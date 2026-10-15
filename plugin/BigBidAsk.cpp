@@ -558,6 +558,7 @@ void BigBidAsk::render(BBState& S) {
         cb::In in; in.paneL = pane.left; in.paneT = pane.top; in.paneB = pane.bottom; in.axisR = axisR;
         in.levels = S.peers.on[cb::LEVELS]; in.levelsW = S.peers.w[cb::LEVELS]; in.delta = S.peers.on[cb::DELTA]; in.deltaW = S.peers.w[cb::DELTA];
         in.dealer = S.peers.on[cb::DEALER]; in.dealerW = S.peers.w[cb::DEALER];
+        in.big = S.peers.on[cb::BIG]; in.bigW = S.peers.w[cb::BIG];   // (1.1.0) the BIG column
         const cb::Layout L = cb::layout(in);
         S.priceRight = (L.ok && L.margin > 0) ? L.priceRight : axisR;
         S.leftLimit = pane.left + (S.peers.on[cb::LIQ] ? S.peers.w[cb::LIQ] + 2 : 2);

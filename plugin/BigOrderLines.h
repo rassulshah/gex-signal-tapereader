@@ -33,7 +33,7 @@
 #include <vector>
 
 namespace bol {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -181,6 +181,7 @@ public:
     std::vector<std::string> rows;     // record rows waiting to be written (S / E)
     long long events = 0, unknown = 0, garbage = 0, drops = 0, lostEnds = 0;
     long long lastT = 0;
+    long long depthMin = 0;            // (1.1.0, Rassul 10-15) also >= 3x the typical displayed size within reach (set live by the host)
 
     // a new floor (the setting changed): the candidate sets are rebuilt from the book
     void setFloor(long long f) {
@@ -192,7 +193,7 @@ public:
     long long threshold() {
         long long t = P.floor;
         if (hist.n >= P.pctMinN) t = std::max(t, hist.pct(P.pct));
-        return t;
+        return std::max(t, depthMin);
     }
     void setAtr(double a) {
         atrPrice = a > 0 && finiteD(a) ? a : 0;

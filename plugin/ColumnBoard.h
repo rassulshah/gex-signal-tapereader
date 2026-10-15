@@ -30,10 +30,10 @@
 #include "BannerBoard.h"
 
 namespace cb {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
 static const int GAP_PX = 20;            // between the last bar and the Levels column
 static const int MIN_PRICE_PX = 160;     // price area kept on a narrow chart
-enum Col { LIQ = 0, LEVELS = 1, DELTA = 2, DEALER = 3, NCOL = 4 };
+enum Col { LIQ = 0, LEVELS = 1, DELTA = 2, DEALER = 3, BIG = 4, NCOL = 5 };
 struct Range { int lo, hi, def; };
 inline Range range(int c)
 {
@@ -41,6 +41,7 @@ inline Range range(int c)
     case LIQ: return Range{ 20, 200, 60 };
     case LEVELS: return Range{ 30, 150, 78 };   // (Rassul 11:39 CT) 40 -> 78 so "LonLO | HL 1.5K" fits
     case DELTA: return Range{ 40, 250, 80 };
+    case BIG: return Range{ 30, 120, 44 };
     default: return Range{ 40, 250, 80 };
     }
 }
@@ -61,19 +62,20 @@ struct In {
     int paneL = 0, paneT = 0, paneB = 0, axisR = 0;     // axisR = the price axis' left edge (pane right without the scale) - 2
     bool levels = false, delta = false, dealer = false;  // which columns are on this chart
     int levelsW = 40, deltaW = 80, dealerW = 80;
+    bool big = false; int bigW = 44;                     // (1.1.0) the BIG column
 };
 struct Layout {
     bool ok = false, squeezed = false;
     int axisR = 0, priceRight = 0, margin = 0;           // priceRight: the last bar ends left of it (the gap starts there)
-    int w[NCOL] = { 0, 0, 0, 0 };
-    bp::Box levels, delta, dealer;                       // zero-width boxes for absent columns
+    int w[NCOL] = { 0, 0, 0, 0, 0 };
+    bp::Box levels, delta, dealer, big;                       // zero-width boxes for absent columns
 };
 inline Layout layout(const In& in)
 {
     Layout L; L.axisR = in.axisR;
     int wl = in.levels ? cleanWidth(LEVELS, in.levelsW) : 0, wd = in.delta ? cleanWidth(DELTA, in.deltaW) : 0,
-        wg = in.dealer ? cleanWidth(DEALER, in.dealerW) : 0;
-    const int sum = wl + wd + wg;
+        wg = in.dealer ? cleanWidth(DEALER, in.dealerW) : 0, wb = in.big ? cleanWidth(BIG, in.bigW) : 0;
+    const int sum = wl + wd + wg + wb;
     const int avail = in.axisR - in.paneL - GAP_PX - MIN_PRICE_PX;
     if (sum > 0 && sum > avail) {                        // a narrow chart: shrink in proportion, never under each minimum
         L.squeezed = true;
@@ -81,25 +83,27 @@ inline Layout layout(const In& in)
         if (in.levels) wl = std::max(range(LEVELS).lo, (int)std::floor(wl * f));
         if (in.delta) wd = std::max(range(DELTA).lo, (int)std::floor(wd * f));
         if (in.dealer) wg = std::max(range(DEALER).lo, (int)std::floor(wg * f));
+        if (in.big) wb = std::max(range(BIG).lo, (int)std::floor(wb * f));
     }
     const int t = in.paneT, b = in.paneB;
     L.dealer = bp::mk(in.axisR - wg, t, in.axisR, b);
     L.delta = bp::mk(L.dealer.l - wd, t, L.dealer.l, b);
     L.levels = bp::mk(L.delta.l - wl, t, L.delta.l, b);
-    const int used = wl + wd + wg;
-    L.priceRight = used > 0 ? L.levels.l - GAP_PX : in.axisR;
+    L.big = bp::mk(L.levels.l - wb, t, L.levels.l, b);
+    const int used = wl + wd + wg + wb;
+    L.priceRight = used > 0 ? L.big.l - GAP_PX : in.axisR;
     L.margin = in.axisR - L.priceRight;
-    L.w[LEVELS] = wl; L.w[DELTA] = wd; L.w[DEALER] = wg;
+    L.w[LEVELS] = wl; L.w[DELTA] = wd; L.w[DEALER] = wg; L.w[BIG] = wb;
     L.ok = L.priceRight >= in.paneL + 40 && b > t;      // a chart with no room left for price: the columns are not drawn
     return L;
 }
 // no two column boxes overlap and none crosses the axis or the price area (the test's invariant, also used in the status line)
 inline bool columnsClean(const Layout& L)
 {
-    const bp::Box* c[3] = { &L.levels, &L.delta, &L.dealer };
-    for (int i = 0; i < 3; ++i) {
+    const bp::Box* c[4] = { &L.levels, &L.delta, &L.dealer, &L.big };
+    for (int i = 0; i < 4; ++i) {
         if (c[i]->r < c[i]->l || c[i]->r > L.axisR || (c[i]->w() > 0 && c[i]->l < L.priceRight + GAP_PX)) return false;
-        for (int j = i + 1; j < 3; ++j) if (c[i]->w() > 0 && c[j]->w() > 0 && bp::overlap(*c[i], *c[j])) return false;
+        for (int j = i + 1; j < 4; ++j) if (c[i]->w() > 0 && c[j]->w() > 0 && bp::overlap(*c[i], *c[j])) return false;
     }
     return true;
 }
@@ -144,7 +148,7 @@ struct MarginCtl {
 };
 
 // ---- the board (process environment, per chart) -------------------------------------------------------------------------------
-inline const char* prefix(int c) { return c == LIQ ? "LRA_COLL_" : c == LEVELS ? "LRA_COLK_" : c == DELTA ? "LRA_COLT_" : "LRA_COLD_"; }
+inline const char* prefix(int c) { return c == LIQ ? "LRA_COLL_" : c == LEVELS ? "LRA_COLK_" : c == DELTA ? "LRA_COLT_" : c == BIG ? "LRA_COLB_" : "LRA_COLD_"; }
 inline std::string enc(long long ms, int w) { return std::to_string(ms) + "|" + std::to_string(w); }
 inline bool dec(int c, const std::string& s, int& w, long long& ms)
 {
@@ -165,7 +169,7 @@ inline bool peek(int c, const std::string& sym, long spb, const std::string& cha
 }
 // the other plugins' columns on this chart, kept per chart by the reader; step() once per own draw
 struct Peers {
-    bb::Beat beat[NCOL]; bool on[NCOL] = { false, false, false, false }; int w[NCOL] = { 0, 0, 0, 0 };
+    bb::Beat beat[NCOL]; bool on[NCOL] = { false, false, false, false, false }; int w[NCOL] = { 0, 0, 0, 0, 0 };
     void step(const std::string& sym, long spb, const std::string& chart, long long nowMs, unsigned selfMask)
     {
         for (int c = 0; c < NCOL; ++c) {

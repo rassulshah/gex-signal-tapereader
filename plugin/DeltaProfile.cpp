@@ -934,6 +934,7 @@ void DeltaProfile::columns(ChartState& s, const RCT& pane, int axisR) {
     in.delta = true; in.deltaW = s.layout.width;
     in.dealer = s.peers.on[cb::DEALER]; in.dealerW = s.peers.w[cb::DEALER];
     in.levels = s.peers.on[cb::LEVELS]; in.levelsW = s.peers.w[cb::LEVELS];
+    in.big = s.peers.on[cb::BIG]; in.bigW = s.peers.w[cb::BIG];   // (2.8.6) the BIG column
     s.lay = cb::layout(in);
     cb::publish(cb::DELTA, s.colSym, s.colSpb, s.chartKey, (long long)now, s.layout.width); s.colPublished = !s.colSym.empty();
     s.needPx = s.lay.ok ? s.lay.margin : 0;
