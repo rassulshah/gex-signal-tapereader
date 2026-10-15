@@ -78,7 +78,7 @@ inline long long floorFor(const std::string& m) {
 static const long long FLOOR_MIN = 1, FLOOR_MAX = 100000;
 static const double REACH_MIN = 0.5, REACH_MAX = 5.0, REACH_DEF = 2.0;
 static const int KEEP_MIN = 0, KEEP_MAX = 50, KEEP_DEF = 10;
-static const int FONT_MIN = 10, FONT_MAX = 16, FONT_DEF = 11;
+static const int FONT_MIN = 7, FONT_MAX = 16, FONT_DEF = 10;   // (LP 0.23.0, Rassul 12:01 "for big trades also add font size ... make sure it works") 7-16, default 10
 
 struct Params {
     double reachAtr = REACH_DEF;       // the reach: this many ATRs from price

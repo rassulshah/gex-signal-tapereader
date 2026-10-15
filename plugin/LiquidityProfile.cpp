@@ -133,7 +133,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.22.9"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.23.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -476,7 +476,7 @@ int cppExtension::setup(void) {
     setFloatParameter("Big order reach (ATR, 0.5-5)", 2.0f, 50, kParmAppendSameLine);   // 6
     setIntegerParameter("Big order min lots", 0, 60);                              // 7  (the market's floor is shown; 0 = market default)
     setIntegerParameter("Ended lines kept per side (0-50)", 10, 50, kParmAppendSameLine);   // 8
-    setIntegerParameter("Big order font pt (10-16)", 11, 50, kParmAppendSameLine);  // 9
+    setIntegerParameter("Big order font pt (7-16)", 10, 50, kParmAppendSameLine);  // 9  (0.23.0) the BIG column's live box; the filled marks 2 pt smaller
 #endif
     return RTX_OK;
 }
@@ -1642,8 +1642,9 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     { RCT r; r.set(coord(cl), coord(top + 2), coord(cr), coord(top + 14)); r.drawText("BIG", true, false); }
     std::vector<std::pair<int, int>> used;                          // y bands taken (top, bottom)
     auto freeAt = [&](int t0, int b0) { for (size_t i = 0; i < used.size(); ++i) if (!(b0 < used[i].first || t0 > used[i].second)) return false; return true; };
-    FONT fb; fb.id = HELVETICA; fb.size = coord(std::max(10, S.boSet.font)); fb.style = BOLD; setFont(fb);
-    const int boxW = std::max(24, (cr - cl) * 64 / 100), boxH = rowPx(std::max(10, S.boSet.font)) + 2;
+    const int bfont = std::max(bol::FONT_MIN, std::min(bol::FONT_MAX, S.boSet.font));   // (0.23.0) his "Big order font pt"
+    FONT fb; fb.id = HELVETICA; fb.size = coord(bfont); fb.style = BOLD; setFont(fb);
+    const int boxW = std::max(24, (cr - cl) * 64 / 100), boxH = rowPx(bfont) + 2;
     for (int s = 0; s < 2; ++s) {
         if (S.bo.live[s] < 0) continue;
         const bol::Line L = S.bo.now((size_t)S.bo.live[s]);
@@ -1673,8 +1674,9 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         for (size_t i = 0; i < v.size() && i < 5; ++i) keep.push_back(v[i]);
     }
     std::sort(keep.begin(), keep.end(), [](const Ex& a, const Ex& b) { return a.px > b.px; });   // top of the chart first
-    FONT fs; fs.id = HELVETICA; fs.size = coord(8); fs.style = PLAIN; setFont(fs);
-    const int sh = rowPx(8);
+    const int sfont = std::max(6, bfont - 2);                         // (0.23.0) the filled marks: 2 pt under his setting
+    FONT fs; fs.id = HELVETICA; fs.size = coord(sfont); fs.style = PLAIN; setFont(fs);
+    const int sh = rowPx(sfont);
     for (size_t i = 0; i < keep.size(); ++i) {
         const Ex& e = keep[i]; const int y = yOfPx(e.px);
         const std::string tx = std::string("\x95 ") + (e.n > 1 ? std::to_string(e.n) + "\xD7 " : std::string()) + std::to_string(e.lots);
@@ -2563,6 +2565,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.22.9");   // LQ_VERSION
+    p->setVersion("0.23.0");   // LQ_VERSION
     return p;
 }

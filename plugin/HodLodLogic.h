@@ -54,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.1.2";   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
+static const char* const HL_VERSION = "2.2.0";   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -739,7 +739,7 @@ struct View {
     // never below the range so far). Study lra.ext_yardstick: the expected range beat ATR (and ATR + range used) in 6 of 7 markets
     // on unseen days (crude a tie). Drawn as a vertical line from the 1st extreme with a flag + "Proj HOD 7,870.00"; in the header.
     static const int PROJ_WAIT_MIN = 30;   // minutes after the RTH open before the projection shows
-    bool projOk = false, projUp = true; long long projFrom = 0, projTo = 0, projFromEnd = 0; std::string projTxt;
+    bool projOk = false, projUp = true; long long projFrom = 0, projTo = 0, projFromEnd = 0; std::string projTxt, projLv;   // (2.2.0) projLv = the price / gamma level at the target ("ONH \xB7 CR")
     double projRange = NAN; int projStage = -1; bool projV2 = false;   // (1.1.5) for the projection log (HodLod.proj-<MKT>.csv)
     int projLockMod = -1;   // (1.1.6) the minute of day the shown target was set (locked)
     // (2.1.0, Rassul 2026-10-14 16:01 "a line in the HOD/LOD indicator box that identifies the key GEX levels where a reaction can
@@ -985,6 +985,27 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
             eRange = pl->range;                                              // Range % against the target shown
         }
         v.projTxt = std::string(v.projUp ? "Proj HOD " : "Proj LOD ") + pxTxt((double)v.projTo * tick, dec);
+        {   // (2.2.0, Rassul 2026-10-15 12:01 "next to the projection add any levels you see near the projection: Proj HOD nnnn <price level>
+            // <gamma level>") the nearest key level and the nearest MenthorQ level within 5% of the projected range (4 ticks min)
+            const long long tol = (std::max)(4LL, (long long)std::llround(0.05 * v.projRange / tick));
+            std::string kn; long long kd = tol + 1;
+            const Lvl* KL[4] = { &T.pf, &T.pd, &T.curOn, &T.curLon };
+            for (int i = 0; i < 4; i++) if (KL[i]->ok && KL[i]->n > 0) {
+                const long long d1 = std::llabs(KL[i]->hi - v.projTo), d2 = std::llabs(KL[i]->lo - v.projTo);
+                if (d1 < kd) { kd = d1; kn = LV_HIGH[i]; }
+                if (d2 < kd) { kd = d2; kn = LV_LOW[i]; }
+            }
+            std::string gn; long long gd = tol + 1;
+            if (mq) {
+                const long long sesA0 = (R->sid - 1) * 86400 + 17 * 3600; const MqSnap* sn = nullptr;
+                for (size_t i = 0; i < mq->size(); i++) { const MqSnap& q = (*mq)[i]; if (q.atAbs >= sesA0 && q.atAbs <= R->lastEndAbs && (!sn || q.atAbs >= sn->atAbs)) sn = &q; }
+                if (sn) for (size_t i = 0; i < sn->lv.size(); i++) {
+                    const MqLevel& q = sn->lv[i]; if (q.code < 0 || q.code > 5) continue;
+                    const long long d = std::llabs(q.px - v.projTo); if (d < gd) { gd = d; gn = MQ_CODES[q.code]; }
+                }
+            }
+            v.projLv = kn + (gn.empty() ? std::string() : (kn.empty() ? std::string() : std::string(" \xB7 ")) + gn);
+        }
     }
     if (std::isfinite(eRange) && eRange > 0) v.usedPct = (int)std::llround(100.0 * (double)v.rangeT * tick / eRange);
     // ---- the candle labels (mockup v5)
@@ -1234,7 +1255,7 @@ inline View buildView(const Tracker& T, const ReadOut& rd, const std::vector<Rea
                 unsigned rc = v.complete ? C_GREY : ((double)v.usedPct >= loPct ? C_AMBER : C_BLUE);
                 v.headLeftSegs.push_back(Seg{ std::string(HL_SHOW_CALLED ? "   Range used " : "   Range ") + std::to_string(v.usedPct) + "%", rc });
             }
-            if (v.projOk) v.headLeftSegs.push_back(Seg{ "   " + v.projTxt, v.projUp ? C_GREEN : C_RED });
+            if (v.projOk) v.headLeftSegs.push_back(Seg{ "   " + v.projTxt + (v.projLv.empty() ? std::string() : "  " + v.projLv), v.projUp ? C_GREEN : C_RED });   // (2.2.0) + its level
         }
         // (HL105, Rassul) + the 2nd-extreme call, the same source / rules as the 2nd Time cell: "   HOD after 9:30 76%" (stage 3),
         // "   HOD: close 14% \xB7 else 11:30-2:30" before it; "2nd" while the 1st is not IN; grey when not qualified / in test
@@ -1604,14 +1625,6 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                 int w2 = M(t2, fs + 1, true); addText(L, x2 + cwv[1] / 2 - w2 / 2, y, y + titleH - 2, t2, c2, fs + 1, true, w2, R_TABLE, -1); }
         }
         y += titleH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
-        if (gexW > 0) {   // (2.1.0) "GEX  7750 G8 ^ . 7775 G7 . 7800 G1" right under the header, centred over the columns
-            addText(L, T.l + 8, y, y + rowHE, "GEX ?", C_GREY, fs, true, M("GEX ?", fs, true), R_TABLE, -1);   // (audit) model context, '?' until proven
-            const int x0 = T.l + 6 + lw; int cols = 0; for (int k = 0; k < ncol; k++) cols += cwv[(size_t)k];
-            const int gx = (std::max)(x0, x0 + cols / 2 - gexW / 2);
-            layoutGexItems(L, v, gx, y, y + rowHE, M, efs, fs);
-            L.gexRow = Box{ T.l, y, T.r, y + rowHE }; L.gexOk = true;
-            y += rowHE; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
-        }
         const Cell* rows[2] = { eRow, aRow };
         for (int r = -1; r < 2; r++) {
             const int rf = r == 0 ? efs : fs, rh = r < 0 ? rowH : (r == 0 ? rowHE : rowH);
@@ -1642,6 +1655,14 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             y += rh;
         }
         y += gap; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
+        if (gexW > 0) {   // (2.2.0, Rassul 12:01 "move the gex line right above estimate and call it Gex S/R")
+            addText(L, T.l + 8, y, y + rowHE, "Gex S/R", C_GREY, fs, true, M("Gex S/R", fs, true), R_TABLE, -1);   // (audit) model context, '?' until proven
+            const int x0 = T.l + 6 + lw; int cols = 0; for (int k = 0; k < ncol; k++) cols += cwv[(size_t)k];
+            const int gx = (std::max)(x0, x0 + cols / 2 - gexW / 2);
+            layoutGexItems(L, v, gx, y, y + rowHE, M, efs, fs);
+            L.gexRow = Box{ T.l, y, T.r, y + rowHE }; L.gexOk = true;
+            y += rowHE; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
+        }
         if (!info.empty()) {   // (05:50 "add Estimate"; 05:55 "align estimate so it is aligned with the other values above it"): the label
             // like Expected / Actual, then Range used centred under 1st Time and the projection under 2nd Time (one value per column)
             addText(L, T.l + 8, y, y + rowH, "Estimate", C_GREY, fs, true, M("Estimate", fs, true), R_TABLE, -1);
@@ -1956,7 +1977,9 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
         const size_t sp = v.projTxt.rfind(' ');
         const std::string price = sp == std::string::npos ? v.projTxt : v.projTxt.substr(sp + 1);
         const std::string l2 = (v.callT >= 0 ? "after " + clk(v.callT) + " \xB7 " : std::string()) + price;
-        const int lh = lineH(PROJ_FS), w1 = M(l1, PROJ_FS, true), w2 = M(l2, PROJ_FS, true), bw = (std::max)(w1, w2);
+        const std::string l3 = v.projLv;                                       // (2.2.0) the level at the target, under the price
+        const int nl = l3.empty() ? 2 : 3;
+        const int lh = lineH(PROJ_FS), w1 = M(l1, PROJ_FS, true), w2 = M(l2, PROJ_FS, true), w3 = l3.empty() ? 0 : M(l3, PROJ_FS, true), bw = (std::max)((std::max)(w1, w2), w3);
         // (06:05 "the arrowhead should be connected with the label on top of it"): the callout sits directly on the flag - above it for a
         // HOD target (beyond the line's end), below it for a LOD target; when the pane edge leaves no room there, it sits against the
         // flag's right side, centred on it. Never across the line.
@@ -1970,33 +1993,34 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
             return !(L.tableOk && boxHit(b, L.table));
         };
         auto put = [&](int bx, int by) {
-            addRect(L, bx - 2, by, bx + bw + 2, by + 2 * lh, C_PANEL, C_PANEL, 1, R_LABEL);   // the dashed target line passes behind it
+            addRect(L, bx - 2, by, bx + bw + 2, by + nl * lh, C_PANEL, C_PANEL, 1, R_LABEL);   // the dashed target line passes behind it
             addText(L, bx + bw / 2 - w1 / 2, by, by + lh, l1, col, PROJ_FS, true, w1, R_LABEL, -1);
             addText(L, bx + bw / 2 - w2 / 2, by + lh, by + 2 * lh, l2, col, PROJ_FS, true, w2, R_LABEL, -1);
-            L.blocks.push_back(Box{ bx, by, bx + bw, by + 2 * lh });
+            if (!l3.empty()) addText(L, bx + bw / 2 - w3 / 2, by + 2 * lh, by + 3 * lh, l3, col, PROJ_FS, true, w3, R_LABEL, -1);
+            L.blocks.push_back(Box{ bx, by, bx + bw, by + nl * lh });
             L.projOk = true;
         };
         const int fTop = ft, fBot = ft + PROJ_FLAG_H;
         int bx = x - bw / 2 + PROJ_FLAG_W / 2;                                // centred on the flag
         bx = (std::max)((int)pane.l + 2, (std::min)(bx, (int)pane.r - 2 - bw));
-        int by = v.projUp ? fTop - 2 * lh : fBot;                              // touching the flag
-        if (clearB(bx, by, bw, 2 * lh)) { put(bx, by); return; }
+        int by = v.projUp ? fTop - nl * lh : fBot;                              // touching the flag
+        if (clearB(bx, by, bw, nl * lh)) { put(bx, by); return; }
         int sx = x + PROJ_FLAG_W + 2, sy = (fTop + fBot) / 2 - lh;             // against the flag's right side
-        sy = (std::max)(top, (std::min)(sy, bot - 2 * lh));                    // at a pane edge: as close to the flag as fits
-        if (clearB(sx, sy, bw, 2 * lh)) { put(sx, sy); return; }
+        sy = (std::max)(top, (std::min)(sy, bot - nl * lh));                    // at a pane edge: as close to the flag as fits
+        if (clearB(sx, sy, bw, nl * lh)) { put(sx, sy); return; }
         int lx = x - 2 - bw;                                                   // against the line's left side
-        if (clearB(lx, sy, bw, 2 * lh)) { put(lx, sy); return; }
+        if (clearB(lx, sy, bw, nl * lh)) { put(lx, sy); return; }
         // (2.0.4) a level badge on the callout's row: the centred callout stepped further from the flag (beyond the line's end), half
         // a line at a time, up to 3 lines
         for (int k = 1; k <= 6; k++) {
             const int yy = v.projUp ? by - k * lh / 2 : by + k * lh / 2;
-            if (clearB(bx, yy, bw, 2 * lh)) { put(bx, yy); return; }
+            if (clearB(bx, yy, bw, nl * lh)) { put(bx, yy); return; }
         }
         // (2.0.4) the flag is in (or next to) the level-label band: the callout just right of the band, on the flag's row, then the
         // rows beside it - never over a level label
         for (int step = 0; step <= 4; step++) {
-            const int yy = sy + ((step + 1) / 2) * (2 * lh + 2) * (step % 2 ? -1 : 1);
-            if (clearB(bandR + 2, yy, bw, 2 * lh)) { put(bandR + 2, yy); return; }
+            const int yy = sy + ((step + 1) / 2) * (nl * lh + 2) * (step % 2 ? -1 : 1);
+            if (clearB(bandR + 2, yy, bw, nl * lh)) { put(bandR + 2, yy); return; }
         }
     }
     std::string txt = v.projTxt;   // no room for the centred callout: the one-line text beside the flag (1.1.x placement)
