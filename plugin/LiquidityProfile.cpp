@@ -131,7 +131,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.19.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.19.1"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1670,7 +1670,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         while (tries < 6 && !freeAt(t0, t0 + sh)) { t0 += sh + 1; ++tries; }   // never over a live box or another mark
         if (tries >= 6 || t0 < top + 14 || t0 + sh > bottom) continue;
         const bool old = nowT - e.last > 1800000LL;                  // older than 30 min: dimmer
-        setTextColor(e.side == bol::BID ? (old ? C_BUY_DIM : C_BUY) : (old ? C_SELL_DIM : C_SELL));
+        setTextColor(e.side == bol::BID ? (old ? C_SELL_DIM : C_SELL) : (old ? C_BUY_DIM : C_BUY));   // (0.19.1, Rassul 10-15) filled bid RED, filled ask GREEN - the same colours as Big Bid / Ask on the bar (who hit it)
         RCT r; r.set(coord(cl + 2), coord(t0), coord(cr - 2), coord(t0 + sh)); r.drawText(tx.c_str(), false, true);   // right-aligned
         used.push_back(std::make_pair(t0, t0 + sh)); ++S.boExec;
     }
@@ -2354,6 +2354,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.19.0");   // LQ_VERSION
+    p->setVersion("0.19.1");   // LQ_VERSION
     return p;
 }
