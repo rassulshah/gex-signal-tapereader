@@ -193,7 +193,7 @@ struct BBState {
     long long lastStatusMs = -1, lastRecordMs = -1;
     // draw
     cb::Peers peers; int priceRight = 0, leftLimit = 0; bb::Beat trBeat; bool trOn = false; bba::Box trBox;
-    bba::LayoutStats lay; int circles = 0, circlesHidden = 0, zoneFull = 0, zoneDim = 0;
+    bba::LayoutStats lay; int droppedInView = 0; int circles = 0, circlesHidden = 0, zoneFull = 0, zoneDim = 0;
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
 };
 
@@ -242,7 +242,7 @@ int cppExtension::setup(void) {
     setParameterDialogHeight(4);
     setIntegerParameter("Font size", 7, 50);                                       // 0
     setFloatParameter("Bold at (x normal)", 2.0f, 50, kParmAppendSameLine);        // 1
-    setBoolParameter("Absorption circle", true);                                    // 2
+    setBoolParameter("Absorption print circle", true);                                    // 2
     setBoolParameter("Show non-bold numbers", true, kParmAppendSameLine);           // 3
     setIntegerParameter("Divider (0 = market default)", 0, 50);                    // 4  (1.4.0) 500 lots / 10 = 50
     setColorParameter("Buyers (ask)", (COLOR)0x0022C55E, 0);                         // 5
@@ -519,7 +519,7 @@ void BigBidAsk::status(BBState& S, long long now) {
       << "\nSETTINGS,font " << S.set.font << ",bold " << bba::ratioText(S.set.boldQ) << ",circle " << (S.set.circle ? 1 : 0) << ",non-bold " << (S.set.nonBold ? 1 : 0) << ",divider " << (S.set.div > 0 ? S.set.div : bba::divFor(S.market)) << (S.set.div > 0 ? "" : " (market default)") << "," << S.settingsWhy
       << "\nCANDLES,final " << S.fin.size() << ",recorded " << S.recorded.size() << ",pending " << S.pending.size() << ",record fails " << S.recFails
       << "\nVAP,missing reads " << S.missing << ",bid/ask vs bar totals mismatch " << S.mismatch << ",faults " << S.faults
-      << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim
+      << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim
       << "\nAREA,left " << S.leftLimit << ",price right " << S.priceRight << ",columns levels " << (S.peers.on[cb::LEVELS] ? "on" : "off") << " delta " << (S.peers.on[cb::DELTA] ? "on" : "off")
       << " dealer " << (S.peers.on[cb::DEALER] ? "on" : "off") << " liq " << (S.peers.on[cb::LIQ] ? "on" : "off") << ",tape reader banner " << (S.trOn ? "avoided" : "none") << "\n";
     const std::string text = o.str();
@@ -557,7 +557,7 @@ template <class Times> static int indexOf(Times& times, long count, long long t)
     return -1;
 }
 void BigBidAsk::render(BBState& S) {
-    S.targets.clear(); S.circles = 0; S.circlesHidden = 0; S.zoneFull = 0; S.zoneDim = 0;
+    S.targets.clear(); S.circles = 0; S.circlesHidden = 0; S.droppedInView = 0; S.zoneFull = 0; S.zoneDim = 0;
     const long count = getBarCount();
     if (count < 2 || S.tick <= 0) return;
     RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
@@ -581,8 +581,8 @@ void BigBidAsk::render(BBState& S) {
         S.trOn = S.trBeat.step(have, ms, steadyMs());
         if (S.trOn) { S.trBox.l = r.l; S.trBox.t = r.t; S.trBox.r = r.r; S.trBox.b = r.b; }
     }
-    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow);
-    if (times.count < count || hi.count < count || lo.count < count) return;
+    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), op(barOpen), cl(barClose);
+    if (times.count < count || hi.count < count || lo.count < count || op.count < count || cl.count < count) return;
     int vs = 0, ve = -1;
     if (getVisibleBars(&vs, &ve) != RTX_OK || vs < 0 || ve < vs) { vs = std::max(0L, count - 200); ve = (int)count - 1; }
     ve = std::min(ve, (int)count - 1);
@@ -606,7 +606,16 @@ void BigBidAsk::render(BBState& S) {
     for (int i = from; i <= ve; ++i) {
         PNT a; a.set(i, hi[i], kBarLeft); PNT b; b.set(i, lo[i], kBarRight);
         bba::Box cb_; cb_.l = std::min(a.h, b.h); cb_.r = std::max(a.h, b.h); cb_.t = std::min(a.v, b.v); cb_.b = std::max(a.v, b.v);
-        candles.push_back(cb_);
+        {   // (1.4.1, Rassul 13:18 "check if there are prints that are missing": 82 of 112 numbers were dropped for no room) a candle blocks
+            // only what is drawn: its BODY (open..close) and its 1-2 px WICK (high..low at the centre), not the whole high-low box, so a
+            // neighbour's number may sit beside the wick above / below its body
+            PNT po; po.set(i, op[i], kBarLeft); PNT pc; pc.set(i, cl[i], kBarRight);
+            bba::Box body; body.l = cb_.l; body.r = cb_.r; body.t = std::min(po.v, pc.v); body.b = std::max(po.v, pc.v);
+            if (body.b - body.t < 1) body.b = body.t + 1;
+            const int cx = (cb_.l + cb_.r) / 2;
+            bba::Box wick; wick.l = cx - 1; wick.r = cx + 1; wick.t = cb_.t; wick.b = cb_.b;
+            candles.push_back(body); candles.push_back(wick);
+        }
         const long long t = (long long)times[i];
         const bba::Facts* F = nullptr;
         if (i < (int)count - 1) { auto it = S.fin.find(t); if (it != S.fin.end()) F = &it->second; }
@@ -637,7 +646,7 @@ void BigBidAsk::render(BBState& S) {
     std::vector<bba::Box> hard; if (S.trOn) hard.push_back(S.trBox);
     const std::vector<bba::Placed> P = bba::place(cands, candles, area, &S.lay, hard);
     for (size_t k = 0; k < cands.size(); ++k) {
-        if (!P[k].shown) { if (cands[k].circle && cands[k].bar >= vs) ++S.circlesHidden; continue; }
+        if (!P[k].shown) { if (cands[k].bar >= vs) { ++S.droppedInView; if (cands[k].circle) ++S.circlesHidden; } continue; }
         const bba::Cand& c = cands[k]; const bba::Box& t = P[k].text;
         if (c.bar < vs) continue;                                       // laid out (lead-in) but left of the view
         const bool zone = zn::atZone(Z, c.bar, candPx[k]);

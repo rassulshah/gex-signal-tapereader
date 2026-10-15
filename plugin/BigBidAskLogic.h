@@ -30,7 +30,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.4.1";   // (1.4.1) a circled number centred in its ring
+static const char* const VERSION = "1.4.1";   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
@@ -258,10 +258,10 @@ inline std::vector<std::string> hover(const Facts& F, double tick, int boldQ, co
     L.push_back("Candle " + clock + (F.closed ? " (closed)" : " (forming - may still change)") + (F.bidQ < 0 && F.askQ < 0 ? ", ratio n/a: under 10 prior candles" : ""));
     const int ab = circleOn ? absorption(F, boldQ) : 0;
     if (ab > 0) {
-        L.push_back("ABSORPTION (circle): bold sell at the bid at/below the halfway mark, candle closed GREEN above it.");
+        L.push_back("ABSORPTION PRINT (large lot absorption, circled): bold sell at the bid at/below the halfway mark, candle closed GREEN above it.");
         L.push_back("Sellers hit hard and price still closed up: buyers absorbed them. Decided at the close, never redrawn.");
     } else if (ab < 0) {
-        L.push_back("ABSORPTION (circle): bold buy at the ask at/above the halfway mark, candle closed RED below it.");
+        L.push_back("ABSORPTION PRINT (large lot absorption, circled): bold buy at the ask at/above the halfway mark, candle closed RED below it.");
         L.push_back("Buyers lifted hard and price still closed down: sellers absorbed them. Decided at the close, never redrawn.");
     }
     L.push_back(hoveredSide < 0 ? "What: red = the price where the most lots were SOLD AT THE BID (sellers hitting) in this candle."
@@ -286,7 +286,7 @@ struct Cand {
     bool first = false;                // a CLOSED candle's bold number (frozen): laid out before every plain / forming number
 };
 struct Placed { bool shown = false, crowded = false; Box text, foot; int dy = 0; };
-static const int GAP = 2;              // px between the candle and its number
+static const int GAP = 1;              // px between the candle and its number (1.4.1: 2 -> 1, Rassul "bring the prints closer")
 static const int RING_X = 3, RING_Y = 1;   // the circle hugs the number
 inline Box textBox(const Cand& c, int dy) {
     Box b;
