@@ -1,5 +1,12 @@
 /********************************************************************************
- *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.6.0 (2026-10-14 night)
+ *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.7.0 (2026-10-14 night)
+ *  1.7.0 (2026-10-14 night, Rassul approved 22:37 CT, mockup-one-bar.png v2): ONE BAR PER CANDLE (OrderFlowFeed.h 1.6.0 drawBars
+ *        one-bar mode, buyer side = 1 offers lifted): the bigger side's bar (red = sellers hitting the bid, green = buyers lifting the
+ *        offer), its lots as the height; a tie = the side of the candle's close direction, else red. Bright = the winner is a spike (its
+ *        label above, persistence unchanged), dim otherwise. A white tick across the bar at the smaller side's lots ONLY when BOTH sides
+ *        spiked. S / L / R? letters on the single bar for the winner (the loser's stack in the same column only when both spiked; always in
+ *        the hover / record). The pane title (parmsTitle) "Bid/Ask Stats - Who is Pressing v1.7.0"; "attacking" -> "pressing" in the
+ *        message. Hover (both sides), read line, settings, records, axis: unchanged.
  *  1.6.0 (2026-10-14 night, Rassul via the coordinator "every order-flow pane gets its own ONE read line in place of its box";
  *        approval list 2026-10-14 s.7): the READ box is gone. Box shows: Read (default) = ONE line at the box's Position / Offset, only
  *        while price is inside a key-level or gamma zone (ZoneRead.h 1.0.0, OrderFlowFeed.h 1.5.0): who is hitting the level and where
@@ -119,7 +126,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.6.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.7.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -252,6 +259,7 @@ public:
     virtual int parmsUpdt(unsigned int) { saveSettings(); return RTX_OK; }
     virtual int mouse(RTX_EVENT* e);
     virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax);
+    virtual int parmsTitle(char* pStr, int size) { return off::copyTitle(pStr, size, bas::TITLE, BAS_VERSION) ? RTX_OK : RTX_FAIL; }   // (1.7.0) the pane title, version next to it
     bool mouseLeft(BASState& S);
     bool visRange(unsigned long long& t0, unsigned long long& t1);   // (1.5.1) HoverBoard.h: the chart-wide hover
     bool followBoard(BASState& S);
@@ -1019,10 +1027,12 @@ void BidAskStats::render(BASState& S) {
     // (1.5.3) the hover grid is not an obstacle: it is drawn over the bars while the mouse is in the box (labels never re-decide for it)
     for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(off::LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
     const COLOR normal[2] = { C_BID_BAR, C_ASK_BAR }, spike[2] = { C_BID_SPIKE, C_ASK_SPIKE };   // left = bids hit (red), right = offers lifted (green)
+    RTARRAY op(barOpen), cl(barClose);                                     // (1.7.0) the close direction (one-bar ties)
     off::drawBars(this, g, v0, v1, slot, top, hov, normal, spike, xOf, [&](int i) {
         off::BarLook k; const bas::BarMax* bm = maxOfBar(i); if (!bm) return k;
         const bas::Stat* sp = statOfBar(i);
         k.ok = true; k.v[0] = bm->bid; k.v[1] = bm->ask; k.spike[0] = sp && sp->bidSpike; k.spike[1] = sp && sp->askSpike;
+        if (i < op.count && i < cl.count) { const float o = op[i], c = cl[i]; if (std::isfinite(o) && std::isfinite(c)) k.dir = c > o ? 1 : c < o ? -1 : 0; }
         if (sp) { k.ratioOk[0] = sp->bidRatioOk; k.ratio[0] = sp->bidRatio; k.ratioOk[1] = sp->askRatioOk; k.ratio[1] = sp->askRatio; }   // (12:03) spike labels
         if (i != last) { std::map<long long, BasFin>::const_iterator ff = S.fin.find((long long)times[i]); if (ff != S.fin.end()) { k.let[0] = ff->second.let[0]; k.let[1] = ff->second.let[1]; k.p100[0] = ff->second.pc.p100[0]; k.p100[1] = ff->second.pc.p100[1]; } }
         if (i != last) {                                                   // (1.4.0) the stop-run mark on the break bar's attacking side
@@ -1033,7 +1043,7 @@ void BidAskStats::render(BASState& S) {
             }
         }
         return k;
-    }, avoid);
+    }, avoid, 1);                                                          // (1.7.0) one bar per candle; buyers = side 1 (offers lifted)
     const COLOR vcol[2] = { C_BID, C_ASK };                                // values: sellers (bid side) red, buyers (ask side) green, labels white
     if (readMode) off::drawLine(this, LP); else off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
 }
@@ -1043,7 +1053,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
-    p->setDescription("LRA BidAskStats: who is ATTACKING. Two bars per candle - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. R = stop run: a key level (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) broken with a sweep or spike that closed back inside within N bars - red R = buyers trapped above a high, green R = sellers trapped below a low; R? = not proven yet in this market (nightly stop-run study). Spike labels: the ratio, the pace (p = aggressive lots per second vs the same time of day) and the lots. Top: a plain-English message (pace named only when fast / slow), a blue options line when fresh (oHit), and (green = bullish, red = bearish), and the info box (Sellers | Buyers: lots, pace, sweep, large, stop run, crowd = orders, avg size, top order share, burst) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
-    p->setVersion("1.6.0");   // BAS_VERSION
+    p->setDescription("LRA BidAskStats: who is PRESSING. One bar per candle = the bigger side - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price); a white tick at the other side's lots when both sides spiked. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. R = stop run: a key level (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) broken with a sweep or spike that closed back inside within N bars - red R = buyers trapped above a high, green R = sellers trapped below a low; R? = not proven yet in this market (nightly stop-run study). Spike labels: the ratio, the pace (p = aggressive lots per second vs the same time of day) and the lots. Top: a plain-English message (pace named only when fast / slow), a blue options line when fresh (oHit), and (green = bullish, red = bearish), and the info box (Sellers | Buyers: lots, pace, sweep, large, stop run, crowd = orders, avg size, top order share, burst) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
+    p->setVersion("1.7.0");   // BAS_VERSION
     return p;
 }

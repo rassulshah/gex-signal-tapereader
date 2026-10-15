@@ -29,7 +29,8 @@
 
 namespace bas {
 
-static const char* const VERSION = "1.6.0";   // 1.6.0 (2026-10-14 night): the read box -> one zone read line (ZoneRead.h), unsigned options line;   // 1.5.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.5.2 (2026-10-14 CR4800): read box + numbers hover, Offset X / Y, white letters, one spike label, rare L; 1.5.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
+static const char* const VERSION = "1.7.0";   // 1.7.0 (2026-10-14 night, Rassul 22:37 CT): one bar per candle, title "Bid/Ask Stats - Who is Pressing", attacking -> pressing;   // 1.6.0 (2026-10-14 night): the read box -> one zone read line (ZoneRead.h), unsigned options line;   // 1.5.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.5.2 (2026-10-14 CR4800): read box + numbers hover, Offset X / Y, white letters, one spike label, rare L; 1.5.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
+static const char* const TITLE = "Bid/Ask Stats - Who is Pressing";   // (1.7.0) the pane title (parmsTitle), "v1.7.0" next to it
 static const int COUNT_CAP = 999, RATIO_MIN_PRIOR = 5, RATIO_DEFAULT = 20, RATIO_LO = 5, RATIO_HI = 200;
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 static const int POS_DEFAULT = 0;   // Top left: the info box (12:05 the box stays; the message line is always top centre)
@@ -355,7 +356,7 @@ inline nl::Msg message(const Stat& s, const off::Rec* r, const std::string let[2
     const int first = side >= 0 ? side : (s.m.ask > s.m.bid ? 1 : 0);
     m.line2 = sideNums(s, r, let[first], first, true) + "   |   " + sideNums(s, r, let[1 - first], 1 - first, false);
     for (int k = 0; k < 2; ++k) if (pc.p100[k] > 0) m.line2 += std::string(k == 0 ? "  BidPace " : "  AskPace ") + off::paceX(pc.p100[k]);
-    if (side < 0) { m.line1 = sc[0] > 0 ? "Both sides attacking evenly (" + nl::ratioText(sc[0]) + ")" : "Normal activity - no spike"; return m; }
+    if (side < 0) { m.line1 = sc[0] > 0 ? "Both sides pressing evenly (" + nl::ratioText(sc[0]) + ")" : "Normal activity - no spike"; return m; }
     const bool b = side == 0, S = r && let[side].find('S') != std::string::npos, L = r && let[side].find('L') != std::string::npos;
     const std::string rt = nl::ratioText(b ? s.bidRatio : s.askRatio);
     std::string t = std::string(b ? "Sellers hit the bid" : "Buyers lifted the offer") + " with a " + std::to_string(b ? s.m.bid : s.m.ask) + "-lot (" + rt + ")"

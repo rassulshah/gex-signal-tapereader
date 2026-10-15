@@ -1,5 +1,10 @@
 /********************************************************************************
- *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.5.0  (2026-10-14 night)
+ *  PullStats.cpp  --  Investor/RT RTX extension  lsPullStats  1.6.0  (2026-10-14 night)
+ *  1.6.0 (2026-10-14 night, Rassul approved 22:37 CT, mockup-one-bar.png v2): ONE BAR PER CANDLE (OrderFlowFeed.h 1.6.0): the bigger
+ *        side's bar (green = bids pulled, red = offers pulled), its lots as the height; tie = the close direction's side, else red;
+ *        bright = the winner spiked (label above), dim otherwise; a white tick at the smaller side's lots ONLY when both sides spiked
+ *        (both pulled - the book thinning); letters on the single bar for the winner. Pane title "Pull Stats - Who is Leaving v1.6.0"
+ *        (parmsTitle). Hover, the locked arrival read line (ZoneRead.h 1.1.0), Record order feed, settings, records, axis: unchanged.
  *  1.5.0 (2026-10-14 night; Rassul approved 20:04 CT "merge lsPulling's read into lsPullStats and retire lsPulling", then changed the
  *        design: "the PullStats line shows ONLY state 3, the locked arrival read after the 3-min window ... It emphasises the pull";
  *        "draw NO pre-touch line and NO measuring line; nothing shows until the read locks"; "still compute and record the pre-touch
@@ -92,11 +97,13 @@
 #include "PullStatsLogic.h"
 #include "MboRecord.h"              // (1.2.0) Record order feed
 
-#define PS_VERSION "1.5.0"          // keep equal to ps::VERSION and the setVersion literal below
+#define PS_VERSION "1.6.0"          // keep equal to ps::VERSION and the setVersion literal below
 
 class PullStats : public off::MboPane<ps::Logic> {
 public:
     PullStats() : off::MboPane<ps::Logic>() {}
+    virtual int oneBarBull() const { return 0; }                       // (1.6.0) one bar per candle; buyers = side 0 (bids, green)
+    virtual int parmsTitle(char* pStr, int size) { return off::copyTitle(pStr, size, ps::Logic::title(), PS_VERSION) ? RTX_OK : RTX_FAIL; }   // (1.6.0) the pane title
     // (1.2.0) Record order feed: the recorder lives in this chart's pane state (deleted with it - the destructor writes what is left)
     virtual bool recorderPane() const { return true; }
     mrec::Recorder* rec(S_& S) {
@@ -156,7 +163,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). Green = bids pulled (buyers leaving), red = offers pulled (sellers leaving). Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. The read line (only at a key / gamma level, shown once it locks 3 minutes after price reached the level): was the size resting at the level cancelled or traded - red = the defence pulled at support (green at resistance), green = traded and held at support, grey = mixed; always '?'. Its hover: the numbers, the normal, the share pulled before the touch, and the study caveats. Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive), Offset X / Y, Box shows.");
-    p->setVersion("1.5.0");   // PS_VERSION
+    p->setDescription("LRA PullStats: who is LEAVING. Per candle, the LOTS of resting orders PULLED near price (cancelled without being filled; market-by-order feed). One bar per candle = the bigger side: green = bids pulled (buyers leaving), red = offers pulled (sellers leaving); a white tick at the other side's lots when both sides spiked. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. L = one large resting order pulled. Spike labels: the ratio, the pace (p = pulled lots per second vs the same time of day) and the lots. The read line (only at a key / gamma level, shown once it locks 3 minutes after price reached the level): was the size resting at the level cancelled or traded - red = the defence pulled at support (green at resistance), green = traded and held at support, grey = mixed; always '?'. Its hover: the numbers, the normal, the share pulled before the touch, and the study caveats. Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive), Offset X / Y, Box shows.");
+    p->setVersion("1.6.0");   // PS_VERSION
     return p;
 }

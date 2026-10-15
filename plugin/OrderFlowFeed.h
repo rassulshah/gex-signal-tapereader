@@ -1,7 +1,17 @@
 #ifndef LS_ORDERFLOWFEED_H
 #define LS_ORDERFLOWFEED_H
-// OrderFlowFeed.h (1.5.0, 2026-10-14 night) -- the ONE shared order-flow header of lsBidAskStats 1.6.0, lsPullStats 1.4.0 and
-// lsStackStats 1.3.0 (and the order feed of lsLiquidityProfile / lsLiquidityFlow 0.17.0).
+// OrderFlowFeed.h (1.6.0, 2026-10-14 night) -- the ONE shared order-flow header of lsBidAskStats 1.7.0, lsPullStats 1.6.0 and
+// lsStackStats 1.4.0 (and the order feed of lsLiquidityProfile / lsLiquidityFlow 0.17.0).
+// 1.6.0 (2026-10-14 night, Rassul approved 22:37 CT, mockup-one-bar.png v2): ONE BAR PER CANDLE, as an opt-in mode of drawBars (its new
+//   last argument oneBull = the pane's buyer side; -1 = the old two bars, the default for every other user of this header). The bar =
+//   the bigger side (oneBarOf): its colour, its lots as the height; a tie goes to the side of the candle's close direction (BarLook.dir),
+//   else red. Bright only when the WINNING side is a spike (its spike label above, CR5300 persistence unchanged); dim otherwise. A
+//   WHITE TICK (2 px, across the bar) at the smaller side's lots ONLY when BOTH sides spiked (a two-sided fight). S / L / R? letters and
+//   the refill dash on the single bar for the winner; the loser's letters stack in the same column only on a both-spiked candle (else
+//   they stay in the hover / record). marks = false (StackStats only, Rassul 23:00 CT correction): NO letters and NO refill dash drawn -
+//   the tick is its only white mark; the hover and the records keep them. Hover, records, settings, read lines and the axis (already
+//   max of the two sides) unchanged.
+//   MboPane: virtual oneBarBull() (-1 here; StackStats / PullStats return their bid side 0) and barMarks() (true; StackStats false).
 // 1.5.0 (2026-10-14 night, Rassul via the coordinator: "every order-flow pane gets its own ONE read line in place of its box"):
 //   - "Box shows: Read" (default) no longer draws the READ box (read + blue options line + the numbers hover grid). Each pane draws ONE
 //     read line at the box's Position / Offset (planLine), ONLY while price is inside a key-level or gamma zone (ZoneRead.h: level
@@ -129,7 +139,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.5.0";   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.6.0";   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -1224,6 +1234,58 @@ inline int spikeSideOf(const bool spk[2], const bool ratioOk[2], const double ra
     if (a != b) return a > b ? 0 : 1;
     return v[0] >= v[1] ? 0 : 1;
 }
+// (1.6.0) the pane title IRT shows in the pane's title row (parmsTitle): "<title> v<version>", cut to the buffer, always terminated
+inline std::string titleText(const char* title, const char* version) { return std::string(title ? title : "") + " v" + (version ? version : ""); }
+inline bool copyTitle(char* out, int size, const char* title, const char* version) {
+    if (!out || size <= 1) return false;
+    const std::string t = titleText(title, version);
+    const size_t n = t.size() < (size_t)(size - 1) ? t.size() : (size_t)(size - 1);
+    std::memcpy(out, t.data(), n); out[n] = 0; return true;
+}
+// (1.6.0, Rassul 22:37 CT) ONE BAR PER CANDLE. bull = the pane's buyer side (BidAskStats 1 = offers lifted; Stack / Pull 0 = bids);
+// the other side is the red one. dir = the candle's close direction (+1 up, -1 down, 0 flat / unknown).
+struct OneBar { int side = -1; long long v = 0, other = 0; bool bright = false, tick = false; };
+inline int oneBarWinner(const long long v[2], int dir, int bull) {
+    if (bull != 0 && bull != 1) bull = 1;
+    if (v[0] <= 0 && v[1] <= 0) return -1;                              // nothing on either side: no bar
+    if (v[0] != v[1]) return v[0] > v[1] ? 0 : 1;                        // the bigger side
+    return dir > 0 ? bull : 1 - bull;                                    // a tie: the close direction's side, else red
+}
+inline OneBar oneBarOf(const long long v[2], const bool spike[2], int dir, int bull) {
+    OneBar o; o.side = oneBarWinner(v, dir, bull); if (o.side < 0) return o;
+    o.v = v[o.side]; o.other = v[1 - o.side] > 0 ? v[1 - o.side] : 0;
+    o.bright = spike[o.side];                                            // bright = the WINNER is a spike
+    o.tick = spike[0] && spike[1];                                       // white tick = BOTH sides met their own spike rule
+    return o;
+}
+// the single bar spans both old bars' room (the slot's inner 80%); the tick is 1 px wider each side (inside the slot) so it reads as a
+// mark across the bar, at the smaller side's height, 2 px tall (drawn t .. t + 2, the bottom edge unpainted; the box is kept t .. t + 2
+// for the overlap checks)
+inline void oneBarSpan(int xc, int slot, int& l, int& r) { const Pair p = pairIn(xc, slot); l = p.l[0]; r = p.r[1]; }
+inline LBox oneTickBox(int xc, int slot, int yBase, int hSmall, int hBar) {
+    int l = 0, r = 0; oneBarSpan(xc, slot, l, r);
+    const int sl = xc - slot / 2, sr = sl + (slot > 2 ? slot - 1 : 1);
+    if (l - 1 >= sl) --l;
+    if (r + 1 <= sr) ++r;
+    int h = hSmall < 1 ? 1 : hSmall; if (h > hBar) h = hBar;
+    const int t = yBase - h;
+    return LBox{ l, t, r, t + 2, '-', -1 };
+}
+// the letters of a one-bar candle: the winner's at the bottom of the bar; the loser's stacked in the same column (above them) only on
+// a both-spiked candle; never over the tick (then the column starts above it). side in the boxes = the REAL side (0 / 1).
+inline std::vector<LBox> oneBarLetters(int slotL, int slotR, int cx, int yBottom, int yTop, const OneBar& ob, const std::string ls[2], int bw, int bh,
+                                       const LBox* tick) {
+    std::vector<LBox> out; if (ob.side < 0) return out;
+    const int w = ob.side;
+    const std::string lose = ob.tick ? ls[1 - w] : std::string();
+    out = letterBoxes(slotL, slotR, cx, cx, yBottom, yTop, ls[w], lose, bw, bh);
+    if (tick) {
+        bool hit = false; for (size_t k = 0; k < out.size() && !hit; ++k) hit = overlaps(out[k], *tick);
+        if (hit) out = letterBoxes(slotL, slotR, cx, cx, tick->t - 2, yTop, ls[w], lose, bw, bh);
+    }
+    for (size_t k = 0; k < out.size(); ++k) out[k].side = out[k].side == 0 ? w : 1 - w;
+    return out;
+}
 
 // =====================================================================================================================
 // TIME: the 17:00 Central trading day of a bar END stamp (local clock fields), as yyyymmdd; at / after 17:00 = the next day
@@ -1665,7 +1727,8 @@ inline void fillFlat(cppExtension* x, int l, int t, int r, int b, COLOR fill) {
 }
 struct BarLook { bool ok = false; long long v[2] = {0, 0}; bool spike[2] = {false, false}; std::string let[2]; long long dash[2] = {-1, -1}; bool ratioOk[2] = {false, false}; double ratio[2] = {0, 0};
                  std::string mark[2]; COLOR markCol[2] = {0, 0};      // 1.1.0: the stop-run mark ("R" / "R?") per side, its colour
-                 long long p100[2] = {0, 0}; };                        // 1.2.0: the pace (x100, 0 = none) for the spike label's middle row
+                 long long p100[2] = {0, 0};                           // 1.2.0: the pace (x100, 0 = none) for the spike label's middle row
+                 int dir = 0; };                                       // 1.6.0: the candle's close direction (one-bar ties)
 struct PaneGeo { int left = 0, top = 0, right = 0, bottom = 0, yBase = 0, px = 1, reserve = 0, edge = 0; };
 // the pane geometry: bars from yBase = bottom - 1 up px pixels; the text area ends at the last bar (never the empty space right
 // of price) and never over the price axis
@@ -1683,10 +1746,14 @@ inline PaneGeo paneGeo(cppExtension* x, int mode) {
     return g;
 }
 // the candles: two bars each (left / right), spike colours, white refill dashes, letters - all with no outline (1.0.1: the hovered
-// candle is no longer outlined white; the info box and the message line show which candle is read)
+// candle is no longer outlined white; the info box and the message line show which candle is read). (1.6.0) oneBull = 0 / 1 (the pane's
+// buyer side): ONE bar per candle (oneBarOf); -1 (default) = the two bars as before. marks = false: no letters / R marks / refill dash
+// (StackStats, Rassul 23:00 CT; the hover and the records keep them).
 inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot, long long top, int hov, const COLOR normal[2], const COLOR spike[2],
-                     const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid = std::vector<LBox>()) {
+                     const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid = std::vector<LBox>(),
+                     int oneBull = -1, bool marks = true) {
     if (top <= 0) return;
+    const bool one = oneBull == 0 || oneBull == 1;
     cppExtension::FONT lf; lf.id = cppExtension::HELVETICA; lf.size = 8; lf.style = cppExtension::BOLD;   // (1.3.0) 8 pt white text (was 7 pt in white boxes)
     std::vector<std::pair<int, BarLook> > lets;
     for (int i = v0; i <= v1; ++i) {
@@ -1694,6 +1761,21 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         const int xc = xOf(i); if (xc < g.left || xc > g.right) continue;
         const Pair p = pairIn(xc, slot);
         (void)hov;                                                          // 1.0.1: no hover outline
+        if (one) {                                                          // (1.6.0) the bigger side's bar, its dash, the both-spiked tick
+            const OneBar ob = oneBarOf(b.v, b.spike, b.dir, oneBull);
+            if (ob.side >= 0) {
+                const int w = ob.side; int l = 0, r = 0; oneBarSpan(xc, slot, l, r);
+                const int hb = barHeight(ob.v, top, g.px);
+                if (hb > 0) fillFlat(x, l, g.yBase - hb, r, g.yBase, ob.bright ? spike[w] : normal[w]);
+                if (marks && b.dash[w] >= 0 && hb > 0) {                   // the winner's refill dash (marks off = StackStats: none)
+                    int dh = barHeight(b.dash[w] < ob.v ? b.dash[w] : ob.v, top, g.px); if (dh < 2) dh = 2; if (dh > hb) dh = hb;
+                    fillFlat(x, l, g.yBase - dh, r, g.yBase - dh + 2, C_WHITE);
+                }
+                if (ob.tick && hb > 0) { const LBox t = oneTickBox(xc, slot, g.yBase, barHeight(ob.other, top, g.px), hb); fillFlat(x, t.l, t.t, t.r, t.b, C_WHITE); }
+            }
+            if (marks && (!b.let[0].empty() || !b.let[1].empty() || !b.mark[0].empty() || !b.mark[1].empty())) lets.push_back(std::make_pair(i, b));
+            continue;
+        }
         int h[2] = {0, 0};
         for (int s = 0; s < 2; ++s) {
             h[s] = barHeight(b.v[s], top, g.px);
@@ -1716,7 +1798,14 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
             const BarLook& lb = lets[k].second;
             std::string ls[2];
             for (int s = 0; s < 2; ++s) ls[s] = lb.mark[s].empty() ? lb.let[s] : lb.let[s].substr(0, 1) + "R";   // 1.1.0: the mark lowest
-            std::vector<LBox> bx = letterBoxes(sl, sr, (p.l[0] + p.r[0]) / 2, (p.l[1] + p.r[1]) / 2, g.yBase - 1, g.top + g.reserve, ls[0], ls[1], bw, bh);
+            std::vector<LBox> bx;
+            if (one) {                                                      // (1.6.0) on the single bar: the winner's (+ the loser's when both spiked)
+                const OneBar ob = oneBarOf(lb.v, lb.spike, lb.dir, oneBull);
+                if (ob.side < 0) continue;
+                const int hb = barHeight(ob.v, top, g.px);
+                const LBox t = oneTickBox(xc, slot, g.yBase, barHeight(ob.other, top, g.px), hb);
+                bx = oneBarLetters(sl, sr, (p.l[0] + p.r[1]) / 2, g.yBase - 1, g.top + g.reserve, ob, ls, bw, bh, ob.tick && hb > 0 ? &t : nullptr);
+            } else bx = letterBoxes(sl, sr, (p.l[0] + p.r[0]) / 2, (p.l[1] + p.r[1]) / 2, g.yBase - 1, g.top + g.reserve, ls[0], ls[1], bw, bh);
             for (size_t j = 0; j < bx.size(); ++j) {
                 const int sd = bx[j].side == 1 ? 1 : 0;
                 const bool isMark = bx[j].c == 'R' && !lb.mark[sd].empty();
@@ -1758,9 +1847,10 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         const BarLook b = look(i); if (!b.ok || (!b.spike[0] && !b.spike[1])) continue;
         const int xc = xOf(i); if (xc > g.right) continue;
         const Pair p = pairIn(xc, slot);
-        const int one = spikeSideOf(b.spike, b.ratioOk, b.ratio, b.v);          // (1.3.0) one label per candle: the bigger side
-        for (int s = 0; s < 2; ++s) if (b.spike[s] && s == one) {
-            SpikeIn si; si.cx = (p.l[s] + p.r[s]) / 2; si.barTop = g.yBase - barHeight(b.v[s], top, g.px); si.side = s;
+        int lab = spikeSideOf(b.spike, b.ratioOk, b.ratio, b.v);                // (1.3.0) one label per candle: the bigger side
+        if (one) { const OneBar ob = oneBarOf(b.v, b.spike, b.dir, oneBull); lab = ob.bright ? ob.side : -1; }   // (1.6.0) the winner, when it spiked
+        for (int s = 0; s < 2; ++s) if (b.spike[s] && s == lab) {
+            SpikeIn si; si.cx = one ? (p.l[0] + p.r[1]) / 2 : (p.l[s] + p.r[s]) / 2; si.barTop = g.yBase - barHeight(b.v[s], top, g.px); si.side = s;
             si.q = std::to_string(b.v[s]); si.x = b.ratioOk[s] ? ratioText(b.ratio[s]) : std::string(); si.p = paceLabel(b.p100[s]);
             si.view = i >= v0 && xc >= g.left;
             sp.push_back(si);
@@ -2097,6 +2187,8 @@ public:
         if (S->hov.hover.set(hoverIndex(ev->v.mouse.bar, getBarCount()))) { ++S->hov.redraws; invalidateChart(false); }
         return RTX_FAIL;                                                   // never swallow the event
     }
+    virtual int oneBarBull() const { return -1; }                         // (1.6.0) the buyer side for one bar per candle; -1 = two bars
+    virtual bool barMarks() const { return true; }                        // (1.6.0) false = no letters / refill dash drawn (StackStats)
     virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax) {
         double mn = 0, mx = 10;
         S_* S = slot_.get(this, false);
@@ -2481,6 +2573,7 @@ private:
         const PaneGeo g = paneGeo(this, S.set.mode);
         const int hov = S.hov.hover.bar >= 0 && S.hov.hover.bar < last ? S.hov.hover.bar : -1;
         const COLOR normal[2] = { C_GREEN_BAR, C_RED_BAR }, spike[2] = { C_GREEN_SPIKE, C_RED_SPIKE };   // left = bids (green), right = offers (red)
+        RTARRAY op(barOpen), cl(barClose);                                 // (1.6.0) the close direction (one-bar ties)
         // (12:05) the info box (hovered candle, else the last closed) and the message line move together
         const int mb = hov >= 0 ? hov : last - 1;
         const long long mt = (long long)times[mb];
@@ -2518,8 +2611,9 @@ private:
             BarLook k; const PaneBar* b = barOf(i); if (!b) return k;
             k.ok = true;
             for (int s = 0; s < 2; ++s) { k.v[s] = L::value(b->r, 0, s); k.spike[s] = b->spike[s]; k.dash[s] = b->dash[s]; k.ratioOk[s] = b->m[0].ratioOk[s]; k.ratio[s] = b->m[0].ratio[s]; k.p100[s] = b->r.pace100[s]; if (i != last) k.let[s] = b->let[s]; }
+            if (i < op.count && i < cl.count) { const float o = op[i], c = cl[i]; if (std::isfinite(o) && std::isfinite(c)) k.dir = c > o ? 1 : c < o ? -1 : 0; }   // (1.6.0)
             return k;
-        }, avoid);
+        }, avoid, oneBarBull(), barMarks());
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
         if (readMode) drawLine(this, LP); else drawPanel(this, P, info, vcol, implOf(zl), false);
     }
