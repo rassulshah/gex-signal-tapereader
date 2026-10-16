@@ -372,6 +372,7 @@ struct LQState {
     // (0.31.0, Rassul 21:27 "build ... ABS gets priority") the ABSORPTION tag / chips: the layers (bit 1 MKT, 2 LMT, 4 FP, 8 DP, 16 = the LMT was an iceberg) seen at one
     // price on one side; sticky (a layer that lit stays lit) until price closes a quarter band through it (then "ABS FAILED" for 1 bar)
     int absDir = 0, absBits = 0, absMTier = 0, absSweep = 1, absFailBar = -100; double absPx = 0, absAx = 0; long long absFill = 0, absIce = 0, absMLots = 0, absMs = 0; std::string absLogKey = "none";
+    long long afKey = 0; std::vector<std::pair<std::string, std::pair<int, std::string> > > afRows;   // (0.32.0) this bar's evidence rows (candidate -> n, row), flushed when the bar changes
     std::string warnSeen; long long warnSinceMs = 0;                                         // (0.22.9) how long the warning on screen has held                                // (0.22.7) the verdict on screen (sticky)                  // (0.20.0) the banner verdict last drawn (status)
     int warnPx = 0;                                // (0.24.0) the banner's drawn height in px (what render() reserves below it)
     bns::Settings bn; long long bnStampT = -2, bnStampN = -2, bnCheckMs = -1; std::string bnMkt, bnWhy;   // (0.24.0) banner settings
@@ -1387,7 +1388,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
             o << "MKT_ORDERS," << bfl::VERSION << ",market orders " << S.mkt.nAll << ",fills " << S.mkt.fills << ",no aggressor id " << S.mkt.noAggr
               << ",start " << S.mkt.start() << ",big " << S.mkt.big.size() << (ok ? ",Mkt mu " + std::to_string((long long)std::llround(mu)) + " / 1SD " + std::to_string((long long)std::llround(v[0]))
               + " / 2SD " + std::to_string((long long)std::llround(v[1])) + " / 3SD " + std::to_string((long long)std::llround(v[2])) : std::string(",learning"))
-              << ",drawn " << S.mktDrawn << "\nABS_BADGE,0.31.0,dir " << S.absDir << ",px " << S.absPx << ",layers " << S.absBits << " (" << absCount(S.absBits) << "/4),mkt lots " << S.absMLots << " sweep " << S.absSweep << ",lmt fill " << S.absFill << " ice " << S.absIce << ",dp ax " << S.absAx << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
+              << ",drawn " << S.mktDrawn << "\nABS_BADGE,0.32.0,dir " << S.absDir << ",px " << S.absPx << ",layers " << S.absBits << " (" << absCount(S.absBits) << "/4),mkt lots " << S.absMLots << " sweep " << S.absSweep << ",lmt fill " << S.absFill << " ice " << S.absIce << ",dp ax " << S.absAx << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
         }
         o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",lines under 1SD (not drawn) " << S.boUnder1sd << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 = 1SD dim, 2 = 2SD full colour, 3 = 3SD full colour + outline),start " << S.boBase << " lots,big lots " << S.bldN << (S.bldOk ? std::string(",Big mu ") + std::to_string((long long)std::llround(S.bldMu)) + " 1SD " + std::to_string((long long)std::llround(S.bldV[0])) + " 2SD " + std::to_string((long long)std::llround(S.bldV[1])) + " 3SD " + std::to_string((long long)std::llround(S.bldV[2])) : std::string(",learning (needs 30) - steps of the start used")) << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
@@ -1570,6 +1571,26 @@ void LiquidityProfile::orders(LQState& S, long long st) {
         }
     });
     if (S.boSet.on && S.bfNow > 0) { S.mkt.step(S.bfNow); S.ice.step(S.bfNow); S.mktOk = S.mkt.stats(S.mktMu, S.mktV); }   // (0.28.0)
+    {   // (0.32.0, Rassul 22:17 "mkt lmt fp and dp ... must all be tracked together") every market order of 10+ lots and every ended iceberg to a file, RAW (whatever
+        // the yardstick says), so the studies can find the best definition per market: <MKT>-<sym>-<spb>-mktorders-<session>.csv / -iceorders-<session>.csv
+        const std::string d2 = dir();
+        auto clk = [](long long ms) { const long long ts = ms / 1000; char tb[16]; std::snprintf(tb, sizeof(tb), "%02lld:%02lld:%02lld", (ts % 86400) / 3600, (ts % 3600) / 60, ts % 60); return std::string(tb); };
+        if (S.boSession >= 0 && !d2.empty()) {
+            std::vector<std::string> L;
+            for (size_t i = 0; i < S.mkt.fresh.size(); ++i) { const bfl::Mkt::Ord& o = S.mkt.fresh[i].second; if (o.lots <= 0) continue;
+                char b2[240]; std::snprintf(b2, sizeof(b2), "%s,%s,%s,%lld,%.2f,%.2f,%.2f,%d,%d,%lld", clk(o.t0).c_str(), clk(o.tLast).c_str(), o.side == bfl::BID ? "BUY" : "SELL", o.lots,
+                    o.pxLots / (double)o.lots * tick, o.lo * tick, o.hi * tick, (int)(o.hi - o.lo + 1), o.big ? 1 : 0, (long long)(o.tLast - o.t0));
+                L.push_back(b2); }
+            if (!L.empty() && appendLines(d2 + "\\" + recordStem(S) + "-mktorders-" + std::to_string(S.boSession) + ".csv", "start_ct,end_ct,aggressor,lots,vwap,lo,hi,levels,big(1SD yardstick),ms", L)) S.mkt.fresh.clear();
+            else if (S.mkt.fresh.size() > 4000) S.mkt.fresh.clear();
+            std::vector<std::string> I;
+            for (size_t i = 0; i < S.ice.fresh.size(); ++i) { const bfl::Ice::Ord& o = S.ice.fresh[i].second;
+                char b2[200]; std::snprintf(b2, sizeof(b2), "%s,%s,%.2f,%lld,%lld,%d", clk(o.tLast).c_str(), o.side == bfl::BID ? "BID" : "ASK", o.px * tick, o.shown, o.traded, o.reloads);
+                I.push_back(b2); }
+            if (!I.empty() && appendLines(d2 + "\\" + recordStem(S) + "-iceorders-" + std::to_string(S.boSession) + ".csv", "end_ct,resting_side,px,shown,traded,reloads", I)) S.ice.fresh.clear();
+            else if (S.ice.fresh.size() > 4000) S.ice.fresh.clear();
+        }
+    }
     if (S.obClearMs < 0 || st - S.obClearMs >= 60000 || st < S.obClearMs) { S.obAcc = off::Acc(); S.obClearMs = st; }   // bounded scratch
     for (size_t i = 0; i < S.e.attempts.size(); ++i) {
         lqp::Attempt& a = S.e.attempts[i]; if (a.done) continue;
@@ -2430,6 +2451,16 @@ void LiquidityProfile::renderWarning(LQState& S) {
                     if (m.lots > a.mlots) { a.mlots = m.lots; a.sweep = (int)(m.hi - m.lo + 1); a.mtier = !S.mktOk ? 0 : m.lots >= (long long)std::llround(S.mktV[2]) ? 3 : m.lots >= (long long)std::llround(S.mktV[1]) ? 2 : 1; }
                 }
                 a.n = absCount(a.bits);
+                {   // (0.32.0) the raw evidence of every candidate in this bar, all four layers side by side (flushed to -absflow- when the bar closes)
+                    const long long bk = barKey(lastBar);
+                    std::string nm = zn::nearest(named, c.px, Z.band).name; for (size_t q = 0; q < nm.size(); ++q) if (nm[q] == ',') nm[q] = ';';
+                    char rb[400]; std::snprintf(rb, sizeof(rb), "%d,%.2f,%d,%d,%lld,%d,%d,%lld,%lld,%.2f,%d,%d,%.2f,%s", c.dir, c.px, a.bits, a.n, a.mlots, a.sweep, a.mtier, a.fill, a.ice, a.ax, c.src, c.circle ? 1 : 0, (double)clA[lastBar], nm.c_str());
+                    const std::string key = std::to_string(c.dir) + "|" + std::to_string((long long)std::llround(c.px / tick));
+                    bool put = false;
+                    for (size_t q = 0; q < S.afRows.size(); ++q) if (S.afRows[q].first == key) { if (a.n >= S.afRows[q].second.first) S.afRows[q].second = std::make_pair(a.n, std::string(rb)); put = true; }
+                    if (!put && S.afRows.size() < 40) S.afRows.push_back(std::make_pair(key, std::make_pair(a.n, std::string(rb))));
+                    if (S.afKey == 0) S.afKey = bk;
+                }
                 abv.push_back(a);
             }
             if (S.absDir != 0) {                                               // the tag fails when price closes a quarter band through it
@@ -2545,6 +2576,18 @@ void LiquidityProfile::renderWarning(LQState& S) {
 #endif
     }
 #ifndef LQ_FLOW
+    {   // (0.32.0) when the bar changes, the previous bar's evidence rows go to <MKT>-<sym>-<spb>-absflow-<session>.csv
+        const long long bkNow = lastBar >= 0 && lastBar < (int)S.barEndMs.size() ? S.barEndMs[(size_t)lastBar] / 1000 : 0LL;
+        if (S.afKey != 0 && bkNow != S.afKey && S.boSession >= 0) {
+            const std::string d = dir();
+            if (!d.empty() && !S.afRows.empty()) {
+                std::vector<std::string> L; const long long kk = S.afKey;
+                for (size_t q = 0; q < S.afRows.size(); ++q) L.push_back(std::to_string(kk) + "," + S.afRows[q].second.second);
+                appendLines(d + "\\" + recordStem(S) + "-absflow-" + std::to_string(S.boSession) + ".csv", "bar_key,dir,px,bits(1 MKT 2 LMT 4 FP 8 DP 16 iceberg),n,mkt_lots_15m,sweep_levels,mkt_tier,lmt_fill_lots,iceberg_traded,dp_ax,src(1 fill 2 A 3 circle 4 initiative),fp_circle,close,level", L);
+            }
+            S.afRows.clear(); S.afKey = bkNow;
+        } else if (S.afKey == 0) S.afKey = bkNow;
+    }
     {   const std::string key = absHave ? std::to_string(S.absDir) + "," + pxTxt(S.absPx) + "," + std::to_string(S.absBits) : std::string("none");   // every change of the tag to <...>-abs-<session>.csv
         if (key != S.absLogKey && S.boSession >= 0) {
             const std::string d = dir();

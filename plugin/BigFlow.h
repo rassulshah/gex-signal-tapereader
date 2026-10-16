@@ -20,7 +20,7 @@
 #include <vector>
 
 namespace bfl {
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };              // FILL side = the aggressor: BID = a buyer lifted the offer, ASK = a seller hit the bid
 static const long long DONE_MS = 2000;      // a market order is complete 2 s after its last fill
@@ -56,14 +56,16 @@ inline std::vector<Mark> topMarks(const std::vector<Mark>& in, int per) {
 // ---- big market orders ----------------------------------------------------------------------------------------------------------
 class Mkt {
 public:
-    struct Ord { int side = BID; long long lots = 0; double pxLots = 0; Tick lo = 0, hi = 0; long long t0 = 0, tLast = 0; };
+    struct Ord { int side = BID; long long lots = 0; double pxLots = 0; Tick lo = 0, hi = 0; long long t0 = 0, tLast = 0; bool big = false; };
+    std::vector<std::pair<long long, Ord> > fresh;    // (1.2.0) completed orders of LOG_MIN+ lots, for the plugin to write to the tracking file (raw, whatever the yardstick says)
+    static const long long LOG_MIN = 10;
     std::unordered_map<long long, Ord> open;          // aggressor id -> its fills so far
     std::deque<std::pair<long long, Ord>> done;       // completed in the last 60 min (any size at or above the start when completed)
     std::vector<long long> big;                       // completed sizes >= the start (the yardstick sample, this session)
     std::vector<long long> cnt;                       // completed sizes 1..1023 (+ the rest in the last) for the start
     long long nAll = 0, fills = 0, noAggr = 0;
     Mkt() : cnt(1024, 0) {}
-    void clear() { open.clear(); done.clear(); big.clear(); std::fill(cnt.begin(), cnt.end(), 0); nAll = fills = noAggr = 0; }
+    void clear() { open.clear(); done.clear(); fresh.clear(); big.clear(); std::fill(cnt.begin(), cnt.end(), 0); nAll = fills = noAggr = 0; }
     long long start() const {                         // the 99th percentile of every completed market order, never under 3
         if (nAll <= 0) return 3;
         const long long want = std::max(1LL, (long long)std::ceil(0.01 * (double)nAll));
@@ -84,7 +86,8 @@ public:
         const long long st = start();
         for (std::unordered_map<long long, Ord>::iterator it = open.begin(); it != open.end();) {
             if (now - it->second.tLast < DONE_MS) { ++it; continue; }
-            const Ord& o = it->second;
+            Ord o = it->second; o.big = o.lots >= st;
+            if (o.lots >= LOG_MIN && fresh.size() < 5000) fresh.push_back(std::make_pair(it->first, o));
             ++nAll; cnt[(size_t)std::min<long long>(o.lots, (long long)cnt.size() - 1)]++;
             if (o.lots >= st) { big.push_back(o.lots); done.push_back(std::make_pair(it->first, o)); }
             it = open.erase(it);
@@ -112,7 +115,8 @@ public:
     std::unordered_map<long long, std::pair<int, std::pair<Tick, long long> > > seen;   // every resting order: side, px, size (for the shown size)
     std::deque<std::pair<long long, Ord> > done;      // icebergs that ended (filled away / pulled) in the last 60 min
     long long reloadsSeen = 0;
-    void clear() { ord.clear(); seen.clear(); done.clear(); reloadsSeen = 0; }
+    std::vector<std::pair<long long, Ord> > fresh;    // (1.2.0) icebergs that ended, for the tracking file
+    void clear() { ord.clear(); seen.clear(); done.clear(); fresh.clear(); reloadsSeen = 0; }
     static bool is(const Ord& o) { return o.reloads >= 2 && o.shown > 0 && o.traded >= 2 * o.shown; }
     void onNew(long long id, int side, Tick px, long long size) {
         if (side != BID && side != ASK || px <= 0 || size < 0) return;
@@ -146,7 +150,7 @@ public:
     }
     void end(long long id, long long t) {
         std::unordered_map<long long, Ord>::iterator it = ord.find(id);
-        if (it != ord.end()) { if (is(it->second)) { Ord o = it->second; o.tLast = t; done.push_back(std::make_pair(id, o)); } ord.erase(it); }
+        if (it != ord.end()) { if (is(it->second)) { Ord o = it->second; o.tLast = t; done.push_back(std::make_pair(id, o)); if (fresh.size() < 5000) fresh.push_back(std::make_pair(id, o)); } ord.erase(it); }
         seen.erase(id);
     }
     void step(long long now) { while (!done.empty() && done.front().second.tLast < now - KEEP_MS) done.pop_front(); }
