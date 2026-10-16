@@ -41,7 +41,7 @@ inline Range range(int c)
     case LIQ: return Range{ 20, 200, 60 };
     case LEVELS: return Range{ 30, 150, 78 };   // (Rassul 11:39 CT) 40 -> 78 so "LonLO | HL 1.5K" fits
     case DELTA: return Range{ 40, 250, 80 };
-    case BIG: return Range{ 30, 120, 44 };
+    case BIG: return Range{ 30, 180, 44 };   // (LP 0.37.0, Rassul 13:23) three narrow columns LMT F | MKT | LMT R = 168
     default: return Range{ 40, 250, 80 };
     }
 }

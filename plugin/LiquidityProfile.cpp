@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.36.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.37.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -170,7 +170,7 @@ static int warnBlockH(int font, int rows) { return warnH(font) + std::max(1, row
 // may start above this row. The warning sits under it and the column header under the warning.
 static const int LQ_TITLE_ROW_PX = 3;   // (0.27.1, Rassul 18:57 "should be higher because there is black space") the IRT title strip is above the pane: 20 -> 3 px
 static int warnTop(int paneTop) { return paneTop + LQ_TITLE_ROW_PX; }
-static const int LQ_BIG_W = 120;   // (0.32.4, Rassul 08:54 LMT slightly bigger: 112 -> 120, the board's maximum)
+static const int LQ_BIG_W = 168;   // (0.37.0, Rassul 13:23) three narrow columns LMT F 52 | MKT 64 | LMT R 52 (was 120: LMT 64 | MKT 56); the board's maximum is now 180
 static const int LQ_BIG_W_112 = 112;   // (0.28.0) MKT (left half, 56) + BIG (right half, 56): Rassul 19:55 "build out the mkt column"
 static inline int absCount(int bits) { int n = 0; for (int k = 0; k < 4; ++k) n += (bits >> k) & 1; return n; }   // (0.31.0) ABS n / 4
 static const int LQ_BIG_W_OLD = 56;   // (0.22.5, Rassul 10:35 "the column for Big needs to be slightly wider") in ColumnBoard's 30-120 range
@@ -1804,23 +1804,27 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     }
     // 2) the BIG column
     if (S.colBigL < 0 || S.colBigR - S.colBigL < 20) { S.boState = S.boState + " (no BIG column room)"; return; }
-    // (0.28.0) the column holds two: MKT (big market orders, left half) | BIG (big limit orders + icebergs, right half, next to the Delta Profile)
-    // (0.30.0, Rassul 21:14 "update Big Column to LMT Column ... before MKT") LMT (big limit orders + icebergs) is the LEFT half, MKT the right half next to the Delta Profile
-    const int colL = S.colBigL, colR = S.colBigR, cl = colL, mk = colL + (colR - colL) * 5 / 11, cr = mk - 2;   // (0.32.3) MKT 25% wider than LMT (5:4)
+    // (0.37.0, Rassul 13:23 "call the filled column LMT F and the resting column LMT R", mockup 8WY3RzGG2BuG6wtPJsfX9m, "keep + -") THREE narrow columns, left to right:
+    // LMT F (filled limit orders + icebergs "450 I") | MKT (big market orders "+ 120 S") | LMT R (the biggest resting orders, "+" stacking / "-" pulled). F is nearest the
+    // candles: it is the absorption evidence at a level. The footer (mean / 1SD / 2SD / 3SD, lots) sits under LMT R (LMT F uses the same sizes) and under MKT.
+    const int colL = S.colBigL, colR = S.colBigR, tw = colR - colL;
+    const int fl = colL, fr = colL + tw * 52 / 168, ml = fr, mr = fr + tw * 64 / 168, cl = mr, cr = colR;   // cl / cr = the LMT R column
     { RCT bg; bg.set(coord(colL), coord(top), coord(colR), coord(bottom)); bg.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
-    { setPen(0x00000000, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = coord(mk - 1); a.v = coord(top); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(mk - 1); b.v = coord(bottom); b.drawLineTo(); }
+    { setPen(0x00000000, 1, P_SOLID); const int xs[2] = { fr - 1, mr - 1 };
+      for (int k = 0; k < 2; ++k) { PNT a; a.set(0, 0.0f); a.h = coord(xs[k]); a.v = coord(top); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(xs[k]); b.v = coord(bottom); b.drawLineTo(); } }
     FONT fh; fh.id = HELVETICA; fh.size = coord(9); fh.style = BOLD; setFont(fh); setTextColor(C_GREY);
-    { RCT r; r.set(coord(cl), coord(top + 2), coord(cr), coord(top + 14)); r.drawText("LMT", true, false); }
-    { RCT r; r.set(coord(mk), coord(top + 2), coord(colR), coord(top + 14)); r.drawText("MKT", true, false); }
-    {   // (0.26.0) the reference at the bottom of the column: this market's Big mu and 1 / 2 / 3 SD sizes (lots)
-        FONT fr; fr.id = HELVETICA; fr.size = coord(9); fr.style = BOLD; setFont(fr); setTextColor(C_GREY);
+    { RCT r; r.set(coord(fl), coord(top + 2), coord(fr - 2), coord(top + 14)); r.drawText("LMT F", true, false); }
+    { RCT r; r.set(coord(ml), coord(top + 2), coord(mr - 2), coord(top + 14)); r.drawText("MKT", true, false); }
+    { RCT r; r.set(coord(cl), coord(top + 2), coord(cr), coord(top + 14)); r.drawText("LMT R", true, false); }
+    {   // (0.26.0) the reference at the bottom of LMT R: this market's large-lot mean and 1 / 2 / 3 SD sizes (lots)
+        FONT fr2; fr2.id = HELVETICA; fr2.size = coord(9); fr2.style = BOLD; setFont(fr2); setTextColor(C_GREY);
         const int rh = rowPx(9);
         std::vector<std::pair<std::string, std::string>> rows;
         if (S.bldOk) {
-            rows.push_back(std::make_pair(std::string("Big \xB5"), std::to_string((long long)std::llround(S.bldMu))));
+            rows.push_back(std::make_pair(std::string("\xB5"), std::to_string((long long)std::llround(S.bldMu))));
             for (int k = 0; k < 3; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD", std::to_string((long long)std::llround(S.bldV[k]))));
-        } else {   // (0.32.1, Rassul 22:24 "the thresholds at the bottom are not being displayed") while learning, the size in use is still shown ("~" = provisional) and the count on its own row
-            rows.push_back(std::make_pair(std::string("Big~"), std::to_string((long long)S.bo.threshold())));
+        } else {   // (0.32.1) while learning, the size in use is still shown ("~" = provisional) and the count on its own row
+            rows.push_back(std::make_pair(std::string("~"), std::to_string((long long)S.bo.threshold())));
             rows.push_back(std::make_pair(std::string("n"), std::to_string(S.bldN) + "/30"));
         }
         int y = bottom - 4 - (int)rows.size() * rh;
@@ -1829,7 +1833,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
             a.drawText(rows[i].second.c_str(), false, true);
         }
     }
-    renderMkt(S, mk, colR, top, bottom);                                  // (0.28.0) the MKT half
+    renderMkt(S, ml, mr, top, bottom);                                    // (0.28.0) the MKT column
     std::vector<std::pair<int, int>> used;                          // y bands taken (top, bottom)
     auto freeAt = [&](int t0, int b0) { for (size_t i = 0; i < used.size(); ++i) if (!(b0 < used[i].first || t0 > used[i].second)) return false; return true; };
     const int bfont = std::max(bol::FONT_MIN, std::min(bol::FONT_MAX, S.boSet.font));   // (0.23.0) his "Big order font pt"
@@ -1861,7 +1865,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
             const bol::Line L = S.bo.now((size_t)S.bo.live[s]);
             px = L.px; n = (long long)std::llround(S.boSize[s] > 0 ? S.boSize[s] : (double)L.left);
             const long long nTier = std::max(n, (long long)L.left);
-            if (nTier < tcut[0]) continue;                                  // (0.26.0) under 1SD: no box (the chart line stays)
+            if (nTier < tcut[0]) continue;                                  // (0.26.0) under 1SD: nothing printed (the chart line stays)
             tier = nTier >= tcut[2] ? 3 : nTier >= tcut[1] ? 2 : 1;
             tx = (S.boSign[s] > 0 ? "+" : S.boSign[s] < 0 ? "-" : "") + std::to_string(n);
         } else {
@@ -1872,32 +1876,38 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         const int y = yOfPx(px); const int t0 = y - boxH / 2, b0 = t0 + boxH;
         if (t0 < top + 14 || b0 > bottom) continue;
         const bool bull = meaning(s, S.bo.live[s] >= 0 ? S.boSign[s] : 0);
-        const COLOR fill = tier == 1 ? (bull ? C_BUY_DIM : C_SELL_DIM) : (bull ? C_BUY : C_SELL);
-        RCT r; r.set(coord(cl + 2), coord(t0), coord(cl + 2 + boxW), coord(b0)); r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID);
-        if (tier == 3) { setPen(C_WHITE, 2, P_SOLID); RCT o; o.set(coord(cl + 1), coord(t0 - 1), coord(cl + 3 + boxW), coord(b0 + 1)); o.draw(2, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW); }
+        // (0.37.0, Rassul "LMT R", "keep + -") LMT R: text only - dim colour = 1SD, full colour = 2SD, a solid block = 3SD and over; no outline
+        RCT r; r.set(coord(cl + 2), coord(t0), coord(cr - 2), coord(b0));
+        if (tier == 3) { const COLOR fill = bull ? C_BUY : C_SELL; r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID); }
         setFont(tier == 1 ? fp1 : fb);
-        setTextColor(tier == 1 ? (bull ? C_MINT : C_PINK) : (bull ? C_INK : C_WHITE)); r.drawText(tx.c_str(), true, false);
+        setTextColor(tier == 3 ? (bull ? C_INK : C_WHITE) : tier == 1 ? (bull ? C_BUY_DIM : C_SELL_DIM) : (bull ? C_BUY : C_SELL));
+        r.drawText(tx.c_str(), true, false);
         used.push_back(std::make_pair(t0, b0)); ++S.boLabels; S.boTier[s] = tier;
     }
-    // (0.28.0, Rassul 19:55 mockup iceberg-twosided-v1) ICEBERGS: one resting order id that keeps reloading after fills (2+ reloads,
-    // traded 2x+ the most it ever showed) - "i 450" = 450 lots traded so far, growing live. Floor = Big mu (an iceberg absorbs what a
-    // big order would, while showing little); 1SD = full colour, 3SD+ = white outline, under 1SD dimmed. Bid iceberg green, offer red.
+    // (0.37.0, Rassul "executed LMT should show iceberg in white and I") LMT F: a live iceberg prints as "450 I" (lots traded so far, growing live); the number is the side's
+    // colour (bid green, offer red; dim under 1SD), the I is white and sits after the number like the sweep S in MKT. Floor = Big mu.
     S.iceLive = 0;
+    std::vector<std::pair<int, int> > usedF;                          // y bands taken in LMT F
+    auto freeF = [&](int t0, int b0) { for (size_t i = 0; i < usedF.size(); ++i) if (!(b0 < usedF[i].first || t0 > usedF[i].second)) return false; return true; };
+    auto putF = [&](int t0, int h, const std::string& num, COLOR c, bool ice) {
+        const std::string tail = " I";
+        const int w1 = (int)getTextWidth(num.c_str(), -1), w2 = ice ? (int)getTextWidth(tail.c_str(), -1) : 0;
+        const int x = fl + 2 + std::max(0, ((fr - fl - 4) - (w1 + w2)) / 2);
+        RCT a; a.set(coord(x), coord(t0), coord(fr - 1), coord(t0 + h)); setTextColor(c); a.drawText(num.c_str(), false, false);
+        if (ice) { RCT b; b.set(coord(x + w1), coord(t0), coord(fr - 1), coord(t0 + h)); setTextColor(C_WHITE); b.drawText(tail.c_str(), false, false); }
+    };
     {   const long long iFloor = S.bldOk ? std::max(1LL, (long long)std::llround(S.bldMu)) : std::max(10LL, 2 * minShow);
         const std::vector<std::pair<long long, bfl::Ice::Ord> > lv = S.ice.live(iFloor, 2);
         for (size_t i = 0; i < lv.size(); ++i) {
             const bfl::Ice::Ord& o = lv[i].second; const int s = o.side;
             const int tier = o.traded >= tcut[2] ? 3 : o.traded >= tcut[0] ? 2 : 1;
-            const std::string tx = "i " + std::to_string(o.traded);
             int y = yOfPx(o.px), t0 = y - boxH / 2, tries = 0;
-            while (tries < 4 && !freeAt(t0, t0 + boxH)) { t0 += (tries % 2 ? -1 : 1) * (tries / 2 + 1) * (boxH + 1); ++tries; }
-            if (!freeAt(t0, t0 + boxH) || t0 < top + 14 || t0 + boxH > bottom) continue;
-            const int b0 = t0 + boxH; const bool bull = s == bfl::BID;
-            const COLOR fill = tier == 1 ? (bull ? C_BUY_DIM : C_SELL_DIM) : (bull ? C_BUY : C_SELL);
-            RCT r; r.set(coord(cl + 2), coord(t0), coord(cl + 2 + boxW), coord(b0)); r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID);
-            if (tier == 3) { RCT o2; o2.set(coord(cl + 1), coord(t0 - 1), coord(cl + 3 + boxW), coord(b0 + 1)); o2.draw(2, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW); }
-            setFont(tier == 1 ? fp1 : fb); setTextColor(tier == 1 ? (bull ? C_MINT : C_PINK) : (bull ? C_INK : C_WHITE)); r.drawText(tx.c_str(), true, false);
-            used.push_back(std::make_pair(t0, b0)); ++S.iceLive;
+            while (tries < 4 && !freeF(t0, t0 + boxH)) { t0 += (tries % 2 ? -1 : 1) * (tries / 2 + 1) * (boxH + 1); ++tries; }
+            if (!freeF(t0, t0 + boxH) || t0 < top + 14 || t0 + boxH > bottom) continue;
+            const bool bull = s == bfl::BID;
+            setFont(tier == 1 ? fp1 : fb);
+            putF(t0, boxH, std::to_string(o.traded), tier == 1 ? (bull ? C_BUY_DIM : C_SELL_DIM) : (bull ? C_BUY : C_SELL), true);
+            usedF.push_back(std::make_pair(t0, t0 + boxH)); ++S.iceLive;
         }
     }
     // executed in the last 60 min, merged by side + price; the 5 biggest per side
@@ -1918,24 +1928,28 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     }
     std::vector<Ex> keep;
     for (int s = 0; s < 2; ++s) {
-        std::vector<Ex> v; for (size_t i = 0; i < ex.size(); ++i) if (ex[i].side == s) v.push_back(ex[i]);
+        std::vector<Ex> v; for (size_t i = 0; i < ex.size(); ++i) if (ex[i].side == s && (ex[i].ice || ex[i].lots >= tcut[0])) v.push_back(ex[i]);   // (0.37.0) LMT F: 1SD and over, plus every iceberg
         std::sort(v.begin(), v.end(), [](const Ex& a, const Ex& b) { return a.lots > b.lots; });
         for (size_t i = 0; i < v.size() && i < 5; ++i) keep.push_back(v[i]);
     }
     std::sort(keep.begin(), keep.end(), [](const Ex& a, const Ex& b) { return a.px > b.px; });   // top of the chart first
-    const int sfont = std::max(6, bfont - 2);                         // (0.23.0) the filled marks: 2 pt under his setting
-    FONT fs; fs.id = HELVETICA; fs.size = coord(sfont); fs.style = PLAIN; setFont(fs);
-    const int sh = rowPx(sfont);
+    const int sfont = std::max(6, bfont - 1);                         // (0.37.0) the filled marks: 1 pt under his setting
+    FONT fsp; fsp.id = HELVETICA; fsp.size = coord(sfont); fsp.style = PLAIN;
+    FONT fsb = fsp; fsb.style = BOLD;
+    const int sh = rowPx(sfont) + 1;
     for (size_t i = 0; i < keep.size(); ++i) {
         const Ex& e = keep[i]; const int y = yOfPx(e.px);
-        const std::string tx = std::string("\x95 ") + (e.ice ? "i " : "") + (e.n > 1 ? std::to_string(e.n) + "\xD7 " : std::string()) + std::to_string(e.lots);
+        const int tier = e.lots >= tcut[2] ? 3 : e.lots >= tcut[1] ? 2 : 1;
+        const std::string tx = (e.n > 1 ? std::to_string(e.n) + "\xD7 " : std::string()) + std::to_string(e.lots);   // "3\xD7 410"; an iceberg adds a white I after the number
         int t0 = y - sh / 2, tries = 0;
-        while (tries < 6 && !freeAt(t0, t0 + sh)) { t0 += sh + 1; ++tries; }   // never over a live box or another mark
+        while (tries < 6 && !freeF(t0, t0 + sh)) { t0 += sh + 1; ++tries; }   // never over another mark
         if (tries >= 6 || t0 < top + 14 || t0 + sh > bottom) continue;
         const bool old = nowT - e.last > 1800000LL;                  // older than 30 min: dimmer
-        setTextColor(e.side == bol::BID ? (old ? C_SELL_DIM : C_SELL) : (old ? C_BUY_DIM : C_BUY));   // (0.19.1, Rassul 10-15) filled bid RED, filled ask GREEN - the same colours as Big Bid / Ask on the bar (who hit it)
-        RCT r; r.set(coord(cl + 2), coord(t0), coord(cr - 2), coord(t0 + sh)); r.drawText(tx.c_str(), false, true);   // right-aligned
-        used.push_back(std::make_pair(t0, t0 + sh)); ++S.boExec;
+        const bool dim = old || tier == 1;
+        const bool green = e.ice ? e.side == bol::BID : e.side != bol::BID;   // filled bid RED, filled ask GREEN (who hit it, 0.19.1); an iceberg keeps its own side's colour
+        setFont(tier >= 2 ? fsb : fsp);
+        putF(t0, sh, tx, green ? (dim ? C_BUY_DIM : C_BUY) : (dim ? C_SELL_DIM : C_SELL), e.ice);
+        usedF.push_back(std::make_pair(t0, t0 + sh)); ++S.boExec;
     }
 }
 // (0.28.0, Rassul 19:20-19:55 mockup mkt-column-v1) THE MKT HALF: single big MARKET orders (all fills of one aggressor order id) from
@@ -2047,6 +2061,7 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
     auto freeAt = [&](int t0, int b0) { for (size_t i = 0; i < used.size(); ++i) if (!(b0 < used[i].first || t0 > used[i].second)) return false; return true; };
     auto hline = [&](int x0, int x1, int y, COLOR c) { setPen(c, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = coord(x0); a.v = coord(y); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(x1); b.v = coord(y); b.drawLineTo(); };
     static const COLOR C_BUY_DIM2 = 0x00157A3D, C_SELL_DIM2 = 0x00933030;
+    FONT fb3 = fb; fb3.size = coord(bfont + 1);                          // (0.37.0) 3SD and over: a bigger number, no outline, no box
     for (size_t i = 0; i < mk.size(); ++i) {
         const bfl::Mark& m = mk[i];
         const int tier = m.lots >= cut[2] ? 3 : m.lots >= cut[1] ? 2 : 1;
@@ -2055,20 +2070,14 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
         int t0 = yOfPx(m.px) - rh / 2, tries = 0;
         while (tries < 6 && !freeAt(t0, t0 + rh)) { t0 += (tries % 2 ? -1 : 1) * (tries / 2 + 1) * (rh + 1); ++tries; }
         if (!freeAt(t0, t0 + rh) || t0 < top + 14 || t0 + rh > bottom) continue;
-        const int yc = t0 + rh / 2, th = std::max(4, rh / 2 - 1), tx0 = l + 3;
-        for (int k = 0; k < th; ++k) {                                  // the triangle, filled line by line (no glyph: IRT's font has none)
-            const int row = up ? yc + th / 2 - k : yc - th / 2 + k, half = (th - 1 - k) * 4 / 5;
-            hline(tx0 + th / 2 - half, tx0 + th / 2 + half, row, c);
-        }
-        const bool swept = m.hi > m.lo;                                  // (0.29.0) a SWEEP: the order took 2+ price levels
-        const std::string tx = (m.n > 1 ? std::to_string(m.n) + "\xD7 " : std::string()) + std::to_string(m.lots) + (swept ? " " + std::to_string((long long)(m.hi - m.lo + 1)) + "L" : std::string());
-        if (swept) {                                                     // a bar at the column's right edge from the lowest to the highest price taken
-            const int ya = std::max(top + 14, yOfPx(m.hi)), yb = std::min(bottom, yOfPx(m.lo)), bx = r - 4;
-            setPen(c, 2, P_SOLID); PNT a0; a0.set(0, 0.0f); a0.h = coord(bx); a0.v = coord(ya); a0.setDrawPosition(); PNT b0; b0.set(0, 0.0f); b0.h = coord(bx); b0.v = coord(yb); b0.drawLineTo();
-        }
-        setTextColor(c);
-        RCT a; a.set(coord(tx0 + th + 2), coord(t0), coord(r - 8), coord(t0 + rh)); a.drawText(tx.c_str(), false, true);
-        if (tier == 3) { RCT o; o.set(coord(l + 1), coord(t0), coord(r - 1), coord(t0 + rh)); o.draw(1, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW); }
+        // (0.37.0, Rassul 13:2x-13:4x mockup "MKT, LMT F, LMT R") "+ 120" = a buyer lifted, "- 310" = a seller hit; the sweep is a white S after the number (the levels swept are in the status file);
+        // no triangle, no sweep bar, no outline, no coloured box: the tier is the colour (dim 1SD, full 2SD) and the size of the number (3SD)
+        const bool swept = m.hi > m.lo;
+        const std::string tx = std::string(up ? "+ " : "- ") + (m.n > 1 ? std::to_string(m.n) + "\xD7 " : std::string()) + std::to_string(m.lots);
+        setFont(tier == 3 ? fb3 : fb);
+        const int w1 = (int)getTextWidth(tx.c_str(), -1);
+        setTextColor(c); RCT a; a.set(coord(l + 4), coord(t0), coord(r - 2), coord(t0 + rh)); a.drawText(tx.c_str(), false, false);
+        if (swept) { RCT b; b.set(coord(l + 4 + w1 + 3), coord(t0), coord(r - 1), coord(t0 + rh)); setTextColor(C_WHITE); b.drawText("S", false, false); }
         used.push_back(std::make_pair(t0, t0 + rh)); ++S.mktDrawn;
     }
     (void)pl; (void)pane;
@@ -3195,6 +3204,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.36.0");   // LQ_VERSION
+    p->setVersion("0.37.0");   // LQ_VERSION
     return p;
 }
