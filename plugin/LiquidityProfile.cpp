@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.32.4"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.33.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -407,7 +407,9 @@ struct LQState {
     int colBigL = -1, colBigR = -1; std::deque<std::pair<long long, double>> boHist[2]; long long boHistPx[2] = { -1, -1 };
     int boSign[2] = { 0, 0 }; double boSize[2] = { 0, 0 }; long long boNormsMs = -1, boNorms[24] = { 0 }; bool boNormsOk = false;
     int boExec = 0; long long boDepthMin = 0;
-    bfl::Mkt mkt; bfl::Ice ice; long long bfNow = 0; bool mktOk = false; double mktMu = 0, mktV[3] = { 0, 0, 0 };   // (0.28.0)
+    bfl::Mkt mkt; bfl::Ice ice; long long bfNow = 0; bool mktOk = false; double mktMu = 0, mktV[3] = { 0, 0, 0 };
+    struct MN { bool ok = false; long long n = 0, start = 0, bigN = 0; double mu = 0, v[3] = { 0, 0, 0 }; };
+    MN mnAll, mnS[4], mnH[24]; long long mnMs = -1; bool mnHave = false; std::string mnSrc;   // (0.33.0)   // (0.28.0)
     int mktDrawn = 0, iceLive = 0, iceEnded = 0;
 #endif
     ~LQState() { delete md; }
@@ -447,6 +449,7 @@ private:
     void readTrades(LQState& S, long long t, long count);
     void closedBars(LQState& S, long count);
     void loadNorms(LQState& S);
+    void mktNormApply(LQState& S);          // (0.33.0) the market-order norms of the hour (LRA-MktNorms-<MKT>.csv) replace the session-learned MKT sizes
     void loadLayout(LQState& S);
     void loadLevels(LQState& S, long count);
     void zoneRestore(LQState& S, long count);   // (0.17.0) open zone-rule encounters of this session after a restart     // (0.10.0) key levels + CR / PS / HVL + the 14-session RTH range
@@ -1389,7 +1392,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
             o << "MKT_ORDERS," << bfl::VERSION << ",market orders " << S.mkt.nAll << ",fills " << S.mkt.fills << ",no aggressor id " << S.mkt.noAggr
               << ",start " << S.mkt.start() << ",big " << S.mkt.big.size() << (ok ? ",Mkt mu " + std::to_string((long long)std::llround(mu)) + " / 1SD " + std::to_string((long long)std::llround(v[0]))
               + " / 2SD " + std::to_string((long long)std::llround(v[1])) + " / 3SD " + std::to_string((long long)std::llround(v[2])) : std::string(",learning"))
-              << ",drawn " << S.mktDrawn << "\nABS_BADGE,0.32.0,dir " << S.absDir << ",px " << S.absPx << ",layers " << S.absBits << " (" << absCount(S.absBits) << "/4),mkt lots " << S.absMLots << " sweep " << S.absSweep << ",lmt fill " << S.absFill << " ice " << S.absIce << ",dp ax " << S.absAx << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
+              << ",drawn " << S.mktDrawn << ",norm " << (S.mnSrc.empty() ? std::string("none (session-learned)") : S.mnSrc) << "\nABS_BADGE,0.32.0,dir " << S.absDir << ",px " << S.absPx << ",layers " << S.absBits << " (" << absCount(S.absBits) << "/4),mkt lots " << S.absMLots << " sweep " << S.absSweep << ",lmt fill " << S.absFill << " ice " << S.absIce << ",dp ax " << S.absAx << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
         }
         o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",lines under 1SD (not drawn) " << S.boUnder1sd << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 = 1SD dim, 2 = 2SD full colour, 3 = 3SD full colour + outline),start " << S.boBase << " lots,big lots " << S.bldN << (S.bldOk ? std::string(",Big mu ") + std::to_string((long long)std::llround(S.bldMu)) + " 1SD " + std::to_string((long long)std::llround(S.bldV[0])) + " 2SD " + std::to_string((long long)std::llround(S.bldV[1])) + " 3SD " + std::to_string((long long)std::llround(S.bldV[2])) : std::string(",learning (needs 30) - steps of the start used")) << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
@@ -1571,7 +1574,7 @@ void LiquidityProfile::orders(LQState& S, long long st) {
             }
         }
     });
-    if (S.boSet.on && S.bfNow > 0) { S.mkt.step(S.bfNow); S.ice.step(S.bfNow); S.mktOk = S.mkt.stats(S.mktMu, S.mktV); }   // (0.28.0)
+    if (S.boSet.on && S.bfNow > 0) { S.mkt.step(S.bfNow); S.ice.step(S.bfNow); S.mktOk = S.mkt.stats(S.mktMu, S.mktV); mktNormApply(S); }   // (0.28.0) (0.33.0) + the nightly norms
     {   // (0.32.0, Rassul 22:17 "mkt lmt fp and dp ... must all be tracked together") every market order of 10+ lots and every ended iceberg to a file, RAW (whatever
         // the yardstick says), so the studies can find the best definition per market: <MKT>-<sym>-<spb>-mktorders-<session>.csv / -iceorders-<session>.csv
         const std::string d2 = dir();
@@ -1931,6 +1934,40 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
 // (green) = a buyer lifted the offers, down (red) = a seller hit the bids. Only 1SD+ of this market's big market orders (this session:
 // start = their 99th percentile, mu / SD over those, 30 needed; learning = 2x the start): 1SD dim, 2SD full colour, 3SD+ white box.
 // The reference at the bottom: Mkt mu / 1SD / 2SD / 3SD (or "learn n/30").
+// (0.33.0, Rassul 09:02 "get the LMT and MKT numbers for all the markets and make sure they are indicated in the columns where we show thresholds")
+// lsFlexLevels\LRA-MktNorms-<MKT>.csv (nightly job lra.mktorder_norms from his Databento MBO): large market orders of this market by Central hour,
+// by session (ASIA 17:00-02:00, LON 02:00-08:30, RTH 08:30-15:00, CLOSE 15:00-17:00) and overall. The current hour's row is used when it has 30+
+// large orders, else the session's, else all hours; its mean and +1/2/3 SD are the MKT footer and the tiers. No file = the session-learned values.
+void LiquidityProfile::mktNormApply(LQState& S) {
+    const long long sm = steadyMs();
+    if (S.mnMs < 0 || sm - S.mnMs > 60000) {
+        S.mnMs = sm; S.mnHave = false; S.mnAll = LQState::MN(); for (int k = 0; k < 4; ++k) S.mnS[k] = LQState::MN(); for (int h = 0; h < 24; ++h) S.mnH[h] = LQState::MN();
+        const std::string dirp = flexDir();
+        if (!dirp.empty() && !S.market.empty()) {
+            std::ifstream in(dirp + "\\LRA-MktNorms-" + S.market + ".csv"); std::string ln; int n = 0;
+            while (n < 100 && std::getline(in, ln)) { ++n;
+                char kind[8] = { 0 }, key[16] = { 0 }; long long cn = 0, st = 0, bn = 0; double mu = 0, a = 0, b = 0, c = 0;
+                if (std::sscanf(ln.c_str(), "%7[^,],%15[^,],%lld,%lld,%lf,%lf,%lf,%lf,%lld", kind, key, &cn, &st, &mu, &a, &b, &c, &bn) != 9) continue;
+                if (!(mu > 0 && a > 0 && b > 0 && c > 0)) continue;
+                LQState::MN m; m.ok = true; m.n = cn; m.start = st; m.bigN = bn; m.mu = mu; m.v[0] = a; m.v[1] = b; m.v[2] = c;
+                const std::string k(kind), ky(key);
+                if (k == "ALL") S.mnAll = m;
+                else if (k == "S") { const int i = ky == "ASIA" ? 0 : ky == "LON" ? 1 : ky == "RTH" ? 2 : ky == "CLOSE" ? 3 : -1; if (i >= 0) S.mnS[i] = m; }
+                else if (k == "H") { const int h = std::atoi(ky.c_str()); if (h >= 0 && h < 24) S.mnH[h] = m; }
+                S.mnHave = true;
+            }
+        }
+    }
+    if (!S.mnHave) { S.mnSrc.clear(); return; }
+    const long long ms = nowMs(S); const int mod = (int)((ms / 60000LL) % 1440LL), hr = mod / 60;
+    const int si = (mod >= 17 * 60 || mod < 2 * 60) ? 0 : mod < 8 * 60 + 30 ? 1 : mod < 15 * 60 ? 2 : 3;
+    const LQState::MN* pick = nullptr; std::string src;
+    if (S.mnH[hr].ok && S.mnH[hr].bigN >= 30) { pick = &S.mnH[hr]; src = "hour " + std::to_string(hr); }
+    else if (S.mnS[si].ok && S.mnS[si].bigN >= 30) { pick = &S.mnS[si]; src = si == 0 ? "ASIA" : si == 1 ? "LON" : si == 2 ? "RTH" : "CLOSE"; }
+    else if (S.mnAll.ok) { pick = &S.mnAll; src = "all hours"; }
+    if (!pick) { S.mnSrc.clear(); return; }
+    S.mktOk = true; S.mktMu = pick->mu; for (int k = 0; k < 3; ++k) S.mktV[k] = pick->v[k]; S.mnSrc = src;
+}
 void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) {
     S.mktDrawn = 0;
     if (r - l < 20) return;
@@ -3084,6 +3121,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.32.4");   // LQ_VERSION
+    p->setVersion("0.33.0");   // LQ_VERSION
     return p;
 }
