@@ -21,7 +21,7 @@
 
 namespace bf {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 using off::BID; using off::ASK;
 
 inline long long netOf(const off::Rec& r, int s) { return r.addC[s] - r.pullC[s]; }
