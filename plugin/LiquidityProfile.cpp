@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.28.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.29.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1943,9 +1943,14 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
             const int row = up ? yc + th / 2 - k : yc - th / 2 + k, half = (th - 1 - k) * 4 / 5;
             hline(tx0 + th / 2 - half, tx0 + th / 2 + half, row, c);
         }
-        const std::string tx = (m.n > 1 ? std::to_string(m.n) + "\xD7 " : std::string()) + std::to_string(m.lots);
+        const bool swept = m.hi > m.lo;                                  // (0.29.0) a SWEEP: the order took 2+ price levels
+        const std::string tx = (m.n > 1 ? std::to_string(m.n) + "\xD7 " : std::string()) + std::to_string(m.lots) + (swept ? " " + std::to_string((long long)(m.hi - m.lo + 1)) + "L" : std::string());
+        if (swept) {                                                     // a bar at the column's right edge from the lowest to the highest price taken
+            const int ya = std::max(top + 14, yOfPx(m.hi)), yb = std::min(bottom, yOfPx(m.lo)), bx = r - 4;
+            setPen(c, 2, P_SOLID); PNT a0; a0.set(0, 0.0f); a0.h = coord(bx); a0.v = coord(ya); a0.setDrawPosition(); PNT b0; b0.set(0, 0.0f); b0.h = coord(bx); b0.v = coord(yb); b0.drawLineTo();
+        }
         setTextColor(c);
-        RCT a; a.set(coord(tx0 + th + 2), coord(t0), coord(r - 2), coord(t0 + rh)); a.drawText(tx.c_str(), false, true);
+        RCT a; a.set(coord(tx0 + th + 2), coord(t0), coord(r - 8), coord(t0 + rh)); a.drawText(tx.c_str(), false, true);
         if (tier == 3) { RCT o; o.set(coord(l + 1), coord(t0), coord(r - 1), coord(t0 + rh)); o.draw(1, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW); }
         used.push_back(std::make_pair(t0, t0 + rh)); ++S.mktDrawn;
     }
@@ -2875,6 +2880,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.28.0");   // LQ_VERSION
+    p->setVersion("0.29.0");   // LQ_VERSION
     return p;
 }

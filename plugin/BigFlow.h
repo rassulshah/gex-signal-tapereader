@@ -1,6 +1,6 @@
 #ifndef LS_BIGFLOW_H
 #define LS_BIGFLOW_H
-// BigFlow.h 1.0.0 (2026-10-15 evening, Rassul 19:55 "build out the mkt column and 1,2,3") -- SDK-free; tested by test_bigflow.cpp.
+// BigFlow.h 1.1.0 (sweep: Mark.lo / hi) / 1.0.0 (2026-10-15 evening, Rassul 19:55 "build out the mkt column and 1,2,3") -- SDK-free; tested by test_bigflow.cpp.
 // Two trackers fed by the same order-by-order events the BIG column already gets (lsLiquidityProfile):
 //   Mkt - BIG MARKET ORDERS: every FILL row carries the AGGRESSOR's order id; all fills of one aggressor id = ONE market order
 //         (its lots, the prices it took, its side = the FILL row's side). An order is complete 2 s after its last fill. Yardstick: the
@@ -20,14 +20,14 @@
 #include <vector>
 
 namespace bfl {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };              // FILL side = the aggressor: BID = a buyer lifted the offer, ASK = a seller hit the bid
 static const long long DONE_MS = 2000;      // a market order is complete 2 s after its last fill
 static const long long KEEP_MS = 3600000;   // marks: the last 60 min
 static const int MIN_N = 30;
 
-struct Mark { int side = BID; Tick px = 0; long long lots = 0; int n = 0; long long last = 0; };
+struct Mark { int side = BID; Tick px = 0; long long lots = 0; int n = 0; long long last = 0; Tick lo = 0, hi = 0; };   // lo / hi = the lowest / highest price taken (a sweep: hi > lo)
 
 inline bool logStats(const std::vector<long long>& v, double& mu, double out[3]) {
     if ((int)v.size() < MIN_N) return false;
@@ -41,7 +41,7 @@ inline std::vector<Mark> topMarks(const std::vector<Mark>& in, int per) {
     std::vector<Mark> m;
     for (size_t i = 0; i < in.size(); ++i) {
         bool hit = false;
-        for (size_t j = 0; j < m.size(); ++j) if (m[j].side == in[i].side && m[j].px == in[i].px) { m[j].lots += in[i].lots; m[j].n += in[i].n; m[j].last = std::max(m[j].last, in[i].last); hit = true; break; }
+        for (size_t j = 0; j < m.size(); ++j) if (m[j].side == in[i].side && m[j].px == in[i].px) { m[j].lots += in[i].lots; m[j].n += in[i].n; m[j].last = std::max(m[j].last, in[i].last); m[j].lo = std::min(m[j].lo, in[i].lo); m[j].hi = std::max(m[j].hi, in[i].hi); hit = true; break; }
         if (!hit) m.push_back(in[i]);
     }
     std::vector<Mark> out;
@@ -97,7 +97,7 @@ public:
     std::vector<Mark> marks(long long now, long long floor, int per = 5) const {
         std::vector<Mark> in;
         auto add = [&](const Ord& o) { if (o.lots < floor || o.tLast < now - KEEP_MS) return;
-            Mark m; m.side = o.side; m.px = (Tick)std::llround(o.pxLots / (double)o.lots); m.lots = o.lots; m.n = 1; m.last = o.tLast; in.push_back(m); };
+            Mark m; m.side = o.side; m.px = (Tick)std::llround(o.pxLots / (double)o.lots); m.lots = o.lots; m.n = 1; m.last = o.tLast; m.lo = o.lo; m.hi = o.hi; in.push_back(m); };
         for (size_t i = 0; i < done.size(); ++i) add(done[i].second);
         for (std::unordered_map<long long, Ord>::const_iterator it = open.begin(); it != open.end(); ++it) add(it->second);
         return topMarks(in, per);
@@ -166,7 +166,7 @@ public:
     std::vector<Mark> ended(long long now, long long floor, int per = 5) const {
         std::vector<Mark> in;
         for (size_t i = 0; i < done.size(); ++i) { const Ord& o = done[i].second; if (o.traded < floor || o.tLast < now - KEEP_MS) continue;
-            Mark m; m.side = o.side; m.px = o.px; m.lots = o.traded; m.n = 1; m.last = o.tLast; in.push_back(m); }
+            Mark m; m.side = o.side; m.px = o.px; m.lots = o.traded; m.n = 1; m.last = o.tLast; m.lo = m.hi = o.px; in.push_back(m); }
         return topMarks(in, per);
     }
 };
