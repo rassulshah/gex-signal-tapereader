@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.30.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.31.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -171,6 +171,7 @@ static int warnBlockH(int font, int rows) { return warnH(font) + std::max(1, row
 static const int LQ_TITLE_ROW_PX = 3;   // (0.27.1, Rassul 18:57 "should be higher because there is black space") the IRT title strip is above the pane: 20 -> 3 px
 static int warnTop(int paneTop) { return paneTop + LQ_TITLE_ROW_PX; }
 static const int LQ_BIG_W = 112;   // (0.28.0) MKT (left half, 56) + BIG (right half, 56): Rassul 19:55 "build out the mkt column"
+static inline int absCount(int bits) { int n = 0; for (int k = 0; k < 4; ++k) n += (bits >> k) & 1; return n; }   // (0.31.0) ABS n / 4
 static const int LQ_BIG_W_OLD = 56;   // (0.22.5, Rassul 10:35 "the column for Big needs to be slightly wider") in ColumnBoard's 30-120 range
 static long long steadyMs() {
     return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -368,6 +369,9 @@ struct LQState {
     int hoverBar = -1;                             // (0.7.0) the bar the mouse is over (Flow), -1 = live
     std::string verdict = "none", vlogKey = "none"; int verdictScore = 0;
     int vIncDir = 0; double vIncPx = 0; bool vIncPick = false;
+    // (0.31.0, Rassul 21:27 "build ... ABS gets priority") the ABSORPTION tag / chips: the layers (bit 1 MKT, 2 LMT, 4 FP, 8 DP, 16 = the LMT was an iceberg) seen at one
+    // price on one side; sticky (a layer that lit stays lit) until price closes a quarter band through it (then "ABS FAILED" for 1 bar)
+    int absDir = 0, absBits = 0, absMTier = 0, absSweep = 1, absFailBar = -100; double absPx = 0, absAx = 0; long long absFill = 0, absIce = 0, absMLots = 0, absMs = 0; std::string absLogKey = "none";
     std::string warnSeen; long long warnSinceMs = 0;                                         // (0.22.9) how long the warning on screen has held                                // (0.22.7) the verdict on screen (sticky)                  // (0.20.0) the banner verdict last drawn (status)
     int warnPx = 0;                                // (0.24.0) the banner's drawn height in px (what render() reserves below it)
     bns::Settings bn; long long bnStampT = -2, bnStampN = -2, bnCheckMs = -1; std::string bnMkt, bnWhy;   // (0.24.0) banner settings
@@ -1383,7 +1387,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
             o << "MKT_ORDERS," << bfl::VERSION << ",market orders " << S.mkt.nAll << ",fills " << S.mkt.fills << ",no aggressor id " << S.mkt.noAggr
               << ",start " << S.mkt.start() << ",big " << S.mkt.big.size() << (ok ? ",Mkt mu " + std::to_string((long long)std::llround(mu)) + " / 1SD " + std::to_string((long long)std::llround(v[0]))
               + " / 2SD " + std::to_string((long long)std::llround(v[1])) + " / 3SD " + std::to_string((long long)std::llround(v[2])) : std::string(",learning"))
-              << ",drawn " << S.mktDrawn << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
+              << ",drawn " << S.mktDrawn << "\nABS_BADGE,0.31.0,dir " << S.absDir << ",px " << S.absPx << ",layers " << S.absBits << " (" << absCount(S.absBits) << "/4),mkt lots " << S.absMLots << " sweep " << S.absSweep << ",lmt fill " << S.absFill << " ice " << S.absIce << ",dp ax " << S.absAx << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
         }
         o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",lines under 1SD (not drawn) " << S.boUnder1sd << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 = 1SD dim, 2 = 2SD full colour, 3 = 3SD full colour + outline),start " << S.boBase << " lots,big lots " << S.bldN << (S.bldOk ? std::string(",Big mu ") + std::to_string((long long)std::llround(S.bldMu)) + " 1SD " + std::to_string((long long)std::llround(S.bldV[0])) + " 2SD " + std::to_string((long long)std::llround(S.bldV[1])) + " 3SD " + std::to_string((long long)std::llround(S.bldV[2])) : std::string(",learning (needs 30) - steps of the start used")) << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
@@ -2390,6 +2394,63 @@ void LiquidityProfile::renderWarning(LQState& S) {
             const bool bInc = best && S.vIncDir == best->dir && std::fabs(best->px - S.vIncPx) < tick * 0.5;
             if (score > bestScore || (score == bestScore && best && ((inc && !bInc) || (inc == bInc && c.lots > best->lots)))) { best = &c; bestScore = score; }
         }
+        {   // (0.31.0, Rassul 21:27 "when you have multiple badges competing, absorption gets priority ... you always want to look for absorption first")
+            // ABSORPTION first: every candidate price (a big order filled, a Delta Profile A, a footprint circle, an initiative lift) is checked for the
+            // FOUR layers on the same side: MKT (a big market order / sweep of the attacker, last 15 min, spanning the price), LMT (a big limit order filled
+            // there or an iceberg on the defender's side), FP (the footprint absorption circle), DP (a Delta Profile A) in the last 5 bars.
+            const long long k0a = barKey(std::max(0, lastBar - 4)), k1a = barKey(lastBar);
+            const long long cut0 = S.mktOk ? std::max(1LL, (long long)std::llround(S.mktV[0])) : 2 * S.mkt.start();
+            const std::vector<bfl::Mark> mks = S.mkt.marks(S.bfNow, cut0, 12);
+            const std::vector<std::pair<long long, bfl::Ice::Ord> > liveIce = S.ice.live(1, 6);
+            const std::vector<bfl::Mark> endIce = S.ice.ended(S.bfNow, 1, 8);
+            struct AB { int dir = 0; double px = 0; int bits = 0; int n = 0; double ax = 0; long long fill = 0, mlots = 0, ice = 0; int sweep = 1; int mtier = 0; };
+            std::vector<AB> abv;
+            const double clo = (double)clA[lastBar], hystA = std::max(2.0 * tick, 0.25 * Z.band);
+            for (size_t i = 0; i < cands.size(); ++i) {
+                const Cand& c = cands[i];
+                bool dup = false; for (size_t j = 0; j < abv.size(); ++j) if (abv[j].dir == c.dir && std::fabs(abv[j].px - c.px) < tol) dup = true;
+                if (dup) continue;
+                {   double ext = c.dir > 0 ? 1e300 : -1e300;                       // a turn is at the EXTREME of the last 10 bars (as for the verdict)
+                    for (int b = std::max(0, lastBar - 9); b <= lastBar; ++b) ext = c.dir > 0 ? std::min(ext, Z.lo[(size_t)b]) : std::max(ext, Z.hi[(size_t)b]);
+                    if (Z.band > 0 && std::fabs(c.px - ext) > Z.band) continue; }
+                AB a; a.dir = c.dir; a.px = c.px;
+                const int fs = c.dir > 0 ? -1 : 1;
+                if (c.src == 1) a.bits |= 2; if (c.src == 2) { a.bits |= 8; a.ax = c.aX; } if (c.src == 3 || c.circle) a.bits |= 4;
+                { const sb::Ev* q = sb::nearestEv(evB, c.px, tol, k0a, k1a, fs); if (q && q->flag) a.bits |= 4; }
+                { const sb::Ev* p = sb::nearestEv(evA, c.px, tol, k0a, k1a, c.dir); if (p) { a.bits |= 8; a.ax = std::max(a.ax, p->val); } }
+                { const sb::Ev* f2 = sb::nearestEv(evF, c.px, tol, k0a, k1a, fs); if (f2) { a.bits |= 2; a.fill = std::max(a.fill, (long long)f2->val); } }
+                const int rs = c.dir > 0 ? bfl::BID : bfl::ASK, as = c.dir > 0 ? bfl::ASK : bfl::BID;   // the defender's / the attacker's side
+                for (size_t k = 0; k < liveIce.size(); ++k) if (liveIce[k].second.side == rs && std::fabs((double)liveIce[k].second.px * tick - c.px) <= tol) { a.bits |= 2 | 16; a.ice = std::max(a.ice, liveIce[k].second.traded); }
+                for (size_t k = 0; k < endIce.size(); ++k) if (endIce[k].side == rs && std::fabs((double)endIce[k].px * tick - c.px) <= tol) { a.bits |= 2 | 16; a.ice = std::max(a.ice, endIce[k].lots); }
+                for (size_t k = 0; k < mks.size(); ++k) {
+                    const bfl::Mark& m = mks[k];
+                    if (m.side != as || S.bfNow - m.last > 900000) continue;
+                    if ((double)m.hi * tick + tol < c.px || (double)m.lo * tick - tol > c.px) continue;
+                    a.bits |= 1;
+                    if (m.lots > a.mlots) { a.mlots = m.lots; a.sweep = (int)(m.hi - m.lo + 1); a.mtier = !S.mktOk ? 0 : m.lots >= (long long)std::llround(S.mktV[2]) ? 3 : m.lots >= (long long)std::llround(S.mktV[1]) ? 2 : 1; }
+                }
+                a.n = absCount(a.bits);
+                abv.push_back(a);
+            }
+            if (S.absDir != 0) {                                               // the tag fails when price closes a quarter band through it
+                const bool heldA = S.absDir > 0 ? clo > S.absPx - hystA : clo < S.absPx + hystA;
+                if (!heldA) { S.absFailBar = lastBar; S.absDir = 0; S.absBits = 0; }
+            }
+            int bi = -1;
+            for (size_t i = 0; i < abv.size(); ++i) {
+                if (best) { if (abv[i].dir == best->dir && std::fabs(abv[i].px - best->px) < tol) { bi = (int)i; break; } continue; }
+                if (bi < 0 || abv[i].n > abv[(size_t)bi].n || (abv[i].n == abv[(size_t)bi].n && std::fabs(clo - abv[i].px) < std::fabs(clo - abv[(size_t)bi].px))) bi = (int)i;
+            }
+            if (bi >= 0 && (best || abv[(size_t)bi].n >= 2)) {
+                const AB& a = abv[(size_t)bi];
+                if (S.absDir == a.dir && std::fabs(S.absPx - a.px) < 2 * tol) {
+                    S.absBits |= a.bits; S.absPx = a.px; S.absAx = std::max(S.absAx, a.ax); S.absFill = std::max(S.absFill, a.fill); S.absIce = std::max(S.absIce, a.ice);
+                    if (a.mlots > S.absMLots) { S.absMLots = a.mlots; S.absSweep = a.sweep; S.absMTier = a.mtier; }
+                } else {
+                    S.absDir = a.dir; S.absPx = a.px; S.absBits = a.bits; S.absAx = a.ax; S.absFill = a.fill; S.absIce = a.ice; S.absMLots = a.mlots; S.absSweep = a.sweep; S.absMTier = a.mtier; S.absMs = barKey(lastBar) * 1000;
+                }
+            }
+        }
         if (!best) S.vIncDir = 0;                                           // (0.22.7) nothing on screen any more
         if (best) {
             vdir = best->dir; vpx = best->px; S.verdictScore = bestScore; S.vIncDir = vdir; S.vIncPx = vpx;
@@ -2459,7 +2520,45 @@ void LiquidityProfile::renderWarning(LQState& S) {
 #endif
     const int bf = std::max(bns::FONT_MIN, std::min(bns::FONT_MAX, S.bn.font));   // (0.24.0) the banner's own font (settings)
     if (!S.bn.on) { S.warnRows = 2; S.warnPx = 0; return; }              // (0.24.0) banner off: nothing drawn, nothing reserved
-    if (!have && vdir == 0) { S.warnRows = 2; S.warnPx = warnBlockH(bf, 2); return; }
+    // (0.31.0) ABS: the tag (no REV yet) / the count + chips (with a REV), its words
+    const bool absHave = S.absDir != 0 && (vdir != 0 ? S.absDir == vdir : absCount(S.absBits) >= 2);
+    const bool absFail = vdir == 0 && S.absDir == 0 && S.absFailBar >= 0 && lastBar <= S.absFailBar + 1;
+    const bool absTag = vdir == 0 && (absHave || absFail);
+    std::string absA1, absA2, absWhen;
+    if (absHave) {
+        const int n = absCount(S.absBits), dr = S.absDir;
+        absA1 = std::string("ABS at ") + pxTxt(S.absPx) + (n >= 3 ? ": " : " forming: ") + (dr > 0 ? "buyers" : "sellers") + (n >= 3 ? " absorbed" : " absorbing");
+        if (S.absBits & 1) absA1 += std::string(" - ") + (dr > 0 ? "sellers" : "buyers") + " sent a " + (S.absMTier > 0 ? std::to_string(S.absMTier) + "SD" : std::string("big")) + " market order ("
+            + (S.absSweep > 1 ? std::to_string(S.absSweep) + "L sweep, " : std::string()) + std::to_string(S.absMLots) + " lots)";
+        std::vector<std::string> pp;
+        if (S.absBits & 4) pp.push_back("FP circle");
+        if (S.absBits & 2) pp.push_back(std::string("LMT: ") + (dr > 0 ? "bid" : "offer") + (S.absIce > 0 ? " iceberg i " + std::to_string(S.absIce) : S.absFill > 0 ? " took " + std::to_string(S.absFill) : std::string(" defended")));
+        if (S.absBits & 8) { char bx[24]; std::snprintf(bx, sizeof(bx), "DP: A %.1fx", S.absAx); pp.push_back(S.absAx > 0 ? std::string(bx) : std::string("DP node")); }
+        for (size_t i = 0; i < pp.size(); ++i) absA2 += (i ? " \xB7 " : "") + pp[i];
+        std::string miss; const char* nm4[4] = { "MKT", "LMT", "FP", "DP" };
+        for (int k = 0; k < 4; ++k) if (!((S.absBits >> k) & 1)) miss += (miss.empty() ? "" : " / ") + std::string(nm4[k]);
+        if (!miss.empty()) absA2 += std::string(absA2.empty() ? "" : " \xB7 ") + "waiting for: " + miss;
+        const zn::NL lvA = zn::nearest(named, S.absPx, Z.band);
+        const bool keyA = !lvA.name.empty() && lvA.name.find("VWAP") == std::string::npos;
+#ifndef LQ_FLOW
+        absWhen = clock12(S.absMs > 0 ? S.absMs : (lastBar < (int)S.barEndMs.size() ? S.barEndMs[(size_t)lastBar] : nowMs(S))) + " at " + (keyA ? lvA.name : pxTxt(S.absPx));
+#endif
+    }
+#ifndef LQ_FLOW
+    {   const std::string key = absHave ? std::to_string(S.absDir) + "," + pxTxt(S.absPx) + "," + std::to_string(S.absBits) : std::string("none");   // every change of the tag to <...>-abs-<session>.csv
+        if (key != S.absLogKey && S.boSession >= 0) {
+            const std::string d = dir();
+            if (!d.empty()) {
+                const long long nm = nowMs(S), ts = nm / 1000; char tb[16]; std::snprintf(tb, sizeof(tb), "%02lld:%02lld:%02lld", (ts % 86400) / 3600, (ts % 3600) / 60, ts % 60);
+                const std::string line = std::string(tb) + "," + std::to_string(S.absDir) + "," + pxTxt(S.absPx) + "," + std::to_string(absHave ? absCount(S.absBits) : 0) + "," + std::to_string(S.absBits) + "," + std::to_string(S.absMLots) + ","
+                    + std::to_string(S.absSweep) + "," + std::to_string(S.absFill) + "," + std::to_string(S.absIce) + "," + std::to_string(S.absAx).substr(0, 4) + "," + S.verdict + "," + pxTxt((double)clA[lastBar]);
+                appendLines(d + "\\" + recordStem(S) + "-abs-" + std::to_string(S.boSession) + ".csv", "time_ct,dir,px,n,bits(1 MKT 2 LMT 4 FP 8 DP 16 iceberg),mkt_lots,sweep_levels,lmt_fill,iceberg_traded,dp_ax,verdict,close", std::vector<std::string>{ line });
+            }
+            S.absLogKey = key;
+        }
+    }
+#endif
+    if (!have && vdir == 0 && !absTag) { S.warnRows = 2; S.warnPx = warnBlockH(bf, 2); return; }
     RCT pane; pane.getPaneRect(false);
     PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int right = std::min((int)pl.h, (int)pane.right) - 4;
     const int x0 = pane.left + 6, y0 = warnTop(pane.top);                     // (0.14.1) below the chart title, never over it
@@ -2471,12 +2570,20 @@ void LiquidityProfile::renderWarning(LQState& S) {
     // REV UP FAILING ? / REV DOWN FAILING ?, bullish green, bearish red), bottom = the book state (outlined, today's words, its OWN colour
     // so a warning against the verdict still shows in its first 15 s); the grey lines = everything both badges showed, the verdict
     // side first (bullish: buyers lines first, bearish: sellers first), the time + level last. No verdict = the book badge as before.
-    const std::string vname = vdir == 0 ? std::string() : vfail ? (vdir > 0 ? "REV UP FAILING ?" : "REV DOWN FAILING ?") : vdir > 0 ? "REV UP ?" : "REV DOWN ?";
+    std::string vname = vdir == 0 ? std::string() : vfail ? (vdir > 0 ? "REV UP FAILING ?" : "REV DOWN FAILING ?") : vdir > 0 ? "REV UP ?" : "REV DOWN ?";
+    if (vdir != 0 && absHave) vname += "  \xB7  ABS " + std::to_string(absCount(S.absBits)) + "/4";          // (0.31.0) the count in the REV row
+    const std::string tagName = absFail ? std::string("ABS FAILED") : absHave ? std::string("ABS ") + (S.absDir > 0 ? "UP" : "DOWN") + "  \xB7  " + std::to_string(absCount(S.absBits)) + "/4" : std::string();
     setFont(f);
-    const int nwW = have ? getTextWidth(w.name.c_str(), -1) : 0, nwV = vname.empty() ? 0 : getTextWidth(vname.c_str(), -1);
-    const int bw = std::max(nwW, nwV) + 16;
+    const int nwW = have ? getTextWidth(w.name.c_str(), -1) : 0, nwV = vname.empty() ? (tagName.empty() ? 0 : getTextWidth(tagName.c_str(), -1)) : getTextWidth(vname.c_str(), -1);
+    FONT fc; fc.id = HELVETICA; fc.size = coord(std::max(8, bf)); fc.style = BOLD; setFont(fc);
+    const int chipW = getTextWidth("LMT+i", -1) + 8, chipsW = 4 * chipW + 3 * 3 + 6;               // (0.31.0) the four layer chips
+    setFont(f);
+    const int bw = std::max(std::max(nwW, nwV), absHave ? chipsW : 0) + 16;
     const int half = rowPx(bf + 2) + 4;                               // one row of the combined badge
-    const int bh = (have && vdir != 0) ? 2 * half : std::max(warnH(bf), 2 * lineH + 2);
+    const bool topRow = vdir != 0 || absTag;                              // the verdict / the ABS tag takes the TOP slot: absorption first
+    const int chipH = absHave ? rowPx(std::max(8, bf)) + 6 : 0;
+    const int bh0 = (have && topRow) ? 2 * half : topRow ? half : std::max(warnH(bf), 2 * lineH + 2);
+    const int bh = bh0 + chipH;
     const int gx = x0 + bw + 10;                                          // the grey column
     const int room = std::max(40, right - gx);
     int y = y0;
@@ -2506,13 +2613,18 @@ void LiquidityProfile::renderWarning(LQState& S) {
         cBook = w.favour > 0 ? C_BUY : w.favour < 0 ? C_SELL : C_GREY;
     }
     if (vdir != 0) {
-        std::vector<GL> v; v.push_back(GL{ v1, sideOf(v1) });
+        std::vector<GL> v; v.push_back((absHave && !absA1.empty()) ? GL{ absA1, vdir > 0 ? 1 : -1 } : GL{ v1, sideOf(v1) });   // (0.31.0) the ABS words lead
         for (size_t i = 0; i < gl.size(); ++i) v.push_back(gl[i]);
         gl.clear();
         const int want = vdir > 0 ? 1 : -1;                                // the verdict's side first, the order kept otherwise
         for (size_t i = 0; i < v.size(); ++i) if (v[i].sd == want) gl.push_back(v[i]);
         for (size_t i = 0; i < v.size(); ++i) if (v[i].sd != want) gl.push_back(v[i]);
         gl.push_back(GL{ v2, 0 });                                         // time + level last
+        if (absHave && !absA1.empty() && !absA2.empty()) gl.insert(gl.begin() + 1, GL{ absA2, want });
+    } else if (absHave) {                                                  // the ABS tag: its words first, the book lines, the time + level last
+        gl.insert(gl.begin(), GL{ absA2, S.absDir });
+        gl.insert(gl.begin(), GL{ absA1, S.absDir });
+        gl.push_back(GL{ absWhen, 0 });
     }
     // the grey lines, wrapped (never cut), centred on the badge when they fit, else from its top down
     setFont(g);
@@ -2531,21 +2643,41 @@ void LiquidityProfile::renderWarning(LQState& S) {
         bgR.draw(0, cb0, cb0, DRAW_OPAQUE, PAT_SOLID);
     }
     // the badge
-    if (vdir != 0) {
+    if (vdir != 0 || absTag) {
         const bool bull = vfail ? vdir < 0 : vdir > 0;                    // REV UP FAILING ? is bearish (red); REV DOWN FAILING ? bullish
         const COLOR cv = bull ? C_BUY : C_SELL;
-        const int hv = have ? half : bh;
+        const int hv = have ? half : bh0;
+        if (vdir == 0) {                                                  // (0.31.0) the ABS tag: OUTLINED, never filled (a REV call is filled)
+            const COLOR ca = (absFail || absCount(S.absBits) < 3) ? C_GREY : S.absDir > 0 ? C_BUY : C_SELL;
+            setPen(ca, 2, P_SOLID); RCT t; t.set(coord(x0), coord(y), coord(x0 + bw), coord(y + hv)); t.draw(2, ca, ca, DRAW_OPAQUE, PAT_HOLLOW);
+            nameIn(tagName, y, hv, ca);
+        } else {
         RCT b; b.set(coord(x0), coord(y), coord(x0 + bw), coord(y + hv)); b.draw(1, cv, cv, DRAW_OPAQUE, PAT_SOLID);
         nameIn(vname, y, hv, cv == C_BUY ? C_INK : C_WHITE);
+        }
         if (have) {
             setPen(cBook, 1, P_SOLID);
-            RCT o; o.set(coord(x0), coord(y + half), coord(x0 + bw), coord(y + bh)); o.draw(1, cBook, cBook, DRAW_OPAQUE, PAT_HOLLOW);
+            RCT o; o.set(coord(x0), coord(y + half), coord(x0 + bw), coord(y + bh0)); o.draw(1, cBook, cBook, DRAW_OPAQUE, PAT_HOLLOW);
             nameIn(w.name, y + half, half, cBook);
         }
     } else if (have) {
         setPen(cBook, 1, P_SOLID);
         RCT o; o.set(coord(x0), coord(y), coord(x0 + bw), coord(y + bh)); o.draw(1, cBook, cBook, DRAW_OPAQUE, PAT_HOLLOW);
         nameIn(w.name, y, bh, cBook);
+    }
+    if (absHave) {                                                        // (0.31.0) MKT / LMT / FP / DP: lit = that layer sees the absorption at this price, on the absorbing side
+        const COLOR cc = absCount(S.absBits) < 3 ? C_GREY : S.absDir > 0 ? C_BUY : C_SELL, cOff = 0x00464646, cFill = 0x00161A20;
+        const bool lit[4] = { (S.absBits & 1) != 0, (S.absBits & 2) != 0, (S.absBits & 4) != 0, (S.absBits & 8) != 0 };
+        const char* nm4[4] = { "MKT", (S.absBits & 16) ? "LMT+i" : "LMT", "FP", "DP" };
+        FONT fk; fk.id = HELVETICA; fk.size = coord(std::max(8, bf)); fk.style = BOLD; setFont(fk);
+        const int cx0 = x0 + std::max(3, (bw - chipsW) / 2), cy0 = y + bh0 + 2, ch = chipH - 4;
+        for (int k = 0; k < 4; ++k) {
+            const int xa = cx0 + k * (chipW + 3);
+            RCT r; r.set(coord(xa), coord(cy0), coord(xa + chipW), coord(cy0 + ch));
+            if (lit[k]) r.draw(1, cc, cc, DRAW_OPAQUE, PAT_SOLID); else r.draw(1, cOff, cFill, DRAW_OPAQUE, PAT_SOLID);
+            setTextColor(lit[k] ? C_INK : cOff);
+            r.drawText(nm4[k], true, false);
+        }
     }
     setFont(g); setTextColor(C_GREY);
     for (size_t i = 0; i < rows.size(); ++i) {
@@ -2881,6 +3013,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.30.0");   // LQ_VERSION
+    p->setVersion("0.31.0");   // LQ_VERSION
     return p;
 }
