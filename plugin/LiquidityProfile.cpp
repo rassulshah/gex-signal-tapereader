@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.35.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.36.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -410,6 +410,7 @@ struct LQState {
     int boExec = 0; long long boDepthMin = 0;
     bfl::Mkt mkt; bfl::Ice ice; long long bfNow = 0; bool mktOk = false; double mktMu = 0, mktV[3] = { 0, 0, 0 };
     struct MN { bool ok = false; long long n = 0, start = 0, bigN = 0; double mu = 0, v[3] = { 0, 0, 0 }; };
+    MN mnP[2], lnP[2];   // (0.36.0) the 5-session average per period: 0 = RTH, 1 = overnight (kind P rows)
     MN mnAll, mnS[4], mnH[24]; long long mnMs = -1; bool mnHave = false; std::string mnSrc;
     MN lnAll, lnS[4], lnH[24]; long long lnMs = -1; bool lnHave = false; std::string lnSrc;   // (0.35.0) the limit-order norms (LRA-LmtNorms-<MKT>.csv)   // (0.33.0)   // (0.28.0)
     int mktDrawn = 0, iceLive = 0, iceEnded = 0;
@@ -1747,7 +1748,9 @@ void LiquidityProfile::bldUpdate(LQState& S, long long start) {
         if (S.bldOk) { S.bldMu = mu; for (int k = 0; k < 3; ++k) S.bldV[k] = v[k]; }
         // (0.35.1, Rassul 11:55 "we did a large lot distribution, first isolating large lots and then doing a distribution") the chart's own big-lot
         // distribution (BigOrderLines LogDist, 0.26.0) stays the LMT footer and tiers: 0.35.0's nightly all-orders norms (ES mean 6 lots) are NOT used.
-        // lmtNormApply() is kept for a rebuilt nightly limit study (resting 30 s+ orders) and is not called.
+        // (0.36.0, Rassul 13:07 "make them consistent") lmtNormApply() is back, but it only takes the nightly 5-session RTH / overnight average of the large resting orders
+        // (kind P rows); without those rows the distribution above stays the footer.
+        lmtNormApply(S);
         if (S.boSession >= 0 && (S.bldWriteMs < 0 || st - S.bldWriteMs >= 60000 || st < S.bldWriteMs)) {
             S.bldWriteMs = st;
             std::string body;
@@ -1950,7 +1953,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
 void LiquidityProfile::lmtNormApply(LQState& S) {
     const long long sm = steadyMs();
     if (S.lnMs < 0 || sm - S.lnMs > 60000) {
-        S.lnMs = sm; S.lnHave = false; S.lnAll = LQState::MN(); for (int k = 0; k < 4; ++k) S.lnS[k] = LQState::MN(); for (int h = 0; h < 24; ++h) S.lnH[h] = LQState::MN();
+        S.lnMs = sm; S.lnHave = false; S.lnAll = LQState::MN(); S.lnP[0] = S.lnP[1] = LQState::MN(); for (int k = 0; k < 4; ++k) S.lnS[k] = LQState::MN(); for (int h = 0; h < 24; ++h) S.lnH[h] = LQState::MN();
         const std::string dirp = flexDir();
         if (!dirp.empty() && !S.market.empty()) {
             std::ifstream in(dirp + "\\LRA-LmtNorms-" + S.market + ".csv"); std::string ln; int n = 0;
@@ -1961,6 +1964,7 @@ void LiquidityProfile::lmtNormApply(LQState& S) {
                 LQState::MN m; m.ok = true; m.n = cn; m.start = st; m.bigN = bn; m.mu = mu; m.v[0] = a; m.v[1] = b; m.v[2] = c;
                 const std::string k(kind), ky(key);
                 if (k == "ALL") S.lnAll = m;
+                else if (k == "P") { const int i = ky == "RTH" ? 0 : ky == "ON" ? 1 : -1; if (i >= 0) S.lnP[i] = m; }
                 else if (k == "S") { const int i = ky == "ASIA" ? 0 : ky == "LON" ? 1 : ky == "RTH" ? 2 : ky == "CLOSE" ? 3 : -1; if (i >= 0) S.lnS[i] = m; }
                 else if (k == "H") { const int h = std::atoi(ky.c_str()); if (h >= 0 && h < 24) S.lnH[h] = m; }
                 S.lnHave = true;
@@ -1971,16 +1975,16 @@ void LiquidityProfile::lmtNormApply(LQState& S) {
     const long long ms = nowMs(S); const int mod = (int)((ms / 60000LL) % 1440LL), hr = mod / 60;
     const int si = (mod >= 17 * 60 || mod < 2 * 60) ? 0 : mod < 8 * 60 + 30 ? 1 : mod < 15 * 60 ? 2 : 3;
     const LQState::MN* pick = nullptr; std::string src;
-    if (S.lnH[hr].ok && S.lnH[hr].bigN >= 30) { pick = &S.lnH[hr]; src = "hour " + std::to_string(hr); }
-    else if (S.lnS[si].ok && S.lnS[si].bigN >= 30) { pick = &S.lnS[si]; src = si == 0 ? "ASIA" : si == 1 ? "LON" : si == 2 ? "RTH" : "CLOSE"; }
-    else if (S.lnAll.ok) { pick = &S.lnAll; src = "all hours"; }
+    // (0.36.0) LMT: only the 5-session average of the period (large resting orders, isolated first); no file / no row = the chart's own big-lot distribution stays
+    const int pi = (mod >= 8 * 60 + 30 && mod < 15 * 60) ? 0 : 1; (void)hr; (void)si;
+    if (S.lnP[pi].ok && S.lnP[pi].bigN >= 30) { pick = &S.lnP[pi]; src = pi == 0 ? "RTH 5-session avg" : "overnight 5-session avg"; }
     if (!pick) { S.lnSrc.clear(); return; }
     S.bldOk = true; S.bldMu = pick->mu; for (int k = 0; k < 3; ++k) S.bldV[k] = pick->v[k]; S.lnSrc = src;
 }
 void LiquidityProfile::mktNormApply(LQState& S) {
     const long long sm = steadyMs();
     if (S.mnMs < 0 || sm - S.mnMs > 60000) {
-        S.mnMs = sm; S.mnHave = false; S.mnAll = LQState::MN(); for (int k = 0; k < 4; ++k) S.mnS[k] = LQState::MN(); for (int h = 0; h < 24; ++h) S.mnH[h] = LQState::MN();
+        S.mnMs = sm; S.mnHave = false; S.mnAll = LQState::MN(); S.mnP[0] = S.mnP[1] = LQState::MN(); for (int k = 0; k < 4; ++k) S.mnS[k] = LQState::MN(); for (int h = 0; h < 24; ++h) S.mnH[h] = LQState::MN();
         const std::string dirp = flexDir();
         if (!dirp.empty() && !S.market.empty()) {
             std::ifstream in(dirp + "\\LRA-MktNorms-" + S.market + ".csv"); std::string ln; int n = 0;
@@ -1991,6 +1995,7 @@ void LiquidityProfile::mktNormApply(LQState& S) {
                 LQState::MN m; m.ok = true; m.n = cn; m.start = st; m.bigN = bn; m.mu = mu; m.v[0] = a; m.v[1] = b; m.v[2] = c;
                 const std::string k(kind), ky(key);
                 if (k == "ALL") S.mnAll = m;
+                else if (k == "P") { const int i = ky == "RTH" ? 0 : ky == "ON" ? 1 : -1; if (i >= 0) S.mnP[i] = m; }
                 else if (k == "S") { const int i = ky == "ASIA" ? 0 : ky == "LON" ? 1 : ky == "RTH" ? 2 : ky == "CLOSE" ? 3 : -1; if (i >= 0) S.mnS[i] = m; }
                 else if (k == "H") { const int h = std::atoi(ky.c_str()); if (h >= 0 && h < 24) S.mnH[h] = m; }
                 S.mnHave = true;
@@ -2001,7 +2006,9 @@ void LiquidityProfile::mktNormApply(LQState& S) {
     const long long ms = nowMs(S); const int mod = (int)((ms / 60000LL) % 1440LL), hr = mod / 60;
     const int si = (mod >= 17 * 60 || mod < 2 * 60) ? 0 : mod < 8 * 60 + 30 ? 1 : mod < 15 * 60 ? 2 : 3;
     const LQState::MN* pick = nullptr; std::string src;
-    if (S.mnH[hr].ok && S.mnH[hr].bigN >= 30) { pick = &S.mnH[hr]; src = "hour " + std::to_string(hr); }
+    const int pi = (mod >= 8 * 60 + 30 && mod < 15 * 60) ? 0 : 1;   // (0.36.0, Rassul 13:07 "make them consistent") the 5-session average of this period first
+    if (S.mnP[pi].ok && S.mnP[pi].bigN >= 30) { pick = &S.mnP[pi]; src = pi == 0 ? "RTH 5-session avg" : "overnight 5-session avg"; }
+    else if (S.mnH[hr].ok && S.mnH[hr].bigN >= 30) { pick = &S.mnH[hr]; src = "hour " + std::to_string(hr); }
     else if (S.mnS[si].ok && S.mnS[si].bigN >= 30) { pick = &S.mnS[si]; src = si == 0 ? "ASIA" : si == 1 ? "LON" : si == 2 ? "RTH" : "CLOSE"; }
     else if (S.mnAll.ok) { pick = &S.mnAll; src = "all hours"; }
     if (!pick) { S.mnSrc.clear(); return; }
@@ -3188,6 +3195,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.35.1");   // LQ_VERSION
+    p->setVersion("0.36.0");   // LQ_VERSION
     return p;
 }
