@@ -1876,11 +1876,13 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         const int y = yOfPx(px); const int t0 = y - boxH / 2, b0 = t0 + boxH;
         if (t0 < top + 14 || b0 > bottom) continue;
         const bool bull = meaning(s, S.bo.live[s] >= 0 ? S.boSign[s] : 0);
-        // (0.37.0, Rassul "LMT R", "keep + -") LMT R: text only - dim colour = 1SD, full colour = 2SD, a solid block = 3SD and over; no outline
+        // (0.37.0, Rassul 13:53 "largest orders within 2 ATR; above 2 sd get the background, above 3 sd get the white outline", "keep + -") LMT R: the biggest resting
+        // bid / ask within the 2 ATR reach; 1SD = dim text, 2SD = background in the side's colour, 3SD = background + white outline
         RCT r; r.set(coord(cl + 2), coord(t0), coord(cr - 2), coord(b0));
-        if (tier == 3) { const COLOR fill = bull ? C_BUY : C_SELL; r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID); }
+        if (tier >= 2) { const COLOR fill = bull ? C_BUY : C_SELL; r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID); }
+        if (tier == 3) { setPen(C_WHITE, 2, P_SOLID); RCT o; o.set(coord(cl + 1), coord(t0 - 1), coord(cr - 1), coord(b0 + 1)); o.draw(2, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW); }
         setFont(tier == 1 ? fp1 : fb);
-        setTextColor(tier == 3 ? (bull ? C_INK : C_WHITE) : tier == 1 ? (bull ? C_BUY_DIM : C_SELL_DIM) : (bull ? C_BUY : C_SELL));
+        setTextColor(tier >= 2 ? (bull ? C_INK : C_WHITE) : (bull ? C_BUY_DIM : C_SELL_DIM));
         r.drawText(tx.c_str(), true, false);
         used.push_back(std::make_pair(t0, b0)); ++S.boLabels; S.boTier[s] = tier;
     }
