@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.33.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.34.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -358,6 +358,7 @@ struct LQState {
         if (i == winKeys.end()) { winKeys[w.tA * 4 + w.side] = winHist.size(); winHist.push_back(w); } else if (w.tE > winHist[i->second].tE) winHist[i->second].tE = w.tE;
     }
     std::vector<std::string> flowLines; long long finSeen = 0;   // (0.11.4) counted against lqp::Engine::finTotal (the list keeps 50)
+    bool lvOnly = true; long long lvChk = -1;     // (0.34.0) Levels only (default) / All: lsFlexLevels\LiquidityProfile.view-<MKT>.txt = "all"
     std::map<long long, std::string> lqMark;       // zone id -> "LQ PDL" (drawn in ES / GC / HG / NG only)
     std::map<std::string, long long> lqPrev;       // (0.11.4) level -> the zone that confirmed it last time (hysteresis)
     long long dpAt = 0;                            // (0.11.4) Central second the Delta Profile record was last read
@@ -2188,13 +2189,23 @@ void LiquidityProfile::render(LQState& S) {
     if (!S.e.haveBook) return;
     const double tick = S.e.P.tick;
     auto yOf = [&](double price) { PNT p; p.set(lastBar, (float)price); return (int)p.v; };
+    {   // (0.34.0, Rassul 2026-10-16 "limit it showing only against levels", mockup liquidity-levels-only) Levels only is the default;
+        // the file lsFlexLevels\LiquidityProfile.view-<MKT>.txt holding "all" brings back every zone and the dim book rows (re-read every 5 s)
+        const long long nw = steadyMs();
+        if (S.lvChk < 0 || nw - S.lvChk >= 5000) {
+            S.lvChk = nw; S.lvOnly = true;
+            const std::string fd = flexDir();
+            if (!fd.empty() && !S.market.empty()) { std::ifstream in; std::string ln; const std::string vp = fd + "\\LiquidityProfile.view-" + S.market + ".txt";
+                if (statFile(vp) && openBoundedInput(vp, in) && readBoundedLine(in, ln) && ln.compare(0, 3, "all") == 0) S.lvOnly = false; }
+        }
+    }
     // plain book rows (dim), scaled to the biggest single level in view, growing right from the edge
     double maxRow = 0;
     for (int s = 0; s < 2; ++s) for (std::map<lqp::Tick, double>::const_iterator i = S.e.book[s].begin(); i != S.e.book[s].end(); ++i) {
         const int y = yOf((double)i->first * tick); if (y > top && y < bottom) maxRow = std::max(maxRow, i->second);
     }
     double maxZone = 0; for (size_t i = 0; i < S.e.zones.size(); ++i) if (S.e.zones[i].shown) maxZone = std::max(maxZone, S.e.zones[i].size);
-    if (maxRow > 0) {
+    if (maxRow > 0 && !S.lvOnly) {
         for (int s = 0; s < 2; ++s) for (std::map<lqp::Tick, double>::const_iterator i = S.e.book[s].begin(); i != S.e.book[s].end(); ++i) {
             int yt = yOf(((double)i->first + 0.5) * tick), yb = yOf(((double)i->first - 0.5) * tick);
             if (yb <= yt) yb = yt + 1;
@@ -2208,7 +2219,25 @@ void LiquidityProfile::render(LQState& S) {
     const long long nowT = S.haveOffset ? steadyMs() + S.ctOffset : 0;
     const lqp::Readout rd = S.e.readout(nowT);
     // (0.11.4) strongest first; a zone overlapping a stronger one is not drawn; a label goes only where no other label is (y spans)
-    const std::vector<LqPick> picks = lqPicks(S);                      // (0.13.0) the strongest each side + the zones on a level
+    std::vector<LqPick> picks = lqPicks(S);                            // (0.13.0) the strongest each side + the zones on a level
+    if (S.lvOnly) {   // (0.34.0) Levels only: just the zones ON a key / gamma level, the 2 nearest price on each side
+        std::vector<LqPick> keep;
+        for (size_t k = 0; k < picks.size(); ++k) {
+            const lqp::Zone& z = S.e.zones[picks[k].idx];
+            if (picks[k].names.empty() && !S.lqMark.count(z.id)) continue;
+            keep.push_back(picks[k]);
+        }
+        std::vector<LqPick> out;
+        for (int sd = 0; sd < 2; ++sd) {
+            std::vector<std::pair<long long, size_t> > d;
+            for (size_t k = 0; k < keep.size(); ++k) { const lqp::Zone& z = S.e.zones[keep[k].idx];
+                if ((z.side == lqp::BID ? 0 : 1) != sd) continue;
+                d.push_back(std::make_pair(std::llabs((long long)(z.lo + z.hi) - 2LL * (long long)S.e.lastPx), k)); }
+            std::sort(d.begin(), d.end());
+            for (size_t k = 0; k < d.size() && k < 2; ++k) out.push_back(keep[d[k].second]);
+        }
+        picks.swap(out);
+    }
     lqp::Lanes labels(1);
     int colR = 0;                                                       // (0.13.2) the column's right end this draw
 #ifndef LQ_FLOW
@@ -3121,6 +3150,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.33.0");   // LQ_VERSION
+    p->setVersion("0.34.0");   // LQ_VERSION
     return p;
 }
