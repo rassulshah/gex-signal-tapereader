@@ -82,7 +82,7 @@ namespace delta_profile { inline bool twoSided(double delta, double volume) { re
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.11.0"; // (2.11.0) two-sided rows: a top-3 volume row with net under 15% of its volume gets "\xB1" // (2.10.3) the A circle on the candle in the trapped side's colour (bullish red, bearish green) // (2.10.2) strictly the 3 biggest: one with no room is not replaced by the 4th // (2.10.1) the 3 biggest values in all (not 3 per side) // (2.10.0, Rassul 2026-10-15 "(b)") the delta value also on the biggest rows // (2.9.1) posts its A events on the SignalBoard // (2.9.0, Rassul 2026-10-15) location first: A bubbles + labels at a high / low / pivot / level full strength, mid-range dimmed (ZoneNear.h) // (2.8.6, Rassul 2026-10-15) A label delta without the +/- sign ("A 3.7x 92"); colour gives the side // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.11.1"; // (2.11.1) a decided A keeps its profile label while its row is in the 90-min profile (no longer only while the node is in the live top 3) // (2.11.0) two-sided rows: a top-3 volume row with net under 15% of its volume gets "\xB1" // (2.10.3) the A circle on the candle in the trapped side's colour (bullish red, bearish green) // (2.10.2) strictly the 3 biggest: one with no room is not replaced by the 4th // (2.10.1) the 3 biggest values in all (not 3 per side) // (2.10.0, Rassul 2026-10-15 "(b)") the delta value also on the biggest rows // (2.9.1) posts its A events on the SignalBoard // (2.9.0, Rassul 2026-10-15) location first: A bubbles + labels at a high / low / pivot / level full strength, mid-range dimmed (ZoneNear.h) // (2.8.6, Rassul 2026-10-15) A label delta without the +/- sign ("A 3.7x 92"); colour gives the side // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -1699,7 +1699,7 @@ bool DeltaProfile::render(ChartState& s) {
         const double x = std::fabs(profile.buckets[a].delta), y = std::fabs(profile.buckets[b].delta);
         return x != y ? x > y : profile.buckets[a].key < profile.buckets[b].key;
     });
-    std::map<dp::Tick, int> edge;
+    std::map<dp::Tick, int> edge, midY;
     struct RowText { double delta; int y, edge, h; const dp::Node* node; };   // (2.8.1) + the node   // (2.8.0) each drawn row's value, placed after the node labels
     std::vector<RowText> rowTexts;
     struct VisibleNode { const dp::Node* node; int y, edge; };
@@ -1744,7 +1744,7 @@ bool DeltaProfile::render(ChartState& s) {
                 e -= width + 2;
             }
         }
-        edge[b.key] = e;
+        edge[b.key] = e; midY[b.key] = (yt + yb) / 2;
         if (twoSided.count(b.key)) twoMarks.push_back(TwoMark{ (yt + yb) / 2, e });   // (2.11.0)
         // (2.8.1, Rassul 18:30 "it has values for every node instead of the nodes that matter") the delta text only on node rows
         if (s.layout.text && b.delta != 0) rowTexts.push_back(RowText{ b.delta, (yt + yb) / 2, e, yb - yt, node });   // (2.10.0) every row is a candidate
@@ -1758,6 +1758,32 @@ bool DeltaProfile::render(ChartState& s) {
     // (2.8.1, Rassul 18:31 "remove the I ... only focused on identifying absorption and consistent with the bubbles") only A nodes
     // are labelled (and get their delta text); I / I? / A? nodes keep their bar only
     nodes.erase(std::remove_if(nodes.begin(), nodes.end(), [](const VisibleNode& v) { return v.node->state.code != "A"; }), nodes.end());
+    // (2.11.1, Rassul 2026-10-16 08:11 "when i scroll my mouse wheel it shows me the A, when i scroll it back it goes away") the A label
+    // used to exist only while its node was ALSO one of the live profile's 3 strongest nodes: the forming candle changes the profile
+    // every second, so a decided A (circle on the candle, in the record, never undone) lost its profile label whenever another row
+    // out-ranked it for a moment, and any redraw could bring it back. Now every confirmed A whose circle is drawn keeps its label at its
+    // price row for as long as that row is in the 90-min profile (nodes with a live A state are used as before; the record fills the rest).
+    std::vector<dp::Node> keepNodes; keepNodes.reserve(confirmed.size() + 1);
+    {   std::set<long long> have;
+        for (std::size_t i = 0; i < nodes.size(); ++i) have.insert(nodes[i].node->state.eventId);
+        for (std::size_t i = 0; i < profile.zones.size(); ++i) if (profile.zones[i].code == "A") have.insert(profile.zones[i].eventId);
+        for (std::size_t c = 0; c < confirmed.size(); ++c) {
+            const Latch& L = *confirmed[c];
+            if (have.count(L.id)) continue;
+            const std::string q = bubbleDisposition(L.id); if (q != "drawn" && q != "shared") continue;
+            dp::Tick pk; try { pk = dp::priceKey(L.price, profile.tick); } catch (...) { continue; }
+            const dp::Bucket* hit = NULL;
+            for (std::size_t j = 0; j < profile.buckets.size(); ++j) if (pk >= profile.buckets[j].low && pk <= profile.buckets[j].high) { hit = &profile.buckets[j]; break; }
+            if (!hit) continue;
+            const std::map<dp::Tick, int>::const_iterator ee = edge.find(hit->key), my = midY.find(hit->key);
+            if (ee == edge.end() || my == midY.end()) continue;
+            dp::Node nn; nn.bucket = hit->key; nn.price = L.price; nn.ratio = L.mult; nn.state.code = "A"; nn.state.support = L.support; nn.state.eventId = L.id;
+            keepNodes.push_back(nn);
+            VisibleNode v; v.node = &keepNodes.back(); v.y = my->second; v.edge = ee->second; nodes.push_back(v);
+        }
+    }
+    std::sort(nodes.begin(), nodes.end(), [](const VisibleNode& a, const VisibleNode& b) {
+        return a.node->ratio != b.node->ratio ? a.node->ratio > b.node->ratio : a.y < b.y; });
     if (nodes.size() > 3) nodes.resize(3);
     std::vector<int> used;
     std::vector<const dp::Node*> labelled;   // (2.8.4) the A nodes whose label was actually drawn
@@ -2025,6 +2051,6 @@ extern "C" cppExtension* CreateExtension() {
     DeltaProfile* p = new DeltaProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.11.0");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
+    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.11.1");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
     return p;
 }
