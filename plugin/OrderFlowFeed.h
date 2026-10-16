@@ -843,7 +843,7 @@ inline long long rebuiltPctOf(long long rebuilt, long long hit) {
 // =====================================================================================================================
 struct PaneBar {
     bool ok = false, fromFile = false; int slotN = 0;    // (1.8.0) slotN = same-slot bars the ratio / spike used (0 = the 20-bar rule)
-    Rec r; MStat m[2];                                   // m: stats as of the bar (metric 0 = the bars, 1 = refills)
+    Rec r; MStat m[3];                                   // m: stats as of the bar (metric 0 = the bars, 1 = refills; BookFlow 1.0.0: 0 added, 1 pulled, 2 refills)
     std::string let[2];                                  // letters on [left = BID side, right = ASK side], max 2 each
     bool spike[2] = {false, false}; long long dash[2] = {-1, -1};
     nl::Msg msg; std::string level;
@@ -1008,6 +1008,23 @@ inline void axisFor(long long top, int paneH, int px, double& mn, double& mx) {
     if (paneH < 24 || px <= 0) { mn = 0; mx = (double)top * 1.02; return; }
     const double unit = (double)top / (double)px;
     mn = -unit; mx = (double)(paneH - 1) * unit;
+}
+// (1.7.0, BookFlow) net bars geometry: SDK-free so it is unit-tested
+struct NetGeo { int yTop = 0, yBot = 0, y0 = 0, maxPx = 1; };            // rows counted from the pane's top: the usable rows, the zero line, the tallest bar
+inline NetGeo netGeoFor(int paneH, int reserve) {
+    NetGeo n; n.yTop = reserve + 3; n.yBot = paneH - 3;
+    if (n.yBot - n.yTop < 12) { n.yTop = 2; n.yBot = paneH - 2; if (n.yBot <= n.yTop) n.yBot = n.yTop + 1; }
+    n.y0 = (n.yTop + n.yBot) / 2;
+    const int half = (n.yBot - n.yTop) / 2;
+    int mp = half - LABEL_ROOM; if (mp < 10) mp = half - 4; if (mp < 4) mp = half > 1 ? half - 1 : 1;
+    n.maxPx = mp; return n;
+}
+// the axis range IRT draws over the pane so a value sits at its bar's pixel row (0 at the zero line, + above, - below)
+inline void netAxisFor(long long top, int paneH, int reserve, double& mn, double& mx) {
+    if (top <= 0 || paneH < 24) { mn = -10; mx = 10; return; }
+    const NetGeo n = netGeoFor(paneH, reserve);
+    const double unit = (double)top / (double)n.maxPx;
+    mx = (double)n.y0 * unit; mn = (double)(n.y0 - (paneH - 1)) * unit;
 }
 inline int textReserve(int paneH) { return paneH >= 80 ? TEXT_RESERVE : 0; }
 // LETTERS: white boxes (black bold letter) at the BOTTOM of a side's bar, priority letter on top (mockup), at most 2 per side.
@@ -1795,7 +1812,8 @@ inline void fillFlat(cppExtension* x, int l, int t, int r, int b, COLOR fill) {
 struct BarLook { bool ok = false; long long v[2] = {0, 0}; bool spike[2] = {false, false}; std::string let[2]; long long dash[2] = {-1, -1}; bool ratioOk[2] = {false, false}; double ratio[2] = {0, 0};
                  std::string mark[2]; COLOR markCol[2] = {0, 0};      // 1.1.0: the stop-run mark ("R" / "R?") per side, its colour
                  long long p100[2] = {0, 0};                           // 1.2.0: the pace (x100, 0 = none) for the spike label's middle row
-                 int dir = 0; };                                       // 1.6.0: the candle's close direction (one-bar ties)
+                 int dir = 0;                                          // 1.6.0: the candle's close direction (one-bar ties)
+                 long long q[2] = {0, 0}; };                            // 1.7.0 (BookFlow): the lots on the spike label (net bars: the added or the pulled part)
 struct PaneGeo { int left = 0, top = 0, right = 0, bottom = 0, yBase = 0, px = 1, reserve = 0, edge = 0; };
 // the pane geometry: bars from yBase = bottom - 1 up px pixels; the text area ends at the last bar (never the empty space right
 // of price) and never over the price axis
@@ -1942,6 +1960,60 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
             cppExtension::RCT r; r.set(coord(cx - w / 2), coord(y), coord(cx - w / 2 + w + 2), coord(y + LABEL_LH)); r.drawText(t.c_str(), false, false); };
         const bool hp = !Lk.p.empty();                                  // (1.2.0) ratio / pace / lots ((1.2.1) the ratio alone when crowded)
         put(Lk.x, Lk.t); if (hp) put(Lk.p, Lk.t + LABEL_LH); if (!Lk.q.empty()) put(Lk.q, Lk.t + (hp ? 2 : 1) * LABEL_LH);
+    }
+}
+// ---- (1.7.0, BookFlow 1.0.0; Rassul 2026-10-16 07:49 "1 net bar. make the zero line gray so i can clearly see the separation") NET BARS ----
+// One bar per side per candle = lots ADDED minus lots PULLED near price: above the zero line = size arriving (stacking), below = size leaving
+// (pulling). Bids green (left), offers red (right) - the buyer / seller colours never change. The zero line is grey and 2 px.
+static const COLOR C_NET_ZERO = 0x00A0A0A0;
+inline void drawNetBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot, long long top, const COLOR normal[2], const COLOR spike[2],
+                        const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid) {
+    if (top <= 0) return;
+    const NetGeo n = netGeoFor(g.bottom - g.top, g.reserve);
+    const int y0 = g.top + n.y0;
+    if (g.edge > g.left + 4) fillFlat(x, g.left, y0, g.edge, y0 + 1, C_NET_ZERO);        // the grey zero line, drawn first; bars sit clear of it
+    struct Cand { int cx = 0, s = 0, hb = 0; bool up = true; long long mag = 0; std::string a, b, c; };
+    std::vector<Cand> cands;
+    for (int i = v0; i <= v1; ++i) {
+        const BarLook b = look(i); if (!b.ok) continue;
+        const int xc = xOf(i); if (xc < g.left || xc > g.right) continue;
+        const Pair p = pairIn(xc, slot);
+        for (int s = 0; s < 2; ++s) {
+            const long long v = b.v[s]; if (v == 0) continue;
+            const bool up = v > 0; const long long mg = up ? v : -v;
+            const int h = barHeight(mg, top, n.maxPx);
+            const COLOR c = b.spike[s] ? spike[s] : normal[s];
+            if (up) fillFlat(x, p.l[s], y0 - h, p.r[s], y0 - 1, c); else fillFlat(x, p.l[s], y0 + 2, p.r[s], y0 + 1 + h, c);
+            if (b.spike[s]) {
+                Cand k; k.cx = (p.l[s] + p.r[s]) / 2; k.s = s; k.hb = h; k.up = up; k.mag = mg;
+                k.a = b.ratioOk[s] ? ratioText(b.ratio[s]) : std::string(); k.b = paceLabel(b.p100[s]); k.c = b.q[s] > 0 ? std::to_string(b.q[s]) : std::string();
+                cands.push_back(k);
+            }
+        }
+    }
+    if (cands.empty()) return;
+    std::stable_sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.mag > b.mag; });   // the biggest spikes get their label first
+    cppExtension::FONT sf; sf.id = cppExtension::HELVETICA; sf.size = LABEL_PT; sf.style = cppExtension::PLAIN; x->setFont(sf);
+    std::vector<LBox> placed(avoid);
+    for (size_t k = 0; k < cands.size(); ++k) {
+        const Cand& c = cands[k];
+        std::string rows[3]; int nr = 0;
+        if (!c.a.empty()) rows[nr++] = c.a; if (!c.b.empty()) rows[nr++] = c.b; if (!c.c.empty()) rows[nr++] = c.c;
+        if (nr == 0) continue;
+        int w = 0; for (int r = 0; r < nr; ++r) w = std::max(w, (int)x->getTextWidth(rows[r].c_str(), -1));
+        const int hgt = nr * LABEL_LH;
+        const int t = c.up ? y0 - c.hb - 2 - hgt : y0 + 1 + c.hb + 2;
+        if (t < g.top + g.reserve || t + hgt > g.bottom) continue;                      // no room (zoomed / short pane): the bar is still drawn
+        const LBox me = { c.cx - w / 2 - 1, t, c.cx - w / 2 + w + 1, t + hgt - 1, 0, 0 };
+        if (me.l < g.left + 1 || me.r > g.edge - 1) continue;
+        bool hit = false; for (size_t o = 0; o < placed.size() && !hit; ++o) hit = overlaps(me, placed[o]);
+        if (hit) continue;
+        placed.push_back(me);
+        x->setTextColor(spike[c.s]);
+        for (int r = 0; r < nr; ++r) {
+            const int tw = (int)x->getTextWidth(rows[r].c_str(), -1);
+            cppExtension::RCT rc; rc.set(coord(c.cx - tw / 2), coord(t + r * LABEL_LH), coord(c.cx - tw / 2 + tw + 2), coord(t + (r + 1) * LABEL_LH)); rc.drawText(rows[r].c_str(), false, false);
+        }
     }
 }
 // ---- (12:05) THE INFO BOX - Rassul "all values go in the info box, which I should be able to see as I move my mouse over different
@@ -2306,6 +2378,19 @@ public:
     }
     virtual int oneBarBull() const { return -1; }                         // (1.6.0) the buyer side for one bar per candle; -1 = two bars
     virtual bool barMarks() const { return true; }                        // (1.6.0) false = no letters / refill dash drawn (StackStats)
+    // (1.7.0, BookFlow 1.0.0) net bars (added - pulled per side, signed, a grey zero line) instead of the one-bar / two-bar columns; the pane's own hooks
+    virtual bool netBars() const { return false; }
+    virtual long long netOf(const Rec& r, int s) const { return L::value(r, 0, s); }   // the drawn value (signed when netBars)
+    virtual void netLook(const PaneBar&, int, BarLook&) const {}           // the pane's label numbers for a net bar (ratio, pace, lots)
+    virtual int zonePane() const { return std::string(L::name()) == "StackStats" ? zread::P_STACK : zread::P_PULLSTATS; }   // which zone read this pane shows
+    virtual std::string zoneDirName() const { return std::string(L::name()); }                                              // whose folder holds its zone-read record
+    virtual void onLoad(S_&, const std::string&, const std::string&) {}   // (flexDir, stem) a session's record was opened: open any extra record
+    virtual void onDecide(S_&, long long, const PaneBar&, const Row&) {}  // a closed candle was decided and recorded: write any extra record row
+    virtual void onSave(S_&) {}                                           // the session record was saved: save any extra record
+    long long magOf(const Rec& r) const {                                 // the tallest bar of a candle: net bars = the bigger |net|, else the bigger side
+        if (netBars()) { const long long a = netOf(r, BID), b = netOf(r, ASK); return std::max(a < 0 ? -a : a, b < 0 ? -b : b); }
+        return std::max(L::value(r, 0, BID), L::value(r, 0, ASK));
+    }
     virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax) {
         double mn = 0, mx = 10;
         S_* S = slot_.get(this, false);
@@ -2321,13 +2406,14 @@ public:
                 PaneBar lb; const bool live = liveBar(*S, lb);
                 for (int i = a; i <= b; ++i) {
                     const long long bt = (long long)times[i];
-                    if (i == last) { if (live && bt == S->formingKey) top = std::max(top, std::max(L::value(lb.r, 0, BID), L::value(lb.r, 0, ASK))); continue; }
+                    if (i == last) { if (live && bt == S->formingKey) top = std::max(top, magOf(lb.r)); continue; }
                     typename std::map<long long, PaneBar>::const_iterator it = S->ser.bars.find(bt);
-                    if (it != S->ser.bars.end() && it->second.ok) top = std::max(top, std::max(L::value(it->second.r, 0, BID), L::value(it->second.r, 0, ASK)));
+                    if (it != S->ser.bars.end() && it->second.ok) top = std::max(top, magOf(it->second.r));
                 }
             }
             S->axisTop = top;
-            axisFor(top, S->paneH, drawPx(S->paneH, textReserve(S->paneH, S->set.mode)), mn, mx);
+            if (netBars()) netAxisFor(top, S->paneH, textReserve(S->paneH, S->set.mode), mn, mx);
+            else axisFor(top, S->paneH, drawPx(S->paneH, textReserve(S->paneH, S->set.mode)), mn, mx);
         }
         if (dMin) *dMin = mn;
         if (dMax) *dMax = mx;
@@ -2525,8 +2611,9 @@ private:
     }
     void zoneTick(S_& S, long count, long long now) {                     // (1.5.0) the zone read line (zoneTickFor)
         const std::string d = dir();
-        zoneTickFor(this, S.zr, S.zrCount, S.zrSession, std::string(L::name()) == "StackStats" ? zread::P_STACK : zread::P_PULLSTATS, S.tick, S.market, S.zone, S.atr,
-                    d.empty() || S.curSession.empty() ? std::string() : d + "\\" + stem(S) + "-zoneread-" + S.curSession + ".csv", count, now);
+        const std::string zdir = flexDir().empty() ? std::string() : flexDir() + "\\" + zoneDirName();
+        zoneTickFor(this, S.zr, S.zrCount, S.zrSession, zonePane(), S.tick, S.market, S.zone, S.atr,
+                    d.empty() || zdir.empty() || S.curSession.empty() ? std::string() : zdir + "\\" + stem(S) + "-zoneread-" + S.curSession + ".csv", count, now);
     }
     // an event to the candle containing its own stamp; one that cannot be counted (no bar, a decided bar, a bar before the stream
     // opened - e.g. a snapshot of old orders) still teaches the engine its order (a scratch candle, thrown away)
@@ -2579,11 +2666,11 @@ private:
                     if (nb.ok && nb.kind == 1 && nb.msgSide >= 0) resetStart(S.rw, nb.msgSide, key, nb.r.pullC[nb.msgSide], P, ctOf(key), nb.level);
                 }
                 S.ser.bars[key] = nb; S.finalized++; any = true;
-                if (nb.ok && sessionKey(key) == S.curSession) S.file.put(rowOf(key, nb));
+                if (nb.ok && sessionKey(key) == S.curSession) { const Row rw0 = rowOf(key, nb); S.file.put(rw0); onDecide(S, key, nb, rw0); }
             }
             S.closedAt.erase(c); S.accs.erase(it++);
         }
-        if (any) { S.file.sizes(S.e.aggrDist, S.e.restDist); S.file.save(); S.changed++; invalidateChart(false); }
+        if (any) { S.file.sizes(S.e.aggrDist, S.e.restDist); S.file.save(); onSave(S); S.changed++; invalidateChart(false); }
         if (S.ser.bars.size() > 5000) S.ser.trim(5000);
         while (S.accs.size() > 16) S.accs.erase(S.accs.begin());          // bounded: never more than a few open bars
     }
@@ -2599,6 +2686,7 @@ private:
                      (size_t)REC_NUMS);
         S.file.load();
         S.file.loadSizes(S.e.aggrDist, S.e.restDist);
+        onLoad(S, flexDir(), stem(S));
         for (std::map<long long, Row>::const_iterator it = S.file.rows.begin(); it != S.file.rows.end(); ++it) {
             const Row& r = it->second; if (r.t >= S.formingKey || S.ser.bars.count(r.t)) continue;   // never the forming bar
             PaneBar b; if (!recFrom(r.nums, 0, b.r)) continue;
@@ -2699,7 +2787,7 @@ private:
             return it != S.ser.bars.end() && it->second.ok ? &it->second : nullptr;
         };
         long long top = 0;
-        for (int i = v0; i <= v1; ++i) { const PaneBar* b = barOf(i); if (b) top = std::max(top, std::max(L::value(b->r, 0, BID), L::value(b->r, 0, ASK))); }
+        for (int i = v0; i <= v1; ++i) { const PaneBar* b = barOf(i); if (b) top = std::max(top, magOf(b->r)); }
         if (S.axisTop > top) top = S.axisTop;
         S.paneH = pane.bottom - pane.top;
         const PaneGeo g = paneGeo(this, S.set.mode);
@@ -2739,13 +2827,15 @@ private:
         if (P.ok) avoid.push_back(LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
         // (1.3.1) the hover grid is NOT an obstacle: it is drawn over the bars while the mouse is in the box; labels never re-decide for it
         for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
-        drawBars(this, g, v0, v1, slot, top, hov, normal, spike, xOf, [&](int i) {
+        const std::function<BarLook(int)> lookFn = [&](int i) {
             BarLook k; const PaneBar* b = barOf(i); if (!b) return k;
             k.ok = true;
-            for (int s = 0; s < 2; ++s) { k.v[s] = L::value(b->r, 0, s); k.spike[s] = b->spike[s]; k.dash[s] = b->dash[s]; k.ratioOk[s] = b->m[0].ratioOk[s]; k.ratio[s] = b->m[0].ratio[s]; k.p100[s] = b->r.pace100[s]; if (i != last) k.let[s] = b->let[s]; }
+            for (int s = 0; s < 2; ++s) { k.v[s] = netBars() ? netOf(b->r, s) : L::value(b->r, 0, s); k.spike[s] = b->spike[s]; k.dash[s] = b->dash[s]; k.ratioOk[s] = b->m[0].ratioOk[s]; k.ratio[s] = b->m[0].ratio[s]; k.p100[s] = b->r.pace100[s]; if (i != last) k.let[s] = b->let[s]; if (netBars()) netLook(*b, s, k); }
             if (i < op.count && i < cl.count) { const float o = op[i], c = cl[i]; if (std::isfinite(o) && std::isfinite(c)) k.dir = c > o ? 1 : c < o ? -1 : 0; }   // (1.6.0)
             return k;
-        }, avoid, oneBarBull(), barMarks());
+        };
+        if (netBars()) drawNetBars(this, g, v0, v1, slot, top, normal, spike, xOf, lookFn, avoid);
+        else drawBars(this, g, v0, v1, slot, top, hov, normal, spike, xOf, lookFn, avoid, oneBarBull(), barMarks());
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
         if (readMode) drawLine(this, LP); else drawPanel(this, P, info, vcol, implOf(zl), false);
         (void)hov;   // (1.8.1, Rassul 18:57 "get rid of the hoverover ... they just take up too much space") no bar hover, no read-line hover

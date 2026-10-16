@@ -86,9 +86,12 @@ REM (2026-10-13 fix1) BidAskStats 1.5.1 / PullStats 1.1.1 / StackStats 1.1.1 / T
 call :one BidAskStats lsBidAskStats BidAskStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h StopRun.h OptionsFlow.h HoverBoard.h BoxPlace.h ZoneRule.h ZoneRead.h
 REM (2026-10-14 night) lsPullStats 1.5.0 - lsPulling's arrival read merged in (ZoneRead.h 1.1.0; the line shows only the locked read)
 REM (2026-10-13) lsPullStats 1.0.0 - who is leaving: resting orders pulled near price per candle (MBO), L, message line + info box (Rassul "number of bids and ask pulled like a histogram")
-call :one PullStats lsPullStats PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h
+REM (retired 2026-10-16) call :one PullStats lsPullStats PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h
 REM (2026-10-13) lsStackStats 1.0.0 - who is arriving: orders added near price per candle (MBO), refill dash, R / L, message line + info box (Rassul "add a stacking indicator", "keep seperate")
-call :one StackStats lsStackStats StackStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h ZoneRule.h ZoneRead.h
+REM (retired 2026-10-16) call :one StackStats lsStackStats StackStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h ZoneRule.h ZoneRead.h
+REM (2026-10-16 Rassul 07:49 CT "dont keep the old panes, replace them") lsPullStats + lsStackStats RETIRED from the build: lsBookFlow 1.0.0 replaces both
+REM   (one net bar per side; it still writes the StackStats\ and PullStats\ records and the PullStats zone read). Their sources stay in plugin\ for reference.
+call :one BookFlow lsBookFlow BookFlowLogic.h StackStatsLogic.h PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
 REM (2026-10-14 claim gates) DealerRead 4.6.0 / TapeReader 1.1.4 also hash ClaimGates.h (DealerRead DealerReadGates.h)
 call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h BannerBoard.h ClaimGates.h
