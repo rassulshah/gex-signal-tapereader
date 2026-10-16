@@ -20,7 +20,7 @@
 #include <vector>
 
 namespace bfl {
-static const char* const VERSION = "1.2.0";
+static const char* const VERSION = "1.2.1";
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };              // FILL side = the aggressor: BID = a buyer lifted the offer, ASK = a seller hit the bid
 static const long long DONE_MS = 2000;      // a market order is complete 2 s after its last fill
@@ -87,7 +87,7 @@ public:
         for (std::unordered_map<long long, Ord>::iterator it = open.begin(); it != open.end();) {
             if (now - it->second.tLast < DONE_MS) { ++it; continue; }
             Ord o = it->second; o.big = o.lots >= st;
-            if (o.lots >= LOG_MIN && fresh.size() < 5000) fresh.push_back(std::make_pair(it->first, o));
+            if (o.lots >= std::min((long long)LOG_MIN, st) && fresh.size() < 5000) fresh.push_back(std::make_pair(it->first, o));
             ++nAll; cnt[(size_t)std::min<long long>(o.lots, (long long)cnt.size() - 1)]++;
             if (o.lots >= st) { big.push_back(o.lots); done.push_back(std::make_pair(it->first, o)); }
             it = open.erase(it);
