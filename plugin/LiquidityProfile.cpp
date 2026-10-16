@@ -1765,6 +1765,12 @@ void LiquidityProfile::bldUpdate(LQState& S, long long start) {
         }
     }
 }
+// (0.37.0, Rassul 14:00 "instead of using 3 SD, use 2.66, in case it just misses the 3SD cutoff") the top tier starts at 2.66 SD: log-space mean + 2.66 x SD, from the mean and the 1SD size
+static double lqSd266(double mu, double v1, double v3) {
+    if (!(mu > 0) || !(v1 > mu)) return v3;
+    const double lm = std::log(mu), v = std::exp(lm + 2.66 * (std::log(v1) - lm));
+    return std::min(v3, v);
+}
 void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX) {
     // (0.19.0, Rassul approved 2026-10-15 mockup v3 + "like the 96") on the chart: at most 2 thin lines = the LIVE biggest bid / ask,
     // thicker while size is stacked, thin + dim while it is pulled, no labels / dots / X / arrows. In the BIG column (first after the
@@ -1822,7 +1828,8 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         std::vector<std::pair<std::string, std::string>> rows;
         if (S.bldOk) {
             rows.push_back(std::make_pair(std::string("\xB5"), std::to_string((long long)std::llround(S.bldMu))));
-            for (int k = 0; k < 3; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD", std::to_string((long long)std::llround(S.bldV[k]))));
+            for (int k = 0; k < 2; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD", std::to_string((long long)std::llround(S.bldV[k]))));
+            rows.push_back(std::make_pair(std::string("2.7SD"), std::to_string((long long)std::llround(lqSd266(S.bldMu, S.bldV[0], S.bldV[2])))));   // (0.37.0) the top tier starts here
         } else {   // (0.32.1) while learning, the size in use is still shown ("~" = provisional) and the count on its own row
             rows.push_back(std::make_pair(std::string("~"), std::to_string((long long)S.bo.threshold())));
             rows.push_back(std::make_pair(std::string("n"), std::to_string(S.bldN) + "/30"));
@@ -1857,7 +1864,8 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     bldUpdate(S, minShow);
     S.bo.sdMin = S.bldOk ? std::max(1LL, (long long)std::llround(S.bldV[0])) : 0;   // (0.26.0, audit item 3) chart lines from Bigger (1SD) too
     long long tcut[3] = { minShow, 2 * minShow, 3 * minShow };
-    if (S.bldOk) for (int k = 0; k < 3; ++k) tcut[k] = std::max(1LL, (long long)std::llround(S.bldV[k]));
+    if (S.bldOk) for (int k = 0; k < 3; ++k) tcut[k] = std::max(1LL, (long long)std::llround(k == 2 ? lqSd266(S.bldMu, S.bldV[0], S.bldV[2]) : S.bldV[k]));
+    tcut[2] = std::max(tcut[2], tcut[1]);
     S.boTier[0] = S.boTier[1] = 0;
     for (int s = 0; s < 2; ++s) {
         long long px = 0, n = 0; int tier = 0; std::string tx;
@@ -1885,6 +1893,23 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         setTextColor(tier >= 2 ? (bull ? C_INK : C_WHITE) : (bull ? C_BUY_DIM : C_SELL_DIM));
         r.drawText(tx.c_str(), true, false);
         used.push_back(std::make_pair(t0, b0)); ++S.boLabels; S.boTier[s] = tier;
+    }
+    {   // (0.37.0, Rassul 13:59 "if an order is 3SD+, show it no matter where it is") the biggest displayed size per side BEYOND the 2 ATR reach, shown at 3SD and over: background + white
+        // outline, no sign (the order tracker only follows the reach, so this is the size shown at that price, read from the book)
+        if (S.e.haveBook && S.bo.havePx && S.bo.reach > 0) for (int s = 0; s < 2; ++s) {
+            const std::map<lqp::Tick, double>& bk = S.e.book[s == bol::BID ? lqp::BID : lqp::ASK];
+            long long bp = 0; double bn = 0;
+            for (std::map<lqp::Tick, double>::const_iterator it = bk.begin(); it != bk.end(); ++it)
+                if (it->second > bn && std::llabs((long long)(it->first - S.bo.px)) > (long long)S.bo.reach) { bn = it->second; bp = (long long)it->first; }
+            if (bn < (double)tcut[2]) continue;
+            const int y = yOfPx(bp); const int t0 = y - boxH / 2, b0 = t0 + boxH;
+            if (t0 < top + 14 || b0 > bottom || !freeAt(t0, b0)) continue;
+            const bool bull = s == bol::BID; const COLOR fill = bull ? C_BUY : C_SELL;
+            RCT r; r.set(coord(cl + 2), coord(t0), coord(cr - 2), coord(b0)); r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID);
+            setPen(C_WHITE, 2, P_SOLID); RCT o; o.set(coord(cl + 1), coord(t0 - 1), coord(cr - 1), coord(b0 + 1)); o.draw(2, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW);
+            setFont(fb); setTextColor(bull ? C_INK : C_WHITE); r.drawText(std::to_string((long long)std::llround(bn)).c_str(), true, false);
+            used.push_back(std::make_pair(t0, b0)); ++S.boLabels;
+        }
     }
     // (0.37.0, Rassul "executed LMT should show iceberg in white and I") LMT F: a live iceberg prints as "450 I" (lots traded so far, growing live); the number is the side's
     // colour (bid green, offer red; dim under 1SD), the I is white and sits after the number like the sweep S in MKT. Floor = Big mu.
@@ -2041,7 +2066,8 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
         std::vector<std::pair<std::string, std::string>> rows;
         if (S.mktOk) {
             rows.push_back(std::make_pair(std::string("Mkt \xB5"), std::to_string((long long)std::llround(S.mktMu))));
-            for (int k = 0; k < 3; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD", std::to_string((long long)std::llround(S.mktV[k]))));
+            for (int k = 0; k < 2; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD", std::to_string((long long)std::llround(S.mktV[k]))));
+            rows.push_back(std::make_pair(std::string("2.7SD"), std::to_string((long long)std::llround(lqSd266(S.mktMu, S.mktV[0], S.mktV[2])))));   // (0.37.0)
         } else {   // (0.32.1) learning: the cut-offs in use (2x / 4x / 8x the start size) marked "~", the count on its own row
             const long long st0 = S.mkt.start();
             for (int k = 0; k < 3; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD~", std::to_string((long long)(2LL << k) * st0)));
@@ -2054,7 +2080,8 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
     }
     const long long st = S.mkt.start();
     long long cut[3] = { 2 * st, 4 * st, 8 * st };
-    if (S.mktOk) for (int k = 0; k < 3; ++k) cut[k] = std::max(1LL, (long long)std::llround(S.mktV[k]));
+    if (S.mktOk) for (int k = 0; k < 3; ++k) cut[k] = std::max(1LL, (long long)std::llround(k == 2 ? lqSd266(S.mktMu, S.mktV[0], S.mktV[2]) : S.mktV[k]));
+    cut[2] = std::max(cut[2], cut[1]);
     const std::vector<bfl::Mark> mk = S.mkt.marks(S.bfNow, cut[0], 5);
     const int bfont = std::max(bol::FONT_MIN, std::min(bol::FONT_MAX, S.boSet.font)) - 1;
     FONT fb; fb.id = HELVETICA; fb.size = coord(bfont); fb.style = BOLD; setFont(fb);
