@@ -82,7 +82,7 @@ namespace delta_profile { inline bool twoSided(double delta, double volume) { re
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.11.1"; // (2.11.1) a decided A keeps its profile label while its row is in the 90-min profile (no longer only while the node is in the live top 3) // (2.11.0) two-sided rows: a top-3 volume row with net under 15% of its volume gets "\xB1" // (2.10.3) the A circle on the candle in the trapped side's colour (bullish red, bearish green) // (2.10.2) strictly the 3 biggest: one with no room is not replaced by the 4th // (2.10.1) the 3 biggest values in all (not 3 per side) // (2.10.0, Rassul 2026-10-15 "(b)") the delta value also on the biggest rows // (2.9.1) posts its A events on the SignalBoard // (2.9.0, Rassul 2026-10-15) location first: A bubbles + labels at a high / low / pivot / level full strength, mid-range dimmed (ZoneNear.h) // (2.8.6, Rassul 2026-10-15) A label delta without the +/- sign ("A 3.7x 92"); colour gives the side // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.12.0"; // (2.12.0, Rassul 08:25) the 3 largest bars always show a value; A and I labels from the record, frozen, kept for 90 min // (2.11.2) the column is drawn at least 110 px wide (a saved Width of 80 no longer squeezes the A label) // (2.11.1) a decided A keeps its profile label while its row is in the 90-min profile (no longer only while the node is in the live top 3) // (2.11.0) two-sided rows: a top-3 volume row with net under 15% of its volume gets "\xB1" // (2.10.3) the A circle on the candle in the trapped side's colour (bullish red, bearish green) // (2.10.2) strictly the 3 biggest: one with no room is not replaced by the 4th // (2.10.1) the 3 biggest values in all (not 3 per side) // (2.10.0, Rassul 2026-10-15 "(b)") the delta value also on the biggest rows // (2.9.1) posts its A events on the SignalBoard // (2.9.0, Rassul 2026-10-15) location first: A bubbles + labels at a high / low / pivot / level full strength, mid-range dimmed (ZoneNear.h) // (2.8.6, Rassul 2026-10-15) A label delta without the +/- sign ("A 3.7x 92"); colour gives the side // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -938,12 +938,12 @@ void DeltaProfile::columns(ChartState& s, const RCT& pane, int axisR) {
     s.peers.step(s.colSym, s.colSpb, s.chartKey, (long long)now, 1u << cb::DELTA);
     if (s.peers.on[cb::DEALER]) s.dealerSeenMs = now;
     cb::In in; in.paneL = pane.left; in.paneT = pane.top; in.paneB = pane.bottom; in.axisR = axisR;
-    in.delta = true; in.deltaW = s.layout.width;
+    in.delta = true; in.deltaW = std::max(s.layout.width, 110);   // (2.11.2, Rassul 08:19) never narrower than 110 px, so the A label always has room
     in.dealer = s.peers.on[cb::DEALER]; in.dealerW = s.peers.w[cb::DEALER];
     in.levels = s.peers.on[cb::LEVELS]; in.levelsW = s.peers.w[cb::LEVELS];
     in.big = s.peers.on[cb::BIG]; in.bigW = s.peers.w[cb::BIG];   // (2.8.6) the BIG column
     s.lay = cb::layout(in);
-    cb::publish(cb::DELTA, s.colSym, s.colSpb, s.chartKey, (long long)now, s.layout.width); s.colPublished = !s.colSym.empty();
+    cb::publish(cb::DELTA, s.colSym, s.colSpb, s.chartKey, (long long)now, std::max(s.layout.width, 110)); s.colPublished = !s.colSym.empty();
     s.needPx = s.lay.ok ? s.lay.margin : 0;
     int ppb = 0, cur = -1;
     if (getChartOption(OPT_PIXELS_PER_BAR, &ppb) == RTX_OK && ppb > 0) s.ppb = ppb;
@@ -1700,7 +1700,7 @@ bool DeltaProfile::render(ChartState& s) {
         return x != y ? x > y : profile.buckets[a].key < profile.buckets[b].key;
     });
     std::map<dp::Tick, int> edge, midY;
-    struct RowText { double delta; int y, edge, h; const dp::Node* node; };   // (2.8.1) + the node   // (2.8.0) each drawn row's value, placed after the node labels
+    struct RowText { double delta; int y, edge, h; const dp::Node* node; dp::Tick key; };   // (2.8.1) + the node   // (2.8.0) each drawn row's value, placed after the node labels
     std::vector<RowText> rowTexts;
     struct VisibleNode { const dp::Node* node; int y, edge; };
     std::vector<VisibleNode> nodes;
@@ -1747,7 +1747,7 @@ bool DeltaProfile::render(ChartState& s) {
         edge[b.key] = e; midY[b.key] = (yt + yb) / 2;
         if (twoSided.count(b.key)) twoMarks.push_back(TwoMark{ (yt + yb) / 2, e });   // (2.11.0)
         // (2.8.1, Rassul 18:30 "it has values for every node instead of the nodes that matter") the delta text only on node rows
-        if (s.layout.text && b.delta != 0) rowTexts.push_back(RowText{ b.delta, (yt + yb) / 2, e, yb - yt, node });   // (2.10.0) every row is a candidate
+        if (s.layout.text && b.delta != 0) rowTexts.push_back(RowText{ b.delta, (yt + yb) / 2, e, yb - yt, node, b.key });   // (2.10.0) every row is a candidate
         if (node) { VisibleNode v; v.node = node; v.y = (yt + yb) / 2; v.edge = e; nodes.push_back(v); }
     }
     // Native key/bucket lookup only. Pixel Y NEVER assigns a node to a bucket.
@@ -1758,33 +1758,36 @@ bool DeltaProfile::render(ChartState& s) {
     // (2.8.1, Rassul 18:31 "remove the I ... only focused on identifying absorption and consistent with the bubbles") only A nodes
     // are labelled (and get their delta text); I / I? / A? nodes keep their bar only
     nodes.erase(std::remove_if(nodes.begin(), nodes.end(), [](const VisibleNode& v) { return v.node->state.code != "A"; }), nodes.end());
-    // (2.11.1, Rassul 2026-10-16 08:11 "when i scroll my mouse wheel it shows me the A, when i scroll it back it goes away") the A label
-    // used to exist only while its node was ALSO one of the live profile's 3 strongest nodes: the forming candle changes the profile
-    // every second, so a decided A (circle on the candle, in the record, never undone) lost its profile label whenever another row
-    // out-ranked it for a moment, and any redraw could bring it back. Now every confirmed A whose circle is drawn keeps its label at its
-    // price row for as long as that row is in the 90-min profile (nodes with a live A state are used as before; the record fills the rest).
-    std::vector<dp::Node> keepNodes; keepNodes.reserve(confirmed.size() + 1);
+    // (2.12.0, Rassul 2026-10-16 08:11-08:25 "once an A or I paints it never repaints", "A and I both", "stays until it leaves the 90 min")
+    // every DECIDED A (its circle drawn) and every decided I of the record is labelled "A 2.3x  -88" / "I 3.9x  -274" at its price row, from the
+    // record's own frozen ratio / net / price - never from the live top-3 node, so a later candle can neither move nor remove it. It leaves
+    // only when its candle is older than the 90-min window. One label per row and letter (the earliest event). Zone A's keep their own pass.
+    std::vector<dp::Node> keepNodes; keepNodes.reserve(book.v.size() + 1);
+    nodes.clear();
     {   std::set<long long> have;
-        for (std::size_t i = 0; i < nodes.size(); ++i) have.insert(nodes[i].node->state.eventId);
-        for (std::size_t i = 0; i < profile.zones.size(); ++i) if (profile.zones[i].code == "A") have.insert(profile.zones[i].eventId);
-        for (std::size_t c = 0; c < confirmed.size(); ++c) {
-            const Latch& L = *confirmed[c];
+        for (std::size_t i2 = 0; i2 < profile.zones.size(); ++i2) if (profile.zones[i2].code == "A") have.insert(profile.zones[i2].eventId);
+        const long long endSec = bubbleTimes.count >= s.barCount ? localSec(static_cast<RTDATE>(bubbleTimes[s.barCount - 1])) : 0;
+        std::set<std::pair<dp::Tick, char> > seen;
+        for (std::size_t c = 0; c < book.v.size(); ++c) {                    // the record is in event-id order
+            const Latch& L = book.v[c];
+            const bool isAev = confirmedAbsorption(L), isIev = L.code == "I" && L.decidedBy > 0;
+            if (!isAev && !isIev) continue;
             if (have.count(L.id)) continue;
-            const std::string q = bubbleDisposition(L.id); if (q != "drawn" && q != "shared") continue;
+            if (endSec > 0 && L.peakT > 0 && L.peakT <= endSec - 90 * 60) continue;   // older than the window
+            if (isAev) { const std::string q = bubbleDisposition(L.id); if (q != "drawn" && q != "shared") continue; }
             dp::Tick pk; try { pk = dp::priceKey(L.price, profile.tick); } catch (...) { continue; }
             const dp::Bucket* hit = NULL;
             for (std::size_t j = 0; j < profile.buckets.size(); ++j) if (pk >= profile.buckets[j].low && pk <= profile.buckets[j].high) { hit = &profile.buckets[j]; break; }
             if (!hit) continue;
+            if (!seen.insert(std::make_pair(hit->key, isAev ? 'A' : 'I')).second) continue;
             const std::map<dp::Tick, int>::const_iterator ee = edge.find(hit->key), my = midY.find(hit->key);
             if (ee == edge.end() || my == midY.end()) continue;
-            dp::Node nn; nn.bucket = hit->key; nn.price = L.price; nn.ratio = L.mult; nn.state.code = "A"; nn.state.support = L.support; nn.state.eventId = L.id;
+            dp::Node nn; nn.bucket = hit->key; nn.price = L.price; nn.ratio = L.mult; nn.state.code = isAev ? "A" : "I"; nn.state.support = L.support; nn.state.eventId = L.id;
             keepNodes.push_back(nn);
             VisibleNode v; v.node = &keepNodes.back(); v.y = my->second; v.edge = ee->second; nodes.push_back(v);
         }
     }
-    std::sort(nodes.begin(), nodes.end(), [](const VisibleNode& a, const VisibleNode& b) {
-        return a.node->ratio != b.node->ratio ? a.node->ratio > b.node->ratio : a.y < b.y; });
-    if (nodes.size() > 3) nodes.resize(3);
+    std::set<dp::Tick> labFull;   // rows whose label already carries the value
     std::vector<int> used;
     std::vector<const dp::Node*> labelled;   // (2.8.4) the A nodes whose label was actually drawn
     std::vector<LBox> placed;
@@ -1800,19 +1803,21 @@ bool DeltaProfile::render(ChartState& s) {
         double net = 0; for (std::size_t j = 0; j < profile.buckets.size(); ++j) if (profile.buckets[j].key == n.bucket) net = profile.buckets[j].delta;
         const Latch* event=eventById(book,n.state.eventId);
         const bool isA=n.state.code=="A";
-        if(isA){++s.activeAbsorptions;if(!event||!confirmedAbsorption(*event)||!permitAbsorptionLabel(event->id))continue;}
-        const double shownRatio=isA?event->mult:n.ratio;
-        if(isA)net=event->net;
+        if(!event)continue;
+        if(isA){++s.activeAbsorptions;if(!confirmedAbsorption(*event)||!permitAbsorptionLabel(event->id))continue;}
+        const double shownRatio=event->mult;
+        net=event->net;                                                   // (2.12.0) frozen at the decision, A and I
+        bool full=net!=0;
         const std::string badge;   // (2.7.1) no "[offscreen]" labels: permitAbsorptionLabel() refuses an offscreen A
         const std::string code = isA ? aeLabel(book, event->id) : n.state.code;      // (2.7.0) A, or AE? / AE once its attackers faded
         std::string label = code + " " + ratio(shownRatio) + (net != 0 ? "  " + amount(net) : std::string()) + badge;
         int width = textWidth(label, s.layout.font, true);
         // (2.8.0) never past the column's left edge: "A 2.1x -861" -> "A 2.1x" -> "A", else not drawn
-        if (v.edge - 4 - width < left) { label = code + " " + ratio(shownRatio) + badge; width = textWidth(label, s.layout.font, true); ++s.labelsShort; }
-        if (v.edge - 4 - width < left) { label = code; width = textWidth(label, s.layout.font, true); }
+        if (v.edge - 4 - width < left) { label = code + " " + ratio(shownRatio) + badge; width = textWidth(label, s.layout.font, true); ++s.labelsShort; full = false; }
+        if (v.edge - 4 - width < left) { label = code; width = textWidth(label, s.layout.font, true); full = false; }
         if (v.edge - 4 - width < left) continue;
         const int h = s.layout.font + 3, r = v.edge - 4, l = r - width;
-        const int anchorY=isA?yOf(lastBar,event->price):v.y;
+        const int anchorY=yOf(lastBar,event->price);
         int y = anchorY; bool ok = false;
         for (int k = 0; k <= 6 && !ok; k++) {
             const int yy = anchorY + ((k + 1) / 2) * h * (k % 2 ? -1 : 1);
@@ -1824,7 +1829,7 @@ bool DeltaProfile::render(ChartState& s) {
         }
         if (!ok) continue;
         const COLOR color = n.state.support ? C_SUPPORT : C_RESISTANCE;
-        textRight(r, y, label, color, s.layout.font, true); used.push_back(y); labelled.push_back(v.node);   // (2.8.4)
+        textRight(r, y, label, color, s.layout.font, true); used.push_back(y); labelled.push_back(v.node); if (full) labFull.insert(n.bucket);   // (2.8.4)
         if(event){s.profileState[event->id]="shown:"+code; if(isA&&(bubbleDisposition(event->id)=="drawn"||bubbleDisposition(event->id)=="shared"))++s.pairedAbsorptions;}
         placed.push_back(LBox{ l, y - h / 2, r, y + h / 2 });
         if (y != v.y) stroke(v.edge - 2, v.y, v.edge - 2, y, color, 1); // visible association when a label stepped
@@ -1886,9 +1891,11 @@ bool DeltaProfile::render(ChartState& s) {
         for (const RowText& t : rowTexts) {
             // (2.8.4) a node whose A label was DRAWN; (2.10.0, Rassul 2026-10-15 12:06 "(b)") plus the 3 biggest buying and the 3 biggest
             // selling rows on screen, so the profile always shows its largest values (biggest first, never over a label or another value)
-            bool isTop = false; if (t.node) for (const dp::Node* v : labelled) if (v == t.node) { isTop = true; break; }
-            if (!isTop && nBig >= 3) continue;   // (2.10.1, Rassul 12:26 "only the biggest 3 should have them") - not 3 per side
-            if (!isTop) ++nBig;                  // (2.10.2) counted even when it has no room: a 4th-biggest never stands in for it
+            // (2.12.0, Rassul 08:25) the THREE LARGEST bars always show their value (biggest first); a row whose A / I label already
+            // carries it is not written twice; rows beyond the third show a value only inside an A / I label
+            if (nBig >= 3) continue;
+            ++nBig;
+            if (labFull.count(t.key)) continue;
             const std::string label = amount(t.delta);
             const int w = textWidth(label, s.layout.font, true), r = t.edge - 2, l = r - w;
             if (l < left || t.y - h / 2 <= top || t.y + h / 2 >= bottom) continue;
@@ -2051,6 +2058,6 @@ extern "C" cppExtension* CreateExtension() {
     DeltaProfile* p = new DeltaProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.11.1");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
+    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.12.0");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
     return p;
 }
