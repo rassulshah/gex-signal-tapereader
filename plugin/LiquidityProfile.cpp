@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.31.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.31.1"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -2372,7 +2372,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
             const bool inc = S.vIncDir == c.dir && std::fabs(c.px - S.vIncPx) < tick * 0.5;
             const double hyst = inc ? std::max(2.0 * tick, 0.25 * Z.band) : 0.0;
             const bool held = c.dir > 0 ? (double)clA[lastBar] > c.px - hyst : (double)clA[lastBar] < c.px + hyst;
-            if (!held || !zn::atZone(Z, std::max(0, std::min(lastBar, c.bar)), c.px)) continue;
+            if (!held) continue;   // (0.31.1, Rassul 21:51 "the badge shouldn't wait for a level" - "just build") no zone needed: absorption at the 10-bar extreme + a close back on its side; a key level is only NAMED
             {   // (0.22.2, Rassul 09:53 - the 9:42 E-S REV UP at 7753 came 30 pts after the 9:00 low: chasing) a turn is at the EXTREME:
                 // within one band of the lowest low (up) / highest high (down) of the last 10 bars, else it is a fill inside a move
                 double ext = c.dir > 0 ? 1e300 : -1e300;
@@ -3013,6 +3013,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.31.0");   // LQ_VERSION
+    p->setVersion("0.31.1");   // LQ_VERSION
     return p;
 }
