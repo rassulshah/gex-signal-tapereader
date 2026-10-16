@@ -1,7 +1,3 @@
-findings=0 allowed=0 staged_files=5 bytes=248419
+findings=0 allowed=0 staged_files=1 bytes=261
 largest staged blobs (bytes, path):
-SIZE	214560	plugin/OrderFlowFeed.h
-SIZE	15141	tools/gex-build.bat
-SIZE	11044	plugin/BookFlow.cpp
-SIZE	7552	plugin/BookFlowLogic.h
-SIZE	122	logs/staged-scan-findings.log
+SIZE	261	logs/staged-scan-findings.log
