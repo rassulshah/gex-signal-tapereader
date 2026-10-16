@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.37.2"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.38.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -315,6 +315,12 @@ static long long civilDays(int y, unsigned m, unsigned d) {
     return era * 146097 + (long long)doe - 719468;
 }
 
+// (0.38.0, Rassul 16:45 "solidify and use for all markets") one large-lot distribution family (LMT resting orders, or MKT market orders), three channels:
+// 0 = all hours, 1 = RTH 8:30-15:00 CT, 2 = overnight; each = this session + the 4 sessions before it (file), log mean / SD of the orders at or above the start
+#ifndef LQ_FLOW
+struct BldCh { bol::LogDist past, curBase, curAll; std::vector<std::pair<long long, std::string> > lines; bool ok = false; long long n = 0; double mu = 0, v[3] = {0, 0, 0}; };
+struct BldSet { std::string mkt; long long ses = -2, calcMs = -1, writeMs = -1, startUsed = -1; BldCh ch[3]; };
+#endif
 struct LQState {
     lqp::Engine e;
     cppExtension::MARKET_DEPTH* md = nullptr;
@@ -392,6 +398,7 @@ struct LQState {
     // (0.18.0) the biggest resting order lines: the engine (fed by the same order feed), the per-market settings file, the record
     // (0.26.0) the big-lot distribution (BigOrderLines 1.4.0 LogDist): this session's new orders (the engine's Hist) + the 4 sessions
     // before it (LiquidityProfile.biglots-<MKT>.txt); Big mu and the 1 / 2 / 3 SD sizes the BIG column tiers and its reference use
+    BldSet bsL, bsM; std::string mkSrc;   // (0.38.0)
     bol::LogDist bldPast, bldCurBase; std::vector<std::pair<long long, std::string>> bldLines; std::string bldMkt; long long bldSes = -2, bldCalcMs = -1, bldWriteMs = -1;
     bool bldOk = false; long long bldN = 0, bldStart = 0; double bldMu = 0, bldV[3] = {0, 0, 0};
     long long boUnder1sd = 0;                       // (0.26.0) live big orders not drawn: under 1SD
@@ -475,6 +482,7 @@ private:
     void renderBig(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX);
     void renderMkt(LQState& S, int l, int r, int top, int bottom);   // (0.28.0) the MKT half of the column
     void bldUpdate(LQState& S, long long start);
+    void mktBldUpdate(LQState& S);          // (0.38.0)
     void renderBigHover(LQState& S, int paneRight);
     std::string boPath(LQState& S) { const std::string d = dir(); return d.empty() || S.boSession < 0 ? std::string() : d + "\\" + recordStem(S) + "-bigorders-" + std::to_string(S.boSession) + ".csv"; }
     lqp::HoverIn hoverIn(const LQState& S, const lqp::Zone& z, const std::string& names) const;   // (0.15.0) its inputs
@@ -1578,7 +1586,7 @@ void LiquidityProfile::orders(LQState& S, long long st) {
             }
         }
     });
-    if (S.boSet.on && S.bfNow > 0) { S.mkt.step(S.bfNow); S.ice.step(S.bfNow); S.mktOk = S.mkt.stats(S.mktMu, S.mktV); mktNormApply(S); }   // (0.28.0) (0.33.0) + the nightly norms
+    if (S.boSet.on && S.bfNow > 0) { S.mkt.step(S.bfNow); S.ice.step(S.bfNow); S.mktOk = S.mkt.stats(S.mktMu, S.mktV); mktBldUpdate(S); }   // (0.28.0) (0.33.0) + the nightly norms
     {   // (0.32.0, Rassul 22:17 "mkt lmt fp and dp ... must all be tracked together") every market order of 10+ lots and every ended iceberg to a file, RAW (whatever
         // the yardstick says), so the studies can find the best definition per market: <MKT>-<sym>-<spb>-mktorders-<session>.csv / -iceorders-<session>.csv
         const std::string d2 = dir();
@@ -1723,47 +1731,98 @@ void LiquidityProfile::boAfter(LQState& S, long count, long long st) {
     boFlush(S, false);
 }
 // (0.26.0) the big-lot distribution: load the 4 earlier sessions once per market / session, recompute every 5 s, save every 60 s
-void LiquidityProfile::bldUpdate(LQState& S, long long start) {
+// (0.38.0) the per-market start size (lots) below which an order is never "large" (BigOrderLines floors, from the recorded data)
+static long long bldFloor(const std::string& m) {
+    if (m == "ES") return 30; if (m == "NQ") return 10; if (m == "GC") return 15; if (m == "HG") return 12;
+    if (m == "CL") return 15; if (m == "NG") return 10; if (m == "6E") return 50; return 10;
+}
+// is a recompute due (every 5 s, a new market / session, or a changed start)?
+static bool bldDue(const BldSet& B, const std::string& market, long long session, long long start) {
     const long long st = steadyMs();
+    return B.mkt != market || B.ses != session || B.calcMs < 0 || st - B.calcMs >= 5000 || st < B.calcMs || start != B.startUsed;
+}
+// load the 4 earlier sessions per channel (once per market / session), recompute, save every 60 s: <dir>\<stem>-<MKT>[-RTH|-ON].txt
+static bool bldRun(const std::string& dirp, const std::string& stem, const std::string& market, long long session, BldSet& B, const bol::LogDist cur[3], long long start) {
+    static const char* const sfx[3] = { "", "-RTH", "-ON" };
+    const long long st = steadyMs();
+    if (B.mkt != market || B.ses != session) {
+        B.mkt = market; B.ses = session;
+        for (int k = 0; k < 3; ++k) {
+            BldCh& c = B.ch[k]; c.past.clear(); c.curBase.clear(); c.lines.clear();
+            std::ifstream in; std::string ln; int n = 0;
+            if (openBoundedInput(dirp + "\\" + stem + "-" + market + sfx[k] + ".txt", in)) while (readBoundedLine(in, ln) && ++n < 64) {
+                long long ses = 0; bol::LogDist d;
+                if (!bol::LogDist::parse(ln, ses, d)) continue;
+                if (ses == session) { c.curBase = d; continue; }   // this session before a restart: the engine's lists start again at 0
+                c.lines.push_back(std::make_pair(ses, ln));
+            }
+            std::sort(c.lines.begin(), c.lines.end(), [](const std::pair<long long, std::string>& a, const std::pair<long long, std::string>& b) { return a.first > b.first; });
+            if (c.lines.size() > 4) c.lines.resize(4);
+            for (size_t i = 0; i < c.lines.size(); ++i) { long long ses = 0; bol::LogDist d; if (bol::LogDist::parse(c.lines[i].second, ses, d)) c.past.add(d); }
+        }
+    }
+    B.calcMs = st; B.startUsed = start;
+    for (int k = 0; k < 3; ++k) {
+        BldCh& c = B.ch[k];
+        bol::LogDist all = cur[k]; all.add(c.curBase); c.curAll = all; all.add(c.past);
+        double v[3] = { 0, 0, 0 }; double mu = 0; long long n = 0;
+        c.ok = all.stats(start, 30, n, mu, v); c.n = n;
+        if (c.ok) { c.mu = mu; for (int q = 0; q < 3; ++q) c.v[q] = v[q]; }
+    }
+    if (session >= 0 && (B.writeMs < 0 || st - B.writeMs >= 60000 || st < B.writeMs)) {
+        B.writeMs = st; makeDir(dirp);
+        for (int k = 0; k < 3; ++k) {
+            const BldCh& c = B.ch[k]; std::string body;
+            for (size_t i = c.lines.size(); i-- > 0;) body += c.lines[i].second + "\n";
+            body += c.curAll.line(session) + "\n";
+            publishFile(dirp + "\\" + stem + "-" + market + sfx[k] + ".txt", body);
+        }
+        return true;
+    }
+    return false;
+}
+// the channel in force: this period's 5-session distribution when it has 30+ large orders, else all hours; false = still learning
+static const BldCh* bldPick(const BldSet& B, bool rth, std::string& src) {
+    const BldCh& pc = B.ch[rth ? 1 : 2];
+    if (pc.ok) { src = rth ? "RTH 5-session" : "overnight 5-session"; return &pc; }
+    if (B.ch[0].ok) { src = "all hours 5-session"; return &B.ch[0]; }
+    src.clear(); return nullptr;
+}
+// (0.26.0) the big-lot distribution: load the 4 earlier sessions once per market / session, recompute every 5 s, save every 60 s
+// (0.38.0) + RTH / overnight channels, the per-market start, and it is the ONLY source of the LMT footer and tiers (the nightly study rows no longer override it)
+void LiquidityProfile::bldUpdate(LQState& S, long long start) {
     const std::string dirp = flexDir(); if (dirp.empty() || S.market.empty()) { S.bldOk = false; return; }
-    const std::string p = dirp + "\\LiquidityProfile.biglots-" + S.market + ".txt";
-    if (S.bldMkt != S.market || S.bldSes != S.boSession) {
-        S.bldMkt = S.market; S.bldSes = S.boSession; S.bldPast.clear(); S.bldCurBase.clear(); S.bldLines.clear(); S.bldCalcMs = -1;
-        std::ifstream in; std::string ln; int n = 0;
-        if (openBoundedInput(p, in)) while (readBoundedLine(in, ln) && ++n < 64) {
-            long long ses = 0; bol::LogDist d;
-            if (!bol::LogDist::parse(ln, ses, d)) continue;
-            if (ses == S.boSession) { S.bldCurBase = d; continue; }   // this session before a restart: the engine's Hist starts again at 0
-            S.bldLines.push_back(std::make_pair(ses, ln));
-        }
-        std::sort(S.bldLines.begin(), S.bldLines.end(), [](const std::pair<long long, std::string>& a, const std::pair<long long, std::string>& b) { return a.first > b.first; });
-        if (S.bldLines.size() > 4) S.bldLines.resize(4);
-        for (size_t i = 0; i < S.bldLines.size(); ++i) { long long ses = 0; bol::LogDist d; if (bol::LogDist::parse(S.bldLines[i].second, ses, d)) S.bldPast.add(d); }
+    start = std::max(start, bldFloor(S.market));
+    BldSet& B = S.bsL;
+    if (!bldDue(B, S.market, S.boSession, start)) return;
+    bol::LogDist cur[3]; cur[0].fromHist(S.bo.hist); cur[1].fromHist(S.bo.histP[0]); cur[2].fromHist(S.bo.histP[1]);
+    const bool wrote = bldRun(dirp, "LiquidityProfile.biglots", S.market, S.boSession, B, cur, start);
+    const long long ms = nowMs(S); const int mod = (int)((ms / 60000LL) % 1440LL);
+    std::string src; const BldCh* a = bldPick(B, mod >= 8 * 60 + 30 && mod < 15 * 60, src);
+    S.bldStart = start; S.lnSrc = src; S.bldOk = a != nullptr; S.bldN = a ? a->n : B.ch[0].n;
+    if (a) { S.bldMu = a->mu; for (int k = 0; k < 3; ++k) S.bldV[k] = a->v[k]; }
+    if (wrote && S.boSession >= 0) {
+        // "BSD1,ok,n,mu,1sd,2sd,3sd" for Big Bid / Ask (ok 0 = still learning: Big Bid / Ask keeps its own rule)
+        char b2[160]; std::snprintf(b2, sizeof(b2), "BSD1,%d,%lld,%lld,%lld,%lld,%lld\n", S.bldOk ? 1 : 0, S.bldN, (long long)std::llround(S.bldMu),
+            (long long)std::llround(S.bldV[0]), (long long)std::llround(S.bldV[1]), (long long)std::llround(S.bldV[2]));
+        publishFile(dirp + "\\LiquidityProfile.bigsd-" + S.market + ".txt", b2);
     }
-    if (S.bldCalcMs < 0 || st - S.bldCalcMs >= 5000 || st < S.bldCalcMs || start != S.bldStart) {
-        S.bldCalcMs = st; S.bldStart = start;
-        bol::LogDist all; all.fromHist(S.bo.hist); all.add(S.bldCurBase); const bol::LogDist cur = all; all.add(S.bldPast);
-        double v[3] = {0, 0, 0}; double mu = 0; long long n = 0;
-        S.bldOk = all.stats(start, 30, n, mu, v); S.bldN = n;
-        if (S.bldOk) { S.bldMu = mu; for (int k = 0; k < 3; ++k) S.bldV[k] = v[k]; }
-        // (0.35.1, Rassul 11:55 "we did a large lot distribution, first isolating large lots and then doing a distribution") the chart's own big-lot
-        // distribution (BigOrderLines LogDist, 0.26.0) stays the LMT footer and tiers: 0.35.0's nightly all-orders norms (ES mean 6 lots) are NOT used.
-        // (0.36.0, Rassul 13:07 "make them consistent") lmtNormApply() is back, but it only takes the nightly 5-session RTH / overnight average of the large resting orders
-        // (kind P rows); without those rows the distribution above stays the footer.
-        lmtNormApply(S);
-        if (S.boSession >= 0 && (S.bldWriteMs < 0 || st - S.bldWriteMs >= 60000 || st < S.bldWriteMs)) {
-            S.bldWriteMs = st;
-            std::string body;
-            for (size_t i = S.bldLines.size(); i-- > 0;) body += S.bldLines[i].second + "\n";
-            body += cur.line(S.boSession) + "\n";
-            makeDir(dirp); publishFile(p, body);
-            // (0.26.0, Rassul 16:13 "why not use the distribution that we are currently using") the sizes for Big Bid / Ask's prints:
-            // "BSD1,ok,n,mu,1sd,2sd,3sd" (ok 0 = still learning: Big Bid / Ask keeps its own rule)
-            char b2[160]; std::snprintf(b2, sizeof(b2), "BSD1,%d,%lld,%lld,%lld,%lld,%lld\n", S.bldOk ? 1 : 0, S.bldN, (long long)std::llround(S.bldMu),
-                (long long)std::llround(S.bldV[0]), (long long)std::llround(S.bldV[1]), (long long)std::llround(S.bldV[2]));
-            publishFile(dirp + "\\LiquidityProfile.bigsd-" + S.market + ".txt", b2);
-        }
-    }
+}
+// (0.38.0, Rassul 16:45 "make them consistent ... use for all markets") the MKT footer and tiers: the SAME method on the big market orders (the session's 99th-percentile
+// start, never under 10 lots for the buckets), 5 sessions pooled, RTH / overnight separately; until a channel has 30+ the session's own live stats stay (set by the caller)
+void LiquidityProfile::mktBldUpdate(LQState& S) {
+    const std::string dirp = flexDir(); if (dirp.empty() || S.market.empty()) return;
+    const long long start = std::max(10LL, S.mkt.start());
+    BldSet& B = S.bsM;
+    if (!bldDue(B, S.market, S.boSession, start)) return;
+    bol::LogDist cur[3];
+    for (size_t i = 0; i < S.mkt.big.size(); ++i) cur[0].addN(S.mkt.big[i], 1);
+    for (int k = 0; k < 2; ++k) for (size_t i = 0; i < S.mkt.bigP[k].size(); ++i) cur[k + 1].addN(S.mkt.bigP[k][i], 1);
+    bldRun(dirp, "LiquidityProfile.mktlots", S.market, S.boSession, B, cur, start);
+    const long long ms = nowMs(S); const int mod = (int)((ms / 60000LL) % 1440LL);
+    std::string src; const BldCh* a = bldPick(B, mod >= 8 * 60 + 30 && mod < 15 * 60, src);
+    S.mkSrc = src;
+    if (a) { S.mktOk = true; S.mktMu = a->mu; for (int k = 0; k < 3; ++k) S.mktV[k] = a->v[k]; }
 }
 // (0.37.0, Rassul 14:00 "instead of using 3 SD, use 2.66, in case it just misses the 3SD cutoff") the top tier starts at 2.66 SD: log-space mean + 2.66 x SD, from the mean and the 1SD size
 static double lqSd266(double mu, double v1, double v3) {
@@ -3233,6 +3292,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.37.2");   // LQ_VERSION
+    p->setVersion("0.38.0");   // LQ_VERSION
     return p;
 }

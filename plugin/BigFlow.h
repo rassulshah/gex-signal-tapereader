@@ -61,11 +61,12 @@ public:
     static const long long LOG_MIN = 10;
     std::unordered_map<long long, Ord> open;          // aggressor id -> its fills so far
     std::deque<std::pair<long long, Ord>> done;       // completed in the last 60 min (any size at or above the start when completed)
+    std::vector<long long> bigP[2];                   // (0.38.0) the same big sizes by period: 0 = RTH 8:30-15:00 CT, 1 = overnight
     std::vector<long long> big;                       // completed sizes >= the start (the yardstick sample, this session)
     std::vector<long long> cnt;                       // completed sizes 1..1023 (+ the rest in the last) for the start
     long long nAll = 0, fills = 0, noAggr = 0;
     Mkt() : cnt(1024, 0) {}
-    void clear() { open.clear(); done.clear(); fresh.clear(); big.clear(); std::fill(cnt.begin(), cnt.end(), 0); nAll = fills = noAggr = 0; }
+    void clear() { open.clear(); done.clear(); fresh.clear(); big.clear(); bigP[0].clear(); bigP[1].clear(); std::fill(cnt.begin(), cnt.end(), 0); nAll = fills = noAggr = 0; }
     long long start() const {                         // the 99th percentile of every completed market order, never under 3
         if (nAll <= 0) return 3;
         const long long want = std::max(1LL, (long long)std::ceil(0.01 * (double)nAll));
@@ -89,7 +90,7 @@ public:
             Ord o = it->second; o.big = o.lots >= st;
             if (o.lots >= std::min((long long)LOG_MIN, st) && fresh.size() < 5000) fresh.push_back(std::make_pair(it->first, o));
             ++nAll; cnt[(size_t)std::min<long long>(o.lots, (long long)cnt.size() - 1)]++;
-            if (o.lots >= st) { big.push_back(o.lots); done.push_back(std::make_pair(it->first, o)); }
+            if (o.lots >= st) { big.push_back(o.lots); { const int md = (int)((o.tLast / 60000LL) % 1440LL); bigP[(md >= 510 && md < 900) ? 0 : 1].push_back(o.lots); } done.push_back(std::make_pair(it->first, o)); }
             it = open.erase(it);
         }
         while (!done.empty() && done.front().second.tLast < now - KEEP_MS) done.pop_front();

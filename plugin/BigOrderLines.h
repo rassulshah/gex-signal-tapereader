@@ -35,7 +35,7 @@
 #include <vector>
 
 namespace bol {
-static const char* const VERSION = "1.4.0";   // (1.4.0) LogDist: the big-lot distribution (log mean / SD, 5 sessions) for the BIG column tiers;   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
+static const char* const VERSION = "1.5.0";   // (1.5.0) histP: RTH / overnight split of the new-order sizes for the large-lot distribution;   // (1.4.0) LogDist: the big-lot distribution (log mean / SD, 5 sessions) for the BIG column tiers;   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -227,6 +227,7 @@ public:
     std::unordered_map<long long, Ord> book;
     std::set<long long> big[2];        // ids resting with size >= the floor (the only candidates)
     Hist hist;
+    Hist histP[2];                     // (1.5.0) the same new-order sizes split by period: 0 = RTH 8:30-15:00 CT, 1 = overnight (t is the Central clock)
     Tick px = 0; bool havePx = false;  // the last trade (a FILL's price), else the chart's close
     bool pxFromFill = false;
     Tick reach = 0;                    // ticks; 0 = no ATR yet: nothing is drawn
@@ -310,6 +311,7 @@ public:
             Ord o; o.side = side; o.px = p; o.size = size; o.orig = size; o.tNew = t; o.startKnown = true;
             book[id] = o; rebig(id, book[id]);
             evaluate(t);
+            { const int md = (int)((t / 60000LL) % 1440LL); histP[(md >= 510 && md < 900) ? 0 : 1].add(size); }   // (1.5.0)
             hist.add(size);                               // past-only: its own size joins the distribution after it was judged
             if (inReach(side, p)) recent.push_back(std::make_pair(t, size));   // (1.2.0) near-price arrivals feed the self-tuned size
             break; }
@@ -436,7 +438,7 @@ public:
     // clearSession() starts the lines / distribution over; the book stays (orders keep resting across the boundary)
     void endSession(long long t) { for (int s = 0; s < 2; ++s) if (live[s] >= 0) finish(s, SESSION, t, 0); }
     void clearSession() {
-        lines.clear(); live[0] = live[1] = -1; hist.clear(); seq = 0; lineN[0] = lineN[1] = 0; restarted = false; rows.clear();
+        lines.clear(); live[0] = live[1] = -1; hist.clear(); histP[0].clear(); histP[1].clear(); seq = 0; lineN[0] = lineN[1] = 0; restarted = false; rows.clear();
         for (int q = 0; q < 2; ++q) { pendId[q] = pendSince[q] = pendTraded[q] = pendSize[q] = outSince[q] = lowSince[q] = 0; }
     }
     // ---- the session record (append-only; read back after a restart: no repaint) ---------------------------------------------
