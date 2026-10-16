@@ -86,10 +86,10 @@ int main() {
         std::vector<Bar> b = held(true,true); b[0].index=42;
         check(classify(b,100,100,-100,1).peakBar == 42,"bar identity lost");
     });
-    test("no contributor above 10 percent yields no node", [] {
+    test("2.13.0 no 10 percent gate", [] {
         std::vector<Bar> b(20,candle(0,0,99,101,100));
         for (std::size_t i=0;i<b.size();++i) { b[i].rows.push_back(Row(100,-5,5)); b[i].time=static_cast<std::int64_t>(i)*60; }
-        check(!classify(b,100,100,-100,1).valid(),"invalid formation");
+        check(classify(b,100,100,-100,1).valid(),"2.13.0: no 10% gate - a node whose biggest bar holds under 10% still has a peak bar");
     });
     test("unknown tick fails closed", [] { check(!classify(held(true,true),100,100,-100,0).valid(),"zero tick accepted"); });
     test("zero delta yields no signal", [] { check(!classify(held(true,true),100,100,0,1).valid(),"zero delta signal"); });

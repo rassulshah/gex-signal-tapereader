@@ -13,7 +13,7 @@ namespace dp = delta_profile;
 static int passed = 0, failed = 0;
 static void check(bool ok, const std::string& why) { if (ok) { ++passed; std::cout << "PASS " << why << '\n'; } else { ++failed; std::cerr << "FAIL " << why << '\n'; } }
 static dp::BubbleCand cand(long long id, long long candle, bool support, double price, long long tDecided) {
-    dp::BubbleCand c; c.id = id; c.candle = candle; c.support = support; c.price = price; c.tDecided = tDecided; return c;
+    dp::BubbleCand c; c.mult = 1.0; c.id = id; c.candle = candle; c.support = support; c.price = price; c.tDecided = tDecided; return c;
 }
 int main()
 {
@@ -25,55 +25,51 @@ int main()
     check(dp::versionBefore("", 2, 8, 4) && dp::versionBefore("2.8", 2, 8, 4) && dp::versionBefore("2.8.4x", 2, 8, 4) && dp::versionBefore("v2.8.5", 2, 8, 4) &&
           dp::versionBefore("2..4", 2, 8, 4) && dp::versionBefore("9999999.0.0", 2, 8, 4), "unreadable versions count as OLD (re-checked, never trusted)");
 
-    // ---- rule 1: oneBubblePerCandle ----
+    // ---- rule 1 (2.13.0): oneBubblePerCandle - ONE bubble per candle (either side): the HIGHER ratio, only among the events decided at the first moment ----
     const double T = 0.25;
-    {   // tonight's ES pattern: the same peak bar recorded 3 times at slightly different prices (row size changed), all decided together
+    {   // the same peak bar recorded 3 times: ONE bubble, the highest ratio
         std::vector<dp::BubbleCand> v = { cand(15, 1000, true, 7746.25, 50), cand(17, 1000, true, 7745.5, 50), cand(20, 1000, true, 7745.625, 50) };
+        v[0].mult = 2.1; v[1].mult = 3.4; v[2].mult = 2.9;
         std::map<long long, long long> h = dp::oneBubblePerCandle(v, T);
-        check(h[15] == 17 && h[17] == 17 && h[20] == 17, "bullish: three A on one candle -> ONE bubble, at the LOWEST price (7745.50)");
+        check(h[15] == 17 && h[17] == 17 && h[20] == 17, "three A on one candle -> ONE bubble, the HIGHEST ratio (3.4x)");
     }
-    {
+    {   // bearish: same rule, price does not matter
         std::vector<dp::BubbleCand> v = { cand(1, 1000, false, 110.0, 50), cand(2, 1000, false, 111.0, 50), cand(3, 1000, false, 110.5, 50) };
+        v[0].mult = 5.0; v[1].mult = 2.0; v[2].mult = 2.5;
         std::map<long long, long long> h = dp::oneBubblePerCandle(v, T);
-        check(h[1] == 2 && h[2] == 2 && h[3] == 2, "bearish: three A on one candle -> ONE bubble, at the HIGHEST price (111.00)");
+        check(h[1] == 1 && h[2] == 1 && h[3] == 1, "bearish: the highest ratio holds the bubble whatever the price");
     }
     {
         std::vector<dp::BubbleCand> v = { cand(1, 1000, true, 100, 50), cand(2, 1180, true, 99, 60) };
+        v[0].mult = v[1].mult = 2.0;
         std::map<long long, long long> h = dp::oneBubblePerCandle(v, T);
         check(h[1] == 1 && h[2] == 2, "two candles -> two bubbles");
     }
-    {
+    {   // one candle, both sides -> ONE bubble (2.13.0: per candle, not per side)
         std::vector<dp::BubbleCand> v = { cand(1, 1000, true, 100, 50), cand(2, 1000, false, 101, 50) };
+        v[0].mult = 2.2; v[1].mult = 3.0;
         std::map<long long, long long> h = dp::oneBubblePerCandle(v, T);
-        check(h[1] == 1 && h[2] == 2, "one candle, both sides -> one bubble per side");
+        check(h[1] == 2 && h[2] == 2, "one candle, both sides -> ONE bubble (the higher ratio)");
     }
-    {   // a later duplicate (decided at a later moment) never moves a drawn bubble, even when it is lower
+    {   // a later duplicate never moves a drawn bubble, even with a higher ratio
         std::vector<dp::BubbleCand> v = { cand(15, 1000, true, 7746.25, 50), cand(17, 1000, true, 7745.5, 53), cand(20, 1000, true, 7744.0, 80) };
+        v[0].mult = 2.0; v[1].mult = 4.0; v[2].mult = 9.0;
         std::map<long long, long long> h = dp::oneBubblePerCandle(v, T);
-        check(h[15] == 15 && h[17] == 15 && h[20] == 15, "later duplicates (decided after the candle's first decision) join the drawn bubble, never move it");
-        // ...but a lower one decided at that SAME first moment does take it
-        v.push_back(cand(30, 1000, true, 7745.0, 50));
+        check(h[15] == 15 && h[17] == 15 && h[20] == 15, "later duplicates (decided after the first decision) join the drawn bubble, never move it");
+        v.push_back(cand(30, 1000, true, 7745.0, 50)); v.back().mult = 2.5;
         h = dp::oneBubblePerCandle(v, T);
-        check(h[15] == 30 && h[30] == 30 && h[17] == 30 && h[20] == 30, "a lower A decided at the same first moment takes the bubble (all candidates exist together)");
-        // bearish mirror
-        std::vector<dp::BubbleCand> b = { cand(1, 1000, false, 110, 50), cand(2, 1000, false, 112, 60) };
-        h = dp::oneBubblePerCandle(b, T);
-        check(h[2] == 1, "bearish: a later HIGHER duplicate never moves the drawn bubble");
-        b.push_back(cand(3, 1000, false, 111, 50));
-        h = dp::oneBubblePerCandle(b, T);
-        check(h[1] == 3 && h[2] == 3 && h[3] == 3, "bearish: a higher A decided at the same first moment takes the bubble");
+        check(h[15] == 30 && h[30] == 30 && h[17] == 30 && h[20] == 30, "a higher ratio decided at the SAME first moment takes the bubble");
     }
-    {   // ties: the same price -> the lowest id; prices that differ only by float noise (< 1/2 tick) are the same price
-        std::vector<dp::BubbleCand> v = { cand(9, 1000, true, 100.0, 50), cand(4, 1000, true, 100.0 + 1e-9, 50), cand(7, 1000, true, 100.0, 50) };
+    {   // ties: the same ratio -> the lowest id
+        std::vector<dp::BubbleCand> v = { cand(9, 1000, true, 100.0, 50), cand(4, 1000, true, 99.0, 50), cand(7, 1000, true, 100.0, 50) };
+        v[0].mult = v[1].mult = v[2].mult = 2.5;
         std::map<long long, long long> h = dp::oneBubblePerCandle(v, T);
-        check(h[9] == 4 && h[7] == 4 && h[4] == 4, "same price -> the lowest id holds the bubble (float noise is not a lower price)");
-        std::vector<dp::BubbleCand> f = { cand(1, 1000, true, 4214.5f, 50), cand(2, 1000, true, 4214.4f, 50) };
-        h = dp::oneBubblePerCandle(f, 0.1f);
-        check(h[1] == 2, "GC float tick 0.1: 4214.4 is lower than 4214.5 (half-tick keys)");
+        check(h[9] == 4 && h[7] == 4 && h[4] == 4, "same ratio -> the lowest id holds the bubble");
     }
     {   // load-order independence: every permutation of 6 events gives the same answer
         std::vector<dp::BubbleCand> v = { cand(1, 1000, true, 100, 50), cand(2, 1000, true, 99.5, 50), cand(3, 1000, true, 99.0, 70),
                                           cand(4, 1180, false, 105, 60), cand(5, 1180, false, 105.25, 60), cand(6, 1180, true, 101, 60) };
+        v[0].mult = 2.0; v[1].mult = 3.0; v[2].mult = 9.0; v[3].mult = 2.0; v[4].mult = 2.0; v[5].mult = 4.0;
         const std::map<long long, long long> ref = dp::oneBubblePerCandle(v, T);
         std::vector<int> idx = { 0, 1, 2, 3, 4, 5 }; int perms = 0, same = 0;
         do {
@@ -81,19 +77,30 @@ int main()
             ++perms; if (dp::oneBubblePerCandle(w, T) == ref) ++same;
         } while (std::next_permutation(idx.begin(), idx.end()));
         check(perms == 720 && same == 720, "all 720 load orders give the same bubbles (" + std::to_string(same) + "/" + std::to_string(perms) + ")");
-        check(ref.at(1) == 2 && ref.at(3) == 2 && ref.at(4) == 5 && ref.at(6) == 6, "the reference answer: candle 1000 bullish -> 99.50, 1180 bearish -> 105.25, 1180 bullish -> its own");
+        check(ref.at(1) == 2 && ref.at(3) == 2 && ref.at(4) == 6 && ref.at(6) == 6, "the reference answer: candle 1000 -> ratio 3.0 (id 2), candle 1180 -> ratio 4.0 (id 6)");
     }
-    {   // incremental growth = the live path: adding later-decided events one at a time never changes an existing holder
-        std::vector<dp::BubbleCand> v = { cand(1, 1000, true, 100, 50) };
+    {   // incremental growth = the live path: later-decided events never change an existing holder
+        std::vector<dp::BubbleCand> v = { cand(1, 1000, true, 100, 50) }; v[0].mult = 2.0;
         bool stable = true;
         for (int k = 0; k < 20; ++k) {
-            v.push_back(cand(100 + k, 1000, true, 100 - 0.25 * (k + 1), 51 + k));      // each one lower, each decided later
+            v.push_back(cand(100 + k, 1000, true, 100 - 0.25 * (k + 1), 51 + k)); v.back().mult = 3.0 + k;   // each higher, each decided later
             const std::map<long long, long long> h = dp::oneBubblePerCandle(v, T);
             for (std::map<long long, long long>::const_iterator i = h.begin(); i != h.end(); ++i) if (i->second != 1) stable = false;
         }
-        check(stable, "20 later, ever-lower duplicates: the bubble never moves (no repaint)");
+        check(stable, "20 later, ever-bigger duplicates: the bubble never moves (no repaint)");
     }
     check(dp::oneBubblePerCandle(std::vector<dp::BubbleCand>(), T).empty(), "no events -> no bubbles");
+    {   // 2.13.0 candidates: build() lists EVERY row >= 2.0x the average |delta| (not only 3)
+        using namespace dp;
+        std::vector<Bar> bars; Bar b; b.index = 0; b.time = 60; b.closed = true; b.open = 100; b.high = 110; b.low = 90; b.close = 105;
+        for (int k = 0; k < 40; ++k) b.rows.push_back(Row(90 + k / 2, (k % 7 == 0) ? -400.0 : -5.0, 500));
+        for (int k = 0; k < 40; ++k) b.rows[(std::size_t)k].key = 80 + k;
+        bars.push_back(b);
+        Snapshot s2 = build(bars, 1.0, true);
+        int big = 0; for (const Bucket& x : s2.buckets) if (x.ratio >= 2.0) ++big;
+        check(big > 3 && s2.nodes.size() <= 3, "the fixture has more than 3 rows at 2x or more; the display nodes stay at most 3");
+        check((int)s2.cands.size() >= std::min(big, 4) && s2.cands.size() > s2.nodes.size() - 0, "cands holds every qualifying row that classifies (more than the 3 display nodes): " + std::to_string(s2.cands.size()) + " of " + std::to_string(big));
+    }
 
     // ---- rule 2: recheckA ----
     {

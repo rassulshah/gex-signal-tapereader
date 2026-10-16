@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -50,7 +50,8 @@ struct Snapshot {
     double tick, meanAbsDelta, maxAbsDelta, maxVolume;
     Tick ticksPerRow;
     std::vector<Bucket> buckets;
-    std::vector<Node> nodes; // at most three, descending magnitude, deterministic ties
+    std::vector<Node> nodes; // at most three, descending magnitude, deterministic ties (display)
+    std::vector<Node> cands; // (2.13.0) EVERY row at 2.0x or more of the average |delta| that classifies - the absorption candidates (no top-3 cap)
     std::vector<Zone> zones;
     Snapshot() : tick(0), meanAbsDelta(0), maxAbsDelta(0), maxVolume(0), ticksPerRow(1) {}
 };
@@ -185,18 +186,17 @@ inline Recheck recheckA(O& open, H& high, L& low, C& close, int count, int pk, T
 // does take the bubble - at that moment every candidate exists together. Ties (same price): the lowest id. Pure function of the
 // set: independent of load order, the same after a restart, unchanged by later bars. Returns event id -> the id that holds its group's
 // bubble (itself for the chosen one).
-struct BubbleCand { long long id = 0, candle = 0, tDecided = 0; bool support = false; double price = 0; };
+struct BubbleCand { long long id = 0, candle = 0, tDecided = 0; bool support = false; double price = 0, mult = 0; };   // (2.13.0) mult = the row's ratio
 inline std::map<long long, long long> oneBubblePerCandle(const std::vector<BubbleCand>& v, double tick) {
     const double t = finite(tick) && tick > 0 ? tick : 0;
     auto halfTicks = [t](double p) -> long long { return t > 0 && finite(p / t) && std::fabs(p / t) < 4.0e15 ? std::llround(p / t * 2.0) : 0; };
-    auto better = [&](const BubbleCand& a, const BubbleCand& b) {   // a beats b inside one group
-        const long long pa = halfTicks(a.price), pb = halfTicks(b.price);
-        if (t > 0 && pa != pb) return a.support ? pa < pb : pa > pb;
-        if (t <= 0 && a.price != b.price) return a.support ? a.price < b.price : a.price > b.price;
+    auto better = [&](const BubbleCand& a, const BubbleCand& b) {   // (2.13.0) a beats b inside one candle: the HIGHER ratio, then the lower id
+        (void)halfTicks;
+        if (a.mult != b.mult) return a.mult > b.mult;
         return a.id < b.id;
     };
     std::map<std::pair<long long, bool>, std::vector<const BubbleCand*> > groups;
-    for (std::size_t i = 0; i < v.size(); ++i) groups[std::make_pair(v[i].candle, v[i].support)].push_back(&v[i]);
+    for (std::size_t i = 0; i < v.size(); ++i) groups[std::make_pair(v[i].candle, false)].push_back(&v[i]);   // (2.13.0) ONE bubble per candle, either side
     std::map<long long, long long> out;
     for (std::map<std::pair<long long, bool>, std::vector<const BubbleCand*> >::const_iterator g = groups.begin(); g != groups.end(); ++g) {
         long long first = g->second[0]->tDecided;
@@ -217,7 +217,7 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
     double peakMagnitude = -1;
     for (std::size_t i = 0; i < bars.size(); ++i) {
         const double d = regionalDelta(bars[i], low, high);
-        if (d != 0 && (d < 0) == sell && std::fabs(d) >= 0.1 * std::fabs(net)) {
+        if (d != 0 && (d < 0) == sell) {   // (2.13.0) no 10%-of-net gate: the peak is simply the biggest same-side bar
             formed = static_cast<int>(i);
             if (std::fabs(d) > peakMagnitude) { peakMagnitude = std::fabs(d); peak = formed; }
         }
@@ -325,6 +325,16 @@ inline Snapshot build(const std::vector<Bar>& bars, double tick, bool allowConfi
         if (!allowConfirmation && (state.code == "A" || state.code == "I")) state.code += "?";
         Node n; n.bucket = b.key; n.price = (static_cast<double>(b.low) + static_cast<double>(b.high)) * 0.5 * tick;
         n.ratio = b.ratio; n.state = state; s.nodes.push_back(n);
+    }
+    // (2.13.0, Rassul 2026-10-16 17:32-17:40 "it doesn't have to be the top 3") every row at 2.0x or more is an absorption candidate
+    for (std::size_t i = 0; i < ranked.size(); ++i) {
+        const Bucket& b = s.buckets[ranked[i]];
+        if (b.ratio < 2.0) break;
+        State state = classify(bars, b.low, b.high, b.delta, tick);
+        if (!state.valid()) continue;
+        if (!allowConfirmation && (state.code == "A" || state.code == "I")) state.code += "?";
+        Node n; n.bucket = b.key; n.price = (static_cast<double>(b.low) + static_cast<double>(b.high)) * 0.5 * tick;
+        n.ratio = b.ratio; n.state = state; s.cands.push_back(n);
     }
     // Zones use exactly the SAME 60-minute subset for both net delta and state.
     std::vector<Bar> zoneBars;
