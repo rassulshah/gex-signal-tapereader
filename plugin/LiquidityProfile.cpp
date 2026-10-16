@@ -144,7 +144,7 @@
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bullish / support, red bearish / resistance
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
 static const COLOR C_GREY = 0x009CA3AF, C_AXIS = 0x00334155, C_INK = 0x000B0F17;
-static const COLOR C_WHITE = 0x00FFFFFF, C_COLBG = 0x0020242C;     // (0.16.0) the lots inside a node; the column's solid background
+static const COLOR C_WHITE = 0x00FFFFFF, C_COLBG = 0x001B1410;     // (0.16.0) the lots inside a node; the column's solid background
 #ifdef LQ_FLOW
 static const int WIDTH_INDEX = -1, FONT_INDEX = 0, OFFX_INDEX = -1, OFFY_INDEX = -1, BG_INDEX = -1;     // (0.15.1) the Flow pane has no Width row
 static const char* const LQ_SIZE_NAME = "LiquidityFlow";
@@ -1806,7 +1806,10 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         if (S.bldOk) {
             rows.push_back(std::make_pair(std::string("Big \xB5"), std::to_string((long long)std::llround(S.bldMu))));
             for (int k = 0; k < 3; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD", std::to_string((long long)std::llround(S.bldV[k]))));
-        } else rows.push_back(std::make_pair(std::string("learn"), std::to_string(S.bldN) + "/30"));
+        } else {   // (0.32.1, Rassul 22:24 "the thresholds at the bottom are not being displayed") while learning, the size in use is still shown ("~" = provisional) and the count on its own row
+            rows.push_back(std::make_pair(std::string("Big~"), std::to_string((long long)S.bo.threshold())));
+            rows.push_back(std::make_pair(std::string("n"), std::to_string(S.bldN) + "/30"));
+        }
         int y = bottom - 4 - (int)rows.size() * rh;
         if (y > top + 30) for (size_t i = 0; i < rows.size(); ++i, y += rh) {
             RCT a; a.set(coord(cl + 3), coord(y), coord(cr - 3), coord(y + rh)); a.drawText(rows[i].first.c_str(), false, false);
@@ -1939,7 +1942,11 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
         if (S.mktOk) {
             rows.push_back(std::make_pair(std::string("Mkt \xB5"), std::to_string((long long)std::llround(S.mktMu))));
             for (int k = 0; k < 3; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD", std::to_string((long long)std::llround(S.mktV[k]))));
-        } else rows.push_back(std::make_pair(std::string("learn"), std::to_string(S.mkt.big.size()) + "/30"));
+        } else {   // (0.32.1) learning: the cut-offs in use (2x / 4x / 8x the start size) marked "~", the count on its own row
+            const long long st0 = S.mkt.start();
+            for (int k = 0; k < 3; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD~", std::to_string((long long)(2LL << k) * st0)));
+            rows.push_back(std::make_pair(std::string("n"), std::to_string(S.mkt.big.size()) + "/30"));
+        }
         int y = bottom - 4 - (int)rows.size() * rh;
         if (y > top + 30) for (size_t i = 0; i < rows.size(); ++i, y += rh) {
             RCT a; a.set(coord(l + 3), coord(y), coord(r - 3), coord(y + rh)); a.drawText(rows[i].first.c_str(), false, false); a.drawText(rows[i].second.c_str(), false, true);
