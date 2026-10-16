@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.31.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.32.3"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1793,7 +1793,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     if (S.colBigL < 0 || S.colBigR - S.colBigL < 20) { S.boState = S.boState + " (no BIG column room)"; return; }
     // (0.28.0) the column holds two: MKT (big market orders, left half) | BIG (big limit orders + icebergs, right half, next to the Delta Profile)
     // (0.30.0, Rassul 21:14 "update Big Column to LMT Column ... before MKT") LMT (big limit orders + icebergs) is the LEFT half, MKT the right half next to the Delta Profile
-    const int colL = S.colBigL, colR = S.colBigR, cl = colL, mk = colL + (colR - colL) / 2, cr = mk - 2;
+    const int colL = S.colBigL, colR = S.colBigR, cl = colL, mk = colL + (colR - colL) * 4 / 9, cr = mk - 2;   // (0.32.3) MKT 25% wider than LMT (5:4)
     { RCT bg; bg.set(coord(colL), coord(top), coord(colR), coord(bottom)); bg.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
     { setPen(0x00000000, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = coord(mk - 1); a.v = coord(top); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(mk - 1); b.v = coord(bottom); b.drawLineTo(); }
     FONT fh; fh.id = HELVETICA; fh.size = coord(9); fh.style = BOLD; setFont(fh); setTextColor(C_GREY);
@@ -2613,9 +2613,9 @@ void LiquidityProfile::renderWarning(LQState& S) {
     PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int right = std::min((int)pl.h, (int)pane.right) - 4;
     const int x0 = pane.left + 6, y0 = warnTop(pane.top);                     // (0.14.1) below the chart title, never over it
     if (right - x0 < 120) { S.warnPx = 0; return; }
-    FONT f; f.id = HELVETICA; f.size = coord(bf + 2); f.style = BOLD;
-    FONT g; g.id = HELVETICA; g.size = coord(bf + 1); g.style = PLAIN;
-    const int lineH = rowPx(bf + 1);
+    FONT f; f.id = HELVETICA; f.size = coord(bf + 1); f.style = BOLD;     // (0.32.3) badge font 1 pt smaller
+    FONT g; g.id = HELVETICA; g.size = coord(std::max(8, bf)); g.style = PLAIN;
+    const int lineH = rowPx(std::max(8, bf)) - 1;                       // (0.32.3) compact grey lines
     // (0.24.0, Rassul 12:37-12:50, mockup-combined-badge-v7.png) ONE badge: top = the verdict (filled, REV UP ? / REV DOWN ? /
     // REV UP FAILING ? / REV DOWN FAILING ?, bullish green, bearish red), bottom = the book state (outlined, today's words, its OWN colour
     // so a warning against the verdict still shows in its first 15 s); the grey lines = everything both badges showed, the verdict
@@ -2625,21 +2625,21 @@ void LiquidityProfile::renderWarning(LQState& S) {
     const std::string tagName = absFail ? std::string("ABS FAILED") : absHave ? std::string("ABS ") + (S.absDir > 0 ? "UP" : "DOWN") + "  \xB7  " + std::to_string(absCount(S.absBits)) + "/4" : std::string();
     setFont(f);
     const int nwW = have ? getTextWidth(w.name.c_str(), -1) : 0, nwV = vname.empty() ? (tagName.empty() ? 0 : getTextWidth(tagName.c_str(), -1)) : getTextWidth(vname.c_str(), -1);
-    FONT fc; fc.id = HELVETICA; fc.size = coord(std::max(8, bf)); fc.style = BOLD; setFont(fc);
+    FONT fc; fc.id = HELVETICA; fc.size = coord(std::max(7, bf - 1)); fc.style = BOLD; setFont(fc);
     const int chipW = getTextWidth("LMT+i", -1) + 8, chipsW = 4 * chipW + 3 * 3 + 6;               // (0.31.0) the four layer chips
     setFont(f);
     const int bw = std::max(std::max(nwW, nwV), absHave ? chipsW : 0) + 16;
-    const int half = rowPx(bf + 2) + 4;                               // one row of the combined badge
+    const int half = rowPx(bf + 1) + 4;                               // one row of the combined badge
     const bool topRow = vdir != 0 || absTag;                              // the verdict / the ABS tag takes the TOP slot: absorption first
-    const int chipH = absHave ? rowPx(std::max(8, bf)) + 6 : 0;
+    const int chipH = absHave ? rowPx(std::max(7, bf - 1)) + 6 : 0;
     const int bh0 = (have && topRow) ? 2 * half : topRow ? half : std::max(warnH(bf), 2 * lineH + 2);
     const int bh = bh0 + chipH;
-    const int gx = x0 + bw + 10;                                          // the grey column
+    const int gx = x0 + bw + 6;                                          // the grey column
     const int room = std::max(40, right - gx);
     int y = y0;
     auto nameIn = [&](const std::string& nm, int top, int h, COLOR tc) {  // (0.22.4) the name centred in a one-row rect
         setFont(f); setTextColor(tc);
-        const int nh = rowPx(bf + 2), ty = top + std::max(0, (h - nh) / 2);
+        const int nh = rowPx(bf + 1), ty = top + std::max(0, (h - nh) / 2);
         RCT t; t.set(coord(x0 + 2), coord(ty), coord(x0 + bw - 2), coord(ty + nh)); t.drawText(nm.c_str(), true, false); };
     // which side a grey line speaks for: +1 buyers (their bids), -1 sellers (their offers), 0 neither
     auto sideOf = [](const std::string& t) {
@@ -2678,18 +2678,35 @@ void LiquidityProfile::renderWarning(LQState& S) {
     }
     // the grey lines, wrapped (never cut), centred on the badge when they fit, else from its top down
     setFont(g);
-    std::vector<std::string> rows;
+    // (0.32.3, Rassul 08:05 "use up all the black space in the gray text area") rows fill the column beside the badge first; the rest
+    // of each line continues UNDER the badge at the full width
+    const int nFit = std::max(1, bh / lineH), fullRoom = std::max(room, right - x0 - 2);
+    std::vector<std::string> rows, rowsU; std::vector<int> rowLine;
     for (size_t i = 0; i < gl.size(); ++i) {
         if (gl[i].t.empty()) continue;
         const std::vector<std::string> wr = lqp::wrapWords(gl[i].t, [&](const std::string& tx) { return getTextWidth(tx.c_str(), -1) <= room; });
-        rows.insert(rows.end(), wr.begin(), wr.end());
+        for (size_t k = 0; k < wr.size(); ++k) { rows.push_back(wr[k]); rowLine.push_back((int)i); }
+    }
+    if ((int)rows.size() > nFit) {
+        std::vector<std::string> keep; std::vector<std::string> tailTxt; std::vector<int> tailLine;
+        for (size_t i = 0; i < rows.size(); ++i) {
+            if ((int)i < nFit) keep.push_back(rows[i]);
+            else if (!tailLine.empty() && tailLine.back() == rowLine[i]) tailTxt.back() += " " + rows[i];
+            else { tailTxt.push_back(rows[i]); tailLine.push_back(rowLine[i]); }
+        }
+        rows = keep;
+        for (size_t i = 0; i < tailTxt.size(); ++i) {
+            const std::vector<std::string> wr = lqp::wrapWords(tailTxt[i], [&](const std::string& tx) { return getTextWidth(tx.c_str(), -1) <= fullRoom; });
+            rowsU.insert(rowsU.end(), wr.begin(), wr.end());
+        }
     }
     int maxW = 0; for (size_t i = 0; i < rows.size(); ++i) maxW = std::max(maxW, getTextWidth(rows[i].c_str(), -1));
+    int maxU = 0; for (size_t i = 0; i < rowsU.size(); ++i) maxU = std::max(maxU, getTextWidth(rowsU[i].c_str(), -1));
     const int top = y + std::max(0, (bh - (int)rows.size() * lineH) / 2);
-    const int yEnd = std::max(y + bh, top + (int)rows.size() * lineH);
+    const int yEnd = std::max(y + bh, top + (int)rows.size() * lineH) + (int)rowsU.size() * lineH;
     if (S.bn.bg) {   // (0.24.0, Rassul 12:56 "use a solid fill background by default") one solid box behind the badge + its grey lines
         const COLOR cb0 = (COLOR)(S.bn.bgc & 0x00FFFFFF);
-        RCT bgR; bgR.set(coord(x0 - 4), coord(y - 3), coord(std::min((int)pane.right - 2, gx + maxW + 8)), coord(yEnd + 3));
+        RCT bgR; bgR.set(coord(x0 - 4), coord(y - 3), coord(std::min((int)pane.right - 2, std::max(gx + maxW, x0 + std::max(bw, maxU)) + 8)), coord(yEnd + 3));
         bgR.draw(0, cb0, cb0, DRAW_OPAQUE, PAT_SOLID);
     }
     // the badge
@@ -2719,7 +2736,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
         const COLOR cc = absCount(S.absBits) < 3 ? C_GREY : S.absDir > 0 ? C_BUY : C_SELL, cOff = 0x00464646, cFill = 0x00161A20;
         const bool lit[4] = { (S.absBits & 1) != 0, (S.absBits & 2) != 0, (S.absBits & 4) != 0, (S.absBits & 8) != 0 };
         const char* nm4[4] = { "MKT", (S.absBits & 16) ? "LMT+i" : "LMT", "FP", "DP" };
-        FONT fk; fk.id = HELVETICA; fk.size = coord(std::max(8, bf)); fk.style = BOLD; setFont(fk);
+        FONT fk; fk.id = HELVETICA; fk.size = coord(std::max(7, bf - 1)); fk.style = BOLD; setFont(fk);
         const int cx0 = x0 + std::max(3, (bw - chipsW) / 2), cy0 = y + bh0 + 2, ch = chipH - 4;
         for (int k = 0; k < 4; ++k) {
             const int xa = cx0 + k * (chipW + 3);
@@ -2734,6 +2751,9 @@ void LiquidityProfile::renderWarning(LQState& S) {
         const int ty = top + (int)i * lineH; const int tw = getTextWidth(rows[i].c_str(), -1) + 4;
         RCT r; r.set(coord(gx), coord(ty), coord(std::max(right, gx + tw)), coord(ty + lineH)); r.drawText(rows[i].c_str(), false, false);
     }
+    {   const int uy = yEnd - (int)rowsU.size() * lineH;
+        for (size_t i = 0; i < rowsU.size(); ++i) { const int ty = uy + (int)i * lineH; const int tw = getTextWidth(rowsU[i].c_str(), -1) + 4;
+            RCT r; r.set(coord(x0), coord(ty), coord(std::max(right, x0 + tw)), coord(ty + lineH)); r.drawText(rowsU[i].c_str(), false, false); } }
     y = yEnd + 6;
 
     const int used = y - y0 - 6;
@@ -3063,6 +3083,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.31.1");   // LQ_VERSION
+    p->setVersion("0.32.3");   // LQ_VERSION
     return p;
 }
