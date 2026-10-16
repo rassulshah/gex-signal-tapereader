@@ -139,7 +139,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.9.0";   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression draws only bars of 2.0x or more (onlyHigh);   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.9.1";   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -1840,7 +1840,7 @@ inline PaneGeo paneGeo(cppExtension* x, int mode) {
 // (StackStats, Rassul 23:00 CT; the hover and the records keep them).
 inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot, long long top, int hov, const COLOR normal[2], const COLOR spike[2],
                      const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid = std::vector<LBox>(),
-                     int oneBull = -1, bool marks = true, bool onlyHigh = false) {   // (1.9.0) onlyHigh: only bars at 2.0x+ their average are drawn (Aggression)
+                     int oneBull = -1, bool marks = true, bool onlyHigh = false) {   // (1.9.0) onlyHigh: only bars at 2.0x+ their average are bright and labelled (Aggression); the rest are drawn dim
     if (top <= 0) return;
     const bool one = oneBull == 0 || oneBull == 1;
     cppExtension::FONT lf; lf.id = cppExtension::HELVETICA; lf.size = 8; lf.style = cppExtension::BOLD;   // (1.3.0) 8 pt white text (was 7 pt in white boxes)
@@ -1852,15 +1852,15 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         (void)hov;                                                          // 1.0.1: no hover outline
         if (one) {                                                          // (1.6.0) the bigger side's bar, its dash, the both-spiked tick
             const OneBar ob = oneBarOf(b.v, b.spike, b.dir, oneBull);
-            if (ob.side >= 0 && !(onlyHigh && !hiOf(b, ob.side))) {
+            if (ob.side >= 0) {
                 const int w = ob.side; int l = 0, r = 0; oneBarSpan(xc, slot, l, r);
                 const int hb = barHeight(ob.v, top, g.px);
-                if (hb > 0) fillFlat(x, l, g.yBase - hb, r, g.yBase, (ob.bright || onlyHigh) ? spike[w] : normal[w]);
+                if (hb > 0) fillFlat(x, l, g.yBase - hb, r, g.yBase, (ob.bright || (onlyHigh && hiOf(b, w))) ? spike[w] : normal[w]);
                 if (marks && b.dash[w] >= 0 && hb > 0) {                   // the winner's refill dash (marks off = StackStats: none)
                     int dh = barHeight(b.dash[w] < ob.v ? b.dash[w] : ob.v, top, g.px); if (dh < 2) dh = 2; if (dh > hb) dh = hb;
                     fillFlat(x, l, g.yBase - dh, r, g.yBase - dh + 2, C_WHITE);
                 }
-                if (ob.tick && hb > 0) { const LBox t = oneTickBox(xc, slot, g.yBase, barHeight(ob.other, top, g.px), hb); fillFlat(x, t.l, t.t, t.r, t.b, C_WHITE); }
+                if (ob.tick && hb > 0 && !onlyHigh) { const LBox t = oneTickBox(xc, slot, g.yBase, barHeight(ob.other, top, g.px), hb); fillFlat(x, t.l, t.t, t.r, t.b, C_WHITE); }
             }
             if (marks && (!b.let[0].empty() || !b.let[1].empty() || !b.mark[0].empty() || !b.mark[1].empty())) lets.push_back(std::make_pair(i, b));
             continue;
@@ -1868,7 +1868,6 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         int h[2] = {0, 0};
         for (int s = 0; s < 2; ++s) {
             h[s] = barHeight(b.v[s], top, g.px);
-            if (onlyHigh && !hiOf(b, s)) h[s] = 0;
             const COLOR c = b.spike[s] ? spike[s] : normal[s];
             if (h[s] > 0) fillFlat(x, p.l[s], g.yBase - h[s], p.r[s], g.yBase, c);
             if (b.dash[s] >= 0 && h[s] > 0) {                               // the refill dash: inside the bar at min(refills, bar)
@@ -1959,13 +1958,18 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         if (!c.q.empty()) { in[nIn] = c.q; ic[nIn++] = C_LBL_LOTS; }
         if (!c.p.empty()) { in[nIn] = c.p; ic[nIn++] = C_LBL_PACE; }
         while (nIn > 0 && c.hb < nIn * LABEL_LH + 2) --nIn;                       // only the rows that fit inside the bar
-        if (c.x.empty() && nIn == 0) continue;
+        // (1.9.1, Rassul 2026-10-16 18:32) Aggression (onlyHigh): the RATIO (yellow) with the PACE (grey) under it, both ABOVE the bar; no lots
+        std::string ab[2]; COLOR ac[2] = { C_LBL_RATIO, C_LBL_PACE }; int nA = 0;
+        if (onlyHigh) { nIn = 0; if (!c.x.empty()) { ab[nA] = c.x; ac[nA++] = C_LBL_RATIO; } if (!c.p.empty()) { ab[nA] = c.p; ac[nA++] = C_LBL_PACE; } }
+        else if (!c.x.empty()) { ab[nA] = c.x; ac[nA++] = C_LBL_RATIO; }
+        if (nA == 0 && nIn == 0) continue;
         const int yTop = g.yBase - c.hb;
-        const int tr = yTop - 2 - LABEL_LH;                                       // the ratio row sits just above the bar
+        const int tr = yTop - 2 - nA * LABEL_LH;                                  // the stack sits just above the bar
         const int tIn = yTop + 1;                                                 // the inside rows start under its top edge
-        const int t0 = c.x.empty() ? tIn : tr, b0 = nIn > 0 ? tIn + nIn * LABEL_LH : yTop + 1;
+        const int t0 = nA == 0 ? tIn : tr, b0 = nIn > 0 ? tIn + nIn * LABEL_LH : yTop + 1;
         if (t0 < g.top + g.reserve || b0 > g.yBase + 1) continue;
-        int w = (int)x->getTextWidth(c.x.c_str(), -1);
+        int w = 0;
+        for (int r = 0; r < nA; ++r) w = std::max(w, (int)x->getTextWidth(ab[r].c_str(), -1));
         for (int r = 0; r < nIn; ++r) w = std::max(w, (int)x->getTextWidth(in[r].c_str(), -1));
         const LBox me = { c.cx - w / 2 - 1, t0, c.cx - w / 2 + w + 1, b0 - 1, 0, 0 };
         if (me.l < g.left + 1 || me.r > g.edge - 1) continue;
@@ -1976,7 +1980,7 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         auto put = [&](const std::string& s, int y, COLOR col) {
             if (s.empty()) return; x->setTextColor(col); const int tw = (int)x->getTextWidth(s.c_str(), -1);
             cppExtension::RCT rc; rc.set(coord(c.cx - tw / 2), coord(y), coord(c.cx - tw / 2 + tw + 2), coord(y + LABEL_LH)); rc.drawText(s.c_str(), false, false); };
-        put(c.x, tr, C_LBL_RATIO);
+        for (int r = 0; r < nA; ++r) put(ab[r], tr + r * LABEL_LH, ac[r]);
         for (int r = 0; r < nIn; ++r) put(in[r], tIn + r * LABEL_LH, ic[r]);
     }
 }
