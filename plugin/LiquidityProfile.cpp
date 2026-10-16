@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.29.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.30.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1767,12 +1767,13 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     // 2) the BIG column
     if (S.colBigL < 0 || S.colBigR - S.colBigL < 20) { S.boState = S.boState + " (no BIG column room)"; return; }
     // (0.28.0) the column holds two: MKT (big market orders, left half) | BIG (big limit orders + icebergs, right half, next to the Delta Profile)
-    const int ml = S.colBigL, cr = S.colBigR, cl = ml + (cr - ml) / 2, mr = cl - 2;
-    { RCT bg; bg.set(coord(ml), coord(top), coord(cr), coord(bottom)); bg.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
-    { setPen(0x00000000, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = coord(cl - 1); a.v = coord(top); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(cl - 1); b.v = coord(bottom); b.drawLineTo(); }
+    // (0.30.0, Rassul 21:14 "update Big Column to LMT Column ... before MKT") LMT (big limit orders + icebergs) is the LEFT half, MKT the right half next to the Delta Profile
+    const int colL = S.colBigL, colR = S.colBigR, cl = colL, mk = colL + (colR - colL) / 2, cr = mk - 2;
+    { RCT bg; bg.set(coord(colL), coord(top), coord(colR), coord(bottom)); bg.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
+    { setPen(0x00000000, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = coord(mk - 1); a.v = coord(top); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(mk - 1); b.v = coord(bottom); b.drawLineTo(); }
     FONT fh; fh.id = HELVETICA; fh.size = coord(9); fh.style = BOLD; setFont(fh); setTextColor(C_GREY);
-    { RCT r; r.set(coord(cl), coord(top + 2), coord(cr), coord(top + 14)); r.drawText("BIG", true, false); }
-    { RCT r; r.set(coord(ml), coord(top + 2), coord(mr), coord(top + 14)); r.drawText("MKT", true, false); }
+    { RCT r; r.set(coord(cl), coord(top + 2), coord(cr), coord(top + 14)); r.drawText("LMT", true, false); }
+    { RCT r; r.set(coord(mk), coord(top + 2), coord(colR), coord(top + 14)); r.drawText("MKT", true, false); }
     {   // (0.26.0) the reference at the bottom of the column: this market's Big mu and 1 / 2 / 3 SD sizes (lots)
         FONT fr; fr.id = HELVETICA; fr.size = coord(9); fr.style = BOLD; setFont(fr); setTextColor(C_GREY);
         const int rh = rowPx(9);
@@ -1787,7 +1788,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
             a.drawText(rows[i].second.c_str(), false, true);
         }
     }
-    renderMkt(S, ml, mr, top, bottom);                                  // (0.28.0) the MKT half
+    renderMkt(S, mk, colR, top, bottom);                                  // (0.28.0) the MKT half
     std::vector<std::pair<int, int>> used;                          // y bands taken (top, bottom)
     auto freeAt = [&](int t0, int b0) { for (size_t i = 0; i < used.size(); ++i) if (!(b0 < used[i].first || t0 > used[i].second)) return false; return true; };
     const int bfont = std::max(bol::FONT_MIN, std::min(bol::FONT_MAX, S.boSet.font));   // (0.23.0) his "Big order font pt"
@@ -2880,6 +2881,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.29.0");   // LQ_VERSION
+    p->setVersion("0.30.0");   // LQ_VERSION
     return p;
 }
