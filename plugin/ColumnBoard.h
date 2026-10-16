@@ -30,7 +30,7 @@
 #include "BannerBoard.h"
 
 namespace cb {
-static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
+static const char* const VERSION = "1.2.0";   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
 static const int GAP_PX = 20;            // between the last bar and the Levels column
 static const int MIN_PRICE_PX = 160;     // price area kept on a narrow chart
 enum Col { LIQ = 0, LEVELS = 1, DELTA = 2, DEALER = 3, BIG = 4, NCOL = 5 };
@@ -88,10 +88,12 @@ inline Layout layout(const In& in)
     const int t = in.paneT, b = in.paneB;
     L.dealer = bp::mk(in.axisR - wg, t, in.axisR, b);
     L.delta = bp::mk(L.dealer.l - wd, t, L.dealer.l, b);
-    L.levels = bp::mk(L.delta.l - wl, t, L.delta.l, b);
-    L.big = bp::mk(L.levels.l - wb, t, L.levels.l, b);
+    // (1.2.0, Rassul 18:57 "note the big column and how far it is from the delta profile .. fix alignment") the BIG column sits right
+    // next to the Delta Profile: gap, Levels, BIG, Delta, Dealer (was gap, BIG, Levels, Delta, Dealer)
+    L.big = bp::mk(L.delta.l - wb, t, L.delta.l, b);
+    L.levels = bp::mk(L.big.l - wl, t, L.big.l, b);
     const int used = wl + wd + wg + wb;
-    L.priceRight = used > 0 ? L.big.l - GAP_PX : in.axisR;
+    L.priceRight = used > 0 ? L.levels.l - GAP_PX : in.axisR;
     L.margin = in.axisR - L.priceRight;
     L.w[LEVELS] = wl; L.w[DELTA] = wd; L.w[DEALER] = wg; L.w[BIG] = wb;
     L.ok = L.priceRight >= in.paneL + 40 && b > t;      // a chart with no room left for price: the columns are not drawn

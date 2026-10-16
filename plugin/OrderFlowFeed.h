@@ -139,7 +139,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.8.0";   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.8.1";   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -2731,7 +2731,7 @@ private:
         const zread::Line zl = S.zr.e.line(S.zr.pane, steadyMs());
         const bool readMode = clampMode(S.set.mode) == MODE_READ;
         PanelPlan P; LinePlan LP;
-        if (readMode) { LP = planLine(area, pl, zl, S.inBox, measureWith(this), paneQuestion(L::title())); S.lastBox = LP.show ? LP.box : bp::Box(); if (!LP.show) S.inBox = false; }
+        if (readMode) { LP = planLine(area, pl, zl, false, measureWith(this), paneQuestion(L::title())); S.lastBox = LP.show ? LP.box : bp::Box(); if (!LP.show) S.inBox = false; }
         else { P = planPanel(area, g.top, S.set.mode, pl, info, zl.show ? zl.text : std::string(), optL, g.reserve, measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box(); }
         (void)m;
         std::vector<LBox> avoid;
@@ -2748,7 +2748,7 @@ private:
         }, avoid, oneBarBull(), barMarks());
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
         if (readMode) drawLine(this, LP); else drawPanel(this, P, info, vcol, implOf(zl), false);
-        if (hov >= 0) drawBarHover(this, planBarHover(area, xOf(hov), info, L::hoverQuestion(), L::hoverVerbs(), oneBarBull(), measureWith(this)));   // (1.7.0)
+        (void)hov;   // (1.8.1, Rassul 18:57 "get rid of the hoverover ... they just take up too much space") no bar hover, no read-line hover
     }
     bp::DlgSnap snap_;                                                     // (1.3.0) the dialog as it opened (this object = the dialog's copy)
 };

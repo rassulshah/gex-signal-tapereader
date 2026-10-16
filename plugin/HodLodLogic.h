@@ -2111,7 +2111,7 @@ inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(
     if (pane.r - pane.l < 120 || pane.b - pane.t < 60) { L.note = "pane too small"; return L; }
     // (1.1.2, Rassul 11:20 "make the hod lod not overlap with the liquidity profile") the Liquidity Profile's column on the left
     // edge (bars + "5.1x", 110 px - the Dealer Profile badges keep off it the same way) is never under the table
-    const int LQ_COL = 110;
+    const int LQ_COL = 64;   // (2.2.3, Rassul 18:57 "the hod lod should be bottom center justified") the Liquidity column is 60 px now: centre on [its edge, the last bar] (was 110)
     int colR = v.has && HODLOD_SHOW_CANDLE ? pane.l + 8 + candleColW(v, M) : (pane.r - pane.l >= 600 ? pane.l + LQ_COL : pane.l + 2);
     L.colRight = v.has && HODLOD_SHOW_CANDLE ? colR : 0;   // the column panel's right border x (0 = no column: the candle is off)
     // (HL105) bottom centre of the free area right of the candle column (6 px clear of its panel) and 15% before the latest bars
