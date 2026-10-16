@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.32.3"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.32.4"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -170,7 +170,8 @@ static int warnBlockH(int font, int rows) { return warnH(font) + std::max(1, row
 // may start above this row. The warning sits under it and the column header under the warning.
 static const int LQ_TITLE_ROW_PX = 3;   // (0.27.1, Rassul 18:57 "should be higher because there is black space") the IRT title strip is above the pane: 20 -> 3 px
 static int warnTop(int paneTop) { return paneTop + LQ_TITLE_ROW_PX; }
-static const int LQ_BIG_W = 112;   // (0.28.0) MKT (left half, 56) + BIG (right half, 56): Rassul 19:55 "build out the mkt column"
+static const int LQ_BIG_W = 120;   // (0.32.4, Rassul 08:54 LMT slightly bigger: 112 -> 120, the board's maximum)
+static const int LQ_BIG_W_112 = 112;   // (0.28.0) MKT (left half, 56) + BIG (right half, 56): Rassul 19:55 "build out the mkt column"
 static inline int absCount(int bits) { int n = 0; for (int k = 0; k < 4; ++k) n += (bits >> k) & 1; return n; }   // (0.31.0) ABS n / 4
 static const int LQ_BIG_W_OLD = 56;   // (0.22.5, Rassul 10:35 "the column for Big needs to be slightly wider") in ColumnBoard's 30-120 range
 static long long steadyMs() {
@@ -1793,7 +1794,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     if (S.colBigL < 0 || S.colBigR - S.colBigL < 20) { S.boState = S.boState + " (no BIG column room)"; return; }
     // (0.28.0) the column holds two: MKT (big market orders, left half) | BIG (big limit orders + icebergs, right half, next to the Delta Profile)
     // (0.30.0, Rassul 21:14 "update Big Column to LMT Column ... before MKT") LMT (big limit orders + icebergs) is the LEFT half, MKT the right half next to the Delta Profile
-    const int colL = S.colBigL, colR = S.colBigR, cl = colL, mk = colL + (colR - colL) * 4 / 9, cr = mk - 2;   // (0.32.3) MKT 25% wider than LMT (5:4)
+    const int colL = S.colBigL, colR = S.colBigR, cl = colL, mk = colL + (colR - colL) * 5 / 11, cr = mk - 2;   // (0.32.3) MKT 25% wider than LMT (5:4)
     { RCT bg; bg.set(coord(colL), coord(top), coord(colR), coord(bottom)); bg.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
     { setPen(0x00000000, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = coord(mk - 1); a.v = coord(top); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(mk - 1); b.v = coord(bottom); b.drawLineTo(); }
     FONT fh; fh.id = HELVETICA; fh.size = coord(9); fh.style = BOLD; setFont(fh); setTextColor(C_GREY);
@@ -3083,6 +3084,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.32.3");   // LQ_VERSION
+    p->setVersion("0.32.4");   // LQ_VERSION
     return p;
 }
