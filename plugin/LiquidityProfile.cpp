@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.35.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.35.1"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1745,7 +1745,9 @@ void LiquidityProfile::bldUpdate(LQState& S, long long start) {
         double v[3] = {0, 0, 0}; double mu = 0; long long n = 0;
         S.bldOk = all.stats(start, 30, n, mu, v); S.bldN = n;
         if (S.bldOk) { S.bldMu = mu; for (int k = 0; k < 3; ++k) S.bldV[k] = v[k]; }
-        lmtNormApply(S);   // (0.35.0) the nightly norms win when the file has this market
+        // (0.35.1, Rassul 11:55 "we did a large lot distribution, first isolating large lots and then doing a distribution") the chart's own big-lot
+        // distribution (BigOrderLines LogDist, 0.26.0) stays the LMT footer and tiers: 0.35.0's nightly all-orders norms (ES mean 6 lots) are NOT used.
+        // lmtNormApply() is kept for a rebuilt nightly limit study (resting 30 s+ orders) and is not called.
         if (S.boSession >= 0 && (S.bldWriteMs < 0 || st - S.bldWriteMs >= 60000 || st < S.bldWriteMs)) {
             S.bldWriteMs = st;
             std::string body;
@@ -3186,6 +3188,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.35.0");   // LQ_VERSION
+    p->setVersion("0.35.1");   // LQ_VERSION
     return p;
 }
