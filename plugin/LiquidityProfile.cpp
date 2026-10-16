@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.37.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.37.2"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1814,7 +1814,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     // LMT F (filled limit orders + icebergs "450 I") | MKT (big market orders "+ 120 S") | LMT R (the biggest resting orders, "+" stacking / "-" pulled). F is nearest the
     // candles: it is the absorption evidence at a level. The footer (mean / 1SD / 2SD / 3SD, lots) sits under LMT R (LMT F uses the same sizes) and under MKT.
     const int colL = S.colBigL, colR = S.colBigR, tw = colR - colL;
-    const int fl = colL, fr = colL + tw * 52 / 168, ml = fr, mr = fr + tw * 64 / 168, cl = mr, cr = colR;   // cl / cr = the LMT R column
+    const int fl = colL, fr = colL + tw * 52 / 168, ml = fr, mr = fr + tw * 56 / 168, cl = mr, cr = colR;   // cl / cr = the LMT R column
     { RCT bg; bg.set(coord(colL), coord(top), coord(colR), coord(bottom)); bg.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
     { setPen(0x00000000, 1, P_SOLID); const int xs[2] = { fr - 1, mr - 1 };
       for (int k = 0; k < 2; ++k) { PNT a; a.set(0, 0.0f); a.h = coord(xs[k]); a.v = coord(top); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(xs[k]); b.v = coord(bottom); b.drawLineTo(); } }
@@ -3233,6 +3233,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.37.1");   // LQ_VERSION
+    p->setVersion("0.37.2");   // LQ_VERSION
     return p;
 }
