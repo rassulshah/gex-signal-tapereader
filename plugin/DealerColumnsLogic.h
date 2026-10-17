@@ -30,7 +30,27 @@ inline std::string nodeText(bool hasD, double d)
     if (!hasD || !std::isfinite(d) || std::fabs(d) < 0.5) return std::string();
     const std::string n = dpaudit::deltaNum(std::fabs(d));
     if (n == "0") return std::string();
-    return std::string(d > 0 ? "B " : "S ") + n;
+    return n + " lots";   // (2.16.0, Rassul 2026-10-16 22:16 "just give the number followed by lots") the node colour says buy (teal) / sell (orange)
+}
+// (2.16.0) a merged level name ("PDH/CR") -> the key level ("PDH") and its gamma name ("CR"), so the badge reads NAME | price | GAMMA | ratio
+inline bool isGammaTok(const std::string& s)
+{
+    if (s.empty()) return false;
+    if (s.compare(0, 3, "HVL") == 0 || s.compare(0, 2, "CR") == 0 || s.compare(0, 2, "1D") == 0 || s.compare(0, 2, "GW") == 0) return true;
+    if (s.compare(0, 2, "PS") == 0 && (s.size() == 2 || (s[2] >= '0' && s[2] <= '9'))) return true;
+    if (s[0] == 'G' && s.size() >= 2 && s[1] >= '0' && s[1] <= '9') return true;
+    return false;
+}
+inline bool splitGamma(const std::string& name, std::string& key, std::string& gamma)
+{
+    key.clear(); gamma.clear(); size_t a = 0;
+    while (a <= name.size()) {
+        size_t e = name.find('/', a); if (e == std::string::npos) e = name.size();
+        const std::string tok = name.substr(a, e - a);
+        if (!tok.empty()) { std::string& d = isGammaTok(tok) ? gamma : key; if (!d.empty()) d += "/"; d += tok; }
+        a = e + 1;
+    }
+    return !key.empty() && !gamma.empty();
 }
 // the text goes inside the node only when it fits: 3 px each side, and the node at least the text's height
 // (14:37 CT review) the text's real height is pt x 4/3 px (96 dpi): the node must hold it + 1 px each side, else it is hidden

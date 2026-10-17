@@ -145,7 +145,7 @@ static void stacking()
 
 static void dealerTexts()
 {
-    check(dcol::nodeText(true, 1234) == "B 1.2K" && dcol::nodeText(true, -980) == "S 980" && dcol::nodeText(true, -12755) == "S 12.8K", "node text: B / S + contracts");
+    check(dcol::nodeText(true, 1234) == "1.2K lots" && dcol::nodeText(true, -980) == "980 lots" && dcol::nodeText(true, -12755) == "12.8K lots", "node text: contracts + lots");
     check(dcol::nodeText(false, 500).empty() && dcol::nodeText(true, 0.2).empty() && dcol::nodeText(true, std::nan("")).empty() && dcol::nodeText(true, 1.0 / 0.0).empty(), "node text: none when missing / zero / NaN / inf (no garbage)");
     check(dcol::textPx(10) == 14 && dcol::textPx(9) == 12, "text height = pt x 4/3 px");
     check(dcol::nodeTextFits(40, 46, 16, 10) && !dcol::nodeTextFits(40, 45, 16, 10) && !dcol::nodeTextFits(40, 80, 15, 10) && !dcol::nodeTextFits(0, 80, 20, 10), "node text fits only inside (3 px each side, the text height + 1 px above and below)");
