@@ -30,18 +30,23 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.8.0";   // (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
+static const char* const VERSION = "1.9.0";   // (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
 // ---- settings (all real: read on every draw from the per-market file, written only from the settings window) ----------------
-struct Settings {
-    int font = 7;             // 6 - 20 pt   (1.4.0, Rassul 11:51 "size should be 7 by default")
-    int boldQ = 200;          // bold threshold in hundredths of x (2.00x); 1.20x - 10.00x
-    bool circle = true;       // draw the absorption circle (on by default)
-    bool nonBold = false;     // (1.5.1) only while learning (no SD sizes yet): draw the numbers that are not bold
-    int div = 0;              // (1.4.0) divider: 0 = the market's default, else 1 - 1000 (500 lots / 10 = "50")
-    unsigned buy = 0x0022C55E, sell = 0x00EF4444;   // (1.4.0) buyers (at the ask) green, sellers (at the bid) red - his colours
+struct Settings {   // (1.9.0, Rassul 2026-10-17 13:14 "make it highly customizable ... font size is 8, no absorption circle, no box, red or green")
+    int font = 8;             // 6 - 20 pt, every number the same size (no bigger numbers for bigger prints)
+    int minTier = 3;          // the smallest print shown: 1 = S20 (~20 a session), 2 = S10 (~10), 3 = S5 (~5)
+    bool box = false;         // a box round each number (in its colour)
+    bool circle = false;      // the absorption circle round an absorption print
+    bool dim = false;         // dim the prints away from a high / low / pivot / level (ZoneNear)
+    int div = 0;              // divider: 0 = the market's default, else 1 - 1000 (500 lots / 10 = "50")
+    unsigned circleCol = 0x00FFFFFF;                   // the absorption circle's colour (IRT COLOR = 0x00RRGGBB)
+    unsigned col[3][2] = { { 0x00EF4444, 0x0022C55E },   // [tier 0 = S20, 1 = S10, 2 = S5][side 0 = bid (sellers), 1 = ask (buyers)]
+                           { 0x00EF4444, 0x0022C55E },
+                           { 0x00EF4444, 0x0022C55E } };
+    int boldQ = 200;          // internal (hover text only; not a setting since 1.9.0)
 };
 // (1.4.0, Rassul 11:51 "a divider ... so the value always looks like a 1 or 2 digit value; for ES 10 by default") per market, from the
 // typical biggest lots at one price in a 3-min candle (ES ~300-1,500, CL / NG / 6E ~100-500, NQ / GC / HG ~20-150)
@@ -53,13 +58,9 @@ inline bool divOk(long long v) { return v >= 1 && v <= 1000; }
 inline bool fontOk(long long v) { return v >= 6 && v <= 20; }
 inline bool boldOk(long long q) { return q >= 120 && q <= 1000; }
 inline int toQ(double x) { if (!std::isfinite(x)) return -1; const double q = std::floor(x * 100.0 + 0.5); return q < 0 || q > 1e9 ? -1 : (int)q; }
-inline Settings clean(Settings s) {
-    Settings d;
-    if (!fontOk(s.font)) s.font = d.font;
-    if (!boldOk(s.boldQ)) s.boldQ = d.boldQ;
-    return s;
-}
-// one line "BBA1|font|boldQ|circle|nonBold"; anything else = defaults (why says so)
+inline bool tierOk(long long v) { return v >= 1 && v <= 3; }
+inline bool colOk(long long v) { return v >= 0 && v <= 0xFFFFFF; }
+// strict whole number (digits only, no sign, no blanks)
 inline bool fullInt(const std::string& t, long long& out) {
     if (t.empty() || t.size() > 12) return false;
     for (size_t i = 0; i < t.size(); ++i) if (t[i] < '0' || t[i] > '9') return false;
@@ -67,33 +68,35 @@ inline bool fullInt(const std::string& t, long long& out) {
     if (errno != 0 || !end || *end != '\0') return false;
     out = v; return true;
 }
+// (1.9.0) one line "BBA3|font|minTier|box|circle|dim|div|circleCol|S20bid|S20ask|S10bid|S10ask|S5bid|S5ask" (14 fields)
 inline std::string formatSettings(const Settings& s) {
-    return "BBA2|" + std::to_string(s.font) + "|" + std::to_string(s.boldQ) + "|" + (s.circle ? "1" : "0") + "|" + (s.nonBold ? "1" : "0")
-         + "|" + std::to_string(s.div) + "|" + std::to_string(s.buy & 0x00FFFFFF) + "|" + std::to_string(s.sell & 0x00FFFFFF);
+    std::string o = "BBA3|" + std::to_string(s.font) + "|" + std::to_string(s.minTier) + "|" + (s.box ? "1" : "0") + "|" + (s.circle ? "1" : "0")
+                  + "|" + (s.dim ? "1" : "0") + "|" + std::to_string(s.div) + "|" + std::to_string(s.circleCol & 0x00FFFFFF);
+    for (int t = 0; t < 3; ++t) for (int d = 0; d < 2; ++d) o += "|" + std::to_string(s.col[t][d] & 0x00FFFFFF);
+    return o;
 }
+// every field checked on its own: a bad field falls back to ITS default (why names it); a wrong layout = all defaults;
+// files from before 1.9.0 (BBA1 / BBA2) = the 1.9.0 defaults (font 8, S5 only, no box, no circle, red / green)
 inline Settings parseSettings(const std::string& text, std::string& why) {
-    Settings s; why.clear();
+    Settings s, d; why.clear();
     std::string line = text;
     const size_t nl = line.find('\n'); if (nl != std::string::npos) line = line.substr(0, nl);
     if (!line.empty() && line.back() == '\r') line.pop_back();
     std::vector<std::string> f; { std::string cur; for (char c : line) { if (c == '|') { f.push_back(cur); cur.clear(); } else cur.push_back(c); } f.push_back(cur); }
-    const bool v1 = f.size() == 5 && f[0] == "BBA1", v2 = f.size() == 8 && f[0] == "BBA2";
-    if (!v1 && !v2) { why = "garbled (defaults)"; return Settings(); }
-    long long a = 0, b = 0, c = 0, d = 0;
-    if (!fullInt(f[1], a) || !fullInt(f[2], b) || !fullInt(f[3], c) || !fullInt(f[4], d) || c > 1 || d > 1) { why = "garbled (defaults)"; return Settings(); }
-    if (fontOk(a)) s.font = (int)a; else why = "font out of range (default)";
-    if (boldOk(b)) s.boldQ = (int)b; else why = "bold threshold out of range (default)";
-    s.circle = c == 1; s.nonBold = d == 1;
-    if (v1) {   // (1.4.0) the 1.3.x file: font 7, the circle on, a bold line over 5.00x (a font typed into the wrong box) back to 2.00x
-        s.font = Settings().font; s.circle = true; if (s.boldQ > 500) s.boldQ = Settings().boldQ;
-        why = "1.3 file migrated (font 7, circle on" + std::string(b > 500 ? ", bold 2.00x" : "") + ")";
-        return s;
-    }
-    long long e = 0, g = 0, h = 0;
-    if (!fullInt(f[5], e) || !fullInt(f[6], g) || !fullInt(f[7], h) || g > 0xFFFFFF || h > 0xFFFFFF) { why = "garbled (defaults)"; return Settings(); }
-    s.div = (e == 0 || divOk(e)) ? (int)e : 0; if (e != 0 && !divOk(e)) why = "divider out of range (market default)";
-    s.buy = (unsigned)g; s.sell = (unsigned)h;
-    if (s.buy == s.sell) { s.buy = Settings().buy; s.sell = Settings().sell; why = "same colour for both sides (defaults)"; }
+    if (!f.empty() && (f[0] == "BBA1" || f[0] == "BBA2")) { why = "pre-1.9 file (1.9 defaults)"; return Settings(); }
+    if (f.size() != 14 || f[0] != "BBA3") { why = "garbled (defaults)"; return Settings(); }
+    std::vector<std::string> bad;
+    long long v = 0;
+    if (fullInt(f[1], v) && fontOk(v)) s.font = (int)v; else bad.push_back("font");
+    if (fullInt(f[2], v) && tierOk(v)) s.minTier = (int)v; else bad.push_back("show from");
+    if (fullInt(f[3], v) && v <= 1) s.box = v == 1; else bad.push_back("box");
+    if (fullInt(f[4], v) && v <= 1) s.circle = v == 1; else bad.push_back("circle");
+    if (fullInt(f[5], v) && v <= 1) s.dim = v == 1; else bad.push_back("dim");
+    if (fullInt(f[6], v) && (v == 0 || divOk(v))) s.div = (int)v; else bad.push_back("divider");
+    if (fullInt(f[7], v) && colOk(v)) s.circleCol = (unsigned)v; else bad.push_back("circle colour");
+    for (int t = 0; t < 3; ++t) for (int k = 0; k < 2; ++k) {
+        if (fullInt(f[8 + 2 * t + k], v) && colOk(v)) s.col[t][k] = (unsigned)v; else { s.col[t][k] = d.col[t][k]; bad.push_back("colour"); } }
+    if (!bad.empty()) { why = "bad value (default used):"; for (const auto& b : bad) why += " " + b; }
     return s;
 }
 
@@ -320,7 +323,8 @@ struct Cand {
     int w = 0, h = 0;                  // the text's size
     bool bold = false, circle = false;
     bool first = false;                // a CLOSED candle's bold number (frozen): laid out before every plain / forming number
-    bool huge = false;                 // (1.5.0) 3SD or more: a white outline round the number
+    bool huge = false;                 // (1.5.0) 3SD or more: a white outline round the number (unused since 1.9.0)
+    int tier = 2;                      // (1.9.0) 0 = S20, 1 = S10, 2 = S5: picks the colour
 };
 struct Placed { bool shown = false, crowded = false; Box text, foot; int dy = 0; };
 static const int GAP = 1;              // px between the candle and its number (1.4.1: 2 -> 1, Rassul "bring the prints closer")
