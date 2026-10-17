@@ -925,7 +925,7 @@ int HodLod::draw(void)
 #else
         localtime_r(&t, &lt);
 #endif
-        hlg::toView(S->view, S->gex, px, (long long)t, lt.tm_wday, lt.tm_hour * 60 + lt.tm_min);
+        hlg::toView(S->view, S->gex, px, (long long)t, lt.tm_wday, lt.tm_hour * 60 + lt.tm_min, hl::MKTS[S->mi < 0 ? 0 : S->mi].dec);
     }
     const int pe = priceEdge();
     const std::vector<hl::Box> avoid = hlAvoid(*S, pb, pe);
@@ -991,6 +991,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it.");
-    p->setVersion("2.2.3");
+    p->setVersion("2.2.4");
     return p;
 }

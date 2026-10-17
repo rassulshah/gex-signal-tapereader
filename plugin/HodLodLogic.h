@@ -54,7 +54,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.2.3";   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
+static const char* const HL_VERSION = "2.2.4";   // (2.2.4, Rassul 2026-10-17) Gex S/R row: the 3 nearest levels ABOVE price first (red), the current price, then the 3 nearest BELOW (green), MenthorQ name BEFORE each price (blue);   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -746,7 +746,7 @@ struct View {
     // (2.1.0, Rassul 2026-10-14 16:01 "a line in the HOD/LOD indicator box that identifies the key GEX levels where a reaction can
     // occur so it is front and center") the GEX line under the header: at most 3 strikes from LRA-GexNodes-<MKT>.csv (HodLodGex.h),
     // nearest the price first; grow = the up arrow; gexStale = "STALE 25m" (the strikes dimmed); gexHover = the detail on mouse-over
-    struct GexItem { std::string strike, name; bool grow = false, other = false, above = false; };   // (2.1.1) above = above price (red), else below (green)   // (2.1.0 rule 2.0) strike = the location's range, name = W / F / M, other = the other side
+    struct GexItem { std::string strike, name; bool grow = false, other = false, above = false, mid = false; };   // (2.2.4) mid = the current price between the 3 above and the 3 below   // (2.1.1) above = above price (red), else below (green)   // (2.1.0 rule 2.0) strike = the location's range, name = W / F / M, other = the other side
     std::vector<GexItem> gexItems; std::string gexStale; std::vector<Seg> gexHover;
 };
 // (v15) every E / A value has a key; the status file writes all of them, the table draws the keys in SHOWN.
@@ -1504,10 +1504,10 @@ inline int gexArrowW(int fs) { return (int)(fs * 0.8f + 0.5f) + 8; }   // (2.2.1
 inline int gexLineW(const View& v, const Measure& M, int fs, int sfs)
 {
     if (v.gexItems.empty()) return 0;
-    int w = 0; const int sep = M("  \xB7  ", fs, true), sepO = M("  \xB7  ", fs, true);
+    int w = 0; const int sep = M("  \xB7  ", fs, true), sepB = M("  |  ", fs, true);
     for (size_t i = 0; i < v.gexItems.size(); i++) {
         const View::GexItem& g = v.gexItems[i];
-        w += (i ? (g.other && !v.gexItems[i - 1].other ? sepO : sep) : 0) + M(g.strike, fs, true) + (g.name.empty() ? 0 : M(" " + g.name, fs, true)) + (g.grow ? gexArrowW(fs) : 0);
+        w += (i ? ((g.mid || v.gexItems[i - 1].mid) ? sepB : sep) : 0) + (g.name.empty() ? 0 : M(g.name + " ", fs, true)) + M(g.strike, fs, true) + (g.grow ? gexArrowW(fs) : 0);   // (2.2.4) the name comes BEFORE the price
     }
     if (!v.gexStale.empty()) w += M("   " + v.gexStale, sfs, false);
     return w;
@@ -1519,11 +1519,12 @@ inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const 
     const std::string sepT = "  \xB7  ";
     for (size_t i = 0; i < v.gexItems.size(); i++) {
         const View::GexItem& g = v.gexItems[i];
-        if (i) { const std::string st = sepT; const int sw = M(st, fs, true);
-                 addText(L, x, t, b, st, C_GREY, fs, true, sw, R_TABLE, -1); x += sw; }   // '|' = the other side of price starts
-        cs = cn = g.above ? C_RED : C_GREEN;
-        int w = M(g.strike, fs, true); addText(L, x, t, b, g.strike, cs, fs, true, w, R_TABLE, -1); x += w;
-        if (!g.name.empty()) { w = M(" " + g.name, fs, true); addText(L, x, t, b, " " + g.name, cn, fs, true, w, R_TABLE, -1); x += w; }
+        if (i) { const std::string st = (g.mid || v.gexItems[i - 1].mid) ? std::string("  |  ") : sepT; const int sw = M(st, fs, true);
+                 addText(L, x, t, b, st, C_GREY, fs, true, sw, R_TABLE, -1); x += sw; }   // (2.2.4) '|' on both sides of the current price
+        cs = g.mid ? C_SLATE : (g.above ? C_RED : C_GREEN);   // above price = red (resistance), below = green (support); the price itself white
+        int w = 0;
+        if (!g.name.empty()) { w = M(g.name + " ", fs, true); addText(L, x, t, b, g.name + " ", C_BLUE, fs, true, w, R_TABLE, -1); x += w; }   // (2.2.4) MenthorQ name first, in blue
+        w = M(g.strike, fs, true); addText(L, x, t, b, g.strike, cs, fs, true, w, R_TABLE, -1); x += w;
         if (g.grow) {   // an up arrow: shaft + head, centred in the row
             const int aw = gexArrowW(fs), ax = x + aw / 2 + 3, h = (int)(fs * 0.95f + 0.5f), yc = (t + b) / 2, y0 = yc + h / 2, y1 = yc - h / 2;
             addLine(L, ax, y0, ax, y1, cs, 2, R_TABLE); addLine(L, ax - 3, y1 + 3, ax, y1, cs, 2, R_TABLE); addLine(L, ax + 3, y1 + 3, ax, y1, cs, 2, R_TABLE);

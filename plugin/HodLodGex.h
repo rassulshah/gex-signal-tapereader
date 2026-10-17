@@ -149,15 +149,37 @@ inline std::vector<HLine> hover(const File& F, const std::string& stale, long lo
     return o;
 }
 
-// the View's GEX row + hover from the file and the clock (now = unix s; wd / min = CT weekday, minute). price is not needed: the
-// bridge ordered the locations for the price it read every 30 s
-inline void toView(hl::View& v, const File& F, double /*price*/, long long now, int wd, int min)
+// the View's GEX row + hover from the file and the clock (now = unix s; wd / min = CT weekday, minute). (2.2.4) price splits the row: 3 above, the price, 3 below
+inline void toView(hl::View& v, const File& F, double price, long long now, int wd, int min, int dec = 2)
 {
     v.gexItems.clear(); v.gexStale.clear(); v.gexHover.clear();
     if (!showable(F)) return;
     if (F.asof > now + 120) return;                           // (audit) received in the future = clock / file wrong: never shown
     v.gexStale = staleText(F, now, updateHours(wd, min));
-    for (const Loc& L : F.locs) { hl::View::GexItem g; g.strike = rangeTxt(L); g.name.clear(); g.grow = L.grow; g.other = L.side == 'O' || L.side == 'A'; g.above = L.side == 'A' || (F.side == "down" && L.side == 'O') || (F.side == "up" && L.side == 'T'); v.gexItems.push_back(g); }   // (2.1.1, Rassul 22:26) no W / F / M on the row
+    {   // (2.2.4, Rassul 2026-10-17 "put 3 above first then 3 below ... above are red (resistance), below green (support)", "name before the level"):
+        // the 3 nearest locations ABOVE the price (highest first), the current price, then the 3 nearest BELOW (nearest first); the name = the location's best-ranked MenthorQ name
+        struct Cand { double mid; const Loc* L; bool above; };
+        std::vector<Cand> up, dn;
+        auto firstNum = [](const std::string& t) { std::string o; for (char c : t) if ((c >= '0' && c <= '9') || c == '.') o += c; else if (!o.empty()) break; char* e = nullptr; const double d = std::strtod(o.c_str(), &e); return (o.empty() || !e || *e) ? NAN : d; };
+        for (const Loc& L : F.locs) {
+            const double lo = firstNum(L.loTxt), hi = firstNum(L.hiTxt), md = (std::isfinite(lo) && std::isfinite(hi)) ? 0.5 * (lo + hi) : NAN;
+            const bool oldAbove = L.side == 'A' || (F.side == "down" && L.side == 'O') || (F.side == "up" && L.side == 'T');
+            const bool ab = (std::isfinite(price) && std::isfinite(md)) ? md > price : oldAbove;
+            Cand c = { md, &L, ab }; (ab ? up : dn).push_back(c);
+        }
+        const auto byDist = [&](const Cand& a, const Cand& b) { const double da = std::isfinite(a.mid) && std::isfinite(price) ? std::fabs(a.mid - price) : 1e18, db = std::isfinite(b.mid) && std::isfinite(price) ? std::fabs(b.mid - price) : 1e18; return da < db; };
+        std::stable_sort(up.begin(), up.end(), byDist); std::stable_sort(dn.begin(), dn.end(), byDist);
+        if (up.size() > 3) up.resize(3);
+        if (dn.size() > 3) dn.resize(3);
+        std::reverse(up.begin(), up.end());                      // highest first, the nearest to the price last
+        auto push = [&](const Cand& c) { hl::View::GexItem g; g.strike = rangeTxt(*c.L); g.name = c.L->mem.empty() ? std::string() : c.L->mem[0].name; g.grow = c.L->grow; g.other = false; g.above = c.above; v.gexItems.push_back(g); };
+        for (size_t i = 0; i < up.size(); i++) push(up[i]);
+        if (std::isfinite(price) && (!up.empty() || !dn.empty())) {
+            char pb[48]; snprintf(pb, sizeof pb, "%.*f", dec < 0 ? 2 : (dec > 6 ? 6 : dec), price);
+            hl::View::GexItem m; m.strike = pb; m.mid = true; m.above = false; v.gexItems.push_back(m);
+        }
+        for (size_t i = 0; i < dn.size(); i++) push(dn[i]);
+    }
     // (HodLod 2.2.1, Rassul 12:18 "do you see the levels mentioned?") the Gex S/R strike nearest the projected target (within 10% of the
     // projected range) joins the projection's level text, in the table and under the flag
     if (v.projOk && std::isfinite(v.projPx) && v.projRange > 0) {
@@ -182,7 +204,7 @@ inline void toView(hl::View& v, const File& F, double /*price*/, long long now, 
 // one line for the status file: "GEX,<state>,asof <t>,shown <..>,basis <b>,..."
 inline std::string statusLine(const File& F, const hl::View& v, const std::string& loadWhy)
 {
-    std::string sh; for (size_t i = 0; i < v.gexItems.size(); i++) sh += (i ? " ; " : "") + v.gexItems[i].strike + " " + v.gexItems[i].name + (v.gexItems[i].grow ? " up" : "") + (v.gexItems[i].other ? " (other)" : "");
+    std::string sh; for (size_t i = 0; i < v.gexItems.size(); i++) if (!v.gexItems[i].mid) sh += (sh.empty() ? "" : " ; ") + v.gexItems[i].strike + " " + v.gexItems[i].name + (v.gexItems[i].grow ? " up" : "") + (v.gexItems[i].other ? " (other)" : "");
     for (char& ch : sh) if ((unsigned char)ch == 0x96) ch = '-';
     return "GEX," + (F.ok ? F.state : std::string("none")) + ",asof " + (F.asofTxt.empty() ? std::string("-") : F.asofTxt) + ",shown " + (sh.empty() ? std::string("none") : sh)
          + ",basis " + F.basis + ",side " + F.side + (v.gexStale.empty() ? "" : "," + v.gexStale) + ",locs " + std::to_string(F.locs.size()) + (loadWhy.empty() ? "" : "," + loadWhy) + "\n";
