@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.39.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.40.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1873,9 +1873,9 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     // LMT F (filled limit orders + icebergs "450 I") | MKT (big market orders "+ 120 S") | LMT R (the biggest resting orders, "+" stacking / "-" pulled). F is nearest the
     // candles: it is the absorption evidence at a level. The footer (mean / 1SD / 2SD / 3SD, lots) sits under LMT R (LMT F uses the same sizes) and under MKT.
     const int colL = S.colBigL, colR = S.colBigR, tw = colR - colL;
-    const int fl = colL, fr = colL + tw * 52 / 168, ml = fr, mr = fr + tw * 56 / 168, cl = mr, cr = colR;   // cl / cr = the LMT R column
+    const int ml = colL, mr = colL + tw * 56 / 168, fl = mr, fr = mr + tw * 52 / 168, cl = fr, cr = colR;   // (0.40.0) MKT | LMT F | LMT R   // cl / cr = the LMT R column
     { RCT bg; bg.set(coord(colL), coord(top), coord(colR), coord(bottom)); bg.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
-    { setPen(0x00000000, 1, P_SOLID); const int xs[2] = { fr - 1, mr - 1 };
+    { setPen(0x00000000, 1, P_SOLID); const int xs[2] = { mr - 1, fr - 1 };
       for (int k = 0; k < 2; ++k) { PNT a; a.set(0, 0.0f); a.h = coord(xs[k]); a.v = coord(top); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(xs[k]); b.v = coord(bottom); b.drawLineTo(); } }
     FONT fh; fh.id = HELVETICA; fh.size = coord(9); fh.style = BOLD; setFont(fh); setTextColor(C_GREY);
     { RCT r; r.set(coord(fl), coord(top + 2), coord(fr - 2), coord(top + 14)); r.drawText("LMT F", true, false); }
@@ -1886,9 +1886,10 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         const int rh = rowPx(8);
         std::vector<std::pair<std::string, std::string>> rows;
         if (S.bldOk) {
+            rows.push_back(std::make_pair(std::string("3SD"), std::to_string((long long)std::llround(S.bldV[2]))));   // (0.40.0) 3SD, 2SD, 1SD, mean
+            rows.push_back(std::make_pair(std::string("2SD"), std::to_string((long long)std::llround(S.bldV[1]))));
+            rows.push_back(std::make_pair(std::string("1SD"), std::to_string((long long)std::llround(S.bldV[0]))));
             rows.push_back(std::make_pair(std::string("\xB5"), std::to_string((long long)std::llround(S.bldMu))));
-            for (int k = 0; k < 2; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD", std::to_string((long long)std::llround(S.bldV[k]))));
-            rows.push_back(std::make_pair(std::string("2.7"), std::to_string((long long)std::llround(lqSd266(S.bldMu, S.bldV[0], S.bldV[2])))));   // (0.37.0) the top tier starts here
         } else {   // (0.32.1) while learning, the size in use is still shown ("~" = provisional) and the count on its own row
             rows.push_back(std::make_pair(std::string("~"), std::to_string((long long)S.bo.threshold())));
             rows.push_back(std::make_pair(std::string("n"), std::to_string(S.bldN) + "/30"));
@@ -2124,9 +2125,10 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
         const int rh = rowPx(8);
         std::vector<std::pair<std::string, std::string>> rows;
         if (S.mktOk) {
+            rows.push_back(std::make_pair(std::string("3SD"), std::to_string((long long)std::llround(S.mktV[2]))));   // (0.40.0)
+            rows.push_back(std::make_pair(std::string("2SD"), std::to_string((long long)std::llround(S.mktV[1]))));
+            rows.push_back(std::make_pair(std::string("1SD"), std::to_string((long long)std::llround(S.mktV[0]))));
             rows.push_back(std::make_pair(std::string("\xB5"), std::to_string((long long)std::llround(S.mktMu))));
-            for (int k = 0; k < 2; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "SD", std::to_string((long long)std::llround(S.mktV[k]))));
-            rows.push_back(std::make_pair(std::string("2.7"), std::to_string((long long)std::llround(lqSd266(S.mktMu, S.mktV[0], S.mktV[2])))));   // (0.37.0)
         } else {   // (0.32.1) learning: the cut-offs in use (2x / 4x / 8x the start size) marked "~", the count on its own row
             const long long st0 = S.mkt.start();
             for (int k = 0; k < 3; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "~", std::to_string((long long)(2LL << k) * st0)));
@@ -3292,6 +3294,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.39.0");   // LQ_VERSION
+    p->setVersion("0.40.0");   // LQ_VERSION
     return p;
 }
