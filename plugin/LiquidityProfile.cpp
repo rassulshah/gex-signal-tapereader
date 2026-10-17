@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.40.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.40.2"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -2129,11 +2129,7 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
             rows.push_back(std::make_pair(std::string("2SD"), std::to_string((long long)std::llround(S.mktV[1]))));
             rows.push_back(std::make_pair(std::string("1SD"), std::to_string((long long)std::llround(S.mktV[0]))));
             rows.push_back(std::make_pair(std::string("\xB5"), std::to_string((long long)std::llround(S.mktMu))));
-        } else {   // (0.32.1) learning: the cut-offs in use (2x / 4x / 8x the start size) marked "~", the count on its own row
-            const long long st0 = S.mkt.start();
-            for (int k = 0; k < 3; ++k) rows.push_back(std::make_pair(std::to_string(k + 1) + "~", std::to_string((long long)(2LL << k) * st0)));
-            rows.push_back(std::make_pair(std::string("n"), std::to_string(S.mkt.big.size()) + "/30"));
-        }
+        }   // (0.40.2, Rassul 2026-10-16 22:29 "remove provisional value in mkt footer") while learning the MKT footer shows nothing
         int y = bottom - 4 - (int)rows.size() * rh;
         if (y > top + 30) for (size_t i = 0; i < rows.size(); ++i, y += rh) {
             RCT a; a.set(coord(l + 3), coord(y), coord(r - 3), coord(y + rh)); a.drawText(rows[i].first.c_str(), false, false); a.drawText(rows[i].second.c_str(), false, true);
@@ -3302,6 +3298,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.40.1");   // LQ_VERSION
+    p->setVersion("0.40.2");   // LQ_VERSION
     return p;
 }
