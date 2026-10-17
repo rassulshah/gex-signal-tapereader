@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -160,7 +160,7 @@ inline bool versionBefore(const std::string& v, int a, int b, int c) {
 // tick), the 2.8.2 halfway rule (halfwayOk) and the 2.8.3 pivot rule (pivotOk). bars = false when the bars needed are not on the chart
 // (peak bar missing / still forming / no bar before it / a non-finite or inverted bar in 0 .. pk): the record is then left undrawn.
 struct Recheck { bool bars = false, close = false, halfway = false, pivot = false; int pivotBar = -1;
-                 bool pass() const { return bars && close && halfway && pivot; } };
+                 bool pass() const { return bars && close && pivot; } };   // (2.15.0) halfway no longer required (still reported)
 template <class O, class H, class L, class C>
 inline Recheck recheckA(O& open, H& high, L& low, C& close, int count, int pk, Tick nodeLow, Tick nodeHigh, double tick, bool sellNode) {
     Recheck r;
@@ -246,7 +246,7 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
         // (2.8.2, Rassul 2026-10-14 19:44) bullish A: the node at / below the peak bar's halfway mark; bearish A: at / above it
         // (2.8.4) the window holds only the last 90 min, so the 2.8.3 pivot rule (chart bars 0 .. peak) is NOT applied here: the
         // host never publishes this A as decided - a new event starts undecided and its own decision loop applies every rule
-        const bool half = halfwayOk(low, high, pb.high, pb.low, tick, sell);
+        const bool half = true;   // (2.15.0, Rassul 2026-10-17 13:25 "it doesn't need the halfway rule") halfwayOk kept for the record re-check only
         const bool confirmed = half && (sell ? (pb.close > pb.open && pk > high) : (pb.close < pb.open && pk < low));
         if (confirmed) { out.code = "A"; out.support = sell; out.decidedBar = pb.index; return out; }
         for (std::size_t i = static_cast<std::size_t>(formed + 1); i < bars.size(); ++i) {
@@ -326,8 +326,9 @@ inline Snapshot build(const std::vector<Bar>& bars, double tick, bool allowConfi
         Node n; n.bucket = b.key; n.price = (static_cast<double>(b.low) + static_cast<double>(b.high)) * 0.5 * tick;
         n.ratio = b.ratio; n.state = state; s.nodes.push_back(n);
     }
-    // (2.13.0, Rassul 2026-10-16 17:32-17:40 "it doesn't have to be the top 3") every row at 2.0x or more is an absorption candidate
-    for (std::size_t i = 0; i < ranked.size(); ++i) {
+    // (2.13.0) every row at 2.0x or more was a candidate; (2.15.0, Rassul 2026-10-17 13:25 "keep it as 2.6 has it") back to the 2.6.0
+    // rule: only the 3 biggest rows (2.0x or more, from the 10 biggest) are absorption candidates
+    for (std::size_t i = 0; i < ranked.size() && i < 10 && s.cands.size() < 3; ++i) {
         const Bucket& b = s.buckets[ranked[i]];
         if (b.ratio < 2.0) break;
         State state = classify(bars, b.low, b.high, b.delta, tick);
