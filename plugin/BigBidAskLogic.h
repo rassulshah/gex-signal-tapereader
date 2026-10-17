@@ -32,7 +32,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.13.0";   // (1.13.0) a Setup per category (Any / Pullback with trend / Reversal at a level / Breakout through the higher of the last 2 pivots), RTH only option; (1.12.0) hover, print log + nightly score, Liquidity Profile read, NG / 6E divider 1; (1.11.0) (1.11.0) category 4 (>= lots), a font per category, time filter, near a level (ATR above / below + sweeps; key / gamma / volume levels), statistics; (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
+static const char* const VERSION = "1.14.0";   // (1.14.0, Rassul 2026-10-17 16:29-16:47) one "Show" choice per category (All prints / Near pivot (either direction) / Near a level / Pivot near a level / Trend PB / Trend BO / Trend PB + BO), category 4 = every print of its size (time filter only), the pivot judged against the candle's own swing (may repaint until the pivot is confirmed), the Trend PB VWAP band rule, Trend BO needs the trend, box colours of their own, new defaults, category 4 size per market; (1.13.0) a Setup per category (Any / Pullback with trend / Reversal at a level / Breakout through the higher of the last 2 pivots), RTH only option; (1.12.0) hover, print log + nightly score, Liquidity Profile read, NG / 6E divider 1; (1.11.0) (1.11.0) category 4 (>= lots), a font per category, time filter, near a level (ATR above / below + sweeps; key / gamma / volume levels), statistics; (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
@@ -42,7 +42,10 @@ static const int NKEY = 16, NGAM = 10, NVOL = 6;
 static const char* const KEY_NAMES[NKEY] = { "ONH", "ONL", "PDH", "PDL", "PFH", "PFL", "LonHI", "LonLO", "PWH", "PWL", "HOD", "LOD", "AHI", "ALO", "CWH", "CWL" };
 static const char* const GAM_NAMES[NGAM] = { "CR", "PS", "HVL", "CR 0DTE", "PS 0DTE", "G1", "G2", "G3", "G4", "G5" };
 static const char* const VOL_NAMES[NVOL] = { "PD POC", "PD VAH", "PD VAL", "Wk POC", "Wk VAH", "Wk VAL" };
-static const char* const SETUP_NAMES = "Any;Pullback with trend;Reversal at a level;Breakout";
+// (1.14.0, Rassul 16:41 "near pivot should be exclusive ... near level is also mutually exclusive ... a third option would be pivot near
+// level. Trend PB and Trend BO would also be mutually exclusive of everything else"; 16:00 "you can select one or the other or both")
+static const char* const SHOW_NAMES = "All prints;Near pivot;Near a level;Pivot near a level;Trend PB;Trend BO;Trend PB + BO";
+enum { SH_ALL = 0, SH_PIVOT = 1, SH_LEVEL = 2, SH_PIVLEVEL = 3, SH_PB = 4, SH_BO = 5, SH_PBBO = 6 };
 static const char* const SESSION_NAMES = "RTH + overnight;RTH only";
 static const char* const POS_NAMES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 struct Cat {   // one Big Lot category (1 - 3: Big Lot N + an optional minimum; 4: a fixed size, >= lots)
@@ -50,25 +53,37 @@ struct Cat {   // one Big Lot category (1 - 3: Big Lot N + an optional minimum; 
     int n = 5;                // Big Lot N (categories 1 - 3): the size reached ~N times a session; 1 - 100
     int lots = 0;             // categories 1 - 3: the optional minimum (0 = none); category 4: the size, >= lots (1 - 100,000)
     int font = 8;             // 6 - 20 pt
-    bool pivot = false;       // only on a candle that passes the Delta Profile pivot rule
-    bool level = false;       // only near a selected level (or a sweep of it)
-    int setup = 0;            // (1.13.0) 0 Any, 1 Pullback with trend, 2 Reversal at a level, 3 Breakout
-    unsigned bid = 0x00EF4444, ask = 0x0022C55E;   // IRT COLOR = 0x00RRGGBB
+    int show = SH_ALL;        // (1.14.0) the one filter of categories 1 - 3 (SHOW_NAMES); category 4 has none (time filter only)
+    unsigned bid = 0x00FFFFFF, ask = 0x00FFFFFF;   // the NUMBER colour at the bid / ask (IRT COLOR = 0x00RRGGBB)
 };
 struct Settings {
     int div = 0;              // divider: 0 = the market's default, else 1 - 1000
-    bool box = false, dim = false, circle = false;
+    bool box = true, dim = false, circle = false;
     unsigned circleCol = 0x00FFFFFF;
+    unsigned boxBid = 0x00EF4444, boxAsk = 0x0022C55E;   // (1.14.0) the box colour by side (red = sold at the bid, green = bought at the ask)
     Cat cat[4];
-    int skipFirst = 0, skipLast = 0;      // minutes (0 - 240) after each open / before each close
+    int skipFirst = 15, skipLast = 15;    // minutes (0 - 240) after each open / before each close
     int atrUpQ = 200, atrDnQ = 100;       // the level zone in hundredths of a 3-min ATR above / below the level (0 - 2000)
-    bool keyOn = true, gamOn = true, volOn = true;
-    unsigned keyMask = (1u << NKEY) - 1, gamMask = (1u << NGAM) - 1, volMask = (1u << NVOL) - 1;
+    bool keyOn = false, gamOn = false, volOn = false;   // (1.14.0, Rassul 16:35 "do not select any levels")
+    unsigned keyMask = 0, gamMask = 0, volMask = 0;
     bool statsChart = true; int statsPos = 9;   // the statistics box on the chart: 1 - 9 (top left .. bottom right)
     bool rthOnly = false;     // (1.13.0, Rassul 15:29) RTH only, or RTH + overnight
     int boldQ = 200;          // internal (hover text only)
-    Settings() { cat[0].on = true; cat[0].n = 5; cat[1].n = 10; cat[2].n = 20; cat[3].n = 0; cat[3].lots = 1000; }
+    // (1.14.0, Rassul 16:35 / 16:46 defaults) categories 1 - 4 on; Big Lot 5 and category 4 cyan, Big Lot 10 / 20 white; 2 and 3 Trend PB + BO
+    Settings() { for (int k = 0; k < 4; ++k) cat[k].on = true;
+        cat[0].n = 5; cat[1].n = 10; cat[2].n = 20; cat[3].n = 0; cat[3].lots = 1350;
+        cat[0].bid = cat[0].ask = cat[3].bid = cat[3].ask = 0x0000FFFF;
+        cat[1].show = cat[2].show = SH_PBBO; }
 };
+// (1.14.0, Rassul 16:47 "figure out what Cat 4 should be for all the markets") the category 4 size per market: about 3 prints a
+// regular session (8:45 AM - 2:45 PM, his 15-min time filter) at or above it - the exceptional print, rarer than Big Lot 5 so it does
+// not stand in for the filtered categories. From his recorded prints (ES Oct 13-15) and the Oct 13 footprint (NQ / CL / GC / NG / 6E);
+// HG scaled from GC by the Big Lot S5 ratio (47 / 56). Lots at one price on one side in a 3-min candle.
+inline int cat4For(const std::string& m) {
+    return m == "ES" ? 1350 : m == "NQ" ? 450 : m == "CL" ? 95 : m == "GC" ? 105 : m == "HG" ? 90 : m == "NG" ? 295
+         : (m == "6E" || m == "EU") ? 490 : 1000;
+}
+inline Settings defaultsFor(const std::string& m) { Settings s; s.cat[3].lots = cat4For(m); return s; }
 // (1.4.0, Rassul 11:51 "a divider ... so the value always looks like a 1 or 2 digit value; for ES 10 by default") per market, from the
 // typical biggest lots at one price in a 3-min candle (ES ~300-1,500, CL / NG / 6E ~100-500, NQ / GC / HG ~20-150)
 inline int divFor(const std::string& m) {
@@ -86,6 +101,7 @@ inline bool minOk(long long v) { return v >= 0 && v <= 240; }
 inline bool atrOk(long long q) { return q >= 0 && q <= 2000; }
 inline bool posOk(long long v) { return v >= 1 && v <= 9; }
 inline bool setupOk(long long v) { return v >= 0 && v <= 3; }
+inline bool showOk(long long v) { return v >= 0 && v <= 6; }
 // strict whole number (digits only, no sign, no blanks)
 inline bool fullInt(const std::string& t, long long& out) {
     if (t.empty() || t.size() > 12) return false;
@@ -94,35 +110,48 @@ inline bool fullInt(const std::string& t, long long& out) {
     if (errno != 0 || !end || *end != '\0') return false;
     out = v; return true;
 }
-// (1.13.0) one line, 55 fields: "BBA6|div|box|dim|circle|circleCol" + 4 x "|on|N|lots|font|pivot|level|bid|ask|setup"
+// (1.14.0) one line, 49 fields: "BBA7|div|box|dim|circle|circleCol|boxBid|boxAsk" + 4 x "|on|N|lots|font|show|bid|ask"
 //   + "|skipFirst|skipLast|atrUpQ|atrDnQ|keyOn|gamOn|volOn|keyMask|gamMask|volMask|statsChart|statsPos|rthOnly"
-static const size_t NFIELDS = 1 + 5 + 4 * 9 + 13;
+static const size_t NFIELDS = 1 + 7 + 4 * 7 + 13;
 inline std::string formatSettings(const Settings& s) {
     auto b = [](bool x) { return std::string(x ? "1" : "0"); };
     auto n = [](long long x) { return std::to_string(x); };
-    std::string o = "BBA6|" + n(s.div) + "|" + b(s.box) + "|" + b(s.dim) + "|" + b(s.circle) + "|" + n(s.circleCol & 0x00FFFFFF);
+    std::string o = "BBA7|" + n(s.div) + "|" + b(s.box) + "|" + b(s.dim) + "|" + b(s.circle) + "|" + n(s.circleCol & 0x00FFFFFF) + "|" + n(s.boxBid & 0x00FFFFFF) + "|" + n(s.boxAsk & 0x00FFFFFF);
     for (int k = 0; k < 4; ++k) { const Cat& c = s.cat[k];
-        o += "|" + b(c.on) + "|" + n(c.n) + "|" + n(c.lots) + "|" + n(c.font) + "|" + b(c.pivot) + "|" + b(c.level) + "|" + n(c.bid & 0x00FFFFFF) + "|" + n(c.ask & 0x00FFFFFF) + "|" + n(c.setup); }
+        o += "|" + b(c.on) + "|" + n(c.n) + "|" + n(c.lots) + "|" + n(c.font) + "|" + n(c.show) + "|" + n(c.bid & 0x00FFFFFF) + "|" + n(c.ask & 0x00FFFFFF); }
     o += "|" + n(s.skipFirst) + "|" + n(s.skipLast) + "|" + n(s.atrUpQ) + "|" + n(s.atrDnQ) + "|" + b(s.keyOn) + "|" + b(s.gamOn) + "|" + b(s.volOn)
        + "|" + n(s.keyMask) + "|" + n(s.gamMask) + "|" + n(s.volMask) + "|" + b(s.statsChart) + "|" + n(s.statsPos) + "|" + b(s.rthOnly);
     return o;
 }
 // every field checked on its own: a bad field falls back to ITS default (why names it); a wrong layout = all defaults;
-// files from before 1.11.0 (BBA1 - BBA4) = the defaults
-inline Settings parseSettings(const std::string& text, std::string& why) {
-    Settings s, d; why.clear();
+// files from before 1.11.0 (BBA1 - BBA4) = the defaults; BBA5 / BBA6 are carried over (1.14.0: their pivot / level / setup -> Show)
+inline Settings parseSettings(const std::string& text, std::string& why, const std::string& mkt = "") {
+    Settings s = defaultsFor(mkt), d = defaultsFor(mkt); why.clear();
     std::string line = text;
     const size_t nl = line.find('\n'); if (nl != std::string::npos) line = line.substr(0, nl);
     if (!line.empty() && line.back() == '\r') line.pop_back();
     std::vector<std::string> f; { std::string cur; for (char c : line) { if (c == '|') { f.push_back(cur); cur.clear(); } else cur.push_back(c); } f.push_back(cur); }
-    if (!f.empty() && f[0].size() == 4 && f[0].compare(0, 3, "BBA") == 0 && f[0][3] >= '1' && f[0][3] <= '4') { why = "older file (defaults)"; return Settings(); }
+    if (!f.empty() && f[0].size() == 4 && f[0].compare(0, 3, "BBA") == 0 && f[0][3] >= '1' && f[0][3] <= '4') { why = "older file (defaults)"; return d; }
     if (f.size() == 50 && f[0] == "BBA5") {   // (1.13.0) a 1.11 / 1.12 file: kept, with setup Any and RTH + overnight added
         std::vector<std::string> g; g.push_back("BBA6"); for (int i = 1; i <= 5; ++i) g.push_back(f[i]);
         for (int k = 0; k < 4; ++k) { for (int j = 0; j < 8; ++j) g.push_back(f[6 + 8 * k + j]); g.push_back("0"); }
         for (int i = 38; i < 50; ++i) g.push_back(f[i]); g.push_back("0");
         f.swap(g);
     }
-    if (f.size() != NFIELDS || f[0] != "BBA6") { why = "garbled (defaults)"; return Settings(); }
+    if (f.size() == 55 && f[0] == "BBA6") {   // (1.14.0) a 1.13 file: pivot / level / setup -> one Show choice; box colours default
+        std::vector<std::string> g; g.push_back("BBA7"); for (int i = 1; i <= 5; ++i) g.push_back(f[i]);
+        g.push_back(std::to_string(d.boxBid)); g.push_back(std::to_string(d.boxAsk));
+        for (int k = 0; k < 4; ++k) { const size_t b0 = 6 + 9 * k;
+            const bool pv = f[b0 + 4] == "1", lv = f[b0 + 5] == "1"; const std::string& su = f[b0 + 8];
+            int sh = su == "1" ? SH_PB : su == "3" ? SH_BO : su == "2" ? (pv ? SH_PIVLEVEL : SH_LEVEL) : pv && lv ? SH_PIVLEVEL : lv ? SH_LEVEL : pv ? SH_PIVOT : SH_ALL;
+            if (k == 3) sh = SH_ALL;
+            for (size_t j = 0; j < 4; ++j) g.push_back(f[b0 + j]);
+            g.push_back(std::to_string(sh)); g.push_back(f[b0 + 6]); g.push_back(f[b0 + 7]); }
+        for (size_t i = 42; i < 55; ++i) g.push_back(f[i]);
+        f.swap(g); why = "carried over from 1.13";
+    }
+    if (f.size() != NFIELDS || f[0] != "BBA7") { why = "garbled (defaults)"; return d; }
+    const std::string carried = why; why.clear();
     std::vector<std::string> bad;
     long long v = 0; size_t i = 1;
     auto flag = [&](bool& out, bool def, const std::string& nm) { if (fullInt(f[i], v) && v <= 1) out = v == 1; else { out = def; bad.push_back(nm); } ++i; };
@@ -131,14 +160,15 @@ inline Settings parseSettings(const std::string& text, std::string& why) {
     auto mask = [&](unsigned& out, unsigned def, int bits, const std::string& nm) { if (fullInt(f[i], v) && v >= 0 && v < (1LL << bits)) out = (unsigned)v; else { out = def; bad.push_back(nm); } ++i; };
     if (fullInt(f[i], v) && (v == 0 || divOk(v))) s.div = (int)v; else { s.div = d.div; bad.push_back("divider"); } ++i;
     flag(s.box, d.box, "box"); flag(s.dim, d.dim, "dim"); flag(s.circle, d.circle, "circle"); col(s.circleCol, d.circleCol, "circle colour");
+    col(s.boxBid, d.boxBid, "box bid colour"); col(s.boxAsk, d.boxAsk, "box ask colour");
     for (int k = 0; k < 4; ++k) { Cat& c = s.cat[k]; const Cat& dc = d.cat[k]; const std::string nm = "category " + std::to_string(k + 1);
         flag(c.on, dc.on, nm + " on");
         if (k < 3) num(c.n, dc.n, nOk, nm + " Big Lot"); else { c.n = 0; ++i; }
         if (k < 3) num(c.lots, dc.lots, lotsOk, nm + " min lots");
         else { if (fullInt(f[i], v) && v >= 1 && v <= 100000) c.lots = (int)v; else { c.lots = dc.lots; bad.push_back(nm + " lots"); } ++i; }
         num(c.font, dc.font, fontOk, nm + " font");
-        flag(c.pivot, dc.pivot, nm + " pivot"); flag(c.level, dc.level, nm + " level");
-        col(c.bid, dc.bid, nm + " bid colour"); col(c.ask, dc.ask, nm + " ask colour"); num(c.setup, dc.setup, setupOk, nm + " setup"); }
+        num(c.show, dc.show, showOk, nm + " show"); if (k == 3) c.show = SH_ALL;
+        col(c.bid, dc.bid, nm + " bid colour"); col(c.ask, dc.ask, nm + " ask colour"); }
     num(s.skipFirst, d.skipFirst, minOk, "skip first"); num(s.skipLast, d.skipLast, minOk, "skip last");
     num(s.atrUpQ, d.atrUpQ, atrOk, "ATR above"); num(s.atrDnQ, d.atrDnQ, atrOk, "ATR below");
     flag(s.keyOn, d.keyOn, "key levels"); flag(s.gamOn, d.gamOn, "gamma levels"); flag(s.volOn, d.volOn, "volume levels");
@@ -146,6 +176,7 @@ inline Settings parseSettings(const std::string& text, std::string& why) {
     flag(s.statsChart, d.statsChart, "statistics on the chart"); num(s.statsPos, d.statsPos, posOk, "statistics position");
     flag(s.rthOnly, d.rthOnly, "RTH only");
     if (!bad.empty()) { why = "bad value (default used):"; for (const auto& x : bad) why += " " + x; }
+    if (!carried.empty()) why = why.empty() ? carried : carried + "; " + why;
     return s;
 }
 // a typed decimal (the dialog's float box) -> hundredths, or -1 when it is not a sane number
@@ -319,6 +350,93 @@ inline void pivotFlags(H& high, L& low, int n, std::vector<char>& bull, std::vec
         bull[i] = (dp == i || lo(i) < hi(dp)) ? 1 : 0;
         bear[i] = (up == i || hi(i) > lo(up)) ? 1 : 0;
     }
+}
+
+// ---- (1.14.0, Rassul 16:0x "it is ok to repaint when the pivot requirement is there"; "the bar must be the dnpivot or the bars low is
+// below the high of the down pivot bar, and vice versa") the pivot of the candle's OWN swing: his 1-bar ZigZag over ALL the bars;
+// the candle belongs to the leg (A, B] between two turns. Its down pivot = the low end of that leg, its up pivot = the high end. The
+// last leg ends at the extreme so far (not confirmed yet): a candle there may be shown, hidden and shown again until its turn is
+// confirmed - conf[i] says it is final. bull[i] = i is its down pivot or its LOW is below that pivot bar's HIGH; bear[i] = i is its up
+// pivot or its HIGH is above that pivot bar's LOW.
+struct Swing {
+    std::vector<int> a, b;            // the leg of bar i: (a, b]; b = the turn it runs into (-1 = none yet)
+    std::vector<int> dp, up;          // the down / up pivot bar of bar i's swing (-1 = none)
+    std::vector<char> bull, bear, conf;
+    int lastConfirmed = -1;           // the last confirmed turn (bars up to it are final)
+};
+template <class H, class L>
+inline Swing swing(H& high, L& low, int n) {
+    Swing s; const size_t N = n > 0 ? (size_t)n : 0;
+    s.a.assign(N, -1); s.b.assign(N, -1); s.dp.assign(N, -1); s.up.assign(N, -1); s.bull.assign(N, 0); s.bear.assign(N, 0); s.conf.assign(N, 0);
+    if (n < 3) return s;
+    auto hi = [&](int i) { return (double)high[i]; }; auto lo = [&](int i) { return (double)low[i]; };
+    auto good = [&](int i) { return std::isfinite(hi(i)) && std::isfinite(lo(i)) && hi(i) >= lo(i); };
+    std::vector<int> piv; std::vector<signed char> typ;              // the turns in order: +1 a top (up pivot), -1 a bottom (down pivot)
+    int dirn = hi(1) >= hi(0) ? 1 : -1, ext = 0, bad = -1;
+    for (int i = 1; i < n; ++i) {
+        if (!good(i)) { bad = i; continue; }
+        if (dirn == 1) {
+            if (hi(i) > hi(ext)) ext = i;
+            else if (lo(i) < lo(i - 1) && i != ext) { piv.push_back(ext); typ.push_back(1); ext = i; dirn = -1; }
+        } else {
+            if (lo(i) < lo(ext)) ext = i;
+            else if (hi(i) > hi(i - 1) && i != ext) { piv.push_back(ext); typ.push_back(-1); ext = i; dirn = 1; }
+        }
+    }
+    const size_t nConf = piv.size();
+    if (nConf) s.lastConfirmed = piv.back();
+    piv.push_back(ext); typ.push_back(dirn == 1 ? 1 : -1);          // the leg still forming ends at the extreme so far
+    for (size_t k = 0; k < piv.size(); ++k) {
+        const int A = k ? piv[k - 1] : -1, B = piv[k];
+        const int D = typ[k] < 0 ? B : (k ? piv[k - 1] : -1), U = typ[k] > 0 ? B : (k ? piv[k - 1] : -1);
+        for (int i = A + 1; i <= B && i < n; ++i) {
+            s.a[i] = A; s.b[i] = B; s.dp[i] = D; s.up[i] = U; s.conf[i] = k < nConf ? 1 : 0;
+            if (!good(i) || (bad >= 0 && i > bad && i - bad < 50)) continue;   // a broken bar recently: no claim
+            s.bull[i] = D >= 0 && (D == i || lo(i) < hi(D)) ? 1 : 0;
+            s.bear[i] = U >= 0 && (U == i || hi(i) > lo(U)) ? 1 : 0;
+        }
+    }
+    // the bars after the extreme so far: tentatively a leg the other way, to the most extreme bar among them, then one more back
+    const int E = piv.back();
+    if (E + 1 < n) {
+        const bool down = typ.back() > 0;                             // after a top: falling to the lowest low since
+        int T = E + 1; for (int i = E + 2; i < n; ++i) if (good(i) && (down ? lo(i) < lo(T) : hi(i) > hi(T))) T = i;
+        for (int i = E + 1; i < n; ++i) {
+            const bool first = i <= T;
+            s.a[i] = first ? E : T; s.b[i] = first ? T : -1;
+            const int D = down ? T : (first ? E : -1), U = down ? (first ? E : -1) : T;
+            s.dp[i] = D; s.up[i] = U;
+            if (!good(i) || (bad >= 0 && i > bad && i - bad < 50)) continue;
+            s.bull[i] = D >= 0 && (D == i || lo(i) < hi(D)) ? 1 : 0;
+            s.bear[i] = U >= 0 && (U == i || hi(i) > lo(U)) ? 1 : 0;
+        }
+    }
+    return s;
+}
+// (1.14.0, Rassul 15:5x "in a strong uptrend, the pullback low needs to touch or go below the 1sd, for a trend it needs to be the vwap.
+// in both cases it cannot be -1 sd below vwap") the Trend PB band rule on the pullback leg: in an uptrend the leg falling INTO the
+// candle's down pivot (from the top before it to that pivot); Uptrend / Strong Uptrend: some bar's low <= its VWAP + 1SD (touching
+// +1SD or VWAP, 16:56);
+// and no bar of the leg reaches VWAP - 1SD. Downtrend the mirror (the leg rising into the up pivot, highs vs VWAP - 1SD / VWAP, never
+// VWAP + 1SD). Each bar against its own session's bands at that bar; bars without bands are skipped (none at all = not met).
+// vw / sd per bar (sd 0 = no band). Returns 1 met, 0 not.
+template <class H, class L>
+inline int pbBands(H& high, L& low, const std::vector<double>& vw, const std::vector<double>& sd, const Swing& s, int i, int trend) {
+    if (trend == 0 || i < 0 || i >= (int)s.dp.size()) return 0;
+    const int P = trend > 0 ? s.dp[i] : s.up[i]; if (P < 0) return 0;
+    int from = P - 1;                                                // back to the turn before the pivot (the start of the pullback)
+    while (from >= 0 && from < (int)s.a.size() && s.b[from] == P) --from;
+    from = std::max(0, from + 1);
+    bool touched = false;
+    for (int k = from; k <= P && k < (int)vw.size() && k < (int)sd.size(); ++k) {
+        if (!(vw[k] > 0) || !(sd[k] > 0) || !std::isfinite(vw[k]) || !std::isfinite(sd[k])) continue;
+        const double h = (double)high[k], l = (double)low[k];
+        // (Rassul 16:56 "update Trend PB so it can be 1sd or vwap"): Uptrend or Strong Uptrend - touching +1SD or VWAP both count
+        // (VWAP is below +1SD, so: the low reaches +1SD or lower); never VWAP - 1SD. Downtrends the mirror.
+        if (trend > 0) { if (l <= vw[k] - sd[k]) return 0; if (l <= vw[k] + sd[k]) touched = true; }
+        else           { if (h >= vw[k] + sd[k]) return 0; if (h >= vw[k] - sd[k]) touched = true; }
+    }
+    return touched ? 1 : 0;
 }
 
 // ---- per-price rows and the biggest bid / ask ---------------------------------------------------------------------------------

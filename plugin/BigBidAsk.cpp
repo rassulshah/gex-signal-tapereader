@@ -69,7 +69,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.13.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.14.0"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -85,7 +85,7 @@ static const int READS_MAX = 900;           // VAP bars read per pass (the rest 
 static const int FAILS_FINAL = 5;           // a closed candle IRT has no VAP for after 5 passes is finalised as "no data"
 static const size_t REC_FILE_MAX = 2 * 1024 * 1024, REC_LINES_MAX = 20000;
 // (1.11.0) the settings window: the control numbers are given out in setup() (labels in between), kept here
-struct PIx { int div = -1, box = -1, dim = -1, circle = -1, circleCol = -1; int cat[4][9]; int rthOnly = -1; int skipF = -1, skipL = -1, atrUp = -1, atrDn = -1;
+struct PIx { int div = -1, box = -1, dim = -1, circle = -1, circleCol = -1, boxBid = -1, boxAsk = -1; int cat[4][9]; int rthOnly = -1; int skipF = -1, skipL = -1, atrUp = -1, atrDn = -1;
              int keyOn = -1, gamOn = -1, volOn = -1; int key[bba::NKEY], gam[bba::NGAM], vol[bba::NVOL]; int statsChart = -1, statsPos = -1; int statLbl[6]; bool ok = false; };
 static PIx g_ix;
 
@@ -181,7 +181,11 @@ static bool keyOf(double price, double tick, long long& key) {
     key = (long long)std::llround(q); return true;
 }
 
-struct PickInfo { int cat = -1; std::string lv; double lvPx = 0; bool sweep = false, piv = false; int why = 0; int brk = 0; int trend = 0; };   // (1.13.0) brk = the pivot broken (1 / 2), trend = vwapTrend level   // (1.12.0) why a print got its category
+struct PickInfo { int cat = -1; std::string lv; double lvPx = 0; bool sweep = false, piv = false; int why = 0; int brk = 0; int trend = 0;
+                  int how = 0, brkDir = 0; bool conf = true; };   // (1.14.0) how = 1 Trend PB / 3 Trend BO; brkDir +1 out / -1 down; conf = the pivot is final
+// (1.14.0) what one pass knows about every bar: the swing (the candle's own pivot, may repaint until confirmed), the breakouts, the
+// session VWAP and its SD at each bar (the Trend PB band rule)
+struct PassCtx { bba::Swing sw; std::vector<signed char> bu, bd; std::vector<double> vw, sd; };   // (1.13.0) brk = the pivot broken (1 / 2), trend = vwapTrend level   // (1.12.0) why a print got its category
 struct HoverT { bba::Box box; long long t = 0; int side = -1; PickInfo pi; long long lots = 0; double px = 0; };
 struct BBState {
     bool sdOk = false; long long sd[3] = {0, 0, 0}; long long sdCheckMs = -1, sdN = 0; double sdMu = 0; std::string sdWhy = "learning";   // (1.5.0) the print SD sizes
@@ -208,13 +212,14 @@ struct BBState {
     // draw
     cb::Peers peers; int priceRight = 0, leftLimit = 0; bb::Beat trBeat; bool trOn = false; bba::Box trBox;
     bba::LayoutStats lay; int clL = 0, clR = 0, clT = 0, clB = 0, clTr = 0, clBig = 0, shifted = 0, areaFallback = 0; int droppedInView = 0; int circles = 0, circlesHidden = 0, zoneFull = 0, zoneDim = 0, hugeN = 0, catN[3] = {0, 0, 0}, pivotHidden = 0;
-    int timeHidden = 0, levelHidden = 0, catN4[4] = {0, 0, 0, 0};
+    int timeHidden = 0, levelHidden = 0, catN4[4] = {0, 0, 0, 0}, trendHidden = 0, unconfirmed = 0;
     // (1.11.0) market hours, the volume profiles, the levels per candle (frozen once the candle closed), the gamma file, the statistics
     int openMin = 510, closeMin = 900;
     struct VP { std::map<long long, long long> rth, full; int bars = 0; };
     std::map<long, VP> vp; long volNext = -1; long long volFirstT = 0; long volFirstSess = 0;
     std::map<long long, std::vector<bba::NamedLevel>> lvCache;
-    std::vector<svl::Bar> svB; long svN = -1; long long svLast = 0; std::map<long long, int> trCache;   // (1.13.0) the bars for vwapTrend, the trend per candle (frozen)
+    std::vector<svl::Bar> svB; long svN = -1; long long svLast = 0; std::map<long long, int> trCache;
+    long bandN = -2; std::vector<double> vw, sdv;   // (1.14.0) session VWAP / SD per bar (the Trend PB band rule)   // (1.13.0) the bars for vwapTrend, the trend per candle (frozen)
     std::vector<bba::NamedLevel> gam; long long gamCheckMs = -1; long gamSess = 0; std::string gamWhy = "not read";
     std::vector<std::string> stats; long long statsMs = -1; std::string statsWritten;
     std::set<std::string> logged; std::vector<std::pair<long long, std::string>> logPending; long long logMs = -1;   // (1.12.0) the print log
@@ -252,8 +257,10 @@ private:
     const std::vector<bba::NamedLevel>& levelsFor(BBState& S, int i, bool closed);
     void gammaRead(BBState& S, long long now);
     void statsBuild(BBState& S, long long now);
-    template <class H, class L, class C> PickInfo choose(BBState& S, int i, bool closed, int sd, const bba::Pick& p, int ph, bool pivOk, int brk, H& hi, L& lo, C& cl);
+    template <class H, class L, class C> PickInfo choose(BBState& S, int i, bool closed, int sd, const bba::Pick& p, int ph, const PassCtx& X, H& hi, L& lo, C& cl);
     int trendAt(BBState& S, int i);
+    void ensureBars(BBState& S);
+    template <class H, class L> void passCtx(BBState& S, H& hi, L& lo, int n, PassCtx& X);
     void logPass(BBState& S, long long now);
     std::string printsPath(BBState& S, long long sess) { const std::string d = dir(); return d.empty() ? d : d + BBA_SEP + stem(S) + "-prints-" + std::to_string(sess) + ".csv"; }
     std::string statsPath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() ? f : f + BBA_SEP "BigBidAsk.stats-" + mkt + ".txt"; }
@@ -283,8 +290,10 @@ int cppExtension::setup(void) {
     const short SAME = kParmAppendSameLine;
     setLabelParameter("NUMBERS", 400);
     g.div = at();       setIntegerParameter("Divider (0 = market default)", 0, 50);
-    g.box = at();       setBoolParameter("Box round the numbers", D.box, SAME);
     g.dim = at();       setBoolParameter("Dim away from a level", D.dim, SAME);
+    g.box = at();       setBoolParameter("Box round the numbers", D.box);                  // (1.14.0) its own colours by side
+    g.boxBid = at();    setColorParameter("Box bid", (COLOR)D.boxBid, 40, SAME);
+    g.boxAsk = at();    setColorParameter("Box ask", (COLOR)D.boxAsk, 40, SAME);
     g.circle = at();    setBoolParameter("Absorption circle", D.circle);
     g.circleCol = at(); setColorParameter("Circle colour", (COLOR)D.circleCol, 50, SAME);
     setLabelParameter("BIG LOT CATEGORIES   (Big Lot N = the size reached about N times a session; category 4 = a fixed size)", 600);
@@ -295,11 +304,12 @@ int cppExtension::setup(void) {
         if (k < 3) { x[1] = at(); setIntegerParameter("Big Lot", c.n, 40, SAME); x[2] = at(); setIntegerParameter("Min lots", c.lots, 55, SAME); }
         else       { x[1] = -1;  x[2] = at(); setIntegerParameter(">= lots", c.lots, 55, SAME); }
         x[3] = at(); setIntegerParameter("Font", c.font, 35, SAME);
-        x[4] = at(); setBoolParameter("Near pivot", c.pivot, SAME);
-        x[5] = at(); setBoolParameter("Near a level", c.level, SAME);
-        x[6] = at(); setColorParameter("Bid", (COLOR)c.bid, 40, SAME);
-        x[7] = at(); setColorParameter("Ask", (COLOR)c.ask, 40, SAME);
-        x[8] = at(); setListParameter("Setup", (short)c.setup, bba::SETUP_NAMES, 140, SAME);   // (1.13.0)
+        x[4] = at(); setColorParameter("Text bid", (COLOR)c.bid, 40, SAME);
+        x[5] = at(); setColorParameter("Text ask", (COLOR)c.ask, 40, SAME);
+        // (1.14.0) one Show choice for categories 1 - 3; category 4 = every print of its size (time filter only)
+        if (k < 3) { x[6] = at(); setListParameter("Show", (short)c.show, bba::SHOW_NAMES, 150, SAME); }
+        else { x[6] = -1; }
+        x[7] = -1; x[8] = -1;
     }
     setLabelParameter("TIME FILTER", 400);
     g.skipF = at(); setIntegerParameter("Skip first (min after the open, 8:30 AM / 5:00 PM)", D.skipFirst, 40);
@@ -361,10 +371,10 @@ void BigBidAsk::identify(BBState& S) {
 bba::Settings BigBidAsk::readSettingsFile(const std::string& mkt, std::string& why) {
     const std::string p = settingsPath(mkt);
     long long st = -1;
-    if (p.empty() || !statFile(p, st)) { why = "missing (defaults)"; return bba::Settings(); }
+    if (p.empty() || !statFile(p, st)) { why = "missing (defaults)"; return bba::defaultsFor(mkt); }
     std::string text;
-    if (!readSmall(p, 4096, text)) { why = "unreadable or too big (defaults)"; return bba::Settings(); }
-    bba::Settings s = bba::parseSettings(text, why);
+    if (!readSmall(p, 4096, text)) { why = "unreadable or too big (defaults)"; return bba::defaultsFor(mkt); }
+    bba::Settings s = bba::parseSettings(text, why, mkt);
     if (why.empty()) why = "file";
     return s;
 }
@@ -415,7 +425,7 @@ void BigBidAsk::settings(BBState& S, long long now) {
     S.setCheckMs = now;
     const std::string p = settingsPath(S.market);
     long long st = -1;
-    if (p.empty() || !statFile(p, st)) { if (S.setStamp != -1) { S.set = bba::Settings(); S.settingsWhy = "missing (defaults)"; S.setStamp = -1; } return; }
+    if (p.empty() || !statFile(p, st)) { if (S.setStamp != -1) { S.set = bba::defaultsFor(S.market); S.settingsWhy = "missing (defaults)"; S.setStamp = -1; } return; }
     if (st == S.setStamp) return;
     std::string why; const bba::Settings s = readSettingsFile(S.market, why);
     long long st2 = -1; if (!statFile(p, st2) || st2 != st) return;                // torn: next check
@@ -427,9 +437,10 @@ static bool inDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(
 static std::vector<std::pair<int, char>> controls() {
     const PIx& g = g_ix; std::vector<std::pair<int, char>> v;
     v.push_back({g.div, 'I'}); v.push_back({g.box, 'B'}); v.push_back({g.dim, 'B'}); v.push_back({g.circle, 'B'}); v.push_back({g.circleCol, 'C'});
+    v.push_back({g.boxBid, 'C'}); v.push_back({g.boxAsk, 'C'});
     for (int k = 0; k < 4; ++k) { const int* x = g.cat[k];
         v.push_back({x[0], 'B'}); if (k < 3) v.push_back({x[1], 'I'}); v.push_back({x[2], 'I'}); v.push_back({x[3], 'I'});
-        v.push_back({x[4], 'B'}); v.push_back({x[5], 'B'}); v.push_back({x[6], 'C'}); v.push_back({x[7], 'C'}); v.push_back({x[8], 'S'}); }
+        v.push_back({x[4], 'C'}); v.push_back({x[5], 'C'}); if (k < 3) v.push_back({x[6], 'S'}); }
     v.push_back({g.skipF, 'I'}); v.push_back({g.skipL, 'I'}); v.push_back({g.rthOnly, 'S'}); v.push_back({g.atrUp, 'F'}); v.push_back({g.atrDn, 'F'});
     v.push_back({g.keyOn, 'B'}); for (int j = 0; j < bba::NKEY; ++j) v.push_back({g.key[j], 'B'});
     v.push_back({g.gamOn, 'B'}); for (int j = 0; j < bba::NGAM; ++j) v.push_back({g.gam[j], 'B'});
@@ -441,8 +452,9 @@ static std::vector<std::pair<int, char>> controls() {
 static std::vector<long long> toVec(const bba::Settings& s) {
     std::vector<long long> v;
     v.push_back(s.div); v.push_back(s.box); v.push_back(s.dim); v.push_back(s.circle); v.push_back(s.circleCol);
+    v.push_back(s.boxBid); v.push_back(s.boxAsk);
     for (int k = 0; k < 4; ++k) { const bba::Cat& c = s.cat[k];
-        v.push_back(c.on); if (k < 3) v.push_back(c.n); v.push_back(c.lots); v.push_back(c.font); v.push_back(c.pivot); v.push_back(c.level); v.push_back(c.bid); v.push_back(c.ask); v.push_back(c.setup); }
+        v.push_back(c.on); if (k < 3) v.push_back(c.n); v.push_back(c.lots); v.push_back(c.font); v.push_back(c.bid); v.push_back(c.ask); if (k < 3) v.push_back(c.show); }
     v.push_back(s.skipFirst); v.push_back(s.skipLast); v.push_back(s.rthOnly ? 1 : 0); v.push_back(s.atrUpQ); v.push_back(s.atrDnQ);
     v.push_back(s.keyOn); for (int j = 0; j < bba::NKEY; ++j) v.push_back((s.keyMask >> j) & 1u);
     v.push_back(s.gamOn); for (int j = 0; j < bba::NGAM; ++j) v.push_back((s.gamMask >> j) & 1u);
@@ -457,14 +469,14 @@ static bba::Settings fromVec(const std::vector<long long>& v, const bba::Setting
     auto bl = [&](bool& o) { const long long x = nx(); if (x == 0 || x == 1) o = x == 1; };
     auto cl = [&](unsigned& o) { const long long x = nx(); if (bba::colOk(x)) o = (unsigned)x; };
     { const long long x = nx(); if (x == 0 || bba::divOk(x)) s.div = (int)x; }
-    bl(s.box); bl(s.dim); bl(s.circle); cl(s.circleCol);
+    bl(s.box); bl(s.dim); bl(s.circle); cl(s.circleCol); cl(s.boxBid); cl(s.boxAsk);
     for (int k = 0; k < 4; ++k) { bba::Cat& c = s.cat[k];
         bl(c.on);
         if (k < 3) { const long long x = nx(); if (bba::nOk(x)) c.n = (int)x; }
         { const long long x = nx(); if (k < 3 ? bba::lotsOk(x) : (x >= 1 && x <= 100000)) c.lots = (int)x; }
         { const long long x = nx(); if (bba::fontOk(x)) c.font = (int)x; }
-        bl(c.pivot); bl(c.level); cl(c.bid); cl(c.ask);
-        { const long long x = nx(); if (bba::setupOk(x)) c.setup = (int)x; } }
+        cl(c.bid); cl(c.ask);
+        if (k < 3) { const long long x = nx(); if (bba::showOk(x)) c.show = (int)x; } else c.show = bba::SH_ALL; }
     { const long long x = nx(); if (bba::minOk(x)) s.skipFirst = (int)x; }
     { const long long x = nx(); if (bba::minOk(x)) s.skipLast = (int)x; }
     { const long long x = nx(); if (x == 0 || x == 1) s.rthOnly = x == 1; }
@@ -728,11 +740,13 @@ void BigBidAsk::status(BBState& S, long long now) {
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << BBA_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nTICK," << S.tick
-      << "\nSETTINGS,fonts " << S.set.cat[0].font << "/" << S.set.cat[1].font << "/" << S.set.cat[2].font << "/" << S.set.cat[3].font << ",box " << (S.set.box ? 1 : 0) << ",circle " << (S.set.circle ? 1 : 0) << ",dim " << (S.set.dim ? 1 : 0) << ",divider " << (S.set.div > 0 ? S.set.div : bba::divFor(S.market)) << (S.set.div > 0 ? "" : " (market default)") << ",skip first / last " << S.set.skipFirst << " / " << S.set.skipLast << " min,level zone " << S.set.atrUpQ / 100.0 << " ATR above / " << S.set.atrDnQ / 100.0 << " below," << S.settingsWhy
+      << "\nSETTINGS,fonts " << S.set.cat[0].font << "/" << S.set.cat[1].font << "/" << S.set.cat[2].font << "/" << S.set.cat[3].font << ",box " << (S.set.box ? 1 : 0) << ",circle " << (S.set.circle ? 1 : 0) << ",dim " << (S.set.dim ? 1 : 0) << ",divider " << (S.set.div > 0 ? S.set.div : bba::divFor(S.market)) << (S.set.div > 0 ? "" : " (market default)") << ",box colours " << std::hex << S.set.boxBid << " / " << S.set.boxAsk << std::dec << ",show " << S.set.cat[0].show << "/" << S.set.cat[1].show << "/" << S.set.cat[2].show
+      << ([&]() { for (int k = 0; k < 3; ++k) { const int sh = S.set.cat[k].show; if (S.set.cat[k].on && (sh == bba::SH_LEVEL || sh == bba::SH_PIVLEVEL) && !(S.set.keyMask | S.set.gamMask | S.set.volMask)) return std::string(" (WARNING: category ") + std::to_string(k + 1) + " shows near a level but no levels are selected - it shows nothing)"; } return std::string(); })()
+      << ",skip first / last " << S.set.skipFirst << " / " << S.set.skipLast << " min,level zone " << S.set.atrUpQ / 100.0 << " ATR above / " << S.set.atrDnQ / 100.0 << " below," << S.settingsWhy
       << "\nLEVELS,gamma " << S.gamWhy << ",volume profiles " << S.vp.size() << " sessions (from bar " << S.volNext << "),candles with levels " << S.lvCache.size()
       << "\nCANDLES,final " << S.fin.size() << ",recorded " << S.recorded.size() << ",pending " << S.pending.size() << ",record fails " << S.recFails
       << "\nVAP,missing reads " << S.missing << ",bid/ask vs bar totals mismatch " << S.mismatch << ",faults " << S.faults
-      << "\nSIZES," << S.sdWhy << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim << ",category 1 / 2 / 3 / 4 prints " << S.catN4[0] << " / " << S.catN4[1] << " / " << S.catN4[2] << " / " << S.catN4[3] << ",big but kept out by the pivot filter " << S.pivotHidden << ",by the level filter " << S.levelHidden << ",by the time filter " << S.timeHidden
+      << "\nSIZES," << S.sdWhy << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim << ",category 1 / 2 / 3 / 4 prints " << S.catN4[0] << " / " << S.catN4[1] << " / " << S.catN4[2] << " / " << S.catN4[3] << ",big but kept out by the pivot filter " << S.pivotHidden << ",by the level filter " << S.levelHidden << ",by Trend PB / BO " << S.trendHidden << ",shown before their pivot is confirmed (may still go) " << S.unconfirmed << ",by the time filter " << S.timeHidden
       << "\nCLASH,left " << S.clL << ",right " << S.clR << ",top " << S.clT << ",bottom " << S.clB << ",banner " << S.clTr << ",too big " << S.clBig << ",slid back in " << S.shifted << ",area fallback " << S.areaFallback
       << "\nAREA,left " << S.leftLimit << ",price right " << S.priceRight << ",columns levels " << (S.peers.on[cb::LEVELS] ? "on" : "off") << " delta " << (S.peers.on[cb::DELTA] ? "on" : "off")
       << " dealer " << (S.peers.on[cb::DEALER] ? "on" : "off") << " liq " << (S.peers.on[cb::LIQ] ? "on" : "off") << ",tape reader banner " << (S.trOn ? "avoided" : "none") << "\n";
@@ -931,40 +945,66 @@ void BigBidAsk::statsBuild(BBState& S, long long now) {
     if (text != S.statsWritten) { const std::string p = statsPath(S.market); if (!p.empty()) { makeDir(flexDir()); if (publishFile(p, text)) S.statsWritten = text; } }
 }
 // ---- (1.13.0) his vwapTrend at candle i (from the closed bars BEFORE it - what was known when the candle opened), kept per candle
+void BigBidAsk::ensureBars(BBState& S) {
+    RTARRAYI times(barDateTime);
+    const long count = getBarCount(); const long long lastT = count > 0 ? (long long)times[(int)count - 1] : 0;
+    if (S.svN == count && S.svLast == lastT) return;
+    RTARRAY hi(barHigh), lo(barLow), cl(barClose); RTARRAYI vo(barVolume);
+    S.svB.clear(); S.svB.reserve((size_t)count);
+    for (int k = 0; k < (int)count; ++k) { long d = 0; int e = 0; parts((long long)times[k], d, e); svl::Bar b; b.days = d; b.endSec = e; b.h = hi[k]; b.l = lo[k]; b.c = cl[k]; b.v = (double)vo[k]; S.svB.push_back(b); }
+    S.svN = count; S.svLast = lastT; S.bandN = -1;
+}
+// (1.14.0) one pass: the swing over ALL the bars (the candle's own pivot), the breakouts, the session VWAP / SD per bar
+template <class H, class L>
+void BigBidAsk::passCtx(BBState& S, H& hi, L& lo, int n, PassCtx& X) {
+    X.sw = bba::swing(hi, lo, n);
+    bba::breakFlags(hi, lo, n, X.bu, X.bd);
+    ensureBars(S);
+    if (S.bandN != S.svN) {
+        std::vector<float> out; svl::run(S.svB, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin, out);
+        S.vw.assign(S.svB.size(), 0.0); S.sdv.assign(S.svB.size(), 0.0);
+        for (size_t k = 0; k < S.svB.size() && (k + 1) * 11 <= out.size(); ++k) {
+            const svl::Cls c = svl::classify(S.svB[k].days, S.svB[k].endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin);
+            const float* o = &out[k * 11] + (c.kind == svl::ON ? 5 : 0);
+            if (c.kind != svl::NONE && o[0] > 0 && o[1] > o[0]) { S.vw[k] = o[0]; S.sdv[k] = (double)o[1] - (double)o[0]; }
+        }
+        S.bandN = S.svN;
+    }
+    X.vw = S.vw; X.sd = S.sdv;
+}
 int BigBidAsk::trendAt(BBState& S, int i) {
     RTARRAYI times(barDateTime); const long long t = (long long)times[i];
     auto it = S.trCache.find(t); if (it != S.trCache.end()) return it->second;
-    const long count = getBarCount(); const long long lastT = count > 0 ? (long long)times[(int)count - 1] : 0;
-    if (S.svN != count || S.svLast != lastT) {
-        RTARRAY hi(barHigh), lo(barLow), cl(barClose); RTARRAYI vo(barVolume);
-        S.svB.clear(); S.svB.reserve((size_t)count);
-        for (int k = 0; k < (int)count; ++k) { long d = 0; int e = 0; parts((long long)times[k], d, e); svl::Bar b; b.days = d; b.endSec = e; b.h = hi[k]; b.l = lo[k]; b.c = cl[k]; b.v = (double)vo[k]; S.svB.push_back(b); }
-        S.svN = count; S.svLast = lastT;
-    }
+    const long count = getBarCount();
+    ensureBars(S);
     const vtl::Trend tr = vtl::fromChart(S.svB, i, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin);
     const int lvl = tr.ready ? vtl::level(tr) : 0;
     if (i < (int)count - 1) { S.trCache[t] = lvl; if (S.trCache.size() > 6000) S.trCache.erase(S.trCache.begin()); }
     return lvl;
 }
 // ---- (1.12.0) the category of one print (the same rule for the chart and the print log): his categories, the biggest size first
-// (= the rarest); the first ON category it reaches whose pivot / level filters it passes. why: 1 = kept out by pivot, 2 = by level
+// (= the rarest); the first ON category it reaches whose Show filter it passes. (1.14.0) one exclusive Show choice per category:
+//   All prints; Near pivot = the candle passes his pivot rule in EITHER direction (its own swing's down or up pivot); Near a level;
+//   Pivot near a level (both); Trend PB = trend up: the down-pivot rule + the band rule on the pullback (mirror down); Trend BO = trend
+//   up: the candle went through the higher of the last 2 high pivots (mirror down); Trend PB + BO = either. Any print side.
+//   Category 4 = every print of its size (only the time filter, applied before).
+// why: 1 kept out by the pivot, 2 by the level, 4 by Trend PB / BO (no trend, wrong direction or the band rule)
 template <class H, class L, class C>
-PickInfo BigBidAsk::choose(BBState& S, int i, bool closed, int sd, const bba::Pick& p, int ph, bool pivOk, int brk, H& hi, L& lo, C& cl) {
-    PickInfo r; const bba::Settings& set = S.set;
-    bool needTrend = false; for (int k = 0; k < 4; ++k) if (set.cat[k].on && set.cat[k].setup == 1) needTrend = true;
-    if (needTrend) r.trend = trendAt(S, i);
+PickInfo BigBidAsk::choose(BBState& S, int i, bool closed, int sd, const bba::Pick& p, int ph, const PassCtx& X, H& hi, L& lo, C& cl) {
+    PickInfo r; const bba::Settings& set = S.set; (void)sd;
+    const bool inSw = i >= 0 && i < (int)X.sw.bull.size();
+    const bool bull = inSw && X.sw.bull[i], bear = inSw && X.sw.bear[i], pivAny = bull || bear;
+    r.conf = inSw ? X.sw.conf[i] != 0 : true; r.piv = pivAny;
     int ord[4] = { 0, 1, 2, 3 }; long long zz[4]; for (int k = 0; k < 4; ++k) zz[k] = set.cat[k].on ? S.catSize(ph, set.cat[k]) : 0;
     std::sort(ord, ord + 4, [&](int x, int y) { return zz[x] != zz[y] ? zz[x] > zz[y] : x < y; });
     const double px = (double)p.key * S.tick;
+    bool trendRead = false; int trend = 0;
     for (int q = 0; q < 4 && r.cat < 0; ++q) { const int k = ord[q]; const bba::Cat& c = set.cat[k];
         if (zz[k] <= 0 || p.vol < zz[k]) continue;
-        if (c.pivot && !pivOk) { r.why |= 1; continue; }
-        // (1.13.0) the setup: 1 pullback WITH the trend - an uptrend shows only sellers hitting on a candle that passes the down-pivot rule
-        // (a buy on the pullback), a downtrend the mirror; 2 reversal at a level (the level filter, sweeps included); 3 breakout - buyers on
-        // the candle that went through the higher of the last 2 high pivots, sellers on the one through the lower of the last 2 low pivots
-        if (c.setup == 1 && !(sd < 0 ? (r.trend > 0 && pivOk) : (r.trend < 0 && pivOk))) { r.why |= 4; continue; }
-        if (c.setup == 3 && brk == 0) { r.why |= 8; continue; }
-        if (c.level || c.setup == 2) {
+        if (k == 3) { r.cat = 3; break; }                              // (Rassul 15:53) category 4: wherever it is
+        const int sh = c.show;
+        if ((sh == bba::SH_PIVOT || sh == bba::SH_PIVLEVEL) && !pivAny) { r.why |= 1; continue; }
+        if (sh == bba::SH_LEVEL || sh == bba::SH_PIVLEVEL) {
             const std::vector<bba::NamedLevel>& LV = levelsFor(S, i, closed);
             const double atr = bba::atr14(hi, lo, cl, i);
             const bba::NamedLevel* nlv = bba::nearLevel(hi, lo, cl, i, px, LV, atr, set.atrUpQ, set.atrDnQ);
@@ -973,8 +1013,18 @@ PickInfo BigBidAsk::choose(BBState& S, int i, bool closed, int sd, const bba::Pi
             const double up = atr * set.atrUpQ / 100.0, dn = atr * set.atrDnQ / 100.0;
             r.sweep = !(atr > 0 && px >= nlv->px - dn && px <= nlv->px + up);   // only the sweep rule let it in
         }
+        if (sh == bba::SH_PB || sh == bba::SH_BO || sh == bba::SH_PBBO) {
+            if (!trendRead) { trend = trendAt(S, i); trendRead = true; r.trend = trend; }
+            int how = 0;
+            if ((sh == bba::SH_PB || sh == bba::SH_PBBO) && trend != 0 && (trend > 0 ? bull : bear) && bba::pbBands(hi, lo, X.vw, X.sd, X.sw, i, trend)) how = 1;
+            if (!how && (sh == bba::SH_BO || sh == bba::SH_PBBO) && trend != 0) {
+                const int w = i < (int)X.bu.size() ? (trend > 0 ? X.bu[i] : X.bd[i]) : 0;
+                if (w) { how = 3; r.brk = w; r.brkDir = trend > 0 ? 1 : -1; }
+            }
+            if (!how) { r.why |= 4; continue; }
+            r.how = how;
+        }
         r.cat = k; }
-    r.piv = pivOk; r.brk = brk;
     if (r.cat >= 0 && r.lv.empty()) {   // the hover names the nearest selected level even when the category has no level filter
         const std::vector<bba::NamedLevel>& LV = levelsFor(S, i, closed);
         const bba::NamedLevel* nlv = bba::nearLevel(hi, lo, cl, i, px, LV, bba::atr14(hi, lo, cl, i), set.atrUpQ, set.atrDnQ);
@@ -989,10 +1039,12 @@ void BigBidAsk::logPass(BBState& S, long long now) {
     RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
     if (times.count < count || hi.count < count || lo.count < count || cl.count < count) return;
     const int from = std::max(0, (int)count - 1 - 300);
-    std::vector<char> pb, pe; bba::pivotFlags(hi, lo, (int)count - 1, pb, pe);
-    std::vector<signed char> bu, bd; bba::breakFlags(hi, lo, (int)count - 1, bu, bd);   // (1.13.0)
+    // (1.14.0) the log keeps the FINAL decision: a candle is logged once its own swing's pivot is confirmed (the chart may show,
+    // hide and show it again before that) - the nightly scores only what stayed
+    PassCtx X; passCtx(S, hi, lo, (int)count, X);
     const bba::Settings& set = S.set;
     for (int i = from; i < (int)count - 1; ++i) {
+        if (i >= (int)X.sw.conf.size() || !X.sw.conf[i]) break;
         const long long t = (long long)times[i];
         auto it = S.fin.find(t); if (it == S.fin.end() || !it->second.valid) continue;
         const bba::Facts& F = it->second;
@@ -1009,13 +1061,14 @@ void BigBidAsk::logPass(BBState& S, long long now) {
                 if ((X > 0 && ((st >= o1 && st < o1 + X) || (st >= o2 && st < o2 + X))) || (Y > 0 && ((en > c1 - Y && en <= c1) || (en > c2 - Y && en <= c2)))) skip = true;
             }
             if (!skip && set.rthOnly && cls.kind != svl::RTH) skip = true;   // (1.13.0) RTH only
-            PickInfo pi; if (!skip) pi = choose(S, i, true, sd, p, ph, i < (int)pb.size() && (sd < 0 ? pb[i] : pe[i]), i < (int)bu.size() ? (sd > 0 ? bu[i] : bd[i]) : 0, hi, lo, cl);
+            PickInfo pi; if (!skip) pi = choose(S, i, true, sd, p, ph, X, hi, lo, cl);
             S.logged.insert(key);
             if (pi.cat < 0) continue;
             const bba::Cat& c = set.cat[pi.cat];
             char b[360]; std::snprintf(b, sizeof(b), "%lld|%d|%lld|%d|%d|%d|%d|%s|%.10g|%d|%d|%.10g|%d|%s|%d|%d|%d|%d",
                 t, sd, p.vol, pi.cat + 1, c.n, c.lots, ph, pi.lv.empty() ? "-" : pi.lv.c_str(), pi.lvPx, pi.sweep ? 1 : 0, pi.piv ? 1 : 0, (double)p.key * S.tick,
-                (c.level ? 1 : 0) | (c.pivot ? 2 : 0), BBA_VERSION, c.setup, pi.brk, pi.trend, cls.kind == svl::RTH ? 1 : 0);
+                pi.cat == 3 ? 0 : (c.show == bba::SH_LEVEL ? 1 : c.show == bba::SH_PIVOT ? 2 : c.show == bba::SH_PIVLEVEL ? 3 : c.show == bba::SH_PB ? 4 : c.show == bba::SH_BO ? 8 : c.show == bba::SH_PBBO ? 12 : 0),
+                BBA_VERSION, pi.how, pi.brk * (pi.brkDir < 0 ? -1 : 1), pi.trend, cls.kind == svl::RTH ? 1 : 0);
             S.logPending.push_back({ (long long)cls.sess, b });
         }
     }
@@ -1035,7 +1088,7 @@ void BigBidAsk::logPass(BBState& S, long long now) {
     if (allOk) S.logPending.clear();
 }
 void BigBidAsk::render(BBState& S) {
-    S.targets.clear(); S.clL = S.clR = S.clT = S.clB = S.clTr = S.clBig = S.shifted = S.areaFallback = 0; S.circles = 0; S.circlesHidden = 0; S.droppedInView = 0; S.zoneFull = 0; S.zoneDim = 0; S.hugeN = 0; S.catN4[0] = S.catN4[1] = S.catN4[2] = S.catN4[3] = 0; S.pivotHidden = 0; S.levelHidden = 0; S.timeHidden = 0;
+    S.targets.clear(); S.clL = S.clR = S.clT = S.clB = S.clTr = S.clBig = S.shifted = S.areaFallback = 0; S.circles = 0; S.circlesHidden = 0; S.droppedInView = 0; S.zoneFull = 0; S.zoneDim = 0; S.hugeN = 0; S.catN4[0] = S.catN4[1] = S.catN4[2] = S.catN4[3] = 0; S.pivotHidden = 0; S.levelHidden = 0; S.timeHidden = 0; S.trendHidden = 0; S.unconfirmed = 0;
     const long count = getBarCount();
     if (count < 2 || S.tick <= 0) return;
     RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
@@ -1073,8 +1126,7 @@ void BigBidAsk::render(BBState& S) {
         Z.band = zn::bandFrom(Z.hi, Z.lo, std::max(0, (int)count - 2 <= ve ? (int)count - 2 : ve));
         const char* sy = getSymbol(); Z.levels = zn::levels(flexDir(), S.market, sy ? sy : "", steadyMs()); }
     std::vector<double> candPx, candVol;
-    std::vector<char> pivBull, pivBear; bba::pivotFlags(hi, lo, ve + 1, pivBull, pivBear);   // (1.10.0) the pivot rule per candle (bars up to it only)
-    std::vector<signed char> brkUp, brkDn; bba::breakFlags(hi, lo, ve + 1, brkUp, brkDn);    // (1.13.0) the breakout per candle
+    PassCtx X; passCtx(S, hi, lo, (int)count, X);   // (1.14.0) the candle's own swing (all bars: may repaint until confirmed), breakouts, bands
     FONT fp; fp.id = HELVETICA; fp.size = (short)set.cat[0].font; fp.style = PLAIN;
     FONT fb = fp; fb.style = BOLD;                                    // (1.9.0) every number the same size (his colours mark the bigger prints)
     int lead = 0, asc = 0, desc = 0; setFont(fp); getFontMetrics(&lead, &asc, &desc);
@@ -1131,11 +1183,11 @@ void BigBidAsk::render(BBState& S) {
         for (int sd = -1; sd <= 1; sd += 2) {
             const bba::Pick& p = sd < 0 ? F->bid : F->ask;
             if (!p.ok || p.vol < minSz) continue;
-            const bool pivOk = i < (int)pivBull.size() && (sd < 0 ? pivBull[i] : pivBear[i]);   // bid prints: the down-pivot rule; ask prints: the up-pivot rule
             const double px = (double)p.key * S.tick;
-            const PickInfo pi = choose(S, i, i < (int)count - 1, sd, p, ph, pivOk, i < (int)brkUp.size() ? (sd > 0 ? brkUp[i] : brkDn[i]) : 0, hi, lo, cl);
+            const PickInfo pi = choose(S, i, i < (int)count - 1, sd, p, ph, X, hi, lo, cl);
             const int got = pi.cat;
-            if (got < 0) { if (pi.why & 1) ++S.pivotHidden; if (pi.why & 2) ++S.levelHidden; continue; }
+            if (got < 0) { if (pi.why & 1) ++S.pivotHidden; if (pi.why & 2) ++S.levelHidden; if (pi.why & 4) ++S.trendHidden; continue; }
+            if (!pi.conf) ++S.unconfirmed;
             const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             FONT fc = fb; fc.size = (short)set.cat[got].font; setFont(fc);
             int lc = 0, ac = 0, dc = 0; getFontMetrics(&lc, &ac, &dc);
@@ -1223,7 +1275,8 @@ void BigBidAsk::render(BBState& S) {
         if (zone) ++S.zoneFull; else ++S.zoneDim;
         const bool ring = c.circle && set.circle, box = set.box && !ring;
         if (ring || box) {   // the black edge first (so it reads on a candle of its own colour), then the colour
-            const COLOR lc = ring ? (dimIt ? getBlendedColor((COLOR)set.circleCol, 0x00000000, 45.0f) : (COLOR)set.circleCol) : ink;
+            const COLOR boxC = (COLOR)(c.side < 0 ? set.boxBid : set.boxAsk);   // (1.14.0) the box has its own colour by side
+            const COLOR lc = ring ? (dimIt ? getBlendedColor((COLOR)set.circleCol, 0x00000000, 45.0f) : (COLOR)set.circleCol) : (dimIt ? getBlendedColor(boxC, 0x00000000, 45.0f) : boxC);
             CBRUSH nb(0x00000000, PAT_HOLLOW); nb.set();
             RCT e; e.set(coord(f.l), coord(f.t), coord(f.r), coord(f.b));
             setPen(0x00000000, 3, P_SOLID);
@@ -1283,9 +1336,10 @@ void BigBidAsk::render(BBState& S) {
                     + mid + nth + (T->side < 0 ? " bid" : " ask") + " print this session");
         std::string where = "Candle " + clockOf(F->t) + (F->closed ? " (closed)" : " (forming - may still change)");
         if (!T->pi.lv.empty()) where += mid + "at " + T->pi.lv + " " + bba::price((long long)std::llround(T->pi.lvPx / S.tick), S.tick) + (T->pi.sweep ? " (sweep)" : "");
-        if (T->pi.piv) where += mid + "near pivot";
-        if (T->pi.brk) where += mid + (T->side > 0 ? "broke out through the " : "broke down through the ") + (T->pi.brk == 2 ? "higher pivot 2 back" : "prior pivot");
-        if (c.setup == 1) where += mid + (T->pi.trend >= 2 ? "Strong Uptrend" : T->pi.trend == 1 ? "Uptrend" : T->pi.trend == -1 ? "Dntrend" : T->pi.trend <= -2 ? "Strong Dntrend" : "no trend") + " pullback";
+        const std::string trTxt = T->pi.trend >= 2 ? "Strong Uptrend" : T->pi.trend == 1 ? "Uptrend" : T->pi.trend == -1 ? "Dntrend" : T->pi.trend <= -2 ? "Strong Dntrend" : "no trend";
+        if (T->pi.piv) where += mid + "on a pivot" + (T->pi.conf ? "" : " (not confirmed yet - may still go)");
+        if (T->pi.how == 1) where += mid + "Trend PB: " + trTxt + " pullback";
+        if (T->pi.how == 3) where += mid + "Trend BO: " + trTxt + (T->pi.brkDir > 0 ? ", broke out through the " : ", broke down through the ") + (T->pi.brk == 2 ? "higher pivot 2 back" : "prior pivot");
         L.push_back(where);
         const int ab = set.circle ? bba::absorptionMin(*F, T->lots) : 0;
         if ((ab > 0 && T->side < 0) || (ab < 0 && T->side > 0))
@@ -1294,6 +1348,7 @@ void BigBidAsk::render(BBState& S) {
         L.push_back(T->side < 0 ? "What: the price in this candle where the most lots were sold at the bid (a big seller hitting)."
                                 : "What: the price in this candle where the most lots were bought at the ask (a big buyer lifting).");
         L.push_back("Question: is a large trader acting here, and is it at a place that matters?");
+        if (T->pi.cat < 3) L.push_back(std::string("Shown by: ") + (c.show == bba::SH_ALL ? "All prints" : c.show == bba::SH_PIVOT ? "Near pivot" : c.show == bba::SH_LEVEL ? "Near a level" : c.show == bba::SH_PIVLEVEL ? "Pivot near a level" : c.show == bba::SH_PB ? "Trend PB" : c.show == bba::SH_BO ? "Trend BO" : "Trend PB + BO"));
         if (c.n > 0) L.push_back("How: Big Lot " + std::to_string(c.n) + " = the size reached about " + std::to_string(c.n) + " times a session (" + (dayOf(S, endSec / 60) ? "day" : "night")
                                  + " now " + bba::commas(S.bigLot(dayOf(S, endSec / 60) ? 1 : 0, c.n)) + " lots" + (c.lots > 0 ? ", min " + bba::commas(c.lots) : std::string("")) + "); this print reached it.");
         else L.push_back("How: category 4 shows every print of " + bba::commas(c.lots) + " lots or more.");
@@ -1331,7 +1386,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask 1.13.0: on each candle, the biggest print AT THE BID (sellers, left) and AT THE ASK (buyers, right) in lots / divider, shown when it reaches one of your Big Lot categories (Big Lot N = the size reached about N times a session, worked out per market for day and night; category 4 = a fixed size). Filters per category: near a pivot, near a level (ATR above / below, sweeps included). Hover a number for the details.");
-    p->setVersion("1.13.0");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask 1.14.0: on each candle, the biggest print AT THE BID (sellers, left) and AT THE ASK (buyers, right) in lots / divider, shown when it reaches one of your Big Lot categories (Big Lot N = the size reached about N times a session, worked out per market for day and night; category 4 = a fixed size). One Show choice per category: All prints, Near pivot, Near a level, Pivot near a level, Trend PB, Trend BO, Trend PB + BO; category 4 shows every print of its size. Hover a number for the details.");
+    p->setVersion("1.14.0");   // BBA_VERSION
     return p;
 }

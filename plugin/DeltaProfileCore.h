@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -137,6 +137,52 @@ inline bool pivotOk(H& high, L& low, int pk, bool bullish, int* pivotBar = nullp
     const int piv = dirn == 1 ? ext : start;               // the up pivot (the current up leg's high, else the down leg's start)
     if (pivotBar) *pivotBar = piv;
     return piv == pk || hi(pk) > lo(piv);
+}
+// swingPivot (2.16.0, Rassul 2026-10-17 "it is ok to repaint when the pivot requirement is there"; "1. yes" for the Delta Profile):
+// the pivot rule judged against the peak bar's OWN swing - his 1-bar ZigZag over ALL the chart's bars, the bar belongs to the leg
+// (A, B] between two turns; its down pivot = the low end of that leg, its up pivot = the high end. Bullish: the bar is its down pivot
+// or its LOW is below that pivot bar's HIGH; bearish mirror. The last leg ends at the extreme so far (not confirmed): bull / bear may
+// change until conf[i] = 1 (the turn after it is confirmed). Same walk as BigBidAskLogic.h bba::swing (tests compare them).
+template <class H, class L>
+inline void swingPivot(H& high, L& low, int n, std::vector<char>& bull, std::vector<char>& bear, std::vector<char>& conf) {
+    const std::size_t N = n > 0 ? static_cast<std::size_t>(n) : 0;
+    bull.assign(N, 0); bear.assign(N, 0); conf.assign(N, 0);
+    if (n < 3) return;
+    auto hi = [&](int i) { return static_cast<double>(high[i]); };
+    auto lo = [&](int i) { return static_cast<double>(low[i]); };
+    auto good = [&](int i) { return finite(hi(i)) && finite(lo(i)) && hi(i) >= lo(i); };
+    std::vector<int> piv; std::vector<signed char> typ;
+    int dirn = hi(1) >= hi(0) ? 1 : -1, ext = 0, bad = -1;
+    for (int i = 1; i < n; ++i) {
+        if (!good(i)) { bad = i; continue; }
+        if (dirn == 1) {
+            if (hi(i) > hi(ext)) ext = i;
+            else if (lo(i) < lo(i - 1) && i != ext) { piv.push_back(ext); typ.push_back(1); ext = i; dirn = -1; }
+        } else {
+            if (lo(i) < lo(ext)) ext = i;
+            else if (hi(i) > hi(i - 1) && i != ext) { piv.push_back(ext); typ.push_back(-1); ext = i; dirn = 1; }
+        }
+    }
+    const std::size_t nConf = piv.size();
+    piv.push_back(ext); typ.push_back(dirn == 1 ? 1 : -1);
+    auto mark = [&](int i, int D, int U, bool c) {
+        conf[i] = c ? 1 : 0;
+        if (!good(i) || (bad >= 0 && i > bad && i - bad < 50)) return;
+        bull[i] = D >= 0 && (D == i || lo(i) < hi(D)) ? 1 : 0;
+        bear[i] = U >= 0 && (U == i || hi(i) > lo(U)) ? 1 : 0;
+    };
+    for (std::size_t k = 0; k < piv.size(); ++k) {
+        const int A = k ? piv[k - 1] : -1, B = piv[k];
+        const int D = typ[k] < 0 ? B : (k ? piv[k - 1] : -1), U = typ[k] > 0 ? B : (k ? piv[k - 1] : -1);
+        for (int i = A + 1; i <= B && i < n; ++i) mark(i, D, U, k < nConf);
+    }
+    const int E = piv.back();
+    if (E + 1 < n) {
+        const bool down = typ.back() > 0;
+        int T = E + 1; for (int i = E + 2; i < n; ++i) if (good(i) && (down ? lo(i) < lo(T) : hi(i) > hi(T))) T = i;
+        for (int i = E + 1; i < n; ++i) { const bool first = i <= T;
+            mark(i, down ? T : (first ? E : -1), down ? (first ? E : -1) : T, false); }
+    }
 }
 // ---- (2.8.5, Rassul approved 2026-10-14 23:05 CT) display-only rules for the A bubbles. The records are never changed. ----
 // versionBefore: true when the record's version text is earlier than a.b.c, or cannot be read (an unreadable version is treated
