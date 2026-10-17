@@ -67,7 +67,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.7.3"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.8.0"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -182,6 +182,7 @@ struct BBState {
     // (1.5.0, Rassul 16:27 "yes" to sizes by time of day) per 30-min window of the bar END (48), then day / night, then the 1.4 rule
     struct Thr { bool ok = false; double mu = 0; long long sd[3] = {0, 0, 0}; long long n = 0; };
     Thr win[48]; Thr phase[2];
+    long long s5[2] = {0, 0}; int s5Sess[2] = {0, 0};   // (1.8.0) cyan = Big Lot S5 per phase (0 night, 1 day 8:30 AM - 3:00 PM): the size reached ~5 times a session
     bool busy = false;
     std::string identity, market, symbol, state = "starting", lastStatusText, settingsWhy = "missing (defaults)", chartKey;
     int spb = 0; long long session = -1; double tick = 0;
@@ -311,16 +312,22 @@ static void printSd(BBState& S, long long now, const std::function<int(long long
     S.phase[0] = S.phase[1] = BBState::Thr();
     if (S.fin.empty()) { S.sdOk = false; S.sdWhy = "learning (no closed candles)"; return; }
     bba::PrintDist w[48], ph[2]; int k = 0;
+    std::vector<long long> pv[2]; std::set<long long> ses[2];   // (1.8.0) S5: every print per phase, and the sessions they came from
     for (std::map<long long, bba::Facts>::const_reverse_iterator it = S.fin.rbegin(); it != S.fin.rend() && k < 2300; ++it, ++k) {
         const bba::Facts& F = it->second; if (!F.valid || !F.closed) continue;
         const int m = modOf(it->first); if (m < 0) continue;
         const int wi = winOf(m), pi = dayMod(m) ? 1 : 0;
-        if (F.bid.ok) { w[wi].add(F.bid.vol); ph[pi].add(F.bid.vol); }
-        if (F.ask.ok) { w[wi].add(F.ask.vol); ph[pi].add(F.ask.vol); }
+        if (F.bid.ok) { w[wi].add(F.bid.vol); ph[pi].add(F.bid.vol); pv[pi].push_back(F.bid.vol); }
+        if (F.ask.ok) { w[wi].add(F.ask.vol); ph[pi].add(F.ask.vol); pv[pi].push_back(F.ask.vol); }
+        ses[pi].insert((it->first - 1 + 7 * 3600) / 86400);   // session = 5:00 PM to 4:00 PM CT (bar stamps are local seconds)
     }
     auto fill = [](const bba::PrintDist& d, BBState::Thr& t) { long long v[3] = {0, 0, 0}; double mu = 0; long long n = 0; t.ok = d.stats(30, n, mu, v); t.n = n; if (t.ok) { t.mu = mu; for (int q = 0; q < 3; ++q) t.sd[q] = v[q]; } };
     for (int i = 0; i < 48; ++i) fill(w[i], S.win[i]);
     for (int i = 0; i < 2; ++i) fill(ph[i], S.phase[i]);
+    // (1.8.0, Rassul 11:34 "option 2") Big Lot S5 by rank: the size at rank 5 x sessions from the top (bid and ask prints pooled)
+    for (int i = 0; i < 2; ++i) { S.s5[i] = 0; S.s5Sess[i] = (int)ses[i].size();
+        const size_t r = (size_t)5 * ses[i].size();
+        if (r >= 5 && pv[i].size() >= std::max<size_t>(r, 30)) { std::nth_element(pv[i].begin(), pv[i].begin() + (r - 1), pv[i].end(), std::greater<long long>()); S.s5[i] = pv[i][r - 1]; } }
     // the newest candle's sizes for the status line
     const int m0 = modOf(S.fin.rbegin()->first);
     const BBState::Thr* t0 = m0 >= 0 && S.win[winOf(m0)].ok ? &S.win[winOf(m0)] : m0 >= 0 && S.phase[dayMod(m0) ? 1 : 0].ok ? &S.phase[dayMod(m0) ? 1 : 0] : nullptr;
@@ -331,6 +338,7 @@ static void printSd(BBState& S, long long now, const std::function<int(long long
                    " " + std::to_string(t0->n) + " prints: Big mu " + std::to_string((long long)std::llround(t0->mu)) + " / 1SD " + std::to_string(t0->sd[0]) +
                    " / 3SD " + std::to_string(t0->sd[2]) + " lots; windows ready " + std::to_string(wins) + "/48"
                  : "learning - bold ratio rule";
+    S.sdWhy += "; cyan = S5 day " + std::to_string(S.s5[1]) + " lots (" + std::to_string(S.s5Sess[1]) + " sessions) / night " + std::to_string(S.s5[0]) + " lots (" + std::to_string(S.s5Sess[0]) + " sessions)";
 }
 void BigBidAsk::settings(BBState& S, long long now) {
     printSd(S, now, [this](long long t) { struct tm m; std::memset(&m, 0, sizeof(m)); return t > 0 && getLocaltime((RTDATE)t, &m) ? m.tm_hour * 60 + m.tm_min : -1; });
@@ -558,7 +566,7 @@ void BigBidAsk::status(BBState& S, long long now) {
       << "\nSETTINGS,font " << S.set.font << ",bold " << bba::ratioText(S.set.boldQ) << ",circle " << (S.set.circle ? 1 : 0) << ",non-bold " << (S.set.nonBold ? 1 : 0) << ",divider " << (S.set.div > 0 ? S.set.div : bba::divFor(S.market)) << (S.set.div > 0 ? "" : " (market default)") << "," << S.settingsWhy
       << "\nCANDLES,final " << S.fin.size() << ",recorded " << S.recorded.size() << ",pending " << S.pending.size() << ",record fails " << S.recFails
       << "\nVAP,missing reads " << S.missing << ",bid/ask vs bar totals mismatch " << S.mismatch << ",faults " << S.faults
-      << "\nSIZES," << S.sdWhy << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim << ",cyan 3SD+ drawn " << S.hugeN
+      << "\nSIZES," << S.sdWhy << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim << ",cyan S5+ drawn " << S.hugeN
       << "\nCLASH,left " << S.clL << ",right " << S.clR << ",top " << S.clT << ",bottom " << S.clB << ",banner " << S.clTr << ",too big " << S.clBig << ",slid back in " << S.shifted << ",area fallback " << S.areaFallback
       << "\nAREA,left " << S.leftLimit << ",price right " << S.priceRight << ",columns levels " << (S.peers.on[cb::LEVELS] ? "on" : "off") << " delta " << (S.peers.on[cb::DELTA] ? "on" : "off")
       << " dealer " << (S.peers.on[cb::DEALER] ? "on" : "off") << " liq " << (S.peers.on[cb::LIQ] ? "on" : "off") << ",tape reader banner " << (S.trOn ? "avoided" : "none") << "\n";
@@ -679,8 +687,11 @@ void BigBidAsk::render(BBState& S) {
             const bba::Pick& p = sd < 0 ? F->bid : F->ask;
             if (!p.ok) continue;
             bool bold = bba::bold(sd < 0 ? F->bidQ : F->askQ, set.boldQ), huge = false;
-            if (tz) { if (p.vol < sd1) continue; bold = true; huge = p.vol >= tz->sd[2]; }   // (1.5.1) 1SD+ only: bold, 3SD+ outlined
+            if (tz) { if (p.vol < sd1) continue; bold = true; }   // (1.5.1) 1SD+ only: bold
             else if (!bold && !set.nonBold) continue;                     // still learning (no SD yet): the setting decides
+            {   // (1.8.0) cyan = Big Lot S5 of the candle's phase (3SD never fired: ~1 in 740)
+                struct tm m5; std::memset(&m5, 0, sizeof(m5));
+                if (getLocaltime((RTDATE)F->t, &m5)) { const long long s5 = S.s5[dayMod(m5.tm_hour * 60 + m5.tm_min) ? 1 : 0]; huge = bold && s5 > 0 && p.vol >= s5; } }
             const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             setFont(bold ? fb : fp);
             PNT pt; pt.set(i, (float)((double)p.key * S.tick), kBarCenter);
@@ -759,7 +770,7 @@ void BigBidAsk::render(BBState& S) {
         ++S.lay.shown;
         const bool zone = zn::atZone(Z, c.bar, candPx[k]);
         const COLOR cSide = c.side < 0 ? (COLOR)set.sell : (COLOR)set.buy;
-        const COLOR CYAN = 0x00FFFF00;   // (1.7.3, Rassul 11:04 "color the 3sd or more cyan") 3SD+ = cyan digits instead of white (box / circle keep the side colour)
+        const COLOR CYAN = 0x00FFFF00;   // (1.8.0, Rassul 11:04 "color the 3sd or more cyan") 3SD+ = cyan digits instead of white (box / circle keep the side colour)
         const COLOR col = zone ? cSide : getBlendedColor(cSide, 0x00000000, 55.0f);
         const COLOR ink = c.huge ? CYAN : zone ? (COLOR)0x00FFFFFF : getBlendedColor(0x00FFFFFF, 0x00000000, 45.0f);
         if (zone) ++S.zoneFull; else ++S.zoneDim;
@@ -823,6 +834,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
     p->setDescription("LRA Big Bid / Ask v1.5.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
-    p->setVersion("1.7.3");   // BBA_VERSION
+    p->setVersion("1.8.0");   // BBA_VERSION
     return p;
 }
