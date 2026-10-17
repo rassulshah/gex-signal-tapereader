@@ -30,23 +30,28 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.9.0";   // (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
+static const char* const VERSION = "1.10.0";   // (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
 // ---- settings (all real: read on every draw from the per-market file, written only from the settings window) ----------------
-struct Settings {   // (1.9.0, Rassul 2026-10-17 13:14 "make it highly customizable ... font size is 8, no absorption circle, no box, red or green")
-    int font = 8;             // 6 - 20 pt, every number the same size (no bigger numbers for bigger prints)
-    int minTier = 3;          // the smallest print shown: 1 = S20 (~20 a session), 2 = S10 (~10), 3 = S5 (~5)
-    bool box = false;         // a box round each number (in its colour)
-    bool circle = false;      // the absorption circle round an absorption print
-    bool dim = false;         // dim the prints away from a high / low / pivot / level (ZoneNear)
+struct Cat {   // (1.10.0, Rassul 14:20 "enter the input for Big Lot ... different categories of prints") one Big Lot category
+    bool on = false;          // shown or not
+    int n = 5;                // Big Lot N: the size reached ~N times a session (rank N x sessions, per phase); 1 - 100
+    bool pivot = false;       // (14:22) only prints on a candle that passes the Delta Profile pivot rule
+    int lots = 0;             // (14:31-14:32 "an optional minimum threshold") 0 = none; else the print must also be at least this many lots (1 - 100,000)
+    unsigned bid = 0x00EF4444, ask = 0x0022C55E;   // colours (IRT COLOR = 0x00RRGGBB): sellers at the bid red, buyers at the ask green
+};
+struct Settings {   // (1.9.0 / 1.10.0, Rassul 2026-10-17 "highly customizable ... font size is 8, no absorption circle, no box, red or green")
+    int font = 8;             // 6 - 20 pt, every number the same size
     int div = 0;              // divider: 0 = the market's default, else 1 - 1000 (500 lots / 10 = "50")
-    unsigned circleCol = 0x00FFFFFF;                   // the absorption circle's colour (IRT COLOR = 0x00RRGGBB)
-    unsigned col[3][2] = { { 0x00EF4444, 0x0022C55E },   // [tier 0 = S20, 1 = S10, 2 = S5][side 0 = bid (sellers), 1 = ask (buyers)]
-                           { 0x00EF4444, 0x0022C55E },
-                           { 0x00EF4444, 0x0022C55E } };
-    int boldQ = 200;          // internal (hover text only; not a setting since 1.9.0)
+    bool box = false;         // a box round each number (in its colour)
+    bool dim = false;         // dim the prints away from a high / low / pivot / level (ZoneNear)
+    bool circle = false;      // the absorption circle round an absorption print
+    unsigned circleCol = 0x00FFFFFF;
+    Cat cat[3];
+    int boldQ = 200;          // internal (hover text only)
+    Settings() { cat[0].on = true; cat[0].n = 5; cat[1].n = 10; cat[2].n = 20; }
 };
 // (1.4.0, Rassul 11:51 "a divider ... so the value always looks like a 1 or 2 digit value; for ES 10 by default") per market, from the
 // typical biggest lots at one price in a 3-min candle (ES ~300-1,500, CL / NG / 6E ~100-500, NQ / GC / HG ~20-150)
@@ -58,7 +63,8 @@ inline bool divOk(long long v) { return v >= 1 && v <= 1000; }
 inline bool fontOk(long long v) { return v >= 6 && v <= 20; }
 inline bool boldOk(long long q) { return q >= 120 && q <= 1000; }
 inline int toQ(double x) { if (!std::isfinite(x)) return -1; const double q = std::floor(x * 100.0 + 0.5); return q < 0 || q > 1e9 ? -1 : (int)q; }
-inline bool tierOk(long long v) { return v >= 1 && v <= 3; }
+inline bool nOk(long long v) { return v >= 1 && v <= 100; }
+inline bool lotsOk(long long v) { return v >= 0 && v <= 100000; }
 inline bool colOk(long long v) { return v >= 0 && v <= 0xFFFFFF; }
 // strict whole number (digits only, no sign, no blanks)
 inline bool fullInt(const std::string& t, long long& out) {
@@ -68,36 +74,66 @@ inline bool fullInt(const std::string& t, long long& out) {
     if (errno != 0 || !end || *end != '\0') return false;
     out = v; return true;
 }
-// (1.9.0) one line "BBA3|font|minTier|box|circle|dim|div|circleCol|S20bid|S20ask|S10bid|S10ask|S5bid|S5ask" (14 fields)
+// (1.10.0) one line "BBA4|font|div|box|dim|circle|circleCol" + 3 x "|on|N|lots|pivot|bidCol|askCol" (25 fields)
 inline std::string formatSettings(const Settings& s) {
-    std::string o = "BBA3|" + std::to_string(s.font) + "|" + std::to_string(s.minTier) + "|" + (s.box ? "1" : "0") + "|" + (s.circle ? "1" : "0")
-                  + "|" + (s.dim ? "1" : "0") + "|" + std::to_string(s.div) + "|" + std::to_string(s.circleCol & 0x00FFFFFF);
-    for (int t = 0; t < 3; ++t) for (int d = 0; d < 2; ++d) o += "|" + std::to_string(s.col[t][d] & 0x00FFFFFF);
+    std::string o = "BBA4|" + std::to_string(s.font) + "|" + std::to_string(s.div) + "|" + (s.box ? "1" : "0") + "|" + (s.dim ? "1" : "0")
+                  + "|" + (s.circle ? "1" : "0") + "|" + std::to_string(s.circleCol & 0x00FFFFFF);
+    for (int k = 0; k < 3; ++k) { const Cat& c = s.cat[k];
+        o += std::string("|") + (c.on ? "1" : "0") + "|" + std::to_string(c.n) + "|" + std::to_string(c.lots) + "|" + (c.pivot ? "1" : "0") + "|" + std::to_string(c.bid & 0x00FFFFFF) + "|" + std::to_string(c.ask & 0x00FFFFFF); }
     return o;
 }
 // every field checked on its own: a bad field falls back to ITS default (why names it); a wrong layout = all defaults;
-// files from before 1.9.0 (BBA1 / BBA2) = the 1.9.0 defaults (font 8, S5 only, no box, no circle, red / green)
+// files from before 1.10.0 (BBA1 / BBA2 / BBA3) = the defaults (font 8, Big Lot 5 only, no box, no circle, red / green)
 inline Settings parseSettings(const std::string& text, std::string& why) {
     Settings s, d; why.clear();
     std::string line = text;
     const size_t nl = line.find('\n'); if (nl != std::string::npos) line = line.substr(0, nl);
     if (!line.empty() && line.back() == '\r') line.pop_back();
     std::vector<std::string> f; { std::string cur; for (char c : line) { if (c == '|') { f.push_back(cur); cur.clear(); } else cur.push_back(c); } f.push_back(cur); }
-    if (!f.empty() && (f[0] == "BBA1" || f[0] == "BBA2")) { why = "pre-1.9 file (1.9 defaults)"; return Settings(); }
-    if (f.size() != 14 || f[0] != "BBA3") { why = "garbled (defaults)"; return Settings(); }
+    if (!f.empty() && (f[0] == "BBA1" || f[0] == "BBA2" || f[0] == "BBA3")) { why = "older file (1.10 defaults)"; return Settings(); }
+    if (f.size() != 25 || f[0] != "BBA4") { why = "garbled (defaults)"; return Settings(); }
     std::vector<std::string> bad;
     long long v = 0;
+    auto flag = [&](size_t i, bool& out, bool def, const char* nm) { if (fullInt(f[i], v) && v <= 1) out = v == 1; else { out = def; bad.push_back(nm); } };
     if (fullInt(f[1], v) && fontOk(v)) s.font = (int)v; else bad.push_back("font");
-    if (fullInt(f[2], v) && tierOk(v)) s.minTier = (int)v; else bad.push_back("show from");
-    if (fullInt(f[3], v) && v <= 1) s.box = v == 1; else bad.push_back("box");
-    if (fullInt(f[4], v) && v <= 1) s.circle = v == 1; else bad.push_back("circle");
-    if (fullInt(f[5], v) && v <= 1) s.dim = v == 1; else bad.push_back("dim");
-    if (fullInt(f[6], v) && (v == 0 || divOk(v))) s.div = (int)v; else bad.push_back("divider");
-    if (fullInt(f[7], v) && colOk(v)) s.circleCol = (unsigned)v; else bad.push_back("circle colour");
-    for (int t = 0; t < 3; ++t) for (int k = 0; k < 2; ++k) {
-        if (fullInt(f[8 + 2 * t + k], v) && colOk(v)) s.col[t][k] = (unsigned)v; else { s.col[t][k] = d.col[t][k]; bad.push_back("colour"); } }
+    if (fullInt(f[2], v) && (v == 0 || divOk(v))) s.div = (int)v; else bad.push_back("divider");
+    flag(3, s.box, d.box, "box"); flag(4, s.dim, d.dim, "dim"); flag(5, s.circle, d.circle, "circle");
+    if (fullInt(f[6], v) && colOk(v)) s.circleCol = (unsigned)v; else bad.push_back("circle colour");
+    for (int k = 0; k < 3; ++k) { const size_t o = 7 + 6 * k; Cat& c = s.cat[k]; const Cat& dc = d.cat[k];
+        const std::string nm = "category " + std::to_string(k + 1);
+        flag(o, c.on, dc.on, "on");
+        if (fullInt(f[o + 1], v) && nOk(v)) c.n = (int)v; else { c.n = dc.n; bad.push_back(nm + " Big Lot"); }
+        if (fullInt(f[o + 2], v) && lotsOk(v)) c.lots = (int)v; else { c.lots = dc.lots; bad.push_back(nm + " lots"); }
+        flag(o + 3, c.pivot, dc.pivot, "pivot");
+        if (fullInt(f[o + 4], v) && colOk(v)) c.bid = (unsigned)v; else { c.bid = dc.bid; bad.push_back(nm + " bid colour"); }
+        if (fullInt(f[o + 5], v) && colOk(v)) c.ask = (unsigned)v; else { c.ask = dc.ask; bad.push_back(nm + " ask colour"); } }
     if (!bad.empty()) { why = "bad value (default used):"; for (const auto& b : bad) why += " " + b; }
     return s;
+}
+// (1.10.0, Rassul 14:22 "only see near pivot ... like delta profiles pivot requirement") his 1-bar ZigZag over bars 0 .. i in ONE pass
+// (the same walk as DeltaProfileCore pivotOk, decided on the bars up to the candle - later bars never change it):
+// bull[i] = bar i makes the down pivot or its LOW is below the HIGH of the latest down-pivot bar (for bid / seller prints);
+// bear[i] = bar i makes the up pivot or its HIGH is above the LOW of the latest up-pivot bar (for ask / buyer prints)
+template <class H, class L>
+inline void pivotFlags(H& high, L& low, int n, std::vector<char>& bull, std::vector<char>& bear) {
+    bull.assign(n > 0 ? n : 0, 0); bear.assign(n > 0 ? n : 0, 0);
+    if (n < 2) return;
+    auto hi = [&](int i) { return (double)high[i]; }; auto lo = [&](int i) { return (double)low[i]; };
+    int dirn = hi(1) >= hi(0) ? 1 : -1, ext = 0, start = 0, bad = -1;
+    for (int i = 1; i < n; ++i) {
+        if (!std::isfinite(hi(i)) || !std::isfinite(lo(i)) || hi(i) < lo(i)) { bad = i; continue; }
+        if (dirn == 1) {
+            if (hi(i) > hi(ext)) ext = i;
+            else if (lo(i) < lo(i - 1) && i != ext) { start = ext; ext = i; dirn = -1; }
+        } else {
+            if (lo(i) < lo(ext)) ext = i;
+            else if (hi(i) > hi(i - 1) && i != ext) { start = ext; ext = i; dirn = 1; }
+        }
+        if (bad >= 0 && i - bad < 50) continue;   // a broken bar recently: no claim
+        const int dp = dirn == -1 ? ext : start, up = dirn == 1 ? ext : start;
+        bull[i] = (dp == i || lo(i) < hi(dp)) ? 1 : 0;
+        bear[i] = (up == i || hi(i) > lo(up)) ? 1 : 0;
+    }
 }
 
 // ---- per-price rows and the biggest bid / ask ---------------------------------------------------------------------------------
@@ -324,7 +360,7 @@ struct Cand {
     bool bold = false, circle = false;
     bool first = false;                // a CLOSED candle's bold number (frozen): laid out before every plain / forming number
     bool huge = false;                 // (1.5.0) 3SD or more: a white outline round the number (unused since 1.9.0)
-    int tier = 2;                      // (1.9.0) 0 = S20, 1 = S10, 2 = S5: picks the colour
+    int tier = 0;                      // (1.10.0) the category (0 - 2) that gave this print its colour
 };
 struct Placed { bool shown = false, crowded = false; Box text, foot; int dy = 0; };
 static const int GAP = 1;              // px between the candle and its number (1.4.1: 2 -> 1, Rassul "bring the prints closer")

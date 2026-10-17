@@ -67,7 +67,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.9.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.10.0"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -82,8 +82,8 @@ static const int LEAD = 30;                 // candles laid out left of the view
 static const int READS_MAX = 900;           // VAP bars read per pass (the rest next pass)
 static const int FAILS_FINAL = 5;           // a closed candle IRT has no VAP for after 5 passes is finalised as "no data"
 static const size_t REC_FILE_MAX = 2 * 1024 * 1024, REC_LINES_MAX = 20000;
-static const int P_FONT = 0, P_TIER = 1, P_BOX = 2, P_CIRCLE = 3, P_DIM = 4, P_DIV = 5, P_CIRCC = 6, P_C20B = 7, P_C20A = 8, P_C10B = 9, P_C10A = 10, P_C5B = 11, P_C5A = 12;   // (1.9.0)
-static const int NSET = 13;
+static const int P_FONT = 0, P_DIV = 1, P_BOX = 2, P_DIM = 3, P_CIRCLE = 4, P_CIRCC = 5, P_CAT = 6;   // (1.10.0) category k: P_CAT + 6k = on, N, lots, pivot, bid colour, ask colour
+static const int NSET = 24;
 
 static long long steadyMs() {
     return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -183,7 +183,9 @@ struct BBState {
     // (1.5.0, Rassul 16:27 "yes" to sizes by time of day) per 30-min window of the bar END (48), then day / night, then the 1.4 rule
     struct Thr { bool ok = false; double mu = 0; long long sd[3] = {0, 0, 0}; long long n = 0; };
     Thr win[48]; Thr phase[2];
-    long long tier[2][3] = {{0, 0, 0}, {0, 0, 0}}; int tierSess[2] = {0, 0};   // (1.9.0) Big Lot S20 / S10 / S5 per phase (0 night, 1 day 8:30 AM - 3:00 PM): the size reached ~20 / 10 / 5 times a session
+    std::vector<long long> pvSorted[2]; int tierSess[2] = {0, 0};   // (1.10.0) every print per phase (0 night, 1 day 8:30 AM - 4:00 PM), biggest first, and the sessions they came from
+    long long catSize(int ph, const bba::Cat& c) const { return std::max(bigLot(ph, c.n), (long long)c.lots); }   // (1.10.0, Rassul 14:32 "an optional minimum threshold") Big Lot N, never under his minimum lots
+    long long bigLot(int ph, int n) const { const size_t r = (size_t)n * (size_t)tierSess[ph]; return (n >= 1 && r >= 1 && pvSorted[ph].size() >= std::max<size_t>(r, 30)) ? pvSorted[ph][r - 1] : 0; }   // Big Lot N: the size at rank N x sessions
     bool busy = false;
     std::string identity, market, symbol, state = "starting", lastStatusText, settingsWhy = "missing (defaults)", chartKey;
     int spb = 0; long long session = -1; double tick = 0;
@@ -200,7 +202,7 @@ struct BBState {
     long long lastStatusMs = -1, lastRecordMs = -1;
     // draw
     cb::Peers peers; int priceRight = 0, leftLimit = 0; bb::Beat trBeat; bool trOn = false; bba::Box trBox;
-    bba::LayoutStats lay; int clL = 0, clR = 0, clT = 0, clB = 0, clTr = 0, clBig = 0, shifted = 0, areaFallback = 0; int droppedInView = 0; int circles = 0, circlesHidden = 0, zoneFull = 0, zoneDim = 0, hugeN = 0;
+    bba::LayoutStats lay; int clL = 0, clR = 0, clT = 0, clB = 0, clTr = 0, clBig = 0, shifted = 0, areaFallback = 0; int droppedInView = 0; int circles = 0, circlesHidden = 0, zoneFull = 0, zoneDim = 0, hugeN = 0, catN[3] = {0, 0, 0}, pivotHidden = 0;
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
 };
 
@@ -245,21 +247,24 @@ int cppExtension::done(void)    { static_cast<BigBidAsk*>(this)->release(); retu
 int cppExtension::destroy(void) { static_cast<BigBidAsk*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) {
     // controls only (his rule); the chart reads the per-market file, the dialog is filled from it (BUILD-LESSONS #42 / #44)
-    setParameterVersion(3);                                                         // (1.9.0) 3: the new control layout (IRT resets the saved rows once)
-    setParameterDialogHeight(7);
+    setParameterVersion(4);                                                         // (1.10.0) 4: the new control layout (IRT resets the saved rows once)
+    setParameterDialogHeight(6);
     setIntegerParameter("Font size (6-20)", 8, 50);                                                   // 0
-    setIntegerParameter("Show from (1 = S20, 2 = S10, 3 = S5)", 3, 50, kParmAppendSameLine);         // 1
+    setIntegerParameter("Divider (0 = market default)", 0, 50, kParmAppendSameLine);                 // 1  500 lots / 10 = 50
     setBoolParameter("Box round the numbers", false);                                                // 2
-    setBoolParameter("Absorption circle", false, kParmAppendSameLine);                               // 3
-    setBoolParameter("Dim away from a level", false, kParmAppendSameLine);                           // 4
-    setIntegerParameter("Divider (0 = market default)", 0, 50);                                      // 5  500 lots / 10 = 50
-    setColorParameter("Absorption circle colour", (COLOR)0x00FFFFFF, 0, kParmAppendSameLine);       // 6
-    setColorParameter("S20 bid (sellers)", (COLOR)0x00EF4444, 0);                                     // 7
-    setColorParameter("S20 ask (buyers)", (COLOR)0x0022C55E, 0, kParmAppendSameLine);                // 8
-    setColorParameter("S10 bid (sellers)", (COLOR)0x00EF4444, 0);                                     // 9
-    setColorParameter("S10 ask (buyers)", (COLOR)0x0022C55E, 0, kParmAppendSameLine);                // 10
-    setColorParameter("S5 bid (sellers)", (COLOR)0x00EF4444, 0);                                      // 11
-    setColorParameter("S5 ask (buyers)", (COLOR)0x0022C55E, 0, kParmAppendSameLine);                 // 12
+    setBoolParameter("Dim away from a level", false, kParmAppendSameLine);                           // 3
+    setBoolParameter("Absorption circle", false);                                                    // 4
+    setColorParameter("Circle colour", (COLOR)0x00FFFFFF, 0, kParmAppendSameLine);                   // 5
+    for (int k = 0; k < 3; ++k) {                                                                    // 6 - 23: the three Big Lot categories
+        const bba::Cat c = bba::Settings().cat[k];
+        const std::string nm = "Category " + std::to_string(k + 1);
+        setBoolParameter(nm.c_str(), c.on);
+        setIntegerParameter("Big Lot (1-100)", c.n, 50, kParmAppendSameLine);
+        setIntegerParameter("Min lots (0 = none)", c.lots, 60, kParmAppendSameLine);
+        setBoolParameter("Only near pivot", c.pivot, kParmAppendSameLine);
+        setColorParameter("Bid", (COLOR)c.bid, 0, kParmAppendSameLine);
+        setColorParameter("Ask", (COLOR)c.ask, 0, kParmAppendSameLine);
+    }
     return RTX_OK;
 }
 int cppExtension::calc(int) { static_cast<BigBidAsk*>(this)->pump(false); return RTX_OK; }
@@ -311,7 +316,7 @@ bba::Settings BigBidAsk::readSettingsFile(const std::string& mkt, std::string& w
 // sessions of 3-min bars), learned per 30-minute window of the day (the candle's END time; 30+ prints needed), else per phase (day
 // 8:30 AM - 3:00 PM CT / night), else not ready (the 1.4 bold-ratio rule); recomputed every 5 s
 static int winOf(int mod) { return mod <= 0 ? 47 : ((mod - 1) / 30) % 48; }   // END 9:00 -> the 8:30-9:00 window
-static bool dayMod(int m) { return m > 510 && m <= 900; }
+static bool dayMod(int m) { return m > 510 && m <= 960; }   // (1.10.0, Rassul 14:27) day = 8:30 AM - 4:00 PM CT (the 3 - 4 PM hour is no longer judged by night sizes)
 static void printSd(BBState& S, long long now, const std::function<int(long long)>& modOf) {
     if (S.sdCheckMs >= 0 && now >= S.sdCheckMs && now - S.sdCheckMs < 5000) return;
     S.sdCheckMs = now;
@@ -331,12 +336,8 @@ static void printSd(BBState& S, long long now, const std::function<int(long long
     auto fill = [](const bba::PrintDist& d, BBState::Thr& t) { long long v[3] = {0, 0, 0}; double mu = 0; long long n = 0; t.ok = d.stats(30, n, mu, v); t.n = n; if (t.ok) { t.mu = mu; for (int q = 0; q < 3; ++q) t.sd[q] = v[q]; } };
     for (int i = 0; i < 48; ++i) fill(w[i], S.win[i]);
     for (int i = 0; i < 2; ++i) fill(ph[i], S.phase[i]);
-    // (1.9.0) Big Lot S20 / S10 / S5 by rank: the size at rank 20 / 10 / 5 x sessions from the top (bid and ask prints pooled, per phase)
-    for (int i = 0; i < 2; ++i) { S.tierSess[i] = (int)ses[i].size(); for (int q = 0; q < 3; ++q) S.tier[i][q] = 0;
-        std::sort(pv[i].begin(), pv[i].end(), std::greater<long long>());
-        const int rk[3] = { 20, 10, 5 };
-        for (int q = 0; q < 3; ++q) { const size_t r = (size_t)rk[q] * ses[i].size();
-            if (r >= 5 && pv[i].size() >= std::max<size_t>(r, 30)) S.tier[i][q] = pv[i][r - 1]; } }
+    // (1.10.0) the prints per phase, biggest first: Big Lot N = the size at rank N x sessions (BBState::bigLot)
+    for (int i = 0; i < 2; ++i) { S.tierSess[i] = (int)ses[i].size(); std::sort(pv[i].begin(), pv[i].end(), std::greater<long long>()); S.pvSorted[i].swap(pv[i]); }
     // the newest candle's sizes for the status line
     const int m0 = modOf(S.fin.rbegin()->first);
     const BBState::Thr* t0 = m0 >= 0 && S.win[winOf(m0)].ok ? &S.win[winOf(m0)] : m0 >= 0 && S.phase[dayMod(m0) ? 1 : 0].ok ? &S.phase[dayMod(m0) ? 1 : 0] : nullptr;
@@ -347,8 +348,10 @@ static void printSd(BBState& S, long long now, const std::function<int(long long
                    " " + std::to_string(t0->n) + " prints: Big mu " + std::to_string((long long)std::llround(t0->mu)) + " / 1SD " + std::to_string(t0->sd[0]) +
                    " / 3SD " + std::to_string(t0->sd[2]) + " lots; windows ready " + std::to_string(wins) + "/48"
                  : "learning - bold ratio rule";
-    S.sdWhy += "; Big Lot S20 / S10 / S5 day " + std::to_string(S.tier[1][0]) + " / " + std::to_string(S.tier[1][1]) + " / " + std::to_string(S.tier[1][2]) + " lots (" + std::to_string(S.tierSess[1]) + " sessions), night "
-             + std::to_string(S.tier[0][0]) + " / " + std::to_string(S.tier[0][1]) + " / " + std::to_string(S.tier[0][2]) + " lots (" + std::to_string(S.tierSess[0]) + " sessions)";
+    {   std::string t = "; Big Lot";
+        for (int k = 0; k < 3; ++k) { const bba::Cat& c = S.set.cat[k];
+            t += std::string(k ? " |" : "") + " " + std::to_string(c.n) + (c.lots > 0 ? " min " + std::to_string(c.lots) : std::string()) + (c.on ? "" : " (off)") + ": day " + std::to_string(S.catSize(1, c)) + " / night " + std::to_string(S.catSize(0, c)) + " lots"; }
+        S.sdWhy += t + " (" + std::to_string(S.tierSess[1]) + " day / " + std::to_string(S.tierSess[0]) + " night sessions)"; }
 }
 void BigBidAsk::settings(BBState& S, long long now) {
     printSd(S, now, [this](long long t) { struct tm m; std::memset(&m, 0, sizeof(m)); return t > 0 && getLocaltime((RTDATE)t, &m) ? m.tm_hour * 60 + m.tm_min : -1; });
@@ -365,10 +368,12 @@ void BigBidAsk::settings(BBState& S, long long now) {
 static bool inDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }   // the dialog's copy has no bar size
 std::vector<long long> BigBidAsk::dialogNow() {
     std::vector<long long> v;
-    v.push_back(getIntegerValue(P_FONT)); v.push_back(getIntegerValue(P_TIER));
-    v.push_back(isBoxChecked(P_BOX) ? 1 : 0); v.push_back(isBoxChecked(P_CIRCLE) ? 1 : 0); v.push_back(isBoxChecked(P_DIM) ? 1 : 0);
-    v.push_back(getIntegerValue(P_DIV)); v.push_back((long long)(getIntegerValue(P_CIRCC) & 0x00FFFFFF));
-    for (int k = P_C20B; k <= P_C5A; ++k) v.push_back((long long)(getIntegerValue(k) & 0x00FFFFFF));
+    v.push_back(getIntegerValue(P_FONT)); v.push_back(getIntegerValue(P_DIV));
+    v.push_back(isBoxChecked(P_BOX) ? 1 : 0); v.push_back(isBoxChecked(P_DIM) ? 1 : 0); v.push_back(isBoxChecked(P_CIRCLE) ? 1 : 0);
+    v.push_back((long long)(getIntegerValue(P_CIRCC) & 0x00FFFFFF));
+    for (int k = 0; k < 3; ++k) { const int o = P_CAT + 6 * k;
+        v.push_back(isBoxChecked(o) ? 1 : 0); v.push_back(getIntegerValue(o + 1)); v.push_back(getIntegerValue(o + 2)); v.push_back(isBoxChecked(o + 3) ? 1 : 0);
+        v.push_back((long long)(getIntegerValue(o + 4) & 0x00FFFFFF)); v.push_back((long long)(getIntegerValue(o + 5) & 0x00FFFFFF)); }
     return v;
 }
 int BigBidAsk::parmsLoad(void) {
@@ -376,10 +381,10 @@ int BigBidAsk::parmsLoad(void) {
         if (!inDialog(this)) return RTX_OK;
         const std::string mkt = market(); if (mkt.empty()) return RTX_OK;
         std::string why; const bba::Settings s = readSettingsFile(mkt, why);   // opening never saves
-        setIntegerValue(P_FONT, s.font); setIntegerValue(P_TIER, s.minTier);
-        checkBox(P_BOX, s.box); checkBox(P_CIRCLE, s.circle); checkBox(P_DIM, s.dim);
-        setIntegerValue(P_DIV, s.div); setIntegerValue(P_CIRCC, (int)s.circleCol);
-        for (int t = 0; t < 3; ++t) for (int d = 0; d < 2; ++d) setIntegerValue(P_C20B + 2 * t + d, (int)s.col[t][d]);
+        setIntegerValue(P_FONT, s.font); setIntegerValue(P_DIV, s.div);
+        checkBox(P_BOX, s.box); checkBox(P_DIM, s.dim); checkBox(P_CIRCLE, s.circle); setIntegerValue(P_CIRCC, (int)s.circleCol);
+        for (int k = 0; k < 3; ++k) { const int o = P_CAT + 6 * k; const bba::Cat& c = s.cat[k];
+            checkBox(o, c.on); setIntegerValue(o + 1, c.n); setIntegerValue(o + 2, c.lots); checkBox(o + 3, c.pivot); setIntegerValue(o + 4, (int)c.bid); setIntegerValue(o + 5, (int)c.ask); }
         snap_.take(dialogNow());
     } catch (...) {}
     return RTX_OK;
@@ -391,17 +396,19 @@ void BigBidAsk::saveSettings() {
         const std::string p = settingsPath(mkt); if (p.empty()) return;
         std::string why; const bba::Settings F = readSettingsFile(mkt, why);
         const std::vector<long long> now = dialogNow();
-        long long fv[NSET] = { F.font, F.minTier, F.box ? 1 : 0, F.circle ? 1 : 0, F.dim ? 1 : 0, F.div, (long long)F.circleCol };
-        for (int t = 0; t < 3; ++t) for (int d = 0; d < 2; ++d) fv[P_C20B + 2 * t + d] = (long long)F.col[t][d];
+        long long fv[NSET] = { F.font, F.div, F.box ? 1 : 0, F.dim ? 1 : 0, F.circle ? 1 : 0, (long long)F.circleCol };
+        for (int k = 0; k < 3; ++k) { const int o = P_CAT + 6 * k; const bba::Cat& c = F.cat[k];
+            fv[o] = c.on ? 1 : 0; fv[o + 1] = c.n; fv[o + 2] = c.lots; fv[o + 3] = c.pivot ? 1 : 0; fv[o + 4] = (long long)c.bid; fv[o + 5] = (long long)c.ask; }
         if (now.size() != (size_t)NSET) return;
         long long v[NSET]; for (size_t k = 0; k < (size_t)NSET; ++k) v[k] = snap_.pick(k, now[k], fv[k]);   // a control he did not touch keeps the file's value
         bba::Settings s = F;                                                  // garbage never reaches the file: a bad control keeps the file's value
-        s.font = bba::fontOk(v[0]) ? (int)v[0] : F.font;
-        s.minTier = bba::tierOk(v[1]) ? (int)v[1] : F.minTier;
-        s.box = v[2] != 0; s.circle = v[3] != 0; s.dim = v[4] != 0;
-        s.div = (v[5] == 0 || bba::divOk(v[5])) ? (int)v[5] : F.div;
-        if (bba::colOk(v[6])) s.circleCol = (unsigned)v[6];
-        for (int t = 0; t < 3; ++t) for (int d = 0; d < 2; ++d) { const long long c = v[P_C20B + 2 * t + d]; if (bba::colOk(c)) s.col[t][d] = (unsigned)c; }
+        s.font = bba::fontOk(v[P_FONT]) ? (int)v[P_FONT] : F.font;
+        s.div = (v[P_DIV] == 0 || bba::divOk(v[P_DIV])) ? (int)v[P_DIV] : F.div;
+        s.box = v[P_BOX] != 0; s.dim = v[P_DIM] != 0; s.circle = v[P_CIRCLE] != 0;
+        if (bba::colOk(v[P_CIRCC])) s.circleCol = (unsigned)v[P_CIRCC];
+        for (int k = 0; k < 3; ++k) { const int o = P_CAT + 6 * k; bba::Cat& c = s.cat[k];
+            c.on = v[o] != 0; if (bba::nOk(v[o + 1])) c.n = (int)v[o + 1]; if (bba::lotsOk(v[o + 2])) c.lots = (int)v[o + 2]; c.pivot = v[o + 3] != 0;
+            if (bba::colOk(v[o + 4])) c.bid = (unsigned)v[o + 4]; if (bba::colOk(v[o + 5])) c.ask = (unsigned)v[o + 5]; }
         makeDir(flexDir());
         if (publishFile(p, bba::formatSettings(s) + "\n")) snap_.take(now);
     } catch (...) {}
@@ -576,10 +583,10 @@ void BigBidAsk::status(BBState& S, long long now) {
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << BBA_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nTICK," << S.tick
-      << "\nSETTINGS,font " << S.set.font << ",show from " << (S.set.minTier == 1 ? "S20" : S.set.minTier == 2 ? "S10" : "S5") << ",box " << (S.set.box ? 1 : 0) << ",circle " << (S.set.circle ? 1 : 0) << ",dim " << (S.set.dim ? 1 : 0) << ",divider " << (S.set.div > 0 ? S.set.div : bba::divFor(S.market)) << (S.set.div > 0 ? "" : " (market default)") << "," << S.settingsWhy
+      << "\nSETTINGS,font " << S.set.font << ",box " << (S.set.box ? 1 : 0) << ",circle " << (S.set.circle ? 1 : 0) << ",dim " << (S.set.dim ? 1 : 0) << ",divider " << (S.set.div > 0 ? S.set.div : bba::divFor(S.market)) << (S.set.div > 0 ? "" : " (market default)") << "," << S.settingsWhy
       << "\nCANDLES,final " << S.fin.size() << ",recorded " << S.recorded.size() << ",pending " << S.pending.size() << ",record fails " << S.recFails
       << "\nVAP,missing reads " << S.missing << ",bid/ask vs bar totals mismatch " << S.mismatch << ",faults " << S.faults
-      << "\nSIZES," << S.sdWhy << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim << ",S5+ prints " << S.hugeN
+      << "\nSIZES," << S.sdWhy << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim << ",category 1 / 2 / 3 prints " << S.catN[0] << " / " << S.catN[1] << " / " << S.catN[2] << ",big but kept out by the pivot filter " << S.pivotHidden
       << "\nCLASH,left " << S.clL << ",right " << S.clR << ",top " << S.clT << ",bottom " << S.clB << ",banner " << S.clTr << ",too big " << S.clBig << ",slid back in " << S.shifted << ",area fallback " << S.areaFallback
       << "\nAREA,left " << S.leftLimit << ",price right " << S.priceRight << ",columns levels " << (S.peers.on[cb::LEVELS] ? "on" : "off") << " delta " << (S.peers.on[cb::DELTA] ? "on" : "off")
       << " dealer " << (S.peers.on[cb::DEALER] ? "on" : "off") << " liq " << (S.peers.on[cb::LIQ] ? "on" : "off") << ",tape reader banner " << (S.trOn ? "avoided" : "none") << "\n";
@@ -618,7 +625,7 @@ template <class Times> static int indexOf(Times& times, long count, long long t)
     return -1;
 }
 void BigBidAsk::render(BBState& S) {
-    S.targets.clear(); S.clL = S.clR = S.clT = S.clB = S.clTr = S.clBig = S.shifted = S.areaFallback = 0; S.circles = 0; S.circlesHidden = 0; S.droppedInView = 0; S.zoneFull = 0; S.zoneDim = 0; S.hugeN = 0;
+    S.targets.clear(); S.clL = S.clR = S.clT = S.clB = S.clTr = S.clBig = S.shifted = S.areaFallback = 0; S.circles = 0; S.circlesHidden = 0; S.droppedInView = 0; S.zoneFull = 0; S.zoneDim = 0; S.hugeN = 0; S.catN[0] = S.catN[1] = S.catN[2] = 0; S.pivotHidden = 0;
     const long count = getBarCount();
     if (count < 2 || S.tick <= 0) return;
     RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
@@ -656,6 +663,7 @@ void BigBidAsk::render(BBState& S) {
         Z.band = zn::bandFrom(Z.hi, Z.lo, std::max(0, (int)count - 2 <= ve ? (int)count - 2 : ve));
         const char* sy = getSymbol(); Z.levels = zn::levels(flexDir(), S.market, sy ? sy : "", steadyMs()); }
     std::vector<double> candPx, candVol;
+    std::vector<char> pivBull, pivBear; bba::pivotFlags(hi, lo, ve + 1, pivBull, pivBear);   // (1.10.0) the pivot rule per candle (bars up to it only)
     FONT fp; fp.id = HELVETICA; fp.size = (short)set.font; fp.style = PLAIN;
     FONT fb = fp; fb.style = BOLD;                                    // (1.9.0) every number the same size (his colours mark the bigger prints)
     int lead = 0, asc = 0, desc = 0; setFont(fp); getFontMetrics(&lead, &asc, &desc);
@@ -692,19 +700,27 @@ void BigBidAsk::render(BBState& S) {
         // (1.9.0, Rassul 2026-10-17 13:14 / 13:27 "use your big lot methodology") a print shows when it reaches the chosen Big Lot tier of
         // its phase (S20 / S10 / S5 by rank); every number the same size, coloured by its tier and side; still learning (no tiers yet) = nothing
         int ph = 0; { struct tm mm; std::memset(&mm, 0, sizeof(mm)); if (getLocaltime((RTDATE)F->t, &mm)) ph = dayMod(mm.tm_hour * 60 + mm.tm_min) ? 1 : 0; }
-        const long long minSz = S.tier[ph][set.minTier - 1];
-        if (minSz <= 0) continue;
+        // (1.10.0) his categories, rarest first (smallest N): a print takes the first ON category it reaches whose pivot filter it passes
+        int ord[3] = { 0, 1, 2 }; long long zz[3]; for (int k = 0; k < 3; ++k) zz[k] = S.catSize(ph, set.cat[k]);
+        std::sort(ord, ord + 3, [&](int x, int y) { return zz[x] != zz[y] ? zz[x] > zz[y] : x < y; });   // the biggest size first (= the rarest)
+        long long minSz = 0; for (int k = 0; k < 3; ++k) { const long long z = set.cat[k].on ? S.catSize(ph, set.cat[k]) : 0; if (z > 0 && (minSz == 0 || z < minSz)) minSz = z; }
+        if (minSz <= 0) continue;                                            // still learning / every category off: nothing
         const int ab = !set.circle ? 0 : bba::absorptionMin(*F, minSz);
         for (int sd = -1; sd <= 1; sd += 2) {
             const bba::Pick& p = sd < 0 ? F->bid : F->ask;
             if (!p.ok || p.vol < minSz) continue;
-            int tr = 0; for (int q = 0; q < 3; ++q) if (S.tier[ph][q] > 0 && p.vol >= S.tier[ph][q]) tr = q;   // the highest tier it reaches
+            const bool pivOk = i < (int)pivBull.size() && (sd < 0 ? pivBull[i] : pivBear[i]);   // bid prints: the down-pivot rule; ask prints: the up-pivot rule
+            int got = -1;
+            for (int q = 0; q < 3 && got < 0; ++q) { const bba::Cat& c = set.cat[ord[q]];
+                if (!c.on) continue; const long long z = S.catSize(ph, c);
+                if (z > 0 && p.vol >= z && (!c.pivot || pivOk)) got = ord[q]; }
+            if (got < 0) { ++S.pivotHidden; continue; }
             const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             setFont(fb);
             PNT pt; pt.set(i, (float)((double)p.key * S.tick), kBarCenter);
             bba::Cand c; c.bar = i; c.side = sd; c.x = (cb_.l + cb_.r) / 2; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = thB;
-            c.bold = true; c.huge = false; c.tier = tr; c.circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0); c.first = F->closed;
-            if (tr == 2) ++S.hugeN;
+            c.bold = true; c.huge = false; c.tier = got; c.circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0); c.first = F->closed;
+            ++S.catN[got];
             cands.push_back(c); src.push_back(F); texts.push_back(tx); candPx.push_back((double)p.key * S.tick); candVol.push_back((double)p.vol);
         }
     }
@@ -780,7 +796,7 @@ void BigBidAsk::render(BBState& S) {
         // (1.9.0) the colour = his pick for the print's tier and side (default red at the bid, green at the ask); dimmed away from a zone
         // only when "Dim away from a level" is on; a box and / or the absorption circle only when switched on
         const bool dimIt = set.dim && !zone;
-        const COLOR base = (COLOR)set.col[c.tier < 0 || c.tier > 2 ? 2 : c.tier][c.side < 0 ? 0 : 1];
+        const bba::Cat& cc = set.cat[c.tier < 0 || c.tier > 2 ? 0 : c.tier]; const COLOR base = (COLOR)(c.side < 0 ? cc.bid : cc.ask);
         const COLOR ink = dimIt ? getBlendedColor(base, 0x00000000, 45.0f) : base;
         if (zone) ++S.zoneFull; else ++S.zoneDim;
         const bool ring = c.circle && set.circle, box = set.box && !ring;
@@ -843,6 +859,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
     p->setDescription("LRA Big Bid / Ask v1.5.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
-    p->setVersion("1.9.0");   // BBA_VERSION
+    p->setVersion("1.10.0");   // BBA_VERSION
     return p;
 }
