@@ -40,7 +40,7 @@
 #include "BookFlowLogic.h"
 #include "MboRecord.h"              // Record order feed
 
-#define BF_VERSION "1.2.0"          // keep equal to bf::VERSION and the setVersion literal below
+#define BF_VERSION "1.2.1"          // keep equal to bf::VERSION and the setVersion literal below
 
 class BookFlow : public off::MboPane<bf::Logic> {
 public:
@@ -48,6 +48,7 @@ public:
     virtual bool barMarks() const { return false; }                        // no letters / dash drawn; hover + records keep them
     virtual bool netBars() const { return true; }
     virtual bool textOff() const { return false; }
+    virtual std::string boxKeep() const { return "Net;Pace"; }            // (1.2.1, Rassul 22:54) the box: Net and Pace only
     virtual bool boxOnly() const { return true; }                         // (1.2.0, Rassul 2026-10-16 22:00) the left-justified numbers box in the pane, no read / options lines                          // (1.1.0, Rassul 2026-10-16 18:14) no read / numbers / options lines on the pane; the records and the tape reader keep every number
     virtual long long netOf(const off::Rec& r, int s) const { return bf::netOf(r, s); }
     // the label numbers of one net bar: ratio / pace / lots of the part that spiked (up = added, down = pulled; pace only for added)
@@ -146,6 +147,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA BookFlow: who is ARRIVING and who is LEAVING, in one pane (replaces PullStats and StackStats). Per candle, one NET bar per side = lots ADDED near price minus lots PULLED near price (market-by-order feed). Above the grey zero line = size arriving (stacking), below = size leaving (pulling). Green = bids (buyers), red = offers (sellers). Bright = a spike of the bigger part (added when up, pulled when down): >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bar of either side in the prior Spike lookback candles. Spike labels: the ratio, the pace (p = added lots per second vs the same time of day) and the lots. The read line (only at a key / gamma level, shown once it locks 3 minutes after price reached the level): was the size resting at the level cancelled or traded; always '?'. The top message is the louder of the stacking and pulling reads for the candle under the mouse. Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off), Near ticks (0 = auto), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive), Offset X / Y, Box shows.");
-    p->setVersion("1.2.0");   // BF_VERSION
+    p->setVersion("1.2.1");   // BF_VERSION
     return p;
 }
