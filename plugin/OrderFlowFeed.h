@@ -139,7 +139,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.9.1";   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.10.0";   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -2020,22 +2020,16 @@ inline void drawNetBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int s
     std::vector<LBox> placed(avoid);
     for (size_t k = 0; k < cands.size(); ++k) {
         const Cand& c = cands[k];
-        // (1.9.0) the RATIO outside the bar's far end (yellow); the LOTS (+ the PACE for added size, grey) inside it at that end, no "p"
-        const std::string rx = noX(c.a), pc = c.up ? noX(c.b) : std::string(), lt = c.c;
-        std::string in[2]; COLOR ic[2] = { C_LBL_LOTS, C_LBL_LOTS }; int nIn = 0;
-        if (!lt.empty()) { in[nIn] = lt; ic[nIn++] = C_LBL_LOTS; }
-        if (!pc.empty()) { in[nIn] = pc; ic[nIn++] = C_LBL_PACE; }
-        while (nIn > 0 && c.hb < nIn * LABEL_LH + 2) --nIn;
-        if (rx.empty() && nIn == 0) continue;
+        // (1.10.0, Rassul 2026-10-16 22:00) like Aggression: the RATIO (yellow) on top and the PACE (grey, added size only) under it, both outside the bar's far end; no lots
+        const std::string rx = noX(c.a), pc = c.up ? noX(c.b) : std::string();
+        std::string lr[2]; COLOR lc[2] = { C_LBL_RATIO, C_LBL_PACE }; int nR = 0;
+        if (!rx.empty()) { lr[nR] = rx; lc[nR++] = C_LBL_RATIO; }
+        if (!pc.empty()) { lr[nR] = pc; lc[nR++] = C_LBL_PACE; }
+        if (nR == 0) continue;
         const int yEdge = c.up ? y0 - c.hb : y0 + 1 + c.hb;
-        const int tr = c.up ? yEdge - 2 - LABEL_LH : yEdge + 2;
-        const int tIn = c.up ? yEdge + 1 : yEdge - nIn * LABEL_LH - 1;
-        int t0, b0;
-        if (c.up) { t0 = rx.empty() ? tIn : tr; b0 = nIn > 0 ? tIn + nIn * LABEL_LH : yEdge + 1; }
-        else { t0 = nIn > 0 ? tIn : yEdge; b0 = rx.empty() ? yEdge + 1 : tr + LABEL_LH; }
+        const int t0 = c.up ? yEdge - 2 - nR * LABEL_LH : yEdge + 2, b0 = t0 + nR * LABEL_LH;
         if (t0 < g.top + g.reserve || b0 > g.bottom) continue;                          // no room (zoomed / short pane): the bar is still drawn
-        int w = (int)x->getTextWidth(rx.c_str(), -1);
-        for (int r = 0; r < nIn; ++r) w = std::max(w, (int)x->getTextWidth(in[r].c_str(), -1));
+        int w = 0; for (int r = 0; r < nR; ++r) w = std::max(w, (int)x->getTextWidth(lr[r].c_str(), -1));
         const LBox me = { c.cx - w / 2 - 1, t0, c.cx - w / 2 + w + 1, b0 - 1, 0, 0 };
         if (me.l < g.left + 1 || me.r > g.edge - 1) continue;
         bool hit = false; for (size_t o = 0; o < placed.size() && !hit; ++o) hit = overlaps(me, placed[o]);
@@ -2044,8 +2038,7 @@ inline void drawNetBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int s
         auto put = [&](const std::string& s, int y, COLOR col) {
             if (s.empty()) return; x->setTextColor(col); const int tw = (int)x->getTextWidth(s.c_str(), -1);
             cppExtension::RCT rc; rc.set(coord(c.cx - tw / 2), coord(y), coord(c.cx - tw / 2 + tw + 2), coord(y + LABEL_LH)); rc.drawText(s.c_str(), false, false); };
-        put(rx, tr, C_LBL_RATIO);
-        for (int r = 0; r < nIn; ++r) put(in[r], tIn + r * LABEL_LH, ic[r]);
+        for (int r = 0; r < nR; ++r) put(lr[r], t0 + r * LABEL_LH, lc[r]);
     }
 }
 // ---- (12:05) THE INFO BOX - Rassul "all values go in the info box, which I should be able to see as I move my mouse over different
@@ -2412,6 +2405,8 @@ public:
     virtual bool barMarks() const { return true; }                        // (1.6.0) false = no letters / refill dash drawn (StackStats)
     virtual bool textOff() const { return false; }                        // (1.9.0) true = no read / numbers / options lines at all (Book Flow)
     int emode(int m) const { return textOff() ? MODE_NONE : m; }
+    virtual bool boxOnly() const { return false; }                        // (1.10.0, Rassul 2026-10-16) true = just the left-justified numbers box in the pane (no read line, no options line, no top text band)
+    int gmode(int m) const { return boxOnly() ? MODE_NONE : emode(m); }   // the geometry mode: a box-only pane keeps the whole height for bars
     // (1.7.0, BookFlow 1.0.0) net bars (added - pulled per side, signed, a grey zero line) instead of the one-bar / two-bar columns; the pane's own hooks
     virtual bool netBars() const { return false; }
     virtual long long netOf(const Rec& r, int s) const { return L::value(r, 0, s); }   // the drawn value (signed when netBars)
@@ -2446,8 +2441,8 @@ public:
                 }
             }
             S->axisTop = top;
-            if (netBars()) netAxisFor(top, S->paneH, textReserve(S->paneH, emode(S->set.mode)), mn, mx);
-            else axisFor(top, S->paneH, drawPx(S->paneH, textReserve(S->paneH, emode(S->set.mode))), mn, mx);
+            if (netBars()) netAxisFor(top, S->paneH, textReserve(S->paneH, gmode(S->set.mode)), mn, mx);
+            else axisFor(top, S->paneH, drawPx(S->paneH, textReserve(S->paneH, gmode(S->set.mode))), mn, mx);
         }
         if (dMin) *dMin = mn;
         if (dMax) *dMax = mx;
@@ -2824,7 +2819,7 @@ private:
         for (int i = v0; i <= v1; ++i) { const PaneBar* b = barOf(i); if (b) top = std::max(top, magOf(b->r)); }
         if (S.axisTop > top) top = S.axisTop;
         S.paneH = pane.bottom - pane.top;
-        const PaneGeo g = paneGeo(this, emode(S.set.mode));
+        const PaneGeo g = paneGeo(this, gmode(S.set.mode));
         const int hov = S.hov.hover.bar >= 0 && S.hov.hover.bar < last ? S.hov.hover.bar : -1;
         const COLOR normal[2] = { C_GREEN_BAR, C_RED_BAR }, spike[2] = { C_GREEN_SPIKE, C_RED_SPIKE };   // left = bids (green), right = offers (red)
         RTARRAY op(barOpen), cl(barClose);                                 // (1.6.0) the close direction (one-bar ties)
@@ -2851,12 +2846,12 @@ private:
         const bp::Box area = bp::mk(g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3);
         // (1.5.0) Read = the ONE zone read line (only inside a key / gamma zone); Numbers = the compact numbers box + that line beside it
         const zread::Line zl = S.zr.e.line(S.zr.pane, steadyMs());
-        const bool noText = emode(S.set.mode) == MODE_NONE;                   // (1.9.0) Book Flow: no text lines
-        const bool readMode = clampMode(S.set.mode) == MODE_READ;
+        const bool noText = !boxOnly() && emode(S.set.mode) == MODE_NONE;                   // (1.9.0) Book Flow: no text lines
+        const bool readMode = !boxOnly() && clampMode(S.set.mode) == MODE_READ;
         PanelPlan P; LinePlan LP;
         if (noText) { S.lastBox = bp::Box(); S.inBox = false; }
         else if (readMode) { LP = planLine(area, pl, zl, false, measureWith(this), paneQuestion(L::title())); S.lastBox = LP.show ? LP.box : bp::Box(); if (!LP.show) S.inBox = false; }
-        else { P = planPanel(area, g.top, S.set.mode, pl, info, zl.show ? zl.text : std::string(), optL, g.reserve, measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box(); }
+        else { P = planPanel(area, g.top, boxOnly() ? MODE_NUMBERS : S.set.mode, pl, info, boxOnly() || !zl.show ? std::string() : zl.text, boxOnly() ? std::string() : optL, g.reserve, measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box(); }
         (void)m;
         std::vector<LBox> avoid;
         if (LP.show) avoid.push_back(LBox{ LP.box.l, LP.box.t, LP.box.r, LP.box.b, 0, 0 });

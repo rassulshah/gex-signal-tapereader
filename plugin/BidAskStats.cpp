@@ -126,7 +126,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.9.1"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.10.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -1016,12 +1016,12 @@ void BidAskStats::render(BASState& S) {
     const bp::Box area = bp::mk(g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3);
     // (1.6.0) Read = the ONE zone read line (only inside a key / gamma zone); Numbers = the numbers box + that line beside it
     const zread::Line zl = S.zr.e.line(zread::P_BAS, steadyMs());
-    const bool noText = true;                                              // (1.9.0) the read, numbers and oHit lines are gone from the pane; the hover grid was removed in 1.8.1; records + tape reader unchanged
-    const bool readMode = off::clampMode(S.mode) == off::MODE_READ;
+    const bool noText = false;                                             // (1.9.0) the read, numbers and oHit lines are gone from the pane; the hover grid was removed in 1.8.1; records + tape reader unchanged
+    const bool readMode = false;   // (1.10.0) the pane shows the numbers box only
     off::PanelPlan P; off::LinePlan LP;
     if (noText) { S.lastBox = bp::Box(); S.inBox = false; }
     else if (readMode) { LP = off::planLine(area, pl, zl, false, off::measureWith(this), off::paneQuestion(bas::TITLE)); S.lastBox = LP.show ? LP.box : bp::Box(); if (!LP.show) S.inBox = false; }
-    else { P = off::planPanel(area, g.top, S.mode, pl, info, zl.show ? zl.text : std::string(), optL, g.reserve, off::measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box(); }
+    else { (void)zl; (void)optL; P = off::planPanel(area, g.top, off::MODE_NUMBERS, pl, info, std::string(), std::string(), g.reserve, off::measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box(); }
     (void)l1;
     std::vector<off::LBox> avoid;
     if (LP.show) avoid.push_back(off::LBox{ LP.box.l, LP.box.t, LP.box.r, LP.box.b, 0, 0 });
@@ -1057,6 +1057,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression (was Bid/Ask Stats): who is PRESSING. One bar per candle = the bigger side - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price); a white tick at the other side's lots when both sides spiked. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. R = stop run: a key level (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) broken with a sweep or spike that closed back inside within N bars - red R = buyers trapped above a high, green R = sellers trapped below a low; R? = not proven yet in this market (nightly stop-run study). Spike labels: the ratio, the pace (p = aggressive lots per second vs the same time of day) and the lots. Top: a plain-English message (pace named only when fast / slow), a blue options line when fresh (oHit), and (green = bullish, red = bearish), and the info box (Sellers | Buyers: lots, pace, sweep, large, stop run, crowd = orders, avg size, top order share, burst) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
-    p->setVersion("1.9.1");   // BAS_VERSION
+    p->setVersion("1.10.0");   // BAS_VERSION
     return p;
 }
