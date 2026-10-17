@@ -1,4 +1,4 @@
-findings=0 allowed=0 staged_files=2 bytes=50384
+findings=0 allowed=0 staged_files=2 bytes=94786
 largest staged blobs (bytes, path):
-SIZE	50260	plugin/SessionVWAP.cpp
-SIZE	124	logs/staged-scan-findings.log
+SIZE	94625	plugin/BigBidAsk.cpp
+SIZE	161	logs/staged-scan-findings.log
