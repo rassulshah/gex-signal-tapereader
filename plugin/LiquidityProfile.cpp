@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.40.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.40.1"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -2402,15 +2402,29 @@ void LiquidityProfile::render(LQState& S) {
             if (hz.names.empty()) { std::map<long long, std::string>::const_iterator q = S.lqMark.find(z.id); if (q != S.lqMark.end()) hz.names = q->second.compare(0, 4, "LQ? ") == 0 ? q->second.substr(4) : q->second; }
             S.hovZones.push_back(hz); }
 #endif
-        const int len = std::max(8, (int)(maxZone > 0 ? z.size / maxZone * full : full));
+        // (0.40.1, Rassul 2026-10-16 22:14 "i want it in the node") the level name (key + gamma) on the left and the ratio (yellow) on the right,
+        // INSIDE the node; a node with a name / ratio is made at least as long as that text
+        std::map<long long, std::string>::const_iterator lq = S.lqMark.find(z.id);
+        const std::string nm = lq != S.lqMark.end() ? lq->second : picks[oi].names;   // "LQ PDL" (confirmed) or the level's name
+        const std::string xs = z.bx > 0 ? mult(z.bx) : std::string();
+        FONT g; g.id = HELVETICA; g.size = coord(S.font); g.style = BOLD; setFont(g);
+        const int nmW = nm.empty() ? 0 : getTextWidth(nm.c_str(), -1), xsW = xs.empty() ? 0 : getTextWidth(xs.c_str(), -1);
+        const int need = nmW + xsW + (nmW > 0 && xsW > 0 ? 10 : 0) + 10;
+        int len = std::max(8, (int)(maxZone > 0 ? z.size / maxZone * full : full));
+        if (nmW + xsW > 0) len = std::min(full, std::max(len, need));
         RCT r; r.set(coord(left), coord(yt), coord(left + len), coord(yb));
         if (solid) r.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
         else { setPen(c, 1, P_SOLID); CBRUSH br(c, PAT_HOLLOW); br.set(); r.draw(1, c, c, DRAW_OPAQUE, PAT_HOLLOW); }   // (0.11.4) no dashed borders
         const int ym = (yt + yb) / 2;
-        FONT g; g.id = HELVETICA; g.size = coord(S.font); g.style = BOLD; setFont(g);
         const std::string lt = lots(z.size); const int lw = getTextWidth(lt.c_str(), -1);
-        // (0.16.0, Rassul 11:02 CT) the size INSIDE every node in white ("103"), only when the node is long and tall enough for it
-        if (lw + 4 < len && yb - yt >= rowH - 4) { setTextColor(C_WHITE); RCT tr; tr.set(coord(left), coord(ym - S.font), coord(left + len), coord(ym + S.font)); tr.drawText(lt.c_str(), true, false); }
+        const bool tall = yb - yt >= rowH - 4;
+        if (nmW + xsW > 0 && need <= len && tall) {   // (0.40.1) name left (white) | ratio right (yellow), inside the node
+            if (nmW > 0) { setTextColor(C_WHITE); RCT tr; tr.set(coord(left + 4), coord(ym - S.font), coord(left + len - 2), coord(ym + S.font)); tr.drawText(nm.c_str(), false, false); }
+            if (xsW > 0) { setTextColor(0x00FFE14D); RCT tr; tr.set(coord(left + 2), coord(ym - S.font), coord(left + len - 4), coord(ym + S.font)); tr.drawText(xs.c_str(), false, true); }
+            colR = std::max(colR, len);
+        }
+        // (0.16.0, Rassul 11:02 CT) a node with no name / ratio keeps the size INSIDE it in white ("103"), only when long and tall enough
+        else if (nmW + xsW == 0 && lw + 4 < len && tall) { setTextColor(C_WHITE); RCT tr; tr.set(coord(left), coord(ym - S.font), coord(left + len), coord(ym + S.font)); tr.drawText(lt.c_str(), true, false); }
         if (S.confirmed.count("Old")) {                                 // (0.5.0) old orders: a 2-px outline and "old 64%" under the bar
             const double os = S.e.zoneOld(z.side, z.lo, z.hi, S.e.bookT);
             if (os >= S.e.P.oldShow) {
@@ -2423,19 +2437,13 @@ void LiquidityProfile::render(LQState& S) {
         }
         // (0.10.0) the label on the PRICE side of the tip = the prominence (x the book behind), then LQ where it confirms a level.
         // No box across the chart (Rassul 18:53 "remove the boxes too because they clutter the chart").
-        int xl = left + len + 4;
-        const int ly0 = ym - rowH / 2, ly1 = ly0 + rowH;
-        if (labels.place(ly0, ly1, 1) < 0) continue;                   // (0.11.4) another zone's label is there: the bar only
-        // (0.16.0) an outlined node's lots are no longer printed beside it: inside it (above), or not at all when it does not fit
-        if (z.bx > 0) { const std::string xs = mult(z.bx); const int xw = getTextWidth(xs.c_str(), -1); setTextColor(solid ? c : C_GREY);
-            RCT xr; xr.set(coord(xl), coord(ly0), coord(xl + xw + 2), coord(ly1)); xr.drawText(xs.c_str(), false, false);
-            colR = std::max(colR, xl + xw + 2 - left);
-            xl += xw + 6; }
-        std::map<long long, std::string>::const_iterator lq = S.lqMark.find(z.id);
-        const std::string nm = lq != S.lqMark.end() ? lq->second : picks[oi].names;   // "LQ PDL" (confirmed) or the level's name
-        if (!nm.empty() && xl < lastX) { const int qw = getTextWidth(nm.c_str(), -1); setTextColor(solid ? c : C_GREY);
-            RCT qr; qr.set(coord(xl), coord(ly0), coord(xl + qw + 2), coord(ly1)); qr.drawText(nm.c_str(), false, false);
-            colR = std::max(colR, xl + qw + 2 - left); }
+        if (nmW + xsW > 0 && !(need <= len && tall)) {   // (0.40.1) no room inside (a short node): the old place, right of the tip
+            int xl = left + len + 4; const int ly0 = ym - rowH / 2, ly1 = ly0 + rowH;
+            if (labels.place(ly0, ly1, 1) >= 0) {
+                if (xsW > 0) { setTextColor(solid ? c : C_GREY); RCT xr; xr.set(coord(xl), coord(ly0), coord(xl + xsW + 2), coord(ly1)); xr.drawText(xs.c_str(), false, false); colR = std::max(colR, xl + xsW + 2 - left); xl += xsW + 6; }
+                if (nmW > 0 && xl < lastX) { setTextColor(solid ? c : C_GREY); RCT qr; qr.set(coord(xl), coord(ly0), coord(xl + nmW + 2), coord(ly1)); qr.drawText(nm.c_str(), false, false); colR = std::max(colR, xl + nmW + 2 - left); }
+            }
+        }
     }
     S.colRight = std::max(colR, full + 4);   // (0.13.2) published so the Dealer Profile's badges start right of it
 #ifndef LQ_FLOW
@@ -3294,6 +3302,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.40.0");   // LQ_VERSION
+    p->setVersion("0.40.1");   // LQ_VERSION
     return p;
 }
