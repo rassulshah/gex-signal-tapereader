@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.41.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.42.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1406,7 +1406,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
               + " / 2SD " + std::to_string((long long)std::llround(v[1])) + " / 3SD " + std::to_string((long long)std::llround(v[2])) : std::string(",learning"))
               << ",drawn " << S.mktDrawn << ",norm " << (S.mnSrc.empty() ? std::string("none (session-learned)") : S.mnSrc) << ",lmtnorm " << (S.lnSrc.empty() ? std::string("none (session-learned)") : S.lnSrc) << "\nABS_BADGE,0.32.0,dir " << S.absDir << ",px " << S.absPx << ",layers " << S.absBits << " (" << absCount(S.absBits) << "/4),mkt lots " << S.absMLots << " sweep " << S.absSweep << ",lmt fill " << S.absFill << " ice " << S.absIce << ",dp ax " << S.absAx << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
         }
-        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",lines under 1SD (not drawn) " << S.boUnder1sd << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 = 1SD dim, 2 = 2SD full colour, 3 = 3SD full colour + outline),start " << S.boBase << " lots,big lots " << S.bldN << (S.bldOk ? std::string(",Big mu ") + std::to_string((long long)std::llround(S.bldMu)) + " 1SD " + std::to_string((long long)std::llround(S.bldV[0])) + " 2SD " + std::to_string((long long)std::llround(S.bldV[1])) + " 3SD " + std::to_string((long long)std::llround(S.bldV[2])) : std::string(",learning (needs 30) - steps of the start used")) << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
+        o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",lines under 1SD (not drawn) " << S.boUnder1sd << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 = 1SD dim, 2 = 2SD full colour, 3 = 3SD full colour + outline),start " << S.boBase << " lots,big lots " << S.bldN << (S.bldOk ? std::string(",Big mu ") + std::to_string((long long)std::llround(S.bldMu)) + " Big Lot S20 " + std::to_string((long long)std::llround(S.bldV[0])) + " S10 " + std::to_string((long long)std::llround(S.bldV[1])) + " S5 " + std::to_string((long long)std::llround(S.bldV[2])) : std::string(",learning (needs 30) - steps of the start used")) << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
           << ",reach " << S.bo.P.reachAtr << " ATR = " << S.bo.reach << " ticks (ATR14 " << S.bo.atrPrice << "),keep " << S.bo.P.keep << ",font " << S.boSet.font
           << ",live " << (S.bo.live[0] >= 0 ? "bid" : "-") << "/" << (S.bo.live[1] >= 0 ? "offer" : "-") << ",lines " << S.bo.lineN[0] << "/" << S.bo.lineN[1]
@@ -1772,7 +1772,9 @@ static bool bldRun(const std::string& dirp, const std::string& stem, const std::
     B.calcMs = st; B.startUsed = start;
     for (int k = 0; k < 3; ++k) {
         BldCh& c = B.ch[k];
-        bol::LogDist all = cur[k]; all.add(c.curBase); c.curAll = all; all.add(c.past);
+        bol::LogDist all = cur[k]; all.add(c.curBase); c.curAll = all;
+        if (c.lines.size() >= 2) { all = c.past; all.nSess = (int)c.lines.size(); }   // (0.42.0) Big Lot S20 / S10 / S5: finished sessions only (stable all day), rank 20 / 10 / 5 per session
+        else { all.add(c.past); all.nSess = (int)c.lines.size() + 1; }
         double v[3] = { 0, 0, 0 }; double mu = 0; long long n = 0; double q266 = 0, stA = 0;
         c.ok = all.stats(start, 30, n, mu, v, &q266, &stA); c.n = n;   // (0.41.0) Large Lot Methodology: rank-based tiers, automatic start
         if (c.ok) { c.mu = mu; for (int q = 0; q < 3; ++q) c.v[q] = v[q]; c.q266 = q266; c.stA = stA; }
@@ -1894,9 +1896,9 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         const int rh = rowPx(8);
         std::vector<std::pair<std::string, std::string>> rows;
         if (S.bldOk) {
-            rows.push_back(std::make_pair(std::string("3SD"), std::to_string((long long)std::llround(S.bldV[2]))));   // (0.40.0) 3SD, 2SD, 1SD, mean
-            rows.push_back(std::make_pair(std::string("2SD"), std::to_string((long long)std::llround(S.bldV[1]))));
-            rows.push_back(std::make_pair(std::string("1SD"), std::to_string((long long)std::llround(S.bldV[0]))));
+            rows.push_back(std::make_pair(std::string("S5"), std::to_string((long long)std::llround(S.bldV[2]))));   // (0.40.0) 3SD, 2SD, 1SD, mean
+            rows.push_back(std::make_pair(std::string("S10"), std::to_string((long long)std::llround(S.bldV[1]))));
+            rows.push_back(std::make_pair(std::string("S20"), std::to_string((long long)std::llround(S.bldV[0]))));
             rows.push_back(std::make_pair(std::string("\xB5"), std::to_string((long long)std::llround(S.bldMu))));
         } else {   // (0.32.1) while learning, the size in use is still shown ("~" = provisional) and the count on its own row
             rows.push_back(std::make_pair(std::string("~"), std::to_string((long long)S.bo.threshold())));
@@ -2133,9 +2135,9 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
         const int rh = rowPx(8);
         std::vector<std::pair<std::string, std::string>> rows;
         if (S.mktOk) {
-            rows.push_back(std::make_pair(std::string("3SD"), std::to_string((long long)std::llround(S.mktV[2]))));   // (0.40.0)
-            rows.push_back(std::make_pair(std::string("2SD"), std::to_string((long long)std::llround(S.mktV[1]))));
-            rows.push_back(std::make_pair(std::string("1SD"), std::to_string((long long)std::llround(S.mktV[0]))));
+            rows.push_back(std::make_pair(std::string("S5"), std::to_string((long long)std::llround(S.mktV[2]))));   // (0.40.0)
+            rows.push_back(std::make_pair(std::string("S10"), std::to_string((long long)std::llround(S.mktV[1]))));
+            rows.push_back(std::make_pair(std::string("S20"), std::to_string((long long)std::llround(S.mktV[0]))));
             rows.push_back(std::make_pair(std::string("\xB5"), std::to_string((long long)std::llround(S.mktMu))));
         }   // (0.40.2, Rassul 2026-10-16 22:29 "remove provisional value in mkt footer") while learning the MKT footer shows nothing
         int y = bottom - 4 - (int)rows.size() * rh;
@@ -3306,6 +3308,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.41.0");   // LQ_VERSION
+    p->setVersion("0.42.0");   // LQ_VERSION
     return p;
 }

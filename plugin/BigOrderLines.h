@@ -35,7 +35,7 @@
 #include <vector>
 
 namespace bol {
-static const char* const VERSION = "1.6.0";   // (1.6.0) LogDist::stats = Large Lot Methodology (rank-based 1SD / 2SD / 3SD, automatic start = mean + 2 SD of all orders);   // (1.5.0) histP: RTH / overnight split of the new-order sizes for the large-lot distribution;   // (1.4.0) LogDist: the big-lot distribution (log mean / SD, 5 sessions) for the BIG column tiers;   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
+static const char* const VERSION = "1.7.0";   // (1.7.0) Big Lot S20 / S10 / S5: LogDist::stats with nSess > 0 = sizes at or above which ~20 / 10 / 5 orders occur per session (rank over the pooled sessions);   // (1.6.0) LogDist::stats = Large Lot Methodology (rank-based 1SD / 2SD / 3SD, automatic start = mean + 2 SD of all orders);   // (1.5.0) histP: RTH / overnight split of the new-order sizes for the large-lot distribution;   // (1.4.0) LogDist: the big-lot distribution (log mean / SD, 5 sessions) for the BIG column tiers;   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -179,6 +179,7 @@ inline std::string label(const Line& L) { return std::string(L.side == BID ? "Bi
 struct LogDist {
     static const int NB = 48;
     long long c[NB];
+    int nSess = 0;                      // (1.7.0) sessions pooled in c (set by the caller); > 0 + automatic start = Big Lot S20 / S10 / S5
     LogDist() { clear(); }
     void clear() { for (int i = 0; i < NB; ++i) c[i] = 0; }
     static int bucket(long long s) { if (s < 10) return -1; const int b = (int)std::floor(std::log((double)s / 10.0) / std::log(1.15)); return b < 0 ? 0 : b >= NB ? NB - 1 : b; }
@@ -209,10 +210,33 @@ struct LogDist {
         for (size_t k = 0; k < t.size(); ++k) if (t[k] < '0' || t[k] > '9') return false;
         out = std::atoll(t.c_str()); return true;
     }
+    // (1.7.0, Rassul 2026-10-17 "Big Lot S20 S10 S5") the tiers are named by how often they occur: S20 / S10 / S5 = the sizes at or above which about 20 / 10 / 5 orders
+    // happen per session (pooled sessions: rank 20 x nSess, 10 x nSess, 5 x nSess from the top; log-interpolated inside a bucket). Needs nSess > 0 and >= 20 x nSess orders.
+    bool rankStats(long long minN, long long& n, double& mu, double v[3], double* q266, double* startOut) const {
+        if (nSess <= 0) return false;
+        double tot = 0; for (int i = 0; i < NB; ++i) tot += (double)c[i];
+        const double R[3] = { 20.0, 10.0, 5.0 };
+        if (tot < R[0] * nSess || (long long)(R[0] * nSess) < minN) return false;
+        for (int k = 0; k < 3; ++k) {
+            const double target = R[k] * nSess; double above = 0; v[k] = 0;
+            for (int i = NB - 1; i >= 0; --i) {
+                if (c[i] <= 0) continue;
+                if (above + (double)c[i] >= target) { v[k] = 10.0 * std::pow(1.15, (double)(i + 1) - (target - above) / (double)c[i]); break; }
+                above += (double)c[i];
+            }
+        }
+        for (int k = 1; k < 3; ++k) if (v[k] < v[k - 1]) v[k] = v[k - 1];
+        double sw = 0, s1 = 0;
+        for (int i = 0; i < NB; ++i) { if (c[i] <= 0 || centre(i) < v[0]) continue; sw += (double)c[i]; s1 += c[i] * std::log(centre(i)); }
+        mu = sw > 0 ? std::exp(s1 / sw) : v[0];
+        n = (long long)(R[0] * nSess); if (q266) *q266 = v[2]; if (startOut) *startOut = v[0];
+        return true;
+    }
     // (1.6.0, "Large Lot Methodology" 2026-10-16) RANK-BASED tiers: start <= 0 = automatic = mean + 2 SD of all the recorded orders (>= 10 lots, bucket centres);
     // the pool = orders at or above the start; mu = geometric mean; 1SD / 2SD / 3SD = the sizes at rank 84.13 / 97.72 / 99.87 % of the pool (log-interpolated inside a
     // bucket, no curve fit); q266 = rank 99.61 % (= 2.66 SD); false under minN orders
     bool stats(long long start, long long minN, long long& n, double& mu, double v[3], double* q266 = nullptr, double* startOut = nullptr) const {
+        if (start <= 0 && nSess > 0) return rankStats(minN, n, mu, v, q266, startOut);   // (1.7.0) Big Lot S20 / S10 / S5
         double st = (double)start;
         if (start <= 0) {
             double w = 0, a = 0, b = 0;

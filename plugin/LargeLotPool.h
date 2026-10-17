@@ -1,4 +1,5 @@
 // LargeLotPool.h - the "Large Lot Methodology" for AGGRESSOR orders (BidAskStats L), 2026-10-17 (Rassul: "yes do it").
+// (2026-10-17) Big Lot S20 / S10 / S5: tiers t[0..2] = sizes at or above which ~20 / 10 / 5 orders occur per session (rank over the pooled sessions).
 // Same method as the LMT pool (BigOrderLines.h): log-bucket histogram of order sizes (>= 10 lots), pool = orders at or above
 // mean + 2 SD, tiers 1SD / 2SD / 3SD = ranks 84.13 / 97.72 / 99.87 % of that pool. 5 sessions (4 past + the current one).
 // Channels: 0 = all hours, 1 = RTH (8:30-15:00 CT), 2 = overnight. A channel needs MIN_N pool orders, else all hours, else none
@@ -13,6 +14,7 @@ namespace llp {
 struct LogDist {
     static const int NB = 48;
     long long c[NB];
+    int nSess = 0;                      // sessions pooled (set by the caller): > 0 + automatic start = Big Lot S20 / S10 / S5
     LogDist() { clear(); }
     void clear() { for (int i = 0; i < NB; ++i) c[i] = 0; }
     static int bucket(long long s) { if (s < 10) return -1; const int b = (int)std::floor(std::log((double)s / 10.0) / std::log(1.15)); return b < 0 ? 0 : b >= NB ? NB - 1 : b; }
@@ -44,7 +46,27 @@ struct LogDist {
         session = sv; d = t; return true;
     }
     // start <= 0 = automatic = mean + 2 SD of all recorded orders (bucket centres); pool = at / above start; tiers by rank, log-interpolated in a bucket
+    bool rankStats(long long minN, long long& n, double& mu, double v[3], double* startOut) const {
+        if (nSess <= 0) return false;
+        double tot = 0; for (int i = 0; i < NB; ++i) tot += (double)c[i];
+        const double R[3] = { 20.0, 10.0, 5.0 };
+        if (tot < R[0] * nSess || (long long)(R[0] * nSess) < minN) return false;
+        for (int k = 0; k < 3; ++k) {
+            const double target = R[k] * nSess; double above = 0; v[k] = 0;
+            for (int i = NB - 1; i >= 0; --i) {
+                if (c[i] <= 0) continue;
+                if (above + (double)c[i] >= target) { v[k] = 10.0 * std::pow(1.15, (double)(i + 1) - (target - above) / (double)c[i]); break; }
+                above += (double)c[i];
+            }
+        }
+        for (int k = 1; k < 3; ++k) if (v[k] < v[k - 1]) v[k] = v[k - 1];
+        double sw = 0, s1 = 0;
+        for (int i = 0; i < NB; ++i) { if (c[i] <= 0 || centre(i) < v[0]) continue; sw += (double)c[i]; s1 += c[i] * std::log(centre(i)); }
+        mu = sw > 0 ? std::exp(s1 / sw) : v[0]; n = (long long)(R[0] * nSess); if (startOut) *startOut = v[0];
+        return true;
+    }
     bool stats(long long start, long long minN, long long& n, double& mu, double v[3], double* startOut = nullptr) const {
+        if (start <= 0 && nSess > 0) return rankStats(minN, n, mu, v, startOut);   // Big Lot S20 / S10 / S5
         double st = (double)start;
         if (start <= 0) {
             double w = 0, a = 0, b = 0;
@@ -102,12 +124,15 @@ struct Pool {
         trim(k);
     }
     LogDist sum(int k) const { LogDist t = cur[k]; for (std::map<long long, LogDist>::const_iterator i = past[k].begin(); i != past[k].end(); ++i) t.add(i->second); return t; }
+    int sessionsIn(int k) const { return (int)past[k].size() + (cur[k].total() > 0 ? 1 : 0); }
     Tiers tiersFor(int ch) const {
         Tiers r; double v[3]; long long n = 0; double mu = 0, st = 0;
         const int order[2] = { ch == CH_RTH || ch == CH_ON ? ch : CH_ALL, CH_ALL };
         for (int j = 0; j < 2; ++j) {
             if (j == 1 && order[0] == CH_ALL) break;
-            if (sum(order[j]).stats(0, MIN_N, n, mu, v, &st)) {
+            LogDist pool; if (past[order[j]].size() >= 2) { for (std::map<long long, LogDist>::const_iterator i = past[order[j]].begin(); i != past[order[j]].end(); ++i) pool.add(i->second); pool.nSess = (int)past[order[j]].size(); }   // finished sessions only: stable all day
+            else { pool = sum(order[j]); pool.nSess = sessionsIn(order[j]); }
+            if (pool.stats(0, MIN_N, n, mu, v, &st)) {
                 r.ok = true; r.channel = order[j]; r.n = n; r.mu = mu; r.start = st;
                 for (int k = 0; k < 3; ++k) r.t[k] = (long long)std::ceil(v[k]);
                 for (int k = 1; k < 3; ++k) if (r.t[k] < r.t[k - 1]) r.t[k] = r.t[k - 1];
