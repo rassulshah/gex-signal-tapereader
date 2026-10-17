@@ -67,7 +67,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.7.1"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.7.2"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -759,8 +759,9 @@ void BigBidAsk::render(BBState& S) {
         ++S.lay.shown;
         const bool zone = zn::atZone(Z, c.bar, candPx[k]);
         const COLOR cSide = c.side < 0 ? (COLOR)set.sell : (COLOR)set.buy;
-        const COLOR col = zone ? cSide : getBlendedColor(cSide, 0x00000000, 55.0f);
-        const COLOR ink = zone ? (COLOR)0x00FFFFFF : getBlendedColor(0x00FFFFFF, 0x00000000, 45.0f);
+        const COLOR CYAN = 0x00FFFF00;   // (1.7.2, Rassul 11:04 "color the 3sd or more cyan") 3SD+ = cyan number and box / circle
+        const COLOR col = c.huge ? CYAN : zone ? cSide : getBlendedColor(cSide, 0x00000000, 55.0f);
+        const COLOR ink = c.huge ? CYAN : zone ? (COLOR)0x00FFFFFF : getBlendedColor(0x00FFFFFF, 0x00000000, 45.0f);
         if (zone) ++S.zoneFull; else ++S.zoneDim;
         const int pw = c.huge ? 2 : 1;
         {   // the black edge first (so the box / circle reads on a candle of its own colour), then the colour
@@ -821,6 +822,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
     p->setDescription("LRA Big Bid / Ask v1.5.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
-    p->setVersion("1.7.1");   // BBA_VERSION
+    p->setVersion("1.7.2");   // BBA_VERSION
     return p;
 }
