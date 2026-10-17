@@ -67,7 +67,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.7.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.7.1"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -328,8 +328,8 @@ static void printSd(BBState& S, long long now, const std::function<int(long long
     if (t0) { S.sdMu = t0->mu; for (int q = 0; q < 3; ++q) S.sd[q] = t0->sd[q]; S.sdN = t0->n; }
     int wins = 0; for (int i = 0; i < 48; ++i) if (S.win[i].ok) ++wins;
     S.sdWhy = t0 ? std::string(m0 >= 0 && S.win[winOf(m0)].ok ? "this 30-min window" : (dayMod(m0) ? "day (window still learning)" : "night (window still learning)")) +
-                   " " + std::to_string(t0->n) + " prints: Big mu " + std::to_string((long long)std::llround(t0->mu)) + " / S20 " + std::to_string(t0->sd[0]) +
-                   " / S5 " + std::to_string(t0->sd[2]) + " lots; windows ready " + std::to_string(wins) + "/48"
+                   " " + std::to_string(t0->n) + " prints: Big mu " + std::to_string((long long)std::llround(t0->mu)) + " / 1SD " + std::to_string(t0->sd[0]) +
+                   " / 3SD " + std::to_string(t0->sd[2]) + " lots; windows ready " + std::to_string(wins) + "/48"
                  : "learning - bold ratio rule";
 }
 void BigBidAsk::settings(BBState& S, long long now) {
@@ -684,7 +684,7 @@ void BigBidAsk::render(BBState& S) {
             const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             setFont(bold ? fb : fp);
             PNT pt; pt.set(i, (float)((double)p.key * S.tick), kBarCenter);
-            bba::Cand c; c.bar = i; c.side = sd; c.x = (cb_.l + cb_.r) / 2;   // (1.6.0) on the candle c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = bold ? thB : th;
+            bba::Cand c; c.bar = i; c.side = sd; c.x = (cb_.l + cb_.r) / 2; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = bold ? thB : th;   // (1.6.0) on the candle; (1.7.1) c.y / c.w / c.h were inside the comment (never set: every number landed at y 0 = 'top' clash)
             c.bold = bold; c.huge = huge; c.circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0); c.first = bold && F->closed;
             cands.push_back(c); src.push_back(F); texts.push_back(tx); candPx.push_back((double)p.key * S.tick); candVol.push_back((double)p.vol);
         }
@@ -821,6 +821,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
     p->setDescription("LRA Big Bid / Ask v1.5.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
-    p->setVersion("1.7.0");   // BBA_VERSION
+    p->setVersion("1.7.1");   // BBA_VERSION
     return p;
 }
