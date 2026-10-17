@@ -1113,7 +1113,7 @@ void BigBidAsk::render(BBState& S) {
     {   // (1.2.1, SignalBoard) the bold sizes (and circles) of the laid-out bars for the other indicators on this chart
         std::vector<sb::Ev> ev;
         for (size_t k = 0; k < cands.size(); ++k) { if (!cands[k].bold) continue;
-            sb::Ev e; e.bar = ctSec((RTDATE)times[cands[k].bar]); e.px = candPx[k]; e.side = cands[k].side; e.val = candVol[k]; e.flag = cands[k].circle ? 1 : 0;
+            sb::Ev e; e.bar = ctSec((RTDATE)times[cands[k].bar]); e.px = candPx[k]; e.side = cands[k].side; e.val = candVol[k]; e.flag = (cands[k].circle ? 1 : 0) | ((picks[k].cat + 1) << 1) | (picks[k].lv.empty() ? 0 : 16) | (picks[k].sweep ? 32 : 0) | (picks[k].piv ? 64 : 0) | ((set.cat[picks[k].cat < 0 || picks[k].cat > 3 ? 0 : picks[k].cat].n & 0x7F) << 8);   // (1.12.0) bit 0 circle, bits 1-3 category (1 - 4), 4 at a level, 5 sweep, 6 pivot, 8-14 Big Lot N (0 = category 4)
             if (e.bar > 0) ev.push_back(e); }
         const char* sy2 = getSymbol(); const char* cl2 = getChartLabel();
         sb::publish('B', sy2 ? sy2 : "", getSecondsPerBar(), cl2 ? cl2 : "", steadyMs(), ev);

@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.42.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.43.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -2592,7 +2592,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
             Cand c; c.dir = evA[i].side > 0 ? 1 : -1; c.px = evA[i].px; c.bar = b; c.aX = evA[i].val; c.tEnd = barKey(b) * 1000; c.src = 2; cands.push_back(c);
         }
         for (size_t i = 0; i < evB.size(); ++i) {                              // 3 Big Bid/Ask absorption circle in the last 5 bars
-            if (!evB[i].flag) continue; const int b = barIdx(evB[i].bar); if (b < 0 || b < lastBar - 4) continue;
+            if (!(evB[i].flag & 1)) continue; const int b = barIdx(evB[i].bar); if (b < 0 || b < lastBar - 4) continue;
             Cand c; c.dir = evB[i].side < 0 ? 1 : -1; c.px = evB[i].px; c.bar = b; c.lots = (long long)evB[i].val; c.circle = true; c.tEnd = barKey(b) * 1000; c.src = 3; cands.push_back(c);
         }
         // 4 (0.22.0, Rassul 09:05 - the E-S 9:00 low: a 500 offer pulled + buyers lifted 1486) INITIATIVE at the session extreme: a bold
@@ -2641,7 +2641,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
             // cross-confirm with the other indicators at the same price / bars
             const long long k0 = barKey(std::max(0, c.bar - 2)), k1 = barKey(lastBar);
             if (c.aX <= 0) { const sb::Ev* a = sb::nearestEv(evA, c.px, tol, k0, k1, c.dir); if (a) c.aX = a->val; }
-            if (!c.circle) { const sb::Ev* q = sb::nearestEv(evB, c.px, tol, k0, k1, c.dir > 0 ? -1 : 1); if (q && q->flag) c.circle = true; }
+            if (!c.circle) { const sb::Ev* q = sb::nearestEv(evB, c.px, tol, k0, k1, c.dir > 0 ? -1 : 1); if (q && (q->flag & 1)) c.circle = true; }
             if (c.lots <= 0) { const sb::Ev* f2 = sb::nearestEv(evF, c.px, tol, k0, k1, c.dir > 0 ? -1 : 1); if (f2) c.lots = (long long)f2->val; }
             const int score = (c.src == 1 || c.lots > 0 ? 1 : 0) + (c.aX > 0 ? 1 : 0) + (c.circle ? 1 : 0);
             const bool bInc = best && S.vIncDir == best->dir && std::fabs(best->px - S.vIncPx) < tick * 0.5;
@@ -2669,7 +2669,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
                 AB a; a.dir = c.dir; a.px = c.px;
                 const int fs = c.dir > 0 ? -1 : 1;
                 if (c.src == 1) a.bits |= 2; if (c.src == 2) { a.bits |= 8; a.ax = c.aX; } if (c.src == 3 || c.circle) a.bits |= 4;
-                { const sb::Ev* q = sb::nearestEv(evB, c.px, tol, k0a, k1a, fs); if (q && q->flag) a.bits |= 4; }
+                { const sb::Ev* q = sb::nearestEv(evB, c.px, tol, k0a, k1a, fs); if (q && (q->flag & 1)) a.bits |= 4; }
                 { const sb::Ev* p = sb::nearestEv(evA, c.px, tol, k0a, k1a, c.dir); if (p) { a.bits |= 8; a.ax = std::max(a.ax, p->val); } }
                 { const sb::Ev* f2 = sb::nearestEv(evF, c.px, tol, k0a, k1a, fs); if (f2) { a.bits |= 2; a.fill = std::max(a.fill, (long long)f2->val); } }
                 const int rs = c.dir > 0 ? bfl::BID : bfl::ASK, as = c.dir > 0 ? bfl::ASK : bfl::BID;   // the defender's / the attacker's side
@@ -2731,11 +2731,22 @@ void LiquidityProfile::renderWarning(LQState& S) {
             const bool against = have && w.favour != 0 && ((w.favour > 0) != (vdir > 0)) && atTurn && nowMs(S) - S.warnSinceMs >= 15000;
             if (against) vfail = true;
             std::string what;
-            if (best->src == 4) what = std::string(vdir > 0 ? "buyers lifted " : "sellers hit ") + std::to_string(best->lots) + " at " + pxTxt(best->px) + " (initiative)";
+            // (0.43.0, Rassul 2026-10-17 15:31 "send it to the liquidity profile read") Big Bid/Ask 1.12.0 posts each shown print with its Big Lot
+            // category (SignalBoard flag bits 1-3, N in bits 8-14, sweep bit 5): the read names it - "Big Lot 5 seller at PDH (sweep)"
+            auto bigLot = [&](const sb::Ev* q) { if (!q) return std::string(); const int cat = (q->flag >> 1) & 7; if (cat <= 0) return std::string();
+                const int N = (q->flag >> 8) & 0x7F; std::string t = N > 0 ? "Big Lot " + std::to_string(N) : ">= " + std::to_string((long long)q->val) + " lots";
+                t += q->side < 0 ? " seller " : " buyer "; t += std::to_string((long long)q->val);
+                if (q->flag & 32) t += " (sweep)";
+                return t; };
+            const long long kb0 = barKey(std::max(0, best->bar - 2)), kb1 = barKey(lastBar);
+            const std::string blWith = bigLot(sb::nearestEv(evB, best->px, tol, kb0, kb1, vdir > 0 ? -1 : 1));   // the absorbed attacker (seller under a REV UP)
+            const std::string blInit = bigLot(sb::nearestEv(evB, best->px, tol, kb0, kb1, vdir > 0 ? 1 : -1));   // the initiative side
+            if (best->src == 4) what = (blInit.empty() ? std::string(vdir > 0 ? "buyers lifted " : "sellers hit ") + std::to_string(best->lots) : blInit + (vdir > 0 ? " lifted" : " hit")) + " at " + pxTxt(best->px) + " (initiative)";
             else if (best->lots > 0) what = std::string(vdir > 0 ? "big bid filled " : "big offer filled ") + (best->n > 1 ? std::to_string(best->n) + "\xD7 " : std::string()) + std::to_string(best->lots)
                 + (vdir > 0 ? " (sellers hit it)" : " (buyers lifted it)");   // (0.22.2) who was passive and who hit it
             else what = std::string(vdir > 0 ? "sellers absorbed" : "buyers absorbed");
             v1 = what;
+            if (!blWith.empty() && best->src != 4) v1 += " \xB7 " + blWith + " absorbed";   // (0.43.0)
             if (best->pulledOpp > 0) v1 += std::string(" \xB7 big ") + (vdir > 0 ? "offer " : "bid ") + std::to_string(best->pulledOpp) + " at " + pxTxt(best->pulledPx) + " pulled";
             auto side = [&](int sd, const char* nm) { if (S.bo.live[sd] < 0) return std::string();
                 const long long n = (long long)std::llround(S.boSize[sd]);
@@ -3308,6 +3319,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.42.0");   // LQ_VERSION
+    p->setVersion("0.43.0");   // LQ_VERSION
     return p;
 }

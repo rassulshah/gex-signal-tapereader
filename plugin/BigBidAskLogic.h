@@ -68,8 +68,8 @@ struct Settings {
 // (1.4.0, Rassul 11:51 "a divider ... so the value always looks like a 1 or 2 digit value; for ES 10 by default") per market, from the
 // typical biggest lots at one price in a 3-min candle (ES ~300-1,500, CL / NG / 6E ~100-500, NQ / GC / HG ~20-150)
 inline int divFor(const std::string& m) {
-    if (m == "ES" || m == "CL" || m == "NG" || m == "EU") return 10;
-    return 1;                                   // NQ, GC, HG: already 1-2 digits
+    if (m == "ES" || m == "CL") return 10;      // (1.12.0, Rassul 15:31 "change ng and 6e divider to 1": their big prints are ~70 - 160 lots)
+    return 1;                                   // NQ, GC, HG, NG, 6E: already 2-3 digits
 }
 inline bool divOk(long long v) { return v >= 1 && v <= 1000; }
 inline bool fontOk(long long v) { return v >= 6 && v <= 20; }
