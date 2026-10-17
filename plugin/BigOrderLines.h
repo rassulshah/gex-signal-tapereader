@@ -35,7 +35,7 @@
 #include <vector>
 
 namespace bol {
-static const char* const VERSION = "1.5.0";   // (1.5.0) histP: RTH / overnight split of the new-order sizes for the large-lot distribution;   // (1.4.0) LogDist: the big-lot distribution (log mean / SD, 5 sessions) for the BIG column tiers;   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
+static const char* const VERSION = "1.6.0";   // (1.6.0) LogDist::stats = Large Lot Methodology (rank-based 1SD / 2SD / 3SD, automatic start = mean + 2 SD of all orders);   // (1.5.0) histP: RTH / overnight split of the new-order sizes for the large-lot distribution;   // (1.4.0) LogDist: the big-lot distribution (log mean / SD, 5 sessions) for the BIG column tiers;   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -209,13 +209,34 @@ struct LogDist {
         for (size_t k = 0; k < t.size(); ++k) if (t[k] < '0' || t[k] > '9') return false;
         out = std::atoll(t.c_str()); return true;
     }
-    // the orders at or above start: n, Big mu and the 1 / 2 / 3 SD sizes (lots); false under minN orders
-    bool stats(long long start, long long minN, long long& n, double& mu, double v[3]) const {
-        double sw = 0, s1 = 0, s2 = 0;
-        for (int i = 0; i < NB; ++i) { if (c[i] <= 0 || centre(i) < (double)start) continue; const double x = std::log(centre(i)); sw += (double)c[i]; s1 += c[i] * x; s2 += c[i] * x * x; }
+    // (1.6.0, "Large Lot Methodology" 2026-10-16) RANK-BASED tiers: start <= 0 = automatic = mean + 2 SD of all the recorded orders (>= 10 lots, bucket centres);
+    // the pool = orders at or above the start; mu = geometric mean; 1SD / 2SD / 3SD = the sizes at rank 84.13 / 97.72 / 99.87 % of the pool (log-interpolated inside a
+    // bucket, no curve fit); q266 = rank 99.61 % (= 2.66 SD); false under minN orders
+    bool stats(long long start, long long minN, long long& n, double& mu, double v[3], double* q266 = nullptr, double* startOut = nullptr) const {
+        double st = (double)start;
+        if (start <= 0) {
+            double w = 0, a = 0, b = 0;
+            for (int i = 0; i < NB; ++i) { if (c[i] <= 0) continue; const double x = centre(i); w += (double)c[i]; a += c[i] * x; b += c[i] * x * x; }
+            if (w < 2) return false;
+            const double m = a / w, sd = std::sqrt(std::max(0.0, b / w - m * m)); st = m + 2.0 * sd;
+        }
+        if (startOut) *startOut = st;
+        double sw = 0, s1 = 0;
+        for (int i = 0; i < NB; ++i) { if (c[i] <= 0 || centre(i) < st) continue; sw += (double)c[i]; s1 += c[i] * std::log(centre(i)); }
         n = (long long)sw; if (n < minN || n < 2) return false;
-        const double m = s1 / sw, var = std::max(0.0, s2 / sw - m * m), sd = std::sqrt(var);
-        mu = std::exp(m); for (int k = 0; k < 3; ++k) v[k] = std::exp(m + (k + 1) * sd);
+        mu = std::exp(s1 / sw);
+        static const double P[4] = { 0.8413, 0.9772, 0.9987, 0.9961 };
+        double out[4] = { 0, 0, 0, 0 };
+        for (int k = 0; k < 4; ++k) {
+            const double target = P[k] * sw; double cum = 0;
+            for (int i = 0; i < NB; ++i) {
+                if (c[i] <= 0 || centre(i) < st) continue;
+                if (cum + (double)c[i] >= target) { const double f = (target - cum) / (double)c[i]; out[k] = 10.0 * std::pow(1.15, (double)i + f); break; }
+                cum += (double)c[i];
+            }
+        }
+        for (int k = 0; k < 3; ++k) v[k] = out[k];
+        if (q266) *q266 = out[3];
         return true;
     }
 };

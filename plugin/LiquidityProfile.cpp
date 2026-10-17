@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.40.2"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.41.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -318,7 +318,7 @@ static long long civilDays(int y, unsigned m, unsigned d) {
 // (0.38.0, Rassul 16:45 "solidify and use for all markets") one large-lot distribution family (LMT resting orders, or MKT market orders), three channels:
 // 0 = all hours, 1 = RTH 8:30-15:00 CT, 2 = overnight; each = this session + the 4 sessions before it (file), log mean / SD of the orders at or above the start
 #ifndef LQ_FLOW
-struct BldCh { bol::LogDist past, curBase, curAll; std::vector<std::pair<long long, std::string> > lines; bool ok = false; long long n = 0; double mu = 0, v[3] = {0, 0, 0}; };
+struct BldCh { bol::LogDist past, curBase, curAll; std::vector<std::pair<long long, std::string> > lines; bool ok = false; long long n = 0; double mu = 0, v[3] = {0, 0, 0}, q266 = 0, stA = 0; };
 struct BldSet { std::string mkt; long long ses = -2, calcMs = -1, writeMs = -1, startUsed = -1; BldCh ch[3]; };
 #endif
 struct LQState {
@@ -400,7 +400,7 @@ struct LQState {
     // before it (LiquidityProfile.biglots-<MKT>.txt); Big mu and the 1 / 2 / 3 SD sizes the BIG column tiers and its reference use
     BldSet bsL, bsM; std::string mkSrc;   // (0.38.0)
     bol::LogDist bldPast, bldCurBase; std::vector<std::pair<long long, std::string>> bldLines; std::string bldMkt; long long bldSes = -2, bldCalcMs = -1, bldWriteMs = -1;
-    bool bldOk = false; long long bldN = 0, bldStart = 0; double bldMu = 0, bldV[3] = {0, 0, 0};
+    bool bldOk = false; long long bldN = 0, bldStart = 0; double bldMu = 0, bldV[3] = {0, 0, 0}, bldQ266 = 0;
     long long boUnder1sd = 0;                       // (0.26.0) live big orders not drawn: under 1SD
     long long boBase = 0;                           // (0.25.0) the tier base (lots): Big >= base, Bigger >= 2x, Biggest >= 3x
     int boTier[2] = {0, 0};                         // (0.25.0) the BIG box tier per side: 0 none, 1 biggest (dim), 2 big, 3 huge (outline)
@@ -415,7 +415,7 @@ struct LQState {
     int colBigL = -1, colBigR = -1; std::deque<std::pair<long long, double>> boHist[2]; long long boHistPx[2] = { -1, -1 };
     int boSign[2] = { 0, 0 }; double boSize[2] = { 0, 0 }; long long boNormsMs = -1, boNorms[24] = { 0 }; bool boNormsOk = false;
     int boExec = 0; long long boDepthMin = 0;
-    bfl::Mkt mkt; bfl::Ice ice; long long bfNow = 0; bool mktOk = false; double mktMu = 0, mktV[3] = { 0, 0, 0 };
+    bfl::Mkt mkt; bfl::Ice ice; long long bfNow = 0; bool mktOk = false; double mktMu = 0, mktV[3] = { 0, 0, 0 }, mktQ266 = 0;
     struct MN { bool ok = false; long long n = 0, start = 0, bigN = 0; double mu = 0, v[3] = { 0, 0, 0 }; };
     MN mnP[2], lnP[2];   // (0.36.0) the 5-session average per period: 0 = RTH, 1 = overnight (kind P rows)
     MN mnAll, mnS[4], mnH[24]; long long mnMs = -1; bool mnHave = false; std::string mnSrc;
@@ -1756,6 +1756,14 @@ static bool bldRun(const std::string& dirp, const std::string& stem, const std::
                 if (ses == session) { c.curBase = d; continue; }   // this session before a restart: the engine's lists start again at 0
                 c.lines.push_back(std::make_pair(ses, ln));
             }
+            {   std::ifstream in2; std::string l2; int n2 = 0;   // (0.41.0) seed sessions rebuilt from the recorded order-by-order history (<file>.seed.txt): only sessions the main file does not have
+                if (openBoundedInput(dirp + "\\" + stem + "-" + market + sfx[k] + ".seed.txt", in2)) while (readBoundedLine(in2, l2) && ++n2 < 64) {
+                    long long ses2 = 0; bol::LogDist d2;
+                    if (!bol::LogDist::parse(l2, ses2, d2) || ses2 == session) continue;
+                    bool have = false; for (size_t q = 0; q < c.lines.size(); ++q) if (c.lines[q].first == ses2) have = true;
+                    if (!have) c.lines.push_back(std::make_pair(ses2, l2));
+                }
+            }
             std::sort(c.lines.begin(), c.lines.end(), [](const std::pair<long long, std::string>& a, const std::pair<long long, std::string>& b) { return a.first > b.first; });
             if (c.lines.size() > 4) c.lines.resize(4);
             for (size_t i = 0; i < c.lines.size(); ++i) { long long ses = 0; bol::LogDist d; if (bol::LogDist::parse(c.lines[i].second, ses, d)) c.past.add(d); }
@@ -1765,9 +1773,9 @@ static bool bldRun(const std::string& dirp, const std::string& stem, const std::
     for (int k = 0; k < 3; ++k) {
         BldCh& c = B.ch[k];
         bol::LogDist all = cur[k]; all.add(c.curBase); c.curAll = all; all.add(c.past);
-        double v[3] = { 0, 0, 0 }; double mu = 0; long long n = 0;
-        c.ok = all.stats(start, 30, n, mu, v); c.n = n;
-        if (c.ok) { c.mu = mu; for (int q = 0; q < 3; ++q) c.v[q] = v[q]; }
+        double v[3] = { 0, 0, 0 }; double mu = 0; long long n = 0; double q266 = 0, stA = 0;
+        c.ok = all.stats(start, 30, n, mu, v, &q266, &stA); c.n = n;   // (0.41.0) Large Lot Methodology: rank-based tiers, automatic start
+        if (c.ok) { c.mu = mu; for (int q = 0; q < 3; ++q) c.v[q] = v[q]; c.q266 = q266; c.stA = stA; }
     }
     if (session >= 0 && (B.writeMs < 0 || st - B.writeMs >= 60000 || st < B.writeMs)) {
         B.writeMs = st; makeDir(dirp);
@@ -1792,15 +1800,15 @@ static const BldCh* bldPick(const BldSet& B, bool rth, std::string& src) {
 // (0.38.0) + RTH / overnight channels, the per-market start, and it is the ONLY source of the LMT footer and tiers (the nightly study rows no longer override it)
 void LiquidityProfile::bldUpdate(LQState& S, long long start) {
     const std::string dirp = flexDir(); if (dirp.empty() || S.market.empty()) { S.bldOk = false; return; }
-    start = std::max(start, bldFloor(S.market));
+    start = 0; (void)bldFloor;   // (0.41.0) automatic start (mean + 2 SD of all recorded orders), per market and channel
     BldSet& B = S.bsL;
     if (!bldDue(B, S.market, S.boSession, start)) return;
     bol::LogDist cur[3]; cur[0].fromHist(S.bo.hist); cur[1].fromHist(S.bo.histP[0]); cur[2].fromHist(S.bo.histP[1]);
     const bool wrote = bldRun(dirp, "LiquidityProfile.biglots", S.market, S.boSession, B, cur, start);
     const long long ms = nowMs(S); const int mod = (int)((ms / 60000LL) % 1440LL);
     std::string src; const BldCh* a = bldPick(B, mod >= 8 * 60 + 30 && mod < 15 * 60, src);
-    S.bldStart = start; S.lnSrc = src; S.bldOk = a != nullptr; S.bldN = a ? a->n : B.ch[0].n;
-    if (a) { S.bldMu = a->mu; for (int k = 0; k < 3; ++k) S.bldV[k] = a->v[k]; }
+    S.bldStart = a ? (long long)std::llround(a->stA) : start; S.lnSrc = src; S.bldOk = a != nullptr; S.bldN = a ? a->n : B.ch[0].n;
+    if (a) { S.bldMu = a->mu; for (int k = 0; k < 3; ++k) S.bldV[k] = a->v[k]; S.bldQ266 = a->q266; }
     if (wrote && S.boSession >= 0) {
         // "BSD1,ok,n,mu,1sd,2sd,3sd" for Big Bid / Ask (ok 0 = still learning: Big Bid / Ask keeps its own rule)
         char b2[160]; std::snprintf(b2, sizeof(b2), "BSD1,%d,%lld,%lld,%lld,%lld,%lld\n", S.bldOk ? 1 : 0, S.bldN, (long long)std::llround(S.bldMu),
@@ -1812,7 +1820,7 @@ void LiquidityProfile::bldUpdate(LQState& S, long long start) {
 // start, never under 10 lots for the buckets), 5 sessions pooled, RTH / overnight separately; until a channel has 30+ the session's own live stats stay (set by the caller)
 void LiquidityProfile::mktBldUpdate(LQState& S) {
     const std::string dirp = flexDir(); if (dirp.empty() || S.market.empty()) return;
-    const long long start = std::max(10LL, S.mkt.start());
+    const long long start = 0;   // (0.41.0) automatic start, same method as LMT
     BldSet& B = S.bsM;
     if (!bldDue(B, S.market, S.boSession, start)) return;
     bol::LogDist cur[3];
@@ -1822,7 +1830,7 @@ void LiquidityProfile::mktBldUpdate(LQState& S) {
     const long long ms = nowMs(S); const int mod = (int)((ms / 60000LL) % 1440LL);
     std::string src; const BldCh* a = bldPick(B, mod >= 8 * 60 + 30 && mod < 15 * 60, src);
     S.mkSrc = src;
-    if (a) { S.mktOk = true; S.mktMu = a->mu; for (int k = 0; k < 3; ++k) S.mktV[k] = a->v[k]; }
+    if (a) { S.mktOk = true; S.mktMu = a->mu; for (int k = 0; k < 3; ++k) S.mktV[k] = a->v[k]; S.mktQ266 = a->q266; }
 }
 // (0.37.0, Rassul 14:00 "instead of using 3 SD, use 2.66, in case it just misses the 3SD cutoff") the top tier starts at 2.66 SD: log-space mean + 2.66 x SD, from the mean and the 1SD size
 static double lqSd266(double mu, double v1, double v3) {
@@ -1924,7 +1932,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     bldUpdate(S, minShow);
     S.bo.sdMin = S.bldOk ? std::max(1LL, (long long)std::llround(S.bldV[0])) : 0;   // (0.26.0, audit item 3) chart lines from Bigger (1SD) too
     long long tcut[3] = { minShow, 2 * minShow, 3 * minShow };
-    if (S.bldOk) for (int k = 0; k < 3; ++k) tcut[k] = std::max(1LL, (long long)std::llround(k == 2 ? lqSd266(S.bldMu, S.bldV[0], S.bldV[2]) : S.bldV[k]));
+    if (S.bldOk) for (int k = 0; k < 3; ++k) tcut[k] = std::max(1LL, (long long)std::llround(k == 2 ? (S.bldQ266 > 0 ? S.bldQ266 : lqSd266(S.bldMu, S.bldV[0], S.bldV[2])) : S.bldV[k]));
     tcut[2] = std::max(tcut[2], tcut[1]);
     S.boTier[0] = S.boTier[1] = 0;
     for (int s = 0; s < 2; ++s) {
@@ -2137,7 +2145,7 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
     }
     const long long st = S.mkt.start();
     long long cut[3] = { 2 * st, 4 * st, 8 * st };
-    if (S.mktOk) for (int k = 0; k < 3; ++k) cut[k] = std::max(1LL, (long long)std::llround(k == 2 ? lqSd266(S.mktMu, S.mktV[0], S.mktV[2]) : S.mktV[k]));
+    if (S.mktOk) for (int k = 0; k < 3; ++k) cut[k] = std::max(1LL, (long long)std::llround(k == 2 ? (S.mktQ266 > 0 ? S.mktQ266 : lqSd266(S.mktMu, S.mktV[0], S.mktV[2])) : S.mktV[k]));
     cut[2] = std::max(cut[2], cut[1]);
     const std::vector<bfl::Mark> mk = S.mkt.marks(S.bfNow, cut[0], 5);
     const int bfont = std::max(bol::FONT_MIN, std::min(bol::FONT_MAX, S.boSet.font)) - 1;
@@ -3298,6 +3306,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.40.2");   // LQ_VERSION
+    p->setVersion("0.41.0");   // LQ_VERSION
     return p;
 }
