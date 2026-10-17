@@ -1,10 +1,3 @@
-findings=0 allowed=0 staged_files=8 bytes=372672
+findings=0 allowed=0 staged_files=1 bytes=425
 largest staged blobs (bytes, path):
-SIZE	151302	plugin/DeltaProfile.cpp
-SIZE	103712	plugin/BigBidAsk.cpp
-SIZE	54793	plugin/BigBidAskLogic.h
-SIZE	41246	plugin/DeltaProfileCore.h
-SIZE	11246	plugin/tests_bigba/test_bigba_114.cpp
-SIZE	6337	plugin/tests_delta/test_repaint216.cpp
-SIZE	3954	plugin/tests_bigba/test_bigba_swing114.cpp
-SIZE	82	logs/staged-scan-findings.log
+SIZE	425	logs/staged-scan-findings.log
