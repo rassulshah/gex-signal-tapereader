@@ -126,7 +126,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.10.1"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.11.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -232,6 +232,7 @@ struct BASState {
     long long lateDropped = 0, noBar = 0, decidedLate = 0, finalized = 0;
     std::map<long long, BasFin> fin;
     off::SessionFile file; std::string curSession; bool loaded = false;
+    long long llpSaveMs = -1000000; std::string llpText[llp::NCH];   // (2026-10-17) aggressor-order large-lot pool files: last save, last text written
     nl::Cache lv; std::vector<nl::Level> levels;
     off::ParamCache params;
     // (1.4.0) the stop run: the detector (closed bars in order), its params file, the events by break bar
@@ -642,6 +643,7 @@ long long BidAskStats::sessionKey(long long t) {
 }
 // (1.3.0) chart bars for the order feed: bar ends -> index, the forming bar, ATR + near band, the fallback last price, the session
 void BidAskStats::orderBars(BASState& S, long count, long long now) {
+    S.e.useLP = true;                                   // (2026-10-17) Large Lot Methodology for the aggressor orders (L)
     RTARRAYI times(barDateTime); RTARRAY high(barHigh), low(barLow), close(barClose);
     if (times.count < count || high.count < count || low.count < count || close.count < count) return;
     const long first = std::max(0L, count - (long)WINDOW_BARS - 1);
@@ -661,8 +663,8 @@ void BidAskStats::orderBars(BASState& S, long count, long long now) {
     if (off::toTick((double)close[(int)count - 1], S.tick, px)) S.e.fallbackRef(px, now);
     const std::string ss = sessionStr(S.formingKey);
     if (!ss.empty() && ss != S.curSession) {
-        if (!S.curSession.empty()) { S.file.save(); S.e.newSession(); S.det = sr::Detector(); S.srFrom = -1; }
-        S.curSession = ss; S.loaded = false;
+        if (!S.curSession.empty()) { S.file.save(); S.e.newSession(); S.det = sr::Detector(); S.srFrom = -1; S.llpSaveMs = -1000000; }
+        S.curSession = ss; S.loaded = false; S.e.lp.setSession(sessionKey(S.formingKey));
     }
 }
 void BidAskStats::route(BASState& S, const off::Ev& x) {
@@ -678,6 +680,32 @@ void BidAskStats::route(BASState& S, const off::Ev& x) {
     }
     S.e.apply(S.accs[key], x);
 }
+// (2026-10-17) the aggressor-order large-lot pool files: lsFlexLevels\BidAskStats.aggrlots-<MKT>[-RTH|-ON].txt (+ .seed.txt = history, read only)
+static std::string llpPath(const BASState& S, int k, bool seed) {
+    static const char* const suf[llp::NCH] = { "", "-RTH", "-ON" };
+    return flexDir() + "\\BidAskStats.aggrlots-" + S.market + suf[k] + (seed ? ".seed.txt" : ".txt");
+}
+static void llpLoad(BASState& S) {
+    if (S.market.empty()) return;
+    for (int k = 0; k < llp::NCH; ++k) {
+        for (int seed = 0; seed < 2; ++seed) {
+            std::vector<std::string> lines;
+            if (!nl::readBoundedLines(llpPath(S, k, seed != 0), lines, 256 * 1024, 64, 2048)) continue;
+            S.e.lp.feed(k, lines, seed != 0);
+        }
+    }
+}
+static void llpSave(BASState& S, long long now, bool force) {
+    llp::Pool& lp = S.e.lp;
+    if (S.market.empty() || lp.session <= 0 || (!lp.dirty && !force)) return;
+    if (!force && now - S.llpSaveMs < 60000) return;
+    S.llpSaveMs = now; bool ok = true;
+    for (int k = 0; k < llp::NCH; ++k) {
+        const std::string t = lp.text(k); if (t.empty() || t == S.llpText[k]) continue;
+        if (publishFile(llpPath(S, k, false), t)) S.llpText[k] = t; else ok = false;
+    }
+    if (ok) lp.dirty = false;
+}
 // (1.3.0) this session's record, once: rows come back at finalize (letters, levels, messages exactly as decided)
 void BidAskStats::loadSession(BASState& S) {
     if (S.loaded || S.curSession.empty()) return;
@@ -692,6 +720,7 @@ void BidAskStats::loadSession(BASState& S) {
     S.file.extraTag = "SR|"; S.file.extraHead = sr::SR_HEAD;     // (1.4.0) stop-run events kept after the candle rows
     S.file.load();
     S.file.loadSizes(S.e.aggrDist, S.e.restDist);
+    S.e.lp.setSession(sessionKey(S.formingKey)); llpLoad(S);
     for (size_t i = 0; i < S.file.extra.size(); ++i) { sr::Event e; if (sr::parseEvent(S.file.extra[i], e)) { addEvent(S, e, true); S.srLoaded++; } }
     S.finFrom = 0;
 }
@@ -749,6 +778,7 @@ void BidAskStats::finalize(BASState& S, long long now) {
                 if (age < off::FINAL_GRACE_MS && (S.feed.lastCapped || age < off::DECIDE_DELAY_MS)) { firstPending = std::min(firstPending, t); continue; }
                 if (S.feed.lastCapped) S.decidedLate++;
                 std::map<long long, off::Acc>::iterator a = S.accs.find(t);
+                { struct tm cx; std::memset(&cx, 0, sizeof(cx)); S.e.chan = (t > 0 && getLocaltime((RTDATE)t, &cx)) ? llp::channelOf(cx.tm_hour, cx.tm_min) : llp::CH_ALL; }   // the bar's own hours
                 F.r = S.e.close(a != S.accs.end() ? a->second : off::Acc(), t == S.firstBarKey, P); F.dbo = true;
                 if (a != S.accs.end()) S.accs.erase(a);
                 S.closedAt.erase(c);
@@ -772,7 +802,7 @@ void BidAskStats::finalize(BASState& S, long long now) {
         S.fin[t] = F; S.finalized++; any = true;
     }
     S.finFrom = firstPending != LLONG_MAX ? firstPending : lastSeen;
-    if (any) { S.file.sizes(S.e.aggrDist, S.e.restDist); S.file.save(); invalidateChart(false); }
+    if (any) { S.file.sizes(S.e.aggrDist, S.e.restDist); S.file.save(); llpSave(S, now, false); invalidateChart(false); }
     while (S.fin.size() > KEEP_BARS) S.fin.erase(S.fin.begin());
     for (std::map<long long, off::Acc>::iterator a = S.accs.begin(); a != S.accs.end() && S.accs.size() > 16;) S.accs.erase(a++);
 }
@@ -850,6 +880,15 @@ void BidAskStats::status(BASState& S, long long now) {
         o << "\nSPIKES_TODAY_BID," << nb << "\nSPIKES_TODAY_ASK," << na << "\nLETTERS_TODAY,S " << ls << ",L " << ll;
     }
     o << "\nLAST_CLOSED_BAR," << S.lastClosedTime << "," << stamp(S.lastClosedTime);
+    {   // (2026-10-17) Large Lot Methodology for aggressor orders: the tiers L is using now (this clock's channel, else all hours)
+        struct tm cx; std::memset(&cx, 0, sizeof(cx)); const long long nowT = S.formingKey;
+        const int ch = (nowT > 0 && getLocaltime((RTDATE)nowT, &cx)) ? llp::channelOf(cx.tm_hour, cx.tm_min) : llp::CH_ALL;
+        const llp::Tiers T = S.e.lp.tiersFor(ch);
+        static const char* const nm[llp::NCH] = { "all hours", "RTH", "overnight" };
+        if (T.ok) o << "\nAGGR_LARGE_TIERS," << nm[T.channel] << ",orders in pool " << T.n << ",start " << (long long)(T.start + 0.5) << ",1SD " << T.t[0] << ",2SD " << T.t[1] << ",3SD " << T.t[2];
+        else o << "\nAGGR_LARGE_TIERS,not enough orders yet (the old percentile rule is used)";
+        o << "\nAGGR_LARGE_POOL,sessions " << (S.e.lp.past[llp::CH_ALL].size() + (S.e.lp.cur[llp::CH_ALL].total() > 0 ? 1 : 0)) << ",orders>=10 lots " << S.e.lp.sum(llp::CH_ALL).total();
+    }
     o.precision(10);
     if (ok) o << "\nBIGGEST_BID," << st->m.bid << "," << st->m.bidPx << "\nBIGGEST_ASK," << st->m.ask << "," << st->m.askPx;
     else o << "\nBIGGEST_BID,n/a\nBIGGEST_ASK,n/a";
@@ -1062,6 +1101,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression (was Bid/Ask Stats): who is PRESSING. One bar per candle = the bigger side - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price); a white tick at the other side's lots when both sides spiked. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. R = stop run: a key level (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) broken with a sweep or spike that closed back inside within N bars - red R = buyers trapped above a high, green R = sellers trapped below a low; R? = not proven yet in this market (nightly stop-run study). Spike labels: the ratio, the pace (p = aggressive lots per second vs the same time of day) and the lots. Top: a plain-English message (pace named only when fast / slow), a blue options line when fresh (oHit), and (green = bullish, red = bearish), and the info box (Sellers | Buyers: lots, pace, sweep, large, stop run, crowd = orders, avg size, top order share, burst) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
-    p->setVersion("1.10.1");   // BAS_VERSION
+    p->setVersion("1.11.0");   // BAS_VERSION
     return p;
 }

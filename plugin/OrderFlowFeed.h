@@ -112,6 +112,7 @@
 //   Large thresholds: 0 in the params file = auto = the largeLotPct (99th) percentile of the sizes seen THIS SESSION BEFORE the
 //   candle (aggressor orders / resting orders near price), never under largeLotMin (20) lots. No look-ahead.
 //   NEAR = |price - the last trade price| <= the Liquidity Profile 0.14.0 near band (NearLevels.h).
+#include "LargeLotPool.h"
 #include "NearLevels.h"
 #include "OptionsFlow.h"
 #include "HoverBoard.h"
@@ -446,6 +447,9 @@ public:
     std::unordered_map<Tick, long long> rest[2];       // known resting size per price
     std::map<Tick, std::pair<long long, long long> > lastFill[2];   // price -> (arrival ms, stamp) of the latest fill there
     SizeDist aggrDist, restDist;                       // this session's aggressor order sizes / resting sizes near price
+    // (2026-10-17, Large Lot Methodology) BidAskStats only: aggressor orders >= 10 lots go to per-channel pools (RTH / overnight / all, 5 sessions);
+    // when a channel has enough orders, L = the 1SD tier of that pool (rank 84.13% of the orders >= mean + 2 SD); chan is set by the caller before close()
+    llp::Pool lp; int chan = 0; bool useLP = false;
     SizeDist aggrBar, restBar;                         // (1.3.0) this session's per-candle, per-side BIGGEST aggressor / resting (add or pull) order
     long long events = 0, garbage = 0, unknownDel = 0, unknownMod = 0, unknownFill = 0, dupNew = 0, bookDrops = 0, bookResets = 0;
     long long perAction[4] = {0, 0, 0, 0};
@@ -635,6 +639,7 @@ public:
     Rec numbers(const Acc& a, bool partial, const Params& P) const {
         Rec r; r.partial = partial; r.events = a.events;
         r.thrAggr = rareThreshold(aggrDist, aggrBar, P.largeLotAggr, P);
+        if (useLP && P.largeLotAggr <= 0) { const llp::Tiers T = lp.tiersFor(chan); if (T.ok) r.thrAggr = std::max(1LL, T.t[0]); }   // a fixed lot size in the params file still wins
         r.thrRest = rareThreshold(restDist, restBar, P.largeLotResting, P);
         for (int s = 0; s < 2; ++s) {
             r.pullN[s] = a.pullN[s]; r.pullC[s] = a.pullC[s]; r.pullMax[s] = a.pullMax[s]; r.pullClose[s] = a.pullClose[s];
@@ -664,7 +669,7 @@ public:
     }
     Rec close(const Acc& a, bool partial, const Params& P) {
         const Rec r = numbers(a, partial, P);
-        for (std::unordered_map<long long, Aggr>::const_iterator i = a.aggr.begin(); i != a.aggr.end(); ++i) if (i->second.side == BID || i->second.side == ASK) aggrDist.add(i->second.size);
+        for (std::unordered_map<long long, Aggr>::const_iterator i = a.aggr.begin(); i != a.aggr.end(); ++i) if (i->second.side == BID || i->second.side == ASK) { aggrDist.add(i->second.size); if (useLP) lp.add(chan, i->second.size); }
         for (size_t i = 0; i < a.restSizes.size(); ++i) restDist.add(a.restSizes[i]);
         if (!partial) for (int s = 0; s < 2; ++s) {                        // (1.3.0) the candle's biggest orders join the per-candle distributions
             if (r.aggrMax[s] > 0) aggrBar.add(r.aggrMax[s]);
@@ -672,7 +677,7 @@ public:
         }
         return r;
     }
-    void newSession() { aggrDist.clear(); restDist.clear(); aggrBar.clear(); restBar.clear(); }
+    void newSession() { if (useLP) lp.roll(); aggrDist.clear(); restDist.clear(); aggrBar.clear(); restBar.clear(); }
     // (1.3.0) after a restart: the per-candle maxima come back from the session record's closed candles (no new file lines)
     void barFrom(const Rec& r) { if (r.partial) return; for (int s = 0; s < 2; ++s) { if (r.aggrMax[s] > 0) aggrBar.add(r.aggrMax[s]); const long long rm = std::max(r.addMax[s], r.pullMax[s]); if (rm > 0) restBar.add(rm); } }
 };
