@@ -69,7 +69,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.14.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.14.1"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -1018,7 +1018,7 @@ PickInfo BigBidAsk::choose(BBState& S, int i, bool closed, int sd, const bba::Pi
             int how = 0;
             if ((sh == bba::SH_PB || sh == bba::SH_PBBO) && trend != 0 && (trend > 0 ? bull : bear) && bba::pbBands(hi, lo, X.vw, X.sd, X.sw, i, trend)) how = 1;
             if (!how && (sh == bba::SH_BO || sh == bba::SH_PBBO) && trend != 0) {
-                const int w = i < (int)X.bu.size() ? (trend > 0 ? X.bu[i] : X.bd[i]) : 0;
+                const int w = i < (int)X.bu.size() && (trend > 0 ? bba::upWave(X.sw, i) : bba::downWave(X.sw, i)) ? (trend > 0 ? X.bu[i] : X.bd[i]) : 0;   // (1.14.1) in the wave
                 if (w) { how = 3; r.brk = w; r.brkDir = trend > 0 ? 1 : -1; }
             }
             if (!how) { r.why |= 4; continue; }
@@ -1386,7 +1386,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask 1.14.0: on each candle, the biggest print AT THE BID (sellers, left) and AT THE ASK (buyers, right) in lots / divider, shown when it reaches one of your Big Lot categories (Big Lot N = the size reached about N times a session, worked out per market for day and night; category 4 = a fixed size). One Show choice per category: All prints, Near pivot, Near a level, Pivot near a level, Trend PB, Trend BO, Trend PB + BO; category 4 shows every print of its size. Hover a number for the details.");
-    p->setVersion("1.14.0");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask 1.14.1: on each candle, the biggest print AT THE BID (sellers, left) and AT THE ASK (buyers, right) in lots / divider, shown when it reaches one of your Big Lot categories (Big Lot N = the size reached about N times a session, worked out per market for day and night; category 4 = a fixed size). One Show choice per category: All prints, Near pivot, Near a level, Pivot near a level, Trend PB, Trend BO, Trend PB + BO; category 4 shows every print of its size. Hover a number for the details.");
+    p->setVersion("1.14.1");   // BBA_VERSION
     return p;
 }

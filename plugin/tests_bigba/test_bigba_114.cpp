@@ -1,4 +1,4 @@
-// lsBigBidAsk 1.14.0 settings / defaults tests. Build (from tests_bigba): g++ -std=c++17 -fsanitize=address,undefined -I.. test_bigba_114.cpp -o t && ./t
+// lsBigBidAsk 1.14.x settings / defaults tests. Build (from tests_bigba): g++ -std=c++17 -fsanitize=address,undefined -I.. test_bigba_114.cpp -o t && ./t
 #include "BigBidAskLogic.h"
 #include <iostream>
 #include <fstream>
@@ -20,7 +20,7 @@ int main(){
   CHECK(d.cat[1].bid==0xFFFFFF&&d.cat[1].ask==0xFFFFFF&&d.cat[2].bid==0xFFFFFF&&d.cat[2].ask==0xFFFFFF);
   CHECK(d.cat[0].show==SH_ALL&&d.cat[1].show==SH_PBBO&&d.cat[2].show==SH_PBBO&&d.cat[3].show==SH_ALL);
   CHECK(d.skipFirst==15&&d.skipLast==15&&!d.keyOn&&!d.gamOn&&!d.volOn&&d.keyMask==0&&d.gamMask==0&&d.volMask==0&&!d.rthOnly);
-  struct M{const char*m;int l;} c4[]={{"ES",1350},{"NQ",450},{"CL",95},{"GC",105},{"HG",90},{"NG",295},{"6E",490},{"EU",490}};
+  struct M{const char*m;int l;} c4[]={{"ES",1000},{"NQ",450},{"CL",95},{"GC",105},{"HG",90},{"NG",295},{"6E",490},{"EU",490}};
   for(auto& x:c4){ CHECK(cat4For(x.m)==x.l); CHECK(defaultsFor(x.m).cat[3].lots==x.l); }
   // ---- format / parse
   const std::string base=formatSettings(d); auto bf=fields(base); CHECK(bf.size()==NFIELDS); CHECK(bf.size()==49);

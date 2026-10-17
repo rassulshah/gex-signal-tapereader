@@ -1,4 +1,4 @@
-// lsBigBidAsk 1.14.0 swing pivot + Trend PB band rule tests. Build (from tests_bigba): g++ -std=c++17 -fsanitize=address,undefined -I.. test_bigba_swing114.cpp -o t && ./t
+// lsBigBidAsk 1.14.x swing pivot, waves + Trend PB band rule tests. Build (from tests_bigba): g++ -std=c++17 -fsanitize=address,undefined -I.. test_bigba_swing114.cpp -o t && ./t
 #include "BigBidAskLogic.h"
 #include <iostream>
 #include <random>
@@ -37,6 +37,19 @@ int main(){
   vw.assign(10,15.0); sd.assign(10,1.0); CHECK(pbBands(H,L,vw,sd,s,4,-1)==0); CHECK(pbBands(H,L,vw,sd,s,4,-2)==0);  // highs below -1SD 14: not touched
   vw.assign(10,13.5); sd.assign(10,0.5); CHECK(pbBands(H,L,vw,sd,s,4,-1)==1); CHECK(pbBands(H,L,vw,sd,s,4,-2)==1);   // -1SD 13 touched (VWAP 13.5 not): both count
   vw.assign(10,0.0); CHECK(pbBands(H,L,vw,sd,s,7,1)==0);  // no bands at all: not met
+  // ---- (1.14.1) waves: bars 0..3 up leg, 4..6 down leg, 7..9 up (forming)
+  for(int i=0;i<=3;++i) CHECK(upWave(s,i)&&!downWave(s,i));
+  for(int i=4;i<=6;++i) CHECK(downWave(s,i)&&!upWave(s,i));
+  for(int i=7;i<=9;++i) CHECK(upWave(s,i));
+  // ---- (1.14.1) the band through the print's own candle: an outside bar AFTER the turn makes the bounce's real high (Oct 16 12:42)
+  { // down leg into bottom 3, bounce 4..6 (top 6), bar 7 lower low (turn down), bar 8 outside bar: higher high AND lower low
+    std::vector<double> h={20,18,16,14,15,16,17,16.5,18.5,15}, l={18,16,14,12,13,14,15,14.5,14.0,13};
+    Swing w=swing(h,l,10); CHECK(w.up[8]==6 && downWave(w,8));
+    std::vector<double> v(10,21.0), q(10,3.0);   // -1SD = 18: the bounce top (bar 6, 17) misses it, the outside bar 8 (18.5) touches it
+    CHECK(pbBands(h,l,v,q,w,6,-2)==0);           // judged at the top: not touched yet
+    CHECK(pbBands(h,l,v,q,w,8,-2)==1);           // the print on the outside bar: touched -1SD, never +1SD (24)
+    std::vector<double> v2(10,15.0); CHECK(pbBands(h,l,v2,q,w,8,-2)==0);   // +1SD = 18: the outside bar (18.5) went to the far band: not a pullback
+  }
   // ---- fuzz: random walks never crash, flags only 0/1, dp/up inside the bars, conf only on a prefix
   std::mt19937 rng(7);
   for(int t=0;t<3000;++t){ int m=1+rng()%300; std::vector<double> h(m),l(m); double p=100;
