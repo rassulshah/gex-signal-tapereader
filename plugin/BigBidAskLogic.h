@@ -32,7 +32,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.11.0";   // (1.11.0) category 4 (>= lots), a font per category, time filter, near a level (ATR above / below + sweeps; key / gamma / volume levels), statistics; (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
+static const char* const VERSION = "1.13.0";   // (1.13.0) a Setup per category (Any / Pullback with trend / Reversal at a level / Breakout through the higher of the last 2 pivots), RTH only option; (1.12.0) hover, print log + nightly score, Liquidity Profile read, NG / 6E divider 1; (1.11.0) (1.11.0) category 4 (>= lots), a font per category, time filter, near a level (ATR above / below + sweeps; key / gamma / volume levels), statistics; (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
@@ -42,6 +42,8 @@ static const int NKEY = 16, NGAM = 10, NVOL = 6;
 static const char* const KEY_NAMES[NKEY] = { "ONH", "ONL", "PDH", "PDL", "PFH", "PFL", "LonHI", "LonLO", "PWH", "PWL", "HOD", "LOD", "AHI", "ALO", "CWH", "CWL" };
 static const char* const GAM_NAMES[NGAM] = { "CR", "PS", "HVL", "CR 0DTE", "PS 0DTE", "G1", "G2", "G3", "G4", "G5" };
 static const char* const VOL_NAMES[NVOL] = { "PD POC", "PD VAH", "PD VAL", "Wk POC", "Wk VAH", "Wk VAL" };
+static const char* const SETUP_NAMES = "Any;Pullback with trend;Reversal at a level;Breakout";
+static const char* const SESSION_NAMES = "RTH + overnight;RTH only";
 static const char* const POS_NAMES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 struct Cat {   // one Big Lot category (1 - 3: Big Lot N + an optional minimum; 4: a fixed size, >= lots)
     bool on = false;
@@ -50,6 +52,7 @@ struct Cat {   // one Big Lot category (1 - 3: Big Lot N + an optional minimum; 
     int font = 8;             // 6 - 20 pt
     bool pivot = false;       // only on a candle that passes the Delta Profile pivot rule
     bool level = false;       // only near a selected level (or a sweep of it)
+    int setup = 0;            // (1.13.0) 0 Any, 1 Pullback with trend, 2 Reversal at a level, 3 Breakout
     unsigned bid = 0x00EF4444, ask = 0x0022C55E;   // IRT COLOR = 0x00RRGGBB
 };
 struct Settings {
@@ -62,6 +65,7 @@ struct Settings {
     bool keyOn = true, gamOn = true, volOn = true;
     unsigned keyMask = (1u << NKEY) - 1, gamMask = (1u << NGAM) - 1, volMask = (1u << NVOL) - 1;
     bool statsChart = true; int statsPos = 9;   // the statistics box on the chart: 1 - 9 (top left .. bottom right)
+    bool rthOnly = false;     // (1.13.0, Rassul 15:29) RTH only, or RTH + overnight
     int boldQ = 200;          // internal (hover text only)
     Settings() { cat[0].on = true; cat[0].n = 5; cat[1].n = 10; cat[2].n = 20; cat[3].n = 0; cat[3].lots = 1000; }
 };
@@ -81,6 +85,7 @@ inline bool colOk(long long v) { return v >= 0 && v <= 0xFFFFFF; }
 inline bool minOk(long long v) { return v >= 0 && v <= 240; }
 inline bool atrOk(long long q) { return q >= 0 && q <= 2000; }
 inline bool posOk(long long v) { return v >= 1 && v <= 9; }
+inline bool setupOk(long long v) { return v >= 0 && v <= 3; }
 // strict whole number (digits only, no sign, no blanks)
 inline bool fullInt(const std::string& t, long long& out) {
     if (t.empty() || t.size() > 12) return false;
@@ -89,17 +94,17 @@ inline bool fullInt(const std::string& t, long long& out) {
     if (errno != 0 || !end || *end != '\0') return false;
     out = v; return true;
 }
-// (1.11.0) one line, 50 fields: "BBA5|div|box|dim|circle|circleCol" + 4 x "|on|N|lots|font|pivot|level|bid|ask"
-//   + "|skipFirst|skipLast|atrUpQ|atrDnQ|keyOn|gamOn|volOn|keyMask|gamMask|volMask|statsChart|statsPos"
-static const size_t NFIELDS = 1 + 5 + 4 * 8 + 12;
+// (1.13.0) one line, 55 fields: "BBA6|div|box|dim|circle|circleCol" + 4 x "|on|N|lots|font|pivot|level|bid|ask|setup"
+//   + "|skipFirst|skipLast|atrUpQ|atrDnQ|keyOn|gamOn|volOn|keyMask|gamMask|volMask|statsChart|statsPos|rthOnly"
+static const size_t NFIELDS = 1 + 5 + 4 * 9 + 13;
 inline std::string formatSettings(const Settings& s) {
     auto b = [](bool x) { return std::string(x ? "1" : "0"); };
     auto n = [](long long x) { return std::to_string(x); };
-    std::string o = "BBA5|" + n(s.div) + "|" + b(s.box) + "|" + b(s.dim) + "|" + b(s.circle) + "|" + n(s.circleCol & 0x00FFFFFF);
+    std::string o = "BBA6|" + n(s.div) + "|" + b(s.box) + "|" + b(s.dim) + "|" + b(s.circle) + "|" + n(s.circleCol & 0x00FFFFFF);
     for (int k = 0; k < 4; ++k) { const Cat& c = s.cat[k];
-        o += "|" + b(c.on) + "|" + n(c.n) + "|" + n(c.lots) + "|" + n(c.font) + "|" + b(c.pivot) + "|" + b(c.level) + "|" + n(c.bid & 0x00FFFFFF) + "|" + n(c.ask & 0x00FFFFFF); }
+        o += "|" + b(c.on) + "|" + n(c.n) + "|" + n(c.lots) + "|" + n(c.font) + "|" + b(c.pivot) + "|" + b(c.level) + "|" + n(c.bid & 0x00FFFFFF) + "|" + n(c.ask & 0x00FFFFFF) + "|" + n(c.setup); }
     o += "|" + n(s.skipFirst) + "|" + n(s.skipLast) + "|" + n(s.atrUpQ) + "|" + n(s.atrDnQ) + "|" + b(s.keyOn) + "|" + b(s.gamOn) + "|" + b(s.volOn)
-       + "|" + n(s.keyMask) + "|" + n(s.gamMask) + "|" + n(s.volMask) + "|" + b(s.statsChart) + "|" + n(s.statsPos);
+       + "|" + n(s.keyMask) + "|" + n(s.gamMask) + "|" + n(s.volMask) + "|" + b(s.statsChart) + "|" + n(s.statsPos) + "|" + b(s.rthOnly);
     return o;
 }
 // every field checked on its own: a bad field falls back to ITS default (why names it); a wrong layout = all defaults;
@@ -110,8 +115,14 @@ inline Settings parseSettings(const std::string& text, std::string& why) {
     const size_t nl = line.find('\n'); if (nl != std::string::npos) line = line.substr(0, nl);
     if (!line.empty() && line.back() == '\r') line.pop_back();
     std::vector<std::string> f; { std::string cur; for (char c : line) { if (c == '|') { f.push_back(cur); cur.clear(); } else cur.push_back(c); } f.push_back(cur); }
-    if (!f.empty() && f[0].size() == 4 && f[0].compare(0, 3, "BBA") == 0 && f[0][3] >= '1' && f[0][3] <= '4') { why = "older file (1.11 defaults)"; return Settings(); }
-    if (f.size() != NFIELDS || f[0] != "BBA5") { why = "garbled (defaults)"; return Settings(); }
+    if (!f.empty() && f[0].size() == 4 && f[0].compare(0, 3, "BBA") == 0 && f[0][3] >= '1' && f[0][3] <= '4') { why = "older file (defaults)"; return Settings(); }
+    if (f.size() == 50 && f[0] == "BBA5") {   // (1.13.0) a 1.11 / 1.12 file: kept, with setup Any and RTH + overnight added
+        std::vector<std::string> g; g.push_back("BBA6"); for (int i = 1; i <= 5; ++i) g.push_back(f[i]);
+        for (int k = 0; k < 4; ++k) { for (int j = 0; j < 8; ++j) g.push_back(f[6 + 8 * k + j]); g.push_back("0"); }
+        for (int i = 38; i < 50; ++i) g.push_back(f[i]); g.push_back("0");
+        f.swap(g);
+    }
+    if (f.size() != NFIELDS || f[0] != "BBA6") { why = "garbled (defaults)"; return Settings(); }
     std::vector<std::string> bad;
     long long v = 0; size_t i = 1;
     auto flag = [&](bool& out, bool def, const std::string& nm) { if (fullInt(f[i], v) && v <= 1) out = v == 1; else { out = def; bad.push_back(nm); } ++i; };
@@ -127,18 +138,45 @@ inline Settings parseSettings(const std::string& text, std::string& why) {
         else { if (fullInt(f[i], v) && v >= 1 && v <= 100000) c.lots = (int)v; else { c.lots = dc.lots; bad.push_back(nm + " lots"); } ++i; }
         num(c.font, dc.font, fontOk, nm + " font");
         flag(c.pivot, dc.pivot, nm + " pivot"); flag(c.level, dc.level, nm + " level");
-        col(c.bid, dc.bid, nm + " bid colour"); col(c.ask, dc.ask, nm + " ask colour"); }
+        col(c.bid, dc.bid, nm + " bid colour"); col(c.ask, dc.ask, nm + " ask colour"); num(c.setup, dc.setup, setupOk, nm + " setup"); }
     num(s.skipFirst, d.skipFirst, minOk, "skip first"); num(s.skipLast, d.skipLast, minOk, "skip last");
     num(s.atrUpQ, d.atrUpQ, atrOk, "ATR above"); num(s.atrDnQ, d.atrDnQ, atrOk, "ATR below");
     flag(s.keyOn, d.keyOn, "key levels"); flag(s.gamOn, d.gamOn, "gamma levels"); flag(s.volOn, d.volOn, "volume levels");
     mask(s.keyMask, d.keyMask, NKEY, "key level boxes"); mask(s.gamMask, d.gamMask, NGAM, "gamma level boxes"); mask(s.volMask, d.volMask, NVOL, "volume level boxes");
     flag(s.statsChart, d.statsChart, "statistics on the chart"); num(s.statsPos, d.statsPos, posOk, "statistics position");
+    flag(s.rthOnly, d.rthOnly, "RTH only");
     if (!bad.empty()) { why = "bad value (default used):"; for (const auto& x : bad) why += " " + x; }
     return s;
 }
 // a typed decimal (the dialog's float box) -> hundredths, or -1 when it is not a sane number
 inline int toHundredths(double x) { if (!std::isfinite(x) || x < 0 || x > 20.0001) return -1; return (int)std::floor(x * 100.0 + 0.5); }
 
+// (1.13.0, Rassul 15:29 / 15:35) BREAKOUT through the higher of the last two HIGH pivots (his 1-bar ZigZag, pivots confirmed by the bars
+// BEFORE the candle): P = the prior high pivot, or the one 2 back when it is higher; the candle breaks out when its LOW is below P and
+// its HIGH above P (it is the candle that went through). up[i] = 1 (the prior pivot) / 2 (the higher one 2 back) / 0 none.
+// BREAKDOWN mirror with the lower of the last two LOW pivots: dn[i]. Decided on the candle's own bars - never repainted.
+template <class H, class L>
+inline void breakFlags(H& high, L& low, int n, std::vector<signed char>& up, std::vector<signed char>& dn) {
+    up.assign(n > 0 ? n : 0, 0); dn.assign(n > 0 ? n : 0, 0);
+    if (n < 2) return;
+    auto hi = [&](int i) { return (double)high[i]; }; auto lo = [&](int i) { return (double)low[i]; };
+    std::vector<double> tops, bots;
+    int dirn = hi(1) >= hi(0) ? 1 : -1, ext = 0;
+    for (int i = 1; i < n; ++i) {
+        if (!std::isfinite(hi(i)) || !std::isfinite(lo(i)) || hi(i) < lo(i)) continue;
+        if (!tops.empty()) { double P = tops.back(); signed char w = 1; if (tops.size() >= 2 && tops[tops.size() - 2] > P) { P = tops[tops.size() - 2]; w = 2; }
+            if (lo(i) < P && hi(i) > P) up[i] = w; }
+        if (!bots.empty()) { double Q = bots.back(); signed char w = 1; if (bots.size() >= 2 && bots[bots.size() - 2] < Q) { Q = bots[bots.size() - 2]; w = 2; }
+            if (lo(i) < Q && hi(i) > Q) dn[i] = w; }
+        if (dirn == 1) {
+            if (hi(i) > hi(ext)) ext = i;
+            else if (lo(i) < lo(i - 1) && i != ext) { tops.push_back(hi(ext)); ext = i; dirn = -1; }
+        } else {
+            if (lo(i) < lo(ext)) ext = i;
+            else if (hi(i) > hi(i - 1) && i != ext) { bots.push_back(lo(ext)); ext = i; dirn = 1; }
+        }
+    }
+}
 // ---- (1.11.0) near a level --------------------------------------------------------------------------------------------------------
 // A print at price p on candle i is NEAR level L when p is within [L - dn x ATR, L + up x ATR] (ATR = the average range of the 14
 // closed 3-min candles before i), OR the print is part of a SWEEP of L: the candle or one of the 2 before it traded through L, the
