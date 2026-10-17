@@ -67,7 +67,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.6.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.6.1"          // keep equal to bba::VERSION and the setVersion literal below
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -198,7 +198,7 @@ struct BBState {
     long long lastStatusMs = -1, lastRecordMs = -1;
     // draw
     cb::Peers peers; int priceRight = 0, leftLimit = 0; bb::Beat trBeat; bool trOn = false; bba::Box trBox;
-    bba::LayoutStats lay; int droppedInView = 0; int circles = 0, circlesHidden = 0, zoneFull = 0, zoneDim = 0;
+    bba::LayoutStats lay; int clL = 0, clR = 0, clT = 0, clB = 0, clTr = 0, clBig = 0, shifted = 0, areaFallback = 0; int droppedInView = 0; int circles = 0, circlesHidden = 0, zoneFull = 0, zoneDim = 0;
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
 };
 
@@ -559,6 +559,7 @@ void BigBidAsk::status(BBState& S, long long now) {
       << "\nCANDLES,final " << S.fin.size() << ",recorded " << S.recorded.size() << ",pending " << S.pending.size() << ",record fails " << S.recFails
       << "\nVAP,missing reads " << S.missing << ",bid/ask vs bar totals mismatch " << S.mismatch << ",faults " << S.faults
       << "\nSIZES," << S.sdWhy << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim
+      << "\nCLASH,left " << S.clL << ",right " << S.clR << ",top " << S.clT << ",bottom " << S.clB << ",banner " << S.clTr << ",too big " << S.clBig << ",slid back in " << S.shifted << ",area fallback " << S.areaFallback
       << "\nAREA,left " << S.leftLimit << ",price right " << S.priceRight << ",columns levels " << (S.peers.on[cb::LEVELS] ? "on" : "off") << " delta " << (S.peers.on[cb::DELTA] ? "on" : "off")
       << " dealer " << (S.peers.on[cb::DEALER] ? "on" : "off") << " liq " << (S.peers.on[cb::LIQ] ? "on" : "off") << ",tape reader banner " << (S.trOn ? "avoided" : "none") << "\n";
     const std::string text = o.str();
@@ -596,7 +597,7 @@ template <class Times> static int indexOf(Times& times, long count, long long t)
     return -1;
 }
 void BigBidAsk::render(BBState& S) {
-    S.targets.clear(); S.circles = 0; S.circlesHidden = 0; S.droppedInView = 0; S.zoneFull = 0; S.zoneDim = 0;
+    S.targets.clear(); S.clL = S.clR = S.clT = S.clB = S.clTr = S.clBig = S.shifted = S.areaFallback = 0; S.circles = 0; S.circlesHidden = 0; S.droppedInView = 0; S.zoneFull = 0; S.zoneDim = 0;
     const long count = getBarCount();
     if (count < 2 || S.tick <= 0) return;
     RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
@@ -641,6 +642,8 @@ void BigBidAsk::render(BBState& S) {
     int leadB = 0, ascB = 0, descB = 0; setFont(fb); getFontMetrics(&leadB, &ascB, &descB); setFont(fp);
     const int thB = std::max(set.font + 5, ascB + descB);
     bba::Box area; area.l = S.leftLimit; area.t = pane.top + 20; area.r = std::min(S.priceRight, axisR) - 1; area.b = pane.bottom - 1;   // the IRT title row stays clear
+    // (1.6.1) an area that came out empty or tiny (columns not read yet, a restart) would drop EVERY number: fall back to the whole pane
+    if (area.r - area.l < 120) { area.l = pane.left + 2; area.r = axisR - 1; ++S.areaFallback; }
     std::vector<bba::Box> candles; std::vector<bba::Cand> cands; std::vector<const bba::Facts*> src; std::vector<std::string> texts;
     for (int i = from; i <= ve; ++i) {
         PNT a; a.set(i, hi[i], kBarLeft); PNT b; b.set(i, lo[i], kBarRight);
@@ -736,11 +739,22 @@ void BigBidAsk::render(BBState& S) {
         }
     }
     for (size_t k = 0; k < cands.size(); ++k) {
-        const bba::Cand& c = cands[k]; const bba::Box& f = boxes[k];
+        const bba::Cand& c = cands[k]; bba::Box f = boxes[k];
         if (c.bar < vs) continue;                                       // left of the view
         if (lose[k]) { ++S.droppedInView; ++S.lay.crowded; if (c.circle) ++S.circlesHidden; continue; }
-        bool clash = f.l < area.l || f.r > area.r || f.t < area.t || f.b > area.b;
-        if (S.trOn && !(f.r < S.trBox.l || f.l > S.trBox.r || f.b < S.trBox.t || f.t > S.trBox.b)) clash = true;   // the Tape Reader banner
+        // (1.6.1) a number that pokes out of the area is SLID back in (up to 40 px, it stays on its candle's price row within a few ticks);
+        // only a number far outside, wider than the area, or under the Tape Reader banner is dropped - and the reason is counted
+        bool clash = false;
+        { int dx = 0, dy = 0;
+          if (f.r - f.l > area.r - area.l || f.b - f.t > area.b - area.t) { clash = true; ++S.clBig; }
+          else {
+              if (f.l < area.l) dx = area.l - f.l; else if (f.r > area.r) dx = area.r - f.r;
+              if (f.t < area.t) dy = area.t - f.t; else if (f.b > area.b) dy = area.b - f.b;
+              if (std::abs(dx) > 40) { clash = true; if (dx > 0) ++S.clL; else ++S.clR; }
+              else if (std::abs(dy) > 40) { clash = true; if (dy > 0) ++S.clT; else ++S.clB; }
+              else if (dx || dy) { f.l += dx; f.r += dx; f.t += dy; f.b += dy; ++S.shifted; }
+          } }
+        if (!clash && S.trOn && !(f.r < S.trBox.l || f.l > S.trBox.r || f.b < S.trBox.t || f.t > S.trBox.b)) { clash = true; ++S.clTr; }   // the Tape Reader banner
         if (clash) { ++S.droppedInView; ++S.lay.dropped; if (c.circle) ++S.circlesHidden; continue; }
         ++S.lay.shown;
         const bool zone = zn::atZone(Z, c.bar, candPx[k]);
@@ -807,6 +821,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
     p->setDescription("LRA Big Bid / Ask v1.5.0: on every candle, the RED number left of the candle sits at the price where the most lots traded AT THE BID (sellers hitting) and shows those lots; the GREEN number right of the candle sits at the price where the most lots traded AT THE ASK (buyers lifting). Ties go to the price nearest the close. Bold = at least 'Bold at' x the median of the same side's biggest over the prior 20 candles. A thin circle = absorption, decided at the candle's close and never redrawn: bold red at or below the candle's halfway mark and the candle closes green above it (bullish), or bold green at or above the halfway mark and the candle closes red below it (bearish). Hover a number for the prices, lots, ratios and how to use it. From the chart's own volume at price (as the Delta Profile). Settings: Font size, Bold at (x normal), Absorption circle, Show non-bold numbers, Divider (0 = the market default: ES / CL / NG / 6E 10, NQ / GC / HG 1 - 500 lots / 10 shows 50; the hover keeps the real lots), Buyers / Sellers colours.");
-    p->setVersion("1.6.0");   // BBA_VERSION
+    p->setVersion("1.6.1");   // BBA_VERSION
     return p;
 }
