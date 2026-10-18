@@ -1,26 +1,3 @@
-findings=0 allowed=0 staged_files=24 bytes=728306
+findings=0 allowed=0 staged_files=1 bytes=1073
 largest staged blobs (bytes, path):
-SIZE	181854	plugin/HodLodLogic.h
-SIZE	141354	plugin/DealerProfile.cpp
-SIZE	81974	plugin/HodLod.cpp
-SIZE	54210	plugin/SessionVWAP.cpp
-SIZE	48257	plugin/CobImpulse.cpp
-SIZE	29542	plugin/DealerColumnsLogic.h
-SIZE	24773	plugin/HodLodGex.h
-SIZE	17674	plugin/test_sessionvwap_settings.cpp
-SIZE	17286	plugin/test_cobimpulse_gamma_host.cpp
-SIZE	14442	plugin/test_cobimpulse_host.cpp
-SIZE	14065	plugin/tests_hodlod/t_hl240.cpp
-SIZE	12294	plugin/test_dealerprofile_2170_host.cpp
-SIZE	10965	plugin/test_cobimpulse_odds_host.cpp
-SIZE	10050	plugin/test_cobimpulse_mst_host.cpp
-SIZE	9668	plugin/HodLodQ.h
-SIZE	8878	plugin/Fresh.h
-SIZE	8782	plugin/SessionVWAPLogic.h
-SIZE	8492	plugin/SessionVWAP_test_support/irtsdk.h
-SIZE	8202	plugin/test_sessionvwap_160.cpp
-SIZE	7218	plugin/test_dealerprofile_2170.cpp
-SIZE	6632	plugin/tests_cobimpulse/irtsdk.h
-SIZE	6591	plugin/tests_fresh/test_fresh.cpp
-SIZE	4249	plugin/test_dealerprofile_2120.cpp
-SIZE	854	logs/staged-scan-findings.log
+SIZE	1073	logs/staged-scan-findings.log
