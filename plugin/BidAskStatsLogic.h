@@ -1,6 +1,6 @@
 #ifndef LS_BIDASKSTATS_LOGIC_H
 #define LS_BIDASKSTATS_LOGIC_H
-// BidAskStatsLogic.h (1.5.0, 2026-10-13; 1.4.0 / 1.3.0 / 1.2.0 / 1.1.0 / 1.0.0 2026-10-13) -- SDK-free logic of lsBidAskStats.
+// BidAskStatsLogic.h (1.13.0 2026-10-18: one spike rule, closed bars only, Market State facts; 1.5.0, 2026-10-13; 1.4.0 / 1.3.0 / 1.2.0 / 1.1.0 / 1.0.0 2026-10-13) -- SDK-free logic of lsBidAskStats.
 // (1.5.0, approved by Rassul 4:49 PM CT "build"; SPEC /home/claude/aud/of140/SPEC.md) bars unchanged (the biggest bid / ask at one price,
 // in lots); PACE = aggressive lots / s per side (VAP totals) vs the same-time norm; the SPEC message grammar
 //   "Sellers hit the bid with a 240-lot (3.4x) fast (p 2.3x), swept 3 levels into PDL - price held: buyers absorbing."
@@ -20,6 +20,7 @@
 //           else n/a (also n/a when that mean is 0).  Shown with one decimal + "x" ("3.5x").  AskRatio likewise.
 //   An unreadable bar (failed / missing VAP) is n/a: no histogram bar, excluded from counts and averages - never 0.
 //   Ties inside a bar: the bid's price is the LOWEST of the tied prices, the ask's the HIGHEST (row order never matters).
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <map>
@@ -29,7 +30,7 @@
 
 namespace bas {
 
-static const char* const VERSION = "1.12.1";   // (1.12.1) 6E seeds read (named 6E, chart code EU);   // (1.12.0) Big Lot S20 / S10 / S5: aggression L = S20;   // 1.10.0 (2026-10-16): numbers box in the pane;   // 1.9.1: ratio + pace above the bar, no lots, no white tick;   // 1.9.0 (2026-10-16): the pane is called Aggression; no text lines; only bars at 2.0x+; plain 20-bar average;   // 1.8.1: no hovers (Rassul 18:57);   // (1.7.2) "Bid/Ask Stats · Who is pressing?" in front of the read line;   // (1.7.1) no S / L / R letters drawn;   // 1.7.0 (2026-10-14 night, Rassul 22:37 CT): one bar per candle, title "Bid/Ask Stats - Who is Pressing", attacking -> pressing;   // 1.6.0 (2026-10-14 night): the read box -> one zone read line (ZoneRead.h), unsigned options line;   // 1.5.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.5.2 (2026-10-14 CR4800): read box + numbers hover, Offset X / Y, white letters, one spike label, rare L; 1.5.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
+static const char* const VERSION = "1.13.0";   // (1.13.0, 2026-10-18, Rassul approved) ONE spike rule for Aggression and Book Flow: >= Spike vs average (2.0x) the plain 20-candle average of that side, decided at the close (the "1.5x the prior biggest" jump is a record field only); the forming bar is drawn dim with no label (no repaint); "Box shows" removed; Market State SRC AGG facts (aggFacts);   // (1.12.1) 6E seeds read (named 6E, chart code EU);   // (1.12.0) Big Lot S20 / S10 / S5: aggression L = S20;   // 1.10.0 (2026-10-16): numbers box in the pane;   // 1.9.1: ratio + pace above the bar, no lots, no white tick;   // 1.9.0 (2026-10-16): the pane is called Aggression; no text lines; only bars at 2.0x+; plain 20-bar average;   // 1.8.1: no hovers (Rassul 18:57);   // (1.7.2) "Bid/Ask Stats · Who is pressing?" in front of the read line;   // (1.7.1) no S / L / R letters drawn;   // 1.7.0 (2026-10-14 night, Rassul 22:37 CT): one bar per candle, title "Bid/Ask Stats - Who is Pressing", attacking -> pressing;   // 1.6.0 (2026-10-14 night): the read box -> one zone read line (ZoneRead.h), unsigned options line;   // 1.5.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.5.2 (2026-10-14 CR4800): read box + numbers hover, Offset X / Y, white letters, one spike label, rare L; 1.5.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
 static const char* const TITLE = "Aggression";   // (1.7.0) the pane title (parmsTitle), "v1.7.0" next to it
 static const int COUNT_CAP = 999, RATIO_MIN_PRIOR = 5, RATIO_DEFAULT = 20, RATIO_LO = 5, RATIO_HI = 200;
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
@@ -46,7 +47,7 @@ static const int LINE_DEFAULT_TENTHS = 15, LINE_MAX_TENTHS = 100;
 static const int SPIKE_AVG_DEFAULT_TENTHS = 20, SPIKE_JUMP_DEFAULT_TENTHS = 15, SPIKE_LOOKBACK_DEFAULT = 10, SPIKE_LOOKBACK_MAX = 50;
 struct SpikeCfg {
     int avgT = SPIKE_AVG_DEFAULT_TENTHS, jumpT = SPIKE_JUMP_DEFAULT_TENTHS, lookback = SPIKE_LOOKBACK_DEFAULT;
-    bool on() const { return avgT > 0 && jumpT > 0 && lookback > 0; }
+    bool on() const { return avgT > 0; }                                // (1.13.0) only "Spike vs average" switches spikes on / off
     bool operator==(const SpikeCfg& o) const { return avgT == o.avgT && jumpT == o.jumpT && lookback == o.lookback; }
     bool operator!=(const SpikeCfg& o) const { return !(*this == o); }
 };
@@ -57,10 +58,11 @@ inline long long priorMaxEither(const std::vector<long long>& pb, const std::vec
     for (size_t i = pb.size() - k; i < pb.size(); ++i) { if (pb[i] > mx) mx = pb[i]; if (i < pa.size() && pa[i] > mx) mx = pa[i]; }
     return mx;
 }
-// exact at the boundaries: v / mean >= X  <=>  10 v >= tenths * mean;  v / priorMax >= J  <=>  10 v >= tenths * priorMax
-inline bool isSpike(long long v, double mean, long long priorMax, const SpikeCfg& c) {
-    if (!c.on() || v <= 0 || !(mean > 0) || priorMax <= 0) return false;
-    return (double)v * 10.0 >= (double)c.avgT * mean && v * 10 >= (long long)c.jumpT * priorMax;
+// (1.13.0) THE spike rule (both panes, Rassul: spikes only at >= 2.0x the plain 20-candle average): v / mean >= X, exact at the boundary
+// (10 v >= tenths * mean). The jump (v / the biggest of the prior lookback candles) is no longer part of it - kept as a record field (Jump).
+inline bool isSpike(long long v, double mean, const SpikeCfg& c) {
+    if (!c.on() || v <= 0 || !(mean > 0)) return false;
+    return (double)v * 10.0 >= (double)c.avgT * mean;
 }
 
 inline bool finite(double v) { return v == v && v < 1e300 && v > -1e300; }
@@ -145,8 +147,8 @@ inline void applySpike(Stat& s, const std::vector<long long>& pb, const std::vec
     s.priorMax = 0; s.bidSpike = s.askSpike = false;
     if (!s.m.ok) return;
     s.priorMax = priorMaxEither(pb, pa, c.lookback > 0 ? c.lookback : SPIKE_LOOKBACK_DEFAULT);
-    s.bidSpike = s.bidRatioOk && isSpike(s.m.bid, s.bidMean, s.priorMax, c);
-    s.askSpike = s.askRatioOk && isSpike(s.m.ask, s.askMean, s.priorMax, c);
+    s.bidSpike = s.bidRatioOk && isSpike(s.m.bid, s.bidMean, c);         // (1.13.0) priorMax stays for the Jump record field only
+    s.askSpike = s.askRatioOk && isSpike(s.m.ask, s.askMean, c);
 }
 
 // the stats of one bar from the bars before it (prior = oldest first, valid bars only)
@@ -198,12 +200,7 @@ struct Series {
         Stat s = statOf(m, pb, pa, ratioBars); applySpike(s, pb, pa, spike); slotFix(t, s);
         return bars[t] = s;
     }
-    // (1.2.0) the stats a bar at time t WOULD get now (the forming bar's live colour); nothing stored
-    Stat peek(long long t, const BarMax& m, int ratioBars) const {
-        std::vector<long long> pb, pa;
-        if (m.ok) prior(t, (size_t)(COUNT_CAP > ratioBars ? COUNT_CAP : ratioBars), pb, pa);
-        Stat s = statOf(m, pb, pa, ratioBars); applySpike(s, pb, pa, spike); slotFix(t, s); return s;
-    }
+    // (1.13.0) peek() removed: the forming bar is never judged (drawn dim, no label) - only closed bars get a colour and a label
     // (1.2.0) a spike settings change (from the dialog only): spikes of the recorded bars re-decided from the stored maxima
     void respike(const SpikeCfg& c) {
         spike = c; std::vector<long long> pb, pa;
@@ -342,9 +339,8 @@ inline int held(int side, double close, double prevLow, double prevHigh, double 
     const double eps = tick * 1e-6;
     return side == 0 ? (close >= prevLow - tick - eps ? 1 : 0) : (close <= prevHigh + tick + eps ? 1 : 0);
 }
-inline bool high(const Stat& s, int side) {
-    return side == 0 ? (s.bidSpike || (s.bidRatioOk && s.bidRatio >= off::HIGH_X)) : (s.askSpike || (s.askRatioOk && s.askRatio >= off::HIGH_X));
-}
+// (1.13.0) HIGH = the spike (one rule: >= Spike vs average x the plain average); the message, the bright bar and the label agree
+inline bool high(const Stat& s, int side) { return side == 0 ? s.bidSpike : s.askSpike; }
 // "BBid 240  BidRatio 4.1x  Jump 2.3x  Sweep 4 lvls  Large 120" (Jump only on the first side)
 inline std::string sideNums(const Stat& s, const off::Rec* r, const std::string& let, int side, bool jump) {
     const bool b = side == 0;
@@ -419,6 +415,56 @@ inline std::vector<Row2> infoRows(const Stat* s, const off::Rec* r, const std::s
     }
     v.push_back(a); v.push_back(p); v.push_back(w); v.push_back(l); v.push_back(o);
     return v;
+}
+
+// =====================================================================================================================
+// (1.13.0, 2026-10-18) WHAT IS DRAWN, decided from closed bars only, and the Market State facts (SRC "AGG", MARKET-STATE-SPEC.md 1.0)
+// =====================================================================================================================
+// a record row written before 1.13.0 kept the stricter old spike (2.0x AND the 1.5x jump) while 1.12 drew every closed bar at 2.0x+
+// bright: the colour as drawn then = the recorded spike OR the one rule (identical for rows written by 1.13.0) - no repaint at the upgrade
+inline bool fileSpike(bool recorded, long long v, bool ratioOk, double mean, const SpikeCfg& c) { return recorded || (ratioOk && isSpike(v, mean, c)); }
+// the look of one candle's side: closed = a later bar exists. Only a closed spike is bright and carries its ratio label (drawBars' onlyHigh
+// shows a label exactly when the side is bright: ratioOk is handed over only for a spike, so a 2.0x bar under a higher setting stays dim).
+struct SideLook { bool bright = false, ratioOk = false; double ratio = 0; };
+inline SideLook sideLook(const Stat* s, int side, bool closed) {
+    SideLook k; if (!closed || !s || !s->m.ok) return k;
+    const bool sp = side == 0 ? s->bidSpike : s->askSpike;
+    if (!sp) return k;
+    k.bright = true; k.ratioOk = side == 0 ? s->bidRatioOk : s->askRatioOk; k.ratio = side == 0 ? s->bidRatio : s->askRatio; return k;
+}
+inline std::string fmt1(double x) { if (!finite(x) || x < 0) return "?"; char b[24]; std::snprintf(b, sizeof(b), "%.1f", x > 9999 ? 9999.0 : x); return b; }
+// the Big Lot tier of a lot size: t = S20 / S10 / S5 (ascending); "?" when the tiers are not known yet
+inline std::string tierOf(long long lots, bool ok, const long long t[3]) {
+    if (!ok || t[0] <= 0) return "?";
+    if (t[2] > 0 && lots >= t[2]) return "S5";
+    if (t[1] > 0 && lots >= t[1]) return "S10";
+    return lots >= t[0] ? "S20" : "none";
+}
+// the side the candle's single bar shows (the bigger side; a tie = the close direction, else sellers) - 0 = bids hit (sellers), 1 = buyers
+inline int domSide(const Stat& s, int dir) { return s.m.ask > s.m.bid ? 1 : s.m.bid > s.m.ask ? 0 : (dir > 0 ? 1 : 0); }
+// SRC AGG: buy_lots / sell_lots = the biggest at one price (the drawn bars), buy_x / sell_x = vs the plain Ratio-bars average, spike, pace_x
+// (the spiking side, else the drawn side), sweep, big_aggr (the largest aggressor order), big_tier. r = nullptr: the order feed was not live.
+struct AggIn { const Stat* s = nullptr; const off::Rec* r = nullptr; std::string let[2]; long long p100[2] = {0, 0}; int dir = 0; bool tiersOk = false; long long tiers[3] = {0, 0, 0}; long long sweepMin = 3; };
+inline std::map<std::string, std::string> aggFacts(const AggIn& in) {
+    std::map<std::string, std::string> kv;
+    const Stat* s = in.s; const bool ok = s && s->m.ok;
+    kv["sell_lots"] = ok ? std::to_string(s->m.bid) : "?";
+    kv["buy_lots"] = ok ? std::to_string(s->m.ask) : "?";
+    kv["sell_x"] = ok && s->bidRatioOk ? fmt1(s->bidRatio) : "?";
+    kv["buy_x"] = ok && s->askRatioOk ? fmt1(s->askRatio) : "?";
+    int sp = -1;
+    if (ok && (s->bidSpike || s->askSpike)) sp = s->bidSpike && s->askSpike ? (s->askRatio > s->bidRatio ? 1 : s->bidRatio > s->askRatio ? 0 : domSide(*s, in.dir)) : (s->askSpike ? 1 : 0);
+    kv["spike"] = !ok ? "?" : sp == 1 ? "buy" : sp == 0 ? "sell" : "none";
+    const int ps = ok ? (sp >= 0 ? sp : domSide(*s, in.dir)) : -1;
+    kv["pace_x"] = ps >= 0 && in.p100[ps] > 0 ? fmt1((double)in.p100[ps] / 100.0) : "?";
+    if (!in.r) { kv["sweep"] = "?"; kv["big_aggr"] = "?"; kv["big_tier"] = "?"; return kv; }
+    int sw = -1;
+    for (int k = 0; k < 2; ++k) if (in.let[k].find('S') != std::string::npos && (sw < 0 || in.r->sweepLv[k] > in.r->sweepLv[sw])) sw = k;
+    kv["sweep"] = sw == 1 ? "buy" : sw == 0 ? "sell" : "none";
+    const long long big = std::max(in.r->aggrMax[0], in.r->aggrMax[1]);
+    kv["big_aggr"] = std::to_string(big);
+    kv["big_tier"] = big > 0 ? tierOf(big, in.tiersOk, in.tiers) : (in.tiersOk ? "none" : "?");
+    return kv;
 }
 
 } // namespace bas

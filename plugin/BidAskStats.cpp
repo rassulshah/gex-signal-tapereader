@@ -1,5 +1,14 @@
 /********************************************************************************
- *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats  1.7.0 (2026-10-14 night)
+ *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats (the "Aggression" pane)  1.13.0 (2026-10-18)
+ *  1.13.0 (2026-10-18, Rassul approved the audit-A fixes): (1) NO REPAINT - only CLOSED candles are judged: the forming candle is drawn
+ *        dim with no label until it closes (was: its bright colour / ratio label came and went intrabar). (2) ONE SPIKE RULE for both
+ *        order-flow panes (Aggression, Book Flow): a side is a spike (bright + ratio / pace above the bar) when it is >= "Spike vs average"
+ *        (default 2.0x) the plain average of that side over the prior "Ratio bars" (20) closed candles, decided once at the close. The
+ *        "1.5x the biggest of the prior 10" jump is no longer part of it (kept as the Jump record / status field); a 1.12 record row keeps
+ *        its colour as drawn then. (3) Settings: "Spike vs prior biggest", "Spike lookback" and "Box shows" (did nothing) removed
+ *        (parameter version 5); the description says what is drawn. (4) MARKET STATE (MarketState.h, MARKET-STATE-SPEC.md 1.0): the facts
+ *        of the last closed candle posted as SRC "AGG" (buy_lots, sell_lots, buy_x, sell_x, spike, pace_x, sweep, big_aggr, big_tier) once
+ *        per closed candle, re-posted unchanged every 15 s so it stays fresh, cleared on removal. Behind the scenes only.
  *  1.7.0 (2026-10-14 night, Rassul approved 22:37 CT, mockup-one-bar.png v2): ONE BAR PER CANDLE (OrderFlowFeed.h 1.6.0 drawBars
  *        one-bar mode, buyer side = 1 offers lifted): the bigger side's bar (red = sellers hitting the bid, green = buyers lifting the
  *        offer), its lots as the height; a tie = the side of the candle's close direction, else red. Bright = the winner is a spike (its
@@ -108,6 +117,7 @@
 #include "StopRun.h"
 #include "OptionsFlow.h"
 #include "HoverBoard.h"
+#include "MarketState.h"              // (1.13.0) SRC "AGG" facts for the read
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -126,14 +136,14 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.12.1"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.13.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
 static const int READS_PER_PASS = 600;        // bounded work per pass; the rest continues on the next pass
 static const int NA_TRIES = 10;               // retries of a closed n/a bar (IRT back-fill)
 static const size_t KEEP_BARS = 5000;
-static const int RATIO_PARM = 0, POS_PARM = 1, SPIKE_AVG_PARM = 2, SPIKE_JUMP_PARM = 3, SPIKE_LB_PARM = 4, OFFX_PARM = 5, OFFY_PARM = 6, MODE_PARM = 7;   // (1.5.2) + 5-7
+static const int RATIO_PARM = 0, POS_PARM = 1, SPIKE_AVG_PARM = 2, OFFX_PARM = 3, OFFY_PARM = 4;   // (1.13.0) parameter version 5: the jump, lookback and Box shows rows removed
 static const COLOR C_ASK_BAR = 0x001F9D55, C_BID_BAR = 0x00962D2D;     // normal histogram bars: darker green / red
 static const COLOR C_ASK_SPIKE = 0x0000FF00, C_BID_SPIKE = 0x00FF3B3B; // spikes: bright green (buyers) / bright red (sellers)
 static const COLOR C_SR_GREEN = 0x00168A42, C_SR_RED = 0x00E0242A;     // (1.4.0) the R mark's letter on its white box (readable on white)
@@ -193,7 +203,8 @@ static bool parseSettings(const std::string& line, int& rb, int& pos, bas::Spike
 }
 // (1.3.0) the spike settings in force: the params file's values where it sets them, else the dialog's; the dialog's 0 = off wins
 static bas::SpikeCfg effSpike(const bas::SpikeCfg& d, const off::Params& P) {
-    off::SpikeCfg o; o.avgT = d.avgT; o.jumpT = d.jumpT; o.lookback = d.lookback;
+    // (1.13.0) the jump / lookback no longer decide a spike (record field only): never let an old 0 there switch spikes off
+    off::SpikeCfg o; o.avgT = d.avgT; o.jumpT = d.jumpT > 0 ? d.jumpT : bas::SPIKE_JUMP_DEFAULT_TENTHS; o.lookback = d.lookback > 0 ? d.lookback : bas::SPIKE_LOOKBACK_DEFAULT;
     const off::SpikeCfg e = off::effectiveSpike(o, P);
     bas::SpikeCfg c; c.avgT = (int)e.avgT; c.jumpT = (int)e.jumpT; c.lookback = (int)e.lookback; return c;
 }
@@ -242,6 +253,8 @@ struct BASState {
     long long srEvents = 0, srLoaded = 0;
     off::OptCache opt;                                   // (1.5.0) LRA-Options-<MKT>.csv: the blue oHit line
     zread::Host zr; long zrCount = -1; long long zrSession = -1;   // (1.6.0) the zone read line
+    // (1.13.0) Market State SRC AGG: the chart label (from the draw), the candle posted, its facts, the last post
+    std::string chartKey; long long mstBar = 0, mstCt = 0, mstMs = -1, mstPosts = 0; std::map<std::string, std::string> mstKv;
 };
 // (1.6.0, approval list s.7 MARK ?) the options volume is unsigned: who bought / sold and opening / closing are unknown
 static std::string unsignedHitLine(const ofo::Snap& s, int gate) {
@@ -266,7 +279,11 @@ public:
     bool followBoard(BASState& S);
     void publishBoard(BASState& S, long bar);
     void pump();
-    void release() { slot_.release(this); }
+    void release() {                                                     // (1.13.0) the Market State entry goes with the indicator
+        BASState* S = slot_.get(this, false);
+        if (S && !S->chartKey.empty()) mst::clear("AGG", S->symbol, S->spb, S->chartKey);
+        slot_.release(this);
+    }
     BASState* testState() { return slot_.get(this, false); }
 private:
     HostSlot<BASState> slot_;
@@ -287,6 +304,7 @@ private:
     std::string levelAt(BASState& S, long long t);
     void heldOf(BASState& S, long long t, int out[2]);
     void stopRuns(BASState& S);
+    void marketState(BASState& S, long long now);
     bas::PaceIn paceAt(BASState& S, long long t, const bas::Stat& st);
     int minuteOf(long long t);
     long long clockSec(long long t);
@@ -308,19 +326,15 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<BidAskStats*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<BidAskStats*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) {
-    // controls only: Ratio bars, Position (9 spots), the three spike settings (0 = off). Unchanged list since 1.2.0.
-    // (1.5.2, CR4800) + Offset X / Y and "Box shows" (appended); version 4 = IRT resets the dialog rows once - harmless: the chart reads
-    // the per-market file and the dialog is filled from it when it opens
-    setParameterVersion(4);
-    setParameterDialogHeight(3);
+    // (1.13.0) version 5: "Spike vs prior biggest", "Spike lookback" (no longer part of the spike rule) and "Box shows" (did nothing)
+    // removed - every row left is read by the chart: Ratio bars (the average), Position + Offset X / Y (the box), Spike vs average (0 = off)
+    setParameterVersion(5);
+    setParameterDialogHeight(2);
     setIntegerParameter("Ratio bars", bas::RATIO_DEFAULT, 50);
     setListParameter("Position", (short)bas::POS_DEFAULT, bas::POS_CHOICES, 110, kParmAppendSameLine);
-    setFloatParameter("Spike vs average", (float)bas::SPIKE_AVG_DEFAULT_TENTHS / 10.0f, 50);
-    setFloatParameter("Spike vs prior biggest", (float)bas::SPIKE_JUMP_DEFAULT_TENTHS / 10.0f, 50, kParmAppendSameLine);
-    setIntegerParameter("Spike lookback", bas::SPIKE_LOOKBACK_DEFAULT, 50, kParmAppendSameLine);
-    setIntegerParameter("Offset X", 0, 50);                                // (1.5.2) parameter 5
-    setIntegerParameter("Offset Y", 0, 50, kParmAppendSameLine);           // 6
-    setListParameter("Box shows", (short)off::MODE_READ, off::MODE_CHOICES, 90, kParmAppendSameLine);   // 7
+    setFloatParameter("Spike vs average", (float)bas::SPIKE_AVG_DEFAULT_TENTHS / 10.0f, 50, kParmAppendSameLine);
+    setIntegerParameter("Offset X", 0, 50);                                // parameter 3
+    setIntegerParameter("Offset Y", 0, 50, kParmAppendSameLine);           // 4
     return RTX_OK;
 }
 int cppExtension::calc(int) {
@@ -335,6 +349,8 @@ int cppExtension::calc(int) {
     return RTX_OK;
 }
 int BidAskStats::draw(void) {
+    {   BASState* S0 = slot_.get(this, false);                            // (1.13.0) the chart label (Market State key), read in the draw as BigBidAsk
+        if (S0) { const char* cl = getChartLabel(); const std::string c = cl ? cl : ""; if (!c.empty() && c != S0->chartKey) { if (!S0->chartKey.empty() && !S0->symbol.empty()) mst::clear("AGG", S0->symbol, S0->spb, S0->chartKey); S0->chartKey = c; S0->mstMs = -1; } } }
     pump();
     BASState* S = slot_.get(this, false);
     if (S) { mouseLeft(*S); followBoard(*S); }                            // (1.5.1) the candle under the mouse ANYWHERE on this chart
@@ -368,6 +384,8 @@ void BidAskStats::identify(BASState& S) {
     double tick = (double)getProperty(SYM_TICKINCR); if (!bas::finite(tick) || tick <= 0 || tick >= 1000) tick = 0;
     const std::string id = root + "|" + sym + "|" + std::to_string(spb);
     if (id == S.identity && tick == S.tick) return;
+    if (!S.chartKey.empty() && !S.symbol.empty()) mst::clear("AGG", S.symbol, S.spb, S.chartKey);   // (1.13.0) the old chart identity's facts
+    S.mstBar = 0; S.mstCt = 0; S.mstMs = -1; S.mstKv.clear();
     S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
     S.ser.bars.clear(); S.naTries.clear(); S.count = 0; S.lastStamp = 0; S.backlog = true; S.lastClosedTime = 0;
     S.liveTime = 0; S.live = bas::BarMax(); S.liveReadMs = -1; S.faulted = false; S.settingsStamp = -2; S.settingsCheckMs = -1;
@@ -390,11 +408,6 @@ int BidAskStats::mouse(RTX_EVENT* e) {
         if (it != S->hoverWnds.end()) S->hoverWnds.erase(it);
         S->hoverWnds.push_back(w);
         if (S->hoverWnds.size() > MAX_HOVER_WNDS) S->hoverWnds.erase(S->hoverWnds.begin());
-    }
-    {   // (1.5.2) over the read box: its numbers show (hover) and the candle it reads stays
-        const bool in = S->mode == off::MODE_READ && off::inBox(S->lastBox, e->v.mouse.h, e->v.mouse.v);
-        if (in != S->inBox) { S->inBox = in; if (in) ++S->boxHovers; invalidateChart(false); }
-        if (in) return RTX_FAIL;
     }
     publishBoard(*S, e->v.mouse.bar);                                    // (1.5.1) every pane of this chart follows this candle
     if (S->hover.set(bas::hoverIndex(e->v.mouse.bar, getBarCount()))) { ++S->redraws; invalidateChart(false); }   // only on a change
@@ -450,8 +463,8 @@ void BidAskStats::settings(BASState& S, long long now) {
             int r = 0, q = 0; bas::SpikeCfg c; BasPanel b2; if (parseSettings(ln, r, q, &c, &b2)) { rb = r; pos = q; sc = c; pn = b2; }
         }
     }
-    if (pos != S.pos || pn.dx != S.dx || pn.dy != S.dy || pn.mode != S.mode) { S.lastBox = bp::Box(); S.inBox = false; }   // (1.5.2) moved: no stale hover rect
-    S.pos = pos; S.dlgSpike = sc; S.dx = pn.dx; S.dy = pn.dy; S.mode = pn.mode;
+    if (pos != S.pos || pn.dx != S.dx || pn.dy != S.dy) { S.lastBox = bp::Box(); S.inBox = false; }   // (1.5.2) moved: no stale rect
+    S.pos = pos; S.dlgSpike = sc; S.dx = pn.dx; S.dy = pn.dy;           // (1.13.0) the file's 8th field (old Box shows) is read and ignored
     const bas::SpikeCfg eff = effSpike(sc, S.params.load.p);
     const bool reratioed = rb != S.ratioBars;
     if (reratioed) { S.ratioBars = rb; S.ser.reratio(rb); }
@@ -470,15 +483,14 @@ static BasFile basFile(const std::string& p) {
 static std::vector<long long> basDialog(cppExtension* x) {
     std::vector<long long> v;
     v.push_back(x->getIntegerValue(RATIO_PARM)); v.push_back(x->getListIndex(POS_PARM)); v.push_back(bas::tenthsOf(x->getFloatValue(SPIKE_AVG_PARM)));
-    v.push_back(bas::tenthsOf(x->getFloatValue(SPIKE_JUMP_PARM))); v.push_back(x->getIntegerValue(SPIKE_LB_PARM));
-    v.push_back(x->getIntegerValue(OFFX_PARM)); v.push_back(x->getIntegerValue(OFFY_PARM)); v.push_back(x->getListIndex(MODE_PARM));
+    v.push_back(x->getIntegerValue(OFFX_PARM)); v.push_back(x->getIntegerValue(OFFY_PARM));
     return v;
 }
 int BidAskStats::parmsLoad(void) {
     if (!basInDialog(this)) return RTX_OK;
     const BasFile F = basFile(placePath(basMarket(this)));
-    setIntegerValue(RATIO_PARM, F.rb); setListIndex(POS_PARM, F.pos); setFloatValue(SPIKE_AVG_PARM, (float)F.sc.avgT / 10.0f); setFloatValue(SPIKE_JUMP_PARM, (float)F.sc.jumpT / 10.0f);
-    setIntegerValue(SPIKE_LB_PARM, F.sc.lookback); setIntegerValue(OFFX_PARM, F.pn.dx); setIntegerValue(OFFY_PARM, F.pn.dy); setListIndex(MODE_PARM, F.pn.mode);
+    setIntegerValue(RATIO_PARM, F.rb); setListIndex(POS_PARM, F.pos); setFloatValue(SPIKE_AVG_PARM, (float)F.sc.avgT / 10.0f);
+    setIntegerValue(OFFX_PARM, F.pn.dx); setIntegerValue(OFFY_PARM, F.pn.dy);
     snap_.take(basDialog(this));
     return RTX_OK;
 }
@@ -488,11 +500,13 @@ void BidAskStats::saveSettings() {
     const std::string p = placePath(mkt); if (p.empty()) return;
     const BasFile F = basFile(p);
     const std::vector<long long> now = basDialog(this);
-    const long long fv[8] = { F.rb, F.pos, F.sc.avgT, F.sc.jumpT, F.sc.lookback, F.pn.dx, F.pn.dy, F.pn.mode };
-    long long v[8]; for (size_t k = 0; k < 8; ++k) v[k] = snap_.pick(k, now[k], fv[k]);   // a control he did not touch keeps the file's value
-    const int rb = (int)v[0], pos = bp::posOk((int)v[1]) ? (int)v[1] : F.pos, sa = (int)v[2], sj = (int)v[3], sl = (int)v[4];
-    const int dx = bp::offOk((int)v[5]) && v[5] == (int)v[5] ? (int)v[5] : F.pn.dx, dy = bp::offOk((int)v[6]) && v[6] == (int)v[6] ? (int)v[6] : F.pn.dy;
-    const int mode = v[7] == off::MODE_READ || v[7] == off::MODE_NUMBERS ? (int)v[7] : F.pn.mode;
+    // (1.13.0) the dialog rows: Ratio bars, Position, Spike vs average, Offset X, Offset Y. The file keeps its 8-field layout (older builds read
+    // it): the jump / lookback / Box shows fields carry the file's values unchanged (record field / unused)
+    const long long fv[5] = { F.rb, F.pos, F.sc.avgT, F.pn.dx, F.pn.dy };
+    long long v[5]; for (size_t k = 0; k < 5; ++k) v[k] = snap_.pick(k, now[k], fv[k]);   // a control he did not touch keeps the file's value
+    const int rb = (int)v[0], pos = bp::posOk((int)v[1]) ? (int)v[1] : F.pos, sa = (int)v[2], sj = F.sc.jumpT, sl = F.sc.lookback;
+    const int dx = bp::offOk((int)v[3]) && v[3] == (int)v[3] ? (int)v[3] : F.pn.dx, dy = bp::offOk((int)v[4]) && v[4] == (int)v[4] ? (int)v[4] : F.pn.dy;
+    const int mode = F.pn.mode == off::MODE_NUMBERS ? off::MODE_NUMBERS : off::MODE_READ;
     if (bas::clampRatioBars(rb) < 0) return;
     if (bas::clampLineTenths(sa) < 0 || bas::clampLineTenths(sj) < 0 || bas::clampLookback(sl) < 0) return;   // never overwrite a saved choice
     makeDir(flexDir());
@@ -769,7 +783,10 @@ void BidAskStats::finalize(BASState& S, long long now) {
             for (int k = 0; k < 2; ++k) { F.pc.p100[k] = rr.pace100[k]; F.pc.note[k] = rr.paceNote[k]; } F.pc.gate = rr.paceGate;   // (1.5.0) as decided then
             for (int s = 0; s < 2; ++s) F.let[s] = fr->second.let[s];
             F.msg.impl = fr->second.impl; F.msg.line1 = fr->second.line1; F.msg.line2 = fr->second.line2;
-            if (it->second.m.ok) { it->second.bidSpike = fr->second.spike[0] != 0; it->second.askSpike = fr->second.spike[1] != 0; }   // the colour as drawn then
+            if (it->second.m.ok) {                                         // the colour as drawn then (1.13.0: a 1.12 row = its spike OR the one rule)
+                it->second.bidSpike = bas::fileSpike(fr->second.spike[0] != 0, it->second.m.bid, it->second.bidRatioOk, it->second.bidMean, S.ser.spike);
+                it->second.askSpike = bas::fileSpike(fr->second.spike[1] != 0, it->second.m.ask, it->second.askRatioOk, it->second.askMean, S.ser.spike);
+            }
             heldOf(S, t, F.held);
         } else {
             const bool dboBar = S.firstBarKey > 0 && t >= S.firstBarKey;
@@ -859,6 +876,29 @@ void BidAskStats::reMessage(BASState& S) {
         it->second.msg = bas::message(st->second, it->second.dbo ? &it->second.r : nullptr, it->second.let, it->second.level, it->second.held, it->second.pc);
     }
 }
+// (1.13.0) MARKET STATE, SRC "AGG" (MARKET-STATE-SPEC.md 1.0): the facts of the newest DECIDED closed candle, built once for it (never
+// changed - no repaint), posted when it is new and re-posted unchanged every 15 s (an entry older than mst::FRESH_MS = 60 s is ignored by
+// the readers; a 3-min candle would otherwise go stale between closes). Keyed like BannerBoard / SignalBoard: symbol, bar size, chart label.
+void BidAskStats::marketState(BASState& S, long long now) {
+    if (S.chartKey.empty() || S.symbol.empty() || S.fin.empty()) return;
+    const long long t = S.fin.rbegin()->first;
+    if (t != S.mstBar) {
+        const long long ct = clockSec(t); if (ct == LLONG_MIN) return;
+        const BasFin& F = S.fin.rbegin()->second;
+        std::map<long long, bas::Stat>::const_iterator st = S.ser.bars.find(t);
+        bas::AggIn in; in.s = st != S.ser.bars.end() ? &st->second : nullptr; in.r = F.dbo ? &F.r : nullptr;
+        for (int k = 0; k < 2; ++k) { in.let[k] = F.let[k]; in.p100[k] = F.pc.p100[k]; }
+        std::map<long long, int>::const_iterator bi = S.barEnds.find(t);
+        if (bi != S.barEnds.end()) { RTARRAY op(barOpen), cl(barClose); const int k = bi->second; if (k >= 0 && op.count > k && cl.count > k) { const float o = op[k], c = cl[k]; if (std::isfinite(o) && std::isfinite(c)) in.dir = c > o ? 1 : c < o ? -1 : 0; } }
+        {   struct tm cx; std::memset(&cx, 0, sizeof(cx));
+            const int ch = getLocaltime((RTDATE)t, &cx) ? llp::channelOf(cx.tm_hour, cx.tm_min) : llp::CH_ALL;   // the candle's own hours
+            const llp::Tiers T = S.e.lp.tiersFor(ch); in.tiersOk = T.ok; for (int k = 0; k < 3; ++k) in.tiers[k] = T.t[k]; }
+        S.mstKv = bas::aggFacts(in); S.mstBar = t; S.mstCt = ct; S.mstMs = -1;
+    }
+    if (S.mstMs >= 0 && now >= S.mstMs && now - S.mstMs < 15000) return;
+    S.mstMs = now; S.mstPosts++;
+    mst::publish("AGG", S.symbol, S.spb, S.chartKey, now, S.mstCt, S.mstKv);
+}
 void BidAskStats::status(BASState& S, long long now) {
     if (S.statusMs >= 0 && now >= S.statusMs && now - S.statusMs < 60000) return;   // at most once a minute
     const bas::Stat* st = NULL;
@@ -868,8 +908,10 @@ void BidAskStats::status(BASState& S, long long now) {
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << BAS_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nRATIO_BARS," << S.ratioBars << "\nPOSITION," << S.pos
-      << "\nSPIKE_VS_AVERAGE," << bas::fmtTenths(S.ser.spike.avgT) << "\nSPIKE_VS_PRIOR_BIGGEST," << bas::fmtTenths(S.ser.spike.jumpT)
-      << "\nSPIKE_LOOKBACK," << S.ser.spike.lookback;
+      << "\nSPIKE_VS_AVERAGE," << bas::fmtTenths(S.ser.spike.avgT) << (S.ser.spike.on() ? "" : " (off)")
+      << "\nSPIKE_RULE,>= " << bas::fmtTenths(S.ser.spike.avgT) << " the plain " << S.ratioBars << "-candle average of that side, decided at the close; forming candle dim, no label"
+      << "\nJUMP_RECORD_FIELD,vs the biggest of the prior " << S.ser.spike.lookback << " candles (not part of the spike rule)"
+      << "\nMARKET_STATE,AGG " << (S.chartKey.empty() ? std::string("waiting for the chart label") : "bar " + std::to_string(S.mstCt) + ",posts " + std::to_string(S.mstPosts) + ",keys " + std::to_string(S.mstKv.size()));
     {   // today's spikes and letters: closed bars of the last closed bar's 17:00 CT session
         int nb = 0, na = 0, ls = 0, ll = 0; const long long day = sessionKey(S.lastClosedTime);
         if (day >= 0) for (std::map<long long, bas::Stat>::const_reverse_iterator r = S.ser.bars.rbegin(); r != S.ser.bars.rend(); ++r) {
@@ -968,6 +1010,7 @@ void BidAskStats::pump() {
                 if (S.srFrom < 0 && S.formingKey > 0) S.srFrom = S.formingKey;   // (1.4.0) bars closing from now on are judged
                 finalize(S, now);
                 stopRuns(S);
+                marketState(S, now);                                       // (1.13.0) SRC AGG, behind the scenes
             }
             if (count >= 2 && !S.faulted) {                                // (1.6.0) the zone read line
                 const std::string d = dir();
@@ -1003,9 +1046,9 @@ void BidAskStats::render(BASState& S) {
     for (int i = v0; i <= v1; ++i) { const bas::BarMax* m = maxOfBar(i); if (m) top = std::max(top, std::max(m->bid, m->ask)); }
     if (S.axisTop > top) top = S.axisTop;                                  // draw on the top the value axis was given
     S.paneH = pane.bottom - pane.top;
-    bas::Stat liveSt; if (S.live.ok && S.liveTime == (long long)times[last]) liveSt = S.ser.peek(S.liveTime, S.live, S.ratioBars);
+    // (1.13.0) the forming candle is never judged: no stats, so it is drawn dim with no label (closed candles only - no repaint)
     auto statOfBar = [&](int i) -> const bas::Stat* {
-        if (i == last) return liveSt.m.ok ? &liveSt : nullptr;
+        if (i == last) return nullptr;
         std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find((long long)times[i]);
         return it != S.ser.bars.end() && it->second.m.ok ? &it->second : nullptr;
     };
@@ -1062,15 +1105,11 @@ void BidAskStats::render(BASState& S) {
     const bp::Box area = bp::mk(g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3);
     // (1.6.0) Read = the ONE zone read line (only inside a key / gamma zone); Numbers = the numbers box + that line beside it
     const zread::Line zl = S.zr.e.line(zread::P_BAS, steadyMs());
-    const bool noText = false;                                             // (1.9.0) the read, numbers and oHit lines are gone from the pane; the hover grid was removed in 1.8.1; records + tape reader unchanged
-    const bool readMode = false;   // (1.10.0) the pane shows the numbers box only
-    off::PanelPlan P; off::LinePlan LP;
-    if (noText) { S.lastBox = bp::Box(); S.inBox = false; }
-    else if (readMode) { LP = off::planLine(area, pl, zl, false, off::measureWith(this), off::paneQuestion(bas::TITLE)); S.lastBox = LP.show ? LP.box : bp::Box(); if (!LP.show) S.inBox = false; }
-    else { (void)zl; (void)optL; P = off::planPanel(area, g.top, off::MODE_NUMBERS, pl, info, std::string(), std::string(), g.reserve, off::measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box(); }
-    (void)l1;
+    // (1.10.0) the pane shows the numbers box only (1.13.0: the "Box shows" setting that did nothing is gone); records + tape reader unchanged
+    off::PanelPlan P;
+    (void)zl; (void)optL; (void)l1;
+    P = off::planPanel(area, g.top, off::MODE_NUMBERS, pl, info, std::string(), std::string(), g.reserve, off::measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box();
     std::vector<off::LBox> avoid;
-    if (LP.show) avoid.push_back(off::LBox{ LP.box.l, LP.box.t, LP.box.r, LP.box.b, 0, 0 });
     if (P.ok) avoid.push_back(off::LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
     // (1.5.3) the hover grid is not an obstacle: it is drawn over the bars while the mouse is in the box (labels never re-decide for it)
     for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(off::LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
@@ -1079,9 +1118,9 @@ void BidAskStats::render(BASState& S) {
     off::drawBars(this, g, v0, v1, slot, top, hov, normal, spike, xOf, [&](int i) {
         off::BarLook k; const bas::BarMax* bm = maxOfBar(i); if (!bm) return k;
         const bas::Stat* sp = statOfBar(i);
-        k.ok = true; k.v[0] = bm->bid; k.v[1] = bm->ask; k.spike[0] = sp && sp->bidSpike; k.spike[1] = sp && sp->askSpike;
+        k.ok = true; k.v[0] = bm->bid; k.v[1] = bm->ask;
+        for (int q = 0; q < 2; ++q) { const bas::SideLook sl = bas::sideLook(sp, q, i != last); k.spike[q] = sl.bright; k.ratioOk[q] = sl.ratioOk; k.ratio[q] = sl.ratio; }   // (1.13.0) closed spikes only
         if (i < op.count && i < cl.count) { const float o = op[i], c = cl[i]; if (std::isfinite(o) && std::isfinite(c)) k.dir = c > o ? 1 : c < o ? -1 : 0; }
-        if (sp) { k.ratioOk[0] = sp->bidRatioOk; k.ratio[0] = sp->bidRatio; k.ratioOk[1] = sp->askRatioOk; k.ratio[1] = sp->askRatio; }   // (12:03) spike labels
         if (i != last) { std::map<long long, BasFin>::const_iterator ff = S.fin.find((long long)times[i]); if (ff != S.fin.end()) { k.let[0] = ff->second.let[0]; k.let[1] = ff->second.let[1]; k.p100[0] = ff->second.pc.p100[0]; k.p100[1] = ff->second.pc.p100[1]; } }
         if (i != last) {                                                   // (1.4.0) the stop-run mark on the break bar's attacking side
             std::map<long long, std::vector<sr::Event> >::const_iterator se = S.srEv.find((long long)times[i]);
@@ -1093,7 +1132,7 @@ void BidAskStats::render(BASState& S) {
         return k;
     }, avoid, 1, false, true);   // (1.9.1) only bars at 2.0x+ their average are bright and labelled; the rest are dim   // (1.7.1, Rassul 09:55 "get rid of the labeling like S L") no letters / R marks drawn; hover + record keep them                                                          // (1.7.0) one bar per candle; buyers = side 1 (offers lifted)
     const COLOR vcol[2] = { C_BID, C_ASK };                                // values: sellers (bid side) red, buyers (ask side) green, labels white
-    if (noText) {} else if (readMode) off::drawLine(this, LP); else off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
+    off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
     (void)hov;   // (1.8.1, Rassul 18:57 "get rid of the hoverover") no bar hover, no read-line hover
 }
 
@@ -1102,7 +1141,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
-    p->setDescription("LRA Aggression (was Bid/Ask Stats): who is PRESSING. One bar per candle = the bigger side - red = the biggest bid (most contracts sold into the bid at one price), green = the biggest ask (most bought at the ask at one price); a white tick at the other side's lots when both sides spiked. Bright = a spike: >= Spike vs average x that side's average AND >= Spike vs prior biggest x the biggest bid or ask of the prior Spike lookback candles. Letters from the order-by-order feed: S = one order swept 3+ price levels, L = one large aggressive order. R = stop run: a key level (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) broken with a sweep or spike that closed back inside within N bars - red R = buyers trapped above a high, green R = sellers trapped below a low; R? = not proven yet in this market (nightly stop-run study). Spike labels: the ratio, the pace (p = aggressive lots per second vs the same time of day) and the lots. Top: a plain-English message (pace named only when fast / slow), a blue options line when fresh (oHit), and (green = bullish, red = bearish), and the info box (Sellers | Buyers: lots, pace, sweep, large, stop run, crowd = orders, avg size, top order share, burst) for the candle under the mouse anywhere on the chart (else the last closed candle). Settings: Ratio bars, Position, Spike vs average, Spike vs prior biggest, Spike lookback (0 = off).");
-    p->setVersion("1.12.1");   // BAS_VERSION
+    p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio) and Pace for sellers and buyers of the candle under the mouse anywhere on the chart, else the last closed candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars).");
+    p->setVersion("1.13.0");   // BAS_VERSION
     return p;
 }
