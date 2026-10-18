@@ -350,6 +350,9 @@ struct Store {
     std::string path;            // <flex>\<plugin>.settings-<MKT>.txt
     std::vector<std::string> legacyPaths;
     LegacyFn legacy = nullptr;
+    // (1.2.0) a changed default: called after a keyed file is read with the version that wrote it (header token 3), e.g. the old
+    // default font -> the new one when the file was written by a version that still had the old default (he never chose it)
+    void (*upgrade)(const std::string& fileVersion, Values& V) = nullptr;
     std::string hint;            // passed to the legacy reader in Values::hint (the chart's contract root)
     long long lastReadMs = -1000000, lastStamp = -2;
     std::string lastText; bool haveText = false;
@@ -363,7 +366,9 @@ struct Store {
         std::string t;
         if (!path.empty() && readSmall(path, t) && isKeyed(t)) {
             if (haveText && t == lastText && cur.market == mkt) return cur;
-            Values V; parse(*S, mkt, t, V); lastText = t; haveText = true; cur = V; return cur;
+            Values V; parse(*S, mkt, t, V);
+            if (upgrade) { const std::string head = t.substr(0, t.find('\n')); const std::vector<std::string> h = split(head, '|'); upgrade(h.size() > 2 ? h[2] : std::string(), V); }
+            lastText = t; haveText = true; cur = V; return cur;
         }
         // not keyed yet: the same path (positional) first, then the older names
         std::vector<std::string> tries; if (!t.empty()) tries.push_back(path); for (const auto& p : legacyPaths) tries.push_back(p);

@@ -1,3 +1,42 @@
-findings=0 allowed=0 staged_files=1 bytes=124
+findings=0 allowed=0 staged_files=55 bytes=2378169
 largest staged blobs (bytes, path):
-SIZE	124	logs/staged-scan-findings.log
+SIZE	289234	plugin/LiquidityProfile.cpp
+SIZE	220325	plugin/OrderFlowFeed.h
+SIZE	186746	plugin/HodLodLogic.h
+SIZE	166349	plugin/DeltaProfile.cpp
+SIZE	134747	plugin/DealerProfile.cpp
+SIZE	125407	plugin/LiquidityProfileLogic.h
+SIZE	119022	plugin/BigBidAsk.cpp
+SIZE	94856	plugin/TapeReaderLogic.h
+SIZE	86215	plugin/BidAskStats.cpp
+SIZE	85277	plugin/HodLod.cpp
+SIZE	68610	plugin/BigBidAskLogic.h
+SIZE	67018	plugin/TapeReader.cpp
+SIZE	52785	plugin/BUILD-LESSONS.md
+SIZE	51513	plugin/CobImpulse.cpp
+SIZE	49558	plugin/DeltaProfileCore.h
+SIZE	47064	plugin/TradeManager.cpp
+SIZE	41620	plugin/test_dealerprofile_2110.cpp
+SIZE	35426	plugin/BidAskStatsLogic.h
+SIZE	35389	plugin/CVD.cpp
+SIZE	30640	plugin/BookFlow.cpp
+SIZE	27843	plugin/tests_bba115/test_bba116.cpp
+SIZE	27108	plugin/SettingsSpec.h
+SIZE	23085	plugin/tests_dp217/test_dp218.cpp
+SIZE	22501	docs/audit/SETTINGS-AUDIT-2026-10-18.md
+SIZE	19799	plugin/tests_lqp044/test_lqp044.cpp
+SIZE	18507	plugin/tests_aggbook/test_aggbook_113.cpp
+SIZE	17804	plugin/tests_settings/settings_contract.cpp
+SIZE	17544	plugin/tests_cvd/test_cvd_host.cpp
+SIZE	17307	plugin/test_cobimpulse_gamma_host.cpp
+SIZE	16718	plugin/test_cobimpulse_host.cpp
+SIZE	14928	plugin/tests_aggbook/test_aggbook_host.cpp
+SIZE	14762	plugin/tests_hodlod/t_hl230.cpp
+SIZE	14687	plugin/tests_hodlod/t_hl244.cpp
+SIZE	14391	plugin/BookFlowLogic.h
+SIZE	14179	plugin/tests_hodlod/t_hl240.cpp
+SIZE	12947	plugin/tests_settings/settings_host_test.cpp
+SIZE	10986	plugin/test_cobimpulse_odds_host.cpp
+SIZE	10166	plugin/SettingsHost.h
+SIZE	9727	plugin/tests_cvd/mock/irtsdk.h
+SIZE	9559	plugin/tests_cobimpulse/irtsdk.h

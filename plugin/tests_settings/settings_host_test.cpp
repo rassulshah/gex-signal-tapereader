@@ -128,9 +128,15 @@ int main() {
       ss::Values g = st.load(ss::M_GC, 0, true);
       CHECK(g.i(dpset::K_WIDTH) == 180 && g.i(dpset::K_FONT) == 12 && !g.b(dpset::K_DELTA_TEXT), "QGC line -> GC values");
       ss::Store sc = st; sc.path = d + "/DeltaProfile.settings-CL.txt"; ss::Values c = sc.load(ss::M_CL, 0, true);
-      CHECK(c.i(dpset::K_WIDTH) == 110 && c.i(dpset::K_FONT) == 9, "CLEX26 pre-2.8 width 50 -> default 110");
+      CHECK(c.i(dpset::K_WIDTH) == 110 && c.i(dpset::K_FONT) == 10, "CLEX26 pre-2.8 width 50 -> default 110; the old default font 9 -> 10 (2.18.3)");
       ss::Store sn = st; sn.path = d + "/DeltaProfile.settings-NG.txt"; ss::Values n = sn.load(ss::M_NG, 0, true);
-      CHECK(n.why == "defaults: no settings file", "no NG line -> defaults"); }
+      CHECK(n.why == "defaults: no settings file", "no NG line -> defaults");
+      // (SettingsSpec 1.2.0) the Store applies the upgrade hook with the version that wrote the keyed file
+      ss::Store su; su.S = &dpset::spec(); su.path = d + "/DeltaProfile.settings-ES.txt"; su.upgrade = dpset::upgrade;
+      writeFile(su.path, "SPEC1|DeltaProfile|2.18.2|ES\nwidth=150\nfont=9\ndelta_text=1\n");
+      ss::Values u = su.load(ss::M_ES, 0, true); CHECK(u.i(dpset::K_FONT) == 10 && u.i(dpset::K_WIDTH) == 150, "a 2.18.2 keyed file: the old default font 9 reads as 10, width kept");
+      writeFile(su.path, "SPEC1|DeltaProfile|2.18.3|ES\nwidth=150\nfont=9\ndelta_text=1\n");
+      u = su.load(ss::M_ES, 5000, true); CHECK(u.i(dpset::K_FONT) == 9, "a 2.18.3 keyed file: font 9 is his choice, kept"); }
     { // the original HodLod 2.4.1 projection row would have been flagged as cut off
       ss::Row R[3] = { ss::masterOf(ss::boolRow("show_proj", "Show projection", true)), ss::same(ss::in(ss::colorRow("proj_up", "Up (to the HOD)", 0x22C55E, 0), "show_proj")), ss::same(ss::in(ss::colorRow("proj_dn", "Down (to the LOD)", 0xEF4444, 0), "show_proj")) };
       ss::Spec old = { "HodLodOld", "x", 1, R, 3, 0 };

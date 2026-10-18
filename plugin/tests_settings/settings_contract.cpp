@@ -21,6 +21,8 @@
 #include "../TapeReaderSettings.h"
 #include "../OrderFlowPaneSettings.h"
 #include "../LiquidityProfileSettings.h"
+#include "../CVDSettings.h"
+#include "../CobImpulseSettings.h"
 #include "../TradeManagerSettings.h"
 #include "../DealerProfileSettings.h"
 #include "../SessionVWAPSettings.h"
@@ -150,6 +152,13 @@ static void checkEntry(const Entry& E, const std::string& dir) {
 int main(int argc, char** argv) {
     const std::string dir = argc > 1 ? argv[1] : "";
     std::vector<Entry> E;
+    {   // (SettingsSpec 1.2.0) a changed default: the old default written by the version that had it reads as the new default; his own value stays
+        ss::Values V = ss::defaults(dpset::spec(), ss::M_ES); V.v[dpset::K_FONT] = 9; dpset::upgrade("2.18.2", V); if (V.i(dpset::K_FONT) != 10) fail("DeltaProfile upgrade: 2.18.2 font 9 -> 10");
+        V.v[dpset::K_FONT] = 9; dpset::upgrade("2.18.3", V); if (V.i(dpset::K_FONT) != 9) fail("DeltaProfile upgrade: a 2.18.3 font 9 is his choice");
+        V.v[dpset::K_FONT] = 12; dpset::upgrade("2.18.2", V); if (V.i(dpset::K_FONT) != 12) fail("DeltaProfile upgrade: font 12 kept");
+        ss::Values T = ss::defaults(tmset::spec(), ss::M_ES); T.v[tmset::K_FONT] = 8; tmset::upgrade("1.3.1", T); if (T.i(tmset::K_FONT) != 10) fail("TradeManager upgrade: 1.3.1 font 8 -> 10");
+        T.v[tmset::K_FONT] = 8; tmset::upgrade("1.3.2", T); if (T.i(tmset::K_FONT) != 8) fail("TradeManager upgrade: a 1.3.2 font 8 is his choice");
+    }
     E.push_back(Entry{ &hlset::spec(), "HodLod.cpp", hlset::legacy, {
         { "7,0,0,1,1,1,-1,-1,-1,-1,-1\n", ss::M_ES, "position", 7 },          // his ES / NQ file on 10-18
         { "7,0,0,1,1,1,-1,-1,-1,-1,-1\n", ss::M_ES, "table_bg", 0x0F1520 },    // -1 = the default colour, never black
@@ -162,12 +171,13 @@ int main(int argc, char** argv) {
     }, {} });
     E.push_back(Entry{ &dpset::spec(), "DeltaProfile.cpp", dpset::legacy, {
         { "EPZ26|0|50|0|9|0|0|0|0|0|1|0|90|2|0\nNQ|0|50|0|9|0|0|0|0|0|1|0|90|2|0\n", ss::M_ES, "width", 110 },  // pre-2.8 default 50 -> the default (drawn 110 either way)
-        { "EPZ26|0|50|0|9|0|0|0|0|0|1|0|90|2|0\n", ss::M_ES, "font", 9 },
+        { "EPZ26|0|50|0|9|0|0|0|0|0|1|0|90|2|0\n", ss::M_ES, "font", 10 },     // (2.18.3) 9 = the old default -> the new default 10
+        { "EPZ26|0|50|0|12|0|0|0|0|0|1|0|90|2|0\n", ss::M_ES, "font", 12 },    // his own choice kept
     }, {} });
     E.push_back(Entry{ &trset::spec(), "TapeReader.cpp", trset::legacy, {
         { "7", ss::M_ES, "position", 7 },
         { "4,10,-5,0", ss::M_NQ, "background", 0 },
-        { "4,10,-5,0", ss::M_NQ, "offset_x", 10 },
+        { "4,10,-5,0", ss::M_NQ, "position", 4 },                              // (1.3.2) Offset X / Y removed: a saved offset is ignored
     }, {} });
     // (BidAskStats 1.13.2 / BookFlow 1.3.2) the window on the layer; the place files keep the panes' own format (no legacy reader needed)
     E.push_back(Entry{ &ofset::bidAskSpec(), "BidAskStats.cpp", nullptr, {}, {} });
@@ -191,6 +201,8 @@ int main(int argc, char** argv) {
     }, {} });
     E.push_back(Entry{ &svset::spec(), "SessionVWAP.cpp", nullptr, {}, {} });   // (1.6.1) the file keeps its own keyed-style format (SessionVWAPStyle.h)
     { Entry b{ &bbaset::spec(), "BigBidAsk.cpp", nullptr, {}, {} }; b.mappedRows = 75; E.push_back(b); }   // (1.16.1) BBA7 file kept; 75 window values
+    E.push_back(Entry{ &cvdset::spec(), "CVD.cpp", nullptr, {}, {} });              // (1.3.0, his decision list) show / hide + colour per drawn element
+    E.push_back(Entry{ &ciset::spec(), "CobImpulse.cpp", nullptr, {}, {} });        // (0.5.0, his decision list) labels / impulse box: show + colour
     if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
         const int mkt = ss::marketIndex(argv[3]);
         for (const Entry& e : E) {
@@ -202,7 +214,7 @@ int main(int argc, char** argv) {
                     t += std::string(t.empty() ? "" : "  |  ") + r.label + " " + v; }
                 std::printf("   ~%3dpx  %s\n", L.px, t.c_str());
             }
-            for (int k = 0; k < S.n; ++k) if (S.rows[k].hidden) std::printf("   (hidden, kept in the file) %s = %s\n", S.rows[k].key, ss::fmt(S.rows[k], D.v[(size_t)k]).c_str());
+            for (int k = 0; k < S.n; ++k) if (S.rows[k].hidden) std::printf("   (hidden, kept in the file) %s = %s\n", S.rows[k].key, (S.rows[k].type == ss::T_TEXT ? D.s(k) : ss::fmt(S.rows[k], D.v[(size_t)k])).c_str());
         }
         return 0;
     }
