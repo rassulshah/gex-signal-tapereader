@@ -1,6 +1,6 @@
 #ifndef LS_BANNERBOARD_H
 #define LS_BANNERBOARD_H
-// BannerBoard.h (1.0.1, 2026-10-14, CR4800 / CR5000) -- the ONE top banner of a chart, shared by lsTapeReader and lsLiquidityProfile.
+// BannerBoard.h (1.0.2 2026-10-18 long values; 1.0.1, 2026-10-14, CR4800 / CR5000) -- the ONE top banner of a chart, shared by lsTapeReader and lsLiquidityProfile.
 // Rassul 07:12 / 07:13 (variant B, "one banner"): the Tape Reader draws a 1-2 line banner at the top left where the Liquidity warning
 // sits today - line 1 its read (bias / turn / swing / next), line 2 the Liquidity warning. The Liquidity Profile stops drawing its own
 // warning while a Tape Reader is on the same chart and hands the warning over; with no Tape Reader it draws it as before.
@@ -24,7 +24,7 @@
 #include <windows.h>
 #endif
 namespace bb {
-static const char* const VERSION = "1.0.1";
+static const char* const VERSION = "1.0.2";   // 1.0.2: bbGet reads values of any length (was capped at 511 chars)
 static const long long FRESH_MS = 60000;
 static const long long BEAT_MS = 5000; static const int BEAT_MISS = 3;
 struct Warn { bool on = false; int favour = 0; std::string name, detail; };
@@ -76,9 +76,16 @@ inline bool decBanner(const std::string& s, long long nowMs, Rect& out) {
 #if defined(_WIN32) && !defined(HB_FAKE)
 inline void bbSet(const std::string& n, const std::string& v) { SetEnvironmentVariableA(n.c_str(), v.empty() ? NULL : v.c_str()); }
 inline bool bbGet(const std::string& n, std::string& v) {
-    char b[512]; const DWORD k = GetEnvironmentVariableA(n.c_str(), b, (DWORD)sizeof(b));
-    if (k == 0 || k >= sizeof(b)) return false;
-    v.assign(b, (size_t)k); return true;
+    // (1.0.2, 2026-10-18) values longer than 511 chars (the Signal Board's event lists: ~16+ events) were silently unreadable ->
+    // the reader saw "no events". GetEnvironmentVariableA returns the size it needs when the buffer is too small: read again.
+    char b[512]; DWORD k = GetEnvironmentVariableA(n.c_str(), b, (DWORD)sizeof(b));
+    if (k == 0) return false;
+    if (k < sizeof(b)) { v.assign(b, (size_t)k); return true; }
+    if (k > 32767) return false;
+    std::string big((size_t)k, '\0');
+    const DWORD k2 = GetEnvironmentVariableA(n.c_str(), &big[0], k);
+    if (k2 == 0 || k2 >= k) return false;
+    big.resize((size_t)k2); v.swap(big); return true;
 }
 #else
 inline void bbSet(const std::string& n, const std::string& v) { if (v.empty()) unsetenv(n.c_str()); else setenv(n.c_str(), v.c_str(), 1); }

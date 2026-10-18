@@ -135,7 +135,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.43.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.43.1"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -1734,8 +1734,9 @@ void LiquidityProfile::boAfter(LQState& S, long count, long long st) {
 // (0.38.0) the per-market start size (lots) below which an order is never "large" (BigOrderLines floors, from the recorded data)
 static long long bldFloor(const std::string& m) {
     if (m == "ES") return 30; if (m == "NQ") return 10; if (m == "GC") return 15; if (m == "HG") return 12;
-    if (m == "CL") return 15; if (m == "NG") return 10; if (m == "6E") return 50; return 10;
+    if (m == "CL") return 15; if (m == "NG") return 10; if (m == "6E" || m == "EU") return 50; return 10;   // (0.43.1) the chart market code is EU
 }
+static long long bldTotal(const bol::LogDist& d) { long long t = 0; for (int i = 0; i < bol::LogDist::NB; ++i) t += d.c[i]; return t; }
 // is a recompute due (every 5 s, a new market / session, or a changed start)?
 static bool bldDue(const BldSet& B, const std::string& market, long long session, long long start) {
     const long long st = steadyMs();
@@ -1754,12 +1755,13 @@ static bool bldRun(const std::string& dirp, const std::string& stem, const std::
                 long long ses = 0; bol::LogDist d;
                 if (!bol::LogDist::parse(ln, ses, d)) continue;
                 if (ses == session) { c.curBase = d; continue; }   // this session before a restart: the engine's lists start again at 0
+                if (bldTotal(d) <= 0) continue;                     // (0.43.1) an empty session (weekend / holiday / no feed) is not a session: it halved S20 / S10 / S5 every Monday
                 c.lines.push_back(std::make_pair(ses, ln));
             }
             {   std::ifstream in2; std::string l2; int n2 = 0;   // (0.41.0) seed sessions rebuilt from the recorded order-by-order history (<file>.seed.txt): only sessions the main file does not have
                 if (openBoundedInput(dirp + "\\" + stem + "-" + market + sfx[k] + ".seed.txt", in2)) while (readBoundedLine(in2, l2) && ++n2 < 64) {
                     long long ses2 = 0; bol::LogDist d2;
-                    if (!bol::LogDist::parse(l2, ses2, d2) || ses2 == session) continue;
+                    if (!bol::LogDist::parse(l2, ses2, d2) || ses2 == session || bldTotal(d2) <= 0) continue;
                     bool have = false; for (size_t q = 0; q < c.lines.size(); ++q) if (c.lines[q].first == ses2) have = true;
                     if (!have) c.lines.push_back(std::make_pair(ses2, l2));
                 }
@@ -3319,6 +3321,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.43.0");   // LQ_VERSION
+    p->setVersion("0.43.1");   // LQ_VERSION
     return p;
 }
