@@ -1,7 +1,4 @@
-findings=0 allowed=0 staged_files=5 bytes=115942
+findings=0 allowed=0 staged_files=2 bytes=20434
 largest staged blobs (bytes, path):
-SIZE	53423	plugin/BUILD-LESSONS.md
-SIZE	27632	plugin/SettingsSpec.h
-SIZE	19440	plugin/tests_settings/settings_contract.cpp
-SIZE	13707	plugin/tests_settings/settings_host_test.cpp
-SIZE	1740	logs/staged-scan-findings.log
+SIZE	20123	tools/gex-build.bat
+SIZE	311	logs/staged-scan-findings.log
