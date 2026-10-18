@@ -246,7 +246,7 @@ static void testVersion()
     CHECK(a != std::string::npos && b != std::string::npos, "both version literals present");
     if (a != std::string::npos && b != std::string::npos) {
         const std::string v1 = src.substr(a + 12, src.find('"', a + 12) - a - 12), v2 = src.substr(b + 14, src.find('"', b + 14) - b - 14);
-        CHECK(v1 == v2 && v1 == "1.5.0", "setVersion literal = SV_VERSION = 1.5.0 (got " << v1 << " / " << v2 << ")");
+        CHECK(v1 == v2 && v1.size() >= 5 && v1 >= "1.5.0", "setVersion literal = SV_VERSION (compared, never typed - lesson 79; got " << v1 << " / " << v2 << ")");
     }
 }
 

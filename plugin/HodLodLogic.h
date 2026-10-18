@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <functional>
 #include <fstream>
+#include <map>
 #include "HodLodExpected.h"
 #include "HodLodExpectedV2.h"
 #include "HodLodEvents.h"         // (HL101) the economic calendar (CPI / NFP / FOMC / ISM, EIA for CL / NG), generated nightly
@@ -54,7 +55,8 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.3.0";   // (2.3.0, Rassul 2026-10-17 19:53-20:20) MenthorQ Q-Scores "Q: M1 O1 V4" top left (hover = the meaning), "Reg: Neg / S. Dntrend" top right; Gex S/R = the BAND rule: 3 biggest abs-GEX strikes from the RTH open up to the 1.38 extension of the 1D Max (red, a drawn up triangle first) | price | 3 down to the 1.38 extension of the 1D Min (green, a down triangle first)
+static const char* const HL_VERSION = "2.4.0";   // (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
+// (2.3.0)   // (2.3.0, Rassul 2026-10-17 19:53-20:20) MenthorQ Q-Scores "Q: M1 O1 V4" top left (hover = the meaning), "Reg: Neg / S. Dntrend" top right; Gex S/R = the BAND rule: 3 biggest abs-GEX strikes from the RTH open up to the 1.38 extension of the 1D Max (red, a drawn up triangle first) | price | 3 down to the 1.38 extension of the 1D Min (green, a down triangle first)
 // (2.2.4)   // (2.2.4, Rassul 2026-10-17) Gex S/R row: the 3 nearest levels ABOVE price first (red), the current price, then the 3 nearest BELOW (green), MenthorQ name BEFORE each price (blue);   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
@@ -1527,7 +1529,7 @@ inline int gexLineW(const View& v, const Measure& M, int fs, int sfs)
 inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const Measure& M, int fs, int sfs)
 {
     const bool st = !v.gexStale.empty();
-    unsigned cs = 0x00FFFFFFu, cn = 0x00FFFFFFu;   // (2.1.1, Rassul 22:31) set per strike below: above price red, below price green   // (2.1.1, Rassul 22:26) strikes always white
+    unsigned cs = 0x00FFFFFFu;   // (2.4.0) the unused "cn" removed (-Werror)   // (2.1.1, Rassul 22:31) set per strike below: above price red, below price green   // (2.1.1, Rassul 22:26) strikes always white
     const std::string sepT = "  \xB7  ";
     for (size_t i = 0; i < v.gexItems.size(); i++) {
         const View::GexItem& g = v.gexItems[i];
@@ -2386,6 +2388,49 @@ inline void primeFromFile(LogState& S, const std::string& path, const std::strin
         if (h < 24 && m < 60) S.lastBarEnd = h * 60 + m;
     }
     if (kindOutcome && c[0] == kindOutcome) S.outcomeDone = true;
+}
+
+// ---- (2.4.0) the MARKET STATE facts (MARKET-STATE-SPEC.md 1.0: SRC "HODLOD" and "TREND"), decided for the last CLOSED bar; SDK-free so
+// they are tested (tests_hodlod/t_hl240.cpp). '?' = not known. Prices with the market's decimals, times "HH:MM" CT (24 h, internal).
+struct MstIn {
+    double tick = 0; int dec = 2;
+    int regime = 0;                  // +1 pos / -1 neg / 0 unknown or STALE (never a stale regime as live)
+    long long dataAgeMin = -1;       // the regime source's age (GammaProfile-MQ book), -1 = unknown
+    bool qOk = false; int qm = -1, qo = -1, qv = -1;     // Q-Scores, only when fresh
+    bool bandOk = false; double bandHi = NAN, bandLo = NAN;   // the Gex S/R band, only when shown and not stale
+};
+inline std::string mstNum(double v, int dec) { if (!std::isfinite(v)) return "?"; char b[48]; std::snprintf(b, sizeof b, "%.*f", dec < 0 ? 2 : (dec > 6 ? 6 : dec), v); return b; }
+inline std::string mstHHMM(int mod) { if (mod < 0 || mod >= 1440) return "?"; char b[8]; std::snprintf(b, sizeof b, "%02d:%02d", mod / 60, mod % 60); return b; }
+inline std::map<std::string, std::string> mstHodLod(const View& v, const MstIn& in)
+{
+    std::map<std::string, std::string> kv;
+    const bool px = v.has && in.tick > 0;
+    kv["hod"] = px ? mstNum((double)v.hod * in.tick, in.dec) : "?";
+    kv["lod"] = px ? mstNum((double)v.lod * in.tick, in.dec) : "?";
+    kv["hod_time"] = px ? mstHHMM(v.hodMod) : "?";
+    kv["lod_time"] = px ? mstHHMM(v.lodMod) : "?";
+    kv["first_extreme"] = (v.has && v.side == 2) ? "hod" : ((v.has && v.side == 1) ? "lod" : "?");
+    const bool pj = v.projOk && in.tick > 0;
+    kv["proj_hi"] = (pj && v.projUp) ? mstNum((double)v.projTo * in.tick, in.dec) : "?";
+    kv["proj_lo"] = (pj && !v.projUp) ? mstNum((double)v.projTo * in.tick, in.dec) : "?";
+    kv["range_used"] = (v.has && v.usedPct >= 0) ? mstNum(v.usedPct / 100.0, 2) : "?";
+    kv["q_m"] = (in.qOk && in.qm >= 0) ? std::to_string(in.qm) : "?";
+    kv["q_o"] = (in.qOk && in.qo >= 0) ? std::to_string(in.qo) : "?";
+    kv["q_v"] = (in.qOk && in.qv >= 0) ? std::to_string(in.qv) : "?";
+    kv["trend"] = v.trendReady ? std::to_string(v.trendLvl) : "?";
+    kv["regime"] = in.regime > 0 ? "pos" : (in.regime < 0 ? "neg" : "?");
+    kv["gex_band_hi"] = in.bandOk ? mstNum(in.bandHi, in.dec) : "?";
+    kv["gex_band_lo"] = in.bandOk ? mstNum(in.bandLo, in.dec) : "?";
+    kv["data_age_min"] = in.dataAgeMin >= 0 ? std::to_string(in.dataAgeMin) : "?";
+    return kv;
+}
+// SRC "TREND": HOD / LOD owns the VWAP trend the box shows (VwapTrendLogic.h on the RTH closed bars); trend_word = the box's word
+inline std::map<std::string, std::string> mstTrend(const View& v)
+{
+    std::map<std::string, std::string> kv;
+    kv["trend"] = v.trendReady ? std::to_string(v.trendLvl) : "?";
+    kv["trend_word"] = v.trendReady ? trendWord(v.trendLvl) : "?";
+    return kv;
 }
 
 }  // namespace hl

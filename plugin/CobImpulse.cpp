@@ -1,5 +1,10 @@
 /********************************************************************************
- *  CobImpulse.cpp  --  Investor/RT RTX extension  lsCobImpulse  (0.3.1, 2026-10-14)
+ *  CobImpulse.cpp  --  Investor/RT RTX extension  lsCobImpulse  (0.3.1, 2026-10-14; 0.4.1, 2026-10-18)
+ *  0.4.1 (2026-10-18 night, Rassul approved the Market State): posts SRC "COB" (MarketState.h, MARKET-STATE-SPEC 1.0) for the last
+ *        CLOSED bar from the record it already keeps: cob (bull / bear / none on that bar), cob_odds (the decided p, only when the odds
+ *        are LIVE - what the label shows - else ?), cob_odds_base, cob_odds_n, cob_tag (the recorded R / V / C letters), cob_gamma (the
+ *        recorded gamma name); re-posted every 10 s, cleared on removal. The odds logic (CobOdds.h, 0.4.0) and everything drawn are
+ *        unchanged; cimp::VERSION (the logic) stays 0.4.0.
  *  0.3.1 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 1): the gamma hover reads "MenthorQ level near
  *        the CoB start: CR 6,020 (model, data 7 min old)." - no "driving" / "behind". RB / CoB marks (his locked trade), the Cob+R? / V? /
  *        C? tags, the gamma part of the tag and the white impulse box are unchanged.
@@ -49,6 +54,7 @@
 #include "HoverBoard.h"                  // hb::hbCursor (GetCursorPos + WindowFromPoint; carries the user32 pragma)
 #include "HostSlot.h"
 #include "ClaimGates.h"                 // (0.3.0) cgate::kShowHvlCushion - the HVL regime text in the gamma hover
+#include "MarketState.h"                // (0.4.1) SRC COB for the last closed bar
 #if defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")      // HoverBoard.h's GetCursorPos / WindowFromPoint
 #endif
@@ -71,7 +77,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CI_VERSION "0.4.0"          // keep equal to cimp::VERSION and the setVersion literal below
+#define CI_VERSION "0.4.1"          // the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
 
 static const COLOR C_LABEL = 0x0080FFFF;   // his IRT Cob label colour (light cyan), unchanged
 static const COLOR C_BOX = 0x00FFFFFF, C_HOVBG = 0x00111827, C_HOVEDGE = 0x009CA3AF, C_INK = 0x00F3F4F6;
@@ -186,6 +192,8 @@ struct CIState {
     std::map<std::pair<long long, int>, codds::Odds> oddsRec, pendOdds;
     // hover
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
+    // (0.4.1) the Market State entry of this chart
+    bool mstPosted = false; std::string mstSym, mstChart; long mstSpb = 0; long long mstBar = -1, mstMs = -1; std::string mstSig;
 };
 
 class CobImpulse : public cppExtension {
@@ -197,7 +205,11 @@ public:
     virtual int parmsApply(void) { return RTX_OK; }
     virtual int parmsUpdt(unsigned int) { return RTX_OK; }
     void pump(bool mayCalc);
-    void release() { slot_.release(this); }
+    void release() {   // (0.4.1) the Market State entry leaves the board first
+        CIState* S = slot_.get(this, false);
+        if (S && S->mstPosted) { mst::clear("COB", S->mstSym, S->mstSpb, S->mstChart); S->mstPosted = false; }
+        slot_.release(this);
+    }
     CIState* testState() { return slot_.get(this, false); }
 private:
     HostSlot<CIState> slot_;
@@ -213,6 +225,7 @@ private:
     void load(CIState& S);
     void status(CIState& S, long long now);
     void render(CIState& S);
+    void postMst(CIState& S, long count);     // (0.4.1) SRC COB
     std::string clockOf(long long t);
     std::string dir() { const std::string f = flexDir(); return f.empty() ? f : f + "\\CobImpulse"; }
     std::string stem(CIState& S) { return S.market + "-" + fileKey(S.symbol) + "-" + std::to_string(S.spb); }
@@ -550,7 +563,49 @@ void CobImpulse::pump(bool mayCalc) {
         if (mayCalc && count != S.lastCount) { decide(S, count); S.lastCount = count; }
         else flush(S);
         status(S, now);
+        postMst(S, count);                                     // (0.4.1) the Market State (behind the scenes)
     } catch (...) { S.state = "calculation error"; }
+}
+// (0.4.1) MARKET STATE, SRC "COB": the facts of the last CLOSED bar from the records (a CoB is decided at its close and recorded once:
+// no repaint); the same facts re-posted every 10 s (MarketState.h drops entries older than 60 s), at once on a new bar / a new record
+static std::string ciNum4(double x) { char b[32]; std::snprintf(b, sizeof(b), "%.4g", x); return b; }
+typedef std::map<std::pair<long long, int>, cimp::Rec> CiRecs;
+typedef std::map<std::pair<long long, int>, codds::Odds> CiOdds;
+// the facts for bar time t (the chart's RTDATE stamp, as the records key it): a recorded (or queued) CoB on that bar, bull first
+static std::map<std::string, std::string> ciMstFacts(const CiRecs& recs, const std::vector<std::pair<long long, cimp::Rec>>& pending,
+                                                     const CiOdds& odds, const CiOdds& pendOdds, long long t) {
+    std::map<std::string, std::string> kv;
+    const cimp::Rec* r = nullptr;
+    for (int side = 1; side >= -1 && !r; side -= 2) {
+        const auto it = recs.find(std::make_pair(t, side)); if (it != recs.end()) { r = &it->second; break; }
+        for (const auto& p : pending) if (p.second.trig == t && p.second.side == side) { r = &p.second; break; }
+    }
+    kv["cob"] = r ? (r->side > 0 ? "bull" : "bear") : "none";
+    const codds::Odds* o = nullptr;
+    if (r) { const auto k = std::make_pair(r->trig, r->side); auto io = odds.find(k); if (io != odds.end()) o = &io->second; else { io = pendOdds.find(k); if (io != pendOdds.end()) o = &io->second; } }
+    const bool known = o && o->decided && o->p >= 0;
+    kv["cob_odds"] = (known && o->live) ? ciNum4(o->p) : "?";          // only what the label shows (LIVE); learning / pooled-only = '?'
+    kv["cob_odds_base"] = (o && o->decided && o->base > 0) ? ciNum4(o->base) : "?";
+    kv["cob_odds_n"] = known ? std::to_string(o->n) : "?";
+    std::string tag; if (r) { if (r->r()) tag += "R"; if (r->v()) tag += "V"; if (r->c()) tag += "C"; }
+    kv["cob_tag"] = tag;
+    kv["cob_gamma"] = r ? r->gCode : std::string();
+    return kv;
+}
+void CobImpulse::postMst(CIState& S, long count) {
+    if (count < 3 || S.symbol.empty()) return;
+    RTARRAYI times(barDateTime); if (times.count < count) return;
+    const long long t = (long long)times[(int)count - 2];
+    const long long bar = ctSec((RTDATE)t); if (bar <= 0) return;
+    const char* cl = getChartLabel(); const std::string chart = cl ? cl : "";
+    const std::map<std::string, std::string> kv = ciMstFacts(S.recs, S.pending, S.oddsRec, S.pendOdds, t);
+    std::string sig; for (const auto& p : kv) sig += p.first + "=" + p.second + ";";
+    const long long now = steadyMs();
+    if (S.mstPosted && (S.symbol != S.mstSym || S.spb != S.mstSpb || chart != S.mstChart)) { mst::clear("COB", S.mstSym, S.mstSpb, S.mstChart); S.mstPosted = false; }
+    const bool changed = bar != S.mstBar || sig != S.mstSig;
+    if (!changed && S.mstPosted && S.mstMs >= 0 && now >= S.mstMs && now - S.mstMs < 10000) return;
+    mst::publish("COB", S.symbol, S.spb, chart, now, bar, kv);
+    S.mstPosted = true; S.mstSym = S.symbol; S.mstSpb = S.spb; S.mstChart = chart; S.mstBar = bar; S.mstSig = sig; S.mstMs = now;
 }
 // the bar index whose time is t (closed bars only), -1 = none
 template <class Times> static int indexOf(Times& times, long count, long long t) {
@@ -651,7 +706,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobImpulse* p = new CobImpulse();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | CALC_LAST);   // CALC_LAST: it reads his RTL results
-    p->setDescription("LRA Cob Impulse v0.4.0: what are the odds this CoB reaches 1R (shown after the label, e.g. Cob 63%, from the nightly CoB Lab, LRA-Odds-<MKT>.csv; ODDS 0 hides it), did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar; hover the label or box for the details. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
-    p->setVersion("0.4.0");   // CI_VERSION
+    p->setDescription("LRA Cob Impulse v0.4.1: what are the odds this CoB reaches 1R (shown after the label, e.g. Cob 63%, from the nightly CoB Lab, LRA-Odds-<MKT>.csv; ODDS 0 hides it), did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar; hover the label or box for the details. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
+    p->setVersion("0.4.1");   // CI_VERSION
     return p;
 }

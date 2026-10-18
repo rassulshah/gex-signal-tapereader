@@ -1,5 +1,18 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.4.0 (2026-10-18 night, Rassul approved the audit-C fixes; audit-C-gamma-hodlod-read findings 7, 8, 13 + the Market State):
+ *         - Reg: from ONE MenthorQ source - the HVL0 strike of lsFlexLevels\GammaProfile-MQ-<MKT>.csv (the same snapshot whose
+ *           "HVL 0D" line the Dealer Profile draws) against the last CLOSED bar's close: at / above = Pos, below = Neg. The bridge's
+ *           LRA-Session GAM used the book's FLIP (MenthorQ's all-expiry HVL: ES 10-16 FLIP 7820 vs HVL0 7780) - two "flips" on one
+ *           chart; it is parsed for the status line only. Aged by Fresh.h (one rule for every indicator): STALE -> "Reg: STALE" (grey),
+ *           never a stale regime as live; PAUSED (MenthorQ's evening / weekend pause, the closing set) is shown as before.
+ *         - Q-Scores aged (Fresh.h judgeDaily): stale -> "Q: STALE", the old scores only in the hover with their date.
+ *         - Gex S/R row aged by Fresh.h also outside MenthorQ hours (older than the last close = "STALE 2d", dimmed).
+ *         - the Tape Reader slot is reserved only while TapeReader.status-<MKT>.txt was written in the last 120 s (an old file from a
+ *           removed Tape Reader no longer pushes the table).
+ *         - MARKET STATE (MarketState.h, MARKET-STATE-SPEC.md 1.0): SRC "HODLOD" and "TREND" (this box owns the VWAP trend it shows),
+ *           decided once per closed bar (slow state: regime / Q / band / age), re-posted every 10 s so readers see it fresh; cleared on
+ *           removal. Nothing drawn changes for it. windows.h now comes first (MarketState.h -> BannerBoard.h); GetCursorPos from it.
  *  2.1.0 (2026-10-14 evening; Rassul 16:01-16:04 CT "a line in the HOD/LOD indicator box that identifies the key GEX levels where a
  *         reaction can occur so it is front and center - this will be where I look for trades"; "must be able to identify strikes like
  *         7750 ... see growth in the absolute gex, regardless of whether it is an identified gamma level"): a GEX row under the header -
@@ -54,9 +67,18 @@
  *  Writes: HodLod.status-<MKT>-<secs>.txt (every value drawn), HodLod.reads-<MKT>-<secs>.csv (the read every closed RTH bar +
  *  the day's OUTCOME line) and, on 3-min charts with the read built in, HodLodRead.reads-<MKT>.csv (the nightly scorer's format).
  ********************************************************************************/
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#if defined(_WIN32)
+#include <windows.h>                 // (2.4.0) BEFORE irtsdk.h (MSVC C2371 RTBOOL clash otherwise): MarketState.h -> BannerBoard.h needs it
+#endif
 #include "irtsdk.h"
 #ifdef far
 #undef far
+#endif
+#ifdef near
+#undef near
 #endif
 #include "HostSlot.h"
 #include "BoxPlace.h"                // (2.0.6) Offset X / Y rules, hysteresis, the dialog snapshot
@@ -64,6 +86,9 @@
 #include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
 #include "HodLodQ.h"               // (2.3.0) MenthorQ Q-Scores: LRA-QScore-<MKT>.csv parse / header parts / hover (SDK-free)
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
+#include "Fresh.h"               // (2.4.0) the one freshness / STALE rule (Reg / Q / Gex row / Tape Reader status)
+#include "MarketState.h"         // (2.4.0) SRC HODLOD + TREND, once per closed bar
+#include <chrono>
 #include "VwapTrendLogic.h"      // (2.0.5) the header's trend: the Tape Reader TREND vote's rule, computed here from the chart's closed bars
 #include <sys/stat.h>
 #include <fstream>
@@ -111,6 +136,12 @@ struct HLState {
     // (2.3.0) the Q-Scores: LRA-QScore-<MKT>.csv (stamp, at most every 5 s) and their hover
     long long qStamp = -2; time_t qChecked = 0; hlq::File qf; std::string qWhy;
     bool inQ = false, lastQOk = false, lastQHoverOk = false; hl::Box lastQBox = { 0, 0, 0, 0 }, lastQHover = { 0, 0, 0, 0 }; int qCurX = -100000, qCurY = -100000; long long qHovers = 0;
+    // (2.4.0) the regime's ONE source: GammaProfile-MQ-<MKT>.csv HVL0 (stamp, at most every 5 s) and its verdict (Fresh.h)
+    long long hvlStamp = -2; time_t hvlChecked = 0; hlg::HvlBook hvl; std::string hvlWhy; int regSign = 0; fr::Verdict regV; fr::Verdict qV; bool qJudged = false;
+    long long lastClosedAbs = 0; double lastClose = NAN;     // the last closed bar (CT wall-clock seconds of its END stamp, its close)
+    // (2.4.0) the Market State posts: this chart's identity, the facts decided for the last closed bar, when they were last posted
+    std::string mstSym, mstChart; long mstSpb = 0; bool mstPosted = false; long long mstBar = -1, mstMs = -1; std::string mstSig;
+    std::map<std::string, std::string> mstKv, mstTrendKv;
     bp::Hyst hyst; long long hystPlaceSig = -3; std::string placeLine; hl::Box hystPane = { 0, 0, 0, 0 };                           // (2.0.6) the table's place: no ping-pong (reset when the settings change)
     ~HLState() { delete T; }
 };
@@ -148,10 +179,17 @@ public:
     int priceEdge();
     HostSlot<HLState> slot_;
     HLState* state(bool create) { return slot_.get(this, create); }
-    void clearState() { slot_.release(this); }
+    void clearState()
+    {   // (2.4.0) this chart's Market State entries leave the board (removal, symbol / period change), then the state goes
+        HLState* S = slot_.get(this, false);
+        if (S && S->mstPosted) { mst::clear("HODLOD", S->mstSym, S->mstSpb, S->mstChart); mst::clear("TREND", S->mstSym, S->mstSpb, S->mstChart); S->mstPosted = false; }
+        slot_.release(this);
+    }
     void refresh(HLState& S);
     bool loadMq(HLState& S);
     void loadSession(HLState& S);
+    void loadHvl(HLState& S);                                        // (2.4.0) the regime's HVL0 book
+    void postMst(HLState& S);                                        // (2.4.0) the Market State
     void recompute(HLState& S, long n);
     void writeFiles(HLState& S, const std::vector<hl::ReadRow>& rows);
     void writeProj(HLState& S);
@@ -339,9 +377,7 @@ bool HodLod::loadMq(HLState& S)
 #if defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")
 #endif
-struct hlPoint { long x; long y; };   // (2.1.0a) layout = Win32 POINT; declared here so windows.h (macro clashes) is not pulled in
-extern "C" __declspec(dllimport) int __stdcall GetCursorPos(hlPoint* p);
-static bool hlCursor(int& x, int& y) { hlPoint p; if (!GetCursorPos(&p)) return false; x = (int)p.x; y = (int)p.y; return true; }
+static bool hlCursor(int& x, int& y) { POINT p; if (!GetCursorPos(&p)) return false; x = (int)p.x; y = (int)p.y; return true; }   // (2.4.0) windows.h is included now (was a local declaration)
 #else
 static int hl_test_cx = 0, hl_test_cy = 0;
 static bool hlCursor(int& x, int& y) { x = hl_test_cx; y = hl_test_cy; return true; }
@@ -427,13 +463,54 @@ void HodLod::loadSession(HLState& S)
     }
 }
 
+// (2.4.0, audit C finding 8) the regime's ONE MenthorQ source: GammaProfile-MQ-<MKT>.csv (the bridge writes it with every grid; the
+// HVL0 strike = the "HVL 0D" line the Dealer Profile draws from the same snapshot). Bounded read, re-read only when its stamp changes,
+// at most every 5 s; a torn / garbled file keeps the last good book.
+void HodLod::loadHvl(HLState& S)
+{
+    time_t now = time(nullptr);
+    if (S.hvlStamp != -2 && now - S.hvlChecked < 5) return;
+    S.hvlChecked = now;
+    std::string p = flexPath("GammaProfile-MQ-" + S.mkt + ".csv");
+    if (p.empty()) { S.hvl = hlg::HvlBook(); S.hvlWhy = "no profile folder"; S.hvlStamp = -1; return; }
+#ifdef _WIN32
+    struct _stat64 st; bool ok = _stat64(p.c_str(), &st) == 0;
+#else
+    struct stat st; bool ok = stat(p.c_str(), &st) == 0;
+#endif
+    long long stamp = ok ? (long long)st.st_mtime * 1000003LL + (long long)st.st_size : -1;
+    if (stamp == S.hvlStamp) return;
+    S.hvlStamp = stamp;
+    if (!ok) { S.hvl = hlg::HvlBook(); S.hvlWhy = "GammaProfile-MQ-" + S.mkt + ".csv missing: no regime"; return; }
+    if ((long long)st.st_size > (long long)hlg::MAX_BYTES) { S.hvl = hlg::HvlBook(); S.hvlWhy = "over 64 KiB: ignored"; return; }
+    std::string text;
+    {   std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) { S.hvlStamp = -2; S.hvlWhy = "unreadable (kept the last copy)"; return; }
+        text.resize(hlg::MAX_BYTES + 1); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); }
+    hlg::HvlBook B = hlg::parseHvl(text, S.mkt);
+    if (!B.ok && S.hvl.ok && B.why != "no HVL0 strike in the book" && B.why != "book is for another market") { S.hvlWhy = "garbled (" + B.why + "): kept the last good book"; S.hvlStamp = -2; return; }
+    S.hvl = B; S.hvlWhy = B.ok ? std::string() : B.why;
+}
+// the CT wall clock now (this PC's local time = Central, as everywhere in this plugin), as CT wall-clock seconds
+static long long hlNowCt()
+{
+    time_t t = time(nullptr); return hlLocalAbs(t);
+}
+
 // (2.0.2) the header's Regime / Expiry segments, rebuilt every draw so the countdown stays current (CT clock of this PC)
+// (2.4.0) Regime = the HVL0 book vs the last closed close (one source with the Dealer Profile), aged by Fresh.h: STALE -> "Regime: STALE"
+// (grey; the header shortens it to "Reg: STALE"); no book / no HVL0 -> no regime part ("Reg: --" with a trend, as before)
 static void hlSessSegs(HLState& S)
 {
     S.view.sessSegs.clear();
-    if (!S.sessGam.empty()) {
-        const bool neg = S.sessGam == "NEG";
-        S.view.sessSegs.push_back(hl::Seg{ neg ? "Regime: Negative" : "Regime: Positive", neg ? hl::C_RED : hl::C_GREEN });
+    S.regSign = 0; S.regV = fr::Verdict();
+    if (S.hvl.ok) {
+        S.regV = fr::judge(fr::K_MQ_LEVELS, S.hvl.asofCt, hlNowCt());
+        const int sg = hlg::regimeSign(S.hvl, S.lastClose);
+        if (S.regV.stale()) S.view.sessSegs.push_back(hl::Seg{ "Regime: STALE", hl::C_GREY });
+        else if (sg != 0) {
+            S.regSign = sg;
+            S.view.sessSegs.push_back(hl::Seg{ sg < 0 ? "Regime: Negative" : "Regime: Positive", sg < 0 ? hl::C_RED : hl::C_GREEN });
+        }
     }
     if (S.sessExp.size() == 5) {
         int e = atoi(S.sessExp.substr(0, 2).c_str()) * 60 + atoi(S.sessExp.substr(3, 2).c_str());
@@ -503,6 +580,7 @@ void HodLod::recompute(HLState& S, long n)
         b.v = haveVol ? (double)vo[i] : NAN;
         B.push_back(b);
     }
+    if (!B.empty()) { S.lastClosedAbs = B.back().absEnd; S.lastClose = B.back().c; }   // (2.4.0) the regime's price + the Market State's bar
     hl::Cfg c; c.mkt = S.mi; c.per = per; c.tick = tick; c.readOpen = hl::readOpenFor(S.mi); c.readN = hl::readNFor(S.mi);
     std::vector<hl::ReadRow> rows;
     hl::ProjLock lock;   // (1.1.6) the target stays where it was set until the 1st extreme is taken out
@@ -863,13 +941,15 @@ void HodLod::loadAvoid(HLState& S)
         const std::string p = flexPath("TapeReader.status-" + S.mkt + ".txt");
         const long long st = hlFileStamp(p);
         if (!p.empty() && st >= 0) {
-            S.trSeen = true;
 #ifdef _WIN32
             struct _stat64 sb; bool ok = _stat64(p.c_str(), &sb) == 0;
 #else
             struct stat sb; bool ok = stat(p.c_str(), &sb) == 0;
 #endif
-            const bool fresh = ok && (long long)sb.st_size <= 64 * 1024 && now - (time_t)sb.st_mtime <= 120 && (time_t)sb.st_mtime - now <= 120;
+            // (2.4.0, audit C finding 13) the slot is reserved only while the Tape Reader is drawing (its status written in the last 120 s,
+            // Fresh.h fileFresh); a file left by a removed Tape Reader (ES: written Wed) no longer pushes the table
+            const bool fresh = ok && (long long)sb.st_size <= 64 * 1024 && fr::fileFresh((long long)sb.st_mtime, (long long)now, fr::TAPE_STATUS_MAX_SEC);
+            S.trSeen = fresh;
             std::ifstream f(p.c_str(), std::ios::binary); std::string ln; int nl = 0;
             while (ok && nl++ < 200 && std::getline(f, ln)) {
                 if (ln.size() > 2048) continue;
@@ -945,7 +1025,7 @@ int HodLod::draw(void)
     if (S->view.projOk && S->projIdx >= 0 && S->projIdx < (int)getBarCount()) {
         PNT p; if (p.set(S->projIdx, (float)((double)S->view.projFrom * tick), kBarCenter) == RTX_OK && p.h > 0) projX = (int)p.h;
     }
-    loadSession(*S); hlSessSegs(*S);         // (2.0.2) Regime / Expiry in the header (Session Info retired)
+    loadSession(*S); loadHvl(*S); hlSessSegs(*S);   // (2.0.2) Regime / Expiry in the header (Session Info retired); (2.4.0) Regime from the HVL0 book
     loadAvoid(*S);                           // (2.0.5) the Dealer Profile header / banner and the Tape Reader box
     loadGex(*S);                             // (2.1.0) the GEX line, nearest the chart's last price first
     {   long n = getBarCount(); double px = NAN;
@@ -959,7 +1039,8 @@ int HodLod::draw(void)
         hlg::toView(S->view, S->gex, px, (long long)t, lt.tm_wday, lt.tm_hour * 60 + lt.tm_min, hl::MKTS[S->mi < 0 ? 0 : S->mi].dec);
     }
     loadQ(*S);                               // (2.3.0) the Q-Scores top left of the header
-    hlq::toView(S->view, S->qf, S->view.trendReady ? hl::trendWord(S->view.trendLvl) : std::string(), S->view.trendLvl);
+    S->qV = hlq::fresh(S->qf, hlNowCt()); S->qJudged = S->qf.ok;   // (2.4.0) their age: stale -> "Q: STALE"
+    hlq::toView(S->view, S->qf, S->view.trendReady ? hl::trendWord(S->view.trendLvl) : std::string(), S->view.trendLvl, &S->qV);
     const int pe = priceEdge();
     const std::vector<hl::Box> avoid = hlAvoid(*S, pb, pe);
     const Place PL = position(S->mkt);
@@ -1001,14 +1082,49 @@ int HodLod::draw(void)
     if (!S->lastGexOk) S->inGex = false;
     S->lastQOk = L.qOk && L.tableOk; S->lastQBox = L.qBox; S->lastQHoverOk = L.qHoverOk && L.tableOk; S->lastQHover = L.qHover;
     if (!S->lastQOk) S->inQ = false;
-    S->placeLine += hlq::statusLine(S->qf, S->qWhy) + "Q_BOX," + (S->lastQOk ? std::to_string(L.qBox.l) + "," + std::to_string(L.qBox.t) + "," + std::to_string(L.qBox.r) + "," + std::to_string(L.qBox.b) : std::string("none"))
+    S->placeLine += hlq::statusLine(S->qf, S->qWhy, S->qJudged ? &S->qV : nullptr) + "Q_BOX," + (S->lastQOk ? std::to_string(L.qBox.l) + "," + std::to_string(L.qBox.t) + "," + std::to_string(L.qBox.r) + "," + std::to_string(L.qBox.b) : std::string("none"))
                   + ",hover " + (S->lastQHoverOk ? std::to_string(L.qHover.l) + "," + std::to_string(L.qHover.t) + "," + std::to_string(L.qHover.r) + "," + std::to_string(L.qHover.b) : std::string("off")) + ",hovers " + std::to_string(S->qHovers) + "\n";
     S->placeLine += hlg::statusLine(S->gex, S->view, S->gexWhy) + "GEX_BOX," + (S->lastGexOk ? std::to_string(L.gexRow.l) + "," + std::to_string(L.gexRow.t) + "," + std::to_string(L.gexRow.r) + "," + std::to_string(L.gexRow.b) : std::string("none"))
                   + ",hover " + (S->lastHoverOk ? std::to_string(L.gexHover.l) + "," + std::to_string(L.gexHover.t) + "," + std::to_string(L.gexHover.r) + "," + std::to_string(L.gexHover.b) : std::string("off")) + ",hovers " + std::to_string(S->gexHovers) + "\n";
+    {   // (2.4.0) the regime's source, for the status file (FLIP / the session GAM are shown only to prove they are not used)
+        const int dec = hl::MKTS[S->mi < 0 ? 0 : S->mi].dec;
+        S->placeLine += std::string("REGIME,") + (S->regV.stale() && S->hvl.ok ? "STALE" : (S->regSign > 0 ? "Pos" : (S->regSign < 0 ? "Neg" : "none")))
+                      + ",src GammaProfile-MQ-" + S->mkt + ".csv HVL0 " + (S->hvl.ok ? S->hvl.hvlTxt : std::string("-"))
+                      + ",close " + (std::isfinite(S->lastClose) ? hl::trimNum(S->lastClose, dec) : std::string("-"))
+                      + ",data " + (S->hvl.ok ? std::string(fr::word(S->regV.st)) + " " + fr::ageShort(S->regV.ageSec) : std::string("-"))
+                      + ",FLIP " + (S->hvl.flipTxt.empty() ? std::string("-") : S->hvl.flipTxt) + " not used,session GAM " + (S->sessGam.empty() ? std::string("-") : S->sessGam) + " not used"
+                      + (S->hvlWhy.empty() ? "" : "," + S->hvlWhy) + "\n";
+    }
+    postMst(*S);                             // (2.4.0) the Market State (behind the scenes; nothing drawn changes)
     execute(L);
     writeStatus(*S, &L);
     writeFxStatus(*S);
     return RTX_OK;
+}
+
+// (2.4.0) MARKET STATE: SRC "HODLOD" + "TREND" for the last CLOSED bar. The facts are decided once for that bar; the slow state (regime,
+// Q, band, age) may change them within the bar (MARKET-STATE-SPEC: "and when a slow state changes"). The same facts are re-posted every
+// 10 s (MarketState.h ignores entries older than 60 s, so a 3-min bar must be refreshed to stay visible); cleared in clearState().
+void HodLod::postMst(HLState& S)
+{
+    if (S.mi < 0 || S.lastClosedAbs <= 0) return;
+    const char* sy = getSymbol(); const char* cl = getChartLabel();
+    const std::string sym = sy ? sy : "", chart = cl ? cl : ""; const long spb = getSecondsPerBar();
+    if (sym.empty()) return;
+    if (S.mstPosted && (sym != S.mstSym || spb != S.mstSpb || chart != S.mstChart)) { mst::clear("HODLOD", S.mstSym, S.mstSpb, S.mstChart); mst::clear("TREND", S.mstSym, S.mstSpb, S.mstChart); S.mstPosted = false; }
+    hl::MstIn in; in.tick = S.tick; in.dec = hl::MKTS[S.mi].dec; in.regime = S.regSign;
+    in.dataAgeMin = (S.hvl.ok && S.regV.known) ? S.regV.ageSec / 60 : -1;
+    in.qOk = S.qf.ok && S.qJudged && !S.qV.stale(); in.qm = S.qf.m; in.qo = S.qf.o; in.qv = S.qf.v;
+    in.bandOk = S.gex.ok && S.gex.band && hlg::showable(S.gex) && S.view.gexStale.empty(); in.bandHi = S.gex.bandTop; in.bandLo = S.gex.bandBot;
+    std::map<std::string, std::string> kv = hl::mstHodLod(S.view, in);
+    std::string sig; for (const auto& p : kv) if (p.first != "data_age_min") sig += p.first + "=" + p.second + ";";
+    const long long now = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    const bool newBar = S.lastClosedAbs != S.mstBar, changed = sig != S.mstSig;
+    if (newBar || changed) { S.mstKv = kv; S.mstTrendKv = hl::mstTrend(S.view); S.mstBar = S.lastClosedAbs; S.mstSig = sig; }
+    if (!(newBar || changed || !S.mstPosted || S.mstMs < 0 || now - S.mstMs >= 10000 || now < S.mstMs)) return;
+    mst::publish("HODLOD", sym, spb, chart, now, S.mstBar, S.mstKv);
+    mst::publish("TREND", sym, spb, chart, now, S.mstBar, S.mstTrendKv);
+    S.mstSym = sym; S.mstSpb = spb; S.mstChart = chart; S.mstPosted = true; S.mstMs = now;
 }
 
 // (2.1.0) over the GEX row (or its open detail, 6 px dead band so the edge never flickers): the detail shows. Never swallows the event.
@@ -1037,7 +1153,7 @@ extern "C" cppExtension *CreateExtension(void)
     HodLod *p = new HodLod();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
-    p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green).");
-    p->setVersion("2.3.0");
+    p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live.");
+    p->setVersion("2.4.0");   // = hl::HL_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

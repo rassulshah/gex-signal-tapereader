@@ -24,6 +24,7 @@ struct Draw { std::string type, text; int l, t, r, b; COLOR color; int width, pa
 struct Host {
     std::vector<Bar> bars; void* data = nullptr; bool noSlot = false;
     std::string symbol = "NQZ6", root = "NQ"; int seconds = 180; unsigned long now = 0;
+    std::string chart = "NQ 3 Min";                             // (0.4.1) getChartLabel (the Market State key)
     std::map<std::string, std::vector<float>> custom;          // his RTL by name (aligned to bars unless shorter)
     std::map<std::string, bool> customFail;
     int customCalls = 0, invalidates = 0;
@@ -90,6 +91,7 @@ public:
     const char* getRootSymbol(char* b = nullptr) { if (b) { std::strcpy(b, mock::current->root.c_str()); return b; } return mock::current->root.c_str(); }
     const char* getSymbol() { return mock::current->symbol.c_str(); }
     int getSecondsPerBar() { return mock::current->seconds; }
+    const char* getChartLabel() { return mock::current->chart.c_str(); }
     float getProperty(int, const char* = nullptr) { return mock::current->tick; }
     RTDATE currentDate() { return mock::current->now; }
     struct tm* getLocaltime(RTDATE stamp, struct tm* t) { time_t v = (time_t)stamp; return gmtime_r(&v, t); }   // stamps are Central wall time in the tests

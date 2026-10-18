@@ -16,9 +16,10 @@
 #include <cctype>
 #include <map>
 #include "DealerProfileAuditLogic.h"
+#include "Fresh.h"   // (1.2.0) the one freshness rule (the header hover states it)
 
 namespace dcol {
-static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-14 18:25 CT audit display list): model-not-forecast hovers, "HL?", reach-only odds, the locked trigger in "How to use"
+static const char* const VERSION = "1.2.0";   // 1.2.0 (DP 2.17.0, 2026-10-18): the Market State GEX facts (mstGex), the header hover states the Fresh.h rule // 1.1.0 (2026-10-14 18:25 CT audit display list): model-not-forecast hovers, "HL?", reach-only odds, the locked trigger in "How to use"
 static const unsigned long C_POS = 0x0014B8A6UL;   // teal: + net gamma (dealers long gamma: they lean against moves)
 static const unsigned long C_NEG = 0x00F97316UL;   // orange: - net gamma (dealers short gamma: they chase moves)
 static const int BADGE_FONT_MIN = 8, BADGE_FONT_MAX = 14, BADGE_FONT_DEF = 9;
@@ -241,7 +242,7 @@ inline dpaudit::Hover headerHoverC(const std::string& ver, const dpaudit::BookAs
     dpaudit::Hover h;
     h.title = stale ? "Why is the dealer data STALE?" : "How fresh is the dealer data?";
     h.lines.push_back("Grid " + (a.ok() ? dpaudit::clock12(a.so) : std::string("time unknown")) + (age >= 0 ? " (" + dpaudit::ageShort(age) + " ago)" : std::string()) + " \xB7 Dealer Profile v" + ver);
-    h.lines.push_back("STALE = over 20 min old: nodes fade, don't trade them");
+    h.lines.push_back("STALE = over 20 min old while MenthorQ updates (older than the last close while it pauses): nodes fade, don't trade them");   // (1.2.0) Fresh.h, the same rule as the HOD / LOD box
     h.lines.push_back("Use: when STALE, trade key levels + footprint only");
     return h;
 }
@@ -327,5 +328,60 @@ inline std::string lotsK(long long n)
     return b;
 }
 inline std::string liqBlockText(long long n, bool hl) { const std::string k = lotsK(n); return k.empty() ? k : (hl ? "HL? " + k : k); }   // (DP 2.12.0, audit list) "HL?" - the 2.5x line is not proven
+// ---- (1.2.0, DP 2.17.0) the MARKET STATE facts, SRC "GEX" (MARKET-STATE-SPEC 1.0): regime, hvl, cr, ps, near_level, near_dist_ticks,
+// near_lots, data_age_min, stale. DEX stays context inside the gamma read (Rassul 2026-10-18): no DEX fact / signal here. SDK-free (tested).
+struct MqLvl { std::string label; double px = 0; };          // a MenthorQ level as drawn on this chart (chart price)
+struct HedgeNode { double px = 0; bool hasD = false; double d = 0; };   // a strike (chart price) and the hedge lots there (+ buy / - sell)
+// "CR 0D / GW 0D" -> tokens {"CR0", "GW0"}; "HVL 0D" -> {"HVL0"}; "G1" -> {"G1"}; "MQ CR 0D" -> {"CR0"}
+inline std::vector<std::string> mstTokens(const std::string& label)
+{
+    std::vector<std::string> out; const std::string r = dpaudit::stripMQ(label); size_t a = 0;
+    while (a <= r.size()) {
+        const size_t b = r.find('/', a); std::string t = r.substr(a, b == std::string::npos ? std::string::npos : b - a);
+        std::string w; for (char c : t) if (c != ' ') w += (char)std::toupper((unsigned char)c);
+        const size_t st = w.find("STALE"); if (st != std::string::npos) w = w.substr(0, st);
+        if (w.size() > 2 && w.compare(w.size() - 2, 2, "0D") == 0) w = w.substr(0, w.size() - 1);   // "CR0D" -> "CR0"
+        if (!w.empty() && w.size() <= 12) out.push_back(w);
+        if (b == std::string::npos) break;
+        a = b + 1;
+    }
+    return out;
+}
+inline std::string mstPx(double v, int dec) { if (!std::isfinite(v) || !(v > 0)) return "?"; char b[48]; std::snprintf(b, sizeof b, "%.*f", dec < 0 ? 2 : (dec > 6 ? 6 : dec), v); return b; }
+inline std::map<std::string, std::string> mstGex(const std::vector<MqLvl>& lv, const std::vector<HedgeNode>& nodes, double close, double tick, int dec,
+                                                 double ageMin, bool stale)
+{
+    std::map<std::string, std::string> kv;
+    double hvl = NAN, cr = NAN, ps = NAN;
+    for (const MqLvl& L : lv) for (const std::string& t : mstTokens(L.label)) {
+        if (t.compare(0, 3, "HVL") == 0 && !std::isfinite(hvl)) hvl = L.px;
+        else if (t.compare(0, 2, "CR") == 0 && !std::isfinite(cr)) cr = L.px;
+        else if (t.compare(0, 2, "PS") == 0 && !std::isfinite(ps)) ps = L.px;
+    }
+    const bool px = std::isfinite(close) && close > 0;
+    kv["regime"] = (!stale && px && std::isfinite(hvl)) ? (close >= hvl ? "pos" : "neg") : "?";   // never a stale regime as live
+    kv["hvl"] = mstPx(hvl, dec); kv["cr"] = mstPx(cr, dec); kv["ps"] = mstPx(ps, dec);
+    // (never "near" / "far" as names: windows.h macros, lesson 3) the MenthorQ level nearest the last closed close (G2-G10 included: they are levels too), its distance in ticks and the hedge there
+    const MqLvl* nl = nullptr; double best = 1e300;
+    if (px) for (const MqLvl& L : lv) { const double d = std::fabs(L.px - close); if (std::isfinite(L.px) && L.px > 0 && d < best) { best = d; nl = &L; } }
+    if (nl) {
+        const std::vector<std::string> t = mstTokens(nl->label); std::string nm; for (size_t i = 0; i < t.size(); ++i) nm += (i ? "/" : "") + t[i];
+        kv["near_level"] = nm.empty() ? "?" : nm + "@" + mstPx(nl->px, dec);
+        kv["near_dist_ticks"] = tick > 0 ? std::to_string((long long)std::llround(best / tick)) : "?";
+        const HedgeNode* hn = nullptr; double hb = 1e300;
+        for (const HedgeNode& n : nodes) { const double d = std::fabs(n.px - nl->px); if (n.hasD && std::isfinite(n.d) && d < hb) { hb = d; hn = &n; } }
+        kv["near_lots"] = (hn && (tick <= 0 || hb <= tick * 0.5 + 1e-9) && !stale) ? std::to_string((long long)std::llround(hn->d)) : "?";
+    } else { kv["near_level"] = "?"; kv["near_dist_ticks"] = "?"; kv["near_lots"] = "?"; }
+    kv["data_age_min"] = ageMin >= 0 ? std::to_string((long long)std::floor(ageMin)) : "?";
+    kv["stale"] = stale ? "1" : "0";
+    return kv;
+}
+// (1.2.0, DP 2.17.0, audit C finding 10) the per-chart status file: DealerProfile.status-<MKT>-<spb>.txt ("" = no market / bar size yet)
+inline std::string statusName(const std::string& mkt, long spb)
+{
+    if (mkt.empty() || spb <= 0 || mkt.size() > 8) return std::string();
+    for (char c : mkt) if (!std::isalnum((unsigned char)c)) return std::string();
+    return "DealerProfile.status-" + mkt + "-" + std::to_string(spb) + ".txt";
+}
 } // namespace dcol
 #endif

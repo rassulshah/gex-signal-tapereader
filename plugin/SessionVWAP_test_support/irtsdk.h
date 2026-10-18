@@ -46,6 +46,8 @@ struct Host {
     std::vector<unsigned long> i[2];
     void* userData = NULL;
     int fontPt = 9;
+    std::string chart = "ES 3 Min";   // (1.6.0) getChartLabel / getSecondsPerBar for the Market State post
+    int spb = 180;
 };
 extern Host* current;
 inline Param* param(int i) {
@@ -115,6 +117,10 @@ public:
         return const_cast<char*>(mock::current->root.c_str());
     }
     const char* getSymbol(void) { return mock::current ? mock::current->root.c_str() : NULL; }   // (1.4.2 svRecordPath)
+    // (1.5.1) the settings window's copy has no bar size: "" inside the dialog, as IRT (svInDialog); (1.6.0) chart label + bar size
+    const char* getPeriodicityLabel(void) { return (mock::current && !mock::current->dialog) ? "3 Min" : ""; }
+    const char* getChartLabel(void) { return mock::current ? mock::current->chart.c_str() : NULL; }
+    int getSecondsPerBar(void) { return mock::current ? mock::current->spb : 0; }
     struct tm* getLocaltime(RTDATE d, struct tm* out) { time_t t = (time_t)d; return gmtime_r(&t, out); }
     void* getUserData(void) { return mock::current ? mock::current->userData : NULL; }
     void setUserData(void* p) { if (mock::current) mock::current->userData = p; }

@@ -1,3 +1,21 @@
-findings=0 allowed=0 staged_files=1 bytes=122
+findings=0 allowed=0 staged_files=19 bytes=955741
 largest staged blobs (bytes, path):
-SIZE	122	logs/staged-scan-findings.log
+SIZE	292324	plugin/LiquidityProfile.cpp
+SIZE	160165	plugin/DeltaProfile.cpp
+SIZE	124650	plugin/LiquidityProfileLogic.h
+SIZE	108159	plugin/BigBidAsk.cpp
+SIZE	59149	plugin/BigBidAskLogic.h
+SIZE	56234	plugin/BigOrderLines.h
+SIZE	45649	plugin/DeltaProfileCore.h
+SIZE	19727	plugin/tests_lqp044/test_lqp044.cpp
+SIZE	14719	plugin/tests_dp217/test_dp217.cpp
+SIZE	14451	plugin/BigFlow.h
+SIZE	13044	plugin/tests_bba115/test_bba115.cpp
+SIZE	12517	plugin/tests_lqp044/irtsdk.h
+SIZE	11300	plugin/tests_bba115/irtsdk.h
+SIZE	8340	plugin/tests_dp217/irtsdk.h
+SIZE	8095	plugin/tests_lqp044/test_lqp044_host.cpp
+SIZE	6100	plugin/SignalBoard.h
+SIZE	502	plugin/tests_bba115/run_tests.sh
+SIZE	492	plugin/tests_dp217/run_tests.sh
+SIZE	124	logs/staged-scan-findings.log

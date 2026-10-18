@@ -8,13 +8,13 @@ static int n = 0, f = 0;
 static bool any(const dpaudit::Hover& h, const std::string& k) { for (const auto& s : h.lines) if (s.find(k) != std::string::npos) return true; return false; }
 int main()
 {
-    CHECK(std::string(dcol::VERSION).compare(0, 5, "1.1.0") == 0, "DealerColumnsLogic 1.1.0");
+    CHECK(std::string(dcol::VERSION).compare(0, 2, "1.") == 0 && std::string(dcol::VERSION) >= "1.1.0", "DealerColumnsLogic 1.1.0 or later (1.2.0 = DP 2.17.0)");
     // the bar (node) hover
     dpaudit::NodeX x; x.k = 7900; x.absG = 27e6; x.hasD = true; x.d = 1200; x.dUsd = 4.7e8;
     const dpaudit::Hover w = dcol::nodeHover("ES", x, 26e6, 40e6, 7857, true, 7.2);
     CHECK(any(w, "Teal = MenthorQ model shows + net gamma here (vendor model, data 7 min old). Not a prediction it holds."), "teal bar: model, data age, not a hold forecast");
     CHECK(!any(w, "lean against") && !any(w, "dealers are net LONG") && !any(w, "price tends to stall or pin"), "before: 'dealers net LONG gamma ... lean against moves' gone");
-    CHECK(any(w, "\"B 1.2K\" = futures dealers must BUY 1.2K ES contracts"), "KEEP (his call): the node text 'B 1.2K' = futures dealers must BUY ...");
+    CHECK(any(w, "\"1.2K lots\" = futures dealers must BUY 1.2K ES contracts"), "KEEP (his call): the node text (2.16.0: '1.2K lots', colour = buy / sell) = futures dealers must BUY ...");
     CHECK(any(w, "How to use: wait for your trigger - a sweep through the exact level, then RB or CoB, before 11:00 AM CT."), "node hover: his locked trigger");
     CHECK(!any(w, "absorption") && !any(w, "can set up") && !any(w, "can run"), "no absorption / set-up / run forecast in the node hover");
     const dpaudit::Hover o = dcol::nodeHover("ES", x, -26e6, 40e6, 7857, true);

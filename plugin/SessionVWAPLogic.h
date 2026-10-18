@@ -18,6 +18,9 @@
 #include <cmath>
 #include "OnTouchLogic.h"
 #include <vector>
+#include <map>
+#include <string>
+#include <cstdio>
 
 namespace svl {
 
@@ -130,6 +133,30 @@ inline Result run(const std::vector<Bar>& B, int per, int openMin, int closeMin,
         }
     }
     return R;
+}
+
+// ---- (1.6.0, 2026-10-18) the MARKET STATE facts, SRC "VWAP" (MARKET-STATE-SPEC 1.0), for the last CLOSED bar of the session it belongs
+// to (RTH, the frozen RTH lines after the close, or the overnight set). v[5] = VWAP, +1, -1, +2, -2 at that bar; back = the VWAP 5 bars
+// earlier in the same session (<= 0 = unknown). pos: above2 (>= +2 SD), above1 (>= +1), above (>= VWAP), below (< VWAP), below1 (<= -1),
+// below2 (<= -2). slope over those 5 bars: up / down when the VWAP moved more than 0.1 SD, else flat. '?' = not known.
+static const int SLOPE_BARS = 5;
+static const double SLOPE_SD = 0.10;
+inline int decOf(const std::string& m) { return m == "GC" ? 1 : (m == "HG" ? 4 : (m == "NG" ? 3 : (m == "EU" ? 5 : 2))); }
+inline std::string fpx(double v, int dec) { if (!std::isfinite(v) || !(v > 0)) return "?"; char b[48]; std::snprintf(b, sizeof b, "%.*f", dec, v); return b; }
+inline std::map<std::string, std::string> vwapFacts(const float v[5], double close, double back, int dec)
+{
+    std::map<std::string, std::string> kv;
+    const bool ok = v && v[0] > 0 && std::isfinite(v[0]) && v[1] > 0 && v[2] > 0 && v[3] > 0 && v[4] > 0;
+    kv["vwap"] = ok ? fpx(v[0], dec) : "?"; kv["sd1_hi"] = ok ? fpx(v[1], dec) : "?"; kv["sd1_lo"] = ok ? fpx(v[2], dec) : "?";
+    kv["sd2_hi"] = ok ? fpx(v[3], dec) : "?"; kv["sd2_lo"] = ok ? fpx(v[4], dec) : "?";
+    if (ok && std::isfinite(close) && close > 0)
+        kv["pos"] = close >= v[3] ? "above2" : close >= v[1] ? "above1" : close >= v[0] ? "above" : close <= v[4] ? "below2" : close <= v[2] ? "below1" : "below";
+    else kv["pos"] = "?";
+    const double sd = ok ? (double)v[1] - (double)v[0] : 0;
+    if (ok && back > 0 && std::isfinite(back) && sd > 0) { const double d = (double)v[0] - back; kv["slope"] = d > SLOPE_SD * sd ? "up" : (d < -SLOPE_SD * sd ? "down" : "flat"); }
+    else if (ok && back > 0 && std::isfinite(back) && sd <= 0) kv["slope"] = "flat";
+    else kv["slope"] = "?";
+    return kv;
 }
 
 using otl::onSigmaMin;

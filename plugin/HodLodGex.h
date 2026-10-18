@@ -25,10 +25,11 @@
 #include <climits>
 #include <utility>
 #include "HodLodLogic.h"
+#include "Fresh.h"                 // (HodLod 2.4.0) the one freshness / STALE rule (shared with the Dealer Profile)
 
 namespace hlg {
 
-static const char* const VERSION = "2.0.0";   // 2.0.0: the file v2 LOCATION rule; 1.1.0: chart basis, receipt time, model wording
+static const char* const VERSION = "2.1.0";   // 2.1.0 (HodLod 2.4.0, 2026-10-18): the row's age by Fresh.h (also outside MenthorQ hours: older than the last close = STALE); the regime's HVL0 book parser (parseHvl)   // 2.0.0: the file v2 LOCATION rule; 1.1.0: chart basis, receipt time, model wording
 static const int FILE_VERSION = 2;
 static const size_t MAX_BYTES = 64 * 1024;
 static const int MAX_LOCS = 8;
@@ -174,7 +175,12 @@ inline void toView(hl::View& v, const File& F, double price, long long now, int 
     v.gexItems.clear(); v.gexStale.clear(); v.gexHover.clear();
     if (!showable(F)) return;
     if (F.asof > now + 120) return;                           // (audit) received in the future = clock / file wrong: never shown
-    v.gexStale = staleText(F, now, updateHours(wd, min));
+    {   // (2.1.0, audit C finding 7) one rule (Fresh.h): STALE in MenthorQ hours past 20 min, and outside them when older than the last close
+        (void)wd;
+        const long long off = fr::offsetFromClock(now, min);
+        const fr::Verdict fv = fr::judge(fr::K_GEX, fr::ctFromUnix(F.asof, off), fr::ctFromUnix(now, off), false);
+        v.gexStale = fv.stale() ? fv.tag : ((F.state == "STALE" && fv.st == fr::LIVE) ? staleText(F, now, true) : std::string());
+    }
     bool bandMode = false; for (const Loc& L : F.locs) if (L.side == 'A' || L.side == 'B') bandMode = true;
     if (bandMode) {   // (2.3.0, Rassul 2026-10-17 19:53 / 19:55 + mockup v2) the BAND rule: side A = above the RTH open (red, an up triangle first),
         // B = below it (green, a down triangle first); each side nearest the open first: "^ 7765 . 7780 . 7800 | 7703.00 | v 7700 . 7675 . 7650"
@@ -246,6 +252,43 @@ inline std::string statusLine(const File& F, const hl::View& v, const std::strin
     return "GEX," + (F.ok ? F.state : std::string("none")) + ",asof " + (F.asofTxt.empty() ? std::string("-") : F.asofTxt) + ",shown " + (sh.empty() ? std::string("none") : sh)
          + ",basis " + F.basis + ",side " + F.side + (v.gexStale.empty() ? "" : "," + v.gexStale) + ",locs " + std::to_string(F.locs.size()) + (F.band ? ",band " + F.bandKind + " open " + F.bandOpenTxt + " up " + F.bandTopTxt + " down " + F.bandBotTxt : std::string(",band none")) + (loadWhy.empty() ? "" : "," + loadWhy) + "\n";
 }
+
+// ---- (2.1.0 / HodLod 2.4.0, audit C finding 8) the regime's ONE MenthorQ source: the HVL0 strike of lsFlexLevels\GammaProfile-MQ-<MKT>.csv
+// = the same MenthorQ snapshot whose "HVL 0D" line the Dealer Profile draws (MenthorQLevels.csv). The book's FLIP row is MenthorQ's
+// all-expiry HVL (ES 10-16: FLIP 7820 vs HVL0 7780; CL: 87.25 vs 94.75) - the bridge's LRA-Session GAM uses FLIP, which is why the box
+// said "Reg: Neg" while the HVL badge said price was above HVL. FLIP is kept only for the status line (not used).
+//   STRIKE,<price>,<pct>,<rank>,<isKing>,<type CR0+GW0 / HVL0 / PS0+HVL0 ...>,<strike>,,<first-seen>   MARKET,<mkt>   SESSION,<date>
+//   FLIP,<price>   ASOF,<CT sec of day>[,<date>]
+struct HvlBook { bool ok = false; std::string why, hvlTxt, flipTxt, session; double hvl = NAN, flip = NAN; long long asofCt = 0; };
+inline HvlBook parseHvl(const std::string& text, const std::string& market)
+{
+    HvlBook B; if (text.size() > MAX_BYTES) { B.why = "over 64 KiB"; return B; }
+    bool mk = false; long long sessDay = -1, asofSec = -1, asofDay = -1; size_t a = 0; int lines = 0;
+    while (a < text.size() && lines++ < 400) {
+        size_t b = text.find('\n', a); std::string ln = text.substr(a, b == std::string::npos ? std::string::npos : b - a); a = b == std::string::npos ? text.size() : b + 1;
+        if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+        if (ln.empty() || ln[0] == '#' || ln.size() > 300) continue;
+        const std::vector<std::string> c = split(ln, ',');
+        if (c[0] == "MARKET") { if (c.size() < 2 || c[1] != market) { B.why = "book is for another market"; return B; } mk = true; }
+        else if (c[0] == "SESSION" && c.size() >= 2) { if (fr::parseYmd(c[1], sessDay)) B.session = c[1]; }
+        else if (c[0] == "FLIP" && c.size() >= 2) { double v; if (fullD(c[1], v) && v > 0) { B.flip = v; B.flipTxt = c[1]; } }
+        else if (c[0] == "ASOF" && c.size() >= 2) { long long s2; if (fullL(c[1], s2) && s2 >= 0 && s2 < 86400) asofSec = s2; if (c.size() >= 3) fr::parseYmd(c[2], asofDay); }
+        else if (c[0] == "STRIKE" && c.size() >= 7) {
+            bool hv = false; for (const std::string& t : split(c[5], '+')) if (t == "HVL0") hv = true;
+            double v; if (hv && fullD(c[1], v) && v > 0 && !std::isfinite(B.hvl)) { B.hvl = v; B.hvlTxt = c[1]; }
+        }
+    }
+    if (!mk) { B.why = "no MARKET row"; return B; }
+    if (asofSec < 0) { B.why = "no ASOF row"; return B; }
+    // the snapshot's CT time: ASOF date + seconds; an older file without the date: the session date (an evening snapshot >= 17:00 CT belongs to the day before)
+    if (asofDay < 0 && sessDay >= 0) asofDay = asofSec >= 17 * 3600 ? sessDay - 1 : sessDay;
+    if (asofDay < 0) { B.why = "no ASOF / SESSION date"; return B; }
+    B.asofCt = asofDay * 86400 + asofSec;
+    if (!std::isfinite(B.hvl)) { B.why = "no HVL0 strike in the book"; return B; }
+    B.ok = true; return B;
+}
+// the regime from that HVL and the last closed bar's close: +1 = price at / above HVL (positive gamma), -1 below, 0 = unknown
+inline int regimeSign(const HvlBook& B, double close) { if (!B.ok || !std::isfinite(close) || !(close > 0)) return 0; return close >= B.hvl ? 1 : -1; }
 
 } // namespace hlg
 #endif

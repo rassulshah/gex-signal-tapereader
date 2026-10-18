@@ -13,10 +13,11 @@
 #include <cstdio>
 #include "HodLodLogic.h"
 #include "HodLodGex.h"
+#include "Fresh.h"                 // (1.1.0) the one freshness rule
 
 namespace hlq {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // 1.1.0 (HodLod 2.4.0, 2026-10-18): age check (Fresh.h judgeDaily) - stale scores read "Q: STALE", never as today's
 static const size_t MAX_BYTES = 8 * 1024;
 static const unsigned C_WHITE = 0x00FFFFFFu;
 
@@ -76,9 +77,22 @@ inline std::string mmdd(const std::string& d) {   // "2026-10-16" -> "Oct 16"
 }
 // the header segments "Q: " + "M1" + " O1" + " V4" and the hover (the mockup's text, with the live numbers). trendWord = the box's
 // trend ("S. Dntrend" / "Uptrend" / ...), "" when not ready; trendLvl -2..+2
-inline void toView(hl::View& v, const File& F, const std::string& trendWord, int trendLvl) {
+// (1.1.0, audit C finding 7: "if the bridge stops, a week-old Q-Score shows as today's") the scores' age: the DATE must be the latest
+// weekday whose scores were due by now (Fresh.h judgeDaily, due 22:00 CT); nowCt = CT wall-clock seconds, <= 0 = not judged (tests)
+inline fr::Verdict fresh(const File& F, long long nowCt) {
+    long long day = -1; if (!F.ok || !fr::parseYmd(F.date, day)) return fr::staleV(-1, false);
+    return fr::judgeDaily(day, nowCt);
+}
+inline void toView(hl::View& v, const File& F, const std::string& trendWord, int trendLvl, const fr::Verdict* fv = nullptr) {
     v.qSegs.clear(); v.qHover.clear();
     if (!F.ok) return;
+    if (fv && fv->stale()) {   // (1.1.0) stale: "Q: STALE" (grey), the old scores only in the hover with their date
+        v.qSegs.push_back(hl::Seg{ "Q: ", C_WHITE });
+        v.qSegs.push_back(hl::Seg{ "STALE", hl::C_GREY });
+        hl::Line L0; L0.push_back(hl::Seg{ "MenthorQ Q-Scores: STALE - the newest on file are from the " + mmdd(F.date) + " close (no newer scores received).", C_WHITE }); v.qHover.push_back(L0);
+        hl::Line L1; L1.push_back(hl::Seg{ "Then: M" + num(F.m) + "  O" + num(F.o) + "  V" + num(F.v) + " - not shown in the box until the bridge sends the current scores.", hl::C_GREY }); v.qHover.push_back(L1);
+        return;
+    }
     const unsigned W = C_WHITE, vc = F.v < 0 ? hl::C_GREY : C_WHITE;   // volatility: white (no direction)
     v.qSegs.push_back(hl::Seg{ "Q: ", W });
     v.qSegs.push_back(hl::Seg{ "M" + num(F.m), dirCol(F.m) });
@@ -99,9 +113,9 @@ inline void toView(hl::View& v, const File& F, const std::string& trendWord, int
     else ex = "Example: S. Dntrend with M1 O1 = sellers in control - favour shorts on pullbacks into Gex S/R above (red).";
     { hl::Line L; L.push_back(hl::Seg{ ex, W }); v.qHover.push_back(L); }
 }
-inline std::string statusLine(const File& F, const std::string& why) {
+inline std::string statusLine(const File& F, const std::string& why, const fr::Verdict* fv = nullptr) {
     if (!F.ok) return "QSCORE,none," + (why.empty() ? F.why : why) + "\n";
-    return "QSCORE," + F.date + ",M" + num(F.m) + ",O" + num(F.o) + ",V" + num(F.v) + ",S" + num(F.s) + "\n";
+    return "QSCORE," + F.date + ",M" + num(F.m) + ",O" + num(F.o) + ",V" + num(F.v) + ",S" + num(F.s) + (fv ? std::string(",") + fr::word(fv->st) : std::string()) + "\n";
 }
 
 }   // namespace hlq
