@@ -58,6 +58,7 @@ inline Values dialogNow(cppExtension* x, const Spec& S, const Ids& ids, const Va
 }
 
 inline void applyEnable(cppExtension* x, const Spec& S, const Ids& ids, const Values& V) {
+    if ((int)ids.id.size() != S.n) return;
     for (int k = 0; k < S.n; ++k) {
         const Row& r = S.rows[k]; if (!r.group) continue;
         const int m = find(S, r.group), id = ids.id[(size_t)k]; if (m < 0 || id < 0) continue;
@@ -66,7 +67,7 @@ inline void applyEnable(cppExtension* x, const Spec& S, const Ids& ids, const Va
 }
 
 inline void fillDialog(cppExtension* x, const Spec& S, const Ids& ids, const Values& V, Snap& snap) {
-    if (!ids.ok) return;
+    if (!ids.ok || (int)ids.id.size() != S.n) return;
     for (int k = 0; k < S.n; ++k) {
         const int id = ids.id[(size_t)k]; if (id < 0) continue;
         const double v = V.v[(size_t)k];
@@ -86,6 +87,7 @@ inline void fillDialog(cppExtension* x, const Spec& S, const Ids& ids, const Val
 // The window -> values to save: an untouched control keeps the file's value; an invalid one keeps the file's (garbage never saved);
 // group items of a master that is off are saved unchecked.
 inline Values readDialog(cppExtension* x, const Spec& S, const Ids& ids, const Values& file, const Snap& snap) {
+    if (!ids.ok || (int)ids.id.size() != S.n) return file;          // nothing registered: the file stays as it is
     const Values now = dialogNow(x, S, ids, file);
     Values V = file;
     for (int k = 0; k < S.n; ++k) {

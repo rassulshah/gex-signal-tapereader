@@ -28,7 +28,7 @@ red / green, rows cut off on the right, and group boxes that did not uncheck or 
 - An invalid entry is never saved, and the chart copy never saves.
 
 ## 3. Tests (all pass)
-- `tests_settings/settings_contract.cpp`: 4,074 checks over 3 tables. It covers:
+- `tests_settings/settings_contract.cpp`: 6,692 checks over 5 tables (HodLod, DeltaProfile, TapeReader, BidAskStats, BookFlow). It covers:
   - table checks (keys, no '?' in labels, defaults valid for all 7 markets, ranges, groups, the 400 px width budget);
   - a 7-market x 20-set round trip;
   - garbage, other-plugin, other-market, invalid and unknown keys all falling back to defaults;
@@ -53,6 +53,9 @@ red / green, rows cut off on the right, and group boxes that did not uncheck or 
 - Existing suites:
   - tests_hodlod/t_hl240: 45 / 45 (the hard-typed version updated to 2.4.2).
   - tests_dp217: test_dp217 47 / 47 and test_dp218 90 / 90 (the mock gained the parameter calls; the version moved to 2.18.1).
+  - tests_aggbook: logic 155 / 155, BidAskStats host 15 / 15, BookFlow host 23 / 23, real-SDK syntax 0 / 0. The mock gained the parameter calls; the host test runs setup once, as IRT does; versions and row checks now read the table.
+  - tests_lqp044: logic 114 / 114, host 21 / 21. The versions moved to 0.44.2 and the mock gained the colour calls. The host test's 48-byte leak is in the test itself, not the plugin.
+  - The PC's cl compiled and passed the contract at 15:44 CT ("SETTINGS CONTRACT PASSED" in gex-build.log).
   - MinGW syntax check against the REAL irtsdk.h: 0 errors and no new warnings for HodLod, DeltaProfile, TapeReader, LiquidityProfile, BidAskStats and BookFlow.
 - Build gate: `tools\gex-build.bat` compiles and runs settings_contract.exe before any plugin. On FAIL nothing is built, BUILD-STATUS shows "SETTINGS CONTRACT: FAILED" and the details are in `plugin\out\SETTINGS-CONTRACT.txt`.
 
@@ -81,7 +84,8 @@ Format: bugs (fix), then KEPT / ADDED / REMOVED, one line each.
 - Bug: positional place file. **Fixed**: keyed `TapeReader.settings-<MKT>.txt`, migrated once.
 - KEPT: Position, Offset X / Y, Banner background. ADDED / REMOVED: none.
 
-### lsLiquidityProfile 0.44.0 -> 0.44.1 (targeted fix; not migrated yet)
+### lsLiquidityProfile 0.44.0 -> 0.44.2 (targeted fixes; not migrated yet)
+- Build break (found in this audit, NOT caused by it): **lsLiquidityFlow had not linked since 15:27 CT** (LNK2019: bandLoad / bandSave). The 0.44.0 band pool is defined only in the Profile build, but pump() called it in both. So the Flow pane kept running its older DLL (BUILD-STATUS "built, not installed - PENDING" came from an earlier build). **Fixed in 0.44.2**: the calls are now in the Profile build only, and the Flow behaves as before 0.44.0.
 - Bug: the Banner background colour was filled and read with the integer calls (black swatch, 0 saved). **Fixed** with setParameterColor / getParameterColor. No banner file existed yet, so no black value had been saved.
 - Open:
   - "Big order min lots | Ended lines kept per side (0-50) | Big order font pt (7-16)" sit on one ~648 px line and are cut off.
@@ -92,9 +96,10 @@ Format: bugs (fix), then KEPT / ADDED / REMOVED, one line each.
   - These need the full migration, which must also cover the LiquidityFlow build (same source, Font only).
 - KEPT (for now): all 15 rows. Candidates are in his decision list.
 
-### lsBidAskStats 1.13.0 -> 1.13.1 and lsBookFlow 1.3.0 -> 1.3.1 (targeted fix; not migrated yet)
+### lsBidAskStats 1.13.0 -> 1.13.2 and lsBookFlow 1.3.0 -> 1.3.2 (window MIGRATED; place files keep their format)
 - Bug: "Ratio bars | Position | Spike vs average" was ~458 px on one line and cut off. **Fixed**: Spike vs average moved to its own line. The row order is unchanged, so IRT's saved values stay on their rows; window height is 3 / 4 lines.
-- Open: index constants and positional place files (migration), no group rows.
+- 1.13.2 / 1.3.2: the window now comes from OrderFlowPaneSettings.h through SettingsHost.h. The index constants (RATIO_PARM, BF_RATIO ...) are gone. Same rows, same order, parameter versions 5 / 3 kept, so IRT's saved values stay on their rows. The settings contract covers both panes.
+- Open: the place files are still the panes' own positional format, read by OrderFlowFeed.h (a keyed file is the next step, together with OrderFlowFeed.h).
 - KEPT: all rows. Candidates are in his decision list.
 
 ### lsBigBidAsk 1.16.0 (fixed by the coordinating agent today; not migrated)
@@ -138,7 +143,7 @@ Format: bugs (fix), then KEPT / ADDED / REMOVED, one line each.
 7. **CVD / CobImpulse**: add show boxes and colours for the drawn line and marks?
 
 ## 6. Real-dialog check (pending)
-Pending for the next attended session (tools\settings-check\README.md): HodLod 2.4.2, DeltaProfile 2.18.1, TapeReader 1.3.1, LiquidityProfile 0.44.1, BidAskStats 1.13.1 and BookFlow 1.3.1. Expected windows: `settings_contract.exe <plugin> --print ES`.
+Pending for the next attended session (tools\settings-check\README.md): HodLod 2.4.2, DeltaProfile 2.18.1, TapeReader 1.3.1, LiquidityProfile + LiquidityFlow 0.44.2, BidAskStats 1.13.2 and BookFlow 1.3.2. Expected windows: `settings_contract.exe <plugin> --print ES`.
 
 ## 7. Left to do
-Migrate to the layer, in this order: LiquidityProfile + LiquidityFlow, BigBidAsk (on top of 1.16), BidAskStats, BookFlow (with OrderFlowFeed.h), DealerProfile (and HodLod's banner reader), SessionVWAP, TradeManager, KingTracker. For each one: add its .cpp to SETSRC in gex-build.bat and add an Entry to settings_contract.cpp.
+Migrate to the layer, in this order: LiquidityProfile + LiquidityFlow, BigBidAsk (on top of 1.16), keyed place files for BidAskStats / BookFlow (with OrderFlowFeed.h), DealerProfile (and HodLod's banner reader), SessionVWAP, TradeManager, KingTracker. For each one: add its .cpp to SETSRC in gex-build.bat and add an Entry to settings_contract.cpp.

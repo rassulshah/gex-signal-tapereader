@@ -19,6 +19,7 @@
 #include "../HodLodSettings.h"
 #include "../DeltaProfileSettings.h"
 #include "../TapeReaderSettings.h"
+#include "../OrderFlowPaneSettings.h"
 
 struct LegacyCase { const char* text; int market; const char* key; double want; };   // key == nullptr: must NOT be recognised
 struct Entry {
@@ -168,6 +169,9 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
+    // (BidAskStats 1.13.2 / BookFlow 1.3.2) the window on the layer; the place files keep the panes' own format (no legacy reader needed)
+    E.push_back(Entry{ &ofset::bidAskSpec(), "BidAskStats.cpp", nullptr, {}, {} });
+    E.push_back(Entry{ &ofset::bookFlowSpec(), "BookFlow.cpp", nullptr, {}, {} });
     for (const Entry& e : E) {
         // a table only binds its .cpp once the .cpp is migrated (it includes the table's header)
         std::string src; const bool have = !dir.empty() && readAll(dir + "/" + e.cpp, src);

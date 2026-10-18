@@ -114,6 +114,9 @@
 #include "HostSlot.h"
 #define OFF_SDK 1
 #include "BidAskStatsLogic.h"
+#include "OrderFlowPaneSettings.h"   // (1.13.2) the settings window table (SettingsSpec.h)
+#include "SettingsHost.h"
+static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
 #include "StopRun.h"
 #include "OptionsFlow.h"
 #include "HoverBoard.h"
@@ -136,14 +139,15 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.13.1"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.13.2"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
 static const int READS_PER_PASS = 600;        // bounded work per pass; the rest continues on the next pass
 static const int NA_TRIES = 10;               // retries of a closed n/a bar (IRT back-fill)
 static const size_t KEEP_BARS = 5000;
-static const int RATIO_PARM = 0, POS_PARM = 1, SPIKE_AVG_PARM = 2, OFFX_PARM = 3, OFFY_PARM = 4;   // (1.13.0) parameter version 5: the jump, lookback and Box shows rows removed
+// (1.13.2) the window rows come from OrderFlowPaneSettings.h (no index constants)
+//   // (1.13.0) parameter version 5: the jump, lookback and Box shows rows removed
 static const COLOR C_ASK_BAR = 0x001F9D55, C_BID_BAR = 0x00962D2D;     // normal histogram bars: darker green / red
 static const COLOR C_ASK_SPIKE = 0x0000FF00, C_BID_SPIKE = 0x00FF3B3B; // spikes: bright green (buyers) / bright red (sellers)
 static const COLOR C_SR_GREEN = 0x00168A42, C_SR_RED = 0x00E0242A;     // (1.4.0) the R mark's letter on its white box (readable on white)
@@ -268,9 +272,9 @@ public:
     BidAskStats() : cppExtension() {}
     virtual int draw(void);
     virtual int parmsLoad(void);                                         // (1.5.2) fills the dialog from the file; loading never saves (lesson 29)
-    bp::DlgSnap snap_;                                                   // (1.5.2) the dialog as it opened
+    ss::Snap snap_;                                                      // (1.5.2) the dialog as it opened (1.13.2: SettingsSpec.h)
     virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { saveSettings(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, ofset::bidAskSpec(), basIds(), (int)i); saveSettings(); return RTX_OK; }
     virtual int mouse(RTX_EVENT* e);
     virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax);
     virtual int parmsTitle(char* pStr, int size) { return off::copyTitle(pStr, size, bas::TITLE, BAS_VERSION) ? RTX_OK : RTX_FAIL; }   // (1.7.0) the pane title, version next to it
@@ -328,13 +332,9 @@ int cppExtension::destroy(void) { static_cast<BidAskStats*>(this)->release(); re
 int cppExtension::setup(void) {
     // (1.13.0) version 5: "Spike vs prior biggest", "Spike lookback" (no longer part of the spike rule) and "Box shows" (did nothing)
     // removed - every row left is read by the chart: Ratio bars (the average), Position + Offset X / Y (the box), Spike vs average (0 = off)
-    setParameterVersion(5);
-    setParameterDialogHeight(3);   // (1.13.1) 3 lines: Spike vs average on its own line (the first line was ~458 px, cut off at ~400)
-    setIntegerParameter("Ratio bars", bas::RATIO_DEFAULT, 50);
-    setListParameter("Position", (short)bas::POS_DEFAULT, bas::POS_CHOICES, 110, kParmAppendSameLine);
-    setFloatParameter("Spike vs average", (float)bas::SPIKE_AVG_DEFAULT_TENTHS / 10.0f, 50);   // (1.13.1) own line - same row order, so saved values keep their rows
-    setIntegerParameter("Offset X", 0, 50);                                // parameter 3
-    setIntegerParameter("Offset Y", 0, 50, kParmAppendSameLine);           // 4
+    // (1.13.1) Spike vs average on its own line (the first line was ~458 px, cut off at ~400); (1.13.2) the same rows from
+    // ofset::bidAskSpec() through SettingsHost.h, parameter version 5 kept (same rows, same order: saved values keep their rows)
+    ss::registerAll(this, ofset::bidAskSpec(), basIds());
     return RTX_OK;
 }
 int cppExtension::calc(int) {
@@ -472,7 +472,7 @@ void BidAskStats::settings(BASState& S, long long now) {
 }
 // (1.5.2) the chart's market and its saved settings (defaults when there is no file / it is malformed)
 static std::string basMarket(cppExtension* x) { char b[32]; std::memset(b, 0, sizeof(b)); const char* rs = x->getRootSymbol(b); const char* sy = x->getSymbol(); const std::string root = rs ? rs : ""; return marketName(root.empty() ? (sy ? sy : "") : root); }
-static bool basInDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }   // the settings window's copy has no bar size
+//   // the settings window's copy has no bar size
 struct BasFile { int rb = bas::RATIO_DEFAULT, pos = bas::POS_DEFAULT; bas::SpikeCfg sc; BasPanel pn; };
 static BasFile basFile(const std::string& p) {
     BasFile F; if (p.empty()) return F;
@@ -480,39 +480,34 @@ static BasFile basFile(const std::string& p) {
     if (f && std::getline(f, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); int r = 0, q = 0; bas::SpikeCfg c; BasPanel b2; if (parseSettings(ln, r, q, &c, &b2)) { F.rb = r; F.pos = q; F.sc = c; F.pn = b2; } }
     return F;
 }
-static std::vector<long long> basDialog(cppExtension* x) {
-    std::vector<long long> v;
-    v.push_back(x->getIntegerValue(RATIO_PARM)); v.push_back(x->getListIndex(POS_PARM)); v.push_back(bas::tenthsOf(x->getFloatValue(SPIKE_AVG_PARM)));
-    v.push_back(x->getIntegerValue(OFFX_PARM)); v.push_back(x->getIntegerValue(OFFY_PARM));
-    return v;
+// (1.13.2, settings audit 2026-10-18) the window from ofset::bidAskSpec() through SettingsHost.h (rows, order and file unchanged)
+static ss::Values basValues(const BasFile& F) {
+    ss::Values V = ss::defaults(ofset::bidAskSpec(), -1);
+    V.v[ofset::bask::K_RATIO_BARS] = F.rb; V.v[ofset::bask::K_POSITION] = F.pos; V.v[ofset::bask::K_SPIKE_AVG] = F.sc.avgT / 10.0;
+    V.v[ofset::bask::K_OFFSET_X] = F.pn.dx; V.v[ofset::bask::K_OFFSET_Y] = F.pn.dy;
+    return V;
 }
 int BidAskStats::parmsLoad(void) {
-    if (!basInDialog(this)) return RTX_OK;
-    const BasFile F = basFile(placePath(basMarket(this)));
-    setIntegerValue(RATIO_PARM, F.rb); setListIndex(POS_PARM, F.pos); setFloatValue(SPIKE_AVG_PARM, (float)F.sc.avgT / 10.0f);
-    setIntegerValue(OFFX_PARM, F.pn.dx); setIntegerValue(OFFY_PARM, F.pn.dy);
-    snap_.take(basDialog(this));
+    if (!ss::inDialog(this)) return RTX_OK;
+    ss::fillDialog(this, ofset::bidAskSpec(), basIds(), basValues(basFile(placePath(basMarket(this)))), snap_);
     return RTX_OK;
 }
 void BidAskStats::saveSettings() {
-    if (!basInDialog(this)) return;                                       // (1.5.2) only the settings window's values are real
+    if (!ss::inDialog(this)) return;                                      // (1.5.2) only the settings window's values are real
     const std::string mkt = basMarket(this);
     const std::string p = placePath(mkt); if (p.empty()) return;
     const BasFile F = basFile(p);
-    const std::vector<long long> now = basDialog(this);
-    // (1.13.0) the dialog rows: Ratio bars, Position, Spike vs average, Offset X, Offset Y. The file keeps its 8-field layout (older builds read
-    // it): the jump / lookback / Box shows fields carry the file's values unchanged (record field / unused)
-    const long long fv[5] = { F.rb, F.pos, F.sc.avgT, F.pn.dx, F.pn.dy };
-    long long v[5]; for (size_t k = 0; k < 5; ++k) v[k] = snap_.pick(k, now[k], fv[k]);   // a control he did not touch keeps the file's value
-    const int rb = (int)v[0], pos = bp::posOk((int)v[1]) ? (int)v[1] : F.pos, sa = (int)v[2], sj = F.sc.jumpT, sl = F.sc.lookback;
-    const int dx = bp::offOk((int)v[3]) && v[3] == (int)v[3] ? (int)v[3] : F.pn.dx, dy = bp::offOk((int)v[4]) && v[4] == (int)v[4] ? (int)v[4] : F.pn.dy;
+    const ss::Values V = ss::readDialog(this, ofset::bidAskSpec(), basIds(), basValues(F), snap_);   // untouched -> the file's value; invalid never saved
+    // (1.13.0) the file keeps its 8-field layout (older builds read it): the jump / lookback / Box shows fields carry the file's values unchanged
+    const int rb = V.i(ofset::bask::K_RATIO_BARS), pos = V.i(ofset::bask::K_POSITION), sa = ofset::tenths(V.f(ofset::bask::K_SPIKE_AVG)), sj = F.sc.jumpT, sl = F.sc.lookback;
+    const int dx = V.i(ofset::bask::K_OFFSET_X), dy = V.i(ofset::bask::K_OFFSET_Y);
     const int mode = F.pn.mode == off::MODE_NUMBERS ? off::MODE_NUMBERS : off::MODE_READ;
     if (bas::clampRatioBars(rb) < 0) return;
     if (bas::clampLineTenths(sa) < 0 || bas::clampLineTenths(sj) < 0 || bas::clampLookback(sl) < 0) return;   // never overwrite a saved choice
     makeDir(flexDir());
     publishFile(p, std::to_string(rb) + "," + std::to_string(pos) + "," + std::to_string(sa) + "," + std::to_string(sj) + "," + std::to_string(sl)
                    + "," + std::to_string(dx) + "," + std::to_string(dy) + "," + std::to_string(mode) + "\n");
-    snap_.take(now);
+    snap_.take(ss::dialogNow(this, ofset::bidAskSpec(), basIds(), V));
     BASState* S = slot_.get(this, false);
     if (S) { S->settingsCheckMs = -1; S->settingsStamp = -2; }
 }
@@ -1142,6 +1137,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio) and Pace for sellers and buyers of the candle under the mouse anywhere on the chart, else the last closed candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars).");
-    p->setVersion("1.13.1");   // BAS_VERSION
+    p->setVersion("1.13.2");   // BAS_VERSION
     return p;
 }

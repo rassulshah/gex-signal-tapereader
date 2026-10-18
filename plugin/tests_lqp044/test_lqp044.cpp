@@ -247,7 +247,7 @@ int main() {
     test_draw_gate_pure(); test_draw_gate_engine(); test_near_15x_not_drawn(); test_absorption_does_not_keep_drawing();
     test_biggest_single(); test_norm_source(); test_band_pool(); test_mq_rules(); test_liq_kv(); test_lots_kv(); test_market_state_roundtrip();
     test_mkt_max_in_bar();
-    CHECK(std::string(VERSION) == "0.44.0", "lqp::VERSION 0.44.0");
+    CHECK(std::string(VERSION) == "0.44.2", "lqp::VERSION 0.44.2 (0.44.1 banner colour API, 0.44.2 Flow link fix)");
     CHECK(std::string(bol::VERSION) == "1.8.0" && std::string(bfl::VERSION) == "1.3.0", "bol 1.8.0 / bfl 1.3.0");
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

@@ -136,7 +136,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.44.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.44.2"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.44.0, 2026-10-18 night, Rassul approved "yes 2x" + the audit fixes) 1) the column DRAWS a zone only at >= 2.0x (lqp drawn state:
 // enters live at 2.0x, removed only at a bar close under 2.0x; no 1.5x near entry / 1.2x keep / any size during absorption) - the
 // records and attempts are unchanged; 2) LMT R "S5 anywhere" compares the largest SINGLE order at a price (bol::biggestSingle), never
@@ -2385,8 +2385,12 @@ void LiquidityProfile::pump() {
         loadBig(S); boSessionCheck(S, t);                              // (0.18.0) the big-order settings + this session's lines
 #endif
         if (S.lastNorms < 0 || st - S.lastNorms >= 60000) { S.lastNorms = st; loadNorms(S); }
+#ifndef LQ_FLOW
+        // (0.44.2) the band pool exists only in the Profile build (bandLoad / bandSave are defined under #ifndef LQ_FLOW): the Flow build
+        // failed to link (LNK2019) from 15:27 CT 2026-10-18, so the Flow pane kept running its older DLL
         if (S.bpMkt != S.market) bandLoad(S, t);                         // (0.44.0) once per market
         else if (S.bpWriteMs < 0 || st - S.bpWriteMs >= 300000 || st < S.bpWriteMs) bandSave(S);   // every 5 min (atomic)
+#endif
         if (S.lastLayout < 0 || st - S.lastLayout >= 1000) { S.lastLayout = st; loadLayout(S); loadLevels(S, getBarCount()); loadReach(S); updateConfirms(S); loadDelta(S); }
         openDepth(S);
         const long count = getBarCount();
@@ -3472,6 +3476,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.44.1");   // LQ_VERSION
+    p->setVersion("0.44.2");   // LQ_VERSION
     return p;
 }

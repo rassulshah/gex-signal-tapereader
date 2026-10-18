@@ -51,13 +51,16 @@
 #define OFF_SDK 1
 #include "OrderFlowFeed.h"
 #include "BookFlowLogic.h"
+#include "OrderFlowPaneSettings.h"   // (1.3.2) the settings window table (SettingsSpec.h)
+#include "SettingsHost.h"
+static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.3.1"          // keep equal to bf::VERSION and the setVersion literal below
+#define BF_VERSION "1.3.2"          // keep equal to bf::VERSION and the setVersion literal below
 
 // (1.3.0) the dialog rows (parameter version 3): every row is read by the chart
-static const int BF_RATIO = 0, BF_POS = 1, BF_AVG = 2, BF_NEAR = 3, BF_RECORD = 4, BF_OFFX = 5, BF_OFFY = 6;
+// (1.3.2) the window rows come from OrderFlowPaneSettings.h (no index constants)
 
 class BookFlow : public off::MboPane<bf::Logic> {
 public:
@@ -209,43 +212,41 @@ public:
     // ---- (1.3.0) the settings window: Ratio bars, Position, Spike vs average, Near ticks, Record order feed, Offset X, Offset Y ---------
     // The per-market file keeps OrderFlowFeed's layout (paneSettingsLine): the removed rows' fields (jump, lookback, Box shows) carry the
     // file's values unchanged. Loading never saves; a control he did not touch keeps the file's value (DlgSnap).
-    bp::DlgSnap snapBf_;
+    ss::Snap snapBf_;                                                      // (1.3.2) SettingsSpec.h snapshot
     std::string placeFile(const std::string& mkt) { const std::string f = off::flexDir(); return f.empty() || mkt.empty() ? std::string() : f + "\\BookFlow.place-" + mkt + ".txt"; }
-    std::vector<long long> dlgNow() {
-        std::vector<long long> v;
-        v.push_back(getIntegerValue(BF_RATIO)); v.push_back(getListIndex(BF_POS)); v.push_back(off::tenthsOf(getFloatValue(BF_AVG)));
-        v.push_back(getIntegerValue(BF_NEAR)); v.push_back(isBoxChecked(BF_RECORD) ? 1 : 0); v.push_back(getIntegerValue(BF_OFFX)); v.push_back(getIntegerValue(BF_OFFY));
-        return v;
+    // (1.3.2, settings audit 2026-10-18) the window from ofset::bookFlowSpec() through SettingsHost.h (rows, order and file unchanged)
+    static ss::Values bfValues(const off::PaneSettings& f) {
+        using namespace ofset::bfk;
+        ss::Values V = ss::defaults(ofset::bookFlowSpec(), -1);
+        V.v[K_RATIO_BARS] = f.ratioBars; V.v[K_POSITION] = f.pos; V.v[K_SPIKE_AVG] = f.spike.avgT / 10.0; V.v[K_NEAR_TICKS] = f.nearTicks;
+        V.v[K_RECORD] = f.record != 0 ? 1 : 0; V.v[K_OFFSET_X] = f.dx; V.v[K_OFFSET_Y] = f.dy;
+        return V;
     }
     virtual int parmsLoad(void) {
         if (!inDialog()) return RTX_OK;
-        const off::PaneSettings f = fileSettings(chartMarket());
-        setIntegerValue(BF_RATIO, f.ratioBars); setListIndex(BF_POS, f.pos); setFloatValue(BF_AVG, (float)f.spike.avgT / 10.0f);
-        setIntegerValue(BF_NEAR, f.nearTicks); checkBox(BF_RECORD, f.record != 0); setIntegerValue(BF_OFFX, f.dx); setIntegerValue(BF_OFFY, f.dy);
-        snapBf_.take(dlgNow());
+        ss::fillDialog(this, ofset::bookFlowSpec(), bfIds(), bfValues(fileSettings(chartMarket())), snapBf_);
         return RTX_OK;
     }
     void saveBf() {
+        using namespace ofset::bfk;
         if (!inDialog()) return;
         const std::string mkt = chartMarket();
         const off::PaneSettings fs = fileSettings(mkt);
-        const std::vector<long long> now = dlgNow();
-        const long long fv[7] = { fs.ratioBars, fs.pos, fs.spike.avgT, fs.nearTicks, fs.record, fs.dx, fs.dy };
-        long long v[7]; for (size_t k = 0; k < 7; ++k) v[k] = snapBf_.pick(k, now[k], fv[k]);
+        const ss::Values V = ss::readDialog(this, ofset::bookFlowSpec(), bfIds(), bfValues(fs), snapBf_);   // untouched -> the file's value; invalid never saved
         off::PaneSettings s = fs;                                          // jump / lookback / Box shows: the file's values
-        s.ratioBars = (int)v[0]; s.pos = bp::posOk((int)v[1]) ? (int)v[1] : fs.pos; s.spike.avgT = (int)v[2]; s.nearTicks = (int)v[3]; s.record = v[4] ? 1 : 0;
-        s.dx = bp::offOk(v[5]) ? (int)v[5] : fs.dx; s.dy = bp::offOk(v[6]) ? (int)v[6] : fs.dy;
+        s.ratioBars = V.i(K_RATIO_BARS); s.pos = V.i(K_POSITION); s.spike.avgT = ofset::tenths(V.f(K_SPIKE_AVG)); s.nearTicks = V.i(K_NEAR_TICKS); s.record = V.b(K_RECORD) ? 1 : 0;
+        s.dx = V.i(K_OFFSET_X); s.dy = V.i(K_OFFSET_Y);
         off::PaneSettings chk;
         if (s.spike.avgT < 0 || s.nearTicks < 0 || !off::parsePaneSettings(off::paneSettingsLine(s), chk)) return;   // never overwrite with garbage
         const std::string p = placeFile(mkt); if (p.empty()) return;
         off::makeDir(off::flexDir());
         off::publishFile(p, off::paneSettingsLine(s) + "\n");
-        snapBf_.take(now);
+        snapBf_.take(ss::dialogNow(this, ofset::bookFlowSpec(), bfIds(), V));
         S_* S = testState();
         if (S) { S->settingsCheckMs = -1; S->settingsStamp = -1 - 3; }    // re-read on the next pass (not "first")
     }
     virtual int parmsApply(void) { saveBf(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { saveBf(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, ofset::bookFlowSpec(), bfIds(), (int)i); saveBf(); return RTX_OK; }
 
     // ---- (1.3.0) the pane: the numbers box (Net, Pace) + one net bar per side per candle, coloured by side ----------------------------
     virtual int draw(void) {
@@ -365,15 +366,9 @@ int cppExtension::destroy(void) { static_cast<BookFlow*>(this)->release(); retur
 int cppExtension::setup(void) {
     // (1.3.0) parameter version 3: "Spike vs prior biggest", "Spike lookback" (not part of the spike rule any more) and "Box shows" (did
     // nothing) removed; rows BF_RATIO .. BF_OFFY, all read by the chart (via the per-market file)
-    setParameterVersion(3);
-    setParameterDialogHeight(4);   // (1.3.1) Spike vs average on its own line (the first line was ~458 px, cut off at ~400)
-    setIntegerParameter("Ratio bars", off::RATIO_DEFAULT, 50);                                          // 0
-    setListParameter("Position", (short)off::POS_DEFAULT, off::POS_CHOICES, 110, kParmAppendSameLine); // 1
-    setFloatParameter("Spike vs average", 2.0f, 50);   // (1.3.1) own line - same row order, so saved values keep their rows                               // 2
-    setIntegerParameter("Near ticks (0 = auto)", 0, 50);                                                // 3
-    setBoolParameter("Record order feed", true, kParmAppendSameLine);      // 4: data\irt\<session>\<MKT>\mbo_HH.csv
-    setIntegerParameter("Offset X", 0, 50);                                // 5
-    setIntegerParameter("Offset Y", 0, 50, kParmAppendSameLine);           // 6
+    // (1.3.1) Spike vs average on its own line (the first line was ~458 px, cut off at ~400); (1.3.2) the same 7 rows in the same order
+    // from ofset::bookFlowSpec() through SettingsHost.h (parameter version 3 kept: saved values keep their rows)
+    ss::registerAll(this, ofset::bookFlowSpec(), bfIds());
     return RTX_OK;
 }
 int cppExtension::calc(int) { static_cast<BookFlow*>(this)->calcHook(); return RTX_OK; }
@@ -384,6 +379,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow: who is ARRIVING and who is LEAVING the order book near price (market-by-order feed). Per candle, ONE NET bar per side = lots ADDED near price minus lots PULLED near price. Left bar = the bid side, always green (buyers); right bar = the offer side, always red (sellers). Above the grey zero line = size arriving (stacking), below = size leaving (pulling): a green bar above = bids arriving (support building), green below = bids leaving (support pulled), red above = offers arriving (resistance building), red below = offers leaving (resistance pulled). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and, for size arriving, its pace (grey, lots added per second vs the same time of day) beyond the bar's end, only when that side's net is at least Spike vs average (default 2.0x) the plain average of its net size over the prior Ratio bars (default 20) closed candles - decided once at the close, never changed. Other candles are dim with no label; the forming candle stays dim until it closes. The numbers box in the pane: Net (with its ratio) and Pace for bids and offers of the candle under the mouse, else the last closed candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars), Near ticks (0 = auto: how close to price counts), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.3.1");   // BF_VERSION
+    p->setVersion("1.3.2");   // BF_VERSION
     return p;
 }

@@ -141,7 +141,7 @@ public:
     int getListIndex(int){return 0;} void setListParameter(const char*,short,const char*,int=0,int=0){} void setFloatParameter(const char*,float,int=0,int=0){} float getFloatValue(int){return 1.5f;}
     int getVisibleBars(int*,int*){return RTX_FAIL;} short getPixelsPerBar(){return static_cast<short>(mock::current->barW);} void setExtendedFlags2(unsigned long){}
     virtual int scale(int,int,double*,double*){return RTX_FAIL;}
-    void setBoolParameter(const char*,bool,int=0){} void setColorParameter(const char*,COLOR,int=0,int=0){}
+    void setBoolParameter(const char*,bool,int=0){} void setColorParameter(const char*,COLOR,int=0,int=0){} COLOR getParameterColor(int){return 0;} int setParameterColor(int,COLOR){return 0;}   // (0.44.1) the banner colour row
     void checkBox(int i,bool on){ mockBoxes()[i]=on; } bool isBoxChecked(int i){ auto it=mockBoxes().find(i); return it!=mockBoxes().end() && it->second; }
     void setFloatValue(int,float){} int createTimer(int,int){return RTX_FAIL;} int killTimer(int){return RTX_OK;}
     static std::map<int,bool>& mockBoxes(){ static std::map<int,bool> m; return m; }

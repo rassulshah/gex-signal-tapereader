@@ -22,7 +22,7 @@ static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %d %s\n", __LINE__, m); } } while (0)
 static std::string readAll(const std::string& p) { std::ifstream f(p.c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }
 static void dispose(Ind* p) { p->destroy(); p->~Ind(); ::operator delete(p); }
-static Ind* make() { return static_cast<Ind*>(CreateExtension()); }
+static Ind* make() { Ind* p = static_cast<Ind*>(CreateExtension()); static bool once = false; if (!once) { once = true; p->setup(); } return p; }   // (2026-10-18) IRT runs setup once per DLL: the settings rows are registered there (SettingsHost.h)
 static const unsigned long T0 = 1791900000UL;
 [[maybe_unused]] static int count(mock::Host& h, const char* type, COLOR c) { int n = 0; for (auto& d : h.draws) if (d.type == type && d.color == c) ++n; return n; }
 static const mock::Draw* text(mock::Host& h, const std::string& t, COLOR c = 0xFFFFFFFF) { for (auto& d : h.draws) if (d.type == "text" && d.text == t && (c == 0xFFFFFFFF || d.color == c)) return &d; return nullptr; }
@@ -33,6 +33,9 @@ static std::vector<mock::Draw> barsAt(mock::Host& h, int bar) {
     for (auto& d : h.draws) if (d.type == "box" && d.color != 0x00000000 && d.border != off::C_BOX_BORDER && d.x >= xc - half && d.r <= xc + half && d.color != off::C_NET_ZERO) v.push_back(d);
     return v;
 }
+// (2026-10-18 settings layer) the plugins no longer carry index constants: the rows keep their 1.13.0 / 1.3.0 positions (registration order)
+static const int RATIO_PARM = 0, POS_PARM = 1, SPIKE_AVG_PARM = 2, OFFX_PARM = 3, OFFY_PARM = 4;
+static const int BF_RATIO = 0, BF_POS = 1, BF_AVG = 2, BF_NEAR = 3, BF_RECORD = 4, BF_OFFX = 5, BF_OFFY = 6;
 #define APPLY(p) do { const std::string sv_ = h.period; h.period = ""; (p)->parmsApply(); h.period = sv_; } while (0)
 #define LOAD(p) do { const std::string sv_ = h.period; h.period = ""; (p)->parmsLoad(); h.period = sv_; } while (0)
 
