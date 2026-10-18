@@ -1,30 +1,3 @@
-findings=0 allowed=0 staged_files=28 bytes=1343651
+findings=0 allowed=0 staged_files=1 bytes=1261
 largest staged blobs (bytes, path):
-SIZE	289210	plugin/LiquidityProfile.cpp
-SIZE	182458	plugin/HodLodLogic.h
-SIZE	166159	plugin/DeltaProfile.cpp
-SIZE	134564	plugin/DealerProfile.cpp
-SIZE	125228	plugin/LiquidityProfileLogic.h
-SIZE	83804	plugin/HodLod.cpp
-SIZE	49529	plugin/DeltaProfileCore.h
-SIZE	46918	plugin/TradeManager.cpp
-SIZE	41522	plugin/test_dealerprofile_2110.cpp
-SIZE	25902	plugin/SettingsSpec.h
-SIZE	23085	plugin/tests_dp217/test_dp218.cpp
-SIZE	19799	plugin/tests_lqp044/test_lqp044.cpp
-SIZE	19586	tools/gex-build.bat
-SIZE	18791	docs/audit/SETTINGS-AUDIT-2026-10-18.md
-SIZE	16844	plugin/tests_settings/settings_contract.cpp
-SIZE	14202	plugin/tests_aggbook/mock/irtsdk.h
-SIZE	14144	plugin/tests_hodlod/t_hl240.cpp
-SIZE	13322	plugin/tests_lqp044/irtsdk.h
-SIZE	12321	plugin/test_dealerprofile_2170_host.cpp
-SIZE	9564	plugin/tests_dp217/irtsdk.h
-SIZE	8095	plugin/tests_lqp044/test_lqp044_host.cpp
-SIZE	7174	plugin/SettingsHost.h
-SIZE	5751	plugin/tests_settings/mock_irtsdk.h
-SIZE	4690	plugin/DealerProfileSettings.h
-SIZE	3834	plugin/DeltaProfileSettings.h
-SIZE	2812	plugin/LiquidityProfileSettings.h
-SIZE	2655	plugin/HodLodSettings.h
-SIZE	1688	plugin/TradeManagerSettings.h
+SIZE	1261	logs/staged-scan-findings.log
