@@ -1,5 +1,17 @@
 /********************************************************************************
- *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats (the "Aggression" pane)  1.13.0 (2026-10-18)
+ *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats (the "Aggression" pane)  1.14.0 (2026-10-18)
+ *  1.14.0 (2026-10-18, Rassul 17:26 CT "implement Big lot 5 style on the aggression indicator. I want to see if it will help identify
+ *        spikes near the hod and lod"; study AGGR-BL5.md: bars >= BL5 sit within 2 bars of the final HOD / LOD 1.8x (RTH) / 2.9x
+ *        (overnight) as often as other bars - an EXTRA mark, the 2.0x spike rule unchanged): BIG LOT MARK. A closed candle whose bar (the
+ *        most lots at one price, one side - the same quantity as a lsBigBidAsk print) is >= the Big Lot size of its session type (RTH /
+ *        overnight) gets a 3 px CYAN CAP on top of its bar; the bar keeps its green / red, bright / dim and its ratio label. Setting
+ *        "Big Lot mark" Off / BL5 (default) / BL10 / BL20. The sizes (BigLotTiers.h = the lsBigBidAsk 1.16 box rule): the average of each
+ *        complete earlier session's 5th / 10th / 20th biggest print of that type, latest 5 sessions, one outlier dropped; under 3 complete
+ *        sessions = learning (no cap). Decided ONCE per session and type and frozen with each candle at its close (never repainted; after
+ *        a restart the session's tiers and marks are read back). The numbers box adds one row "BL5  311" (the tier of the candle shown).
+ *        Recorded: lsFlexLevels\BidAskStats\BigLot-<MKT>-<spb>.txt (complete sessions S| + the tiers decided T|) and
+ *        BidAskStats\<stem>-<session>-biglot.txt (every closed candle >= BL20: lots, side, ratio, spike, reached tier) for the nightly;
+ *        status file BIG_LOT_* lines.
  *  1.13.0 (2026-10-18, Rassul approved the audit-A fixes): (1) NO REPAINT - only CLOSED candles are judged: the forming candle is drawn
  *        dim with no label until it closes (was: its bright colour / ratio label came and went intrabar). (2) ONE SPIKE RULE for both
  *        order-flow panes (Aggression, Book Flow): a side is a spike (bright + ratio / pace above the bar) when it is >= "Spike vs average"
@@ -121,6 +133,8 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include "OptionsFlow.h"
 #include "HoverBoard.h"
 #include "MarketState.h"              // (1.13.0) SRC "AGG" facts for the read
+#include "SessionVWAPLogic.h"         // (1.14.0) svl::rthOf / classify (the session and its RTH)
+#include "BigLotTiers.h"              // (1.14.0) the Big Lot sizes per session type
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -139,7 +153,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.13.3"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.14.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -150,6 +164,8 @@ static const size_t KEEP_BARS = 5000;
 //   // (1.13.0) parameter version 5: the jump, lookback and Box shows rows removed
 static const COLOR C_ASK_BAR = 0x001F9D55, C_BID_BAR = 0x00962D2D;     // normal histogram bars: darker green / red
 static const COLOR C_ASK_SPIKE = 0x0000FF00, C_BID_SPIKE = 0x00FF3B3B; // spikes: bright green (buyers) / bright red (sellers)
+static const COLOR C_BIG_LOT = 0x0000FFFF;                            // (1.14.0) the Big Lot cap: cyan = Big Lot in lsBigBidAsk too
+static const int BIG_LOT_CAP_PX = 3;
 static const COLOR C_SR_GREEN = 0x00168A42, C_SR_RED = 0x00E0242A;     // (1.4.0) the R mark's letter on its white box (readable on white)
 static const size_t MAX_HOVER_WNDS = 8;
 static const int BAS_NUMS = 4 + off::REC_NUMS;                         // session record: bid|ask|bbid|bask + the order-feed numbers
@@ -178,15 +194,19 @@ using off::coord; using off::flexDir; using off::makeDir; using off::fileStamp; 
 #ifndef BAS_DEFAULT_MODE
 #define BAS_DEFAULT_MODE off::MODE_READ   // (1.5.2) a 2 / 3 / 5-field file (1.5.1 and before) = Read; the 1.4 / 1.5 host suites build with Numbers
 #endif
-struct BasPanel { int dx = 0, dy = 0, mode = BAS_DEFAULT_MODE; };       // (1.5.2) fields 6-8
+struct BasPanel { int dx = 0, dy = 0, mode = BAS_DEFAULT_MODE, bigLot = blt::CHOICE_DEFAULT; };   // (1.14.0) field 9: Big Lot mark 0-3       // (1.5.2) fields 6-8
 static bool parseSettings(const std::string& line, int& rb, int& pos, bas::SpikeCfg* spike = nullptr, BasPanel* panel = nullptr) {
-    if (line.empty() || line.size() > 48) return false;
+    if (line.empty() || line.size() > 52) return false;
     std::vector<std::string> f; size_t a = 0;
     for (;;) { const size_t c = line.find(',', a); f.push_back(line.substr(a, c == std::string::npos ? std::string::npos : c - a)); if (c == std::string::npos) break; a = c + 1; }
     BasPanel bpn;
+    if (f.size() == 9) {                                                   // (1.14.0) + Big Lot mark (an 8-field file = the default BL5)
+        if (f[8].size() != 1 || f[8][0] < '0' || f[8][0] > '3') return false;
+        bpn.bigLot = f[8][0] - '0'; f.resize(8);
+    }
     if (f.size() == 8) {                                                   // (1.5.2) Offset X, Offset Y, Box shows
         if (!bp::intTok(f[5], bpn.dx) || !bp::intTok(f[6], bpn.dy) || !bp::offOk(bpn.dx) || !bp::offOk(bpn.dy) || (f[7] != "0" && f[7] != "1")) return false;
-        bpn.mode = f[7] == "1" ? off::MODE_NUMBERS : off::MODE_READ; f.resize(5);
+        const int bl = bpn.bigLot; bpn.mode = f[7] == "1" ? off::MODE_NUMBERS : off::MODE_READ; bpn.bigLot = bl; f.resize(5);
     }
     if (f.size() != 2 && f.size() != 3 && f.size() != 5) return false;
     const size_t maxLen5[5] = { 3, 1, 3, 3, 2 }, maxLen3[3] = { 3, 1, 3 };
@@ -229,7 +249,7 @@ struct BASState {
     long count = 0; long long lastStamp = 0; bool backlog = true;
     long long lastClosedTime = 0;                    // the last CLOSED bar's stamp
     long long liveTime = 0; bas::BarMax live;        // the forming bar (drawn only)
-    long long liveReadMs = -1, retryMs = -1, statusMs = -1, settingsCheckMs = -1, settingsStamp = -2;
+    long long liveReadMs = -1, retryMs = -1, statusMs = -1, settingsCheckMs = -1, settingsStamp = -2; std::string settingsText = "\x01";   // (1.14.0) the line last applied
     int ratioBars = bas::RATIO_DEFAULT, pos = bas::POS_DEFAULT;
     int dx = 0, dy = 0, mode = BAS_DEFAULT_MODE;     // (1.5.2) Offset X / Y, Box shows
     bp::Box lastBox; bool inBox = false; long long boxHovers = 0;   // (1.5.2) the read box last drawn; the mouse over it
@@ -259,6 +279,12 @@ struct BASState {
     zread::Host zr; long zrCount = -1; long long zrSession = -1;   // (1.6.0) the zone read line
     // (1.13.0) Market State SRC AGG: the chart label (from the draw), the candle posted, its facts, the last post
     std::string chartKey; long long mstBar = 0, mstCt = 0, mstMs = -1, mstPosts = 0; std::map<std::string, std::string> mstKv;
+    // (1.14.0) the Big Lot mark: the setting, the market's RTH, the history book (+ its file), each closed candle's mark decided once,
+    // this session's record of candles >= BL20 (read back after a restart: the marks stay exactly as decided)
+    int bigLot = blt::CHOICE_DEFAULT, openMin = 510, closeMin = 900;
+    blt::Book blBook; bool blLoaded = false; std::string blWritten; size_t blBarsN = (size_t)-1; long long blLast = -1;
+    std::map<long long, blt::Mark> blMarks;
+    std::string blSession; std::map<long long, std::string> blRows; std::map<long long, blt::Mark> blFile; std::string blRowsWritten; long long blRejected = 0;
 };
 // (1.6.0, approval list s.7 MARK ?) the options volume is unsigned: who bought / sold and opening / closing are unknown
 static std::string unsignedHitLine(const ofo::Snap& s, int gate) {
@@ -309,6 +335,10 @@ private:
     void heldOf(BASState& S, long long t, int out[2]);
     void stopRuns(BASState& S);
     void marketState(BASState& S, long long now);
+    void bigLots(BASState& S);                                            // (1.14.0)
+    bool partsOf(long long t, long& days, int& sec);
+    const blt::Mark* markAt(BASState& S, long long t) { std::map<long long, blt::Mark>::const_iterator it = S.blMarks.find(t); return it != S.blMarks.end() && it->second.decided ? &it->second : nullptr; }
+    std::string blHistPath(BASState& S) { const std::string d = dir(); return d.empty() || S.market.empty() ? std::string() : d + "\\BigLot-" + S.market + "-" + std::to_string(S.spb) + ".txt"; }
     bas::PaceIn paceAt(BASState& S, long long t, const bas::Stat& st);
     int minuteOf(long long t);
     long long clockSec(long long t);
@@ -388,7 +418,7 @@ void BidAskStats::identify(BASState& S) {
     S.mstBar = 0; S.mstCt = 0; S.mstMs = -1; S.mstKv.clear();
     S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
     S.ser.bars.clear(); S.naTries.clear(); S.count = 0; S.lastStamp = 0; S.backlog = true; S.lastClosedTime = 0;
-    S.liveTime = 0; S.live = bas::BarMax(); S.liveReadMs = -1; S.faulted = false; S.settingsStamp = -2; S.settingsCheckMs = -1;
+    S.liveTime = 0; S.live = bas::BarMax(); S.liveReadMs = -1; S.faulted = false; S.settingsStamp = -2; S.settingsText = "\x01"; S.settingsCheckMs = -1;
     S.hover.set(-1); S.hoverWnds.clear();
     S.det = sr::Detector(); S.srFrom = -1; S.srCursor = 0; S.srEv.clear(); S.srReclaim.clear(); S.srp = sr::ParamCache();
     S.feed.reset(); S.e = off::Engine(); S.scratch = off::Acc(); S.zone = nl::zoneFor(S.market); S.atr = 0; S.atrCount = -1;
@@ -396,6 +426,9 @@ void BidAskStats::identify(BASState& S) {
     S.file = off::SessionFile(); S.curSession.clear(); S.loaded = false; S.params = off::ParamCache(); S.lastStatusText.clear();
     S.opt = off::OptCache();
     S.zr = zread::Host(); S.zrCount = -1; S.zrSession = -1;               // (1.6.0)
+    S.blBook = blt::Book(); S.blLoaded = false; S.blWritten.clear(); S.blBarsN = (size_t)-1; S.blLast = -1; S.blMarks.clear();   // (1.14.0)
+    S.blSession.clear(); S.blRows.clear(); S.blFile.clear(); S.blRowsWritten.clear(); S.blRejected = 0;
+    { int o = 0, c = 0; if (svl::rthOf(S.market.c_str(), o, c)) { S.openMin = o; S.closeMin = c; } else { S.openMin = 510; S.closeMin = 900; } }
 }
 // the mouse over a bar: the info box and the message line follow it. Never swallows the event (the chart keeps its own mouse behaviour).
 int BidAskStats::mouse(RTX_EVENT* e) {
@@ -452,19 +485,17 @@ void BidAskStats::settings(BASState& S, long long now) {
     if (S.settingsCheckMs >= 0 && now >= S.settingsCheckMs && now - S.settingsCheckMs < 1000) return;
     S.settingsCheckMs = now;
     const std::string p = placePath(S.market);
+    // (1.14.0, lesson 84) compared by CONTENT, not the whole-second stamp: two Applies within one second that keep the size
+    // ("...,0,0,0,2" -> "...,0,0,0,0", BL10 -> Off) were missed; the file is one short line, read at most once a second
     const long long st = p.empty() ? -1 : fileStamp(p);
-    if (st == S.settingsStamp) return;
-    S.settingsStamp = st;
+    std::string ln;
+    if (st >= 0) { std::ifstream f(p.c_str(), std::ios::binary); if (!(f && std::getline(f, ln))) ln.clear(); if (!ln.empty() && ln.back() == '\r') ln.pop_back(); }
+    if (st == S.settingsStamp && ln == S.settingsText) return;
+    S.settingsStamp = st; S.settingsText = ln;
     int rb = bas::RATIO_DEFAULT, pos = bas::POS_DEFAULT; bas::SpikeCfg sc; BasPanel pn;
-    if (st >= 0) {
-        std::ifstream f(p.c_str(), std::ios::binary); std::string ln;
-        if (f && std::getline(f, ln)) {
-            if (!ln.empty() && ln.back() == '\r') ln.pop_back();
-            int r = 0, q = 0; bas::SpikeCfg c; BasPanel b2; if (parseSettings(ln, r, q, &c, &b2)) { rb = r; pos = q; sc = c; pn = b2; }
-        }
-    }
+    if (st >= 0 && !ln.empty()) { int r = 0, q = 0; bas::SpikeCfg c; BasPanel b2; if (parseSettings(ln, r, q, &c, &b2)) { rb = r; pos = q; sc = c; pn = b2; } }
     if (pos != S.pos) { S.lastBox = bp::Box(); S.inBox = false; }   // (1.5.2) moved: no stale rect
-    S.pos = pos; S.dlgSpike = sc; S.dx = 0; S.dy = 0;   // (1.13.3) a saved Offset X / Y is ignored (the 9-spot Position only)           // (1.13.0) the file's 8th field (old Box shows) is read and ignored
+    S.pos = pos; S.dlgSpike = sc; S.dx = 0; S.dy = 0; S.bigLot = pn.bigLot;   // (1.14.0) Big Lot mark: frozen numbers, a change only changes what is shown   // (1.13.3) a saved Offset X / Y is ignored (the 9-spot Position only)           // (1.13.0) the file's 8th field (old Box shows) is read and ignored
     const bas::SpikeCfg eff = effSpike(sc, S.params.load.p);
     const bool reratioed = rb != S.ratioBars;
     if (reratioed) { S.ratioBars = rb; S.ser.reratio(rb); }
@@ -484,6 +515,7 @@ static BasFile basFile(const std::string& p) {
 static ss::Values basValues(const BasFile& F) {
     ss::Values V = ss::defaults(ofset::bidAskSpec(), -1);
     V.v[ofset::bask::K_RATIO_BARS] = F.rb; V.v[ofset::bask::K_POSITION] = F.pos; V.v[ofset::bask::K_SPIKE_AVG] = F.sc.avgT / 10.0;
+    V.v[ofset::bask::K_BIG_LOT] = F.pn.bigLot;                         // (1.14.0)
     return V;
 }
 int BidAskStats::parmsLoad(void) {
@@ -499,16 +531,16 @@ void BidAskStats::saveSettings() {
     const ss::Values V = ss::readDialog(this, ofset::bidAskSpec(), basIds(), basValues(F), snap_);   // untouched -> the file's value; invalid never saved
     // (1.13.0) the file keeps its 8-field layout (older builds read it): the jump / lookback / Box shows fields carry the file's values unchanged
     const int rb = V.i(ofset::bask::K_RATIO_BARS), pos = V.i(ofset::bask::K_POSITION), sa = ofset::tenths(V.f(ofset::bask::K_SPIKE_AVG)), sj = F.sc.jumpT, sl = F.sc.lookback;
-    const int dx = 0, dy = 0;   // (1.13.3) no offsets: the 9-spot Position only
+    const int dx = 0, dy = 0, bl = V.i(ofset::bask::K_BIG_LOT);   // (1.13.3) no offsets: the 9-spot Position only; (1.14.0) Big Lot mark
     const int mode = F.pn.mode == off::MODE_NUMBERS ? off::MODE_NUMBERS : off::MODE_READ;
-    if (bas::clampRatioBars(rb) < 0) return;
+    if (bas::clampRatioBars(rb) < 0 || bl < 0 || bl > 3) return;
     if (bas::clampLineTenths(sa) < 0 || bas::clampLineTenths(sj) < 0 || bas::clampLookback(sl) < 0) return;   // never overwrite a saved choice
     makeDir(flexDir());
     publishFile(p, std::to_string(rb) + "," + std::to_string(pos) + "," + std::to_string(sa) + "," + std::to_string(sj) + "," + std::to_string(sl)
-                   + "," + std::to_string(dx) + "," + std::to_string(dy) + "," + std::to_string(mode) + "\n");
+                   + "," + std::to_string(dx) + "," + std::to_string(dy) + "," + std::to_string(mode) + "," + std::to_string(bl) + "\n");
     snap_.take(ss::dialogNow(this, ofset::bidAskSpec(), basIds(), V));
     BASState* S = slot_.get(this, false);
-    if (S) { S->settingsCheckMs = -1; S->settingsStamp = -2; }
+    if (S) { S->settingsCheckMs = -1; S->settingsStamp = -2; S->settingsText = "\x01"; }
 }
 // MSVC SEH helpers hold only trivial locals (/EHsc compatible). -1 = native fault, -2 = not available.
 int BidAskStats::readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats) {
@@ -893,6 +925,102 @@ void BidAskStats::marketState(BASState& S, long long now) {
     S.mstMs = now; S.mstPosts++;
     mst::publish("AGG", S.symbol, S.spb, S.chartKey, now, S.mstCt, S.mstKv);
 }
+// (1.14.0) a bar stamp -> the civil day and second of its CLOSE on the chart's (Central) clock, as lsBigBidAsk parts()
+bool BidAskStats::partsOf(long long t, long& days, int& sec) {
+    struct tm x; std::memset(&x, 0, sizeof(x));
+    if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return false;
+    days = svl::daysFromCivil(x.tm_year + 1900, x.tm_mon + 1, x.tm_mday); sec = x.tm_hour * 3600 + x.tm_min * 60 + x.tm_sec; return true;
+}
+// (1.14.0) THE BIG LOT MARK. Runs only once every closed bar in the window is read (no backlog), so a session's tier is decided from its
+// full history. (1) the history file once; (2) each complete earlier session of each type from the chart -> the book (file rewritten
+// when it changed); (3) every closed candle not decided yet: its session / type, the drawn bar's lots and the tier of its session
+// (Book::tierAt, decided once) frozen in its Mark - this session's candles come back from the record exactly as decided before a
+// restart; (4) this session's candles >= BL20 -> the record (the nightly scores BL5 / BL10 / BL20 near the HOD / LOD from it).
+void BidAskStats::bigLots(BASState& S) {
+    if (S.backlog || S.spb <= 0 || S.market.empty()) return;
+    const int per = S.spb;
+    if (!S.blLoaded) {
+        S.blLoaded = true; const std::string p = blHistPath(S); std::string t;
+        if (!p.empty()) { std::ifstream f(p.c_str(), std::ios::binary); if (f) { std::stringstream b; b << f.rdbuf(); t = b.str(); } }
+        if (t.size() <= 256 * 1024) { S.blBook.load(t); S.blWritten = t; }
+    }
+    // this session's record (read once per session): the marks decided before a restart
+    if (S.blSession != S.curSession) {
+        S.blSession = S.curSession; S.blRows.clear(); S.blFile.clear(); S.blRowsWritten.clear();
+        const std::string d = dir();
+        if (!d.empty() && !S.curSession.empty()) {
+            std::ifstream f((d + "\\" + stem(S) + "-" + S.curSession + "-biglot.txt").c_str(), std::ios::binary); std::string ln; int n = 0;
+            while (f && std::getline(f, ln) && ++n < 2000) {
+                if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+                if (ln.empty() || ln[0] == '#' || ln.compare(0, 9, "bar_time|") == 0) continue;
+                const std::vector<std::string> v = blt::fields(ln); long long bt = 0, ty = 0, sd = 0, lots = 0, b[3] = {0, 0, 0}, ns = 0, ss = 0; bool ok = v.size() == 13;
+                ok = ok && blt::num(v[0], 1, LLONG_MAX / 2, bt) && blt::num(v[2], 1, 10000000, ss) && blt::num(v[3], 0, 1, ty) && blt::num(v[4], 0, 1, sd) && blt::num(v[5], 1, 100000000, lots) && blt::num(v[12], blt::MIN_SESS, 1000, ns);
+                for (int q = 0; ok && q < 3; ++q) ok = blt::num(v[(size_t)9 + q], 1, 100000000, b[q]);
+                if (!ok) { ++S.blRejected; continue; }
+                blt::Mark m; m.decided = true; m.sess = (long)ss; m.type = (int)ty; m.side = (int)sd; m.lots = lots; m.tier.ok = true; m.tier.nSess = (int)ns;
+                for (int q = 0; q < 3; ++q) { m.tier.bl[q] = b[q]; }
+                m.tier.why = "recorded";
+                S.blFile[bt] = m; S.blRows[bt] = ln;
+            }
+            S.blRowsWritten.clear();
+            for (const auto& kv : S.blRows) S.blRowsWritten += kv.second + "\n";
+        }
+    }
+    if (S.ser.bars.size() == S.blBarsN && S.lastClosedTime == S.blLast) return;   // nothing new
+    S.blBarsN = S.ser.bars.size(); S.blLast = S.lastClosedTime;
+    long d0 = 0; int e0 = 0;
+    const long cur = partsOf(S.formingKey, d0, e0) ? svl::classify(d0, e0, per, S.openMin, S.closeMin).sess : 0;
+    // (2) complete earlier sessions from the chart
+    std::map<long, std::vector<long long> > pr[2]; std::map<long, int> nc[2];
+    for (const auto& kv : S.ser.bars) {
+        long d = 0; int e = 0; if (!partsOf(kv.first, d, e)) continue;
+        const svl::Cls c = svl::classify(d, e, per, S.openMin, S.closeMin); if (c.kind == svl::NONE || c.sess >= cur) continue;
+        const int ty = blt::typeOf(e / 60, S.openMin, S.closeMin);
+        ++nc[ty][c.sess];
+        if (kv.second.m.ok) { pr[ty][c.sess].push_back(kv.second.m.bid); pr[ty][c.sess].push_back(kv.second.m.ask); }
+    }
+    for (int ty = 0; ty < 2; ++ty) for (const auto& kv : nc[ty]) S.blBook.put(kv.first, ty, blt::sessOf(pr[ty][kv.first], kv.second));
+    // (3) the marks, decided once
+    bool rows = false;
+    for (const auto& kv : S.ser.bars) {
+        const long long t = kv.first; if (S.formingKey > 0 && t >= S.formingKey) break;
+        if (S.blMarks.count(t) || !kv.second.m.ok || S.naTries.count(t)) continue;
+        blt::Mark m; long d = 0; int e = 0; if (!partsOf(t, d, e)) continue;
+        const svl::Cls c = svl::classify(d, e, per, S.openMin, S.closeMin);
+        std::map<long long, blt::Mark>::const_iterator fm = S.blFile.find(t);
+        if (fm != S.blFile.end()) m = fm->second;                          // decided before a restart: exactly as then
+        else {
+            m.decided = true; m.sess = c.sess; m.type = blt::typeOf(e / 60, S.openMin, S.closeMin);
+            m.side = bas::domSide(kv.second, 0); m.lots = std::max(kv.second.m.bid, kv.second.m.ask);
+            if (c.kind != svl::NONE) { const blt::Tier* T = S.blBook.tierAt(c.sess, m.type, blt::typeNeed(m.type, S.openMin, S.closeMin, per), true); if (T) m.tier = *T; }
+            // (4) this session's candles >= BL20 -> the record
+            if (sessionStr(t) == S.curSession && m.tier.ok && m.tier.bl[2] > 0 && m.lots >= m.tier.bl[2]) {
+                const bas::Stat& st = kv.second; const bool b = m.side == 0;
+                char line[512]; const std::string rch = blt::reached(m.lots, m.tier);
+                std::snprintf(line, sizeof(line), "%lld|%s|%ld|%d|%d|%lld|%s|%d|%s|%lld|%lld|%lld|%d", t, ctOf(t).c_str(), m.sess, m.type, m.side, m.lots,
+                              bas::fmtRatio(b ? st.bidRatioOk : st.askRatioOk, b ? st.bidRatio : st.askRatio).c_str(), (b ? st.bidSpike : st.askSpike) ? 1 : 0, rch.c_str(),
+                              m.tier.bl[0], m.tier.bl[1], m.tier.bl[2], m.tier.nSess);
+                S.blRows[t] = line; rows = true;
+            }
+        }
+        S.blMarks[t] = m;
+    }
+    if (cur > 0) { const int ty = blt::typeOf(e0 / 60, S.openMin, S.closeMin); S.blBook.tierAt(cur, ty, blt::typeNeed(ty, S.openMin, S.closeMin, per), true); }   // the forming candle's type: the box shows its size from the first candle
+    while (S.blMarks.size() > KEEP_BARS) S.blMarks.erase(S.blMarks.begin());
+    const std::string d = dir();
+    if (!d.empty()) {
+        makeDir(flexDir()); makeDir(d);
+        const std::string h = S.blBook.text(), p = blHistPath(S);
+        if (h != S.blWritten && !p.empty() && publishFile(p, h)) S.blWritten = h;
+        if (rows && !S.curSession.empty()) {
+            std::string o = std::string("# BidAskStats ") + BAS_VERSION + " Big Lot marks " + S.market + " " + S.symbol + " " + std::to_string(S.spb)
+                          + "\nbar_time|ct_time|session|type|side|lots|ratio|spike|reached|bl5|bl10|bl20|n_sess\n";
+            std::string body; for (const auto& kv : S.blRows) body += kv.second + "\n";
+            if (body != S.blRowsWritten && publishFile(d + "\\" + stem(S) + "-" + S.curSession + "-biglot.txt", o + body)) S.blRowsWritten = body;
+        }
+    }
+    invalidateChart(false);
+}
 void BidAskStats::status(BASState& S, long long now) {
     if (S.statusMs >= 0 && now >= S.statusMs && now - S.statusMs < 60000) return;   // at most once a minute
     const bas::Stat* st = NULL;
@@ -918,6 +1046,24 @@ void BidAskStats::status(BASState& S, long long now) {
         o << "\nSPIKES_TODAY_BID," << nb << "\nSPIKES_TODAY_ASK," << na << "\nLETTERS_TODAY,S " << ls << ",L " << ll;
     }
     o << "\nLAST_CLOSED_BAR," << S.lastClosedTime << "," << stamp(S.lastClosedTime);
+    {   // (1.14.0) the Big Lot mark: the setting, the tiers in force for the forming candle's session (both types), today's marks
+        static const char* const ch[4] = { "Off", "BL5", "BL10", "BL20" };
+        o << "\nBIG_LOT_MARK," << ch[S.bigLot < 0 || S.bigLot > 3 ? 1 : S.bigLot] << ",cyan cap on a closed bar >= the size of its session type, decided at the close (frozen)";
+        long d = 0; int e = 0;
+        const long cur = S.spb > 0 && partsOf(S.formingKey, d, e) ? svl::classify(d, e, S.spb, S.openMin, S.closeMin).sess : 0;
+        for (int ty = 1; ty >= 0; --ty) {
+            std::map<long, blt::Tier>::const_iterator it = S.blBook.tiers[ty].find(cur);
+            o << (ty ? "\nBIG_LOT_TIER_RTH," : "\nBIG_LOT_TIER_ON,") << "session " << cur << ",";
+            if (it == S.blBook.tiers[ty].end()) o << "not decided yet";
+            else o << "BL5 " << it->second.bl[0] << ",BL10 " << it->second.bl[1] << ",BL20 " << it->second.bl[2] << "," << it->second.why;
+            int done = 0; const int need = blt::typeNeed(ty, S.openMin, S.closeMin, S.spb);
+            for (const auto& kv : S.blBook.hist[ty]) if (kv.first < cur && kv.second.candles >= need) ++done;
+            o << ",complete sessions known " << done;
+        }
+        int h[3] = { 0, 0, 0 };
+        for (const auto& kv : S.blMarks) if (sessionStr(kv.first) == S.curSession) for (int q = 0; q < 3; ++q) h[q] += blt::shows(kv.second, q + 1) ? 1 : 0;
+        o << "\nBIG_LOT_HITS_TODAY,BL5 " << h[0] << ",BL10 " << h[1] << ",BL20 " << h[2] << ",record rows " << S.blRows.size() << ",rejected " << S.blRejected + S.blBook.rejected;
+    }
     {   // (2026-10-17) Large Lot Methodology for aggressor orders: the tiers L is using now (this clock's channel, else all hours)
         struct tm cx; std::memset(&cx, 0, sizeof(cx)); const long long nowT = S.formingKey;
         const int ch = (nowT > 0 && getLocaltime((RTDATE)nowT, &cx)) ? llp::channelOf(cx.tm_hour, cx.tm_min) : llp::CH_ALL;
@@ -1005,6 +1151,7 @@ void BidAskStats::pump() {
                 finalize(S, now);
                 stopRuns(S);
                 marketState(S, now);                                       // (1.13.0) SRC AGG, behind the scenes
+                bigLots(S);                                                // (1.14.0) the Big Lot sizes + each closed candle's mark, once
             }
             if (count >= 2 && !S.faulted) {                                // (1.6.0) the zone read line
                 const std::string d = dir();
@@ -1082,6 +1229,17 @@ void BidAskStats::render(BASState& S) {
             for (size_t k = 0; k < info.rows.size(); ++k) if (info.rows[k].label == "Lots" || info.rows[k].label == "Pace") kept.push_back(info.rows[k]);
             info.rows.swap(kept);
         }
+        if (S.bigLot >= 1 && S.bigLot <= 3) {                              // (1.14.0) "BL5  311": the Big Lot size of the candle shown ("--" learning)
+            const blt::Tier* T = nullptr; blt::Tier liveT;
+            if (hov >= 0) { const blt::Mark* mk = markAt(S, mt); if (mk) T = &mk->tier; }
+            else { long d = 0; int e = 0;
+                if (S.spb > 0 && partsOf((long long)times[last], d, e)) {
+                    const svl::Cls c = svl::classify(d, e, S.spb, S.openMin, S.closeMin); const int ty = blt::typeOf(e / 60, S.openMin, S.closeMin);
+                    std::map<long, blt::Tier>::const_iterator it = S.blBook.tiers[ty].find(c.sess); if (it != S.blBook.tiers[ty].end()) { liveT = it->second; T = &liveT; } } }
+            const long long z = T ? blt::markSize(*T, S.bigLot) : 0;
+            off::InfoRow r; r.label = blt::label(S.bigLot); r.v[0] = z > 0 ? std::to_string(z) : std::string("--"); r.v[1] = ""; r.side[0] = r.side[1] = -1;
+            info.rows.push_back(r);
+        }
     }
     // (1.5.2) the read and the blue oHit line first (the panel is laid out before the bars: labels never go over it)
     nl::Msg m;
@@ -1125,6 +1283,16 @@ void BidAskStats::render(BASState& S) {
         }
         return k;
     }, avoid, 1, false, true);   // (1.9.1) only bars at 2.0x+ their average are bright and labelled; the rest are dim   // (1.7.1, Rassul 09:55 "get rid of the labeling like S L") no letters / R marks drawn; hover + record keep them                                                          // (1.7.0) one bar per candle; buyers = side 1 (offers lifted)
+    if (S.bigLot >= 1 && S.bigLot <= 3 && top > 0) {                       // (1.14.0) the Big Lot cap: 3 px cyan on the top of a marked closed bar
+        for (int i = v0; i <= v1 && i < last; ++i) {
+            const blt::Mark* mk = markAt(S, (long long)times[i]); if (!mk || !blt::shows(*mk, S.bigLot)) continue;
+            const int xc = xOf(i); if (xc < g.left || xc > g.right) continue;
+            const int hb = off::barHeight(mk->lots, top, g.px); if (hb <= 0) continue;
+            int l = 0, r = 0; off::oneBarSpan(xc, slot, l, r);
+            const int y0 = g.yBase - hb, y1 = y0 + std::min(BIG_LOT_CAP_PX, hb) - 1;
+            off::fillFlat(this, l, y0, r, y1, C_BIG_LOT);
+        }
+    }
     const COLOR vcol[2] = { C_BID, C_ASK };                                // values: sellers (bid side) red, buyers (ask side) green, labels white
     off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
     (void)hov;   // (1.8.1, Rassul 18:57 "get rid of the hoverover") no bar hover, no read-line hover
@@ -1135,7 +1303,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
-    p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio) and Pace for sellers and buyers of the candle under the mouse anywhere on the chart, else the last closed candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars).");
-    p->setVersion("1.13.3");   // BAS_VERSION
+    p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio) and Pace for sellers and buyers of the candle under the mouse anywhere on the chart, else the last closed candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
+    p->setVersion("1.14.0");   // BAS_VERSION
     return p;
 }

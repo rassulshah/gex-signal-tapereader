@@ -34,7 +34,7 @@ static std::vector<mock::Draw> barsAt(mock::Host& h, int bar) {
     return v;
 }
 // (2026-10-18 settings layer) the plugins no longer carry index constants: the rows keep their 1.13.0 / 1.3.0 positions (registration order)
-static const int POS_PARM = 0;   // (1.13.3) the window shows the Position only (Ratio bars / Spike vs average hidden, Offset X / Y removed)
+static const int POS_PARM = 0, BIGLOT_PARM = 1;   // (1.14.0) Big Lot mark on the Position line   // (1.13.3) the window shows the Position only (Ratio bars / Spike vs average hidden, Offset X / Y removed)
 static const int BF_POS = 0, BF_NEAR = 1;   // (1.3.3) the window: Position + Near-price ticks (Ratio bars / Spike vs average hidden, Record and Offset X / Y removed)
 #define APPLY(p) do { const std::string sv_ = h.period; h.period = ""; (p)->parmsApply(); h.period = sv_; } while (0)
 #define LOAD(p) do { const std::string sv_ = h.period; h.period = ""; (p)->parmsLoad(); h.period = sv_; } while (0)
@@ -76,16 +76,20 @@ int main() {
     CHECK(mst::read("AGG", "ESZ6", 60, "test", NOW).ok, "re-posted while the chart runs (stays fresh past 60 s)");
     // settings: the dialog rows, Apply writes the 8-field file (old fields carried), the chart re-reads, a change re-decides
     LOAD(p);
-    CHECK(h.lists[POS_PARM] == 0, "parmsLoad fills the Position (the only row in the window)");
+    CHECK(h.lists[POS_PARM] == 0, "parmsLoad fills the Position");
+    CHECK(basIds().id[ofset::bask::K_BIG_LOT] == BIGLOT_PARM && h.lists[BIGLOT_PARM] == 1, "(1.14.0) parmsLoad fills Big Lot mark = BL5 (an 8-field file)");
     h.lists[POS_PARM] = 4; APPLY(p);
     std::string line = readAll(flex + "\\BidAskStats.place-ES.txt");
-    CHECK(line == "20,4,20,15,10,0,0,0\n", "Apply: 8-field file, the hidden Ratio bars / Spike vs average / jump / lookback / Box shows carried, Position 4, offsets 0");
+    CHECK(line == "20,4,20,15,10,0,0,0,1\n", "Apply: 9-field file (1.14.0: + Big Lot mark BL5), the hidden Ratio bars / Spike vs average / jump / lookback / Box shows carried, Position 4, offsets 0");
     // the hidden Spike vs average still comes from the file (data-tuned, his decision: not in the window); a saved offset is ignored
     { std::ofstream f((flex + "\\BidAskStats.place-ES.txt").c_str()); f << "20,4,60,15,10,7,3,0\n"; }
     NOW += 1500; p->calc(0);
     CHECK(S->ser.spike.avgT == 60 && S->dx == 0 && S->dy == 0 && !S->ser.bars[T0 + 1800].bidSpike, "the chart reads the file: 5.0x < 6.0x is no longer a spike; a saved Offset 7 / 3 is ignored");
     h.draws.clear(); p->draw();
     CHECK(count(h, "box", C_BID_SPIKE) == 0 && !text(h, "5.0"), "under 6.0x nothing is bright or labelled");
+    LOAD(p); h.lists[BIGLOT_PARM] = 3; APPLY(p);                          // (1.14.0) Big Lot mark BL20 saved as the 9th field, read by the chart
+    CHECK(readAll(flex + "\\BidAskStats.place-ES.txt") == "20,4,60,15,10,0,0,0,3\n", "(1.14.0) Apply: Big Lot mark BL20 = field 9 (3), the hidden values carried");
+    NOW += 1500; p->calc(0); CHECK(S->bigLot == 3, "(1.14.0) the chart reads Big Lot mark BL20");
     dispose(p);
     CHECK(!mst::read("AGG", "ESZ6", 60, "test", NOW).ok, "removed: the Market State entry is cleared");
     std::printf("BidAskStats host: %d passed, %d failed\n", passes, fails);

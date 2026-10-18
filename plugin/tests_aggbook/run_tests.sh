@@ -7,6 +7,8 @@ step() { echo "== $1" >&2; shift; "$@" || { echo "FAILED: $*"; exit 1; }; }
 step "logic" $CXX -I"$P" "$D/test_aggbook_113.cpp" -o "$B/tl"; step "run" "$B/tl" "$P"
 # OrderFlowFeed.h 1.10.1 has two pre-existing -Wmisleading-indentation warnings (shared header, not ours)
 step "BidAskStats host" $CXX -Wno-misleading-indentation -DBAS_TEST_CLOCK -I"$D/mock" -I"$P" "$D/test_aggbook_host.cpp" -o "$B/thb"; step "run" "$B/thb"
+step "Big Lot logic (1.14.0)" $CXX -I"$P" "$D/test_aggbook_114.cpp" -o "$B/tbl"; step "run" "$B/tbl"
+step "BidAskStats Big Lot host (1.14.0)" $CXX -Wno-misleading-indentation -DBAS_TEST_CLOCK -I"$D/mock" -I"$P" "$D/test_aggbook_114_host.cpp" -o "$B/tblh"; step "run" "$B/tblh"
 step "BookFlow host" $CXX -Wno-misleading-indentation -DBOOK -DOFF_TEST_CLOCK -I"$D/mock" -I"$P" "$D/test_aggbook_host.cpp" -o "$B/thf"; step "run" "$B/thf"
 SDK=${SDK:-/mnt/user-data/uploads/sdk/c++/include}
 if [ -d "$SDK" ]; then for N in BidAskStats BookFlow; do
