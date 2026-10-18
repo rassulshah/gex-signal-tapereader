@@ -11,6 +11,8 @@
  *  It is a normal RTX build (links irtsdkV143-x64.lib, exports cpp_main) that IRT never loads directly: gex-hot-build.bat compiles it
  *  with /DHR_BUILD=<n> and copies it to InvestorRT\hotreload\lsHotReloadDemo_impl_<n>.dll; the shim lsHotReloadDemo.dll forwards to it.
  *  No settings (one hidden output, like Session Info). Remove it from the chart when the test is done.
+ *  Settings contract (plugin\tests_settings\settings_contract.cpp, 2026-10-18): EXEMPT - it has no user settings (no window rows to
+ *  register, save or read), it is a temporary test indicator, and it is not in SETSRC; the contract still gates its build.
  ********************************************************************************/
 #ifndef NOMINMAX
 #define NOMINMAX

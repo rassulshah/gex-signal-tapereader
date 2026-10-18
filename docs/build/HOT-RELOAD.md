@@ -80,7 +80,9 @@ IRT ──cpp_main(pAPI)──► lsHotReloadDemo.dll  (SHIM: loaded once, in dl
 | `plugin\HotReloadDemo\test_hotreload_e2e.cpp` + `test_hotreload_e2e_impl.cpp` | End to end on Linux: real files, the manifest published with tmp + rename, real dlopen of three versioned builds. 15 checks |
 | `plugin\HotReloadDemo\run_hotreload_tests.sh` | Runs both |
 | `tools\gex-hot-build.bat` | Builds the implementation, publishes it while IRT is open, builds the shim and installs it while IRT is closed (CRLF, no PowerShell) |
-| `tools\gex-build.bat` | One added line: `call "%REPO%\tools\gex-hot-build.bat" HotReloadDemo` |
+| `tools\gex-build.bat` | One added line: `call "%REPO%\tools\gex-hot-build.bat" HotReloadDemo`. It runs after the settings contract gate, so a failing contract stops the demo build too |
+
+**Settings contract:** the demo is **exempt**. It has no user settings (one hidden output, like Session Info), so there is nothing to register, save or read. It is a temporary test indicator and is not in `SETSRC`.
 
 ### Tests (all passing)
 
@@ -147,7 +149,8 @@ The demo is a test only. It has no settings and goes in **one** chart.
 
 **Per indicator**
 
-* Add `HR_IMPL_EXPORTS(...)` with a settings string, and a Linux test that checks the string against the set*Parameter calls in setup(). This stops the string from drifting.
+* Add `HR_IMPL_EXPORTS(...)`. For indicators already on the settings layer (SettingsSpec.h tables, checked by `plugin\tests_settings\settings_contract.cpp`), the settings signature is computed from the indicator's settings table, so it cannot drift from the window IRT registered. For the others, add a Linux test that checks the string against the set*Parameter calls in setup().
+* The settings contract keeps gating every build, hot builds included. A build that fails the contract is never published.
 * Audit init(), setup(), destroy(), threads, timers and DEPTH objects (risks 3 and 4).
 * Run the host tests through the shim with a swap in the middle: the chart state is rebuilt, there is no repaint, and the record files match.
 
