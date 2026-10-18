@@ -33,7 +33,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.15.0";   // (1.15.0, 2026-10-18 audit B finding 2) the Big Lot tiers are decided ONCE PER SESSION from complete earlier sessions only (3 - 5, each with 3/4 of its day candles; today's partial session and partly read sessions never count), and only once the chart history before the session is fully read: a print's tier is fixed for its candle and never re-judged by a later recompute or by what is in view (TierSet / tiersFor); the facts are read from the chart's full recent history (8 sessions), not from the view, and recorded for 8 sessions; the SignalBoard B events come from the record for the last 120 closed candles whatever is on screen (+ bit 7 = pivot confirmed); the 5-s log-normal curve fit is gone (status shows the S-tiers); (1.14.1, Rassul 17:19-17:37) Trend PB band checked from the start of the pullback THROUGH the print's own candle (his 96 at 12:42 Oct 16); Trend BO only on a candle in the up-wave (down-wave for a breakdown); ES category 4 = 1,000; (1.14.0) (1.14.0, Rassul 2026-10-17 16:29-16:47) one "Show" choice per category (All prints / Near pivot (either direction) / Near a level / Pivot near a level / Trend PB / Trend BO / Trend PB + BO), category 4 = every print of its size (time filter only), the pivot judged against the candle's own swing (may repaint until the pivot is confirmed), the Trend PB VWAP band rule, Trend BO needs the trend, box colours of their own, new defaults, category 4 size per market; (1.13.0) a Setup per category (Any / Pullback with trend / Reversal at a level / Breakout through the higher of the last 2 pivots), RTH only option; (1.12.0) hover, print log + nightly score, Liquidity Profile read, NG / 6E divider 1; (1.11.0) (1.11.0) category 4 (>= lots), a font per category, time filter, near a level (ATR above / below + sweeps; key / gamma / volume levels), statistics; (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
+static const char* const VERSION = "1.16.0";   // (1.16.0, 2026-10-18, Rassul approved 15:03 CT) the statistics box becomes the compact Big Lot box: BL5 / BL10 / BL20 = the rolling average of the CURRENT session type (RTH / overnight), docked to the HOD/LOD table (BoxDock.h), everything else in its hover (typeAvg / boxRows / boxHover); category order 1 > 4 > 2 / 3 (his category-4 size wins over Big Lot 10 / 20: catOrder / firstCat); (1.15.0, 2026-10-18 audit B finding 2) the Big Lot tiers are decided ONCE PER SESSION from complete earlier sessions only (3 - 5, each with 3/4 of its day candles; today's partial session and partly read sessions never count), and only once the chart history before the session is fully read: a print's tier is fixed for its candle and never re-judged by a later recompute or by what is in view (TierSet / tiersFor); the facts are read from the chart's full recent history (8 sessions), not from the view, and recorded for 8 sessions; the SignalBoard B events come from the record for the last 120 closed candles whatever is on screen (+ bit 7 = pivot confirmed); the 5-s log-normal curve fit is gone (status shows the S-tiers); (1.14.1, Rassul 17:19-17:37) Trend PB band checked from the start of the pullback THROUGH the print's own candle (his 96 at 12:42 Oct 16); Trend BO only on a candle in the up-wave (down-wave for a breakdown); ES category 4 = 1,000; (1.14.0) (1.14.0, Rassul 2026-10-17 16:29-16:47) one "Show" choice per category (All prints / Near pivot (either direction) / Near a level / Pivot near a level / Trend PB / Trend BO / Trend PB + BO), category 4 = every print of its size (time filter only), the pivot judged against the candle's own swing (may repaint until the pivot is confirmed), the Trend PB VWAP band rule, Trend BO needs the trend, box colours of their own, new defaults, category 4 size per market; (1.13.0) a Setup per category (Any / Pullback with trend / Reversal at a level / Breakout through the higher of the last 2 pivots), RTH only option; (1.12.0) hover, print log + nightly score, Liquidity Profile read, NG / 6E divider 1; (1.11.0) (1.11.0) category 4 (>= lots), a font per category, time filter, near a level (ATR above / below + sweeps; key / gamma / volume levels), statistics; (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
@@ -768,6 +768,97 @@ inline long long catSizeOf(const TierSet& T, int ph, const Cat& c) {
     if (c.n <= 0) return (long long)c.lots;
     const long long z = bigLotOf(T, ph, c.n);
     return z > 0 ? std::max(z, (long long)c.lots) : 0;
+}
+// ---- (1.16.0, Rassul 15:10 settings-window screenshot) the window and the chart -------------------------------------------------
+// what the window shows: the divider as used (0 in the file = the market default: ES / CL 10, others 1)
+inline Settings shownSettings(Settings s, const std::string& mkt) { if (s.div <= 0) s.div = divFor(mkt); return s; }
+// what the chart uses: a level group that is off uses none of its levels (its boxes may still be ticked in an old file)
+inline Settings effective(Settings s) { if (!s.keyOn) s.keyMask = 0; if (!s.gamOn) s.gamMask = 0; if (!s.volOn) s.volMask = 0; return s; }
+// a swatch at (near) black: numbers / boxes would vanish on his black chart - the saved colour is kept
+inline bool nearBlack(unsigned c) { return ((c >> 16) & 0xFF) < 0x18 && ((c >> 8) & 0xFF) < 0x18 && (c & 0xFF) < 0x18; }
+// ---- (1.16.0, Rassul 2026-10-18 15:03 CT approved: "make it simple like BL 5 1434 and just have a compact box of the averages
+// connected to the hod lod box ... so it doesn't overlap"; "no, just the avg") the compact Big Lot box: BL5 / BL10 / BL20 = the rolling
+// average (latest 5 complete sessions, one outlier session dropped) of each session's 5th / 10th / 20th biggest print of the CURRENT
+// session type (RTH during RTH, overnight overnight). Everything else (prior session, today's count, the other type, the outlier,
+// scoring) is in the box's hover.
+static const int BOX_N[3] = { 5, 10, 20 };
+struct TypeAvg { bool night = false; std::vector<long> done; long long prior[3] = { 0, 0, 0 }; Avg avg[3]; int nSess = 0;
+                 long droppedSess = -1; double droppedRatio = 0; int today[3] = { 0, 0, 0 }; long long thr[3] = { 0, 0, 0 }; };
+// candles of a complete session of one type: 3/4 of its candles. Day = the RTH open to an hour after the RTH close; night = the rest
+// of the 23-hour session (17:00 - the open, an hour after the close - 16:00). The day rule = the 1.11 statistics' rule.
+inline int typeNeed(bool night, int openMin, int closeMin, int per) {
+    if (per <= 0) per = 180;
+    const int dayMin = std::max(60, closeMin + 60 - openMin), nightMin = std::max(60, 1380 - dayMin);
+    return std::max(20, (int)((long long)(night ? nightMin : dayMin) * 60 / per * 3 / 4));
+}
+// prints: per session, that type's biggest bid and biggest ask lots of each candle; candles: that type's candle count per session;
+// cur = the current session (never averaged); thr = today's tiers (BL5 / 10 / 20 of the session's tier set) for "today N of ~N"
+inline TypeAvg typeAvg(const std::map<long, std::vector<long long>>& prints, const std::map<long, int>& candles, long cur, int need,
+                       const long long thr[3], bool night) {
+    TypeAvg A; A.night = night;
+    for (const auto& kv : candles) if (kv.first < cur && kv.second >= need) A.done.push_back(kv.first);
+    static const std::vector<long long> none;
+    auto of = [&](long s) -> const std::vector<long long>& { auto it = prints.find(s); return it == prints.end() ? none : it->second; };
+    for (int q = 0; q < 3; ++q) {
+        const int N = BOX_N[q];
+        A.prior[q] = A.done.empty() ? 0 : nth(of(A.done.back()), N);
+        std::vector<long long> xs; std::vector<long> ss;
+        for (int k = (int)A.done.size() - 1; k >= 0 && (int)xs.size() < 5; --k) { xs.push_back(nth(of(A.done[k]), N)); ss.push_back(A.done[k]); }
+        A.avg[q] = avgDropOutlier(xs);
+        if (A.avg[q].dropped >= 0 && A.droppedSess < 0) { A.droppedSess = ss[(size_t)A.avg[q].dropped]; A.droppedRatio = A.avg[q].ratio; }
+        A.nSess = std::max(A.nSess, A.avg[q].used);
+        A.thr[q] = thr ? thr[q] : 0;
+        if (A.thr[q] > 0) for (long long v : of(cur)) if (v >= A.thr[q]) ++A.today[q];
+    }
+    return A;
+}
+inline std::string boxValue(const TypeAvg& A, int q) { return (q >= 0 && q < 3 && A.avg[q].used > 0 && A.avg[q].avg > 0) ? commas(A.avg[q].avg) : std::string("--"); }
+// the box: exactly 3 rows "BL5" / "1,434" ("--" while learning)
+inline std::vector<std::pair<std::string, std::string>> boxRows(const TypeAvg& A) {
+    std::vector<std::pair<std::string, std::string>> r;
+    for (int q = 0; q < 3; ++q) r.push_back({ "BL" + std::to_string(BOX_N[q]), boxValue(A, q) });
+    return r;
+}
+// the hover: what it is, the question, how, the numbers removed from the box, why, how to use it, an example
+// tiers = the session's tier line (what the candles use), dropped = "Oct 14" of the outlier session (or ""), score = the nightly line
+inline std::vector<std::string> boxHover(const TypeAvg& A, const TypeAvg& O, const std::string& market, const std::string& tiers,
+                                         const std::string& dropped, const std::string& score) {
+    const std::string mid = " \xB7 ", ty = A.night ? "overnight" : "RTH", oty = A.night ? "RTH" : "overnight";
+    const std::string n = std::to_string(A.nSess);
+    std::vector<std::string> L;
+    L.push_back("Big Lot sizes " + mid + ty + mid + (A.nSess > 0 ? n + "-session average" : std::string("learning")) + mid + market);
+    L.push_back("Question: how big is a really big print in this market right now - which numbers on the candles are the rare ones?");
+    L.push_back("What: BL5 = the size of one print (lots at one price, one side, one candle) reached about 5 times a session; BL10 ~10, BL20 ~20 times.");
+    L.push_back("How: each complete earlier session's 5th / 10th / 20th biggest " + ty + " print, averaged over the latest " + (A.nSess > 0 ? n : std::string("5")) + " sessions (an outlier session is dropped).");
+    for (int q = 0; q < 3; ++q) {
+        const int N = BOX_N[q];
+        L.push_back("BL" + std::to_string(N) + ":  prior session " + (A.prior[q] > 0 ? commas(A.prior[q]) : std::string("learning")) + mid
+                    + n + "-session avg " + boxValue(A, q) + mid + "today " + std::to_string(A.today[q]) + " of ~" + std::to_string(N));
+    }
+    L.push_back("The " + oty + " averages: BL5 / 10 / 20 = " + boxValue(O, 0) + " / " + boxValue(O, 1) + " / " + boxValue(O, 2) + " lots.");
+    if (!tiers.empty()) L.push_back(tiers);
+    L.push_back(A.droppedSess >= 0 && !dropped.empty() ? [&]() { char r[16]; std::snprintf(r, sizeof(r), "%.1f", A.droppedRatio);
+                    return "Outlier dropped: " + dropped + " (" + r + "x the other sessions)."; }() : std::string("No session dropped as an outlier."));
+    if (!score.empty()) L.push_back(score);
+    L.push_back("Why: big sizes differ by market and between RTH and overnight; at or above BL5 a print is one of the ~5 biggest of a normal session.");
+    L.push_back("Use: a print >= BL5 at a key level = a big trader acting - absorption if price does not move, initiative if it breaks and holds.");
+    L.push_back("Example: ES RTH BL5 1,434 - 1,500 lots sold at LonLO that fail to push lower is a top-5 print of the day: watch for the turn.");
+    return L;
+}
+// ---- (1.16.0, Rassul 2026-10-18 15:04-15:07: "the 1000 lots that are part of category 4 are not in cyan", "cat 1 and 4 should be
+// cyan", "i defined cat 4 because it is a user input") the ORDER a print is judged in: category 1 first, then category 4 (HIS fixed
+// size wins over categories 2 / 3), then categories 2 / 3 biggest size first. 1.14 - 1.15 sorted all four by size, so a 1,000 - 1,389
+// lot ES print took category 2 / 3 (BL10 1,190 / BL20 1,007, white) before his category 4 (>= 1,000, cyan). The chart, the print log
+// and the board events all go through choose(), which uses this order. zz = each category's size now (0 = off / learning).
+inline void catOrder(const long long zz[4], int ord[4]) {
+    ord[0] = 0; ord[1] = 3;
+    if (zz[2] > zz[1]) { ord[2] = 2; ord[3] = 1; } else { ord[2] = 1; ord[3] = 2; }
+}
+// the first category (0 - 3) a print of vol lots reaches whose Show filter passes (pass[k]; category 4 has no filter), -1 = none
+inline int firstCat(const long long zz[4], long long vol, const bool pass[4]) {
+    int ord[4]; catOrder(zz, ord);
+    for (int q = 0; q < 4; ++q) { const int k = ord[q]; if (zz[k] <= 0 || vol < zz[k]) continue; if (k == 3 || pass[k]) return k; }
+    return -1;
 }
 } // namespace bba
 #endif

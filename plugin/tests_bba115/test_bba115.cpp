@@ -155,7 +155,7 @@ int main() {
         CHECK(onlyCat4, "[host] learning: only category 4 (fixed size) events");
     }
     {   const std::string src = [] { std::ifstream f("../BigBidAsk.cpp", std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }();
-        CHECK(std::string(BBA_VERSION) == "1.15.0" && std::string(bba::VERSION) == "1.15.0" && src.find("p->setVersion(\"1.15.0\")") != std::string::npos, "[ver] 1.15.0 everywhere");
+        CHECK(std::string(BBA_VERSION) == "1.16.0" && std::string(bba::VERSION) == "1.16.0" && src.find("p->setVersion(\"1.16.0\")") != std::string::npos, "[ver] 1.16.0 everywhere");
     }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;

@@ -38,6 +38,7 @@ struct Host {
     int barOffset = 0, barW = 60;   // x of bar i = 20 + (i - barOffset) * barW (left), +barW/4 centre .. +barW/2 right
     int visStart = -1, visEnd = -1;
     bool inDialog = false; std::map<int, int> ints; std::map<int, float> floats; std::map<int, bool> boxes;   // the dialog's values
+    std::map<int, COLOR> colors; std::map<int, bool> enabled;   // (1.16.0) swatches, greyed rows
     int vapCalls = 0;
 };
 extern Host* current;
@@ -151,6 +152,10 @@ public:
     int getListIndex(int i) { return mock::current->inDialog ? mock::current->ints[i] : 0; }
     void setListIndex(int i, int v) { mock::current->ints[i] = v; }
     void setLabelText(int, const char*) {}
+    // (1.16.0) the colour swatches and greying (the real SDK: setParameterColor / getParameterColor / enableParameter)
+    RTX_RESULT setParameterColor(int i, COLOR c) { mock::current->colors[i] = c; return RTX_OK; }
+    COLOR getParameterColor(int i) { return mock::current->inDialog ? mock::current->colors[i] : 0; }
+    RTX_RESULT enableParameter(int i, RTBOOL b) { mock::current->enabled[i] = b; return RTX_OK; }
     COLOR getBlendedColor(COLOR a, COLOR, float) { return a; }
     void setArrayCount(int) {} void setFlags(unsigned long) {} void setDescription(const char*) {} void setVersion(const char*) {}
 };

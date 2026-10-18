@@ -128,7 +128,7 @@ int main() {
         CHECK(mst::encode(1, 2, kv).size() < 600, "well under the entry cap");
     }
     std::printf("[6] versions\n");
-    {   CHECK(std::string(hl::HL_VERSION) == "2.4.0", "HL_VERSION 2.4.0");
+    {   CHECK(std::string(hl::HL_VERSION) == "2.4.1", "HL_VERSION 2.4.1 (2.4.1 = the table rectangle published, BoxDock.h)");
         std::ifstream f("../HodLod.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
         CHECK(src.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos, "setVersion literal == HL_VERSION");
         CHECK(std::string(hlg::VERSION) == "2.1.0" && std::string(hlq::VERSION) == "1.1.0" && std::string(fr::VERSION) == "1.0.0", "header versions");

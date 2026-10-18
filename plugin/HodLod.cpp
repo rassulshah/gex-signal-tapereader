@@ -1,5 +1,9 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.4.1 (2026-10-18, Rassul approved 15:03 CT the compact Big Lot box "connected to the hod lod box ... so it doesn't overlap"):
+ *         the table's rectangle (table + Q-Scores header + GEX row, after the hysteresis) is published on every draw for the other
+ *         indicators on this chart (BoxDock.h, LRA_HLB_<symbol>_<spb>_<chart>; lsBigBidAsk 1.16.0 docks its box to it); cleared when the
+ *         table is off / not drawn and when the indicator is removed. Nothing drawn here changes.
  *  2.4.0 (2026-10-18 night, Rassul approved the audit-C fixes; audit-C-gamma-hodlod-read findings 7, 8, 13 + the Market State):
  *         - Reg: from ONE MenthorQ source - the HVL0 strike of lsFlexLevels\GammaProfile-MQ-<MKT>.csv (the same snapshot whose
  *           "HVL 0D" line the Dealer Profile draws) against the last CLOSED bar's close: at / above = Pos, below = Neg. The bridge's
@@ -88,6 +92,7 @@
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
 #include "Fresh.h"               // (2.4.0) the one freshness / STALE rule (Reg / Q / Gex row / Tape Reader status)
 #include "MarketState.h"         // (2.4.0) SRC HODLOD + TREND, once per closed bar
+#include "BoxDock.h"             // (2.4.1) the table rectangle for the Big Lot box (lsBigBidAsk) to dock to
 #include <chrono>
 #include "VwapTrendLogic.h"      // (2.0.5) the header's trend: the Tape Reader TREND vote's rule, computed here from the chart's closed bars
 #include <sys/stat.h>
@@ -140,6 +145,7 @@ struct HLState {
     long long hvlStamp = -2; time_t hvlChecked = 0; hlg::HvlBook hvl; std::string hvlWhy; int regSign = 0; fr::Verdict regV; fr::Verdict qV; bool qJudged = false;
     long long lastClosedAbs = 0; double lastClose = NAN;     // the last closed bar (CT wall-clock seconds of its END stamp, its close)
     // (2.4.0) the Market State posts: this chart's identity, the facts decided for the last closed bar, when they were last posted
+    std::string hlbSym, hlbChart; long hlbSpb = 0; bool hlbPosted = false;   // (2.4.1) the published table rectangle (BoxDock.h)
     std::string mstSym, mstChart; long mstSpb = 0; bool mstPosted = false; long long mstBar = -1, mstMs = -1; std::string mstSig;
     std::map<std::string, std::string> mstKv, mstTrendKv;
     bp::Hyst hyst; long long hystPlaceSig = -3; std::string placeLine; hl::Box hystPane = { 0, 0, 0, 0 };                           // (2.0.6) the table's place: no ping-pong (reset when the settings change)
@@ -182,6 +188,7 @@ public:
     void clearState()
     {   // (2.4.0) this chart's Market State entries leave the board (removal, symbol / period change), then the state goes
         HLState* S = slot_.get(this, false);
+        if (S && S->hlbPosted) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; }   // (2.4.1)
         if (S && S->mstPosted) { mst::clear("HODLOD", S->mstSym, S->mstSpb, S->mstChart); mst::clear("TREND", S->mstSym, S->mstSpb, S->mstChart); S->mstPosted = false; }
         slot_.release(this);
     }
@@ -1097,6 +1104,21 @@ int HodLod::draw(void)
     }
     postMst(*S);                             // (2.4.0) the Market State (behind the scenes; nothing drawn changes)
     execute(L);
+    {   // (2.4.1) the table's rectangle for the docked Big Lot box (BoxDock.h): table + Q header + GEX row, as drawn; none = cleared
+        const char* sy = getSymbol(); const char* cl = getChartLabel();
+        const std::string sym = sy ? sy : "", chart = cl ? cl : ""; const long spb = getSecondsPerBar();
+        if (S->hlbPosted && (sym != S->hlbSym || spb != S->hlbSpb || chart != S->hlbChart)) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; }
+        if (L.tableOk && L.table.r > L.table.l && L.table.b > L.table.t && !sym.empty()) {
+            bdk::Box u = bdk::mk(L.table.l, L.table.t, L.table.r, L.table.b);
+            auto add = [&](const hl::Box& b) { if (b.r > b.l && b.b > b.t) { u.l = (std::min)(u.l, b.l); u.t = (std::min)(u.t, b.t); u.r = (std::max)(u.r, b.r); u.b = (std::max)(u.b, b.b); } };
+            if (S->lastQOk) add(L.qBox);
+            if (S->lastGexOk) add(L.gexRow);
+            const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            bdk::publishHodLod(sym, spb, chart, ms, u);
+            S->hlbSym = sym; S->hlbSpb = spb; S->hlbChart = chart; S->hlbPosted = true;
+            S->placeLine += "HLB_BOX," + std::to_string(u.l) + "," + std::to_string(u.t) + "," + std::to_string(u.r) + "," + std::to_string(u.b) + " (published for the Big Lot box)\n";
+        } else if (S->hlbPosted) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; S->placeLine += "HLB_BOX,none\n"; }
+    }
     writeStatus(*S, &L);
     writeFxStatus(*S);
     return RTX_OK;
@@ -1154,6 +1176,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live.");
-    p->setVersion("2.4.0");   // = hl::HL_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.4.1");   // = hl::HL_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
