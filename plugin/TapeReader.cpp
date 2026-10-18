@@ -80,6 +80,8 @@
 #include "TapeReaderLogic.h"
 #include "HostSlot.h"
 #include "HoverBoard.h"
+#include "ZoneStory.h"                  // (1.3.0) the Market State (MarketState.h) + the zone story
+#include "OddsTable.h"                  // (1.3.0) the probability engine's answers (LRA-Odds-<MKT>.csv)
 #include <algorithm>
 #include <chrono>
 #include <climits>
@@ -93,7 +95,7 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.2.0"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.3.0"          // keep equal to tr::VERSION and the setVersion literal below
 
 static const long long GRACE_MS = 5000;           // a closed candle is finalised when its pane rows landed, else 5 s after it closed
 static const long long CHECK_FAST_MS = 1000;      // Delta / order-flow records (the intrabar triggers)
@@ -188,6 +190,9 @@ struct TRState {
     // (1.1.3) the banner: Position + Offset X / Y + background (place file), the stable width, the hysteresis, the hover, the board
     bp::Place place; bool bg = true; std::string placeWhy; bp::StableW banW; bp::Hyst hyst; bool inBanner = false; long long bannerHovers = 0;
     std::string chartKey; bb::Warn warn; bool warnSeen = false; bb::Beat lqBeat; tr::Box lastDetail; bool lastDetailOn = false;
+    // (1.3.0) the Market State: every source's facts, the zone story, the odds, the snapshot for Claude (behind the scenes - nothing new drawn)
+    std::map<std::string, mst::Facts> msF; zst::Story story; unsigned long long storyRaw = 0; long long snapMs = -1, snapWrites = 0;
+    odt::Table odds; long long oddsChecked = -1; std::string oddsWhy = "not read"; std::string readWords, readOdds = "?";
 };
 
 class TapeReader : public cppExtension {
@@ -210,6 +215,7 @@ public:
     bool check(Src& s, long long nowMs, long long every);
     tr::Inputs inputsFor(TRState& S, int k, std::vector<tr::Bar>& work);
     void finalize(TRState& S, int k);
+    void marketState(TRState& S, int kClosed, long long nowMs);
     void intrabar(TRState& S, long n);
     void openLog(TRState& S, long long ctSec);
     void writeLog(TRState& S, const tr::Read& R);
@@ -612,6 +618,7 @@ void TapeReader::pump()
                 finalize(S, kClosed); S.finalRaw = raw; S.pendingRaw = 0; ++S.redraws; invalidateChart(false);
             }
         } else intrabar(S, n);
+        marketState(S, kClosed, now);
         S.state = S.haveLive ? "ready" : "waiting for the first candle close";
     } catch (...) { S.faulted = true; S.state = "calculation error (cleared on symbol change)"; }
 }
@@ -836,6 +843,58 @@ int TapeReader::draw(void)
     return RTX_OK;
 }
 
+
+// (1.3.0, 2026-10-18, Rassul 2026-10-17 23:18 "the indicators must ... be aware of each other ... so the liquidity reader can better judge")
+// Read every indicator's facts (MarketState.h), step the story of the zone price is working once per CLOSED bar (ZoneStory.h), look up
+// its odds (question ZONE_HOLD, keys step + path, from the nightly market learning; '?' until it exists / is LIVE), post SRC READ and
+// write lsFlexLevels\MarketState\<MKT>-<spb>.json every 2 s for Claude's live tools. Nothing new is drawn (mockup first).
+void TapeReader::marketState(TRState& S, int kClosed, long long nowMs)
+{
+    if (S.chartKey.empty()) { const char* cl = getChartLabel(); S.chartKey = cl ? std::string(cl) : std::string(); }
+    S.msF = mst::readAll(S.symbol, S.spb, S.chartKey, nowMs);
+    if (kClosed < 0 || kClosed >= (int)S.bars.size()) return;
+    const tr::Bar& kb = S.bars[(size_t)kClosed];
+    if (kb.raw != S.storyRaw) {                                     // once per closed bar
+        S.storyRaw = kb.raw;
+        auto L = S.msF.find("LIQ");
+        if (L != S.msF.end()) {
+            zst::Zone z; z.id = mst::getS(L->second, "zone_id"); z.lo = mst::getD(L->second, "zone_lo"); z.hi = mst::getD(L->second, "zone_hi");
+            const std::string sd = mst::getS(L->second, "zone_side"); z.side = sd == "support" ? 1 : sd == "resistance" ? -1 : 0;
+            if (!z.id.empty() && z.side != 0 && z.hi >= z.lo && (z.id != S.story.z.id || S.story.done)) { S.story = zst::Story(); S.story.z = z; }
+        }
+        if (S.story.z.side != 0) {
+            zst::Bar b; b.t = kb.t; b.o = kb.o; b.h = kb.h; b.l = kb.l; b.c = kb.c;
+            zst::step(S.story, b, zst::observe(S.story.z, b, S.msF));
+        }
+        // the odds of this story state (from the nightly market learning)
+        if (S.oddsChecked < 0 || nowMs - S.oddsChecked >= 60000 || nowMs < S.oddsChecked) {
+            S.oddsChecked = nowMs; std::string text;
+            std::ifstream in((flexDir() + "LRA-Odds-" + S.mkt + ".csv").c_str(), std::ios::binary);
+            if (in) { in.seekg(0, std::ios::end); const std::streamoff sz = in.tellg(); if (sz > 0 && sz <= (std::streamoff)odt::MAX_BYTES) { in.seekg(0); text.resize((size_t)sz); in.read(&text[0], sz); } }
+            if (!text.empty()) { odt::Table t = odt::parse(text, S.mkt); if (t.ok) { S.odds = t; S.oddsWhy = "ok, built " + t.built; } else S.oddsWhy = t.why; } else S.oddsWhy = "missing";
+        }
+        const std::string path = zst::pathSoFar(S.story);
+        const odt::Answer A = odt::lookup(S.odds, "ZONE_HOLD", { zst::stepName(S.story.step), path });
+        S.readWords = zst::words(S.story); S.readOdds = (A.ok && A.live) ? std::to_string(odt::pct(A.p)) + "%" : "?";
+        std::map<std::string, std::string> kv;
+        kv["zone_id"] = S.story.z.id.empty() ? "?" : S.story.z.id; kv["story"] = zst::stepName(S.story.step); kv["story_path"] = path;
+        kv["odds"] = (A.ok && A.live) ? mst::num(A.p, 3) : "?"; kv["odds_q"] = "ZONE_HOLD"; kv["odds_base"] = A.ok ? mst::num(A.base, 3) : "?"; kv["odds_n"] = std::to_string(A.n);
+        const bool abs = S.story.step >= zst::ABSORBING && S.story.step != zst::BREAK && S.story.step != zst::DEF_PULLING;
+        kv["badge"] = abs ? "ABS?" : "";               // Rassul 2026-10-18: ABS first, with "?" until the market's knowledge grade is Solid
+        kv["grade"] = "?";                             // the knowledge grade arrives with the nightly market learning
+        kv["words"] = S.readWords;
+        mst::publish("READ", S.symbol, S.spb, S.chartKey, nowMs, kb.t, kv);
+        S.msF["READ"] = mst::read("READ", S.symbol, S.spb, S.chartKey, nowMs);
+    }
+    if (S.snapMs < 0 || nowMs - S.snapMs >= 2000 || nowMs < S.snapMs) {
+        S.snapMs = nowMs;
+        const std::string F = flexDir(); if (F.empty()) return;
+        makeDir(F + "MarketState");
+        const std::string ct = std::to_string(S.bars.empty() ? 0 : S.bars.back().t);
+        if (writeAtomic(F + "MarketState\\" + S.mkt + "-" + std::to_string(S.spb) + ".json", mst::snapshotJson(S.mkt, S.symbol, S.spb, ct, nowMs, S.msF))) ++S.snapWrites;
+    }
+}
+
 void TapeReader::writeStatus(TRState& S)
 {
     if (S.mkt.empty()) return;
@@ -862,6 +921,7 @@ void TapeReader::writeStatus(TRState& S)
     o += "BANNER,pos " + std::to_string(S.place.pos) + ",dx " + std::to_string(S.place.dx) + ",dy " + std::to_string(S.place.dy) + ",background " + (S.bg ? "on" : "off") + ",width " + std::to_string(S.banW.w)
          + ",warning " + (S.warnSeen ? (S.warn.on ? S.warn.name : std::string("none")) : std::string("no Liquidity Profile on this chart")) + ",hover " + (S.inBanner ? "on" : "off") + ",hovers " + std::to_string(S.bannerHovers) + ",moves " + std::to_string(S.hyst.moves)
          + (S.placeWhy.empty() ? "" : "," + S.placeWhy) + "\n";
+    o += "MARKET_STATE,sources " + std::to_string(S.msF.size()) + ",story " + zst::stepName(S.story.step) + " " + zst::pathSoFar(S.story) + " " + S.story.z.id + ",odds " + S.readOdds + " (" + S.oddsWhy + "),snapshots " + std::to_string(S.snapWrites) + "\n";
     o += "COUNTS,recomputes " + std::to_string(S.recomputes) + ",redraws " + std::to_string(S.redraws) + ",hover " + std::to_string(S.hover) + "\n";
     const long long now = steadyMs();
     const bool changed = o != S.lastStatus;
@@ -876,6 +936,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. A 1-2 line banner at the top left (the read + the Liquidity warning); mouse over it for BUYERS / SELLERS / OPTIONS. Settings: Position, Offset X / Y, Banner background.");
-    p->setVersion("1.2.0");   // TR_VERSION
+    p->setVersion("1.3.0");   // TR_VERSION
     return p;
 }

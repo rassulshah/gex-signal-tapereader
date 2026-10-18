@@ -1,7 +1,3 @@
-findings=0 allowed=0 staged_files=5 bytes=84056
+findings=0 allowed=0 staged_files=1 bytes=268
 largest staged blobs (bytes, path):
-SIZE	43701	plugin/CobImpulse.cpp
-SIZE	15161	tools/gex-build.bat
-SIZE	10965	plugin/test_cobimpulse_odds_host.cpp
-SIZE	9921	plugin/CobOdds.h
-SIZE	4308	plugin/MARKET-STATE-SPEC.md
+SIZE	268	logs/staged-scan-findings.log
