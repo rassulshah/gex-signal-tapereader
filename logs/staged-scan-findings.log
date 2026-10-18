@@ -1,5 +1,5 @@
-findings=0 allowed=0 staged_files=3 bytes=29894
+findings=0 allowed=0 staged_files=3 bytes=22970
 largest staged blobs (bytes, path):
-SIZE	19148	tools/gex-build.bat
-SIZE	8954	plugin/HotReloadDemo/HotShim.cpp
-SIZE	1792	logs/staged-scan-findings.log
+SIZE	17465	docs/build/HOT-RELOAD.md
+SIZE	5302	plugin/HotReloadDemo/HotReloadDemoImpl.cpp
+SIZE	203	logs/staged-scan-findings.log
