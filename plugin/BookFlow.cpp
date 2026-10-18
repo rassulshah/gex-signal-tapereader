@@ -246,7 +246,7 @@ public:
         if (S) { S->settingsCheckMs = -1; S->settingsStamp = -1 - 3; }    // re-read on the next pass (not "first")
     }
     virtual int parmsApply(void) { saveBf(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, ofset::bookFlowSpec(), bfIds(), (int)i); saveBf(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, ofset::bookFlowSpec(), bfIds(), (int)i, snapBf_); saveBf(); return RTX_OK; }
 
     // ---- (1.3.0) the pane: the numbers box (Net, Pace) + one net bar per side per candle, coloured by side ----------------------------
     virtual int draw(void) {

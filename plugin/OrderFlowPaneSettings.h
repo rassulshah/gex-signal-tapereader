@@ -20,7 +20,7 @@ inline const ss::Spec& bidAskSpec() {
         ss::intRow("offset_x", "Offset X", 0, -600, 600, 50),
         ss::same(ss::intRow("offset_y", "Offset Y", 0, -600, 600, 50)),
     };
-    static const ss::Spec S = { "BidAskStats", BAS_VERSION, 5, R, bask::K_N };
+    static const ss::Spec S = { "BidAskStats", BAS_VERSION, 5, R, bask::K_N, 0 };
     return S;
 }
 
@@ -36,7 +36,7 @@ inline const ss::Spec& bookFlowSpec() {
         ss::intRow("offset_x", "Offset X", 0, -600, 600, 50),
         ss::same(ss::intRow("offset_y", "Offset Y", 0, -600, 600, 50)),
     };
-    static const ss::Spec S = { "BookFlow", BF_VERSION, 3, R, bfk::K_N };
+    static const ss::Spec S = { "BookFlow", BF_VERSION, 3, R, bfk::K_N, 0 };
     return S;
 }
 

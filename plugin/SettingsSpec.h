@@ -84,6 +84,7 @@ struct Spec {
     unsigned paramVersion;    // setParameterVersion (bump whenever the visible rows change)
     const Row* rows;
     int n;
+    int dialogLines;          // optional: the window height in lines (0 = one per visible line)
 };
 
 // ---- table helpers (keep a table one line per row) ---------------------------------------------------------------------------------
@@ -373,6 +374,7 @@ struct Store {
 // The dialog snapshot rule (BoxPlace.h DlgSnap, lesson 44): a control he did not touch keeps the FILE's value (IRT may ignore a fill).
 struct Snap {
     std::vector<double> v; std::vector<std::string> t; bool ok = false;
+    std::vector<int> mst;   // the group masters' last seen state (-1 = not a master): IRT may pass parmsUpdt ANOTHER number than the clicked row (BUILD-LESSONS 94)
     void take(const Values& V) { v = V.v; t = V.t; ok = true; }
     double pick(size_t k, double now, double file) const { if (!ok || k >= v.size()) return now; return now == v[k] ? file : now; }
     std::string pickText(size_t k, const std::string& now, const std::string& file) const { if (!ok || k >= t.size()) return now; return now == t[k] ? file : now; }

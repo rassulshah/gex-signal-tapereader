@@ -23,6 +23,8 @@
 #include "../LiquidityProfileSettings.h"
 #include "../TradeManagerSettings.h"
 #include "../DealerProfileSettings.h"
+#include "../SessionVWAPSettings.h"
+#include "../BigBidAskSettings.h"
 
 struct LegacyCase { const char* text; int market; const char* key; double want; };   // key == nullptr: must NOT be recognised
 struct Entry {
@@ -31,6 +33,7 @@ struct Entry {
     ss::LegacyFn legacy;
     std::vector<LegacyCase> cases;
     std::vector<std::string> extraSources; // headers that also read the values (e.g. OrderFlowFeed.h for the panes)
+    int mappedRows = -1;                   // >= 0: rows are read through a mapping (not K_ names) - the non-label row count it must cover
 };
 
 static int g_fail = 0, g_checks = 0;
@@ -129,7 +132,10 @@ static void checkEntry(const Entry& E, const std::string& dir) {
     if (dir.empty()) return;
     std::string src; if (!readAll(dir + "/" + E.cpp, src)) { fail(P + " cannot read " + E.cpp); return; }
     std::string all = src; for (const std::string& x : E.extraSources) { std::string t; if (readAll(dir + "/" + x, t)) all += t; else fail(P + " cannot read " + x); }
-    for (int k = 0; k < S.n; ++k) { const ss::Row& r = S.rows[k]; if (r.type == ss::T_LABEL) continue;
+    if (E.mappedRows >= 0) {   // e.g. BigBidAsk: every row through controls() / toVec (test_bba116 proves the 75-value round trip)
+        int n = 0; for (int k = 0; k < S.n; ++k) if (S.rows[k].type != ss::T_LABEL) ++n;
+        ok(n == E.mappedRows, P + " the mapping covers " + std::to_string(E.mappedRows) + " rows, the table has " + std::to_string(n));
+    } else for (int k = 0; k < S.n; ++k) { const ss::Row& r = S.rows[k]; if (r.type == ss::T_LABEL) continue;
         ok(wordCount(all, upperKey(r.key)) > 0, P + " dead setting: '" + r.key + "' (" + upperKey(r.key) + ") is never read by " + E.cpp); }
     ok(countOf(src, "ss::registerAll(") == 1, P + " the window must be registered by ss::registerAll (once)");
     ok(countOf(src, "ss::fillDialog(") >= 1, P + " parmsLoad must fill the window with ss::fillDialog");
@@ -183,6 +189,8 @@ int main(int argc, char** argv) {
         { "NQ|0|300|10|0|1|1|1|0|x\n", ss::M_NQ, "width", 250 },                                     // old row: clamped into 40-250
         { "NQ|0|300|10|0|1|1|1|0|x\n", ss::M_ES, nullptr, 0 },                                        // no ES row: not recognised (defaults)
     }, {} });
+    E.push_back(Entry{ &svset::spec(), "SessionVWAP.cpp", nullptr, {}, {} });   // (1.6.1) the file keeps its own keyed-style format (SessionVWAPStyle.h)
+    { Entry b{ &bbaset::spec(), "BigBidAsk.cpp", nullptr, {}, {} }; b.mappedRows = 75; E.push_back(b); }   // (1.16.1) BBA7 file kept; 75 window values
     if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
         const int mkt = ss::marketIndex(argv[3]);
         for (const Entry& e : E) {
@@ -190,7 +198,7 @@ int main(int argc, char** argv) {
             const ss::Values D = ss::defaults(S, mkt);
             for (const ss::Line& L : ss::lines(S)) {
                 std::string t; for (int k : L.rows) { const ss::Row& r = S.rows[k]; std::string v = ss::fmt(r, D.v[(size_t)k]);
-                    if (r.type == ss::T_BOOL) v = D.b(k) ? "[x]" : "[ ]"; else if (r.type == ss::T_TEXT) v = "'" + D.s(k) + "'"; else if (r.type == ss::T_COLOR) v = "#" + v; else if (r.type == ss::T_LIST) { std::vector<std::string> c = ss::split(r.choices, ';'); v = D.i(k) < (int)c.size() ? c[(size_t)D.i(k)] : v; }
+                    if (r.type == ss::T_LABEL) v = ""; else if (r.type == ss::T_BOOL) v = D.b(k) ? "[x]" : "[ ]"; else if (r.type == ss::T_TEXT) v = "'" + D.s(k) + "'"; else if (r.type == ss::T_COLOR) v = "#" + v; else if (r.type == ss::T_LIST) { std::vector<std::string> c = ss::split(r.choices, ';'); v = D.i(k) < (int)c.size() ? c[(size_t)D.i(k)] : v; }
                     t += std::string(t.empty() ? "" : "  |  ") + r.label + " " + v; }
                 std::printf("   ~%3dpx  %s\n", L.px, t.c_str());
             }

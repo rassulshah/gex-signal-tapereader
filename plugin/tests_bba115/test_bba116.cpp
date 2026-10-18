@@ -270,7 +270,7 @@ static void hostTests() {
         f = bba::parseSettings(readSettingsLine(), why, "ES");
         CHECK(f.boxAsk == 0x22C55E, "[host] black picked: the saved colour is kept (numbers would vanish)");
         std::ifstream dl(std::string(getenv("USERPROFILE")) + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.dialog-ES.txt"); std::stringstream ds; ds << dl.rdbuf();
-        CHECK(ds.str().find("PARMSLOAD,1.16.0") != std::string::npos && ds.str().find("read back same 75") != std::string::npos && ds.str().find("SAVED,1.16.0,BBA7|5|") != std::string::npos, "[host] the dialog log (fill read back, saves)");
+        CHECK(ds.str().find("PARMSLOAD,1.16.1") != std::string::npos && ds.str().find("read back same 75") != std::string::npos && ds.str().find("SAVED,1.16.1,BBA7|5|") != std::string::npos, "[host] the dialog log (fill read back, saves)");
     }
 }
 
@@ -278,8 +278,8 @@ int main() {
     setenv("TZ", "UTC", 1); tzset();
     boxLogic(); catLogic(); dockLogic(); setLogic(); hostTests();
     {   const std::string src = [] { std::ifstream f("../BigBidAsk.cpp", std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }();
-        CHECK(std::string(BBA_VERSION) == "1.16.0" && std::string(bba::VERSION) == "1.16.0" && src.find("p->setVersion(\"1.16.0\")") != std::string::npos, "[ver] 1.16.0 everywhere");
-        CHECK(src.find("setParameterVersion(6)") != std::string::npos, "[ver] parameter version 6 (the re-laid-out window)");
+        CHECK(std::string(BBA_VERSION) == "1.16.1" && std::string(bba::VERSION) == "1.16.1" && src.find("p->setVersion(\"1.16.1\")") != std::string::npos, "[ver] 1.16.1 everywhere (1.16.1 = the settings layer)");
+        CHECK(bbaset::spec().paramVersion == 6 && src.find("ss::registerAll(this, bbaset::spec()") != std::string::npos, "[ver] parameter version 6 (the re-laid-out window), registered from the table");
     }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;

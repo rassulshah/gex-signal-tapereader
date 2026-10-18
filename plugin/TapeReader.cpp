@@ -204,7 +204,7 @@ public:
     virtual int mouse(RTX_EVENT* e);
     virtual int parmsLoad(void);                                       // (1.1.3) fills the dialog from the place file (never saves)
     virtual int parmsApply(void) { savePos(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, trset::spec(), trIds(), (int)i); savePos(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, trset::spec(), trIds(), (int)i, snap_); savePos(); return RTX_OK; }
     static ss::Ids& trIds() { static ss::Ids I; return I; }        // (1.3.1) the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
     struct SetStore { std::string mkt; ss::Store st; };
     std::vector<SetStore> stores_;                                     // (1.3.1) per market, per object

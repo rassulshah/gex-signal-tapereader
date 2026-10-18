@@ -17,7 +17,7 @@ inline const ss::Spec& spec() {
         // (2.14.0) the row values are no longer drawn; this box only reserved room for them -> hidden, value kept (audit: removed)
         ss::hide(ss::boolRow("delta_text", "Show delta text", true)),
     };
-    static const ss::Spec S = { "DeltaProfile", PLUGIN_VERSION, 13, R, K_N };
+    static const ss::Spec S = { "DeltaProfile", PLUGIN_VERSION, 13, R, K_N, 0 };
     return S;
 }
 

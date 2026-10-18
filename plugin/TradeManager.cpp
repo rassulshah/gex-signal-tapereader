@@ -284,7 +284,7 @@ public:
         TSet cfg; fromValues(V, cfg); savePl(cfg);      // the place file the placement / drag code reads
     }
     virtual int parmsApply(void) { saveAll(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, tmset::spec(), tmIds(), (int)i); saveAll(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, tmset::spec(), tmIds(), (int)i, snap_); saveAll(); return RTX_OK; }
     virtual int done(void);
     virtual int destroy(void);
     // the Position is kept per market in TradeManager.place-<MKT>.txt (IRT reads list settings back as -1 outside the settings

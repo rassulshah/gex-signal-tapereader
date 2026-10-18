@@ -455,7 +455,7 @@ public:
     virtual int mouse(RTX_EVENT* e);
     virtual int parmsApply(void);                                       // (0.45.0) the window -> the three files, through SettingsHost.h
     virtual int parmsLoad(void);                                        // (CR5000) the dialog filled from the size file (never saves)
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, LQ_SPEC, lqIds(), (int)i); return RTX_OK; }   // (0.45.0) a master greys its rows; saved on OK / Apply
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, LQ_SPEC, lqIds(), (int)i, snap_); return RTX_OK; }   // (0.45.0) a master greys its rows; saved on OK / Apply
     ss::Values fileValues();                                             // (0.45.0) the three files as the table's values
     ss::Snap snap_;                                                   // (CR5000) the dialog as it opened         // (0.15.1) OK / Apply: kept per market (loading never saves, #29)
     void saveSize(const ss::Values& V);

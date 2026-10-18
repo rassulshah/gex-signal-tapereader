@@ -39,13 +39,14 @@ int main() {
       CHECK(y.getIntegerValue(yi.id[K_PROJ_UP]) == 0, "old path: getIntegerValue on a colour row reads 0 -> black saved (BigBidAsk.settings-ES.txt 10-18)"); }
     // 3. user edits + group master
     x.userColor(ids.id[K_MARK_HOD], 0xABCDEF); x.userInt(ids.id[K_OFFSET_X], 25);
-    x.userCheck(ids.id[K_SHOW_PROJ], false); ss::onUpdate(&x, S, ids, ids.id[K_SHOW_PROJ]);
+    x.userCheck(ids.id[K_SHOW_PROJ], false); ss::onUpdate(&x, S, ids, ids.id[K_SHOW_PROJ] + 1, snap);   // IRT may pass another number (lesson 94)
     CHECK(!x.isEnabled(ids.id[K_PROJ_UP]) && !x.isEnabled(ids.id[K_PROJ_DN]), "master off greys its colours");
     CHECK(x.isEnabled(ids.id[K_TABLE_BG]), "another group's item stays enabled");
+    CHECK(!ss::onUpdate(&x, S, ids, ids.id[K_SHOW_PROJ], snap), "a second update without a change does nothing");
     ss::Values W = ss::readDialog(&x, S, ids, V, snap);
     CHECK(W.c(K_MARK_HOD) == 0xABCDEFul && W.i(K_OFFSET_X) == 25 && !W.b(K_SHOW_PROJ), "edits read back");
     CHECK(W.c(K_PROJ_UP) == 0x123456ul, "a disabled colour keeps its value");
-    x.userCheck(ids.id[K_SHOW_PROJ], true); ss::onUpdate(&x, S, ids, ids.id[K_SHOW_PROJ]);
+    x.userCheck(ids.id[K_SHOW_PROJ], true); ss::onUpdate(&x, S, ids, 0, snap);
     CHECK(x.isEnabled(ids.id[K_PROJ_UP]), "master on enables its colours again");
     // 4. garbage typed into a number -> the file's value
     x.userInt(ids.id[K_OFFSET_Y], 99999); W = ss::readDialog(&x, S, ids, V, snap);
@@ -87,7 +88,7 @@ int main() {
       CHECK(n.why == "defaults: no settings file", "no NG line -> defaults"); }
     { // the original HodLod 2.4.1 projection row would have been flagged as cut off
       ss::Row R[3] = { ss::masterOf(ss::boolRow("show_proj", "Show projection", true)), ss::same(ss::in(ss::colorRow("proj_up", "Up (to the HOD)", 0x22C55E, 0), "show_proj")), ss::same(ss::in(ss::colorRow("proj_dn", "Down (to the LOD)", 0xEF4444, 0), "show_proj")) };
-      ss::Spec old = { "HodLodOld", "x", 1, R, 3 };
+      ss::Spec old = { "HodLodOld", "x", 1, R, 3, 0 };
       bool cut = false; for (const std::string& e : ss::check(old)) if (e.find("cut off") != std::string::npos) cut = true;
       CHECK(cut, "the 2.4.1 projection row (~424 px) fails the width budget"); }
     std::printf("%s settings host test: %d checks, %d failures\n", F ? "FAIL" : "PASS", N, F);

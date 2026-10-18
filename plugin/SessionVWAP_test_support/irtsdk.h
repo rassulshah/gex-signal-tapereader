@@ -141,6 +141,14 @@ public:
     RTX_RESULT setListIndex(int i, int v = -1) { mock::Param* p = mock::param(i); if (!p || p->type != 3 || v >= p->listCount) return RTX_FAIL; p->list = v; return RTX_OK; }
     RTX_RESULT setIntegerParameter(const char*, int, short = 0, short = 0) { return RTX_OK; }
     int getIntegerValue(int) { return mock::current ? mock::current->fontPt : 9; }
+    // (SessionVWAP 1.6.1, settings layer) the rest of the parameter API SettingsHost.h may call (rows counted like the others)
+    void setIntegerValue(int, int) {}
+    RTX_RESULT setFloatParameter(const char*, float, short = 0, short = 0) { mock::Param p; p.type = 4; mock::declared.push_back(p); return RTX_OK; }
+    float getFloatValue(int) { return 0.0f; } void setFloatValue(int, float) {}
+    RTX_RESULT setLabelParameter(const char*, short = 0, short = 0) { mock::Param p; p.type = 5; mock::declared.push_back(p); return RTX_OK; }
+    RTX_RESULT setStringParameter(const char*, const char*, size_t, short = 0, short = 0) { mock::Param p; p.type = 6; mock::declared.push_back(p); return RTX_OK; }
+    RTX_RESULT getParameterText(int, char* t, size_t n) { if (t && n) t[0] = 0; return RTX_OK; } RTX_RESULT setParameterText(int, const char*) { return RTX_OK; }
+    RTX_RESULT enableParameter(int, RTBOOL) { return RTX_OK; }
     RTX_RESULT setFont(FONT&) { return RTX_OK; }
     void setTextColor(COLOR) {}
     void setPen(COLOR c, short w, PEN_STYLE) { if (mock::current) { mock::current->pen = c; mock::current->penW = w; } }

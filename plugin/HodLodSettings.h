@@ -23,7 +23,7 @@ inline const ss::Spec& spec() {
         ss::same(ss::in(ss::colorRow("mark_lod", "LOD call", 0x0022C55E), "show_mark")),
         ss::same(ss::in(ss::colorRow("mark_hod", "HOD call", 0x00EF4444), "show_mark")),
     };
-    static const ss::Spec S = { "HodLod", PLUGIN_VERSION, 6, R, K_N };
+    static const ss::Spec S = { "HodLod", PLUGIN_VERSION, 6, R, K_N, 0 };
     return S;
 }
 

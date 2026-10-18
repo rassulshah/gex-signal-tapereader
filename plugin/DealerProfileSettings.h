@@ -24,7 +24,7 @@ inline const ss::Spec& spec() {
         // the label was ~444 px with the 160 px box (cut off): shortened
         ss::textRow("inds", "Indicators in the bar file", "cob_bull,cob_bear", 160, 160),
     };
-    static const ss::Spec S = { "DealerProfile", PLUGIN_VERSION, 6, R, K_N };
+    static const ss::Spec S = { "DealerProfile", PLUGIN_VERSION, 6, R, K_N, 0 };
     return S;
 }
 

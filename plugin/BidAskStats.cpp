@@ -274,7 +274,7 @@ public:
     virtual int parmsLoad(void);                                         // (1.5.2) fills the dialog from the file; loading never saves (lesson 29)
     ss::Snap snap_;                                                      // (1.5.2) the dialog as it opened (1.13.2: SettingsSpec.h)
     virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, ofset::bidAskSpec(), basIds(), (int)i); saveSettings(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, ofset::bidAskSpec(), basIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
     virtual int mouse(RTX_EVENT* e);
     virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax);
     virtual int parmsTitle(char* pStr, int size) { return off::copyTitle(pStr, size, bas::TITLE, BAS_VERSION) ? RTX_OK : RTX_FAIL; }   // (1.7.0) the pane title, version next to it

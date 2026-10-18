@@ -964,7 +964,7 @@ int DeltaProfile::parmsApply() {
     try { ChartState& s = chartState(); syncLayout(s, true); return RTX_OK; }
     catch (...) { return RTX_FAIL; }
 }
-int DeltaProfile::parmsUpdt(unsigned int i) { ss::onUpdate(this, dpset::spec(), dpIds(), (int)i); return RTX_OK; } // groups only; saved on Apply/OK
+int DeltaProfile::parmsUpdt(unsigned int i) { try { ss::onUpdate(this, dpset::spec(), dpIds(), (int)i, chartState().setSnap); } catch (...) {} return RTX_OK; } // groups only; saved on Apply/OK
 int DeltaProfile::dealerWidth(ChartState& s) { return s.lay.w[cb::DEALER]; }   // (2.8.0) the Dealer column from the board (not its status file)
 // (2.8.0) this draw's columns: the Dealer Profile's Levels + Dealer widths from the board (with its heartbeat), this column's own
 // Width, the layout (ColumnBoard.h, the same the Dealer Profile computes), what the margin must be, the unit check

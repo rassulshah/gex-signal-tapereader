@@ -18,7 +18,7 @@ inline bool inDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(
 inline void registerAll(cppExtension* x, const Spec& S, Ids& ids) {
     ids.id.assign((size_t)S.n, -1); ids.ok = false;
     x->setParameterVersion(S.paramVersion);
-    const int nl = visibleLines(S); x->setParameterDialogHeight(nl < 1 ? 1 : nl);
+    const int nl = S.dialogLines > 0 ? S.dialogLines : visibleLines(S); x->setParameterDialogHeight(nl < 1 ? 1 : nl);
     for (int k = 0; k < S.n; ++k) {
         const Row& r = S.rows[k]; if (r.hidden) continue;
         const short fl = r.same ? (short)kParmAppendSameLine : (short)0;
@@ -86,6 +86,8 @@ inline void fillDialog(cppExtension* x, const Spec& S, const Ids& ids, const Val
     }
     applyEnable(x, S, ids, V);
     snap.take(dialogNow(x, S, ids, V));
+    snap.mst.assign((size_t)S.n, -1);
+    for (int k = 0; k < S.n; ++k) if (S.rows[k].master && ids.id[(size_t)k] >= 0) snap.mst[(size_t)k] = x->isBoxChecked(ids.id[(size_t)k]) ? 1 : 0;
 }
 
 // The window -> values to save: an untouched control keeps the file's value; an invalid one keeps the file's (garbage never saved);
@@ -107,13 +109,25 @@ inline Values readDialog(cppExtension* x, const Spec& S, const Ids& ids, const V
     return V;
 }
 
-// parmsUpdt: a master click checks / unchecks its BOOL items and enables / disables every item of its group.
-inline bool onUpdate(cppExtension* x, const Spec& S, const Ids& ids, int parm) {
-    const int k = rowOf(ids, parm); if (k < 0 || !S.rows[k].master) return false;
-    const bool on = x->isBoxChecked(parm) != 0;
+// parmsUpdt: a master click checks / unchecks its BOOL items and enables / disables every item of its group. IRT may pass a DIFFERENT
+// number than the clicked row (BUILD-LESSONS 94, lsBigBidAsk 1.16), so the masters are compared with their last seen state (snap.mst);
+// the number passed is used only when the window was never filled by fillDialog.
+inline void applyMaster(cppExtension* x, const Spec& S, const Ids& ids, int k, bool on) {
     for (int j : itemsOf(S, k)) { const int id = ids.id[(size_t)j]; if (id < 0) continue;
         if (S.rows[j].type == T_BOOL) x->checkBox(id, (RTBOOL)(on ? 1 : 0));
         x->enableParameter(id, (RTBOOL)(on ? 1 : 0)); }
+}
+inline bool onUpdate(cppExtension* x, const Spec& S, const Ids& ids, int parm, Snap& snap) {
+    if (!ids.ok || (int)ids.id.size() != S.n) return false;
+    bool any = false;
+    if ((int)snap.mst.size() == S.n) {
+        for (int k = 0; k < S.n; ++k) { if (snap.mst[(size_t)k] < 0) continue;
+            const int on = x->isBoxChecked(ids.id[(size_t)k]) ? 1 : 0;
+            if (on != snap.mst[(size_t)k]) { applyMaster(x, S, ids, k, on != 0); snap.mst[(size_t)k] = on; any = true; } }
+        return any;
+    }
+    const int k = rowOf(ids, parm); if (k < 0 || !S.rows[k].master) return false;
+    applyMaster(x, S, ids, k, x->isBoxChecked(parm) != 0);
     return true;
 }
 

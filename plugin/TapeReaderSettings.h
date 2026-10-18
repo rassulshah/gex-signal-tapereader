@@ -16,7 +16,7 @@ inline const ss::Spec& spec() {
         ss::same(ss::intRow("offset_y", "Offset Y", 0, -600, 600, 45)),
         ss::boolRow("background", "Banner background", true),
     };
-    static const ss::Spec S = { "TapeReader", PLUGIN_VERSION, 3, R, K_N };
+    static const ss::Spec S = { "TapeReader", PLUGIN_VERSION, 3, R, K_N, 0 };
     return S;
 }
 

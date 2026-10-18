@@ -68,6 +68,9 @@
 #include "VwapTrendLogic.h"       // (1.4.0) vwapTrend, natively from the chart's bars (closed bars only)
 #include "VwapOddsLogic.h"        // (1.4.0) the calibration layer + the proven flag per market / session (VwapOddsParams.h, nightly)
 #include "SessionVWAPStyle.h"     // (1.5.0) show / colour / width per line, kept per market (no SDK; tested)
+#include "SessionVWAPSettings.h"  // (1.6.1) the settings window table (SettingsSpec.h)
+#include "SettingsHost.h"
+static ss::Ids& svIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
 #include "MarketState.h"          // (1.6.0) SRC VWAP, once per closed bar
 #include <chrono>
 #include <fstream>
@@ -86,7 +89,7 @@
 #include <atomic>
 
 static const bool SV_SHOW_BADGES = false;   // (1.4.1) Rassul 18:07: VWAP odds off the chart for now
-static const char* SV_VERSION = "1.6.0";        // 1.6.0 (2026-10-18): Market State SRC VWAP (vwap, bands, pos, slope) for the last closed bar, cleared on removal.        // 1.5.1 (2026-10-17): FIX unchecking / re-checking a line in the settings did not stick - only the window saves, nothing while it loads, untouched controls keep the file.        // 1.5.0 (2026-10-14; built as 1.4.3 on 10-13, never shipped): real settings - every line has a show box and a colour, VWAP / band widths, the overnight set on / off; kept per market (SessionVWAPStyle.h). 1.4.2: vwapTrend cache also keys the detected bar period, so a chart periodicity change cannot retain trend state computed with different session boundaries. 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const char* SV_VERSION = "1.6.1";        // 1.6.1 (2026-10-18 settings audit): the window from SessionVWAPSettings.h / SettingsHost.h (same rows, same file); each line's show box greys its colour.        // 1.6.0 (2026-10-18): Market State SRC VWAP (vwap, bands, pos, slope) for the last closed bar, cleared on removal.        // 1.5.1 (2026-10-17): FIX unchecking / re-checking a line in the settings did not stick - only the window saves, nothing while it loads, untouched controls keep the file.        // 1.5.0 (2026-10-14; built as 1.4.3 on 10-13, never shipped): real settings - every line has a show box and a colour, VWAP / band widths, the overnight set on / off; kept per market (SessionVWAPStyle.h). 1.4.2: vwapTrend cache also keys the detected bar period, so a chart periodicity change cannot retain trend state computed with different session boundaries. 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 // (1.5.0) the default colours (0x00RRGGBB) live in SessionVWAPStyle.h (svs::D_*) - the settings window starts from them
 static const COLOR C_VWAP = (COLOR)svs::D_VWAP;   // (1.2.0) Rassul's own settings 22:37 - VWAP magenta (the outputs' nominal pen)
 static const COLOR C_DARK = 0x000B0F19;
@@ -183,10 +186,9 @@ public:
     virtual int parmsUpdt(unsigned int);        // (1.5.0) each change in the window: saved at once, so the chart follows it live
     int P[svs::R_COUNT];                        // (1.5.0) the parameter index of each settings row (set in setup)
     std::string marketNow();
-    void readDialog(svs::Dialog& d);
     void saveStyle();
     bool loading_ = false;                      // (1.5.1) inside parmsLoad: the window is being filled - nothing is saved
-    bool haveSnap_ = false; svs::Dialog snap_;  // (1.5.1) the window as parmsLoad left it: only the controls he changed are saved
+    ss::Snap snap_;                             // (1.5.1) the window as parmsLoad left it: only the controls he changed are saved (1.6.1: SettingsSpec.h)
     const svs::Style& styleFor(SVState& S, const std::string& market, bool force = false);
     void fill(int from);
     void writeStatus(const char* what, int nRth, const std::string& market, int nOn = 0);
@@ -219,25 +221,11 @@ int cppExtension::setup(void)
     // Controls only (no how-to text). Defaults = 1.4.2's fixed look. Parameter version 6: the old (empty) saved set is replaced.
     // IRT keeps saved values BY POSITION: rows may only be appended below the last one (svs::Row) from here on.
     SessionVWAP* me = static_cast<SessionVWAP*>(this);
-    setParameterVersion(6);
-    setParameterDialogHeight(8);
-    const short SL = kParmAppendSameLine;
-    int* P = me->P;
-    P[svs::R_VWAP]      = getParameterCount(); setBoolParameter("VWAP", true);
-    P[svs::R_VWAP_COL]  = getParameterCount(); setColorParameter("VWAP colour", (COLOR)svs::D_VWAP, 0, SL);
-    P[svs::R_VWAP_W]    = getParameterCount(); setListParameter("VWAP width", (short)(svs::D_VWAP_W - svs::W_MIN), svs::WIDTH_CHOICES, 0, SL);
-    P[svs::R_P1]        = getParameterCount(); setBoolParameter("+1 SD band", true);
-    P[svs::R_P1_COL]    = getParameterCount(); setColorParameter("+1 SD colour", (COLOR)svs::D_P1, 0, SL);
-    P[svs::R_M1]        = getParameterCount(); setBoolParameter("-1 SD band", true);
-    P[svs::R_M1_COL]    = getParameterCount(); setColorParameter("-1 SD colour", (COLOR)svs::D_M1, 0, SL);
-    P[svs::R_P2]        = getParameterCount(); setBoolParameter("+2 SD band", true);
-    P[svs::R_P2_COL]    = getParameterCount(); setColorParameter("+2 SD colour", (COLOR)svs::D_P2, 0, SL);
-    P[svs::R_M2]        = getParameterCount(); setBoolParameter("-2 SD band", true);
-    P[svs::R_M2_COL]    = getParameterCount(); setColorParameter("-2 SD colour", (COLOR)svs::D_M2, 0, SL);
-    P[svs::R_BAND_W]    = getParameterCount(); setListParameter("Band width", (short)(svs::D_BAND_W - svs::W_MIN), svs::WIDTH_CHOICES);
-    P[svs::R_ON]        = getParameterCount(); setBoolParameter("Overnight VWAP + bands", true);
-    P[svs::R_PRIOR]     = getParameterCount(); setBoolParameter("Prior RTH VWAP (overnight)", true);
-    P[svs::R_PRIOR_COL] = getParameterCount(); setColorParameter("Prior RTH VWAP colour", (COLOR)svs::D_PRTH, 0, SL);
+    // (1.6.1, settings audit 2026-10-18) the same 15 rows in the same order from svset::spec() (parameter version 6 kept); P[] keeps
+    // each row's id for the host tests (svs::Row order = the table order)
+    ss::registerAll(this, svset::spec(), svIds());
+    (void)svs::WIDTH_CHOICES;   // the table uses the same "1 px;2 px;3 px;4 px" text (svset::WIDTHS)
+    for (int r = 0; r < svs::R_COUNT && r < (int)svIds().id.size(); ++r) me->P[r] = svIds().id[(size_t)r];
     // (1.3.3 / 1.3.4) the 11 value arrays stay OUTPUT_NO_UI: they exist for anything that reads them but never appear in the
     // settings window; the plugin draws the lines itself, in the style above.
     static const char* NAMES[11] = { "VWAP", "VWAP +1 SD", "VWAP -1 SD", "VWAP +2 SD", "VWAP -2 SD",
@@ -257,53 +245,43 @@ std::string SessionVWAP::marketNow()
     return dl::marketForRoot(rs ? rs : "");
 }
 
-void SessionVWAP::readDialog(svs::Dialog& d)
+// (1.6.1, settings audit 2026-10-18) the window from svset::spec() through SettingsHost.h; the per-market file keeps its format.
+// Kept from 1.5.1: only the settings WINDOW's copy saves, nothing while it loads, an untouched control keeps the file's value
+// (ss::Snap), a near-black swatch keeps the saved colour (black lines would vanish on his black chart).
+static ss::Values svValues(const svs::Style& s)
 {
-    d.vwapW = getListIndex(P[svs::R_VWAP_W]);
-    d.bandW = getListIndex(P[svs::R_BAND_W]);
-    const int showRow[svs::K_N] = { svs::R_VWAP, svs::R_P1, svs::R_M1, svs::R_P2, svs::R_M2 };
-    const int colRow[svs::K_N]  = { svs::R_VWAP_COL, svs::R_P1_COL, svs::R_M1_COL, svs::R_P2_COL, svs::R_M2_COL };
-    for (int k = 0; k < svs::K_N; ++k) { d.show[k] = isBoxChecked(P[showRow[k]]) != 0; d.col[k] = (svs::Colour)getParameterColor(P[colRow[k]]); }
-    d.on = isBoxChecked(P[svs::R_ON]) != 0;
-    d.prior = isBoxChecked(P[svs::R_PRIOR]) != 0;
-    d.priorCol = (svs::Colour)getParameterColor(P[svs::R_PRIOR_COL]);
+    using namespace svset;
+    ss::Values V = ss::defaults(spec(), -1);
+    const int show[svs::K_N] = { K_VWAP, K_P1, K_M1, K_P2, K_M2 }, col[svs::K_N] = { K_VWAP_COLOR, K_P1_COLOR, K_M1_COLOR, K_P2_COLOR, K_M2_COLOR };
+    for (int k = 0; k < svs::K_N; ++k) { V.v[(size_t)show[k]] = s.show[k] ? 1 : 0; V.v[(size_t)col[k]] = (double)(s.col[k] & 0xFFFFFFUL); }
+    V.v[K_VWAP_WIDTH] = s.vwapW - svs::W_MIN; V.v[K_BAND_WIDTH] = s.bandW - svs::W_MIN;
+    V.v[K_OVERNIGHT] = s.on ? 1 : 0; V.v[K_PRIOR] = s.prior ? 1 : 0; V.v[K_PRIOR_COLOR] = (double)(s.priorCol & 0xFFFFFFUL);
+    return V;
 }
-
-// saved ONLY from the window's callbacks, ONLY when its width lists read a real choice (else it is not this window's values),
-// and only when something changed; a near-black swatch keeps the saved colour (black lines would vanish on his black chart)
-// (1.5.1, Rassul 2026-10-17 15:23 "if you uncheck and then recheck it doesnt work") FIX - three ways the 1.5.0 save went wrong:
-//   1. the CHART's copy of the indicator also gets parmsApply / parmsUpdt, and IRT hands it every box UNCHECKED: it wrote "all off"
-//      over his choices (his ES file had every line 0 while the window showed them ticked). Now only the settings WINDOW's copy saves
-//      (the window's copy has no bar size - the rule lsBigBidAsk uses).
-//   2. parmsLoad's own checkBox / setListIndex calls can fire parmsUpdt while the window is half filled: nothing is saved while loading.
-//   3. a control he did not touch keeps the file's value (snapshot at the end of parmsLoad), so a stale control cannot undo a change
-//      made on another chart of the market. A changed control is always saved - unchecking, then checking again, both stick.
-// a near-black swatch keeps the saved colour (black lines would vanish on his black chart)
-static bool svInDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }
+static svs::Style svStyle(const ss::Values& V, const svs::Style& keep)
+{
+    using namespace svset;
+    svs::Style s = keep;
+    const int show[svs::K_N] = { K_VWAP, K_P1, K_M1, K_P2, K_M2 }, col[svs::K_N] = { K_VWAP_COLOR, K_P1_COLOR, K_M1_COLOR, K_P2_COLOR, K_M2_COLOR };
+    for (int k = 0; k < svs::K_N; ++k) { s.show[k] = V.b(show[k]); const svs::Colour c = (svs::Colour)V.c(col[k]); if (!svs::nearBlack(c)) s.col[k] = c; }
+    s.vwapW = svs::W_MIN + V.i(K_VWAP_WIDTH); s.bandW = svs::W_MIN + V.i(K_BAND_WIDTH);
+    s.on = V.b(K_OVERNIGHT); s.prior = V.b(K_PRIOR);
+    { const svs::Colour c = (svs::Colour)V.c(K_PRIOR_COLOR); if (!svs::nearBlack(c)) s.priorCol = c; }
+    return s;
+}
+static bool svInDialog(cppExtension* x) { return ss::inDialog(x); }
 void SessionVWAP::saveStyle()
 {
     if (loading_ || !svInDialog(this)) return;
     const std::string market = marketNow();
-    const char* up = getenv("USERPROFILE");
-    const std::string path = svs::pathFor(up, market);
-    if (path.empty()) return;
-    if (P[svs::R_VWAP_W] < 0 || P[svs::R_PRIOR_COL] < 0) return;          // setup() has not declared the rows
-    svs::Dialog d; readDialog(d);
+    const std::string path = svs::pathFor(getenv("USERPROFILE"), market);
+    if (path.empty() || !svIds().ok) return;
     svs::Style keep; std::string text; long long st = -1;
     if (svs::readFile(path, text, st) == 0) svs::fromText(text, keep);
-    svs::Dialog m = d;                                                   // what he changed since the window opened, else the file's value
-    if (haveSnap_) {
-        if (d.vwapW == snap_.vwapW) m.vwapW = keep.vwapW - svs::W_MIN;
-        if (d.bandW == snap_.bandW) m.bandW = keep.bandW - svs::W_MIN;
-        for (int k = 0; k < svs::K_N; ++k) { if (d.show[k] == snap_.show[k]) m.show[k] = keep.show[k]; if (d.col[k] == snap_.col[k]) m.col[k] = keep.col[k]; }
-        if (d.on == snap_.on) m.on = keep.on;
-        if (d.prior == snap_.prior) m.prior = keep.prior;
-        if (d.priorCol == snap_.priorCol) m.priorCol = keep.priorCol;
-    }
-    svs::Style next;
-    if (!svs::fromDialog(m, keep, next)) return;
+    const ss::Values V = ss::readDialog(this, svset::spec(), svIds(), svValues(keep), snap_);   // untouched -> the file's value; invalid never saved
+    const svs::Style next = svStyle(V, keep);
     const std::string out = svs::toText(next);
-    snap_ = d; haveSnap_ = true;                                          // this change is now the baseline
+    snap_.take(ss::dialogNow(this, svset::spec(), svIds(), V));          // this change is now the baseline
     if (st >= 0 && out == text) return;
     if (!svPublishText(path, out)) return;
     SVState* S = state(false);
@@ -311,26 +289,18 @@ void SessionVWAP::saveStyle()
 }
 
 int SessionVWAP::parmsApply(void) { saveStyle(); return RTX_OK; }
-int SessionVWAP::parmsUpdt(unsigned int) { saveStyle(); return RTX_OK; }
+int SessionVWAP::parmsUpdt(unsigned int i) { if (!loading_) ss::onUpdate(this, svset::spec(), svIds(), (int)i, snap_); saveStyle(); return RTX_OK; }
 
 // the window opens on what this market's chart is drawing (another chart of the market may have changed it); never saves
 int SessionVWAP::parmsLoad(void)
 {
     struct Unload { bool& f; ~Unload() { f = false; } } unload = { loading_ };
-    loading_ = true; haveSnap_ = false;
+    loading_ = true;
+    if (!svInDialog(this) || !svIds().ok) return RTX_OK;
     const std::string path = svs::pathFor(getenv("USERPROFILE"), marketNow());
-    std::string text; long long st = -1; svs::Style s;
-    if (P[svs::R_VWAP_W] < 0 || P[svs::R_PRIOR_COL] < 0) return RTX_OK;
-    if (path.empty() || svs::readFile(path, text, st) != 0 || !svs::fromText(text, s)) return RTX_OK;
-    const int showRow[svs::K_N] = { svs::R_VWAP, svs::R_P1, svs::R_M1, svs::R_P2, svs::R_M2 };
-    const int colRow[svs::K_N]  = { svs::R_VWAP_COL, svs::R_P1_COL, svs::R_M1_COL, svs::R_P2_COL, svs::R_M2_COL };
-    for (int k = 0; k < svs::K_N; ++k) { checkBox(P[showRow[k]], s.show[k]); setParameterColor(P[colRow[k]], (COLOR)s.col[k]); }
-    setListIndex(P[svs::R_VWAP_W], s.vwapW - svs::W_MIN);
-    setListIndex(P[svs::R_BAND_W], s.bandW - svs::W_MIN);
-    checkBox(P[svs::R_ON], s.on);
-    checkBox(P[svs::R_PRIOR], s.prior);
-    setParameterColor(P[svs::R_PRIOR_COL], (COLOR)s.priorCol);
-    readDialog(snap_); haveSnap_ = true;                                 // (1.5.1) what the window shows now = untouched
+    std::string text; long long st = -1; svs::Style s;                    // no file / unreadable = the defaults (svs::Style())
+    if (!path.empty() && svs::readFile(path, text, st) == 0) { svs::Style r; if (svs::fromText(text, r)) s = r; }
+    ss::fillDialog(this, svset::spec(), svIds(), svValues(s), snap_);
     return RTX_OK;
 }
 
@@ -810,6 +780,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(11);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("LRA Session VWAP: the session VWAP with its +-1 and +-2 SD bands - RTH in the day session, the overnight VWAP and the prior RTH VWAP overnight.");
-    p->setVersion("1.6.0");   // = SV_VERSION (gex-build reads this literal; test_sessionvwap_settings checks they match)
+    p->setVersion("1.6.1");   // = SV_VERSION (gex-build reads this literal; test_sessionvwap_settings checks they match)
     return p;
 }

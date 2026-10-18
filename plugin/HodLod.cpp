@@ -173,7 +173,7 @@ public:
     // HodLod.place-<MKT>.txt - written only from the dialog's callbacks (loading never saves, #29) and read back by stamp.
     virtual int parmsLoad(void);                                     // (2.0.6) fills the dialog from the place file (never saves)
     virtual int parmsApply(void) { savePos(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, hlset::spec(), hlIds(), (int)i); savePos(); return RTX_OK; }   // (2.4.2) a show box greys its colours
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, hlset::spec(), hlIds(), (int)i, snap_); savePos(); return RTX_OK; }   // (2.4.2) a show box greys its colours
     static ss::Ids& hlIds() { static ss::Ids I; return I; }        // (2.4.2) the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
     // (2.0.5) the checkboxes and colours (indices into the parameter list, set in setup); (2.0.6) after Offset X / Y
     ss::Snap snap_;                                                    // (2.0.6) the dialog as it opened (2.4.2: SettingsSpec.h)

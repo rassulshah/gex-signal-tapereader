@@ -30,14 +30,14 @@ inline const ss::Spec& profileSpec() {
         ss::in(ss::intRow("banner_font", "Banner font pt", 11, 7, 16, 40), "banner"),
         ss::same(ss::in(ss::colorRow("banner_color", "Banner background", 0x141414), "banner")),
     };
-    static const ss::Spec S = { "LiquidityProfile", PLUGIN_VERSION, 5, R, K_N };
+    static const ss::Spec S = { "LiquidityProfile", PLUGIN_VERSION, 5, R, K_N, 0 };
     return S;
 }
 // lsLiquidityFlow (the same source built with LQ_FLOW): Font only
 enum KF { KF_FONT, KF_N };
 inline const ss::Spec& flowSpec() {
     static const ss::Row R[KF_N] = { ss::intRow("font", "Font pt", 11, 10, 16, 50) };
-    static const ss::Spec S = { "LiquidityFlow", PLUGIN_VERSION, 2, R, KF_N };
+    static const ss::Spec S = { "LiquidityFlow", PLUGIN_VERSION, 2, R, KF_N, 0 };
     return S;
 }
 

@@ -15,7 +15,7 @@ inline const ss::Spec& spec() {
         ss::same(ss::intRow("font", "Font size (pt)", 8, 6, 20, 40)),
         ss::listRow("position", "Position", 2, POS_CHOICES, 110),
     };
-    static const ss::Spec S = { "TradeManager", PLUGIN_VERSION, 2, R, K_N };
+    static const ss::Spec S = { "TradeManager", PLUGIN_VERSION, 2, R, K_N, 0 };
     return S;
 }
 // the 1.2 / 1.3.0 place file: "N" (the Position 0-8)

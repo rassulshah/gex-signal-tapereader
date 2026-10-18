@@ -526,7 +526,7 @@ void DealerProfile::fillDialog()
 }
 int DealerProfile::parmsLoad(void)  { if (loadHostState()) { fillDialog(); saveHostState(); } return RTX_OK; }   // (2.11.0) opening the window never saves
 int DealerProfile::parmsApply(void) { if (loadHostState()) { syncSettings(true); applyMargin(); saveHostState(); } return RTX_OK; }
-int DealerProfile::parmsUpdt(unsigned int i) { if (loadHostState()) { ss::onUpdate(this, dprset::spec(), dpIds(), (int)i); syncSettings(true); saveHostState(); } return RTX_OK; }
+int DealerProfile::parmsUpdt(unsigned int i) { if (loadHostState()) { ss::onUpdate(this, dprset::spec(), dpIds(), (int)i, dsnap_); syncSettings(true); saveHostState(); } return RTX_OK; }
 
 int cppExtension::setup(void)
 {

@@ -156,6 +156,9 @@ public:
     RTX_RESULT setParameterColor(int i, COLOR c) { mock::current->colors[i] = c; return RTX_OK; }
     COLOR getParameterColor(int i) { return mock::current->inDialog ? mock::current->colors[i] : 0; }
     RTX_RESULT enableParameter(int i, RTBOOL b) { mock::current->enabled[i] = b; return RTX_OK; }
+    // (1.16.1 settings layer) TEXT rows (not used by BigBidAsk; SettingsHost.h compiles them)
+    RTX_RESULT setStringParameter(const char*, const char*, size_t, short = 0, short = 0) { ++nParm; return RTX_OK; }
+    RTX_RESULT getParameterText(int, char* t, size_t n) { if (t && n) t[0] = 0; return RTX_OK; } RTX_RESULT setParameterText(int, const char*) { return RTX_OK; }
     COLOR getBlendedColor(COLOR a, COLOR, float) { return a; }
     void setArrayCount(int) {} void setFlags(unsigned long) {} void setDescription(const char*) {} void setVersion(const char*) {}
 };
