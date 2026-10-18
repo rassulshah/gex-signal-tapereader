@@ -1551,7 +1551,8 @@ inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const 
 
 // (2.4.4, 2026-10-18, Rassul approved the mockup 17:13 CT "build": the table was ~790 px, "way too wide") the COMPACT table, every
 // column sized to its text (not to the box):
-//   [strip, its own one-line box ABOVE the table, same width, 4 px gap, moves with it]  R PS 7700.G1 7750.7800   S 7650.7640.7625
+//   [strip, its own one-line box ABOVE the table, same width, 4 px gap, moves with it]  R  PS 7700 . G1 7750 . 7800     S  7650 . 7640 . 7625
+//   (review 17:50: R + levels RED = resistance above price, S + levels GREEN = support below, as his old row; a separator between levels)
 //   ES M2 O0 V2                        Neg . S.Dn        (market + Q-Scores left; regime . trend right, red / green as before)
 //                   1st        2nd                       (grey column headings)
 //   Exp             8:33-9:21  late LOD                  (blue, the model's expected times)
@@ -1579,7 +1580,7 @@ inline std::vector<Seg> compactRegime(const View& v)
     for (size_t i = 0; i < p.size(); i++) {
         std::string s = p[i].s;
         if (s.compare(0, 5, "Reg: ") == 0) s = s.substr(5);
-        if (s.compare(0, 3, " / ") == 0) s = " \xB7 " + s.substr(3);
+        if (s.compare(0, 3, " / ") == 0) s = "  \xB7  " + s.substr(3);
         size_t k; while ((k = s.find(". ")) != std::string::npos) s.erase(k + 1, 1);   // "S. Dn" -> "S.Dn"
         o.push_back(Seg{ s, p[i].col });
     }
@@ -1590,11 +1591,11 @@ inline std::vector<Seg> compactHead(const View& v, const std::string& mkt, unsig
 {
     std::vector<Seg> o; o.push_back(Seg{ mkt, mktCol });
     const bool stale = v.qSegs.size() >= 2 && v.qSegs[1].s == "STALE";
-    if (stale) { o.push_back(Seg{ " Q STALE", C_GREY }); return o; }
+    if (stale) { o.push_back(Seg{ "   Q STALE", C_GREY }); return o; }
     for (size_t i = 0; i < v.qSegs.size(); i++) {
         std::string s = v.qSegs[i].s; if (s == "Q: ") continue;
         size_t k = s.find_first_not_of(' '); if (k == std::string::npos) continue;
-        o.push_back(Seg{ " " + s.substr(k), v.qSegs[i].col });
+        o.push_back(Seg{ (o.size() == 1 ? "   " : "  ") + s.substr(k), v.qSegs[i].col });   // (review) "ES   M2  O0  V2": clear gaps
     }
     return o;
 }
@@ -1608,10 +1609,11 @@ inline std::vector<StripPart> stripParts(const View& v)
         for (size_t i = 0; i < v.gexItems.size(); i++) {
             const View::GexItem& g = v.gexItems[i];
             if (g.mid || (side == 0) != g.above) continue;
-            if (first) { if (!o.empty()) o.push_back(StripPart{ "   ", C_GREY, false });
-                         o.push_back(StripPart{ side == 0 ? "R " : "S ", side == 0 ? C_GREEN : C_RED, false }); first = false; }
-            else o.push_back(StripPart{ "\xB7", C_GREY, false });
-            o.push_back(StripPart{ (g.name.empty() ? std::string() : g.name + " ") + g.strike, C_SLATE, g.grow });
+            const unsigned sc = side == 0 ? C_RED : C_GREEN;   // (review 17:50) resistance ABOVE price red, support BELOW green (as his old row)
+            if (first) { if (!o.empty()) o.push_back(StripPart{ "     ", C_GREY, false });
+                         o.push_back(StripPart{ side == 0 ? "R  " : "S  ", sc, false }); first = false; }
+            else o.push_back(StripPart{ " \xB7 ", C_GREY, false });   // each level reads on its own
+            o.push_back(StripPart{ (g.name.empty() ? std::string() : g.name + " ") + g.strike, sc, g.grow });
         }
     }
     if (!o.empty() && !v.gexStale.empty()) o.push_back(StripPart{ "   " + v.gexStale, C_GREY, false });
@@ -1698,7 +1700,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             addRect(L, Sb.l, Sb.t, Sb.r, Sb.b, C_BORDER, C_PANEL, 1, R_TABLE);
             int x = Sb.l + 8;
             for (const StripPart& p : strip) {
-                const int w = M(p.s, fs, false); addText(L, x, Sb.t + 1, Sb.b - 1, p.s, p.col, fs, p.s == "R " || p.s == "S ", w, R_TABLE, -1); x += w;
+                const int w = M(p.s, fs, false); addText(L, x, Sb.t + 1, Sb.b - 1, p.s, p.col, fs, p.s == "R  " || p.s == "S  ", w, R_TABLE, -1); x += w;
                 if (p.arrow) { const int aw = gexArrowW(fs), ax = x + aw / 2 + 2, h = (int)(fs * 0.9f + 0.5f), yc = (Sb.t + Sb.b) / 2, y0 = yc + h / 2, y1 = yc - h / 2;
                                addLine(L, ax, y0, ax, y1, p.col, 2, R_TABLE); addLine(L, ax - 3, y1 + 3, ax, y1, p.col, 2, R_TABLE); addLine(L, ax + 3, y1 + 3, ax, y1, p.col, 2, R_TABLE); x += aw; }
             }

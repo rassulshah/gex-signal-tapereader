@@ -12,6 +12,8 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <cctype>
 #include "HodLodLogic.h"
 #include "HodLodGex.h"
 #include "HodLodQ.h"
@@ -52,8 +54,8 @@ int main() {
         const int W = L.table.r - L.table.l; std::printf("  table %d x %d px, strip %d x %d\n", W, L.table.b - L.table.t, L.gexRow.r - L.gexRow.l, L.gexRow.b - L.gexRow.t);
         CHECK(W <= 380 && W >= 200, "compact: " + std::to_string(W) + " px (was ~790)");
         const std::vector<hl::Item> tx = texts(L);
-        CHECK(has(tx, "ES") && has(tx, " M2") && has(tx, " O0", hl::C_RED) && has(tx, " V2"), "header left: ES M2 O0 V2 (Q colours kept)");
-        CHECK(has(tx, "Neg", hl::C_RED) && has(tx, " \xB7 S.Dn", hl::C_RED), "header right: Neg . S.Dn in the regime / trend colours");
+        CHECK(has(tx, "ES") && has(tx, "   M2") && has(tx, "  O0", hl::C_RED) && has(tx, "  V2"), "header left: ES M2 O0 V2 (Q colours kept)");
+        CHECK(has(tx, "Neg", hl::C_RED) && has(tx, "  \xB7  S.Dn", hl::C_RED), "header right: Neg . S.Dn in the regime / trend colours");
         CHECK(has(tx, "1st") && has(tx, "2nd") && has(tx, "Exp") && has(tx, "Act") && has(tx, "Est"), "1st / 2nd, Exp / Act / Est");
         CHECK(has(tx, "8:33 - 9:21", hl::C_BLUE) && has(tx, "late-day LOD", hl::C_BLUE), "expected times blue");
         CHECK(has(tx, "prior RTH 10/16"), "Est value kept");
@@ -80,9 +82,23 @@ int main() {
         CHECK(bad == 0 && cnt == 27, "strip: same width, 4 px above, both inside the pane and left of the last bar (" + std::to_string(cnt) + ")");
         hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, 1530, 520 }, yOf, measure, 960, 7, -1, nullptr, nullptr);
         const std::vector<hl::Item> tx = texts(L);
-        CHECK(has(tx, "R ", hl::C_GREEN) && has(tx, "S ", hl::C_RED) && has(tx, "PS/PS0 7700") && has(tx, "G1 7750") && has(tx, "7625"), "R green + levels above, S red + levels below, names before strikes");
+        CHECK(has(tx, "R  ", hl::C_RED) && has(tx, "S  ", hl::C_GREEN) && has(tx, "PS/PS0 7700", hl::C_RED) && has(tx, "G1 7750", hl::C_RED) && has(tx, "7800", hl::C_RED)
+              && has(tx, "7650", hl::C_GREEN) && has(tx, "7625", hl::C_GREEN), "R + levels above RED (resistance), S + levels below GREEN (support), names before strikes");
+        {   // no two tokens touch: a text ending in a letter / digit is followed by one starting with a space (or >= 4 px apart)
+            std::vector<hl::Item> row; for (const hl::Item& it : tx) if (it.t >= L.gexRow.t && it.b <= L.gexRow.b) row.push_back(it);
+            std::vector<hl::Item> hd; for (const hl::Item& it : tx) if (it.t >= L.qBox.t && it.b <= L.qBox.b) hd.push_back(it);
+            int touch = 0;
+            for (std::vector<hl::Item>* R : { &row, &hd }) {
+                std::sort(R->begin(), R->end(), [](const hl::Item& a, const hl::Item& b) { return a.l < b.l; });
+                for (size_t i = 0; i + 1 < R->size(); i++) { const hl::Item& a = (*R)[i]; const hl::Item& b = (*R)[i + 1];
+                    if (std::isalnum((unsigned char)a.s.back()) && std::isalnum((unsigned char)b.s[0]) && b.l - a.r < 4) { ++touch; std::printf("  touch '%s' '%s'\n", a.s.c_str(), b.s.c_str()); } }
+            }
+            CHECK(touch == 0, "no two tokens touch on the strip or the header (" + std::to_string(touch) + ")");
+            int gaps = 0; for (const hl::Item& it : row) if (it.s == " \xB7 ") ++gaps;
+            CHECK(gaps == 4, "' . ' between the levels of each side (" + std::to_string(gaps) + ")");
+        }
         CHECK(!has(tx, "7717.50"), "the current price is not in the strip text");
-        int rx = -1, sx = -1; for (const hl::Item& it : tx) { if (it.s == "R ") rx = it.l; if (it.s == "S ") sx = it.l; }
+        int rx = -1, sx = -1; for (const hl::Item& it : tx) { if (it.s == "R  ") rx = it.l; if (it.s == "S  ") sx = it.l; }
         CHECK(rx >= 0 && sx > rx, "R before S on one line");
         hl::View w = v; for (auto& g : w.gexItems) if (!g.mid) g.name = "CR0+GW0+HVL0";
         hl::Layout L2 = hl::layoutAll(w, hl::Box{ 0, 0, 1530, 520 }, yOf, measure, 1200, 7, -1, nullptr, nullptr);
