@@ -1,4 +1,3 @@
-findings=0 allowed=0 staged_files=2 bytes=16096
+findings=0 allowed=0 staged_files=1 bytes=158
 largest staged blobs (bytes, path):
-SIZE	15972	tools/gex-build.bat
-SIZE	124	logs/staged-scan-findings.log
+SIZE	158	logs/staged-scan-findings.log
