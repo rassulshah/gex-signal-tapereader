@@ -1,2 +1,3 @@
-findings=0 allowed=0 staged_files=0 bytes=0
+findings=0 allowed=0 staged_files=1 bytes=82
 largest staged blobs (bytes, path):
+SIZE	82	logs/staged-scan-findings.log
