@@ -1,3 +1,35 @@
-findings=0 allowed=0 staged_files=1 bytes=124
+findings=0 allowed=0 staged_files=33 bytes=1390727
 largest staged blobs (bytes, path):
+SIZE	289217	plugin/LiquidityProfile.cpp
+SIZE	166204	plugin/DeltaProfile.cpp
+SIZE	134572	plugin/DealerProfile.cpp
+SIZE	116810	plugin/BigBidAsk.cpp
+SIZE	86271	plugin/BidAskStats.cpp
+SIZE	83811	plugin/HodLod.cpp
+SIZE	67891	plugin/BigBidAskLogic.h
+SIZE	67022	plugin/TapeReader.cpp
+SIZE	52003	plugin/SessionVWAP.cpp
+SIZE	51012	plugin/BUILD-LESSONS.md
+SIZE	46925	plugin/TradeManager.cpp
+SIZE	30656	plugin/BookFlow.cpp
+SIZE	26164	plugin/SettingsSpec.h
+SIZE	24829	plugin/tests_bba115/test_bba116.cpp
+SIZE	20005	tools/gex-build.bat
+SIZE	19650	docs/audit/SETTINGS-AUDIT-2026-10-18.md
+SIZE	17763	plugin/tests_settings/settings_contract.cpp
+SIZE	13063	plugin/tests_bba115/test_bba115.cpp
+SIZE	12191	plugin/tests_bba115/irtsdk.h
+SIZE	9421	plugin/SessionVWAP_test_support/irtsdk.h
+SIZE	8455	plugin/tests_settings/settings_host_test.cpp
+SIZE	8258	plugin/BigBidAskSettings.h
+SIZE	8231	plugin/test_sessionvwap_160.cpp
+SIZE	8174	plugin/SettingsHost.h
+SIZE	4693	plugin/DealerProfileSettings.h
+SIZE	3837	plugin/DeltaProfileSettings.h
+SIZE	2818	plugin/LiquidityProfileSettings.h
+SIZE	2658	plugin/HodLodSettings.h
+SIZE	2513	plugin/OrderFlowPaneSettings.h
+SIZE	2060	plugin/SessionVWAPSettings.h
+SIZE	1735	plugin/TapeReaderSettings.h
+SIZE	1691	plugin/TradeManagerSettings.h
 SIZE	124	logs/staged-scan-findings.log
