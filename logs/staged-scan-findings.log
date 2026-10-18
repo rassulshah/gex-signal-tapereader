@@ -1,12 +1,3 @@
-findings=0 allowed=0 staged_files=10 bytes=315557
+findings=0 allowed=0 staged_files=1 bytes=535
 largest staged blobs (bytes, path):
-SIZE	165628	plugin/DeltaProfile.cpp
-SIZE	48557	plugin/DeltaProfileCore.h
-SIZE	26480	plugin/tests_delta/test_record_254.cpp
-SIZE	21747	plugin/tests_delta/test_rules284.cpp
-SIZE	19986	plugin/tests_dp217/test_dp218.cpp
-SIZE	14975	plugin/tests_dp217/test_dp217.cpp
-SIZE	10997	plugin/tests_delta/test_rule262.cpp
-SIZE	6370	plugin/tests_delta/test_repaint216.cpp
-SIZE	695	plugin/tests_dp217/run_tests.sh
-SIZE	122	logs/staged-scan-findings.log
+SIZE	535	logs/staged-scan-findings.log
