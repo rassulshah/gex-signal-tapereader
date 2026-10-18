@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
         hb::fakeCursor() = 0;
         S->lastStatusMs = -1; p->calc(0);
         std::string st = slurp(flex() + "\\CobImpulse.status-NQ-NQZ6-180.txt");
-        CHECK(st.find("VERSION,0.4.1") != std::string::npos && st.find("ODDS,LRA-Odds-NQ.csv,ok, built 2026-10-01 01:00,show 1,decided 2") != std::string::npos, "status: odds line");
+        CHECK(st.find(std::string("VERSION,") + CI_VERSION) != std::string::npos && st.find("ODDS,LRA-Odds-NQ.csv,ok, built 2026-10-01 01:00,show 1,decided 2") != std::string::npos, "status: odds line");
         // 2) ODDS,0 hides the number, keeps the record
         spit(flex() + "\\LRA-CobImpulse-NQ.csv", "VERSION,1\nMARKET,NQ\nODDS,0\n");
         S->paramsCheckMs = -1; S->paramsStamp = -3; H.draws.clear(); p->draw();

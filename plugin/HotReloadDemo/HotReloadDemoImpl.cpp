@@ -1,5 +1,6 @@
 /********************************************************************************
- *  HotReloadDemoImpl.cpp  --  Investor/RT RTX extension  lsHotReloadDemo (implementation build)  1.0.0 (2026-10-18)  TEST ONLY
+ *  HotReloadDemoImpl.cpp  --  Investor/RT RTX extension  lsHotReloadDemo (implementation build)  1.0.1 (2026-10-18)  TEST ONLY
+ *  1.0.1 (17:21 CT): the box moves BELOW the Liquidity Profile read at the top left (it covered the REV / ABS headline) - the 2nd hot-reload test
  *
  *  Rassul 2026-10-18 15:17 CT: "is there a way for you to do the build without me having to restart every time, maybe i can just
  *  refresh the chart instead?"  -- this tiny indicator proves the hot-reload shim on his IRT before any real indicator is converted.
@@ -32,7 +33,7 @@
 #include "HotReloadDemoLogic.h"
 #include "HostSlot.h"
 
-#define DEMO_VERSION "1.0.0"                 // keep equal to the setVersion literal below
+#define DEMO_VERSION "1.0.1"                 // keep equal to the setVersion literal below
 #define DEMO_ARRAYS 1
 #define DEMO_FLAGS (POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE)
 #define DEMO_FLAGS_EXT 0
@@ -87,7 +88,7 @@ int HotReloadDemo::draw(void)
 {
     DemoState* s = g_slot.get(this, false);
     RCT pane; pane.getPaneRect(false);
-    if (pane.right - pane.left < hrdemo::BOX_W + 20 || pane.bottom - pane.top < hrdemo::BOX_H + 40) return RTX_OK;
+    if (pane.right - pane.left < hrdemo::BOX_W + 20 || pane.bottom - pane.top < hrdemo::TOP_Y + hrdemo::BOX_H + 20) return RTX_OK;
     if (s && s->lastBar >= 0) {
         PNT a;
         if (a.set(s->lastBar, s->lastClose) == RTX_OK && a.v > pane.top && a.v < pane.bottom) {
@@ -96,7 +97,7 @@ int HotReloadDemo::draw(void)
             PNT r; r.h = pane.right; r.v = a.v; r.drawLineTo();
         }
     }
-    int x = pane.left + 8, y = pane.top + 24;                       // under the IRT title row
+    int x = pane.left + 8, y = pane.top + hrdemo::TOP_Y;            // (1.0.1) under the Liquidity Profile read block (was +24: on top of it)
     RCT box; box.set((short)x, (short)y, (short)(x + hrdemo::BOX_W), (short)(y + hrdemo::BOX_H));
     box.draw(1, DEMO_WHITE, getBackgroundColor());
     text(x + 8, y + 15, hrdemo::title(DEMO_VERSION, hotreload::implBuild(), s ? s->calcs : 0), DEMO_WHITE, 11);
@@ -110,6 +111,6 @@ extern "C" cppExtension* CreateExtension(void)
     p->setArrayCount(DEMO_ARRAYS);
     p->setFlags(DEMO_FLAGS);
     p->setDescription("TEST ONLY: proves hot reload (a new build loads on a chart refresh, no IRT restart). Shows its version, build and the shim status. Remove after the test.");
-    p->setVersion("1.0.0");   // DEMO_VERSION
+    p->setVersion("1.0.1");   // DEMO_VERSION
     return p;
 }

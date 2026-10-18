@@ -54,6 +54,13 @@
  *  2.0.4 (2026-10-13): the projection callout ("HOD after 10:45 . 94.34") keeps out of the left level-label band (the Liquidity
  *         column's level names, e.g. "/PDH") - max(110 px, 15% of the pane); it moves right of the band, never over a level label.
  *  2.0.3 (2026-10-13 10:38): the table 33% smaller ("reduce the size of this by 33%. too big"): 9 pt instead of 13, padding x 2/3.
+ *  2.4.4 (2026-10-18, Rassul approved the mockup 17:13 CT "build"; the table was ~790 px "way too wide"): the COMPACT table, columns
+ *         sized to their text (~350 px): header "ES M2 O0 V2" + "Neg . S.Dn" (regime / trend colours as before); "1st / 2nd" headings;
+ *         Exp (blue) / Act / Est rows; grey footer "Exp 3:00 PM . v2.4.4". The Gex S/R moves to its OWN one-line strip ABOVE the table
+ *         (same width, 4 px gap, moves with it): green R + the levels above price, red S + the levels below; a strip wider than the
+ *         table widens the table. Removed words (RTH hours, expiry countdown, full regime / trend words, the current price) are in the
+ *         hovers (header row, strip). Publishes table + strip (LRA_HLB_) and the table alone (LRA_HLT_, the Big Lot box's height).
+ *         Offset X / Y removed from Settings (the 9-spot Position only; parameter version 7 - his saved offsets were 0).
  *  2.0.2 (2026-10-13): Rassul's table redesign (mockups a-u): Regime / RTH / Expiry header aligned to the columns, Reclaim column gone,
  *         Expected (blue) / Actual ("LOD IN 8:39 (71%)") / Estimate rows, odds in (), bigger fonts, no 1st-extreme line, projection label on
  *         its arrowhead; Session Info retired (its Regime + Expiry are read here from LRA-Session-<MKT>.csv)
@@ -197,7 +204,7 @@ public:
     void clearState()
     {   // (2.4.0) this chart's Market State entries leave the board (removal, symbol / period change), then the state goes
         HLState* S = slot_.get(this, false);
-        if (S && S->hlbPosted) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; }   // (2.4.1)
+        if (S && S->hlbPosted) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); bdk::clearHodLodTable(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; }   // (2.4.1)
         if (S && S->mstPosted) { mst::clear("HODLOD", S->mstSym, S->mstSpb, S->mstChart); mst::clear("TREND", S->mstSym, S->mstSpb, S->mstChart); S->mstPosted = false; }
         slot_.release(this);
     }
@@ -853,7 +860,7 @@ ss::Store& HodLod::storeFor(const std::string& mkt)
 HodLod::Place HodLod::toPlace(const ss::Values& V)
 {
     using namespace hlset;
-    Place P; P.pos = V.i(K_POSITION); P.o.dx = V.i(K_OFFSET_X); P.o.dy = V.i(K_OFFSET_Y);
+    Place P; P.pos = V.i(K_POSITION); P.o.dx = 0; P.o.dy = 0;   // (2.4.4) Offset X / Y removed (the 9-spot Position only)
     P.o.table = V.b(K_SHOW_TABLE); P.o.proj = V.b(K_SHOW_PROJ); P.o.mark = V.b(K_SHOW_MARK);
     const int ck[5] = { K_TABLE_BG, K_PROJ_UP, K_PROJ_DN, K_MARK_LOD, K_MARK_HOD };
     for (int k = 0; k < 5; ++k) P.col[k] = (long long)V.c(ck[k]);
@@ -1040,10 +1047,10 @@ int HodLod::draw(void)
         if (PL.sig != S->hystPlaceSig || pb.l != S->hystPane.l || pb.t != S->hystPane.t || pb.r != S->hystPane.r || pb.b != S->hystPane.b) { S->hyst.reset(); S->hystPlaceSig = PL.sig; S->hystPane = pb; }   // settings or the pane changed: start clean
         if (L.tableOk) {
             const bp::Box want = bp::mk(L.table.l, L.table.t, L.table.l + 1, L.table.t + 1);
-            bool blocked = false; if (S->hyst.have) for (const hl::Box& a : avoid) { const bp::Box c = bp::mk(S->hyst.cur.l, S->hyst.cur.t, S->hyst.cur.l + (L.table.r - L.table.l), S->hyst.cur.t + (L.table.b - L.table.t)); if (bp::overlap(c, bp::mk(a.l, a.t, a.r, a.b))) blocked = true; }
+            bool blocked = false; if (S->hyst.have) for (const hl::Box& a : avoid) { const bp::Box c = bp::mk(S->hyst.cur.l, S->hyst.cur.t - (L.gexOk ? L.table.t - L.gexRow.t : 0), S->hyst.cur.l + (L.table.r - L.table.l), S->hyst.cur.t + (L.table.b - L.table.t));   /* (2.4.4) + the strip */ if (bp::overlap(c, bp::mk(a.l, a.t, a.r, a.b))) blocked = true; }
             bp::Box got = S->hyst.step(want, blocked);
-            const int tw = L.table.r - L.table.l, th = L.table.b - L.table.t;
-            if (got.l < pb.l || got.t < pb.t || got.l + tw > pb.r || got.t + th > pb.b) { S->hyst.reset(); got = S->hyst.step(want); }   // never kept outside the pane
+            const int tw = L.table.r - L.table.l, th = L.table.b - L.table.t, sh = L.gexOk ? L.table.t - L.gexRow.t : 0;   // (2.4.4) + the Gex S/R strip above
+            if (got.l < pb.l || got.t - sh < pb.t || got.l + tw > pb.r || got.t + th > pb.b) { S->hyst.reset(); got = S->hyst.step(want); }   // never kept outside the pane
             const int dx = got.l - L.table.l, dy = got.t - L.table.t;
             if (dx || dy) { for (size_t i = 0; i < L.items.size(); ++i) if (L.items[i].role == hl::R_TABLE || L.items[i].role == hl::R_NOTE) { L.items[i].l += dx; L.items[i].r += dx; L.items[i].t += dy; L.items[i].b += dy; }
                             L.table.l += dx; L.table.r += dx; L.table.t += dy; L.table.b += dy;
@@ -1088,7 +1095,7 @@ int HodLod::draw(void)
     {   // (2.4.1) the table's rectangle for the docked Big Lot box (BoxDock.h): table + Q header + GEX row, as drawn; none = cleared
         const char* sy = getSymbol(); const char* cl = getChartLabel();
         const std::string sym = sy ? sy : "", chart = cl ? cl : ""; const long spb = getSecondsPerBar();
-        if (S->hlbPosted && (sym != S->hlbSym || spb != S->hlbSpb || chart != S->hlbChart)) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; }
+        if (S->hlbPosted && (sym != S->hlbSym || spb != S->hlbSpb || chart != S->hlbChart)) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); bdk::clearHodLodTable(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; }
         if (L.tableOk && L.table.r > L.table.l && L.table.b > L.table.t && !sym.empty()) {
             bdk::Box u = bdk::mk(L.table.l, L.table.t, L.table.r, L.table.b);
             auto add = [&](const hl::Box& b) { if (b.r > b.l && b.b > b.t) { u.l = (std::min)(u.l, b.l); u.t = (std::min)(u.t, b.t); u.r = (std::max)(u.r, b.r); u.b = (std::max)(u.b, b.b); } };
@@ -1096,9 +1103,10 @@ int HodLod::draw(void)
             if (S->lastGexOk) add(L.gexRow);
             const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
             bdk::publishHodLod(sym, spb, chart, ms, u);
+            bdk::publishHodLodTable(sym, spb, chart, ms, bdk::mk(L.table.l, L.table.t, L.table.r, L.table.b));   // (2.4.4) the table alone: the Big Lot box takes its height
             S->hlbSym = sym; S->hlbSpb = spb; S->hlbChart = chart; S->hlbPosted = true;
             S->placeLine += "HLB_BOX," + std::to_string(u.l) + "," + std::to_string(u.t) + "," + std::to_string(u.r) + "," + std::to_string(u.b) + " (published for the Big Lot box)\n";
-        } else if (S->hlbPosted) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; S->placeLine += "HLB_BOX,none\n"; }
+        } else if (S->hlbPosted) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); bdk::clearHodLodTable(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; S->placeLine += "HLB_BOX,none\n"; }
     }
     writeStatus(*S, &L);
     writeFxStatus(*S);
@@ -1157,6 +1165,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live.");
-    p->setVersion("2.4.3");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.4.4");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

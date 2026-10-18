@@ -7,36 +7,32 @@
 
 namespace ofset {
 
-static const char* const BAS_VERSION = "1.13.2";
-static const char* const BF_VERSION = "1.3.2";
+static const char* const BAS_VERSION = "1.13.3";
+static const char* const BF_VERSION = "1.3.3";
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 
-namespace bask { enum K { K_RATIO_BARS, K_POSITION, K_SPIKE_AVG, K_OFFSET_X, K_OFFSET_Y, K_N }; }
+// (1.13.3 / 1.3.3, Rassul 2026-10-18 "I'll go with your recommendation") Offset X / Y removed (the 9-spot Position only), Ratio bars and
+// Spike vs average hidden (data-tuned: kept in the file at their values, set by the per-market data), BookFlow records always.
+namespace bask { enum K { K_RATIO_BARS, K_POSITION, K_SPIKE_AVG, K_N }; }
 inline const ss::Spec& bidAskSpec() {
     static const ss::Row R[bask::K_N] = {
-        ss::intRow("ratio_bars", "Ratio bars", 20, 5, 200, 50),
-        ss::same(ss::listRow("position", "Position", 0, POS_CHOICES, 110)),
-        ss::floatRow("spike_avg", "Spike vs average", 2.0, 0.0, 10.0, 50),     // own line (the first line was ~458 px, cut off)
-        ss::intRow("offset_x", "Offset X", 0, -600, 600, 50),
-        ss::same(ss::intRow("offset_y", "Offset Y", 0, -600, 600, 50)),
+        ss::hide(ss::intRow("ratio_bars", "Ratio bars", 20, 5, 200, 50)),
+        ss::listRow("position", "Position", 0, POS_CHOICES, 110),
+        ss::hide(ss::floatRow("spike_avg", "Spike vs average", 2.0, 0.0, 10.0, 50)),
     };
-    static const ss::Spec S = { "BidAskStats", BAS_VERSION, 5, R, bask::K_N, 0 };
+    static const ss::Spec S = { "BidAskStats", BAS_VERSION, 6, R, bask::K_N, 0 };   // 6: the window rows changed
     return S;
 }
 
-// BookFlow: the 1.3.0 order kept exactly (Ratio, Position, Spike, Near, Record, Offset X, Offset Y)
-namespace bfk { enum K { K_RATIO_BARS, K_POSITION, K_SPIKE_AVG, K_NEAR_TICKS, K_RECORD, K_OFFSET_X, K_OFFSET_Y, K_N }; }
+namespace bfk { enum K { K_RATIO_BARS, K_POSITION, K_SPIKE_AVG, K_NEAR_TICKS, K_N }; }
 inline const ss::Spec& bookFlowSpec() {
     static const ss::Row R[bfk::K_N] = {
-        ss::intRow("ratio_bars", "Ratio bars", 20, 5, 200, 50),
-        ss::same(ss::listRow("position", "Position", 0, POS_CHOICES, 110)),
-        ss::floatRow("spike_avg", "Spike vs average", 2.0, 0.0, 10.0, 50),     // own line (the first line was ~458 px, cut off)
+        ss::hide(ss::intRow("ratio_bars", "Ratio bars", 20, 5, 200, 50)),
+        ss::listRow("position", "Position", 0, POS_CHOICES, 110),
+        ss::hide(ss::floatRow("spike_avg", "Spike vs average", 2.0, 0.0, 10.0, 50)),
         ss::intRow("near_ticks", "Near ticks (0 = auto)", 0, 0, 2000, 50),
-        ss::same(ss::boolRow("record", "Record order feed", true)),
-        ss::intRow("offset_x", "Offset X", 0, -600, 600, 50),
-        ss::same(ss::intRow("offset_y", "Offset Y", 0, -600, 600, 50)),
     };
-    static const ss::Spec S = { "BookFlow", BF_VERSION, 3, R, bfk::K_N, 0 };
+    static const ss::Spec S = { "BookFlow", BF_VERSION, 4, R, bfk::K_N, 0 };   // 4: the window rows changed
     return S;
 }
 

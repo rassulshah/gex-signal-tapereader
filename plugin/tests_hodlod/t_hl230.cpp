@@ -111,17 +111,18 @@ int main() {
             std::vector<hl::Item> tx; for (const hl::Item& it : L.items) if (it.k == hl::K_TEXT && !it.s.empty()) tx.push_back(it);
             for (size_t i = 0; i < tx.size(); i++) for (size_t j = i + 1; j < tx.size(); j++) { const hl::Item& a = tx[i]; const hl::Item& b = tx[j];
                 const int ah = (a.t + a.b) / 2, bh = (b.t + b.b) / 2; if (std::abs(ah - bh) < 6 && a.l < b.r - 1 && b.l < a.r - 1) { ++overl; if (overl < 4) std::printf("  overlap '%s' [%d,%d] / '%s' [%d,%d]\n", a.s.c_str(), a.l, a.r, b.s.c_str(), b.l, b.r); } }
-            for (const hl::Item& it : tx) { if (it.s.find("S. Dntrend") != std::string::npos && it.r == L.table.r - 8) ++regR; if (it.s == "Q: " && it.l == L.table.l + 8) ++qL; }
-            int lines = 0; for (const hl::Item& it : L.items) if (it.k == hl::K_LINE && it.t >= L.gexRow.t && it.b <= L.gexRow.b && it.t == it.b && it.l > L.gexRow.l + 40) ++lines;
-            if (lines >= 8) ++tri;   // two filled triangles (each >= 5 lines)
+            // (2.4.4 compact) "ES" top left, " \xB7 S.Dn" ends right-aligned top right; the strip: green "R " and red "S "
+            for (const hl::Item& it : tx) { if (it.s.find("S.Dn") != std::string::npos && it.r == L.table.r - 8) ++regR; if (it.s == "ES" && it.l == L.table.l + 8) ++qL; }
+            int rs = 0; for (const hl::Item& it : tx) if (it.t >= L.gexRow.t && it.b <= L.gexRow.b && ((it.s == "R " && it.c1 == hl::C_GREEN) || (it.s == "S " && it.c1 == hl::C_RED))) ++rs;
+            if (rs == 2) ++tri;
         }
         CHECK(cnt > 30, "the table drawn (" + std::to_string(cnt) + " layouts)");
         CHECK(bad == 0, "Q box inside the table, the table inside the pane, left of the last bar");
         CHECK(overl == 0, "no two texts overlap (" + std::to_string(overl) + ")");
         CHECK(regR == cnt && qL == cnt, "Q: top left (" + std::to_string(qL) + "), Reg / trend right-aligned top right (" + std::to_string(regR) + ") of " + std::to_string(cnt));
-        CHECK(tri == cnt, "two triangles on the Gex row");
+        CHECK(tri == cnt, "(2.4.4) the strip: green R + red S");
         hl::Layout L0 = hl::layoutAll(v0, hl::Box{ 0, 0, 1400, 620 }, yOf, measure, 1200, 7, -1, nullptr, nullptr);
-        CHECK(L0.tableOk && !L0.qOk, "no Q file: no Q box (the table still drawn)");
+        { int mov = 0; for (const hl::Item& it : L0.items) if (it.k == hl::K_TEXT && (it.s == " M1" || it.s == " O1")) ++mov; CHECK(L0.tableOk && mov == 0, "(2.4.4) no Q file: no M / O / V in the header (the table still drawn)"); }
     }
     std::printf("[5] the Q hover\n");
     {   hl::View v; v.has = true; v.headLeftSegs.push_back(hl::Seg{ "ES RTH 8:30-3:00", hl::C_SLATE });
@@ -136,14 +137,14 @@ int main() {
             if (!L.qHoverOk) continue; ++shown;
             if (!inside(L.qHover, pane) || L.qHover.r > pe) ++bad;
             int rows = 0; for (size_t i = n0; i < L.items.size(); i++) { if (L.items[i].k == hl::K_TEXT && L.items[i].c1 == hl::C_RED && (L.items[i].s == "M1" || L.items[i].s == "O1")) ++red; if (L.items[i].k == hl::K_TEXT) ++rows; }
-            if (W == 700) wrapped += rows > 9; if (W == 1400 && rows > 9) ++bad;
+            if (W == 700) wrapped += rows > 9; if (W == 1400 && rows > 24) ++bad;   // (2.4.4) + the header lines (RTH, expiry, regime, Exp / Act / Est)
         }
         CHECK(shown > 30, "the hover shown (" + std::to_string(shown) + ")");
         CHECK(bad == 0, "inside the pane, left of the last bar");
         CHECK(red == 2 * shown, "M1 / O1 red in every hover");
         CHECK(wrapped > 0, "a narrow pane wraps");
         hl::View e = v; e.qSegs.clear(); e.qHover.clear(); hl::Layout L = hl::layoutAll(e, hl::Box{ 0, 0, 1400, 620 }, yOf, measure, 1200, 7, -1, nullptr, nullptr);
-        hl::layoutQHover(L, e, hl::Box{ 0, 0, 1400, 620 }, 1200, measure); CHECK(!L.qHoverOk, "no Q: no hover");
+        hl::layoutQHover(L, e, hl::Box{ 0, 0, 1400, 620 }, 1200, measure); CHECK(L.qHoverOk, "(2.4.4) no Q: the header hover still explains the header");
     }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

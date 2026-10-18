@@ -72,13 +72,13 @@ static ss::Ids& tmIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <climits>
 #include <new>
 
-static const char* const TM_VERSION = "1.3.1";   // (1.3.1, 2026-10-18 settings audit) the window from TradeManagerSettings.h / SettingsHost.h, keyed TradeManager.settings-<MKT>.txt (migrated once from the place file); Font now reaches the chart (it was read only while the window was open);   // (1.3.0, 2026-10-14 18:25 CT audit display list) READY only from his checklist (key level, before 11:00 AM CT, no news, limits OK; unknown / stale = WAIT), no "Read" item, no in-trade HOLD / EXIT? (ClaimGates.h LRA_SHOW_CONTROL_WORD / LRA_SHOW_READ_EXIT)   // (1.2.0) drag the box, per-chart spot, never over the profiles / past price;
+static const char* const TM_VERSION = "1.3.2";   // (1.3.2, 2026-10-18 his decision list) Font default 10 pt (was 8; an 8 written by 1.3.1 reads as 10);  // (1.3.1, 2026-10-18 settings audit) the window from TradeManagerSettings.h / SettingsHost.h, keyed TradeManager.settings-<MKT>.txt (migrated once from the place file); Font now reaches the chart (it was read only while the window was open);   // (1.3.0, 2026-10-14 18:25 CT audit display list) READY only from his checklist (key level, before 11:00 AM CT, no news, limits OK; unknown / stale = WAIT), no "Read" item, no in-trade HOLD / EXIT? (ClaimGates.h LRA_SHOW_CONTROL_WORD / LRA_SHOW_READ_EXIT)   // (1.2.0) drag the box, per-chart spot, never over the profiles / past price;
                                                   // (1.1.2) per-chart state, validated bridge inputs, bounded sizing
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF, C_BOXBG = 0x000B1220, C_BORDER = 0x00334155;
 static const COLOR C_AMBER = 0x00F59E0B, C_RED = 0x00EF4444, C_GREEN = 0x0022C55E, C_DKRED = 0x007F1D1D, C_DKGRN = 0x00166534, C_TRACK = 0x001F2937;
 
 struct TIdx { int market = 0, font = 1, place = 2; };            // parameter indices: a member of the object, no static (#1)
-struct TSet { int market = 0, font = 8, place = 2; };          // place = the Position (0-8), default Top right
+struct TSet { int market = 0, font = 10, place = 2; };          // place = the Position (0-8), default Top right
 
 #ifdef TM_TEST_HOOKS
 extern bool tmTestButtonHeld;                                   // the mock decides whether the left button is still down
@@ -264,7 +264,7 @@ public:
     ss::Store& store(const std::string& mk) {
         if (storeMkt_ != mk || !store_.S) { store_ = ss::Store(); store_.S = &tmset::spec(); storeMkt_ = mk;
             const std::string pp = dl::placePath("TradeManager", mk); const size_t cut = pp.rfind("TradeManager.place-");
-            if (!mk.empty() && cut != std::string::npos) { store_.path = pp.substr(0, cut) + "TradeManager.settings-" + mk + ".txt"; store_.legacyPaths.push_back(pp); store_.legacy = tmset::legacy; } }
+            if (!mk.empty() && cut != std::string::npos) { store_.path = pp.substr(0, cut) + "TradeManager.settings-" + mk + ".txt"; store_.legacyPaths.push_back(pp); store_.legacy = tmset::legacy; store_.upgrade = tmset::upgrade; } }
         return store_;
     }
     static long long tmNowMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -700,6 +700,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // TRACK_MOUSE: drag without selecting it first
     p->setDescription("LRA Trade Manager: your Topstep day, the checklist for the next trade, and how to manage the open one. Drag the box to move it (kept per chart); double-click it to go back to the Position setting.");
-    p->setVersion("1.3.1");   // = TM_VERSION; a literal so gex-build.log shows the number (it showed "TM_VERSION")
+    p->setVersion("1.3.2");   // = TM_VERSION; a literal so gex-build.log shows the number (it showed "TM_VERSION")
     return p;
 }

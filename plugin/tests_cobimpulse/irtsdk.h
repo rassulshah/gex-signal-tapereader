@@ -12,6 +12,7 @@ typedef unsigned long COLOR;
 typedef int RTX_RESULT;
 typedef bool RTBOOL;
 enum { RTX_OK = 0, RTX_FAIL = -1 };
+enum { kParmAppendSameLine = 1 };   // (0.5.0) SettingsHost.h
 enum { SYM_TICKINCR = 171 };
 enum { POST_DRAWING = 1, OVERLAY = 2, NO_UI = 4, INSTRUMENT_SCALE = 8, TRACK_MOUSE = (1 << 27), CALC_LAST = (1 << 28), FRONT_DRAWING = (1 << 29) };
 enum iARRAY { barDateTime, barVolume };
@@ -24,7 +25,6 @@ struct Draw { std::string type, text; int l, t, r, b; COLOR color; int width, pa
 struct Host {
     std::vector<Bar> bars; void* data = nullptr; bool noSlot = false;
     std::string symbol = "NQZ6", root = "NQ"; int seconds = 180; unsigned long now = 0;
-    std::string chart = "NQ 3 Min";                             // (0.4.1) getChartLabel (the Market State key)
     std::map<std::string, std::vector<float>> custom;          // his RTL by name (aligned to bars unless shorter)
     std::map<std::string, bool> customFail;
     int customCalls = 0, invalidates = 0;
@@ -91,11 +91,35 @@ public:
     const char* getRootSymbol(char* b = nullptr) { if (b) { std::strcpy(b, mock::current->root.c_str()); return b; } return mock::current->root.c_str(); }
     const char* getSymbol() { return mock::current->symbol.c_str(); }
     int getSecondsPerBar() { return mock::current->seconds; }
-    const char* getChartLabel() { return mock::current->chart.c_str(); }
     float getProperty(int, const char* = nullptr) { return mock::current->tick; }
     RTDATE currentDate() { return mock::current->now; }
     struct tm* getLocaltime(RTDATE stamp, struct tm* t) { time_t v = (time_t)stamp; return gmtime_r(&v, t); }   // stamps are Central wall time in the tests
-    void setParameterVersion(unsigned) {}
+    // (lsCobImpulse 0.5.0) the settings window rows (SettingsHost.h): one parameter list per DLL, values per row id;
+    // dlgPeriod() = "" makes this object the settings window's copy (IRT gives that copy no bar size)
+    struct Parm { std::string name; int type; double v; bool on; unsigned long flags; std::string text; };
+    static std::vector<Parm>& P() { static std::vector<Parm> p; return p; }
+    static unsigned& pver() { static unsigned v = 0; return v; }
+    static std::string& dlgPeriod() { static std::string s = "1 Minute"; return s; }
+    int add(const char* n, int t, double v, unsigned long f) { P().push_back(Parm{ n ? n : "", t, v, true, f, "" }); return (int)P().size() - 1; }
+    void setParameterVersion(unsigned v) { pver() = v; P().clear(); }   /* a new setup() = a new parameter list */ void setParameterDialogHeight(int) {} int getParameterCount() { return (int)P().size(); }
+    const char* getPeriodicityLabel() { return dlgPeriod().c_str(); }
+    const char* getChartLabel() { return "test"; }   // (0.4.1 Market State; the mock had not been updated)
+    void setIntegerParameter(const char* n, int v, int = 0, unsigned long f = 0) { add(n, 2, v, f); }
+    void setFloatParameter(const char* n, float v, int = 0, unsigned long f = 0) { add(n, 3, v, f); }
+    void setBoolParameter(const char* n, RTBOOL v, unsigned long f = 0) { add(n, 1, v ? 1 : 0, f); }
+    void setColorParameter(const char* n, COLOR c, int = 0, unsigned long f = 0) { add(n, 4, (double)c, f); }
+    void setListParameter(const char* n, short v, const char*, int = 0, unsigned long f = 0) { add(n, 5, v, f); }
+    void setLabelParameter(const char* n, int = 0, unsigned long f = 0) { add(n, 6, 0, f); }
+    void setStringParameter(const char* n, const char* t, size_t = 0, int = 0, unsigned long f = 0) { const int i = add(n, 7, 0, f); P()[(size_t)i].text = t ? t : ""; }
+    bool okId(int i) { return i >= 0 && i < (int)P().size(); }
+    int getIntegerValue(int i) { return okId(i) ? (int)P()[(size_t)i].v : 0; } void setIntegerValue(int i, int v) { if (okId(i)) P()[(size_t)i].v = v; }
+    float getFloatValue(int i) { return okId(i) ? (float)P()[(size_t)i].v : 0.0f; } void setFloatValue(int i, float v) { if (okId(i)) P()[(size_t)i].v = v; }
+    COLOR getParameterColor(int i) { return okId(i) ? (COLOR)P()[(size_t)i].v : 0; } void setParameterColor(int i, COLOR c) { if (okId(i)) P()[(size_t)i].v = (double)c; }
+    int getListIndex(int i) { return okId(i) ? (int)P()[(size_t)i].v : 0; } void setListIndex(int i, int v) { if (okId(i)) P()[(size_t)i].v = v; }
+    int isBoxChecked(int i) { return okId(i) ? (int)P()[(size_t)i].v : 0; } void checkBox(int i, RTBOOL b) { if (okId(i)) P()[(size_t)i].v = b ? 1 : 0; }
+    void enableParameter(int i, RTBOOL on) { if (okId(i)) P()[(size_t)i].on = on; }
+    int getParameterText(int i, char* b, size_t cap) { if (!okId(i) || !b || !cap) return RTX_FAIL; std::strncpy(b, P()[(size_t)i].text.c_str(), cap - 1); b[cap - 1] = 0; return RTX_OK; }
+    void setParameterText(int i, const char* t) { if (okId(i)) P()[(size_t)i].text = t ? t : ""; }
     void setFont(FONT&) {} void setTextColor(COLOR c) { mock::current->ink = c; }
     int getTextWidth(const char* t, int = -1) { return (int)std::strlen(t) * 6; }
     RTX_RESULT invalidateChart(RTBOOL = false) { ++mock::current->invalidates; return RTX_OK; }

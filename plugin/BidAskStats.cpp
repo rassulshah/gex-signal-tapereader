@@ -139,7 +139,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.13.2"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.13.3"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -463,8 +463,8 @@ void BidAskStats::settings(BASState& S, long long now) {
             int r = 0, q = 0; bas::SpikeCfg c; BasPanel b2; if (parseSettings(ln, r, q, &c, &b2)) { rb = r; pos = q; sc = c; pn = b2; }
         }
     }
-    if (pos != S.pos || pn.dx != S.dx || pn.dy != S.dy) { S.lastBox = bp::Box(); S.inBox = false; }   // (1.5.2) moved: no stale rect
-    S.pos = pos; S.dlgSpike = sc; S.dx = pn.dx; S.dy = pn.dy;           // (1.13.0) the file's 8th field (old Box shows) is read and ignored
+    if (pos != S.pos) { S.lastBox = bp::Box(); S.inBox = false; }   // (1.5.2) moved: no stale rect
+    S.pos = pos; S.dlgSpike = sc; S.dx = 0; S.dy = 0;   // (1.13.3) a saved Offset X / Y is ignored (the 9-spot Position only)           // (1.13.0) the file's 8th field (old Box shows) is read and ignored
     const bas::SpikeCfg eff = effSpike(sc, S.params.load.p);
     const bool reratioed = rb != S.ratioBars;
     if (reratioed) { S.ratioBars = rb; S.ser.reratio(rb); }
@@ -484,7 +484,6 @@ static BasFile basFile(const std::string& p) {
 static ss::Values basValues(const BasFile& F) {
     ss::Values V = ss::defaults(ofset::bidAskSpec(), -1);
     V.v[ofset::bask::K_RATIO_BARS] = F.rb; V.v[ofset::bask::K_POSITION] = F.pos; V.v[ofset::bask::K_SPIKE_AVG] = F.sc.avgT / 10.0;
-    V.v[ofset::bask::K_OFFSET_X] = F.pn.dx; V.v[ofset::bask::K_OFFSET_Y] = F.pn.dy;
     return V;
 }
 int BidAskStats::parmsLoad(void) {
@@ -500,7 +499,7 @@ void BidAskStats::saveSettings() {
     const ss::Values V = ss::readDialog(this, ofset::bidAskSpec(), basIds(), basValues(F), snap_);   // untouched -> the file's value; invalid never saved
     // (1.13.0) the file keeps its 8-field layout (older builds read it): the jump / lookback / Box shows fields carry the file's values unchanged
     const int rb = V.i(ofset::bask::K_RATIO_BARS), pos = V.i(ofset::bask::K_POSITION), sa = ofset::tenths(V.f(ofset::bask::K_SPIKE_AVG)), sj = F.sc.jumpT, sl = F.sc.lookback;
-    const int dx = V.i(ofset::bask::K_OFFSET_X), dy = V.i(ofset::bask::K_OFFSET_Y);
+    const int dx = 0, dy = 0;   // (1.13.3) no offsets: the 9-spot Position only
     const int mode = F.pn.mode == off::MODE_NUMBERS ? off::MODE_NUMBERS : off::MODE_READ;
     if (bas::clampRatioBars(rb) < 0) return;
     if (bas::clampLineTenths(sa) < 0 || bas::clampLineTenths(sj) < 0 || bas::clampLookback(sl) < 0) return;   // never overwrite a saved choice
@@ -1137,6 +1136,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio) and Pace for sellers and buyers of the candle under the mouse anywhere on the chart, else the last closed candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars).");
-    p->setVersion("1.13.2");   // BAS_VERSION
+    p->setVersion("1.13.3");   // BAS_VERSION
     return p;
 }

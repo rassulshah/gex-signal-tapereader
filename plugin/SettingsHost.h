@@ -1,4 +1,10 @@
-// SettingsHost.h  1.0.0  (2026-10-18)  -  the SDK side of SettingsSpec.h. Include AFTER irtsdk.h.
+// SettingsHost.h  1.1.0  (2026-10-18)  -  the SDK side of SettingsSpec.h. Include AFTER irtsdk.h.
+// (1.1.0, 2026-10-18 17:20 CT) BLANK-SAVE GUARD: his BigBidAsk.settings-ES.txt was overwritten at 15:07:55 CT with every box off and
+// every colour 0 ("where are all the big prints? they are all gone") - a window copy that READ BLANK (every box unchecked, colour 0,
+// list -1, number 0: what IRT hands a copy whose controls were never filled, e.g. after setParameterVersion reset them) was saved.
+// Now: (1) blankRead() - a window that reads blank is never saved (readDialog returns the FILE unchanged, why = "refused: blank");
+// (2) without a snapshot (parmsLoad never filled THIS copy) only controls that read a real (non-zero) value replace the file's;
+// (3) Store::save refuses an all-zero table (settings_host_test: "a blank dialog never overwrites the saved file").
 // Every indicator's settings window goes through these five calls - no set*Parameter / getIntegerValue by hand:
 //   setup():        ss::registerAll(this, SPEC, IDS)            rows registered from the table, ids kept per table row
 //   parmsLoad():    ss::fillDialog(this, SPEC, IDS, V, SNAP)    the window filled from the chart's file (colours with setParameterColor)
@@ -90,14 +96,32 @@ inline void fillDialog(cppExtension* x, const Spec& S, const Ids& ids, const Val
     for (int k = 0; k < S.n; ++k) if (S.rows[k].master && ids.id[(size_t)k] >= 0) snap.mst[(size_t)k] = x->isBoxChecked(ids.id[(size_t)k]) ? 1 : 0;
 }
 
+// (1.1.0) the window reads BLANK: every registered BOOL / INT / FLOAT / COLOR / LIST control reads 0 (a list -1 or 0) - what IRT's
+// unfilled copy returns. A real window always has something non-zero (a colour, a size, a checked box), so this is never saved.
+inline bool blankRead(const Spec& S, const Ids& ids, const Values& now) {
+    if ((int)ids.id.size() != S.n) return true;
+    int seen = 0;
+    for (int k = 0; k < S.n; ++k) {
+        if (ids.id[(size_t)k] < 0) continue;
+        const Type t = S.rows[k].type; if (t == T_LABEL || t == T_TEXT) continue;
+        ++seen; const double v = now.v[(size_t)k];
+        if (t == T_LIST ? v > 0 : v != 0) return false;
+    }
+    return seen >= 2;
+}
+
 // The window -> values to save: an untouched control keeps the file's value; an invalid one keeps the file's (garbage never saved);
-// group items of a master that is off are saved unchecked.
+// group items of a master that is off are saved unchecked. (1.1.0) a blank window = the file unchanged (why says "refused: blank").
 inline Values readDialog(cppExtension* x, const Spec& S, const Ids& ids, const Values& file, const Snap& snap) {
     if (!ids.ok || (int)ids.id.size() != S.n) return file;          // nothing registered: the file stays as it is
     const Values now = dialogNow(x, S, ids, file);
+    if (blankRead(S, ids, now)) { Values F = file; F.why = "refused: the window read blank (never saved over the file)"; return F; }
     Values V = file;
     for (int k = 0; k < S.n; ++k) {
         if (ids.id[(size_t)k] < 0) continue;                                  // hidden rows keep the file's value
+        if (!snap.ok && S.rows[k].type != T_TEXT && S.rows[k].type != T_LABEL) {   // (1.1.0) no fill on this copy: only real reads count
+            const double nv = now.v[(size_t)k]; if ((S.rows[k].type == T_LIST ? nv > 0 : nv != 0) && valid(S.rows[k], nv)) V.v[(size_t)k] = nv;
+            continue; }
         if (S.rows[k].type == T_TEXT) { if (V.t.size() != (size_t)S.n) V.t.resize((size_t)S.n);
             std::string tv = snap.pickText((size_t)k, now.s(k), file.s(k)); while (!tv.empty() && tv.back() == ' ') tv.pop_back();
             if (validText(S.rows[k], tv)) V.t[(size_t)k] = tv;

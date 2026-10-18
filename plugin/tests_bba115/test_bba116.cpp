@@ -243,6 +243,22 @@ static void hostTests() {
         CHECK(c.boxRect() == nullptr && !c.S()->blOn, "[host] Big Lot box unchecked: nothing drawn");
         bdk::clearHodLod("ESZ6", 180, "ES 3m");
     }
+    {   home("dock162");   // (1.16.2) lsHodLod 2.4.4: table + strip (LRA_HLB_) and the table alone (LRA_HLT_), same stamp
+        Chart c(bars); c.pump(10, false);
+        const long long ms = steadyMs();
+        const bdk::Box full = bdk::mk(400, 576, 680, 790), tab = bdk::mk(400, 601, 680, 790);   // a 21 px strip + 4 px gap above the table
+        bdk::publishHodLod("ESZ6", 180, "ES 3m", ms, full); bdk::publishHodLodTable("ESZ6", 180, "ES 3m", ms, tab);
+        c.pump(2, true);
+        bdk::publishHodLod("ESZ6", 180, "ES 3m", ms + 1, full); bdk::publishHodLodTable("ESZ6", 180, "ES 3m", ms + 1, tab);
+        c.pump(1, true);
+        const mock::Draw* r = c.boxRect();
+        CHECK(r && r->l == 684 && r->t == 601 && r->b == 790, "[host 1.16.2] docked right of the TABLE, its top and bottom (not the strip's)");
+        if (r) std::cerr << "  box " << r->l << "," << r->t << "," << r->r << "," << r->b << "\n";
+        CHECK(r && !(r->l < full.r && full.l < r->r && r->t < full.b && full.t < r->b), "[host 1.16.2] never over the table or the strip");
+        std::vector<int> ys; for (const auto& d : c.H.draws) if (d.type == "text" && r && d.l >= r->l && d.r <= r->r + 2 && d.t >= r->t && d.b <= r->b && (d.text == "BL5" || d.text == "BL10" || d.text == "BL20")) ys.push_back(d.t);
+        CHECK(ys.size() == 3 && ys[1] - ys[0] == ys[2] - ys[1] && ys[1] - ys[0] >= 40 && std::abs((ys[0] - r->t) - (r->b - (ys[2] + (ys[1] - ys[0])))) <= 1, "[host 1.16.2] the 3 rows spread evenly over the table's height");
+        bdk::clearHodLod("ESZ6", 180, "ES 3m"); bdk::clearHodLodTable("ESZ6", 180, "ES 3m");
+    }
     {   home("dialog");
         bba::Settings his = bba::defaultsFor("ES"); his.boxBid = 0xEF4444; his.boxAsk = 0x22C55E; writeSettings(his);
         Chart c(bars); c.H.inDialog = true; mock::current = &c.H;
@@ -270,7 +286,20 @@ static void hostTests() {
         f = bba::parseSettings(readSettingsLine(), why, "ES");
         CHECK(f.boxAsk == 0x22C55E, "[host] black picked: the saved colour is kept (numbers would vanish)");
         std::ifstream dl(std::string(getenv("USERPROFILE")) + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.dialog-ES.txt"); std::stringstream ds; ds << dl.rdbuf();
-        CHECK(ds.str().find("PARMSLOAD,1.16.1") != std::string::npos && ds.str().find("read back same 75") != std::string::npos && ds.str().find("SAVED,1.16.1,BBA7|5|") != std::string::npos, "[host] the dialog log (fill read back, saves)");
+        CHECK(ds.str().find("PARMSLOAD,1.16.2") != std::string::npos && ds.str().find("read back same 75") != std::string::npos && ds.str().find("SAVED,1.16.2,BBA7|5|") != std::string::npos, "[host] the dialog log (fill read back, saves)");
+        // (1.16.2) THE 10-18 15:07 CT BUG: a window copy that reads blank (every box off, colour 0, number 0) never overwrites his file
+        const std::string before = readSettingsLine();
+        {   Chart b(bars); b.H.inDialog = true; mock::current = &b.H;          // a copy whose parmsLoad never ran (no snapshot), all blank
+            b.H.boxes.clear(); b.H.colors.clear(); b.H.ints.clear(); b.H.floats.clear();
+            for (int i = 0; i < 120; ++i) { b.H.boxes[i] = false; b.H.colors[i] = 0; b.H.ints[i] = 0; b.H.floats[i] = 0; }
+            b.x->parmsApply(); b.x->parmsUpdt(3);
+            CHECK(readSettingsLine() == before, "[host 1.16.2] a blank window (no fill) never overwrites the settings file");
+            b.x->parmsLoad(); for (int i = 0; i < 120; ++i) { b.H.boxes[i] = false; b.H.colors[i] = 0; b.H.ints[i] = 0; b.H.floats[i] = 0; }
+            b.x->parmsApply();
+            CHECK(readSettingsLine() == before, "[host 1.16.2] filled, then every control reads blank: the file is kept");
+            std::ifstream dl2(std::string(getenv("USERPROFILE")) + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.dialog-ES.txt"); std::stringstream d2; d2 << dl2.rdbuf();
+            CHECK(d2.str().find("REFUSED,1.16.2") != std::string::npos, "[host 1.16.2] the refusal is logged");
+            mock::current = &c.H; }
     }
 }
 
@@ -278,7 +307,7 @@ int main() {
     setenv("TZ", "UTC", 1); tzset();
     boxLogic(); catLogic(); dockLogic(); setLogic(); hostTests();
     {   const std::string src = [] { std::ifstream f("../BigBidAsk.cpp", std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }();
-        CHECK(std::string(BBA_VERSION) == "1.16.1" && std::string(bba::VERSION) == "1.16.1" && src.find("p->setVersion(\"1.16.1\")") != std::string::npos, "[ver] 1.16.1 everywhere (1.16.1 = the settings layer)");
+        CHECK(std::string(BBA_VERSION) == "1.16.2" && std::string(bba::VERSION) == "1.16.2" && std::string(bbaset::PLUGIN_VERSION) == "1.16.2" && src.find("p->setVersion(\"1.16.2\")") != std::string::npos, "[ver] 1.16.2 everywhere (1.16.2 = table-height dock + blank-save guard)");
         CHECK(bbaset::spec().paramVersion == 6 && src.find("ss::registerAll(this, bbaset::spec()") != std::string::npos, "[ver] parameter version 6 (the re-laid-out window), registered from the table");
     }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";

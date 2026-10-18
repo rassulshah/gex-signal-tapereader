@@ -9,7 +9,7 @@
 #include "BigBidAskLogic.h"
 
 namespace bbaset {
-static const char* const PLUGIN_VERSION = "1.16.1";
+static const char* const PLUGIN_VERSION = "1.16.2";
 inline const ss::Spec& spec() {
     static const bba::Settings D;
     static const ss::Row R[] = {

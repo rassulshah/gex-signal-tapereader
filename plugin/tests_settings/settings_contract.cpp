@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
     E.push_back(Entry{ &hlset::spec(), "HodLod.cpp", hlset::legacy, {
         { "7,0,0,1,1,1,-1,-1,-1,-1,-1\n", ss::M_ES, "position", 7 },          // his ES / NQ file on 10-18
         { "7,0,0,1,1,1,-1,-1,-1,-1,-1\n", ss::M_ES, "table_bg", 0x0F1520 },    // -1 = the default colour, never black
-        { "3,10,-20,0,1,1,255,-1,-1,-1,-1", ss::M_NQ, "offset_y", -20 },
+        { "3,10,-20,0,1,1,255,-1,-1,-1,-1", ss::M_NQ, "position", 3 },     // (2.4.4) the old offsets are skipped
         { "3,10,-20,0,1,1,255,-1,-1,-1,-1", ss::M_NQ, "show_table", 0 },
         { "3,10,-20,0,1,1,255,-1,-1,-1,-1", ss::M_NQ, "table_bg", 255 },
         { "5", ss::M_CL, "position", 5 },

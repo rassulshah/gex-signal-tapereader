@@ -6,14 +6,14 @@
 
 namespace dpset {
 
-static const char* const PLUGIN_VERSION = "2.18.2";
+static const char* const PLUGIN_VERSION = "2.18.3";
 enum K { K_WIDTH, K_FONT, K_DELTA_TEXT, K_N };
 
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
         // the column is drawn at least 110 px wide (2.11.2): the window used to offer 40-109, which did nothing
         ss::intRow("width", "Width px", 110, 110, 250, 50),
-        ss::same(ss::intRow("font", "Font pt", 9, 6, 18, 40)),
+        ss::same(ss::intRow("font", "Font pt", 10, 6, 18, 40)),   // (2.18.3, his decision) default 10 (was 9)
         // (2.14.0) the row values are no longer drawn; this box only reserved room for them -> hidden, value kept (audit: removed)
         ss::hide(ss::boolRow("delta_text", "Show delta text", true)),
     };
@@ -64,7 +64,12 @@ inline bool legacy(const ss::Spec& S, int mkt, const std::string& text, ss::Valu
     std::vector<const char*> order; order.push_back(""); order.push_back(""); order.push_back(""); order.push_back(""); order.push_back("font");
     ss::fromPositional(S, order, t, V);
     if (v28) V.v[K_DELTA_TEXT] = t[15] != "0" ? 1 : 0;
+    if (V.v[K_FONT] == 9) V.v[K_FONT] = 10;                         // (2.18.3) 9 was the old default (never his choice): the new default 10
     return true;
+}
+// (2.18.3) a keyed file written by 2.18.1 / 2.18.2 holds the old default font 9 (written at the migration): read as the new default 10
+inline void upgrade(const std::string& fileVersion, ss::Values& V) {
+    if ((fileVersion == "2.18.1" || fileVersion == "2.18.2") && V.v[K_FONT] == 9) V.v[K_FONT] = 10;
 }
 
 } // namespace dpset

@@ -5,18 +5,16 @@
 
 namespace trset {
 
-static const char* const PLUGIN_VERSION = "1.3.1";
+static const char* const PLUGIN_VERSION = "1.3.2";
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
-enum K { K_POSITION, K_OFFSET_X, K_OFFSET_Y, K_BACKGROUND, K_N };
+enum K { K_POSITION, K_BACKGROUND, K_N };
 
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
         ss::listRow("position", "Position", 0, POS_CHOICES, 110),
-        ss::same(ss::intRow("offset_x", "Offset X", 0, -600, 600, 45)),
-        ss::same(ss::intRow("offset_y", "Offset Y", 0, -600, 600, 45)),
         ss::boolRow("background", "Banner background", true),
     };
-    static const ss::Spec S = { "TapeReader", PLUGIN_VERSION, 3, R, K_N, 0 };
+    static const ss::Spec S = { "TapeReader", PLUGIN_VERSION, 4, R, K_N, 0 };   // 4 (1.3.2): Offset X / Y removed;
     return S;
 }
 

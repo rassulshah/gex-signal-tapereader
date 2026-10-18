@@ -1,4 +1,4 @@
-// TEST DOUBLE ONLY for lsCVD (from the DeltaProfile day-replay mock): boxes record their fill colour; DRAW_TRANSLUCENT; bars can hide their VAP.
+// TEST DOUBLE ONLY for lsCVD (1.3.0: + the settings-window parameter calls SettingsHost.h uses) (from the DeltaProfile day-replay mock): boxes record their fill colour; DRAW_TRANSLUCENT; bars can hide their VAP.
 #ifndef DELTA_TEST_SDK_H
 #define DELTA_TEST_SDK_H
 // TEST DOUBLE ONLY. Not a replacement for the supplied Linnsoft SDK.
@@ -12,6 +12,7 @@
 #define DIR_SEPARATOR_CHR '/'
 typedef unsigned long RTDATE;
 typedef unsigned long COLOR;
+typedef int RTBOOL;
 enum { RTX_OK=0, RTX_FAIL=-1, POST_DRAWING=1, OVERLAY=2, NO_UI=4, INSTRUMENT_SCALE=8, VAP_REQUIRED=16, kParmAppendSameLine=1, SYM_TICKINCR=171 };
 enum iARRAY { barDateTime,barVolume };
 enum fARRAY { barOpen,barHigh,barLow,barClose };
@@ -92,8 +93,27 @@ public:
     const char* getWorkingDirectoryPath(){return mock::current->directory.c_str();}
     float getProperty(int){return mock::current->tick;} int getSecondsPerBar(){return mock::current->seconds;}
     tm* getLocaltime(RTDATE stamp,tm* t){time_t v=static_cast<time_t>(stamp);return gmtime_r(&v,t);}
-    void setParameterVersion(int){} void setParameterDialogHeight(int){} void setIntegerParameter(const char*,int,int,int=0){}
-    int getIntegerValue(int i){return mock::current->parms[i];} void setIntegerValue(int i,int v){mock::current->parms[i]=v;}
+    // (lsCVD 1.3.0) the settings window rows (SettingsHost.h): one parameter list per DLL, values per row id
+    struct Parm { std::string name; int type; double v; bool on; unsigned long flags; std::string text; };
+    static std::vector<Parm>& P() { static std::vector<Parm> p; return p; }
+    static int& pver() { static int v = 0; return v; }
+    int add(const char* n, int t, double v, unsigned long f) { P().push_back(Parm{ n ? n : "", t, v, true, f, "" }); return (int)P().size() - 1; }
+    void setParameterVersion(int v){ pver() = v; P().clear(); }   /* a new setup() = a new parameter list */ void setParameterDialogHeight(int){} int getParameterCount(){ return (int)P().size(); }
+    void setIntegerParameter(const char* n,int v,int=0,unsigned long f=0){ add(n,2,v,f); }
+    void setFloatParameter(const char* n,float v,int=0,unsigned long f=0){ add(n,3,v,f); }
+    void setBoolParameter(const char* n,RTBOOL v,unsigned long f=0){ add(n,1,v,f); }
+    void setColorParameter(const char* n,COLOR c,int=0,unsigned long f=0){ add(n,4,(double)c,f); }
+    void setListParameter(const char* n,short v,const char*,int=0,unsigned long f=0){ add(n,5,v,f); }
+    void setLabelParameter(const char* n,int=0,unsigned long f=0){ add(n,6,0,f); }
+    void setStringParameter(const char* n,const char* t,size_t=0,int=0,unsigned long f=0){ const int i = add(n,7,0,f); P()[(size_t)i].text = t ? t : ""; }
+    bool okId(int i){ return i >= 0 && i < (int)P().size(); }
+    int getIntegerValue(int i){ return okId(i) ? (int)P()[(size_t)i].v : 0; } void setIntegerValue(int i,int v){ if (okId(i)) P()[(size_t)i].v = v; }
+    float getFloatValue(int i){ return okId(i) ? (float)P()[(size_t)i].v : 0.0f; } void setFloatValue(int i,float v){ if (okId(i)) P()[(size_t)i].v = v; }
+    COLOR getParameterColor(int i){ return okId(i) ? (COLOR)P()[(size_t)i].v : 0; } void setParameterColor(int i,COLOR c){ if (okId(i)) P()[(size_t)i].v = (double)c; }
+    int getListIndex(int i){ return okId(i) ? (int)P()[(size_t)i].v : 0; } void setListIndex(int i,int v){ if (okId(i)) P()[(size_t)i].v = v; }
+    int isBoxChecked(int i){ return okId(i) ? (int)P()[(size_t)i].v : 0; } void checkBox(int i,RTBOOL b){ if (okId(i)) P()[(size_t)i].v = b ? 1 : 0; }
+    void enableParameter(int i,RTBOOL on){ if (okId(i)) P()[(size_t)i].on = on; }
+    int getParameterText(int i,char* b,size_t cap){ if (!okId(i) || !b || !cap) return RTX_FAIL; std::strncpy(b, P()[(size_t)i].text.c_str(), cap - 1); b[cap - 1] = 0; return RTX_OK; } void setParameterText(int i,const char* t){ if (okId(i)) P()[(size_t)i].text = t ? t : ""; }
     void setFont(FONT){} void setTextColor(COLOR c){mock::current->ink=c;}
     int getTextWidth(const char* t,int){return static_cast<int>(std::strlen(t))*6;}
     void setPen(COLOR c,int w,int){mock::current->pen=c;mock::current->penW=w;} void setArrayCount(int){} void setFlags(unsigned long){} void setDescription(const char*){} void setVersion(const char*){}

@@ -138,7 +138,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.45.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.45.1"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.44.0, 2026-10-18 night, Rassul approved "yes 2x" + the audit fixes) 1) the column DRAWS a zone only at >= 2.0x (lqp drawn state:
 // enters live at 2.0x, removed only at a bar close under 2.0x; no 1.5x near entry / 1.2x keep / any size during absorption) - the
 // records and attempts are unchanged; 2) LMT R "S5 anywhere" compares the largest SINGLE order at a price (bol::biggestSingle), never
@@ -610,7 +610,7 @@ ss::Values LiquidityProfile::fileValues() {
     if (z.ok) V.v[lpset::KF_FONT] = clampFont(z.f);
 #else
     using namespace lpset;
-    if (z.ok) { V.v[K_WIDTH] = clampWidth(z.w); V.v[K_FONT] = clampFont(z.f); V.v[K_LABEL_OFFSET_X] = z.dx; V.v[K_LABEL_OFFSET_Y] = z.dy; V.v[K_SOLID_BG] = z.bg ? 1 : 0; }
+    if (z.ok) { V.v[K_WIDTH] = clampWidth(z.w); V.v[K_FONT] = clampFont(z.f); V.v[K_SOLID_BG] = z.bg ? 1 : 0; }
     {   const std::string bp2 = bigPath(this); const BigFile bf = bp2.empty() ? BigFile() : readBig(bp2);
         const bol::Settings b = bf.ok ? bf.s : bol::Settings();
         V.v[K_BIG_ORDERS] = b.on ? 1 : 0; V.v[K_BIG_REACH] = b.reach10 / 10.0;
@@ -641,7 +641,7 @@ void LiquidityProfile::saveSize(const ss::Values& V) {
 #ifdef LQ_FLOW
     const int w = 70, f = clampFont(V.i(lpset::KF_FONT)); const int dx = 0, dy = 0; const bool bg = true;
 #else
-    const int w = clampWidth(V.i(lpset::K_WIDTH)), f = clampFont(V.i(lpset::K_FONT)), dx = V.i(lpset::K_LABEL_OFFSET_X), dy = V.i(lpset::K_LABEL_OFFSET_Y);
+    const int w = clampWidth(V.i(lpset::K_WIDTH)), f = clampFont(V.i(lpset::K_FONT)), dx = 0, dy = 0;   // (0.45.1) label Offset X / Y removed (his decision): saved as 0
     const bool bg = V.b(lpset::K_SOLID_BG);
 #endif
     if (S) { S->width = w; S->font = f; S->labDx = dx; S->labDy = dy; S->bg = bg; }
@@ -717,7 +717,7 @@ void LiquidityProfile::loadSize(LQState& S) {
     S.sizeWhy = z.why;
     if (!z.ok) return;                                                    // garbled: keep (reason on the status file)
     if (z.migrated && S.sizeWhy.empty()) S.sizeWhy = "old default width 70 read as 60 (0.16.0)";
-    S.width = clampWidth(z.w); S.font = clampFont(z.f); S.labDx = z.dx; S.labDy = z.dy; S.bg = z.bg;
+    S.width = clampWidth(z.w); S.font = clampFont(z.f); S.labDx = 0; S.labDy = 0; S.bg = z.bg;   // (0.45.1) a saved label offset is ignored (Offset X / Y removed)
 }
 int cppExtension::calc(int) { static_cast<LiquidityProfile*>(this)->pump(); return RTX_OK; }
 // (0.8.0, Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets") every step of the
@@ -3442,6 +3442,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.45.0");   // LQ_VERSION
+    p->setVersion("0.45.1");   // LQ_VERSION
     return p;
 }

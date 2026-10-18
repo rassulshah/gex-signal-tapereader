@@ -149,7 +149,24 @@ Format: bugs (fix), then KEPT / ADDED / REMOVED, one line each.
 
 New BUILD-LESSONS: 101 (LiquidityFlow link break), 102 (build hash list over 1,023 characters = endless rebuild), 103 (IRT may pass parmsUpdt another number: the layer compares masters with their last state). LiquidityFlow's link break was older than first reported: gex-build.log shows it failing hourly since at least 01:16 CT on 10-18. Pre-existing, NOT caused by this audit: test_dealerprofile_2110 (19 failures) and test_dealerprofile_290 (3 failures) are stale suites written for 2.12 / 2.9 - same failures before and after; they need their own refresh.
 
-## 5. His decision list (not changed)
+## 4c. His decision list APPLIED (Rassul 2026-10-18 ~16:55 CT: "I'll go with your recommendation")
+| Indicator | Version | Removed | Hidden (kept in the file, table default) | Added / changed | Saved values |
+|---|---|---|---|---|---|
+| TapeReader | 1.3.1 -> 1.3.2 (pv 4) | Offset X / Y | - | - | a saved offset is ignored (Position only) |
+| BidAskStats | 1.13.2 -> 1.13.3 (pv 6) | Offset X / Y | Ratio bars, Spike vs average | window = Position only | offsets ignored on read; the hidden knobs keep the file's values |
+| BookFlow | 1.3.2 -> 1.3.3 (pv 4) | Offset X / Y, Record order feed | Ratio bars, Spike vs average | window = Position + Near-price ticks; recording ALWAYS on (a saved 0 no longer stops it: OrderFlowFeed.h forces it for the recorder pane) | offsets ignored on read |
+| LiquidityProfile | 0.45.0 -> 0.45.1 (pv 6) | Label offset X / Y | Ended lines kept per side | big-order min lots + font on one line | a saved label offset is ignored (saved back as 0) |
+| DealerProfile | 2.17.1 -> 2.17.2 (pv 7) | Snapshot outline (dashed, against his no-dashed rule) | Market, Clock offset, Indicators in the bar file | rows re-paired to fit 400 px | a saved snap key is ignored; hidden rows keep their file values |
+| DeltaProfile | 2.18.2 -> 2.18.3 | - | - | Font default 10 pt (was 9) | 9 = the old default (written by the 2.18.1 / 2.18.2 migration, never his choice) reads as 10; any other font kept; a 9 saved from 2.18.3 on is kept |
+| TradeManager | 1.3.1 -> 1.3.2 | - | - | Font default 10 pt (was 8) | an 8 written by 1.3.1 reads as 10; other values kept |
+| CVD | 1.2.0 -> 1.3.0 (pv 2) | - | - | NEW window: CVD line (show + colour), Delta % bars (show + up / down colours), Marks (show + bullish / bearish colours); keyed CVD.settings-<MKT>.txt | defaults = what 1.2.0 drew |
+| CobImpulse | 0.4.1 -> 0.5.0 (pv 2) | - | - | NEW window: Cob labels (show + colour), Impulse bar box (show + colour); keyed CobImpulse.settings-<MKT>.txt | defaults = what 0.4.1 drew |
+| HodLod | 2.4.3 (unchanged here) | Offset X / Y: HANDED to the agent building HodLod 2.4.4 (compact table + Gex S/R strip) to avoid two 2.4.4s | - | - | - |
+| KingTracker | 0.17 | left as is (not an LRA pane, his call) | - | - | - |
+
+Layer: SettingsSpec.h Store::upgrade (a changed default: called with the version that wrote the keyed file). Tests: contract 13 tables / 32,065 checks, host test 63, aggbook 155 + 15 + 23, lqp044 114 + 21, dp217 47, dp218 90, CVD host 50 (11 new), CobImpulse host 38 (8 new) + gamma 41 + odds 25, SessionVWAP 173 + 28, bba 26 + 74, TradeManager 13; DealerProfile 2110 / 290 unchanged from baseline (37 / 19 and 60 / 3, stale suites). The CVD / CobImpulse mocks gained the settings-window calls (tests_cvd\mock\irtsdk.h is new; tests_cobimpulse\irtsdk.h had no getChartLabel since 0.4.1).
+
+## 5. His decision list (APPLIED - see 4c)
 1. **Offset X / Y** in HodLod, TapeReader, BidAskStats, BookFlow, and LiquidityProfile's label offset. On 10-07 you chose the 9-spot Position instead of pixel offsets, but HodLod 2.0.6 added offsets later. Remove them from the window? (Saved offsets would stay in the files and keep working.)
 2. **BookFlow "Record order feed"**: your rule is to always keep recording. Remove the box so recording is always on?
 3. **BidAskStats / BookFlow "Ratio bars" and "Spike vs average"**: internal tuning that the per-market data should set. Hide them and let the nightly set them per market?
@@ -162,7 +179,7 @@ New BUILD-LESSONS: 101 (LiquidityFlow link break), 102 (build hash list over 1,0
 7. **CVD / CobImpulse**: add show boxes and colours for the drawn line and marks?
 
 ## 6. Real-dialog check (pending)
-Pending for the next attended session (tools\settings-check\README.md): HodLod 2.4.3, DeltaProfile 2.18.2, TapeReader 1.3.1, LiquidityProfile + LiquidityFlow 0.45.0, BidAskStats 1.13.2, BookFlow 1.3.2, DealerProfile 2.17.1, TradeManager 1.3.1, SessionVWAP 1.6.1 and BigBidAsk 1.16.1. Expected windows: `settings_contract.exe <plugin> --print ES`.
+Pending for the next attended session (tools\settings-check\README.md): HodLod (its next build), DeltaProfile 2.18.3, TapeReader 1.3.2, LiquidityProfile + LiquidityFlow 0.45.1, BidAskStats 1.13.3, BookFlow 1.3.3, DealerProfile 2.17.2, TradeManager 1.3.2, SessionVWAP 1.6.1, BigBidAsk 1.16.1, CVD 1.3.0 and CobImpulse 0.5.0. Expected windows: `settings_contract.exe <plugin> --print ES`.
 
 ## 7. Left to do
 Not done (reasons): keyed place files for BidAskStats / BookFlow - their files are already per market and strictly validated (OrderFlowFeed.h parsePaneSettings), changing them touches OrderFlowFeed.h shared with the Liquidity Profile; LiquidityProfile's three strict files into one keyed file - same reason; KingTracker (Skylit King, not an LRA pane) keeps its window-only settings - it has no per-market file at all and needs a design decision. Earlier list for reference: LiquidityProfile + LiquidityFlow, BigBidAsk (on top of 1.16), keyed place files for BidAskStats / BookFlow (with OrderFlowFeed.h), DealerProfile (and HodLod's banner reader), SessionVWAP, TradeManager, KingTracker. For each one: add its .cpp to SETSRC in gex-build.bat and add an Entry to settings_contract.cpp.

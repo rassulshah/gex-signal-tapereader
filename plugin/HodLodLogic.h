@@ -55,7 +55,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.4.3";   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
+static const char* const HL_VERSION = "2.4.4";   // (2.4.4, 2026-10-18, Rassul approved 17:13 CT "build") the COMPACT table (~350 px, columns sized to their text; Exp / Act / Est; header "ES M2 O0 V2  Neg . S.Dn"; footer "Exp 3:00 PM . v2.4.4") + the Gex S/R on its own strip ABOVE it (R green / S red); the removed words in the hovers; Offset X / Y removed (9-spot Position only);   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
 // (2.3.0)   // (2.3.0, Rassul 2026-10-17 19:53-20:20) MenthorQ Q-Scores "Q: M1 O1 V4" top left (hover = the meaning), "Reg: Neg / S. Dntrend" top right; Gex S/R = the BAND rule: 3 biggest abs-GEX strikes from the RTH open up to the 1.38 extension of the 1D Max (red, a drawn up triangle first) | price | 3 down to the 1.38 extension of the 1D Min (green, a down triangle first)
 // (2.2.4)   // (2.2.4, Rassul 2026-10-17) Gex S/R row: the 3 nearest levels ABOVE price first (red), the current price, then the 3 nearest BELOW (green), MenthorQ name BEFORE each price (blue);   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
@@ -1549,174 +1549,231 @@ inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const 
     if (st) { const std::string s = "   " + v.gexStale; addText(L, x, t, b, s, C_GREY, sfs, false, M(s, sfs, false), R_TABLE, -1); }
 }
 
+// (2.4.4, 2026-10-18, Rassul approved the mockup 17:13 CT "build": the table was ~790 px, "way too wide") the COMPACT table, every
+// column sized to its text (not to the box):
+//   [strip, its own one-line box ABOVE the table, same width, 4 px gap, moves with it]  R PS 7700.G1 7750.7800   S 7650.7640.7625
+//   ES M2 O0 V2                        Neg . S.Dn        (market + Q-Scores left; regime . trend right, red / green as before)
+//                   1st        2nd                       (grey column headings)
+//   Exp             8:33-9:21  late LOD                  (blue, the model's expected times)
+//   Act             HOD 8:33   LOD 2:09 PFL
+//   Est             prior RTH 10/16
+//   Exp 3:00 PM . v2.4.4                                 (grey footer: the options expiry, the version)
+// Words shortened (Expected -> Exp, Actual -> Act, Estimate -> Est, Reg: Negative -> Neg, S. Dntrend -> S.Dn); what left the text (the
+// RTH hours, the expiry countdown, the full regime / trend words, the current price of the Gex row) is in the hovers: the header row
+// (L.qBox) and the strip (L.gexRow). A strip wider than the table widens the table to it (never wrapped or cut).
+static const int STRIP_GAP = 4;   // px between the Gex S/R strip and the table
+inline std::string hlMarketOf(const std::string& title) { const size_t k = title.find(' '); return k == std::string::npos ? title : title.substr(0, k); }
+// "Expiry 3:00 PM (in 21h 51m)" -> "Exp 3:00 PM"; "(expired)" -> "Exp 3:00 PM done"
+inline std::string hlShortExpiry(const std::string& s)
+{
+    if (s.compare(0, 6, "Expiry") != 0) return s;
+    std::string o = "Exp" + s.substr(6);
+    const size_t p = o.find(" (");
+    if (p != std::string::npos) { const bool done = o.find("expired", p) != std::string::npos; o = o.substr(0, p); if (done) o += " done"; }
+    return o;
+}
+// the header's compact regime: "Reg: Neg" + " / S. Dntrend" -> "Neg" + " \xB7 S.Dn" (same colours as regimeParts)
+inline std::vector<Seg> compactRegime(const View& v)
+{
+    std::vector<Seg> p = regimeParts(v, true), o;
+    for (size_t i = 0; i < p.size(); i++) {
+        std::string s = p[i].s;
+        if (s.compare(0, 5, "Reg: ") == 0) s = s.substr(5);
+        if (s.compare(0, 3, " / ") == 0) s = " \xB7 " + s.substr(3);
+        size_t k; while ((k = s.find(". ")) != std::string::npos) s.erase(k + 1, 1);   // "S. Dn" -> "S.Dn"
+        o.push_back(Seg{ s, p[i].col });
+    }
+    return o;
+}
+// the header's left side: "ES" + " M2 O0 V2" (the Q-Scores without "Q: ", in their colours); stale scores " Q STALE" (grey)
+inline std::vector<Seg> compactHead(const View& v, const std::string& mkt, unsigned mktCol)
+{
+    std::vector<Seg> o; o.push_back(Seg{ mkt, mktCol });
+    const bool stale = v.qSegs.size() >= 2 && v.qSegs[1].s == "STALE";
+    if (stale) { o.push_back(Seg{ " Q STALE", C_GREY }); return o; }
+    for (size_t i = 0; i < v.qSegs.size(); i++) {
+        std::string s = v.qSegs[i].s; if (s == "Q: ") continue;
+        size_t k = s.find_first_not_of(' '); if (k == std::string::npos) continue;
+        o.push_back(Seg{ " " + s.substr(k), v.qSegs[i].col });
+    }
+    return o;
+}
+// the strip's parts: "R" (green) + the levels above price, "S" (red) + the levels below; MenthorQ name before its strike, "\xB7" between
+struct StripPart { std::string s; unsigned col; bool arrow; };
+inline std::vector<StripPart> stripParts(const View& v)
+{
+    std::vector<StripPart> o;
+    for (int side = 0; side < 2; side++) {
+        bool first = true;
+        for (size_t i = 0; i < v.gexItems.size(); i++) {
+            const View::GexItem& g = v.gexItems[i];
+            if (g.mid || (side == 0) != g.above) continue;
+            if (first) { if (!o.empty()) o.push_back(StripPart{ "   ", C_GREY, false });
+                         o.push_back(StripPart{ side == 0 ? "R " : "S ", side == 0 ? C_GREEN : C_RED, false }); first = false; }
+            else o.push_back(StripPart{ "\xB7", C_GREY, false });
+            o.push_back(StripPart{ (g.name.empty() ? std::string() : g.name + " ") + g.strike, C_SLATE, g.grow });
+        }
+    }
+    if (!o.empty() && !v.gexStale.empty()) o.push_back(StripPart{ "   " + v.gexStale, C_GREY, false });
+    return o;
+}
+inline int stripW(const std::vector<StripPart>& P, const Measure& M, int fs)
+{ int w = 0; for (const StripPart& p : P) w += M(p.s, fs, false) + (p.arrow ? gexArrowW(fs) : 0); return w; }
+
 inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M, int freeR = -1, int pos = POS_DEFAULT, int dx = 0, int dy = 0)
 {
     if (freeR < 0) freeR = pane.r;
     const int pad = 6;
-    // (2.0.5) the IRT chart title row stays clear (a top table starts under it) when the pane has room for it
-    const int titleRow = pane.b - pane.t >= 200 ? TITLE_ROW_PX : 0;
+    const int titleRow = pane.b - pane.t >= 200 ? TITLE_ROW_PX : 0;   // (2.0.5) the IRT chart title row stays clear
     Box area = { left, pane.t + titleRow, (std::min)(freeR, (int)pane.r), pane.b - 1 };
-    const std::string verTxt = std::string("  v") + HL_VERSION;   // (2.0.5, his rule: the version next to the panel's title)
     auto trimL = [](std::string t) { size_t k = t.find_first_not_of(' '); return k == std::string::npos ? std::string() : t.substr(k); };
-    // ---- the content (independent of the font size)
+    // ---- the content
     std::string title; unsigned titleCol = v.headerCol;
-    std::vector<Seg> info;                                   // Range used / Proj (or "prior RTH 10/12")
+    std::vector<Seg> info;                                   // Est: Range used / Proj (or "prior RTH 10/16")
     if (!v.headLeftSegs.empty()) {
         title = trimL(v.headLeftSegs[0].s); titleCol = v.headLeftSegs[0].col;
         for (size_t q = 1; q < v.headLeftSegs.size(); q++) info.push_back(Seg{ trimL(v.headLeftSegs[q].s), v.headLeftSegs[q].col });
     } else title = trimL(v.headLeftTxt);
     if (v.prior && !v.headMain.empty()) info.push_back(Seg{ v.headMain, C_GREY });
-    // (05:55 "i also dont want the line ... 1st extreme LOD? (73%) ...") the 1st Extreme model still runs, logs and draws its candle
-    // marker; its table line is not shown
-    std::vector<Seg> fx;
     Cell eRow[NALL], aRow[NALL];
     for (int c = 0; c < NALL; c++) { eRow[c] = v.E[c]; aRow[c] = v.A[c]; }
-    eRow[K_LABEL].s = "Expected";   // (05:50 "keep the Expected wording")
     const std::string tail = trimL(v.headTail);
-    if (!tail.empty()) eRow[K_2ND] = mkCell(tail, C_BLUE, true);   // the 2nd-extreme call is the Estimate's 2nd Time
-    for (int c = 1; c < NALL; c++) { Cell& e = eRow[c]; e.col = e.col2 = e.col3 = C_BLUE; e.bold = true; for (size_t q = 0; q < e.lv.size(); q++) e.lv[q].col = C_BLUE; }
-    {   // Actual 1st Time = "LOD IN 8:39 (71%)" once the read names the side and the 1st extreme has printed
+    if (!tail.empty()) eRow[K_2ND] = mkCell(tail, C_BLUE, true);   // the 2nd-extreme call is the Expected 2nd
+    for (int c = 1; c < NALL; c++) { Cell& e = eRow[c]; e.col = e.col2 = e.col3 = C_BLUE; e.bold = false; for (size_t q = 0; q < e.lv.size(); q++) e.lv[q].col = C_BLUE; }
+    {   // Act 1st = "LOD IN 8:39" once the read names the side and the 1st extreme has printed
         const std::string hm = trimL(v.headMain);
         size_t inPos = hm.find(" IN "), pct = hm.find('%');
         const Cell& a1 = v.A[K_1ST];
         if (!v.prior && inPos != std::string::npos && pct != std::string::npos && pct > inPos && !a1.s.empty() && !a1.s2.empty()) {
             Cell c = a1; size_t e = pct + 1; if (e < hm.size() && hm[e] == '?') e++;
-            c.s = hm.substr(0, inPos) + " IN"; c.s2 = a1.s + " " + hm.substr(inPos + 4, e - inPos - 4); c.col2 = a1.col; c.bold = true; c.s3.clear();
+            c.s = hm.substr(0, inPos) + " IN"; c.s2 = a1.s + " " + hm.substr(inPos + 4, e - inPos - 4); c.col2 = a1.col; c.s3.clear();
             aRow[K_1ST] = c;
         }
     }
-    for (int c = 1; c < NALL; c++) { if (aRow[c].s3 == "late") aRow[c].s3.clear(); hlParenCell(aRow[c]); hlParenCell(eRow[c]); hlNoPctCell(aRow[c]); hlNoPctCell(eRow[c]); }
-    // ---- sizes: (2.0.3, Rassul 10:38 "reduce the size of this by 33%. too big") 9 / 9 / 8 / 8 pt instead of 13 / 12 / 11 / 10, and the
-    // padding scaled by 2/3 (equal columns first, then content-sized)
-    // (2.0.5) attempts 4-5: the same at 8 pt with the compact trend word ("Strong Down") - only when the full word cannot fit
-    for (int attempt = 0; attempt < 6; attempt++) {
-        const int fs = 9 - (std::min)(attempt, 3) / 2, efs = fs + 1; const bool natural = attempt % 2 == 1; const bool compactT = attempt >= 4;
-        if (compactT && !v.trendReady) break;
-        const int rowH = lineH(fs) + 1, rowHE = lineH(efs) + 1, titleH = lineH(fs + 1) + 3, gap = 3;
-        auto cellWf = [&](const Cell& C, int f) {
-            int w = M(C.s, f, C.bold);
-            if (!C.s2.empty()) w += M(" " + C.s2, f, C.bold);
-            for (size_t q = 0; q < C.lv.size(); q++) w += M((q ? " \xB7 " : " ") + C.lv[q].s, f, C.bold);
-            if (!C.s3.empty()) w += M("  " + C.s3, f, C.bold);
+    for (int c = 1; c < NALL; c++) { if (aRow[c].s3 == "late") aRow[c].s3.clear(); hlParenCell(aRow[c]); hlParenCell(eRow[c]); hlNoPctCell(aRow[c]); hlNoPctCell(eRow[c]); aRow[c].bold = false; }
+    // the Est values: one per column; more values than columns join the last column
+    const int ncol = NSHOWN - 1;
+    std::vector<Seg> est((size_t)ncol, Seg{ "", C_GREY });
+    for (size_t q = 0; q < info.size(); q++) { const size_t ci = (std::min)(q, (size_t)(ncol - 1)); if (!est[ci].s.empty()) est[ci].s += "  "; else est[ci].col = info[q].col; est[ci].s += info[q].s; }
+    const std::vector<Seg> head = compactHead(v, hlMarketOf(title), titleCol), reg = compactRegime(v);
+    std::string expTxt; unsigned expCol = C_GREY;
+    for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") != 0) { expTxt = hlShortExpiry(v.sessSegs[q].s); expCol = v.sessSegs[q].col; break; }
+    const std::string verTxt = std::string("v") + HL_VERSION;   // his rule: the version on the panel
+    const std::string footSep = expTxt.empty() ? "" : " \xB7 ";
+    const std::vector<StripPart> strip = stripParts(v);
+    static const char* const HDR[3] = { "", "1st", "2nd" };
+    for (int attempt = 0; attempt < 2; attempt++) {
+        const int fs = 10 - attempt;                         // 10 pt (his minimum); 9 pt only when 10 cannot fit
+        const int rowH = lineH(fs) + 1, footH = lineH(fs), stripH = strip.empty() ? 0 : lineH(fs) + 4;
+        auto cellWf = [&](const Cell& C) {
+            int w = M(C.s, fs, C.bold);
+            if (!C.s2.empty()) w += M(" " + C.s2, fs, C.bold);
+            for (size_t q = 0; q < C.lv.size(); q++) w += M((q ? " \xB7 " : " ") + C.lv[q].s, fs, C.bold);
+            if (!C.s3.empty()) w += M("  " + C.s3, fs, C.bold);
             return w;
         };
-        auto segW = [&](const std::vector<Seg>& S, int f, int sep) { int w = 0; for (size_t q = 0; q < S.size(); q++) w += M(S[q].s, f, true) + (q ? sep : 0); return w; };
-        const int sepInfo = M("     ", fs, true);
-        const std::vector<Seg> regP = regimeParts(v, compactT);
-        int regW = 0; for (size_t q = 0; q < regP.size(); q++) regW += M(regP[q].s, fs + 1, true);
-        int qW = 0; for (size_t q = 0; q < v.qSegs.size(); q++) qW += M(v.qSegs[q].s, fs + 1, true);   // (2.3.0) the Q-Scores take the label column's header cell
-        int lw = (std::max)((std::max)((std::max)(M(eRow[K_LABEL].s, fs, true), M(aRow[K_LABEL].s, fs, true)), info.empty() ? 0 : M("Estimate", fs, true)), qW) + 12;
-        std::vector<int> nat; int cw = 0, sumNat = 0;
-        for (int j = 0; j < NSHOWN; j++) { int c = SHOWN[j]; if (c == K_LABEL) continue;
-            int w = (std::max)(M(COLS[c], fs, false), (std::max)(cellWf(eRow[c], efs), cellWf(aRow[c], fs))) + 24;
-            if (j == 1) w = (std::max)(w, M(title, fs + 1, true) + M(verTxt, fs, false) + 16);           // the RTH title (+ version) over 1st Time
-            if (j == 2) { std::string t2; for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") != 0) t2 += (t2.empty() ? "" : "  ") + v.sessSegs[q].s;
-                          w = (std::max)(w, (t2.empty() ? 0 : M(t2, fs + 1, true) + 16) + regW + 16); }   // (2.3.0) the expiry + the regime (right) over 2nd Time
-            nat.push_back(w); sumNat += w; cw = (std::max)(cw, w); }
-        const int ncol = NSHOWN - 1, colsW = natural ? sumNat : ncol * cw;
-        int W = (std::max)(lw + colsW + 12, (std::max)(info.empty() ? 0 : lw + segW(info, fs, sepInfo) + 12, segW(fx, fs, 0)) + 32);
-        const int gexW = gexLineW(v, M, efs, fs);                  // (2.1.0) the GEX line, in the 10 pt row font (front and centre)
-        if (gexW > 0) W = (std::max)(W, lw + gexW + 24);
-        const int H = titleH + 1 + (gexW > 0 ? rowHE + 1 : 0) + rowH + rowHE + rowH + gap + 1 + (info.empty() ? 0 : rowH) + (fx.empty() ? 0 : rowH) + gap + 2;
-        if (W > area.r - area.l && attempt < (v.trendReady ? 5 : 3)) continue;
+        auto segsW = [&](const std::vector<Seg>& S, bool bold) { int w = 0; for (size_t q = 0; q < S.size(); q++) w += M(S[q].s, fs, bold); return w; };
+        const int lw = (std::max)((std::max)(M("Exp", fs, false), M("Act", fs, false)), info.empty() ? 0 : M("Est", fs, false)) + 14;
+        std::vector<int> cw((size_t)ncol, 0); int sumC = 0;
+        for (int j = 1; j < NSHOWN; j++) { const int c = SHOWN[j], k = j - 1;
+            cw[(size_t)k] = (std::max)((std::max)(M(HDR[j < 3 ? j : 2], fs, false), cellWf(eRow[c])), (std::max)(cellWf(aRow[c]), est[(size_t)k].s.empty() ? 0 : M(est[(size_t)k].s, fs, false))) + 14;
+            sumC += cw[(size_t)k]; }
+        const int headW = 8 + segsW(head, true) + 16 + segsW(reg, true) + 8;
+        const int footW = 8 + M(expTxt + footSep + verTxt, fs, false) + 8;
+        const int sW = strip.empty() ? 0 : 8 + stripW(strip, M, fs) + 8;
+        int W = (std::max)((std::max)(8 + lw + sumC, headW), (std::max)(footW, sW));   // the strip never wraps: the table widens to it
+        cw[(size_t)(ncol - 1)] += W - (8 + lw + sumC);                                   // the spare width goes to the last column
+        const int H = 2 + rowH + 1 + rowH + rowH + rowH + (info.empty() ? 0 : rowH) + 2 + footH + 3;
+        const int Htot = H + (strip.empty() ? 0 : stripH + STRIP_GAP);
+        if (W > area.r - area.l && attempt == 0) continue;
         if (area.l + W > pane.r - pad) continue;
-        if (H + 40 > pane.b - pane.t) break;
+        if (Htot + 40 > pane.b - pane.t) break;
         if (W > area.r - area.l) area.r = (std::min)((int)pane.r, area.l + W);
-        std::vector<int> cwv((size_t)ncol, (W - 12 - lw) / ncol);
-        if (natural) { int extra = (W - 12 - lw - sumNat) / ncol; for (int k = 0; k < ncol; k++) cwv[(size_t)k] = nat[(size_t)k] + extra; }
-        L.tableWant = offsetIn(area, placeIn(area, W, H, pos), dx, dy);
-        Box T = placeAvoid(area, W, H, pos, L.avoid, &L.tableMoved, &L.tableClear, dx, dy);
-        L.table = T; L.tableOk = true; L.trendCompact = compactT;
-        addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_TABLE);
-        const int cx = (T.l + T.r) / 2;
-        int y = T.t + 2;
-        {   // (05:52 "keep the RTH header but add the Regime and Options Expiry"; 05:56 "move the regime to the left of rth"; 05:57 "shorten
-            // Regime to Reg: ... Negative to Neg ... i want all the columns aligned"): the header is a grid row too -
-            // "Reg: Neg" in the label column, "ES RTH 8:30-3:00" centred over 1st Time, "Expiry 1:30 PM (in 8h 27m)" over 2nd Time
-            // (2.0.5) "Regime: Neg / Uptrend": the gamma part in its sign colour, the trend part green (up) / red (down) / the table white (Range)
-            std::vector<Seg> rest;
-            for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") != 0) rest.push_back(v.sessSegs[q]);
-            // (2.3.0, Rassul 20:16 "switch positions of qscore and Reg trend") the Q-Scores top left, the regime / trend top right
-            { int xq = T.l + 8; for (size_t q = 0; q < v.qSegs.size(); q++) { int w = M(v.qSegs[q].s, fs + 1, true); addText(L, xq, y, y + titleH - 2, v.qSegs[q].s, v.qSegs[q].col, fs + 1, true, w, R_TABLE, -1); xq += w; }
-              if (qW > 0) { L.qBox = Box{ T.l, y, T.l + 8 + qW + 6, y + titleH }; L.qOk = true; } }
-            const int regX = T.r - 8 - regW;
-            { int xr = regX; for (size_t q = 0; q < regP.size(); q++) { int w = M(regP[q].s, fs + 1, true); addText(L, xr, y, y + titleH - 2, regP[q].s, regP[q].col, fs + 1, true, w, R_TABLE, -1); xr += w; } }
-            int xl = T.l + 6 + lw;
-            int w0 = M(title, fs + 1, true), wv = M(verTxt, fs, false);
-            addText(L, xl + cwv[0] / 2 - (w0 + wv) / 2, y, y + titleH - 2, title, titleCol, fs + 1, true, w0, R_TABLE, -1);
-            addText(L, xl + cwv[0] / 2 - (w0 + wv) / 2 + w0, y, y + titleH - 2, verTxt, C_GREY, fs, false, wv, R_TABLE, -1);
-            if (!rest.empty() && ncol > 1) { int x2 = xl + cwv[0]; std::string t2; unsigned c2 = rest[0].col;
-                for (size_t q = 0; q < rest.size(); q++) t2 += (q ? "  " : "") + rest[q].s;
-                int w2 = M(t2, fs + 1, true); const int right = regW > 0 ? regX - 8 : x2 + cwv[1];   // (2.3.0) centred in the room left of the regime
-                addText(L, (std::max)(x2 + 4, x2 + (right - x2) / 2 - w2 / 2), y, y + titleH - 2, t2, c2, fs + 1, true, w2, R_TABLE, -1); }
+        L.tableWant = offsetIn(area, placeIn(area, W, Htot, pos), dx, dy);
+        const Box B = placeAvoid(area, W, Htot, pos, L.avoid, &L.tableMoved, &L.tableClear, dx, dy);
+        const Box T = { B.l, B.b - H, B.r, B.b };
+        L.table = T; L.tableOk = true; L.trendCompact = true;
+        if (!strip.empty()) {   // the Gex S/R strip: its own box, the table's width, 4 px above it
+            const Box Sb = { B.l, B.t, B.r, B.t + stripH };
+            addRect(L, Sb.l, Sb.t, Sb.r, Sb.b, C_BORDER, C_PANEL, 1, R_TABLE);
+            int x = Sb.l + 8;
+            for (const StripPart& p : strip) {
+                const int w = M(p.s, fs, false); addText(L, x, Sb.t + 1, Sb.b - 1, p.s, p.col, fs, p.s == "R " || p.s == "S ", w, R_TABLE, -1); x += w;
+                if (p.arrow) { const int aw = gexArrowW(fs), ax = x + aw / 2 + 2, h = (int)(fs * 0.9f + 0.5f), yc = (Sb.t + Sb.b) / 2, y0 = yc + h / 2, y1 = yc - h / 2;
+                               addLine(L, ax, y0, ax, y1, p.col, 2, R_TABLE); addLine(L, ax - 3, y1 + 3, ax, y1, p.col, 2, R_TABLE); addLine(L, ax + 3, y1 + 3, ax, y1, p.col, 2, R_TABLE); x += aw; }
+            }
+            L.gexRow = Sb; L.gexOk = true; L.blocks.push_back(Sb);
         }
-        y += titleH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
-        const Cell* rows[2] = { eRow, aRow };
-        for (int r = -1; r < 2; r++) {
-            const int rf = r == 0 ? efs : fs, rh = r < 0 ? rowH : (r == 0 ? rowHE : rowH);
-            int x = T.l + 6 + lw, ci = 0;
-            for (int j = 0; j < NSHOWN; j++) {
-                int c = SHOWN[j]; int cwc = 0;
-                if (c != K_LABEL) cwc = cwv[(size_t)ci++];
-                if (c == K_LABEL) {
-                    if (r >= 0) { const Cell& C = rows[r][c]; addText(L, T.l + 8, y, y + rh, C.s, r == 0 ? C_GREY : C.col, fs, true, M(C.s, fs, true), R_TABLE, -1); }
-                    continue;
-                }
-                if (r < 0) { std::string h = COLS[c]; int hw = M(h, fs, false); addText(L, x + cwc / 2 - hw / 2, y, y + rh, h, C_GREY, fs, false, hw, R_TABLE, -1); x += cwc; continue; }
-                const Cell& C = rows[r][c];
+        addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_TABLE);
+        int y = T.t + 2;
+        {   // header: "ES M2 O0 V2" left, "Neg . S.Dn" right - the hover target (RTH hours, expiry countdown, full words, the Q meaning)
+            int x = T.l + 8; for (size_t q = 0; q < head.size(); q++) { const int w = M(head[q].s, fs, true); addText(L, x, y, y + rowH, head[q].s, head[q].col, fs, true, w, R_TABLE, -1); x += w; }
+            int xr = T.r - 8 - segsW(reg, true); for (size_t q = 0; q < reg.size(); q++) { const int w = M(reg[q].s, fs, true); addText(L, xr, y, y + rowH, reg[q].s, reg[q].col, fs, true, w, R_TABLE, -1); xr += w; }
+            L.qBox = Box{ T.l, T.t, T.r, y + rowH }; L.qOk = true;
+        }
+        y += rowH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
+        const int x0 = T.l + 8 + lw;
+        auto colX = [&](int k) { int x = x0; for (int i = 0; i < k; i++) x += cw[(size_t)i]; return x; };
+        for (int k = 0; k < ncol; k++) addText(L, colX(k), y, y + rowH, HDR[k + 1 < 3 ? k + 1 : 2], C_GREY, fs, false, M(HDR[k + 1 < 3 ? k + 1 : 2], fs, false), R_TABLE, -1);
+        y += rowH;
+        const Cell* rows[2] = { eRow, aRow }; const char* lab[2] = { "Exp", "Act" };
+        for (int r = 0; r < 2; r++) {
+            addText(L, T.l + 8, y, y + rowH, lab[r], C_SLATE, fs, false, M(lab[r], fs, false), R_TABLE, -1);
+            for (int j = 1; j < NSHOWN; j++) {
+                const Cell& C = rows[r][SHOWN[j]]; int xx = colX(j - 1);
                 std::vector<std::string> part; std::vector<unsigned> pc;
                 part.push_back(C.s); pc.push_back(C.col);
                 part.push_back(C.s2.empty() ? "" : " " + C.s2); pc.push_back(C.col2 ? C.col2 : C.col);
                 for (size_t q = 0; q < C.lv.size(); q++) { part.push_back((q ? " \xB7 " : " ") + C.lv[q].s); pc.push_back(C.lv[q].col); }
                 part.push_back(C.s3.empty() ? "" : "  " + C.s3); pc.push_back(C.col3 ? C.col3 : C.col);
-                int tw = cellWf(C, rf), xx = x + cwc / 2 - tw / 2;
-                for (size_t k = 0; k < part.size(); k++) {
-                    if (part[k].empty()) continue;
-                    int pw = M(part[k], rf, C.bold);
-                    addText(L, xx, y, y + rh, part[k], pc[k], rf, C.bold, pw, R_TABLE, -1);
-                    xx += pw;
-                }
-                x += cwc;
-            }
-            y += rh;
-        }
-        y += gap; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
-        if (gexW > 0) {   // (2.2.0, Rassul 12:01 "move the gex line right above estimate and call it Gex S/R")
-            addText(L, T.l + 8, y, y + rowHE, "Gex S/R", C_GREY, fs, true, M("Gex S/R", fs, true), R_TABLE, -1);   // (audit) model context, '?' until proven
-            const int x0 = T.l + 6 + lw; int cols = 0; for (int k = 0; k < ncol; k++) cols += cwv[(size_t)k];
-            const int gx = (std::max)(x0, x0 + cols / 2 - gexW / 2);
-            layoutGexItems(L, v, gx, y, y + rowHE, M, efs, fs);
-            L.gexRow = Box{ T.l, y, T.r, y + rowHE }; L.gexOk = true;
-            y += rowHE; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
-        }
-        if (!info.empty()) {   // (05:50 "add Estimate"; 05:55 "align estimate so it is aligned with the other values above it"): the label
-            // like Expected / Actual, then Range used centred under 1st Time and the projection under 2nd Time (one value per column)
-            addText(L, T.l + 8, y, y + rowH, "Estimate", C_GREY, fs, true, M("Estimate", fs, true), R_TABLE, -1);
-            int x0 = T.l + 6 + lw;
-            for (size_t q = 0; q < info.size(); q++) {
-                const int ci = (std::min)((int)q, ncol - 1);
-                int xl = x0; for (int k = 0; k < ci; k++) xl += cwv[(size_t)k];
-                int w = M(info[q].s, fs, true);
-                addText(L, xl + cwv[(size_t)ci] / 2 - w / 2, y, y + rowH, info[q].s, info[q].col, fs, true, w, R_TABLE, -1);
+                for (size_t k = 0; k < part.size(); k++) { if (part[k].empty()) continue; const int pw = M(part[k], fs, C.bold); addText(L, xx, y, y + rowH, part[k], pc[k], fs, C.bold, pw, R_TABLE, -1); xx += pw; }
             }
             y += rowH;
         }
-        if (!fx.empty()) {
-            int xx = cx - segW(fx, fs, 0) / 2;
-            for (size_t q = 0; q < fx.size(); q++) { int w = M(fx[q].s, fs, true); addText(L, xx, y, y + rowH, fx[q].s, fx[q].col, fs, true, w, R_TABLE, -1); xx += w; }
+        if (!info.empty()) {
+            addText(L, T.l + 8, y, y + rowH, "Est", C_SLATE, fs, false, M("Est", fs, false), R_TABLE, -1);
+            for (int k = 0; k < ncol; k++) if (!est[(size_t)k].s.empty()) addText(L, colX(k), y, y + rowH, est[(size_t)k].s, est[(size_t)k].col == C_GREY ? C_SLATE : est[(size_t)k].col, fs, false, M(est[(size_t)k].s, fs, false), R_TABLE, -1);
             y += rowH;
+        }
+        y += 2;
+        {   int x = T.l + 8;   // the footer: "Exp 3:00 PM . v2.4.4" (grey; the expiry amber in its last hour, as before)
+            if (!expTxt.empty()) { const int w = M(expTxt, fs, false); addText(L, x, y, y + footH, expTxt, expCol == C_AMBER ? C_AMBER : C_GREY, fs, false, w, R_TABLE, -1); x += w;
+                                   const int ws = M(footSep, fs, false); addText(L, x, y, y + footH, footSep, C_GREY, fs, false, ws, R_TABLE, -1); x += ws; }
+            addText(L, x, y, y + footH, verTxt, C_GREY, fs, false, M(verTxt, fs, false), R_TABLE, -1);
         }
         L.blocks.push_back(T);
         return;
     }
     // too narrow / too short: one line instead of forcing the table (checklist #35)
-    std::string s = "HOD/LOD: pane too small for the table"; int fs = 8, w = M(s, fs, false), h = lineH(fs) + 4;
+    std::string s = "HOD/LOD: pane too small for the table"; int fs = 10, w = M(s, fs, false), h = lineH(fs) + 4;
     Box T = { left, pane.b - pad - h, left + w + 8, pane.b - pad };
     if (T.r > pane.r || T.t < pane.t) { L.note = "pane too small"; return; }
     L.table = T; L.note = "table: pane too small";
     addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_NOTE);
     addText(L, T.l + 4, T.t, T.b, s, C_GREY, fs, false, w, R_NOTE, -1);
     L.blocks.push_back(T);
+}
+// (2.4.4) the header hover's first lines: what the compact header left out (the RTH hours, the expiry countdown, the full regime and
+// trend words, what Exp / Act / Est mean), then the Q-Scores' meaning
+inline std::vector<Line> headerHover(const View& v)
+{
+    std::vector<Line> o;
+    const unsigned W = C_SLATE;
+    std::string title = !v.headLeftSegs.empty() ? v.headLeftSegs[0].s : v.headLeftTxt; { size_t k = title.find_first_not_of(' '); title = k == std::string::npos ? std::string() : title.substr(k); }
+    std::string exp; for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") != 0) exp = v.sessSegs[q].s;
+    { Line L; L.push_back(Seg{ "HOD / LOD  " + title + (exp.empty() ? std::string() : "  \xB7  options " + exp), W }); o.push_back(L); }
+    std::string rg; unsigned rc = C_GREY;
+    for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") == 0) { rg = v.sessSegs[q].s; rc = v.sessSegs[q].col; }
+    if (!rg.empty() || v.trendReady) {
+        Line L; L.push_back(Seg{ "Regime: ", W });
+        if (rg.size() > 8) L.push_back(Seg{ rg.substr(8) + (rg.find("Negative") != std::string::npos ? " gamma (dealers chase moves)" : rg.find("Positive") != std::string::npos ? " gamma (dealers dampen moves)" : ""), rc });
+        else L.push_back(Seg{ "--", C_GREY });
+        if (v.trendReady) { L.push_back(Seg{ "  \xB7  trend: ", W }); std::string t = trendWord(v.trendLvl); if (t == "S. Uptrend") t = "Strong Uptrend"; else if (t == "S. Dntrend") t = "Strong Downtrend"; else if (t == "Dntrend") t = "Downtrend"; L.push_back(Seg{ t, trendCol(v.trendLvl) }); }
+        o.push_back(L);
+    }
+    { Line L; L.push_back(Seg{ "Exp", C_BLUE }); L.push_back(Seg{ " = Expected times of the 1st / 2nd extreme (the model)  \xB7  Act = Actual  \xB7  Est = Estimate (range used, projection).", W }); o.push_back(L); }
+    for (size_t i = 0; i < v.qHover.size(); i++) o.push_back(v.qHover[i]);
+    return o;
 }
 
 // (2.1.0) the GEX line's detail, drawn only while the mouse is on the row: above the table when there is room (the table sits at the
@@ -1744,8 +1801,10 @@ inline void layoutGexHover(Layout& L, const View& v, const Box& pane, int freeR,
     if (maxW < 220) return;
     struct WL { std::string s; unsigned col; bool bold; int x; };
     std::vector<WL> lines; int W = 0, gaps = 0; const int GAP = 5;
-    for (size_t i = 0; i < v.gexHover.size(); i++) {
-        const Seg& g = v.gexHover[i]; const bool bold = g.col == C_SLATE || i == 0;
+    std::vector<Seg> gh = v.gexHover;   // (2.4.4) the current price left the strip: it is the hover's 2nd line
+    for (size_t i = 0; i < v.gexItems.size(); i++) if (v.gexItems[i].mid) { gh.insert(gh.begin() + (gh.empty() ? 0 : 1), Seg{ "Price now " + v.gexItems[i].strike + "  (R = resistance above it, S = support below it)", C_SLATE }); break; }
+    for (size_t i = 0; i < gh.size(); i++) {
+        const Seg& g = gh[i]; const bool bold = g.col == C_SLATE || i == 0;
         if (g.s.empty()) { lines.push_back(WL{ "", g.col, false, 0 }); gaps++; continue; }   // a spacer
         std::vector<std::string> w = wrapText(g.s, maxW - ind, M, fs, bold);
         for (size_t k = 0; k < w.size(); k++) { lines.push_back(WL{ w[k], g.col, bold, k ? ind : 0 }); W = (std::max)(W, M(w[k], fs, bold) + (k ? ind : 0)); }
@@ -1775,7 +1834,8 @@ inline void layoutGexHover(Layout& L, const View& v, const Box& pane, int freeR,
 inline void layoutQHover(Layout& L, const View& v, const Box& pane, int freeR, const Measure& M)
 {
     L.qHoverOk = false;
-    if (!L.qOk || v.qHover.empty()) return;
+    if (!L.qOk) return;
+    const std::vector<Line> HL = headerHover(v);   // (2.4.4) what the compact header left out, then the Q-Scores' meaning
     const int fs = 10, lh = lineH(fs), pad = 8, ind = 12;
     if (freeR <= pane.l + 200) freeR = pane.r;
     const int maxW = (std::min)(900, freeR - pane.l - 2 * pad - 8);
@@ -1783,8 +1843,8 @@ inline void layoutQHover(Layout& L, const View& v, const Box& pane, int freeR, c
     struct Run { std::string s; unsigned col; };
     struct WL { std::vector<Run> runs; bool bold; int x; };
     std::vector<WL> lines; int W = 0;
-    for (size_t i = 0; i < v.qHover.size(); i++) {
-        const Line& ln = v.qHover[i]; const bool bold = i == 0;
+    for (size_t i = 0; i < HL.size(); i++) {
+        const Line& ln = HL[i]; const bool bold = i == 0;
         std::string full; std::vector<size_t> segEnd;
         for (size_t k = 0; k < ln.size(); k++) { full += ln[k].s; segEnd.push_back(full.size()); }
         if (full.empty()) continue;

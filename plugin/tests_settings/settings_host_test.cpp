@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 static int F = 0, N = 0;
-#define CHECK(c, m) do { ++N; if (!(c)) { std::printf("FAIL %s (line %d)\n", m, __LINE__); ++F; } } while (0)
+#define CHECK(c, m) do { ++N; if (!(c)) { std::printf("FAIL %s (line %d)\n", std::string(m).c_str(), __LINE__); ++F; } } while (0)
 
 static std::string tmpDir() { char t[] = "/tmp/sstestXXXXXX"; const char* d = mkdtemp(t); return d ? d : "/tmp"; }
 static void writeFile(const std::string& p, const std::string& s) { FILE* f = std::fopen(p.c_str(), "wb"); std::fwrite(s.data(), 1, s.size(), f); std::fclose(f); }
@@ -38,19 +38,20 @@ int main() {
       CHECK(y.at(yi.id[K_PROJ_UP])->c == (COLOR)0x22C55E, "old path: setIntegerValue on a colour row does nothing (the swatch keeps its default / black)");
       CHECK(y.getIntegerValue(yi.id[K_PROJ_UP]) == 0, "old path: getIntegerValue on a colour row reads 0 -> black saved (BigBidAsk.settings-ES.txt 10-18)"); }
     // 3. user edits + group master
-    x.userColor(ids.id[K_MARK_HOD], 0xABCDEF); x.userInt(ids.id[K_OFFSET_X], 25);
+    x.userColor(ids.id[K_MARK_HOD], 0xABCDEF); x.userList(ids.id[K_POSITION], 2);
     x.userCheck(ids.id[K_SHOW_PROJ], false); ss::onUpdate(&x, S, ids, ids.id[K_SHOW_PROJ] + 1, snap);   // IRT may pass another number (lesson 94)
     CHECK(!x.isEnabled(ids.id[K_PROJ_UP]) && !x.isEnabled(ids.id[K_PROJ_DN]), "master off greys its colours");
     CHECK(x.isEnabled(ids.id[K_TABLE_BG]), "another group's item stays enabled");
     CHECK(!ss::onUpdate(&x, S, ids, ids.id[K_SHOW_PROJ], snap), "a second update without a change does nothing");
     ss::Values W = ss::readDialog(&x, S, ids, V, snap);
-    CHECK(W.c(K_MARK_HOD) == 0xABCDEFul && W.i(K_OFFSET_X) == 25 && !W.b(K_SHOW_PROJ), "edits read back");
+    CHECK(W.c(K_MARK_HOD) == 0xABCDEFul && W.i(K_POSITION) == 2 && !W.b(K_SHOW_PROJ), "edits read back");
     CHECK(W.c(K_PROJ_UP) == 0x123456ul, "a disabled colour keeps its value");
     x.userCheck(ids.id[K_SHOW_PROJ], true); ss::onUpdate(&x, S, ids, 0, snap);
     CHECK(x.isEnabled(ids.id[K_PROJ_UP]), "master on enables its colours again");
     // 4. garbage typed into a number -> the file's value
-    x.userInt(ids.id[K_OFFSET_Y], 99999); W = ss::readDialog(&x, S, ids, V, snap);
-    CHECK(W.i(K_OFFSET_Y) == V.i(K_OFFSET_Y), "an out-of-range number is never saved");
+    { cppExtension d; const ss::Spec& DS = dpset::spec(); ss::Ids di; ss::registerAll(&d, DS, di); ss::Values DV = ss::defaults(DS, ss::M_ES); ss::Snap dsn; ss::fillDialog(&d, DS, di, DV, dsn);
+      d.userInt(di.id[dpset::K_WIDTH], 99999); ss::Values DW = ss::readDialog(&d, DS, di, DV, dsn);
+      CHECK(DW.i(dpset::K_WIDTH) == DV.i(dpset::K_WIDTH), "an out-of-range number is never saved"); }
     // 5. IRT ignores the fill: untouched controls keep the FILE's values (not the window's stale ones)
     { cppExtension z; ss::Ids zi; ss::registerAll(&z, S, zi); z.m.ignoreFill = true;
       ss::Values file = ss::defaults(S, ss::M_NQ); file.v[K_POSITION] = 2; file.v[K_TABLE_BG] = 0x010203; file.v[K_SHOW_MARK] = 0;
@@ -59,6 +60,50 @@ int main() {
       for (int k = 0; k < S.n; ++k) CHECK(out.v[(size_t)k] == file.v[(size_t)k], "ignored fill + untouched -> file value kept");
       z.userList(zi.id[K_POSITION], 5); out = ss::readDialog(&z, S, zi, file, zs);
       CHECK(out.i(K_POSITION) == 5 && out.c(K_TABLE_BG) == 0x010203ul, "the one control he changed is saved, the rest from the file"); }
+    // 5b. (SettingsHost 1.1.0, 2026-10-18: BigBidAsk.settings-ES.txt zeroed at 15:07 CT) a BLANK window never overwrites the saved file
+    {   const std::string d0 = tmpDir();
+        const ss::Spec* specs[] = { &hlset::spec(), &dpset::spec(), &trset::spec() };
+        for (const ss::Spec* SP : specs) {
+            const std::string path = d0 + "/" + SP->plugin + ".settings-ES.txt";
+            ss::Store st; st.S = SP; st.path = path;
+            ss::Values file = ss::defaults(*SP, ss::M_ES);
+            for (int k = 0; k < SP->n; ++k) if (SP->rows[k].type == ss::T_COLOR) file.v[(size_t)k] = 0x123456;   // his own colours
+            CHECK(st.save(file), "the saved file");
+            const std::string before = readFile(path);
+            // (a) a copy whose controls read blank (never filled, IRT reset them after setParameterVersion): no snapshot
+            cppExtension b; ss::Ids bi; ss::registerAll(&b, *SP, bi);
+            for (auto& q : b.m.p) { q.b = false; q.i = 0; q.f = 0; q.c = 0; q.list = -1; }
+            ss::Snap none; ss::Values out = ss::readDialog(&b, *SP, bi, file, none);
+            CHECK(out.why.compare(0, 7, "refused") == 0 && out.v == file.v, std::string(SP->plugin) + ": a blank window (no fill) reads back the FILE, refused");
+            st.save(out); CHECK(readFile(path) == before, std::string(SP->plugin) + ": the file is unchanged after a blank window");
+            // (b) the same with a snapshot taken from the blank window (IRT ignored the fill)
+            ss::Snap bs; b.m.ignoreFill = true; ss::fillDialog(&b, *SP, bi, file, bs); out = ss::readDialog(&b, *SP, bi, file, bs);
+            CHECK(out.v == file.v, std::string(SP->plugin) + ": ignored fill + blank window -> the file's values");
+            // (c) the store itself refuses an all-zero table
+            ss::Values z = file; for (auto& x : z.v) x = 0;
+            CHECK(!st.save(z) && !st.refused.empty() && readFile(path) == before, std::string(SP->plugin) + ": Store::save refuses an all-zero table");
+            // (d) the chart copy (inDialog false) is never the window
+            cppExtension c; c.m.dialog = false; CHECK(!ss::inDialog(&c), "chart copy is not the window");
+            // (e) no snapshot but a REAL read: only non-blank controls replace the file's values
+            cppExtension r; ss::Ids ri; ss::registerAll(&r, *SP, ri); for (auto& q : r.m.p) { q.b = false; q.c = 0; }   // boxes / colours blank, numbers + lists real
+            out = ss::readDialog(&r, *SP, ri, file, none);
+            int lost = 0; for (int k = 0; k < SP->n; ++k) if ((SP->rows[k].type == ss::T_COLOR || SP->rows[k].type == ss::T_BOOL) && out.v[(size_t)k] != file.v[(size_t)k]) ++lost;
+            CHECK(lost == 0, std::string(SP->plugin) + ": without a snapshot a blank-reading box / colour keeps the file's value");
+        }
+        // (f) the HodLod parameter version 6 -> 7 (Offset X / Y removed): his 2.4.3 file loads, nothing is written by loading,
+        //     a blank window after the bump is refused
+        const std::string p = d0 + "/HodLod.settings-NQ.txt";
+        writeFile(p, "SPEC1|HodLod|2.4.3|NQ\nposition=7\noffset_x=0\noffset_y=0\nshow_table=1\ntable_bg=0F1520\nshow_proj=1\nproj_up=22C55E\nproj_dn=EF4444\nshow_mark=1\nmark_lod=22C55E\nmark_hod=EF4444\n");
+        const std::string his = readFile(p);
+        ss::Store st; st.S = &hlset::spec(); st.path = p; st.legacy = hlset::legacy;
+        ss::Values a = st.load(ss::M_NQ, 0, true);
+        CHECK(a.i(K_POSITION) == 7 && a.b(K_SHOW_TABLE) && a.c(K_PROJ_UP) == 0x22C55Eul && a.why.find("unknown ignored") != std::string::npos, "2.4.3 file read by 2.4.4 (offsets ignored)");
+        CHECK(readFile(p) == his, "loading after the parameter-version bump writes nothing");
+        cppExtension b; ss::Ids bi; ss::registerAll(&b, hlset::spec(), bi); CHECK(b.m.paramVersion == 7, "HodLod parameter version 7");
+        for (auto& q : b.m.p) { q.b = false; q.c = 0; q.list = -1; }
+        ss::Snap none; st.save(ss::readDialog(&b, hlset::spec(), bi, a, none));
+        CHECK(ss::parse(hlset::spec(), ss::M_NQ, readFile(p), a) && a.i(K_POSITION) == 7 && a.c(K_TABLE_BG) == 0x0F1520ul && a.b(K_SHOW_MARK), "a blank window after the bump leaves his values");
+    }
     // 6. the chart copy: everything blank -> inDialog false (the plugins never save from it)
     { cppExtension c; c.m.dialog = false; CHECK(!ss::inDialog(&c), "chart copy is not the window"); }
     // 7. the store: legacy migration from his real files, keyed file, lesson 84

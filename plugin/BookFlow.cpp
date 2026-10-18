@@ -57,7 +57,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.3.2"          // keep equal to bf::VERSION and the setVersion literal below
+#define BF_VERSION "1.3.3"          // keep equal to bf::VERSION and the setVersion literal below
 
 // (1.3.0) the dialog rows (parameter version 3): every row is read by the chart
 // (1.3.2) the window rows come from OrderFlowPaneSettings.h (no index constants)
@@ -219,7 +219,7 @@ public:
         using namespace ofset::bfk;
         ss::Values V = ss::defaults(ofset::bookFlowSpec(), -1);
         V.v[K_RATIO_BARS] = f.ratioBars; V.v[K_POSITION] = f.pos; V.v[K_SPIKE_AVG] = f.spike.avgT / 10.0; V.v[K_NEAR_TICKS] = f.nearTicks;
-        V.v[K_RECORD] = f.record != 0 ? 1 : 0; V.v[K_OFFSET_X] = f.dx; V.v[K_OFFSET_Y] = f.dy;
+
         return V;
     }
     virtual int parmsLoad(void) {
@@ -234,8 +234,8 @@ public:
         const off::PaneSettings fs = fileSettings(mkt);
         const ss::Values V = ss::readDialog(this, ofset::bookFlowSpec(), bfIds(), bfValues(fs), snapBf_);   // untouched -> the file's value; invalid never saved
         off::PaneSettings s = fs;                                          // jump / lookback / Box shows: the file's values
-        s.ratioBars = V.i(K_RATIO_BARS); s.pos = V.i(K_POSITION); s.spike.avgT = ofset::tenths(V.f(K_SPIKE_AVG)); s.nearTicks = V.i(K_NEAR_TICKS); s.record = V.b(K_RECORD) ? 1 : 0;
-        s.dx = V.i(K_OFFSET_X); s.dy = V.i(K_OFFSET_Y);
+        s.ratioBars = V.i(K_RATIO_BARS); s.pos = V.i(K_POSITION); s.spike.avgT = ofset::tenths(V.f(K_SPIKE_AVG)); s.nearTicks = V.i(K_NEAR_TICKS); s.record = 1;   // (1.3.3) recording always on (his rule)
+        s.dx = 0; s.dy = 0;                                               // (1.3.3) the 9-spot Position only
         off::PaneSettings chk;
         if (s.spike.avgT < 0 || s.nearTicks < 0 || !off::parsePaneSettings(off::paneSettingsLine(s), chk)) return;   // never overwrite with garbage
         const std::string p = placeFile(mkt); if (p.empty()) return;
@@ -379,6 +379,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow: who is ARRIVING and who is LEAVING the order book near price (market-by-order feed). Per candle, ONE NET bar per side = lots ADDED near price minus lots PULLED near price. Left bar = the bid side, always green (buyers); right bar = the offer side, always red (sellers). Above the grey zero line = size arriving (stacking), below = size leaving (pulling): a green bar above = bids arriving (support building), green below = bids leaving (support pulled), red above = offers arriving (resistance building), red below = offers leaving (resistance pulled). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and, for size arriving, its pace (grey, lots added per second vs the same time of day) beyond the bar's end, only when that side's net is at least Spike vs average (default 2.0x) the plain average of its net size over the prior Ratio bars (default 20) closed candles - decided once at the close, never changed. Other candles are dim with no label; the forming candle stays dim until it closes. The numbers box in the pane: Net (with its ratio) and Pace for bids and offers of the candle under the mouse, else the last closed candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars), Near ticks (0 = auto: how close to price counts), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.3.2");   // BF_VERSION
+    p->setVersion("1.3.3");   // BF_VERSION
     return p;
 }

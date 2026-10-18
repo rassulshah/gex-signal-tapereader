@@ -2365,7 +2365,8 @@ public:
         PaneSettings ns; const std::string p = placePath(mkt); if (p.empty()) return ns;
         std::ifstream f(p.c_str(), std::ios::binary); std::string ln;
         if (f && std::getline(f, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); PaneSettings c; if (parsePaneSettings(ln, c)) ns = c; }
-        if (recorderPane() && ns.record < 0) ns.record = 1;
+        if (recorderPane()) ns.record = 1;   // (settings 2026-10-18) recording always on: a saved 0 can no longer stop it
+        ns.dx = 0; ns.dy = 0;                // (settings 2026-10-18, his decision) Offset X / Y removed: the 9-spot Position only, a saved offset is ignored
         return ns;
     }
     std::vector<long long> dialogNow() {
@@ -2585,6 +2586,7 @@ private:
             std::ifstream f(p.c_str(), std::ios::binary); std::string ln;
             if (f && std::getline(f, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); PaneSettings c; if (parsePaneSettings(ln, c)) ns = c; }
         }
+        ns.dx = 0; ns.dy = 0; if (recorderPane()) ns.record = 1;          // (settings 2026-10-18, his decision) recording always on; the 9-spot Position only (a saved offset ignored)
         const bool renear = ns.nearTicks != S.set.nearTicks;
         if (ns.pos != S.set.pos || ns.dx != S.set.dx || ns.dy != S.set.dy || ns.mode != S.set.mode) { S.lastBox = bp::Box(); S.inBox = false; }   // (1.3.0) moved: no stale hover rect
         S.set = ns; S.dlgSpike = ns.spike;

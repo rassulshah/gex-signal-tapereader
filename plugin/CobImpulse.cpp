@@ -34,7 +34,8 @@
  *      with Abs on the pivot); PROVEN,1 drops the "?"; PLAIN,0 stops drawing plain "Cob". The tag is always recorded.
  *  NEVER REPAINTS: each CoB is decided once at its close and recorded (lsFlexLevels\CobImpulse\<MKT>-<CONTRACT>-<sec>-<session>.csv);
  *  labels and boxes are drawn from the records only. Status: lsFlexLevels\CobImpulse.status-<MKT>-<CONTRACT>-<sec>.txt.
- *  No settings window (controls none; the market file is the setting). Logic without the SDK: CobImpulseLogic.h (tested).
+ *  (0.5.0) Settings window: Cob labels / Impulse bar box, each Show + colour (CobImpulseSettings.h, CobImpulse.settings-<MKT>.txt); the logic
+ *  settings stay in the market file. Logic without the SDK: CobImpulseLogic.h (tested).
  ********************************************************************************/
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -55,6 +56,8 @@
 #include "HostSlot.h"
 #include "ClaimGates.h"                 // (0.3.0) cgate::kShowHvlCushion - the HVL regime text in the gamma hover
 #include "MarketState.h"                // (0.4.1) SRC COB for the last closed bar
+#include "CobImpulseSettings.h"          // (0.5.0) the settings table (show / hide + colour: label, impulse box)
+#include "SettingsHost.h"
 #if defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")      // HoverBoard.h's GetCursorPos / WindowFromPoint
 #endif
@@ -77,7 +80,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CI_VERSION "0.4.1"          // the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
+#define CI_VERSION "0.5.0"          // (0.5.0, 2026-10-18, Rassul "I'll go with your recommendation") a settings window: Cob labels + Impulse bar box, each Show + colour, per market (CobImpulseSettings.h); defaults = what 0.4.1 drew; the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
 
 static const COLOR C_LABEL = 0x0080FFFF;   // his IRT Cob label colour (light cyan), unchanged
 static const COLOR C_BOX = 0x00FFFFFF, C_HOVBG = 0x00111827, C_HOVEDGE = 0x009CA3AF, C_INK = 0x00F3F4F6;
@@ -194,16 +197,25 @@ struct CIState {
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
     // (0.4.1) the Market State entry of this chart
     bool mstPosted = false; std::string mstSym, mstChart; long mstSpb = 0; long long mstBar = -1, mstMs = -1; std::string mstSig;
+    ss::Store setStore; ss::Values set = ss::defaults(ciset::spec(), -1);   // (0.5.0) CobImpulse.settings-<MKT>.txt (re-read by stamp, at most once a second)
 };
+static ss::Ids& ciIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
+static std::string ciSettingsPath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() || mkt.empty() ? std::string() : f + "\\CobImpulse.settings-" + mkt + ".txt"; }
 
 class CobImpulse : public cppExtension {
 public:
     CobImpulse() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int parmsLoad(void)  { return RTX_OK; }
-    virtual int parmsApply(void) { return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
+    // (0.5.0) the settings window: filled from the market's file (opening never saves); Apply / a change saves; the chart copy never saves
+    virtual int parmsLoad(void) {
+        if (!ss::inDialog(this)) return RTX_OK;
+        ss::Store* st = dialogStore(); if (!st) return RTX_OK;
+        ss::fillDialog(this, ciset::spec(), ciIds(), st->load(ss::marketIndex(dlgMkt_), steadyMs(), true), snap_);
+        return RTX_OK;
+    }
+    virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, ciset::spec(), ciIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
     void pump(bool mayCalc);
     void release() {   // (0.4.1) the Market State entry leaves the board first
         CIState* S = slot_.get(this, false);
@@ -213,6 +225,27 @@ public:
     CIState* testState() { return slot_.get(this, false); }
 private:
     HostSlot<CIState> slot_;
+    ss::Snap snap_; ss::Store dlgStore_; std::string dlgMkt_;
+    ss::Store* dialogStore() {
+        char b[64]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const char* sy = getSymbol();
+        const std::string root = rs ? rs : "", mkt = marketName(root.empty() ? (sy ? sy : "") : root);   // as identify()
+        const std::string p = ciSettingsPath(mkt); if (p.empty()) return nullptr;
+        if (dlgStore_.path != p) { dlgStore_ = ss::Store(); dlgStore_.S = &ciset::spec(); dlgStore_.path = p; dlgMkt_ = mkt; }
+        return &dlgStore_;
+    }
+    void saveSettings() {
+        if (!ss::inDialog(this)) return;
+        ss::Store* st = dialogStore(); if (!st) return;
+        const ss::Values V = ss::readDialog(this, ciset::spec(), ciIds(), st->load(ss::marketIndex(dlgMkt_), steadyMs(), true), snap_);   // untouched -> the file's value
+        makeDir(flexDir());
+        if (st->save(V)) snap_.take(ss::dialogNow(this, ciset::spec(), ciIds(), V));
+    }
+    void loadSettings(CIState& S) {   // (0.5.0) the market's settings file (keyed); missing / bad = the defaults (what 0.4.1 drew)
+        const std::string p = ciSettingsPath(S.market);
+        if (p.empty()) { S.set = ss::defaults(ciset::spec(), -1); return; }
+        if (S.setStore.path != p) { S.setStore = ss::Store(); S.setStore.S = &ciset::spec(); S.setStore.path = p; }
+        S.set = S.setStore.load(ss::marketIndex(S.market), steadyMs());
+    }
     long long ctSec(RTDATE d);
     long long sessionOf(long long barTime) { const long long cs = ctSec((RTDATE)barTime); return cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : -1; }
     void identify(CIState& S);
@@ -234,7 +267,7 @@ private:
 int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<CobImpulse*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<CobImpulse*>(this)->release(); return RTX_OK; }
-int cppExtension::setup(void)   { setParameterVersion(1); return RTX_OK; }
+int cppExtension::setup(void)   { ss::registerAll(this, ciset::spec(), ciIds()); return RTX_OK; }   // (0.5.0) the rows from CobImpulseSettings.h
 int cppExtension::calc(int)     { static_cast<CobImpulse*>(this)->pump(true); return RTX_OK; }
 int CobImpulse::draw(void) {
     pump(false);
@@ -558,6 +591,7 @@ void CobImpulse::pump(bool mayCalc) {
         const long long ct = ctSec(currentDate());
         if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; load(S); } }
         params(S, now);
+        loadSettings(S);
         const long count = getBarCount();
         // his RTL is read (and recalculated by IRT) only from calc on a new bar, like the Dealer Profile / Chart View
         if (mayCalc && count != S.lastCount) { decide(S, count); S.lastCount = count; }
@@ -639,11 +673,13 @@ void CobImpulse::render(CIState& S) {
         PNT pe; pe.set(ai, ext, kBarCenter);
         const int w = getTextWidth(text.c_str(), -1) + 4, h = 14;
         const cimp::Box lb = cimp::labelBox(pe.h, pe.v, r.side, w, h, 30, pane.top, pane.bottom);
-        setTextColor(C_LABEL);
-        RCT tr; tr.set(coord(lb.l), coord(lb.t), coord(lb.r), coord(lb.b)); tr.drawText(text.c_str(), true, false);
         HoverT H; H.key = std::to_string(r.trig) + (r.side > 0 ? "b" : "s"); H.l = lb.l; H.t = lb.t; H.r = lb.r; H.b = lb.b; H.rec = r;
-        S.targets.push_back(H);
-        if (!tag) continue;
+        if (S.set.b(ciset::K_SHOW_LABELS)) {                              // (0.5.0) Cob labels: Show + colour
+            setTextColor((COLOR)S.set.c(ciset::K_LABEL_COLOR));
+            RCT tr; tr.set(coord(lb.l), coord(lb.t), coord(lb.r), coord(lb.b)); tr.drawText(text.c_str(), true, false);
+            S.targets.push_back(H);
+        }
+        if (!tag || !S.set.b(ciset::K_SHOW_BOX)) continue;                // (0.5.0) Impulse bar box: Show + colour
         // the thin white box around the impulse bar(s)
         const long long bars[3] = { r.rT, r.vT, r.cT };
         for (int k = 0; k < 3; ++k) {
@@ -651,7 +687,7 @@ void CobImpulse::render(CIState& S) {
             const int bi = indexOf(times, count, bars[k]); if (bi < 0) continue;
             PNT a; a.set(bi, hi[bi], kBarLeft); PNT b; b.set(bi, lo[bi], kBarRight);
             const int l = std::min(a.h, b.h) - 2, rr = std::max(a.h, b.h) + 2, t = std::min(a.v, b.v) - 2, bt = std::max(a.v, b.v) + 2;
-            RCT box; box.set(coord(l), coord(t), coord(rr), coord(bt)); box.draw(1, C_BOX, C_BOX, DRAW_OPAQUE, PAT_HOLLOW);
+            RCT box; box.set(coord(l), coord(t), coord(rr), coord(bt)); box.draw(1, (COLOR)S.set.c(ciset::K_BOX_COLOR), (COLOR)S.set.c(ciset::K_BOX_COLOR), DRAW_OPAQUE, PAT_HOLLOW);
             HoverT HB = H; HB.l = l; HB.t = t; HB.r = rr; HB.b = bt; S.targets.push_back(HB);
         }
     }
@@ -707,6 +743,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | CALC_LAST);   // CALC_LAST: it reads his RTL results
     p->setDescription("LRA Cob Impulse v0.4.1: what are the odds this CoB reaches 1R (shown after the label, e.g. Cob 63%, from the nightly CoB Lab, LRA-Odds-<MKT>.csv; ODDS 0 hides it), did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar; hover the label or box for the details. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
-    p->setVersion("0.4.1");   // CI_VERSION
+    p->setVersion("0.5.0");   // CI_VERSION
     return p;
 }

@@ -1,7 +1,8 @@
-// test_cvd_host.cpp -- lsCVD 1.2.0 (1.1.0 + the audit "?" marks) on the mock host (BUILD-LESSONS proofs). From tests/:  g++ -std=c++17 -Wall -Wextra -Imock -I../plugin test_cvd_host.cpp -o th && ./th
+// test_cvd_host.cpp -- lsCVD 1.3.0 (1.2.0 + the settings window: show / hide + colour per drawn element; 1.1.0 + the audit "?" marks) on the mock host (BUILD-LESSONS proofs). From tests/:  g++ -std=c++17 -Wall -Wextra -Imock -I../plugin test_cvd_host.cpp -o th && ./th
 #include "CVD.cpp"
 #include <cstdio>
 #include <random>
+#include <sstream>
 #include <unistd.h>
 namespace mock { Host* current = nullptr; }
 static int fails = 0, passes = 0;
@@ -122,7 +123,7 @@ int main() {
         c.h.paneBottom = 40; c.draw(); CHECK(c.h.draws.empty(), "pane too short: nothing drawn"); }
     // 12. status file written once, keyed by market and bar size
     {   std::ifstream in((std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\CVD.status-ES-180.txt").c_str()); std::string l; std::getline(in, l);
-        CHECK(l == "VERSION,1.2.0", "status file"); }
+        CHECK(l == "VERSION,1.3.0", "status file"); }
     // 13. (1.1.0) the chart shows only shown marks: confirmed, at PDH/PDL/PFH/PFL, stop within 4.0x the bar range; no '?' and no 'x'
     {   Chart c; c.h.bars = all; c.h.barPx = 1; c.h.firstBar = 0; c.run(); c.draw();
         int labels = 0; bool warn = false;
@@ -167,6 +168,36 @@ int main() {
         drawn("VERDICT,retired\n", t, off, n); CHECK(!t && off && n == 0, "retired: no marks, says so");
         drawn("VERDICT,garbage\n", t, off, n); CHECK(t && n == n0, "unknown verdict = testing");
         std::remove(vf.c_str()); }
+    // 16. (1.3.0) the settings window and file: show / hide + colour for the line, the delta % bars and the marks
+    {   const std::string sf = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\CVD.settings-ES.txt";
+        std::remove(sf.c_str());
+        auto run = [&](Chart& c) { c.h.bars = all; c.h.barPx = 1; c.h.firstBar = 0; c.run(); c.draw(); };
+        auto lines = [](const Chart& c, COLOR col) { int n = 0; for (const mock::Draw& d : c.h.draws) if (d.type == "line" && d.color == col) ++n; return n; };
+        auto boxes = [](const Chart& c, COLOR col) { int n = 0; for (const mock::Draw& d : c.h.draws) if (d.type == "box" && d.color == col) ++n; return n; };
+        Chart a; run(a);
+        CHECK(lines(a, 0x60A5FA) > 10 && boxes(a, 0x205C49) + boxes(a, 0x5E2B35) > 10 && boxes(a, 0x34D399) + boxes(a, 0xF87171) > 0, "no file: what 1.2.0 drew (blue line, muted bars, green / red marks)");
+        { std::ofstream o(sf.c_str()); o << "SPEC1|CVD|1.3.0|ES\nshow_line=1\nline_color=FFFF00\nshow_bars=0\nbar_up=205C49\nbar_dn=5E2B35\nshow_marks=1\nmark_bull=0000FF\nmark_bear=FF00FF\n"; }
+        Chart b; run(b);
+        CHECK(lines(b, 0x60A5FA) == 0 && lines(b, 0xFFFF00) > 10, "Line colour from the file");
+        CHECK(boxes(b, 0x205C49) + boxes(b, 0x5E2B35) == 0, "Delta % bars off: none drawn");
+        CHECK(boxes(b, 0x34D399) + boxes(b, 0xF87171) == 0 && boxes(b, 0x0000FF) + boxes(b, 0xFF00FF) > 0, "mark colours from the file");
+        { std::ofstream o(sf.c_str()); o << "SPEC1|CVD|1.3.0|ES\nshow_line=0\nshow_marks=0\n"; }
+        Chart d; run(d);
+        CHECK(lines(d, 0x60A5FA) == 0 && boxes(d, 0x34D399) + boxes(d, 0xF87171) == 0 && boxes(d, 0x205C49) + boxes(d, 0x5E2B35) > 10, "line and marks off; bars back on (missing key = default)");
+        { std::ofstream o(sf.c_str()); o << "garbage\n"; }
+        Chart g; run(g); CHECK(lines(g, 0x60A5FA) > 10, "a bad file = the defaults");
+        // the window: rows from the table, filled from the file, Apply saves only from the window (never from the chart copy)
+        std::remove(sf.c_str());
+        Chart w; w.use(); w.ind.setup();
+        CHECK(cppExtension::P().size() == 8 && cppExtension::pver() == 2, "setup registers the 8 rows (parameter version 2)");
+        w.h.period = ""; w.ind.parmsLoad();
+        CHECK(w.ind.getParameterColor(1) == 0x60A5FAul && w.ind.isBoxChecked(2) == 1, "the window opens with the defaults");
+        { std::ifstream in(sf.c_str()); CHECK(!in, "opening the window never writes"); }
+        w.ind.checkBox(2, 0); w.ind.setParameterColor(6, 0x123456); w.ind.parmsApply();
+        std::string t; { std::ifstream in(sf.c_str()); std::stringstream ss2; ss2 << in.rdbuf(); t = ss2.str(); }
+        CHECK(t.find("\nshow_bars=0\n") != std::string::npos && t.find("\nmark_bull=123456\n") != std::string::npos && t.find("\nline_color=60A5FA\n") != std::string::npos, "Apply saves the changes, the rest at their values");
+        w.h.period = "3 Minutes"; std::remove(sf.c_str()); w.ind.parmsApply(); { std::ifstream in(sf.c_str()); CHECK(!in, "the chart copy never saves"); }
+        std::remove(sf.c_str()); }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

@@ -31,7 +31,7 @@
 
 namespace ss {
 
-static const char* const VERSION = "1.1.0";   // 1.1.0: TEXT rows (the Dealer Profile indicators list)
+static const char* const VERSION = "1.2.0";   // 1.1.0: TEXT rows (the Dealer Profile indicators list); 1.2.0: blank-save guard (allZero, Store::refused)
 static const char* const MAGIC = "SPEC1";      // first token of every keyed settings file
 static const int BUDGET_PX = 400;              // widest row the IRT settings window shows without cutting it off
 
@@ -331,6 +331,17 @@ inline bool writeAtomic(const std::string& path, const std::string& text) {
     return true;
 }
 
+// (1.1.0, 2026-10-18 BigBidAsk.settings-ES.txt zeroed at 15:07 CT) every BOOL / INT / FLOAT / COLOR / LIST value is 0 while the
+// defaults are not: what a blank window reads. Store::save refuses it (the file is kept); the defaults themselves are never "all zero".
+inline bool allZero(const Spec& S, const Values& V) {
+    if ((int)V.v.size() != S.n) return true;
+    int n = 0, dz = 0;
+    for (int k = 0; k < S.n; ++k) { const Type t = S.rows[k].type; if (t == T_LABEL || t == T_TEXT) continue; ++n;
+        if (V.v[(size_t)k] != 0) return false;
+        if (S.rows[k].def == 0) ++dz; }
+    return n >= 2 && dz < n;
+}
+
 // ---- the per-chart store: the chart reads ONLY this (re-read at most once a second, compared by content - lesson 84) --------------
 // legacy: optional reader for the indicator's previous file (positional); it fills V and returns true when it recognised the text.
 typedef bool (*LegacyFn)(const Spec& S, int mkt, const std::string& text, Values& V);
@@ -368,7 +379,10 @@ struct Store {
         }
         cur = defaults(*S, mkt); cur.why = "defaults: no settings file"; haveText = true; lastText.clear(); return cur;
     }
-    bool save(const Values& V) { if (!S || path.empty()) return false; const std::string t = format(*S, V); if (!writeAtomic(path, t)) return false; lastText = t; cur = V; haveText = true; lastStamp = fileStamp(path); return true; }
+    std::string refused;         // (1.1.0) why the last save was refused ("" = saved)
+    bool save(const Values& V) { refused.clear(); if (!S || path.empty()) return false;
+        if (allZero(*S, V)) { refused = "all-zero values (a blank window) - the file was kept"; return false; }   // (1.1.0) never a blank table over his file
+        const std::string t = format(*S, V); if (!writeAtomic(path, t)) return false; lastText = t; cur = V; haveText = true; lastStamp = fileStamp(path); return true; }
 };
 
 // The dialog snapshot rule (BoxPlace.h DlgSnap, lesson 44): a control he did not touch keeps the FILE's value (IRT may ignore a fill).

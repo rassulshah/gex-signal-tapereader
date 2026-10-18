@@ -1,5 +1,12 @@
 /********************************************************************************
  *  BigBidAsk.cpp  --  Investor/RT RTX extension  lsBigBidAsk  1.0.0  (2026-10-14 night)
+ *  1.16.2 (2026-10-18, Rassul 17:13 CT "build"; "the BLS box should be the same height as the hod lod box"): docked beside the
+ *         HOD/LOD TABLE (lsHodLod 2.4.4 publishes the table alone as LRA_HLT_, and table + Gex S/R strip as LRA_HLB_) the box takes the
+ *         table's top and bottom, its 3 rows spread evenly; never over the strip / table / banner / price (BoxDock.h placeMatched).
+ *         BLANK-SAVE GUARD: his BigBidAsk.settings-ES.txt was overwritten at 15:07:55 CT with every box off and every colour 0 ("where
+ *         are all the big prints? they are all gone") - a window copy that read blank was saved. Now a blank read (SettingsHost.h 1.1.0
+ *         blankRead) or a blank-shaped result (bba::looksBlank) is never written; the refusal is logged in BigBidAsk.dialog-<MKT>.txt.
+ *         "Show the Big Lot box" stays checked by default (his restored file has it on).
  *  1.16.0 (2026-10-18, Rassul approved 15:03 CT): THE COMPACT BIG LOT BOX - "make it simple like BL 5 1434 and just have a compact box
  *         of the averages connected to the hod lod box when it is added to the chart so it doesn't overlap"; "no, just the avg". The
  *         6-line statistics box is replaced by 3 rows BL5 / BL10 / BL20 = the rolling average (latest 5 complete sessions, one outlier
@@ -90,7 +97,7 @@ static ss::Ids& bbaIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.16.1"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.16.2"          // keep equal to bba::VERSION and the setVersion literal below
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
 // complete sessions before it (bba::tiersFor) and only after the chart history before that session is fully read; the facts come from the
 // last 8 sessions of the chart whatever is in view (and are recorded for 8 sessions); SignalBoard B events from the record for the last
@@ -249,7 +256,7 @@ struct BBState {
     std::vector<std::string> stats; long long statsMs = -1; std::string statsWritten;
     // (1.16.0) the compact Big Lot box: both session types' averages, the box / table rectangles, the hover
     bba::TypeAvg blDay, blNight; std::string blDropDay, blDropNight, blTiers; bool blNightNow = false;
-    bdk::Box blBox; bool blOn = false; bdk::Box hlBox; bb::Beat hlBeat; bool hlOn = false; std::string blWhy = "not drawn yet";
+    bdk::Box blBox; bool blOn = false; bdk::Box hlBox; bb::Beat hlBeat; bool hlOn = false; bdk::Box hlTable; bool hlTableOn = false;   /* (1.16.2) the table alone (LRA_HLT_) */ std::string blWhy = "not drawn yet";
     std::set<std::string> logged; std::vector<std::pair<long long, std::string>> logPending; long long logMs = -1;   // (1.12.0) the print log
     std::string scoreLine = "Scoring: learning (needs the nightly run and 20+ prints per category).";
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
@@ -536,11 +543,13 @@ void BigBidAsk::saveSettings() {
         if (!g_ix.ok) return;
         // (1.16.1) a control he did not touch keeps the file's value (ss::readDialog + the snapshot); fromVec keeps 1.16's checks (black kept out)
         const ss::Values V = ss::readDialog(this, bbaset::spec(), bbaIds(), valuesFromVec(toVec(bba::shownSettings(F, mkt)), mkt), snap_);
+        if (V.why.compare(0, 7, "refused") == 0) { dialogLog(mkt, "REFUSED," BBA_VERSION "," + V.why); return; }   // (1.16.2) a blank window never overwrites his file (10-18 15:07 CT zeroed file)
         const std::vector<long long> v = vecFromValues(V);
         if (v.size() != toVec(F).size()) return;
         bba::Settings s = fromVec(v, F);
         if (s.div == bba::divFor(mkt)) s.div = 0;                     // (1.16.0) the market default shown in the window is stored as 0 (follows the default)
         makeDir(flexDir());
+        if (bba::looksBlank(s)) { dialogLog(mkt, "REFUSED," BBA_VERSION ",every category / box / circle off and every colour black - kept " + bba::formatSettings(F)); return; }   // (1.16.2)
         const std::string line = bba::formatSettings(s);
         if (publishFile(p, line + "\n")) { snap_.take(ss::dialogNow(this, bbaset::spec(), bbaIds(), V)); dialogLog(mkt, "SAVED," BBA_VERSION "," + line); }
     } catch (...) {}
@@ -1208,6 +1217,9 @@ void BigBidAsk::render(BBState& S) {
         // (1.16.0) the HOD/LOD table (lsHodLod 2.4.1+, BoxDock.h): present while its stamp keeps moving (same heartbeat as the banner)
         bdk::Box hb_; long long hms = -1; const bool hhave = bdk::peekHodLod(sym, getSecondsPerBar(), chart, hb_, hms);
         S.hlOn = S.hlBeat.step(hhave, hms, steadyMs()); if (S.hlOn) S.hlBox = hb_;
+        {   bdk::Box tb_; long long tms = -1;   // (1.16.2) lsHodLod 2.4.4+: the table alone, published with the same stamp (an older lsHodLod: its box = the table)
+            const bool tOk = S.hlOn && bdk::peekHodLodTable(sym, getSecondsPerBar(), chart, tb_, tms) && tms == hms && bdk::valid(tb_);
+            S.hlTable = tOk ? tb_ : S.hlBox; S.hlTableOn = S.hlOn; }
     }
     RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), op(barOpen), cl(barClose);
     if (times.count < count || hi.count < count || lo.count < count || op.count < count || cl.count < count) return;
@@ -1390,12 +1402,15 @@ void BigBidAsk::render(BBState& S) {
         setFont(lf); int lw = getTextWidth("BL20", -1); for (const auto& r : rows) lw = std::max(lw, getTextWidth(r.first.c_str(), -1));
         setFont(vf); int vw = getTextWidth("00,000", -1); for (const auto& r : rows) vw = std::max(vw, getTextWidth(r.second.c_str(), -1));
         int la = 0, aa = 0, da = 0; getFontMetrics(&la, &aa, &da);
-        const int lh = std::max(15, aa + da + 2), padX = 7, padY = 4;
-        const int w = padX + lw + 14 + vw + padX, h = padY + 3 * lh + padY;           // fixed size (fits 5-digit sizes)
+        const int lh0 = std::max(15, aa + da + 2), padX = 7, padY = 4;
+        const int w = padX + lw + 14 + vw + padX, h0 = padY + 3 * lh0 + padY;         // fixed width (fits 5-digit sizes); the smallest height
         int lastX = -1; { PNT pe; if (pe.set((int)count - 1, cl[(int)count - 1], kBarRight) == RTX_OK && pe.h > 0) lastX = pe.h; }
         bdk::Box ar = bdk::mk(area.l, area.t, std::min(area.r, lastX > area.l ? lastX : area.r), area.b);   // his rule: up to where price ends
         std::vector<bdk::Box> avoid; if (S.trOn) avoid.push_back(bdk::mk(S.trBox.l, S.trBox.t, S.trBox.r, S.trBox.b));
-        const bdk::Result R = bdk::place(S.hlOn, S.hlBox, w, h, ar, set.statsPos, avoid);
+        // (1.16.2, Rassul 10-18 "the BLS box should be the same height as the hod lod box") beside the TABLE, its top and bottom (not the
+        // Gex S/R strip above it), the rows spread evenly over that height; no room beside it = the 1.16 placement at the smallest height
+        int h = h0; const bdk::Result R = bdk::placeMatched(S.hlTableOn, S.hlBox, S.hlTable, w, h0, ar, set.statsPos, avoid, &h);
+        const int lh = std::max(lh0, (h - 2 * padY) / 3);
         S.blWhy = R.why + (S.hlOn ? ",hodlod table " + std::to_string(S.hlBox.l) + "," + std::to_string(S.hlBox.t) + "," + std::to_string(S.hlBox.r) + "," + std::to_string(S.hlBox.b) : std::string(",no hodlod table"))
                 + ",type " + (S.blNightNow ? "overnight" : "RTH") + ",sessions " + std::to_string(A.nSess);
         if (R.mode != bdk::NONE) {
@@ -1404,7 +1419,7 @@ void BigBidAsk::render(BBState& S) {
             RCT bg; bg.set(coord(B.l), coord(B.t), coord(B.r), coord(B.b)); bg.draw(1, C_BLEDGE, C_BLBG, DRAW_OPAQUE, PAT_SOLID);
             setTextColor(C_INK);
             for (size_t k = 0; k < rows.size(); ++k) {
-                const int y0 = B.t + padY + (int)k * lh;
+                const int y0 = B.t + padY + (int)k * lh + (B.b - B.t - 2 * padY - 3 * lh) / 2;   // (1.16.2) evenly over the box
                 setFont(lf); { RCT tr; tr.set(coord(B.l + padX), coord(y0), coord(B.l + padX + lw + 4), coord(y0 + lh)); tr.drawText(rows[k].first.c_str(), false, false); }
                 setFont(vf); { const int tw = getTextWidth(rows[k].second.c_str(), -1); RCT tr; tr.set(coord(B.r - padX - tw), coord(y0), coord(B.r - padX + 2), coord(y0 + lh)); tr.drawText(rows[k].second.c_str(), false, false); }
             }
@@ -1508,6 +1523,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
     p->setDescription("LRA Big Bid / Ask 1.16.0: on each candle, the biggest print AT THE BID (sellers, left) and AT THE ASK (buyers, right) in lots / divider, shown when it reaches one of your Big Lot categories (Big Lot N = the size reached about N times a session, worked out per market for day and night; category 4 = a fixed size). One Show choice per category: All prints, Near pivot, Near a level, Pivot near a level, Trend PB, Trend BO, Trend PB + BO; category 4 shows every print of its size. Hover a number for the details.");
-    p->setVersion("1.16.1");   // BBA_VERSION
+    p->setVersion("1.16.2");   // BBA_VERSION
     return p;
 }

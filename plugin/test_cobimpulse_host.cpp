@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
         p->testState()->paramsCheckMs = -1; p->testState()->paramsStamp = -3; H.draws.clear(); p->draw();
         CHECK(texts(H, "Cob+").empty() && p->testState()->paramsWhy.find("defaults") != std::string::npos, "wrong-market file -> defaults (abs), reason in the status");
         std::string st = slurp(flex() + "\\CobImpulse.status-NQ-NQZ6-180.txt");
-        CHECK(st.find("VERSION,0.4.1") != std::string::npos && st.find("MARKET,NQ") != std::string::npos, "status file");
+        CHECK(st.find(std::string("VERSION,") + CI_VERSION) != std::string::npos && st.find("MARKET,NQ") != std::string::npos, "status file");
         p->destroy(); delete p; std::remove((flex() + "\\LRA-CobImpulse-NQ.csv").c_str());
     }
     // 3b) a 0.1.0 record file (11 fields) is read, kept and rewritten in the 0.2.0 layout
@@ -179,6 +179,33 @@ int main(int argc, char** argv) {
         setBars(H, G, G.bars.size(), i839, i854, i833, true); p->calc(0);
         bool v = false; for (auto& kv : p->testState()->recs) if (kv.second.v()) v = true;
         CHECK(v, "huge volumes still tag V");
+        p->destroy(); delete p;
+    }
+    // (0.5.0) the settings window and file: Cob labels / Impulse bar box, each Show + colour
+    {
+        wipe(); mock::Host H; mock::current = &H; CobImpulse* p = static_cast<CobImpulse*>(CreateExtension()); p->setup();
+        CHECK(cppExtension::P().size() == 4 && cppExtension::pver() == 2, "setup registers the 4 rows (parameter version 2)");
+        setBars(H, F, F.bars.size(), i839, i854, i833, true); p->calc(0);
+        const std::string sf = flex() + "\\CobImpulse.settings-NQ.txt";
+        spit(sf, "SPEC1|CobImpulse|0.5.0|NQ\nshow_labels=1\nlabel_color=FF0000\nshow_box=0\nbox_color=FFFFFF\n");
+        H.draws.clear(); p->draw();
+        const std::vector<mock::Draw> t1 = texts(H, "Cob+V?");
+        CHECK(t1.size() == 1 && t1[0].color == 0xFF0000ul && hollowBoxes(H) == 0, "label colour from the file; Impulse bar box off: no box");
+        spit(sf, "SPEC1|CobImpulse|0.5.0|NQ\nshow_labels=0\nshow_box=1\nbox_color=00FF00\n");
+        H.draws.clear(); p->draw();
+        int green = 0; for (const auto& d : H.draws) if (d.type == "rect" && d.pattern == cppExtension::PAT_HOLLOW && d.color == 0x00FF00ul) ++green;
+        CHECK(texts(H, "Cob+V?").empty() && texts(H, "Cob").empty() && green == 1, "labels off: none drawn; the box in its colour");
+        spit(sf, "garbage"); H.draws.clear(); p->draw();
+        CHECK(texts(H, "Cob+V?").size() == 1 && hollowBoxes(H) == 1, "a bad file = the defaults (what 0.4.1 drew)");
+        std::remove(sf.c_str());
+        cppExtension::dlgPeriod() = ""; p->parmsLoad();
+        CHECK(slurp(sf).empty(), "opening the window never writes");
+        CHECK(p->getParameterColor(1) == 0x80FFFFul && p->isBoxChecked(2) == 1, "the window opens with the defaults");
+        p->checkBox(2, false); p->setParameterColor(1, 0x123456); p->parmsApply();
+        const std::string w = slurp(sf);
+        CHECK(w.find("\nshow_box=0\n") != std::string::npos && w.find("\nlabel_color=123456\n") != std::string::npos && w.find("\nshow_labels=1\n") != std::string::npos, "Apply saves the changes, the rest at their values");
+        cppExtension::dlgPeriod() = "1 Minute"; std::remove(sf.c_str()); p->parmsApply();
+        CHECK(slurp(sf).empty(), "the chart copy never saves");
         p->destroy(); delete p;
     }
     std::printf("%d checks, %d failures\n", checks, fails);

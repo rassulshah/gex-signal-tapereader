@@ -228,7 +228,7 @@ int main(int argc, char** argv)
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   // ---- setup(): controls only, the agreed rows and defaults (Dealer 80 / Levels 78 / Badge 9 / Liquidity in badge / Show B / S text)
         DealerProfile E; E.setup();
-        bool rows = PARAMS.size() == 12 && PARAMS[PX.width] == "Dealer column px (40-250)" && PARAMS[PX.levelsW] == "Levels column px (30-150)" && PARAMS[PX.badgeFont] == "Badge font (pt)"
+        bool rows = PARAMS.size() == 8 &&   /* (2.17.2) 11 rows, 3 hidden */ PARAMS[PX.width] == "Dealer column px (40-250)" && PARAMS[PX.levelsW] == "Levels column px (30-150)" && PARAMS[PX.badgeFont] == "Badge font (pt)"
                     && PARAMS[PX.liqBadge] == "Liquidity in badge" && PARAMS[PX.labels] == "Show buy / sell text in node";
         check(rows && MOCK_INT[PX.width] == 80 && MOCK_INT[PX.levelsW] == 78 && MOCK_INT[PX.badgeFont] == 9 && MOCK_CHK[PX.liqBadge] && MOCK_CHK[PX.labels], "setup: the column rows with their defaults (80 / 78 / 9, both boxes on)");
         if (!rows) for (size_t i = 0; i < PARAMS.size(); ++i) std::printf("  param %zu %s\n", i, PARAMS[i].c_str());
@@ -430,7 +430,7 @@ int main(int argc, char** argv)
         X.parmsLoad();
         check(slurp(fl("DealerProfile.settings.txt")) == before, "opening the window never writes the file");
         check(MOCK_INT[PX.width] == 120 && MOCK_INT[PX.levelsW] == 60 && MOCK_INT[PX.badgeFont] == 9 && MOCK_INT[PX.font] == 11 && MOCK_CHK[PX.liqBadge] && MOCK_CHK[PX.labels], "the window opens filled from the market's row (120 / 60 / 9 / 11, checked)");
-        MOCK_LIST_GET[PX.market] = MOCK_LIST[PX.market];
+        if (PX.market >= 0) MOCK_LIST_GET[PX.market] = MOCK_LIST[PX.market];   // (2.17.2) Market is hidden (no control)
         settingsRow("ES", 130, 60, 1, 11);                           // another window saved the Dealer width meanwhile
         MOCK_INT[PX.levelsW] = 90;                                   // he changes only the Levels column
         X.parmsApply();

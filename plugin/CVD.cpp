@@ -28,6 +28,8 @@
 #endif
 #include "CvdFeed.h"
 #include "HostSlot.h"
+#include "CVDSettings.h"     // (1.3.0) the settings table (show / hide + colour per drawn element)
+#include "SettingsHost.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -52,7 +54,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CVD_VERSION "1.2.0"   // 1.2.0 (2026-10-14 audit display list) the confirmed marks read Div? / Exh? / BR?
+#define CVD_VERSION "1.3.0"   // 1.3.0 (2026-10-18, Rassul "I'll go with your recommendation") a settings window: CVD line / Delta % bars / Marks each with Show + colour(s), kept per market in CVD.settings-<MKT>.txt (CVDSettings.h / SettingsHost.h); defaults = what 1.2.0 drew;  // 1.2.0 (2026-10-14 audit display list) the confirmed marks read Div? / Exh? / BR?
 
 static const COLOR C_BULL = 0x0034D399;       // green  (bullish setup)
 static const COLOR C_BEAR = 0x00F87171;       // red    (bearish setup)
@@ -162,20 +164,44 @@ struct RuntimeState {
     std::vector<cvdf::Mark> journalRetry;
     long long rangeStamp = -2, verdictStamp = -2; std::string verdict = "testing";   // lra.cvd_nightly: testing / proven / retired
     long long lastStatusMs = -1; std::string lastStatusText;
+    ss::Store setStore; ss::Values set = ss::defaults(cvdset::spec(), -1);   // (1.3.0) CVD.settings-<MKT>.txt (re-read by stamp, at most once a second)
 };
+static ss::Ids& cvdIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
+static std::string cvdSettingsPath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() || mkt.empty() ? std::string() : f + "\\CVD.settings-" + mkt + ".txt"; }
 
 class CVD : public cppExtension {
 public:
     CVD() : cppExtension() {}
     virtual int draw(void);
-    virtual int parmsLoad(void) { return RTX_OK; }
-    virtual int parmsApply(void) { return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
+    // (1.3.0) the settings window: filled from the market's file (opening never saves); Apply / a change saves; the chart copy never saves
+    virtual int parmsLoad(void) {
+        if (!ss::inDialog(this)) return RTX_OK;
+        ss::Store* st = dialogStore(); if (!st) return RTX_OK;
+        ss::fillDialog(this, cvdset::spec(), cvdIds(), st->load(ss::marketIndex(dlgMkt_), steadyMs(), true), snap_);
+        return RTX_OK;
+    }
+    virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, cvdset::spec(), cvdIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
     void pump();
     void release() { slot_.release(this); }
     RuntimeState* stateFor() { return slot_.get(this, false); }   // tests
 private:
     HostSlot<RuntimeState> slot_;
+    ss::Snap snap_; ss::Store dlgStore_; std::string dlgMkt_;
+    ss::Store* dialogStore() {
+        char b[64]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const std::string mkt = marketOf(rs ? rs : "");
+        const std::string p = cvdSettingsPath(mkt); if (p.empty()) return nullptr;
+        if (dlgStore_.path != p) { dlgStore_ = ss::Store(); dlgStore_.S = &cvdset::spec(); dlgStore_.path = p; dlgMkt_ = mkt; }
+        return &dlgStore_;
+    }
+    void saveSettings() {
+        if (!ss::inDialog(this)) return;
+        ss::Store* st = dialogStore(); if (!st) return;
+        const ss::Values V = ss::readDialog(this, cvdset::spec(), cvdIds(), st->load(ss::marketIndex(dlgMkt_), steadyMs(), true), snap_);   // untouched -> the file's value
+        makeDir(flexDir());
+        if (st->save(V)) snap_.take(ss::dialogNow(this, cvdset::spec(), cvdIds(), V));
+    }
+    void loadSettings(RuntimeState& s);
     void identify(RuntimeState& s);
     bool civil(RTDATE raw, long& days, int& endSec);
     bool readFlow(RTARRAYP& vap, int bar, double& buy, double& sell);
@@ -191,7 +217,7 @@ private:
 int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::done(void) { static_cast<CVD*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<CVD*>(this)->release(); return RTX_OK; }
-int cppExtension::setup(void) { setParameterVersion(1); return RTX_OK; }
+int cppExtension::setup(void) { ss::registerAll(this, cvdset::spec(), cvdIds()); return RTX_OK; }   // (1.3.0) the rows from CVDSettings.h
 int cppExtension::calc(int) { static_cast<CVD*>(this)->pump(); return RTX_OK; }
 int CVD::draw(void) {
     RuntimeState* s = slot_.get(this, false);
@@ -410,7 +436,17 @@ void CVD::writeStatus(RuntimeState& s) {
     s.lastStatusText = text;
 }
 
+// (1.3.0) the market's settings file (keyed); a missing / bad file = the defaults (what 1.2.0 drew)
+void CVD::loadSettings(RuntimeState& s) {
+    const std::string p = cvdSettingsPath(s.market);
+    if (p.empty()) { s.set = ss::defaults(cvdset::spec(), -1); return; }
+    if (s.setStore.path != p) { s.setStore = ss::Store(); s.setStore.S = &cvdset::spec(); s.setStore.path = p; }
+    s.set = s.setStore.load(ss::marketIndex(s.market), steadyMs());
+}
+
 void CVD::render(const RuntimeState& s) {
+    using namespace cvdset;
+    const ss::Values& V = s.set;
     RCT pane; pane.getPaneRect(false);
     const long count = getBarCount();
     if (pane.bottom - pane.top < 60 || pane.right - pane.left < 200) return;   // pane too short: draw nothing rather than overlap (#35)
@@ -452,11 +488,12 @@ void CVD::render(const RuntimeState& s) {
     // delta % histogram (right scale, its own zero in the middle) - muted, behind the line
     long spacing = vis.size() > 1 ? std::max(1L, xOf(vis[1]) - xOf(vis[0])) : 6;
     const long bw = std::max(1L, spacing * 6 / 10);
-    for (size_t k = 0; k < vis.size(); ++k) {
+    const COLOR barUp = (COLOR)V.c(K_BAR_UP), barDn = (COLOR)V.c(K_BAR_DN);
+    for (size_t k = 0; k < vis.size() && V.b(K_SHOW_BARS); ++k) {
         const cvdf::Out* o = outOf(vis[k]); if (!o || !std::isfinite(o->pct)) continue;
         const long x = xOf(vis[k]), y = yP(o->pct); RCT r;
         r.set(coord(x - bw / 2), coord(std::min(y, mid)), coord(x - bw / 2 + bw), coord(std::max(y, mid) + 1));
-        r.draw(0, o->pct >= 0 ? C_HBULL : C_HBEAR, o->pct >= 0 ? C_HBULL : C_HBEAR, DRAW_OPAQUE, PAT_SOLID);
+        r.draw(0, o->pct >= 0 ? barUp : barDn, o->pct >= 0 ? barUp : barDn, DRAW_OPAQUE, PAT_SOLID);
     }
     setPen(C_AXIS, 1, P_SOLID);
     { PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(mid); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(mid); b.drawLineTo(); }
@@ -464,8 +501,8 @@ void CVD::render(const RuntimeState& s) {
     text(pane.right - 40, bottom + 1, "-" + std::to_string((int)std::lround(pmax)) + "%", C_GREY);
     text(pane.left + 4, top - 13, withSign(hi), C_GREY); text(pane.left + 4, bottom + 1, withSign(lo), C_GREY);
     // the CVD line (gaps where a session has no CVD; a new session starts a new line)
-    setPen(C_LINE, 2, P_SOLID); bool started = false;
-    for (size_t k = 0; k < vis.size(); ++k) {
+    setPen((COLOR)V.c(K_LINE_COLOR), 2, P_SOLID); bool started = false;
+    for (size_t k = 0; k < vis.size() && V.b(K_SHOW_LINE); ++k) {
         const cvdf::Out* o = outOf(vis[k]);
         if (!o || !std::isfinite(o->cvd)) { started = false; continue; }
         PNT p; p.set(0, 0.0f); p.h = coord(xOf(vis[k])); p.v = coord(yC(o->cvd));
@@ -475,13 +512,13 @@ void CVD::render(const RuntimeState& s) {
     std::map<long long, int> barOf; for (size_t k = 0; k < vis.size(); ++k) barOf[(long long)times[vis[k]]] = vis[k];
     // every placed label box; a new label tries 4 heights on its own side and is skipped (its dot stays) if all would touch one
     struct Box { long l, t, r, b; }; std::vector<Box> placed;
-    for (size_t m = 0; m < s.feed.marks.size(); ++m) {
+    for (size_t m = 0; m < s.feed.marks.size() && V.b(K_SHOW_MARKS); ++m) {
         const cvdf::Mark& mk = s.feed.marks[m];
         if (!mk.shown || s.verdict == "retired") continue;        // 1.1.0: only the confirmed reads that held up; none once retired
         std::map<long long, int>::const_iterator b = barOf.find(mk.raw); if (b == barOf.end()) continue;
         const cvdf::Out* o = outOf(b->second); if (!o || !std::isfinite(o->cvd)) continue;
         const bool bull = mk.e.direction == cvd::Direction::Bull;
-        const COLOR col = bull ? C_BULL : C_BEAR;
+        const COLOR col = (COLOR)(bull ? V.c(K_MARK_BULL) : V.c(K_MARK_BEAR));
         std::string label = cvd::name(mk.e.type);
         if (mk.e.type != cvd::Type::Abs) label += "?";   // (1.2.0, audit list 18:25 CT: small test sample, +0.26R on 99) "Div?" / "Exh?" / "BR?"
         const long x = xOf(b->second), y = yC(o->cvd), w = getTextWidth(label.c_str(), -1) + 8, x0 = x - w / 2;
@@ -513,6 +550,7 @@ void CVD::pump() {
     try {
         identify(*s);
         if (!s->identified) identify(*s);
+        loadSettings(*s);
         if (!s->fault) calcBars(*s, getBarCount());
         writeStatus(*s);
     } catch (...) { s->fault = true; s->state = "STOPPED - error, reload the chart"; }
@@ -523,6 +561,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA CVD (testing): blue line = cumulative delta (ask-traded minus bid-traded volume) since the 5:00 PM session start; bars = each bar's delta as a % of its volume. Marks sit on the CVD line where a reversal or breakout was confirmed by price and flow at a prior-day or prior-session high / low (PDH PDL PFH PFL): Div = price made a new high / low but CVD did not; Exh = the pushing side faded at the new extreme; BR = broke the level, retested it and held. Green below the line = bullish, red above = bearish. Only setups with a stop within 4x the normal bar range are shown. Closed bars only; nothing drawn ever changes.");
-    p->setVersion("1.2.0");   // keep equal to CVD_VERSION (the build log reads this literal)
+    p->setVersion("1.3.0");   // keep equal to CVD_VERSION (the build log reads this literal)
     return p;
 }

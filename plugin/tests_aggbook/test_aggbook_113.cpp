@@ -224,12 +224,12 @@ static void versions(const std::string& dir) {
     // (2026-10-18 settings layer) the window rows live in OrderFlowPaneSettings.h (one table per pane; registered by SettingsHost.h)
     const std::string t = slurp(dir + "/OrderFlowPaneSettings.h");
     const std::string ta = t.substr(0, t.find("bookFlowSpec")), tb = t.substr(t.find("bookFlowSpec"));
-    EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.13.2");   // (1.13.2 settings layer)
-    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.3.2");
+    EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.13.3");   // (1.13.2 settings layer)
+    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.3.3");
     // every dialog row the chart reads; the removed rows are gone
     CHECK(ta.find("\"Spike vs prior biggest\"") == std::string::npos && ta.find("\"Box shows\"") == std::string::npos && ta.find("\"Spike lookback\"") == std::string::npos && ta.find("\"Spike vs average\"") != std::string::npos);
     CHECK(tb.find("\"Spike vs prior biggest\"") == std::string::npos && tb.find("\"Box shows\"") == std::string::npos && tb.find("\"Spike lookback\"") == std::string::npos && tb.find("\"Spike vs average\"") != std::string::npos);
-    CHECK(ofset::bidAskSpec().paramVersion == 5 && ofset::bookFlowSpec().paramVersion == 3 && a.find("ss::registerAll(this, ofset::bidAskSpec()") != std::string::npos && b.find("ss::registerAll(this, ofset::bookFlowSpec()") != std::string::npos);
+    CHECK(ofset::bidAskSpec().paramVersion == 6 && ofset::bookFlowSpec().paramVersion == 4 && a.find("ss::registerAll(this, ofset::bidAskSpec()") != std::string::npos && b.find("ss::registerAll(this, ofset::bookFlowSpec()") != std::string::npos);
     CHECK(a.find("mst::publish(\"AGG\"") != std::string::npos && a.find("mst::clear(\"AGG\"") != std::string::npos);
     CHECK(b.find("mst::publish(\"BOOK\"") != std::string::npos && b.find("mst::clear(\"BOOK\"") != std::string::npos);
     // the descriptions no longer promise what is not drawn

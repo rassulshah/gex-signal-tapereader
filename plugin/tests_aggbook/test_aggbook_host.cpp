@@ -34,8 +34,8 @@ static std::vector<mock::Draw> barsAt(mock::Host& h, int bar) {
     return v;
 }
 // (2026-10-18 settings layer) the plugins no longer carry index constants: the rows keep their 1.13.0 / 1.3.0 positions (registration order)
-static const int RATIO_PARM = 0, POS_PARM = 1, SPIKE_AVG_PARM = 2, OFFX_PARM = 3, OFFY_PARM = 4;
-static const int BF_RATIO = 0, BF_POS = 1, BF_AVG = 2, BF_NEAR = 3, BF_RECORD = 4, BF_OFFX = 5, BF_OFFY = 6;
+static const int POS_PARM = 0;   // (1.13.3) the window shows the Position only (Ratio bars / Spike vs average hidden, Offset X / Y removed)
+static const int BF_POS = 0, BF_NEAR = 1;   // (1.3.3) the window: Position + Near-price ticks (Ratio bars / Spike vs average hidden, Record and Offset X / Y removed)
 #define APPLY(p) do { const std::string sv_ = h.period; h.period = ""; (p)->parmsApply(); h.period = sv_; } while (0)
 #define LOAD(p) do { const std::string sv_ = h.period; h.period = ""; (p)->parmsLoad(); h.period = sv_; } while (0)
 
@@ -76,12 +76,14 @@ int main() {
     CHECK(mst::read("AGG", "ESZ6", 60, "test", NOW).ok, "re-posted while the chart runs (stays fresh past 60 s)");
     // settings: the dialog rows, Apply writes the 8-field file (old fields carried), the chart re-reads, a change re-decides
     LOAD(p);
-    CHECK(h.parms[RATIO_PARM] == 20 && h.floats[SPIKE_AVG_PARM] == 2.0f && h.parms[OFFX_PARM] == 0 && h.parms[OFFY_PARM] == 0, "parmsLoad fills Ratio bars, Spike vs average, Offset X / Y");
-    h.floats[SPIKE_AVG_PARM] = 6.0f; h.floatSet[SPIKE_AVG_PARM] = true; h.parms[OFFX_PARM] = 7; APPLY(p);
-    const std::string line = readAll(flex + "\\BidAskStats.place-ES.txt");
-    CHECK(line == "20,0,60,15,10,7,0,0\n", "Apply: 8-field file, jump / lookback / old Box shows carried, Spike vs average 6.0, Offset X 7");
+    CHECK(h.lists[POS_PARM] == 0, "parmsLoad fills the Position (the only row in the window)");
+    h.lists[POS_PARM] = 4; APPLY(p);
+    std::string line = readAll(flex + "\\BidAskStats.place-ES.txt");
+    CHECK(line == "20,4,20,15,10,0,0,0\n", "Apply: 8-field file, the hidden Ratio bars / Spike vs average / jump / lookback / Box shows carried, Position 4, offsets 0");
+    // the hidden Spike vs average still comes from the file (data-tuned, his decision: not in the window); a saved offset is ignored
+    { std::ofstream f((flex + "\\BidAskStats.place-ES.txt").c_str()); f << "20,4,60,15,10,7,3,0\n"; }
     NOW += 1500; p->calc(0);
-    CHECK(S->ser.spike.avgT == 60 && S->dx == 7 && !S->ser.bars[T0 + 1800].bidSpike, "the chart reads it: 5.0x < 6.0x is no longer a spike (a settings change re-decides)");
+    CHECK(S->ser.spike.avgT == 60 && S->dx == 0 && S->dy == 0 && !S->ser.bars[T0 + 1800].bidSpike, "the chart reads the file: 5.0x < 6.0x is no longer a spike; a saved Offset 7 / 3 is ignored");
     h.draws.clear(); p->draw();
     CHECK(count(h, "box", C_BID_SPIKE) == 0 && !text(h, "5.0"), "under 6.0x nothing is bright or labelled");
     dispose(p);
@@ -153,13 +155,14 @@ int main() {
         CHECK(F.bar == off::civilDays(x.tm_year + 1900, (unsigned)x.tm_mon + 1, (unsigned)x.tm_mday) * 86400 + x.tm_hour * 3600 + x.tm_min * 60 + x.tm_sec, "bar = the candle's Central wall-clock seconds"); }
     NOW += 50000; p->calc(0);
     CHECK(mst::read("BOOK", "ESZ6", 60, "test", NOW).ok, "re-posted while the chart runs");
-    // settings: the 7 rows, Apply keeps the file layout, the chart re-reads
+    // settings: the 2 rows, Apply keeps the file layout, the chart re-reads
     LOAD(p);
-    CHECK(h.parms[BF_RATIO] == 20 && h.floats[BF_AVG] == 2.0f && h.parms[BF_NEAR] == 0 && h.boxes[BF_RECORD] == 0 && h.parms[BF_OFFX] == 0 && h.parms[BF_OFFY] == 0, "parmsLoad fills the 7 rows from the file");
-    h.floats[BF_AVG] = 6.0f; h.floatSet[BF_AVG] = true; h.parms[BF_OFFY] = 5; APPLY(p);
-    CHECK(readAll(flex + "\\BookFlow.place-ES.txt") == "20,0,60,15,10,0,0,0,5,0\n", "Apply: Spike vs average 6.0 and Offset Y 5 written, jump / lookback / Box shows carried");
+    CHECK(h.lists[BF_POS] == 0 && h.parms[BF_NEAR] == 0, "parmsLoad fills Position / Near-price ticks from the file");
+    h.parms[BF_NEAR] = 3; APPLY(p);
+    CHECK(readAll(flex + "\\BookFlow.place-ES.txt") == "20,0,20,15,10,3,1,0,0,0\n", "Apply: Near 3 written, the hidden Ratio / Spike vs average / jump / lookback carried, record 1 (always on), offsets 0");
+    { std::ofstream f((flex + "\\BookFlow.place-ES.txt").c_str()); f << "20,0,60,15,10,0,0,0,5,0\n"; }   // an old file: record off, Offset Y 5, Spike vs average 6.0
     NOW += 1500; p->calc(0);
-    CHECK(S->dlgSpike.avgT == 60 && S->set.dy == 5, "the chart reads the file");
+    CHECK(S->dlgSpike.avgT == 60 && S->set.dy == 0 && S->set.record == 1, "the chart reads the file: Spike vs average 6.0 (hidden, from the file), a saved offset ignored, recording on despite a saved 0");
     h.draws.clear(); p->draw();
     {   int bright = 0; for (auto& d : barsAt(h, 52)) bright += d.color == off::C_GREEN_SPIKE || d.color == off::C_RED_SPIKE;
         CHECK(bright == 0 && !text(h, "5.0"), "5.0x under a 6.0x setting: dim, no label (the setting works)"); }

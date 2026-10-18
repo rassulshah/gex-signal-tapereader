@@ -14,7 +14,7 @@
 #include <vector>
 #include "BannerBoard.h"
 namespace bdk {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-18): LRA_HLT_ (the table alone) + placeMatched (the Big Lot box = the table's height)
 static const int GAP = 4;          // px between the docked box and the table
 static const int MARGIN = 4;       // px kept inside the area edges (the 9-spot placement)
 struct Box { int l = 0, t = 0, r = 0, b = 0; };
@@ -85,6 +85,32 @@ inline bool peekHodLod(const std::string& sym, long spb, const std::string& char
     std::string v; ms = -1; bb::Rect x;
     if (sym.empty() || !bb::bbGet(bb::key("LRA_HLB_", sym, spb, chart), v) || !bb::decBanner(v, -1, x)) return false;
     ms = bb::stampOf(v); r = mk(x.l, x.t, x.r, x.b); return ms >= 0;
+}
+// ---- (1.1.0, Rassul 2026-10-18 "the BLS box should be the same height as the hod lod box") ----------------------------------------
+// lsHodLod 2.4.4 draws the Gex S/R strip ABOVE its table: LRA_HLB_ = table + strip (+ header) - what nothing may cover; LRA_HLT_ = the
+// table alone - what the Big Lot box matches: beside it (right, else left), the table's top and bottom, never the strip's.
+inline void publishHodLodTable(const std::string& sym, long spb, const std::string& chart, long long ms, const Box& r) {
+    if (sym.empty()) return;
+    bb::Rect x; x.l = r.l; x.t = r.t; x.r = r.r; x.b = r.b;
+    bb::bbSet(bb::key("LRA_HLT_", sym, spb, chart), bb::encBanner(ms, x));
+}
+inline void clearHodLodTable(const std::string& sym, long spb, const std::string& chart) { if (!sym.empty()) bb::bbSet(bb::key("LRA_HLT_", sym, spb, chart), std::string()); }
+inline bool peekHodLodTable(const std::string& sym, long spb, const std::string& chart, Box& r, long long& ms) {
+    std::string v; ms = -1; bb::Rect x;
+    if (sym.empty() || !bb::bbGet(bb::key("LRA_HLT_", sym, spb, chart), v) || !bb::decBanner(v, -1, x)) return false;
+    ms = bb::stampOf(v); r = mk(x.l, x.t, x.r, x.b); return ms >= 0;
+}
+// the docked box at the TABLE's height (full = table + strip, never covered; table = the part whose top / bottom it shares).
+// minH = the box's smallest readable height: a table shorter than that keeps the old place() (own height).
+inline Result placeMatched(bool hostOn, const Box& full, const Box& table, int w, int minH, const Box& area, int pos, std::vector<Box> avoid, int* hOut = nullptr) {
+    if (hostOn && valid(table) && valid(full) && table.b - table.t >= minH) {
+        const int h = table.b - table.t;
+        const Box c[2] = { mk(table.r + GAP, table.t, table.r + GAP + w, table.b), mk(table.l - GAP - w, table.t, table.l - GAP, table.b) };
+        for (int i = 0; i < 2; ++i)
+            if (clear(c[i], area, avoid) && !overlap(c[i], full)) { Result R; R.b = c[i]; R.mode = DOCKED; R.side = i ? S_LEFT : S_RIGHT; R.why = std::string("docked ") + sideName(R.side) + ", table height"; if (hOut) *hOut = h; return R; }
+    }
+    if (hOut) *hOut = minH;
+    return place(hostOn, full, w, minH, area, pos, avoid);
 }
 } // namespace bdk
 #endif
