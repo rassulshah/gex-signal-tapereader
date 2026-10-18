@@ -23,7 +23,7 @@
 
 namespace codds {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // 1.0.1: odds only for CoBs AFTER the table was built (no in-sample numbers on old CoBs); the case count is said to be all markets
 static const char* const QID = "COB_1R";
 static const char* const SIDECAR_HEADER = "trig_time|side|p|n|base|live|key|facts";
 
@@ -101,6 +101,15 @@ inline Facts facts(const std::vector<cimp::Bar>& A, const std::vector<long long>
 
 struct Odds { bool decided = false; double p = -1, base = 0; int n = 0; bool live = false; std::string key, facts; };
 
+// "2026-10-17 23:41" (the table's BUILT stamp, Central) -> Central seconds (civil days x 86400 + seconds); -1 = unreadable
+inline long long builtCt(const std::string& s) {
+    int y = 0, mo = 0, d = 0, h = 0, mi = 0;
+    if (std::sscanf(s.c_str(), "%d-%d-%d %d:%d", &y, &mo, &d, &h, &mi) != 5 || mo < 1 || mo > 12 || d < 1 || d > 31 || h < 0 || h > 23 || mi < 0 || mi > 59) return -1;
+    return cimp::civil(y, (unsigned)mo, (unsigned)d) * 86400LL + h * 3600LL + mi * 60LL;
+}
+// a CoB that closed BEFORE the table was built was part of what the table learned from: its odds would be in-sample -> not decided
+inline bool afterBuilt(const odt::Table& T, long long trigCt) { const long long b = builtCt(T.built); return b > 0 && trigCt >= b; }
+
 inline Odds decide(const odt::Table& T, const Facts& F)
 {
     Odds O; O.decided = true;
@@ -119,17 +128,17 @@ inline Odds decide(const odt::Table& T, const Facts& F)
 inline std::string labelSuffix(const Odds& O, bool show) { return (show && O.decided && O.p >= 0 && O.live) ? " " + std::to_string(odt::pct(O.p)) + "%" : std::string(); }
 inline std::string hoverLine(const Odds& O)
 {
-    if (!O.decided) return "Odds: not decided (recorded before odds existed).";
+    if (!O.decided) return "Odds: none - this CoB closed before tonight's odds table was built (its odds would be learned from itself).";
     if (O.p < 0) return "Odds: ? - fewer than 20 past CoBs like this one (or no odds file yet).";
-    std::string s = "Odds: " + std::to_string(odt::pct(O.p)) + "% reach 1R before the stop (usual " + std::to_string(odt::pct(O.base)) + "%, "
-                    + std::to_string(O.n) + " past CoBs like this).";
+    std::string s = "Odds: " + std::to_string(odt::pct(O.p)) + "% reach 1R before the stop (usual here " + std::to_string(odt::pct(O.base)) + "%; learned from "
+                    + std::to_string(O.n) + " similar CoBs in all 7 markets, adjusted for this market).";
     if (!O.live) s += " Still learning - not shown on the chart.";
     return s;
 }
 inline std::string fmt4(double x) { char b[32]; std::snprintf(b, sizeof(b), "%.4f", x); return b; }
 inline std::string sidecarLine(long long trig, int side, const Odds& O)
 {
-    return std::to_string(trig) + "|" + (side > 0 ? "bull" : "bear") + "|" + (O.p < 0 ? std::string("-1") : fmt4(O.p)) + "|" + std::to_string(O.n) + "|"
+    return std::to_string(trig) + "|" + (side > 0 ? "bull" : "bear") + "|" + (!O.decided ? std::string("-2") : O.p < 0 ? std::string("-1") : fmt4(O.p)) + "|" + std::to_string(O.n) + "|"
            + fmt4(O.base) + "|" + (O.live ? "1" : "0") + "|" + O.key + "|" + O.facts;
 }
 inline bool parseSidecar(const std::string& line, long long& trig, int& side, Odds& O)
@@ -141,7 +150,7 @@ inline bool parseSidecar(const std::string& line, long long& trig, int& side, Od
     if (f[1] == "bull") side = 1; else if (f[1] == "bear") side = -1; else return false;
     double p = 0, b = 0; int n = 0;
     if (!odt::num(f[2], p) || !odt::inum(f[3], n) || !odt::num(f[4], b) || (f[5] != "0" && f[5] != "1")) return false;
-    O = Odds(); O.decided = true; O.p = p < 0 ? -1 : p; O.n = n; O.base = b; O.live = f[5] == "1";
+    O = Odds(); O.decided = p > -1.5; O.p = p < 0 ? -1 : p; O.n = n; O.base = b; O.live = f[5] == "1";   // -2 = not decided (before the table)
     O.key = odt::join(f, 6, f.size() - 1); O.facts = f.back();
     return true;
 }

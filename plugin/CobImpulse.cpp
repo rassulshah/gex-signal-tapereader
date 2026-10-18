@@ -380,7 +380,8 @@ void CobImpulse::decide(CIState& S, long count) {
                 const int legBars = (T.pivot >= 0 && T.legEnd >= T.pivot) ? T.legEnd - T.pivot : -1;
                 const codds::Facts F = codds::facts(A, ct, ai, side, S.tick, rthFirst, rthLast, legBars);
                 const odt::Table* ot = readOdds(S);
-                O = codds::decide(ot ? *ot : odt::Table(), F);
+                if (ot && !codds::afterBuilt(*ot, ct[(size_t)ai])) O.decided = false;   // (0.4.0) an older CoB: no in-sample odds
+                else O = codds::decide(ot ? *ot : odt::Table(), F);
             }
             const long long sess = sessionOf(bt);
             if (sess < 0 || S.pending.size() >= REC_LINES_MAX) { ++S.recFails; continue; }

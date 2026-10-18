@@ -60,7 +60,7 @@ static std::string sidecars() {
     return out;
 }
 static const char* ODDS_A =
-    "VERSION|1\nMARKET|NQ\nBUILT|2026-10-18 01:00|test\n"
+    "VERSION|1\nMARKET|NQ\nBUILT|2026-10-01 01:00|test\n"
     "Q|COB_1R|CoB reaches 1R before the stop|base|0.3190|n|69|keys|side,risk,legb,hv|status|LIVE|calib|0.070\n"
     "P|COB_1R|*|*|*|*|p|0.3190|n|464|lo|0.28|hi|0.36\n"
     "P|COB_1R|long|*|*|*|p|0.3300|n|265|lo|0.28|hi|0.38\n"
@@ -89,12 +89,12 @@ int main(int argc, char** argv) {
         auto L = texts(H, "Cob");
         RTX_EVENT e; std::memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)((L[0].l + L[0].r) / 2); e.v.mouse.v = (short)((L[0].t + L[0].b) / 2);
         hb::fakeCursor() = 77; p->draw(); p->mouse(&e); H.draws.clear(); p->draw();
-        bool hl = false; for (const auto& d : H.draws) if (d.text.find("Odds: 33% reach 1R before the stop (usual 32%") != std::string::npos) hl = true;
+        bool hl = false; for (const auto& d : H.draws) if (d.text.find("Odds: 33% reach 1R before the stop (usual here 32%") != std::string::npos) hl = true;
         CHECK(hl, "hover: the odds line with the usual rate and cases");
         hb::fakeCursor() = 0;
         S->lastStatusMs = -1; p->calc(0);
         std::string st = slurp(flex() + "\\CobImpulse.status-NQ-NQZ6-180.txt");
-        CHECK(st.find("VERSION,0.4.0") != std::string::npos && st.find("ODDS,LRA-Odds-NQ.csv,ok, built 2026-10-18 01:00,show 1,decided 2") != std::string::npos, "status: odds line");
+        CHECK(st.find("VERSION,0.4.0") != std::string::npos && st.find("ODDS,LRA-Odds-NQ.csv,ok, built 2026-10-01 01:00,show 1,decided 2") != std::string::npos, "status: odds line");
         // 2) ODDS,0 hides the number, keeps the record
         spit(flex() + "\\LRA-CobImpulse-NQ.csv", "VERSION,1\nMARKET,NQ\nODDS,0\n");
         S->paramsCheckMs = -1; S->paramsStamp = -3; H.draws.clear(); p->draw();
@@ -137,6 +137,20 @@ int main(int argc, char** argv) {
         setBars(H2, F, F.bars.size(), i839, i854, i833, true); p->calc(0); H2.draws.clear(); p->draw();
         CHECK(texts(H2, "%").empty(), "LEARNING question: not shown on the chart");
         for (const auto& kv : p->testState()->oddsRec) CHECK(codds::hoverLine(kv.second).find("Still learning") != std::string::npos, "hover says still learning");
+        p->destroy(); delete p;
+    }
+    // 6) (1.0.1) a table built AFTER the CoBs: no in-sample odds - not decided, nothing drawn, the hover says why, the sidecar keeps -2
+    {
+        wipe(); std::string late(ODDS_A); late.replace(late.find("2026-10-01 01:00"), 16, "2026-10-18 01:00");
+        spit(flex() + "\\LRA-Odds-NQ.csv", late);
+        mock::Host H; mock::current = &H; CobImpulse* p = static_cast<CobImpulse*>(CreateExtension()); p->setup();
+        setBars(H, F, F.bars.size(), i839, i854, i833, true); p->calc(0); H.draws.clear(); p->draw();
+        CHECK(texts(H, "%").empty() && p->testState()->oddsRec.size() == 2, "table newer than the CoBs: no number");
+        for (const auto& kv : p->testState()->oddsRec) CHECK(!kv.second.decided && codds::hoverLine(kv.second).find("before tonight") != std::string::npos, "not decided, hover says why");
+        p->destroy(); delete p;
+        mock::Host H2; mock::current = &H2; p = static_cast<CobImpulse*>(CreateExtension()); p->setup();
+        setBars(H2, F, F.bars.size(), i839, i854, i833, true); p->calc(0);
+        for (const auto& kv : p->testState()->oddsRec) CHECK(!kv.second.decided, "restart keeps 'not decided' (sidecar -2)");
         p->destroy(); delete p;
     }
     std::printf("%d checks, %d failures\n", checks, fails);
