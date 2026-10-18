@@ -94,6 +94,7 @@
 #include "BoxPlace.h"                // (2.0.6) Offset X / Y rules, hysteresis, the dialog snapshot
 #include "HodLodLogic.h"
 #include "HodLodSettings.h"         // (2.4.2) the ONE settings table (SettingsSpec.h)
+#include "DealerProfileSettings.h"   // (2.4.3) the Dealer Profile banner key (its keyed per-market file)
 #include "SettingsHost.h"           // (2.4.2) registration / window fill / read / group masters from the table
 #include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
 #include "HodLodQ.h"               // (2.3.0) MenthorQ Q-Scores: LRA-QScore-<MKT>.csv parse / header parts / hover (SDK-free)
@@ -953,18 +954,15 @@ void HodLod::loadAvoid(HLState& S)
             }
         }
     }
-    {   // the Dealer Profile's whole-book banner (top left, off by default): DealerProfile.settings.txt, "<root>|market|width|font|clock|labels|snap|fadefar|banner|..."
+    {   // the Dealer Profile's whole-book banner (top left, off by default): (2.4.3) the "banner" key of DealerProfile.settings-<MKT>.txt
+        // (lsDealerProfile 2.17.1, keyed per market); before the Dealer Profile has migrated, the old root-keyed DealerProfile.settings.txt
+        // row of this market through the same legacy reader the Dealer Profile uses (dprset::legacy) - never a positional column here
         S.dpBanner = false;
-        const std::string p = flexPath("DealerProfile.settings.txt");
-        std::ifstream f(p.c_str(), std::ios::binary); std::string ln; int nl = 0;
-        while (!p.empty() && f.is_open() && nl++ < 200 && std::getline(f, ln)) {
-            if (ln.size() > 1024) continue;
-            size_t a = ln.find('|'); if (a == std::string::npos) continue;
-            std::string key = ln.substr(0, a); size_t tl = key.find('~'); if (tl != std::string::npos) key = key.substr(0, tl);
-            if (key.empty() || hl::marketForRoot(key) != S.mkt) continue;
-            std::vector<std::string> c; size_t q = 0; for (;;) { size_t e = ln.find('|', q); c.push_back(ln.substr(q, e == std::string::npos ? std::string::npos : e - q)); if (e == std::string::npos) break; q = e + 1; }
-            if (c.size() >= 9 && c[8] == "1") S.dpBanner = true;
-        }
+        std::string text; ss::Values V;
+        const std::string pk = flexPath("DealerProfile.settings-" + S.mkt + ".txt"), pl = flexPath("DealerProfile.settings.txt");
+        const int mi = ss::marketIndex(S.mkt);
+        if (!pk.empty() && ss::readSmall(pk, text) && ss::parse(dprset::spec(), mi, text, V)) S.dpBanner = V.b(dprset::K_BANNER);
+        else if (!pl.empty() && ss::readSmall(pl, text)) { V = ss::defaults(dprset::spec(), mi); if (dprset::legacy(dprset::spec(), mi, text, V)) S.dpBanner = V.b(dprset::K_BANNER); }
     }
 }
 // (2.0.5) the avoid boxes for this pane: the Dealer Profile header (right-aligned at the scale edge, ~44 px tall, 2.9.0
@@ -1159,6 +1157,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live.");
-    p->setVersion("2.4.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.4.3");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

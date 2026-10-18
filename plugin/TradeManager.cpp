@@ -52,6 +52,9 @@
 #include "HostSlot.h"
 #include "TradeGuardLayout.h"
 #include "ClaimGates.h"      // (1.3.0) LRA_SHOW_CONTROL_WORD / LRA_SHOW_READ_EXIT
+#include "TradeManagerSettings.h"   // (1.3.1) the settings window table (SettingsSpec.h)
+#include "SettingsHost.h"
+static ss::Ids& tmIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
 #include <chrono>
 #include <deque>
 #include <fstream>
@@ -69,7 +72,7 @@
 #include <climits>
 #include <new>
 
-static const char* const TM_VERSION = "1.3.0";   // (1.3.0, 2026-10-14 18:25 CT audit display list) READY only from his checklist (key level, before 11:00 AM CT, no news, limits OK; unknown / stale = WAIT), no "Read" item, no in-trade HOLD / EXIT? (ClaimGates.h LRA_SHOW_CONTROL_WORD / LRA_SHOW_READ_EXIT)   // (1.2.0) drag the box, per-chart spot, never over the profiles / past price;
+static const char* const TM_VERSION = "1.3.1";   // (1.3.1, 2026-10-18 settings audit) the window from TradeManagerSettings.h / SettingsHost.h, keyed TradeManager.settings-<MKT>.txt (migrated once from the place file); Font now reaches the chart (it was read only while the window was open);   // (1.3.0, 2026-10-14 18:25 CT audit display list) READY only from his checklist (key level, before 11:00 AM CT, no news, limits OK; unknown / stale = WAIT), no "Read" item, no in-trade HOLD / EXIT? (ClaimGates.h LRA_SHOW_CONTROL_WORD / LRA_SHOW_READ_EXIT)   // (1.2.0) drag the box, per-chart spot, never over the profiles / past price;
                                                   // (1.1.2) per-chart state, validated bridge inputs, bounded sizing
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF, C_BOXBG = 0x000B1220, C_BORDER = 0x00334155;
 static const COLOR C_AMBER = 0x00F59E0B, C_RED = 0x00EF4444, C_GREEN = 0x0022C55E, C_DKRED = 0x007F1D1D, C_DKGRN = 0x00166534, C_TRACK = 0x001F2937;
@@ -255,9 +258,33 @@ class TradeManager : public cppExtension {
 public:
     TradeManager() : cppExtension() {}
     TIdx TX;                                           // set in setup(); one per extension object
-    virtual int parmsLoad(void) { return RTX_OK; }     // (#29) loading never saves and never changes anything
-    virtual int parmsApply(void) { if (ready()) { TSet cfg; readS(cfg); savePl(cfg); } return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { if (ready()) { TSet cfg; readS(cfg); savePl(cfg); } return RTX_OK; }
+    // (1.3.1, settings audit 2026-10-18) the window from tmset::spec() through SettingsHost.h; the chart reads the keyed per-market file
+    ss::Snap snap_; ss::Store store_; std::string storeMkt_;
+    std::string fileMarket() { char b[32] = {0}; const char* rs = getRootSymbol(b); return dl::marketFor(0, rs ? rs : ""); }   // the file follows the chart's own market
+    ss::Store& store(const std::string& mk) {
+        if (storeMkt_ != mk || !store_.S) { store_ = ss::Store(); store_.S = &tmset::spec(); storeMkt_ = mk;
+            const std::string pp = dl::placePath("TradeManager", mk); const size_t cut = pp.rfind("TradeManager.place-");
+            if (!mk.empty() && cut != std::string::npos) { store_.path = pp.substr(0, cut) + "TradeManager.settings-" + mk + ".txt"; store_.legacyPaths.push_back(pp); store_.legacy = tmset::legacy; } }
+        return store_;
+    }
+    static long long tmNowMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+    void fromValues(const ss::Values& V, TSet& S) { S.market = V.i(tmset::K_MARKET); S.font = V.i(tmset::K_FONT); S.place = V.i(tmset::K_POSITION); }
+    virtual int parmsLoad(void) {                       // (#29) loading never saves
+        if (!ss::inDialog(this)) return RTX_OK;
+        const std::string mk = fileMarket(); if (mk.empty()) return RTX_OK;
+        ss::fillDialog(this, tmset::spec(), tmIds(), store(mk).load(ss::marketIndex(mk), tmNowMs(), true), snap_);
+        return RTX_OK;
+    }
+    void saveAll() {
+        if (!ss::inDialog(this)) return;
+        const std::string mk = fileMarket(); if (mk.empty()) return;
+        ss::Store& st = store(mk);
+        const ss::Values V = ss::readDialog(this, tmset::spec(), tmIds(), st.load(ss::marketIndex(mk), tmNowMs(), true), snap_);
+        if (st.save(V)) snap_.take(ss::dialogNow(this, tmset::spec(), tmIds(), V));
+        TSet cfg; fromValues(V, cfg); savePl(cfg);      // the place file the placement / drag code reads
+    }
+    virtual int parmsApply(void) { saveAll(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, tmset::spec(), tmIds(), (int)i); saveAll(); return RTX_OK; }
     virtual int done(void);
     virtual int destroy(void);
     // the Position is kept per market in TradeManager.place-<MKT>.txt (IRT reads list settings back as -1 outside the settings
@@ -276,12 +303,11 @@ public:
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
 
-    bool ready() { int i = getListIndex(TX.market); return i >= 0 && i <= 7; }
-    void readS(TSet& S)
+    bool ready() { return ss::inDialog(this); }          // (1.3.1) the settings window's copy
+    void readS(TSet& S)                                  // (1.3.1) the chart's settings: the keyed per-market file (every copy)
     {
-        { int v = getListIndex(TX.market); if (v >= 0 && v <= 7) S.market = v; }
-        { int v = getIntegerValue(TX.font); if (v >= 6 && v <= 20) S.font = v; }
-        { int v = getListIndex(TX.place); if (v >= 0 && v <= 8) S.place = v; }
+        const std::string mk = fileMarket(); if (mk.empty()) return;
+        fromValues(store(mk).load(ss::marketIndex(mk), tmNowMs()), S);
     }
     HostSlot<TMState> slot_;
     TMState* state() { return slot_.get(this, true); }
@@ -325,14 +351,8 @@ int cppExtension::destroy(void) { return RTX_OK; }
 
 int cppExtension::setup(void)
 {
-    TIdx& TX = static_cast<TradeManager*>(this)->TX;   // the parameter indices live in the object (no static state)
-    setParameterVersion(2);                            // unchanged: the same three settings in the same order, saved values kept
-    setParameterDialogHeight(3);
-    const short SL = kParmAppendSameLine;
-    int pc = 0;
-    TX.market = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    TX.font   = pc++; setIntegerParameter("Font size (pt)", 8, NUMW, SL);
-    TX.place  = pc++; setListParameter("Position", 2, dl::ANCHORS);   // one of 9 spots, default Top right; drag overrides per chart
+    // (1.3.1, settings audit 2026-10-18) the same three rows in the same order from tmset::spec() (parameter version 2 kept)
+    ss::registerAll(this, tmset::spec(), tmIds());
     return RTX_OK;
 }
 
@@ -430,7 +450,7 @@ int TradeManager::draw(void)
     bool& inPos = S.inPos; std::string& posSide = S.posSide; int& posSize = S.posSize; double& posPx = S.posPx; double& posUpl = S.posUpl;
     bool& haveTurn = S.haveTurn; bool& atLevel = S.atLevel; char& side = S.side; std::string& ctl = S.ctl; std::string& levelTxt = S.levelTxt; double& ext = S.ext; double& lvl = S.lvl; double& t1 = S.t1; double& px = S.px;
     std::vector<TMWin>& W = S.W; std::vector<TMCal>& C = S.C;
-    if (ready()) readS(cfg);
+    readS(cfg);                                         // (1.3.1) every copy reads the file (Font was ignored outside the window)
     load(S);
     if (mkt.empty()) return RTX_OK;
     RCT pane; pane.getPaneRect(false);
@@ -680,6 +700,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // TRACK_MOUSE: drag without selecting it first
     p->setDescription("LRA Trade Manager: your Topstep day, the checklist for the next trade, and how to manage the open one. Drag the box to move it (kept per chart); double-click it to go back to the Position setting.");
-    p->setVersion("1.3.0");   // = TM_VERSION; a literal so gex-build.log shows the number (it showed "TM_VERSION")
+    p->setVersion("1.3.1");   // = TM_VERSION; a literal so gex-build.log shows the number (it showed "TM_VERSION")
     return p;
 }

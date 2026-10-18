@@ -93,6 +93,8 @@ static void* dpCursorWindow() { return NULL; }
 #undef far
 #endif
 #include "DealerLogic.h"
+#include "DealerProfileSettings.h"   // (2.17.1) the settings window table (SettingsSpec.h)
+#include "SettingsHost.h"
 #include "HostSlot.h"
 #include "DealerProfileAuditLogic.h"
 #include "OnTouchLogic.h"   // (2.6.0) the overnight touch odds, natively
@@ -115,7 +117,7 @@ static void* dpCursorWindow() { return NULL; }
 #include <algorithm>
 #include <chrono>
 
-static const char* DP_VERSION = "2.17.0";   // 2.17.0 (2026-10-18): STALE by Fresh.h (one rule with HOD / LOD), a status file per chart (DealerProfile.status-<MKT>-<spb>.txt, the old one kept one more version), Market State SRC GEX // 2.16.0 (2026-10-16, Rassul): node text "480 lots" (colour = buy / sell); level badge NAME | price | GAMMA | ratio (yellow) // 2.15.1: node / hedge-text cut-offs vs the whole grid's biggest strike (not the screen's) // 2.15.0: compact hovers (level / node / HVL / header), dynamic hover width, hover clear of the BIG column // 2.14.1: Levels column >= 150 px (NQ prices) //   // 2.14.0 (2026-10-15 10:34, Rassul): level badges NAME | price | liquidity, Levels column >= 124 px //   // 2.13.0 (2026-10-15 09:53, Rassul): level lines only in the Levels column, not across the chart //   // 2.12.1 (2026-10-15): the chart margin also leaves room for the BIG column (ColumnBoard 1.1.0) //   // 2.12.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 5): the bar hover "Teal = MenthorQ model shows + net gamma here (vendor model, data N min old). Not a prediction it holds."; MenthorQ badge hover "MenthorQ model level, about 6 to 8 min delayed. Watch price and tape here; it isn't a turn forecast."; touch odds "A chance to REACH only - not hold or reverse."; "How to use: wait for your trigger - a sweep through the exact level, then RB or CoB, before 11:00 AM CT."; HL badge "HL?" + "whether they hold is unknown"; today's pick marked ? in its hover; HVL regime text behind the hvl_cushion gate. The node B / S text and "dealers must BUY N" stay (his call).   // 2.11.1 (MQF100, 2026-10-14 after-close - "STALE 2h - 9:35 AM" with no reason): when the grid is STALE the header adds WHY and what is being done ("no internet - retrying", "signed out - sign in", "tab asleep - retrying") from the bridge's lsFlexLevels\LRA-MQFeed.txt (bridge 1.30.0, read at most every 5 s, used only while written in the last 5 min); the header hover says why / what is being done / what you do   // 2.11.0 (CR5200, Rassul 2026-10-14 11:00 CT): the Levels / Delta / Dealer columns right of price, the chart margin, one-sided teal / orange nodes with B / S hedge text, compact level badges (detail in the hovers)   // 2.10.0 (Rassul 2026-10-14): HrHI / HrLO no longer drawn; AsiaHI / AsiaLO (18:00-02:00 CT, muted purple) and CWH / CWL (this week's high / low set before yesterday, soft blue) added; a new level within the market's merge ticks joins the line ("ONH . AsiaHI")   // 2.9.0: absolute-GEX nodes, W / F, top-3 %, hedge numbers, HVL tags, STALE header, CR0 merge, G2-G10 hidden, hovers   // 2.8.7: audit defect fixes - external files read bounded (a torn / oversized / malformed file keeps the last good one), level matching on the tick grid (no adjacent-tick merge), settings / status written atomically   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.17.1";   // 2.17.1 (2026-10-18 settings audit): the window from DealerProfileSettings.h / SettingsHost.h; settings per MARKET in DealerProfile.settings-<MKT>.txt (the root-keyed DealerProfile.settings.txt reset at every roll; migrated once, left in place); the indicators row no longer cut off; drawing unchanged // 2.17.0 (2026-10-18): STALE by Fresh.h (one rule with HOD / LOD), a status file per chart (DealerProfile.status-<MKT>-<spb>.txt, the old one kept one more version), Market State SRC GEX // 2.16.0 (2026-10-16, Rassul): node text "480 lots" (colour = buy / sell); level badge NAME | price | GAMMA | ratio (yellow) // 2.15.1: node / hedge-text cut-offs vs the whole grid's biggest strike (not the screen's) // 2.15.0: compact hovers (level / node / HVL / header), dynamic hover width, hover clear of the BIG column // 2.14.1: Levels column >= 150 px (NQ prices) //   // 2.14.0 (2026-10-15 10:34, Rassul): level badges NAME | price | liquidity, Levels column >= 124 px //   // 2.13.0 (2026-10-15 09:53, Rassul): level lines only in the Levels column, not across the chart //   // 2.12.1 (2026-10-15): the chart margin also leaves room for the BIG column (ColumnBoard 1.1.0) //   // 2.12.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 5): the bar hover "Teal = MenthorQ model shows + net gamma here (vendor model, data N min old). Not a prediction it holds."; MenthorQ badge hover "MenthorQ model level, about 6 to 8 min delayed. Watch price and tape here; it isn't a turn forecast."; touch odds "A chance to REACH only - not hold or reverse."; "How to use: wait for your trigger - a sweep through the exact level, then RB or CoB, before 11:00 AM CT."; HL badge "HL?" + "whether they hold is unknown"; today's pick marked ? in its hover; HVL regime text behind the hvl_cushion gate. The node B / S text and "dealers must BUY N" stay (his call).   // 2.11.1 (MQF100, 2026-10-14 after-close - "STALE 2h - 9:35 AM" with no reason): when the grid is STALE the header adds WHY and what is being done ("no internet - retrying", "signed out - sign in", "tab asleep - retrying") from the bridge's lsFlexLevels\LRA-MQFeed.txt (bridge 1.30.0, read at most every 5 s, used only while written in the last 5 min); the header hover says why / what is being done / what you do   // 2.11.0 (CR5200, Rassul 2026-10-14 11:00 CT): the Levels / Delta / Dealer columns right of price, the chart margin, one-sided teal / orange nodes with B / S hedge text, compact level badges (detail in the hovers)   // 2.10.0 (Rassul 2026-10-14): HrHI / HrLO no longer drawn; AsiaHI / AsiaLO (18:00-02:00 CT, muted purple) and CWH / CWL (this week's high / low set before yesterday, soft blue) added; a new level within the market's merge ticks joins the line ("ONH . AsiaHI")   // 2.9.0: absolute-GEX nodes, W / F, top-3 %, hedge numbers, HVL tags, STALE header, CR0 merge, G2-G10 hidden, hovers   // 2.8.7: audit defect fixes - external files read bounded (a torn / oversized / malformed file keeps the last good one), level matching on the tick grid (no adjacent-tick merge), settings / status written atomically   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
 //   // 2.0.2 (2026-10-03, Rassul: "ng looks wierd", "euro also looks strange", font / clock show T): bars capped in height (NG / EU strikes are 100-300 px apart when zoomed in - each bar was a block), values on every visible bar, CL / NG dimmed (options data context only), stale age by date, number fields at the default width
@@ -242,7 +244,9 @@ public:
         long long mstBar = -1, mstMs = -1; std::string mstSig; std::map<std::string, std::string> mstKv;
     };
     ColsState cs;
-    bp::DlgSnap dsnap_; std::string dsnapInds; bool dsnapHave = false;   // (2.11.0) the dialog's values when it opened (object-level, as the Liquidity Profile)
+    ss::Snap dsnap_;                                                    // (2.11.0) the dialog's values when it opened (2.17.1: SettingsSpec.h)
+    std::vector<std::pair<std::string, ss::Store> > stores_;            // (2.17.1) per market (files keyed by market: safe across charts)
+    ss::Store& settingsStore(const std::string& mkt);
     void columns(const RCT& pane, short axisR, bool hasDealer);         // this draw's layout + the board
     void applyMargin();                                                 // calc / preCalc / Apply: the right margin
     void unpublishCols();
@@ -303,9 +307,7 @@ public:
         }
     }
     std::string chartKey(); std::string savedKey; long long savedStamp = -2;
-    void readSettings(Settings& S, bool normalize = true);
     void fillDialog();
-    void takeSnap();
     void load();
     void alignContract();
     void render(const Settings& S);
@@ -467,193 +469,82 @@ int DealerProfile::destroy(void)
     return RTX_OK;
 }
 
-bool DealerProfile::dialogReady() { int i = getListIndex(PX.market); return i >= 0 && i <= 7; }
-// (2.2.4, Rassul 23:05 "the same thing is happening with the dealer profile") the GammaProfile way: read the saved values
-// whenever they are populated (Width 30..900 is the test); a list that reads -1 keeps its last value
-// (2.2.5, Rassul 23:06 labels vanish when the settings window closes) IRT fills list / check-box values only while the
-// window is open. Read + SAVE them per chart then; use the saved copy while it is closed (survives restarts).
-static std::string dpSettingsPath() { const char* up = getenv("USERPROFILE"); return std::string(up ? up : "C:") + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.settings.txt"; }
+// (2.17.1, settings audit 2026-10-18) the settings come from DealerProfileSettings.h through SettingsHost.h: the window is filled / read
+// by the layer, the chart reads ONLY lsFlexLevels\DealerProfile.settings-<MKT>.txt (keyed, per MARKET; the old DealerProfile.settings.txt
+// was keyed by the contract root, so every roll reset the settings - it is migrated once and left in place for older readers).
+static ss::Ids& dpIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
+static std::string dpFlexDir() { const char* up = getenv("USERPROFILE"); return std::string(up ? up : "C:") + "\\InvestorRT\\rtx\\lsFlexLevels\\"; }
+static std::string dpSettingsPath() { return dpFlexDir() + "DealerProfile.settings.txt"; }
+static long long dpNowMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+static Settings dpFromValues(const ss::Values& V)
+{
+    using namespace dprset;
+    Settings c; c.market = V.i(K_MARKET); c.width = V.i(K_WIDTH); c.levelsW = V.i(K_LEVELS_W); c.badgeFont = V.i(K_BADGE_FONT);
+    c.liqBadge = V.b(K_LIQ_BADGE); c.font = V.i(K_FONT); c.clock = V.i(K_CLOCK); c.labels = V.b(K_LABELS); c.snap = V.b(K_SNAP);
+    c.fadefar = V.b(K_FADEFAR); c.banner = V.b(K_BANNER); c.inds = V.s(K_INDS); c.whisk = false; c.legend = false;
+    if (c.inds.empty()) c.inds = "cob_bull,cob_bear";   // blank = the default (as before); "none" = off
+    dpNormalizeSettings(c); return c;
+}
+bool DealerProfile::dialogReady() { return ss::inDialog(this); }
 std::string DealerProfile::chartKey()
 {
-    // (fix 23:22) the settings window's copy of the plugin has NO bar size / chart label (its key read "EPZ26~~") while the
-    // chart's copy has them, so the two never matched. Key = the market symbol only (charts of one market share settings).
+    // the file follows the chart's own market (the Market list overrides which book is drawn, not where the settings live)
     char rb[32] = {0}; const char* rs = getRootSymbol(rb);
-    std::string k = rs ? rs : "";
-    for (size_t i = 0; i < k.size(); i++) if (k[i] == '|' || k[i] == '\n' || k[i] == '\r') k[i] = ' ';
-    return k;
+    const int m = ss::marketOfRoot(rs ? rs : "");
+    return m >= 0 ? ss::MARKETS[m] : std::string();
 }
-// (2.11.0) one row per chart key (the market's root symbol) in DealerProfile.settings.txt:
-//   key|market|width|font|clock|labels|snap|fadefar|banner|inds|c2|levelsW|badgeFont|liqBadge   (2.11.0, 14 fields)
-//   key|market|width|font|clock|labels|snap|fadefar|banner|inds                            (2.10.0 and older: width = bar length)
-// An old row is migrated once on read: its width was the bar length (default 50) -> the Dealer column (default 80); a width
-// outside 40-250 is clamped into it (a real choice is kept as near as the new range allows); the next save writes the 2.11.0 row.
-static bool dpParseRow(const std::vector<std::string>& t, Settings& c, bool* migrated = nullptr)
+ss::Store& DealerProfile::settingsStore(const std::string& mkt)
 {
-    if (t.size() < 9) return false;
-    int market = 0, width = 0, font = 0, clock = 0;
-    if (!dpaudit::parseInt(t[1], market) || !dpaudit::parseInt(t[2], width) || !dpaudit::parseInt(t[3], font) || !dpaudit::parseInt(t[4], clock)) return false;
-    const bool v2 = t.size() >= 13 && t[10] == "c2";
-    Settings n = c;
-    n.market = market; n.font = font; n.clock = clock;
-    n.labels = t[5] == "1"; n.snap = t[6] == "1"; n.fadefar = t[7] == "1"; n.banner = t[8] == "1";
-    if (t.size() >= 10 && !t[9].empty()) n.inds = t[9];
-    if (v2) {
-        n.width = width;
-        int lw = 0, bf = 0;
-        n.levelsW = dpaudit::parseInt(t[11], lw) ? lw : -1;
-        n.badgeFont = dpaudit::parseInt(t[12], bf) ? bf : -1;
-        n.liqBadge = t.size() >= 14 ? t[13] != "0" : true;
-    } else {
-        n.width = width == 50 ? cb::range(cb::DEALER).def : std::max(cb::range(cb::DEALER).lo, std::min(cb::range(cb::DEALER).hi, width));
-        n.levelsW = cb::range(cb::LEVELS).def; n.badgeFont = dcol::BADGE_FONT_DEF; n.liqBadge = true;
-        if (migrated) *migrated = true;
-    }
-    dpNormalizeSettings(n);
-    c = n; return true;
-}
-static std::string dpRow(const std::string& key, const Settings& c)
-{
-    std::string inds = c.inds; for (size_t i = 0; i < inds.size(); i++) if (inds[i] == '|' || inds[i] == '\n' || inds[i] == '\r') inds[i] = ',';
-    char b[200]; snprintf(b, sizeof(b), "|%d|%d|%d|%d|%d|%d|%d|%d|", c.market, c.width, c.font, c.clock, c.labels ? 1 : 0,
-                          c.snap ? 1 : 0, c.fadefar ? 1 : 0, c.banner ? 1 : 0);
-    char e[64]; snprintf(e, sizeof(e), "|c2|%d|%d|%d", c.levelsW, c.badgeFont, c.liqBadge ? 1 : 0);
-    return key + b + inds + e;
-}
-// the saved row for this key: true = found (c filled), false = none (c untouched)
-static bool dpLoadRow(const std::string& key, Settings& c, long long* stampOut = nullptr)
-{
-    const std::string path = dpSettingsPath(); const long long st = dl::fileStamp(path);
-    if (stampOut) *stampOut = st;
-    if (st < 0) return false;
-    std::vector<std::string> lines;
-    if (dpaudit::readBoundedLines(path, lines) != dpaudit::READ_OK || dl::fileStamp(path) != st) return false;
-    for (size_t i = 0; i < lines.size(); ++i) {
-        std::vector<std::string> t = dl::split(lines[i], '|');
-        if (t.size() >= 9 && t[0] == key) { Settings n = c; if (dpParseRow(t, n)) { c = n; return true; } }
-    }
-    return false;
+    for (size_t i = 0; i < stores_.size(); i++) if (stores_[i].first == mkt) return stores_[i].second;
+    if (stores_.size() >= 8) stores_.erase(stores_.begin());
+    ss::Store st; st.S = &dprset::spec();
+    if (!mkt.empty()) { st.path = dpFlexDir() + "DealerProfile.settings-" + mkt + ".txt"; st.legacyPaths.push_back(dpSettingsPath()); st.legacy = dprset::legacy;
+        char rb[32] = {0}; const char* rs = getRootSymbol(rb); st.hint = rs ? rs : ""; }   // the old file was keyed by the root: this chart's row first
+    stores_.push_back(std::make_pair(mkt, st)); return stores_.back().second;
 }
 void DealerProfile::syncSettings(bool fromDialog)
 {
-    std::string key = chartKey();
-    // the settings window's copy has no bar size: only there are the values real (on the chart every list reads 0 and
-    // every box unchecked - which is why "Auto" passed the old test and blank values were saved)
-    const char* pl = getPeriodicityLabel(); bool inDialog = !(pl && pl[0]);
-    if (inDialog && fromDialog) {                       // saved ONLY from the settings window's Apply / OK (parmsApply / parmsUpdt)
-        Settings fileS; const bool haveRow = dpLoadRow(key, fileS);
-        Settings now; readSettings(now, false);
-        // (2.11.0, lesson #29) a control he did not touch since the window opened keeps the FILE's value (never a stale IRT value)
-        if (dsnapHave) {
-            const long long nv[11] = { now.market, now.width, now.levelsW, now.badgeFont, now.font, now.clock, now.labels, now.snap, now.fadefar, now.banner, now.liqBadge };
-            const long long fv[11] = { fileS.market, fileS.width, fileS.levelsW, fileS.badgeFont, fileS.font, fileS.clock, fileS.labels, fileS.snap, fileS.fadefar, fileS.banner, fileS.liqBadge };
-            long long v[11]; for (size_t i = 0; i < 11; ++i) v[i] = haveRow ? dsnap_.pick(i, nv[i], fv[i]) : nv[i];
-            now.market = (int)v[0]; now.width = (int)v[1]; now.levelsW = (int)v[2]; now.badgeFont = (int)v[3]; now.font = (int)v[4]; now.clock = (int)v[5];
-            now.labels = v[6] != 0; now.snap = v[7] != 0; now.fadefar = v[8] != 0; now.banner = v[9] != 0; now.liqBadge = v[10] != 0;
-            if (haveRow && now.inds == dsnapInds) now.inds = fileS.inds;
-        }
-        // garbage never reaches the file: an invalid width / font keeps the file's (or the default) value
-        if (!cb::widthOk(cb::DEALER, now.width)) now.width = fileS.width;
-        if (!cb::widthOk(cb::LEVELS, now.levelsW)) now.levelsW = fileS.levelsW;
-        if (now.badgeFont < dcol::BADGE_FONT_MIN || now.badgeFont > dcol::BADGE_FONT_MAX) now.badgeFont = fileS.badgeFont;
-        dpNormalizeSettings(now);
-        cfg = now;
-        const std::string path = dpSettingsPath();
-        std::map<std::string, std::string> all; std::vector<std::string> lines;
-        const dpaudit::BoundedRead rr = dpaudit::readBoundedLines(path, lines);
-        if (rr != dpaudit::READ_OK && rr != dpaudit::READ_OPEN_FAILED) return; // never truncate an unreadable existing settings file
-        for (size_t i = 0; i < lines.size(); ++i) { size_t p = lines[i].find('|'); if (p != std::string::npos) all[lines[i].substr(0, p)] = lines[i]; }
-        const std::string row = dpRow(key, cfg);
-        if (all[key] == row) { savedKey = key; savedStamp = dl::fileStamp(path); takeSnap(); return; }
-        all[key] = row;
-        State* state = slot_.get(this, false);
-        const std::uintptr_t id = state ? reinterpret_cast<std::uintptr_t>(state) : reinterpret_cast<std::uintptr_t>(this);
-        const std::string tmp = dpaudit::exportTempPath(path, id);
-        bool wrote = false;
-        {
-            std::ofstream out(tmp.c_str(), std::ios::trunc);
-            if (out.is_open()) { for (std::map<std::string, std::string>::const_iterator it = all.begin(); it != all.end(); ++it) out << it->second << "\n"; out.flush(); wrote = out.good(); }
-        }
-        if (wrote && dpReplaceFile(tmp, path)) { savedKey = key; savedStamp = dl::fileStamp(path); takeSnap(); }
-        else std::remove(tmp.c_str());
+    const std::string mkt = chartKey();
+    if (fromDialog) {                                   // saved ONLY from the settings window's Apply / OK / changes
+        if (!ss::inDialog(this) || mkt.empty()) return;
+        ss::Store& st = settingsStore(mkt);
+        const ss::Values V = ss::readDialog(this, dprset::spec(), dpIds(), st.load(ss::marketIndex(mkt), dpNowMs(), true), dsnap_);   // untouched -> the file's value; invalid never saved
+        if (st.save(V)) dsnap_.take(ss::dialogNow(this, dprset::spec(), dpIds(), V));
+        cfg = dpFromValues(V); savedKey = mkt;
         return;
     }
-    const std::string path = dpSettingsPath(); long long st = dl::fileStamp(path);
-    if (savedKey == key && st == savedStamp) return;
-    if (st < 0) { savedStamp = st; savedKey = key; cfg = Settings(); return; }
-    std::vector<std::string> lines;
-    if (dpaudit::readBoundedLines(path, lines) != dpaudit::READ_OK || dl::fileStamp(path) != st) return;
-    for (size_t i = 0; i < lines.size(); ++i) {
-        std::vector<std::string> t = dl::split(lines[i], '|');
-        if (t.size() >= 9 && t[0] == key) {
-            Settings n = Settings();
-            if (!dpParseRow(t, n)) continue;
-            cfg = n; savedKey = key; savedStamp = st; return;
-        }
-    }
-    cfg = Settings();                  // (2.11.0) no row for this market: the defaults (never another market's values)
-    savedKey = key; savedStamp = st;   // (2.7.4) no row for this chart: defaults, and the file is not re-read on every repaint until it changes
+    if (mkt.empty()) { cfg = Settings(); savedKey.clear(); return; }
+    cfg = dpFromValues(settingsStore(mkt).load(ss::marketIndex(mkt), dpNowMs()));   // re-read at most once a second, by content
+    savedKey = mkt;
 }
-// (2.11.0) the dialog opens: fill every control from this market's saved row (or the defaults), remember what it showed
+// (2.11.0) the dialog opens: fill every control from this market's saved values (or the defaults)
 void DealerProfile::fillDialog()
 {
-    const char* pl = getPeriodicityLabel(); if (pl && pl[0]) return;     // the chart's copy: nothing to fill
-    Settings c; dpLoadRow(chartKey(), c); dpNormalizeSettings(c);
-    setListIndex(PX.market, c.market);
-    setIntegerValue(PX.width, c.width); setIntegerValue(PX.levelsW, c.levelsW); setIntegerValue(PX.badgeFont, c.badgeFont);
-    setIntegerValue(PX.font, c.font); setIntegerValue(PX.clock, c.clock);
-    checkBox(PX.labels, c.labels); checkBox(PX.snap, c.snap); checkBox(PX.fadefar, c.fadefar); checkBox(PX.banner, c.banner); checkBox(PX.liqBadge, c.liqBadge);
-    setParameterText(PX.inds, c.inds.c_str());
-    takeSnap();
-}
-void DealerProfile::takeSnap()
-{
-    Settings now; readSettings(now, false);
-    std::vector<long long> v = { now.market, now.width, now.levelsW, now.badgeFont, now.font, now.clock, now.labels, now.snap, now.fadefar, now.banner, now.liqBadge };
-    dsnap_.take(v); dsnapInds = now.inds; dsnapHave = true;
+    if (!ss::inDialog(this)) return;                    // the chart's copy: nothing to fill
+    const std::string mkt = chartKey(); if (mkt.empty()) return;
+    ss::fillDialog(this, dprset::spec(), dpIds(), settingsStore(mkt).load(ss::marketIndex(mkt), dpNowMs(), true), dsnap_);
 }
 int DealerProfile::parmsLoad(void)  { if (loadHostState()) { fillDialog(); saveHostState(); } return RTX_OK; }   // (2.11.0) opening the window never saves
 int DealerProfile::parmsApply(void) { if (loadHostState()) { syncSettings(true); applyMargin(); saveHostState(); } return RTX_OK; }
-int DealerProfile::parmsUpdt(unsigned int) { if (loadHostState()) { syncSettings(true); saveHostState(); } return RTX_OK; }
+int DealerProfile::parmsUpdt(unsigned int i) { if (loadHostState()) { ss::onUpdate(this, dprset::spec(), dpIds(), (int)i); syncSettings(true); saveHostState(); } return RTX_OK; }
 
 int cppExtension::setup(void)
 {
     // (1.3.12, Rassul 2026-09-30) only real settings have a control; controls only, no how-to text.
     // (2.11.0) BUMPED to 6: the column rows (Dealer column / Levels column / Badge font / Show buy / sell text in node). IRT resets
     // the saved rows once; the per-market settings file keeps his values and fills the window when it opens.
-    setParameterVersion(6);
-    setParameterDialogHeight(7);
-    const short SL = kParmAppendSameLine;
-    int pc = 0;
-    PX.market    = pc++; setListParameter("Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU");
-    // (2.0.3) NUMW (DealerLogic.h): the SDK default width (0) made the number boxes so narrow they showed "T"
-    PX.width     = pc++; setIntegerParameter("Dealer column px (40-250)", 80, NUMW, SL);
-    PX.levelsW   = pc++; setIntegerParameter("Levels column px (30-150)", 78, NUMW);
-    PX.badgeFont = pc++; setIntegerParameter("Badge font (pt)", 9, NUMW, SL);
-    PX.liqBadge  = pc++; setBoolParameter("Liquidity in badge", true);
-    PX.font      = pc++; setIntegerParameter("Font size (pt)", 10, NUMW, SL);   // (2.7.4) 10 pt default (Rassul: fonts too small)
-    PX.clock     = pc++; setIntegerParameter("Clock offset (min)", 0, NUMW);
-    PX.labels    = pc++; setBoolParameter("Show buy / sell text in node", true, SL);
-    PX.snap      = pc++; setBoolParameter("Snapshot outline (1.x files)", true);
-    PX.fadefar   = pc++; setBoolParameter("Fade strikes beyond 1.2 EM", true, SL);
-    PX.banner    = pc++; setBoolParameter("Whole-book banner", false);
-    PX.inds      = pc++; setStringParameter("Your indicators in the bar file (names, comma)", "cob_bull,cob_bear", 160);
-    PX.keyHow = PX.keyNode = PX.keyPill = PX.whisk = PX.legend = -1;
+    // (2.17.1, settings audit 2026-10-18) the same 12 rows in the same order from dprset::spec() (parameter version 6 kept); the
+    // indicators row's label shortened (the row was ~444 px, cut off)
+    ss::registerAll(this, dprset::spec(), dpIds());
+    {   // PX keeps the row ids for the host tests that address the mocked controls by name (the plugin itself reads through the layer)
+        using namespace dprset; const ss::Ids& I = dpIds(); if ((int)I.id.size() == K_N) {
+        PX.market = I.id[K_MARKET]; PX.width = I.id[K_WIDTH]; PX.levelsW = I.id[K_LEVELS_W]; PX.badgeFont = I.id[K_BADGE_FONT]; PX.liqBadge = I.id[K_LIQ_BADGE];
+        PX.font = I.id[K_FONT]; PX.clock = I.id[K_CLOCK]; PX.labels = I.id[K_LABELS]; PX.snap = I.id[K_SNAP]; PX.fadefar = I.id[K_FADEFAR];
+        PX.banner = I.id[K_BANNER]; PX.inds = I.id[K_INDS]; }
+        PX.keyHow = PX.keyNode = PX.keyPill = PX.whisk = PX.legend = -1; }
     return RTX_OK;
 }
 
-void DealerProfile::readSettings(Settings& S, bool normalize)
-{
-    { int v = getListIndex(PX.market); if (v >= 0 && v <= 7) S.market = v; }
-    S.width = getIntegerValue(PX.width); S.levelsW = getIntegerValue(PX.levelsW); S.badgeFont = getIntegerValue(PX.badgeFont);
-    S.liqBadge = isBoxChecked(PX.liqBadge) != 0;
-    S.labels = isBoxChecked(PX.labels) != 0; S.snap = isBoxChecked(PX.snap) != 0; S.whisk = false;
-    S.fadefar = isBoxChecked(PX.fadefar) != 0; S.banner = isBoxChecked(PX.banner) != 0; S.legend = false;
-    S.font = getIntegerValue(PX.font); if (S.font < 10) S.font = 10; if (S.font > 24) S.font = 24;
-    S.clock = getIntegerValue(PX.clock); if (S.clock < -720) S.clock = -720; if (S.clock > 720) S.clock = 720;
-    char ib[200]; memset(ib, 0, sizeof(ib));
-    if (getParameterText(PX.inds, ib, sizeof(ib) - 1) == RTX_OK && ib[0] && ib[0] != ' ') S.inds = ib;   // blank (an older saved layout) = the default; "none" = off
-    if (normalize) dpNormalizeSettings(S);
-}
 
 void DealerProfile::load()
 {
@@ -1976,6 +1867,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.9.0) hovers: mouse events even when not selected
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.17.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.17.1");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }

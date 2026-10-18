@@ -94,6 +94,8 @@
 #undef near
 #endif
 #include "LiquidityProfileLogic.h"
+#include "LiquidityProfileSettings.h"   // (0.45.0) the settings window tables (SettingsSpec.h)
+#include "SettingsHost.h"
 #include "KeyLevelsLogic.h"      // (0.10.0) the key levels, computed natively from the chart (as lsDealerProfile)
 #include "HostSlot.h"
 #include "BannerBoard.h"           // (0.15.3) the one top banner: the warning handed to the Tape Reader
@@ -136,7 +138,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.44.2"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.45.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.44.0, 2026-10-18 night, Rassul approved "yes 2x" + the audit fixes) 1) the column DRAWS a zone only at >= 2.0x (lqp drawn state:
 // enters live at 2.0x, removed only at a bar close under 2.0x; no 1.5x near entry / 1.2x keep / any size during absorption) - the
 // records and attempts are unchanged; 2) LMT R "S5 anywhere" compares the largest SINGLE order at a price (bol::biggestSingle), never
@@ -155,18 +157,15 @@ static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bu
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
 static const COLOR C_GREY = 0x009CA3AF, C_AXIS = 0x00334155, C_INK = 0x000B0F17;
 static const COLOR C_WHITE = 0x00FFFFFF, C_COLBG = 0x001B1410;     // (0.16.0) the lots inside a node; the column's solid background
+// (0.45.0) the settings rows come from LiquidityProfileSettings.h (no index constants); the files keep their names
 #ifdef LQ_FLOW
-static const int WIDTH_INDEX = -1, FONT_INDEX = 0, OFFX_INDEX = -1, OFFY_INDEX = -1, BG_INDEX = -1;     // (0.15.1) the Flow pane has no Width row
 static const char* const LQ_SIZE_NAME = "LiquidityFlow";
+#define LQ_SPEC lpset::flowSpec()
 #else
-static const int WIDTH_INDEX = 0, FONT_INDEX = 1, OFFX_INDEX = 2, OFFY_INDEX = 3, BG_INDEX = 4;   // (CR5000) the LIQ label Offset X / Y; (0.16.0) Solid background
-// (0.18.0) the big resting order lines: on / off, reach (ATR), minimum lots (the market's floor shown; 0 = the market default), ended
-// lines kept per side, font - saved per market in lsFlexLevels\LiquidityProfile.bigorders-<MKT>.txt, the chart reads only that file
-static const int BO_ON_INDEX = 5, BO_REACH_INDEX = 6, BO_MIN_INDEX = 7, BO_KEEP_INDEX = 8, BO_FONT_INDEX = 9;
-// (0.24.0) the verdict banner: on / off, solid background, font, background colour - per market in LiquidityProfile.banner-<MKT>.txt
-static const int BN_ON_INDEX = 10, BN_BG_INDEX = 11, BN_FONT_INDEX = 12, BN_COL_INDEX = 13;
 static const char* const LQ_SIZE_NAME = "LiquidityProfile";
+#define LQ_SPEC lpset::profileSpec()
 #endif
+static ss::Ids& lqIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
 static const long long DEPTH_EVERY_MS = 1000, ZONES_EVERY_MS = 500, STATUS_EVERY_MS = 30000;
 static const int DEPTH_READ_MAX = 200, VAP_ROWS_MAX = 5000;
 
@@ -454,14 +453,15 @@ public:
     LiquidityProfile() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int parmsApply(void) { saveSize(); saveBig(); saveBanner(); snap_.take(dlgValues()); return RTX_OK; }   // (0.18.0) both files judged against the SAME opening snapshot
+    virtual int parmsApply(void);                                       // (0.45.0) the window -> the three files, through SettingsHost.h
     virtual int parmsLoad(void);                                        // (CR5000) the dialog filled from the size file (never saves)
-    bp::DlgSnap snap_;                                                   // (CR5000) the dialog as it opened         // (0.15.1) OK / Apply: kept per market (loading never saves, #29)
-    void saveSize();
-    void saveBanner();                                                   // (0.24.0) the banner rows -> their per-market file
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, LQ_SPEC, lqIds(), (int)i); return RTX_OK; }   // (0.45.0) a master greys its rows; saved on OK / Apply
+    ss::Values fileValues();                                             // (0.45.0) the three files as the table's values
+    ss::Snap snap_;                                                   // (CR5000) the dialog as it opened         // (0.15.1) OK / Apply: kept per market (loading never saves, #29)
+    void saveSize(const ss::Values& V);
+    void saveBanner(const ss::Values& V);                                // (0.24.0) the banner rows -> their per-market file
     void loadBanner(LQState& S);
-    void saveBig();                                                      // (0.18.0) the big-order rows -> their per-market file
-    std::vector<long long> dlgValues();                                  // (0.18.0) every dialog row as numbers (the snapshot)
+    void saveBig(const ss::Values& V);                                   // (0.18.0) the big-order rows -> their per-market file
     void loadSize(LQState& S);
     void pump();
     void release() { slot_.release(this); }
@@ -532,28 +532,9 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<LiquidityProfile*>(this)->unpublish(); static_cast<LiquidityProfile*>(this)->release(); return RTX_OK; }   // symbol / period change: start clean
 int cppExtension::destroy(void) { static_cast<LiquidityProfile*>(this)->unpublish(); static_cast<LiquidityProfile*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) {
-#ifdef LQ_FLOW
-    setParameterVersion(2);                       // (0.15.1) Flow: Font pt only (its Width row did nothing; IRT resets the saved values once)
-    setParameterDialogHeight(1);
-    setIntegerParameter("Font pt", 11, 50);
-#else
-    setParameterVersion(5);                       // (0.16.0) + Solid background, Width 20-200; (0.18.0) + the big-order rows; (0.24.0) + the banner rows (IRT resets the saved rows once; the files keep them)
-    setParameterDialogHeight(7);
-    setIntegerParameter("Width px (20-200)", 60, 50);
-    setIntegerParameter("Font pt", 11, 50, kParmAppendSameLine);
-    setIntegerParameter("Label offset X", 0, 50);
-    setIntegerParameter("Label offset Y", 0, 50, kParmAppendSameLine);
-    setBoolParameter("Solid background", true);
-    setBoolParameter("Big resting orders", true);                                   // 5  (0.18.0)
-    setFloatParameter("Big order reach (ATR, 0.5-5)", 2.0f, 50, kParmAppendSameLine);   // 6
-    setIntegerParameter("Big order min lots", 0, 60);                              // 7  (the market's floor is shown; 0 = market default)
-    setIntegerParameter("Ended lines kept per side (0-50)", 10, 50, kParmAppendSameLine);   // 8
-    setIntegerParameter("Big order font pt (7-16)", 10, 50, kParmAppendSameLine);  // 9  (0.23.0) the BIG column's live box; the filled marks 2 pt smaller
-    setBoolParameter("Verdict banner", true);                                     // 10 (0.24.0) the combined REV / book badge + its grey lines
-    setBoolParameter("Banner solid background", true);                           // 11
-    setIntegerParameter("Banner font pt (7-16)", bns::FONT_DEF, 50);              // 12
-    setColorParameter("Banner background", (COLOR)bns::BG_DEF, 0, kParmAppendSameLine);   // 13
-#endif
+    // (0.45.0, settings audit 2026-10-18) the same rows in the same order from LiquidityProfileSettings.h (parameter versions 5 / 2 kept):
+    // the big-order font row on its own line (the line was ~648 px, cut off), masters grey their rows, ranges = what the code draws
+    ss::registerAll(this, LQ_SPEC, lqIds());
     return RTX_OK;
 }
 // (0.15.1) the window's Width / Font -> lsFlexLevels\<name>.size-<MKT>.txt ("70,11"), for every chart of the market and after a restart
@@ -574,7 +555,7 @@ static LqSize readSize(const std::string& p) {
     else if (w == 70) { w = cb::range(cb::LIQ).def; z.migrated = true; }      // (0.16.0) the old default 70 -> the new default 60
     z.w = (int)std::min<long long>(w, cb::range(cb::LIQ).hi); z.f = (int)ft; z.dx = dx; z.dy = dy; z.ok = true; return z;
 }
-static bool lqInDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }   // the settings window's copy has no bar size
+//   // the settings window's copy has no bar size
 static std::string lqSizePath(cppExtension* x) {
     char rb[32]; std::memset(rb, 0, sizeof(rb)); const char* rs = x->getRootSymbol(rb); const char* sy = x->getSymbol();
     const std::string root = rs ? rs : "", mkt = marketName(root.empty() ? (sy ? sy : "") : root), dirp = flexDir();
@@ -616,51 +597,52 @@ static std::string bannerPath(cppExtension* x) {
     return dirp + "\\LiquidityProfile.banner-" + mkt + ".txt";
 }
 #endif
-int LiquidityProfile::parmsLoad(void) {
-#ifndef LQ_FLOW
-    if (!lqInDialog(this)) return RTX_OK;
-    const std::string p = lqSizePath(this); if (p.empty()) return RTX_OK;
-    const LqSize z = readSize(p);
-    if (z.ok) { setIntegerValue(WIDTH_INDEX, z.w); setIntegerValue(FONT_INDEX, z.f); setIntegerValue(OFFX_INDEX, z.dx); setIntegerValue(OFFY_INDEX, z.dy); checkBox(BG_INDEX, z.bg); }
-    else { setIntegerValue(WIDTH_INDEX, cb::range(cb::LIQ).def); setIntegerValue(OFFX_INDEX, 0); setIntegerValue(OFFY_INDEX, 0); checkBox(BG_INDEX, true); }
-    {   // (0.18.0) the big-order rows from their per-market file (defaults when there is none); min lots shows the market's real floor
-        const std::string bp2 = bigPath(this); const BigFile bf = bp2.empty() ? BigFile() : readBig(bp2);
+// (0.45.0, settings audit 2026-10-18) the window from LiquidityProfileSettings.h through SettingsHost.h: the files below are read into the
+// table's values (fileValues), the window is filled / read by the layer (colours with the colour calls, groups greyed), and OK / Apply
+// writes the same three files as before (size / bigorders / banner) - only from the settings window's copy (the chart copy's controls
+// read blank, lesson 44; 0.44 saved the size row from any copy).
+ss::Values LiquidityProfile::fileValues() {
+    char rb[32]; std::memset(rb, 0, sizeof(rb)); const char* rs = getRootSymbol(rb); const char* sy = getSymbol();
+    const std::string root = rs ? rs : "", mkt = marketName(root.empty() ? (sy ? sy : "") : root);   // as bigMarket / lqSizePath (both builds)
+    ss::Values V = ss::defaults(LQ_SPEC, ss::marketIndex(mkt));
+    const std::string p = lqSizePath(this); const LqSize z = p.empty() ? LqSize() : readSize(p);
+#ifdef LQ_FLOW
+    if (z.ok) V.v[lpset::KF_FONT] = clampFont(z.f);
+#else
+    using namespace lpset;
+    if (z.ok) { V.v[K_WIDTH] = clampWidth(z.w); V.v[K_FONT] = clampFont(z.f); V.v[K_LABEL_OFFSET_X] = z.dx; V.v[K_LABEL_OFFSET_Y] = z.dy; V.v[K_SOLID_BG] = z.bg ? 1 : 0; }
+    {   const std::string bp2 = bigPath(this); const BigFile bf = bp2.empty() ? BigFile() : readBig(bp2);
         const bol::Settings b = bf.ok ? bf.s : bol::Settings();
-        checkBox(BO_ON_INDEX, b.on); setFloatValue(BO_REACH_INDEX, (float)(b.reach10 / 10.0));
-        setIntegerValue(BO_MIN_INDEX, (int)(b.minLots > 0 ? b.minLots : bol::floorFor(bigMarket(this))));
-        setIntegerValue(BO_KEEP_INDEX, b.keep); setIntegerValue(BO_FONT_INDEX, b.font);
-    }
-    {   // (0.24.0) the banner rows from their per-market file (defaults when there is none)
-        const std::string p3 = bannerPath(this); bns::Settings b;
-        if (!p3.empty()) { std::ifstream in; std::string ln; if (statFile(p3) && openBoundedInput(p3, in) && readBoundedLine(in, ln)) { bns::Settings z; if (bns::parse(ln, z)) b = z; } }
-        checkBox(BN_ON_INDEX, b.on); checkBox(BN_BG_INDEX, b.bg); setIntegerValue(BN_FONT_INDEX, b.font); setParameterColor(BN_COL_INDEX, (COLOR)(b.bgc & 0x00FFFFFF));   // (0.44.1) the colour API (setIntegerValue left the swatch black)
-    }
-    snap_.take(dlgValues());
+        V.v[K_BIG_ORDERS] = b.on ? 1 : 0; V.v[K_BIG_REACH] = b.reach10 / 10.0;
+        V.v[K_BIG_MIN_LOTS] = (double)(b.minLots > 0 ? b.minLots : bol::floorFor(mkt)); V.v[K_BIG_KEEP] = b.keep; V.v[K_BIG_FONT] = b.font; }
+    {   const std::string p3 = bannerPath(this); bns::Settings b;
+        if (!p3.empty()) { std::ifstream in; std::string ln; if (statFile(p3) && openBoundedInput(p3, in) && readBoundedLine(in, ln)) { bns::Settings q; if (bns::parse(ln, q)) b = q; } }
+        V.v[K_BANNER] = b.on ? 1 : 0; V.v[K_BANNER_BG] = b.bg ? 1 : 0; V.v[K_BANNER_FONT] = b.font; V.v[K_BANNER_COLOR] = (double)(b.bgc & 0x00FFFFFF); }
 #endif
+    for (int k = 0; k < LQ_SPEC.n; ++k) if (!ss::valid(LQ_SPEC.rows[k], V.v[(size_t)k])) V.v[(size_t)k] = ss::defaultFor(LQ_SPEC.rows[k], V.market);   // never garbage into the window
+    return V;
+}
+int LiquidityProfile::parmsLoad(void) {
+    if (!ss::inDialog(this)) return RTX_OK;                              // loading never saves (#29)
+    ss::fillDialog(this, LQ_SPEC, lqIds(), fileValues(), snap_);
     return RTX_OK;
 }
-// (0.15.1) the window's Width / Font -> lsFlexLevels\<name>.size-<MKT>.txt ("70,11"), for every chart of the market and after a restart;
-// (CR5000) + the LIQ label Offset X / Y ("70,11,dx,dy"); a control he did not touch since the dialog opened keeps the file's value
-void LiquidityProfile::saveSize() {
-    int w = WIDTH_INDEX >= 0 ? clampWidth(getIntegerValue(WIDTH_INDEX)) : 70, f = clampFont(getIntegerValue(FONT_INDEX));
-    bool bg = true;
+int LiquidityProfile::parmsApply(void) {
+    if (!ss::inDialog(this)) return RTX_OK;                              // (0.45.0) never from the chart copy
+    const ss::Values V = ss::readDialog(this, LQ_SPEC, lqIds(), fileValues(), snap_);   // untouched -> the files' values; invalid never saved
+    saveSize(V); saveBig(V); saveBanner(V);
+    snap_.take(ss::dialogNow(this, LQ_SPEC, lqIds(), V));
+    return RTX_OK;
+}
+// (0.15.1) the window's Width / Font -> lsFlexLevels\<name>.size-<MKT>.txt ("w,f" Flow; "w,f,dx,dy,bg" Profile), for every chart of the market
+void LiquidityProfile::saveSize(const ss::Values& V) {
     const std::string p = lqSizePath(this), dirp = flexDir();
     LQState* S = slot_.get(this, false);
-    int dx = 0, dy = 0;
-#ifndef LQ_FLOW
-    const LqSize z = p.empty() ? LqSize() : readSize(p);
-    if (snap_.have) {
-        const long long now[5] = { getIntegerValue(WIDTH_INDEX), getIntegerValue(FONT_INDEX), getIntegerValue(OFFX_INDEX), getIntegerValue(OFFY_INDEX), isBoxChecked(BG_INDEX) ? 1 : 0 };
-        const long long fv[5] = { z.w, z.f, z.dx, z.dy, z.bg ? 1 : 0 };
-        long long v[5]; for (size_t k = 0; k < 5; ++k) v[k] = snap_.pick(k, now[k], fv[k]);
-        bg = v[4] != 0;
-        w = clampWidth((int)std::max(-100000LL, std::min(100000LL, v[0]))); f = clampFont((int)std::max(-100000LL, std::min(100000LL, v[1])));
-        dx = v[2] >= bp::OFF_MIN && v[2] <= bp::OFF_MAX ? (int)v[2] : z.dx; dy = v[3] >= bp::OFF_MIN && v[3] <= bp::OFF_MAX ? (int)v[3] : z.dy;   // garbage never reaches the file
-    } else {
-        const long long ox = getIntegerValue(OFFX_INDEX), oy = getIntegerValue(OFFY_INDEX);
-        dx = ox >= bp::OFF_MIN && ox <= bp::OFF_MAX ? (int)ox : z.dx; dy = oy >= bp::OFF_MIN && oy <= bp::OFF_MAX ? (int)oy : z.dy;
-        bg = isBoxChecked(BG_INDEX) != 0;
-    }
+#ifdef LQ_FLOW
+    const int w = 70, f = clampFont(V.i(lpset::KF_FONT)); const int dx = 0, dy = 0; const bool bg = true;
+#else
+    const int w = clampWidth(V.i(lpset::K_WIDTH)), f = clampFont(V.i(lpset::K_FONT)), dx = V.i(lpset::K_LABEL_OFFSET_X), dy = V.i(lpset::K_LABEL_OFFSET_Y);
+    const bool bg = V.b(lpset::K_SOLID_BG);
 #endif
     if (S) { S->width = w; S->font = f; S->labDx = dx; S->labDy = dy; S->bg = bg; }
     if (p.empty()) return;
@@ -670,51 +652,35 @@ void LiquidityProfile::saveSize() {
 #else
     const std::string body = std::to_string(w) + "," + std::to_string(f) + "," + std::to_string(dx) + "," + std::to_string(dy) + "," + (bg ? "1" : "0") + "\n";
 #endif
-    if (publishFile(p, body)) {
-        if (S) { S->sizeStamp = -2; S->sizeCheckMs = -1; }
-    }                                                                  // (0.18.0) the snapshot is retaken by parmsApply after BOTH files
+    if (publishFile(p, body)) { if (S) { S->sizeStamp = -2; S->sizeCheckMs = -1; } }
 }
-std::vector<long long> LiquidityProfile::dlgValues() {
-    std::vector<long long> v;
+// (0.18.0) the big-order rows -> lsFlexLevels\LiquidityProfile.bigorders-<MKT>.txt (the market's own floor is saved as 0 = follow its default)
+void LiquidityProfile::saveBig(const ss::Values& V) {
 #ifndef LQ_FLOW
-    v.push_back(getIntegerValue(WIDTH_INDEX)); v.push_back(getIntegerValue(FONT_INDEX)); v.push_back(getIntegerValue(OFFX_INDEX)); v.push_back(getIntegerValue(OFFY_INDEX)); v.push_back(isBoxChecked(BG_INDEX) ? 1 : 0);
-    const double r = (double)getFloatValue(BO_REACH_INDEX);
-    v.push_back(isBoxChecked(BO_ON_INDEX) ? 1 : 0); v.push_back(bol::finiteD(r) ? (long long)std::llround(r * 10.0) : -1);
-    v.push_back(getIntegerValue(BO_MIN_INDEX)); v.push_back(getIntegerValue(BO_KEEP_INDEX)); v.push_back(getIntegerValue(BO_FONT_INDEX));
-    v.push_back(isBoxChecked(BN_ON_INDEX) ? 1 : 0); v.push_back(isBoxChecked(BN_BG_INDEX) ? 1 : 0); v.push_back(getIntegerValue(BN_FONT_INDEX));
-    v.push_back((long long)(getParameterColor(BN_COL_INDEX) & 0x00FFFFFF));       // 10-13 (0.24.0); (0.44.1) getParameterColor - getIntegerValue read 0 (black saved)
-#endif
-    return v;
-}
-// (0.18.0) OK / Apply: the big-order rows -> lsFlexLevels\LiquidityProfile.bigorders-<MKT>.txt (a control he did not touch since the
-// dialog opened keeps the file's value - IRT may hand a copy with boxes unchecked; garbage never reaches the file)
-void LiquidityProfile::saveBig() {
-#ifndef LQ_FLOW
+    using namespace lpset;
     const std::string p = bigPath(this); if (p.empty()) return;
     const std::string mkt = bigMarket(this);
     const BigFile bf = readBig(p); const bol::Settings fv = bf.ok ? bf.s : bol::Settings();
-    const long long floorM = bol::floorFor(mkt), fileMin = fv.minLots > 0 ? fv.minLots : floorM;
-    const std::vector<long long> now = dlgValues();
-    const long long fileV[5] = { fv.on ? 1 : 0, fv.reach10, fileMin, fv.keep, fv.font };
-    long long v[5]; for (size_t k = 0; k < 5; ++k) v[k] = snap_.pick(5 + k, now[5 + k], fileV[k]);
-    long long minLots = v[2]; if (minLots == floorM) minLots = 0;           // the market's own floor: keep following its default
+    long long minLots = (long long)V.i(K_BIG_MIN_LOTS); if (minLots == bol::floorFor(mkt)) minLots = 0;
     if (minLots < 0 || minLots > bol::FLOOR_MAX) minLots = fv.minLots;
-    const bol::Settings z = bol::cleanSettings(v[0] != 0, v[1] >= 0 ? (double)v[1] / 10.0 : -1.0, minLots, v[3], v[4], fv);
+    const bol::Settings z = bol::cleanSettings(V.b(K_BIG_ORDERS), V.f(K_BIG_REACH), minLots, V.i(K_BIG_KEEP), V.i(K_BIG_FONT), fv);
     makeDir(flexDir());
     if (publishFile(p, bol::settingsLine(z) + "\n")) { LQState* S = slot_.get(this, false); if (S) { S->boStampT = S->boStampN = -2; S->boCheckMs = -1; } }
+#else
+    (void)V;
 #endif
 }
-// (0.24.0) OK / Apply: the banner rows -> LiquidityProfile.banner-<MKT>.txt (an untouched control keeps the file's value)
-void LiquidityProfile::saveBanner() {
+// (0.24.0) the banner rows -> LiquidityProfile.banner-<MKT>.txt
+void LiquidityProfile::saveBanner(const ss::Values& V) {
 #ifndef LQ_FLOW
+    using namespace lpset;
     const std::string p = bannerPath(this); if (p.empty()) return;
     bns::Settings fv; { std::ifstream in; std::string ln; if (statFile(p) && openBoundedInput(p, in) && readBoundedLine(in, ln)) { bns::Settings z; if (bns::parse(ln, z)) fv = z; } }
-    const std::vector<long long> now = dlgValues(); if (now.size() < 14) return;
-    const long long fileV[4] = { fv.on ? 1 : 0, fv.bg ? 1 : 0, fv.font, fv.bgc };
-    long long v[4]; for (size_t k = 0; k < 4; ++k) v[k] = snap_.pick(10 + k, now[10 + k], fileV[k]);
-    const bns::Settings z = bns::clean(v[0], v[1], v[2], v[3], fv);
+    const bns::Settings z = bns::clean(V.b(K_BANNER) ? 1 : 0, V.b(K_BANNER_BG) ? 1 : 0, V.i(K_BANNER_FONT), (long long)V.c(K_BANNER_COLOR), fv);
     makeDir(flexDir());
     if (publishFile(p, bns::line(z) + "\n")) { LQState* S = slot_.get(this, false); if (S) { S->bn = z; S->bnStampT = S->bnStampN = -2; S->bnCheckMs = -1; } }
+#else
+    (void)V;
 #endif
 }
 #ifndef LQ_FLOW
@@ -3476,6 +3442,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.44.2");   // LQ_VERSION
+    p->setVersion("0.45.0");   // LQ_VERSION
     return p;
 }

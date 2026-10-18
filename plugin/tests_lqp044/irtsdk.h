@@ -133,15 +133,21 @@ public:
     const char* getWorkingDirectoryPath(){return mock::current->directory.c_str();}
     float getProperty(int){return mock::current->tick;} RTDATE currentDate(){return mock::current->now;} void setExtendedFlags(unsigned long){} int getSecondsPerBar(){return mock::current->seconds;}
     tm* getLocaltime(RTDATE stamp,tm* t){time_t v=static_cast<time_t>(stamp);return gmtime_r(&v,t);}
-    void setParameterVersion(int){} void setParameterDialogHeight(int){} void setIntegerParameter(const char*,int,int,int=0){}
+    // (settings layer 1.1.0) TEXT rows
+    void setStringParameter(const char*, const char*, size_t, int = 0, int = 0) { ++nparm(); }
+    int getParameterText(int, char* t, size_t n) { if (t && n) t[0] = 0; return RTX_OK; } int setParameterText(int, const char*) { return RTX_OK; }
+    // (LP 0.45.0 settings layer) SettingsHost.h: rows counted per DLL; label / enable calls
+    static int& nparm(){ static int n=0; return n; } int getParameterCount(){ return nparm(); }
+    void setLabelParameter(const char*,int=0,int=0){ ++nparm(); } int enableParameter(int,RTBOOL){ return 0; } int setListIndex(int,int=-1){ return 0; }
+    void setParameterVersion(int){} void setParameterDialogHeight(int){} void setIntegerParameter(const char*,int,int,int=0){ ++nparm(); }
     int getIntegerValue(int i){return mock::current->parms[i];} void setIntegerValue(int i,int v){mock::current->parms[i]=v;}
     void setFont(FONT f){mock::current->fid=f.id;mock::current->fsize=f.size;mock::current->fstyle=f.style;} void setTextColor(COLOR c){mock::current->ink=c;}
     int getTextWidth(const char* t,int){ const int n=static_cast<int>(std::strlen(t)); return mock::current->textPx>0 ? static_cast<int>(n*mock::current->textPx*mock::current->fsize+0.5) : n*6; }
     void setPen(COLOR c,int w,int){mock::current->pen=c;mock::current->penW=w;} int invalidateChart(bool=false){++mock::current->invalidates;return 0;}
-    int getListIndex(int){return 0;} void setListParameter(const char*,short,const char*,int=0,int=0){} void setFloatParameter(const char*,float,int=0,int=0){} float getFloatValue(int){return 1.5f;}
+    int getListIndex(int){return 0;} void setListParameter(const char*,short,const char*,int=0,int=0){ ++nparm(); } void setFloatParameter(const char*,float,int=0,int=0){ ++nparm(); } float getFloatValue(int){return 1.5f;}
     int getVisibleBars(int*,int*){return RTX_FAIL;} short getPixelsPerBar(){return static_cast<short>(mock::current->barW);} void setExtendedFlags2(unsigned long){}
     virtual int scale(int,int,double*,double*){return RTX_FAIL;}
-    void setBoolParameter(const char*,bool,int=0){} void setColorParameter(const char*,COLOR,int=0,int=0){} COLOR getParameterColor(int){return 0;} int setParameterColor(int,COLOR){return 0;}   // (0.44.1) the banner colour row
+    void setBoolParameter(const char*,bool,int=0){ ++nparm(); } void setColorParameter(const char*,COLOR,int=0,int=0){ ++nparm(); } COLOR getParameterColor(int){return 0;} int setParameterColor(int,COLOR){return 0;}   // (0.44.1) the banner colour row
     void checkBox(int i,bool on){ mockBoxes()[i]=on; } bool isBoxChecked(int i){ auto it=mockBoxes().find(i); return it!=mockBoxes().end() && it->second; }
     void setFloatValue(int,float){} int createTimer(int,int){return RTX_FAIL;} int killTimer(int){return RTX_OK;}
     static std::map<int,bool>& mockBoxes(){ static std::map<int,bool> m; return m; }

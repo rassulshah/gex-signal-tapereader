@@ -30,6 +30,7 @@ inline void registerAll(cppExtension* x, const Spec& S, Ids& ids) {
             case T_COLOR: x->setColorParameter(r.label, (COLOR)((unsigned long)r.def & 0xFFFFFFul), r.width, fl); break;
             case T_LIST:  x->setListParameter(r.label, (short)r.def, r.choices, r.width, fl); break;
             case T_LABEL: x->setLabelParameter(r.label, r.width, fl); break;
+            case T_TEXT:  x->setStringParameter(r.label, r.text ? r.text : "", (size_t)r.hi + 1, r.width, fl); break;
         }
         if (x->getParameterCount() == at + 1) ids.id[(size_t)k] = at;   // the id IRT gave THIS row (a refused row keeps -1: never read / filled)
     }
@@ -52,6 +53,8 @@ inline Values dialogNow(cppExtension* x, const Spec& S, const Ids& ids, const Va
             case T_COLOR: o = (double)((unsigned long)x->getParameterColor(id) & 0xFFFFFFul); break;   // NEVER getIntegerValue
             case T_LIST:  o = (double)x->getListIndex(id); break;
             case T_LABEL: break;
+            case T_TEXT: { char b[1024]; std::memset(b, 0, sizeof b); const size_t cap = (size_t)S.rows[k].hi + 1 < sizeof b ? (size_t)S.rows[k].hi + 1 : sizeof b;
+                           if (x->getParameterText(id, b, cap) == RTX_OK) { b[sizeof b - 1] = 0; if (V.t.size() != (size_t)S.n) V.t.resize((size_t)S.n); V.t[(size_t)k] = b; } break; }
         }
     }
     return V;
@@ -78,6 +81,7 @@ inline void fillDialog(cppExtension* x, const Spec& S, const Ids& ids, const Val
             case T_COLOR: x->setParameterColor(id, (COLOR)((unsigned long)std::llround(v) & 0xFFFFFFul)); break;   // NEVER setIntegerValue
             case T_LIST:  x->setListIndex(id, (int)std::llround(v)); break;
             case T_LABEL: break;
+            case T_TEXT:  x->setParameterText(id, V.s(k).c_str()); break;
         }
     }
     applyEnable(x, S, ids, V);
@@ -92,6 +96,10 @@ inline Values readDialog(cppExtension* x, const Spec& S, const Ids& ids, const V
     Values V = file;
     for (int k = 0; k < S.n; ++k) {
         if (ids.id[(size_t)k] < 0) continue;                                  // hidden rows keep the file's value
+        if (S.rows[k].type == T_TEXT) { if (V.t.size() != (size_t)S.n) V.t.resize((size_t)S.n);
+            std::string tv = snap.pickText((size_t)k, now.s(k), file.s(k)); while (!tv.empty() && tv.back() == ' ') tv.pop_back();
+            if (validText(S.rows[k], tv)) V.t[(size_t)k] = tv;
+            continue; }
         const double pick = snap.pick((size_t)k, now.v[(size_t)k], file.v[(size_t)k]);
         if (valid(S.rows[k], pick)) V.v[(size_t)k] = pick;
     }

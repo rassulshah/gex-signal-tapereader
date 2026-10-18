@@ -130,6 +130,25 @@ Format: bugs (fix), then KEPT / ADDED / REMOVED, one line each.
 - PullStats / StackStats / Pulling are retired from the build, so they were skipped.
 - Right-settings gap: CVD and CobImpulse draw lines and marks with no show box or colour. Whether to add them is in his decision list.
 
+## 4b. Status after the second pass (16:00 - 17:30 CT): per indicator
+
+| Indicator | Version | On the layer | File | Bugs fixed in this audit | Tests |
+|---|---|---|---|---|---|
+| HodLod | 2.4.3 | yes | keyed HodLod.settings-<MKT>.txt (from place file) | black colour swatches / colours never saved; cut-off projection row; Show boxes now grey their colours; Dealer Profile banner read from the keyed file (no positional column) | t_hl240 45/45, contract |
+| DeltaProfile | 2.18.2 | yes | keyed per MARKET (was per contract: reset at every roll) | dead Width range 40-109; "Show delta text" did nothing (now hidden); migration reads the chart's own contract row first | dp217 47/47, dp218 90/90, contract |
+| TapeReader | 1.3.1 | yes | keyed (from place file) | controls read by literal position | contract, syntax |
+| BidAskStats | 1.13.2 | window yes | pane place file (format kept) | cut-off first row; index constants | aggbook 155 + 15 host, contract |
+| BookFlow | 1.3.2 | window yes | pane place file (format kept) | cut-off first row; index constants | aggbook 23 host, contract |
+| LiquidityProfile + LiquidityFlow | 0.45.0 | yes (2 tables) | size / bigorders / banner files (strict formats kept) | banner colour black swatch / 0 saved; ~648 px row cut off; no group wiring (masters now grey their rows); Font 6-9 did nothing; chart copy could save the size row; **Flow had not linked since 15:27** (fixed 0.44.2) | lqp044 114 + 21 host, contract |
+| DealerProfile | 2.17.1 | yes (new TEXT row type for the indicators list) | keyed per MARKET DealerProfile.settings-<MKT>.txt (old file keyed by contract root: reset at every roll); migrated once from the chart's own root row; per-chart (~) rows of 10-05 never matched before, so they are skipped (nothing he sees changes) | indicators row ~444 px cut off (label shortened) | 2110 identical to baseline (37 pass / 19 pre-existing failures of a stale suite), 2170_host 12/12 (version check now compares the constant), 290 identical (60/3 pre-existing), contract with his real file rows |
+| TradeManager | 1.3.1 | yes | keyed (from place file; place file still written for the drag code) | **Font never reached the chart** (read only while the window was open) | t130 13/13, contract |
+| SessionVWAP | 1.6.0 | no | its own keyed-style file | none found (correct colour API, groups not needed) | - |
+| BigBidAsk | 1.16.0 | no | positional BBA7 file | colour API / version bump / groups fixed by the coordinating agent in 1.16 | its tests_bba115 |
+| KingTracker | 0.17 | no | none (reads the window in callbacks) | design predates the per-market file rule (Skylit King, not an LRA pane) | - |
+| CVD, CobImpulse, SessionInfo, Exhaustion, ExhaustionV2, DeltaProfileHourly, MboCheck | - | n/a | - | no settings window (nothing to migrate) | - |
+
+New BUILD-LESSONS: 101 (LiquidityFlow link break). Pre-existing, NOT caused by this audit: test_dealerprofile_2110 (19 failures) and test_dealerprofile_290 (3 failures) are stale suites written for 2.12 / 2.9 - same failures before and after; they need their own refresh.
+
 ## 5. His decision list (not changed)
 1. **Offset X / Y** in HodLod, TapeReader, BidAskStats, BookFlow, and LiquidityProfile's label offset. On 10-07 you chose the 9-spot Position instead of pixel offsets, but HodLod 2.0.6 added offsets later. Remove them from the window? (Saved offsets would stay in the files and keep working.)
 2. **BookFlow "Record order feed"**: your rule is to always keep recording. Remove the box so recording is always on?
@@ -139,11 +158,11 @@ Format: bugs (fix), then KEPT / ADDED / REMOVED, one line each.
    - "Clock offset (min)" and "Your indicators in the bar file" are internal: hide them?
    - "Market (Auto)": hide it?
 5. **LiquidityProfile "Ended lines kept per side (0-50)"**: internal, hide it?
-6. **DeltaProfile Font default is 9 pt**, under your 10 pt minimum. Raise it to 10?
+6. **DeltaProfile Font default is 9 pt** and **TradeManager Font default is 8 pt**, both under your 10 pt minimum. Raise them to 10?
 7. **CVD / CobImpulse**: add show boxes and colours for the drawn line and marks?
 
 ## 6. Real-dialog check (pending)
-Pending for the next attended session (tools\settings-check\README.md): HodLod 2.4.2, DeltaProfile 2.18.1, TapeReader 1.3.1, LiquidityProfile + LiquidityFlow 0.44.2, BidAskStats 1.13.2 and BookFlow 1.3.2. Expected windows: `settings_contract.exe <plugin> --print ES`.
+Pending for the next attended session (tools\settings-check\README.md): HodLod 2.4.3, DeltaProfile 2.18.2, TapeReader 1.3.1, LiquidityProfile + LiquidityFlow 0.45.0, BidAskStats 1.13.2, BookFlow 1.3.2, DealerProfile 2.17.1 and TradeManager 1.3.1. Expected windows: `settings_contract.exe <plugin> --print ES`.
 
 ## 7. Left to do
-Migrate to the layer, in this order: LiquidityProfile + LiquidityFlow, BigBidAsk (on top of 1.16), keyed place files for BidAskStats / BookFlow (with OrderFlowFeed.h), DealerProfile (and HodLod's banner reader), SessionVWAP, TradeManager, KingTracker. For each one: add its .cpp to SETSRC in gex-build.bat and add an Entry to settings_contract.cpp.
+Migrate to the layer: BigBidAsk (on top of 1.16 and its tests_bba115), keyed place files for BidAskStats / BookFlow (with OrderFlowFeed.h), LiquidityProfile's three files into one keyed file, SessionVWAP, KingTracker. Earlier list for reference: LiquidityProfile + LiquidityFlow, BigBidAsk (on top of 1.16), keyed place files for BidAskStats / BookFlow (with OrderFlowFeed.h), DealerProfile (and HodLod's banner reader), SessionVWAP, TradeManager, KingTracker. For each one: add its .cpp to SETSRC in gex-build.bat and add an Entry to settings_contract.cpp.

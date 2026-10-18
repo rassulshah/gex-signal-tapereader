@@ -25,16 +25,17 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sys/stat.h>
 #include <string>
 #include <vector>
 
 namespace ss {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // 1.1.0: TEXT rows (the Dealer Profile indicators list)
 static const char* const MAGIC = "SPEC1";      // first token of every keyed settings file
 static const int BUDGET_PX = 400;              // widest row the IRT settings window shows without cutting it off
 
-enum Type { T_BOOL = 1, T_INT, T_FLOAT, T_COLOR, T_LIST, T_LABEL };
+enum Type { T_BOOL = 1, T_INT, T_FLOAT, T_COLOR, T_LIST, T_LABEL, T_TEXT };   // T_TEXT (1.1.0): a short text (hi = max length)
 enum Market { M_ES, M_NQ, M_CL, M_GC, M_HG, M_NG, M_EU, M_N };
 static const char* const MARKETS[M_N] = { "ES", "NQ", "CL", "GC", "HG", "NG", "EU" };
 static const double NO_MKT = -1e300;           // "no per-market default" marker inside Row::mkt
@@ -42,6 +43,21 @@ static const double NO_MKT = -1e300;           // "no per-market default" marker
 inline int marketIndex(const std::string& m) {
     for (int i = 0; i < M_N; ++i) if (m == MARKETS[i]) return i;
     if (m == "6E") return M_EU;
+    return -1;
+}
+
+// a contract root (EPZ26, NQ, CLEX26, QGC, CPEZ26, NGEX26, EU6Z26, "EPZ26~3 Minutes*~") -> market, the rule DeltaProfile.cpp marketName() uses
+inline int marketOfRoot(const std::string& rootIn) {
+    std::string r = rootIn.substr(0, rootIn.find('~'));
+    for (size_t i = 0; i < r.size(); ++i) r[i] = (char)std::toupper((unsigned char)r[i]);
+    auto has = [&r](const char* p) { return r.find(p) != std::string::npos; };
+    if (has("NQ")) return M_NQ;
+    if (has("GC")) return M_GC;
+    if (has("CL") || r == "QM") return M_CL;
+    if (has("HG") || has("CP")) return M_HG;
+    if (has("NG") || r == "QG") return M_NG;
+    if (has("EU") || has("6E") || has("E6")) return M_EU;
+    if (has("ES") || has("EP")) return M_ES;
     return -1;
 }
 
@@ -53,6 +69,7 @@ struct Row {
     double def;               // default for every market without its own
     double lo, hi;            // INT / FLOAT range; LIST: 0 .. choices-1 (filled by the table helpers); COLOR 0 .. 0xFFFFFF
     const char* choices;      // LIST: "a;b;c"
+    const char* text;         // TEXT: the default text
     short width;              // control width px (0 = the IRT default for the type)
     bool same;                // on the previous row's line (kParmAppendSameLine)
     const char* group;        // key of this row's group master, or nullptr
@@ -71,7 +88,7 @@ struct Spec {
 
 // ---- table helpers (keep a table one line per row) ---------------------------------------------------------------------------------
 inline Row base(const char* k, const char* l, Type t, double d, double lo, double hi) {
-    Row r; r.key = k; r.label = l; r.type = t; r.def = d; r.lo = lo; r.hi = hi; r.choices = nullptr; r.width = 0; r.same = false;
+    Row r; r.key = k; r.label = l; r.type = t; r.def = d; r.lo = lo; r.hi = hi; r.choices = nullptr; r.text = nullptr; r.width = 0; r.same = false;
     r.group = nullptr; r.master = false; r.hidden = false; for (int i = 0; i < M_N; ++i) r.mkt[i] = NO_MKT; return r;
 }
 inline int countChoices(const char* c) { if (!c || !*c) return 0; int n = 1; for (; *c; ++c) if (*c == ';') ++n; return n; }
@@ -80,6 +97,7 @@ inline Row intRow(const char* k, const char* l, int d, int lo, int hi, short w =
 inline Row floatRow(const char* k, const char* l, double d, double lo, double hi, short w = 50) { Row r = base(k, l, T_FLOAT, d, lo, hi); r.width = w; return r; }
 inline Row colorRow(const char* k, const char* l, unsigned long d, short w = 40) { Row r = base(k, l, T_COLOR, (double)(d & 0xFFFFFFul), 0, 0xFFFFFF); r.width = w; return r; }
 inline Row listRow(const char* k, const char* l, int d, const char* ch, short w = 110) { Row r = base(k, l, T_LIST, d, 0, countChoices(ch) - 1); r.choices = ch; r.width = w; return r; }
+inline Row textRow(const char* k, const char* l, const char* d, int maxLen, short w = 160) { Row r = base(k, l, T_TEXT, 0, 0, maxLen); r.text = d; r.width = w; return r; }
 inline Row labelRow(const char* k, const char* l, short w = 400) { Row r = base(k, l, T_LABEL, 0, 0, 0); r.width = w; return r; }
 inline Row same(Row r) { r.same = true; return r; }
 inline Row in(Row r, const char* masterKey) { r.group = masterKey; return r; }
@@ -102,24 +120,35 @@ inline bool valid(const Row& r, double x) {
         case T_COLOR: return x == std::floor(x) && x >= 0 && x <= 0xFFFFFF;
         case T_LIST:  return x == std::floor(x) && x >= 0 && x <= r.hi;
         case T_LABEL: return true;
+        case T_TEXT:  return x == 0;   // the number slot of a text row is unused
     }
     return false;
+}
+
+// a text value: printable, no '=' / '|', at most hi characters (it is one line of the file)
+inline bool validText(const Row& r, const std::string& t) {
+    if (r.type != T_TEXT || (double)t.size() > r.hi) return false;
+    for (unsigned char ch : t) if (ch < 32 || ch == 127 || ch == '=' || ch == '|') return false;
+    return true;
 }
 
 // ---- the values of one chart (one per table row, in table order) --------------------------------------------------------------------
 struct Values {
     std::vector<double> v;
+    std::vector<std::string> t;          // TEXT rows' values (same index; empty for other rows)
     int market = -1;
+    std::string hint;                     // input to a legacy reader: e.g. the chart's contract root (its old file was keyed by it)
     std::string why;                      // where the values came from ("file", "defaults: no file", "migrated from ...")
     bool b(int k) const { return k >= 0 && k < (int)v.size() && v[(size_t)k] != 0; }
     int i(int k) const { return (k >= 0 && k < (int)v.size()) ? (int)std::llround(v[(size_t)k]) : 0; }
     double f(int k) const { return (k >= 0 && k < (int)v.size()) ? v[(size_t)k] : 0.0; }
     unsigned long c(int k) const { return (unsigned long)i(k) & 0xFFFFFFul; }   // COLOR, 0x00RRGGBB, passed to the SDK unchanged
+    std::string s(int k) const { return (k >= 0 && k < (int)t.size()) ? t[(size_t)k] : std::string(); }
 };
 
 inline Values defaults(const Spec& S, int mkt) {
-    Values V; V.market = mkt; V.why = "defaults"; V.v.resize((size_t)S.n);
-    for (int k = 0; k < S.n; ++k) V.v[(size_t)k] = defaultFor(S.rows[k], mkt);
+    Values V; V.market = mkt; V.why = "defaults"; V.v.resize((size_t)S.n); V.t.resize((size_t)S.n);
+    for (int k = 0; k < S.n; ++k) { V.v[(size_t)k] = defaultFor(S.rows[k], mkt); if (S.rows[k].type == T_TEXT && S.rows[k].text) V.t[(size_t)k] = S.rows[k].text; }
     return V;
 }
 
@@ -164,7 +193,8 @@ inline bool parseNum(const Row& r, const std::string& s, double& out) {
 // ---- the keyed file: "SPEC1|<plugin>|<version>|<MKT>" then key=value lines ------------------------------------------------------------
 inline std::string format(const Spec& S, const Values& V) {
     std::string o = std::string(MAGIC) + "|" + S.plugin + "|" + S.version + "|" + (V.market >= 0 && V.market < M_N ? MARKETS[V.market] : "?") + "\n";
-    for (int k = 0; k < S.n; ++k) { const Row& r = S.rows[k]; if (r.type == T_LABEL) continue; o += std::string(r.key) + "=" + fmt(r, V.v[(size_t)k]) + "\n"; }
+    for (int k = 0; k < S.n; ++k) { const Row& r = S.rows[k]; if (r.type == T_LABEL) continue;
+        o += std::string(r.key) + "=" + (r.type == T_TEXT ? (k < (int)V.t.size() ? V.t[(size_t)k] : std::string()) : fmt(r, V.v[(size_t)k])) + "\n"; }
     return o;
 }
 inline bool isKeyed(const std::string& text) { return text.compare(0, std::strlen(MAGIC) + 1, std::string(MAGIC) + "|") == 0; }
@@ -189,6 +219,7 @@ inline bool parse(const Spec& S, int mkt, const std::string& text, Values& V) {
         if (ln.empty()) { if (e >= text.size()) break; continue; }
         const size_t eq = ln.find('='); if (eq == std::string::npos) { ++bad; continue; }
         const int k = find(S, ln.substr(0, eq).c_str()); if (k < 0) { ++unknown; continue; }
+        if (S.rows[k].type == T_TEXT) { const std::string tv = ln.substr(eq + 1); if (validText(S.rows[k], tv)) { V.t[(size_t)k] = tv; ++got; } else ++bad; if (e >= text.size()) break; continue; }
         double x = 0; if (!parseNum(S.rows[k], ln.substr(eq + 1), x) || !valid(S.rows[k], x)) { ++bad; continue; }
         V.v[(size_t)k] = x; ++got;
         if (e >= text.size()) break;
@@ -205,6 +236,7 @@ inline void fromPositional(const Spec& S, const std::vector<const char*>& order,
         const int k = find(S, order[j]); if (k < 0) continue;
         const Row& r = S.rows[k]; double x = 0;
         std::string f = fields[j]; while (!f.empty() && (f.back() == ' ' || f.back() == '\r')) f.pop_back();
+        if (r.type == T_TEXT) { if (validText(r, f)) V.t[(size_t)k] = f; continue; }
         if (r.type == T_COLOR) { char* e = nullptr; const long long d = std::strtoll(f.c_str(), &e, 10); if (!e || *e || f.empty()) continue; x = (double)d; }   // old files kept colours as decimal ints
         else { char* e = nullptr; x = std::strtod(f.c_str(), &e); if (!e || *e || f.empty()) continue; }
         if (valid(r, x)) V.v[(size_t)k] = x;
@@ -226,6 +258,7 @@ inline int controlPx(const Row& r) {
         case T_LABEL: return r.width > 0 ? std::min<int>(r.width, (int)std::strlen(r.label) * 6 + 8) : labelPx(r.label);
         case T_COLOR: return labelPx(r.label) + (r.width > 0 ? r.width : 40);
         case T_LIST:  return labelPx(r.label) + (r.width > 0 ? r.width : 110);
+        case T_TEXT:  return labelPx(r.label) + (r.width > 0 ? r.width : 160);
         default:      return labelPx(r.label) + (r.width > 0 ? r.width : 60);
     }
 }
@@ -253,6 +286,7 @@ inline std::vector<std::string> check(const Spec& S) {
         for (char ch : key) if (!((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_')) { E("key '" + key + "' must be [a-z0-9_]"); break; }
         if (find(S, r.key) != k) E("duplicate key '" + key + "'");
         if (r.type != T_LABEL && !r.hidden && (!r.label || !*r.label)) E("'" + key + "' has no label");
+        if (r.type == T_TEXT && (!(r.hi >= 1 && r.hi <= 1000) || !validText(r, r.text ? r.text : ""))) E("text '" + key + "' needs a max length 1-1000 and a valid default");
         if (r.type == T_LIST && countChoices(r.choices) < 2) E("list '" + key + "' needs 2+ choices");
         if ((r.type == T_INT || r.type == T_FLOAT) && !(r.lo < r.hi)) E("'" + key + "' range lo < hi");
         for (int m = -1; m < M_N; ++m) { const double d = m < 0 ? r.def : defaultFor(r, m);
@@ -279,6 +313,11 @@ inline bool readSmall(const std::string& path, std::string& out, size_t cap = 64
     while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) { out.append(buf, n); if (out.size() > cap) { ok = false; break; } }
     std::fclose(f); return ok;
 }
+// the file's stamp (mtime + size; -1 = missing): a change is seen at once, the content compare catches same-second rewrites (lesson 84)
+inline long long fileStamp(const std::string& path) {
+    struct stat st; if (path.empty() || stat(path.c_str(), &st) != 0) return -1;
+    return (long long)st.st_mtime * 1000003LL + (long long)st.st_size;
+}
 // .tmp -> old to .bak -> rename -> restore .bak on failure (BUILD-LESSONS 5)
 inline bool writeAtomic(const std::string& path, const std::string& text) {
     const std::string tmp = path + ".tmp", bak = path + ".bak";
@@ -299,14 +338,16 @@ struct Store {
     std::string path;            // <flex>\<plugin>.settings-<MKT>.txt
     std::vector<std::string> legacyPaths;
     LegacyFn legacy = nullptr;
-    long long lastReadMs = -1000000;
+    std::string hint;            // passed to the legacy reader in Values::hint (the chart's contract root)
+    long long lastReadMs = -1000000, lastStamp = -2;
     std::string lastText; bool haveText = false;
     Values cur;
     // load: keyed file -> values; else a legacy file (same path or an older name) -> values, written back keyed ONCE (log line)
     Values load(int mkt, long long nowMs, bool force = false, std::string* migrated = nullptr) {
         if (!S) return Values();
-        if (!force && haveText && nowMs - lastReadMs < 1000 && cur.market == mkt) return cur;
-        lastReadMs = nowMs;
+        const long long stamp = fileStamp(path);
+        if (!force && haveText && nowMs - lastReadMs < 1000 && cur.market == mkt && stamp == lastStamp) return cur;
+        lastReadMs = nowMs; lastStamp = stamp;
         std::string t;
         if (!path.empty() && readSmall(path, t) && isKeyed(t)) {
             if (haveText && t == lastText && cur.market == mkt) return cur;
@@ -316,23 +357,25 @@ struct Store {
         std::vector<std::string> tries; if (!t.empty()) tries.push_back(path); for (const auto& p : legacyPaths) tries.push_back(p);
         for (const auto& p : tries) {
             std::string lt; if (p == path) lt = t; else if (!readSmall(p, lt)) continue;
-            Values V = defaults(*S, mkt);
+            Values V = defaults(*S, mkt); V.hint = hint;
             if (legacy && !lt.empty() && legacy(*S, mkt, lt, V)) {
                 V.market = mkt; V.why = "migrated from " + p;
                 if (!path.empty() && writeAtomic(path, format(*S, V)) && migrated) *migrated = p;
+                lastStamp = fileStamp(path);
                 cur = V; haveText = true; lastText = format(*S, V); return cur;
             }
         }
         cur = defaults(*S, mkt); cur.why = "defaults: no settings file"; haveText = true; lastText.clear(); return cur;
     }
-    bool save(const Values& V) { if (!S || path.empty()) return false; const std::string t = format(*S, V); if (!writeAtomic(path, t)) return false; lastText = t; cur = V; haveText = true; return true; }
+    bool save(const Values& V) { if (!S || path.empty()) return false; const std::string t = format(*S, V); if (!writeAtomic(path, t)) return false; lastText = t; cur = V; haveText = true; lastStamp = fileStamp(path); return true; }
 };
 
 // The dialog snapshot rule (BoxPlace.h DlgSnap, lesson 44): a control he did not touch keeps the FILE's value (IRT may ignore a fill).
 struct Snap {
-    std::vector<double> v; bool ok = false;
-    void take(const Values& V) { v = V.v; ok = true; }
+    std::vector<double> v; std::vector<std::string> t; bool ok = false;
+    void take(const Values& V) { v = V.v; t = V.t; ok = true; }
     double pick(size_t k, double now, double file) const { if (!ok || k >= v.size()) return now; return now == v[k] ? file : now; }
+    std::string pickText(size_t k, const std::string& now, const std::string& file) const { if (!ok || k >= t.size()) return now; return now == t[k] ? file : now; }
 };
 
 } // namespace ss

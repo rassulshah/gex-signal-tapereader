@@ -1,4 +1,4 @@
-// DeltaProfileSettings.h  (lsDeltaProfile 2.18.1, 2026-10-18 settings audit)  -  the ONE table of the Delta Profile settings window.
+// DeltaProfileSettings.h  (lsDeltaProfile 2.18.2, 2026-10-18 settings audit)  -  the ONE table of the Delta Profile settings window.
 // File: lsFlexLevels\DeltaProfile.settings-<MKT>.txt (keyed, per MARKET - the old file was keyed per contract root, so every roll
 // (EPZ26 -> EPH27) silently fell back to defaults). Migrates once from DeltaProfile.settings.txt ("<root>|0|width|gap|font|...").
 #pragma once
@@ -6,7 +6,7 @@
 
 namespace dpset {
 
-static const char* const PLUGIN_VERSION = "2.18.1";
+static const char* const PLUGIN_VERSION = "2.18.2";
 enum K { K_WIDTH, K_FONT, K_DELTA_TEXT, K_N };
 
 inline const ss::Spec& spec() {
@@ -45,9 +45,11 @@ inline bool legacy(const ss::Spec& S, int mkt, const std::string& text, ss::Valu
         if (l.size() > 400 || l.find('|') == std::string::npos) continue;
         const std::string root = l.substr(0, l.find('|'));
         if (rootMarket(root) != mkt) continue;
-        if (root.find('~') != std::string::npos) { if (!chartPick) chartPick = &l; } else if (!pick) pick = &l;
+        if (root.find('~') != std::string::npos) continue;   // per-chart keys were never matched by 2.8 - 2.18.0 (they read root == chart root)
+        if (!V.hint.empty() && root == V.hint) { pick = &l; break; }   // the chart's own root: exactly what 2.18.0 read
+        if (!pick) pick = &l;
     }
-    if (!pick) pick = chartPick;
+    (void)chartPick;
     if (!pick) return false;
     std::string ln = *pick; while (!ln.empty() && (ln.back() == '\r' || ln.back() == ' ')) ln.pop_back();
     const std::vector<std::string> t = ss::split(ln, '|');

@@ -125,10 +125,16 @@ RTX_RESULT cppExtension::setBoolParameter(const char* n, RTBOOL b, short) { MOCK
 RTX_RESULT cppExtension::setIntegerParameter(const char* n, int v, short, short) { MOCK_INT[PARAMS.size()] = v; PARAMS.push_back(n); return RTX_OK; }
 RTX_RESULT cppExtension::setListParameter(const char* n, short d, const char*, short, short) { MOCK_LIST[PARAMS.size()] = d; PARAMS.push_back(n); return RTX_OK; }
 RTX_RESULT cppExtension::setStringParameter(const char* n, const char* d, size_t, short, short) { MOCK_TXT[PARAMS.size()] = d ? d : ""; PARAMS.push_back(n); return RTX_OK; }
+int cppExtension::getParameterCount(void) { return (int)PARAMS.size(); }   // (2.17.1) SettingsHost.h registers by the count
+RTX_RESULT cppExtension::enableParameter(int, RTBOOL) { return RTX_OK; }
 static std::string UP;
 static std::string fl(const char* name) { return UP + "\\InvestorRT\\rtx\\lsFlexLevels\\" + name; }
 static std::string slurp(const std::string& p) { std::ifstream f(p.c_str(), std::ios::binary); std::stringstream s; s << f.rdbuf(); return s.str(); }
-static void put(const char* name, const std::string& body) { std::ofstream f(fl(name).c_str(), std::ios::binary); f << body; }
+static void put(const char* name, const std::string& body) { std::ofstream f(fl(name).c_str(), std::ios::binary); f << body; f.close();
+    // (2.17.1) the plugin reads DealerProfile.settings-<MKT>.txt (keyed) and migrates the old file once: a test that writes the OLD file
+    // starts from it again (as a first start after the upgrade)
+    if (std::string(name) == "DealerProfile.settings.txt") for (const char* m : { "ES", "NQ", "CL", "GC", "HG", "NG", "EU" }) std::remove(fl((std::string("DealerProfile.settings-") + m + ".txt").c_str()).c_str()); }
+static std::string keyedES() { return slurp(fl("DealerProfile.settings-ES.txt")); }   // (2.17.1) the market's keyed settings file
 static const std::string D = "tests_dp290";
 
 static Chart loadBars(const char* cut, const std::string& root = "ES", const std::string& sym = "ESZ6", float shift = 0)
@@ -428,14 +434,14 @@ int main(int argc, char** argv)
         settingsRow("ES", 130, 60, 1, 11);                           // another window saved the Dealer width meanwhile
         MOCK_INT[PX.levelsW] = 90;                                   // he changes only the Levels column
         X.parmsApply();
-        std::string row; { std::istringstream in(slurp(fl("DealerProfile.settings.txt"))); std::string ln; while (std::getline(in, ln)) if (ln.rfind("ES|", 0) == 0) row = ln; }
-        check(row == "ES|0|130|11|0|1|1|1|0|cob_bull,cob_bear|c2|90|9|1", "Apply: Levels 90 saved, the untouched Dealer width keeps the file's 130 (" + row + ")");
-        MOCK_INT[PX.width] = 9999; MOCK_INT[PX.badgeFont] = 99; X.parmsApply();
-        { std::istringstream in(slurp(fl("DealerProfile.settings.txt"))); std::string ln; while (std::getline(in, ln)) if (ln.rfind("ES|", 0) == 0) row = ln; }
-        check(row == "ES|0|130|11|0|1|1|1|0|cob_bull,cob_bear|c2|90|9|1", "garbage widths / fonts from the window never reach the file (" + row + ")");
-        MOCK_CHK[PX.liqBadge] = false; X.parmsApply();
-        { std::istringstream in(slurp(fl("DealerProfile.settings.txt"))); std::string ln; while (std::getline(in, ln)) if (ln.rfind("ES|", 0) == 0) row = ln; }
-        check(row.size() > 2 && row.substr(row.size() - 2) == "|0", "the 'Liquidity in badge' box saved");
+        // (2.17.1) the values live in the keyed per-market file
+        std::string row = keyedES();
+        auto has = [&](const char* kv) { return row.find(std::string("\n") + kv + "\n") != std::string::npos; };
+        check(has("width=130") && has("levels_w=90") && has("font=11") && has("badge_font=9") && has("liq_badge=1") && has("inds=cob_bull,cob_bear"), "Apply: Levels 90 saved, the untouched Dealer width keeps the file's 130 (" + row + ")");
+        MOCK_INT[PX.width] = 9999; MOCK_INT[PX.badgeFont] = 99; X.parmsApply(); row = keyedES();
+        check(has("width=130") && has("levels_w=90") && has("badge_font=9"), "garbage widths / fonts from the window never reach the file (" + row + ")");
+        MOCK_CHK[PX.liqBadge] = false; X.parmsApply(); row = keyedES();
+        check(has("liq_badge=0"), "the 'Liquidity in badge' box saved");
         PERIOD = "3 Minutes";
         // an old 2.10.0 row: the bar length 50 -> the 80 px Dealer column, the Levels default 78
         put("DealerProfile.settings.txt", "ES|0|50|10|0|1|1|1|0|cob_bull,cob_bear\nNQ|0|300|10|0|1|1|1|0|x\n");

@@ -129,6 +129,9 @@ public:
     const char* getWorkingDirectoryPath(){return mock::current->directory.c_str();}
     float getProperty(int){return mock::current->tick;} RTDATE currentDate(){return mock::current->now;} void setExtendedFlags(unsigned long f){mock::current->xflags=f;} int getSecondsPerBar(){return mock::current->seconds;}
     tm* getLocaltime(RTDATE stamp,tm* t){time_t v=static_cast<time_t>(stamp);return gmtime_r(&v,t);}
+    // (settings layer 1.1.0) TEXT rows
+    void setStringParameter(const char*, const char*, size_t, int = 0, int = 0) { ++nparm(); }
+    int getParameterText(int, char* t, size_t n) { if (t && n) t[0] = 0; return RTX_OK; } int setParameterText(int, const char*) { return RTX_OK; }
     // (2026-10-18 settings layer) SettingsHost.h: rows counted per DLL (ids = registration order, as IRT), colour / label rows, enable
     static int& nparm(){ static int n=0; return n; } int getParameterCount(){ return nparm(); }
     void setColorParameter(const char*,COLOR,int=0,int=0){ ++nparm(); } void setLabelParameter(const char*,int=0,int=0){ ++nparm(); }

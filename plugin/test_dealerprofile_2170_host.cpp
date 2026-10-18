@@ -130,7 +130,7 @@ int main()
         Chart b; b.root = "CL"; b.sym = "CLX6"; bars(b, 94.0f); CUR = &b; MOCK_CHART = "CL 3m";
         X.loadHostState(); X.mkt = "CL"; X.root = "CLX6"; X.cs.spb = 180; X.writeStatus("no data"); X.saveHostState();
         const std::string es = slurp(fl("DealerProfile.status-ES-180.txt")), cl = slurp(fl("DealerProfile.status-CL-180.txt")), old = slurp(fl("DealerProfile.status.txt"));
-        check(es.find("VERSION,2.17.0") != std::string::npos && es.find("MARKET,ES") != std::string::npos && es.find("STATE,drawn") != std::string::npos, "ES chart: its own status file");
+        check(es.find(std::string("VERSION,") + DP_VERSION + "\n") != std::string::npos && es.find("MARKET,ES") != std::string::npos && es.find("STATE,drawn") != std::string::npos, "ES chart: its own status file");
         check(cl.find("MARKET,CL") != std::string::npos && cl.find("STATE,no data") != std::string::npos, "CL chart: its own status file (the ES one is not overwritten)");
         check(old.find("MARKET,CL") != std::string::npos, "the old shared DealerProfile.status.txt is still written (one more version)");
         // ES writes again with the same content: its gate holds (no rewrite); the CL chart's write did not reset the ES gate

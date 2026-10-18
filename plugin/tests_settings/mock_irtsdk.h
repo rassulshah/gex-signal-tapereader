@@ -17,8 +17,8 @@ static const short kParmAppendSameLine = (1 << 0);
 #define MAKE_COLOR(r,g,b) ((COLOR)((((unsigned long)(r) & 0xFF) << 16) | (((unsigned long) (g) & 0xFF) << 8)  | (((unsigned long) (b) & 0xFF))))
 
 namespace mock {
-enum PT { P_BOOL = 1, P_INT, P_FLOAT, P_COLOR, P_LIST, P_LABEL };
-struct Param { PT type; std::string name; short width = 0, flags = 0; int i = 0; float f = 0; COLOR c = 0; bool b = false; int list = 0, nList = 0; bool enabled = true; };
+enum PT { P_BOOL = 1, P_INT, P_FLOAT, P_COLOR, P_LIST, P_LABEL, P_TEXT };
+struct Param { PT type; std::string name; std::string text; short width = 0, flags = 0; int i = 0; float f = 0; COLOR c = 0; bool b = false; int list = 0, nList = 0; bool enabled = true; };
 struct Ext {
     std::vector<Param> p;
     bool dialog = true;        // false = the chart copy
@@ -42,6 +42,9 @@ public:
     RTX_RESULT setColorParameter(const char* n, COLOR d, short w = 0, short fl = 0) { add(mock::P_COLOR, n, w, fl); m.p.back().c = d; return RTX_OK; }
     RTX_RESULT setListParameter(const char* n, short d, const char* ch, short w = 0, short fl = 0) { add(mock::P_LIST, n, w, fl); m.p.back().list = d; int c = 1; for (const char* x = ch; x && *x; ++x) if (*x == ';') ++c; m.p.back().nList = c; return RTX_OK; }
     RTX_RESULT setLabelParameter(const char* t, short w = 0, short fl = 0) { return add(mock::P_LABEL, t, w, fl); }
+    RTX_RESULT setStringParameter(const char* n, const char* d, size_t, short w = 0, short fl = 0) { add(mock::P_TEXT, n, w, fl); m.p.back().text = d ? d : ""; return RTX_OK; }
+    RTX_RESULT getParameterText(int i, char* out, size_t sz) { mock::Param* q = at(i); if (!q || q->type != mock::P_TEXT || !sz) return RTX_FAIL; std::snprintf(out, sz, "%s", m.dialog ? q->text.c_str() : ""); return RTX_OK; }
+    RTX_RESULT setParameterText(int i, const char* t) { mock::Param* q = at(i); if (!q || q->type != mock::P_TEXT) return RTX_FAIL; if (!m.ignoreFill) q->text = t ? t : ""; return RTX_OK; }
     mock::Param* at(int i) { return (i >= 0 && i < (int)m.p.size()) ? &m.p[(size_t)i] : nullptr; }
     // reads: real only inside the window
     RTBOOL isBoxChecked(int i) { mock::Param* q = at(i); return (q && m.dialog && q->type == mock::P_BOOL && q->b) ? 1 : 0; }
@@ -62,4 +65,5 @@ public:
     void userColor(int i, COLOR c) { at(i)->c = c; }
     void userInt(int i, int v) { at(i)->i = v; }
     void userList(int i, int v) { at(i)->list = v; }
+    void userText(int i, const char* t) { at(i)->text = t; }
 };

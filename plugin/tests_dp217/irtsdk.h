@@ -102,6 +102,9 @@ public:
     float getProperty(int){return mock::current->tick;} int getSecondsPerBar(){return mock::current->seconds;}
     tm* getLocaltime(RTDATE stamp,tm* t){time_t v=static_cast<time_t>(stamp);return gmtime_r(&v,t);}
     void setParameterVersion(int){} void setParameterDialogHeight(int){} void setIntegerParameter(const char*,int,int,int=0){ ++nparm(); }
+    // (settings layer 1.1.0) TEXT rows
+    void setStringParameter(const char*, const char*, size_t, int = 0, int = 0) { ++nparm(); }
+    int getParameterText(int, char* t, size_t n) { if (t && n) t[0] = 0; return RTX_OK; } int setParameterText(int, const char*) { return RTX_OK; }
     // (2.18.1, SettingsHost.h) the parameter API the settings layer uses: rows counted, values kept per id in parms[] / checks[]
     static int& nparm(){ static int n=0; return n; } int getParameterCount(){ return nparm(); }
     void setFloatParameter(const char*,float,int=0,int=0){ ++nparm(); } void setColorParameter(const char*,COLOR,int=0,int=0){ ++nparm(); }

@@ -20,6 +20,9 @@
 #include "../DeltaProfileSettings.h"
 #include "../TapeReaderSettings.h"
 #include "../OrderFlowPaneSettings.h"
+#include "../LiquidityProfileSettings.h"
+#include "../TradeManagerSettings.h"
+#include "../DealerProfileSettings.h"
 
 struct LegacyCase { const char* text; int market; const char* key; double want; };   // key == nullptr: must NOT be recognised
 struct Entry {
@@ -69,10 +72,16 @@ static void checkEntry(const Entry& E, const std::string& dir) {
     for (int mkt = 0; mkt < ss::M_N; ++mkt) {
         for (int rep = 0; rep < 20; ++rep) {
             ss::Values V = ss::defaults(S, mkt);
-            if (rep) for (int k = 0; k < S.n; ++k) if (S.rows[k].type != ss::T_LABEL) V.v[(size_t)k] = randomValid(S.rows[k]);
+            if (rep) {
+                for (int k = 0; k < S.n; ++k) {
+                    if (S.rows[k].type == ss::T_TEXT) { std::string t; const int n = (int)(rnd01() * std::min(40.0, S.rows[k].hi)); for (int c = 0; c < n; ++c) t += (char)('a' + (int)(rnd01() * 26)); if (rep % 3 == 0 && !t.empty()) t[0] = ','; V.t[(size_t)k] = t; }
+                    else if (S.rows[k].type != ss::T_LABEL) V.v[(size_t)k] = randomValid(S.rows[k]);
+                }
+            }
             ss::Values W; const bool okp = ss::parse(S, mkt, ss::format(S, V), W);
             ok(okp, P + " round trip parse " + ss::MARKETS[mkt]);
-            for (int k = 0; k < S.n; ++k) if (S.rows[k].type != ss::T_LABEL)
+            for (int k = 0; k < S.n; ++k) if (S.rows[k].type == ss::T_TEXT) ok(W.s(k) == V.s(k), P + " round trip text " + S.rows[k].key + " '" + V.s(k) + "' -> '" + W.s(k) + "'");
+            for (int k = 0; k < S.n; ++k) if (S.rows[k].type != ss::T_LABEL && S.rows[k].type != ss::T_TEXT)
                 ok(std::fabs(W.v[(size_t)k] - V.v[(size_t)k]) < 1e-6, P + " round trip " + S.rows[k].key + " " + ss::MARKETS[mkt] + " " + ss::fmt(S.rows[k], V.v[(size_t)k]) + " -> " + ss::fmt(S.rows[k], W.v[(size_t)k]));
         }
         // defaults: never 0 / garbage where the row has a real default, and valid
@@ -89,9 +98,9 @@ static void checkEntry(const Entry& E, const std::string& dir) {
         {   // invalid values / unknown keys / missing keys -> default, the rest kept
             std::string t = std::string("SPEC1|") + S.plugin + "|0|" + ss::MARKETS[mkt] + "\nnot_a_key=5\n";
             for (int k = 0; k < S.n; ++k) { const ss::Row& r = S.rows[k]; if (r.type == ss::T_LABEL) continue;
-                t += std::string(r.key) + "=" + (r.type == ss::T_COLOR ? "ZZZZZZ" : (r.type == ss::T_FLOAT ? "nan" : "999999999")) + "\n"; }
+                t += std::string(r.key) + "=" + (r.type == ss::T_TEXT ? std::string((size_t)r.hi + 5, 'x') : std::string(r.type == ss::T_COLOR ? "ZZZZZZ" : (r.type == ss::T_FLOAT ? "nan" : "999999999"))) + "\n"; }
             ss::Values W; ss::parse(S, mkt, t, W);
-            for (int k = 0; k < S.n; ++k) ok(W.v[(size_t)k] == D.v[(size_t)k], P + " invalid value -> default " + S.rows[k].key);
+            for (int k = 0; k < S.n; ++k) ok(W.v[(size_t)k] == D.v[(size_t)k] && W.s(k) == D.s(k), P + " invalid value -> default " + S.rows[k].key);
         }
     }
     // colours pass through unchanged
@@ -126,7 +135,7 @@ static void checkEntry(const Entry& E, const std::string& dir) {
     ok(countOf(src, "ss::fillDialog(") >= 1, P + " parmsLoad must fill the window with ss::fillDialog");
     ok(countOf(src, "ss::readDialog(") >= 1, P + " parmsApply must read the window with ss::readDialog");
     ok(countOf(src, "ss::onUpdate(") >= 1, P + " parmsUpdt must call ss::onUpdate (group masters)");
-    const char* banned[] = { "setBoolParameter(", "setIntegerParameter(", "setFloatParameter(", "setColorParameter(", "setListParameter(", "setLabelParameter(", "getIntegerValue(", "setIntegerValue(", "getParameterColor(", "setParameterColor(", "isBoxChecked(", "checkBox(", "getListIndex(", "setListIndex(", "getFloatValue(", "setFloatValue(" };
+    const char* banned[] = { "setBoolParameter(", "setIntegerParameter(", "setFloatParameter(", "setColorParameter(", "setListParameter(", "setLabelParameter(", "getIntegerValue(", "setIntegerValue(", "getParameterColor(", "setParameterColor(", "isBoxChecked(", "checkBox(", "getListIndex(", "setListIndex(", "getFloatValue(", "setFloatValue(", "getParameterText(", "setParameterText(", "setStringParameter(" };
     for (const char* b : banned) ok(countOf(src, b) == 0, P + " " + E.cpp + " calls " + b + " by hand (use the table / SettingsHost.h)");
     const std::string want = std::string("setVersion(\"") + S.version + "\")";
     ok(countOf(src, want) == 1, P + " setVersion literal must be " + want);
@@ -154,6 +163,26 @@ int main(int argc, char** argv) {
         { "4,10,-5,0", ss::M_NQ, "background", 0 },
         { "4,10,-5,0", ss::M_NQ, "offset_x", 10 },
     }, {} });
+    // (BidAskStats 1.13.2 / BookFlow 1.3.2) the window on the layer; the place files keep the panes' own format (no legacy reader needed)
+    E.push_back(Entry{ &ofset::bidAskSpec(), "BidAskStats.cpp", nullptr, {}, {} });
+    E.push_back(Entry{ &ofset::bookFlowSpec(), "BookFlow.cpp", nullptr, {}, {} });
+    // (LiquidityProfile / LiquidityFlow 0.45.0) one source, two builds; the three files keep their strict formats
+    E.push_back(Entry{ &lpset::profileSpec(), "LiquidityProfile.cpp", nullptr, {}, {} });
+    E.push_back(Entry{ &lpset::flowSpec(), "LiquidityProfile.cpp", nullptr, {}, {} });
+    E.push_back(Entry{ &tmset::spec(), "TradeManager.cpp", tmset::legacy, {
+        { "2\n", ss::M_ES, "position", 2 }, { "7", ss::M_NQ, "position", 7 }, { "9", ss::M_NQ, "position", 2 }, { "abc", ss::M_ES, nullptr, 0 } }, {} });
+    // (DealerProfile 2.17.1) his real 10-05 file (root + chart keys) and a 2.11 (c2) row; lsHodLod 2.4.3 reads "banner" through the same reader
+    E.push_back(Entry{ &dprset::spec(), "DealerProfile.cpp", dprset::legacy, {
+        { "CPEZ26~3 Minutes*~|0|50|9|0|0|0|0|0|cob_bull,cob_bear\nEPZ26~3 Minutes*~|0|50|9|0|0|0|0|0|cob_bull,cob_bear\nNQ~3 Minutes*~|0|50|9|0|0|0|0|0|cob_bull,cob_bear\n", ss::M_HG, nullptr, 0 },   // his 10-05 file: per-chart keys, never matched -> defaults (unchanged)
+        { "CPEZ26|0|50|9|0|0|0|0|0|cob_bull,cob_bear\n", ss::M_HG, "width", 80 },          // an old root row: bar length 50 -> the 80 px column
+        { "CPEZ26|0|50|9|0|0|0|0|0|cob_bull,cob_bear\n", ss::M_HG, "font", 10 },           // 9 pt was drawn as 10 (the 10 pt minimum)
+        { "CPEZ26|0|50|9|0|0|0|0|0|cob_bull,cob_bear\n", ss::M_HG, "labels", 0 },
+        { "EPZ26~3 Minutes*~|0|50|9|0|0|0|0|0|x\nES|0|130|11|0|1|1|1|1|cob_bull,cob_bear|c2|60|9|1\n", ss::M_ES, "levels_w", 60 },   // the c2 row wins
+        { "EPZ26~3 Minutes*~|0|50|9|0|0|0|0|0|x\nES|0|130|11|0|1|1|1|1|cob_bull,cob_bear|c2|60|9|1\n", ss::M_ES, "banner", 1 },     // HodLod's banner flag
+        { "EPZ26~3 Minutes*~|0|50|9|0|0|0|0|0|x\nES|0|130|11|0|1|1|1|1|cob_bull,cob_bear|c2|60|9|1\n", ss::M_ES, "width", 130 },
+        { "NQ|0|300|10|0|1|1|1|0|x\n", ss::M_NQ, "width", 250 },                                     // old row: clamped into 40-250
+        { "NQ|0|300|10|0|1|1|1|0|x\n", ss::M_ES, nullptr, 0 },                                        // no ES row: not recognised (defaults)
+    }, {} });
     if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
         const int mkt = ss::marketIndex(argv[3]);
         for (const Entry& e : E) {
@@ -161,7 +190,7 @@ int main(int argc, char** argv) {
             const ss::Values D = ss::defaults(S, mkt);
             for (const ss::Line& L : ss::lines(S)) {
                 std::string t; for (int k : L.rows) { const ss::Row& r = S.rows[k]; std::string v = ss::fmt(r, D.v[(size_t)k]);
-                    if (r.type == ss::T_BOOL) v = D.b(k) ? "[x]" : "[ ]"; else if (r.type == ss::T_COLOR) v = "#" + v; else if (r.type == ss::T_LIST) { std::vector<std::string> c = ss::split(r.choices, ';'); v = D.i(k) < (int)c.size() ? c[(size_t)D.i(k)] : v; }
+                    if (r.type == ss::T_BOOL) v = D.b(k) ? "[x]" : "[ ]"; else if (r.type == ss::T_TEXT) v = "'" + D.s(k) + "'"; else if (r.type == ss::T_COLOR) v = "#" + v; else if (r.type == ss::T_LIST) { std::vector<std::string> c = ss::split(r.choices, ';'); v = D.i(k) < (int)c.size() ? c[(size_t)D.i(k)] : v; }
                     t += std::string(t.empty() ? "" : "  |  ") + r.label + " " + v; }
                 std::printf("   ~%3dpx  %s\n", L.px, t.c_str());
             }
@@ -169,9 +198,6 @@ int main(int argc, char** argv) {
         }
         return 0;
     }
-    // (BidAskStats 1.13.2 / BookFlow 1.3.2) the window on the layer; the place files keep the panes' own format (no legacy reader needed)
-    E.push_back(Entry{ &ofset::bidAskSpec(), "BidAskStats.cpp", nullptr, {}, {} });
-    E.push_back(Entry{ &ofset::bookFlowSpec(), "BookFlow.cpp", nullptr, {}, {} });
     for (const Entry& e : E) {
         // a table only binds its .cpp once the .cpp is migrated (it includes the table's header)
         std::string src; const bool have = !dir.empty() && readAll(dir + "/" + e.cpp, src);
