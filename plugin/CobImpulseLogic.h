@@ -43,7 +43,8 @@
 
 namespace cimp {
 
-static const char* const VERSION = "0.3.1";   // 0.3.1 (2026-10-14 18:25 CT audit display list): the gamma hover says which MenthorQ level is NEAR the CoB start, "(model, data N min old)", never "driving" / "behind"; the CoB / RB marks and the tags are unchanged
+static const char* const VERSION = "0.4.0";   // 0.4.0 (2026-10-18): live CoB odds from the CoB Lab (CobOdds.h, LRA-Odds-<MKT>.csv question COB_1R) - "Cob 63%"; ODDS,0|1
+// was 0.3.1   // 0.3.1 (2026-10-14 18:25 CT audit display list): the gamma hover says which MenthorQ level is NEAR the CoB start, "(model, data N min old)", never "driving" / "behind"; the CoB / RB marks and the tags are unchanged
 enum { MODE_OFF = 0, MODE_ABS = 1, MODE_ALWAYS = 2 };
 
 struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0, v = 0; };   // t = the chart's bar stamp (bar END, IRT)
@@ -56,6 +57,7 @@ struct Params {
     int mode = MODE_ABS;       // display: Off / Only with Abs on pivot / Always
     bool proven = false;       // true = the study proved it for this market: the "?" is dropped
     bool plain = true;         // draw plain "Cob" labels too (the plugin is the one CoB label source once IRT's marker text is cleared)
+    bool odds = true;          // (0.4.0) ODDS,1 = show the live odds after the label (always computed and recorded)
     bool gamma = true;         // (0.3.0) GAMMA,1 = show the gamma part of the tag (always computed and logged)
     int gammaW = 6;            // (0.3.0) GAMMA_W: zone half-width, hundredths of the ADR (3-10)
     int gammaEM = 100;         // (0.3.0) GAMMA_EM: how far ahead a target node may be, % of the expected move (25-150)
@@ -596,6 +598,7 @@ inline Params parseFile(const std::string& text, const std::string& market, std:
         else if (k == "PLAIN") { if (!parseInt(v, 0, 1, iv)) { reason = "bad PLAIN"; return D; } P.plain = iv == 1; }
         else if (k == "MIN_BARS") { if (!parseInt(v, 10, 100, iv)) { reason = "bad MIN_BARS"; return D; } P.minBars = iv; }
         else if (k == "WINDOW") { if (!parseInt(v, 0, 5, iv)) { reason = "bad WINDOW"; return D; } P.window = iv; }
+        else if (k == "ODDS") { if (!parseInt(v, 0, 1, iv)) { reason = "bad ODDS"; return D; } P.odds = iv == 1; }
         else if (k == "GAMMA") { if (!parseInt(v, 0, 1, iv)) { reason = "bad GAMMA"; return D; } P.gamma = iv == 1; }
         else if (k == "GAMMA_W") { if (!parseInt(v, 3, 10, iv)) { reason = "bad GAMMA_W"; return D; } P.gammaW = iv; }
         else if (k == "GAMMA_EM") { if (!parseInt(v, 25, 150, iv)) { reason = "bad GAMMA_EM"; return D; } P.gammaEM = iv; }

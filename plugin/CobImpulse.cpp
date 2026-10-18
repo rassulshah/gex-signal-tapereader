@@ -45,6 +45,7 @@
 #undef near
 #endif
 #include "CobImpulseLogic.h"
+#include "CobOdds.h"                    // (0.4.0) the live odds (OddsTable.h + the lab's facts)
 #include "HoverBoard.h"                  // hb::hbCursor (GetCursorPos + WindowFromPoint; carries the user32 pragma)
 #include "HostSlot.h"
 #include "ClaimGates.h"                 // (0.3.0) cgate::kShowHvlCushion - the HVL regime text in the gamma hover
@@ -70,7 +71,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CI_VERSION "0.3.1"          // keep equal to cimp::VERSION and the setVersion literal below
+#define CI_VERSION "0.4.0"          // keep equal to cimp::VERSION and the setVersion literal below
 
 static const COLOR C_LABEL = 0x0080FFFF;   // his IRT Cob label colour (light cyan), unchanged
 static const COLOR C_BOX = 0x00FFFFFF, C_HOVBG = 0x00111827, C_HOVEDGE = 0x009CA3AF, C_INK = 0x00F3F4F6;
@@ -180,6 +181,9 @@ struct CIState {
     // (0.3.0) the gamma part: the book (cached on its file stamp), the hover sidecar, the chart's tick
     cimp::GBook book; long long bookStamp = -2; std::string bookWhy = "not read yet"; double tick = 0;
     std::map<std::pair<long long, int>, cimp::GCtx> ctx, pendCtx;
+    // (0.4.0) the odds table (cached on its file stamp) and the odds decided at each CoB close
+    odt::Table odds; long long oddsStamp = -2; std::string oddsWhy = "not read yet";
+    std::map<std::pair<long long, int>, codds::Odds> oddsRec, pendOdds;
     // hover
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
 };
@@ -202,6 +206,7 @@ private:
     void identify(CIState& S);
     void params(CIState& S, long long now);
     const cimp::GBook* readBook(CIState& S);
+    const odt::Table* readOdds(CIState& S);
     bool readFlags(const char* name, long count, std::vector<float>& out);
     void decide(CIState& S, long count);
     bool flush(CIState& S);
@@ -242,7 +247,7 @@ void CobImpulse::identify(CIState& S) {
     const std::string id = root + "|" + sym + "|" + std::to_string(spb);
     if (id == S.identity) return;
     S.identity = id; S.symbol = sym; S.spb = spb; S.market = marketName(root.empty() ? sym : root);
-    S.recs.clear(); S.pending.clear(); S.ctx.clear(); S.pendCtx.clear(); S.bookStamp = -2; S.bookWhy = "not read yet"; S.lastCount = 0; S.decidedThrough = 0; S.session = -1; S.paramsStamp = -2; S.paramsCheckMs = -1;
+    S.recs.clear(); S.pending.clear(); S.ctx.clear(); S.pendCtx.clear(); S.oddsRec.clear(); S.pendOdds.clear(); S.oddsStamp = -2; S.oddsWhy = "not read yet"; S.odds = odt::Table(); S.bookStamp = -2; S.bookWhy = "not read yet"; S.lastCount = 0; S.decidedThrough = 0; S.session = -1; S.paramsStamp = -2; S.paramsCheckMs = -1;
     S.targets.clear(); S.hovKey.clear();
 }
 void CobImpulse::params(CIState& S, long long now) {
@@ -274,6 +279,22 @@ const cimp::GBook* CobImpulse::readBook(CIState& S) {
         S.bookStamp = st;
     }
     return S.book.ok ? &S.book : nullptr;
+}
+// (0.4.0) the CoB Lab's odds as they are NOW (read at the CoB close): bounded, torn-safe, cached on the file stamp; nullptr = none usable
+const odt::Table* CobImpulse::readOdds(CIState& S) {
+    const std::string f = flexDir(); if (f.empty()) { S.oddsWhy = "no lsFlexLevels folder"; return nullptr; }
+    const std::string p = f + "\\LRA-Odds-" + S.market + ".csv";
+    long long st = -1;
+    if (!statFile(p, st)) { S.odds = odt::Table(); S.oddsStamp = -1; S.oddsWhy = "missing"; return nullptr; }
+    if (st != S.oddsStamp) {
+        std::string text;
+        if (!readSmall(p, odt::MAX_BYTES, text)) { S.oddsWhy = "unreadable or over 512 KB"; return S.odds.ok ? &S.odds : nullptr; }
+        long long st2 = -1; if (!statFile(p, st2) || st2 != st) { S.oddsWhy = "being written (kept the last good)"; return S.odds.ok ? &S.odds : nullptr; }
+        odt::Table t = odt::parse(text, S.market);
+        if (t.ok) { S.odds = t; S.oddsWhy = std::string("ok, built ") + t.built; } else { S.odds = odt::Table(); S.oddsWhy = t.why; }
+        S.oddsStamp = st;
+    }
+    return S.odds.ok ? &S.odds : nullptr;
 }
 // his RTL by name, aligned so element i is chart bar i (the array ends on the chart's last bar); false = not readable
 bool CobImpulse::readFlags(const char* name, long count, std::vector<float>& out) {
@@ -353,10 +374,19 @@ void CobImpulse::decide(CIState& S, long count) {
                 }
                 G = cimp::gammaTag(in, book, S.P);
             }
+            // (0.4.0) the live odds, decided now from the lab's table as it is now (same facts as lra.cob_lab.features)
+            codds::Odds O; O.decided = true;
+            if (ai >= 0 && ai < (long)A.size() && hasRth) {
+                const int legBars = (T.pivot >= 0 && T.legEnd >= T.pivot) ? T.legEnd - T.pivot : -1;
+                const codds::Facts F = codds::facts(A, ct, ai, side, S.tick, rthFirst, rthLast, legBars);
+                const odt::Table* ot = readOdds(S);
+                O = codds::decide(ot ? *ot : odt::Table(), F);
+            }
             const long long sess = sessionOf(bt);
             if (sess < 0 || S.pending.size() >= REC_LINES_MAX) { ++S.recFails; continue; }
             S.pending.push_back(std::make_pair(sess, cimp::toRec(T, B, &G))); ++S.decided;
             if (G.computed && G.why.empty()) S.pendCtx[std::make_pair(bt, side)] = cimp::toCtx(G, bt, side);
+            S.pendOdds[std::make_pair(bt, side)] = O;
         }
     }
     S.decidedThrough = (long long)times[(int)lastClosed];
@@ -379,6 +409,24 @@ static bool publishCtx(const std::string& path, const std::vector<cimp::GCtx>& a
     std::string text = std::string(cimp::GCTX_HEADER) + "\n";
     for (const auto& k : keep) text += k + "\n";
     for (const auto& c : add) if (seen.insert(std::make_pair(c.trig, c.side)).second) text += cimp::ctxLine(c) + "\n";
+    return text.size() <= REC_FILE_MAX && publishFile(path, text);
+}
+// (0.4.0) merge-publish the odds sidecar of one session: old lines kept (first wins), the new ones appended; false = not written
+static bool publishOdds(const std::string& path, const std::vector<std::pair<std::pair<long long, int>, codds::Odds>>& add) {
+    std::string old; long long st = -1; std::vector<std::string> keep; std::set<std::pair<long long, int>> seen;
+    if (statFile(path, st)) {
+        if (!readSmall(path, REC_FILE_MAX, old)) return false;
+        std::istringstream in(old); std::string line; bool head = true;
+        while (std::getline(in, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (head) { head = false; if (line != codds::SIDECAR_HEADER) return false; continue; }
+            long long t = 0; int s = 0; codds::Odds o; if (codds::parseSidecar(line, t, s, o) && seen.insert(std::make_pair(t, s)).second) keep.push_back(codds::sidecarLine(t, s, o));
+        }
+        if (head && !old.empty()) return false;
+    }
+    std::string text = std::string(codds::SIDECAR_HEADER) + "\n";
+    for (const auto& k : keep) text += k + "\n";
+    for (const auto& a : add) if (seen.insert(a.first).second) text += codds::sidecarLine(a.first.first, a.first.second, a.second) + "\n";
     return text.size() <= REC_FILE_MAX && publishFile(path, text);
 }
 bool CobImpulse::flush(CIState& S) {
@@ -411,13 +459,18 @@ bool CobImpulse::flush(CIState& S) {
         std::vector<cimp::GCtx> add;
         for (size_t j : g.second) { const cimp::Rec& r = S.pending[j].second; const auto it = S.pendCtx.find(std::make_pair(r.trig, r.side)); if (it != S.pendCtx.end()) add.push_back(it->second); }
         if (!add.empty() && !publishCtx(d + "\\" + stem(S) + "-" + std::to_string(g.first) + ".gamma.csv", add)) { ++S.recFails; continue; }
+        // (0.4.0) the odds sidecar of the same session
+        std::vector<std::pair<std::pair<long long, int>, codds::Odds>> addO;
+        for (size_t j : g.second) { const cimp::Rec& r = S.pending[j].second; const auto it = S.pendOdds.find(std::make_pair(r.trig, r.side)); if (it != S.pendOdds.end()) addO.push_back(*it); }
+        if (!addO.empty() && !publishOdds(d + "\\" + stem(S) + "-" + std::to_string(g.first) + ".odds.csv", addO)) { ++S.recFails; continue; }
         for (size_t j : g.second) {
             const cimp::Rec& r = S.pending[j].second; const std::pair<long long, int> key(r.trig, r.side);
             if (!S.recs.count(key)) {
                 S.recs[key] = r;
                 const auto it = S.pendCtx.find(key); if (it != S.pendCtx.end() && !S.ctx.count(key)) S.ctx[key] = it->second;
+                const auto io = S.pendOdds.find(key); if (io != S.pendOdds.end() && !S.oddsRec.count(key)) S.oddsRec[key] = io->second;
             }
-            S.pendCtx.erase(key); done[j] = 1;
+            S.pendCtx.erase(key); S.pendOdds.erase(key); done[j] = 1;
         }
     }
     std::vector<std::pair<long long, cimp::Rec>> retry;
@@ -438,6 +491,16 @@ void CobImpulse::load(CIState& S) {
             if (head) { head = false; if (!cimp::knownHeader(line)) break; continue; }
             cimp::Rec r; if (cimp::parseRec(line, r)) S.recs.insert(std::make_pair(std::make_pair(r.trig, r.side), r));
         }
+        // (0.4.0) the odds sidecar
+        { const std::string op = d + "\\" + stem(S) + "-" + std::to_string(k) + ".odds.csv"; long long so = -1; std::string ot;
+          if (statFile(op, so) && readSmall(op, REC_FILE_MAX, ot)) {
+              std::istringstream oi(ot); std::string ol; bool oh = true; size_t on = 0;
+              while (std::getline(oi, ol) && ++on <= REC_LINES_MAX) {
+                  if (!ol.empty() && ol.back() == '\r') ol.pop_back();
+                  if (oh) { oh = false; if (ol != codds::SIDECAR_HEADER) break; continue; }
+                  long long t = 0; int s = 0; codds::Odds o; if (codds::parseSidecar(ol, t, s, o)) S.oddsRec.insert(std::make_pair(std::make_pair(t, s), o));
+              }
+          } }
         // (0.3.0) the hover sidecar
         const std::string cp = d + "\\" + stem(S) + "-" + std::to_string(k) + ".gamma.csv";
         if (!statFile(cp, st)) continue;
@@ -462,6 +525,7 @@ void CobImpulse::status(CIState& S, long long now) {
       << ",min_bars " << S.P.minBars << ",window " << S.P.window << ",gamma " << (S.P.gamma ? 1 : 0) << ",gamma_w " << S.P.gammaW
       << ",gamma_em " << S.P.gammaEM << "," << S.paramsWhy
       << "\nBOOK,GammaProfile-MQ-" << S.market << ".csv," << S.bookWhy << ",asof " << (S.book.ok ? S.book.asof : 0) << ",tick " << S.tick
+      << "\nODDS,LRA-Odds-" << S.market << ".csv," << S.oddsWhy << ",show " << (S.P.odds ? 1 : 0) << ",decided " << S.oddsRec.size()
       << "\nRECORDS," << S.recs.size() << ",tagged " << tagged << ",tag shown " << shownN << ",gamma " << gTagged << ",pending " << S.pending.size() << ",fails " << S.recFails
       << "\nDECIDED_THROUGH," << S.decidedThrough << "\n";
     const std::string text = o.str(); if (text == S.lastStatusText) return;
@@ -508,8 +572,10 @@ void CobImpulse::render(CIState& S) {
     for (const auto& kv : S.recs) {
         const cimp::Rec& r = kv.second;
         const bool tag = cimp::shown(r.r() || r.v() || r.c(), r.abs, S.P.mode);   // the impulse part is shown (its bar gets the box)
-        const std::string text = cimp::label(r.r(), r.v(), r.abs, S.P, r.c(), r.gCode);   // (0.3.0) + the gamma name
-        if (text == "Cob" && !S.P.plain) continue;
+        const std::string base = cimp::label(r.r(), r.v(), r.abs, S.P, r.c(), r.gCode);   // (0.3.0) + the gamma name
+        if (base == "Cob" && !S.P.plain) continue;
+        const auto io = S.oddsRec.find(kv.first);
+        const std::string text = base + (io != S.oddsRec.end() ? codds::labelSuffix(io->second, S.P.odds) : std::string());   // (0.4.0) "Cob 63%"
         const int ti = indexOf(times, count, r.trig); if (ti < 0) continue;
         int ai = r.legEnd > 0 ? indexOf(times, count, r.legEnd) : -1; if (ai < 0) ai = ti > 0 ? ti - 1 : ti;
         PNT x0; x0.set(ai, 0.0f, kBarCenter); if (x0.h < pane.left - 40 || x0.h > pane.right + 40) continue;
@@ -553,6 +619,8 @@ void CobImpulse::render(CIState& S) {
     }
     std::vector<std::string> L = cimp::hover(in, S.P);
     L.insert(L.begin() + 1, std::string("CoB ") + (T->rec.side > 0 ? "long" : "short") + " at " + clockOf(T->rec.trig) + " (leg from the " + clockOf(T->rec.pivot) + " bar).");
+    { const auto io = S.oddsRec.find(std::make_pair(T->rec.trig, T->rec.side));   // (0.4.0) the live odds, as decided at the CoB close
+      L.insert(L.begin() + 2, io != S.oddsRec.end() ? codds::hoverLine(io->second) : std::string("Odds: not decided (this CoB was recorded before odds existed).")); }
     FONT hf; hf.id = HELVETICA; hf.size = 10; hf.style = PLAIN; setFont(hf);
     int w = 0; for (const auto& s : L) w = std::max(w, getTextWidth(s.c_str(), -1));
     w += 16; const int lh = 15, h = (int)L.size() * lh + 10;
@@ -582,7 +650,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobImpulse* p = new CobImpulse();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | CALC_LAST);   // CALC_LAST: it reads his RTL results
-    p->setDescription("LRA Cob Impulse v0.3.1: did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar; hover the label or box for the details. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
-    p->setVersion("0.3.1");   // CI_VERSION
+    p->setDescription("LRA Cob Impulse v0.4.0: what are the odds this CoB reaches 1R (shown after the label, e.g. Cob 63%, from the nightly CoB Lab, LRA-Odds-<MKT>.csv; ODDS 0 hides it), did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar; hover the label or box for the details. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
+    p->setVersion("0.4.0");   // CI_VERSION
     return p;
 }

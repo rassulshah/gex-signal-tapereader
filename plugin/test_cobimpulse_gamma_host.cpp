@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
         hb::fakeCursor() = 0;
         p->testState()->lastStatusMs = -1; p->calc(0);                     // the status file is written at most once a second
         const std::string st = slurp(flex() + "\\CobImpulse.status-NQ-NQZ6-180.txt");
-        CHECK(st.find("VERSION,0.3.1") != std::string::npos && st.find("BOOK,GammaProfile-MQ-NQ.csv,ok,asof ") != std::string::npos && st.find(",gamma 2,") != std::string::npos
+        CHECK(st.find("VERSION,0.4.0") != std::string::npos && st.find("BOOK,GammaProfile-MQ-NQ.csv,ok,asof ") != std::string::npos && st.find(",gamma 2,") != std::string::npos
               && st.find("gamma 1,gamma_w 6,gamma_em 100") != std::string::npos && st.find("tick 0.25") != std::string::npos, "status: version, book ok, 2 gamma tags, settings");
         p->destroy(); delete p;
         files1 = recFiles();
