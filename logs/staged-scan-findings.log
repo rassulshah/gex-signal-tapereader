@@ -1,9 +1,3 @@
-findings=0 allowed=0 staged_files=7 bytes=189356
+findings=0 allowed=0 staged_files=1 bytes=336
 largest staged blobs (bytes, path):
-SIZE	94555	plugin/TapeReaderLogic.h
-SIZE	67654	plugin/TapeReader.cpp
-SIZE	15199	tools/gex-build.bat
-SIZE	7877	plugin/ZoneStory.h
-SIZE	2522	plugin/test_zonestory.cpp
-SIZE	1425	plugin/test_marketstate.cpp
-SIZE	124	logs/staged-scan-findings.log
+SIZE	336	logs/staged-scan-findings.log
