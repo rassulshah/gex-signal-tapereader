@@ -1,2 +1,10 @@
-findings=0 allowed=0 staged_files=0 bytes=0
+findings=0 allowed=0 staged_files=8 bytes=151317
 largest staged blobs (bytes, path):
+SIZE	51183	plugin/CobImpulseLogic.h
+SIZE	43565	plugin/CobImpulse.cpp
+SIZE	17286	plugin/test_cobimpulse_gamma_host.cpp
+SIZE	14442	plugin/test_cobimpulse_host.cpp
+SIZE	9758	plugin/test_cobimpulse_odds_host.cpp
+SIZE	8854	plugin/CobOdds.h
+SIZE	6147	plugin/OddsTable.h
+SIZE	82	logs/staged-scan-findings.log
