@@ -25,12 +25,12 @@ static std::string home(const std::string& name) {
 }
 static int lines(const std::string& text, const char* event) {
     int n = 0; std::istringstream in(text); std::string l;
-    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == event) ++n; }
+    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[12] == event) ++n; }
     return n;
 }
 static int linesWithCode(const std::string& text, const char* event, const char* code) {
     int n = 0; std::istringstream in(text); std::string l;
-    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == event && c[2] == code) ++n; }
+    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[12] == event && c[2] == code) ++n; }
     return n;
 }
 // A whole session's bars with absorption at several places: a random walk with heavy one-sided prints at swing points.
@@ -106,7 +106,7 @@ int main()
         check(a.size() == b.size() && differ == 0 && rings > 0, "restart after every bar draws the same signals in every frame");
         // every candidate has exactly one F line and at most one D line; a D line never repeats or changes
         std::map<long long, int> f, d; std::istringstream in(fileA); std::string l;
-        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() != REC_FIELDS || c[0] == "t_first") continue; long long id = std::atoll(c[14].c_str()); (c[12] == "F" ? f : d)[id]++; }
+        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() != REC_FIELDS && c.size() != REC_FIELDS_CONF) || c[0] == "t_first") continue; long long id = std::atoll(c[14].c_str()); (c[12] == "F" ? f : d)[id]++; }
         bool once = true; for (auto& x : f) if (x.second != 1) once = false; for (auto& x : d) if (x.second != 1 || !f.count(x.first)) once = false;
         check(once, "one F per candidate, at most one D, never a D without its F");
     }
@@ -150,7 +150,7 @@ int main()
         mock::current = &h; p.draw();
         text = slurp(path);
         std::istringstream in(text); std::string l; std::vector<std::string> F, D;
-        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == "F") F = c; if (c.size() == REC_FIELDS && c[12] == "D") D = c; }
+        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[12] == "F") F = c; if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[12] == "D") D = c; }
         check(!F.empty() && !D.empty(), "F and D lines present");
         if (!F.empty() && !D.empty()) {
             check(F[0] == std::to_string(t0 + 109 * 60), "t_first = the chart's last bar end on the Central clock (" + F[0] + ")");
@@ -245,8 +245,8 @@ int main()
         const std::string f60 = slurp(dir + "ES-ESZ26-3600-signals-" + std::to_string(s60) + ".csv");
         check(lines(f3, "F") > 0 && lines(f60, "F") == 0, "3min records; coarse 60min crossing the 90min boundary cannot admit events");
         bool clean3 = true, clean60 = true; std::istringstream i3(f3), i60(f60); std::string l;
-        while (std::getline(i3, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[0] != "t_first" && (std::atoll(c[15].c_str()) % 180) != 0) clean3 = false; }
-        while (std::getline(i60, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[0] != "t_first" && (std::atoll(c[15].c_str()) % 3600) != 0) clean60 = false; }
+        while (std::getline(i3, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[0] != "t_first" && (std::atoll(c[15].c_str()) % 180) != 0) clean3 = false; }
+        while (std::getline(i60, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[0] != "t_first" && (std::atoll(c[15].c_str()) % 3600) != 0) clean60 = false; }
         check(clean3 && clean60, "each file holds only its own chart's bars");
         const std::vector<Latch> keep3 = latchBooks()["ES|180"].v, keep60 = latchBooks()["ESZ26|3600"].v;
         a.draws.clear(); b.draws.clear(); state(a).builtAt -= 1001; state(b).builtAt -= 1001;
@@ -275,7 +275,7 @@ int main()
         check(!oldAt1700.empty() && slurp(oldPath) == oldAt1700, "the old session's file is not touched after 17:00 CT");
         check(latchBooks().begin()->second.session == session + 1, "the book is on the new session after 17:00 CT");
         std::istringstream in(slurp(newPath)); std::string l; bool onlyNew = true;
-        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[0] != "t_first" && std::atoll(c[0].c_str()) < static_cast<long long>(day + 17 * 3600)) onlyNew = false; }
+        while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[0] != "t_first" && std::atoll(c[0].c_str()) < static_cast<long long>(day + 17 * 3600)) onlyNew = false; }
         check(onlyNew, "the new session's file holds only lines first seen after 17:00 CT");
         const std::size_t kept = latchBooks().begin()->second.v.size();
         mock::current = &h; p.destroy(); latchBooks().clear();

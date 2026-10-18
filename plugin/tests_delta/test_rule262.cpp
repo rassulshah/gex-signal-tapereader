@@ -22,19 +22,19 @@ static std::string home(const std::string& name) {
 }
 static int lines(const std::string& text, const char* event) {
     int n = 0; std::istringstream in(text); std::string l;
-    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == event) ++n; }
+    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[12] == event) ++n; }
     return n;
 }
 static int linesWithCode(const std::string& text, const char* event, const char* code) {
     int n = 0; std::istringstream in(text); std::string l;
-    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == event && c[2] == code) ++n; }
+    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[12] == event && c[2] == code) ++n; }
     return n;
 }
 
 static ChartState& state(mock::Host& h) { return *static_cast<ChartState*>(h.data); }
 static std::vector<std::vector<std::string> > rows(const std::string& text, const char* event) {
     std::vector<std::vector<std::string> > out; std::istringstream in(text); std::string l;
-    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == event) out.push_back(c); }
+    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[12] == event) out.push_back(c); }
     return out;
 }
 static int rings(const mock::Host& h) { int n = 0; for (const mock::Draw& d : h.draws) if (d.type == "ring") ++n; return n; }
@@ -90,7 +90,8 @@ int main()
         mock::Bar n = h.bars.back(); n.time += 60; n.rows = { mock::Price(120,1,0,1) }; n.volume = 1; n.open = 104; n.close = 104; n.low = 100; n.high = 125;
         h.bars.push_back(n);                                            // the peak bar is now CLOSED red on the node: not A
         h.draws.clear(); mock::current = &h; p.draw();
-        check(latchBooks().begin()->second.v[0].code == "I?", "red peak bar closed: absorption ruled out (I?) - got " + latchBooks().begin()->second.v[0].code);
+        // (2.18.0, Rassul 2026-10-18) the own close failed, the NEXT candle (still forming) may still close beyond: pending A?, not shown
+        check(latchBooks().begin()->second.v[0].code == "A?" && rings(h) == 0, "red peak bar closed, next candle forming: pending A? (2.18.0), no circle - got " + latchBooks().begin()->second.v[0].code);
         mock::Bar g = h.bars.back(); g.time += 60; g.open = 103; g.close = 106; h.bars.push_back(g);
         mock::Bar f = g; f.time += 60; h.bars.push_back(f);              // a later GREEN close above, now closed
         h.draws.clear(); mock::current = &h; p.draw();

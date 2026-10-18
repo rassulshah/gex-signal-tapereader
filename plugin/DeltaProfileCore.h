@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.17.0 (2.17.0, 2026-10-18: tentStep - the tentative-A life cycle (final / shown / hidden / failed), boardFlag (SignalBoard A flag 1 final / 2 tentative), dpFacts - the Market State "DP" facts of one closed bar) 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.18.0 (2.18.0, Rassul 2026-10-18: aStep / nextPivotOk - the A close may come from the node's own candle OR the next candle, a next-candle A needs the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; swingPivot also returns each bar's pivot bar) 2.17.0 (2.17.0, 2026-10-18: tentStep - the tentative-A life cycle (final / shown / hidden / failed), boardFlag (SignalBoard A flag 1 final / 2 tentative), dpFacts - the Market State "DP" facts of one closed bar) 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -147,11 +147,38 @@ inline bool pivotOk(H& high, L& low, int pk, bool bullish, int* pivotBar = nullp
 // ---- (2.17.0, 2026-10-18, audit B finding 1) the tentative A and the shared facts -------------------------------------------------
 // One A candidate on its CLOSED peak bar: closeOk = the peak bar closed through the node in its own colour; pivNow = the pivot rule holds
 // on the bars so far (the peak bar's own swing); pivFinal = that swing pivot is confirmed (cannot change any more).
-enum TentStep { TS_RULED_OUT = 0, TS_FINAL = 1, TS_SHOWN = 2, TS_HIDDEN = 3, TS_FAILED = 4 };
+enum TentStep { TS_RULED_OUT = 0, TS_FINAL = 1, TS_SHOWN = 2, TS_HIDDEN = 3, TS_FAILED = 4, TS_PENDING = 5 };   // (2.18.0) PENDING = own close failed, next candle not closed yet
 inline TentStep tentStep(bool closeOk, bool pivNow, bool pivFinal) {
     if (!closeOk) return TS_RULED_OUT;                  // never an A (the same-candle close failed)
     if (pivFinal) return pivNow ? TS_FINAL : TS_FAILED; // decided: final A, or a shown A whose confirmed pivot went against it
     return pivNow ? TS_SHOWN : TS_HIDDEN;               // undecided: the tentative A shows / is hidden for now (may come back)
+}
+// (2.18.0, Rassul 2026-10-18 "the close can be from the same candle or the close of the next candle as long as the low of both bars is
+// below the high of the pivot bar which may or may not be either bar for bullish absorption and vice versa for the bearish absorption")
+// closeSame = the node's own candle closed beyond the node in its colour (the 2.6.2 rule, unchanged, wins); otherwise the NEXT candle
+// decides: nextClosed = it has closed, closeNext = it closed beyond the node in its colour (bullish green above the node's high, bearish
+// red below its low), pivBoth = the lows (bullish) / highs (bearish) of BOTH bars are beyond the pivot bar's high / low (nextPivotOk).
+// A node whose own candle failed is PENDING for exactly one candle, then ruled out for good - a third candle never confirms it.
+enum ConfBy { CONF_NONE = 0, CONF_SAME = 1, CONF_NEXT = 2 };
+struct AStep { TentStep step; ConfBy by; };
+inline AStep aStep(bool closeSame, bool pivSame, bool nextClosed, bool closeNext, bool pivBoth, bool pivFinal) {
+    AStep r; r.by = CONF_NONE;
+    if (closeSame) { r.step = tentStep(true, pivSame, pivFinal); r.by = CONF_SAME; return r; }
+    if (!nextClosed) { r.step = TS_PENDING; return r; }
+    if (!closeNext) { r.step = TS_RULED_OUT; return r; }
+    r.step = tentStep(true, pivBoth, pivFinal); r.by = CONF_NEXT; return r;
+}
+// (2.18.0) the next-candle pivot part: bar nb (the confirming candle) against the node candle's pivot bar piv (from swingPivot's dPiv /
+// uPiv for the node candle). Bullish: nb IS the pivot bar or its LOW is below the pivot bar's HIGH; bearish: nb is it or its HIGH is
+// above the pivot bar's LOW. The node candle's own part is swingPivot's bull / bear flag (same rule, same bad-bar guard).
+template <class H, class L>
+inline bool nextPivotOk(H& high, L& low, int n, int nb, int piv, bool bullish) {
+    if (nb < 0 || nb >= n || piv < 0 || piv >= n) return false;
+    if (nb == piv) return true;
+    const double h = static_cast<double>(high[piv]), l = static_cast<double>(low[piv]);
+    const double bh = static_cast<double>(high[nb]), bl = static_cast<double>(low[nb]);
+    if (!finite(h) || !finite(l) || !finite(bh) || !finite(bl) || h < l || bh < bl) return false;
+    return bullish ? bl < h : bh > l;
 }
 // SignalBoard kind 'A' flag (SignalBoard.h 1.1.0): 1 = final, 2 = tentative
 inline int boardFlag(bool tentative) { return tentative ? 2 : 1; }
@@ -196,9 +223,12 @@ inline std::map<std::string, std::string> dpFacts(const std::vector<FactNode>& t
     return kv;
 }
 template <class H, class L>
-inline void swingPivot(H& high, L& low, int n, std::vector<char>& bull, std::vector<char>& bear, std::vector<char>& conf) {
+inline void swingPivot(H& high, L& low, int n, std::vector<char>& bull, std::vector<char>& bear, std::vector<char>& conf,
+                       std::vector<int>* dPiv = nullptr, std::vector<int>* uPiv = nullptr) {   // (2.18.0) + each bar's down / up pivot bar (-1 none)
     const std::size_t N = n > 0 ? static_cast<std::size_t>(n) : 0;
     bull.assign(N, 0); bear.assign(N, 0); conf.assign(N, 0);
+    if (dPiv) dPiv->assign(N, -1);
+    if (uPiv) uPiv->assign(N, -1);
     if (n < 3) return;
     auto hi = [&](int i) { return static_cast<double>(high[i]); };
     auto lo = [&](int i) { return static_cast<double>(low[i]); };
@@ -220,6 +250,8 @@ inline void swingPivot(H& high, L& low, int n, std::vector<char>& bull, std::vec
     auto mark = [&](int i, int D, int U, bool c) {
         conf[i] = c ? 1 : 0;
         if (!good(i) || (bad >= 0 && i > bad && i - bad < 50)) return;
+        if (dPiv) (*dPiv)[i] = D;
+        if (uPiv) (*uPiv)[i] = U;
         bull[i] = D >= 0 && (D == i || lo(i) < hi(D)) ? 1 : 0;
         bear[i] = U >= 0 && (U == i || hi(i) > lo(U)) ? 1 : 0;
     };

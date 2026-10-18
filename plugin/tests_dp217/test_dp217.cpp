@@ -1,4 +1,4 @@
-// test_dp217.cpp -- lsDeltaProfile 2.17.0 / SignalBoard 1.1.0 / DeltaProfileCore 2.17.0 (2026-10-18, audit B finding 1 + Market State)
+// test_dp217.cpp (2.18.0: version checks compare DLT_VERSION, the D / TA field counts take the conf field) -- lsDeltaProfile 2.17.0 / SignalBoard 1.1.0 / DeltaProfileCore 2.17.0 (2026-10-18, audit B finding 1 + Market State)
 //   [core] tentStep / boardFlag / dpFacts   [sb] flag 1 final / 2 tentative, read() = final only, readAll, nearestFinal
 //   [host] the tentative A posts flag 2, the final one flag 1; TA|S once when first shown, TA|X once when it fails, none duplicated after
 //          a restart; per-chart status file + the old shared one; Market State "DP" once per closed bar, decided once, cleared on destroy
@@ -27,7 +27,7 @@ static int countPrefix(const std::string& text, const std::string& pre) {
 }
 static int dLines(const std::string& text, const char* code) {
     int n = 0; std::istringstream in(text); std::string l;
-    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == "D" && c[2] == code) ++n; }
+    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[12] == "D" && c[2] == code) ++n; }
     return n;
 }
 static int rings(const mock::Host& h) { int n = 0; for (const mock::Draw& d : h.draws) if (d.type == "ring") ++n; return n; }
@@ -106,7 +106,7 @@ int main() {
         redraw(h, p); redraw(h, p);
         check(countPrefix(slurp(path), "TA|S|") == 1, "[host] TA|S only once across redraws");
         mst::Facts F = dpState();
-        check(F.ok && mst::getS(F, "a") == "tentative" && mst::getS(F, "a_side") == "bull" && mst::getS(F, "version") == "2.17.0", "[host] DP fact: a tentative on its bar");
+        check(F.ok && mst::getS(F, "a") == "tentative" && mst::getS(F, "a_side") == "bull" && mst::getS(F, "version") == DLT_VERSION, "[host] DP fact: a tentative on its bar");
         check(F.ok && F.bar == state(h).mstBar && F.bar > 0 && mst::getS(F, "node_px") != "?" && mst::getS(F, "a_conf_n") == "0", "[host] DP fact: node + bar stamp, no history reported");
         const long long bar1 = F.bar;
         h.bars.back().high = 104.5f; add(h, 100, 105); redraw(h, p);       // the pivot is confirmed
@@ -119,7 +119,7 @@ int main() {
         redraw(h, p); F = dpState();
         check(F.ok && F.kv == kv, "[host] DP facts of a bar never change on later redraws");
         const std::string st = slurp(flex + "DeltaProfile.status-ES-60.txt"), old = slurp(flex + "DeltaProfile.status.txt");
-        check(st.find("VERSION,2.17.0\n") == 0 && st.find("TENTATIVE_A,") != std::string::npos && st.find("MARKET_STATE,DP bar ") != std::string::npos, "[host] per-chart status file");
+        check(st.find(std::string("VERSION,") + DLT_VERSION + "\n") == 0 && st.find("TENTATIVE_A,") != std::string::npos && st.find("MARKET_STATE,DP bar ") != std::string::npos, "[host] per-chart status file");
         check(old == st, "[host] the shared status file still written (compatibility)");
         mock::current = &h; p.destroy();
         check(!dpState().ok, "[host] destroy clears the Market State entry");
@@ -137,8 +137,8 @@ int main() {
         const std::string rec = slurp(path);
         check(countPrefix(rec, "TA|S|") == 1 && countPrefix(rec, "TA|X|") == 1 && dLines(rec, "A") == 0, "[host] fail: one TA|S, one TA|X, no D line");
         { std::istringstream in(rec); std::string l; bool ok = false;
-          while (std::getline(in, l)) if (l.compare(0, 5, "TA|X|") == 0) { std::vector<std::string> c = fields(l); ok = c.size() == 13 && c[2] == "2.17.0" && c[3] == "ESZ26" && c[8] == "bullish"; }
-          check(ok, "[host] TA|X line: 13 fields, version, root, bias"); }
+          while (std::getline(in, l)) if (l.compare(0, 5, "TA|X|") == 0) { std::vector<std::string> c = fields(l); ok = c.size() == TA_FIELDS && c[2] == DLT_VERSION && c[13] == "conf=same" && c[3] == "ESZ26" && c[8] == "bullish"; }
+          check(ok, "[host] TA|X line: 14 fields (2.18.0 conf=same at the end), version, root, bias"); }
         mst::Facts F = dpState();
         check(F.ok && mst::getS(F, "a_fail_n") == "1" && mst::getS(F, "a_fail_side") == "bull", "[host] DP fact reports the failed tentative A");
         redraw(h, p); add(h, 61, 73); redraw(h, p);
@@ -159,8 +159,8 @@ int main() {
         mock::current = &h2; q.destroy(); latchBooks().clear(); }
     // 4) versions
     {   const std::string src = slurp("../DeltaProfile.cpp");
-        check(std::string(DLT_VERSION) == "2.17.0" && src.find("p->setVersion(\"2.17.0\")") != std::string::npos, "[ver] DLT_VERSION = setVersion literal = 2.17.0");
-        check(slurp("../DeltaProfileCore.h").find("DeltaProfileCore.h 2.17.0") != std::string::npos, "[ver] core header 2.17.0"); }
+        check(src.find(std::string("p->setVersion(\"") + DLT_VERSION + "\")") != std::string::npos, "[ver] DLT_VERSION = setVersion literal (lesson 79: compared, never typed)");
+        check(slurp("../DeltaProfileCore.h").find(std::string("DeltaProfileCore.h ") + DLT_VERSION) != std::string::npos, "[ver] core header = DLT_VERSION"); }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

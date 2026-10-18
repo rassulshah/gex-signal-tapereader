@@ -18,7 +18,7 @@ static std::string home(const std::string& name) {
 }
 static int dLines(const std::string& text, const char* code) {
     int n = 0; std::istringstream in(text); std::string l;
-    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == "D" && c[2] == code) ++n; }
+    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[12] == "D" && c[2] == code) ++n; }
     return n;
 }
 static int rings(const mock::Host& h) { int n = 0; for (const mock::Draw& d : h.draws) if (d.type == "ring") ++n; return n; }

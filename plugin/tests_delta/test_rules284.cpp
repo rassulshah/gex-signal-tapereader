@@ -26,7 +26,7 @@ static std::string home(const std::string& name) {
 }
 static std::vector<std::vector<std::string> > rows(const std::string& text, const char* event) {
     std::vector<std::vector<std::string> > out; std::istringstream in(text); std::string l;
-    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if (c.size() == REC_FIELDS && c[12] == event) out.push_back(c); }
+    while (std::getline(in, l)) { std::vector<std::string> c = fields(l); if ((c.size() == REC_FIELDS || c.size() == REC_FIELDS_CONF) && c[12] == event) out.push_back(c); }
     return out;
 }
 static std::vector<mock::Draw> rings(const mock::Host& h) { std::vector<mock::Draw> o; for (const mock::Draw& d : h.draws) if (d.type == "ring") o.push_back(d); return o; }
