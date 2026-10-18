@@ -6,6 +6,7 @@
 //          rejected: next low not below the pivot high / neither closes beyond / a 3rd candle; bearish mirrors; no repaint after the
 //          pivot is confirmed; restart from the record; status A_CONF
 //   [rec]  D / TA lines round-trip old (24 / 13 fields = same) and new (25 / 14) formats; 24-column header upgraded once
+//   [lab]  (12:49 CT) ratio labels only on the 3 biggest profile bars by abs delta: 4th at 2.0x+ unlabelled, a top-3 bar under 2.0x labelled, A prefix kept
 //   [ver]  DLT_VERSION = setVersion literal = core header
 // Build (from tests_dp217/): see run_tests.sh
 #include "../DeltaProfile.cpp"
@@ -217,6 +218,42 @@ static void recordTests() {
         check(appendRecord(p, std::vector<std::string>(1, ds)) && countPrefix(slurp(p), "t_first|") == 1, "[rec] a second append does not touch the header again"); }
 }
 
+// (2.18.0, Rassul 12:49 CT) the profile labels
+static std::vector<std::string> ratioTexts(const mock::Host& h) {
+    std::vector<std::string> v; for (const mock::Draw& d : h.draws) if (d.type == "text" && !d.text.empty() && d.text.back() == 'x') v.push_back(d.text); return v;
+}
+static void labelTests(unsigned long t0) {
+    {   std::vector<dp::Bucket> b(5); const double d[5] = { 5, -900, 300, std::nan(""), -900 };
+        for (int i = 0; i < 5; ++i) { b[i].key = 10 + i; b[i].delta = d[i]; }
+        const std::vector<dp::Tick> k = dp::labelKeys(b);
+        check(k.size() == 3 && k[0] == 11 && k[1] == 14 && k[2] == 12, "[lab] core: 3 biggest by abs delta, ties to the lower key, NaN skipped");
+        check(dp::labelKeys(std::vector<dp::Bucket>(b.begin(), b.begin() + 2)).size() == 2, "[lab] core: fewer than 3 rows = all of them"); }
+    bear = false;
+    for (int fx = 0; fx < 2; ++fx) {   // fx 0: fillers lower the average so the 4th bar is 2.0x+; fx 1: small 3rd / 4th bars (3rd under 2.0x)
+        home(fx ? "lab_small" : "lab_big");
+        mock::Host h = chart(t0, 100.5, 101);
+        auto put = [&](int bar, double px, long buy, long sell) { h.bars[bar].rows.push_back(mock::Price(static_cast<float>(px), buy, sell, buy + sell)); h.bars[bar].volume += static_cast<unsigned long>(buy + sell); };
+        if (!fx) for (int i = 20; i <= 78; i += 2) put(i, 154 - 0.25 * i, 5, 0);
+        put(90, 112, 3000, 0); put(91, 114, 0, fx ? 1200 : 2900); put(92, 116, fx ? 900 : 2800, 0);
+        add(h, 99.5, 103.5);
+        DeltaProfile p; redraw(h, p);
+        const std::vector<dp::Bucket>& B = state(h).snapshot.buckets;
+        std::vector<const dp::Bucket*> v; for (const dp::Bucket& b : B) v.push_back(&b);
+        std::sort(v.begin(), v.end(), [](const dp::Bucket* a, const dp::Bucket* b) { return std::fabs(a->delta) > std::fabs(b->delta); });
+        const std::vector<std::string> T = ratioTexts(h);
+        auto has = [&](const std::string& t) { return std::find(T.begin(), T.end(), t) != T.end(); };
+        const bool fixture = v.size() >= 4 && (fx ? v[2]->ratio < 2.0 : v[3]->ratio >= 2.0);
+        check(fixture, fx ? "[lab] fixture: the 3rd biggest bar is under 2.0x" : "[lab] fixture: the 4th biggest bar is 2.0x or more");
+        if (!fixture) continue;
+        check(T.size() == 3, std::string("[lab] exactly 3 ratio labels (") + std::to_string(T.size()) + ")" + (fx ? " small" : " big"));
+        check(has("A " + ratio(v[0]->ratio)) && has(ratio(v[1]->ratio)) && has(ratio(v[2]->ratio)), "[lab] the 3 biggest bars are labelled, the absorbed node keeps \"A \"");
+        if (!fx) check(!has(ratio(v[3]->ratio)), "[lab] the 4th bar at 2.0x+ has no label");
+        else check(has(ratio(v[2]->ratio)) && v[2]->ratio < 2.0, "[lab] a top-3 bar under 2.0x is labelled");
+        check(rings(h) == 1, "[lab] the candle circle unchanged");
+        finish(h, p);
+    }
+}
+
 int main() {
     setenv("TZ", "UTC", 1); tzset();
     coreTests();
@@ -224,6 +261,7 @@ int main() {
     hostTests(false, t0);
     hostTests(true, t0);
     recordTests();
+    labelTests(t0);
     {   const std::string src = slurp("../DeltaProfile.cpp");
         check(std::string(DLT_VERSION) == "2.18.0", "[ver] this suite is for 2.18.0");
         check(src.find(std::string("p->setVersion(\"") + DLT_VERSION + "\")") != std::string::npos, "[ver] DLT_VERSION = setVersion literal");

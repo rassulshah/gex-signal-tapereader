@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.18.0 (2.18.0, Rassul 2026-10-18: aStep / nextPivotOk - the A close may come from the node's own candle OR the next candle, a next-candle A needs the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; swingPivot also returns each bar's pivot bar) 2.17.0 (2.17.0, 2026-10-18: tentStep - the tentative-A life cycle (final / shown / hidden / failed), boardFlag (SignalBoard A flag 1 final / 2 tentative), dpFacts - the Market State "DP" facts of one closed bar) 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.18.0 (2.18.0, Rassul 2026-10-18: aStep / nextPivotOk - the A close may come from the node's own candle OR the next candle, a next-candle A needs the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; swingPivot also returns each bar's pivot bar; labelKeys - Rassul 12:49 CT: the ratio label only on the 3 biggest profile bars by abs delta, at any ratio) 2.17.0 (2.17.0, 2026-10-18: tentStep - the tentative-A life cycle (final / shown / hidden / failed), boardFlag (SignalBoard A flag 1 final / 2 tentative), dpFacts - the Market State "DP" facts of one closed bar) 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -159,6 +159,17 @@ inline TentStep tentStep(bool closeOk, bool pivNow, bool pivFinal) {
 // decides: nextClosed = it has closed, closeNext = it closed beyond the node in its colour (bullish green above the node's high, bearish
 // red below its low), pivBoth = the lows (bullish) / highs (bearish) of BOTH bars are beyond the pivot bar's high / low (nextPivotOk).
 // A node whose own candle failed is PENDING for exactly one candle, then ruled out for good - a third candle never confirms it.
+// (2.18.0, Rassul 2026-10-18 12:49 CT) the profile's ratio labels: ONLY the 3 biggest bars by abs(delta), even one under 2.0x; no other bar,
+// even at 2.0x or more. Non-finite deltas are skipped; ties go to the lower key (stable, load-order independent). Returns the keys.
+inline std::vector<Tick> labelKeys(const std::vector<Bucket>& buckets, std::size_t n = 3) {
+    std::vector<const Bucket*> v;
+    for (const Bucket& b : buckets) if (finite(b.delta)) v.push_back(&b);
+    std::sort(v.begin(), v.end(), [](const Bucket* a, const Bucket* b) {
+        const double x = std::fabs(a->delta), y = std::fabs(b->delta); return x != y ? x > y : a->key < b->key; });
+    std::vector<Tick> out;
+    for (std::size_t i = 0; i < v.size() && i < n; ++i) out.push_back(v[i]->key);
+    return out;
+}
 enum ConfBy { CONF_NONE = 0, CONF_SAME = 1, CONF_NEXT = 2 };
 struct AStep { TentStep step; ConfBy by; };
 inline AStep aStep(bool closeSame, bool pivSame, bool nextClosed, bool closeNext, bool pivBoth, bool pivFinal) {
