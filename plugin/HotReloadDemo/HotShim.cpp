@@ -192,7 +192,7 @@ extern "C" __declspec(dllexport) int cpp_main(void* pAPI)
     return r->onCall(pAPI);
 }
 
-BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved)
+extern "C" BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved)
 {
     (void)reserved;
     if (reason == DLL_PROCESS_ATTACH) {

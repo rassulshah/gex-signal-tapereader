@@ -1,3 +1,42 @@
-findings=0 allowed=0 staged_files=1 bytes=124
+findings=0 allowed=0 staged_files=40 bytes=1530578
 largest staged blobs (bytes, path):
-SIZE	124	logs/staged-scan-findings.log
+SIZE	292478	plugin/LiquidityProfile.cpp
+SIZE	182252	plugin/HodLodLogic.h
+SIZE	165912	plugin/DeltaProfile.cpp
+SIZE	124846	plugin/LiquidityProfileLogic.h
+SIZE	94771	plugin/TapeReaderLogic.h
+SIZE	86651	plugin/BidAskStats.cpp
+SIZE	83771	plugin/HodLod.cpp
+SIZE	67015	plugin/TapeReader.cpp
+SIZE	49529	plugin/DeltaProfileCore.h
+SIZE	49274	plugin/BUILD-LESSONS.md
+SIZE	35165	plugin/BidAskStatsLogic.h
+SIZE	31008	plugin/BookFlow.cpp
+SIZE	27762	plugin/HotReloadDemo/HotReloadLogic.h
+SIZE	24277	plugin/HotReloadDemo/test_hotreload_logic.cpp
+SIZE	23085	plugin/tests_dp217/test_dp218.cpp
+SIZE	22439	plugin/SettingsSpec.h
+SIZE	16829	docs/build/HOT-RELOAD.md
+SIZE	16485	tools/gex-build.bat
+SIZE	14144	plugin/tests_hodlod/t_hl240.cpp
+SIZE	14120	plugin/BookFlowLogic.h
+SIZE	13966	docs/audit/SETTINGS-AUDIT-2026-10-18.md
+SIZE	13508	plugin/tests_settings/settings_contract.cpp
+SIZE	9281	plugin/tests_dp217/irtsdk.h
+SIZE	8943	plugin/HotReloadDemo/HotShim.cpp
+SIZE	8565	tools/gex-hot-build.bat
+SIZE	8295	plugin/tests_settings/settings_host_test.cpp
+SIZE	6133	plugin/SettingsHost.h
+SIZE	5791	plugin/HotReloadDemo/test_hotreload_e2e.cpp
+SIZE	5071	plugin/tests_settings/mock_irtsdk.h
+SIZE	5045	plugin/HotReloadDemo/HotReloadDemoImpl.cpp
+SIZE	4617	plugin/tests_settings/audit_legacy.py
+SIZE	4195	plugin/HotReloadDemo/HotImpl.h
+SIZE	3662	plugin/DeltaProfileSettings.h
+SIZE	2988	tools/settings-check/README.md
+SIZE	2655	plugin/HodLodSettings.h
+SIZE	1732	plugin/TapeReaderSettings.h
+SIZE	1419	plugin/HotReloadDemo/test_hotreload_e2e_impl.cpp
+SIZE	1057	plugin/tests_settings/run_tests.sh
+SIZE	924	plugin/HotReloadDemo/HotReloadDemoLogic.h
+SIZE	918	plugin/HotReloadDemo/run_hotreload_tests.sh

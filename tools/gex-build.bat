@@ -29,6 +29,17 @@ if not exist "%OUT%" mkdir "%OUT%"
 
 set VCOK=
 set ANY=
+REM (2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator always has its settings verified and tested so there are not bugs
+REM   anymore") THE SETTINGS CONTRACT GATES EVERY BUILD: plugin\tests_settings\settings_contract.cpp (SettingsSpec.h + every <Name>Settings.h +
+REM   the migrated sources) is compiled and run first; FAIL = nothing is built this tick (the installed DLLs stay), the log says why once,
+REM   plugin\out\SETTINGS-CONTRACT.txt has every failing check. SETSRC = the plugin sources on the layer (add one when it migrates).
+set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp"
+call :settings
+if defined SETFAIL (
+  call :status
+  del "%LOCK%" >nul 2>&1
+  exit /b 0
+)
 call :one GammaProfile lsGammaProfile GammaProfileLogic.h ContractOffsetLogic.h
 REM (MT100 2026-10-09) lsDayModel + lsDayStats RETIRED - superseded by lsHodLod (+ SessionInfo) and the HOD / LOD studies.
 REM   Their sources are kept in plugin\retired\ (see plugin\retired\RETIRE-NOTES.md); they are no longer built or installed.
@@ -39,10 +50,10 @@ call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h 
 call :one DealerRead   lsDealerRead   DealerLogic.h HostSlot.h BoxPlace.h ClaimGates.h DealerReadGates.h
 call :one DealerSig    lsDealerSig    DealerLogic.h ClaimGates.h
 call :one DealerSummary lsDealerSummary DealerLogic.h HostSlot.h
-call :one DeltaProfile lsDeltaProfile DeltaProfileCore.h ColumnBoard.h BoxPlace.h BannerBoard.h SignalBoard.h ZoneNear.h MarketState.h
+call :one DeltaProfile lsDeltaProfile DeltaProfileCore.h ColumnBoard.h BoxPlace.h BannerBoard.h SignalBoard.h ZoneNear.h MarketState.h DeltaProfileSettings.h SettingsSpec.h SettingsHost.h
 call :one DeltaProfileHourly lsDeltaProfileHourly DeltaProfileHourlyCore.h DeltaProfileHourlyEngine.h DeltaProfileHourlyParams.h HostSlot.h
 call :one SessionInfo  lsSessionInfo  DealerLogic.h SessionInfoLayout.h HodLodLogic.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h
-call :one HodLod       lsHodLod       HodLodLogic.h HodLodGex.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h HodLodFx.h HodLodQ.h FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp BoxPlace.h Fresh.h MarketState.h BannerBoard.h VwapTrendLogic.h BoxDock.h
+call :one HodLod       lsHodLod       HodLodLogic.h HodLodGex.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h HodLodFx.h HodLodQ.h FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp BoxPlace.h Fresh.h MarketState.h BannerBoard.h VwapTrendLogic.h BoxDock.h HodLodSettings.h SettingsSpec.h SettingsHost.h
 REM (CR204 2026-10-12) lsFirstExtreme: the First Final Extreme v2 model, shadow mode - (CR210) RETIRED stub 2.0.0: the model runs inside lsHodLod 2.0.0
 call :one FirstExtreme lsFirstExtreme FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp HostSlot.h
 call :one TradeManager lsTradeManager DealerLogic.h HostSlot.h TradeGuardLayout.h ClaimGates.h
@@ -95,7 +106,7 @@ REM   (one net bar per side; it still writes the StackStats\ and PullStats\ reco
 call :one BookFlow lsBookFlow BookFlowLogic.h StackStatsLogic.h PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
 REM (2026-10-14 claim gates) DealerRead 4.6.0 / TapeReader 1.1.4 also hash ClaimGates.h (DealerRead DealerReadGates.h)
-call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h BannerBoard.h ClaimGates.h MarketState.h ZoneStory.h OddsTable.h SignalBoard.h
+call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h BannerBoard.h ClaimGates.h MarketState.h ZoneStory.h OddsTable.h SignalBoard.h TapeReaderSettings.h SettingsSpec.h SettingsHost.h
 REM (2026-10-14) lsCobImpulse 0.1.0 - CoB impulse tag Cob+R? / Cob+V? / Cob+RV? + 1 px box on the impulse bar (Rassul 12:07 CT approved; CR5500); 0.3.0 gamma part Cob+R+CR? (reads ClaimGates.h)
 call :one CobImpulse lsCobImpulse CobImpulseLogic.h HostSlot.h HoverBoard.h ClaimGates.h CobOdds.h OddsTable.h MarketState.h BannerBoard.h
 REM (2026-10-14 night) lsBigBidAsk 1.0.0 - biggest bid (red, left) / biggest ask (green, right) lots on every candle of the price chart, bold >= 2.0x, thin circle = absorption (Rassul approved the mockup 20:41 CT)
@@ -188,9 +199,47 @@ REM ---- :log <text> -----------------------------------------------------------
 echo %DATE% %TIME% %* >> "%LOGF%"
 goto :eof
 
+REM ---- :settings  the settings contract (run when its inputs change; a failure blocks every build until fixed) ---------------
+:settings
+set SETFAIL=
+set SH=
+for %%X in (SettingsSpec.h SettingsHost.h %SETSRC%) do (
+  if exist "%PLUG%\%%X" ( call :hashof "%PLUG%\%%X" & set SH=!SH!-!H! )
+)
+for %%F in ("%PLUG%\*Settings.h" "%PLUG%\tests_settings\settings_contract.cpp") do ( call :hashof "%%~F" & set SH=!SH!-!H! )
+set SOK=
+set SBAD=
+if exist "%OUT%\settings-contract.ok" set /p SOK=<"%OUT%\settings-contract.ok"
+if exist "%OUT%\settings-contract.fail" set /p SBAD=<"%OUT%\settings-contract.fail"
+if "!SOK!"=="!SH!" goto :eof
+if "!SBAD!"=="!SH!" ( set SETFAIL=1& goto :eof )
+call :vc
+if not defined VCOK goto :eof
+if not exist "%PLUG%\tests_settings\settings_contract.cpp" goto :eof
+cd /d "%PLUG%\tests_settings"
+cl /nologo /EHsc /O1 settings_contract.cpp /Fo"%OUT%\\" /Fe:"%OUT%\settings_contract.exe" > "%OUT%\SETTINGS-CONTRACT.txt" 2>&1
+if errorlevel 1 (
+  set SETFAIL=1
+  > "%OUT%\settings-contract.fail" echo !SH!
+  call :log SETTINGS CONTRACT DID NOT COMPILE - nothing built, see plugin\out\SETTINGS-CONTRACT.txt
+  goto :eof
+)
+"%OUT%\settings_contract.exe" "%PLUG%" >> "%OUT%\SETTINGS-CONTRACT.txt" 2>&1
+if errorlevel 1 (
+  set SETFAIL=1
+  > "%OUT%\settings-contract.fail" echo !SH!
+  call :log SETTINGS CONTRACT FAILED - nothing built, see plugin\out\SETTINGS-CONTRACT.txt
+  goto :eof
+)
+> "%OUT%\settings-contract.ok" echo !SH!
+del "%OUT%\settings-contract.fail" >nul 2>&1
+call :log SETTINGS CONTRACT PASSED
+goto :eof
+
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
+if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
 for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow TapeReader CobImpulse BigBidAsk) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
