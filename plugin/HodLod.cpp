@@ -62,6 +62,7 @@
 #include "BoxPlace.h"                // (2.0.6) Offset X / Y rules, hysteresis, the dialog snapshot
 #include "HodLodLogic.h"
 #include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
+#include "HodLodQ.h"               // (2.3.0) MenthorQ Q-Scores: LRA-QScore-<MKT>.csv parse / header parts / hover (SDK-free)
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
 #include "VwapTrendLogic.h"      // (2.0.5) the header's trend: the Tape Reader TREND vote's rule, computed here from the chart's closed bars
 #include <sys/stat.h>
@@ -107,6 +108,9 @@ struct HLState {
     long long gexStamp = -2; time_t gexChecked = 0; hlg::File gex; std::string gexWhy; long long gexLoads = 0;
     bool inGex = false; bool lastGexOk = false, lastHoverOk = false; hl::Box lastGexRow = { 0, 0, 0, 0 }, lastGexHover = { 0, 0, 0, 0 };
     int gexCurX = -100000, gexCurY = -100000; long long gexHovers = 0;
+    // (2.3.0) the Q-Scores: LRA-QScore-<MKT>.csv (stamp, at most every 5 s) and their hover
+    long long qStamp = -2; time_t qChecked = 0; hlq::File qf; std::string qWhy;
+    bool inQ = false, lastQOk = false, lastQHoverOk = false; hl::Box lastQBox = { 0, 0, 0, 0 }, lastQHover = { 0, 0, 0, 0 }; int qCurX = -100000, qCurY = -100000; long long qHovers = 0;
     bp::Hyst hyst; long long hystPlaceSig = -3; std::string placeLine; hl::Box hystPane = { 0, 0, 0, 0 };                           // (2.0.6) the table's place: no ping-pong (reset when the settings change)
     ~HLState() { delete T; }
 };
@@ -117,6 +121,7 @@ public:
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);                                 // (2.1.0) the GEX row's hover
     void loadGex(HLState& S);
+    void loadQ(HLState& S);                                          // (2.3.0)
     // (HL105, Rassul "you should have setting where to put them like upper left etc.") ONE setting: Position (9 spots), default
     // Bottom centre. IRT can return -1 for a LIST parameter outside its settings copy, so the choice is also kept per market in
     // HodLod.place-<MKT>.txt - written only from the dialog's callbacks (loading never saves, #29) and read back by stamp.
@@ -365,6 +370,32 @@ void HodLod::loadGex(HLState& S)
     S.gexLoads++;
     if (!F.ok) { S.gexWhy = "garbled (" + F.why + "): kept the last good copy"; S.gexStamp = -2; return; }   // a torn write: re-read next time
     S.gex = F; S.gexWhy = F.why;
+}
+
+// (2.3.0) MenthorQ Q-Scores, written by the bridge once a day (lra.gex_nodes.qscore_flex); same bounded, stamp-checked read as the GEX file
+void HodLod::loadQ(HLState& S)
+{
+    time_t now = time(nullptr);
+    if (S.qStamp != -2 && now - S.qChecked < 5) return;
+    S.qChecked = now;
+    std::string p = flexPath("LRA-QScore-" + S.mkt + ".csv");
+    if (p.empty()) { S.qf = hlq::File(); S.qWhy = "no profile folder"; S.qStamp = -1; return; }
+#ifdef _WIN32
+    struct _stat64 st; bool ok = _stat64(p.c_str(), &st) == 0;
+#else
+    struct stat st; bool ok = stat(p.c_str(), &st) == 0;
+#endif
+    long long stamp = ok ? (long long)st.st_mtime * 1000003LL + (long long)st.st_size : -1;
+    if (stamp == S.qStamp) return;
+    S.qStamp = stamp;
+    if (!ok) { S.qf = hlq::File(); S.qWhy = "LRA-QScore-" + S.mkt + ".csv missing: no Q-Scores"; return; }
+    if ((long long)st.st_size > (long long)hlq::MAX_BYTES) { S.qf = hlq::File(); S.qWhy = "over 8 KiB: ignored"; return; }
+    std::string text;
+    {   std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) { S.qStamp = -2; S.qWhy = "unreadable (kept the last copy)"; return; }
+        text.resize(hlq::MAX_BYTES + 1); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); }
+    hlq::File F = hlq::parse(text, S.mkt);
+    if (!F.ok) { S.qWhy = "garbled (" + F.why + "): kept the last good copy"; S.qStamp = -2; return; }
+    S.qf = F; S.qWhy.clear();
 }
 
 void HodLod::loadSession(HLState& S)
@@ -927,6 +958,8 @@ int HodLod::draw(void)
 #endif
         hlg::toView(S->view, S->gex, px, (long long)t, lt.tm_wday, lt.tm_hour * 60 + lt.tm_min, hl::MKTS[S->mi < 0 ? 0 : S->mi].dec);
     }
+    loadQ(*S);                               // (2.3.0) the Q-Scores top left of the header
+    hlq::toView(S->view, S->qf, S->view.trendReady ? hl::trendWord(S->view.trendLvl) : std::string(), S->view.trendLvl);
     const int pe = priceEdge();
     const std::vector<hl::Box> avoid = hlAvoid(*S, pb, pe);
     const Place PL = position(S->mkt);
@@ -945,7 +978,8 @@ int HodLod::draw(void)
             const int dx = got.l - L.table.l, dy = got.t - L.table.t;
             if (dx || dy) { for (size_t i = 0; i < L.items.size(); ++i) if (L.items[i].role == hl::R_TABLE || L.items[i].role == hl::R_NOTE) { L.items[i].l += dx; L.items[i].r += dx; L.items[i].t += dy; L.items[i].b += dy; }
                             L.table.l += dx; L.table.r += dx; L.table.t += dy; L.table.b += dy;
-                            if (L.gexOk) { L.gexRow.l += dx; L.gexRow.r += dx; L.gexRow.t += dy; L.gexRow.b += dy; } }
+                            if (L.gexOk) { L.gexRow.l += dx; L.gexRow.r += dx; L.gexRow.t += dy; L.gexRow.b += dy; }
+                            if (L.qOk) { L.qBox.l += dx; L.qBox.r += dx; L.qBox.t += dy; L.qBox.b += dy; } }
         }
     }
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
@@ -959,10 +993,16 @@ int HodLod::draw(void)
     {   // (2.1.0) the GEX row's hover: open while the mouse is on the row (or its detail); closed once the cursor left this pane
         if (S->inGex) { int cx = 0, cy = 0; if (hlCursor(cx, cy) && (std::abs(cx - S->gexCurX) > 8 || std::abs(cy - S->gexCurY) > 8)) S->inGex = false; }
         if (S->inGex && L.gexOk) hl::layoutGexHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
+        if (S->inQ) { int cx = 0, cy = 0; if (hlCursor(cx, cy) && (std::abs(cx - S->qCurX) > 8 || std::abs(cy - S->qCurY) > 8)) S->inQ = false; }   // (2.3.0) the Q-Scores' detail
+        if (S->inQ && L.qOk && !S->inGex) hl::layoutQHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
     }
     hl::applyOpts(L, O);                      // (2.0.5) the Settings checkboxes and colours
     S->lastGexOk = L.gexOk && L.tableOk; S->lastGexRow = L.gexRow; S->lastHoverOk = L.gexHoverOk && L.tableOk; S->lastGexHover = L.gexHover;
     if (!S->lastGexOk) S->inGex = false;
+    S->lastQOk = L.qOk && L.tableOk; S->lastQBox = L.qBox; S->lastQHoverOk = L.qHoverOk && L.tableOk; S->lastQHover = L.qHover;
+    if (!S->lastQOk) S->inQ = false;
+    S->placeLine += hlq::statusLine(S->qf, S->qWhy) + "Q_BOX," + (S->lastQOk ? std::to_string(L.qBox.l) + "," + std::to_string(L.qBox.t) + "," + std::to_string(L.qBox.r) + "," + std::to_string(L.qBox.b) : std::string("none"))
+                  + ",hover " + (S->lastQHoverOk ? std::to_string(L.qHover.l) + "," + std::to_string(L.qHover.t) + "," + std::to_string(L.qHover.r) + "," + std::to_string(L.qHover.b) : std::string("off")) + ",hovers " + std::to_string(S->qHovers) + "\n";
     S->placeLine += hlg::statusLine(S->gex, S->view, S->gexWhy) + "GEX_BOX," + (S->lastGexOk ? std::to_string(L.gexRow.l) + "," + std::to_string(L.gexRow.t) + "," + std::to_string(L.gexRow.r) + "," + std::to_string(L.gexRow.b) : std::string("none"))
                   + ",hover " + (S->lastHoverOk ? std::to_string(L.gexHover.l) + "," + std::to_string(L.gexHover.t) + "," + std::to_string(L.gexHover.r) + "," + std::to_string(L.gexHover.b) : std::string("off")) + ",hovers " + std::to_string(S->gexHovers) + "\n";
     execute(L);
@@ -982,6 +1022,13 @@ int HodLod::mouse(RTX_EVENT* e)
     const bool in = S->lastGexOk && (inB(S->lastGexRow) || (S->inGex && S->lastHoverOk && inB(S->lastGexHover)));
     if (in) hlCursor(S->gexCurX, S->gexCurY);
     if (in != S->inGex) { S->inGex = in; if (in) ++S->gexHovers; invalidateChart(false); }
+    {   // (2.3.0) the Q-Scores (or their open detail)
+        const int gq = S->inQ ? 6 : 0;
+        auto inQB = [&](const hl::Box& b) { return mh >= b.l - gq && mh <= b.r + gq && mv >= b.t - gq && mv <= b.b + gq; };
+        const bool iq = !in && S->lastQOk && (inQB(S->lastQBox) || (S->inQ && S->lastQHoverOk && inQB(S->lastQHover)));
+        if (iq) hlCursor(S->qCurX, S->qCurY);
+        if (iq != S->inQ) { S->inQ = iq; if (iq) ++S->qHovers; invalidateChart(false); }
+    }
     return RTX_FAIL;
 }
 
@@ -990,7 +1037,7 @@ extern "C" cppExtension *CreateExtension(void)
     HodLod *p = new HodLod();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
-    p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it.");
-    p->setVersion("2.2.4");
+    p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green).");
+    p->setVersion("2.3.0");
     return p;
 }

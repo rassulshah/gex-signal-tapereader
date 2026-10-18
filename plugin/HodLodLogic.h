@@ -54,7 +54,8 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.2.4";   // (2.2.4, Rassul 2026-10-17) Gex S/R row: the 3 nearest levels ABOVE price first (red), the current price, then the 3 nearest BELOW (green), MenthorQ name BEFORE each price (blue);   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
+static const char* const HL_VERSION = "2.3.0";   // (2.3.0, Rassul 2026-10-17 19:53-20:20) MenthorQ Q-Scores "Q: M1 O1 V4" top left (hover = the meaning), "Reg: Neg / S. Dntrend" top right; Gex S/R = the BAND rule: 3 biggest abs-GEX strikes from the RTH open up to the 1.38 extension of the 1D Max (red, a drawn up triangle first) | price | 3 down to the 1.38 extension of the 1D Min (green, a down triangle first)
+// (2.2.4)   // (2.2.4, Rassul 2026-10-17) Gex S/R row: the 3 nearest levels ABOVE price first (red), the current price, then the 3 nearest BELOW (green), MenthorQ name BEFORE each price (blue);   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
 #define HL_SHOW_CALLED 1   // (1.1.9, Rassul 2026-10-12 19:52 "approved" the mockup) "called h:mm" after the IN read + "Range used"
 #endif
@@ -746,8 +747,10 @@ struct View {
     // (2.1.0, Rassul 2026-10-14 16:01 "a line in the HOD/LOD indicator box that identifies the key GEX levels where a reaction can
     // occur so it is front and center") the GEX line under the header: at most 3 strikes from LRA-GexNodes-<MKT>.csv (HodLodGex.h),
     // nearest the price first; grow = the up arrow; gexStale = "STALE 25m" (the strikes dimmed); gexHover = the detail on mouse-over
-    struct GexItem { std::string strike, name; bool grow = false, other = false, above = false, mid = false; };   // (2.2.4) mid = the current price between the 3 above and the 3 below   // (2.1.1) above = above price (red), else below (green)   // (2.1.0 rule 2.0) strike = the location's range, name = W / F / M, other = the other side
+    struct GexItem { std::string strike, name; bool grow = false, other = false, above = false, mid = false; char mark = 0; };   // (2.3.0) mark 'U' / 'D' = a drawn up / down triangle before the first strike of a side   // (2.2.4) mid = the current price between the 3 above and the 3 below   // (2.1.1) above = above price (red), else below (green)   // (2.1.0 rule 2.0) strike = the location's range, name = W / F / M, other = the other side
     std::vector<GexItem> gexItems; std::string gexStale; std::vector<Seg> gexHover;
+    // (2.3.0) MenthorQ Q-Scores (HodLodQ.h): "Q: " + "M1" + " O1" + " V4" top left of the header; qHover = the mouse-over lines, each a run of coloured parts
+    std::vector<Seg> qSegs; std::vector<Line> qHover;
 };
 // (v15) every E / A value has a key; the status file writes all of them, the table draws the keys in SHOWN.
 enum { K_LABEL = 0, K_1ST, K_RECL, K_2ND, K_GAP, K_TOOK, K_SIZE, K_RECTOOK, K_ROOM, K_RANGE, K_CLOSE, K_DIR1, K_DIR2, NALL };
@@ -1354,6 +1357,8 @@ struct Layout {
     std::vector<Box> avoid; Box tableWant = { 0, 0, 0, 0 }; bool tableMoved = false, tableClear = true; bool trendCompact = false;
     Box gexRow = { 0, 0, 0, 0 }; bool gexOk = false;          // (2.1.0) the GEX line's row (the mouse-over target)
     Box gexHover = { 0, 0, 0, 0 }; bool gexHoverOk = false;   // (2.1.0) its detail box (drawn only while the mouse is on the row)
+    Box qBox = { 0, 0, 0, 0 }; bool qOk = false;               // (2.3.0) the Q-Scores in the header (the mouse-over target)
+    Box qHover = { 0, 0, 0, 0 }; bool qHoverOk = false;        // (2.3.0) their detail box
 };
 
 inline int lineH(int fs) { return (int)(fs * 1.7f + 0.5f); }   // as SessionInfo (a 9 pt font is 12 px at 96 dpi)
@@ -1500,14 +1505,21 @@ inline std::string regimeText(const View& v, bool compact = false) { std::string
 
 // (2.1.0) the GEX line: "7750 G8 ^  .  7775 G7  .  7800 G1" (+ "  STALE 25m"); the up arrow is drawn with lines (no glyph: IRT draws
 // text in the chart's code page). Strike white, MenthorQ name blue, separators grey; stale = strikes / names dimmed.
-inline int gexArrowW(int fs) { return (int)(fs * 0.8f + 0.5f) + 8; }   // (2.2.1, Rassul 12:22 "the arrow is too close to the number") +4 px
+inline int gexArrowW(int fs) { return (int)(fs * 0.8f + 0.5f) + 8; }
+inline int gexMarkW(int fs) { return (int)(fs * 0.9f + 0.5f) + 6; }   // (2.3.0) the side triangle + its gap (drawn with lines: no glyph in the chart code page)
+// a filled triangle (apex up for U, down for D), centred in [x, x + size] and the row
+inline void gexTri(Layout& L, int x, int t, int b, int fs, bool up, unsigned col)
+{
+    const int h = (std::max)(5, (int)(fs * 0.8f + 0.5f)), yc = (t + b) / 2, y0 = yc - h / 2, cx = x + h / 2 + 1;
+    for (int k = 0; k < h; k++) { const int half = (k * h / 2) / (h - 1 > 0 ? h - 1 : 1), y = up ? y0 + k : y0 + h - 1 - k; addLine(L, cx - half, y, cx + half + 1, y, col, 1, R_TABLE); }
+}   // (2.2.1, Rassul 12:22 "the arrow is too close to the number") +4 px
 inline int gexLineW(const View& v, const Measure& M, int fs, int sfs)
 {
     if (v.gexItems.empty()) return 0;
     int w = 0; const int sep = M("  \xB7  ", fs, true), sepB = M("  |  ", fs, true);
     for (size_t i = 0; i < v.gexItems.size(); i++) {
         const View::GexItem& g = v.gexItems[i];
-        w += (i ? ((g.mid || v.gexItems[i - 1].mid) ? sepB : sep) : 0) + (g.name.empty() ? 0 : M(g.name + " ", fs, true)) + M(g.strike, fs, true) + (g.grow ? gexArrowW(fs) : 0);   // (2.2.4) the name comes BEFORE the price
+        w += (i ? ((g.mid || v.gexItems[i - 1].mid) ? sepB : sep) : 0) + (g.mark ? gexMarkW(fs) : 0) + (g.name.empty() ? 0 : M(g.name + " ", fs, true)) + M(g.strike, fs, true) + (g.grow ? gexArrowW(fs) : 0);   // (2.2.4) the name comes BEFORE the price
     }
     if (!v.gexStale.empty()) w += M("   " + v.gexStale, sfs, false);
     return w;
@@ -1523,6 +1535,7 @@ inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const 
                  addText(L, x, t, b, st, C_GREY, fs, true, sw, R_TABLE, -1); x += sw; }   // (2.2.4) '|' on both sides of the current price
         cs = g.mid ? C_SLATE : (g.above ? C_RED : C_GREEN);   // above price = red (resistance), below = green (support); the price itself white
         int w = 0;
+        if (g.mark) { gexTri(L, x, t, b, fs, g.mark == 'U', cs); x += gexMarkW(fs); }   // (2.3.0) the side's triangle, in its colour
         if (!g.name.empty()) { w = M(g.name + " ", fs, true); addText(L, x, t, b, g.name + " ", C_BLUE, fs, true, w, R_TABLE, -1); x += w; }   // (2.2.4) MenthorQ name first, in blue
         w = M(g.strike, fs, true); addText(L, x, t, b, g.strike, cs, fs, true, w, R_TABLE, -1); x += w;
         if (g.grow) {   // an up arrow: shaft + head, centred in the row
@@ -1589,13 +1602,14 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int sepInfo = M("     ", fs, true);
         const std::vector<Seg> regP = regimeParts(v, compactT);
         int regW = 0; for (size_t q = 0; q < regP.size(); q++) regW += M(regP[q].s, fs + 1, true);
-        int lw = (std::max)((std::max)((std::max)(M(eRow[K_LABEL].s, fs, true), M(aRow[K_LABEL].s, fs, true)), info.empty() ? 0 : M("Estimate", fs, true)), regW) + 12;
+        int qW = 0; for (size_t q = 0; q < v.qSegs.size(); q++) qW += M(v.qSegs[q].s, fs + 1, true);   // (2.3.0) the Q-Scores take the label column's header cell
+        int lw = (std::max)((std::max)((std::max)(M(eRow[K_LABEL].s, fs, true), M(aRow[K_LABEL].s, fs, true)), info.empty() ? 0 : M("Estimate", fs, true)), qW) + 12;
         std::vector<int> nat; int cw = 0, sumNat = 0;
         for (int j = 0; j < NSHOWN; j++) { int c = SHOWN[j]; if (c == K_LABEL) continue;
             int w = (std::max)(M(COLS[c], fs, false), (std::max)(cellWf(eRow[c], efs), cellWf(aRow[c], fs))) + 24;
             if (j == 1) w = (std::max)(w, M(title, fs + 1, true) + M(verTxt, fs, false) + 16);           // the RTH title (+ version) over 1st Time
             if (j == 2) { std::string t2; for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") != 0) t2 += (t2.empty() ? "" : "  ") + v.sessSegs[q].s;
-                          w = (std::max)(w, M(t2, fs + 1, true) + 16); }                                 // the expiry over 2nd Time
+                          w = (std::max)(w, (t2.empty() ? 0 : M(t2, fs + 1, true) + 16) + regW + 16); }   // (2.3.0) the expiry + the regime (right) over 2nd Time
             nat.push_back(w); sumNat += w; cw = (std::max)(cw, w); }
         const int ncol = NSHOWN - 1, colsW = natural ? sumNat : ncol * cw;
         int W = (std::max)(lw + colsW + 12, (std::max)(info.empty() ? 0 : lw + segW(info, fs, sepInfo) + 12, segW(fx, fs, 0)) + 32);
@@ -1620,14 +1634,19 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             // (2.0.5) "Regime: Neg / Uptrend": the gamma part in its sign colour, the trend part green (up) / red (down) / the table white (Range)
             std::vector<Seg> rest;
             for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") != 0) rest.push_back(v.sessSegs[q]);
-            { int xr = T.l + 8; for (size_t q = 0; q < regP.size(); q++) { int w = M(regP[q].s, fs + 1, true); addText(L, xr, y, y + titleH - 2, regP[q].s, regP[q].col, fs + 1, true, w, R_TABLE, -1); xr += w; } }
+            // (2.3.0, Rassul 20:16 "switch positions of qscore and Reg trend") the Q-Scores top left, the regime / trend top right
+            { int xq = T.l + 8; for (size_t q = 0; q < v.qSegs.size(); q++) { int w = M(v.qSegs[q].s, fs + 1, true); addText(L, xq, y, y + titleH - 2, v.qSegs[q].s, v.qSegs[q].col, fs + 1, true, w, R_TABLE, -1); xq += w; }
+              if (qW > 0) { L.qBox = Box{ T.l, y, T.l + 8 + qW + 6, y + titleH }; L.qOk = true; } }
+            const int regX = T.r - 8 - regW;
+            { int xr = regX; for (size_t q = 0; q < regP.size(); q++) { int w = M(regP[q].s, fs + 1, true); addText(L, xr, y, y + titleH - 2, regP[q].s, regP[q].col, fs + 1, true, w, R_TABLE, -1); xr += w; } }
             int xl = T.l + 6 + lw;
             int w0 = M(title, fs + 1, true), wv = M(verTxt, fs, false);
             addText(L, xl + cwv[0] / 2 - (w0 + wv) / 2, y, y + titleH - 2, title, titleCol, fs + 1, true, w0, R_TABLE, -1);
             addText(L, xl + cwv[0] / 2 - (w0 + wv) / 2 + w0, y, y + titleH - 2, verTxt, C_GREY, fs, false, wv, R_TABLE, -1);
             if (!rest.empty() && ncol > 1) { int x2 = xl + cwv[0]; std::string t2; unsigned c2 = rest[0].col;
                 for (size_t q = 0; q < rest.size(); q++) t2 += (q ? "  " : "") + rest[q].s;
-                int w2 = M(t2, fs + 1, true); addText(L, x2 + cwv[1] / 2 - w2 / 2, y, y + titleH - 2, t2, c2, fs + 1, true, w2, R_TABLE, -1); }
+                int w2 = M(t2, fs + 1, true); const int right = regW > 0 ? regX - 8 : x2 + cwv[1];   // (2.3.0) centred in the room left of the regime
+                addText(L, (std::max)(x2 + 4, x2 + (right - x2) / 2 - w2 / 2), y, y + titleH - 2, t2, c2, fs + 1, true, w2, R_TABLE, -1); }
         }
         y += titleH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
         const Cell* rows[2] = { eRow, aRow };
@@ -1747,6 +1766,63 @@ inline void layoutGexHover(Layout& L, const View& v, const Box& pane, int freeR,
     int yy = B.t + pad;
     for (const WL& l : lines) { if (l.s.empty()) { yy += GAP; continue; } addText(L, B.l + pad + l.x, yy, yy + lh, l.s, l.col, fs, l.bold, M(l.s, fs, l.bold), R_TABLE, -1); yy += lh; }
     L.gexHover = B; L.gexHoverOk = true; L.blocks.push_back(B);
+}
+
+// (2.3.0) the Q-Scores' detail (mouse over "Q: M1 O1 V4"): the mockup's lines, each a run of coloured parts ("M1" red + the meaning
+// white), word-wrapped to the room; placed like the GEX detail (above the table, else below / beside it)
+inline void layoutQHover(Layout& L, const View& v, const Box& pane, int freeR, const Measure& M)
+{
+    L.qHoverOk = false;
+    if (!L.qOk || v.qHover.empty()) return;
+    const int fs = 10, lh = lineH(fs), pad = 8, ind = 12;
+    if (freeR <= pane.l + 200) freeR = pane.r;
+    const int maxW = (std::min)(900, freeR - pane.l - 2 * pad - 8);
+    if (maxW < 220) return;
+    struct Run { std::string s; unsigned col; };
+    struct WL { std::vector<Run> runs; bool bold; int x; };
+    std::vector<WL> lines; int W = 0;
+    for (size_t i = 0; i < v.qHover.size(); i++) {
+        const Line& ln = v.qHover[i]; const bool bold = i == 0;
+        std::string full; std::vector<size_t> segEnd;
+        for (size_t k = 0; k < ln.size(); k++) { full += ln[k].s; segEnd.push_back(full.size()); }
+        if (full.empty()) continue;
+        std::vector<std::string> w = wrapText(full, maxW - ind, M, fs, bold);
+        size_t off = 0;
+        for (size_t k = 0; k < w.size(); k++) {
+            size_t a = full.find(w[k], off); if (a == std::string::npos) a = off;
+            const size_t e = a + w[k].size(); off = e;
+            WL wl; wl.bold = bold; wl.x = k ? ind : 0;
+            size_t c = a;
+            for (size_t q = 0; q < segEnd.size() && c < e; q++) {
+                if (segEnd[q] <= c) continue;
+                const size_t ce = (std::min)(segEnd[q], e);
+                wl.runs.push_back(Run{ full.substr(c, ce - c), ln[q].col }); c = ce;
+            }
+            int tw = 0; for (const Run& r : wl.runs) tw += M(r.s, fs, bold);
+            W = (std::max)(W, tw + wl.x);
+            lines.push_back(wl);
+        }
+    }
+    const int top = pane.t + (pane.b - pane.t >= 200 ? TITLE_ROW_PX : 0);
+    while (!lines.empty() && (int)lines.size() * lh + 2 * pad > pane.b - 1 - top) lines.pop_back();   // a short pane: the last lines go first
+    if (lines.size() < 2) return;
+    W += 2 * pad; const int H = (int)lines.size() * lh + 2 * pad;
+    int x = (std::max)(pane.l + 2, (std::min)(L.table.l, freeR - W - 2));
+    int y; const int sideY = (std::max)(top, (std::min)(L.table.b - H, pane.b - 1 - H));
+    if (L.table.t - 4 - H >= top) y = L.table.t - 4 - H;
+    else if (L.table.b + 4 + H <= pane.b - 1) y = L.table.b + 4;
+    else if (H <= pane.b - 1 - top && L.table.r + 4 + W <= freeR) { x = L.table.r + 4; y = sideY; }
+    else if (H <= pane.b - 1 - top && L.table.l - 4 - W >= pane.l + 2) { x = L.table.l - 4 - W; y = sideY; }
+    else y = (std::max)(top, pane.b - 1 - H);
+    Box B = { x, y, x + W, y + H };
+    addRect(L, B.l, B.t, B.r, B.b, C_BORDER, C_PANEL, 1, R_TABLE);
+    int yy = B.t + pad;
+    for (const WL& l : lines) {
+        int xx = B.l + pad + l.x;
+        for (const Run& r : l.runs) { const int w = M(r.s, fs, l.bold); addText(L, xx, yy, yy + lh, r.s, r.col, fs, l.bold, w, R_TABLE, -1); xx += w; }
+        yy += lh;
+    }
+    L.qHover = B; L.qHoverOk = true; L.blocks.push_back(B);
 }
 
 struct Block { std::vector<Line> lines; int fs; int w = 0, h = 0; Box at = { 0, 0, 0, 0 }; bool side = false; };

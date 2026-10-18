@@ -23,6 +23,7 @@
 #include <cstring>
 #include <algorithm>
 #include <climits>
+#include <utility>
 #include "HodLodLogic.h"
 
 namespace hlg {
@@ -40,6 +41,8 @@ struct Loc { int ord = 0; char side = 'T'; std::string loTxt, hiTxt; char sign =
 struct File {
     bool ok = false; std::string why, market, state, asofTxt, stampTxt, basis = "-", basisWhy, side = "none"; long long asof = 0; double vwap = NAN, basisApplied = NAN;
     std::vector<Loc> locs;
+    // (3.0.0 file / HodLod 2.3.0) the BAND row: BAND|open|kind|top|bottom|max_1d|min_1d|ext|at|src (kind RTH / ON / ON*)
+    bool band = false; double bandOpen = NAN, bandTop = NAN, bandBot = NAN, bandMax = NAN, bandMin = NAN, bandExt = NAN; std::string bandKind, bandAt, bandSrc, bandOpenTxt, bandTopTxt, bandBotTxt, bandMaxTxt, bandMinTxt;
 };
 
 inline std::vector<std::string> split(const std::string& s, char d) {
@@ -75,6 +78,15 @@ inline File parse(const std::string& text, const std::string& market) {
         else if (c[0] == "STATE") { if (c.size() < 2) { F.why = "bad STATE"; return F; } F.state = c[1]; }
         else if (c[0] == "VWAP") { if (c.size() >= 3) { optD(c[1], F.vwap); F.side = c[2]; } }
         else if (c[0] == "BASIS") { if (c.size() >= 3 && (c[1] == "VERIFIED" || c[1] == "APPLIED" || c[1] == "UNKNOWN")) { F.basis = c[1]; optD(c[2], F.basisApplied); if (c.size() >= 7) F.basisWhy = c[6]; } }
+        else if (c[0] == "BAND") {   // a bad BAND row = no band (the row falls back to the price split)
+            File B = F; bool ok = c.size() >= 8 && fullD(c[1], B.bandOpen) && c[2].size() <= 4 && fullD(c[3], B.bandTop) && fullD(c[4], B.bandBot)
+                && fullD(c[5], B.bandMax) && fullD(c[6], B.bandMin) && fullD(c[7], B.bandExt) && B.bandTop >= B.bandOpen && B.bandBot <= B.bandOpen;
+            if (ok) { F.band = true; F.bandOpen = B.bandOpen; F.bandTop = B.bandTop; F.bandBot = B.bandBot; F.bandMax = B.bandMax; F.bandMin = B.bandMin; F.bandExt = B.bandExt;
+                      F.bandKind = c[2]; F.bandOpenTxt = c[1]; F.bandTopTxt = c[3]; F.bandBotTxt = c[4]; F.bandMaxTxt = c[5]; F.bandMinTxt = c[6];
+                      if (c.size() >= 9 && c[8].size() <= 8) F.bandAt = c[8];
+                      if (c.size() >= 10 && c[9].size() <= 24) F.bandSrc = c[9]; }
+            else bad++;
+        }
         else if (c[0] == "LOC") {
             long long o = 0, n = 0; Loc L;
             bool ok = c.size() == 8 && fullL(c[1], o) && o >= 1 && o <= 99 && c[2].size() == 1 && std::string("TOBA").find(c[2][0]) != std::string::npos
@@ -133,13 +145,20 @@ inline std::string signHow(char s) {
          : (s == 'F' ? "net short gamma (model): dealers forced to sell drops / buy rallies through it - moves can run"
                      : "long and short gamma about equal (model) - no clear forced side");
 }
-struct HLine { std::string s; int role; };     // role 0 = title, 1 = location head, 2 = detail, 3 = guide
+struct HLine { std::string s; int role; };
+// (2.3.0) "Band: open 7,703.00 (RTH 8:30) - up to 7,800.00 (1.38x to 1D Max 7,770.00), down to 7,650.00 (1.38x to 1D Min 7,660.00); biggest abs GEX, no neighbours"
+inline std::string bandLine(const File& F) {
+    const std::string k = F.bandKind == "RTH" ? "RTH open" : (F.bandKind == "ON" ? "5 PM open (before the RTH open)" : (F.bandKind == "ON*" ? "first overnight bar (before the RTH open)" : "open"));
+    char e[16]; snprintf(e, sizeof e, "%gx", std::isfinite(F.bandExt) ? F.bandExt : 1.38);
+    return "Band from the " + k + " " + F.bandOpenTxt + (F.bandAt.empty() ? "" : " (" + F.bandAt + ")") + ": up to " + F.bandTopTxt + " (" + e + " to 1D Max " + F.bandMaxTxt + "), down to " + F.bandBotTxt + " (" + e + " to 1D Min " + F.bandMinTxt + "); the 3 biggest abs-GEX strikes each side, never two neighbouring";
+}     // role 0 = title, 1 = location head, 2 = detail, 3 = guide
 inline std::string ageText(long long sec) { if (sec < 0) return "-"; char b[32]; long long m = sec / 60; if (m < 60) snprintf(b, sizeof b, "%lldm old", m); else snprintf(b, sizeof b, "%lldh %lldm old", m / 60, m % 60); return b; }
 inline std::vector<HLine> hover(const File& F, const std::string& stale, long long now = 0, int minCT = -1) {
     // (2.1.1, Rassul 22:23 "a huge hover text box") compact: one title line + one line per strike, nothing else
     (void)minCT;
     std::vector<HLine> o;
     o.push_back({ "GEX strikes ? (MenthorQ " + (F.asofTxt.empty() ? std::string("-") : F.asofTxt) + (stale.empty() ? "" : ", " + stale) + ")", 0 });
+    if (F.band) o.push_back({ bandLine(F), 2 });   // (2.3.0) where the strikes were picked
     (void)now;
     for (const Loc& L : F.locs)
         for (const Mem& m : L.mem) {
@@ -156,6 +175,24 @@ inline void toView(hl::View& v, const File& F, double price, long long now, int 
     if (!showable(F)) return;
     if (F.asof > now + 120) return;                           // (audit) received in the future = clock / file wrong: never shown
     v.gexStale = staleText(F, now, updateHours(wd, min));
+    bool bandMode = false; for (const Loc& L : F.locs) if (L.side == 'A' || L.side == 'B') bandMode = true;
+    if (bandMode) {   // (2.3.0, Rassul 2026-10-17 19:53 / 19:55 + mockup v2) the BAND rule: side A = above the RTH open (red, an up triangle first),
+        // B = below it (green, a down triangle first); each side nearest the open first: "^ 7765 . 7780 . 7800 | 7703.00 | v 7700 . 7675 . 7650"
+        auto firstNum = [](const std::string& t) { std::string o; for (char c : t) if ((c >= '0' && c <= '9') || c == '.') o += c; else if (!o.empty()) break; char* e = nullptr; const double d = std::strtod(o.c_str(), &e); return (o.empty() || !e || *e) ? NAN : d; };
+        std::vector<std::pair<double, const Loc*> > up, dn;
+        for (const Loc& L : F.locs) { if (L.side != 'A' && L.side != 'B') continue; const double md = firstNum(L.loTxt); (L.side == 'A' ? up : dn).push_back(std::make_pair(md, &L)); }
+        std::stable_sort(up.begin(), up.end(), [](const std::pair<double, const Loc*>& a, const std::pair<double, const Loc*>& b) { return a.first < b.first; });
+        std::stable_sort(dn.begin(), dn.end(), [](const std::pair<double, const Loc*>& a, const std::pair<double, const Loc*>& b) { return a.first > b.first; });
+        if (up.size() > 3) up.resize(3);
+        if (dn.size() > 3) dn.resize(3);
+        auto push = [&](const Loc* L, bool above, bool first) { hl::View::GexItem g; g.strike = rangeTxt(*L); g.name = L->mem.empty() ? std::string() : L->mem[0].name; g.grow = L->grow; g.above = above; g.mark = first ? (above ? 'U' : 'D') : 0; v.gexItems.push_back(g); };
+        for (size_t i = 0; i < up.size(); i++) push(up[i].second, true, i == 0);
+        if (std::isfinite(price) && (!up.empty() || !dn.empty())) {
+            char pb[48]; snprintf(pb, sizeof pb, "%.*f", dec < 0 ? 2 : (dec > 6 ? 6 : dec), price);
+            hl::View::GexItem m; m.strike = pb; m.mid = true; m.above = false; v.gexItems.push_back(m);
+        }
+        for (size_t i = 0; i < dn.size(); i++) push(dn[i].second, false, i == 0);
+    } else
     {   // (2.2.4, Rassul 2026-10-17 "put 3 above first then 3 below ... above are red (resistance), below green (support)", "name before the level"):
         // the 3 nearest locations ABOVE the price (highest first), the current price, then the 3 nearest BELOW (nearest first); the name = the location's best-ranked MenthorQ name
         struct Cand { double mid; const Loc* L; bool above; };
@@ -207,7 +244,7 @@ inline std::string statusLine(const File& F, const hl::View& v, const std::strin
     std::string sh; for (size_t i = 0; i < v.gexItems.size(); i++) if (!v.gexItems[i].mid) sh += (sh.empty() ? "" : " ; ") + v.gexItems[i].strike + " " + v.gexItems[i].name + (v.gexItems[i].grow ? " up" : "") + (v.gexItems[i].other ? " (other)" : "");
     for (char& ch : sh) if ((unsigned char)ch == 0x96) ch = '-';
     return "GEX," + (F.ok ? F.state : std::string("none")) + ",asof " + (F.asofTxt.empty() ? std::string("-") : F.asofTxt) + ",shown " + (sh.empty() ? std::string("none") : sh)
-         + ",basis " + F.basis + ",side " + F.side + (v.gexStale.empty() ? "" : "," + v.gexStale) + ",locs " + std::to_string(F.locs.size()) + (loadWhy.empty() ? "" : "," + loadWhy) + "\n";
+         + ",basis " + F.basis + ",side " + F.side + (v.gexStale.empty() ? "" : "," + v.gexStale) + ",locs " + std::to_string(F.locs.size()) + (F.band ? ",band " + F.bandKind + " open " + F.bandOpenTxt + " up " + F.bandTopTxt + " down " + F.bandBotTxt : std::string(",band none")) + (loadWhy.empty() ? "" : "," + loadWhy) + "\n";
 }
 
 } // namespace hlg
