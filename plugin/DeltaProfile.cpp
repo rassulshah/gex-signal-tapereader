@@ -60,6 +60,8 @@
 #include "irtsdk.h"
 #endif
 #include "DeltaProfileCore.h"
+#include "DeltaProfileSettings.h"   // (2.18.1) the ONE settings table (SettingsSpec.h)
+#include "SettingsHost.h"           // (2.18.1) the window from the table
 // (2.11.0) a two-sided row: buying and selling both heavy - the net under 15% of the volume (a top-3 volume row is checked)
 namespace delta_profile { inline bool twoSided(double delta, double volume) { return volume > 0 && (delta < 0 ? -delta : delta) < 0.15 * volume; } }
 #include "SignalBoard.h"     // (2.9.1) posts its confirmed A events for the other indicators on this chart
@@ -83,12 +85,12 @@ namespace delta_profile { inline bool twoSided(double delta, double volume) { re
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.18.0"; // (2.18.0, Rassul 2026-10-18 11:49 CT mockup approved: "the close can be from the same candle or the close of the next candle as long as the low of both bars is below the high of the pivot bar which may or may not be either bar for bullish absorption and vice versa for the bearish absorption") A = the node's own candle closes beyond the node (unchanged) OR, if it did not, the NEXT candle does (bullish green close above the node's high, bearish red close below its low) with the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; the bubble stays on the node's candle; a failed node waits exactly one candle, never a third; the pivot-confirmation repaint of 2.16.0 applies the same way; D and TA lines end in conf=same|next (older lines = same), status A_CONF counts them. (2.18.0, Rassul 2026-10-18 12:49 CT mockup approved) the profile's ratio label ONLY on the 3 biggest bars by abs delta (dp::labelKeys), even one under 2.0x; no label on any other bar, even at 2.0x+; "A " kept on an absorbed node's label; circles and A rules unchanged. Evidence (his recorded A candidates Oct 14-16, 7 markets; held = 1 ATR before 1 tick through the node within 20 bars): same-candle A held 42% (n 197), next-candle A meeting his rule 52% (n 31), next-candle failing it 8% (n 13) // (2.17.0, 2026-10-18 audit B) SignalBoard A events carry flag 1 = final / 2 = tentative (SignalBoard 1.1.0: read() gives readers such as the Liquidity Profile only final ones); a tentative A writes a TA|S line when first shown and a TA|X line when its confirmed pivot fails it (the nightly measures how often a shown A? vanished); per-chart status file DeltaProfile.status-<MKT>-<spb>.txt (the shared DeltaProfile.status.txt is still written for one more version); Market State SRC "DP" facts once per closed bar (MarketState.h, cleared on done / destroy) // (2.16.0, Rassul 2026-10-17 "it is ok to repaint when the pivot requirement is there") the pivot rule against the peak bar's OWN swing (the down / up pivot of the leg it belongs to, which a later bar may make): the A bubble shows while the close rule and that pivot hold, may go and come back until the pivot is confirmed; the record (D line) is written only then, so the nightly sees the final A // (2.15.0, Rassul 2026-10-17 15:35 option 2 (b)) the 2.6.0 absorption rules in this indicator: only the 3 biggest rows (2.0x or more), no halfway rule, more than one bubble per candle; kept: the pivot rule, the same-candle close, no repaint, the layout and the shared A events // (2.13.0, Rassul 2026-10-16 17:40 "just keep it simple to absorption") the absorption rule only: every row >= 2.0x the average |delta| (90-min profile) is tracked, no top-3 cap, no initiative (I never decided or labelled), no zone A, ONE bubble per candle (the higher ratio), never repainted // (2.12.0, Rassul 08:25) the 3 largest bars always show a value; A and I labels from the record, frozen, kept for 90 min // (2.11.2) the column is drawn at least 110 px wide (a saved Width of 80 no longer squeezes the A label) // (2.11.1) a decided A keeps its profile label while its row is in the 90-min profile (no longer only while the node is in the live top 3) // (2.11.0) two-sided rows: a top-3 volume row with net under 15% of its volume gets "\xB1" // (2.10.3) the A circle on the candle in the trapped side's colour (bullish red, bearish green) // (2.10.2) strictly the 3 biggest: one with no room is not replaced by the 4th // (2.10.1) the 3 biggest values in all (not 3 per side) // (2.10.0, Rassul 2026-10-15 "(b)") the delta value also on the biggest rows // (2.9.1) posts its A events on the SignalBoard // (2.9.0, Rassul 2026-10-15) location first: A bubbles + labels at a high / low / pivot / level full strength, mid-range dimmed (ZoneNear.h) // (2.8.6, Rassul 2026-10-15) A label delta without the +/- sign ("A 3.7x 92"); colour gives the side // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static ss::Ids& dpIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
+static const char* const DLT_VERSION = "2.18.1"; // (2.18.1, 2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator always has its settings verified and tested") the window from DeltaProfileSettings.h / SettingsSpec.h: settings per MARKET in DeltaProfile.settings-<MKT>.txt (the per-root file fell back to defaults at every contract roll), migrated once from DeltaProfile.settings.txt; Width 110-250 (the column never drew under 110); "Show delta text" left the window (no row values are drawn since 2.14.0); drawing unchanged // // (2.18.0, Rassul 2026-10-18 11:49 CT mockup approved: "the close can be from the same candle or the close of the next candle as long as the low of both bars is below the high of the pivot bar which may or may not be either bar for bullish absorption and vice versa for the bearish absorption") A = the node's own candle closes beyond the node (unchanged) OR, if it did not, the NEXT candle does (bullish green close above the node's high, bearish red close below its low) with the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; the bubble stays on the node's candle; a failed node waits exactly one candle, never a third; the pivot-confirmation repaint of 2.16.0 applies the same way; D and TA lines end in conf=same|next (older lines = same), status A_CONF counts them. (2.18.0, Rassul 2026-10-18 12:49 CT mockup approved) the profile's ratio label ONLY on the 3 biggest bars by abs delta (dp::labelKeys), even one under 2.0x; no label on any other bar, even at 2.0x+; "A " kept on an absorbed node's label; circles and A rules unchanged. Evidence (his recorded A candidates Oct 14-16, 7 markets; held = 1 ATR before 1 tick through the node within 20 bars): same-candle A held 42% (n 197), next-candle A meeting his rule 52% (n 31), next-candle failing it 8% (n 13) // (2.17.0, 2026-10-18 audit B) SignalBoard A events carry flag 1 = final / 2 = tentative (SignalBoard 1.1.0: read() gives readers such as the Liquidity Profile only final ones); a tentative A writes a TA|S line when first shown and a TA|X line when its confirmed pivot fails it (the nightly measures how often a shown A? vanished); per-chart status file DeltaProfile.status-<MKT>-<spb>.txt (the shared DeltaProfile.status.txt is still written for one more version); Market State SRC "DP" facts once per closed bar (MarketState.h, cleared on done / destroy) // (2.16.0, Rassul 2026-10-17 "it is ok to repaint when the pivot requirement is there") the pivot rule against the peak bar's OWN swing (the down / up pivot of the leg it belongs to, which a later bar may make): the A bubble shows while the close rule and that pivot hold, may go and come back until the pivot is confirmed; the record (D line) is written only then, so the nightly sees the final A // (2.15.0, Rassul 2026-10-17 15:35 option 2 (b)) the 2.6.0 absorption rules in this indicator: only the 3 biggest rows (2.0x or more), no halfway rule, more than one bubble per candle; kept: the pivot rule, the same-candle close, no repaint, the layout and the shared A events // (2.13.0, Rassul 2026-10-16 17:40 "just keep it simple to absorption") the absorption rule only: every row >= 2.0x the average |delta| (90-min profile) is tracked, no top-3 cap, no initiative (I never decided or labelled), no zone A, ONE bubble per candle (the higher ratio), never repainted // (2.12.0, Rassul 08:25) the 3 largest bars always show a value; A and I labels from the record, frozen, kept for 90 min // (2.11.2) the column is drawn at least 110 px wide (a saved Width of 80 no longer squeezes the A label) // (2.11.1) a decided A keeps its profile label while its row is in the 90-min profile (no longer only while the node is in the live top 3) // (2.11.0) two-sided rows: a top-3 volume row with net under 15% of its volume gets "\xB1" // (2.10.3) the A circle on the candle in the trapped side's colour (bullish red, bearish green) // (2.10.2) strictly the 3 biggest: one with no room is not replaced by the 4th // (2.10.1) the 3 biggest values in all (not 3 per side) // (2.10.0, Rassul 2026-10-15 "(b)") the delta value also on the biggest rows // (2.9.1) posts its A events on the SignalBoard // (2.9.0, Rassul 2026-10-15) location first: A bubbles + labels at a high / low / pivot / level full strength, mid-range dimmed (ZoneNear.h) // (2.8.6, Rassul 2026-10-15) A label delta without the +/- sign ("A 3.7x 92"); colour gives the side // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
 static const COLOR C_SUPPORT = 0x0086EFAC, C_RESISTANCE = 0x00FCA5A5;
-static const int WIDTH_INDEX = 0, FONT_INDEX = 1, TEXT_INDEX = 2;   // (2.8.0) the Gap row is gone; Show delta text
 struct Layout {
     int width, gap, font; bool text;
     Layout() : width(80), gap(0), font(9), text(true) {}
@@ -765,6 +767,7 @@ struct ChartState {
     double tick;
     std::int64_t builtAt, statusAt, dealerAt, settingsAt, touchedAt;
     long long settingsStamp;
+    ss::Store setStore; ss::Snap setSnap;   // (2.18.1) DeltaProfile.settings-<MKT>.txt (keyed) and the window as it opened
     int dealerReach, drawnRows, missingVap, vapMismatch;
     bool dirty, faulted, ready, shortHistory, coarseBoundary;
     int absorptionEvents, bubblesDrawn, bubblesOffscreen, bubblesSuppressed, activeAbsorptions, pairedAbsorptions;
@@ -798,6 +801,7 @@ public:
     int parmsLoad() override;
     int parmsApply() override;
     int parmsUpdt(unsigned int) override;
+    ss::Store& settingsStore(ChartState& s);
 private:
     ChartState* fallback_ = NULL;
     ChartState& chartState();
@@ -833,11 +837,9 @@ int cppExtension::calc(int) { return RTX_OK; }
 int cppExtension::done() { return RTX_OK; }
 int cppExtension::destroy() { return RTX_OK; }
 int cppExtension::setup() {
-    setParameterVersion(12); // (2.8.0) Width / Font / Show delta text (the Gap row is gone): IRT resets the saved rows once, the file keeps them
-    setParameterDialogHeight(2);
-    setIntegerParameter("Width px (40-250)", 80, 50);
-    setIntegerParameter("Font pt", 9, 50, kParmAppendSameLine);
-    setBoolParameter("Show delta text", true);
+    // (2.18.1, settings audit 2026-10-18) the window from dpset::spec(): Width 110-250 (the column never drew under 110 - the old
+    // 40-109 did nothing), Font; "Show delta text" left the window (the row values are not drawn since 2.14.0; the value is kept)
+    ss::registerAll(this, dpset::spec(), dpIds());
     return RTX_OK;
 }
 std::string DeltaProfile::rootSymbol() {
@@ -920,71 +922,49 @@ std::string DeltaProfile::storageDirectory() {
 #endif
     base += DIR_SEPARATOR_CHR; return base;
 }
-void DeltaProfile::syncLayout(ChartState& s, bool apply) {
+// (2.18.1) the settings come from DeltaProfile.settings-<MKT>.txt only (keyed, per MARKET - the old per-root file lost them at every roll);
+// migrated once from DeltaProfile.settings.txt, which is left in place. The window is read / filled through SettingsHost.h.
+ss::Store& DeltaProfile::settingsStore(ChartState& s) {
     const std::string directory = storageDirectory();
-    const std::string path = directory + "DeltaProfile.settings.txt";
+    const std::string want = directory.empty() || s.market.empty() ? std::string() : directory + "DeltaProfile.settings-" + s.market + ".txt";
+    if (s.setStore.path != want) {
+        s.setStore = ss::Store(); s.setStore.S = &dpset::spec(); s.setStore.path = want;
+        if (!directory.empty()) s.setStore.legacyPaths.push_back(directory + "DeltaProfile.settings.txt");
+        s.setStore.legacy = dpset::legacy;
+    }
+    return s.setStore;
+}
+void DeltaProfile::syncLayout(ChartState& s, bool apply) {
+    ss::Store& st = settingsStore(s);
+    const int mkt = ss::marketIndex(s.market);
     if (apply) {
-        Layout desired; desired.width = getIntegerValue(WIDTH_INDEX);
-        desired.font = getIntegerValue(FONT_INDEX); desired.text = isBoxChecked(TEXT_INDEX) != 0;
-        if (!cb::widthOk(cb::DELTA, desired.width)) desired.width = s.layout.width;   // garbage keeps the file's width
-        validateLayout(desired); s.layout = desired;
-        setIntegerValue(WIDTH_INDEX, desired.width);
-        setIntegerValue(FONT_INDEX, desired.font); checkBox(TEXT_INDEX, desired.text);
-        if (directory.empty() || s.root.empty()) return;
-        // Preserve the legacy per-root layout file and its field positions. All
-        // nonlayout options remain standardized; no retired list APIs are called.
-        std::map<std::string, std::string> records;
-        std::ifstream in(path.c_str()); std::string line;
-        while (std::getline(in, line)) {
-            const std::size_t at = line.find('|');
-            if (at != std::string::npos) records[line.substr(0, at)] = line;
-        }
-        std::ostringstream row;
-        row << s.root << "|0|" << desired.width << '|' << desired.gap << '|' << desired.font
-            << "|1|0|0|0|0|1|0|90|3|1|" << (desired.text ? 1 : 0) << "|c28";   // (2.8.0) + Show delta text, the 2.8.0 marker
-        records[s.root] = row.str();
-        std::ostringstream out;
-        for (std::map<std::string, std::string>::const_iterator i = records.begin(); i != records.end(); ++i)
-            out << i->second << '\n';
-        if (!atomicWrite(path, out.str())) s.state = "settings write failed";
-        s.settingsStamp = -2; s.settingsAt = -1; return;
+        if (!ss::inDialog(this) || st.path.empty()) return;              // never from the chart copy
+        const ss::Values F = st.load(mkt, steadyMs(), true);
+        const ss::Values V = ss::readDialog(this, dpset::spec(), dpIds(), F, s.setSnap);
+        if (!st.save(V)) { s.state = "settings write failed"; return; }
+        s.setSnap.take(ss::dialogNow(this, dpset::spec(), dpIds(), V));
+        s.settingsAt = -1;
     }
     const std::int64_t now = steadyMs();
-    if (s.settingsAt >= 0 && now - s.settingsAt < 1000) return;
+    if (!apply && s.settingsAt >= 0 && now - s.settingsAt < 1000) return;
     s.settingsAt = now;
-    if (directory.empty()) return;
-    const long long stamp = fileStamp(path);
-    if (stamp == s.settingsStamp) return;
-    s.settingsStamp = stamp;
-    s.layout = Layout(); // no inherited layout from another root/chart
-    std::ifstream in(path.c_str()); std::string line;
-    while (std::getline(in, line)) {
-        const std::vector<std::string> tokens = split(line, '|');
-        if (tokens.size() < 5 || tokens[0] != s.root) continue;
-        Layout next;
-        if (integer(tokens[2], next.width) && integer(tokens[3], next.gap) && integer(tokens[4], next.font)) {
-            const bool v28 = tokens.size() >= 17 && tokens[16] == "c28";
-            if (!v28 && next.width == 50) next.width = cb::range(cb::DELTA).def;   // (2.8.0) the old default 50 -> the new default 80, once
-            if (!v28 && next.width > 0 && !cb::widthOk(cb::DELTA, next.width)) next.width = std::max(cb::range(cb::DELTA).lo, std::min(cb::range(cb::DELTA).hi, next.width));
-            next.text = v28 ? tokens[15] != "0" : true;
-            validateLayout(next); s.layout = next;
-        }
-        break;
-    }
+    const ss::Values V = st.load(mkt, now);
+    Layout next; next.width = V.i(dpset::K_WIDTH); next.font = V.i(dpset::K_FONT); next.text = V.b(dpset::K_DELTA_TEXT);
+    validateLayout(next); s.layout = next;
 }
 int DeltaProfile::parmsLoad() {
     try {
-        ChartState& s = chartState(); syncLayout(s, false);
+        ChartState& s = chartState(); if (!ss::inDialog(this)) return RTX_OK;
         // Populate the dialog. Merely opening preferences NEVER saves a row.
-        setIntegerValue(WIDTH_INDEX, s.layout.width);
-        setIntegerValue(FONT_INDEX, s.layout.font); checkBox(TEXT_INDEX, s.layout.text); return RTX_OK;
+        ss::fillDialog(this, dpset::spec(), dpIds(), settingsStore(s).load(ss::marketIndex(s.market), steadyMs(), true), s.setSnap);
+        return RTX_OK;
     } catch (...) { return RTX_FAIL; }
 }
 int DeltaProfile::parmsApply() {
     try { ChartState& s = chartState(); syncLayout(s, true); return RTX_OK; }
     catch (...) { return RTX_FAIL; }
 }
-int DeltaProfile::parmsUpdt(unsigned int) { return RTX_OK; } // wait for Apply/OK
+int DeltaProfile::parmsUpdt(unsigned int i) { ss::onUpdate(this, dpset::spec(), dpIds(), (int)i); return RTX_OK; } // groups only; saved on Apply/OK
 int DeltaProfile::dealerWidth(ChartState& s) { return s.lay.w[cb::DEALER]; }   // (2.8.0) the Dealer column from the board (not its status file)
 // (2.8.0) this draw's columns: the Dealer Profile's Levels + Dealer widths from the board (with its heartbeat), this column's own
 // Width, the layout (ColumnBoard.h, the same the Dealer Profile computes), what the margin must be, the unit check
@@ -2218,6 +2198,6 @@ extern "C" cppExtension* CreateExtension() {
     DeltaProfile* p = new DeltaProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.18.0");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
+    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.18.1");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
     return p;
 }

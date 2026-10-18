@@ -1,5 +1,11 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.4.2 (2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator always has its settings verified and tested so there
+ *         are not bugs anymore"): the settings window from ONE table (HodLodSettings.h / SettingsSpec.h / SettingsHost.h). Fixed: the
+ *         colour rows were filled / read with setIntegerValue / getIntegerValue (swatches BLACK, a picked colour never saved - the place
+ *         files held -1 for every colour); Show boxes now grey their colours; "Up (to the HOD)" / "Down (to the LOD)" -> "Up (HOD)" /
+ *         "Down (LOD)" so the row fits (~424 -> ~372 px of 400); file HodLod.settings-<MKT>.txt (keyed, migrated once from
+ *         HodLod.place-<MKT>.txt, which is left in place); parameter version 6 (IRT resets the saved rows once; the file keeps them).
  *  2.4.1 (2026-10-18, Rassul approved 15:03 CT the compact Big Lot box "connected to the hod lod box ... so it doesn't overlap"):
  *         the table's rectangle (table + Q-Scores header + GEX row, after the hysteresis) is published on every draw for the other
  *         indicators on this chart (BoxDock.h, LRA_HLB_<symbol>_<spb>_<chart>; lsBigBidAsk 1.16.0 docks its box to it); cleared when the
@@ -87,6 +93,8 @@
 #include "HostSlot.h"
 #include "BoxPlace.h"                // (2.0.6) Offset X / Y rules, hysteresis, the dialog snapshot
 #include "HodLodLogic.h"
+#include "HodLodSettings.h"         // (2.4.2) the ONE settings table (SettingsSpec.h)
+#include "SettingsHost.h"           // (2.4.2) registration / window fill / read / group masters from the table
 #include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
 #include "HodLodQ.h"               // (2.3.0) MenthorQ Q-Scores: LRA-QScore-<MKT>.csv parse / header parts / hover (SDK-free)
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
@@ -164,19 +172,19 @@ public:
     // HodLod.place-<MKT>.txt - written only from the dialog's callbacks (loading never saves, #29) and read back by stamp.
     virtual int parmsLoad(void);                                     // (2.0.6) fills the dialog from the place file (never saves)
     virtual int parmsApply(void) { savePos(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { savePos(); return RTX_OK; }
-    int posParam = 0, pOffX = 1, pOffY = 2;
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, hlset::spec(), hlIds(), (int)i); savePos(); return RTX_OK; }   // (2.4.2) a show box greys its colours
+    static ss::Ids& hlIds() { static ss::Ids I; return I; }        // (2.4.2) the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
     // (2.0.5) the checkboxes and colours (indices into the parameter list, set in setup); (2.0.6) after Offset X / Y
-    int pShowTable = 3, pTableBg = 4, pShowProj = 5, pProjUp = 6, pProjDn = 7, pShowMark = 8, pMarkLod = 9, pMarkHod = 10;
-    bp::DlgSnap snap_;                                                 // (2.0.6) the dialog as it opened
-    std::vector<long long> dialogNow();
+    ss::Snap snap_;                                                    // (2.0.6) the dialog as it opened (2.4.2: SettingsSpec.h)
+    struct SetStore { std::string mkt; ss::Store st; };
+    std::vector<SetStore> stores_;                                     // (2.4.2) per market, per object (no static chart state)
+    ss::Store& storeFor(const std::string& mkt);
     // (2.0.6) the per-market settings: "pos,dx,dy,table,proj,mark,tableBg,projUp,projDn,markLod,markHod" (colours 0..0xFFFFFF, -1 =
     // default); a 2.0.5 file ("7") = that position with everything else default
     struct Place { int pos = hl::POS_DEFAULT; hl::Opts o; long long col[5] = { -1, -1, -1, -1, -1 }; std::string why; long long sig = -3; };
     Place readPlace(const std::string& mkt);
+    static Place toPlace(const ss::Values& V);
     hl::Opts opts(const Place& P);
-    struct PosCache { std::string path; long long stamp = -2; Place v; };
-    std::vector<PosCache> posCache;                      // per object (no static state), <= 8 markets
     void savePos();
     Place position(const std::string& mkt);
     std::vector<std::string> migChecked;                 // (2.0.5) markets whose place file was checked for the old default this run
@@ -238,22 +246,10 @@ int cppExtension::setup(void)
     // (HL105) Position (9 spots; default Bottom centre since 2.0.6); (2.0.5, Rassul 2026-10-13 "settings must be real") a checkbox and a
     // colour for every drawn element; (2.0.6) Offset X / Y. Controls only, no how-to text. The value array stays hidden from the settings
     // window. The chart reads HodLod.place-<MKT>.txt only (IRT hands the chart copy every box unchecked - why the table vanished in 2.0.5).
-    setParameterVersion(5);   // (2.0.6) 5: + Offset X / Y (the rows below them move; the chart never reads the saved values)
-    setParameterDialogHeight(5);         // 4 rows: Position + offsets; table; projection; 1st-extreme mark
-    HodLod* x = static_cast<HodLod*>(this);
-    const short SL = kParmAppendSameLine;
-    int pc = 0;
-    x->posParam = pc++;   setListParameter("Position", (short)hl::POS_DEFAULT, hl::POS_CHOICES);
-    x->pOffX = pc++;      setIntegerParameter("Offset X", 0, 50, SL);
-    x->pOffY = pc++;      setIntegerParameter("Offset Y", 0, 50, SL);
-    x->pShowTable = pc++; setBoolParameter("Show table", true);
-    x->pTableBg = pc++;   setColorParameter("Table background", (COLOR)hl::C_PANEL, 0, SL);
-    x->pShowProj = pc++;  setBoolParameter("Show projection", true);
-    x->pProjUp = pc++;    setColorParameter("Up (to the HOD)", (COLOR)hl::C_GREEN, 0, SL);
-    x->pProjDn = pc++;    setColorParameter("Down (to the LOD)", (COLOR)hl::C_RED, 0, SL);
-    x->pShowMark = pc++;  setBoolParameter("Show 1st-extreme mark", true);
-    x->pMarkLod = pc++;   setColorParameter("LOD call", (COLOR)hl::C_GREEN, 0, SL);
-    x->pMarkHod = pc++;   setColorParameter("HOD call", (COLOR)hl::C_RED, 0, SL);
+    // (2.4.2, settings audit 2026-10-18) every row from hlset::spec(): colours filled / read with setParameterColor / getParameterColor
+    // (2.0.5 - 2.4.1 used setIntegerValue / getIntegerValue on the colour rows: the swatches showed BLACK and a colour he picked was never
+    // saved); a Show box greys its colours; projection labels shortened so the row fits the window (~400 px); parameter version 6.
+    ss::registerAll(this, hlset::spec(), HodLod::hlIds());
     CPEN p(HL_GREY, 1, P_SOLID);
     setOutputParameter("HOD/LOD", DRAW_INVISIBLE, &p, HL_GREY, OUTPUT_NO_UI);
     setArrayDrawingFlags(0, (DRAW_FLAGS)(CONNECT_CNONZERO | NO_AUTOSCALE));
@@ -843,43 +839,42 @@ static long long hlFileStamp(const std::string& p)
     return (long long)st.st_mtime * 1000003LL + (long long)st.st_size;
 }
 // (2.0.6) the settings window's copy has no bar size: only there are the dialog values real (on the chart every box reads unchecked)
-static bool hlInDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }
 static std::string hlMarket(cppExtension* x) { char rb[32] = { 0 }; const char* rs = x->getRootSymbol(rb); return hl::marketForRoot(rs ? rs : ""); }
-std::vector<long long> HodLod::dialogNow()
+// (2.4.2) the settings store of one market: HodLod.settings-<MKT>.txt (keyed), migrated once from HodLod.place-<MKT>.txt
+ss::Store& HodLod::storeFor(const std::string& mkt)
 {
-    std::vector<long long> v;
-    v.push_back(getListIndex(posParam)); v.push_back(getIntegerValue(pOffX)); v.push_back(getIntegerValue(pOffY));
-    v.push_back(isBoxChecked(pShowTable) ? 1 : 0); v.push_back(isBoxChecked(pShowProj) ? 1 : 0); v.push_back(isBoxChecked(pShowMark) ? 1 : 0);
-    const int cp[5] = { pTableBg, pProjUp, pProjDn, pMarkLod, pMarkHod }; for (int k = 0; k < 5; ++k) v.push_back(getIntegerValue(cp[k]));
-    return v;
+    for (size_t i = 0; i < stores_.size(); i++) if (stores_[i].mkt == mkt) return stores_[i].st;
+    if (stores_.size() >= 8) stores_.erase(stores_.begin());
+    SetStore n; n.mkt = mkt; n.st.S = &hlset::spec(); n.st.path = flexPath("HodLod.settings-" + mkt + ".txt");
+    n.st.legacyPaths.push_back(flexPath("HodLod.place-" + mkt + ".txt")); n.st.legacy = hlset::legacy;
+    stores_.push_back(n); return stores_.back().st;
 }
+HodLod::Place HodLod::toPlace(const ss::Values& V)
+{
+    using namespace hlset;
+    Place P; P.pos = V.i(K_POSITION); P.o.dx = V.i(K_OFFSET_X); P.o.dy = V.i(K_OFFSET_Y);
+    P.o.table = V.b(K_SHOW_TABLE); P.o.proj = V.b(K_SHOW_PROJ); P.o.mark = V.b(K_SHOW_MARK);
+    const int ck[5] = { K_TABLE_BG, K_PROJ_UP, K_PROJ_DN, K_MARK_LOD, K_MARK_HOD };
+    for (int k = 0; k < 5; ++k) P.col[k] = (long long)V.c(ck[k]);
+    P.why = V.why; return P;
+}
+static long long hlNowMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 int HodLod::parmsLoad(void)
 {
-    if (!hlInDialog(this)) return RTX_OK;
+    if (!ss::inDialog(this)) return RTX_OK;                              // loading never saves (#29)
     const std::string mkt = hlMarket(this); if (mkt.empty()) return RTX_OK;
-    const Place P = readPlace(mkt);
-    setListIndex(posParam, P.pos); setIntegerValue(pOffX, P.o.dx); setIntegerValue(pOffY, P.o.dy);
-    checkBox(pShowTable, P.o.table); checkBox(pShowProj, P.o.proj); checkBox(pShowMark, P.o.mark);
-    const hl::Opts O = opts(P); const unsigned cv[5] = { O.tableBg, O.projUp, O.projDn, O.markLod, O.markHod }; const int cp[5] = { pTableBg, pProjUp, pProjDn, pMarkLod, pMarkHod };
-    for (int k = 0; k < 5; ++k) setIntegerValue(cp[k], (int)cv[k]);
-    snap_.take(dialogNow());
+    const ss::Values V = storeFor(mkt).load(ss::marketIndex(mkt), hlNowMs(), true);
+    ss::fillDialog(this, hlset::spec(), hlIds(), V, snap_);
     return RTX_OK;
 }
 void HodLod::savePos()
 {
-    if (!hlInDialog(this)) return;                                      // (2.0.6) never from the chart copy (its boxes read unchecked)
+    if (!ss::inDialog(this)) return;                                    // (2.0.6) never from the chart copy (its boxes read unchecked)
     const std::string mkt = hlMarket(this); if (mkt.empty()) return;
-    const std::string p = flexPath("HodLod.place-" + mkt + ".txt"); if (p.empty()) return;
-    const Place F = readPlace(mkt);
-    const std::vector<long long> now = dialogNow();
-    const long long fv[11] = { F.pos, F.o.dx, F.o.dy, F.o.table ? 1 : 0, F.o.proj ? 1 : 0, F.o.mark ? 1 : 0, F.col[0], F.col[1], F.col[2], F.col[3], F.col[4] };
-    long long v[11]; for (size_t k = 0; k < 11; ++k) v[k] = snap_.pick(k, now[k], fv[k]);   // a control he did not touch keeps the file's value
-    Place P = F;
-    P.pos = bp::posOk((int)v[0]) && v[0] == (int)v[0] ? (int)v[0] : F.pos;                 // garbage never reaches the file
-    P.o.dx = bp::offOk((int)v[1]) && v[1] == (int)v[1] ? (int)v[1] : F.o.dx; P.o.dy = bp::offOk((int)v[2]) && v[2] == (int)v[2] ? (int)v[2] : F.o.dy;
-    P.o.table = v[3] != 0; P.o.proj = v[4] != 0; P.o.mark = v[5] != 0;
-    for (int k = 0; k < 5; ++k) P.col[k] = v[6 + k] == fv[6 + k] ? F.col[k] : (v[6 + k] > 0 && v[6 + k] <= 0xFFFFFF ? v[6 + k] : F.col[k]);
-    hl::FileOps Fo; if (hl::writeAtomic(Fo, p, hlFormatPlace(P) + "\n")) snap_.take(now);
+    ss::Store& st = storeFor(mkt);
+    const ss::Values F = st.load(ss::marketIndex(mkt), hlNowMs(), true);
+    const ss::Values V = ss::readDialog(this, hlset::spec(), hlIds(), F, snap_);   // untouched -> the file's value; invalid never saved
+    if (st.save(V)) snap_.take(ss::dialogNow(this, hlset::spec(), hlIds(), V));
 }
 // (2.0.6) ONE-TIME migration (Rassul 07:13 "move it DOWN, default Bottom centre"): per market, the first time 2.0.6 sees its place file,
 // a 2.0.5 default "1" (alone, or "1,0,0" ...) becomes 7 (Bottom centre); any other value is his choice and stays. HodLod.migrate-206.txt
@@ -916,27 +911,15 @@ void HodLod::migratePlace(const std::string& mkt)
 }
 HodLod::Place HodLod::readPlace(const std::string& mkt)
 {
-    Place c; const std::string p = flexPath("HodLod.place-" + mkt + ".txt");
-    if (mkt.empty() || p.empty()) return c;
-    c.sig = hlFileStamp(p);
-    if (c.sig < 0) { c.why = "no place file: defaults"; return c; }
-    std::ifstream f(p.c_str()); std::string ln;
-    if (!std::getline(f, ln) || ln.size() > 200) { c.why = "place file unreadable: defaults"; return c; }
-    const long long sig = c.sig; hlParsePlace(ln, c); c.sig = sig;
-    return c;
+    if (mkt.empty()) return Place();
+    return toPlace(storeFor(mkt).load(ss::marketIndex(mkt), hlNowMs()));
 }
-// the per-market place file is the ONLY source while drawing (IRT hands the chart copy a stale list / unchecked boxes); cached by stamp
+// the per-market settings file is the ONLY source while drawing (IRT hands the chart copy a stale list / unchecked boxes);
+// (2.4.2) re-read at most once a second and compared by content (lesson 84), never by stamp alone
 HodLod::Place HodLod::position(const std::string& mkt)
 {
-    if (!mkt.empty()) migratePlace(mkt);
-    const std::string p = flexPath("HodLod.place-" + mkt + ".txt");
-    if (mkt.empty() || p.empty()) return Place();
-    const long long st = hlFileStamp(p);
-    for (size_t i = 0; i < posCache.size(); i++) if (posCache[i].path == p) { if (posCache[i].stamp == st) return posCache[i].v; posCache.erase(posCache.begin() + (long)i); break; }
-    PosCache c; c.path = p; c.stamp = st; c.v = readPlace(mkt);
-    if (posCache.size() >= 8) posCache.erase(posCache.begin());
-    posCache.push_back(c);
-    return c.v;
+    if (!mkt.empty()) migratePlace(mkt);                                // the 2.0.6 one-time 1 -> 7 on the old place file, before it migrates
+    return readPlace(mkt);
 }
 // (2.0.5) the boxes of other indicators the table keeps clear of: bounded reads, at most every 3 s
 void HodLod::loadAvoid(HLState& S)
@@ -1176,6 +1159,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live.");
-    p->setVersion("2.4.1");   // = hl::HL_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.4.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

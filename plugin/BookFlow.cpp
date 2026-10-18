@@ -54,7 +54,7 @@
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.3.0"          // keep equal to bf::VERSION and the setVersion literal below
+#define BF_VERSION "1.3.1"          // keep equal to bf::VERSION and the setVersion literal below
 
 // (1.3.0) the dialog rows (parameter version 3): every row is read by the chart
 static const int BF_RATIO = 0, BF_POS = 1, BF_AVG = 2, BF_NEAR = 3, BF_RECORD = 4, BF_OFFX = 5, BF_OFFY = 6;
@@ -366,10 +366,10 @@ int cppExtension::setup(void) {
     // (1.3.0) parameter version 3: "Spike vs prior biggest", "Spike lookback" (not part of the spike rule any more) and "Box shows" (did
     // nothing) removed; rows BF_RATIO .. BF_OFFY, all read by the chart (via the per-market file)
     setParameterVersion(3);
-    setParameterDialogHeight(3);
+    setParameterDialogHeight(4);   // (1.3.1) Spike vs average on its own line (the first line was ~458 px, cut off at ~400)
     setIntegerParameter("Ratio bars", off::RATIO_DEFAULT, 50);                                          // 0
     setListParameter("Position", (short)off::POS_DEFAULT, off::POS_CHOICES, 110, kParmAppendSameLine); // 1
-    setFloatParameter("Spike vs average", 2.0f, 50, kParmAppendSameLine);                               // 2
+    setFloatParameter("Spike vs average", 2.0f, 50);   // (1.3.1) own line - same row order, so saved values keep their rows                               // 2
     setIntegerParameter("Near ticks (0 = auto)", 0, 50);                                                // 3
     setBoolParameter("Record order feed", true, kParmAppendSameLine);      // 4: data\irt\<session>\<MKT>\mbo_HH.csv
     setIntegerParameter("Offset X", 0, 50);                                // 5
@@ -384,6 +384,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow: who is ARRIVING and who is LEAVING the order book near price (market-by-order feed). Per candle, ONE NET bar per side = lots ADDED near price minus lots PULLED near price. Left bar = the bid side, always green (buyers); right bar = the offer side, always red (sellers). Above the grey zero line = size arriving (stacking), below = size leaving (pulling): a green bar above = bids arriving (support building), green below = bids leaving (support pulled), red above = offers arriving (resistance building), red below = offers leaving (resistance pulled). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and, for size arriving, its pace (grey, lots added per second vs the same time of day) beyond the bar's end, only when that side's net is at least Spike vs average (default 2.0x) the plain average of its net size over the prior Ratio bars (default 20) closed candles - decided once at the close, never changed. Other candles are dim with no label; the forming candle stays dim until it closes. The numbers box in the pane: Net (with its ratio) and Pace for bids and offers of the candle under the mouse, else the last closed candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars), Near ticks (0 = auto: how close to price counts), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.3.0");   // BF_VERSION
+    p->setVersion("1.3.1");   // BF_VERSION
     return p;
 }

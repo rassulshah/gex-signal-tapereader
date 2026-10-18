@@ -1,0 +1,144 @@
+# IRT indicator settings audit - 2026-10-18
+
+Asked by Rassul at 15:13 CT: "go. make sure every indicator always has its settings verified and tested so there are not bugs anymore".
+Added at 15:14 CT: "make sure it even has the right settings and you are not adding useless settings also".
+His complaints: "?" or garbage values, wrong colours and defaults (BigBidAsk Divider 7 on ES), black colour swatches while the chart draws
+red / green, rows cut off on the right, and group boxes that did not uncheck or grey out their items.
+
+## 1. Root causes, checked against the SDK (irtsdk.h 15.1.6)
+
+| # | Suspected cause | What the SDK and the files show | Verdict |
+|---|---|---|---|
+| 1 | Tests ran on a Linux mock and never tried the settings window | No suite modelled how IRT treats colour rows, and no test looked at row widths or group boxes. The existing mocks returned plain values, so the black-swatch bug could not show up in a test. | **Confirmed.** New mock (tests_settings/mock_irtsdk.h): a colour row ignores setIntegerValue and reads 0, the chart copy reads blank, and a window can be set to ignore what the plugin fills in. |
+| 2 | Settings registered by running index and saved / read by position | IRT keeps window values BY POSITION (lesson 42). The plugin files were positional too ("7,0,0,1,1,1,-1,..." in HodLod; "BBA7\|0\|0\|..." in BigBidAsk). Controls were looked up by `pc++`, by index constants (`WIDTH_INDEX = 0`) or by bare numbers (TapeReader: `getListIndex(0)`). DeltaProfile.settings.txt was keyed by CONTRACT root (EPZ26), so every contract roll fell back to defaults. | **Confirmed.** |
+| 3 | Colour byte order differs between drawing and the dialog | The SDK has ONE colour type: `typedef unsigned long COLOR`, with `MAKE_COLOR(r,g,b) = r<<16 \| g<<8 \| b`, i.e. 0x00RRGGBB. Drawing, setColorParameter, getParameterColor and setParameterColor all use it, and no plugin uses the Windows RGB() macro. The real cause was the **wrong call**: colour rows were filled with setIntegerValue and read with getIntegerValue, which leaves the swatch BLACK and reads back 0. On his PC on 10-18, BigBidAsk.settings-ES.txt held 0 for every colour. HodLod's place files held -1 for every colour, which meant a colour he picked was never saved. SessionVWAP, which uses the colour calls, stores sane colours (VWAP FF80FF). | **Not a byte-order problem; wrong API (confirmed).** KingTracker found this in v0.15, BigBidAsk fixed it in 1.16 (lesson 94), HodLod and LiquidityProfile still had it. |
+| 4 | No width budget for same-line controls | The SDK has `setParameterDialogHeight(nLines)` but no window width. Measured estimate: about 6 px per character plus the control, with the window cutting off at about 415 px (BigBidAsk, 10-18). Budget: 400 px per line. | **Confirmed.** Cut-off rows: HodLod projection ~424 px, BidAskStats / BookFlow first line ~458 px, LiquidityProfile big-order line ~648 px, DealerProfile indicators text ~444 px. |
+| 5 | Group master boxes not wired to their items | `enableParameter(i, bool)` and the `parmsUpdt(i)` callback exist in the real SDK. Only BigBidAsk 1.11+ used them (1.16 also greys its items). Every other plugin had none. | **Confirmed.** |
+
+## 2. The layer (plugin\SettingsSpec.h 1.0.0, SDK-free + plugin\SettingsHost.h 1.0.0)
+- Each indicator has ONE table, `<Name>Settings.h`, with one row per control: key, label, type, default plus per-market defaults, range, width, same-line flag, group master, hidden flag.
+- Registration (`ss::registerAll`), filling the window (`ss::fillDialog`), reading it back (`ss::readDialog`), group masters (`ss::onUpdate`) and the per-market keyed file (`ss::Store`) all come from that table. There is no index arithmetic.
+- File format: `<Name>.settings-<MKT>.txt` holds `SPEC1|plugin|version|MKT` on the first line, then key=value lines.
+  - Unknown keys are ignored.
+  - A missing or invalid key gets the market's default, never garbage.
+  - It is re-read at most once a second and compared by content (lesson 84).
+  - The old file is migrated ONCE through the table's `legacy()` reader and left in place.
+- Colours go through setParameterColor / getParameterColor only.
+- A control he did not touch keeps the file's value, even if IRT ignored the fill.
+- An invalid entry is never saved, and the chart copy never saves.
+
+## 3. Tests (all pass)
+- `tests_settings/settings_contract.cpp`: 4,074 checks over 3 tables. It covers:
+  - table checks (keys, no '?' in labels, defaults valid for all 7 markets, ranges, groups, the 400 px width budget);
+  - a 7-market x 20-set round trip;
+  - garbage, other-plugin, other-market, invalid and unknown keys all falling back to defaults;
+  - legacy samples taken from his real 10-18 files;
+  - group masters, and colours passing through unchanged;
+  - every row actually read by its .cpp (no dead settings);
+  - no hand-written parameter calls in a migrated .cpp;
+  - the setVersion literal matching the table version.
+
+  It builds with g++ (ASan/UBSan, -Werror) and MinGW, and gex-build runs it with cl.
+- `tests_settings/settings_host_test.cpp`: 60 checks on the IRT-behaviour mock. It covers:
+  - registration (ids, same-line flags, parameter version, window height);
+  - a colour shown in the window equals the colour drawn, and the old integer path reproduces the black swatch;
+  - a master greys its colours and re-enables them;
+  - an out-of-range entry is never saved;
+  - an ignored fill keeps the file's values;
+  - his ES place file migrates to Bottom centre with default colours (never black);
+  - his DeltaProfile per-root file maps to per-market values;
+  - a second save in the same second with the same size is still seen;
+  - the 2.4.1 projection row fails the width budget.
+- `tests_settings/run_tests.sh` runs both, then plants a `setIntegerValue` in a copy of HodLod.cpp and checks that the contract catches it.
+- Existing suites:
+  - tests_hodlod/t_hl240: 45 / 45 (the hard-typed version updated to 2.4.2).
+  - tests_dp217: test_dp217 47 / 47 and test_dp218 90 / 90 (the mock gained the parameter calls; the version moved to 2.18.1).
+  - MinGW syntax check against the REAL irtsdk.h: 0 errors and no new warnings for HodLod, DeltaProfile, TapeReader, LiquidityProfile, BidAskStats and BookFlow.
+- Build gate: `tools\gex-build.bat` compiles and runs settings_contract.exe before any plugin. On FAIL nothing is built, BUILD-STATUS shows "SETTINGS CONTRACT: FAILED" and the details are in `plugin\out\SETTINGS-CONTRACT.txt`.
+
+## 4. Per indicator
+
+Format: bugs (fix), then KEPT / ADDED / REMOVED, one line each.
+
+### lsHodLod 2.4.1 -> 2.4.2 (MIGRATED)
+- Bug: the 5 colour rows were filled and read with the integer calls. The swatches showed black and a colour he picked was never saved (his ES / NQ files had -1 everywhere). **Fixed**: colour calls through the layer.
+- Bug: the projection row was ~424 px and cut off. **Fixed**: "Up (to the HOD)" / "Down (to the LOD)" shortened to "Up (HOD)" / "Down (LOD)", now ~340 px.
+- Bug: the Show boxes did not grey their colours. **Fixed**: each Show box is now the master of its colours.
+- Bug: positional place file. **Fixed**: keyed `HodLod.settings-<MKT>.txt`, migrated once from `HodLod.place-<MKT>.txt`.
+- KEPT: Position (the 9-spot box rule). Show table + Table background, Show projection + Up / Down colours, Show 1st-extreme mark + LOD / HOD call colours (a show box and a colour for every drawn element). Offset X / Y (see his decision list).
+- ADDED: none. REMOVED: none.
+
+### lsDeltaProfile 2.18.0 -> 2.18.1 (MIGRATED)
+- Bug: "Width px (40-250)" did nothing under 110 px, because the column is drawn at least 110 px wide (2.11.2). **Fixed**: range 110-250, default 110 (drawn exactly as before).
+- Bug: settings were kept per contract root (EPZ26), so every roll reset them, and an old pre-2.8 Gap column was still in the file. **Fixed**: per market, migrated once.
+- Bug: positional file and index constants. **Fixed**: the layer.
+- KEPT: Width, Font pt.
+- REMOVED from the window: "Show delta text". Since 2.14.0 the row values are not drawn, so this box only reserved room for text that never appears. It is now a hidden row: its value is kept and still read, so the drawing is unchanged.
+- ADDED: none.
+
+### lsTapeReader 1.3.0 -> 1.3.1 (MIGRATED)
+- Bug: controls were read by literal position (0, 1, 2, 3). **Fixed**: the layer.
+- Bug: positional place file. **Fixed**: keyed `TapeReader.settings-<MKT>.txt`, migrated once.
+- KEPT: Position, Offset X / Y, Banner background. ADDED / REMOVED: none.
+
+### lsLiquidityProfile 0.44.0 -> 0.44.1 (targeted fix; not migrated yet)
+- Bug: the Banner background colour was filled and read with the integer calls (black swatch, 0 saved). **Fixed** with setParameterColor / getParameterColor. No banner file existed yet, so no black value had been saved.
+- Open:
+  - "Big order min lots | Ended lines kept per side (0-50) | Big order font pt (7-16)" sit on one ~648 px line and are cut off.
+  - No parmsUpdt, so "Big resting orders" and "Verdict banner" do not grey their rows.
+  - Three positional files (size, bigorders, banner).
+  - Range text in the labels.
+  - A dead read of DeltaProfile.settings.txt into dpWidth / dpGap, which nothing uses.
+  - These need the full migration, which must also cover the LiquidityFlow build (same source, Font only).
+- KEPT (for now): all 15 rows. Candidates are in his decision list.
+
+### lsBidAskStats 1.13.0 -> 1.13.1 and lsBookFlow 1.3.0 -> 1.3.1 (targeted fix; not migrated yet)
+- Bug: "Ratio bars | Position | Spike vs average" was ~458 px on one line and cut off. **Fixed**: Spike vs average moved to its own line. The row order is unchanged, so IRT's saved values stay on their rows; window height is 3 / 4 lines.
+- Open: index constants and positional place files (migration), no group rows.
+- KEPT: all rows. Candidates are in his decision list.
+
+### lsBigBidAsk 1.16.0 (fixed by the coordinating agent today; not migrated)
+- 1.16.0 already: colour calls (lesson 94), parameter version bump (the Divider 7), groups grey their items, and a fill / read-back log in `BigBidAsk.dialog-<MKT>.txt`.
+- Open:
+  - positional `BBA7|...` file (toVec / fromVec);
+  - the category rows are built in a loop, so their widths cannot be estimated statically until it is on the layer;
+  - "Divider (0 = market default)" should show the market's real value (a per-market default in the table).
+- Next: migrate on top of 1.16 and its tests_bba115/test_bba116.cpp.
+
+### lsDealerProfile 2.17.0 (audited; not migrated)
+- Bug: "Your indicators in the bar file (names, comma)" is a ~444 px text row and is cut off.
+- Bug: DealerProfile.settings.txt is keyed by contract root plus chart ("EPZ26~3 Minutes*~"), so it resets at every roll, as Delta did. The file on his PC is from 10-05 and has labels = 0.
+- Rule conflict: "Snapshot outline (1.x files)" is ON by default and draws a DASHED rectangle (dashRect), but his rule is solid lines only.
+- HodLod also reads DealerProfile.settings.txt positionally (the banner flag, column 9), so migrating the Dealer Profile must update that reader too.
+- KEPT: Dealer column px, Levels column px, Badge font, Liquidity in badge, Font size, Show buy / sell text, Fade strikes beyond 1.2 EM, Whole-book banner. Candidates are in his decision list.
+
+### lsSessionVWAP 1.6.0 (audited; already correct, not migrated)
+- Uses the colour calls correctly, every band has a show box and a colour, and every line is within the budget (widest ~366 px). No bugs found. Move it to the layer for uniformity later.
+
+### lsTradeManager 1.3.0, lsKingTracker 0.17 (audited; not migrated)
+- TradeManager: Market (Auto), Font size, Position. All lines within the budget.
+- KingTracker: already uses the colour calls (v0.15), lines within the budget.
+- The scanner found nothing else. "Market (Auto)" and "Clock offset" are in his decision list.
+
+### No settings window (nothing to audit in a window)
+- CVD, CobImpulse, SessionInfo, Exhaustion, ExhaustionV2, DeltaProfileHourly, MboCheck: no rows. SessionInfo only has a place file ("0").
+- PullStats / StackStats / Pulling are retired from the build, so they were skipped.
+- Right-settings gap: CVD and CobImpulse draw lines and marks with no show box or colour. Whether to add them is in his decision list.
+
+## 5. His decision list (not changed)
+1. **Offset X / Y** in HodLod, TapeReader, BidAskStats, BookFlow, and LiquidityProfile's label offset. On 10-07 you chose the 9-spot Position instead of pixel offsets, but HodLod 2.0.6 added offsets later. Remove them from the window? (Saved offsets would stay in the files and keep working.)
+2. **BookFlow "Record order feed"**: your rule is to always keep recording. Remove the box so recording is always on?
+3. **BidAskStats / BookFlow "Ratio bars" and "Spike vs average"**: internal tuning that the per-market data should set. Hide them and let the nightly set them per market?
+4. **DealerProfile**:
+   - "Snapshot outline (1.x files)" draws dashed rectangles: remove it (off)?
+   - "Clock offset (min)" and "Your indicators in the bar file" are internal: hide them?
+   - "Market (Auto)": hide it?
+5. **LiquidityProfile "Ended lines kept per side (0-50)"**: internal, hide it?
+6. **DeltaProfile Font default is 9 pt**, under your 10 pt minimum. Raise it to 10?
+7. **CVD / CobImpulse**: add show boxes and colours for the drawn line and marks?
+
+## 6. Real-dialog check (pending)
+Pending for the next attended session (tools\settings-check\README.md): HodLod 2.4.2, DeltaProfile 2.18.1, TapeReader 1.3.1, LiquidityProfile 0.44.1, BidAskStats 1.13.1 and BookFlow 1.3.1. Expected windows: `settings_contract.exe <plugin> --print ES`.
+
+## 7. Left to do
+Migrate to the layer, in this order: LiquidityProfile + LiquidityFlow, BigBidAsk (on top of 1.16), BidAskStats, BookFlow (with OrderFlowFeed.h), DealerProfile (and HodLod's banner reader), SessionVWAP, TradeManager, KingTracker. For each one: add its .cpp to SETSRC in gex-build.bat and add an Entry to settings_contract.cpp.

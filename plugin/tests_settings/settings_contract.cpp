@@ -1,0 +1,181 @@
+// settings_contract.cpp  1.0.0  (2026-10-18)  -  the settings contract every IRT indicator must pass (SettingsSpec.h).
+// SDK-free and portable: Linux g++ (run_tests.sh) AND the PC's cl (tools\gex-build.bat runs it before building; a FAIL stops the build).
+//   settings_contract <plugin folder>      exit 0 = PASS, 1 = FAIL (one line per failure on stdout)
+// Per table: the table checks (keys, labels without '?', defaults valid for all 7 markets, ranges, groups, every window line within
+// the width budget), save -> load round trip for every market (random valid values), garbage / wrong-market / other-plugin / unknown /
+// missing keys -> defaults (never garbage), each legacy file sample migrates to the expected values, group masters switch their
+// items, colours pass through unchanged (0x00RRGGBB - the value the window shows is the value drawn), and against the plugin's .cpp:
+// every row is READ (its K_ name used outside the table), the window is registered from the table (no hand-written set*Parameter
+// rows, no getIntegerValue / setIntegerValue on parameters), parmsLoad / parmsApply / parmsUpdt go through the layer, and the
+// setVersion literal equals the table's version.
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include "../SettingsSpec.h"
+#include "../HodLodSettings.h"
+#include "../DeltaProfileSettings.h"
+#include "../TapeReaderSettings.h"
+
+struct LegacyCase { const char* text; int market; const char* key; double want; };   // key == nullptr: must NOT be recognised
+struct Entry {
+    const ss::Spec* S;
+    const char* cpp;                       // the indicator's source (setVersion literal + reads checked)
+    ss::LegacyFn legacy;
+    std::vector<LegacyCase> cases;
+    std::vector<std::string> extraSources; // headers that also read the values (e.g. OrderFlowFeed.h for the panes)
+};
+
+static int g_fail = 0, g_checks = 0;
+static void fail(const std::string& m) { std::printf("FAIL %s\n", m.c_str()); ++g_fail; }
+static void ok(bool c, const std::string& m) { ++g_checks; if (!c) fail(m); }
+
+static bool readAll(const std::string& p, std::string& out) { std::ifstream f(p.c_str(), std::ios::binary); if (!f) return false; std::stringstream ss_; ss_ << f.rdbuf(); out = ss_.str(); return true; }
+static size_t countOf(const std::string& s, const std::string& w) { size_t n = 0, p = 0; while ((p = s.find(w, p)) != std::string::npos) { ++n; p += w.size(); } return n; }
+// a K_ name used as a whole word (K_POS must not match K_POSITION)
+static size_t wordCount(const std::string& s, const std::string& w) {
+    size_t n = 0, p = 0;
+    while ((p = s.find(w, p)) != std::string::npos) {
+        const bool l = p == 0 || !(std::isalnum((unsigned char)s[p - 1]) || s[p - 1] == '_');
+        const size_t e = p + w.size(); const bool r = e >= s.size() || !(std::isalnum((unsigned char)s[e]) || s[e] == '_');
+        if (l && r) ++n;
+        p = e;
+    }
+    return n;
+}
+static std::string upperKey(const char* k) { std::string s = "K_"; for (const char* c = k; *c; ++c) s += (char)std::toupper((unsigned char)*c); return s; }
+
+static unsigned long long g_rng = 0x9E3779B97F4A7C15ull;
+static double rnd01() { g_rng ^= g_rng << 13; g_rng ^= g_rng >> 7; g_rng ^= g_rng << 17; return (double)(g_rng % 1000003ull) / 1000003.0; }
+static double randomValid(const ss::Row& r) {
+    switch (r.type) {
+        case ss::T_BOOL: return rnd01() < 0.5 ? 0 : 1;
+        case ss::T_INT: case ss::T_LIST: return std::floor(r.lo + rnd01() * (r.hi - r.lo + 1 - 1e-9));
+        case ss::T_FLOAT: { const double x = r.lo + rnd01() * (r.hi - r.lo); return std::floor(x * 100.0) / 100.0; }
+        case ss::T_COLOR: return std::floor(rnd01() * 0xFFFFFF);
+        default: return 0;
+    }
+}
+
+static void checkEntry(const Entry& E, const std::string& dir) {
+    const ss::Spec& S = *E.S; const std::string P = S.plugin;
+    for (const std::string& m : ss::check(S)) fail(m);
+    ++g_checks;
+    // round trip, every market
+    for (int mkt = 0; mkt < ss::M_N; ++mkt) {
+        for (int rep = 0; rep < 20; ++rep) {
+            ss::Values V = ss::defaults(S, mkt);
+            if (rep) for (int k = 0; k < S.n; ++k) if (S.rows[k].type != ss::T_LABEL) V.v[(size_t)k] = randomValid(S.rows[k]);
+            ss::Values W; const bool okp = ss::parse(S, mkt, ss::format(S, V), W);
+            ok(okp, P + " round trip parse " + ss::MARKETS[mkt]);
+            for (int k = 0; k < S.n; ++k) if (S.rows[k].type != ss::T_LABEL)
+                ok(std::fabs(W.v[(size_t)k] - V.v[(size_t)k]) < 1e-6, P + " round trip " + S.rows[k].key + " " + ss::MARKETS[mkt] + " " + ss::fmt(S.rows[k], V.v[(size_t)k]) + " -> " + ss::fmt(S.rows[k], W.v[(size_t)k]));
+        }
+        // defaults: never 0 / garbage where the row has a real default, and valid
+        const ss::Values D = ss::defaults(S, mkt);
+        for (int k = 0; k < S.n; ++k) ok(S.rows[k].type == ss::T_LABEL || ss::valid(S.rows[k], D.v[(size_t)k]), P + " default " + S.rows[k].key + " " + ss::MARKETS[mkt]);
+        // garbage / wrong files -> defaults
+        const char* bad[] = { "", "garbage", "SPEC1|Other|1|ES\nposition=3\n", "SPEC1|X\n", "\x01\x02\x03" };
+        for (const char* b : bad) { ss::Values W; ss::parse(S, mkt, b, W); for (int k = 0; k < S.n; ++k) ok(W.v[(size_t)k] == D.v[(size_t)k], P + " bad file -> default " + S.rows[k].key); }
+        {   // another market's file is not applied
+            ss::Values V = D; const int other = (mkt + 1) % ss::M_N; V.market = other;
+            for (int k = 0; k < S.n; ++k) if (S.rows[k].type == ss::T_BOOL) V.v[(size_t)k] = 1 - V.v[(size_t)k];
+            ss::Values W; ok(!ss::parse(S, mkt, ss::format(S, V), W), P + " other market's file rejected");
+        }
+        {   // invalid values / unknown keys / missing keys -> default, the rest kept
+            std::string t = std::string("SPEC1|") + S.plugin + "|0|" + ss::MARKETS[mkt] + "\nnot_a_key=5\n";
+            for (int k = 0; k < S.n; ++k) { const ss::Row& r = S.rows[k]; if (r.type == ss::T_LABEL) continue;
+                t += std::string(r.key) + "=" + (r.type == ss::T_COLOR ? "ZZZZZZ" : (r.type == ss::T_FLOAT ? "nan" : "999999999")) + "\n"; }
+            ss::Values W; ss::parse(S, mkt, t, W);
+            for (int k = 0; k < S.n; ++k) ok(W.v[(size_t)k] == D.v[(size_t)k], P + " invalid value -> default " + S.rows[k].key);
+        }
+    }
+    // colours pass through unchanged
+    for (int k = 0; k < S.n; ++k) if (S.rows[k].type == ss::T_COLOR) {
+        ss::Values V = ss::defaults(S, 0); V.v[(size_t)k] = 0x22C55E; ok(V.c(k) == 0x22C55Eul, P + " colour " + S.rows[k].key + " unchanged");
+        ss::Values W; ss::parse(S, 0, ss::format(S, V), W); ok(W.c(k) == 0x22C55Eul, P + " colour " + S.rows[k].key + " file round trip (RRGGBB)");
+    }
+    // group masters
+    for (int k = 0; k < S.n; ++k) if (S.rows[k].master) {
+        ss::Values V = ss::defaults(S, 0); V.v[(size_t)k] = 0; ss::masterClick(S, V, k);
+        for (int j : ss::itemsOf(S, k)) { if (S.rows[j].type == ss::T_BOOL) ok(!V.b(j), P + " master " + S.rows[k].key + " off unchecks " + S.rows[j].key); ok(!ss::effective(S, V, j), P + " master off -> " + S.rows[j].key + " not in effect"); }
+        V.v[(size_t)k] = 1; ss::masterClick(S, V, k);
+        for (int j : ss::itemsOf(S, k)) if (S.rows[j].type == ss::T_BOOL) ok(V.b(j), P + " master " + S.rows[k].key + " on checks " + S.rows[j].key);
+    }
+    // legacy samples
+    for (const LegacyCase& c : E.cases) {
+        ss::Values V = ss::defaults(S, c.market);
+        const bool rec = E.legacy && E.legacy(S, c.market, c.text, V);
+        if (!c.key) { ok(!rec, P + " legacy text must not be recognised: '" + std::string(c.text).substr(0, 40) + "'"); continue; }
+        ok(rec, P + " legacy recognised: '" + std::string(c.text).substr(0, 40) + "'");
+        const int k = ss::find(S, c.key); ok(k >= 0, P + " legacy key " + c.key);
+        if (k >= 0) ok(std::fabs(V.v[(size_t)k] - c.want) < 1e-6, P + " legacy " + c.key + " = " + ss::fmt(S.rows[k], V.v[(size_t)k]) + " want " + ss::fmt(S.rows[k], c.want));
+        for (int j = 0; j < S.n; ++j) ok(S.rows[j].type == ss::T_LABEL || ss::valid(S.rows[j], V.v[(size_t)j]), P + " legacy -> valid " + S.rows[j].key);
+    }
+    // the source: every row read, the window from the table, version literal
+    if (dir.empty()) return;
+    std::string src; if (!readAll(dir + "/" + E.cpp, src)) { fail(P + " cannot read " + E.cpp); return; }
+    std::string all = src; for (const std::string& x : E.extraSources) { std::string t; if (readAll(dir + "/" + x, t)) all += t; else fail(P + " cannot read " + x); }
+    for (int k = 0; k < S.n; ++k) { const ss::Row& r = S.rows[k]; if (r.type == ss::T_LABEL) continue;
+        ok(wordCount(all, upperKey(r.key)) > 0, P + " dead setting: '" + r.key + "' (" + upperKey(r.key) + ") is never read by " + E.cpp); }
+    ok(countOf(src, "ss::registerAll(") == 1, P + " the window must be registered by ss::registerAll (once)");
+    ok(countOf(src, "ss::fillDialog(") >= 1, P + " parmsLoad must fill the window with ss::fillDialog");
+    ok(countOf(src, "ss::readDialog(") >= 1, P + " parmsApply must read the window with ss::readDialog");
+    ok(countOf(src, "ss::onUpdate(") >= 1, P + " parmsUpdt must call ss::onUpdate (group masters)");
+    const char* banned[] = { "setBoolParameter(", "setIntegerParameter(", "setFloatParameter(", "setColorParameter(", "setListParameter(", "setLabelParameter(", "getIntegerValue(", "setIntegerValue(", "getParameterColor(", "setParameterColor(", "isBoxChecked(", "checkBox(", "getListIndex(", "setListIndex(", "getFloatValue(", "setFloatValue(" };
+    for (const char* b : banned) ok(countOf(src, b) == 0, P + " " + E.cpp + " calls " + b + " by hand (use the table / SettingsHost.h)");
+    const std::string want = std::string("setVersion(\"") + S.version + "\")";
+    ok(countOf(src, want) == 1, P + " setVersion literal must be " + want);
+}
+
+int main(int argc, char** argv) {
+    const std::string dir = argc > 1 ? argv[1] : "";
+    std::vector<Entry> E;
+    E.push_back(Entry{ &hlset::spec(), "HodLod.cpp", hlset::legacy, {
+        { "7,0,0,1,1,1,-1,-1,-1,-1,-1\n", ss::M_ES, "position", 7 },          // his ES / NQ file on 10-18
+        { "7,0,0,1,1,1,-1,-1,-1,-1,-1\n", ss::M_ES, "table_bg", 0x0F1520 },    // -1 = the default colour, never black
+        { "3,10,-20,0,1,1,255,-1,-1,-1,-1", ss::M_NQ, "offset_y", -20 },
+        { "3,10,-20,0,1,1,255,-1,-1,-1,-1", ss::M_NQ, "show_table", 0 },
+        { "3,10,-20,0,1,1,255,-1,-1,-1,-1", ss::M_NQ, "table_bg", 255 },
+        { "5", ss::M_CL, "position", 5 },
+        { "99,0,0", ss::M_CL, "position", 7 },                                // out of range -> default
+        { "1,2", ss::M_CL, nullptr, 0 },                                       // 2 fields: not a place file
+    }, {} });
+    E.push_back(Entry{ &dpset::spec(), "DeltaProfile.cpp", dpset::legacy, {
+        { "EPZ26|0|50|0|9|0|0|0|0|0|1|0|90|2|0\nNQ|0|50|0|9|0|0|0|0|0|1|0|90|2|0\n", ss::M_ES, "width", 110 },  // pre-2.8 default 50 -> the default (drawn 110 either way)
+        { "EPZ26|0|50|0|9|0|0|0|0|0|1|0|90|2|0\n", ss::M_ES, "font", 9 },
+    }, {} });
+    E.push_back(Entry{ &trset::spec(), "TapeReader.cpp", trset::legacy, {
+        { "7", ss::M_ES, "position", 7 },
+        { "4,10,-5,0", ss::M_NQ, "background", 0 },
+        { "4,10,-5,0", ss::M_NQ, "offset_x", 10 },
+    }, {} });
+    if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
+        const int mkt = ss::marketIndex(argv[3]);
+        for (const Entry& e : E) {
+            const ss::Spec& S = *e.S; std::printf("== %s %s (parameter version %u) - %s defaults\n", S.plugin, S.version, S.paramVersion, mkt >= 0 ? ss::MARKETS[mkt] : "ALL");
+            const ss::Values D = ss::defaults(S, mkt);
+            for (const ss::Line& L : ss::lines(S)) {
+                std::string t; for (int k : L.rows) { const ss::Row& r = S.rows[k]; std::string v = ss::fmt(r, D.v[(size_t)k]);
+                    if (r.type == ss::T_BOOL) v = D.b(k) ? "[x]" : "[ ]"; else if (r.type == ss::T_COLOR) v = "#" + v; else if (r.type == ss::T_LIST) { std::vector<std::string> c = ss::split(r.choices, ';'); v = D.i(k) < (int)c.size() ? c[(size_t)D.i(k)] : v; }
+                    t += std::string(t.empty() ? "" : "  |  ") + r.label + " " + v; }
+                std::printf("   ~%3dpx  %s\n", L.px, t.c_str());
+            }
+            for (int k = 0; k < S.n; ++k) if (S.rows[k].hidden) std::printf("   (hidden, kept in the file) %s = %s\n", S.rows[k].key, ss::fmt(S.rows[k], D.v[(size_t)k]).c_str());
+        }
+        return 0;
+    }
+    for (const Entry& e : E) {
+        // a table only binds its .cpp once the .cpp is migrated (it includes the table's header)
+        std::string src; const bool have = !dir.empty() && readAll(dir + "/" + e.cpp, src);
+        std::string hdr = std::string(e.S->plugin) + "Settings.h";
+        const bool migrated = have && (src.find("Settings.h\"") != std::string::npos) && (src.find("ss::registerAll(") != std::string::npos);
+        checkEntry(e, migrated ? dir : std::string());
+        if (have && !migrated) std::printf("NOTE %s: table checked; %s not migrated to the layer yet (source checks skipped)\n", e.S->plugin, e.cpp);
+    }
+    std::printf("%s settings contract: %d checks, %d failures (%d tables)\n", g_fail ? "FAIL" : "PASS", g_checks, g_fail, (int)E.size());
+    return g_fail ? 1 : 0;
+}

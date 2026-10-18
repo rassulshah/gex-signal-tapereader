@@ -136,7 +136,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.13.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.13.1"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -329,10 +329,10 @@ int cppExtension::setup(void) {
     // (1.13.0) version 5: "Spike vs prior biggest", "Spike lookback" (no longer part of the spike rule) and "Box shows" (did nothing)
     // removed - every row left is read by the chart: Ratio bars (the average), Position + Offset X / Y (the box), Spike vs average (0 = off)
     setParameterVersion(5);
-    setParameterDialogHeight(2);
+    setParameterDialogHeight(3);   // (1.13.1) 3 lines: Spike vs average on its own line (the first line was ~458 px, cut off at ~400)
     setIntegerParameter("Ratio bars", bas::RATIO_DEFAULT, 50);
     setListParameter("Position", (short)bas::POS_DEFAULT, bas::POS_CHOICES, 110, kParmAppendSameLine);
-    setFloatParameter("Spike vs average", (float)bas::SPIKE_AVG_DEFAULT_TENTHS / 10.0f, 50, kParmAppendSameLine);
+    setFloatParameter("Spike vs average", (float)bas::SPIKE_AVG_DEFAULT_TENTHS / 10.0f, 50);   // (1.13.1) own line - same row order, so saved values keep their rows
     setIntegerParameter("Offset X", 0, 50);                                // parameter 3
     setIntegerParameter("Offset Y", 0, 50, kParmAppendSameLine);           // 4
     return RTX_OK;
@@ -1142,6 +1142,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio) and Pace for sellers and buyers of the candle under the mouse anywhere on the chart, else the last closed candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars).");
-    p->setVersion("1.13.0");   // BAS_VERSION
+    p->setVersion("1.13.1");   // BAS_VERSION
     return p;
 }

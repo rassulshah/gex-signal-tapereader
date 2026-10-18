@@ -12,6 +12,8 @@
 #define DIR_SEPARATOR_CHR '/'
 typedef unsigned long RTDATE;
 typedef unsigned long COLOR;
+typedef unsigned short RTBOOL;   // (2.18.1 settings layer) SettingsHost.h
+typedef int RTX_RESULT;
 enum { RTX_OK=0, RTX_FAIL=-1, POST_DRAWING=1, OVERLAY=2, NO_UI=4, INSTRUMENT_SCALE=8, VAP_REQUIRED=16, kParmAppendSameLine=1, SYM_TICKINCR=171 };
 enum CHART_OPTION { OPT_RIGHT_MARGIN, OPT_FULL_REDRAW, OPT_CROSSHAIRS, OPT_GRIDLINES, OPT_BKGND_COLOR, OPT_GRIDLINE_COLOR, OPT_SCALEAREA_WIDTH, OPT_SHOW_TIMESCALE, OPT_MARGIN_ABOVE_BAR, OPT_MARGIN_BELOW_BAR, OPT_PIXELS_PER_BAR };   // (2.8.0 test double)
 enum iARRAY { barDateTime,barVolume };
@@ -90,7 +92,7 @@ public:
     int getChartOption(CHART_OPTION w,int* v){ if(mock::current->optFail)return RTX_FAIL; if(w==OPT_RIGHT_MARGIN){*v=mock::current->margin;return RTX_OK;} if(w==OPT_PIXELS_PER_BAR){*v=mock::current->ppb;return RTX_OK;} return RTX_FAIL; }
     int setChartOption(CHART_OPTION w,int v=1){ if(mock::current->optFail)return RTX_FAIL; if(w==OPT_RIGHT_MARGIN){mock::current->margin=v;++mock::current->marginSets;return RTX_OK;} return RTX_FAIL; }
     int getVisibleBars(int* s,int* e){ *s=0; *e=static_cast<int>(mock::current->bars.size())-1; return RTX_OK; }
-    void setBoolParameter(const char*,bool,int=0){} bool isBoxChecked(int i){return mock::current->checks[i];} int checkBox(int i,bool b){mock::current->checks[i]=b;return RTX_OK;} virtual int parmsLoad(){return RTX_FAIL;} virtual int parmsApply(){return RTX_FAIL;} virtual int parmsUpdt(unsigned int){return RTX_FAIL;}
+    void setBoolParameter(const char*,bool,int=0){ ++nparm(); } bool isBoxChecked(int i){return mock::current->checks[i];} int checkBox(int i,bool b){mock::current->checks[i]=b;return RTX_OK;} virtual int parmsLoad(){return RTX_FAIL;} virtual int parmsApply(){return RTX_FAIL;} virtual int parmsUpdt(unsigned int){return RTX_FAIL;}
     void* getUserData(){return mock::current->data;} void setUserData(void* p){if(!mock::current->noSlot)mock::current->data=p;}
     long getBarCount(){return static_cast<long>(mock::current->bars.size());}
     const char* getRootSymbol(char* b=NULL,const char* =NULL){if(b){std::strcpy(b,mock::current->root.c_str());return b;}return mock::current->root.c_str();} const char* getSymbol(){return mock::current->symbol.c_str();}
@@ -99,7 +101,13 @@ public:
     const char* getWorkingDirectoryPath(){return mock::current->directory.c_str();}
     float getProperty(int){return mock::current->tick;} int getSecondsPerBar(){return mock::current->seconds;}
     tm* getLocaltime(RTDATE stamp,tm* t){time_t v=static_cast<time_t>(stamp);return gmtime_r(&v,t);}
-    void setParameterVersion(int){} void setParameterDialogHeight(int){} void setIntegerParameter(const char*,int,int,int=0){}
+    void setParameterVersion(int){} void setParameterDialogHeight(int){} void setIntegerParameter(const char*,int,int,int=0){ ++nparm(); }
+    // (2.18.1, SettingsHost.h) the parameter API the settings layer uses: rows counted, values kept per id in parms[] / checks[]
+    static int& nparm(){ static int n=0; return n; } int getParameterCount(){ return nparm(); }
+    void setFloatParameter(const char*,float,int=0,int=0){ ++nparm(); } void setColorParameter(const char*,COLOR,int=0,int=0){ ++nparm(); }
+    void setListParameter(const char*,short,const char*,int=0,int=0){ ++nparm(); } void setLabelParameter(const char*,int=0,int=0){ ++nparm(); }
+    float getFloatValue(int){ return 0.0f; } void setFloatValue(int,float){} COLOR getParameterColor(int){ return 0; } int setParameterColor(int,COLOR){ return RTX_OK; }
+    int getListIndex(int){ return -1; } int setListIndex(int,int=-1){ return RTX_OK; } int enableParameter(int,RTBOOL){ return RTX_OK; }
     int getIntegerValue(int i){return mock::current->parms[i];} void setIntegerValue(int i,int v){mock::current->parms[i]=v;}
     void setFont(FONT){} void setTextColor(COLOR c){mock::current->ink=c;}
     int getTextWidth(const char* t,int){return static_cast<int>(std::strlen(t))*6;}

@@ -78,6 +78,8 @@
 #include "DealerLogic.h"
 #include "VwapTrendLogic.h"
 #include "TapeReaderLogic.h"
+#include "TapeReaderSettings.h"     // (1.3.1) the ONE settings table (SettingsSpec.h)
+#include "SettingsHost.h"           // (1.3.1) the window from the table
 #include "HostSlot.h"
 #include "HoverBoard.h"
 #include "ZoneStory.h"                  // (1.3.0) the Market State (MarketState.h) + the zone story
@@ -95,7 +97,7 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.3.0"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.3.1"          // keep equal to tr::VERSION and the setVersion literal below
 
 static const long long GRACE_MS = 5000;           // a closed candle is finalised when its pane rows landed, else 5 s after it closed
 static const long long CHECK_FAST_MS = 1000;      // Delta / order-flow records (the intrabar triggers)
@@ -202,8 +204,12 @@ public:
     virtual int mouse(RTX_EVENT* e);
     virtual int parmsLoad(void);                                       // (1.1.3) fills the dialog from the place file (never saves)
     virtual int parmsApply(void) { savePos(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { savePos(); return RTX_OK; }
-    bp::DlgSnap snap_;                                                 // (1.1.3) the dialog as it opened
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, trset::spec(), trIds(), (int)i); savePos(); return RTX_OK; }
+    static ss::Ids& trIds() { static ss::Ids I; return I; }        // (1.3.1) the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
+    struct SetStore { std::string mkt; ss::Store st; };
+    std::vector<SetStore> stores_;                                     // (1.3.1) per market, per object
+    ss::Store& storeFor(const std::string& mkt);
+    ss::Snap snap_;                                                    // (1.1.3) the dialog as it opened (1.3.1: SettingsSpec.h)
     HostSlot<TRState> slot_;
     TRState* state(bool create) { return slot_.get(this, create); }
     void clearState() { slot_.release(this); }
@@ -255,12 +261,8 @@ int cppExtension::setup(void)
     // controls only (Rassul 2026-10-02: settings windows show controls only). (1.1.3) Position (9 spots, default Top left), Offset X /
     // Y (px, -600..600), Banner background; version 2 = IRT resets the saved rows once (the chart reads the place file, the dialog is
     // filled from it when it opens)
-    setParameterVersion(2);
-    setParameterDialogHeight(2);
-    setListParameter("Position", (short)tr::POS_DEFAULT, tr::POS_CHOICES);
-    setIntegerParameter("Offset X", 0, 50, kParmAppendSameLine);
-    setIntegerParameter("Offset Y", 0, 50, kParmAppendSameLine);
-    setBoolParameter("Banner background", true);
+    // (1.3.1, settings audit 2026-10-18) the same rows from trset::spec(), registered / filled / read by SettingsHost.h (no index arithmetic)
+    ss::registerAll(this, trset::spec(), TapeReader::trIds());
     CPEN p(0x009CA3AF, 1, P_SOLID);
     setOutputParameter("Tape Reader", DRAW_INVISIBLE, &p, 0x009CA3AF, OUTPUT_NO_UI);
     setArrayDrawingFlags(0, (DRAW_FLAGS)(CONNECT_CNONZERO | NO_AUTOSCALE));
@@ -623,59 +625,46 @@ void TapeReader::pump()
     } catch (...) { S.faulted = true; S.state = "calculation error (cleared on symbol change)"; }
 }
 
-// (1.1.3) the place file "pos,dx,dy,bg" (1.1.0-1.1.2 files: "pos" only = no offset, background on); malformed = the defaults + why
-struct TrPlace { bp::Place pl; bool bg = true; std::string why; };
-static TrPlace trReadPlace(const std::string& p) {
-    TrPlace T; T.pl.pos = tr::POS_DEFAULT;
-    std::string text; long long s2;
-    if (tr::readBounded(p, 64, text, s2) != tr::RD_OK) { T.why = "no place file: defaults"; return T; }
-    const std::vector<std::string> L = tr::lines(text, false); std::vector<std::string> rest;
-    if (L.empty() || !bp::parse(L[0], tr::POS_DEFAULT, T.pl, &T.why, &rest)) { if (T.why.empty()) T.why = "empty"; T.why = "place file ignored (" + T.why + "): defaults"; T.pl = bp::Place(); T.pl.pos = tr::POS_DEFAULT; return T; }
-    if (!rest.empty()) { if (rest[0] == "0") T.bg = false; else if (rest[0] != "1") T.why = "bad background field - on"; }
-    return T;
-}
+// (1.3.1) TapeReader.settings-<MKT>.txt (keyed), migrated once from TapeReader.place-<MKT>.txt ("pos,dx,dy,bg"), which is left in place
 static std::string trMarket(cppExtension* x) { char rb[32]; std::memset(rb, 0, sizeof(rb)); const char* rs = x->getRootSymbol(rb); return dl::marketFor(0, rs ? rs : ""); }
-static bool trInDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }   // the settings window's copy has no bar size
-static std::vector<long long> trDialog(cppExtension* x) { std::vector<long long> v; v.push_back(x->getListIndex(0)); v.push_back(x->getIntegerValue(1)); v.push_back(x->getIntegerValue(2)); v.push_back(x->isBoxChecked(3) ? 1 : 0); return v; }
+ss::Store& TapeReader::storeFor(const std::string& mkt)
+{
+    for (size_t i = 0; i < stores_.size(); i++) if (stores_[i].mkt == mkt) return stores_[i].st;
+    if (stores_.size() >= 8) stores_.erase(stores_.begin());
+    const std::string F = flexDir();
+    SetStore n; n.mkt = mkt; n.st.S = &trset::spec();
+    if (!F.empty() && !mkt.empty()) { n.st.path = F + "TapeReader.settings-" + mkt + ".txt"; n.st.legacyPaths.push_back(F + "TapeReader.place-" + mkt + ".txt"); }
+    n.st.legacy = trset::legacy;
+    stores_.push_back(n); return stores_.back().st;
+}
 int TapeReader::parmsLoad(void)
 {
-    if (!trInDialog(this)) return RTX_OK;
-    const std::string mkt = trMarket(this), F = flexDir(); if (mkt.empty() || F.empty()) return RTX_OK;
-    const TrPlace T = trReadPlace(F + "TapeReader.place-" + mkt + ".txt");
-    setListIndex(0, T.pl.pos); setIntegerValue(1, T.pl.dx); setIntegerValue(2, T.pl.dy); checkBox(3, T.bg);
-    snap_.take(trDialog(this));
+    if (!ss::inDialog(this)) return RTX_OK;                              // opening never saves
+    const std::string mkt = trMarket(this); if (mkt.empty()) return RTX_OK;
+    ss::fillDialog(this, trset::spec(), trIds(), storeFor(mkt).load(ss::marketIndex(mkt), steadyMs(), true), snap_);
     return RTX_OK;
 }
 void TapeReader::savePos()
 {
-    if (!trInDialog(this)) return;                                      // (1.1.3) only the settings window's values are real
+    if (!ss::inDialog(this)) return;                                    // (1.1.3) only the settings window's values are real
     const std::string mkt = trMarket(this); if (mkt.empty()) return;
-    const std::string F = flexDir(); if (F.empty()) return;
-    const std::string path = F + "TapeReader.place-" + mkt + ".txt";
-    const TrPlace T = trReadPlace(path);
-    const std::vector<long long> now = trDialog(this);
-    const long long fv[4] = { T.pl.pos, T.pl.dx, T.pl.dy, T.bg ? 1 : 0 };
-    long long v[4]; for (size_t k = 0; k < 4; ++k) v[k] = snap_.pick(k, now[k], fv[k]);   // a control he did not touch keeps the file's value
-    bp::Place pl; pl.pos = bp::posOk((int)v[0]) && v[0] == (int)v[0] ? (int)v[0] : T.pl.pos;   // garbage never reaches the file
-    pl.dx = bp::offOk((int)v[1]) && v[1] == (int)v[1] ? (int)v[1] : T.pl.dx; pl.dy = bp::offOk((int)v[2]) && v[2] == (int)v[2] ? (int)v[2] : T.pl.dy;
-    writeAtomic(path, bp::format(pl) + "," + (v[3] ? "1" : "0") + "\n");
-    snap_.take(now);
+    ss::Store& st = storeFor(mkt);
+    const ss::Values F = st.load(ss::marketIndex(mkt), steadyMs(), true);
+    const ss::Values V = ss::readDialog(this, trset::spec(), trIds(), F, snap_);   // untouched -> the file's value; garbage never saved
+    if (st.save(V)) snap_.take(ss::dialogNow(this, trset::spec(), trIds(), V));
     TRState* S = testState(); if (S) { S->placeSig = -2; S->placeChecked = -1; }
 }
-// the per-market place file is the only source while drawing (IRT hands the chart copy list 0): no file = Top left (1.1.3)
+// the per-market settings file is the only source while drawing (IRT hands the chart copy list 0): no file = Top left (1.1.3)
 int TapeReader::position(TRState& S)
 {
     const long long now = steadyMs();
     if (S.placeChecked >= 0 && now >= S.placeChecked && now - S.placeChecked < 1000) return S.pos;
     S.placeChecked = now;
-    const std::string F = flexDir(); if (F.empty()) { S.place = bp::Place(); S.place.pos = tr::POS_DEFAULT; S.bg = true; return S.pos = tr::POS_DEFAULT; }
-    const std::string p = F + "TapeReader.place-" + S.mkt + ".txt";
-    const long long sig = tr::fileSig(p);
-    if (sig == S.placeSig) return S.pos;
-    S.placeSig = sig;
-    const TrPlace T = trReadPlace(p);
-    if (T.pl.pos != S.place.pos || T.pl.dx != S.place.dx || T.pl.dy != S.place.dy) { S.hyst.reset(); S.inBanner = false; }   // moved: start clean
-    S.place = T.pl; S.bg = T.bg; S.placeWhy = T.why; S.pos = T.pl.pos;
+    if (flexDir().empty() || S.mkt.empty()) { S.place = bp::Place(); S.place.pos = tr::POS_DEFAULT; S.bg = true; return S.pos = tr::POS_DEFAULT; }
+    const ss::Values V = storeFor(S.mkt).load(ss::marketIndex(S.mkt), now);
+    bp::Place pl; pl.pos = V.i(trset::K_POSITION); pl.dx = V.i(trset::K_OFFSET_X); pl.dy = V.i(trset::K_OFFSET_Y);
+    if (pl.pos != S.place.pos || pl.dx != S.place.dx || pl.dy != S.place.dy) { S.hyst.reset(); S.inBanner = false; }   // moved: start clean
+    S.place = pl; S.bg = V.b(trset::K_BACKGROUND); S.placeWhy = V.why; S.pos = pl.pos;
     return S.pos;
 }
 // the last price bar's right edge (x): the usable area ends there (never beyond price); -1 = unknown
@@ -936,6 +925,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. A 1-2 line banner at the top left (the read + the Liquidity warning); mouse over it for BUYERS / SELLERS / OPTIONS. Settings: Position, Offset X / Y, Banner background.");
-    p->setVersion("1.3.0");   // TR_VERSION
+    p->setVersion("1.3.1");   // TR_VERSION = tr::VERSION = trset::PLUGIN_VERSION
     return p;
 }
