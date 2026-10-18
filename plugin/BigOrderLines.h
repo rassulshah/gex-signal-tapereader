@@ -35,7 +35,7 @@
 #include <vector>
 
 namespace bol {
-static const char* const VERSION = "1.7.0";   // (1.7.0) Big Lot S20 / S10 / S5: LogDist::stats with nSess > 0 = sizes at or above which ~20 / 10 / 5 orders occur per session (rank over the pooled sessions);   // (1.6.0) LogDist::stats = Large Lot Methodology (rank-based 1SD / 2SD / 3SD, automatic start = mean + 2 SD of all orders);   // (1.5.0) histP: RTH / overnight split of the new-order sizes for the large-lot distribution;   // (1.4.0) LogDist: the big-lot distribution (log mean / SD, 5 sessions) for the BIG column tiers;   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
+static const char* const VERSION = "1.8.0";   // (1.8.0, lsLiquidityProfile 0.44.0, audit B finding 5) biggestSingle(): the largest SINGLE known resting order per side within / beyond the reach (the LMT R "S5 anywhere" box and the Market State resting_* facts compare single orders with the single-order tiers - never a price level's total);   // (1.7.0) Big Lot S20 / S10 / S5: LogDist::stats with nSess > 0 = sizes at or above which ~20 / 10 / 5 orders occur per session (rank over the pooled sessions);   // (1.6.0) LogDist::stats = Large Lot Methodology (rank-based 1SD / 2SD / 3SD, automatic start = mean + 2 SD of all orders);   // (1.5.0) histP: RTH / overnight split of the new-order sizes for the large-lot distribution;   // (1.4.0) LogDist: the big-lot distribution (log mean / SD, 5 sessions) for the BIG column tiers;   // (1.3.0) biggest(): the biggest order each side within reach for the BIG column (display only, sticky +20%);   // (1.2.0) self-tuning big size: k-th largest new order near price in the last 60 min (~3 per side per hour), nightly prior at cold start, +/-20% per minute   // (1.1.0) depthMin: large = also >= 3x the typical displayed size within reach
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -426,6 +426,23 @@ public:
         if (cur && (!best || (double)best->size < 1.2 * (double)cur->size)) { best = cur; bestId = showId[s]; }
         if (!best) { showId[s] = 0; return false; }
         showId[s] = bestId; outPx = best->px; outSize = best->size; return true;
+    }
+    // (1.8.0) the largest SINGLE known resting order on side s (size >= minSize): beyond = farther than the reach from price (either
+    // direction, as the old depth-book check), else within the reach on its own side (inReach). Ties: the nearer price. Read-only.
+    bool biggestSingle(int s, bool beyond, long long minSize, Tick& outPx, long long& outSize) const {
+        outPx = 0; outSize = 0;
+        if (s < 0 || s > 1 || !havePx || reach <= 0) return false;
+        auto take = [&](const Ord& o) {
+            if (o.side != s || o.size <= 0 || o.size < minSize || o.px <= 0) return;
+            const bool isFar = std::llabs((long long)(o.px - px)) > (long long)reach;
+            if (beyond ? !isFar : !inReach(s, o.px)) return;
+            const long long d = std::llabs((long long)(o.px - px)), bd = std::llabs((long long)(outPx - px));
+            if (o.size > outSize || (o.size == outSize && d < bd)) { outSize = o.size; outPx = o.px; }
+        };
+        if (minSize >= P.floor) {                                   // the candidates already hold every order >= the floor
+            for (std::set<long long>::const_iterator i = big[s].begin(); i != big[s].end(); ++i) { std::unordered_map<long long, Ord>::const_iterator it = book.find(*i); if (it != book.end()) take(it->second); }
+        } else for (std::unordered_map<long long, Ord>::const_iterator it = book.begin(); it != book.end(); ++it) take(it->second);
+        return outSize > 0;
     }
     // the selection: the biggest order on each side within the reach (size >= the minimum), else nothing
     void evaluate(long long t) {

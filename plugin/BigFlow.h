@@ -20,7 +20,7 @@
 #include <vector>
 
 namespace bfl {
-static const char* const VERSION = "1.2.1";
+static const char* const VERSION = "1.3.0";   // (1.3.0, lsLiquidityProfile 0.44.0) Mkt::maxIn(): the largest single market order (one aggressor id) per side whose last fill fell in a bar, for the Market State LOTS facts (every completed order is kept 30 min as (tLast, side, lots), any size)
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };              // FILL side = the aggressor: BID = a buyer lifted the offer, ASK = a seller hit the bid
 static const long long DONE_MS = 2000;      // a market order is complete 2 s after its last fill
@@ -65,8 +65,11 @@ public:
     std::vector<long long> big;                       // completed sizes >= the start (the yardstick sample, this session)
     std::vector<long long> cnt;                       // completed sizes 1..1023 (+ the rest in the last) for the start
     long long nAll = 0, fills = 0, noAggr = 0;
+    struct Recent { long long t = 0; int side = BID; long long lots = 0; };
+    std::deque<Recent> recent;                        // (1.3.0) every completed market order of the last RECENT_MS (any size), sorted by its last fill
+    static const long long RECENT_MS = 1800000; static const size_t RECENT_CAP = 200000;
     Mkt() : cnt(1024, 0) {}
-    void clear() { open.clear(); done.clear(); fresh.clear(); big.clear(); bigP[0].clear(); bigP[1].clear(); std::fill(cnt.begin(), cnt.end(), 0); nAll = fills = noAggr = 0; }
+    void clear() { open.clear(); done.clear(); fresh.clear(); recent.clear(); big.clear(); bigP[0].clear(); bigP[1].clear(); std::fill(cnt.begin(), cnt.end(), 0); nAll = fills = noAggr = 0; }
     long long start() const {                         // the 99th percentile of every completed market order, never under 3
         if (nAll <= 0) return 3;
         const long long want = std::max(1LL, (long long)std::ceil(0.01 * (double)nAll));
@@ -90,13 +93,30 @@ public:
             Ord o = it->second; o.big = o.lots >= st;
             if (o.lots >= std::min((long long)LOG_MIN, st) && fresh.size() < 5000) fresh.push_back(std::make_pair(it->first, o));
             ++nAll; cnt[(size_t)std::min<long long>(o.lots, (long long)cnt.size() - 1)]++;
+            {   // kept sorted by the last fill's time (orders completing in one step come in any order)
+                Recent r; r.t = o.tLast; r.side = o.side; r.lots = o.lots;
+                std::deque<Recent>::iterator at = recent.end(); while (at != recent.begin() && (at - 1)->t > r.t) --at;
+                recent.insert(at, r); if (recent.size() > RECENT_CAP) recent.pop_front();
+            }
             if (o.lots >= st) { big.push_back(o.lots); { const int md = (int)((o.tLast / 60000LL) % 1440LL); bigP[(md >= 510 && md < 900) ? 0 : 1].push_back(o.lots); } done.push_back(std::make_pair(it->first, o)); }
             it = open.erase(it);
         }
         while (!done.empty() && done.front().second.tLast < now - KEEP_MS) done.pop_front();
+        while (!recent.empty() && recent.front().t < now - RECENT_MS) recent.pop_front();
         if (open.size() > 20000) open.clear();          // a stuck feed never grows without bound
     }
     bool stats(double& mu, double v[3]) const { return logStats(big, mu, v); }
+    // (1.3.0) the largest single market order on side s whose LAST fill is in [t0, t1) (completed, or still filling); 0 = none
+    long long maxIn(int s, long long t0, long long t1) const {
+        long long m = 0;
+        for (std::deque<Recent>::const_reverse_iterator it = recent.rbegin(); it != recent.rend(); ++it) {
+            if (it->t < t0) break;                    // sorted by the last fill: nothing earlier can be in the bar
+            if (it->t < t1 && it->side == s) m = std::max(m, it->lots);
+        }
+        for (std::unordered_map<long long, Ord>::const_iterator it = open.begin(); it != open.end(); ++it)
+            if (it->second.side == s && it->second.tLast >= t0 && it->second.tLast < t1) m = std::max(m, it->second.lots);
+        return m;
+    }
     // the marks at or above `floor` lots (completed + still filling), at each order's volume-weighted price
     std::vector<Mark> marks(long long now, long long floor, int per = 5) const {
         std::vector<Mark> in;
@@ -120,7 +140,7 @@ public:
     void clear() { ord.clear(); seen.clear(); done.clear(); fresh.clear(); reloadsSeen = 0; }
     static bool is(const Ord& o) { return o.reloads >= 2 && o.shown > 0 && o.traded >= 2 * o.shown; }
     void onNew(long long id, int side, Tick px, long long size) {
-        if (side != BID && side != ASK || px <= 0 || size < 0) return;
+        if ((side != BID && side != ASK) || px <= 0 || size < 0) return;
         seen[id] = std::make_pair(side, std::make_pair(px, size));
         if (seen.size() > 600000) seen.clear();
     }

@@ -69,7 +69,11 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.14.1"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.15.0"          // keep equal to bba::VERSION and the setVersion literal below
+// (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
+// complete sessions before it (bba::tiersFor) and only after the chart history before that session is fully read; the facts come from the
+// last 8 sessions of the chart whatever is in view (and are recorded for 8 sessions); SignalBoard B events from the record for the last
+// 120 closed candles (not the view), bit 7 = pivot confirmed; the 5-s log-normal fit is gone (SIZES = the S-tiers in force).
 
 #if defined(_WIN32)
 #define BBA_SEP "\\"
@@ -188,13 +192,12 @@ struct PickInfo { int cat = -1; std::string lv; double lvPx = 0; bool sweep = fa
 struct PassCtx { bba::Swing sw; std::vector<signed char> bu, bd; std::vector<double> vw, sd; };   // (1.13.0) brk = the pivot broken (1 / 2), trend = vwapTrend level   // (1.12.0) why a print got its category
 struct HoverT { bba::Box box; long long t = 0; int side = -1; PickInfo pi; long long lots = 0; double px = 0; };
 struct BBState {
-    bool sdOk = false; long long sd[3] = {0, 0, 0}; long long sdCheckMs = -1, sdN = 0; double sdMu = 0; std::string sdWhy = "learning";   // (1.5.0) the print SD sizes
-    // (1.5.0, Rassul 16:27 "yes" to sizes by time of day) per 30-min window of the bar END (48), then day / night, then the 1.4 rule
-    struct Thr { bool ok = false; double mu = 0; long long sd[3] = {0, 0, 0}; long long n = 0; };
-    Thr win[48]; Thr phase[2];
-    std::vector<long long> pvSorted[2]; int tierSess[2] = {0, 0};   // (1.10.0) every print per phase (0 night, 1 day 8:30 AM - 4:00 PM), biggest first, and the sessions they came from
-    long long catSize(int ph, const bba::Cat& c) const { if (c.n <= 0) return (long long)c.lots; const long long z = bigLot(ph, c.n); return z > 0 ? std::max(z, (long long)c.lots) : 0; }   // (1.11.0) category 4: a fixed size (>= lots); 1 - 3: Big Lot N, never under the minimum   // (1.10.0, Rassul 14:32 "an optional minimum threshold") Big Lot N, never under his minimum lots
-    long long bigLot(int ph, int n) const { const size_t r = (size_t)n * (size_t)tierSess[ph]; return (n >= 1 && r >= 1 && pvSorted[ph].size() >= std::max<size_t>(r, 30)) ? pvSorted[ph][r - 1] : 0; }   // Big Lot N: the size at rank N x sessions
+    long long sdCheckMs = -1; std::string sdWhy = "learning";   // (1.15.0) the SIZES status line: the S-tiers in force (the 1.5 log-normal fit is gone)
+    // (1.15.0) the Big Lot tiers per session (svl session key), decided ONCE (bba::tiersFor) and then fixed for every candle of that session;
+    // covered = the chart's closed bars are all final from covSess on (covStart: back to the chart's first bar); bySess = prints per session
+    std::map<long, bba::TierSet> tiers; long covSess = LONG_MAX; bool covStart = false;   // LONG_MAX = nothing final yet (never decide before compute ran)
+    std::map<long, bba::SessPrints> bySess; size_t bySessN = (size_t)-1;
+    long long boardLast = 0, boardMs = -1; int boardN = 0;   // (1.15.0) the SignalBoard B pass (from the record, not the view)
     bool busy = false;
     std::string identity, market, symbol, state = "starting", lastStatusText, settingsWhy = "missing (defaults)", chartKey;
     int spb = 0; long long session = -1; double tick = 0;
@@ -257,11 +260,15 @@ private:
     const std::vector<bba::NamedLevel>& levelsFor(BBState& S, int i, bool closed);
     void gammaRead(BBState& S, long long now);
     void statsBuild(BBState& S, long long now);
-    template <class H, class L, class C> PickInfo choose(BBState& S, int i, bool closed, int sd, const bba::Pick& p, int ph, const PassCtx& X, H& hi, L& lo, C& cl);
+    template <class H, class L, class C> PickInfo choose(BBState& S, int i, bool closed, int sd, const bba::Pick& p, int ph, const bba::TierSet& T, const PassCtx& X, H& hi, L& lo, C& cl);
     int trendAt(BBState& S, int i);
     void ensureBars(BBState& S);
     template <class H, class L> void passCtx(BBState& S, H& hi, L& lo, int n, PassCtx& X);
     void logPass(BBState& S, long long now);
+    const bba::TierSet* tierFor(BBState& S, long sess);   // (1.15.0) the session's tiers once decidable (nullptr = still reading history)
+    const bba::TierSet& tiersAt(BBState& S, long sess) { static const bba::TierSet learning; const bba::TierSet* T = tierFor(S, sess); return T ? *T : learning; }
+    void tierStatus(BBState& S, long long now);
+    void boardPass(BBState& S, long long now);           // (1.15.0) SignalBoard B from the record
     std::string printsPath(BBState& S, long long sess) { const std::string d = dir(); return d.empty() ? d : d + BBA_SEP + stem(S) + "-prints-" + std::to_string(sess) + ".csv"; }
     std::string statsPath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() ? f : f + BBA_SEP "BigBidAsk.stats-" + mkt + ".txt"; }
     void saveSettings();
@@ -378,49 +385,22 @@ bba::Settings BigBidAsk::readSettingsFile(const std::string& mkt, std::string& w
     if (why.empty()) why = "file";
     return s;
 }
-// (1.5.0) the print distribution of THIS chart: the biggest print per side of each closed candle on it (the newest 2,300 - about 5
-// sessions of 3-min bars), learned per 30-minute window of the day (the candle's END time; 30+ prints needed), else per phase (day
-// 8:30 AM - 3:00 PM CT / night), else not ready (the 1.4 bold-ratio rule); recomputed every 5 s
-static int winOf(int mod) { return mod <= 0 ? 47 : ((mod - 1) / 30) % 48; }   // END 9:00 -> the 8:30-9:00 window
 static bool dayOf(const BBState& S, int m) { return m > S.openMin && m <= S.closeMin + 60; }   // (1.11.0) day = the RTH open to an hour after the RTH close (ES 8:30 AM - 4:00 PM)   // (1.10.0, Rassul 14:27) day = 8:30 AM - 4:00 PM CT (the 3 - 4 PM hour is no longer judged by night sizes)
-static void printSd(BBState& S, long long now, const std::function<int(long long)>& modOf) {
-    if (S.sdCheckMs >= 0 && now >= S.sdCheckMs && now - S.sdCheckMs < 5000) return;
-    S.sdCheckMs = now;
-    for (int i = 0; i < 48; ++i) S.win[i] = BBState::Thr();
-    S.phase[0] = S.phase[1] = BBState::Thr();
-    if (S.fin.empty()) { S.sdOk = false; S.sdWhy = "learning (no closed candles)"; return; }
-    bba::PrintDist w[48], ph[2]; int k = 0;
-    std::vector<long long> pv[2]; std::set<long long> ses[2];   // (1.9.0) S5: every print per phase, and the sessions they came from
-    for (std::map<long long, bba::Facts>::const_reverse_iterator it = S.fin.rbegin(); it != S.fin.rend() && k < 2300; ++it, ++k) {
-        const bba::Facts& F = it->second; if (!F.valid || !F.closed) continue;
-        const int m = modOf(it->first); if (m < 0) continue;
-        const int wi = winOf(m), pi = dayOf(S, m) ? 1 : 0;
-        if (F.bid.ok) { w[wi].add(F.bid.vol); ph[pi].add(F.bid.vol); pv[pi].push_back(F.bid.vol); }
-        if (F.ask.ok) { w[wi].add(F.ask.vol); ph[pi].add(F.ask.vol); pv[pi].push_back(F.ask.vol); }
-        ses[pi].insert((it->first - 1 + 7 * 3600) / 86400);   // session = 5:00 PM to 4:00 PM CT (bar stamps are local seconds)
+// (1.15.0) the 1.5 - 1.14 printSd (a log-normal fit over the newest 2,300 candles every 5 s, and Big Lot N over a moving window that
+// counted today's partial session and partly read sessions as whole ones) is gone: tiers are per session, decided once (tierFor).
+// (1.15.0) a complete session: 3/4 of its day candles (the statistics' rule)
+static int dayNeed(const BBState& S) { const int per = S.spb > 0 ? S.spb : 180; return std::max(20, (int)((S.closeMin + 60 - S.openMin) * 60 / per * 3 / 4)); }
+// (1.15.0) the time filter of one candle (Skip first / last, RTH only) - the chart, the print log and the board use the same rule
+static bool timeSkipped(const bba::Settings& set, const svl::Cls& cls, int endSec, int openMin, int closeMin) {
+    if (set.rthOnly && cls.kind != svl::RTH) return true;
+    if (set.skipFirst > 0 || set.skipLast > 0) {
+        const int st = cls.startSec, en = endSec, o1 = 17 * 3600, o2 = openMin * 60, c1 = 16 * 3600, c2 = closeMin * 60, X = set.skipFirst * 60, Y = set.skipLast * 60;
+        if ((X > 0 && ((st >= o1 && st < o1 + X) || (st >= o2 && st < o2 + X))) || (Y > 0 && ((en > c1 - Y && en <= c1) || (en > c2 - Y && en <= c2)))) return true;
     }
-    auto fill = [](const bba::PrintDist& d, BBState::Thr& t) { long long v[3] = {0, 0, 0}; double mu = 0; long long n = 0; t.ok = d.stats(30, n, mu, v); t.n = n; if (t.ok) { t.mu = mu; for (int q = 0; q < 3; ++q) t.sd[q] = v[q]; } };
-    for (int i = 0; i < 48; ++i) fill(w[i], S.win[i]);
-    for (int i = 0; i < 2; ++i) fill(ph[i], S.phase[i]);
-    // (1.10.0) the prints per phase, biggest first: Big Lot N = the size at rank N x sessions (BBState::bigLot)
-    for (int i = 0; i < 2; ++i) { S.tierSess[i] = (int)ses[i].size(); std::sort(pv[i].begin(), pv[i].end(), std::greater<long long>()); S.pvSorted[i].swap(pv[i]); }
-    // the newest candle's sizes for the status line
-    const int m0 = modOf(S.fin.rbegin()->first);
-    const BBState::Thr* t0 = m0 >= 0 && S.win[winOf(m0)].ok ? &S.win[winOf(m0)] : m0 >= 0 && S.phase[dayOf(S, m0) ? 1 : 0].ok ? &S.phase[dayOf(S, m0) ? 1 : 0] : nullptr;
-    S.sdOk = t0 != nullptr;
-    if (t0) { S.sdMu = t0->mu; for (int q = 0; q < 3; ++q) S.sd[q] = t0->sd[q]; S.sdN = t0->n; }
-    int wins = 0; for (int i = 0; i < 48; ++i) if (S.win[i].ok) ++wins;
-    S.sdWhy = t0 ? std::string(m0 >= 0 && S.win[winOf(m0)].ok ? "this 30-min window" : (dayOf(S, m0) ? "day (window still learning)" : "night (window still learning)")) +
-                   " " + std::to_string(t0->n) + " prints: Big mu " + std::to_string((long long)std::llround(t0->mu)) + " / 1SD " + std::to_string(t0->sd[0]) +
-                   " / 3SD " + std::to_string(t0->sd[2]) + " lots; windows ready " + std::to_string(wins) + "/48"
-                 : "learning - bold ratio rule";
-    {   std::string t = "; Big Lot";
-        for (int k = 0; k < 3; ++k) { const bba::Cat& c = S.set.cat[k];
-            t += std::string(k ? " |" : "") + " " + std::to_string(c.n) + (c.lots > 0 ? " min " + std::to_string(c.lots) : std::string()) + (c.on ? "" : " (off)") + ": day " + std::to_string(S.catSize(1, c)) + " / night " + std::to_string(S.catSize(0, c)) + " lots"; }
-        S.sdWhy += t + " (" + std::to_string(S.tierSess[1]) + " day / " + std::to_string(S.tierSess[0]) + " night sessions)"; }
+    return false;
 }
 void BigBidAsk::settings(BBState& S, long long now) {
-    printSd(S, now, [this](long long t) { struct tm m; std::memset(&m, 0, sizeof(m)); return t > 0 && getLocaltime((RTDATE)t, &m) ? m.tm_hour * 60 + m.tm_min : -1; });
+    tierStatus(S, now);   // (1.15.0)
     if (S.setCheckMs >= 0 && now >= S.setCheckMs && now - S.setCheckMs < 1000) return;
     S.setCheckMs = now;
     const std::string p = settingsPath(S.market);
@@ -631,7 +611,12 @@ void BigBidAsk::compute(BBState& S, bool fromDraw) {
     S.builtMs = now; S.lastCount = count; S.lastFirst = first; S.lastLast = last;
     int vs = 0, ve = -1;
     if (!fromDraw || getVisibleBars(&vs, &ve) != RTX_OK || vs < 0 || ve < vs) { vs = std::max(0L, count - 400); ve = (int)count - 1; }
-    const int from = std::max(0, vs - LEAD), lo0 = std::max(0, from - 140);   // (1.3.0) priors of the same time of day reach further back
+    // (1.15.0, audit B finding 2) the facts of the last 8 sessions are read whatever is in view (the tiers must never depend on how far he
+    // scrolled): the read starts at the first closed candle of that span that is not final yet (900 reads a pass), or at the view if earlier
+    const int histBars = (int)std::min<long long>(count, 8LL * 86400 / std::max(60, S.spb > 0 ? S.spb : 180) + 200);
+    int firstOpen = (int)count - 1;
+    for (int i = std::max(0, (int)count - histBars); i < (int)count - 1; ++i) if (!S.fin.count((long long)times[i])) { firstOpen = i; break; }
+    const int from = std::min(std::max(0, vs - LEAD), firstOpen), lo0 = std::max(0, from - 140);   // (1.3.0) priors of the same time of day reach further back
     std::vector<bba::Facts> seq; seq.reserve((size_t)(count - lo0));
     int reads = 0; bool capped = false;
     for (int i = lo0; i < (int)count; ++i) {
@@ -673,9 +658,17 @@ void BigBidAsk::compute(BBState& S, bool fromDraw) {
         if (!S.raw.count(t) || !priorsKnown) continue;                           // not final yet: retried next pass
         S.fin[t] = seq[k]; S.raw.erase(t); ++S.decided;
         const long long sess = sessionOf(t);
-        if (seq[k].valid && sess >= S.session - 2 && sess <= S.session && sess > 0 && !S.recorded.count(t) && S.pending.size() < REC_LINES_MAX) S.pending.push_back(std::make_pair(sess, seq[k]));
+        if (seq[k].valid && sess >= S.session - 7 && sess <= S.session && sess > 0 && !S.recorded.count(t) && S.pending.size() < REC_LINES_MAX) S.pending.push_back(std::make_pair(sess, seq[k]));   // (1.15.0) 8 sessions (the tiers' source survives a restart)
     }
     if (S.raw.size() > 50000) S.raw.clear();                                        // bounded (re-read if needed)
+    {   // (1.15.0) how far back every closed chart bar is final (contiguous from the last closed bar): the tiers of a session are decided
+        // only once the 7 days before it are covered (or the chart's first bar is reached)
+        int c0 = (int)count - 1;
+        while (c0 > 0 && S.fin.count((long long)times[c0 - 1])) --c0;
+        S.covStart = c0 == 0;
+        long d = 0; int e = 0; S.covSess = c0 < (int)count - 1 && parts((long long)times[c0], d, e) ? svl::classify(d, e, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin).sess : LONG_MAX;
+        if (c0 >= (int)count - 1) S.covSess = LONG_MAX;                             // nothing final yet
+    }
     S.state = capped ? "reading history (continues next pass)" : "ready";
 }
 void BigBidAsk::load(BBState& S) {
@@ -684,8 +677,12 @@ void BigBidAsk::load(BBState& S) {
         const std::string path = printsPath(S, k); std::string text; long long st = -1;
         if (!statFile(path, st) || !readSmall(path, REC_FILE_MAX, text)) continue;
         std::istringstream in(text); std::string line; bool head = true;
-        while (std::getline(in, line)) { if (head) { head = false; continue; } const size_t a = line.find('|'), b = a == std::string::npos ? a : line.find('|', a + 1);
-            if (b == std::string::npos) continue; S.logged.insert(line.substr(0, a) + (line.substr(a + 1, b - a - 1) == "-1" ? "b" : "a")); }
+        while (std::getline(in, line)) {
+            if (head) { head = false; continue; }
+            const size_t a = line.find('|'), b = a == std::string::npos ? a : line.find('|', a + 1);
+            if (b == std::string::npos) continue;
+            S.logged.insert(line.substr(0, a) + (line.substr(a + 1, b - a - 1) == "-1" ? "b" : "a"));
+        }
     }
     for (long long k = S.session - 10; k <= S.session; ++k) {   // (1.11.0) back 10 days: 5 complete sessions for the statistics
         const std::string path = d + BBA_SEP + stem(S) + "-" + std::to_string(k) + ".csv";
@@ -765,7 +762,8 @@ void BigBidAsk::pump(bool fromDraw) {
         identify(S);
         const double tick = cleanTick(getProperty(SYM_TICKINCR));
         if (tick <= 0) { S.state = "no tick size (SYM_TICKINCR)"; return; }
-        if (tick != S.tick) { S.fin.clear(); S.raw.clear(); S.fails.clear(); S.recorded.clear(); S.pending.clear(); S.haveForming = false; S.session = -1; S.lastCount = -1; S.tick = tick; }
+        if (tick != S.tick) { S.fin.clear(); S.raw.clear(); S.fails.clear(); S.recorded.clear(); S.pending.clear(); S.haveForming = false; S.session = -1; S.lastCount = -1; S.tick = tick;
+                              S.tiers.clear(); S.bySess.clear(); S.bySessN = (size_t)-1; S.covSess = LONG_MAX; S.covStart = false; }
         const long long now = steadyMs();
         const long long ct = ctSec(currentDate());
         if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; load(S); } }
@@ -775,6 +773,7 @@ void BigBidAsk::pump(bool fromDraw) {
         gammaRead(S, now);
         statsBuild(S, now);
         logPass(S, now);                                                     // (1.12.0)
+        boardPass(S, now);                                                   // (1.15.0) SignalBoard B from the record
         flush(S);
         status(S, now);
     } catch (...) { S.state = "calculation error"; }
@@ -924,13 +923,14 @@ void BigBidAsk::statsBuild(BBState& S, long long now) {
         const bba::Avg a = bba::avgDropOutlier(xs);
         line += "  ·  " + std::to_string(xs.size()) + "-session avg " + (a.used ? fmt(a.avg) : std::string("learning"));
         if (a.dropped >= 0) { line += " (1 dropped)"; if (dropNote.empty()) { char r[16]; std::snprintf(r, sizeof(r), "%.1f", a.ratio); dropNote = "Dropped: " + dateOf(ss[a.dropped]) + " (" + r + "x the others)."; } }
-        const long long thr = S.bigLot(1, N); int today = 0;
+        const long long thr = bba::bigLotOf(tiersAt(S, curSess), 1, N); int today = 0;   // (1.15.0) today's tiers (decided once)
         if (thr > 0) for (long long v : day[curSess]) if (v >= thr) ++today;
         line += "  ·  today " + std::to_string(today) + " of ~" + std::to_string(N);
         L.push_back(line);
     }
-    L.push_back("Night: Big Lot 5 / 10 / 20 = " + fmt(S.bigLot(0, 5)) + " / " + fmt(S.bigLot(0, 10)) + " / " + fmt(S.bigLot(0, 20)) + " lots.  Day now: "
-                + fmt(S.bigLot(1, 5)) + " / " + fmt(S.bigLot(1, 10)) + " / " + fmt(S.bigLot(1, 20)) + " lots (" + S.market + ").");
+    {   const bba::TierSet& T = tiersAt(S, curSess);
+        L.push_back("Night: Big Lot 5 / 10 / 20 = " + fmt(bba::bigLotOf(T, 0, 5)) + " / " + fmt(bba::bigLotOf(T, 0, 10)) + " / " + fmt(bba::bigLotOf(T, 0, 20)) + " lots.  Day now: "
+                    + fmt(bba::bigLotOf(T, 1, 5)) + " / " + fmt(bba::bigLotOf(T, 1, 10)) + " / " + fmt(bba::bigLotOf(T, 1, 20)) + " lots (" + S.market + ", " + T.why + ")."); }
     L.push_back(dropNote.empty() ? std::string("No session dropped as an outlier.") : dropNote);
     {   // (1.12.0) the nightly score of his categories (lra.bba_prints -> LRA-BigPrints-<MKT>.csv): "SCORE|<text>"
         std::string text; const std::string f = flexDir();
@@ -990,12 +990,12 @@ int BigBidAsk::trendAt(BBState& S, int i) {
 //   Category 4 = every print of its size (only the time filter, applied before).
 // why: 1 kept out by the pivot, 2 by the level, 4 by Trend PB / BO (no trend, wrong direction or the band rule)
 template <class H, class L, class C>
-PickInfo BigBidAsk::choose(BBState& S, int i, bool closed, int sd, const bba::Pick& p, int ph, const PassCtx& X, H& hi, L& lo, C& cl) {
+PickInfo BigBidAsk::choose(BBState& S, int i, bool closed, int sd, const bba::Pick& p, int ph, const bba::TierSet& T, const PassCtx& X, H& hi, L& lo, C& cl) {
     PickInfo r; const bba::Settings& set = S.set; (void)sd;
     const bool inSw = i >= 0 && i < (int)X.sw.bull.size();
     const bool bull = inSw && X.sw.bull[i], bear = inSw && X.sw.bear[i], pivAny = bull || bear;
     r.conf = inSw ? X.sw.conf[i] != 0 : true; r.piv = pivAny;
-    int ord[4] = { 0, 1, 2, 3 }; long long zz[4]; for (int k = 0; k < 4; ++k) zz[k] = set.cat[k].on ? S.catSize(ph, set.cat[k]) : 0;
+    int ord[4] = { 0, 1, 2, 3 }; long long zz[4]; for (int k = 0; k < 4; ++k) zz[k] = set.cat[k].on ? bba::catSizeOf(T, ph, set.cat[k]) : 0;   // (1.15.0) the candle's session tiers
     std::sort(ord, ord + 4, [&](int x, int y) { return zz[x] != zz[y] ? zz[x] > zz[y] : x < y; });
     const double px = (double)p.key * S.tick;
     bool trendRead = false; int trend = 0;
@@ -1032,6 +1032,88 @@ PickInfo BigBidAsk::choose(BBState& S, int i, bool closed, int sd, const bba::Pi
     }
     return r;
 }
+// ---- (1.15.0, audit B finding 2) the tiers of ONE session, decided once: from the complete sessions before it (bba::tiersFor), and only
+// when every chart bar of the 7 days before it is final (or the chart starts after that). Kept for the life of the chart state; the same
+// data gives the same tiers after a restart (the facts are recorded for 8 sessions). nullptr = not decidable yet (history still reading).
+const bba::TierSet* BigBidAsk::tierFor(BBState& S, long sess) {
+    auto it = S.tiers.find(sess); if (it != S.tiers.end()) return &it->second;
+    if (!(S.covStart || S.covSess < sess - 7)) return nullptr;
+    if (S.bySessN != S.fin.size()) {                                             // the prints per session (rebuilt when facts were added)
+        S.bySess.clear(); const int per = S.spb > 0 ? S.spb : 180;
+        for (const auto& kv : S.fin) {
+            const bba::Facts& F = kv.second; if (!F.valid || !F.closed) continue;
+            long d = 0; int e = 0; if (!parts(kv.first, d, e)) continue;
+            const svl::Cls c = svl::classify(d, e, per, S.openMin, S.closeMin); if (c.kind == svl::NONE) continue;
+            bba::SessPrints& P = S.bySess[c.sess]; const int ph = dayOf(S, e / 60) ? 1 : 0;
+            if (ph == 1) ++P.dayCandles;
+            if (F.bid.ok) P.pv[ph].push_back(F.bid.vol);
+            if (F.ask.ok) P.pv[ph].push_back(F.ask.vol);
+        }
+        S.bySessN = S.fin.size();
+    }
+    bba::TierSet& T = S.tiers[sess];
+    T = bba::tiersFor(sess, S.bySess, dayNeed(S));
+    if (S.tiers.size() > 400) S.tiers.erase(S.tiers.begin());
+    return &S.tiers[sess];
+}
+// the SIZES status line: today's tiers in force and where they came from
+void BigBidAsk::tierStatus(BBState& S, long long now) {
+    if (S.sdCheckMs >= 0 && now >= S.sdCheckMs && now - S.sdCheckMs < 5000) return;
+    S.sdCheckMs = now;
+    long cur = 0;
+    { const long count = getBarCount(); RTARRAYI times(barDateTime); long d = 0; int e = 0;
+      if (count > 0 && times.count >= count && parts((long long)times[(int)count - 1], d, e)) cur = svl::classify(d, e, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin).sess; }
+    const bba::TierSet* T = cur ? tierFor(S, cur) : nullptr;
+    std::string t = "Big Lot tiers of session " + std::to_string(cur) + ": ";
+    if (!T) t += "waiting for the chart history (covered from session " + (S.covSess == LONG_MAX ? std::string("-") : std::to_string(S.covSess)) + ")";
+    else {
+        t += T->why; if (!T->used.empty()) { t += " ("; for (size_t k = 0; k < T->used.size(); ++k) t += (k ? " " : "") + std::to_string(T->used[k]); t += ")"; }
+        for (int k = 0; k < 3; ++k) { const bba::Cat& c = S.set.cat[k];
+            t += std::string(k ? " |" : ";") + " Big Lot " + std::to_string(c.n) + (c.lots > 0 ? " min " + std::to_string(c.lots) : std::string()) + (c.on ? "" : " (off)") + ": day " + std::to_string(bba::catSizeOf(*T, 1, c)) + " / night " + std::to_string(bba::catSizeOf(*T, 0, c)) + " lots"; }
+        t += "; decided once for the session (fixed for its candles)";
+    }
+    t += "; sessions decided " + std::to_string(S.tiers.size()) + "; board events " + std::to_string(S.boardN);
+    S.sdWhy = t;
+}
+// ---- (1.15.0, audit B) the SignalBoard B events from the RECORD: the last 120 closed candles, whatever is on screen; the same filters
+// and tiers as the chart. Bit 0 circle, 1-3 category, 4 at a level, 5 sweep, 6 pivot rule passed, 7 pivot CONFIRMED, 8-14 Big Lot N.
+void BigBidAsk::boardPass(BBState& S, long long now) {
+    const long count = getBarCount(); if (count < 3 || S.tick <= 0) return;
+    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
+    if (times.count < count || hi.count < count || lo.count < count || cl.count < count) return;
+    const long long lastT = (long long)times[(int)count - 1];
+    if (lastT == S.boardLast && S.boardMs >= 0 && now >= S.boardMs && now - S.boardMs < 1000) return;   // once a second or on a new bar
+    S.boardLast = lastT; S.boardMs = now;
+    PassCtx X; passCtx(S, hi, lo, (int)count, X);
+    const bba::Settings& set = S.set;
+    std::vector<sb::Ev> ev;
+    for (int i = std::max(0, (int)count - 1 - 120); i < (int)count - 1; ++i) {
+        const long long t = (long long)times[i];
+        auto it = S.fin.find(t); if (it == S.fin.end() || !it->second.valid) continue;
+        const bba::Facts& F = it->second;
+        long days = 0; int endSec = 0; if (!parts(t, days, endSec)) continue;
+        const svl::Cls cls = svl::classify(days, endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin); if (cls.kind == svl::NONE) continue;
+        if (timeSkipped(set, cls, endSec, S.openMin, S.closeMin)) continue;
+        const bba::TierSet* TS = tierFor(S, cls.sess); if (!TS) continue;
+        const int ph = dayOf(S, endSec / 60) ? 1 : 0;
+        long long minSz = 0; for (int k = 0; k < 4; ++k) { const long long z = set.cat[k].on ? bba::catSizeOf(*TS, ph, set.cat[k]) : 0; if (z > 0 && (minSz == 0 || z < minSz)) minSz = z; }
+        if (minSz <= 0) continue;
+        const int ab = !set.circle ? 0 : bba::absorptionMin(F, minSz);
+        for (int sd = -1; sd <= 1; sd += 2) {
+            const bba::Pick& p = sd < 0 ? F.bid : F.ask;
+            if (!p.ok || p.vol < minSz) continue;
+            const PickInfo pi = choose(S, i, true, sd, p, ph, *TS, X, hi, lo, cl);
+            if (pi.cat < 0) continue;
+            const bool circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0);
+            sb::Ev e; e.bar = ctSec((RTDATE)t); e.px = (double)p.key * S.tick; e.side = sd; e.val = (double)p.vol;
+            e.flag = (circle ? 1 : 0) | ((pi.cat + 1) << 1) | (pi.lv.empty() ? 0 : 16) | (pi.sweep ? 32 : 0) | (pi.piv ? 64 : 0) | (pi.conf ? 128 : 0) | ((set.cat[pi.cat].n & 0x7F) << 8);
+            if (e.bar > 0) ev.push_back(e);
+        }
+    }
+    S.boardN = (int)ev.size();
+    const char* sy = getSymbol(); const char* chl = getChartLabel();
+    sb::publish('B', sy ? sy : "", getSecondsPerBar(), chl ? chl : "", steadyMs(), ev);
+}
 // ---- (1.12.0, Rassul 15:10 "score every print") the print log: every closed candle's shown prints, decided once at the close with the
 // settings of that moment, one file per session (<stem>-prints-<session>.csv) - the nightly lra.bba_prints scores what price did next
 void BigBidAsk::logPass(BBState& S, long long now) {
@@ -1051,17 +1133,14 @@ void BigBidAsk::logPass(BBState& S, long long now) {
         long days = 0; int endSec = 0; if (!parts(t, days, endSec)) continue;
         const svl::Cls cls = svl::classify(days, endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin); if (cls.kind == svl::NONE) continue;
         const int ph = dayOf(S, endSec / 60) ? 1 : 0;
+        const bba::TierSet* TS = tierFor(S, cls.sess);   // (1.15.0) not decided yet (history still reading): logged later, never as "nothing"
+        if (!TS) continue;
         for (int sd = -1; sd <= 1; sd += 2) {
             const std::string key = std::to_string(t) + (sd < 0 ? "b" : "a");
             if (S.logged.count(key)) continue;
             const bba::Pick& p = sd < 0 ? F.bid : F.ask;
-            bool skip = !p.ok;
-            if (!skip && (set.skipFirst > 0 || set.skipLast > 0)) {
-                const int st = cls.startSec, en = endSec, o1 = 17 * 3600, o2 = S.openMin * 60, c1 = 16 * 3600, c2 = S.closeMin * 60, X = set.skipFirst * 60, Y = set.skipLast * 60;
-                if ((X > 0 && ((st >= o1 && st < o1 + X) || (st >= o2 && st < o2 + X))) || (Y > 0 && ((en > c1 - Y && en <= c1) || (en > c2 - Y && en <= c2)))) skip = true;
-            }
-            if (!skip && set.rthOnly && cls.kind != svl::RTH) skip = true;   // (1.13.0) RTH only
-            PickInfo pi; if (!skip) pi = choose(S, i, true, sd, p, ph, X, hi, lo, cl);
+            bool skip = !p.ok || timeSkipped(set, cls, endSec, S.openMin, S.closeMin);   // (1.15.0) the shared time filter (1.13.0 RTH only)
+            PickInfo pi; if (!skip) pi = choose(S, i, true, sd, p, ph, *TS, X, hi, lo, cl);
             S.logged.insert(key);
             if (pi.cat < 0) continue;
             const bba::Cat& c = set.cat[pi.cat];
@@ -1166,16 +1245,11 @@ void BigBidAsk::render(BBState& S) {
         long days = 0; int endSec = 0; if (!parts(t, days, endSec)) continue;
         const svl::Cls cls = svl::classify(days, endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin);
         const int ph = dayOf(S, endSec / 60) ? 1 : 0;
-        if (set.rthOnly && cls.kind != svl::RTH) { ++S.timeHidden; continue; }   // (1.13.0, Rassul 15:29) RTH only
-        if (set.skipFirst > 0 || set.skipLast > 0) {   // (Rassul 14:50 "skips the first or the last x min of a session")
-            const int st = cls.startSec, en = endSec;
-            const int o1 = 17 * 3600, o2 = S.openMin * 60, c1 = 16 * 3600, c2 = S.closeMin * 60, X = set.skipFirst * 60, Y = set.skipLast * 60;
-            const bool early = X > 0 && ((st >= o1 && st < o1 + X) || (st >= o2 && st < o2 + X));
-            const bool late = Y > 0 && ((en > c1 - Y && en <= c1) || (en > c2 - Y && en <= c2));
-            if (early || late) { ++S.timeHidden; continue; }
-        }
+        if (timeSkipped(set, cls, endSec, S.openMin, S.closeMin)) { ++S.timeHidden; continue; }   // (1.13.0 RTH only; Rassul 14:50 skip first / last x min)
         // his categories, the biggest size first (= the rarest): a print takes the first ON category it reaches whose filters it passes
-        int ord[4] = { 0, 1, 2, 3 }; long long zz[4]; for (int k = 0; k < 4; ++k) zz[k] = set.cat[k].on ? S.catSize(ph, set.cat[k]) : 0;
+        // (1.15.0) judged against the tiers of the candle's OWN session (decided once): a later recompute or a scroll never re-judges it
+        const bba::TierSet& TS = tiersAt(S, cls.sess);
+        int ord[4] = { 0, 1, 2, 3 }; long long zz[4]; for (int k = 0; k < 4; ++k) zz[k] = set.cat[k].on ? bba::catSizeOf(TS, ph, set.cat[k]) : 0;
         std::sort(ord, ord + 4, [&](int x, int y) { return zz[x] != zz[y] ? zz[x] > zz[y] : x < y; });
         long long minSz = 0; for (int k = 0; k < 4; ++k) if (zz[k] > 0 && (minSz == 0 || zz[k] < minSz)) minSz = zz[k];
         if (minSz <= 0) continue;                                            // still learning / every category off: nothing
@@ -1184,7 +1258,7 @@ void BigBidAsk::render(BBState& S) {
             const bba::Pick& p = sd < 0 ? F->bid : F->ask;
             if (!p.ok || p.vol < minSz) continue;
             const double px = (double)p.key * S.tick;
-            const PickInfo pi = choose(S, i, i < (int)count - 1, sd, p, ph, X, hi, lo, cl);
+            const PickInfo pi = choose(S, i, i < (int)count - 1, sd, p, ph, TS, X, hi, lo, cl);
             const int got = pi.cat;
             if (got < 0) { if (pi.why & 1) ++S.pivotHidden; if (pi.why & 2) ++S.levelHidden; if (pi.why & 4) ++S.trendHidden; continue; }
             if (!pi.conf) ++S.unconfirmed;
@@ -1198,14 +1272,7 @@ void BigBidAsk::render(BBState& S) {
             cands.push_back(c); src.push_back(F); texts.push_back(tx); candPx.push_back(px); candVol.push_back((double)p.vol); picks.push_back(pi);
         }
     }
-    {   // (1.2.1, SignalBoard) the bold sizes (and circles) of the laid-out bars for the other indicators on this chart
-        std::vector<sb::Ev> ev;
-        for (size_t k = 0; k < cands.size(); ++k) { if (!cands[k].bold) continue;
-            sb::Ev e; e.bar = ctSec((RTDATE)times[cands[k].bar]); e.px = candPx[k]; e.side = cands[k].side; e.val = candVol[k]; e.flag = (cands[k].circle ? 1 : 0) | ((picks[k].cat + 1) << 1) | (picks[k].lv.empty() ? 0 : 16) | (picks[k].sweep ? 32 : 0) | (picks[k].piv ? 64 : 0) | ((set.cat[picks[k].cat < 0 || picks[k].cat > 3 ? 0 : picks[k].cat].n & 0x7F) << 8);   // (1.12.0) bit 0 circle, bits 1-3 category (1 - 4), 4 at a level, 5 sweep, 6 pivot, 8-14 Big Lot N (0 = category 4)
-            if (e.bar > 0) ev.push_back(e); }
-        const char* sy2 = getSymbol(); const char* cl2 = getChartLabel();
-        sb::publish('B', sy2 ? sy2 : "", getSecondsPerBar(), cl2 ? cl2 : "", steadyMs(), ev);
-    }
+    // (1.15.0) the SignalBoard B events are no longer posted from the laid-out (visible) candles: boardPass posts them from the record
     // (1.6.0, Rassul 18:26-18:40 mockup footprint-white-box-circle-v1 row B) ON THE CANDLE: each number is drawn ON its own candle at the
     // price row it traded (never nudged, so it can only belong to that candle - a print is always inside the candle's high-low), WHITE with
     // a 1 px black edge; a big print = a rounded box, an absorption print = a circle, both in the SIDE colour (red = sold at the bid,
@@ -1350,7 +1417,7 @@ void BigBidAsk::render(BBState& S) {
         L.push_back("Question: is a large trader acting here, and is it at a place that matters?");
         if (T->pi.cat < 3) L.push_back(std::string("Shown by: ") + (c.show == bba::SH_ALL ? "All prints" : c.show == bba::SH_PIVOT ? "Near pivot" : c.show == bba::SH_LEVEL ? "Near a level" : c.show == bba::SH_PIVLEVEL ? "Pivot near a level" : c.show == bba::SH_PB ? "Trend PB" : c.show == bba::SH_BO ? "Trend BO" : "Trend PB + BO"));
         if (c.n > 0) L.push_back("How: Big Lot " + std::to_string(c.n) + " = the size reached about " + std::to_string(c.n) + " times a session (" + (dayOf(S, endSec / 60) ? "day" : "night")
-                                 + " now " + bba::commas(S.bigLot(dayOf(S, endSec / 60) ? 1 : 0, c.n)) + " lots" + (c.lots > 0 ? ", min " + bba::commas(c.lots) : std::string("")) + "); this print reached it.");
+                                 + " this session " + bba::commas(bba::bigLotOf(tiersAt(S, me.sess), dayOf(S, endSec / 60) ? 1 : 0, c.n)) + " lots" + (c.lots > 0 ? ", min " + bba::commas(c.lots) : std::string("")) + "); this print reached it.");
         else L.push_back("How: category 4 shows every print of " + bba::commas(c.lots) + " lots or more.");
         L.push_back("Why: size at a level that does not move price is absorption; size that breaks a level and holds is initiative.");
         L.push_back(T->side < 0 ? "Use: a big seller at a low / support that fails to push lower - watch for the close back up and a turn."
@@ -1386,7 +1453,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask 1.14.1: on each candle, the biggest print AT THE BID (sellers, left) and AT THE ASK (buyers, right) in lots / divider, shown when it reaches one of your Big Lot categories (Big Lot N = the size reached about N times a session, worked out per market for day and night; category 4 = a fixed size). One Show choice per category: All prints, Near pivot, Near a level, Pivot near a level, Trend PB, Trend BO, Trend PB + BO; category 4 shows every print of its size. Hover a number for the details.");
-    p->setVersion("1.14.1");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask 1.15.0: on each candle, the biggest print AT THE BID (sellers, left) and AT THE ASK (buyers, right) in lots / divider, shown when it reaches one of your Big Lot categories (Big Lot N = the size reached about N times a session, worked out per market for day and night; category 4 = a fixed size). One Show choice per category: All prints, Near pivot, Near a level, Pivot near a level, Trend PB, Trend BO, Trend PB + BO; category 4 shows every print of its size. Hover a number for the details.");
+    p->setVersion("1.15.0");   // BBA_VERSION
     return p;
 }

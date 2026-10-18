@@ -45,6 +45,7 @@
 //              Each is drawn only in markets where the nightly study confirmed it (SIGNAL lines); unconfirmed = not drawn.
 //              Holds / breaks / expiries and the O / R crosses are logged for the study, never drawn.
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <cmath>
 #include <cstdint>
@@ -63,7 +64,7 @@
 
 namespace lqp {
 
-static const char* const VERSION = "0.32.2";   // (0.32.2) market-order log from the market's own start size when under 10 lots (NQ);   // (0.32.1) learning rows show the thresholds in use (Big~ / 1-3SD~) + the count; darker, less grey column background;   // (0.32.0) raw tracking of MKT / LMT / FP / DP together: -mktorders-, -iceorders-, -absflow- files (studies find the best combination per market);   // (0.28.0) the MKT half of the column (big market orders) + iceberg "i" boxes in BIG (BigFlow.h);   // (0.27.1) the badge / BIG column 3 px under the pane top (was 20);   // (0.27.0) a pulled opposite big order no longer qualifies an initiative verdict (5 / 22 on ES); Pull % capped at 100%; Attack / pace against the same 30-min slot (log mean of that slot's earlier bars, 10+), else the 20 bars before;   // (0.26.0) BIG column on the big-lot distribution: boxes from 1SD (dim) / 2SD (full) / 3SD (outline), reference Big mu + 1-3SD at the column bottom;   // (0.25.0) BIG column 3 tiers: biggest within reach dimmed, big full colour, huge + white outline;   // (0.24.0) one combined badge: verdict on top (REV UP / DOWN FAILING ?), book state below in its own colour, grey lines verdict side first, levels by name;   // (0.23.0) Big order font 7-16 (default 10) drives the BIG column box and its filled marks;   // (0.22.9) an opposing warning fails the verdict only at the turn and after 15 s; CSV-safe warning names;   // (0.22.8) verdict log to the second with seconds-into-bar, the warning and the band (verdicts2);   // (0.22.7) the verdict is sticky (no REV / NONE flicker);   // (0.22.6) a warning on the other side of the verdict makes it FAILING ? (coordinated);   // (0.22.5) BIG column 56 px wide, from the top of the chart;   // (0.22.4) banner / verdict badge names centred vertically;   // (0.22.3) a big order placed in the current bar gets its stack / pull line at once;   // (0.22.2) verdict only at the 10-bar extreme (no chasing); "big bid filled N (sellers hit it)";   // (0.22.1) every verdict change logged (<MKT>-...-verdicts-<session>.csv);   // (0.22.0) verdict also on INITIATIVE at the session extreme (bold lift / hit) with the book on its side or the opposite big order pulled;   // (0.21.0) SignalBoard: the verdict uses the Delta Profile A, Big Bid/Ask circles and the big fills together;   // (0.20.1) level badges use the drawn zone's own lots / x (in sync with the column);   // (0.20.0) banner: badge + 2 grey lines aligned inside its height, level named first; verdict badge REV UP / REV DOWN / FAILING ? below during a turn;   // (0.19.2) the big size tunes itself from the last 60 min (BigOrderLines 1.2.0);   // (0.19.1) BIG column fills in the bar colours (bid red, ask green);   // (0.19.0, Rassul 2026-10-15) the BIG column + 2 stack / pull lines (no labels on the chart), large = floor (nightly hourly norms) AND 3x the local book;   // (0.18.0, 2026-10-14 night) the biggest resting order lines (BigOrderLines.h) + the warning detail on two lines (warnLines);   // (0.17.0, 2026-10-14 night, Rassul approved 18:25 CT) Held / Broke by the ZONE rule (ZoneRule.h: centre +/- 0.06 ADR, held = a close 0.10 ADR back out, broke = a close 0.10 ADR beyond with no close back inside in 15 min; never a tick-through or a first touch), labels only once resolved; audit wording: "Hit N lots \xB7 NN% re-added ?", LQ? <LEVEL>, no intent words;   // (0.16.1, 2026-10-14 evening) rebuilt % <= 100%: an add is credited only at a hit price, up to the lots hit there and not yet restored (was 200% on every ES attempt: every queue join in the zone counted);   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
+static const char* const VERSION = "0.44.0";   // (0.44.0, Rassul 2026-10-17 night "yes 2x") the column DRAWS a zone only at >= 2.0x (drawX; no 1.5x near entry, no keep to 1.2x / 1.7x, no any-size during absorption): it appears live once durable at 2.0x and is removed only at a BAR CLOSE where it measures under 2.0x (no flicker); the old shown state still drives the attempts / records (logging unchanged); the zone normal says its source (norms file slot / 5-session pool slot / session median) and slots missing from the norms file (overnight) come from a 5-session per-slot pool (BandPool); MenthorQ rows must match the chart contract and be <= 18 h old (sameContract / mqFresh); Market State LIQ / LOTS fact builders (liqKv / lotsKv); lqp::VERSION now equals LQ_VERSION;   // (0.32.3-0.43.x lived only in LQ_VERSION)   // (0.32.2) market-order log from the market's own start size when under 10 lots (NQ);   // (0.32.1) learning rows show the thresholds in use (Big~ / 1-3SD~) + the count; darker, less grey column background;   // (0.32.0) raw tracking of MKT / LMT / FP / DP together: -mktorders-, -iceorders-, -absflow- files (studies find the best combination per market);   // (0.28.0) the MKT half of the column (big market orders) + iceberg "i" boxes in BIG (BigFlow.h);   // (0.27.1) the badge / BIG column 3 px under the pane top (was 20);   // (0.27.0) a pulled opposite big order no longer qualifies an initiative verdict (5 / 22 on ES); Pull % capped at 100%; Attack / pace against the same 30-min slot (log mean of that slot's earlier bars, 10+), else the 20 bars before;   // (0.26.0) BIG column on the big-lot distribution: boxes from 1SD (dim) / 2SD (full) / 3SD (outline), reference Big mu + 1-3SD at the column bottom;   // (0.25.0) BIG column 3 tiers: biggest within reach dimmed, big full colour, huge + white outline;   // (0.24.0) one combined badge: verdict on top (REV UP / DOWN FAILING ?), book state below in its own colour, grey lines verdict side first, levels by name;   // (0.23.0) Big order font 7-16 (default 10) drives the BIG column box and its filled marks;   // (0.22.9) an opposing warning fails the verdict only at the turn and after 15 s; CSV-safe warning names;   // (0.22.8) verdict log to the second with seconds-into-bar, the warning and the band (verdicts2);   // (0.22.7) the verdict is sticky (no REV / NONE flicker);   // (0.22.6) a warning on the other side of the verdict makes it FAILING ? (coordinated);   // (0.22.5) BIG column 56 px wide, from the top of the chart;   // (0.22.4) banner / verdict badge names centred vertically;   // (0.22.3) a big order placed in the current bar gets its stack / pull line at once;   // (0.22.2) verdict only at the 10-bar extreme (no chasing); "big bid filled N (sellers hit it)";   // (0.22.1) every verdict change logged (<MKT>-...-verdicts-<session>.csv);   // (0.22.0) verdict also on INITIATIVE at the session extreme (bold lift / hit) with the book on its side or the opposite big order pulled;   // (0.21.0) SignalBoard: the verdict uses the Delta Profile A, Big Bid/Ask circles and the big fills together;   // (0.20.1) level badges use the drawn zone's own lots / x (in sync with the column);   // (0.20.0) banner: badge + 2 grey lines aligned inside its height, level named first; verdict badge REV UP / REV DOWN / FAILING ? below during a turn;   // (0.19.2) the big size tunes itself from the last 60 min (BigOrderLines 1.2.0);   // (0.19.1) BIG column fills in the bar colours (bid red, ask green);   // (0.19.0, Rassul 2026-10-15) the BIG column + 2 stack / pull lines (no labels on the chart), large = floor (nightly hourly norms) AND 3x the local book;   // (0.18.0, 2026-10-14 night) the biggest resting order lines (BigOrderLines.h) + the warning detail on two lines (warnLines);   // (0.17.0, 2026-10-14 night, Rassul approved 18:25 CT) Held / Broke by the ZONE rule (ZoneRule.h: centre +/- 0.06 ADR, held = a close 0.10 ADR back out, broke = a close 0.10 ADR beyond with no close back inside in 15 min; never a tick-through or a first touch), labels only once resolved; audit wording: "Hit N lots \xB7 NN% re-added ?", LQ? <LEVEL>, no intent words;   // (0.16.1, 2026-10-14 evening) rebuilt % <= 100%: an add is credited only at a hit price, up to the lots hit there and not yet restored (was 200% on every ES attempt: every queue join in the zone counted);   // (0.16.0, CR5200) the solid left column (20-200 px, 60), lots inside in white, the per-level liquidity for the badges   //   // (0.15.1a, CR5000) Tape Reader heartbeat, label Offset X / Y; (0.15.1) Width / Font kept per market
 typedef long long Tick;
 typedef long long Ms;
 enum Side { BID = 0, ASK = 1 };                 // BID = buy orders below price (support), ASK = sell orders above (resistance)
@@ -109,6 +110,11 @@ struct Params {
     // under 1x 23% - the 1.5x near line loses almost nothing in holding odds and shows the liquidity price is about to test.
     double nearAtr = 1.0, nearShowX = 1.5, nearKeepX = 1.2, nearExit = 1.5;
     double minShowX = 1.0;
+    // (0.44.0, Rassul 2026-10-17 night "yes 2x" - his 10-16 rule "liquidity only at levels when 2x+ normal") the DRAW gate, separate from
+    // 'shown' above (which still decides which zones are touchable / recorded, so the records do not change): a zone is DRAWN once it is
+    // durable, behindOk, rank 1 or near, and >= drawX x the book behind it (bx, the ratio printed in the node); a drawn zone is removed
+    // only at a closed bar where it measures under drawX. No near 1.5x entry, no keep line under 2.0x, no any-size during absorption.
+    double drawX = 2.0;
     int nearPerSide = 2;                        // the strongest near candidates per side always tracked (even outside topN)
     Tick reachTicks = 0;                        // > 0: the reach in ticks set by the plugin (1/2 expected range ...), else reachAtr x ATR
     double oneOrderShare = 0.70;                // (0.15.0) the top order's share of the zone from which the hover says "Mostly one order"
@@ -146,22 +152,215 @@ inline int halfWidth(const Params& p, double atrPrice) {
     return std::max(p.hwMin, std::min(p.hwMax, (int)std::llround(raw)));
 }
 
-// ---- normal band size per 30-min Central slot (slot = minute of day / 30), from the nightly file; else the session's median
+// ---- (0.44.0) the 5-session per-slot pool of band sizes, learned live (audit LP-3: the norms file holds RTH slots only, so overnight
+// the "normal" was the median of every band this session - NQ 3 lots - while the status said "norms file"). Each session keeps, per
+// 30-min Central slot, a log-bucket histogram (5 % buckets) of the band sizes the zones were picked from; when the session ends its
+// slot medians join the pool. Only sessions that sampled the slot (n >= MIN_N) count; the 5 newest sessions WITH data are kept
+// (empty sessions - weekends, holidays, a chart without depth - are never counted: the LP-1 lesson). Normal for a slot = the median
+// of its per-session medians, from 2+ sessions. Saved / loaded as text: "BP1" then "S,<session>,<slot>,<median>,<n>" rows.
+struct SlotHist {
+    std::vector<unsigned> c; long long n = 0;
+    static int bucket(double x) { const double b = std::log(x) / std::log(1.05); return b < 0 ? 0 : b > 400 ? 400 : (int)b; }
+    void add(double x) { if (!(x > 0) || !finite(x)) return; const int k = bucket(x); if ((int)c.size() <= k) c.resize((size_t)k + 1, 0); c[(size_t)k]++; ++n; }
+    double median() const {
+        if (n <= 0) return 0;
+        long long acc = 0; const long long half = (n + 1) / 2;
+        for (size_t k = 0; k < c.size(); ++k) { acc += c[k]; if (acc >= half) return std::pow(1.05, (double)k + 0.5); }
+        return 0;
+    }
+};
+struct BandPool {
+    static const int KEEP = 5, MIN_SESS = 2; static const long long MIN_N = 60;
+    std::map<long long, std::map<int, std::pair<double, long long> > > past;   // session -> slot -> (median, samples)
+    long long curSession = -1; std::map<int, SlotHist> cur;
+    void roll() {                                                              // the current session's slot medians join the pool
+        std::map<int, std::pair<double, long long> > m;
+        for (std::map<int, SlotHist>::const_iterator it = cur.begin(); it != cur.end(); ++it) if (it->second.n >= MIN_N) m[it->first] = std::make_pair(it->second.median(), it->second.n);
+        if (!m.empty() && curSession >= 0) past[curSession] = m;
+        cur.clear();
+        while ((int)past.size() > KEEP) past.erase(past.begin());
+    }
+    void sample(long long session, int slot, double band) {
+        if (session < 0 || slot < 0 || slot > 47 || !(band > 0)) return;
+        if (session != curSession) { if (curSession >= 0 && session > curSession) roll(); else cur.clear(); curSession = session; }
+        cur[slot].add(band);
+    }
+    // the pooled normal for a slot from the finished sessions (never the current one); nSess = how many sessions it came from
+    bool at(int slot, double& v, int& nSess) const {
+        std::vector<double> m;
+        for (std::map<long long, std::map<int, std::pair<double, long long> > >::const_reverse_iterator s = past.rbegin(); s != past.rend() && (int)m.size() < KEEP; ++s) {
+            if (s->first == curSession) continue;
+            std::map<int, std::pair<double, long long> >::const_iterator q = s->second.find(slot);
+            if (q != s->second.end() && q->second.second >= MIN_N && q->second.first > 0) m.push_back(q->second.first);
+        }
+        nSess = (int)m.size(); v = 0;
+        if ((int)m.size() < MIN_SESS) return false;
+        std::sort(m.begin(), m.end()); const size_t n = m.size();
+        v = n % 2 ? m[n / 2] : 0.5 * (m[n / 2 - 1] + m[n / 2]); return v > 0;
+    }
+    std::string text() const {                                                 // the pool + the current session so far (a restart keeps it)
+        std::map<long long, std::map<int, std::pair<double, long long> > > all = past;
+        if (curSession >= 0) { std::map<int, std::pair<double, long long> > m;
+            for (std::map<int, SlotHist>::const_iterator it = cur.begin(); it != cur.end(); ++it) if (it->second.n >= MIN_N) m[it->first] = std::make_pair(it->second.median(), it->second.n);
+            if (!m.empty()) all[curSession] = m; }
+        while ((int)all.size() > KEEP + 1) all.erase(all.begin());
+        std::ostringstream o; o.imbue(std::locale::classic()); o << "BP1\n";
+        for (std::map<long long, std::map<int, std::pair<double, long long> > >::const_iterator s = all.begin(); s != all.end(); ++s)
+            for (std::map<int, std::pair<double, long long> >::const_iterator q = s->second.begin(); q != s->second.end(); ++q) {
+                char b[96]; std::snprintf(b, sizeof(b), "S,%lld,%d,%.2f,%lld\n", s->first, q->first, q->second.first, q->second.second); o << b;
+            }
+        return o.str();
+    }
+    // a saved pool; the CURRENT session's saved row is not restored as finished (it is still being sampled; its slots come back as it runs)
+    bool parse(const std::string& body, long long nowSession) {
+        std::istringstream in(body); in.imbue(std::locale::classic()); std::string ln; bool head = false; int lines = 0;
+        std::map<long long, std::map<int, std::pair<double, long long> > > p;
+        while (std::getline(in, ln) && ++lines < 5000) {
+            if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+            if (!head) { if (ln != "BP1") return false; head = true; continue; }
+            if (ln.compare(0, 2, "S,") != 0) continue;
+            char* e = nullptr; const char* c = ln.c_str() + 2; errno = 0;
+            const long long ses = std::strtoll(c, &e, 10); if (e == c || *e != ',' || errno) continue; c = e + 1;
+            const long slot = std::strtol(c, &e, 10); if (e == c || *e != ',' || slot < 0 || slot > 47) continue; c = e + 1;
+            const double med = std::strtod(c, &e); if (e == c || *e != ',' || !finite(med) || med <= 0 || med > 1e9) continue; c = e + 1;
+            const long long n = std::strtoll(c, &e, 10); if (e == c || (*e != 0) || n < MIN_N || n > 4000000000LL) continue;
+            if (ses <= 0 || ses == nowSession) continue;
+            p[ses][(int)slot] = std::make_pair(med, n);
+        }
+        if (!head) return false;
+        while ((int)p.size() > KEEP) p.erase(p.begin());
+        past.swap(p); return true;
+    }
+};
+enum NormSrc { NS_NONE = 0, NS_FILE = 1, NS_POOL = 2, NS_SESSION = 3 };
+inline const char* normSrcName(int s) { return s == NS_FILE ? "norms file slot" : s == NS_POOL ? "5-session pool slot" : s == NS_SESSION ? "session median (fallback)" : "none yet"; }
+
+// ---- normal band size per 30-min Central slot (slot = minute of day / 30): (0.44.0) the nightly file's slot, else the 5-session pool's
+// slot (overnight: the file has RTH slots only), else this session's median of every band (labelled as the fallback it is)
 struct Norms {
     std::map<int, double> median;               // slot -> median band size (contracts)
     bool loaded = false;
     std::vector<double> session;                // fallback: band sizes sampled this session (capped)
-    double at(int slot) const {
-        std::map<int, double>::const_iterator it = median.find(slot);
-        if (it != median.end() && it->second > 0) return it->second;
-        if (session.size() >= 30) {
-            std::vector<double> v(session); std::nth_element(v.begin(), v.begin() + v.size() / 2, v.end());
-            return v[v.size() / 2] > 0 ? v[v.size() / 2] : 0;
-        }
-        return 0;
+    BandPool pool;                              // (0.44.0)
+    double sessionMedian() const {
+        if (session.size() < 30) return 0;
+        std::vector<double> v(session); std::nth_element(v.begin(), v.begin() + v.size() / 2, v.end());
+        return v[v.size() / 2] > 0 ? v[v.size() / 2] : 0;
     }
+    // (0.44.0) the normal for a slot and where it came from
+    double pick(int slot, int& src, int* poolSess = nullptr) const {
+        std::map<int, double>::const_iterator it = median.find(slot);
+        if (it != median.end() && it->second > 0) { src = NS_FILE; return it->second; }
+        double v = 0; int ns = 0;
+        if (pool.at(slot, v, ns)) { src = NS_POOL; if (poolSess) *poolSess = ns; return v; }
+        if (poolSess) *poolSess = ns;
+        const double m = sessionMedian();
+        src = m > 0 ? NS_SESSION : NS_NONE; return m;
+    }
+    double at(int slot) const { int src = NS_NONE; return pick(slot, src); }
     void sample(double band) { if (band > 0) { if (session.size() >= 5000) session.erase(session.begin(), session.begin() + 1000); session.push_back(band); } }
 };
+
+// ---- (0.44.0) the strict 2.0x draw gate (Rassul 2026-10-17 night "yes 2x"): enter live once durable, behind-book visible, rank 1 or
+// near and >= drawX; keep while >= drawX, judged only at a bar close (no flicker). behindN == 0 = no book behind it to measure: unchanged.
+inline bool drawEnter(bool behindOk, bool rank1OrNear, double bx, bool durable, double drawX) { return behindOk && rank1OrNear && durable && bx >= drawX; }
+inline bool drawKeep(int behindN, double bx, double drawX) { return behindN == 0 || bx >= drawX; }
+
+// ---- (0.44.0, audit LP-5) MenthorQ rows: the row's contract must be the chart's (CLEX26 on a CLZ6 chart = skipped) and the file
+// <= 18 h old (as NearLevels.h / ZoneRead.h / the Aggression pane). Month code + last year digit compared (ESZ6 == EPZ26); a
+// continuous chart or a symbol without a month code is accepted.
+inline bool monthYear(const std::string& s, char& mon, int& year) {
+    const size_t n = s.size();
+    auto isM = [](char c) { return c != 0 && std::string("FGHJKMNQUVXZ").find(c) != std::string::npos; };
+    auto dig = [](char c) { return c >= '0' && c <= '9'; };
+    if (n >= 4 && isM(s[n - 3]) && dig(s[n - 2]) && dig(s[n - 1])) { mon = s[n - 3]; year = s[n - 1] - '0'; return true; }
+    if (n >= 3 && isM(s[n - 2]) && dig(s[n - 1]) && !dig(s[n - 3])) { mon = s[n - 2]; year = s[n - 1] - '0'; return true; }
+    return false;
+}
+inline bool sameContract(const std::string& chart, const std::string& file) {
+    if (chart.empty() || file.empty()) return true;
+    std::string a, b;
+    for (size_t i = 0; i < chart.size(); ++i) a += (char)std::toupper((unsigned char)chart[i]);
+    for (size_t i = 0; i < file.size(); ++i) b += (char)std::toupper((unsigned char)file[i]);
+    if (a == b) return true;
+    char ma = 0, mb = 0; int ya = 0, yb = 0;
+    if (!monthYear(a, ma, ya) || !monthYear(b, mb, yb)) return true;
+    return ma == mb && ya == yb;
+}
+static const long long MQ_FRESH_S = 18 * 3600;
+inline bool mqFresh(long long fileMtimeSec, long long wallSec) { return fileMtimeSec > 0 && wallSec > 0 && wallSec - fileMtimeSec <= MQ_FRESH_S && fileMtimeSec - wallSec <= 600; }
+
+// ---- (0.44.0) Market State facts (MARKET-STATE-SPEC.md 1.0: SRC LIQ and SRC LOTS); '?' = not known. Built SDK-free, posted by the plugin.
+inline std::string fmtPx(double px, double tick) { if (!finite(px) || px <= 0) return "?"; char b[48]; std::snprintf(b, sizeof(b), "%.*f", decimals(tick), px); return b; }
+inline std::string fmtLots(double v) { if (!finite(v) || v < 0) return "?"; char b[32]; std::snprintf(b, sizeof(b), "%lld", (long long)std::llround(v)); return b; }
+inline std::string fmtX(double v) { if (!finite(v) || v <= 0) return "?"; char b[32]; std::snprintf(b, sizeof(b), "%.1f", v); return b; }
+// the Big Lot tier a size reaches: S5 / S10 / S20 / none; '?' while the tiers are still learning
+inline std::string tierOf(double lots, bool ok, double s20, double s10, double s5) {
+    if (!ok || !(s20 > 0)) return "?";
+    if (!(lots > 0)) return "none";
+    if (s5 > 0 && lots >= s5) return "S5";
+    if (s10 > 0 && lots >= s10) return "S10";
+    return lots >= s20 ? "S20" : "none";
+}
+// the zone story step on this closed bar: the zone rule's verdict decided on this bar first, then the open attempt's furthest step
+inline std::string zoneStepOf(bool heldNow, bool brokeNow, bool open, int barP, int barS, int barE, double attackVol) {
+    if (brokeNow) return "break";
+    if (heldNow) return "held";
+    if (!open) return "none";
+    if (barP >= 0) return "defenders_pulling";
+    if (barS >= 0) return "counter";
+    if (barE >= 0) return "attack_fading";
+    return attackVol > 0 ? "absorbing" : "arrived";
+}
+struct LiqFacts {
+    bool have = false; std::string level; double tick = 0.01, lo = 0, hi = 0, lots = -1, x = -1; int side = BID;
+    std::string step = "none"; double absorbLots = -1, pulledBeforePct = -1;
+};
+inline std::map<std::string, std::string> liqKv(const LiqFacts& f) {
+    std::map<std::string, std::string> kv;
+    if (!f.have) {
+        const char* const keys[] = { "zone_id", "zone_lo", "zone_hi", "zone_level", "zone_lots", "zone_x", "zone_side", "absorb_lots", "pulled_before_pct" };
+        for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) kv[keys[i]] = "?";
+        kv["zone_step"] = "none"; return kv;
+    }
+    const double mid = 0.5 * (f.lo + f.hi);
+    kv["zone_id"] = (f.level.empty() ? std::string("zone") : f.level) + " " + fmtPx(mid, f.tick);
+    kv["zone_lo"] = fmtPx(f.lo, f.tick); kv["zone_hi"] = fmtPx(f.hi, f.tick);
+    kv["zone_level"] = f.level.empty() ? "?" : f.level;
+    kv["zone_lots"] = fmtLots(f.lots);
+    kv["zone_x"] = f.x >= 2.0 ? fmtX(f.x) : "?";            // the spec: shown only >= 2.0x
+    kv["zone_side"] = f.side == BID ? "support" : "resistance";
+    kv["zone_step"] = f.step.empty() ? "none" : f.step;
+    kv["absorb_lots"] = fmtLots(f.absorbLots);
+    kv["pulled_before_pct"] = f.pulledBeforePct >= 0 ? fmtLots(std::min(100.0, f.pulledBeforePct)) : "?";
+    return kv;
+}
+struct LotsFacts {
+    bool tiersOk = false; double s20 = 0, s10 = 0, s5 = 0, mu = 0;          // the LMT Big Lot tiers in force (slow state)
+    bool mktTiersOk = false; double ms20 = 0, ms10 = 0, ms5 = 0;            // the MKT tiers (for mkt_tier only)
+    double tick = 0.01;
+    long long mktBuy = -1, mktSell = -1;                                     // largest market order this bar per side (-1 = no feed)
+    long long lmtFilled = -1; int lmtFilledSide = -1;                        // largest big resting order filled this bar (lots, BID / ASK)
+    int iceberg = -1;                                                        // -1 none, BID, ASK
+    long long restBid = -1, restAsk = -1; double restBidPx = 0, restAskPx = 0; // largest single resting order within 2 ATR (slow)
+};
+inline std::map<std::string, std::string> lotsKv(const LotsFacts& f) {
+    std::map<std::string, std::string> kv;
+    kv["s20"] = f.tiersOk ? fmtLots(f.s20) : "?"; kv["s10"] = f.tiersOk ? fmtLots(f.s10) : "?"; kv["s5"] = f.tiersOk ? fmtLots(f.s5) : "?"; kv["mu"] = f.tiersOk ? fmtLots(f.mu) : "?";
+    kv["mkt_buy_max"] = f.mktBuy >= 0 ? fmtLots((double)f.mktBuy) : "?";
+    kv["mkt_sell_max"] = f.mktSell >= 0 ? fmtLots((double)f.mktSell) : "?";
+    kv["mkt_tier"] = (f.mktBuy < 0 && f.mktSell < 0) ? "?" : tierOf((double)std::max(f.mktBuy, f.mktSell), f.mktTiersOk, f.ms20, f.ms10, f.ms5);
+    kv["lmt_filled_max"] = f.lmtFilled >= 0 ? fmtLots((double)f.lmtFilled) : "?";
+    kv["lmt_filled_side"] = f.lmtFilled > 0 ? (f.lmtFilledSide == BID ? "bid" : f.lmtFilledSide == ASK ? "ask" : "?") : (f.lmtFilled == 0 ? "none" : "?");
+    kv["iceberg"] = f.iceberg == BID ? "bid" : f.iceberg == ASK ? "ask" : "none";
+    kv["resting_bid_max"] = f.restBid > 0 ? fmtLots((double)f.restBid) : "?";
+    kv["resting_bid_px"] = f.restBid > 0 ? fmtPx(f.restBidPx, f.tick) : "?";
+    kv["resting_ask_max"] = f.restAsk > 0 ? fmtLots((double)f.restAsk) : "?";
+    kv["resting_ask_px"] = f.restAsk > 0 ? fmtPx(f.restAskPx, f.tick) : "?";
+    kv["resting_tier_bid"] = f.restBid > 0 ? tierOf((double)f.restBid, f.tiersOk, f.s20, f.s10, f.s5) : "?";
+    kv["resting_tier_ask"] = f.restAsk > 0 ? tierOf((double)f.restAsk, f.tiersOk, f.s20, f.s10, f.s5) : "?";
+    return kv;
+}
 
 struct Zone {
     long long id = 0; int side = BID; Tick center = 0, lo = 0, hi = 0; int hw = 0;
@@ -171,6 +370,7 @@ struct Zone {
     double bx = -1; int rank = 0, behindN = 0; bool behindOk = false;
     Tick edgeLo = 0, edgeHi = 0;
     bool shown = false; Ms belowSince = -1;
+    bool drawn = false;                         // (0.44.0) the strict 2.0x draw state (drawEnter live, drawKeep at a bar close)
     bool near = false;                          // (0.14.0) within the near band of price (hysteresis: in at nearTicks, out past 1.5x)
     double nearBase = -1;                       // (0.15.0) the zone's lots when price first came within reach on THIS approach (-1 = not near)
     bool durable(Ms now, Ms persist) const { return now - born >= persist; }
@@ -643,6 +843,7 @@ public:
                                             : (Tick)std::llround(std::max(10.0 * hw, P.reachAtr * (atrPrice > 0 ? atrPrice : 15 * P.tick) / P.tick));
         const Tick ref = havePx ? lastPx : (book[BID].rbegin()->first + book[ASK].begin()->first) / 2;
         nearTicks = nearBand(atrPrice);
+        const long long sess = zrule::sessionKey(t / 1000);              // (0.44.0) the 5-session per-slot pool
         for (int s = 0; s < 2; ++s) {
             std::vector<std::pair<double, Tick>> cand;
             const std::map<Tick, double>& b = book[s];
@@ -657,7 +858,7 @@ public:
                 while (c < lv.size() && lv[c].first <= p + hw) { sum += lv[c].second; ++c; }
                 while (a < lv.size() && lv[a].first < p - hw) { sum -= lv[a].second; ++a; }
                 cand.push_back(std::make_pair(sum, p));
-                norms.sample(sum);
+                norms.sample(sum); norms.pool.sample(sess, slot, sum);
             }
             std::sort(cand.begin(), cand.end(), [](const std::pair<double, Tick>& x, const std::pair<double, Tick>& y) { return x.first != y.first ? x.first > y.first : x.second < y.second; });
             std::vector<std::pair<double, Tick>> pick;
@@ -692,10 +893,11 @@ public:
         for (size_t i = 0; i < zones.size();) {
             if (!zones[i].inAttempt && t - zones[i].seen > P.graceMs) zones.erase(zones.begin() + i); else ++i;
         }
-        for (size_t i = 0; i < zones.size(); ++i) { nearState(zones[i], ref); prominence(zones[i]); showState(zones[i], t); }
-        normal = norms.at(slot);
+        for (size_t i = 0; i < zones.size(); ++i) { nearState(zones[i], ref); prominence(zones[i]); showState(zones[i], t); drawState(zones[i], t); }
+        normal = norms.pick(slot, normalSrc, &normalPoolN);
     }
     double normal = 0;
+    int normalSrc = NS_NONE, normalPoolN = 0;    // (0.44.0) where the normal came from (NormSrc) and the pool sessions behind that slot
     Tick nearTicks = 0;                          // (0.14.0) the near band in ticks, set by updateZones
     // (0.14.0) near band = max(round(nearAtr x the 3-min range / tick), 4 half-widths)
     Tick nearBand(double atrPrice) const {
@@ -762,6 +964,23 @@ public:
         if (z.belowSince < 0) z.belowSince = t;
         if (t - z.belowSince > P.graceMs) { z.shown = false; z.belowSince = -1; }
     }
+    // (0.44.0) the strict 2.0x DRAW state: enters live (drawEnter), leaves only at a closed bar (drawClose -> drawKeep)
+    void drawState(Zone& z, Ms t) const {
+        if (!z.drawn && drawEnter(z.behindOk, z.near || z.rank == 1, z.bx, z.durable(t, P.persistMs), P.drawX)) z.drawn = true;
+    }
+    void drawClose() { for (size_t i = 0; i < zones.size(); ++i) if (zones[i].drawn && !drawKeep(zones[i].behindN, zones[i].bx, P.drawX)) zones[i].drawn = false; }
+    // (0.44.0) the Market State story step of a zone on the bar that closed at barEnd (+ its open attempt, if any)
+    std::string stepOf(long long zoneId, Ms barEnd, const Attempt** open = nullptr) const {
+        bool held = false, broke = false;
+        for (size_t i = 0; i < ztracks.size(); ++i) {
+            const ZTrack& t = ztracks[i];
+            if (zoneId > 0 && t.zoneId == zoneId && t.o.resolved() && t.tRes == barEnd) { held = held || t.o.res == zrule::REV; broke = broke || t.o.res == zrule::CONT; }
+        }
+        const Attempt* a = nullptr;
+        for (size_t i = 0; i < attempts.size() && !a; ++i) if (!attempts[i].done && attempts[i].zoneId == zoneId && zoneId > 0) a = &attempts[i];
+        if (open) *open = a;
+        return zoneStepOf(held, broke, a != nullptr, a ? a->barP : -1, a ? a->barS : -1, a ? a->barE : -1, a ? a->attackVol : 0);
+    }
     // a key / gamma level at levelTick is liquidity-confirmed by a shown zone >= confirmX on the right side whose band holds it
     // (0.11.4) keepId = the zone that confirmed this level last time: it keeps the LQ down to confirmKeepX (hysteresis, as the zones
     // themselves: shown at 2x, kept to 1.7x) so the label does not blink on and off while the zone's size hovers around 2.5x
@@ -769,7 +988,7 @@ public:
         const Zone* best = nullptr;
         for (size_t i = 0; i < zones.size(); ++i) {
             const Zone& z = zones[i];
-            if (!z.shown || z.bx < (z.id == keepId && keepId > 0 ? P.confirmKeepX : P.confirmX)) continue;
+            if (!z.shown || !z.drawn || z.bx < (z.id == keepId && keepId > 0 ? P.confirmKeepX : P.confirmX)) continue;   // (0.44.0) only a drawn zone names a level
             if (levelTick < z.lo || levelTick > z.hi) continue;
             if (z.side == BID ? z.lo > px : z.hi < px) continue;       // a support below price, a resistance above
             if (!best || z.bx > best->bx) best = &z;
@@ -780,7 +999,7 @@ public:
     // out (two tracked zones a little more than a half-width apart can both be shown for a few seconds: their bars and labels overlapped)
     std::vector<size_t> drawOrder() const {
         std::vector<size_t> idx, out;
-        for (size_t i = 0; i < zones.size(); ++i) if (zones[i].shown) idx.push_back(i);
+        for (size_t i = 0; i < zones.size(); ++i) if (zones[i].drawn) idx.push_back(i);   // (0.44.0) the strict 2.0x draw state
         std::stable_sort(idx.begin(), idx.end(), [this](size_t a, size_t b) { return zones[a].bx > zones[b].bx; });
         for (size_t k = 0; k < idx.size(); ++k) {
             const Zone& z = zones[idx[k]]; bool clash = false;
@@ -794,6 +1013,7 @@ public:
     void onBarClose(int bar, long long barTime, Ms barEnd, double close, const std::vector<std::pair<Tick, Tick>>& deltaAbsorbBid,
                     const std::vector<std::pair<Tick, Tick>>& deltaAbsorbAsk) {
         Tick c = 0; if (!tryToTick(close, P.tick, c)) return;
+        drawClose();                                                       // (0.44.0) a drawn zone under 2.0x at this close is removed
         if (haveBook && havePx) { nearBook[bar] = nearNow(); while (nearBook.size() > 1200) nearBook.erase(nearBook.begin()); }   // (0.11.0)
         // (0.8.0) s after a touch already decided as held (the defenders often step in on the bars after the close back out): finished
         // attempts first, so one closed on THIS bar is not read twice

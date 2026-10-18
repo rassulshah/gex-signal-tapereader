@@ -1,10 +1,11 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.17.0 (2.17.0, 2026-10-18: tentStep - the tentative-A life cycle (final / shown / hidden / failed), boardFlag (SignalBoard A flag 1 final / 2 tentative), dpFacts - the Market State "DP" facts of one closed bar) 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -143,6 +144,57 @@ inline bool pivotOk(H& high, L& low, int pk, bool bullish, int* pivotBar = nullp
 // (A, B] between two turns; its down pivot = the low end of that leg, its up pivot = the high end. Bullish: the bar is its down pivot
 // or its LOW is below that pivot bar's HIGH; bearish mirror. The last leg ends at the extreme so far (not confirmed): bull / bear may
 // change until conf[i] = 1 (the turn after it is confirmed). Same walk as BigBidAskLogic.h bba::swing (tests compare them).
+// ---- (2.17.0, 2026-10-18, audit B finding 1) the tentative A and the shared facts -------------------------------------------------
+// One A candidate on its CLOSED peak bar: closeOk = the peak bar closed through the node in its own colour; pivNow = the pivot rule holds
+// on the bars so far (the peak bar's own swing); pivFinal = that swing pivot is confirmed (cannot change any more).
+enum TentStep { TS_RULED_OUT = 0, TS_FINAL = 1, TS_SHOWN = 2, TS_HIDDEN = 3, TS_FAILED = 4 };
+inline TentStep tentStep(bool closeOk, bool pivNow, bool pivFinal) {
+    if (!closeOk) return TS_RULED_OUT;                  // never an A (the same-candle close failed)
+    if (pivFinal) return pivNow ? TS_FINAL : TS_FAILED; // decided: final A, or a shown A whose confirmed pivot went against it
+    return pivNow ? TS_SHOWN : TS_HIDDEN;               // undecided: the tentative A shows / is hidden for now (may come back)
+}
+// SignalBoard kind 'A' flag (SignalBoard.h 1.1.0): 1 = final, 2 = tentative
+inline int boardFlag(bool tentative) { return tentative ? 2 : 1; }
+// Market State "DP" facts (MARKET-STATE-SPEC.md) of one closed bar. Prices with the market's decimals (from the tick), ratios 1 decimal.
+struct FactNode { double px = 0, x = 0; bool buy = false; };   // a top delta node: price, ratio (x the average |delta|), net buying?
+struct FactA { double px = 0, x = 0; bool bull = false, fin = false; long long bar = 0; };   // an A: price, ratio, side, final?, peak bar
+inline int tickDecimals(double tick) {
+    if (!(tick > 0) || !finite(tick)) return 2;
+    for (int d = 0; d <= 8; ++d) { const double m = tick * std::pow(10.0, d); if (std::fabs(m - std::floor(m + 0.5)) < 1e-6) return d; }
+    return 8;
+}
+inline std::string fixedText(double v, int decimals) {
+    if (!finite(v)) return "?";
+    char b[64]; std::snprintf(b, sizeof(b), "%.*f", decimals < 0 ? 0 : decimals > 8 ? 8 : decimals, v); return b;
+}
+// top = the profile's top nodes (biggest first); onBar = the A events whose peak bar IS this bar (final or tentative, as they stand at
+// its close); confirmed / failed = A events (any earlier peak bar) that turned final / failed since the previous posted bar.
+inline std::map<std::string, std::string> dpFacts(const std::vector<FactNode>& top, const std::vector<FactA>& onBar,
+                                                  const std::vector<FactA>& confirmed, const std::vector<FactA>& failed, double tick) {
+    std::map<std::string, std::string> kv; const int d = tickDecimals(tick);
+    if (!top.empty()) {
+        kv["node_px"] = fixedText(top[0].px, d); kv["node_x"] = fixedText(top[0].x, 1); kv["node_side"] = top[0].buy ? "buy" : "sell";
+        std::string t3; for (std::size_t i = 0; i < top.size() && i < 3; ++i) { if (i) t3 += "/"; t3 += fixedText(top[i].px, d); }
+        kv["top3"] = t3;
+    } else { kv["node_px"] = "?"; kv["node_x"] = "?"; kv["node_side"] = "?"; kv["top3"] = "?"; }
+    // the A on this bar: a final one wins over a tentative one, then the stronger
+    const FactA* best = nullptr;
+    for (const FactA& a : onBar) {
+        if (!finite(a.px) || !finite(a.x)) continue;
+        if (!best || (a.fin && !best->fin) || (a.fin == best->fin && a.x > best->x)) best = &a;
+    }
+    kv["a"] = best ? (best->fin ? "final" : "tentative") : "none";
+    kv["a_side"] = best ? (best->bull ? "bull" : "bear") : "?";
+    kv["a_px"] = best ? fixedText(best->px, d) : "?";
+    kv["a_x"] = best ? fixedText(best->x, 1) : "?";
+    auto strongest = [](const std::vector<FactA>& v) { const FactA* b = nullptr; for (const FactA& a : v) if (finite(a.px) && finite(a.x) && (!b || a.x > b->x)) b = &a; return b; };
+    const FactA* c = strongest(confirmed); const FactA* f = strongest(failed);
+    kv["a_conf_n"] = std::to_string(confirmed.size());
+    kv["a_conf_px"] = c ? fixedText(c->px, d) : "?"; kv["a_conf_side"] = c ? (c->bull ? "bull" : "bear") : "?"; kv["a_conf_bar"] = c ? std::to_string(c->bar) : "?";
+    kv["a_fail_n"] = std::to_string(failed.size());
+    kv["a_fail_px"] = f ? fixedText(f->px, d) : "?"; kv["a_fail_side"] = f ? (f->bull ? "bull" : "bear") : "?"; kv["a_fail_bar"] = f ? std::to_string(f->bar) : "?";
+    return kv;
+}
 template <class H, class L>
 inline void swingPivot(H& high, L& low, int n, std::vector<char>& bull, std::vector<char>& bear, std::vector<char>& conf) {
     const std::size_t N = n > 0 ? static_cast<std::size_t>(n) : 0;

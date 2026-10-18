@@ -19,6 +19,7 @@
 // circles among them) are laid out first, then the plain ones and the forming candle's, each group in time order from older ones
 // only: a newer number never takes a row from an older one of its group, and a plain number never takes one from a bold one.
 #include <algorithm>
+#include <functional>
 #include <cctype>
 #include <map>
 #include <cerrno>
@@ -32,7 +33,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.14.1";   // (1.14.1, Rassul 17:19-17:37) Trend PB band checked from the start of the pullback THROUGH the print's own candle (his 96 at 12:42 Oct 16); Trend BO only on a candle in the up-wave (down-wave for a breakdown); ES category 4 = 1,000; (1.14.0) (1.14.0, Rassul 2026-10-17 16:29-16:47) one "Show" choice per category (All prints / Near pivot (either direction) / Near a level / Pivot near a level / Trend PB / Trend BO / Trend PB + BO), category 4 = every print of its size (time filter only), the pivot judged against the candle's own swing (may repaint until the pivot is confirmed), the Trend PB VWAP band rule, Trend BO needs the trend, box colours of their own, new defaults, category 4 size per market; (1.13.0) a Setup per category (Any / Pullback with trend / Reversal at a level / Breakout through the higher of the last 2 pivots), RTH only option; (1.12.0) hover, print log + nightly score, Liquidity Profile read, NG / 6E divider 1; (1.11.0) (1.11.0) category 4 (>= lots), a font per category, time filter, near a level (ATR above / below + sweeps; key / gamma / volume levels), statistics; (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
+static const char* const VERSION = "1.15.0";   // (1.15.0, 2026-10-18 audit B finding 2) the Big Lot tiers are decided ONCE PER SESSION from complete earlier sessions only (3 - 5, each with 3/4 of its day candles; today's partial session and partly read sessions never count), and only once the chart history before the session is fully read: a print's tier is fixed for its candle and never re-judged by a later recompute or by what is in view (TierSet / tiersFor); the facts are read from the chart's full recent history (8 sessions), not from the view, and recorded for 8 sessions; the SignalBoard B events come from the record for the last 120 closed candles whatever is on screen (+ bit 7 = pivot confirmed); the 5-s log-normal curve fit is gone (status shows the S-tiers); (1.14.1, Rassul 17:19-17:37) Trend PB band checked from the start of the pullback THROUGH the print's own candle (his 96 at 12:42 Oct 16); Trend BO only on a candle in the up-wave (down-wave for a breakdown); ES category 4 = 1,000; (1.14.0) (1.14.0, Rassul 2026-10-17 16:29-16:47) one "Show" choice per category (All prints / Near pivot (either direction) / Near a level / Pivot near a level / Trend PB / Trend BO / Trend PB + BO), category 4 = every print of its size (time filter only), the pivot judged against the candle's own swing (may repaint until the pivot is confirmed), the Trend PB VWAP band rule, Trend BO needs the trend, box colours of their own, new defaults, category 4 size per market; (1.13.0) a Setup per category (Any / Pullback with trend / Reversal at a level / Breakout through the higher of the last 2 pivots), RTH only option; (1.12.0) hover, print log + nightly score, Liquidity Profile read, NG / 6E divider 1; (1.11.0) (1.11.0) category 4 (>= lots), a font per category, time filter, near a level (ATR above / below + sweeps; key / gamma / volume levels), statistics; (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 
@@ -135,7 +136,8 @@ inline Settings parseSettings(const std::string& text, std::string& why, const s
     if (f.size() == 50 && f[0] == "BBA5") {   // (1.13.0) a 1.11 / 1.12 file: kept, with setup Any and RTH + overnight added
         std::vector<std::string> g; g.push_back("BBA6"); for (int i = 1; i <= 5; ++i) g.push_back(f[i]);
         for (int k = 0; k < 4; ++k) { for (int j = 0; j < 8; ++j) g.push_back(f[6 + 8 * k + j]); g.push_back("0"); }
-        for (int i = 38; i < 50; ++i) g.push_back(f[i]); g.push_back("0");
+        for (int i = 38; i < 50; ++i) { g.push_back(f[i]); }
+        g.push_back("0");
         f.swap(g);
     }
     if (f.size() == 55 && f[0] == "BBA6") {   // (1.14.0) a 1.13 file: pivot / level / setup -> one Show choice; box colours default
@@ -250,8 +252,9 @@ inline const NamedLevel* nearLevel(H& hi, L& lo, C& cl, int i, double p, const s
 // labels split on '/', "CR 0D" -> "CR 0DTE", "PS 0D" -> "PS 0DTE", "HVL" / "HVL 0D" -> "HVL", "G1" - "G5"; GW and others ignored
 inline std::string mqMarket(const std::string& sym) {
     auto st = [&](const char* p) { return sym.compare(0, std::strlen(p), p) == 0; };
-    if (st("ENQ")) return "NQ"; if (st("EP")) return "ES"; if (st("CLE")) return "CL"; if (st("GCE")) return "GC";
-    if (st("CPE")) return "HG"; if (st("NGE")) return "NG"; if (st("EU6")) return "EU"; return "";
+    static const char* const P[7][2] = { {"ENQ", "NQ"}, {"EP", "ES"}, {"CLE", "CL"}, {"GCE", "GC"}, {"CPE", "HG"}, {"NGE", "NG"}, {"EU6", "EU"} };
+    for (int k = 0; k < 7; ++k) { if (st(P[k][0])) return P[k][1]; }
+    return "";
 }
 inline bool monthOf(const std::string& s, char& m, char& y) {
     const size_t n = s.size(); auto isM = [](char c) { return c && std::strchr("FGHJKMNQUVXZ", c) != NULL; };
@@ -732,5 +735,39 @@ inline std::string clock12(int h, int m) {
     char b[16]; std::snprintf(b, sizeof(b), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM"); return b;
 }
 
+// ---- (1.15.0, audit B finding 2) Big Lot tiers per SESSION, decided once ------------------------------------------------------------
+// The prints of one session (svl session key): the biggest print per side of each closed candle, per phase (0 night, 1 day), and how
+// many DAY candles it has (a complete session has at least 3/4 of them).
+struct SessPrints { int dayCandles = 0; std::vector<long long> pv[2]; };
+// The tiers in force for every candle of ONE session: the pooled prints (biggest first) of the complete sessions before it.
+struct TierSet { bool ok = false; int nSess = 0; std::vector<long long> pv[2]; std::vector<long> used; std::string why = "learning"; };
+// sess = the session to judge; bySess = every session's prints known so far; need = day candles of a complete session.
+// Only sessions BEFORE sess that are complete count (never today's partial one); the latest maxSess of them are pooled; fewer than
+// minSess = not ok ("learning": nothing is drawn by size). The caller decides WHEN to call it (history read) and keeps the result.
+inline TierSet tiersFor(long sess, const std::map<long, SessPrints>& bySess, int need, int maxSess = 5, int minSess = 3) {
+    TierSet T;
+    for (std::map<long, SessPrints>::const_reverse_iterator it = bySess.rbegin(); it != bySess.rend() && (int)T.used.size() < maxSess; ++it) {
+        if (it->first >= sess || it->second.dayCandles < need) continue;
+        T.used.push_back(it->first);
+        for (int ph = 0; ph < 2; ++ph) T.pv[ph].insert(T.pv[ph].end(), it->second.pv[ph].begin(), it->second.pv[ph].end());
+    }
+    T.nSess = (int)T.used.size();
+    for (int ph = 0; ph < 2; ++ph) std::sort(T.pv[ph].begin(), T.pv[ph].end(), std::greater<long long>());
+    T.ok = T.nSess >= minSess;
+    T.why = T.ok ? std::to_string(T.nSess) + " complete sessions" : "learning (" + std::to_string(T.nSess) + " of " + std::to_string(minSess) + " complete sessions)";
+    return T;
+}
+// Big Lot N of a tier set: the size at rank N x sessions (the size reached about N times a session); 0 = not known
+inline long long bigLotOf(const TierSet& T, int ph, int n) {
+    if (!T.ok || ph < 0 || ph > 1 || n < 1) return 0;
+    const size_t r = (size_t)n * (size_t)T.nSess;
+    return (r >= 1 && T.pv[ph].size() >= std::max<size_t>(r, 30)) ? T.pv[ph][r - 1] : 0;
+}
+// a category's size: category 4 (n <= 0) = its fixed lots; 1 - 3 = Big Lot N, never under the category's minimum; 0 = learning
+inline long long catSizeOf(const TierSet& T, int ph, const Cat& c) {
+    if (c.n <= 0) return (long long)c.lots;
+    const long long z = bigLotOf(T, ph, c.n);
+    return z > 0 ? std::max(z, (long long)c.lots) : 0;
+}
 } // namespace bba
 #endif

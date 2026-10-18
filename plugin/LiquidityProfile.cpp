@@ -102,6 +102,7 @@
 #include "ZoneNear.h"              // (0.20.0) the zone + level names for the banner verdict
 #include "BannerSettings.h"    // (0.24.0) the verdict banner settings (SDK-free, tested)
 #include "ColumnBoard.h"           // (0.16.0) the right-side columns (Levels / Delta / Dealer) and this column's width on the board
+#include "MarketState.h"           // (0.44.0) SRC LIQ / LOTS facts for the Tape Reader (MARKET-STATE-SPEC.md 1.0), behind the scenes
 #ifndef LQ_FLOW
 // (0.15.0) the order-by-order feed and its order book: the shared order-flow header, reused as is (lsBidAskStats / PullStats /
 // StackStats). After irtsdk.h and after the near / far #undefs above (off::Engine has a member named 'near').
@@ -135,7 +136,16 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.43.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.44.0"          // keep equal to lqp::VERSION and the setVersion literal below
+// (0.44.0, 2026-10-18 night, Rassul approved "yes 2x" + the audit fixes) 1) the column DRAWS a zone only at >= 2.0x (lqp drawn state:
+// enters live at 2.0x, removed only at a bar close under 2.0x; no 1.5x near entry / 1.2x keep / any size during absorption) - the
+// records and attempts are unchanged; 2) LMT R "S5 anywhere" compares the largest SINGLE order at a price (bol::biggestSingle), never
+// the price level's total; 3) the zone normal names its source in the status (norms file slot / 5-session pool slot / session median)
+// and slots the norms file lacks (overnight) come from the 5-session per-slot pool (LiquidityProfile.bandnorms-<MKT>.txt); 4) MenthorQ
+// rows of another contract (CLEX26 on CLZ6) or a file older than 18 h are skipped (status MQ line); 5) Market State SRC LIQ and LOTS
+// posted once per closed bar (re-posted unchanged every 15 s so readers see them fresh), cleared on removal; 6) no "LIQ TESTING"
+// header: nothing is drawn when depth is fine, a red "LIQ no depth" / "LIQ blocked" only on a fault. (0.43.1 kept: empty sessions
+// skipped in the big-lot pool, EU floor.)
 // (0.15.1 settings audit, 2026-10-13) Width / Font reach every chart and survive a restart: OK / Apply writes them per market to
 // lsFlexLevels\<LiquidityProfile|LiquidityFlow>.size-<MKT>.txt and every draw reads that back (by its stamp, at most once a second).
 // Before, Apply set them only on the copy the settings window ran in, and a restart went back to 70 px / 11 pt. The Flow pane
@@ -200,6 +210,16 @@ static bool statFile(const std::string& p, long long* stamp = nullptr, long long
     if (stamp) *stamp = (long long)st.st_mtime * 1000000LL + (long long)st.st_size;
     if (bytes) *bytes = (long long)st.st_size;
     return true;
+}
+// (0.44.0) a file's modification time in Unix seconds (0 = missing) - the MenthorQ 18 h freshness rule
+static long long fileMtimeSec(const std::string& p) {
+#if defined(_WIN32)
+    struct _stat64 st; if (_stat64(p.c_str(), &st) != 0) return 0;
+#else
+    struct stat st; if (stat(p.c_str(), &st) != 0) return 0;
+#endif
+    if ((st.st_mode & S_IFMT) != S_IFREG) return 0;
+    return (long long)st.st_mtime;
 }
 static const size_t INPUT_LINE_MAX = 4096, INPUT_FILE_MAX = 4U * 1024U * 1024U;
 // External status/record files are advisory inputs.  Refuse non-regular or oversized
@@ -349,6 +369,10 @@ struct LQState {
     // (0.10.0) levels for the LQ confirmation and the reach
     struct Lvl { std::string code; lqp::Tick px = 0; };
     std::vector<Lvl> levels; long levelsAt = -1; long long mqStamp = -2; std::vector<Lvl> mqLevels;
+    std::vector<Lvl> mqParsed; long long mqMtime = 0; std::string mqNote = "not read yet";   // (0.44.0) the rows of THIS contract; used only while the file is <= 18 h old
+    std::string bpMkt, bpState = "not loaded"; long long bpWriteMs = -1;                     // (0.44.0) LiquidityProfile.bandnorms-<MKT>.txt (5-session per-slot pool)
+    long long mstBar = -1, mstMs = -1; bool mstPub = false; std::string mstChart;            // (0.44.0) Market State: the closed bar posted, when, under which chart key
+    std::map<std::string, std::string> mstLiq, mstLotsBar;                                   // (0.44.0) the facts frozen for that bar (LIQ all; LOTS the per-bar keys)
     double avgRth = 0; int avgRthN = 0, rthOpen = -1, rthClose = -1;
     double expRange = 0; long long hlStamp = -2; std::string reachSrc = "6x 3-min range";
     // (0.17.0) the zone rule: the lagged ADR (chart bars, prior 20 sessions), the last closed bar (session end), the restore of open encounters
@@ -445,6 +469,8 @@ public:
 #ifndef LQ_FLOW
         LQState* S = slot_.get(this, false); if (S && S->published) { bb::clearWarn(S->symbol, S->spb, S->chartKey); S->published = false; }
         if (S && S->colPublished) { cb::clear(cb::LIQ, S->symbol, S->spb, S->chartKey); S->colPublished = false; }
+        if (S && S->mstPub) { mst::clear("LIQ", S->symbol, S->spb, S->mstChart); mst::clear("LOTS", S->symbol, S->spb, S->mstChart); S->mstPub = false; }   // (0.44.0)
+        if (S && !S->bpMkt.empty()) bandSave(*S);                       // (0.44.0) keep the pool's current session
 #endif
     }
     static int clampWidth(int w) { return w < cb::range(cb::LIQ).lo ? cb::range(cb::LIQ).def : std::min(w, cb::range(cb::LIQ).hi); }   // (0.16.0) 20-200, default 60
@@ -472,7 +498,12 @@ private:
     void status(LQState& S, long long now);
     void writeLiqZones(LQState& S);    // (0.12.0) the zones for the Dealer Profile's level badges
     void writeLiqLevels(LQState& S);   // (0.16.0) every price's liquidity for the level badges
+public:
+    void bandLoad(LQState& S, long long t);    // (0.44.0) the 5-session per-slot band pool (LiquidityProfile.bandnorms-<MKT>.txt)
+    void bandSave(LQState& S);
+private:
 #ifndef LQ_FLOW
+    void postState(LQState& S, long count, long long st);   // (0.44.0) Market State SRC LIQ / LOTS, once per closed bar
     void orders(LQState& S, long long st);          // (0.15.0) the order-by-order feed -> order book, hits / rebuilds, makeup
     void renderHover(LQState& S, int left, int top, int bottom, int paneRight);   // (0.15.0) the hovered near zone's box
     void loadBig(LQState& S);                       // (0.18.0) the big-order settings of this market (file, by its sub-second stamp)
@@ -785,7 +816,11 @@ void LiquidityProfile::identify(LQState& S) {
         const int w = S.width, f = S.font; const bool bg = S.bg;
 #ifndef LQ_FLOW
         if (S.colPublished) { cb::clear(cb::LIQ, S.symbol, S.spb, S.chartKey); S.colPublished = false; }   // (0.16.0) the old chart's entry
+        if (S.mstPub) { mst::clear("LIQ", S.symbol, S.spb, S.mstChart); mst::clear("LOTS", S.symbol, S.spb, S.mstChart); S.mstPub = false; }   // (0.44.0)
+        if (!S.bpMkt.empty()) bandSave(S);                              // (0.44.0) the old market's pool first
 #endif
+        S.mstBar = -1; S.mstMs = -1; S.mstLiq.clear(); S.mstLotsBar.clear(); S.bpMkt.clear(); S.bpWriteMs = -1; S.bpState = "not loaded";
+        S.mqParsed.clear(); S.mqMtime = 0; S.mqNote = "not read yet";
         S.peers = cb::Peers(); S.colPriceRight = -1; S.lvlBody.clear(); S.lvlAt = -1;
         LQState fresh; S.e = fresh.e; delete S.md; S.md = nullptr; S.mdDead = S.mdBlocked = false; S.barCount = 0; S.vapRows.clear(); S.vapBar = -1; S.vapStamp = 0; S.primed = false; S.session = -1; S.marksWritten = 0;
         S.normsStamp = S.layoutStamp = S.dealerStamp = S.dpStamp = -2; S.width = w; S.font = f; S.bg = bg; S.params = "built-in defaults"; S.confirmed.clear();
@@ -1066,23 +1101,36 @@ void LiquidityProfile::loadLevels(LQState& S, long count) {
     const std::string f = flexDir();
     if (!f.empty()) {
         long long st = -1; const std::string mq = f + "\\MenthorQLevels.csv";
-        if (!statFile(mq, &st)) { S.mqLevels.clear(); S.mqStamp = -1; }
+        if (!statFile(mq, &st)) { S.mqLevels.clear(); S.mqParsed.clear(); S.mqStamp = -1; S.mqMtime = 0; S.mqNote = "no MenthorQLevels.csv"; }
         else if (st != S.mqStamp) {
-            S.mqStamp = st; S.mqLevels.clear();
-            std::ifstream in; std::string line; int n = 0;
+            S.mqStamp = st; S.mqParsed.clear(); S.mqMtime = fileMtimeSec(mq);
+            std::ifstream in; std::string line; int n = 0, skipped = 0, kept = 0; std::string skipSym;
             if (openBoundedInput(mq, in)) while (readBoundedLine(in, line) && ++n < 2000) {
                 if (!line.empty() && line.back() == '\r') line.pop_back();
                 const std::vector<std::string> c = split(line, ',');
                 if (c.size() < 3 || mqMarket(c[0]) != S.market) continue;
+                // (0.44.0, audit LP-5) a row of another contract month (CLEX26 on a CLZ6 chart) is skipped, as the Aggression pane does
+                if (!lqp::sameContract(S.symbol, c[0])) { ++skipped; if (skipSym.empty()) skipSym = c[0].substr(0, 16); continue; }
+                ++kept;
                 double px = 0; if (!parseD(c[1], px) || px <= 0) continue;
                 const std::vector<std::string> parts = split(c[2], '/');
                 for (size_t k = 0; k < parts.size(); ++k) if (gamma1(parts[k])) {
                     LQState::Lvl L; if (!lqp::tryToTick(px, S.tick, L.px)) continue; std::string code = parts[k];
                     while (!code.empty() && code[0] == ' ') code.erase(0, 1);
                     while (!code.empty() && code.back() == ' ') code.pop_back();
-                    L.code = code; S.mqLevels.push_back(L); break;
+                    L.code = code; S.mqParsed.push_back(L); break;
                 }
             }
+            S.mqNote = skipped > 0 && kept == 0 ? "MenthorQ levels skipped (file is " + skipSym + ", chart " + S.symbol + ")"
+                     : std::to_string(S.mqParsed.size()) + " gamma1 rows of " + S.symbol + (skipped > 0 ? " (" + std::to_string(skipped) + " rows of " + skipSym + " skipped)" : std::string());
+        }
+        // (0.44.0, audit LP-5) used only while the file is <= 18 h old (the freshness rule of NearLevels.h / ZoneRead.h), checked every pass
+        if (S.mqStamp >= 0) {
+            const bool fresh = lqp::mqFresh(S.mqMtime, (long long)std::time(nullptr));
+            if (fresh) S.mqLevels = S.mqParsed; else S.mqLevels.clear();
+            const std::string tag = " - file older than 18 h: not used";
+            if (!fresh && S.mqNote.find(tag) == std::string::npos) S.mqNote += tag;
+            if (fresh && S.mqNote.size() > tag.size() && S.mqNote.compare(S.mqNote.size() - tag.size(), tag.size(), tag) == 0) S.mqNote.erase(S.mqNote.size() - tag.size());
         }
     }
     // the key levels from the chart's own bars (lsDealerProfile's KeyLevelsLogic) and the 14-session RTH range - on a new bar only
@@ -1374,7 +1422,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
       << "\nCOLUMN,width " << S.width << ",background " << (S.bg ? "on" : "off") << ",right columns end price at " << S.colPriceRight
       << "\nLIQ_LEVELS,rows " << S.lvlRows << ",writes " << S.lvlWrites
       << "\nBANNER," << (S.trBanner ? "Tape Reader banner on this chart: the warning is shown there" : "no Tape Reader banner: the warning is drawn here") << ",handed " << S.handed << ",verdict " << S.verdict << " (agree " << S.verdictScore << "/3)" << ",label offset " << S.labDx << "," << S.labDy << (S.sizeWhy.empty() ? std::string() : "," + S.sizeWhy)
-      << "\nTRADES," << S.e.trades << "\nZONE_HW," << S.e.hw << ",atr " << S.atr << ",slot " << S.slot << ",normal " << S.e.normal << ",norms " << (S.e.norms.loaded ? "file" : "session") << "\nPARAMS," << S.params
+      << "\nTRADES," << S.e.trades << "\nZONE_HW," << S.e.hw << ",atr " << S.atr << ",slot " << S.slot << ",normal " << S.e.normal << ",normal_from " << lqp::normSrcName(S.e.normalSrc) << (S.e.normalSrc == lqp::NS_POOL || S.e.normalSrc == lqp::NS_SESSION ? " (" + std::to_string(S.e.normalPoolN) + " pool sessions for this slot)" : std::string()) << ",norms_file " << (S.e.norms.loaded ? std::to_string(S.e.norms.median.size()) + " slots" : std::string("none")) << ",pool_sessions " << S.e.norms.pool.past.size() << ",pool_file " << S.bpState << "\nPARAMS," << S.params
       << "\nZONES," << S.e.zones.size() << "\nATTEMPTS," << S.e.attempts.size() << "\nMARKS," << S.e.marks.size() << ",written " << S.marksWritten
       << ",writes " << S.recWrites << ",fails " << S.recFails << "\nDELTA_A," << S.dpBid.size() << "," << S.dpAsk.size()
       << "\nSESSION," << S.session << "\nSTATE," << S.state
@@ -1391,8 +1439,9 @@ void LiquidityProfile::status(LQState& S, long long now) {
           << S.e.barNorm.size() << "\n";
     }
     o << "REACH," << S.reachSrc << ",ticks " << S.e.P.reachTicks << ",expected " << S.expRange << ",avg_rth " << S.avgRth << ",sessions " << S.avgRthN
-      << "\nNEAR,ticks " << S.e.nearTicks << ",show " << xfmt(S.e.P.nearShowX) << ",keep " << xfmt(S.e.P.nearKeepX)   // (0.14.0)
-      << "\nLEVELS," << S.levels.size() << " key," << S.mqLevels.size() << " gamma1\nLQ," << (S.lqShow ? "shown" : "logged") << "," << S.confirms.size() << "\n";
+      << "\nNEAR,ticks " << S.e.nearTicks << " (records / attempts: show " << xfmt(S.e.P.nearShowX) << ", keep " << xfmt(S.e.P.nearKeepX) << ")"   // (0.14.0)
+      << "\nDRAW,only >= " << xfmt(S.e.P.drawX) << " (enter live once rested, removed at a bar close under it; only on a level)"   // (0.44.0)
+      << "\nLEVELS," << S.levels.size() << " key," << S.mqLevels.size() << " gamma1\nMQ," << S.mqNote << "\nLQ," << (S.lqShow ? "shown" : "logged") << "," << S.confirms.size() << "\n";
     for (size_t i = 0; i < S.confirms.size(); ++i) o << "CONFIRM," << S.confirms[i] << "\n";
 #ifndef LQ_FLOW
     {   // (0.15.0) the order feed and each near zone's makeup (what its hover shows)
@@ -1426,7 +1475,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
 #endif
     for (size_t i = 0; i < S.e.zones.size(); ++i) {
         const lqp::Zone& z = S.e.zones[i];
-        o << "ZONE,bx " << z.bx << ",rank " << z.rank << ",behind " << z.behindN << "," << (z.shown ? "shown" : "hidden") << "," << (z.side == lqp::BID ? "support" : "resistance") << "," << (double)z.lo * S.e.P.tick << "," << (double)z.hi * S.e.P.tick
+        o << "ZONE,bx " << z.bx << ",rank " << z.rank << ",behind " << z.behindN << "," << (z.shown ? "shown" : "hidden") << (z.drawn ? ",drawn" : ",not drawn") << "," << (z.side == lqp::BID ? "support" : "resistance") << "," << (double)z.lo * S.e.P.tick << "," << (double)z.hi * S.e.P.tick
           << "," << z.size << ",x " << S.e.xNormal(z.size) << ",age_s " << (S.e.bookT - z.born) / 1000 << ",old " << S.e.zoneOld(z.side, z.lo, z.hi, S.e.bookT) << (z.near ? ",near" : ",far") << "\n";   // (0.14.0)
     }
     const std::string text = o.str();
@@ -1529,7 +1578,7 @@ void LiquidityProfile::writeLiqLevels(LQState& S) {
         // (0.20.1, Rassul 08:51 "the liquidity numbers on the key levels are not in sync with the liquidity profile") a price inside a
         // zone the column DRAWS takes that zone's own lots and x - the badge and the column show the same number for the same level
         for (size_t zi = 0; zi < S.e.zones.size(); ++zi) { const lqp::Zone& z = S.e.zones[zi];
-            if (z.shown && z.side == side && px >= z.lo && px <= z.hi && z.size > 0) { lots = z.size; bx = z.bx > 0 ? z.bx : bx; break; } }
+            if (z.drawn && z.side == side && px >= z.lo && px <= z.hi && z.size > 0) { lots = z.size; bx = z.bx > 0 ? z.bx : bx; break; } }   // (0.44.0) a zone the column draws
         const long long n = (long long)std::llround(lots); if (n < 1) continue;
         char row[96]; std::snprintf(row, sizeof(row), "L,%lld,%s,%lld,%.3f\n", (long long)px, side == lqp::BID ? "S" : "R", n, bx > 0 ? bx : -1.0);
         b << row; ++rows;
@@ -1551,6 +1600,106 @@ void LiquidityProfile::writeLiqLevels(LQState& S) {
 // chart kept alive, opened from calc / draw only behind a crash-guard file, drained <= 5,000 events / ~8 ms per call). Each event
 // first goes to the attempts (hits / rebuilds, open attempts only), then to the order book. The open attempts' makeup is refreshed
 // every call, so the one recorded at the decision is the last one before it.
+// (0.44.0, audit LP-3) the 5-session per-slot pool of band sizes (lqp::BandPool): the normal for the slots the nightly norms file does not
+// hold (it has RTH slots only). lsFlexLevels\LiquidityProfile.bandnorms-<MKT>.txt, loaded once per market, saved every 5 min (atomic).
+static std::string bandPath(const std::string& market) { const std::string f = flexDir(); return f.empty() || market.empty() ? std::string() : f + "\\LiquidityProfile.bandnorms-" + market + ".txt"; }
+void LiquidityProfile::bandLoad(LQState& S, long long t) {
+    S.bpMkt = S.market; S.bpWriteMs = steadyMs();
+    const std::string p = bandPath(S.market); if (p.empty()) { S.bpState = "no folder"; return; }
+    std::ifstream in; std::string ln, body; int n = 0;
+    if (!statFile(p)) { S.bpState = "new (no file yet)"; return; }
+    if (!openBoundedInput(p, in)) { S.bpState = "unreadable"; return; }
+    while (readBoundedLine(in, ln) && ++n < 5000) body += ln + "\n";
+    lqp::BandPool bp;
+    if (!bp.parse(body, zrule::sessionKey(t / 1000))) { S.bpState = "garbled - starting over"; return; }
+    S.e.norms.pool.past.swap(bp.past);
+    S.bpState = "loaded " + std::to_string(S.e.norms.pool.past.size()) + " sessions";
+}
+void LiquidityProfile::bandSave(LQState& S) {
+    S.bpWriteMs = steadyMs();
+    const lqp::BandPool& bp = S.e.norms.pool;
+    if (S.bpMkt.empty() || S.bpMkt != S.market || (bp.past.empty() && bp.cur.empty())) return;
+    const std::string p = bandPath(S.market); if (p.empty()) return;
+    if (publishFile(p, bp.text())) S.bpState = "saved, " + std::to_string(bp.past.size()) + " finished sessions"; else S.bpState = "save failed";
+}
+
+#ifndef LQ_FLOW
+// (0.44.0) MARKET STATE (MARKET-STATE-SPEC.md 1.0): SRC LIQ (the zone price is working or the nearest drawn level zone) and SRC LOTS (the
+// MKT / LMT columns), decided once per CLOSED bar and frozen for it; the slow state (tiers, the biggest resting orders) refreshes when the
+// entry is re-posted every 15 s (the reader ignores an entry older than 60 s). Behind the scenes only: nothing here draws.
+void LiquidityProfile::postState(LQState& S, long count, long long st) {
+    if (S.symbol.empty() || count < 3 || !(S.e.P.tick > 0)) return;
+    RTARRAYI times(barDateTime); if (times.count < count) return;
+    const long long barCt = ctSec((RTDATE)times[(int)count - 2]);
+    if (barCt <= 0) return;
+    const char* cl = getChartLabel(); const std::string chart = cl ? std::string(cl) : std::string();
+    const bool newBar = barCt != S.mstBar;
+    if (!newBar && S.mstPub && chart == S.mstChart && st >= S.mstMs && st - S.mstMs < 15000) return;
+    if (S.mstPub && chart != S.mstChart) { mst::clear("LIQ", S.symbol, S.spb, S.mstChart); mst::clear("LOTS", S.symbol, S.spb, S.mstChart); }
+    const double tick = S.e.P.tick;
+    const bool feed = S.bfNow > 0;                                       // the order-by-order feed has delivered events
+    if (newBar) {
+        const long long endMs = barCt * 1000LL, t0 = endMs - (long long)std::max(1, S.spb) * 1000LL;
+        // ---- LOTS: the per-bar keys
+        lqp::LotsFacts B; B.tick = tick; B.mktTiersOk = S.mktOk; B.ms20 = S.mktV[0]; B.ms10 = S.mktV[1]; B.ms5 = S.mktV[2];
+        if (feed) {
+            B.mktBuy = S.mkt.maxIn(bfl::BID, t0, endMs); B.mktSell = S.mkt.maxIn(bfl::ASK, t0, endMs);   // bfl BID = a buyer lifted the offer
+            B.lmtFilled = 0;
+            for (size_t k = 0; k < S.bo.lines.size(); ++k) { const bol::Line& L = S.bo.lines[k];
+                if (L.end == bol::FILLED && L.tEnd >= t0 && L.tEnd < endMs && L.traded > B.lmtFilled) { B.lmtFilled = L.traded; B.lmtFilledSide = L.side == bol::BID ? lqp::BID : lqp::ASK; } }
+            const long long iFloor = S.bldOk ? std::max(1LL, (long long)std::llround(S.bldMu)) : 10LL;
+            const std::vector<std::pair<long long, bfl::Ice::Ord> > ice = S.ice.live(iFloor, 2);
+            long long best = 0; for (size_t i = 0; i < ice.size(); ++i) if (ice[i].second.traded > best) { best = ice[i].second.traded; B.iceberg = ice[i].second.side == bfl::BID ? lqp::BID : lqp::ASK; }
+        }
+        const std::map<std::string, std::string> bk = lqp::lotsKv(B);
+        static const char* const PER_BAR[] = { "mkt_buy_max", "mkt_sell_max", "mkt_tier", "lmt_filled_max", "lmt_filled_side", "iceberg" };
+        S.mstLotsBar.clear();
+        for (size_t i = 0; i < sizeof(PER_BAR) / sizeof(PER_BAR[0]); ++i) { std::map<std::string, std::string>::const_iterator it = bk.find(PER_BAR[i]); if (it != bk.end()) S.mstLotsBar[it->first] = it->second; }
+        if (!feed) S.mstLotsBar["iceberg"] = "?";
+        // ---- LIQ: the drawn zone on a level that price is working (an open attempt), else the nearest one
+        lqp::LiqFacts F; F.tick = tick;
+        if (S.e.haveBook && S.depthAvail) {
+            const std::vector<LqPick> picks = lqPicks(S);
+            long bi = -1; bool biOpen = false; long long bd = 0; std::string bname;
+            for (size_t k = 0; k < picks.size(); ++k) {
+                const lqp::Zone& z = S.e.zones[picks[k].idx];
+                std::string nm = picks[k].names;
+                if (nm.empty()) { std::map<long long, std::string>::const_iterator q = S.lqMark.find(z.id); if (q == S.lqMark.end()) continue;
+                    nm = q->second; if (nm.compare(0, 4, "LQ? ") == 0) nm = nm.substr(4); else if (nm.compare(0, 3, "LQ ") == 0) nm = nm.substr(3); }
+                const lqp::Attempt* a = nullptr; S.e.stepOf(z.id, endMs, &a);
+                const long long d = S.e.havePx ? std::llabs((long long)(z.lo + z.hi) - 2LL * (long long)S.e.lastPx) : 0;
+                const bool open = a != nullptr;
+                if (bi < 0 || (open && !biOpen) || (open == biOpen && d < bd)) { bi = (long)picks[k].idx; biOpen = open; bd = d; bname = nm; }
+            }
+            if (bi >= 0) {
+                const lqp::Zone& z = S.e.zones[(size_t)bi];
+                const lqp::Attempt* a = nullptr;
+                F.have = true; F.level = bname; F.lo = (double)z.lo * tick; F.hi = (double)z.hi * tick; F.lots = z.size; F.x = z.bx; F.side = z.side;
+                F.step = S.e.stepOf(z.id, endMs, &a);
+                if (a) {
+                    F.absorbLots = a->hitLots > 0 ? (double)a->hitLots : a->attackVol;
+                    if (a->cameBase > 0 && a->cameArr >= 0) F.pulledBeforePct = std::max(0.0, (a->cameBase - a->cameArr) / a->cameBase * 100.0);
+                } else if (z.near && z.nearBase > 0) F.pulledBeforePct = std::max(0.0, (z.nearBase - z.size) / z.nearBase * 100.0);
+            }
+        }
+        S.mstLiq = lqp::liqKv(F);
+        S.mstBar = barCt;
+    }
+    // ---- LOTS: the slow state (re-read at every post) + the frozen per-bar keys
+    lqp::LotsFacts L; L.tick = tick; L.tiersOk = S.bldOk; L.s20 = S.bldV[0]; L.s10 = S.bldV[1]; L.s5 = S.bldV[2]; L.mu = S.bldMu;
+    if (feed) {
+        bol::Tick px = 0; long long n = 0;
+        if (S.bo.biggestSingle(bol::BID, false, 1, px, n)) { L.restBid = n; L.restBidPx = (double)px * tick; }
+        if (S.bo.biggestSingle(bol::ASK, false, 1, px, n)) { L.restAsk = n; L.restAskPx = (double)px * tick; }
+    }
+    std::map<std::string, std::string> kv = lqp::lotsKv(L);
+    for (std::map<std::string, std::string>::const_iterator it = S.mstLotsBar.begin(); it != S.mstLotsBar.end(); ++it) kv[it->first] = it->second;
+    mst::publish("LOTS", S.symbol, S.spb, chart, st, S.mstBar, kv);
+    mst::publish("LIQ", S.symbol, S.spb, chart, st, S.mstBar, S.mstLiq);
+    S.mstMs = st; S.mstChart = chart; S.mstPub = true;
+}
+#endif
+
 void LiquidityProfile::orders(LQState& S, long long st) {
     if (!S.e.haveBook || !S.depthAvail || S.symbol.empty()) return;
     const std::string d = dir();
@@ -1968,12 +2117,12 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     }
     {   // (0.37.0, Rassul 13:59 "if an order is 3SD+, show it no matter where it is") the biggest displayed size per side BEYOND the 2 ATR reach, shown at 3SD and over: background + white
         // outline, no sign (the order tracker only follows the reach, so this is the size shown at that price, read from the book)
-        if (S.e.haveBook && S.bo.havePx && S.bo.reach > 0) for (int s = 0; s < 2; ++s) {
-            const std::map<lqp::Tick, double>& bk = S.e.book[s == bol::BID ? lqp::BID : lqp::ASK];
-            long long bp = 0; double bn = 0;
-            for (std::map<lqp::Tick, double>::const_iterator it = bk.begin(); it != bk.end(); ++it)
-                if (it->second > bn && std::llabs((long long)(it->first - S.bo.px)) > (long long)S.bo.reach) { bn = it->second; bp = (long long)it->first; }
-            if (bn < (double)tcut[2]) continue;
+        // (0.44.0, audit B finding 5) the largest SINGLE known resting order beyond the reach (order-by-order book), compared with the
+        // single-order tiers - before, the depth book's price-level TOTAL (200 lots of 5-lot orders drew as a top-tier order)
+        if (S.bo.havePx && S.bo.reach > 0) for (int s = 0; s < 2; ++s) {
+            bol::Tick bpT = 0; long long bnL = 0;
+            if (!S.bo.biggestSingle(s, true, tcut[2], bpT, bnL)) continue;
+            const long long bp = (long long)bpT; const double bn = (double)bnL;
             const int y = yOfPx(bp); const int t0 = y - boxH / 2, b0 = t0 + boxH;
             if (t0 < top + 14 || b0 > bottom || !freeAt(t0, b0)) continue;
             const bool bull = s == bol::BID; const COLOR fill = bull ? C_BUY : C_SELL;
@@ -2236,6 +2385,8 @@ void LiquidityProfile::pump() {
         loadBig(S); boSessionCheck(S, t);                              // (0.18.0) the big-order settings + this session's lines
 #endif
         if (S.lastNorms < 0 || st - S.lastNorms >= 60000) { S.lastNorms = st; loadNorms(S); }
+        if (S.bpMkt != S.market) bandLoad(S, t);                         // (0.44.0) once per market
+        else if (S.bpWriteMs < 0 || st - S.bpWriteMs >= 300000 || st < S.bpWriteMs) bandSave(S);   // every 5 min (atomic)
         if (S.lastLayout < 0 || st - S.lastLayout >= 1000) { S.lastLayout = st; loadLayout(S); loadLevels(S, getBarCount()); loadReach(S); updateConfirms(S); loadDelta(S); }
         openDepth(S);
         const long count = getBarCount();
@@ -2264,6 +2415,9 @@ void LiquidityProfile::pump() {
             if (getLocaltime(currentDate(), &tt)) S.slot = (tt.tm_hour * 60 + tt.tm_min) / 30;
             S.e.updateZones(t, S.atr, S.slot);
         }
+#ifndef LQ_FLOW
+        postState(S, count, st);                                        // (0.44.0) after the bar was decided and the zones refreshed
+#endif
         S.state = S.mdBlocked ? S.state : !S.md ? "depth not opened" : !S.depthAvail ? "no depth from this feed" : !S.e.haveBook ? "waiting for depth" : "ready";
         status(S, st);
         if (S.e.haveBook && S.depthAvail) { writeLiqZones(S); writeLiqLevels(S); }   // (0.12.0 / 0.16.0) only from a live book
@@ -2327,16 +2481,16 @@ void LiquidityProfile::render(LQState& S) {
     // header: what the column is and whether it has data (no other text on the chart)
     {
         const bool ok = S.e.haveBook && S.depthAvail;
-        const std::string h = ok ? "LIQ TESTING" : S.mdBlocked ? "LIQ blocked" : "LIQ no depth";
-        setTextColor(ok ? C_GREY : C_SELL);
+        const std::string h = ok ? std::string() : S.mdBlocked ? "LIQ blocked" : "LIQ no depth";   // (0.44.0) no text on the chart unless there is a fault
+        setTextColor(C_SELL);
         // (CR5000) Offset X / Y moves the label only (the column stays): clamped inside the pane, left of the last bar, below the title row,
         // and never over the Tape Reader banner (then just under it)
         const int tw = getTextWidth(h.c_str(), -1) + 4;
         const bp::Box area = bp::mk(left, warnTop(pane.top), std::max(left + tw, lastX), bottom);
         bp::Box lb = bp::offset(bp::mk(left + 2, hdrTop, left + 2 + tw, hdrTop + rowH), S.labDx, S.labDy, area);
         if (S.trBanner && bp::overlap(lb, bp::mk(S.trRect.l, S.trRect.t, S.trRect.r, S.trRect.b + 4))) lb = bp::clampIn(bp::mk(lb.l, S.trRect.b + 4, lb.r, S.trRect.b + 4 + rowH), area);
-        S.labBox = lb;
-        RCT r; r.set(coord(lb.l), coord(lb.t), coord(lb.l + std::max(full + 58, tw - 2)), coord(lb.b)); r.drawText(h.c_str(), false, false);
+        S.labBox = h.empty() ? bp::Box() : lb;
+        if (!h.empty()) { RCT r; r.set(coord(lb.l), coord(lb.t), coord(lb.l + std::max(full + 58, tw - 2)), coord(lb.b)); r.drawText(h.c_str(), false, false); }
     }
     if (!S.e.haveBook) return;
     const double tick = S.e.P.tick;
@@ -2345,10 +2499,7 @@ void LiquidityProfile::render(LQState& S) {
         // the file lsFlexLevels\LiquidityProfile.view-<MKT>.txt holding "all" brings back every zone and the dim book rows (re-read every 5 s)
         const long long nw = steadyMs();
         if (S.lvChk < 0 || nw - S.lvChk >= 5000) {
-            S.lvChk = nw; S.lvOnly = true;   // (0.39.0, Rassul 17:53 "liquidity should only be for the levels") always: the view-<MKT>.txt "all" switch is gone
-            const std::string fd = flexDir();
-            if (!fd.empty() && !S.market.empty()) { std::ifstream in; std::string ln; const std::string vp = fd + "\\LiquidityProfile.view-" + S.market + ".txt";
-                (void)vp; (void)in; (void)ln; }
+            S.lvChk = nw; S.lvOnly = true;   // (0.39.0, Rassul 17:53 "liquidity should only be for the levels") always: the view-<MKT>.txt "all" switch is gone (0.44.0: its dead file stub removed)
         }
     }
     // plain book rows (dim), scaled to the biggest single level in view, growing right from the edge
@@ -2356,7 +2507,7 @@ void LiquidityProfile::render(LQState& S) {
     for (int s = 0; s < 2; ++s) for (std::map<lqp::Tick, double>::const_iterator i = S.e.book[s].begin(); i != S.e.book[s].end(); ++i) {
         const int y = yOf((double)i->first * tick); if (y > top && y < bottom) maxRow = std::max(maxRow, i->second);
     }
-    double maxZone = 0; for (size_t i = 0; i < S.e.zones.size(); ++i) if (S.e.zones[i].shown) maxZone = std::max(maxZone, S.e.zones[i].size);
+    double maxZone = 0; for (size_t i = 0; i < S.e.zones.size(); ++i) if (S.e.zones[i].drawn) maxZone = std::max(maxZone, S.e.zones[i].size);   // (0.44.0) drawn zones
     if (maxRow > 0 && !S.lvOnly) {
         for (int s = 0; s < 2; ++s) for (std::map<lqp::Tick, double>::const_iterator i = S.e.book[s].begin(); i != S.e.book[s].end(); ++i) {
             int yt = yOf(((double)i->first + 0.5) * tick), yb = yOf(((double)i->first - 0.5) * tick);
@@ -3319,8 +3470,8 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED | TRACK_MOUSE);   // (0.15.0) TRACK_MOUSE: the zone hover
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
-    p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price, top 3 zones per side with lots and x normal (solid = rested, hollow = new); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
+    p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.43.1");   // LQ_VERSION
+    p->setVersion("0.44.0");   // LQ_VERSION
     return p;
 }

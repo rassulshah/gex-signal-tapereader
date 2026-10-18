@@ -65,6 +65,7 @@ namespace delta_profile { inline bool twoSided(double delta, double volume) { re
 #include "SignalBoard.h"     // (2.9.1) posts its confirmed A events for the other indicators on this chart
 #include "ZoneNear.h"        // (2.9.0) location first: A bubbles / labels away from a zone are dimmed
 #include "ColumnBoard.h"     // (2.8.0) the right-side columns, the board and the right margin (shared with Dealer / Liquidity)
+#include "MarketState.h"     // (2.17.0) posts its SRC "DP" facts once per closed bar for the read (MARKET-STATE-SPEC.md)
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -82,7 +83,7 @@ namespace delta_profile { inline bool twoSided(double delta, double volume) { re
 #endif
 
 namespace dp = delta_profile;
-static const char* const DLT_VERSION = "2.16.0"; // (2.16.0, Rassul 2026-10-17 "it is ok to repaint when the pivot requirement is there") the pivot rule against the peak bar's OWN swing (the down / up pivot of the leg it belongs to, which a later bar may make): the A bubble shows while the close rule and that pivot hold, may go and come back until the pivot is confirmed; the record (D line) is written only then, so the nightly sees the final A // (2.15.0, Rassul 2026-10-17 15:35 option 2 (b)) the 2.6.0 absorption rules in this indicator: only the 3 biggest rows (2.0x or more), no halfway rule, more than one bubble per candle; kept: the pivot rule, the same-candle close, no repaint, the layout and the shared A events // (2.13.0, Rassul 2026-10-16 17:40 "just keep it simple to absorption") the absorption rule only: every row >= 2.0x the average |delta| (90-min profile) is tracked, no top-3 cap, no initiative (I never decided or labelled), no zone A, ONE bubble per candle (the higher ratio), never repainted // (2.12.0, Rassul 08:25) the 3 largest bars always show a value; A and I labels from the record, frozen, kept for 90 min // (2.11.2) the column is drawn at least 110 px wide (a saved Width of 80 no longer squeezes the A label) // (2.11.1) a decided A keeps its profile label while its row is in the 90-min profile (no longer only while the node is in the live top 3) // (2.11.0) two-sided rows: a top-3 volume row with net under 15% of its volume gets "\xB1" // (2.10.3) the A circle on the candle in the trapped side's colour (bullish red, bearish green) // (2.10.2) strictly the 3 biggest: one with no room is not replaced by the 4th // (2.10.1) the 3 biggest values in all (not 3 per side) // (2.10.0, Rassul 2026-10-15 "(b)") the delta value also on the biggest rows // (2.9.1) posts its A events on the SignalBoard // (2.9.0, Rassul 2026-10-15) location first: A bubbles + labels at a high / low / pivot / level full strength, mid-range dimmed (ZoneNear.h) // (2.8.6, Rassul 2026-10-15) A label delta without the +/- sign ("A 3.7x 92"); colour gives the side // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.17.0"; // (2.17.0, 2026-10-18 audit B) SignalBoard A events carry flag 1 = final / 2 = tentative (SignalBoard 1.1.0: read() gives readers such as the Liquidity Profile only final ones); a tentative A writes a TA|S line when first shown and a TA|X line when its confirmed pivot fails it (the nightly measures how often a shown A? vanished); per-chart status file DeltaProfile.status-<MKT>-<spb>.txt (the shared DeltaProfile.status.txt is still written for one more version); Market State SRC "DP" facts once per closed bar (MarketState.h, cleared on done / destroy) // (2.16.0, Rassul 2026-10-17 "it is ok to repaint when the pivot requirement is there") the pivot rule against the peak bar's OWN swing (the down / up pivot of the leg it belongs to, which a later bar may make): the A bubble shows while the close rule and that pivot hold, may go and come back until the pivot is confirmed; the record (D line) is written only then, so the nightly sees the final A // (2.15.0, Rassul 2026-10-17 15:35 option 2 (b)) the 2.6.0 absorption rules in this indicator: only the 3 biggest rows (2.0x or more), no halfway rule, more than one bubble per candle; kept: the pivot rule, the same-candle close, no repaint, the layout and the shared A events // (2.13.0, Rassul 2026-10-16 17:40 "just keep it simple to absorption") the absorption rule only: every row >= 2.0x the average |delta| (90-min profile) is tracked, no top-3 cap, no initiative (I never decided or labelled), no zone A, ONE bubble per candle (the higher ratio), never repainted // (2.12.0, Rassul 08:25) the 3 largest bars always show a value; A and I labels from the record, frozen, kept for 90 min // (2.11.2) the column is drawn at least 110 px wide (a saved Width of 80 no longer squeezes the A label) // (2.11.1) a decided A keeps its profile label while its row is in the 90-min profile (no longer only while the node is in the live top 3) // (2.11.0) two-sided rows: a top-3 volume row with net under 15% of its volume gets "\xB1" // (2.10.3) the A circle on the candle in the trapped side's colour (bullish red, bearish green) // (2.10.2) strictly the 3 biggest: one with no room is not replaced by the 4th // (2.10.1) the 3 biggest values in all (not 3 per side) // (2.10.0, Rassul 2026-10-15 "(b)") the delta value also on the biggest rows // (2.9.1) posts its A events on the SignalBoard // (2.9.0, Rassul 2026-10-15) location first: A bubbles + labels at a high / low / pivot / level full strength, mid-range dimmed (ZoneNear.h) // (2.8.6, Rassul 2026-10-15) A label delta without the +/- sign ("A 3.7x 92"); colour gives the side // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -178,6 +179,7 @@ struct Latch {
     long long id, tFirst, tDecided, decidedBy, peakT; double net, mult; bool zone, logged;
     std::string version;   // (2.8.5) the version that wrote the decision (D line), DLT_VERSION for one decided here
     bool tent = false;     // (2.16.0) shown before its pivot is confirmed: the close rule holds and the pivot holds on the bars so far
+    bool shownTent = false, failLogged = false; long long failT = 0;   // (2.17.0) ever shown as a tentative A (TA|S line) / failed (TA|X line, at failT)
     Latch() : low(0), high(0), support(false), peakTime(0), price(0), sell(false), candSupport(false), id(-1), tFirst(0), tDecided(0), decidedBy(0),
         peakT(0), net(0), mult(0), zone(false), logged(false), version(DLT_VERSION) { formedTime = 0; formedT = 0; }   // (2.8.5) in memory = decided here; a parsed line sets its own
 };
@@ -260,6 +262,18 @@ static std::string recordLine(const Latch& L, char event, double tick, const std
       << DLT_VERSION << '|' << event << '|' << root << '|' << L.id << '|' << L.peakT << '|'
       << static_cast<unsigned long long>(L.peakTime) << '|' << num(L.price, "%.17g") << '|' << L.low << '|' << L.high << '|'
       << (L.sell ? "sell" : "buy") << '|' << (L.zone ? "zone" : "node") << '|' << L.formedT << '|' << static_cast<unsigned long long>(L.formedTime);
+    return o.str();
+}
+// (2.17.0, audit B finding 1) the tentative-A record, in the same session file (append-only, never rewritten):
+//   TA|status|version|root|id|peak_t|peak_raw|price|bias|multiple|t|lo_ticks|hi_ticks      (13 fields)
+//   status S = first SHOWN as a tentative A (the bubble appeared before its pivot was confirmed); X = FAILED (its swing pivot was
+//   confirmed against it - the bubble went for good). A tentative A that becomes final gets its normal D line. t = the chart's last
+//   bar end (CT clock) when written. 2.16.0 and older count these lines as rejected and skip them.
+static const int TA_FIELDS = 13;
+static std::string taLine(const Latch& L, char status, long long t, const std::string& root) {
+    std::ostringstream o; o.imbue(std::locale::classic());
+    o << "TA|" << status << '|' << DLT_VERSION << '|' << root << '|' << L.id << '|' << L.peakT << '|' << static_cast<unsigned long long>(L.peakTime) << '|'
+      << num(L.price, "%.17g") << '|' << (L.sell ? "bullish" : "bearish") << '|' << num(L.mult, "%.17g") << '|' << t << '|' << L.low << '|' << L.high;
     return o.str();
 }
 // strict full-token parsing (checklist #4): no leading blanks, no trailing junk, in range, finite
@@ -443,12 +457,13 @@ static void seedFromText(const std::string& text, const std::string& root, const
         std::istringstream scan(text.substr(0,end+1));std::string row;
         while(std::getline(scan,row)){RecordEvent r;if(parseRecordLine(row,chartTick,r)&&r.root==root){hasExactRoot=true;break;}}
     }
-    std::istringstream in(text.substr(0, end + 1)); std::string line;
+    std::istringstream in(text.substr(0, end + 1)); std::string line; std::vector<std::string> taRows;
     while (std::getline(in, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty() || line[0] == '#' || line.compare(0, 8, "t_first|") == 0) continue;
         if (line.compare(0, 2, "E|") == 0) { seedExLine(line, root, bk); continue; }
-        if (line.compare(0, 3, "AE|") == 0) { seedAeLine(line, root, bk); continue; }   // (2.7.0) attacker exhaustion inside an A   // (2.7.0) exhaustion lines: their own book
+        if (line.compare(0, 3, "AE|") == 0) { seedAeLine(line, root, bk); continue; }
+        if (line.compare(0, 3, "TA|") == 0) { taRows.push_back(line); continue; }   // (2.17.0) applied once the F lines are known   // (2.7.0) attacker exhaustion inside an A   // (2.7.0) exhaustion lines: their own book
         RecordEvent r;
         if (!parseRecordLine(line, chartTick, r)) { ++bk.rejected; continue; }
         if (r.root != root && r.root != legacyRoot) continue;
@@ -466,6 +481,16 @@ static void seedFromText(const std::string& text, const std::string& root, const
             L.code = r.latch.code; L.support = r.latch.support; L.tDecided = r.latch.tDecided; L.decidedBy = r.latch.decidedBy; L.logged = true;
             L.version = r.latch.version;   // (2.8.5) the DECISION's version decides whether the pre-2.8.4 re-check applies
         }
+    }
+    for (const std::string& row : taRows) {   // (2.17.0) TA|S / TA|X: the tentative history of a known id (identity must match)
+        const std::vector<std::string> c = fields(row);
+        long long id = 0, praw = 0, t = 0;
+        if (static_cast<int>(c.size()) != TA_FIELDS || (c[1] != "S" && c[1] != "X") || (c[3] != root && c[3] != legacyRoot) ||
+            !parseWhole(c[4], 0, 1000000, id) || !parseWhole(c[6], 1, LLONG_MAX, praw) || !parseWhole(c[10], 0, 32503680000LL, t)) { ++bk.rejected; continue; }
+        std::map<long long, Latch>::iterator at = byId.find(id);
+        if (at == byId.end() || static_cast<unsigned long long>(at->second.peakTime) != static_cast<unsigned long long>(praw)) { ++bk.rejected; continue; }
+        at->second.shownTent = true;
+        if (c[1] == "X" && !at->second.failLogged) { at->second.failLogged = true; at->second.failT = t; }
     }
     for (std::map<long long, Latch>::const_iterator i = byId.begin(); i != byId.end(); ++i) {
         bk.v.push_back(i->second); bk.nextId = std::max(bk.nextId, i->first + 1);
@@ -728,6 +753,9 @@ struct ChartState {
     cb::Peers peers; cb::Layout lay; cb::UnitProbe probe; cb::MarginCtl mctl; std::string chartKey, colSym; long colSpb = 0; bool colPublished = false;
     long long firstDrawMs = -1, dealerSeenMs = -1; int needPx = 0, ppb = 0, marginRead = -1, marginAsked = -1, setOk = 0, setFail = 0, gapSeen = -1;
     bool marginOwner = false; int textsDrawn = 0, labelsShort = 0;
+    // (2.17.0) the Market State "DP" entry of this chart: the closed bar posted, its facts (decided once), when last written
+    long long mstBar = 0, mstDecT = -1, mstFailT = -1; std::int64_t mstAt = -1; std::map<std::string, std::string> mstKv; std::string mstNote = "not posted yet";
+    bool mstPosted = false;
     ChartState() : barCount(0), latestStamp(0), firstStamp(0), tick(0), builtAt(-1),
         statusAt(-1), dealerAt(-1), settingsAt(-1), touchedAt(-1), settingsStamp(-2),
         dealerReach(0), drawnRows(0), missingVap(0), vapMismatch(0), dirty(true), faulted(false), ready(false), shortHistory(false), coarseBoundary(false),
@@ -758,6 +786,7 @@ private:
     void status(ChartState& s);
     void exhaust(ChartState& s, LatchBook& bk, const std::vector<dp::Bar>& window, double tick);   // (2.7.0)
     void absorbExhaust(ChartState& s, LatchBook& bk, const std::vector<dp::Bar>& window, double tick);   // (2.7.0) AE
+    void postMarketState(ChartState& s);   // (2.17.0) Market State SRC "DP", once per closed bar
     static int readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
     static int readPrices(RTARRAYP* vap, int bar, VOLPROFILE* rows, int count);
     bool epoch(RTDATE value, std::int64_t& out);
@@ -842,12 +871,13 @@ void DeltaProfile::applyMargin(ChartState& s) {
 }
 int DeltaProfile::done() {
     ChartState* p = static_cast<ChartState*>(getUserData());
-    if (p) { if (p->colPublished) cb::clear(cb::DELTA, p->colSym, p->colSpb, p->chartKey); *p = ChartState(); } // symbol/periodicity changes safely release fault state
+    if (p) { if (p->colPublished) cb::clear(cb::DELTA, p->colSym, p->colSpb, p->chartKey); if (p->mstPosted) mst::clear("DP", p->colSym, p->colSpb, p->chartKey); *p = ChartState(); } // symbol/periodicity changes safely release fault state
     return RTX_OK;
 }
 int DeltaProfile::destroy() {
     ChartState* p = static_cast<ChartState*>(getUserData());
     if (p && p->colPublished) cb::clear(cb::DELTA, p->colSym, p->colSpb, p->chartKey);
+    if (p && p->mstPosted) mst::clear("DP", p->colSym, p->colSpb, p->chartKey);   // (2.17.0) the Market State entry goes with the indicator
     if (p && p != fallback_) { delete p; setUserData(NULL); }
     return RTX_OK;
 }
@@ -1254,8 +1284,15 @@ bool DeltaProfile::buildNative(ChartState& s) {
             const bool closeOk = L.sell ? (pc > po && pck > L.high) : (pc < po && pck < L.low);
             const bool pivNow = pk < static_cast<int>(swBull.size()) && (L.sell ? swBull[pk] : swBear[pk]) != 0;
             const bool pivFinal = pk < static_cast<int>(swConf.size()) && swConf[pk] != 0;
-            if (closeOk && pivNow && pivFinal) { L.code = "A"; L.support = L.sell; L.decidedBy = barEnd(pk); continue; }
-            if (closeOk && !pivFinal) { L.code = "A?"; L.support = L.sell; L.tent = pivNow; continue; }   // undecided until confirmed
+            const dp::TentStep step = dp::tentStep(closeOk, pivNow, pivFinal);   // (2.17.0) the same rules, one tested function
+            if (step == dp::TS_FINAL) { L.code = "A"; L.support = L.sell; L.decidedBy = barEnd(pk); continue; }
+            if (step == dp::TS_SHOWN || step == dp::TS_HIDDEN) {                                   // undecided until confirmed
+                L.code = "A?"; L.support = L.sell; L.tent = step == dp::TS_SHOWN;
+                if (L.tent && !L.shownTent) { L.shownTent = true; bk.journal.push_back(taLine(L, 'S', nowT, s.book)); }   // (2.17.0) first shown
+                continue;
+            }
+            // (2.17.0) a tentative A that was shown and whose confirmed pivot went against it: one TA|X line (the nightly measures it)
+            if (step == dp::TS_FAILED && L.shownTent && !L.failLogged) { L.failLogged = true; L.failT = nowT; bk.journal.push_back(taLine(L, 'X', nowT, s.book)); }
             L.code = "I?"; L.support = !L.sell;                                                   // absorption ruled out
             // (2.13.0) no initiative: a node that is not absorption stays "I?" (undecided, never drawn, never labelled)
         }
@@ -1658,7 +1695,8 @@ bool DeltaProfile::render(ChartState& s) {
     });
     {   // (2.9.1, SignalBoard) every displayable A for the other indicators on this chart: bar, price, side, strength
         std::vector<sb::Ev> ev;
-        for (const Latch* item : confirmed) { sb::Ev e; e.bar = localSec(item->peakTime); e.px = item->price; e.side = item->support ? 1 : -1; e.val = item->mult; if (e.bar > 0) ev.push_back(e); }
+        // (2.17.0) flag 1 = final (pivot confirmed, D line written), 2 = tentative (may still vanish) - SignalBoard.h 1.1.0
+        for (const Latch* item : confirmed) { sb::Ev e; e.bar = localSec(item->peakTime); e.px = item->price; e.side = item->support ? 1 : -1; e.val = item->mult; e.flag = dp::boardFlag(item->tent); if (e.bar > 0) ev.push_back(e); }
         sb::publish('A', s.colSym, s.colSpb, s.chartKey, (long long)steadyMs(), ev);
     }
     for (const Latch* item : confirmed) {
@@ -1980,6 +2018,53 @@ bool DeltaProfile::render(ChartState& s) {
     }
     return true;
 }
+// (2.17.0) DeltaProfile.status-<MKT>-<sec/bar>.txt (market code as the other plugins use it: ES NQ CL GC HG NG EU)
+static std::string statusFileName(const std::string& market, int secondsPerBar) {
+    std::string m; for (char c : market) { const unsigned char u = static_cast<unsigned char>(c); m += (std::isalnum(u) || c == '-' || c == '_') ? c : '_'; }
+    if (m.empty()) m = "UNKNOWN";
+    return "DeltaProfile.status-" + m.substr(0, 16) + "-" + std::to_string(secondsPerBar > 0 ? secondsPerBar : 0) + ".txt";
+}
+// (2.17.0, MARKET-STATE-SPEC.md SRC "DP") once per CLOSED bar: the top nodes as they stand at its close, the A on that bar (final /
+// tentative, as it stood then), and the A events that turned final / failed since the previous posted bar. The facts of a bar are
+// decided once and never changed; the same entry is re-posted (new stamp only) every 20 s so readers keep it fresh. Drawing unchanged.
+void DeltaProfile::postMarketState(ChartState& s) {
+    if (!s.ready || s.colSym.empty() || s.shortHistory || s.coarseBoundary) return;
+    const long count = getBarCount();
+    if (count < 2) return;
+    RTARRAYI times(barDateTime);
+    if (times.count < count) return;
+    const RTDATE closedRaw = static_cast<RTDATE>(times[static_cast<int>(count) - 2]);
+    if (closedRaw != s.latestStamp && static_cast<RTDATE>(times[static_cast<int>(count) - 1]) != s.latestStamp) return;   // snapshot not of this chart state
+    const long long bar = localSec(closedRaw);
+    const std::int64_t now = steadyMs();
+    if (bar <= 0) return;
+    if (bar == s.mstBar) {                                                          // same bar: re-post the same facts to stay fresh
+        if (s.mstAt >= 0 && now - s.mstAt < 20000) return;
+        mst::publish("DP", s.colSym, s.colSpb, s.chartKey, now, s.mstBar, s.mstKv); s.mstAt = now; s.mstPosted = true; return;
+    }
+    const LatchBook& bk = latchBooks()[s.book + "|" + std::to_string(getSecondsPerBar())];
+    std::vector<dp::FactNode> top;
+    for (const dp::Node& n : s.snapshot.nodes) {
+        dp::FactNode f; f.px = n.price; f.x = n.ratio;
+        for (const dp::Bucket& b : s.snapshot.buckets) if (b.key == n.bucket) { f.buy = b.delta > 0; break; }
+        top.push_back(f);
+    }
+    std::vector<dp::FactA> onBar, conf, fail;
+    long long maxDec = s.mstDecT, maxFail = s.mstFailT;
+    for (const Latch& L : bk.v) {
+        dp::FactA a; a.px = L.price; a.x = L.mult; a.bull = L.support; a.bar = localSec(L.peakTime);
+        const bool fin = confirmedAbsorption(L);
+        if (L.peakTime == closedRaw && (fin || L.tent)) { a.fin = fin; onBar.push_back(a); }
+        if (fin) { if (s.mstDecT >= 0 && L.tDecided > s.mstDecT) { a.fin = true; conf.push_back(a); } maxDec = std::max(maxDec, L.tDecided); }
+        if (L.failLogged) { if (s.mstFailT >= 0 && L.failT > s.mstFailT) { a.bull = L.sell; fail.push_back(a); } maxFail = std::max(maxFail, L.failT); }
+    }
+    s.mstDecT = std::max<long long>(maxDec, 0); s.mstFailT = std::max<long long>(maxFail, 0);   // the first post reports no history
+    s.mstKv = dp::dpFacts(top, onBar, conf, fail, s.tick);
+    s.mstKv["version"] = DLT_VERSION;
+    mst::publish("DP", s.colSym, s.colSpb, s.chartKey, now, bar, s.mstKv);
+    s.mstBar = bar; s.mstAt = now; s.mstPosted = true;
+    s.mstNote = "bar " + std::to_string(bar) + " a " + s.mstKv["a"] + " node " + s.mstKv["node_px"] + " " + s.mstKv["node_x"] + "x";
+}
 void DeltaProfile::status(ChartState& s) {
     const std::int64_t now = steadyMs();
     if (s.statusAt >= 0 && now - s.statusAt < 1000) return;      // at most once a second; written only when it changed or 30 s passed
@@ -2002,6 +2087,9 @@ void DeltaProfile::status(ChartState& s) {
         const std::vector<Latch>& latches = bk.v;
         out << "RECORD," << safeField(bk.path) << ",session " << bk.session << ",loaded " << bk.loaded << ",written " << bk.written
             << ",pending " << bk.journal.size() << ",rejected " << bk.rejected << ',' << safeField(bk.note) << '\n';   // (2.5.4)
+        {   std::size_t tentNow = 0, tentShown = 0, tentFailed = 0;   // (2.17.0) the tentative A's (SignalBoard flag 2) and their outcome
+            for (const Latch& L : latches) { if (L.tent) ++tentNow; if (L.shownTent) ++tentShown; if (L.failLogged) ++tentFailed; }
+            out << "TENTATIVE_A,showing now " << tentNow << ",ever shown " << tentShown << ",failed (TA|X) " << tentFailed << ",board flag 1 final / 2 tentative\n"; }
         out << "BUBBLE_POLICY,confirmed A only; historical peak annotations\nABSORPTION_EVENTS," << s.absorptionEvents
             << "\nTWO_SIDED_ROWS," << s.twoSidedDrawn << ",top-3 volume rows with net under 15% of volume (\xB1)"
             << "\nBUBBLES_DRAWN," << s.bubblesDrawn << "\nBUBBLES_OFFSCREEN," << s.bubblesOffscreen
@@ -2041,10 +2129,19 @@ void DeltaProfile::status(ChartState& s) {
         for (std::size_t k = 0; k < latches.size(); ++k)
             out << "SIGNAL," << latches[k].code << "," << (latches[k].support ? "support" : "resistance") << "," << latches[k].low * s.tick << "," << latches[k].high * s.tick << ",t " << latches[k].peakTime << '\n';
     }
-    static std::string lastText; static std::int64_t lastWrite = -1;                       // (2.5.7, audit) no identical rewrites
+    // (2.17.0, audit B) one status file PER CHART (market + seconds per bar) - the shared DeltaProfile.status.txt (last chart wins) is
+    // still written for one more version (ChartView / older readers), then retired. No identical rewrites (per file, 30 s).
+    out << "MARKET_STATE,DP " << safeField(s.mstNote) << '\n';
+    struct Last { std::string text; std::int64_t at = -1; };
+    static std::map<std::string, Last> lastByPath;
     s.statusAt = now;
-    if (out.str() == lastText && lastWrite >= 0 && now - lastWrite < 30000) return;
-    atomicWrite(directory + "DeltaProfile.status.txt", out.str()); lastText = out.str(); lastWrite = now;
+    const std::string text = out.str();
+    const std::string paths[2] = { directory + statusFileName(s.market, getSecondsPerBar()), directory + "DeltaProfile.status.txt" };
+    for (const std::string& path : paths) {
+        Last& w = lastByPath[path];
+        if (text == w.text && w.at >= 0 && now - w.at < 30000) continue;
+        if (atomicWrite(path, text)) { w.text = text; w.at = now; }
+    }
 }
 int DeltaProfile::draw() {
     ChartState* current = NULL;
@@ -2056,6 +2153,7 @@ int DeltaProfile::draw() {
             s.coarseBoundary ? "boundary bar crosses window: provisional signals" : "ready";
         const bool drawn = render(s);
         if (drawn && s.state == "ready") s.state = "drawn";
+        postMarketState(s);   // (2.17.0)
         status(s); return RTX_OK;
     } catch (const std::exception& e) {
         if (current) {
@@ -2072,6 +2170,6 @@ extern "C" cppExtension* CreateExtension() {
     DeltaProfile* p = new DeltaProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.16.0");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
+    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.17.0");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
     return p;
 }
