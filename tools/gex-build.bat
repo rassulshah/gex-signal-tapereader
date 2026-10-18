@@ -33,7 +33,7 @@ REM (2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator alway
 REM   anymore") THE SETTINGS CONTRACT GATES EVERY BUILD: plugin\tests_settings\settings_contract.cpp (SettingsSpec.h + every <Name>Settings.h +
 REM   the migrated sources) is compiled and run first; FAIL = nothing is built this tick (the installed DLLs stay), the log says why once,
 REM   plugin\out\SETTINGS-CONTRACT.txt has every failing check. SETSRC = the plugin sources on the layer (add one when it migrates).
-set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp"
+set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp"
 call :settings
 if defined SETFAIL (
   call :status
@@ -90,7 +90,7 @@ call :one Exhaustion lsExhaustion ExhaustionLogic.h HostSlot.h
 REM (2026-10-12) lsExhaustionV2 - pullback watch E? / trend response R? / EXIT? warnings (outside review), calibration from lra.exh2_nightly
 call :one ExhaustionV2 lsExhaustionV2 ExhaustionV2Logic.h HostSlot.h
 REM (2026-10-12) lsCVD - CVD line + delta-pct bars + Div / Abs / Exh / BR marks on the CVD line (outside package CVD Signals v0.1, reviewed), TESTING
-call :one CVD lsCVD CvdEngine.h CvdFeed.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h
+call :one CVD lsCVD CvdEngine.h CvdFeed.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h CVDSettings.h SettingsSpec.h SettingsHost.h
 REM (2026-10-13) lsBidAskStats - biggest bid (red) / biggest ask (green) per candle, BBid / BAsk / BidRatio / AskRatio box
 REM (2026-10-13) lsBidAskStats 1.3.0 - who is attacking: S / L letters from the order feed, message line + info box, spike labels (shared OrderFlowFeed.h)
 REM (2026-10-13 of140) BidAskStats 1.5.0 / PullStats 1.1.0 / StackStats 1.1.0 also hash OptionsFlow.h (BidAskStats StopRun.h); TapeReader 1.1.0 hashes OptionsFlow.h
@@ -108,7 +108,7 @@ REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LR
 REM (2026-10-14 claim gates) DealerRead 4.6.0 / TapeReader 1.1.4 also hash ClaimGates.h (DealerRead DealerReadGates.h)
 call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h BannerBoard.h ClaimGates.h MarketState.h ZoneStory.h OddsTable.h SignalBoard.h TapeReaderSettings.h SettingsSpec.h SettingsHost.h
 REM (2026-10-14) lsCobImpulse 0.1.0 - CoB impulse tag Cob+R? / Cob+V? / Cob+RV? + 1 px box on the impulse bar (Rassul 12:07 CT approved; CR5500); 0.3.0 gamma part Cob+R+CR? (reads ClaimGates.h)
-call :one CobImpulse lsCobImpulse CobImpulseLogic.h HostSlot.h HoverBoard.h ClaimGates.h CobOdds.h OddsTable.h MarketState.h BannerBoard.h
+call :one CobImpulse lsCobImpulse CobImpulseLogic.h HostSlot.h HoverBoard.h ClaimGates.h CobOdds.h OddsTable.h MarketState.h BannerBoard.h CobImpulseSettings.h SettingsSpec.h SettingsHost.h
 REM (2026-10-14 night) lsBigBidAsk 1.0.0 - biggest bid (red, left) / biggest ask (green, right) lots on every candle of the price chart, bold >= 2.0x, thin circle = absorption (Rassul approved the mockup 20:41 CT)
 REM (2026-10-18) lsBigBidAsk 1.16.0 compact Big Lot box docked to the lsHodLod 2.4.1 table (BoxDock.h), category order 1 > 4 > 2 / 3, settings window fixes
 call :one BigBidAsk lsBigBidAsk BigBidAskLogic.h ColumnBoard.h HoverBoard.h BoxPlace.h BannerBoard.h HostSlot.h SignalBoard.h ZoneNear.h VwapTrendLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h BoxDock.h BigBidAskSettings.h SettingsSpec.h SettingsHost.h
