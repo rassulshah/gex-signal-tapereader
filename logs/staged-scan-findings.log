@@ -1,3 +1,14 @@
-findings=0 allowed=0 staged_files=1 bytes=124
+findings=0 allowed=0 staged_files=12 bytes=585355
 largest staged blobs (bytes, path):
-SIZE	124	logs/staged-scan-findings.log
+SIZE	182016	plugin/HodLodLogic.h
+SIZE	119920	plugin/BigBidAsk.cpp
+SIZE	84408	plugin/HodLod.cpp
+SIZE	67609	plugin/BigBidAskLogic.h
+SIZE	44026	plugin/BUILD-LESSONS.md
+SIZE	24722	plugin/tests_bba115/test_bba116.cpp
+SIZE	16149	tools/gex-build.bat
+SIZE	14116	plugin/tests_hodlod/t_hl240.cpp
+SIZE	13044	plugin/tests_bba115/test_bba115.cpp
+SIZE	11816	plugin/tests_bba115/irtsdk.h
+SIZE	6897	plugin/BoxDock.h
+SIZE	632	plugin/tests_bba115/run_tests.sh
