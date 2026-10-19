@@ -18,6 +18,9 @@ static long long& NOW = bas_test_now_ms;
 #include <unistd.h>
 #include <sys/stat.h>
 namespace mock { Host* current = nullptr; Feed feed; }
+namespace pc { int test_cx = 0, test_cy = 0; bool test_ok = false; }   // (1.14.1 / 1.3.4) the screen cursor (PaneCursor.h)
+[[maybe_unused]] static bool hasPrefix(mock::Host& h, const std::string& p) { for (auto& d : h.draws) if (d.type == "text" && d.text.compare(0, p.size(), p) == 0) return true; return false; }
+static RTX_EVENT moveAt(int h, int v, long bar) { RTX_EVENT e; std::memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)h; e.v.mouse.v = (short)v; e.v.mouse.bar = bar; return e; }
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %d %s\n", __LINE__, m); } } while (0)
 static std::string readAll(const std::string& p) { std::ifstream f(p.c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }
@@ -87,6 +90,30 @@ int main() {
     CHECK(S->ser.spike.avgT == 60 && S->dx == 0 && S->dy == 0 && !S->ser.bars[T0 + 1800].bidSpike, "the chart reads the file: 5.0x < 6.0x is no longer a spike; a saved Offset 7 / 3 is ignored");
     h.draws.clear(); p->draw();
     CHECK(count(h, "box", C_BID_SPIKE) == 0 && !text(h, "5.0"), "under 6.0x nothing is bright or labelled");
+    // (1.14.1, Rassul 23:19 CT) the box follows the mouse ONLY while the cursor is inside this pane; anywhere else = Live (the forming candle), updating
+    {   void* W = (void*)0x1; bas_test_cursor_wnd = W; pc::test_ok = true;
+        h.draws.clear(); p->draw();
+        CHECK(text(h, "Live") != nullptr && hasPrefix(h, "10 ("), "no mouse event yet: Live = the forming candle (10 lots at the bid so far)");
+        pc::test_cx = 1450; pc::test_cy = 650; RTX_EVENT ev = moveAt(450, 150, 10); p->mouse(&ev);   // inside the pane over candle 10
+        h.draws.clear(); p->draw();
+        CHECK(S->hover.bar == 10 && text(h, "Live") == nullptr, "cursor inside the pane over candle 10: the box shows that candle");
+        NOW += 300; p->calc(0); h.draws.clear(); p->draw();
+        CHECK(S->hover.bar == 10, "still inside (no new event): the candle stays");
+        pc::test_cy = 900;                                                  // the cursor moved below the pane (price pane / elsewhere): no event comes
+        NOW += 300; p->calc(0); h.draws.clear(); p->draw();
+        CHECK(S->hover.bar == -1 && text(h, "Live") != nullptr && hasPrefix(h, "10 ("), "cursor outside the pane: Live, the forming candle");
+        h.bars.back() = bar(h.bars.back().time, 77, 10);                    // the forming candle trades: 77 lots at the bid
+        const int inv = h.invalidates; NOW += 300; p->calc(0);
+        CHECK(h.invalidates > inv, "a new tick on the forming candle while Live: redrawn");
+        h.draws.clear(); p->draw();
+        CHECK(hasPrefix(h, "77 (") && text(h, "Live") != nullptr, "Live box shows the updated 77 lots with the mouse outside the pane");
+        pc::test_cy = 650; ev = moveAt(450, 150, 12); p->mouse(&ev); NOW += 300; p->calc(0);
+        CHECK(S->hover.bar == 12, "back inside: follows the mouse again");
+        bas_test_cursor_wnd = (void*)0x2; NOW += 300; p->calc(0);        // same screen spot but another window on top / another program
+        CHECK(S->hover.bar == -1, "the cursor over another window: Live");
+        bas_test_cursor_wnd = W; ev = moveAt(450, 400, 12); p->mouse(&ev);  // an event reported outside the pane rectangle
+        CHECK(S->hover.bar == -1, "an event outside the pane rectangle never picks a candle");
+        pc::test_ok = false; bas_test_cursor_wnd = nullptr; }
     LOAD(p); h.lists[BIGLOT_PARM] = 3; APPLY(p);                          // (1.14.0) Big Lot mark BL20 saved as the 9th field, read by the chart
     CHECK(readAll(flex + "\\BidAskStats.place-ES.txt") == "20,4,60,15,10,0,0,0,3\n", "(1.14.0) Apply: Big Lot mark BL20 = field 9 (3), the hidden values carried");
     NOW += 1500; p->calc(0); CHECK(S->bigLot == 3, "(1.14.0) the chart reads Big Lot mark BL20");
@@ -170,6 +197,19 @@ int main() {
     h.draws.clear(); p->draw();
     {   int bright = 0; for (auto& d : barsAt(h, 52)) bright += d.color == off::C_GREEN_SPIKE || d.color == off::C_RED_SPIKE;
         CHECK(bright == 0 && !text(h, "5.0"), "5.0x under a 6.0x setting: dim, no label (the setting works)"); }
+    // (1.3.4) the box follows the mouse only inside this pane; outside = Live (the forming candle), updating with new order events
+    {   void* W = (void*)0x1; off::off_test_cursor_wnd = W; pc::test_ok = true;
+        pc::test_cx = 1450; pc::test_cy = 650; RTX_EVENT e2 = moveAt(450, 150, 52); p->mouse(&e2);
+        h.draws.clear(); p->draw();
+        CHECK(S->hov.hover.bar == 52 && text(h, "Live") == nullptr && hasPrefix(h, "+100 ("), "inside the pane over candle 52: its Net +100");
+        pc::test_cy = 900; NOW += 300; p->calc(0); h.draws.clear(); p->draw();
+        CHECK(S->hov.hover.bar == -1 && text(h, "Live") != nullptr, "cursor outside the pane: Live");
+        {   const RTDATE t = T0 + 60 * 53 - 30; for (int i = 0; i < 3; ++i) ev(0, 1, 6999.75f, 10, t, nextId++); }
+        const int inv = h.invalidates; NOW += 300; p->calc(0);
+        CHECK(h.invalidates > inv, "new order events on the forming candle while Live: redrawn");
+        h.draws.clear(); p->draw();
+        CHECK(text(h, "Live") != nullptr && text(h, "+30") != nullptr, "Live box: the forming candle's Net +30 bids so far, mouse outside the pane");
+        pc::test_ok = false; off::off_test_cursor_wnd = nullptr; }
     dispose(p);
     CHECK(!mst::read("BOOK", "ESZ6", 60, "test", NOW).ok, "removed: the Market State entry is cleared");
     std::printf("BookFlow host: %d passed, %d failed\n", passes, fails);

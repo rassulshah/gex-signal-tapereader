@@ -57,7 +57,8 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.3.3"          // keep equal to bf::VERSION and the setVersion literal below
+#define BF_VERSION "1.3.4"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#include "PaneCursor.h"           // (1.3.4)
 
 // (1.3.0) the dialog rows (parameter version 3): every row is read by the chart
 // (1.3.2) the window rows come from OrderFlowPaneSettings.h (no index constants)
@@ -90,6 +91,7 @@ public:
         // label + identity they belong to, the Market State facts posted
         std::map<long long, bf::NetStat> net; int netRb = -1; long long netAvg = -1; std::string identity, chart;
         long long mstBar = 0, mstCt = 0, mstMs = -1, mstPosts = 0; std::map<std::string, std::string> mstKv;
+        pc::Tracker cur; long long liveEv = -1, liveMs = -1;               // (1.3.4) the pane on the screen; the live candle's events last drawn
     };
     Ext* ext(S_& S) {
         if (!S.ext) S.ext.reset(new (std::nothrow) Ext());
@@ -255,12 +257,47 @@ public:
                       if (e && !c.empty() && c != e->chart) { if (!e->chart.empty() && !S0->symbol.empty()) mst::clear("BOOK", S0->symbol, S0->spb, e->chart); e->chart = c; e->mstMs = -1; } } }
         pump(true);                                                        // from the draw: a recorder buffers, never writes
         S_* S = testState();
-        if (S) { S->hov.left(); followBoard(*S); boxLeft(*S); }
+        if (S) paneLeft(*S);                                               // (1.3.4) the candle under the mouse only while the cursor is inside this pane
         if (S) { try { renderNet(*S); } catch (...) { S->state = "draw error"; } }
         return RTX_OK;
     }
+    // (1.3.4, Rassul 23:19 CT "when i move the mouse outside the aggression pane the updated values should still be displayed") IRT sends
+    // mouse events only over this pane and nothing when the mouse leaves: the hovered candle stayed latched (HoverTrack::left clears only
+    // off the chart window) and followed other panes' candle (HoverBoard). Now: inside = the cursor over the last event's window AND
+    // within the pane rectangle located then (PaneCursor.h), checked on every draw / calc; anywhere else = Live (the forming candle).
+    bool paneLeft(S_& S) {
+        Ext* e = ext(S); if (!e) return false;
+        int cx = 0, cy = 0; const bool ok = pc::cursorPos(cx, cy);
+        if (e->cur.inside(off::cursorWindow(), ok, cx, cy)) return false;
+        bool ch = S.hov.hover.set(-1);
+        if (S.inBox) { S.inBox = false; ch = true; }
+        return ch;
+    }
+    virtual int mouse(RTX_EVENT* ev) {
+        S_* S = testState();
+        if (S && ev && (ev->type == E_MOUSE_MOVE || ev->type == E_MOUSE_HOVER)) {
+            Ext* e = ext(*S); if (e) { int cx = 0, cy = 0; const bool ok = pc::cursorPos(cx, cy); e->cur.onEvent(off::cursorWindow(), ok, cx, cy, ev->v.mouse.h, ev->v.mouse.v); }
+        }
+        const int r = off::MboPane<bf::Logic>::mouse(ev);
+        if (S && ev && (ev->type == E_MOUSE_MOVE || ev->type == E_MOUSE_HOVER)) {
+            Ext* e = ext(*S); if (e && !e->cur.eventInside(ev->v.mouse.h, ev->v.mouse.v) && S->hov.hover.set(-1)) invalidateChart(false);
+        }
+        return r;
+    }
+    void bfCalc() {                                                        // (1.3.4) in place of calcHook (no HoverBoard following)
+        pump(); S_* S = testState(); if (!S) return;
+        bool ch = paneLeft(*S);
+        Ext* e = ext(*S);
+        if (e && S->hov.hover.bar < 0) {                                   // Live: redraw when the forming candle got new order events (<= 4 a second)
+            std::map<long long, off::Acc>::const_iterator it = S->accs.find(S->formingKey);
+            const long long ev = it != S->accs.end() ? (long long)it->second.events : -1; const long long now = off::steadyMs();
+            if (ev != e->liveEv && (e->liveMs < 0 || now < e->liveMs || now - e->liveMs >= 250)) { e->liveEv = ev; e->liveMs = now; ch = true; }
+        }
+        if (ch) invalidateChart(false);
+    }
     void renderNet(S_& S) {
         RCT pane; pane.getPaneRect(false);
+        if (Ext* e = ext(S)) { e->cur.pane.l = pane.left; e->cur.pane.t = pane.top; e->cur.pane.r = pane.right; e->cur.pane.b = pane.bottom; }
         const long count = getBarCount();
         if (count < 2 || pane.bottom - pane.top < 24 || pane.right - pane.left < 60) return;
         RTARRAYI times(barDateTime);
@@ -289,7 +326,9 @@ public:
         const long long mt = (long long)times[mb];
         std::map<long long, off::PaneBar>::const_iterator mi = S.ser.bars.find(mt);
         const off::PaneBar* mbar = mi != S.ser.bars.end() && mi->second.ok ? &mi->second : nullptr;
-        off::Info info = bf::info(mbar, S.params.load.p, mbar ? netAt(S, mt) : nullptr);
+        const bool liveBox = hov < 0 && haveLive;                          // (1.3.4) Live = the forming candle's numbers so far (no net decision yet)
+        if (liveBox) mbar = &lb;
+        off::Info info = bf::info(mbar, S.params.load.p, mbar && !liveBox ? netAt(S, mt) : nullptr);
         {   const std::string keep = ";" + boxKeep() + ";"; std::vector<off::InfoRow> kept;   // (1.2.1) Net and Pace only
             for (size_t k = 0; k < info.rows.size(); ++k) if (keep.find(";" + info.rows[k].label + ";") != std::string::npos) kept.push_back(info.rows[k]);
             info.rows.swap(kept); }
@@ -371,7 +410,7 @@ int cppExtension::setup(void) {
     ss::registerAll(this, ofset::bookFlowSpec(), bfIds());
     return RTX_OK;
 }
-int cppExtension::calc(int) { static_cast<BookFlow*>(this)->calcHook(); return RTX_OK; }
+int cppExtension::calc(int) { static_cast<BookFlow*>(this)->bfCalc(); return RTX_OK; }   // (1.3.4)
 
 extern "C" cppExtension* CreateExtension(void) {
     BookFlow* p = new BookFlow();
@@ -379,6 +418,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow: who is ARRIVING and who is LEAVING the order book near price (market-by-order feed). Per candle, ONE NET bar per side = lots ADDED near price minus lots PULLED near price. Left bar = the bid side, always green (buyers); right bar = the offer side, always red (sellers). Above the grey zero line = size arriving (stacking), below = size leaving (pulling): a green bar above = bids arriving (support building), green below = bids leaving (support pulled), red above = offers arriving (resistance building), red below = offers leaving (resistance pulled). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and, for size arriving, its pace (grey, lots added per second vs the same time of day) beyond the bar's end, only when that side's net is at least Spike vs average (default 2.0x) the plain average of its net size over the prior Ratio bars (default 20) closed candles - decided once at the close, never changed. Other candles are dim with no label; the forming candle stays dim until it closes. The numbers box in the pane: Net (with its ratio) and Pace for bids and offers of the candle under the mouse, else the last closed candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars), Near ticks (0 = auto: how close to price counts), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.3.3");   // BF_VERSION
+    p->setVersion("1.3.4");   // BF_VERSION
     return p;
 }

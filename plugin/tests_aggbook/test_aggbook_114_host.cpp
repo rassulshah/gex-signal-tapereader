@@ -11,6 +11,7 @@ static long long& NOW = bas_test_now_ms;
 #include <unistd.h>
 #include <sys/stat.h>
 namespace mock { Host* current = nullptr; Feed feed; }
+namespace pc { int test_cx = 0, test_cy = 0; bool test_ok = false; }
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %d %s\n", __LINE__, m); } } while (0)
 static std::string readAll(const std::string& p) { std::ifstream f(p.c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }

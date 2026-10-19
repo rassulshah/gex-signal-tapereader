@@ -27,7 +27,7 @@
 
 namespace bf {
 
-static const char* const VERSION = "1.3.3";   // (1.3.3, 2026-10-18 his decision list) window: Position + Near ticks (Offset X / Y and Record removed - recording always on; Ratio bars / Spike hidden);  (1.3.2, 2026-10-18 settings audit) the window from OrderFlowPaneSettings.h through SettingsHost.h (same rows / file); (1.3.1, 2026-10-18 settings audit) Spike vs average on its own settings line (was cut off); rows / file unchanged // keep equal to BF_VERSION / setVersion in BookFlow.cpp (1.3.0: net spike, colour by side, Market State BOOK; 1.2.1 box Net + Pace)
+static const char* const VERSION = "1.3.4";   // (1.3.4) box follows the mouse only inside the pane, else Live = the forming candle; // (1.3.3, 2026-10-18 his decision list) window: Position + Near ticks (Offset X / Y and Record removed - recording always on; Ratio bars / Spike hidden);  (1.3.2, 2026-10-18 settings audit) the window from OrderFlowPaneSettings.h through SettingsHost.h (same rows / file); (1.3.1, 2026-10-18 settings audit) Spike vs average on its own settings line (was cut off); rows / file unchanged // keep equal to BF_VERSION / setVersion in BookFlow.cpp (1.3.0: net spike, colour by side, Market State BOOK; 1.2.1 box Net + Pace)
 using off::BID; using off::ASK;
 
 inline long long netOf(const off::Rec& r, int s) { return r.addC[s] - r.pullC[s]; }

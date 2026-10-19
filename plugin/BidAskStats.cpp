@@ -1,5 +1,12 @@
 /********************************************************************************
- *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats (the "Aggression" pane)  1.14.0 (2026-10-18)
+ *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats (the "Aggression" pane)  1.14.1 (2026-10-18)
+ *  1.14.1 (2026-10-18 23:19 CT, Rassul: "when i move the mouse outside the aggression pane the updated values should still be displayed
+ *        in the info box"): ROOT CAUSE - IRT sends mouse events only while the mouse is over this pane and nothing when it leaves; the
+ *        hovered candle stayed latched until the cursor left the whole chart window (mouseLeft) and also followed the candle other panes
+ *        published (HoverBoard), and "Live" showed the last CLOSED candle. FIX (PaneCursor.h): the box follows the mouse ONLY while the
+ *        cursor is inside this pane (screen cursor vs the pane rectangle located at the last mouse event, checked on every draw / calc);
+ *        anywhere else it shows LIVE = the forming candle (Lots and ratio vs the prior average, Pace from the seconds elapsed so far, the
+ *        Big Lot size), refreshed whenever its numbers change. The forming bar on the chart is still dim and unlabelled (no repaint).
  *  1.14.0 (2026-10-18, Rassul 17:26 CT "implement Big lot 5 style on the aggression indicator. I want to see if it will help identify
  *        spikes near the hod and lod"; study AGGR-BL5.md: bars >= BL5 sit within 2 bars of the final HOD / LOD 1.8x (RTH) / 2.9x
  *        (overnight) as often as other bars - an EXTRA mark, the 2.0x spike rule unchanged): BIG LOT MARK. A closed candle whose bar (the
@@ -135,6 +142,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include "MarketState.h"              // (1.13.0) SRC "AGG" facts for the read
 #include "SessionVWAPLogic.h"         // (1.14.0) svl::rthOf / classify (the session and its RTH)
 #include "BigLotTiers.h"              // (1.14.0) the Big Lot sizes per session type
+#include "PaneCursor.h"               // (1.14.1) the box follows the mouse only while the cursor is inside this pane
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -153,7 +161,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.14.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.14.1"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -250,6 +258,7 @@ struct BASState {
     long long lastClosedTime = 0;                    // the last CLOSED bar's stamp
     long long liveTime = 0; bas::BarMax live;        // the forming bar (drawn only)
     long long liveReadMs = -1, retryMs = -1, statusMs = -1, settingsCheckMs = -1, settingsStamp = -2; std::string settingsText = "\x01";   // (1.14.0) the line last applied
+    pc::Tracker cur; long long liveDrawnT = -1, liveDrawnBid = -1, liveDrawnAsk = -1;   // (1.14.1) the pane on the screen; the live numbers last drawn
     int ratioBars = bas::RATIO_DEFAULT, pos = bas::POS_DEFAULT;
     int dx = 0, dy = 0, mode = BAS_DEFAULT_MODE;     // (1.5.2) Offset X / Y, Box shows
     bp::Box lastBox; bool inBox = false; long long boxHovers = 0;   // (1.5.2) the read box last drawn; the mouse over it
@@ -340,6 +349,11 @@ private:
     const blt::Mark* markAt(BASState& S, long long t) { std::map<long long, blt::Mark>::const_iterator it = S.blMarks.find(t); return it != S.blMarks.end() && it->second.decided ? &it->second : nullptr; }
     std::string blHistPath(BASState& S) { const std::string d = dir(); return d.empty() || S.market.empty() ? std::string() : d + "\\BigLot-" + S.market + "-" + std::to_string(S.spb) + ".txt"; }
     bas::PaceIn paceAt(BASState& S, long long t, const bas::Stat& st);
+    bas::PaceIn livePace(BASState& S, const bas::Stat& st);              // (1.14.1) the forming candle's pace so far
+public:
+    bool paneLeft(BASState& S);                                           // (1.14.1) the cursor is not inside this pane: Live (true = changed)
+    bool liveChanged(BASState& S) { return S.hover.bar < 0 && S.live.ok && (S.liveTime != S.liveDrawnT || S.live.bid != S.liveDrawnBid || S.live.ask != S.liveDrawnAsk); }
+private:
     int minuteOf(long long t);
     long long clockSec(long long t);
     long long unixOf(long long t);
@@ -372,8 +386,8 @@ int cppExtension::calc(int) {
     x->pump();
     BASState* S = x->testState();
     if (S) {
-        bool ch = x->mouseLeft(*S);                                        // the mouse left the chart: back to Live
-        if (x->followBoard(*S)) ch = true;                                 // (1.5.1) the mouse moved over another pane of this chart
+        bool ch = x->paneLeft(*S);                                         // (1.14.1) the cursor is not inside this pane: Live
+        if (x->liveChanged(*S)) ch = true;                                 // (1.14.1) Live: the forming candle's numbers changed
         if (ch) { ++S->redraws; x->invalidateChart(false); }               // only on a change
     }
     return RTX_OK;
@@ -383,7 +397,7 @@ int BidAskStats::draw(void) {
         if (S0) { const char* cl = getChartLabel(); const std::string c = cl ? cl : ""; if (!c.empty() && c != S0->chartKey) { if (!S0->chartKey.empty() && !S0->symbol.empty()) mst::clear("AGG", S0->symbol, S0->spb, S0->chartKey); S0->chartKey = c; S0->mstMs = -1; } } }
     pump();
     BASState* S = slot_.get(this, false);
-    if (S) { mouseLeft(*S); followBoard(*S); }                            // (1.5.1) the candle under the mouse ANYWHERE on this chart
+    if (S) paneLeft(*S);                                                  // (1.14.1) the candle under the mouse only while the cursor is inside this pane
     if (S) { try { render(*S); } catch (...) { S->state = "draw error"; } }
     return RTX_OK;
 }
@@ -442,8 +456,10 @@ int BidAskStats::mouse(RTX_EVENT* e) {
         S->hoverWnds.push_back(w);
         if (S->hoverWnds.size() > MAX_HOVER_WNDS) S->hoverWnds.erase(S->hoverWnds.begin());
     }
-    publishBoard(*S, e->v.mouse.bar);                                    // (1.5.1) every pane of this chart follows this candle
-    if (S->hover.set(bas::hoverIndex(e->v.mouse.bar, getBarCount()))) { ++S->redraws; invalidateChart(false); }   // only on a change
+    {   int cx = 0, cy = 0; const bool ok = pc::cursorPos(cx, cy); S->cur.onEvent(w, ok, cx, cy, e->v.mouse.h, e->v.mouse.v); }   // (1.14.1) where the pane is
+    publishBoard(*S, e->v.mouse.bar);                                    // (1.5.1) other panes may follow this candle (this box no longer follows theirs)
+    const int hi = S->cur.eventInside(e->v.mouse.h, e->v.mouse.v) ? bas::hoverIndex(e->v.mouse.bar, getBarCount()) : -1;
+    if (S->hover.set(hi)) { ++S->redraws; invalidateChart(false); }      // only on a change
     return RTX_FAIL;
 }
 // this pane's own value axis in contracts (not the instrument's prices): the tallest bid / ask in the bars IRT scales
@@ -1021,6 +1037,26 @@ void BidAskStats::bigLots(BASState& S) {
     }
     invalidateChart(false);
 }
+// (1.14.1) the cursor is inside this pane only when it is over the window the last mouse event came from and within the pane rectangle
+// located then (PaneCursor.h); anywhere else the box shows Live. IRT sends no event when the mouse leaves a pane - this is checked on
+// every draw / calc instead.
+bool BidAskStats::paneLeft(BASState& S) {
+    int cx = 0, cy = 0; const bool ok = pc::cursorPos(cx, cy);
+    if (S.cur.inside(cursorWindow(), ok, cx, cy)) return false;
+    bool ch = S.hover.set(-1);
+    if (S.inBox) { S.inBox = false; ch = true; }
+    return ch;
+}
+// (1.14.1) the forming candle's pace so far: its lots per second over the seconds elapsed (the bar stamp is its close when it lies ahead of
+// the chart clock, else its start); under 5 s elapsed = n/a
+bas::PaceIn BidAskStats::livePace(BASState& S, const bas::Stat& st) {
+    const long long now = clockSec((long long)currentDate()), t = clockSec(S.liveTime);
+    if (now == LLONG_MIN || t == LLONG_MIN || S.spb <= 0 || !st.m.ok) return bas::PaceIn();
+    const long long el = t >= now ? (long long)S.spb - (t - now) : now - t;
+    if (el < 5 || el > (long long)S.spb) return bas::PaceIn();
+    bas::Stat sc = st; sc.m.totBid = st.m.totBid * S.spb / el; sc.m.totAsk = st.m.totAsk * S.spb / el;
+    return paceAt(S, S.liveTime, sc);
+}
 void BidAskStats::status(BASState& S, long long now) {
     if (S.statusMs >= 0 && now >= S.statusMs && now - S.statusMs < 60000) return;   // at most once a minute
     const bas::Stat* st = NULL;
@@ -1164,6 +1200,7 @@ void BidAskStats::pump() {
 }
 void BidAskStats::render(BASState& S) {
     RCT pane; pane.getPaneRect(false);
+    S.cur.pane.l = pane.left; S.cur.pane.t = pane.top; S.cur.pane.r = pane.right; S.cur.pane.b = pane.bottom;   // (1.14.1)
     const long count = getBarCount();
     if (count < 2 || pane.bottom - pane.top < 24 || pane.right - pane.left < 60) return;
     RTARRAYI times(barDateTime);
@@ -1203,14 +1240,23 @@ void BidAskStats::render(BASState& S) {
     const bas::Stat* bst = NULL;
     if (hov >= 0) { std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(mt); if (it != S.ser.bars.end()) bst = &it->second; }
     else { std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(S.lastClosedTime); if (it != S.ser.bars.end() && S.lastClosedTime == mt) bst = &it->second; }
+    // (1.14.1) Live = the FORMING candle: its biggest bid / ask so far against the prior closed candles' average, its pace so far (box only:
+    // the forming bar on the chart stays dim and unlabelled until it closes)
+    bas::Stat liveSt; bas::PaceIn livePc; bool liveBox = false;
+    if (hov < 0 && S.live.ok && S.liveTime == (long long)times[last]) {
+        std::vector<long long> pb, pa; S.ser.prior(S.liveTime, (size_t)bas::RATIO_HI, pb, pa);
+        liveSt = bas::statOf(S.live, pb, pa, S.ratioBars); livePc = livePace(S, liveSt); bst = &liveSt; liveBox = true;
+        S.liveDrawnT = S.liveTime; S.liveDrawnBid = S.live.bid; S.liveDrawnAsk = S.live.ask;
+    }
     // (1.5.0) two columns: Sellers (bids hit, red) | Buyers (offers lifted, green)
     off::Info info; info.twoCol = true; info.colHead[0] = "Sellers"; info.colHead[1] = "Buyers"; info.tmpl = off::CROWD_TMPL;   // (1.5.1) the Crowd row is the widest
     {
         struct tm x; std::memset(&x, 0, sizeof(x));
         info.head = hov < 0 ? std::string("Live") : (mt > 0 && getLocaltime((RTDATE)mt, &x) ? bas::clock12(x.tm_hour, x.tm_min) : std::string("n/a"));
         const std::string none[2]; const bas::PaceIn nopc;
-        const std::vector<bas::Row2> L = bas::infoRows(bst, f != S.fin.end() ? &f->second.r : nullptr, f != S.fin.end() ? f->second.let : none, f != S.fin.end() && f->second.dbo,
-                                                       f != S.fin.end() ? f->second.pc : nopc, S.params.load.p.paceFastT);
+        const bool rec = !liveBox && f != S.fin.end();                    // (1.14.1) the live candle has no record yet
+        const std::vector<bas::Row2> L = bas::infoRows(bst, rec ? &f->second.r : nullptr, rec ? f->second.let : none, rec && f->second.dbo,
+                                                       liveBox ? livePc : rec ? f->second.pc : nopc, S.params.load.p.paceFastT);
         for (size_t k = 0; k < L.size(); ++k) { off::InfoRow r; r.label = L[k].label; r.v[0] = L[k].v[0]; r.v[1] = L[k].v[1]; info.rows.push_back(r); }
         // (1.4.0) StopRun: "above PDH 6t" (red = buyers trapped, in the Buyers column) / "below LonLO 4t" (green, Sellers column); Burst
         const sr::Event* e = eventAt(S, mt);
@@ -1304,6 +1350,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio) and Pace for sellers and buyers of the candle under the mouse anywhere on the chart, else the last closed candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.14.0");   // BAS_VERSION
+    p->setVersion("1.14.1");   // BAS_VERSION
     return p;
 }
