@@ -70,16 +70,22 @@ int main() {
     Ind* p = make(); p->calc(0); p->draw(); p->calc(0);
     h.draws.clear(); p->draw();
     {   const std::vector<mock::Draw> v = barsAt(h, 30);
-        CHECK(v.size() == 1 && v[0].color == C_BID_BAR, "forming candle: drawn, dim red (no spike colour)");
+        CHECK(v.size() == 2 && ((v[0].color == C_BID_BAR && v[1].color == C_ASK_BAR) || (v[1].color == C_BID_BAR && v[0].color == C_ASK_BAR)), "(1.16.0) forming candle: BOTH sides drawn, dim red + dim green (no spike colour)");
         CHECK(count(h, "box", C_BID_SPIKE) == 0 && !text(h, "5.0"), "forming candle: no bright bar, no ratio label (no repaint)"); }
     h.bars.push_back(bar(T0 + 60UL * 31, 10, 10)); NOW += 100; p->calc(0); NOW += 600; p->calc(0);
     BASState* S = p->testState();
     CHECK(S->fin.count(T0 + 1800) && S->ser.bars[T0 + 1800].bidSpike && !S->ser.bars[T0 + 1800].askSpike, "closed: the bid side is a spike (5.0x >= 2.0x)");
     h.draws.clear(); p->draw();
     {   const std::vector<mock::Draw> v = barsAt(h, 30);
-        CHECK(v.size() == 1 && v[0].color == C_BID_SPIKE, "closed candle: bright red");
+        const mock::Draw* rd = nullptr; const mock::Draw* gr = nullptr; for (auto& d : v) { if (d.color == C_BID_SPIKE) rd = &d; if (d.color == C_ASK_BAR) gr = &d; }
+        CHECK(v.size() == 2 && rd && gr, "(1.16.0) closed candle: bright red sellers + dim green buyers");
+        CHECK(rd && gr && gr->b < rd->y, "(1.16.0) buyers ABOVE the zero line, sellers BELOW it");
         CHECK(text(h, "5.0", off::C_LBL_RATIO) != nullptr, "closed candle: its ratio label 5.0 (yellow), no x");
-        CHECK(pTexts(h) == 0, "no \"p \" pace prefix"); }
+        CHECK(pTexts(h) == 0, "no \"p \" pace prefix");
+#ifndef BOOK
+        CHECK(text(h, "Attack Effort") != nullptr && text(h, "Reward") != nullptr, "(1.16.0) box rows Attack Effort + Reward");
+#endif
+    }
     // a closed 1.9x candle: dim, no label; exactly 2.0x: bright (one rule, at the close)
     h.bars.back() = bar(T0 + 60UL * 31, 23, 10); h.bars.push_back(bar(T0 + 60UL * 32, 10, 10)); NOW += 100; p->calc(0); NOW += 600; p->calc(0);
     CHECK(!S->ser.bars[T0 + 1860].bidSpike, "a 1.9x candle (23 vs 11.95) is not a spike");
@@ -245,6 +251,7 @@ int main() {
         CHECK(text(h, "Live") != nullptr && hasPrefix(h, "+30 ("), "Live box: the forming candle's Net +30 bids so far with its ratio (1.4.0), mouse outside the pane");
         CHECK(text(h, "Refill Effort") != nullptr && text(h, "Refilled") != nullptr && text(h, "Added") == nullptr && text(h, "Pulled") == nullptr
               && text(h, "Pace") == nullptr && text(h, "Net") == nullptr, "(1.5.0) the box shows Refill Effort + Refilled only (Added / Pulled / Pace hidden)");
+        CHECK(text(h, "Reward") != nullptr, "(1.6.0) + the Reward row");
         {   Ind::Ext* e = p->ext(*S); std::string why; const bool fits = e && readFits(h, S->lastBox, e->lastRead, e->lastReadLines, why);
             CHECK(e && text(h, "BULLISH", br::C_BULL) != nullptr && e->lastRead.head.find("Bids stacking") == 0, "(1.4.0) Read: BULLISH, Bids stacking (live, offers flat)");
             CHECK(fits, ("(1.4.0) the Read lines fit inside the box, nothing cut " + why).c_str()); }

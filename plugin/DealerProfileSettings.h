@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace dprset {
-static const char* const PLUGIN_VERSION = "2.18.0";
+static const char* const PLUGIN_VERSION = "2.18.1";
 // (2.17.2, his decision list) "Snapshot outline" removed (dashed: against his no-dashed rule; a saved snap key is ignored);
 // Market / Clock offset / Indicators text hidden (kept in the file with their defaults / saved values, not shown) -> parameter version 7.
 enum K { K_MARKET, K_WIDTH, K_LEVELS_W, K_BADGE_FONT, K_LIQ_BADGE, K_FONT, K_CLOCK, K_LABELS, K_FADEFAR, K_BANNER, K_INDS, K_N };

@@ -2013,6 +2013,61 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         for (int r = 0; r < nIn; ++r) put(in[r], tIn + r * LABEL_LH, ic[r]);
     }
 }
+// ---- (Aggression 1.16.0, Rassul 2026-10-19 17:04 "i want it to show both bid and ask and i want the selling side to be on the bottom";
+// mockup bidask-mirror-mockup.png, "build it already" 17:42) MIRROR BARS: every candle shows BOTH sides - buyers (side 1, offers lifted)
+// green ABOVE the grey zero line, sellers (side 0, bids hit) red BELOW it, each the full slot wide, one scale both ways. The zero line sits
+// where the data needs it (netGeoFor with the biggest buy / sell on screen). Bright = 2.0x+ (hiOf); its RATIO (yellow) and PACE (grey)
+// sit just outside the bar (above a buy bar, below a sell bar); biggest first, a label that would sit on another is skipped, never moved.
+struct MirrorGeo { NetGeo n; int y0 = 0; };
+inline MirrorGeo mirrorGeo(const PaneGeo& g, long long up, long long down) { MirrorGeo m; m.n = netGeoFor(g.bottom - g.top, g.reserve, up, down); m.y0 = g.top + m.n.y0; return m; }
+inline int mirrorH(long long v, const NetGeo& n, bool upSide) { return upSide ? barHeight(v, n.upTop, n.maxPx) : barHeight(v, n.downTop, n.downPx); }
+inline void drawMirrorBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot, long long up, long long down, const COLOR normal[2], const COLOR spike[2],
+                           const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid) {
+    if (up <= 0 && down <= 0) return;
+    const MirrorGeo M = mirrorGeo(g, up, down); const NetGeo& n = M.n; const int y0 = M.y0;
+    if (g.edge > g.left + 4) fillFlat(x, g.left, y0, g.edge, y0 + 1, (COLOR)0x00A0A0A0);   // the grey zero line (C_NET_ZERO)
+    struct Lb { int cx = 0, hb = 0; bool upSide = true; long long mag = 0; std::string a, b; bool view = true; };
+    std::vector<Lb> labs;
+    for (int i = std::max(0, v0 - labelLead(slot)); i <= v1; ++i) {
+        const BarLook b = look(i); if (!b.ok) continue;
+        const int xc = xOf(i); if (xc > g.right) continue;
+        const bool view = i >= v0 && xc >= g.left;
+        int l = 0, r = 0; oneBarSpan(xc, slot, l, r);
+        for (int s = 0; s < 2; ++s) {
+            const bool upSide = s == 1; const long long v = b.v[s]; if (v <= 0) continue;
+            const int h = mirrorH(v, n, upSide); if (h <= 0) continue;
+            const bool hi = hiOf(b, s);
+            if (view) { if (upSide) fillFlat(x, l, y0 - h, r, y0 - 1, hi ? spike[s] : normal[s]); else fillFlat(x, l, y0 + 2, r, y0 + 1 + h, hi ? spike[s] : normal[s]); }
+            if (!hi) continue;
+            Lb q; q.cx = (l + r) / 2; q.hb = h; q.upSide = upSide; q.mag = v; q.view = view;
+            q.a = b.ratioOk[s] ? noX(ratioText(b.ratio[s])) : std::string(); q.b = b.p100[s] > 0 ? noX(paceX(b.p100[s])) : std::string();
+            if (!q.a.empty() || !q.b.empty()) labs.push_back(q);
+        }
+    }
+    if (labs.empty()) return;
+    std::stable_sort(labs.begin(), labs.end(), [](const Lb& a, const Lb& b) { return a.mag > b.mag; });
+    cppExtension::FONT sf; sf.id = cppExtension::HELVETICA; sf.size = LABEL_PT; sf.style = cppExtension::PLAIN; x->setFont(sf);
+    std::vector<LBox> placed(avoid);
+    for (size_t k = 0; k < labs.size(); ++k) {
+        const Lb& c = labs[k];
+        std::string t[2]; COLOR tc[2] = { C_LBL_RATIO, C_LBL_PACE }; int nr = 0;
+        if (!c.a.empty()) { t[nr] = c.a; tc[nr++] = C_LBL_RATIO; }
+        if (!c.b.empty()) { t[nr] = c.b; tc[nr++] = C_LBL_PACE; }
+        const int t0 = c.upSide ? y0 - c.hb - 2 - nr * LABEL_LH : y0 + 2 + c.hb + 2, b0 = t0 + nr * LABEL_LH;
+        if (t0 < g.top + g.reserve || b0 > g.bottom) continue;
+        int w = 0; for (int r = 0; r < nr; ++r) w = std::max(w, (int)x->getTextWidth(t[r].c_str(), -1));
+        const LBox me = { c.cx - w / 2 - 1, t0, c.cx - w / 2 + w + 1, b0 - 1, 0, 0 };
+        if (me.l < g.left + 1 || me.r > g.edge - 1) continue;
+        bool hit = false; for (size_t o = 0; o < placed.size() && !hit; ++o) hit = overlaps(me, placed[o]);
+        if (hit) continue;
+        placed.push_back(me);
+        if (!c.view) continue;
+        for (int r = 0; r < nr; ++r) {
+            x->setTextColor(tc[r]); const int tw = (int)x->getTextWidth(t[r].c_str(), -1);
+            cppExtension::RCT rc; rc.set(coord(c.cx - tw / 2), coord(t0 + r * LABEL_LH), coord(c.cx - tw / 2 + tw + 2), coord(t0 + r * LABEL_LH + LABEL_LH)); rc.drawText(t[r].c_str(), false, false);
+        }
+    }
+}
 // ---- (1.7.0, BookFlow 1.0.0; Rassul 2026-10-16 07:49 "1 net bar. make the zero line gray so i can clearly see the separation") NET BARS ----
 // One bar per side per candle = lots ADDED minus lots PULLED near price: above the zero line = size arriving (stacking), below = size leaving
 // (pulling). Bids green (left), offers red (right) - the buyer / seller colours never change. The zero line is grey and 2 px.

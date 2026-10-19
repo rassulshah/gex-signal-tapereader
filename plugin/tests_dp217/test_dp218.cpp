@@ -267,7 +267,7 @@ int main() {
     recordTests();
     labelTests(t0);
     {   const std::string src = slurp("../DeltaProfile.cpp");
-        check(std::string(DLT_VERSION) == "2.19.0", "[ver] this suite is for 2.18.x rules (2.19.0 = + gray circles)");
+        check(std::string(DLT_VERSION) == "2.19.1", "[ver] this suite is for 2.18.x rules (2.19.0 = + gray circles)");
         check(src.find(std::string("p->setVersion(\"") + DLT_VERSION + "\")") != std::string::npos, "[ver] DLT_VERSION = setVersion literal");
         check(slurp("../DeltaProfileCore.h").find(std::string("DeltaProfileCore.h ") + DLT_VERSION) != std::string::npos, "[ver] core header = DLT_VERSION"); }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";

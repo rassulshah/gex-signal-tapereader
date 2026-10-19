@@ -151,7 +151,9 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include "SessionVWAPLogic.h"         // (1.14.0) svl::rthOf / classify (the session and its RTH)
 #include "BigLotTiers.h"              // (1.14.0) the Big Lot sizes per session type
 #include "PaneCursor.h"               // (1.14.1) the box follows the mouse only while the cursor is inside this pane
-#include "BoxReadDraw.h"              // (1.15.0) the Read row
+#include "BoxReadDraw.h"
+#include "EffortReward.h"            // (1.16.0) Attack Effort + Reward rows and their read
+#include <array>              // (1.15.0) the Read row
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -170,7 +172,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.15.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.16.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -276,7 +278,7 @@ struct BASState {
     bas::Hover hover;                                // the closed bar under the mouse, -1 = Live
     std::vector<void*> hoverWnds;                    // windows the chart's mouse events came from (most recent last)
     long long redraws = 0;
-    long long axisTop = 0; int paneH = 0;
+    long long axisTop = 0, axisUp = -1, axisDown = -1; int paneH = 0;   // (1.16.0) axisUp / axisDown: the biggest buy / sell on screen (mirror bars)
     long long vapReads = 0, vapFailures = 0, vapMismatch = 0;
     // (1.3.0) the order feed, the attack reads, the session record, params, levels
     off::Conn feed; off::Engine e; off::Acc scratch; nl::Zone zone; double atr = 0; long atrCount = -1;
@@ -371,6 +373,8 @@ private:
     const sr::Event* eventAt(BASState& S, long long t);
     void status(BASState& S, long long now);
     void render(BASState& S);
+    std::array<er::Side, 2> erSides(BASState& S, int ci, RTARRAYI& times, int last);   // (1.16.0)
+    bool newExtreme(int ci, bool& newLow, bool& newHigh);                                 // (1.16.0) a new 10-bar low / high
     std::string stamp(long long t);
     std::string ctOf(long long t);
     std::string sessionStr(long long t);
@@ -479,7 +483,7 @@ int BidAskStats::scale(int iStartBar, int iEndBar, double* dMin, double* dMax) {
     if (S) {
         const long count = getBarCount();
         RTARRAYI times(barDateTime);
-        long long top = 0;
+        long long top = 0, up = 0, down = 0;
         if (count > 0 && times.count >= count) {
             const int last = (int)count - 1;
             int a = std::max(0, iStartBar), b = std::min(last, iEndBar);
@@ -487,13 +491,15 @@ int BidAskStats::scale(int iStartBar, int iEndBar, double* dMin, double* dMax) {
             if (b - a > 20000) a = b - 20000;
             for (int i = a; i <= b; ++i) {
                 const long long bt = (long long)times[i];
-                if (i == last) { if (S->liveTime == bt && S->live.ok) top = std::max(top, std::max(S->live.bid, S->live.ask)); continue; }
-                std::map<long long, bas::Stat>::const_iterator it = S->ser.bars.find(bt);
-                if (it != S->ser.bars.end() && it->second.m.ok) top = std::max(top, std::max(it->second.m.bid, it->second.m.ask));
+                const bas::BarMax* bm = nullptr;
+                if (i == last) { if (S->liveTime == bt && S->live.ok) bm = &S->live; }
+                else { std::map<long long, bas::Stat>::const_iterator it = S->ser.bars.find(bt); if (it != S->ser.bars.end() && it->second.m.ok) bm = &it->second.m; }
+                if (!bm) continue;
+                top = std::max(top, std::max(bm->bid, bm->ask)); up = std::max(up, bm->ask); down = std::max(down, bm->bid);
             }
         }
-        S->axisTop = top;
-        off::axisFor(top, S->paneH, off::drawPx(S->paneH, off::textReserve(S->paneH, off::MODE_NONE)), mn, mx);
+        S->axisTop = top; S->axisUp = up; S->axisDown = down;
+        off::netAxisFor(top, S->paneH, off::textReserve(S->paneH, off::MODE_NONE), mn, mx, up, down);   // (1.16.0) mirror: buyers up, sellers down
     }
     if (dMin) *dMin = mn;
     if (dMax) *dMax = mx;
@@ -1208,6 +1214,35 @@ void BidAskStats::pump() {
         status(S, now);
     } catch (...) { S.state = "calculation error"; }
 }
+// (1.16.0) Attack Effort (the side's whole aggressive lots / its 20 prior candles' average) and Reward (ticks the attacker's way per 1,000
+// lots / the market's normal) for candle ci (EffortReward.h); side 0 = sellers (bids hit), 1 = buyers (offers lifted)
+std::array<er::Side, 2> BidAskStats::erSides(BASState& S, int ci, RTARRAYI& times, int last) {
+    std::array<er::Side, 2> out;
+    if (ci < 1 || ci > last) return out;
+    const long long t = (long long)times[ci];
+    const bas::BarMax* bm = nullptr;
+    if (ci == last) { if (S.liveTime == t && S.live.ok) bm = &S.live; }
+    else { std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(t); if (it != S.ser.bars.end() && it->second.m.ok) bm = &it->second.m; }
+    if (!bm) return out;
+    std::vector<long long> pb, pa;
+    std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.lower_bound(t);
+    while (it != S.ser.bars.begin() && (int)pb.size() < er::EFFORT_BARS) { --it; if (it->second.m.ok) { pb.push_back(it->second.m.totBid); pa.push_back(it->second.m.totAsk); } }
+    RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
+    if (op.count <= ci || hi.count <= ci || lo.count <= ci || cl.count <= ci) return out;
+    const long long tot[2] = { bm->totBid, bm->totAsk };
+    for (int q = 0; q < 2; ++q) {
+        out[q].effOk = er::effortX(tot[q], q == 0 ? pb : pa, out[q].eff);
+        out[q].rewOk = er::rewardX(op[ci], hi[ci], lo[ci], cl[ci - 1], S.tick, tot[q], q, S.market, out[q].rew);
+    }
+    return out;
+}
+bool BidAskStats::newExtreme(int ci, bool& newLow, bool& newHigh) {
+    newLow = newHigh = false; if (ci < 9) return false;
+    RTARRAY hi(barHigh), lo(barLow); if (hi.count <= ci || lo.count <= ci) return false;
+    double mn = lo[ci], mx = hi[ci];
+    for (int k = ci - 9; k < ci; ++k) { mn = std::min(mn, (double)lo[k]); mx = std::max(mx, (double)hi[k]); }
+    newLow = lo[ci] <= mn; newHigh = hi[ci] >= mx; return true;
+}
 void BidAskStats::render(BASState& S) {
     RCT pane; pane.getPaneRect(false);
     S.cur.pane.l = pane.left; S.cur.pane.t = pane.top; S.cur.pane.r = pane.right; S.cur.pane.b = pane.bottom;   // (1.14.1)
@@ -1230,9 +1265,10 @@ void BidAskStats::render(BASState& S) {
         std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(bt);
         return it != S.ser.bars.end() && it->second.m.ok ? &it->second.m : nullptr;
     };
-    long long top = 0;
-    for (int i = v0; i <= v1; ++i) { const bas::BarMax* m = maxOfBar(i); if (m) top = std::max(top, std::max(m->bid, m->ask)); }
+    long long top = 0, upMax = 0, downMax = 0;
+    for (int i = v0; i <= v1; ++i) { const bas::BarMax* m = maxOfBar(i); if (m) { top = std::max(top, std::max(m->bid, m->ask)); upMax = std::max(upMax, m->ask); downMax = std::max(downMax, m->bid); } }
     if (S.axisTop > top) top = S.axisTop;                                  // draw on the top the value axis was given
+    upMax = std::max(upMax, S.axisUp); downMax = std::max(downMax, S.axisDown);   // (1.16.0) the mirror's two sides, as the axis was given
     S.paneH = pane.bottom - pane.top;
     // (1.13.0) the forming candle is never judged: no stats, so it is drawn dim with no label (closed candles only - no repaint)
     auto statOfBar = [&](int i) -> const bas::Stat* {
@@ -1261,6 +1297,7 @@ void BidAskStats::render(BASState& S) {
     // (1.5.0) two columns: Sellers (bids hit, red) | Buyers (offers lifted, green)
     off::Info info; info.twoCol = true; info.colHead[0] = "Sellers"; info.colHead[1] = "Buyers"; info.tmpl = "9999 (99.9x)";   // (1.15.0) Lots / Pace / BBI / Read only: the Lots template (Crowd is not shown)
     bas::PaceIn readPc;                                                    // (1.15.0) the pace the Read row uses (the candle shown)
+    std::array<er::Side, 2> erNow;                                         // (1.16.0) Attack Effort / Reward of the candle shown
     {
         struct tm x; std::memset(&x, 0, sizeof(x));
         info.head = hov < 0 ? std::string("Live") : (mt > 0 && getLocaltime((RTDATE)mt, &x) ? bas::clock12(x.tm_hour, x.tm_min) : std::string("n/a"));
@@ -1295,6 +1332,14 @@ void BidAskStats::render(BASState& S) {
             info.rows.push_back(r);
         }
         // (1.15.0) the BL5 row is removed (Rassul 23:48 CT); the Big Lot size stays in the status file and the cyan cap on the chart
+        {   // (1.16.0, EffortReward.h) ATTACK EFFORT and REWARD under Lots, for the candle shown (hovered closed, else the live forming one)
+            const int ci = liveBox ? last : mb;
+            erNow = erSides(S, ci, times, last);
+            off::InfoRow ef; ef.label = "Attack Effort"; off::InfoRow rw; rw.label = "Reward";
+            for (int q = 0; q < 2; ++q) { ef.v[q] = er::effortCell(erNow[q].effOk, erNow[q].eff); rw.v[q] = er::rewardCell(erNow[q].rewOk, erNow[q].rew); }
+            std::vector<off::InfoRow>::iterator at = info.rows.begin(); if (at != info.rows.end()) ++at;   // after Lots
+            at = info.rows.insert(at, ef); info.rows.insert(at + 1, rw);
+        }
     }
     // (1.5.2) the read and the blue oHit line first (the panel is laid out before the bars: labels never go over it)
     nl::Msg m;
@@ -1316,7 +1361,11 @@ void BidAskStats::render(BASState& S) {
     off::PanelPlan P;
     (void)zl; (void)optL; (void)l1;
     // (1.15.0) + the Read row: the box grows to hold its lines, wrapped to the box width (BoxReadDraw.h)
-    const br::Read rd = bas::aggRead(bst, readPc);
+    br::Read rd = bas::aggRead(bst, readPc);
+    {   // (1.16.0) at a new 10-bar low / high the Effort vs Reward read leads (absorbed / going through), as Book Flow's refill read does
+        const int ci = liveBox ? last : mb; bool nlw = false, nhi = false;
+        if (newExtreme(ci, nlw, nhi)) { br::Read er0; const er::Side sd[2] = { erNow[0], erNow[1] }; if (er::read(nlw, nhi, sd, er0)) rd = er0; }
+    }
     const off::TextW tw = off::measureWith(this);
     const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
     S.lastBox = P.ok ? P.box : bp::Box(); S.lastRead = rd; S.lastReadLines = rp.lines;
@@ -1326,7 +1375,7 @@ void BidAskStats::render(BASState& S) {
     for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(off::LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
     const COLOR normal[2] = { C_BID_BAR, C_ASK_BAR }, spike[2] = { C_BID_SPIKE, C_ASK_SPIKE };   // left = bids hit (red), right = offers lifted (green)
     RTARRAY op(barOpen), cl(barClose);                                     // (1.7.0) the close direction (one-bar ties)
-    off::drawBars(this, g, v0, v1, slot, top, hov, normal, spike, xOf, [&](int i) {
+    off::drawMirrorBars(this, g, v0, v1, slot, upMax, downMax, normal, spike, xOf, [&](int i) {   // (1.16.0, Rassul 17:04 / 17:42) BOTH sides: buyers above the zero line, sellers below
         off::BarLook k; const bas::BarMax* bm = maxOfBar(i); if (!bm) return k;
         const bas::Stat* sp = statOfBar(i);
         k.ok = true; k.v[0] = bm->bid; k.v[1] = bm->ask;
@@ -1341,14 +1390,17 @@ void BidAskStats::render(BASState& S) {
             }
         }
         return k;
-    }, avoid, 1, false, true);   // (1.9.1) only bars at 2.0x+ their average are bright and labelled; the rest are dim   // (1.7.1, Rassul 09:55 "get rid of the labeling like S L") no letters / R marks drawn; hover + record keep them                                                          // (1.7.0) one bar per candle; buyers = side 1 (offers lifted)
+    }, avoid);   // (1.16.0) mirror bars (was drawBars one bar per candle, 1.7.0); bright + ratio / pace only at 2.0x+, no letters (1.7.1)   // (1.9.1) only bars at 2.0x+ their average are bright and labelled; the rest are dim   // (1.7.1, Rassul 09:55 "get rid of the labeling like S L") no letters / R marks drawn; hover + record keep them                                                          // (1.7.0) one bar per candle; buyers = side 1 (offers lifted)
     if (S.bigLot >= 1 && S.bigLot <= 3 && top > 0) {                       // (1.14.0) the Big Lot cap: 3 px cyan on the top of a marked closed bar
         for (int i = v0; i <= v1 && i < last; ++i) {
             const blt::Mark* mk = markAt(S, (long long)times[i]); if (!mk || !blt::shows(*mk, S.bigLot)) continue;
             const int xc = xOf(i); if (xc < g.left || xc > g.right) continue;
-            const int hb = off::barHeight(mk->lots, top, g.px); if (hb <= 0) continue;
+            const off::MirrorGeo M = off::mirrorGeo(g, upMax, downMax);       // (1.16.0) the cap at the outer end of its side's bar
+            const bool upSide = mk->side == 1;
+            const int hb = off::mirrorH(mk->lots, M.n, upSide); if (hb <= 0) continue;
             int l = 0, r = 0; off::oneBarSpan(xc, slot, l, r);
-            const int y0 = g.yBase - hb, y1 = y0 + std::min(BIG_LOT_CAP_PX, hb) - 1;
+            const int cap = std::min(BIG_LOT_CAP_PX, hb);
+            const int y0 = upSide ? M.y0 - hb : M.y0 + 2 + hb - cap, y1 = y0 + cap - 1;
             off::fillFlat(this, l, y0, r, y1, C_BIG_LOT);
         }
     }
@@ -1364,6 +1416,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.15.0");   // BAS_VERSION
+    p->setVersion("1.16.0");   // BAS_VERSION
     return p;
 }
