@@ -1016,20 +1016,44 @@ inline void axisFor(long long top, int paneH, int px, double& mn, double& mx) {
     mn = -unit; mx = (double)(paneH - 1) * unit;
 }
 // (1.7.0, BookFlow) net bars geometry: SDK-free so it is unit-tested
-struct NetGeo { int yTop = 0, yBot = 0, y0 = 0, maxPx = 1; };            // rows counted from the pane's top: the usable rows, the zero line, the tallest bar
-inline NetGeo netGeoFor(int paneH, int reserve) {
+struct NetGeo { int yTop = 0, yBot = 0, y0 = 0, maxPx = 1, downPx = 1; long long upTop = 0, downTop = 0; };   // rows from the pane's top: usable rows, the zero line, the tallest up / down bar; upTop / downTop = the value drawn maxPx / downPx tall
+// (BookFlow 1.5.1, Rassul 2026-10-19 13:37 "there is a lot of black space .. get rid of the extra black space") up / down = the
+// biggest + and - net on screen (-1 = not given: the old even split). The zero line sits where the data needs it: no negative net
+// on screen -> the zero line drops to the bottom (only the pull-marker strip below it); some -> the height is split by size, one
+// scale for both directions (a 1,000 bar is as tall up as down).
+inline NetGeo netGeoFor(int paneH, int reserve, long long up = -1, long long down = -1) {
     NetGeo n; n.yTop = reserve + 3; n.yBot = paneH - 3;
     if (n.yBot - n.yTop < 12) { n.yTop = 2; n.yBot = paneH - 2; if (n.yBot <= n.yTop) n.yBot = n.yTop + 1; }
-    n.y0 = (n.yTop + n.yBot) / 2;
-    const int half = (n.yBot - n.yTop) / 2;
-    int mp = half - LABEL_ROOM; if (mp < 10) mp = half - 4; if (mp < 4) mp = half > 1 ? half - 1 : 1;
-    n.maxPx = mp; return n;
+    if (up < 0 || down < 0) {
+        n.y0 = (n.yTop + n.yBot) / 2;
+        const int half = (n.yBot - n.yTop) / 2;
+        int mp = half - LABEL_ROOM; if (mp < 10) mp = half - 4; if (mp < 4) mp = half > 1 ? half - 1 : 1;
+        n.maxPx = mp; n.downPx = mp; n.upTop = n.downTop = 0; return n;
+    }
+    const int H = n.yBot - n.yTop;
+    const int strip = down > 0 ? LABEL_ROOM : LABEL_LH + 12;               // under the bars: room for a down bar's labels, else only the pull-marker strip
+    int room = LABEL_ROOM; if (H - room - strip < 12) room = std::max(4, H - strip - 12);
+    const int bars = std::max(4, H - room - strip - 2);                    // pixels shared by the up and down bars
+    int dn = 0;
+    if (down > 0) {
+        const double f = (double)down / (double)(std::max<long long>(up, 0) + down);
+        dn = (int)(bars * f + .5); if (dn < 6) dn = std::min(6, bars / 2);
+        if (bars - dn < 6) dn = bars - 6;                                  // the up side always keeps a little room
+    }
+    const int upPx = std::max(1, bars - dn);
+    n.y0 = n.yTop + room + upPx; n.maxPx = upPx; n.downPx = std::max(1, dn);
+    // one scale: the unit that fits both sides
+    const double u = std::max(up > 0 ? (double)up / upPx : 0.0, down > 0 && dn > 0 ? (double)down / dn : 0.0);
+    n.upTop = u > 0 ? (long long)std::llround(u * upPx) : std::max<long long>(up, 1);
+    n.downTop = u > 0 ? (long long)std::llround(u * n.downPx) : std::max<long long>(down, 1);
+    n.upTop = std::max<long long>(n.upTop, 1); n.downTop = std::max<long long>(n.downTop, 1);
+    return n;
 }
 // the axis range IRT draws over the pane so a value sits at its bar's pixel row (0 at the zero line, + above, - below)
-inline void netAxisFor(long long top, int paneH, int reserve, double& mn, double& mx) {
+inline void netAxisFor(long long top, int paneH, int reserve, double& mn, double& mx, long long up = -1, long long down = -1) {
     if (top <= 0 || paneH < 24) { mn = -10; mx = 10; return; }
-    const NetGeo n = netGeoFor(paneH, reserve);
-    const double unit = (double)top / (double)n.maxPx;
+    const NetGeo n = netGeoFor(paneH, reserve, up, down);
+    const double unit = up < 0 ? (double)top / (double)n.maxPx : (double)n.upTop / (double)n.maxPx;
     mx = (double)n.y0 * unit; mn = (double)(n.y0 - (paneH - 1)) * unit;
 }
 inline int textReserve(int paneH) { return paneH >= 80 ? TEXT_RESERVE : 0; }
@@ -2285,7 +2309,7 @@ template <class L> struct PaneState {
     std::string curSession; SessionFile file; bool loaded = false; long long sessionResets = 0; int histSessions = 0;   // (1.8.0) earlier sessions read for the slot yardstick
     nl::Cache lv; std::vector<nl::Level> levels;
     ParamCache params; PaneSettings set; SpikeCfg dlgSpike; long long settingsCheckMs = -1, settingsStamp = -2;
-    HoverTrack hov; long long axisTop = 0; int paneH = 0;
+    HoverTrack hov; long long axisTop = 0, axisUp = -1, axisDown = -1, netUp = -1, netDown = -1; int paneH = 0;   // (1.5.1) axisUp / axisDown: the biggest + / - net on screen (net panes)
     long long statusMs = -1, changed = 0;
     OptCache opt; ResetWatch rw;                     // (1.2.0) the options file (blue line), PullStats' reset watch
     std::unique_ptr<PaneExt> ext;                    // (1.2.2) PullStats' order-feed recorder (null in the other panes)
@@ -2433,7 +2457,7 @@ public:
         if (S) {
             const long count = getBarCount();
             RTARRAYI times(barDateTime);
-            long long top = 0;
+            long long top = 0, up = 0, down = 0;
             if (count > 0 && times.count >= count) {
                 const int last = (int)count - 1;
                 int a = std::max(0, iStartBar), b = std::min(last, iEndBar);
@@ -2442,13 +2466,16 @@ public:
                 PaneBar lb; const bool live = liveBar(*S, lb);
                 for (int i = a; i <= b; ++i) {
                     const long long bt = (long long)times[i];
-                    if (i == last) { if (live && bt == S->formingKey) top = std::max(top, magOf(lb.r)); continue; }
-                    typename std::map<long long, PaneBar>::const_iterator it = S->ser.bars.find(bt);
-                    if (it != S->ser.bars.end() && it->second.ok) top = std::max(top, magOf(it->second.r));
+                    const Rec* rr = nullptr;
+                    if (i == last) { if (live && bt == S->formingKey) rr = &lb.r; }
+                    else { typename std::map<long long, PaneBar>::const_iterator it = S->ser.bars.find(bt); if (it != S->ser.bars.end() && it->second.ok) rr = &it->second.r; }
+                    if (!rr) continue;
+                    top = std::max(top, magOf(*rr));
+                    if (netBars()) for (int s = 0; s < 2; ++s) { const long long v = netOf(*rr, s); if (v > up) up = v; if (-v > down) down = -v; }
                 }
             }
-            S->axisTop = top;
-            if (netBars()) netAxisFor(top, S->paneH, textReserve(S->paneH, gmode(S->set.mode)), mn, mx);
+            S->axisTop = top; S->axisUp = up; S->axisDown = down;
+            if (netBars()) netAxisFor(top, S->paneH, textReserve(S->paneH, gmode(S->set.mode)), mn, mx, up, down);
             else axisFor(top, S->paneH, drawPx(S->paneH, textReserve(S->paneH, gmode(S->set.mode))), mn, mx);
         }
         if (dMin) *dMin = mn;

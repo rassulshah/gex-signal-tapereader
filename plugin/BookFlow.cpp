@@ -75,7 +75,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.5.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.5.1"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 
@@ -347,9 +347,11 @@ public:
             std::map<long long, off::PaneBar>::const_iterator it = S.ser.bars.find((long long)times[i]);
             return it != S.ser.bars.end() && it->second.ok ? &it->second : nullptr;
         };
-        long long top = 0;
-        for (int i = v0; i <= v1; ++i) { const off::PaneBar* b = barOf(i); if (b) top = std::max(top, magOf(b->r)); }
+        long long top = 0, up = 0, down = 0;
+        for (int i = v0; i <= v1; ++i) { const off::PaneBar* b = barOf(i); if (!b) continue; top = std::max(top, magOf(b->r)); for (int s = 0; s < 2; ++s) { const long long v = netOf(b->r, s); if (v > up) up = v; if (-v > down) down = -v; } }
         if (S.axisTop > top) top = S.axisTop;
+        up = std::max(up, S.axisUp); down = std::max(down, S.axisDown);   // (1.5.1) the axis IRT was given (same bars)
+        S.netUp = up; S.netDown = down;
         S.paneH = pane.bottom - pane.top;
         const off::PaneGeo g = off::paneGeo(this, gmode(S.set.mode));
         const int hov = S.hov.hover.bar >= 0 && S.hov.hover.bar < last ? S.hov.hover.bar : -1;
@@ -417,7 +419,7 @@ public:
     template <class XOf>
     void pullMarkers(S_& S, const off::PaneGeo& g, int v0, int v1, int last, int slot, RTARRAYI& times, XOf xOf, std::vector<off::LBox>& avoid, const bp::Box* box) {
         Ext* e = ext(S); if (!e) return;
-        const off::NetGeo n = off::netGeoFor(g.bottom - g.top, g.reserve);
+        const off::NetGeo n = off::netGeoFor(g.bottom - g.top, g.reserve, S.netUp, S.netDown);   // (1.5.1) zero line where the data needs it
         const int yLab = g.top + n.yBot - off::LABEL_LH, yBlk = yLab - 8;
         if (yBlk <= g.top + n.y0 + 4) return;                                // pane too short
         const COLOR col[2] = { off::C_GREEN_SPIKE, off::C_RED_SPIKE };
@@ -446,7 +448,7 @@ public:
     void drawNet(S_& S, const off::PaneGeo& g, int v0, int v1, int last, int slot, long long top, XOf xOf, BarOf barOf, const std::vector<off::LBox>& avoid) {
         if (top <= 0) return;
         const COLOR normal[2] = { off::C_GREEN_BAR, off::C_RED_BAR }, spike[2] = { off::C_GREEN_SPIKE, off::C_RED_SPIKE };
-        const off::NetGeo n = off::netGeoFor(g.bottom - g.top, g.reserve);
+        const off::NetGeo n = off::netGeoFor(g.bottom - g.top, g.reserve, S.netUp, S.netDown);   // (1.5.1) zero line where the data needs it
         const int y0 = g.top + n.y0;
         if (g.edge > g.left + 4) off::fillFlat(this, g.left, y0, g.edge, y0 + 1, off::C_NET_ZERO);
         struct Cand { int cx = 0, hb = 0; bool up = true; long long mag = 0; std::string a, b; };
@@ -462,7 +464,7 @@ public:
                 const bf::NetLook k = bf::netLookOf(pb, ns, s, closed, S.market);   // (1.5.0) R = Refilled vs the market's normal
                 if (k.v == 0) continue;
                 const bool up = k.v > 0; const long long mg = up ? k.v : -k.v;
-                const int h = off::barHeight(mg, top, n.maxPx);
+                const int h = up ? off::barHeight(mg, n.upTop, n.maxPx) : off::barHeight(mg, n.downTop, n.downPx);   // (1.5.1) one scale, up / down
                 const COLOR c = k.bright ? spike[k.col] : normal[k.col];
                 if (up) off::fillFlat(this, p.l[s], y0 - h, p.r[s], y0 - 1, c); else off::fillFlat(this, p.l[s], y0 + 2, p.r[s], y0 + 1 + h, c);
                 if (k.bright && (!k.ratio.empty() || !k.pace.empty())) { Cand q; q.cx = (p.l[s] + p.r[s]) / 2; q.hb = h; q.up = up; q.mag = mg; q.a = k.ratio; q.b = k.pace; cands.push_back(q); }
@@ -513,6 +515,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.5.0");   // BF_VERSION
+    p->setVersion("1.5.1");   // BF_VERSION
     return p;
 }

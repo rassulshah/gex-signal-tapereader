@@ -8,6 +8,7 @@ step "logic" $CXX -I"$P" "$D/test_aggbook_113.cpp" -o "$B/tl"; step "run" "$B/tl
 # OrderFlowFeed.h 1.10.1 has two pre-existing -Wmisleading-indentation warnings (shared header, not ours)
 step "BidAskStats host" $CXX -Wno-misleading-indentation -DBAS_TEST_CLOCK -DPC_TEST_CURSOR -I"$D/mock" -I"$P" "$D/test_aggbook_host.cpp" -o "$B/thb"; step "run" "$B/thb"
 step "BookFlow 1.5.0 refill logic" $CXX -I"$P" "$D/test_aggbook_150.cpp" -o "$B/t150"; step "run" "$B/t150" "$P"
+step "BookFlow 1.5.1 zero line" $CXX -Wno-misleading-indentation -I"$D/mock" -I"$P" "$D/test_aggbook_151.cpp" -o "$B/t151"; step "run" "$B/t151"
 step "Read rows logic (1.15.0 / 1.4.0)" $CXX -I"$P" "$D/test_aggbook_115.cpp" -o "$B/trd"; step "run" "$B/trd"
 step "Big Lot logic (1.14.0)" $CXX -I"$P" "$D/test_aggbook_114.cpp" -o "$B/tbl"; step "run" "$B/tbl"
 step "BidAskStats Big Lot host (1.14.0)" $CXX -Wno-misleading-indentation -DBAS_TEST_CLOCK -DPC_TEST_CURSOR -I"$D/mock" -I"$P" "$D/test_aggbook_114_host.cpp" -o "$B/tblh"; step "run" "$B/tblh"
