@@ -120,6 +120,7 @@
 #include "ZoneRead.h"          // (1.5.0) the one-line zone reads
 #include <algorithm>
 #include <cctype>
+#include <climits>   // (1.17.0) capTop
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
@@ -1049,6 +1050,21 @@ inline NetGeo netGeoFor(int paneH, int reserve, long long up = -1, long long dow
     n.upTop = std::max<long long>(n.upTop, 1); n.downTop = std::max<long long>(n.downTop, 1);
     return n;
 }
+// (Aggression 1.17.0 / Book Flow 1.7.0, Rassul 2026-10-19 18:26 "there needs to be a different scale .. it is difficult to see and gets
+// distorted", mockup aggr-cap-mockup.png approved 18:28) the SCALE CAP: the bars on screen scale to 1.5x their 90th-percentile size (fewer
+// than 10 bars: no cap); a taller bar stops at the edge with a white tip (its label and the box keep the true size). Recomputed from what
+// is on screen (zoom / scroll), the same in scale() (the axis) and the drawing.
+static const double CAP_X = 1.5, CAP_PCT = 0.90; static const int CAP_MIN_BARS = 10;
+inline long long capTop(std::vector<long long> v) {
+    v.erase(std::remove_if(v.begin(), v.end(), [](long long a) { return a <= 0; }), v.end());
+    if ((int)v.size() < CAP_MIN_BARS) return LLONG_MAX;
+    const size_t k = (size_t)((double)(v.size() - 1) * CAP_PCT);
+    std::nth_element(v.begin(), v.begin() + (long)k, v.end());
+    const long long c = (long long)std::llround(CAP_X * (double)v[k]);
+    return c < 1 ? 1 : c;
+}
+inline long long capped(long long v, long long cap) { return v > cap ? cap : v; }
+static const int CAP_TIP_PX = 2;
 // the axis range IRT draws over the pane so a value sits at its bar's pixel row (0 at the zero line, + above, - below)
 inline void netAxisFor(long long top, int paneH, int reserve, double& mn, double& mx, long long up = -1, long long down = -1) {
     if (top <= 0 || paneH < 24) { mn = -10; mx = 10; return; }
@@ -2038,6 +2054,9 @@ inline void drawMirrorBars(cppExtension* x, const PaneGeo& g, int v0, int v1, in
             const int h = mirrorH(v, n, upSide); if (h <= 0) continue;
             const bool hi = hiOf(b, s);
             if (view) { if (upSide) fillFlat(x, l, y0 - h, r, y0 - 1, hi ? spike[s] : normal[s]); else fillFlat(x, l, y0 + 2, r, y0 + 1 + h, hi ? spike[s] : normal[s]); }
+            if (view && v > (upSide ? n.upTop : n.downTop) && h > CAP_TIP_PX) {   // a capped bar: the white tip at its outer end
+                if (upSide) fillFlat(x, l, y0 - h, r, y0 - h + CAP_TIP_PX - 1, C_WHITE); else fillFlat(x, l, y0 + 2 + h - CAP_TIP_PX, r, y0 + 1 + h, C_WHITE);
+            }
             if (!hi) continue;
             Lb q; q.cx = (l + r) / 2; q.hb = h; q.upSide = upSide; q.mag = v; q.view = view;
             q.a = b.ratioOk[s] ? noX(ratioText(b.ratio[s])) : std::string(); q.b = b.p100[s] > 0 ? noX(paceX(b.p100[s])) : std::string();
@@ -2512,7 +2531,7 @@ public:
         if (S) {
             const long count = getBarCount();
             RTARRAYI times(barDateTime);
-            long long top = 0, up = 0, down = 0;
+            long long top = 0, up = 0, down = 0; std::vector<long long> mags;
             if (count > 0 && times.count >= count) {
                 const int last = (int)count - 1;
                 int a = std::max(0, iStartBar), b = std::min(last, iEndBar);
@@ -2526,9 +2545,10 @@ public:
                     else { typename std::map<long long, PaneBar>::const_iterator it = S->ser.bars.find(bt); if (it != S->ser.bars.end() && it->second.ok) rr = &it->second.r; }
                     if (!rr) continue;
                     top = std::max(top, magOf(*rr));
-                    if (netBars()) for (int s = 0; s < 2; ++s) { const long long v = netOf(*rr, s); if (v > up) up = v; if (-v > down) down = -v; }
+                    if (netBars()) for (int s = 0; s < 2; ++s) { const long long v = netOf(*rr, s); if (v > up) up = v; if (-v > down) down = -v; mags.push_back(v < 0 ? -v : v); }
                 }
             }
+            if (netBars()) { const long long cp = capTop(mags); up = capped(up, cp); down = capped(down, cp); top = capped(top, cp); }   // (BookFlow 1.7.0) the scale cap
             S->axisTop = top; S->axisUp = up; S->axisDown = down;
             if (netBars()) netAxisFor(top, S->paneH, textReserve(S->paneH, gmode(S->set.mode)), mn, mx, up, down);
             else axisFor(top, S->paneH, drawPx(S->paneH, textReserve(S->paneH, gmode(S->set.mode))), mn, mx);

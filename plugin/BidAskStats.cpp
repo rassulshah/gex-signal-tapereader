@@ -172,7 +172,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.16.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.17.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -483,7 +483,7 @@ int BidAskStats::scale(int iStartBar, int iEndBar, double* dMin, double* dMax) {
     if (S) {
         const long count = getBarCount();
         RTARRAYI times(barDateTime);
-        long long top = 0, up = 0, down = 0;
+        long long top = 0, up = 0, down = 0; std::vector<long long> mags;
         if (count > 0 && times.count >= count) {
             const int last = (int)count - 1;
             int a = std::max(0, iStartBar), b = std::min(last, iEndBar);
@@ -496,8 +496,10 @@ int BidAskStats::scale(int iStartBar, int iEndBar, double* dMin, double* dMax) {
                 else { std::map<long long, bas::Stat>::const_iterator it = S->ser.bars.find(bt); if (it != S->ser.bars.end() && it->second.m.ok) bm = &it->second.m; }
                 if (!bm) continue;
                 top = std::max(top, std::max(bm->bid, bm->ask)); up = std::max(up, bm->ask); down = std::max(down, bm->bid);
+                mags.push_back(bm->bid); mags.push_back(bm->ask);
             }
         }
+        { const long long cp = off::capTop(mags); up = off::capped(up, cp); down = off::capped(down, cp); top = off::capped(top, cp); }   // (1.17.0) the scale cap
         S->axisTop = top; S->axisUp = up; S->axisDown = down;
         off::netAxisFor(top, S->paneH, off::textReserve(S->paneH, off::MODE_NONE), mn, mx, up, down);   // (1.16.0) mirror: buyers up, sellers down
     }
@@ -1266,7 +1268,9 @@ void BidAskStats::render(BASState& S) {
         return it != S.ser.bars.end() && it->second.m.ok ? &it->second.m : nullptr;
     };
     long long top = 0, upMax = 0, downMax = 0;
-    for (int i = v0; i <= v1; ++i) { const bas::BarMax* m = maxOfBar(i); if (m) { top = std::max(top, std::max(m->bid, m->ask)); upMax = std::max(upMax, m->ask); downMax = std::max(downMax, m->bid); } }
+    std::vector<long long> mags;
+    for (int i = v0; i <= v1; ++i) { const bas::BarMax* m = maxOfBar(i); if (m) { top = std::max(top, std::max(m->bid, m->ask)); upMax = std::max(upMax, m->ask); downMax = std::max(downMax, m->bid); mags.push_back(m->bid); mags.push_back(m->ask); } }
+    { const long long cp = off::capTop(mags); upMax = off::capped(upMax, cp); downMax = off::capped(downMax, cp); top = off::capped(top, cp); }   // (1.17.0, Rassul 18:26) the scale cap: 1.5x the 90th percentile on screen
     if (S.axisTop > top) top = S.axisTop;                                  // draw on the top the value axis was given
     upMax = std::max(upMax, S.axisUp); downMax = std::max(downMax, S.axisDown);   // (1.16.0) the mirror's two sides, as the axis was given
     S.paneH = pane.bottom - pane.top;
@@ -1416,6 +1420,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.16.0");   // BAS_VERSION
+    p->setVersion("1.17.0");   // BAS_VERSION
     return p;
 }

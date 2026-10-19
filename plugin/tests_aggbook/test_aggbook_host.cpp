@@ -69,14 +69,19 @@ int main() {
     h.bars.push_back(bar(T0 + 60UL * 30, 50, 10));                        // forming: 50 at the bid = 5.0x if it closed now
     Ind* p = make(); p->calc(0); p->draw(); p->calc(0);
     h.draws.clear(); p->draw();
-    {   const std::vector<mock::Draw> v = barsAt(h, 30);
+    {   std::vector<mock::Draw> v = barsAt(h, 30);
+#ifndef BOOK
+        { const size_t all = v.size(); v.erase(std::remove_if(v.begin(), v.end(), [](const mock::Draw& d) { return d.color == off::C_WHITE; }), v.end());
+          CHECK(all == 3 && v.size() == 2, "(1.17.0) the 50-lot bid bar is over the scale cap (1.5x the 10-lot p90): a white tip on it"); }
+#endif
         CHECK(v.size() == 2 && ((v[0].color == C_BID_BAR && v[1].color == C_ASK_BAR) || (v[1].color == C_BID_BAR && v[0].color == C_ASK_BAR)), "(1.16.0) forming candle: BOTH sides drawn, dim red + dim green (no spike colour)");
         CHECK(count(h, "box", C_BID_SPIKE) == 0 && !text(h, "5.0"), "forming candle: no bright bar, no ratio label (no repaint)"); }
     h.bars.push_back(bar(T0 + 60UL * 31, 10, 10)); NOW += 100; p->calc(0); NOW += 600; p->calc(0);
     BASState* S = p->testState();
     CHECK(S->fin.count(T0 + 1800) && S->ser.bars[T0 + 1800].bidSpike && !S->ser.bars[T0 + 1800].askSpike, "closed: the bid side is a spike (5.0x >= 2.0x)");
     h.draws.clear(); p->draw();
-    {   const std::vector<mock::Draw> v = barsAt(h, 30);
+    {   std::vector<mock::Draw> v = barsAt(h, 30);
+        v.erase(std::remove_if(v.begin(), v.end(), [](const mock::Draw& d) { return d.color == off::C_WHITE; }), v.end());   // (1.17.0) the cap tip
         const mock::Draw* rd = nullptr; const mock::Draw* gr = nullptr; for (auto& d : v) { if (d.color == C_BID_SPIKE) rd = &d; if (d.color == C_ASK_BAR) gr = &d; }
         CHECK(v.size() == 2 && rd && gr, "(1.16.0) closed candle: bright red sellers + dim green buyers");
         CHECK(rd && gr && gr->b < rd->y, "(1.16.0) buyers ABOVE the zero line, sellers BELOW it");
@@ -181,7 +186,8 @@ int main() {
         for (int i = 0; i < 20; ++i) ev(2, 0, 7000.25f, 5, t, offers[(size_t)i]); }
     NOW += 50; p->calc(0);
     h.draws.clear(); p->draw();
-    {   const std::vector<mock::Draw> v = barsAt(h, 52);
+    {   std::vector<mock::Draw> v = barsAt(h, 52);
+        v.erase(std::remove_if(v.begin(), v.end(), [](const mock::Draw& d) { return d.color == off::C_WHITE; }), v.end());   // (1.7.0) a cap tip is not a bar
         int gd = 0, rd = 0, bright = 0; for (auto& d : v) { gd += d.color == off::C_GREEN_BAR; rd += d.color == off::C_RED_BAR; bright += d.color == off::C_GREEN_SPIKE || d.color == off::C_RED_SPIKE; }
         CHECK(v.size() == 2 && gd == 1 && rd == 1 && bright == 0, "forming candle: bid bar dim green, offer bar dim red, nothing bright");
         CHECK(!text(h, "5.0"), "forming candle: no label (no repaint)");

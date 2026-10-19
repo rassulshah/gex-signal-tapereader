@@ -76,7 +76,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.6.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.7.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 
@@ -349,7 +349,9 @@ public:
             return it != S.ser.bars.end() && it->second.ok ? &it->second : nullptr;
         };
         long long top = 0, up = 0, down = 0;
-        for (int i = v0; i <= v1; ++i) { const off::PaneBar* b = barOf(i); if (!b) continue; top = std::max(top, magOf(b->r)); for (int s = 0; s < 2; ++s) { const long long v = netOf(b->r, s); if (v > up) up = v; if (-v > down) down = -v; } }
+        std::vector<long long> mags;
+        for (int i = v0; i <= v1; ++i) { const off::PaneBar* b = barOf(i); if (!b) continue; top = std::max(top, magOf(b->r)); for (int s = 0; s < 2; ++s) { const long long v = netOf(b->r, s); if (v > up) up = v; if (-v > down) down = -v; mags.push_back(v < 0 ? -v : v); } }
+        { const long long cp = off::capTop(mags); up = off::capped(up, cp); down = off::capped(down, cp); top = off::capped(top, cp); }   // (1.7.0, Rassul 18:26) the scale cap
         if (S.axisTop > top) top = S.axisTop;
         up = std::max(up, S.axisUp); down = std::max(down, S.axisDown);   // (1.5.1) the axis IRT was given (same bars)
         S.netUp = up; S.netDown = down;
@@ -475,6 +477,13 @@ public:
                 if (k.v == 0) continue;
                 const bool up = k.v > 0; const long long mg = up ? k.v : -k.v;
                 const int h = up ? off::barHeight(mg, n.upTop, n.maxPx) : off::barHeight(mg, n.downTop, n.downPx);   // (1.5.1) one scale, up / down
+                if (h > off::CAP_TIP_PX && mg > (up ? n.upTop : n.downTop)) {   // (1.7.0) a capped bar: the white tip at its outer end (drawn after the bar)
+                    const COLOR c0 = k.bright ? spike[k.col] : normal[k.col];
+                    if (up) { off::fillFlat(this, p.l[s], y0 - h, p.r[s], y0 - 1, c0); off::fillFlat(this, p.l[s], y0 - h, p.r[s], y0 - h + off::CAP_TIP_PX - 1, off::C_WHITE); }
+                    else { off::fillFlat(this, p.l[s], y0 + 2, p.r[s], y0 + 1 + h, c0); off::fillFlat(this, p.l[s], y0 + 2 + h - off::CAP_TIP_PX, p.r[s], y0 + 1 + h, off::C_WHITE); }
+                    if (k.bright && (!k.ratio.empty() || !k.pace.empty())) { Cand q; q.cx = (p.l[s] + p.r[s]) / 2; q.hb = h; q.up = up; q.mag = mg; q.a = k.ratio; q.b = k.pace; cands.push_back(q); }
+                    continue;
+                }
                 const COLOR c = k.bright ? spike[k.col] : normal[k.col];
                 if (up) off::fillFlat(this, p.l[s], y0 - h, p.r[s], y0 - 1, c); else off::fillFlat(this, p.l[s], y0 + 2, p.r[s], y0 + 1 + h, c);
                 if (k.bright && (!k.ratio.empty() || !k.pace.empty())) { Cand q; q.cx = (p.l[s] + p.r[s]) / 2; q.hb = h; q.up = up; q.mag = mg; q.a = k.ratio; q.b = k.pace; cands.push_back(q); }
@@ -525,6 +534,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.6.0");   // BF_VERSION
+    p->setVersion("1.7.0");   // BF_VERSION
     return p;
 }
