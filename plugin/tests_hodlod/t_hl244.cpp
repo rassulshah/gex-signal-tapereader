@@ -58,7 +58,14 @@ int main() {
         CHECK(has(tx, "Neg", hl::C_RED) && has(tx, "  \xB7  S.Dn", hl::C_RED), "header right: Neg . S.Dn in the regime / trend colours");
         CHECK(has(tx, "1st") && has(tx, "2nd") && has(tx, "Exp") && has(tx, "Act") && has(tx, "Est"), "1st / 2nd, Exp / Act / Est");
         CHECK(has(tx, "8:33 - 9:21", hl::C_BLUE) && has(tx, "late-day LOD", hl::C_BLUE), "expected times blue");
-        CHECK(has(tx, "prior RTH 10/16"), "Est value kept");
+        CHECK(!has(tx, "prior RTH 10/16") && has(tx, "Est"), "(2.4.5) outside RTH the Est row is there but blank (no 'prior RTH 10/16')");
+        {   // (2.4.5) the 2nd column right-aligned: "2nd", "late-day LOD" and the Act 2nd cell end at the table's right padding
+            int r2 = -1, rLate = -1, rAct2 = -100000;
+            for (const hl::Item& it : tx) { if (it.s == "2nd") r2 = it.r; if (it.s == "late-day LOD") rLate = it.r; if (it.t > 0 && it.s.find("PFL") != std::string::npos) rAct2 = (std::max)(rAct2, it.r); }
+            const int edge = L.table.r - 8;
+            CHECK(std::abs(r2 - edge) <= 1 && std::abs(rLate - edge) <= 1 && std::abs(rAct2 - edge) <= 1,
+                  "2nd column right-aligned to " + std::to_string(edge) + " (2nd " + std::to_string(r2) + ", late-day " + std::to_string(rLate) + ", Act " + std::to_string(rAct2) + ")");
+        }
         CHECK(has(tx, "Exp 3:00 PM") && has(tx, std::string("v") + hl::HL_VERSION), "footer: Exp 3:00 PM . v" + std::string(hl::HL_VERSION));
         bool noLong = true; for (const hl::Item& it : tx) if (it.s.find("Expected") != std::string::npos || it.s.find("Actual") != std::string::npos || it.s.find("Estimate") != std::string::npos || it.s.find("(in ") != std::string::npos || it.s.find("RTH 8:30") != std::string::npos || it.s.find("Reg:") != std::string::npos) noLong = false;
         CHECK(noLong, "no long words / countdown / RTH hours in the text");
@@ -158,7 +165,7 @@ int main() {
         CHECK(R2.mode == bdk::OWN && R2.b.b - R2.b.t == 53, "no HOD/LOD table: its own Position at its own height");
     }
     std::printf("[5] versions\n");
-    {   CHECK(std::string(hl::HL_VERSION) == "2.4.4" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == hlset::PLUGIN_VERSION == 2.4.4");
+    {   CHECK(std::string(hl::HL_VERSION) == "2.4.5" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == hlset::PLUGIN_VERSION == 2.4.5");
         const std::string src = readAll("../HodLod.cpp"); CHECK(src.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos, "HodLod setVersion literal");
         CHECK(hlset::spec().paramVersion == 7 && ss::find(hlset::spec(), "offset_x") < 0 && ss::find(hlset::spec(), "offset_y") < 0, "Offset X / Y removed, parameter version 7");
         const std::string b = readAll("../BigBidAsk.cpp"), bl = readAll("../BigBidAskLogic.h"), bs = readAll("../BigBidAskSettings.h");

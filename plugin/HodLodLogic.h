@@ -55,7 +55,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.4.4";   // (2.4.4, 2026-10-18, Rassul approved 17:13 CT "build") the COMPACT table (~350 px, columns sized to their text; Exp / Act / Est; header "ES M2 O0 V2  Neg . S.Dn"; footer "Exp 3:00 PM . v2.4.4") + the Gex S/R on its own strip ABOVE it (R green / S red); the removed words in the hovers; Offset X / Y removed (9-spot Position only);   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
+static const char* const HL_VERSION = "2.4.5";   // (2.4.5, 2026-10-18 19:13 CT, Rassul "right justify the 2nd column" + outside RTH "just keep it blank" - "prior RTH 10/16 ... doesnt make any sense") the 2nd column (heading, Exp, Act, Est) is right-aligned to the table edge; the Est row stays (same height) but is empty while the box shows the prior session;  // (2.4.4, 2026-10-18, Rassul approved 17:13 CT "build") the COMPACT table (~350 px, columns sized to their text; Exp / Act / Est; header "ES M2 O0 V2  Neg . S.Dn"; footer "Exp 3:00 PM . v2.4.4") + the Gex S/R on its own strip ABOVE it (R green / S red); the removed words in the hovers; Offset X / Y removed (9-spot Position only);   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
 // (2.3.0)   // (2.3.0, Rassul 2026-10-17 19:53-20:20) MenthorQ Q-Scores "Q: M1 O1 V4" top left (hover = the meaning), "Reg: Neg / S. Dntrend" top right; Gex S/R = the BAND rule: 3 biggest abs-GEX strikes from the RTH open up to the 1.38 extension of the 1D Max (red, a drawn up triangle first) | price | 3 down to the 1.38 extension of the 1D Min (green, a down triangle first)
 // (2.2.4)   // (2.2.4, Rassul 2026-10-17) Gex S/R row: the 3 nearest levels ABOVE price first (red), the current price, then the 3 nearest BELOW (green), MenthorQ name BEFORE each price (blue);   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
@@ -1636,7 +1636,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         title = trimL(v.headLeftSegs[0].s); titleCol = v.headLeftSegs[0].col;
         for (size_t q = 1; q < v.headLeftSegs.size(); q++) info.push_back(Seg{ trimL(v.headLeftSegs[q].s), v.headLeftSegs[q].col });
     } else title = trimL(v.headLeftTxt);
-    if (v.prior && !v.headMain.empty()) info.push_back(Seg{ v.headMain, C_GREY });
+    // (2.4.5) outside RTH the Est row stays blank (was "prior RTH 10/16")
     Cell eRow[NALL], aRow[NALL];
     for (int c = 0; c < NALL; c++) { eRow[c] = v.E[c]; aRow[c] = v.A[c]; }
     const std::string tail = trimL(v.headTail);
@@ -1675,7 +1675,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             return w;
         };
         auto segsW = [&](const std::vector<Seg>& S, bool bold) { int w = 0; for (size_t q = 0; q < S.size(); q++) w += M(S[q].s, fs, bold); return w; };
-        const int lw = (std::max)((std::max)(M("Exp", fs, false), M("Act", fs, false)), info.empty() ? 0 : M("Est", fs, false)) + 14;
+        const int lw = (std::max)((std::max)(M("Exp", fs, false), M("Act", fs, false)), M("Est", fs, false)) + 14;   // (2.4.5) the Est row is always there
         std::vector<int> cw((size_t)ncol, 0); int sumC = 0;
         for (int j = 1; j < NSHOWN; j++) { const int c = SHOWN[j], k = j - 1;
             cw[(size_t)k] = (std::max)((std::max)(M(HDR[j < 3 ? j : 2], fs, false), cellWf(eRow[c])), (std::max)(cellWf(aRow[c]), est[(size_t)k].s.empty() ? 0 : M(est[(size_t)k].s, fs, false))) + 14;
@@ -1685,7 +1685,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int sW = strip.empty() ? 0 : 8 + stripW(strip, M, fs) + 8;
         int W = (std::max)((std::max)(8 + lw + sumC, headW), (std::max)(footW, sW));   // the strip never wraps: the table widens to it
         cw[(size_t)(ncol - 1)] += W - (8 + lw + sumC);                                   // the spare width goes to the last column
-        const int H = 2 + rowH + 1 + rowH + rowH + rowH + (info.empty() ? 0 : rowH) + 2 + footH + 3;
+        const int H = 2 + rowH + 1 + rowH + rowH + rowH + rowH + 2 + footH + 3;   // (2.4.5) the Est row always (blank outside RTH) so the box keeps one height
         const int Htot = H + (strip.empty() ? 0 : stripH + STRIP_GAP);
         if (W > area.r - area.l && attempt == 0) continue;
         if (area.l + W > pane.r - pad) continue;
@@ -1716,13 +1716,15 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         y += rowH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
         const int x0 = T.l + 8 + lw;
         auto colX = [&](int k) { int x = x0; for (int i = 0; i < k; i++) x += cw[(size_t)i]; return x; };
-        for (int k = 0; k < ncol; k++) addText(L, colX(k), y, y + rowH, HDR[k + 1 < 3 ? k + 1 : 2], C_GREY, fs, false, M(HDR[k + 1 < 3 ? k + 1 : 2], fs, false), R_TABLE, -1);
+        // (2.4.5, Rassul 19:08 "right justify the 2nd column, we have space") the last column's text ends at the table's right padding
+        auto colStart = [&](int k, int w) { return k == ncol - 1 ? T.r - 8 - w : colX(k); };
+        for (int k = 0; k < ncol; k++) { const int hw = M(HDR[k + 1 < 3 ? k + 1 : 2], fs, false); addText(L, colStart(k, hw), y, y + rowH, HDR[k + 1 < 3 ? k + 1 : 2], C_GREY, fs, false, hw, R_TABLE, -1); }
         y += rowH;
         const Cell* rows[2] = { eRow, aRow }; const char* lab[2] = { "Exp", "Act" };
         for (int r = 0; r < 2; r++) {
             addText(L, T.l + 8, y, y + rowH, lab[r], C_SLATE, fs, false, M(lab[r], fs, false), R_TABLE, -1);
             for (int j = 1; j < NSHOWN; j++) {
-                const Cell& C = rows[r][SHOWN[j]]; int xx = colX(j - 1);
+                const Cell& C = rows[r][SHOWN[j]]; int xx = colStart(j - 1, cellWf(C));
                 std::vector<std::string> part; std::vector<unsigned> pc;
                 part.push_back(C.s); pc.push_back(C.col);
                 part.push_back(C.s2.empty() ? "" : " " + C.s2); pc.push_back(C.col2 ? C.col2 : C.col);
@@ -1732,9 +1734,9 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             }
             y += rowH;
         }
-        if (!info.empty()) {
+        {   // (2.4.5) always drawn; blank values outside RTH
             addText(L, T.l + 8, y, y + rowH, "Est", C_SLATE, fs, false, M("Est", fs, false), R_TABLE, -1);
-            for (int k = 0; k < ncol; k++) if (!est[(size_t)k].s.empty()) addText(L, colX(k), y, y + rowH, est[(size_t)k].s, est[(size_t)k].col == C_GREY ? C_SLATE : est[(size_t)k].col, fs, false, M(est[(size_t)k].s, fs, false), R_TABLE, -1);
+            for (int k = 0; k < ncol; k++) if (!est[(size_t)k].s.empty()) addText(L, colStart(k, M(est[(size_t)k].s, fs, false)), y, y + rowH, est[(size_t)k].s, est[(size_t)k].col == C_GREY ? C_SLATE : est[(size_t)k].col, fs, false, M(est[(size_t)k].s, fs, false), R_TABLE, -1);
             y += rowH;
         }
         y += 2;
