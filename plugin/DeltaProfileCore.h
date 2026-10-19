@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.18.3 (2026-10-18: host settings only - font default 10, core unchanged) / 2.18.2 (settings audit) / 2.18.0 (2.18.0, Rassul 2026-10-18: aStep / nextPivotOk - the A close may come from the node's own candle OR the next candle, a next-candle A needs the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; swingPivot also returns each bar's pivot bar; labelKeys - Rassul 12:49 CT: the ratio label only on the 3 biggest profile bars by abs delta, at any ratio) 2.17.0 (2.17.0, 2026-10-18: tentStep - the tentative-A life cycle (final / shown / hidden / failed), boardFlag (SignalBoard A flag 1 final / 2 tentative), dpFacts - the Market State "DP" facts of one closed bar) 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.19.0 (2.19.0, Rassul 2026-10-19: grayPick - one gray circle per candle for a big node with no coloured A) 2.18.3 (2026-10-18: host settings only - font default 10, core unchanged) / 2.18.2 (settings audit) / 2.18.0 (2.18.0, Rassul 2026-10-18: aStep / nextPivotOk - the A close may come from the node's own candle OR the next candle, a next-candle A needs the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; swingPivot also returns each bar's pivot bar; labelKeys - Rassul 12:49 CT: the ratio label only on the 3 biggest profile bars by abs delta, at any ratio) 2.17.0 (2.17.0, 2026-10-18: tentStep - the tentative-A life cycle (final / shown / hidden / failed), boardFlag (SignalBoard A flag 1 final / 2 tentative), dpFacts - the Market State "DP" facts of one closed bar) 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -13,6 +13,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <map>   // (2.19.0) grayPick
+#include <set>
 
 namespace delta_profile {
 typedef std::int64_t Tick;
@@ -193,6 +195,23 @@ inline bool nextPivotOk(H& high, L& low, int n, int nb, int piv, bool bullish) {
 }
 // SignalBoard kind 'A' flag (SignalBoard.h 1.1.0): 1 = final, 2 = tentative
 inline int boardFlag(bool tentative) { return tentative ? 2 : 1; }
+// ---- (2.19.0, Rassul 2026-10-19 17:09-17:13 CT "the circle is just a gray circle and you dont know bullish or bearish until candle
+// close"; "stay gray, keep the pivot rule and the next candle rule too"; "the idea is to see if volume is trapped and which way the
+// close occurred at a pivot") GRAY circles: a big node (one of the 3 biggest rows, 2.0x+) that is NOT a coloured A - still forming,
+// waiting for the next candle, its pivot not holding (yet), or decided no winner - is drawn as ONE gray circle on its candle. A candle
+// that has a coloured A shows only that (colour wins); of several gray nodes on one candle the biggest multiple, then the earliest.
+struct GrayCand { long long id = -1; long long candle = 0; double mult = 0; bool coloured = false; bool open = false; };   // open = code A? / I?
+inline std::vector<long long> grayPick(const std::vector<GrayCand>& c) {
+    std::map<long long, const GrayCand*> best; std::set<long long> col;
+    for (const GrayCand& g : c) if (g.coloured) col.insert(g.candle);
+    for (const GrayCand& g : c) {
+        if (g.coloured || !g.open || col.count(g.candle)) continue;
+        std::map<long long, const GrayCand*>::iterator it = best.find(g.candle);
+        if (it == best.end() || g.mult > it->second->mult + 1e-12 || (std::fabs(g.mult - it->second->mult) <= 1e-12 && g.id < it->second->id)) best[g.candle] = &g;
+    }
+    std::vector<long long> out; for (std::map<long long, const GrayCand*>::const_iterator it = best.begin(); it != best.end(); ++it) out.push_back(it->second->id);
+    return out;
+}
 // Market State "DP" facts (MARKET-STATE-SPEC.md) of one closed bar. Prices with the market's decimals (from the tick), ratios 1 decimal.
 struct FactNode { double px = 0, x = 0; bool buy = false; };   // a top delta node: price, ratio (x the average |delta|), net buying?
 struct FactA { double px = 0, x = 0; bool bull = false, fin = false; long long bar = 0; };   // an A: price, ratio, side, final?, peak bar

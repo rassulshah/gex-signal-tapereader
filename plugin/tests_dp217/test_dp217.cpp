@@ -31,6 +31,8 @@ static int dLines(const std::string& text, const char* code) {
     return n;
 }
 static int rings(const mock::Host& h) { int n = 0; for (const mock::Draw& d : h.draws) if (d.type == "ring") ++n; return n; }
+static COLOR dimGray() { const COLOR a = 0x009CA3AF; COLOR o = 0; for (int sh = 0; sh < 24; sh += 8) { const float x = (float)((a >> sh) & 0xFF) * 0.45f; o |= ((COLOR)(x + 0.5f) & 0xFF) << sh; } return o; }
+static int grayRings(const mock::Host& h) { int n = 0; for (const mock::Draw& d : h.draws) if (d.type == "ring" && (d.color == 0x009CA3AF || d.color == dimGray())) ++n; return n; }
 static ChartState& state(mock::Host& h) { return *static_cast<ChartState*>(h.data); }
 static const int PK = 100;
 static mock::Host chart(unsigned long t0) {   // the test_repaint216 market: a falling market into PK (heavy selling at 100, PK closes green above it)
@@ -131,7 +133,7 @@ int main() {
         check(rings(h) == 1 && boardAll().size() == 1 && boardAll()[0].flag == 2, "[host] fail: shown, flag 2");
         h.bars.back().low = 60; h.bars.back().high = 70; h.bars.back().open = h.bars.back().close = 65; add(h, 59, 69); redraw(h, p);   // valid OHLC (test_repaint216 left open / close at 101: a calc error)
         check(state(h).state.find("error") == std::string::npos, "[host] fail: the bars are valid (no calc error)");
-        check(rings(h) == 0 && boardAll().empty(), "[host] fail: hidden while the pivot rule does not hold, off the board");
+        check(rings(h) == 1 && grayRings(h) == 1 && boardAll().empty(), "[host] fail: (2.19.0) GRAY while the pivot rule does not hold (no colour), off the board");
         check(countPrefix(slurp(path), "TA|X|") == 0, "[host] fail: hidden is not yet failed (may come back)");
         add(h, 60, 72); redraw(h, p);                                    // the turn confirms the pivot at 59: the A failed
         const std::string rec = slurp(path);

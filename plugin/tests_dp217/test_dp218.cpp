@@ -41,6 +41,10 @@ static std::string taConf(const std::string& text, const char* pre) {   // the c
     return "";
 }
 static int rings(const mock::Host& h) { int n = 0; for (const mock::Draw& d : h.draws) if (d.type == "ring") ++n; return n; }
+// (2.19.0) the gray circle (full or dimmed away from a zone) vs the coloured A circles
+static COLOR dimGray() { const COLOR a = 0x009CA3AF; COLOR o = 0; for (int sh = 0; sh < 24; sh += 8) { const float x = (float)((a >> sh) & 0xFF) * 0.45f; o |= ((COLOR)(x + 0.5f) & 0xFF) << sh; } return o; }
+static int grayRings(const mock::Host& h) { int n = 0; for (const mock::Draw& d : h.draws) if (d.type == "ring" && (d.color == 0x009CA3AF || d.color == dimGray())) ++n; return n; }
+static int colourRings(const mock::Host& h) { return rings(h) - grayRings(h); }
 static ChartState& state(mock::Host& h) { return *static_cast<ChartState*>(h.data); }
 static const int PK = 100;
 // Prices are given in BULLISH coordinates; bear = true mirrors them (x -> 220 - x): a rising market into heavy BUYING at 120.
@@ -124,7 +128,7 @@ static void hostTests(bool bearish, unsigned long t0) {
         mock::Host h = chart(t0, 101.5, 100.75);                      // red (bullish coordinates): own close fails
         add(h, 99.5, 103.5, 100, 103);                                 // PK+1 forming: green, closes above the node
         DeltaProfile p; redraw(h, p);
-        check(rings(h) == 0 && boardAll().empty() && dRows(slurp(path)).empty() && countPrefix(slurp(path), "TA|") == 0, S + "next: nothing before the next candle closes");
+        check(colourRings(h) == 0 && grayRings(h) == 1 && boardAll().empty() && dRows(slurp(path)).empty() && countPrefix(slurp(path), "TA|") == 0, S + "next: nothing before the next candle closes (2.19.0: GRAY circle, no colour)");
         add(h, 99.75, 103.25); redraw(h, p);                           // PK+1 closed; PK+2 forming (no turn yet)
         check(rings(h) == 1 && boardAll().size() == 1 && boardAll()[0].flag == 2, S + "next: tentative A once the next candle closed");
         check(taConf(slurp(path), "TA|S|") == "conf=next", S + "next: TA|S ends in conf=next");
@@ -155,9 +159,9 @@ static void hostTests(bool bearish, unsigned long t0) {
         add(h, 104.25, 106, 104.5, 105.75);                            // green, above the node, low 104.25 >= PK high 104
         add(h, 105, 106.5);
         DeltaProfile p; redraw(h, p);
-        check(rings(h) == 0 && boardAll().empty() && countPrefix(slurp(path), "TA|") == 0, S + "case 3: no A when the next low is not below the pivot high");
+        check(colourRings(h) == 0 && grayRings(h) == 1 && boardAll().empty() && countPrefix(slurp(path), "TA|") == 0, S + "case 3: no A when the next low is not below the pivot high (2.19.0: GRAY circle, no colour)");
         add(h, 99.5, 103, 100, 102.5); add(h, 101, 103); redraw(h, p);   // a later green candle closing above with a low below: still never
-        check(rings(h) == 0 && dRows(slurp(path)).empty() && countPrefix(slurp(path), "TA|") == 0, S + "case 3: a later candle never confirms it");
+        check(colourRings(h) == 0 && grayRings(h) == 1 && dRows(slurp(path)).empty() && countPrefix(slurp(path), "TA|") == 0, S + "case 3: a later candle never confirms it (2.19.0: GRAY circle, no colour)");
         finish(h, p); }
     // 4) neither candle closes beyond (next closes back below the node in the wrong colour) -> no A, then a 3rd candle cannot
     {   const std::string dir = home(std::string("none") + (bearish ? "b" : "u")), path = recPath(dir);
@@ -166,17 +170,17 @@ static void hostTests(bool bearish, unsigned long t0) {
         add(h, 99.75, 103.25, 100, 103);                               // 3rd candle green above, lows below the pivot high
         add(h, 99.8, 103.2);
         DeltaProfile p; redraw(h, p);
-        check(rings(h) == 0 && boardAll().empty() && countPrefix(slurp(path), "TA|") == 0, S + "neither closes beyond: no A; the 3rd candle never confirms");
+        check(colourRings(h) == 0 && grayRings(h) == 1 && boardAll().empty() && countPrefix(slurp(path), "TA|") == 0, S + "neither closes beyond: no A; the 3rd candle never confirms (2.19.0: GRAY circle, no colour)");
         if (!bearish) h.bars.back().high = 104.5f; else h.bars.back().low = static_cast<float>(M(104.5));
         add(h, 100, 105); redraw(h, p);
-        check(rings(h) == 0 && dRows(slurp(path)).empty(), S + "neither: no D line after the pivot is confirmed");
+        check(colourRings(h) == 0 && grayRings(h) == 1 && dRows(slurp(path)).empty(), S + "neither: no D line after the pivot is confirmed (2.19.0: GRAY circle, no colour)");
         finish(h, p); }
     // 5) next candle a doji above the node (not green / not red) -> no A
     {   const std::string dir = home(std::string("doji") + (bearish ? "b" : "u")), path = recPath(dir);
         mock::Host h = chart(t0, 101.5, 100.75);
         add(h, 99.5, 103.5, 102, 102); add(h, 99.75, 103.25);
         DeltaProfile p; redraw(h, p);
-        check(rings(h) == 0 && countPrefix(slurp(path), "TA|") == 0, S + "next candle doji: no A (its own colour is required)");
+        check(colourRings(h) == 0 && grayRings(h) == 1 && countPrefix(slurp(path), "TA|") == 0, S + "next candle doji: no A (its own colour is required) (2.19.0: GRAY circle, no colour)");
         finish(h, p); }
     bear = false;
 }
@@ -249,7 +253,7 @@ static void labelTests(unsigned long t0) {
         check(has("A " + ratio(v[0]->ratio)) && has(ratio(v[1]->ratio)) && has(ratio(v[2]->ratio)), "[lab] the 3 biggest bars are labelled, the absorbed node keeps \"A \"");
         if (!fx) check(!has(ratio(v[3]->ratio)), "[lab] the 4th bar at 2.0x+ has no label");
         else check(has(ratio(v[2]->ratio)) && v[2]->ratio < 2.0, "[lab] a top-3 bar under 2.0x is labelled");
-        check(rings(h) == 1, "[lab] the candle circle unchanged");
+        check(colourRings(h) == 1, "[lab] the coloured candle circle unchanged (gray ones may sit on other candles)");
         finish(h, p);
     }
 }
@@ -263,7 +267,7 @@ int main() {
     recordTests();
     labelTests(t0);
     {   const std::string src = slurp("../DeltaProfile.cpp");
-        check(std::string(DLT_VERSION) == "2.18.3", "[ver] this suite is for 2.18.x (2.18.1 = the settings layer)");
+        check(std::string(DLT_VERSION) == "2.19.0", "[ver] this suite is for 2.18.x rules (2.19.0 = + gray circles)");
         check(src.find(std::string("p->setVersion(\"") + DLT_VERSION + "\")") != std::string::npos, "[ver] DLT_VERSION = setVersion literal");
         check(slurp("../DeltaProfileCore.h").find(std::string("DeltaProfileCore.h ") + DLT_VERSION) != std::string::npos, "[ver] core header = DLT_VERSION"); }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";

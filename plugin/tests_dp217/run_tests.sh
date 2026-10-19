@@ -6,3 +6,4 @@ set -e
 CXX="g++ -std=c++17 -Wall -Wextra -Werror -Wno-unused-function -Wno-misleading-indentation -fsanitize=address,undefined -fno-sanitize-recover=all -g -I. -I../tests_delta -I.."
 $CXX test_dp217.cpp -o /tmp/t_dp217 && /tmp/t_dp217
 $CXX test_dp218.cpp -o /tmp/t_dp218 && /tmp/t_dp218
+$CXX test_dp219.cpp -o /tmp/t_dp219 && /tmp/t_dp219
