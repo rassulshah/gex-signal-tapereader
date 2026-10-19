@@ -9,7 +9,7 @@
 
 namespace lpset {
 
-static const char* const PLUGIN_VERSION = "0.45.2";
+static const char* const PLUGIN_VERSION = "0.45.3";
 enum K { K_WIDTH, K_FONT, K_SOLID_BG, K_BIG_ORDERS, K_BIG_REACH, K_BIG_MIN_LOTS, K_BIG_KEEP, K_BIG_FONT,
          K_BANNER, K_BANNER_BG, K_BANNER_FONT, K_BANNER_COLOR, K_N };
 

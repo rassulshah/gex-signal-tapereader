@@ -138,7 +138,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.45.2"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.45.3"          // keep equal to lqp::VERSION and the setVersion literal below
+// (0.45.3, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") every PRICE-CHART hover is off: the
+// near-zone makeup box and the big-order line box (the code is kept - set LQ_HOVERS true to bring them back); the price chart no longer asks
+// IRT for mouse events (no TRACK_MOUSE). The Liquidity Flow pane (LQ_FLOW) keeps its candle-follow. Column inks lighter: lqp::colInk.
+static const bool LQ_HOVERS = false;
 // (0.44.0, 2026-10-18 night, Rassul approved "yes 2x" + the audit fixes) 1) the column DRAWS a zone only at >= 2.0x (lqp drawn state:
 // enters live at 2.0x, removed only at a bar close under 2.0x; no 1.5x near entry / 1.2x keep / any size during absorption) - the
 // records and attempts are unchanged; 2) LMT R "S5 anywhere" compares the largest SINGLE order at a price (bol::biggestSingle), never
@@ -157,6 +161,7 @@ static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;          // green bu
 static const COLOR C_BUY_DIM = 0x00166534, C_SELL_DIM = 0x007F1D1D;  // the same two colours, dimmed, for the plain book rows
 static const COLOR C_GREY = 0x009CA3AF, C_AXIS = 0x00334155, C_INK = 0x000B0F17;
 static const COLOR C_WHITE = 0x00FFFFFF, C_COLBG = 0x001B1410;     // (0.16.0) the lots inside a node; the column's solid background
+static_assert((unsigned)C_COLBG == lqp::COL_BG, "the column background the inks were contrast-checked against (lqp::colInk)");   // (0.45.3)
 // (0.45.0) the settings rows come from LiquidityProfileSettings.h (no index constants); the files keep their names
 #ifdef LQ_FLOW
 static const char* const LQ_SIZE_NAME = "LiquidityFlow";
@@ -417,7 +422,7 @@ struct LQState {
     std::vector<HovZone> hovZones;                 // the near zones drawn last time (the mouse picks among them by price)
     int hovColX0 = 0, hovColX1 = -1, hovLastBar = -1, hovLastX = 0; double hovBarW = 0;   // the column's x span and the bar -> x map
     long long hovId = 0; void* hovWnd = nullptr;   // the hovered zone (0 = none) and the window its mouse event came from
-    std::string hovState = "none";                 // the last draw's hover: none / shown N rows / no room (status file)
+    std::string hovState = LQ_HOVERS ? "none" : "off";                // the last draw's hover: none / shown N rows / no room (status file)
     // (0.18.0) the biggest resting order lines: the engine (fed by the same order feed), the per-market settings file, the record
     // (0.26.0) the big-lot distribution (BigOrderLines 1.4.0 LogDist): this session's new orders (the engine's Hist) + the 4 sessions
     // before it (LiquidityProfile.biglots-<MKT>.txt); Big mu and the 1 / 2 / 3 SD sizes the BIG column tiers and its reference use
@@ -2080,7 +2085,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         if (tier >= 2) { const COLOR fill = bull ? C_BUY : C_SELL; r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID); }
         if (tier == 3) { setPen(C_WHITE, 2, P_SOLID); RCT o; o.set(coord(cl + 1), coord(t0 - 1), coord(cr - 1), coord(b0 + 1)); o.draw(2, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW); }
         setFont(tier == 1 ? fp1 : fb);
-        setTextColor(tier >= 2 ? (bull ? C_INK : C_WHITE) : (bull ? C_BUY_DIM : C_SELL_DIM));
+        setTextColor(tier >= 2 ? (bull ? C_INK : C_WHITE) : (COLOR)lqp::colInk(bull, true));   // (0.45.3) the 1SD text lighter (was the dim 0x157A3D / 0x933030)
         r.drawText(tx.c_str(), true, false);
         used.push_back(std::make_pair(t0, b0)); ++S.boLabels; S.boTier[s] = tier;
     }
@@ -2123,7 +2128,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
             if (!freeF(t0, t0 + boxH) || t0 < top + 14 || t0 + boxH > bottom) continue;
             const bool bull = s == bfl::BID;
             setFont(tier == 1 ? fp1 : fb);
-            putF(t0, boxH, std::to_string(o.traded), tier == 1 ? (bull ? C_BUY_DIM : C_SELL_DIM) : (bull ? C_BUY : C_SELL), true);
+            putF(t0, boxH, std::to_string(o.traded), (COLOR)lqp::colInk(bull, tier == 1), true);   // (0.45.3) lighter inks
             usedF.push_back(std::make_pair(t0, t0 + boxH)); ++S.iceLive;
         }
     }
@@ -2165,7 +2170,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         const bool dim = old || tier == 1;
         const bool green = lqp::lmtFillGreen(e.side == bol::BID);   // (0.45.2, Rassul 20:06) the RESTING side: filled bid GREEN (buyers absorbed), filled offer RED (sellers absorbed); icebergs the same (0.19.1-0.45.1: coloured by who hit it)
         setFont(tier >= 2 ? fsb : fsp);
-        putF(t0, sh, tx, green ? (dim ? C_BUY_DIM : C_BUY) : (dim ? C_SELL_DIM : C_SELL), e.ice);
+        putF(t0, sh, tx, (COLOR)lqp::colInk(green, dim), e.ice);   // (0.45.3, Rassul 23:37 "i can barely see them") lighter inks
         usedF.push_back(std::make_pair(t0, t0 + sh)); ++S.boExec;
     }
 }
@@ -2276,13 +2281,12 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
     std::vector<std::pair<int, int>> used;
     auto freeAt = [&](int t0, int b0) { for (size_t i = 0; i < used.size(); ++i) if (!(b0 < used[i].first || t0 > used[i].second)) return false; return true; };
     auto hline = [&](int x0, int x1, int y, COLOR c) { setPen(c, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = coord(x0); a.v = coord(y); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(x1); b.v = coord(y); b.drawLineTo(); };
-    static const COLOR C_BUY_DIM2 = 0x00157A3D, C_SELL_DIM2 = 0x00933030;
     FONT fb3 = fb; fb3.size = coord(bfont + 1);                          // (0.37.0) 3SD and over: a bigger number, no outline, no box
     for (size_t i = 0; i < mk.size(); ++i) {
         const bfl::Mark& m = mk[i];
         const int tier = std::max(1, std::min(3, m.tier));                 // (0.45.2) the held tier
         const bool up = m.side == bfl::BID;                              // a buyer lifted the offers
-        const COLOR c = tier == 1 ? (up ? C_BUY_DIM2 : C_SELL_DIM2) : (up ? C_BUY : C_SELL);
+        const COLOR c = (COLOR)lqp::colInk(up, tier == 1);              // (0.45.3, Rassul 23:37 "i can barely see them") lighter inks (were 0x157A3D / 0x933030 dim, 0x22C55E / 0xEF4444 full)
         int t0 = yOfPx(m.px) - rh / 2, tries = 0;
         while (tries < 6 && !freeAt(t0, t0 + rh)) { t0 += (tries % 2 ? -1 : 1) * (tries / 2 + 1) * (rh + 1); ++tries; }
         if (!freeAt(t0, t0 + rh) || t0 < top + 14 || t0 + rh > bottom) continue;
@@ -2300,7 +2304,8 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
 }
 // the hovered line's box: the rows from bol::hoverRows (tested), inside the drawable band, never over the column or the right columns
 void LiquidityProfile::renderBigHover(LQState& S, int paneRight) {
-    S.boHovState = "none";
+    S.boHovState = LQ_HOVERS ? "none" : "off";
+    if (!LQ_HOVERS) { S.boHovKey = 0; return; }                      // (0.45.3) hovers off
     if (S.boHovKey == 0 || !S.boSet.on) return;
     size_t k = S.bo.lines.size(); for (size_t i = S.bo.lines.size(); i-- > 0;) if (S.bo.lines[i].key == S.boHovKey) { k = i; break; }
     if (k == S.bo.lines.size()) { S.boHovKey = 0; return; }
@@ -2598,6 +2603,7 @@ void LiquidityProfile::render(LQState& S) {
 // rows and their colours come from lqp::hoverRows (tested) - green = good for buyers, red = good for sellers, white = fact only
 void LiquidityProfile::renderHover(LQState& S, int left, int top, int bottom, int paneRight) {
     S.hovState = "none";
+    if (!LQ_HOVERS) { S.hovId = 0; S.hovState = "off"; return; }     // (0.45.3) hovers off
     if (S.hovId == 0) return;
     const LQState::HovZone* hz = nullptr;
     for (size_t i = 0; i < S.hovZones.size(); ++i) if (S.hovZones[i].id == S.hovId) hz = &S.hovZones[i];
@@ -3395,7 +3401,7 @@ int LiquidityProfile::mouse(RTX_EVENT* e) {
 #ifndef LQ_FLOW
     // (0.15.0) the price chart: the mouse over a NEAR zone's bar / label in the column -> that zone's makeup box (by price and bar: the
     // bar's x from the last draw's bar -> x map, the price from the event; window pixels are not used)
-    if (!e) return RTX_FAIL;
+    if (!e || !LQ_HOVERS) return RTX_FAIL;                              // (0.45.3) hovers off: the mouse is never used on the price chart
     LQState* S = slot_.get(this, false); if (!S) return RTX_FAIL;
     if (e->type == E_MOUSE_MOVE || e->type == E_MOUSE_HOVER) {
         long long id = 0;
@@ -3441,10 +3447,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);
     p->setDescription("LRA Liquidity Flow: the process at the zone price is in. AGGRESSIVE (market orders): buyers (green) and sellers (red) trading into the zone - Attack, Exh (the attackers slowed), Counter (the other side turned aggressive). PASSIVE (resting orders): buyers' bids (green) and sellers' offers (red), net added since arrival - Eaten, Pulled, Rebuilt. Each reads Metric: now (line), the line set per market by the nightly study. Held / Broke at a touch = the zone rule (zone = centre +/- 0.06 ADR; held = a 3-min close 0.10 ADR back out; broke = a close 0.10 ADR beyond with no close back inside within 15 min), written only once decided.");
 #else
-    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED | TRACK_MOUSE);   // (0.15.0) TRACK_MOUSE: the zone hover
+    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED | (LQ_HOVERS ? TRACK_MOUSE : 0));   // (0.45.3) no TRACK_MOUSE while the hovers are off   // (0.15.0) TRACK_MOUSE: the zone hover
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
-    p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
+    p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.45.2");   // LQ_VERSION
+    p->setVersion("0.45.3");   // LQ_VERSION
     return p;
 }
