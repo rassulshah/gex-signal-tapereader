@@ -243,6 +243,8 @@ int main() {
         CHECK(h.invalidates > inv, "new order events on the forming candle while Live: redrawn");
         h.draws.clear(); p->draw();
         CHECK(text(h, "Live") != nullptr && hasPrefix(h, "+30 ("), "Live box: the forming candle's Net +30 bids so far with its ratio (1.4.0), mouse outside the pane");
+        CHECK(text(h, "Refill Effort") != nullptr && text(h, "Refilled") != nullptr && text(h, "Added") == nullptr && text(h, "Pulled") == nullptr
+              && text(h, "Pace") == nullptr && text(h, "Net") == nullptr, "(1.5.0) the box shows Refill Effort + Refilled only (Added / Pulled / Pace hidden)");
         {   Ind::Ext* e = p->ext(*S); std::string why; const bool fits = e && readFits(h, S->lastBox, e->lastRead, e->lastReadLines, why);
             CHECK(e && text(h, "BULLISH", br::C_BULL) != nullptr && e->lastRead.head.find("Bids stacking") == 0, "(1.4.0) Read: BULLISH, Bids stacking (live, offers flat)");
             CHECK(fits, ("(1.4.0) the Read lines fit inside the box, nothing cut " + why).c_str()); }
@@ -251,6 +253,13 @@ int main() {
     for (int k = 54; k < 58; ++k) step(h, p, k);
     {   h.draws.clear(); p->draw(); int markers = 0; for (auto& d : h.draws) if (d.type == "text" && d.text == "P 100.0") ++markers;
         Ind::Ext* e = p->ext(*S); CHECK(markers == 1 && e && e->pulls.count(k52) && e->pulls[k52].pulling[1], "(1.4.0) 4 candles later: the same marker, the same decision"); }
+    {   // (1.5.0) spotAt reads the chart's own bars: a new 10-bar low on 2.5x the volume of the 20 before it
+        std::vector<mock::Bar>& B = mock::current->bars; const int i = (int)B.size() - 2;
+        for (int k = i - 20; k < i; ++k) { B[(size_t)k].low = 6999.5f; B[(size_t)k].high = 7001.0f; B[(size_t)k].volume = 100; }
+        B[(size_t)i].low = 6998.0f; B[(size_t)i].high = 7000.5f; B[(size_t)i].volume = 250;
+        bf::Spot sp = p->spotAt(i); CHECK(sp.ok && sp.newLow && !sp.newHigh && sp.busy, "(1.5.0) spotAt: new 10-bar low, busy (2.5x volume)");
+        B[(size_t)i].low = 7000.0f; B[(size_t)i].volume = 120; sp = p->spotAt(i); CHECK(sp.ok && !sp.newLow && !sp.busy, "(1.5.0) spotAt: not new, not busy");
+        CHECK(!p->spotAt(3).ok && !p->spotAt((int)B.size()).ok, "(1.5.0) spotAt: too early / out of range -> none"); }
     dispose(p);
     CHECK(!mst::read("BOOK", "ESZ6", 60, "test", NOW).ok, "removed: the Market State entry is cleared");
     std::printf("BookFlow host: %d passed, %d failed\n", passes, fails);

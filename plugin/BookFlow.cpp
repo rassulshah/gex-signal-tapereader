@@ -1,5 +1,13 @@
 /********************************************************************************
- *  BookFlow.cpp  --  Investor/RT RTX extension  lsBookFlow  1.4.0  (2026-10-18; 1.0.0 2026-10-16)
+ *  BookFlow.cpp  --  Investor/RT RTX extension  lsBookFlow  1.5.0  (2026-10-19; 1.0.0 2026-10-16)
+ *  1.5.0 (2026-10-19, Rassul 11:05 "build", 11:19 "show Refill Effort, Refilled X and Pace. The rest can be there but invisible ... keep the
+ *        read below", 11:20 "remove the questions", 11:15 "use 4.5x instead of percentage", 11:53 "lets just build and replace the pace.
+ *        also on the labels"): the box shows REFILL EFFORT (the net = added - pulled, vs its 20-candle average; was "Net") and REFILLED
+ *        (lots re-posted at the exact prices that were hit, within 1 s, / lots eaten there: "4.3x STRONG"; STRONG / weak = the market's
+ *        top / bottom quarter, bf::REFILL_CUTS) + the Read. Eaten, Added, Pulled and Pace are computed, recorded and used by the Read but
+ *        not shown. The bright bars' second label is Refilled ("R4.3") instead of the pace. The Read leads with the REFILL read when the
+ *        shown candle made a new 10-bar low / high (bf::refillRead: "C+R ?" busy + defending side 2x + strong; strong; weak = "defense
+ *        failing, don't fade ?"), else the 1.4.0 stacking read. Bars, pull markers and every record unchanged.
  *  1.4.0 (2026-10-18 23:48 CT, Rassul approved bookflow-read-mockup.png): box rows Net, Pace, READ - one word (BULLISH / BEARISH / NEUTRAL)
  *        + up to 2 lines from the Net ratios (bids / offers arriving, leaving or flat; the stronger side decides; bf::bookRead), wrapped to
  *        the box (BoxReadDraw.h). The live forming candle's Net now carries its ratio so far (bf::liveNetStat, never a decision).
@@ -65,7 +73,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.4.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.5.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 
@@ -78,7 +86,7 @@ public:
     virtual bool barMarks() const { return false; }                        // no letters / dash drawn; hover + records keep them
     virtual bool netBars() const { return true; }
     virtual bool textOff() const { return false; }
-    virtual std::string boxKeep() const { return "Net;Added;Pulled;Pace"; }   // (1.4.0, 23:56 CT) + Added / Pulled (their plain 20-candle ratios, as the pull marker)            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
+    virtual std::string boxKeep() const { return "Refill Effort;Refilled"; }   // (1.5.0, Rassul 11:19 / 11:53) the two defense rows; the rest hidden   // (1.4.0, 23:56 CT) + Added / Pulled (their plain 20-candle ratios, as the pull marker)            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
     virtual bool boxOnly() const { return true; }                         // (1.2.0, Rassul 2026-10-16 22:00) the left-justified numbers box in the pane, no read / options lines                          // (1.1.0, Rassul 2026-10-16 18:14) no read / numbers / options lines on the pane; the records and the tape reader keep every number
     virtual long long netOf(const off::Rec& r, int s) const { return bf::netOf(r, s); }
     // the label numbers of one net bar: ratio / pace / lots of the part that spiked (up = added, down = pulled; pace only for added)
@@ -353,7 +361,7 @@ public:
         const bf::NetStat* shownNs = mbar ? (liveBox ? &liveNs : netAt(S, mt)) : nullptr;
         bf::PullStat livePs; if (liveBox) livePs = bf::pullStatAt(S.ser.bars, S.formingKey, lb.r);   // (1.4.0) the forming candle: shown, never a marker
         const bf::PullStat* shownPs = mbar ? (liveBox ? &livePs : pullAt(S, mt)) : nullptr;
-        off::Info info = bf::info(mbar, S.params.load.p, shownNs);
+        off::Info info = bf::info(mbar, S.params.load.p, shownNs, S.market);   // (1.5.0) the market picks the Refilled cut-offs
         {   const std::string keep = ";" + boxKeep() + ";"; std::vector<off::InfoRow> kept;   // (1.2.1) Net and Pace only
             for (size_t k = 0; k < info.rows.size(); ++k) if (keep.find(";" + info.rows[k].label + ";") != std::string::npos) kept.push_back(info.rows[k]);
             info.rows.swap(kept); }
@@ -366,7 +374,10 @@ public:
         const bp::Box area = bp::mk(g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3);
         const zread::Line zl = S.zr.e.line(S.zr.pane, off::steadyMs());
         off::PanelPlan P;                                                  // (1.4.0) + the Read row: the box grows to hold it (BoxReadDraw.h)
-        const br::Read rd = bf::bookRead(shownNs, shownPs);
+        br::Read rd = bf::bookRead(shownNs, shownPs);
+        if (mbar) {                                                        // (1.5.0) at a new 10-bar low / high the REFILL read leads
+            br::Read rr; if (bf::refillRead(mbar->r, S.market, spotAt(liveBox ? last : mb), shownNs, rr)) rd = rr;
+        }
         const off::TextW tw = off::measureWith(this);
         const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
         if (Ext* e = ext(S)) { e->lastRead = rd; e->lastReadLines = rp.lines; }
@@ -379,6 +390,21 @@ public:
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
         off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
         br::draw(this, P, info, rp, rd);                                  // (1.4.0) the Read word + lines over its rows
+    }
+    // (1.5.0) where candle i sits: a new 10-bar low / high and its volume vs the 20 before it (bf::spotOf), from the chart's own bars
+    bf::Spot spotAt(int i) {
+        bf::Spot none; if (i < 9) return none;
+        RTARRAY lo(barLow), hi(barHigh); RTARRAYI vol(barVolume);
+        const long count = getBarCount();
+        if (i >= count || lo.count < count || hi.count < count || vol.count < count) return none;
+        const int from = i >= 20 ? i - 20 : i - 9;
+        std::vector<double> L, H; std::vector<long long> V;
+        for (int k = from; k <= i; ++k) {
+            const double l = (double)lo[k], h = (double)hi[k];
+            if (!(l == l) || !(h == h) || l <= 0 || h <= 0) return none;
+            L.push_back(l); H.push_back(h); V.push_back((long long)vol[k]);
+        }
+        return bf::spotOf(L, H, V);
     }
     // the net bars (OrderFlowFeed drawNetBars' geometry, 1.3.0 rules): the grey zero line, one bar per side, colour BY SIDE (bid green,
     // offer red), bright + label only for a CLOSED candle's net spike; labels biggest first, a label that would sit on another is skipped
@@ -484,7 +510,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Book Flow: who is ARRIVING and who is LEAVING the order book near price (market-by-order feed). Per candle, ONE NET bar per side = lots ADDED near price minus lots PULLED near price. A closed candle whose side PULLED at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom (a block in the side colour + yellow P and the ratio). Left bar = the bid side, always green (buyers); right bar = the offer side, always red (sellers). Above the grey zero line = size arriving (stacking), below = size leaving (pulling): a green bar above = bids arriving (support building), green below = bids leaving (support pulled), red above = offers arriving (resistance building), red below = offers leaving (resistance pulled). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and, for size arriving, its pace (grey, lots added per second vs the same time of day) beyond the bar's end, only when that side's net is at least Spike vs average (default 2.0x) the plain average of its net size over the prior Ratio bars (default 20) closed candles - decided once at the close, never changed. Other candles are dim with no label; the forming candle stays dim until it closes. The numbers box in the pane: Net (with its ratio), Added and Pulled (vs their 20-candle averages), Pace and the Read (BULLISH / BEARISH / NEUTRAL: what the book is doing near price, in words) for bids and offers of the candle under the mouse while it is inside this pane, else the live forming candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars), Near ticks (0 = auto: how close to price counts), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.4.0");   // BF_VERSION
+    p->setDescription("LRA Book Flow: how the resting side DEFENDS near price (market-by-order feed). Per candle, ONE bar per side = lots ADDED near price minus lots PULLED near price - in practice how much that side put back after being hit (the REFILL EFFORT). Left bar = the bid side, always green (buyers); right bar = the offer side, always red (sellers); above the grey zero line = more added than pulled, below = more pulled than added. A CLOSED candle is drawn bright when that side's bar is at least Spike vs average (default 2.0x) the plain average of its size over the prior Ratio bars (default 20) closed candles - decided once at the close, never changed - with two labels: the ratio (yellow) and R = REFILLED. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. THE BOX (the candle under the mouse while inside this pane, else the live candle) and the questions it answers: REFILL EFFORT = how much defense vs normal? (the bar and its ratio, e.g. +2,587 (4.8x)). REFILLED = how many times what was taken got put back? (lots re-posted at the exact prices that were hit, within 1 second, divided by the lots eaten there; 4.3x = put back 4.3 times what was taken; STRONG = the market's top quarter, weak = its bottom quarter; ES: strong 2.7x and up, weak 1.7x and down, normal about 2.2x). READ = is the defense holding? At a new 10-bar low / high: C+R ? (a busy candle, the defending side bright and a strong refill: 53% of lows / 46% of highs turned vs about 20%), strong refill (34% / 28%), weak refill = defense failing, don't fade ? (only 10% / 8% turned); elsewhere what the book is doing near price. Measured on 7 markets and one week of order-book data - every refill read shows ? until it holds on new days. Eaten, Added, Pulled and Pace are computed and recorded but not shown. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
+    p->setVersion("1.5.0");   // BF_VERSION
     return p;
 }

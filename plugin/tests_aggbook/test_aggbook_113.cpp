@@ -159,13 +159,14 @@ static void bookSeries() {
 static void bookLook() {
     std::vector<long long> pb(20, 100), pa(20, 100);
     off::PaneBar up = pbar(400, 100, 0, 300); up.r.pace100[0] = 130; up.r.pace100[1] = 250;   // bid +300 arriving, ask -300 leaving
+    up.r.hitC[0] = 100; up.r.refC[0] = 430;                                  // (1.5.0) bids: 100 eaten, 430 re-posted at the hit prices -> R4.3
     bf::NetStat n = bf::netStat(pb, pa, up.r, 20, 20);
     bf::NetLook f0 = bf::netLookOf(&up, &n, 0, false);   // forming: drawn dim, no label
     CHECK(!f0.bright && f0.ratio.empty() && f0.pace.empty() && f0.v == 300);
     bf::NetLook c0 = bf::netLookOf(&up, &n, 0, true);
-    CHECK(c0.bright && c0.col == 0); EQS(c0.ratio, "3.0"); EQS(c0.pace, "1.3");          // no "x", no "p"
+    CHECK(c0.bright && c0.col == 0); EQS(c0.ratio, "3.0"); EQS(c0.pace, "R4.3");         // (1.5.0) the second label = Refilled, not the pace
     bf::NetLook c1 = bf::netLookOf(&up, &n, 1, true);
-    CHECK(c1.bright && c1.col == 1 && c1.v == -300); EQS(c1.ratio, "3.0"); EQS(c1.pace, ""); // leaving: no pace
+    CHECK(c1.bright && c1.col == 1 && c1.v == -300); EQS(c1.ratio, "3.0"); EQS(c1.pace, ""); // nothing eaten on the offer side: no Refilled label
     // colour by side, never by meaning: a bid bar below zero is still green (0), an offer bar above zero still red (1)
     off::PaneBar dn = pbar(0, 300, 300, 0); bf::NetStat n2 = bf::netStat(pb, pa, dn.r, 20, 20);
     CHECK(bf::netLookOf(&dn, &n2, 0, true).col == 0 && bf::netLookOf(&dn, &n2, 0, true).v < 0);
@@ -175,7 +176,7 @@ static void bookLook() {
     bf::NetLook s0 = bf::netLookOf(&small, &n3, 0, true); CHECK(!s0.bright && s0.ratio.empty());
     // the info box Net cell carries the ratio
     off::Params P; off::Info I = bf::info(&up, P, &n);
-    EQS(I.rows[0].label, "Net"); EQS(I.rows[0].v[0], "+300 (3.0x)"); EQS(I.rows[0].v[1], "-300 (3.0x)");
+    EQS(I.rows[0].label, "Refill Effort"); EQS(I.rows[0].v[0], "+300 (3.0x)"); EQS(I.rows[0].v[1], "-300 (3.0x)");
     off::Info I2 = bf::info(&up, P); EQS(I2.rows[0].v[0], "+300");
     // decide() leaves the drawn spike to the pane (it needs the series)
     off::PaneBar d = up; d.spike[0] = d.spike[1] = true; bf::Logic::decide(d, P, false); CHECK(!d.spike[0] && !d.spike[1]);
@@ -225,7 +226,7 @@ static void versions(const std::string& dir) {
     const std::string t = slurp(dir + "/OrderFlowPaneSettings.h");
     const std::string ta = t.substr(0, t.find("bookFlowSpec")), tb = t.substr(t.find("bookFlowSpec"));
     EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.15.0"); EQS(ofset::BAS_VERSION, bas::VERSION);   // (1.13.2 settings layer; 1.14.0 Big Lot mark)
-    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.4.0"); EQS(ofset::BF_VERSION, bf::VERSION);
+    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.5.0"); EQS(ofset::BF_VERSION, bf::VERSION);
     // every dialog row the chart reads; the removed rows are gone
     CHECK(ta.find("\"Spike vs prior biggest\"") == std::string::npos && ta.find("\"Box shows\"") == std::string::npos && ta.find("\"Spike lookback\"") == std::string::npos && ta.find("\"Spike vs average\"") != std::string::npos);
     CHECK(tb.find("\"Spike vs prior biggest\"") == std::string::npos && tb.find("\"Box shows\"") == std::string::npos && tb.find("\"Spike lookback\"") == std::string::npos && tb.find("\"Spike vs average\"") != std::string::npos);
