@@ -1,2 +1,5 @@
-findings=0 allowed=0 staged_files=0 bytes=0
+findings=0 allowed=0 staged_files=3 bytes=25917
 largest staged blobs (bytes, path):
+SIZE	14513	plugin/tests_settings/settings_host_test.cpp
+SIZE	11322	plugin/SettingsHost.h
+SIZE	82	logs/staged-scan-findings.log
