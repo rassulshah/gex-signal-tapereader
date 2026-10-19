@@ -24,5 +24,11 @@ int main() {
     s[0].rew = 1.0; CHECK(!er::read(true, false, s, r), "normal reward: no ER read");
     s[1].effOk = s[1].rewOk = true; s[1].eff = 3.0; s[1].rew = 0.2; CHECK(er::read(false, true, s, r) && r.impl == br::BEAR, "new high, buyers absorbed: bearish");
     CHECK(!er::read(true, true, s, r) && !er::read(false, false, s, r), "outside bar / no extreme: none");
-    printf("EffortReward 1.0.0: %d checks, %d failed\n", p + f, f); return f ? 1 : 0;
+    {   er::Side g; g.effOk = true; g.eff = 0.3; g.rewOk = true; g.rew = 20.5; er::guard(g);
+        CHECK(!g.rewOk && g.thin && er::rewardCellOf(g) == "-", "(1.1.0) 14 lots overnight (effort 0.3x): Reward \"-\", not 20.5x");
+        er::Side h; h.effOk = true; h.eff = 0.5; h.rewOk = true; h.rew = 0.3; er::guard(h);
+        CHECK(h.rewOk && er::rewardCellOf(h) == "0.3x absorbed", "(1.1.0) effort 0.5x: Reward shown");
+        er::Side k; k.effOk = false; k.rewOk = true; k.rew = 1.0; er::guard(k); CHECK(!k.rewOk, "(1.1.0) effort unknown: Reward hidden");
+        er::Side s2[2]; s2[0] = g; br::Read r2; CHECK(!er::read(true, false, s2, r2), "(1.1.0) a thin side gives no read"); }
+    printf("EffortReward 1.1.0: %d checks, %d failed\n", p + f, f); return f ? 1 : 0;
 }

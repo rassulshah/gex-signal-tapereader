@@ -1,4 +1,4 @@
-// EffortReward.h 1.0.0 (2026-10-19, Rassul "now what would the opposite for aggressiveness" -> "so both together can be an effort reward
+// EffortReward.h 1.1.0 (1.1.0, 18:37 CT: Reward hidden ("-") when that side attacked under 0.5x its normal) 1.0.0 (2026-10-19, Rassul "now what would the opposite for aggressiveness" -> "so both together can be an effort reward
 // indicator" -> "build it already" 17:42 CT) - ATTACK EFFORT and REWARD, shared by Aggression (lsBidAskStats) and Book Flow (lsBookFlow).
 //   Attack Effort = the lots a side traded aggressively in the candle / its average over the 20 candles before (sellers = lots hit at
 //                   the bid, buyers = lots lifted at the offer). 2.0x = twice its normal attack.
@@ -22,6 +22,11 @@ namespace er {
 
 static const double EFFORT_HI = 2.0, REWARD_LO = 0.5, REWARD_HI = 2.0;
 static const int EFFORT_BARS = 20, EFFORT_MIN = 5;
+// (1.1.0, Rassul 18:37 CT, overnight: 14 lots showed "20.5x through") Reward only when that side's Attack Effort is at least 0.5x its normal
+// (a few lots moving price a couple of ticks is not a result); otherwise "-" and no Effort vs Reward read
+static const double REWARD_MIN_EFFORT = 0.5;
+struct Side;
+inline void guard(Side& s);
 
 inline double rewardNorm(const std::string& m) {
     static const struct { const char* m; double v; } T[] = { {"ES", 5.73}, {"NQ", 78.0}, {"CL", 50.6}, {"GC", 112.5}, {"HG", 150.0}, {"NG", 24.1}, {"EU", 14.8}, {"6E", 14.8} };
@@ -53,7 +58,9 @@ inline std::string rewardCell(bool ok, double x) {
     return x1(x);
 }
 // the Read at a new 10-bar low (sellers attacking) / high (buyers attacking); false = nothing to say (the pane's own read stays)
-struct Side { bool effOk = false, rewOk = false; double eff = 0, rew = 0; };
+struct Side { bool effOk = false, rewOk = false; double eff = 0, rew = 0; bool thin = false; };   // thin = Reward hidden: too few lots (1.1.0)
+inline void guard(Side& s) { if (s.rewOk && (!s.effOk || s.eff < REWARD_MIN_EFFORT - 1e-9)) { s.rewOk = false; s.thin = true; } }
+inline std::string rewardCellOf(const Side& s) { return s.thin ? std::string("-") : rewardCell(s.rewOk, s.rew); }
 inline bool read(bool newLow, bool newHigh, const Side s[2], br::Read& r) {
     if (newLow == newHigh) return false;                                   // neither, or an outside bar: no side to judge
     const int a = newLow ? 0 : 1;                                          // the attacker into the extreme

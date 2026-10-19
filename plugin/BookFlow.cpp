@@ -375,7 +375,14 @@ public:
             const int ci = liveBox ? last : mb;
             RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
             if (mbar && ci >= 1 && op.count > ci && hi.count > ci && lo.count > ci && cl.count > ci)
-                for (int q = 0; q < 2; ++q) { double x = 0; const bool ok = er::rewardX(op[ci], hi[ci], lo[ci], cl[ci - 1], S.tick, mbar->r.hitC[q], q, S.market, x); rw.v[q] = er::rewardCell(ok, x); }
+                for (int q = 0; q < 2; ++q) {
+                    er::Side sd; sd.rewOk = er::rewardX(op[ci], hi[ci], lo[ci], cl[ci - 1], S.tick, mbar->r.hitC[q], q, S.market, sd.rew);
+                    std::vector<long long> pr;                                   // (1.7.0) the attack's effort: lots taken vs the 20 candles before
+                    std::map<long long, off::PaneBar>::const_iterator it = S.ser.bars.lower_bound(liveBox ? (long long)times[last] : mt);
+                    while (it != S.ser.bars.begin() && (int)pr.size() < er::EFFORT_BARS) { --it; if (it->second.ok) pr.push_back(it->second.r.hitC[q]); }
+                    sd.effOk = er::effortX(mbar->r.hitC[q], pr, sd.eff);
+                    er::guard(sd); rw.v[q] = er::rewardCellOf(sd);
+                }
             info.rows.push_back(rw);
         }
         {   const std::string keep = ";" + boxKeep() + ";"; std::vector<off::InfoRow> kept;   // (1.2.1) Net and Pace only

@@ -1235,6 +1235,7 @@ std::array<er::Side, 2> BidAskStats::erSides(BASState& S, int ci, RTARRAYI& time
     for (int q = 0; q < 2; ++q) {
         out[q].effOk = er::effortX(tot[q], q == 0 ? pb : pa, out[q].eff);
         out[q].rewOk = er::rewardX(op[ci], hi[ci], lo[ci], cl[ci - 1], S.tick, tot[q], q, S.market, out[q].rew);
+        er::guard(out[q]);   // (1.17.0) too few lots: "-"
     }
     return out;
 }
@@ -1299,7 +1300,7 @@ void BidAskStats::render(BASState& S) {
         S.liveDrawnT = S.liveTime; S.liveDrawnBid = S.live.bid; S.liveDrawnAsk = S.live.ask;
     }
     // (1.5.0) two columns: Sellers (bids hit, red) | Buyers (offers lifted, green)
-    off::Info info; info.twoCol = true; info.colHead[0] = "Sellers"; info.colHead[1] = "Buyers"; info.tmpl = "9999 (99.9x)";   // (1.15.0) Lots / Pace / BBI / Read only: the Lots template (Crowd is not shown)
+    off::Info info; info.twoCol = true; info.colHead[0] = "Sellers"; info.colHead[1] = "Buyers"; info.tmpl = "99.9x through";   // (1.17.0) wide enough for the Reward cells ("8.9x through" was cut off);   // (1.15.0) Lots / Pace / BBI / Read only: the Lots template (Crowd is not shown)
     bas::PaceIn readPc;                                                    // (1.15.0) the pace the Read row uses (the candle shown)
     std::array<er::Side, 2> erNow;                                         // (1.16.0) Attack Effort / Reward of the candle shown
     {
@@ -1340,7 +1341,7 @@ void BidAskStats::render(BASState& S) {
             const int ci = liveBox ? last : mb;
             erNow = erSides(S, ci, times, last);
             off::InfoRow ef; ef.label = "Attack Effort"; off::InfoRow rw; rw.label = "Reward";
-            for (int q = 0; q < 2; ++q) { ef.v[q] = er::effortCell(erNow[q].effOk, erNow[q].eff); rw.v[q] = er::rewardCell(erNow[q].rewOk, erNow[q].rew); }
+            for (int q = 0; q < 2; ++q) { ef.v[q] = er::effortCell(erNow[q].effOk, erNow[q].eff); rw.v[q] = er::rewardCellOf(erNow[q]); }
             std::vector<off::InfoRow>::iterator at = info.rows.begin(); if (at != info.rows.end()) ++at;   // after Lots
             at = info.rows.insert(at, ef); info.rows.insert(at + 1, rw);
         }
