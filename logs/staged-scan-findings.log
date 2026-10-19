@@ -1,15 +1,3 @@
-findings=0 allowed=0 staged_files=13 bytes=326073
+findings=0 allowed=0 staged_files=1 bytes=622
 largest staged blobs (bytes, path):
-SIZE	105973	plugin/BidAskStats.cpp
-SIZE	58100	plugin/BUILD-LESSONS.md
-SIZE	35785	plugin/BidAskStatsLogic.h
-SIZE	33730	plugin/BookFlow.cpp
-SIZE	20182	tools/gex-build.bat
-SIZE	19599	plugin/tests_aggbook/test_aggbook_host.cpp
-SIZE	19040	plugin/tests_aggbook/test_aggbook_113.cpp
-SIZE	14478	plugin/BookFlowLogic.h
-SIZE	11465	plugin/tests_aggbook/test_aggbook_114_host.cpp
-SIZE	2856	plugin/PaneCursor.h
-SIZE	2592	plugin/OrderFlowPaneSettings.h
-SIZE	2191	plugin/tests_aggbook/run_tests.sh
-SIZE	82	logs/staged-scan-findings.log
+SIZE	622	logs/staged-scan-findings.log
