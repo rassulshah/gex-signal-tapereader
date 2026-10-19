@@ -80,7 +80,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CI_VERSION "0.5.0"          // (0.5.0, 2026-10-18, Rassul "I'll go with your recommendation") a settings window: Cob labels + Impulse bar box, each Show + colour, per market (CobImpulseSettings.h); defaults = what 0.4.1 drew; the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
+#define CI_VERSION "0.5.1"          // (0.5.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the Cob label / impulse box hover is OFF (CI_HOVERS; code kept), no TRACK_MOUSE; (0.5.0, 2026-10-18, Rassul "I'll go with your recommendation") a settings window: Cob labels + Impulse bar box, each Show + colour, per market (CobImpulseSettings.h); defaults = what 0.4.1 drew; the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
+static const bool CI_HOVERS = false;   // (0.5.1) true brings the hover back
 
 static const COLOR C_LABEL = 0x0080FFFF;   // his IRT Cob label colour (light cyan), unchanged
 static const COLOR C_BOX = 0x00FFFFFF, C_HOVBG = 0x00111827, C_HOVEDGE = 0x009CA3AF, C_INK = 0x00F3F4F6;
@@ -692,7 +693,7 @@ void CobImpulse::render(CIState& S) {
         }
     }
     // the hover: only while the cursor is over this chart's window and over a label / box
-    if (!S.msHas || S.msWnd == 0 || hb::hbCursor() != S.msWnd) { S.hovKey.clear(); return; }
+    if (!CI_HOVERS || !S.msHas || S.msWnd == 0 || hb::hbCursor() != S.msWnd) { S.hovKey.clear(); return; }   // (0.5.1) CI_HOVERS
     const HoverT* T = nullptr;
     for (const auto& t : S.targets) if (S.msH >= t.l && S.msH <= t.r && S.msV >= t.t && S.msV <= t.b) { T = &t; break; }
     S.hovKey = T ? T->key : std::string();
@@ -729,6 +730,7 @@ void CobImpulse::render(CIState& S) {
 }
 // the mouse: remember where it is; redraw only when the hovered label / box changes. Never swallows the event.
 int CobImpulse::mouse(RTX_EVENT* e) {
+    if (!CI_HOVERS) return RTX_FAIL;                                    // (0.5.1) hovers off: the mouse is never used
     if (!e || (e->type != E_MOUSE_MOVE && e->type != E_MOUSE_HOVER)) return RTX_FAIL;
     CIState* S = slot_.get(this, false); if (!S) return RTX_FAIL;
     S->msHas = true; S->msH = e->v.mouse.h; S->msV = e->v.mouse.v; S->msWnd = hb::hbCursor();
@@ -741,8 +743,8 @@ int CobImpulse::mouse(RTX_EVENT* e) {
 extern "C" cppExtension* CreateExtension(void) {
     CobImpulse* p = new CobImpulse();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | CALC_LAST);   // CALC_LAST: it reads his RTL results
-    p->setDescription("LRA Cob Impulse v0.4.1: what are the odds this CoB reaches 1R (shown after the label, e.g. Cob 63%, from the nightly CoB Lab, LRA-Odds-<MKT>.csv; ODDS 0 hides it), did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar; hover the label or box for the details. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
-    p->setVersion("0.5.0");   // CI_VERSION
+    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (CI_HOVERS ? TRACK_MOUSE : 0) | CALC_LAST);   // (0.5.1) no TRACK_MOUSE while the hovers are off   // CALC_LAST: it reads his RTL results
+    p->setDescription("LRA Cob Impulse v0.4.1: what are the odds this CoB reaches 1R (shown after the label, e.g. Cob 63%, from the nightly CoB Lab, LRA-Odds-<MKT>.csv; ODDS 0 hides it), did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
+    p->setVersion("0.5.1");   // CI_VERSION
     return p;
 }

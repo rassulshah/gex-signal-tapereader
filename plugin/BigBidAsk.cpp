@@ -100,7 +100,9 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.17.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.17.1"          // keep equal to bba::VERSION and the setVersion literal below
+// (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
+static const bool BBA_HOVERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
 // complete sessions before it (bba::tiersFor) and only after the chart history before that session is fully read; the facts come from the
 // last 8 sessions of the chart whatever is in view (and are recorded for 8 sessions); SignalBoard B events from the record for the last
@@ -1247,7 +1249,7 @@ void BigBidAsk::render(BBState& S) {
         }
     } else S.blWhy = "off (Big Lot box unchecked in Settings)";
     // the hover: only while the cursor is over this chart's window and over a number
-    if (!S.msHas || S.msWnd == 0 || hb::hbCursor() != S.msWnd) { S.hovKey.clear(); return; }
+    if (!BBA_HOVERS || !S.msHas || S.msWnd == 0 || hb::hbCursor() != S.msWnd) { S.hovKey.clear(); return; }   // (1.17.1) BBA_HOVERS
     if (S.blOn && S.msH >= S.blBox.l && S.msH <= S.blBox.r && S.msV >= S.blBox.t && S.msV <= S.blBox.b) {   // (1.16.0) the Big Lot box's hover
         S.hovKey = "BLBOX";
         const bba::TypeAvg& A = S.blNightNow ? S.blNight : S.blDay; const bba::TypeAvg& O = S.blNightNow ? S.blDay : S.blNight;
@@ -1329,6 +1331,7 @@ void BigBidAsk::render(BBState& S) {
 }
 // the mouse: remember where it is; redraw only when the hovered number changes. Never swallows the event.
 int BigBidAsk::mouse(RTX_EVENT* e) {
+    if (!BBA_HOVERS) return RTX_FAIL;                                   // (1.17.1) hovers off: the mouse is never used
     if (!e || (e->type != E_MOUSE_MOVE && e->type != E_MOUSE_HOVER)) return RTX_FAIL;
     BBState* S = slot_.get(this, false); if (!S) return RTX_FAIL;
     S->msHas = true; S->msH = e->v.mouse.h; S->msV = e->v.mouse.v; S->msWnd = hb::hbCursor();
@@ -1342,8 +1345,8 @@ int BigBidAsk::mouse(RTX_EVENT* e) {
 extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask 1.17.0 (no settings): on each candle, the biggest print AT THE BID (left) and AT THE ASK (right) in lots / divider, boxed red at the bid and green at the ask. Big Lot 5 = every such print (cyan); Big Lot 10 and Big Lot 20 only on a trend pullback or breakout (white). Big Lot N = the size reached about N times a session, per market, day and night. The first and last 15 minutes of each session are skipped. The Big Lot box (BL5 / BL10 / BL20 averages) sits beside the HOD/LOD table. Mouse over a number or the box for the detail.");
-    p->setVersion("1.17.0");   // BBA_VERSION
+    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (BBA_HOVERS ? TRACK_MOUSE : 0) | VAP_REQUIRED);   // (1.17.1) no TRACK_MOUSE while the hovers are off
+    p->setDescription("LRA Big Bid / Ask 1.17.1 (no settings): on each candle, the biggest print AT THE BID (left) and AT THE ASK (right) in lots / divider, boxed red at the bid and green at the ask. Big Lot 5 = every such print (cyan); Big Lot 10 and Big Lot 20 only on a trend pullback or breakout (white). Big Lot N = the size reached about N times a session, per market, day and night. The first and last 15 minutes of each session are skipped. The Big Lot box (BL5 / BL10 / BL20 averages) sits beside the HOD/LOD table.");
+    p->setVersion("1.17.1");   // BBA_VERSION
     return p;
 }

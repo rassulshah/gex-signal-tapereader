@@ -257,11 +257,11 @@ static void hostTests() {
         hb::fakeCursor() = 77;
         if (r) { S->msHas = true; S->msH = (short)((r->l + r->r) / 2); S->msV = (short)((r->t + r->b) / 2); S->msWnd = hb::hbCursor();
                  RTX_EVENT ev; ev.type = E_MOUSE_MOVE; ev.v.mouse.h = S->msH; ev.v.mouse.v = S->msV; c.x->mouse(&ev); }
-        CHECK(S->hovKey == "BLBOX", "[host] the mouse over the box");
+        CHECK(BBA_HOVERS ? S->hovKey == "BLBOX" : S->hovKey.empty(), (BBA_HOVERS ? "[host] the mouse over the box" : "[host] (1.17.1) hovers off: the mouse over the box is ignored"));
         c.pump(1, true);
         bool q = false, pr = false; for (const auto& t : c.texts()) { if (t.find("Question: how big is a really big print") == 0) q = true; if (t.find("prior session") != std::string::npos) pr = true; }
-        CHECK(q && pr, "[host] the hover: question, prior session, ...");
-        if (!(q && pr)) for (const auto& t : c.texts()) std::cerr << "  text: " << t << "\n";
+        CHECK(BBA_HOVERS ? (q && pr) : (!q && !pr), (BBA_HOVERS ? "[host] the hover: question, prior session, ..." : "[host] (1.17.1) hovers off: no box hover drawn"));
+        if (BBA_HOVERS && !(q && pr)) for (const auto& t : c.texts()) std::cerr << "  text: " << t << "\n";
         S->msHas = false;
         // (1.17.0) a settings file with everything off is IGNORED (no settings): the box still drawn, the file untouched
         bba::Settings off = bba::defaultsFor("ES"); off.statsChart = false; for (int k = 0; k < 4; ++k) off.cat[k].on = false; off.box = false; writeSettings(off);
@@ -325,7 +325,7 @@ int main() {
     setenv("TZ", "UTC", 1); tzset();
     boxLogic(); catLogic(); dockLogic(); keepOutLogic(); setLogic(); hostTests();
     {   const std::string src = [] { std::ifstream f("../BigBidAsk.cpp", std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }();
-        CHECK(std::string(BBA_VERSION) == "1.17.0" && std::string(bba::VERSION) == "1.17.0" && src.find("p->setVersion(\"1.17.0\")") != std::string::npos, "[ver] 1.17.0 everywhere (no settings)");
+        CHECK(std::string(BBA_VERSION) == "1.17.1" && std::string(bba::VERSION) == "1.17.1" && src.find("p->setVersion(\"1.17.1\")") != std::string::npos, "[ver] 1.17.1 everywhere (no settings)");
         CHECK(src.find("setParameterVersion(7)") != std::string::npos && src.find("ss::registerAll(") == std::string::npos && src.find("\"BigBidAsk.settings-\" +") == std::string::npos, "[ver] parameter version 7, no rows registered, the settings file never opened");
     }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";

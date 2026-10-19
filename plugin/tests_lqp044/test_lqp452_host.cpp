@@ -104,7 +104,7 @@ int main() {
     CHECK(mktTexts(h) == seen[0], "after the pool's 5-s recompute: still the same MKT items");
     const std::string st = [&]() { std::ifstream f((flex + "\\LiquidityProfile.status-CL-180.txt").c_str()); std::stringstream s; s << f.rdbuf(); return s.str(); }();
     CHECK(st.find(",tiers 5-session pool") != std::string::npos && st.find(",held ") != std::string::npos, "status: MKT tiers source + held count");
-    CHECK(st.compare(0, 15, "VERSION,0.45.2\n") == 0, "status VERSION 0.45.2");
+    CHECK(st.compare(0, 15, "VERSION,0.45.3\n") == 0, "status VERSION 0.45.3");
     delete p;
     std::printf("lqp 0.45.2 host: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

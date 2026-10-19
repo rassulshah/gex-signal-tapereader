@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
         RTX_EVENT e; std::memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)((L[0].l + L[0].r) / 2); e.v.mouse.v = (short)((L[0].t + L[0].b) / 2);
         hb::fakeCursor() = 77; p->draw(); p->mouse(&e); H.draws.clear(); p->draw();
         bool hl = false; for (const auto& d : H.draws) if (d.text.find("Odds: 33% reach 1R before the stop (usual here 32%") != std::string::npos) hl = true;
-        CHECK(hl, "hover: the odds line with the usual rate and cases");
+        /* (0.5.1, Rassul 23:37 CT 2026-10-18 hovers off: with CI_HOVERS false the mouse must change nothing) */ CHECK(CI_HOVERS ? hl : !hl, CI_HOVERS ? "hover: the odds line with the usual rate and cases" : "hovers off: no odds hover");
         hb::fakeCursor() = 0;
         S->lastStatusMs = -1; p->calc(0);
         std::string st = slurp(flex() + "\\CobImpulse.status-NQ-NQZ6-180.txt");

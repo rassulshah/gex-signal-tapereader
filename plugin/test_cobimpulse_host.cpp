@@ -81,10 +81,10 @@ int main(int argc, char** argv) {
         // the hover over the label
         RTX_EVENT e; std::memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)((L[0].l + L[0].r) / 2); e.v.mouse.v = (short)((L[0].t + L[0].b) / 2);
         hb::fakeCursor() = 77; p->draw(); H.invalidates = 0; p->mouse(&e);
-        CHECK(H.invalidates == 1, "hovering the label redraws once");
+        /* (0.5.1, Rassul 23:37 CT 2026-10-18 hovers off: with CI_HOVERS false the mouse must change nothing) */ CHECK(CI_HOVERS ? H.invalidates == 1 : H.invalidates == 0, CI_HOVERS ? "hovering the label redraws once" : "hovers off: the mouse over the label asks for no redraw");
         H.draws.clear(); p->draw();
         bool vol = false, tm = false; for (const auto& d : H.draws) { if (d.text.find("biggest volume in 100+ bars") != std::string::npos) vol = true; if (d.text.find("8:33 AM bar") != std::string::npos) tm = true; }
-        CHECK(vol && tm, "hover: 8:33 AM bar, biggest volume in 100+ bars");
+        CHECK(CI_HOVERS ? (vol && tm) : (!vol && !tm), CI_HOVERS ? "hover: 8:33 AM bar, biggest volume in 100+ bars" : "hovers off: no hover box over the label");
         hb::fakeCursor() = 99; H.draws.clear(); p->draw();
         bool gone = true; for (const auto& d : H.draws) if (d.text.find("biggest volume") != std::string::npos) gone = false;
         CHECK(gone, "hover hidden when the cursor leaves the chart window");

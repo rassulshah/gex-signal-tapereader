@@ -97,7 +97,10 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.3.2"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.3.3"          // keep equal to tr::VERSION and the setVersion literal below
+// (1.3.3, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the banner's BUYERS / SELLERS / OPTIONS detail popup on mouse-over is OFF (TR_BANNER_HOVER; code kept). TRACK_MOUSE stays
+// only for the chart-wide candle follow (HoverBoard: the banner and the order-flow panes read the candle under the mouse) - no popup.
+static const bool TR_BANNER_HOVER = false;
 
 static const long long GRACE_MS = 5000;           // a closed candle is finalised when its pane rows landed, else 5 s after it closed
 static const long long CHECK_FAST_MS = 1000;      // Delta / order-flow records (the intrabar triggers)
@@ -709,7 +712,7 @@ int TapeReader::mouse(RTX_EVENT* e)
         // a dead band (tr::HOVER_BAND px): it opens only inside the banner, and closes only once the mouse is that far outside the
         // banner / its detail - no flicker on the edge or on the 2 px gap between them
         const int g = S->inBanner ? tr::HOVER_BAND : 0;
-        const bool in = S->lastOk && (tr::inBox(bx, mh, mv, g) || (S->inBanner && S->lastDetailOn && tr::inBox(dt, mh, mv, g)));
+        const bool in = TR_BANNER_HOVER && S->lastOk && (tr::inBox(bx, mh, mv, g) || (S->inBanner && S->lastDetailOn && tr::inBox(dt, mh, mv, g)));   // (1.3.3) TR_BANNER_HOVER
         if (in != S->inBanner) { S->inBanner = in; if (in) ++S->bannerHovers; ++S->redraws; invalidateChart(false); }
         if (in) return RTX_FAIL;
     }
@@ -925,6 +928,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. A 1-2 line banner at the top left (the read + the Liquidity warning); mouse over it for BUYERS / SELLERS / OPTIONS. Settings: Position, Offset X / Y, Banner background.");
-    p->setVersion("1.3.2");   // TR_VERSION = tr::VERSION = trset::PLUGIN_VERSION
+    p->setVersion("1.3.3");   // TR_VERSION = tr::VERSION = trset::PLUGIN_VERSION
     return p;
 }
