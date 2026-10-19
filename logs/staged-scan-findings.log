@@ -1,3 +1,8 @@
-findings=0 allowed=0 staged_files=1 bytes=124
+findings=0 allowed=0 staged_files=6 bytes=282374
 largest staged blobs (bytes, path):
-SIZE	124	logs/staged-scan-findings.log
+SIZE	105357	plugin/BigBidAsk.cpp
+SIZE	71369	plugin/BigBidAskLogic.h
+SIZE	55745	plugin/BUILD-LESSONS.md
+SIZE	29345	plugin/tests_bba115/test_bba116.cpp
+SIZE	20134	plugin/tests_settings/settings_contract.cpp
+SIZE	424	plugin/BigBidAskSettings.h
