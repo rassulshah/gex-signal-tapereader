@@ -26,7 +26,6 @@
 #include "../TradeManagerSettings.h"
 #include "../DealerProfileSettings.h"
 #include "../SessionVWAPSettings.h"
-#include "../BigBidAskSettings.h"
 
 struct LegacyCase { const char* text; int market; const char* key; double want; };   // key == nullptr: must NOT be recognised
 struct Entry {
@@ -200,7 +199,6 @@ int main(int argc, char** argv) {
         { "NQ|0|300|10|0|1|1|1|0|x\n", ss::M_ES, nullptr, 0 },                                        // no ES row: not recognised (defaults)
     }, {} });
     E.push_back(Entry{ &svset::spec(), "SessionVWAP.cpp", nullptr, {}, {} });   // (1.6.1) the file keeps its own keyed-style format (SessionVWAPStyle.h)
-    { Entry b{ &bbaset::spec(), "BigBidAsk.cpp", nullptr, {}, {} }; b.mappedRows = 75; E.push_back(b); }   // (1.16.1) BBA7 file kept; 75 window values
     E.push_back(Entry{ &cvdset::spec(), "CVD.cpp", nullptr, {}, {} });              // (1.3.0, his decision list) show / hide + colour per drawn element
     E.push_back(Entry{ &ciset::spec(), "CobImpulse.cpp", nullptr, {}, {} });        // (0.5.0, his decision list) labels / impulse box: show + colour
     if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
@@ -225,6 +223,13 @@ int main(int argc, char** argv) {
         const bool migrated = have && (src.find("Settings.h\"") != std::string::npos) && (src.find("ss::registerAll(") != std::string::npos);
         checkEntry(e, migrated ? dir : std::string());
         if (have && !migrated) std::printf("NOTE %s: table checked; %s not migrated to the layer yet (source checks skipped)\n", e.S->plugin, e.cpp);
+    }
+    {   // (BigBidAsk 1.17.0, Rassul approved 19:57 CT) indicators with NO user settings: no rows registered, no settings file read or written
+        const char* fixedSrc[] = { "BigBidAsk.cpp" };
+        for (const char* f : fixedSrc) { std::string src; if (dir.empty() || !readAll(dir + "/" + f, src)) continue;
+            const char* banned[] = { "ss::registerAll(", "ss::readDialog(", "ss::fillDialog(", "setBoolParameter(", "setIntegerParameter(", "setFloatParameter(", "setColorParameter(", "setListParameter(", "setLabelParameter(", "setStringParameter(", "\"BigBidAsk.settings-\" +", "\"BigBidAsk.dialog-\" +" };
+            for (const char* b : banned) ok(countOf(src, b) == 0, std::string(f) + " has no settings but contains " + b);
+            ok(countOf(src, "setParameterVersion(7)") == 1, std::string(f) + " parameter version 7 (the old 87 rows dropped)"); }
     }
     std::printf("%s settings contract: %d checks, %d failures (%d tables)\n", g_fail ? "FAIL" : "PASS", g_checks, g_fail, (int)E.size());
     return g_fail ? 1 : 0;

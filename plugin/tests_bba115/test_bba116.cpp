@@ -1,4 +1,4 @@
-// test_bba116.cpp -- lsBigBidAsk 1.16.0 (2026-10-18, Rassul approved 15:03 CT) + lsHodLod 2.4.1 publish (BoxDock.h).
+// test_bba116.cpp -- (1.17.0: [fixed] no user settings, no category 4, numbers never through the HOD/LOD box / Big Lot box) lsBigBidAsk 1.16.0 (2026-10-18, Rassul approved 15:03 CT) + lsHodLod 2.4.1 publish (BoxDock.h).
 //   [box]    typeNeed / typeAvg / boxRows / boxHover: the averages of the CURRENT session type, thousands separators, "--" learning,
 //            only 3 rows in the box, everything else in the hover
 //   [cat]    category order 1 > 4 > 2 / 3 (Rassul 15:04-15:07 "cat 1 and 4 should be cyan"): 1,000 lots with BL 1,391 / 1,190 / 1,007
@@ -110,8 +110,24 @@ static void dockLogic() {
     bdk::clearHodLod("ESZ6", 180, "ES 3m");
     CHECK(!bdk::peekHodLod("ESZ6", 180, "ES 3m", got, ms), "[dock] cleared on removal");
 }
+static void keepOutLogic() {   // (1.17.0, Rassul 19:58 CT) numbers never through the HOD/LOD table + strip or the Big Lot box
+    std::mt19937 rng(23); int bad = 0, slid = 0, blocked = 0, clear = 0;
+    for (int it = 0; it < 20000; ++it) {
+        bba::Box area; area.l = 60; area.t = 20; area.r = 900 + (int)(rng() % 400); area.b = 400 + (int)(rng() % 400);
+        bba::Box hl; hl.l = 100 + (int)(rng() % 300); hl.t = 100 + (int)(rng() % 250); hl.r = hl.l + 280 + (int)(rng() % 100); hl.b = hl.t + 140;
+        bba::Box blb; blb.l = hl.r + 4; blb.t = hl.t + 25; blb.r = blb.l + 90; blb.b = hl.b;
+        const std::vector<bba::Box> ko = { hl, blb };
+        bba::Box f; f.l = area.l + (int)(rng() % (area.r - area.l - 40)); f.t = area.t + (int)(rng() % (area.b - area.t - 20)); f.r = f.l + 18 + (int)(rng() % 14); f.b = f.t + 13;
+        const bba::Box f0 = f; const int r = bba::keepOut(f, ko, area);
+        if (r < 0) { ++blocked; continue; }
+        if (r == 0) ++clear; else ++slid;
+        if (bba::hits(f, hl) || bba::hits(f, blb) || f.t < area.t || f.b > area.b || f.l != f0.l || std::abs(f.t - f0.t) > 40) ++bad;
+    }
+    std::cerr << "  keep-out fuzz: clear " << clear << ", slid " << slid << ", not drawn " << blocked << "\n";
+    CHECK(bad == 0 && slid > 100 && blocked > 100, "[keepout] 20,000 numbers: none drawn over the HOD/LOD box or the Big Lot box; slid at most 40 px up / down, never sideways, inside the area");
+}
 static void setLogic() {
-    std::mt19937 rng(11); bool fileRt = true, vecRt = true;
+    std::mt19937 rng(11); bool fileRt = true;
     for (int it = 0; it < 500; ++it) {
         bba::Settings s; s.div = (int)(rng() % 50); s.box = rng() % 2; s.dim = rng() % 2; s.circle = rng() % 2;
         s.circleCol = 0x202020 + rng() % 0xDFDFDF; s.boxBid = 0x202020 + rng() % 0xDFDFDF; s.boxAsk = 0x202020 + rng() % 0xDFDFDF;
@@ -125,12 +141,9 @@ static void setLogic() {
         const bba::Settings b = bba::parseSettings(f + "\n", why, "ES");
         if (bba::formatSettings(b) != f || !why.empty()) fileRt = false;
         if (std::count(f.begin(), f.end(), '|') + 1 != (long)bba::NFIELDS) fileRt = false;
-        const bba::Settings c = fromVec(toVec(s), bba::Settings());
-        if (bba::formatSettings(c) != f) vecRt = false;
     }
     CHECK(fileRt, "[set] 500 random settings: every one of the 49 fields survives the file");
-    CHECK(vecRt, "[set] 500 random settings: every field survives the window order (toVec / fromVec)");
-    CHECK(bba::NFIELDS == 49 && toVec(bba::Settings()).size() == 75, "[set] 49 file fields, 75 window values (each level its own box)");
+    CHECK(bba::NFIELDS == 49, "[set] 49 file fields (the old file format, still parsed by the tests only)");
     // his ES file (15:10)
     std::string why; const std::string his = "BBA7|0|1|0|0|16777215|15680580|2278750|1|5|0|8|0|65535|65535|1|10|0|8|6|16777215|16777215|1|20|0|8|6|16777215|16777215|1|0|1000|8|0|65535|65535|15|15|200|100|0|0|0|0|0|0|1|9|0";
     const bba::Settings h = bba::parseSettings(his, why, "ES");
@@ -144,8 +157,21 @@ static void setLogic() {
     const bba::Settings e = bba::effective(g);
     CHECK(e.keyMask == 0 && e.gamMask == 3, "[set] an off group uses none of its levels");
     CHECK(bba::nearBlack(0) && bba::nearBlack(0x101010) && !bba::nearBlack(0xEF4444) && !bba::nearBlack(0x0000FF), "[set] near-black swatch detection");
-    std::vector<long long> v = toVec(h); v[5] = 0; const bba::Settings k = fromVec(v, h);
-    CHECK(k.boxBid == 0xEF4444, "[set] a black swatch keeps the saved colour");
+    // (1.17.0) THE fixed behaviour = what his chart showed (his 17:15 file) without category 4
+    for (const char* m : { "ES", "NQ", "CL", "GC", "HG", "NG", "6E" }) {
+        const bba::Settings f = bba::fixedSettings(m);
+        bool ok = f.div == 0 && f.box && !f.dim && !f.circle && f.boxBid == 0xEF4444 && f.boxAsk == 0x22C55E && f.skipFirst == 15 && f.skipLast == 15 && !f.rthOnly
+               && !f.keyOn && !f.gamOn && !f.volOn && f.keyMask == 0 && f.gamMask == 0 && f.volMask == 0 && f.statsChart && f.statsPos == 9 && !f.cat[3].on;
+        const int n[3] = { 5, 10, 20 }, sh[3] = { bba::SH_ALL, bba::SH_PBBO, bba::SH_PBBO }; const unsigned col[3] = { 0x00FFFF, 0xFFFFFF, 0xFFFFFF };
+        for (int k = 0; k < 3; ++k) ok = ok && f.cat[k].on && f.cat[k].n == n[k] && f.cat[k].lots == 0 && f.cat[k].font == 8 && f.cat[k].show == sh[k] && f.cat[k].bid == col[k] && f.cat[k].ask == col[k];
+        CHECK(ok, std::string("[fixed] ") + m + ": BL5 all cyan / BL10 + BL20 Trend PB + BO white, font 8, boxes red / green, no circle / dim / levels, skip 15 / 15, box on, no category 4");
+    }
+    {   bba::Settings f = bba::fixedSettings("ES"); f.cat[3] = h.cat[3];
+        CHECK(bba::formatSettings(f) == bba::formatSettings(h), "[fixed] = his 17:15 ES file field for field, except category 4 (removed)"); }
+    {   const bba::Settings f = bba::fixedSettings("ES"); long long zz[4]; bool pass[4] = { true, true, true, true };
+        for (int k = 0; k < 4; ++k) zz[k] = f.cat[k].on ? (k == 3 ? (long long)f.cat[3].lots : 100LL * (k + 1)) : 0;
+        bool never4 = zz[3] == 0; for (long long vol : { 50LL, 150LL, 999LL, 1000LL, 5000LL, 100000LL }) if (bba::firstCat(zz, vol, pass) == 3) never4 = false;
+        CHECK(never4, "[fixed] category 4 never chosen (off, size 0), whatever the print size"); }
 }
 
 // ---- host ---------------------------------------------------------------------------------------------------------------------------
@@ -237,10 +263,13 @@ static void hostTests() {
         CHECK(q && pr, "[host] the hover: question, prior session, ...");
         if (!(q && pr)) for (const auto& t : c.texts()) std::cerr << "  text: " << t << "\n";
         S->msHas = false;
-        // the box unchecked: nothing drawn
-        bba::Settings off = bba::defaultsFor("ES"); off.statsChart = false; writeSettings(off);
-        c.pump(1, true);
-        CHECK(c.boxRect() == nullptr && !c.S()->blOn, "[host] Big Lot box unchecked: nothing drawn");
+        // (1.17.0) a settings file with everything off is IGNORED (no settings): the box still drawn, the file untouched
+        bba::Settings off = bba::defaultsFor("ES"); off.statsChart = false; for (int k = 0; k < 4; ++k) off.cat[k].on = false; off.box = false; writeSettings(off);
+        const std::string offLine = readSettingsLine();
+        c.pump(2, true);
+        CHECK(c.boxRect() != nullptr && c.S()->blOn && c.S()->set.box && c.S()->set.cat[0].on && !c.S()->set.cat[3].on, "[fixed host] BigBidAsk.settings-ES.txt is not read: the fixed behaviour stays");
+        CHECK(readSettingsLine() == offLine && c.S()->settingsWhy == "fixed (1.17.0, no settings)", "[fixed host] the settings file is never written; status reason 'fixed (1.17.0, no settings)'");
+        CHECK(c.S()->catN4[3] == 0, "[fixed host] no category 4 number drawn");
         bdk::clearHodLod("ESZ6", 180, "ES 3m");
     }
     {   home("dock162");   // (1.16.2) lsHodLod 2.4.4: table + strip (LRA_HLB_) and the table alone (LRA_HLT_), same stamp
@@ -259,56 +288,45 @@ static void hostTests() {
         CHECK(ys.size() == 3 && ys[1] - ys[0] == ys[2] - ys[1] && ys[1] - ys[0] >= 40 && std::abs((ys[0] - r->t) - (r->b - (ys[2] + (ys[1] - ys[0])))) <= 1, "[host 1.16.2] the 3 rows spread evenly over the table's height");
         bdk::clearHodLod("ESZ6", 180, "ES 3m"); bdk::clearHodLodTable("ESZ6", 180, "ES 3m");
     }
-    {   home("dialog");
-        bba::Settings his = bba::defaultsFor("ES"); his.boxBid = 0xEF4444; his.boxAsk = 0x22C55E; writeSettings(his);
+    {   home("dialog");   // (1.17.0) the settings window has no controls: opening / OK / Apply / a click never write anything
         Chart c(bars); c.H.inDialog = true; mock::current = &c.H;
-        c.x->parmsLoad();
-        const PIx& g = g_ix;
-        CHECK(c.H.colors[g.boxBid] == 0xEF4444 && c.H.colors[g.boxAsk] == 0x22C55E && c.H.colors[g.cat[0][4]] == 0x00FFFF, "[host] swatches filled with the real colours (setParameterColor)");
-        CHECK(c.H.ints[g.div] == 10, "[host] Divider shows 10 on ES (the market default), not 0 / 7");
-        CHECK(!c.H.boxes[g.keyOn] && !c.H.enabled[g.key[0]] && !c.H.enabled[g.vol[5]], "[host] groups off: their levels greyed out");
-        c.H.boxes[g.keyOn] = true; c.x->parmsUpdt((unsigned)g.keyOn);
-        bool allOn = true; for (int j = 0; j < bba::NKEY; ++j) if (!c.H.boxes[g.key[j]] || !c.H.enabled[g.key[j]]) allOn = false;
-        CHECK(allOn, "[host] Key levels checked: every key level checked and enabled");
-        std::string why; bba::Settings f = bba::parseSettings(readSettingsLine(), why, "ES");
-        CHECK(f.keyOn && f.keyMask == (1u << bba::NKEY) - 1 && f.div == 0 && f.boxBid == 0xEF4444, "[host] saved: key levels on (all), divider still the default (0), colours kept");
-        c.H.boxes[g.key[3]] = false; c.x->parmsUpdt((unsigned)g.key[3]);
-        f = bba::parseSettings(readSettingsLine(), why, "ES");
-        CHECK(f.keyOn && f.keyMask == ((1u << bba::NKEY) - 1) - 8, "[host] one level unticked: only it off");
-        c.H.boxes[g.keyOn] = false; c.x->parmsUpdt((unsigned)(g.keyOn + 1));   // whatever number IRT passes
-        bool allOff = true; for (int j = 0; j < bba::NKEY; ++j) if (c.H.boxes[g.key[j]] || c.H.enabled[g.key[j]]) allOff = false;
-        f = bba::parseSettings(readSettingsLine(), why, "ES");
-        CHECK(allOff && !f.keyOn && f.keyMask == 0, "[host] Key levels unchecked: every key level unchecked, greyed, none used");
-        c.H.ints[g.div] = 5; c.H.colors[g.boxBid] = 0x123456; c.x->parmsApply();
-        f = bba::parseSettings(readSettingsLine(), why, "ES");
-        CHECK(f.div == 5 && f.boxBid == 0x123456, "[host] a typed divider and a picked colour are saved");
-        c.H.colors[g.boxAsk] = 0; c.x->parmsApply();
-        f = bba::parseSettings(readSettingsLine(), why, "ES");
-        CHECK(f.boxAsk == 0x22C55E, "[host] black picked: the saved colour is kept (numbers would vanish)");
-        std::ifstream dl(std::string(getenv("USERPROFILE")) + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.dialog-ES.txt"); std::stringstream ds; ds << dl.rdbuf();
-        CHECK(ds.str().find("PARMSLOAD,1.16.2") != std::string::npos && ds.str().find("read back same 75") != std::string::npos && ds.str().find("SAVED,1.16.2,BBA7|5|") != std::string::npos, "[host] the dialog log (fill read back, saves)");
-        // (1.16.2) THE 10-18 15:07 CT BUG: a window copy that reads blank (every box off, colour 0, number 0) never overwrites his file
-        const std::string before = readSettingsLine();
-        {   Chart b(bars); b.H.inDialog = true; mock::current = &b.H;          // a copy whose parmsLoad never ran (no snapshot), all blank
-            b.H.boxes.clear(); b.H.colors.clear(); b.H.ints.clear(); b.H.floats.clear();
-            for (int i = 0; i < 120; ++i) { b.H.boxes[i] = false; b.H.colors[i] = 0; b.H.ints[i] = 0; b.H.floats[i] = 0; }
-            b.x->parmsApply(); b.x->parmsUpdt(3);
-            CHECK(readSettingsLine() == before, "[host 1.16.2] a blank window (no fill) never overwrites the settings file");
-            b.x->parmsLoad(); for (int i = 0; i < 120; ++i) { b.H.boxes[i] = false; b.H.colors[i] = 0; b.H.ints[i] = 0; b.H.floats[i] = 0; }
-            b.x->parmsApply();
-            CHECK(readSettingsLine() == before, "[host 1.16.2] filled, then every control reads blank: the file is kept");
-            std::ifstream dl2(std::string(getenv("USERPROFILE")) + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.dialog-ES.txt"); std::stringstream d2; d2 << dl2.rdbuf();
-            CHECK(d2.str().find("REFUSED,1.16.2") != std::string::npos, "[host 1.16.2] the refusal is logged");
-            mock::current = &c.H; }
+        c.x->parmsLoad(); c.x->parmsUpdt(3); c.x->parmsApply();
+        struct stat st;
+        const std::string fx = std::string(getenv("USERPROFILE")) + "/InvestorRT/rtx/lsFlexLevels/";
+        CHECK(stat((fx + "BigBidAsk.settings-ES.txt").c_str(), &st) != 0 && stat((fx + "BigBidAsk.dialog-ES.txt").c_str(), &st) != 0, "[fixed host] the window writes no settings / dialog file");
+        mock::current = &c.H;
     }
+    {   home("keepout");   // (1.17.0, Rassul 19:58 CT) no number drawn through the HOD/LOD table + strip or the Big Lot box
+        Chart c(bars); c.pump(10, false);
+        int over = 0, frames = 0;
+        for (int it = 0; it < 12; ++it) {
+            const int t = 60 + it * 50; const bdk::Box hb = bdk::mk(120 + it * 20, t, 520 + it * 20, t + 160);
+            bdk::publishHodLod("ESZ6", 180, "ES 3m", steadyMs() + it, hb);
+            c.pump(2, true); ++frames;
+            const mock::Draw* r = c.boxRect();
+            for (const auto& d : c.H.draws) {
+                if (d.type != "text") continue;
+                const bool inBl = r && d.l >= r->l && d.r <= r->r + 2 && d.t >= r->t && d.b <= r->b;
+                if (inBl) continue;                                     // the Big Lot box's own labels
+                const bdk::Box tx = bdk::mk(d.l, d.t, d.r, d.b);
+                if (bdk::overlap(tx, hb) || (r && bdk::overlap(tx, bdk::mk(r->l, r->t, r->r, r->b)))) ++over;
+            }
+        }
+        int moved = 0;
+        { BBState* S = c.S(); moved = S ? S->clHl + S->slidHl : 0; std::cerr << "  keep-out host (last frame): not drawn " << (S ? S->clHl : -1) << ", slid " << (S ? S->slidHl : -1) << "\n"; }
+        CHECK(moved > 0, "[keepout host] the rule acted (numbers under the box were slid or dropped)");
+        CHECK(frames == 12 && over == 0, "[keepout host] 12 table positions: no number over the HOD/LOD box or the Big Lot box (" + std::to_string(over) + ")");
+        bdk::clearHodLod("ESZ6", 180, "ES 3m");
+    }
+
 }
 
 int main() {
     setenv("TZ", "UTC", 1); tzset();
-    boxLogic(); catLogic(); dockLogic(); setLogic(); hostTests();
+    boxLogic(); catLogic(); dockLogic(); keepOutLogic(); setLogic(); hostTests();
     {   const std::string src = [] { std::ifstream f("../BigBidAsk.cpp", std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }();
-        CHECK(std::string(BBA_VERSION) == "1.16.2" && std::string(bba::VERSION) == "1.16.2" && std::string(bbaset::PLUGIN_VERSION) == "1.16.2" && src.find("p->setVersion(\"1.16.2\")") != std::string::npos, "[ver] 1.16.2 everywhere (1.16.2 = table-height dock + blank-save guard)");
-        CHECK(bbaset::spec().paramVersion == 6 && src.find("ss::registerAll(this, bbaset::spec()") != std::string::npos, "[ver] parameter version 6 (the re-laid-out window), registered from the table");
+        CHECK(std::string(BBA_VERSION) == "1.17.0" && std::string(bba::VERSION) == "1.17.0" && src.find("p->setVersion(\"1.17.0\")") != std::string::npos, "[ver] 1.17.0 everywhere (no settings)");
+        CHECK(src.find("setParameterVersion(7)") != std::string::npos && src.find("ss::registerAll(") == std::string::npos && src.find("\"BigBidAsk.settings-\" +") == std::string::npos, "[ver] parameter version 7, no rows registered, the settings file never opened");
     }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;

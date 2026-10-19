@@ -1,5 +1,12 @@
 /********************************************************************************
  *  BigBidAsk.cpp  --  Investor/RT RTX extension  lsBigBidAsk  1.0.0  (2026-10-14 night)
+ *  1.17.0 (2026-10-18, Rassul approved the mockup 19:57 CT, "go"): NO USER SETTINGS - the settings window is empty ("the settings window
+ *         would be empty" = yes). Fixed behaviour (what his chart showed, BigBidAsk.settings-ES.txt of 17:15): category 1 = Big Lot 5,
+ *         all prints, cyan numbers; category 2 = Big Lot 10, Trend PB + BO; category 3 = Big Lot 20, Trend PB + BO (white numbers);
+ *         category 4 (>= lots) REMOVED; font 8; boxes on (red at the bid EF4444, green at the ask 22C55E); no circle, no dim, no level
+ *         filters; skip the first / last 15 min of each session (RTH + overnight); divider = the market default; the Big Lot box on,
+ *         docked beside the HOD/LOD table (1.16.2). BigBidAsk.settings-<MKT>.txt is no longer read or written (old files are left alone).
+ *         Parameter version 7 with no rows: IRT drops the 87 old rows. Status: "SETTINGS,fixed (1.17.0, no settings)".
  *  1.16.2 (2026-10-18, Rassul 17:13 CT "build"; "the BLS box should be the same height as the hod lod box"): docked beside the
  *         HOD/LOD TABLE (lsHodLod 2.4.4 publishes the table alone as LRA_HLT_, and table + Gex S/R strip as LRA_HLB_) the box takes the
  *         table's top and bottom, its 3 rows spread evenly; never over the strip / table / banner / price (BoxDock.h placeMatched).
@@ -59,12 +66,8 @@
 #undef near
 #endif
 #include "BigBidAskLogic.h"
-#include "BigBidAskSettings.h"   // (1.16.1) the settings window table (SettingsSpec.h)
-#include "SettingsHost.h"
-static ss::Ids& bbaIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
 #include "ColumnBoard.h"                 // where the price area ends (the right-side columns) and the left Liquidity column - read only
 #include "HoverBoard.h"                  // hb::hbCursor (GetCursorPos + WindowFromPoint; carries the user32 pragma)
-#include "BoxPlace.h"                    // bp::DlgSnap (a control he did not touch keeps the file's value)
 #include "HostSlot.h"
 #include "BoxDock.h"                 // (1.16.0) the Big Lot box docks to the HOD/LOD table (lsHodLod 2.4.1 publishes it)
 #include "SignalBoard.h"           // (1.2.1) posts its bold sizes / circles for the other indicators on this chart
@@ -97,7 +100,7 @@ static ss::Ids& bbaIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.16.2"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.17.0"          // keep equal to bba::VERSION and the setVersion literal below
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
 // complete sessions before it (bba::tiersFor) and only after the chart history before that session is fully read; the facts come from the
 // last 8 sessions of the chart whatever is in view (and are recorded for 8 sessions); SignalBoard B events from the record for the last
@@ -117,10 +120,6 @@ static const int LEAD = 30;                 // candles laid out left of the view
 static const int READS_MAX = 900;           // VAP bars read per pass (the rest next pass)
 static const int FAILS_FINAL = 5;           // a closed candle IRT has no VAP for after 5 passes is finalised as "no data"
 static const size_t REC_FILE_MAX = 2 * 1024 * 1024, REC_LINES_MAX = 20000;
-// (1.11.0) the settings window: the control numbers are given out in setup() (labels in between), kept here
-struct PIx { int div = -1, box = -1, dim = -1, circle = -1, circleCol = -1, boxBid = -1, boxAsk = -1; int cat[4][9]; int rthOnly = -1; int skipF = -1, skipL = -1, atrUp = -1, atrDn = -1;
-             int keyOn = -1, gamOn = -1, volOn = -1; int key[bba::NKEY], gam[bba::NGAM], vol[bba::NVOL]; int statsChart = -1, statsPos = -1; int statLbl[6]; bool ok = false; };
-static PIx g_ix;
 
 static long long steadyMs() {
     return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -228,9 +227,9 @@ struct BBState {
     std::map<long, bba::SessPrints> bySess; size_t bySessN = (size_t)-1;
     long long boardLast = 0, boardMs = -1; int boardN = 0;   // (1.15.0) the SignalBoard B pass (from the record, not the view)
     bool busy = false;
-    std::string identity, market, symbol, state = "starting", lastStatusText, settingsWhy = "missing (defaults)", chartKey;
+    std::string identity, market, symbol, state = "starting", lastStatusText, settingsWhy = "fixed (1.17.0, no settings)", chartKey;
     int spb = 0; long long session = -1; double tick = 0;
-    bba::Settings set; long long setStamp = -2, setCheckMs = -1;
+    bba::Settings set; long long setStamp = -2, setCheckMs = -1; std::string setMarket;   // (1.17.0) fixed settings, set once per market
     std::map<long long, bba::Facts> fin;            // closed candles, final (from the record or decided here) - never changed
     std::map<long long, bba::Facts> raw;            // closed candles' prices / lots read from the chart (ratios not yet final)
     struct Fail { int n = 0; long long firstMs = 0; };
@@ -243,7 +242,7 @@ struct BBState {
     long long lastStatusMs = -1, lastRecordMs = -1;
     // draw
     cb::Peers peers; int priceRight = 0, leftLimit = 0; bb::Beat trBeat; bool trOn = false; bba::Box trBox;
-    bba::LayoutStats lay; int clL = 0, clR = 0, clT = 0, clB = 0, clTr = 0, clBig = 0, shifted = 0, areaFallback = 0; int droppedInView = 0; int circles = 0, circlesHidden = 0, zoneFull = 0, zoneDim = 0, hugeN = 0, catN[3] = {0, 0, 0}, pivotHidden = 0;
+    bba::LayoutStats lay; int clL = 0, clR = 0, clT = 0, clB = 0, clTr = 0, clBig = 0, clHl = 0, slidHl = 0, shifted = 0, areaFallback = 0; int droppedInView = 0; int circles = 0, circlesHidden = 0, zoneFull = 0, zoneDim = 0, hugeN = 0, catN[3] = {0, 0, 0}, pivotHidden = 0;
     int timeHidden = 0, levelHidden = 0, catN4[4] = {0, 0, 0, 0}, trendHidden = 0, unconfirmed = 0;
     // (1.11.0) market hours, the volume profiles, the levels per candle (frozen once the candle closed), the gamma file, the statistics
     int openMin = 510, closeMin = 900;
@@ -267,27 +266,20 @@ public:
     BigBidAsk() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int parmsLoad(void);
-    virtual int parmsApply(void) { if (!loading_) saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { if (loading_) return RTX_OK; if (ss::inDialog(this)) ss::onUpdate(this, bbaset::spec(), bbaIds(), (int)i, snap_); saveSettings(); return RTX_OK; }   // (1.16.1) groups through the layer   // (1.12.0) nothing while the window fills
-    bool loading_ = false;
-    std::string dlgLog_;                                  // (1.16.0) the window's fill / save log (BigBidAsk.dialog-<MKT>.txt)
-    void dialogLog(const std::string& mkt, const std::string& line);
+    virtual int parmsLoad(void) { return RTX_OK; }    // (1.17.0) no settings: nothing to fill, nothing to save
+    virtual int parmsApply(void) { return RTX_OK; }
+    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
     void pump(bool fromDraw);
     void release() { BBState* S = slot_.get(this, false); if (S && !S->busy) { try { S->lastRecordMs = -1; flush(*S); } catch (...) {} } slot_.release(this); }   // what is decided is written before the state goes
     BBState* testState() { return slot_.get(this, false); }
 private:
     HostSlot<BBState> slot_;
-    ss::Snap snap_;                                       // (1.16.1) SettingsSpec.h snapshot (+ the group masters' last state)
     long long ctSec(RTDATE d);
     long long sessionOf(long long barTime) { const long long cs = ctSec((RTDATE)barTime); return cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : -1; }
     std::string clockOf(long long t);
     void identify(BBState& S);
     void settings(BBState& S, long long now);
     std::string market();
-    std::string settingsPath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() ? f : f + BBA_SEP "BigBidAsk.settings-" + mkt + ".txt"; }
-    bba::Settings readSettingsFile(const std::string& mkt, std::string& why);
-    std::vector<long long> dialogNow();
     void volPass(BBState& S);
     bool parts(long long t, long& days, int& endSec);
     const std::vector<bba::NamedLevel>& levelsFor(BBState& S, int i, bool closed);
@@ -304,7 +296,6 @@ private:
     void boardPass(BBState& S, long long now);           // (1.15.0) SignalBoard B from the record
     std::string printsPath(BBState& S, long long sess) { const std::string d = dir(); return d.empty() ? d : d + BBA_SEP + stem(S) + "-prints-" + std::to_string(sess) + ".csv"; }
     std::string statsPath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() ? f : f + BBA_SEP "BigBidAsk.stats-" + mkt + ".txt"; }
-    void saveSettings();
     int readStats(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
     int readRows(RTARRAYP* vap, int bar, VOLPROFILE* rows, int count);
     bool readBar(BBState& S, RTARRAYP& vap, int i, long long t, bool closed, float o, float h, float l, float c, bba::Facts& F);
@@ -321,25 +312,9 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<BigBidAsk*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<BigBidAsk*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) {
-    // controls only (his rule); the chart reads the per-market file, the dialog is filled from it (BUILD-LESSONS #42 / #44)
-    // (1.11.0, Rassul mockup v2 approved 15:10) the layout of the mockup: labels for the sections, the statistics as read-only labels
-    // (1.16.1, settings audit 2026-10-18) the same 87 rows in the same order from bbaset::spec() (parameter version 6 kept, 18 lines);
-    // g_ix keeps each control's id (by key) for controls() / toVec / fromVec and the tests
-    PIx& g = g_ix;
-    ss::registerAll(this, bbaset::spec(), bbaIds());
-    const ss::Spec& S = bbaset::spec(); const ss::Ids& I = bbaIds();
-    auto id = [&](const std::string& k) { const int r = ss::find(S, k.c_str()); return r >= 0 && r < (int)I.id.size() ? I.id[(size_t)r] : -1; };
-    g.div = id("div"); g.dim = id("dim"); g.box = id("box"); g.boxBid = id("box_bid"); g.boxAsk = id("box_ask"); g.circle = id("circle"); g.circleCol = id("circle_col");
-    for (int k = 0; k < 4; ++k) { int* x = g.cat[k]; const std::string p = "cat" + std::to_string(k + 1) + "_";
-        x[0] = id(p + "on"); x[1] = k < 3 ? id(p + "n") : -1; x[2] = id(p + "lots"); x[3] = id(p + "font"); x[4] = id(p + "bid"); x[5] = id(p + "ask");
-        x[6] = k < 3 ? id(p + "show") : -1; x[7] = -1; x[8] = -1; }
-    g.skipF = id("skip_first"); g.skipL = id("skip_last"); g.rthOnly = id("sessions"); g.atrUp = id("atr_up"); g.atrDn = id("atr_dn");
-    g.keyOn = id("key_on"); for (int j = 0; j < bba::NKEY; ++j) g.key[j] = id("key_" + std::to_string(j));
-    g.gamOn = id("gam_on"); for (int j = 0; j < bba::NGAM; ++j) g.gam[j] = id("gam_" + std::to_string(j));
-    g.volOn = id("vol_on"); for (int j = 0; j < bba::NVOL; ++j) g.vol[j] = id("vol_" + std::to_string(j));
-    g.statsChart = id("stats_chart"); g.statsPos = id("stats_pos");
-    for (int j = 0; j < 6; ++j) g.statLbl[j] = id("stat_" + std::to_string(j));
-    g.ok = true;
+    // (1.17.0, Rassul approved 19:57 CT) no user settings: no rows. Parameter version 7 (was 6 with 87 rows) so IRT drops what it kept
+    // by position for the old rows; the settings window shows only IRT's own rows.
+    setParameterVersion(7);
     return RTX_OK;
 }
 int cppExtension::calc(int) { static_cast<BigBidAsk*>(this)->pump(false); return RTX_OK; }
@@ -377,17 +352,6 @@ void BigBidAsk::identify(BBState& S) {
     { int o = 0, c = 0; if (svl::rthOf(fresh.market.c_str(), o, c)) { fresh.openMin = o; fresh.closeMin = c; } }   // (1.11.0)
     S = fresh;                                                       // nothing of another symbol / bar size is kept
 }
-// ---- settings: the chart reads the file only (IRT hands the chart copy every box unchecked) ---------------------------------------
-bba::Settings BigBidAsk::readSettingsFile(const std::string& mkt, std::string& why) {
-    const std::string p = settingsPath(mkt);
-    long long st = -1;
-    if (p.empty() || !statFile(p, st)) { why = "missing (defaults)"; return bba::defaultsFor(mkt); }
-    std::string text;
-    if (!readSmall(p, 4096, text)) { why = "unreadable or too big (defaults)"; return bba::defaultsFor(mkt); }
-    bba::Settings s = bba::parseSettings(text, why, mkt);
-    if (why.empty()) why = "file";
-    return s;
-}
 static bool dayOf(const BBState& S, int m) { return m > S.openMin && m <= S.closeMin + 60; }   // (1.11.0) day = the RTH open to an hour after the RTH close (ES 8:30 AM - 4:00 PM)   // (1.10.0, Rassul 14:27) day = 8:30 AM - 4:00 PM CT (the 3 - 4 PM hour is no longer judged by night sizes)
 // (1.15.0) the 1.5 - 1.14 printSd (a log-normal fit over the newest 2,300 candles every 5 s, and Big Lot N over a moving window that
 // counted today's partial session and partly read sessions as whole ones) is gone: tiers are per session, decided once (tierFor).
@@ -404,155 +368,8 @@ static bool timeSkipped(const bba::Settings& set, const svl::Cls& cls, int endSe
 }
 void BigBidAsk::settings(BBState& S, long long now) {
     tierStatus(S, now);   // (1.15.0)
-    if (S.setCheckMs >= 0 && now >= S.setCheckMs && now - S.setCheckMs < 1000) return;
-    S.setCheckMs = now;
-    const std::string p = settingsPath(S.market);
-    long long st = -1;
-    if (p.empty() || !statFile(p, st)) { if (S.setStamp != -1) { S.set = bba::effective(bba::defaultsFor(S.market)); S.settingsWhy = "missing (defaults)"; S.setStamp = -1; } return; }
-    if (st == S.setStamp) return;
-    std::string why; const bba::Settings s = readSettingsFile(S.market, why);
-    long long st2 = -1; if (!statFile(p, st2) || st2 != st) return;                // torn: next check
-    S.set = bba::effective(s); S.settingsWhy = why; S.setStamp = st;   // (1.16.0) an off group uses none of its levels
-}
-static bool inDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }   // the dialog's copy has no bar size
-// (1.11.0) every control in one order: (control number, kind) - I whole number, B box, C colour, F decimal (hundredths), L list (1 - 9)
-static std::vector<std::pair<int, char>> controls() {
-    const PIx& g = g_ix; std::vector<std::pair<int, char>> v;
-    v.push_back({g.div, 'I'}); v.push_back({g.box, 'B'}); v.push_back({g.dim, 'B'}); v.push_back({g.circle, 'B'}); v.push_back({g.circleCol, 'C'});
-    v.push_back({g.boxBid, 'C'}); v.push_back({g.boxAsk, 'C'});
-    for (int k = 0; k < 4; ++k) { const int* x = g.cat[k];
-        v.push_back({x[0], 'B'}); if (k < 3) v.push_back({x[1], 'I'}); v.push_back({x[2], 'I'}); v.push_back({x[3], 'I'});
-        v.push_back({x[4], 'C'}); v.push_back({x[5], 'C'}); if (k < 3) v.push_back({x[6], 'S'}); }
-    v.push_back({g.skipF, 'I'}); v.push_back({g.skipL, 'I'}); v.push_back({g.rthOnly, 'S'}); v.push_back({g.atrUp, 'F'}); v.push_back({g.atrDn, 'F'});
-    v.push_back({g.keyOn, 'B'}); for (int j = 0; j < bba::NKEY; ++j) v.push_back({g.key[j], 'B'});
-    v.push_back({g.gamOn, 'B'}); for (int j = 0; j < bba::NGAM; ++j) v.push_back({g.gam[j], 'B'});
-    v.push_back({g.volOn, 'B'}); for (int j = 0; j < bba::NVOL; ++j) v.push_back({g.vol[j], 'B'});
-    v.push_back({g.statsChart, 'B'}); v.push_back({g.statsPos, 'L'});
-    return v;
-}
-// the settings in the same order as controls()
-static std::vector<long long> toVec(const bba::Settings& s) {
-    std::vector<long long> v;
-    v.push_back(s.div); v.push_back(s.box); v.push_back(s.dim); v.push_back(s.circle); v.push_back(s.circleCol);
-    v.push_back(s.boxBid); v.push_back(s.boxAsk);
-    for (int k = 0; k < 4; ++k) { const bba::Cat& c = s.cat[k];
-        v.push_back(c.on); if (k < 3) v.push_back(c.n); v.push_back(c.lots); v.push_back(c.font); v.push_back(c.bid); v.push_back(c.ask); if (k < 3) v.push_back(c.show); }
-    v.push_back(s.skipFirst); v.push_back(s.skipLast); v.push_back(s.rthOnly ? 1 : 0); v.push_back(s.atrUpQ); v.push_back(s.atrDnQ);
-    v.push_back(s.keyOn); for (int j = 0; j < bba::NKEY; ++j) v.push_back((s.keyMask >> j) & 1u);
-    v.push_back(s.gamOn); for (int j = 0; j < bba::NGAM; ++j) v.push_back((s.gamMask >> j) & 1u);
-    v.push_back(s.volOn); for (int j = 0; j < bba::NVOL; ++j) v.push_back((s.volMask >> j) & 1u);
-    v.push_back(s.statsChart); v.push_back(s.statsPos);
-    return v;
-}
-// the dialog's values -> settings; a value out of range keeps the file's (garbage never reaches the file)
-static bba::Settings fromVec(const std::vector<long long>& v, const bba::Settings& F) {
-    bba::Settings s = F; size_t i = 0;
-    auto nx = [&]() { return i < v.size() ? v[i++] : -1LL; };
-    auto bl = [&](bool& o) { const long long x = nx(); if (x == 0 || x == 1) o = x == 1; };
-    auto cl = [&](unsigned& o) { const long long x = nx(); if (bba::colOk(x) && !bba::nearBlack((unsigned)x)) o = (unsigned)x; };   // (1.16.0) black numbers would vanish on his black chart
-    { const long long x = nx(); if (x == 0 || bba::divOk(x)) s.div = (int)x; }
-    bl(s.box); bl(s.dim); bl(s.circle); cl(s.circleCol); cl(s.boxBid); cl(s.boxAsk);
-    for (int k = 0; k < 4; ++k) { bba::Cat& c = s.cat[k];
-        bl(c.on);
-        if (k < 3) { const long long x = nx(); if (bba::nOk(x)) c.n = (int)x; }
-        { const long long x = nx(); if (k < 3 ? bba::lotsOk(x) : (x >= 1 && x <= 100000)) c.lots = (int)x; }
-        { const long long x = nx(); if (bba::fontOk(x)) c.font = (int)x; }
-        cl(c.bid); cl(c.ask);
-        if (k < 3) { const long long x = nx(); if (bba::showOk(x)) c.show = (int)x; } else c.show = bba::SH_ALL; }
-    { const long long x = nx(); if (bba::minOk(x)) s.skipFirst = (int)x; }
-    { const long long x = nx(); if (bba::minOk(x)) s.skipLast = (int)x; }
-    { const long long x = nx(); if (x == 0 || x == 1) s.rthOnly = x == 1; }
-    { const long long x = nx(); if (bba::atrOk(x)) s.atrUpQ = (int)x; }
-    { const long long x = nx(); if (bba::atrOk(x)) s.atrDnQ = (int)x; }
-    auto grp = [&](bool& on, unsigned& mask, int n) { bl(on); unsigned m = 0; bool good = true;
-        for (int j = 0; j < n; ++j) { const long long x = nx(); if (x == 1) m |= (1u << j); else if (x != 0) good = false; }
-        if (good) mask = m;
-        if (!on) mask = 0; };                                         // (1.16.0) an off group keeps none of its levels
-    grp(s.keyOn, s.keyMask, bba::NKEY); grp(s.gamOn, s.gamMask, bba::NGAM); grp(s.volOn, s.volMask, bba::NVOL);
-    bl(s.statsChart);
-    { const long long x = nx(); if (bba::posOk(x)) s.statsPos = (int)x; }
-    return s;
-}
-// (1.16.1) the window <-> 1.16's control vector (controls() order): through the table rows (SettingsHost.h) - the colour calls, the
-// snapshot, the group masters (compared with their last state, lesson 94) all come from the layer
-static std::vector<long long> vecFromValues(const ss::Values& V) {
-    std::vector<long long> v;
-    for (const auto& c : controls()) {
-        const int r = ss::rowOf(bbaIds(), c.first);
-        if (c.first < 0 || r < 0) { v.push_back(-1); continue; }
-        switch (c.second) {
-            case 'B': v.push_back(V.b(r) ? 1 : 0); break;
-            case 'C': v.push_back((long long)V.c(r)); break;
-            case 'F': v.push_back(bba::toHundredths(V.f(r))); break;
-            case 'L': v.push_back(V.i(r) + 1); break;                  // the Position list: 1 - 9
-            default:  v.push_back(V.i(r));                             // whole numbers and index lists ('S')
-        }
-    }
-    return v;
-}
-static ss::Values valuesFromVec(const std::vector<long long>& v, const std::string& mkt) {
-    ss::Values V = ss::defaults(bbaset::spec(), ss::marketIndex(mkt));
-    const auto cs = controls();
-    for (size_t k = 0; k < cs.size() && k < v.size(); ++k) {
-        const int r = ss::rowOf(bbaIds(), cs[k].first); if (r < 0) continue;
-        double x = (double)v[k];
-        if (cs[k].second == 'F') x = v[k] / 100.0; else if (cs[k].second == 'L') x = (double)(v[k] - 1);
-        if (ss::valid(bbaset::spec().rows[r], x)) V.v[(size_t)r] = x;
-    }
-    return V;
-}
-std::vector<long long> BigBidAsk::dialogNow() {
-    return vecFromValues(ss::dialogNow(this, bbaset::spec(), bbaIds(), ss::defaults(bbaset::spec(), ss::marketIndex(market()))));
-}
-void BigBidAsk::dialogLog(const std::string& mkt, const std::string& line) {
-    try { const std::string f = flexDir(); if (f.empty() || mkt.empty()) return; makeDir(f);
-          dlgLog_ = (dlgLog_.size() > 3000 ? dlgLog_.substr(dlgLog_.size() - 3000) : dlgLog_) + line + "\n";
-          publishFile(f + BBA_SEP "BigBidAsk.dialog-" + mkt + ".txt", dlgLog_); } catch (...) {}
-}
-int BigBidAsk::parmsLoad(void) {
-    struct Unload { bool& f; ~Unload() { f = false; } } unload = { loading_ };
-    loading_ = true;
-    try {
-        if (!inDialog(this)) return RTX_OK;
-        const std::string mkt = market(); if (mkt.empty()) return RTX_OK;
-        std::string why; const bba::Settings s = readSettingsFile(mkt, why);   // opening never saves
-        if (!g_ix.ok) return RTX_OK;
-        ss::fillDialog(this, bbaset::spec(), bbaIds(), valuesFromVec(toVec(bba::shownSettings(s, mkt)), mkt), snap_);   // (1.16.1) the divider as used (market default when 0)
-        {   // (1.11.0, Rassul 15:06 "i want to see them in the settings") the statistics the chart wrote, as read-only text
-            std::string text; std::vector<std::string> L;
-            const std::string sp = statsPath(mkt);
-            if (!sp.empty() && readSmall(sp, 16 * 1024, text)) { std::istringstream in(text); std::string ln; while (L.size() < 6 && std::getline(in, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); L.push_back(ln); } }
-            if (L.empty()) L.push_back("No statistics yet: open the chart with BigBidAsk on it (they are written by the chart every 5 seconds).");
-            for (int j = 0; j < 6; ++j) setLabelText(g_ix.statLbl[j], j < (int)L.size() ? L[j].c_str() : "");
-        }
-        {   // (1.16.0) what the window was filled with vs what it shows now (a window that ignores the fill shows here)
-            ss::Values shown; shown.v = snap_.v; shown.t = snap_.t;
-            const std::vector<long long> want = toVec(bba::shownSettings(s, mkt)), got = vecFromValues(shown);
-            int okN = 0; std::string bad; for (size_t k = 0; k < want.size() && k < got.size(); ++k) { if (want[k] == got[k]) ++okN; else if (bad.size() < 300) bad += " " + std::to_string(k) + ":" + std::to_string(want[k]) + "/" + std::to_string(got[k]); }
-            dialogLog(mkt, "PARMSLOAD," BBA_VERSION ",settings " + why + ",filled " + std::to_string(want.size()) + ",read back same " + std::to_string(okN) + (bad.empty() ? std::string() : ",differ (field:filled/shown)" + bad));
-        }
-    } catch (...) {}
-    return RTX_OK;
-}
-void BigBidAsk::saveSettings() {
-    try {
-        if (!inDialog(this)) return;                                  // never from the chart copy
-        const std::string mkt = market(); if (mkt.empty()) return;
-        const std::string p = settingsPath(mkt); if (p.empty()) return;
-        std::string why; const bba::Settings F = readSettingsFile(mkt, why);
-        if (!g_ix.ok) return;
-        // (1.16.1) a control he did not touch keeps the file's value (ss::readDialog + the snapshot); fromVec keeps 1.16's checks (black kept out)
-        const ss::Values V = ss::readDialog(this, bbaset::spec(), bbaIds(), valuesFromVec(toVec(bba::shownSettings(F, mkt)), mkt), snap_);
-        if (V.why.compare(0, 7, "refused") == 0) { dialogLog(mkt, "REFUSED," BBA_VERSION "," + V.why); return; }   // (1.16.2) a blank window never overwrites his file (10-18 15:07 CT zeroed file)
-        const std::vector<long long> v = vecFromValues(V);
-        if (v.size() != toVec(F).size()) return;
-        bba::Settings s = fromVec(v, F);
-        if (s.div == bba::divFor(mkt)) s.div = 0;                     // (1.16.0) the market default shown in the window is stored as 0 (follows the default)
-        makeDir(flexDir());
-        if (bba::looksBlank(s)) { dialogLog(mkt, "REFUSED," BBA_VERSION ",every category / box / circle off and every colour black - kept " + bba::formatSettings(F)); return; }   // (1.16.2)
-        const std::string line = bba::formatSettings(s);
-        if (publishFile(p, line + "\n")) { snap_.take(ss::dialogNow(this, bbaset::spec(), bbaIds(), V)); dialogLog(mkt, "SAVED," BBA_VERSION "," + line); }
-    } catch (...) {}
+    // (1.17.0) fixed behaviour, no file: BigBidAsk.settings-<MKT>.txt is never read or written
+    if (S.setStamp != 117 || S.setMarket != S.market) { S.set = bba::effective(bba::fixedSettings(S.market)); S.settingsWhy = "fixed (1.17.0, no settings)"; S.setStamp = 117; S.setMarket = S.market; }
 }
 // ---- the chart's volume at price (only trivial values live in these MSVC SEH helpers) ---------------------------------------------
 int BigBidAsk::readStats(RTARRAYP* vap, int bar, BARSTATISTICS* stats) {
@@ -748,13 +565,13 @@ void BigBidAsk::status(BBState& S, long long now) {
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << BBA_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nTICK," << S.tick
-      << "\nSETTINGS,fonts " << S.set.cat[0].font << "/" << S.set.cat[1].font << "/" << S.set.cat[2].font << "/" << S.set.cat[3].font << ",box " << (S.set.box ? 1 : 0) << ",circle " << (S.set.circle ? 1 : 0) << ",dim " << (S.set.dim ? 1 : 0) << ",divider " << (S.set.div > 0 ? S.set.div : bba::divFor(S.market)) << (S.set.div > 0 ? "" : " (market default)") << ",box colours " << std::hex << S.set.boxBid << " / " << S.set.boxAsk << std::dec << ",show " << S.set.cat[0].show << "/" << S.set.cat[1].show << "/" << S.set.cat[2].show
-      << ([&]() { for (int k = 0; k < 3; ++k) { const int sh = S.set.cat[k].show; if (S.set.cat[k].on && (sh == bba::SH_LEVEL || sh == bba::SH_PIVLEVEL) && !(S.set.keyMask | S.set.gamMask | S.set.volMask)) return std::string(" (WARNING: category ") + std::to_string(k + 1) + " shows near a level but no levels are selected - it shows nothing)"; } return std::string(); })()
-      << ",skip first / last " << S.set.skipFirst << " / " << S.set.skipLast << " min,level zone " << S.set.atrUpQ / 100.0 << " ATR above / " << S.set.atrDnQ / 100.0 << " below," << S.settingsWhy
+      << "\nSETTINGS,fixed (1.17.0, no settings),categories BL5 all prints / BL10 Trend PB + BO / BL20 Trend PB + BO (no category 4),font " << S.set.cat[0].font
+      << ",box " << (S.set.box ? 1 : 0) << ",circle " << (S.set.circle ? 1 : 0) << ",dim " << (S.set.dim ? 1 : 0) << ",divider " << bba::divFor(S.market) << " (market default)"
+      << ",skip first / last " << S.set.skipFirst << " / " << S.set.skipLast << " min,levels off,Big Lot box " << (S.set.statsChart ? "on" : "off")
       << "\nLEVELS,gamma " << S.gamWhy << ",volume profiles " << S.vp.size() << " sessions (from bar " << S.volNext << "),candles with levels " << S.lvCache.size()
       << "\nCANDLES,final " << S.fin.size() << ",recorded " << S.recorded.size() << ",pending " << S.pending.size() << ",record fails " << S.recFails
       << "\nVAP,missing reads " << S.missing << ",bid/ask vs bar totals mismatch " << S.mismatch << ",faults " << S.faults
-      << "\nSIZES," << S.sdWhy << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim << ",category 1 / 2 / 3 / 4 prints " << S.catN4[0] << " / " << S.catN4[1] << " / " << S.catN4[2] << " / " << S.catN4[3] << ",big but kept out by the pivot filter " << S.pivotHidden << ",by the level filter " << S.levelHidden << ",by Trend PB / BO " << S.trendHidden << ",shown before their pivot is confirmed (may still go) " << S.unconfirmed << ",by the time filter " << S.timeHidden
+      << "\nSIZES," << S.sdWhy << "\nDRAWN,numbers " << S.lay.shown << ",nudged " << S.lay.nudged << ",bold without room " << S.lay.crowded << ",not drawn (no room) " << S.lay.dropped << ",of them in view " << S.droppedInView << " (the rest are the lead-in left of the view)" << ",under the HOD/LOD box " << S.clHl << ",slid off the HOD/LOD box " << S.slidHl << ",circles " << S.circles << ",circles without room " << S.circlesHidden << ",bold at a zone " << S.zoneFull << ",bold mid-range (dimmed) " << S.zoneDim << ",category 1 / 2 / 3 / 4 prints " << S.catN4[0] << " / " << S.catN4[1] << " / " << S.catN4[2] << " / " << S.catN4[3] << ",big but kept out by the pivot filter " << S.pivotHidden << ",by the level filter " << S.levelHidden << ",by Trend PB / BO " << S.trendHidden << ",shown before their pivot is confirmed (may still go) " << S.unconfirmed << ",by the time filter " << S.timeHidden
       << "\nCLASH,left " << S.clL << ",right " << S.clR << ",top " << S.clT << ",bottom " << S.clB << ",banner " << S.clTr << ",too big " << S.clBig << ",slid back in " << S.shifted << ",area fallback " << S.areaFallback
       << "\nAREA,left " << S.leftLimit << ",price right " << S.priceRight << ",columns levels " << (S.peers.on[cb::LEVELS] ? "on" : "off") << " delta " << (S.peers.on[cb::DELTA] ? "on" : "off")
       << " dealer " << (S.peers.on[cb::DEALER] ? "on" : "off") << " liq " << (S.peers.on[cb::LIQ] ? "on" : "off") << ",tape reader banner " << (S.trOn ? "avoided" : "none")
@@ -1191,7 +1008,7 @@ void BigBidAsk::logPass(BBState& S, long long now) {
     if (allOk) S.logPending.clear();
 }
 void BigBidAsk::render(BBState& S) {
-    S.targets.clear(); S.clL = S.clR = S.clT = S.clB = S.clTr = S.clBig = S.shifted = S.areaFallback = 0; S.circles = 0; S.circlesHidden = 0; S.droppedInView = 0; S.zoneFull = 0; S.zoneDim = 0; S.hugeN = 0; S.catN4[0] = S.catN4[1] = S.catN4[2] = S.catN4[3] = 0; S.pivotHidden = 0; S.levelHidden = 0; S.timeHidden = 0; S.trendHidden = 0; S.unconfirmed = 0;
+    S.targets.clear(); S.clL = S.clR = S.clT = S.clB = S.clTr = S.clBig = S.clHl = S.slidHl = S.shifted = S.areaFallback = 0; S.circles = 0; S.circlesHidden = 0; S.droppedInView = 0; S.zoneFull = 0; S.zoneDim = 0; S.hugeN = 0; S.catN4[0] = S.catN4[1] = S.catN4[2] = S.catN4[3] = 0; S.pivotHidden = 0; S.levelHidden = 0; S.timeHidden = 0; S.trendHidden = 0; S.unconfirmed = 0;
     const long count = getBarCount();
     if (count < 2 || S.tick <= 0) return;
     RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
@@ -1343,6 +1160,9 @@ void BigBidAsk::render(BBState& S) {
             if (hit) lose[q] = 1; else kept.push_back(q);
         }
     }
+    std::vector<bba::Box> ko;   // (1.17.0) the HOD/LOD table + strip (as published) and the Big Lot box (as last drawn): keep-out
+    if (S.hlOn) { bba::Box x; x.l = S.hlBox.l - 2; x.t = S.hlBox.t - 2; x.r = S.hlBox.r + 2; x.b = S.hlBox.b + 2; ko.push_back(x); }
+    if (S.blOn && set.statsChart) { bba::Box x; x.l = S.blBox.l - 2; x.t = S.blBox.t - 2; x.r = S.blBox.r + 2; x.b = S.blBox.b + 2; ko.push_back(x); }
     for (size_t k = 0; k < cands.size(); ++k) {
         const bba::Cand& c = cands[k]; bba::Box f = boxes[k];
         if (c.bar < vs) continue;                                       // left of the view
@@ -1360,6 +1180,7 @@ void BigBidAsk::render(BBState& S) {
               else if (dx || dy) { f.l += dx; f.r += dx; f.t += dy; f.b += dy; ++S.shifted; }
           } }
         if (!clash && S.trOn && !(f.r < S.trBox.l || f.l > S.trBox.r || f.b < S.trBox.t || f.t > S.trBox.b)) { clash = true; ++S.clTr; }   // the Tape Reader banner
+        if (!clash && !ko.empty()) { const int kr = bba::keepOut(f, ko, area); if (kr < 0) { clash = true; ++S.clHl; } else if (kr > 0) ++S.slidHl; }   // (1.17.0) never through the HOD/LOD table / strip or the Big Lot box
         if (clash) { ++S.droppedInView; ++S.lay.dropped; if (c.circle) ++S.circlesHidden; continue; }
         ++S.lay.shown;
         const bool zone = zn::atZone(Z, c.bar, candPx[k]);
@@ -1522,7 +1343,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);
-    p->setDescription("LRA Big Bid / Ask 1.16.0: on each candle, the biggest print AT THE BID (sellers, left) and AT THE ASK (buyers, right) in lots / divider, shown when it reaches one of your Big Lot categories (Big Lot N = the size reached about N times a session, worked out per market for day and night; category 4 = a fixed size). One Show choice per category: All prints, Near pivot, Near a level, Pivot near a level, Trend PB, Trend BO, Trend PB + BO; category 4 shows every print of its size. Hover a number for the details.");
-    p->setVersion("1.16.2");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask 1.17.0 (no settings): on each candle, the biggest print AT THE BID (left) and AT THE ASK (right) in lots / divider, boxed red at the bid and green at the ask. Big Lot 5 = every such print (cyan); Big Lot 10 and Big Lot 20 only on a trend pullback or breakout (white). Big Lot N = the size reached about N times a session, per market, day and night. The first and last 15 minutes of each session are skipped. The Big Lot box (BL5 / BL10 / BL20 averages) sits beside the HOD/LOD table. Mouse over a number or the box for the detail.");
+    p->setVersion("1.17.0");   // BBA_VERSION
     return p;
 }
