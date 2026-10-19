@@ -1,4 +1,4 @@
-// SettingsHost.h  1.1.0  (2026-10-18)  -  the SDK side of SettingsSpec.h. Include AFTER irtsdk.h.
+// SettingsHost.h  1.1.1  (2026-10-18; 1.1.1: a filled copy without a snapshot saves a 0 choice, e.g. Show = All prints)  -  the SDK side of SettingsSpec.h. Include AFTER irtsdk.h.
 // (1.1.0, 2026-10-18 17:20 CT) BLANK-SAVE GUARD: his BigBidAsk.settings-ES.txt was overwritten at 15:07:55 CT with every box off and
 // every colour 0 ("where are all the big prints? they are all gone") - a window copy that READ BLANK (every box unchecked, colour 0,
 // list -1, number 0: what IRT hands a copy whose controls were never filled, e.g. after setParameterVersion reset them) was saved.
@@ -117,8 +117,21 @@ inline Values readDialog(cppExtension* x, const Spec& S, const Ids& ids, const V
     const Values now = dialogNow(x, S, ids, file);
     if (blankRead(S, ids, now)) { Values F = file; F.why = "refused: the window read blank (never saved over the file)"; return F; }
     Values V = file;
+    // (1.1.1, Rassul 19:22 "i selected all prints now and nothing changed": BigBidAsk's Show = "All prints" is list item 0 and was
+    // dropped by the no-snapshot rule) without a snapshot, a copy that reads back what the file holds on >= 80% of the file's non-zero
+    // controls IS filled (a real window): every valid read counts, a 0 included. Only a partly blank copy keeps the per-control rule.
+    bool filledCopy = false;
+    if (!snap.ok) { int nz = 0, same = 0;
+        for (int k = 0; k < S.n; ++k) { if (ids.id[(size_t)k] < 0) continue; const Type t = S.rows[k].type; if (t == T_LABEL || t == T_TEXT) continue;
+            if (file.v[(size_t)k] == 0) continue;
+            ++nz;
+            if (now.v[(size_t)k] == file.v[(size_t)k]) ++same; }
+        filledCopy = nz >= 3 && same * 10 >= nz * 8; }
     for (int k = 0; k < S.n; ++k) {
         if (ids.id[(size_t)k] < 0) continue;                                  // hidden rows keep the file's value
+        if (!snap.ok && filledCopy && S.rows[k].type != T_TEXT && S.rows[k].type != T_LABEL) {   // (1.1.1) a real window: take what it shows
+            const double nv = now.v[(size_t)k]; if (valid(S.rows[k], nv)) V.v[(size_t)k] = nv;
+            continue; }
         if (!snap.ok && S.rows[k].type != T_TEXT && S.rows[k].type != T_LABEL) {   // (1.1.0) no fill on this copy: only real reads count
             const double nv = now.v[(size_t)k]; if ((S.rows[k].type == T_LIST ? nv > 0 : nv != 0) && valid(S.rows[k], nv)) V.v[(size_t)k] = nv;
             continue; }

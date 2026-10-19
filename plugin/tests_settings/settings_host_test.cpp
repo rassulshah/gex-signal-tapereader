@@ -89,6 +89,13 @@ int main() {
             out = ss::readDialog(&r, *SP, ri, file, none);
             int lost = 0; for (int k = 0; k < SP->n; ++k) if ((SP->rows[k].type == ss::T_COLOR || SP->rows[k].type == ss::T_BOOL) && out.v[(size_t)k] != file.v[(size_t)k]) ++lost;
             CHECK(lost == 0, std::string(SP->plugin) + ": without a snapshot a blank-reading box / colour keeps the file's value");
+            // (g) (1.1.1, Rassul 19:22 "i selected all prints now and nothing changed") no snapshot, a FILLED window (it shows the file),
+            //     he changes one list to item 0 / one number to 0: that 0 is saved
+            {   cppExtension f; ss::Ids fi; ss::registerAll(&f, *SP, fi); ss::Snap tmp; ss::fillDialog(&f, *SP, fi, file, tmp);
+                int lk = -1; for (int k = 0; k < SP->n; ++k) if (fi.id[(size_t)k] >= 0 && SP->rows[k].type == ss::T_LIST && file.v[(size_t)k] != 0 && ss::valid(SP->rows[k], 0)) { lk = k; break; }
+                if (lk >= 0) { f.userList(fi.id[(size_t)lk], 0); out = ss::readDialog(&f, *SP, fi, file, none);
+                    CHECK(out.v[(size_t)lk] == 0, std::string(SP->plugin) + ": filled window, no snapshot: list item 0 is saved"); }
+            }
         }
         // (f) the HodLod parameter version 6 -> 7 (Offset X / Y removed): his 2.4.3 file loads, nothing is written by loading,
         //     a blank window after the bump is refused
