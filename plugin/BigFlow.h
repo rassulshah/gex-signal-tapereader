@@ -20,14 +20,14 @@
 #include <vector>
 
 namespace bfl {
-static const char* const VERSION = "1.3.0";   // (1.3.0, lsLiquidityProfile 0.44.0) Mkt::maxIn(): the largest single market order (one aggressor id) per side whose last fill fell in a bar, for the Market State LOTS facts (every completed order is kept 30 min as (tLast, side, lots), any size)
+static const char* const VERSION = "1.4.0";   // (1.4.0, lsLiquidityProfile 0.45.2, Rassul 20:04 2026-10-18 "MKT column values are flashing") Mkt::marksHeld(): an order printed once stays printed (its id is held, its tier never drops) while it is in the 60-min window, whatever the cut does later; (1.3.0, lsLiquidityProfile 0.44.0) Mkt::maxIn(): the largest single market order (one aggressor id) per side whose last fill fell in a bar, for the Market State LOTS facts (every completed order is kept 30 min as (tLast, side, lots), any size)
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };              // FILL side = the aggressor: BID = a buyer lifted the offer, ASK = a seller hit the bid
 static const long long DONE_MS = 2000;      // a market order is complete 2 s after its last fill
 static const long long KEEP_MS = 3600000;   // marks: the last 60 min
 static const int MIN_N = 30;
 
-struct Mark { int side = BID; Tick px = 0; long long lots = 0; int n = 0; long long last = 0; Tick lo = 0, hi = 0; };   // lo / hi = the lowest / highest price taken (a sweep: hi > lo)
+struct Mark { int side = BID; Tick px = 0; long long lots = 0; int n = 0; long long last = 0; Tick lo = 0, hi = 0; int tier = 0; };   // (1.4.0) tier 1-3 from marksHeld (0 = not set)   // lo / hi = the lowest / highest price taken (a sweep: hi > lo)
 
 inline bool logStats(const std::vector<long long>& v, double& mu, double out[3]) {
     if ((int)v.size() < MIN_N) return false;
@@ -41,7 +41,7 @@ inline std::vector<Mark> topMarks(const std::vector<Mark>& in, int per) {
     std::vector<Mark> m;
     for (size_t i = 0; i < in.size(); ++i) {
         bool hit = false;
-        for (size_t j = 0; j < m.size(); ++j) if (m[j].side == in[i].side && m[j].px == in[i].px) { m[j].lots += in[i].lots; m[j].n += in[i].n; m[j].last = std::max(m[j].last, in[i].last); m[j].lo = std::min(m[j].lo, in[i].lo); m[j].hi = std::max(m[j].hi, in[i].hi); hit = true; break; }
+        for (size_t j = 0; j < m.size(); ++j) if (m[j].side == in[i].side && m[j].px == in[i].px) { m[j].lots += in[i].lots; m[j].n += in[i].n; m[j].last = std::max(m[j].last, in[i].last); m[j].lo = std::min(m[j].lo, in[i].lo); m[j].hi = std::max(m[j].hi, in[i].hi); m[j].tier = std::max(m[j].tier, in[i].tier); hit = true; break; }
         if (!hit) m.push_back(in[i]);
     }
     std::vector<Mark> out;
@@ -69,7 +69,7 @@ public:
     std::deque<Recent> recent;                        // (1.3.0) every completed market order of the last RECENT_MS (any size), sorted by its last fill
     static const long long RECENT_MS = 1800000; static const size_t RECENT_CAP = 200000;
     Mkt() : cnt(1024, 0) {}
-    void clear() { open.clear(); done.clear(); fresh.clear(); recent.clear(); big.clear(); bigP[0].clear(); bigP[1].clear(); std::fill(cnt.begin(), cnt.end(), 0); nAll = fills = noAggr = 0; }
+    void clear() { open.clear(); done.clear(); fresh.clear(); recent.clear(); held.clear(); big.clear(); bigP[0].clear(); bigP[1].clear(); std::fill(cnt.begin(), cnt.end(), 0); nAll = fills = noAggr = 0; }
     long long start() const {                         // the 99th percentile of every completed market order, never under 3
         if (nAll <= 0) return 3;
         const long long want = std::max(1LL, (long long)std::ceil(0.01 * (double)nAll));
@@ -124,6 +124,29 @@ public:
             Mark m; m.side = o.side; m.px = (Tick)std::llround(o.pxLots / (double)o.lots); m.lots = o.lots; m.n = 1; m.last = o.tLast; m.lo = o.lo; m.hi = o.hi; in.push_back(m); };
         for (size_t i = 0; i < done.size(); ++i) add(done[i].second);
         for (std::unordered_map<long long, Ord>::const_iterator it = open.begin(); it != open.end(); ++it) add(it->second);
+        return topMarks(in, per);
+    }
+    // (1.4.0) NO FLICKER: the MKT column's marks. An order enters at cut[0] (1SD) and is then HELD by its aggressor id: it stays a mark at the tier it
+    // reached (1 = 1SD, 2 = 2SD, 3 = cut[2]) even if a later cut is higher, until it leaves the 60-min window. A still-filling order may only go UP a tier.
+    std::unordered_map<long long, int> held;          // aggressor id -> tier printed
+    std::vector<Mark> marksHeld(long long now, const long long cut[3], int per = 5) {
+        std::vector<Mark> in;
+        auto add = [&](long long id, const Ord& o) {
+            if (o.tLast < now - KEEP_MS) return;
+            const int t = o.lots >= cut[2] ? 3 : o.lots >= cut[1] ? 2 : o.lots >= cut[0] ? 1 : 0;
+            std::unordered_map<long long, int>::iterator h = held.find(id);
+            const int tier = std::max(t, h == held.end() ? 0 : h->second);
+            if (tier <= 0) return;
+            held[id] = tier;
+            Mark m; m.side = o.side; m.px = (Tick)std::llround(o.pxLots / (double)o.lots); m.lots = o.lots; m.n = 1; m.last = o.tLast; m.lo = o.lo; m.hi = o.hi; m.tier = tier; in.push_back(m); };
+        for (size_t i = 0; i < done.size(); ++i) add(done[i].first, done[i].second);
+        for (std::unordered_map<long long, Ord>::const_iterator it = open.begin(); it != open.end(); ++it) add(it->first, it->second);
+        if (held.size() > in.size() + 256) {          // forget ids that left the window (never one still in it)
+            std::unordered_map<long long, int> keep;
+            for (size_t i = 0; i < done.size(); ++i) { std::unordered_map<long long, int>::iterator h = held.find(done[i].first); if (h != held.end()) keep.insert(*h); }
+            for (std::unordered_map<long long, Ord>::const_iterator it = open.begin(); it != open.end(); ++it) { std::unordered_map<long long, int>::iterator h = held.find(it->first); if (h != held.end()) keep.insert(*h); }
+            held.swap(keep);
+        }
         return topMarks(in, per);
     }
 };

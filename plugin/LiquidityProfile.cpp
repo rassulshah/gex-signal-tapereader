@@ -138,7 +138,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.45.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.45.2"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.44.0, 2026-10-18 night, Rassul approved "yes 2x" + the audit fixes) 1) the column DRAWS a zone only at >= 2.0x (lqp drawn state:
 // enters live at 2.0x, removed only at a bar close under 2.0x; no 1.5x near entry / 1.2x keep / any size during absorption) - the
 // records and attempts are unchanged; 2) LMT R "S5 anywhere" compares the largest SINGLE order at a price (bol::biggestSingle), never
@@ -438,7 +438,7 @@ struct LQState {
     int colBigL = -1, colBigR = -1; std::deque<std::pair<long long, double>> boHist[2]; long long boHistPx[2] = { -1, -1 };
     int boSign[2] = { 0, 0 }; double boSize[2] = { 0, 0 }; long long boNormsMs = -1, boNorms[24] = { 0 }; bool boNormsOk = false;
     int boExec = 0; long long boDepthMin = 0;
-    bfl::Mkt mkt; bfl::Ice ice; long long bfNow = 0; bool mktOk = false; double mktMu = 0, mktV[3] = { 0, 0, 0 }, mktQ266 = 0;
+    bfl::Mkt mkt; bfl::Ice ice; long long bfNow = 0; bool mktOk = false; double mktMu = 0, mktV[3] = { 0, 0, 0 }, mktQ266 = 0; lqp::MktPool mkPool;   // (0.45.2) the 5-session MKT pick, kept between recomputes
     struct MN { bool ok = false; long long n = 0, start = 0, bigN = 0; double mu = 0, v[3] = { 0, 0, 0 }; };
     MN mnP[2], lnP[2];   // (0.36.0) the 5-session average per period: 0 = RTH, 1 = overnight (kind P rows)
     MN mnAll, mnS[4], mnH[24]; long long mnMs = -1; bool mnHave = false; std::string mnSrc;
@@ -1419,7 +1419,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
             o << "MKT_ORDERS," << bfl::VERSION << ",market orders " << S.mkt.nAll << ",fills " << S.mkt.fills << ",no aggressor id " << S.mkt.noAggr
               << ",start " << S.mkt.start() << ",big " << S.mkt.big.size() << (ok ? ",Mkt mu " + std::to_string((long long)std::llround(mu)) + " / 1SD " + std::to_string((long long)std::llround(v[0]))
               + " / 2SD " + std::to_string((long long)std::llround(v[1])) + " / 3SD " + std::to_string((long long)std::llround(v[2])) : std::string(",learning"))
-              << ",drawn " << S.mktDrawn << ",norm " << (S.mnSrc.empty() ? std::string("none (session-learned)") : S.mnSrc) << ",lmtnorm " << (S.lnSrc.empty() ? std::string("none (session-learned)") : S.lnSrc) << "\nABS_BADGE,0.32.0,dir " << S.absDir << ",px " << S.absPx << ",layers " << S.absBits << " (" << absCount(S.absBits) << "/4),mkt lots " << S.absMLots << " sweep " << S.absSweep << ",lmt fill " << S.absFill << " ice " << S.absIce << ",dp ax " << S.absAx << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
+              << ",drawn " << S.mktDrawn << ",held " << S.mkt.held.size() << ",tiers " << (S.mkPool.ok ? "5-session pool" : S.mktOk ? "session (pool learning)" : "learning") << ",norm " << (S.mnSrc.empty() ? std::string("none (session-learned)") : S.mnSrc) << ",lmtnorm " << (S.lnSrc.empty() ? std::string("none (session-learned)") : S.lnSrc) << "\nABS_BADGE,0.32.0,dir " << S.absDir << ",px " << S.absPx << ",layers " << S.absBits << " (" << absCount(S.absBits) << "/4),mkt lots " << S.absMLots << " sweep " << S.absSweep << ",lmt fill " << S.absFill << " ice " << S.absIce << ",dp ax " << S.absAx << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
         }
         o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",lines under 1SD (not drawn) " << S.boUnder1sd << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 = 1SD dim, 2 = 2SD full colour, 3 = 3SD full colour + outline),start " << S.boBase << " lots,big lots " << S.bldN << (S.bldOk ? std::string(",Big mu ") + std::to_string((long long)std::llround(S.bldMu)) + " Big Lot S20 " + std::to_string((long long)std::llround(S.bldV[0])) + " S10 " + std::to_string((long long)std::llround(S.bldV[1])) + " S5 " + std::to_string((long long)std::llround(S.bldV[2])) : std::string(",learning (needs 30) - steps of the start used")) << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
@@ -1701,7 +1701,10 @@ void LiquidityProfile::orders(LQState& S, long long st) {
             }
         }
     });
-    if (S.boSet.on && S.bfNow > 0) { S.mkt.step(S.bfNow); S.ice.step(S.bfNow); S.mktOk = S.mkt.stats(S.mktMu, S.mktV); mktBldUpdate(S); }   // (0.28.0) (0.33.0) + the nightly norms
+    if (S.boSet.on && S.bfNow > 0) { S.mkt.step(S.bfNow); S.ice.step(S.bfNow);
+        // (0.45.2) ONE source per calc: the pool kept between its 5-s recomputes, else the session's own stats (0.45.1 alternated them: the flashing MKT values)
+        double lmu = 0, lv[3] = { 0, 0, 0 }; const bool lok = S.mkt.stats(lmu, lv); mktBldUpdate(S);
+        S.mktOk = lqp::mktTiersPick(S.mkPool, lok, lmu, lv, S.mktMu, S.mktV, S.mktQ266); }   // (0.28.0) (0.33.0) + the nightly norms
     {   // (0.32.0, Rassul 22:17 "mkt lmt fp and dp ... must all be tracked together") every market order of 10+ lots and every ended iceberg to a file, RAW (whatever
         // the yardstick says), so the studies can find the best definition per market: <MKT>-<sym>-<spb>-mktorders-<session>.csv / -iceorders-<session>.csv
         const std::string d2 = dir();
@@ -1949,7 +1952,7 @@ void LiquidityProfile::mktBldUpdate(LQState& S) {
     const long long ms = nowMs(S); const int mod = (int)((ms / 60000LL) % 1440LL);
     std::string src; const BldCh* a = bldPick(B, mod >= 8 * 60 + 30 && mod < 15 * 60, src);
     S.mkSrc = src;
-    if (a) { S.mktOk = true; S.mktMu = a->mu; for (int k = 0; k < 3; ++k) S.mktV[k] = a->v[k]; S.mktQ266 = a->q266; }
+    S.mkPool = lqp::MktPool(); if (a) { S.mkPool.ok = true; S.mkPool.mu = a->mu; for (int k = 0; k < 3; ++k) S.mkPool.v[k] = a->v[k]; S.mkPool.q266 = a->q266; }   // (0.45.2) kept until the next recompute
 }
 // (0.37.0, Rassul 14:00 "instead of using 3 SD, use 2.66, in case it just misses the 3SD cutoff") the top tier starts at 2.66 SD: log-space mean + 2.66 x SD, from the mean and the 1SD size
 static double lqSd266(double mu, double v1, double v3) {
@@ -2160,7 +2163,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         if (tries >= 6 || t0 < top + 14 || t0 + sh > bottom) continue;
         const bool old = nowT - e.last > 1800000LL;                  // older than 30 min: dimmer
         const bool dim = old || tier == 1;
-        const bool green = e.ice ? e.side == bol::BID : e.side != bol::BID;   // filled bid RED, filled ask GREEN (who hit it, 0.19.1); an iceberg keeps its own side's colour
+        const bool green = lqp::lmtFillGreen(e.side == bol::BID);   // (0.45.2, Rassul 20:06) the RESTING side: filled bid GREEN (buyers absorbed), filled offer RED (sellers absorbed); icebergs the same (0.19.1-0.45.1: coloured by who hit it)
         setFont(tier >= 2 ? fsb : fsp);
         putF(t0, sh, tx, green ? (dim ? C_BUY_DIM : C_BUY) : (dim ? C_SELL_DIM : C_SELL), e.ice);
         usedF.push_back(std::make_pair(t0, t0 + sh)); ++S.boExec;
@@ -2266,7 +2269,7 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
     long long cut[3] = { 2 * st, 4 * st, 8 * st };
     if (S.mktOk) for (int k = 0; k < 3; ++k) cut[k] = std::max(1LL, (long long)std::llround(k == 2 ? (S.mktQ266 > 0 ? S.mktQ266 : lqSd266(S.mktMu, S.mktV[0], S.mktV[2])) : S.mktV[k]));
     cut[2] = std::max(cut[2], cut[1]);
-    const std::vector<bfl::Mark> mk = S.mkt.marks(S.bfNow, cut[0], 5);
+    const std::vector<bfl::Mark> mk = S.mkt.marksHeld(S.bfNow, cut, 5);   // (0.45.2) printed once = kept (held by order id, tier never drops) while in the 60-min window
     const int bfont = std::max(bol::FONT_MIN, std::min(bol::FONT_MAX, S.boSet.font)) - 1;
     FONT fb; fb.id = HELVETICA; fb.size = coord(bfont); fb.style = BOLD; setFont(fb);
     const int rh = rowPx(bfont) + 2;
@@ -2277,7 +2280,7 @@ void LiquidityProfile::renderMkt(LQState& S, int l, int r, int top, int bottom) 
     FONT fb3 = fb; fb3.size = coord(bfont + 1);                          // (0.37.0) 3SD and over: a bigger number, no outline, no box
     for (size_t i = 0; i < mk.size(); ++i) {
         const bfl::Mark& m = mk[i];
-        const int tier = m.lots >= cut[2] ? 3 : m.lots >= cut[1] ? 2 : 1;
+        const int tier = std::max(1, std::min(3, m.tier));                 // (0.45.2) the held tier
         const bool up = m.side == bfl::BID;                              // a buyer lifted the offers
         const COLOR c = tier == 1 ? (up ? C_BUY_DIM2 : C_SELL_DIM2) : (up ? C_BUY : C_SELL);
         int t0 = yOfPx(m.px) - rh / 2, tries = 0;
@@ -3442,6 +3445,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). Hover a near zone: bids / offers and the level they sit on, the orders (count, average lots, top order's share; mostly one order at 70%+ - may not reload ?), whether it was building or leaving as price came (+/-10% vs when price first came within reach), and while price is in it the lots hit and the share re-added ?. LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.45.1");   // LQ_VERSION
+    p->setVersion("0.45.2");   // LQ_VERSION
     return p;
 }
