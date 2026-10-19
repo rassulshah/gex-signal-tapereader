@@ -94,9 +94,13 @@ int main() {
     {   void* W = (void*)0x1; bas_test_cursor_wnd = W; pc::test_ok = true;
         h.draws.clear(); p->draw();
         CHECK(text(h, "Live") != nullptr && hasPrefix(h, "10 ("), "no mouse event yet: Live = the forming candle (10 lots at the bid so far)");
+        CHECK(text(h, "BBI / BAI") != nullptr && text(h, "0", C_BID) != nullptr && text(h, "0", C_ASK) != nullptr, "(1.14.2) BBI / BAI row: live 10 / 10 - the previous candle (23 / 10) is bigger or equal: 0 / 0");
         pc::test_cx = 1450; pc::test_cy = 650; RTX_EVENT ev = moveAt(450, 150, 10); p->mouse(&ev);   // inside the pane over candle 10
         h.draws.clear(); p->draw();
         CHECK(S->hover.bar == 10 && text(h, "Live") == nullptr, "cursor inside the pane over candle 10: the box shows that candle");
+        {   RTX_EVENT e30 = moveAt(450, 150, 30); p->mouse(&e30); h.draws.clear(); p->draw();
+            CHECK(text(h, "30", C_BID) != nullptr && text(h, "0", C_ASK) != nullptr, "(1.14.2) candle 30 (50 sold): BBI 30 = beats all 30 prior candles, BAI 0 (equal stops)");
+            p->mouse(&ev); h.draws.clear(); p->draw(); }
         NOW += 300; p->calc(0); h.draws.clear(); p->draw();
         CHECK(S->hover.bar == 10, "still inside (no new event): the candle stays");
         pc::test_cy = 900;                                                  // the cursor moved below the pane (price pane / elsewhere): no event comes
@@ -107,6 +111,7 @@ int main() {
         CHECK(h.invalidates > inv, "a new tick on the forming candle while Live: redrawn");
         h.draws.clear(); p->draw();
         CHECK(hasPrefix(h, "77 (") && text(h, "Live") != nullptr, "Live box shows the updated 77 lots with the mouse outside the pane");
+        CHECK(text(h, "32", C_BID) != nullptr && text(h, "0", C_ASK) != nullptr, "(1.14.2) live BBI 32 after the trade (77 beats all 32 prior candles), updating with the forming candle");
         pc::test_cy = 650; ev = moveAt(450, 150, 12); p->mouse(&ev); NOW += 300; p->calc(0);
         CHECK(S->hover.bar == 12, "back inside: follows the mouse again");
         bas_test_cursor_wnd = (void*)0x2; NOW += 300; p->calc(0);        // same screen spot but another window on top / another program

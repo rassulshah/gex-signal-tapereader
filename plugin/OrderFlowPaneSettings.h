@@ -7,7 +7,7 @@
 
 namespace ofset {
 
-static const char* const BAS_VERSION = "1.14.1";   // (1.14.0) + "Big Lot mark" on the Position line (appended last: no saved value moves)
+static const char* const BAS_VERSION = "1.14.2";   // (1.14.0) + "Big Lot mark" on the Position line (appended last: no saved value moves)
 static const char* const BF_VERSION = "1.3.4";   // (1.3.4) the box follows the mouse only inside the pane, else Live
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 

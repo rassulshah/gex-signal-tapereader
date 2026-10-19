@@ -224,7 +224,7 @@ static void versions(const std::string& dir) {
     // (2026-10-18 settings layer) the window rows live in OrderFlowPaneSettings.h (one table per pane; registered by SettingsHost.h)
     const std::string t = slurp(dir + "/OrderFlowPaneSettings.h");
     const std::string ta = t.substr(0, t.find("bookFlowSpec")), tb = t.substr(t.find("bookFlowSpec"));
-    EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.14.1"); EQS(ofset::BAS_VERSION, bas::VERSION);   // (1.13.2 settings layer; 1.14.0 Big Lot mark)
+    EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.14.2"); EQS(ofset::BAS_VERSION, bas::VERSION);   // (1.13.2 settings layer; 1.14.0 Big Lot mark)
     EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.3.4"); EQS(ofset::BF_VERSION, bf::VERSION);
     // every dialog row the chart reads; the removed rows are gone
     CHECK(ta.find("\"Spike vs prior biggest\"") == std::string::npos && ta.find("\"Box shows\"") == std::string::npos && ta.find("\"Spike lookback\"") == std::string::npos && ta.find("\"Spike vs average\"") != std::string::npos);
@@ -241,8 +241,24 @@ static void versions(const std::string& dir) {
         CHECK(a.substr(da, a.find('\n', da) - da).find(bad) == std::string::npos); CHECK(b.substr(db, b.find('\n', db) - db).find(bad) == std::string::npos); }
 }
 
+// (1.14.2) BBI / BAI: consecutive PRIOR candles strictly smaller, an equal or bigger one stops it, cap 50+, fewer prior = what is there
+static void aggBeats() {
+    CHECK(bas::beatsOf({}, 100) == 0);                                   // the first candle: no prior candle
+    CHECK(bas::beatsOf({ 10, 20, 30 }, 100) == 3);                       // fewer than 50 prior: all 3 beaten
+    CHECK(bas::beatsOf({ 10, 100, 20, 30 }, 100) == 2);                  // an EQUAL value stops the run
+    CHECK(bas::beatsOf({ 500, 20, 30 }, 100) == 2);                      // a bigger one stops it
+    CHECK(bas::beatsOf({ 10, 20, 300 }, 100) == 0);                      // the previous candle bigger: 0
+    std::vector<long long> many(80, 5);
+    bas::Stat s = bas::statOf(bm(100, 5), many, many, 20);
+    EQS(bas::beatText(s.bBid, s.bBidCap, s.m.ok), "50+");                // 80 beaten -> capped at 50+
+    EQS(bas::beatText(s.bAsk, s.bAskCap, s.m.ok), "0");                  // 5 vs prior 5s: equal stops at once
+    std::vector<long long> fifty(50, 5), fortynine(49, 5);
+    EQS(bas::beatText(bas::statOf(bm(100, 5), fifty, fifty, 20).bBid, false, true), "50+");
+    EQS(bas::beatText(bas::statOf(bm(100, 5), fortynine, fortynine, 20).bBid, false, true), "49");
+    EQS(bas::beatText(0, false, false), "n/a");
+}
 int main(int argc, char** argv) {
-    aggSpikeRule(); aggNoRepaint(); aggLook(); aggFacts();
+    aggBeats(); aggSpikeRule(); aggNoRepaint(); aggLook(); aggFacts();
     bookNetRule(); bookSeries(); bookLook(); bookFacts();
     marketState();
     if (argc > 1) versions(argv[1]); else std::printf("(version check skipped: no plugin dir given)\n");

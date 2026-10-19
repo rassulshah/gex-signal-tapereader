@@ -1,5 +1,9 @@
 /********************************************************************************
- *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats (the "Aggression" pane)  1.14.1 (2026-10-18)
+ *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats (the "Aggression" pane)  1.14.2 (2026-10-18)
+ *  1.14.2 (2026-10-18 23:34 CT, Rassul approved aggr-bbi-mockup.png): box row "BBI / BAI" under Pace, above BL5 - Sellers = BBI (Biggest
+ *        Bid In) = how many prior candles in a row this candle's biggest bid beats (strictly; an equal or bigger one stops it), Buyers = BAI
+ *        the same for the ask, up to 50 ("50+"). Same hover rule as 1.14.1: the candle under the mouse inside the pane, else the live
+ *        forming candle (updating with each trade, final at its close).
  *  1.14.1 (2026-10-18 23:19 CT, Rassul: "when i move the mouse outside the aggression pane the updated values should still be displayed
  *        in the info box"): ROOT CAUSE - IRT sends mouse events only while the mouse is over this pane and nothing when it leaves; the
  *        hovered candle stayed latched until the cursor left the whole chart window (mouseLeft) and also followed the candle other panes
@@ -161,7 +165,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.14.1"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.14.2"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -1275,6 +1279,13 @@ void BidAskStats::render(BASState& S) {
             for (size_t k = 0; k < info.rows.size(); ++k) if (info.rows[k].label == "Lots" || info.rows[k].label == "Pace") kept.push_back(info.rows[k]);
             info.rows.swap(kept);
         }
+        {   // (1.14.2) BBI / BAI under Pace (sellers red, buyers green), from the candle shown: hovered closed, else the live forming candle
+            const bool ok = bst && bst->m.ok;
+            off::InfoRow r; r.label = "BBI / BAI";
+            r.v[0] = ok ? bas::beatText(bst->bBid, bst->bBidCap, true) : std::string("n/a");
+            r.v[1] = ok ? bas::beatText(bst->bAsk, bst->bAskCap, true) : std::string("n/a");
+            info.rows.push_back(r);
+        }
         if (S.bigLot >= 1 && S.bigLot <= 3) {                              // (1.14.0) "BL5  311": the Big Lot size of the candle shown ("--" learning)
             const blt::Tier* T = nullptr; blt::Tier liveT;
             if (hov >= 0) { const blt::Mark* mk = markAt(S, mt); if (mk) T = &mk->tier; }
@@ -1349,7 +1360,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
-    p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio) and Pace for sellers and buyers of the candle under the mouse anywhere on the chart, else the last closed candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.14.1");   // BAS_VERSION
+    p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace and BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
+    p->setVersion("1.14.2");   // BAS_VERSION
     return p;
 }
