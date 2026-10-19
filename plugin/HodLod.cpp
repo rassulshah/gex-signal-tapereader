@@ -105,6 +105,8 @@
 #include "SettingsHost.h"           // (2.4.2) registration / window fill / read / group masters from the table
 #include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
 #include "HodLodQ.h"               // (2.3.0) MenthorQ Q-Scores: LRA-QScore-<MKT>.csv parse / header parts / hover (SDK-free)
+// (2.4.6, Rassul 2026-10-18 20:28 "remove the hoverover on gext strikes and the hod lod box") both hovers (Gex S/R strip, header) off
+static const bool HL_HOVERS = false;
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
 #include "Fresh.h"               // (2.4.0) the one freshness / STALE rule (Reg / Q / Gex row / Tape Reader status)
 #include "MarketState.h"         // (2.4.0) SRC HODLOD + TREND, once per closed bar
@@ -1068,9 +1070,9 @@ int HodLod::draw(void)
     }
     {   // (2.1.0) the GEX row's hover: open while the mouse is on the row (or its detail); closed once the cursor left this pane
         if (S->inGex) { int cx = 0, cy = 0; if (hlCursor(cx, cy) && (std::abs(cx - S->gexCurX) > 8 || std::abs(cy - S->gexCurY) > 8)) S->inGex = false; }
-        if (S->inGex && L.gexOk) hl::layoutGexHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
+        if (HL_HOVERS && S->inGex && L.gexOk) hl::layoutGexHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
         if (S->inQ) { int cx = 0, cy = 0; if (hlCursor(cx, cy) && (std::abs(cx - S->qCurX) > 8 || std::abs(cy - S->qCurY) > 8)) S->inQ = false; }   // (2.3.0) the Q-Scores' detail
-        if (S->inQ && L.qOk && !S->inGex) hl::layoutQHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
+        if (HL_HOVERS && S->inQ && L.qOk && !S->inGex) hl::layoutQHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
     }
     hl::applyOpts(L, O);                      // (2.0.5) the Settings checkboxes and colours
     S->lastGexOk = L.gexOk && L.tableOk; S->lastGexRow = L.gexRow; S->lastHoverOk = L.gexHoverOk && L.tableOk; S->lastGexHover = L.gexHover;
@@ -1143,6 +1145,7 @@ int HodLod::mouse(RTX_EVENT* e)
 {
     if (!e) return RTX_FAIL;
     HLState* S = state(false); if (!S) return RTX_FAIL;
+    if (!HL_HOVERS) return RTX_FAIL;                                         // (2.4.6) no hovers: the mouse is never used
     if (e->type != E_MOUSE_MOVE && e->type != E_MOUSE_HOVER) return RTX_FAIL;
     const int mh = e->v.mouse.h, mv = e->v.mouse.v, g = S->inGex ? 6 : 0;
     auto inB = [&](const hl::Box& b) { return mh >= b.l - g && mh <= b.r + g && mv >= b.t - g && mv <= b.b + g; };
@@ -1163,8 +1166,8 @@ extern "C" cppExtension *CreateExtension(void)
 {
     HodLod *p = new HodLod();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);   // (2.1.0) TRACK_MOUSE: the GEX row's hover
+    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | (HL_HOVERS ? TRACK_MOUSE : 0));   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live.");
-    p->setVersion("2.4.5");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.4.6");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

@@ -165,7 +165,7 @@ int main() {
         CHECK(R2.mode == bdk::OWN && R2.b.b - R2.b.t == 53, "no HOD/LOD table: its own Position at its own height");
     }
     std::printf("[5] versions\n");
-    {   CHECK(std::string(hl::HL_VERSION) == "2.4.5" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == hlset::PLUGIN_VERSION == 2.4.5");
+    {   CHECK(std::string(hl::HL_VERSION) == "2.4.6" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == hlset::PLUGIN_VERSION == 2.4.6");
         const std::string src = readAll("../HodLod.cpp"); CHECK(src.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos, "HodLod setVersion literal");
         CHECK(hlset::spec().paramVersion == 7 && ss::find(hlset::spec(), "offset_x") < 0 && ss::find(hlset::spec(), "offset_y") < 0, "Offset X / Y removed, parameter version 7");
         const std::string b = readAll("../BigBidAsk.cpp"), bl = readAll("../BigBidAskLogic.h"), bs = readAll("../BigBidAskSettings.h");
