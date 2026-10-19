@@ -1139,6 +1139,7 @@ void BidAskStats::status(BASState& S, long long now) {
     const off::Engine& e = S.e; const off::Conn& c = S.feed;
     o << "\nBARS," << S.ser.bars.size() << "\nVAP_READS," << S.vapReads << "\nVAP_FAILURES," << S.vapFailures
       << "\nVAP_NA_RETRYING," << S.naTries.size() << "\nVAP_MISMATCH," << S.vapMismatch
+      << "\nFEED_WATCH,dropouts " << c.dropouts << ",reconnects " << c.reconnects << ",silent now " << (c.silentFromMs >= 0 ? "yes" : "no")
       << "\nMBO,subscribed " << (c.flag < 0 ? "unknown" : c.flag ? "1" : "0") << ",opened_with " << (c.via.empty() ? "not opened" : c.via) << ",state " << c.stateText(now)
       << "\nMBO_EVENTS,per_min " << c.roll.perMin(now) << ",total " << e.events << ",new " << e.perAction[0] << ",mod " << e.perAction[1] << ",del " << e.perAction[2] << ",fill " << e.perAction[3] << ",garbage " << e.garbage
       << "\nMBO_READS,slices " << c.slices << ",cap_hits " << c.capHits << ",longest_backlog " << c.longestBacklog << ",faults " << c.faults
@@ -1191,6 +1192,8 @@ void BidAskStats::pump() {
                 S.levels = nl::levels(S.lv, flexDir().empty() ? std::string() : flexDir() + "\\", S.market, S.symbol, now, (long long)std::time(NULL));
                 loadSession(S);
                 std::string st;
+                {   RTARRAYI vt(barDateTime), vv(barVolume);                    // (1.17.0) the watchdog: is the chart trading?
+                    if (vt.count >= count && vv.count >= count) S.feed.watch(now, (long long)vt[(int)count - 1] * 1000003LL + (long long)vv[(int)count - 1]); }
                 S.feed.open(S.symbol, dir().empty() ? std::string() : dir() + "\\_opening-" + stem(S) + ".txt", now, st);
                 const double tick = S.tick;
                 S.feed.drain(now, steadyMs, [&](const DEPTH_ORDER& o) { route(S, off::evOf(o, tick, now)); });
@@ -1371,6 +1374,7 @@ void BidAskStats::render(BASState& S) {
         const int ci = liveBox ? last : mb; bool nlw = false, nhi = false;
         if (newExtreme(ci, nlw, nhi)) { br::Read er0; const er::Side sd[2] = { erNow[0], erNow[1] }; if (er::read(nlw, nhi, sd, er0)) rd = er0; }
     }
+    if (S.feed.silentNow(steadyMs())) { rd = br::Read(); rd.head = off::silentRead(S.feed.silentFromWall, S.feed.reconnects); }   // (1.17.0) the watchdog says so
     const off::TextW tw = off::measureWith(this);
     const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
     S.lastBox = P.ok ? P.box : bp::Box(); S.lastRead = rd; S.lastReadLines = rp.lines;

@@ -15,5 +15,12 @@ int main() {
     // a capped bar fills its side and sits at the edge
     off::NetGeo n = off::netGeoFor(200, 4, 1500, 1500);
     CHECK(off::barHeight(16000, n.upTop, n.maxPx) == n.maxPx && off::barHeight(1500, n.upTop, n.maxPx) == n.maxPx && off::barHeight(750, n.upTop, n.maxPx) < n.maxPx, "capped bars stop at the edge");
-    printf("scale cap: %d checks, %d failed\n", p + f, f); return f ? 1 : 0;
+    // (1.17.0) the feed watchdog rule
+    CHECK(off::feedSilent(true, 1, 1000, 40000, 40000), "open, subscribed, 39 s without an event while the chart traded: silent");
+    CHECK(!off::feedSilent(true, 1, 1000, 4000, 40000), "no trade after the last event (+5 s): quiet market, not silent");
+    CHECK(!off::feedSilent(true, 1, 20000, 40000, 40000), "20 s: not yet");
+    CHECK(!off::feedSilent(false, 1, 1000, 40000, 40000) && !off::feedSilent(true, 0, 1000, 40000, 40000) && !off::feedSilent(true, 1, -1, 40000, 40000), "closed / not subscribed / never had an event: not judged here");
+    CHECK(off::reconnectDue(-1, 5) && !off::reconnectDue(1000, 30000) && off::reconnectDue(1000, 61000), "reconnect at most once a minute");
+    CHECK(off::silentRead(0, 2).find("Order feed silent") == 0 && off::silentRead(0, 2).find("(2)") != std::string::npos, "the silent read text");
+    printf("scale cap + watchdog: %d checks, %d failed\n", p + f, f); return f ? 1 : 0;
 }

@@ -1065,6 +1065,24 @@ inline long long capTop(std::vector<long long> v) {
 }
 inline long long capped(long long v, long long cap) { return v > cap ? cap : v; }
 static const int CAP_TIP_PX = 2;
+// ---- (1.17.0 / BookFlow 1.7.0, Rassul 2026-10-19 18:47 "yes" - the order feed went silent 3:29 PM -> 6:24 PM with no reconnect) FEED WATCHDOG:
+// silent = the feed is open and subscribed, no order event for SILENT_MS while the chart kept trading (its volume changed after the last
+// event + 5 s). Then the feed is closed and reopened (at most once a minute) and the pane says so; every dropout / reconnect is counted.
+static const long long FEED_SILENT_MS = 30000, FEED_RECONNECT_GAP_MS = 60000, FEED_TRADE_LAG_MS = 5000;
+inline bool feedSilent(bool open, int flag, long long lastEventMs, long long lastTradeMs, long long now) {
+    return open && flag == 1 && lastEventMs >= 0 && now - lastEventMs >= FEED_SILENT_MS && lastTradeMs >= 0 && lastTradeMs > lastEventMs + FEED_TRADE_LAG_MS;
+}
+inline bool reconnectDue(long long lastReconnectMs, long long now) { return lastReconnectMs < 0 || now - lastReconnectMs >= FEED_RECONNECT_GAP_MS; }
+// the pane's read while the feed is silent: "Order feed silent since 3:29 PM - reconnecting (2)"
+inline std::string silentRead(long long fromWall, long long reconnects) {
+    std::string at; const std::time_t t = (std::time_t)fromWall; struct tm x; std::memset(&x, 0, sizeof(x));
+#if defined(_WIN32)
+    if (localtime_s(&x, &t) == 0) at = " since " + zread::clock12(x.tm_hour * 60 + x.tm_min);
+#else
+    if (localtime_r(&t, &x)) at = " since " + zread::clock12(x.tm_hour * 60 + x.tm_min);
+#endif
+    return "Order feed silent" + at + " - reconnecting" + (reconnects > 0 ? " (" + std::to_string(reconnects) + ")" : std::string()) + "; book numbers are stale";
+}
 // the axis range IRT draws over the pane so a value sits at its bar's pixel row (0 at the zero line, + above, - below)
 inline void netAxisFor(long long top, int paneH, int reserve, double& mn, double& mx, long long up = -1, long long down = -1) {
     if (top <= 0 || paneH < 24) { mn = -10; mx = 10; return; }
@@ -1745,6 +1763,19 @@ struct Conn {
     std::vector<QEv> q; size_t qPeak = 0;
     long long qDropped = 0, timerTicks = 0, timerEvents = 0, timerFaults = 0, pumpEvents = 0;
     bool timerOff = false;                           // a faulting timer read: the clock stops reading (never re-enter it)
+    // (1.17.0) the watchdog: the chart's last volume key and when it changed, the dropout being handled, reconnects made
+    long long tradeKey = -1, lastTradeMs = -1, silentFromMs = -1, silentFromWall = 0, reconnects = 0, lastReconnectMs = -1, dropouts = 0;
+    bool silentNow(long long now) const { return silentFromMs >= 0 && (dbo == nullptr || lastEventMs <= silentFromMs || now - lastEventMs >= FEED_SILENT_MS); }
+    // chart context, before open(): volKey changes whenever the chart's last bar trades; a silent feed is closed so open() reopens it
+    void watch(long long now, long long volKey) {
+        if (volKey != tradeKey) { if (tradeKey != -1) lastTradeMs = now; tradeKey = volKey; }
+        if (silentFromMs >= 0 && dbo && lastEventMs > silentFromMs && now - lastEventMs < FEED_SILENT_MS) silentFromMs = -1;   // events again: recovered
+        if (!feedSilent(dbo != nullptr, flag, lastEventMs, lastTradeMs, now)) return;
+        if (silentFromMs < 0) { silentFromMs = lastEventMs; silentFromWall = (long long)std::time(NULL) - (now - lastEventMs) / 1000; ++dropouts; }
+        if (!reconnectDue(lastReconnectMs, now)) return;
+        delete dbo; dbo = nullptr; attempt = 0; flag = -1; dead = false; timerOff = false; openMs = -1; lastResubMs = -1; via.clear();
+        ++reconnects; lastReconnectMs = now;
+    }
     std::function<void(const DEPTH_ORDER&)> raw;
     Coverage cov;
     Conn() {}
@@ -2609,6 +2640,8 @@ public:
                 S.levels = nl::levels(S.lv, flexDir().empty() ? std::string() : flexDir() + "\\", S.market, S.symbol, now, (long long)std::time(NULL));
                 load(S);
                 std::string st;
+                {   RTARRAYI vt(barDateTime), vv(barVolume);                    // (1.17.0) the watchdog: is the chart trading?
+                    if (vt.count >= count && vv.count >= count) S.feed.watch(now, (long long)vt[(int)count - 1] * 1000003LL + (long long)vv[(int)count - 1]); }
                 S.feed.open(S.symbol, dir().empty() ? std::string() : dir() + "\\_opening-" + stem(S) + ".txt", now, st);
                 if (!st.empty()) S.state = st;
                 const double tick = S.tick;
@@ -2864,6 +2897,7 @@ private:
         const Engine& e = S.e; const Conn& f = S.feed;
         std::ostringstream o; o.imbue(std::locale::classic());
         o << "VERSION," << L::version() << "\nINDICATOR," << L::name() << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
+          << "\nFEED_WATCH,dropouts " << f.dropouts << ",reconnects " << f.reconnects << ",silent now " << (f.silentFromMs >= 0 ? "yes" : "no")
           << "\nSUBSCRIBED," << (f.flag < 0 ? "unknown" : f.flag ? "1" : "0") << "\nOPENED_WITH," << (f.via.empty() ? "not opened" : f.via)
           << "\nEVENTS_PER_MIN," << f.roll.perMin(now) << "\nEVENTS_TOTAL," << e.events
           << "\nACTIONS,NEW " << e.perAction[0] << ",MOD " << e.perAction[1] << ",DEL " << e.perAction[2] << ",FILL " << e.perAction[3]

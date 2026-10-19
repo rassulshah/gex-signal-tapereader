@@ -401,6 +401,7 @@ public:
         if (mbar) {                                                        // (1.5.0) at a new 10-bar low / high the REFILL read leads
             br::Read rr; if (bf::refillRead(mbar->r, S.market, spotAt(liveBox ? last : mb), shownNs, rr)) rd = rr;
         }
+        if (S.feed.silentNow(off::steadyMs())) { rd = br::Read(); rd.head = off::silentRead(S.feed.silentFromWall, S.feed.reconnects); }   // (1.7.0) the watchdog says so
         const off::TextW tw = off::measureWith(this);
         const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
         if (Ext* e = ext(S)) { e->lastRead = rd; e->lastReadLines = rp.lines; }
