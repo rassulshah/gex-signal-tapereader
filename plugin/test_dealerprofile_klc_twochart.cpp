@@ -71,6 +71,7 @@ cppExtension::RTARRAYI::RTARRAYI(iARRAY a) : tempULong(0), pArray(&tempArrayI), 
 cppExtension::RTARRAYI::~RTARRAYI() {}
 unsigned long& cppExtension::RTARRAYI::operator[](int i) { if (i >= 0 && i < count) return pArray->data[i]; return tempULong; }
 
+#include "tests_dp290/dp_mock_vap.h"   // (DP 2.18.0) the volume-at-price calls of the key levels
 static int passes = 0, fails = 0;
 static void check(bool ok, const char* m) { if (ok) ++passes; else { ++fails; std::printf("FAIL %s\n", m); } }
 
@@ -115,6 +116,18 @@ int main()
         check(pa == 6710.0, "chart A: its own prior-day high");
         check(pb == 6770.0, "chart B: its OWN prior-day high, not chart A's (shared-cache leak)");
         check(pa2 == 6710.0, "chart A again: still its own");
+        // (DP 2.18.0) Open + the volume-profile levels from each chart's OWN volume-at-price (both charts have the same bar times)
+        auto lv = [&](Chart& c, const char* code) { CUR = &c; X.loadHostState(); X.mkt = "ES"; double r = -1;
+            for (const auto& m : X.nativeLevels("ES")) if (("/" + m.name + "/").find(std::string("/") + code + "/") != std::string::npos) r = m.price;
+            X.saveHostState(); return r; };
+        check(lv(a, "DPoc") == 6700.0 && lv(b, "DPoc") == 6760.0, "(2.18.0) DPoc per chart from its own volume-at-price (no shared cache)");
+        check(lv(a, "Open") == 6700.0 && lv(b, "Open") == 6760.0, "(2.18.0) Open = the first RTH bar's open");
+        check(lv(a, "VAH") == 6700.0 && lv(a, "VAL") == 6700.0, "(2.18.0) one-price profile: VAH = VAL = POC (merged on one line)");
+        {   CUR = &a; X.loadHostState(); DealerProfile::State* s = static_cast<DealerProfile::State*>(a.user);
+            check(s && s->klc["ES"].vap && s->klc["ES"].vap->bars.size() + 1 == a.dt.size() && s->klc["ES"].diag.dayUsed, "(2.18.0) every closed bar's rows cached once; the profile used");
+            const std::string pl = X.profileLine();
+            check(pl.find("used 1") != std::string::npos && pl.find("DPoc r1 6700") != std::string::npos, "(2.18.0) status PROFILE line");
+            X.saveHostState(); }
         CUR = &a; X.done(); CUR = &b; X.done();
         check(a.user == nullptr && b.user == nullptr, "done releases both charts' state");
     }

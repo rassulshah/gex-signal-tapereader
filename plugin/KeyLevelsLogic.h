@@ -24,7 +24,8 @@
 
 namespace klv {
 
-struct Bar { long days; int endSec; float h, l, c; };          // days = civil days of the bar END (local), endSec = seconds of day
+struct Bar { long days; int endSec; float h, l, c; float o = NAN; double v = -1; };   // days = civil days of the bar END (local), endSec = seconds of day
+// (DP 2.18.0) o = the bar's open (the RTH Open level), v = its volume (the profile's coverage check); NAN / -1 = not supplied
 struct Level { std::string code; double price; bool pivot; };
 
 struct Agg { double h = -1e300, l = 1e300; int n = 0; void add(double hi, double lo) { h = std::max(h, hi); l = std::min(l, lo); n++; } bool ok() const { return n > 0; } };
@@ -46,12 +47,64 @@ inline int mergeTicksFor(const std::string& m)
 }
 inline bool isNewCode(const std::string& c) { return c.compare(0, 4, "Asia") == 0 || c.compare(0, 2, "CW") == 0; }
 
+// ---- (DP 2.18.0, Rassul 2026-10-19 13:14 / 13:25 / 13:33) Open + the volume-profile levels -------------------------------
+// Open        today's RTH open: the open of this session's first RTH bar, drawn from the RTH open on (white)
+// DPoc        the prior FULL session's (17:00 -> 16:00 CT) volume POC - his ProfPrevDay (IRT Profile, Volume, POC (Prev), daily)
+// VAH / VAL   that same profile's 70% value area high / low
+// WPoc        the PRIOR week's (Monday..Friday sessions) volume POC - fixed all week (his ProfPrevWeekly showed this week's developing
+//             POC; the name and the no-repaint rule say the prior week)
+// Rows are the chart's volume-at-price (IRT barVolumeProfile) summed per session; rowTicks groups rows (a row's price = its lowest
+// tick). POC = the biggest row; a tie goes to the row nearest the profile's middle, then the lower one. Value area: start at the
+// POC, add the bigger of the next two rows above / the next two below (the CBOT rule; equal -> both) until >= vaPct of the volume.
+// A profile is used only when its sessions are fully loaded and the volume-at-price covers >= 98% of the bars' volume.
+struct Vap { double price; double vol; };
+struct Prof { double poc = NAN, vah = NAN, val = NAN, vol = 0; bool ok = false; };
+inline Prof profileOf(const std::map<long long, double>& ticks, double tick, int rowTicks = 1, double vaPct = 0.70)
+{
+    Prof P; if (ticks.empty() || !(tick > 0)) return P;
+    if (rowTicks < 1) rowTicks = 1;
+    std::map<long long, double> rows;                               // row key (lowest tick of the row) -> volume
+    for (const auto& kv : ticks) {
+        if (!(kv.second > 0)) continue;
+        long long k = kv.first; long long r = k >= 0 ? (k / rowTicks) * rowTicks : -(((-k) + rowTicks - 1) / rowTicks) * rowTicks;
+        rows[r] += kv.second;
+    }
+    if (rows.empty()) return P;
+    std::vector<long long> key; std::vector<double> vol;
+    for (const auto& kv : rows) { key.push_back(kv.first); vol.push_back(kv.second); P.vol += kv.second; }
+    const double mid = 0.5 * ((double)key.front() + (double)key.back());
+    size_t pi = 0;
+    for (size_t i = 1; i < vol.size(); ++i) {
+        if (vol[i] > vol[pi] + 1e-9) pi = i;
+        else if (std::fabs(vol[i] - vol[pi]) <= 1e-9 && std::fabs((double)key[i] - mid) < std::fabs((double)key[pi] - mid) - 1e-9) pi = i;
+    }
+    size_t lo = pi, hi = pi; double cum = vol[pi]; const double need = vaPct * P.vol;
+    while (cum + 1e-9 < need && (lo > 0 || hi + 1 < vol.size())) {
+        double up = 0, dn = 0; size_t nu = 0, nd = 0;
+        for (size_t j = hi + 1; j < vol.size() && nu < 2; ++j, ++nu) up += vol[j];
+        for (size_t j = lo; j > 0 && nd < 2; --j, ++nd) dn += vol[j - 1];
+        if (nu == 0) { lo -= nd; cum += dn; continue; }
+        if (nd == 0) { hi += nu; cum += up; continue; }
+        if (up > dn + 1e-9) { hi += nu; cum += up; }
+        else if (dn > up + 1e-9) { lo -= nd; cum += dn; }
+        else { hi += nu; lo -= nd; cum += up + dn; }
+    }
+    P.poc = (double)key[pi] * tick; P.vah = (double)key[hi] * tick; P.val = (double)key[lo] * tick; P.ok = true;
+    return P;
+}
+// what the profile levels were built from - for the status file (verification against IRT's own Profile)
+// (2.18.0) the profile row size in ticks per market (IRT's Profile 'Price/Row' Automatic); 1 until checked against his DPoc / WPoc
+// lines on every market (the status file's PROFILE line shows the POC for 1 / 2 / 4-tick rows next to the one used)
+inline int profileRowTicks(const std::string& m) { (void)m; return 1; }
+struct ProfDiag { double dayCover = 0, weekCover = 0; double dpoc1 = NAN, dpoc2 = NAN, dpoc4 = NAN, wpoc1 = NAN, wpoc4 = NAN; bool dayUsed = false, weekUsed = false; };
+
 inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int openMin, int closeMin, double tick,
-                                  int asiaStartMin = 18 * 60, int asiaEndMin = 2 * 60)
+                                  int asiaStartMin = 18 * 60, int asiaEndMin = 2 * 60,
+                                  const std::vector<std::vector<Vap>>* vap = nullptr, int rowTicks = 1, ProfDiag* diag = nullptr)
 {
     std::vector<Level> out;
     if (B.empty() || perSec <= 0 || !(tick > 0)) return out;
-    struct S { Agg full, rth, on, lon, asia; };
+    struct S { Agg full, rth, on, lon, asia; double open = NAN; std::map<long long, double> prof; double barVol = 0, vapVol = 0; int barsNoVol = 0; };
     std::map<long, S> by;                                         // session (civil days) -> aggregates
     std::vector<long> sessOf(B.size(), 0); std::vector<int> kindOf(B.size(), svl::NONE);
     // (2.7.4) the chart's history may start part-way through a session: a level built from a session (or week) that is only
@@ -66,7 +119,11 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
         if (!haveFirst) { haveFirst = true; firstSess = c.sess; firstStart = c.startSec; }
         S& s = by[c.sess];
         s.full.add(b.h, b.l);
-        if (c.kind == svl::RTH) s.rth.add(b.h, b.l);
+        if (c.kind == svl::RTH) { if (!s.rth.ok() && std::isfinite(b.o)) s.open = b.o; s.rth.add(b.h, b.l); }
+        if (vap && i < vap->size()) {                             // (2.18.0) the session's volume profile
+            if (b.v >= 0) s.barVol += b.v; else s.barsNoVol++;
+            for (const Vap& r : (*vap)[i]) if (std::isfinite(r.price) && r.vol > 0) { s.prof[(long long)std::llround(r.price / tick)] += r.vol; s.vapVol += r.vol; }
+        }
         if (c.kind == svl::ON) {
             s.on.add(b.h, b.l);
             int endMin = b.endSec / 60;
@@ -90,6 +147,16 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
         auto p = std::prev(it);
         if (p->second.full.ok()) { push("PFH", p->second.full.h, false); push("PFL", p->second.full.l, false); }
         if (p->second.rth.ok()) { push("PDH", p->second.rth.h, false); push("PDL", p->second.rth.l, false); }
+        // (2.18.0) DPoc / VAH / VAL: the prior full session's volume profile
+        if (vap) {
+            const S& ps = p->second;
+            const double cover = ps.barVol > 0 ? ps.vapVol / ps.barVol : 0;
+            if (diag) { diag->dayCover = cover; diag->dpoc1 = profileOf(ps.prof, tick, 1).poc; diag->dpoc2 = profileOf(ps.prof, tick, 2).poc; diag->dpoc4 = profileOf(ps.prof, tick, 4).poc; }
+            if (cover >= 0.98 && ps.barsNoVol == 0) {
+                const Prof P = profileOf(ps.prof, tick, rowTicks);
+                if (P.ok) { push("DPoc", P.poc, false); push("VAH", P.vah, false); push("VAL", P.val, false); if (diag) diag->dayUsed = true; }
+            }
+        }
     }
     // prior week: Monday..Friday sessions of the week before this session's week
     {
@@ -99,10 +166,22 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
         if (complete(monday - 7))                                // the whole previous week is loaded (from its Monday session)
         for (auto& kv : by) if (kv.first >= monday - 7 && kv.first <= monday - 3 && kv.second.full.ok()) { wk.add(kv.second.full.h, kv.second.full.l); }
         if (wk.ok()) { push("PWH", wk.h, false); push("PWL", wk.l, false); }
+        // (2.18.0) WPoc: the prior week's volume POC (the same sessions as PWH / PWL)
+        if (vap && wk.ok()) {
+            std::map<long long, double> wp; double bv = 0, vv = 0; int nov = 0;
+            for (auto& kv : by) if (kv.first >= monday - 7 && kv.first <= monday - 3 && kv.second.full.ok()) {
+                for (const auto& r : kv.second.prof) wp[r.first] += r.second;
+                bv += kv.second.barVol; vv += kv.second.vapVol; nov += kv.second.barsNoVol;
+            }
+            const double cover = bv > 0 ? vv / bv : 0;
+            if (diag) { diag->weekCover = cover; diag->wpoc1 = profileOf(wp, tick, 1).poc; diag->wpoc4 = profileOf(wp, tick, 4).poc; }
+            if (cover >= 0.98 && nov == 0) { const Prof P = profileOf(wp, tick, rowTicks); if (P.ok) { push("WPoc", P.poc, false); if (diag) diag->weekUsed = true; } }
+        }
     }
     const S& cs = it->second;
     bool rthStarted = kindOf[last] == svl::RTH || kindOf[last] == svl::POST;
     if (rthStarted && cs.on.ok() && complete(cur)) { push("ONH", cs.on.h, false); push("ONL", cs.on.l, false); }
+    if (rthStarted && std::isfinite(cs.open)) push("Open", cs.open, false);   // (2.18.0) today's RTH open, from the open on
     bool lonDone = rthStarted || (B[last].endSec < 17 * 3600 && lastEndMin > 7 * 60 + 30);
     const bool lonComplete = complete(cur) || (firstSess == cur && firstStart < 2 * 3600);   // loaded from before 02:00
     if (lonDone && cs.lon.ok() && lonComplete) { push("LonHI", cs.lon.h, false); push("LonLO", cs.lon.l, false); }

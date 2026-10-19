@@ -138,6 +138,10 @@ inline std::string levelWhat(const std::string& name)
     if (f == "ONH" || f == "ONL") return std::string("tonight's overnight session ") + (f == "ONH" ? "high" : "low");
     if (f == "LonHI" || f == "LonLO") return std::string("the London session's ") + (f == "LonHI" ? "high" : "low");
     if (f == "AsiaHI" || f == "AsiaLO") return std::string("the Asia session's (6:00 PM - 2:00 AM CT) ") + (f == "AsiaHI" ? "high" : "low");
+    if (f == "Open") return "today's RTH open (the first trade of the day session)";                                   // (DP 2.18.0)
+    if (f == "DPoc") return "the previous full session's volume point of control (the price that traded the most)";
+    if (f == "VAH" || f == "VAL") return std::string("the previous full session's value area ") + (f == "VAH" ? "high" : "low") + " (70% of its volume traded inside)";
+    if (f == "WPoc") return "the previous week's volume point of control (the price that traded the most)";
     const char k = dpaudit::mqKind(name);
     if (f == "CR0") return "today's 0DTE call resistance (the biggest call wall that expires today)";
     if (k == 'R') return "call resistance: the strike with the most call gamma (MenthorQ model)";            // (DP 2.12.0) no "dealers sell into rallies" claim
@@ -148,7 +152,7 @@ inline std::string levelWhat(const std::string& name)
 inline bool isKeyLevel(const std::string& name)
 {
     const std::string f = name.substr(0, name.find_first_of("/ "));
-    static const char* const K[] = { "PFH", "PFL", "PDH", "PDL", "PWH", "PWL", "CWH", "CWL", "ONH", "ONL", "LonHI", "LonLO", "AsiaHI", "AsiaLO" };
+    static const char* const K[] = { "PFH", "PFL", "PDH", "PDL", "PWH", "PWL", "CWH", "CWL", "ONH", "ONL", "LonHI", "LonLO", "AsiaHI", "AsiaLO", "Open", "DPoc", "VAH", "VAL", "WPoc" };   // (DP 2.18.0) + Open / profile levels
     for (size_t i = 0; i < sizeof(K) / sizeof(K[0]); ++i) if (f == K[i]) return true;
     return false;
 }

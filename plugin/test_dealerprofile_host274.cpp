@@ -103,6 +103,7 @@ RTX_RESULT cppExtension::PNT::set(int bar, float price, BAR_POSITION) { h = (sho
 void cppExtension::PNT::setDrawPosition() {}
 void cppExtension::PNT::drawLineTo() {}
 
+#include "tests_dp290/dp_mock_vap.h"   // (DP 2.18.0) the volume-at-price calls of the key levels
 static int passes = 0, fails = 0;
 static void check(bool ok, const char* m) { if (ok) ++passes; else { ++fails; std::printf("FAIL %s\n", m); } }
 #include "tests_dp290/dp_mock_cols.h"   // (CR5200) the 2.11.0 SDK calls (chart options, dialog setters)

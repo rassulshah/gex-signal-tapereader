@@ -116,8 +116,9 @@ static void* dpCursorWindow() { return NULL; }
 #include <new>
 #include <algorithm>
 #include <chrono>
+#include <memory>
 
-static const char* DP_VERSION = "2.17.3";   // 2.17.3 (2026-10-18 23:37 CT, Rassul "get rid of the hover over on the gex levels and other places"): every hover OFF (level badges CR0 / HVL / G1 ..., nodes, HVL tags, header) - DP_HOVERS = false, the code kept; no TRACK_MOUSE // 2.17.2 (2026-10-18 his decision list): Snapshot outline removed (dashed); Market / Clock offset / Indicators text hidden (kept in the file) // 2.17.1 (2026-10-18 settings audit): the window from DealerProfileSettings.h / SettingsHost.h; settings per MARKET in DealerProfile.settings-<MKT>.txt (the root-keyed DealerProfile.settings.txt reset at every roll; migrated once, left in place); the indicators row no longer cut off; drawing unchanged // 2.17.0 (2026-10-18): STALE by Fresh.h (one rule with HOD / LOD), a status file per chart (DealerProfile.status-<MKT>-<spb>.txt, the old one kept one more version), Market State SRC GEX // 2.16.0 (2026-10-16, Rassul): node text "480 lots" (colour = buy / sell); level badge NAME | price | GAMMA | ratio (yellow) // 2.15.1: node / hedge-text cut-offs vs the whole grid's biggest strike (not the screen's) // 2.15.0: compact hovers (level / node / HVL / header), dynamic hover width, hover clear of the BIG column // 2.14.1: Levels column >= 150 px (NQ prices) //   // 2.14.0 (2026-10-15 10:34, Rassul): level badges NAME | price | liquidity, Levels column >= 124 px //   // 2.13.0 (2026-10-15 09:53, Rassul): level lines only in the Levels column, not across the chart //   // 2.12.1 (2026-10-15): the chart margin also leaves room for the BIG column (ColumnBoard 1.1.0) //   // 2.12.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 5): the bar hover "Teal = MenthorQ model shows + net gamma here (vendor model, data N min old). Not a prediction it holds."; MenthorQ badge hover "MenthorQ model level, about 6 to 8 min delayed. Watch price and tape here; it isn't a turn forecast."; touch odds "A chance to REACH only - not hold or reverse."; "How to use: wait for your trigger - a sweep through the exact level, then RB or CoB, before 11:00 AM CT."; HL badge "HL?" + "whether they hold is unknown"; today's pick marked ? in its hover; HVL regime text behind the hvl_cushion gate. The node B / S text and "dealers must BUY N" stay (his call).   // 2.11.1 (MQF100, 2026-10-14 after-close - "STALE 2h - 9:35 AM" with no reason): when the grid is STALE the header adds WHY and what is being done ("no internet - retrying", "signed out - sign in", "tab asleep - retrying") from the bridge's lsFlexLevels\LRA-MQFeed.txt (bridge 1.30.0, read at most every 5 s, used only while written in the last 5 min); the header hover says why / what is being done / what you do   // 2.11.0 (CR5200, Rassul 2026-10-14 11:00 CT): the Levels / Delta / Dealer columns right of price, the chart margin, one-sided teal / orange nodes with B / S hedge text, compact level badges (detail in the hovers)   // 2.10.0 (Rassul 2026-10-14): HrHI / HrLO no longer drawn; AsiaHI / AsiaLO (18:00-02:00 CT, muted purple) and CWH / CWL (this week's high / low set before yesterday, soft blue) added; a new level within the market's merge ticks joins the line ("ONH . AsiaHI")   // 2.9.0: absolute-GEX nodes, W / F, top-3 %, hedge numbers, HVL tags, STALE header, CR0 merge, G2-G10 hidden, hovers   // 2.8.7: audit defect fixes - external files read bounded (a torn / oversized / malformed file keeps the last good one), level matching on the tick grid (no adjacent-tick merge), settings / status written atomically   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
+static const char* DP_VERSION = "2.18.0";   // 2.18.0 (2026-10-19 13:14-13:35 CT, Rassul "i want an open live also, make its badge and line white .. prior day poc and prior week poc (Wpoc) .. VAH and VAL"; "RTH open"; "prior day poc is full session"; "both use volume"): new key levels from the chart - Open (today's RTH open, white), DPoc / VAH / VAL (the prior full session's volume profile, 70% value area, teal), WPoc (the prior week's volume POC, blue), from IRT's own volume-at-price (barVolumeProfile) summed per session; status PROFILE line // 2.17.3 (2026-10-18 23:37 CT, Rassul "get rid of the hover over on the gex levels and other places"): every hover OFF (level badges CR0 / HVL / G1 ..., nodes, HVL tags, header) - DP_HOVERS = false, the code kept; no TRACK_MOUSE // 2.17.2 (2026-10-18 his decision list): Snapshot outline removed (dashed); Market / Clock offset / Indicators text hidden (kept in the file) // 2.17.1 (2026-10-18 settings audit): the window from DealerProfileSettings.h / SettingsHost.h; settings per MARKET in DealerProfile.settings-<MKT>.txt (the root-keyed DealerProfile.settings.txt reset at every roll; migrated once, left in place); the indicators row no longer cut off; drawing unchanged // 2.17.0 (2026-10-18): STALE by Fresh.h (one rule with HOD / LOD), a status file per chart (DealerProfile.status-<MKT>-<spb>.txt, the old one kept one more version), Market State SRC GEX // 2.16.0 (2026-10-16, Rassul): node text "480 lots" (colour = buy / sell); level badge NAME | price | GAMMA | ratio (yellow) // 2.15.1: node / hedge-text cut-offs vs the whole grid's biggest strike (not the screen's) // 2.15.0: compact hovers (level / node / HVL / header), dynamic hover width, hover clear of the BIG column // 2.14.1: Levels column >= 150 px (NQ prices) //   // 2.14.0 (2026-10-15 10:34, Rassul): level badges NAME | price | liquidity, Levels column >= 124 px //   // 2.13.0 (2026-10-15 09:53, Rassul): level lines only in the Levels column, not across the chart //   // 2.12.1 (2026-10-15): the chart margin also leaves room for the BIG column (ColumnBoard 1.1.0) //   // 2.12.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 5): the bar hover "Teal = MenthorQ model shows + net gamma here (vendor model, data N min old). Not a prediction it holds."; MenthorQ badge hover "MenthorQ model level, about 6 to 8 min delayed. Watch price and tape here; it isn't a turn forecast."; touch odds "A chance to REACH only - not hold or reverse."; "How to use: wait for your trigger - a sweep through the exact level, then RB or CoB, before 11:00 AM CT."; HL badge "HL?" + "whether they hold is unknown"; today's pick marked ? in its hover; HVL regime text behind the hvl_cushion gate. The node B / S text and "dealers must BUY N" stay (his call).   // 2.11.1 (MQF100, 2026-10-14 after-close - "STALE 2h - 9:35 AM" with no reason): when the grid is STALE the header adds WHY and what is being done ("no internet - retrying", "signed out - sign in", "tab asleep - retrying") from the bridge's lsFlexLevels\LRA-MQFeed.txt (bridge 1.30.0, read at most every 5 s, used only while written in the last 5 min); the header hover says why / what is being done / what you do   // 2.11.0 (CR5200, Rassul 2026-10-14 11:00 CT): the Levels / Delta / Dealer columns right of price, the chart margin, one-sided teal / orange nodes with B / S hedge text, compact level badges (detail in the hovers)   // 2.10.0 (Rassul 2026-10-14): HrHI / HrLO no longer drawn; AsiaHI / AsiaLO (18:00-02:00 CT, muted purple) and CWH / CWL (this week's high / low set before yesterday, soft blue) added; a new level within the market's merge ticks joins the line ("ONH . AsiaHI")   // 2.9.0: absolute-GEX nodes, W / F, top-3 %, hedge numbers, HVL tags, STALE header, CR0 merge, G2-G10 hidden, hovers   // 2.8.7: audit defect fixes - external files read bounded (a torn / oversized / malformed file keeps the last good one), level matching on the tick grid (no adjacent-tick merge), settings / status written atomically   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 static const bool DP_HOVERS = false;   // (2.17.3, Rassul 23:37 CT) the hovers are off; true brings them back (the code is unchanged)
 //   // 2.1.0 (2026-10-03): SPX / QQQ book tag (file 2.0 SRC row)
 //   // 2.0.3 (2026-10-03): number boxes get an explicit width (NUMW) - 0 is the SDK default and still showed "T"
@@ -364,9 +365,13 @@ public:
     void levelSpan(const RCT& pane, short& x0, short& x1);   // (2.13.0)
     // (2.7.0) the native key levels, cached per market: recomputed when the chart gets a new bar (at most every 10 s)
     // (2.7.2) the cache is per chart: copied in/out of the host State like every other cache (loadHostState / saveHostState)
-    struct KLC { long n = -1; long long lastT = 0; time_t at = 0; std::vector<klv::Merged> v; };
+    // (2.18.0) + the volume-at-price of every closed bar (the DPoc / VAH / VAL / WPoc profiles), held by a shared pointer so the
+    // per-draw host-state copy stays cheap; diag = what the profiles were built from (status file PROFILE line)
+    struct VapCache { std::map<long long, std::vector<klv::Vap>> bars; };
+    struct KLC { long n = -1; long long lastT = 0; time_t at = 0; std::vector<klv::Merged> v; std::shared_ptr<VapCache> vap; klv::ProfDiag diag; int vapRead = 0, vapMissing = 0; };
     std::map<std::string, KLC> klc;
     const std::vector<klv::Merged>& nativeLevels(const std::string& m);
+    std::string profileLine();   // (2.18.0) the PROFILE status line
 
     // cppExtension can be shared by host charts. These fields are the complete mutable
     // chart state, kept in the SDK's current-host storage rather than on the shared object.
@@ -1077,6 +1082,19 @@ void DealerProfile::srcTag()
     textLJ((short)(x + 5), (short)(y + 8), t.c_str(), 0x0022D3EE, 10, true);
 }
 
+// (2.18.0) PROFILE,day cover 99.8%,used 1,DPoc r1 7703 r2 7702.5 r4 7702,week cover 100%,used 1,WPoc r1 .. r4 ..,rows 1,vap read N missing M
+std::string DealerProfile::profileLine()
+{
+    std::map<std::string, KLC>::const_iterator it = klc.find(mkt);
+    if (it == klc.end()) return "PROFILE,none yet";
+    const KLC& K = it->second; const klv::ProfDiag& g = K.diag;
+    auto px = [](double v) { if (!std::isfinite(v)) return std::string("-"); char b[32]; std::snprintf(b, sizeof(b), "%.6g", v); return std::string(b); };
+    auto pc = [](double v) { char b[32]; std::snprintf(b, sizeof(b), "%.1f%%", v * 100.0); return std::string(b); };
+    return "PROFILE,day cover " + pc(g.dayCover) + ",used " + (g.dayUsed ? "1" : "0") + ",DPoc r1 " + px(g.dpoc1) + " r2 " + px(g.dpoc2) + " r4 " + px(g.dpoc4)
+         + ",week cover " + pc(g.weekCover) + ",used " + (g.weekUsed ? "1" : "0") + ",WPoc r1 " + px(g.wpoc1) + " r4 " + px(g.wpoc4)
+         + ",rows " + std::to_string(klv::profileRowTicks(mkt)) + ",vap read " + std::to_string(K.vapRead) + " missing " + std::to_string(K.vapMissing)
+         + ",cached " + std::to_string(K.vap ? K.vap->bars.size() : 0);
+}
 void DealerProfile::writeStatus(const char* what)
 {
     const char* up = getenv("USERPROFILE"); if (!up) return;
@@ -1089,7 +1107,8 @@ void DealerProfile::writeStatus(const char* what)
       << "MARGIN,need " << cs.needPx << " px,units " << (cs.probe.units == cb::PIXELS ? "pixels" : "bars") << ",ppb " << cs.ppb << ",read " << cs.marginRead
       << ",asked " << cs.marginAsked << ",set ok " << cs.setOk << ",set fail " << cs.setFail << ",gap " << cs.gapSeen << "\n"
       << "BADGES,shown " << cs.badgesShown << ",dropped " << cs.badgesDropped << ",liquidity blocks " << cs.liqBlocks << ",HL " << cs.hlOn
-      << ",liquidity file " << (cs.liqLWhy.empty() ? std::string("ok") : cs.liqLWhy) << ",HL line " << cs.liqL.onX << "x / " << cs.liqL.offX << "x" << "\nNODE_TEXT,shown " << cs.nodeTexts << ",hidden " << cs.nodeTextsHidden << ",tiny nodes not drawn " << cs.nodesTiny << "\n";
+      << ",liquidity file " << (cs.liqLWhy.empty() ? std::string("ok") : cs.liqLWhy) << ",HL line " << cs.liqL.onX << "x / " << cs.liqL.offX << "x" << "\nNODE_TEXT,shown " << cs.nodeTexts << ",hidden " << cs.nodeTextsHidden << ",tiny nodes not drawn " << cs.nodesTiny << "\n"
+      << profileLine() << "\n";
     // (2.7.4) written when its content changes (or once a minute), not on every repaint. (2.17.0, audit C finding 10) one file PER CHART
     // (DealerProfile.status-<MKT>-<spb>.txt) + the old shared DealerProfile.status.txt for one more version (ChartView / the Tape Reader
     // still read it); each with this chart's own gate (the 2.7.4 function static was shared by every chart on the DLL, lesson 1)
@@ -1422,12 +1441,49 @@ double DealerProfile::chartTick(const std::string& m)
     return dpaudit::finite(tick) && tick > 0.0 ? tick : tickOfMkt(m);
 }
 
+// (2.18.0) one closed bar's volume-at-price, read the way the Delta Profile reads it (any failure = no rows for that bar)
+static int dpVapStats(cppExtension::RTARRAYP* vap, int bar, cppExtension::BARSTATISTICS* st)
+{
+#if defined(_MSC_VER) || (defined(__clang__) && defined(_WIN32))
+    __try {
+#endif
+        if (!vap || !st || bar < 0) return -2;
+        std::memset(st, 0, sizeof(*st));
+        if (vap->getBarStatistics(bar, *st) != RTX_OK) return -2;
+        return st->prices < 0 ? -2 : st->prices;
+#if defined(_MSC_VER) || (defined(__clang__) && defined(_WIN32))
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#endif
+}
+static int dpVapRows(cppExtension::RTARRAYP* vap, int bar, cppExtension::VOLPROFILE* rows, int count)
+{
+#if defined(_MSC_VER) || (defined(__clang__) && defined(_WIN32))
+    __try {
+#endif
+        if (!vap || count < 0 || (count > 0 && !rows)) return -2;
+        for (int i = 0; i < count; ++i) { std::memset(&rows[i], 0, sizeof(rows[i])); if (vap->getVolumeProfile(bar, i, rows[i]) != RTX_OK) return -2; }
+        return count;
+#if defined(_MSC_VER) || (defined(__clang__) && defined(_WIN32))
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#endif
+}
+static bool dpReadVap(cppExtension::RTARRAYP* vap, int bar, std::vector<klv::Vap>& out)
+{
+    out.clear();
+    cppExtension::BARSTATISTICS st; const int n = dpVapStats(vap, bar, &st);
+    if (n < 0 || n > 4000) return false;
+    std::vector<cppExtension::VOLPROFILE> rows((size_t)n);
+    if (n > 0 && dpVapRows(vap, bar, &rows[0], n) != n) return false;
+    for (int i = 0; i < n; ++i) if (std::isfinite(rows[(size_t)i].price) && rows[(size_t)i].totalVolume > 0) out.push_back(klv::Vap{ (double)rows[(size_t)i].price, (double)rows[(size_t)i].totalVolume });
+    return true;
+}
+
 const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m)
 {
     KLC& K = klc[m];
     long n = getBarCount();
     if (n < 2) { K.v.clear(); return K.v; }
-    RTARRAY h(barHigh), l(barLow), c(barClose); RTARRAYI dt(barDateTime);
+    RTARRAY h(barHigh), l(barLow), c(barClose), op(barOpen); RTARRAYI dt(barDateTime), bv(barVolume);
     long long lastT = (long long)dt[(int)n - 1];
     time_t now = time(nullptr);
     if (n == K.n && lastT == K.lastT && now - K.at < 60) return K.v;
@@ -1449,15 +1505,34 @@ const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m
     }
     long from = n - (long)(15LL * 86400 / per); if (from < 0) from = 0;     // two weeks and a bit: enough for the prior week
     std::vector<klv::Bar> B; B.reserve((size_t)(n - from));
+    // (2.18.0) the volume-at-price of each closed bar, read once and kept (the forming bar is never used: the profiles are
+    // the PRIOR session / week, so their bars are all closed); a bar IRT has no rows for yet is retried at the next recompute
+    if (!K.vap) K.vap = std::make_shared<VapCache>();
+    std::vector<std::vector<klv::Vap>> V; V.reserve((size_t)(n - from));
+    RTARRAYP vapArr(barVolumeProfile);
+    K.vapRead = 0; K.vapMissing = 0;
+    const long long firstT = (long long)dt[(int)from];
+    for (auto it = K.vap->bars.begin(); it != K.vap->bars.end(); ) { if (it->first < firstT) it = K.vap->bars.erase(it); else ++it; }   // trim to the window
     for (long i = from; i < n; i++) {
         struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[(int)i], &t);
-        B.push_back(klv::Bar{ svl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday), t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec, h[(int)i], l[(int)i], c[(int)i] });
+        klv::Bar b{ svl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday), t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec, h[(int)i], l[(int)i], c[(int)i] };
+        b.o = op.count > (int)i ? op[(int)i] : NAN;
+        b.v = bv.count > (int)i ? (double)bv[(int)i] : -1;
+        B.push_back(b);
+        const long long key = (long long)dt[(int)i];
+        auto f = K.vap->bars.find(key);
+        if (f != K.vap->bars.end()) { V.push_back(f->second); continue; }
+        std::vector<klv::Vap> rows;
+        if (i < n - 1 && dpReadVap(&vapArr, (int)i, rows) && !(rows.empty() && b.v > 0)) { K.vap->bars[key] = rows; K.vapRead++; }
+        else if (i < n - 1) K.vapMissing++;
+        V.push_back(rows);
     }
     int o = 0, cl = 0;
     if (!svl::rthOf(m.c_str(), o, cl)) { K.v.clear(); return K.v; }
     double tk = chartTick(m);
     int a0 = 18 * 60, a1 = 2 * 60; klv::asiaWindow(m.c_str(), a0, a1);              // (2.10.0)
-    K.v = klv::merge(klv::compute(B, per, o, cl, tk, a0, a1), tk, klv::mergeTicksFor(m));
+    K.diag = klv::ProfDiag();
+    K.v = klv::merge(klv::compute(B, per, o, cl, tk, a0, a1, &V, klv::profileRowTicks(m), &K.diag), tk, klv::mergeTicksFor(m));   // (2.18.0) + Open, DPoc / VAH / VAL, WPoc
     {   std::vector<klv::Merged> keep; for (size_t i = 0; i < K.v.size(); ++i) { klv::Merged q = K.v[i]; q.name = dcol::dropHourly(q.name); if (!q.name.empty()) keep.push_back(q); } K.v.swap(keep); }
     K.n = n; K.lastT = lastT; K.at = now;
     {   // (2.8.0) share them with this market's hourly charts (written at each recompute: every new bar, at most every 10 s)
@@ -1485,6 +1560,9 @@ static COLOR klColor(const std::string& name, bool pivotOnly)
     if (f == "ONH" || f == "ONL") return (COLOR)0x00808080;
     if (f == "AsiaHI" || f == "AsiaLO") return (COLOR)0x008E6CC0;   // (2.10.0) Asia = muted purple
     if (f == "CWH" || f == "CWL") return (COLOR)0x005470D6;         // (2.10.0) current week = a softer Prev Week blue
+    if (f == "Open") return (COLOR)0x00FFFFFF;                      // (2.18.0, Rassul 2026-10-19 13:14 "make its badge and line white")
+    if (f == "DPoc" || f == "VAH" || f == "VAL") return (COLOR)0x0014B8A6;   // (2.18.0) the prior FULL session's profile = Prev Full teal (brighter)
+    if (f == "WPoc") return (COLOR)0x000000FF;                      // (2.18.0) prior week = Prev Week blue
     return (COLOR)0x00F59E0B;
 }
 // "33%/50%?" -> "33%  /  50%?" (two spaces each side of the slash between the odds; names are not touched)
@@ -1869,6 +1947,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (DP_HOVERS ? TRACK_MOUSE : 0));   // (2.17.3) no TRACK_MOUSE while the hovers are off   // (2.9.0) hovers: mouse events even when not selected
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.17.3");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.18.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }
