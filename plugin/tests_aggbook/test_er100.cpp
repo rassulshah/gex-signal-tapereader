@@ -30,5 +30,11 @@ int main() {
         CHECK(h.rewOk && er::rewardCellOf(h) == "0.3x absorbed", "(1.1.0) effort 0.5x: Reward shown");
         er::Side k; k.effOk = false; k.rewOk = true; k.rew = 1.0; er::guard(k); CHECK(!k.rewOk, "(1.1.0) effort unknown: Reward hidden");
         er::Side s2[2]; s2[0] = g; br::Read r2; CHECK(!er::read(true, false, s2, r2), "(1.1.0) a thin side gives no read"); }
-    printf("EffortReward 1.1.0: %d checks, %d failed\n", p + f, f); return f ? 1 : 0;
+    {   er::Side c[2]; c[1].effOk = true; c[1].eff = 1.6; br::Read r3;
+        CHECK(er::counterRead(true, false, c, r3) && r3.impl == br::BULL && r3.head == "New low: Buyers stepping in 1.6x - support coming in ?", "(1.2.0) new low, buyers 1.6x: support coming in");
+        c[1].eff = 2.3; CHECK(er::counterRead(true, false, c, r3) && r3.head == "New low: Buyers lifting 2.3x - strong support coming in ?", "(1.2.0) 2.0x+: strong");
+        c[1].eff = 1.4; CHECK(!er::counterRead(true, false, c, r3), "(1.2.0) 1.4x: nothing");
+        c[0].effOk = true; c[0].eff = 1.8; CHECK(er::counterRead(false, true, c, r3) && r3.impl == br::BEAR && r3.head.find("resistance coming in") != std::string::npos, "(1.2.0) new high, sellers 1.8x: resistance coming in");
+        CHECK(!er::counterRead(false, false, c, r3) && !er::counterRead(true, true, c, r3), "(1.2.0) no extreme / outside bar: nothing"); }
+    printf("EffortReward 1.2.0: %d checks, %d failed\n", p + f, f); return f ? 1 : 0;
 }

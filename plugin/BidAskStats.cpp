@@ -1372,7 +1372,7 @@ void BidAskStats::render(BASState& S) {
     br::Read rd = bas::aggRead(bst, readPc);
     {   // (1.16.0) at a new 10-bar low / high the Effort vs Reward read leads (absorbed / going through), as Book Flow's refill read does
         const int ci = liveBox ? last : mb; bool nlw = false, nhi = false;
-        if (newExtreme(ci, nlw, nhi)) { br::Read er0; const er::Side sd[2] = { erNow[0], erNow[1] }; if (er::read(nlw, nhi, sd, er0)) rd = er0; }
+        if (newExtreme(ci, nlw, nhi)) { br::Read er0; const er::Side sd[2] = { erNow[0], erNow[1] }; if (er::read(nlw, nhi, sd, er0)) rd = er0; else if (er::counterRead(nlw, nhi, sd, er0)) rd = er0; }   // (1.17.0) + support / resistance coming in at 1.5x
     }
     if (S.feed.silentNow(steadyMs())) { rd = br::Read(); rd.head = off::silentRead(S.feed.silentFromWall, S.feed.reconnects); }   // (1.17.0) the watchdog says so
     const off::TextW tw = off::measureWith(this);

@@ -1,4 +1,4 @@
-// EffortReward.h 1.1.0 (1.1.0, 18:37 CT: Reward hidden ("-") when that side attacked under 0.5x its normal) 1.0.0 (2026-10-19, Rassul "now what would the opposite for aggressiveness" -> "so both together can be an effort reward
+// EffortReward.h 1.2.0 (1.2.0, 18:54 CT: counterRead - support / resistance coming in at 1.5x) 1.1.0 (1.1.0, 18:37 CT: Reward hidden ("-") when that side attacked under 0.5x its normal) 1.0.0 (2026-10-19, Rassul "now what would the opposite for aggressiveness" -> "so both together can be an effort reward
 // indicator" -> "build it already" 17:42 CT) - ATTACK EFFORT and REWARD, shared by Aggression (lsBidAskStats) and Book Flow (lsBookFlow).
 //   Attack Effort = the lots a side traded aggressively in the candle / its average over the 20 candles before (sellers = lots hit at
 //                   the bid, buyers = lots lifted at the offer). 2.0x = twice its normal attack.
@@ -84,6 +84,22 @@ inline bool read(bool newLow, bool newHigh, const Side s[2], br::Read& r) {
         return true;
     }
     return false;
+}
+
+// (1.2.0, Rassul 2026-10-19 18:48 "it usually waits for 2x but those are more rare so what should it be for a reversal to see that support
+// is coming in" -> "do it" 18:54) the COUNTER-SIDE read: at a new 10-bar low, buyers' Attack Effort >= 1.5x = support coming in; at a new
+// high, sellers' >= 1.5x = resistance coming in. Unseen data (49 sessions, 7 markets): 1.5x+ turned 30% (lows) / 31% (highs) vs 22% base,
+// 2.0x+ 33% / 35%, under 1.25x 17-18% (worse than base). Used when the attacker's Effort vs Reward read has nothing to say.
+static const double COUNTER_X = 1.5, COUNTER_STRONG_X = 2.0;
+inline bool counterRead(bool newLow, bool newHigh, const Side s[2], br::Read& r) {
+    if (newLow == newHigh) return false;
+    const int c = newLow ? 1 : 0;                                          // the side coming in against the move
+    if (!s[c].effOk || s[c].eff < COUNTER_X - 1e-9) return false;
+    const bool strong = s[c].eff >= COUNTER_STRONG_X - 1e-9;
+    r = br::Read(); r.impl = newLow ? br::BULL : br::BEAR;
+    r.head = std::string(newLow ? "New low: Buyers " : "New high: Sellers ") + (strong ? (newLow ? "lifting " : "hitting ") : "stepping in ") + x1(s[c].eff)
+           + (newLow ? " - " : " - ") + (strong ? "strong " : "") + (newLow ? "support" : "resistance") + " coming in ?";
+    return true;
 }
 
 } // namespace er
