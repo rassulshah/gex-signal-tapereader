@@ -19,6 +19,7 @@
 #include "OrderFlowFeed.h"
 #include "StackStatsLogic.h"
 #include "PullStatsLogic.h"
+#include "BoxRead.h"
 #include <algorithm>
 #include <cstdio>
 #include <map>
@@ -27,7 +28,7 @@
 
 namespace bf {
 
-static const char* const VERSION = "1.3.4";   // (1.3.4) box follows the mouse only inside the pane, else Live = the forming candle; // (1.3.3, 2026-10-18 his decision list) window: Position + Near ticks (Offset X / Y and Record removed - recording always on; Ratio bars / Spike hidden);  (1.3.2, 2026-10-18 settings audit) the window from OrderFlowPaneSettings.h through SettingsHost.h (same rows / file); (1.3.1, 2026-10-18 settings audit) Spike vs average on its own settings line (was cut off); rows / file unchanged // keep equal to BF_VERSION / setVersion in BookFlow.cpp (1.3.0: net spike, colour by side, Market State BOOK; 1.2.1 box Net + Pace)
+static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-10-18 23:48 / 23:56 CT approved bookflow-read-mockup.png + bookflow-pull2-mockup.png) box rows Net, Added, Pulled, Pace, Read; pull markers (pullStat) (bookRead, BoxRead.h); the live candle's Net carries its ratio; // (1.3.4) box follows the mouse only inside the pane, else Live = the forming candle; // (1.3.3, 2026-10-18 his decision list) window: Position + Near ticks (Offset X / Y and Record removed - recording always on; Ratio bars / Spike hidden);  (1.3.2, 2026-10-18 settings audit) the window from OrderFlowPaneSettings.h through SettingsHost.h (same rows / file); (1.3.1, 2026-10-18 settings audit) Spike vs average on its own settings line (was cut off); rows / file unchanged // keep equal to BF_VERSION / setVersion in BookFlow.cpp (1.3.0: net spike, colour by side, Market State BOOK; 1.2.1 box Net + Pace)
 using off::BID; using off::ASK;
 
 inline long long netOf(const off::Rec& r, int s) { return r.addC[s] - r.pullC[s]; }
@@ -142,6 +143,91 @@ inline NetStat netStatAt(const std::map<long long, off::PaneBar>& bars, long lon
     if (me == bars.end() || !me->second.ok) return n;
     std::vector<long long> pb, pa; priorAbsNet(bars, t, (size_t)(ratioBars > off::RATIO_HI ? off::RATIO_HI : (ratioBars < off::RATIO_LO ? off::RATIO_LO : ratioBars)), pb, pa);
     return netStat(pb, pa, me->second.r, ratioBars, avgT);
+}
+// (1.4.0, Rassul approved 23:48 CT) THE READ ROW - what the book is doing near price, from the Net ratios of the candle shown (hovered
+// closed, else the live forming one): a side ARRIVES (net > 0) or LEAVES (net < 0) when its |net| is >= 1.0x its average and >= 3 lots,
+// else it is FLAT. When both move the same way and one is >= 1.5x the other, the stronger decides (the weaker counts as flat).
+//   bids arriving + offers leaving -> BULLISH "Bids stacking {b}x, offers pulled {o}x - path up opening"; + offers flat -> BULLISH
+//   "Bids stacking {b}x - support arriving"; bids leaving + offers arriving -> BEARISH "Bids pulled {b}x, offers stacking {o}x - path down
+//   opening"; + offers flat -> BEARISH "Bids pulled {b}x - support leaving"; bids flat + offers leaving -> BULLISH "Offers pulled {o}x -
+//   resistance leaving"; bids flat + offers arriving -> BEARISH "Sellers stacking offers {o}x, little support under price ({b}x)" (no
+//   bid ratio yet: " - resistance building"); both arriving -> NEUTRAL "Both sides stacking ~{r}x - book thickening, wait for the hit";
+//   both leaving -> NEUTRAL "Both sides pulling ~{r}x - book thinning"; both flat -> NEUTRAL "Book quiet - nothing building or leaving".
+static const long long READ_MIN_LOTS = 3;
+// (1.4.0, Rassul approved 23:56 CT bookflow-pull2-mockup.png) THE PULL MARKER: a side PULLED its orders near price when its pulled lots are
+// >= 2.0x the plain average of the prior 20 decided candles' pulled lots (>= 5 needed, mean floored at 1 lot) AND >= 1.2x its added lots
+// in the candle - real pulling, not re-quoting. Drawn only for a CLOSED candle (decided once at its close, never repainted).
+// Calibration (ES Fri 2026-10-16 RTH, his recording, BookFlow's own engine): pulled / added per side-candle p50 0.80, max 0.89 -> 0 markers
+// at 1.2x; reported to the coordinator, thresholds NOT changed (PULL_X_T / PULL_ADD_T).
+static const int PULL_X_T = 20, PULL_ADD_T = 12, PULL_MENTION_T = 15, PULL_BARS = 20;
+struct PullStat { bool ok = false; long long add[2] = {0, 0}, pull[2] = {0, 0}; bool addOk[2] = {false, false}, pullOk[2] = {false, false};
+                  double addR[2] = {0, 0}, pullR[2] = {0, 0}, pullMean[2] = {0, 0}; bool pulling[2] = {false, false}; };
+// the prior added / pulled lots before t (decided, not partial, newest last, at most `need`)
+inline void priorAddPull(const std::map<long long, off::PaneBar>& bars, long long t, size_t need, std::vector<long long> add[2], std::vector<long long> pull[2]) {
+    for (int s = 0; s < 2; ++s) { add[s].clear(); pull[s].clear(); }
+    std::map<long long, off::PaneBar>::const_iterator it = bars.lower_bound(t);
+    while (it != bars.begin() && add[0].size() < need) {
+        --it; if (!it->second.ok || it->second.r.partial) continue;
+        for (int s = 0; s < 2; ++s) { add[s].push_back(it->second.r.addC[s]); pull[s].push_back(it->second.r.pullC[s]); }
+    }
+    for (int s = 0; s < 2; ++s) { std::reverse(add[s].begin(), add[s].end()); std::reverse(pull[s].begin(), pull[s].end()); }
+}
+// pulling = the marker's condition (pulled >= 2.0x its average AND >= 1.2x added); a partial candle never pulls
+inline PullStat pullStatOf(const std::vector<long long> add[2], const std::vector<long long> pull[2], const off::Rec& r) {
+    PullStat p; p.ok = true;
+    for (int s = 0; s < 2; ++s) {
+        p.add[s] = r.addC[s]; p.pull[s] = r.pullC[s];
+        p.addR[s] = off::ratioOf(add[s], p.add[s], PULL_BARS, p.addOk[s], nullptr, 1.0);
+        p.pullR[s] = off::ratioOf(pull[s], p.pull[s], PULL_BARS, p.pullOk[s], &p.pullMean[s], 1.0);
+        p.pulling[s] = !r.partial && p.pullOk[s] && p.pull[s] > 0 && (double)p.pull[s] * 10.0 >= (double)PULL_X_T * p.pullMean[s] && p.pull[s] * 10 >= (long long)PULL_ADD_T * p.add[s];
+    }
+    return p;
+}
+inline PullStat pullStatAt(const std::map<long long, off::PaneBar>& bars, long long t, const off::Rec& r) {
+    std::vector<long long> a[2], p[2]; priorAddPull(bars, t, (size_t)PULL_BARS, a, p); return pullStatOf(a, p, r);
+}
+inline std::string pullLabel(const PullStat& p, int s) { return "P " + br::x1(p.pullR[s]); }
+enum { RD_FLAT = 0, RD_ARRIVE = 1, RD_LEAVE = 2 };
+inline int sideState(const NetStat& n, int s) {
+    const long long a = n.net[s] < 0 ? -n.net[s] : n.net[s];
+    if (!n.ratioOk[s] || n.ratio[s] < 1.0 || a < READ_MIN_LOTS) return RD_FLAT;
+    return n.net[s] > 0 ? RD_ARRIVE : RD_LEAVE;
+}
+// (1.4.0, 23:56 CT) PULLING decides first: both sides pulling -> NEUTRAL "Both sides pulling - book thinning, a fast move is likely";
+// bids pulling + offers stacking -> BEARISH "Sellers stacking offers {o}x, bids pulled {p}x - support leaving"; bids pulling -> BEARISH
+// "Bids pulled {p}x, more than added - support leaving under price"; offers pulling + bids stacking -> BULLISH "Bids stacking {b}x, offers
+// pulled {p}x - path up opening"; offers pulling -> BULLISH "Offers pulled {p}x, more than added - resistance leaving, path up opening";
+// else the stacking rules below. A side pulling >= 1.5x its average is mentioned (", bids pulling {p}x") when the text does not say it.
+inline br::Read bookRead(const NetStat* n, const PullStat* pl = nullptr) {
+    br::Read r;
+    if (!n || !n->ok) { r.head = "No order data for this candle"; return r; }
+    int st[2] = { sideState(*n, BID), sideState(*n, ASK) };
+    const double b = n->ratio[BID], o = n->ratio[ASK];
+    if (st[0] == st[1] && st[0] != RD_FLAT) { if (b >= 1.5 * o) st[1] = RD_FLAT; else if (o >= 1.5 * b) st[0] = RD_FLAT; }
+    const std::string bx = br::x1(b) + "x", ox = br::x1(o) + "x";
+    const bool pull[2] = { pl && pl->ok && pl->pulling[BID], pl && pl->ok && pl->pulling[ASK] };
+    const std::string pbx = pl ? br::x1(pl->pullR[BID]) + "x" : std::string(), pox = pl ? br::x1(pl->pullR[ASK]) + "x" : std::string();
+    if (pull[0] && pull[1]) { r.head = "Both sides pulling - book thinning, a fast move is likely"; return r; }
+    if (pull[0]) { r.impl = br::BEAR; r.head = st[1] == RD_ARRIVE ? "Sellers stacking offers " + ox + ", bids pulled " + pbx + " - support leaving" : "Bids pulled " + pbx + ", more than added - support leaving under price"; }
+    else if (pull[1]) { r.impl = br::BULL; r.head = st[0] == RD_ARRIVE ? "Bids stacking " + bx + ", offers pulled " + pox + " - path up opening" : "Offers pulled " + pox + ", more than added - resistance leaving, path up opening"; }
+    else if (st[0] == RD_ARRIVE && st[1] == RD_LEAVE) { r.impl = br::BULL; r.head = "Bids stacking " + bx + ", offers pulled " + ox + " - path up opening"; }
+    else if (st[0] == RD_ARRIVE && st[1] == RD_FLAT) { r.impl = br::BULL; r.head = "Bids stacking " + bx + " - support arriving"; }
+    else if (st[0] == RD_LEAVE && st[1] == RD_ARRIVE) { r.impl = br::BEAR; r.head = "Bids pulled " + bx + ", offers stacking " + ox + " - path down opening"; }
+    else if (st[0] == RD_LEAVE && st[1] == RD_FLAT) { r.impl = br::BEAR; r.head = "Bids pulled " + bx + " - support leaving"; }
+    else if (st[0] == RD_FLAT && st[1] == RD_LEAVE) { r.impl = br::BULL; r.head = "Offers pulled " + ox + " - resistance leaving"; }
+    else if (st[0] == RD_FLAT && st[1] == RD_ARRIVE) { r.impl = br::BEAR; r.head = "Sellers stacking offers " + ox; r.opt.push_back(n->ratioOk[BID] ? ", little support under price (" + bx + ")" : std::string(" - resistance building")); }
+    else if (st[0] == RD_ARRIVE && st[1] == RD_ARRIVE) r.head = "Both sides stacking ~" + br::approx((b + o) / 2.0) + "x - book thickening, wait for the hit";
+    else if (st[0] == RD_LEAVE && st[1] == RD_LEAVE) r.head = "Both sides pulling ~" + br::approx((b + o) / 2.0) + "x - book thinning";
+    else r.head = "Book quiet - nothing building or leaving";
+    if (pl && pl->ok) for (int s = 0; s < 2; ++s)                       // pulling >= 1.5x its average is said even when it does not decide
+        if (!pull[s] && pl->pullOk[s] && pl->pullR[s] * 10.0 >= PULL_MENTION_T - 1e-9 && r.head.find(s == BID ? "ids pulled" : "ffers pulled") == std::string::npos)
+            r.opt.push_back(std::string(s == BID ? ", bids pulling " : ", offers pulling ") + br::x1(pl->pullR[s]) + "x");
+    return r;
+}
+// the live (forming) candle's Net ratios against the decided candles before it (the same rule as a closed candle; never a decision)
+inline NetStat liveNetStat(const std::map<long long, off::PaneBar>& bars, long long t, const off::Rec& r, int ratioBars, long long avgT) {
+    std::vector<long long> pb, pa; priorAbsNet(bars, t, (size_t)(ratioBars > off::RATIO_HI ? off::RATIO_HI : (ratioBars < off::RATIO_LO ? off::RATIO_LO : ratioBars)), pb, pa);
+    NetStat n = netStat(pb, pa, r, ratioBars, avgT); for (int s = 0; s < 2; ++s) n.spike[s] = false; return n;
 }
 inline std::string netCell(const off::PaneBar& b, int s, const NetStat* ns) {
     std::string o = signedLots(netOf(b.r, s));

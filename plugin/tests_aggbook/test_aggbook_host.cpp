@@ -18,7 +18,21 @@ static long long& NOW = bas_test_now_ms;
 #include <unistd.h>
 #include <sys/stat.h>
 namespace mock { Host* current = nullptr; Feed feed; }
-namespace pc { int test_cx = 0, test_cy = 0; bool test_ok = false; }   // (1.14.1 / 1.3.4) the screen cursor (PaneCursor.h)
+namespace pc { int test_cx = 0, test_cy = 0; bool test_ok = false; }
+// (1.15.0 / 1.4.0) the Read lines drawn: every one inside the box (left / right / bottom), joined = the read shown (nothing cut)
+[[maybe_unused]] static bool readFits(mock::Host& h, const bp::Box& b, const br::Read& r, const std::vector<std::string>& lines, std::string& why) {
+    if (lines.empty()) { why = "no lines"; return false; }
+    std::string joined;
+    for (const auto& ln : lines) {
+        const mock::Draw* d = nullptr; for (auto& x : h.draws) if (x.type == "text" && x.text == ln && x.color == (COLOR)r.color()) d = &x;
+        if (!d) { why = "line not drawn: " + ln; return false; }
+        if (d->x < b.l || d->r > b.r + 2 || d->y < b.t || d->b > b.b + 1) { why = "outside the box: " + ln; return false; }
+        joined += (joined.empty() ? "" : " ") + ln;
+    }
+    bool ok = false; for (size_t n = 0; n <= r.opt.size(); ++n) ok = ok || joined == r.text(n);
+    if (!ok) { why = "cut: " + joined; return false; }
+    return true;
+}   // (1.14.1 / 1.3.4) the screen cursor (PaneCursor.h)
 [[maybe_unused]] static bool hasPrefix(mock::Host& h, const std::string& p) { for (auto& d : h.draws) if (d.type == "text" && d.text.compare(0, p.size(), p) == 0) return true; return false; }
 static RTX_EVENT moveAt(int h, int v, long bar) { RTX_EVENT e; std::memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)h; e.v.mouse.v = (short)v; e.v.mouse.bar = bar; return e; }
 static int fails = 0, passes = 0;
@@ -111,6 +125,11 @@ int main() {
         CHECK(h.invalidates > inv, "a new tick on the forming candle while Live: redrawn");
         h.draws.clear(); p->draw();
         CHECK(hasPrefix(h, "77 (") && text(h, "Live") != nullptr, "Live box shows the updated 77 lots with the mouse outside the pane");
+        {   std::string why; const bool fits = readFits(h, S->lastBox, S->lastRead, S->lastReadLines, why);
+            CHECK(text(h, "Read") != nullptr && text(h, "BEARISH", br::C_BEAR) != nullptr && S->lastRead.head.find("Sellers hitting") == 0
+                  && S->lastRead.full().find("biggest bid in 32") != std::string::npos, "(1.15.0) Read: BEARISH, Sellers hitting, biggest bid in 32 (live)");
+            CHECK(fits && S->lastReadLines.size() <= 2, ("(1.15.0) the Read lines fit inside the box, <= 2 lines, nothing cut " + why).c_str());
+            CHECK(text(h, "BL5") == nullptr, "(1.15.0) no BL5 row"); }
         CHECK(text(h, "32", C_BID) != nullptr && text(h, "0", C_ASK) != nullptr, "(1.14.2) live BBI 32 after the trade (77 beats all 32 prior candles), updating with the forming candle");
         pc::test_cy = 650; ev = moveAt(450, 150, 12); p->mouse(&ev); NOW += 300; p->calc(0);
         CHECK(S->hover.bar == 12, "back inside: follows the mouse again");
@@ -159,9 +178,19 @@ int main() {
     {   const std::vector<mock::Draw> v = barsAt(h, 52);
         int gd = 0, rd = 0, bright = 0; for (auto& d : v) { gd += d.color == off::C_GREEN_BAR; rd += d.color == off::C_RED_BAR; bright += d.color == off::C_GREEN_SPIKE || d.color == off::C_RED_SPIKE; }
         CHECK(v.size() == 2 && gd == 1 && rd == 1 && bright == 0, "forming candle: bid bar dim green, offer bar dim red, nothing bright");
-        CHECK(!text(h, "5.0"), "forming candle: no label (no repaint)"); }
+        CHECK(!text(h, "5.0"), "forming candle: no label (no repaint)");
+        CHECK(!hasPrefix(h, "P "), "(1.4.0) the forming candle never gets a pull marker (100 offer lots pulled so far)"); }
     step(h, p, 53);
     const long long k52 = T0 + 60 * 52;
+    {   h.draws.clear(); p->draw();                                       // (1.4.0) candle 52 closed: offers pulled 100 lots (avg 0 -> floored 1 lot), added 0 -> marker
+        int markers = 0, blocks = 0; const mock::Draw* lab = nullptr;
+        for (auto& d : h.draws) { if (d.type == "text" && d.text.compare(0, 2, "P ") == 0 && d.color == off::C_LBL_RATIO) { ++markers; lab = &d; } }
+        for (auto& d : h.draws) if (d.type == "box" && d.color == off::C_RED_SPIKE && lab && d.b < lab->y + 1 && d.b >= lab->y - 9) ++blocks;
+        CHECK(markers == 1 && lab && lab->text == "P 100.0", "(1.4.0) one pull marker: P 100.0 on candle 52 (offers)");
+        CHECK(blocks == 1, "(1.4.0) its block in the offer colour (red) just above the label");
+        CHECK(lab && lab->y >= 150 && lab->b <= 300 && (S->lastBox.r < lab->x || S->lastBox.b < lab->y), "(1.4.0) the marker sits in the bottom strip, clear of the info box");
+        Ind::Ext* e = p->ext(*S); const bf::PullStat* ps = e ? &e->pulls[k52] : nullptr;
+        CHECK(ps && ps->pulling[1] && !ps->pulling[0] && ps->pull[1] == 100 && ps->add[1] == 0, "(1.4.0) the decision kept for candle 52: offers pulling, bids not"); }
     CHECK(S->ser.bars.count(k52) && S->ser.bars[k52].r.addC[0] == 100 && S->ser.bars[k52].r.pullC[1] == 100, "candle 52 decided: +100 bids added, 100 offer lots pulled");
     CHECK(S->ser.bars[k52].spike[0] && S->ser.bars[k52].spike[1], "the NET spike on both sides (|+100| and |-100| = 5.0x the |net| average 20)");
     CHECK(S->file.rows.count(k52) && S->file.rows[k52].spike[0] == 1 && S->file.rows[k52].spike[1] == 1, "the BookFlow record keeps the net spike (spike_left / spike_right)");
@@ -200,7 +229,7 @@ int main() {
     NOW += 1500; p->calc(0);
     CHECK(S->dlgSpike.avgT == 60 && S->set.dy == 0 && S->set.record == 1, "the chart reads the file: Spike vs average 6.0 (hidden, from the file), a saved offset ignored, recording on despite a saved 0");
     h.draws.clear(); p->draw();
-    {   int bright = 0; for (auto& d : barsAt(h, 52)) bright += d.color == off::C_GREEN_SPIKE || d.color == off::C_RED_SPIKE;
+    {   int bright = 0; for (auto& d : barsAt(h, 52)) bright += (d.color == off::C_GREEN_SPIKE || d.color == off::C_RED_SPIKE) && d.y < 250;   // (1.4.0) not the pull-marker block in the bottom strip
         CHECK(bright == 0 && !text(h, "5.0"), "5.0x under a 6.0x setting: dim, no label (the setting works)"); }
     // (1.3.4) the box follows the mouse only inside this pane; outside = Live (the forming candle), updating with new order events
     {   void* W = (void*)0x1; off::off_test_cursor_wnd = W; pc::test_ok = true;
@@ -213,8 +242,15 @@ int main() {
         const int inv = h.invalidates; NOW += 300; p->calc(0);
         CHECK(h.invalidates > inv, "new order events on the forming candle while Live: redrawn");
         h.draws.clear(); p->draw();
-        CHECK(text(h, "Live") != nullptr && text(h, "+30") != nullptr, "Live box: the forming candle's Net +30 bids so far, mouse outside the pane");
+        CHECK(text(h, "Live") != nullptr && hasPrefix(h, "+30 ("), "Live box: the forming candle's Net +30 bids so far with its ratio (1.4.0), mouse outside the pane");
+        {   Ind::Ext* e = p->ext(*S); std::string why; const bool fits = e && readFits(h, S->lastBox, e->lastRead, e->lastReadLines, why);
+            CHECK(e && text(h, "BULLISH", br::C_BULL) != nullptr && e->lastRead.head.find("Bids stacking") == 0, "(1.4.0) Read: BULLISH, Bids stacking (live, offers flat)");
+            CHECK(fits, ("(1.4.0) the Read lines fit inside the box, nothing cut " + why).c_str()); }
         pc::test_ok = false; off::off_test_cursor_wnd = nullptr; }
+    // (1.4.0) no repaint: later candles never move or remove the marker (decided once at the close)
+    for (int k = 54; k < 58; ++k) step(h, p, k);
+    {   h.draws.clear(); p->draw(); int markers = 0; for (auto& d : h.draws) if (d.type == "text" && d.text == "P 100.0") ++markers;
+        Ind::Ext* e = p->ext(*S); CHECK(markers == 1 && e && e->pulls.count(k52) && e->pulls[k52].pulling[1], "(1.4.0) 4 candles later: the same marker, the same decision"); }
     dispose(p);
     CHECK(!mst::read("BOOK", "ESZ6", 60, "test", NOW).ok, "removed: the Market State entry is cleared");
     std::printf("BookFlow host: %d passed, %d failed\n", passes, fails);

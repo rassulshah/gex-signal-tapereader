@@ -1,5 +1,9 @@
 /********************************************************************************
- *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats (the "Aggression" pane)  1.14.2 (2026-10-18)
+ *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats (the "Aggression" pane)  1.15.0 (2026-10-18)
+ *  1.15.0 (2026-10-18 23:48 CT, Rassul approved aggr-read-v2-mockup.png): box rows Lots, Pace, BBI / BAI, READ - one word (BULLISH green /
+ *        BEARISH red / NEUTRAL light grey) + the read in up to 2 lines that always fit the box (bas::aggRead, BoxRead.h / BoxReadDraw.h): who
+ *        is attacking, fast, biggest in N, the other side quiet. The BL5 row is removed (the Big Lot cyan cap and its setting stay). The box's
+ *        value columns are sized on the Lots / Pace values (no longer the wide Crowd template the BBI / BAI row picked up in 1.14.2).
  *  1.14.2 (2026-10-18 23:34 CT, Rassul approved aggr-bbi-mockup.png): box row "BBI / BAI" under Pace, above BL5 - Sellers = BBI (Biggest
  *        Bid In) = how many prior candles in a row this candle's biggest bid beats (strictly; an equal or bigger one stops it), Buyers = BAI
  *        the same for the ask, up to 50 ("50+"). Same hover rule as 1.14.1: the candle under the mouse inside the pane, else the live
@@ -147,6 +151,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include "SessionVWAPLogic.h"         // (1.14.0) svl::rthOf / classify (the session and its RTH)
 #include "BigLotTiers.h"              // (1.14.0) the Big Lot sizes per session type
 #include "PaneCursor.h"               // (1.14.1) the box follows the mouse only while the cursor is inside this pane
+#include "BoxReadDraw.h"              // (1.15.0) the Read row
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -165,7 +170,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.14.2"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.15.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -262,6 +267,7 @@ struct BASState {
     long long lastClosedTime = 0;                    // the last CLOSED bar's stamp
     long long liveTime = 0; bas::BarMax live;        // the forming bar (drawn only)
     long long liveReadMs = -1, retryMs = -1, statusMs = -1, settingsCheckMs = -1, settingsStamp = -2; std::string settingsText = "\x01";   // (1.14.0) the line last applied
+    br::Read lastRead; std::vector<std::string> lastReadLines;            // (1.15.0) the Read last drawn (status / tests)
     pc::Tracker cur; long long liveDrawnT = -1, liveDrawnBid = -1, liveDrawnAsk = -1;   // (1.14.1) the pane on the screen; the live numbers last drawn
     int ratioBars = bas::RATIO_DEFAULT, pos = bas::POS_DEFAULT;
     int dx = 0, dy = 0, mode = BAS_DEFAULT_MODE;     // (1.5.2) Offset X / Y, Box shows
@@ -1253,12 +1259,14 @@ void BidAskStats::render(BASState& S) {
         S.liveDrawnT = S.liveTime; S.liveDrawnBid = S.live.bid; S.liveDrawnAsk = S.live.ask;
     }
     // (1.5.0) two columns: Sellers (bids hit, red) | Buyers (offers lifted, green)
-    off::Info info; info.twoCol = true; info.colHead[0] = "Sellers"; info.colHead[1] = "Buyers"; info.tmpl = off::CROWD_TMPL;   // (1.5.1) the Crowd row is the widest
+    off::Info info; info.twoCol = true; info.colHead[0] = "Sellers"; info.colHead[1] = "Buyers"; info.tmpl = "9999 (99.9x)";   // (1.15.0) Lots / Pace / BBI / Read only: the Lots template (Crowd is not shown)
+    bas::PaceIn readPc;                                                    // (1.15.0) the pace the Read row uses (the candle shown)
     {
         struct tm x; std::memset(&x, 0, sizeof(x));
         info.head = hov < 0 ? std::string("Live") : (mt > 0 && getLocaltime((RTDATE)mt, &x) ? bas::clock12(x.tm_hour, x.tm_min) : std::string("n/a"));
         const std::string none[2]; const bas::PaceIn nopc;
         const bool rec = !liveBox && f != S.fin.end();                    // (1.14.1) the live candle has no record yet
+        readPc = liveBox ? livePc : rec ? f->second.pc : nopc;
         const std::vector<bas::Row2> L = bas::infoRows(bst, rec ? &f->second.r : nullptr, rec ? f->second.let : none, rec && f->second.dbo,
                                                        liveBox ? livePc : rec ? f->second.pc : nopc, S.params.load.p.paceFastT);
         for (size_t k = 0; k < L.size(); ++k) { off::InfoRow r; r.label = L[k].label; r.v[0] = L[k].v[0]; r.v[1] = L[k].v[1]; info.rows.push_back(r); }
@@ -1286,17 +1294,7 @@ void BidAskStats::render(BASState& S) {
             r.v[1] = ok ? bas::beatText(bst->bAsk, bst->bAskCap, true) : std::string("n/a");
             info.rows.push_back(r);
         }
-        if (S.bigLot >= 1 && S.bigLot <= 3) {                              // (1.14.0) "BL5  311": the Big Lot size of the candle shown ("--" learning)
-            const blt::Tier* T = nullptr; blt::Tier liveT;
-            if (hov >= 0) { const blt::Mark* mk = markAt(S, mt); if (mk) T = &mk->tier; }
-            else { long d = 0; int e = 0;
-                if (S.spb > 0 && partsOf((long long)times[last], d, e)) {
-                    const svl::Cls c = svl::classify(d, e, S.spb, S.openMin, S.closeMin); const int ty = blt::typeOf(e / 60, S.openMin, S.closeMin);
-                    std::map<long, blt::Tier>::const_iterator it = S.blBook.tiers[ty].find(c.sess); if (it != S.blBook.tiers[ty].end()) { liveT = it->second; T = &liveT; } } }
-            const long long z = T ? blt::markSize(*T, S.bigLot) : 0;
-            off::InfoRow r; r.label = blt::label(S.bigLot); r.v[0] = z > 0 ? std::to_string(z) : std::string("--"); r.v[1] = ""; r.side[0] = r.side[1] = -1;
-            info.rows.push_back(r);
-        }
+        // (1.15.0) the BL5 row is removed (Rassul 23:48 CT); the Big Lot size stays in the status file and the cyan cap on the chart
     }
     // (1.5.2) the read and the blue oHit line first (the panel is laid out before the bars: labels never go over it)
     nl::Msg m;
@@ -1317,7 +1315,11 @@ void BidAskStats::render(BASState& S) {
     // (1.10.0) the pane shows the numbers box only (1.13.0: the "Box shows" setting that did nothing is gone); records + tape reader unchanged
     off::PanelPlan P;
     (void)zl; (void)optL; (void)l1;
-    P = off::planPanel(area, g.top, off::MODE_NUMBERS, pl, info, std::string(), std::string(), g.reserve, off::measureWith(this)); S.lastBox = P.ok ? P.box : bp::Box();
+    // (1.15.0) + the Read row: the box grows to hold its lines, wrapped to the box width (BoxReadDraw.h)
+    const br::Read rd = bas::aggRead(bst, readPc);
+    const off::TextW tw = off::measureWith(this);
+    const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
+    S.lastBox = P.ok ? P.box : bp::Box(); S.lastRead = rd; S.lastReadLines = rp.lines;
     std::vector<off::LBox> avoid;
     if (P.ok) avoid.push_back(off::LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
     // (1.5.3) the hover grid is not an obstacle: it is drawn over the bars while the mouse is in the box (labels never re-decide for it)
@@ -1352,6 +1354,7 @@ void BidAskStats::render(BASState& S) {
     }
     const COLOR vcol[2] = { C_BID, C_ASK };                                // values: sellers (bid side) red, buyers (ask side) green, labels white
     off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
+    br::draw(this, P, info, rp, rd);                                      // (1.15.0) the Read word + lines over its rows
     (void)hov;   // (1.8.1, Rassul 18:57 "get rid of the hoverover") no bar hover, no read-line hover
 }
 
@@ -1360,7 +1363,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
-    p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace and BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.14.2");   // BAS_VERSION
+    p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
+    p->setVersion("1.15.0");   // BAS_VERSION
     return p;
 }

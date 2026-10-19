@@ -27,10 +27,11 @@
 #include <string>
 #include <vector>
 #include "OrderFlowFeed.h"
+#include "BoxRead.h"
 
 namespace bas {
 
-static const char* const VERSION = "1.14.2";   // (1.14.2, 2026-10-18 23:34 CT approved aggr-bbi-mockup.png) box row "BBI / BAI": how many prior candles in a row this biggest bid / ask beats (strictly), cap 50+ (beatText); // (1.14.1, 2026-10-18 23:19 CT) the box follows the mouse only inside the pane (PaneCursor.h), else Live = the forming candle; // (1.14.0, 2026-10-18, Rassul 17:26 CT) Big Lot mark: a cyan cap on a closed bar >= BL5 / BL10 / BL20 of its session type (BigLotTiers.h), decided at the close, frozen; box row "BL5 311"; history + marks recorded for the nightly; // (1.13.3, 2026-10-18 his decision list) window: Position only (Offset X / Y removed, Ratio bars / Spike vs average hidden, kept in the file);  (1.13.2, 2026-10-18 settings audit) the window from OrderFlowPaneSettings.h through SettingsHost.h (same rows / file); (1.13.1, 2026-10-18 settings audit) Spike vs average moved to its own line of the settings window (the first line was ~458 px and cut off); rows / file unchanged // (1.13.0, 2026-10-18, Rassul approved) ONE spike rule for Aggression and Book Flow: >= Spike vs average (2.0x) the plain 20-candle average of that side, decided at the close (the "1.5x the prior biggest" jump is a record field only); the forming bar is drawn dim with no label (no repaint); "Box shows" removed; Market State SRC AGG facts (aggFacts);   // (1.12.1) 6E seeds read (named 6E, chart code EU);   // (1.12.0) Big Lot S20 / S10 / S5: aggression L = S20;   // 1.10.0 (2026-10-16): numbers box in the pane;   // 1.9.1: ratio + pace above the bar, no lots, no white tick;   // 1.9.0 (2026-10-16): the pane is called Aggression; no text lines; only bars at 2.0x+; plain 20-bar average;   // 1.8.1: no hovers (Rassul 18:57);   // (1.7.2) "Bid/Ask Stats · Who is pressing?" in front of the read line;   // (1.7.1) no S / L / R letters drawn;   // 1.7.0 (2026-10-14 night, Rassul 22:37 CT): one bar per candle, title "Bid/Ask Stats - Who is Pressing", attacking -> pressing;   // 1.6.0 (2026-10-14 night): the read box -> one zone read line (ZoneRead.h), unsigned options line;   // 1.5.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.5.2 (2026-10-14 CR4800): read box + numbers hover, Offset X / Y, white letters, one spike label, rare L; 1.5.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
+static const char* const VERSION = "1.15.0";   // (1.15.0, 2026-10-18 23:48 CT approved aggr-read-v2-mockup.png) box rows Lots, Pace, BBI / BAI, Read (aggRead, BoxRead.h); the BL5 row removed (the cyan cap stays); // (1.14.2, 2026-10-18 23:34 CT approved aggr-bbi-mockup.png) box row "BBI / BAI": how many prior candles in a row this biggest bid / ask beats (strictly), cap 50+ (beatText); // (1.14.1, 2026-10-18 23:19 CT) the box follows the mouse only inside the pane (PaneCursor.h), else Live = the forming candle; // (1.14.0, 2026-10-18, Rassul 17:26 CT) Big Lot mark: a cyan cap on a closed bar >= BL5 / BL10 / BL20 of its session type (BigLotTiers.h), decided at the close, frozen; box row "BL5 311"; history + marks recorded for the nightly; // (1.13.3, 2026-10-18 his decision list) window: Position only (Offset X / Y removed, Ratio bars / Spike vs average hidden, kept in the file);  (1.13.2, 2026-10-18 settings audit) the window from OrderFlowPaneSettings.h through SettingsHost.h (same rows / file); (1.13.1, 2026-10-18 settings audit) Spike vs average moved to its own line of the settings window (the first line was ~458 px and cut off); rows / file unchanged // (1.13.0, 2026-10-18, Rassul approved) ONE spike rule for Aggression and Book Flow: >= Spike vs average (2.0x) the plain 20-candle average of that side, decided at the close (the "1.5x the prior biggest" jump is a record field only); the forming bar is drawn dim with no label (no repaint); "Box shows" removed; Market State SRC AGG facts (aggFacts);   // (1.12.1) 6E seeds read (named 6E, chart code EU);   // (1.12.0) Big Lot S20 / S10 / S5: aggression L = S20;   // 1.10.0 (2026-10-16): numbers box in the pane;   // 1.9.1: ratio + pace above the bar, no lots, no white tick;   // 1.9.0 (2026-10-16): the pane is called Aggression; no text lines; only bars at 2.0x+; plain 20-bar average;   // 1.8.1: no hovers (Rassul 18:57);   // (1.7.2) "Bid/Ask Stats · Who is pressing?" in front of the read line;   // (1.7.1) no S / L / R letters drawn;   // 1.7.0 (2026-10-14 night, Rassul 22:37 CT): one bar per candle, title "Bid/Ask Stats - Who is Pressing", attacking -> pressing;   // 1.6.0 (2026-10-14 night): the read box -> one zone read line (ZoneRead.h), unsigned options line;   // 1.5.3 (2026-10-14 CR5300): spike labels keep pace / lots (OrderFlowFeed 1.3.1); 1.5.2 (2026-10-14 CR4800): read box + numbers hover, Offset X / Y, white letters, one spike label, rare L; 1.5.1 (2026-10-13 9:40 PM): row order + Crowd, 10 pt labels, chart-wide hover; 1.5.0 (2026-10-13): pace, SPEC grammar, hover rows, options line; 1.4.0: stop run R?; 1.3.1: no white outline
 static const char* const TITLE = "Aggression";   // (1.7.0) the pane title (parmsTitle), "v1.7.0" next to it
 static const int COUNT_CAP = 999, RATIO_MIN_PRIOR = 5, RATIO_DEFAULT = 20, RATIO_LO = 5, RATIO_HI = 200;
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
@@ -475,6 +476,31 @@ inline std::map<std::string, std::string> aggFacts(const AggIn& in) {
     kv["big_aggr"] = std::to_string(big);
     kv["big_tier"] = big > 0 ? tierOf(big, in.tiersOk, in.tiers) : (in.tiersOk ? "none" : "?");
     return kv;
+}
+
+// (1.15.0, Rassul approved 23:48 CT) THE READ ROW - who is attacking, from the candle shown (hovered closed, else the live forming one):
+//   sellers' lots >= 2.0x their average and buyers' < 2.0x -> BEARISH "Sellers hitting {r}x"; buyers >= 2.0x and sellers < 2.0x -> BULLISH
+//   "Buyers lifting {r}x"; both >= 2.0x -> NEUTRAL "Both sides hitting ~{r}x - fight; watch the close and Book Flow"; neither -> NEUTRAL
+//   "Quiet - no side attacking". Clauses on the attacking side: ", fast ({p}x)" when its pace >= 2.0x; " - biggest bid / ask in {BBI}" when
+//   it beats >= 20 prior candles (50+ capped); ", buyers / sellers quiet ({r}x)" when the other side is < 1.5x. (Spec gap: the other side
+//   1.5x - 2.0x keeps the attacking side's read without the quiet clause.)
+static const int READ_HIT_T = 20, READ_QUIET_T = 15, READ_FAST_P100 = 200, READ_BIGGEST_N = 20;
+inline br::Read aggRead(const Stat* s, const PaceIn& pc) {
+    br::Read r;
+    if (!s || !s->m.ok) { r.head = "No volume data for this candle"; return r; }
+    const double rt[2] = { s->bidRatioOk ? s->bidRatio : 0.0, s->askRatioOk ? s->askRatio : 0.0 };
+    const bool ok[2] = { s->bidRatioOk, s->askRatioOk };
+    const bool hit[2] = { ok[0] && rt[0] * 10.0 >= READ_HIT_T - 1e-9, ok[1] && rt[1] * 10.0 >= READ_HIT_T - 1e-9 };
+    if (hit[0] && hit[1]) { r.head = "Both sides hitting ~" + br::approx((rt[0] + rt[1]) / 2.0) + "x - fight; watch the close and Book Flow"; return r; }
+    if (!hit[0] && !hit[1]) { r.head = "Quiet - no side attacking"; return r; }
+    const int a = hit[0] ? 0 : 1, o = 1 - a;
+    r.impl = a == 0 ? br::BEAR : br::BULL;
+    r.head = std::string(a == 0 ? "Sellers hitting " : "Buyers lifting ") + br::x1(rt[a]) + "x";
+    if (pc.p100[a] >= READ_FAST_P100) r.opt.push_back(", fast (" + br::x1((double)pc.p100[a] / 100.0) + "x)");
+    const int cnt = a == 0 ? s->bBid : s->bAsk; const bool cap = a == 0 ? s->bBidCap : s->bAskCap;
+    if (cnt - 1 >= READ_BIGGEST_N || cap) r.opt.push_back(std::string(" - biggest ") + (a == 0 ? "bid" : "ask") + " in " + beatText(cnt, cap, true));
+    if (ok[o] && rt[o] * 10.0 < READ_QUIET_T) r.opt.push_back(std::string(", ") + (o == 0 ? "sellers" : "buyers") + " quiet (" + br::x1(rt[o]) + "x)");
+    return r;
 }
 
 } // namespace bas

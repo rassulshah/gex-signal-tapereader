@@ -72,7 +72,7 @@ int main() {
     {   int keep = 0; for (auto& c : h.draws) if (c.type == "box" && c.color == C_BIG_LOT && c.x <= 50 + 3 * 460 + 330 && c.r >= 50 + 3 * 460 + 330)
             for (auto& d : h.draws) if (d.type == "box" && d.color == C_ASK_SPIKE && d.x == c.x && d.r == c.r && d.y == c.y && d.b > c.b) ++keep;   // 120 = 2.0x+: bright green, its cap on its top edge
         CHECK(keep == 1, "the marked bar keeps its green bar under the cap"); }
-    CHECK(hasText(h, "BL5") && hasText(h, "100"), "box row BL5 / 100 (Thu RTH, the live candle's type)");
+    CHECK(!hasText(h, "BL5") && S->blBook.tiers[blt::DAY][thu].bl[0] == 100, "(1.15.0) no BL5 box row (removed); the tier is still decided and drawn as caps");
     // the records: history (S lines Mon - Wed both types + the T lines), this session's candles >= BL20
     {   const std::string hist = readAll(flex + "\\BidAskStats\\BigLot-ES-180.txt");
         CHECK(hist.find("S|" + std::to_string(wed) + "|1|150|100|50|9") != std::string::npos, "history: Wed RTH S line (150 candles, 100 / 50 / 9)");
@@ -88,7 +88,7 @@ int main() {
     mkdir(flex.c_str(), 0700);
     { std::ofstream f((flex + "\\BidAskStats.place-ES.txt").c_str()); f << "20,0,20,15,10,0,0,0,2\n"; }
     NOW += 1500; p->calc(0); h.draws.clear(); p->draw();
-    CHECK(S->bigLot == 2 && cyan(h) == 3 && hasText(h, "BL10") && hasText(h, "50"), "BL10: 3 caps, box row BL10 / 50");
+    CHECK(S->bigLot == 2 && cyan(h) == 3 && !hasText(h, "BL10"), "BL10: 3 caps (no box row since 1.15.0)");
     { std::ofstream f((flex + "\\BidAskStats.place-ES.txt").c_str()); f << "20,0,20,15,10,0,0,0,0\n"; }
     NOW += 1500; p->calc(0); h.draws.clear(); p->draw();
     CHECK(S->bigLot == 0 && cyan(h) == 0 && !hasText(h, "BL5") && !hasText(h, "BL10"), "Off: no cap, no box row");

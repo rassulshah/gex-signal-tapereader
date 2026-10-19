@@ -1,5 +1,13 @@
 /********************************************************************************
- *  BookFlow.cpp  --  Investor/RT RTX extension  lsBookFlow  1.3.0  (2026-10-18; 1.0.0 2026-10-16)
+ *  BookFlow.cpp  --  Investor/RT RTX extension  lsBookFlow  1.4.0  (2026-10-18; 1.0.0 2026-10-16)
+ *  1.4.0 (2026-10-18 23:48 CT, Rassul approved bookflow-read-mockup.png): box rows Net, Pace, READ - one word (BULLISH / BEARISH / NEUTRAL)
+ *        + up to 2 lines from the Net ratios (bids / offers arriving, leaving or flat; the stronger side decides; bf::bookRead), wrapped to
+ *        the box (BoxReadDraw.h). The live forming candle's Net now carries its ratio so far (bf::liveNetStat, never a decision).
+ *        (23:56 CT, bookflow-pull2-mockup.png) + PULL MARKERS: a closed candle whose side pulled >= 2.0x its plain 20-candle average of
+ *        pulled lots AND >= 1.2x what it added gets a block in the side's colour + a yellow "P {ratio}" in the bottom strip (decided once
+ *        at the close, kept; never on the forming candle); box rows Net, Added, Pulled (their plain ratios), Pace, Read; the Read names
+ *        pulling first (bf::bookRead). Calibration ES Fri 10-16 RTH: 0 markers at 2.0x / 1.2x (pulled / added max 0.89) - reported.
+ *  1.3.4 (2026-10-18 23:19 CT): the box follows the mouse only while the cursor is inside this pane (PaneCursor.h), else Live.
  *  1.3.0 (2026-10-18, Rassul approved the audit-A fixes; colour by side decided by Rassul tonight):
  *   - BRIGHT + LABEL FROM THE NET THAT IS DRAWN: a side is a spike when its |net| is >= "Spike vs average" (2.0x) the plain average of
  *     that side's |net| over the prior "Ratio bars" (20) closed candles - THE spike rule of both order-flow panes (Aggression the same),
@@ -57,8 +65,9 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.3.4"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.4.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
+#include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 
 // (1.3.0) the dialog rows (parameter version 3): every row is read by the chart
 // (1.3.2) the window rows come from OrderFlowPaneSettings.h (no index constants)
@@ -69,7 +78,7 @@ public:
     virtual bool barMarks() const { return false; }                        // no letters / dash drawn; hover + records keep them
     virtual bool netBars() const { return true; }
     virtual bool textOff() const { return false; }
-    virtual std::string boxKeep() const { return "Net;Pace"; }            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
+    virtual std::string boxKeep() const { return "Net;Added;Pulled;Pace"; }   // (1.4.0, 23:56 CT) + Added / Pulled (their plain 20-candle ratios, as the pull marker)            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
     virtual bool boxOnly() const { return true; }                         // (1.2.0, Rassul 2026-10-16 22:00) the left-justified numbers box in the pane, no read / options lines                          // (1.1.0, Rassul 2026-10-16 18:14) no read / numbers / options lines on the pane; the records and the tape reader keep every number
     virtual long long netOf(const off::Rec& r, int s) const { return bf::netOf(r, s); }
     // the label numbers of one net bar: ratio / pace / lots of the part that spiked (up = added, down = pulled; pace only for added)
@@ -91,7 +100,9 @@ public:
         // label + identity they belong to, the Market State facts posted
         std::map<long long, bf::NetStat> net; int netRb = -1; long long netAvg = -1; std::string identity, chart;
         long long mstBar = 0, mstCt = 0, mstMs = -1, mstPosts = 0; std::map<std::string, std::string> mstKv;
-        pc::Tracker cur; long long liveEv = -1, liveMs = -1;               // (1.3.4) the pane on the screen; the live candle's events last drawn
+        pc::Tracker cur; long long liveEv = -1, liveMs = -1;
+        br::Read lastRead; std::vector<std::string> lastReadLines;        // (1.4.0) the Read last drawn (tests)
+        std::map<long long, bf::PullStat> pulls; long long markersDrawn = 0; // (1.4.0) closed candles' pull decisions (decided once, never cleared: no repaint)               // (1.3.4) the pane on the screen; the live candle's events last drawn
     };
     Ext* ext(S_& S) {
         if (!S.ext) S.ext.reset(new (std::nothrow) Ext());
@@ -174,6 +185,16 @@ public:
         if (!n.ok) return nullptr;
         while (e->net.size() > 6000) e->net.erase(e->net.begin());
         return &(e->net[t] = n);
+    }
+    // (1.4.0) a closed candle's pull decision: computed once from the decided candles before it, then kept (never re-decided)
+    const bf::PullStat* pullAt(S_& S, long long t) {
+        Ext* e = ext(S); if (!e) return nullptr;
+        std::map<long long, bf::PullStat>::const_iterator it = e->pulls.find(t);
+        if (it != e->pulls.end()) return &it->second;
+        std::map<long long, off::PaneBar>::const_iterator b = S.ser.bars.find(t);
+        if (b == S.ser.bars.end() || !b->second.ok) return nullptr;
+        while (e->pulls.size() > 6000) e->pulls.erase(e->pulls.begin());
+        return &(e->pulls[t] = bf::pullStatAt(S.ser.bars, t, b->second.r));
     }
     // a closed candle was decided: its net spike goes into the record row (spike_left / spike_right) and the Market State facts
     void decidedNet(S_& S, long long key) {
@@ -328,25 +349,71 @@ public:
         const off::PaneBar* mbar = mi != S.ser.bars.end() && mi->second.ok ? &mi->second : nullptr;
         const bool liveBox = hov < 0 && haveLive;                          // (1.3.4) Live = the forming candle's numbers so far (no net decision yet)
         if (liveBox) mbar = &lb;
-        off::Info info = bf::info(mbar, S.params.load.p, mbar && !liveBox ? netAt(S, mt) : nullptr);
+        bf::NetStat liveNs; if (liveBox) liveNs = bf::liveNetStat(S.ser.bars, S.formingKey, lb.r, S.ser.ratioBars, avgT(S));   // (1.4.0) its Net ratio so far
+        const bf::NetStat* shownNs = mbar ? (liveBox ? &liveNs : netAt(S, mt)) : nullptr;
+        bf::PullStat livePs; if (liveBox) livePs = bf::pullStatAt(S.ser.bars, S.formingKey, lb.r);   // (1.4.0) the forming candle: shown, never a marker
+        const bf::PullStat* shownPs = mbar ? (liveBox ? &livePs : pullAt(S, mt)) : nullptr;
+        off::Info info = bf::info(mbar, S.params.load.p, shownNs);
         {   const std::string keep = ";" + boxKeep() + ";"; std::vector<off::InfoRow> kept;   // (1.2.1) Net and Pace only
             for (size_t k = 0; k < info.rows.size(); ++k) if (keep.find(";" + info.rows[k].label + ";") != std::string::npos) kept.push_back(info.rows[k]);
             info.rows.swap(kept); }
+        if (shownPs && shownPs->ok) for (size_t k = 0; k < info.rows.size(); ++k) {   // (1.4.0) Added / Pulled with the plain 20-candle ratios (the marker's yardstick)
+            const bool ad = info.rows[k].label == "Added", pu = info.rows[k].label == "Pulled"; if (!ad && !pu) continue;
+            for (int s = 0; s < 2; ++s) info.rows[k].v[s] = std::to_string(ad ? shownPs->add[s] : shownPs->pull[s]) + " (" + off::ratioOr(ad ? shownPs->addOk[s] : shownPs->pullOk[s], ad ? shownPs->addR[s] : shownPs->pullR[s]) + ")";
+        }
         { struct tm x; std::memset(&x, 0, sizeof(x)); info.head = hov < 0 ? std::string("Live") : (mt > 0 && getLocaltime((RTDATE)mt, &x) ? off::clock12(x.tm_hour, x.tm_min) : std::string("n/a")); }
         bp::Place pl; pl.pos = S.set.pos; pl.dx = S.set.dx; pl.dy = S.set.dy;
         const bp::Box area = bp::mk(g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3);
         const zread::Line zl = S.zr.e.line(S.zr.pane, off::steadyMs());
-        const off::PanelPlan P = off::planPanel(area, g.top, off::MODE_NUMBERS, pl, info, std::string(), std::string(), g.reserve, off::measureWith(this));
+        off::PanelPlan P;                                                  // (1.4.0) + the Read row: the box grows to hold it (BoxReadDraw.h)
+        const br::Read rd = bf::bookRead(shownNs, shownPs);
+        const off::TextW tw = off::measureWith(this);
+        const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
+        if (Ext* e = ext(S)) { e->lastRead = rd; e->lastReadLines = rp.lines; }
         S.lastBox = P.ok ? P.box : bp::Box();
         std::vector<off::LBox> avoid;
         if (P.ok) avoid.push_back(off::LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
         for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(off::LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
+        pullMarkers(S, g, v0, v1, last, slot, times, xOf, avoid, P.ok ? &P.box : nullptr);   // (1.4.0) before the bars' labels: they avoid the markers
         drawNet(S, g, v0, v1, last, slot, top, xOf, barOf, avoid);
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
         off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
+        br::draw(this, P, info, rp, rd);                                  // (1.4.0) the Read word + lines over its rows
     }
     // the net bars (OrderFlowFeed drawNetBars' geometry, 1.3.0 rules): the grey zero line, one bar per side, colour BY SIDE (bid green,
     // offer red), bright + label only for a CLOSED candle's net spike; labels biggest first, a label that would sit on another is skipped
+    // (1.4.0, Rassul approved 23:56 CT bookflow-pull2-mockup.png) PULL MARKERS: a closed candle whose side pulled (bf::PullStat pulling) gets
+    // a small solid block in the side's colour (bids green / offers red) under its bar column + a yellow "P {ratio}" label, at a fixed strip
+    // at the bottom of the pane (below the deepest net bar: netGeoFor keeps LABEL_ROOM there), never over the info box or another marker
+    // label (older candles first, a later one that would overlap is skipped). The forming candle never gets one.
+    template <class XOf>
+    void pullMarkers(S_& S, const off::PaneGeo& g, int v0, int v1, int last, int slot, RTARRAYI& times, XOf xOf, std::vector<off::LBox>& avoid, const bp::Box* box) {
+        Ext* e = ext(S); if (!e) return;
+        const off::NetGeo n = off::netGeoFor(g.bottom - g.top, g.reserve);
+        const int yLab = g.top + n.yBot - off::LABEL_LH, yBlk = yLab - 8;
+        if (yBlk <= g.top + n.y0 + 4) return;                                // pane too short
+        const COLOR col[2] = { off::C_GREEN_SPIKE, off::C_RED_SPIKE };
+        const off::TextW M = off::measureWith(this);
+        std::vector<off::LBox> mine;
+        for (int i = std::max(0, v0); i <= v1 && i < last; ++i) {
+            const bf::PullStat* p = pullAt(S, (long long)times[i]); if (!p || (!p->pulling[0] && !p->pulling[1])) continue;
+            const int xc = xOf(i); if (xc < g.left || xc > g.edge) continue;
+            const off::Pair pr = off::pairIn(xc, slot);
+            for (int s = 0; s < 2; ++s) {
+                if (!p->pulling[s]) continue;
+                const std::string lab = bf::pullLabel(*p, s); const int w = M(lab, 9, true), cx = (pr.l[s] + pr.r[s]) / 2;
+                int lx = cx - w / 2; if (lx < g.left + 1) lx = g.left + 1; if (lx + w > g.edge - 1) lx = g.edge - 1 - w;
+                const off::LBox blk = { std::min(pr.l[s], cx - 2), yBlk, std::max(pr.r[s], cx + 2), yBlk + 6, 0, 0 }, lb = { lx, yLab, lx + w + 1, yLab + off::LABEL_LH - 1, 0, 0 };
+                bool hit = box && ((lb.r >= box->l && lb.l <= box->r && lb.b >= box->t && lb.t <= box->b) || (blk.r >= box->l && blk.l <= box->r && blk.b >= box->t && blk.t <= box->b));
+                for (size_t q = 0; q < mine.size() && !hit; ++q) hit = off::overlaps(lb, mine[q]);
+                if (hit) continue;
+                mine.push_back(lb); avoid.push_back(lb); avoid.push_back(blk);
+                off::fillFlat(this, blk.l, blk.t, blk.r, blk.b, col[s]);
+                off::textAt(this, lx, yLab, off::LABEL_LH - 1, lab, off::C_LBL_RATIO, 9, true);
+                ++e->markersDrawn;
+            }
+        }
+    }
     template <class XOf, class BarOf>
     void drawNet(S_& S, const off::PaneGeo& g, int v0, int v1, int last, int slot, long long top, XOf xOf, BarOf barOf, const std::vector<off::LBox>& avoid) {
         if (top <= 0) return;
@@ -417,7 +484,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Book Flow: who is ARRIVING and who is LEAVING the order book near price (market-by-order feed). Per candle, ONE NET bar per side = lots ADDED near price minus lots PULLED near price. Left bar = the bid side, always green (buyers); right bar = the offer side, always red (sellers). Above the grey zero line = size arriving (stacking), below = size leaving (pulling): a green bar above = bids arriving (support building), green below = bids leaving (support pulled), red above = offers arriving (resistance building), red below = offers leaving (resistance pulled). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and, for size arriving, its pace (grey, lots added per second vs the same time of day) beyond the bar's end, only when that side's net is at least Spike vs average (default 2.0x) the plain average of its net size over the prior Ratio bars (default 20) closed candles - decided once at the close, never changed. Other candles are dim with no label; the forming candle stays dim until it closes. The numbers box in the pane: Net (with its ratio) and Pace for bids and offers of the candle under the mouse, else the last closed candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars), Near ticks (0 = auto: how close to price counts), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
-    p->setVersion("1.3.4");   // BF_VERSION
+    p->setDescription("LRA Book Flow: who is ARRIVING and who is LEAVING the order book near price (market-by-order feed). Per candle, ONE NET bar per side = lots ADDED near price minus lots PULLED near price. A closed candle whose side PULLED at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom (a block in the side colour + yellow P and the ratio). Left bar = the bid side, always green (buyers); right bar = the offer side, always red (sellers). Above the grey zero line = size arriving (stacking), below = size leaving (pulling): a green bar above = bids arriving (support building), green below = bids leaving (support pulled), red above = offers arriving (resistance building), red below = offers leaving (resistance pulled). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and, for size arriving, its pace (grey, lots added per second vs the same time of day) beyond the bar's end, only when that side's net is at least Spike vs average (default 2.0x) the plain average of its net size over the prior Ratio bars (default 20) closed candles - decided once at the close, never changed. Other candles are dim with no label; the forming candle stays dim until it closes. The numbers box in the pane: Net (with its ratio), Added and Pulled (vs their 20-candle averages), Pace and the Read (BULLISH / BEARISH / NEUTRAL: what the book is doing near price, in words) for bids and offers of the candle under the mouse while it is inside this pane, else the live forming candle. Settings: Ratio bars (the average), Position and Offset X / Y (the box), Spike vs average (0 = no bright bars), Near ticks (0 = auto: how close to price counts), Record order feed (every order-by-order event to the LRA data folder for the nightly MBO archive).");
+    p->setVersion("1.4.0");   // BF_VERSION
     return p;
 }
