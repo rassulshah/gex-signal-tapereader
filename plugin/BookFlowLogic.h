@@ -88,27 +88,33 @@ inline nl::Msg message(const off::PaneBar& b, const off::Params& P, int* sideOut
 // 7 markets Oct 6-9; BookFlow's own ES record 10-19 gives the same quartiles 1.67 / 2.71). At a new 10-bar low / high:
 //   strong refill turned 34% / 28% (base 20% / 19%), weak 10% / 8%; busy candle + defending net 2x + strong ("C+R") 53% / 46%.
 // =====================================================================================================================
-struct RefillCut { const char* mkt; int strongT, weakT; };              // tenths: strong >= strongT / 10, weak <= weakT / 10
-static const RefillCut REFILL_CUTS[] = { {"ES", 27, 17}, {"NQ", 45, 19}, {"CL", 23, 12}, {"GC", 20, 12}, {"HG", 10, 3}, {"NG", 15, 7}, {"EU", 33, 13}, {"6E", 33, 13} };
+// (12:22 CT, Rassul "i will go with your recommendation") SHOWN AS A RATIO TO THE MARKET'S NORMAL (1.0x = that market's usual refill):
+// normal = the market's median put-back / eaten (Databento MBO Oct 6-9, BookFlow's own ES record 10-19 agrees: 2.19); the cut-offs stay the
+// tested raw quartiles (a ratio to the last 20 candles was tested too and lost most of the edge: strong 25% / 16% vs 34% / 28%).
+struct RefillCut { const char* mkt; int strongT, weakT, normH; };       // tenths: strong >= strongT / 10, weak <= weakT / 10; normH = normal x 100
+static const RefillCut REFILL_CUTS[] = { {"ES", 27, 17, 220}, {"NQ", 45, 19, 257}, {"CL", 23, 12, 180}, {"GC", 20, 12, 157}, {"HG", 10, 3, 60},
+                                         {"NG", 15, 7, 108}, {"EU", 33, 13, 219}, {"6E", 33, 13, 219} };
 inline const RefillCut* refillCutOf(const std::string& mkt) {
     for (size_t k = 0; k < sizeof(REFILL_CUTS) / sizeof(REFILL_CUTS[0]); ++k) if (mkt == REFILL_CUTS[k].mkt) return &REFILL_CUTS[k];
     return nullptr;
 }
 enum { RF_NA = -9, RF_WEAK = -1, RF_NORMAL = 0, RF_STRONG = 1 };
-struct Refill { long long eaten = 0, put = 0; bool ok = false; double x = 0; int cls = RF_NA; };
+struct Refill { long long eaten = 0, put = 0; bool ok = false; double x = 0, rel = 0; bool relOk = false; int cls = RF_NA; };   // x = put / eaten; rel = x / the market's normal
 inline Refill refillOf(const off::Rec& r, int s, const std::string& mkt) {
     Refill f; f.eaten = r.hitC[s] > 0 ? r.hitC[s] : 0; f.put = r.refC[s] > 0 ? r.refC[s] : 0;
     if (f.eaten <= 0) return f;
     f.ok = true; f.x = (double)f.put / (double)f.eaten;
     const RefillCut* c = refillCutOf(mkt);
-    if (c) f.cls = f.x * 10.0 >= c->strongT - 1e-9 ? RF_STRONG : (f.x * 10.0 <= c->weakT + 1e-9 ? RF_WEAK : RF_NORMAL);
+    if (c) { f.cls = f.x * 10.0 >= c->strongT - 1e-9 ? RF_STRONG : (f.x * 10.0 <= c->weakT + 1e-9 ? RF_WEAK : RF_NORMAL);
+             if (c->normH > 0) { f.rel = f.x * 100.0 / (double)c->normH; f.relOk = true; } }
     return f;
 }
 inline std::string refillCell(const off::Rec& r, int s, const std::string& mkt) {
     const Refill f = refillOf(r, s, mkt);
     if (!f.ok) return "-";
-    char t[24]; std::snprintf(t, sizeof(t), "%.1fx", f.x > 99.9 ? 99.9 : f.x);
-    return std::string(t) + (f.cls == RF_STRONG ? " STRONG" : f.cls == RF_WEAK ? " weak" : f.cls == RF_NA ? " ?" : "");
+    if (!f.relOk) return "?";                                              // a market with no normal yet: nothing to compare with
+    char t[24]; std::snprintf(t, sizeof(t), "%.1fx", f.rel > 99.9 ? 99.9 : f.rel);
+    return std::string(t) + (f.cls == RF_STRONG ? " STRONG" : f.cls == RF_WEAK ? " weak" : "");
 }
 // where the shown candle sits: a new 10-bar low / high (its low <= the 9 candles before it), and how busy (volume vs the plain mean of
 // the 20 before it); the host fills it from the chart's bars (lows / highs / volumes oldest first, the candle LAST)
@@ -126,9 +132,9 @@ inline Spot spotOf(const std::vector<double>& lo, const std::vector<double>& hi,
 }
 // THE REFILL READ (only at a new 10-bar low / high; else none -> the stacking read): the defending side = bids at a low, offers at a high
 // (both: the side that was hit more).
-//   C+R  busy + defending net >= 2.0x (and > 0) + STRONG refill -> "C+R ? New low: sellers took 2,010, buyers put back 6.0x - defense holding"
-//   STRONG -> "New low: buyers put back 3.1x what sellers took (strong) - defense holding ?"
-//   weak   -> "New low: buyers put back only 1.2x (weak) - defense failing, don't fade ?"  (BEARISH at a low: the move tends to continue)
+//   C+R  busy + defending net >= 2.0x (and > 0) + STRONG refill -> "C+R ? New low: sellers took 2,010, buyers refilled 2.0x normal - defense holding"
+//   STRONG -> "New low: buyers refilled 1.4x normal (strong) - defense holding ?"
+//   weak   -> "New low: buyers refilled only 0.5x normal (weak) - defense failing, don't fade ?"  (BEARISH at a low: the move tends to continue)
 //   normal / no cut-offs for the market / no hits -> none
 inline std::string commas(long long v) { std::string t = std::to_string(v < 0 ? -v : v); for (int k = (int)t.size() - 3; k > 0; k -= 3) t.insert((size_t)k, ","); return v < 0 ? "-" + t : t; }
 // the info box rows (Bids | Offers): Refill Effort (the net), Eaten, Refilled, Added, Pulled, Rebuilt, Pace, Crowd
@@ -292,7 +298,7 @@ inline std::string netCell(const off::PaneBar& b, int s, const NetStat* ns) {
 // 1 red (offer side, sellers): BY SIDE, never by meaning. ratio / pace = the label rows ("" = none); the pace only for size arriving.
 inline std::string dropX(std::string t) { if (!t.empty() && t[t.size() - 1] == 'x') t.erase(t.size() - 1); return t; }   // "2.4x" -> "2.4"
 struct NetLook { long long v = 0; bool bright = false; int col = 0; std::string ratio, pace; };   // (1.5.0) pace = the Refilled label ("R4.3")
-inline NetLook netLookOf(const off::PaneBar* b, const NetStat* ns, int s, bool closed) {
+inline NetLook netLookOf(const off::PaneBar* b, const NetStat* ns, int s, bool closed, const std::string& mkt = std::string()) {
     NetLook k; k.col = s == BID ? 0 : 1;
     if (!b || !b->ok) return k;
     k.v = netOf(b->r, s);
@@ -300,7 +306,7 @@ inline NetLook netLookOf(const off::PaneBar* b, const NetStat* ns, int s, bool c
     k.bright = true;
     k.ratio = ns->ratioOk[s] ? dropX(off::ratioText(ns->ratio[s])) : std::string();
     // (1.5.0, Rassul 11:53 "replace the pace ... also on the labels") the second label = REFILLED (re-posted at the hit prices / eaten)
-    if (b->r.hitC[s] > 0) { char t[24]; const double x = (double)(b->r.refC[s] > 0 ? b->r.refC[s] : 0) / (double)b->r.hitC[s]; std::snprintf(t, sizeof(t), "R%.1f", x > 99.9 ? 99.9 : x); k.pace = t; }
+    { const Refill f = refillOf(b->r, s, mkt); if (f.ok && f.relOk) { char t[24]; std::snprintf(t, sizeof(t), "R%.1f", f.rel > 99.9 ? 99.9 : f.rel); k.pace = t; } }   // (12:22) vs the market's normal
     return k;
 }
 inline std::string fmt1(double x) { if (!(x == x) || x < 0) return "?"; char t[24]; std::snprintf(t, sizeof(t), "%.1f", x > 9999 ? 9999.0 : x); return t; }
@@ -336,16 +342,17 @@ inline bool refillRead(const off::Rec& r, const std::string& mkt, const Spot& sp
     if (!f.ok || f.cls == RF_NA || f.cls == RF_NORMAL) return false;
     const bool low = d == BID;
     const std::string where = low ? "New low: " : "New high: ", def = low ? "buyers" : "sellers", att = low ? "sellers" : "buyers";
-    const std::string fx = br::x1(f.x) + "x";
+    if (!f.relOk) return false;
+    const std::string fx = br::x1(f.rel) + "x normal";
     br::Read rd;
     if (f.cls == RF_STRONG) {
         rd.impl = low ? br::BULL : br::BEAR;
         const bool cr = sp.busy && ns && ns->ok && ns->ratioOk[d] && ns->net[d] > 0 && ns->ratio[d] >= 2.0;
-        if (cr) rd.head = "C+R ? " + where + att + " took " + commas(f.eaten) + ", " + def + " put back " + fx + " - defense holding";
-        else rd.head = where + def + " put back " + fx + " what " + att + " took (strong) - defense holding ?";
+        if (cr) rd.head = "C+R ? " + where + att + " took " + commas(f.eaten) + ", " + def + " refilled " + fx + " - defense holding";
+        else rd.head = where + def + " refilled " + fx + " (strong) - defense holding ?";
     } else {
         rd.impl = low ? br::BEAR : br::BULL;
-        rd.head = where + def + " put back only " + fx + " (weak) - defense failing, don't fade ?";
+        rd.head = where + def + " refilled only " + fx + " (weak) - defense failing, don't fade ?";
     }
     out = rd; return true;
 }

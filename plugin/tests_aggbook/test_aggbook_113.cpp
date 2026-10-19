@@ -163,8 +163,9 @@ static void bookLook() {
     bf::NetStat n = bf::netStat(pb, pa, up.r, 20, 20);
     bf::NetLook f0 = bf::netLookOf(&up, &n, 0, false);   // forming: drawn dim, no label
     CHECK(!f0.bright && f0.ratio.empty() && f0.pace.empty() && f0.v == 300);
-    bf::NetLook c0 = bf::netLookOf(&up, &n, 0, true);
-    CHECK(c0.bright && c0.col == 0); EQS(c0.ratio, "3.0"); EQS(c0.pace, "R4.3");         // (1.5.0) the second label = Refilled, not the pace
+    bf::NetLook c0 = bf::netLookOf(&up, &n, 0, true, "ES");
+    CHECK(c0.bright && c0.col == 0); EQS(c0.ratio, "3.0"); EQS(c0.pace, "R2.0");         // (1.5.0) the second label = Refilled vs the ES normal (4.3 / 2.2), not the pace
+    CHECK(bf::netLookOf(&up, &n, 0, true).pace.empty());                       // no market: no Refilled label
     bf::NetLook c1 = bf::netLookOf(&up, &n, 1, true);
     CHECK(c1.bright && c1.col == 1 && c1.v == -300); EQS(c1.ratio, "3.0"); EQS(c1.pace, ""); // nothing eaten on the offer side: no Refilled label
     // colour by side, never by meaning: a bid bar below zero is still green (0), an offer bar above zero still red (1)

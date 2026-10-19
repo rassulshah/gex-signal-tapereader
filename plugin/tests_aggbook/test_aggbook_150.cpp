@@ -29,25 +29,28 @@ int main(int argc, char** argv) {
     CHECK(bf::refillOf(rec(100, 430, 0, 0), 0, "ZZ").cls == bf::RF_NA);          // unknown market: the ratio, no class
     CHECK(!bf::refillOf(rec(0, 430, 0, 0), 0, "ES").ok);                          // nothing eaten: no Refilled
     CHECK(bf::refillOf(rec(100, -5, 0, 0), 0, "ES").x == 0.0);                    // a negative count reads as 0
-    EQS(bf::refillCell(rec(100, 430, 0, 0), 0, "ES"), "4.3x STRONG");
-    EQS(bf::refillCell(rec(100, 120, 0, 0), 0, "ES"), "1.2x weak");
-    EQS(bf::refillCell(rec(100, 220, 0, 0), 0, "ES"), "2.2x");
-    EQS(bf::refillCell(rec(100, 430, 0, 0), 0, "ZZ"), "4.3x ?");
+    EQS(bf::refillCell(rec(100, 430, 0, 0), 0, "ES"), "2.0x STRONG");   // 4.3 / ES normal 2.2
+    EQS(bf::refillCell(rec(100, 120, 0, 0), 0, "ES"), "0.5x weak");
+    EQS(bf::refillCell(rec(100, 220, 0, 0), 0, "ES"), "1.0x");             // exactly normal
+    EQS(bf::refillCell(rec(100, 430, 0, 0), 0, "ZZ"), "?");                // no normal for an unknown market
     EQS(bf::refillCell(rec(0, 0, 0, 0), 0, "ES"), "-");
     EQS(bf::refillCell(rec(1, 100000, 0, 0), 0, "ES"), "99.9x STRONG");          // capped display
+    EQS(bf::refillCell(rec(100, 120, 0, 0), 0, "HG"), "2.0x STRONG");          // HG normal 0.6: 1.2 = twice normal
+    { bf::Refill f = bf::refillOf(rec(100, 430, 0, 0), 0, "ES"); CHECK(f.relOk && f.rel > 1.95 && f.rel < 1.96); }
     // ---- the info rows: order and labels; the host keeps Refill Effort + Refilled ----
     { off::PaneBar b; b.ok = true; b.r = rec(2010, 8624, 2131, 9707); off::Params P; bf::NetStat n = ns(2.2, 1377, 4.8, 2587);
       off::Info I = bf::info(&b, P, &n, "ES");
       CHECK(I.rows.size() == 8);
       EQS(I.rows[0].label, "Refill Effort"); EQS(I.rows[1].label, "Eaten"); EQS(I.rows[2].label, "Refilled"); EQS(I.rows[3].label, "Added");
       EQS(I.rows[4].label, "Pulled"); EQS(I.rows[5].label, "Rebuilt"); EQS(I.rows[6].label, "Pace"); EQS(I.rows[7].label, "Crowd");
-      EQS(I.rows[0].v[1], "+400 (4.8x)"); EQS(I.rows[1].v[0], "2010"); EQS(I.rows[2].v[0], "4.3x STRONG"); EQS(I.rows[2].v[1], "4.6x STRONG");
+      EQS(I.rows[0].v[1], "+400 (4.8x)"); EQS(I.rows[1].v[0], "2010"); EQS(I.rows[2].v[0], "2.0x STRONG"); EQS(I.rows[2].v[1], "2.1x STRONG");
       off::Info I0 = bf::info(nullptr, P, nullptr, "ES"); EQS(I0.rows[2].v[0], "n/a"); }
     { const std::string h = slurp(dir + "/BookFlow.cpp");
       CHECK(h.find("return \"Refill Effort;Refilled\";") != std::string::npos);
       CHECK(h.find("bf::info(mbar, S.params.load.p, shownNs, S.market)") != std::string::npos);
       CHECK(h.find("bf::refillRead(mbar->r, S.market, spotAt(") != std::string::npos);
-      CHECK(h.find("REFILLED = how many times what was taken got put back?") != std::string::npos); }
+      CHECK(h.find("REFILLED = how strongly did they put back what was taken, vs normal for this market?") != std::string::npos);
+      CHECK(h.find("bf::netLookOf(pb, ns, s, closed, S.market)") != std::string::npos); }
     // ---- spotOf: new 10-bar low / high, busy ----
     { std::vector<double> lo(21, 100), hi(21, 110); std::vector<long long> v(21, 100);
       lo[20] = 99; hi[20] = 105; v[20] = 250;
@@ -63,15 +66,15 @@ int main(int argc, char** argv) {
     // ---- the REFILL read ----
     { bf::Spot sp; sp.ok = true; sp.newHigh = true; sp.busy = true; bf::NetStat n = ns(2.2, 1377, 4.8, 2587); br::Read r;
       CHECK(bf::refillRead(rec(2131, 9707, 2010, 8624), "ES", sp, &n, r));
-      CHECK(r.impl == br::BEAR); EQS(r.head, "C+R ? New high: buyers took 2,010, sellers put back 4.3x - defense holding");
+      CHECK(r.impl == br::BEAR); EQS(r.head, "C+R ? New high: buyers took 2,010, sellers refilled 2.0x normal - defense holding");
       sp.busy = false; CHECK(bf::refillRead(rec(2131, 9707, 2010, 8624), "ES", sp, &n, r));
-      EQS(r.head, "New high: sellers put back 4.3x what buyers took (strong) - defense holding ?");
+      EQS(r.head, "New high: sellers refilled 2.0x normal (strong) - defense holding ?");
       sp.busy = true; bf::NetStat n2 = ns(2.2, 1377, 1.5, 2587);               // defending side not 2x: strong, not C+R
       CHECK(bf::refillRead(rec(2131, 9707, 2010, 8624), "ES", sp, &n2, r) && r.head.find("C+R") == std::string::npos);
       bf::NetStat n3 = ns(2.2, 1377, 3.0, -500);                               // defending side pulled more than it added: not C+R
       CHECK(bf::refillRead(rec(2131, 9707, 2010, 8624), "ES", sp, &n3, r) && r.head.find("C+R") == std::string::npos);
       CHECK(bf::refillRead(rec(2131, 9707, 2010, 2412), "ES", sp, &n, r));     // offers 1.2x: weak
-      CHECK(r.impl == br::BULL); EQS(r.head, "New high: sellers put back only 1.2x (weak) - defense failing, don't fade ?");
+      CHECK(r.impl == br::BULL); EQS(r.head, "New high: sellers refilled only 0.5x normal (weak) - defense failing, don't fade ?");
       CHECK(!bf::refillRead(rec(2131, 9707, 2010, 4422), "ES", sp, &n, r));    // 2.2x normal: no refill read
       CHECK(!bf::refillRead(rec(2131, 9707, 2010, 8624), "ZZ", sp, &n, r));    // unknown market: no class, no read
       CHECK(!bf::refillRead(rec(2131, 9707, 0, 0), "ES", sp, &n, r));          // nothing eaten on the defending side
@@ -79,9 +82,9 @@ int main(int argc, char** argv) {
       bf::Spot no; CHECK(!bf::refillRead(rec(2131, 9707, 2010, 8624), "ES", no, &n, r));
       bf::Spot lowS; lowS.ok = true; lowS.newLow = true; lowS.busy = true; bf::NetStat nb = ns(2.5, 900, 1.0, 100);
       CHECK(bf::refillRead(rec(1000, 3000, 50, 50), "ES", lowS, &nb, r) && r.impl == br::BULL);
-      EQS(r.head, "C+R ? New low: sellers took 1,000, buyers put back 3.0x - defense holding");
+      EQS(r.head, "C+R ? New low: sellers took 1,000, buyers refilled 1.4x normal - defense holding");
       CHECK(bf::refillRead(rec(1000, 1000, 50, 50), "ES", lowS, &nb, r) && r.impl == br::BEAR);
-      EQS(r.head, "New low: buyers put back only 1.0x (weak) - defense failing, don't fade ?");
+      EQS(r.head, "New low: buyers refilled only 0.5x normal (weak) - defense failing, don't fade ?");
       bf::Spot both; both.ok = true; both.newLow = both.newHigh = true;        // outside bar: the side hit more defends
       CHECK(bf::refillRead(rec(100, 1000, 900, 900), "ES", both, nullptr, r) && r.head.find("New high") == 0);
       CHECK(bf::refillRead(rec(900, 3000, 100, 100), "ES", both, nullptr, r) && r.head.find("New low") == 0); }
