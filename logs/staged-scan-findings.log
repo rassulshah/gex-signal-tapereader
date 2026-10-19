@@ -1,7 +1,22 @@
-findings=0 allowed=0 staged_files=5 bytes=557866
+findings=0 allowed=0 staged_files=20 bytes=593440
 largest staged blobs (bytes, path):
-SIZE	290824	plugin/LiquidityProfile.cpp
-SIZE	135350	plugin/DealerProfile.cpp
-SIZE	128768	plugin/LiquidityProfileLogic.h
-SIZE	2802	plugin/LiquidityProfileSettings.h
-SIZE	122	logs/staged-scan-findings.log
+SIZE	105779	plugin/BigBidAsk.cpp
+SIZE	95007	plugin/TapeReaderLogic.h
+SIZE	71528	plugin/BigBidAskLogic.h
+SIZE	67468	plugin/TapeReader.cpp
+SIZE	59171	plugin/BUILD-LESSONS.md
+SIZE	51957	plugin/CobImpulse.cpp
+SIZE	29568	plugin/tests_bba115/test_bba116.cpp
+SIZE	19895	plugin/tests_lqp044/test_lqp044.cpp
+SIZE	18302	plugin/test_cobimpulse_gamma_host.cpp
+SIZE	17014	plugin/test_cobimpulse_host.cpp
+SIZE	11682	plugin/tests_lqp044/test_lqp453_host.cpp
+SIZE	11151	plugin/test_cobimpulse_odds_host.cpp
+SIZE	8095	plugin/tests_lqp044/test_lqp044_host.cpp
+SIZE	8075	plugin/tests_lqp044/test_lqp452_host.cpp
+SIZE	6505	plugin/tests_lqp044/test_lqp452.cpp
+SIZE	4818	plugin/DealerProfileSettings.h
+SIZE	4277	plugin/tests_hover1018/check_hovers_off.py
+SIZE	1605	plugin/TapeReaderSettings.h
+SIZE	1248	plugin/CobImpulseSettings.h
+SIZE	295	logs/staged-scan-findings.log
