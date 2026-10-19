@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
       CHECK(h.find("return \"Refill Effort;Refilled\";") != std::string::npos);
       CHECK(h.find("bf::info(mbar, S.params.load.p, shownNs, S.market)") != std::string::npos);
       CHECK(h.find("bf::refillRead(mbar->r, S.market, spotAt(") != std::string::npos);
-      CHECK(h.find("REFILLED = how strongly did they put back what was taken, vs normal for this market?") != std::string::npos);
+      CHECK(h.find("1) REFILL EFFORT - Question: how much defense is there compared with normal?") != std::string::npos && h.find("2) REFILLED - Question: did they put back what was taken, compared with normal for this market?") != std::string::npos && h.find("Refilled = 2.0x STRONG") != std::string::npos && h.find("How to read: 1.0x = the usual refill") != std::string::npos);
       CHECK(h.find("bf::netLookOf(pb, ns, s, closed, S.market)") != std::string::npos); }
     // ---- spotOf: new 10-bar low / high, busy ----
     { std::vector<double> lo(21, 100), hi(21, 110); std::vector<long long> v(21, 100);
