@@ -172,7 +172,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.21.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.22.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -261,6 +261,7 @@ struct BasFin {
 
 struct BASState {
     bool busy = false, faulted = false;
+    off::IconRect infoIcon; bool infoTipOn = false;                        // (1.22.0) the info icon (pane pixels) and its hover tip
     std::string identity, market, symbol, state = "starting", lastStatusText;
     int spb = 0; double tick = 0;
     bas::Series ser;                                 // closed bars: time -> stats (computed once)
@@ -471,6 +472,7 @@ int BidAskStats::mouse(RTX_EVENT* e) {
         if (S->hoverWnds.size() > MAX_HOVER_WNDS) S->hoverWnds.erase(S->hoverWnds.begin());
     }
     {   int cx = 0, cy = 0; const bool ok = pc::cursorPos(cx, cy); S->cur.onEvent(w, ok, cx, cy, e->v.mouse.h, e->v.mouse.v); }   // (1.14.1) where the pane is
+    off::infoTip(S->infoIcon, S->infoTipOn, e->v.mouse.h, e->v.mouse.v, bas::INFO_TIP);   // (1.22.0) the info icon's description
     publishBoard(*S, e->v.mouse.bar);                                    // (1.5.1) other panes may follow this candle (this box no longer follows theirs)
     const int hi = S->cur.eventInside(e->v.mouse.h, e->v.mouse.v) ? bas::hoverIndex(e->v.mouse.bar, getBarCount()) : -1;
     if (S->hover.set(hi)) { ++S->redraws; invalidateChart(false); }      // only on a change
@@ -1405,7 +1407,7 @@ void BidAskStats::render(BASState& S) {
         if (i != last) { const std::array<er::Side, 2> ef = erSides(S, i, times, last);   // bright + its ratio at 2.0x+ Attack Effort (closed candles only, no repaint)
             for (int q = 0; q < 2; ++q) { k.ratioOk[q] = ef[q].effOk; k.ratio[q] = ef[q].eff; } }
         if (i < op.count && i < cl.count) { const float o = op[i], c = cl[i]; if (std::isfinite(o) && std::isfinite(c)) k.dir = c > o ? 1 : c < o ? -1 : 0; }
-        if (i != last) { std::map<long long, BasFin>::const_iterator ff = S.fin.find((long long)times[i]); if (ff != S.fin.end()) { k.let[0] = ff->second.let[0]; k.let[1] = ff->second.let[1]; k.p100[0] = ff->second.pc.p100[0]; k.p100[1] = ff->second.pc.p100[1]; } }
+        if (i != last) { std::map<long long, BasFin>::const_iterator ff = S.fin.find((long long)times[i]); if (ff != S.fin.end()) { k.let[0] = ff->second.let[0]; k.let[1] = ff->second.let[1]; /* (1.22.0) no pace on the bar labels (unproven) */ } }
         if (i != last) {                                                   // (1.4.0) the stop-run mark on the break bar's attacking side
             std::map<long long, std::vector<sr::Event> >::const_iterator se = S.srEv.find((long long)times[i]);
             if (se != S.srEv.end()) for (size_t q = 0; q < se->second.size(); ++q) {
@@ -1432,7 +1434,7 @@ void BidAskStats::render(BASState& S) {
     const COLOR vcol[2] = { C_ASK, C_BID };                                // (1.21.0) column 1 Buyers green, column 2 Sellers red - headings and values (1.20.0 had the headings swapped)
     off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
     br::draw(this, P, info, rp, rd);                                      // (1.15.0) the Read word + lines over its rows
-    off::drawQuestion(this, g, bas::QUESTION, P.ok ? &P.box : nullptr);   // (1.18.0, Rassul 19:09) the question the pane answers
+    off::drawQuestion(this, g, bas::QUESTION, P.ok ? &P.box : nullptr, &S.infoIcon);   // (1.22.0) + the info icon   // (1.18.0, Rassul 19:09) the question the pane answers
     (void)hov;   // (1.8.1, Rassul 18:57 "get rid of the hoverover") no bar hover, no read-line hover
 }
 
@@ -1442,6 +1444,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.21.0");   // BAS_VERSION
+    p->setVersion("1.22.0");   // BAS_VERSION
     return p;
 }

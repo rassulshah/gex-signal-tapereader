@@ -86,6 +86,15 @@ int main() {
         CHECK(v.size() == 2 && rd && gr, "(1.16.0) closed candle: bright red sellers + dim green buyers");
         CHECK(rd && gr && gr->x < rd->x && gr->b == rd->b, "(1.18.0) side by side above zero: buyers (green) LEFT, sellers (red) RIGHT, same bottom");
         CHECK(text(h, bas::QUESTION) != nullptr, "(1.18.0) the question line on top");
+        {   const mock::Draw* q = text(h, bas::QUESTION); const mock::Draw* ring = nullptr; for (auto& d : h.draws) if (d.type == "ring") ring = &d;
+            CHECK(q && ring && ring->x > q->r && ring->y >= q->y - 8 && ring->y <= q->y + 8, "(1.22.0) the info icon just right of the question, same line");
+            CHECK(text(h, "i", 0x00000000) != nullptr, "(1.22.0) the icon's black i");
+            CHECK(std::string(bas::QUESTION) == "Is the effort rewarded?", "(1.22.0) the question text");
+            off::IconRect r; r.l = 100; r.t = 2; r.r = 112; r.b = 14; bool on = false; const size_t n0 = h.draws.size();
+            CHECK(off::infoTip(r, on, 106, 8, bas::INFO_TIP) && on && h.draws.size() == n0 + 1 && h.draws.back().type == "tip" && h.draws.back().text.find("Example - ES 8:18 PM") != std::string::npos, "(1.22.0) mouse on the icon: the description tip");
+            CHECK(!off::infoTip(r, on, 107, 9, bas::INFO_TIP) && h.draws.size() == n0 + 1, "(1.22.0) still on it: shown once, not again");
+            CHECK(off::infoTip(r, on, 300, 80, bas::INFO_TIP) && !on && h.draws.back().type == "tipoff", "(1.22.0) mouse leaves: the tip goes");
+            h.draws.erase(h.draws.begin() + (long)n0, h.draws.end()); }
         CHECK(text(h, "4.3", off::C_LBL_RATIO) != nullptr, "(1.19.0) closed candle: its Attack Effort label 4.3 (52 total lots sold vs 12 normal; yellow, no x)");
         CHECK(pTexts(h) == 0, "no \"p \" pace prefix");
 #ifndef BOOK

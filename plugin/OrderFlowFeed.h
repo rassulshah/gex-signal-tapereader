@@ -2124,16 +2124,45 @@ inline void drawPairBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int 
     }
 }
 // (1.18.0) the pane's question, yellow bold, centred at the top (moved right of the box if they would meet)
-inline void drawQuestion(cppExtension* x, const PaneGeo& g, const std::string& q, const bp::Box* box) {
-    if (q.empty() || g.edge - g.left < 120) return;
+// (Effort Reward 1.22.0 / Defense 1.10.0, Rassul 2026-10-19 23:23 "move it more to the left so its aligned with the info box right side",
+// "an info icon .. when i hover over it this description with a little more detail on how its calculated as well as an example";
+// info-icon-mockup.png, "build" 23:29) the question starts just right of the info box (left of the pane when the box is not beside it),
+// then a small grey info icon ("i" in a dot); its rectangle goes back in `icon` (pane pixels) for the mouse hover. Returns false = nothing drawn.
+struct IconRect { int l = 0, t = 0, r = -1, b = -1; bool has(int h, int v) const { return r > l && h >= l - 2 && h <= r + 2 && v >= t - 2 && v <= b + 2; } };
+static const int INFO_ICON_PX = 12;
+static const COLOR C_INFO_ICON = 0x009CA3AF;                               // light grey dot, black "i"
+inline bool drawQuestion(cppExtension* x, const PaneGeo& g, const std::string& q, const bp::Box* box, IconRect* icon = nullptr) {
+    if (icon) *icon = IconRect();
+    if (q.empty() || g.edge - g.left < 120) return false;
     cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = 10; f.style = cppExtension::BOLD; x->setFont(f);
     const int w = (int)x->getTextWidth(q.c_str(), -1);
-    int l = (g.left + g.edge) / 2 - w / 2; const int t = g.top + 1;
-    if (box && box->r > box->l && t + QUESTION_H > box->t && t < box->b && l < box->r + 6 && l + w > box->l - 6) l = box->r + 8;
-    if (l + w > g.edge - 2) { l = g.edge - 2 - w; if (box && l < box->r + 6 && t < box->b && t + QUESTION_H > box->t) return; }
-    if (l < g.left + 2) return;
+    const int t = g.top + 1;
+    const bool beside = box && box->r > box->l && t + QUESTION_H > box->t && t < box->b;
+    int l = beside ? box->r + 10 : g.left + 4;
+    const int need = w + (icon ? INFO_ICON_PX + 8 : 0);
+    if (l + need > g.edge - 2) return false;                               // no room beside the box: leave it out (never over the box)
     x->setTextColor(C_LBL_RATIO);                                         // yellow, as the ratio labels
     cppExtension::RCT rc; rc.set(coord(l), coord(t), coord(l + w + 2), coord(t + QUESTION_H)); rc.drawText(q.c_str(), false, false);
+    if (icon) {
+        const int il = l + w + 8, it = t + (QUESTION_H - INFO_ICON_PX) / 2;
+        x->setPen(C_INFO_ICON, 1, P_SOLID); cppExtension::CBRUSH br(C_INFO_ICON, PAT_SOLID); br.set();
+        cppExtension::RCT d; d.set(coord(il), coord(it), coord(il + INFO_ICON_PX), coord(it + INFO_ICON_PX)); d.drawOval(cppExtension::DRAW_OPAQUE);
+        cppExtension::FONT fi; fi.id = cppExtension::HELVETICA; fi.size = 9; fi.style = cppExtension::BOLD; x->setFont(fi);
+        x->setTextColor(0x00000000);
+        const int iw = (int)x->getTextWidth("i", -1);
+        cppExtension::RCT ti; ti.set(coord(il + (INFO_ICON_PX - iw) / 2), coord(it - 1), coord(il + INFO_ICON_PX), coord(it + INFO_ICON_PX)); ti.drawText("i", false, false);
+        icon->l = il; icon->t = it; icon->r = il + INFO_ICON_PX; icon->b = it + INFO_ICON_PX;
+    }
+    return true;
+}
+// the info icon's hover: the description tooltip while the mouse is on the icon, gone when it leaves (IRT's own help tip, so it can
+// be larger than the pane). Call from mouse() with the event's pane position; true = shown or hidden now.
+inline bool infoTip(const IconRect& r, bool& on, int h, int v, const char* text) {
+    const bool in = r.has(h, v);
+    if (in == on) return false;
+    cppExtension::PNT p; p.set(0, 0.0f); p.h = (short)h; p.v = (short)v;
+    if (in) p.showHelpTip(text); else p.hideHelpTip();
+    on = in; return true;
 }
 // ---- (Aggression 1.16.0, Rassul 2026-10-19 17:04 "i want it to show both bid and ask and i want the selling side to be on the bottom";
 // mockup bidask-mirror-mockup.png, "build it already" 17:42) MIRROR BARS: every candle shows BOTH sides - buyers (side 1, offers lifted)

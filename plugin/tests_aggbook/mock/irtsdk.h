@@ -79,6 +79,7 @@ public:
         short h,v;
         int set(int bar,float price,int=0) { h=static_cast<short>(50+bar*mock::current->barW); v=static_cast<short>(mock::current->paneBottom-(price-mock::current->priceBase)*20); return 0; }
         void setDrawPosition(){} void drawLineTo(){ mock::current->draws.push_back(mock::Draw("line",h,v)); }
+        int showHelpTip(const char* s){ mock::current->draws.push_back(mock::Draw("tip",h,v,s)); return 0; } int hideHelpTip(){ mock::current->draws.push_back(mock::Draw("tipoff",h,v)); return 0; }   // (1.22.0) the info icon
     };
     struct RCT {
         short left,top,right,bottom;

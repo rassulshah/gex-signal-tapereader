@@ -28,8 +28,25 @@
 
 namespace bf {
 
-static const char* const QUESTION = "Are they defending?";   // (1.9.0, Rassul 19:38; 1.8.0 was "Who is defending - and are they refilling?")
-static const char* const VERSION = "1.9.0";   // (1.9.0, 2026-10-19 19:31 / 19:38 CT Rassul) title "Defense", question "Are they defending?", box columns Buyers | Sellers (was Bids | Offers); // (1.8.0, 2026-10-19 19:09 CT Rassul "build", side-by-side-question-mockup.png) PAIR bars - bids green left, offers red right, both above zero (negative net = a stub); the question line on top; the pull markers' strip removed (stats kept); the Reward row removed (Rassul 19:19: it repeats Aggression's Reward); // (1.7.0, 2026-10-19 18:28 CT) the same SCALE CAP as Aggression 1.17.0 (OrderFlowFeed capTop): 1.5x the 90th-percentile |net| on screen, capped bars with a white tip; // (1.6.0, 2026-10-19 17:42 CT Rassul "build it already" - Effort vs Reward) box row REWARD under Refilled: ticks the attack into each side moved price per 1,000 lots it took vs the market normal (EffortReward.h), "absorbed" at 0.5x or less, "through" at 2.0x or more; // (1.5.1, 2026-10-19 13:37 CT Rassul "a lot of black space .. get rid of the extra black space") the zero line sits where the data needs it: no negative net on screen = at the bottom (only the pull-marker strip under it), else the height split by size with one scale (OrderFlowFeed netGeoFor). (1.5.0, 2026-10-19 11:05 CT Rassul "build" on bookflow-refill-mockup.png + bookflow-box-questions-mockup.png; 11:07 "why are you removing pace" -> every row kept) (11:19 / 11:20 / 11:53 CT) box rows REFILL EFFORT (was Net) and REFILLED (re-posted at the hit prices / eaten, STRONG / weak by market) + the Read; Eaten, Added, Pulled, Pace hidden (computed, recorded, used by the Read); questions in the description, not the box; the bars' second label = Refilled ("R4.3") instead of the pace; the Read leads with the REFILL read at a new 10-bar high / low (refillRead);
+static const char* const QUESTION = "Are they defending?";
+// (1.10.0, Rassul 23:23 / 23:29, info-icon-mockup.png) the info icon's hover text
+static const char* const INFO_TIP =
+"Defense - Are they defending?\n"
+"Shows whether resting buyers (bids) and sellers (offers) near price are adding or\n"
+"pulling size, and whether they re-post what gets hit - the passive side holding the line.\n"
+"\n"
+"How it is calculated (each candle, each side, near price)\n"
+"  Refill Effort: lots added - lots pulled, and its size vs the last 20 candles\n"
+"  Refilled: lots re-posted at the prices that were hit / lots eaten, vs the\n"
+"     market normal; STRONG / weak cut-offs per market\n"
+"  Read: at a new 10-bar low / high, strong refill = defense holding ?,\n"
+"     weak = defense failing ?\n"
+"\n"
+"Example - ES 8:18 PM (the low)\n"
+"  Buyers added 6,266 and pulled 4,821 lots of bids = +1,445 net, 3.1x a normal candle.\n"
+"  Sellers ate 772 lots from the bids; buyers re-posted 2,179 lots at those prices\n"
+"  (2.8 per lot eaten) - the bids held and price closed green.";   // (1.9.0, Rassul 19:38; 1.8.0 was "Who is defending - and are they refilling?")
+static const char* const VERSION = "1.10.0";   // (1.10.0, 2026-10-19 23:29 CT Rassul "build", info-icon-mockup.png) question just right of the info box + info icon with the description / calculation / example on hover; the box width template restored ("1.4x STR..." was cut off); // (1.9.0, 2026-10-19 19:31 / 19:38 CT Rassul) title "Defense", question "Are they defending?", box columns Buyers | Sellers (was Bids | Offers); // (1.8.0, 2026-10-19 19:09 CT Rassul "build", side-by-side-question-mockup.png) PAIR bars - bids green left, offers red right, both above zero (negative net = a stub); the question line on top; the pull markers' strip removed (stats kept); the Reward row removed (Rassul 19:19: it repeats Aggression's Reward); // (1.7.0, 2026-10-19 18:28 CT) the same SCALE CAP as Aggression 1.17.0 (OrderFlowFeed capTop): 1.5x the 90th-percentile |net| on screen, capped bars with a white tip; // (1.6.0, 2026-10-19 17:42 CT Rassul "build it already" - Effort vs Reward) box row REWARD under Refilled: ticks the attack into each side moved price per 1,000 lots it took vs the market normal (EffortReward.h), "absorbed" at 0.5x or less, "through" at 2.0x or more; // (1.5.1, 2026-10-19 13:37 CT Rassul "a lot of black space .. get rid of the extra black space") the zero line sits where the data needs it: no negative net on screen = at the bottom (only the pull-marker strip under it), else the height split by size with one scale (OrderFlowFeed netGeoFor). (1.5.0, 2026-10-19 11:05 CT Rassul "build" on bookflow-refill-mockup.png + bookflow-box-questions-mockup.png; 11:07 "why are you removing pace" -> every row kept) (11:19 / 11:20 / 11:53 CT) box rows REFILL EFFORT (was Net) and REFILLED (re-posted at the hit prices / eaten, STRONG / weak by market) + the Read; Eaten, Added, Pulled, Pace hidden (computed, recorded, used by the Read); questions in the description, not the box; the bars' second label = Refilled ("R4.3") instead of the pace; the Read leads with the REFILL read at a new 10-bar high / low (refillRead);
 // (1.4.0)   // (1.4.0, 2026-10-18 23:48 / 23:56 CT approved bookflow-read-mockup.png + bookflow-pull2-mockup.png) box rows Net, Added, Pulled, Pace, Read; pull markers (pullStat) (bookRead, BoxRead.h); the live candle's Net carries its ratio; // (1.3.4) box follows the mouse only inside the pane, else Live = the forming candle; // (1.3.3, 2026-10-18 his decision list) window: Position + Near ticks (Offset X / Y and Record removed - recording always on; Ratio bars / Spike hidden);  (1.3.2, 2026-10-18 settings audit) the window from OrderFlowPaneSettings.h through SettingsHost.h (same rows / file); (1.3.1, 2026-10-18 settings audit) Spike vs average on its own settings line (was cut off); rows / file unchanged // keep equal to BF_VERSION / setVersion in BookFlow.cpp (1.3.0: net spike, colour by side, Market State BOOK; 1.2.1 box Net + Pace)
 using off::BID; using off::ASK;
 
@@ -144,7 +161,7 @@ inline off::Info info(const off::PaneBar* b, const off::Params& P, const NetStat
 inline off::Info info(const off::PaneBar* b, const off::Params& P) { return info(b, P, nullptr); }
 inline std::string netCell(const off::PaneBar& b, int s, const NetStat* ns);
 inline off::Info info(const off::PaneBar* b, const off::Params& P, const NetStat* ns, const std::string& mkt) {
-    off::Info I; I.colHead[0] = "Buyers"; I.colHead[1] = "Sellers";   // (1.9.0, Rassul 19:31) was Bids | Offers - the same words as Effort Reward I.tmpl = off::CROWD_TMPL;
+    off::Info I; I.colHead[0] = "Buyers"; I.colHead[1] = "Sellers"; I.tmpl = off::CROWD_TMPL;   // (1.9.0, Rassul 19:31) was Bids | Offers; (1.10.0) the width template restored (1.9.0 lost it in a comment: "1.4x STR..." was cut off)
     const char* labels[8] = { "Refill Effort", "Eaten", "Refilled", "Added", "Pulled", "Rebuilt", "Pace", "Crowd" };   // (1.5.0) Net -> Refill Effort; + Eaten, Refilled
     for (int k0 = 0; k0 < 8; ++k0) {
         const int k = k0 == 0 ? 0 : k0 <= 2 ? 10 + k0 : k0 - 2;          // 0 Refill Effort (net), 11 Eaten, 12 Refilled, then 1 Added .. 5 Crowd as before
