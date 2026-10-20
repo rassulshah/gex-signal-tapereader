@@ -1,4 +1,4 @@
-// EffortReward.h 1.2.0 (1.2.0, 18:54 CT: counterRead - support / resistance coming in at 1.5x) 1.1.0 (1.1.0, 18:37 CT: Reward hidden ("-") when that side attacked under 0.5x its normal) 1.0.0 (2026-10-19, Rassul "now what would the opposite for aggressiveness" -> "so both together can be an effort reward
+// EffortReward.h 1.3.0 (1.3.0, 19:25 CT: lotsText, effortRead) 1.2.0 (1.2.0, 18:54 CT: counterRead - support / resistance coming in at 1.5x) 1.1.0 (1.1.0, 18:37 CT: Reward hidden ("-") when that side attacked under 0.5x its normal) 1.0.0 (2026-10-19, Rassul "now what would the opposite for aggressiveness" -> "so both together can be an effort reward
 // indicator" -> "build it already" 17:42 CT) - ATTACK EFFORT and REWARD, shared by Aggression (lsBidAskStats) and Book Flow (lsBookFlow).
 //   Attack Effort = the lots a side traded aggressively in the candle / its average over the 20 candles before (sellers = lots hit at
 //                   the bid, buyers = lots lifted at the offer). 2.0x = twice its normal attack.
@@ -86,6 +86,21 @@ inline bool read(bool newLow, bool newHigh, const Side s[2], br::Read& r) {
     return false;
 }
 
+// (1.3.0, Rassul 19:25 "go with your recommendation") the Aggression bars and Lots row = each side's TOTAL aggressive lots; the plain read
+// from Attack Effort (was the biggest lots at one price): one side 2.0x+ = "Sellers attacking 2.4x", both = a fight, else quiet
+inline std::string lotsText(long long v) { std::string s = std::to_string(v < 0 ? 0 : v); for (int i = (int)s.size() - 3; i > 0; i -= 3) s.insert((size_t)i, ","); return s; }
+inline br::Read effortRead(const Side s[2]) {
+    br::Read r;
+    const bool hit[2] = { s[0].effOk && s[0].eff >= EFFORT_HI - 1e-9, s[1].effOk && s[1].eff >= EFFORT_HI - 1e-9 };
+    if (!s[0].effOk && !s[1].effOk) { r.head = "Not enough candles yet to judge the attack"; return r; }
+    if (hit[0] && hit[1]) { r.head = "Both sides attacking (" + x1(s[0].eff) + " / " + x1(s[1].eff) + ") - a fight; watch the close and Book Flow"; return r; }
+    if (!hit[0] && !hit[1]) { r.head = "Quiet - no side attacking"; return r; }
+    const int a = hit[0] ? 0 : 1;
+    r.impl = a == 0 ? br::BEAR : br::BULL;
+    r.head = std::string(a == 0 ? "Sellers attacking " : "Buyers attacking ") + x1(s[a].eff);
+    if (s[a].rewOk) r.opt.push_back(", moving price " + x1(s[a].rew) + " normal");
+    return r;
+}
 // (1.2.0, Rassul 2026-10-19 18:48 "it usually waits for 2x but those are more rare so what should it be for a reversal to see that support
 // is coming in" -> "do it" 18:54) the COUNTER-SIDE read: at a new 10-bar low, buyers' Attack Effort >= 1.5x = support coming in; at a new
 // high, sellers' >= 1.5x = resistance coming in. Unseen data (49 sessions, 7 markets): 1.5x+ turned 30% (lows) / 31% (highs) vs 22% base,

@@ -172,7 +172,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.18.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.19.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -495,8 +495,8 @@ int BidAskStats::scale(int iStartBar, int iEndBar, double* dMin, double* dMax) {
                 if (i == last) { if (S->liveTime == bt && S->live.ok) bm = &S->live; }
                 else { std::map<long long, bas::Stat>::const_iterator it = S->ser.bars.find(bt); if (it != S->ser.bars.end() && it->second.m.ok) bm = &it->second.m; }
                 if (!bm) continue;
-                top = std::max(top, std::max(bm->bid, bm->ask)); up = std::max(up, bm->ask); down = std::max(down, bm->bid);
-                mags.push_back(bm->bid); mags.push_back(bm->ask);
+                top = std::max(top, std::max(bm->totBid, bm->totAsk)); up = std::max(up, bm->totAsk); down = std::max(down, bm->totBid);   // (1.19.0) total lots
+                mags.push_back(bm->totBid); mags.push_back(bm->totAsk);
             }
         }
         { const long long cp = off::capTop(mags); up = off::capped(up, cp); down = off::capped(down, cp); top = off::capped(top, cp); }   // (1.17.0) the scale cap
@@ -1273,7 +1273,7 @@ void BidAskStats::render(BASState& S) {
     };
     long long top = 0, upMax = 0, downMax = 0;
     std::vector<long long> mags;
-    for (int i = v0; i <= v1; ++i) { const bas::BarMax* m = maxOfBar(i); if (m) { top = std::max(top, std::max(m->bid, m->ask)); upMax = std::max(upMax, m->ask); downMax = std::max(downMax, m->bid); mags.push_back(m->bid); mags.push_back(m->ask); } }
+    for (int i = v0; i <= v1; ++i) { const bas::BarMax* m = maxOfBar(i); if (m) { top = std::max(top, std::max(m->totBid, m->totAsk)); upMax = std::max(upMax, m->totAsk); downMax = std::max(downMax, m->totBid); mags.push_back(m->totBid); mags.push_back(m->totAsk); } }   // (1.19.0) total lots
     { const long long cp = off::capTop(mags); upMax = off::capped(upMax, cp); downMax = off::capped(downMax, cp); top = off::capped(top, cp); }   // (1.17.0, Rassul 18:26) the scale cap: 1.5x the 90th percentile on screen
     if (S.axisTop > top) top = S.axisTop;                                  // draw on the top the value axis was given
     upMax = std::max(upMax, S.axisUp); downMax = std::max(downMax, S.axisDown);   // (1.16.0) the mirror's two sides, as the axis was given
@@ -1330,10 +1330,14 @@ void BidAskStats::render(BASState& S) {
         info.rows.insert(info.rows.end() - (info.rows.empty() ? 0 : 1), a); info.rows.push_back(b);
         {   // (1.10.1, Rassul 2026-10-16 22:54) the box shows Lots and Pace only (no Sweep, Large, StopRun, Crowd, Burst)
             std::vector<off::InfoRow> kept;
-            for (size_t k = 0; k < info.rows.size(); ++k) if (info.rows[k].label == "Lots" || info.rows[k].label == "Pace") kept.push_back(info.rows[k]);
+            for (size_t k = 0; k < info.rows.size(); ++k) if (info.rows[k].label == "Lots") {   // (1.19.0, Rassul 19:25) Pace removed (unproven)
+                off::InfoRow r = info.rows[k];                               // (1.19.0) Lots = the side's TOTAL aggressive lots (the bar), its ratio is Attack Effort
+                if (bst && bst->m.ok) { r.v[0] = er::lotsText(bst->m.totBid); r.v[1] = er::lotsText(bst->m.totAsk); }
+                kept.push_back(r);
+            }
             info.rows.swap(kept);
         }
-        {   // (1.14.2) BBI / BAI under Pace (sellers red, buyers green), from the candle shown: hovered closed, else the live forming candle
+        if (false) {   // (1.19.0, Rassul 19:25) BBI / BAI removed (never tested); the code kept
             const bool ok = bst && bst->m.ok;
             off::InfoRow r; r.label = "BBI / BAI";
             r.v[0] = ok ? bas::beatText(bst->bBid, bst->bBidCap, true) : std::string("n/a");
@@ -1370,10 +1374,11 @@ void BidAskStats::render(BASState& S) {
     off::PanelPlan P;
     (void)zl; (void)optL; (void)l1;
     // (1.15.0) + the Read row: the box grows to hold its lines, wrapped to the box width (BoxReadDraw.h)
-    br::Read rd = bas::aggRead(bst, readPc);
+    br::Read rd = bas::aggRead(bst, readPc); (void)rd;
     {   // (1.16.0) at a new 10-bar low / high the Effort vs Reward read leads (absorbed / going through), as Book Flow's refill read does
         const int ci = liveBox ? last : mb; bool nlw = false, nhi = false;
-        if (newExtreme(ci, nlw, nhi)) { br::Read er0; const er::Side sd[2] = { erNow[0], erNow[1] }; if (er::read(nlw, nhi, sd, er0)) rd = er0; else if (er::counterRead(nlw, nhi, sd, er0)) rd = er0; }   // (1.17.0) + support / resistance coming in at 1.5x
+        { const er::Side sd0[2] = { erNow[0], erNow[1] }; rd = er::effortRead(sd0); }   // (1.19.0) the read from Attack Effort (was the one-price Lots ratio)
+        if (newExtreme(ci, nlw, nhi)) { br::Read er0; const er::Side sd[2] = { erNow[0], erNow[1] }; if (er::read(nlw, nhi, sd, er0)) rd = er0; else if (er::counterRead(nlw, nhi, sd, er0)) rd = er0; else rd = er::effortRead(sd); }   // (1.17.0) + support / resistance coming in at 1.5x; (1.19.0) else the Attack Effort read
     }
     if (S.feed.silentNow(steadyMs())) { rd = br::Read(); rd.head = off::silentRead(S.feed.silentFromWall, S.feed.reconnects); }   // (1.17.0) the watchdog says so
     const off::TextW tw = off::measureWith(this);
@@ -1389,8 +1394,10 @@ void BidAskStats::render(BASState& S) {
     off::drawPairBars(this, g, v0, v1, slot, top, normal, spike, xOf, [&](int i) {   // (1.18.0, Rassul 19:02 / 19:09) BOTH sides side by side, above zero: buyers green left, sellers red right
         off::BarLook k; const bas::BarMax* bm = maxOfBar(i); if (!bm) return k;
         const bas::Stat* sp = statOfBar(i);
-        k.ok = true; k.v[0] = bm->bid; k.v[1] = bm->ask;
-        for (int q = 0; q < 2; ++q) { const bas::SideLook sl = bas::sideLook(sp, q, i != last); k.spike[q] = sl.bright; k.ratioOk[q] = sl.ratioOk; k.ratio[q] = sl.ratio; }   // (1.13.0) closed spikes only
+        k.ok = true; k.v[0] = bm->totBid; k.v[1] = bm->totAsk;          // (1.19.0, Rassul 19:25) the bars = each side's TOTAL aggressive lots (the validated Attack Effort)
+        (void)sp;
+        if (i != last) { const std::array<er::Side, 2> ef = erSides(S, i, times, last);   // bright + its ratio at 2.0x+ Attack Effort (closed candles only, no repaint)
+            for (int q = 0; q < 2; ++q) { k.ratioOk[q] = ef[q].effOk; k.ratio[q] = ef[q].eff; } }
         if (i < op.count && i < cl.count) { const float o = op[i], c = cl[i]; if (std::isfinite(o) && std::isfinite(c)) k.dir = c > o ? 1 : c < o ? -1 : 0; }
         if (i != last) { std::map<long long, BasFin>::const_iterator ff = S.fin.find((long long)times[i]); if (ff != S.fin.end()) { k.let[0] = ff->second.let[0]; k.let[1] = ff->second.let[1]; k.p100[0] = ff->second.pc.p100[0]; k.p100[1] = ff->second.pc.p100[1]; } }
         if (i != last) {                                                   // (1.4.0) the stop-run mark on the break bar's attacking side
@@ -1407,7 +1414,8 @@ void BidAskStats::render(BASState& S) {
             const blt::Mark* mk = markAt(S, (long long)times[i]); if (!mk || !blt::shows(*mk, S.bigLot)) continue;
             const int xc = xOf(i); if (xc < g.left || xc > g.right) continue;
             const int px = off::pairPx(g.bottom - g.top, g.reserve), yb = g.bottom - 1;   // (1.18.0) the cap on top of its side's bar
-            const int hb = off::barHeight(mk->lots, top, px); if (hb <= 0) continue;
+            const bas::BarMax* bmk = maxOfBar(i); if (!bmk) continue;
+            const int hb = off::barHeight(mk->side == 1 ? bmk->totAsk : bmk->totBid, top, px); if (hb <= 0) continue;   // (1.19.0) the cap marks the candle on top of its side's total bar
             const off::Pair pr = off::pairIn(xc, slot); const int pos = mk->side == 1 ? 0 : 1;   // buyers left, sellers right
             const int l = pr.l[pos], r = pr.r[pos];
             const int cap = std::min(BIG_LOT_CAP_PX, hb);
@@ -1428,6 +1436,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.18.0");   // BAS_VERSION
+    p->setVersion("1.19.0");   // BAS_VERSION
     return p;
 }

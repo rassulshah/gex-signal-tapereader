@@ -36,5 +36,10 @@ int main() {
         c[1].eff = 1.4; CHECK(!er::counterRead(true, false, c, r3), "(1.2.0) 1.4x: nothing");
         c[0].effOk = true; c[0].eff = 1.8; CHECK(er::counterRead(false, true, c, r3) && r3.impl == br::BEAR && r3.head.find("resistance coming in") != std::string::npos, "(1.2.0) new high, sellers 1.8x: resistance coming in");
         CHECK(!er::counterRead(false, false, c, r3) && !er::counterRead(true, true, c, r3), "(1.2.0) no extreme / outside bar: nothing"); }
-    printf("EffortReward 1.2.0: %d checks, %d failed\n", p + f, f); return f ? 1 : 0;
+    {   er::Side e[2]; e[0].effOk = e[1].effOk = true; e[0].eff = 2.4; e[1].eff = 0.8; e[0].rewOk = true; e[0].rew = 1.1;
+        br::Read r4 = er::effortRead(e); CHECK(r4.impl == br::BEAR && r4.full() == "Sellers attacking 2.4x, moving price 1.1x normal", "(1.3.0) one side 2.0x+: attacking");
+        e[1].eff = 2.1; CHECK(er::effortRead(e).head.find("Both sides attacking") == 0, "(1.3.0) both: a fight");
+        e[0].eff = 1.0; e[1].eff = 1.2; CHECK(er::effortRead(e).head == "Quiet - no side attacking", "(1.3.0) quiet");
+        CHECK(er::lotsText(1234567) == "1,234,567" && er::lotsText(12) == "12", "(1.3.0) lots with commas"); }
+    printf("EffortReward 1.3.0: %d checks, %d failed\n", p + f, f); return f ? 1 : 0;
 }

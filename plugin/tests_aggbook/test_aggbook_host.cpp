@@ -86,7 +86,7 @@ int main() {
         CHECK(v.size() == 2 && rd && gr, "(1.16.0) closed candle: bright red sellers + dim green buyers");
         CHECK(rd && gr && gr->x < rd->x && gr->b == rd->b, "(1.18.0) side by side above zero: buyers (green) LEFT, sellers (red) RIGHT, same bottom");
         CHECK(text(h, bas::QUESTION) != nullptr, "(1.18.0) the question line on top");
-        CHECK(text(h, "5.0", off::C_LBL_RATIO) != nullptr, "closed candle: its ratio label 5.0 (yellow), no x");
+        CHECK(text(h, "4.3", off::C_LBL_RATIO) != nullptr, "(1.19.0) closed candle: its Attack Effort label 4.3 (52 total lots sold vs 12 normal; yellow, no x)");
         CHECK(pTexts(h) == 0, "no \"p \" pace prefix");
 #ifndef BOOK
         CHECK(text(h, "Attack Effort") != nullptr && text(h, "Reward") != nullptr, "(1.16.0) box rows Attack Effort + Reward");
@@ -115,34 +115,33 @@ int main() {
     NOW += 1500; p->calc(0);
     CHECK(S->ser.spike.avgT == 60 && S->dx == 0 && S->dy == 0 && !S->ser.bars[T0 + 1800].bidSpike, "the chart reads the file: 5.0x < 6.0x is no longer a spike; a saved Offset 7 / 3 is ignored");
     h.draws.clear(); p->draw();
-    CHECK(count(h, "box", C_BID_SPIKE) == 0 && !text(h, "5.0"), "under 6.0x nothing is bright or labelled");
+    CHECK(count(h, "box", C_BID_SPIKE) >= 1 && text(h, "4.3") != nullptr, "(1.19.0) the bars use Attack Effort 2.0x (the validated rule), not the record's Spike vs average");
     // (1.14.1, Rassul 23:19 CT) the box follows the mouse ONLY while the cursor is inside this pane; anywhere else = Live (the forming candle), updating
     {   void* W = (void*)0x1; bas_test_cursor_wnd = W; pc::test_ok = true;
         h.draws.clear(); p->draw();
-        CHECK(text(h, "Live") != nullptr && hasPrefix(h, "10 ("), "no mouse event yet: Live = the forming candle (10 lots at the bid so far)");
-        CHECK(text(h, "BBI / BAI") != nullptr && text(h, "0", C_BID) != nullptr && text(h, "0", C_ASK) != nullptr, "(1.14.2) BBI / BAI row: live 10 / 10 - the previous candle (23 / 10) is bigger or equal: 0 / 0");
+        CHECK(text(h, "Live") != nullptr && text(h, "12") != nullptr, "(1.19.0) no mouse event yet: Live = the forming candle (12 total lots at the bid so far)");
+        CHECK(text(h, "BBI / BAI") == nullptr && text(h, "Pace") == nullptr, "(1.19.0) no BBI / BAI and no Pace rows");
         pc::test_cx = 1450; pc::test_cy = 650; RTX_EVENT ev = moveAt(450, 150, 10); p->mouse(&ev);   // inside the pane over candle 10
         h.draws.clear(); p->draw();
         CHECK(S->hover.bar == 10 && text(h, "Live") == nullptr, "cursor inside the pane over candle 10: the box shows that candle");
         {   RTX_EVENT e30 = moveAt(450, 150, 30); p->mouse(&e30); h.draws.clear(); p->draw();
-            CHECK(text(h, "30", C_BID) != nullptr && text(h, "0", C_ASK) != nullptr, "(1.14.2) candle 30 (50 sold): BBI 30 = beats all 30 prior candles, BAI 0 (equal stops)");
+            CHECK(text(h, "52", C_BID) != nullptr, "(1.19.0) candle 30: Lots = 52 total lots sold");
             p->mouse(&ev); h.draws.clear(); p->draw(); }
         NOW += 300; p->calc(0); h.draws.clear(); p->draw();
         CHECK(S->hover.bar == 10, "still inside (no new event): the candle stays");
         pc::test_cy = 900;                                                  // the cursor moved below the pane (price pane / elsewhere): no event comes
         NOW += 300; p->calc(0); h.draws.clear(); p->draw();
-        CHECK(S->hover.bar == -1 && text(h, "Live") != nullptr && hasPrefix(h, "10 ("), "cursor outside the pane: Live, the forming candle");
+        CHECK(S->hover.bar == -1 && text(h, "Live") != nullptr && text(h, "12") != nullptr, "cursor outside the pane: Live, the forming candle");
         h.bars.back() = bar(h.bars.back().time, 77, 10);                    // the forming candle trades: 77 lots at the bid
         const int inv = h.invalidates; NOW += 300; p->calc(0);
         CHECK(h.invalidates > inv, "a new tick on the forming candle while Live: redrawn");
         h.draws.clear(); p->draw();
-        CHECK(hasPrefix(h, "77 (") && text(h, "Live") != nullptr, "Live box shows the updated 77 lots with the mouse outside the pane");
+        CHECK(text(h, "79") != nullptr && text(h, "Live") != nullptr, "(1.19.0) Live box shows the updated 79 total lots with the mouse outside the pane");
         {   std::string why; const bool fits = readFits(h, S->lastBox, S->lastRead, S->lastReadLines, why);
-            CHECK(text(h, "Read") != nullptr && text(h, "BEARISH", br::C_BEAR) != nullptr && S->lastRead.head.find("Sellers hitting") == 0
-                  && S->lastRead.full().find("biggest bid in 32") != std::string::npos, "(1.15.0) Read: BEARISH, Sellers hitting, biggest bid in 32 (live)");
+            CHECK(text(h, "Read") != nullptr && text(h, "BEARISH", br::C_BEAR) != nullptr && S->lastRead.head.find("Sellers attacking") == 0, "(1.19.0) Read: BEARISH, Sellers attacking (Attack Effort, live)");
             CHECK(fits && S->lastReadLines.size() <= 2, ("(1.15.0) the Read lines fit inside the box, <= 2 lines, nothing cut " + why).c_str());
             CHECK(text(h, "BL5") == nullptr, "(1.15.0) no BL5 row"); }
-        CHECK(text(h, "32", C_BID) != nullptr && text(h, "0", C_ASK) != nullptr, "(1.14.2) live BBI 32 after the trade (77 beats all 32 prior candles), updating with the forming candle");
+        CHECK(text(h, "32", C_BID) == nullptr, "(1.19.0) no BBI count any more");
         pc::test_cy = 650; ev = moveAt(450, 150, 12); p->mouse(&ev); NOW += 300; p->calc(0);
         CHECK(S->hover.bar == 12, "back inside: follows the mouse again");
         bas_test_cursor_wnd = (void*)0x2; NOW += 300; p->calc(0);        // same screen spot but another window on top / another program
