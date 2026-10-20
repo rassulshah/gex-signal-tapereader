@@ -1,2 +1,11 @@
-findings=0 allowed=0 staged_files=0 bytes=0
+findings=0 allowed=0 staged_files=9 bytes=522946
 largest staged blobs (bytes, path):
+SIZE	238239	plugin/OrderFlowFeed.h
+SIZE	113858	plugin/BidAskStats.cpp
+SIZE	48080	plugin/BookFlow.cpp
+SIZE	40393	plugin/BidAskStatsLogic.h
+SIZE	32247	plugin/BookFlowLogic.h
+SIZE	26692	plugin/tests_aggbook/test_aggbook_host.cpp
+SIZE	20726	plugin/tests_aggbook/test_aggbook_113.cpp
+SIZE	2629	plugin/OrderFlowPaneSettings.h
+SIZE	82	logs/staged-scan-findings.log
