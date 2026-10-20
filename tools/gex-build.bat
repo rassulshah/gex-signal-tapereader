@@ -33,7 +33,7 @@ REM (2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator alway
 REM   anymore") THE SETTINGS CONTRACT GATES EVERY BUILD: plugin\tests_settings\settings_contract.cpp (SettingsSpec.h + every <Name>Settings.h +
 REM   the migrated sources) is compiled and run first; FAIL = nothing is built this tick (the installed DLLs stay), the log says why once,
 REM   plugin\out\SETTINGS-CONTRACT.txt has every failing check. SETSRC = the plugin sources on the layer (add one when it migrates).
-set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp"
+set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp"
 call :settings
 if defined SETFAIL (
   call :status
@@ -103,7 +103,9 @@ REM (2026-10-13) lsStackStats 1.0.0 - who is arriving: orders added near price p
 REM (retired 2026-10-16) call :one StackStats lsStackStats StackStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h ZoneRule.h ZoneRead.h
 REM (2026-10-16 Rassul 07:49 CT "dont keep the old panes, replace them") lsPullStats + lsStackStats RETIRED from the build: lsBookFlow 1.0.0 replaces both
 REM   (one net bar per side; it still writes the StackStats\ and PullStats\ records and the PullStats zone read). Their sources stay in plugin\ for reference.
-call :one BookFlow lsBookFlow BookFlowLogic.h StackStatsLogic.h PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h OrderFlowPaneSettings.h SettingsSpec.h SettingsHost.h PaneCursor.h BoxRead.h BoxReadDraw.h
+call :one BookFlow lsBookFlow BookFlowLogic.h StackStatsLogic.h PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h OrderFlowPaneSettings.h SettingsSpec.h SettingsHost.h PaneCursor.h BoxRead.h BoxReadDraw.h DefenseTurn.h DefenseLinesSettings.h
+REM (2026-10-20 Rassul 12:22 CT "first build the lines, do it now") lsDefenseLines 1.0.0 - the Defense pane's pivot turns + refill lines on the price chart
+call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
 REM (2026-10-14 claim gates) DealerRead 4.6.0 / TapeReader 1.1.4 also hash ClaimGates.h (DealerRead DealerReadGates.h)
 call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h BannerBoard.h ClaimGates.h MarketState.h ZoneStory.h OddsTable.h SignalBoard.h TapeReaderSettings.h SettingsSpec.h SettingsHost.h
@@ -243,7 +245,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow TapeReader CobImpulse BigBidAsk) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines TapeReader CobImpulse BigBidAsk) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"

@@ -387,6 +387,7 @@ struct Acc {
     long long refN[2] = {0, 0}, refC[2] = {0, 0};
     int pullMaxTraded[2] = {0, 0};                       // (1.2.0) the biggest pulled order had traded (a fill) before it was pulled
     long long hitC[2] = {0, 0}, rebuildC[2] = {0, 0};    // (1.2.0) lots filled (hit) / lots re-added at a price after a hit there this candle
+    long long tFirst = -1, tLast = -1, fillLo = 0, fillHi = 0, tLo = -1, tHi = -1, cumLo[2] = {0, 0}, cumHi[2] = {0, 0};   // (DefenseTurn 2026-10-20) fill times (s), the candle's low / high fill and the hits up to it
     std::vector<std::pair<long long, long long> > addT[2];   // (1.2.0) (event stamp s, cumulative lots added near price) - the reset clock
     std::unordered_map<long long, long long> addBy[2];  // order id -> contracts added in this candle (concentration)
     bool orderCap = false, aggrCap = false;
@@ -568,6 +569,11 @@ public:
             }
             if (ic) { const long long r = restAt(s, e.px); if (r > ic->shown) ic->shown = r; ic->traded += e.size; }
             if (e.size > 0) a.hitC[s] += e.size;                           // (1.2.0) the hit size (rebuilt % = re-added / hit)
+            {   const long long ts = e.stamp > 0 ? e.stamp : e.arrMs / 1000;     // (DefenseTurn 2026-10-20) when the candle's low / high printed and the hits up to it
+                if (a.tFirst < 0) { a.tFirst = ts; }
+                a.tLast = ts;
+                if (a.fillLo == 0 || e.px < a.fillLo) { a.fillLo = e.px; a.tLo = ts; a.cumLo[0] = a.hitC[0]; a.cumLo[1] = a.hitC[1]; }
+                if (a.fillHi == 0 || e.px > a.fillHi) { a.fillHi = e.px; a.tHi = ts; a.cumHi[0] = a.hitC[0]; a.cumHi[1] = a.hitC[1]; } }
             if (it != book.end() && it->second.known) {
                 Ord& o = it->second;
                 const long long take = e.size < o.size ? e.size : o.size;
@@ -2704,6 +2710,7 @@ public:
     virtual std::string zoneDirName() const { return std::string(L::name()); }                                              // whose folder holds its zone-read record
     virtual void onLoad(S_&, const std::string&, const std::string&) {}   // (flexDir, stem) a session's record was opened: open any extra record
     virtual void onDecide(S_&, long long, const PaneBar&, const Row&) {}  // a closed candle was decided and recorded: write any extra record row
+    virtual void onAccClosed(S_&, long long, const Acc&) {}             // (DefenseTurn 2026-10-20) a decided candle's raw accumulator, just before it is dropped
     virtual void onSave(S_&) {}                                           // the session record was saved: save any extra record
     long long magOf(const Rec& r) const {                                 // the tallest bar of a candle: net bars = the bigger |net|, else the bigger side
         if (netBars()) { const long long a = netOf(r, BID), b = netOf(r, ASK); return std::max(a < 0 ? -a : a, b < 0 ? -b : b); }
@@ -2991,6 +2998,7 @@ private:
                     if (nb.ok && nb.kind == 1 && nb.msgSide >= 0) resetStart(S.rw, nb.msgSide, key, nb.r.pullC[nb.msgSide], P, ctOf(key), nb.level);
                 }
                 S.ser.bars[key] = nb; S.finalized++; any = true;
+                if (nb.ok) onAccClosed(S, key, it->second);                // (DefenseTurn) before onDecide, so the turn sees this candle's refill / extreme
                 if (nb.ok && sessionKey(key) == S.curSession) { const Row rw0 = rowOf(key, nb); S.file.put(rw0); onDecide(S, key, nb, rw0); }
             }
             S.closedAt.erase(c); S.accs.erase(it++);

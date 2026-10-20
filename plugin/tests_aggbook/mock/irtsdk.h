@@ -20,7 +20,7 @@ enum BRUSH_STYLE { PAT_NONE, PAT_HOLLOW, PAT_SOLID };   // global, as in the rea
 enum PEN_STYLE { P_SOLID, P_DOT, P_DASH };              // global, as in the real irtsdk.h (1.0.1: the pen is tracked)
 typedef int RTX_RESULT;
 typedef struct DEPTH_ORDER { RTDATE timestamp; float price; float previousPrice; float bid, ask; unsigned long bidsize, asksize; unsigned long size; int orderID; int aggressorOrderID; unsigned char action; unsigned char buySell; } DEPTH_ORDER;
-enum { RTX_OK=0, RTX_FAIL=-1, POST_DRAWING=1, OVERLAY=2, NO_UI=4, INSTRUMENT_SCALE=8, VAP_REQUIRED=16, TRACK_MOUSE=(1<<27), kParmAppendSameLine=1, SYM_TICKINCR=171, CALL_CONTINUOUSLY=1 };
+enum { RTX_OK=0, RTX_FAIL=-1, POST_DRAWING=1, OVERLAY=2, NO_UI=4, INSTRUMENT_SCALE=8, VAP_REQUIRED=16, FRONT_DRAWING=32, TRACK_MOUSE=(1<<27), kParmAppendSameLine=1, SYM_TICKINCR=171, CALL_CONTINUOUSLY=1 };
 typedef struct DEPTH_LEVEL { float bid, ask; unsigned short bidsize, asksize; } DEPTH_LEVEL;
 enum iARRAY { barDateTime,barVolume };
 enum fARRAY { barOpen,barHigh,barLow,barClose };

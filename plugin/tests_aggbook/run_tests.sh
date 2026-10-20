@@ -15,8 +15,10 @@ step "Read rows logic (1.15.0 / 1.4.0)" $CXX -I"$P" "$D/test_aggbook_115.cpp" -o
 step "Big Lot logic (1.14.0)" $CXX -I"$P" "$D/test_aggbook_114.cpp" -o "$B/tbl"; step "run" "$B/tbl"
 step "BidAskStats Big Lot host (1.14.0)" $CXX -Wno-misleading-indentation -DBAS_TEST_CLOCK -DPC_TEST_CURSOR -I"$D/mock" -I"$P" "$D/test_aggbook_114_host.cpp" -o "$B/tblh"; step "run" "$B/tblh"
 step "BookFlow host" $CXX -Wno-misleading-indentation -DBOOK -DOFF_TEST_CLOCK -DPC_TEST_CURSOR -I"$D/mock" -I"$P" "$D/test_aggbook_host.cpp" -o "$B/thf"; step "run" "$B/thf"
+step "DefenseTurn 1.0.0 logic" $CXX -I"$P" "$D/test_defenseturn.cpp" -o "$B/tdt"; step "run" "$B/tdt"
+step "DefenseLines 1.0.0 host" $CXX -Wno-misleading-indentation -I"$D/mock" -I"$P" "$D/test_defenselines_host.cpp" -o "$B/tdl"; step "run" "$B/tdl"
 SDK=${SDK:-/mnt/user-data/uploads/sdk/c++/include}
-if [ -d "$SDK" ]; then for N in BidAskStats BookFlow; do
+if [ -d "$SDK" ]; then for N in BidAskStats BookFlow DefenseLines; do
   printf '#define NOMINMAX\n#include <windows.h>\n#pragma push_macro("__GNUC__")\n#undef __GNUC__\n#include "irtsdk.h"\n#pragma pop_macro("__GNUC__")\n#include "%s.cpp"\n' "$N" > "$B/wrap_$N.cpp"
   x86_64-w64-mingw32-g++ -std=c++17 -fsyntax-only -Wall -Wextra -Wno-unknown-pragmas -Wno-misleading-indentation -I"$SDK" -I"$P" "$B/wrap_$N.cpp" 2>"$B/syntax-$N.log"
   E=$(grep -c ' error' "$B/syntax-$N.log"); W=$(grep 'warning' "$B/syntax-$N.log" | grep -vc "$SDK")

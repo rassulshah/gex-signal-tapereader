@@ -290,6 +290,32 @@ int main() {
         bf::Spot sp = p->spotAt(i); CHECK(sp.ok && sp.newLow && !sp.newHigh && sp.busy, "(1.5.0) spotAt: new 10-bar low, busy (2.5x volume)");
         B[(size_t)i].low = 7000.0f; B[(size_t)i].volume = 120; sp = p->spotAt(i); CHECK(sp.ok && !sp.newLow && !sp.busy, "(1.5.0) spotAt: not new, not busy");
         CHECK(!p->spotAt(3).ok && !p->spotAt((int)B.size()).ok, "(1.5.0) spotAt: too early / out of range -> none"); }
+    {   // (1.12.0) the pivot turn: candle i makes a new low, closes green, bids' Defense bar bigger -> decided once, written, drawn "+NN%"
+        std::vector<mock::Bar>& B = mock::current->bars; const long long k = S->ser.bars.rbegin()->first; int i = -1;
+        for (size_t q = 0; q < B.size(); ++q) if ((long long)B[q].time == k) i = (int)q;
+        CHECK(i >= 2 && S->barEnds.count(k) && S->barEnds[k] == i, "(1.12.0) the last decided candle is on the chart");
+        B[(size_t)i - 2].open = 7001; B[(size_t)i - 2].high = 7002; B[(size_t)i - 2].low = 7000; B[(size_t)i - 2].close = 7000.5f;
+        B[(size_t)i - 1].open = 7000.5f; B[(size_t)i - 1].high = 7001; B[(size_t)i - 1].low = 6999; B[(size_t)i - 1].close = 6999.5f;
+        B[(size_t)i].open = 6999.5f; B[(size_t)i].high = 7000.5f; B[(size_t)i].low = 6997; B[(size_t)i].close = 7000.25f;
+        CHECK(S->ser.bars.count(k) == 1, "(1.12.0) the turn candle is decided");
+        off::PaneBar nb = S->ser.bars[k]; nb.r.addC[0] = 90; nb.r.pullC[0] = 0; nb.r.addC[1] = 60; nb.r.pullC[1] = 0; nb.r.aggrC[0] = 700; nb.r.aggrC[1] = 400;
+        S->ser.bars[k] = nb;
+        p->decideTurns(*S, k, nb); p->decideTurns(*S, k, nb);
+        Ind::Ext* e = p->ext(*S);
+        const auto it = e ? e->dtTurns.find(std::make_pair((int)dt::LOW, k)) : decltype(e->dtTurns.end())();
+        CHECK(e && it != e->dtTurns.end() && it->second.marginPct == 50 && it->second.A && it->second.linePx == 27988, "(1.12.0) LOW turn: +50%, sellers out-hit (A), line at the low 6997 (no refill seen)");
+        const std::string tf = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
+        int lines = 0; for (char ch : tf) lines += ch == '\n';
+        CHECK(lines == 1 && tf.compare(0, 2, "T|") == 0, "(1.12.0) one line in the turns file (decided once, not twice)");
+        h.draws.clear(); p->draw();
+        CHECK(text(h, "+50%", 0x22C55E) != nullptr, "(1.12.0) the pane mark +50% in green over the bids' bar");
+        CHECK(readAll(flex + "\\BookFlow\\ES-60-turns-live.txt").size() >= 2, "(1.12.0) the live file is published (N or the forming ?)");
+        { std::ofstream f((flex + "\\DefenseLines.settings-ES.txt").c_str()); f << ss::format(dlset::spec(), [] { ss::Values V = ss::defaults(dlset::spec(), 0); V.v[dlset::K_SHOW_MARKS] = 0; return V; }()); }
+        NOW += 1500; h.draws.clear(); p->draw();
+        CHECK(text(h, "+50%") == nullptr, "(1.12.0) Turn marks off in the shared settings: no pane mark");
+        // a reload (restart): the turn comes back from the file and is never decided again
+        e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb);
+        CHECK(e->dtTurns.count(std::make_pair((int)dt::LOW, k)) == 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.12.0) after a reload: read back, not written twice"); }
     dispose(p);
     CHECK(!mst::read("BOOK", "ESZ6", 60, "test", NOW).ok, "removed: the Market State entry is cleared");
     std::printf("BookFlow host: %d passed, %d failed\n", passes, fails);
