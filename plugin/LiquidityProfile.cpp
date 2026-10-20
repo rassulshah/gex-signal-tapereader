@@ -184,7 +184,7 @@ static int warnBlockH(int font, int rows) { return warnH(font) + std::max(1, row
 // may start above this row. The warning sits under it and the column header under the warning.
 static const int LQ_TITLE_ROW_PX = 3;   // (0.27.1, Rassul 18:57 "should be higher because there is black space") the IRT title strip is above the pane: 20 -> 3 px
 static int warnTop(int paneTop) { return paneTop + LQ_TITLE_ROW_PX; }
-static const int LQ_BIG_W = 64;    // (0.46.0, Rassul 2026-10-19 23:38 "ill keep lmt F and remove the others. build") ONE column, LMT F (was 168: LMT F 52 | MKT 64 | LMT R 52)
+static const int LQ_BIG_W = 64;    // (0.46.0, Rassul 2026-10-19 23:38 "ill keep lmt F and remove the others. build"; 23:46 + the resting-order lines off) ONE column, LMT F (was 168: LMT F 52 | MKT 64 | LMT R 52)
 static const bool LQ_SHOW_MKT = false, LQ_SHOW_LMT_R = false;   // (0.46.0) the MKT and LMT R columns are off (their data is still computed and recorded)
 static const int LQ_BIG_W_168 = 168;   // (0.37.0, Rassul 13:23) three narrow columns LMT F 52 | MKT 64 | LMT R 52 (was 120: LMT 64 | MKT 56); the board's maximum is now 180
 static const int LQ_BIG_W_112 = 112;   // (0.28.0) MKT (left half, 56) + BIG (right half, 56): Rassul 19:55 "build out the mkt column"
@@ -1987,8 +1987,8 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     const long long midT = S.bo.havePx ? S.bo.px : 0;
     const double pxPerTick = std::fabs((double)(yOfPx(midT) - yOfPx(midT + 20))) / 20.0;
     const long long tol = std::max(1LL, (long long)std::ceil(5.0 / std::max(0.01, pxPerTick)));
-    // 1) the live lines
-    for (int s = 0; s < 2; ++s) {
+    // 1) the live lines; (0.46.0, Rassul 23:46 "yes") off with LMT R - they are the same resting-order tracking
+    for (int s = 0; s < 2 && LQ_SHOW_LMT_R; ++s) {
         if (S.bo.live[s] < 0) continue;
         const size_t k = (size_t)S.bo.live[s]; const bol::Line L = S.bo.now(k);
         {   // (0.26.0, Rassul 16:40 audit #3) a chart line only for an order of Bigger (1SD of the big-lot distribution) or more - the same
