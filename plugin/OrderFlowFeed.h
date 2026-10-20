@@ -2155,14 +2155,63 @@ inline bool drawQuestion(cppExtension* x, const PaneGeo& g, const std::string& q
     }
     return true;
 }
-// the info icon's hover: the description tooltip while the mouse is on the icon, gone when it leaves (IRT's own help tip, so it can
-// be larger than the pane). Call from mouse() with the event's pane position; true = shown or hidden now.
-inline bool infoTip(const IconRect& r, bool& on, int h, int v, const char* text) {
+// the info icon's hover: true while the mouse is on the icon. Call from mouse() with the event's pane position; true = it changed (redraw).
+// (1.23.0 / 1.11.0, Rassul 2026-10-20 07:44 "it shows ... one long line, instead of a multiline box") IRT's help tip shows one line,
+// so the description is DRAWN as a box in the pane (drawInfoTip), last, over everything.
+inline bool infoTip(const IconRect& r, bool& on, int h, int v, const char* /*text*/) {
     const bool in = r.has(h, v);
     if (in == on) return false;
-    cppExtension::PNT p; p.set(0, 0.0f); p.h = (short)h; p.v = (short)v;
-    if (in) p.showHelpTip(text); else p.hideHelpTip();
     on = in; return true;
+}
+// the tip box: the text's lines (split at '\n'), the first in bold; as many columns as the pane height needs (a short pane gets a wide
+// box, never cut); it starts at the icon and moves left to stay inside the pane; dark grey with light text, a grey border.
+struct TipCol { size_t from = 0, to = 0; int w = 0; };
+inline std::vector<TipCol> tipColumns(const std::vector<std::string>& lines, const std::vector<int>& widths, int rows) {
+    std::vector<TipCol> cols; if (rows < 1) rows = 1;
+    size_t i = 0;
+    while (i < lines.size()) {
+        while (i < lines.size() && lines[i].empty() && !cols.empty()) ++i;   // no blank line at the top of a column
+        if (i >= lines.size()) break;
+        TipCol c; c.from = i;
+        size_t end = std::min(lines.size(), i + (size_t)rows);
+        if (end < lines.size()) {                                          // break at a blank line when one is in the lower half
+            for (size_t k = end; k > i + (size_t)rows / 2; --k) if (lines[k - 1].empty()) { end = k; break; }
+        }
+        c.to = end; for (size_t k = c.from; k < c.to; ++k) c.w = std::max(c.w, widths[k]);
+        cols.push_back(c); i = end;
+    }
+    return cols;
+}
+static const COLOR C_TIP_BG = 0x00111827, C_TIP_BORDER = 0x009CA3AF, C_TIP_TEXT = 0x00E5E7EB;
+inline void drawInfoTip(cppExtension* x, const PaneGeo& g, const IconRect& icon, const char* text) {
+    if (!text || icon.r <= icon.l) return;
+    std::vector<std::string> lines; { std::string cur; for (const char* p = text; *p; ++p) { if (*p == '\n') { lines.push_back(cur); cur.clear(); } else cur += *p; } lines.push_back(cur); }
+    cppExtension::FONT fb; fb.id = cppExtension::HELVETICA; fb.size = 9; fb.style = cppExtension::BOLD;
+    cppExtension::FONT fp = fb; fp.style = cppExtension::PLAIN;
+    std::vector<int> w(lines.size(), 0);
+    for (size_t k = 0; k < lines.size(); ++k) { x->setFont(k == 0 ? fb : fp); w[k] = lines[k].empty() ? 0 : (int)x->getTextWidth(lines[k].c_str(), -1); }
+    const int lh = 13, pad = 6, gap = 18;
+    const int top = icon.b + 3, avail = g.bottom - 2 - top;
+    const int rows = std::max(1, (avail - 2 * pad) / lh);
+    const std::vector<TipCol> cols = tipColumns(lines, w, rows);
+    int boxW = 2 * pad, used = 0;
+    for (size_t c = 0; c < cols.size(); ++c) { boxW += cols[c].w + (c ? gap : 0); used = std::max(used, (int)(cols[c].to - cols[c].from)); }
+    const int boxH = 2 * pad + used * lh;
+    int l = icon.l; if (l + boxW > g.right - 2) l = std::max(g.left + 2, g.right - 2 - boxW);
+    const int r = std::min(g.right - 2, l + boxW), b = std::min(g.bottom - 2, top + boxH);
+    x->setPen(C_TIP_BORDER, 1, P_SOLID);
+    fillRect(l, top, r, b, C_TIP_BORDER, C_TIP_BG, 1);
+    x->setTextColor(C_TIP_TEXT);
+    int cx = l + pad;
+    for (size_t c = 0; c < cols.size(); ++c) {
+        int y = top + pad;
+        for (size_t k = cols[c].from; k < cols[c].to; ++k, y += lh) {
+            if (lines[k].empty()) continue;
+            x->setFont(k == 0 ? fb : fp);
+            cppExtension::RCT t; t.set(coord(cx), coord(y), coord(std::min(r - 2, cx + cols[c].w + 4)), coord(y + lh)); t.drawText(lines[k].c_str(), false, false);
+        }
+        cx += cols[c].w + gap;
+    }
 }
 // ---- (Aggression 1.16.0, Rassul 2026-10-19 17:04 "i want it to show both bid and ask and i want the selling side to be on the bottom";
 // mockup bidask-mirror-mockup.png, "build it already" 17:42) MIRROR BARS: every candle shows BOTH sides - buyers (side 1, offers lifted)

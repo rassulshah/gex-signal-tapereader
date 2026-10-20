@@ -91,9 +91,16 @@ int main() {
             CHECK(text(h, "i", 0x00000000) != nullptr, "(1.22.0) the icon's black i");
             CHECK(std::string(bas::QUESTION) == "Is the effort rewarded?", "(1.22.0) the question text");
             off::IconRect r; r.l = 100; r.t = 2; r.r = 112; r.b = 14; bool on = false; const size_t n0 = h.draws.size();
-            CHECK(off::infoTip(r, on, 106, 8, bas::INFO_TIP) && on && h.draws.size() == n0 + 1 && h.draws.back().type == "tip" && h.draws.back().text.find("Example - ES 8:18 PM") != std::string::npos, "(1.22.0) mouse on the icon: the description tip");
-            CHECK(!off::infoTip(r, on, 107, 9, bas::INFO_TIP) && h.draws.size() == n0 + 1, "(1.22.0) still on it: shown once, not again");
-            CHECK(off::infoTip(r, on, 300, 80, bas::INFO_TIP) && !on && h.draws.back().type == "tipoff", "(1.22.0) mouse leaves: the tip goes");
+            CHECK(off::infoTip(r, on, 106, 8, bas::INFO_TIP) && on, "(1.22.0) mouse on the icon: the tip turns on");
+            CHECK(!off::infoTip(r, on, 107, 9, bas::INFO_TIP) && on, "(1.22.0) still on it: no change");
+            {   off::PaneGeo pg; pg.left = 0; pg.right = 1200; pg.top = 0; pg.bottom = 150; pg.edge = 1100;
+                off::drawInfoTip(p, pg, r, bas::INFO_TIP);
+                int lines = 0; bool ex = false; int maxY = 0, minY = 99999, cols = 0; std::set<int> xs;
+                for (size_t k = n0; k < h.draws.size(); ++k) if (h.draws[k].type == "text") { ++lines; if (h.draws[k].text.find("Example - ES 8:18 PM") != std::string::npos) ex = true; maxY = std::max(maxY, h.draws[k].b); minY = std::min(minY, h.draws[k].y); xs.insert(h.draws[k].x); }
+                cols = (int)xs.size();
+                CHECK(lines >= 12 && ex, "(1.23.0) the tip is drawn as many lines (not one long line), the example included");
+                CHECK(maxY <= 148 && cols >= 2, "(1.23.0) a 150 px pane: the lines fit in the pane, in 2+ columns"); }
+            CHECK(off::infoTip(r, on, 300, 80, bas::INFO_TIP) && !on, "(1.22.0) mouse leaves: the tip goes");
             h.draws.erase(h.draws.begin() + (long)n0, h.draws.end()); }
         CHECK(text(h, "4.3", off::C_LBL_RATIO) != nullptr, "(1.19.0) closed candle: its Attack Effort label 4.3 (52 total lots sold vs 12 normal; yellow, no x)");
         CHECK(pTexts(h) == 0, "no \"p \" pace prefix");

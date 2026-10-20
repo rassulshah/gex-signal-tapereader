@@ -172,7 +172,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.22.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.23.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -308,6 +308,38 @@ struct BASState {
     std::map<long long, blt::Mark> blMarks;
     std::string blSession; std::map<long long, std::string> blRows; std::map<long long, blt::Mark> blFile; std::string blRowsWritten; long long blRejected = 0;
 };
+// (1.23.0, Rassul 2026-10-20 07:43 "do it") ORDER-BY-ORDER TOTALS: each side's aggressive lots from the exchange's order feed (the
+// aggressor order's own fills: bid hit = sellers, offer lifted = buyers) - what every tested turn rate was measured on (Databento MBO).
+// A decided candle: its record (live then, or read back after a restart); a candle still collecting: its open accumulator. No order
+// data for that candle (before the feed was live, a partial first candle, a restart gap) = false: the caller keeps IRT's bid / ask volume.
+static const bool BAS_MBO_TOTALS = false;   // (1.23.0) OFF until after the 2026-10-20 close (Rassul 08:01: ship only the info-box crash fix pre-market)
+static bool mboTotOf(const BASState& S, long long t, long long out[2]) {
+    if (!BAS_MBO_TOTALS) return false;
+    std::map<long long, BasFin>::const_iterator f = S.fin.find(t);
+    if (f != S.fin.end()) {
+        if (!f->second.dbo || f->second.r.partial) return false;
+        const long long b = f->second.r.aggrC[off::BID], a = f->second.r.aggrC[off::ASK];
+        if (b + a <= 0) return false;
+        out[0] = b; out[1] = a; return true;
+    }
+    if (!(S.firstBarKey > 0 && t > S.firstBarKey)) return false;             // the first candle after the feed opened is partial
+    std::map<long long, off::Acc>::const_iterator ac = S.accs.find(t);
+    if (ac == S.accs.end()) return false;
+    long long b = 0, a = 0;
+    for (std::unordered_map<long long, off::Aggr>::const_iterator g = ac->second.aggr.begin(); g != ac->second.aggr.end(); ++g) {
+        if (g->second.side == off::BID) b += g->second.size; else if (g->second.side == off::ASK) a += g->second.size;
+    }
+    if (b + a <= 0) return false;
+    out[0] = b; out[1] = a; return true;
+}
+// a copy of the bar's IRT numbers with the totals replaced by the order-by-order ones when this candle has them; src: true = order feed
+static bas::BarMax withMbo(const BASState& S, long long t, const bas::BarMax& m, bool* src = nullptr) {
+    bas::BarMax c = m; long long o[2] = {0, 0};
+    const bool ok = mboTotOf(S, t, o);
+    if (ok) { c.totBid = o[0]; c.totAsk = o[1]; }
+    if (src) *src = ok;
+    return c;
+}
 // (1.6.0, approval list s.7 MARK ?) the options volume is unsigned: who bought / sold and opening / closing are unknown
 static std::string unsignedHitLine(const ofo::Snap& s, int gate) {
     if (!s.ok || !s.hit.ok || gate == ofo::GATE_OFF) return std::string();
@@ -472,7 +504,7 @@ int BidAskStats::mouse(RTX_EVENT* e) {
         if (S->hoverWnds.size() > MAX_HOVER_WNDS) S->hoverWnds.erase(S->hoverWnds.begin());
     }
     {   int cx = 0, cy = 0; const bool ok = pc::cursorPos(cx, cy); S->cur.onEvent(w, ok, cx, cy, e->v.mouse.h, e->v.mouse.v); }   // (1.14.1) where the pane is
-    off::infoTip(S->infoIcon, S->infoTipOn, e->v.mouse.h, e->v.mouse.v, bas::INFO_TIP);   // (1.22.0) the info icon's description
+    if (off::infoTip(S->infoIcon, S->infoTipOn, e->v.mouse.h, e->v.mouse.v, bas::INFO_TIP)) invalidateChart(false);   // (1.22.0) the info icon's description; (1.23.0) drawn as a box
     publishBoard(*S, e->v.mouse.bar);                                    // (1.5.1) other panes may follow this candle (this box no longer follows theirs)
     const int hi = S->cur.eventInside(e->v.mouse.h, e->v.mouse.v) ? bas::hoverIndex(e->v.mouse.bar, getBarCount()) : -1;
     if (S->hover.set(hi)) { ++S->redraws; invalidateChart(false); }      // only on a change
@@ -497,6 +529,7 @@ int BidAskStats::scale(int iStartBar, int iEndBar, double* dMin, double* dMax) {
                 if (i == last) { if (S->liveTime == bt && S->live.ok) bm = &S->live; }
                 else { std::map<long long, bas::Stat>::const_iterator it = S->ser.bars.find(bt); if (it != S->ser.bars.end() && it->second.m.ok) bm = &it->second.m; }
                 if (!bm) continue;
+                const bas::BarMax bmo = withMbo(*S, bt, *bm); bm = &bmo;     // (1.23.0) the axis on the same totals as the bars
                 top = std::max(top, std::max(bm->totBid, bm->totAsk)); up = std::max(up, bm->totAsk); down = std::max(down, bm->totBid);   // (1.19.0) total lots
                 mags.push_back(bm->totBid); mags.push_back(bm->totAsk);
             }
@@ -1231,9 +1264,10 @@ std::array<er::Side, 2> BidAskStats::erSides(BASState& S, int ci, RTARRAYI& time
     if (ci == last) { if (S.liveTime == t && S.live.ok) bm = &S.live; }
     else { std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(t); if (it != S.ser.bars.end() && it->second.m.ok) bm = &it->second.m; }
     if (!bm) return out;
+    const bas::BarMax bmo = withMbo(S, t, *bm); bm = &bmo;               // (1.23.0) order-by-order totals when the candle has them
     std::vector<long long> pb, pa;
     std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.lower_bound(t);
-    while (it != S.ser.bars.begin() && (int)pb.size() < er::EFFORT_BARS) { --it; if (it->second.m.ok) { pb.push_back(it->second.m.totBid); pa.push_back(it->second.m.totAsk); } }
+    while (it != S.ser.bars.begin() && (int)pb.size() < er::EFFORT_BARS) { --it; if (it->second.m.ok) { const bas::BarMax pm = withMbo(S, it->first, it->second.m); pb.push_back(pm.totBid); pa.push_back(pm.totAsk); } }
     RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
     if (op.count <= ci || hi.count <= ci || lo.count <= ci || cl.count <= ci) return out;
     const long long tot[2] = { bm->totBid, bm->totAsk };
@@ -1268,11 +1302,16 @@ void BidAskStats::render(BASState& S) {
     }
     int slot = (int)getPixelsPerBar();
     if (slot <= 0 || slot > 400) slot = v1 > v0 ? std::max(2, std::abs(xOf(v1) - xOf(v1 - 1))) : 8;
+    std::map<int, bas::BarMax> mboCache;                                  // (1.23.0) the bars' numbers with order-by-order totals, this draw
     auto maxOfBar = [&](int i) -> const bas::BarMax* {
         const long long bt = (long long)times[i];
-        if (i == last) return S.liveTime == bt && S.live.ok ? &S.live : nullptr;
-        std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(bt);
-        return it != S.ser.bars.end() && it->second.m.ok ? &it->second.m : nullptr;
+        const bas::BarMax* m = nullptr;
+        if (i == last) m = S.liveTime == bt && S.live.ok ? &S.live : nullptr;
+        else { std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(bt); m = it != S.ser.bars.end() && it->second.m.ok ? &it->second.m : nullptr; }
+        if (!m) return nullptr;
+        std::map<int, bas::BarMax>::iterator c = mboCache.find(i);
+        if (c == mboCache.end()) c = mboCache.insert(std::make_pair(i, withMbo(S, bt, *m))).first;
+        return &c->second;
     };
     long long top = 0, upMax = 0, downMax = 0;
     std::vector<long long> mags;
@@ -1335,7 +1374,11 @@ void BidAskStats::render(BASState& S) {
             std::vector<off::InfoRow> kept;
             for (size_t k = 0; k < info.rows.size(); ++k) if (info.rows[k].label == "Lots") {   // (1.19.0, Rassul 19:25) Pace removed (unproven)
                 off::InfoRow r = info.rows[k];                               // (1.19.0) Lots = the side's TOTAL aggressive lots (the bar), its ratio is Attack Effort
-                if (bst && bst->m.ok) { r.v[0] = er::lotsText(bst->m.totBid); r.v[1] = er::lotsText(bst->m.totAsk); }
+                {   const int lc = liveBox ? last : mb; const bas::BarMax* lm = lc >= 0 && lc <= last ? maxOfBar(lc) : nullptr;   // (1.23.0) the same candle and totals as Effort / Reward
+                    bool src = false; if (lm) { long long o[2]; src = mboTotOf(S, (long long)times[lc], o); }
+                    if (lm) { r.v[0] = er::lotsText(lm->totBid); r.v[1] = er::lotsText(lm->totAsk); }
+                    if (lm && !src && BAS_MBO_TOTALS) r.label = "Lots (IRT)";                 // no order data for this candle: IRT's bid / ask volume
+                }
                 kept.push_back(r);
             }
             info.rows.swap(kept);
@@ -1434,7 +1477,8 @@ void BidAskStats::render(BASState& S) {
     const COLOR vcol[2] = { C_ASK, C_BID };                                // (1.21.0) column 1 Buyers green, column 2 Sellers red - headings and values (1.20.0 had the headings swapped)
     off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
     br::draw(this, P, info, rp, rd);                                      // (1.15.0) the Read word + lines over its rows
-    off::drawQuestion(this, g, bas::QUESTION, P.ok ? &P.box : nullptr, &S.infoIcon);   // (1.22.0) + the info icon   // (1.18.0, Rassul 19:09) the question the pane answers
+    off::drawQuestion(this, g, bas::QUESTION, P.ok ? &P.box : nullptr, &S.infoIcon);   // (1.22.0) + the info icon
+    if (S.infoTipOn) off::drawInfoTip(this, g, S.infoIcon, bas::INFO_TIP);  // (1.23.0) the description box while the mouse is on the icon (last: over everything)   // (1.18.0, Rassul 19:09) the question the pane answers
     (void)hov;   // (1.8.1, Rassul 18:57 "get rid of the hoverover") no bar hover, no read-line hover
 }
 
@@ -1444,6 +1488,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.22.0");   // BAS_VERSION
+    p->setVersion("1.23.0");   // BAS_VERSION
     return p;
 }
