@@ -455,6 +455,44 @@ public:
     SizeDist aggrBar, restBar;                         // (1.3.0) this session's per-candle, per-side BIGGEST aggressor / resting (add or pull) order
     long long events = 0, garbage = 0, unknownDel = 0, unknownMod = 0, unknownFill = 0, dupNew = 0, bookDrops = 0, bookResets = 0;
     long long perAction[4] = {0, 0, 0, 0};
+    // (DefenseTurn 1.1.0, 2026-10-20 13:54 CT Rassul "okay build" - the gray E line) EXHAUSTION AT THE PRICE, per fresh-price touch: a fill at a
+    // price untraded for 5 min (that side) starts a touch; the lots hit there in seconds 0-20 and 20-60 and the resting size at the touch /
+    // at 60 s decide it once: ATTACK DIED = (lots/s 20-60) / (lots/s 0-20 + 0.05) <= the market's median slowdown AND >= half the size stayed.
+    struct Touch { int s = BID; Tick px = 0; long long key = 0, t0 = 0, rest0 = 0, h1 = 0, h2 = 0; bool done = false, ad = false; };
+    std::vector<Touch> touches;                       // newest last; bounded
+    std::unordered_map<Tick, long long> lastTradeS[2]; // price -> last fill second (that resting side)
+    long long curKey = 0, lastS = 0;                   // the candle the event belongs to (set by the caller); the newest event second
+    double adMedian = 0.1;                             // the market's median slowdown (set by the caller; DefenseTurn.h table)
+    void touchFill(int s, Tick px, long long size, long long ts, long long restBefore) {
+        if (ts <= 0) return;
+        if (ts > lastS) lastS = ts;
+        std::unordered_map<Tick, long long>::iterator lt = lastTradeS[s].find(px);
+        const bool fresh = lt == lastTradeS[s].end() || ts - lt->second > 300;
+        lastTradeS[s][px] = ts;
+        if (lastTradeS[s].size() > 20000) { for (std::unordered_map<Tick, long long>::iterator q = lastTradeS[s].begin(); q != lastTradeS[s].end();) if (ts - q->second > 600) q = lastTradeS[s].erase(q); else ++q; }
+        if (fresh) { Touch t; t.s = s; t.px = px; t.key = curKey; t.t0 = ts; t.rest0 = restBefore; touches.push_back(t); }
+        for (size_t k = touches.size(); k-- > 0;) {
+            Touch& t = touches[k];
+            if (ts - t.t0 > 600) break;                                        // older touches are all finished
+            if (t.done || t.s != s || t.px != px) continue;
+            const long long dt = ts - t.t0;
+            if (dt < 20) t.h1 += size; else if (dt < 60) t.h2 += size;
+        }
+        finishTouches(ts);
+        if (touches.size() > 3000) touches.erase(touches.begin(), touches.begin() + 1000);
+    }
+    void finishTouches(long long nowS) {
+        if (nowS > lastS) lastS = nowS;
+        for (size_t k = touches.size(); k-- > 0;) {
+            Touch& t = touches[k];
+            if (lastS - t.t0 > 900) break;
+            if (t.done || lastS - t.t0 < 60) continue;
+            const double decel = ((double)t.h2 / 40.0) / ((double)t.h1 / 20.0 + 0.05);
+            const long long left = restAt(t.s, t.px);
+            t.ad = t.rest0 > 0 && decel <= adMedian + 1e-12 && left * 2 >= t.rest0;
+            t.done = true;
+        }
+    }
 
     bool isNear(Tick px) const { return haveRef && near > 0 && std::llabs(px - ref) <= near; }
     void fallbackRef(Tick px, long long nowMs) {
@@ -573,7 +611,8 @@ public:
                 if (a.tFirst < 0) { a.tFirst = ts; }
                 a.tLast = ts;
                 if (a.fillLo == 0 || e.px < a.fillLo) { a.fillLo = e.px; a.tLo = ts; a.cumLo[0] = a.hitC[0]; a.cumLo[1] = a.hitC[1]; }
-                if (a.fillHi == 0 || e.px > a.fillHi) { a.fillHi = e.px; a.tHi = ts; a.cumHi[0] = a.hitC[0]; a.cumHi[1] = a.hitC[1]; } }
+                if (a.fillHi == 0 || e.px > a.fillHi) { a.fillHi = e.px; a.tHi = ts; a.cumHi[0] = a.hitC[0]; a.cumHi[1] = a.hitC[1]; }
+                if (e.size > 0) touchFill(s, e.px, e.size, ts, restAt(s, e.px)); }   // (DefenseTurn 1.1.0) before the book takes this fill
             if (it != book.end() && it->second.known) {
                 Ord& o = it->second;
                 const long long take = e.size < o.size ? e.size : o.size;
@@ -2960,7 +2999,7 @@ private:
             if (S.scratch.events > 20000) S.scratch = Acc();
             return;
         }
-        S.e.apply(S.accs[key], x);
+        S.e.curKey = key; S.e.apply(S.accs[key], x);
     }
     std::string levelAt(S_& S, long long key) {
         std::map<long long, int>::const_iterator i = S.barEnds.find(key);

@@ -21,7 +21,11 @@
 #include <cmath>
 
 namespace dt {
-static const char* const VERSION = "1.0.1";
+static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
+// the market's median slowdown at a fresh-price touch ((lots/s 20-60 s) / (lots/s 0-20 s + 0.05)), Databento MBO Oct 5 / 7 / 9 (wall4.py)
+inline double adMedianOf(const std::string& m) {
+    return m == "ES" ? 0.095 : m == "NQ" ? 0.029 : m == "CL" ? 0.057 : m == "GC" ? 0.0 : m == "HG" ? 0.0 : m == "NG" ? 0.032 : (m == "EU" || m == "6E") ? 0.067 : 0.05;
+}
 static const int NEAR_TICKS = 8;                 // 2 points in ES: how far from the extreme the refill price may be
 
 struct Candle {                                  // one candle (prices in ticks)
@@ -115,13 +119,15 @@ inline std::string tags(const Turn& t) { std::string s = "R"; if (SHOW_E && t.E)
 inline std::string marginText(int m) { return m >= 999 ? std::string("+999%") : "+" + std::to_string(m) + "%"; }
 
 // ---- the turns file (written by lsBookFlow, read by lsDefenseLines) --------------------------------------------------------------------
-// one line per decided turn: T|bar_key|side|pivot_px|line_px|margin|E|A|def_net|att_net|tick  (prices as doubles, tick = tick size)
+// one line per decided turn: T|bar_key|side|pivot_px|line_px|margin|E|A|def_net|att_net|tick|pivot_key  (prices as doubles, tick = tick size;
+// pivot_key since 1.1.0 - older 10-field lines read pivot_key = 0)
+// (1.1.0) one line per exhaustion decided for a turn: X|turn_bar_key|side|price|tick|bar_key_where_it_traded
 // live file: L|bar_key|side|pivot_px|line_px|margin|E|A|def_net|att_net|tick  or "N" (no "?" now)
-struct Line { char kind = 'T'; long long t = 0; int side = -1; double pivotPx = 0, linePx = 0, tick = 0; int margin = 0; bool E = false, A = false; long long defNet = 0, attNet = 0; };
+struct Line { char kind = 'T'; long long t = 0; int side = -1; double pivotPx = 0, linePx = 0, tick = 0; int margin = 0; bool E = false, A = false; long long defNet = 0, attNet = 0, pivotT = 0; };
 inline std::string lineOf(char kind, const Turn& t, double tick) {
     std::ostringstream o; o.precision(12);
     o << kind << '|' << t.t << '|' << t.side << '|' << (double)t.pivotPx * tick << '|' << (double)t.linePx * tick << '|' << t.marginPct << '|'
-      << (t.E ? 1 : 0) << '|' << (t.A ? 1 : 0) << '|' << t.defNet << '|' << t.attNet << '|' << tick;
+      << (t.E ? 1 : 0) << '|' << (t.A ? 1 : 0) << '|' << t.defNet << '|' << t.attNet << '|' << tick << '|' << t.pivotT;
     return o.str();
 }
 inline bool parseLine(const std::string& s, Line& L) {
@@ -129,7 +135,7 @@ inline bool parseLine(const std::string& s, Line& L) {
     std::vector<std::string> f; std::string cur;
     for (size_t k = 2; k < s.size(); ++k) { const char ch = s[k]; if (ch == '\r') continue; if (ch == '|') { f.push_back(cur); cur.clear(); } else cur += ch; }
     f.push_back(cur);
-    if (f.size() != 10) return false;
+    if (f.size() != 10 && f.size() != 11) return false;
     char* e = nullptr;
     L.kind = s[0];
     L.t = std::strtoll(f[0].c_str(), &e, 10); if (*e || L.t <= 0) return false;
@@ -141,7 +147,40 @@ inline bool parseLine(const std::string& s, Line& L) {
     L.defNet = std::strtoll(f[7].c_str(), &e, 10); if (*e) return false;
     L.attNet = std::strtoll(f[8].c_str(), &e, 10); if (*e) return false;
     L.tick = std::strtod(f[9].c_str(), &e); if (*e || !(L.tick > 0)) return false;
+    L.pivotT = 0; if (f.size() == 11) { L.pivotT = std::strtoll(f[10].c_str(), &e, 10); if (*e || L.pivotT < 0) return false; }
     return true;
+}
+// (1.1.0) the exhaustion line of a turn
+struct XLine { long long t = 0, at = 0; int side = -1; double px = 0, tick = 0; };
+inline std::string xLineOf(long long turnT, int side, long long pxTicks, double tick, long long atKey) {
+    std::ostringstream o; o.precision(12); o << "X|" << turnT << '|' << side << '|' << (double)pxTicks * tick << '|' << tick << '|' << atKey; return o.str();
+}
+inline bool parseX(const std::string& s, XLine& X) {
+    if (s.size() < 3 || s[0] != 'X' || s[1] != '|') return false;
+    std::vector<std::string> f; std::string cur;
+    for (size_t k = 2; k < s.size(); ++k) { const char ch = s[k]; if (ch == '\r') continue; if (ch == '|') { f.push_back(cur); cur.clear(); } else cur += ch; }
+    f.push_back(cur);
+    if (f.size() != 5) return false;
+    char* e = nullptr;
+    X.t = std::strtoll(f[0].c_str(), &e, 10); if (*e || X.t <= 0) return false;
+    X.side = (int)std::strtol(f[1].c_str(), &e, 10); if (*e || (X.side != LOW && X.side != HIGH)) return false;
+    X.px = std::strtod(f[2].c_str(), &e); if (*e || !(X.px > 0)) return false;
+    X.tick = std::strtod(f[3].c_str(), &e); if (*e || !(X.tick > 0)) return false;
+    X.at = std::strtoll(f[4].c_str(), &e, 10); if (*e || X.at <= 0) return false;
+    return true;
+}
+// (1.1.0) the exhaustion price of a turn from the finished touches: the defending side's touches on the pivot candle or the turn candle,
+// within NEAR_TICKS of the pivot extreme, where the attack died; the one closest to the extreme. false = none.
+struct TouchV { int s = 0; long long px = 0, key = 0; bool ad = false; };
+inline bool exhaustionOf(const std::vector<TouchV>& T, int side, long long pivotT, long long turnT, long long pivotPx, long long& px, long long& atKey) {
+    const int rs = side == HIGH ? 1 : 0;                                  // the resting side the attackers hit (offers at a high)
+    bool found = false;
+    for (size_t k = 0; k < T.size(); ++k) {
+        const TouchV& t = T[k];
+        if (!t.ad || t.s != rs || (t.key != pivotT && t.key != turnT) || std::llabs(t.px - pivotPx) > NEAR_TICKS) continue;
+        if (!found || (side == HIGH ? t.px > px : t.px < px)) { px = t.px; atKey = t.key; found = true; }
+    }
+    return found;
 }
 inline std::string tagsOf(const Line& L) { std::string s = "R"; if (SHOW_E && L.E) s += " E"; if (L.A) s += " A"; return s + " ?"; }
 
@@ -149,6 +188,17 @@ inline std::string tagsOf(const Line& L) { std::string s = "R"; if (SHOW_E && L.
 // from the turn candle forward: ends at the first candle that CLOSES through the line (broken, drawn faded with x), when the next line
 // starts, or after 15 minutes - whichever comes first. closes[k] / times[k] = the candles after the turn candle (k = 0 is the next one).
 struct Life { int bars = 0; bool broken = false; };
+// (1.1.0, Rassul 13:48 "no more than 3 candles or till the next lines") from the candle the line refers to: at most maxBars candles in all
+// (that candle + the ones after it), until the next line starts, or a close through it. closes / times = the candles AFTER the start candle.
+inline Life lifeBars(int side, double px, const std::vector<double>& closes, const std::vector<long long>& times, long long nextLineT, int maxBars) {
+    Life L;
+    for (size_t k = 0; k < closes.size() && k < times.size() && (int)k + 1 < maxBars; ++k) {
+        if (nextLineT > 0 && times[k] >= nextLineT) break;
+        L.bars = (int)k + 1;
+        if (side == HIGH ? closes[k] > px : closes[k] < px) { L.broken = true; break; }
+    }
+    return L;
+}
 inline Life lifeOf(int side, double linePx, long long turnT, const std::vector<double>& closes, const std::vector<long long>& times, long long nextLineT, int maxSec) {
     Life L;
     for (size_t k = 0; k < closes.size() && k < times.size(); ++k) {

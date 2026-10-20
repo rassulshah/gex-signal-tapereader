@@ -60,6 +60,22 @@ int main() {
     CHECK(lf.bars == 5 && !lf.broken, "15 minutes = 5 candles");
     lf = dt::lifeOf(dt::HIGH, 100, 0, cl, tm, 360, 900); CHECK(lf.bars == 1 && !lf.broken, "ends when the next line starts");
     lf = dt::lifeOf(dt::LOW, 98.5, 0, cl, tm, 0, 900); CHECK(lf.bars == 3 && lf.broken, "a low line: closed below on the 3rd candle");
+    // (1.1.0) the pivot key on T lines (old 10-field lines still read), X lines, the exhaustion choice, the 3-candle life, the medians
+    {   dt::Turn q2; q2.t = 3875279400LL; q2.pivotT = 3875279220LL; q2.side = dt::LOW; q2.pivotPx = 27996; q2.linePx = 27997; dt::Line L2;
+        CHECK(dt::parseLine(dt::lineOf('T', q2, 0.25), L2) && L2.pivotT == 3875279220LL && L2.linePx == 6999.25, "1.1.0 T line carries the pivot key");
+        CHECK(dt::parseLine("T|5|0|7000|7000|10|0|0|5|3|0.25", L2) && L2.pivotT == 0, "an old 10-field T line still reads (pivot key 0)");
+        dt::XLine X; CHECK(dt::parseX(dt::xLineOf(3875279400LL, dt::LOW, 27995, 0.25, 3875279220LL), X) && X.t == 3875279400LL && X.px == 6998.75 && X.at == 3875279220LL && X.side == dt::LOW, "X line round trip");
+        CHECK(!dt::parseX("X|1|0|7000", X) && !dt::parseX("T|1|0|7000|0.25|1", X), "garbage X lines refused");
+        std::vector<dt::TouchV> T; auto add = [&](int s_, long long px, long long key, bool ad) { dt::TouchV v; v.s = s_; v.px = px; v.key = key; v.ad = ad; T.push_back(v); };
+        add(0, 27997, 10, true); add(0, 27995, 11, true); add(0, 27994, 11, false); add(0, 27990, 9, true); add(1, 27993, 11, true); add(0, 27980, 11, true);
+        long long px = 0, at = 0;
+        CHECK(dt::exhaustionOf(T, dt::LOW, 10, 11, 27994, px, at) && px == 27995 && at == 11, "low: the bid touch nearest the low where the attack died (not the non-AD one, not other candles / offers / 14 ticks away)");
+        T.clear(); add(0, 27997, 12, true); CHECK(!dt::exhaustionOf(T, dt::LOW, 10, 11, 27994, px, at), "a touch on another candle: none");
+        T.clear(); add(1, 28010, 10, true); add(1, 28012, 11, true); CHECK(dt::exhaustionOf(T, dt::HIGH, 10, 11, 28012, px, at) && px == 28012, "high: the offer touch nearest the high");
+        dt::Life lb = dt::lifeBars(dt::HIGH, 100, std::vector<double>{99, 99, 99, 99}, std::vector<long long>{1, 2, 3, 4}, 0, 3); CHECK(lb.bars == 2 && !lb.broken, "3 candles: the start + 2 after");
+        lb = dt::lifeBars(dt::HIGH, 100, std::vector<double>{101, 99}, std::vector<long long>{1, 2}, 0, 3); CHECK(lb.bars == 1 && lb.broken, "closed through on the next candle");
+        lb = dt::lifeBars(dt::LOW, 100, std::vector<double>{101, 101}, std::vector<long long>{5, 6}, 6, 3); CHECK(lb.bars == 1 && !lb.broken, "ends at the next line");
+        CHECK(dt::adMedianOf("ES") == 0.095 && dt::adMedianOf("GC") == 0.0 && dt::adMedianOf("6E") == 0.067 && dt::adMedianOf("ZZ") == 0.05, "medians per market"); }
     printf("DefenseTurn: %d passed, %d failed\n", p, f);
     return f ? 1 : 0;
 }

@@ -316,6 +316,31 @@ int main() {
         // a reload (restart): the turn comes back from the file and is never decided again
         e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb);
         CHECK(e->dtTurns.count(std::make_pair((int)dt::LOW, k)) == 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.12.0) after a reload: read back, not written twice"); }
+    {   // (1.13.0) the touch rule in the engine: 40 lots hit at 7000.00 in the first 20 s, 2 in 20-60 s, 60 of 80 resting lots stay -> attack died
+        off::Engine g; g.adMedian = 0.095; g.curKey = 77; g.restAdd(off::BID, 28000, 80);
+        g.touchFill(off::BID, 28000, 30, 1000, 80); g.restAdd(off::BID, 28000, -30);
+        g.touchFill(off::BID, 28000, 10, 1010, 50); g.restAdd(off::BID, 28000, -10); g.restAdd(off::BID, 28000, 20);
+        g.touchFill(off::BID, 28000, 2, 1030, 60); g.restAdd(off::BID, 28000, -2);
+        CHECK(g.touches.size() == 1 && !g.touches[0].done && g.touches[0].h1 == 40 && g.touches[0].h2 == 2 && g.touches[0].key == 77, "(1.13.0) one fresh touch, 40 lots in 0-20 s, 2 in 20-60 s");
+        g.touchFill(off::BID, 27999, 1, 1061, 5);
+        CHECK(g.touches[0].done && g.touches[0].ad && g.touches.size() == 2, "(1.13.0) finished at 60 s: slowed (0.05 / 2.05 = 0.02 <= 0.095) and 58 of 80 stayed -> attack died; a new touch at 6999.75");
+        off::Engine q; q.adMedian = 0.095; q.restAdd(off::BID, 28000, 80);
+        q.touchFill(off::BID, 28000, 10, 1000, 80); q.restAdd(off::BID, 28000, -70);
+        q.finishTouches(1060); CHECK(q.touches[0].done && !q.touches[0].ad, "(1.13.0) 10 of 80 left: the defenders pulled / were eaten -> not exhaustion");
+        q.touchFill(off::BID, 28000, 5, 1100, 10); CHECK(q.touches.size() == 1, "(1.13.0) the same price traded again within 5 min: not a fresh touch"); }
+    {   // (1.13.0) checkX: the LOW turn decided above gets its exhaustion line once the touches on its pivot / turn candle are finished
+        const long long k = S->ser.bars.rbegin()->first; Ind::Ext* e = p->ext(*S); const dt::Turn& t = e->dtTurns[std::make_pair((int)dt::LOW, k)];
+        e->dtPendX.clear(); e->dtXDone.clear(); e->dtPendX.push_back(std::make_pair((int)dt::LOW, k));
+        S->e.touches.clear(); off::Engine::Touch a1; a1.s = off::BID; a1.px = 27989; a1.key = t.pivotT; a1.t0 = 5000; a1.done = false;
+        S->e.touches.push_back(a1); S->e.lastS = 5030;
+        p->checkX(*S);
+        CHECK(e->dtPendX.size() == 1 && e->dtXWritten == 0, "(1.13.0) a touch on the pivot candle still running: waiting");
+        S->e.touches[0].done = true; S->e.touches[0].ad = true; S->e.lastS = 5070;
+        off::Engine::Touch a2 = a1; a2.px = 27988; a2.done = true; a2.ad = false; S->e.touches.push_back(a2);
+        p->checkX(*S);
+        const std::string tf2 = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
+        CHECK(e->dtPendX.empty() && e->dtXWritten == 1 && tf2.find("X|" + std::to_string(k) + "|0|6997.25|") != std::string::npos, "(1.13.0) decided once: X line at 6997.25 (the touch where the attack died, not the one where it did not)");
+        p->checkX(*S); CHECK(e->dtXWritten == 1, "(1.13.0) never written twice"); }
     dispose(p);
     CHECK(!mst::read("BOOK", "ESZ6", 60, "test", NOW).ok, "removed: the Market State entry is cleared");
     std::printf("BookFlow host: %d passed, %d failed\n", passes, fails);
