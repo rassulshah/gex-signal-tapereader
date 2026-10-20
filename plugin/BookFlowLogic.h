@@ -378,11 +378,10 @@ inline bool refillRead(const off::Rec& r, const std::string& mkt, const Spot& sp
 // ---- (1.14.0, Rassul 2026-10-20 09:59 "lets do it") the EARLY-WARNING READ while the candle forms, at a FRESH price (untraded on that side
 // for 5 min - the engine's touch tracker). Text only, never a mark; the normal Read returns once the candle closes. WATCH (defenders'
 // colour) needs all three: (1) the attack SLOWING at that price after its first 20 s (lots per second in 20 s+ vs the first 20 s <= the
-// market's median slowdown, the exhaustion rule) or stopped; (2) the defending side's Refill Effort so far this candle >= 1.5x the other
+// market's median slowdown, the exhaustion rule) or stopped; (2) the defending side's Refill Effort so far this candle BIGGER than the other
 // side's; (3) a STRONG refill at the hit prices (the market's Refilled cut-offs). CAUTION (the other colour): the other side's Refill
-// Effort >= 1.5x the defenders' - the level is being hit while the other side stacks. Both carry "?" (unproven; scored nightly).
+// Effort bigger than the defenders' (Rassul 15:33: 'just greater than', both reads; was 1.5x) - the level is being hit while the other side stacks. Both carry "?" (unproven; scored nightly).
 struct EwTouch { bool ok = false; int s = BID; double px = 0; long long elapsed = 0, h1 = 0, h2 = 0; };
-static const double EW_MORE = 1.5;
 inline std::string ewPx(double px, double tick) {
     int d = 0; for (double t = tick; d < 6 && std::fabs(t - std::floor(t + 1e-9)) > 1e-9; t *= 10) ++d;
     char b[40]; std::snprintf(b, sizeof(b), "%.*f", d, px); return b;
@@ -393,7 +392,7 @@ inline bool earlyRead(const EwTouch& t, const off::Rec& r, const std::string& mk
     const long long nd = netOf(r, d), no = netOf(r, o);
     const std::string D = bids ? "Bids" : "Offers", O = bids ? "offers" : "bids", def = bids ? "buyers" : "sellers", att = bids ? "sellers" : "buyers";
     const std::string at = ewPx(t.px, tick);
-    if (no > 0 && (double)no >= EW_MORE * (double)std::max<long long>(nd, 1)) {   // CAUTION: the other side stacking more
+    if (no > 0 && no > nd) {                                               // CAUTION: the other side stacking more (Rassul 15:33: bigger is enough, was 1.5x)
         br::Read rd; rd.impl = bids ? br::BEAR : br::BULL; rd.tag = "CAUTION";
         rd.head = D + " hit at " + at + ", but " + O + " stacking " + br::x1((double)no / (double)std::max<long long>(nd, 1)) + "x more " + (bids ? "above" : "below") + " - don't lean on it ?";
         out = rd; return true;
@@ -402,7 +401,7 @@ inline bool earlyRead(const EwTouch& t, const off::Rec& r, const std::string& mk
     const double r1 = (double)t.h1 / 20.0, r2 = (double)t.h2 / (double)std::max<long long>(w, 1);
     const bool stopped = t.h2 == 0, slowing = stopped || r2 / (r1 + 0.05) <= median + 1e-12;
     if (!slowing) return false;
-    if (nd <= 0 || (double)nd < EW_MORE * (double)std::max<long long>(no, 1)) return false;
+    if (nd <= 0 || nd <= no) return false;                                // (Rassul 15:33 "it should just be greater than") the defenders bigger, no 1.5x needed
     const Refill f = refillOf(r, d, mkt);
     if (!f.ok || f.cls != RF_STRONG || !f.relOk) return false;
     br::Read rd; rd.impl = bids ? br::BULL : br::BEAR; rd.tag = "WATCH";

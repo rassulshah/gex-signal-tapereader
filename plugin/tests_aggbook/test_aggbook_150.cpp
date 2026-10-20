@@ -99,7 +99,9 @@ int main(int argc, char** argv) {
         t.h2 = 300; CHECK(!bf::earlyRead(t, r, "ES", 0.095, 0.25, rd));      // still hitting at 12/s: no read
         t.h2 = 10; t.elapsed = 15; CHECK(!bf::earlyRead(t, r, "ES", 0.095, 0.25, rd));   // too early (first 20 s)
         t.elapsed = 45; off::Rec w = r; w.refC[0] = 600; CHECK(!bf::earlyRead(t, w, "ES", 0.095, 0.25, rd));   // refill only 1.2x eaten: not strong
-        off::Rec e = r; e.addC[1] = 600; CHECK(!bf::earlyRead(t, e, "ES", 0.095, 0.25, rd));   // bids 800 vs offers 600 = 1.3x: under 1.5x
+        off::Rec e = r; e.addC[1] = 600; CHECK(bf::earlyRead(t, e, "ES", 0.095, 0.25, rd) && rd.tag == "WATCH");   // (15:33) bids 800 vs offers 600: bigger is enough
+        e.addC[1] = 800; CHECK(!bf::earlyRead(t, e, "ES", 0.095, 0.25, rd));   // equal: neither read
+        e.addC[1] = 900; CHECK(bf::earlyRead(t, e, "ES", 0.095, 0.25, rd) && rd.tag == "CAUTION" && rd.head.find("1.1x more above") != std::string::npos);   // (15:33) offers 900 > bids 800: CAUTION
         off::Rec c = r; c.addC[0] = 300; c.pullC[0] = 100; c.addC[1] = 900;                    // bids +200, offers +900
         CHECK(bf::earlyRead(t, c, "ES", 0.095, 0.25, rd) && rd.tag == "CAUTION" && rd.impl == br::BEAR);
         EQS(rd.head, "Bids hit at 7746.50, but offers stacking 4.5x more above - don't lean on it ?");
