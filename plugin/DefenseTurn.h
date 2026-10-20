@@ -21,7 +21,7 @@
 #include <cmath>
 
 namespace dt {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";
 static const int NEAR_TICKS = 8;                 // 2 points in ES: how far from the extreme the refill price may be
 
 struct Candle {                                  // one candle (prices in ticks)
@@ -110,7 +110,8 @@ inline bool decide(const std::vector<Candle>& c, size_t i, int side, bool live, 
     t.A = att > def;
     out = t; return true;
 }
-inline std::string tags(const Turn& t) { std::string s = "R"; if (t.E) s += " E"; if (t.A) s += " A"; return s + " ?"; }
+static const bool SHOW_E = false;   // (1.0.1, Rassul 13:37 CT "remove the exhaustion indicators for now"): E is still decided and recorded (nightly), not drawn
+inline std::string tags(const Turn& t) { std::string s = "R"; if (SHOW_E && t.E) s += " E"; if (t.A) s += " A"; return s + " ?"; }
 inline std::string marginText(int m) { return m >= 999 ? std::string("+999%") : "+" + std::to_string(m) + "%"; }
 
 // ---- the turns file (written by lsBookFlow, read by lsDefenseLines) --------------------------------------------------------------------
@@ -142,7 +143,7 @@ inline bool parseLine(const std::string& s, Line& L) {
     L.tick = std::strtod(f[9].c_str(), &e); if (*e || !(L.tick > 0)) return false;
     return true;
 }
-inline std::string tagsOf(const Line& L) { std::string s = "R"; if (L.E) s += " E"; if (L.A) s += " A"; return s + " ?"; }
+inline std::string tagsOf(const Line& L) { std::string s = "R"; if (SHOW_E && L.E) s += " E"; if (L.A) s += " A"; return s + " ?"; }
 
 // ---- the line's life on the chart (lsDefenseLines) --------------------------------------------------------------------------------------
 // from the turn candle forward: ends at the first candle that CLOSES through the line (broken, drawn faded with x), when the next line

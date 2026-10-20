@@ -39,7 +39,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* DL_VERSION = "1.0.0";
+static const char* DL_VERSION = "1.0.1";   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
 static long long dlSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string dlFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void dlMakeDir(const std::string& p) {
@@ -230,7 +230,7 @@ extern "C" cppExtension* CreateExtension(void) {
     DefenseLines* p = new DefenseLines();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour. Triangle = the turn candle. LINE = the price near the pivot where the defenders re-posted the most of what was eaten; it runs up to 15 minutes, until the next line, or until a candle closes through it (then dimmed with x). Label: R = refill location; E = the attack died at the extreme (attackers' pace after it half or less of before); A = absorption (attackers out-hit the defenders and still lost the close); ? = not proven yet (2026-10-20 test: no edge over a plain defending close; scored nightly). Dotted ? line = the forming candle, gone if it does not confirm. Example: 10:21 AM ES high, offers +23% bigger than bids, red close -> red line at 7853.25 'R E ?'. Needs lsBookFlow (Defense) on the same chart.");
-    p->setVersion("1.0.0");   // DL_VERSION
+    p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour. Triangle = the turn candle. LINE = the price near the pivot where the defenders re-posted the most of what was eaten; it runs up to 15 minutes, until the next line, or until a candle closes through it (then dimmed with x). Label: R = refill location; A = absorption (attackers out-hit the defenders and still lost the close); ? = not proven yet (2026-10-20 test: no edge over a plain defending close; scored nightly). Dotted ? line = the forming candle, gone if it does not confirm. Example: 10:21 AM ES high, offers +23% bigger than bids, red close -> red line at 7853.25 'R ?'. Needs lsBookFlow (Defense) on the same chart.");
+    p->setVersion("1.0.1");   // DL_VERSION
     return p;
 }

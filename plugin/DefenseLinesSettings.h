@@ -5,7 +5,7 @@
 #include "SettingsSpec.h"
 
 namespace dlset {
-static const char* const PLUGIN_VERSION = "1.0.0";
+static const char* const PLUGIN_VERSION = "1.0.1";
 enum K { K_SHOW_LINES, K_COL_LOW, K_COL_HIGH, K_SHOW_MARKS, K_MAX_MINUTES, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

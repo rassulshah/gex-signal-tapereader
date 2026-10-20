@@ -28,11 +28,11 @@ int main() {
     h.draws.clear(); p->draw();
     DlState* s = p->stateFor();
     CHECK(s && s->lines.size() == 3 && s->bad == 1, "3 turns read, 1 unreadable line skipped");
-    CHECK(text(h, "x R E ?") != nullptr, "the high line is closed through on bar 14: 'x R E ?' (dimmed)");
+    CHECK(text(h, "x R ?") != nullptr, "the high line is closed through on bar 14: 'x R ?' (dimmed)");
     CHECK(text(h, "R A ?") != nullptr, "the low line: R A ? (absorption)");
     CHECK(text(h, "R ?") != nullptr, "the third line: R ?");
     {   const mock::Draw* d = text(h, "R A ?"); CHECK(d && d->color == 0x22C55E, "low line label green"); }
-    {   const mock::Draw* d = text(h, "x R E ?"); CHECK(d && d->color != 0xEF4444, "broken line dimmed (not the full red)"); }
+    {   const mock::Draw* d = text(h, "x R ?"); CHECK(d && d->color != 0xEF4444, "broken line dimmed (not the full red)"); }
     {   dt::Life L = dt::lifeOf(dt::LOW, 6999.0, 0, std::vector<double>{7000, 7000, 7000}, std::vector<long long>{180, 360, 540}, 540, 900); CHECK(L.bars == 2, "the low line ends where the next line (bar 23) starts"); }
     const int withMarks = lines(h);
     // settings: marks off -> fewer line strokes (no triangles), labels stay; lines off -> no labels
@@ -56,7 +56,7 @@ int main() {
     s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
     CHECK(s->lines.size() == 3 && text(h, "R A ?") != nullptr, "a torn shorter file: the 3 lines stay (no repaint)");
     std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string body((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
-    CHECK(body.find("VERSION,1.0.0") != std::string::npos && body.find("3 turns") != std::string::npos, "status file");
+    CHECK(body.find("VERSION,1.0.1") != std::string::npos && body.find("3 turns") != std::string::npos, "status file");
     p->destroy(); p->~DefenseLines(); ::operator delete(p);
     std::printf("DefenseLines host: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

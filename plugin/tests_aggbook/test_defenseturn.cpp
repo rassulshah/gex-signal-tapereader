@@ -51,7 +51,7 @@ int main() {
     // file lines
     dt::Turn q; q.t = 3875279220LL; q.side = dt::HIGH; q.pivotPx = 31376; q.linePx = 31374; q.marginPct = 23; q.E = true; q.defNet = 3847; q.attNet = 3363;
     const std::string ln = dt::lineOf('T', q, 0.25); dt::Line L;
-    CHECK(dt::parseLine(ln, L) && L.t == q.t && L.side == dt::HIGH && L.linePx == 7843.5 && L.pivotPx == 7844 && L.margin == 23 && L.E && !L.A && dt::tagsOf(L) == "R E ?", "file line round trip");
+    CHECK(dt::parseLine(ln, L) && L.t == q.t && L.side == dt::HIGH && L.linePx == 7843.5 && L.pivotPx == 7844 && L.margin == 23 && L.E && !L.A && dt::tagsOf(L) == "R ?", "file line round trip (E recorded, not shown)");
     CHECK(!dt::parseLine("T|1|2|3", L) && !dt::parseLine("X|1|0|1|1|0|0|0|0|0|0.25", L) && !dt::parseLine(ln.substr(0, ln.size() - 6), L), "garbage / half lines refused");
     // line life: 3-min bars, closes after a high line at 100
     std::vector<double> cl = { 99, 99.5, 98, 101, 97 }; std::vector<long long> tm = { 180, 360, 540, 720, 900 };
