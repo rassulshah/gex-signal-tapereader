@@ -89,7 +89,7 @@ int main() {
         CHECK(text(h, "4.3", off::C_LBL_RATIO) != nullptr, "(1.19.0) closed candle: its Attack Effort label 4.3 (52 total lots sold vs 12 normal; yellow, no x)");
         CHECK(pTexts(h) == 0, "no \"p \" pace prefix");
 #ifndef BOOK
-        CHECK(text(h, "Attack Effort") != nullptr && text(h, "Reward") != nullptr, "(1.16.0) box rows Attack Effort + Reward");
+        CHECK(text(h, "Effort") != nullptr && text(h, "Reward") != nullptr, "(1.20.0) box rows Effort + Reward");
 #endif
     }
     // a closed 1.9x candle: dim, no label; exactly 2.0x: bright (one rule, at the close)

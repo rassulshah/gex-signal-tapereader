@@ -16,7 +16,7 @@ int main() {
     CHECK(er::rewardX(100, 103, 99, 100, 0.25, 1000, 1, "ES", x) && std::fabs(x - (12.0 / 5.73)) < 1e-9, "buyers' reward to the high");
     CHECK(!er::rewardX(100, 101, 99, 100, 0.25, 0, 0, "ES", x), "no lots: n/a");
     CHECK(!er::rewardX(100, 101, 99, 100, 0.25, 10, 0, "ZZ", x), "unknown market: n/a");
-    CHECK(er::rewardCell(true, 0.3) == "0.3x absorbed" && er::rewardCell(true, 2.4) == "2.4x through" && er::rewardCell(true, 1.0) == "1.0x" && er::rewardCell(false, 0) == "n/a", "reward cells");
+    CHECK(er::rewardCell(true, 0.3) == "0.3x Abs" && er::rewardCell(true, 2.4) == "2.4x Rwd" && er::rewardCell(true, 1.0) == "1.0x" && er::rewardCell(false, 0) == "n/a", "reward cells");
     er::Side s[2]; s[0].effOk = s[0].rewOk = true; s[0].eff = 2.4; s[0].rew = 0.3;
     br::Read r;
     CHECK(er::read(true, false, s, r) && r.impl == br::BULL && r.head.find("absorbed") != std::string::npos && r.head.find("2.4x") != std::string::npos, "new low, sellers 2.4x, 0.3x: absorbed, bullish ?");
@@ -27,7 +27,7 @@ int main() {
     {   er::Side g; g.effOk = true; g.eff = 0.3; g.rewOk = true; g.rew = 20.5; er::guard(g);
         CHECK(!g.rewOk && g.thin && er::rewardCellOf(g) == "-", "(1.1.0) 14 lots overnight (effort 0.3x): Reward \"-\", not 20.5x");
         er::Side h; h.effOk = true; h.eff = 0.5; h.rewOk = true; h.rew = 0.3; er::guard(h);
-        CHECK(h.rewOk && er::rewardCellOf(h) == "0.3x absorbed", "(1.1.0) effort 0.5x: Reward shown");
+        CHECK(h.rewOk && er::rewardCellOf(h) == "0.3x Abs", "(1.1.0) effort 0.5x: Reward shown");
         er::Side k; k.effOk = false; k.rewOk = true; k.rew = 1.0; er::guard(k); CHECK(!k.rewOk, "(1.1.0) effort unknown: Reward hidden");
         er::Side s2[2]; s2[0] = g; br::Read r2; CHECK(!er::read(true, false, s2, r2), "(1.1.0) a thin side gives no read"); }
     {   er::Side c[2]; c[1].effOk = true; c[1].eff = 1.6; br::Read r3;

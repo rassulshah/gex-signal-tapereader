@@ -1,4 +1,4 @@
-// EffortReward.h 1.3.0 (1.3.0, 19:25 CT: lotsText, effortRead) 1.2.0 (1.2.0, 18:54 CT: counterRead - support / resistance coming in at 1.5x) 1.1.0 (1.1.0, 18:37 CT: Reward hidden ("-") when that side attacked under 0.5x its normal) 1.0.0 (2026-10-19, Rassul "now what would the opposite for aggressiveness" -> "so both together can be an effort reward
+// EffortReward.h 1.4.0 (1.4.0, 19:31 CT: Reward cells "Abs" / "Rwd") 1.3.0 (1.3.0, 19:25 CT: lotsText, effortRead) 1.2.0 (1.2.0, 18:54 CT: counterRead - support / resistance coming in at 1.5x) 1.1.0 (1.1.0, 18:37 CT: Reward hidden ("-") when that side attacked under 0.5x its normal) 1.0.0 (2026-10-19, Rassul "now what would the opposite for aggressiveness" -> "so both together can be an effort reward
 // indicator" -> "build it already" 17:42 CT) - ATTACK EFFORT and REWARD, shared by Aggression (lsBidAskStats) and Book Flow (lsBookFlow).
 //   Attack Effort = the lots a side traded aggressively in the candle / its average over the 20 candles before (sellers = lots hit at
 //                   the bid, buyers = lots lifted at the offer). 2.0x = twice its normal attack.
@@ -53,8 +53,8 @@ inline std::string x1(double v) { return br::x1(v) + "x"; }
 inline std::string effortCell(bool ok, double x) { return ok ? x1(x) : std::string("n/a"); }
 inline std::string rewardCell(bool ok, double x) {
     if (!ok) return "n/a";
-    if (x <= REWARD_LO + 1e-9) return x1(x) + " absorbed";
-    if (x >= REWARD_HI - 1e-9) return x1(x) + " through";
+    if (x <= REWARD_LO + 1e-9) return x1(x) + " Abs";     // (1.4.0, Rassul 19:31) absorbed
+    if (x >= REWARD_HI - 1e-9) return x1(x) + " Rwd";     // (1.4.0) rewarded (going through)
     return x1(x);
 }
 // the Read at a new 10-bar low (sellers attacking) / high (buyers attacking); false = nothing to say (the pane's own read stays)

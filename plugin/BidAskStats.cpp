@@ -172,7 +172,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.19.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.20.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -1348,7 +1348,8 @@ void BidAskStats::render(BASState& S) {
         {   // (1.16.0, EffortReward.h) ATTACK EFFORT and REWARD under Lots, for the candle shown (hovered closed, else the live forming one)
             const int ci = liveBox ? last : mb;
             erNow = erSides(S, ci, times, last);
-            off::InfoRow ef; ef.label = "Attack Effort"; off::InfoRow rw; rw.label = "Reward";
+            off::InfoRow ef; ef.label = "Effort";   // (1.20.0) was "Attack Effort"
+            off::InfoRow rw; rw.label = "Reward";
             for (int q = 0; q < 2; ++q) { ef.v[q] = er::effortCell(erNow[q].effOk, erNow[q].eff); rw.v[q] = er::rewardCellOf(erNow[q]); }
             std::vector<off::InfoRow>::iterator at = info.rows.begin(); if (at != info.rows.end()) ++at;   // after Lots
             at = info.rows.insert(at, ef); info.rows.insert(at + 1, rw);
@@ -1382,6 +1383,10 @@ void BidAskStats::render(BASState& S) {
     }
     if (S.feed.silentNow(steadyMs())) { rd = br::Read(); rd.head = off::silentRead(S.feed.silentFromWall, S.feed.reconnects); }   // (1.17.0) the watchdog says so
     const off::TextW tw = off::measureWith(this);
+    {   // (1.20.0, Rassul 19:31) Buyers | Sellers - buyers on the LEFT, as the bars and the Defense pane (the rows are built sellers-first)
+        std::swap(info.colHead[0], info.colHead[1]);
+        for (size_t k = 0; k < info.rows.size(); ++k) { std::swap(info.rows[k].v[0], info.rows[k].v[1]); std::swap(info.rows[k].side[0], info.rows[k].side[1]); }
+    }
     const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
     S.lastBox = P.ok ? P.box : bp::Box(); S.lastRead = rd; S.lastReadLines = rp.lines;
     std::vector<off::LBox> avoid;
@@ -1436,6 +1441,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.19.0");   // BAS_VERSION
+    p->setVersion("1.20.0");   // BAS_VERSION
     return p;
 }
