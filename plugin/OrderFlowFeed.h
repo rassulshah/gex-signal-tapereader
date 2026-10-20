@@ -1016,6 +1016,12 @@ inline void axisFor(long long top, int paneH, int px, double& mn, double& mx) {
     const double unit = (double)top / (double)px;
     mn = -unit; mx = (double)(paneH - 1) * unit;
 }
+// ---- (Aggression 1.18.0 / Book Flow 1.8.0, Rassul 2026-10-19 19:02 "can book flow and bid ask stats show both buyers and sellers side by
+// side and on the top side instead of negative values", 19:04 "make sure there is a read .. have a question on top of the pane", 19:09
+// "who is aggressive - and is it moving price" / "who is defending - and are they refilling", "build") PAIR BARS: two bars per candle,
+// both from the bottom up, green (buyers) LEFT, red (sellers) RIGHT in both panes; the question line on top of each pane.
+static const int QUESTION_H = 16;                                          // the question line's rows at the top of the pane
+inline int pairPx(int paneH, int reserve) { const int p = paneH - reserve - (2 * LABEL_LH + 4) - 3; return p < 4 ? 4 : p; }   // the tallest bar: room for 2 label rows above it
 // (1.7.0, BookFlow) net bars geometry: SDK-free so it is unit-tested
 struct NetGeo { int yTop = 0, yBot = 0, y0 = 0, maxPx = 1, downPx = 1; long long upTop = 0, downTop = 0; };   // rows from the pane's top: usable rows, the zero line, the tallest up / down bar; upTop / downTop = the value drawn maxPx / downPx tall
 // (BookFlow 1.5.1, Rassul 2026-10-19 13:37 "there is a lot of black space .. get rid of the extra black space") up / down = the
@@ -1892,7 +1898,8 @@ struct BarLook { bool ok = false; long long v[2] = {0, 0}; bool spike[2] = {fals
                  std::string mark[2]; COLOR markCol[2] = {0, 0};      // 1.1.0: the stop-run mark ("R" / "R?") per side, its colour
                  long long p100[2] = {0, 0};                           // 1.2.0: the pace (x100, 0 = none) for the spike label's middle row
                  int dir = 0;                                          // 1.6.0: the candle's close direction (one-bar ties)
-                 long long q[2] = {0, 0}; };                            // 1.7.0 (BookFlow): the lots on the spike label (net bars: the added or the pulled part)
+                 long long q[2] = {0, 0};                               // 1.7.0 (BookFlow): the lots on the spike label (net bars: the added or the pulled part)
+                 std::string lab1[2], lab2[2]; };                      // (1.18.0) pair bars: ready-made label rows (Book Flow: ratio, R refilled); empty = from ratio / pace
 inline bool hiOf(const BarLook& b, int s) { return b.spike[s] || (b.ratioOk[s] && b.ratio[s] >= HIGH_X); }   // (1.9.0) a side at 2.0x+ its average (or a spike)
 struct PaneGeo { int left = 0, top = 0, right = 0, bottom = 0, yBase = 0, px = 1, reserve = 0, edge = 0; };
 // the pane geometry: bars from yBase = bottom - 1 up px pixels; the text area ends at the last bar (never the empty space right
@@ -2059,6 +2066,74 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
         for (int r = 0; r < nA; ++r) put(ab[r], tr + r * LABEL_LH, ac[r]);
         for (int r = 0; r < nIn; ++r) put(in[r], tIn + r * LABEL_LH, ic[r]);
     }
+}
+// (1.18.0) pair bars: look.v[s] per side; left = the side drawn on the left (Aggression: 1 = buyers, Book Flow: 0 = bids); green / red by side
+// (normal / spike colours indexed by side). top = the capped scale (a taller bar stops at the top with a white tip); a negative value
+// (Book Flow: more pulled than added) is a 2 px stub. Bright (hiOf) bars carry the ratio (yellow) and pace / R (grey) above them.
+inline void drawPairBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot, long long top, const COLOR normal[2], const COLOR spike[2],
+                         const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid, int left) {
+    if (top <= 0) return;
+    const int px = pairPx(g.bottom - g.top, g.reserve), yb = g.bottom - 1;
+    struct Lb { int cx = 0, hb = 0; long long mag = 0; std::string a, b; bool view = true; };
+    std::vector<Lb> labs;
+    for (int i = std::max(0, v0 - labelLead(slot)); i <= v1; ++i) {
+        const BarLook b = look(i); if (!b.ok) continue;
+        const int xc = xOf(i); if (xc > g.right) continue;
+        const bool view = i >= v0 && xc >= g.left;
+        const Pair p = pairIn(xc, slot);
+        for (int pos = 0; pos < 2; ++pos) {
+            const int s = pos == 0 ? left : 1 - left; const long long v = b.v[s];
+            if (v == 0) continue;
+            const int l = p.l[pos], r = p.r[pos];
+            if (v < 0) { if (view) fillFlat(x, l, yb - 1, r, yb, normal[s]); continue; }   // more pulled than added: a stub, never below zero
+            const int h = barHeight(v, top, px); if (h <= 0) continue;
+            const bool hi = hiOf(b, s);
+            if (view) {
+                fillFlat(x, l, yb - h + 1, r, yb, hi ? spike[s] : normal[s]);
+                if (v > top && h > CAP_TIP_PX) fillFlat(x, l, yb - h + 1, r, yb - h + CAP_TIP_PX, C_WHITE);   // capped: the white tip
+            }
+            if (!hi) continue;
+            Lb q; q.cx = (l + r) / 2; q.hb = h; q.mag = v; q.view = view;
+            q.a = b.ratioOk[s] ? noX(ratioText(b.ratio[s])) : std::string(); q.b = b.p100[s] > 0 ? noX(paceX(b.p100[s])) : std::string();
+            if (!b.lab1[s].empty() || !b.lab2[s].empty()) { q.a = b.lab1[s]; q.b = b.lab2[s]; }   // ready-made rows (Book Flow)
+            if (!q.a.empty() || !q.b.empty()) labs.push_back(q);
+        }
+    }
+    if (labs.empty()) return;
+    std::stable_sort(labs.begin(), labs.end(), [](const Lb& a, const Lb& b) { return a.mag > b.mag; });
+    cppExtension::FONT sf; sf.id = cppExtension::HELVETICA; sf.size = LABEL_PT; sf.style = cppExtension::PLAIN; x->setFont(sf);
+    std::vector<LBox> placed(avoid);
+    for (size_t k = 0; k < labs.size(); ++k) {
+        const Lb& c = labs[k];
+        std::string t[2]; COLOR tc[2] = { C_LBL_RATIO, C_LBL_PACE }; int nr = 0;
+        if (!c.a.empty()) { t[nr] = c.a; tc[nr++] = C_LBL_RATIO; }
+        if (!c.b.empty()) { t[nr] = c.b; tc[nr++] = C_LBL_PACE; }
+        const int t0 = yb - c.hb - 2 - nr * LABEL_LH, b0 = t0 + nr * LABEL_LH;
+        if (t0 < g.top + g.reserve) continue;
+        int w = 0; for (int r = 0; r < nr; ++r) w = std::max(w, (int)x->getTextWidth(t[r].c_str(), -1));
+        const LBox me = { c.cx - w / 2 - 1, t0, c.cx - w / 2 + w + 1, b0 - 1, 0, 0 };
+        if (me.l < g.left + 1 || me.r > g.edge - 1) continue;
+        bool hit = false; for (size_t o = 0; o < placed.size() && !hit; ++o) hit = overlaps(me, placed[o]);
+        if (hit) continue;
+        placed.push_back(me);
+        if (!c.view) continue;
+        for (int r = 0; r < nr; ++r) {
+            x->setTextColor(tc[r]); const int tw = (int)x->getTextWidth(t[r].c_str(), -1);
+            cppExtension::RCT rc; rc.set(coord(c.cx - tw / 2), coord(t0 + r * LABEL_LH), coord(c.cx - tw / 2 + tw + 2), coord(t0 + r * LABEL_LH + LABEL_LH)); rc.drawText(t[r].c_str(), false, false);
+        }
+    }
+}
+// (1.18.0) the pane's question, yellow bold, centred at the top (moved right of the box if they would meet)
+inline void drawQuestion(cppExtension* x, const PaneGeo& g, const std::string& q, const bp::Box* box) {
+    if (q.empty() || g.edge - g.left < 120) return;
+    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = 10; f.style = cppExtension::BOLD; x->setFont(f);
+    const int w = (int)x->getTextWidth(q.c_str(), -1);
+    int l = (g.left + g.edge) / 2 - w / 2; const int t = g.top + 1;
+    if (box && box->r > box->l && t + QUESTION_H > box->t && t < box->b && l < box->r + 6 && l + w > box->l - 6) l = box->r + 8;
+    if (l + w > g.edge - 2) { l = g.edge - 2 - w; if (box && l < box->r + 6 && t < box->b && t + QUESTION_H > box->t) return; }
+    if (l < g.left + 2) return;
+    x->setTextColor(C_LBL_RATIO);                                         // yellow, as the ratio labels
+    cppExtension::RCT rc; rc.set(coord(l), coord(t), coord(l + w + 2), coord(t + QUESTION_H)); rc.drawText(q.c_str(), false, false);
 }
 // ---- (Aggression 1.16.0, Rassul 2026-10-19 17:04 "i want it to show both bid and ask and i want the selling side to be on the bottom";
 // mockup bidask-mirror-mockup.png, "build it already" 17:42) MIRROR BARS: every candle shows BOTH sides - buyers (side 1, offers lifted)
@@ -2581,7 +2656,7 @@ public:
             }
             if (netBars()) { const long long cp = capTop(mags); up = capped(up, cp); down = capped(down, cp); top = capped(top, cp); }   // (BookFlow 1.7.0) the scale cap
             S->axisTop = top; S->axisUp = up; S->axisDown = down;
-            if (netBars()) netAxisFor(top, S->paneH, textReserve(S->paneH, gmode(S->set.mode)), mn, mx, up, down);
+            if (netBars()) axisFor(top, S->paneH, pairPx(S->paneH, textReserve(S->paneH, gmode(S->set.mode)) + QUESTION_H), mn, mx);   // (BookFlow 1.8.0) pair bars above zero; the question line on top
             else axisFor(top, S->paneH, drawPx(S->paneH, textReserve(S->paneH, gmode(S->set.mode))), mn, mx);
         }
         if (dMin) *dMin = mn;

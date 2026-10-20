@@ -84,7 +84,8 @@ int main() {
         v.erase(std::remove_if(v.begin(), v.end(), [](const mock::Draw& d) { return d.color == off::C_WHITE; }), v.end());   // (1.17.0) the cap tip
         const mock::Draw* rd = nullptr; const mock::Draw* gr = nullptr; for (auto& d : v) { if (d.color == C_BID_SPIKE) rd = &d; if (d.color == C_ASK_BAR) gr = &d; }
         CHECK(v.size() == 2 && rd && gr, "(1.16.0) closed candle: bright red sellers + dim green buyers");
-        CHECK(rd && gr && gr->b < rd->y, "(1.16.0) buyers ABOVE the zero line, sellers BELOW it");
+        CHECK(rd && gr && gr->x < rd->x && gr->b == rd->b, "(1.18.0) side by side above zero: buyers (green) LEFT, sellers (red) RIGHT, same bottom");
+        CHECK(text(h, bas::QUESTION) != nullptr, "(1.18.0) the question line on top");
         CHECK(text(h, "5.0", off::C_LBL_RATIO) != nullptr, "closed candle: its ratio label 5.0 (yellow), no x");
         CHECK(pTexts(h) == 0, "no \"p \" pace prefix");
 #ifndef BOOK
@@ -198,9 +199,8 @@ int main() {
         int markers = 0, blocks = 0; const mock::Draw* lab = nullptr;
         for (auto& d : h.draws) { if (d.type == "text" && d.text.compare(0, 2, "P ") == 0 && d.color == off::C_LBL_RATIO) { ++markers; lab = &d; } }
         for (auto& d : h.draws) if (d.type == "box" && d.color == off::C_RED_SPIKE && lab && d.b < lab->y + 1 && d.b >= lab->y - 9) ++blocks;
-        CHECK(markers == 1 && lab && lab->text == "P 100.0", "(1.4.0) one pull marker: P 100.0 on candle 52 (offers)");
-        CHECK(blocks == 1, "(1.4.0) its block in the offer colour (red) just above the label");
-        CHECK(lab && lab->y >= 150 && lab->b <= 300 && (S->lastBox.r < lab->x || S->lastBox.b < lab->y), "(1.4.0) the marker sits in the bottom strip, clear of the info box");
+        CHECK(markers == 0 && !lab, "(1.8.0) no pull-marker strip any more (the decision is still kept, below)");
+        (void)blocks;
         Ind::Ext* e = p->ext(*S); const bf::PullStat* ps = e ? &e->pulls[k52] : nullptr;
         CHECK(ps && ps->pulling[1] && !ps->pulling[0] && ps->pull[1] == 100 && ps->add[1] == 0, "(1.4.0) the decision kept for candle 52: offers pulling, bids not"); }
     CHECK(S->ser.bars.count(k52) && S->ser.bars[k52].r.addC[0] == 100 && S->ser.bars[k52].r.pullC[1] == 100, "candle 52 decided: +100 bids added, 100 offer lots pulled");
@@ -212,11 +212,12 @@ int main() {
         const int y0 = 300 / 2; (void)y0;
         const mock::Draw* g = nullptr; const mock::Draw* r = nullptr;
         for (auto& d : v) { if (d.color == off::C_GREEN_SPIKE) g = &d; if (d.color == off::C_RED_SPIKE) r = &d; }
-        CHECK(g && r, "closed: bid bar bright GREEN, offer bar bright RED (colour by side)");
-        CHECK(g && r && g->x < r->x, "bid bar left, offer bar right");
-        CHECK(g && r && g->b < r->y, "bids arriving above the zero line, offers leaving below it (red, not the old meaning-green)");
+        const mock::Draw* stub = nullptr; for (auto& d : v) if (d.color == off::C_RED_BAR) stub = &d;
+        CHECK(g && !r && stub, "(1.8.0) closed: bid bar bright GREEN; the offers' NEGATIVE net (100 pulled) is a red stub, never below zero");
+        CHECK(g && stub && g->x < stub->x, "bid bar left, offer bar right");
+        CHECK(g && stub && stub->b == g->b && stub->b - stub->y <= 2, "(1.8.0) both from the same bottom; the stub is 2 px");
         int labels = 0; for (auto& d : h.draws) if (d.type == "text" && d.text == "5.0" && d.color == off::C_LBL_RATIO) ++labels;
-        CHECK(labels == 2, "both net spikes labelled with the net ratio 5.0 (yellow, no x)");
+        CHECK(labels == 1, "(1.8.0) the bid spike labelled 5.0 (yellow, no x); the stub carries no label");
         CHECK(pTexts(h) == 0, "no \"p \" pace prefix");
         int brightOthers = 0; for (int b = 30; b < 52; ++b) for (auto& d : barsAt(h, b)) brightOthers += d.color == off::C_GREEN_SPIKE || d.color == off::C_RED_SPIKE;
         CHECK(brightOthers == 0, "normal candles are dim"); }
@@ -258,6 +259,7 @@ int main() {
         CHECK(text(h, "Refill Effort") != nullptr && text(h, "Refilled") != nullptr && text(h, "Added") == nullptr && text(h, "Pulled") == nullptr
               && text(h, "Pace") == nullptr && text(h, "Net") == nullptr, "(1.5.0) the box shows Refill Effort + Refilled only (Added / Pulled / Pace hidden)");
         CHECK(text(h, "Reward") != nullptr, "(1.6.0) + the Reward row");
+        CHECK(text(h, bf::QUESTION) != nullptr, "(1.8.0) the question line on top");
         {   Ind::Ext* e = p->ext(*S); std::string why; const bool fits = e && readFits(h, S->lastBox, e->lastRead, e->lastReadLines, why);
             CHECK(e && text(h, "BULLISH", br::C_BULL) != nullptr && e->lastRead.head.find("Bids stacking") == 0, "(1.4.0) Read: BULLISH, Bids stacking (live, offers flat)");
             CHECK(fits, ("(1.4.0) the Read lines fit inside the box, nothing cut " + why).c_str()); }
@@ -265,7 +267,7 @@ int main() {
     // (1.4.0) no repaint: later candles never move or remove the marker (decided once at the close)
     for (int k = 54; k < 58; ++k) step(h, p, k);
     {   h.draws.clear(); p->draw(); int markers = 0; for (auto& d : h.draws) if (d.type == "text" && d.text == "P 100.0") ++markers;
-        Ind::Ext* e = p->ext(*S); CHECK(markers == 1 && e && e->pulls.count(k52) && e->pulls[k52].pulling[1], "(1.4.0) 4 candles later: the same marker, the same decision"); }
+        Ind::Ext* e = p->ext(*S); CHECK(markers == 0 && e && e->pulls.count(k52) && e->pulls[k52].pulling[1], "(1.8.0) 4 candles later: the same decision kept (no marker drawn)"); }
     {   // (1.5.0) spotAt reads the chart's own bars: a new 10-bar low on 2.5x the volume of the 20 before it
         std::vector<mock::Bar>& B = mock::current->bars; const int i = (int)B.size() - 2;
         for (int k = i - 20; k < i; ++k) { B[(size_t)k].low = 6999.5f; B[(size_t)k].high = 7001.0f; B[(size_t)k].volume = 100; }

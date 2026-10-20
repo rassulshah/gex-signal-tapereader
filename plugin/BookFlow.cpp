@@ -76,7 +76,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.7.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.8.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 
@@ -356,7 +356,8 @@ public:
         up = std::max(up, S.axisUp); down = std::max(down, S.axisDown);   // (1.5.1) the axis IRT was given (same bars)
         S.netUp = up; S.netDown = down;
         S.paneH = pane.bottom - pane.top;
-        const off::PaneGeo g = off::paneGeo(this, gmode(S.set.mode));
+        off::PaneGeo g = off::paneGeo(this, gmode(S.set.mode));
+        g.reserve += off::QUESTION_H;                                      // (1.8.0) the question line on top
         const int hov = S.hov.hover.bar >= 0 && S.hov.hover.bar < last ? S.hov.hover.bar : -1;
         const int mb = hov >= 0 ? hov : last - 1;
         const long long mt = (long long)times[mb];
@@ -409,11 +410,21 @@ public:
         std::vector<off::LBox> avoid;
         if (P.ok) avoid.push_back(off::LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
         for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(off::LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
-        pullMarkers(S, g, v0, v1, last, slot, times, xOf, avoid, P.ok ? &P.box : nullptr);   // (1.4.0) before the bars' labels: they avoid the markers
-        drawNet(S, g, v0, v1, last, slot, top, xOf, barOf, avoid);
+        // (1.8.0) the pull markers' bottom strip is gone with the pair bars (the pull stats stay in the record and the status)
+        {   // (1.8.0, Rassul 19:02 / 19:09) PAIR bars: bids (buyers defending) green LEFT, offers (sellers defending) red RIGHT, both above zero
+            const COLOR normal[2] = { off::C_GREEN_BAR, off::C_RED_BAR }, spike[2] = { off::C_GREEN_SPIKE, off::C_RED_SPIKE };
+            off::drawPairBars(this, g, v0, v1, slot, top, normal, spike, xOf, [&](int i) {
+                off::BarLook k; const off::PaneBar* pb = barOf(i); if (!pb) return k;
+                const bool closed = i != last; const bf::NetStat* ns = closed ? netAt(S, (long long)times[i]) : nullptr;
+                k.ok = true;
+                for (int s = 0; s < 2; ++s) { const bf::NetLook nk = bf::netLookOf(pb, ns, s, closed, S.market); k.v[s] = nk.v; k.spike[s] = nk.bright; k.lab1[s] = nk.ratio; k.lab2[s] = nk.pace; }
+                return k;
+            }, avoid, 0);
+        }
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
         off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
         br::draw(this, P, info, rp, rd);                                  // (1.4.0) the Read word + lines over its rows
+        off::drawQuestion(this, g, bf::QUESTION, P.ok ? &P.box : nullptr);   // (1.8.0, Rassul 19:09) the question the pane answers
     }
     // (1.5.0) where candle i sits: a new 10-bar low / high and its volume vs the 20 before it (bf::spotOf), from the chart's own bars
     bf::Spot spotAt(int i) {
@@ -542,6 +553,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.7.0");   // BF_VERSION
+    p->setVersion("1.8.0");   // BF_VERSION
     return p;
 }
