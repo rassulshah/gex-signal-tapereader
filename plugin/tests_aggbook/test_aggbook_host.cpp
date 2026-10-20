@@ -102,7 +102,7 @@ int main() {
                 CHECK(maxY <= 148 && cols >= 2, "(1.23.0) a 150 px pane: the lines fit in the pane, in 2+ columns"); }
             CHECK(off::infoTip(r, on, 300, 80, bas::INFO_TIP) && !on, "(1.22.0) mouse leaves: the tip goes");
             h.draws.erase(h.draws.begin() + (long)n0, h.draws.end()); }
-        CHECK(text(h, "4.3", off::C_LBL_RATIO) != nullptr, "(1.19.0) closed candle: its Attack Effort label 4.3 (52 total lots sold vs 12 normal; yellow, no x)");
+        CHECK(text(h, "4.3", off::C_LBL_RATIO) == nullptr && count(h, "box", C_BID_SPIKE) >= 1, "(1.24.0, Rassul 14:33) the closed 4.3x candle is bright but carries no number label");
         CHECK(pTexts(h) == 0, "no \"p \" pace prefix");
 #ifndef BOOK
         CHECK(text(h, "Effort") != nullptr && text(h, "Reward") != nullptr, "(1.20.0) box rows Effort + Reward");
@@ -131,7 +131,7 @@ int main() {
     NOW += 1500; p->calc(0);
     CHECK(S->ser.spike.avgT == 60 && S->dx == 0 && S->dy == 0 && !S->ser.bars[T0 + 1800].bidSpike, "the chart reads the file: 5.0x < 6.0x is no longer a spike; a saved Offset 7 / 3 is ignored");
     h.draws.clear(); p->draw();
-    CHECK(count(h, "box", C_BID_SPIKE) >= 1 && text(h, "4.3") != nullptr, "(1.19.0) the bars use Attack Effort 2.0x (the validated rule), not the record's Spike vs average");
+    CHECK(count(h, "box", C_BID_SPIKE) >= 1 && text(h, "4.3") == nullptr, "(1.19.0) the bars use Attack Effort 2.0x (the validated rule), not the record's Spike vs average (bright, no label since 1.24.0)");
     // (1.14.1, Rassul 23:19 CT) the box follows the mouse ONLY while the cursor is inside this pane; anywhere else = Live (the forming candle), updating
     {   void* W = (void*)0x1; bas_test_cursor_wnd = W; pc::test_ok = true;
         h.draws.clear(); p->draw();
@@ -168,6 +168,23 @@ int main() {
     LOAD(p); h.lists[BIGLOT_PARM] = 3; APPLY(p);                          // (1.14.0) Big Lot mark BL20 saved as the 9th field, read by the chart
     CHECK(readAll(flex + "\\BidAskStats.place-ES.txt") == "20,4,60,15,10,0,0,0,3\n", "(1.14.0) Apply: Big Lot mark BL20 = field 9 (3), the hidden values carried");
     NOW += 1500; p->calc(0); CHECK(S->bigLot == 3, "(1.14.0) the chart reads Big Lot mark BL20");
+    {   // (1.24.0, Rassul 07:43 "do it", on after the 2026-10-20 close) ORDER-BY-ORDER TOTALS: bars / Lots / Effort / Reward from the exchange's aggressor fills
+        BASState T; T.firstBarKey = 100; long long o[2] = {0, 0};
+        BasFin d; d.dbo = true; d.r.aggrC[off::BID] = 700; d.r.aggrC[off::ASK] = 400; T.fin[200] = d;
+        CHECK(mboTotOf(T, 200, o) && o[0] == 700 && o[1] == 400, "a decided order-feed candle: its aggressor totals (bids hit 700, offers lifted 400)");
+        BasFin pp = d; pp.r.partial = true; T.fin[300] = pp; CHECK(!mboTotOf(T, 300, o), "a partial candle: falls back to IRT");
+        BasFin nd = d; nd.dbo = false; T.fin[310] = nd; CHECK(!mboTotOf(T, 310, o), "no order feed for that candle: falls back to IRT");
+        off::Acc ac; off::Aggr g1; g1.side = off::BID; g1.size = 30; off::Aggr g2; g2.side = off::ASK; g2.size = 12; off::Aggr g3; g3.side = off::BID; g3.size = 5;
+        ac.aggr[1] = g1; ac.aggr[2] = g2; ac.aggr[3] = g3; T.accs[400] = ac;
+        CHECK(mboTotOf(T, 400, o) && o[0] == 35 && o[1] == 12, "a candle still collecting: its open accumulator summed by side (35 / 12)");
+        T.accs[100] = ac; CHECK(!mboTotOf(T, 100, o), "the first candle after the feed opened: partial, falls back");
+        CHECK(!mboTotOf(T, 999, o), "no data at all: falls back");
+        bas::BarMax m; m.totBid = 11; m.totAsk = 22; bool src = false;
+        bas::BarMax w = withMbo(T, 200, m, &src); CHECK(src && w.totBid == 700 && w.totAsk == 400, "withMbo: the bar takes the order-feed totals");
+        w = withMbo(T, 999, m, &src); CHECK(!src && w.totBid == 11 && w.totAsk == 22, "withMbo: IRT's bid / ask volume kept, flagged as IRT");
+        CHECK(BAS_MBO_TOTALS, "the switch is on"); }
+    {   bool lotsIrt = false; for (auto& d : h.draws) lotsIrt = lotsIrt || (d.type == "text" && d.text == "Lots (IRT)");
+        CHECK(lotsIrt, "(1.24.0) no order data on the test chart: the box row reads 'Lots (IRT)'"); }
     dispose(p);
     CHECK(!mst::read("AGG", "ESZ6", 60, "test", NOW).ok, "removed: the Market State entry is cleared");
     std::printf("BidAskStats host: %d passed, %d failed\n", passes, fails);
@@ -232,7 +249,7 @@ int main() {
         CHECK(g && stub && g->x < stub->x, "bid bar left, offer bar right");
         CHECK(g && stub && stub->b == g->b && stub->b - stub->y <= 2, "(1.8.0) both from the same bottom; the stub is 2 px");
         int labels = 0; for (auto& d : h.draws) if (d.type == "text" && d.text == "5.0" && d.color == off::C_LBL_RATIO) ++labels;
-        CHECK(labels == 1, "(1.8.0) the bid spike labelled 5.0 (yellow, no x); the stub carries no label");
+        CHECK(labels == 0, "(1.14.0, Rassul 14:33) no number labels over the bars (the 5.0 bid spike is bright only); the stub carries none");
         CHECK(pTexts(h) == 0, "no \"p \" pace prefix");
         int brightOthers = 0; for (int b = 30; b < 52; ++b) for (auto& d : barsAt(h, b)) brightOthers += d.color == off::C_GREEN_SPIKE || d.color == off::C_RED_SPIKE;
         CHECK(brightOthers == 0, "normal candles are dim"); }

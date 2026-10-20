@@ -312,7 +312,7 @@ struct BASState {
 // aggressor order's own fills: bid hit = sellers, offer lifted = buyers) - what every tested turn rate was measured on (Databento MBO).
 // A decided candle: its record (live then, or read back after a restart); a candle still collecting: its open accumulator. No order
 // data for that candle (before the feed was live, a partial first candle, a restart gap) = false: the caller keeps IRT's bid / ask volume.
-static const bool BAS_MBO_TOTALS = false;   // (1.23.0) OFF until after the 2026-10-20 close (Rassul 08:01: ship only the info-box crash fix pre-market)
+static const bool BAS_MBO_TOTALS = true;    // (1.24.0) ON after the 2026-10-20 close (Rassul 07:43 "do it"; 08:01: held until after the close)
 static bool mboTotOf(const BASState& S, long long t, long long out[2]) {
     if (!BAS_MBO_TOTALS) return false;
     std::map<long long, BasFin>::const_iterator f = S.fin.find(t);

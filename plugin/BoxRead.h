@@ -20,8 +20,9 @@ static const int MAX_LINES = 2, TEXT_PT = 9;
 struct Read {
     int impl = NEUTRAL;
     std::string head;                  // the read itself (always shown)
+    std::string tag;                   // (Defense 1.14.0) a word in place of BULLISH / BEARISH (WATCH / CAUTION); empty = the usual word
     std::vector<std::string> opt;      // optional clauses in text order, each with its own separator; dropped from the last when too long
-    std::string word() const { return impl == BULL ? "BULLISH" : impl == BEAR ? "BEARISH" : "NEUTRAL"; }
+    std::string word() const { if (!tag.empty()) return tag; return impl == BULL ? "BULLISH" : impl == BEAR ? "BEARISH" : "NEUTRAL"; }
     unsigned long color() const { return impl == BULL ? C_BULL : impl == BEAR ? C_BEAR : C_NEUTRAL; }
     std::string text(size_t nOpt) const { std::string t = head; for (size_t k = 0; k < nOpt && k < opt.size(); ++k) t += opt[k]; return t; }
     std::string full() const { return text(opt.size()); }

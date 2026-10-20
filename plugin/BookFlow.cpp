@@ -535,6 +535,16 @@ public:
         if (mbar) {                                                        // (1.5.0) at a new 10-bar low / high the REFILL read leads
             br::Read rr; if (bf::refillRead(mbar->r, S.market, spotAt(liveBox ? last : mb), shownNs, rr)) rd = rr;
         }
+        if (liveBox && haveLive) {                                         // (1.14.0) the early-warning read while the candle forms (bf::earlyRead)
+            bf::EwTouch tw0;
+            for (size_t k = S.e.touches.size(); k-- > 0;) {
+                const off::Engine::Touch& t = S.e.touches[k];
+                if (t.key != S.formingKey) { if (t.key < S.formingKey) break; continue; }
+                if (t.h1 <= 0) continue;
+                tw0.ok = true; tw0.s = t.s; tw0.px = (double)t.px * S.tick; tw0.elapsed = S.e.lastS - t.t0; tw0.h1 = t.h1; tw0.h2 = t.h2; break;
+            }
+            br::Read er; if (bf::earlyRead(tw0, lb.r, S.market, S.e.adMedian, S.tick, er)) rd = er;
+        }
         if (S.feed.silentNow(off::steadyMs())) { rd = br::Read(); rd.head = off::silentRead(S.feed.silentFromWall, S.feed.reconnects); }   // (1.7.0) the watchdog says so
         const off::TextW tw = off::measureWith(this);
         const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
@@ -567,7 +577,7 @@ public:
                     const off::Pair pr = off::pairIn(xc, slot); const int s = t.side == dt::HIGH ? 1 : 0;
                     const long long v = netOf(pb->r, s); int yb = g.bottom - 1; const int h = off::pairBarH(&vyNow, g, top, v, yb);   // (1.14.0) on the axis like the bar
                     const bf::NetStat* ns = live ? nullptr : netAt(S, (long long)times[i]);
-                    const bool lab = ns && ns->spike[s];                     // a bright bar carries its own labels: go above them
+                    const bool lab = off::PAIR_LABELS && ns && ns->spike[s];   // (1.14.0) bars carry no labels now: the mark sits right on the bar
                     const int cx = (pr.l[s] + pr.r[s]) / 2; int tip = yb - h - 3 - (lab ? 2 * off::LABEL_LH : 0);
                     const COLOR col = (COLOR)(t.side == dt::HIGH ? e->dlSet.c(dlset::K_COL_HIGH) : e->dlSet.c(dlset::K_COL_LOW));
                     if (tip - 5 - off::LABEL_LH < g.top + g.reserve) tip = g.top + g.reserve + 5 + off::LABEL_LH;

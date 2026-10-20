@@ -2149,6 +2149,9 @@ inline int pairBarH(const ValY* vy, const PaneGeo& g, long long top, long long v
     if (vy && vy->ok) { yb = std::min(g.bottom - 1, vy->yOf(0)); int a = 0, b = 0; bool c = false; return v > 0 ? axisBar(*vy, g.top + g.reserve + 1, g.bottom - 1, v, a, b, c) : 0; }
     yb = g.bottom - 1; return v > 0 ? barHeight(v, top, pairPx(g.bottom - g.top, g.reserve)) : 0;
 }
+// (Effort Reward 1.24.0 / Defense 1.14.0, Rassul 2026-10-20 14:33 "get rid of the labels like 2.4 etc and R1 2, keep percentages instead")
+// no ratio / Refilled labels over the bright bars (the bright colour still marks the spike; the numbers stay in the info box)
+static const bool PAIR_LABELS = false;
 inline void drawPairBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot, long long top, const COLOR normal[2], const COLOR spike[2],
                          const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid, int left, const ValY* vy = nullptr) {
     if (top <= 0) return;
@@ -2175,7 +2178,7 @@ inline void drawPairBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int 
                 fillFlat(x, l, yb - h + 1, r, yb, hi ? spike[s] : normal[s]);
                 if (cap && h > CAP_TIP_PX) fillFlat(x, l, yb - h + 1, r, yb - h + CAP_TIP_PX, C_WHITE);   // capped: the white tip
             }
-            if (!hi) continue;
+            if (!hi || !PAIR_LABELS) continue;
             Lb q; q.cx = (l + r) / 2; q.hb = h; q.mag = v; q.view = view;
             q.a = b.ratioOk[s] ? noX(ratioText(b.ratio[s])) : std::string(); q.b = b.p100[s] > 0 ? noX(paceX(b.p100[s])) : std::string();
             if (!b.lab1[s].empty() || !b.lab2[s].empty()) { q.a = b.lab1[s]; q.b = b.lab2[s]; }   // ready-made rows (Book Flow)
