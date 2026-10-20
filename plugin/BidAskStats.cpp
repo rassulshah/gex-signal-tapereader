@@ -172,7 +172,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.20.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.21.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -1238,6 +1238,7 @@ std::array<er::Side, 2> BidAskStats::erSides(BASState& S, int ci, RTARRAYI& time
     for (int q = 0; q < 2; ++q) {
         out[q].effOk = er::effortX(tot[q], q == 0 ? pb : pa, out[q].eff);
         out[q].rewOk = er::rewardX(op[ci], hi[ci], lo[ci], cl[ci - 1], S.tick, tot[q], q, S.market, out[q].rew);
+        out[q].lost = q == 0 ? cl[ci] > op[ci] : cl[ci] < op[ci];   // (1.21.0) the close went against this side
         er::guard(out[q]);   // (1.17.0) too few lots: "-"
     }
     return out;
@@ -1385,7 +1386,7 @@ void BidAskStats::render(BASState& S) {
     const off::TextW tw = off::measureWith(this);
     {   // (1.20.0, Rassul 19:31) Buyers | Sellers - buyers on the LEFT, as the bars and the Defense pane (the rows are built sellers-first)
         std::swap(info.colHead[0], info.colHead[1]);
-        for (size_t k = 0; k < info.rows.size(); ++k) { std::swap(info.rows[k].v[0], info.rows[k].v[1]); std::swap(info.rows[k].side[0], info.rows[k].side[1]); }
+        for (size_t k = 0; k < info.rows.size(); ++k) std::swap(info.rows[k].v[0], info.rows[k].v[1]);   // (1.21.0) colours follow the column (vcol below), so the headings are right too
     }
     const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
     S.lastBox = P.ok ? P.box : bp::Box(); S.lastRead = rd; S.lastReadLines = rp.lines;
@@ -1428,7 +1429,7 @@ void BidAskStats::render(BASState& S) {
             off::fillFlat(this, l, y0, r, y1, C_BIG_LOT);
         }
     }
-    const COLOR vcol[2] = { C_BID, C_ASK };                                // values: sellers (bid side) red, buyers (ask side) green, labels white
+    const COLOR vcol[2] = { C_ASK, C_BID };                                // (1.21.0) column 1 Buyers green, column 2 Sellers red - headings and values (1.20.0 had the headings swapped)
     off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
     br::draw(this, P, info, rp, rd);                                      // (1.15.0) the Read word + lines over its rows
     off::drawQuestion(this, g, bas::QUESTION, P.ok ? &P.box : nullptr);   // (1.18.0, Rassul 19:09) the question the pane answers
@@ -1441,6 +1442,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.20.0");   // BAS_VERSION
+    p->setVersion("1.21.0");   // BAS_VERSION
     return p;
 }

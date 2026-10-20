@@ -17,16 +17,18 @@ int main() {
     CHECK(!er::rewardX(100, 101, 99, 100, 0.25, 0, 0, "ES", x), "no lots: n/a");
     CHECK(!er::rewardX(100, 101, 99, 100, 0.25, 10, 0, "ZZ", x), "unknown market: n/a");
     CHECK(er::rewardCell(true, 0.3) == "0.3x Abs" && er::rewardCell(true, 2.4) == "2.4x Rwd" && er::rewardCell(true, 1.0) == "1.0x" && er::rewardCell(false, 0) == "n/a", "reward cells");
-    er::Side s[2]; s[0].effOk = s[0].rewOk = true; s[0].eff = 2.4; s[0].rew = 0.3;
+    er::Side s[2]; s[0].effOk = s[0].rewOk = true; s[0].eff = 2.4; s[0].rew = 0.3; s[0].lost = true;
     br::Read r;
     CHECK(er::read(true, false, s, r) && r.impl == br::BULL && r.head.find("absorbed") != std::string::npos && r.head.find("2.4x") != std::string::npos, "new low, sellers 2.4x, 0.3x: absorbed, bullish ?");
-    s[0].rew = 2.5; CHECK(er::read(true, false, s, r) && r.impl == br::BEAR && r.head.find("don't fade") != std::string::npos, "new low, going through: bearish, don't fade");
+    s[0].lost = false; CHECK(!er::read(true, false, s, r) && er::rewardCellOf(s[0]) == "0.3x", "(1.5.0) pushed little but closed with them: no Abs, no read");
+    s[0].lost = true; s[0].rew = 1.8; CHECK(er::read(true, false, s, r) && r.impl == br::NEUTRAL && r.head == "New low: Sellers pushed 1.8x but closed green - lost the candle ?", "(1.5.0) 8:18 PM ES: pushed 1.8x, closed green - lost the candle, neutral");
+    s[0].lost = false; s[0].rew = 2.5; CHECK(er::read(true, false, s, r) && r.impl == br::BEAR && r.head.find("don't fade") != std::string::npos, "new low, going through: bearish, don't fade");
     s[0].rew = 1.0; CHECK(!er::read(true, false, s, r), "normal reward: no ER read");
-    s[1].effOk = s[1].rewOk = true; s[1].eff = 3.0; s[1].rew = 0.2; CHECK(er::read(false, true, s, r) && r.impl == br::BEAR, "new high, buyers absorbed: bearish");
+    s[1].effOk = s[1].rewOk = true; s[1].eff = 3.0; s[1].rew = 0.2; s[1].lost = true; CHECK(er::read(false, true, s, r) && r.impl == br::BEAR, "new high, buyers absorbed: bearish");
     CHECK(!er::read(true, true, s, r) && !er::read(false, false, s, r), "outside bar / no extreme: none");
     {   er::Side g; g.effOk = true; g.eff = 0.3; g.rewOk = true; g.rew = 20.5; er::guard(g);
         CHECK(!g.rewOk && g.thin && er::rewardCellOf(g) == "-", "(1.1.0) 14 lots overnight (effort 0.3x): Reward \"-\", not 20.5x");
-        er::Side h; h.effOk = true; h.eff = 0.5; h.rewOk = true; h.rew = 0.3; er::guard(h);
+        er::Side h; h.effOk = true; h.eff = 0.5; h.rewOk = true; h.rew = 0.3; h.lost = true; er::guard(h);
         CHECK(h.rewOk && er::rewardCellOf(h) == "0.3x Abs", "(1.1.0) effort 0.5x: Reward shown");
         er::Side k; k.effOk = false; k.rewOk = true; k.rew = 1.0; er::guard(k); CHECK(!k.rewOk, "(1.1.0) effort unknown: Reward hidden");
         er::Side s2[2]; s2[0] = g; br::Read r2; CHECK(!er::read(true, false, s2, r2), "(1.1.0) a thin side gives no read"); }
@@ -41,5 +43,5 @@ int main() {
         e[1].eff = 2.1; CHECK(er::effortRead(e).head.find("Both sides attacking") == 0, "(1.3.0) both: a fight");
         e[0].eff = 1.0; e[1].eff = 1.2; CHECK(er::effortRead(e).head == "Quiet - no side attacking", "(1.3.0) quiet");
         CHECK(er::lotsText(1234567) == "1,234,567" && er::lotsText(12) == "12", "(1.3.0) lots with commas"); }
-    printf("EffortReward 1.3.0: %d checks, %d failed\n", p + f, f); return f ? 1 : 0;
+    printf("EffortReward 1.5.0: %d checks, %d failed\n", p + f, f); return f ? 1 : 0;
 }

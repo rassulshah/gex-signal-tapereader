@@ -1,4 +1,4 @@
-// EffortReward.h 1.4.0 (1.4.0, 19:31 CT: Reward cells "Abs" / "Rwd") 1.3.0 (1.3.0, 19:25 CT: lotsText, effortRead) 1.2.0 (1.2.0, 18:54 CT: counterRead - support / resistance coming in at 1.5x) 1.1.0 (1.1.0, 18:37 CT: Reward hidden ("-") when that side attacked under 0.5x its normal) 1.0.0 (2026-10-19, Rassul "now what would the opposite for aggressiveness" -> "so both together can be an effort reward
+// EffortReward.h 1.5.0 (1.5.0, 20:48 CT: Abs needs the close against the side; "lost the candle" read) 1.4.0 (1.4.0, 19:31 CT: Reward cells "Abs" / "Rwd") 1.3.0 (1.3.0, 19:25 CT: lotsText, effortRead) 1.2.0 (1.2.0, 18:54 CT: counterRead - support / resistance coming in at 1.5x) 1.1.0 (1.1.0, 18:37 CT: Reward hidden ("-") when that side attacked under 0.5x its normal) 1.0.0 (2026-10-19, Rassul "now what would the opposite for aggressiveness" -> "so both together can be an effort reward
 // indicator" -> "build it already" 17:42 CT) - ATTACK EFFORT and REWARD, shared by Aggression (lsBidAskStats) and Book Flow (lsBookFlow).
 //   Attack Effort = the lots a side traded aggressively in the candle / its average over the 20 candles before (sellers = lots hit at
 //                   the bid, buyers = lots lifted at the offer). 2.0x = twice its normal attack.
@@ -51,16 +51,19 @@ inline bool rewardX(double o, double h, double l, double pc, double tick, long l
 }
 inline std::string x1(double v) { return br::x1(v) + "x"; }
 inline std::string effortCell(bool ok, double x) { return ok ? x1(x) : std::string("n/a"); }
-inline std::string rewardCell(bool ok, double x) {
+// (1.5.0, Rassul 20:33-20:48 "since the close is green, sellers didn't win" -> data: Abs only when the side pushed little AND the candle
+// closed against it - unseen sessions, 7 markets, Effort 2.0x+ at a new 10-bar extreme: 49% (lows, n 76) / 51% (highs, n 63) turned vs
+// 22% base; pushed little alone 43% / 50%; pushed well (> 0.5x) but closed against 31% / 21% (about base); pure open-to-close 34% / 38%)
+inline std::string rewardCell(bool ok, double x, bool lost = true) {
     if (!ok) return "n/a";
-    if (x <= REWARD_LO + 1e-9) return x1(x) + " Abs";     // (1.4.0, Rassul 19:31) absorbed
+    if (x <= REWARD_LO + 1e-9) return lost ? x1(x) + " Abs" : x1(x);     // (1.4.0, Rassul 19:31) absorbed
     if (x >= REWARD_HI - 1e-9) return x1(x) + " Rwd";     // (1.4.0) rewarded (going through)
     return x1(x);
 }
 // the Read at a new 10-bar low (sellers attacking) / high (buyers attacking); false = nothing to say (the pane's own read stays)
-struct Side { bool effOk = false, rewOk = false; double eff = 0, rew = 0; bool thin = false; };   // thin = Reward hidden: too few lots (1.1.0)
+struct Side { bool effOk = false, rewOk = false; double eff = 0, rew = 0; bool thin = false; bool lost = false; };   // lost (1.5.0) = the candle closed against this side (sellers: green close, buyers: red)   // thin = Reward hidden: too few lots (1.1.0)
 inline void guard(Side& s) { if (s.rewOk && (!s.effOk || s.eff < REWARD_MIN_EFFORT - 1e-9)) { s.rewOk = false; s.thin = true; } }
-inline std::string rewardCellOf(const Side& s) { return s.thin ? std::string("-") : rewardCell(s.rewOk, s.rew); }
+inline std::string rewardCellOf(const Side& s) { return s.thin ? std::string("-") : rewardCell(s.rewOk, s.rew, s.lost); }
 inline bool read(bool newLow, bool newHigh, const Side s[2], br::Read& r) {
     if (newLow == newHigh) return false;                                   // neither, or an outside bar: no side to judge
     const int a = newLow ? 0 : 1;                                          // the attacker into the extreme
@@ -68,9 +71,14 @@ inline bool read(bool newLow, bool newHigh, const Side s[2], br::Read& r) {
     if (!x.rewOk) return false;
     const std::string who = a == 0 ? "Sellers" : "Buyers", where = a == 0 ? "New low" : "New high";
     r = br::Read();
-    if (x.effOk && x.eff >= EFFORT_HI - 1e-9 && x.rew <= REWARD_LO + 1e-9) {
+    if (x.lost && x.effOk && x.eff >= EFFORT_HI - 1e-9 && x.rew <= REWARD_LO + 1e-9) {
         r.impl = a == 0 ? br::BULL : br::BEAR;
         r.head = where + ": " + who + " attacked " + x1(x.eff) + " but moved price only " + x1(x.rew) + " normal - absorbed, turn odds up ?";
+        return true;
+    }
+    if (x.lost && x.rew > REWARD_LO + 1e-9) {                             // (1.5.0) pushed well, then lost the close: about base odds - say so, no side
+        r.impl = br::NEUTRAL;
+        r.head = where + ": " + who + " pushed " + x1(x.rew) + " but closed " + (a == 0 ? "green" : "red") + " - lost the candle ?";
         return true;
     }
     if (x.rew >= REWARD_HI - 1e-9) {
@@ -78,7 +86,7 @@ inline bool read(bool newLow, bool newHigh, const Side s[2], br::Read& r) {
         r.head = where + ": " + who + " going through (" + x1(x.rew) + " normal) - don't fade ?";
         return true;
     }
-    if (x.rew <= REWARD_LO + 1e-9) {
+    if (x.lost && x.rew <= REWARD_LO + 1e-9) {
         r.impl = a == 0 ? br::BULL : br::BEAR;
         r.head = where + ": " + who + "' push absorbed (" + x1(x.rew) + " normal) ?";
         return true;
