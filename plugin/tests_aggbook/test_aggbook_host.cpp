@@ -308,11 +308,11 @@ int main() {
         int lines = 0; for (char ch : tf) lines += ch == '\n';
         CHECK(lines == 1 && tf.compare(0, 2, "T|") == 0, "(1.12.0) one line in the turns file (decided once, not twice)");
         h.draws.clear(); p->draw();
-        CHECK(text(h, "+50%", 0x22C55E) != nullptr, "(1.12.0) the pane mark +50% in green over the bids' bar");
+        CHECK(text(h, "50%", 0x22C55E) != nullptr, "(1.12.0) the pane mark +50% in green over the bids' bar");
         CHECK(readAll(flex + "\\BookFlow\\ES-60-turns-live.txt").size() >= 2, "(1.12.0) the live file is published (N or the forming ?)");
         { std::ofstream f((flex + "\\DefenseLines.settings-ES.txt").c_str()); f << ss::format(dlset::spec(), [] { ss::Values V = ss::defaults(dlset::spec(), 0); V.v[dlset::K_SHOW_MARKS] = 0; return V; }()); }
         NOW += 1500; h.draws.clear(); p->draw();
-        CHECK(text(h, "+50%") == nullptr, "(1.12.0) Turn marks off in the shared settings: no pane mark");
+        CHECK(text(h, "50%") == nullptr, "(1.12.0) Turn marks off in the shared settings: no pane mark");
         // a reload (restart): the turn comes back from the file and is never decided again
         e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb);
         CHECK(e->dtTurns.count(std::make_pair((int)dt::LOW, k)) == 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.12.0) after a reload: read back, not written twice"); }

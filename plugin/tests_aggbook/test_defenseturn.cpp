@@ -30,6 +30,13 @@ int main() {
     c[1].refPx[0] = 100; c[1].refLots[0] = 900;           // the candle before the pivot: not in pivot..turn
     c[2].refPx[0] = 98; c[2].refLots[0] = 300; CHECK(dt::decide(c, 2, dt::LOW, false, U, t) && t.linePx == 98, "line at the refill price 98");
     c[2].refPx[0] = 120; CHECK(dt::decide(c, 2, dt::LOW, false, U, t) && t.linePx == 96, "a refill 24 ticks away is ignored: the extreme");
+    // (1.2.0) the close must be beyond the R line: above it at a low (green close 102 under a refill line at 103 = no turn)
+    c[2].refPx[0] = 103; c[2].refLots[0] = 300; c[2].h = 104;
+    CHECK(!dt::decide(c, 2, dt::LOW, false, U, t), "(1.2.0) green close 102 below the R line 103: no turn");
+    c[2].c = 103; CHECK(!dt::decide(c, 2, dt::LOW, false, U, t), "(1.2.0) close ON the line: no turn");
+    c[2].c = 104; CHECK(dt::decide(c, 2, dt::LOW, false, U, t) && t.linePx == 103, "(1.2.0) close 104 above the line 103: turn");
+    c[2].c = 102; CHECK(!dt::decide(c, 2, dt::LOW, true, U, t), "(1.2.0) forming: price back under the line = no '?'");
+    c[2].c = 102; c[2].h = 103; c[2].refPx[0] = 0;
     // E: the attack died - 600 lots in 60 s before the low (10/s), 40 lots in 60 s after (0.67/s)
     c[2].refPx[0] = 0; c[2].before[dt::LOW] = 600; c[2].secsBefore[dt::LOW] = 60; c[2].after[dt::LOW] = 40; c[2].secsAfter[dt::LOW] = 60;
     CHECK(dt::decide(c, 2, dt::LOW, false, U, t) && t.E, "pace after the low 0.67/s <= half of 10/s: E");
@@ -47,7 +54,7 @@ int main() {
     h[2].aggr[1] = 900; h[2].aggr[0] = 400;
     CHECK(dt::decide(h, 2, dt::HIGH, false, U, t) && t.pivotPx == 110 && t.A && t.marginPct == 167, "pivot high, red close, offers 80 vs 30 (+167%), buyers out-hit: A");
     CHECK(dt::tags(t) == "R A ?", "tags R A ?");
-    h[2].net[0] = -20; CHECK(dt::decide(h, 2, dt::HIGH, false, U, t) && dt::marginText(t.marginPct) == "+999%", "attacking side pulled: +999%");
+    h[2].net[0] = -20; CHECK(dt::decide(h, 2, dt::HIGH, false, U, t) && dt::marginText(t.marginPct) == "999%", "attacking side pulled: 999% (no + sign)");
     // file lines
     dt::Turn q; q.t = 3875279220LL; q.side = dt::HIGH; q.pivotPx = 31376; q.linePx = 31374; q.marginPct = 23; q.E = true; q.defNet = 3847; q.attNet = 3363;
     const std::string ln = dt::lineOf('T', q, 0.25); dt::Line L;
@@ -76,6 +83,10 @@ int main() {
         lb = dt::lifeBars(dt::HIGH, 100, std::vector<double>{101, 99}, std::vector<long long>{1, 2}, 0, 3); CHECK(lb.bars == 1 && lb.broken, "closed through on the next candle");
         lb = dt::lifeBars(dt::LOW, 100, std::vector<double>{101, 101}, std::vector<long long>{5, 6}, 6, 3); CHECK(lb.bars == 1 && !lb.broken, "ends at the next line");
         CHECK(dt::adMedianOf("ES") == 0.095 && dt::adMedianOf("GC") == 0.0 && dt::adMedianOf("6E") == 0.067 && dt::adMedianOf("ZZ") == 0.05, "medians per market"); }
+    {   std::vector<dt::Candle> hh = { C(1, 100, 104, 99, 103, 50, 40), C(2, 103, 108, 102, 107, 60, 50), C(3, 107, 110, 105, 109, 30, 80) };
+        hh[2].refPx[1] = 108; hh[2].refLots[1] = 200; hh[2].o = 109.5;
+        CHECK(!dt::decide(hh, 2, dt::HIGH, false, U, t), "(1.2.0) high: red close 109 above the R line 108 = no turn");
+        hh[2].c = 107; CHECK(dt::decide(hh, 2, dt::HIGH, false, U, t) && t.linePx == 108, "(1.2.0) high: red close 107 below the line 108 = turn"); }
     printf("DefenseTurn: %d passed, %d failed\n", p, f);
     return f ? 1 : 0;
 }

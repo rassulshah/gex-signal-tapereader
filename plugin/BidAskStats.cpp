@@ -172,7 +172,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.23.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.24.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -1442,6 +1442,7 @@ void BidAskStats::render(BASState& S) {
     const COLOR normal[2] = { C_BID_BAR, C_ASK_BAR }, spike[2] = { C_BID_SPIKE, C_ASK_SPIKE };   // left = bids hit (red), right = offers lifted (green)
     RTARRAY op(barOpen), cl(barClose);                                     // (1.7.0) the close direction (one-bar ties)
     (void)downMax;
+    const off::ValY vy = off::paneValY(v0, top, g);                         // (1.23.0, Rassul 08:19 / 14:22) the y-axis drives the bars
     off::drawPairBars(this, g, v0, v1, slot, top, normal, spike, xOf, [&](int i) {   // (1.18.0, Rassul 19:02 / 19:09) BOTH sides side by side, above zero: buyers green left, sellers red right
         off::BarLook k; const bas::BarMax* bm = maxOfBar(i); if (!bm) return k;
         const bas::Stat* sp = statOfBar(i);
@@ -1459,14 +1460,13 @@ void BidAskStats::render(BASState& S) {
             }
         }
         return k;
-    }, avoid, 1);   // (1.18.0) pair bars, buyers (side 1) left (was the 1.16.0 mirror) (was drawBars one bar per candle, 1.7.0); bright + ratio / pace only at 2.0x+, no letters (1.7.1)   // (1.9.1) only bars at 2.0x+ their average are bright and labelled; the rest are dim   // (1.7.1, Rassul 09:55 "get rid of the labeling like S L") no letters / R marks drawn; hover + record keep them                                                          // (1.7.0) one bar per candle; buyers = side 1 (offers lifted)
+    }, avoid, 1, &vy);   // (1.18.0) pair bars, buyers (side 1) left (was the 1.16.0 mirror) (was drawBars one bar per candle, 1.7.0); bright + ratio / pace only at 2.0x+, no letters (1.7.1)   // (1.9.1) only bars at 2.0x+ their average are bright and labelled; the rest are dim   // (1.7.1, Rassul 09:55 "get rid of the labeling like S L") no letters / R marks drawn; hover + record keep them                                                          // (1.7.0) one bar per candle; buyers = side 1 (offers lifted)
     if (S.bigLot >= 1 && S.bigLot <= 3 && top > 0) {                       // (1.14.0) the Big Lot cap: 3 px cyan on the top of a marked closed bar
         for (int i = v0; i <= v1 && i < last; ++i) {
             const blt::Mark* mk = markAt(S, (long long)times[i]); if (!mk || !blt::shows(*mk, S.bigLot)) continue;
             const int xc = xOf(i); if (xc < g.left || xc > g.right) continue;
-            const int px = off::pairPx(g.bottom - g.top, g.reserve), yb = g.bottom - 1;   // (1.18.0) the cap on top of its side's bar
             const bas::BarMax* bmk = maxOfBar(i); if (!bmk) continue;
-            const int hb = off::barHeight(mk->side == 1 ? bmk->totAsk : bmk->totBid, top, px); if (hb <= 0) continue;   // (1.19.0) the cap marks the candle on top of its side's total bar
+            int yb = g.bottom - 1; const int hb = off::pairBarH(&vy, g, top, mk->side == 1 ? bmk->totAsk : bmk->totBid, yb); if (hb <= 0) continue;   // (1.23.0) on the axis like the bar   // (1.19.0) the cap marks the candle on top of its side's total bar
             const off::Pair pr = off::pairIn(xc, slot); const int pos = mk->side == 1 ? 0 : 1;   // buyers left, sellers right
             const int l = pr.l[pos], r = pr.r[pos];
             const int cap = std::min(BIG_LOT_CAP_PX, hb);
@@ -1488,6 +1488,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.23.0");   // BAS_VERSION
+    p->setVersion("1.24.0");   // BAS_VERSION
     return p;
 }

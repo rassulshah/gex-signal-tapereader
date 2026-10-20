@@ -1,6 +1,6 @@
 #ifndef LS_DEFENSE_TURN_H
 #define LS_DEFENSE_TURN_H
-// DefenseTurn.h 1.0.0 (2026-10-20, Rassul 12:22 CT "first build the lines, do it now") - SDK-free logic shared by lsBookFlow (decides,
+// DefenseTurn.h 1.2.0 (14:19 CT: the close beyond the R line) (2026-10-20, Rassul 12:22 CT "first build the lines, do it now") - SDK-free logic shared by lsBookFlow (decides,
 // records) and lsDefenseLines (draws on the price chart). Approved design (11:37-12:22 CT, defense-refill-level-pane-mockup.png):
 //   TURN = his pivot rule (1-bar ZigZag pivotOk, DeltaProfileCore.h): the candle that makes the new high / low, or the NEXT candle when it
 //          trades back into that pivot candle's range; + the DEFENDING side's Defense bar (Refill Effort = added - pulled near price) is
@@ -107,6 +107,9 @@ inline bool decide(const std::vector<Candle>& c, size_t i, int side, bool live, 
     const long long ext = side == HIGH ? x.h : x.l;
     const long long rp = refillNear(c, piv, i, side, t.pivotPx);
     t.linePx = rp > 0 ? rp : (side == HIGH ? std::max(t.pivotPx, ext) : std::min(t.pivotPx, ext));
+    // (1.2.0, Rassul 14:19 CT "the close of the candle has to be above the refill line"): the close beyond the R line (above at a low, below
+    // at a high; on the line = no). Forming candle: the price now must be beyond it, so the "?" goes when price is back through the line.
+    if (!(side == HIGH ? x.c < t.linePx : x.c > t.linePx)) return false;
     t.defNet = x.net[ds]; t.attNet = x.net[as]; t.marginPct = marginOf(x.net[ds], x.net[as]);
     // attackers: buyers lifting offers at a high (aggr[1]), sellers hitting bids at a low (aggr[0])
     const long long att = x.aggr[side == HIGH ? 1 : 0], def = x.aggr[side == HIGH ? 0 : 1];
@@ -116,7 +119,7 @@ inline bool decide(const std::vector<Candle>& c, size_t i, int side, bool live, 
 }
 static const bool SHOW_E = false;   // (1.0.1, Rassul 13:37 CT "remove the exhaustion indicators for now"): E is still decided and recorded (nightly), not drawn
 inline std::string tags(const Turn& t) { std::string s = "R"; if (SHOW_E && t.E) s += " E"; if (t.A) s += " A"; return s + " ?"; }
-inline std::string marginText(int m) { return m >= 999 ? std::string("+999%") : "+" + std::to_string(m) + "%"; }
+inline std::string marginText(int m) { return m >= 999 ? std::string("999%") : std::to_string(m) + "%"; }   // (1.2.0, Rassul 14:28 "get rid of the + sign before the percents")
 
 // ---- the turns file (written by lsBookFlow, read by lsDefenseLines) --------------------------------------------------------------------
 // one line per decided turn: T|bar_key|side|pivot_px|line_px|margin|E|A|def_net|att_net|tick|pivot_key  (prices as doubles, tick = tick size;

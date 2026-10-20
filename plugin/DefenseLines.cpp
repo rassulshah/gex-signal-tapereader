@@ -1,5 +1,5 @@
 /********************************************************************************
- *  DefenseLines.cpp  --  Investor/RT RTX extension  lsDefenseLines  1.0.0  (2026-10-20)
+ *  DefenseLines.cpp  --  Investor/RT RTX extension  lsDefenseLines  1.2.0  (2026-10-20)
  *  Rassul 11:37-12:22 CT (defense-refill-level-pane-mockup.png; 12:22 "first build the lines, do it now"): the PRICE CHART half of the
  *  Defense pane's pivot turns. lsBookFlow (Defense) decides each turn at the close and writes it to
  *  lsFlexLevels\BookFlow\<MKT>-<spb>-turns.csv (+ the forming candle's "?" in <MKT>-<spb>-turns-live.txt); this overlay only READS and draws:
@@ -39,7 +39,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* DL_VERSION = "1.1.0";   // 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
+static const char* DL_VERSION = "1.2.0";   // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
 static long long dlSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string dlFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void dlMakeDir(const std::string& p) {
@@ -88,7 +88,7 @@ public:
     std::string chartMarket() { char b[64]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const int m = ss::marketOfRoot(rs ? rs : ""); if (m < 0) { const char* sy = getSymbol(); const int m2 = ss::marketOfRoot(sy ? sy : ""); return m2 < 0 ? std::string() : ss::MARKETS[m2]; } return ss::MARKETS[m]; }
     long long localSec(RTDATE d) { struct tm t; std::memset(&t, 0, sizeof(t)); if (!getLocaltime(d, &t)) return 0; return dlCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec); }
     void refresh(DlState& s);
-    void writeStatus(DlState& s, size_t drawn);
+    void writeStatus(DlState& s, size_t drawn, size_t failed = 0);
     void tri(int cx, int tipY, bool down, COLOR col) {
         setPen(col, 1, P_SOLID);
         for (int r = 0; r < 5; ++r) { const int y = down ? tipY - r : tipY + r; PNT a; a.set(0, 0.0f); a.h = (short)(cx - r); a.v = (short)y; a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = (short)(cx + r + 1); b.v = (short)y; b.drawLineTo(); }
@@ -147,11 +147,11 @@ void DefenseLines::refresh(DlState& s) {
     }
 }
 
-void DefenseLines::writeStatus(DlState& s, size_t drawn) {
+void DefenseLines::writeStatus(DlState& s, size_t drawn, size_t failed) {
     const std::string d = dlFlex(); if (d.empty() || s.mkt.empty()) return;
     std::ostringstream o;
     o << "VERSION," << DL_VERSION << "\nMARKET," << s.mkt << "\nBAR_SECONDS," << s.spb << "\nTURNS_FILE," << s.turns.path << "," << s.lines.size() << " turns, "
-      << s.bad << " unreadable lines\nLIVE," << (s.haveLive ? "? on the forming candle" : "none") << "\nDRAWN_NOW," << drawn
+      << s.bad << " unreadable lines\nLIVE," << (s.haveLive ? "? on the forming candle" : "none") << "\nDRAWN_NOW," << drawn << ",failed lines removed " << failed
       << "\nSETTINGS," << s.set.why << ",lines " << (s.set.b(dlset::K_SHOW_LINES) ? "on" : "off") << ",E " << (s.set.b(dlset::K_SHOW_E) ? "on" : "off") << ",dots " << (s.set.b(dlset::K_SHOW_DOTS) ? "on" : "off")
       << ",pane marks " << (s.set.b(dlset::K_SHOW_MARKS) ? "on" : "off") << ",candles " << s.set.i(dlset::K_MAX_CANDLES) << ",exhaustion lines " << s.xs.size() << "\n";
     const std::string body = o.str(); if (body == s.statusBody) return;
@@ -183,23 +183,27 @@ int DefenseLines::draw(void) {
             return -1;
         };
         const COLOR colLow = (COLOR)V.c(dlset::K_COL_LOW), colHigh = (COLOR)V.c(dlset::K_COL_HIGH), colE = (COLOR)V.c(dlset::K_COL_E), colDot = (COLOR)V.c(dlset::K_COL_DOT);
-        auto dim = [](COLOR c) { return (COLOR)(((c >> 1) & 0x7F7F7Ful) + 0x101010ul); };
         auto traded = [&](int k, double px) { return k >= 0 && k < n && (double)loA[k] <= px + 1e-9 && px <= (double)hiA[k] + 1e-9; };
-        size_t drawn = 0;
+        size_t drawn = 0, failed = 0;
         // one line: from the candle it refers to (yellow dot), at most maxBars candles, until the next turn's lines, or a close through it
-        auto drawLine = [&](int st, int side, double px, long long nextKey, COLOR col, const std::string& tag, int labelDy) {
-            if (st < 0 || st > v1 || st < v0 - maxBars) return;
+        // (1.2.0, Rassul 14:20 CT "once a refill on any line fails, remove it to get rid of the clutter"): a line a candle CLOSES through is
+        // removed (line, label, dot); a failed R takes its E with it. Lines that ended by time / the next line stay. The turns file keeps all.
+        auto lifeAt = [&](int st, int side, double px, long long nextKey) {
             std::vector<double> closes; std::vector<long long> times;
             for (int j = st + 1; j < n && (int)closes.size() < maxBars + 1; ++j) { closes.push_back((double)clA[j]); times.push_back((long long)dtA[j]); }
-            const dt::Life life = dt::lifeBars(side, px, closes, times, nextKey, maxBars);
+            return dt::lifeBars(side, px, closes, times, nextKey, maxBars);
+        };
+        auto drawLine = [&](int st, int side, double px, long long nextKey, COLOR col, const std::string& tag, int labelDy) {
+            if (st < 0 || st > v1 || st < v0 - maxBars) return;
+            const dt::Life life = lifeAt(st, side, px, nextKey);
+            if (life.broken) return;                                          // failed: removed
             const int j = st + life.bars;
             if (j < v0) return;
             PNT a; a.set(st, (float)px, kBarCenter); PNT b; b.set(j, (float)px, kBarCenter);
             const int xa = a.h - ppb / 2, xb = b.h + ppb / 2;
-            const COLOR c = life.broken ? dim(col) : col;
-            setPen(c, 2, P_SOLID);
+            setPen(col, 2, P_SOLID);
             { PNT p0; p0.set(0, 0.0f); p0.h = (short)xa; p0.v = a.v; p0.setDrawPosition(); PNT p1; p1.set(0, 0.0f); p1.h = (short)xb; p1.v = a.v; p1.drawLineTo(); }
-            label(xb + 3, a.v + labelDy, (life.broken ? std::string("x ") : std::string()) + tag, c);
+            label(xb + 3, a.v + labelDy, tag, col);
             if (showDots && st >= v0) dot(a.h, a.v, colDot);
             ++drawn;
         };
@@ -212,6 +216,7 @@ int DefenseLines::draw(void) {
             std::map<std::pair<int, long long>, dt::XLine>::const_iterator xi = s->xs.find(std::make_pair(L.side, L.t));
             const bool haveX = xi != s->xs.end() && showE;
             const bool close = haveX && std::fabs(xi->second.px - L.linePx) < 1.5 * L.tick;   // within a tick: stack the labels
+            if (st >= 0 && lifeAt(st, L.side, L.linePx, nextKey).broken) { ++failed; continue; }   // the R failed: R and its E removed
             if (showLines) drawLine(st, L.side, L.linePx, nextKey, L.side == dt::HIGH ? colHigh : colLow, dt::tagsOf(L), close ? (L.side == dt::HIGH ? 6 : -6) : 0);
             if (haveX) {
                 const int xs_ = indexOf(xi->second.at);
@@ -230,7 +235,7 @@ int DefenseLines::draw(void) {
                 ++drawn;
             }
         }
-        writeStatus(*s, drawn);
+        writeStatus(*s, drawn, failed);
     } catch (...) {}
     return RTX_OK;
 }
@@ -245,7 +250,7 @@ extern "C" cppExtension* CreateExtension(void) {
     DefenseLines* p = new DefenseLines();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour. R LINE (red at a high, green at a low) = the price near the pivot where the defenders re-posted the most of what was eaten. E LINE (gray) = exhaustion: the price near the pivot where the attack died AT the price (the attackers' hits there in seconds 20-60 slowed to the market's median or less vs seconds 0-20, and at least half the resting size stayed); decided about a minute after the close; only on turns that have an R. Yellow dot = the candle each line refers to. Each line runs at most 3 candles (setting), until the next turn's lines, or until a candle closes through it (then dimmed with x). A = absorption (attackers out-hit the defenders and still lost the close); ? = not proven yet (scored nightly). Dotted ? line = the forming candle, gone if it does not confirm. Example: 8:48 AM ES low: green R at 7827.25, gray E at 7826.75, dots on the 8:48 candle. Needs lsBookFlow (Defense) on the same chart.");
-    p->setVersion("1.1.0");   // DL_VERSION
+    p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour AND beyond the R line (above it at a low, below it at a high). R LINE (red at a high, green at a low) = the price near the pivot where the defenders re-posted the most of what was eaten. E LINE (gray) = exhaustion: the price near the pivot where the attack died AT the price (the attackers' hits there in seconds 20-60 slowed to the market's median or less vs seconds 0-20, and at least half the resting size stayed); decided about a minute after the close; only on turns that have an R. Yellow dot = the candle each line refers to. Each line runs at most 3 candles (setting), until the next turn's lines, or until a candle closes through it (then it is removed). A = absorption (attackers out-hit the defenders and still lost the close); ? = not proven yet (scored nightly). Dotted ? line = the forming candle, gone if it does not confirm. Example: 8:48 AM ES low: green R at 7827.25, gray E at 7826.75, dots on the 8:48 candle. Needs lsBookFlow (Defense) on the same chart.");
+    p->setVersion("1.2.0");   // DL_VERSION
     return p;
 }

@@ -1042,6 +1042,29 @@ inline int barHeight(long long v, long long top, int px) {
     const int r = (int)(h + .5);
     return r < 1 ? 1 : (r > px ? px : r);
 }
+// (Effort Reward 1.23 / Defense 1.14, Rassul 2026-10-20 08:19 + 14:22 "if i move it dont the bars move also ?") THE Y-AXIS DRIVES THE BARS:
+// the bars are placed with IRT's own value -> pixel mapping of the pane (the same mapping the axis labels use), so dragging / stretching
+// the axis zooms the bars with it. ValY = that mapping read once per draw: y0 = the pixel row of value 0, ppu = pixels per unit (> 0).
+// Not usable (no mapping, or value 0 far outside the pane) -> the old fixed-pixel scale. SDK-free so it is unit-tested.
+struct ValY { bool ok = false; double y0 = 0, ppu = 0; int yOf(double v) const { return (int)std::lround(y0 - v * ppu); } };
+inline ValY valYOf(double yZero, double yTop, long long top, int paneTop, int paneBottom) {
+    ValY m; if (top <= 0) return m;
+    const double ppu = (yZero - yTop) / (double)top, H = (double)(paneBottom - paneTop);
+    if (!(ppu > 0) || !(ppu < 1e7) || !(yZero == yZero)) return m;
+    if (yZero < paneTop - H || yZero > paneBottom + H) return m;               // value 0 far off the pane: not this pane's mapping
+    m.ok = true; m.y0 = yZero; m.ppu = ppu; return m;
+}
+// the pixel rows of a bar of value v from zero: [yTopOut, yBotOut] inside the pane's drawing rows; returns its height (0 = not visible);
+// capped = it was clipped at the top of the drawing area (the white tip)
+// lo / hi = the first / last drawing row (pane top + reserve + 1 / pane bottom - 1)
+inline int axisBar(const ValY& m, int lo, int hi, long long v, int& yTopOut, int& yBotOut, bool& capped) {
+    int yb = m.yOf(0), yt = m.yOf((double)v); capped = false;
+    if (yb > hi) yb = hi;
+    if (yt < lo) { yt = lo; capped = true; }
+    if (yt > yb || yb < lo) return 0;
+    if (yt == yb && v > 0) yt = yb;                                       // at least 1 px
+    yTopOut = yt; yBotOut = yb; return yb - yt + 1;
+}
 // (12:03 / 12:10) HEADROOM for the spike labels and the message line: the tallest bar tops out at <= 1/1.45 (~69%) of the drawing
 // height AND leaves LABEL_ROOM px (two label lines) plus the text reserve above it. The axis (scale()) uses the same px, so every
 // bar top still sits at its value on the axis.
@@ -2115,10 +2138,22 @@ inline void drawBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot
 // (1.18.0) pair bars: look.v[s] per side; left = the side drawn on the left (Aggression: 1 = buyers, Book Flow: 0 = bids); green / red by side
 // (normal / spike colours indexed by side). top = the capped scale (a taller bar stops at the top with a white tip); a negative value
 // (Book Flow: more pulled than added) is a 2 px stub. Bright (hiOf) bars carry the ratio (yellow) and pace / R (grey) above them.
+// IRT's mapping of this pane, read at candle `bar`: the rows of value 0 and value `top` (inside a draw)
+inline ValY paneValY(int bar, long long top, const PaneGeo& g) {
+    if (top <= 0) return ValY();
+    cppExtension::PNT a; a.set(bar, 0.0f); cppExtension::PNT b; b.set(bar, (float)top);
+    return valYOf((double)a.v, (double)b.v, top, g.top, g.bottom);
+}
+// a bar's height and its zero row the same way drawPairBars places it (for things drawn on top of a bar: marks, caps)
+inline int pairBarH(const ValY* vy, const PaneGeo& g, long long top, long long v, int& yb) {
+    if (vy && vy->ok) { yb = std::min(g.bottom - 1, vy->yOf(0)); int a = 0, b = 0; bool c = false; return v > 0 ? axisBar(*vy, g.top + g.reserve + 1, g.bottom - 1, v, a, b, c) : 0; }
+    yb = g.bottom - 1; return v > 0 ? barHeight(v, top, pairPx(g.bottom - g.top, g.reserve)) : 0;
+}
 inline void drawPairBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int slot, long long top, const COLOR normal[2], const COLOR spike[2],
-                         const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid, int left) {
+                         const std::function<int(int)>& xOf, const std::function<BarLook(int)>& look, const std::vector<LBox>& avoid, int left, const ValY* vy = nullptr) {
     if (top <= 0) return;
-    const int px = pairPx(g.bottom - g.top, g.reserve), yb = g.bottom - 1;
+    const bool ax = vy && vy->ok;
+    const int px = pairPx(g.bottom - g.top, g.reserve), yb = ax ? std::min(g.bottom - 1, vy->yOf(0)) : g.bottom - 1;
     struct Lb { int cx = 0, hb = 0; long long mag = 0; std::string a, b; bool view = true; };
     std::vector<Lb> labs;
     for (int i = std::max(0, v0 - labelLead(slot)); i <= v1; ++i) {
@@ -2130,12 +2165,15 @@ inline void drawPairBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int 
             const int s = pos == 0 ? left : 1 - left; const long long v = b.v[s];
             if (v == 0) continue;
             const int l = p.l[pos], r = p.r[pos];
-            if (v < 0) { if (view) fillFlat(x, l, yb - 1, r, yb, normal[s]); continue; }   // more pulled than added: a stub, never below zero
-            const int h = barHeight(v, top, px); if (h <= 0) continue;
+            if (v < 0) { if (view && yb > g.top + g.reserve) fillFlat(x, l, yb - 1, r, yb, normal[s]); continue; }   // more pulled than added: a stub, never below zero
+            int h = 0; bool cap = false;
+            if (ax) { int yt = 0, ybb = 0; h = axisBar(*vy, g.top + g.reserve + 1, g.bottom - 1, v, yt, ybb, cap); }
+            else { h = barHeight(v, top, px); cap = v > top; }
+            if (h <= 0) continue;
             const bool hi = hiOf(b, s);
             if (view) {
                 fillFlat(x, l, yb - h + 1, r, yb, hi ? spike[s] : normal[s]);
-                if (v > top && h > CAP_TIP_PX) fillFlat(x, l, yb - h + 1, r, yb - h + CAP_TIP_PX, C_WHITE);   // capped: the white tip
+                if (cap && h > CAP_TIP_PX) fillFlat(x, l, yb - h + 1, r, yb - h + CAP_TIP_PX, C_WHITE);   // capped: the white tip
             }
             if (!hi) continue;
             Lb q; q.cx = (l + r) / 2; q.hb = h; q.mag = v; q.view = view;

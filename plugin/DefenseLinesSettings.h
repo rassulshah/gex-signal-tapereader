@@ -1,11 +1,11 @@
-// DefenseLinesSettings.h (lsDefenseLines 1.1.0, 2026-10-20, Rassul 12:04 / 12:22 / 13:54 CT): the ONE settings table for the refill lines,
+// DefenseLinesSettings.h (lsDefenseLines 1.2.0, 2026-10-20, Rassul 12:04 / 12:22 / 13:54 CT): the ONE settings table for the refill lines,
 // the exhaustion lines, the dots and the Defense pane's turn marks. File: lsFlexLevels\DefenseLines.settings-<MKT>.txt (keyed, per market).
 // lsBookFlow reads the same file for its pane marks, so one window controls both. Each drawn element has a Show box and its colours.
 #pragma once
 #include "SettingsSpec.h"
 
 namespace dlset {
-static const char* const PLUGIN_VERSION = "1.1.0";
+static const char* const PLUGIN_VERSION = "1.2.0";
 enum K { K_SHOW_LINES, K_COL_LOW, K_COL_HIGH, K_SHOW_E, K_COL_E, K_SHOW_DOTS, K_COL_DOT, K_SHOW_MARKS, K_MAX_CANDLES, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

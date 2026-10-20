@@ -33,8 +33,8 @@ int main() {
     h.draws.clear(); p->draw();
     DlState* s = p->stateFor();
     CHECK(s && s->lines.size() == 3 && s->xs.size() == 1 && s->bad == 1, "3 turns + 1 exhaustion line read, 1 unreadable line skipped");
-    CHECK(text(h, "x R ?") != nullptr, "the high line is closed through 2 candles later: 'x R ?' (dimmed)");
-    {   const mock::Draw* d = text(h, "x R ?"); CHECK(d && d->color != 0xEF4444, "broken line dimmed (not the full red)"); }
+    CHECK(text(h, "x R ?") == nullptr, "(1.2.0) the high line closed through 2 candles later: removed (no dimmed 'x R ?')");
+    {   int red = 0; for (auto& d : h.draws) red += d.type == "text" && d.color == 0xEF4444; CHECK(red == 1, "(1.2.0) only the third (holding) high line's label is drawn in red"); }
     {   const mock::Draw* d = text(h, "R A ?"); CHECK(d && d->color == 0x22C55E, "the low line: green 'R A ?'"); }
     {   const mock::Draw* d = text(h, "E ?"); CHECK(d && d->color == 0xA3A3A3, "the gray exhaustion line 'E ?'"); }
     CHECK(text(h, "R ?") != nullptr, "the third line: R ?");
@@ -47,7 +47,7 @@ int main() {
     settings(flex, dlset::K_SHOW_LINES, 0); s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
     CHECK(text(h, "R A ?") == nullptr && text(h, "E ?") != nullptr, "R lines off: no R, E stays");
     settings(flex, dlset::K_MAX_CANDLES, 1); s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
-    CHECK(text(h, "R ?") != nullptr && text(h, "x R ?") == nullptr && text(h, "R ?") != nullptr, "1 candle: the high line ends before the close through");
+    {   int r = 0; for (auto& d : h.draws) r += d.type == "text" && d.text == "R ?"; CHECK(r == 2, "1 candle: the high line ends before the close through, so it stays (2 'R ?' lines)"); }
     settings(flex, -1, 0);
     // the live "?" on the forming candle
     dt::Turn lv; lv.t = (long long)h.bars[39].time; lv.side = dt::LOW; lv.pivotPx = 27990; lv.linePx = 27990; lv.marginPct = 12;
@@ -62,7 +62,8 @@ int main() {
     s->lastCheckMs = -100000; h.draws.clear(); p->draw();
     CHECK(s->lines.size() == 3 && s->xs.size() == 1 && text(h, "R A ?") != nullptr && text(h, "E ?") != nullptr, "a torn shorter file: the lines stay (no repaint)");
     std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string body((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
-    CHECK(body.find("VERSION,1.1.0") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    CHECK(body.find("failed lines removed") != std::string::npos, "(1.2.0) the status counts the removed lines");
+    CHECK(body.find("VERSION,1.2.0") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
     p->destroy(); p->~DefenseLines(); ::operator delete(p);
     std::printf("DefenseLines host: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
