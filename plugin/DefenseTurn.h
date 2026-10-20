@@ -19,6 +19,8 @@
 #include <sstream>
 #include <cstdlib>
 #include <cmath>
+#include <cerrno>
+#include <limits>
 
 namespace dt {
 static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
@@ -133,24 +135,64 @@ inline std::string lineOf(char kind, const Turn& t, double tick) {
       << (t.E ? 1 : 0) << '|' << (t.A ? 1 : 0) << '|' << t.defNet << '|' << t.attNet << '|' << tick << '|' << t.pivotT;
     return o.str();
 }
+inline bool decimalToken(const std::string& s, bool decimalPoint) {
+    if (s.empty()) return false;
+    size_t k = s[0] == '-' ? 1 : 0;             // lineOf emits a minus only for negative net values
+    if (k == s.size()) return false;
+    bool digits = false;
+    while (k < s.size() && s[k] >= '0' && s[k] <= '9') { digits = true; ++k; }
+    if (decimalPoint && k < s.size() && s[k] == '.') {
+        ++k;
+        while (k < s.size() && s[k] >= '0' && s[k] <= '9') { digits = true; ++k; }
+    }
+    if (!digits) return false;
+    if (decimalPoint && k < s.size() && (s[k] == 'e' || s[k] == 'E')) {
+        ++k;
+        if (k < s.size() && (s[k] == '+' || s[k] == '-')) ++k;
+        const size_t exponent = k;
+        while (k < s.size() && s[k] >= '0' && s[k] <= '9') ++k;
+        if (k == exponent) return false;
+    }
+    return k == s.size();
+}
+inline bool parseLongLong(const std::string& s, long long& v) {
+    if (!decimalToken(s, false)) return false;
+    char* e = nullptr; errno = 0;
+    const long long n = std::strtoll(s.c_str(), &e, 10);
+    if (errno == ERANGE || e == s.c_str() || *e) return false;
+    v = n; return true;
+}
+inline bool parseInt(const std::string& s, int& v) {
+    long long n = 0;
+    if (!parseLongLong(s, n) || n < (long long)std::numeric_limits<int>::min() || n > (long long)std::numeric_limits<int>::max()) return false;
+    v = (int)n; return true;
+}
+inline bool parseFiniteDouble(const std::string& s, double& v) {
+    if (!decimalToken(s, true)) return false;
+    char* e = nullptr; errno = 0;
+    const double n = std::strtod(s.c_str(), &e);
+    if (errno == ERANGE || e == s.c_str() || *e || !std::isfinite(n)) return false;
+    v = n; return true;
+}
 inline bool parseLine(const std::string& s, Line& L) {
     if (s.size() < 3 || (s[0] != 'T' && s[0] != 'L') || s[1] != '|') return false;
     std::vector<std::string> f; std::string cur;
-    for (size_t k = 2; k < s.size(); ++k) { const char ch = s[k]; if (ch == '\r') continue; if (ch == '|') { f.push_back(cur); cur.clear(); } else cur += ch; }
+    const size_t end = s.back() == '\r' ? s.size() - 1 : s.size();
+    for (size_t k = 2; k < end; ++k) { const char ch = s[k]; if (ch == '|') { f.push_back(cur); cur.clear(); } else cur += ch; }
     f.push_back(cur);
     if (f.size() != 10 && f.size() != 11) return false;
-    char* e = nullptr;
-    L.kind = s[0];
-    L.t = std::strtoll(f[0].c_str(), &e, 10); if (*e || L.t <= 0) return false;
-    L.side = (int)std::strtol(f[1].c_str(), &e, 10); if (*e || (L.side != LOW && L.side != HIGH)) return false;
-    L.pivotPx = std::strtod(f[2].c_str(), &e); if (*e || !(L.pivotPx > 0)) return false;
-    L.linePx = std::strtod(f[3].c_str(), &e); if (*e || !(L.linePx > 0)) return false;
-    L.margin = (int)std::strtol(f[4].c_str(), &e, 10); if (*e || L.margin < 0) return false;
-    L.E = f[5] == "1"; L.A = f[6] == "1";
-    L.defNet = std::strtoll(f[7].c_str(), &e, 10); if (*e) return false;
-    L.attNet = std::strtoll(f[8].c_str(), &e, 10); if (*e) return false;
-    L.tick = std::strtod(f[9].c_str(), &e); if (*e || !(L.tick > 0)) return false;
-    L.pivotT = 0; if (f.size() == 11) { L.pivotT = std::strtoll(f[10].c_str(), &e, 10); if (*e || L.pivotT < 0) return false; }
+    Line out; out.kind = s[0];
+    if (!parseLongLong(f[0], out.t) || out.t <= 0) return false;
+    if (!parseInt(f[1], out.side) || (out.side != LOW && out.side != HIGH)) return false;
+    if (!parseFiniteDouble(f[2], out.pivotPx) || !(out.pivotPx > 0)) return false;
+    if (!parseFiniteDouble(f[3], out.linePx) || !(out.linePx > 0)) return false;
+    if (!parseInt(f[4], out.margin) || out.margin < 0) return false;
+    if ((f[5] != "0" && f[5] != "1") || (f[6] != "0" && f[6] != "1")) return false;
+    out.E = f[5] == "1"; out.A = f[6] == "1";
+    if (!parseLongLong(f[7], out.defNet) || !parseLongLong(f[8], out.attNet)) return false;
+    if (!parseFiniteDouble(f[9], out.tick) || !(out.tick > 0)) return false;
+    if (f.size() == 11 && (!parseLongLong(f[10], out.pivotT) || out.pivotT < 0)) return false;
+    L = out;
     return true;
 }
 // (1.1.0) the exhaustion line of a turn
@@ -161,15 +203,17 @@ inline std::string xLineOf(long long turnT, int side, long long pxTicks, double 
 inline bool parseX(const std::string& s, XLine& X) {
     if (s.size() < 3 || s[0] != 'X' || s[1] != '|') return false;
     std::vector<std::string> f; std::string cur;
-    for (size_t k = 2; k < s.size(); ++k) { const char ch = s[k]; if (ch == '\r') continue; if (ch == '|') { f.push_back(cur); cur.clear(); } else cur += ch; }
+    const size_t end = s.back() == '\r' ? s.size() - 1 : s.size();
+    for (size_t k = 2; k < end; ++k) { const char ch = s[k]; if (ch == '|') { f.push_back(cur); cur.clear(); } else cur += ch; }
     f.push_back(cur);
     if (f.size() != 5) return false;
-    char* e = nullptr;
-    X.t = std::strtoll(f[0].c_str(), &e, 10); if (*e || X.t <= 0) return false;
-    X.side = (int)std::strtol(f[1].c_str(), &e, 10); if (*e || (X.side != LOW && X.side != HIGH)) return false;
-    X.px = std::strtod(f[2].c_str(), &e); if (*e || !(X.px > 0)) return false;
-    X.tick = std::strtod(f[3].c_str(), &e); if (*e || !(X.tick > 0)) return false;
-    X.at = std::strtoll(f[4].c_str(), &e, 10); if (*e || X.at <= 0) return false;
+    XLine out;
+    if (!parseLongLong(f[0], out.t) || out.t <= 0) return false;
+    if (!parseInt(f[1], out.side) || (out.side != LOW && out.side != HIGH)) return false;
+    if (!parseFiniteDouble(f[2], out.px) || !(out.px > 0)) return false;
+    if (!parseFiniteDouble(f[3], out.tick) || !(out.tick > 0)) return false;
+    if (!parseLongLong(f[4], out.at) || out.at <= 0) return false;
+    X = out;
     return true;
 }
 // (1.1.0) the exhaustion price of a turn from the finished touches: the defending side's touches on the pivot candle or the turn candle,

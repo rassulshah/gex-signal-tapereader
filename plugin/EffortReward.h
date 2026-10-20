@@ -44,7 +44,8 @@ inline bool effortX(long long tot, const std::vector<long long>& prior, double& 
 // side 0 = sellers (attack down), 1 = buyers (attack up)
 inline bool rewardX(double o, double h, double l, double pc, double tick, long long tot, int side, const std::string& mkt, double& x) {
     x = 0; const double nrm = rewardNorm(mkt);
-    if (!(tick > 0) || !(nrm > 0) || tot <= 0 || !std::isfinite(o) || !std::isfinite(h) || !std::isfinite(l)) return false;
+    if (!std::isfinite(tick) || !(tick > 0) || !(nrm > 0) || tot <= 0 || (side != 0 && side != 1)
+        || !std::isfinite(o) || !std::isfinite(h) || !std::isfinite(l) || h < l || o < l || o > h) return false;
     if (!std::isfinite(pc)) pc = o;
     const double mv = side == 0 ? std::max(0.0, std::max(o, pc) - l) : std::max(0.0, h - std::min(o, pc));
     x = (mv / tick) / (double)tot * 1000.0 / nrm; return std::isfinite(x);
@@ -62,7 +63,11 @@ inline std::string rewardCell(bool ok, double x, bool lost = true) {
 }
 // the Read at a new 10-bar low (sellers attacking) / high (buyers attacking); false = nothing to say (the pane's own read stays)
 struct Side { bool effOk = false, rewOk = false; double eff = 0, rew = 0; bool thin = false; bool lost = false; };   // lost (1.5.0) = the candle closed against this side (sellers: green close, buyers: red)   // thin = Reward hidden: too few lots (1.1.0)
-inline void guard(Side& s) { if (s.rewOk && (!s.effOk || s.eff < REWARD_MIN_EFFORT - 1e-9)) { s.rewOk = false; s.thin = true; } }
+inline void guard(Side& s) {
+    if (s.effOk && (!std::isfinite(s.eff) || s.eff < 0)) s.effOk = false;
+    if (s.rewOk && (!std::isfinite(s.rew) || s.rew < 0)) s.rewOk = false;
+    if (s.rewOk && (!s.effOk || s.eff < REWARD_MIN_EFFORT - 1e-9)) { s.rewOk = false; s.thin = true; }
+}
 inline std::string rewardCellOf(const Side& s) { return s.thin ? std::string("-") : rewardCell(s.rewOk, s.rew, s.lost); }
 inline bool read(bool newLow, bool newHigh, const Side s[2], br::Read& r) {
     if (newLow == newHigh) return false;                                   // neither, or an outside bar: no side to judge

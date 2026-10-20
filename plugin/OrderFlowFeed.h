@@ -464,18 +464,20 @@ public:
     long long curKey = 0, lastS = 0;                   // the candle the event belongs to (set by the caller); the newest event second
     double adMedian = 0.1;                             // the market's median slowdown (set by the caller; DefenseTurn.h table)
     void touchFill(int s, Tick px, long long size, long long ts, long long restBefore) {
-        if (ts <= 0) return;
-        if (ts > lastS) lastS = ts;
+        if ((s != BID && s != ASK) || px <= 0 || size <= 0 || ts <= 0 || ts < lastS) return;
+        lastS = ts;
         std::unordered_map<Tick, long long>::iterator lt = lastTradeS[s].find(px);
-        const bool fresh = lt == lastTradeS[s].end() || ts - lt->second > 300;
-        lastTradeS[s][px] = ts;
-        if (lastTradeS[s].size() > 20000) { for (std::unordered_map<Tick, long long>::iterator q = lastTradeS[s].begin(); q != lastTradeS[s].end();) if (ts - q->second > 600) q = lastTradeS[s].erase(q); else ++q; }
+        const long long prior = lt == lastTradeS[s].end() ? -1 : lt->second;
+        const bool fresh = prior < 0 || ts - prior >= 300;                 // exactly five minutes untraded is fresh
+        if (ts >= prior) lastTradeS[s][px] = ts;
+        if (lastTradeS[s].size() > 20000) { for (std::unordered_map<Tick, long long>::iterator q = lastTradeS[s].begin(); q != lastTradeS[s].end();) if (lastS - q->second > 600) q = lastTradeS[s].erase(q); else ++q; }
         if (fresh) { Touch t; t.s = s; t.px = px; t.key = curKey; t.t0 = ts; t.rest0 = restBefore; touches.push_back(t); }
         for (size_t k = touches.size(); k-- > 0;) {
             Touch& t = touches[k];
             if (ts - t.t0 > 600) break;                                        // older touches are all finished
             if (t.done || t.s != s || t.px != px) continue;
             const long long dt = ts - t.t0;
+            if (dt < 0) continue;                                              // stale MBO event: never count it in a later touch
             if (dt < 20) t.h1 += size; else if (dt < 60) t.h2 += size;
         }
         finishTouches(ts);
@@ -489,7 +491,7 @@ public:
             if (t.done || lastS - t.t0 < 60) continue;
             const double decel = ((double)t.h2 / 40.0) / ((double)t.h1 / 20.0 + 0.05);
             const long long left = restAt(t.s, t.px);
-            t.ad = t.rest0 > 0 && decel <= adMedian + 1e-12 && left * 2 >= t.rest0;
+            t.ad = t.rest0 > 0 && finite(adMedian) && adMedian >= 0 && decel <= adMedian + 1e-12 && left * 2 >= t.rest0;
             t.done = true;
         }
     }

@@ -60,6 +60,8 @@ int main() {
     const std::string ln = dt::lineOf('T', q, 0.25); dt::Line L;
     CHECK(dt::parseLine(ln, L) && L.t == q.t && L.side == dt::HIGH && L.linePx == 7843.5 && L.pivotPx == 7844 && L.margin == 23 && L.E && !L.A && dt::tagsOf(L) == "R ?", "file line round trip (E recorded, not shown)");
     CHECK(!dt::parseLine("T|1|2|3", L) && !dt::parseLine("X|1|0|1|1|0|0|0|0|0|0.25", L) && !dt::parseLine(ln.substr(0, ln.size() - 6), L), "garbage / half lines refused");
+    CHECK(dt::parseLine(ln + "\r", L) && !dt::parseLine("T|1||1|1|0|0|0|0|0|1", L) && !dt::parseLine("T|\r1|0|1|1|0|0|0|0|1", L) && !dt::parseLine("T|1|0|inf|1|0|0|0|0|0|1", L) && !dt::parseLine("T|999999999999999999999999|0|1|1|0|0|0|0|0|1", L) && !dt::parseLine("T|1|0|1|1|0|2|0|0|0|1", L), "Windows line ending accepted; malformed T fields refused");
+    CHECK(!dt::parseLine("T| 1|0|1|1|0|0|0|0|0|1", L) && !dt::parseLine("T|+1|0|1|1|0|0|0|0|0|1", L) && !dt::parseLine("T|1|0|0x1p0|1|0|0|0|0|0|1", L) && !dt::parseLine("T|1|0|1e-999|1|0|0|0|0|0|1", L), "whitespace, noncanonical, hex, and underflowed T numeric fields refused");
     // line life: 3-min bars, closes after a high line at 100
     std::vector<double> cl = { 99, 99.5, 98, 101, 97 }; std::vector<long long> tm = { 180, 360, 540, 720, 900 };
     dt::Life lf = dt::lifeOf(dt::HIGH, 100, 0, cl, tm, 0, 900); CHECK(lf.bars == 4 && lf.broken, "closed above on the 4th candle: broken there");
@@ -73,6 +75,8 @@ int main() {
         CHECK(dt::parseLine("T|5|0|7000|7000|10|0|0|5|3|0.25", L2) && L2.pivotT == 0, "an old 10-field T line still reads (pivot key 0)");
         dt::XLine X; CHECK(dt::parseX(dt::xLineOf(3875279400LL, dt::LOW, 27995, 0.25, 3875279220LL), X) && X.t == 3875279400LL && X.px == 6998.75 && X.at == 3875279220LL && X.side == dt::LOW, "X line round trip");
         CHECK(!dt::parseX("X|1|0|7000", X) && !dt::parseX("T|1|0|7000|0.25|1", X), "garbage X lines refused");
+        CHECK(!dt::parseX("X|1||1|1|1", X) && !dt::parseX("X|1|0|nan|1|1", X) && !dt::parseX("X|1|0|1|1|999999999999999999999999", X), "empty, non-finite, and overflowed X fields refused");
+        CHECK(!dt::parseX("X| 1|0|1|1|1", X) && !dt::parseX("X|1|0|0x1p0|1|1", X), "whitespace and hex X numeric fields refused");
         std::vector<dt::TouchV> T; auto add = [&](int s_, long long px, long long key, bool ad) { dt::TouchV v; v.s = s_; v.px = px; v.key = key; v.ad = ad; T.push_back(v); };
         add(0, 27997, 10, true); add(0, 27995, 11, true); add(0, 27994, 11, false); add(0, 27990, 9, true); add(1, 27993, 11, true); add(0, 27980, 11, true);
         long long px = 0, at = 0;

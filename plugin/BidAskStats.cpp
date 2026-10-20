@@ -172,7 +172,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.24.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.24.1"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -319,17 +319,21 @@ static bool mboTotOf(const BASState& S, long long t, long long out[2]) {
     if (f != S.fin.end()) {
         if (!f->second.dbo || f->second.r.partial) return false;
         const long long b = f->second.r.aggrC[off::BID], a = f->second.r.aggrC[off::ASK];
-        if (b + a <= 0) return false;
+        if (b < 0 || a < 0 || (b == 0 && a == 0)) return false;
         out[0] = b; out[1] = a; return true;
     }
     if (!(S.firstBarKey > 0 && t > S.firstBarKey)) return false;             // the first candle after the feed opened is partial
     std::map<long long, off::Acc>::const_iterator ac = S.accs.find(t);
     if (ac == S.accs.end()) return false;
+    if (ac->second.aggrCap || ac->second.aggrUnknown > 0) return false;      // truncated / unidentified fills are not complete MBO totals
     long long b = 0, a = 0;
     for (std::unordered_map<long long, off::Aggr>::const_iterator g = ac->second.aggr.begin(); g != ac->second.aggr.end(); ++g) {
-        if (g->second.side == off::BID) b += g->second.size; else if (g->second.side == off::ASK) a += g->second.size;
+        if (g->second.size < 0 || (g->second.side != off::BID && g->second.side != off::ASK)) return false;
+        long long& total = g->second.side == off::BID ? b : a;
+        if (g->second.size > LLONG_MAX - total) return false;
+        total += g->second.size;
     }
-    if (b + a <= 0) return false;
+    if (b == 0 && a == 0) return false;
     out[0] = b; out[1] = a; return true;
 }
 // a copy of the bar's IRT numbers with the totals replaced by the order-by-order ones when this candle has them; src: true = order feed
@@ -893,7 +897,9 @@ void BidAskStats::finalize(BASState& S, long long now) {
                 if (S.feed.lastCapped) S.decidedLate++;
                 std::map<long long, off::Acc>::iterator a = S.accs.find(t);
                 { struct tm cx; std::memset(&cx, 0, sizeof(cx)); S.e.chan = (t > 0 && getLocaltime((RTDATE)t, &cx)) ? llp::channelOf(cx.tm_hour, cx.tm_min) : llp::CH_ALL; }   // the bar's own hours
-                F.r = S.e.close(a != S.accs.end() ? a->second : off::Acc(), t == S.firstBarKey, P); F.dbo = true;
+                const bool incomplete = t == S.firstBarKey || a == S.accs.end()
+                    || a->second.aggrCap || a->second.aggrUnknown > 0;
+                F.r = S.e.close(a != S.accs.end() ? a->second : off::Acc(), incomplete, P); F.dbo = true;
                 if (a != S.accs.end()) S.accs.erase(a);
                 S.closedAt.erase(c);
                 for (int s = 0; s < 2; ++s) F.let[s] = bas::letters(F.r, s, P);
@@ -1270,6 +1276,7 @@ std::array<er::Side, 2> BidAskStats::erSides(BASState& S, int ci, RTARRAYI& time
     while (it != S.ser.bars.begin() && (int)pb.size() < er::EFFORT_BARS) { --it; if (it->second.m.ok) { const bas::BarMax pm = withMbo(S, it->first, it->second.m); pb.push_back(pm.totBid); pa.push_back(pm.totAsk); } }
     RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
     if (op.count <= ci || hi.count <= ci || lo.count <= ci || cl.count <= ci) return out;
+    if (!std::isfinite((double)cl[ci])) return out;                         // no current close: cannot decide who lost the candle
     const long long tot[2] = { bm->totBid, bm->totAsk };
     for (int q = 0; q < 2; ++q) {
         out[q].effOk = er::effortX(tot[q], q == 0 ? pb : pa, out[q].eff);
@@ -1488,6 +1495,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.24.0");   // BAS_VERSION
+    p->setVersion("1.24.1");   // BAS_VERSION
     return p;
 }

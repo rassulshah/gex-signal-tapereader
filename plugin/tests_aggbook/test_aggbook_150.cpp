@@ -1,5 +1,5 @@
-// test_aggbook_150.cpp (2026-10-19) - lsBookFlow 1.5.0: Refill Effort / Refilled box rows, the Refilled cut-offs per market, the
-// new-extreme spot (spotOf), the REFILL read (refillRead: C+R / strong / weak / none) and the bars' "R" label. SDK-free.
+// test_aggbook_150.cpp (2026-10-19 / 2026-10-20) - lsBookFlow Defense 1.14.0: Refill Effort / Refilled box rows, the Refilled cut-offs
+// per market, the new-extreme spot (spotOf), the REFILL read (refillRead: C+R / strong / weak / none), and the early WATCH / CAUTION read.
 #include "BidAskStatsLogic.h"
 #include "BookFlowLogic.h"
 #include <cstdio>
@@ -90,18 +90,20 @@ int main(int argc, char** argv) {
       CHECK(bf::refillRead(rec(900, 3000, 100, 100), "ES", both, nullptr, r) && r.head.find("New low") == 0); }
     {   // (1.14.0) the early-warning read while the candle forms
         off::Rec r = rec(500, 2000, 50, 50); r.addC[0] = 900; r.pullC[0] = 100; r.addC[1] = 300; r.pullC[1] = 0;   // bids +800, offers +300; refilled 4.0x eaten (strong)
-        bf::EwTouch t; t.ok = true; t.s = 0; t.px = 7746.5; t.elapsed = 45; t.h1 = 400; t.h2 = 10;                  // 20 lots/s, then 0.4/s: slowing
+        bf::EwTouch t; t.ok = true; t.s = 0; t.px = 7746.5; t.elapsed = 45; t.h1 = 400; t.h2 = 10;                  // 20 lots/s, then 0.25/s across the complete 20--60 s window: slowing
         br::Read rd;
+        CHECK(!bf::earlyRead(t, r, "ES", 0.095, 0.25, rd));                 // incomplete second phase: do not call the 5 s sample a slowdown
+        t.elapsed = 60;
         CHECK(bf::earlyRead(t, r, "ES", 0.095, 0.25, rd) && rd.tag == "WATCH" && rd.impl == br::BULL);
         EQS(rd.head, "Bids defending at 7746.50: sellers slowing, buyers 2.7x more than sellers, refilled 1.8x - watch the close ?");
         EQS(rd.word(), "WATCH");
         t.h2 = 0; CHECK(bf::earlyRead(t, r, "ES", 0.095, 0.25, rd) && rd.head.find("sellers stopped hitting") != std::string::npos);
         t.h2 = 300; CHECK(!bf::earlyRead(t, r, "ES", 0.095, 0.25, rd));      // still hitting at 12/s: no read
-        t.h2 = 10; t.elapsed = 15; CHECK(!bf::earlyRead(t, r, "ES", 0.095, 0.25, rd));   // too early (first 20 s)
-        t.elapsed = 45; off::Rec w = r; w.refC[0] = 600; CHECK(!bf::earlyRead(t, w, "ES", 0.095, 0.25, rd));   // refill only 1.2x eaten: not strong
-        off::Rec e = r; e.addC[1] = 600; CHECK(bf::earlyRead(t, e, "ES", 0.095, 0.25, rd) && rd.tag == "WATCH");   // (15:33) bids 800 vs offers 600: bigger is enough
-        e.addC[1] = 800; CHECK(!bf::earlyRead(t, e, "ES", 0.095, 0.25, rd));   // equal: neither read
-        e.addC[1] = 900; CHECK(bf::earlyRead(t, e, "ES", 0.095, 0.25, rd) && rd.tag == "CAUTION" && rd.head.find("1.1x more above") != std::string::npos);   // (15:33) offers 900 > bids 800: CAUTION
+        t.h2 = 10; t.elapsed = 15; CHECK(!bf::earlyRead(t, r, "ES", 0.095, 0.25, rd));   // too early for either read
+        t.elapsed = 60; off::Rec w = r; w.refC[0] = 600; CHECK(!bf::earlyRead(t, w, "ES", 0.095, 0.25, rd));   // refill only 1.2x eaten: not strong
+        off::Rec e = r; e.addC[1] = 600; CHECK(bf::earlyRead(t, e, "ES", 0.095, 0.25, rd) && rd.tag == "WATCH");   // bids 800 vs offers 600 = 1.3x: strict net-bigger is enough
+        e.addC[1] = 800; CHECK(!bf::earlyRead(t, e, "ES", 0.095, 0.25, rd));   // equal: neither WATCH nor CAUTION
+        e.addC[1] = 900; CHECK(bf::earlyRead(t, e, "ES", 0.095, 0.25, rd) && rd.tag == "CAUTION" && rd.head.find("1.1x more above") != std::string::npos);   // offers 900 > bids 800: CAUTION
         off::Rec c = r; c.addC[0] = 300; c.pullC[0] = 100; c.addC[1] = 900;                    // bids +200, offers +900
         CHECK(bf::earlyRead(t, c, "ES", 0.095, 0.25, rd) && rd.tag == "CAUTION" && rd.impl == br::BEAR);
         EQS(rd.head, "Bids hit at 7746.50, but offers stacking 4.5x more above - don't lean on it ?");
@@ -110,6 +112,6 @@ int main(int argc, char** argv) {
         bf::EwTouch none; CHECK(!bf::earlyRead(none, r, "ES", 0.095, 0.25, rd));
         br::Read plain; plain.impl = br::BULL; EQS(plain.word(), "BULLISH"); }
     EQS(bf::commas(1234567), "1,234,567"); EQS(bf::commas(999), "999"); EQS(bf::commas(-2010), "-2,010");
-    std::printf("BookFlow 1.5.0 logic: %d checks, %d failed\n", checks, fails);
+    std::printf("BookFlow Defense 1.14 logic: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

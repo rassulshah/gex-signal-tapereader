@@ -39,7 +39,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* DL_VERSION = "1.2.0";   // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
+static const char* DL_VERSION = "1.2.1";   // 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
 static long long dlSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string dlFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void dlMakeDir(const std::string& p) {
@@ -118,7 +118,7 @@ private:
     }
 };
 
-// re-read the turns file / the live file only when their size or time changed (at most every 2 s); a half-written line is not a record
+// Re-read turns only when metadata changed; parse the volatile live file on every two-second poll. A half-written line is not a record.
 void DefenseLines::refresh(DlState& s) {
     const long long now = dlSteadyMs();
     if (now - s.lastCheckMs < 2000 && now >= s.lastCheckMs) return;
@@ -129,7 +129,7 @@ void DefenseLines::refresh(DlState& s) {
     if (s.setStore.path != sp) { s.setStore = ss::Store(); s.setStore.S = &dlset::spec(); s.setStore.path = sp; }
     s.set = sp.empty() ? ss::defaults(dlset::spec(), -1) : s.setStore.load(ss::marketIndex(s.mkt), now);
     long long mt = -1, sz = -1;
-    if (tp != s.turns.path) { s.turns = DlState::File(); s.turns.path = tp; s.lines.clear(); }
+    if (tp != s.turns.path) { s.turns = DlState::File(); s.turns.path = tp; s.lines.clear(); s.xs.clear(); }
     if (dlStat(tp, mt, sz) && (mt != s.turns.mt || sz != s.turns.sz) && sz < 4 * 1024 * 1024) {
         std::ifstream in(tp.c_str(), std::ios::binary); std::string ln; std::vector<dt::Line> v; long long bad = 0;
         std::map<std::pair<int, long long>, dt::XLine> xs;
@@ -139,12 +139,14 @@ void DefenseLines::refresh(DlState& s) {
         for (std::map<std::pair<int, long long>, dt::XLine>::const_iterator it = xs.begin(); it != xs.end(); ++it) s.xs[it->first] = it->second;
         s.turns.mt = mt; s.turns.sz = sz; s.reads++; s.bad = bad;
     }
-    if (lp != s.live.path) { s.live = DlState::File(); s.live.path = lp; s.haveLive = false; }
-    if (dlStat(lp, mt, sz) && (mt != s.live.mt || sz != s.live.sz) && sz < 4096) {
+    if (lp != s.live.path) { s.live = DlState::File(); s.live.path = lp; s.haveLive = false; s.liveLine = dt::Line(); }
+    // This is a tiny, volatile file: re-read on each two-second poll. mtime is only second-granularity on some hosts, so a same-size
+    // overwrite could otherwise leave a stale forming "?" on the chart. Missing / oversized / malformed live input fails closed.
+    if (dlStat(lp, mt, sz) && sz < 4096) {
         std::ifstream in(lp.c_str(), std::ios::binary); std::string ln; std::getline(in, ln);
-        dt::Line L; s.haveLive = dt::parseLine(ln, L) && L.kind == 'L'; if (s.haveLive) s.liveLine = L;
+        dt::Line L; s.haveLive = dt::parseLine(ln, L) && L.kind == 'L'; if (s.haveLive) s.liveLine = L; else s.liveLine = dt::Line();
         s.live.mt = mt; s.live.sz = sz;
-    }
+    } else { s.haveLive = false; s.liveLine = dt::Line(); s.live.mt = mt; s.live.sz = sz; }
 }
 
 void DefenseLines::writeStatus(DlState& s, size_t drawn, size_t failed) {
@@ -251,6 +253,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour AND beyond the R line (above it at a low, below it at a high). R LINE (red at a high, green at a low) = the price near the pivot where the defenders re-posted the most of what was eaten. E LINE (gray) = exhaustion: the price near the pivot where the attack died AT the price (the attackers' hits there in seconds 20-60 slowed to the market's median or less vs seconds 0-20, and at least half the resting size stayed); decided about a minute after the close; only on turns that have an R. Yellow dot = the candle each line refers to. Each line runs at most 3 candles (setting), until the next turn's lines, or until a candle closes through it (then it is removed). A = absorption (attackers out-hit the defenders and still lost the close); ? = not proven yet (scored nightly). Dotted ? line = the forming candle, gone if it does not confirm. Example: 8:48 AM ES low: green R at 7827.25, gray E at 7826.75, dots on the 8:48 candle. Needs lsBookFlow (Defense) on the same chart.");
-    p->setVersion("1.2.0");   // DL_VERSION
+    p->setVersion("1.2.1");   // DL_VERSION
     return p;
 }

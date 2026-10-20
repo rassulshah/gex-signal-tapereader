@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <utime.h>
 namespace mock { Host* current = nullptr; Feed feed; }
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %d %s\n", __LINE__, m); } } while (0)
@@ -51,10 +52,22 @@ int main() {
     settings(flex, -1, 0);
     // the live "?" on the forming candle
     dt::Turn lv; lv.t = (long long)h.bars[39].time; lv.side = dt::LOW; lv.pivotPx = 27990; lv.linePx = 27990; lv.marginPct = 12;
-    { std::ofstream f((flex + "\\BookFlow\\ES-180-turns-live.txt").c_str()); f << dt::lineOf('L', lv, 0.25) << "\n"; }
+    const std::string livePath = flex + "\\BookFlow\\ES-180-turns-live.txt";
+    lv.linePx = 27989; const std::string liveFirst = dt::lineOf('L', lv, 0.25); lv.linePx = 27991; const std::string liveSecond = dt::lineOf('L', lv, 0.25);
+    CHECK(liveFirst.size() == liveSecond.size(), "same-size live fixture");
+    { std::ofstream f(livePath.c_str()); f << liveFirst << "\n"; }
     s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
-    CHECK(text(h, "? R") != nullptr, "the forming candle: dotted '? R' line");
-    { std::ofstream f((flex + "\\BookFlow\\ES-180-turns-live.txt").c_str()); f << "N\n"; }
+    CHECK(text(h, "? R") != nullptr && s->haveLive && s->liveLine.linePx == 6997.25, "the forming candle: dotted '? R' line");
+    struct stat liveStat; CHECK(stat(livePath.c_str(), &liveStat) == 0, "live fixture stat");
+    { std::ofstream f(livePath.c_str()); f << liveSecond << "\n"; }
+    struct utimbuf sameLiveTime; sameLiveTime.actime = liveStat.st_atime; sameLiveTime.modtime = liveStat.st_mtime;
+    CHECK(utime(livePath.c_str(), &sameLiveTime) == 0, "restore live fixture mtime");
+    s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+    CHECK(s->haveLive && s->liveLine.linePx == 6997.75, "same-size, same-mtime live update replaces the cached '?' line");
+    CHECK(unlink(livePath.c_str()) == 0, "remove live fixture");
+    s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+    CHECK(!s->haveLive && text(h, "? R") == nullptr, "a removed live file clears the cached '?' line");
+    { std::ofstream f(livePath.c_str()); f << "N\n"; }
     s->lastCheckMs = -100000; h.draws.clear(); p->draw();
     CHECK(text(h, "? R") == nullptr && text(h, "R A ?") != nullptr, "not confirmed: the ? is gone, the decided lines stay");
     // a shorter (torn) file never removes drawn lines
@@ -63,7 +76,15 @@ int main() {
     CHECK(s->lines.size() == 3 && s->xs.size() == 1 && text(h, "R A ?") != nullptr && text(h, "E ?") != nullptr, "a torn shorter file: the lines stay (no repaint)");
     std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string body((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
     CHECK(body.find("failed lines removed") != std::string::npos, "(1.2.0) the status counts the removed lines");
-    CHECK(body.find("VERSION,1.2.0") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    CHECK(body.find("VERSION,1.2.1") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    { std::ofstream f(livePath.c_str()); f << liveSecond << "\n"; }
+    s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+    CHECK(s->haveLive && text(h, "? R") != nullptr, "live fixture restored before the bar-period switch");
+    // Changing the turns or live file must not carry data into an identically named market with another bar period.
+    h.seconds = 60;
+    { std::ofstream f((flex + "\\BookFlow\\ES-60-turns.csv").c_str()); f << dt::lineOf('T', b, 0.25) << "\n"; }
+    s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+    CHECK(s->lines.size() == 1 && s->xs.empty() && !s->haveLive && text(h, "E ?") == nullptr && text(h, "? R") == nullptr, "a new period clears stale exhaustion records and the live cache");
     p->destroy(); p->~DefenseLines(); ::operator delete(p);
     std::printf("DefenseLines host: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

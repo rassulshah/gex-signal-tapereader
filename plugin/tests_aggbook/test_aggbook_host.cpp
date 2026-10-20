@@ -182,9 +182,37 @@ int main() {
         bas::BarMax m; m.totBid = 11; m.totAsk = 22; bool src = false;
         bas::BarMax w = withMbo(T, 200, m, &src); CHECK(src && w.totBid == 700 && w.totAsk == 400, "withMbo: the bar takes the order-feed totals");
         w = withMbo(T, 999, m, &src); CHECK(!src && w.totBid == 11 && w.totAsk == 22, "withMbo: IRT's bid / ask volume kept, flagged as IRT");
+        T.accs[400].aggrCap = true;
+        CHECK(!mboTotOf(T, 400, o), "audit: capped live aggressor map is incomplete, not MBO totals");
+        w = withMbo(T, 400, m, &src); CHECK(!src && w.totBid == 11 && w.totAsk == 22, "audit: capped live map keeps IRT fallback values");
+        T.accs[400].aggrCap = false; T.accs[400].aggrUnknown = 5;
+        CHECK(!mboTotOf(T, 400, o), "audit: unidentified aggressor fills force IRT fallback");
+        T.accs[400].aggrUnknown = 0; T.accs[400].aggr[1].size = -1;
+        CHECK(!mboTotOf(T, 400, o), "audit: negative live aggressor size rejected");
+        T.accs[400].aggr[1].size = 30; T.accs[400].aggr[1].side = 7;
+        CHECK(!mboTotOf(T, 400, o), "audit: invalid live aggressor side rejected");
+        T.accs[400].aggr[1].side = off::BID; T.accs[400].aggr[1].size = LLONG_MAX;
+        CHECK(!mboTotOf(T, 400, o), "audit: per-side accumulation overflow rejected");
+        T.fin[200].r.aggrC[0] = -1; CHECK(!mboTotOf(T, 200, o), "audit: negative persisted total rejected");
+        T.fin[200].r.aggrC[0] = LLONG_MAX; T.fin[200].r.aggrC[1] = 1;
+        CHECK(mboTotOf(T, 200, o) && o[0] == LLONG_MAX && o[1] == 1, "audit: valid independent side totals do not overflow a combined sum");
         CHECK(BAS_MBO_TOTALS, "the switch is on"); }
     {   bool lotsIrt = false; for (auto& d : h.draws) lotsIrt = lotsIrt || (d.type == "text" && d.text == "Lots (IRT)");
         CHECK(lotsIrt, "(1.24.0) no order data on the test chart: the box row reads 'Lots (IRT)'"); }
+    {   // Exercise actual private finalization via the public calc/pump path, not a sliced substitute.
+        S->firstBarKey = T0 + 1800;
+        for (int scenario = 0; scenario < 4; ++scenario) {
+            const unsigned long t = h.bars.back().time;
+            if (scenario != 2) {
+                off::Acc a; off::Aggr g; g.side = off::BID; g.size = 20; a.aggr[1] = g;
+                a.aggrCap = scenario == 0; a.aggrUnknown = scenario == 1 ? 5 : 0; S->accs[t] = a;
+            }
+            h.bars.push_back(bar(t + 60, 10, 10)); NOW += 100; p->calc(0); NOW += 600; p->calc(0);
+            const auto f = S->fin.find(t); long long totals[2] = {0, 0};
+            CHECK(f != S->fin.end() && f->second.dbo && f->second.r.partial == (scenario != 3), "audit: candle-close finalization persists capped/unknown/missing accumulator quality");
+            CHECK(mboTotOf(*S, t, totals) == (scenario == 3), "audit: closed incomplete data falls back; complete closed MBO remains available");
+        }
+    }
     dispose(p);
     CHECK(!mst::read("AGG", "ESZ6", 60, "test", NOW).ok, "removed: the Market State entry is cleared");
     std::printf("BidAskStats host: %d passed, %d failed\n", passes, fails);
