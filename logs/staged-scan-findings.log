@@ -1,8 +1,3 @@
-findings=0 allowed=0 staged_files=6 bytes=41171
+findings=0 allowed=0 staged_files=1 bytes=348
 largest staged blobs (bytes, path):
-SIZE	15515	plugin/DefenseLines.cpp
-SIZE	11693	plugin/DefenseTurn.h
-SIZE	6079	plugin/tests_aggbook/test_defenseturn.cpp
-SIZE	5902	plugin/tests_aggbook/test_defenselines_host.cpp
-SIZE	1858	plugin/DefenseLinesSettings.h
-SIZE	124	logs/staged-scan-findings.log
+SIZE	348	logs/staged-scan-findings.log
