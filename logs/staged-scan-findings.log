@@ -1,8 +1,3 @@
-findings=0 allowed=0 staged_files=6 bytes=113802
+findings=0 allowed=0 staged_files=1 bytes=326
 largest staged blobs (bytes, path):
-SIZE	63178	plugin/BUILD-LESSONS.md
-SIZE	20158	plugin/tests_keylevels/test_keylevels.cpp
-SIZE	14916	plugin/KeyLevels.cpp
-SIZE	12014	plugin/KeyLevelsHLogic.h
-SIZE	3412	plugin/KeyLevelsHSettings.h
-SIZE	124	logs/staged-scan-findings.log
+SIZE	326	logs/staged-scan-findings.log
