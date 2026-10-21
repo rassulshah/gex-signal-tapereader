@@ -16,7 +16,7 @@ inline const ss::Spec& spec() {
         ss::intRow("biggest_in", "Biggest in (candles)", 10, 2, CAP, 50),
         ss::intRow("skip_first", "Skip first (min)", 15, 0, 240, 50),
         ss::same(ss::intRow("skip_last", "Skip last (min)", 15, 0, 240, 50)),
-        ss::intRow("font", "Font size", 7, 6, 20, 50),
+        ss::intRow("font", "Font size", 10, 6, 20, 50),   // (1.19.1, Rassul 22:32 "set them as defaults") 10, was 7
         ss::same(ss::colorRow("col_num", "Number", 0xFFFFFF, 40)),
         ss::colorRow("col_bid", "Bid box (sellers)", 0xEF4444, 40),
         ss::same(ss::colorRow("col_ask", "Ask box (buyers)", 0x22C55E, 40)),

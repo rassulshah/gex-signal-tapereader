@@ -15,12 +15,12 @@ static int passed = 0, failed = 0;
 
 static void logic() {
     const ss::Spec& S = bbaset::spec(); const ss::Values D = ss::defaults(S, ss::M_ES);
-    CHECK(D.i(bbaset::K_BIGGEST_IN) == 10 && D.i(bbaset::K_SKIP_FIRST) == 15 && D.i(bbaset::K_SKIP_LAST) == 15 && D.i(bbaset::K_FONT) == 7, "[set] defaults: biggest in 10, skip 15 / 15, font 7");
+    CHECK(D.i(bbaset::K_BIGGEST_IN) == 10 && D.i(bbaset::K_SKIP_FIRST) == 15 && D.i(bbaset::K_SKIP_LAST) == 15 && D.i(bbaset::K_FONT) == 10, "[set] defaults: biggest in 10, skip 15 / 15, font 10");
     CHECK(D.c(bbaset::K_COL_NUM) == 0xFFFFFFul && D.c(bbaset::K_COL_BID) == 0xEF4444ul && D.c(bbaset::K_COL_ASK) == 0x22C55Eul, "[set] defaults: white number, red bid box, green ask box");
     ss::Values V = D; V.v[bbaset::K_BIGGEST_IN] = 30; V.v[bbaset::K_SKIP_FIRST] = 60; V.v[bbaset::K_SKIP_LAST] = 30; V.v[bbaset::K_FONT] = 12; V.v[bbaset::K_COL_BID] = 0x0000FF;
     ss::Values W; CHECK(ss::parse(S, ss::M_ES, ss::format(S, V), W) && W.i(bbaset::K_BIGGEST_IN) == 30 && W.i(bbaset::K_SKIP_FIRST) == 60 && W.i(bbaset::K_SKIP_LAST) == 30 && W.i(bbaset::K_FONT) == 12 && W.c(bbaset::K_COL_BID) == 0x0000FFul, "[set] file round trip");
     ss::Values B; ss::parse(S, ss::M_ES, "SPEC1|BigBidAsk|1.19.0|ES\nbiggest_in=999\nskip_first=-5\nfont=99\n", B);
-    CHECK(B.i(bbaset::K_BIGGEST_IN) == 10 && B.i(bbaset::K_SKIP_FIRST) == 15 && B.i(bbaset::K_FONT) == 7, "[set] out-of-range values -> defaults");
+    CHECK(B.i(bbaset::K_BIGGEST_IN) == 10 && B.i(bbaset::K_SKIP_FIRST) == 15 && B.i(bbaset::K_FONT) == 10, "[set] out-of-range values -> defaults");
     CHECK(bbaset::CAP == 50 && std::string(bba::VERSION) == "1.19.1" && std::string(bbaset::PLUGIN_VERSION) == "1.19.1", "[ver] cap 50, version 1.19.0");
 }
 static const unsigned long DAY = 86400, START = 1791133200UL;   // Sun 2026-10-04 17:00
@@ -82,7 +82,7 @@ int main() {
         CHECK(A.txt.count("12"), "[host] 9:15: 700 sold is the biggest bid in 12 candles (the 8:36 900 stops the count) -> shows 12");
         CHECK(A.txt.count("14"), "[host] 10:00: 500 sold is the biggest in 14 candles (back to the 9:15 700)");
         CHECK(A.shown == 2 && A.n == 2, "[host] 10:03's equal 500 is the biggest in 0 candles -> nothing; 8:36 (first 15 min) never printed");
-        CHECK(A.font == 7 && A.col == 0xFFFFFFul, "[host] font 7, white numbers (defaults)");
+        CHECK(A.font == 10 && A.col == 0xFFFFFFul, "[host] font 10, white numbers (defaults)");
         CHECK(A.boxCols.count(0xEF4444ul) == 1, "[host] the bid box red (default)");
         const Seen B = view(c, 345, 385);
         CHECK(B.txt.count("50") && B.n == 1 && B.boxCols.count(0x22C55Eul) == 1, "[host] 10:30: 300 bought beats every earlier ask -> capped at 50, green box");
