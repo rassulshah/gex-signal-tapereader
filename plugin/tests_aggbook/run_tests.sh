@@ -26,6 +26,7 @@ fi
 compile_run agg_logic test_aggbook_113.cpp
 compile_run bidask_host test_aggbook_host.cpp -Wno-misleading-indentation -DBAS_TEST_CLOCK -DPC_TEST_CURSOR -I"$D/mock"
 compile_run refill_logic test_aggbook_150.cpp
+compile_run moves test_moves.cpp
 compile_run scale_axis test_cap170.cpp -Wno-misleading-indentation -I"$D/mock"
 compile_run effort_reward_original test_er100.cpp
 compile_run zero_line test_aggbook_151.cpp -Wno-misleading-indentation -I"$D/mock"

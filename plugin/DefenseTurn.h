@@ -25,7 +25,7 @@
 #include <limits>
 
 namespace dt {
-static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-10-21 Rassul approved defender4-mockup-v1 + L / X 11:32 CT) Top Defender #4: the RE-TEST of the refill level (retestStep): price moved >= 0.5 ATR away, then came back into the zone within 15 min; the defenders' RESTING lots in the zone at the close BEFORE it came back vs the market normal -> L (reloaded) / X (empty) / N; Q lines in the turns file; badge "A|H|L"; box row "Re-test";   // (1.3.0, 2026-10-21 Rassul approved defender5-mockup-v2 11:25 CT "build this") H = the defenders HIT BACK after an A (counterDecide), the H line in the turns file, the pane badge text "A|H" (badgeText), the Counter row text;   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
+static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-10-21 Rassul approved defender3-mockup-v3 11:50 CT "lets do it" + 11:59 both sides) Top Defender #3: badgeText5 adds P (the DEFENDERS PRESSING IN: their resting orders moved toward price, MoveLogic.h) - the only move case drawn; the other three cases recorded as M lines;   // (1.4.0, 2026-10-21 Rassul approved defender4-mockup-v1 + L / X 11:32 CT) Top Defender #4: the RE-TEST of the refill level (retestStep): price moved >= 0.5 ATR away, then came back into the zone within 15 min; the defenders' RESTING lots in the zone at the close BEFORE it came back vs the market normal -> L (reloaded) / X (empty) / N; Q lines in the turns file; badge "A|H|L"; box row "Re-test";   // (1.3.0, 2026-10-21 Rassul approved defender5-mockup-v2 11:25 CT "build this") H = the defenders HIT BACK after an A (counterDecide), the H line in the turns file, the pane badge text "A|H" (badgeText), the Counter row text;   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
 // the market's median slowdown at a fresh-price touch ((lots/s 20-60 s) / (lots/s 0-20 s + 0.05)), Databento MBO Oct 5 / 7 / 9 (wall4.py)
 inline double adMedianOf(const std::string& m) {
     return m == "ES" ? 0.095 : m == "NQ" ? 0.029 : m == "CL" ? 0.057 : m == "GC" ? 0.0 : m == "HG" ? 0.0 : m == "NG" ? 0.032 : (m == "EU" || m == "6E") ? 0.067 : 0.05;
@@ -370,6 +370,13 @@ inline std::string retestText(const Retest& r) {
 inline std::string badgeText4(bool A, bool H, char Q, bool E) {
     std::string s = badgeText(A, H, E);
     if (Q == 'L' || Q == 'X') { if (!s.empty()) s += "|"; s += Q; }
+    return s;
+}
+
+// (1.5.0) + P (the defenders pressed in, MoveLogic.h): "A|H|L|P"; the font shrinks to fit (fitFont)
+inline std::string badgeText5(bool A, bool H, char Q, bool P, bool E) {
+    std::string s = badgeText4(A, H, Q, E);
+    if (P) { if (!s.empty()) s += "|"; s += 'P'; }
     return s;
 }
 

@@ -76,7 +76,7 @@ int main() {
     CHECK(s->lines.size() == 3 && s->xs.size() == 1 && text(h, "R A ?") != nullptr && text(h, "E ?") != nullptr, "a torn shorter file: the lines stay (no repaint)");
     std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string body((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
     CHECK(body.find("failed lines removed") != std::string::npos, "(1.2.0) the status counts the removed lines");
-    CHECK(body.find("VERSION,1.4.0") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    CHECK(body.find("VERSION,1.5.0") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
     {   // (1.3.0, Top Defender #5) lsBookFlow decided the defenders hit back after the A: the label reads "R A H ?"; "absorbed only" keeps "R A ?"
         { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); dt::Counter C; C.t = b.t; C.side = b.side; C.H = true; C.lots = 640; C.attack = 266; C.at = b.t + 360; f << dt::hLineOf(C) << "\n"; }
         s->lastCheckMs = -100000; h.draws.clear(); p->draw();
@@ -88,6 +88,26 @@ int main() {
         { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); dt::Retest q; q.t = b.t; q.side = b.side; q.res = 'L'; q.ratio = 1.4; q.rest = 700; q.at = b.t + 720; f << dt::qLineOf(q) << "\n"; }
         s->lastCheckMs = -100000; h.draws.clear(); p->draw();
         CHECK(s->bad == bad0 && text(h, "R A H ?") != nullptr && text(h, "R A H L ?") == nullptr, "(1.4.0) a Q line (re-test L / X) is read, not counted bad; the line label stays R A H ? (L / X in the pane)");
+        // (1.5.0, Top Defender #3) an M line where the defenders pressed in (P): 12 bid lots moved from 6997.50 to 6998.00 on the low candle
+        {   mvl::Read R; R.t = b.t; R.ext = 0; R.px = 27992; R.tick = 0.25; R.s.in[0] = 12; R.s.bigSize[0] = 12; R.s.bigOld[0] = 27990; R.s.bigNew[0] = 27992; R.s.ticksIn[0] = 2; R.norm[0] = 4; R.norm[1] = 4; R.q[mvl::C_DEF_IN] = true; R.x[0] = 3;
+            mvl::Read B2 = R; B2.t = (long long)h.bars[30].time; B2.q[mvl::C_DEF_IN] = false; B2.q[mvl::C_DEF_OUT] = true;   // stepping back: recorded, never boxed
+            mvl::Read N = R; N.t = (long long)h.bars[25].time; N.s.bigOld[0] = 27991; N.s.bigNew[0] = 27992; N.s.bigSize[0] = 7;   // a 1-tick move (5 px here, the box is 10)
+            { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); f << mvl::mLineOf(R) << "\n" << mvl::mLineOf(B2) << "\n" << mvl::mLineOf(N) << "\nM|garbage\n"; }
+            s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+            if (const char* dp = std::getenv("D3_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
+            CHECK(s->ms.size() == 3 && s->boxesDrawn >= 2, "(1.5.0) 3 M lines read (a garbled one skipped), 2 boxed (B is never boxed)");
+            const mock::Draw* t12 = text(h, "12"); const mock::Draw* t7 = text(h, "7");
+            CHECK(t12 && t12->color == 0 && t7, "(1.5.0) the solid box shows only the lot size, black text");
+            {   cppExtension::PNT pn; pn.set(21, 6998.0f); cppExtension::PNT po; po.set(21, 6997.5f);
+                CHECK(t12 && t12->y - 1 <= pn.v && t12->b >= pn.v && t12->x >= po.h - 20 && t12->r <= po.h + 20, "(1.5.0) the lot size sits in the solid box at the new price (6998.00), on the candle");
+                bool hollow = false; for (auto& d : h.draws) if (d.type == "line" && d.y == po.v + 5) hollow = true;
+                CHECK(hollow, "(1.5.0) the hollow box at the old price (6997.50)"); }
+            {   cppExtension::PNT pn; pn.set(25, 6998.0f); int lo = 1 << 30; for (auto& d : h.draws) if (d.type == "line" && d.x >= pn.h - 15 && d.x <= pn.h + 15) lo = std::min(lo, d.y);
+                int maxY = -1; for (auto& d : h.draws) if (d.type == "line" && d.x >= pn.h - 15 && d.x <= pn.h + 15) maxY = std::max(maxY, d.y);
+                CHECK(t7 && maxY >= pn.v + 15 && lo >= pn.v - 5, "(1.5.0) a 1-tick move: the hollow box sits under the solid one, never on top of it"); }
+            CHECK(text(h, "R A H ?") != nullptr, "(1.5.0) the R line label unchanged by the boxes");
+            const long long n0 = s->boxesDrawn; s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+            CHECK(s->boxesDrawn - n0 == 2 && text(h, "12") != nullptr, "(1.5.0) redrawn the same on the next refresh (no repaint)"); }
     }
     { std::ofstream f(livePath.c_str()); f << liveSecond << "\n"; }
     s->lastCheckMs = -100000; h.draws.clear(); p->draw();

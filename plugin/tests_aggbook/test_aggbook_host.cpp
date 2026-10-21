@@ -397,7 +397,36 @@ int main() {
         {   const std::string tf0 = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
             { std::ofstream f((flex + "\\BookFlow\\ES-60-turns.csv").c_str(), std::ios::app); dt::Retest q; q.t = k; q.side = dt::LOW; q.res = 'L'; q.ratio = 1.25; q.rest = 625; q.at = k; f << dt::qLineOf(q) << "\n"; }
             e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb);
-            CHECK(e->dtQ.count(std::make_pair((int)dt::LOW, k)) == 1 && e->dtQ[std::make_pair((int)dt::LOW, k)].res == 'L' && std::fabs(e->dtQ[std::make_pair((int)dt::LOW, k)].ratio - 1.25) < 1e-9, "(1.16.0) after a reload the Q line is read back (no repaint)"); (void)tf0; } }
+            CHECK(e->dtQ.count(std::make_pair((int)dt::LOW, k)) == 1 && e->dtQ[std::make_pair((int)dt::LOW, k)].res == 'L' && std::fabs(e->dtQ[std::make_pair((int)dt::LOW, k)].ratio - 1.25) < 1e-9, "(1.16.0) after a reload the Q line is read back (no repaint)"); (void)tf0; }
+        // (1.17.0, Top Defender #3) stepping back / pressing in: 10 bid lots moved 2 ticks toward price in the low's zone, the slot's normal 4 -> P (2.5x)
+        {   std::vector<mock::Bar>& B = mock::current->bars; int i = -1; for (size_t q = 0; q < B.size(); ++q) if ((long long)B[q].time == k) i = (int)q;
+            CHECK(i >= 6, "(1.17.0) the low candle found");
+            if (i >= 6) {
+                for (int j = i - 5; j < i; ++j) if (B[(size_t)j].low <= B[(size_t)i].low) B[(size_t)j].low = B[(size_t)i].low + 1.0f;
+                off::Tick l = 0; off::toTick((double)B[(size_t)i].low, S->tick, l);
+                const int sl = off::slotOfKey(k); e->mvNorm = mvl::Norm(); { const long long four[2] = {4, 4}; for (int n = 0; n < 5; ++n) e->mvNorm.add(sl, four); }
+                e->mvNormPath = off::flexDir() + "\\BookFlow\\ES-moves-norm.txt";
+                mvl::Move m; m.side = mvl::BIDS; m.oldPx = l - 1; m.newPx = l + 1; m.size = 10; m.dir = 1; m.ms = 1000; m.id = 5;
+                e->mvByKey[k] = std::vector<mvl::Move>(1, m); e->dtM.clear();
+                const long long w0 = e->dtMWritten; p->decideTurns(*S, k, nb);
+                const std::string tf = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
+                int mLines = 0; { std::stringstream ss(tf); std::string ln; while (std::getline(ss, ln)) if (ln.compare(0, 2 + std::to_string(k).size() + 1, "M|" + std::to_string(k) + "|") == 0) ++mLines; }
+                CHECK(e->dtMWritten == w0 + 1 && mLines == 1, ("(1.17.0) one M line written for the low (" + std::to_string(mLines) + ")").c_str());
+                CHECK(e->dtM.count(std::make_pair(0, k)) == 1 && mvl::drawP(e->dtM[std::make_pair(0, k)]) && e->dtM[std::make_pair(0, k)].s.bigSize[0] == 10, "(1.17.0) the read: defenders pressed in (P), largest move 10 lots");
+                p->decideTurns(*S, k, nb); CHECK(e->dtMWritten == w0 + 1, "(1.17.0) decided once: a second close of the same candle writes nothing");
+                e->dtQ.erase(std::make_pair((int)dt::LOW, k)); e->dtH.erase(std::make_pair((int)dt::LOW, k));
+                h.draws.clear(); p->draw();
+                if (const char* dp = std::getenv("D3_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
+                std::string badges; for (auto& d : h.draws) if (d.type == "text" && d.text.find("?") != std::string::npos && d.y < 60) badges += d.text + " ";
+                CHECK(text(h, "A|P?", 0x22C55E) != nullptr, ("(1.17.0) one combined badge A|P? in the defenders' green (" + badges + ")").c_str());
+                {   const mock::Draw* mv = text(h, "Moved"); const mock::Draw* rr = text(h, "Re-test");
+                    CHECK(mv && text(h, "In 2t 2.5x") != nullptr && rr && mv->y > rr->y && mv->y < S->lastBox.b, "(1.17.0) the box row Moved: In 2t 2.5x under Re-test, inside the box"); }
+                e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = true;
+                h.draws.clear(); p->draw();
+                CHECK(text(h, "A|P?") == nullptr && text(h, "A?") != nullptr, "(1.17.0) stepping back (B) is recorded, not drawn: badge A? only");
+                e->dtLoaded = false; e->dtPath.clear(); e->mvByKey.clear(); p->decideTurns(*S, k, nb);
+                CHECK(e->dtM.count(std::make_pair(0, k)) == 1 && mvl::drawP(e->dtM[std::make_pair(0, k)]) && e->dtMWritten == w0 + 1, "(1.17.0) after a reload the M line is read back the same (no repaint, nothing re-written)");
+            } } }
     {   // (1.13.0) the touch rule in the engine: 40 lots hit at 7000.00 in the first 20 s, 2 in 20-60 s, 60 of 80 resting lots stay -> attack died
         off::Engine g; g.adMedian = 0.095; g.curKey = 77; g.restAdd(off::BID, 28000, 80);
         g.touchFill(off::BID, 28000, 30, 1000, 80); g.restAdd(off::BID, 28000, -30);

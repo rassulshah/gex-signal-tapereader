@@ -122,6 +122,7 @@
 #include "HoverBoard.h"
 #include "BoxPlace.h"
 #include "ZoneRead.h"          // (1.5.0) the one-line zone reads
+#include "MoveLogic.h"         // (1.11.0, Top Defender #3) resting orders MOVED toward / away from price (lsBookFlow only: Engine.trackMoves)
 #include <algorithm>
 #include <cctype>
 #include <climits>   // (1.17.0) capTop
@@ -145,7 +146,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.10.1";   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.11.0";   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -401,6 +402,7 @@ struct Acc {
     std::unordered_map<long long, Aggr> aggr;            // aggressor order id -> what it filled this candle
     long long aggrUnknown = 0;                           // fills without an aggressor id
     std::vector<long long> restSizes;                    // resting sizes added near price (the session distribution)
+    std::vector<mvl::Move> moves;                        // (1.11.0) confirmed order MOVES near price in this candle (trackMoves only; capped)
 };
 // (1.7.0) ORDER-BOOK ABSORPTION at one resting price of a decided candle: the defenders' resting orders there traded at least
 // minX x the most ever shown there (hidden / refilled size) AND were reloaded at least minRef times. s = the RESTING side (BID / ASK).
@@ -462,9 +464,10 @@ inline bool recFrom(const std::vector<long long>& v, size_t at, Rec& out) {
 
 class Engine {
 public:
-    struct Ord { int side = BID; Tick px = 0; long long size = 0; bool filledLast = false; bool known = true; bool traded = false; };   // traded: (1.2.0) any fill
+    struct Ord { int side = BID; Tick px = 0; long long size = 0; bool filledLast = false; bool known = true; bool traded = false; Tick refAt = 0; };   // traded: (1.2.0) any fill; refAt: (1.11.0) the last trade when placed / last re-priced (0 = none)
     Tick near = 0;                                     // the near band in ticks (0 = nothing is near)
     Tick ref = 0; bool haveRef = false; long long lastFillMs = -1;
+    bool trackMoves = false; mvl::Tracker mvt; std::vector<mvl::Move> mvTmp;   // (1.11.0, Top Defender #3) order moves (lsBookFlow sets trackMoves)
     long long refillMs = 1000; Tick closeTicks = 2;
     std::unordered_map<long long, Ord> book;
     std::unordered_map<Tick, long long> rest[2];       // known resting size per price
@@ -606,6 +609,11 @@ public:
         if (it != book.end() && e.action != NEW) s = it->second.side;     // the order's own side wins
         if (s != BID && s != ASK) { garbage++; return; }                  // an unknown side cannot be classified
         events++; perAction[e.action]++; a.events++;
+        if (trackMoves) {                                                   // (1.11.0) moves whose 0.5 s rest is done join this candle
+            mvTmp.clear(); mvt.confirm(e.arrMs, mvTmp);
+            for (size_t k = 0; k < mvTmp.size(); ++k) if ((isNear(mvTmp[k].oldPx) || isNear(mvTmp[k].newPx)) && a.moves.size() < 3000) a.moves.push_back(mvTmp[k]);
+            if (e.action != NEW) mvt.touched(e.id, e.arrMs);
+        }
         switch (e.action) {
         case NEW: {
             if (it != book.end()) {                                        // a duplicate / replayed NEW: refresh, never counted twice
@@ -615,7 +623,8 @@ public:
                 restAdd(s, e.px, e.size); shown(a, s, e.px);
                 break;
             }
-            Ord o; o.side = s; o.px = e.px; o.size = e.size; book[e.id] = o;
+            Ord o; o.side = s; o.px = e.px; o.size = e.size; o.refAt = haveRef ? ref : 0; book[e.id] = o;
+            if (trackMoves && haveRef) mvt.added(e.id, s, e.px, e.size, ref, e.arrMs);   // (1.11.0) PATH R: a unique same-size cancel just before it
             restAdd(s, e.px, e.size); shown(a, s, e.px);
             if (isNear(e.px)) {
                 add(a, s, e.id, e.size, true, e.px, e.stamp);
@@ -665,6 +674,7 @@ public:
             const Ord o = it->second; book.erase(it);
             if (o.known) restAdd(o.side, o.px, -o.size);
             if (o.filledLast || !o.known) break;                           // just filled: the trade took it, not a pull
+            if (trackMoves && o.refAt > 0) mvt.cancel(e.id, o.side, o.px, o.size, o.refAt, e.arrMs);   // (1.11.0) PATH R: may be re-posted elsewhere
             if (isNear(o.px)) pull(a, o.side, o.px, o.size > 0 ? o.size : e.size, true, o.traded);
             break; }
         case MOD: {
@@ -675,6 +685,8 @@ public:
                 break;
             }
             Ord& o = it->second;
+            if (trackMoves && e.px != o.px && o.refAt > 0 && haveRef) mvt.modify(e.id, o.side, o.px, e.px, e.size, o.refAt, ref, e.arrMs);   // (1.11.0) PATH M
+            if (e.px != o.px) o.refAt = haveRef ? ref : 0;
             if (e.px != o.px) {                                            // moved: a pull at the old price + an add at the new
                 if (isNear(o.px)) pull(a, o.side, o.px, o.size, true, o.traded);
                 if (isNear(e.px)) add(a, o.side, e.id, e.size, true, e.px, e.stamp);

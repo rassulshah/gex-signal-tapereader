@@ -8,7 +8,7 @@
 namespace ofset {
 
 static const char* const BAS_VERSION = "1.25.0";   // (1.14.0) + "Big Lot mark" on the Position line (appended last: no saved value moves)
-static const char* const BF_VERSION = "1.16.0";   // (1.5.0 Refill Effort / Refilled box) (1.3.4) the box follows the mouse only inside the pane, else Live
+static const char* const BF_VERSION = "1.17.0";   // (1.5.0 Refill Effort / Refilled box) (1.3.4) the box follows the mouse only inside the pane, else Live
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 
 // (1.13.3 / 1.3.3, Rassul 2026-10-18 "I'll go with your recommendation") Offset X / Y removed (the 9-spot Position only), Ratio bars and
