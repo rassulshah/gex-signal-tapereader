@@ -9,9 +9,9 @@
 
 namespace lpset {
 
-static const char* const PLUGIN_VERSION = "0.46.1";   // (0.46.1) book object parked at done / destroy; (0.46.0) LMT F only
+static const char* const PLUGIN_VERSION = "0.47.0";   // (0.47.0) the air pocket (AP? band) row; (0.46.1) book object parked at done / destroy; (0.46.0) LMT F only
 enum K { K_WIDTH, K_FONT, K_SOLID_BG, K_BIG_ORDERS, K_BIG_REACH, K_BIG_MIN_LOTS, K_BIG_KEEP, K_BIG_FONT,
-         K_BANNER, K_BANNER_BG, K_BANNER_FONT, K_BANNER_COLOR, K_N };
+         K_BANNER, K_BANNER_BG, K_BANNER_FONT, K_BANNER_COLOR, K_AIR_POCKET, K_N };
 
 inline const ss::Spec& profileSpec() {
     static const ss::Row R[K_N] = {
@@ -28,8 +28,9 @@ inline const ss::Spec& profileSpec() {
         ss::same(ss::in(ss::boolRow("banner_bg", "Banner solid background", true), "banner")),
         ss::in(ss::intRow("banner_font", "Banner font pt", 11, 7, 16, 40), "banner"),
         ss::same(ss::in(ss::colorRow("banner_color", "Banner background", 0x141414), "banner")),
+        ss::boolRow("air_pocket", "Air pocket (AP band)", true),            // (0.47.0) the band from the turn's close to T1 while the path is open
     };
-    static const ss::Spec S = { "LiquidityProfile", PLUGIN_VERSION, 6, R, K_N, 0 };
+    static const ss::Spec S = { "LiquidityProfile", PLUGIN_VERSION, 7, R, K_N, 0 };
     return S;
 }
 // lsLiquidityFlow (the same source built with LQ_FLOW): Font only

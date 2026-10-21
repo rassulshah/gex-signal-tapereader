@@ -111,6 +111,7 @@
 // StackStats). After irtsdk.h and after the near / far #undefs above (off::Engine has a member named 'near').
 #define OFF_SDK 1
 #include "OrderFlowFeed.h"
+#include "AirPocketLogic.h"    // (0.47.0) MBO roadmap Middle Ahead #1: the air pocket band (SDK-free, tested)
 #include "BigOrderLines.h"     // (0.18.0) the biggest resting order lines on the price chart (SDK-free, tested)
 #include "BigFlow.h"          // (0.28.0) big MARKET orders (the MKT column) + icebergs (the "i" box), SDK-free, tested
 #if defined(_MSC_VER)
@@ -139,7 +140,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.46.1"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.47.0"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.45.3, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") every PRICE-CHART hover is off: the
 // near-zone makeup box and the big-order line box (the code is kept - set LQ_HOVERS true to bring them back); the price chart no longer asks
 // IRT for mouse events (no TRACK_MOUSE). The Liquidity Flow pane (LQ_FLOW) keeps its candle-follow. Column inks lighter: lqp::colInk.
@@ -438,6 +439,10 @@ struct LQState {
     bol::Engine bo; bol::Settings boSet; long long boStampT = -2, boStampN = -2, boCheckMs = -1; std::string boMkt, boWhy;
     long long boSession = -1, boFlushMs = -1, boLastH = 0, boWrites = 0, boFails = 0, boRestored = 0, boBad = 0, boDropped = 0;
     long long boLastStamp = -1, boLastStampMs = 0;                  // an event's stamp -> Central ms (cached per second)
+    // (0.47.0) the air pocket (AirPocketLogic.h): the book's last 3 min (snapshots + pulls / fills), the cases decided at bar closes
+    apl::Tracker ap; std::vector<apl::Case> apCases; bool apOn = true; long long apLastSnap = -1, apStamp = -1, apStampMs = 0, apSession = -2;
+    std::vector<std::string> apLines; long long apFired = 0, apNot = 0, apEnded = 0, apRestored = 0; std::string apWhy = "waiting", apSetWhy = "default on";
+    std::string apMkt; int apLive = 0; long long apNowMs = 0; long long apStampT = -2, apStampN = -2, apCheckMs = -1;
     std::vector<long long> barEndMs; long boAtrCount = -1;          // every bar's END in Central ms (bars stamp their end)
     struct BoHit { long long key = 0; int b0 = 0, b1 = 0; long long px = 0, tol = 1; };
     std::vector<BoHit> boHits; long long boHovKey = 0; int boHovBar = -1; double boHovPrice = 0; void* boHovWnd = nullptr;
@@ -475,7 +480,8 @@ public:
     ss::Values fileValues();                                             // (0.45.0) the three files as the table's values
     ss::Snap snap_;                                                   // (CR5000) the dialog as it opened         // (0.15.1) OK / Apply: kept per market (loading never saves, #29)
     void saveSize(const ss::Values& V);
-    void saveBanner(const ss::Values& V);                                // (0.24.0) the banner rows -> their per-market file
+    void saveBanner(const ss::Values& V);
+    void saveAirPocket(const ss::Values& V);                             // (0.47.0) the air pocket row -> its per-market file                                // (0.24.0) the banner rows -> their per-market file
     void loadBanner(LQState& S);
     void saveBig(const ss::Values& V);                                   // (0.18.0) the big-order rows -> their per-market file
     void loadSize(LQState& S);
@@ -500,6 +506,11 @@ private:
     bool readDepth(LQState& S, long long t);
     void readTrades(LQState& S, long long t, long count);
     void closedBars(LQState& S, long count);
+    void apDecide(LQState& S, int bar, long long endMs);   // (0.47.0) the air pocket
+    void apStep(LQState& S, long long t);
+    void apLoad(LQState& S);
+    void apRestore(LQState& S);
+    std::string apPath(LQState& S);
     void loadNorms(LQState& S);
     void lmtNormApply(LQState& S);          // (0.35.0) the resting-order norms of the hour (LRA-LmtNorms-<MKT>.csv) replace the session-learned LMT sizes
     void mktNormApply(LQState& S);          // (0.33.0) the market-order norms of the hour (LRA-MktNorms-<MKT>.csv) replace the session-learned MKT sizes
@@ -613,6 +624,17 @@ static std::string bannerPath(cppExtension* x) {
     if (mkt.empty() || dirp.empty()) return std::string();
     return dirp + "\\LiquidityProfile.banner-" + mkt + ".txt";
 }
+static std::string airPocketPath(cppExtension* x) {                     // (0.47.0) "1" / "0": the air pocket on / off for the market
+    const std::string mkt = bigMarket(x), dirp = flexDir();
+    if (mkt.empty() || dirp.empty()) return std::string();
+    return dirp + "\\LiquidityProfile.airpocket-" + mkt + ".txt";
+}
+static int readAirPocket(const std::string& p) {                        // 1 on / 0 off / -1 no file or garbled
+    std::ifstream in; std::string ln;
+    if (p.empty() || !statFile(p) || !openBoundedInput(p, in) || !readBoundedLine(in, ln)) return -1;
+    if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+    return ln == "1" ? 1 : ln == "0" ? 0 : -1;
+}
 #endif
 // (0.45.0, settings audit 2026-10-18) the window from LiquidityProfileSettings.h through SettingsHost.h: the files below are read into the
 // table's values (fileValues), the window is filled / read by the layer (colours with the colour calls, groups greyed), and OK / Apply
@@ -635,6 +657,7 @@ ss::Values LiquidityProfile::fileValues() {
     {   const std::string p3 = bannerPath(this); bns::Settings b;
         if (!p3.empty()) { std::ifstream in; std::string ln; if (statFile(p3) && openBoundedInput(p3, in) && readBoundedLine(in, ln)) { bns::Settings q; if (bns::parse(ln, q)) b = q; } }
         V.v[K_BANNER] = b.on ? 1 : 0; V.v[K_BANNER_BG] = b.bg ? 1 : 0; V.v[K_BANNER_FONT] = b.font; V.v[K_BANNER_COLOR] = (double)(b.bgc & 0x00FFFFFF); }
+    {   const int a = readAirPocket(airPocketPath(this)); if (a >= 0) V.v[K_AIR_POCKET] = a; }   // (0.47.0) no file = on (the default)
 #endif
     for (int k = 0; k < LQ_SPEC.n; ++k) if (!ss::valid(LQ_SPEC.rows[k], V.v[(size_t)k])) V.v[(size_t)k] = ss::defaultFor(LQ_SPEC.rows[k], V.market);   // never garbage into the window
     return V;
@@ -647,7 +670,7 @@ int LiquidityProfile::parmsLoadBody(void) {
 int LiquidityProfile::parmsApplyBody(void) {
     if (!ss::inDialog(this)) return RTX_OK;                              // (0.45.0) never from the chart copy
     const ss::Values V = ss::readDialog(this, LQ_SPEC, lqIds(), fileValues(), snap_);   // untouched -> the files' values; invalid never saved
-    saveSize(V); saveBig(V); saveBanner(V);
+    saveSize(V); saveBig(V); saveBanner(V); saveAirPocket(V);
     snap_.take(ss::dialogNow(this, LQ_SPEC, lqIds(), V));
     return RTX_OK;
 }
@@ -683,6 +706,16 @@ void LiquidityProfile::saveBig(const ss::Values& V) {
     const bol::Settings z = bol::cleanSettings(V.b(K_BIG_ORDERS), V.f(K_BIG_REACH), minLots, V.i(K_BIG_KEEP), V.i(K_BIG_FONT), fv);
     makeDir(flexDir());
     if (publishFile(p, bol::settingsLine(z) + "\n")) { LQState* S = slot_.get(this, false); if (S) { S->boStampT = S->boStampN = -2; S->boCheckMs = -1; } }
+#else
+    (void)V;
+#endif
+}
+// (0.47.0) the air pocket row -> LiquidityProfile.airpocket-<MKT>.txt ("1" / "0"); the chart re-reads it within a second
+void LiquidityProfile::saveAirPocket(const ss::Values& V) {
+#ifndef LQ_FLOW
+    const std::string p = airPocketPath(this); if (p.empty()) return;
+    makeDir(flexDir());
+    if (publishFile(p, std::string(V.b(lpset::K_AIR_POCKET) ? "1" : "0") + "\n")) { LQState* S = slot_.get(this, false); if (S) { S->apStampT = S->apStampN = -2; S->apCheckMs = -1; } }
 #else
     (void)V;
 #endif
@@ -958,6 +991,9 @@ void LiquidityProfile::closedBars(LQState& S, long count) {
         const long long bt = (long long)times[(int)i];
         const long long endMs = ctSec((RTDATE)times[(int)i]) * 1000LL;   // IRT stamps the bar END (checklist #12)
         if (endMs > 0) { seedBars(S, vap, high, low, (int)i, (int)i, &times); S.e.onBarClose((int)i, bt, endMs, (double)close[(int)i], S.dpBid, S.dpAsk); S.zrLastBarTime = bt; S.zrLastEndMs = endMs; }
+#ifndef LQ_FLOW
+        if (endMs > 0 && S.apOn && i >= 6) apDecide(S, (int)i, endMs);   // (0.47.0) the air pocket, decided once at this close
+#endif
 #ifdef LQ_FLOW
         std::map<int, std::pair<double, double>>::const_iterator nb = S.e.nearBook.find((int)i);
         if (nb != S.e.nearBook.end() && !S.bookHist.count(bt)) {
@@ -1446,6 +1482,16 @@ void LiquidityProfile::status(LQState& S, long long now) {
           << ",drawn " << S.boDrawn << ",labels " << S.boLabels << ",events " << S.bo.events << ",not_known " << S.bo.unknown << ",lost_ends " << S.bo.lostEnds
           << ",orders " << S.bo.book.size() << ",restored " << S.boRestored << " (bad rows " << S.boBad << "),writes " << S.boWrites << ",fails " << S.boFails
           << ",dropped " << S.boDropped << ",hover " << S.boHovState << "\n";
+#ifndef LQ_FLOW
+        {   // (0.47.0) the air pocket: the setting, the cases decided this run, the last one's reason and ratio (numbers here, never on the chart)
+            const apl::Case* lk = S.apCases.empty() ? nullptr : &S.apCases.back(); char rb[48] = "-";
+            int liveN = 0; for (size_t i = 0; i < S.apCases.size(); ++i) if (S.apCases[i].live(S.apNowMs)) ++liveN;
+            if (lk && lk->ratio >= 0) std::snprintf(rb, sizeof(rb), "%.2fx (%s)", lk->ratio, lk->fired ? "fired" : "not");
+            o << "AIR_POCKET," << apl::VERSION << "," << (S.apOn ? "on" : "off") << ",settings " << S.apSetWhy << ",fired " << S.apFired << ",not " << S.apNot
+              << ",last why " << S.apWhy << ",last ratio " << rb << ",live " << liveN << " (drawn " << S.apLive << ")" << ",ended " << S.apEnded << ",restored " << S.apRestored
+              << ",rule ahead <= " << apl::Params().shrinkMax << "x of 60 s before + pulls > fills + closeback >= " << apl::Params().closeBackMin << ",T1 close +/- " << apl::Params().atrMult << " ATR,ends T1 / size back / 15 min\n";
+        }
+#endif
         for (size_t i = 0; i < S.e.zones.size(); ++i) {
             const lqp::Zone& z = S.e.zones[i]; if (!z.shown || !z.near) continue;
             const lqp::HoverIn in = hoverIn(S, z, std::string()); const lqp::Makeup& m = in.mk;
@@ -1699,6 +1745,21 @@ void LiquidityProfile::orders(LQState& S, long long st) {
             S.e.mboEvent(ev.action, side, ev.px, ev.size, had, had ? it->second.px : 0, had ? it->second.size : 0);
         }
         const int restSide = (S.ob.book.find(ev.id) != S.ob.book.end() && ev.action != off::NEW) ? S.ob.book.find(ev.id)->second.side : ev.side;
+        if (S.apOn && ev.px > 0) {                                      // (0.47.0) the air pocket's pulls / fills, on the Central clock
+            long long ams = 0;
+            if (ev.stamp > 0 && ev.stamp == S.apStamp) ams = S.apStampMs;
+            else { ams = ev.stamp > 0 ? ctSec((RTDATE)ev.stamp) * 1000LL : 0; if (ams > 0) { S.apStamp = ev.stamp; S.apStampMs = ams; } else ams = S.haveOffset ? st + S.ctOffset : 0; }
+            std::unordered_map<long long, off::Engine::Ord>::const_iterator o2 = S.ob.book.find(ev.id);
+            const bool known = o2 != S.ob.book.end() && o2->second.known;
+            if (ams > 0) {
+                if (ev.action == off::FILL) S.ap.flow(ams, known ? o2->second.side : ev.side, ev.px, (double)ev.size, true);
+                else if (ev.action == off::DEL && known && !o2->second.filledLast && o2->second.size > 0) S.ap.flow(ams, o2->second.side, o2->second.px, (double)o2->second.size, false);
+                else if (ev.action == off::MOD && known) {
+                    if (ev.px != o2->second.px) S.ap.flow(ams, o2->second.side, o2->second.px, (double)o2->second.size, false);   // moved away from its price: pulled there
+                    else if (ev.size < o2->second.size) S.ap.flow(ams, o2->second.side, o2->second.px, (double)(o2->second.size - ev.size), false);
+                }
+            }
+        }
         S.ob.apply(S.obAcc, ev);
         if (S.boSet.on) {                                               // (0.18.0) the same event to the big-order lines, on the Central clock
             long long ms = 0;
@@ -1751,6 +1812,61 @@ void LiquidityProfile::orders(LQState& S, long long st) {
     // the mouse left the chart window: the hover goes (as the order-flow panes' HoverTrack)
     if (S.hovId != 0 && S.hovWnd) { void* w = off::cursorWindow(); if (w && w != S.hovWnd) { S.hovId = 0; S.hovWnd = nullptr; invalidateChart(false); } }
     if (S.boHovKey != 0 && S.boHovWnd) { void* w = off::cursorWindow(); if (w && w != S.boHovWnd) { S.boHovKey = 0; S.boHovWnd = nullptr; invalidateChart(false); } }   // (0.18.0)
+}
+#endif
+
+#ifndef LQ_FLOW
+// ---- (0.47.0, MBO roadmap Middle Ahead #1, Rassul approved air-pocket-mockup-v2 option A 14:25 CT) THE AIR POCKET -------------------------
+// The rule is AirPocketLogic.h (tested on its own). Here: the per-market on / off file, the session record (AP / APE lines, read back after a
+// restart so a band is never re-decided), the decision at each live bar close and the end of a live band.
+std::string LiquidityProfile::apPath(LQState& S) { const std::string d = dir(); return d.empty() || S.session < 0 ? std::string() : d + "\\" + recordStem(S) + "-airpocket-" + std::to_string(S.session) + ".csv"; }
+void LiquidityProfile::apLoad(LQState& S) {
+    const long long now = steadyMs();
+    if (S.apMkt == S.market && S.apCheckMs >= 0 && now >= S.apCheckMs && now - S.apCheckMs < 1000) return;   // at most once a second
+    S.apCheckMs = now;
+    const std::string dirp = flexDir(); if (dirp.empty() || S.market.empty()) return;
+    const std::string p = dirp + "\\LiquidityProfile.airpocket-" + S.market + ".txt";
+    long long t = -1, n = -1; if (!statSub(p, t, n)) { t = -1; n = -1; }
+    if (S.apMkt == S.market && t == S.apStampT && n == S.apStampN) return;
+    S.apMkt = S.market; S.apStampT = t; S.apStampN = n;
+    if (t < 0) { S.apOn = true; S.apSetWhy = "no file: on (default)"; return; }
+    const int a = readAirPocket(p);
+    if (a == 1) { S.apOn = true; S.apSetWhy = "file: on"; } else if (a == 0) { S.apOn = false; S.apSetWhy = "file: off"; } else S.apSetWhy = "file garbled - last good kept";
+}
+void LiquidityProfile::apRestore(LQState& S) {
+    S.apSession = S.session; S.apCases.clear(); S.apLines.clear(); S.apRestored = 0;
+    const std::string p = apPath(S); if (p.empty() || !statFile(p)) return;
+    std::ifstream in; if (!openBoundedInput(p, in)) return;
+    std::string ln; int n = 0;
+    while (readBoundedLine(in, ln) && ++n < 20000) {
+        apl::Case k; long long tm = 0, em = 0; std::string why;
+        if (apl::parse(ln, k)) { bool dup = false; for (size_t i = 0; i < S.apCases.size(); ++i) if (S.apCases[i].turnMs == k.turnMs) dup = true; if (!dup) { S.apCases.push_back(k); ++S.apRestored; } }
+        else if (apl::parseEnd(ln, tm, em, why)) { for (size_t i = 0; i < S.apCases.size(); ++i) if (S.apCases[i].turnMs == tm && S.apCases[i].endMs < 0) { S.apCases[i].endMs = em; S.apCases[i].endWhy = why; } }
+    }
+}
+void LiquidityProfile::apDecide(LQState& S, int bar, long long endMs) {
+    for (size_t i = 0; i < S.apCases.size(); ++i) if (S.apCases[i].turnMs == endMs) return;   // decided once (a restart re-reads it)
+    RTARRAY open(barOpen), high(barHigh), low(barLow), close(barClose);
+    if (bar < 6 || open.count <= bar || high.count <= bar || low.count <= bar || close.count <= bar) return;
+    std::vector<apl::Candle> c;
+    for (int j = bar - 5; j <= bar; ++j) { apl::Candle x; x.o = (double)open[j]; x.h = (double)high[j]; x.l = (double)low[j]; x.c = (double)close[j]; c.push_back(x); }
+    if (apl::localExtreme(c) == 0) return;                               // only local extremes are cases (the research universe)
+    const apl::Case k = apl::decide(c, endMs, S.tick, S.atr, S.ap);
+    S.apCases.push_back(k); S.apLines.push_back(apl::line(k));
+    if (k.fired) ++S.apFired; else ++S.apNot;
+    S.apWhy = k.why;
+    if (S.apCases.size() > 400) S.apCases.erase(S.apCases.begin());
+}
+void LiquidityProfile::apStep(LQState& S, long long t) {
+    if (S.apSession != S.session) apRestore(S);
+    S.apNowMs = t;
+    for (size_t i = 0; i < S.apCases.size(); ++i) if (apl::step(S.apCases[i], t, S.e.lastPx, S.e.havePx, S.ap)) { S.apLines.push_back(apl::endLine(S.apCases[i])); ++S.apEnded; }
+    if (!S.apLines.empty()) {
+        const std::string p = apPath(S); if (p.empty()) { if (S.apLines.size() > 2000) S.apLines.clear(); return; }
+        makeDir(flexDir()); makeDir(dir());
+        if (appendLines(p, "kind (AP = decision / APE = end)|turn_end_ms|dir (+1 up / -1 down) or end_ms|close_tick or end why|t1_tick|ahead_60s_before|ahead_now|ratio|pulled|filled|closeback|fired|why|version", S.apLines)) S.apLines.clear();
+        else if (S.apLines.size() > 2000) S.apLines.clear();
+    }
 }
 #endif
 
@@ -2371,6 +2487,7 @@ void LiquidityProfile::pump() {
         session(S, t);
 #ifndef LQ_FLOW
         loadBig(S); boSessionCheck(S, t);                              // (0.18.0) the big-order settings + this session's lines
+        apLoad(S);                                                      // (0.47.0) the air pocket on / off (per market)
 #endif
         if (S.lastNorms < 0 || st - S.lastNorms >= 60000) { S.lastNorms = st; loadNorms(S); }
 #ifndef LQ_FLOW
@@ -2393,12 +2510,19 @@ void LiquidityProfile::pump() {
             readTrades(S, t, count);                                    // trades first: they explain the book change
             S.e.formBar = (int)count - 1;                               // book flow belongs to the bar in progress
             readDepth(S, t);
+#ifndef LQ_FLOW
+            if (S.apOn && S.e.haveBook && S.e.havePx && S.tick > 0) {   // (0.47.0) the air pocket's book snapshot (one per depth read)
+                const lqp::Tick reach = (lqp::Tick)std::llround(std::max(S.atr, 20 * S.tick) * 2.0 / S.tick) + 10;
+                S.ap.snap(t, S.e.book[lqp::BID], S.e.book[lqp::ASK], S.e.lastPx, reach);
+            }
+#endif
         }
 #ifndef LQ_FLOW
         orders(S, st);                                                  // (0.15.0) before the bars are decided: hits / rebuilds in time
 #endif
         closedBars(S, count);
 #ifndef LQ_FLOW
+        apStep(S, t);                                                   // (0.47.0) live bands end once (T1 / size back / 15 min); records flushed
         boAfter(S, count, st);                                          // (0.18.0) ATR, bar ends, price, time steps, book check, record
 #endif
         if (S.e.haveBook && (S.lastZones < 0 || t - S.lastZones >= ZONES_EVERY_MS || t < S.lastZones)) {
@@ -2494,6 +2618,35 @@ void LiquidityProfile::render(LQState& S) {
             S.lvChk = nw; S.lvOnly = true;   // (0.39.0, Rassul 17:53 "liquidity should only be for the levels") always: the view-<MKT>.txt "all" switch is gone (0.44.0: its dead file stub removed)
         }
     }
+#ifndef LQ_FLOW
+    {   // (0.47.0, Rassul 14:25 CT option A) THE AIR POCKET: a live case = a band from the turn candle's close to T1 inside the column, green
+        // (path up open, at a low) / red (path down open, at a high), a dark tint with a 1-px outline, "AP?" badge in its middle (or just past
+        // the T1 end when the band is short). No numbers on the chart: the ratio is on the status line. Drawn under the zones.
+        S.apLive = 0;
+        const int cl = pane.left, cr = pane.left + S.width;
+        for (size_t i = 0; i < S.apCases.size(); ++i) {
+            const apl::Case& k = S.apCases[i]; if (!k.live(S.apNowMs)) continue;
+            int yt = 0, yb = 0;
+            if (!apl::bandRect(yOf((double)k.closeTk * tick), yOf((double)k.t1Tk * tick), top, bottom, yt, yb)) continue;
+            ++S.apLive;
+            const COLOR c = k.dir > 0 ? C_BUY : C_SELL, tint = k.dir > 0 ? (COLOR)0x000F2A1A : (COLOR)0x002A0F0F;   // dark green / dark red (0x00RRGGBB, as C_BUY / C_SELL)
+            RCT b; b.set(coord(cl + 1), coord(yt), coord(cr - 1), coord(yb)); b.draw(0, tint, tint, DRAW_OPAQUE, PAT_SOLID);
+            setPen(c, 1, P_SOLID); { CBRUSH hb(c, PAT_HOLLOW); hb.set(); } b.draw(1, c, c, DRAW_OPAQUE, PAT_HOLLOW);
+            const char* tx = "AP?"; const int tw = getTextWidth(tx, -1) + 8, th = rowH;
+            int by = (yt + yb) / 2 - th / 2;
+            if (yb - yt < th + 4) {                                       // short band: the badge just beyond the T1 end, inside the column
+                const int yT1 = yOf((double)k.t1Tk * tick);
+                by = k.dir > 0 ? yT1 - th - 2 : yT1 + 2;
+                by = std::max(top, std::min(bottom - th, by));
+            }
+            const int bx = cl + std::max(2, (S.width - tw) / 2);
+            RCT bb; bb.set(coord(bx), coord(by), coord(std::min(cr - 1, bx + tw)), coord(by + th));
+            bb.draw(0, 0x00000000, 0x00000000, DRAW_OPAQUE, PAT_SOLID);
+            setPen(c, 1, P_SOLID); { CBRUSH hb(c, PAT_HOLLOW); hb.set(); } bb.draw(1, c, c, DRAW_OPAQUE, PAT_HOLLOW);
+            setTextColor(c); bb.drawText(tx, true, false);
+        }
+    }
+#endif
     // plain book rows (dim), scaled to the biggest single level in view, growing right from the edge
     double maxRow = 0;
     for (int s = 0; s < 2; ++s) for (std::map<lqp::Tick, double>::const_iterator i = S.e.book[s].begin(); i != S.e.book[s].end(); ++i) {
@@ -3465,6 +3618,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.46.1");   // LQ_VERSION
+    p->setVersion("0.47.0");   // LQ_VERSION
     return p;
 }
