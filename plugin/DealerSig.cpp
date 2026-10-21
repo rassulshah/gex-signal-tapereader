@@ -47,6 +47,7 @@
 #undef far
 #endif
 #include "DealerLogic.h"
+#include "KeepOutDraw.h"         // (1.8.0) BoxDock.h 1.2.0 keep-out: nothing painted over the HOD/LOD table
 #include "ClaimGates.h"          // (1.7.0) the claim gates: options codes / ledger (options_causes), Abs (absorption_reason)
 #include <fstream>
 #include <sstream>
@@ -59,7 +60,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.7.0";   // 1.7.0 (2026-10-14 18:25 CT audit display list): footprint codes "?", options codes / ledger / Abs follow the claim gates.  1.5.5 settings audit (2026-10-13): "Dealer ledger marks" is a check box (was an Off / On list). 1.5.4 audit: file changes clear old signals; source identity and status writes are explicit/cached
+static const char* DS_VERSION = "1.8.0";   // 1.8.0 (2026-10-21 16:05 CT Rassul "fix this, it should be solid"): a reason code that would touch the lsHodLod table is not painted there (KeepOutDraw.h; the signal files unchanged). 1.7.0 (2026-10-14 18:25 CT audit display list): footprint codes "?", options codes / ledger / Abs follow the claim gates.  1.5.5 settings audit (2026-10-13): "Dealer ledger marks" is a check box (was an Off / On list). 1.5.4 audit: file changes clear old signals; source identity and status writes are explicit/cached
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
@@ -88,6 +89,7 @@ class DealerSig : public cppExtension {
 public:
     SS_SAFE_DIALOG(DealerSig, "DealerSig")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     DealerSig() : cppExtension() {}
+    std::map<std::string, bdk::TableWatch> keeps_;   // (1.8.0) the HOD/LOD table per chart (symbol + bar size + chart label): its heartbeat
     virtual int parmsLoadBody(void);
     virtual int parmsApplyBody(void);
     virtual int parmsUpdtBody(unsigned int iParmNumber);
@@ -267,6 +269,10 @@ int DealerSig::draw(void)
     RCT pane; pane.getPaneRect(false);
     std::vector<dl::Box> used;
     std::map<int, int> perBar;
+    const char* kSy = getSymbol(); const char* kCl = getChartLabel(); const long kSpb = getSecondsPerBar();
+    bdk::TableWatch& keep = keeps_[std::string(kSy ? kSy : "") + "|" + std::to_string(kSpb) + "|" + (kCl ? kCl : "")];
+    keep.refresh(kSy, kSpb, kCl);                                     // (1.8.0) the HOD/LOD table: nothing painted over it this draw
+    bdk::KeepScope keepScope(keep);
     for (int pass = 0; pass < 2; pass++) {                            // the Turn's reasons first: they keep the spots next to the bar
         for (size_t k = 0; k < all.size(); k++) {
             if ((pass == 0) == all[k].second) continue;
@@ -295,6 +301,7 @@ int DealerSig::draw(void)
             if (led) c = buy ? 0x0086EFAC : 0x00FCA5A5;                 // the ledger: lighter, smaller, not bold
             setTextColor(c);
             RCT rc; rc.set((short)x.l, (short)x.t, (short)x.r, (short)x.b);
+            if (ko::off(rc)) continue;                                  // (1.8.0) under the HOD/LOD table: not painted
             rc.drawText(txt.c_str(), true, false);
             drawn++;
         }
@@ -309,6 +316,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: the Turn's reversal reasons on the turn's bars - green under a low, red above a high.");
-    p->setVersion("1.7.0");
+    p->setVersion("1.8.0");
     return p;
 }

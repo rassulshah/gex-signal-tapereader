@@ -76,7 +76,7 @@ int main() {
     CHECK(s->lines.size() == 3 && s->xs.size() == 1 && text(h, "R A ?") != nullptr && text(h, "E ?") != nullptr, "a torn shorter file: the lines stay (no repaint)");
     std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string body((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
     CHECK(body.find("failed lines removed") != std::string::npos, "(1.2.0) the status counts the removed lines");
-    CHECK(body.find("VERSION,1.7.0") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    CHECK(body.find("VERSION,1.8.0") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
     {   // (1.3.0, Top Defender #5) lsBookFlow decided the defenders hit back after the A: the label reads "R A H ?"; "absorbed only" keeps "R A ?"
         { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); dt::Counter C; C.t = b.t; C.side = b.side; C.H = true; C.lots = 640; C.attack = 266; C.at = b.t + 360; f << dt::hLineOf(C) << "\n"; }
         s->lastCheckMs = -100000; h.draws.clear(); p->draw();
@@ -135,6 +135,38 @@ int main() {
     { std::ofstream f(livePath.c_str()); f << liveSecond << "\n"; }
     s->lastCheckMs = -100000; h.draws.clear(); p->draw();
     CHECK(s->haveLive && text(h, "? R") != nullptr, "live fixture restored before the bar-period switch");
+    {   // (1.8.0, Rassul 16:05 CT 2026-10-21 "fix this, it should be solid") the lsHodLod table on this chart: nothing painted over it
+        s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+        const mock::Draw* e0 = text(h, "E ?"); const mock::Draw* r0 = text(h, "R A H ?");
+        CHECK(e0 && r0, "(1.8.0) E ? and R A H ? drawn with no table");
+        if (e0 && r0) {
+            const int el = e0->x - 40, et = e0->y - 20, er = e0->r + 5, eb = e0->b + 2;   // a table over the E label and the line's right end
+            const bdk::Box T = bdk::mk(el, et, er, eb);
+            const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            bdk::publishHodLod(h.symbol, h.seconds, h.chart, ms, T);
+            const size_t xs0 = s->xs.size(), lines0 = s->lines.size(); const int strokes0 = lines(h);
+            s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+            bool inside = false; for (auto& d : h.draws) if (bdk::hitsTable(T, d.x, d.y, d.type == "text" || d.type == "box" ? d.r : d.x, d.type == "text" || d.type == "box" ? d.b : d.y)) inside = true;
+            CHECK(!inside, "(1.8.0) nothing drawn inside the table (+2 px): labels, line ends, dots");
+            CHECK(text(h, "E ?") == nullptr && s->xs.size() == xs0 && s->lines.size() == lines0, "(1.8.0) the E label under the table is not painted, the E record is still kept");
+            CHECK(lines(h) > 0 && lines(h) <= strokes0 + 4, "(1.8.0) lines are cut at the table, not dropped");
+            std::ifstream st2((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string b2((std::istreambuf_iterator<char>(st2)), std::istreambuf_iterator<char>());
+            CHECK(b2.find("UNDER_HODLOD,table on") != std::string::npos, "(1.8.0) status: UNDER_HODLOD line");
+            const std::string chart0 = h.chart; h.chart = "another chart";
+            s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+            CHECK(text(h, "E ?") != nullptr, "(1.8.0) a table on ANOTHER chart: no effect");
+            h.chart = chart0; const std::string sym0 = h.symbol; h.symbol = "NQZ6";
+            s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+            CHECK(text(h, "E ?") != nullptr, "(1.8.0) a table for another symbol: no effect");
+            h.symbol = sym0;
+            bdk::publishHodLod(h.symbol, h.seconds, h.chart, ms - 600000, T);   // lsHodLod stopped drawing 10 minutes ago (no clear: a fault)
+            for (int k = 0; k < 4; ++k) { s->lastCheckMs = -100000; h.draws.clear(); p->draw(); }
+            CHECK(text(h, "E ?") != nullptr, "(1.8.0) a stale table (stamp 10 min old, unchanged for 4 draws): no effect");
+            bdk::clearHodLod(h.symbol, h.seconds, h.chart);
+            s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+            CHECK(text(h, "E ?") != nullptr, "(1.8.0) table cleared: drawn again");
+        }
+    }
     // Changing the turns or live file must not carry data into an identically named market with another bar period.
     h.seconds = 60;
     { std::ofstream f((flex + "\\BookFlow\\ES-60-turns.csv").c_str()); f << dt::lineOf('T', b, 0.25) << "\n"; }

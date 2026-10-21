@@ -138,7 +138,29 @@ static void hostTests() {
         const mock::Draw& pwh = s.badge["PWH  7887.00"];
         CHECK(pwh.color != (COLOR)0x0000FF, "[host] pure-blue PWH text lifted so it reads on black");
         const std::string st = slurp("KeyLevels.status-ES.txt");
-        CHECK(st.find("VERSION,1.1.0") != std::string::npos && st.find("KEY_LEVELS,9 levels") == std::string::npos && st.find("10 levels") != std::string::npos && st.find("MENTHORQ,off") != std::string::npos && st.find("9 to draw, 9 on screen") != std::string::npos, "[host] status file: version, 10 levels read, MenthorQ off, 9 drawn");
+        CHECK(st.find("VERSION,1.2.0") != std::string::npos && st.find("KEY_LEVELS,9 levels") == std::string::npos && st.find("10 levels") != std::string::npos && st.find("MENTHORQ,off") != std::string::npos && st.find("9 to draw, 9 on screen") != std::string::npos, "[host] status file: version, 10 levels read, MenthorQ off, 9 drawn");
+    }
+    {   // (1.2.0, Rassul 16:05 CT 2026-10-21 "fix this, it should be solid") the lsHodLod table on this chart: lines stop at its edges,
+        // a badge that would touch it is not painted; another chart's table changes nothing
+        home("es-keepout"); put("LRA-KeyLevels-ES.csv", keyFile(now - 120)); put("MenthorQLevels.csv", MQFILE);
+        Chart c("ESZ6", "ES", 7700); c.drawNow(); Seen s0 = look(c);
+        const mock::Draw pdl = s0.badge["PDL  7710.25"]; int pdlY = -1; for (auto& l : s0.lines) if (l.color == (COLOR)0xFFA500) pdlY = l.t;
+        CHECK(pdlY > 0 && s0.badge.count("PDL  7710.25"), "[keep-out] PDL drawn with no table");
+        const bdk::Box T = bdk::mk(200, pdlY - 30, 1795, pdlY + 30);   // a table over the PDL line and its badge
+        bdk::publishHodLod("ESZ6", 3600, "ES 60m", 1, T);
+        c.drawNow(); Seen s1 = look(c);
+        bool inside = false; for (auto& l : s1.lines) if (bdk::hitsTable(T, l.l, l.t, l.r, l.b)) inside = true;
+        for (auto& r : s1.rects) if (bdk::hitsTable(T, r.l, r.t, r.r, r.b)) inside = true;
+        for (auto& b : s1.badge) if (bdk::hitsTable(T, b.second.l, b.second.t, b.second.r, b.second.b)) inside = true;
+        CHECK(!inside, "[keep-out] no line part, badge or text inside the table");
+        CHECK(!s1.badge.count("PDL  7710.25"), "[keep-out] the PDL badge under the table is not painted");
+        bool leftPart = false; for (auto& l : s1.lines) if (l.color == (COLOR)0xFFA500 && l.t == pdlY) { leftPart = leftPart || (l.l == 0 && l.r == 197); CHECK(l.r <= 197 || l.l >= 1798, "[keep-out] the PDL line stops at the table's edge"); }
+        CHECK(leftPart, "[keep-out] the PDL line keeps its part left of the table (cut 2 px before it)");
+        const std::string st = slurp("KeyLevels.status-ES.txt");
+        CHECK(st.find("9 to draw, 9 on screen") != std::string::npos && st.find("UNDER_HODLOD,table on") != std::string::npos, "[keep-out] status: still 9 levels (records unchanged) + UNDER_HODLOD");
+        c.H.chart = "ES 60m (2)"; c.drawNow(); Seen s2 = look(c);
+        CHECK(s2.badge.count("PDL  7710.25") && s2.lines.size() == s0.lines.size(), "[keep-out] another chart's table: nothing hidden");
+        bdk::clearHodLod("ESZ6", 3600, "ES 60m");
     }
     {   home("es-mq"); put("LRA-KeyLevels-ES.csv", keyFile(now - 60)); put("MenthorQLevels.csv", MQFILE);
         ss::Values V = ss::defaults(klhset::spec(), ss::M_ES); V.market = ss::M_ES; V.v[klhset::K_SHOW_MQ] = 1;
@@ -212,6 +234,6 @@ static void hostTests() {
 int main() {
     setenv("TZ", "UTC", 1); tzset();
     settingsTests(); logicTests(); hostTests();
-    std::cout << "lsKeyLevels 1.1.0: " << passed << " passed, " << failed << " failed\n";
+    std::cout << "lsKeyLevels 1.2.0: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

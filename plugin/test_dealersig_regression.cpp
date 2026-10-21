@@ -112,6 +112,26 @@ int main()
     CHECK(dsText(dl::Data::Sig(), false).empty(), "an empty code draws nothing");
 #endif
 
+    {   // (1.8.0, Rassul 16:05 CT 2026-10-21 "fix this, it should be solid") the lsHodLod table over the first mark: it is not painted,
+        // the others are; the signal outputs are unchanged; a table on another chart changes nothing
+        mockrt::drawnTexts.clear(); mockrt::textBoxes.clear(); d.draw();
+        const size_t n0 = mockrt::drawnTexts.size();
+        CHECK(n0 >= 1, "[keep-out] marks drawn with no table");
+        if (n0 >= 1) {
+            const std::vector<int> b = mockrt::textBoxes[0]; const bdk::Box T = bdk::mk(b[0] - 3, b[1] - 3, b[2] + 3, b[3] + 3);
+            bdk::publishHodLod(mockrt::root, 60, mockrt::chart, 1, T);
+            mockrt::drawnTexts.clear(); mockrt::textBoxes.clear(); d.draw();
+            bool inside = false; for (auto& x : mockrt::textBoxes) if (bdk::hitsTable(T, x[0], x[1], x[2], x[3])) inside = true;
+            CHECK(!inside && mockrt::drawnTexts.size() < n0, "[keep-out] the mark under the table is not painted");
+            d.fillSignals(0); const unsigned long o1 = mockrt::out1[0];
+            bdk::clearHodLod(mockrt::root, 60, mockrt::chart); d.fillSignals(0);
+            CHECK(mockrt::out1[0] == o1, "[keep-out] the signal output is the same with or without the table");
+            bdk::publishHodLod(mockrt::root, 60, "another chart", 1, T);
+            mockrt::drawnTexts.clear(); d.draw();
+            CHECK(mockrt::drawnTexts.size() == n0, "[keep-out] a table on another chart: every mark drawn");
+            bdk::clearHodLod(mockrt::root, 60, "another chart");
+        }
+    }
     std::printf("\n%d passed, %d failed\n", passes, fails);
     return fails;
 }

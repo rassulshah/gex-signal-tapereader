@@ -83,6 +83,7 @@ public:
     short size = 9;
     FONT_STYLE style = BOLD;
 };
+#define KO_PNT PNT   // (SessionVWAP 1.6.3) KeepOutDraw.h: this mock's PNT is not nested in cppExtension
 class PNT {
 public:
     short v = 100, h = 400;

@@ -24,6 +24,7 @@
 #include "HostSlot.h"
 #include "KeyLevelsHSettings.h"
 #include "KeyLevelsHLogic.h"
+#include "KeepOutDraw.h"   // (1.2.0) BoxDock.h 1.2.0 keep-out: nothing painted over the HOD/LOD table
 #include "DealerProfileAuditLogic.h"
 #include "SettingsHost.h"
 #include "SettingsGuard.h"   // the window calls behind a fault guard (IRT faulted in other plugins' parmsLoad / parmsApply on a copy with no chart)
@@ -41,7 +42,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* KL_VERSION = "1.1.0";   // (1.1.0, 2026-10-21) one right edge; a crowded group shrinks its font, then spreads (klh::layoutStack)
+static const char* KL_VERSION = "1.2.0";   // (1.2.0, 2026-10-21 16:05 CT, Rassul "fix this, it should be solid") level lines stop at the lsHodLod table's edges, a badge that would touch it is not painted (KeepOutDraw.h); (1.1.0, 2026-10-21) one right edge; a crowded group shrinks its font, then spreads (klh::layoutStack)
 static long long klSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string klFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + KLH_SEP "InvestorRT" KLH_SEP "rtx" KLH_SEP "lsFlexLevels" : std::string(); }
 static void klMakeDir(const std::string& p) {
@@ -71,6 +72,7 @@ struct KlState {
     int shrunk = 0, spread = 0;   // (1.1.0) badges drawn smaller / spread off their line on the last draw
     ss::Store setStore; ss::Values set = ss::defaults(klhset::spec(), -1);
     std::string statusBody;
+    bdk::TableWatch keep;   // (1.2.0) the HOD/LOD table on this chart
 };
 static ss::Ids& klIds() { static ss::Ids I; return I; }
 
@@ -147,7 +149,7 @@ void KeyLevels::writeStatus(KlState& s, const std::vector<klh::Line>& L, size_t 
     o << "\nMENTHORQ," << s.mqNote << "\nLEVELS," << L.size() << " to draw, " << drawn << " on screen\n";
     o << "BADGES,one right edge,smaller font " << s.shrunk << ",spread off their line " << s.spread << "\n";   // (1.1.0)
     for (const klh::Line& q : L) o << "L," << q.name << "," << dpaudit::priceText(s.mkt, q.price) << "\n";
-    o << "SETTINGS," << s.set.why << ",MenthorQ " << (s.set.b(klhset::K_SHOW_MQ) ? "on" : "off") << ",font " << s.set.i(klhset::K_FONT) << ",width " << s.set.i(klhset::K_WIDTH) << "\n";
+    o << "SETTINGS," << s.set.why << ",MenthorQ " << (s.set.b(klhset::K_SHOW_MQ) ? "on" : "off") << ",font " << s.set.i(klhset::K_FONT) << ",width " << s.set.i(klhset::K_WIDTH) << "\n" << bdk::keepLine();
     const std::string body = o.str(); if (body == s.statusBody) return;
     klMakeDir(d);
     std::ofstream f((d + KLH_SEP "KeyLevels.status-" + s.mkt + ".txt").c_str(), std::ios::binary | std::ios::trunc);
@@ -162,6 +164,8 @@ int KeyLevels::draw(void) {
         { const char* sy = getSymbol(); s->sym = sy ? sy : ""; }
         if (s->mkt.empty()) return RTX_OK;
         refresh(*s);
+        s->keep.refresh(getSymbol(), getSecondsPerBar(), getChartLabel());   // (1.2.0) the HOD/LOD table: nothing painted over it this draw
+        bdk::KeepScope keepScope(s->keep);
         const ss::Values& V = s->set;
         // the chart's MenthorQ contract (the same picker as lsDealerProfile): its own contract under either spelling, else the nearest expiry
         std::vector<klh::MqIn> mq;
@@ -189,8 +193,7 @@ int KeyLevels::draw(void) {
         for (size_t j = 0; j < idx.size(); ++j) {                          // the lines first, across the chart, at the TRUE price
             const COLOR col = (COLOR)L[idx[j]].col;
             setPen(col, (short)lw, P_SOLID);
-            PNT a; a.set(0, 0.0f); a.h = pane.left; a.v = (short)ys[j]; a.setDrawPosition();
-            PNT b; b.set(0, 0.0f); b.h = pane.right; b.v = (short)ys[j]; b.drawLineTo();
+            ko::line(pane.left, ys[j], pane.right, ys[j]);                 // (1.2.0) cut at the HOD/LOD table
         }
         const COLOR bg = getBackgroundColor();
         s->shrunk = s->spread = 0;
@@ -202,10 +205,10 @@ int KeyLevels::draw(void) {
             if (slot[j].font < baseFont) ++s->shrunk;
             if (yc != ys[j]) {                                             // spread off its line: a short tick from the badge to its line
                 ++s->spread; setPen(col, 1, P_SOLID);
-                PNT a; a.set(0, 0.0f); a.h = (short)(x0 - 6); a.v = (short)ys[j]; a.setDrawPosition();
-                PNT b; b.set(0, 0.0f); b.h = (short)x0; b.v = (short)yc; b.drawLineTo();
+                ko::line(x0 - 6, ys[j], x0, yc);
             }
             RCT rc; rc.set((short)x0, (short)(yc - h / 2), (short)x1, (short)(yc + h / 2));
+            if (ko::off(rc)) continue;                                      // (1.2.0) a badge under the HOD/LOD table: not painted
             rc.draw(1, col, bg, DRAW_OPAQUE, PAT_SOLID);
             setTextColor((COLOR)dpaudit::liftForText(col));                 // a dark line colour (his pure blue) lifted to read on black
             rc.drawText(txt[j].c_str(), true, false);
@@ -227,6 +230,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Key Levels - for hourly charts. A line across the chart at each key level, with its name and price in a badge at the right edge. Price levels: prior full (PFH / PFL), prior day (PDH / PDL), prior week (PWH / PWL), this week (CWH / CWL), overnight (ONH / ONL), London (LonHI / LonLO), Asia (AsiaHI / AsiaLO). Volume levels: prior day POC (DPoc), value area (VAH / VAL), prior week POC (WPoc). MenthorQ levels (CR / PS / HVL / G) are off by default - tick the box to show them. No Open. Levels on one price share one line (PFH \xB7 PDH). The numbers are the ones lsDealerProfile computes on the market's 3-min chart (it must be open). Example: ES 60-min - an orange line at 7710.25 with the badge PDL  7710.25.");
-    p->setVersion("1.1.0");   // KL_VERSION
+    p->setVersion("1.2.0");   // KL_VERSION
     return p;
 }

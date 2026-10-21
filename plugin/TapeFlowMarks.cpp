@@ -27,6 +27,7 @@
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "TapeFlowLogic.h"
 #include "HostSlot.h"
+#include "KeepOutDraw.h"   // (1.3.0) BoxDock.h 1.2.0 keep-out: nothing painted over the HOD/LOD table
 #include <atomic>
 #include <mutex>
 #include <fstream>
@@ -44,7 +45,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* TFM_VERSION = "1.2.0";   // (1.2.0, 2026-10-14 audit display list) the candle mark is always "A?" (never "A")   // (1.1.1) current cache is published before status; same-size atomic rewrites use native-resolution write times; a transient bad file never erases a drawn mark
+static const char* TFM_VERSION = "1.3.0";   // (1.3.0, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") an A? that would touch the lsHodLod table is not painted there (the TapeFlow record unchanged; KeepOutDraw.h)   // (1.2.0, 2026-10-14 audit display list) the candle mark is always "A?" (never "A")   // (1.1.1) current cache is published before status; same-size atomic rewrites use native-resolution write times; a transient bad file never erases a drawn mark
 static const COLOR C_BUY  = 0x0022C55E;
 static const COLOR C_SELL = 0x00EF4444;
 static const COLOR C_GRAY = 0x0064748B;
@@ -111,6 +112,7 @@ struct MarksState {
     time_t lastCheck = 0;
     long reads = 0, skipped = 0, stats = 0, statusWrites = 0;
     std::mutex mx;
+    bdk::TableWatch keep;                         // (1.3.0) the HOD/LOD table on this chart (keep-out)
     std::string statusBody;                       // (2.0.4) the status file is rewritten only when this changes                                // the timer (re-read) and draw never touch byT at the same time
 };
 static int nextTimerId() { static std::atomic<int> next(8711); return next.fetch_add(1); }
@@ -143,7 +145,7 @@ public:
     void textC(short x, short yBottom, const char* str, COLOR col)
     {
         FONT f; f.id = HELVETICA; f.size = (short)FONT_PT; f.style = BOLD; setFont(f); setTextColor(col);
-        RCT rc; rc.set((short)(x - 12), (short)(yBottom - LETTER_H), (short)(x + 12), yBottom); rc.drawText(str, true, false);
+        RCT rc; rc.set((short)(x - 12), (short)(yBottom - LETTER_H), (short)(x + 12), yBottom); ko::text(rc, str, true, false);   // (1.3.0) not under the HOD/LOD table
     }
 };
 
@@ -292,6 +294,8 @@ int TapeFlowMarks::draw(void)
         else if (!s->timerOn && time(0) - s->lastCheck >= 2) { s->lastCheck = time(0); refresh(*s); }                    // no timer: the same 2-s rhythm
         if (s->byT.empty()) return RTX_OK;
         const long n = getBarCount(); if (n <= 0) return RTX_OK;
+        s->keep.refresh(getSymbol(), getSecondsPerBar(), getChartLabel());   // (1.3.0) the HOD/LOD table: nothing painted over it this draw
+        bdk::KeepScope keepScope(s->keep);
         int b0 = 0, b1 = (int)n - 1;
         if (getVisibleBars(&b0, &b1) != RTX_OK) { b0 = std::max(0, (int)n - 200); b1 = (int)n - 1; }
         if (b1 >= n) b1 = (int)n - 1;

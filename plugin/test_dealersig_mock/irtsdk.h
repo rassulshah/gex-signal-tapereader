@@ -26,13 +26,15 @@ static std::string root = "GCE";
 static int parameterCount = 0;
 static int pntResult = RTX_OK, pntCalls = 0, drawTextCalls = 0;
 static std::vector<std::string> drawnTexts;   // (DealerSig 1.7.0 tests) every text drawn
+static std::vector<std::vector<int> > textBoxes;   // (1.8.0) and its rectangle
+static std::string chart = "GC 1 min";
 
 inline void reset()
 {
     out1.assign(3, 0); out2.assign(3, 0); dates.assign(3, 0);
     highs.assign(3, 100.0f); lows.assign(3, 99.0f);
     lists.assign(16, 0); integers.assign(16, 10); bools.assign(16, 0);
-    root = "GCE"; parameterCount = 0; pntResult = RTX_OK; pntCalls = 0; drawTextCalls = 0; drawnTexts.clear();
+    root = "GCE"; parameterCount = 0; pntResult = RTX_OK; pntCalls = 0; drawTextCalls = 0; drawnTexts.clear(); textBoxes.clear();
 }
 inline std::vector<unsigned long>& ints(fARRAY a)
 {
@@ -67,6 +69,7 @@ private:
     fARRAY array;
 };
 
+typedef unsigned char RTBOOL;
 class cppExtension {
 public:
     enum FONT_ID { HELVETICA = 1 };
@@ -87,7 +90,7 @@ public:
         short top = 0, left = 0, bottom = 500, right = 500;
         void getPaneRect(bool) { top = 0; left = 0; bottom = 500; right = 500; }
         void set(short l, short t, short r, short b) { left = l; top = t; right = r; bottom = b; }
-        void drawText(const char* t, bool, bool) { ++mockrt::drawTextCalls; mockrt::drawnTexts.push_back(t ? t : ""); }
+        void drawText(const char* t, bool, bool) { ++mockrt::drawTextCalls; mockrt::drawnTexts.push_back(t ? t : ""); mockrt::textBoxes.push_back(std::vector<int>{ left, top, right, bottom }); }
     };
 
     cppExtension() {}
@@ -121,6 +124,19 @@ public:
         return const_cast<char*>(mockrt::root.c_str());
     }
     long getBarCount(void) { return (long)mockrt::dates.size(); }
+    // (2026-10-21) the settings-layer calls SettingsHost.h / SettingsGuard.h make (the mock had not built since the layer moved in)
+    char* getPeriodicityLabel(void) { static char p[] = "1 min"; return p; }
+    void checkBox(int, RTBOOL) {} void enableParameter(int, RTBOOL) {}
+    float getFloatValue(int) { return 0.0f; } void setFloatValue(int, float) {} void setIntegerValue(int, int) {} void setListIndex(int, int) {}
+    COLOR getParameterColor(int) { return 0; } void setParameterColor(int, COLOR) {}
+    int getParameterText(int, char*, int) { return RTX_FAIL; } void setParameterText(int, const char*) {}
+    int setColorParameter(const char*, COLOR, short = 0, short = 0) { ++mockrt::parameterCount; return RTX_OK; }
+    int setFloatParameter(const char*, float, short = 0, short = 0) { ++mockrt::parameterCount; return RTX_OK; }
+    int setLabelParameter(const char*, short = 0, short = 0) { ++mockrt::parameterCount; return RTX_OK; }
+    int setStringParameter(const char*, const char*, size_t, short = 0, short = 0) { ++mockrt::parameterCount; return RTX_OK; }
+    char* getSymbol(void) { return const_cast<char*>(mockrt::root.c_str()); }          // (DealerSig 1.8.0) the keep-out key
+    char* getChartLabel(void) { return const_cast<char*>(mockrt::chart.c_str()); }
+    int getSecondsPerBar(void) { return 60; }
     std::tm* getLocaltime(RTDATE dt, std::tm* out) { std::time_t t = (std::time_t)dt; return gmtime_r(&t, out); }
     int setFont(FONT&) { return RTX_OK; }
     void setTextColor(COLOR) {}

@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace ciset {
-static const char* const PLUGIN_VERSION = "0.5.1";
+static const char* const PLUGIN_VERSION = "0.5.2";
 enum K { K_SHOW_LABELS, K_LABEL_COLOR, K_SHOW_BOX, K_BOX_COLOR, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

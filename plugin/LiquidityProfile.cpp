@@ -99,6 +99,7 @@
 #include "SettingsHost.h"
 #include "KeyLevelsLogic.h"      // (0.10.0) the key levels, computed natively from the chart (as lsDealerProfile)
 #include "HostSlot.h"
+#include "KeepOutDraw.h"   // (0.47.1) BoxDock.h 1.2.0 keep-out: the big-order lines stop at the HOD/LOD table
 #include "BannerBoard.h"           // (0.15.3) the one top banner: the warning handed to the Tape Reader
 #include "BoxPlace.h"              // (CR5000) the LIQ label Offset X / Y: validation + clamping (shared, as is)
 #include "SignalBoard.h"           // (0.21.0) reads / posts the chart's signals (Delta Profile A, Big Bid/Ask, big fills)
@@ -140,7 +141,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.47.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.47.1"          // (0.47.1, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") the biggest resting order lines stop at the lsHodLod table's edges (KeepOutDraw.h; the lines, records and counts unchanged) // keep equal to lqp::VERSION and the setVersion literal below
 // (0.45.3, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") every PRICE-CHART hover is off: the
 // near-zone makeup box and the big-order line box (the code is kept - set LQ_HOVERS true to bring them back); the price chart no longer asks
 // IRT for mouse events (no TRACK_MOUSE). The Liquidity Flow pane (LQ_FLOW) keeps its candle-follow. Column inks lighter: lqp::colInk.
@@ -350,6 +351,7 @@ struct BldCh { bol::LogDist past, curBase, curAll; std::vector<std::pair<long lo
 struct BldSet { std::string mkt; long long ses = -2, calcMs = -1, writeMs = -1, startUsed = -1; BldCh ch[3]; };
 #endif
 struct LQState {
+    bdk::TableWatch keep;   // (0.47.1) the HOD/LOD table on this chart (keep-out)
     lqp::Engine e;
     cppExtension::MARKET_DEPTH* md = nullptr;
     bool mdDead = false, mdBlocked = false, busy = false, faulted = false, primed = false;
@@ -2108,7 +2110,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     S.boXMin = xMin; S.boXMax = xMax; S.boTop = top; S.boBot = bottom;
     auto xOfBar = [&](int b) { PNT p; p.set(b, 0.0f, kBarCenter); return (int)p.h; };
     auto yOfPx = [&](long long t) { PNT p; p.set(lastBar, (float)((double)t * tick)); return (int)p.v; };
-    auto stroke = [&](int x0, int y0, int x1, int y1) { PNT a; a.set(0, 0.0f); a.h = coord(x0); a.v = coord(y0); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(x1); b.v = coord(y1); b.drawLineTo(); };
+    auto stroke = [&](int x0, int y0, int x1, int y1) { ko::line(coord(x0), coord(y0), coord(x1), coord(y1)); };   // (0.47.1) cut at the HOD/LOD table
     static const COLOR C_BUY_DIM = 0x00157A3D, C_SELL_DIM = 0x00933030, C_PINK = 0x00FECACA, C_MINT = 0x00BBF7D0;
     auto meaning = [&](int side, int sign) -> bool { return sign == 0 ? side == bol::BID : (side == bol::BID) == (sign > 0); };   // true = bullish (green)
     const long long midT = S.bo.havePx ? S.bo.px : 0;
@@ -2751,7 +2753,8 @@ void LiquidityProfile::render(LQState& S) {
     }
     S.colRight = std::max(colR, full + 4);   // (0.13.2) published so the Dealer Profile's badges start right of it
 #ifndef LQ_FLOW
-    renderBig(S, pane.left, paneRight, warnTop(pane.top), bottom, lastBar, lastX);   // (0.22.5, Rassul 10:35) the BIG column from the top of the chart (under the title row)   // (0.18.0) the biggest resting order lines, over the candles
+    S.keep.refresh(getSymbol(), getSecondsPerBar(), getChartLabel());   // (0.47.1) the HOD/LOD table: the big-order lines stop at its edges
+    { bdk::KeepScope keepScope(S.keep); renderBig(S, pane.left, paneRight, warnTop(pane.top), bottom, lastBar, lastX); }   // (0.22.5, Rassul 10:35) the BIG column from the top of the chart (under the title row)   // (0.18.0) the biggest resting order lines, over the candles
     {   // (0.15.0) the column's x span and the bar -> x map, for the mouse; then the hovered near zone's makeup box
         S.hovColX0 = pane.left; S.hovColX1 = left + S.colRight;
         PNT a, b; a.set(lastBar, 0.0f, kBarCenter); b.set(lastBar - 1, 0.0f, kBarCenter);
@@ -3618,6 +3621,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.47.0");   // LQ_VERSION
+    p->setVersion("0.47.1");   // LQ_VERSION
     return p;
 }

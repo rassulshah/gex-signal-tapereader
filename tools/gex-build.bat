@@ -43,22 +43,22 @@ if defined SETFAIL (
 call :one GammaProfile lsGammaProfile GammaProfileLogic.h ContractOffsetLogic.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 REM (MT100 2026-10-09) lsDayModel + lsDayStats RETIRED - superseded by lsHodLod (+ SessionInfo) and the HOD / LOD studies.
 REM   Their sources are kept in plugin\retired\ (see plugin\retired\RETIRE-NOTES.md); they are no longer built or installed.
-call :one KingTracker  lsKingTracker  KingTrackerLogic.h ContractOffsetLogic.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+call :one KingTracker  lsKingTracker  KingTrackerLogic.h ContractOffsetLogic.h SettingsGuard.h SettingsHost.h SettingsSpec.h BoxDock.h BannerBoard.h KeepOutDraw.h
 REM (2026-10-18 night) Market State posts: MarketState.h / BannerBoard.h / SignalBoard.h 1.1.0 / Fresh.h added to the hash lists of every plugin that posts or reads it (LQP 0.44.0, BidAskStats 1.13.0, BookFlow 1.3.0, DeltaProfile 2.17.0, BigBidAsk 1.15.0, HodLod 2.4.0, DealerProfile 2.17.0, SessionVWAP 1.6.0, CobImpulse 0.4.1, TapeReader 1.3.0)
 REM (2026-10-14 CR5200) the right-side columns: ColumnBoard.h shared by DealerProfile 2.11.0 / DeltaProfile 2.8.0 / LiquidityProfile + Flow 0.16.0
 call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h HostSlot.h OnTouchParams.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h ColumnBoard.h DealerColumnsLogic.h BoxPlace.h BannerBoard.h ClaimGates.h Fresh.h MarketState.h DealerProfileSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h
 call :one DealerRead   lsDealerRead   DealerLogic.h HostSlot.h BoxPlace.h ClaimGates.h DealerReadGates.h SettingsGuard.h SettingsHost.h SettingsSpec.h
-call :one DealerSig    lsDealerSig    DealerLogic.h ClaimGates.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+call :one DealerSig    lsDealerSig    DealerLogic.h ClaimGates.h SettingsGuard.h SettingsHost.h SettingsSpec.h BoxDock.h BannerBoard.h KeepOutDraw.h
 call :one DealerSummary lsDealerSummary DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 REM (2026-10-21) DeltaProfile 2.20.0 / BigBidAsk 1.20.0 hash AbsorbLogic.h (wick absorption + absorbed-print circle); BidAskStats 1.25.0 hashes SignalBoard.h (posts kind O)
-call :one DeltaProfile lsDeltaProfile AbsorbLogic.h TrapLogic.h DeltaProfileCore.h ColumnBoard.h BoxPlace.h BannerBoard.h SignalBoard.h ZoneNear.h MarketState.h DeltaProfileSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h
+call :one DeltaProfile lsDeltaProfile AbsorbLogic.h TrapLogic.h DeltaProfileCore.h ColumnBoard.h BoxPlace.h BannerBoard.h SignalBoard.h ZoneNear.h MarketState.h DeltaProfileSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h BoxDock.h KeepOutDraw.h
 call :one DeltaProfileHourly lsDeltaProfileHourly DeltaProfileHourlyCore.h DeltaProfileHourlyEngine.h DeltaProfileHourlyParams.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 call :one SessionInfo  lsSessionInfo  DealerLogic.h SessionInfoLayout.h HodLodLogic.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h
 call :one HodLod       lsHodLod       HodLodLogic.h HodLodGex.h HodLodExpected.h HodLodExpectedV2.h HodLodMedians.h HodLodReadTables.h HodLodEvents.h HostSlot.h HodLodFx.h HodLodQ.h FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp BoxPlace.h Fresh.h MarketState.h BannerBoard.h VwapTrendLogic.h BoxDock.h HodLodSettings.h SettingsSpec.h SettingsHost.h DealerProfileSettings.h OnTouchLogic.h OnTouchParams.h SessionVWAPLogic.h SettingsGuard.h
 REM (CR204 2026-10-12) lsFirstExtreme: the First Final Extreme v2 model, shadow mode - (CR210) RETIRED stub 2.0.0: the model runs inside lsHodLod 2.0.0
 call :one FirstExtreme lsFirstExtreme FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp HostSlot.h
 call :one TradeManager lsTradeManager DealerLogic.h HostSlot.h TradeGuardLayout.h ClaimGates.h TradeManagerSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h
-call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h OnTouchParams.h OnTouchLogic.h VwapTrendLogic.h VwapOddsLogic.h VwapOddsParams.h SessionVWAPStyle.h MarketState.h BannerBoard.h SessionVWAPSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h
+call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h OnTouchParams.h OnTouchLogic.h VwapTrendLogic.h VwapOddsLogic.h VwapOddsParams.h SessionVWAPStyle.h MarketState.h BannerBoard.h SessionVWAPSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h BoxDock.h KeepOutDraw.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
@@ -74,15 +74,15 @@ call :one TapeFlowGC lsTapeFlowGC TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h
 call :one TapeFlowHG lsTapeFlowHG TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 call :one TapeFlowNG lsTapeFlowNG TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 call :one TapeFlowEU lsTapeFlowEU TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
-call :one TapeFlowMarks lsTapeFlowMarks TapeFlowLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+call :one TapeFlowMarks lsTapeFlowMarks TapeFlowLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h BoxDock.h BannerBoard.h KeepOutDraw.h
 call :one ChartView    lsChartView    ChartViewLogic.h HostSlot.h DealerLogic.h ChartViewCamera.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 call :one MboCheck     lsMboCheck     MboCheckLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 REM (LQ010 2026-10-11) the Liquidity Profile - native depth + VAP, TESTING
 REM (LQ150 2026-10-13) 0.15.0 includes the order-by-order feed: rebuild when OrderFlowFeed.h / OptionsFlow.h / NearLevels.h change
 REM (2026-10-14 night) lsLiquidityProfile 0.18.0: the biggest resting order lines (BigOrderLines.h)
-call :one LiquidityProfile lsLiquidityProfile LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h OrderFlowFeed.h OptionsFlow.h NearLevels.h HoverBoard.h BannerBoard.h BoxPlace.h ColumnBoard.h ZoneRule.h ZoneRead.h BigOrderLines.h MarketState.h SignalBoard.h BigFlow.h LiquidityProfileSettings.h SettingsSpec.h SettingsHost.h BannerSettings.h LargeLotPool.h SettingsGuard.h ZoneNear.h MoveLogic.h AirPocketLogic.h
+call :one LiquidityProfile lsLiquidityProfile LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h OrderFlowFeed.h OptionsFlow.h NearLevels.h HoverBoard.h BannerBoard.h BoxPlace.h ColumnBoard.h ZoneRule.h ZoneRead.h BigOrderLines.h MarketState.h SignalBoard.h BigFlow.h LiquidityProfileSettings.h SettingsSpec.h SettingsHost.h BannerSettings.h LargeLotPool.h SettingsGuard.h ZoneNear.h MoveLogic.h AirPocketLogic.h BoxDock.h KeepOutDraw.h
 REM (LQ020 2026-10-11) the aggression / defense panes - the same source built as its own pane
-call :one LiquidityFlow lsLiquidityFlow LiquidityProfile.cpp LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h BannerBoard.h BoxPlace.h ColumnBoard.h OrderFlowFeed.h OptionsFlow.h NearLevels.h HoverBoard.h ZoneRule.h ZoneRead.h MarketState.h SignalBoard.h BigOrderLines.h BigFlow.h LiquidityProfileSettings.h SettingsSpec.h SettingsHost.h BannerSettings.h LargeLotPool.h SettingsGuard.h ZoneNear.h MoveLogic.h AirPocketLogic.h
+call :one LiquidityFlow lsLiquidityFlow LiquidityProfile.cpp LiquidityProfileLogic.h HostSlot.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h BannerBoard.h BoxPlace.h ColumnBoard.h OrderFlowFeed.h OptionsFlow.h NearLevels.h HoverBoard.h ZoneRule.h ZoneRead.h MarketState.h SignalBoard.h BigOrderLines.h BigFlow.h LiquidityProfileSettings.h SettingsSpec.h SettingsHost.h BannerSettings.h LargeLotPool.h SettingsGuard.h ZoneNear.h MoveLogic.h AirPocketLogic.h BoxDock.h KeepOutDraw.h
 REM (2026-10-11) lsPulling - who pulled their orders near price, from the order-by-order (MBO) feed
 REM (2026-10-14 night) lsPulling RETIRED stub 1.0.0: its read is lsPullStats 1.5.0's line (ZoneRead.h 1.1.0); the stub includes no header (0.3.0 source in plugin\retired\Pulling_0_3_0.cpp)
 call :one Pulling lsPulling
@@ -107,14 +107,14 @@ REM   (one net bar per side; it still writes the StackStats\ and PullStats\ reco
 REM (2026-10-21) lsBookFlow 1.19.0 reads the Delta Profile's TR record (Tr on the Defense badge): TrapLogic.h hashed
 call :one BookFlow lsBookFlow BookFlowLogic.h StackStatsLogic.h PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h OrderFlowPaneSettings.h SettingsSpec.h SettingsHost.h PaneCursor.h BoxRead.h BoxReadDraw.h DefenseTurn.h DefenseLinesSettings.h EffortReward.h LargeLotPool.h SettingsGuard.h MoveLogic.h TrapLogic.h
 REM (2026-10-20 Rassul 12:22 CT "first build the lines, do it now") lsDefenseLines 1.0.0 - the Defense pane's pivot turns + refill lines on the price chart
-call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h
+call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h
 REM (2026-10-20 22:41 CT Rassul "a seperate levels indicator without the open .. for my hourly charts") lsKeyLevels 1.0.0 - key levels across the chart, badges right-justified
-call :one KeyLevels lsKeyLevels KeyLevelsHLogic.h KeyLevelsHSettings.h DealerProfileAuditLogic.h DealerLogic.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h
+call :one KeyLevels lsKeyLevels KeyLevelsHLogic.h KeyLevelsHSettings.h DealerProfileAuditLogic.h DealerLogic.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h BoxDock.h BannerBoard.h KeepOutDraw.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
 REM (2026-10-14 claim gates) DealerRead 4.6.0 / TapeReader 1.1.4 also hash ClaimGates.h (DealerRead DealerReadGates.h)
 call :one TapeReader lsTapeReader TapeReaderLogic.h TapeReaderText.h DealerLogic.h VwapTrendLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h OptionsFlow.h HoverBoard.h BoxPlace.h BannerBoard.h ClaimGates.h MarketState.h ZoneStory.h OddsTable.h SignalBoard.h TapeReaderSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h
 REM (2026-10-14) lsCobImpulse 0.1.0 - CoB impulse tag Cob+R? / Cob+V? / Cob+RV? + 1 px box on the impulse bar (Rassul 12:07 CT approved; CR5500); 0.3.0 gamma part Cob+R+CR? (reads ClaimGates.h)
-call :one CobImpulse lsCobImpulse CobImpulseLogic.h HostSlot.h HoverBoard.h ClaimGates.h CobOdds.h OddsTable.h MarketState.h BannerBoard.h CobImpulseSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h
+call :one CobImpulse lsCobImpulse CobImpulseLogic.h HostSlot.h HoverBoard.h ClaimGates.h CobOdds.h OddsTable.h MarketState.h BannerBoard.h CobImpulseSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h BoxDock.h KeepOutDraw.h
 REM (2026-10-14 night) lsBigBidAsk 1.0.0 - biggest bid (red, left) / biggest ask (green, right) lots on every candle of the price chart, bold >= 2.0x, thin circle = absorption (Rassul approved the mockup 20:41 CT)
 REM (2026-10-18) lsBigBidAsk 1.16.0 compact Big Lot box docked to the lsHodLod 2.4.1 table (BoxDock.h), category order 1 > 4 > 2 / 3, settings window fixes
 call :one BigBidAsk lsBigBidAsk AbsorbLogic.h BigBidAskLogic.h ColumnBoard.h HoverBoard.h BoxPlace.h BannerBoard.h HostSlot.h SignalBoard.h ZoneNear.h VwapTrendLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h BoxDock.h BigBidAskSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h OnTouchParams.h

@@ -7,7 +7,9 @@ build=root.parent/'tools/gex-build.bat'
 files={p.name:p for p in root.glob('*') if p.is_file()}
 text=build.read_text()
 checks=0
-for target in ['BidAskStats','BookFlow','DefenseLines']:
+for target in ['BidAskStats','BookFlow','DefenseLines',
+               # (2026-10-21) every plugin that now includes KeepOutDraw.h / BoxDock.h / BannerBoard.h (the HOD/LOD keep-out)
+               'KeyLevels','DeltaProfile','TapeFlowMarks','CobImpulse','DealerSig','KingTracker','SessionVWAP','LiquidityProfile']:
     closure=set();todo=[target+'.cpp']
     while todo:
         name=todo.pop()

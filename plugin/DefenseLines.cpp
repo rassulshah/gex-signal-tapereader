@@ -21,6 +21,7 @@
 #include "irtsdk.h"
 #include "HostSlot.h"
 #include "DefenseTurn.h"
+#include "KeepOutDraw.h"   // (1.8.0) BoxDock.h 1.2.0 keep-out: nothing painted over the HOD/LOD table
 #include "MoveLogic.h"   // (1.5.0) the M lines: order moves (Top Defender #3)
 #include "DefenseLinesSettings.h"
 #include "SettingsHost.h"
@@ -41,7 +42,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* DL_VERSION = "1.7.0";   // 1.7.0 (2026-10-21, lsBookFlow 1.19.0): the turns file's new G (attackers giving up) and W (defenders withdrew at a key level) lines are read and kept out of the bad-line count; nothing new drawn on the price chart (the letters are in the Defense pane's badge);   // 1.6.0 (2026-10-21 14:16-14:18 CT Rassul "i want you to draw them", mockup v4): every move case drawn - per BOOK side the largest qualifying move (P: in, B: out), hollow box at the old price, solid box + lots at the new price, in the side's colour (bids green, offers red); both sides on one candle side by side, never overlapping;   // 1.5.0 (2026-10-21, Rassul approved defender3-mockup-v3 11:50 CT, Top Defender #3): on a candle where the Defense pane drew P (the defenders PRESSED IN), the largest such move on the price chart: a HOLLOW box at the old price, a SOLID box at the new price with only its lot size (M lines, MoveLogic.h); never repainted;   // 1.4.0 (2026-10-21, Top Defender #4): the turns file's Q lines (the re-test L / X, DefenseTurn 1.4.0) are read and kept out of the bad-line count; the line label stays "R A H ?" - L / X are in the Defense pane's badge row (Rassul 11:26 "if the refill line gets too complicated ... they are in the pane"; the line is usually gone by the re-test: at most 3 candles);   // 1.3.0 (2026-10-21, Rassul approved defender5-mockup-v2 11:25 CT): the line label adds H when lsBookFlow decided the defenders hit back after the A ("R A H ?"; DefenseTurn 1.3.0 H lines);    // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
+static const char* DL_VERSION = "1.8.0";   // 1.8.0 (2026-10-21 16:05 CT, Rassul "fix this, it should be solid"): lines stop at the lsHodLod table's edges, labels / dots / boxes that would touch it are not painted (still in the turns file and counted; KeepOutDraw.h); 1.7.0 (2026-10-21, lsBookFlow 1.19.0): the turns file's new G (attackers giving up) and W (defenders withdrew at a key level) lines are read and kept out of the bad-line count; nothing new drawn on the price chart (the letters are in the Defense pane's badge);   // 1.6.0 (2026-10-21 14:16-14:18 CT Rassul "i want you to draw them", mockup v4): every move case drawn - per BOOK side the largest qualifying move (P: in, B: out), hollow box at the old price, solid box + lots at the new price, in the side's colour (bids green, offers red); both sides on one candle side by side, never overlapping;   // 1.5.0 (2026-10-21, Rassul approved defender3-mockup-v3 11:50 CT, Top Defender #3): on a candle where the Defense pane drew P (the defenders PRESSED IN), the largest such move on the price chart: a HOLLOW box at the old price, a SOLID box at the new price with only its lot size (M lines, MoveLogic.h); never repainted;   // 1.4.0 (2026-10-21, Top Defender #4): the turns file's Q lines (the re-test L / X, DefenseTurn 1.4.0) are read and kept out of the bad-line count; the line label stays "R A H ?" - L / X are in the Defense pane's badge row (Rassul 11:26 "if the refill line gets too complicated ... they are in the pane"; the line is usually gone by the re-test: at most 3 candles);   // 1.3.0 (2026-10-21, Rassul approved defender5-mockup-v2 11:25 CT): the line label adds H when lsBookFlow decided the defenders hit back after the A ("R A H ?"; DefenseTurn 1.3.0 H lines);    // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
 static long long dlSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string dlFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void dlMakeDir(const std::string& p) {
@@ -76,6 +77,7 @@ struct DlState {
     long long lastCheckMs = -100000, reads = 0, bad = 0;
     ss::Store setStore; ss::Values set = ss::defaults(dlset::spec(), -1);
     std::string statusBody;
+    bdk::TableWatch keep;                         // (1.8.0) the HOD/LOD table on this chart (keep-out)
 };
 static ss::Ids& dlIds() { static ss::Ids I; return I; }
 
@@ -101,16 +103,18 @@ public:
     void writeStatus(DlState& s, size_t drawn, size_t failed = 0);
     void tri(int cx, int tipY, bool down, COLOR col) {
         setPen(col, 1, P_SOLID);
-        for (int r = 0; r < 5; ++r) { const int y = down ? tipY - r : tipY + r; PNT a; a.set(0, 0.0f); a.h = (short)(cx - r); a.v = (short)y; a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = (short)(cx + r + 1); b.v = (short)y; b.drawLineTo(); }
+        if (bdk::hide(cx - 5, down ? tipY - 4 : tipY, cx + 6, down ? tipY : tipY + 4)) return;   // (1.8.0) a mark under the HOD/LOD table: not painted
+        for (int r = 0; r < 5; ++r) { const int y = down ? tipY - r : tipY + r; ko::rawLine(cx - r, y, cx + r + 1, y); }
     }
     void dot(int cx, int cy, COLOR col) {                                    // (1.1.0) the candle a line refers to: a small filled dot (7 px)
         setPen(col, 1, P_SOLID);
         static const int W[7] = { 1, 2, 3, 3, 3, 2, 1 };
+        if (bdk::hide(cx - 3, cy - 3, cx + 4, cy + 3)) return;   // (1.8.0)
         for (int r = -3; r <= 3; ++r) { const int w = W[r + 3]; PNT a; a.set(0, 0.0f); a.h = (short)(cx - w); a.v = (short)(cy + r); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = (short)(cx + w + 1); b.v = (short)(cy + r); b.drawLineTo(); }
     }
     void label(int x, int yMid, const std::string& t, COLOR col) {
         FONT f; f.id = HELVETICA; f.size = 8; f.style = BOLD; setFont(f); setTextColor(col);
-        const int w = (int)getTextWidth(t.c_str(), -1); RCT rc; rc.set((short)x, (short)(yMid - 6), (short)(x + w + 2), (short)(yMid + 6)); rc.drawText(t.c_str(), false, false);
+        const int w = (int)getTextWidth(t.c_str(), -1); RCT rc; rc.set((short)x, (short)(yMid - 6), (short)(x + w + 2), (short)(yMid + 6)); ko::text(rc, t.c_str(), false, false);
     }
 private:
     ss::Snap snap_; ss::Store dlgStore_; std::string dlgMkt_;
@@ -167,7 +171,7 @@ void DefenseLines::writeStatus(DlState& s, size_t drawn, size_t failed) {
     o << "VERSION," << DL_VERSION << "\nMARKET," << s.mkt << "\nBAR_SECONDS," << s.spb << "\nTURNS_FILE," << s.turns.path << "," << s.lines.size() << " turns, "
       << s.bad << " unreadable lines\nLIVE," << (s.haveLive ? "? on the forming candle" : "none") << "\nDRAWN_NOW," << drawn << ",failed lines removed " << failed
       << "\nSETTINGS," << s.set.why << ",lines " << (s.set.b(dlset::K_SHOW_LINES) ? "on" : "off") << ",E " << (s.set.b(dlset::K_SHOW_E) ? "on" : "off") << ",dots " << (s.set.b(dlset::K_SHOW_DOTS) ? "on" : "off")
-      << ",pane marks " << (s.set.b(dlset::K_SHOW_MARKS) ? "on" : "off") << ",candles " << s.set.i(dlset::K_MAX_CANDLES) << ",exhaustion lines " << s.xs.size() << "\n";
+      << ",pane marks " << (s.set.b(dlset::K_SHOW_MARKS) ? "on" : "off") << ",candles " << s.set.i(dlset::K_MAX_CANDLES) << ",exhaustion lines " << s.xs.size() << "\n" << bdk::keepLine();
     const std::string body = o.str(); if (body == s.statusBody) return;
     std::ofstream f((d + "\\DefenseLines.status-" + s.mkt + ".txt").c_str(), std::ios::binary | std::ios::trunc);
     if (f.is_open()) { f << body; s.statusBody = body; }
@@ -180,6 +184,8 @@ int DefenseLines::draw(void) {
         s->mkt = chartMarket(); s->spb = (int)getSecondsPerBar();
         if (s->mkt.empty() || s->spb <= 0) return RTX_OK;
         refresh(*s);
+        s->keep.refresh(getSymbol(), getSecondsPerBar(), getChartLabel());   // (1.8.0) the HOD/LOD table: nothing painted over it this draw
+        bdk::KeepScope keepScope(s->keep);
         const ss::Values& V = s->set;
         const bool showLines = V.b(dlset::K_SHOW_LINES), showE = V.b(dlset::K_SHOW_E), showDots = V.b(dlset::K_SHOW_DOTS);
         const int maxBars = std::max(1, V.i(dlset::K_MAX_CANDLES));
@@ -217,7 +223,7 @@ int DefenseLines::draw(void) {
             PNT a; a.set(st, (float)px, kBarCenter); PNT b; b.set(j, (float)px, kBarCenter);
             const int xa = a.h - ppb / 2, xb = b.h + ppb / 2;
             setPen(col, 2, P_SOLID);
-            { PNT p0; p0.set(0, 0.0f); p0.h = (short)xa; p0.v = a.v; p0.setDrawPosition(); PNT p1; p1.set(0, 0.0f); p1.h = (short)xb; p1.v = a.v; p1.drawLineTo(); }
+            ko::line(xa, a.v, xb, a.v);                                       // (1.8.0) cut at the HOD/LOD table
             label(xb + 3, a.v + labelDy, tag, col);
             if (showDots && st >= v0) dot(a.h, a.v, colDot);
             ++drawn;
@@ -260,6 +266,7 @@ int DefenseLines::draw(void) {
                 PNT po; po.set(i, (float)((double)o[d] * tk), kBarCenter); PNT pn; pn.set(i, (float)((double)nw[d] * tk), kBarCenter);
                 const int l = both ? (d == mvl::BIDS ? po.h - w - 1 : po.h + 1) : po.h - w / 2, r = l + w;
                 if (std::abs(po.v - pn.v) < hh) po.v = (short)(pn.v + ((po.v > pn.v || (po.v == pn.v && d == mvl::BIDS)) ? hh : -hh));   // a 1-tick move on a tight scale: the hollow box sits against the solid one on the old price's side (never on top of it)
+                if (bdk::hide(l, std::min(po.v, pn.v) - hh / 2, r, std::max(po.v, pn.v) + hh / 2 + 1)) continue;   // (1.8.0) a box under the HOD/LOD table: not painted (still in the M line)
                 setPen(col, 1, P_SOLID);
                 auto hl = [&](int x0, int x1, int y) { PNT a; a.set(0, 0.0f); a.h = (short)x0; a.v = (short)y; a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = (short)x1; b.v = (short)y; b.drawLineTo(); };
                 auto vl = [&](int x, int y0, int y1) { PNT a; a.set(0, 0.0f); a.h = (short)x; a.v = (short)y0; a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = (short)x; b.v = (short)y1; b.drawLineTo(); };
@@ -276,7 +283,7 @@ int DefenseLines::draw(void) {
                 const COLOR col = L.side == dt::HIGH ? colHigh : colLow;
                 PNT a; a.set(i, (float)L.linePx, kBarCenter);
                 setPen(col, 1, P_DOT);
-                { PNT p0; p0.set(0, 0.0f); p0.h = (short)(a.h - ppb / 2); p0.v = a.v; p0.setDrawPosition(); PNT p1; p1.set(0, 0.0f); p1.h = (short)(a.h + 2 * ppb); p1.v = a.v; p1.drawLineTo(); }
+                ko::line(a.h - ppb / 2, a.v, a.h + 2 * ppb, a.v);
                 label(a.h + 2 * ppb + 3, a.v, "? " + dt::tagsOf(L).substr(0, dt::tagsOf(L).size() - 2), col);
                 ++drawn;
             }
@@ -297,6 +304,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour AND beyond the R line (above it at a low, below it at a high). R LINE (red at a high, green at a low) = the price near the pivot where the defenders re-posted the most of what was eaten. E LINE (gray) = exhaustion: the price near the pivot where the attack died AT the price (the attackers' hits there in seconds 20-60 slowed to the market's median or less vs seconds 0-20, and at least half the resting size stayed); decided about a minute after the close; only on turns that have an R. Yellow dot = the candle each line refers to. Each line runs at most 3 candles (setting), until the next turn's lines, or until a candle closes through it (then it is removed). A = absorption (attackers out-hit the defenders and still lost the close); ? = not proven yet (scored nightly). Dotted ? line = the forming candle, gone if it does not confirm. Example: 8:48 AM ES low: green R at 7827.25, gray E at 7826.75, dots on the 8:48 candle. Needs lsBookFlow (Defense) on the same chart.");
-    p->setVersion("1.7.0");   // DL_VERSION
+    p->setVersion("1.8.0");   // DL_VERSION
     return p;
 }

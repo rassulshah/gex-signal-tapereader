@@ -1,6 +1,6 @@
 #ifndef LS_BOXDOCK_H
 #define LS_BOXDOCK_H
-// BoxDock.h (1.0.0, 2026-10-18) -- one small box DOCKED to another indicator's box on the same chart (SDK-free, Linux-tested).
+// BoxDock.h (1.2.0 2026-10-21 the keep-out; 1.0.0, 2026-10-18) -- one small box DOCKED to another indicator's box on the same chart (SDK-free, Linux-tested).
 // Rassul 2026-10-18 (approved 15:03 CT): "make it simple like BL 5 1434 and just have a compact box of the averages connected to the
 // hod lod box when it is added to the chart so it doesn't overlap"; "no, just the avg".
 //   lsHodLod (2.4.1+) publishes the rectangle of its HOD/LOD table on every draw:
@@ -10,11 +10,13 @@
 //   the pane, top-aligned otherwise), else above / below it (right edge, then left edge aligned). It moves with the table and never
 //   overlaps the table, the other avoid boxes (Tape Reader banner) or anything right of the LAST BAR (the area ends there).
 //   No HOD/LOD table on the chart (or no docked spot fits): the box's own 9-spot Position, else the first free spot of the 9.
+#include <chrono>
+#include <cmath>
 #include <string>
 #include <vector>
 #include "BannerBoard.h"
 namespace bdk {
-static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-18): LRA_HLT_ (the table alone) + placeMatched (the Big Lot box = the table's height)
+static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-10-21): the KEEP-OUT (TableWatch / KeepScope / hide / clip) - no chart mark paints over the HOD/LOD table; 1.1.0 (2026-10-18): LRA_HLT_ (the table alone) + placeMatched (the Big Lot box = the table's height)
 static const int GAP = 4;          // px between the docked box and the table
 static const int MARGIN = 4;       // px kept inside the area edges (the 9-spot placement)
 struct Box { int l = 0, t = 0, r = 0, b = 0; };
@@ -112,5 +114,123 @@ inline Result placeMatched(bool hostOn, const Box& full, const Box& table, int w
     if (hOut) *hOut = minH;
     return place(hostOn, full, w, minH, area, pos, avoid);
 }
+// ---- (1.2.0) THE KEEP-OUT: chart marks never paint over the HOD/LOD table ------------------------------------------------------
+// Rassul 16:05 CT 2026-10-21 (ES 3-min): "fix this, it should be solid" - Exhaustion "E ?" / "R ?" labels, swing lines with their
+// labels, key-level lines and circles of OTHER indicators were painted on top of the lsHodLod table. IRT draws the indicators in
+// chart order, so the table cannot simply paint last: every plugin that draws on the price pane asks here before it paints.
+//   TableWatch (one per chart, in the plugin's HostSlot state): reads LRA_HLB_ (table + strip + header, as published by lsHodLod)
+//     and decides "the table is there" with the bb::Beat heartbeat, or the stamp under bb::FRESH_MS (lsHodLod clears the entry when
+//     its table is off or it is removed, so an old stamp only means an idle chart). A different chart / symbol / bar size = another key.
+//   KeepScope (one per draw call): makes that chart's table the ACTIVE keep-out for the plugin's drawing helpers on this thread;
+//     the destructor clears it, so nothing carries from one chart's draw to another's.
+//   hide(l, t, r, b): a mark / label / circle / badge that would touch the table (KEEP_MARGIN px around it) is NOT painted.
+//   segParts / hParts: a line is cut at the table's edges; only the parts outside are painted.
+//   rectParts: a plain fill (band, bar) loses the part under the table (up to 4 pieces remain).
+// Screen only: the plugin's records, signals, status files and no-repaint rules never ask here.
+static const int KEEP_MARGIN = 2;
+inline Box grow(const Box& a, int m) { return mk(a.l - m, a.t - m, a.r + m, a.b + m); }
+// any (inclusive) overlap of a mark's rectangle with the table + margin; rectangles given in any corner order
+inline bool hitsTable(const Box& table, int l, int t, int r, int b, int m = KEEP_MARGIN) {
+    if (!valid(table)) return false;
+    if (r < l) { const int k = l; l = r; r = k; } if (b < t) { const int k = t; t = b; b = k; }
+    const Box g = grow(table, m);
+    return l <= g.r && r >= g.l && t <= g.b && b >= g.t;
+}
+// a segment against the table + margin: the visible parts (0, 1 or 2) - Liang-Barsky on the grown box
+struct Seg { int x1 = 0, y1 = 0, x2 = 0, y2 = 0; };
+inline int segParts(const Box& table, int x1, int y1, int x2, int y2, Seg out[2], int m = KEEP_MARGIN) {
+    Seg whole; whole.x1 = x1; whole.y1 = y1; whole.x2 = x2; whole.y2 = y2;
+    if (!valid(table)) { out[0] = whole; return 1; }
+    const Box g = grow(table, m);
+    const double dx = (double)x2 - x1, dy = (double)y2 - y1;
+    double t0 = 0.0, t1 = 1.0;
+    const double p[4] = { -dx, dx, -dy, dy }, q[4] = { (double)x1 - g.l, (double)g.r - x1, (double)y1 - g.t, (double)g.b - y1 };
+    for (int i = 0; i < 4; ++i) {
+        if (p[i] == 0.0) { if (q[i] < 0.0) { out[0] = whole; return 1; } continue; }   // parallel and outside: all visible
+        const double r = q[i] / p[i];
+        if (p[i] < 0.0) { if (r > t1) { out[0] = whole; return 1; } if (r > t0) t0 = r; }
+        else { if (r < t0) { out[0] = whole; return 1; } if (r < t1) t1 = r; }
+    }
+    // [t0, t1] is inside the grown box: keep [0, t0) and (t1, 1], one pixel clear of it
+    int n = 0;
+    auto at = [&](double t, int& x, int& y) { x = (int)(x1 + dx * t + (dx >= 0 ? 0.5 : -0.5)); y = (int)(y1 + dy * t + (dy >= 0 ? 0.5 : -0.5)); };
+    const double len = std::sqrt(dx * dx + dy * dy), eps = len > 0.0 ? 1.0 / len : 1.0;
+    for (int k = 1; k <= 3; ++k) {   // the cut end one pixel clear of the box (a step further when rounding lands on its edge)
+        if (t0 - k * eps <= 0.0) break;
+        Seg s; s.x1 = x1; s.y1 = y1; at(t0 - k * eps, s.x2, s.y2);
+        if (!hitsTable(table, s.x2, s.y2, s.x2, s.y2, m)) { out[n++] = s; break; }
+    }
+    for (int k = 1; k <= 3; ++k) {
+        if (t1 + k * eps >= 1.0) break;
+        Seg s; at(t1 + k * eps, s.x1, s.y1); s.x2 = x2; s.y2 = y2;
+        if (!hitsTable(table, s.x1, s.y1, s.x1, s.y1, m)) { out[n++] = s; break; }
+    }
+    return n;
+}
+// a horizontal line [x1, x2] at y: the visible x ranges (0, 1 or 2)
+inline int hParts(const Box& table, int x1, int x2, int y, int out[2][2], int m = KEEP_MARGIN) {
+    if (x2 < x1) { const int k = x1; x1 = x2; x2 = k; }
+    if (!valid(table) || y < table.t - m || y > table.b + m || x2 < table.l - m || x1 > table.r + m) { out[0][0] = x1; out[0][1] = x2; return 1; }
+    int n = 0;
+    if (x1 < table.l - m) { out[n][0] = x1; out[n][1] = table.l - m - 1; ++n; }
+    if (x2 > table.r + m) { out[n][0] = table.r + m + 1; out[n][1] = x2; ++n; }
+    return n;
+}
+// a filled rectangle minus the table + margin (0 .. 4 pieces; the whole one when it does not touch)
+inline int rectParts(const Box& table, const Box& a, Box out[4], int m = KEEP_MARGIN) {
+    if (!valid(a)) return 0;
+    if (!hitsTable(table, a.l, a.t, a.r, a.b, m)) { out[0] = a; return 1; }
+    const Box g = grow(table, m); int n = 0;
+    if (a.t < g.t) out[n++] = mk(a.l, a.t, a.r, g.t);                                       // above
+    if (a.b > g.b + 1) out[n++] = mk(a.l, g.b + 1, a.r, a.b);                               // below
+    const int t = a.t > g.t ? a.t : g.t, b = a.b < g.b + 1 ? a.b : g.b + 1;
+    if (b > t) {
+        if (a.l < g.l) out[n++] = mk(a.l, t, g.l, b);                                       // left
+        if (a.r > g.r + 1) out[n++] = mk(g.r + 1, t, a.r, b);                               // right
+    }
+    return n;
+}
+// one per chart (HostSlot state): is lsHodLod's table on THIS chart now, and where
+struct TableWatch {
+    bb::Beat beat; Box box; bool on = false;
+    bool refresh(const std::string& sym, long spb, const std::string& chart, long long nowMs) {
+        Box r; long long ms = -1;
+        const bool have = peekHodLod(sym, spb, chart, r, ms);
+        const bool beatOn = beat.step(have, ms, nowMs);
+        on = have && valid(r) && (beatOn || (nowMs >= ms && nowMs - ms <= bb::FRESH_MS));
+        box = on ? r : Box();
+        return on;
+    }
+    bool refresh(const char* sym, long spb, const char* chart) {   // the plugin's call (lsHodLod stamps with the same steady clock)
+        const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        return refresh(std::string(sym ? sym : ""), spb, std::string(chart ? chart : ""), ms);
+    }
+};
+// the active keep-out of THIS draw call (thread-local, set by KeepScope, cleared when the draw returns)
+struct Active { bool on = false; Box box; long long hidden = 0, clipped = 0; };
+inline Active& active() { static thread_local Active a; return a; }
+struct KeepScope {
+    Active prev;
+    explicit KeepScope(const TableWatch& w) : prev(active()) { Active& a = active(); a.on = w.on && valid(w.box); a.box = w.box; a.hidden = 0; a.clipped = 0; }
+    ~KeepScope() { active() = prev; }
+    KeepScope(const KeepScope&) = delete; KeepScope& operator=(const KeepScope&) = delete;
+};
+// the drawing helpers' questions (no active scope = nothing hidden, nothing cut)
+inline bool hide(int l, int t, int r, int b) { Active& a = active(); if (!a.on || !hitsTable(a.box, l, t, r, b)) return false; ++a.hidden; return true; }
+inline int seg(int x1, int y1, int x2, int y2, Seg out[2]) {
+    Active& a = active();
+    if (!a.on) { out[0].x1 = x1; out[0].y1 = y1; out[0].x2 = x2; out[0].y2 = y2; return 1; }
+    const int n = segParts(a.box, x1, y1, x2, y2, out);
+    if (n != 1 || out[0].x1 != x1 || out[0].y1 != y1 || out[0].x2 != x2 || out[0].y2 != y2) ++a.clipped;
+    return n;
+}
+inline int rects(const Box& r, Box out[4]) {
+    Active& a = active();
+    if (!a.on) { if (!valid(r)) return 0; out[0] = r; return 1; }
+    const int n = rectParts(a.box, r, out);
+    if (n != 1 || out[0].l != r.l || out[0].t != r.t || out[0].r != r.r || out[0].b != r.b) ++a.clipped;
+    return n;
+}
+inline std::string keepLine() { const Active& a = active(); return std::string("UNDER_HODLOD,") + (a.on ? "table on" : "no table") + ",hidden " + std::to_string(a.hidden) + ",clipped " + std::to_string(a.clipped) + "\n"; }
 } // namespace bdk
 #endif

@@ -76,6 +76,8 @@ static std::map<int, std::vector<long long> > g_barsAll;
 void mockSelectChart(int id) { if (id == g_curChart) return; g_barsAll[g_curChart].swap(g_bars); g_curChart = id; g_bars.swap(g_barsAll[id]); g_barsAll.erase(id); }
 int mockCurrentChart() { return g_curChart; }
 char* cppExtension::getSymbol() { static char s[32]; strcpy(s, g_sym.c_str()); return s; }
+char* cppExtension::getPeriodicityLabel(void) { static char lab[] = "3 min"; return lab; }   // (2026-10-21) SettingsGuard 1.1.0 asks it (the sims had not linked since)
+char* cppExtension::getChartLabel(void) { static std::string lab; lab = "chart " + std::to_string(g_curChart); return &lab[0]; }   // (TapeFlowMarks 1.3.0) the keep-out key
 int cppExtension::getTextWidth(const char* s, int) { return (int)strlen(s) * 6; }
 RTX_RESULT cppExtension::getVisibleBars(int* a, int* b) { *a = g_bars.size() > 160 ? (int)g_bars.size() - 160 : 0; *b = (int)g_bars.size() - 1; return RTX_OK; }
 void cppExtension::setArrayCount(int) {}

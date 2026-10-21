@@ -55,6 +55,7 @@
 #include "CobOdds.h"                    // (0.4.0) the live odds (OddsTable.h + the lab's facts)
 #include "HoverBoard.h"                  // hb::hbCursor (GetCursorPos + WindowFromPoint; carries the user32 pragma)
 #include "HostSlot.h"
+#include "KeepOutDraw.h"   // (0.5.2) BoxDock.h 1.2.0 keep-out: nothing painted over the HOD/LOD table
 #include "ClaimGates.h"                 // (0.3.0) cgate::kShowHvlCushion - the HVL regime text in the gamma hover
 #include "MarketState.h"                // (0.4.1) SRC COB for the last closed bar
 #include "CobImpulseSettings.h"          // (0.5.0) the settings table (show / hide + colour: label, impulse box)
@@ -81,7 +82,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CI_VERSION "0.5.1"          // (0.5.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the Cob label / impulse box hover is OFF (CI_HOVERS; code kept), no TRACK_MOUSE; (0.5.0, 2026-10-18, Rassul "I'll go with your recommendation") a settings window: Cob labels + Impulse bar box, each Show + colour, per market (CobImpulseSettings.h); defaults = what 0.4.1 drew; the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
+#define CI_VERSION "0.5.2"          // (0.5.2, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") a Cob label or impulse box that would touch the lsHodLod table is not painted there (records unchanged; KeepOutDraw.h; status UNDER_HODLOD) // (0.5.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the Cob label / impulse box hover is OFF (CI_HOVERS; code kept), no TRACK_MOUSE; (0.5.0, 2026-10-18, Rassul "I'll go with your recommendation") a settings window: Cob labels + Impulse bar box, each Show + colour, per market (CobImpulseSettings.h); defaults = what 0.4.1 drew; the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
 static const bool CI_HOVERS = false;   // (0.5.1) true brings the hover back
 
 static const COLOR C_LABEL = 0x0080FFFF;   // his IRT Cob label colour (light cyan), unchanged
@@ -181,6 +182,7 @@ static const size_t REC_FILE_MAX = 512 * 1024, REC_LINES_MAX = 5000;
 
 struct HoverT { std::string key; int l = 0, t = 0, r = 0, b = 0; cimp::Rec rec; };
 struct CIState {
+    bdk::TableWatch keep; std::string keepNote;   // (0.5.2) the HOD/LOD table on this chart (keep-out) + its status line
     bool busy = false;
     std::string identity, market, symbol, state = "starting", lastStatusText, flags = "not read yet", paramsWhy = "missing";
     int spb = 0; long long session = -1;
@@ -275,7 +277,11 @@ int cppExtension::calc(int)     { static_cast<CobImpulse*>(this)->pump(true); re
 int CobImpulse::draw(void) {
     pump(false);
     CIState* S = slot_.get(this, false);
-    if (S) { try { render(*S); } catch (...) { S->state = "draw error"; } }
+    if (S) { try {
+        S->keep.refresh(getSymbol(), getSecondsPerBar(), getChartLabel());   // (0.5.2) the HOD/LOD table: nothing painted over it this draw
+        bdk::KeepScope keepScope(S->keep);
+        render(*S); S->keepNote = bdk::keepLine();
+    } catch (...) { S->state = "draw error"; } }
     return RTX_OK;
 }
 long long CobImpulse::ctSec(RTDATE d) {
@@ -570,7 +576,7 @@ void CobImpulse::status(CIState& S, long long now) {
     for (const auto& kv : S.recs) { if (kv.second.r() || kv.second.v() || kv.second.c()) { ++tagged; if (cimp::shown(true, kv.second.abs, S.P.mode)) ++shownN; }
                                     if (!kv.second.gCode.empty()) ++gTagged; }
     std::ostringstream o; o.imbue(std::locale::classic());
-    o << "VERSION," << CI_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
+    o << "VERSION," << CI_VERSION << "\n" << S.keepNote << "MARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nFLAGS," << S.flags << "\nPARAMS,mode " << cimp::modeName(S.P.mode) << ",proven " << (S.P.proven ? 1 : 0) << ",plain " << (S.P.plain ? 1 : 0)
       << ",min_bars " << S.P.minBars << ",window " << S.P.window << ",gamma " << (S.P.gamma ? 1 : 0) << ",gamma_w " << S.P.gammaW
       << ",gamma_em " << S.P.gammaEM << "," << S.paramsWhy
@@ -679,8 +685,8 @@ void CobImpulse::render(CIState& S) {
         HoverT H; H.key = std::to_string(r.trig) + (r.side > 0 ? "b" : "s"); H.l = lb.l; H.t = lb.t; H.r = lb.r; H.b = lb.b; H.rec = r;
         if (S.set.b(ciset::K_SHOW_LABELS)) {                              // (0.5.0) Cob labels: Show + colour
             setTextColor((COLOR)S.set.c(ciset::K_LABEL_COLOR));
-            RCT tr; tr.set(coord(lb.l), coord(lb.t), coord(lb.r), coord(lb.b)); tr.drawText(text.c_str(), true, false);
-            S.targets.push_back(H);
+            RCT tr; tr.set(coord(lb.l), coord(lb.t), coord(lb.r), coord(lb.b));
+            if (!ko::off(tr)) { tr.drawText(text.c_str(), true, false); S.targets.push_back(H); }   // (0.5.2) under the HOD/LOD table: not painted (still recorded)
         }
         if (!tag || !S.set.b(ciset::K_SHOW_BOX)) continue;                // (0.5.0) Impulse bar box: Show + colour
         // the thin white box around the impulse bar(s)
@@ -690,7 +696,8 @@ void CobImpulse::render(CIState& S) {
             const int bi = indexOf(times, count, bars[k]); if (bi < 0) continue;
             PNT a; a.set(bi, hi[bi], kBarLeft); PNT b; b.set(bi, lo[bi], kBarRight);
             const int l = std::min(a.h, b.h) - 2, rr = std::max(a.h, b.h) + 2, t = std::min(a.v, b.v) - 2, bt = std::max(a.v, b.v) + 2;
-            RCT box; box.set(coord(l), coord(t), coord(rr), coord(bt)); box.draw(1, (COLOR)S.set.c(ciset::K_BOX_COLOR), (COLOR)S.set.c(ciset::K_BOX_COLOR), DRAW_OPAQUE, PAT_HOLLOW);
+            RCT box; box.set(coord(l), coord(t), coord(rr), coord(bt)); if (ko::off(box)) continue;   // (0.5.2) under the HOD/LOD table: not painted
+            box.draw(1, (COLOR)S.set.c(ciset::K_BOX_COLOR), (COLOR)S.set.c(ciset::K_BOX_COLOR), DRAW_OPAQUE, PAT_HOLLOW);
             HoverT HB = H; HB.l = l; HB.t = t; HB.r = rr; HB.b = bt; S.targets.push_back(HB);
         }
     }
@@ -747,6 +754,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (CI_HOVERS ? TRACK_MOUSE : 0) | CALC_LAST);   // (0.5.1) no TRACK_MOUSE while the hovers are off   // CALC_LAST: it reads his RTL results
     p->setDescription("LRA Cob Impulse v0.4.1: what are the odds this CoB reaches 1R (shown after the label, e.g. Cob 63%, from the nightly CoB Lab, LRA-Odds-<MKT>.csv; ODDS 0 hides it), did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
-    p->setVersion("0.5.1");   // CI_VERSION
+    p->setVersion("0.5.2");   // CI_VERSION
     return p;
 }

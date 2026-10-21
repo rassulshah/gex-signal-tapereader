@@ -1,4 +1,6 @@
 /********************************************************************************
+ *  0.18 (2026-10-21 16:05 CT, Rassul "fix this, it should be solid"): the stepped lines stop at the lsHodLod table's edges; a dot or
+ *        label that would touch it is not painted (KeepOutDraw.h). Status VERSION now = the setVersion literal (was 0.16).
  *  0.17 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 13): the title reads "King ? (vendor)"
  *  (the vendor King strike is context). Lines, labels and settings unchanged.
  *  KingTracker.cpp  —  Investor/RT RTX extension  (KING TRACKER — stepped lines)
@@ -36,6 +38,8 @@
 #include "irtsdk.h"
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "ContractOffsetLogic.h"   // (shared) the anchor-bar rule, tested
+#include <map>
+#include "KeepOutDraw.h"           // (0.18) BoxDock.h 1.2.0 keep-out: nothing painted over the HOD/LOD table
 #include "KingTrackerLogic.h"      // (v0.10) the row grammar, the re-derivation, the anchor — testable without IRT
 #include <fstream>
 #include <sstream>
@@ -93,6 +97,7 @@ class KingTracker : public cppExtension {
 public:
     SS_SAFE_DIALOG(KingTracker, "KingTracker")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     KingTracker();
+    std::map<std::string, bdk::TableWatch> keeps_;   // (0.18) the HOD/LOD table per chart (symbol + bar size + chart label): its heartbeat
     virtual int parmsLoadBody(void);
     virtual int parmsApplyBody(void);
     virtual int parmsUpdtBody(unsigned int iParmNumber);
@@ -337,19 +342,19 @@ int KingTracker::barForClock(double secOfDay, int offMin)
 void KingTracker::seg(short x1, short y1, short x2, short y2, COLOR col, int w)
 {
     setPen(col, (short)w, P_SOLID);
-    PNT a; a.set(0, 0.0f); a.h = x1; a.v = y1; a.setDrawPosition();
-    PNT b; b.set(0, 0.0f); b.h = x2; b.v = y2; b.drawLineTo();
+    ko::line(x1, y1, x2, y2);                                      // (0.18) cut at the HOD/LOD table
 }
 void KingTracker::dot(short x, short y, COLOR col, int r)
 {
     RCT rc; rc.set((short)(x - r), (short)(y - r), (short)(x + r), (short)(y + r));
-    rc.draw(1, darker(col), col, DRAW_OPAQUE, PAT_SOLID);
+    ko::mark(rc, (short)1, darker(col), col, DRAW_OPAQUE, PAT_SOLID);   // (0.18) not under the HOD/LOD table
 }
 void KingTracker::label(short x, short y, const char* s, COLOR col, int sz)
 {
     FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = BOLD; setFont(f);
     setTextColor(col);
     RCT rc; rc.set(x, (short)(y - sz), (short)(x + 140), (short)(y + sz));
+    if (bdk::hide(x, y - sz, x + getTextWidth(s, -1), y + sz)) return;   // (0.18) not under the HOD/LOD table
     rc.drawText(s, false, false);
 }
 
@@ -412,11 +417,17 @@ void KingTracker::writeStatus(const Settings& S)
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\KingTracker.status.txt";
     std::ofstream f(path.c_str(), std::ios::trunc); if (!f.is_open()) return;
     const char* famStr = (chartFamily(S) == 2) ? "NQ" : "ES";
-    f << "VERSION,0.16\n";
+    f << "VERSION,0.18\n";
     for (int b = 0; b < NBOOK; b++) f << ktl::statusLine(S.sourceIF, famStr, BOOK_NAME[b], BOOK_FAM[b], book[b], lastOffset) << "\n";
     f << "ASOF," << asofSo << "\n";
 }
-int KingTracker::draw(void) { load(); applyContractOffset(); render(cfg); drawStaleBadge(); writeStatus(cfg); return RTX_OK; }
+int KingTracker::draw(void) {
+    load(); applyContractOffset();
+    {   const char* sy = getSymbol(); const char* cl = getChartLabel(); const long spb = getSecondsPerBar();   // (0.18) the HOD/LOD table: nothing painted over it
+        bdk::TableWatch& keep = keeps_[std::string(sy ? sy : "") + "|" + std::to_string(spb) + "|" + (cl ? cl : "")];
+        keep.refresh(sy, spb, cl); bdk::KeepScope keepScope(keep);
+        render(cfg); drawStaleBadge(); }
+    writeStatus(cfg); return RTX_OK; }
 
 // ---- (v0.3) CONTRACT ALIGNMENT — the ES King prices are in the panel's ES space (SPOT is the ES-cash
 // anchor). If the ES chart is a different contract (EPZ26 December, ~+70 over cash), shift every King
@@ -502,6 +513,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King ? (vendor): King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");   // (0.17, 2026-10-14 audit display list) title "King ? (vendor)": the vendor King strike is context
-    p->setVersion("0.17");
+    p->setVersion("0.18");
     return p;
 }

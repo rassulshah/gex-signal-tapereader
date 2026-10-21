@@ -82,6 +82,17 @@ static void testPlugin()
     // re-post: not before 10 s (same stamp), so the entry ages and is refreshed
     std::string raw1; bb::bbGet(mst::keyOf("VWAP", "ESZ6", 180, "ES 3 Min"), raw1); x.draw(); std::string raw2; bb::bbGet(mst::keyOf("VWAP", "ESZ6", 180, "ES 3 Min"), raw2);
     CHECK(raw1 == raw2, "no re-post within 10 s");
+    {   // (1.6.3, Rassul 16:05 CT 2026-10-21 "fix this, it should be solid") the lsHodLod table on this chart: no line part painted over it
+        // (this mock puts every PNT at x 400, y 100: a table there hides every segment); the posted values are unchanged; another chart = no effect
+        mock::current = &H; H.lines.clear(); x.draw(); const size_t l0 = H.lines.size();
+        bdk::publishHodLod("ESZ6", 180, "ES 3 Min", 1, bdk::mk(390, 90, 410, 110));
+        H.lines.clear(); x.draw();
+        CHECK(l0 > 0 && H.lines.empty(), "[keep-out] lines under the table are not painted");
+        CHECK(mst::encode(0, 0, mst::read("VWAP", "ESZ6", 180, "ES 3 Min", -1).kv) == before, "[keep-out] the posted VWAP facts are unchanged");
+        bdk::clearHodLod("ESZ6", 180, "ES 3 Min"); bdk::publishHodLod("ESZ6", 180, "ES 3 Min #2", 1, bdk::mk(390, 90, 410, 110));
+        H.lines.clear(); x.draw(); CHECK(H.lines.size() == l0, "[keep-out] a table on another chart: every line drawn");
+        bdk::clearHodLod("ESZ6", 180, "ES 3 Min #2");
+    }
     // overnight (Mon 23:00): outputs 5-9
     mock::Host O; O.root = "ESZ6"; O.chart = "ES 3 Min overnight"; mock::current = &O;
     bars(O, at(2026, 10, 12, 23, 0)); x.fill(0); x.draw();
@@ -100,7 +111,7 @@ static void testPlugin()
 static void testVersion()
 {
     std::ifstream f("SessionVWAP.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
-    CHECK(src.find("static const char* SV_VERSION = \"1.6.2\";") != std::string::npos && src.find("p->setVersion(\"1.6.2\");") != std::string::npos, "SV_VERSION == setVersion == 1.6.2 (1.6.2 = the settings window guard)");
+    CHECK(src.find("static const char* SV_VERSION = \"1.6.3\";") != std::string::npos && src.find("p->setVersion(\"1.6.3\");") != std::string::npos, "SV_VERSION == setVersion == 1.6.3 (1.6.2 = the settings window guard, 1.6.3 = the HOD/LOD keep-out)");
 }
 int main()
 {

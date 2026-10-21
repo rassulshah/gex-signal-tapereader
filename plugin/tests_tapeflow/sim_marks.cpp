@@ -234,6 +234,22 @@ int main()
         bool stillThere = true; const long long first = g_bars[g_bars.size() - 160]; for (auto& kv : before) if (kv.first >= first && !f.count(kv.first)) stillThere = false;
         CHECK(stillThere && f2.count(m.barT) && f2[m.barT].label == "A?", "the roll keeps the previous session's marks and picks up the new session's file");
     }
+    {   // (lsTapeFlowMarks 1.3.0, Rassul 16:05 CT 2026-10-21 "fix this, it should be solid") the lsHodLod table on the ES chart: an A? under it is
+        // not painted, the record (byT) is unchanged; the NQ chart is not affected
+        auto f0 = frame(ES3, 12); f0.erase(-1); MarksState* s = st(ES3); const size_t marks0 = s ? s->byT.size() : 0;
+        CHECK(!f0.empty(), "[keep-out] ES marks drawn with no table");
+        if (!f0.empty()) {
+            const Drawn d = f0.rbegin()->second; const bdk::Box T = bdk::mk(d.l - 4, d.t - 4, d.r + 4, d.b + 4);
+            sel(ES3); bdk::publishHodLod(ES3.sym, 180, "chart 0", 1, T);
+            sel(ES3); g_ppb = 12; g_pntSets.clear(); g_textRects.clear(); TF->draw();
+            bool inside = false; for (auto& t : g_textRects) if (bdk::hitsTable(T, t.l, t.t, t.r, t.b)) inside = true;
+            CHECK(!inside && g_textRects.size() + 1 <= f0.size(), "[keep-out] the A? under the table is not painted");
+            CHECK(st(ES3)->byT.size() == marks0, "[keep-out] the record keeps the mark");
+            auto fn = frame(NQ3, 12); fn.erase(-1); CHECK(!fn.empty(), "[keep-out] the NQ chart (another chart) still draws");
+            sel(ES3); bdk::clearHodLod(ES3.sym, 180, "chart 0");
+            auto f1 = frame(ES3, 12); f1.erase(-1); CHECK(f1.size() == f0.size(), "[keep-out] table removed: drawn again");
+        }
+    }
     // ---- (leaks) 50 charts created, drawn, switched between ES and NQ, destroyed - the states and timers are released every time
     {
         size_t regBefore = 0; { std::lock_guard<std::mutex> g(regMx()); regBefore = timerReg().size(); }

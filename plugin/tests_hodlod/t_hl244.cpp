@@ -184,7 +184,7 @@ int main() {
         const std::string b = readAll("../BigBidAsk.cpp"), bl = readAll("../BigBidAskLogic.h"), bs = readAll("../BigBidAskSettings.h");
         CHECK(b.find("#define BBA_VERSION \"1.16.2\"") != std::string::npos && b.find("p->setVersion(\"1.16.2\")") != std::string::npos
               && bl.find("VERSION = \"1.16.2\"") != std::string::npos && bs.find("PLUGIN_VERSION = \"1.16.2\"") != std::string::npos, "BigBidAsk 1.16.2 everywhere");
-        CHECK(std::string(bdk::VERSION) == "1.1.0", "BoxDock 1.1.0");
+        CHECK(std::string(bdk::VERSION) == "1.2.0", "BoxDock 1.2.0 (1.2.0 = the keep-out)");
     }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

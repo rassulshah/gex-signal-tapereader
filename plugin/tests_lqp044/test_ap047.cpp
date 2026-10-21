@@ -294,7 +294,7 @@ static void partB(const char* tmp) {
         }
         CHECK(red == 1 && redTint == 1 && green == 0, "B10 path down open at a high: red band close..T1 below, red AP? badge, inside the column");
     }
-    CHECK(std::string(LQ_VERSION) == "0.47.0" && std::string(lqp::VERSION) == "0.47.0" && std::string(lpset::PLUGIN_VERSION) == "0.47.0" && std::string(apl::VERSION) == "1.0.0", "versions 0.47.0 / AirPocketLogic 1.0.0");
+    CHECK(std::string(LQ_VERSION) == "0.47.1" && std::string(lqp::VERSION) == "0.47.1" && std::string(lpset::PLUGIN_VERSION) == "0.47.1" && std::string(apl::VERSION) == "1.0.0", "versions 0.47.0 / AirPocketLogic 1.0.0");
     R.p->destroy(); R.p->slot_.release(R.p); R.p->flushPark(); delete R.p;
 }
 

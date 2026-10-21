@@ -73,6 +73,24 @@ int main(int argc, char** argv) {
         H.draws.clear(); p->draw();
         CHECK(texts(H, "Cob+V?").size() == 1 && texts(H, "Cob").size() == 2, "labels: one Cob+V?, one plain Cob");
         CHECK(hollowBoxes(H) == 1, "one 1 px white box (the 08:33 impulse bar)");
+        {   // (0.5.2, Rassul 16:05 CT 2026-10-21 "fix this, it should be solid") the lsHodLod table over the Cob+V? label and the impulse box:
+            // neither is painted, both records stay; a table on another chart changes nothing
+            auto L0 = texts(H, "Cob+V?"); int bl = 1 << 30, bt = 1 << 30, br = -1, bb = -1;
+            for (const auto& d : H.draws) if (d.type == "rect" && d.pattern == cppExtension::PAT_HOLLOW) { bl = d.l; bt = d.t; br = d.r; bb = d.b; }
+            if (!L0.empty() && br > 0) {
+                const bdk::Box T = bdk::mk(std::min(L0[0].l, bl) - 3, std::min(L0[0].t, bt) - 3, std::max(L0[0].r, br) + 3, std::max(L0[0].b, bb) + 3);
+                const std::string sym = p->getSymbol() ? p->getSymbol() : "";
+                bdk::publishHodLod(sym, p->getSecondsPerBar(), "test", 1, T);
+                H.draws.clear(); p->draw();
+                bool inside = false; for (const auto& d : H.draws) if (bdk::hitsTable(T, d.l, d.t, d.r, d.b)) inside = true;
+                CHECK(!inside && texts(H, "Cob+V?").empty() && hollowBoxes(H) == 0, "[keep-out] the label and box under the table are not painted");
+                CHECK(S->recs.size() == 2, "[keep-out] both CoBs still recorded");
+                bdk::publishHodLod(sym, p->getSecondsPerBar(), "another chart", 1, T); bdk::clearHodLod(sym, p->getSecondsPerBar(), "test");
+                H.draws.clear(); p->draw();
+                CHECK(texts(H, "Cob+V?").size() == 1 && hollowBoxes(H) == 1, "[keep-out] a table on another chart: drawn as before");
+                bdk::clearHodLod(sym, p->getSecondsPerBar(), "another chart");
+            } else CHECK(false, "[keep-out] fixture: label and box drawn");
+        }
         // the box surrounds the impulse bar: x = bar 08:33
         for (const auto& d : H.draws) if (d.type == "rect" && d.pattern == cppExtension::PAT_HOLLOW) CHECK(d.l <= 20 + i833 * 10 && d.r >= 20 + i833 * 10 + 8, "box around the 08:33 bar");
         // label above the leg high (bull)

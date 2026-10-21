@@ -40,7 +40,7 @@ int main() {
     CHECK(h.depthObjects == before && p->mdPark_.size() == (before ? 1u : 0u), "4) destroy() parks the book (at quit it is never deleted)");
     const std::string st = [&]() { std::ifstream f((std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels\\LiquidityProfile.status-CL-180.txt").c_str()); std::string s((std::istreambuf_iterator<char>(f)), {}); return s; }();
     CHECK(st.empty() || st.compare(0, 15, "VERSION,0.47.0\n") == 0, "status VERSION 0.47.0 (was 0.46.1)");
-    CHECK(std::string(LQ_VERSION) == "0.47.0" && std::string(lqp::VERSION) == "0.47.0", "versions 0.47.0");
+    CHECK(std::string(LQ_VERSION) == "0.47.1" && std::string(lqp::VERSION) == "0.47.1", "versions 0.47.0");
     p->mdPark_.clear();          // the mock process ends: (IRT would never delete it) - drop the pointer so ASan's leak check stays about real leaks
     delete p;
     std::printf("lqp 0.46.1 host (book parked at done / destroy): %d passed, %d failed\n", passes, fails);
