@@ -100,7 +100,7 @@ static void testPlugin()
 static void testVersion()
 {
     std::ifstream f("SessionVWAP.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
-    CHECK(src.find("static const char* SV_VERSION = \"1.6.1\";") != std::string::npos && src.find("p->setVersion(\"1.6.1\");") != std::string::npos, "SV_VERSION == setVersion == 1.6.1 (1.6.1 = the settings layer)");
+    CHECK(src.find("static const char* SV_VERSION = \"1.6.2\";") != std::string::npos && src.find("p->setVersion(\"1.6.2\");") != std::string::npos, "SV_VERSION == setVersion == 1.6.2 (1.6.2 = the settings window guard)");
 }
 int main()
 {
