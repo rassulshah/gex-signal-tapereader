@@ -1,3 +1,40 @@
-findings=0 allowed=0 staged_files=1 bytes=124
+findings=0 allowed=0 staged_files=38 bytes=1269348
 largest staged blobs (bytes, path):
-SIZE	124	logs/staged-scan-findings.log
+SIZE	305008	plugin/LiquidityProfile.cpp
+SIZE	194883	plugin/DeltaProfile.cpp
+SIZE	129691	plugin/LiquidityProfileLogic.h
+SIZE	78931	plugin/BUILD-LESSONS.md
+SIZE	53082	plugin/CobImpulse.cpp
+SIZE	53025	plugin/SessionVWAP.cpp
+SIZE	51577	plugin/DeltaProfileCore.h
+SIZE	30966	plugin/KingTracker.cpp
+SIZE	27036	plugin/DefenseLines.cpp
+SIZE	25672	plugin/tests_lqp044/test_ap047.cpp
+SIZE	24102	plugin/tests_dp217/test_dp218.cpp
+SIZE	23889	plugin/tests_tapeflow/sim_marks.cpp
+SIZE	23454	tools/gex-build.bat
+SIZE	22404	plugin/tests_keylevels/test_keylevels.cpp
+SIZE	19654	plugin/TapeFlowMarks.cpp
+SIZE	19443	plugin/DealerSig.cpp
+SIZE	19246	plugin/tests_hodlod/t_hl244.cpp
+SIZE	19165	plugin/tests_aggbook/test_defenselines_host.cpp
+SIZE	18728	plugin/test_cobimpulse_host.cpp
+SIZE	17496	plugin/BoxDock.h
+SIZE	16266	plugin/tests_delta/test_trap221.cpp
+SIZE	15536	plugin/KeyLevels.cpp
+SIZE	9526	plugin/SessionVWAP_test_support/irtsdk.h
+SIZE	9316	plugin/test_sessionvwap_160.cpp
+SIZE	9151	plugin/tests_tapeflow/mock/mockirt.cpp
+SIZE	7770	plugin/tests_keepout/test_keepout.cpp
+SIZE	7490	plugin/test_dealersig_regression.cpp
+SIZE	7146	plugin/test_dealersig_mock/irtsdk.h
+SIZE	5086	plugin/DeltaProfileSettings.h
+SIZE	4054	plugin/tests_lqp044/test_lqp461_host.cpp
+SIZE	3722	plugin/KeepOutDraw.h
+SIZE	3412	plugin/KeyLevelsHSettings.h
+SIZE	3076	plugin/LiquidityProfileSettings.h
+SIZE	2670	plugin/tests_absorb/test_dp220_record.cpp
+SIZE	2294	plugin/DefenseLinesSettings.h
+SIZE	2073	plugin/tests_aggbook/test_build_dependencies.py
+SIZE	2060	plugin/SessionVWAPSettings.h
+SIZE	1248	plugin/CobImpulseSettings.h
