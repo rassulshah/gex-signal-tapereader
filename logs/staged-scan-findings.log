@@ -1,3 +1,42 @@
-findings=0 allowed=0 staged_files=1 bytes=122
+findings=0 allowed=0 staged_files=41 bytes=2462412
 largest staged blobs (bytes, path):
-SIZE	122	logs/staged-scan-findings.log
+SIZE	292581	plugin/LiquidityProfile.cpp
+SIZE	253532	plugin/OrderFlowFeed.h
+SIZE	180032	plugin/DeltaProfile.cpp
+SIZE	142299	plugin/DealerProfile.cpp
+SIZE	122884	plugin/BidAskStats.cpp
+SIZE	118782	plugin/BigBidAsk.cpp
+SIZE	117751	plugin/DealerRead.cpp
+SIZE	116527	plugin/TapeFlow.cpp
+SIZE	101581	plugin/GammaProfile.cpp
+SIZE	88331	plugin/IRTReader.cpp
+SIZE	85929	plugin/HodLod.cpp
+SIZE	67736	plugin/TapeReader.cpp
+SIZE	64613	plugin/BUILD-LESSONS.md
+SIZE	63943	plugin/BookFlow.cpp
+SIZE	60560	plugin/DeltaProfileHourly.cpp
+SIZE	52281	plugin/SessionVWAP.cpp
+SIZE	52221	plugin/CobImpulse.cpp
+SIZE	51973	plugin/ExhaustionV2.cpp
+SIZE	47332	plugin/TradeManager.cpp
+SIZE	38723	plugin/DayModel.cpp
+SIZE	35639	plugin/CVD.cpp
+SIZE	32604	plugin/ChartView.cpp
+SIZE	29999	plugin/Exhaustion.cpp
+SIZE	29942	plugin/KingTracker.cpp
+SIZE	25728	plugin/DayStats.cpp
+SIZE	23856	plugin/MboCheck.cpp
+SIZE	22908	tools/gex-build.bat
+SIZE	19801	plugin/DefenseLines.cpp
+SIZE	19534	plugin/test_sessionvwap_settings.cpp
+SIZE	19039	plugin/TapeFlowMarks.cpp
+SIZE	18493	plugin/DealerSig.cpp
+SIZE	15111	plugin/DealerSummary.cpp
+SIZE	15065	plugin/KeyLevels.cpp
+SIZE	12322	plugin/SettingsGuard.h
+SIZE	7712	plugin/tests_settings/dialog_guard_test.cpp
+SIZE	6523	plugin/tests_settings/mock_irtsdk.h
+SIZE	2674	plugin/tests_settings/convert_dialog_guard.py
+SIZE	2300	plugin/tests_settings/test_dialog_guard.py
+SIZE	2060	plugin/SessionVWAPSettings.h
+SIZE	1367	plugin/tests_settings/run_tests.sh
