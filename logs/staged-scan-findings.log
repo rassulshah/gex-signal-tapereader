@@ -1,10 +1,3 @@
-findings=0 allowed=0 staged_files=8 bytes=98572
+findings=0 allowed=0 staged_files=1 bytes=420
 largest staged blobs (bytes, path):
-SIZE	21016	tools/gex-build.bat
-SIZE	19923	plugin/tests_settings/settings_contract.cpp
-SIZE	18913	plugin/tests_keylevels/test_keylevels.cpp
-SIZE	13571	plugin/KeyLevels.cpp
-SIZE	12885	plugin/tests_keylevels/irtsdk.h
-SIZE	8728	plugin/KeyLevelsHLogic.h
-SIZE	3412	plugin/KeyLevelsHSettings.h
-SIZE	124	logs/staged-scan-findings.log
+SIZE	420	logs/staged-scan-findings.log
