@@ -269,7 +269,7 @@ static void hostTests() {
         const std::string offLine = readSettingsLine();
         c.pump(2, true);
         CHECK(c.boxRect() != nullptr && c.S()->blOn && c.S()->set.box && c.S()->set.cat[0].on && !c.S()->set.cat[3].on, "[fixed host] BigBidAsk.settings-ES.txt is not read: the fixed behaviour stays");
-        CHECK(readSettingsLine() == offLine && c.S()->settingsWhy == "fixed (1.17.0, no settings)", "[fixed host] the settings file is never written; status reason 'fixed (1.17.0, no settings)'");
+        CHECK(readSettingsLine() == offLine && c.S()->settingsWhy.find("fixed") == std::string::npos, "[fixed host] the old BBA7 file is never written (1.19.0 reads BigBidAsk.settings2-<MKT>.txt)");
         CHECK(c.S()->catN4[3] == 0, "[fixed host] no category 4 number drawn");
         bdk::clearHodLod("ESZ6", 180, "ES 3m");
     }
@@ -326,8 +326,8 @@ int main() {
     setenv("TZ", "UTC", 1); tzset();
     boxLogic(); catLogic(); dockLogic(); keepOutLogic(); setLogic(); hostTests();
     {   const std::string src = [] { std::ifstream f("../BigBidAsk.cpp", std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }();
-        CHECK(std::string(BBA_VERSION) == "1.18.0" && std::string(bba::VERSION) == "1.18.0" && src.find("p->setVersion(\"1.18.0\")") != std::string::npos, "[ver] 1.18.0 everywhere (no settings)");
-        CHECK(src.find("setParameterVersion(7)") != std::string::npos && src.find("ss::registerAll(") == std::string::npos && src.find("\"BigBidAsk.settings-\" +") == std::string::npos, "[ver] parameter version 7, no rows registered, the settings file never opened");
+        CHECK(std::string(BBA_VERSION) == "1.19.0" && std::string(bba::VERSION) == "1.19.0" && src.find("p->setVersion(\"1.19.0\")") != std::string::npos, "[ver] 1.19.0 everywhere");
+        CHECK(src.find("ss::registerAll(") != std::string::npos && src.find("\"BigBidAsk.settings-\" +") == std::string::npos && bbaset::spec().paramVersion == 8, "[ver] (1.19.0) rows from the table, parameter version 8, the old BBA7 file never opened");
     }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;

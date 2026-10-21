@@ -152,8 +152,8 @@ int main() {
         BBState* S = c.S();
         CHECK(S && S->tiers.count(today) && !S->tiers[today].ok, "[host] 2 complete sessions: learning");
         // (1.18.0) prints no longer depend on the tiers: the 10-candle rule works while the tiers are still learning
-        bool rule = true; for (const auto& e : board(c)) if (((e.flag >> 1) & 7) != 1 || ((e.flag >> 8) & 0x7F) != 10) rule = false;
-        CHECK(rule, "[host] learning: events are the 10-candle rule (category 1, n = 10)");
+        bool rule = true; for (const auto& e : board(c)) { const int n = (e.flag >> 8) & 0x7F; if (((e.flag >> 1) & 7) != 1 || n < 10 || n > 50) rule = false; }
+        CHECK(rule, "[host] learning: events follow the candles-back rule (category 1, n = 10 - 50)");
     }
     {   const std::string src = [] { std::ifstream f("../BigBidAsk.cpp", std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }();
         CHECK(std::string(BBA_VERSION) == bba::VERSION && src.find(std::string("p->setVersion(\"") + bba::VERSION + "\")") != std::string::npos, "[ver] one version everywhere (compared, never typed)");

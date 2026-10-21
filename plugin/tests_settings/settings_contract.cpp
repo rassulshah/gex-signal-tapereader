@@ -27,6 +27,7 @@
 #include "../DealerProfileSettings.h"
 #include "../SessionVWAPSettings.h"
 #include "../DefenseLinesSettings.h"
+#include "../BigBidAskSettings.h"
 
 struct LegacyCase { const char* text; int market; const char* key; double want; };   // key == nullptr: must NOT be recognised
 struct Entry {
@@ -202,7 +203,8 @@ int main(int argc, char** argv) {
     E.push_back(Entry{ &svset::spec(), "SessionVWAP.cpp", nullptr, {}, {} });   // (1.6.1) the file keeps its own keyed-style format (SessionVWAPStyle.h)
     E.push_back(Entry{ &cvdset::spec(), "CVD.cpp", nullptr, {}, {} });              // (1.3.0, his decision list) show / hide + colour per drawn element
     E.push_back(Entry{ &dlset::spec(), "DefenseLines.cpp", nullptr, {}, {} });   // (2026-10-20) lsDefenseLines 1.0.0: lines / marks show + colours, line minutes (also read by BookFlow.cpp)
-    E.push_back(Entry{ &ciset::spec(), "CobImpulse.cpp", nullptr, {}, {} });        // (0.5.0, his decision list) labels / impulse box: show + colour
+    E.push_back(Entry{ &ciset::spec(), "CobImpulse.cpp", nullptr, {}, {} });
+    E.push_back(Entry{ &bbaset::spec(), "BigBidAsk.cpp", nullptr, {}, {} });   // (1.19.0, Rassul 21:51) Biggest in, skip first / last, font, number / bid / ask colours        // (0.5.0, his decision list) labels / impulse box: show + colour
     if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
         const int mkt = ss::marketIndex(argv[3]);
         for (const Entry& e : E) {
@@ -225,13 +227,6 @@ int main(int argc, char** argv) {
         const bool migrated = have && (src.find("Settings.h\"") != std::string::npos) && (src.find("ss::registerAll(") != std::string::npos);
         checkEntry(e, migrated ? dir : std::string());
         if (have && !migrated) std::printf("NOTE %s: table checked; %s not migrated to the layer yet (source checks skipped)\n", e.S->plugin, e.cpp);
-    }
-    {   // (BigBidAsk 1.17.0, Rassul approved 19:57 CT) indicators with NO user settings: no rows registered, no settings file read or written
-        const char* fixedSrc[] = { "BigBidAsk.cpp" };
-        for (const char* f : fixedSrc) { std::string src; if (dir.empty() || !readAll(dir + "/" + f, src)) continue;
-            const char* banned[] = { "ss::registerAll(", "ss::readDialog(", "ss::fillDialog(", "setBoolParameter(", "setIntegerParameter(", "setFloatParameter(", "setColorParameter(", "setListParameter(", "setLabelParameter(", "setStringParameter(", "\"BigBidAsk.settings-\" +", "\"BigBidAsk.dialog-\" +" };
-            for (const char* b : banned) ok(countOf(src, b) == 0, std::string(f) + " has no settings but contains " + b);
-            ok(countOf(src, "setParameterVersion(7)") == 1, std::string(f) + " parameter version 7 (the old 87 rows dropped)"); }
     }
     std::printf("%s settings contract: %d checks, %d failures (%d tables)\n", g_fail ? "FAIL" : "PASS", g_checks, g_fail, (int)E.size());
     return g_fail ? 1 : 0;

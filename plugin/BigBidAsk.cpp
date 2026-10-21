@@ -66,6 +66,8 @@
 #undef near
 #endif
 #include "BigBidAskLogic.h"
+#include "BigBidAskSettings.h"         // (1.19.0) the settings table (Biggest in, skip first / last, font, colours)
+#include "SettingsHost.h"              // (1.19.0) the window <-> file layer every indicator uses
 #include "ColumnBoard.h"                 // where the price area ends (the right-side columns) and the left Liquidity column - read only
 #include "HoverBoard.h"                  // hb::hbCursor (GetCursorPos + WindowFromPoint; carries the user32 pragma)
 #include "HostSlot.h"
@@ -100,7 +102,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.18.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.19.0"          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
 static const bool BBA_HOVERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
@@ -229,7 +231,8 @@ struct BBState {
     std::map<long, bba::SessPrints> bySess; size_t bySessN = (size_t)-1;
     long long boardLast = 0, boardMs = -1; int boardN = 0;   // (1.15.0) the SignalBoard B pass (from the record, not the view)
     bool busy = false;
-    std::string identity, market, symbol, state = "starting", lastStatusText, settingsWhy = "fixed (1.17.0, no settings)", chartKey;
+    std::string identity, market, symbol, state = "starting", lastStatusText, settingsWhy = "defaults", chartKey;
+    ss::Store setStore; ss::Values sv = ss::defaults(bbaset::spec(), -1); int topN = 10;   // (1.19.0) his settings
     int spb = 0; long long session = -1; double tick = 0;
     bba::Settings set; long long setStamp = -2, setCheckMs = -1; std::string setMarket;   // (1.17.0) fixed settings, set once per market
     std::map<long long, bba::Facts> fin;            // closed candles, final (from the record or decided here) - never changed
@@ -268,9 +271,31 @@ public:
     BigBidAsk() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int parmsLoad(void) { return RTX_OK; }    // (1.17.0) no settings: nothing to fill, nothing to save
-    virtual int parmsApply(void) { return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
+    // (1.19.0, Rassul 21:51) the settings window: filled from / saved to lsFlexLevels\BigBidAsk.settings2-<MKT>.txt (SettingsHost.h)
+    virtual int parmsLoad(void) {
+        if (!ss::inDialog(this)) return RTX_OK;
+        ss::Store* st = dialogStore(); if (!st) return RTX_OK;
+        ss::fillDialog(this, bbaset::spec(), bbaIds(), st->load(ss::marketIndex(dlgMkt_), steadyMs(), true), snap_);
+        return RTX_OK;
+    }
+    virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, bbaset::spec(), bbaIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
+    static ss::Ids& bbaIds() { static ss::Ids I; return I; }
+    std::string chartMarket() { char b[64]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const int m = ss::marketOfRoot(rs ? rs : ""); if (m < 0) { const char* sy = getSymbol(); const int m2 = ss::marketOfRoot(sy ? sy : ""); return m2 < 0 ? std::string() : ss::MARKETS[m2]; } return ss::MARKETS[m]; }
+    static std::string setPath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() || mkt.empty() ? std::string() : f + BBA_SEP "BigBidAsk.settings2-" + mkt + ".txt"; }
+    ss::Snap snap_; ss::Store dlgStore_; std::string dlgMkt_;
+    ss::Store* dialogStore() {
+        const std::string mkt = chartMarket(); const std::string p = setPath(mkt); if (p.empty()) return nullptr;
+        if (dlgStore_.path != p) { dlgStore_ = ss::Store(); dlgStore_.S = &bbaset::spec(); dlgStore_.path = p; dlgMkt_ = mkt; }
+        return &dlgStore_;
+    }
+    void saveSettings() {
+        if (!ss::inDialog(this)) return;
+        ss::Store* st = dialogStore(); if (!st) return;
+        const ss::Values V = ss::readDialog(this, bbaset::spec(), bbaIds(), st->load(ss::marketIndex(dlgMkt_), steadyMs(), true), snap_);
+        makeDir(flexDir());
+        if (st->save(V)) snap_.take(ss::dialogNow(this, bbaset::spec(), bbaIds(), V));
+    }
     void pump(bool fromDraw);
     void release() { BBState* S = slot_.get(this, false); if (S && !S->busy) { try { S->lastRecordMs = -1; flush(*S); } catch (...) {} } slot_.release(this); }   // what is decided is written before the state goes
     BBState* testState() { return slot_.get(this, false); }
@@ -289,7 +314,7 @@ private:
     void statsBuild(BBState& S, long long now);
     template <class H, class L, class C> PickInfo choose(BBState& S, int i, bool closed, int sd, const bba::Pick& p, int ph, const bba::TierSet& T, const PassCtx& X, H& hi, L& lo, C& cl);
     int trendAt(BBState& S, int i);
-    template <class T> bool topN(BBState& S, T& times, int i, int sd, long long vol);   // (1.18.0) the one print rule
+    template <class T> int backCount(BBState& S, T& times, int i, int sd, long long vol);   // (1.19.0) candles back it is the biggest
     void ensureBars(BBState& S);
     template <class H, class L> void passCtx(BBState& S, H& hi, L& lo, int n, PassCtx& X);
     void logPass(BBState& S, long long now);
@@ -315,9 +340,8 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<BigBidAsk*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<BigBidAsk*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) {
-    // (1.17.0, Rassul approved 19:57 CT) no user settings: no rows. Parameter version 7 (was 6 with 87 rows) so IRT drops what it kept
-    // by position for the old rows; the settings window shows only IRT's own rows.
-    setParameterVersion(7);
+    // (1.19.0, Rassul 21:51) the settings rows from the table (parameter version 8; 1.17 had none at version 7)
+    ss::registerAll(this, bbaset::spec(), BigBidAsk::bbaIds());
     return RTX_OK;
 }
 int cppExtension::calc(int) { static_cast<BigBidAsk*>(this)->pump(false); return RTX_OK; }
@@ -372,7 +396,16 @@ static bool timeSkipped(const bba::Settings& set, const svl::Cls& cls, int endSe
 void BigBidAsk::settings(BBState& S, long long now) {
     tierStatus(S, now);   // (1.15.0)
     // (1.17.0) fixed behaviour, no file: BigBidAsk.settings-<MKT>.txt is never read or written
-    if (S.setStamp != 117 || S.setMarket != S.market) { S.set = bba::effective(bba::fixedSettings(S.market)); S.settingsWhy = "fixed (1.17.0, no settings)"; S.setStamp = 117; S.setMarket = S.market; }
+    // (1.19.0) the fixed behaviour + his settings file (read at most every 2 s by the Store; a missing / bad file = the defaults)
+    const std::string sp = setPath(ss::marketIndex(S.market) >= 0 ? ss::MARKETS[ss::marketIndex(S.market)] : std::string());
+    if (S.setStore.path != sp) { S.setStore = ss::Store(); S.setStore.S = &bbaset::spec(); S.setStore.path = sp; }
+    S.sv = sp.empty() ? ss::defaults(bbaset::spec(), -1) : S.setStore.load(ss::marketIndex(S.market), now);
+    bba::Settings f = bba::fixedSettings(S.market);
+    f.skipFirst = S.sv.i(bbaset::K_SKIP_FIRST); f.skipLast = S.sv.i(bbaset::K_SKIP_LAST);
+    for (int k = 0; k < 3; ++k) { f.cat[k].font = S.sv.i(bbaset::K_FONT); f.cat[k].bid = f.cat[k].ask = (unsigned)S.sv.c(bbaset::K_COL_NUM); }
+    f.boxBid = (unsigned)S.sv.c(bbaset::K_COL_BID); f.boxAsk = (unsigned)S.sv.c(bbaset::K_COL_ASK);
+    S.set = bba::effective(f); S.topN = std::max(2, std::min(bbaset::CAP, S.sv.i(bbaset::K_BIGGEST_IN)));
+    S.settingsWhy = S.sv.why.empty() ? "defaults" : S.sv.why; S.setStamp = 119; S.setMarket = S.market;
 }
 // ---- the chart's volume at price (only trivial values live in these MSVC SEH helpers) ---------------------------------------------
 int BigBidAsk::readStats(RTARRAYP* vap, int bar, BARSTATISTICS* stats) {
@@ -568,7 +601,7 @@ void BigBidAsk::status(BBState& S, long long now) {
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << BBA_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nTICK," << S.tick
-      << "\nSETTINGS,fixed (1.18.0, no settings),a print = the biggest cell of its side in the last 10 candles (skip first / last 15 min),font " << S.set.cat[0].font
+      << "\nSETTINGS," << S.settingsWhy << ",biggest in " << S.topN << ",skip first " << S.set.skipFirst << " / last " << S.set.skipLast << " min,font " << S.set.cat[0].font
       << ",box " << (S.set.box ? 1 : 0) << ",circle " << (S.set.circle ? 1 : 0) << ",dim " << (S.set.dim ? 1 : 0) << ",divider " << bba::divFor(S.market) << " (market default)"
       << ",skip first / last " << S.set.skipFirst << " / " << S.set.skipLast << " min,levels off,Big Lot box " << (S.set.statsChart ? "on" : "off")
       << "\nLEVELS,gamma " << S.gamWhy << ",volume profiles " << S.vp.size() << " sessions (from bar " << S.volNext << "),candles with levels " << S.lvCache.size()
@@ -816,17 +849,19 @@ void BigBidAsk::passCtx(BBState& S, H& hi, L& lo, int n, PassCtx& X) {
     }
     X.vw = S.vw; X.sd = S.sdv;
 }
-// (1.18.0) the biggest cell of side sd (-1 bid / +1 ask) at candle i beats the same side's biggest cell on EACH of the bba::TOP_N
-// closed candles before it (from the frozen record: never re-judged). A candle before it not read yet = no claim (not drawn).
-template <class T> bool BigBidAsk::topN(BBState& S, T& times, int i, int sd, long long vol) {
-    if (i < bba::TOP_N || vol <= 0) return false;
-    std::vector<long long> prev; prev.reserve(bba::TOP_N);
-    for (int k = i - 1; k >= i - bba::TOP_N; --k) {
-        auto it = S.fin.find((long long)times[k]); if (it == S.fin.end()) return false;
+// (1.19.0, Rassul 21:47 "if the bid is the biggest in 40 candles then show 40, but cap the max at 50") how many candles back the cell
+// of side sd (-1 bid / +1 ask) at candle i is the biggest of its side: the run of earlier closed candles whose same-side biggest cell is
+// SMALLER, up to bbaset::CAP. Read from the frozen record (never re-judged); a candle not read yet ends the run.
+template <class T> int BigBidAsk::backCount(BBState& S, T& times, int i, int sd, long long vol) {
+    if (vol <= 0) return 0;
+    int n = 0;
+    for (int k = i - 1; k >= 0 && n < bbaset::CAP; --k) {
+        auto it = S.fin.find((long long)times[k]); if (it == S.fin.end()) break;
         const bba::Facts& F = it->second; const bba::Pick& q = sd < 0 ? F.bid : F.ask;
-        prev.push_back(F.valid && q.ok ? q.vol : 0);
+        if ((F.valid && q.ok ? q.vol : 0) >= vol) break;
+        ++n;
     }
-    return bba::biggestOfLast(prev, vol);
+    return n;
 }
 int BigBidAsk::trendAt(BBState& S, int i) {
     RTARRAYI times(barDateTime); const long long t = (long long)times[i];
@@ -952,9 +987,10 @@ void BigBidAsk::boardPass(BBState& S, long long now) {
         if (timeSkipped(set, cls, endSec, S.openMin, S.closeMin)) continue;
         for (int sd = -1; sd <= 1; sd += 2) {   // (1.18.0) the chart's one rule: the biggest cell of its side in the last 10 candles
             const bba::Pick& p = sd < 0 ? F.bid : F.ask;
-            if (!p.ok || !topN(S, times, i, sd, p.vol)) continue;
+            if (!p.ok) continue;
+            const int back = backCount(S, times, i, sd, p.vol); if (back < S.topN) continue;
             sb::Ev e; e.bar = ctSec((RTDATE)t); e.px = (double)p.key * S.tick; e.side = sd; e.val = (double)p.vol;
-            e.flag = (1 << 1) | 128 | ((bba::TOP_N & 0x7F) << 8);   // category 1, final; n = 10 (the look-back)
+            e.flag = (1 << 1) | 128 | ((back & 0x7F) << 8);   // (1.19.0) category 1, final; n = the candles back (<= 50)
             if (e.bar > 0) ev.push_back(e);
         }
     }
@@ -988,7 +1024,7 @@ void BigBidAsk::logPass(BBState& S, long long now) {
             if (S.logged.count(key)) continue;
             const bba::Pick& p = sd < 0 ? F.bid : F.ask;
             bool skip = !p.ok || timeSkipped(set, cls, endSec, S.openMin, S.closeMin);   // (1.15.0) the shared time filter (1.13.0 RTH only)
-            PickInfo pi; if (!skip && topN(S, times, i, sd, p.vol)) { pi.cat = 0; pi.conf = true; }   // (1.18.0) the one rule
+            PickInfo pi; if (!skip && backCount(S, times, i, sd, p.vol) >= S.topN) { pi.cat = 0; pi.conf = true; }   // (1.19.0) Biggest in
             S.logged.insert(key);
             if (pi.cat < 0) continue;
             const bba::Cat& c = set.cat[pi.cat];
@@ -1105,11 +1141,13 @@ void BigBidAsk::render(BBState& S) {
         // No Big Lot tiers, pivot, level or trend filter; the first / last 15 minutes of every session stay skipped (21:31-21:32, all markets).
         for (int sd = -1; sd <= 1; sd += 2) {
             const bba::Pick& p = sd < 0 ? F->bid : F->ask;
-            if (!p.ok || !topN(S, times, i, sd, p.vol)) continue;
+            if (!p.ok) continue;
+            const int back = backCount(S, times, i, sd, p.vol);
+            if (back < S.topN) continue;                                    // (1.19.0) "Biggest in" (default 10)
             const double px = (double)p.key * S.tick;
             PickInfo pi; pi.cat = 0; pi.conf = true;
             const int got = 0;
-            const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
+            const std::string tx = std::to_string(back);                     // (1.19.0) the candles back, 10 - 50 (no lots / divider)
             FONT fc = fb; fc.size = (short)set.cat[got].font; setFont(fc);
             int lc = 0, ac = 0, dc = 0; getFontMetrics(&lc, &ac, &dc);
             PNT pt; pt.set(i, (float)px, kBarCenter);
@@ -1345,7 +1383,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (BBA_HOVERS ? TRACK_MOUSE : 0) | VAP_REQUIRED);   // (1.17.1) no TRACK_MOUSE while the hovers are off
-    p->setDescription("LRA Big Bid / Ask 1.18.0 (no settings): on each candle, the biggest print AT THE BID (left, red box) and AT THE ASK (right, green box), in lots / divider, shown when it is bigger than that side's biggest print on each of the 10 candles before it. The first and last 15 minutes of each session are skipped. The Big Lot box (BL5 / BL10 / BL20 averages) sits beside the HOD/LOD table.");
-    p->setVersion("1.18.0");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask 1.19.0: on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
+    p->setVersion("1.19.0");   // BBA_VERSION
     return p;
 }
