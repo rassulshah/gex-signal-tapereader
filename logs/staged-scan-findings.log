@@ -1,12 +1,3 @@
-findings=0 allowed=0 staged_files=10 bytes=385107
+findings=0 allowed=0 staged_files=1 bytes=489
 largest staged blobs (bytes, path):
-SIZE	191390	plugin/DeltaProfile.cpp
-SIZE	68038	plugin/BUILD-LESSONS.md
-SIZE	51467	plugin/DeltaProfileCore.h
-SIZE	24102	plugin/tests_dp217/test_dp218.cpp
-SIZE	22920	tools/gex-build.bat
-SIZE	12278	plugin/tests_delta/test_trap221.cpp
-SIZE	7032	plugin/TrapLogic.h
-SIZE	5086	plugin/DeltaProfileSettings.h
-SIZE	2670	plugin/tests_absorb/test_dp220_record.cpp
-SIZE	124	logs/staged-scan-findings.log
+SIZE	489	logs/staged-scan-findings.log
