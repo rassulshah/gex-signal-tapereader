@@ -1,11 +1,3 @@
-findings=0 allowed=0 staged_files=9 bytes=576121
+findings=0 allowed=0 staged_files=1 bytes=460
 largest staged blobs (bytes, path):
-SIZE	304498	plugin/LiquidityProfile.cpp
-SIZE	129616	plugin/LiquidityProfileLogic.h
-SIZE	74818	plugin/BUILD-LESSONS.md
-SIZE	25672	plugin/tests_lqp044/test_ap047.cpp
-SIZE	23014	tools/gex-build.bat
-SIZE	11251	plugin/AirPocketLogic.h
-SIZE	4054	plugin/tests_lqp044/test_lqp461_host.cpp
-SIZE	3076	plugin/LiquidityProfileSettings.h
-SIZE	122	logs/staged-scan-findings.log
+SIZE	460	logs/staged-scan-findings.log
