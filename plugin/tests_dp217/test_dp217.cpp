@@ -89,7 +89,7 @@ static void boardTests() {
     check(all.size() == 3 && fin.size() == 2 && fin[0].flag == 1 && fin[1].flag == 0, "[sb] read('A') = final only, readAll = all");
     sb::publish('B', "SBTEST", 180, "c", 1000, v); std::vector<sb::Ev> b; sb::read('B', "SBTEST", 180, "c", 1000, b);
     check(b.size() == 3, "[sb] other kinds unfiltered (B flag bits are not the A flag)");
-    check(std::string(sb::VERSION) == "1.1.0", "[sb] version 1.1.0");
+    check(std::string(sb::VERSION) == "1.2.0", "[sb] version 1.2.0");
 }
 int main() {
     setenv("TZ", "UTC", 1); tzset();

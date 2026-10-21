@@ -1,5 +1,9 @@
 #ifndef LS_ORDERFLOWFEED_H
 #define LS_ORDERFLOWFEED_H
+// OrderFlowFeed.h (1.7.0, 2026-10-21, MBO Roadmap Top Defender #1 "is the level absorbing the attack?"): Acc counts refills PER PRICE
+//   (refAt) and absorbedPx() lists, for a decided candle, the resting prices where the defenders were filled AND reloaded - the
+//   order-book truth used by the absorption test (research_testing.md: traded >= 2x the most ever shown there, >= 2 refills).
+//   lsBidAskStats posts them on the SignalBoard (kind 'O') for lsDeltaProfile / lsBigBidAsk. Nothing else changes.
 // OrderFlowFeed.h (1.6.0, 2026-10-14 night) -- the ONE shared order-flow header of lsBidAskStats 1.7.0, lsPullStats 1.6.0 and
 // lsStackStats 1.4.0 (and the order feed of lsLiquidityProfile / lsLiquidityFlow 0.17.0).
 // 1.6.0 (2026-10-14 night, Rassul approved 22:37 CT, mockup-one-bar.png v2): ONE BAR PER CANDLE, as an opt-in mode of drawBars (its new
@@ -393,10 +397,27 @@ struct Acc {
     bool orderCap = false, aggrCap = false;
     std::map<Tick, Ice> ice[2];
     std::set<Tick> refPx[2];                             // prices with a refill this candle
+    std::map<Tick, int> refAt[2];                        // (1.7.0) refills per price this candle (capped like refPx)
     std::unordered_map<long long, Aggr> aggr;            // aggressor order id -> what it filled this candle
     long long aggrUnknown = 0;                           // fills without an aggressor id
     std::vector<long long> restSizes;                    // resting sizes added near price (the session distribution)
 };
+// (1.7.0) ORDER-BOOK ABSORPTION at one resting price of a decided candle: the defenders' resting orders there traded at least
+// minX x the most ever shown there (hidden / refilled size) AND were reloaded at least minRef times. s = the RESTING side (BID / ASK).
+struct ObPx { Tick px = 0; long long traded = 0, shown = 0; int refills = 0; };
+inline bool obAbsorbed(long long traded, long long shown, int refills, long long minX = 2, int minRef = 2) {
+    return shown > 0 && traded >= minX * shown && refills >= minRef;
+}
+inline void absorbedPx(const Acc& a, int s, std::vector<ObPx>& out, long long minX = 2, int minRef = 2) {
+    out.clear(); if (s != BID && s != ASK) return;
+    for (std::map<Tick, Ice>::const_iterator i = a.ice[s].begin(); i != a.ice[s].end(); ++i) {
+        if (i->second.unknown) continue;
+        std::map<Tick, int>::const_iterator r = a.refAt[s].find(i->first);
+        const int ref = r == a.refAt[s].end() ? 0 : r->second;
+        if (!obAbsorbed(i->second.traded, i->second.shown, ref, minX, minRef)) continue;
+        ObPx o; o.px = i->first; o.traded = i->second.traded; o.shown = i->second.shown; o.refills = ref; out.push_back(o);
+    }
+}
 // a decided candle's numbers (all three indicators keep all of them; the nightly reads the record)
 struct Rec {
     bool partial = false; long long events = 0;
@@ -562,7 +583,8 @@ public:
             else T.back().second = a.addC[s];
         }
     }
-    void refill(Acc& a, int s, Tick px, long long c) { a.refN[s]++; a.refC[s] += c; if (a.refPx[s].size() < ICE_CAP) a.refPx[s].insert(px); }
+    void refill(Acc& a, int s, Tick px, long long c) { a.refN[s]++; a.refC[s] += c; if (a.refPx[s].size() < ICE_CAP) a.refPx[s].insert(px);
+        if (a.refAt[s].size() < ICE_CAP || a.refAt[s].count(px)) a.refAt[s][px]++; }
     void aggressor(Acc& a, int restingSide, const Ev& e) {
         if (e.aggr == 0) { a.aggrUnknown++; return; }
         std::unordered_map<long long, Aggr>::iterator it = a.aggr.find(e.aggr);

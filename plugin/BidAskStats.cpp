@@ -152,6 +152,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include "BigLotTiers.h"              // (1.14.0) the Big Lot sizes per session type
 #include "PaneCursor.h"               // (1.14.1) the box follows the mouse only while the cursor is inside this pane
 #include "BoxReadDraw.h"
+#include "SignalBoard.h"              // (1.25.0) posts the order-book absorption prices (kind 'O')
 #include "EffortReward.h"            // (1.16.0) Attack Effort + Reward rows and their read
 #include <array>              // (1.15.0) the Read row
 #include <algorithm>
@@ -172,7 +173,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.24.1"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.25.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -261,6 +262,7 @@ struct BasFin {
 
 struct BASState {
     bool busy = false, faulted = false;
+    std::vector<sb::Ev> obEv; long long obMs = -1, obPosts = 0, obMarks = 0;   // (1.25.0) order-book absorption per decided candle (board kind 'O')
     off::IconRect infoIcon; bool infoTipOn = false;                        // (1.22.0) the info icon (pane pixels) and its hover tip
     std::string identity, market, symbol, state = "starting", lastStatusText;
     int spb = 0; double tick = 0;
@@ -393,6 +395,8 @@ private:
     void heldOf(BASState& S, long long t, int out[2]);
     void stopRuns(BASState& S);
     void marketState(BASState& S, long long now);
+    void obPublish(BASState& S, long long now);                          // (1.25.0)
+    long long obBarKey(long long t);                                       // (1.25.0)
     void bigLots(BASState& S);                                            // (1.14.0)
     bool partsOf(long long t, long& days, int& sec);
     const blt::Mark* markAt(BASState& S, long long t) { std::map<long long, blt::Mark>::const_iterator it = S.blMarks.find(t); return it != S.blMarks.end() && it->second.decided ? &it->second : nullptr; }
@@ -900,6 +904,23 @@ void BidAskStats::finalize(BASState& S, long long now) {
                 const bool incomplete = t == S.firstBarKey || a == S.accs.end()
                     || a->second.aggrCap || a->second.aggrUnknown > 0;
                 F.r = S.e.close(a != S.accs.end() ? a->second : off::Acc(), incomplete, P); F.dbo = true;
+                {   // (1.25.0, MBO Roadmap Top Defender #1) the order-book truth of absorption for this candle: every resting price where the
+                    // defenders traded >= 2x the most ever shown there AND reloaded >= 2 times; plus one marker (px 0) = "decided, order feed
+                    // present" so lsDeltaProfile / lsBigBidAsk can tell "no absorption" from "no order feed". Incomplete candles post nothing.
+                    const long long bk = obBarKey(t);
+                    if (bk > 0 && !incomplete && a != S.accs.end()) {
+                        sb::Ev mk; mk.bar = bk; S.obEv.push_back(mk);
+                        for (int rs = 0; rs < 2; ++rs) {
+                            std::vector<off::ObPx> ob; off::absorbedPx(a->second, rs, ob);
+                            for (size_t q = 0; q < ob.size(); ++q) {
+                                sb::Ev e; e.bar = bk; e.px = (double)ob[q].px * S.tick; e.side = rs == off::ASK ? 1 : -1; e.val = (double)ob[q].traded;
+                                e.flag = sb::obFlag(ob[q].shown, ob[q].refills); S.obEv.push_back(e); S.obMarks++;
+                            }
+                        }
+                        if (S.obEv.size() > sb::CAP_O) S.obEv.erase(S.obEv.begin(), S.obEv.begin() + (long)(S.obEv.size() - sb::CAP_O));
+                        S.obMs = -1;
+                    }
+                }
                 if (a != S.accs.end()) S.accs.erase(a);
                 S.closedAt.erase(c);
                 for (int s = 0; s < 2; ++s) F.let[s] = bas::letters(F.r, s, P);
@@ -999,6 +1020,18 @@ void BidAskStats::marketState(BASState& S, long long now) {
     if (S.mstMs >= 0 && now >= S.mstMs && now - S.mstMs < 15000) return;
     S.mstMs = now; S.mstPosts++;
     mst::publish("AGG", S.symbol, S.spb, S.chartKey, now, S.mstCt, S.mstKv);
+}
+// (1.25.0) the order-book absorption events on the chart's SignalBoard (kind 'O'), refreshed at least every 15 s while drawing
+void BidAskStats::obPublish(BASState& S, long long now) {
+    if (S.symbol.empty() || S.obEv.empty()) return;
+    if (S.obMs >= 0 && now >= S.obMs && now - S.obMs < 15000) return;
+    S.obMs = now; S.obPosts++;
+    sb::publish('O', S.symbol, S.spb, S.chartKey, now, S.obEv);
+}
+// (1.25.0) a bar stamp -> Central wall-clock seconds (the SignalBoard bar key; lsBigBidAsk ctSec / lsDeltaProfile localSec)
+long long BidAskStats::obBarKey(long long t) {
+    long days = 0; int sec = 0; if (!partsOf(t, days, sec)) return 0;
+    return (long long)days * 86400LL + sec;
 }
 // (1.14.0) a bar stamp -> the civil day and second of its CLOSE on the chart's (Central) clock, as lsBigBidAsk parts()
 bool BidAskStats::partsOf(long long t, long& days, int& sec) {
@@ -1129,6 +1162,7 @@ void BidAskStats::status(BASState& S, long long now) {
       << "\nSPIKE_RULE,>= " << bas::fmtTenths(S.ser.spike.avgT) << " the plain " << S.ratioBars << "-candle average of that side, decided at the close; forming candle dim, no label"
       << "\nJUMP_RECORD_FIELD,vs the biggest of the prior " << S.ser.spike.lookback << " candles (not part of the spike rule)"
       << "\nMARKET_STATE,AGG " << (S.chartKey.empty() ? std::string("waiting for the chart label") : "bar " + std::to_string(S.mstCt) + ",posts " + std::to_string(S.mstPosts) + ",keys " + std::to_string(S.mstKv.size()));
+    o << "\nORDERBOOK_ABS,board O events " << S.obEv.size() << ",absorbed prices posted " << S.obMarks << ",posts " << S.obPosts << " (traded >= 2x shown + >= 2 refills; read by lsDeltaProfile / lsBigBidAsk)";
     {   // today's spikes and letters: closed bars of the last closed bar's 17:00 CT session
         int nb = 0, na = 0, ls = 0, ll = 0; const long long day = sessionKey(S.lastClosedTime);
         if (day >= 0) for (std::map<long long, bas::Stat>::const_reverse_iterator r = S.ser.bars.rbegin(); r != S.ser.bars.rend(); ++r) {
@@ -1248,7 +1282,7 @@ void BidAskStats::pump() {
                 if (S.srFrom < 0 && S.formingKey > 0) S.srFrom = S.formingKey;   // (1.4.0) bars closing from now on are judged
                 finalize(S, now);
                 stopRuns(S);
-                marketState(S, now);                                       // (1.13.0) SRC AGG, behind the scenes
+                marketState(S, now); obPublish(S, now);                                       // (1.13.0) SRC AGG, behind the scenes
                 bigLots(S);                                                // (1.14.0) the Big Lot sizes + each closed candle's mark, once
             }
             if (count >= 2 && !S.faulted) {                                // (1.6.0) the zone read line
@@ -1495,6 +1529,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.24.1");   // BAS_VERSION
+    p->setVersion("1.25.0");   // BAS_VERSION
     return p;
 }

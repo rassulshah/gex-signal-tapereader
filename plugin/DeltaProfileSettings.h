@@ -1,4 +1,4 @@
-// DeltaProfileSettings.h  (lsDeltaProfile 2.18.2, 2026-10-18 settings audit)  -  the ONE table of the Delta Profile settings window.
+// DeltaProfileSettings.h  (lsDeltaProfile 2.20.0: + Wick absorption on / Wick attack x normal; was 2.18.2, 2026-10-18 settings audit)  -  the ONE table of the Delta Profile settings window.
 // File: lsFlexLevels\DeltaProfile.settings-<MKT>.txt (keyed, per MARKET - the old file was keyed per contract root, so every roll
 // (EPZ26 -> EPH27) silently fell back to defaults). Migrates once from DeltaProfile.settings.txt ("<root>|0|width|gap|font|...").
 #pragma once
@@ -6,8 +6,8 @@
 
 namespace dpset {
 
-static const char* const PLUGIN_VERSION = "2.19.1";
-enum K { K_WIDTH, K_FONT, K_DELTA_TEXT, K_N };
+static const char* const PLUGIN_VERSION = "2.20.0";
+enum K { K_WIDTH, K_FONT, K_DELTA_TEXT, K_WICK_ON, K_WICK_X, K_N };
 
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
@@ -16,8 +16,12 @@ inline const ss::Spec& spec() {
         ss::same(ss::intRow("font", "Font pt", 10, 6, 18, 40)),   // (2.18.3, his decision) default 10 (was 9)
         // (2.14.0) the row values are no longer drawn; this box only reserved room for them -> hidden, value kept (audit: removed)
         ss::hide(ss::boolRow("delta_text", "Show delta text", true)),
+        // (2.20.0, MBO Roadmap Top Defender #1) the wick absorption A: footprint candidate (attack in the wick vs the half-hour normal)
+        // confirmed by the order book (Aggression / lsBidAskStats on the same chart)
+        ss::boolRow("wick_on", "Wick absorption (order book)", true),
+        ss::same(ss::floatRow("wick_x", "Wick attack x normal", 3.0, 1.0, 20.0, 40)),
     };
-    static const ss::Spec S = { "DeltaProfile", PLUGIN_VERSION, 13, R, K_N, 0 };
+    static const ss::Spec S = { "DeltaProfile", PLUGIN_VERSION, 14, R, K_N, 0 };   // (2.20.0) parameter version 14: + wick rows
     return S;
 }
 
