@@ -22,7 +22,7 @@
 #include <vector>
 
 namespace absl {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // (1.0.1, 2026-10-21 reverse engineering) the half-hour norm has a floor: 0.5x the market's median over all slots (quiet slots gave 150x - 1500x junk ratios in 6E / overnight)
 static const int SLOT_MIN = 30;           // half-hour slots
 static const int LOOKBACK_SESSIONS = 10;  // slot norm = median over the last 10 sessions with data in that slot
 static const int MIN_OBS = 8;             // fewer observations in a slot = no norm (no mark, logged as learning)
@@ -45,6 +45,15 @@ inline bool slotNorm(const std::vector<Obs>& obs, long long session, int slot, i
         v.insert(v.end(), r->second.begin(), r->second.end());
     n = (int)v.size(); norm = median(v);
     return n >= MIN_OBS && norm > 0;
+}
+// (1.0.1) the floor under a slot norm: half the median of ALL slots' observations of that side before `session` (last 10 sessions)
+inline double floorNorm(const std::vector<Obs>& obs, long long session, int top) {
+    std::map<long long, std::vector<double> > by;
+    for (const Obs& o : obs) if (o.session < session && o.top == top && o.lots >= 0) by[o.session].push_back(o.lots);
+    std::vector<double> v; int used = 0;
+    for (std::map<long long, std::vector<double> >::const_reverse_iterator r = by.rbegin(); r != by.rend() && used < LOOKBACK_SESSIONS; ++r, ++used)
+        v.insert(v.end(), r->second.begin(), r->second.end());
+    return 0.5 * median(v);
 }
 // file lines: "session,slot,top,lots" (the observations file the plugin appends; the seed file has the same format)
 inline std::string obsLine(const Obs& o) { char b[96]; std::snprintf(b, sizeof(b), "%lld,%d,%d,%.0f", o.session, o.slot, o.top, o.lots); return b; }
