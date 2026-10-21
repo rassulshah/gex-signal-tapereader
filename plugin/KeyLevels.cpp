@@ -41,7 +41,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* KL_VERSION = "1.0.0";
+static const char* KL_VERSION = "1.1.0";   // (1.1.0, 2026-10-21) one right edge; a crowded group shrinks its font, then spreads (klh::layoutStack)
 static long long klSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string klFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + KLH_SEP "InvestorRT" KLH_SEP "rtx" KLH_SEP "lsFlexLevels" : std::string(); }
 static void klMakeDir(const std::string& p) {
@@ -68,6 +68,7 @@ struct KlState {
     std::vector<klh::KeyIn> keys; long long keyAt = 0; std::string keyNote = "not read yet";
     std::vector<klh::MqIn> mqAll; std::string mqSym, mqNote = "off";
     long long lastCheckMs = -100000;
+    int shrunk = 0, spread = 0;   // (1.1.0) badges drawn smaller / spread off their line on the last draw
     ss::Store setStore; ss::Values set = ss::defaults(klhset::spec(), -1);
     std::string statusBody;
 };
@@ -143,6 +144,7 @@ void KeyLevels::writeStatus(KlState& s, const std::vector<klh::Line>& L, size_t 
     o << "VERSION," << KL_VERSION << "\nMARKET," << s.mkt << "\nSYMBOL," << s.sym << "\nKEY_LEVELS," << s.keyNote;
     if (s.keyAt > 0) o << ",written " << ((long long)time(nullptr) - s.keyAt) / 60 << " min ago";
     o << "\nMENTHORQ," << s.mqNote << "\nLEVELS," << L.size() << " to draw, " << drawn << " on screen\n";
+    o << "BADGES,one right edge,smaller font " << s.shrunk << ",spread off their line " << s.spread << "\n";   // (1.1.0)
     for (const klh::Line& q : L) o << "L," << q.name << "," << dpaudit::priceText(s.mkt, q.price) << "\n";
     o << "SETTINGS," << s.set.why << ",MenthorQ " << (s.set.b(klhset::K_SHOW_MQ) ? "on" : "off") << ",font " << s.set.i(klhset::K_FONT) << ",width " << s.set.i(klhset::K_WIDTH) << "\n";
     const std::string body = o.str(); if (body == s.statusBody) return;
@@ -174,29 +176,40 @@ int KeyLevels::draw(void) {
         RCT pane; pane.getPaneRect(false);
         FONT ft; ft.id = HELVETICA; ft.size = (short)std::max(6, std::min(20, V.i(klhset::K_FONT))); ft.style = BOLD; setFont(ft);
         const int lw = std::max(1, std::min(4, V.i(klhset::K_WIDTH)));
-        const int h = ft.size + 6, padX = 4;
-        std::vector<int> ys, ws; std::vector<size_t> idx; std::vector<std::string> txt;
+        const int baseFont = ft.size, minFont = std::min(baseFont, 7), padX = 4;
+        std::vector<int> ys; std::vector<size_t> idx; std::vector<std::string> txt;
         for (size_t k = 0; k < L.size(); ++k) {
             PNT p; p.set((int)(n - 1), (float)L[k].price); const int y = p.v;
             if (y <= pane.top || y >= pane.bottom) continue;               // off screen: not drawn
-            const std::string t = L[k].name + "  " + dpaudit::priceText(s->mkt, L[k].price);
-            idx.push_back(k); ys.push_back(y); txt.push_back(t); ws.push_back((int)getTextWidth(t.c_str(), -1) + 2 * padX);
+            idx.push_back(k); ys.push_back(y); txt.push_back(L[k].name + "  " + dpaudit::priceText(s->mkt, L[k].price));
         }
-        const std::vector<int> xs = klh::placeRight(ys, ws, pane.right - 3, h, 3);
-        for (size_t j = 0; j < idx.size(); ++j) {                          // the lines first, across the chart
+        // (1.1.0, Rassul 09:26 CT) ONE right edge for every badge; a crowded group shrinks its font, then spreads up / down only if needed
+        const std::vector<klh::Slot> slot = klh::layoutStack(ys, baseFont, minFont, pane.top + 1, pane.bottom - 1);
+        for (size_t j = 0; j < idx.size(); ++j) {                          // the lines first, across the chart, at the TRUE price
             const COLOR col = (COLOR)L[idx[j]].col;
             setPen(col, (short)lw, P_SOLID);
             PNT a; a.set(0, 0.0f); a.h = pane.left; a.v = (short)ys[j]; a.setDrawPosition();
             PNT b; b.set(0, 0.0f); b.h = pane.right; b.v = (short)ys[j]; b.drawLineTo();
         }
         const COLOR bg = getBackgroundColor();
+        s->shrunk = s->spread = 0;
         for (size_t j = 0; j < idx.size(); ++j) {                          // then the badges on top: name + price, right-justified
             const COLOR col = (COLOR)L[idx[j]].col;
-            RCT rc; rc.set((short)xs[j], (short)(ys[j] - h / 2), (short)(xs[j] + ws[j]), (short)(ys[j] + h / 2));
+            FONT fj = ft; fj.size = (short)slot[j].font; setFont(fj);
+            const int w = (int)getTextWidth(txt[j].c_str(), -1) + 2 * padX, h = slot[j].h, yc = slot[j].y;
+            const int x1 = pane.right - 3, x0 = x1 - w;
+            if (slot[j].font < baseFont) ++s->shrunk;
+            if (yc != ys[j]) {                                             // spread off its line: a short tick from the badge to its line
+                ++s->spread; setPen(col, 1, P_SOLID);
+                PNT a; a.set(0, 0.0f); a.h = (short)(x0 - 6); a.v = (short)ys[j]; a.setDrawPosition();
+                PNT b; b.set(0, 0.0f); b.h = (short)x0; b.v = (short)yc; b.drawLineTo();
+            }
+            RCT rc; rc.set((short)x0, (short)(yc - h / 2), (short)x1, (short)(yc + h / 2));
             rc.draw(1, col, bg, DRAW_OPAQUE, PAT_SOLID);
             setTextColor((COLOR)dpaudit::liftForText(col));                 // a dark line colour (his pure blue) lifted to read on black
             rc.drawText(txt[j].c_str(), true, false);
         }
+        setFont(ft);
         writeStatus(*s, L, idx.size());
     } catch (...) {}
     return RTX_OK;
@@ -213,6 +226,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Key Levels - for hourly charts. A line across the chart at each key level, with its name and price in a badge at the right edge. Price levels: prior full (PFH / PFL), prior day (PDH / PDL), prior week (PWH / PWL), this week (CWH / CWL), overnight (ONH / ONL), London (LonHI / LonLO), Asia (AsiaHI / AsiaLO). Volume levels: prior day POC (DPoc), value area (VAH / VAL), prior week POC (WPoc). MenthorQ levels (CR / PS / HVL / G) are off by default - tick the box to show them. No Open. Levels on one price share one line (PFH \xB7 PDH). The numbers are the ones lsDealerProfile computes on the market's 3-min chart (it must be open). Example: ES 60-min - an orange line at 7710.25 with the badge PDL  7710.25.");
-    p->setVersion("1.0.0");   // KL_VERSION
+    p->setVersion("1.1.0");   // KL_VERSION
     return p;
 }

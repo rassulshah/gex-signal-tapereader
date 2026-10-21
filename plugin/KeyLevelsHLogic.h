@@ -1,4 +1,4 @@
-// KeyLevelsHLogic.h (lsKeyLevels 1.0.0, 2026-10-20): the pure logic of the Key Levels indicator for hourly charts - which levels show,
+// KeyLevelsHLogic.h (lsKeyLevels 1.1.0, 2026-10-21: layoutStack - one right edge, a crowded group shrinks its font, then spreads; was 1.0.0, 2026-10-20): the pure logic of the Key Levels indicator for hourly charts - which levels show,
 // their names and colours, and where the right-justified badges go. No SDK calls (tested on Linux: tests_keylevels/).
 //  - Key / volume levels come from lsFlexLevels\LRA-KeyLevels-<MKT>.csv, written by lsDealerProfile on the market's 3-min chart
 //    ("KEYLV,1,<unix>" then "L|<name>|<price>|<pivot>"; merged names "PFH/PDH"). The same numbers as the 3-min chart, to the tick.
@@ -142,5 +142,49 @@ inline std::vector<int> placeRight(const std::vector<int>& y, const std::vector<
         x[i] = right - w[i]; placed.push_back(i);
     }
     return x;
+}
+
+// (1.1.0, Rassul 2026-10-21 09:26 CT "sometimes the levels are close to each other so you need to make the badges dynamic so they not
+// move left and right messing up the alignment, instead you can make the badge smaller or the font smaller and adjust as necessary")
+// ONE right edge for every badge (never stepped left). Badges whose rows would overlap form a group; the group shrinks its font
+// (base -> minFont) until its rows fit at their own lines; only if they still cannot fit at minFont are the group's badges spread up /
+// down just enough (centred on the group, inside the pane) - each stays beside its own line. Badges away from a crowd keep the base size.
+struct Slot { int y = 0; int font = 0; int h = 0; };
+inline int badgeH(int font, int base) { return font + (font >= base ? 6 : 4); }
+inline std::vector<Slot> layoutStack(const std::vector<int>& yIn, int baseFont, int minFont, int top, int bottom) {
+    const size_t n = yIn.size(); std::vector<Slot> out(n);
+    if (!n) return out;
+    if (minFont > baseFont) minFont = baseFont;
+    std::vector<size_t> ord(n); for (size_t i = 0; i < n; ++i) ord[i] = i;
+    std::stable_sort(ord.begin(), ord.end(), [&](size_t a, size_t b) { return yIn[a] < yIn[b]; });
+    const int hBase = badgeH(baseFont, baseFont);
+    size_t a = 0;
+    while (a < n) {                                        // a group = a chain of badges closer than one base badge height
+        size_t b = a;
+        while (b + 1 < n && yIn[ord[b + 1]] - yIn[ord[b]] < hBase) ++b;
+        int font = baseFont;
+        for (; font > minFont; --font) {                   // the largest font whose rows fit at their own lines
+            const int hh = badgeH(font, baseFont); bool fits = true;
+            for (size_t k = a; k < b; ++k) if (yIn[ord[k + 1]] - yIn[ord[k]] < hh) { fits = false; break; }
+            if (fits) break;
+        }
+        const int hh = badgeH(font, baseFont);
+        std::vector<int> yy; for (size_t k = a; k <= b; ++k) yy.push_back(yIn[ord[k]]);
+        bool fits = true; for (size_t k = 1; k < yy.size(); ++k) if (yy[k] - yy[k - 1] < hh) { fits = false; break; }
+        if (!fits) {                                       // still overlapping at the smallest font: spread up / down, centred on the group
+            std::vector<int> p(yy.size()); p[0] = yy[0];
+            for (size_t k = 1; k < yy.size(); ++k) p[k] = std::max(yy[k], p[k - 1] + hh);
+            long long shiftSum = 0; for (size_t k = 0; k < yy.size(); ++k) shiftSum += p[k] - yy[k];
+            int shift = (int)(shiftSum / (long long)yy.size());
+            for (size_t k = 0; k < p.size(); ++k) p[k] -= shift;
+            if (p.front() - hh / 2 < top) { const int d = top - (p.front() - hh / 2); for (int& v : p) v += d; }
+            if (p.back() + hh / 2 > bottom) { const int d = p.back() + hh / 2 - bottom; for (int& v : p) v -= d; }
+            for (size_t k = 1; k < p.size(); ++k) if (p[k] < p[k - 1] + hh) p[k] = p[k - 1] + hh;   // keep the order after a clamp
+            yy = p;
+        }
+        for (size_t k = a; k <= b; ++k) { Slot& o = out[ord[k]]; o.y = yy[k - a]; o.font = font; o.h = hh; }
+        a = b + 1;
+    }
+    return out;
 }
 } // namespace klh
