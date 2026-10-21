@@ -102,7 +102,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.19.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.19.1"          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
 static const bool BBA_HOVERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
@@ -273,13 +273,31 @@ public:
     virtual int mouse(RTX_EVENT* e);
     // (1.19.0, Rassul 21:51) the settings window: filled from / saved to lsFlexLevels\BigBidAsk.settings2-<MKT>.txt (SettingsHost.h)
     virtual int parmsLoad(void) {
+        rawLog("parmsLoad");
         if (!ss::inDialog(this)) return RTX_OK;
         ss::Store* st = dialogStore(); if (!st) return RTX_OK;
-        ss::fillDialog(this, bbaset::spec(), bbaIds(), st->load(ss::marketIndex(dlgMkt_), steadyMs(), true), snap_);
+        const ss::Values F = st->load(ss::marketIndex(dlgMkt_), steadyMs(), true);
+        ss::fillDialog(this, bbaset::spec(), bbaIds(), F, snap_);
+        dlgLog("FILL", F, ss::dialogNow(this, bbaset::spec(), bbaIds(), F));   // (1.19.1) what was filled and what the window reads back
         return RTX_OK;
     }
-    virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, bbaset::spec(), bbaIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
+    virtual int parmsApply(void) { rawLog("parmsApply"); saveSettings(); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { rawLog(("parmsUpdt " + std::to_string(i)).c_str()); ss::onUpdate(this, bbaset::spec(), bbaIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
+    // (1.19.1) every settings-window call as IRT makes it: in the window or not, the bar size label, the ids and the raw control reads
+    void rawLog(const char* what) {
+        const std::string f = flexDir(); if (f.empty()) return;
+        const std::string mkt = chartMarket(); const char* pl = getPeriodicityLabel();
+        const std::string p = f + BBA_SEP "BigBidAsk.dialog2-" + (mkt.empty() ? std::string("XX") : mkt) + ".txt";
+        std::vector<std::string> keep; { std::ifstream in(p.c_str()); std::string ln; while (std::getline(in, ln)) keep.push_back(ln); }
+        if (keep.size() > 199) keep.erase(keep.begin(), keep.end() - 199);
+        const ss::Ids& I = bbaIds(); std::string o = std::to_string(std::time(nullptr)) + ",CALL," + what + ",inDialog " + (ss::inDialog(this) ? "1" : "0") + ",period '" + (pl ? pl : "") + "',count " + std::to_string(getParameterCount()) + ",ids";
+        for (int v : I.id) o += " " + std::to_string(v);
+        const ss::Spec& SP = bbaset::spec();
+        if ((int)I.id.size() == SP.n) { const ss::Values R = ss::dialogNow(this, SP, I, ss::defaults(SP, -1));
+            for (int k = 0; k < SP.n; ++k) o += std::string(",") + SP.rows[k].key + "=" + ss::fmt(SP.rows[k], R.v[(size_t)k]); }
+        keep.push_back(o);
+        std::ofstream out(p.c_str(), std::ios::trunc); for (const auto& l : keep) out << l << "\n";
+    }
     static ss::Ids& bbaIds() { static ss::Ids I; return I; }
     std::string chartMarket() { char b[64]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const int m = ss::marketOfRoot(rs ? rs : ""); if (m < 0) { const char* sy = getSymbol(); const int m2 = ss::marketOfRoot(sy ? sy : ""); return m2 < 0 ? std::string() : ss::MARKETS[m2]; } return ss::MARKETS[m]; }
     static std::string setPath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() || mkt.empty() ? std::string() : f + BBA_SEP "BigBidAsk.settings2-" + mkt + ".txt"; }
@@ -292,9 +310,31 @@ public:
     void saveSettings() {
         if (!ss::inDialog(this)) return;
         ss::Store* st = dialogStore(); if (!st) return;
-        const ss::Values V = ss::readDialog(this, bbaset::spec(), bbaIds(), st->load(ss::marketIndex(dlgMkt_), steadyMs(), true), snap_);
+        const ss::Values file = st->load(ss::marketIndex(dlgMkt_), steadyMs(), true);
+        ss::Values V = ss::readDialog(this, bbaset::spec(), bbaIds(), file, snap_);
+        // (1.19.1, Rassul 22:21 "i am trying to increase the font size and it doesn't work": his ES file was saved twice with font 7 while
+        // the window showed 10) the NUMBER boxes are saved exactly as the window shows them when the value is valid - the "untouched
+        // control keeps the file's value" rule lost his typed size when IRT re-filled / re-read the window around OK. An invalid number
+        // (e.g. a blank or 0 Biggest in) keeps the file's value. Colours keep the layer's rule (a never-filled swatch must not save black).
+        const ss::Values now = ss::dialogNow(this, bbaset::spec(), bbaIds(), file);
+        const ss::Spec& SP = bbaset::spec();
+        if (V.why.find("refused") == std::string::npos)
+            for (int k = 0; k < SP.n; ++k) if (SP.rows[k].type == ss::T_INT && ss::valid(SP.rows[k], now.v[(size_t)k])) V.v[(size_t)k] = now.v[(size_t)k];
         makeDir(flexDir());
-        if (st->save(V)) snap_.take(ss::dialogNow(this, bbaset::spec(), bbaIds(), V));
+        const bool ok = st->save(V);
+        dlgLog(ok ? "SAVED" : "NOT SAVED", V, now);
+        if (ok) snap_.take(now);
+    }
+    // (1.19.1) lsFlexLevels\BigBidAsk.dialog2-<MKT>.txt: every fill / save with the window's read-back (the last 200 lines)
+    void dlgLog(const char* what, const ss::Values& V, const ss::Values& shown) {
+        const std::string f = flexDir(); if (f.empty() || dlgMkt_.empty()) return;
+        const std::string p = f + BBA_SEP "BigBidAsk.dialog2-" + dlgMkt_ + ".txt";
+        std::vector<std::string> keep; { std::ifstream in(p.c_str()); std::string ln; while (std::getline(in, ln)) keep.push_back(ln); }
+        if (keep.size() > 199) keep.erase(keep.begin(), keep.end() - 199);
+        const ss::Spec& SP = bbaset::spec(); std::string o = std::to_string(std::time(nullptr)) + "," + what + "," + BBA_VERSION;
+        for (int k = 0; k < SP.n; ++k) { o += std::string(",") + SP.rows[k].key + "=" + ss::fmt(SP.rows[k], V.v[(size_t)k]) + "/shown " + ss::fmt(SP.rows[k], shown.v[(size_t)k]); }
+        keep.push_back(o);
+        std::ofstream out(p.c_str(), std::ios::trunc); for (const auto& l : keep) out << l << "\n";
     }
     void pump(bool fromDraw);
     void release() { BBState* S = slot_.get(this, false); if (S && !S->busy) { try { S->lastRecordMs = -1; flush(*S); } catch (...) {} } slot_.release(this); }   // what is decided is written before the state goes
@@ -479,7 +519,12 @@ void BigBidAsk::compute(BBState& S, bool fromDraw) {
     // scrolled): the read starts at the first closed candle of that span that is not final yet (900 reads a pass), or at the view if earlier
     const int histBars = (int)std::min<long long>(count, 8LL * 86400 / std::max(60, S.spb > 0 ? S.spb : 180) + 200);
     int firstOpen = (int)count - 1;
-    for (int i = std::max(0, (int)count - histBars); i < (int)count - 1; ++i) if (!S.fin.count((long long)times[i])) { firstOpen = i; break; }
+    // (1.19.1, Rassul 22:23 "when i copy and paste the indicator to other markets like nq it doesn't work") the LAST 400 candles first:
+    // a new chart drew nothing until all 8 sessions were read (NQ: minutes of missing volume-at-price retries). The prints need only the
+    // 50 candles before them; the older sessions (the Big Lot box) are read after the recent ones are final.
+    for (int i = std::max(0, (int)count - 1 - 400); i < (int)count - 1; ++i) if (!S.fin.count((long long)times[i])) { firstOpen = i; break; }
+    if (firstOpen == (int)count - 1)
+        for (int i = std::max(0, (int)count - histBars); i < (int)count - 1; ++i) if (!S.fin.count((long long)times[i])) { firstOpen = i; break; }
     const int from = std::min(std::max(0, vs - LEAD), firstOpen), lo0 = std::max(0, from - 140);   // (1.3.0) priors of the same time of day reach further back
     std::vector<bba::Facts> seq; seq.reserve((size_t)(count - lo0));
     int reads = 0; bool capped = false;
@@ -1383,7 +1428,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (BBA_HOVERS ? TRACK_MOUSE : 0) | VAP_REQUIRED);   // (1.17.1) no TRACK_MOUSE while the hovers are off
-    p->setDescription("LRA Big Bid / Ask 1.19.0: on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.19.0");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask 1.19.1: on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
+    p->setVersion("1.19.1");   // BBA_VERSION
     return p;
 }
