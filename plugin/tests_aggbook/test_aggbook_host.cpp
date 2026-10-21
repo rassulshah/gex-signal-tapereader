@@ -380,7 +380,24 @@ int main() {
             CHECK(q && ring && ring->x > q->x && ring->x < S->lastBox.r && ring->y >= S->lastBox.t - 2 && ring->y < S->lastBox.t + 20, "(1.15.0) the info icon right of it, inside the box");
             CHECK(e->infoIcon.r > e->infoIcon.l && e->infoIcon.l >= S->lastBox.l && e->infoIcon.r <= S->lastBox.r, "(1.15.0) the icon's hover rectangle moved with it (hover keeps working)"); }
         e->dtH[std::make_pair((int)dt::LOW, k)].H = false; h.draws.clear(); p->draw();
-        CHECK(text(h, "A?") != nullptr && text(h, "Absorbed only") != nullptr, "(1.15.0) decided without a counter: A? only, Counter = Absorbed only"); }
+        CHECK(text(h, "A?") != nullptr && text(h, "Absorbed only") != nullptr, "(1.15.0) decided without a counter: A? only, Counter = Absorbed only");
+        // (1.16.0, Top Defender #4) the re-test: the engine's resting lots in the zone are read; a decided L on the candle -> one badge A|L?, box Re-test
+        S->e.restAdd(off::BID, 27990, 300); S->e.restAdd(off::BID, 27995, 50);
+        CHECK(p->restIn(*S, dt::LOW, 27988, 27992) == 300 && p->restIn(*S, dt::LOW, 27988, 27995) == 350, "(1.16.0) restIn sums the defenders' resting lots in the zone");
+        {   dt::Retest q; q.t = k; q.side = dt::LOW; q.res = 'L'; q.ratio = 1.9; q.rest = 950; q.at = k; q.state = 2; e->dtQ[std::make_pair((int)dt::LOW, k)] = q; }
+        e->dtH[std::make_pair((int)dt::LOW, k)].H = true;
+        h.draws.clear(); p->draw();
+        if (const char* dp = std::getenv("D4_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
+        CHECK(text(h, "A|H|L?", 0x22C55E) != nullptr && text(h, "A|H?") == nullptr, "(1.16.0) one combined badge A|H|L? (font fits), in the defenders' green");
+        CHECK(text(h, "Re-test") != nullptr && text(h, "Reloaded 1.9x") != nullptr, "(1.16.0) the box row Re-test: Reloaded 1.9x");
+        {   const mock::Draw* rr = text(h, "Re-test"); const mock::Draw* cc = text(h, "Counter"); CHECK(rr && cc && rr->y > cc->y && rr->y < S->lastBox.b, "(1.16.0) Re-test under Counter, inside the box"); }
+        e->dtQ[std::make_pair((int)dt::LOW, k)].res = 'X'; e->dtQ[std::make_pair((int)dt::LOW, k)].ratio = 0.2; e->dtH[std::make_pair((int)dt::LOW, k)].H = false;
+        h.draws.clear(); p->draw();
+        CHECK(text(h, "A|X?") != nullptr && text(h, "Empty 0.2x") != nullptr, "(1.16.0) X: badge A|X?, box Empty 0.2x");
+        {   const std::string tf0 = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
+            { std::ofstream f((flex + "\\BookFlow\\ES-60-turns.csv").c_str(), std::ios::app); dt::Retest q; q.t = k; q.side = dt::LOW; q.res = 'L'; q.ratio = 1.25; q.rest = 625; q.at = k; f << dt::qLineOf(q) << "\n"; }
+            e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb);
+            CHECK(e->dtQ.count(std::make_pair((int)dt::LOW, k)) == 1 && e->dtQ[std::make_pair((int)dt::LOW, k)].res == 'L' && std::fabs(e->dtQ[std::make_pair((int)dt::LOW, k)].ratio - 1.25) < 1e-9, "(1.16.0) after a reload the Q line is read back (no repaint)"); (void)tf0; } }
     {   // (1.13.0) the touch rule in the engine: 40 lots hit at 7000.00 in the first 20 s, 2 in 20-60 s, 60 of 80 resting lots stay -> attack died
         off::Engine g; g.adMedian = 0.095; g.curKey = 77; g.restAdd(off::BID, 28000, 80);
         g.touchFill(off::BID, 28000, 30, 1000, 80); g.restAdd(off::BID, 28000, -30);

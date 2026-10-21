@@ -25,7 +25,7 @@
 #include <limits>
 
 namespace dt {
-static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-10-21 Rassul approved defender5-mockup-v2 11:25 CT "build this") H = the defenders HIT BACK after an A (counterDecide), the H line in the turns file, the pane badge text "A|H" (badgeText), the Counter row text;   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
+static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-10-21 Rassul approved defender4-mockup-v1 + L / X 11:32 CT) Top Defender #4: the RE-TEST of the refill level (retestStep): price moved >= 0.5 ATR away, then came back into the zone within 15 min; the defenders' RESTING lots in the zone at the close BEFORE it came back vs the market normal -> L (reloaded) / X (empty) / N; Q lines in the turns file; badge "A|H|L"; box row "Re-test";   // (1.3.0, 2026-10-21 Rassul approved defender5-mockup-v2 11:25 CT "build this") H = the defenders HIT BACK after an A (counterDecide), the H line in the turns file, the pane badge text "A|H" (badgeText), the Counter row text;   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
 // the market's median slowdown at a fresh-price touch ((lots/s 20-60 s) / (lots/s 0-20 s + 0.05)), Databento MBO Oct 5 / 7 / 9 (wall4.py)
 inline double adMedianOf(const std::string& m) {
     return m == "ES" ? 0.095 : m == "NQ" ? 0.029 : m == "CL" ? 0.057 : m == "GC" ? 0.0 : m == "HG" ? 0.0 : m == "NG" ? 0.032 : (m == "EU" || m == "6E") ? 0.067 : 0.05;
@@ -304,6 +304,74 @@ inline std::string counterText(const Counter& c) {
     return std::string("Hit back ") + b;
 }
 inline std::string tagsOfH(const Line& L, bool H) { std::string s = "R"; if (SHOW_E && L.E) s += " E"; if (L.A) s += " A"; if (H && L.A) s += " H"; return s + " ?"; }
+
+// ---- (1.4.0) L / X: is the defended level REFILLED on the RE-TEST? -------------------------------------------------------------------
+// MBO roadmap Top Defender #4 (Rassul 2026-10-21, defender4-mockup-v1.png; letters L = reloaded, X = empty, 11:32 CT). Research + test:
+// /home/claude/pt/d4/Defender4-findings.md. A RE-TEST = after the turn, price first moves RT_AWAY ATR away from the R line (within RT_SEC
+// of the turn), then trades back into the zone (within max(RT_ZONE ATR, 2 ticks) of the line) within RT_SEC of leaving. The read: the
+// defenders' RESTING lots in the zone (the line +- the zone, RT_DEPTH ticks toward price) at the CLOSE BEFORE the re-test candle (price was
+// still away - no look-ahead) vs the market's normal resting lots per price near the top of that side x RT_PRICES:
+// ratio >= RT_L -> L (reloaded), <= RT_X -> X (empty), else N (shown as the ratio only). Decided once at the re-test candle's close,
+// never repainted, "?" until proven. It answers "are they defending?" (the size is there or not); the test found it does NOT predict the
+// hold (heavier waiting size went with MORE breaks on the one full-book day) - a read of the defenders, not an entry trigger.
+static const double RT_AWAY = 0.5, RT_ZONE = 0.1, RT_L = 1.0, RT_X = 0.35;
+static const int RT_ZONE_MIN = 2, RT_DEPTH = 4, RT_PRICES = 5, RT_SEC = 900;
+struct Retest {
+    long long t = 0; int side = -1; long long linePx = 0;      // the turn (its key), its side, the R line (ticks)
+    int state = 0;                                              // 0 = waiting for price to leave, 1 = left (watching for the return), 2 = decided
+    long long leftAt = 0;                                       // the candle (key) where price had left
+    long long restBefore = -1;                                  // the defenders' resting lots in the zone at the last close (-1 = unknown)
+    char res = 0; double ratio = 0; long long rest = 0, at = 0; // the decision: 'L' / 'X' / 'N', the ratio, the lots, the re-test candle
+};
+inline long long rtZone(double atrTicks) { const long long z = (long long)std::llround(RT_ZONE * atrTicks); return std::max<long long>(z, RT_ZONE_MIN); }
+// the price range (ticks) whose resting lots count: LOW (bids) [line - zone, line + RT_DEPTH], HIGH (offers) [line - RT_DEPTH, line + zone]
+inline void rtRange(const Retest& r, double atrTicks, long long& lo, long long& hi) {
+    const long long z = rtZone(atrTicks);
+    if (r.side == HIGH) { lo = r.linePx - RT_DEPTH; hi = r.linePx + z; } else { lo = r.linePx - z; hi = r.linePx + RT_DEPTH; }
+}
+inline char rtClass(double ratio) { return ratio >= RT_L ? 'L' : (ratio <= RT_X ? 'X' : 'N'); }
+// one CLOSED candle q (sec = seconds since the turn candle's key, or since leaving once state == 1); restNow = the resting lots in the zone
+// measured at THIS close (stored for the next candle), normal = the market's normal resting lots per price (> 0).
+// returns 1 = decided (r.res set), 0 = keep watching, -1 = over (expired / closed through before a re-test), -2 = no resting size known
+inline int retestStep(Retest& r, const Candle& q, double atrTicks, long long restNow, double normal) {
+    if (r.state == 2 || !q.ok || atrTicks <= 0) return r.state == 2 ? 1 : 0;
+    const bool low = r.side != HIGH;
+    if (r.state == 0) {
+        if (q.t - r.t > RT_SEC) return -1;
+        if (low ? q.c < r.linePx : q.c > r.linePx) return -1;                       // closed through before it ever left
+        const double away = (double)(low ? q.h - r.linePx : r.linePx - q.l);   // (not "far": a Windows macro)
+        if (away >= RT_AWAY * atrTicks) { r.state = 1; r.leftAt = q.t; }
+        r.restBefore = restNow; return 0;
+    }
+    if (q.t - r.leftAt > RT_SEC) return -1;
+    const long long z = rtZone(atrTicks);
+    const bool back = low ? q.l <= r.linePx + z : q.h >= r.linePx - z;
+    if (!back) { if (low ? q.c < r.linePx : q.c > r.linePx) return -1; r.restBefore = restNow; return 0; }
+    if (r.restBefore < 0 || !(normal > 0)) return -2;
+    r.rest = r.restBefore; r.ratio = (double)r.restBefore / (normal * RT_PRICES); r.res = rtClass(r.ratio); r.at = q.t; r.state = 2;
+    return 1;
+}
+// the Q line in the turns file: Q|turn_key|side|L/X/N|resting_lots|ratio_x100|re-test_key
+inline std::string qLineOf(const Retest& r) { std::ostringstream o; o << "Q|" << r.t << '|' << r.side << '|' << (r.res ? r.res : 'N') << '|' << r.rest << '|' << (long long)std::llround(r.ratio * 100.0) << '|' << r.at; return o.str(); }
+inline bool parseQ(const std::string& s, Retest& R) {
+    if (s.size() < 2 || s[0] != 'Q' || s[1] != '|') return false;
+    std::vector<std::string> f; std::string cur; for (size_t i = 0; i <= s.size(); ++i) { if (i == s.size() || s[i] == '|') { f.push_back(cur); cur.clear(); } else if (s[i] != '\r') cur += s[i]; }
+    if (f.size() != 7 || f[3].size() != 1 || (f[3][0] != 'L' && f[3][0] != 'X' && f[3][0] != 'N')) return false;
+    Retest o; int side = -1; long long r100 = 0;
+    if (!parseLongLong(f[1], o.t) || !parseInt(f[2], side) || (side != LOW && side != HIGH) || !parseLongLong(f[4], o.rest) || o.rest < 0 || !parseLongLong(f[5], r100) || r100 < 0 || !parseLongLong(f[6], o.at)) return false;
+    o.side = side; o.res = f[3][0]; o.ratio = (double)r100 / 100.0; o.state = 2; R = o; return true;
+}
+// the box's Re-test row (defending side's column): "Reloaded 1.9x" / "Empty 0.2x" / "1.0x" (between: the ratio only)
+inline std::string retestText(const Retest& r) {
+    char b[32]; std::snprintf(b, sizeof b, "%.1fx", r.ratio);
+    return r.res == 'L' ? std::string("Reloaded ") + b : (r.res == 'X' ? std::string("Empty ") + b : std::string(b));
+}
+// (1.4.0) the badge with the re-test letter: "A|H|L"; at most 3 letters
+inline std::string badgeText4(bool A, bool H, char Q, bool E) {
+    std::string s = badgeText(A, H, E);
+    if (Q == 'L' || Q == 'X') { if (!s.empty()) s += "|"; s += Q; }
+    return s;
+}
 
 // ---- the line's life on the chart (lsDefenseLines) --------------------------------------------------------------------------------------
 // from the turn candle forward: ends at the first candle that CLOSES through the line (broken, drawn faded with x), when the next line

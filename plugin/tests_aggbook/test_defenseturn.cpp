@@ -113,7 +113,38 @@ int main() {
         CHECK(dt::fitFont(w("A?"), 20, 9, 6) == 9 && dt::fitFont(w("A|H?"), 25, 9, 6) == 8 && dt::fitFont(w("A|H|E?"), 25, 9, 6) == 6, "the font shrinks so 1 / 2 / 3 letters fit the candle");
         std::vector<dt::Candle> at = { K(1, 100, 0, 0), K(2, 100, 0, 0) }; at[1].h = 106; at[1].l = 98; CHECK(std::fabs(dt::atrOf(at) - 8.0) < 1e-9, "ATR from the candles");
         dt::Line L; L.A = true; CHECK(dt::tagsOfH(L, true) == "R A H ?" && dt::tagsOfH(L, false) == "R A ?", "the line label adds H");
-        CHECK(std::string(dt::VERSION) == "1.3.0", "DefenseTurn 1.3.0");
+        CHECK(std::string(dt::VERSION) == "1.4.0", "DefenseTurn 1.4.0");
+    }
+    {   // (1.4.0) Top Defender #4: the RE-TEST of the R line -> L (reloaded) / X (empty) / N, decided once at the re-test candle's close
+        auto C3 = [](long long t, long long h, long long l, long long c) { dt::Candle q; q.t = t; q.o = c; q.h = h; q.l = l; q.c = c; q.ok = true; return q; };
+        const double atr = 8.0;                                 // zone = max(0.8, 2) = 2 ticks; away = 4 ticks
+        dt::Retest r; r.t = 0; r.side = dt::LOW; r.linePx = 1000;
+        CHECK(dt::rtZone(atr) == 2, "zone = max(0.1 ATR, 2 ticks)");
+        long long lo = 0, hi = 0; dt::rtRange(r, atr, lo, hi); CHECK(lo == 998 && hi == 1004, "LOW: the bids from line - zone to line + 4 ticks count");
+        CHECK(dt::retestStep(r, C3(180, 1003, 1001, 1002), atr, 500, 100) == 0 && r.state == 0, "not yet 0.5 ATR away: waiting");
+        CHECK(dt::retestStep(r, C3(360, 1006, 1002, 1005), atr, 900, 100) == 0 && r.state == 1 && r.leftAt == 360, "6 ticks above (>= 4): price LEFT");
+        CHECK(dt::retestStep(r, C3(540, 1008, 1004, 1007), atr, 600, 100) == 0 && r.restBefore == 600, "still away: the resting lots at this close are kept (600)");
+        CHECK(dt::retestStep(r, C3(720, 1006, 1001, 1003), atr, 50, 100) == 1 && r.res == 'L' && r.rest == 600 && std::fabs(r.ratio - 1.2) < 1e-9 && r.at == 720,
+              "back within the zone: decided from the lots BEFORE the return (600 / (100 x 5) = 1.2x -> L), not the 50 at this close");
+        dt::Retest x; x.side = dt::LOW; x.linePx = 1000; dt::retestStep(x, C3(180, 1006, 1001, 1005), atr, 100, 100);
+        CHECK(dt::retestStep(x, C3(360, 1004, 999, 1001), atr, 80, 100) == 1 && x.res == 'X' && std::fabs(x.ratio - 0.2) < 1e-9, "100 / 500 = 0.2x <= 0.35: X (empty)");
+        dt::Retest n; n.side = dt::LOW; n.linePx = 1000; dt::retestStep(n, C3(180, 1006, 1001, 1005), atr, 300, 100);
+        CHECK(dt::retestStep(n, C3(360, 1004, 999, 1001), atr, 80, 100) == 1 && n.res == 'N', "0.6x: between (N, ratio only)");
+        dt::Retest b; b.side = dt::LOW; b.linePx = 1000;
+        CHECK(dt::retestStep(b, C3(180, 1002, 997, 998), atr, 100, 100) == -1, "closed through the line before it left: over");
+        dt::Retest e; e.side = dt::LOW; e.linePx = 1000; dt::retestStep(e, C3(180, 1006, 1001, 1005), atr, 100, 100);
+        CHECK(dt::retestStep(e, C3(180 + dt::RT_SEC + 1, 1006, 1004, 1005), atr, 100, 100) == -1, "no return within 15 min of leaving: over");
+        dt::Retest u; u.side = dt::LOW; u.linePx = 1000; dt::retestStep(u, C3(180, 1006, 1001, 1005), atr, 100, 0);
+        CHECK(dt::retestStep(u, C3(360, 1004, 999, 1001), atr, 80, 0) == -2, "no market normal yet: no decision (never guessed)");
+        dt::Retest h; h.side = dt::HIGH; h.linePx = 2000; dt::rtRange(h, atr, lo, hi); CHECK(lo == 1996 && hi == 2002, "HIGH: the offers from line - 4 to line + zone");
+        dt::retestStep(h, C3(180, 1999, 1994, 1995), atr, 700, 100);
+        CHECK(h.state == 1 && dt::retestStep(h, C3(360, 1999, 1995, 1997), atr, 10, 100) == 1 && h.res == 'L', "HIGH: left 6 below, back within 2 ticks: L from the 700 before");
+        dt::Retest R2; CHECK(dt::parseQ(dt::qLineOf(r), R2) && R2.res == 'L' && R2.rest == 600 && std::fabs(R2.ratio - 1.2) < 1e-9 && R2.at == 720 && R2.side == dt::LOW, "Q line round trip (restart redraws the same)");
+        CHECK(!dt::parseQ("Q|1|0|Z|5|5|5", R2) && !dt::parseQ("Q|x", R2) && !dt::parseQ("H|1|0|1|1|1|1", R2), "garbled Q lines refused");
+        CHECK(dt::retestText(r) == "Reloaded 1.2x" && dt::retestText(x) == "Empty 0.2x" && dt::retestText(n) == "0.6x", "the Re-test row text");
+        CHECK(dt::badgeText4(true, true, 'L', false) == "A|H|L" && dt::badgeText4(false, false, 'X', false) == "X" && dt::badgeText4(true, false, 'N', false) == "A", "badge A|H|L / X; N adds no letter");
+        auto w2 = [](const std::string& s) { return [s](int pt) { return (int)(s.size() * pt * 0.62) + 4; }; };
+        CHECK(dt::fitFont(w2("A|H|L?"), 26, 9, 6) <= 7, "3 letters + ? shrink the font to fit");
     }
     printf("DefenseTurn: %d passed, %d failed\n", p, f);
     return f ? 1 : 0;
