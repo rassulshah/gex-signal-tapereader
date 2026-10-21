@@ -151,8 +151,9 @@ int main() {
         Chart c(b2); c.pump(8, false);
         BBState* S = c.S();
         CHECK(S && S->tiers.count(today) && !S->tiers[today].ok, "[host] 2 complete sessions: learning");
-        bool onlyCat4 = true; for (const auto& e : board(c)) if (((e.flag >> 1) & 7) != 4) onlyCat4 = false;
-        CHECK(onlyCat4, "[host] learning: only category 4 (fixed size) events");
+        // (1.18.0) prints no longer depend on the tiers: the 10-candle rule works while the tiers are still learning
+        bool rule = true; for (const auto& e : board(c)) if (((e.flag >> 1) & 7) != 1 || ((e.flag >> 8) & 0x7F) != 10) rule = false;
+        CHECK(rule, "[host] learning: events are the 10-candle rule (category 1, n = 10)");
     }
     {   const std::string src = [] { std::ifstream f("../BigBidAsk.cpp", std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }();
         CHECK(std::string(BBA_VERSION) == bba::VERSION && src.find(std::string("p->setVersion(\"") + bba::VERSION + "\")") != std::string::npos, "[ver] one version everywhere (compared, never typed)");

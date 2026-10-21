@@ -162,12 +162,13 @@ static void setLogic() {
         const bba::Settings f = bba::fixedSettings(m);
         bool ok = f.div == 0 && f.box && !f.dim && !f.circle && f.boxBid == 0xEF4444 && f.boxAsk == 0x22C55E && f.skipFirst == 15 && f.skipLast == 15 && !f.rthOnly
                && !f.keyOn && !f.gamOn && !f.volOn && f.keyMask == 0 && f.gamMask == 0 && f.volMask == 0 && f.statsChart && f.statsPos == 9 && !f.cat[3].on;
-        const int n[3] = { 5, 10, 20 }, sh[3] = { bba::SH_ALL, bba::SH_PBBO, bba::SH_PBBO }; const unsigned col[3] = { 0x00FFFF, 0xFFFFFF, 0xFFFFFF };
-        for (int k = 0; k < 3; ++k) ok = ok && f.cat[k].on && f.cat[k].n == n[k] && f.cat[k].lots == 0 && f.cat[k].font == 8 && f.cat[k].show == sh[k] && f.cat[k].bid == col[k] && f.cat[k].ask == col[k];
-        CHECK(ok, std::string("[fixed] ") + m + ": BL5 all cyan / BL10 + BL20 Trend PB + BO white, font 8, boxes red / green, no circle / dim / levels, skip 15 / 15, box on, no category 4");
+        const int n[3] = { 5, 10, 20 }, sh[3] = { bba::SH_ALL, bba::SH_PBBO, bba::SH_PBBO }; const unsigned col[3] = { 0xFFFFFF, 0xFFFFFF, 0xFFFFFF };   // (1.18.0) all white, font 7
+        for (int k = 0; k < 3; ++k) ok = ok && f.cat[k].on && f.cat[k].n == n[k] && f.cat[k].lots == 0 && f.cat[k].font == 7 && f.cat[k].show == sh[k] && f.cat[k].bid == col[k] && f.cat[k].ask == col[k];
+        CHECK(ok, std::string("[fixed] ") + m + ": (1.18.0) white numbers, font 7, boxes red / green, no circle / dim / levels, skip 15 / 15, box on, no category 4");
     }
     {   bba::Settings f = bba::fixedSettings("ES"); f.cat[3] = h.cat[3];
-        CHECK(bba::formatSettings(f) == bba::formatSettings(h), "[fixed] = his 17:15 ES file field for field, except category 4 (removed)"); }
+        for (int k = 0; k < 3; ++k) { f.cat[k].font = 8; f.cat[k].bid = f.cat[k].ask = k == 0 ? 0x00FFFF : 0xFFFFFF; }   // (1.18.0) only font / colour changed
+        CHECK(bba::formatSettings(f) == bba::formatSettings(h), "[fixed] = his 17:15 ES file field for field, except category 4 (removed) and 1.18.0 font 7 / white"); }
     {   const bba::Settings f = bba::fixedSettings("ES"); long long zz[4]; bool pass[4] = { true, true, true, true };
         for (int k = 0; k < 4; ++k) zz[k] = f.cat[k].on ? (k == 3 ? (long long)f.cat[3].lots : 100LL * (k + 1)) : 0;
         bool never4 = zz[3] == 0; for (long long vol : { 50LL, 150LL, 999LL, 1000LL, 5000LL, 100000LL }) if (bba::firstCat(zz, vol, pass) == 3) never4 = false;
@@ -325,7 +326,7 @@ int main() {
     setenv("TZ", "UTC", 1); tzset();
     boxLogic(); catLogic(); dockLogic(); keepOutLogic(); setLogic(); hostTests();
     {   const std::string src = [] { std::ifstream f("../BigBidAsk.cpp", std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }();
-        CHECK(std::string(BBA_VERSION) == "1.17.1" && std::string(bba::VERSION) == "1.17.1" && src.find("p->setVersion(\"1.17.1\")") != std::string::npos, "[ver] 1.17.1 everywhere (no settings)");
+        CHECK(std::string(BBA_VERSION) == "1.18.0" && std::string(bba::VERSION) == "1.18.0" && src.find("p->setVersion(\"1.18.0\")") != std::string::npos, "[ver] 1.18.0 everywhere (no settings)");
         CHECK(src.find("setParameterVersion(7)") != std::string::npos && src.find("ss::registerAll(") == std::string::npos && src.find("\"BigBidAsk.settings-\" +") == std::string::npos, "[ver] parameter version 7, no rows registered, the settings file never opened");
     }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";

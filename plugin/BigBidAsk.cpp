@@ -100,7 +100,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.17.1"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.18.0"          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
 static const bool BBA_HOVERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
@@ -289,6 +289,7 @@ private:
     void statsBuild(BBState& S, long long now);
     template <class H, class L, class C> PickInfo choose(BBState& S, int i, bool closed, int sd, const bba::Pick& p, int ph, const bba::TierSet& T, const PassCtx& X, H& hi, L& lo, C& cl);
     int trendAt(BBState& S, int i);
+    template <class T> bool topN(BBState& S, T& times, int i, int sd, long long vol);   // (1.18.0) the one print rule
     void ensureBars(BBState& S);
     template <class H, class L> void passCtx(BBState& S, H& hi, L& lo, int n, PassCtx& X);
     void logPass(BBState& S, long long now);
@@ -567,7 +568,7 @@ void BigBidAsk::status(BBState& S, long long now) {
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << BBA_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nTICK," << S.tick
-      << "\nSETTINGS,fixed (1.17.0, no settings),categories BL5 all prints / BL10 Trend PB + BO / BL20 Trend PB + BO (no category 4),font " << S.set.cat[0].font
+      << "\nSETTINGS,fixed (1.18.0, no settings),a print = the biggest cell of its side in the last 10 candles (skip first / last 15 min),font " << S.set.cat[0].font
       << ",box " << (S.set.box ? 1 : 0) << ",circle " << (S.set.circle ? 1 : 0) << ",dim " << (S.set.dim ? 1 : 0) << ",divider " << bba::divFor(S.market) << " (market default)"
       << ",skip first / last " << S.set.skipFirst << " / " << S.set.skipLast << " min,levels off,Big Lot box " << (S.set.statsChart ? "on" : "off")
       << "\nLEVELS,gamma " << S.gamWhy << ",volume profiles " << S.vp.size() << " sessions (from bar " << S.volNext << "),candles with levels " << S.lvCache.size()
@@ -815,6 +816,18 @@ void BigBidAsk::passCtx(BBState& S, H& hi, L& lo, int n, PassCtx& X) {
     }
     X.vw = S.vw; X.sd = S.sdv;
 }
+// (1.18.0) the biggest cell of side sd (-1 bid / +1 ask) at candle i beats the same side's biggest cell on EACH of the bba::TOP_N
+// closed candles before it (from the frozen record: never re-judged). A candle before it not read yet = no claim (not drawn).
+template <class T> bool BigBidAsk::topN(BBState& S, T& times, int i, int sd, long long vol) {
+    if (i < bba::TOP_N || vol <= 0) return false;
+    std::vector<long long> prev; prev.reserve(bba::TOP_N);
+    for (int k = i - 1; k >= i - bba::TOP_N; --k) {
+        auto it = S.fin.find((long long)times[k]); if (it == S.fin.end()) return false;
+        const bba::Facts& F = it->second; const bba::Pick& q = sd < 0 ? F.bid : F.ask;
+        prev.push_back(F.valid && q.ok ? q.vol : 0);
+    }
+    return bba::biggestOfLast(prev, vol);
+}
 int BigBidAsk::trendAt(BBState& S, int i) {
     RTARRAYI times(barDateTime); const long long t = (long long)times[i];
     auto it = S.trCache.find(t); if (it != S.trCache.end()) return it->second;
@@ -937,19 +950,11 @@ void BigBidAsk::boardPass(BBState& S, long long now) {
         long days = 0; int endSec = 0; if (!parts(t, days, endSec)) continue;
         const svl::Cls cls = svl::classify(days, endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin); if (cls.kind == svl::NONE) continue;
         if (timeSkipped(set, cls, endSec, S.openMin, S.closeMin)) continue;
-        const bba::TierSet* TS = tierFor(S, cls.sess); if (!TS) continue;
-        const int ph = dayOf(S, endSec / 60) ? 1 : 0;
-        long long minSz = 0; for (int k = 0; k < 4; ++k) { const long long z = set.cat[k].on ? bba::catSizeOf(*TS, ph, set.cat[k]) : 0; if (z > 0 && (minSz == 0 || z < minSz)) minSz = z; }
-        if (minSz <= 0) continue;
-        const int ab = !set.circle ? 0 : bba::absorptionMin(F, minSz);
-        for (int sd = -1; sd <= 1; sd += 2) {
+        for (int sd = -1; sd <= 1; sd += 2) {   // (1.18.0) the chart's one rule: the biggest cell of its side in the last 10 candles
             const bba::Pick& p = sd < 0 ? F.bid : F.ask;
-            if (!p.ok || p.vol < minSz) continue;
-            const PickInfo pi = choose(S, i, true, sd, p, ph, *TS, X, hi, lo, cl);
-            if (pi.cat < 0) continue;
-            const bool circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0);
+            if (!p.ok || !topN(S, times, i, sd, p.vol)) continue;
             sb::Ev e; e.bar = ctSec((RTDATE)t); e.px = (double)p.key * S.tick; e.side = sd; e.val = (double)p.vol;
-            e.flag = (circle ? 1 : 0) | ((pi.cat + 1) << 1) | (pi.lv.empty() ? 0 : 16) | (pi.sweep ? 32 : 0) | (pi.piv ? 64 : 0) | (pi.conf ? 128 : 0) | ((set.cat[pi.cat].n & 0x7F) << 8);
+            e.flag = (1 << 1) | 128 | ((bba::TOP_N & 0x7F) << 8);   // category 1, final; n = 10 (the look-back)
             if (e.bar > 0) ev.push_back(e);
         }
     }
@@ -969,7 +974,7 @@ void BigBidAsk::logPass(BBState& S, long long now) {
     PassCtx X; passCtx(S, hi, lo, (int)count, X);
     const bba::Settings& set = S.set;
     for (int i = from; i < (int)count - 1; ++i) {
-        if (i >= (int)X.sw.conf.size() || !X.sw.conf[i]) break;
+        // (1.18.0) the one rule is final at the candle's close: no pivot wait
         const long long t = (long long)times[i];
         auto it = S.fin.find(t); if (it == S.fin.end() || !it->second.valid) continue;
         const bba::Facts& F = it->second;
@@ -983,7 +988,7 @@ void BigBidAsk::logPass(BBState& S, long long now) {
             if (S.logged.count(key)) continue;
             const bba::Pick& p = sd < 0 ? F.bid : F.ask;
             bool skip = !p.ok || timeSkipped(set, cls, endSec, S.openMin, S.closeMin);   // (1.15.0) the shared time filter (1.13.0 RTH only)
-            PickInfo pi; if (!skip) pi = choose(S, i, true, sd, p, ph, *TS, X, hi, lo, cl);
+            PickInfo pi; if (!skip && topN(S, times, i, sd, p.vol)) { pi.cat = 0; pi.conf = true; }   // (1.18.0) the one rule
             S.logged.insert(key);
             if (pi.cat < 0) continue;
             const bba::Cat& c = set.cat[pi.cat];
@@ -1093,29 +1098,23 @@ void BigBidAsk::render(BBState& S) {
         // (1.11.0) the candle's session clock: its phase (day / night), the time filter, its levels
         long days = 0; int endSec = 0; if (!parts(t, days, endSec)) continue;
         const svl::Cls cls = svl::classify(days, endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin);
-        const int ph = dayOf(S, endSec / 60) ? 1 : 0;
         if (timeSkipped(set, cls, endSec, S.openMin, S.closeMin)) { ++S.timeHidden; continue; }   // (1.13.0 RTH only; Rassul 14:50 skip first / last x min)
-        // his categories in the order 1, 4, then 2 / 3 (1.16.0, bba::catOrder): a print takes the first ON category it reaches whose filters it passes
-        // (1.15.0) judged against the tiers of the candle's OWN session (decided once): a later recompute or a scroll never re-judges it
-        const bba::TierSet& TS = tiersAt(S, cls.sess);
-        long long zz[4]; for (int k = 0; k < 4; ++k) zz[k] = set.cat[k].on ? bba::catSizeOf(TS, ph, set.cat[k]) : 0;
-        long long minSz = 0; for (int k = 0; k < 4; ++k) if (zz[k] > 0 && (minSz == 0 || zz[k] < minSz)) minSz = zz[k];
-        if (minSz <= 0) continue;                                            // still learning / every category off: nothing
-        const int ab = !set.circle ? 0 : bba::absorptionMin(*F, minSz);
+        // (1.18.0, Rassul 2026-10-20 21:26 "show a print if it is the biggest print for that side in the last 10 bars", 21:30 "for now on
+        // a print will be displayed every time it is the biggest print in the last 10 bars on any side") ONE rule, both sides on their own:
+        // the candle's biggest cell at the bid (ask) is bigger than the biggest cell at the bid (ask) of EACH of the 10 candles before it.
+        // No Big Lot tiers, pivot, level or trend filter; the first / last 15 minutes of every session stay skipped (21:31-21:32, all markets).
         for (int sd = -1; sd <= 1; sd += 2) {
             const bba::Pick& p = sd < 0 ? F->bid : F->ask;
-            if (!p.ok || p.vol < minSz) continue;
+            if (!p.ok || !topN(S, times, i, sd, p.vol)) continue;
             const double px = (double)p.key * S.tick;
-            const PickInfo pi = choose(S, i, i < (int)count - 1, sd, p, ph, TS, X, hi, lo, cl);
-            const int got = pi.cat;
-            if (got < 0) { if (pi.why & 1) ++S.pivotHidden; if (pi.why & 2) ++S.levelHidden; if (pi.why & 4) ++S.trendHidden; continue; }
-            if (!pi.conf) ++S.unconfirmed;
+            PickInfo pi; pi.cat = 0; pi.conf = true;
+            const int got = 0;
             const std::string tx = bba::shown(p.vol, set.div > 0 ? set.div : bba::divFor(S.market));   // (1.4.0) lots / divider
             FONT fc = fb; fc.size = (short)set.cat[got].font; setFont(fc);
             int lc = 0, ac = 0, dc = 0; getFontMetrics(&lc, &ac, &dc);
             PNT pt; pt.set(i, (float)px, kBarCenter);
             bba::Cand c; c.bar = i; c.side = sd; c.x = (cb_.l + cb_.r) / 2; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = std::max(set.cat[got].font + 5, ac + dc);
-            c.bold = true; c.huge = false; c.tier = got; c.circle = (sd < 0 && ab > 0) || (sd > 0 && ab < 0); c.first = F->closed;
+            c.bold = true; c.huge = false; c.tier = got; c.circle = false; c.first = F->closed;
             ++S.catN4[got];
             cands.push_back(c); src.push_back(F); texts.push_back(tx); candPx.push_back(px); candVol.push_back((double)p.vol); picks.push_back(pi);
         }
@@ -1346,7 +1345,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (BBA_HOVERS ? TRACK_MOUSE : 0) | VAP_REQUIRED);   // (1.17.1) no TRACK_MOUSE while the hovers are off
-    p->setDescription("LRA Big Bid / Ask 1.17.1 (no settings): on each candle, the biggest print AT THE BID (left) and AT THE ASK (right) in lots / divider, boxed red at the bid and green at the ask. Big Lot 5 = every such print (cyan); Big Lot 10 and Big Lot 20 only on a trend pullback or breakout (white). Big Lot N = the size reached about N times a session, per market, day and night. The first and last 15 minutes of each session are skipped. The Big Lot box (BL5 / BL10 / BL20 averages) sits beside the HOD/LOD table.");
-    p->setVersion("1.17.1");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask 1.18.0 (no settings): on each candle, the biggest print AT THE BID (left, red box) and AT THE ASK (right, green box), in lots / divider, shown when it is bigger than that side's biggest print on each of the 10 candles before it. The first and last 15 minutes of each session are skipped. The Big Lot box (BL5 / BL10 / BL20 averages) sits beside the HOD/LOD table.");
+    p->setVersion("1.18.0");   // BBA_VERSION
     return p;
 }
