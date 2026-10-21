@@ -27,6 +27,7 @@
 #include "../DealerProfileSettings.h"
 #include "../SessionVWAPSettings.h"
 #include "../DefenseLinesSettings.h"
+#include "../KeyLevelsHSettings.h"
 #include "../BigBidAskSettings.h"
 
 struct LegacyCase { const char* text; int market; const char* key; double want; };   // key == nullptr: must NOT be recognised
@@ -203,6 +204,7 @@ int main(int argc, char** argv) {
     E.push_back(Entry{ &svset::spec(), "SessionVWAP.cpp", nullptr, {}, {} });   // (1.6.1) the file keeps its own keyed-style format (SessionVWAPStyle.h)
     E.push_back(Entry{ &cvdset::spec(), "CVD.cpp", nullptr, {}, {} });              // (1.3.0, his decision list) show / hide + colour per drawn element
     E.push_back(Entry{ &dlset::spec(), "DefenseLines.cpp", nullptr, {}, {} });   // (2026-10-20) lsDefenseLines 1.0.0: lines / marks show + colours, line minutes (also read by BookFlow.cpp)
+    E.push_back(Entry{ &klhset::spec(), "KeyLevels.cpp", nullptr, {}, {} });   // (2026-10-20 22:41) lsKeyLevels 1.0.0: hourly-chart key levels - show + colour per group, MenthorQ (off), font, line width
     E.push_back(Entry{ &ciset::spec(), "CobImpulse.cpp", nullptr, {}, {} });
     E.push_back(Entry{ &bbaset::spec(), "BigBidAsk.cpp", nullptr, {}, {} });   // (1.19.0, Rassul 21:51) Biggest in, skip first / last, font, number / bid / ask colours        // (0.5.0, his decision list) labels / impulse box: show + colour
     if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
