@@ -67,7 +67,8 @@
 #endif
 #include "BigBidAskLogic.h"
 #include "BigBidAskSettings.h"         // (1.19.0) the settings table (Biggest in, skip first / last, font, colours)
-#include "SettingsHost.h"              // (1.19.0) the window <-> file layer every indicator uses
+#include "SettingsHost.h"
+#include "SettingsGuard.h"         // (1.19.2) the window calls behind a fault guard; the market read safely              // (1.19.0) the window <-> file layer every indicator uses
 #include "ColumnBoard.h"                 // where the price area ends (the right-side columns) and the left Liquidity column - read only
 #include "HoverBoard.h"                  // hb::hbCursor (GetCursorPos + WindowFromPoint; carries the user32 pragma)
 #include "HostSlot.h"
@@ -102,7 +103,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.19.1"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.19.2"          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
 static const bool BBA_HOVERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
@@ -272,17 +273,29 @@ public:
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
     // (1.19.0, Rassul 21:51) the settings window: filled from / saved to lsFlexLevels\BigBidAsk.settings2-<MKT>.txt (SettingsHost.h)
-    virtual int parmsLoad(void) {
+    // (1.19.2) IRT faulted INSIDE these calls when the window copy had no chart ("???": adding / pasting the indicator - msglog
+    // 2026-10-20 22:24 parmsLoad, 22:33 parmsApply): the window was never filled and OK saved nothing. Each call now runs behind
+    // ss::sehRun (SettingsGuard.h); a caught fault is logged in BigBidAsk.dialog2-<MKT>.txt and the window keeps what it shows.
+    virtual int parmsLoad(void) { guarded(&BigBidAsk::loadBody, "parmsLoad", 0); return RTX_OK; }
+    virtual int parmsApply(void) { guarded(&BigBidAsk::applyBody, "parmsApply", 0); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { guarded(&BigBidAsk::updtBody, "parmsUpdt", i); return RTX_OK; }
+    struct GArg { BigBidAsk* me; void (BigBidAsk::*fn)(unsigned); unsigned i; };
+    static void gThunk(void* p) { GArg* a = static_cast<GArg*>(p); (a->me->*(a->fn))(a->i); }
+    static void gLog(void* p) { GArg* a = static_cast<GArg*>(p); a->me->rawLog("FAULT caught (IRT faulted inside the call; window kept as shown)"); }
+    void guarded(void (BigBidAsk::*fn)(unsigned), const char* what, unsigned i) {
+        GArg a{ this, fn, i };
+        if (ss::sehRun(&BigBidAsk::gThunk, &a)) { (void)what; ss::sehRun(&BigBidAsk::gLog, &a); }
+    }
+    void loadBody(unsigned) {
         rawLog("parmsLoad");
-        if (!ss::inDialog(this)) return RTX_OK;
-        ss::Store* st = dialogStore(); if (!st) return RTX_OK;
+        if (!ss::inDialog(this)) return;
+        ss::Store* st = dialogStore(); if (!st) { rawLog("parmsLoad: no market on this copy - the window keeps the defaults, OK saves nothing"); return; }
         const ss::Values F = st->load(ss::marketIndex(dlgMkt_), steadyMs(), true);
         ss::fillDialog(this, bbaset::spec(), bbaIds(), F, snap_);
         dlgLog("FILL", F, ss::dialogNow(this, bbaset::spec(), bbaIds(), F));   // (1.19.1) what was filled and what the window reads back
-        return RTX_OK;
     }
-    virtual int parmsApply(void) { rawLog("parmsApply"); saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { rawLog(("parmsUpdt " + std::to_string(i)).c_str()); ss::onUpdate(this, bbaset::spec(), bbaIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
+    void applyBody(unsigned) { rawLog("parmsApply"); saveSettings(); }
+    void updtBody(unsigned i) { rawLog(("parmsUpdt " + std::to_string(i)).c_str()); ss::onUpdate(this, bbaset::spec(), bbaIds(), (int)i, snap_); saveSettings(); }
     // (1.19.1) every settings-window call as IRT makes it: in the window or not, the bar size label, the ids and the raw control reads
     void rawLog(const char* what) {
         const std::string f = flexDir(); if (f.empty()) return;
@@ -299,7 +312,7 @@ public:
         std::ofstream out(p.c_str(), std::ios::trunc); for (const auto& l : keep) out << l << "\n";
     }
     static ss::Ids& bbaIds() { static ss::Ids I; return I; }
-    std::string chartMarket() { char b[64]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const int m = ss::marketOfRoot(rs ? rs : ""); if (m < 0) { const char* sy = getSymbol(); const int m2 = ss::marketOfRoot(sy ? sy : ""); return m2 < 0 ? std::string() : ss::MARKETS[m2]; } return ss::MARKETS[m]; }
+    std::string chartMarket() { return ss::safeMarket(this); }   // (1.19.2) a copy with no chart = "" (never faults)
     static std::string setPath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() || mkt.empty() ? std::string() : f + BBA_SEP "BigBidAsk.settings2-" + mkt + ".txt"; }
     ss::Snap snap_; ss::Store dlgStore_; std::string dlgMkt_;
     ss::Store* dialogStore() {
@@ -1429,6 +1442,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (BBA_HOVERS ? TRACK_MOUSE : 0) | VAP_REQUIRED);   // (1.17.1) no TRACK_MOUSE while the hovers are off
     p->setDescription("LRA Big Bid / Ask 1.19.1: on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.19.1");   // BBA_VERSION
+    p->setVersion("1.19.2");   // BBA_VERSION
     return p;
 }

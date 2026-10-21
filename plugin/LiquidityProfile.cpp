@@ -138,7 +138,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.46.0"          // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.46.1"          // keep equal to lqp::VERSION and the setVersion literal below
 // (0.45.3, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") every PRICE-CHART hover is off: the
 // near-zone makeup box and the big-order line box (the code is kept - set LQ_HOVERS true to bring them back); the price chart no longer asks
 // IRT for mouse events (no TRACK_MOUSE). The Liquidity Flow pane (LQ_FLOW) keeps its candle-follow. Column inks lighter: lqp::colInk.
@@ -458,6 +458,13 @@ struct LQState {
 class LiquidityProfile : public cppExtension {
 public:
     LiquidityProfile() : cppExtension() {}
+    // (0.46.1, 2026-10-20 night) IRT faults INSIDE the MARKET_DEPTH destructor while it is quitting ("C0000005 Exception at 14002AD39
+    // in RTX extension lsLiquidityProfile ... calling done()" at every exit since 10-18; lsIRTReader / lsFootprintReader* the same - the
+    // plugins that own a MARKET_DEPTH). done() / destroy() park the book object; the next calc / draw (a symbol / bar-size change) deletes
+    // it in chart context; at quit it is never deleted (the process ends).
+    std::vector<cppExtension::MARKET_DEPTH*> mdPark_;
+    void parkDepth();
+    void flushPark() { for (size_t i = 0; i < mdPark_.size(); ++i) delete mdPark_[i]; mdPark_.clear(); }
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
     virtual int parmsApply(void);                                       // (0.45.0) the window -> the three files, through SettingsHost.h
@@ -536,8 +543,9 @@ private:
 
 // the SDK leaves these five undefined: every RTX plugin supplies them (else LNK2019)
 int cppExtension::init(void)    { return RTX_OK; }
-int cppExtension::done(void)    { static_cast<LiquidityProfile*>(this)->unpublish(); static_cast<LiquidityProfile*>(this)->release(); return RTX_OK; }   // symbol / period change: start clean
-int cppExtension::destroy(void) { static_cast<LiquidityProfile*>(this)->unpublish(); static_cast<LiquidityProfile*>(this)->release(); return RTX_OK; }
+int cppExtension::done(void)    { static_cast<LiquidityProfile*>(this)->unpublish(); static_cast<LiquidityProfile*>(this)->parkDepth(); static_cast<LiquidityProfile*>(this)->release(); return RTX_OK; }   // symbol / period change: start clean
+int cppExtension::destroy(void) { static_cast<LiquidityProfile*>(this)->unpublish(); static_cast<LiquidityProfile*>(this)->parkDepth(); static_cast<LiquidityProfile*>(this)->release(); return RTX_OK; }
+void LiquidityProfile::parkDepth() { LQState* S = slot_.get(this, false); if (S && S->md) { mdPark_.push_back(S->md); S->md = nullptr; } }   // (0.46.1) never deleted from done() / destroy()
 int cppExtension::setup(void) {
     // (0.45.0, settings audit 2026-10-18) the same rows in the same order from LiquidityProfileSettings.h (parameter versions 5 / 2 kept):
     // the big-order font row on its own line (the line was ~648 px, cut off), masters grey their rows, ranges = what the code draws
@@ -726,7 +734,7 @@ void LiquidityProfile::loadSize(LQState& S) {
     if (z.migrated && S.sizeWhy.empty()) S.sizeWhy = "old default width 70 read as 60 (0.16.0)";
     S.width = clampWidth(z.w); S.font = clampFont(z.f); S.labDx = 0; S.labDy = 0; S.bg = z.bg;   // (0.45.1) a saved label offset is ignored (Offset X / Y removed)
 }
-int cppExtension::calc(int) { static_cast<LiquidityProfile*>(this)->pump(); return RTX_OK; }
+int cppExtension::calc(int) { static_cast<LiquidityProfile*>(this)->flushPark(); static_cast<LiquidityProfile*>(this)->pump(); return RTX_OK; }   // (0.46.1) flushPark: a book parked by done()
 // (0.8.0, Rassul 2026-10-11 "i want to see the process of absorption, which has the same scenarios in all markets") every step of the
 // process is drawn in every market: e (Exh) at or under the market's line, p (Pull) at or over it, s (Counter) at or over it, t (trapped),
 // a watch (e? p?) until that same touch printed the full step (then the e / p stands for it, like A? -> A), the reasons whenever they have
@@ -750,6 +758,7 @@ static void standardLines(LQState& S) {
     S.e.L.attack = 2.0; S.e.L.eaten = 0.15; S.e.L.exh = 0.5; S.e.L.pulled = 0.7; S.e.L.rebuilt = 1.0; S.e.L.counter = 1.25; S.e.L.trapped = true;
 }
 int LiquidityProfile::draw(void) {
+    flushPark();                                                         // (0.46.1)
     pump();
     LQState* S = slot_.get(this, false);
     if (S && !S->faulted) { try { loadSize(*S); } catch (...) {} }          // (0.15.1) this market's Width / Font
@@ -3454,6 +3463,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.46.0");   // LQ_VERSION
+    p->setVersion("0.46.1");   // LQ_VERSION
     return p;
 }

@@ -23,6 +23,7 @@
 #include "DefenseTurn.h"
 #include "DefenseLinesSettings.h"
 #include "SettingsHost.h"
+#include "SettingsGuard.h"   // (1.2.2) the window calls behind a fault guard (IRT faulted in parmsLoad / parmsApply of 1.1.0 on a copy with no chart)
 #include <algorithm>
 #include <chrono>
 #include <climits>
@@ -39,7 +40,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* DL_VERSION = "1.2.1";   // 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
+static const char* DL_VERSION = "1.2.2";   // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
 static long long dlSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string dlFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void dlMakeDir(const std::string& p) {
@@ -76,16 +77,18 @@ class DefenseLines : public cppExtension {
 public:
     HostSlot<DlState> slot_;
     virtual int draw(void);
-    virtual int parmsLoad(void) {
-        if (!ss::inDialog(this)) return RTX_OK;
-        ss::Store* st = dialogStore(); if (!st) return RTX_OK;
+    virtual int parmsLoad(void) { ss::guardedCall(this, &DefenseLines::loadBody, 0u); return RTX_OK; }
+    virtual int parmsApply(void) { ss::guardedCall(this, &DefenseLines::applyBody, 0u); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::guardedCall(this, &DefenseLines::updtBody, i); return RTX_OK; }
+    void loadBody(unsigned) {
+        if (!ss::inDialog(this)) return;
+        ss::Store* st = dialogStore(); if (!st) return;
         ss::fillDialog(this, dlset::spec(), dlIds(), st->load(ss::marketIndex(dlgMkt_), dlSteadyMs(), true), snap_);
-        return RTX_OK;
     }
-    virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, dlset::spec(), dlIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
+    void applyBody(unsigned) { saveSettings(); }
+    void updtBody(unsigned i) { ss::onUpdate(this, dlset::spec(), dlIds(), (int)i, snap_); saveSettings(); }
     DlState* stateFor() { return slot_.get(this, false); }   // tests
-    std::string chartMarket() { char b[64]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const int m = ss::marketOfRoot(rs ? rs : ""); if (m < 0) { const char* sy = getSymbol(); const int m2 = ss::marketOfRoot(sy ? sy : ""); return m2 < 0 ? std::string() : ss::MARKETS[m2]; } return ss::MARKETS[m]; }
+    std::string chartMarket() { return ss::safeMarket(this); }   // (1.2.2) a copy with no chart = "" (never faults)
     long long localSec(RTDATE d) { struct tm t; std::memset(&t, 0, sizeof(t)); if (!getLocaltime(d, &t)) return 0; return dlCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec); }
     void refresh(DlState& s);
     void writeStatus(DlState& s, size_t drawn, size_t failed = 0);
@@ -253,6 +256,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour AND beyond the R line (above it at a low, below it at a high). R LINE (red at a high, green at a low) = the price near the pivot where the defenders re-posted the most of what was eaten. E LINE (gray) = exhaustion: the price near the pivot where the attack died AT the price (the attackers' hits there in seconds 20-60 slowed to the market's median or less vs seconds 0-20, and at least half the resting size stayed); decided about a minute after the close; only on turns that have an R. Yellow dot = the candle each line refers to. Each line runs at most 3 candles (setting), until the next turn's lines, or until a candle closes through it (then it is removed). A = absorption (attackers out-hit the defenders and still lost the close); ? = not proven yet (scored nightly). Dotted ? line = the forming candle, gone if it does not confirm. Example: 8:48 AM ES low: green R at 7827.25, gray E at 7826.75, dots on the 8:48 candle. Needs lsBookFlow (Defense) on the same chart.");
-    p->setVersion("1.2.1");   // DL_VERSION
+    p->setVersion("1.2.2");   // DL_VERSION
     return p;
 }

@@ -26,6 +26,7 @@
 #include "KeyLevelsHLogic.h"
 #include "DealerProfileAuditLogic.h"
 #include "SettingsHost.h"
+#include "SettingsGuard.h"   // the window calls behind a fault guard (IRT faulted in other plugins' parmsLoad / parmsApply on a copy with no chart)
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -76,16 +77,18 @@ class KeyLevels : public cppExtension {
 public:
     HostSlot<KlState> slot_;
     virtual int draw(void);
-    virtual int parmsLoad(void) {
-        if (!ss::inDialog(this)) return RTX_OK;
-        ss::Store* st = dialogStore(); if (!st) return RTX_OK;
+    virtual int parmsLoad(void) { ss::guardedCall(this, &KeyLevels::loadBody, 0u); return RTX_OK; }
+    virtual int parmsApply(void) { ss::guardedCall(this, &KeyLevels::applyBody, 0u); return RTX_OK; }
+    virtual int parmsUpdt(unsigned int i) { ss::guardedCall(this, &KeyLevels::updtBody, i); return RTX_OK; }
+    void loadBody(unsigned) {
+        if (!ss::inDialog(this)) return;
+        ss::Store* st = dialogStore(); if (!st) return;
         ss::fillDialog(this, klhset::spec(), klIds(), st->load(ss::marketIndex(dlgMkt_), klSteadyMs(), true), snap_);
-        return RTX_OK;
     }
-    virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, klhset::spec(), klIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
+    void applyBody(unsigned) { saveSettings(); }
+    void updtBody(unsigned i) { ss::onUpdate(this, klhset::spec(), klIds(), (int)i, snap_); saveSettings(); }
     KlState* stateFor() { return slot_.get(this, false); }   // tests
-    std::string chartMarket() { char b[64]; std::memset(b, 0, sizeof(b)); const char* rs = getRootSymbol(b); const int m = ss::marketOfRoot(rs ? rs : ""); if (m < 0) { const char* sy = getSymbol(); const int m2 = ss::marketOfRoot(sy ? sy : ""); return m2 < 0 ? std::string() : ss::MARKETS[m2]; } return ss::MARKETS[m]; }
+    std::string chartMarket() { return ss::safeMarket(this); }   // a copy with no chart = "" (never faults)
     void refresh(KlState& s);
     void writeStatus(KlState& s, const std::vector<klh::Line>& L, size_t drawn);
 private:

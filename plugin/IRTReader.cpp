@@ -136,7 +136,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* IR_VERSION = "0.8.0";   // (0.8.0) the depth recorder: chart-context open, 250 ms guarded clock, valid books only, hourly dom_HH / dbo_HH, coverage; stuck-bar skip; pass watchdog
+static const char* IR_VERSION = "0.8.1";   // (0.8.1) the book object parked at done() / destroy() - IRT faulted inside its destructor at every quit; (0.8.0) the depth recorder: chart-context open, 250 ms guarded clock, valid books only, hourly dom_HH / dbo_HH, coverage; stuck-bar skip; pass watchdog
 //   // (0.7.1 audit) complete VAP bars and cursor advancement are durable-only; fixed-market readers remain footprint-only; MBO is accurately labelled on CQG and bounded per pass.
 //   // (0.6.5) times every step: any step over 250 ms is traced as SLOW (the IRT freeze hunt, 2026-10-08)   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
 #ifndef IR_FIXED
@@ -267,6 +267,13 @@ static double tickOf(const std::string& m)
 class IRTReader : public cppExtension {
 public:
     IRTReader() : cppExtension() {}
+    // (0.8.1, 2026-10-20 night) IRT faults INSIDE the MARKET_DEPTH destructor while it is quitting ("C0000005 Exception at 14002AD39
+    // ... calling done()" on every exit since 10-18, in lsIRTReader / lsFootprintReader* and lsLiquidityProfile - the plugins that own a
+    // MARKET_DEPTH; the DEPTH_BY_ORDER-only plugins never fault). done() / destroy() now PARK the book object instead of deleting it; the
+    // next calc / draw of this chart (a symbol / bar-size change) deletes it in chart context. At quit nothing follows, so it is never
+    // deleted (the process ends). A chart closed during the day keeps its book object until IRT exits (one depth subscription).
+    std::vector<cppExtension::MARKET_DEPTH*> mdPark_;
+    void flushPark() { for (size_t i = 0; i < mdPark_.size(); ++i) delete mdPark_[i]; mdPark_.clear(); }
     virtual int parmsLoad(void);
     virtual int parmsApply(void);
     virtual int parmsUpdt(unsigned int iParmNumber);
@@ -397,6 +404,7 @@ int cppExtension::destroy(void)
 int cppExtension::calc(int)
 {
     IRTReader* me = static_cast<IRTReader*>(this);
+    me->flushPark();                                                 // (0.8.1) a book parked by done() (symbol change): delete it here
     IRTReader::StateGuard guard(*me);
     me->pump("calc");
     return RTX_OK;
@@ -421,6 +429,7 @@ void IRTReader::pump(const char* via)
 
 int IRTReader::draw(void)
 {
+    flushPark();                                                     // (0.8.1)
     StateGuard guard(*this);
     pump("draw");
     return RTX_OK;
@@ -1047,6 +1056,7 @@ void IRTReader::depthRelease()
 {
     DepthState* D = dslot_.get(this, false);
     if (!D) return;
+    if (D->md) { mdPark_.push_back(D->md); D->md = nullptr; }      // (0.8.1) never deleted from done() / destroy()
     depthStop(*D);
     try { depthFlush(*D, irSteadyMs(), true); } catch (...) {}
     if (D->owner && !D->folder.empty() && !D->mkt.empty()) std::remove((D->folder + "\\_depth-owner-" + D->mkt + ".txt").c_str());
