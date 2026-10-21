@@ -118,7 +118,7 @@ int main() {
     }
     // ---- the badge ---------------------------------------------------------------------------------------------------------------
     CHECK(dt::badgeText5(true, true, 'L', true, false) == "A|H|L|P" && dt::badgeText5(false, false, 0, true, false) == "P" && dt::badgeText5(true, false, 0, false, false) == "A", "the combined badge A|H|L|P");
-    CHECK(std::string(dt::VERSION) == "1.6.0" && std::string(mvl::VERSION) == "1.1.0" && std::string(off::VERSION) == "1.11.0", "versions");
+    CHECK(std::string(dt::VERSION) == "1.7.0" && std::string(mvl::VERSION) == "1.1.1" && std::string(off::VERSION) == "1.12.0", "versions");
     // ---- (1.1.0 / DefenseTurn 1.6.0, Rassul 14:16 "i want you to draw them") all four cases drawn ----------------------------------
     {   mvl::Read r; r.ext = 0; r.t = 100; r.px = 4000; r.tick = 0.25; r.norm[0] = 5; r.norm[1] = 5;
         r.s.in[0] = 12; r.s.bigSize[0] = 12; r.s.bigOld[0] = 3990; r.s.bigNew[0] = 3992;                 // bids pressed in
@@ -133,8 +133,9 @@ int main() {
         CHECK(mvl::parseM(old, q) && q.s.outSize[1] == 0 && mvl::letterOf(q, mvl::BIDS) == 'P', "a 1.0.0 line (19 fields) still reads");
         CHECK(!mvl::parseM(old + "|1|2", q), "a line with a wrong field count is rejected");
         mvl::Read e; e.ext = 1; CHECK(!mvl::anyDrawn(e) && mvl::letterOf(e, mvl::BIDS) == 0 && !mvl::chartBoxOf(e, mvl::BIDS, o, n, z), "nothing qualified: no letter, no box");
-        r.q[mvl::C_ATT_OUT] = false; r.q[mvl::C_ATT_IN] = true;   // offers pressed in, but no in-move recorded for offers: letter, no box
-        CHECK(mvl::letterOf(r, mvl::OFFERS) == 'P' && !mvl::chartBoxOf(r, mvl::OFFERS, o, n, z), "a letter without a recorded move: no box");
+        r.q[mvl::C_ATT_OUT] = false; r.q[mvl::C_ATT_IN] = true;   // offers flagged "pressed in", but no offer lots moved in
+        CHECK(mvl::letterOf(r, mvl::OFFERS) == 0 && !mvl::chartBoxOf(r, mvl::OFFERS, o, n, z) && mvl::movedText(r, mvl::OFFERS) == "-", "(1.1.1) a flag with no lots moved that way: no letter, no box, Moved '-' (was 'In 0t 0.0x')");
+        r.s.in[1] = 7; CHECK(mvl::letterOf(r, mvl::OFFERS) == 'P', "(1.1.1) the same flag with 7 offer lots moved in: P");
     }
     {   std::vector<dt::BadgeSeg> v = dt::badgeSegs(true, true, 'L', dt::LOW, 'P', 'B');
         CHECK(dt::segsText(v) == "A|H|L|P|B?" && v.size() == 3 && v[0].colourKey == dt::LOW && v[1].s == "P|" && v[1].colourKey == dt::LOW && v[2].s == "B?" && v[2].colourKey == dt::HIGH, "badge parts: A|H|L| defending colour, P| bids green, B? offers red");

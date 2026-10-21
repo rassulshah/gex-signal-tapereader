@@ -32,7 +32,7 @@
 #include <vector>
 
 namespace mvl {
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.1.1";   // (1.1.1, 2026-10-21) letterOf / movedText: a side whose case flag is set but moved no lots that way shows "-" and no letter (the box showed "In 0t 0.0x")
 static const long long PAIR_MS = 250, REST_MS = 500, LADDER_MS = 5;
 static const int LADDER_N = 5;
 static const double BADGE_X = 2.0, ONE_WAY = 0.65, ZONE_ATR = 0.5;
@@ -186,7 +186,7 @@ inline bool drawP(const Read& r) { return r.q[C_DEF_IN]; }          // the defen
 inline char letterOf(const Read& r, int side) {
     const int def = r.ext == 0 ? BIDS : OFFERS;
     const int cin = side == def ? C_DEF_IN : C_ATT_IN, cout = side == def ? C_DEF_OUT : C_ATT_OUT;
-    return r.q[cin] ? 'P' : (r.q[cout] ? 'B' : 0);
+    return r.q[cin] && r.s.in[side] > 0 ? 'P' : (r.q[cout] && r.s.out[side] > 0 ? 'B' : 0);   // (1.1.1) a flag with no lots moved that way = nothing
 }
 inline bool anyDrawn(const Read& r) { return r.q[0] || r.q[1] || r.q[2] || r.q[3]; }
 
@@ -266,8 +266,8 @@ inline std::string movedText(const Read& r, int side) {
     const int def = r.ext == 0 ? BIDS : OFFERS;
     const int cin = side == def ? C_DEF_IN : C_ATT_IN, cout = side == def ? C_DEF_OUT : C_ATT_OUT;
     char b[48];
-    if (r.q[cin]) { std::snprintf(b, sizeof b, "In %lldt %.1fx", r.s.ticksIn[side], r.x[cin]); return b; }
-    if (r.q[cout]) { std::snprintf(b, sizeof b, "Out %lldt %.1fx", r.s.ticksOut[side], r.x[cout]); return b; }   // (1.1.0) "Out" (mockup v4)
+    if (r.q[cin] && r.s.in[side] > 0) { std::snprintf(b, sizeof b, "In %lldt %.1fx", r.s.ticksIn[side], r.x[cin]); return b; }   // (1.1.1) no lots that way = "-" (was "In 0t 0.0x")
+    if (r.q[cout] && r.s.out[side] > 0) { std::snprintf(b, sizeof b, "Out %lldt %.1fx", r.s.ticksOut[side], r.x[cout]); return b; }   // (1.1.0) "Out" (mockup v4)
     return "-";
 }
 // the price-chart boxes: drawn only on a P candle, for the largest move on the defenders' side (hollow at the old price, solid at the new)

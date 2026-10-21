@@ -76,7 +76,7 @@ int main() {
     CHECK(s->lines.size() == 3 && s->xs.size() == 1 && text(h, "R A ?") != nullptr && text(h, "E ?") != nullptr, "a torn shorter file: the lines stay (no repaint)");
     std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string body((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
     CHECK(body.find("failed lines removed") != std::string::npos, "(1.2.0) the status counts the removed lines");
-    CHECK(body.find("VERSION,1.6.0") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    CHECK(body.find("VERSION,1.7.0") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
     {   // (1.3.0, Top Defender #5) lsBookFlow decided the defenders hit back after the A: the label reads "R A H ?"; "absorbed only" keeps "R A ?"
         { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); dt::Counter C; C.t = b.t; C.side = b.side; C.H = true; C.lots = 640; C.attack = 266; C.at = b.t + 360; f << dt::hLineOf(C) << "\n"; }
         s->lastCheckMs = -100000; h.draws.clear(); p->draw();
@@ -88,6 +88,15 @@ int main() {
         { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); dt::Retest q; q.t = b.t; q.side = b.side; q.res = 'L'; q.ratio = 1.4; q.rest = 700; q.at = b.t + 720; f << dt::qLineOf(q) << "\n"; }
         s->lastCheckMs = -100000; h.draws.clear(); p->draw();
         CHECK(s->bad == bad0 && text(h, "R A H ?") != nullptr && text(h, "R A H L ?") == nullptr, "(1.4.0) a Q line (re-test L / X) is read, not counted bad; the line label stays R A H ? (L / X in the pane)");
+        {   // (1.7.0) lsBookFlow 1.19.0's G and W lines: read, never counted bad, nothing drawn here; a garbled one is counted
+            { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); dt::GiveUp g; g.t = b.t; g.side = dt::HIGH; g.G = true; g.pull = 900; g.secs = 60; g.x = 2.1; g.normal = 17.8;
+              dt::WRead w; w.key = b.t; w.px = 27980; w.side = dt::LOW; w.pulled = 300; w.filled = 40; w.W = true; w.name = "PDL"; w.t0 = 5;
+              f << dt::gLineOf(g) << "\n" << dt::wLineOf(w, 0.25) << "\n"; }
+            s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+            CHECK(s->bad == bad0 && text(h, "R A H ?") != nullptr && text(h, "G?") == nullptr && text(h, "W?") == nullptr, "(1.7.0) G / W lines read, not counted bad, nothing new on the price chart");
+            { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); f << "G|garbage\nW|1|2\n"; }
+            s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+            CHECK(s->bad == bad0 + 2, "(1.7.0) garbled G / W lines counted bad"); }
         // (1.5.0, Top Defender #3) an M line where the defenders pressed in (P): 12 bid lots moved from 6997.50 to 6998.00 on the low candle
         {   mvl::Read R; R.t = b.t; R.ext = 0; R.px = 27992; R.tick = 0.25; R.s.in[0] = 12; R.s.bigSize[0] = 12; R.s.bigOld[0] = 27990; R.s.bigNew[0] = 27992; R.s.ticksIn[0] = 2; R.norm[0] = 4; R.norm[1] = 4; R.q[mvl::C_DEF_IN] = true; R.x[0] = 3;
             mvl::Read B2 = R; B2.t = (long long)h.bars[30].time; B2.q[mvl::C_DEF_IN] = false; B2.q[mvl::C_DEF_OUT] = true;   // (1.6.0) stepping back: now boxed too (12 bids 6998.00 -> 6997.00)

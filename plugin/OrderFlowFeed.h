@@ -146,7 +146,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.11.0";   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.12.0";   // 1.12.0 (2026-10-21, Top Attacker #2 G / Top Defender #2 W, lsBookFlow 1.19.0): Acc keeps the pulls / adds / moves up to the candle's low / high fill (pullLo / pullHi / addLo / addHi / movLo / movHi: the part after the extreme = total - these); Engine.sink (BookSink) gets every classified near-price add / pull / fill (side, price, second, candle) - lsBookFlow only; an InfoRow cell side 2 = grey;   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -403,7 +403,14 @@ struct Acc {
     long long aggrUnknown = 0;                           // fills without an aggressor id
     std::vector<long long> restSizes;                    // resting sizes added near price (the session distribution)
     std::vector<mvl::Move> moves;                        // (1.11.0) confirmed order MOVES near price in this candle (trackMoves only; capped)
+    // (1.12.0, Top Attacker #2 G) the pulls / adds near price per resting side and the moves seen, UP TO the candle's low / high fill (the
+    // part after the extreme = the candle's total minus these): at a high the buyers' own bids, at a low the sellers' own offers
+    long long pullLo[2] = {0, 0}, pullHi[2] = {0, 0}, addLo[2] = {0, 0}, addHi[2] = {0, 0}; size_t movLo = 0, movHi = 0;
 };
+// (1.12.0, Top Defender #2 W) one classified book event for a host that watches prices itself (lsBookFlow's key-level watch): kind 0 = added
+// near price, 1 = pulled near price (a cancel / size cut that was not a fill; a moved order = a pull at its old price + an add at the new),
+// 2 = filled; side = the RESTING side; ts = the event second; key = the candle it belongs to
+struct BookSink { virtual ~BookSink() {} virtual void onBook(int kind, int side, Tick px, long long size, long long ts, long long key) = 0; };
 // (1.7.0) ORDER-BOOK ABSORPTION at one resting price of a decided candle: the defenders' resting orders there traded at least
 // minX x the most ever shown there (hidden / refilled size) AND were reloaded at least minRef times. s = the RESTING side (BID / ASK).
 struct ObPx { Tick px = 0; long long traded = 0, shown = 0; int refills = 0; };
@@ -486,6 +493,7 @@ public:
     std::vector<Touch> touches;                       // newest last; bounded
     std::unordered_map<Tick, long long> lastTradeS[2]; // price -> last fill second (that resting side)
     long long curKey = 0, lastS = 0;                   // the candle the event belongs to (set by the caller); the newest event second
+    BookSink* sink = nullptr; long long evTs = 0;       // (1.12.0) the classified-event watcher (lsBookFlow sets it every pump; null = none); the event second
     double adMedian = 0.1;                             // the market's median slowdown (set by the caller; DefenseTurn.h table)
     void touchFill(int s, Tick px, long long size, long long ts, long long restBefore) {
         if ((s != BID && s != ASK) || px <= 0 || size <= 0 || ts <= 0 || ts < lastS) return;
@@ -561,7 +569,7 @@ public:
             if (c > a.pullMax[s]) { a.pullMax[s] = c; a.pullMaxTraded[s] = traded ? 1 : 0; }
             if (haveRef && std::llabs(px - ref) <= closeTicks) a.pullClose[s]++;   // pulled just before price got there
         }
-        if (c > 0) a.pullC[s] += c;
+        if (c > 0) { a.pullC[s] += c; if (sink) sink->onBook(1, s, px, c, evTs, curKey); }
     }
     void add(Acc& a, int s, long long id, long long c, bool wholeOrder, Tick px = 0, long long stamp = 0) {
         if (wholeOrder) {
@@ -571,6 +579,7 @@ public:
         }
         if (c > 0) {
             a.addC[s] += c; bump(a.addBy[s], id, c, a);
+            if (sink && px > 0) sink->onBook(0, s, px, c, evTs, curKey);
             if (px > 0) {                                                  // (1.2.0) rebuilt: added back at a price hit earlier this candle
                 // (1.2.1, live 13 Oct 9:12 PM "Rebuilt 200%") credit at most the lots still un-restored at that price: every new order
                 // joining the queue at a once-hit price used to count, so normal queue joins read as 200% (the cap) with a 1-lot hit
@@ -609,6 +618,7 @@ public:
         if (it != book.end() && e.action != NEW) s = it->second.side;     // the order's own side wins
         if (s != BID && s != ASK) { garbage++; return; }                  // an unknown side cannot be classified
         events++; perAction[e.action]++; a.events++;
+        evTs = e.stamp > 0 ? e.stamp : e.arrMs / 1000;                     // (1.12.0) the event second for the sink
         if (trackMoves) {                                                   // (1.11.0) moves whose 0.5 s rest is done join this candle
             mvTmp.clear(); mvt.confirm(e.arrMs, mvTmp);
             for (size_t k = 0; k < mvTmp.size(); ++k) if ((isNear(mvTmp[k].oldPx) || isNear(mvTmp[k].newPx)) && a.moves.size() < 3000) a.moves.push_back(mvTmp[k]);
@@ -643,8 +653,10 @@ public:
             {   const long long ts = e.stamp > 0 ? e.stamp : e.arrMs / 1000;     // (DefenseTurn 2026-10-20) when the candle's low / high printed and the hits up to it
                 if (a.tFirst < 0) { a.tFirst = ts; }
                 a.tLast = ts;
-                if (a.fillLo == 0 || e.px < a.fillLo) { a.fillLo = e.px; a.tLo = ts; a.cumLo[0] = a.hitC[0]; a.cumLo[1] = a.hitC[1]; }
-                if (a.fillHi == 0 || e.px > a.fillHi) { a.fillHi = e.px; a.tHi = ts; a.cumHi[0] = a.hitC[0]; a.cumHi[1] = a.hitC[1]; }
+                if (a.fillLo == 0 || e.px < a.fillLo) { a.fillLo = e.px; a.tLo = ts; a.cumLo[0] = a.hitC[0]; a.cumLo[1] = a.hitC[1];
+                    for (int q = 0; q < 2; ++q) { a.pullLo[q] = a.pullC[q]; a.addLo[q] = a.addC[q]; } a.movLo = a.moves.size(); }   // (1.12.0) G: what came before the low
+                if (a.fillHi == 0 || e.px > a.fillHi) { a.fillHi = e.px; a.tHi = ts; a.cumHi[0] = a.hitC[0]; a.cumHi[1] = a.hitC[1];
+                    for (int q = 0; q < 2; ++q) { a.pullHi[q] = a.pullC[q]; a.addHi[q] = a.addC[q]; } a.movHi = a.moves.size(); }   // (1.12.0) G: what came before the high
                 if (e.size > 0) touchFill(s, e.px, e.size, ts, restAt(s, e.px)); }   // (DefenseTurn 1.1.0) before the book takes this fill
             if (it != book.end() && it->second.known) {
                 Ord& o = it->second;
@@ -658,6 +670,7 @@ public:
             }
             aggressor(a, s, e);
             ref = e.px; haveRef = true; lastFillMs = e.arrMs;              // a fill's price = the last trade
+            if (sink && e.size > 0) sink->onBook(2, s, e.px, e.size, evTs, curKey);   // (1.12.0) the watcher sees the fill after the book took it
             lastFill[s][e.px] = std::make_pair(e.arrMs, e.stamp);
             if (lastFill[s].size() > FILLMEM_CAP) {                        // forget fills older than the window, then everything
                 for (std::map<Tick, std::pair<long long, long long> >::iterator f = lastFill[s].begin(); f != lastFill[s].end();)
@@ -1312,7 +1325,7 @@ inline std::string fitMessage(const std::string& l1, int width, const std::funct
 // the first top line: "10:24 <message>"
 inline std::string line1Of(const std::string& ct, const std::string& msg) { return ct.empty() ? msg : ct + " " + msg; }   // (1.2.0) SPEC: one space
 // (12:05) the info box's content (drawn by drawInfo): label | left value | right value; side -1 = white
-struct InfoRow { std::string label, v[2]; int side[2] = {0, 1}; };          // side -1 = white
+struct InfoRow { std::string label, v[2]; int side[2] = {0, 1}; };          // side -1 = white, (1.12.0) 2 = grey
 struct Info { std::string head; bool twoCol = true; std::string colHead[2]; std::vector<InfoRow> rows; std::string tmpl = "9999 (99.9x)";
               int topLines = 0, topW = 0; };   // (2026-10-21, lsBookFlow 1.15.0) lines kept free at the box's top for the question + info icon, and their width
 
@@ -2510,7 +2523,7 @@ inline void numbersAt(cppExtension* x, int x0, int y0, int lw, int vw, const Inf
         for (int s = 0; s < (I.twoCol ? 2 : 1); ++s) {
             const std::string v = nl::fitText(I.rows[k].v[s], vw, [&](const std::string& u) { return M(u, NUM_PT, true); }); if (v.empty()) continue;
             const int sd = I.rows[k].side[s];
-            textAt(x, (I.twoCol ? rc[s] : x0 + lw + 10 + vw) - M(v, NUM_PT, true), y, NUM_LH - 1, v, sd < 0 ? C_WHITE : col[sd], NUM_PT, true);
+            textAt(x, (I.twoCol ? rc[s] : x0 + lw + 10 + vw) - M(v, NUM_PT, true), y, NUM_LH - 1, v, sd < 0 ? C_WHITE : sd > 1 ? C_INFO_ICON : col[sd], NUM_PT, true);   // (1.12.0) side 2 = grey
         }
     }
 }

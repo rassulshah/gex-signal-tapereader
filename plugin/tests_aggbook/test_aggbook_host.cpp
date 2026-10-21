@@ -427,8 +427,12 @@ int main() {
                     CHECK(mv && text(h, "In 2t 2.5x") != nullptr && rr && mv->y > rr->y && mv->y < S->lastBox.b, "(1.17.0) the box row Moved: In 2t 2.5x under Re-test, inside the box"); }
                 e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = true;
                 h.draws.clear(); p->draw();
+                CHECK(text(h, "B?") == nullptr && text(h, "In 0t 0.0x") == nullptr && text(h, "Out 0t 0.0x") == nullptr, "(1.19.0, MoveLogic 1.1.1) a case flag with NO lots moved that way: no letter, the Moved row shows '-' (was 'In 0t 0.0x')");
+                e->dtM[std::make_pair(0, k)].s.out[0] = 10; e->dtM[std::make_pair(0, k)].s.ticksOut[0] = 2;   // the bids really stepped back 10 lots
+                h.draws.clear(); p->draw();
                 CHECK(text(h, "A|", 0x22C55E) != nullptr && text(h, "B?", 0x22C55E) != nullptr, "(1.18.0) stepping back (B) drawn: A|B? in the bids' green");
                 e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_ATT_IN] = true;   // offers pressed in at the low
+                e->dtM[std::make_pair(0, k)].s.in[1] = 6; e->dtM[std::make_pair(0, k)].s.ticksIn[1] = 1;
                 h.draws.clear(); p->draw();
                 CHECK(text(h, "A|", 0x22C55E) != nullptr && text(h, "P?", 0xEF4444) != nullptr, "(1.18.0) offers pressing in at a low: A| green, P? in the offers' red");
                 e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = true;                                                                   // both sides on one candle
@@ -443,6 +447,100 @@ int main() {
                 e->dtLoaded = false; e->dtPath.clear(); e->mvByKey.clear(); p->decideTurns(*S, k, nb);
                 CHECK(e->dtM.count(std::make_pair(0, k)) == 1 && mvl::drawP(e->dtM[std::make_pair(0, k)]) && e->dtMWritten == w0 + 1, "(1.18.0) after a reload the M line is read back the same (no repaint, nothing re-written)");
             } } }
+    {   // (1.19.0) G / Tr / W on the Defense pane, end to end: G from the candle's order feed (Acc -> fillAcc -> decideTurns), Tr from the Delta
+        // Profile's TR line, W from the key-level watch fed by the engine's BookSink; one badge (<= 4 letters, the rest in its hover), box rows
+        const long long k = S->ser.bars.rbegin()->first; Ind::Ext* e = p->ext(*S); off::PaneBar nb = S->ser.bars[k];
+        std::vector<mock::Bar>& B = mock::current->bars; int i = -1; for (size_t q = 0; q < B.size(); ++q) if ((long long)B[q].time == k) i = (int)q;
+        CHECK(i >= 6 && e, "(1.19.0) the candle found");
+        const COLOR GRN = 0x22C55E, RED = 0xEF4444;
+        B[(size_t)i].high = 7003.0f; for (int j = i - 5; j < i; ++j) if (B[(size_t)j].high >= B[(size_t)i].high) B[(size_t)j].high = 7002.0f;   // also a 5-candle HIGH
+        // ---- G at the high: before the high 300 lots lifted in 61 s; after it 40 in 90 s (died); the buyers pulled 4,000 bids (100 of them moved) and added 300
+        off::Acc a; a.tFirst = 1000; a.tHi = 1060; a.tLast = 1150; a.hitC[1] = 340; a.cumHi[1] = 300; a.pullC[0] = 4500; a.pullHi[0] = 500; a.addC[0] = 600; a.addHi[0] = 300;
+        { mvl::Move m; m.side = mvl::BIDS; m.oldPx = 28010; m.newPx = 28005; m.size = 100; m.dir = -1; a.moves.push_back(m); }
+        a.movHi = 0;
+        p->onAccClosed(*S, k, a);
+        CHECK(e->dtc[k].gOk[dt::HIGH] && !e->dtc[k].gOk[dt::LOW] && e->dtc[k].apull[dt::HIGH] == 4000 && e->dtc[k].aadd[dt::HIGH] == 300 && e->dtc[k].amov[dt::HIGH] == 100,
+              "(1.19.0) fillAcc: the buyers' bids after the high - pulled 4,000, added 300, moved 100 (the low had no fill time: nothing)");
+        const long long g0 = e->dtGWritten; p->decideTurns(*S, k, nb);
+        CHECK(e->dtG.count(std::make_pair((int)dt::HIGH, k)) && e->dtG[std::make_pair((int)dt::HIGH, k)].G && e->dtGWritten == g0 + 1, "(1.19.0) G decided at the high: (4,000 - 100) / 90 s = 2.4x ES normal, pulled > added, attack died; one G line");
+        p->decideTurns(*S, k, nb); CHECK(e->dtGWritten == g0 + 1, "(1.19.0) decided once: a second close writes nothing");
+        h.draws.clear(); p->draw();
+        CHECK(text(h, "A|", GRN) != nullptr && text(h, "G|", RED) != nullptr, "(1.19.0) badge A| (the low's defenders, green) + G (the high's buyers giving up, red)");
+        CHECK(text(h, "Attackers") != nullptr && text(h, "Pulling 2.4x", RED) != nullptr, "(1.19.0) box row Attackers: Pulling 2.4x, red at a high, in the buyers' column");
+        {   const mock::Draw* at = text(h, "Attackers"); const mock::Draw* mv = text(h, "Moved"); CHECK(at && mv && at->y > mv->y && at->y < S->lastBox.b, "(1.19.0) Attackers under Moved, inside the box"); }
+        // ---- Tr: the Delta Profile's TR line (trapped sellers below the old low) on this candle
+        const std::string tp = p->trapPathFor(*S, 0);
+        CHECK(!tp.empty() && tp.find("\\DeltaProfile\\ES-ESZ6-60-signals-") != std::string::npos, ("(1.19.0) the Delta Profile record path " + tp).c_str());
+        off::makeDir(flex + "\\DeltaProfile");
+        trapl::Rec tr; tr.id = 0; tr.top = false; tr.barT = 5; tr.barRaw = (unsigned long long)k; tr.lo = 27980; tr.hi = 27984; tr.tick = 0.25; tr.lots = 640; tr.med = 220; tr.x = 2.9; tr.version = "2.21.1"; tr.root = "ESZ6";
+        { std::ofstream f(tp.c_str(), std::ios::binary); f << "t_first|header\nD|something|else\n" << trapl::line(tr) << "\r\nTR|garbled\n"; }
+        e->trMs = -1; p->readTraps(*S, *e, NOW);
+        CHECK(e->dtTr.count(std::make_pair((int)dt::LOW, k)) == 1 && e->trRead == 1 && e->trBad == 1, "(1.19.0) the TR line read (CRLF ok), a garbled TR line counted bad, other lines ignored");
+        { std::ofstream f(tp.c_str(), std::ios::binary | std::ios::app); trapl::Rec t2 = tr; t2.lots = 9999; f << trapl::line(t2) << "\n"; }
+        e->trMs = -1; p->readTraps(*S, *e, NOW);
+        CHECK(e->dtTr[std::make_pair((int)dt::LOW, k)].lots == 640 && e->trRead == 1, "(1.19.0) appended lines read from where it stopped; the first line per candle + side wins (never re-decided)");
+        h.draws.clear(); p->draw();
+        CHECK(text(h, "A|", GRN) != nullptr && text(h, "Tr|", GRN) != nullptr && text(h, "G|", RED) != nullptr && text(h, "P?", GRN) != nullptr, "(1.19.0) badge A|Tr|G|P?: Tr green at the low (trapped sellers), G red, the bids' P green");
+        // ---- W: PDL at 6995.00 (27980): price away above, then a touch; in the first minute 300 bid lots pulled at the level, 40 traded
+        S->zr.e.lv.clear(); { zread::LevelZone z; z.name = "PDL"; z.c = 27980; z.kind = 0; S->zr.e.lv.push_back(z); zread::LevelZone v; v.name = "VAH"; v.c = 28100; v.kind = 0; S->zr.e.lv.push_back(v); }
+        p->trackOn(*S); p->checkW(*S);
+        CHECK(e->lwLevels.size() == 1 && e->lw.tol == 2 && e->lw.rearm == S->zone.hwMax, "(1.19.0) the watch takes the key levels it was tested on only (PDL, not VAH)");
+        CHECK(S->e.sink == &e->lwSink, "(1.19.0) the engine feeds the watch (BookSink)");
+        const long long t0 = std::max(S->e.lastS, e->lw.lastTs) + 100;     // the engine's clock (event seconds)
+        S->e.sink->onBook(2, off::ASK, 27990, 2, t0, k);                   // 6997.50: away above
+        S->e.sink->onBook(2, off::BID, 27981, 3, t0 + 10, k);              // the touch
+        S->e.sink->onBook(1, off::BID, 27980, 300, t0 + 20, k); S->e.sink->onBook(2, off::BID, 27980, 37, t0 + 30, k);
+        CHECK(e->lw.open.size() == 1 && e->lw.open[0].pulled == 300 && e->lw.open[0].filled == 40, "(1.19.0) measuring the first minute: 300 pulled, 40 traded (3 at the touch + 37)");
+        S->e.lastS = t0 + 69; p->checkW(*S); CHECK(e->dtW.empty(), "(1.19.0) not decided before 60 s");
+        const long long w0 = e->dtWWritten; S->e.lastS = t0 + 70; p->checkW(*S);
+        CHECK(e->dtW.size() == 1 && e->dtW.begin()->second.W && e->dtWWritten == w0 + 1, "(1.19.0) touch + 60 s: W decided once, one W line");
+        p->checkW(*S); CHECK(e->dtWWritten == w0 + 1, "(1.19.0) never written twice");
+        h.draws.clear(); p->draw();
+        std::string badges; for (auto& d : h.draws) if (d.type == "text" && d.y < 60 && d.text != bf::QUESTION && (d.text.find('|') != std::string::npos || d.text.find('?') != std::string::npos)) badges += d.text;
+        CHECK(badges == "A|Tr|G|W?", ("(1.19.0) 6 letters (A, Tr, G, W, P, L): the 4 most important on the badge, P and L to the hover (" + badges + ")").c_str());
+        if (const char* dp = std::getenv("GTW_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
+        CHECK(text(h, "W?", RED) != nullptr, "(1.19.0) W in red (a support at risk)");
+        CHECK(text(h, "At level") != nullptr && text(h, "Pulled 88%", RED) != nullptr, "(1.19.0) box row At level: Pulled 88% (300 / 340), red");
+        {   int l = 1 << 30, r = -1, fs = 99; for (auto& d : h.draws) if (d.type == "text" && d.y < 60 && (d.text == "A|" || d.text == "Tr|" || d.text == "G|" || d.text == "W?")) { l = std::min(l, d.x); r = std::max(r, d.r); fs = std::min(fs, d.fsize); }
+            const bool in = !e->badgeHit.empty() && l >= e->badgeHit.back().first.l && r <= e->badgeHit.back().first.r + 1;
+            CHECK(r > l && in && fs == 6, ("(1.19.0) the 4-letter badge: text inside its border, the font shrunk to the 6 pt floor on a 20 px slot (" + std::to_string(fs) + " pt)").c_str()); }
+        {   // two neighbouring candles with badges: the wider one never covers the one before it
+            const long long kp = (long long)B[(size_t)i - 1].time; dt::GiveUp gp; gp.t = kp; gp.side = dt::HIGH; gp.G = true; gp.x = 2.5; gp.secs = 60; gp.normal = 17.8; e->dtG[std::make_pair((int)dt::HIGH, kp)] = gp;
+            h.draws.clear(); p->draw();
+            CHECK(e->badgeHit.size() == 2 && e->badgeHit[0].first.r < e->badgeHit[1].first.l, "(1.19.0) two badges on neighbouring candles never overlap (the second shifted right)");
+            e->dtG.erase(std::make_pair((int)dt::HIGH, kp)); h.draws.clear(); p->draw(); }
+        // ---- the badge's hover: the letters, the numbers (never on the chart), the letter with no room
+        CHECK(e->badgeHit.size() >= 1, "(1.19.0) the badge's rectangle is kept for the mouse");
+        if (!e->badgeHit.empty()) {
+            const off::IconRect br0 = e->badgeHit.back().first; void* W = (void*)0x1; off::off_test_cursor_wnd = W; pc::test_ok = true;
+            RTX_EVENT ev = moveAt((br0.l + br0.r) / 2, (br0.t + br0.b) / 2, i); p->mouse(&ev);
+            h.draws.clear(); p->draw();
+            if (const char* dp = std::getenv("GTW_DUMP2")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
+            CHECK(e->badgeTip >= 0, "(1.19.0) mouse on the badge: its hover is on");
+            {   int stripR = -1, tipR = -1; for (auto& d : h.draws) { if (d.type == "box" && d.color == (COLOR)0x000B0F15) stripR = std::max(stripR, d.r); if (d.type == "box" && d.color == off::C_TIP_BG) tipR = std::max(tipR, d.r); }
+                CHECK(stripR > 0 && tipR > 0 && tipR <= stripR, ("(1.19.0) the hover box stays inside the pane, left of the price axis (" + std::to_string(tipR) + " <= " + std::to_string(stripR) + ")").c_str()); }
+            CHECK(text(h, "Tr  Sellers trapped: 640 lots (2.9x) below the old low") != nullptr, "(1.19.0) hover: the trap size (only here)");
+            CHECK(text(h, "G  attackers giving up (buyers at the high):") != nullptr && text(h, "    bids pulled 2.4x normal, 4000 pulled vs 300 added, pace 0.1x") != nullptr, "(1.19.0) hover: G with its numbers");
+            CHECK(text(h, "W  defenders withdrew at PDL 6995:") != nullptr && text(h, "    300 bid lots pulled (net) vs 40 traded in 1 min") != nullptr, "(1.19.0) hover: W with its numbers");
+            CHECK(text(h, "Not on the badge (no room): P, L") != nullptr, "(1.19.0) hover: the letters with no room (P, L)");
+            RTX_EVENT ev2 = moveAt(5, 280, i); p->mouse(&ev2); h.draws.clear(); p->draw();
+            CHECK(e->badgeTip < 0 && text(h, "Not on the badge (no room): P, L") == nullptr, "(1.19.0) mouse off the badge: hover gone");
+            pc::test_ok = false; off::off_test_cursor_wnd = nullptr; }
+        // ---- restart: G / W read back from the turns file, Tr from the Delta Profile's record - the same badge, nothing re-decided
+        const std::string tf = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
+        int gl = 0, wl = 0; { std::stringstream ss(tf); std::string ln; while (std::getline(ss, ln)) { if (ln.compare(0, 2, "G|") == 0) ++gl; if (ln.compare(0, 2, "W|") == 0) ++wl; } }
+        CHECK(gl == 1 && wl == 1, "(1.19.0) one G line and one W line in the turns file (the records for the nightly)");
+        e->dtLoaded = false; e->dtPath.clear(); e->dtG.clear(); e->dtW.clear(); e->dtTr.clear(); e->trOff.clear(); e->trMs = -1; p->readTraps(*S, *e, NOW);
+        p->decideTurns(*S, k, nb);
+        CHECK(e->dtG.count(std::make_pair((int)dt::HIGH, k)) && e->dtG[std::make_pair((int)dt::HIGH, k)].G && e->dtW.size() == 1 && e->dtGWritten == g0 + 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.19.0) after a restart: G and W read back, nothing written again (no repaint)");
+        h.draws.clear(); p->draw();
+        badges.clear(); for (auto& d : h.draws) if (d.type == "text" && d.y < 60 && d.text != bf::QUESTION && (d.text.find('|') != std::string::npos || d.text.find('?') != std::string::npos)) badges += d.text;
+        CHECK(badges == "A|Tr|G|W?", ("(1.19.0) the same badge after the restart (" + badges + ")").c_str());
+        // ---- later candles never change it
+        {   std::ostringstream o; p->statusExtra(*S, o); const std::string st = o.str();
+            CHECK(st.find("\nGIVE_UP,") != std::string::npos && st.find("\nTRAPS,1 Delta Profile TR lines") != std::string::npos && st.find("\nAT_LEVEL,1 key levels watched") != std::string::npos && st.find("\nBADGES,") != std::string::npos,
+                  "(1.19.0) status lines GIVE_UP / TRAPS / AT_LEVEL / BADGES"); }
+    }
     {   // (1.13.0) the touch rule in the engine: 40 lots hit at 7000.00 in the first 20 s, 2 in 20-60 s, 60 of 80 resting lots stay -> attack died
         off::Engine g; g.adMedian = 0.095; g.curKey = 77; g.restAdd(off::BID, 28000, 80);
         g.touchFill(off::BID, 28000, 30, 1000, 80); g.restAdd(off::BID, 28000, -30);
