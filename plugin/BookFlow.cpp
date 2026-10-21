@@ -77,7 +77,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.14.1"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.15.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 #include "DefenseTurn.h"          // (1.12.0) the pivot turn marks + the refill line decisions (drawn on the price chart by lsDefenseLines)
@@ -95,7 +95,7 @@ public:
     virtual bool barMarks() const { return false; }                        // no letters / dash drawn; hover + records keep them
     virtual bool netBars() const { return true; }
     virtual bool textOff() const { return false; }
-    virtual std::string boxKeep() const { return "Refill Effort;Refilled"; }   // (1.8.0, Rassul 19:19) Reward removed - it repeats Aggression's Reward;   // (1.6.0, Rassul 17:42 "build it already") + Reward (EffortReward.h)    // (1.5.0, Rassul 11:19 / 11:53) the two defense rows; the rest hidden   // (1.4.0, 23:56 CT) + Added / Pulled (their plain 20-candle ratios, as the pull marker)            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
+    virtual std::string boxKeep() const { return "Refill Effort;Refilled;Counter"; }   // (1.15.0) + Counter (Top Defender #5)   // (1.8.0, Rassul 19:19) Reward removed - it repeats Aggression's Reward;   // (1.6.0, Rassul 17:42 "build it already") + Reward (EffortReward.h)    // (1.5.0, Rassul 11:19 / 11:53) the two defense rows; the rest hidden   // (1.4.0, 23:56 CT) + Added / Pulled (their plain 20-candle ratios, as the pull marker)            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
     virtual bool boxOnly() const { return true; }                         // (1.2.0, Rassul 2026-10-16 22:00) the left-justified numbers box in the pane, no read / options lines                          // (1.1.0, Rassul 2026-10-16 18:14) no read / numbers / options lines on the pane; the records and the tape reader keep every number
     virtual long long netOf(const off::Rec& r, int s) const { return bf::netOf(r, s); }
     // the label numbers of one net bar: ratio / pace / lots of the part that spiked (up = added, down = pulled; pace only for added)
@@ -125,6 +125,9 @@ public:
         std::map<long long, dt::Candle> dtc; std::set<std::pair<int, long long> > dtUsed; std::map<std::pair<int, long long>, dt::Turn> dtTurns;
         std::string dtPath, dtLivePath, dtLiveText, dtMkt; int dtSpb = 0; bool dtLoaded = false; long long dtWritten = 0, dtFileFails = 0;
         std::vector<std::pair<int, long long> > dtPendX; std::set<std::pair<int, long long> > dtXDone; long long dtXWritten = 0;   // (1.13.0) turns waiting for their exhaustion decision (60 s after the touches), done
+        // (1.15.0) H: per turn with an A, did the defenders hit back (DefenseTurn counterDecide)? decided once, written as an H line
+        std::map<std::pair<int, long long>, dt::Counter> dtH; std::vector<std::pair<int, long long> > dtPendH; long long dtHWritten = 0, dtHNoFeed = 0;
+        long long badgesDrawn = 0;                                          // (1.15.0) badge-row draws (status / tests)
         dt::Turn dtLive; bool dtHaveLive = false; ss::Store dlStore; ss::Values dlSet = ss::defaults(dlset::spec(), -1);
         std::map<long long, bf::PullStat> pulls; long long markersDrawn = 0; // (1.4.0) closed candles' pull decisions (decided once, never cleared: no repaint)               // (1.3.4) the pane on the screen; the live candle's events last drawn
     };
@@ -187,7 +190,7 @@ public:
         mrec::Recorder* r = rec(S); if (r) r->status(o); else o << "\nMBO_RECORD,unavailable (out of memory)";
         Ext* e = ext(S);
         o << "\nSPIKE_RULE,|net| >= " << off::tenthsText(avgT(S)) << (avgT(S) > 0 ? "" : " (off)") << " the plain " << S.ser.ratioBars << "-candle average of that side's |net|, decided at the close; forming candle dim, no label; colour by side"
-          << "\nTURNS," << (e ? std::to_string(e->dtTurns.size()) + " decided, " + std::to_string(e->dtXWritten) + " exhaustion lines, " + std::to_string(e->dtPendX.size()) + " waiting, touches " + std::to_string(S.e.touches.size()) + ", " + std::to_string(e->dtWritten) + " written, " + std::to_string(e->dtFileFails) + " write fails, live " + (e->dtHaveLive ? "?" : "none") + ", file " + e->dtPath : std::string("n/a"))
+          << "\nTURNS," << (e ? std::to_string(e->dtTurns.size()) + " decided, " + std::to_string(e->dtXWritten) + " exhaustion lines, " + std::to_string(e->dtPendX.size()) + " waiting, touches " + std::to_string(S.e.touches.size()) + ", " + std::to_string(e->dtWritten) + " written, " + std::to_string(e->dtFileFails) + " write fails, H " + std::to_string(e->dtH.size()) + " decided (" + std::to_string(e->dtHWritten) + " written, " + std::to_string(e->dtPendH.size()) + " waiting, " + std::to_string(e->dtHNoFeed) + " no feed), live " + (e->dtHaveLive ? "?" : "none") + ", file " + e->dtPath : std::string("n/a"))
           << "\nMARKET_STATE,BOOK " << (!e || e->chart.empty() ? std::string("waiting for the chart label") : "bar " + std::to_string(e->mstBar ? e->mstCt : 0) + ",posts " + std::to_string(e->mstPosts) + ",keys " + std::to_string(e->mstKv.size()));
     }
     // the old panes' session records (StackStats\ and PullStats\), opened with the session, one row per decided candle, saved with the main record
@@ -252,7 +255,9 @@ public:
         if (p.empty()) return;
         off::makeDir(f); off::makeDir(f + "\\BookFlow");
         std::ifstream in(p.c_str(), std::ios::binary); std::string ln; std::vector<std::string> keep;
+        e.dtH.clear(); e.dtPendH.clear();
         while (std::getline(in, ln)) { dt::XLine X; if (dt::parseX(ln, X)) { keep.push_back(ln); e.dtXDone.insert(std::make_pair(X.side, X.t)); continue; }
+            dt::Counter HC; if (dt::parseH(ln, HC)) { keep.push_back(ln); e.dtH[std::make_pair(HC.side, HC.t)] = HC; continue; }   // (1.15.0) decided H: redrawn the same
             dt::Line L; if (!dt::parseLine(ln, L) || L.kind != 'T') continue; keep.push_back(ln);
             dt::Turn t; t.t = L.t; t.side = L.side; t.marginPct = L.margin; t.E = L.E; t.A = L.A; t.defNet = L.defNet; t.attNet = L.attNet;
             off::Tick a = 0, b = 0; if (off::toTick(L.pivotPx, L.tick, a)) t.pivotPx = a; if (off::toTick(L.linePx, L.tick, b)) t.linePx = b;
@@ -283,6 +288,32 @@ public:
             e->dtTurns[std::make_pair(sd, key)] = t;
             if (!e->dtPath.empty()) { std::ofstream f(e->dtPath.c_str(), std::ios::binary | std::ios::app); if (f.is_open()) { f << dt::lineOf('T', t, S.tick) << "\n"; f.flush(); if (f.good()) ++e->dtWritten; else ++e->dtFileFails; } else ++e->dtFileFails; }
             e->dtPendX.push_back(std::make_pair(sd, key));                 // (1.13.0) its exhaustion is decided once the touches near it finish
+            if (t.A) e->dtPendH.push_back(std::make_pair(sd, key));        // (1.15.0) its counter (H) is decided COUNTER_BARS candles later
+        }
+        decideCounters(S, i, times, op, hi, lo, cl, nb);
+    }
+    // (1.15.0, Top Defender #5) each turn with an A waiting for its counter: the candles after it (this run's order feed) -> H decided once
+    void decideCounters(S_& S, int i, RTARRAYI& times, RTARRAY& op, RTARRAY& hi, RTARRAY& lo, RTARRAY& cl, const off::PaneBar& nb) {
+        Ext* e = ext(S); if (!e) return;
+        for (size_t k = 0; k < e->dtPendH.size();) {
+            const std::pair<int, long long> pk = e->dtPendH[k];
+            std::map<std::pair<int, long long>, dt::Turn>::const_iterator it = e->dtTurns.find(pk);
+            std::map<long long, int>::const_iterator ti = S.barEnds.find(pk.second);
+            if (it == e->dtTurns.end() || e->dtH.count(pk) || ti == S.barEnds.end()) { e->dtPendH.erase(e->dtPendH.begin() + (long)k); continue; }
+            const int t0 = ti->second;
+            std::vector<dt::Candle> after;
+            for (int j = t0 + 1; j <= i; ++j) { dt::Candle q; if (!candleAt(S, j, times, op, hi, lo, cl, j == i ? &nb.r : nullptr, q)) q.ok = false; after.push_back(q); }
+            std::vector<dt::Candle> back;                                    // the ATR: the 15 candles up to the turn (OHLC only)
+            for (int j = std::max(0, t0 - 15); j <= t0; ++j) { dt::Candle q; off::Tick o = 0, h = 0, l = 0, c = 0;
+                if (j < op.count && off::toTick((double)op[j], S.tick, o) && off::toTick((double)hi[j], S.tick, h) && off::toTick((double)lo[j], S.tick, l) && off::toTick((double)cl[j], S.tick, c)) { q.o = o; q.h = h; q.l = l; q.c = c; q.ok = true; }
+                back.push_back(q); }
+            dt::Counter C; const int r = dt::counterDecide(it->second, after, dt::atrOf(back), C);
+            if (r == 0 && (int)after.size() < dt::COUNTER_BARS + 3) { ++k; continue; }
+            if (r == 1) {
+                e->dtH[pk] = C;
+                if (!e->dtPath.empty()) { std::ofstream f(e->dtPath.c_str(), std::ios::binary | std::ios::app); if (f.is_open()) { f << dt::hLineOf(C) << "\n"; f.flush(); if (f.good()) ++e->dtHWritten; else ++e->dtFileFails; } else ++e->dtFileFails; }
+            } else if (r == -2 || r == 0) ++e->dtHNoFeed;                   // a window candle without the order feed: no H decided (never guessed)
+            e->dtPendH.erase(e->dtPendH.begin() + (long)k);
         }
     }
     // the forming candle's "?" (pivot rule + the defending Defense bar bigger so far); published for lsDefenseLines only when it changes
@@ -302,6 +333,43 @@ public:
         }
         const std::string txt = e->dtHaveLive ? dt::lineOf('L', e->dtLive, S.tick) + "\n" : std::string("N\n");
         if (txt != e->dtLiveText && !e->dtLivePath.empty()) { if (off::publishFile(e->dtLivePath, txt)) e->dtLiveText = txt; }
+    }
+    // (1.15.0, Rassul 11:22 / 11:25 CT, defender5-mockup-v2 "we could also have multiple like A|H and adjust font size as needed") the
+    // BADGE ROW: a thin solid strip at the top of the pane; on each closed candle ONE badge with the behaviours decided on it ("A", "H",
+    // "A|H"), letters only + "?" until proven, green where buyers defend a low / red where sellers defend a high, the font shrinking (9 -> 6
+    // pt) to fit the candle's slot; never over the box; drawn only when a badge is on screen. dt::badgeText decides the text.
+    template <class XOf>
+    void badgeRow(S_& S, Ext& e, const off::PaneGeo& g, int v0, int v1, int last, int slot, RTARRAYI& times, XOf xOf, const bp::Box* box) {
+        (void)S;
+        struct B { int x; std::string s; int side; };
+        std::vector<B> bs;
+        for (int i = std::max(0, v0); i <= v1 && i < last; ++i) {
+            const long long key = (long long)times[i];
+            bool A = false, H = false; int side = -1;
+            for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, dt::Turn>::const_iterator it = e.dtTurns.find(std::make_pair(sd, key)); if (it != e.dtTurns.end() && it->second.A) { A = true; side = sd; } }
+            for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator h = e.dtH.begin(); h != e.dtH.end(); ++h) if (h->second.H && h->second.at == key) { H = true; if (side < 0) side = h->second.side; }
+            const std::string t = dt::badgeText(A, H, false); if (t.empty()) continue;
+            const int xc = xOf(i); if (xc < g.left || xc > g.edge) continue;
+            bs.push_back(B{ xc, t + "?", side });
+        }
+        if (bs.empty()) return;
+        const int y0 = g.top + g.reserve + 1, h = 15, y1 = y0 + h;
+        if (y1 + 10 > g.bottom) return;                                    // pane too short
+        off::fillFlat(this, g.left, y0, g.edge, y1, (COLOR)0x000B0F15);
+        off::fillFlat(this, g.left, y1, g.edge, y1, (COLOR)0x00374151);
+        const int maxW = std::max(12, slot - 2);
+        for (size_t k = 0; k < bs.size(); ++k) {
+            const COLOR col = (COLOR)(bs[k].side == dt::HIGH ? e.dlSet.c(dlset::K_COL_HIGH) : e.dlSet.c(dlset::K_COL_LOW));
+            FONT f; f.id = HELVETICA; f.style = BOLD;
+            const int fs = dt::fitFont([&](int pt) { f.size = pt; setFont(f); return (int)getTextWidth(bs[k].s.c_str(), -1) + 4; }, maxW, 9, 6);
+            f.size = fs; setFont(f); const int w = (int)getTextWidth(bs[k].s.c_str(), -1) + 4;
+            const int l = bs[k].x - w / 2, r = l + w;
+            if (box && l < box->r && r > box->l && y0 < box->b && y1 > box->t) continue;   // never over the box
+            off::fillFlat(this, l, y0 + 1, r, y0 + 1, col); off::fillFlat(this, l, y1 - 1, r, y1 - 1, col);
+            off::fillFlat(this, l, y0 + 1, l, y1 - 1, col); off::fillFlat(this, r, y0 + 1, r, y1 - 1, col);
+            setTextColor(col); RCT rc; rc.set(off::coord(l + 2), off::coord(y0 + 1), off::coord(r - 1), off::coord(y1 - 1)); rc.drawText(bs[k].s.c_str(), false, false);
+        }
+        ++e.badgesDrawn;
     }
     // a small filled triangle (pointing down = at a high, up = at a low), tip at (cx, tipY)
     void triangle(int cx, int tipY, bool down, COLOR col) {
@@ -521,6 +589,27 @@ public:
                 }
             info.rows.push_back(rw);
         }
+        {   // (1.15.0, Top Defender #5) the COUNTER row: the latest turn with an A within 12 candles of the shown candle - in the defending side's
+            // column "Hit back 2.4x" (decided), "Absorbed only" (decided, no counter) or "Watching" (its window is still open); else "-"
+            off::InfoRow cr; cr.label = "Counter"; cr.v[0] = cr.v[1] = "-";
+            if (Ext* e = ext(S)) {
+                const long long sk = liveBox ? (long long)times[last] : mt;
+                std::map<long long, int>::const_iterator si = S.barEnds.find(sk);
+                const int sIdx = si != S.barEnds.end() ? si->second : (liveBox ? last : -1);
+                const dt::Turn* best = nullptr; int bIdx = -1;
+                for (std::map<std::pair<int, long long>, dt::Turn>::const_iterator it = e->dtTurns.begin(); it != e->dtTurns.end(); ++it) {
+                    const dt::Turn& t = it->second; if (!t.A || t.t > sk) continue;
+                    std::map<long long, int>::const_iterator ti = S.barEnds.find(t.t); if (ti == S.barEnds.end() || sIdx < 0 || sIdx - ti->second > 12) continue;
+                    if (!best || ti->second > bIdx) { best = &t; bIdx = ti->second; }
+                }
+                if (best) {
+                    std::map<std::pair<int, long long>, dt::Counter>::const_iterator h = e->dtH.find(std::make_pair(best->side, best->t));
+                    const int col = best->side == dt::HIGH ? 1 : 0;
+                    cr.v[col] = h != e->dtH.end() ? dt::counterText(h->second) : std::string(sIdx - bIdx <= dt::COUNTER_BARS ? "Watching" : "-");
+                }
+            }
+            info.rows.push_back(cr);
+        }
         {   const std::string keep = ";" + boxKeep() + ";"; std::vector<off::InfoRow> kept;   // (1.2.1) Net and Pace only
             for (size_t k = 0; k < info.rows.size(); ++k) if (keep.find(";" + info.rows[k].label + ";") != std::string::npos) kept.push_back(info.rows[k]);
             info.rows.swap(kept); }
@@ -549,6 +638,7 @@ public:
         }
         if (S.feed.silentNow(off::steadyMs())) { rd = br::Read(); rd.head = off::silentRead(S.feed.silentFromWall, S.feed.reconnects); }   // (1.7.0) the watchdog says so
         const off::TextW tw = off::measureWith(this);
+        info.topLines = 1; info.topW = off::questionW(tw, bf::QUESTION);   // (1.15.0, Rassul 11:30) the question + info icon: the box's first line
         const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
         if (Ext* e = ext(S)) { e->lastRead = rd; e->lastReadLines = rp.lines; }
         S.lastBox = P.ok ? P.box : bp::Box();
@@ -592,11 +682,12 @@ public:
                     for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, dt::Turn>::const_iterator it = e->dtTurns.find(std::make_pair(sd, (long long)times[i])); if (it != e->dtTurns.end()) mark(i, it->second, false); }
                 if (e->dtHaveLive && last <= v1) mark(last, e->dtLive, true);
             }
+            if (top > 0) badgeRow(S, *e, g, v0, v1, last, slot, times, xOf, P.ok ? &P.box : nullptr);   // (1.15.0) the badge row
         }
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
         off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
         br::draw(this, P, info, rp, rd);                                  // (1.4.0) the Read word + lines over its rows
-        { Ext* ex = ext(S); off::IconRect tmp; off::drawQuestion(this, g, bf::QUESTION, P.ok ? &P.box : nullptr, ex ? &ex->infoIcon : &tmp);   // (1.8.0) the question; (1.10.0) + the info icon
+        { Ext* ex = ext(S); off::IconRect tmp; if (P.ok) off::drawQuestionIn(this, P.box, bf::QUESTION, ex ? &ex->infoIcon : &tmp); else if (ex) ex->infoIcon = off::IconRect();   // (1.15.0) inside the box, upper left   // (1.8.0) the question; (1.10.0) + the info icon
           if (ex && ex->infoTipOn) off::drawInfoTip(this, g, ex->infoIcon, bf::INFO_TIP); }   // (1.11.0) the description box while the mouse is on the icon
     }
     // (1.5.0) where candle i sits: a new 10-bar low / high and its volume vs the 20 before it (bf::spotOf), from the chart's own bars
@@ -726,6 +817,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.14.1");   // BF_VERSION
+    p->setVersion("1.15.0");   // BF_VERSION
     return p;
 }

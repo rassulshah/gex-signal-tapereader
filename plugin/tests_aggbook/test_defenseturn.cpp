@@ -91,6 +91,30 @@ int main() {
         hh[2].refPx[1] = 108; hh[2].refLots[1] = 200; hh[2].o = 109.5;
         CHECK(!dt::decide(hh, 2, dt::HIGH, false, U, t), "(1.2.0) high: red close 109 above the R line 108 = no turn");
         hh[2].c = 107; CHECK(dt::decide(hh, 2, dt::HIGH, false, U, t) && t.linePx == 108, "(1.2.0) high: red close 107 below the line 108 = turn"); }
+    {   // (1.3.0, Top Defender #5) H: the defenders hit back after an A
+        dt::Turn T; T.t = 100; T.side = dt::LOW; T.pivotPx = 1000; T.A = true; T.attAggr = 300;
+        auto K = [](long long t, long long c, long long buy, long long sell) { dt::Candle q; q.t = t; q.ok = true; q.o = c; q.h = c + 2; q.l = c - 2; q.c = c; q.aggr[1] = buy; q.aggr[0] = sell; return q; };
+        dt::Counter C;
+        CHECK(dt::counterDecide(T, std::vector<dt::Candle>{ K(101, 1003, 200, 50) }, 8.0, C) == 0, "1 of 2 candles: wait");
+        CHECK(dt::counterDecide(T, std::vector<dt::Candle>{ K(101, 1003, 200, 50), K(102, 1004, 150, 40) }, 8.0, C) == 1 && C.H && C.lots == 350 && C.at == 102, "buyers lift 350 >= the 300 attack, close 4 ticks >= 0.25 ATR (2) above the low: H");
+        CHECK(dt::counterDecide(T, std::vector<dt::Candle>{ K(101, 1003, 100, 50), K(102, 1004, 150, 40) }, 8.0, C) == 1 && !C.H, "250 < 300: absorbed only");
+        CHECK(dt::counterDecide(T, std::vector<dt::Candle>{ K(101, 1003, 200, 50), K(102, 1001, 150, 40) }, 8.0, C) == 1 && !C.H, "close only 1 tick away (< 0.25 ATR): absorbed only");
+        CHECK(dt::counterDecide(T, std::vector<dt::Candle>{ K(101, 999, 900, 50) }, 8.0, C) == 1 && !C.H && C.at == 101, "a close beyond the low ends it at once: absorbed only");
+        dt::Candle nf = K(101, 1003, 200, 50); nf.ok = false;
+        CHECK(dt::counterDecide(T, std::vector<dt::Candle>{ nf, K(102, 1004, 150, 40) }, 8.0, C) == -2, "no order feed in the window: no decision");
+        dt::Turn N = T; N.A = false; CHECK(dt::counterDecide(N, std::vector<dt::Candle>{ K(101, 1003, 200, 50), K(102, 1004, 150, 40) }, 8.0, C) == -1, "no A: not applicable");
+        dt::Turn Hh = T; Hh.side = dt::HIGH; Hh.pivotPx = 1010;   // at a high the defenders are the sellers (aggr[0])
+        CHECK(dt::counterDecide(Hh, std::vector<dt::Candle>{ K(101, 1007, 50, 200), K(102, 1006, 40, 150) }, 8.0, C) == 1 && C.H && C.lots == 350, "high: sellers hit back 350, close 4 below the high: H");
+        dt::Counter R; CHECK(dt::parseH(dt::hLineOf(C), R) && R.H && R.lots == 350 && R.attack == 300 && R.at == 102 && R.side == dt::HIGH, "H line round trip (restart redraws the same)");
+        CHECK(!dt::parseH("H|1|0|2|5|5|5", R) && !dt::parseH("H|x", R) && !dt::parseH("T|1", R), "garbled H lines refused");
+        CHECK(dt::counterText(C) == "Hit back 1.2x" && dt::counterText(dt::Counter()) == "Absorbed only", "the Counter row text");
+        CHECK(dt::badgeText(true, false, false) == "A" && dt::badgeText(true, true, false) == "A|H" && dt::badgeText(false, true, false) == "H" && dt::badgeText(false, false, true) == "", "badge text A / A|H / H; E not shown while SHOW_E is off");
+        auto w = [](const std::string& s) { return [s](int pt) { return (int)(s.size() * pt * 0.62) + 4; }; };
+        CHECK(dt::fitFont(w("A?"), 20, 9, 6) == 9 && dt::fitFont(w("A|H?"), 25, 9, 6) == 8 && dt::fitFont(w("A|H|E?"), 25, 9, 6) == 6, "the font shrinks so 1 / 2 / 3 letters fit the candle");
+        std::vector<dt::Candle> at = { K(1, 100, 0, 0), K(2, 100, 0, 0) }; at[1].h = 106; at[1].l = 98; CHECK(std::fabs(dt::atrOf(at) - 8.0) < 1e-9, "ATR from the candles");
+        dt::Line L; L.A = true; CHECK(dt::tagsOfH(L, true) == "R A H ?" && dt::tagsOfH(L, false) == "R A ?", "the line label adds H");
+        CHECK(std::string(dt::VERSION) == "1.3.0", "DefenseTurn 1.3.0");
+    }
     printf("DefenseTurn: %d passed, %d failed\n", p, f);
     return f ? 1 : 0;
 }

@@ -32,7 +32,7 @@ inline Plan addAndPlan(off::Info& I, const Read& r, const off::TextW& M, PlanFn 
     return out;
 }
 // the y of a box row (0 = the first data row; two-column boxes have the column-head row under the header)
-inline int rowY(const off::PanelPlan& P, const off::Info& I, int row) { return P.box.t + off::BOX_PAD - 1 + off::NUM_LH * (1 + (I.twoCol ? 1 : 0) + row); }
+inline int rowY(const off::PanelPlan& P, const off::Info& I, int row) { return P.box.t + off::BOX_PAD - 1 + off::NUM_LH * (1 + (I.twoCol ? 1 : 0) + I.topLines + row); }   // (2026-10-21) + the question line
 
 template <class X>
 inline void draw(X* x, const off::PanelPlan& P, const off::Info& I, const Plan& pl, const Read& r) {

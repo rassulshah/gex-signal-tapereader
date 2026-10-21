@@ -40,7 +40,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* DL_VERSION = "1.2.2";   // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
+static const char* DL_VERSION = "1.3.0";   // 1.3.0 (2026-10-21, Rassul approved defender5-mockup-v2 11:25 CT): the line label adds H when lsBookFlow decided the defenders hit back after the A ("R A H ?"; DefenseTurn 1.3.0 H lines);    // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
 static long long dlSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string dlFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void dlMakeDir(const std::string& p) {
@@ -66,6 +66,7 @@ struct DlState {
     File turns, live;
     std::vector<dt::Line> lines;                  // decided turns, sorted by bar key
     std::map<std::pair<int, long long>, dt::XLine> xs; // (1.1.0) the exhaustion line of each turn (side, turn key)
+    std::map<std::pair<int, long long>, bool> hs;      // (1.3.0) H decided per turn (side, turn key): true = the defenders hit back
     bool haveLive = false; dt::Line liveLine;
     long long lastCheckMs = -100000, reads = 0, bad = 0;
     ss::Store setStore; ss::Values set = ss::defaults(dlset::spec(), -1);
@@ -136,11 +137,12 @@ void DefenseLines::refresh(DlState& s) {
     if (tp != s.turns.path) { s.turns = DlState::File(); s.turns.path = tp; s.lines.clear(); s.xs.clear(); }
     if (dlStat(tp, mt, sz) && (mt != s.turns.mt || sz != s.turns.sz) && sz < 4 * 1024 * 1024) {
         std::ifstream in(tp.c_str(), std::ios::binary); std::string ln; std::vector<dt::Line> v; long long bad = 0;
-        std::map<std::pair<int, long long>, dt::XLine> xs;
-        while (std::getline(in, ln)) { dt::Line L; dt::XLine X; if (dt::parseLine(ln, L) && L.kind == 'T') v.push_back(L); else if (dt::parseX(ln, X)) xs[std::make_pair(X.side, X.t)] = X; else if (!ln.empty()) ++bad; }
+        std::map<std::pair<int, long long>, dt::XLine> xs; std::map<std::pair<int, long long>, bool> hs;
+        while (std::getline(in, ln)) { dt::Line L; dt::XLine X; dt::Counter HC; if (dt::parseLine(ln, L) && L.kind == 'T') v.push_back(L); else if (dt::parseX(ln, X)) xs[std::make_pair(X.side, X.t)] = X; else if (dt::parseH(ln, HC)) hs[std::make_pair(HC.side, HC.t)] = HC.H; else if (!ln.empty()) ++bad; }
         std::stable_sort(v.begin(), v.end(), [](const dt::Line& a, const dt::Line& b) { return a.t < b.t; });
         if (v.size() >= s.lines.size()) s.lines.swap(v);                     // append-only: a torn / shorter read never removes a drawn line
         for (std::map<std::pair<int, long long>, dt::XLine>::const_iterator it = xs.begin(); it != xs.end(); ++it) s.xs[it->first] = it->second;
+        for (std::map<std::pair<int, long long>, bool>::const_iterator it = hs.begin(); it != hs.end(); ++it) s.hs[it->first] = it->second;
         s.turns.mt = mt; s.turns.sz = sz; s.reads++; s.bad = bad;
     }
     if (lp != s.live.path) { s.live = DlState::File(); s.live.path = lp; s.haveLive = false; s.liveLine = dt::Line(); }
@@ -223,7 +225,7 @@ int DefenseLines::draw(void) {
             const bool haveX = xi != s->xs.end() && showE;
             const bool close = haveX && std::fabs(xi->second.px - L.linePx) < 1.5 * L.tick;   // within a tick: stack the labels
             if (st >= 0 && lifeAt(st, L.side, L.linePx, nextKey).broken) { ++failed; continue; }   // the R failed: R and its E removed
-            if (showLines) drawLine(st, L.side, L.linePx, nextKey, L.side == dt::HIGH ? colHigh : colLow, dt::tagsOf(L), close ? (L.side == dt::HIGH ? 6 : -6) : 0);
+            if (showLines) drawLine(st, L.side, L.linePx, nextKey, L.side == dt::HIGH ? colHigh : colLow, dt::tagsOfH(L, s->hs.count(std::make_pair(L.side, L.t)) && s->hs[std::make_pair(L.side, L.t)]), close ? (L.side == dt::HIGH ? 6 : -6) : 0);
             if (haveX) {
                 const int xs_ = indexOf(xi->second.at);
                 const int sx = traded(xs_, xi->second.px) ? xs_ : (traded(piv, xi->second.px) ? piv : i);
@@ -257,6 +259,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour AND beyond the R line (above it at a low, below it at a high). R LINE (red at a high, green at a low) = the price near the pivot where the defenders re-posted the most of what was eaten. E LINE (gray) = exhaustion: the price near the pivot where the attack died AT the price (the attackers' hits there in seconds 20-60 slowed to the market's median or less vs seconds 0-20, and at least half the resting size stayed); decided about a minute after the close; only on turns that have an R. Yellow dot = the candle each line refers to. Each line runs at most 3 candles (setting), until the next turn's lines, or until a candle closes through it (then it is removed). A = absorption (attackers out-hit the defenders and still lost the close); ? = not proven yet (scored nightly). Dotted ? line = the forming candle, gone if it does not confirm. Example: 8:48 AM ES low: green R at 7827.25, gray E at 7826.75, dots on the 8:48 candle. Needs lsBookFlow (Defense) on the same chart.");
-    p->setVersion("1.2.2");   // DL_VERSION
+    p->setVersion("1.3.0");   // DL_VERSION
     return p;
 }

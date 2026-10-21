@@ -76,7 +76,15 @@ int main() {
     CHECK(s->lines.size() == 3 && s->xs.size() == 1 && text(h, "R A ?") != nullptr && text(h, "E ?") != nullptr, "a torn shorter file: the lines stay (no repaint)");
     std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string body((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
     CHECK(body.find("failed lines removed") != std::string::npos, "(1.2.0) the status counts the removed lines");
-    CHECK(body.find("VERSION,1.2.1") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    CHECK(body.find("VERSION,1.3.0") != std::string::npos && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    {   // (1.3.0, Top Defender #5) lsBookFlow decided the defenders hit back after the A: the label reads "R A H ?"; "absorbed only" keeps "R A ?"
+        { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); dt::Counter C; C.t = b.t; C.side = b.side; C.H = true; C.lots = 640; C.attack = 266; C.at = b.t + 360; f << dt::hLineOf(C) << "\n"; }
+        s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+        CHECK(text(h, "R A H ?") != nullptr, "(1.3.0) H decided -> the line label R A H ?");
+        { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); f << "H|garbage\n"; }
+        s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+        CHECK(text(h, "R A H ?") != nullptr && s->hs.size() == 1, "(1.3.0) a garbled H line is ignored, the decided H stays (no repaint)");
+    }
     { std::ofstream f(livePath.c_str()); f << liveSecond << "\n"; }
     s->lastCheckMs = -100000; h.draws.clear(); p->draw();
     CHECK(s->haveLive && text(h, "? R") != nullptr, "live fixture restored before the bar-period switch");

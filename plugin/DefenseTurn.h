@@ -15,6 +15,8 @@
 // Test 2026-10-20 (TURN-TEST.md, 7 markets, 4,075 pivot candles, +1.5R before beyond the extreme): no edge over a plain defending close yet,
 // so every mark is "?" until the nightly proves it (his show-only-what-works rule). No look-ahead: only candles up to the turn candle.
 #include <string>
+#include <cstdio>
+#include <algorithm>
 #include <vector>
 #include <sstream>
 #include <cstdlib>
@@ -23,7 +25,7 @@
 #include <limits>
 
 namespace dt {
-static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
+static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-10-21 Rassul approved defender5-mockup-v2 11:25 CT "build this") H = the defenders HIT BACK after an A (counterDecide), the H line in the turns file, the pane badge text "A|H" (badgeText), the Counter row text;   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
 // the market's median slowdown at a fresh-price touch ((lots/s 20-60 s) / (lots/s 0-20 s + 0.05)), Databento MBO Oct 5 / 7 / 9 (wall4.py)
 inline double adMedianOf(const std::string& m) {
     return m == "ES" ? 0.095 : m == "NQ" ? 0.029 : m == "CL" ? 0.057 : m == "GC" ? 0.0 : m == "HG" ? 0.0 : m == "NG" ? 0.032 : (m == "EU" || m == "6E") ? 0.067 : 0.05;
@@ -51,6 +53,7 @@ struct Turn {
     int marginPct = 0;                           // how much bigger the defending Defense bar is (capped 999)
     bool E = false, A = false;
     bool live = false;                           // the forming candle's "?"
+    long long attAggr = 0;                       // (1.3.0) the attackers' aggressive lots on the turn candle (the attack H is measured against)
 };
 
 // the pivot rule for candle i (no look-ahead): LOW / HIGH candidate and the pivot candle's index, or false
@@ -116,7 +119,7 @@ inline bool decide(const std::vector<Candle>& c, size_t i, int side, bool live, 
     // attackers: buyers lifting offers at a high (aggr[1]), sellers hitting bids at a low (aggr[0])
     const long long att = x.aggr[side == HIGH ? 1 : 0], def = x.aggr[side == HIGH ? 0 : 1];
     t.E = attackDied(c[piv], x, piv != i, side);
-    t.A = att > def;
+    t.A = att > def; t.attAggr = att;
     out = t; return true;
 }
 static const bool SHOW_E = false;   // (1.0.1, Rassul 13:37 CT "remove the exhaustion indicators for now"): E is still decided and recorded (nightly), not drawn
@@ -230,6 +233,77 @@ inline bool exhaustionOf(const std::vector<TouchV>& T, int side, long long pivot
     return found;
 }
 inline std::string tagsOf(const Line& L) { std::string s = "R"; if (SHOW_E && L.E) s += " E"; if (L.A) s += " A"; return s + " ?"; }
+
+// ---- (1.3.0) H: did the defenders HIT BACK after the absorption (A)? -----------------------------------------------------------------
+// MBO roadmap Top Defender #5 (Rassul 2026-10-21, defender5-mockup-v2.png). Research + test: /home/claude/pt/d5/Defender5-findings.md -
+// 7 markets Sep 24 - Oct 9, 1,813 Defense A turns: H held 54% vs absorbed-only 49% (control 51%), costs ~0.5 ATR of waiting, GC / NQ / HG
+// best, CL / ES / EU / NG no difference -> a READ of the defenders ("are they defending?"), shown with "?" until the nightly proves it.
+// Rule: in the COUNTER_BARS candles after the A candle, the defenders' aggressive lots (buyers lifting offers at a low, sellers hitting bids
+// at a high) >= COUNTER_X x the attackers' lots on the A candle, AND the last of them closes >= COUNTER_K ATR away from the pivot extreme,
+// with no close beyond the extreme in between (that ends it: absorbed only). Decided once, at the close of the last window candle.
+static const int COUNTER_BARS = 2;
+static const double COUNTER_X = 1.0, COUNTER_K = 0.25;
+struct Counter { long long t = 0; int side = -1; bool H = false; long long lots = 0, attack = 0, at = 0; };
+// 0 = wait for more candles, 1 = decided (out), -1 = not applicable (no A / no attack), -2 = a window candle has no order feed (no decision)
+inline int counterDecide(const Turn& t, const std::vector<Candle>& after, double atrTicks, Counter& out) {
+    if (!t.A || t.attAggr <= 0 || t.side < 0) return -1;
+    Counter c; c.t = t.t; c.side = t.side; c.attack = t.attAggr;
+    const int dAggr = t.side == HIGH ? 0 : 1;                                          // aggr index of the defenders' aggression
+    for (size_t k = 0; k < after.size() && (int)k < COUNTER_BARS; ++k) {
+        const Candle& q = after[k];
+        if (!q.ok) return -2;
+        c.lots += q.aggr[dAggr];
+        if (t.side == HIGH ? q.c > t.pivotPx : q.c < t.pivotPx) { c.H = false; c.at = q.t; out = c; return 1; }   // closed beyond: absorbed only
+        if ((int)k == COUNTER_BARS - 1) {
+            const double away = (double)(t.side == HIGH ? t.pivotPx - q.c : q.c - t.pivotPx);
+            c.H = (double)c.lots >= COUNTER_X * (double)c.attack && atrTicks > 0 && away >= COUNTER_K * atrTicks;
+            c.at = q.t; out = c; return 1;
+        }
+    }
+    return 0;
+}
+// the true-range average of candles (ticks), the last `n` of them
+inline double atrOf(const std::vector<Candle>& c, int n = 14) {
+    double s = 0; int k = 0;
+    for (size_t i = c.size(); i-- > 1 && k < n;) { if (!c[i].ok || !c[i - 1].ok) continue;
+        const double tr = (double)std::max(c[i].h - c[i].l, std::max(std::llabs(c[i].h - c[i - 1].c), std::llabs(c[i].l - c[i - 1].c))); s += tr; ++k; }
+    return k ? s / k : 0.0;
+}
+// the H line in the turns file: H|turn_key|side|H(0/1)|lots|attack|decided_at_key
+inline std::string hLineOf(const Counter& c) { std::ostringstream o; o << "H|" << c.t << '|' << c.side << '|' << (c.H ? 1 : 0) << '|' << c.lots << '|' << c.attack << '|' << c.at; return o.str(); }
+inline bool parseH(const std::string& s, Counter& C) {
+    if (s.size() < 3 || s[0] != 'H' || s[1] != '|') return false;
+    std::vector<std::string> f; std::string cur;
+    const size_t end = s.back() == '\r' ? s.size() - 1 : s.size();
+    for (size_t k = 2; k < end; ++k) { const char ch = s[k]; if (ch == '|') { f.push_back(cur); cur.clear(); } else cur += ch; }
+    f.push_back(cur);
+    if (f.size() != 6) return false;
+    Counter o;
+    if (!parseLongLong(f[0], o.t) || o.t <= 0 || !parseInt(f[1], o.side) || (o.side != LOW && o.side != HIGH)) return false;
+    if (f[2] != "0" && f[2] != "1") return false;
+    o.H = f[2] == "1";
+    if (!parseLongLong(f[3], o.lots) || o.lots < 0 || !parseLongLong(f[4], o.attack) || o.attack < 0 || !parseLongLong(f[5], o.at) || o.at <= 0) return false;
+    C = o; return true;
+}
+// the pane's badge on one candle: the behaviours decided ON that candle, joined "A|H" (A = the turn candle absorbed, H = the hit back
+// decided on this candle, E only while SHOW_E); at most 3; "" = none. The "?" stays in the hover / box until proven (no numbers here).
+inline std::string badgeText(bool A, bool H, bool E) {
+    std::string s; auto add = [&](const char* x) { if (!s.empty()) s += "|"; s += x; };
+    if (A) add("A");
+    if (H) add("H");
+    if (SHOW_E && E) add("E");
+    return s;
+}
+// the biggest font (pt) from fs0 down to fsMin whose text fits maxW px (w(fs) = the text width at fs); fsMin when nothing fits
+template <class W> inline int fitFont(W w, int maxW, int fs0, int fsMin) { for (int fs = fs0; fs > fsMin; --fs) if (w(fs) <= maxW) return fs; return fsMin; }
+// the box's Counter row (in the defending side's column): "Hit back 2.4x" (the defenders' lots / the attack) / "Absorbed only"; the lots
+// themselves are in the turns file and the status (the box columns keep their width: the mockup's "640 lots" would widen both columns)
+inline std::string counterText(const Counter& c) {
+    if (!c.H) return "Absorbed only";
+    const double r = c.attack > 0 ? (double)c.lots / (double)c.attack : 0.0; char b[48]; std::snprintf(b, sizeof b, "%.1fx", r);
+    return std::string("Hit back ") + b;
+}
+inline std::string tagsOfH(const Line& L, bool H) { std::string s = "R"; if (SHOW_E && L.E) s += " E"; if (L.A) s += " A"; if (H && L.A) s += " H"; return s + " ?"; }
 
 // ---- the line's life on the chart (lsDefenseLines) --------------------------------------------------------------------------------------
 // from the turn candle forward: ends at the first candle that CLOSES through the line (broken, drawn faded with x), when the next line

@@ -227,7 +227,7 @@ static void versions(const std::string& dir) {
     const std::string t = slurp(dir + "/OrderFlowPaneSettings.h");
     const std::string ta = t.substr(0, t.find("bookFlowSpec")), tb = t.substr(t.find("bookFlowSpec"));
     EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.25.0"); EQS(ofset::BAS_VERSION, bas::VERSION);   // (1.13.2 settings layer; 1.14.0 Big Lot mark)
-    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.14.1"); EQS(ofset::BF_VERSION, bf::VERSION);
+    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.15.0"); EQS(ofset::BF_VERSION, bf::VERSION);
     // every dialog row the chart reads; the removed rows are gone
     CHECK(ta.find("\"Spike vs prior biggest\"") == std::string::npos && ta.find("\"Box shows\"") == std::string::npos && ta.find("\"Spike lookback\"") == std::string::npos && ta.find("\"Spike vs average\"") != std::string::npos);
     CHECK(tb.find("\"Spike vs prior biggest\"") == std::string::npos && tb.find("\"Box shows\"") == std::string::npos && tb.find("\"Spike lookback\"") == std::string::npos && tb.find("\"Spike vs average\"") != std::string::npos);

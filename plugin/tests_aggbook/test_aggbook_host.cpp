@@ -360,7 +360,27 @@ int main() {
         CHECK(text(h, "50%") == nullptr, "(1.12.0) Turn marks off in the shared settings: no pane mark");
         // a reload (restart): the turn comes back from the file and is never decided again
         e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb);
-        CHECK(e->dtTurns.count(std::make_pair((int)dt::LOW, k)) == 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.12.0) after a reload: read back, not written twice"); }
+        CHECK(e->dtTurns.count(std::make_pair((int)dt::LOW, k)) == 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.12.0) after a reload: read back, not written twice");
+        // (1.15.0, Top Defender #5) the A turn is waiting for its counter; then H decided on that candle: the badge row + the Counter row
+        CHECK(e->dtPendH.empty() || e->dtPendH.back() == std::make_pair((int)dt::LOW, k), "(1.15.0) the A turn waits for its counter (or the reload cleared it)");
+        h.draws.clear(); p->draw();
+        CHECK(text(h, "A?", 0x22C55E) != nullptr, "(1.15.0) badge row: A? in green on the turn candle (buyers defend a low)");
+        {   dt::Counter C; C.t = k; C.side = dt::LOW; C.H = true; C.lots = 920; C.attack = 400; C.at = k; e->dtH[std::make_pair((int)dt::LOW, k)] = C; }
+        h.draws.clear(); p->draw();
+        if (const char* dp = std::getenv("D5_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
+        const mock::Draw* bd = text(h, "A|H?", 0x22C55E);
+        CHECK(bd != nullptr && text(h, "A?") == nullptr, "(1.15.0) one combined badge A|H? on the candle (not two)");
+        CHECK(bd && bd->y >= 0 && bd->y < 60, "(1.15.0) the badge row sits at the top of the pane");
+        {   bool over = false; if (bd) over = bd->x < S->lastBox.r && bd->x + 10 > S->lastBox.l && bd->y < S->lastBox.b && bd->y + 10 > S->lastBox.t;
+            CHECK(!over, "(1.15.0) the badge never over the info box"); }
+        CHECK(text(h, "Counter") != nullptr && text(h, "Hit back 2.3x") != nullptr, "(1.15.0) the box row Counter: Hit back 2.3x (920 / 400)");
+        {   const mock::Draw* q = text(h, bf::QUESTION);
+            CHECK(q && q->x >= S->lastBox.l && q->x < S->lastBox.r && q->y >= S->lastBox.t - 2 && q->y < S->lastBox.t + 20, "(1.15.0, Rassul 11:30) the question is the box's first line, upper left inside the box");
+            const mock::Draw* ring = nullptr; for (auto& d : h.draws) if (d.type == "ring" || d.type == "oval") ring = &d;
+            CHECK(q && ring && ring->x > q->x && ring->x < S->lastBox.r && ring->y >= S->lastBox.t - 2 && ring->y < S->lastBox.t + 20, "(1.15.0) the info icon right of it, inside the box");
+            CHECK(e->infoIcon.r > e->infoIcon.l && e->infoIcon.l >= S->lastBox.l && e->infoIcon.r <= S->lastBox.r, "(1.15.0) the icon's hover rectangle moved with it (hover keeps working)"); }
+        e->dtH[std::make_pair((int)dt::LOW, k)].H = false; h.draws.clear(); p->draw();
+        CHECK(text(h, "A?") != nullptr && text(h, "Absorbed only") != nullptr, "(1.15.0) decided without a counter: A? only, Counter = Absorbed only"); }
     {   // (1.13.0) the touch rule in the engine: 40 lots hit at 7000.00 in the first 20 s, 2 in 20-60 s, 60 of 80 resting lots stay -> attack died
         off::Engine g; g.adMedian = 0.095; g.curKey = 77; g.restAdd(off::BID, 28000, 80);
         g.touchFill(off::BID, 28000, 30, 1000, 80); g.restAdd(off::BID, 28000, -30);

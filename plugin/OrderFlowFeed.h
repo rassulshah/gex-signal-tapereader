@@ -1301,7 +1301,8 @@ inline std::string fitMessage(const std::string& l1, int width, const std::funct
 inline std::string line1Of(const std::string& ct, const std::string& msg) { return ct.empty() ? msg : ct + " " + msg; }   // (1.2.0) SPEC: one space
 // (12:05) the info box's content (drawn by drawInfo): label | left value | right value; side -1 = white
 struct InfoRow { std::string label, v[2]; int side[2] = {0, 1}; };          // side -1 = white
-struct Info { std::string head; bool twoCol = true; std::string colHead[2]; std::vector<InfoRow> rows; std::string tmpl = "9999 (99.9x)"; };
+struct Info { std::string head; bool twoCol = true; std::string colHead[2]; std::vector<InfoRow> rows; std::string tmpl = "9999 (99.9x)";
+              int topLines = 0, topW = 0; };   // (2026-10-21, lsBookFlow 1.15.0) lines kept free at the box's top for the question + info icon, and their width
 
 // =====================================================================================================================
 // (1.3.0, CR4800) THE PANEL - pure geometry, measured with the host's own font (TextW), so the plugin draws exactly what the tests check.
@@ -1354,20 +1355,21 @@ inline std::string rowTmpl(const std::string& label, const std::string& def) {
     static const char* const T[][2] = {
         { "Lots", "9999 (99.9x)" }, { "Added", "9999 (99.9x)" }, { "Pulled", "9999 (99.9x)" }, { "Pace", "9.9x (2.0x) ?" },
         { "Sweep", "99 lvls" }, { "Large", "9999" }, { "StopRun", "above LonLO 12t?" }, { "Burst", "99.9x, in 9 bars" },
-        { "Rebuilt", "100% ?" }, { "Refills (I)", "999 (99.9x)" }, { "Before price", "yes" }, { "Traded first", "yes" } };
+        { "Rebuilt", "100% ?" }, { "Refills (I)", "999 (99.9x)" }, { "Before price", "yes" }, { "Traded first", "yes" }, { "Counter", "Absorbed only" } };   // (2026-10-21) Counter = BookFlow 1.15.0
     for (size_t k = 0; k < sizeof(T) / sizeof(T[0]); ++k) if (label == T[k][0]) return T[k][1];
     return def;                                                             // Crowd and anything new: the box's template (the widest)
 }
 // the compact numbers box for the rows that fit in maxH: label column + two value columns (Rassul 07:02 "make them more compact")
 struct NumGeom { int lw = 0, vw = 0, W = 0, H = 0, rows = 0; };
 inline NumGeom numGeom(const Info& I, int maxH, const TextW& M) {
-    NumGeom g; const int head = 1 + (I.twoCol ? 1 : 0);
+    NumGeom g; const int head = 1 + (I.twoCol ? 1 : 0) + I.topLines;
     int fit = (maxH - BOX_PAD + 2) / NUM_LH - head; if (fit < 0) fit = 0;   // a row fits when its text ends inside the box (as 1.2.1 drew them)
     g.rows = std::min((int)I.rows.size(), fit);
     for (int k = 0; k < g.rows; ++k) { g.lw = std::max(g.lw, M(I.rows[(size_t)k].label, NUM_PT, true)); g.vw = std::max(g.vw, M(rowTmpl(I.rows[(size_t)k].label, I.tmpl), NUM_PT, true)); }
     if (I.twoCol) for (int s = 0; s < 2; ++s) g.vw = std::max(g.vw, M(I.colHead[s], NUM_PT, true));
     const int hw = std::max(M("12:59 PM", NUM_PT, true), M(I.head, NUM_PT, true));
     g.W = std::max(I.twoCol ? BOX_PAD + g.lw + 8 + g.vw + 8 + g.vw + BOX_PAD : BOX_PAD + g.lw + 10 + g.vw + BOX_PAD, hw + 2 * BOX_PAD);
+    if (I.topLines > 0) g.W = std::max(g.W, I.topW + 2 * BOX_PAD);
     g.H = std::min(maxH, BOX_PAD + NUM_LH * (head + g.rows) + BOX_PAD - 2);
     return g;
 }
@@ -2242,6 +2244,29 @@ inline void drawPairBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int 
 struct IconRect { int l = 0, t = 0, r = -1, b = -1; bool has(int h, int v) const { return r > l && h >= l - 2 && h <= r + 2 && v >= t - 2 && v <= b + 2; } };
 static const int INFO_ICON_PX = 12;
 static const COLOR C_INFO_ICON = 0x009CA3AF;                               // light grey dot, black "i"
+// (2026-10-21, Rassul 11:30 "move the question and its info icon inside the info box, to the upper left") the question as the box's
+// FIRST line (Info::topLines = 1 keeps it free), upper left inside the box, the info icon right of it; questionW = its width for Info::topW
+inline int questionW(const TextW& M, const std::string& q) { return M(q, 10, true) + INFO_ICON_PX + 8; }
+inline bool drawQuestionIn(cppExtension* x, const bp::Box& box, const std::string& q, IconRect* icon) {
+    if (icon) *icon = IconRect();
+    if (q.empty() || box.r <= box.l) return false;
+    cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = 10; f.style = cppExtension::BOLD; x->setFont(f);
+    const int w = (int)x->getTextWidth(q.c_str(), -1), l = box.l + BOX_PAD, t = box.t + BOX_PAD - 2;
+    if (l + w + INFO_ICON_PX + 8 > box.r - 2) return false;
+    x->setTextColor(C_LBL_RATIO);
+    cppExtension::RCT rc; rc.set(coord(l), coord(t), coord(l + w + 2), coord(t + QUESTION_H)); rc.drawText(q.c_str(), false, false);
+    if (icon) {
+        const int il = l + w + 8, it = t + (QUESTION_H - INFO_ICON_PX) / 2;
+        x->setPen(C_INFO_ICON, 1, P_SOLID); cppExtension::CBRUSH br(C_INFO_ICON, PAT_SOLID); br.set();
+        cppExtension::RCT d; d.set(coord(il), coord(it), coord(il + INFO_ICON_PX), coord(it + INFO_ICON_PX)); d.drawOval(cppExtension::DRAW_OPAQUE);
+        cppExtension::FONT fi; fi.id = cppExtension::HELVETICA; fi.size = 9; fi.style = cppExtension::BOLD; x->setFont(fi);
+        x->setTextColor(0x00000000);
+        const int iw = (int)x->getTextWidth("i", -1);
+        cppExtension::RCT ti; ti.set(coord(il + (INFO_ICON_PX - iw) / 2), coord(it - 1), coord(il + INFO_ICON_PX), coord(it + INFO_ICON_PX)); ti.drawText("i", false, false);
+        icon->l = il; icon->t = it; icon->r = il + INFO_ICON_PX; icon->b = it + INFO_ICON_PX;
+    }
+    return true;
+}
 inline bool drawQuestion(cppExtension* x, const PaneGeo& g, const std::string& q, const bp::Box* box, IconRect* icon = nullptr) {
     if (icon) *icon = IconRect();
     if (q.empty() || g.edge - g.left < 120) return false;
@@ -2495,8 +2520,9 @@ inline void drawPanel(cppExtension* x, const PanelPlan& P, const Info& I, const 
         return;
     }
     boxAt(x, P.box);                                                       // numbers mode: the compact box + the read beside it
-    { const TextW M = measureWith(x); const int w = M(I.head, NUM_PT, true); textAt(x, P.box.l + (P.box.w() - w) / 2, P.box.t + BOX_PAD - 1, NUM_LH - 1, I.head, C_WHITE, NUM_PT, true); }
-    numbersAt(x, P.box.l + BOX_PAD, P.box.t + BOX_PAD - 1 + NUM_LH, P.num.lw, P.num.vw, I, 0, (size_t)P.num.rows, col, true);
+    const int top = NUM_LH * I.topLines;                                    // (2026-10-21) the question line(s) first, drawn by the pane
+    { const TextW M = measureWith(x); const int w = M(I.head, NUM_PT, true); textAt(x, P.box.l + (P.box.w() - w) / 2, P.box.t + BOX_PAD - 1 + top, NUM_LH - 1, I.head, C_WHITE, NUM_PT, true); }
+    numbersAt(x, P.box.l + BOX_PAD, P.box.t + BOX_PAD - 1 + NUM_LH + top, P.num.lw, P.num.vw, I, 0, (size_t)P.num.rows, col, true);
     size_t r = 0;
     for (size_t k = 0; k < P.read.size(); ++k, ++r) textAt(x, P.textRects[r].l, P.textRects[r].t, READ_LH, P.read[k], implColor(impl), READ_PT, true);
     for (size_t k = 0; k < P.opt.size() && r < P.textRects.size(); ++k, ++r) textAt(x, P.textRects[r].l, P.textRects[r].t, OPT_LH, P.opt[k], C_OPT_BLUE, OPT_PT, false);
