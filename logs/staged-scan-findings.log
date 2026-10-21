@@ -1,8 +1,6 @@
-findings=0 allowed=0 staged_files=6 bytes=393658
+findings=0 allowed=0 staged_files=4 bytes=41937
 largest staged blobs (bytes, path):
-SIZE	197715	plugin/HodLodLogic.h
-SIZE	87053	plugin/HodLod.cpp
-SIZE	65860	plugin/BUILD-LESSONS.md
-SIZE	25445	plugin/HodLodGex.h
-SIZE	14940	plugin/tests_hodlod/t_hl230.cpp
-SIZE	2645	plugin/HodLodSettings.h
+SIZE	19223	plugin/tests_hodlod/t_hl244.cpp
+SIZE	14179	plugin/tests_hodlod/t_hl240.cpp
+SIZE	8238	plugin/test_sessionvwap_160.cpp
+SIZE	297	logs/staged-scan-findings.log
