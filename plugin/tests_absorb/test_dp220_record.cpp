@@ -21,7 +21,7 @@ int main() {
     CHECK(S.n == dpset::K_N && dpset::K_N == 6 && S.paramVersion == 15, "settings: 6 rows (2.21.0 + trap_on), parameter version 15");
     CHECK(std::string(S.rows[dpset::K_WICK_ON].key) == "wick_on" && S.rows[dpset::K_WICK_ON].def == 1, "Wick absorption on by default");
     CHECK(std::string(S.rows[dpset::K_WICK_X].key) == "wick_x" && S.rows[dpset::K_WICK_X].def == 3.0 && S.rows[dpset::K_WICK_X].lo == 1.0 && S.rows[dpset::K_WICK_X].hi == 20.0, "Wick attack x normal 3.0 (1 - 20)");
-    CHECK(std::string(DLT_VERSION) == "2.21.0" && std::string(dpset::PLUGIN_VERSION) == "2.21.0", "versions");
+    CHECK(std::string(DLT_VERSION) == "2.21.1" && std::string(dpset::PLUGIN_VERSION) == "2.21.1", "versions");
     std::printf("dp 2.20.0 record / settings: %d checks, %d failed\n", P + F, F);
     return F ? 1 : 0;
 }
