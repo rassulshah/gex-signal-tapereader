@@ -113,7 +113,7 @@ int main() {
         CHECK(dt::fitFont(w("A?"), 20, 9, 6) == 9 && dt::fitFont(w("A|H?"), 25, 9, 6) == 8 && dt::fitFont(w("A|H|E?"), 25, 9, 6) == 6, "the font shrinks so 1 / 2 / 3 letters fit the candle");
         std::vector<dt::Candle> at = { K(1, 100, 0, 0), K(2, 100, 0, 0) }; at[1].h = 106; at[1].l = 98; CHECK(std::fabs(dt::atrOf(at) - 8.0) < 1e-9, "ATR from the candles");
         dt::Line L; L.A = true; CHECK(dt::tagsOfH(L, true) == "R A H ?" && dt::tagsOfH(L, false) == "R A ?", "the line label adds H");
-        CHECK(std::string(dt::VERSION) == "1.5.0", "DefenseTurn 1.5.0");
+        CHECK(std::string(dt::VERSION) == "1.6.0", "DefenseTurn 1.6.0");
     }
     {   // (1.4.0) Top Defender #4: the RE-TEST of the R line -> L (reloaded) / X (empty) / N, decided once at the re-test candle's close
         auto C3 = [](long long t, long long h, long long l, long long c) { dt::Candle q; q.t = t; q.o = c; q.h = h; q.l = l; q.c = c; q.ok = true; return q; };

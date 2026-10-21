@@ -1,6 +1,9 @@
 #ifndef LS_MOVE_LOGIC_H
 #define LS_MOVE_LOGIC_H
-// MoveLogic.h 1.0.0 (2026-10-21, MBO Roadmap TOP DEFENDER #3 "are the defenders stepping back or pressing in?" - Rassul approved
+// MoveLogic.h 1.1.0 (2026-10-21; 1.1.0 14:18 CT Rassul "i want you to draw them" - all FOUR cases drawn, mockup v4: P = pressing in /
+// B = stepping back, the letter and the price boxes in the colour of the SIDE that moved (bids green, offers red); "they may be weak
+// for other reasons and may require additional confluences" - drawn with "?" while the confluence study + the nightly score them),
+// 1.0.0 (2026-10-21, MBO Roadmap TOP DEFENDER #3 "are the defenders stepping back or pressing in?" - Rassul approved
 // defender3-mockup-v3 11:50 CT "ok.. lets do it" + 11:59 "the other scenario would be offers going down ... and vice versa").
 // SDK-free: which resting orders MOVED, toward price (pressing in) or away (stepping back), both sides of the book.
 // Design + test: /home/claude/pt/d3/Defender3-design-research.md, Defender3-phase1-findings.md (7 markets, Oct 6-8 MBO):
@@ -29,7 +32,7 @@
 #include <vector>
 
 namespace mvl {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 static const long long PAIR_MS = 250, REST_MS = 500, LADDER_MS = 5;
 static const int LADDER_N = 5;
 static const double BADGE_X = 2.0, ONE_WAY = 0.65, ZONE_ATR = 0.5;
@@ -142,7 +145,8 @@ private:
 
 // ---- the per-candle read -----------------------------------------------------------------------------------------------------
 // one candle's confirmed moves (prices in ticks), as the pane keeps them
-struct Sum { long long in[2] = {0, 0}, out[2] = {0, 0}; long long bigSize[2] = {0, 0}, bigOld[2] = {0, 0}, bigNew[2] = {0, 0}; long long ticksIn[2] = {0, 0}, ticksOut[2] = {0, 0}; };   // big*: the largest move IN (toward price) per side
+struct Sum { long long in[2] = {0, 0}, out[2] = {0, 0}; long long bigSize[2] = {0, 0}, bigOld[2] = {0, 0}, bigNew[2] = {0, 0}; long long ticksIn[2] = {0, 0}, ticksOut[2] = {0, 0};
+             long long outSize[2] = {0, 0}, outOld[2] = {0, 0}, outNew[2] = {0, 0}; };   // big*: the largest move IN (toward price) per side; (1.1.0) out*: the largest move OUT (away) per side
 inline long long zoneOf(double atrTicks) { const long long z = (long long)std::llround(ZONE_ATR * (std::isfinite(atrTicks) ? atrTicks : 0.0)); return std::max(z, ZONE_MIN); }
 // the moves of the candle and the one before (window) whose old or new price is in [ext - zone, ext + zone]
 inline Sum sumIn(const std::vector<Move>& mv, long long ext, long long zone) {
@@ -153,7 +157,8 @@ inline Sum sumIn(const std::vector<Move>& mv, long long ext, long long zone) {
         const long long t = std::llabs(m.newPx - m.oldPx);
         if (m.dir > 0) { s.in[m.side] += m.size; s.ticksIn[m.side] = std::max(s.ticksIn[m.side], t);
                          if (m.size > s.bigSize[m.side]) { s.bigSize[m.side] = m.size; s.bigOld[m.side] = m.oldPx; s.bigNew[m.side] = m.newPx; } }
-        else { s.out[m.side] += m.size; s.ticksOut[m.side] = std::max(s.ticksOut[m.side], t); }
+        else { s.out[m.side] += m.size; s.ticksOut[m.side] = std::max(s.ticksOut[m.side], t);
+               if (m.size > s.outSize[m.side]) { s.outSize[m.side] = m.size; s.outOld[m.side] = m.oldPx; s.outNew[m.side] = m.newPx; } }
     }
     return s;
 }
@@ -176,7 +181,14 @@ inline Read readAt(long long t, int ext, long long px, const Sum& s, const doubl
     r.q[C_ATT_OUT] = qualifies(s.out[att], s.in[att], norm[att], r.x[C_ATT_OUT]);
     return r;
 }
-inline bool drawP(const Read& r) { return r.q[C_DEF_IN]; }          // the only case drawn (phase 1 evidence); the rest recorded
+inline bool drawP(const Read& r) { return r.q[C_DEF_IN]; }          // the defenders pressed in (1.0.0: the only case drawn)
+// (1.1.0) every qualified case is drawn. Per BOOK side (BIDS / OFFERS) at most one letter: 'P' (pressed in) or 'B' (stepped back), 0 = none
+inline char letterOf(const Read& r, int side) {
+    const int def = r.ext == 0 ? BIDS : OFFERS;
+    const int cin = side == def ? C_DEF_IN : C_ATT_IN, cout = side == def ? C_DEF_OUT : C_ATT_OUT;
+    return r.q[cin] ? 'P' : (r.q[cout] ? 'B' : 0);
+}
+inline bool anyDrawn(const Read& r) { return r.q[0] || r.q[1] || r.q[2] || r.q[3]; }
 
 // the normal: the mean of moved lots per candle per side, per 30-min slot of the day (>= 5 candles in the slot), else all slots (>= 20)
 struct Norm {
@@ -221,20 +233,27 @@ inline std::string mLineOf(const Read& r) {
       << (long long)std::llround(r.norm[0] * 100.0) << '|' << (long long)std::llround(r.norm[1] * 100.0) << '|' << f << '|' << r.s.bigOld[r.ext == 0 ? BIDS : OFFERS] << '|' << r.s.bigNew[r.ext == 0 ? BIDS : OFFERS] << '|' << r.s.bigSize[r.ext == 0 ? BIDS : OFFERS]
       << '|' << r.s.ticksIn[0] << '|' << r.s.ticksOut[0] << '|' << r.s.ticksIn[1] << '|' << r.s.ticksOut[1];
     char tb[40]; std::snprintf(tb, sizeof tb, "%.10g", r.tick); o << '|' << tb;
+    for (int sd = 0; sd < 2; ++sd) o << '|' << r.s.bigOld[sd] << '|' << r.s.bigNew[sd] << '|' << r.s.bigSize[sd] << '|' << r.s.outOld[sd] << '|' << r.s.outNew[sd] << '|' << r.s.outSize[sd];   // (1.1.0) both sides, in + out
     return o.str();
 }
 inline bool parseM(const std::string& line, Read& r) {
     if (line.compare(0, 2, "M|") != 0) return false;
     std::vector<std::string> c; std::stringstream ss(line); std::string tok; while (std::getline(ss, tok, '|')) c.push_back(tok);
-    if (c.size() != 19) return false;
+    if (c.size() != 19 && c.size() != 31) return false;              // (1.1.0) 31 = + both sides' largest moves in / out; 19 = a 1.0.0 line
     char* e = nullptr; std::vector<long long> v;
-    for (size_t k = 1; k < c.size(); ++k) { if (k == 10 || k == 18) continue; errno = 0; const long long x = std::strtoll(c[k].c_str(), &e, 10); if (c[k].empty() || !e || *e) return false; v.push_back(x); }
+    for (size_t k = 1; k < 19; ++k) { if (k == 10 || k == 18) continue; errno = 0; const long long x = std::strtoll(c[k].c_str(), &e, 10); if (c[k].empty() || !e || *e) return false; v.push_back(x); }
     Read z; { char* te = nullptr; z.tick = std::strtod(c[18].c_str(), &te); if (c[18].empty() || !te || *te || !std::isfinite(z.tick) || z.tick <= 0) return false; }
     z.t = v[0]; z.ext = (int)v[1]; if (z.ext != 0 && z.ext != 1) return false; z.px = v[2];
     z.s.in[0] = v[3]; z.s.out[0] = v[4]; z.s.in[1] = v[5]; z.s.out[1] = v[6]; z.norm[0] = (double)v[7] / 100.0; z.norm[1] = (double)v[8] / 100.0;
     { const int d = z.ext == 0 ? BIDS : OFFERS; z.s.bigOld[d] = v[9]; z.s.bigNew[d] = v[10]; z.s.bigSize[d] = v[11]; }
     z.s.ticksIn[0] = v[12]; z.s.ticksOut[0] = v[13]; z.s.ticksIn[1] = v[14]; z.s.ticksOut[1] = v[15];
     if (z.s.in[0] < 0 || z.s.out[0] < 0 || z.s.in[1] < 0 || z.s.out[1] < 0 || v[11] < 0) return false;
+    if (c.size() == 31) {
+        long long w[12];
+        for (int k = 0; k < 12; ++k) { const std::string& cs = c[19 + k]; errno = 0; char* ee = nullptr; w[k] = std::strtoll(cs.c_str(), &ee, 10); if (cs.empty() || !ee || *ee) return false; }
+        for (int sd = 0; sd < 2; ++sd) { const long long* q = w + 6 * sd; if (q[2] < 0 || q[5] < 0) return false;
+            z.s.bigOld[sd] = q[0]; z.s.bigNew[sd] = q[1]; z.s.bigSize[sd] = q[2]; z.s.outOld[sd] = q[3]; z.s.outNew[sd] = q[4]; z.s.outSize[sd] = q[5]; }
+    }
     const std::string& f = c[10];
     for (size_t k = 0; k < f.size(); ++k) { const char ch = f[k]; if (ch == 'P') z.q[C_DEF_IN] = true; else if (ch == 'B') z.q[C_DEF_OUT] = true; else if (ch == 'a') z.q[C_ATT_IN] = true; else if (ch == 'b') z.q[C_ATT_OUT] = true; else if (ch == 'L') z.learning = true; else if (ch != '-') return false; }
     const int def = z.ext == 0 ? BIDS : OFFERS, att = 1 - def;
@@ -248,10 +267,18 @@ inline std::string movedText(const Read& r, int side) {
     const int cin = side == def ? C_DEF_IN : C_ATT_IN, cout = side == def ? C_DEF_OUT : C_ATT_OUT;
     char b[48];
     if (r.q[cin]) { std::snprintf(b, sizeof b, "In %lldt %.1fx", r.s.ticksIn[side], r.x[cin]); return b; }
-    if (r.q[cout]) { std::snprintf(b, sizeof b, "Back %lldt %.1fx", r.s.ticksOut[side], r.x[cout]); return b; }
+    if (r.q[cout]) { std::snprintf(b, sizeof b, "Out %lldt %.1fx", r.s.ticksOut[side], r.x[cout]); return b; }   // (1.1.0) "Out" (mockup v4)
     return "-";
 }
 // the price-chart boxes: drawn only on a P candle, for the largest move on the defenders' side (hollow at the old price, solid at the new)
 inline bool chartBoxes(const Read& r) { const int d = r.ext == 0 ? BIDS : OFFERS; return drawP(r) && r.s.bigSize[d] > 0 && r.s.bigOld[d] != r.s.bigNew[d]; }
+// (1.1.0) the box of one BOOK side: the largest move in the direction that side qualified (P: in, B: out); false = nothing to draw
+inline bool chartBoxOf(const Read& r, int side, long long& oldPx, long long& newPx, long long& size) {
+    const char L = letterOf(r, side);
+    if (L == 'P') { oldPx = r.s.bigOld[side]; newPx = r.s.bigNew[side]; size = r.s.bigSize[side]; }
+    else if (L == 'B') { oldPx = r.s.outOld[side]; newPx = r.s.outNew[side]; size = r.s.outSize[side]; }
+    else return false;
+    return size > 0 && oldPx != newPx;
+}
 } // namespace mvl
 #endif

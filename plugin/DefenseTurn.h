@@ -25,7 +25,7 @@
 #include <limits>
 
 namespace dt {
-static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-10-21 Rassul approved defender3-mockup-v3 11:50 CT "lets do it" + 11:59 both sides) Top Defender #3: badgeText5 adds P (the DEFENDERS PRESSING IN: their resting orders moved toward price, MoveLogic.h) - the only move case drawn; the other three cases recorded as M lines;   // (1.4.0, 2026-10-21 Rassul approved defender4-mockup-v1 + L / X 11:32 CT) Top Defender #4: the RE-TEST of the refill level (retestStep): price moved >= 0.5 ATR away, then came back into the zone within 15 min; the defenders' RESTING lots in the zone at the close BEFORE it came back vs the market normal -> L (reloaded) / X (empty) / N; Q lines in the turns file; badge "A|H|L"; box row "Re-test";   // (1.3.0, 2026-10-21 Rassul approved defender5-mockup-v2 11:25 CT "build this") H = the defenders HIT BACK after an A (counterDecide), the H line in the turns file, the pane badge text "A|H" (badgeText), the Counter row text;   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
+static const char* const VERSION = "1.6.0";   // (1.6.0, 2026-10-21 14:16-14:18 CT Rassul "i want you to draw them" - B (stepping back) and both offer cases, mockup v4) badgeSegs: every move letter drawn (P / B per BOOK side) in the colour of the side that moved (bids green = LOW colour, offers red = HIGH colour), each letter its own colour in one combined badge;   // (1.5.0, 2026-10-21 Rassul approved defender3-mockup-v3 11:50 CT "lets do it" + 11:59 both sides) Top Defender #3: badgeText5 adds P (the DEFENDERS PRESSING IN: their resting orders moved toward price, MoveLogic.h) - the only move case drawn; the other three cases recorded as M lines;   // (1.4.0, 2026-10-21 Rassul approved defender4-mockup-v1 + L / X 11:32 CT) Top Defender #4: the RE-TEST of the refill level (retestStep): price moved >= 0.5 ATR away, then came back into the zone within 15 min; the defenders' RESTING lots in the zone at the close BEFORE it came back vs the market normal -> L (reloaded) / X (empty) / N; Q lines in the turns file; badge "A|H|L"; box row "Re-test";   // (1.3.0, 2026-10-21 Rassul approved defender5-mockup-v2 11:25 CT "build this") H = the defenders HIT BACK after an A (counterDecide), the H line in the turns file, the pane badge text "A|H" (badgeText), the Counter row text;   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
 // the market's median slowdown at a fresh-price touch ((lots/s 20-60 s) / (lots/s 0-20 s + 0.05)), Databento MBO Oct 5 / 7 / 9 (wall4.py)
 inline double adMedianOf(const std::string& m) {
     return m == "ES" ? 0.095 : m == "NQ" ? 0.029 : m == "CL" ? 0.057 : m == "GC" ? 0.0 : m == "HG" ? 0.0 : m == "NG" ? 0.032 : (m == "EU" || m == "6E") ? 0.067 : 0.05;
@@ -379,6 +379,20 @@ inline std::string badgeText5(bool A, bool H, char Q, bool P, bool E) {
     if (P) { if (!s.empty()) s += "|"; s += 'P'; }
     return s;
 }
+
+// (1.6.0) the combined badge as coloured parts: A / H / L / X in the defending side's colour (X alone: the opposite colour, as 1.4.0), then
+// the move letters per BOOK side - bids first ('P' pressed in / 'B' stepped back, LOW = green), offers second (HIGH = red); "|" between
+// letters in the colour of the letter before it; the "?" in the colour of the last letter. colourKey: LOW / HIGH (the pane's two colours).
+struct BadgeSeg { std::string s; int colourKey = LOW; };
+inline std::vector<BadgeSeg> badgeSegs(bool A, bool H, char Q, int defSide, char bidMove, char offerMove, bool E = false) {
+    std::vector<BadgeSeg> o; std::string base = badgeText4(A, H, Q, E);
+    if (!base.empty()) { BadgeSeg b; b.s = base; b.colourKey = (Q == 'X' && !A && !H && !bidMove && !offerMove) ? 1 - defSide : defSide; o.push_back(b); }
+    auto add = [&](char L, int key) { if (!L) return; BadgeSeg b; b.s = std::string(o.empty() ? "" : "|") + L; b.colourKey = key; if (!o.empty()) { o.back().s += "|"; b.s = std::string(1, L); } o.push_back(b); };
+    add(bidMove, LOW); add(offerMove, HIGH);
+    if (!o.empty()) o.back().s += "?";
+    return o;
+}
+inline std::string segsText(const std::vector<BadgeSeg>& v) { std::string s; for (size_t k = 0; k < v.size(); ++k) s += v[k].s; return s; }
 
 // ---- the line's life on the chart (lsDefenseLines) --------------------------------------------------------------------------------------
 // from the turn candle forward: ends at the first candle that CLOSES through the line (broken, drawn faded with x), when the next line

@@ -2258,17 +2258,18 @@ static const int INFO_ICON_PX = 12;
 static const COLOR C_INFO_ICON = 0x009CA3AF;                               // light grey dot, black "i"
 // (2026-10-21, Rassul 11:30 "move the question and its info icon inside the info box, to the upper left") the question as the box's
 // FIRST line (Info::topLines = 1 keeps it free), upper left inside the box, the info icon right of it; questionW = its width for Info::topW
-inline int questionW(const TextW& M, const std::string& q) { return M(q, 10, true) + INFO_ICON_PX + 8; }
+static const int INFO_ICON_GAP = 12;                                       // (BookFlow 1.18.0) px between the question and its icon (was 8: the icon touched "defending?")
+inline int questionW(const TextW& M, const std::string& q) { return M(q, 10, true) + INFO_ICON_PX + INFO_ICON_GAP; }
 inline bool drawQuestionIn(cppExtension* x, const bp::Box& box, const std::string& q, IconRect* icon) {
     if (icon) *icon = IconRect();
     if (q.empty() || box.r <= box.l) return false;
     cppExtension::FONT f; f.id = cppExtension::HELVETICA; f.size = 10; f.style = cppExtension::BOLD; x->setFont(f);
     const int w = (int)x->getTextWidth(q.c_str(), -1), l = box.l + BOX_PAD, t = box.t + BOX_PAD - 2;
-    if (l + w + INFO_ICON_PX + 8 > box.r - 2) return false;
+    if (l + w + INFO_ICON_PX + INFO_ICON_GAP > box.r - 2) return false;
     x->setTextColor(C_LBL_RATIO);
     cppExtension::RCT rc; rc.set(coord(l), coord(t), coord(l + w + 2), coord(t + QUESTION_H)); rc.drawText(q.c_str(), false, false);
     if (icon) {
-        const int il = l + w + 8, it = t + (QUESTION_H - INFO_ICON_PX) / 2;
+        const int il = l + w + INFO_ICON_GAP, it = t + (QUESTION_H - INFO_ICON_PX) / 2;
         x->setPen(C_INFO_ICON, 1, P_SOLID); cppExtension::CBRUSH br(C_INFO_ICON, PAT_SOLID); br.set();
         cppExtension::RCT d; d.set(coord(il), coord(it), coord(il + INFO_ICON_PX), coord(it + INFO_ICON_PX)); d.drawOval(cppExtension::DRAW_OPAQUE);
         cppExtension::FONT fi; fi.id = cppExtension::HELVETICA; fi.size = 9; fi.style = cppExtension::BOLD; x->setFont(fi);

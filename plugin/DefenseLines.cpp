@@ -41,7 +41,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* DL_VERSION = "1.5.0";   // 1.5.0 (2026-10-21, Rassul approved defender3-mockup-v3 11:50 CT, Top Defender #3): on a candle where the Defense pane drew P (the defenders PRESSED IN), the largest such move on the price chart: a HOLLOW box at the old price, a SOLID box at the new price with only its lot size (M lines, MoveLogic.h); never repainted;   // 1.4.0 (2026-10-21, Top Defender #4): the turns file's Q lines (the re-test L / X, DefenseTurn 1.4.0) are read and kept out of the bad-line count; the line label stays "R A H ?" - L / X are in the Defense pane's badge row (Rassul 11:26 "if the refill line gets too complicated ... they are in the pane"; the line is usually gone by the re-test: at most 3 candles);   // 1.3.0 (2026-10-21, Rassul approved defender5-mockup-v2 11:25 CT): the line label adds H when lsBookFlow decided the defenders hit back after the A ("R A H ?"; DefenseTurn 1.3.0 H lines);    // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
+static const char* DL_VERSION = "1.6.0";   // 1.6.0 (2026-10-21 14:16-14:18 CT Rassul "i want you to draw them", mockup v4): every move case drawn - per BOOK side the largest qualifying move (P: in, B: out), hollow box at the old price, solid box + lots at the new price, in the side's colour (bids green, offers red); both sides on one candle side by side, never overlapping;   // 1.5.0 (2026-10-21, Rassul approved defender3-mockup-v3 11:50 CT, Top Defender #3): on a candle where the Defense pane drew P (the defenders PRESSED IN), the largest such move on the price chart: a HOLLOW box at the old price, a SOLID box at the new price with only its lot size (M lines, MoveLogic.h); never repainted;   // 1.4.0 (2026-10-21, Top Defender #4): the turns file's Q lines (the re-test L / X, DefenseTurn 1.4.0) are read and kept out of the bad-line count; the line label stays "R A H ?" - L / X are in the Defense pane's badge row (Rassul 11:26 "if the refill line gets too complicated ... they are in the pane"; the line is usually gone by the re-test: at most 3 candles);   // 1.3.0 (2026-10-21, Rassul approved defender5-mockup-v2 11:25 CT): the line label adds H when lsBookFlow decided the defenders hit back after the A ("R A H ?"; DefenseTurn 1.3.0 H lines);    // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
 static long long dlSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string dlFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void dlMakeDir(const std::string& p) {
@@ -70,6 +70,8 @@ struct DlState {
     std::map<std::pair<int, long long>, bool> hs;      // (1.3.0) H decided per turn (side, turn key): true = the defenders hit back
     std::map<std::pair<int, long long>, mvl::Read> ms; // (1.5.0) the move read per (extreme side, candle): P draws the moved-order boxes
     long long boxesDrawn = 0;
+    struct BoxRec { int side, l, r, ot, ob, nt, nb; };   // (1.6.0) the boxes of the last draw (tests: never overlapping)
+    std::vector<BoxRec> lastBoxes;
     bool haveLive = false; dt::Line liveLine;
     long long lastCheckMs = -100000, reads = 0, bad = 0;
     ss::Store setStore; ss::Values set = ss::defaults(dlset::spec(), -1);
@@ -197,6 +199,7 @@ int DefenseLines::draw(void) {
         const COLOR colLow = (COLOR)V.c(dlset::K_COL_LOW), colHigh = (COLOR)V.c(dlset::K_COL_HIGH), colE = (COLOR)V.c(dlset::K_COL_E), colDot = (COLOR)V.c(dlset::K_COL_DOT);
         auto traded = [&](int k, double px) { return k >= 0 && k < n && (double)loA[k] <= px + 1e-9 && px <= (double)hiA[k] + 1e-9; };
         size_t drawn = 0, failed = 0;
+        s->lastBoxes.clear();
         // one line: from the candle it refers to (yellow dot), at most maxBars candles, until the next turn's lines, or a close through it
         // (1.2.0, Rassul 14:20 CT "once a refill on any line fails, remove it to get rid of the clutter"): a line a candle CLOSES through is
         // removed (line, label, dot); a failed R takes its E with it. Lines that ended by time / the next line stay. The turns file keeps all.
@@ -238,26 +241,34 @@ int DefenseLines::draw(void) {
         }
         // (1.5.0, Top Defender #3) the defenders PRESSED IN on a candle (the pane's P): the largest such move - hollow box at the old
         // price, solid box at the new price with only its lot size; in the defending colour; inside the visible candles only
+        // (1.6.0) every qualified case: per BOOK side the largest move in the direction it qualified; bids green (LOW colour), offers red
+        // (HIGH colour); two sides on one candle: bids left of the candle centre, offers right, so the four boxes never overlap
         for (std::map<std::pair<int, long long>, mvl::Read>::const_iterator it = s->ms.begin(); it != s->ms.end(); ++it) {
-            const mvl::Read& R = it->second; if (!mvl::chartBoxes(R)) continue;
+            const mvl::Read& R = it->second; if (!mvl::anyDrawn(R)) continue;
             const int i = indexOf(R.t); if (i < v0 || i > v1) continue;
-            const int d = R.ext == 0 ? mvl::BIDS : mvl::OFFERS;
             const double tk = R.tick;                                         // the M line carries its tick size
             if (!(tk > 0)) continue;
-            const COLOR col = R.ext == 1 ? colHigh : colLow;
-            const std::string txt = std::to_string(R.s.bigSize[d]);
+            long long o[2] = {0, 0}, nw[2] = {0, 0}, sz[2] = {0, 0}; bool has[2] = {false, false};
+            for (int sd = 0; sd < 2; ++sd) has[sd] = mvl::chartBoxOf(R, sd, o[sd], nw[sd], sz[sd]);
+            const bool both = has[0] && has[1];
             FONT f; f.id = HELVETICA; f.size = 7; f.style = BOLD; setFont(f);
-            const int tw = (int)getTextWidth(txt.c_str(), -1) + 6, w = std::max(ppb, tw), hh = 10;
-            PNT po; po.set(i, (float)((double)R.s.bigOld[d] * tk), kBarCenter); PNT pn; pn.set(i, (float)((double)R.s.bigNew[d] * tk), kBarCenter);
-            const int l = po.h - w / 2, r = l + w;
-            if (std::abs(po.v - pn.v) < hh) po.v = (short)(pn.v + ((po.v > pn.v || (po.v == pn.v && d == mvl::BIDS)) ? hh : -hh));   // a 1-tick move on a tight scale: the hollow box sits against the solid one on the old price's side (never on top of it)
-            setPen(col, 1, P_SOLID);
-            auto hl = [&](int x0, int x1, int y) { PNT a; a.set(0, 0.0f); a.h = (short)x0; a.v = (short)y; a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = (short)x1; b.v = (short)y; b.drawLineTo(); };
-            auto vl = [&](int x, int y0, int y1) { PNT a; a.set(0, 0.0f); a.h = (short)x; a.v = (short)y0; a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = (short)x; b.v = (short)y1; b.drawLineTo(); };
-            { const int t = po.v - hh / 2, b = t + hh; hl(l, r, t); hl(l, r, b); vl(l, t, b); vl(r, t, b); }      // the old price: hollow
-            { const int t = pn.v - hh / 2, b = t + hh; for (int y = t; y <= b; ++y) hl(l, r, y);                     // the new price: solid + lots
-              setTextColor((COLOR)0x00000000); RCT rc; rc.set((short)(l + 2), (short)t, (short)(r - 1), (short)(b + 1)); rc.drawText(txt.c_str(), false, false); }
-            ++s->boxesDrawn; ++drawn;
+            for (int d = 0; d < 2; ++d) {
+                if (!has[d]) continue;
+                const COLOR col = d == mvl::OFFERS ? colHigh : colLow;
+                const std::string txt = std::to_string(sz[d]);
+                const int tw = (int)getTextWidth(txt.c_str(), -1) + 6, w = std::max(ppb, tw), hh = 10;
+                PNT po; po.set(i, (float)((double)o[d] * tk), kBarCenter); PNT pn; pn.set(i, (float)((double)nw[d] * tk), kBarCenter);
+                const int l = both ? (d == mvl::BIDS ? po.h - w - 1 : po.h + 1) : po.h - w / 2, r = l + w;
+                if (std::abs(po.v - pn.v) < hh) po.v = (short)(pn.v + ((po.v > pn.v || (po.v == pn.v && d == mvl::BIDS)) ? hh : -hh));   // a 1-tick move on a tight scale: the hollow box sits against the solid one on the old price's side (never on top of it)
+                setPen(col, 1, P_SOLID);
+                auto hl = [&](int x0, int x1, int y) { PNT a; a.set(0, 0.0f); a.h = (short)x0; a.v = (short)y; a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = (short)x1; b.v = (short)y; b.drawLineTo(); };
+                auto vl = [&](int x, int y0, int y1) { PNT a; a.set(0, 0.0f); a.h = (short)x; a.v = (short)y0; a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = (short)x; b.v = (short)y1; b.drawLineTo(); };
+                { const int t = po.v - hh / 2, b = t + hh; hl(l, r, t); hl(l, r, b); vl(l, t, b); vl(r, t, b); }      // the old price: hollow
+                { const int t = pn.v - hh / 2, b = t + hh; for (int y = t; y <= b; ++y) hl(l, r, y);                     // the new price: solid + lots
+                  setTextColor((COLOR)0x00000000); RCT rc; rc.set((short)(l + 2), (short)t, (short)(r - 1), (short)(b + 1)); rc.drawText(txt.c_str(), false, false); }
+                s->lastBoxes.push_back(DlState::BoxRec{ d, l, r, po.v - hh / 2, po.v + hh / 2, pn.v - hh / 2, pn.v + hh / 2 });
+                ++s->boxesDrawn; ++drawn;
+            }
         }
         if (s->haveLive && showLines) {                                      // the forming candle's "?": dotted, 2 bars long
             const dt::Line& L = s->liveLine; const int i = indexOf(L.t);
@@ -286,6 +297,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour AND beyond the R line (above it at a low, below it at a high). R LINE (red at a high, green at a low) = the price near the pivot where the defenders re-posted the most of what was eaten. E LINE (gray) = exhaustion: the price near the pivot where the attack died AT the price (the attackers' hits there in seconds 20-60 slowed to the market's median or less vs seconds 0-20, and at least half the resting size stayed); decided about a minute after the close; only on turns that have an R. Yellow dot = the candle each line refers to. Each line runs at most 3 candles (setting), until the next turn's lines, or until a candle closes through it (then it is removed). A = absorption (attackers out-hit the defenders and still lost the close); ? = not proven yet (scored nightly). Dotted ? line = the forming candle, gone if it does not confirm. Example: 8:48 AM ES low: green R at 7827.25, gray E at 7826.75, dots on the 8:48 candle. Needs lsBookFlow (Defense) on the same chart.");
-    p->setVersion("1.5.0");   // DL_VERSION
+    p->setVersion("1.6.0");   // DL_VERSION
     return p;
 }

@@ -78,7 +78,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.17.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.18.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 #include "DefenseTurn.h"          // (1.12.0) the pivot turn marks + the refill line decisions (drawn on the price chart by lsDefenseLines)
@@ -436,7 +436,7 @@ public:
     template <class XOf>
     void badgeRow(S_& S, Ext& e, const off::PaneGeo& g, int v0, int v1, int last, int slot, RTARRAYI& times, XOf xOf, const bp::Box* box) {
         (void)S;
-        struct B { int x; std::string s; int side; };
+        struct B { int x; std::vector<dt::BadgeSeg> segs; std::string s; };   // (1.18.0) coloured parts per letter
         std::vector<B> bs;
         for (int i = std::max(0, v0); i <= v1 && i < last; ++i) {
             const long long key = (long long)times[i];
@@ -444,10 +444,13 @@ public:
             for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, dt::Turn>::const_iterator it = e.dtTurns.find(std::make_pair(sd, key)); if (it != e.dtTurns.end() && it->second.A) { A = true; side = sd; } }
             for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator h = e.dtH.begin(); h != e.dtH.end(); ++h) if (h->second.H && h->second.at == key) { H = true; if (side < 0) side = h->second.side; }
             char Q = 0; for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator qq = e.dtQ.begin(); qq != e.dtQ.end(); ++qq) if (qq->second.at == key && (qq->second.res == 'L' || qq->second.res == 'X')) { Q = qq->second.res; if (side < 0) side = qq->second.side; }   // (1.16.0)
-            bool P = false; for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, mvl::Read>::const_iterator m = e.dtM.find(std::make_pair(sd, key)); if (m != e.dtM.end() && mvl::drawP(m->second)) { P = true; if (side < 0) side = sd; } }   // (1.17.0) the defenders pressed in
-            const std::string t = dt::badgeText5(A, H, Q, P, false); if (t.empty()) continue;
+            char bidL = 0, offL = 0;                                          // (1.18.0, Rassul 14:16 "i want you to draw them") every move case, per BOOK side
+            for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, mvl::Read>::const_iterator m = e.dtM.find(std::make_pair(sd, key)); if (m == e.dtM.end()) continue;
+                const char lb = mvl::letterOf(m->second, mvl::BIDS), lo = mvl::letterOf(m->second, mvl::OFFERS); if (lb && !bidL) bidL = lb; if (lo && !offL) offL = lo; if ((lb || lo) && side < 0) side = sd; }
+            if (side < 0) side = dt::LOW;
+            const std::vector<dt::BadgeSeg> segs = dt::badgeSegs(A, H, Q, side, bidL, offL, false); if (segs.empty()) continue;   // (1.16.0) X alone: the opposite colour
             const int xc = xOf(i); if (xc < g.left || xc > g.edge) continue;
-            bs.push_back(B{ xc, t + "?", (Q == 'X' && !A && !H && !P) ? 1 - side : side });   // (1.16.0) X alone: the opposite colour (bad for the level)
+            bs.push_back(B{ xc, segs, dt::segsText(segs) });
         }
         if (bs.empty()) return;
         const int y0 = g.top + g.reserve + 1, h = 15, y1 = y0 + h;
@@ -456,7 +459,8 @@ public:
         off::fillFlat(this, g.left, y1, g.edge, y1, (COLOR)0x00374151);
         const int maxW = std::max(12, slot - 2);
         for (size_t k = 0; k < bs.size(); ++k) {
-            const COLOR col = (COLOR)(bs[k].side == dt::HIGH ? e.dlSet.c(dlset::K_COL_HIGH) : e.dlSet.c(dlset::K_COL_LOW));
+            auto colOf = [&](int key) { return (COLOR)(key == dt::HIGH ? e.dlSet.c(dlset::K_COL_HIGH) : e.dlSet.c(dlset::K_COL_LOW)); };
+            const COLOR col = colOf(bs[k].segs.front().colourKey);         // the border: the first letter's colour
             FONT f; f.id = HELVETICA; f.style = BOLD;
             const int fs = dt::fitFont([&](int pt) { f.size = pt; setFont(f); return (int)getTextWidth(bs[k].s.c_str(), -1) + 4; }, maxW, 9, 6);
             f.size = fs; setFont(f); const int w = (int)getTextWidth(bs[k].s.c_str(), -1) + 4;
@@ -464,7 +468,9 @@ public:
             if (box && l < box->r && r > box->l && y0 < box->b && y1 > box->t) continue;   // never over the box
             off::fillFlat(this, l, y0 + 1, r, y0 + 1, col); off::fillFlat(this, l, y1 - 1, r, y1 - 1, col);
             off::fillFlat(this, l, y0 + 1, l, y1 - 1, col); off::fillFlat(this, r, y0 + 1, r, y1 - 1, col);
-            setTextColor(col); RCT rc; rc.set(off::coord(l + 2), off::coord(y0 + 1), off::coord(r - 1), off::coord(y1 - 1)); rc.drawText(bs[k].s.c_str(), false, false);
+            int xt = l + 2;                                                    // (1.18.0) each letter in its side's colour
+            for (size_t q = 0; q < bs[k].segs.size(); ++q) { const std::string& part = bs[k].segs[q].s; const int pw = (int)getTextWidth(part.c_str(), -1);
+                setTextColor(colOf(bs[k].segs[q].colourKey)); RCT rc; rc.set(off::coord(xt), off::coord(y0 + 1), off::coord(std::min(r - 1, xt + pw + 1)), off::coord(y1 - 1)); rc.drawText(part.c_str(), false, false); xt += pw; }
         }
         ++e.badgesDrawn;
     }
@@ -948,6 +954,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.17.0");   // BF_VERSION
+    p->setVersion("1.18.0");   // BF_VERSION
     return p;
 }

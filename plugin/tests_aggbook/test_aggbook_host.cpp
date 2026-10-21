@@ -378,7 +378,10 @@ int main() {
             CHECK(q && q->x >= S->lastBox.l && q->x < S->lastBox.r && q->y >= S->lastBox.t - 2 && q->y < S->lastBox.t + 20, "(1.15.0, Rassul 11:30) the question is the box's first line, upper left inside the box");
             const mock::Draw* ring = nullptr; for (auto& d : h.draws) if (d.type == "ring" || d.type == "oval") ring = &d;
             CHECK(q && ring && ring->x > q->x && ring->x < S->lastBox.r && ring->y >= S->lastBox.t - 2 && ring->y < S->lastBox.t + 20, "(1.15.0) the info icon right of it, inside the box");
-            CHECK(e->infoIcon.r > e->infoIcon.l && e->infoIcon.l >= S->lastBox.l && e->infoIcon.r <= S->lastBox.r, "(1.15.0) the icon's hover rectangle moved with it (hover keeps working)"); }
+            CHECK(e->infoIcon.r > e->infoIcon.l && e->infoIcon.l >= S->lastBox.l && e->infoIcon.r <= S->lastBox.r, "(1.15.0) the icon's hover rectangle moved with it (hover keeps working)"); 
+        {   const mock::Draw* q = text(h, bf::QUESTION);   // (1.18.0) the icon >= 4 px clear of the question's text (it touched "defending?")
+            CHECK(q && e->infoIcon.l - (q->r - 2) >= 4, ("(1.18.0) the (i) icon " + std::to_string(q ? e->infoIcon.l - (q->r - 2) : -1) + " px right of the question text (>= 4)").c_str()); }
+        }
         e->dtH[std::make_pair((int)dt::LOW, k)].H = false; h.draws.clear(); p->draw();
         CHECK(text(h, "A?") != nullptr && text(h, "Absorbed only") != nullptr, "(1.15.0) decided without a counter: A? only, Counter = Absorbed only");
         // (1.16.0, Top Defender #4) the re-test: the engine's resting lots in the zone are read; a decided L on the candle -> one badge A|L?, box Re-test
@@ -418,14 +421,27 @@ int main() {
                 h.draws.clear(); p->draw();
                 if (const char* dp = std::getenv("D3_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
                 std::string badges; for (auto& d : h.draws) if (d.type == "text" && d.text.find("?") != std::string::npos && d.y < 60) badges += d.text + " ";
-                CHECK(text(h, "A|P?", 0x22C55E) != nullptr, ("(1.17.0) one combined badge A|P? in the defenders' green (" + badges + ")").c_str());
+                CHECK(text(h, "A|", 0x22C55E) != nullptr && text(h, "P?", 0x22C55E) != nullptr, ("(1.18.0) one combined badge A|P? - A| and P? both in the bids' green (" + badges + ")").c_str());
+                {   const mock::Draw* a = text(h, "A|"); const mock::Draw* pp = text(h, "P?"); CHECK(a && pp && pp->x > a->x && pp->y == a->y, "(1.18.0) the letters in one badge, left to right on one line"); }
                 {   const mock::Draw* mv = text(h, "Moved"); const mock::Draw* rr = text(h, "Re-test");
                     CHECK(mv && text(h, "In 2t 2.5x") != nullptr && rr && mv->y > rr->y && mv->y < S->lastBox.b, "(1.17.0) the box row Moved: In 2t 2.5x under Re-test, inside the box"); }
                 e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = true;
                 h.draws.clear(); p->draw();
-                CHECK(text(h, "A|P?") == nullptr && text(h, "A?") != nullptr, "(1.17.0) stepping back (B) is recorded, not drawn: badge A? only");
+                CHECK(text(h, "A|", 0x22C55E) != nullptr && text(h, "B?", 0x22C55E) != nullptr, "(1.18.0) stepping back (B) drawn: A|B? in the bids' green");
+                e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_ATT_IN] = true;   // offers pressed in at the low
+                h.draws.clear(); p->draw();
+                CHECK(text(h, "A|", 0x22C55E) != nullptr && text(h, "P?", 0xEF4444) != nullptr, "(1.18.0) offers pressing in at a low: A| green, P? in the offers' red");
+                e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = true;                                                                   // both sides on one candle
+                h.draws.clear(); p->draw();
+                if (const char* dp = std::getenv("D3_DUMP2")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
+                {   const mock::Draw* a = text(h, "A|", 0x22C55E); const mock::Draw* pb = text(h, "P|", 0x22C55E); const mock::Draw* po = text(h, "P?", 0xEF4444);
+                    CHECK(a && pb && po && a->x < pb->x && pb->x < po->x, "(1.18.0) both sides: A|P|P? - bids P green, offers P red, in order");
+                    int l = 1 << 30, r = -1, bl = -1, br = -1; for (auto& d : h.draws) if (d.type == "text" && (d.text == "A|" || d.text == "P|" || d.text == "P?") && d.y < 60) { l = std::min(l, d.x); r = std::max(r, d.r); }
+                    for (auto& d : h.draws) if (d.type == "fill" && d.y < 60 && d.y == d.b && d.color == (COLOR)0x22C55E && d.r > d.x) { if (bl < 0 || d.x < bl) bl = d.x; br = std::max(br, d.r); }
+                    CHECK(r > l && (bl < 0 || (l >= bl && r <= br + 1)), "(1.18.0) the three-letter badge's text stays inside its border (font fits)"); }
+                e->dtM[std::make_pair(0, k)].q[mvl::C_ATT_IN] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = true; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = false;
                 e->dtLoaded = false; e->dtPath.clear(); e->mvByKey.clear(); p->decideTurns(*S, k, nb);
-                CHECK(e->dtM.count(std::make_pair(0, k)) == 1 && mvl::drawP(e->dtM[std::make_pair(0, k)]) && e->dtMWritten == w0 + 1, "(1.17.0) after a reload the M line is read back the same (no repaint, nothing re-written)");
+                CHECK(e->dtM.count(std::make_pair(0, k)) == 1 && mvl::drawP(e->dtM[std::make_pair(0, k)]) && e->dtMWritten == w0 + 1, "(1.18.0) after a reload the M line is read back the same (no repaint, nothing re-written)");
             } } }
     {   // (1.13.0) the touch rule in the engine: 40 lots hit at 7000.00 in the first 20 s, 2 in 20-60 s, 60 of 80 resting lots stay -> attack died
         off::Engine g; g.adMedian = 0.095; g.curKey = 77; g.restAdd(off::BID, 28000, 80);

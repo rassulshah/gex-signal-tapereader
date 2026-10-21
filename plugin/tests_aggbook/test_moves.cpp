@@ -96,7 +96,7 @@ int main() {
         mvl::Sum h; h.in[1] = 40; h.out[1] = 0; h.in[0] = 0; h.out[0] = 30;
         const double n10[2] = { 10.0, 10.0 }; mvl::Read rh = mvl::readAt(200, 1, 1003, h, n10);
         CHECK(rh.q[mvl::C_DEF_IN] && rh.q[mvl::C_ATT_OUT] && !rh.q[mvl::C_ATT_IN], "resistance: offers pressed in (defenders, P) + bids stepped back (attackers, recorded)");
-        CHECK(mvl::movedText(rh, mvl::OFFERS) == "In 0t 4.0x" && mvl::movedText(rh, mvl::BIDS) == "Back 0t 3.0x", "box text per side: offers 'In ... 4.0x' (40 / 10), bids 'Back ... 3.0x' (30 / 10)");
+        CHECK(mvl::movedText(rh, mvl::OFFERS) == "In 0t 4.0x" && mvl::movedText(rh, mvl::BIDS) == "Out 0t 3.0x", "box text per side: offers 'In ... 4.0x' (40 / 10), bids 'Out ... 3.0x' (30 / 10)");
         mvl::Read rt = r; rt.tick = 0.25;
         const std::string line = mvl::mLineOf(rt); mvl::Read back;
         CHECK(mvl::parseM(line, back) && back.t == 100 && back.ext == 0 && back.s.in[0] == 50 && back.q[mvl::C_DEF_IN] && std::fabs(back.tick - 0.25) < 1e-12 && back.s.bigOld[0] == 996 && back.s.bigNew[0] == 998 && back.s.bigSize[0] == 30, "the M line round trip (a restart redraws the same: no repaint)");
@@ -118,7 +118,34 @@ int main() {
     }
     // ---- the badge ---------------------------------------------------------------------------------------------------------------
     CHECK(dt::badgeText5(true, true, 'L', true, false) == "A|H|L|P" && dt::badgeText5(false, false, 0, true, false) == "P" && dt::badgeText5(true, false, 0, false, false) == "A", "the combined badge A|H|L|P");
-    CHECK(std::string(dt::VERSION) == "1.5.0" && std::string(mvl::VERSION) == "1.0.0" && std::string(off::VERSION) == "1.11.0", "versions");
+    CHECK(std::string(dt::VERSION) == "1.6.0" && std::string(mvl::VERSION) == "1.1.0" && std::string(off::VERSION) == "1.11.0", "versions");
+    // ---- (1.1.0 / DefenseTurn 1.6.0, Rassul 14:16 "i want you to draw them") all four cases drawn ----------------------------------
+    {   mvl::Read r; r.ext = 0; r.t = 100; r.px = 4000; r.tick = 0.25; r.norm[0] = 5; r.norm[1] = 5;
+        r.s.in[0] = 12; r.s.bigSize[0] = 12; r.s.bigOld[0] = 3990; r.s.bigNew[0] = 3992;                 // bids pressed in
+        r.s.out[1] = 15; r.s.outSize[1] = 15; r.s.outOld[1] = 4004; r.s.outNew[1] = 4008;              // offers stepped back (up, away)
+        r.q[mvl::C_DEF_IN] = true; r.q[mvl::C_ATT_OUT] = true;
+        CHECK(mvl::letterOf(r, mvl::BIDS) == 'P' && mvl::letterOf(r, mvl::OFFERS) == 'B' && mvl::anyDrawn(r), "letters per book side: bids P (pressed in), offers B (stepped back)");
+        long long o = 0, n = 0, z = 0;
+        CHECK(mvl::chartBoxOf(r, mvl::BIDS, o, n, z) && o == 3990 && n == 3992 && z == 12, "the bids box: the largest move IN");
+        CHECK(mvl::chartBoxOf(r, mvl::OFFERS, o, n, z) && o == 4004 && n == 4008 && z == 15, "the offers box: the largest move OUT");
+        mvl::Read q; CHECK(mvl::parseM(mvl::mLineOf(r), q) && q.s.outSize[1] == 15 && q.s.outNew[1] == 4008 && q.s.bigSize[0] == 12 && mvl::letterOf(q, mvl::OFFERS) == 'B', "the 31-field M line round trip keeps both sides' moves");
+        std::string old = mvl::mLineOf(r); for (int k = 0; k < 12; ++k) old = old.substr(0, old.rfind('|'));
+        CHECK(mvl::parseM(old, q) && q.s.outSize[1] == 0 && mvl::letterOf(q, mvl::BIDS) == 'P', "a 1.0.0 line (19 fields) still reads");
+        CHECK(!mvl::parseM(old + "|1|2", q), "a line with a wrong field count is rejected");
+        mvl::Read e; e.ext = 1; CHECK(!mvl::anyDrawn(e) && mvl::letterOf(e, mvl::BIDS) == 0 && !mvl::chartBoxOf(e, mvl::BIDS, o, n, z), "nothing qualified: no letter, no box");
+        r.q[mvl::C_ATT_OUT] = false; r.q[mvl::C_ATT_IN] = true;   // offers pressed in, but no in-move recorded for offers: letter, no box
+        CHECK(mvl::letterOf(r, mvl::OFFERS) == 'P' && !mvl::chartBoxOf(r, mvl::OFFERS, o, n, z), "a letter without a recorded move: no box");
+    }
+    {   std::vector<dt::BadgeSeg> v = dt::badgeSegs(true, true, 'L', dt::LOW, 'P', 'B');
+        CHECK(dt::segsText(v) == "A|H|L|P|B?" && v.size() == 3 && v[0].colourKey == dt::LOW && v[1].s == "P|" && v[1].colourKey == dt::LOW && v[2].s == "B?" && v[2].colourKey == dt::HIGH, "badge parts: A|H|L| defending colour, P| bids green, B? offers red");
+        v = dt::badgeSegs(false, false, 0, dt::HIGH, 0, 'P');
+        CHECK(dt::segsText(v) == "P?" && v.size() == 1 && v[0].colourKey == dt::HIGH, "offers alone: P? red");
+        v = dt::badgeSegs(false, false, 'X', dt::LOW, 0, 0);
+        CHECK(dt::segsText(v) == "X?" && v[0].colourKey == dt::HIGH, "X alone: the opposite colour (as 1.4.0)");
+        CHECK(dt::badgeSegs(false, false, 0, dt::LOW, 0, 0).empty(), "nothing: no badge");
+        v = dt::badgeSegs(true, false, 0, dt::HIGH, 'B', 0);
+        CHECK(dt::segsText(v) == "A|B?" && v[0].colourKey == dt::HIGH && v[1].colourKey == dt::LOW, "A at a high (red) + bids stepped back (green)");
+    }
     // ---- the shared engine (OrderFlowFeed.h 1.11.0) ---------------------------------------------------------------------------------
     {
         off::Engine g; g.near = 40; g.trackMoves = true; g.mvt.minLots = 6;
