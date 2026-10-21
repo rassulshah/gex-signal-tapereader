@@ -55,7 +55,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.4.6";   // (2.4.6, 2026-10-18 20:28 CT, Rassul "remove the hoverover on gext strikes and the hod lod box") the Gex S/R strip and header hovers are off (HodLod.cpp HL_HOVERS);  // (2.4.5, 2026-10-18 19:13 CT, Rassul "right justify the 2nd column" + outside RTH "just keep it blank" - "prior RTH 10/16 ... doesnt make any sense") the 2nd column (heading, Exp, Act, Est) is right-aligned to the table edge; the Est row stays (same height) but is empty while the box shows the prior session;  // (2.4.4, 2026-10-18, Rassul approved 17:13 CT "build") the COMPACT table (~350 px, columns sized to their text; Exp / Act / Est; header "ES M2 O0 V2  Neg . S.Dn"; footer "Exp 3:00 PM . v2.4.4") + the Gex S/R on its own strip ABOVE it (R green / S red); the removed words in the hovers; Offset X / Y removed (9-spot Position only);   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
+static const char* const HL_VERSION = "2.5.0";   // (2.5.0, 2026-10-21 10:56 CT, Rassul approved mockup v1 "ok.. build") the Gex S/R LADDER low -> high (supports, the spot with its distance to the nearest S / R, resistances) as the card's top band; the header band with a +GAMMA / -GAMMA pill and the trend in full ("Strong Uptrend"); the regime from the LIVE Gex S/R file's HVL0 when the HVL book is stale; row dividers; footer "Options exp 3:00 PM" . version right;   // (2.4.6, 2026-10-18 20:28 CT, Rassul "remove the hoverover on gext strikes and the hod lod box") the Gex S/R strip and header hovers are off (HodLod.cpp HL_HOVERS);  // (2.4.5, 2026-10-18 19:13 CT, Rassul "right justify the 2nd column" + outside RTH "just keep it blank" - "prior RTH 10/16 ... doesnt make any sense") the 2nd column (heading, Exp, Act, Est) is right-aligned to the table edge; the Est row stays (same height) but is empty while the box shows the prior session;  // (2.4.4, 2026-10-18, Rassul approved 17:13 CT "build") the COMPACT table (~350 px, columns sized to their text; Exp / Act / Est; header "ES M2 O0 V2  Neg . S.Dn"; footer "Exp 3:00 PM . v2.4.4") + the Gex S/R on its own strip ABOVE it (R green / S red); the removed words in the hovers; Offset X / Y removed (9-spot Position only);   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
 // (2.3.0)   // (2.3.0, Rassul 2026-10-17 19:53-20:20) MenthorQ Q-Scores "Q: M1 O1 V4" top left (hover = the meaning), "Reg: Neg / S. Dntrend" top right; Gex S/R = the BAND rule: 3 biggest abs-GEX strikes from the RTH open up to the 1.38 extension of the 1D Max (red, a drawn up triangle first) | price | 3 down to the 1.38 extension of the 1D Min (green, a down triangle first)
 // (2.2.4)   // (2.2.4, Rassul 2026-10-17) Gex S/R row: the 3 nearest levels ABOVE price first (red), the current price, then the 3 nearest BELOW (green), MenthorQ name BEFORE each price (blue);   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
@@ -1490,6 +1490,24 @@ inline std::string trendWord(int lvl, bool compact = false)
     }
 }
 inline unsigned trendCol(int lvl) { return lvl > 0 ? C_GREEN : (lvl < 0 ? C_RED : C_SLATE); }   // Range = the table's white text (no new colour)
+// (2.5.0, Rassul 2026-10-21 10:56 "indicate Strong Uptrend, its fine to spell it out, since we have space now") the card's trend, in full
+inline std::string trendFull(int lvl)
+{
+    switch (lvl) { case 2: return "Strong Uptrend"; case 1: return "Uptrend"; case -1: return "Downtrend"; case -2: return "Strong Downtrend"; default: return "Range"; }
+}
+// (2.5.0) the card's shades: the header band, the spot cell, the row dividers, the regime pill's fills (tints of his green / red - no new colour)
+static const unsigned C_HEAD = 0x00111827, C_SPOT = 0x001F2937, C_DIV = 0x001A202C, C_PILL_G = 0x00052E16, C_PILL_R = 0x00450A0A, C_PILL_N = 0x001F2937;
+// "+GAMMA" (green) / "-GAMMA" (red) / "GAMMA STALE" (grey) from the header's Regime segment; empty = no regime known
+inline Seg gammaPill(const View& v)
+{
+    for (size_t q = 0; q < v.sessSegs.size(); q++) {
+        const std::string& r = v.sessSegs[q].s; if (r.compare(0, 6, "Regime") != 0) continue;
+        if (r.find("Positive") != std::string::npos) return Seg{ "+GAMMA", C_GREEN };
+        if (r.find("Negative") != std::string::npos) return Seg{ "-GAMMA", C_RED };
+        if (r.find("STALE") != std::string::npos) return Seg{ "GAMMA STALE", C_GREY };
+    }
+    return Seg{ "", C_GREY };
+}
 // the header's Regime cell as its coloured parts: "Regime: Neg" (gamma colour) + " / Uptrend" (trend colour). No gamma file and a
 // trend: "Regime: -- / Uptrend". Trend not ready (< 20 RTH bars): the gamma part only.
 inline std::vector<Seg> regimeParts(const View& v, bool compact = false)
@@ -1562,7 +1580,7 @@ inline void layoutGexItems(Layout& L, const View& v, int x, int t, int b, const 
 // Words shortened (Expected -> Exp, Actual -> Act, Estimate -> Est, Reg: Negative -> Neg, S. Dntrend -> S.Dn); what left the text (the
 // RTH hours, the expiry countdown, the full regime / trend words, the current price of the Gex row) is in the hovers: the header row
 // (L.qBox) and the strip (L.gexRow). A strip wider than the table widens the table to it (never wrapped or cut).
-static const int STRIP_GAP = 4;   // px between the Gex S/R strip and the table
+static const int STRIP_GAP = 0;   // (2.5.0) the ladder sits ON the table: one card (was 4 px apart)
 inline std::string hlMarketOf(const std::string& title) { const size_t k = title.find(' '); return k == std::string::npos ? title : title.substr(0, k); }
 // "Expiry 3:00 PM (in 21h 51m)" -> "Exp 3:00 PM"; "(expired)" -> "Exp 3:00 PM done"
 inline std::string hlShortExpiry(const std::string& s)
@@ -1622,6 +1640,108 @@ inline std::vector<StripPart> stripParts(const View& v)
 inline int stripW(const std::vector<StripPart>& P, const Measure& M, int fs)
 { int w = 0; for (const StripPart& p : P) w += M(p.s, fs, false) + (p.arrow ? gexArrowW(fs) : 0); return w; }
 
+// (2.5.0, Rassul 2026-10-21 10:37 "put the spot price so i can judge where we are in the context of the next sr levels, also the support
+// levels should be before the resistance levels" - mockup v1 approved 10:56) the Gex S/R LADDER, low -> high:
+//   [S]  7700  7750      7775  | 7,795.25 |  7800     7825  7850  [R]
+//        PS    PS0/HVL0        | -20.25 . +4.75 |  GW0/CR0  G1   CR
+// supports green (lowest first), the spot in its own shaded cell with the distance to the nearest support (green) and resistance (red),
+// resistances red (nearest first); the MenthorQ name under each strike (grey). Stale data: the age after [R] (grey), as before.
+struct Rung { std::string strike, name; bool grow = false; double lo = NAN, hi = NAN; };
+struct Ladder { std::vector<Rung> sup, res; std::string spot, distS, distR, stale; bool ok = false; };
+inline void numsOf(const std::string& t, double& lo, double& hi)
+{
+    lo = hi = NAN; std::string cur; std::vector<double> got;
+    for (size_t i = 0; i <= t.size(); i++) {
+        const char c = i < t.size() ? t[i] : ' ';
+        if ((c >= '0' && c <= '9') || c == '.') cur += c;
+        else if (c == ',' && !cur.empty()) continue;                   // 7,795.25
+        else { if (!cur.empty()) { char* e = nullptr; const double d = std::strtod(cur.c_str(), &e); if (e && !*e) got.push_back(d); cur.clear(); } }
+    }
+    if (!got.empty()) { lo = got.front(); hi = got.back(); if (lo > hi) std::swap(lo, hi); }
+}
+inline std::string thousands(const std::string& px)
+{
+    const size_t dot = px.find('.'); std::string ip = px.substr(0, dot), fp = dot == std::string::npos ? "" : px.substr(dot);
+    bool neg = !ip.empty() && ip[0] == '-'; if (neg) ip = ip.substr(1);
+    std::string o; for (size_t i = 0; i < ip.size(); i++) { if (i && (ip.size() - i) % 3 == 0) o += ','; o += ip[i]; }
+    return (neg ? "-" : "") + o + fp;
+}
+inline Ladder ladderOf(const View& v)
+{
+    Ladder Lr; double spot = NAN; int dec = 0;
+    for (size_t i = 0; i < v.gexItems.size(); i++) {
+        const View::GexItem& g = v.gexItems[i];
+        if (g.mid) { Lr.spot = g.strike; double a, b2; numsOf(g.strike, a, b2); spot = a; const size_t d = g.strike.find('.'); dec = d == std::string::npos ? 0 : (int)(g.strike.size() - d - 1); continue; }
+        Rung r; r.strike = g.strike; r.name = g.name; r.grow = g.grow; numsOf(g.strike, r.lo, r.hi);
+        (g.above ? Lr.res : Lr.sup).push_back(r);
+    }
+    auto byLo = [](const Rung& a, const Rung& b) { return a.lo < b.lo; };
+    std::stable_sort(Lr.sup.begin(), Lr.sup.end(), byLo); std::stable_sort(Lr.res.begin(), Lr.res.end(), byLo);
+    if (std::isfinite(spot)) {
+        char b[48];
+        if (!Lr.sup.empty() && std::isfinite(Lr.sup.back().hi)) { snprintf(b, sizeof b, "-%.*f", dec, std::fabs(spot - Lr.sup.back().hi)); Lr.distS = b; }
+        if (!Lr.res.empty() && std::isfinite(Lr.res.front().lo)) { snprintf(b, sizeof b, "+%.*f", dec, std::fabs(Lr.res.front().lo - spot)); Lr.distR = b; }
+        Lr.spot = thousands(Lr.spot);
+    }
+    Lr.stale = v.gexStale;
+    Lr.ok = !Lr.sup.empty() || !Lr.res.empty();
+    return Lr;
+}
+// the ladder's geometry at font fs: rung widths, the spot cell, the tags; the total width is 2 x the wider side + the spot (spot centred)
+struct LadderGeo { std::vector<int> ws, wr; int tagW = 0, spotW = 0, sideW = 0, staleW = 0, W = 0, H = 0, sfs = 0; };
+inline int rungW(const Rung& r, const Measure& M, int fs) { return (std::max)(M(r.strike, fs, true) + (r.grow ? gexArrowW(fs) : 0), r.name.empty() ? 0 : M(r.name, fs, false)) + 12; }
+inline LadderGeo ladderGeo(const Ladder& Lr, const Measure& M, int fs)
+{
+    LadderGeo G; G.sfs = fs + 3;
+    int sl = 0, sr = 0;
+    for (const Rung& r : Lr.sup) { G.ws.push_back(rungW(r, M, fs)); sl += G.ws.back(); }
+    for (const Rung& r : Lr.res) { G.wr.push_back(rungW(r, M, fs)); sr += G.wr.back(); }
+    G.tagW = M("S", fs, true) + 8;
+    const std::string dist = Lr.distS + (Lr.distS.empty() || Lr.distR.empty() ? "" : " \xB7 ") + Lr.distR;
+    G.spotW = (std::max)(M(Lr.spot, G.sfs, true), M(dist, fs, false)) + 24;
+    G.staleW = Lr.stale.empty() ? 0 : M("  " + Lr.stale, fs, false);
+    G.sideW = (std::max)(8 + G.tagW + 8 + sl, sr + 8 + G.tagW + G.staleW + 8);
+    G.W = 2 * G.sideW + G.spotW;
+    G.H = 3 + lineH(fs) + lineH(fs) - 4 + 3;
+    return G;
+}
+inline void layoutLadder(Layout& L, const Ladder& Lr, const LadderGeo& G, const Box& Sb, const Measure& M, int fs)
+{
+    addRect(L, Sb.l, Sb.t, Sb.r, Sb.b, C_BORDER, C_PANEL, 1, R_TABLE);
+    const int cx0 = (Sb.l + Sb.r) / 2 - G.spotW / 2, cx1 = cx0 + G.spotW;
+    const int t1 = Sb.t + 3, b1 = t1 + lineH(fs), t2 = b1 - 4, b2 = Sb.b - 3;
+    // the spot cell
+    addFill(L, cx0, Sb.t + 1, cx1, Sb.b - 1, C_SPOT, R_TABLE);
+    addLine(L, cx0, Sb.t + 1, cx0, Sb.b - 1, C_BORDER, 1, R_TABLE); addLine(L, cx1, Sb.t + 1, cx1, Sb.b - 1, C_BORDER, 1, R_TABLE);
+    if (!Lr.spot.empty()) { const int w = M(Lr.spot, G.sfs, true); addText(L, (cx0 + cx1 - w) / 2, t1 - 1, b1 + 1, Lr.spot, 0x00FFFFFF, G.sfs, true, w, R_TABLE, -1); }
+    {   const std::string sep = Lr.distS.empty() || Lr.distR.empty() ? "" : " \xB7 ";
+        const int w = M(Lr.distS + sep + Lr.distR, fs, false); int x = (cx0 + cx1 - w) / 2;
+        if (!Lr.distS.empty()) { const int ww = M(Lr.distS, fs, false); addText(L, x, t2, b2, Lr.distS, C_GREEN, fs, false, ww, R_TABLE, -1); x += ww; }
+        if (!sep.empty()) { const int ww = M(sep, fs, false); addText(L, x, t2, b2, sep, C_GREY, fs, false, ww, R_TABLE, -1); x += ww; }
+        if (!Lr.distR.empty()) { const int ww = M(Lr.distR, fs, false); addText(L, x, t2, b2, Lr.distR, C_RED, fs, false, ww, R_TABLE, -1); }
+    }
+    auto rung = [&](const Rung& r, int x, int w, unsigned col) {
+        const int sw = M(r.strike, fs, true) + (r.grow ? gexArrowW(fs) : 0), sx = x + (w - 12 - sw) / 2 + 6;
+        addText(L, sx, t1, b1, r.strike, col, fs, true, M(r.strike, fs, true), R_TABLE, -1);
+        if (r.grow) { const int aw = gexArrowW(fs), ax = sx + M(r.strike, fs, true) + aw / 2 + 2, h = (int)(fs * 0.9f + 0.5f), yc = (t1 + b1) / 2, y0 = yc + h / 2, y1 = yc - h / 2;
+                      addLine(L, ax, y0, ax, y1, col, 2, R_TABLE); addLine(L, ax - 3, y1 + 3, ax, y1, col, 2, R_TABLE); addLine(L, ax + 3, y1 + 3, ax, y1, col, 2, R_TABLE); }
+        if (!r.name.empty()) { const int nw = M(r.name, fs, false); addText(L, x + (w - 12 - nw) / 2 + 6, t2, b2, r.name, C_GREY, fs, false, nw, R_TABLE, -1); }
+    };
+    auto tag = [&](int x, const char* t, unsigned col) { const int w = G.tagW, yc = (Sb.t + Sb.b) / 2, h = lineH(fs) - 2;
+        addRect(L, x, yc - h / 2, x + w, yc + h / 2, col, C_PANEL, 1, R_TABLE); addText(L, x + 4, yc - h / 2, yc + h / 2, t, col, fs, true, w - 8, R_TABLE, -1); };
+    if (!Lr.sup.empty()) {   // supports: lowest first, ending at the spot cell
+        int sum = 0; for (int w : G.ws) sum += w;
+        int x = cx0 - 4 - sum; tag(Sb.l + 8, "S", C_GREEN);
+        for (size_t i = 0; i < Lr.sup.size(); i++) { rung(Lr.sup[i], x, G.ws[i], C_GREEN); x += G.ws[i]; }
+    }
+    if (!Lr.res.empty()) {   // resistances: nearest first, from the spot cell
+        int x = cx1 + 4;
+        for (size_t i = 0; i < Lr.res.size(); i++) { rung(Lr.res[i], x, G.wr[i], C_RED); x += G.wr[i]; }
+        tag(Sb.r - 8 - G.staleW - G.tagW, "R", C_RED);
+    }
+    if (!Lr.stale.empty()) { const std::string st = "  " + Lr.stale; addText(L, Sb.r - 8 - G.staleW, Sb.t + 1, Sb.b - 1, st, C_GREY, fs, false, G.staleW, R_TABLE, -1); }
+}
+
 inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M, int freeR = -1, int pos = POS_DEFAULT, int dx = 0, int dy = 0)
 {
     if (freeR < 0) freeR = pane.r;
@@ -1657,16 +1777,21 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
     const int ncol = NSHOWN - 1;
     std::vector<Seg> est((size_t)ncol, Seg{ "", C_GREY });
     for (size_t q = 0; q < info.size(); q++) { const size_t ci = (std::min)(q, (size_t)(ncol - 1)); if (!est[ci].s.empty()) est[ci].s += "  "; else est[ci].col = info[q].col; est[ci].s += info[q].s; }
-    const std::vector<Seg> head = compactHead(v, hlMarketOf(title), titleCol), reg = compactRegime(v);
+    const std::vector<Seg> head = compactHead(v, hlMarketOf(title), titleCol);
     std::string expTxt; unsigned expCol = C_GREY;
     for (size_t q = 0; q < v.sessSegs.size(); q++) if (v.sessSegs[q].s.compare(0, 6, "Regime") != 0) { expTxt = hlShortExpiry(v.sessSegs[q].s); expCol = v.sessSegs[q].col; break; }
     const std::string verTxt = std::string("v") + HL_VERSION;   // his rule: the version on the panel
-    const std::string footSep = expTxt.empty() ? "" : " \xB7 ";
-    const std::vector<StripPart> strip = stripParts(v);
-    static const char* const HDR[3] = { "", "1st", "2nd" };
+    const Ladder lad = ladderOf(v);                          // (2.5.0) the Gex S/R ladder (low -> high, the spot in the middle)
+    const Seg pill = gammaPill(v);                           // (2.5.0) +GAMMA / -GAMMA / GAMMA STALE
+    const std::string trendTxt = v.trendReady ? trendFull(v.trendLvl) : std::string();
+    const unsigned trendC = trendCol(v.trendLvl);
+    const std::string expLong = expTxt.compare(0, 4, "Exp ") == 0 ? "Options exp " + expTxt.substr(4) : expTxt;   // (2.5.0) footer words in full
+    static const char* const HDR[3] = { "", "1ST", "2ND" };
     for (int attempt = 0; attempt < 2; attempt++) {
         const int fs = 10 - attempt;                         // 10 pt (his minimum); 9 pt only when 10 cannot fit
-        const int rowH = lineH(fs) + 1, footH = lineH(fs), stripH = strip.empty() ? 0 : lineH(fs) + 4;
+        const LadderGeo geo = ladderGeo(lad, M, fs);
+        const int rowH = lineH(fs) + 1, footH = lineH(fs), stripH = lad.ok ? geo.H : 0;
+        const int pillW = pill.s.empty() ? 0 : M(pill.s, fs, true) + 12;
         auto cellWf = [&](const Cell& C) {
             int w = M(C.s, fs, C.bold);
             if (!C.s2.empty()) w += M(" " + C.s2, fs, C.bold);
@@ -1680,13 +1805,14 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         for (int j = 1; j < NSHOWN; j++) { const int c = SHOWN[j], k = j - 1;
             cw[(size_t)k] = (std::max)((std::max)(M(HDR[j < 3 ? j : 2], fs, false), cellWf(eRow[c])), (std::max)(cellWf(aRow[c]), est[(size_t)k].s.empty() ? 0 : M(est[(size_t)k].s, fs, false))) + 14;
             sumC += cw[(size_t)k]; }
-        const int headW = 8 + segsW(head, true) + 16 + segsW(reg, true) + 8;
-        const int footW = 8 + M(expTxt + footSep + verTxt, fs, false) + 8;
-        const int sW = strip.empty() ? 0 : 8 + stripW(strip, M, fs) + 8;
+        const int headW = 10 + segsW(head, true) + 24 + pillW + (trendTxt.empty() ? 0 : 10 + M(trendTxt, fs, true)) + 10;
+        const int footW = 10 + M(expLong, fs, false) + 24 + M(verTxt, fs, false) + 10;
+        const int sW = lad.ok ? geo.W : 0;
         int W = (std::max)((std::max)(8 + lw + sumC, headW), (std::max)(footW, sW));   // the strip never wraps: the table widens to it
         cw[(size_t)(ncol - 1)] += W - (8 + lw + sumC);                                   // the spare width goes to the last column
-        const int H = 2 + rowH + 1 + rowH + rowH + rowH + rowH + 2 + footH + 3;   // (2.4.5) the Est row always (blank outside RTH) so the box keeps one height
-        const int Htot = H + (strip.empty() ? 0 : stripH + STRIP_GAP);
+        const int hdrH = rowH + 4;                         // (2.5.0) the header band, a little taller
+        const int H = 1 + hdrH + 1 + rowH + rowH + rowH + rowH + 3 + 1 + footH + 2;   // (2.4.5) the Est row always (blank outside RTH) so the box keeps one height
+        const int Htot = H + (lad.ok ? stripH + STRIP_GAP : 0);
         if (W > area.r - area.l && attempt == 0) continue;
         if (area.l + W > pane.r - pad) continue;
         if (Htot + 40 > pane.b - pane.t) break;
@@ -1695,25 +1821,26 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const Box B = placeAvoid(area, W, Htot, pos, L.avoid, &L.tableMoved, &L.tableClear, dx, dy);
         const Box T = { B.l, B.b - H, B.r, B.b };
         L.table = T; L.tableOk = true; L.trendCompact = true;
-        if (!strip.empty()) {   // the Gex S/R strip: its own box, the table's width, 4 px above it
+        if (lad.ok) {   // (2.5.0) the Gex S/R ladder: the card's top band, the table's width
             const Box Sb = { B.l, B.t, B.r, B.t + stripH };
-            addRect(L, Sb.l, Sb.t, Sb.r, Sb.b, C_BORDER, C_PANEL, 1, R_TABLE);
-            int x = Sb.l + 8;
-            for (const StripPart& p : strip) {
-                const int w = M(p.s, fs, false); addText(L, x, Sb.t + 1, Sb.b - 1, p.s, p.col, fs, p.s == "R  " || p.s == "S  ", w, R_TABLE, -1); x += w;
-                if (p.arrow) { const int aw = gexArrowW(fs), ax = x + aw / 2 + 2, h = (int)(fs * 0.9f + 0.5f), yc = (Sb.t + Sb.b) / 2, y0 = yc + h / 2, y1 = yc - h / 2;
-                               addLine(L, ax, y0, ax, y1, p.col, 2, R_TABLE); addLine(L, ax - 3, y1 + 3, ax, y1, p.col, 2, R_TABLE); addLine(L, ax + 3, y1 + 3, ax, y1, p.col, 2, R_TABLE); x += aw; }
-            }
+            layoutLadder(L, lad, geo, Sb, M, fs);
             L.gexRow = Sb; L.gexOk = true; L.blocks.push_back(Sb);
         }
         addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_TABLE);
-        int y = T.t + 2;
-        {   // header: "ES M2 O0 V2" left, "Neg . S.Dn" right - the hover target (RTH hours, expiry countdown, full words, the Q meaning)
-            int x = T.l + 8; for (size_t q = 0; q < head.size(); q++) { const int w = M(head[q].s, fs, true); addText(L, x, y, y + rowH, head[q].s, head[q].col, fs, true, w, R_TABLE, -1); x += w; }
-            int xr = T.r - 8 - segsW(reg, true); for (size_t q = 0; q < reg.size(); q++) { const int w = M(reg[q].s, fs, true); addText(L, xr, y, y + rowH, reg[q].s, reg[q].col, fs, true, w, R_TABLE, -1); xr += w; }
-            L.qBox = Box{ T.l, T.t, T.r, y + rowH }; L.qOk = true;
+        int y = T.t + 1;
+        {   // (2.5.0) the header band: "ES  M4 O0 V2" left; the gamma pill and the trend in full right ("+GAMMA  Strong Uptrend")
+            addFill(L, T.l + 1, y, T.r - 1, y + hdrH, C_HEAD, R_TABLE);
+            int x = T.l + 10; for (size_t q = 0; q < head.size(); q++) { const int w = M(head[q].s, fs, true); addText(L, x, y + 2, y + hdrH - 2, head[q].s, head[q].col, fs, true, w, R_TABLE, -1); x += w; }
+            int xr = T.r - 10 - (trendTxt.empty() ? 0 : M(trendTxt, fs, true) + 10) - pillW;
+            if (!pill.s.empty()) {
+                const unsigned fill = pill.col == C_GREEN ? C_PILL_G : (pill.col == C_RED ? C_PILL_R : C_PILL_N);
+                addRect(L, xr, y + 3, xr + pillW, y + hdrH - 3, pill.col, fill, 1, R_TABLE);
+                addText(L, xr + 6, y + 3, y + hdrH - 3, pill.s, pill.col, fs, true, pillW - 12, R_TABLE, -1); xr += pillW + 10;
+            }
+            if (!trendTxt.empty()) addText(L, xr, y + 2, y + hdrH - 2, trendTxt, trendC, fs, true, M(trendTxt, fs, true), R_TABLE, -1);
+            L.qBox = Box{ T.l, T.t, T.r, y + hdrH }; L.qOk = true;
         }
-        y += rowH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
+        y += hdrH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
         const int x0 = T.l + 8 + lw;
         auto colX = [&](int k) { int x = x0; for (int i = 0; i < k; i++) x += cw[(size_t)i]; return x; };
         // (2.4.5, Rassul 19:08 "right justify the 2nd column, we have space") the last column's text ends at the table's right padding
@@ -1732,18 +1859,19 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                 part.push_back(C.s3.empty() ? "" : "  " + C.s3); pc.push_back(C.col3 ? C.col3 : C.col);
                 for (size_t k = 0; k < part.size(); k++) { if (part[k].empty()) continue; const int pw = M(part[k], fs, C.bold); addText(L, xx, y, y + rowH, part[k], pc[k], fs, C.bold, pw, R_TABLE, -1); xx += pw; }
             }
+            addLine(L, T.l + 1, y, T.r - 1, y, C_DIV, 1, R_TABLE);   // (2.5.0) a thin divider above each row
             y += rowH;
         }
         {   // (2.4.5) always drawn; blank values outside RTH
+            addLine(L, T.l + 1, y, T.r - 1, y, C_DIV, 1, R_TABLE);
             addText(L, T.l + 8, y, y + rowH, "Est", C_SLATE, fs, false, M("Est", fs, false), R_TABLE, -1);
             for (int k = 0; k < ncol; k++) if (!est[(size_t)k].s.empty()) addText(L, colStart(k, M(est[(size_t)k].s, fs, false)), y, y + rowH, est[(size_t)k].s, est[(size_t)k].col == C_GREY ? C_SLATE : est[(size_t)k].col, fs, false, M(est[(size_t)k].s, fs, false), R_TABLE, -1);
             y += rowH;
         }
-        y += 2;
-        {   int x = T.l + 8;   // the footer: "Exp 3:00 PM . v2.4.4" (grey; the expiry amber in its last hour, as before)
-            if (!expTxt.empty()) { const int w = M(expTxt, fs, false); addText(L, x, y, y + footH, expTxt, expCol == C_AMBER ? C_AMBER : C_GREY, fs, false, w, R_TABLE, -1); x += w;
-                                   const int ws = M(footSep, fs, false); addText(L, x, y, y + footH, footSep, C_GREY, fs, false, ws, R_TABLE, -1); x += ws; }
-            addText(L, x, y, y + footH, verTxt, C_GREY, fs, false, M(verTxt, fs, false), R_TABLE, -1);
+        y += 3; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
+        {   // (2.5.0) the footer: "Options exp 3:00 PM" left (amber in its last hour, as before), the version right
+            if (!expLong.empty()) addText(L, T.l + 10, y, y + footH, expLong, expCol == C_AMBER ? C_AMBER : C_GREY, fs, false, M(expLong, fs, false), R_TABLE, -1);
+            const int vw = M(verTxt, fs, false); addText(L, T.r - 10 - vw, y, y + footH, verTxt, C_GREY, fs, false, vw, R_TABLE, -1);
         }
         L.blocks.push_back(T);
         return;

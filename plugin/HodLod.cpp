@@ -161,7 +161,7 @@ struct HLState {
     long long qStamp = -2; time_t qChecked = 0; hlq::File qf; std::string qWhy;
     bool inQ = false, lastQOk = false, lastQHoverOk = false; hl::Box lastQBox = { 0, 0, 0, 0 }, lastQHover = { 0, 0, 0, 0 }; int qCurX = -100000, qCurY = -100000; long long qHovers = 0;
     // (2.4.0) the regime's ONE source: GammaProfile-MQ-<MKT>.csv HVL0 (stamp, at most every 5 s) and its verdict (Fresh.h)
-    long long hvlStamp = -2; time_t hvlChecked = 0; hlg::HvlBook hvl; std::string hvlWhy; int regSign = 0; fr::Verdict regV; fr::Verdict qV; bool qJudged = false;
+    long long hvlStamp = -2; time_t hvlChecked = 0; hlg::HvlBook hvl; std::string hvlWhy; int regSign = 0; bool regFromGex = false; double regGexHvl = 0;   /* (2.5.0) the regime from the Gex S/R file HVL0 */ fr::Verdict regV; fr::Verdict qV; bool qJudged = false;
     long long lastClosedAbs = 0; double lastClose = NAN;     // the last closed bar (CT wall-clock seconds of its END stamp, its close)
     // (2.4.0) the Market State posts: this chart's identity, the facts decided for the last closed bar, when they were last posted
     std::string hlbSym, hlbChart; long hlbSpb = 0; bool hlbPosted = false;   // (2.4.1) the published table rectangle (BoxDock.h)
@@ -1037,6 +1037,15 @@ int HodLod::draw(void)
 #endif
         hlg::toView(S->view, S->gex, px, (long long)t, lt.tm_wday, lt.tm_hour * 60 + lt.tm_min, hl::MKTS[S->mi < 0 ? 0 : S->mi].dec);
     }
+    {   // (2.5.0, Rassul 10:40 "i also dont see the regime") the HVL book stale / missing but the Gex S/R file LIVE: the regime from ITS HVL0
+        const double h = hlg::hvlFromGex(S->gex);
+        S->regFromGex = false;
+        if (S->regSign == 0 && S->view.gexStale.empty() && std::isfinite(h) && std::isfinite(S->lastClose) && S->lastClose > 0) {
+            S->regSign = S->lastClose >= h ? 1 : -1; S->regFromGex = true; S->regGexHvl = h;
+            for (size_t q = 0; q < S->view.sessSegs.size(); q++) if (S->view.sessSegs[q].s.compare(0, 6, "Regime") == 0) { S->view.sessSegs.erase(S->view.sessSegs.begin() + (long)q); break; }
+            S->view.sessSegs.insert(S->view.sessSegs.begin(), hl::Seg{ S->regSign < 0 ? "Regime: Negative" : "Regime: Positive", S->regSign < 0 ? hl::C_RED : hl::C_GREEN });
+        }
+    }
     loadQ(*S);                               // (2.3.0) the Q-Scores top left of the header
     S->qV = hlq::fresh(S->qf, hlNowCt()); S->qJudged = S->qf.ok;   // (2.4.0) their age: stale -> "Q: STALE"
     hlq::toView(S->view, S->qf, S->view.trendReady ? hl::trendWord(S->view.trendLvl) : std::string(), S->view.trendLvl, &S->qV);
@@ -1087,7 +1096,8 @@ int HodLod::draw(void)
                   + ",hover " + (S->lastHoverOk ? std::to_string(L.gexHover.l) + "," + std::to_string(L.gexHover.t) + "," + std::to_string(L.gexHover.r) + "," + std::to_string(L.gexHover.b) : std::string("off")) + ",hovers " + std::to_string(S->gexHovers) + "\n";
     {   // (2.4.0) the regime's source, for the status file (FLIP / the session GAM are shown only to prove they are not used)
         const int dec = hl::MKTS[S->mi < 0 ? 0 : S->mi].dec;
-        S->placeLine += std::string("REGIME,") + (S->regV.stale() && S->hvl.ok ? "STALE" : (S->regSign > 0 ? "Pos" : (S->regSign < 0 ? "Neg" : "none")))
+        S->placeLine += std::string("REGIME,") + (S->regFromGex ? std::string(S->regSign > 0 ? "Pos" : "Neg") + " (from Gex S/R HVL0 " + hl::trimNum(S->regGexHvl, dec) + ", LIVE)"
+                                                 : std::string(S->regV.stale() && S->hvl.ok ? "STALE" : (S->regSign > 0 ? "Pos" : (S->regSign < 0 ? "Neg" : "none"))))
                       + ",src GammaProfile-MQ-" + S->mkt + ".csv HVL0 " + (S->hvl.ok ? S->hvl.hvlTxt : std::string("-"))
                       + ",close " + (std::isfinite(S->lastClose) ? hl::trimNum(S->lastClose, dec) : std::string("-"))
                       + ",data " + (S->hvl.ok ? std::string(fr::word(S->regV.st)) + " " + fr::ageShort(S->regV.ageSec) : std::string("-"))
@@ -1170,6 +1180,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | (HL_HOVERS ? TRACK_MOUSE : 0));   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live.");
-    p->setVersion("2.4.6");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.5.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

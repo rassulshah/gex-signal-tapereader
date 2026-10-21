@@ -289,6 +289,18 @@ inline HvlBook parseHvl(const std::string& text, const std::string& market)
 }
 // the regime from that HVL and the last closed bar's close: +1 = price at / above HVL (positive gamma), -1 below, 0 = unknown
 inline int regimeSign(const HvlBook& B, double close) { if (!B.ok || !std::isfinite(close) || !(close > 0)) return 0; return close >= B.hvl ? 1 : -1; }
+// (HodLod 2.5.0, Rassul 2026-10-21 10:40 "i also dont see the regime") the HVL0 strike named in the Gex S/R file (LRA-GexNodes-<MKT>.csv,
+// the same MenthorQ intraday names) - used for the regime only while that file is LIVE and the HVL book is stale / missing. NAN = none.
+inline double hvlFromGex(const File& F)
+{
+    if (!F.ok || F.state != "LIVE") return NAN;
+    for (const Loc& L : F.locs) for (const Mem& m : L.mem) {
+        if (m.name.find("HVL0") == std::string::npos) continue;
+        char* e = nullptr; const double d = std::strtod(m.chartTxt.c_str(), &e);
+        if (e != m.chartTxt.c_str() && std::isfinite(d) && d > 0) return d;
+    }
+    return NAN;
+}
 
 } // namespace hlg
 #endif
