@@ -1,6 +1,3 @@
-findings=0 allowed=0 staged_files=4 bytes=41937
+findings=0 allowed=0 staged_files=1 bytes=257
 largest staged blobs (bytes, path):
-SIZE	19223	plugin/tests_hodlod/t_hl244.cpp
-SIZE	14179	plugin/tests_hodlod/t_hl240.cpp
-SIZE	8238	plugin/test_sessionvwap_160.cpp
-SIZE	297	logs/staged-scan-findings.log
+SIZE	257	logs/staged-scan-findings.log
