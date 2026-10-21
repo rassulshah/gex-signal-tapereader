@@ -87,6 +87,7 @@
 #else
 #include "irtsdk.h"
 #endif
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
 #endif
@@ -457,6 +458,7 @@ struct LQState {
 
 class LiquidityProfile : public cppExtension {
 public:
+    SS_SAFE_DIALOG(LiquidityProfile, "LiquidityProfile")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     LiquidityProfile() : cppExtension() {}
     // (0.46.1, 2026-10-20 night) IRT faults INSIDE the MARKET_DEPTH destructor while it is quitting ("C0000005 Exception at 14002AD39
     // in RTX extension lsLiquidityProfile ... calling done()" at every exit since 10-18; lsIRTReader / lsFootprintReader* the same - the
@@ -467,9 +469,9 @@ public:
     void flushPark() { for (size_t i = 0; i < mdPark_.size(); ++i) delete mdPark_[i]; mdPark_.clear(); }
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int parmsApply(void);                                       // (0.45.0) the window -> the three files, through SettingsHost.h
-    virtual int parmsLoad(void);                                        // (CR5000) the dialog filled from the size file (never saves)
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, LQ_SPEC, lqIds(), (int)i, snap_); return RTX_OK; }   // (0.45.0) a master greys its rows; saved on OK / Apply
+    virtual int parmsApplyBody(void);                                       // (0.45.0) the window -> the three files, through SettingsHost.h
+    virtual int parmsLoadBody(void);                                        // (CR5000) the dialog filled from the size file (never saves)
+    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, LQ_SPEC, lqIds(), (int)i, snap_); return RTX_OK; }   // (0.45.0) a master greys its rows; saved on OK / Apply
     ss::Values fileValues();                                             // (0.45.0) the three files as the table's values
     ss::Snap snap_;                                                   // (CR5000) the dialog as it opened         // (0.15.1) OK / Apply: kept per market (loading never saves, #29)
     void saveSize(const ss::Values& V);
@@ -637,12 +639,12 @@ ss::Values LiquidityProfile::fileValues() {
     for (int k = 0; k < LQ_SPEC.n; ++k) if (!ss::valid(LQ_SPEC.rows[k], V.v[(size_t)k])) V.v[(size_t)k] = ss::defaultFor(LQ_SPEC.rows[k], V.market);   // never garbage into the window
     return V;
 }
-int LiquidityProfile::parmsLoad(void) {
+int LiquidityProfile::parmsLoadBody(void) {
     if (!ss::inDialog(this)) return RTX_OK;                              // loading never saves (#29)
     ss::fillDialog(this, LQ_SPEC, lqIds(), fileValues(), snap_);
     return RTX_OK;
 }
-int LiquidityProfile::parmsApply(void) {
+int LiquidityProfile::parmsApplyBody(void) {
     if (!ss::inDialog(this)) return RTX_OK;                              // (0.45.0) never from the chart copy
     const ss::Values V = ss::readDialog(this, LQ_SPEC, lqIds(), fileValues(), snap_);   // untouched -> the files' values; invalid never saved
     saveSize(V); saveBig(V); saveBanner(V);

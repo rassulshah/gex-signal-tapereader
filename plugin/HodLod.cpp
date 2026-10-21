@@ -91,6 +91,7 @@
 #include <windows.h>                 // (2.4.0) BEFORE irtsdk.h (MSVC C2371 RTBOOL clash otherwise): MarketState.h -> BannerBoard.h needs it
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
 #endif
@@ -172,6 +173,7 @@ struct HLState {
 
 class HodLod : public cppExtension {
 public:
+    SS_SAFE_DIALOG(HodLod, "HodLod")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     HodLod() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);                                 // (2.1.0) the GEX row's hover
@@ -180,9 +182,9 @@ public:
     // (HL105, Rassul "you should have setting where to put them like upper left etc.") ONE setting: Position (9 spots), default
     // Bottom centre. IRT can return -1 for a LIST parameter outside its settings copy, so the choice is also kept per market in
     // HodLod.place-<MKT>.txt - written only from the dialog's callbacks (loading never saves, #29) and read back by stamp.
-    virtual int parmsLoad(void);                                     // (2.0.6) fills the dialog from the place file (never saves)
-    virtual int parmsApply(void) { savePos(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, hlset::spec(), hlIds(), (int)i, snap_); savePos(); return RTX_OK; }   // (2.4.2) a show box greys its colours
+    virtual int parmsLoadBody(void);                                     // (2.0.6) fills the dialog from the place file (never saves)
+    virtual int parmsApplyBody(void) { savePos(); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, hlset::spec(), hlIds(), (int)i, snap_); savePos(); return RTX_OK; }   // (2.4.2) a show box greys its colours
     static ss::Ids& hlIds() { static ss::Ids I; return I; }        // (2.4.2) the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
     // (2.0.5) the checkboxes and colours (indices into the parameter list, set in setup); (2.0.6) after Offset X / Y
     ss::Snap snap_;                                                    // (2.0.6) the dialog as it opened (2.4.2: SettingsSpec.h)
@@ -869,7 +871,7 @@ HodLod::Place HodLod::toPlace(const ss::Values& V)
     P.why = V.why; return P;
 }
 static long long hlNowMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
-int HodLod::parmsLoad(void)
+int HodLod::parmsLoadBody(void)
 {
     if (!ss::inDialog(this)) return RTX_OK;                              // loading never saves (#29)
     const std::string mkt = hlMarket(this); if (mkt.empty()) return RTX_OK;

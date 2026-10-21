@@ -34,6 +34,7 @@
  *  Parameter indices numbered EXPLICITLY (pc++); NO setLabelParameter headers.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "ContractOffsetLogic.h"   // (shared) the anchor-bar rule, tested
 #include "KingTrackerLogic.h"      // (v0.10) the row grammar, the re-derivation, the anchor — testable without IRT
 #include <fstream>
@@ -90,10 +91,11 @@ struct Settings {
 // ---------------------------------------------------------------------------
 class KingTracker : public cppExtension {
 public:
+    SS_SAFE_DIALOG(KingTracker, "KingTracker")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     KingTracker();
-    virtual int parmsLoad(void);
-    virtual int parmsApply(void);
-    virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int parmsLoadBody(void);
+    virtual int parmsApplyBody(void);
+    virtual int parmsUpdtBody(unsigned int iParmNumber);
     virtual int draw(void);
 
     BookTrk book[NBOOK];
@@ -181,9 +183,9 @@ void KingTracker::unblackColours()
         if (mx < 0x30) setParameterColor(PX.col[i], BOOK_DEF[i]);
     }
 }
-int KingTracker::parmsLoad(void)  { if (dialogReady()) { migrateScrambled(); unblackColours(); readSettings(cfg); syncEnable(); } return RTX_OK; }
-int KingTracker::parmsApply(void) { if (dialogReady()) { unblackColours(); readSettings(cfg); syncEnable(); } return RTX_OK; }
-int KingTracker::parmsUpdt(unsigned int) { if (dialogReady()) { readSettings(cfg); syncEnable(); } return RTX_OK; }
+int KingTracker::parmsLoadBody(void)  { if (dialogReady()) { migrateScrambled(); unblackColours(); readSettings(cfg); syncEnable(); } return RTX_OK; }
+int KingTracker::parmsApplyBody(void) { if (dialogReady()) { unblackColours(); readSettings(cfg); syncEnable(); } return RTX_OK; }
+int KingTracker::parmsUpdtBody(unsigned int) { if (dialogReady()) { readSettings(cfg); syncEnable(); } return RTX_OK; }
 
 // ---- parameter panel ------------------------------------------------------
 int cppExtension::setup(void)

@@ -56,6 +56,7 @@
 #include <windows.h>     // BEFORE irtsdk.h (MSVC C2371 RTBOOL clash otherwise); NOMINMAX keeps std::max usable
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 // windows.h (included by some supported SDK build configurations) defines far.
 // DealerLogic uses far as a data member, so remove only that obsolete macro here.
 #ifdef far
@@ -89,7 +90,7 @@ static ss::Ids& svIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <atomic>
 
 static const bool SV_SHOW_BADGES = false;   // (1.4.1) Rassul 18:07: VWAP odds off the chart for now
-static const char* SV_VERSION = "1.6.1";        // 1.6.1 (2026-10-18 settings audit): the window from SessionVWAPSettings.h / SettingsHost.h (same rows, same file); each line's show box greys its colour.        // 1.6.0 (2026-10-18): Market State SRC VWAP (vwap, bands, pos, slope) for the last closed bar, cleared on removal.        // 1.5.1 (2026-10-17): FIX unchecking / re-checking a line in the settings did not stick - only the window saves, nothing while it loads, untouched controls keep the file.        // 1.5.0 (2026-10-14; built as 1.4.3 on 10-13, never shipped): real settings - every line has a show box and a colour, VWAP / band widths, the overnight set on / off; kept per market (SessionVWAPStyle.h). 1.4.2: vwapTrend cache also keys the detected bar period, so a chart periodicity change cannot retain trend state computed with different session boundaries. 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const char* SV_VERSION = "1.6.2";        // 1.6.1 (2026-10-18 settings audit): the window from SessionVWAPSettings.h / SettingsHost.h (same rows, same file); each line's show box greys its colour.        // 1.6.0 (2026-10-18): Market State SRC VWAP (vwap, bands, pos, slope) for the last closed bar, cleared on removal.        // 1.5.1 (2026-10-17): FIX unchecking / re-checking a line in the settings did not stick - only the window saves, nothing while it loads, untouched controls keep the file.        // 1.5.0 (2026-10-14; built as 1.4.3 on 10-13, never shipped): real settings - every line has a show box and a colour, VWAP / band widths, the overnight set on / off; kept per market (SessionVWAPStyle.h). 1.4.2: vwapTrend cache also keys the detected bar period, so a chart periodicity change cannot retain trend state computed with different session boundaries. 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 // (1.5.0) the default colours (0x00RRGGBB) live in SessionVWAPStyle.h (svs::D_*) - the settings window starts from them
 static const COLOR C_VWAP = (COLOR)svs::D_VWAP;   // (1.2.0) Rassul's own settings 22:37 - VWAP magenta (the outputs' nominal pen)
 static const COLOR C_DARK = 0x000B0F19;
@@ -179,11 +180,12 @@ struct SVState {
 
 class SessionVWAP : public cppExtension {
 public:
+    SS_SAFE_DIALOG(SessionVWAP, "SessionVWAP")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     SessionVWAP() : cppExtension() { for (int i = 0; i < svs::R_COUNT; i++) P[i] = -1; }   // (1.5.0) rows unknown until setup()
     virtual int draw(void);
-    virtual int parmsLoad(void);                // (1.5.0) fills the window from the market's saved choices; never saves (lesson 29)
-    virtual int parmsApply(void);               // (1.5.0) OK / Apply: saves the window's choices for this chart's market
-    virtual int parmsUpdt(unsigned int);        // (1.5.0) each change in the window: saved at once, so the chart follows it live
+    virtual int parmsLoadBody(void);                // (1.5.0) fills the window from the market's saved choices; never saves (lesson 29)
+    virtual int parmsApplyBody(void);               // (1.5.0) OK / Apply: saves the window's choices for this chart's market
+    virtual int parmsUpdtBody(unsigned int);        // (1.5.0) each change in the window: saved at once, so the chart follows it live
     int P[svs::R_COUNT];                        // (1.5.0) the parameter index of each settings row (set in setup)
     std::string marketNow();
     void saveStyle();
@@ -288,11 +290,11 @@ void SessionVWAP::saveStyle()
     if (S) { S->styleCheckMs = -1; S->styleStamp = -2; }                 // the next draw re-reads it at once
 }
 
-int SessionVWAP::parmsApply(void) { saveStyle(); return RTX_OK; }
-int SessionVWAP::parmsUpdt(unsigned int i) { if (!loading_) ss::onUpdate(this, svset::spec(), svIds(), (int)i, snap_); saveStyle(); return RTX_OK; }
+int SessionVWAP::parmsApplyBody(void) { saveStyle(); return RTX_OK; }
+int SessionVWAP::parmsUpdtBody(unsigned int i) { if (!loading_) ss::onUpdate(this, svset::spec(), svIds(), (int)i, snap_); saveStyle(); return RTX_OK; }
 
 // the window opens on what this market's chart is drawing (another chart of the market may have changed it); never saves
-int SessionVWAP::parmsLoad(void)
+int SessionVWAP::parmsLoadBody(void)
 {
     struct Unload { bool& f; ~Unload() { f = false; } } unload = { loading_ };
     loading_ = true;
@@ -780,6 +782,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(11);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("LRA Session VWAP: the session VWAP with its +-1 and +-2 SD bands - RTH in the day session, the overnight VWAP and the prior RTH VWAP overnight.");
-    p->setVersion("1.6.1");   // = SV_VERSION (gex-build reads this literal; test_sessionvwap_settings checks they match)
+    p->setVersion("1.6.2");   // = SV_VERSION (gex-build reads this literal; test_sessionvwap_settings checks they match)
     return p;
 }

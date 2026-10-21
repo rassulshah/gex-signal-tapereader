@@ -39,6 +39,7 @@
 #define NOMINMAX
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef min
 #undef min
 #endif
@@ -132,10 +133,11 @@ struct DayModelState {
 // ---------------------------------------------------------------------------
 class DayModel : public cppExtension {
 public:
+    SS_SAFE_DIALOG(DayModel, "DayModel")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     DayModel();
-    virtual int parmsLoad(void);
-    virtual int parmsApply(void);
-    virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int parmsLoadBody(void);
+    virtual int parmsApplyBody(void);
+    virtual int parmsUpdtBody(unsigned int iParmNumber);
     virtual int done(void);
     virtual int destroy(void);
     virtual int draw(void);
@@ -198,7 +200,7 @@ int DayModel::destroy(void)
 
 // ---- parameter callbacks (dialog controls valid here; guard on a plausible
 //      font read so a nonsense value never corrupts the cached settings) -----
-int DayModel::parmsLoad(void)
+int DayModel::parmsLoadBody(void)
 {
     DayModelState* state = getState(true);
     if (!state) return RTX_FAIL;
@@ -206,7 +208,7 @@ int DayModel::parmsLoad(void)
     if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(state->cfg);
     return RTX_OK;
 }
-int DayModel::parmsApply(void)
+int DayModel::parmsApplyBody(void)
 {
     DayModelState* state = getState(true);
     if (!state) return RTX_FAIL;
@@ -214,7 +216,7 @@ int DayModel::parmsApply(void)
     if (probe >= 1 && probe <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(state->cfg);
     return RTX_OK;
 }
-int DayModel::parmsUpdt(unsigned int)
+int DayModel::parmsUpdtBody(unsigned int)
 {
     DayModelState* state = getState(true);
     if (!state) return RTX_FAIL;

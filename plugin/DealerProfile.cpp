@@ -80,6 +80,7 @@
 #include <windows.h>     // BEFORE irtsdk.h: the SDK's RTBOOL clashes with minwindef.h's BOOL the other way round (MSVC C2371)
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #if defined(DP_TEST_CURSOR)
 extern void* dp_test_cursor_wnd;
 static void* dpCursorWindow() { return dp_test_cursor_wnd; }
@@ -220,10 +221,11 @@ static bool dpKnownDealerRow(const std::string& line)
 using dpaudit::LblBox;                 // (2.7.3) a drawn label box (2.7.4: DealerProfileAuditLogic.h, tested)
 class DealerProfile : public cppExtension {
 public:
+    SS_SAFE_DIALOG(DealerProfile, "DealerProfile")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     DealerProfile();
-    virtual int parmsLoad(void);
-    virtual int parmsApply(void);
-    virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int parmsLoadBody(void);
+    virtual int parmsApplyBody(void);
+    virtual int parmsUpdtBody(unsigned int iParmNumber);
     virtual int done(void);
     virtual int destroy(void);
     virtual int draw(void);
@@ -530,9 +532,9 @@ void DealerProfile::fillDialog()
     const std::string mkt = chartKey(); if (mkt.empty()) return;
     ss::fillDialog(this, dprset::spec(), dpIds(), settingsStore(mkt).load(ss::marketIndex(mkt), dpNowMs(), true), dsnap_);
 }
-int DealerProfile::parmsLoad(void)  { if (loadHostState()) { fillDialog(); saveHostState(); } return RTX_OK; }   // (2.11.0) opening the window never saves
-int DealerProfile::parmsApply(void) { if (loadHostState()) { syncSettings(true); applyMargin(); saveHostState(); } return RTX_OK; }
-int DealerProfile::parmsUpdt(unsigned int i) { if (loadHostState()) { ss::onUpdate(this, dprset::spec(), dpIds(), (int)i, dsnap_); syncSettings(true); saveHostState(); } return RTX_OK; }
+int DealerProfile::parmsLoadBody(void)  { if (loadHostState()) { fillDialog(); saveHostState(); } return RTX_OK; }   // (2.11.0) opening the window never saves
+int DealerProfile::parmsApplyBody(void) { if (loadHostState()) { syncSettings(true); applyMargin(); saveHostState(); } return RTX_OK; }
+int DealerProfile::parmsUpdtBody(unsigned int i) { if (loadHostState()) { ss::onUpdate(this, dprset::spec(), dpIds(), (int)i, dsnap_); syncSettings(true); saveHostState(); } return RTX_OK; }
 
 int cppExtension::setup(void)
 {

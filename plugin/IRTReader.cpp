@@ -108,6 +108,7 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 // Windows headers may define far as a legacy memory-model macro.  DealerLogic
 // legitimately uses Node::far, so remove only that obsolete macro before the
 // unmodified shared header is parsed.
@@ -266,6 +267,7 @@ static double tickOf(const std::string& m)
 
 class IRTReader : public cppExtension {
 public:
+    SS_SAFE_DIALOG(IRTReader, "IRTReader")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     IRTReader() : cppExtension() {}
     // (0.8.1, 2026-10-20 night) IRT faults INSIDE the MARKET_DEPTH destructor while it is quitting ("C0000005 Exception at 14002AD39
     // ... calling done()" on every exit since 10-18, in lsIRTReader / lsFootprintReader* and lsLiquidityProfile - the plugins that own a
@@ -274,9 +276,9 @@ public:
     // deleted (the process ends). A chart closed during the day keeps its book object until IRT exits (one depth subscription).
     std::vector<cppExtension::MARKET_DEPTH*> mdPark_;
     void flushPark() { for (size_t i = 0; i < mdPark_.size(); ++i) delete mdPark_[i]; mdPark_.clear(); }
-    virtual int parmsLoad(void);
-    virtual int parmsApply(void);
-    virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int parmsLoadBody(void);
+    virtual int parmsApplyBody(void);
+    virtual int parmsUpdtBody(unsigned int iParmNumber);
     virtual int timer(RTX_EVENT* e);
     virtual int draw(void);
     void pump(const char* via);
@@ -435,9 +437,9 @@ int IRTReader::draw(void)
     return RTX_OK;
 }
 
-int IRTReader::parmsLoad(void)  { StateGuard guard(*this); if (dialogReady()) readSettings(state().cfg); return RTX_OK; }
-int IRTReader::parmsApply(void) { StateGuard guard(*this); if (dialogReady()) readSettings(state().cfg); return RTX_OK; }
-int IRTReader::parmsUpdt(unsigned int) { StateGuard guard(*this); if (dialogReady()) readSettings(state().cfg); return RTX_OK; }
+int IRTReader::parmsLoadBody(void)  { StateGuard guard(*this); if (dialogReady()) readSettings(state().cfg); return RTX_OK; }
+int IRTReader::parmsApplyBody(void) { StateGuard guard(*this); if (dialogReady()) readSettings(state().cfg); return RTX_OK; }
+int IRTReader::parmsUpdtBody(unsigned int) { StateGuard guard(*this); if (dialogReady()) readSettings(state().cfg); return RTX_OK; }
 
 int cppExtension::setup(void)
 {

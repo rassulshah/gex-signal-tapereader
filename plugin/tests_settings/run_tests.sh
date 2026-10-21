@@ -7,6 +7,10 @@ g++ -std=c++14 -Wall -Wextra -Werror -fsanitize=address,undefined -o "$OUT/setti
 g++ -std=c++14 -Wall -Wextra -Werror -fsanitize=address,undefined -o "$OUT/settings_host_test" settings_host_test.cpp
 "$OUT/settings_contract" ..
 "$OUT/settings_host_test"
+# (2026-10-21) the settings window round trip every indicator must pass, incl. a chart-less window copy and a faulting symbol call
+g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I. -I.. -o "$OUT/dialog_guard_test" dialog_guard_test.cpp
+"$OUT/dialog_guard_test"
+python3 test_dialog_guard.py
 # the gate must catch a hand-written colour call (proof the contract fails when it should)
 T=$(mktemp -d); cp ../*.h ../*.cpp "$T"/ 2>/dev/null || true
 sed -i 's|ss::registerAll(this, hlset::spec(), HodLod::hlIds());|ss::registerAll(this, hlset::spec(), HodLod::hlIds()); setIntegerValue(4, 0);|' "$T/HodLod.cpp"

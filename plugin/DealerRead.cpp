@@ -47,6 +47,7 @@
  *  DealerLogic.h. Parameters read only in the parms callbacks. Never black lines: the chart is black.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 // windows.h may expose the legacy far macro; DealerLogic's existing Node::far
 // member must remain visible in this implementation unit.
 #ifdef far
@@ -182,10 +183,11 @@ struct DealerReadState {
 
 class DealerRead : public cppExtension {
 public:
+    SS_SAFE_DIALOG(DealerRead, "DealerRead")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     DealerRead();
-    virtual int parmsLoad(void);
-    virtual int parmsApply(void);
-    virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int parmsLoadBody(void);
+    virtual int parmsApplyBody(void);
+    virtual int parmsUpdtBody(unsigned int iParmNumber);
     virtual int draw(void);
     virtual int done(void);
     virtual int destroy(void);
@@ -298,7 +300,7 @@ static bp::Place drPlace(const std::string& m)
 }
 static bool drInDialog(cppExtension* x) { const char* pl = x->getPeriodicityLabel(); return !(pl && pl[0]); }   // the settings window's copy has no bar size
 static std::string drMarketOf(cppExtension* x, int market) { char b[32] = {0}; const char* rs = x->getRootSymbol(b); return dl::marketFor(market, rs ? rs : ""); }
-int DealerRead::parmsLoad(void)
+int DealerRead::parmsLoadBody(void)
 {
     if (!dialogReady()) return RTX_OK;
     readSettings(cfg);
@@ -340,8 +342,8 @@ static int drLoadFont(const std::string& m, int def)
     cache.push_back(std::make_pair(p, std::make_pair(st, v)));
     return v < 0 ? def : v;
 }
-int DealerRead::parmsApply(void) { if (dialogReady()) { readSettings(cfg); drSavePlace(this, cfg); } return RTX_OK; }
-int DealerRead::parmsUpdt(unsigned int) { if (dialogReady()) { readSettings(cfg); drSavePlace(this, cfg); } return RTX_OK; }
+int DealerRead::parmsApplyBody(void) { if (dialogReady()) { readSettings(cfg); drSavePlace(this, cfg); } return RTX_OK; }
+int DealerRead::parmsUpdtBody(unsigned int) { if (dialogReady()) { readSettings(cfg); drSavePlace(this, cfg); } return RTX_OK; }
 
 int cppExtension::setup(void)
 {

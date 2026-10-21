@@ -30,6 +30,7 @@
 #include <windows.h>     // MoveFileExA for the status file; BEFORE irtsdk.h (RTBOOL / BOOL order, as DealerProfile)
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "TapeFlowLogic.h"
 #include "TapeFlowSupport.h"
 #include "HostSlot.h"
@@ -226,15 +227,16 @@ static void releaseHost(const TapeFlowState* st)
 
 class TapeFlow : public cppExtension {
 public:
+    SS_SAFE_DIALOG(TapeFlow, "TapeFlow")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     TapeFlow() : cppExtension() {}
     ~TapeFlow() {}
     HostSlot<TapeFlowState> slot_;                                   // (2.0.3) the per-chart states
     TapeFlowState* bindHost(bool create) { TapeFlowState* st = slot_.get(this, create); if (st) own_ = st; return st; }
     virtual int timer(RTX_EVENT* e);
     virtual int draw(void);
-    virtual int parmsLoad(void)  { return RTX_OK; }
-    virtual int parmsApply(void) { return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
+    virtual int parmsLoadBody(void)  { return RTX_OK; }
+    virtual int parmsApplyBody(void) { return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int) { return RTX_OK; }
     virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax);   // symmetric, fitted to the visible data
     virtual int parmsTitle(char* pStr, int size);                               // the readout for IRT's grey header
 

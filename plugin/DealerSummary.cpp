@@ -16,6 +16,7 @@
  *  Never black text: the chart background is black.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 // windows.h may define the legacy `far` macro before the RTX source is included.
 // DealerLogic's shared Node member is named far, so contain that SDK/Windows macro here.
 #ifdef far
@@ -92,10 +93,11 @@ static bool readSummaryText(const std::string& path, std::string& text, std::str
 
 class DealerSummary : public cppExtension {
 public:
+    SS_SAFE_DIALOG(DealerSummary, "DealerSummary")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     DealerSummary() : cppExtension() {}
-    virtual int parmsLoad(void);
-    virtual int parmsApply(void);
-    virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int parmsLoadBody(void);
+    virtual int parmsApplyBody(void);
+    virtual int parmsUpdtBody(unsigned int iParmNumber);
     virtual int done(void);
     virtual int destroy(void);
     virtual int draw(void);
@@ -122,9 +124,9 @@ DSState* DealerSummary::state(bool create)
     return slot_.get(this, create);
 }
 
-int DealerSummary::parmsLoad(void)  { if (dialogReady()) readSettings(state(true)->cfg); return RTX_OK; }
-int DealerSummary::parmsApply(void) { if (dialogReady()) readSettings(state(true)->cfg); return RTX_OK; }
-int DealerSummary::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(state(true)->cfg); return RTX_OK; }
+int DealerSummary::parmsLoadBody(void)  { if (dialogReady()) readSettings(state(true)->cfg); return RTX_OK; }
+int DealerSummary::parmsApplyBody(void) { if (dialogReady()) readSettings(state(true)->cfg); return RTX_OK; }
+int DealerSummary::parmsUpdtBody(unsigned int) { if (dialogReady()) readSettings(state(true)->cfg); return RTX_OK; }
 
 int DealerSummary::done(void)
 {

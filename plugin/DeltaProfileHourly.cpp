@@ -53,6 +53,7 @@
 #else
 #include "irtsdk.h"
 #endif
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "DeltaProfileHourlyEngine.h"
 #include "HostSlot.h"
 #include <atomic>
@@ -350,6 +351,7 @@ Feed::~Feed() {
 // ---------------------------------------------------------------- the plugin
 class DeltaProfileHourly : public cppExtension {
 public:
+    SS_SAFE_DIALOG(DeltaProfileHourly, "DeltaProfileHourly")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     HostSlot<HostState> slot_;
     HostState* own_ = nullptr;
     HostState* bind(bool create) { HostState* s = slot_.get(this, create); own_ = s; return s; }
@@ -358,9 +360,9 @@ public:
     int done() override;
     int destroy() override;
     int timer(RTX_EVENT* e) override;
-    int parmsLoad() override { return RTX_OK; }          // no settings: nothing is loaded or saved (checklist #29)
-    int parmsApply() override { return RTX_OK; }
-    int parmsUpdt(unsigned int) override { return RTX_OK; }
+    int parmsLoadBody() { return RTX_OK; }          // no settings: nothing is loaded or saved (checklist #29)
+    int parmsApplyBody() { return RTX_OK; }
+    int parmsUpdtBody(unsigned int) { return RTX_OK; }
 
     long long localSec(RTDATE value);
     bool identify(HostState& h);

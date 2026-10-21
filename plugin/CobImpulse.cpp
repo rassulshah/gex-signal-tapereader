@@ -44,6 +44,7 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
 #endif
@@ -205,18 +206,19 @@ static std::string ciSettingsPath(const std::string& mkt) { const std::string f 
 
 class CobImpulse : public cppExtension {
 public:
+    SS_SAFE_DIALOG(CobImpulse, "CobImpulse")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     CobImpulse() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
     // (0.5.0) the settings window: filled from the market's file (opening never saves); Apply / a change saves; the chart copy never saves
-    virtual int parmsLoad(void) {
+    virtual int parmsLoadBody(void) {
         if (!ss::inDialog(this)) return RTX_OK;
         ss::Store* st = dialogStore(); if (!st) return RTX_OK;
         ss::fillDialog(this, ciset::spec(), ciIds(), st->load(ss::marketIndex(dlgMkt_), steadyMs(), true), snap_);
         return RTX_OK;
     }
-    virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, ciset::spec(), ciIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
+    virtual int parmsApplyBody(void) { saveSettings(); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, ciset::spec(), ciIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
     void pump(bool mayCalc);
     void release() {   // (0.4.1) the Market State entry leaves the board first
         CIState* S = slot_.get(this, false);

@@ -59,6 +59,7 @@
 #else
 #include "irtsdk.h"
 #endif
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "DeltaProfileCore.h"
 #include "DeltaProfileSettings.h"   // (2.18.1) the ONE settings table (SettingsSpec.h)
 #include "SettingsHost.h"           // (2.18.1) the window from the table
@@ -809,15 +810,16 @@ struct ChartState {
 };
 class DeltaProfile : public cppExtension {
 public:
+    SS_SAFE_DIALOG(DeltaProfile, "DeltaProfile")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     ~DeltaProfile() { delete fallback_; }
     int draw() override;
     int calc(int) override;
     int preCalc() override;
     int done() override;
     int destroy() override;
-    int parmsLoad() override;
-    int parmsApply() override;
-    int parmsUpdt(unsigned int) override;
+    int parmsLoadBody();
+    int parmsApplyBody();
+    int parmsUpdtBody(unsigned int);
     ss::Store& settingsStore(ChartState& s);
 private:
     ChartState* fallback_ = NULL;
@@ -970,7 +972,7 @@ void DeltaProfile::syncLayout(ChartState& s, bool apply) {
     validateLayout(next); s.layout = next;
     s.wickOn = V.b(dpset::K_WICK_ON); s.wickX = V.f(dpset::K_WICK_X); if (!(s.wickX >= 1.0 && s.wickX <= 20.0)) s.wickX = 3.0;   // (2.20.0)
 }
-int DeltaProfile::parmsLoad() {
+int DeltaProfile::parmsLoadBody() {
     try {
         ChartState& s = chartState(); if (!ss::inDialog(this)) return RTX_OK;
         // Populate the dialog. Merely opening preferences NEVER saves a row.
@@ -978,11 +980,11 @@ int DeltaProfile::parmsLoad() {
         return RTX_OK;
     } catch (...) { return RTX_FAIL; }
 }
-int DeltaProfile::parmsApply() {
+int DeltaProfile::parmsApplyBody() {
     try { ChartState& s = chartState(); syncLayout(s, true); return RTX_OK; }
     catch (...) { return RTX_FAIL; }
 }
-int DeltaProfile::parmsUpdt(unsigned int i) { try { ss::onUpdate(this, dpset::spec(), dpIds(), (int)i, chartState().setSnap); } catch (...) {} return RTX_OK; } // groups only; saved on Apply/OK
+int DeltaProfile::parmsUpdtBody(unsigned int i) { try { ss::onUpdate(this, dpset::spec(), dpIds(), (int)i, chartState().setSnap); } catch (...) {} return RTX_OK; } // groups only; saved on Apply/OK
 int DeltaProfile::dealerWidth(ChartState& s) { return s.lay.w[cb::DEALER]; }   // (2.8.0) the Dealer column from the board (not its status file)
 // (2.8.0) this draw's columns: the Dealer Profile's Levels + Dealer widths from the board (with its heartbeat), this column's own
 // Width, the layout (ColumnBoard.h, the same the Dealer Profile computes), what the margin must be, the unit check
@@ -1390,6 +1392,7 @@ bool DeltaProfile::buildNative(ChartState& s) {
                     if (!absl::localExtreme(hk, lk, 5, top, 5)) continue;
                     double norm = 0; int nN = 0;
                     const bool nOk = absl::slotNorm(bk.obs, sessDay, slot, top ? 1 : 0, norm, nN);
+                    if (nOk) norm = std::max(norm, absl::floorNorm(bk.obs, sessDay, top ? 1 : 0));   // (AbsorbLogic 1.0.1) quiet-slot floor
                     absl::Params P; P.x = s.wickX;
                     const absl::WickResult R = absl::wickA(c, top, true, norm, nN, nOk, present, ev, tick, P);
                     ++bk.wickEval;

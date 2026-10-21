@@ -20,6 +20,7 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
 #endif
@@ -171,17 +172,18 @@ static std::string cvdSettingsPath(const std::string& mkt) { const std::string f
 
 class CVD : public cppExtension {
 public:
+    SS_SAFE_DIALOG(CVD, "CVD")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     CVD() : cppExtension() {}
     virtual int draw(void);
     // (1.3.0) the settings window: filled from the market's file (opening never saves); Apply / a change saves; the chart copy never saves
-    virtual int parmsLoad(void) {
+    virtual int parmsLoadBody(void) {
         if (!ss::inDialog(this)) return RTX_OK;
         ss::Store* st = dialogStore(); if (!st) return RTX_OK;
         ss::fillDialog(this, cvdset::spec(), cvdIds(), st->load(ss::marketIndex(dlgMkt_), steadyMs(), true), snap_);
         return RTX_OK;
     }
-    virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, cvdset::spec(), cvdIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
+    virtual int parmsApplyBody(void) { saveSettings(); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, cvdset::spec(), cvdIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
     void pump();
     void release() { slot_.release(this); }
     RuntimeState* stateFor() { return slot_.get(this, false); }   // tests

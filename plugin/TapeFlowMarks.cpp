@@ -24,6 +24,7 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "TapeFlowLogic.h"
 #include "HostSlot.h"
 #include <atomic>
@@ -120,12 +121,13 @@ static std::map<int, MarksState*>& timerReg() { static std::map<int, MarksState*
 
 class TapeFlowMarks : public cppExtension {
 public:
+    SS_SAFE_DIALOG(TapeFlowMarks, "TapeFlowMarks")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     HostSlot<MarksState> slot_;
     virtual int timer(RTX_EVENT* e);
     virtual int draw(void);
-    virtual int parmsLoad(void)  { return RTX_OK; }
-    virtual int parmsApply(void) { return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
+    virtual int parmsLoadBody(void)  { return RTX_OK; }
+    virtual int parmsApplyBody(void) { return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int) { return RTX_OK; }
     long long localSec(RTDATE d) { struct tm t; memset(&t, 0, sizeof(t)); getLocaltime(d, &t); return civil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec); }
     std::string tfDir() const { const char* up = getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\TapeFlow" : std::string(); }
     std::string pathOf(const MarksState& s, long long sid) const

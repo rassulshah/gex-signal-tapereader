@@ -44,6 +44,7 @@
 #endif
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 // windows.h may define the obsolete `far` macro, which conflicts with DealerLogic's Node::far member.
 #ifdef far
 #undef far
@@ -256,6 +257,7 @@ struct TMState {
 
 class TradeManager : public cppExtension {
 public:
+    SS_SAFE_DIALOG(TradeManager, "TradeManager")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     TradeManager() : cppExtension() {}
     TIdx TX;                                           // set in setup(); one per extension object
     // (1.3.1, settings audit 2026-10-18) the window from tmset::spec() through SettingsHost.h; the chart reads the keyed per-market file
@@ -269,7 +271,7 @@ public:
     }
     static long long tmNowMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
     void fromValues(const ss::Values& V, TSet& S) { S.market = V.i(tmset::K_MARKET); S.font = V.i(tmset::K_FONT); S.place = V.i(tmset::K_POSITION); }
-    virtual int parmsLoad(void) {                       // (#29) loading never saves
+    virtual int parmsLoadBody(void) {                       // (#29) loading never saves
         if (!ss::inDialog(this)) return RTX_OK;
         const std::string mk = fileMarket(); if (mk.empty()) return RTX_OK;
         ss::fillDialog(this, tmset::spec(), tmIds(), store(mk).load(ss::marketIndex(mk), tmNowMs(), true), snap_);
@@ -283,8 +285,8 @@ public:
         if (st.save(V)) snap_.take(ss::dialogNow(this, tmset::spec(), tmIds(), V));
         TSet cfg; fromValues(V, cfg); savePl(cfg);      // the place file the placement / drag code reads
     }
-    virtual int parmsApply(void) { saveAll(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, tmset::spec(), tmIds(), (int)i, snap_); saveAll(); return RTX_OK; }
+    virtual int parmsApplyBody(void) { saveAll(); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, tmset::spec(), tmIds(), (int)i, snap_); saveAll(); return RTX_OK; }
     virtual int done(void);
     virtual int destroy(void);
     // the Position is kept per market in TradeManager.place-<MKT>.txt (IRT reads list settings back as -1 outside the settings

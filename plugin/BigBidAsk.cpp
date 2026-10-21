@@ -275,6 +275,7 @@ struct BBState {
 
 class BigBidAsk : public cppExtension {
 public:
+    SS_SAFE_DIALOG(BigBidAsk, "BigBidAsk")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     BigBidAsk() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
@@ -282,9 +283,9 @@ public:
     // (1.19.2) IRT faulted INSIDE these calls when the window copy had no chart ("???": adding / pasting the indicator - msglog
     // 2026-10-20 22:24 parmsLoad, 22:33 parmsApply): the window was never filled and OK saved nothing. Each call now runs behind
     // ss::sehRun (SettingsGuard.h); a caught fault is logged in BigBidAsk.dialog2-<MKT>.txt and the window keeps what it shows.
-    virtual int parmsLoad(void) { guarded(&BigBidAsk::loadBody, "parmsLoad", 0); return RTX_OK; }
-    virtual int parmsApply(void) { guarded(&BigBidAsk::applyBody, "parmsApply", 0); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { guarded(&BigBidAsk::updtBody, "parmsUpdt", i); return RTX_OK; }
+    virtual int parmsLoadBody(void) { guarded(&BigBidAsk::loadBody, "parmsLoad", 0); return RTX_OK; }
+    virtual int parmsApplyBody(void) { guarded(&BigBidAsk::applyBody, "parmsApply", 0); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { guarded(&BigBidAsk::updtBody, "parmsUpdt", i); return RTX_OK; }
     struct GArg { BigBidAsk* me; void (BigBidAsk::*fn)(unsigned); unsigned i; };
     static void gThunk(void* p) { GArg* a = static_cast<GArg*>(p); (a->me->*(a->fn))(a->i); }
     static void gLog(void* p) { GArg* a = static_cast<GArg*>(p); a->me->rawLog("FAULT caught (IRT faulted inside the call; window kept as shown)"); }

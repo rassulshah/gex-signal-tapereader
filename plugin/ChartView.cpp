@@ -33,6 +33,7 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 // windows.h may define far as a legacy macro; DealerLogic.h (via ChartViewLogic.h) uses far as a member name
 #ifdef far
 #undef far
@@ -275,12 +276,13 @@ static void camRepaint(const std::string&, int, const std::string&, int, int) {}
 
 class ChartView : public cppExtension {
 public:
+    SS_SAFE_DIALOG(ChartView, "ChartView")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     ChartView() : cppExtension() {}
     virtual int draw(void);
     virtual int timer(RTX_EVENT* e);
-    virtual int parmsLoad(void)  { return RTX_OK; }          // no settings: nothing to load, nothing ever saved (#29)
-    virtual int parmsApply(void) { return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
+    virtual int parmsLoadBody(void)  { return RTX_OK; }          // no settings: nothing to load, nothing ever saved (#29)
+    virtual int parmsApplyBody(void) { return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int) { return RTX_OK; }
     void pump(int ctx);
     void release() { CVState* S = slot_.get(this, false); if (S && S->timerOn) { destroyTimer(cvTimerId(S)); S->timerOn = false; } slot_.release(this); }
     CVState* testState() { return slot_.get(this, false); }

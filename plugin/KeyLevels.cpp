@@ -76,11 +76,12 @@ static ss::Ids& klIds() { static ss::Ids I; return I; }
 
 class KeyLevels : public cppExtension {
 public:
+    SS_SAFE_DIALOG(KeyLevels, "KeyLevels")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     HostSlot<KlState> slot_;
     virtual int draw(void);
-    virtual int parmsLoad(void) { ss::guardedCall(this, &KeyLevels::loadBody, 0u); return RTX_OK; }
-    virtual int parmsApply(void) { ss::guardedCall(this, &KeyLevels::applyBody, 0u); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::guardedCall(this, &KeyLevels::updtBody, i); return RTX_OK; }
+    virtual int parmsLoadBody(void) { ss::guardedCall(this, &KeyLevels::loadBody, 0u); return RTX_OK; }
+    virtual int parmsApplyBody(void) { ss::guardedCall(this, &KeyLevels::applyBody, 0u); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { ss::guardedCall(this, &KeyLevels::updtBody, i); return RTX_OK; }
     void loadBody(unsigned) {
         if (!ss::inDialog(this)) return;
         ss::Store* st = dialogStore(); if (!st) return;

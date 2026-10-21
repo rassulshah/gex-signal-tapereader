@@ -69,6 +69,7 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
 #endif
@@ -202,12 +203,13 @@ struct TRState {
 
 class TapeReader : public cppExtension {
 public:
+    SS_SAFE_DIALOG(TapeReader, "TapeReader")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     TapeReader() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int parmsLoad(void);                                       // (1.1.3) fills the dialog from the place file (never saves)
-    virtual int parmsApply(void) { savePos(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, trset::spec(), trIds(), (int)i, snap_); savePos(); return RTX_OK; }
+    virtual int parmsLoadBody(void);                                       // (1.1.3) fills the dialog from the place file (never saves)
+    virtual int parmsApplyBody(void) { savePos(); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, trset::spec(), trIds(), (int)i, snap_); savePos(); return RTX_OK; }
     static ss::Ids& trIds() { static ss::Ids I; return I; }        // (1.3.1) the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
     struct SetStore { std::string mkt; ss::Store st; };
     std::vector<SetStore> stores_;                                     // (1.3.1) per market, per object
@@ -640,7 +642,7 @@ ss::Store& TapeReader::storeFor(const std::string& mkt)
     n.st.legacy = trset::legacy;
     stores_.push_back(n); return stores_.back().st;
 }
-int TapeReader::parmsLoad(void)
+int TapeReader::parmsLoadBody(void)
 {
     if (!ss::inDialog(this)) return RTX_OK;                              // opening never saves
     const std::string mkt = trMarket(this); if (mkt.empty()) return RTX_OK;

@@ -49,6 +49,7 @@
  *  numbering and silently scrambles every setting read after it.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "GammaProfileLogic.h"     // (v0.45) the decisions, testable without IRT
 #include "ContractOffsetLogic.h"   // (shared) the anchor-bar rule, tested
 #include <fstream>
@@ -134,12 +135,13 @@ struct GStrike { float price; float pct; int rank; bool king; std::string type; 
 // ---------------------------------------------------------------------------
 class GammaProfile : public cppExtension {
 public:
+    SS_SAFE_DIALOG(GammaProfile, "GammaProfile")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     GammaProfile();
     // Read settings ONLY from the parameter callbacks (dialog controls are valid there);
     // the constructor seeds safe defaults so the closed-dialog state renders correctly.
-    virtual int parmsLoad(void);
-    virtual int parmsApply(void);
-    virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int parmsLoadBody(void);
+    virtual int parmsApplyBody(void);
+    virtual int parmsUpdtBody(unsigned int iParmNumber);
     virtual int draw(void);
 
     std::vector<GStrike> strikes;
@@ -276,9 +278,9 @@ void GammaProfile::syncSettings()
     if (f < 1 || f > 200) return;          // values not populated yet — keep what we have, retry next draw
     readSettings(cfg); enableParameter(PX.thresh, cfg.filter == 4);
 }
-int GammaProfile::parmsLoad(void)  { syncSettings(); return RTX_OK; }
-int GammaProfile::parmsApply(void) { syncSettings(); return RTX_OK; }
-int GammaProfile::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
+int GammaProfile::parmsLoadBody(void)  { syncSettings(); return RTX_OK; }
+int GammaProfile::parmsApplyBody(void) { syncSettings(); return RTX_OK; }
+int GammaProfile::parmsUpdtBody(unsigned int) { syncSettings(); return RTX_OK; }
 
 // ---- parameter panel ------------------------------------------------------
 // IMPORTANT: parameter indices are numbered EXPLICITLY here (pc++), one per

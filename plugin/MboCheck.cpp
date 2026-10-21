@@ -48,6 +48,7 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
 #endif
@@ -164,12 +165,13 @@ static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREY = 0x009CA3AF
 
 class MboCheck : public cppExtension {
 public:
+    SS_SAFE_DIALOG(MboCheck, "MboCheck")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     MboCheck() : cppExtension() {}
     virtual int draw(void);
     virtual int timer(RTX_EVENT* e);
-    virtual int parmsLoad(void)  { return RTX_OK; }          // no settings: nothing to load, nothing saved (#29)
-    virtual int parmsApply(void) { return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
+    virtual int parmsLoadBody(void)  { return RTX_OK; }          // no settings: nothing to load, nothing saved (#29)
+    virtual int parmsApplyBody(void) { return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int) { return RTX_OK; }
     void pump(int ctx);
     void release() { MCState* S = slot_.get(this, false); if (S && S->timerOn) { destroyTimer(mcTimerId(S)); S->timerOn = false; } slot_.release(this); }
     MCState* testState() { return slot_.get(this, false); }

@@ -224,6 +224,27 @@ static void testPlugin(const std::string& profile)
     CHECK(drawn(H2)[std::make_pair(0xFFFF00UL, 2)] == want[4] + want[9], "the second ES chart draws the same style");
     mock::Host H3; H3.root = "NQ"; mock::current = &H3; bars(H3, true); x.fill(0); H3.lines.clear(); x.draw();
     CHECK(drawn(H3)[std::make_pair(0xFF0000UL, 1)] == want[4] + want[9] && drawn(H3)[std::make_pair(0xFF80FFUL, 2)] == want[0] + want[5], "NQ keeps the defaults (settings are per market)");
+    // (1.6.2, msglog 2026-10-21 09:51 "lsSessionVWAP Ver 1.6.1 in chart "???" calling parmsLoad()") a window copy with NO chart:
+    // it used to open blank (VWAP / bands unticked, colour black). Now it opens on this plugin's last market (ES) - filled - and OK on
+    // the real chart saves only what he changed; an Apply that still has no chart saves nothing.
+    {
+        mock::Host H5; H5.root = ""; H5.dialog = true; mock::current = &H5;
+        x.parmsLoad();
+        CHECK(x.isBoxChecked(x.P[svs::R_VWAP]) && x.getListIndex(x.P[svs::R_VWAP_W]) == 3 && x.getParameterColor(x.P[svs::R_M2_COL]) == 0xFFFF00,
+              "a chart-less window copy opens FILLED from the last market's file (VWAP ticked, width 4 px, -2 SD yellow)");
+        x.checkBox(x.P[svs::R_P1], false); x.parmsUpdt((unsigned)x.P[svs::R_P1]);
+        const std::string before = readAll(esFile);
+        x.parmsApply();
+        CHECK(readAll(esFile) == before, "an Apply that still has no chart saves nothing (never into a guessed market)");
+        H5.root = "ES"; x.parmsApply();                                   // IRT attaches the copy to its chart for OK
+        const std::string after = readAll(esFile);
+        CHECK(after.find("P1,0,") != std::string::npos && after.find("M2,1,FFFF00\n") != std::string::npos && after.find("VWAP,1,FF80FF,4\n") != std::string::npos,
+              "OK on the real chart saves the one change (+1 SD off) and keeps every other choice");
+        mock::Host H6; H6.root = "ES"; H6.dialog = true; mock::current = &H6; x.parmsLoad();
+        CHECK(!x.isBoxChecked(x.P[svs::R_P1]) && x.isBoxChecked(x.P[svs::R_M1]), "re-opened: the window shows what was saved");
+        x.checkBox(x.P[svs::R_P1], true); x.parmsApply();
+        mock::current = &H3;                                              // as before: the next done() frees H3's chart
+    }
     x.done(); mock::current = &H2; x.done(); mock::current = &H;
 
     // a damaged file: defaults, no crash; then a good file again is picked up without a restart (stamp change)

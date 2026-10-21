@@ -42,6 +42,7 @@
  *  (LRA analytics/lra/forced.py via dealer_irt.py, file 1.6); grammar in DealerLogic.h. Never black lines: the chart is black.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
 #endif
@@ -85,10 +86,11 @@ struct SSet { int market = 0, font = 10, clock = 0, gap = 6; bool ledger = false
 
 class DealerSig : public cppExtension {
 public:
+    SS_SAFE_DIALOG(DealerSig, "DealerSig")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     DealerSig() : cppExtension() {}
-    virtual int parmsLoad(void);
-    virtual int parmsApply(void);
-    virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int parmsLoadBody(void);
+    virtual int parmsApplyBody(void);
+    virtual int parmsUpdtBody(unsigned int iParmNumber);
     virtual int draw(void);
 
     SSet cfg;
@@ -113,9 +115,9 @@ int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { return RTX_OK; }
 int cppExtension::calc(int iStartBar) { static_cast<DealerSig*>(this)->fillSignals(iStartBar); return RTX_OK; }
 
-int DealerSig::parmsLoad(void)  { if (dialogReady()) readSettings(cfg); return RTX_OK; }
-int DealerSig::parmsApply(void) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
-int DealerSig::parmsUpdt(unsigned int) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
+int DealerSig::parmsLoadBody(void)  { if (dialogReady()) readSettings(cfg); return RTX_OK; }
+int DealerSig::parmsApplyBody(void) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
+int DealerSig::parmsUpdtBody(unsigned int) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
 
 int cppExtension::setup(void)
 {

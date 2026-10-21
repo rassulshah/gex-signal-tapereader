@@ -132,6 +132,7 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
 #endif
@@ -355,12 +356,13 @@ static std::string unsignedHitLine(const ofo::Snap& s, int gate) {
 
 class BidAskStats : public cppExtension {
 public:
+    SS_SAFE_DIALOG(BidAskStats, "BidAskStats")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     BidAskStats() : cppExtension() {}
     virtual int draw(void);
-    virtual int parmsLoad(void);                                         // (1.5.2) fills the dialog from the file; loading never saves (lesson 29)
+    virtual int parmsLoadBody(void);                                         // (1.5.2) fills the dialog from the file; loading never saves (lesson 29)
     ss::Snap snap_;                                                      // (1.5.2) the dialog as it opened (1.13.2: SettingsSpec.h)
-    virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, ofset::bidAskSpec(), basIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
+    virtual int parmsApplyBody(void) { saveSettings(); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, ofset::bidAskSpec(), basIds(), (int)i, snap_); saveSettings(); return RTX_OK; }
     virtual int mouse(RTX_EVENT* e);
     virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax);
     virtual int parmsTitle(char* pStr, int size) { return off::copyTitle(pStr, size, bas::TITLE, BAS_VERSION) ? RTX_OK : RTX_FAIL; }   // (1.7.0) the pane title, version next to it
@@ -595,7 +597,7 @@ static ss::Values basValues(const BasFile& F) {
     V.v[ofset::bask::K_BIG_LOT] = F.pn.bigLot;                         // (1.14.0)
     return V;
 }
-int BidAskStats::parmsLoad(void) {
+int BidAskStats::parmsLoadBody(void) {
     if (!ss::inDialog(this)) return RTX_OK;
     ss::fillDialog(this, ofset::bidAskSpec(), basIds(), basValues(basFile(placePath(basMarket(this)))), snap_);
     return RTX_OK;

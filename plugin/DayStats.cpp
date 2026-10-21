@@ -25,6 +25,7 @@
  *  from under the getters and silently scrambles settings — see the gamma plugin).
  ********************************************************************************/
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "DayStatsLogic.h"
 #include "HostSlot.h"   // (v0.8) the row grammar, the formatting and the cells, testable without IRT
 #include <fstream>
@@ -63,10 +64,11 @@ typedef dsl::StatRow StatRow;   // (v0.8) DayStatsLogic.h
 // ---------------------------------------------------------------------------
 class DayStats : public cppExtension {
 public:
+    SS_SAFE_DIALOG(DayStats, "DayStats")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     DayStats();
-    virtual int parmsLoad(void);
-    virtual int parmsApply(void);
-    virtual int parmsUpdt(unsigned int iParmNumber);
+    virtual int parmsLoadBody(void);
+    virtual int parmsApplyBody(void);
+    virtual int parmsUpdtBody(unsigned int iParmNumber);
     virtual int done(void);
     virtual int destroy(void);
     virtual int draw(void);
@@ -148,9 +150,9 @@ DayStats::DayStats() : cppExtension() {}
 // right all along; the plugin just never read it. syncSettings() runs at the top of draw() as well, behind the same guard, so
 // the first draw after the values exist applies the saved Corner / font / insets. Eight reads per draw — nothing.
 void DayStats::syncSettings() { State& s = state(); int p = getIntegerValue(PIdx::font); if (p >= 1 && p <= 200 /* (2026-09-17) was 6..48: at Font size 3 no dialog change ever applied (KT 0.12 lesson) */) readSettings(s.cfg); }
-int DayStats::parmsLoad(void)  { syncSettings(); return RTX_OK; }
-int DayStats::parmsApply(void) { syncSettings(); return RTX_OK; }
-int DayStats::parmsUpdt(unsigned int) { syncSettings(); return RTX_OK; }
+int DayStats::parmsLoadBody(void)  { syncSettings(); return RTX_OK; }
+int DayStats::parmsApplyBody(void) { syncSettings(); return RTX_OK; }
+int DayStats::parmsUpdtBody(unsigned int) { syncSettings(); return RTX_OK; }
 int DayStats::done(void) { releaseState(); return RTX_OK; }
 int DayStats::destroy(void) { releaseState(); return RTX_OK; }
 

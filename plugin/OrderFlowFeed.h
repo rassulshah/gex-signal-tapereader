@@ -1818,6 +1818,7 @@ static const long long FINAL_GRACE_MS = 5000;      // ... or 5 s after it closed
 // =====================================================================================================================
 #ifdef OFF_SDK
 #include "HostSlot.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG in MboPane: the settings window never faults, never opens blank
 #include <chrono>
 #include <climits>
 #include <cstdint>
@@ -2688,6 +2689,7 @@ template <class L> struct PaneState {
 
 template <class L> class MboPane : public cppExtension {
 public:
+    SS_SAFE_DIALOG(MboPane<L>, "OrderFlowPane")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     typedef PaneState<L> S_;
     MboPane() : cppExtension() {}
     // (1.2.2) hooks for a pane that does more with the raw feed (PullStats' "Record order feed"); the defaults do nothing
@@ -2768,7 +2770,7 @@ public:
         v.push_back(getIntegerValue(base())); v.push_back(getIntegerValue(base() + 1)); v.push_back(getListIndex(base() + 2));
         return v;
     }
-    virtual int parmsLoad(void) {
+    int parmsLoadBody(void) {
         if (!inDialog()) return RTX_OK;
         const PaneSettings f = fileSettings(chartMarket());
         this->setIntegerValue(0, f.ratioBars); this->setListIndex(1, f.pos); this->setFloatValue(2, (float)f.spike.avgT / 10.0f); this->setFloatValue(3, (float)f.spike.jumpT / 10.0f);
@@ -2777,8 +2779,8 @@ public:
         snap_.take(dialogNow());                                           // what the dialog shows now (filled, or IRT's own values)
         return RTX_OK;
     }
-    virtual int parmsApply(void) { saveSettings(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { saveSettings(); return RTX_OK; }
+    int parmsApplyBody(void) { saveSettings(); return RTX_OK; }
+    int parmsUpdtBody(unsigned int) { saveSettings(); return RTX_OK; }
     void boxLeft(S_& S) {                                                  // the mouse is no longer over this chart: no box hover
         if (!S.inBox) return;
         void* w = cursorWindow();

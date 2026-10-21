@@ -21,6 +21,7 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
 #endif
@@ -214,11 +215,12 @@ struct EXState {
 
 class Exhaustion : public cppExtension {
 public:
+    SS_SAFE_DIALOG(Exhaustion, "Exhaustion")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     Exhaustion() : cppExtension() {}
     virtual int draw(void);
-    virtual int parmsLoad(void)  { return RTX_OK; }
-    virtual int parmsApply(void) { return RTX_OK; }
-    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
+    virtual int parmsLoadBody(void)  { return RTX_OK; }
+    virtual int parmsApplyBody(void) { return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int) { return RTX_OK; }
     void pump();
     void release() { slot_.release(this); }
     EXState* testState() { return slot_.get(this, false); }

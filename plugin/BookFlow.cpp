@@ -59,6 +59,7 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
 #endif
@@ -89,6 +90,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 
 class BookFlow : public off::MboPane<bf::Logic> {
 public:
+    SS_SAFE_DIALOG(BookFlow, "BookFlow")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     BookFlow() : off::MboPane<bf::Logic>() {}
     virtual bool barMarks() const { return false; }                        // no letters / dash drawn; hover + records keep them
     virtual bool netBars() const { return true; }
@@ -388,7 +390,7 @@ public:
 
         return V;
     }
-    virtual int parmsLoad(void) {
+    virtual int parmsLoadBody(void) {
         if (!inDialog()) return RTX_OK;
         ss::fillDialog(this, ofset::bookFlowSpec(), bfIds(), bfValues(fileSettings(chartMarket())), snapBf_);
         return RTX_OK;
@@ -411,8 +413,8 @@ public:
         S_* S = testState();
         if (S) { S->settingsCheckMs = -1; S->settingsStamp = -1 - 3; }    // re-read on the next pass (not "first")
     }
-    virtual int parmsApply(void) { saveBf(); return RTX_OK; }
-    virtual int parmsUpdt(unsigned int i) { ss::onUpdate(this, ofset::bookFlowSpec(), bfIds(), (int)i, snapBf_); saveBf(); return RTX_OK; }
+    virtual int parmsApplyBody(void) { saveBf(); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, ofset::bookFlowSpec(), bfIds(), (int)i, snapBf_); saveBf(); return RTX_OK; }
 
     // ---- (1.3.0) the pane: the numbers box (Net, Pace) + one net bar per side per candle, coloured by side ----------------------------
     virtual int draw(void) {

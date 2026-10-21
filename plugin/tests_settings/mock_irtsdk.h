@@ -3,6 +3,7 @@
 // unchecked, every list -1, every colour 0, every number 0; setIntegerValue / getIntegerValue on a COLOUR row do nothing / read 0
 // (the black swatch); a window can be told to IGNORE fills (the suspected IRT behaviour lsBigBidAsk 1.16 logs).
 #pragma once
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -24,6 +25,8 @@ struct Ext {
     bool dialog = true;        // false = the chart copy
     bool ignoreFill = false;   // the window ignores values written by the plugin
     unsigned paramVersion = 0; int dialogLines = 0;
+    std::string root = "ES";   // (2026-10-21) the chart's root; "" = a window copy with NO chart (IRT's "???")
+    bool symFault = false;     // the symbol call faults (IRT: C0000005 in a runtime DLL) - here it returns NULL
 };
 }
 
@@ -32,6 +35,11 @@ public:
     mock::Ext m;
     virtual ~cppExtension() {}
     const char* getPeriodicityLabel() { return m.dialog ? "" : "3 Min"; }
+    char* getRootSymbol(char* b = NULL, const char* = NULL) { if (m.symFault || m.root.empty()) return NULL; static char sb[16]; char* o = b ? b : sb; std::snprintf(o, 16, "%s", m.root.c_str()); return o; }
+    char* getSymbol(void) { if (m.symFault || m.root.empty()) return NULL; static char sb[16]; std::snprintf(sb, 16, "%sZ6", m.root.c_str()); return sb; }
+    virtual int parmsLoad(void) { return RTX_FAIL; }
+    virtual int parmsApply(void) { return RTX_FAIL; }
+    virtual int parmsUpdt(unsigned int) { return RTX_OK; }
     int getParameterCount() { return (int)m.p.size(); }
     RTX_RESULT setParameterVersion(unsigned v) { m.paramVersion = v; return RTX_OK; }
     void setParameterDialogHeight(int n, int = 22) { m.dialogLines = n; }
