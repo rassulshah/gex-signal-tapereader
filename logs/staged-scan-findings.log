@@ -1,24 +1,3 @@
-findings=0 allowed=0 staged_files=22 bytes=1064504
+findings=0 allowed=0 staged_files=1 bytes=982
 largest staged blobs (bytes, path):
-SIZE	253278	plugin/OrderFlowFeed.h
-SIZE	179638	plugin/DeltaProfile.cpp
-SIZE	122614	plugin/BidAskStats.cpp
-SIZE	118633	plugin/BigBidAsk.cpp
-SIZE	73327	plugin/BigBidAskLogic.h
-SIZE	62657	plugin/BUILD-LESSONS.md
-SIZE	51392	plugin/DeltaProfileCore.h
-SIZE	44096	plugin/BidAskStatsLogic.h
-SIZE	29737	plugin/tests_bba115/test_bba116.cpp
-SIZE	24074	plugin/tests_dp217/test_dp218.cpp
-SIZE	21022	tools/gex-build.bat
-SIZE	20727	plugin/tests_aggbook/test_aggbook_113.cpp
-SIZE	15403	plugin/tests_dp217/test_dp217.cpp
-SIZE	10001	plugin/tests_bba115/test_bba119.cpp
-SIZE	9279	plugin/AbsorbLogic.h
-SIZE	8583	plugin/tests_absorb/test_absorb.cpp
-SIZE	7178	plugin/SignalBoard.h
-SIZE	4838	plugin/DeltaProfileSettings.h
-SIZE	2651	plugin/tests_absorb/test_dp220_record.cpp
-SIZE	2630	plugin/OrderFlowPaneSettings.h
-SIZE	2267	plugin/BigBidAskSettings.h
-SIZE	479	plugin/tests_absorb/run_tests.sh
+SIZE	982	logs/staged-scan-findings.log
