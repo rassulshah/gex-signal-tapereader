@@ -127,6 +127,14 @@ RTX_RESULT cppExtension::setBoolParameter(const char* n, RTBOOL b, short) { MOCK
 RTX_RESULT cppExtension::setIntegerParameter(const char* n, int v, short, short) { MOCK_INT[PARAMS.size()] = v; PARAMS.push_back(n); return RTX_OK; }
 RTX_RESULT cppExtension::setListParameter(const char* n, short d, const char*, short, short) { MOCK_LIST[PARAMS.size()] = d; PARAMS.push_back(n); return RTX_OK; }
 RTX_RESULT cppExtension::setStringParameter(const char* n, const char* d, size_t, short, short) { MOCK_TXT[PARAMS.size()] = d ? d : ""; PARAMS.push_back(n); return RTX_OK; }
+// (2.20.0) the queue meter rows: a float (Reach) and three colours - mocked so setup() registers every row (a missing mock = a NULL call)
+static double MOCK_FLT[32]; static unsigned long MOCK_COL[32];
+RTX_RESULT cppExtension::setFloatParameter(const char* n, float f, short, short) { MOCK_FLT[PARAMS.size() % 32] = f; PARAMS.push_back(n); return RTX_OK; }
+RTX_RESULT cppExtension::setColorParameter(const char* n, COLOR c, short, short) { MOCK_COL[PARAMS.size() % 32] = c; PARAMS.push_back(n); return RTX_OK; }
+float cppExtension::getFloatValue(int i) { return i >= 0 && i < 32 ? (float)MOCK_FLT[i] : 0.0f; }
+void cppExtension::setFloatValue(int i, float f) { if (i >= 0 && i < 32) MOCK_FLT[i] = f; }
+COLOR cppExtension::getParameterColor(int i) { return i >= 0 && i < 32 ? (COLOR)MOCK_COL[i] : 0; }
+RTX_RESULT cppExtension::setParameterColor(int i, COLOR c) { if (i >= 0 && i < 32) MOCK_COL[i] = c; return RTX_OK; }
 int cppExtension::getParameterCount(void) { return (int)PARAMS.size(); }   // (2.17.1) SettingsHost.h registers by the count
 RTX_RESULT cppExtension::enableParameter(int, RTBOOL) { return RTX_OK; }
 static std::string UP;
@@ -240,7 +248,7 @@ int main()
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   // versions: the constant = the setVersion literal gex-build reads = the settings table; the shared headers
         const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.19.0" && src.find("p->setVersion(\"2.19.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == "2.19.0", "version 2.19.0 everywhere");
+        check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "version: DP_VERSION = setVersion literal = settings table (compared, never typed: lesson 79)");
         check(std::string(cb::VERSION) == "1.3.0" && cb::range(cb::LEVELS).hi == 250 && std::string(lpct::VERSION) == "1.0.0", "ColumnBoard 1.3.0 (Levels up to 250), LevelPctLogic 1.0.0");
         DealerProfile E; E.setup();
         check(PX.levelPct >= 0 && PX.levelPct < (int)PARAMS.size() && PARAMS[PX.levelPct] == "Level % badges" && MOCK_CHK[PX.levelPct], "setting 'Level % badges', on by default");
@@ -276,7 +284,7 @@ int main()
     int green = 0, grey = 0; for (auto& q2 : O) if (q2.kind == "line" && q2.l >= c.lay.levels.l) { if (q2.col == lpct::C_GREEN) ++green; if (q2.col == lpct::C_GREY) ++grey; }
     check(green >= 4 && grey >= 4, "outlines: green (beats random) and grey (no better) both drawn (" + std::to_string(green) + " / " + std::to_string(grey) + ")");
     const std::string st = slurp(fl("DealerProfile.status.txt"));
-    check(st.find("LEVEL_PCT,on,file ok,rows 22,built 2026-10-21,shown ") != std::string::npos && st.find("VERSION,2.19.0") != std::string::npos, "status LEVEL_PCT line");
+    check(st.find("LEVEL_PCT,on,file ok,rows 22,built 2026-10-21,shown ") != std::string::npos && st.find(std::string("VERSION,") + DP_VERSION) != std::string::npos, "status LEVEL_PCT line");
     check(c.lay.levels.w() == 150 + DP_PCT_W, "Levels column 150 + the % block (" + std::to_string(c.lay.levels.w()) + ")");
     // the hover: on the % block only (every other hover stays off)
     {

@@ -6,11 +6,13 @@
 #include "SettingsSpec.h"
 
 namespace dprset {
-static const char* const PLUGIN_VERSION = "2.19.0";
+static const char* const PLUGIN_VERSION = "2.20.0";
+// (2.20.0, Rassul approved the QUEUE METER 2026-10-22 13:51 CT) + "Queue meter" on / off, "Queue meter reach (ATR)", its bid / offer / warning
+// colours, appended (earlier rows keep their positions) -> parameter version 9
 // (2.19.0, Rassul 2026-10-21 approved Option B) + "Level % badges" (on by default) -> parameter version 8
 // (2.17.2, his decision list) "Snapshot outline" removed (dashed: against his no-dashed rule; a saved snap key is ignored);
 // Market / Clock offset / Indicators text hidden (kept in the file with their defaults / saved values, not shown) -> parameter version 7.
-enum K { K_MARKET, K_WIDTH, K_LEVELS_W, K_BADGE_FONT, K_LIQ_BADGE, K_LEVEL_PCT, K_FONT, K_CLOCK, K_LABELS, K_FADEFAR, K_BANNER, K_INDS, K_N };
+enum K { K_MARKET, K_WIDTH, K_LEVELS_W, K_BADGE_FONT, K_LIQ_BADGE, K_LEVEL_PCT, K_FONT, K_CLOCK, K_LABELS, K_FADEFAR, K_BANNER, K_INDS, K_QM, K_QM_REACH, K_QM_BID, K_QM_ASK, K_QM_WARN, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
         ss::hide(ss::listRow("market", "Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU", 70)),
@@ -25,8 +27,13 @@ inline const ss::Spec& spec() {
         ss::boolRow("fadefar", "Fade strikes beyond 1.2 EM", true),
         ss::same(ss::boolRow("banner", "Whole-book banner", false)),
         ss::hide(ss::textRow("inds", "Indicators in the bar file", "cob_bull,cob_bear", 160, 160)),
+        ss::boolRow("queue_meter", "Queue meter", true),
+        ss::same(ss::floatRow("qm_reach", "Reach (ATR)", 1.0, 0.25, 2.0, 50)),
+        ss::colorRow("qm_bid", "Meter bids", 0x22C55E, 40),
+        ss::same(ss::colorRow("qm_ask", "Meter offers", 0xEF4444, 40)),
+        ss::same(ss::colorRow("qm_warn", "Originals gone", 0xFACC15, 40)),
     };
-    static const ss::Spec S = { "DealerProfile", PLUGIN_VERSION, 8, R, K_N, 0 };
+    static const ss::Spec S = { "DealerProfile", PLUGIN_VERSION, 9, R, K_N, 0 };
     return S;
 }
 

@@ -73,7 +73,7 @@ int main() {
     CHECK(rec.find("\nZ|") != std::string::npos && rec.find("|7001|") != std::string::npos, "the zone is recorded (Z line)");
     const std::string st = readAll(flex + "\\LiquidityProfile.status-CL-180.txt");
     CHECK(st.find("LMT_ZONES,1.0.0,on") != std::string::npos, "status: LMT_ZONES line");
-    CHECK(st.compare(0, 14, "VERSION,0.48.0") == 0, "status VERSION 0.48.0");
+    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0, "status VERSION = LQ_VERSION (compared, never typed)");
     // the order is pulled -> X, the zone ends once
     mock::feed.push(2, 0, 80.10f, 40, (RTDATE)(t0 + 30), 7001);
     for (int s = 0; s < 3; ++s) { h.now = t0 + 31 + s; p->calc(0); usleep(5000); }

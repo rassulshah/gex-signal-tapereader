@@ -125,6 +125,14 @@ RTX_RESULT cppExtension::setBoolParameter(const char* n, RTBOOL b, short) { MOCK
 RTX_RESULT cppExtension::setIntegerParameter(const char* n, int v, short, short) { MOCK_INT[PARAMS.size()] = v; PARAMS.push_back(n); return RTX_OK; }
 RTX_RESULT cppExtension::setListParameter(const char* n, short d, const char*, short, short) { MOCK_LIST[PARAMS.size()] = d; PARAMS.push_back(n); return RTX_OK; }
 RTX_RESULT cppExtension::setStringParameter(const char* n, const char* d, size_t, short, short) { MOCK_TXT[PARAMS.size()] = d ? d : ""; PARAMS.push_back(n); return RTX_OK; }
+// (2.20.0) the queue meter rows: a float (Reach) and three colours - mocked so setup() registers every row (a missing mock = a NULL call)
+static double MOCK_FLT[32]; static unsigned long MOCK_COL[32];
+RTX_RESULT cppExtension::setFloatParameter(const char* n, float f, short, short) { MOCK_FLT[PARAMS.size() % 32] = f; PARAMS.push_back(n); return RTX_OK; }
+RTX_RESULT cppExtension::setColorParameter(const char* n, COLOR c, short, short) { MOCK_COL[PARAMS.size() % 32] = c; PARAMS.push_back(n); return RTX_OK; }
+float cppExtension::getFloatValue(int i) { return i >= 0 && i < 32 ? (float)MOCK_FLT[i] : 0.0f; }
+void cppExtension::setFloatValue(int i, float f) { if (i >= 0 && i < 32) MOCK_FLT[i] = f; }
+COLOR cppExtension::getParameterColor(int i) { return i >= 0 && i < 32 ? (COLOR)MOCK_COL[i] : 0; }
+RTX_RESULT cppExtension::setParameterColor(int i, COLOR c) { if (i >= 0 && i < 32) MOCK_COL[i] = c; return RTX_OK; }
 int cppExtension::getParameterCount(void) { return (int)PARAMS.size(); }   // (2.17.1) SettingsHost.h registers by the count
 RTX_RESULT cppExtension::enableParameter(int, RTBOOL) { return RTX_OK; }
 static std::string UP;
@@ -235,7 +243,7 @@ int main(int argc, char** argv)
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   // ---- setup(): controls only, the agreed rows and defaults (Dealer 80 / Levels 78 / Badge 9 / Liquidity in badge / Show B / S text)
         DealerProfile E; E.setup();
-        bool rows = PARAMS.size() == 9 &&   /* (2.17.2) 11 rows, 3 hidden; (2.19.0) + "Level % badges" */ PARAMS[PX.width] == "Dealer column px (40-250)" && PARAMS[PX.levelsW] == "Levels column px (30-150)" && PARAMS[PX.badgeFont] == "Badge font (pt)"
+        bool rows = PARAMS.size() == 14 &&   /* (2.17.2) 11 rows, 3 hidden; (2.19.0) + "Level % badges"; (2.20.0) + the 5 queue meter rows */ PARAMS[PX.width] == "Dealer column px (40-250)" && PARAMS[PX.levelsW] == "Levels column px (30-150)" && PARAMS[PX.badgeFont] == "Badge font (pt)"
                     && PARAMS[PX.liqBadge] == "Liquidity in badge" && PARAMS[PX.labels] == "Show buy / sell text in node";
         check(rows && MOCK_INT[PX.width] == 80 && MOCK_INT[PX.levelsW] == 78 && MOCK_INT[PX.badgeFont] == 9 && MOCK_CHK[PX.liqBadge] && MOCK_CHK[PX.labels], "setup: the column rows with their defaults (80 / 78 / 9, both boxes on)");
         if (!rows) for (size_t i = 0; i < PARAMS.size(); ++i) std::printf("  param %zu %s\n", i, PARAMS[i].c_str());

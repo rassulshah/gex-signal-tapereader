@@ -1,5 +1,5 @@
 /********************************************************************************
- *  StopRunMark.cpp  --  Investor/RT RTX extension  lsStopRun  1.0.0  (2026-10-22)
+ *  StopRunMark.cpp  --  Investor/RT RTX extension  lsStopRun  1.1.0  (2026-10-22)
  *
  *  THE STOP-RUN MARK on the PRICE chart (MBO Roadmap "Were stops triggered - and were they absorbed after?", T-20261022-15).
  *  Rassul 15:33-15:34 CT (agreed design, "show yes"); 15:37 CT "Sta can indicate the stop run absorbed":
@@ -8,6 +8,10 @@
  *      "Sta", GREEN when stops below a low were absorbed (bullish), RED when stops above a high were absorbed (bearish);
  *    - not absorbed: it stays grey "St" and the hover says "not absorbed - continuation";
  *    - decided once: St is drawn when the burst ends, the upgrade to Sta happens at most once; never moved, removed or changed again.
+ *  1.1.0 (approved 16:13 CT): FEWER - St only through REAL levels (his session key levels, the MenthorQ levels, the 5-candle pivot
+ *  extreme; the prior candle's high / low dropped); EARLIER - absorbed is decided LIVE within N s (default 10) of the burst: big resting
+ *  orders took >= X % of the burst at / beyond the level AND price traded back across it (or made no new extreme in the window),
+ *  not at a later candle close. The SA record line carries the decision second.
  *  The hover (mouse over the mark, drawn as a box): header "Stop run?" ("?" = not proven), the run, the outcome, then
  *  question / what it is / why it matters / how to use / example.
  *  Rules (burst, level, normal burst, absorbed): StopRunLogic.h (SDK-free, unit-tested; replay on real MBO in replay_st.cpp).
@@ -19,7 +23,8 @@
  *  session record brings the marks back after a restart.
  *  FILES (lsFlexLevels\StopRun\):  <MKT>-<spb>-<yyyymmdd>.csv  the record (ST fire lines + SA decision lines, append-only)
  *                                  StopRun.status-<MKT>-<spb>.txt  the status line(s), on change or every 30 s
- *  Key levels: lsFlexLevels\LRA-KeyLevels-<MKT>.csv (lsDealerProfile writes it), fresh <= 18 h.
+ *  Levels (NearLevels.h, as lsBidAskStats / lsDeltaProfile read them): lsFlexLevels\LRA-KeyLevels-<MKT>.csv (session levels) and
+ *  LRA-Levels-<MKT>.csv (MenthorQ: CR PS HVL GW0 CR0 PS0 HVL0 1DH 1DL; contract must match), fresh <= 18 h.
  *  Settings: lsFlexLevels\StopRunMark.settings-<MKT>.txt via SettingsSpec / SettingsHost (StopRunMarkSettings.h).
  ********************************************************************************/
 #ifndef NOMINMAX
@@ -57,7 +62,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define SRM_VERSION "1.0.0"     // = stl::VERSION = srmset::PLUGIN_VERSION = the setVersion literal
+#define SRM_VERSION "1.1.0"     // = stl::VERSION = srmset::PLUGIN_VERSION = the setVersion literal
 
 #ifdef SRM_TEST_CLOCK
 long long srmTestClockMs();
@@ -96,7 +101,7 @@ struct SrmState {
     // detector + bars
     stl::Detector D; bool primed = false; long long lastClosedT = 0; long long lastStampSec = 0;
     // levels
-    nl::Source keySrc; long long keyCheckMs = -100000; std::string keyNote = "not read yet";
+    nl::Cache lvCache; long long keyCheckMs = -100000; std::string keyNote = "not read yet"; int nKey = 0, nMq = 0;
     // record
     std::vector<stl::Event> marks; std::string session, recPath; long long recFails = 0, recLines = 0, recBad = 0; bool loaded = false;
     // settings
@@ -196,7 +201,7 @@ void StopRunMark::identify(SrmState& S) {
     S.identity = id; S.market = mkt; S.symbol = sym; S.spb = spb; S.tick = tick;
     S.dboDead = S.blocked = false; S.attempt = 0; S.flag = -1; S.events = S.fills = S.aggNamed = 0; S.lastResubMs = -1;
     S.D = stl::Detector(); S.primed = false; S.lastClosedT = 0; S.lastStampSec = 0;
-    S.keySrc = nl::Source(); S.keyCheckMs = -100000; S.marks.clear(); S.session.clear(); S.recPath.clear(); S.loaded = false;
+    S.lvCache = nl::Cache(); S.keyCheckMs = -100000; S.nKey = S.nMq = 0; S.marks.clear(); S.session.clear(); S.recPath.clear(); S.loaded = false;
     S.setStore = ss::Store(); S.setCheckMs = -100000; S.hits.clear(); S.hover = -1; S.statusBody.clear();
 }
 
@@ -208,25 +213,29 @@ void StopRunMark::settings(SrmState& S, long long now) {
     S.set = sp.empty() ? ss::defaults(srmset::spec(), ss::marketIndex(S.market)) : S.setStore.load(ss::marketIndex(S.market), now);
     const stl::MarketDefaults md = stl::marketDefaults(S.market);
     stl::Params& P = S.D.P;   // a change applies from now on; decided marks never change
-    P.windowMs = S.set.i(srmset::K_WINDOW); P.minFills = S.set.i(srmset::K_MIN_FILLS); P.ratio = S.set.f(srmset::K_RATIO);
-    P.minIds = S.set.i(srmset::K_MIN_IDS); P.nearTicks = S.set.i(srmset::K_NEAR); P.bigLots = S.set.i(srmset::K_BIG);
-    P.absorbBars = S.set.i(srmset::K_ABSORB); P.seedLots = md.seedLots;
+    P.windowMs = S.set.i(srmset::K_WINDOW_MS); P.minFills = S.set.i(srmset::K_MIN_FILLS); P.ratio = S.set.f(srmset::K_RATIO);
+    P.minIds = S.set.i(srmset::K_MIN_IDS); P.nearTicks = S.set.i(srmset::K_NEAR_TICKS); P.bigLots = S.set.i(srmset::K_BIG_LOTS);
+    P.decideS = S.set.i(srmset::K_DECIDE_S); P.sharePct = S.set.i(srmset::K_SHARE_PCT); P.requireReclaim = S.set.b(srmset::K_RECLAIM);
+    P.useKeys = S.set.b(srmset::K_KEY_LEVELS) || S.set.b(srmset::K_MQ_LEVELS); P.seedLots = md.seedLots;
 }
 
 void StopRunMark::levels(SrmState& S, long long now) {
     if (now - S.keyCheckMs < 5000 && now >= S.keyCheckMs) return;
     S.keyCheckMs = now;
     const std::string f = srmFlex(); if (f.empty() || S.market.empty() || !(S.tick > 0)) return;
-    nl::loadSource(f + SRM_SEP "LRA-KeyLevels-" + S.market + ".csv", S.keySrc, 0);
-    const long long wall = (long long)std::time(nullptr);
-    S.D.keys.clear();
-    if (!(S.keySrc.sig >= 0 && S.keySrc.at > 0 && wall - S.keySrc.at <= 18 * 3600 && S.keySrc.at - wall <= 600)) { S.keyNote = S.keySrc.sig < 0 ? "missing (open lsDealerProfile on a 3-min chart)" : "older than 18 h - not used"; return; }
-    for (size_t i = 0; i < S.keySrc.v.size(); ++i) {
-        stl::Ref r; r.name = S.keySrc.v[i].name; r.dir = stl::keyDir(r.name, r.rank);
-        if (r.dir == 0 || !stl::toTicks(S.keySrc.v[i].px, S.tick, r.px)) continue;
-        S.D.keys.push_back(r);
+    const std::vector<nl::Level> all = nl::levels(S.lvCache, f + SRM_SEP, S.market, S.symbol, now, (long long)std::time(nullptr));
+    const bool useKey = S.set.b(srmset::K_KEY_LEVELS), useMq = S.set.b(srmset::K_MQ_LEVELS);
+    S.D.keys.clear(); S.nKey = S.nMq = 0;
+    for (size_t i = 0; i < all.size(); ++i) {
+        stl::Ref r; r.name = all[i].name; r.dir = stl::keyDir(r.name, r.rank);
+        if (r.dir == 0 || !stl::toTicks(all[i].px, S.tick, r.px)) continue;      // only his named session levels + the 9 MenthorQ levels
+        const bool mq = r.dir == 2;
+        if (mq ? !useMq : !useKey) continue;
+        bool dup = false; for (size_t k = 0; k < S.D.keys.size() && !dup; ++k) dup = S.D.keys[k].name == r.name && S.D.keys[k].px == r.px;
+        if (dup) continue;
+        S.D.keys.push_back(r); if (mq) ++S.nMq; else ++S.nKey;
     }
-    S.keyNote = std::to_string(S.D.keys.size()) + " key levels";
+    S.keyNote = std::to_string(S.nKey) + " session + " + std::to_string(S.nMq) + " MenthorQ levels (" + S.lvCache.note + ")" + (useKey ? "" : ", session levels off") + (useMq ? "" : ", MenthorQ off");
 }
 
 // chart context only, behind the crash guard; 1st try the chart's symbol, 2nd try NULL (= this chart) after 60 s with no event
@@ -281,8 +290,8 @@ void StopRunMark::bars(SrmState& S) {
     auto bar = [&](int i, stl::Bar& b) { b.t = (long long)times[i]; return stl::toTicks(hi[i], S.tick, b.h) && stl::toTicks(lo[i], S.tick, b.l) && stl::toTicks(cl[i], S.tick, b.c); };
     auto context = [&](int last) {        // prior candle, 5-candle extreme, ATR (14) from closed candles up to `last`
         stl::Bar p; if (bar(last, p)) { S.D.prior = p; S.D.havePrior = true; }
-        if (last >= 4) { long long h = 0, l = (long long)9e18; bool ok = true; for (int k = last - 4; k <= last; ++k) { stl::Bar b; if (!bar(k, b)) { ok = false; break; } h = std::max(h, b.h); l = std::min(l, b.l); }
-            if (ok) { S.D.haveX5 = true; S.D.x5hi = h; S.D.x5lo = l; } }
+        if (last >= 4) { std::vector<stl::Bar> five; for (int k = last - 4; k <= last; ++k) { stl::Bar b; if (!bar(k, b)) { five.clear(); break; } five.push_back(b); }
+            if (five.size() == 5) { stl::pivot5(five, S.D.haveX5lo, S.D.x5lo, S.D.haveX5hi, S.D.x5hi); S.D.haveX5 = S.D.haveX5lo || S.D.haveX5hi; } else S.D.haveX5 = false; }
         double s = 0; int m = 0; for (int k = std::max(0, last - 13); k <= last; ++k) { stl::Bar b; if (bar(k, b)) { s += (double)(b.h - b.l); ++m; } }
         S.D.atrTicks = m ? s / m : 0;
     };
@@ -298,13 +307,13 @@ void StopRunMark::loadRecord(SrmState& S) {
     const std::string sess = sessionOf(currentDate());
     if (sess.empty() || S.market.empty()) return;
     if (S.loaded && sess == S.session) return;
-    S.session = sess; S.loaded = true; S.marks.clear(); S.D.marksPerBar.clear();
+    S.session = sess; S.loaded = true; S.marks.clear(); S.D.marksPerBar.clear(); S.D.used.clear();   // a new session: every level's stops are fresh
     const std::string dir = srmFlex() + SRM_SEP "StopRun";
     S.recPath = srmFlex().empty() ? std::string() : dir + SRM_SEP + S.market + "-" + std::to_string(S.spb) + "-" + sess + ".csv";
     std::vector<std::string> lines;
     if (S.recPath.empty() || !nl::readBoundedLines(S.recPath, lines, 4 * 1024 * 1024, 20000, 1024)) return;
     S.marks = stl::parseRecord(lines, S.tick, &S.recBad);
-    for (size_t i = 0; i < S.marks.size(); ++i) { if (S.marks[i].outcome == stl::PENDING) S.marks[i].orphan = true; if (S.marks[i].drawn) ++S.D.marksPerBar[S.marks[i].barT]; }
+    for (size_t i = 0; i < S.marks.size(); ++i) { if (S.marks[i].outcome == stl::PENDING) S.marks[i].orphan = true; if (S.marks[i].drawn) ++S.D.marksPerBar[S.marks[i].barT]; S.D.markUsed(S.marks[i].side, S.marks[i].refPx); }
 }
 
 // one flushed append per line; a failure is counted (never retried in a loop)
@@ -335,6 +344,7 @@ void StopRunMark::collect(SrmState& S) {
             stl::Event& m = S.marks[k];
             if (m.key != d.key || m.outcome != stl::PENDING) continue;
             m.outcome = d.outcome; m.decidedT = d.decidedT; m.bars = d.bars; m.bigIds = d.bigIds; m.excAtr = d.excAtr; m.reclaimed = d.reclaimed;
+            m.decidedSec = d.decidedSec; m.decidedMs = d.decidedMs; m.sharePct = d.sharePct; m.newExt = d.newExt;
             append(S, stl::saLine(m)); break;
         }
     }
@@ -353,7 +363,9 @@ void StopRunMark::status(SrmState& S, long long now) {
     char nb[64]; std::snprintf(nb, sizeof nb, "%.1f", S.D.normNow(stl::slotOfMinute(S.D.minuteOfDay)));
     o << "NORMAL_BURST," << nb << " lots (slot " << S.D.minuteOfDay / 30 << ")\nKEY_LEVELS," << S.keyNote << "\nRECORD," << S.recPath << ",lines " << S.recLines << ",failed " << S.recFails << ",bad lines " << S.recBad << "\n";
     o << "SETTINGS," << S.set.why << ",show " << (S.set.b(srmset::K_SHOW) ? "on" : "off") << ",window " << S.D.P.windowMs << " ms,min fills " << S.D.P.minFills << ",ratio " << S.D.P.ratio
-      << "x,min orders " << S.D.P.minIds << ",near " << S.D.P.nearTicks << " ticks,big " << S.D.P.bigLots << " lots,absorb " << S.D.P.absorbBars << " candles\nBACKLOG_SLICES," << S.backlogSlices << "\n";
+      << "x,min orders " << S.D.P.minIds << ",near " << S.D.P.nearTicks << " ticks,big " << S.D.P.bigLots << " lots,decide within " << S.D.P.decideS << " s,big orders took >= "
+      << S.D.P.sharePct << "%,reclaim " << (S.D.P.requireReclaim ? "required" : "or no new extreme") << ",session levels " << (S.set.b(srmset::K_KEY_LEVELS) ? "on" : "off") << ",MenthorQ " << (S.set.b(srmset::K_MQ_LEVELS) ? "on" : "off")
+      << "\nBACKLOG_SLICES," << S.backlogSlices << "\n";
     const std::string body = o.str();
     if (body == S.statusBody && now - S.statusMs < 30000 && now >= S.statusMs) return;
     if (now - S.statusMs < 1000 && now >= S.statusMs) return;
@@ -428,7 +440,7 @@ void StopRunMark::render(SrmState& S) {
     if (S.hover >= 0 && (size_t)S.hover < S.marks.size()) {
         const HitBox* at = nullptr; for (size_t k = 0; k < S.hits.size(); ++k) if ((int)S.hits[k].idx == S.hover) at = &S.hits[k];
         if (!at) return;
-        const std::vector<std::string> rows = stl::hoverRows(S.marks[(size_t)S.hover], S.tick, S.D.P.absorbBars);
+        const std::vector<std::string> rows = stl::hoverRows(S.marks[(size_t)S.hover], S.tick, S.D.P.decideS);
         FONT hf; hf.id = HELVETICA; hf.size = HOVER_PT; hf.style = PLAIN; setFont(hf);
         int w = 0; for (size_t k = 0; k < rows.size(); ++k) w = std::max(w, (int)getTextWidth(rows[k].c_str(), -1));
         w += 12; const int h = (int)rows.size() * HOVER_LH + 8;
@@ -459,7 +471,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the burst ends and the feed is drained while the chart is quiet
-    p->setDescription("LRA Stop Run v1.0.0 - St / Sta on the price chart. A grey St marks where stop orders fired: a burst of many small market orders in one moment, just through a recent high / low or a key level, at least 2x the normal burst. If big resting orders absorb it and a candle closes back across the level within 3 candles, the mark becomes Sta - green when stops below a low were absorbed (bullish), red when stops above a high were absorbed (bearish). Not absorbed = it stays grey St (continuation - don't fade it). Hover a mark for the numbers. Needs the market-by-order feed; works from the moment it is on the chart. Example: ES St at 7672.50 below LonLO, 3.1x, absorbed by 2 bid ids, back above in 1 candle -> green Sta.");
-    p->setVersion("1.0.0");   // SRM_VERSION
+    p->setDescription("LRA Stop Run v1.1.0 - St / Sta on the price chart. A grey St marks where stop orders fired: a burst of many small market orders in one moment, just through a real level - a session key level (ONH/ONL, PDH/PDL, LonHI/LonLO ...), a MenthorQ level or the 5-candle pivot high / low - at least 2x the normal burst. Seconds later (default within 10 s) it is decided live: if big resting orders took at least half the burst and price came back across the level (or made no new extreme), the mark becomes Sta - green when stops below a low were absorbed (bullish), red when stops above a high were absorbed (bearish). Not absorbed = it stays grey St (continuation - don't fade it). Hover a mark for the numbers. Needs the market-by-order feed; works from the moment it is on the chart. Example: ES St at 7672.25 below LonLO, 3.1x; 4 s later 2 big bids took 70%, back above -> green Sta.");
+    p->setVersion("1.1.0");   // SRM_VERSION
     return p;
 }
