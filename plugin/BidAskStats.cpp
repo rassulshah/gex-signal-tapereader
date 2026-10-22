@@ -167,6 +167,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include "SignalBoard.h"              // (1.25.0) posts the order-book absorption prices (kind 'O')
 #include "EffortReward.h"            // (1.16.0) Attack Effort + Reward rows and their read
 #include "AttackLogic.h"             // (1.26.0) the attacker letters S / K / G / Tr / R / L: badge row, hover, K / S / AS lines
+#include "SharedAbsorb.h"            // (1.27.0) the SHARED absorption A: decided here at the close, one record for every plugin
 #include "DefenseLinesSettings.h"    // (1.26.0) dlset::turnsPath - lsBookFlow's turns file (G lines + the Defense letters, read only)
 #include <array>              // (1.15.0) the Read row
 #include <algorithm>
@@ -187,7 +188,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.26.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.27.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -331,6 +332,8 @@ struct BASState {
     atk::Others atkO; std::map<std::string, long long> atkOff; long long atkReadMs = -1; std::string atkTurnsPath, atkTrPath;
     long long atkKn = 0, atkSn = 0, atkUndecided = 0, atkLoaded = 0, atkRejected = 0, badgesDrawn = 0, badgeDropped = 0, badgeTipNoRoom = 0, badgeTipCompact = 0;
     std::vector<std::pair<off::IconRect, std::string> > badgeHit; int badgeTip = -1; dt::TipRect lastTip; int lastTipLevel = -1;
+    // (1.27.0) THE SHARED A (SharedAbsorb.h): the record host, candles already judged, the store size last copied to atkO.SA
+    sab::Host sab; std::set<long long> sabDone; size_t sabSeen = (size_t)-1; bool sabDir = false;
 };
 // (1.23.0, Rassul 2026-10-20 07:43 "do it") ORDER-BY-ORDER TOTALS: each side's aggressive lots from the exchange's order feed (the
 // aggressor order's own fills: bid hit = sellers, offer lifted = buyers) - what every tested turn rate was measured on (Databento MBO).
@@ -398,6 +401,7 @@ public:
         slot_.release(this);
     }
     BASState* testState() { return slot_.get(this, false); }
+    long long testKey(long long t) { return obBarKey(t); }              // (1.27.0) tests: the CT bar key of a chart stamp
 private:
     HostSlot<BASState> slot_;
     void identify(BASState& S);
@@ -422,6 +426,7 @@ private:
     long long obBarKey(long long t);                                       // (1.25.0)
     void bigLots(BASState& S);                                            // (1.14.0)
     void attack(BASState& S, long long t, const off::Rec& r, const atk::Pace pace[2], const llp::Tiers& tiers, int ch);   // (1.26.0) K / S / AS at the close
+    void sharedAbs(BASState& S, long long now);                           // (1.27.0) the shared A: decide + record + read
     void readOthers(BASState& S, long long now);                          // (1.26.0) lsBookFlow's G + Defense letters, the Delta Profile's TR
     std::string secClock(long long sec);                                  // (1.26.0) "11:39:18 AM"
     std::string badgeTipText(BASState& S, long long key, const atk::BadgeIn& in, bool isHigh, bool isLow, const std::string& badge, const std::vector<std::string>& dropped);
@@ -529,6 +534,7 @@ void BidAskStats::identify(BASState& S) {
     S.blBook = blt::Book(); S.blLoaded = false; S.blWritten.clear(); S.blBarsN = (size_t)-1; S.blLast = -1; S.blMarks.clear();   // (1.14.0)
     S.blSession.clear(); S.blRows.clear(); S.blFile.clear(); S.blRowsWritten.clear(); S.blRejected = 0;
     S.atkK.clear(); S.atkS.clear(); S.atkAS.clear(); S.atkO = atk::Others(); S.atkOff.clear(); S.atkReadMs = -1; S.atkTurnsPath.clear(); S.atkTrPath.clear();   // (1.26.0)
+    S.sab = sab::Host(); S.sabDone.clear(); S.sabSeen = (size_t)-1; S.sabDir = false;   // (1.27.0)
     S.atkKn = S.atkSn = S.atkUndecided = S.atkLoaded = S.atkRejected = 0; S.badgeHit.clear(); S.badgeTip = -1; S.lastTip = dt::TipRect(); S.lastTipLevel = -1;
     { int o = 0, c = 0; if (svl::rthOf(S.market.c_str(), o, c)) { S.openMin = o; S.closeMin = c; } else { S.openMin = 510; S.closeMin = 900; } }
 }
@@ -1274,6 +1280,7 @@ void BidAskStats::status(BASState& S, long long now) {
       << ",breaks " << S.det.breaks << ",no_burst " << S.det.noBurst << ",held " << S.det.held << ",events " << S.srEvents << ",reloaded " << S.srLoaded
       << "\nATTACK,K " << S.atkKn << ",S " << S.atkSn << ",K_lines " << S.atkK.size() << ",S_lines " << S.atkS.size() << ",AS " << S.atkAS.size() << ",undecided " << S.atkUndecided
       << ",reloaded " << S.atkLoaded << ",rejected " << S.atkRejected << ",badges " << S.badgesDrawn << ",cut " << S.badgeDropped << ",hover_no_room " << S.badgeTipNoRoom << ",hover_compact " << S.badgeTipCompact
+      << "\n" << S.sab.statusLine() << ",record SAB lines (nightly read SHARED_A)"
       << "\nATTACK_READS,G " << S.atkO.G.size() << ",TR " << S.atkO.Tr.size() << ",TR_bad " << S.atkO.bad << ",turns " << S.atkTurnsPath << ",tr " << S.atkTrPath      << "\nOPTIONS," << S.opt.why << ",asof " << S.opt.last.asof << ",reads " << S.opt.reads << ",arrived " << S.opt.hist.v.size()
       << "\nPARAMS_SOURCE," << S.params.load.source << "\nPARAMS," << off::paramsText(S.params.load.p);
     for (size_t i = 0; i < S.params.load.notes.size() && i < 20; ++i) o << "\nPARAMS_NOTE," << S.params.load.notes[i];
@@ -1334,7 +1341,8 @@ void BidAskStats::pump() {
                 readOthers(S, now);                                        // (1.26.0) G / Tr / Defense letters from the other panes' records
                 finalize(S, now);
                 stopRuns(S);
-                marketState(S, now); obPublish(S, now);                                       // (1.13.0) SRC AGG, behind the scenes
+                marketState(S, now); obPublish(S, now);
+                sharedAbs(S, now);                                         // (1.27.0) after the order book of each candle is posted                                       // (1.13.0) SRC AGG, behind the scenes
                 bigLots(S);                                                // (1.14.0) the Big Lot sizes + each closed candle's mark, once
             }
             if (count >= 2 && !S.faulted) {                                // (1.6.0) the zone read line
@@ -1424,6 +1432,79 @@ static std::string basContractTok(const std::string& sym) {                // as
 }
 // every 3 s: the new lines of lsBookFlow's turns file (G + the Defense letters) and of the Delta Profile's signals file (TR), this session
 // and the one before - read only, never re-decided here
+// =====================================================================================================================================
+// (1.27.0, 2026-10-22 Rassul 06:43 CT "then do it" + 06:49 "then require it") THE SHARED ABSORPTION A (SharedAbsorb.h): every candle this
+// pane has finalized (its order book posted) is judged ONCE: at a 5-candle high / low, the attackers' lots (the pane's Attack Effort
+// totals) >= E x their 20-candle average AND the close in the defenders' colour. A fired A is appended to the shared record
+// lsFlexLevels\SharedAbsorb\SAB-<MKT>-<spb>.csv with the book (lsBidAskStats' own order-book absorption in the wick), the pace at the
+// extreme and the nearest level; the Delta Profile, the Defense pane, Big Bid / Ask and this pane all DRAW from that record. A candle that
+// already has a line (another chart / plugin decided it first) is adopted, never re-decided. Never repainted.
+// =====================================================================================================================================
+void BidAskStats::sharedAbs(BASState& S, long long now) {
+    const std::string f = flexDir(); if (f.empty() || S.market.empty() || S.spb <= 0 || !(S.tick > 0)) return;
+    const std::string d = f + "\\SharedAbsorb";
+    S.sab.bind(S.market, (int)S.spb, d + "\\" + sab::fileName(S.market, (int)S.spb), f + "\\LRA-Badges-" + sab::canon(S.market) + ".csv");
+    if (!S.sabDir) { makeDir(d); S.sabDir = true; }
+    S.sab.poll(now);
+    RTARRAYI times(barDateTime); RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
+    const int n = (int)std::min(std::min((long)times.count, (long)op.count), std::min(std::min((long)hi.count, (long)lo.count), (long)cl.count));
+    if (n >= 2) {
+        int first = -1;                                                       // the oldest closed candle not judged yet (last 2,000)
+        for (int i = std::max(0, n - 2001); i <= n - 2; ++i) { const long long t = (long long)times[i]; if (t > 0 && !S.sabDone.count(t) && S.fin.count(t)) { first = i; break; } }
+        if (first >= 0) {
+            const int from = std::max(0, first - sab::EFFORT_BARS - sab::EXT_BARS - 15);
+            std::vector<sab::Bar> B; B.reserve((size_t)(n - from));
+            for (int j = from; j <= n - 2; ++j) {
+                sab::Bar b; off::Tick o = 0, h = 0, l = 0, c = 0; const long long t = (long long)times[j];
+                b.ok = t > 0 && off::toTick((double)op[j], S.tick, o) && off::toTick((double)hi[j], S.tick, h) && off::toTick((double)lo[j], S.tick, l) && off::toTick((double)cl[j], S.tick, c);
+                b.o = o; b.h = h; b.l = l; b.c = c;
+                std::map<long long, bas::Stat>::const_iterator it = S.ser.bars.find(t);
+                if (b.ok && it != S.ser.bars.end() && it->second.m.ok) { const bas::BarMax m = withMbo(S, t, it->second.m); b.buy = m.totAsk; b.sell = m.totBid; }
+                B.push_back(b);
+            }
+            std::vector<sab::Lv> lv; for (size_t k = 0; k < S.levels.size(); ++k) { sab::Lv x; x.name = S.levels[k].name; x.px = S.levels[k].px; lv.push_back(x); }
+            for (int i = first; i <= n - 2; ++i) {
+                const long long t = (long long)times[i]; if (t <= 0 || S.sabDone.count(t)) continue;
+                if (!S.fin.count(t)) continue;                                // not finalized yet (VAP retry / order feed grace): later
+                const size_t bi = (size_t)(i - from);
+                const long long key = obBarKey(t); if (key <= 0) { S.sabDone.insert(t); continue; }
+                bool present = false; std::vector<sab::ObEv> ev;
+                for (const sb::Ev& e : S.obEv) { if (e.bar != key) continue; if (e.side == 0) { present = true; continue; } sab::ObEv o; o.px = e.px; o.side = e.side; o.traded = e.val; o.refills = sb::obRefills(e.flag); ev.push_back(o); }
+                for (int sd = 0; sd < 2; ++sd) {
+                    if (S.sab.st.has(sd, key)) { ++S.sab.adopted; continue; }
+                    const sab::Decision D = sab::decide(B, bi, sd, S.sab.P.E);
+                    if (!D.decided) { ++S.sab.learning; continue; }
+                    S.sab.count(D);
+                    if (!D.fired) continue;
+                    sab::Rec r; r.mkt = S.market; r.spb = (int)S.spb; r.key = key; r.raw = t; r.side = sd; r.effort = D.effort; r.E = D.E; r.att = D.att; r.avg = D.avg;
+                    r.close = sd == sab::LOW ? 'G' : 'R'; r.extPx = (double)(sd == sab::HIGH ? B[bi].h : B[bi].l) * S.tick; r.closePx = (double)B[bi].c * S.tick;
+                    sab::bookOf(B[bi], sd, present, ev, S.tick, r.book, r.bookLots, r.refills);
+                    r.decided = obBarKey((long long)currentDate()); if (r.decided <= 0) r.decided = key;
+                    r.by = "BAS"; r.loc = sab::locName(sab::LOCATION);
+                    const std::pair<int, long long> kk(sd, t);
+                    std::map<std::pair<int, long long>, atk::KRead>::const_iterator kr = S.atkK.find(kk); std::map<std::pair<int, long long>, atk::SRead>::const_iterator sr2 = S.atkS.find(kk);
+                    const atk::Pace pc = kr != S.atkK.end() ? kr->second.p : sr2 != S.atkS.end() ? sr2->second.p : atk::Pace();
+                    r.e100 = pc.e100; r.into100 = pc.into100;
+                    const double atr = sab::atrTicks(B, bi) * S.tick; sab::levelOf(lv, r.extPx, r.closePx, atr, r.level, r.lvd, r.gamma);
+                    S.sab.put(r);
+                    sab::Extra x; x.mkt = S.market; x.spb = (int)S.spb; x.key = key; x.side = sd; x.by = "BAS";   // pace / level ride in an SABX line (the SAB line keeps the decision)
+                    if (r.e100 >= 0) x.kv["e100"] = std::to_string(r.e100);
+                    if (r.into100 >= 0) x.kv["into100"] = std::to_string(r.into100);
+                    if (!r.level.empty()) { x.kv["level"] = r.level; x.kv["lvd"] = sab::fmt(r.lvd, 2); }
+                    if (r.gamma) x.kv["gamma"] = std::to_string(r.gamma);
+                    S.sab.putX(x);
+                }
+                S.sabDone.insert(t);
+            }
+            while (S.sabDone.size() > 6000) S.sabDone.erase(S.sabDone.begin());
+        }
+    }
+    if (S.sab.st.byKey.size() != S.sabSeen) {                                 // the badges read the record by the chart's own bar key
+        S.sabSeen = S.sab.st.byKey.size(); S.atkO.SA.clear();
+        for (std::map<std::pair<int, long long>, sab::Rec>::const_iterator it = S.sab.st.byKey.begin(); it != S.sab.st.byKey.end(); ++it) if (it->second.raw > 0) S.atkO.SA.insert(std::make_pair(it->first.first, it->second.raw));
+        invalidateChart(false);
+    }
+}
 void BidAskStats::readOthers(BASState& S, long long now) {
     if (S.atkReadMs >= 0 && now >= S.atkReadMs && now - S.atkReadMs < 3000) return;
     S.atkReadMs = now;
@@ -1476,7 +1557,8 @@ std::string BidAskStats::badgeTipText(BASState& S, long long key, const atk::Bad
             else if (n == "G") { std::map<std::pair<int, long long>, dt::GiveUp>::const_iterator g = S.atkO.G.find(kk); if (g != S.atkO.G.end() && g->second.G) blocks.push_back(atk::hoverG(g->second, othersOf("G", sd), S.atkO.defenseAt(key, sd), nG)); }
             else if (n == "Tr") { std::map<std::pair<int, long long>, trapl::Rec>::const_iterator r = S.atkO.Tr.find(kk); if (r != S.atkO.Tr.end()) blocks.push_back(atk::hoverTr(r->second.top, r->second.lots, r->second.x, othersOf("Tr", sd), S.atkO.defenseAt(key, sd), (long long)S.atkO.Tr.size())); }
         }
-        if (n == "R") { std::map<long long, std::vector<sr::Event> >::const_iterator se = S.srEv.find(key);
+        if (n == "A") { for (int sd = 1; sd >= 0; --sd) { const sab::Rec* rr = S.sab.st.atRaw(sd, key); if (rr) { dt::HoverBlock b; b.letter = "A"; b.rows = sab::hover(*rr, S.sab.P); blocks.push_back(b); } } }   // (1.27.0)
+        else if (n == "R") { std::map<long long, std::vector<sr::Event> >::const_iterator se = S.srEv.find(key);
             if (se != S.srEv.end()) for (size_t q = 0; q < se->second.size(); ++q) { const sr::Event& e = se->second[q]; if (e.show == sr::SHOW_OFF) continue; blocks.push_back(atk::hoverR(e.dir, e.level, e.ticks, e.bars, sr::burstText(e), nR)); } }
         else if (n == "L") { std::map<long long, atk::AS>::const_iterator a = S.atkAS.find(key);
             if (a != S.atkAS.end()) for (int rs = 1; rs >= 0; --rs) if (atk::lOf(a->second, rs)) blocks.push_back(atk::hoverL(rs, a->second.big[rs], a->second.tier, secClock(a->second.sec[rs]), nL)); }
@@ -1501,6 +1583,7 @@ void BidAskStats::badgeRow(BASState& S, const off::PaneGeo& g, int v0, int v1, i
             std::map<std::pair<int, long long>, atk::KRead>::const_iterator k = S.atkK.find(kk); if (k != S.atkK.end() && k->second.K && in.K < 0) in.K = sd;
             std::map<std::pair<int, long long>, dt::GiveUp>::const_iterator gg = S.atkO.G.find(kk); if (gg != S.atkO.G.end() && gg->second.G && in.G < 0) in.G = sd;
             if (S.atkO.Tr.count(kk) && in.Tr < 0) in.Tr = sd;
+            if (S.atkO.SA.count(kk) && in.A < 0) in.A = sd;                 // (1.27.0) the shared A (LOW green / HIGH red)
         }
         { std::map<long long, std::vector<sr::Event> >::const_iterator se = S.srEv.find(key);
           if (se != S.srEv.end()) for (size_t q = 0; q < se->second.size() && in.R < 0; ++q) if (se->second[q].show != sr::SHOW_OFF) in.R = se->second[q].dir > 0 ? atk::HIGH : atk::LOW; }
@@ -1797,6 +1880,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.26.0");   // BAS_VERSION
+    p->setVersion("1.27.0");   // BAS_VERSION
     return p;
 }

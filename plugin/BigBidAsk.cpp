@@ -84,7 +84,8 @@
 #include "HoverBoard.h"                  // hb::hbCursor (GetCursorPos + WindowFromPoint; carries the user32 pragma)
 #include "HostSlot.h"
 #include "BoxDock.h"                 // (1.16.0) the Big Lot box docks to the HOD/LOD table (lsHodLod 2.4.1 publishes it)
-#include "AbsorbLogic.h"           // (1.20.0) the absorbed-print circle (order-book truth from lsBidAskStats, board kind O)
+#include "AbsorbLogic.h"           // (1.20.0) the absorbed-print circle (order-book truth from lsBidAskStats, board kind O) - replaced 1.22.0
+#include "SharedAbsorb.h"           // (1.22.0) the circle only on a SHARED A candle (one rule, one record for every plugin)
 #include "SignalBoard.h"           // (1.2.1) posts its bold sizes / circles for the other indicators on this chart
 #include "ZoneNear.h"              // (1.2.0) location first: bold / circles away from a zone are dimmed
 #include "VwapTrendLogic.h"         // (1.13.0) his vwapTrend, natively from the chart's bars (the pullback setup)
@@ -115,7 +116,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.21.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.22.0"          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
 static const bool BBA_HOVERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
@@ -237,6 +238,7 @@ struct PickInfo { int cat = -1; std::string lv; double lvPx = 0; bool sweep = fa
 struct PassCtx { bba::Swing sw; std::vector<signed char> bu, bd; std::vector<double> vw, sd; };   // (1.13.0) brk = the pivot broken (1 / 2), trend = vwapTrend level   // (1.12.0) why a print got its category
 struct HoverT { bba::Box box; long long t = 0; int side = -1; PickInfo pi; long long lots = 0; double px = 0; };
 struct BBState {
+    sab::Host sab; long long sabCircles = 0, sabVeto = 0;   // (1.22.0) the shared A record (read only) + circles drawn / vetoed by the candle colour
     // (1.20.0, MBO Roadmap Top Defender #1) the ABSORBED-PRINT circle, decided once per closed candle and kept in
     // lsFlexLevels\BigBidAsk.abs-<MKT>-<spb>.txt ("t,mask": bit 0 the bid print / bit 1 the ask print absorbed; -1 = no order feed)
     std::map<long long, int> absC; std::map<long long, long long> absWait; bool absLoaded = false; std::string absPath;
@@ -377,7 +379,8 @@ public:
 private:
     HostSlot<BBState> slot_;
     long long ctSec(RTDATE d);
-    int absMask(BBState& S, long long t, const bba::Facts& F);   // (1.20.0)
+    int absMask(BBState& S, long long t, const bba::Facts& F);   // (1.20.0) (no longer drawn from 1.22.0)
+    int sabMask(BBState& S, long long t, const bba::Facts& F);   // (1.22.0) the shared A on this candle: 1 = bullish (circle the bid print), 2 = bearish (the ask print)
     long long sessionOf(long long barTime) { const long long cs = ctSec((RTDATE)barTime); return cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : -1; }
     std::string clockOf(long long t);
     void identify(BBState& S);
@@ -475,6 +478,20 @@ int BigBidAsk::absMask(BBState& S, long long t, const bba::Facts& F) {
     ++S.absDecided; S.absC[t] = m;
     if (S.absC.size() > 6000) S.absC.erase(S.absC.begin());
     if (!S.absPath.empty()) { std::ofstream o(S.absPath.c_str(), std::ios::app); if (o.is_open()) o << t << ',' << m << '\n'; }
+    return m;
+}
+// (1.22.0, 2026-10-22 Rassul 06:43 "then do it" / 06:49 "then require it", SHARED-ABSORPTION-STUDY: the circle "only when the shared A
+// holds; the book test becomes the hover upgrade") a drawn print is circled only on a CLOSED candle that carries the SHARED A of its side in
+// lsFlexLevels\SharedAbsorb\SAB-<MKT>-<spb>.csv (lsBidAskStats / lsDeltaProfile decide it) AND that closed in the defenders' colour on
+// this chart: the bid print (sellers hitting) at a bullish A on a GREEN candle, the ask print at a bearish A on a RED candle. Read only.
+int BigBidAsk::sabMask(BBState& S, long long t, const bba::Facts& F) {
+    if (!F.closed || !F.valid || S.market.empty() || S.spb <= 0) return 0;
+    const std::string f = flexDir(); if (f.empty()) return 0;
+    S.sab.bind(S.market, (int)S.spb, f + BBA_SEP "SharedAbsorb" BBA_SEP + sab::fileName(S.market, (int)S.spb), f + BBA_SEP "LRA-Badges-" + sab::canon(S.market) + ".csv");
+    S.sab.poll(steadyMs());
+    int m = 0;
+    if (S.sab.st.atRaw(sab::LOW, t)) { if (F.c > F.o) m |= 1; else ++S.sabVeto; }
+    if (S.sab.st.atRaw(sab::HIGH, t)) { if (F.c < F.o) m |= 2; else ++S.sabVeto; }
     return m;
 }
 std::string BigBidAsk::clockOf(long long t) {
@@ -736,7 +753,7 @@ void BigBidAsk::status(BBState& S, long long now) {
     o << "VERSION," << BBA_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nTICK," << S.tick
       << "\nSETTINGS," << S.settingsWhy << ",biggest in " << S.topN << ",skip first " << S.set.skipFirst << " / last " << S.set.skipLast << " min,font " << S.set.cat[0].font
-      << ",box " << (S.set.box ? 1 : 0) << ",circle (absorbed, order book) " << (S.set.circle ? 1 : 0) << "\nABSORBED,candles decided " << S.absDecided << ",with an absorbed print " << S.absCircled << ",no order feed " << S.absNoFeed << ",circles on screen " << S.circles << " (wick print where the defenders traded >= 2x shown + >= 2 refills; needs Aggression / lsBidAskStats on this chart)\nSETTINGS_CONT" << ",dim " << (S.set.dim ? 1 : 0) << ",divider " << bba::divFor(S.market) << " (market default)"
+      << ",box " << (S.set.box ? 1 : 0) << ",circle (shared A) " << (S.set.circle ? 1 : 0) << "\n" << S.sab.statusLine() << ",circles on the bid / ask print of a shared A candle (vetoed by the chart candle colour " << S.sabVeto << ")" << "\nABSORBED,retired 1.22.0 (the order-book circle; the shared A decides),candles decided " << S.absDecided << ",with an absorbed print " << S.absCircled << ",no order feed " << S.absNoFeed << ",circles on screen " << S.circles << " (wick print where the defenders traded >= 2x shown + >= 2 refills; needs Aggression / lsBidAskStats on this chart)\nSETTINGS_CONT" << ",dim " << (S.set.dim ? 1 : 0) << ",divider " << bba::divFor(S.market) << " (market default)"
       << ",skip first / last " << S.set.skipFirst << " / " << S.set.skipLast << " min,levels off,Big Lot box " << (S.set.statsChart ? "on" : "off")
       << "\nLEVELS,gamma " << S.gamWhy << ",volume profiles " << S.vp.size() << " sessions (from bar " << S.volNext << "),candles with levels " << S.lvCache.size()
       << "\nCANDLES,final " << S.fin.size() << ",recorded " << S.recorded.size() << ",pending " << S.pending.size() << ",record fails " << S.recFails
@@ -1142,7 +1159,7 @@ void BigBidAsk::boardPass(BBState& S, long long now) {
             const int back = backCount(S, times, i, sd, p.vol); if (back < S.topN) continue;
             sb::Ev e; e.bar = ctSec((RTDATE)t); e.px = (double)p.key * S.tick; e.side = sd; e.val = (double)p.vol;
             e.flag = (1 << 1) | 128 | ((back & 0x7F) << 8);   // (1.19.0) category 1, final; n = the candles back (<= 50)
-            { const auto ac = S.absC.find(t); if (ac != S.absC.end() && ac->second > 0 && (ac->second & (sd < 0 ? 1 : 2))) e.flag |= 1; }   // (1.20.0) bit 0 = absorbed (order book)
+            { const int sm = (S.sab.bound ? ((S.sab.st.atRaw(sab::LOW, t) ? 1 : 0) | (S.sab.st.atRaw(sab::HIGH, t) ? 2 : 0)) : 0); if (sm & (sd < 0 ? 1 : 2)) e.flag |= 1; }   // (1.22.0) bit 0 = the print is on a shared A candle of its side
             if (e.bar > 0) ev.push_back(e);
         }
     }
@@ -1358,7 +1375,7 @@ void BigBidAsk::render(BBState& S) {
             int lc = 0, ac = 0, dc = 0; getFontMetrics(&lc, &ac, &dc);
             PNT pt; pt.set(i, (float)px, kBarCenter);
             bba::Cand c; c.bar = i; c.side = sd; c.x = (cb_.l + cb_.r) / 2; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = std::max(set.cat[got].font + 5, ac + dc);
-            c.bold = true; c.huge = false; c.tier = got; c.circle = (absMask(S, t, *F) > 0) && ((absMask(S, t, *F) & (sd < 0 ? 1 : 2)) != 0); c.first = F->closed;   // (1.20.0)
+            c.bold = true; c.huge = false; c.tier = got; c.circle = S.set.circle && (sabMask(S, t, *F) & (sd < 0 ? 1 : 2)) != 0; c.first = F->closed;   // (1.22.0) only at a shared A of its side (was the 1.20.0 order-book test)
             ++S.catN4[got];
             cands.push_back(c); src.push_back(F); texts.push_back(tx); candPx.push_back(px); candVol.push_back((double)p.vol); picks.push_back(pi);
         }
@@ -1660,6 +1677,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (BBA_HOVERS ? TRACK_MOUSE : 0) | VAP_REQUIRED);   // (1.17.1) no TRACK_MOUSE while the hovers are off
     p->setDescription("LRA Big Bid / Ask 1.21.0: BO / BD = a breakout (breakdown) candle through the higher (lower) of the last 2 pivots with a 10-candle high (low), range and volume up, its biggest buy (sell) print in lots on the candle. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.21.0");   // BBA_VERSION
+    p->setVersion("1.22.0");   // BBA_VERSION
     return p;
 }

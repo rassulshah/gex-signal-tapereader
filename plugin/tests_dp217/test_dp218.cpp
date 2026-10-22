@@ -130,9 +130,9 @@ static void hostTests(bool bearish, unsigned long t0) {
         DeltaProfile p; redraw(h, p);
         check(colourRings(h) == 0 && grayRings(h) == 1 && boardAll().empty() && dRows(slurp(path)).empty() && countPrefix(slurp(path), "TA|") == 0, S + "next: nothing before the next candle closes (2.19.0: GRAY circle, no colour)");
         add(h, 99.75, 103.25); redraw(h, p);                           // PK+1 closed; PK+2 forming (no turn yet)
-        check(rings(h) == 1 && boardAll().size() == 1 && boardAll()[0].flag == 2, S + "next: tentative A once the next candle closed");
+        check(colourRings(h) == 0 && grayRings(h) == 1 && boardAll().empty(), S + "next: tentative A once the next candle closed - (2.22.0, 06:49 \"then require it\") the node's candle closed in the ATTACKERS' colour, so its one circle stays GRAY (nothing on the board)");
         check(taConf(slurp(path), "TA|S|") == "conf=next", S + "next: TA|S ends in conf=next");
-        check(!boardAll().empty() && boardAll()[0].bar == samePeakBar, S + "next: the bubble stays on the node's candle (same bar as the same-candle A)");
+        check(state(h).bubbleState.size() >= 1 && state(h).sabGrayFromNode == 1, S + "next: the A stays on the node's candle, shown gray (2.22.0: attackers' close)"); (void)samePeakBar;
         redraw(h, p); redraw(h, p);
         check(rings(h) == 1 && countPrefix(slurp(path), "TA|S|") == 1, S + "next: stable across redraws, TA|S once");
         if (!bearish) h.bars.back().high = 104.5f; else h.bars.back().low = static_cast<float>(M(104.5));
@@ -141,12 +141,12 @@ static void hostTests(bool bearish, unsigned long t0) {
         check(d.size() == 1 && d[0].size() == 25 && d[0][24] == "conf=next", S + "next: one D line ending in conf=next");
         check(d.size() == 1 && d[0][16] == std::to_string(static_cast<unsigned long long>(h.bars[PK].time)), S + "next: the D line's peak is the node's candle");
         check(d.size() == 1 && std::stoll(d[0][10]) == std::stoll(d[0][15]) + 60, S + "next: decided_by_t = the next candle's bar end");
-        check(rings(h) == 1 && boardAll().size() == 1 && boardAll()[0].flag == 1 && countPrefix(slurp(path), "TA|X|") == 0, S + "next: final bubble, flag 1, no failure");
+        check(colourRings(h) == 0 && grayRings(h) == 1 && boardAll().empty() && countPrefix(slurp(path), "TA|X|") == 0, S + "next: final (D line written), still one GRAY circle (2.22.0), no failure");
         check(slurp(flex + "DeltaProfile.status-ES-60.txt").find("A_CONF,same 0,next 1,") != std::string::npos, S + "next: status A_CONF same 0 next 1");
         // no repaint after the pivot is confirmed: a crash far beyond the node, more bars
         add(h, 60, 70); add(h, 50, 60); add(h, 55, 65); redraw(h, p);
-        check(rings(h) == 1 && dRows(slurp(path)).size() == 1 && countPrefix(slurp(path), "TA|X|") == 0 && boardAll().size() == 1 && boardAll()[0].flag == 1,
-              S + "next: never repainted after the pivot is confirmed");
+        check(rings(h) == 1 && colourRings(h) == 0 && dRows(slurp(path)).size() == 1 && countPrefix(slurp(path), "TA|X|") == 0 && boardAll().empty(),
+              S + "next: never repainted after the pivot is confirmed (one gray circle, 2.22.0)");
         // restart from the record
         finish(h, p);
         DeltaProfile q; mock::Host h2 = h; h2.data = NULL; redraw(h2, q); redraw(h2, q);
@@ -267,7 +267,7 @@ int main() {
     recordTests();
     labelTests(t0);
     {   const std::string src = slurp("../DeltaProfile.cpp");
-        check(std::string(DLT_VERSION) == "2.21.2", "[ver] this suite is for 2.18.x rules (2.19.0 = + gray circles, 2.20.0 = + wick A, 2.21.x = + trapped traders)");
+        check(std::string(DLT_VERSION) == "2.22.0", "[ver] this suite is for 2.18.x rules (2.19.0 = + gray circles, 2.20.0 = + wick A, 2.21.x = + trapped traders)");
         check(src.find(std::string("p->setVersion(\"") + DLT_VERSION + "\")") != std::string::npos, "[ver] DLT_VERSION = setVersion literal");
         check(slurp("../DeltaProfileCore.h").find(std::string("DeltaProfileCore.h ") + DLT_VERSION) != std::string::npos, "[ver] core header = DLT_VERSION"); }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";

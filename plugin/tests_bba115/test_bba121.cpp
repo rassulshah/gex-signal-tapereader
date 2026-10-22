@@ -249,7 +249,7 @@ static void host(const std::vector<Fx>& F) {
         c.view(i1048 - 6, i1048 + 6);
         CHECK(textAt(c, "124", 0x00FFFFFF, i1048) && textAt(c, "BO", 0x0022C55E, i1048), "[host] 10:48 BO 124 drawn on its candle");
         const std::string stt = slurp(HOME + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.status-NQ-NQZ6-180.txt");
-        CHECK(stt.find("VERSION,1.21.0\n") == 0 && stt.find("\nBREAKOUTS,on,today BO ") != std::string::npos && stt.find("BO_EVENT,8:33 AM,BO,fired,Q: did buyers break out with real size?") != std::string::npos
+        CHECK(stt.find("VERSION,1.22.0\n") == 0 && stt.find("\nBREAKOUTS,on,today BO ") != std::string::npos && stt.find("BO_EVENT,8:33 AM,BO,fired,Q: did buyers break out with real size?") != std::string::npos
               && stt.find("print 80 lots bought at 29,891.75") != std::string::npos && stt.find("biggest in 50") != std::string::npos, "[host] status: version, BREAKOUTS counts, the 8:33 details");
         // no repaint: recomputes + a later bar changing nothing already decided
         std::map<long long, std::string> before; for (const auto& kv : S.boDec) if (kv.second.dir) before[kv.first] = bba::boLine(kv.second, 0, "x");
@@ -288,6 +288,26 @@ static void host(const std::vector<Fx>& F) {
         c.view(i833 - 2, i833 + 12);
         CHECK(!textAt(c, "BO", 0x0022C55E, i833) && !textAt(c, "BD", 0x00EF4444, i845) && !textAt(c, "72", 0x00FFFFFF, i845) && !textAt(c, "80", 0x00FFFFFF, i833), "[host] nothing drawn inside the skipped minutes (8:33 / 8:45)");
     }
+    {   // (1.22.0, Rassul 06:43 / 06:49) the circle only on a SHARED A candle of its side that closed in the defenders' colour; skip first 15 stays the default
+        for (int m = 0; m < 7; ++m) CHECK(ss::defaults(bbaset::spec(), m).v[bbaset::K_SKIP_FIRST] == 15 && ss::defaults(bbaset::spec(), m).v[bbaset::K_SKIP_LAST] == 15, "[1.22.0] skip first / last 15 min is the default in every market (07:08 \"first 15 min needs to be skipped\")");
+        home("sab", &V0); mkdir((HOME + "/InvestorRT/rtx/lsFlexLevels/SharedAbsorb").c_str(), 0700);
+        Chart c(nqBars(F, F.size())); c.pump(14, false); c.view(i833 - 2, i833 + 12);
+        CHECK(c.st().circles == 0, "[1.22.0] no shared A record: no circle (the 1.20.0 order-book circle is retired)");
+        const mock::Bar& b = c.H.bars[(size_t)i833]; const bool green = b.close > b.open;
+        sab::Rec r; r.mkt = "NQ"; r.spb = 180; r.key = 1; r.raw = (long long)b.time; r.side = green ? sab::LOW : sab::HIGH; r.effort = 2.5; r.E = 2.0; r.att = 500; r.avg = 200;
+        r.close = green ? 'G' : 'R'; r.extPx = green ? b.low : b.high; r.closePx = b.close; r.by = "TEST"; r.loc = "ext5";
+        const mock::Bar& b2 = c.H.bars[(size_t)i845]; sab::Rec f2 = r; f2.raw = (long long)b2.time; f2.key = 2; f2.side = b2.close > b2.open ? sab::HIGH : sab::LOW;   // the attackers' colour on 8:45
+        f2.close = f2.side == sab::LOW ? 'G' : 'R'; std::string forged = sab::line(f2); { const size_t g = forged.find(f2.close == 'G' ? "|G|" : "|R|"); forged.replace(g, 3, f2.close == 'G' ? "|R|" : "|G|"); }   // a line claiming the attackers' close
+        { std::ofstream o((HOME + "/InvestorRT/rtx/lsFlexLevels/SharedAbsorb/SAB-NQ-180.csv").c_str(), std::ios::binary); o << sab::line(r) << "\n" << forged << "\n"; }
+        c.st().sab.sReadMs = -1; c.view(i833 - 2, i833 + 12);
+        CHECK(c.st().circles == 1, "[1.22.0] the shared A on 8:33: ONE circle, on the print of the attackers' side (" + std::to_string(c.st().circles) + ")");
+        CHECK(c.st().sab.st.byKey.size() == 1 && c.st().sab.st.bad == 1, "[1.22.0] a record line on an attacker-colour candle is rejected: no circle at 8:45");
+        V0.v[bbaset::K_ABS_CIRCLE] = 0; home("sab_off", &V0); mkdir((HOME + "/InvestorRT/rtx/lsFlexLevels/SharedAbsorb").c_str(), 0700);
+        { std::ofstream o((HOME + "/InvestorRT/rtx/lsFlexLevels/SharedAbsorb/SAB-NQ-180.csv").c_str(), std::ios::binary); o << sab::line(r) << "\n"; }
+        Chart c2(nqBars(F, F.size())); c2.pump(14, false); c2.view(i833 - 2, i833 + 12);
+        CHECK(c2.st().circles == 0, "[1.22.0] 'Circle prints at a shared A' unchecked: no circle");
+        V0.v[bbaset::K_ABS_CIRCLE] = 1;
+    }
     {   // the setting off: no letters / breakout prints; still decided and recorded
         ss::Values V = V0; V.v[bbaset::K_BREAKOUT] = 0; home("off", &V);
         Chart c(nqBars(F, F.size())); c.pump(14, false); c.view(i833 - 2, i833 + 12);
@@ -317,7 +337,7 @@ static void host(const std::vector<Fx>& F) {
     { const std::string src = slurp("../BigBidAsk.cpp");
       const size_t a = src.find("(1.21.0) BREAKOUT / BREAKDOWN (decided in boPass"), b = src.find("the hover: only while the cursor");
       CHECK(a != std::string::npos && b > a && src.substr(a, b - a).find("P_DASH") == std::string::npos && src.substr(a, b - a).find("drawLineTo") == std::string::npos, "[host] no dashed / pivot line in the breakout drawing");
-      CHECK(std::string(BBA_VERSION) == "1.21.0" && std::string(bba::VERSION) == "1.21.0" && std::string(bbaset::PLUGIN_VERSION) == "1.21.0" && src.find("p->setVersion(\"1.21.0\")") != std::string::npos, "[ver] 1.21.0 everywhere");
+      CHECK(std::string(BBA_VERSION) == "1.22.0" && std::string(bba::VERSION) == "1.22.0" && std::string(bbaset::PLUGIN_VERSION) == "1.22.0" && src.find("p->setVersion(\"1.22.0\")") != std::string::npos, "[ver] 1.21.0 everywhere");
       CHECK(bbaset::spec().rows[bbaset::K_BREAKOUT].def == 1 && bbaset::spec().paramVersion == 10, "[set] Breakout / breakdown on by default; parameter version 10"); }
 }
 

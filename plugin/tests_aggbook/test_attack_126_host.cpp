@@ -41,7 +41,7 @@ int main() {
     for (int k = 0; k <= 15; ++k) h.bars.push_back(bar(keyOf(k), 7000.0f, 7000.5f, 6999.5f, 7000.0f));
     Ind* p = make(); p->calc(0); p->draw(); p->calc(0);
     BASState* S = p->testState();
-    CHECK(S && std::string(bas::QUESTION) == "Who is aggressive?" && std::string(bas::VERSION) == "1.26.0" && std::string(BAS_VERSION) == "1.26.0", "lsBidAskStats 1.26.0, the question 'Who is aggressive?'");
+    CHECK(S && std::string(bas::QUESTION) == "Who is aggressive?" && std::string(bas::VERSION) == "1.27.0" && std::string(BAS_VERSION) == "1.27.0", "lsBidAskStats 1.27.0, the question 'Who is aggressive?'");
     // the Big Lot pool (S20 / S10 / S5): 3 past RTH sessions and 3 overnight ones of a different size
     {   llp::LogDist d; for (int k = 0; k < 200; ++k) d.addN(20, 1); for (int k = 0; k < 20; ++k) d.addN(100, 1); for (int k = 0; k < 10; ++k) d.addN(150, 1); for (int k = 0; k < 5; ++k) d.addN(220, 1);
         llp::LogDist n; for (int k = 0; k < 200; ++k) n.addN(15, 1); for (int k = 0; k < 20; ++k) n.addN(40, 1); for (int k = 0; k < 10; ++k) n.addN(60, 1); for (int k = 0; k < 5; ++k) n.addN(90, 1);
@@ -147,7 +147,7 @@ int main() {
             CHECK(has("G  Giving up") && has("19,226 pulled vs 18,673 added"), "hover G: lsBookFlow's G line numbers");
             CHECK(has("Tr  Trapped") && has("640 lots"), "hover Tr: the Delta Profile record");
             CHECK(has("R  Stop run - did buyers get trapped above PDH?"), "hover R (cut from the badge): its own block");
-            CHECK(has("with Defense A: K + A held 61% vs 47% (n 49, learning)"), "the combination line with the Defense A on the same candle");
+            CHECK(!has("with Defense A"), "(1.27.0) the Defense T line's own A no longer counts: only the SHARED A (tests_sab) makes an A");
             CHECK(S->lastTipLevel >= 1 || has("Status: still learning, n = "), "status still learning, n");
             const bp::Box& b = S->lastBox; const dt::TipRect& t = S->lastTip;
             CHECK(t.b <= h.paneBottom - 2 && t.r <= h.scaleLeft && t.l >= 0, "the hover fits inside the pane, left of the price axis");

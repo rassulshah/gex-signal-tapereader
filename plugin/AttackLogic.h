@@ -35,7 +35,7 @@
 
 namespace atk {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-10-22 Rassul 06:43 "then do it") the SHARED A (SharedAbsorb.h): letter A first on the badge, read from the shared record (Others::SA); the Defense T line's own A flag no longer makes an "A" anywhere
 static const int EXT_BARS = 5;              // a 5-candle high / low: beyond the 5 candles before (lsBookFlow decideGiveUp, the research universe)
 static const int LEG_BARS = 10;             // S: bigger than the biggest sweep of each of the 10 candles before
 static const int INIT_BARS = 20;            // the initiative veto: the deltas of the 20 candles before
@@ -194,10 +194,11 @@ inline bool parseAS(const std::string& s, AS& A) {
 // ---- the badge ------------------------------------------------------------------------------------------------------------------
 // colourKey: LOW = green (bullish), HIGH = red (bearish). K / S / G / Tr at their extreme (a high = red); R by the trapped side (buyers
 // trapped above a high = red); L by meaning: buyers at a 5-candle high = red, sellers at a 5-candle low = green, else buyers green / sellers red.
-struct BadgeIn { int S = -1, K = -1, G = -1, Tr = -1, R = -1; int L = -1; };   // the side / colour key of each letter, -1 = none
+struct BadgeIn { int S = -1, K = -1, G = -1, Tr = -1, R = -1; int L = -1; int A = -1; };   // (1.1.0) A = the shared absorption A (LOW green / HIGH red)   // the side / colour key of each letter, -1 = none
 struct Letter { std::string s; int colourKey = LOW; };
 inline std::vector<Letter> letters(const BadgeIn& b) {
     std::vector<Letter> v; auto add = [&](const char* s, int key) { if (key == LOW || key == HIGH) { Letter L; L.s = s; L.colourKey = key; v.push_back(L); } };
+    add("A", b.A);                                                    // (1.1.0) the shared A first (most important)
     add("S", b.S); add("K", b.K); add("G", b.G); add("Tr", b.Tr); add("R", b.R); add("L", b.L);
     return v;
 }
@@ -343,11 +344,13 @@ inline void noQ(br::Read& r) { r.head = noQ(r.head); for (size_t k = 0; k < r.op
 // ---- the other panes' records read here (never re-decided): lsBookFlow's turns file (G lines + the Defense letters of each candle) and
 // the Delta Profile's TR lines. Both files are append-only between rewrites: read from where the last read stopped; a shorter file = read
 // again from the start. Bounded (8 MB per read); only whole lines.
-struct Defense { std::set<std::pair<int, long long> > A; std::set<long long> H, W; std::map<long long, char> Q; std::map<std::pair<int, long long>, std::string> M; };
+struct Defense { std::set<std::pair<int, long long> > A;   // (1.1.0) the T lines' own A flag: kept for the record only, never drawn
+    std::set<long long> H, W; std::map<long long, char> Q; std::map<std::pair<int, long long>, std::string> M; };
 struct Others {
     std::map<std::pair<int, long long>, dt::GiveUp> G;               // [side, candle key]
     std::map<std::pair<int, long long>, trapl::Rec> Tr;              // [side, candle key]
     Defense D; long long lines = 0, bad = 0;
+    std::set<std::pair<int, long long> > SA;                         // (1.1.0) the SHARED A [side, candle raw key] (SharedAbsorb record, filled by the host)
     void turnsLine(const std::string& ln) {
         dt::GiveUp g; if (dt::parseG(ln, g)) { G[std::make_pair(g.side, g.t)] = g; ++lines; return; }
         dt::Counter h; if (dt::parseH(ln, h)) { if (h.H) D.H.insert(h.at); ++lines; return; }
@@ -366,7 +369,7 @@ struct Others {
     // the Defense letters on candle key for an attacker letter at extreme `side` (A on the same extreme; H / L / X / W / P / B any side)
     std::vector<std::string> defenseAt(long long key, int side) const {
         std::vector<std::string> v;
-        if (D.A.count(std::make_pair(side, key))) v.push_back("A");
+        if (SA.count(std::make_pair(side, key))) v.push_back("A");        // (1.1.0) the shared A (was the Defense T line's A)
         if (D.H.count(key)) v.push_back("H");
         std::map<long long, char>::const_iterator q = D.Q.find(key); if (q != D.Q.end()) v.push_back(std::string(1, q->second));
         for (int s = 0; s < 2; ++s) { std::map<std::pair<int, long long>, std::string>::const_iterator m = D.M.find(std::make_pair(s, key)); if (m != D.M.end()) for (char c : m->second) { const std::string x(1, c); if (std::find(v.begin(), v.end(), x) == v.end()) v.push_back(x); } }

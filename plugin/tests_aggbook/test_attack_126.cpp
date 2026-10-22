@@ -14,7 +14,7 @@ static off::Ev fill(int restSide, off::Tick px, long long size, long long id, lo
 }
 static std::string segs(const std::vector<dt::BadgeSeg>& v) { std::string s; for (size_t k = 0; k < v.size(); ++k) s += (k ? "/" : "") + v[k].s + (v[k].colourKey == atk::HIGH ? "r" : "g"); return s; }
 int main() {
-    CHECK(std::string(atk::VERSION) == "1.0.0" && std::string(off::VERSION).compare(0, 6, "1.13.0") == 0, "AttackLogic 1.0.0, OrderFlowFeed 1.13.0");
+    CHECK(std::string(atk::VERSION) == "1.1.0" && std::string(off::VERSION).compare(0, 6, "1.13.0") == 0, "AttackLogic 1.1.0, OrderFlowFeed 1.13.0");
     // ---------------- OrderFlowFeed 1.13.0: the biggest order and the biggest sweep per side, its first second and prices
     off::Params P; P.sweepLevels = 3;
     {   off::Engine e; off::Acc a;
@@ -154,8 +154,10 @@ int main() {
         o.turnsLine("W|500|0|27980|300|0|40|27990|W|1000|PDL|0.25");
         o.turnsLine("garbage|line");
         CHECK(o.G.count(std::make_pair((int)dt::HIGH, 500LL)) && o.G[std::make_pair((int)dt::HIGH, 500LL)].G, "G line read (lsBookFlow's record, unchanged)");
+        CHECK(o.defenseAt(500, dt::HIGH).size() == 2, "(1.1.0) the T line's own A no longer makes an A: H, W only");
+        o.SA.insert(std::make_pair((int)dt::HIGH, 500LL));                 // (1.1.0) the SHARED A on that candle (filled by the host from the record)
         const std::vector<std::string> d = o.defenseAt(500, dt::HIGH);
-        CHECK(d.size() == 3 && d[0] == "A" && d[1] == "H" && d[2] == "W", "the Defense letters on the candle: A (same extreme), H, W");
+        CHECK(d.size() == 3 && d[0] == "A" && d[1] == "H" && d[2] == "W", "the Defense letters on the candle: A (the shared A, same extreme), H, W");
         CHECK(o.defenseAt(500, dt::LOW).size() == 2, "A at the other extreme does not combine");
         trapl::Rec tr; tr.id = 0; tr.top = true; tr.barT = 5; tr.barRaw = 500; tr.lo = 1; tr.hi = 2; tr.tick = 0.25; tr.lots = 640; tr.med = 220; tr.x = 2.9; tr.version = "2.21.1"; tr.root = "ES";
         o.trLine(trapl::line(tr)); trapl::Rec t2 = tr; t2.lots = 9; o.trLine(trapl::line(t2)); o.trLine("TR|bad");

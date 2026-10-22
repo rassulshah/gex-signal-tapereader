@@ -7,3 +7,4 @@ CXX="g++ -std=c++17 -Wall -Wextra -Werror -Wno-unused-function -Wno-misleading-i
 $CXX test_dp217.cpp -o /tmp/t_dp217 && /tmp/t_dp217
 $CXX test_dp218.cpp -o /tmp/t_dp218 && /tmp/t_dp218
 $CXX test_dp219.cpp -o /tmp/t_dp219 && /tmp/t_dp219
+$CXX test_dp222.cpp -o /tmp/t_dp222 && /tmp/t_dp222   # 2.22.0: the shared A, one circle per candle, the close required

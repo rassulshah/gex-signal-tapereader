@@ -226,6 +226,15 @@ static void step(mock::Host& h, Ind* p, int k) { h.bars.push_back(bar(T0 + 60UL 
 int main() {
     char tmpl[] = "/tmp/bf130XXXXXX"; const char* tmp = mkdtemp(tmpl); setenv("USERPROFILE", tmp, 1);
     const std::string flex = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels";
+    // (1.22.0) the Defense badge A is the SHARED A: simulate the decider (lsBidAskStats / lsDeltaProfile) having recorded an A on every candle
+    // this suite's turns call absorbed, so the badge / hover / restart checks below run on the shared record
+    std::set<std::pair<int, long long> > sabMirrored;
+    auto mirrorA = [&](auto* pp, auto& SS) { auto* ee = pp->ext(SS); if (!ee) return;
+        std::ofstream f((flex + "\\SharedAbsorb\\SAB-ES-60.csv").c_str(), std::ios::binary | std::ios::app);
+        for (auto& t : ee->dtTurns) { if (!t.second.A || sabMirrored.count(t.first)) continue; sabMirrored.insert(t.first);
+            sab::Rec r; r.mkt = "ES"; r.spb = 60; r.key = t.first.second; r.raw = t.first.second; r.side = t.first.first; r.effort = 3.5; r.E = 3.0; r.att = 700; r.avg = 200;
+            r.close = t.first.first == sab::LOW ? 'G' : 'R'; r.extPx = 6997; r.closePx = 7000.25; r.by = "TEST"; r.loc = "ext5"; f << sab::line(r) << "\n"; }
+        f.close(); ee->sab.sReadMs = -1; if (ee->sab.bound) ee->sab.poll(NOW); };
     mock::Host h; mock::current = &h; h.tick = 0.25f; h.seconds = 60; h.symbol = "ESZ6"; h.root = "ES"; h.paneBottom = 300; h.paneRight = 2000; h.ppb = 10; h.barW = 20; h.listIndex = 0;
     for (int i = 0; i < 31; ++i) h.bars.push_back(bar(T0 + 60UL * i));
     mkdir(flex.c_str(), 0700);
@@ -345,7 +354,7 @@ int main() {
         CHECK(S->ser.bars.count(k) == 1, "(1.12.0) the turn candle is decided");
         off::PaneBar nb = S->ser.bars[k]; nb.r.addC[0] = 90; nb.r.pullC[0] = 0; nb.r.addC[1] = 60; nb.r.pullC[1] = 0; nb.r.aggrC[0] = 700; nb.r.aggrC[1] = 400;
         S->ser.bars[k] = nb;
-        p->decideTurns(*S, k, nb); p->decideTurns(*S, k, nb);
+        p->decideTurns(*S, k, nb); p->decideTurns(*S, k, nb); mirrorA(p, *S);
         Ind::Ext* e = p->ext(*S);
         const auto it = e ? e->dtTurns.find(std::make_pair((int)dt::LOW, k)) : decltype(e->dtTurns.end())();
         CHECK(e && it != e->dtTurns.end() && it->second.marginPct == 50 && it->second.A && it->second.linePx == 27988, "(1.12.0) LOW turn: +50%, sellers out-hit (A), line at the low 6997 (no refill seen)");
@@ -359,7 +368,7 @@ int main() {
         NOW += 1500; h.draws.clear(); p->draw();
         CHECK(text(h, "50%") == nullptr, "(1.12.0) Turn marks off in the shared settings: no pane mark");
         // a reload (restart): the turn comes back from the file and is never decided again
-        e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb);
+        e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb); mirrorA(p, *S);
         CHECK(e->dtTurns.count(std::make_pair((int)dt::LOW, k)) == 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.12.0) after a reload: read back, not written twice");
         // (1.15.0, Top Defender #5) the A turn is waiting for its counter; then H decided on that candle: the badge row + the Counter row
         CHECK(e->dtPendH.empty() || e->dtPendH.back() == std::make_pair((int)dt::LOW, k), "(1.15.0) the A turn waits for its counter (or the reload cleared it)");
@@ -399,7 +408,7 @@ int main() {
         CHECK(text(h, "A|X") != nullptr && text(h, "Empty 0.2x") != nullptr, "(1.16.0) X: badge A|X?, box Empty 0.2x");
         {   const std::string tf0 = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
             { std::ofstream f((flex + "\\BookFlow\\ES-60-turns.csv").c_str(), std::ios::app); dt::Retest q; q.t = k; q.side = dt::LOW; q.res = 'L'; q.ratio = 1.25; q.rest = 625; q.at = k; f << dt::qLineOf(q) << "\n"; }
-            e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb);
+            e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb); mirrorA(p, *S);
             CHECK(e->dtQ.count(std::make_pair((int)dt::LOW, k)) == 1 && e->dtQ[std::make_pair((int)dt::LOW, k)].res == 'L' && std::fabs(e->dtQ[std::make_pair((int)dt::LOW, k)].ratio - 1.25) < 1e-9, "(1.16.0) after a reload the Q line is read back (no repaint)"); (void)tf0; }
         // (1.17.0, Top Defender #3) stepping back / pressing in: 10 bid lots moved 2 ticks toward price in the low's zone, the slot's normal 4 -> P (2.5x)
         {   std::vector<mock::Bar>& B = mock::current->bars; int i = -1; for (size_t q = 0; q < B.size(); ++q) if ((long long)B[q].time == k) i = (int)q;
@@ -411,12 +420,12 @@ int main() {
                 e->mvNormPath = off::flexDir() + "\\BookFlow\\ES-moves-norm.txt";
                 mvl::Move m; m.side = mvl::BIDS; m.oldPx = l - 1; m.newPx = l + 1; m.size = 10; m.dir = 1; m.ms = 1000; m.id = 5;
                 e->mvByKey[k] = std::vector<mvl::Move>(1, m); e->dtM.clear();
-                const long long w0 = e->dtMWritten; p->decideTurns(*S, k, nb);
+                const long long w0 = e->dtMWritten; p->decideTurns(*S, k, nb); mirrorA(p, *S);
                 const std::string tf = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
                 int mLines = 0; { std::stringstream ss(tf); std::string ln; while (std::getline(ss, ln)) if (ln.compare(0, 2 + std::to_string(k).size() + 1, "M|" + std::to_string(k) + "|") == 0) ++mLines; }
                 CHECK(e->dtMWritten == w0 + 1 && mLines == 1, ("(1.17.0) one M line written for the low (" + std::to_string(mLines) + ")").c_str());
                 CHECK(e->dtM.count(std::make_pair(0, k)) == 1 && mvl::drawP(e->dtM[std::make_pair(0, k)]) && e->dtM[std::make_pair(0, k)].s.bigSize[0] == 10, "(1.17.0) the read: defenders pressed in (P), largest move 10 lots");
-                p->decideTurns(*S, k, nb); CHECK(e->dtMWritten == w0 + 1, "(1.17.0) decided once: a second close of the same candle writes nothing");
+                p->decideTurns(*S, k, nb); mirrorA(p, *S); CHECK(e->dtMWritten == w0 + 1, "(1.17.0) decided once: a second close of the same candle writes nothing");
                 e->dtQ.erase(std::make_pair((int)dt::LOW, k)); e->dtH.erase(std::make_pair((int)dt::LOW, k));
                 h.draws.clear(); p->draw();
                 if (const char* dp = std::getenv("D3_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
@@ -444,7 +453,7 @@ int main() {
                     for (auto& d : h.draws) if (d.type == "fill" && d.y < 60 && d.y == d.b && d.color == (COLOR)0x22C55E && d.r > d.x) { if (bl < 0 || d.x < bl) bl = d.x; br = std::max(br, d.r); }
                     CHECK(r > l && (bl < 0 || (l >= bl && r <= br + 1)), "(1.18.0) the three-letter badge's text stays inside its border (font fits)"); }
                 e->dtM[std::make_pair(0, k)].q[mvl::C_ATT_IN] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = true; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = false;
-                e->dtLoaded = false; e->dtPath.clear(); e->mvByKey.clear(); p->decideTurns(*S, k, nb);
+                e->dtLoaded = false; e->dtPath.clear(); e->mvByKey.clear(); p->decideTurns(*S, k, nb); mirrorA(p, *S);
                 CHECK(e->dtM.count(std::make_pair(0, k)) == 1 && mvl::drawP(e->dtM[std::make_pair(0, k)]) && e->dtMWritten == w0 + 1, "(1.18.0) after a reload the M line is read back the same (no repaint, nothing re-written)");
             } } }
     {   // (1.19.0) G / Tr / W on the Defense pane, end to end: G from the candle's order feed (Acc -> fillAcc -> decideTurns), Tr from the Delta
@@ -461,9 +470,9 @@ int main() {
         p->onAccClosed(*S, k, a);
         CHECK(e->dtc[k].gOk[dt::HIGH] && !e->dtc[k].gOk[dt::LOW] && e->dtc[k].apull[dt::HIGH] == 4000 && e->dtc[k].aadd[dt::HIGH] == 300 && e->dtc[k].amov[dt::HIGH] == 100,
               "(1.19.0) fillAcc: the buyers' bids after the high - pulled 4,000, added 300, moved 100 (the low had no fill time: nothing)");
-        const long long g0 = e->dtGWritten; p->decideTurns(*S, k, nb);
+        const long long g0 = e->dtGWritten; p->decideTurns(*S, k, nb); mirrorA(p, *S);
         CHECK(e->dtG.count(std::make_pair((int)dt::HIGH, k)) && e->dtG[std::make_pair((int)dt::HIGH, k)].G && e->dtGWritten == g0 + 1, "(1.19.0) G decided at the high: (4,000 - 100) / 90 s = 2.4x ES normal, pulled > added, attack died; one G line");
-        p->decideTurns(*S, k, nb); CHECK(e->dtGWritten == g0 + 1, "(1.19.0) decided once: a second close writes nothing");
+        p->decideTurns(*S, k, nb); mirrorA(p, *S); CHECK(e->dtGWritten == g0 + 1, "(1.19.0) decided once: a second close writes nothing");
         h.draws.clear(); p->draw();
         CHECK(text(h, "A|", GRN) != nullptr && text(h, "G|", RED) == nullptr && text(h, "G", RED) == nullptr, "(1.21.0) badge A|.. (the low's defenders, green); G is decided and written here but drawn on the attacker pane");
         CHECK(text(h, "Attackers") == nullptr && text(h, "Pulling 2.4x") == nullptr, "(1.21.0, Rassul \"no\") the box row Attackers is removed");
@@ -509,7 +518,7 @@ int main() {
             const bool in = !e->badgeHit.empty() && l >= e->badgeHit.back().first.l && r <= e->badgeHit.back().first.r + 1;
             CHECK(r > l && in && fs <= 7 && fs >= 6, ("(1.19.0) the 4-letter badge: text inside its border, the font shrunk toward the 6 pt floor on a 20 px slot (" + std::to_string(fs) + " pt)").c_str()); }
         {   // two neighbouring candles with badges: the wider one never covers the one before it
-            const long long kp = (long long)B[(size_t)i - 1].time; dt::Turn tq; tq.t = kp; tq.side = dt::HIGH; tq.A = true; e->dtTurns[std::make_pair((int)dt::HIGH, kp)] = tq;   // (1.21.0) an A (G is no longer drawn here)
+            const long long kp = (long long)B[(size_t)i - 1].time; dt::Turn tq; tq.t = kp; tq.side = dt::HIGH; tq.A = true; e->dtTurns[std::make_pair((int)dt::HIGH, kp)] = tq; mirrorA(p, *S);   // (1.21.0) an A (G is no longer drawn here)
             h.draws.clear(); p->draw();
             CHECK(e->badgeHit.size() == 2 && e->badgeHit[0].first.r < e->badgeHit[1].first.l, "(1.19.0) two badges on neighbouring candles never overlap (the second shifted right)");
             e->dtTurns.erase(std::make_pair((int)dt::HIGH, kp)); h.draws.clear(); p->draw(); }
@@ -529,7 +538,7 @@ int main() {
             auto tipHas = [&](const std::string& t) { return tipJoined().find(t) != std::string::npos; };
             CHECK(e->lastTip.r > e->lastTip.l && e->lastTipLevel >= 0, ("(1.20.0) the hover drawn (fit level " + std::to_string(e->lastTipLevel) + ")").c_str());
             CHECK(tipText("Defense A|W|P|L"), "(1.21.0) hover header: the badge (every letter fits: Tr / G moved to the attacker pane)");
-            CHECK(tipHas("A  Absorbed - did the sellers' attack fail against the bids?"), "(1.20.0) hover A: the question it answers");
+            CHECK(tipHas("A  Absorbed - will this low hold?"), "(1.20.0) hover A: the question it answers");
             CHECK(!tipHas("Tr  Trapped") && !tipHas("G  Giving up"), "(1.21.0) no Tr / G block in the Defense hover (they are on the attacker pane)");
             CHECK(true, "(1.21.0) G hover moved to the attacker pane");
             CHECK(tipHas("W  Withdrew - did the bids leave the key level when price touched it?") && tipHas("In the first 60 s at PDL 6,995 the bids pulled 88%: 300 lots net pulled vs 40 traded"), "(1.20.0) hover W: level, %, lots");
@@ -549,9 +558,9 @@ int main() {
                 h.paneBottom = pb0; h.draws.clear(); p->draw(); }
             {   // the cursor leaves the pane (IRT sends nothing): the hover is cleared on the next draw (lesson 111)
                 pc::test_ok = false; h.draws.clear(); p->draw();
-                CHECK(e->badgeTip < 0 && !tipHas("A  Absorbed - did the sellers' attack fail against the bids?"), "(1.20.0) cursor outside the pane: the badge hover is gone");
+                CHECK(e->badgeTip < 0 && !tipHas("A  Absorbed - will this low hold?"), "(1.20.0) cursor outside the pane: the badge hover is gone");
                 pc::test_ok = true; RTX_EVENT evb = moveAt((br0.l + br0.r) / 2, (br0.t + br0.b) / 2, i); p->mouse(&evb); h.draws.clear(); p->draw();
-                CHECK(e->badgeTip >= 0 && tipHas("A  Absorbed - did the sellers' attack fail against the bids?"), "(1.20.0) back on the badge: the hover again"); }
+                CHECK(e->badgeTip >= 0 && tipHas("A  Absorbed - will this low hold?"), "(1.20.0) back on the badge: the hover again"); }
             if (const char* dp = std::getenv("GTW_DUMP4")) { const int pb0 = h.paneBottom; h.paneBottom = 480; h.draws.clear(); p->draw();   // render check (not a test): a taller pane
                 std::ofstream o(dp); o << "# level " << e->lastTipLevel << "\n"; for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n';
                 h.paneBottom = pb0; h.draws.clear(); p->draw(); }
@@ -566,7 +575,7 @@ int main() {
         int gl = 0, wl = 0; { std::stringstream ss(tf); std::string ln; while (std::getline(ss, ln)) { if (ln.compare(0, 2, "G|") == 0) ++gl; if (ln.compare(0, 2, "W|") == 0) ++wl; } }
         CHECK(gl == 1 && wl == 1, "(1.19.0) one G line and one W line in the turns file (the records for the nightly)");
         e->dtLoaded = false; e->dtPath.clear(); e->dtG.clear(); e->dtW.clear(); e->dtTr.clear(); e->trOff.clear(); e->trMs = -1; p->readTraps(*S, *e, NOW);
-        p->decideTurns(*S, k, nb);
+        p->decideTurns(*S, k, nb); mirrorA(p, *S);
         CHECK(e->dtG.count(std::make_pair((int)dt::HIGH, k)) && e->dtG[std::make_pair((int)dt::HIGH, k)].G && e->dtW.size() == 1 && e->dtGWritten == g0 + 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.19.0) after a restart: G and W read back, nothing written again (no repaint)");
         h.draws.clear(); p->draw();
         badges = badgeTexts();
@@ -601,6 +610,19 @@ int main() {
         const std::string tf2 = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
         CHECK(e->dtPendX.empty() && e->dtXWritten == 1 && tf2.find("X|" + std::to_string(k) + "|0|6997.25|") != std::string::npos, "(1.13.0) decided once: X line at 6997.25 (the touch where the attack died, not the one where it did not)");
         p->checkX(*S); CHECK(e->dtXWritten == 1, "(1.13.0) never written twice"); }
+    {   // (1.22.0, Rassul 06:49 "then require it") an attacker-colour candle never gets a coloured A on the Defense pane: a T line with its own A
+        // flag but no shared record = no A; a record line claiming an A on a RED close at a low is rejected by the parser (never drawn)
+        Ind::Ext* e = p->ext(*S); std::vector<mock::Bar>& B = mock::current->bars; const int i = (int)B.size() - 4; const long long kq = (long long)B[(size_t)i].time;
+        B[(size_t)i].open = 7001; B[(size_t)i].close = 6998;                                   // a RED candle
+        dt::Turn tq; tq.t = kq; tq.side = dt::LOW; tq.A = true; e->dtTurns[std::make_pair((int)dt::LOW, kq)] = tq;   // the old T-line A (not mirrored)
+        {   std::ofstream f((flex + "\\SharedAbsorb\\SAB-ES-60.csv").c_str(), std::ios::binary | std::ios::app);
+            sab::Rec r; r.mkt = "ES"; r.spb = 60; r.key = kq; r.raw = kq; r.side = sab::LOW; r.effort = 5; r.E = 3; r.att = 500; r.avg = 100; r.close = 'G'; r.by = "TEST"; r.loc = "ext5";
+            std::string l = sab::line(r); const size_t g = l.find("|G|"); l.replace(g, 3, "|R|"); f << l << "\n"; }   // forged: an A on a red close
+        e->sab.sReadMs = -1; NOW += 1500; h.draws.clear(); p->draw();
+        CHECK(e->sab.st.atRaw(sab::LOW, kq) == nullptr && e->sab.st.bad >= 1, "(1.22.0) a record line with the attackers' close is rejected (counted bad)");
+        bool aOnIt = false; const int xc = 50 + i * h.barW;
+        for (auto& d : h.draws) if (d.type == "text" && d.y < 60 && d.text.find('A') != std::string::npos && std::abs(d.x - xc) < h.barW / 2 + 6 && (d.color == 0x22C55E || d.color == 0xEF4444)) aOnIt = true;
+        CHECK(!aOnIt, "(1.22.0) the red candle with a T-line A but no valid shared A: no coloured A on the Defense badge"); }
     dispose(p);
     CHECK(!mst::read("BOOK", "ESZ6", 60, "test", NOW).ok, "removed: the Market State entry is cleared");
     std::printf("BookFlow host: %d passed, %d failed\n", passes, fails);

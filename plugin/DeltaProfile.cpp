@@ -65,7 +65,8 @@
 #include "SettingsHost.h"           // (2.18.1) the window from the table
 // (2.11.0) a two-sided row: buying and selling both heavy - the net under 15% of the volume (a top-3 volume row is checked)
 namespace delta_profile { inline bool twoSided(double delta, double volume) { return volume > 0 && (delta < 0 ? -delta : delta) < 0.15 * volume; } }
-#include "AbsorbLogic.h"     // (2.20.0) the wick absorption A (footprint candidate + order-book truth)
+#include "AbsorbLogic.h"     // (2.20.0) the wick absorption A (footprint candidate + order-book truth) - retired 2.22.0 (records still read)
+#include "SharedAbsorb.h"    // (2.22.0) the SHARED absorption A: one rule, one record for every plugin
 #include "TrapLogic.h"       // (2.21.0) the trapped traders read (Tr / A|Tr on the profile)
 #include "SignalBoard.h"     // (2.9.1) posts its confirmed A events for the other indicators on this chart
 #include "ZoneNear.h"        // (2.9.0) location first: A bubbles / labels away from a zone are dimmed
@@ -90,7 +91,7 @@ namespace delta_profile { inline bool twoSided(double delta, double volume) { re
 
 namespace dp = delta_profile;
 static ss::Ids& dpIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
-static const char* const DLT_VERSION = "2.21.2"; // (2.21.2, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") screen only: an A / gray circle, its tick, a label or a fill that would touch the lsHodLod table is not painted there (the record, SignalBoard and no-repaint rules unchanged; KeepOutDraw.h, status UNDER_HODLOD) // (2.21.1, 2026-10-21 render check) the Tr badge in its OWN clear slot: >= 4 px from every A label / bubble (above or below the outline, else beside the outer trapped row, else stepping out), text inside its box with 4 px padding, a step smaller font when needed; the tick still to the trapped rows // (2.21.0, 2026-10-21 Rassul approved delta-profile-trapped-mockup-v2.png 11:43 CT "ok.. approve.. build", Delta-Profile-research-2026-10-21.md) TRAPPED TRADERS (TrapLogic.h): a candle that makes a new 20-candle high / low, with the attackers' lots traded beyond the old extreme >= 1.0x the median attack of the 20 candles before it, and that closes back inside = trapped buyers (red) / sellers (green); decided once at the close, never repainted, a TR line in the session record; drawn ON the profile: the trapped rows outlined in amber and a badge beside them "Tr?" or "A|Tr?" when his A is on the same candle and side; the size only in the status / record; the old 3-bar T context of Ex stays logged only; settings row "Trapped traders" (trap_on, parameter version 15) // (2.20.0, 2026-10-21 Rassul approved mockup-absorption-v2-ES.png "approved", MBO Roadmap Top Defender #1) WICK ABSORPTION A: at a 5-candle high / low, the attackers' lots in the wick >= X (default 3.0, per-market setting) x this market's normal for that half hour (LRA-AbsNorm-<MKT>.csv seed + own LRA-AbsObs-<MKT>.csv, last 10 sessions), AND the order book (lsBidAskStats, SignalBoard kind O) shows the defenders filled >= 2x what they ever showed and reloaded >= 2 times at wick prices taking >= 25% of that attack; decided at the candle close after the order feed decided it, never repainted, A bubble in the winner's colour, D line conf=wick; no order feed = logged only (status WICK_A). Tested 7 markets x 12 sessions vs the order book (research_testing.md) // (2.19.1, Rassul 2026-10-19 17:39 CT "lets do it the other way around using bullish or bearish instead") the A circle in the WINNER's colour: bullish A green, bearish A red (was the trapped side's colour, 2.10.3); gray unchanged // (2.19.0, Rassul 2026-10-19 17:09-17:13 CT "the circle is just a gray circle and you dont know bullish or bearish until candle close" / "stay gray, keep the pivot rule and the next candle rule too" / "the idea is to see if volume is trapped and which way the close occurred at a pivot", mockup delta-gray-circle-mockup.png approved "ok build") every big node (3 biggest rows, 2.0x+) that is not a coloured A is drawn as ONE GRAY circle on its candle - while it forms, while it waits for the next candle or its pivot, and for good when no side won; it turns red (bullish A) / green (bearish A) the moment the A rules hold (rules unchanged); colour wins its candle; display only (no record or SignalBoard change); status GRAY_DRAWN // (2.18.3, 2026-10-18 his decision list) Font default 10 pt (was 9; a 9 from the old default reads as 10) // (2.18.2, 2026-10-18 settings audit) the one-time migration reads THIS chart's contract-root row first (as 2.18.0 did), per-chart (~) rows never; // (2.18.1, 2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator always has its settings verified and tested") the window from DeltaProfileSettings.h / SettingsSpec.h: settings per MARKET in DeltaProfile.settings-<MKT>.txt (the per-root file fell back to defaults at every contract roll), migrated once from DeltaProfile.settings.txt; Width 110-250 (the column never drew under 110); "Show delta text" left the window (no row values are drawn since 2.14.0); drawing unchanged // // (2.18.0, Rassul 2026-10-18 11:49 CT mockup approved: "the close can be from the same candle or the close of the next candle as long as the low of both bars is below the high of the pivot bar which may or may not be either bar for bullish absorption and vice versa for the bearish absorption") A = the node's own candle closes beyond the node (unchanged) OR, if it did not, the NEXT candle does (bullish green close above the node's high, bearish red close below its low) with the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; the bubble stays on the node's candle; a failed node waits exactly one candle, never a third; the pivot-confirmation repaint of 2.16.0 applies the same way; D and TA lines end in conf=same|next (older lines = same), status A_CONF counts them. (2.18.0, Rassul 2026-10-18 12:49 CT mockup approved) the profile's ratio label ONLY on the 3 biggest bars by abs delta (dp::labelKeys), even one under 2.0x; no label on any other bar, even at 2.0x+; "A " kept on an absorbed node's label; circles and A rules unchanged. Evidence (his recorded A candidates Oct 14-16, 7 markets; held = 1 ATR before 1 tick through the node within 20 bars): same-candle A held 42% (n 197), next-candle A meeting his rule 52% (n 31), next-candle failing it 8% (n 13) // (2.17.0, 2026-10-18 audit B) SignalBoard A events carry flag 1 = final / 2 = tentative (SignalBoard 1.1.0: read() gives readers such as the Liquidity Profile only final ones); a tentative A writes a TA|S line when first shown and a TA|X line when its confirmed pivot fails it (the nightly measures how often a shown A? vanished); per-chart status file DeltaProfile.status-<MKT>-<spb>.txt (the shared DeltaProfile.status.txt is still written for one more version); Market State SRC "DP" facts once per closed bar (MarketState.h, cleared on done / destroy) // (2.16.0, Rassul 2026-10-17 "it is ok to repaint when the pivot requirement is there") the pivot rule against the peak bar's OWN swing (the down / up pivot of the leg it belongs to, which a later bar may make): the A bubble shows while the close rule and that pivot hold, may go and come back until the pivot is confirmed; the record (D line) is written only then, so the nightly sees the final A // (2.15.0, Rassul 2026-10-17 15:35 option 2 (b)) the 2.6.0 absorption rules in this indicator: only the 3 biggest rows (2.0x or more), no halfway rule, more than one bubble per candle; kept: the pivot rule, the same-candle close, no repaint, the layout and the shared A events // (2.13.0, Rassul 2026-10-16 17:40 "just keep it simple to absorption") the absorption rule only: every row >= 2.0x the average |delta| (90-min profile) is tracked, no top-3 cap, no initiative (I never decided or labelled), no zone A, ONE bubble per candle (the higher ratio), never repainted // (2.12.0, Rassul 08:25) the 3 largest bars always show a value; A and I labels from the record, frozen, kept for 90 min // (2.11.2) the column is drawn at least 110 px wide (a saved Width of 80 no longer squeezes the A label) // (2.11.1) a decided A keeps its profile label while its row is in the 90-min profile (no longer only while the node is in the live top 3) // (2.11.0) two-sided rows: a top-3 volume row with net under 15% of its volume gets "\xB1" // (2.10.3) the A circle on the candle in the trapped side's colour (bullish red, bearish green) // (2.10.2) strictly the 3 biggest: one with no room is not replaced by the 4th // (2.10.1) the 3 biggest values in all (not 3 per side) // (2.10.0, Rassul 2026-10-15 "(b)") the delta value also on the biggest rows // (2.9.1) posts its A events on the SignalBoard // (2.9.0, Rassul 2026-10-15) location first: A bubbles + labels at a high / low / pivot / level full strength, mid-range dimmed (ZoneNear.h) // (2.8.6, Rassul 2026-10-15) A label delta without the +/- sign ("A 3.7x 92"); colour gives the side // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
+static const char* const DLT_VERSION = "2.22.0"; // (2.22.0, 2026-10-22 Rassul 06:43 "then do it", 06:46 "only one circle per candle", 06:49 "then require it") THE SHARED ABSORPTION A (SharedAbsorb.h 1.0.0): the 2.20.0 wick A is retired (not decided; old conf=wick records not drawn; its two settings rows hidden); the price chart shows the shared A - the letter A in a ring in the winner's colour just beyond the candle's extreme - read from lsFlexLevels\SharedAbsorb\SAB-<MKT>-<spb>.csv (lsBidAskStats decides; this plugin decides from the chart VAP only when no attacker pane is on the chart); ONE circle per candle: the shared A wins, else one node A (the biggest |delta| of the top-3 node A's) and only on a candle closed in the defenders' colour, else one gray; records unchanged; SignalBoard A also carries the shared A; status SHARED_A / ONE_CIRCLE // (2.21.2, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") screen only: an A / gray circle, its tick, a label or a fill that would touch the lsHodLod table is not painted there (the record, SignalBoard and no-repaint rules unchanged; KeepOutDraw.h, status UNDER_HODLOD) // (2.21.1, 2026-10-21 render check) the Tr badge in its OWN clear slot: >= 4 px from every A label / bubble (above or below the outline, else beside the outer trapped row, else stepping out), text inside its box with 4 px padding, a step smaller font when needed; the tick still to the trapped rows // (2.21.0, 2026-10-21 Rassul approved delta-profile-trapped-mockup-v2.png 11:43 CT "ok.. approve.. build", Delta-Profile-research-2026-10-21.md) TRAPPED TRADERS (TrapLogic.h): a candle that makes a new 20-candle high / low, with the attackers' lots traded beyond the old extreme >= 1.0x the median attack of the 20 candles before it, and that closes back inside = trapped buyers (red) / sellers (green); decided once at the close, never repainted, a TR line in the session record; drawn ON the profile: the trapped rows outlined in amber and a badge beside them "Tr?" or "A|Tr?" when his A is on the same candle and side; the size only in the status / record; the old 3-bar T context of Ex stays logged only; settings row "Trapped traders" (trap_on, parameter version 15) // (2.20.0, 2026-10-21 Rassul approved mockup-absorption-v2-ES.png "approved", MBO Roadmap Top Defender #1) WICK ABSORPTION A: at a 5-candle high / low, the attackers' lots in the wick >= X (default 3.0, per-market setting) x this market's normal for that half hour (LRA-AbsNorm-<MKT>.csv seed + own LRA-AbsObs-<MKT>.csv, last 10 sessions), AND the order book (lsBidAskStats, SignalBoard kind O) shows the defenders filled >= 2x what they ever showed and reloaded >= 2 times at wick prices taking >= 25% of that attack; decided at the candle close after the order feed decided it, never repainted, A bubble in the winner's colour, D line conf=wick; no order feed = logged only (status WICK_A). Tested 7 markets x 12 sessions vs the order book (research_testing.md) // (2.19.1, Rassul 2026-10-19 17:39 CT "lets do it the other way around using bullish or bearish instead") the A circle in the WINNER's colour: bullish A green, bearish A red (was the trapped side's colour, 2.10.3); gray unchanged // (2.19.0, Rassul 2026-10-19 17:09-17:13 CT "the circle is just a gray circle and you dont know bullish or bearish until candle close" / "stay gray, keep the pivot rule and the next candle rule too" / "the idea is to see if volume is trapped and which way the close occurred at a pivot", mockup delta-gray-circle-mockup.png approved "ok build") every big node (3 biggest rows, 2.0x+) that is not a coloured A is drawn as ONE GRAY circle on its candle - while it forms, while it waits for the next candle or its pivot, and for good when no side won; it turns red (bullish A) / green (bearish A) the moment the A rules hold (rules unchanged); colour wins its candle; display only (no record or SignalBoard change); status GRAY_DRAWN // (2.18.3, 2026-10-18 his decision list) Font default 10 pt (was 9; a 9 from the old default reads as 10) // (2.18.2, 2026-10-18 settings audit) the one-time migration reads THIS chart's contract-root row first (as 2.18.0 did), per-chart (~) rows never; // (2.18.1, 2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator always has its settings verified and tested") the window from DeltaProfileSettings.h / SettingsSpec.h: settings per MARKET in DeltaProfile.settings-<MKT>.txt (the per-root file fell back to defaults at every contract roll), migrated once from DeltaProfile.settings.txt; Width 110-250 (the column never drew under 110); "Show delta text" left the window (no row values are drawn since 2.14.0); drawing unchanged // // (2.18.0, Rassul 2026-10-18 11:49 CT mockup approved: "the close can be from the same candle or the close of the next candle as long as the low of both bars is below the high of the pivot bar which may or may not be either bar for bullish absorption and vice versa for the bearish absorption") A = the node's own candle closes beyond the node (unchanged) OR, if it did not, the NEXT candle does (bullish green close above the node's high, bearish red close below its low) with the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; the bubble stays on the node's candle; a failed node waits exactly one candle, never a third; the pivot-confirmation repaint of 2.16.0 applies the same way; D and TA lines end in conf=same|next (older lines = same), status A_CONF counts them. (2.18.0, Rassul 2026-10-18 12:49 CT mockup approved) the profile's ratio label ONLY on the 3 biggest bars by abs delta (dp::labelKeys), even one under 2.0x; no label on any other bar, even at 2.0x+; "A " kept on an absorbed node's label; circles and A rules unchanged. Evidence (his recorded A candidates Oct 14-16, 7 markets; held = 1 ATR before 1 tick through the node within 20 bars): same-candle A held 42% (n 197), next-candle A meeting his rule 52% (n 31), next-candle failing it 8% (n 13) // (2.17.0, 2026-10-18 audit B) SignalBoard A events carry flag 1 = final / 2 = tentative (SignalBoard 1.1.0: read() gives readers such as the Liquidity Profile only final ones); a tentative A writes a TA|S line when first shown and a TA|X line when its confirmed pivot fails it (the nightly measures how often a shown A? vanished); per-chart status file DeltaProfile.status-<MKT>-<spb>.txt (the shared DeltaProfile.status.txt is still written for one more version); Market State SRC "DP" facts once per closed bar (MarketState.h, cleared on done / destroy) // (2.16.0, Rassul 2026-10-17 "it is ok to repaint when the pivot requirement is there") the pivot rule against the peak bar's OWN swing (the down / up pivot of the leg it belongs to, which a later bar may make): the A bubble shows while the close rule and that pivot hold, may go and come back until the pivot is confirmed; the record (D line) is written only then, so the nightly sees the final A // (2.15.0, Rassul 2026-10-17 15:35 option 2 (b)) the 2.6.0 absorption rules in this indicator: only the 3 biggest rows (2.0x or more), no halfway rule, more than one bubble per candle; kept: the pivot rule, the same-candle close, no repaint, the layout and the shared A events // (2.13.0, Rassul 2026-10-16 17:40 "just keep it simple to absorption") the absorption rule only: every row >= 2.0x the average |delta| (90-min profile) is tracked, no top-3 cap, no initiative (I never decided or labelled), no zone A, ONE bubble per candle (the higher ratio), never repainted // (2.12.0, Rassul 08:25) the 3 largest bars always show a value; A and I labels from the record, frozen, kept for 90 min // (2.11.2) the column is drawn at least 110 px wide (a saved Width of 80 no longer squeezes the A label) // (2.11.1) a decided A keeps its profile label while its row is in the 90-min profile (no longer only while the node is in the live top 3) // (2.11.0) two-sided rows: a top-3 volume row with net under 15% of its volume gets "\xB1" // (2.10.3) the A circle on the candle in the trapped side's colour (bullish red, bearish green) // (2.10.2) strictly the 3 biggest: one with no room is not replaced by the 4th // (2.10.1) the 3 biggest values in all (not 3 per side) // (2.10.0, Rassul 2026-10-15 "(b)") the delta value also on the biggest rows // (2.9.1) posts its A events on the SignalBoard // (2.9.0, Rassul 2026-10-15) location first: A bubbles + labels at a high / low / pivot / level full strength, mid-range dimmed (ZoneNear.h) // (2.8.6, Rassul 2026-10-15) A label delta without the +/- sign ("A 3.7x 92"); colour gives the side // (2.8.5, Rassul approved 2026-10-14 23:05 CT) ONE bubble per candle per side: of the confirmed A events on one peak bar, bullish draws one bubble at the LOWEST price, bearish one at the HIGHEST (only among those decided at the group's first decision moment - a later re-track never moves a drawn bubble); the profile A label follows the same choice; records unchanged (display only). A records written before 2.8.4 are re-checked ONCE against the 2.8.4 rules (same-bar close beyond, halfway, pivot) on the chart's bars up to their peak bar: a failure is not drawn ("hidden: pre-2.8.4 rule"), missing bars = undrawn and said so; 2.8.4+ records are never re-checked // (2.8.4, 2026-10-14 night verification) the pivot rule also on a node first seen after its peak bar closed (new events start undecided; one decision path); delta text only on drawn A labels; setVersion literal = DLT_VERSION; the Ex record label always "Ex?" // (2.8.3) A also needs the pivot rule: bullish = the peak bar makes the down pivot or its low is below the down-pivot bar's high; bearish mirror // (2.8.2) A only when the node is in the lower half of its peak bar (bullish) / upper half (bearish) // (2.8.1) delta text only on the labelled A nodes (not every row); I / I? / A? labels removed and no AE / AE? and no Ex? marks on the chart (still recorded); only A + its bubble - absorption only, consistent with the A bubbles // (2.8.0, CR5200) the middle right-side column, delta text per row, margin owner without a Dealer Profile // (2.7.1, 2026-10-13, Rassul screenshot: "[offscreen]" A labels sat on circles and swing labels when the chart was scrolled back) an A whose peak bar is off screen gets NO profile label at all - nothing is drawn for it; it stays in the record and the status (suppressed:offscreen)   // (2.7.0, Rassul 2026-10-13 "the thin extreme seems promising for exhaustion signals especially after absorbtion or trapped detla" / "this looks good, lets implement this") the native, non-repainting thin-extreme exhaustion mark Ex? (E record lines, LRA-DeltaEx-<MKT>.csv gate)   // (2.6.3, audit F3 persistence) the signal record file is named by the sanitized FULL contract (<MKT>-<contract>-<spb>-signals-<session>.csv): a new expiry never loads the prior contract's records; root-only files are no longer read or imported   // (2.6.2) absorption = the node's own peak bar closes green above a selling node / red below a buying node (Rassul 2026-10-13 05:16); a later bar can no longer make A; records written before 2.6.2 keep their A circles   // (2.6.1) 2.5.7 external-audit port: a latch whose tick re-key fails is dropped (never compared on a stale grid); old-session lines owed at 17:00 are merged per file, never dropped, retried after the record folder is re-made, and counted   // (2.6.0) shared event IDs, confirmed-A-only bubbles, formation-aware decisions, historical A retention
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_VOL = 0x00243040, C_AXIS = 0x00334155;
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF;
@@ -106,6 +107,7 @@ static void validateLayout(Layout& s) {
     s.gap = 0;                                           // (2.8.0) the columns abut (ColumnBoard.h); an old file's gap is ignored
     s.font = s.font < 6 ? 9 : std::min(s.font, 18);
 }
+static long long g_sabGraceMs = 90000;   // (2.22.0) no attacker-pane post for this long before this plugin decides a shared A itself (tests set 0)
 static std::int64_t steadyMs() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -226,6 +228,8 @@ struct LatchBook {
     std::set<long long> wickDone; std::map<long long, long long> wickWait; std::vector<absl::Obs> obs; bool obsLoaded = false;
     std::vector<std::string> obsJournal; long long wickEval = 0, wickCand = 0, wickMarks = 0, wickNoFeed = 0, wickLearning = 0, wickNotBook = 0;
     std::string wickLast, obsNote;
+    // (2.22.0) the SHARED A: the record host (one per market / bar size), candles judged here (only with no attacker pane on the chart)
+    sab::Host sab; std::set<long long> sabDone; bool sabDir = false, sabBasHere = false; long long sabStartMs = -1;
     // (2.21.0) the trapped traders read: decided candles (bar key * 2 + side), the decided traps (record TR lines), counters
     std::set<long long> trapDone; std::vector<trapl::Rec> traps; long long trapNext = 0, trapEval = 0, trapFired = 0, trapLearning = 0, trapAccepted = 0,
         trapLight = 0, trapLoaded = 0, trapRejected = 0; std::string trapLast;
@@ -808,6 +812,7 @@ struct ChartState {
     bool dirty, faulted, ready, shortHistory, coarseBoundary;
     int absorptionEvents, bubblesDrawn, bubblesOffscreen, bubblesSuppressed, activeAbsorptions, pairedAbsorptions;
     int grayDrawn = 0, grayOffscreen = 0;   // (2.19.0) the gray circles
+    int sabDrawn = 0, sabOffscreen = 0, sabColourVeto = 0, sabGrayFromNode = 0;   // (2.22.0) the shared A circles, node A's shown gray (attackers' close)
     int zoneFull = 0, zoneDim = 0;   // (2.9.0) A bubbles at a zone / mid-range (dimmed)
     int twoSidedDrawn = 0;           // (2.11.0) the two-sided rows marked
     int bubblesMerged = 0, aHiddenPre284 = 0, aUncheckedPre284 = 0;   // (2.8.5)
@@ -1360,83 +1365,70 @@ bool DeltaProfile::buildNative(ChartState& s) {
             L.code = "I?"; L.support = !L.sell;                                                   // absorption ruled out
             // (2.13.0) no initiative: a node that is not absorption stays "I?" (undecided, never drawn, never labelled)
         }
-        // (2.20.0, MBO Roadmap Top Defender #1) THE WICK ABSORPTION A (AbsorbLogic.h). For each recently closed candle, once lsBidAskStats
-        // has decided it (its SignalBoard 'O' marker) or 90 s have passed: at a 5-candle high / low, the attackers' lots in the wick vs this
-        // market's half-hour normal, then the order-book truth. An absorbed side becomes a decided A latch (conf=wick) - drawn, recorded and
-        // posted like every other A; decided once, never repainted.
-        if (s.wickOn && allowedNow && !s.market.empty()) {
+        // (2.22.0, 2026-10-22 Rassul 06:43 "then do it" / 06:49 "then require it") THE SHARED ABSORPTION A (SharedAbsorb.h) replaces the
+        // 2.20.0 wick A (no longer decided; old conf=wick records are kept but not drawn). Every A drawn here comes from the ONE shared
+        // record lsFlexLevels\SharedAbsorb\SAB-<MKT>-<spb>.csv. lsBidAskStats (the attacker pane) decides it; only when no attacker pane
+        // posts on this chart (no fresh SignalBoard 'O') does this plugin decide a closed candle itself, from the chart's VAP statistics
+        // (the same buy / sell lots), and append it. Decided once at the close, never repainted.
+        {
             const long long nowMs = static_cast<long long>(steadyMs());
             const std::string fdir = storageDirectory();
-            if (!bk.obsLoaded && !fdir.empty()) {
-                bk.obsLoaded = true; bk.obs.clear(); int bad = 0, badAll = 0;
-                for (const char* nm : { "LRA-AbsNorm-", "LRA-AbsObs-" }) {
-                    std::string text; bool big = false;
-                    if (readWholeFile(fdir + nm + s.market + ".csv", text, big)) { std::vector<absl::Obs> v = absl::parseObsText(text, &bad); badAll += bad; bk.obs.insert(bk.obs.end(), v.begin(), v.end()); }
+            const int spbNow = getSecondsPerBar();
+            if (!fdir.empty() && !s.market.empty() && spbNow > 0) {
+                const std::string sdir = fdir + "SharedAbsorb";
+                bk.sab.bind(s.market, spbNow, sdir + DIR_SEPARATOR_CHR + sab::fileName(s.market, spbNow), fdir + "LRA-Badges-" + sab::canon(s.market) + ".csv");
+                if (!bk.sabDir) { makeDirectory(sdir); bk.sabDir = true; }
+                bk.sab.poll(nowMs);
+                std::vector<sb::Ev> obAll; const bool basHere = sb::readAll('O', s.colSym, s.colSpb, s.chartKey, nowMs, obAll);
+                bk.sabBasHere = basHere;
+                const int nBars = static_cast<int>(count);
+                if (bk.sabStartMs < 0 || basHere) bk.sabStartMs = nowMs;           // an attacker pane seen: the grace starts over
+                // decide only with the chart identity known and after 90 s without any attacker-pane post (it posts at least every 15 s),
+                // so a chart that has lsBidAskStats never gets a line from here while that pane is still loading
+                if (allowedNow && !basHere && !s.colSym.empty() && nowMs - bk.sabStartMs >= g_sabGraceMs) {
+                    for (int idx = std::max(sab::EXT_BARS, nBars - 7); idx <= nBars - 2; ++idx) {
+                        const RTDATE raw = static_cast<RTDATE>(times[idx]);
+                        const long long key = localSec(raw);
+                        if (key <= 0 || bk.sabDone.count(key)) continue;
+                        const int from = std::max(0, idx - sab::EFFORT_BARS - 15);
+                        std::vector<sab::Bar> SB; bool okAll = true;
+                        for (int j = from; j <= idx; ++j) {
+                            sab::Bar x;
+                            try { x.o = dp::priceKey(open[j], tick); x.h = dp::priceKey(high[j], tick); x.l = dp::priceKey(low[j], tick); x.c = dp::priceKey(close[j], tick); x.ok = true; } catch (...) { x.ok = false; }
+                            BARSTATISTICS st; std::memset(&st, 0, sizeof(st));
+                            const int pr = x.ok ? readStatistics(&vap, j, &st) : -2;
+                            if (pr == -1) { okAll = false; break; }                       // a VAP fault: never decided on it
+                            if (pr >= 0 && st.buyVolume >= 0 && st.sellVolume >= 0) { x.buy = static_cast<long long>(st.buyVolume); x.sell = static_cast<long long>(st.sellVolume); }
+                            else if (j == idx) okAll = false;                             // the candle's own lots not read yet: later
+                            SB.push_back(x);
+                        }
+                        if (!okAll) continue;
+                        const size_t bi = SB.size() - 1;
+                        std::vector<sab::Lv> lv;
+                        for (const zn::NL& z : zn::levelsNamed(fdir, s.market, s.book, nowMs)) { sab::Lv q; q.name = z.name; q.px = z.px; lv.push_back(q); }
+                        for (int sd = 0; sd < 2; ++sd) {
+                            if (bk.sab.st.has(sd, key)) { ++bk.sab.adopted; continue; }
+                            const sab::Decision D = sab::decide(SB, bi, sd, bk.sab.P.E);
+                            if (!D.decided) { ++bk.sab.learning; continue; }
+                            bk.sab.count(D);
+                            if (!D.fired) continue;
+                            sab::Rec r; r.mkt = s.market; r.spb = spbNow; r.key = key; r.raw = static_cast<long long>(raw); r.side = sd; r.effort = D.effort; r.E = D.E;
+                            r.att = D.att; r.avg = D.avg; r.close = sd == sab::LOW ? 'G' : 'R';
+                            r.extPx = static_cast<double>(sd == sab::HIGH ? SB[bi].h : SB[bi].l) * tick; r.closePx = static_cast<double>(SB[bi].c) * tick;
+                            r.book = -1; r.decided = localSec(static_cast<RTDATE>(times[nBars - 1])); if (r.decided <= 0) r.decided = key;   // decided at the forming candle's stamp (~ now)
+                            r.by = "DP"; r.loc = sab::locName(sab::LOCATION);
+                            sab::levelOf(lv, r.extPx, r.closePx, sab::atrTicks(SB, bi) * tick, r.level, r.lvd, r.gamma);
+                            bk.sab.put(r);
+                            sab::Extra x; x.mkt = s.market; x.spb = spbNow; x.key = key; x.side = sd; x.by = "DP";
+                            if (!r.level.empty()) { x.kv["level"] = r.level; x.kv["lvd"] = sab::fmt(r.lvd, 2); }
+                            if (r.gamma) x.kv["gamma"] = std::to_string(r.gamma);
+                            bk.sab.putX(x);
+                        }
+                        bk.sabDone.insert(key);
+                    }
+                    while (bk.sabDone.size() > 4000) bk.sabDone.erase(bk.sabDone.begin());
                 }
-                bk.obsNote = std::to_string(bk.obs.size()) + " observations" + (badAll ? ", " + std::to_string(badAll) + " bad lines skipped" : std::string());
             }
-            std::vector<sb::Ev> obAll; sb::readAll('O', s.colSym, s.colSpb, s.chartKey, nowMs, obAll);
-            const int nBars = static_cast<int>(count);
-            for (std::size_t bi = bars.size() > 6 ? bars.size() - 6 : 0; bi < bars.size(); ++bi) {
-                const dp::Bar& B = bars[bi];
-                const int idx = B.index;
-                if (!B.closed || idx < 5 || idx >= nBars - 1) continue;
-                const RTDATE raw = static_cast<RTDATE>(times[idx]);
-                const long long key = localSec(raw);
-                if (key <= 0 || bk.wickDone.count(key)) continue;
-                bool present = false; std::vector<absl::ObEv> ev;
-                for (const sb::Ev& e : obAll) {
-                    if (e.bar != key) continue;
-                    if (e.side == 0) { present = true; continue; }
-                    absl::ObEv o; o.px = e.px; o.side = e.side; o.traded = e.val; o.shown = sb::obShown(e.flag); o.refills = sb::obRefills(e.flag); ev.push_back(o);
-                }
-                std::map<long long, long long>::iterator w = bk.wickWait.find(key);
-                if (w == bk.wickWait.end()) w = bk.wickWait.insert(std::make_pair(key, nowMs)).first;
-                if (!present && nowMs - w->second < 90000) continue;                 // the order feed decides a candle a few seconds after its close
-                bk.wickDone.insert(key); bk.wickWait.erase(w);
-                if (bk.wickWait.size() > 200) bk.wickWait.clear();
-                absl::Candle c; bool keysOk = true;
-                try {
-                    c.open = dp::priceKey(open[idx], tick); c.high = dp::priceKey(high[idx], tick); c.low = dp::priceKey(low[idx], tick); c.close = dp::priceKey(close[idx], tick);
-                } catch (...) { keysOk = false; }
-                if (!keysOk) continue;
-                for (const dp::Row& r : B.rows) { absl::Row x; x.key = r.key; x.bought = (r.volume + r.delta) * 0.5; x.sold = (r.volume - r.delta) * 0.5; c.rows.push_back(x); }
-                std::vector<long long> hk, lk; bool ok6 = true;
-                for (int k = idx - 5; k <= idx; ++k) { try { hk.push_back(dp::priceKey(high[k], tick)); lk.push_back(dp::priceKey(low[k], tick)); } catch (...) { ok6 = false; } }
-                if (!ok6) continue;
-                struct tm tmx = {}; if (!getLocaltime(raw, &tmx)) continue;
-                const int slot = absl::slotOf((tmx.tm_hour * 60 + tmx.tm_min + 1439) % 1440);   // the bar END minute - 1 (the seed's rule)
-                const long long sessDay = localSessionKey(raw, B.time);
-                for (int sd = 0; sd < 2; ++sd) {
-                    const bool top = sd == 0;
-                    if (!absl::localExtreme(hk, lk, 5, top, 5)) continue;
-                    double norm = 0; int nN = 0;
-                    const bool nOk = absl::slotNorm(bk.obs, sessDay, slot, top ? 1 : 0, norm, nN);
-                    if (nOk) norm = std::max(norm, absl::floorNorm(bk.obs, sessDay, top ? 1 : 0));   // (AbsorbLogic 1.0.1) quiet-slot floor
-                    absl::Params P; P.x = s.wickX;
-                    const absl::WickResult R = absl::wickA(c, top, true, norm, nN, nOk, present, ev, tick, P);
-                    ++bk.wickEval;
-                    if (R.attack > 0) { absl::Obs o; o.session = sessDay; o.slot = slot; o.top = top ? 1 : 0; o.lots = R.attack; bk.obs.push_back(o); bk.obsJournal.push_back(absl::obsLine(o)); }
-                    if (!nOk && R.attack > 0) ++bk.wickLearning;
-                    if (R.candidate) ++bk.wickCand;
-                    if (R.candidate && !present) ++bk.wickNoFeed;
-                    if (R.candidate && present && !R.absorbed) ++bk.wickNotBook;
-                    if (!R.absorbed || latches.size() >= REC_MAX_LATCHES) continue;
-                    Latch L; L.low = R.lo; L.high = R.hi; L.code = "A"; L.support = !top; L.candSupport = !top; L.sell = !top;
-                    L.peakTime = raw; L.formedTime = raw; L.formedT = key; L.peakT = key;
-                    L.price = (static_cast<double>(R.lo) + static_cast<double>(R.hi)) * 0.5 * tick;
-                    L.id = bk.nextId++; L.tFirst = nowT; L.decidedBy = key; L.net = R.absorbedLots; L.mult = R.x; L.zone = false; L.conf = 'W';
-                    L.version = DLT_VERSION;
-                    bk.journal.push_back(recordLine(L, 'F', tick, s.book));
-                    latches.push_back(L); ++bk.wickMarks;
-                    char b[160]; std::snprintf(b, sizeof(b), "%s %s: attack %.0f lots %.1fx (%.1fx), order book %.0f lots %.0f%%", top ? "high" : "low",
-                                               std::to_string(key % 86400 / 3600).c_str(), R.attack, R.x, s.wickX, R.absorbedLots, R.share * 100.0);
-                    bk.wickLast = b;
-                }
-                if (bk.wickDone.size() > 2000) bk.wickDone.erase(bk.wickDone.begin());
-            }
-            if (!bk.obsJournal.empty() && !fdir.empty() && appendPlain(fdir + "LRA-AbsObs-" + s.market + ".csv", bk.obsJournal)) bk.obsJournal.clear();
-            if (bk.obs.size() > 60000) bk.obs.erase(bk.obs.begin(), bk.obs.begin() + 10000);
         }
         // (2.21.0) TRAPPED TRADERS (TrapLogic.h): every recently closed candle, decided once at its close (never repainted): a new 20-candle
         // high / low, the attackers' lots beyond the old extreme >= 1.0x the median attack of the 20 candles before it, the close back inside.
@@ -1857,7 +1849,7 @@ bool DeltaProfile::render(ChartState& s) {
     const LatchBook& book = latchBooks()[s.book + "|" + std::to_string(getSecondsPerBar())];
     struct LBox { int l, t, r, b; };
     auto overlap = [](const LBox& a, const LBox& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; };
-    struct Bubble { LBox box; int bar; double price; bool support; long long id; int offset; bool gray = false; };   // (2.19.0) gray = big node, no winner (yet)
+    struct Bubble { LBox box; int bar; double price; bool support; long long id; int offset; bool gray = false; bool shared = false; };   // (2.22.0) shared = the SHARED A (letter A in its ring)   // (2.19.0) gray = big node, no winner (yet)
     std::vector<Bubble> bubbles;
     // (2.9.0, Rassul approved mockup-location-first-v1 08:22 CT) LOCATION FIRST: an A at a high / low / pivot / key or MenthorQ level
     // is drawn full strength; mid-range it is dimmed (never hidden, never moved) - ZoneNear.h, using only bars up to the A's own bar
@@ -1885,6 +1877,39 @@ bool DeltaProfile::render(ChartState& s) {
         ++s.absorptionEvents; s.bubbleState[L.id] = q;
         if (q.compare(0, 7, "merged:") == 0) ++s.bubblesMerged; else if (q.compare(0, 7, "hidden:") == 0) ++s.aHiddenPre284; else ++s.aUncheckedPre284;
     }
+    // (2.22.0, Rassul 06:46 "only one circle per candle" + 06:49 "then require it") ONE circle per candle on the price chart, display only
+    // (records unchanged): the SHARED A wins its candle; else ONE node A - the biggest |delta| of the candle's top-3 node A's - and only when
+    // the candle closed in the DEFENDERS' colour (green for a bullish A, red for a bearish one); a node A on an attacker-colour candle shows
+    // as the one gray circle (no winner); the retired 2.20.0 wick A records are not drawn.
+    RTARRAY dOpen(barOpen), dClose(barClose);
+    auto barOf = [&](RTDATE t) -> int { if (t == 0 || bubbleTimes.count < s.barCount) return -1; int lo2 = 0, hi2 = s.barCount - 1;
+        while (lo2 <= hi2) { const int mid = (lo2 + hi2) / 2; const RTDATE q = static_cast<RTDATE>(bubbleTimes[mid]); if (q == t) return mid; if (q < t) lo2 = mid + 1; else hi2 = mid - 1; } return -1; };
+    auto defClose = [&](int at, bool bullish) -> bool { if (at < 0 || at >= dOpen.count || at >= dClose.count) return false;
+        const double o = dOpen[at], c = dClose[at]; return dp::finite(o) && dp::finite(c) && (bullish ? c > o : c < o); };
+    std::map<int, const sab::Rec*> sharedAt;                                // chart bar -> its shared A (the first side read wins the candle)
+    for (std::map<std::pair<int, long long>, sab::Rec>::const_iterator it = book.sab.st.byKey.begin(); it != book.sab.st.byKey.end(); ++it) {
+        const int at = barOf(static_cast<RTDATE>(it->second.raw));
+        if (at < 0 || at >= s.barCount - 1) continue;                     // off the chart / the forming candle never
+        if (!defClose(at, it->second.side == sab::LOW)) { ++s.sabColourVeto; continue; }   // belt and braces: the chart's own candle must agree
+        if (!sharedAt.count(at)) sharedAt[at] = &it->second;
+    }
+    s.sabGrayFromNode = 0; std::set<long long> demoted;
+    {   std::map<int, const Latch*> best; std::vector<const Latch*> keep;
+        for (const Latch* L : confirmed) {
+            if (L->conf == 'W') { s.bubbleState[L->id] = "replaced: wick A retired (2.22.0 shared A)"; continue; }
+            const int at = barOf(L->peakTime);
+            if (at < 0) { keep.push_back(L); continue; }                    // offscreen: the loop below says so
+            if (sharedAt.count(at)) { s.bubbleState[L->id] = (sharedAt[at]->side == sab::LOW) == L->support ? "shared" : "merged: shared A (other side) on this candle"; continue; }   // same side: its label / A|Tr ride on the shared A's circle
+            if (!defClose(at, L->support)) { s.bubbleState[L->id] = "gray: attackers' close"; demoted.insert(L->id); ++s.sabGrayFromNode; continue; }
+            std::map<int, const Latch*>::iterator b = best.find(at);
+            if (b == best.end()) { best[at] = L; continue; }
+            const double ab = std::fabs(b->second->net), al = std::fabs(L->net);
+            if (al > ab + 1e-9 || (std::fabs(al - ab) <= 1e-9 && L->id < b->second->id)) { s.bubbleState[b->second->id] = "merged: one circle per candle"; b->second = L; }
+            else s.bubbleState[L->id] = "merged: one circle per candle";
+        }
+        for (std::map<int, const Latch*>::const_iterator b = best.begin(); b != best.end(); ++b) keep.push_back(b->second);
+        confirmed.swap(keep);
+    }
     std::sort(confirmed.begin(),confirmed.end(),[](const Latch* a,const Latch* b){
         return a->tDecided!=b->tDecided?a->tDecided<b->tDecided:a->id<b->id;
     });
@@ -1892,7 +1917,18 @@ bool DeltaProfile::render(ChartState& s) {
         std::vector<sb::Ev> ev;
         // (2.17.0) flag 1 = final (pivot confirmed, D line written), 2 = tentative (may still vanish) - SignalBoard.h 1.1.0
         for (const Latch* item : confirmed) { sb::Ev e; e.bar = localSec(item->peakTime); e.px = item->price; e.side = item->support ? 1 : -1; e.val = item->mult; e.flag = dp::boardFlag(item->tent); if (e.bar > 0) ev.push_back(e); }
+        for (std::map<int, const sab::Rec*>::const_iterator it = sharedAt.begin(); it != sharedAt.end(); ++it) {   // (2.22.0) the shared A's (final)
+            sb::Ev e; e.bar = it->second->key; e.px = it->second->extPx; e.side = it->second->side == sab::LOW ? 1 : -1; e.val = it->second->effort; e.flag = sb::A_FINAL; ev.push_back(e); }
         sb::publish('A', s.colSym, s.colSpb, s.chartKey, (long long)steadyMs(), ev);
+    }
+    s.sabDrawn = s.sabOffscreen = 0;
+    for (std::map<int, const sab::Rec*>::const_iterator it = sharedAt.begin(); it != sharedAt.end(); ++it) {   // (2.22.0) the shared A wins its candle
+        const int at = it->first; const sab::Rec& R = *it->second; const bool bull = R.side == sab::LOW;
+        PNT point; point.set(at, static_cast<float>(R.extPx), kBarCenter);
+        const int dy = bull ? 9 : -9;                                       // just beyond the extreme: below a low, above a high
+        const LBox anchorBox{point.h-7,point.v+dy-7,point.h+8,point.v+dy+8};
+        if (anchorBox.l<pane.left || anchorBox.r>priceLimit || anchorBox.t<top || anchorBox.b>bottom) { ++s.sabOffscreen; continue; }
+        Bubble g{anchorBox,at,R.extPx,bull,-1 - static_cast<long long>(at),0}; g.shared = true; bubbles.push_back(g);
     }
     for (const Latch* item : confirmed) {
         const Latch& L=*item;
@@ -1931,7 +1967,7 @@ bool DeltaProfile::render(ChartState& s) {
         for (const Latch& L : book.v) {
             dp::GrayCand g; g.id = L.id; g.candle = static_cast<long long>(L.peakTime); g.mult = L.mult;
             g.coloured = drawableAbsorption(L) && s.bubbleState.count(L.id) && s.bubbleState[L.id] == "drawn";
-            g.open = L.code == "A?" || L.code == "I?";
+            g.open = L.code == "A?" || L.code == "I?" || demoted.count(L.id) != 0;   // (2.22.0) a node A on an attacker-colour candle = gray
             gc.push_back(g);
         }
         const std::vector<long long> pick = dp::grayPick(gc);
@@ -2310,6 +2346,13 @@ bool DeltaProfile::render(ChartState& s) {
         // (Big Bid/Ask 1.6.0): bullish A (sellers absorbed at a low) = red, bearish A (buyers absorbed at a high) = green
         const COLOR trapped=b.gray?C_GRAY_RING:(b.support?C_SUPPORT:C_RESISTANCE);   // (2.19.1, Rassul 2026-10-19 17:39 "using bullish or bearish instead") the WINNER's colour: bullish A green, bearish A red; gray = big node, winner unknown / none (2.19.0). Was the trapped side's colour (2.10.3).
         const COLOR color=atZ?trapped:getBlendedColor(trapped,0x00000000,55.0f);   // (2.9.0) dimmed away from a zone
+        if (b.shared) {                                                     // (2.22.0) the shared A: the letter A in its ring, winner's colour, nothing else
+            setPen(color,2,P_SOLID);CBRUSH brush(color,PAT_HOLLOW);brush.set();
+            RCT r;r.set(coordinate(b.box.l),coordinate(b.box.t),coordinate(b.box.r-1),coordinate(b.box.b-1));ko::oval(r,DRAW_OPAQUE);
+            const int fpt = 8, cx = (b.box.l + b.box.r) / 2, cy = (b.box.t + b.box.b) / 2;
+            textRight(cx + (textWidth("A", fpt, true) + 1) / 2, cy + (fpt * 45 + 50) / 100, "A", color, fpt, true);
+            ++s.sabDrawn; continue;
+        }
         if(b.offset==0)ringAt(b.bar,b.price,color,pane.left,priceLimit,top,bottom);
         else {
             PNT anchor;anchor.set(b.bar,static_cast<float>(b.price),kBarCenter);
@@ -2396,9 +2439,10 @@ void DeltaProfile::status(ChartState& s) {
             std::size_t confSame = 0, confNext = 0, confWick = 0;   // (2.18.0) final A's by the candle whose close made them; (2.20.0) + wick
             for (const Latch& L : latches) if (confirmedAbsorption(L)) { if (L.conf == 'N') ++confNext; else if (L.conf == 'W') ++confWick; else ++confSame; }
             out << "A_CONF,same " << confSame << ",next " << confNext << ",wick " << confWick << ",final A by the candle that closed beyond the node (next = his 2.18.0 both-lows / both-highs pivot rule; wick = 2.20.0 order-book wick absorption)\n";
-            out << "WICK_A," << (s.wickOn ? "on" : "off") << ",x " << s.wickX << ",candle sides checked " << bk.wickEval << ",footprint candidates " << bk.wickCand
-                << ",A drawn " << bk.wickMarks << ",candidates without the order feed " << bk.wickNoFeed << ",order book said no " << bk.wickNotBook
-                << ",no half-hour norm yet " << bk.wickLearning << ",norm " << safeField(bk.obsNote) << ",last " << safeField(bk.wickLast) << '\n';
+            out << "WICK_A,retired 2.22.0 (replaced by the shared A; old conf=wick records kept, not drawn; settings rows hidden: " << (s.wickOn ? "on" : "off") << " x " << s.wickX << ")\n";
+            out << bk.sab.statusLine() << ",decider " << (bk.sabBasHere ? "lsBidAskStats on this chart (this plugin reads)" : "this plugin (no attacker pane on this chart)") << '\n';
+            out << "ONE_CIRCLE,shared A drawn " << s.sabDrawn << ",offscreen " << s.sabOffscreen << ",shared A vetoed by the chart candle colour " << s.sabColourVeto
+                << ",node A shown gray (attackers' close) " << s.sabGrayFromNode << " (one circle per candle: shared A > biggest |delta| node A > one gray)\n";
             out << "TRAP," << (s.trapOn ? "on" : "off") << ",new 20-candle extremes " << bk.trapEval << ",trapped " << bk.trapFired << ",accepted breakouts " << bk.trapAccepted
                 << ",under 1.0x " << bk.trapLight << ",learning " << bk.trapLearning << ",loaded " << bk.trapLoaded << ",bad lines " << bk.trapRejected
                 << ",drawn " << s.trapsDrawn << " (A|Tr " << s.trapsWithA << "),not drawn " << safeField(s.trapNote) << ",last " << safeField(bk.trapLast) << '\n'; }
@@ -2489,6 +2533,6 @@ extern "C" cppExtension* CreateExtension() {
     DeltaProfile* p = new DeltaProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.21.2");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
+    p->setDescription("LRA Delta Profile (DLT)"); p->setVersion("2.22.0");   // = DLT_VERSION (gex-build reads this literal; tests check they match)
     return p;
 }

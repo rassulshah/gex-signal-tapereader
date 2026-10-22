@@ -78,11 +78,12 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.21.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.22.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 #include "DefenseTurn.h"          // (1.12.0) the pivot turn marks + the refill line decisions (drawn on the price chart by lsDefenseLines)
 #include "DefenseLinesSettings.h" // (1.12.0) their show / colour settings (one file with lsDefenseLines)
+#include "SharedAbsorb.h"        // (1.22.0) the SHARED absorption A: the Defense badge A read from the one shared record
 #include "TrapLogic.h"           // (1.19.0, Middle Attacker #1) the Delta Profile's TR record (read only)
 #include <fstream>
 #include <set>
@@ -114,6 +115,7 @@ public:
     // Record order feed: the recorder and the two legacy session records live in this chart's pane state
     virtual bool recorderPane() const { return true; }
     struct Ext : off::PaneExt {
+        sab::Host sab; long long sabX = 0;                                  // (1.22.0) the shared A record (read only here) + pull extras written
         mrec::Recorder r; off::SessionFile stack, pull;
         off::IconRect infoIcon; bool infoTipOn = false;                    // (1.10.0) the info icon (pane pixels) and its hover tip
         // (1.3.0) the net decisions of closed candles (decided once; only a Ratio bars / Spike vs average change re-decides), the chart
@@ -177,7 +179,22 @@ public:
         r->add(e);
     }
     virtual void afterPump(S_& S, long long now, bool fromDraw) { trackOn(S); mrec::Recorder* r = rec(S); if (r) r->tick(now, fromDraw); post(S, now); try { checkX(S); } catch (...) {}
-        try { checkW(S); } catch (...) {} try { Ext* e = ext(S); if (e) readTraps(S, *e, now); } catch (...) {} }   // (1.19.0) W reads at touch + 60 s; the Delta Profile's TR lines
+        try { checkW(S); } catch (...) {} try { Ext* e = ext(S); if (e) readTraps(S, *e, now); } catch (...) {} try { sharedA(S, now); } catch (...) {} }
+    // (1.22.0, 2026-10-22 Rassul 06:43 "then do it") THE SHARED A (SharedAbsorb.h): this pane no longer decides its own A - the badge A comes
+    // from the one shared record lsBidAskStats / lsDeltaProfile decide into (the same A on every pane and the price chart). This pane adds
+    // what only it knows: the attackers pulling their own orders after the extreme (its G read, x normal) as an SABX extra, once per A.
+    void sharedA(S_& S, long long now) {
+        Ext* e = ext(S); if (!e || S.market.empty() || S.spb <= 0) return;
+        const std::string f = off::flexDir(); if (f.empty()) return;
+        e->sab.bind(S.market, (int)S.spb, f + "\\SharedAbsorb\\" + sab::fileName(S.market, (int)S.spb), f + "\\LRA-Badges-" + sab::canon(S.market) + ".csv");
+        e->sab.poll(now);
+        for (std::map<std::pair<int, long long>, sab::Rec>::const_iterator it = e->sab.st.byKey.begin(); it != e->sab.st.byKey.end(); ++it) {
+            const sab::Rec& r = it->second; if (r.raw <= 0 || r.pullx >= 0) continue;
+            std::map<std::pair<int, long long>, dt::GiveUp>::const_iterator g = e->dtG.find(std::make_pair(r.side, r.raw)); if (g == e->dtG.end()) continue;
+            sab::Extra x; x.mkt = S.market; x.spb = (int)S.spb; x.key = r.key; x.side = r.side; x.by = "BF"; x.kv["pullx"] = sab::fmt(g->second.x, 2);
+            if (e->sab.putX(x)) ++e->sabX;
+        }
+    }   // (1.19.0) W reads at touch + 60 s; the Delta Profile's TR lines
     // (1.13.0) the gray EXHAUSTION line of each decided turn: once every touch that started on its pivot / turn candle has finished (60 s),
     // the defending side's touch nearest the extreme where the attack died (DefenseTurn.h exhaustionOf) -> one X line, decided once
     void checkX(S_& S) {
@@ -211,6 +228,7 @@ public:
         mrec::Recorder* r = rec(S); if (r) r->status(o); else o << "\nMBO_RECORD,unavailable (out of memory)";
         Ext* e = ext(S);
         o << "\nSPIKE_RULE,|net| >= " << off::tenthsText(avgT(S)) << (avgT(S) > 0 ? "" : " (off)") << " the plain " << S.ser.ratioBars << "-candle average of that side's |net|, decided at the close; forming candle dim, no label; colour by side"
+          << "\n" << (e ? e->sab.statusLine() + ",pull extras written " + std::to_string(e->sabX) + " (this pane reads the A; the T line A flag is recorded, not drawn)" : std::string("SHARED_A,n/a"))
           << "\nTURNS," << (e ? std::to_string(e->dtTurns.size()) + " decided, " + std::to_string(e->dtXWritten) + " exhaustion lines, " + std::to_string(e->dtPendX.size()) + " waiting, touches " + std::to_string(S.e.touches.size()) + ", " + std::to_string(e->dtWritten) + " written, " + std::to_string(e->dtFileFails) + " write fails, H " + std::to_string(e->dtH.size()) + " decided (" + std::to_string(e->dtHWritten) + " written, " + std::to_string(e->dtPendH.size()) + " waiting, " + std::to_string(e->dtHNoFeed) + " no feed), re-test " + std::to_string(e->dtQ.size()) + " decided (" + std::to_string(e->dtQWritten) + " written, " + std::to_string(e->dtQPend.size()) + " watching, " + std::to_string(e->dtQNoBook) + " no book, " + std::to_string(e->dtQOver) + " over), live " + (e->dtHaveLive ? "?" : "none") + ", file " + e->dtPath : std::string("n/a"))
           << "\nMOVES," << (e ? std::to_string(e->dtM.size()) + " reads (" + std::to_string(e->dtMWritten) + " written, " + std::to_string(e->mvNoFeed) + " candles without the order feed), seen modify " + std::to_string(S.e.mvt.seenM) + " / re-post " + std::to_string(S.e.mvt.seenR) + ", dropped following " + std::to_string(S.e.mvt.following) + " / ladder " + std::to_string(S.e.mvt.ladder) + " / short rest " + std::to_string(S.e.mvt.shortRest) + " / small " + std::to_string(S.e.mvt.smallSz) + " / ambiguous " + std::to_string(S.e.mvt.ambiguous) + ", confirmed " + std::to_string(S.e.mvt.confirmed) + ", min lots " + std::to_string(S.e.mvt.minLots) + ", normal candles " + std::to_string(e->mvNorm.n[0]) + ", P drawn only (B / attacker cases recorded)" : std::string("n/a"))
           << "\nGIVE_UP," << (e ? std::to_string(e->dtG.size()) + " decided at 5-candle extremes (" + std::to_string(e->dtGWritten) + " written, " + std::to_string(e->gUndecided) + " without the feed / < 20 s after the extreme), G drawn: pulled >= 2x normal net of moves, pulled > added, attack died, no initiative candle" : std::string("n/a"))
@@ -552,13 +570,7 @@ public:
         const std::vector<dt::BadgeLetter> letters = dt::badgeLetters(in);
         for (size_t k = 0; k < letters.size(); ++k) {
             const std::string& L = letters[k].s;
-            if (L == "A") { long long n = 0; for (std::map<std::pair<int, long long>, dt::Turn>::const_iterator it = e.dtTurns.begin(); it != e.dtTurns.end(); ++it) n += it->second.A ? 1 : 0;
-                std::map<std::pair<int, long long>, dt::Turn>::const_iterator t = e.dtTurns.find(std::make_pair(in.defSide, key));
-                if (t == e.dtTurns.end()) t = e.dtTurns.find(std::make_pair(1 - in.defSide, key));
-                if (t != e.dtTurns.end()) { dt::Turn tt = t->second;               // the attackers' lots: decided this session, else the H line's attack, else the session candle
-                    if (tt.attAggr <= 0) { std::map<std::pair<int, long long>, dt::Counter>::const_iterator hc = e.dtH.find(std::make_pair(tt.side, tt.t)); if (hc != e.dtH.end()) tt.attAggr = hc->second.attack; }
-                    if (tt.attAggr <= 0) { std::map<long long, dt::Candle>::const_iterator cd = e.dtc.find(key); if (cd != e.dtc.end() && cd->second.ok) tt.attAggr = cd->second.aggr[tt.side == dt::HIGH ? 1 : 0]; }
-                    blocks.push_back(dt::hoverA(tt, S.tick, proven, n)); } }
+            if (L == "A") { for (int sd = 0; sd < 2; ++sd) { const sab::Rec* rr = e.sab.st.atRaw(sd, key); if (rr) { dt::HoverBlock b; b.letter = "A"; b.rows = sab::hover(*rr, e.sab.P); blocks.push_back(b); break; } } }   // (1.22.0) the shared A block
             else if (L == "H") { long long n = 0; const dt::Counter* c = nullptr;
                 for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator h = e.dtH.begin(); h != e.dtH.end(); ++h) if (h->second.H) { ++n; if (!c && h->second.at == key) c = &h->second; }
                 if (c) blocks.push_back(dt::hoverH(*c, proven, n)); }
@@ -638,7 +650,7 @@ public:
         for (int i = std::max(0, v0); i <= v1 && i < last; ++i) {
             const long long key = (long long)times[i];
             dt::BadgeIn in; int side = -1;
-            for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, dt::Turn>::const_iterator it = e.dtTurns.find(std::make_pair(sd, key)); if (it != e.dtTurns.end() && it->second.A) { in.A = true; side = sd; } }
+            for (int sd = 0; sd < 2; ++sd) if (e.sab.st.atRaw(sd, key)) { in.A = true; side = sd; }   // (1.22.0) the SHARED A (the T line's own A is no longer drawn)
             for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator h = e.dtH.begin(); h != e.dtH.end(); ++h) if (h->second.H && h->second.at == key) { in.H = true; if (side < 0) side = h->second.side; }
             for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator qq = e.dtQ.begin(); qq != e.dtQ.end(); ++qq) if (qq->second.at == key && (qq->second.res == 'L' || qq->second.res == 'X')) { in.Q = qq->second.res; if (side < 0) side = qq->second.side; }   // (1.16.0)
             for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, mvl::Read>::const_iterator m = e.dtM.find(std::make_pair(sd, key)); if (m == e.dtM.end()) continue;   // (1.18.0) every move case, per BOOK side
@@ -1210,6 +1222,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.21.0");   // BF_VERSION
+    p->setVersion("1.22.0");   // BF_VERSION
     return p;
 }

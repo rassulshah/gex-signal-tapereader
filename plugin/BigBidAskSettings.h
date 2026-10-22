@@ -8,7 +8,7 @@
 #include "SettingsSpec.h"
 
 namespace bbaset {
-static const char* const PLUGIN_VERSION = "1.21.0";
+static const char* const PLUGIN_VERSION = "1.22.0";
 static const int CAP = 50;                      // the number shown never goes above 50 (Rassul 21:47 "cap the max at 50")
 enum K { K_BIGGEST_IN, K_SKIP_FIRST, K_SKIP_LAST, K_FONT, K_COL_NUM, K_COL_BID, K_COL_ASK, K_ABS_CIRCLE, K_BREAKOUT, K_COL_BO, K_COL_BD, K_N };
 inline const ss::Spec& spec() {
@@ -21,7 +21,7 @@ inline const ss::Spec& spec() {
         ss::colorRow("col_bid", "Bid box (sellers)", 0xEF4444, 40),
         ss::same(ss::colorRow("col_ask", "Ask box (buyers)", 0x22C55E, 40)),
         // (1.20.0, MBO Roadmap Top Defender #1) a print in the wick that the order book shows absorbed gets a circle in the winner's colour
-        ss::boolRow("abs_circle", "Circle absorbed prints (order book)", true),
+        ss::boolRow("abs_circle", "Circle prints at a shared A", true),   // (1.22.0) same key / place; the circle needs the shared A (SharedAbsorb.h)
         // (1.21.0, Rassul approved breakout-mockup-v2 20:10 CT 2026-10-21) BO / BD letter + the breakout print on the breakout candle
         ss::boolRow("breakout", "Breakout / breakdown (BO / BD)", true),
         ss::colorRow("col_bo", "BO (breakout)", 0x22C55E, 40),
