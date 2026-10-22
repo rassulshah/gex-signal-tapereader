@@ -133,7 +133,7 @@ int main() {
     CHECK(sig() == before, "the draw after the mouse is identical to the draw before it (no hover box)");
     CHECK(!LQ_HOVERS, "LQ_HOVERS is off");
     { const std::string st = readAll(flex + "\\LiquidityProfile.status-CL-180.txt");
-      CHECK(st.compare(0, 15, "VERSION,0.45.3\n") == 0, "status VERSION 0.45.3");
+      CHECK(st.compare(0, 8 + std::string(lqp::VERSION).size() + 1, "VERSION," + std::string(lqp::VERSION) + "\n") == 0, "status VERSION = lqp::VERSION");   // (2026-10-22) the version moves on with each approved build (0.47.1 now): at least this one
       CHECK(st.find(",hover off") != std::string::npos, "status: the hover is reported off"); }
     delete p;
     std::printf("lqp 0.45.3 host: %d passed, %d failed\n", passes, fails);

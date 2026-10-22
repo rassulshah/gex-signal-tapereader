@@ -22,7 +22,7 @@ static void logic() {
     CHECK(!bba::biggestOfLast(std::vector<long long>(10, 0), 0), "[logic] zero lots never prints");
     std::vector<long long> r(12, 100); r[10] = r[11] = 9999;          // only the 10 just before count
     CHECK(bba::biggestOfLast(r, 101), "[logic] only the last 10 candles count");
-    CHECK(bba::TOP_N == 10 && std::string(bba::VERSION) == "1.18.0", "[logic] look-back 10, version 1.18.0");
+    CHECK(bba::TOP_N == 10 && std::string(bba::VERSION) >= "1.18.0", "[logic] look-back 10, version 1.18.0 or later");   // (2026-10-22) the version moves on with each approved build (0.47.1 now): at least this one
 }
 static const unsigned long DAY = 86400, START = 1791133200UL;   // Sun 2026-10-04 17:00
 static std::vector<mock::Bar> quiet(int todayBars, std::map<int, std::pair<long, long>> plant) {

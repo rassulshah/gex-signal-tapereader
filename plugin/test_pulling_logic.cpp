@@ -69,8 +69,11 @@ static void replay(const char* path, double tick) {
         const int mm = std::atoi(c[0].substr(14, 2).c_str()), hh = std::atoi(c[0].substr(11, 2).c_str());
         const int b = (hh * 60 + mm) / 3; if (b != bar) { bar = b; e.setBar(b); }
         Ev x; x.action = -1; for (int k = 0; k < 4; ++k) if (c[1] == A[k]) x.action = k; if (x.action < 0) continue;
-        x.px = toTick(std::atof(c[2].c_str()), tick); x.size = std::atof(c[4].c_str()); x.id = std::atoll(c[5].c_str());
-        x.side = c[7] == "B" ? BID : OFFER; x.bid = toTick(std::atof(c[8].c_str()), tick); x.ask = toTick(std::atof(c[9].c_str()), tick);
+        // (PullingLogic toTick(price, tick, out) -> bool: a malformed price is refused, never wrapped - the replay skips that event)
+        auto tk = [&](const std::string& v, Tick& out) { return toTick(std::atof(v.c_str()), tick, out); };
+        if (!tk(c[2], x.px) || !tk(c[8], x.bid) || !tk(c[9], x.ask)) continue;
+        x.size = std::atof(c[4].c_str()); x.id = std::atoll(c[5].c_str());
+        x.side = c[7] == "B" ? BID : OFFER; 
         e.onEvent(x);
     }
     std::printf("replay %s: %lld events, %lld unknown, %zu bars\n", path, e.events, e.unknown, e.bars.size());

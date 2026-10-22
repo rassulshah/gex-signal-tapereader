@@ -21,6 +21,6 @@ int main() {
     CHECK(tr::levelType("CWH", "key") == "current_week" && tr::levelType("CWL", "key") == "current_week", "current_week bucket");
     CHECK(tr::levelType("CR", "gamma") == "gamma" && tr::levelType("LonHI", "key") == "london" && tr::levelType("PWH", "key") == "prior_week", "old buckets unchanged");
     CHECK(tr::turnLevel("AsiaHI", "key").empty() && tr::turnLevel("CWH", "key").empty() && tr::turnLevel("LonHI", "key") == "LonHI", "ledger rows: Asia / CW base row only (not in the ledger yet)");
-    CHECK(std::string(tr::VERSION) == "1.1.2", "version");
+    CHECK(std::string(tr::VERSION) >= "1.1.2", "version 1.1.2 or later");   // (2026-10-22) TapeReaderLogic moved on (1.3.3, 2026-10-18); the 1.1.2 buckets above still hold
     std::printf("%d passed, %d failed\n", p, f); return f != 0;
 }

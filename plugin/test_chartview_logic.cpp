@@ -213,7 +213,7 @@ int main()
         check(cvl::printFlags(0) == 2 && cvl::printFlags(1) == 2 && cvl::printFlags(2) == 0, "PW_RENDERFULLCONTENT, again, then classic");
         cvl::SnapStatus st; st.result = "OK"; st.window = "ES LTF"; st.attempts = 1; st.blankFrac = 0.75;
         std::string t = cvl::snapStatusText(st);
-        check(t.find("VERSION|1.2.0\nRESULT|OK\n") == 0 && t.find("BLANK_FRAC|0.7500") != std::string::npos, "status text");
+        check(t.find(std::string("VERSION|") + cvl::CV_VERSION_STR + "\nRESULT|OK\n") == 0 && t.find("BLANK_FRAC|0.7500") != std::string::npos, "status text");
     }
 
     // ---- scheduling
@@ -281,11 +281,11 @@ int main()
     // ---- sources and cuts
     {
         long long today = cvl::daysFromCivil(2026, 10, 9);
-        std::vector<cvl::Src> v = cvl::sourcesFor("ES", "EPZ26", today);
+        std::vector<cvl::Src> v = cvl::sourcesFor("ES", "EPZ26", 180, today);   // (ChartViewLogic: sourcesFor takes the chart's bar size, for the per-chart status files)
         bool tf = false, odds = false, dealer = false, gp = false, ev = false;
         for (auto& s : v) {
             if (s.rel == "TapeFlow.status-ES.txt") tf = true;
-            if (s.rel == "SessionVWAP-ES.odds.txt") odds = true;
+            if (s.rel == "SessionVWAP-ES-EPZ26-180s.odds.txt") odds = true;   // (ChartViewLogic 1.2.x) SessionVWAP publishes contract-qualified files; the shared name is retired
             if (s.rel == "LRA-Dealer-ES.csv" && s.cut == cvl::HEADTAIL) dealer = true;
             if (s.rel == "GammaProfile.status-SPX-Right.txt") gp = true;
             if (s.rel == "TapeFlow\\ES-events-v110-EPZ26-2026-10-10.csv" && s.cut == cvl::TAIL) ev = true;
@@ -320,7 +320,7 @@ int main()
         std::string b = cvl::body(s);
         std::string d = cvl::document(b, "2026-10-09T10:15:03-05:00", 1791558903, cvl::NEWBAR);
         check(validJson(d), "the snapshot is valid JSON (UTF-8 safe)");
-        check(d.find("\"version\":\"1.2.0\"") != std::string::npos, "version in header");
+        check(d.find(std::string("\"version\":\"") + cvl::CV_VERSION_STR + "\"") != std::string::npos, "version in header");   // the current CV_VERSION_STR (1.2.1), not the 1.2.0 literal
         check(d.find("\"legend_prefix\":\"CI\",\"legend_name\":\"Biggest_Wave_Price_Since_Bars1\"") != std::string::npos, "legend parts in the export");
         check(d.find("\"why\":\"new bar\"") != std::string::npos, "why in header");
         check(d.find("\"arrays\":{\"0\":[12,null],\"1\":[0.5,0.25]}") != std::string::npos, "series arrays keyed by array number, NaN = null");

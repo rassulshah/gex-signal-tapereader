@@ -386,8 +386,9 @@ static void test_reason_uses_only_confirmed_lines() {
     f.onBarClose(2, 2000, 240000, 70.00, none, none);
     const Mark* n = get(f, "Held");
     CHECK(n && n->reasons.find("x normal") == std::string::npos, "no confirmed lines -> no numbers in the sentence");
-    CHECK(Engine::line(*m, 0.01).find("Absorbed") != std::string::npos, "the reason is recorded (no repaint after a restart)");
-    Mark r; CHECK(Engine::parse(Engine::line(*m, 0.01), r, 0.01) && r.reasons == m->reasons && r.code == "Held", "and read back");
+    // (2026-10-22) never dereference a missing mark: the checks above already FAIL when there is no "Held" mark (the suite used to crash here)
+    CHECK(m && Engine::line(*m, 0.01).find("Absorbed") != std::string::npos, "the reason is recorded (no repaint after a restart)");
+    Mark r; CHECK(m && Engine::parse(Engine::line(*m, 0.01), r, 0.01) && r.reasons == m->reasons && r.code == "Held", "and read back");
 }
 static void test_warnings_priority() {
     Engine e = zoneSetup();

@@ -165,7 +165,7 @@ static void dealerTexts()
     check(stale && pick && short_ && unproven && h2.title.find("STALE") == std::string::npos, "level hover: STALE / age, pick, a short above price, '?' explained");
     dpaudit::NodeX x; x.k = 7900; x.absG = 27e6; x.hasD = true; x.d = -8591; x.dUsd = -3.39e9;
     dpaudit::Hover n = dcol::nodeHover("ES", x, 26e6, 40e6, 7857, true);
-    check(!n.lines.empty() && n.lines[0].find("\"S 8.6K\" = futures dealers must SELL 8.6K ES contracts (about $3.4B)") != std::string::npos, "node hover: the node text + its $");
+    check(!n.lines.empty() && n.lines[0].find("\"8.6K lots\" = futures dealers must SELL 8.6K ES contracts (about $3.4B)") != std::string::npos, "node hover: the node text + its $");   // (DP 2.16.0, Rassul 2026-10-16 22:16 "just give the number followed by lots") the node text is "8.6K lots", no B / S letter
     bool teal = false; for (const std::string& l : n.lines) if (l.rfind("Teal = MenthorQ model shows + net gamma here (vendor model, ", 0) == 0 && l.find("Not a prediction it holds.") != std::string::npos) teal = true;
     check(teal, "(DP 2.12.0) node hover: 'Teal = MenthorQ model shows + net gamma here (vendor model, data N min old). Not a prediction it holds.'");
 }

@@ -61,7 +61,12 @@ int main()
         CHECK(F.ok && F.kv == kv && mst::getS(F, "regime") == "neg" && mst::getD(F, "near_lots") == -560, "board round trip (near_level '@' and '/' survive)");
         mst::clear("GEX", "ESZ6", 180, "ES 3 Min"); CHECK(!mst::read("GEX", "ESZ6", 180, "ES 3 Min", 9000).ok, "cleared");
         std::ifstream src("DealerProfile.cpp"); std::stringstream ss; ss << src.rdbuf(); const std::string s = ss.str();
-        CHECK(s.find("static const char* DP_VERSION = \"2.17.0\";") != std::string::npos && s.find("p->setVersion(\"2.17.0\");") != std::string::npos, "DP_VERSION == setVersion == 2.17.0");
+        // (2026-10-22) the version moves on with every approved build (2.17.x .. 2.19.0, DealerProfile.cpp DP_VERSION history): the check is
+        // that DP_VERSION and setVersion agree and are at least 2.17.0, not the literal 2.17.0 (test_dealerprofile_2190 pins the current one)
+        auto lit = [&](const std::string& pre) { size_t p = s.find(pre); if (p == std::string::npos) return std::string(); p += pre.size(); size_t q = s.find('"', p); return q == std::string::npos ? std::string() : s.substr(p, q - p); };
+        const std::string dv = lit("static const char* DP_VERSION = \""), sv = lit("p->setVersion(\"");
+        int a = 0, b = 0, c = 0; const bool parsed = std::sscanf(dv.c_str(), "%d.%d.%d", &a, &b, &c) == 3;
+        CHECK(!dv.empty() && dv == sv && parsed && (a > 2 || (a == 2 && b >= 17)), "DP_VERSION == setVersion, >= 2.17.0");
         CHECK(s.find("static dpaudit::WriteGate gate;") == std::string::npos, "no function-static write gate (lesson 1)");
         CHECK(std::string(dcol::VERSION) == "1.2.0", "DealerColumnsLogic 1.2.0");
     }

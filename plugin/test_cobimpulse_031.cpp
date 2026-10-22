@@ -7,7 +7,7 @@ static int n = 0, f = 0;
 static bool any(const std::vector<std::string>& L, const std::string& k) { for (const auto& s : L) if (s.find(k) != std::string::npos) return true; return false; }
 int main()
 {
-    CHECK(std::string(cimp::VERSION).compare(0, 5, "0.3.1") == 0, "version 0.3.1");
+    CHECK(std::string(cimp::VERSION) >= "0.3.1", "version 0.3.1 or later");   // (2026-10-22) CobImpulseLogic moved on (0.4.0, 2026-10-18 live CoB odds); the 0.3.1 display rules below still hold
     cimp::GTag g; g.computed = true; g.code = "CR"; g.kind = "origin"; g.px = 6020; g.sign = 1; g.gw = 6; g.w = 4.5; g.asof = 1000;
     // before: "Gamma: origin in CR 6,020 zone (the leg started inside it; ...)" -> after: "MenthorQ level near the CoB start: CR 6,020 (model, data 7 min old)."
     const std::vector<std::string> L = cimp::gammaLines(g, true, 0.25, false, 7 * 60 + 5);

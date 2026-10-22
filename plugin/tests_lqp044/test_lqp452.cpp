@@ -96,7 +96,7 @@ static void test_lmt_f_colour() {
 
 int main() {
     test_old_flicker_and_fix(); test_held(); test_lmt_f_colour();
-    CHECK(std::string(lqp::VERSION) == "0.45.3" && std::string(bfl::VERSION) == "1.4.0", "lqp 0.45.3 / bfl 1.4.0");
+    CHECK(std::string(lqp::VERSION) >= "0.45.3" && std::string(bfl::VERSION) >= "1.4.0", "lqp 0.45.3 / bfl 1.4.0 or later");   // (2026-10-22) the version moves on with each approved build (0.47.1 now): at least this one
     std::printf("lqp 0.45.2: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

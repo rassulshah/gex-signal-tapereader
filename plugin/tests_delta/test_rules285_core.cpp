@@ -99,7 +99,8 @@ int main()
         Snapshot s2 = build(bars, 1.0, true);
         int big = 0; for (const Bucket& x : s2.buckets) if (x.ratio >= 2.0) ++big;
         check(big > 3 && s2.nodes.size() <= 3, "the fixture has more than 3 rows at 2x or more; the display nodes stay at most 3");
-        check((int)s2.cands.size() >= std::min(big, 4) && s2.cands.size() > s2.nodes.size() - 0, "cands holds every qualifying row that classifies (more than the 3 display nodes): " + std::to_string(s2.cands.size()) + " of " + std::to_string(big));
+        // (2.15.0, Rassul 2026-10-17 "the 2.6.0 rules - top 3 rows") the 2.13.0 uncapped candidate list is capped at the top 3 again
+        check(s2.cands.size() == 3 && s2.cands.size() <= (std::size_t)big, "(2.15.0) cands = the top 3 qualifying rows: " + std::to_string(s2.cands.size()) + " of " + std::to_string(big));
     }
 
     // ---- rule 2: recheckA ----
@@ -123,7 +124,7 @@ int main()
         {   // halfway fails: node at 115.00 (above the 108.75 midpoint); close 115.50 still above it, pivot still ok
             auto b = chart(101.5, 116, 102, 115.5);
             const dp::Recheck r = dp::recheckA(b[0], b[1], b[2], b[3], 40, 30, key(115.0), key(115.0), 0.25, true);
-            check(r.bars && r.close && !r.halfway && r.pivot && !r.pass(), "re-check: node in the UPPER half of a bullish peak bar -> fails halfway -> hidden");
+            check(r.bars && r.close && !r.halfway && r.pivot && r.pass(), "(2.15.0 no halfway rule) re-check: node in the UPPER half of a bullish peak bar -> halfway reported false, still shown");
         }
         {   // pivot fails: the peak bar's low 112 stays above the down-pivot bar 19's high 103 and makes no new down pivot
             auto b = chart(112, 116, 112.5, 115.5);

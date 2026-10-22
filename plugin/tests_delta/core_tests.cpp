@@ -70,7 +70,10 @@ int main() {
     });
     test("(2.8.2) halfway: a green-above peak bar whose node sits in its UPPER half is not A", [] {
         std::vector<Bar> b = held(true, true); b[0].low = 95; b[0].high = 101; b[0].open = 95.5; b[0].close = 101;   // mid 98, node 100
-        check(classify(b,100,100,-100,1).code != "A","upper-half node confirmed");
+        // (DeltaProfileCore 2.15.0, Rassul 2026-10-17: "the 2.6.0 rules - top 3 rows, no halfway rule") the halfway mark is still measured
+        // (halfwayOk, reported by recheckA) but no longer refuses the A: an upper-half node classifies like a lower-half one
+        std::vector<Bar> lo = b; lo[0].low = 99; lo[0].high = 105; lo[0].open = 99.5;   // mid 102, node 100: lower half
+        check(!halfwayOk(100, 100, 101, 95, 1, true) && classify(b,100,100,-100,1).code == classify(lo,100,100,-100,1).code, "(2.15.0) upper-half node: halfway measured, not a gate");
     });
     test("(2.5.0) the first decisive close wins over later ones (I stays I)", [] {
         std::vector<Bar> b = held(true,false,60); b.resize(2);   // sell node, closes below = I

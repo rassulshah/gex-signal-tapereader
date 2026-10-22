@@ -27,6 +27,8 @@ static inline int strncpy_s(char* d, size_t n, const char* s, size_t) { if (!n) 
 #endif
 // the standard headers first, so only DealerProfile's own members are opened up for the test
 #include <sstream>
+#include <thread>
+#include <chrono>
 #include <fstream>
 #include <string>
 #include <map>
@@ -202,10 +204,14 @@ int main()
         std::ofstream f(fl("DealerProfile.settings.txt").c_str()); f << "EPZ26~3 Minutes*~|0|50|9|0|0|0|0|0|cob_bull,cob_bear\n"; f.close();
         DealerProfile X; Chart a; a.root = "ES"; a.sym = "EPZ26"; build(a, 6650.0f); CUR = &a;
         X.loadHostState(); X.syncSettings();
-        check(X.savedKey == "EPZ26", "no row for this chart: remembered (2.7.3 re-read the file on every draw)");
+        // (DP 2.17.1, 2026-10-18 settings audit) settings live per MARKET in DealerProfile.settings-<MKT>.txt (the root-keyed file is
+        // migrated once, left in place): the remembered key is the market, and the store re-reads at most once a second (SettingsSpec.h
+        // ss::Store::load), so the test waits past that guard before expecting the later row
+        check(X.savedKey == "ES", "no row for this chart: remembered by market (2.7.3 re-read the file on every draw)");
         check(X.cfg.font == 10 && X.cfg.labels, "and the defaults stay (10 pt)");
         std::ofstream g(fl("DealerProfile.settings.txt").c_str(), std::ios::app); g << "EPZ26|0|60|12|0|1|1|1|0|cob_bull\n"; g.close();
         X.savedStamp = -3;                                     // the file changed (mtime granularity is 1 s in the test)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1100));   // past the store's once-a-second re-read guard (and the 1 s mtime grain)
         X.syncSettings();
         check(X.cfg.width == 60 && X.cfg.font == 12, "a row saved later is still applied");
         X.done();

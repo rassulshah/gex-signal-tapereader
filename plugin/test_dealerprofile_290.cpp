@@ -221,7 +221,7 @@ int main(int argc, char** argv)
     std::vector<Op> O = drawOnce(D, cut, 0, dealer);
     // (2.11.0, CR5200) the Dealer column = the right 80 px before the axis; the header fits it ("DP v2.11.0", "STALE 10h")
     const int anchor = 1598, reach = 80, bound = 1600 - reach;   // the mock scale starts at the pane edge (1600): the column is 1520-1600
-    check(hasText(O, "DP v2.12.0"), "header: the version (short form inside the 80 px column)");
+    check(hasText(O, std::string("DP v") + DP_VERSION), "header: the version (short form inside the 80 px column)");   // (2026-10-22) the current DP_VERSION, not the 2.12.0 literal
     check(hasText(O, "STALE 10h"), "header: STALE 10h (the time is in the header hover)");
     {   // (2.11.1, MQF100 2026-10-14) WHY it is stale + what is being done, from the bridge's LRA-MQFeed.txt
         using namespace dpaudit;
@@ -295,10 +295,11 @@ int main(int argc, char** argv)
       check(full >= 1, "(2.11.0) the biggest wall = the full Dealer column (80 px - 6)"); }
     // the hover: the mouse over the 7,900 node
     std::vector<Op> H = drawOnce(D, cut, 7900.0f, dealer);
-    check(hasText(H, "What do dealers do if ES gets to 7900?"), "hover: the question, on the node under the mouse");
-    bool hoverInPane = true; int boxL = 9999;
-    for (size_t i = 0; i < H.size(); i++) if (H[i].kind == "box" && H[i].col == 0x111827) { boxL = H[i].l; if (H[i].l < 110 || H[i].r > 1600) hoverInPane = false; }
-    check(boxL < 9999 && hoverInPane, "hover box inside the pane, right of the Liquidity column");
+    // (2.17.3, Rassul 2026-10-18 23:37 CT "get rid of the hover over on the gex levels and other places") every hover OFF (DP_HOVERS = false)
+    check(!hasText(H, "What do dealers do if ES gets to 7900?"), "(2.17.3) no node hover drawn with the mouse over a node");
+    int hovBoxes = 0;
+    for (size_t i = 0; i < H.size(); i++) if (H[i].kind == "box" && H[i].col == 0x111827) ++hovBoxes;
+    check(hovBoxes == 0, "(2.17.3) no hover box");
     // a fresh grid: no STALE, nodes not faded
     {
         std::string fresh = dealer; size_t p = fresh.find("BOOKASOF|17700"); fresh.replace(p, 14, "BOOKASOF|53700");   // 14:55
@@ -309,9 +310,10 @@ int main(int argc, char** argv)
           check(teal > 0 && orange > 0 && past == 0, "(2.11.0) fresh grid: nodes teal (+) / orange (-), anchored on the column's right edge, never past its left edge"); }
         int red = 0, green = 0;
         for (size_t i = 0; i < F.size(); i++) if (F[i].kind == "text" && F[i].l >= bound) {
-            if (F[i].text.rfind("S ", 0) == 0) red++;
-            if (F[i].text.rfind("B ", 0) == 0) green++; }
-        check(red + green > 0, "fresh grid: B / S hedge text inside the nodes (" + std::to_string(red) + " S, " + std::to_string(green) + " B)");
+            // (DP 2.16.0, Rassul 2026-10-16 22:16 "just give the number followed by lots") "480 lots": the node colour says buy / sell
+            const std::string& t = F[i].text;
+            if (t.size() > 5 && t.compare(t.size() - 5, 5, " lots") == 0) red++; }
+        check(red + green > 0, "fresh grid: 'N lots' hedge text inside the nodes (" + std::to_string(red + green) + ")");
     }
     // an old 2.3 file (no NODEX): the 2.8.7 drawing, no header
     {

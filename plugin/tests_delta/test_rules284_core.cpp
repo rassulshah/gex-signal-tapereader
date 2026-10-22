@@ -61,7 +61,7 @@ int main()
         b[1].low = b[1].high = b[1].open = b[1].close = 103;
         check(dp::classify(b, 404, 404, -500, 0.25).code == "A", "core: green peak bar, close above, node in the lower half -> A");
         b[0].rows[0].key = 412;                                   // node 103.00: upper half of a 100-104 bar
-        check(dp::classify(b, 412, 412, -500, 0.25).code != "A", "core: node in the upper half of the green peak bar -> not A");
+        check(dp::classify(b, 412, 412, -500, 0.25).code == "A", "(2.15.0, Rassul 2026-10-17 no halfway rule) core: node in the upper half of the green peak bar -> still A");
     }
 
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";

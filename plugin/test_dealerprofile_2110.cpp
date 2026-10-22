@@ -164,6 +164,13 @@ static DealerProfile::ColsState colsOf(DealerProfile& X, Chart& a) { CUR = &a; X
 static bool inBox(const Op& q, const bp::Box& b) { return q.l >= b.l && q.r <= b.r; }
 static bool hasText(const std::vector<Op>& O, const std::string& s) { for (auto& q : O) if (q.kind == "text" && q.text == s) return true; return false; }
 static int countPrefix(const std::vector<Op>& O, const std::string& s) { int n = 0; for (auto& q : O) if (q.kind == "text" && q.text.rfind(s, 0) == 0) ++n; return n; }
+// (2026-10-22 test refresh) the approved face since this suite was written: the node text is "9.0K lots" (DP 2.16.0, Rassul 2026-10-16
+// 22:16 "just give the number followed by lots" - colour says buy / sell, no "B " / "S "); the Levels column is at least 150 px
+// (2.14.0 124 px "NAME | price | liquidity", 2.14.1 150 px for NQ prices) plus the 92 px level % block when "Level % badges" is on
+// (2.19.0, ColumnBoard 1.3.0 range 30-250) - DealerProfile.cpp lvlW()
+static bool isNodeText(const std::string& t) { return t.size() > 5 && t.compare(t.size() - 5, 5, " lots") == 0; }
+static int countNodeText(const std::vector<Op>& O) { int n = 0; for (auto& q : O) if (q.kind == "text" && isNodeText(q.text)) ++n; return n; }
+static int LV(int setting, bool pct = true) { return std::min(250, std::max(setting, 150) + (pct ? 92 : 0)); }
 static void dealerFile(bool fresh)
 {
     std::string d = slurp(D + "/LRA-Dealer-ES.csv");
@@ -228,7 +235,7 @@ int main(int argc, char** argv)
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   // ---- setup(): controls only, the agreed rows and defaults (Dealer 80 / Levels 78 / Badge 9 / Liquidity in badge / Show B / S text)
         DealerProfile E; E.setup();
-        bool rows = PARAMS.size() == 8 &&   /* (2.17.2) 11 rows, 3 hidden */ PARAMS[PX.width] == "Dealer column px (40-250)" && PARAMS[PX.levelsW] == "Levels column px (30-150)" && PARAMS[PX.badgeFont] == "Badge font (pt)"
+        bool rows = PARAMS.size() == 9 &&   /* (2.17.2) 11 rows, 3 hidden; (2.19.0) + "Level % badges" */ PARAMS[PX.width] == "Dealer column px (40-250)" && PARAMS[PX.levelsW] == "Levels column px (30-150)" && PARAMS[PX.badgeFont] == "Badge font (pt)"
                     && PARAMS[PX.liqBadge] == "Liquidity in badge" && PARAMS[PX.labels] == "Show buy / sell text in node";
         check(rows && MOCK_INT[PX.width] == 80 && MOCK_INT[PX.levelsW] == 78 && MOCK_INT[PX.badgeFont] == 9 && MOCK_CHK[PX.liqBadge] && MOCK_CHK[PX.labels], "setup: the column rows with their defaults (80 / 78 / 9, both boxes on)");
         if (!rows) for (size_t i = 0; i < PARAMS.size(); ++i) std::printf("  param %zu %s\n", i, PARAMS[i].c_str());
@@ -238,8 +245,9 @@ int main(int argc, char** argv)
     // ---- 0. versions: DP_VERSION = the setVersion literal gex-build reads = the header
     {
         const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.12.0" && src.find("p->setVersion(\"2.12.0\")") != std::string::npos, "version 2.12.0: constant = setVersion literal");
-        check(std::string(cb::VERSION) == "1.0.0" && std::string(dcol::VERSION).compare(0, 5, "1.1.0") == 0, "ColumnBoard 1.0.0 / DealerColumnsLogic 1.1.0");
+        // (2026-10-22) the literal moves with every approved build (2.12.0 -> 2.19.0 so far): DP_VERSION must equal the setVersion literal
+        check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos, std::string("version ") + DP_VERSION + ": constant = setVersion literal");
+        check(std::string(cb::VERSION) >= "1.0.0" && std::string(dcol::VERSION) >= "1.1.0", std::string("ColumnBoard ") + cb::VERSION + " / DealerColumnsLogic " + dcol::VERSION + " (at least 1.0.0 / 1.1.0)");
     }
     // ---- 1. the default layout on ES: Delta Profile on the chart (board), Levels 78 | Delta 80 | Dealer 80, the margin
     {
@@ -250,21 +258,22 @@ int main(int argc, char** argv)
         cb::publish(cb::DELTA, a.sym, a.spb, MOCK_CHART, 2, 80);
         std::vector<Op> O = drawOn(X, a, MOCK_CHART);
         DealerProfile::ColsState c = colsOf(X, a);
-        check(c.lay.ok && c.lay.dealer.l == 1520 && c.lay.dealer.r == 1600 && c.lay.delta.l == 1440 && c.lay.levels.l == 1362 && c.lay.priceRight == 1342, "default: Levels 1362-1440 | Delta 1440-1520 | Dealer 1520-1600, price ends at 1342");
+        const int lv0 = LV(78), lvL = 1440 - lv0;   // (2.19.0) 150 + 92 = 242 px: Levels 1198-1440
+        check(c.lay.ok && c.lay.dealer.l == 1520 && c.lay.dealer.r == 1600 && c.lay.delta.l == 1440 && c.lay.levels.l == lvL && c.lay.priceRight == lvL - 20, "default: Levels " + std::to_string(lvL) + "-1440 | Delta 1440-1520 | Dealer 1520-1600, price ends at " + std::to_string(lvL - 20));
         std::string why; const int s = strays(O, c, &why);
         check(s == 0, "nothing drawn into the Delta column or past the columns (" + std::to_string(s) + " " + why + ")");
         int nodes = 0, past = 0, teal = 0, orange = 0;
         for (auto& q : O) if (q.kind == "box" && q.r == 1598 && q.t > 40) { ++nodes; if (q.l < 1520) ++past; if (q.col == dcol::C_POS) ++teal; if (q.col == dcol::C_NEG) ++orange; }
         check(nodes > 5 && past == 0 && teal > 0 && orange > 0, "nodes one-sided at the Dealer column's right edge, teal + / orange -, never past its left edge");
-        int bs = 0, bad = 0; for (auto& q : O) if (q.kind == "text" && (q.text.rfind("B ", 0) == 0 || q.text.rfind("S ", 0) == 0)) { ++bs; if (!inBox(q, c.lay.dealer) || q.col != (C_DARK & 0xFFFFFF)) ++bad; }
-        check(bs > 0 && bad == 0, "B / S hedge text inside the nodes (dark ink), " + std::to_string(bs) + " shown");
+        int bs = 0, bad = 0; for (auto& q : O) if (q.kind == "text" && isNodeText(q.text)) { ++bs; if (!inBox(q, c.lay.dealer) || q.col != (C_DARK & 0xFFFFFF)) ++bad; }
+        check(bs > 0 && bad == 0, "(2.16.0) 'N lots' hedge text inside the nodes (dark ink), " + std::to_string(bs) + " shown");
         check(hasText(O, "CR0") && hasText(O, "HVL") && hasText(O, "PS0"), "compact MenthorQ badges CR0 / HVL / PS0");
         // (14:37 CT review) no W / F letters anywhere; no hourly swing names; every node text inside a node that is tall and long enough;
         // every badge text inside its block with its padding
         int wf = 0, hr = 0; for (auto& q : O) if (q.kind == "text") { if (q.text == "W" || q.text == "F") ++wf; if (q.text.find("HrHI") != std::string::npos || q.text.find("HrLO") != std::string::npos) ++hr; }
         check(wf == 0 && hr == 0, "no W / F letters and no HrHI / HrLO on the chart (" + std::to_string(wf) + " / " + std::to_string(hr) + ")");
         int badNode = 0, nodeTxt = 0;
-        for (size_t i = 0; i < O.size(); ++i) if (O[i].kind == "text" && (O[i].text.rfind("B ", 0) == 0 || O[i].text.rfind("S ", 0) == 0)) {
+        for (size_t i = 0; i < O.size(); ++i) if (O[i].kind == "text" && isNodeText(O[i].text)) {
             ++nodeTxt; const int yc = O[i].t + (O[i].b - O[i].t) / 2 + (int)std::lround(O[i].font * 0.45);   // the y the plugin asked for
             bool in = false; for (size_t j = 0; j < i; ++j) if (O[j].kind == "box" && O[j].r == 1598 && O[j].l <= O[i].l - 3 && O[j].r >= O[i].r + 3 && O[j].t <= yc - dcol::textPx(O[i].font) / 2 && O[j].b >= yc + dcol::textPx(O[i].font) / 2) in = true;
             if (!in) ++badNode; }
@@ -276,17 +285,18 @@ int main(int argc, char** argv)
             if (!in) ++badBadge; }
         check(badgeTxt > 3 && badBadge == 0, "badge text inside its block with padding, vertically centred (" + std::to_string(badBadge) + " of " + std::to_string(badgeTxt) + " not)");
         { const std::string st0 = slurp(fl("DealerProfile.status.txt")); check(st0.find("tiny nodes not drawn ") != std::string::npos && st0.find("tiny nodes not drawn 0") == std::string::npos, "strikes under 3% of the biggest wall: not drawn (counted)"); }
-        int wide = 0; for (auto& q : O) if (q.kind == "text" && (q.text.find('%') != std::string::npos || q.text.find("STALE 24m") != std::string::npos || q.text.find("7925.00") != std::string::npos || q.text.find("Liq ") != std::string::npos)) ++wide;
-        check(wide == 0, "no wide level labels on the chart (price / odds / STALE / Liq are in the hovers)");
+        int wide = 0; for (auto& q : O) if (q.kind == "text" && (q.text.find('%') != std::string::npos || q.text.find("STALE 24m") != std::string::npos || q.text.find("Liq ") != std::string::npos)) ++wide;
+        check(wide == 0, "no wide level labels on the chart (odds / STALE / Liq are in the hovers; the price is in the badge since 2.14.0)");
         int cnt = 0; check(badgeOverlaps(O, c.lay.levels, &cnt) == 0 && cnt > 3, "badges inside the Levels column, none overlapping (" + std::to_string(cnt) + ")");
         // the margin: set in calc (not in draw), in bars: ceil(258 / 5) = 52; again = no new call
         check(mockOpt().sets == 0, "draw never sets the margin");
         CUR = &a; X.calc(0);
-        check(mockOpt().margin == 52 && mockOpt().sets == 1, "calc: right margin 52 bars (258 px at 5 px / bar), set once (" + std::to_string(mockOpt().margin) + ")");
+        const int need0 = 20 + LV(78) + 80 + 80;   // gap + Levels + Delta + Dealer (2.19.0: 422 px -> 85 bars at 5 px / bar)
+        check(mockOpt().margin == (need0 + 4) / 5 && mockOpt().sets == 1, "calc: right margin " + std::to_string((need0 + 4) / 5) + " bars (" + std::to_string(need0) + " px at 5 px / bar), set once (" + std::to_string(mockOpt().margin) + ")");
         X.calc(0); X.preCalc();
         check(mockOpt().sets == 1, "the chart already has it: not set again");
         const std::string st = slurp(fl("DealerProfile.status.txt"));
-        check(st.find("COLUMNS,1362-1440,1440-1520,1520-1600,price right 1342,clean,delta on") != std::string::npos && st.find("MARGIN,need 258 px,units bars,ppb 5") != std::string::npos && st.find("VERSION,2.12.0") != std::string::npos, "status: COLUMNS / MARGIN / VERSION lines");
+        check(st.find("COLUMNS," + std::to_string(1440 - LV(78)) + "-1440,1440-1520,1520-1600,price right " + std::to_string(1420 - LV(78)) + ",clean,delta on") != std::string::npos && st.find("MARGIN,need " + std::to_string(need0) + " px,units bars,ppb 5") != std::string::npos && st.find(std::string("VERSION,") + DP_VERSION) != std::string::npos, "status: COLUMNS / MARGIN / VERSION lines");
         check(st.find("REACH,80") != std::string::npos, "REACH = the Dealer column (the Read / Analyst keep left of it)");
         // a hover on a badge: the detail moved off the chart
         RTX_EVENT e; memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE;
@@ -294,7 +304,7 @@ int main(int argc, char** argv)
         CUR = &a; X.mouse(&e);
         std::vector<Op> H = drawOn(X, a, MOCK_CHART);
         bool q = false, od = false; for (auto& o : H) if (o.kind == "text") { if (o.text.find("Will ES react at CR0") == 0) q = true; if (o.text.find("Touch odds") == 0 || o.text.find("Data: STALE") == 0) od = true; }
-        check(q && od, "badge hover: the question + odds / STALE detail");
+        check(!q && !od, "(2.17.3, Rassul 2026-10-18 23:37 \"get rid of the hover over on the gex levels\") no badge hover drawn");
         X.done(); cb::clear(cb::DELTA, a.sym, a.spb, MOCK_CHART);
         int w = 0; long long ms = 0; check(!cb::peek(cb::DEALER, a.sym, a.spb, MOCK_CHART, w, ms) && !cb::peek(cb::LEVELS, a.sym, a.spb, MOCK_CHART, w, ms), "done(): the chart's columns leave the board");
     }
@@ -309,8 +319,8 @@ int main(int argc, char** argv)
             cb::publish(cb::DELTA, a.sym, a.spb, L, 1, DW[i]); drawOn(X, a, L); cb::publish(cb::DELTA, a.sym, a.spb, L, 2, DW[i]);
             std::vector<Op> O = drawOn(X, a, L);
             DealerProfile::ColsState c = colsOf(X, a);
-            const int sum = 20 + LW[i] + DW[i] + G[i];
-            if (c.lay.w[cb::DEALER] != G[i] || c.lay.w[cb::LEVELS] != LW[i] || c.lay.w[cb::DELTA] != DW[i] || c.lay.margin != sum || !cb::columnsClean(c.lay)) { ++bad; why += " layout" + std::to_string(i); }
+            const int sum = 20 + LV(LW[i]) + DW[i] + G[i];
+            if (c.lay.w[cb::DEALER] != G[i] || c.lay.w[cb::LEVELS] != LV(LW[i]) || c.lay.w[cb::DELTA] != DW[i] || c.lay.margin != sum || !cb::columnsClean(c.lay)) { ++bad; why += " layout" + std::to_string(i); }
             if (strays(O, c, &why)) { ++bad; why += " stray" + std::to_string(i); }
             int maxL = 0; for (auto& q : O) if (q.kind == "box" && q.r == 1598 && q.t > 40) maxL = std::max(maxL, q.r - q.l);
             if (maxL != G[i] - 6) { ++bad; why += " node" + std::to_string(i) + "=" + std::to_string(maxL); }
@@ -351,7 +361,7 @@ int main(int argc, char** argv)
         int outside = 0; for (auto& q : O) if (q.kind == "box" && q.l == c.lay.levels.l + 2 && (q.t < 0 || q.b > PH)) ++outside;
         check(cnt >= 30 && ov == 0 && outside == 0, "30 close key levels (+ MenthorQ): " + std::to_string(cnt) + " badges, none overlapping, all inside the pane");
         check(ticks >= 10, "stacked badges: a tick from each line (" + std::to_string(ticks) + ")");
-        check(hasText(O, "no data") && !hasText(O, "nan") && !hasText(O, "0") && countPrefix(O, "B ") + countPrefix(O, "S ") == 0, "no dealer file: 'no data' in the column header, no nodes, no garbage");
+        check(hasText(O, "no data") && !hasText(O, "nan") && !hasText(O, "0") && countNodeText(O) == 0, "no dealer file: 'no data' in the column header, no nodes, no garbage");
         std::string why; check(strays(O, c, &why) == 0, "no dealer data: still nothing outside the columns " + why);
         CUR = &a; X.calc(0); check(mockOpt().margin > 0, "no dealer data: the margin is still kept for the columns");
         X.done(); dealerFile(true);
@@ -365,9 +375,9 @@ int main(int argc, char** argv)
         std::vector<Op> E2 = drawOn(X, es, "ES 3m");
         DealerProfile::ColsState a = colsOf(X, es), b = colsOf(X, nq), c = colsOf(X, cl);
         int w = 0; long long ms = 0;
-        check(a.lay.w[cb::DEALER] == 80 && a.lay.w[cb::LEVELS] == 78 && b.lay.w[cb::DEALER] == 120 && b.lay.w[cb::LEVELS] == 100 && c.lay.w[cb::DEALER] == 60 && c.lay.w[cb::LEVELS] == 40,
-              "ES 80/78, NQ 120/100, CL 60/40: each chart its own market's widths");
-        check(cb::peek(cb::DEALER, "NQZ6", 180, "NQ 3m", w, ms) && w == 120 && cb::peek(cb::DEALER, "CLX6", 180, "CL 3m", w, ms) && w == 60 && cb::peek(cb::LEVELS, "ESZ6", 180, "ES 3m", w, ms) && w == 78, "board entries per chart");
+        check(a.lay.w[cb::DEALER] == 80 && a.lay.w[cb::LEVELS] == LV(78) && b.lay.w[cb::DEALER] == 120 && b.lay.w[cb::LEVELS] == LV(100) && c.lay.w[cb::DEALER] == 60 && c.lay.w[cb::LEVELS] == LV(40),
+              "ES 80/78, NQ 120/100, CL 60/40: each chart its own market's widths (Levels >= 150 + the % block since 2.14.1 / 2.19.0)");
+        check(cb::peek(cb::DEALER, "NQZ6", 180, "NQ 3m", w, ms) && w == 120 && cb::peek(cb::DEALER, "CLX6", 180, "CL 3m", w, ms) && w == 60 && cb::peek(cb::LEVELS, "ESZ6", 180, "ES 3m", w, ms) && w == LV(78), "board entries per chart");
         CUR = &es; X.loadHostState(); const bool esLiq = X.cfg.liqBadge; CUR = &cl; X.loadHostState(); const bool clLiq = X.cfg.liqBadge;
         check(esLiq && !clLiq, "settings never leak between markets (Liquidity in badge on ES, off on CL)");
         CUR = &es; X.done(); CUR = &nq; X.done(); CUR = &cl; X.done(); put("DealerProfile.settings.txt", "");
@@ -384,40 +394,42 @@ int main(int argc, char** argv)
         auto boxAt = [&](const std::vector<Op>& V, const std::string& txt, unsigned long& fill) { for (size_t i = 0; i < V.size(); ++i) if (V[i].kind == "text" && V[i].text == txt) {
                 for (size_t j = i; j-- > 0;) if (V[j].kind == "box" && V[j].l <= V[i].l && V[j].r >= V[i].r && V[j].t <= V[i].b && V[j].b >= V[i].t) { fill = V[j].col; return true; } } return false; };
         unsigned long f1 = 0, f2 = 0, f3 = 0;
-        check((boxAt(O, "HL? 900", f1) || boxAt(O, "900?", f1)) && f1 == (C_SELL & 0xFFFFFF), "(2.12.0) CR0 above price: 'HL? 900' (or '900?' when HL? does not fit) on RED (resting offers)");
-        check((boxAt(O, "HL? 1.2K", f2) || boxAt(O, "1.2K?", f2)) && f2 == (C_BUY & 0xFFFFFF), "HVL below price: the HL block on GREEN (resting bids; 'HL 1.2K', or '1.2K' when 'HL' does not fit 78 px)");
-        check(boxAt(O, "310", f3) && f3 == 0x282828, "PS0 normal liquidity: '310' grey on dark grey (40,40,40)");
+        // (2.16.0, Rassul 2026-10-16 22:18) the liquidity block shows the RATIO ("2.7x", yellow), not "HL? 900" / "310"; the HL colour + outline stay
+        check(boxAt(O, "2.7x", f1) && f1 == (C_SELL & 0xFFFFFF), "CR0 above price: the HL block '2.7x' on RED (resting offers)");
+        check(boxAt(O, "2.6x", f2) && f2 == (C_BUY & 0xFFFFFF), "HVL below price: the HL block '2.6x' on GREEN (resting bids)");
+        check(boxAt(O, "1.1x", f3) && f3 == 0x282828, "PS0 normal liquidity: '1.1x' on dark grey (40,40,40)");
         int outl = 0; for (auto& q : O) if (q.kind == "line" && q.col == 0xFFFFFF && q.font == 2 && q.l >= c.lay.levels.l) ++outl;
         check(outl >= 8, "HL blocks: a 2 px white outline (" + std::to_string(outl) + " segments)");
         int thick = 0, thin = 0; { const int y1 = yOfP(7925.0f), y2 = yOfP(7825.0f);
           for (auto& q : O) if (q.kind == "line" && q.l == 0 && q.r == PW) { if (q.t == y1 && q.font == 3) ++thick; if (q.t == y2 && q.font == 3) ++thin; } }
-        check(thick == 1 && thin == 0, "the HL level's line 3 px across the chart; a normal level's not");
+        check(thick == 0 && thin == 0, "(2.13.0, Rassul 2026-10-15 09:53) level lines only in the Levels column: no line across the chart, HL or not");
         int cnt = 0; check(badgeOverlaps(O, c.lay.levels, &cnt) == 0 && strays(O, c) == 0, "wider badges: still stacked inside the 78 px column, no overlap");
         int liqBlocks = 0; for (auto& q : O) if (q.kind == "box" && (q.col == 0x282828 || q.col == (C_BUY & 0xFFFFFF) || q.col == (C_SELL & 0xFFFFFF)) && q.l > c.lay.levels.l + 2 && q.r <= c.lay.levels.r) ++liqBlocks;
         check(liqBlocks == 3, "only the levels with liquidity get a block (" + std::to_string(liqBlocks) + "), the rest name only");
         // hysteresis: CR0 drops to 2.3x -> still HL (off only under 2.1x after 30 s)
         liqFile("L,31700,R,950,2.3\nL,31400,S,1234,2.6\nL,31300,S,310,1.1\n"); reloadLiq(X, a);
         std::vector<Op> O2 = drawOn(X, a, MOCK_CHART); unsigned long f4 = 0;
-        check((boxAt(O2, "HL? 950", f4) || boxAt(O2, "950?", f4)) && f4 == (C_SELL & 0xFFFFFF), "2.5x -> 2.3x: stays HL (no flicker)");
+        check(boxAt(O2, "2.3x", f4) && f4 == (C_SELL & 0xFFFFFF), "2.5x -> 2.3x: stays HL (no flicker)");
         // price crosses the level: the Liquidity Profile now reports CR0's band as BIDS (below price) -> green
         liqFile("L,31700,S,980,2.8\n"); reloadLiq(X, a);
         std::vector<Op> O3 = drawOn(X, a, MOCK_CHART); unsigned long f5 = 0;
-        check((boxAt(O3, "HL? 980", f5) || boxAt(O3, "980?", f5)) && f5 == (C_BUY & 0xFFFFFF), "price crossed CR0: the block flips to GREEN (bids)");
+        check(boxAt(O3, "2.8x", f5) && f5 == (C_BUY & 0xFFFFFF), "price crossed CR0: the block flips to GREEN (bids)");
         // a stale file, then garbage, then 'Liquidity in badge' off: name-only, never 0 / garbage
         liqFile("L,31700,S,980,2.8\n", 30); reloadLiq(X, a);
         std::vector<Op> O4 = drawOn(X, a, MOCK_CHART);
-        check(countPrefix(O4, "HL") == 0 && !hasText(O4, "310") && hasText(O4, "CR0"), "a file 30 s old: name-only badges");
+        check(countPrefix(O4, "HL") == 0 && !hasText(O4, "2.8x") && !hasText(O4, "1.1x") && hasText(O4, "CR0"), "a file 30 s old: no liquidity in the badges");
         put("LRA-LiqLevels-ES.csv", "garbage\nL,31700,S,0,9\n"); reloadLiq(X, a);
         std::vector<Op> O5 = drawOn(X, a, MOCK_CHART);
-        check(countPrefix(O5, "HL") == 0 && !hasText(O5, "0"), "a garbage file: name-only, no '0'");
+        check(countPrefix(O5, "HL") == 0 && !hasText(O5, "0") && !hasText(O5, "9.0x") && !hasText(O5, "0.0x"), "a garbage file: no liquidity, no '0'");
         settingsRow("ES", 80, 78, 0); liqFile("L,31700,R,900,2.7\n");
         Chart b = loadBars("14:57"); DealerProfile Y; prime(Y, b, "ES");
         std::vector<Op> O6 = drawOn(Y, b, "ES liq off");
-        check(countPrefix(O6, "HL") == 0 && hasText(O6, "CR0"), "'Liquidity in badge' off: name-only badges");
+        check(countPrefix(O6, "HL") == 0 && !hasText(O6, "2.7x") && hasText(O6, "CR0"), "'Liquidity in badge' off: no liquidity in the badges");
         // a narrow Levels column: no room for the block -> the name alone (never cut)
         settingsRow("ES", 80, 30, 1); Chart n = loadBars("14:57"); DealerProfile Z; prime(Z, n, "ES");
         std::vector<Op> O7 = drawOn(Z, n, "ES liq narrow");
-        check(countPrefix(O7, "HL") == 0, "a 30 px Levels column: the name only");
+        int lvN = 0; { DealerProfile::ColsState cn = colsOf(Z, n); lvN = cn.lay.w[cb::LEVELS]; }
+        check(countPrefix(O7, "HL") == 0 && lvN == LV(30), "(2.14.1) a 30 px Levels setting: the column stays " + std::to_string(LV(30)) + " px (150 + the % block), never narrower (" + std::to_string(lvN) + ")");
         CUR = &a; X.done(); CUR = &b; Y.done(); CUR = &n; Z.done(); put("DealerProfile.settings.txt", ""); cb::clear(cb::DELTA, a.sym, a.spb, "ES liq");
     }
     // ---- 7. the settings window: filled from the file (opening never saves); an untouched control keeps the file's value; garbage refused
@@ -456,8 +468,8 @@ int main(int argc, char** argv)
         DealerProfile X; prime(X, a, "ES"); MOCK_CHART = "ES 1h"; mockOpt() = MockOpts();
         std::vector<Op> O = drawOn(X, a, MOCK_CHART); DealerProfile::ColsState c = colsOf(X, a);
         int w = 0; long long ms = 0;
-        check(c.lay.dealer.w() == 0 && c.lay.levels.r == 1600 && c.lay.margin == 98 && !cb::peek(cb::DEALER, a.sym, a.spb, MOCK_CHART, w, ms), "hourly: Levels at the axis, no Dealer column, margin 20 + 78");
-        check(countPrefix(O, "B ") + countPrefix(O, "S ") == 0 && hasText(O, "CR0"), "hourly: badges only, no nodes");
+        check(c.lay.dealer.w() == 0 && c.lay.levels.r == 1600 && c.lay.margin == 20 + LV(78) && !cb::peek(cb::DEALER, a.sym, a.spb, MOCK_CHART, w, ms), "hourly: Levels at the axis, no Dealer column, margin 20 + Levels");
+        check(countNodeText(O) == 0 && hasText(O, "CR0"), "hourly: badges only, no nodes");
         X.done();
     }
     // ---- 9. the right-margin unit: IRT in pixels -> the probe switches and the margin is asked in pixels

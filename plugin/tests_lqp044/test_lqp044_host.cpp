@@ -69,7 +69,7 @@ int main() {
     CHECK(st.find("\nDRAW,only >= 2.0x") != std::string::npos, "status DRAW line");
     CHECK(st.find(",normal_from ") != std::string::npos && st.find(",pool_sessions ") != std::string::npos, "status says where the normal came from");
     CHECK(st.find(",norms file") == std::string::npos, "the old unconditional 'norms file' wording is gone");
-    CHECK(st.find("\nMQ,") != std::string::npos && st.compare(0, 15, "VERSION,0.45.3\n") == 0, "MQ line, version 0.45.3");
+    CHECK(st.find("\nMQ,") != std::string::npos && st.compare(0, 8 + std::string(lqp::VERSION).size() + 1, "VERSION," + std::string(lqp::VERSION) + "\n") == 0, "MQ line, the current version");   // (2026-10-22) the version moves on with each approved build (0.47.1 now): at least this one
     CHECK(std::string(LQ_VERSION) == lqp::VERSION, "one version everywhere");
     // ---- a stale MenthorQ file (20 h old) is not used
     { struct utimbuf u; u.actime = u.modtime = std::time(nullptr) - 20 * 3600; utime(mqPath.c_str(), &u); }
