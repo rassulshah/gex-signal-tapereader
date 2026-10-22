@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#include "SwingRef.h"   // (1.26.0) the ONE swing rule (lsSweepRefill / lsStopRun): the BO pivot = an intact swing of the last 3
 #include <string>
 #include <vector>
 
@@ -237,39 +238,42 @@ inline void breakFlagsPx(H& high, L& low, int n, std::vector<signed char>& up, s
         }
     }
 }
-// (1.26.0, Rassul 18:01 CT 2026-10-22 "the bo ... using the pivot rule") the BO pivot = an INTACT SWING: his 1-bar ZigZag (the same walk,
-// pivots confirmed by the bars BEFORE the candle); a swing high stays intact until a later candle's HIGH goes above it (a swing low:
-// a LOW below it). Only the LAST 3 intact swings of each side count (the Sr v4 / SwingRef rule). The candle breaks out when its LOW is
-// below and its HIGH above one of them (it went through it); when it goes through more than one, the highest high (lowest low) is the
-// pivot. up[i] / dn[i] = 1 .. 3 = which of the 3 (1 = the most recent), 0 none; upPx / dnPx = its price. Every swing the candle's high
-// (low) passed is no longer intact afterwards. A pure function of the bars up to the candle - never repainted.
+// (1.26.0, Rassul 18:01 CT 2026-10-22 "the bo ... using the pivot rule") the BO pivot = an INTACT SWING of SwingRef.h (swg, the rule
+// lsSweepRefill / lsStopRun use, Rassul approved 17:39): the 1-bar ZigZag of each RTH session from the open (rly2 rules, outside-candle
+// exception), swings CONFIRMED by a candle before this one; of the last 3 confirmed swing highs, 1 back always counts, 2 back if above
+// 1 back, 3 back if above both; each must be INTACT (no candle after its pivot candle and before this one went above it). The candle
+// breaks out when its LOW is below and its HIGH above one of them (it went through it); more than one = the highest. up[i] / dn[i] =
+// 1 .. 3 = how many swings back, 0 none; upPx / dnPx = its price. RTH candles only (the zigzag is an RTH one). The mirror for lows.
+// A pure function of the bars up to the candle - never repainted. rth[i] / day[i] = the candle's RTH flag and session key.
 static const int SWING_KEEP = 3;
-template <class H, class L>
-inline void swingBreaksPx(H& high, L& low, int n, std::vector<signed char>& up, std::vector<signed char>& dn, std::vector<double>& upPx, std::vector<double>& dnPx) {
+template <class O, class H, class L, class C>
+inline void swingBreaksPx(O& open, H& high, L& low, C& close, const std::vector<char>& rth, const std::vector<long long>& day, int n, double tick,
+                          std::vector<signed char>& up, std::vector<signed char>& dn, std::vector<double>& upPx, std::vector<double>& dnPx) {
     up.assign(n > 0 ? n : 0, 0); dn.assign(n > 0 ? n : 0, 0); upPx.assign(n > 0 ? n : 0, 0.0); dnPx.assign(n > 0 ? n : 0, 0.0);
-    if (n < 2) return;
-    auto hi = [&](int i) { return (double)high[i]; }; auto lo = [&](int i) { return (double)low[i]; };
-    std::vector<double> tops, bots;                                    // intact swings, oldest first
-    int dirn = hi(1) >= hi(0) ? 1 : -1, ext = 0;
-    for (int i = 1; i < n; ++i) {
-        if (!std::isfinite(hi(i)) || !std::isfinite(lo(i)) || hi(i) < lo(i)) continue;
-        {   const int a = std::max(0, (int)tops.size() - SWING_KEEP); double best = 0; int w = 0;
-            for (int k = (int)tops.size() - 1; k >= a; --k) { const double P = tops[(size_t)k]; if (lo(i) < P && hi(i) > P && (w == 0 || P > best)) { best = P; w = (int)tops.size() - k; } }
-            if (w) { up[(size_t)i] = (signed char)w; upPx[(size_t)i] = best; }
-            for (size_t k = 0; k < tops.size();) { if (hi(i) > tops[k]) tops.erase(tops.begin() + (long)k); else ++k; } }
-        {   const int a = std::max(0, (int)bots.size() - SWING_KEEP); double best = 0; int w = 0;
-            for (int k = (int)bots.size() - 1; k >= a; --k) { const double Q = bots[(size_t)k]; if (lo(i) < Q && hi(i) > Q && (w == 0 || Q < best)) { best = Q; w = (int)bots.size() - k; } }
-            if (w) { dn[(size_t)i] = (signed char)w; dnPx[(size_t)i] = best; }
-            for (size_t k = 0; k < bots.size();) { if (lo(i) < bots[k]) bots.erase(bots.begin() + (long)k); else ++k; } }
-        if (dirn == 1) {
-            if (hi(i) > hi(ext)) ext = i;
-            else if (lo(i) < lo(i - 1) && i != ext) { tops.push_back(hi(ext)); ext = i; dirn = -1; }
-        } else {
-            if (lo(i) < lo(ext)) ext = i;
-            else if (hi(i) > hi(i - 1) && i != ext) { bots.push_back(lo(ext)); ext = i; dirn = 1; }
+    if (n < 2 || !(tick > 0) || !std::isfinite(tick) || (int)rth.size() < n || (int)day.size() < n) return;
+    swg::ZigZag Z; Z.day = -1;
+    for (int i = 0; i < n; ++i) {
+        const double o = open[i], h = high[i], l = low[i], c = close[i];
+        if (!rth[(size_t)i] || !std::isfinite(o) || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(c) || h < l) continue;
+        swg::ZBar b; b.t = i + 1; b.o = std::llround(o / tick); b.h = std::llround(h / tick); b.l = std::llround(l / tick); b.c = std::llround(c / tick); b.day = day[(size_t)i]; b.rth = true;
+        if (Z.day == b.day) {
+            const int fi = (int)Z.bars.size();                                   // every candle in Z closed before this one
+            for (int sd = 1; sd >= -1; sd -= 2) {
+                std::vector<const swg::Swing*> conf;
+                for (size_t k = 0; k < Z.swings.size(); ++k) if (Z.swings[k].confirmIdx < fi && Z.swings[k].dir == sd) conf.push_back(&Z.swings[k]);
+                const int m = (int)conf.size(); long long best = 0; int w = 0;
+                for (int k = 0; k < SWING_KEEP && k < m; ++k) {
+                    const swg::Swing& p = *conf[(size_t)(m - 1 - k)];
+                    bool elig = true; for (int q = 0; q < k && elig; ++q) { const swg::Swing& r = *conf[(size_t)(m - 1 - q)]; elig = sd > 0 ? p.px > r.px : p.px < r.px; }
+                    if (!elig || !(b.l < p.px && b.h > p.px)) continue;
+                    bool intact = true; for (int j = p.idx + 1; j < fi && intact; ++j) { const swg::ZBar& x = Z.bars[(size_t)j]; intact = sd > 0 ? x.h <= p.px : x.l >= p.px; }
+                    if (!intact) continue;
+                    if (w == 0 || (sd > 0 ? p.px > best : p.px < best)) { best = p.px; w = k + 1; }
+                }
+                if (w) { if (sd > 0) { up[(size_t)i] = (signed char)w; upPx[(size_t)i] = (double)best * tick; } else { dn[(size_t)i] = (signed char)w; dnPx[(size_t)i] = (double)best * tick; } }
+            }
         }
-        if (tops.size() > 64) tops.erase(tops.begin());
-        if (bots.size() > 64) bots.erase(bots.begin());
+        Z.add(b);
     }
 }
 template <class H, class L>

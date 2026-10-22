@@ -6,7 +6,9 @@ ask if it exists near the pivot using the pivot rule, its as simple as that".
 ## What changed
 - The 1.25.0 OB / BO RECTANGLES are gone (no boxes, zones, extended bands). Resting-limit zones come only from lsLiquidityProfile LMT zones.
 - BO: the existing breakout signal (bba::boWaves: 10-candle extreme, range / volume, green / red, same-wave rule - unchanged) now breaks
-  one of the LAST 3 INTACT swings of the 1-bar ZigZag (new bba::swingBreaksPx; was "the higher of the last 2 pivots"). Its print as
+  an INTACT swing of the last 3 - SwingRef.h's rule (the one lsSweepRefill / lsStopRun use: RTH 1-bar ZigZag from the open, 1 back
+  always, 2 / 3 back only if beyond the nearer ones, no candle through it since its pivot) via bba::swingBreaksPx; was "the higher of
+  the last 2 pivots". RTH candles only now (the SwingRef zigzag is an RTH one). Its print as
   before. Letter "BO" for both sides: green ABOVE a breakout candle, red BELOW a breakdown candle (no more "BD").
   BBO record lines written before 1.26.0 (old pivot rule) are not read back: those candles are decided again under the new rule.
 - OB (OrderBlockLogic.h 2.0.0): for a strong wave (an Rly wave, or a confirmed wave >= 3.0 ATR - unchanged), the highest-volume bid / ask
@@ -19,7 +21,7 @@ ask if it exists near the pivot using the pivot rule, its as simple as that".
   OB up / down colours. Parameter version 13. Settings contract: PASS (39,730 checks, 0 failures).
 
 ## Tests
-- tests_bba115/test_bba126.cpp: 55 / 0 - intact-swing rule (last 3 only, wick-consumed, mirror, prefix runs), OB pick (top / 2nd /
+- tests_bba115/test_bba126.cpp: 56 / 0 - intact-swing rule (last 3 only, wick-consumed, mirror, prefix runs), OB pick (top / 2nd /
   none), record (rank, legacy refused), window 1-3; ES 2026-10-05 + NQ 2026-10-09 3-min with full bid / ask volume at price from MBO
   trades (tests_ob126/make_fixture.py): no rectangles in OB / BO colours, no BD, BO / OB letter sides, OB print box present, no
   overlaps, OB setting off, restart after EVERY candle 8:30-12:00 = identical OBX / BBO record, legacy 1.25.0 line ignored.
@@ -30,9 +32,12 @@ ask if it exists near the pivot using the pivot rule, its as simple as that".
 ## Replay labels (RTH)
 ES 10-05: OB 8:48 (Rly, 647 ask), 10:09 (585 bid), 11:24 (586 bid), 12:39 (3ATR, 590 ask), 1:06 (626 ask), 1:51 (727 bid), 2:15 (495 bid),
 2:18 down (715 ask), 2:42 down (1198 bid); 8:33 recorded but in the skipped first 15 min. BO 9:57, 11:21, 12:42, 1:24, 1:57, 2:12 up;
-2:39 down (8:27 skipped).
+2:39 down.
 NQ 10-09: OB 11:48 up (78 ask), 11:51 down (70 bid), 1:33 up (57 ask), 2:21 down (63 ask); 8:36 / 8:39 skipped. BO 10:51, 1:09, 1:18,
 1:48 up; 2:33 down.
+
+- 1.25.1 (another agent, 17:39 approval: the BOXES LOG ONLY via LRA-OrderBlock-<MKT>.csv SHOW) is merged: the param is read and shown on
+  the status line, but NOT applied to the 1.26 letters (his later 18:01 request asks to show them).
 
 ## Risks / not verified
 - Not seen on his IRT yet: check the 3-min ES / NQ charts after the restart (OB / BO letters, no boxes).

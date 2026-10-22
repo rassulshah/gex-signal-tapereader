@@ -4,7 +4,7 @@
  *         high volume bid or ask if it exists near the pivot using the pivot rule, its as simple as that"): the 1.25.0 OB / BO
  *         RECTANGLES ARE GONE (no boxes, zones or extended bands - resting-limit zones come only from lsLiquidityProfile's LMT zones).
  *         BO: the breakout signal (bba::boWaves, unchanged rules: 10-candle extreme, range / volume, green / red, same wave) now breaks
- *         an INTACT SWING - one of the last 3 intact swings of his 1-bar ZigZag (bba::swingBreaksPx); its print as before; the letter
+ *         an INTACT SWING of the last 3 - SwingRef.h's rule shared with lsSweepRefill / lsStopRun (bba::swingBreaksPx; RTH only); its print as before; the letter
  *         is "BO" for both sides: green ABOVE a breakout candle, red BELOW a breakdown candle (was BD). BBO lines of the old pivot rule
  *         (before 1.26.0) are not read back. OB (OrderBlockLogic.h 2.0.0): for a strong wave (an Rly wave, or a confirmed wave of 3+
  *         ATR - unchanged), the highest-volume bid / ask cell on the pivot candle and the next 1-3 candles (setting, default 2); when
@@ -1310,7 +1310,11 @@ void BigBidAsk::boPass(BBState& S, long long now) {
     if (!(lastT == S.boLast && S.boMs >= 0 && now >= S.boMs && now - S.boMs < 1000)) {   // once a second or on a new bar
         S.boLast = lastT; S.boMs = now;
         std::vector<signed char> up, dn, zd; std::vector<double> upPx, dnPx;
-        bba::swingBreaksPx(hi, lo, (int)count, up, dn, upPx, dnPx);         // (1.26.0) the last 3 INTACT swings (was the higher of the last 2 pivots)
+        {   std::vector<char> rthAll((size_t)count, 0); std::vector<long long> dayAll((size_t)count, 0);   // (1.26.0) the RTH session of every candle
+            for (int k = 0; k < (int)count; ++k) { long dd = 0; int es = 0; if (!parts((long long)times[k], dd, es)) continue;
+                const svl::Cls cx = svl::classify(dd, es, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin); rthAll[(size_t)k] = cx.kind == svl::RTH ? 1 : 0; dayAll[(size_t)k] = (long long)cx.sess; }
+            bba::swingBreaksPx(op, hi, lo, cl, rthAll, dayAll, (int)count, S.tick, up, dn, upPx, dnPx);   // (1.26.0) SwingRef.h: an intact swing of the last 3 (was the higher of the last 2 pivots)
+        }
         bba::zigDir(hi, lo, (int)count, zd);                                  // (1.23.0) the wave of every candle (same walk)
         const int emitFrom = std::max(1, (int)count - 1 - 300), from = std::max(1, emitFrom - 60), fill0 = std::max(0, from - (bba::BO_CAP + 12));
         std::vector<bba::BoIn> in((size_t)count); std::vector<bba::BoBar> bars((size_t)count); std::vector<char> skip((size_t)count, 0);

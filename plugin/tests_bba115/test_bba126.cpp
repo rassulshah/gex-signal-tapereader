@@ -22,35 +22,40 @@ static int passed = 0, failed = 0;
 #define CHECK(c, why) do { if (c) ++passed; else { ++failed; std::cerr << "FAIL line " << __LINE__ << ": " << why << "\n"; } } while (0)
 
 // ---- [swing] ---------------------------------------------------------------------------------------------------------------------
+static void swb(const std::vector<double>& H, const std::vector<double>& L, bool red, std::vector<signed char>& up, std::vector<signed char>& dn, std::vector<double>& pu, std::vector<double>& pd) {
+    const int n = (int)H.size(); std::vector<double> O(n), C(n); for (int k = 0; k < n; ++k) { O[(size_t)k] = red ? H[(size_t)k] : L[(size_t)k]; C[(size_t)k] = red ? L[(size_t)k] : H[(size_t)k]; }
+    std::vector<char> r((size_t)n, 1); std::vector<long long> d((size_t)n, 7);
+    bba::swingBreaksPx(O, H, L, C, r, d, n, 0.25, up, dn, pu, pd);
+}
 static void swing() {
-    // a falling staircase of 4 intact swing highs 110 / 108 / 106 / 104 (each a 1-bar ZigZag top), then a candle 103 -> 111
+    // SwingRef.h's rule: a falling staircase of 4 confirmed swing highs 110 / 108 / 106 / 104, then a candle 103 -> 111
     std::vector<double> H = { 100, 110, 107, 108, 105, 106, 103, 104, 101, 102, 111 }, L = { 98, 107, 104, 105, 102, 103, 100, 101, 99, 100, 103 };
     std::vector<signed char> up, dn; std::vector<double> pu, pd;
-    bba::swingBreaksPx(H, L, (int)H.size(), up, dn, pu, pd);
-    CHECK(up[10] == 3 && pu[10] == 108, "[swing] through 4 intact highs: only the last 3 count, the highest of them (108, 3rd back) is the pivot");
-    // the same, but the candle only reaches 105: through 104 (the latest)
+    swb(H, L, false, up, dn, pu, pd);
+    CHECK(up[10] == 3 && pu[10] == 108, "[swing] through 4 swing highs: only the last 3 count, the highest of them (108, 3 back) is the pivot");
     std::vector<double> H2 = H, L2 = L; H2[10] = 105; L2[10] = 101.5;
-    bba::swingBreaksPx(H2, L2, (int)H2.size(), up, dn, pu, pd);
-    CHECK(up[10] == 1 && pu[10] == 104, "[swing] through the latest intact high only: which 1, pivot 104");
-    // a wick above 104 at bar 10, then bar 11 trades 103.5 -> 104.5: 104 is no longer intact
+    swb(H2, L2, false, up, dn, pu, pd);
+    CHECK(up[10] == 1 && pu[10] == 104, "[swing] through the latest swing high only: 1 back, pivot 104");
     H2.push_back(104.5); L2.push_back(103.5); H2.push_back(104.75); L2.push_back(104.25);
-    bba::swingBreaksPx(H2, L2, (int)H2.size(), up, dn, pu, pd);
-    CHECK(up[11] == 0, "[swing] a swing a candle already went above is gone (not intact): no second break of 104");
-    // a candle that gaps over a swing (low above it) is not 'through' it
+    swb(H2, L2, false, up, dn, pu, pd);
+    CHECK(up[11] == 0 && up[12] == 0, "[swing] a swing a candle already went above is not intact: no second break of 104");
     std::vector<double> H3 = { 100, 103, 101, 102, 106 }, L3 = { 98, 101, 99, 100, 104 };
-    bba::swingBreaksPx(H3, L3, (int)H3.size(), up, dn, pu, pd);
+    swb(H3, L3, false, up, dn, pu, pd);
     CHECK(up[4] == 0, "[swing] a candle whose low is above the swing high did not trade through it");
-    // the mirror (lows)
     std::vector<double> Hm, Lm; for (size_t k = 0; k < H.size(); ++k) { Hm.push_back(400 - L[k]); Lm.push_back(400 - H[k]); }
-    bba::swingBreaksPx(Hm, Lm, (int)Hm.size(), up, dn, pu, pd);
-    CHECK(dn[10] == 3 && pd[10] == 292, "[swing] mirror: the lowest of the last 3 intact swing lows (292)");
-    // no repaint: every prefix gives the same flags for its bars
-    std::vector<signed char> u0, d0; std::vector<double> p0, q0; bba::swingBreaksPx(H2, L2, (int)H2.size(), u0, d0, p0, q0);
+    swb(Hm, Lm, true, up, dn, pu, pd);
+    CHECK(dn[10] == 3 && pd[10] == 292, "[swing] mirror: the lowest of the last 3 swing lows (292)");
+    {   std::vector<double> O(H.size()), C(H.size()); for (size_t k = 0; k < H.size(); ++k) { O[k] = L[k]; C[k] = H[k]; }
+        std::vector<char> r(H.size(), 1); std::vector<long long> d(H.size(), 7); d[10] = 8;
+        bba::swingBreaksPx(O, H, L, C, r, d, (int)H.size(), 0.25, up, dn, pu, pd);
+        CHECK(up[10] == 0, "[swing] a new RTH session starts a new zigzag: yesterday's swings never count");
+        r.assign(H.size(), 1); d.assign(H.size(), 7); r[10] = 0; bba::swingBreaksPx(O, H, L, C, r, d, (int)H.size(), 0.25, up, dn, pu, pd);
+        CHECK(up[10] == 0, "[swing] an overnight candle: no BO pivot (RTH zigzag only)"); }
+    std::vector<signed char> u0, d0; std::vector<double> p0, q0; swb(H2, L2, false, u0, d0, p0, q0);
     bool same = true;
     for (int n = 2; n <= (int)H2.size(); ++n) { std::vector<double> h(H2.begin(), H2.begin() + n), l(L2.begin(), L2.begin() + n);
-        bba::swingBreaksPx(h, l, n, up, dn, pu, pd); for (int k = 0; k < n; ++k) if (up[(size_t)k] != u0[(size_t)k] || dn[(size_t)k] != d0[(size_t)k] || pu[(size_t)k] != p0[(size_t)k]) same = false; }
+        swb(h, l, false, up, dn, pu, pd); for (int k = 0; k < n; ++k) if (up[(size_t)k] != u0[(size_t)k] || dn[(size_t)k] != d0[(size_t)k] || pu[(size_t)k] != p0[(size_t)k]) same = false; }
     CHECK(same, "[swing] a pure function of the bars up to the candle (prefix runs agree)");
-    std::vector<double> e; bba::swingBreaksPx(e, e, 0, up, dn, pu, pd); CHECK(up.empty(), "[swing] no bars: nothing");
 }
 
 // ---- [pick] + [rec] ------------------------------------------------------------------------------------------------------------
