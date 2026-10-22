@@ -31,6 +31,7 @@
 #include "../KeyLevelsHSettings.h"
 #include "../BigBidAskSettings.h"
 #include "../DealerHedgeSettings.h"
+#include "../SweepRefillSettings.h"
 
 struct LegacyCase { const char* text; int market; const char* key; double want; };   // key == nullptr: must NOT be recognised
 struct Entry {
@@ -211,6 +212,7 @@ int main(int argc, char** argv) {
     E.push_back(Entry{ &bbaset::spec(), "BigBidAsk.cpp", nullptr, {}, {} });   // (1.19.0, Rassul 21:51) Biggest in, skip first / last, font, number / bid / ask colours        // (0.5.0, his decision list) labels / impulse box: show + colour
     E.push_back(Entry{ &torset::spec(), "TurnOrder.cpp", nullptr, {}, {} });   // (2026-10-22) lsTurnOrder 1.0.0: show + bid / offer colours, the confirmation gate (ATR), min size
     E.push_back(Entry{ &dhset::spec(), "DealerHedge.cpp", nullptr, {}, {} });   // (2026-10-22) lsDealerHedge 0.1.0 oH zones: show + buy / sell colours, band %, pulse, labels, hover, width, flow x, repeats, refills
+    E.push_back(Entry{ &swrset::spec(), "SweepRefill.cpp", nullptr, {}, {} });   // (2026-10-22) lsSweepRefill 1.0.0 Sr: show bullish / bearish + colours, min prices / lots, refill %, window, gap, font
     if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
         const int mkt = ss::marketIndex(argv[3]);
         for (const Entry& e : E) {

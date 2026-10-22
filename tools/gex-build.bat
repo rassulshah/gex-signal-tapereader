@@ -130,13 +130,16 @@ REM (2026-10-14 night) lsBigBidAsk 1.0.0 - biggest bid (red, left) / biggest ask
 REM (2026-10-18) lsBigBidAsk 1.16.0 compact Big Lot box docked to the lsHodLod 2.4.1 table (BoxDock.h), category order 1 > 4 > 2 / 3, settings window fixes
 REM (2026-10-22) lsBigBidAsk 1.23.0 BO / BD: green / red only + the same-wave confirmation (bba::boWaves in BigBidAskLogic.h, already hashed); failed wick breaks logged only
 REM (2026-10-22) lsBigBidAsk 1.24.0 Rly (rally) on 3-min charts: RallyLogic.h 1.0.0 added to its hash list (Rassul approved the Rly mockup v0.2 15:10-15:15 CT)
-call :one BigBidAsk lsBigBidAsk AbsorbLogic.h RallyLogic.h BigBidAskLogic.h ColumnBoard.h HoverBoard.h BoxPlace.h BannerBoard.h HostSlot.h SignalBoard.h ZoneNear.h VwapTrendLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h BoxDock.h BigBidAskSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h OnTouchParams.h SharedAbsorb.h
+REM (2026-10-22) lsBigBidAsk 1.25.0 OB / BO boxes of strong waves: OrderBlockLogic.h 1.0.0 added to its hash list (agreed with Rassul 16:00-16:01 CT)
+call :one BigBidAsk lsBigBidAsk AbsorbLogic.h RallyLogic.h OrderBlockLogic.h BigBidAskLogic.h ColumnBoard.h HoverBoard.h BoxPlace.h BannerBoard.h HostSlot.h SignalBoard.h ZoneNear.h VwapTrendLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h BoxDock.h BigBidAskSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h OnTouchParams.h SharedAbsorb.h
 REM (2026-10-22) lsStopRun 1.0.0 - St / Sta stop-run mark on the price chart (Rassul 15:33-15:37 CT "show yes", "Sta can indicate the stop run absorbed"; MBO Roadmap T-20261022-15)
 call :one StopRunMark lsStopRun StopRunLogic.h StopRunMarkSettings.h NearLevels.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h
 REM (2026-10-22) lsTurnOrder 1.0.0 - the TURN ORDER mark: the resting limit order that made each pivot (Rassul 15:45 CT "I'll go with your recommendation"; MBO Roadmap T-20261022-25)
 call :one TurnOrder lsTurnOrder TurnOrderLogic.h TurnOrderSettings.h OrderFlowFeed.h LmtZonesLogic.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h HoverBoard.h BoxPlace.h LargeLotPool.h MoveLogic.h NearLevels.h OptionsFlow.h ZoneRead.h ZoneRule.h
 REM (2026-10-22) lsDealerHedge 0.1.0 - "oH" dealer-hedging zones on the price pane (Rassul agreed 15:23-15:24 CT, build 15:31 CT; MBO Roadmap T-20261022-27): gamma level +/- 0.5 ATR, lights / pulses on programmatic MBO flow, settles faint, never removed
 call :one DealerHedge lsDealerHedge DealerHedgeLogic.h DealerHedgeSettings.h HostSlot.h HoverBoard.h KeepOutDraw.h BoxDock.h BannerBoard.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+REM (2026-10-22) lsSweepRefill 1.0.0 - "Sr" SWEEP REFILLED on the price chart (Rassul approved 16:16 CT, 16:18 no adjacent candles, 16:28 bearish drawn + the v3 taken-out rule; MBO Roadmap "Did the swept prices refill fast after a sweep?")
+call :one SweepRefill lsSweepRefill SweepRefillLogic.h SweepRefillSettings.h NearLevels.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h
 REM (2026-10-18 HOT-RELOAD) hot-reload test indicator lsHotReloadDemo: its implementation publishes WHILE IRT IS OPEN (refresh the chart),
 REM   the shim installs only when IRT is closed - tools\gex-hot-build.bat, docs\build\HOT-RELOAD.md
 if not defined HOLD if exist "%REPO%\tools\gex-hot-build.bat" call "%REPO%\tools\gex-hot-build.bat" HotReloadDemo
@@ -301,7 +304,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - new builds install after 15:15 CT, when Investor/RT is closed ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines KeyLevels TapeReader CobImpulse BigBidAsk StopRunMark DealerHedge TurnOrder) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines KeyLevels TapeReader CobImpulse BigBidAsk StopRunMark DealerHedge TurnOrder SweepRefill) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
