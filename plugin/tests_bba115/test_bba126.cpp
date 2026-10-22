@@ -134,6 +134,8 @@ static void home(const std::string& name, const ss::Values* set) {
     for (const std::string& p : parts) mkdir(p.c_str(), 0700);
     setenv("USERPROFILE", h.c_str(), 1); HOME = h;
     std::ofstream f((h + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.settings2-" + MKT + ".txt").c_str()); f << ss::format(bbaset::spec(), *set);
+    // the 1.25.1 nightly verdict on the BOXES (LOG ONLY): the 1.26.0 letters are drawn anyway (his 18:01 request), the status reports it
+    std::ofstream g((h + "/InvestorRT/rtx/lsFlexLevels/LRA-OrderBlock-" + MKT + ".csv").c_str()); g << "VERSION,1\nMARKET," << MKT << "\nPARAM,SHOW,0\n";
 }
 static std::string slurp(const std::string& p) { std::ifstream f(p.c_str(), std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }
 static long long SINCE = 0;
@@ -208,7 +210,8 @@ static void day(const std::string& mkt, const std::string& sym, const std::strin
         CHECK(obPrintMissing == 0, tag + "every OB letter has its print box on the candle at the print's price");
         CHECK(overlap == 0, tag + "no letter over another letter or a print box (" + std::to_string(overlap) + ")");
         const std::string stt = slurp(HOME + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.status-" + mkt + "-" + sym + "-180.txt");
-        CHECK(stt.find("VERSION,1.26.0\n") == 0 && stt.find("\nORDER_BLOCK,OB on") != std::string::npos && stt.find("logic 2.0.0 (prints + letters only; no boxes)") != std::string::npos, tag + "status: version 1.26.0 + ORDER_BLOCK line");
+        CHECK(stt.find("VERSION,1.26.0\n") == 0 && stt.find("\nORDER_BLOCK,OB on") != std::string::npos && stt.find("logic 2.0.0 (prints + letters only; no boxes)") != std::string::npos
+              && stt.find("(nightly param SHOW LOG - the 1.25 boxes' verdict, not applied to the letters)") != std::string::npos, tag + "status: version 1.26.0 + ORDER_BLOCK line; the 1.25.1 LOG param (present) reported, letters still drawn");
         // the list for Rassul
         std::cout << "  " << mkt << " " << date << " RTH labels:\n";
         std::map<long long, std::string> L;
