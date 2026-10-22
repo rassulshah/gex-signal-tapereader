@@ -38,7 +38,7 @@ REM (2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator alway
 REM   anymore") THE SETTINGS CONTRACT GATES EVERY BUILD: plugin\tests_settings\settings_contract.cpp (SettingsSpec.h + every <Name>Settings.h +
 REM   the migrated sources) is compiled and run first; FAIL = nothing is built this tick (the installed DLLs stay), the log says why once,
 REM   plugin\out\SETTINGS-CONTRACT.txt has every failing check. SETSRC = the plugin sources on the layer (add one when it migrates).
-set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp KeyLevels.cpp"
+set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp KeyLevels.cpp DealerHedge.cpp"
 call :settings
 if defined SETFAIL (
   call :status
@@ -131,6 +131,8 @@ REM (2026-10-22) lsBigBidAsk 1.24.0 Rly (rally) on 3-min charts: RallyLogic.h 1.
 call :one BigBidAsk lsBigBidAsk AbsorbLogic.h RallyLogic.h BigBidAskLogic.h ColumnBoard.h HoverBoard.h BoxPlace.h BannerBoard.h HostSlot.h SignalBoard.h ZoneNear.h VwapTrendLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h BoxDock.h BigBidAskSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h OnTouchParams.h SharedAbsorb.h
 REM (2026-10-22) lsStopRun 1.0.0 - St / Sta stop-run mark on the price chart (Rassul 15:33-15:37 CT "show yes", "Sta can indicate the stop run absorbed"; MBO Roadmap T-20261022-15)
 call :one StopRunMark lsStopRun StopRunLogic.h StopRunMarkSettings.h NearLevels.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h
+REM (2026-10-22) lsDealerHedge 0.1.0 - "oH" dealer-hedging zones on the price pane (Rassul agreed 15:23-15:24 CT, build 15:31 CT; MBO Roadmap T-20261022-27): gamma level +/- 0.5 ATR, lights / pulses on programmatic MBO flow, settles faint, never removed
+call :one DealerHedge lsDealerHedge DealerHedgeLogic.h DealerHedgeSettings.h HostSlot.h HoverBoard.h KeepOutDraw.h BoxDock.h BannerBoard.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 REM (2026-10-18 HOT-RELOAD) hot-reload test indicator lsHotReloadDemo: its implementation publishes WHILE IRT IS OPEN (refresh the chart),
 REM   the shim installs only when IRT is closed - tools\gex-hot-build.bat, docs\build\HOT-RELOAD.md
 if not defined HOLD if exist "%REPO%\tools\gex-hot-build.bat" call "%REPO%\tools\gex-hot-build.bat" HotReloadDemo
@@ -295,7 +297,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - new builds install after 15:15 CT, when Investor/RT is closed ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines KeyLevels TapeReader CobImpulse BigBidAsk StopRunMark) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines KeyLevels TapeReader CobImpulse BigBidAsk StopRunMark DealerHedge) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
