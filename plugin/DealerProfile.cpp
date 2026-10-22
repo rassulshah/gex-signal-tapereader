@@ -502,7 +502,7 @@ static Settings dpFromValues(const ss::Values& V)
     c.liqBadge = V.b(K_LIQ_BADGE); c.levelPct = V.b(K_LEVEL_PCT); c.font = V.i(K_FONT); c.clock = V.i(K_CLOCK); c.labels = V.b(K_LABELS); c.snap = false;   // (2.17.2) Snapshot outline removed (dashed)
     c.fadefar = V.b(K_FADEFAR); c.banner = V.b(K_BANNER); c.inds = V.s(K_INDS); c.whisk = false; c.legend = false;
     if (c.inds.empty()) c.inds = "cob_bull,cob_bear";   // blank = the default (as before); "none" = off
-    c.qm = V.b(K_QM); c.qmReach = V.f(K_QM_REACH); c.qmBid = (COLOR)V.c(K_QM_BID); c.qmAsk = (COLOR)V.c(K_QM_ASK); c.qmWarn = (COLOR)V.c(K_QM_WARN);   // (2.20.0)
+    c.qm = V.b(K_QUEUE_METER); c.qmReach = V.f(K_QM_REACH); c.qmBid = (COLOR)V.c(K_QM_BID); c.qmAsk = (COLOR)V.c(K_QM_ASK); c.qmWarn = (COLOR)V.c(K_QM_WARN);   // (2.20.0)
     if (!(c.qmReach >= 0.25 && c.qmReach <= 2.0)) c.qmReach = 1.0;
     dpNormalizeSettings(c); return c;
 }

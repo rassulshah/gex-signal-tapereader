@@ -12,7 +12,7 @@ static const char* const PLUGIN_VERSION = "2.20.0";
 // (2.19.0, Rassul 2026-10-21 approved Option B) + "Level % badges" (on by default) -> parameter version 8
 // (2.17.2, his decision list) "Snapshot outline" removed (dashed: against his no-dashed rule; a saved snap key is ignored);
 // Market / Clock offset / Indicators text hidden (kept in the file with their defaults / saved values, not shown) -> parameter version 7.
-enum K { K_MARKET, K_WIDTH, K_LEVELS_W, K_BADGE_FONT, K_LIQ_BADGE, K_LEVEL_PCT, K_FONT, K_CLOCK, K_LABELS, K_FADEFAR, K_BANNER, K_INDS, K_QM, K_QM_REACH, K_QM_BID, K_QM_ASK, K_QM_WARN, K_N };
+enum K { K_MARKET, K_WIDTH, K_LEVELS_W, K_BADGE_FONT, K_LIQ_BADGE, K_LEVEL_PCT, K_FONT, K_CLOCK, K_LABELS, K_FADEFAR, K_BANNER, K_INDS, K_QUEUE_METER, K_QM_REACH, K_QM_BID, K_QM_ASK, K_QM_WARN, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
         ss::hide(ss::listRow("market", "Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU", 70)),

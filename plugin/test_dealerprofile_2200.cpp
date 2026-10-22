@@ -273,7 +273,7 @@ int main()
     {   const std::string src = slurp("DealerProfile.cpp");
         check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && std::string(DP_VERSION) == "2.20.0", "version 2.20.0: DP_VERSION = setVersion literal = settings table");
         const ss::Spec& sp = dprset::spec();
-        check(sp.paramVersion == 9 && std::string(sp.rows[dprset::K_QM].key) == "queue_meter" && std::string(sp.rows[dprset::K_QM_REACH].key) == "qm_reach"
+        check(sp.paramVersion == 9 && std::string(sp.rows[dprset::K_QUEUE_METER].key) == "queue_meter" && std::string(sp.rows[dprset::K_QM_REACH].key) == "qm_reach"
               && sp.rows[dprset::K_QM_BID].type == ss::T_COLOR && sp.rows[dprset::K_QM_WARN].type == ss::T_COLOR && sp.rows[dprset::K_QM_REACH].type == ss::T_FLOAT, "settings: Queue meter checkbox, Reach (ATR) float, 3 colours; parameter version 9");
         check(sp.rows[dprset::K_QM_REACH].lo == 0.25 && sp.rows[dprset::K_QM_REACH].hi == 2.0 && sp.rows[dprset::K_QM_REACH].def == 1.0, "reach 0.25 - 2.0 ATR, default 1.0");
     }
