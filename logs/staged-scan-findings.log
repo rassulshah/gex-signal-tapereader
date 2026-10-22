@@ -1,3 +1,13 @@
-findings=0 allowed=0 staged_files=1 bytes=122
+findings=0 allowed=0 staged_files=11 bytes=262260
 largest staged blobs (bytes, path):
-SIZE	122	logs/staged-scan-findings.log
+SIZE	148549	plugin/DealerProfile.cpp
+SIZE	26489	plugin/test_dealerprofile_2190.cpp
+SIZE	23946	tools/gex-build.bat
+SIZE	19287	plugin/test_columnboard_logic.cpp
+SIZE	14134	plugin/ColumnBoard.h
+SIZE	11354	plugin/LevelPctLogic.h
+SIZE	6434	plugin/test_levelpct_logic.cpp
+SIZE	4996	plugin/DealerProfileSettings.h
+SIZE	4711	plugin/tests_hover1018/check_hovers_off.py
+SIZE	2236	plugin/tests_aggbook/test_build_dependencies.py
+SIZE	124	logs/staged-scan-findings.log
