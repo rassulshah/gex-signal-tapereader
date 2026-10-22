@@ -1,6 +1,11 @@
 #ifndef LS_MOVE_LOGIC_H
 #define LS_MOVE_LOGIC_H
-// MoveLogic.h 1.1.2 (2026-10-21; 1.1.2 23:30 CT: counter `small` renamed smallSz - Windows rpcndr.h #define small char broke MSVC builds; 1.1.0 14:18 CT Rassul "i want you to draw them" - all FOUR cases drawn, mockup v4: P = pressing in /
+// MoveLogic.h 1.2.0 (2026-10-22 15:20 CT Rassul ordered "ROLLING BIDS / OFFERS DURING THE MOVE", MBO Roadmap "Is a big order following price
+// during the move?" T-20261022-17: TRAILS - one big order (by id, >= the market's Big Lot S20 of resting orders) re-priced again and again
+// BEHIND price during the wave: a step = a bid re-priced UP (an offer DOWN) after price ran that way since its last price, still behind the
+// trade and inside the near band (NQ 10-09 replay: without these, band-keeping quotes 300+ ticks away and oscillating quotes made 112 junk
+// trails; with them 19); 2 steps = a trail; it ends once (traded / pulled / stepped back here, stopped following on the chart side - TrailSet).
+// The extreme reads below are unchanged); 1.1.2 (2026-10-21; 1.1.2 23:30 CT: counter `small` renamed smallSz - Windows rpcndr.h #define small char broke MSVC builds; 1.1.0 14:18 CT Rassul "i want you to draw them" - all FOUR cases drawn, mockup v4: P = pressing in /
 // B = stepping back, the letter and the price boxes in the colour of the SIDE that moved (bids green, offers red); "they may be weak
 // for other reasons and may require additional confluences" - drawn with "?" while the confluence study + the nightly score them),
 // 1.0.0 (2026-10-21, MBO Roadmap TOP DEFENDER #3 "are the defenders stepping back or pressing in?" - Rassul approved
@@ -21,10 +26,12 @@
 // cases are recorded for the nightly (his "i just want what works": the test found only P positive, +28 at supports, LEARNING).
 #include <algorithm>
 #include <cerrno>
+#include <climits>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <deque>
+#include <fstream>
 #include <map>
 #include <sstream>
 #include <string>
@@ -32,7 +39,7 @@
 #include <vector>
 
 namespace mvl {
-static const char* const VERSION = "1.1.1";   // (1.1.1, 2026-10-21) letterOf / movedText: a side whose case flag is set but moved no lots that way shows "-" and no letter (the box showed "In 0t 0.0x")
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-10-22) TRAILS: Tracker::fill + the trail lines (TS / TP / TF / TX / TB / RS) + TrailSet (the stop-following B? decision);   // (1.1.1, 2026-10-21) letterOf / movedText: a side whose case flag is set but moved no lots that way shows "-" and no letter (the box showed "In 0t 0.0x")
 static const long long PAIR_MS = 250, REST_MS = 500, LADDER_MS = 5;
 static const int LADDER_N = 5;
 static const double BADGE_X = 2.0, ONE_WAY = 0.65, ZONE_ATR = 0.5;
@@ -61,10 +68,12 @@ public:
     void modify(long long id, int side, long long oldPx, long long newPx, long long size, long long refAt, long long ref, long long ms) {
         if (oldPx == newPx || side < 0 || side > 1) return;
         ++seenM; ladderNote(side, newPx - oldPx, ms);
+        if (trailMin > 0) trailNote(id, side, oldPx, newPx, size, refAt, ref, ms);   // (1.2.0) a trail step (judged after its 5 ms ladder window)
         candidate(id, side, oldPx, newPx, size, distOf(side, oldPx, refAt), distOf(side, newPx, ref), ms, false, 0);
     }
     // PATH R step 1: a resting order cancelled (not because it traded)
     void cancel(long long id, int side, long long px, long long size, long long refAt, long long ms) {
+        if (trailMin > 0) trailEnd(id, 'X', px, 0, ms);                  // (1.2.0) a trailing order pulled
         if (side < 0 || side > 1 || size <= 0) return;
         prune(ms);
         Cx c; c.id = id; c.side = side; c.px = px; c.size = size; c.dOld = distOf(side, px, refAt); c.ms = ms;
@@ -96,6 +105,7 @@ public:
     }
     // the moves whose 0.5 s rest is done by `ms` (in time order) -> out; ladder shifts / ambiguous pairs / small sizes dropped here
     void confirm(long long ms, std::vector<Move>& out) {
+        if (trailMin > 0) trailRun(ms, 0);                                  // (1.2.0) trail steps whose ladder window closed (before prune: it reads the ladder buckets)
         prune(ms);
         while (!pend.empty() && (pend.front().dead || ms - pend.front().m.ms >= REST_MS)) {
             Pend p = pend.front(); pend.pop_front(); ++base;
@@ -110,7 +120,107 @@ public:
         rebase();
     }
     size_t pending() const { return pend.size(); }
+    // ---- (1.2.0) TRAILS: one big order (by id, PATH M only - the exact id) re-priced again and again BEHIND price -------------------
+    // A bid stepping UP (an offer stepping DOWN) after price ran that way, still behind the trade and inside the near band, is a FOLLOW step. An order >= trailMin lots with 2 follow steps (ladder shifts never
+    // count) becomes a TRAIL; every later step extends it; it ENDS once: traded (TF, a fill on it), pulled (TX, cancelled), or moved
+    // AWAY from price (TB, stepped back). The stop-following "B?" (price ran on, the order did not follow) needs candles + ATR: it is
+    // decided by the chart overlay from these lines (TrailSet below). Lines (prices in ticks), appended to the trail file:
+    //   RS|key|tick                      a new order stream (a restart: trails open before it are lost - MBO has no history)
+    //   TS|id|side|size|key|ms|px        trail started (px = the price before its first step; key / ms = its first step)
+    //   TP|id|key|ms|px|flag|dist|ran    a step to px (flag 1 = not counted: a ladder shift / not after a run; dist = ticks behind the
+    //                                    last trade at the new price; ran = ticks price moved its way since the order's last price)
+    //   TF|id|key|ms|px|lots   TX|id|key|ms|px   TB|id|key|ms|px
+    long long trailMin = 0;                         // 0 = trails off (lsBookFlow's engine sets trailMinOf(market))
+    long long key = 0;                              // the candle key of the event being applied (set by the engine)
+    long long trailNear = 0;                        // the near band in ticks (the engine's: max(1 ATR, the zone)); a step must stay this close behind price (0 = no cap)
+    std::vector<std::string> trailOut;              // lines waiting for the file (flushTrails)
+    long long trStarted = 0, trSteps = 0, trLadder = 0, trFilled = 0, trPulled = 0, trBack = 0, trFileFails = 0, trCands = 0;
+    // a fill on a resting order (any size): a trail that traded ends with the dot
+    void fill(long long id, long long px, long long lots, long long ms) { if (trailMin > 0) trailEnd(id, 'F', px, lots, ms); }
+    void setTrailFile(const std::string& path, double tick) {
+        if (path == trailPath) return;
+        trailPath = path; trailTick = tick;
+        { std::ifstream in(path.c_str(), std::ios::binary | std::ios::ate); if (in.is_open() && (long long)in.tellg() > 3LL * 1024 * 1024) { in.close(); const std::string old = path + ".old"; std::remove(old.c_str()); std::rename(path.c_str(), old.c_str()); } }
+        char tb[40]; std::snprintf(tb, sizeof tb, "%.10g", tick);
+        trailOut.push_back("RS|" + std::to_string(key) + "|" + tb);
+    }
+    const std::string& trailFile() const { return trailPath; }
+    // append the waiting lines; on a failed append they are kept (bounded) and tried again
+    bool flushTrails() {
+        if (trailOut.empty() || trailPath.empty()) return true;
+        std::ofstream f(trailPath.c_str(), std::ios::binary | std::ios::app);
+        if (f.is_open()) { for (size_t k = 0; k < trailOut.size(); ++k) f << trailOut[k] << "\n"; f.flush(); if (f.good()) { trailOut.clear(); return true; } }
+        ++trFileFails; if (trailOut.size() > 4000) trailOut.erase(trailOut.begin(), trailOut.begin() + (trailOut.size() - 4000));
+        return false;
+    }
+    size_t trailsOpen() const { size_t n = 0; for (std::unordered_map<long long, Tr>::const_iterator it = trails.begin(); it != trails.end(); ++it) n += it->second.active ? 1 : 0; return n; }
 private:
+    struct TStep { long long id = 0; int side = 0; long long oldPx = 0, newPx = 0, size = 0, ms = 0, key = 0, ran = 0, dNew = 0; };   // ran: ticks price moved its way since the order's last price; dNew: its new distance behind the trade
+    struct Tr { int side = 0; long long size = 0, firstPx = 0, lastPx = 0, lastMs = 0; int steps = 0; bool active = false; std::vector<TStep> st; };
+    std::deque<TStep> tsteps;                           // steps waiting for their ladder window (5 ms)
+    std::unordered_map<long long, Tr> trails;           // order id -> candidate (1 step) / active trail
+    std::string trailPath; double trailTick = 0; long long trLastPrune = 0;
+    void trailNote(long long id, int side, long long oldPx, long long newPx, long long size, long long refAt, long long ref, long long ms) {
+        TStep t; t.id = id; t.side = side; t.oldPx = oldPx; t.newPx = newPx; t.size = size; t.ms = ms; t.key = key;
+        t.ran = side == BIDS ? ref - refAt : refAt - ref; t.dNew = distOf(side, newPx, ref);
+        tsteps.push_back(t); if (tsteps.size() > 20000) tsteps.pop_front();
+    }
+    static std::string num(long long v) { return std::to_string(v); }
+    void emitStep(long long id, const TStep& s, bool lad) { trailOut.push_back("TP|" + num(id) + "|" + num(s.key) + "|" + num(s.ms) + "|" + num(s.newPx) + "|" + (lad ? "1" : "0") + "|" + num(s.dNew) + "|" + num(s.ran)); }
+    void stepNow(const TStep& s) {
+        const bool lad = ladderCount(s.side, s.newPx - s.oldPx, s.ms) >= LADDER_N;
+        // FOLLOW = re-priced in the wave's direction (a bid up / an offer down) AFTER price moved that way since its last price, still
+        // behind price (not crossing it) A re-price that way without price moving first is quote management (it oscillates): no step.
+        const bool toward = s.side == BIDS ? s.newPx > s.oldPx : s.newPx < s.oldPx;
+        // and NEAR: within the near band behind the trade (NQ 10-09: band-keeping quotes 300+ ticks away stepped with price - not support)
+        const bool follow = toward && s.ran > 0 && s.dNew >= 0 && (trailNear <= 0 || s.dNew <= trailNear);
+        std::unordered_map<long long, Tr>::iterator it = trails.find(s.id);
+        if (it == trails.end()) {
+            if (lad) { ++trLadder; return; }
+            if (!follow || s.size < trailMin) return;
+            if (trails.size() >= 20000) return;
+            Tr t; t.side = s.side; t.size = s.size; t.firstPx = s.oldPx; t.lastPx = s.newPx; t.lastMs = s.ms; t.steps = 1; t.st.push_back(s);
+            trails[s.id] = t; ++trCands; return;
+        }
+        Tr& t = it->second;
+        if (lad) { ++trLadder; if (!t.active) { trails.erase(it); return; } t.lastPx = s.newPx; t.lastMs = s.ms; emitStep(s.id, s, true); return; }
+        if (toward && !follow) { if (t.active) { t.lastPx = s.newPx; t.lastMs = s.ms; emitStep(s.id, s, true); } return; }   // toward price but not after a run: drawn (price kept), never counted
+        if (!follow) {                                                 // moved away from price: stepped back
+            if (t.active) { trailOut.push_back("TB|" + num(s.id) + "|" + num(s.key) + "|" + num(s.ms) + "|" + num(s.newPx)); ++trBack; }
+            trails.erase(it); return;
+        }
+        t.steps++; t.lastPx = s.newPx; t.lastMs = s.ms; ++trSteps;
+        if (t.active) { emitStep(s.id, s, false); return; }
+        t.st.push_back(s);
+        if (t.steps >= 2) {                                            // 2 follow steps: a trail
+            t.active = true; ++trStarted;
+            const TStep& f = t.st.front();
+            trailOut.push_back("TS|" + num(s.id) + "|" + num(t.side) + "|" + num(t.size) + "|" + num(f.key) + "|" + num(f.ms) + "|" + num(t.firstPx));
+            for (size_t k = 0; k < t.st.size(); ++k) emitStep(s.id, t.st[k], false);
+            t.st.clear(); t.st.shrink_to_fit();
+        }
+    }
+    // the steps whose ladder window closed by `ms` (all of one order's steps when `forceId` != 0: it is being filled / pulled now)
+    void trailRun(long long ms, long long forceId) {
+        if (forceId != 0) {
+            for (std::deque<TStep>::iterator it = tsteps.begin(); it != tsteps.end();) { if (it->id == forceId) { const TStep s = *it; it = tsteps.erase(it); stepNow(s); } else ++it; }
+        }
+        while (!tsteps.empty() && ms >= (tsteps.front().ms / LADDER_MS + 1) * LADDER_MS) { const TStep s = tsteps.front(); tsteps.pop_front(); stepNow(s); }
+        if (ms - trLastPrune > 10000 || ms < trLastPrune) {             // candidates idle 10 min / trails idle 2 h are forgotten
+            trLastPrune = ms;
+            for (std::unordered_map<long long, Tr>::iterator it = trails.begin(); it != trails.end();) { const long long idle = ms - it->second.lastMs; if (idle > (it->second.active ? 7200000LL : 600000LL)) it = trails.erase(it); else ++it; }
+        }
+    }
+    void trailEnd(long long id, char why, long long px, long long lots, long long ms) {
+        trailRun(ms, id);
+        std::unordered_map<long long, Tr>::iterator it = trails.find(id);
+        if (it == trails.end()) return;
+        if (it->second.active) {
+            if (why == 'F') { trailOut.push_back("TF|" + num(id) + "|" + num(key) + "|" + num(ms) + "|" + num(px) + "|" + num(lots)); ++trFilled; }
+            else { trailOut.push_back("TX|" + num(id) + "|" + num(key) + "|" + num(ms) + "|" + num(it->second.lastPx)); ++trPulled; }
+        }
+        trails.erase(it);
+    }
     struct Cx { long long id = 0; int side = 0; long long px = 0, size = 0, dOld = 0, ms = 0; int matches = 0; };
     struct Pend { Move m; long long cancelId = 0; bool dead = false; };
     std::deque<Cx> cancels;
@@ -279,6 +389,205 @@ inline bool chartBoxOf(const Read& r, int side, long long& oldPx, long long& new
     else if (L == 'B') { oldPx = r.s.outOld[side]; newPx = r.s.outNew[side]; size = r.s.outSize[side]; }
     else return false;
     return size > 0 && oldPx != newPx;
+}
+
+// ==== (1.2.0) TRAILS: the chart side (SDK-free; lsDefenseLines reads the trail file, decides the stop-following B?, records, draws) ====
+// The big-order size for a trail: Big Lot S20 of RESTING orders per market (LmtZonesLogic fallback table, the smaller of RTH / overnight;
+// COPIED, not included, so the two plugins never break each other's build). Always >= the q90 of moves above.
+inline long long trailMinOf(const std::string& m) {
+    return m == "ES" ? 25 : m == "NQ" ? 15 : m == "CL" ? 15 : m == "GC" ? 9 : m == "HG" ? 5 : m == "NG" ? 10 : (m == "EU" || m == "6E") ? 41 : 20;
+}
+inline std::string trailPathOf(const std::string& flex, const std::string& mkt, int spb) { return flex.empty() || mkt.empty() ? std::string() : flex + "\\BookFlow\\" + mkt + "-" + std::to_string(spb) + "-trails.csv"; }
+inline std::string trailRecPathOf(const std::string& flex, const std::string& mkt, int spb) { return flex.empty() || mkt.empty() ? std::string() : flex + "\\BookFlow\\" + mkt + "-" + std::to_string(spb) + "-trails-rec.csv"; }
+static const double TRAIL_GAP_ATR = 0.5;   // default follow gap: price ran >= 0.5 ATR past the candle of the last step
+static const int TRAIL_N = 2;              // default N: ... and the order did not follow within N candles
+static const int TRAIL_SHOW_PER_SIDE = 2;  // at most 2 trails per side on screen
+struct TStepR { long long key = 0, ms = 0, px = 0; bool lad = false; };
+// end: 0 open, 'F' traded (dot), 'X' pulled (x), 'B' stopped following (B?), 'b' stepped back - moved away (B?), 'R' lost (a restart)
+struct Trail {
+    long long id = 0; int side = BIDS; long long size = 0, key0 = 0, ms0 = 0, px0 = 0;
+    std::vector<TStepR> steps;
+    char end = 0; long long endKey = 0, endMs = 0, endPx = 0, endLots = 0;
+    bool fromRec = false, recorded = false;
+    double atrAt = 0, gapUsed = 0; int nUsed = 0;    // the B? decision's numbers (ticks)
+    int moves() const { int n = 0; for (size_t k = 0; k < steps.size(); ++k) n += steps[k].lad ? 0 : 1; return n; }
+    long long lastPx() const { return steps.empty() ? px0 : steps.back().px; }
+    long long ticks() const { return std::llabs(lastPx() - px0); }
+    long long followMs() const { return steps.empty() ? 0 : std::max(0LL, steps.back().ms - ms0); }
+    bool stopLetter() const { return end == 'B' || end == 'b'; }
+    void cutAfterEnd() { if (end != 'B') return; size_t k = steps.size(); while (k > 0 && steps[k - 1].key > endKey) --k; steps.resize(k); }   // steps after a B? never count
+};
+inline bool splitInts(const std::string& ln, size_t from, std::vector<long long>& out) {
+    std::vector<std::string> c; std::stringstream ss(ln); std::string tok; while (std::getline(ss, tok, '|')) c.push_back(tok);
+    out.clear();
+    for (size_t k = from; k < c.size(); ++k) { errno = 0; char* e = nullptr; const long long x = std::strtoll(c[k].c_str(), &e, 10); if (c[k].empty() || !e || *e || errno) return false; out.push_back(x); }
+    return true;
+}
+// the trail file, read in order (append-only; a second chart on the same market writes the same lines: duplicates are ignored)
+class TrailSet {
+public:
+    std::vector<Trail> v; std::map<long long, size_t> open; long long bad = 0, restarts = 0; double tick = 0;
+    void clear() { v.clear(); open.clear(); bad = 0; restarts = 0; tick = 0; }
+    bool line(const std::string& raw) {
+        std::string ln = raw; while (!ln.empty() && (ln.back() == '\r' || ln.back() == '\n')) ln.pop_back();
+        if (ln.empty()) return true;
+        if (ln.size() < 3 || ln[2] != '|') { ++bad; return false; }
+        const std::string tag = ln.substr(0, 2); std::vector<long long> x;
+        if (tag == "RS") {
+            std::vector<std::string> c; std::stringstream ss(ln); std::string tok; while (std::getline(ss, tok, '|')) c.push_back(tok);
+            char* e = nullptr; const double t = c.size() == 3 ? std::strtod(c[2].c_str(), &e) : 0.0;
+            if (c.size() != 3 || !e || *e || !std::isfinite(t) || t <= 0) { ++bad; return false; }
+            tick = t; ++restarts;
+            for (std::map<long long, size_t>::iterator it = open.begin(); it != open.end(); ++it) { Trail& T = v[it->second];
+                if (!T.end) { T.end = 'R'; T.endKey = T.steps.empty() ? T.key0 : T.steps.back().key; T.endMs = T.steps.empty() ? T.ms0 : T.steps.back().ms; T.endPx = T.lastPx(); } }
+            open.clear(); return true;
+        }
+        if (!splitInts(ln, 1, x)) { ++bad; return false; }
+        if (tag == "TS") {
+            if (x.size() != 6 || (x[1] != BIDS && x[1] != OFFERS) || x[2] <= 0) { ++bad; return false; }
+            std::map<long long, size_t>::iterator it = open.find(x[0]);
+            if (it != open.end() && v[it->second].key0 == x[3] && v[it->second].ms0 == x[4]) return true;   // the same start twice (2 charts)
+            Trail T; T.id = x[0]; T.side = (int)x[1]; T.size = x[2]; T.key0 = x[3]; T.ms0 = x[4]; T.px0 = x[5];
+            if (it != open.end()) { Trail& O = v[it->second]; if (!O.end) { O.end = 'R'; O.endKey = O.steps.empty() ? O.key0 : O.steps.back().key; O.endMs = O.steps.empty() ? O.ms0 : O.steps.back().ms; O.endPx = O.lastPx(); } }
+            v.push_back(T); open[T.id] = v.size() - 1; return true;
+        }
+        std::map<long long, size_t>::iterator it = x.empty() ? open.end() : open.find(x[0]);
+        if (tag == "TP") {
+            if ((x.size() != 5 && x.size() != 7) || (x[4] != 0 && x[4] != 1)) { ++bad; return false; }   // 7: + dist / ran (1.2.0 final)
+            if (it == open.end()) return true;                        // a step of a trail whose start is not in this file (rotated): ignored
+            Trail& T = v[it->second]; if (T.end) return true;
+            for (size_t k = 0; k < T.steps.size(); ++k) if (T.steps[k].ms == x[2] && T.steps[k].px == x[3]) return true;   // duplicate
+            TStepR s; s.key = x[1]; s.ms = x[2]; s.px = x[3]; s.lad = x[4] == 1; T.steps.push_back(s); return true;
+        }
+        if (tag == "TF" || tag == "TX" || tag == "TB") {
+            if (x.size() != (tag == "TF" ? 5u : 4u)) { ++bad; return false; }
+            if (it == open.end()) return true;
+            Trail& T = v[it->second];
+            if (!T.end) { T.end = tag == "TF" ? 'F' : tag == "TX" ? 'X' : 'b'; T.endKey = x[1]; T.endMs = x[2]; T.endPx = x[3]; T.endLots = tag == "TF" ? x[4] : 0; }
+            open.erase(it); return true;
+        }
+        ++bad; return false;
+    }
+};
+// the record line for the nightly (one per ended trail, written once; prices in ticks, tick size included):
+// TR|1|id|side|size|key0|ms0|px0|lastPx|moves|ticks|followMs|end|endKey|endMs|endPx|endLots|atr*100|gap*100|N|tick
+inline std::string trLineOf(const Trail& T, double tick) {
+    std::ostringstream o; char tb[40]; std::snprintf(tb, sizeof tb, "%.10g", tick);
+    o << "TR|1|" << T.id << '|' << T.side << '|' << T.size << '|' << T.key0 << '|' << T.ms0 << '|' << T.px0 << '|' << T.lastPx() << '|' << T.moves() << '|' << T.ticks() << '|' << T.followMs()
+      << '|' << (T.end ? T.end : '-') << '|' << T.endKey << '|' << T.endMs << '|' << T.endPx << '|' << T.endLots << '|' << (long long)std::llround(T.atrAt * 100.0) << '|' << (long long)std::llround(T.gapUsed * 100.0) << '|' << T.nUsed << '|' << tb;
+    return o.str();
+}
+struct TrEnd { char end = 0; long long endKey = 0, endMs = 0, endPx = 0, endLots = 0; double atr = 0, gap = 0; int n = 0; };
+inline bool parseTR(const std::string& raw, long long& id, long long& key0, TrEnd& e) {
+    std::string ln = raw; while (!ln.empty() && (ln.back() == '\r' || ln.back() == '\n')) ln.pop_back();
+    if (ln.compare(0, 5, "TR|1|") != 0) return false;
+    std::vector<std::string> c; std::stringstream ss(ln); std::string tok; while (std::getline(ss, tok, '|')) c.push_back(tok);
+    if (c.size() != 21 || c[12].size() != 1) return false;
+    { char* te = nullptr; const double tk = std::strtod(c[20].c_str(), &te); if (c[20].empty() || !te || *te || !std::isfinite(tk) || tk <= 0) return false; }
+    const char en = c[12][0]; if (en != 'F' && en != 'X' && en != 'B' && en != 'b' && en != 'R') return false;
+    std::vector<long long> x;
+    for (size_t k = 2; k < 20; ++k) { if (k == 12) { x.push_back(0); continue; } errno = 0; char* q = nullptr; const long long y = std::strtoll(c[k].c_str(), &q, 10); if (c[k].empty() || !q || *q || errno) return false; x.push_back(y); }
+    id = x[0]; key0 = x[3]; e.end = en; e.endKey = x[11]; e.endMs = x[12]; e.endPx = x[13]; e.endLots = x[14]; e.atr = (double)x[15] / 100.0; e.gap = (double)x[16] / 100.0; e.n = (int)x[17];
+    return true;
+}
+// one chart candle in ticks
+struct TBar { long long key = 0, hi = 0, lo = 0, cl = 0; };
+inline int barIdx(const std::vector<TBar>& b, long long key) {     // the candle with this key, else the first one after it (-1 = none)
+    size_t a = 0, z = b.size(); while (a < z) { const size_t m = (a + z) / 2; if (b[m].key < key) a = m + 1; else z = m; }
+    return a < b.size() ? (int)a : -1;
+}
+inline double atrAtIdx(const std::vector<TBar>& b, int i, int n = 14) {
+    double s = 0; int k = 0;
+    for (int j = i; j >= 1 && k < n; --j, ++k) s += (double)std::max(b[j].hi - b[j].lo, std::max(std::llabs(b[j].hi - b[j - 1].cl), std::llabs(b[j].lo - b[j - 1].cl)));
+    if (k == 0 && i >= 0 && i < (int)b.size()) return (double)(b[i].hi - b[i].lo);
+    return k ? s / k : 0.0;
+}
+// THE STOP-FOLLOWING B?: after each step (in its candle s), price RAN on - a bid: a high >= gapAtr x ATR above candle s's high (an offer:
+// a low that far below its low) first in candle m - and the order made no step through candle e = m + N - 1: B? at e's close. A traded /
+// pulled / stepped-back end in an earlier candle wins; the same candle: the order's own end wins. lastDecidable = the last candle allowed
+// to decide (closed, with the trail file caught up). A trail already decided (from the record) never changes. Returns the trails ended now.
+inline int decideStops(TrailSet& T, const std::vector<TBar>& bars, int lastDecidable, double gapAtr, int N) {
+    if (bars.empty() || !(gapAtr > 0) || N < 1) return 0;
+    if (lastDecidable >= (int)bars.size()) lastDecidable = (int)bars.size() - 1;
+    int ended = 0;
+    for (size_t t = 0; t < T.v.size(); ++t) {
+        Trail& R = T.v[t]; if (R.fromRec || R.end == 'B') continue;
+        if (R.end == 'R') continue;                                       // lost at a restart: never judged
+        const int fe = R.end ? barIdx(bars, R.endKey) : -1;                // the candle of the order's own end (traded / pulled / back)
+        if (R.end && (fe < 0 || bars[(size_t)fe].key != R.endKey)) continue;   // its end is not on this chart: keep it as it is
+        const int limit = R.end ? std::min(lastDecidable, fe - 1) : lastDecidable;
+        bool decided = false;
+        // the step candles (the first step's candle starts it)
+        std::vector<int> si; std::vector<long long> spx;
+        for (size_t k = 0; k < R.steps.size(); ++k) { const int b = barIdx(bars, R.steps[k].key); si.push_back(b); spx.push_back(R.steps[k].px); }
+        for (size_t k = 0; k < si.size() && !decided; ++k) {
+            const int s = si[k]; if (s < 0 || bars[(size_t)s].key != R.steps[k].key) continue;
+            const int next = k + 1 < si.size() ? (si[k + 1] < 0 ? (int)bars.size() : si[k + 1]) : INT_MAX;
+            if (next == s) continue;                                       // another step in the same candle: judge from the last one
+            const double atr = atrAtIdx(bars, s), gap = std::max(1.0, gapAtr * atr);
+            const long long ref = R.side == BIDS ? bars[(size_t)s].hi : bars[(size_t)s].lo;
+            long long run = ref;
+            for (int j = s + 1; j < (int)bars.size() && j <= limit && j < next; ++j) {
+                run = R.side == BIDS ? std::max(run, bars[(size_t)j].hi) : std::min(run, bars[(size_t)j].lo);
+                if ((double)(R.side == BIDS ? run - ref : ref - run) + 1e-9 < gap) continue;
+                const int e = j + N - 1;
+                if (e >= next || e > limit) break;                         // it followed in time / not decidable yet / its own end first
+                R.end = 'B'; R.endKey = bars[(size_t)e].key; R.endMs = 0; R.endPx = spx[k]; R.endLots = 0; R.atrAt = atr; R.gapUsed = gap; R.nUsed = N;
+                R.cutAfterEnd();
+                decided = true; ++ended; break;
+            }
+        }
+    }
+    return ended;
+}
+// a trail's end is FINAL (can be recorded) when it cannot change any more: B? / R, or the order's own end with every candle before it judged
+inline bool finalEnd(const Trail& R, const std::vector<TBar>& bars, int lastDecidable) {
+    if (!R.end) return false;
+    if (R.fromRec || R.end == 'B' || R.end == 'R') return true;
+    const int fe = barIdx(bars, R.endKey);
+    if (fe < 0 || bars[(size_t)fe].key != R.endKey) return true;     // not on this chart (older): as the file says
+    return fe - 1 <= lastDecidable;
+}
+// the trails to draw: per side the TRAIL_SHOW_PER_SIDE latest started among those that touch [keyLo, keyHi]
+inline std::vector<size_t> shownTrails(const TrailSet& T, long long keyLo, long long keyHi, int perSide = TRAIL_SHOW_PER_SIDE) {
+    std::vector<size_t> out; int n[2] = {0, 0};
+    for (size_t k = T.v.size(); k-- > 0;) {
+        const Trail& R = T.v[k]; if (R.side != BIDS && R.side != OFFERS) continue;
+        if (R.key0 > keyHi || (R.end && R.endKey < keyLo)) continue;
+        if (n[R.side] >= perSide) continue;
+        ++n[R.side]; out.push_back(k);
+    }
+    std::reverse(out.begin(), out.end()); return out;
+}
+inline std::string durText(long long ms) {
+    const long long s = std::max(0LL, ms / 1000); char b[32];
+    if (s >= 3600) std::snprintf(b, sizeof b, "%lldh %02lldm", s / 3600, s / 60 % 60); else if (s >= 60) std::snprintf(b, sizeof b, "%lldm %02llds", s / 60, s % 60); else std::snprintf(b, sizeof b, "%llds", s);
+    return b;
+}
+// the hover (rows <= ~115 characters): numbers first, then question / what / why / use / example, "?" last
+inline std::vector<std::string> trailHover(const Trail& R, const std::string& pxFrom, const std::string& pxTo, const std::string& pxEnd, const std::string& clkFrom, const std::string& clkEnd) {
+    const bool bid = R.side == BIDS; const std::string mid = " \xB7 ";
+    std::vector<std::string> L; char b[200];
+    std::snprintf(b, sizeof b, "Trailing %s %lld lots%sstepped %dx%s%lld ticks %s%sfollowed %s", bid ? "BID" : "OFFER", R.size, mid.c_str(), R.moves(), mid.c_str(), R.ticks(), bid ? "up" : "down", mid.c_str(), durText(R.followMs()).c_str());
+    L.push_back(b);
+    std::string end;
+    if (R.end == 'B') { std::snprintf(b, sizeof b, "End: B? stopped following - price ran %.0f ticks (%.1f ATR) on and it did not follow in %d candle%s (%s)", R.gapUsed, R.atrAt > 0 ? R.gapUsed / R.atrAt : 0.0, R.nUsed, R.nUsed == 1 ? "" : "s", clkEnd.c_str()); end = b; }
+    else if (R.end == 'b') end = "End: B? stepped back - re-priced AWAY from price to " + pxEnd + " (" + clkEnd + ")";
+    else if (R.end == 'F') { std::snprintf(b, sizeof b, "End: traded at %s (%lld lots hit, %s) - price came back to it", pxEnd.c_str(), R.endLots, clkEnd.c_str()); end = b; }
+    else if (R.end == 'X') end = "End: pulled (cancelled) at " + pxEnd + " (" + clkEnd + ")";
+    else if (R.end == 'R') end = "End: lost - IRT / the order feed restarted (MBO has no history)";
+    else end = std::string("Still following - last step to ") + pxTo;
+    L.push_back("From " + pxFrom + " to " + pxTo + ", since " + clkFrom);
+    L.push_back(end);
+    L.push_back(bid ? "Question: is a big bid following price up during the rally - and has it stopped?" : "Question: is a big offer following price down during the selloff - and has it stopped?");
+    L.push_back(bid ? "What: ONE resting bid (one order id) re-priced UP behind price again and again - the stepped green line." : "What: ONE resting offer (one order id) re-priced DOWN above price again and again - the stepped red line.");
+    L.push_back("Why: each re-price gives up its queue place - a trader paying that to stay close to price is supporting the move.");
+    L.push_back(bid ? "Use: a bid that stops following under a rally = buyers quitting - watch for the turn." : "Use: an offer that stops following over a selloff = sellers quitting - watch for the turn.");
+    L.push_back(bid ? "Dot = it traded (defended) \xB7 x = pulled \xB7 B? = stopped following / stepped back (support quitting)." : "Dot = it traded (defended) \xB7 x = pulled \xB7 B? = stopped following / stepped back (resistance quitting).");
+    L.push_back(bid ? "Example: an 85-lot NQ bid steps 4x from 21,300 to 21,312 under the rally, then stops: B?; the high prints 2 candles later."
+                    : "Example: a 60-lot NQ offer steps 5x from 21,340 to 21,322 over the selloff, then stops: B?; the low prints next candle.");
+    L.push_back("? = not proven yet: the nightly scores whether B? comes before the turn.");
+    return L;
 }
 } // namespace mvl
 #endif

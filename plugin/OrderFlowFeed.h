@@ -630,6 +630,7 @@ public:
         events++; perAction[e.action]++; a.events++;
         evTs = e.stamp > 0 ? e.stamp : e.arrMs / 1000;                     // (1.12.0) the event second for the sink
         if (trackMoves) {                                                   // (1.11.0) moves whose 0.5 s rest is done join this candle
+            mvt.key = curKey; mvt.trailNear = near;                         // (MoveLogic 1.2.0) the candle of this event + the near band, for the trails
             mvTmp.clear(); mvt.confirm(e.arrMs, mvTmp);
             for (size_t k = 0; k < mvTmp.size(); ++k) if ((isNear(mvTmp[k].oldPx) || isNear(mvTmp[k].newPx)) && a.moves.size() < 3000) a.moves.push_back(mvTmp[k]);
             if (e.action != NEW) mvt.touched(e.id, e.arrMs);
@@ -683,6 +684,7 @@ public:
             }
             aggressor(a, s, e);
             ref = e.px; haveRef = true; lastFillMs = e.arrMs;              // a fill's price = the last trade
+            if (trackMoves) mvt.fill(e.id, e.px, e.size, e.arrMs);         // (MoveLogic 1.2.0) a trailing order that traded ends with its dot
             if (sink && e.size > 0) sink->onBook(2, s, e.px, e.size, evTs, curKey);   // (1.12.0) the watcher sees the fill after the book took it
             lastFill[s][e.px] = std::make_pair(e.arrMs, e.stamp);
             if (lastFill[s].size() > FILLMEM_CAP) {                        // forget fills older than the window, then everything
@@ -3141,9 +3143,22 @@ private:
             if (noBar) S.noBar++; else S.lateDropped++;
             S.e.apply(S.scratch, x);
             if (S.scratch.events > 20000) S.scratch = Acc();
+            trailFile(S);                                                  // (MoveLogic 1.2.0)
             return;
         }
         S.e.curKey = key; S.e.apply(S.accs[key], x);
+        trailFile(S);                                                      // (MoveLogic 1.2.0) lsBookFlow only
+    }
+    // (MoveLogic 1.2.0, 2026-10-22 Rassul "rolling bids / offers during the move") lsBookFlow only (trackMoves): the trail lines of big
+    // orders following price -> lsFlexLevels\BookFlow\<MKT>-<spb>-trails.csv (lsDefenseLines draws them and decides the B?)
+    void trailFile(S_& S) {
+        if (!S.e.trackMoves) return;
+        if (S.e.mvt.trailFile().empty()) {
+            if (S.market.empty() || S.spb <= 0 || !(S.tick > 0)) return;
+            const std::string fd = flexDir(); if (fd.empty()) return;
+            makeDir(fd + "\\BookFlow"); S.e.mvt.trailMin = mvl::trailMinOf(S.market); S.e.mvt.setTrailFile(mvl::trailPathOf(fd, S.market, (int)S.spb), S.tick);
+        }
+        if (!S.e.mvt.trailOut.empty()) S.e.mvt.flushTrails();
     }
     std::string levelAt(S_& S, long long key) {
         std::map<long long, int>::const_iterator i = S.barEnds.find(key);

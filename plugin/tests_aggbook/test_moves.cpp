@@ -118,7 +118,7 @@ int main() {
     }
     // ---- the badge ---------------------------------------------------------------------------------------------------------------
     CHECK(dt::badgeText5(true, true, 'L', true, false) == "A|H|L|P" && dt::badgeText5(false, false, 0, true, false) == "P" && dt::badgeText5(true, false, 0, false, false) == "A", "the combined badge A|H|L|P");
-    CHECK(std::string(dt::VERSION) == "1.8.0" && std::string(mvl::VERSION) == "1.1.1" && std::string(off::VERSION) == "1.13.0", "versions");
+    CHECK(std::string(dt::VERSION) == "1.8.0" && std::string(mvl::VERSION) == "1.2.0" && std::string(off::VERSION).compare(0, 5, "1.13.") == 0, "versions");   // (MoveLogic 1.2.0) off: any 1.13.x (other plugins bump it)
     // ---- (1.1.0 / DefenseTurn 1.6.0, Rassul 14:16 "i want you to draw them") all four cases drawn ----------------------------------
     {   mvl::Read r; r.ext = 0; r.t = 100; r.px = 4000; r.tick = 0.25; r.norm[0] = 5; r.norm[1] = 5;
         r.s.in[0] = 12; r.s.bigSize[0] = 12; r.s.bigOld[0] = 3990; r.s.bigNew[0] = 3992;                 // bids pressed in
@@ -170,6 +170,26 @@ int main() {
         CHECK(a2.moves.size() == 2, "engine: a DEL right after a fill is the trade, never paired as a move");
         off::Engine q; q.near = 40; q.apply(a1, ev(off::NEW, off::BID, 996, 10, 1, 1100)); q.apply(a1, ev(off::MOD, off::BID, 998, 10, 1, 2000));
         CHECK(q.mvt.seenM == 0, "engine: trackMoves off (every other pane) = no move work at all");
+    }
+    {   // (MoveLogic 1.2.0 TRAILS) the engine wiring: candle key, same-id steps, the fill hook; trails off unless trailMin is set
+        off::Engine g; g.near = 40; g.trackMoves = true; g.mvt.minLots = 6; g.mvt.trailMin = 25;
+        auto ev = [](int act, int side, long long px, long long size, long long id, long long ms) { off::Ev e; e.action = act; e.side = side; e.px = px; e.size = size; e.id = id; e.arrMs = ms; e.stamp = ms / 1000; return e; };
+        off::Acc a;
+        g.curKey = 500; g.apply(a, ev(off::NEW, off::ASK, 1000, 5, 900, 1000)); g.apply(a, ev(off::FILL, off::ASK, 1000, 1, 900, 1001));
+        g.apply(a, ev(off::NEW, off::BID, 996, 40, 1, 1100));
+        g.apply(a, ev(off::NEW, off::ASK, 1002, 5, 910, 1500)); g.apply(a, ev(off::FILL, off::ASK, 1002, 1, 910, 1501));   // price runs up 2 first
+        g.curKey = 501; g.apply(a, ev(off::MOD, off::BID, 998, 40, 1, 2000));
+        g.apply(a, ev(off::NEW, off::ASK, 1004, 5, 911, 2500)); g.apply(a, ev(off::FILL, off::ASK, 1004, 1, 911, 2501));
+        g.curKey = 502; g.apply(a, ev(off::MOD, off::BID, 1000, 40, 1, 3000));
+        g.apply(a, ev(off::NEW, off::ASK, 1010, 2, 901, 3100));                   // a later event closes the 5 ms ladder window
+        CHECK(g.mvt.trStarted == 1 && !g.mvt.trailOut.empty() && g.mvt.trailOut[0] == "TS|1|0|40|501|2000|996", "engine: a 40-lot bid stepping up twice after price ran = a trail (key = the candle of its first step)");
+        CHECK(g.mvt.trailOut.size() >= 3 && g.mvt.trailOut[1] == "TP|1|501|2000|998|0|4|2", "engine: the step carries ticks behind the trade (4) and the run before it (2); the near band reaches the tracker");
+        g.curKey = 503; g.apply(a, ev(off::FILL, off::BID, 1000, 7, 1, 4000));
+        CHECK(g.mvt.trFilled == 1 && g.mvt.trailOut.back() == "TF|1|503|4000|1000|7", "engine: a fill on it = TF (the dot)");
+        off::Engine q; q.near = 40; q.trackMoves = true; q.mvt.minLots = 6; off::Acc b;
+        q.apply(b, ev(off::NEW, off::ASK, 1000, 5, 900, 1000)); q.apply(b, ev(off::FILL, off::ASK, 1000, 1, 900, 1001));
+        q.apply(b, ev(off::NEW, off::BID, 996, 40, 1, 1100)); q.apply(b, ev(off::FILL, off::ASK, 1002, 1, 900, 1501)); q.apply(b, ev(off::MOD, off::BID, 998, 40, 1, 2000)); q.apply(b, ev(off::FILL, off::ASK, 1004, 1, 900, 2501)); q.apply(b, ev(off::MOD, off::BID, 1000, 40, 1, 3000)); q.apply(b, ev(off::NEW, off::ASK, 1010, 2, 901, 3100));
+        CHECK(q.mvt.trailOut.empty() && q.mvt.trStarted == 0, "engine: trailMin 0 = no trail work");
     }
     std::printf("Moves (Top Defender #3): %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;

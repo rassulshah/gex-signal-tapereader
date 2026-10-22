@@ -1,5 +1,15 @@
 /********************************************************************************
- *  DefenseLines.cpp  --  Investor/RT RTX extension  lsDefenseLines  1.9.0  (2026-10-21)
+ *  DefenseLines.cpp  --  Investor/RT RTX extension  lsDefenseLines  1.10.0  (2026-10-22)
+ *  (1.10.0, Rassul ordered 15:20 CT 2026-10-22 "ROLLING BIDS / OFFERS DURING THE MOVE", MBO Roadmap "Is a big order following price during
+ *  the move?" T-20261022-17) TRAILS: one big resting order (one order id, >= the market's Big Lot S20 of resting orders) re-priced again and
+ *  again BEHIND price during the wave - a bid stepping up under a rally, an offer stepping down above a selloff. lsBookFlow's order feed
+ *  writes its steps (MoveLogic 1.2.0) to lsFlexLevels\BookFlow\<MKT>-<spb>-trails.csv; this overlay draws a thin STEPPED line (green bid,
+ *  red offer) joining its prices from the first step to now, ending ONCE: a filled dot (it traded), x (pulled), "B?" (it STOPPED FOLLOWING:
+ *  price ran >= 0.5 ATR on and it did not follow within N candles, or it stepped back - support / resistance quitting, the stage 3
+ *  exhaustion warning). At most 2 trails per side. Never repainted: each end is decided once at a candle close and recorded to
+ *  <MKT>-<spb>-trails-rec.csv (the nightly scores whether B? precedes the turn); a restart redraws from that record. Hover a trail: size,
+ *  steps, ticks, how long it followed, the end, question / what / why / use / example. Settings: Trails checkbox, Bid / Offer colours,
+ *  Stop-following gap (ATR), Candles to follow (N).
  *  (1.9.0, Rassul 19:48 CT "for the exhaustion line remove the E and the ? and the refill line remove any characters like R A etc. keep them
  *  both clean") the lines carry NO text: no "R A H ?", no "E ?", no "? R" on the forming line - the letters live in the Defense pane's
  *  badge row (hover there for the numbers). Lines, colours, dots, boxes and the records are unchanged.
@@ -28,6 +38,7 @@
 #include "MoveLogic.h"   // (1.5.0) the M lines: order moves (Top Defender #3)
 #include "DefenseLinesSettings.h"
 #include "SettingsHost.h"
+#include "HoverBoard.h"     // (1.10.0) hbCursor: the trail hover only while the cursor is over this chart
 #include "SettingsGuard.h"   // (1.2.2) the window calls behind a fault guard (IRT faulted in parmsLoad / parmsApply of 1.1.0 on a copy with no chart)
 #include <algorithm>
 #include <chrono>
@@ -39,13 +50,17 @@
 #include <ctime>
 #include <fstream>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
 #include <sys/types.h>
 #include <sys/stat.h>
+#if defined(_MSC_VER)
+#pragma comment(lib, "user32.lib")   // (1.10.0) GetCursorPos / WindowFromPoint via HoverBoard.h
+#endif
 
-static const char* DL_VERSION = "1.9.0";   // 1.9.0 (2026-10-21 19:48 CT Rassul "keep them both clean"): no text on the refill / exhaustion / forming lines (the letters are in the Defense pane's badge + its hover); 1.8.0 (2026-10-21 16:05 CT, Rassul "fix this, it should be solid"): lines stop at the lsHodLod table's edges, labels / dots / boxes that would touch it are not painted (still in the turns file and counted; KeepOutDraw.h); 1.7.0 (2026-10-21, lsBookFlow 1.19.0): the turns file's new G (attackers giving up) and W (defenders withdrew at a key level) lines are read and kept out of the bad-line count; nothing new drawn on the price chart (the letters are in the Defense pane's badge);   // 1.6.0 (2026-10-21 14:16-14:18 CT Rassul "i want you to draw them", mockup v4): every move case drawn - per BOOK side the largest qualifying move (P: in, B: out), hollow box at the old price, solid box + lots at the new price, in the side's colour (bids green, offers red); both sides on one candle side by side, never overlapping;   // 1.5.0 (2026-10-21, Rassul approved defender3-mockup-v3 11:50 CT, Top Defender #3): on a candle where the Defense pane drew P (the defenders PRESSED IN), the largest such move on the price chart: a HOLLOW box at the old price, a SOLID box at the new price with only its lot size (M lines, MoveLogic.h); never repainted;   // 1.4.0 (2026-10-21, Top Defender #4): the turns file's Q lines (the re-test L / X, DefenseTurn 1.4.0) are read and kept out of the bad-line count; the line label stays "R A H ?" - L / X are in the Defense pane's badge row (Rassul 11:26 "if the refill line gets too complicated ... they are in the pane"; the line is usually gone by the re-test: at most 3 candles);   // 1.3.0 (2026-10-21, Rassul approved defender5-mockup-v2 11:25 CT): the line label adds H when lsBookFlow decided the defenders hit back after the A ("R A H ?"; DefenseTurn 1.3.0 H lines);    // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
+static const char* DL_VERSION = "1.10.0";   // 1.10.0 (2026-10-22 15:20 CT Rassul, T-20261022-17): TRAILS of big orders following price (MoveLogic 1.2.0), decided / recorded once, hover; TRACK_MOUSE for the trail hover only; 1.9.0 (2026-10-21 19:48 CT Rassul "keep them both clean"): no text on the refill / exhaustion / forming lines (the letters are in the Defense pane's badge + its hover); 1.8.0 (2026-10-21 16:05 CT, Rassul "fix this, it should be solid"): lines stop at the lsHodLod table's edges, labels / dots / boxes that would touch it are not painted (still in the turns file and counted; KeepOutDraw.h); 1.7.0 (2026-10-21, lsBookFlow 1.19.0): the turns file's new G (attackers giving up) and W (defenders withdrew at a key level) lines are read and kept out of the bad-line count; nothing new drawn on the price chart (the letters are in the Defense pane's badge);   // 1.6.0 (2026-10-21 14:16-14:18 CT Rassul "i want you to draw them", mockup v4): every move case drawn - per BOOK side the largest qualifying move (P: in, B: out), hollow box at the old price, solid box + lots at the new price, in the side's colour (bids green, offers red); both sides on one candle side by side, never overlapping;   // 1.5.0 (2026-10-21, Rassul approved defender3-mockup-v3 11:50 CT, Top Defender #3): on a candle where the Defense pane drew P (the defenders PRESSED IN), the largest such move on the price chart: a HOLLOW box at the old price, a SOLID box at the new price with only its lot size (M lines, MoveLogic.h); never repainted;   // 1.4.0 (2026-10-21, Top Defender #4): the turns file's Q lines (the re-test L / X, DefenseTurn 1.4.0) are read and kept out of the bad-line count; the line label stays "R A H ?" - L / X are in the Defense pane's badge row (Rassul 11:26 "if the refill line gets too complicated ... they are in the pane"; the line is usually gone by the re-test: at most 3 candles);   // 1.3.0 (2026-10-21, Rassul approved defender5-mockup-v2 11:25 CT): the line label adds H when lsBookFlow decided the defenders hit back after the A ("R A H ?"; DefenseTurn 1.3.0 H lines);    // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
 static long long dlSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string dlFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void dlMakeDir(const std::string& p) {
@@ -81,6 +96,13 @@ struct DlState {
     ss::Store setStore; ss::Values set = ss::defaults(dlset::spec(), -1);
     std::string statusBody;
     bdk::TableWatch keep;                         // (1.8.0) the HOD/LOD table on this chart (keep-out)
+    // (1.10.0) TRAILS: the trail file (read incrementally: append-only), the record of decided ends, the hover
+    mvl::TrailSet trails; std::string trailPath, recPath; long long trailOff = 0, trailSz = -1, trailMt = -1;
+    std::map<std::pair<long long, long long>, mvl::TrEnd> recEnds; std::set<std::pair<long long, long long> > recDone;
+    long long lastN = -1, nChangedMs = 0, recWritten = 0, recFails = 0, trailsDrawn = 0;
+    struct TrHit { size_t idx; int l, t, r, b; };
+    std::vector<TrHit> trHits;                    // the drawn trails' segments (+ 3 px), for the hover
+    bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
 };
 static ss::Ids& dlIds() { static ss::Ids I; return I; }
 
@@ -89,6 +111,10 @@ public:
     SS_SAFE_DIALOG(DefenseLines, "DefenseLines")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     HostSlot<DlState> slot_;
     virtual int draw(void);
+    virtual int mouse(RTX_EVENT* e);              // (1.10.0) the trail hover
+    void drawTrails(DlState& s, const ss::Values& V, int n, int v0, int v1, RTARRAYI& dtA, RTARRAY& hiA, RTARRAY& loA, RTARRAY& clA, int ppb, size_t& drawn);
+    void refreshTrails(DlState& s);
+    std::string clockOf(long long key) { const long long t = localSec((RTDATE)key) - (long long)getSecondsPerBar(); if (t <= 0) return "?"; const int h = (int)(t / 3600 % 24), m = (int)(t / 60 % 60); char b[16]; std::snprintf(b, sizeof b, "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM"); return b; }
     virtual int parmsLoadBody(void) { ss::guardedCall(this, &DefenseLines::loadBody, 0u); return RTX_OK; }
     virtual int parmsApplyBody(void) { ss::guardedCall(this, &DefenseLines::applyBody, 0u); return RTX_OK; }
     virtual int parmsUpdtBody(unsigned int i) { ss::guardedCall(this, &DefenseLines::updtBody, i); return RTX_OK; }
@@ -154,6 +180,7 @@ void DefenseLines::refresh(DlState& s) {
         for (std::map<std::pair<int, long long>, mvl::Read>::const_iterator it = ms.begin(); it != ms.end(); ++it) s.ms[it->first] = it->second;   // (1.5.0) append-only: never removed
         s.turns.mt = mt; s.turns.sz = sz; s.reads++; s.bad = bad;
     }
+    refreshTrails(s);                                                     // (1.10.0)
     if (lp != s.live.path) { s.live = DlState::File(); s.live.path = lp; s.haveLive = false; s.liveLine = dt::Line(); }
     // This is a tiny, volatile file: re-read on each two-second poll. mtime is only second-granularity on some hosts, so a same-size
     // overwrite could otherwise leave a stale forming "?" on the chart. Missing / oversized / malformed live input fails closed.
@@ -170,10 +197,153 @@ void DefenseLines::writeStatus(DlState& s, size_t drawn, size_t failed) {
     o << "VERSION," << DL_VERSION << "\nMARKET," << s.mkt << "\nBAR_SECONDS," << s.spb << "\nTURNS_FILE," << s.turns.path << "," << s.lines.size() << " turns, "
       << s.bad << " unreadable lines\nLIVE," << (s.haveLive ? "dotted line on the forming candle" : "none") << "\nDRAWN_NOW," << drawn << ",failed lines removed " << failed
       << "\nSETTINGS," << s.set.why << ",lines " << (s.set.b(dlset::K_SHOW_LINES) ? "on" : "off") << ",E " << (s.set.b(dlset::K_SHOW_E) ? "on" : "off") << ",dots " << (s.set.b(dlset::K_SHOW_DOTS) ? "on" : "off")
-      << ",pane marks " << (s.set.b(dlset::K_SHOW_MARKS) ? "on" : "off") << ",candles " << s.set.i(dlset::K_MAX_CANDLES) << ",exhaustion lines " << s.xs.size() << "\nLABELS,none (1.9.0: clean lines; the letters are in the Defense pane's badge)\n" << bdk::keepLine();
+      << ",pane marks " << (s.set.b(dlset::K_SHOW_MARKS) ? "on" : "off") << ",candles " << s.set.i(dlset::K_MAX_CANDLES) << ",exhaustion lines " << s.xs.size() << "\nLABELS,none (1.9.0: clean lines; the letters are in the Defense pane's badge)\n"
+      << "TRAILS," << (s.set.b(dlset::K_SHOW_TRAILS) ? "on" : "off") << "," << s.trails.v.size() << " trails (" << s.trails.bad << " unreadable lines, " << s.trails.restarts << " feed starts),drawn " << s.trailsDrawn
+      << ",recorded " << s.recDone.size() << " (" << s.recWritten << " this run, " << s.recFails << " write fails),gap " << s.set.f(dlset::K_TRAIL_GAP) << " ATR,N " << s.set.i(dlset::K_TRAIL_N) << "\n" << bdk::keepLine();
     const std::string body = o.str(); if (body == s.statusBody) return;
     std::ofstream f((d + "\\DefenseLines.status-" + s.mkt + ".txt").c_str(), std::ios::binary | std::ios::trunc);
     if (f.is_open()) { f << body; s.statusBody = body; }
+}
+
+// (1.10.0) the trail file: append-only, read from where the last read stopped (whole lines only); a shorter file = rotated: read again.
+// The record of decided ends is read once per market / bar size: a recorded end always wins (never repainted).
+void DefenseLines::refreshTrails(DlState& s) {
+    const std::string f = dlFlex();
+    const std::string tp = mvl::trailPathOf(f, s.mkt, s.spb), rp = mvl::trailRecPathOf(f, s.mkt, s.spb);
+    if (rp != s.recPath) {
+        s.recPath = rp; s.recEnds.clear(); s.recDone.clear(); s.recWritten = 0; s.recFails = 0;
+        long long mt = -1, sz = -1;
+        if (dlStat(rp, mt, sz) && sz < 8 * 1024 * 1024) {
+            std::ifstream in(rp.c_str(), std::ios::binary); std::string ln;
+            while (std::getline(in, ln)) { long long id = 0, k0 = 0; mvl::TrEnd E; if (mvl::parseTR(ln, id, k0, E)) { s.recEnds[std::make_pair(id, k0)] = E; s.recDone.insert(std::make_pair(id, k0)); } }
+        }
+    }
+    if (tp != s.trailPath) { s.trailPath = tp; s.trails.clear(); s.trailOff = 0; s.trailSz = -1; s.trailMt = -1; }
+    long long mt = -1, sz = -1;
+    if (!dlStat(tp, mt, sz)) return;
+    if (sz == s.trailSz && mt == s.trailMt) return;
+    if (sz < s.trailOff) { s.trails.clear(); s.trailOff = 0; }              // rotated (MoveLogic keeps it under 3 MB): read the new file
+    if (sz - s.trailOff > 8 * 1024 * 1024) return;                          // never a huge read from the draw
+    std::ifstream in(tp.c_str(), std::ios::binary); if (!in.is_open()) return;
+    in.seekg((std::streamoff)s.trailOff);
+    std::string buf((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const size_t lastNl = buf.rfind('\n'); if (lastNl == std::string::npos) { s.trailSz = -1; return; }   // only a half-written line: try again
+    size_t a = 0;
+    while (a <= lastNl) { const size_t b = buf.find('\n', a); s.trails.line(buf.substr(a, b - a)); a = b + 1; }
+    s.trailOff += (long long)lastNl + 1; s.trailSz = sz; s.trailMt = mt;
+    for (size_t k = 0; k < s.trails.v.size(); ++k) {                        // a recorded end wins
+        mvl::Trail& R = s.trails.v[k]; if (R.fromRec) continue;
+        std::map<std::pair<long long, long long>, mvl::TrEnd>::const_iterator it = s.recEnds.find(std::make_pair(R.id, R.key0));
+        if (it == s.recEnds.end()) continue;
+        R.end = it->second.end; R.endKey = it->second.endKey; R.endMs = it->second.endMs; R.endPx = it->second.endPx; R.endLots = it->second.endLots;
+        R.atrAt = it->second.atr; R.gapUsed = it->second.gap; R.nUsed = it->second.n; R.fromRec = true; R.recorded = true; R.cutAfterEnd();
+    }
+}
+
+// (1.10.0) decide the stop-following B? on closed candles (3 s after a new candle appeared, so the trail file has caught up), record each
+// final end once, then draw at most 2 trails per side: a thin stepped line, dot / x / "B?" at the end
+void DefenseLines::drawTrails(DlState& s, const ss::Values& V, int n, int v0, int v1, RTARRAYI& dtA, RTARRAY& hiA, RTARRAY& loA, RTARRAY& clA, int ppb, size_t& drawn) {
+    s.trHits.clear(); s.trailsDrawn = 0;
+    const double tick = s.trails.tick; if (!(tick > 0) || s.trails.v.empty() || n < 3) return;
+    const long long now = dlSteadyMs();
+    if (n != s.lastN) { s.lastN = n; s.nChangedMs = now; }
+    const int first = std::max(0, n - 3000);
+    std::vector<mvl::TBar> bars; bars.reserve((size_t)(n - first));
+    for (int i = first; i < n; ++i) { mvl::TBar b; b.key = (long long)dtA[i]; b.hi = (long long)std::llround((double)hiA[i] / tick); b.lo = (long long)std::llround((double)loA[i] / tick); b.cl = (long long)std::llround((double)clA[i] / tick); bars.push_back(b); }
+    const int lastDec = (now - s.nChangedMs >= 3000 ? n - 2 : n - 3) - first;   // closed candles only; the newest one after a 3 s grace
+    mvl::decideStops(s.trails, bars, lastDec, std::max(0.1, V.f(dlset::K_TRAIL_GAP)), std::max(1, V.i(dlset::K_TRAIL_N)));
+    for (size_t k = 0; k < s.trails.v.size(); ++k) {                         // record each final end once (flushed good append = recorded)
+        mvl::Trail& R = s.trails.v[k]; if (R.recorded || !mvl::finalEnd(R, bars, lastDec)) continue;
+        const std::pair<long long, long long> id = std::make_pair(R.id, R.key0);
+        if (s.recDone.count(id)) { R.recorded = true; continue; }
+        std::ofstream f(s.recPath.c_str(), std::ios::binary | std::ios::app);
+        if (f.is_open()) { f << mvl::trLineOf(R, tick) << "\n"; f.flush(); }
+        if (f.is_open() && f.good()) { R.recorded = true; R.fromRec = true; s.recDone.insert(id); ++s.recWritten; } else ++s.recFails;
+    }
+    if (!V.b(dlset::K_SHOW_TRAILS)) return;
+    const long long kLo = (long long)dtA[v0], kHi = (long long)dtA[v1];
+    const std::vector<size_t> show = mvl::shownTrails(s.trails, kLo, kHi);
+    auto idxOf = [&](long long key) -> int { const int j = mvl::barIdx(bars, key); return j < 0 ? -1 : j + first; };
+    auto xOf = [&](int i) { PNT p; p.set(i, 0.0f, kBarCenter); return (int)p.h; };
+    auto yOf = [&](long long px) { PNT p; p.set(v0, (float)((double)px * tick), kBarCenter); return (int)p.v; };
+    for (size_t q = 0; q < show.size(); ++q) {
+        const mvl::Trail& R = s.trails.v[show[q]];
+        const COLOR col = (COLOR)(R.side == mvl::BIDS ? V.c(dlset::K_COL_TRAIL_BID) : V.c(dlset::K_COL_TRAIL_OFF));
+        int a = idxOf(R.key0); if (a < 0) continue;
+        const char end = mvl::finalEnd(R, bars, lastDec) ? R.end : 0;        // an end not final yet is drawn as still following (never repainted)
+        int endI = end ? idxOf(R.endKey) : n - 1; if (endI < 0) endI = n - 1;
+        // the path: (bar, price) corners
+        std::vector<std::pair<int, long long> > P; P.push_back(std::make_pair(a, R.px0));
+        long long cur = R.px0;
+        for (size_t k = 0; k < R.steps.size(); ++k) {
+            int b = idxOf(R.steps[k].key); if (b < 0) b = n - 1; if (end && b > endI) break;
+            P.push_back(std::make_pair(b, cur)); cur = R.steps[k].px; P.push_back(std::make_pair(b, cur));
+        }
+        P.push_back(std::make_pair(std::max(endI, P.back().first), cur));
+        setPen(col, 1, P_SOLID);
+        bool any = false;
+        for (size_t k = 0; k + 1 < P.size(); ++k) {
+            const int b0 = P[k].first, b1 = P[k + 1].first;
+            if (P[k].second == P[k + 1].second) {                             // horizontal: clipped to the visible candles
+                const int c0 = std::max(b0, v0), c1 = std::min(b1, v1); if (c0 > c1 || (c0 == c1 && b0 != b1)) continue;
+                const int x0 = xOf(c0), x1 = xOf(c1), y = yOf(P[k].second); if (x1 <= x0) continue;
+                ko::line(x0, y, x1, y); s.trHits.push_back(DlState::TrHit{ show[q], x0, y - 3, x1, y + 3 }); any = true;
+            } else if (b0 >= v0 && b0 <= v1) {                                // vertical: the step
+                const int x = xOf(b0), y0 = yOf(P[k].second), y1 = yOf(P[k + 1].second);
+                ko::line(x, y0, x, y1); s.trHits.push_back(DlState::TrHit{ show[q], x - 3, std::min(y0, y1), x + 3, std::max(y0, y1) }); any = true;
+            }
+        }
+        if (end && endI >= v0 && endI <= v1) {                                // the end mark
+            const int x = xOf(endI), y = yOf(end == 'F' ? R.endPx : cur);
+            if (end == 'F') {                                               // filled dot (7 px)
+                static const int W[7] = { 1, 2, 3, 3, 3, 2, 1 };
+                if (!bdk::hide(x - 3, y - 3, x + 4, y + 4)) for (int r = -3; r <= 3; ++r) ko::rawLine(x - W[r + 3], y + r, x + W[r + 3] + 1, y + r);
+            } else if (end == 'X') {
+                if (!bdk::hide(x - 4, y - 4, x + 5, y + 5)) { ko::rawLine(x - 3, y - 3, x + 4, y + 4); ko::rawLine(x - 3, y + 3, x + 4, y - 4); }
+            } else if (R.stopLetter()) {
+                FONT fo; fo.id = HELVETICA; fo.size = 10; fo.style = BOLD; setFont(fo);
+                const int tw = (int)getTextWidth("B?", -1) + 2, l = x + std::max(3, ppb / 2), t = R.side == mvl::BIDS ? y - 15 : y + 1;
+                if (!bdk::hide(l, t, l + tw, t + 14)) { setTextColor(col); RCT rc; rc.set((short)l, (short)t, (short)(l + tw), (short)(t + 14)); rc.drawText("B?", false, false); s.trHits.push_back(DlState::TrHit{ show[q], l, t, l + tw, t + 14 }); }
+            }
+            any = true;
+        }
+        if (any) { ++s.trailsDrawn; ++drawn; }
+    }
+    // the hover: only while the cursor is over this chart's window and on a drawn trail
+    if (!s.msHas || s.msWnd == 0 || hb::hbCursor() != s.msWnd) return;
+    const DlState::TrHit* H = nullptr;
+    for (size_t k = 0; k < s.trHits.size(); ++k) { const DlState::TrHit& h = s.trHits[k]; if (s.msH >= h.l && s.msH <= h.r && s.msV >= h.t && s.msV <= h.b) { H = &h; break; } }
+    if (!H) return;
+    mvl::Trail R = s.trails.v[H->idx]; if (!mvl::finalEnd(R, bars, lastDec)) R.end = 0;   // the hover says what the chart shows
+    auto pxText = [&](long long px) { char b[48]; const double v = (double)px * tick; const int dec = tick >= 1 ? 0 : tick >= 0.1 ? 1 : tick >= 0.01 ? 2 : tick >= 0.001 ? 3 : tick >= 0.0001 ? 4 : 5; std::snprintf(b, sizeof b, "%.*f", dec, v); return std::string(b); };
+    const std::vector<std::string> L = mvl::trailHover(R, pxText(R.px0), pxText(R.lastPx()), pxText(R.end == 'F' ? R.endPx : R.lastPx()), clockOf(R.key0), R.end ? clockOf(R.endKey) : std::string("now"));
+    RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
+    int axisR = pane.right; if (scale.left > pane.left && scale.left < pane.right) axisR = scale.left - 2;
+    FONT hf; hf.id = HELVETICA; hf.size = 10; hf.style = PLAIN; setFont(hf);
+    int w = 0; for (size_t i = 0; i < L.size(); ++i) w = std::max(w, (int)getTextWidth(L[i].c_str(), -1));
+    w += 16; const int lh = 15, hh = (int)L.size() * lh + 10;
+    int l = s.msH + 14, t = s.msV + 14;
+    if (l + w > axisR - 2) l = s.msH - 14 - w;
+    if (l < pane.left + 2) l = pane.left + 2;
+    if (t + hh > pane.bottom - 2) t = pane.bottom - 2 - hh;
+    if (t < pane.top + 2) t = pane.top + 2;
+    RCT bg; bg.set((short)l, (short)t, (short)(l + w), (short)(t + hh)); bg.draw(1, (COLOR)0x00606060, (COLOR)0x00FFFFFF, DRAW_OPAQUE, PAT_SOLID);
+    for (size_t i = 0; i < L.size(); ++i) {
+        setTextColor(i == 0 ? (COLOR)(R.side == mvl::BIDS ? V.c(dlset::K_COL_TRAIL_BID) : V.c(dlset::K_COL_TRAIL_OFF)) : (COLOR)0x00202020);
+        RCT tr; tr.set((short)(l + 8), (short)(t + 5 + (int)i * lh), (short)(l + w - 4), (short)(t + 5 + (int)(i + 1) * lh)); tr.drawText(L[i].c_str(), false, false);
+    }
+}
+
+// (1.10.0) the mouse: remember where it is; redraw only when the hovered trail changes. Never swallows the event.
+int DefenseLines::mouse(RTX_EVENT* e) {
+    if (!e || (e->type != E_MOUSE_MOVE && e->type != E_MOUSE_HOVER)) return RTX_FAIL;
+    DlState* S = slot_.get(this, false); if (!S) return RTX_FAIL;
+    if (S->trHits.empty() && S->hovKey.empty()) return RTX_FAIL;
+    S->msHas = true; S->msH = e->v.mouse.h; S->msV = e->v.mouse.v; S->msWnd = hb::hbCursor();
+    std::string k;
+    for (size_t i = 0; i < S->trHits.size(); ++i) { const DlState::TrHit& h = S->trHits[i]; if (S->msH >= h.l && S->msH <= h.r && S->msV >= h.t && S->msV <= h.b) { k = std::to_string(h.idx); break; } }
+    if (k != S->hovKey) { S->hovKey = k; invalidateChart(false); }
+    return RTX_FAIL;
 }
 
 int DefenseLines::draw(void) {
@@ -274,6 +444,7 @@ int DefenseLines::draw(void) {
                 ++s->boxesDrawn; ++drawn;
             }
         }
+        drawTrails(*s, V, (int)n, v0, v1, dtA, hiA, loA, clA, ppb, drawn);   // (1.10.0)
         if (s->haveLive && showLines) {                                      // the forming candle: dotted, 2 bars long, no text (1.9.0)
             const dt::Line& L = s->liveLine; const int i = indexOf(L.t);
             if (i >= 0 && i >= (int)n - 2 && i <= v1 + 1) {
@@ -298,8 +469,8 @@ int cppExtension::calc(int) { return RTX_OK; }
 extern "C" cppExtension* CreateExtension(void) {
     DefenseLines* p = new DefenseLines();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour AND beyond the R line (above it at a low, below it at a high). R LINE (red at a high, green at a low) = the price near the pivot where the defenders re-posted the most of what was eaten. E LINE (gray) = exhaustion: the price near the pivot where the attack died AT the price (the attackers' hits there in seconds 20-60 slowed to the market's median or less vs seconds 0-20, and at least half the resting size stayed); decided about a minute after the close; only on turns that have an R. Yellow dot = the candle each line refers to. The lines carry no text: the letters (A absorbed, H hit back, L / X re-test ...) are in the Defense pane's badge row - hover a badge there for its numbers. Each line runs at most 3 candles (setting), until the next turn's lines, or until a candle closes through it (then it is removed). Dotted line = the forming candle, gone if it does not confirm. Example: 8:48 AM ES low: green R at 7827.25, gray E at 7826.75, dots on the 8:48 candle. Needs lsBookFlow (Defense) on the same chart.");
-    p->setVersion("1.9.0");   // DL_VERSION
+    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (1.10.0) TRACK_MOUSE for the trail hover only (never swallows an event)
+    p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour AND beyond the R line (above it at a low, below it at a high). R LINE (red at a high, green at a low) = the price near the pivot where the defenders re-posted the most of what was eaten. E LINE (gray) = exhaustion: the price near the pivot where the attack died AT the price (the attackers' hits there in seconds 20-60 slowed to the market's median or less vs seconds 0-20, and at least half the resting size stayed); decided about a minute after the close; only on turns that have an R. Yellow dot = the candle each line refers to. The lines carry no text: the letters (A absorbed, H hit back, L / X re-test ...) are in the Defense pane's badge row - hover a badge there for its numbers. Each line runs at most 3 candles (setting), until the next turn's lines, or until a candle closes through it (then it is removed). Dotted line = the forming candle, gone if it does not confirm. Example: 8:48 AM ES low: green R at 7827.25, gray E at 7826.75, dots on the 8:48 candle. TRAILS (1.10.0): a thin stepped line = ONE big resting order (one order id) re-priced again and again behind price during the move - green = a bid stepping up under a rally, red = an offer stepping down above a selloff; it ends once: dot = it traded, x = pulled, B? = it stopped following (price ran 0.5 ATR on and it did not follow in 2 candles) or stepped back - support / resistance quitting; hover a trail for its numbers. At most 2 per side. Needs lsBookFlow (Defense) on the same chart.");
+    p->setVersion("1.10.0");   // DL_VERSION
     return p;
 }
