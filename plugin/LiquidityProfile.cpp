@@ -472,6 +472,7 @@ struct LQState {
     int lzDrawnNow = 0, lzLmtRows = 0, lzFRows = 0, lzGammaDrawn = 0;
     // (0.49.0) the QUEUE METER (QueueMeter.h): its own order book + candles; the live file for the Dealer Profile's Levels column; the Q record
     qm::Engine qmE; std::string qmMkt, qmNormWhy = "not read"; long long qmSession = -1, qmFlushMs = -1, qmPubMs = -1, qmWrites = 0, qmFails = 0, qmPubs = 0, qmPubFails = 0;
+    std::vector<std::string> qmStripRows; long long qmStripWrites = 0, qmStripFails = 0;   // (0.49.0) the Q letters for the Defense pane's Holding strip
     long long qmRestored = 0, qmNormT = -2, qmNormN = -2, qmNormMs = -1, qmStamp = 0, qmStampMs = 0; long qmBarCount = 0; size_t qmLastLive = 0; bool qmPubEmpty = true;
 #endif
     ~LQState() { delete md; }
@@ -1550,7 +1551,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
             o << "QUEUE_METER," << qm::VERSION << ",tests live " << QL.size() << ",started " << S.qmE.nStarted << ",anchors levels " << S.qmE.levels.size() << " pivots " << S.qmE.pivots.size()
               << ",ATR " << S.qmE.atr << ",zone " << S.qmE.zoneW() << " ticks,book " << S.qmE.book.size() << ",events " << S.qmE.nEvents << ",unknown fills " << S.qmE.nUnknownFill
               << ",normal bids " << S.qmE.normal(qm::BID, qn) << " offers " << S.qmE.normal(qm::ASK, qn) << " lots/s (" << S.qmE.normSrc(qm::BID, qn) << "),nightly normal " << S.qmNormWhy
-              << ",Q rows written " << S.qmWrites << " fails " << S.qmFails << ",restored " << S.qmRestored << ",live file writes " << S.qmPubs << " fails " << S.qmPubFails << ",Q letter not drawn (no Defense strip yet: record only)\n"; }
+              << ",Q rows written " << S.qmWrites << " fails " << S.qmFails << ",restored " << S.qmRestored << ",live file writes " << S.qmPubs << " fails " << S.qmPubFails << ",Holding-strip Q lines written " << S.qmStripWrites << " fails " << S.qmStripFails << " (Strips\\QUEUE-" << S.market << "-" << S.spb << ".csv)\n"; }
 #ifndef LQ_FLOW
         {   // (0.47.0) the air pocket: the setting, the cases decided this run, the last one's reason and ratio (numbers here, never on the chart)
             const apl::Case* lk = S.apCases.empty() ? nullptr : &S.apCases.back(); char rb[48] = "-";
@@ -2712,7 +2713,14 @@ void LiquidityProfile::qmAfter(LQState& S, long count, long long st) {
             const long from = std::max(S.qmBarCount > 0 ? S.qmBarCount - 1 : 0L, count - 400);
             for (long i = from; i <= count - 2; ++i) {
                 const long long endMs = ctSec((RTDATE)times[(int)i]) * 1000LL; if (endMs <= 0) continue;
+                const size_t had = E.rows.size();
                 E.closeBar(endMs, (double)high[(int)i], (double)low[(int)i], (double)close[(int)i]);
+                for (size_t k = had; k < E.rows.size(); ++k) {   // (coordinator 2026-10-22) the same Q as a Holding-strip letter (LetterStrips.h contract), keyed by
+                    qm::Engine::QRec r; if (!qm::Engine::parseRec(E.rows[k], r)) continue;   // the decision candle's raw IRT bar time; Q colour = the defenders
+                    char lb[200]; std::snprintf(lb, sizeof(lb), "LT|1|Q|%lld|Q|%d|-1|%s %d%% orig %s q0 %lld", (long long)times[(int)i], r.side == qm::BID ? 0 : 1,
+                                                r.g == 1 ? (r.why == "refilled" ? "refilled" : "held") : (r.why == "broke" ? "broke" : "drained"), r.pct, r.orig < 0 ? "n/a" : (std::to_string(r.orig) + "%").c_str(), r.q0);
+                    S.qmStripRows.push_back(lb);
+                }
             }
             S.qmBarCount = count;
         }
@@ -2722,6 +2730,14 @@ void LiquidityProfile::qmAfter(LQState& S, long count, long long st) {
         if (!path.empty()) { makeDir(flexDir()); makeDir(dir());
             if (appendLines(path, qm::Engine::header(), E.rows)) { E.rows.clear(); S.qmWrites++; } else { S.qmFails++; if (E.rows.size() > 2000) E.rows.erase(E.rows.begin(), E.rows.begin() + 500); } }
         else if (E.rows.size() > 2000) E.rows.clear();
+    }
+    if (!S.qmStripRows.empty()) {   // lsFlexLevels\Strips\QUEUE-<MKT>-<spb>.csv: append-only, cleared only after a good write (the Q record above is unchanged)
+        const std::string f = flexDir();
+        if (!f.empty()) { makeDir(f); makeDir(f + "\\Strips");
+            const std::string sp = f + "\\Strips\\QUEUE-" + (S.market == "6E" ? std::string("EU") : S.market) + "-" + std::to_string(S.spb) + ".csv";
+            std::ofstream o(sp.c_str(), std::ios::binary | std::ios::app);
+            if (o) { for (size_t k = 0; k < S.qmStripRows.size(); ++k) o << S.qmStripRows[k] << "\n"; o.flush(); }
+            if (o) { S.qmStripRows.clear(); S.qmStripWrites++; } else { S.qmStripFails++; if (S.qmStripRows.size() > 2000) S.qmStripRows.clear(); } }
     }
     // the live file: about once a second while a test is live, once more when the last one ends, else every 30 s (a heartbeat)
     const size_t nLive = E.tests.size();

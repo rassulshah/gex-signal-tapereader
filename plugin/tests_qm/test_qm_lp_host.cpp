@@ -54,6 +54,12 @@ int main() {
     const std::string rec = readAll(recPath);
     int nq = 0; { std::istringstream in(rec); std::string ln; while (std::getline(in, ln)) if (ln.rfind("Q|", 0) == 0 && ln.find("|R|broke|") != std::string::npos) ++nq; }
     CHECK(nq == 1, "the record holds one red Q (broke) for the G1 test");
+    {   // (coordinator) the same Q as a Holding-strip letter: LetterStrips.h line format, pane Q, the decision candle's raw bar time, pivot 0 (low)
+        const std::string strip = readAll(flex + "\\Strips\\QUEUE-CL-180.csv");
+        const std::string want = "LT|1|Q|" + std::to_string(t0) + "|Q|0|-1|broke ";
+        int n = 0, fields = 0; { std::istringstream in(strip); std::string ln; while (std::getline(in, ln)) if (ln.rfind("LT|", 0) == 0) { ++n; fields = 1; for (char c : ln) if (c == '|') ++fields; } }
+        CHECK(strip.rfind(want, 0) == 0 && n == 1 && fields == 8, "Strips\\QUEUE-CL-180.csv: one LT|1|Q|<bar key>|Q|0|-1|<numbers> line (8 fields)");
+    }
     const std::string st = readAll(flex + "\\LiquidityProfile.status-CL-180.txt");
     CHECK(st.find("QUEUE_METER,1.0.0,") != std::string::npos && st.find("Q rows written 1") != std::string::npos, "status: QUEUE_METER line");
     CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0 && std::string(LQ_VERSION) == "0.49.0", "status VERSION 0.49.0");
@@ -69,6 +75,8 @@ int main() {
     CHECK(S2 && S2->qmRestored == 1, "restart: the Q line is read back");
     const std::string rec2 = readAll(recPath);
     CHECK(rec2 == rec, "restart: the record is unchanged (no repaint)");
+    { int n = 0; std::istringstream in(readAll(flex + "\\Strips\\QUEUE-CL-180.csv")); std::string ln; while (std::getline(in, ln)) if (ln.rfind("LT|", 0) == 0) ++n;
+      CHECK(n == 1, "restart: no second strip line"); }
     q->destroy(); q->mdPark_.clear(); delete q;
     std::printf("lsLiquidityProfile 0.49.0 queue meter host: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

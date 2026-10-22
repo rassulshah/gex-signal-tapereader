@@ -1126,7 +1126,7 @@ void DealerProfile::writeStatus(const char* what)
       << "LEVEL_PCT," << (cfg.levelPct ? "on" : "off (setting)") << ",file " << (cs.lpWhy.empty() ? std::string("ok") : cs.lpWhy) << ",rows " << cs.lpT.rows.size()
       << ",built " << (cs.lpT.built.empty() ? std::string("-") : cs.lpT.built) << ",shown " << cs.lpShown << ",green " << cs.lpGreen << ",no row " << cs.lpNoRow << ",no room " << cs.lpNoRoom << "\n"
       << "QUEUE_METER," << (cfg.qm ? "on" : "off (setting)") << ",reach " << cfg.qmReach << " ATR,file " << cs.qmF.why << (cs.qmF.ok ? ",live tests " + std::to_string(cs.qmF.t.size()) + ",age " + std::to_string((long long)time(nullptr) - cs.qmMtime) + " s" : std::string())
-      << ",on a level badge " << cs.qmOnBadge << ",unlabeled " << cs.qmAlone << ",beyond reach " << cs.qmFar << ",no room " << cs.qmNoRoom << ",Q letter: record only (no Defense strip yet)\n"
+      << ",on a level badge " << cs.qmOnBadge << ",unlabeled " << cs.qmAlone << ",beyond reach " << cs.qmFar << ",no room " << cs.qmNoRoom << ",Q letter: Holding strip of lsBookFlow 1.23.0 (Strips\\QUEUE-<MKT>-<spb>.csv by lsLiquidityProfile)\n"
       << profileLine() << "\n";
     // (2.7.4) written when its content changes (or once a minute), not on every repaint. (2.17.0, audit C finding 10) one file PER CHART
     // (DealerProfile.status-<MKT>-<spb>.txt) + the old shared DealerProfile.status.txt for one more version (ChartView / the Tape Reader
