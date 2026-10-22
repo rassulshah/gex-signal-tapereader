@@ -9,7 +9,8 @@ text=build.read_text()
 checks=0
 for target in ['BidAskStats','BookFlow','DefenseLines',
                # (2026-10-21) every plugin that now includes KeepOutDraw.h / BoxDock.h / BannerBoard.h (the HOD/LOD keep-out)
-               'KeyLevels','DeltaProfile','TapeFlowMarks','CobImpulse','DealerSig','KingTracker','SessionVWAP','LiquidityProfile']:
+               'KeyLevels','DeltaProfile','TapeFlowMarks','CobImpulse','DealerSig','KingTracker','SessionVWAP','LiquidityProfile',
+               'BigBidAsk']:   # (1.21.0) breakout / breakdown
     closure=set();todo=[target+'.cpp']
     while todo:
         name=todo.pop()

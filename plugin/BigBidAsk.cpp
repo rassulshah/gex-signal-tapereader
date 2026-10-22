@@ -1,5 +1,16 @@
 /********************************************************************************
  *  BigBidAsk.cpp  --  Investor/RT RTX extension  lsBigBidAsk  1.0.0  (2026-10-14 night)
+ *  1.21.0 (2026-10-21, Rassul approved breakout-mockup-v2 at 20:10 CT: "no dashed pivot line. yes build"): BREAKOUT / BREAKDOWN.
+ *         A candle that trades THROUGH the higher of the last two pivot highs (bba::breakFlagsPx, his 1-bar ZigZag), makes the highest
+ *         high of the last 10 candles, has range >= the prior candle's and (volume > prior OR range > prior) = BO; the mirror = BD.
+ *         Decided once at the candle's close (bba::breakoutAt), never repainted; every decision (fired or not, with the reason) is kept
+ *         in lsFlexLevels\BigBidAsk\<stem>-breakouts-<session>.csv (BBO| lines) for the nightly and reloaded on a restart.
+ *         On the chart: "BO" green above / "BD" red below the candle; the breakout PRINT (the candle's biggest buy cell for BO / sell
+ *         cell for BD, drawn only when bigger than the prior candle's biggest of that side) = its LOTS, white in a box outlined green /
+ *         red, ON the candle at its price. A print that is already a drawn Big Bid/Ask print is drawn once (that print + the letter).
+ *         No pivot line. Kept out of the HOD/LOD table / Big Lot box / Tape Reader banner like the prints; the skip first / last
+ *         minutes apply. Setting "Breakout / breakdown (BO / BD)" (on) + BO / BD colours. Hovers stay off (1.17.1): the details of
+ *         today's breakouts are on the status file (BREAKOUTS / BO_EVENT lines).
  *  1.17.0 (2026-10-18, Rassul approved the mockup 19:57 CT, "go"): NO USER SETTINGS - the settings window is empty ("the settings window
  *         would be empty" = yes). Fixed behaviour (what his chart showed, BigBidAsk.settings-ES.txt of 17:15): category 1 = Big Lot 5,
  *         all prints, cyan numbers; category 2 = Big Lot 10, Trend PB + BO; category 3 = Big Lot 20, Trend PB + BO (white numbers);
@@ -104,7 +115,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.20.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.21.0"          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
 static const bool BBA_HOVERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
@@ -270,6 +281,10 @@ struct BBState {
     bdk::Box blBox; bool blOn = false; bdk::Box hlBox; bb::Beat hlBeat; bool hlOn = false; bdk::Box hlTable; bool hlTableOn = false;   /* (1.16.2) the table alone (LRA_HLT_) */ std::string blWhy = "not drawn yet";
     std::set<std::string> logged; std::vector<std::pair<long long, std::string>> logPending; long long logMs = -1;   // (1.12.0) the print log
     std::string scoreLine = "Scoring: learning (needs the nightly run and 20+ prints per category).";
+    // (1.21.0) BREAKOUT / BREAKDOWN: each closed candle decided once (candidates recorded as BBO| lines; dir 0 = no pivot traded through)
+    std::map<long long, bba::BoDec> boDec; std::vector<std::pair<long long, std::string>> boPending; long long boLast = 0, boMs = -1, boFlushMs = -1, boRecFails = 0;
+    bool boOn = true; unsigned boCol = 0x0022C55E, bdCol = 0x00EF4444;
+    int boLetters = 0, boPrints = 0, boShared = 0, boKept = 0, boNoRoom = 0;
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
 };
 
@@ -383,6 +398,8 @@ private:
     const bba::TierSet& tiersAt(BBState& S, long sess) { static const bba::TierSet learning; const bba::TierSet* T = tierFor(S, sess); return T ? *T : learning; }
     void tierStatus(BBState& S, long long now);
     void boardPass(BBState& S, long long now);           // (1.15.0) SignalBoard B from the record
+    void boPass(BBState& S, long long now);              // (1.21.0) the breakout / breakdown decisions (once per closed candle)
+    std::string boPath(BBState& S, long long sess) { const std::string d = dir(); return d.empty() ? d : d + BBA_SEP + stem(S) + "-breakouts-" + std::to_string(sess) + ".csv"; }
     std::string printsPath(BBState& S, long long sess) { const std::string d = dir(); return d.empty() ? d : d + BBA_SEP + stem(S) + "-prints-" + std::to_string(sess) + ".csv"; }
     std::string statsPath(const std::string& mkt) { const std::string f = flexDir(); return f.empty() ? f : f + BBA_SEP "BigBidAsk.stats-" + mkt + ".txt"; }
     int readStats(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
@@ -509,6 +526,7 @@ void BigBidAsk::settings(BBState& S, long long now) {
     for (int k = 0; k < 3; ++k) { f.cat[k].font = S.sv.i(bbaset::K_FONT); f.cat[k].bid = f.cat[k].ask = (unsigned)S.sv.c(bbaset::K_COL_NUM); }
     f.boxBid = (unsigned)S.sv.c(bbaset::K_COL_BID); f.boxAsk = (unsigned)S.sv.c(bbaset::K_COL_ASK);
     f.circle = S.sv.b(bbaset::K_ABS_CIRCLE);   // (1.20.0) the absorbed-print circle (order book)
+    S.boOn = S.sv.b(bbaset::K_BREAKOUT); S.boCol = (unsigned)S.sv.c(bbaset::K_COL_BO); S.bdCol = (unsigned)S.sv.c(bbaset::K_COL_BD);   // (1.21.0)
     S.set = bba::effective(f); S.topN = std::max(2, std::min(bbaset::CAP, S.sv.i(bbaset::K_BIGGEST_IN)));
     S.settingsWhy = S.sv.why.empty() ? "defaults" : S.sv.why; S.setStamp = 119; S.setMarket = S.market;
 }
@@ -658,6 +676,12 @@ void BigBidAsk::load(BBState& S) {
             S.logged.insert(line.substr(0, a) + (line.substr(a + 1, b - a - 1) == "-1" ? "b" : "a"));
         }
     }
+    for (long long k = S.session - 2; k <= S.session; ++k) {    // (1.21.0) the breakout decisions already made: never decided again (no repaint)
+        const std::string path = boPath(S, k); std::string text; long long st = -1;
+        if (!statFile(path, st) || !readSmall(path, REC_FILE_MAX, text)) continue;
+        std::istringstream in(text); std::string line;
+        while (std::getline(in, line)) { bba::BoDec D; if (bba::parseBoLine(line, D) && !S.boDec.count(D.t)) S.boDec[D.t] = D; }
+    }
     for (long long k = S.session - 10; k <= S.session; ++k) {   // (1.11.0) back 10 days: 5 complete sessions for the statistics
         const std::string path = d + BBA_SEP + stem(S) + "-" + std::to_string(k) + ".csv";
         long long st = -1; if (!statFile(path, st)) continue;
@@ -723,6 +747,22 @@ void BigBidAsk::status(BBState& S, long long now) {
       << " dealer " << (S.peers.on[cb::DEALER] ? "on" : "off") << " liq " << (S.peers.on[cb::LIQ] ? "on" : "off") << ",tape reader banner " << (S.trOn ? "avoided" : "none")
       << "\nBL_BOX," << S.blWhy << ",RTH avg " << bba::boxValue(S.blDay, 0) << " / " << bba::boxValue(S.blDay, 1) << " / " << bba::boxValue(S.blDay, 2)
       << ",overnight avg " << bba::boxValue(S.blNight, 0) << " / " << bba::boxValue(S.blNight, 1) << " / " << bba::boxValue(S.blNight, 2) << "\n";
+    {   // (1.21.0) BREAKOUTS: today's counts (the session of the last bar) + the details of today's breakouts (the hovers are off)
+        const long count = getBarCount(); long long today = -1;
+        if (count > 0) { RTARRAYI times(barDateTime); if (times.count >= count) today = sessionOf((long long)times[(int)count - 1]); }
+        int bo = 0, boP = 0, bd = 0, bdP = 0, cand = 0, tf = 0, nx = 0, nr = 0, nv = 0;
+        std::vector<const bba::BoDec*> ev;
+        for (const auto& kv : S.boDec) { const bba::BoDec& D = kv.second; if (D.dir == 0 || sessionOf(kv.first) != today) continue;
+            ++cand;
+            if (D.fired) { if (D.dir > 0) { ++bo; if (D.print) ++boP; } else { ++bd; if (D.print) ++bdP; } ev.push_back(&D); }
+            else if (D.reason == bba::BO_R_TIME) ++tf; else if (D.reason == bba::BO_R_NOT_EXTREME) ++nx; else if (D.reason == bba::BO_R_RANGE) ++nr; else ++nv; }
+        o << "BREAKOUTS," << (S.boOn ? "on" : "off (unchecked in Settings)") << ",today BO " << bo << " (with a print " << boP << ") / BD " << bd << " (with a print " << bdP << ")"
+          << ",candidates " << cand << ",not fired: time filter " << tf << " / not a 10-candle extreme " << nx << " / range below prior " << nr << " / no volume or range up " << nv
+          << ",on screen letters " << S.boLetters << " / own prints " << S.boPrints << " / on a Big Bid/Ask print " << S.boShared << " / kept out of the HOD/LOD box " << S.boKept << " / no room " << S.boNoRoom
+          << ",decided " << S.boDec.size() << ",pending " << S.boPending.size() << ",record fails " << S.boRecFails << "\n";
+        const size_t a = ev.size() > 30 ? ev.size() - 30 : 0;
+        for (size_t k = a; k < ev.size(); ++k) o << "BO_EVENT," << bba::boDetail(*ev[k], S.tick, clockOf(ev[k]->t)) << "\n";
+    }
     const std::string text = o.str();
     if (text == S.lastStatusText && S.lastStatusMs >= 0 && now - S.lastStatusMs < 30000) return;
     S.lastStatusMs = now;
@@ -739,7 +779,7 @@ void BigBidAsk::pump(bool fromDraw) {
         const double tick = cleanTick(getProperty(SYM_TICKINCR));
         if (tick <= 0) { S.state = "no tick size (SYM_TICKINCR)"; return; }
         if (tick != S.tick) { S.fin.clear(); S.raw.clear(); S.fails.clear(); S.recorded.clear(); S.pending.clear(); S.haveForming = false; S.session = -1; S.lastCount = -1; S.tick = tick;
-                              S.tiers.clear(); S.bySess.clear(); S.bySessN = (size_t)-1; S.covSess = LONG_MAX; S.covStart = false; }
+                              S.tiers.clear(); S.bySess.clear(); S.bySessN = (size_t)-1; S.covSess = LONG_MAX; S.covStart = false; S.boDec.clear(); S.boPending.clear(); }
         const long long now = steadyMs();
         const long long ct = ctSec(currentDate());
         if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; load(S); } }
@@ -750,6 +790,7 @@ void BigBidAsk::pump(bool fromDraw) {
         statsBuild(S, now);
         logPass(S, now);                                                     // (1.12.0)
         boardPass(S, now);                                                   // (1.15.0) SignalBoard B from the record
+        boPass(S, now);                                                      // (1.21.0) breakout / breakdown, once per closed candle
         flush(S);
         status(S, now);
     } catch (...) { S.state = "calculation error"; }
@@ -1109,6 +1150,59 @@ void BigBidAsk::boardPass(BBState& S, long long now) {
     const char* sy = getSymbol(); const char* chl = getChartLabel();
     sb::publish('B', sy ? sy : "", getSecondsPerBar(), chl ? chl : "", steadyMs(), ev);
 }
+// ---- (1.21.0, Rassul approved breakout-mockup-v2 20:10 CT 2026-10-21) BREAKOUT / BREAKDOWN: each closed candle decided ONCE at its
+// close from the chart's bars (his ZigZag over every bar, bba::breakFlagsPx) and the frozen facts (S.fin: the biggest cell per side);
+// a decision waits until the candle, the one before it and the 50 before that are final. Candidates (a pivot traded through) are
+// recorded as BBO| lines - fired or not, with the reason - and reloaded on a restart (load), so a candle is never judged twice.
+void BigBidAsk::boPass(BBState& S, long long now) {
+    const long count = getBarCount(); if (count < 12 || S.tick <= 0) return;
+    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow); RTARRAYI vo(barVolume);
+    if (times.count < count || hi.count < count || lo.count < count || vo.count < count) return;
+    const long long lastT = (long long)times[(int)count - 1];
+    if (!(lastT == S.boLast && S.boMs >= 0 && now >= S.boMs && now - S.boMs < 1000)) {   // once a second or on a new bar
+        S.boLast = lastT; S.boMs = now;
+        std::vector<signed char> up, dn; std::vector<double> upPx, dnPx;
+        bba::breakFlagsPx(hi, lo, (int)count, up, dn, &upPx, &dnPx);
+        const int from = std::max(1, (int)count - 1 - 300), fill0 = std::max(0, from - (bba::BO_CAP + 12));
+        std::vector<bba::BoIn> in((size_t)count);
+        for (int k = fill0; k < (int)count - 1; ++k) {
+            const auto it = S.fin.find((long long)times[k]); if (it == S.fin.end()) continue;
+            bba::BoIn& b = in[(size_t)k];
+            if (!keyOf(hi[k], S.tick, b.hk) || !keyOf(lo[k], S.tick, b.lk)) continue;
+            b.vol = (long long)vo[k]; b.known = true;
+            const bba::Facts& F = it->second;
+            if (F.valid && F.bid.ok) { b.big[0] = F.bid.vol; b.bigKey[0] = F.bid.key; }
+            if (F.valid && F.ask.ok) { b.big[1] = F.ask.vol; b.bigKey[1] = F.ask.key; }
+        }
+        for (int i = from; i < (int)count - 1; ++i) {
+            const long long t = (long long)times[i];
+            if (S.boDec.count(t)) continue;
+            bool wait = false; bba::BoDec D = bba::breakoutAt(in, up, dn, upPx, dnPx, i, wait);
+            if (wait) continue;
+            D.t = t;
+            long days = 0; int endSec = 0; svl::Cls cls; cls.kind = svl::NONE;
+            if (D.dir != 0 && parts(t, days, endSec)) cls = svl::classify(days, endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin);
+            if (D.dir != 0 && D.fired && (cls.kind == svl::NONE || timeSkipped(S.set, cls, endSec, S.openMin, S.closeMin))) { D.fired = false; D.reason = bba::BO_R_TIME; }
+            S.boDec[t] = D;
+            if (D.dir != 0) { const long long sess = sessionOf(t); if (sess > 0) S.boPending.push_back({ sess, bba::boLine(D, cls.kind == svl::RTH ? 1 : 0, BBA_VERSION) }); }
+        }
+        while (S.boDec.size() > 20000) S.boDec.erase(S.boDec.begin());
+    }
+    if (S.boPending.empty() || (S.boFlushMs >= 0 && now >= S.boFlushMs && now - S.boFlushMs < 1000)) return;
+    S.boFlushMs = now;
+    const std::string d = dir(); if (d.empty()) return;
+    makeDir(flexDir()); makeDir(d);
+    std::map<long long, std::vector<std::string>> by; for (const auto& x : S.boPending) by[x.first].push_back(x.second);
+    std::vector<std::pair<long long, std::string>> retry;
+    for (const auto& g : by) {
+        const std::string path = boPath(S, g.first); std::string old; long long st = -1;
+        if (statFile(path, st) && !readSmall(path, REC_FILE_MAX, old)) { ++S.boRecFails; for (const auto& l : g.second) retry.push_back({ g.first, l }); continue; }   // never rewrite what could not be read
+        if (old.empty()) old = std::string(bba::BO_HEADER) + "\n";
+        for (const auto& ln : g.second) old += ln + "\n";
+        if (old.size() > REC_FILE_MAX || !publishFile(path, old)) { ++S.boRecFails; for (const auto& l : g.second) retry.push_back({ g.first, l }); }
+    }
+    S.boPending.swap(retry);
+}
 // ---- (1.12.0, Rassul 15:10 "score every print") the print log: every closed candle's shown prints, decided once at the close with the
 // settings of that moment, one file per session (<stem>-prints-<session>.csv) - the nightly lra.bba_prints scores what price did next
 void BigBidAsk::logPass(BBState& S, long long now) {
@@ -1163,6 +1257,7 @@ void BigBidAsk::logPass(BBState& S, long long now) {
 }
 void BigBidAsk::render(BBState& S) {
     S.targets.clear(); S.clL = S.clR = S.clT = S.clB = S.clTr = S.clBig = S.clHl = S.slidHl = S.shifted = S.areaFallback = 0; S.circles = 0; S.circlesHidden = 0; S.droppedInView = 0; S.zoneFull = 0; S.zoneDim = 0; S.hugeN = 0; S.catN4[0] = S.catN4[1] = S.catN4[2] = S.catN4[3] = 0; S.pivotHidden = 0; S.levelHidden = 0; S.timeHidden = 0; S.trendHidden = 0; S.unconfirmed = 0;
+    S.boLetters = S.boPrints = S.boShared = S.boKept = S.boNoRoom = 0;   // (1.21.0)
     const long count = getBarCount();
     if (count < 2 || S.tick <= 0) return;
     RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
@@ -1268,6 +1363,34 @@ void BigBidAsk::render(BBState& S) {
             cands.push_back(c); src.push_back(F); texts.push_back(tx); candPx.push_back(px); candVol.push_back((double)p.vol); picks.push_back(pi);
         }
     }
+    // (1.21.0) BREAKOUT / BREAKDOWN (decided in boPass, never here): the breakout print joins the numbers ON its candle at its price,
+    // its LOTS (as the approved mockup) white in a box outlined green (BO) / red (BD); when that cell is already a Big Bid/Ask print
+    // (same candle, same side) it is drawn ONCE - that box shows the breakout lots in the BO / BD colour, plus the letter. A breakout with no qualifying print gets the letter alone. No pivot line.
+    std::vector<int> boDir(cands.size(), 0); std::vector<char> boOwn(cands.size(), 0);
+    struct BoLetter { int bar = 0, dir = 0; };
+    std::vector<BoLetter> letters;
+    if (S.boOn) for (int i = std::max(from, vs); i <= ve && i < (int)count - 1; ++i) {
+        const long long t = (long long)times[i];
+        const auto it = S.boDec.find(t); if (it == S.boDec.end() || !it->second.fired) continue;
+        const bba::BoDec& D = it->second; const int sd = D.dir > 0 ? +1 : -1;
+        letters.push_back(BoLetter{ i, D.dir });
+        if (!D.print || D.lots <= 0) continue;
+        size_t hit = cands.size();
+        for (size_t k = 0; k < cands.size(); ++k) if (cands[k].bar == i && cands[k].side == sd) { hit = k; break; }
+        if (hit < cands.size()) {                                            // already a Big Bid/Ask print: drawn ONCE, as the breakout print
+            boDir[hit] = D.dir; boOwn[hit] = 2; texts[hit] = bba::lots(D.lots); candVol[hit] = (double)D.lots; continue; }
+        const auto fi = S.fin.find(t); if (fi == S.fin.end()) continue;
+        PNT a; a.set(i, hi[i], kBarLeft); PNT b; b.set(i, lo[i], kBarRight);
+        const std::string tx = bba::lots(D.lots);
+        FONT fc = fb; fc.size = (short)set.cat[0].font; setFont(fc);
+        int lc = 0, ac = 0, dc = 0; getFontMetrics(&lc, &ac, &dc);
+        const double px = (double)D.key * S.tick;
+        PNT pt; pt.set(i, (float)px, kBarCenter);
+        bba::Cand c; c.bar = i; c.side = sd; c.x = (std::min(a.h, b.h) + std::max(a.h, b.h)) / 2; c.y = pt.v; c.w = getTextWidth(tx.c_str(), -1) + 2; c.h = std::max(set.cat[0].font + 5, ac + dc);
+        c.bold = true; c.huge = false; c.tier = 0; c.circle = false; c.first = true;
+        cands.push_back(c); src.push_back(&fi->second); texts.push_back(tx); candPx.push_back(px); candVol.push_back((double)D.lots); picks.push_back(PickInfo());
+        boDir.push_back(D.dir); boOwn.push_back(1);
+    }
     // (1.15.0) the SignalBoard B events are no longer posted from the laid-out (visible) candles: boardPass posts them from the record
     // (1.6.0, Rassul 18:26-18:40 mockup footprint-white-box-circle-v1 row B) ON THE CANDLE: each number is drawn ON its own candle at the
     // price row it traded (never nudged, so it can only belong to that candle - a print is always inside the candle's high-low), WHITE with
@@ -1300,6 +1423,7 @@ void BigBidAsk::render(BBState& S) {
     {   std::vector<size_t> ord(cands.size()); for (size_t k = 0; k < ord.size(); ++k) ord[k] = k;
         std::stable_sort(ord.begin(), ord.end(), [&](size_t x, size_t y) {
             if (cands[x].circle != cands[y].circle) return cands[x].circle > cands[y].circle;
+            if ((boDir[x] != 0) != (boDir[y] != 0)) return boDir[x] != 0;   // (1.21.0) a breakout print next
             return candVol[x] > candVol[y]; });
         std::vector<size_t> kept;
         for (size_t q : ord) {
@@ -1313,6 +1437,7 @@ void BigBidAsk::render(BBState& S) {
     std::vector<bba::Box> ko;   // (1.17.0) the HOD/LOD table + strip (as published) and the Big Lot box (as last drawn): keep-out
     if (S.hlOn) { bba::Box x; x.l = S.hlBox.l - 2; x.t = S.hlBox.t - 2; x.r = S.hlBox.r + 2; x.b = S.hlBox.b + 2; ko.push_back(x); }
     if (S.blOn && set.statsChart) { bba::Box x; x.l = S.blBox.l - 2; x.t = S.blBox.t - 2; x.r = S.blBox.r + 2; x.b = S.blBox.b + 2; ko.push_back(x); }
+    std::vector<bba::Box> drawnBox; std::vector<int> drawnBar;          // (1.21.0) what was drawn: the letters never cover it
     for (size_t k = 0; k < cands.size(); ++k) {
         const bba::Cand& c = cands[k]; bba::Box f = boxes[k];
         if (c.bar < vs) continue;                                       // left of the view
@@ -1342,7 +1467,7 @@ void BigBidAsk::render(BBState& S) {
         if (zone) ++S.zoneFull; else ++S.zoneDim;
         const bool ring = c.circle && set.circle, box = set.box && !ring;
         if (ring || box) {   // the black edge first (so it reads on a candle of its own colour), then the colour
-            const COLOR boxC = (COLOR)(c.side < 0 ? set.boxBid : set.boxAsk);   // (1.14.0) the box has its own colour by side
+            const COLOR boxC = boOwn[k] ? (COLOR)(boDir[k] > 0 ? S.boCol : S.bdCol) : (COLOR)(c.side < 0 ? set.boxBid : set.boxAsk);   // (1.14.0) the box has its own colour by side; (1.21.0) a breakout print: BO / BD colour
             const COLOR winC = (COLOR)(c.side < 0 ? set.boxAsk : set.boxBid);   // (1.20.0) the WINNER's colour: an absorbed bid print = buyers won (green), an absorbed ask print = sellers won (red)
             const COLOR lc = ring ? (dimIt ? getBlendedColor(winC, 0x00000000, 45.0f) : winC) : (dimIt ? getBlendedColor(boxC, 0x00000000, 45.0f) : boxC);
             CBRUSH nb(0x00000000, PAT_HOLLOW); nb.set();
@@ -1362,6 +1487,45 @@ void BigBidAsk::render(BBState& S) {
         setTextColor(ink);
         { RCT r; r.set(coord(tl), coord(tt), coord(tr), coord(tb)); r.drawText(texts[k].c_str(), true, false); }
         HoverT H; H.box = f; H.t = src[k]->t; H.side = c.side; H.pi = picks[k]; H.lots = (long long)candVol[k]; H.px = candPx[k]; S.targets.push_back(H);
+        drawnBox.push_back(f); drawnBar.push_back(c.bar);
+        if (boOwn[k] == 1) ++S.boPrints; else if (boOwn[k] == 2) ++S.boShared;
+    }
+    // (1.21.0) the BO / BD letters: "BO" green ABOVE the candle (and above its drawn prints), "BD" red BELOW (the footprint-signal
+    // convention); never over a drawn print or another letter (moved further out), the Tape Reader banner, or the HOD/LOD table / Big
+    // Lot box (keep-out: not drawn); outside the price area = not drawn. Counted on the status file.
+    {   FONT lf = fb; lf.size = (short)set.cat[0].font; setFont(lf);
+        int ll = 0, la = 0, ld = 0; getFontMetrics(&ll, &la, &ld);
+        const int lh = std::max(set.cat[0].font + 5, la + ld);
+        std::vector<bba::Box> placedL;
+        for (const BoLetter& L : letters) {
+            const char* tx = L.dir > 0 ? "BO" : "BD";
+            const int w = getTextWidth(tx, -1) + 2;
+            PNT a; a.set(L.bar, hi[L.bar], kBarLeft); PNT b; b.set(L.bar, lo[L.bar], kBarRight);
+            const int cx = (std::min(a.h, b.h) + std::max(a.h, b.h)) / 2, top = std::min(a.v, b.v), bot = std::max(a.v, b.v);
+            int edge = L.dir > 0 ? top : bot;
+            for (size_t q = 0; q < drawnBox.size(); ++q) if (drawnBar[q] == L.bar) edge = L.dir > 0 ? std::min(edge, drawnBox[q].t) : std::max(edge, drawnBox[q].b);
+            bba::Box f; f.l = cx - w / 2; f.r = f.l + w;
+            if (L.dir > 0) { f.b = edge - 2; f.t = f.b - lh; } else { f.t = edge + 2; f.b = f.t + lh; }
+            bool ok = false;
+            for (int tries = 0; tries < 4 && !ok; ++tries) {
+                const bba::Box* clash = nullptr;
+                for (const bba::Box& o : drawnBox) if (bba::hits(f, o)) { clash = &o; break; }
+                if (!clash) for (const bba::Box& o : placedL) if (bba::hits(f, o)) { clash = &o; break; }
+                if (!clash) { ok = true; break; }
+                if (L.dir > 0) { f.b = clash->t - 2; f.t = f.b - lh; } else { f.t = clash->b + 2; f.b = f.t + lh; }   // further out
+            }
+            if (!ok || !bba::inside(f, area) || (S.trOn && bba::hits(f, S.trBox))) { ++S.boNoRoom; continue; }
+            bool kept = false; for (const bba::Box& k2 : ko) if (k2.r > k2.l && k2.b > k2.t && bba::hits(f, k2)) kept = true;
+            if (kept) { ++S.boKept; continue; }
+            placedL.push_back(f); ++S.boLetters;
+            const COLOR col = (COLOR)(L.dir > 0 ? S.boCol : S.bdCol);
+            const int lift = std::max(1, (ll + ld + 1) / 2);
+            setTextColor(0x00000000);
+            for (int d = 0; d < 4; ++d) { const int dx = d == 0 ? -1 : d == 1 ? 1 : 0, dy = d == 2 ? -1 : d == 3 ? 1 : 0;
+                RCT r; r.set(coord(f.l + dx), coord(f.t - lift + dy), coord(f.r + dx), coord(f.b - lift + dy)); r.drawText(tx, true, false); }
+            setTextColor(col);
+            { RCT r; r.set(coord(f.l), coord(f.t - lift), coord(f.r), coord(f.b - lift)); r.drawText(tx, true, false); }
+        }
     }
     // (1.16.0, Rassul 15:03 CT) the compact Big Lot box: BL5 / BL10 / BL20 = the rolling average of the CURRENT session type, docked to
     // the HOD/LOD table when it is on this chart (BoxDock.h), else his 9-spot Position; only up to the LAST BAR, never over another box
@@ -1495,7 +1659,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (BBA_HOVERS ? TRACK_MOUSE : 0) | VAP_REQUIRED);   // (1.17.1) no TRACK_MOUSE while the hovers are off
-    p->setDescription("LRA Big Bid / Ask 1.19.1: on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.20.0");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask 1.21.0: BO / BD = a breakout (breakdown) candle through the higher (lower) of the last 2 pivots with a 10-candle high (low), range and volume up, its biggest buy (sell) print in lots on the candle. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
+    p->setVersion("1.21.0");   // BBA_VERSION
     return p;
 }

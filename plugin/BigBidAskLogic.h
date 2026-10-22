@@ -33,7 +33,7 @@
 
 namespace bba {
 
-static const char* const VERSION = "1.20.0";   // (1.20.0, 2026-10-21, MBO Roadmap Top Defender #1, Rassul approved mockup v2) a drawn print in the candle's WICK at a price the order book shows ABSORBED (lsBidAskStats / SignalBoard O: traded >= 2x shown + >= 2 refills) gets a circle in the WINNER's colour; decided once per closed candle, kept in BigBidAsk.abs-<MKT>-<spb>.txt; no order feed = no circle; setting "Circle absorbed prints (order book)"; board B flag bit 0 = absorbed; (1.19.2) the settings window behind a fault guard (IRT faulted in parmsLoad / parmsApply on a copy with no chart); the market read safely (SettingsGuard.h); (1.19.1) number settings saved as the window shows them (his font 10 was lost); dialog log; (1.19.0) (1.19.0, Rassul 21:47-21:51) the number = candles back it is the biggest of its side (cap 50); settings: Biggest in (default 10), skip first / last minutes (15 / 15), font, number / bid / ask colours (BigBidAskSettings.h); (1.18.0, Rassul 2026-10-20 21:26-21:32) ONE print rule: the biggest cell of its side bigger than that side's biggest cell on each of the 10 candles before it (biggestOfLast, TOP_N); no Big Lot tier / pivot / level / trend filter on the chart, board or print log; font 7 (was 8, "slightly smaller"), every number white; first / last 15 minutes of every session still skipped; (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") hovers off in BigBidAsk.cpp (BBA_HOVERS), logic unchanged; (1.17.0, Rassul approved 19:57 CT) no user settings: fixedSettings() (BL5 all / BL10 + BL20 Trend PB + BO, no category 4); (1.16.2, 2026-10-18) the Big Lot box = the HOD/LOD TABLE's height when docked beside it (BoxDock.h placeMatched, lsHodLod 2.4.4 publishes the table alone), rows spread evenly; a blank window read is never saved (looksBlank + SettingsHost 1.1.0); (1.16.1, 2026-10-18 settings audit) the settings window from BigBidAskSettings.h / SettingsHost.h: same 87 rows / order / BBA7 file, the volume levels on two lines of three (the line was ~422 px, "Wk VAL" cut off), group masters through the layer (compared with their last state);  (1.16.0, 2026-10-18, Rassul approved 15:03 CT) the statistics box becomes the compact Big Lot box: BL5 / BL10 / BL20 = the rolling average of the CURRENT session type (RTH / overnight), docked to the HOD/LOD table (BoxDock.h), everything else in its hover (typeAvg / boxRows / boxHover); category order 1 > 4 > 2 / 3 (his category-4 size wins over Big Lot 10 / 20: catOrder / firstCat); (1.15.0, 2026-10-18 audit B finding 2) the Big Lot tiers are decided ONCE PER SESSION from complete earlier sessions only (3 - 5, each with 3/4 of its day candles; today's partial session and partly read sessions never count), and only once the chart history before the session is fully read: a print's tier is fixed for its candle and never re-judged by a later recompute or by what is in view (TierSet / tiersFor); the facts are read from the chart's full recent history (8 sessions), not from the view, and recorded for 8 sessions; the SignalBoard B events come from the record for the last 120 closed candles whatever is on screen (+ bit 7 = pivot confirmed); the 5-s log-normal curve fit is gone (status shows the S-tiers); (1.14.1, Rassul 17:19-17:37) Trend PB band checked from the start of the pullback THROUGH the print's own candle (his 96 at 12:42 Oct 16); Trend BO only on a candle in the up-wave (down-wave for a breakdown); ES category 4 = 1,000; (1.14.0) (1.14.0, Rassul 2026-10-17 16:29-16:47) one "Show" choice per category (All prints / Near pivot (either direction) / Near a level / Pivot near a level / Trend PB / Trend BO / Trend PB + BO), category 4 = every print of its size (time filter only), the pivot judged against the candle's own swing (may repaint until the pivot is confirmed), the Trend PB VWAP band rule, Trend BO needs the trend, box colours of their own, new defaults, category 4 size per market; (1.13.0) a Setup per category (Any / Pullback with trend / Reversal at a level / Breakout through the higher of the last 2 pivots), RTH only option; (1.12.0) hover, print log + nightly score, Liquidity Profile read, NG / 6E divider 1; (1.11.0) (1.11.0) category 4 (>= lots), a font per category, time filter, near a level (ATR above / below + sweeps; key / gamma / volume levels), statistics; (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
+static const char* const VERSION = "1.21.0";   // (1.21.0, 2026-10-21, Rassul approved breakout-mockup-v2 20:10 CT "no dashed pivot line. yes build") BREAKOUT / BREAKDOWN: BO / BD letter + the breakout print (lots, biggest buy / sell cell) ON the breakout candle, decided once at the close, BBO| record per session, setting "Breakout / breakdown (BO / BD)"; (1.20.0, 2026-10-21, MBO Roadmap Top Defender #1, Rassul approved mockup v2) a drawn print in the candle's WICK at a price the order book shows ABSORBED (lsBidAskStats / SignalBoard O: traded >= 2x shown + >= 2 refills) gets a circle in the WINNER's colour; decided once per closed candle, kept in BigBidAsk.abs-<MKT>-<spb>.txt; no order feed = no circle; setting "Circle absorbed prints (order book)"; board B flag bit 0 = absorbed; (1.19.2) the settings window behind a fault guard (IRT faulted in parmsLoad / parmsApply on a copy with no chart); the market read safely (SettingsGuard.h); (1.19.1) number settings saved as the window shows them (his font 10 was lost); dialog log; (1.19.0) (1.19.0, Rassul 21:47-21:51) the number = candles back it is the biggest of its side (cap 50); settings: Biggest in (default 10), skip first / last minutes (15 / 15), font, number / bid / ask colours (BigBidAskSettings.h); (1.18.0, Rassul 2026-10-20 21:26-21:32) ONE print rule: the biggest cell of its side bigger than that side's biggest cell on each of the 10 candles before it (biggestOfLast, TOP_N); no Big Lot tier / pivot / level / trend filter on the chart, board or print log; font 7 (was 8, "slightly smaller"), every number white; first / last 15 minutes of every session still skipped; (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") hovers off in BigBidAsk.cpp (BBA_HOVERS), logic unchanged; (1.17.0, Rassul approved 19:57 CT) no user settings: fixedSettings() (BL5 all / BL10 + BL20 Trend PB + BO, no category 4); (1.16.2, 2026-10-18) the Big Lot box = the HOD/LOD TABLE's height when docked beside it (BoxDock.h placeMatched, lsHodLod 2.4.4 publishes the table alone), rows spread evenly; a blank window read is never saved (looksBlank + SettingsHost 1.1.0); (1.16.1, 2026-10-18 settings audit) the settings window from BigBidAskSettings.h / SettingsHost.h: same 87 rows / order / BBA7 file, the volume levels on two lines of three (the line was ~422 px, "Wk VAL" cut off), group masters through the layer (compared with their last state);  (1.16.0, 2026-10-18, Rassul approved 15:03 CT) the statistics box becomes the compact Big Lot box: BL5 / BL10 / BL20 = the rolling average of the CURRENT session type (RTH / overnight), docked to the HOD/LOD table (BoxDock.h), everything else in its hover (typeAvg / boxRows / boxHover); category order 1 > 4 > 2 / 3 (his category-4 size wins over Big Lot 10 / 20: catOrder / firstCat); (1.15.0, 2026-10-18 audit B finding 2) the Big Lot tiers are decided ONCE PER SESSION from complete earlier sessions only (3 - 5, each with 3/4 of its day candles; today's partial session and partly read sessions never count), and only once the chart history before the session is fully read: a print's tier is fixed for its candle and never re-judged by a later recompute or by what is in view (TierSet / tiersFor); the facts are read from the chart's full recent history (8 sessions), not from the view, and recorded for 8 sessions; the SignalBoard B events come from the record for the last 120 closed candles whatever is on screen (+ bit 7 = pivot confirmed); the 5-s log-normal curve fit is gone (status shows the S-tiers); (1.14.1, Rassul 17:19-17:37) Trend PB band checked from the start of the pullback THROUGH the print's own candle (his 96 at 12:42 Oct 16); Trend BO only on a candle in the up-wave (down-wave for a breakdown); ES category 4 = 1,000; (1.14.0) (1.14.0, Rassul 2026-10-17 16:29-16:47) one "Show" choice per category (All prints / Near pivot (either direction) / Near a level / Pivot near a level / Trend PB / Trend BO / Trend PB + BO), category 4 = every print of its size (time filter only), the pivot judged against the candle's own swing (may repaint until the pivot is confirmed), the Trend PB VWAP band rule, Trend BO needs the trend, box colours of their own, new defaults, category 4 size per market; (1.13.0) a Setup per category (Any / Pullback with trend / Reversal at a level / Breakout through the higher of the last 2 pivots), RTH only option; (1.12.0) hover, print log + nightly score, Liquidity Profile read, NG / 6E divider 1; (1.11.0) (1.11.0) category 4 (>= lots), a font per category, time filter, near a level (ATR above / below + sweeps; key / gamma / volume levels), statistics; (1.10.0) Big Lot categories with his own N (1 - 100), per-category pivot filter and colours, day = 8:30 AM - 4:00 PM; (1.9.0) Big Lot S20 / S10 / S5 tiers, one font size (8), a colour per tier and side, box / circle / dim switches (all off), circle colour; (1.8.0) cyan digits = Big Lot S5 (the size reached ~5 times a session, day / night) instead of 3SD; (1.7.3) status counts the cyan 3SD+ prints drawn; (1.7.2) 3SD+ prints in cyan; (1.7.1) FIX: numbers never drew (y / width / height of every number were commented out); (1.7.0) sizes are Big Lot S20 / S10 / S5 (labels);   // (1.6.1) numbers that poke out of the area slide back in instead of vanishing; area fallback; drop reasons on the status file;   // (1.6.0) ON the candle: white number, box = big print / circle = absorption print in the side colour, 3SD+ bigger;   // (1.5.1) nothing under 1SD (1SD+ bold, 3SD+ outlined), circle from 1SD; non-bold only while learning;   // (1.5.0) prints on the big-lot SD sizes: 1SD faded, 2SD bold, 3SD bold + outline, nothing under 1SD;   // (1.4.1) a circled number centred in its ring; "absorption print" naming; candles as body + wick (82 of 112 numbers had no room); 1 px gap
 static const int LOOKBACK = 20;        // prior candles in the median
 static const int MIN_PRIOR = 10;       // fewer prior candles with data = no ratio (never bold)
 // (1.18.0) THE print rule: v beats EVERY one of the n candles before it (same side); fewer than n known = no print
@@ -211,9 +211,13 @@ inline int toHundredths(double x) { if (!std::isfinite(x) || x < 0 || x > 20.000
 // BEFORE the candle): P = the prior high pivot, or the one 2 back when it is higher; the candle breaks out when its LOW is below P and
 // its HIGH above P (it is the candle that went through). up[i] = 1 (the prior pivot) / 2 (the higher one 2 back) / 0 none.
 // BREAKDOWN mirror with the lower of the last two LOW pivots: dn[i]. Decided on the candle's own bars - never repainted.
+// (1.21.0) the same walk, with the pivot price broken (upPx / dnPx; 0 = none) for the BREAKOUT / BREAKDOWN signal; breakFlags below is
+// this walk without the prices (unchanged rule).
 template <class H, class L>
-inline void breakFlags(H& high, L& low, int n, std::vector<signed char>& up, std::vector<signed char>& dn) {
+inline void breakFlagsPx(H& high, L& low, int n, std::vector<signed char>& up, std::vector<signed char>& dn, std::vector<double>* upPx, std::vector<double>* dnPx) {
     up.assign(n > 0 ? n : 0, 0); dn.assign(n > 0 ? n : 0, 0);
+    if (upPx) upPx->assign(n > 0 ? n : 0, 0.0);
+    if (dnPx) dnPx->assign(n > 0 ? n : 0, 0.0);
     if (n < 2) return;
     auto hi = [&](int i) { return (double)high[i]; }; auto lo = [&](int i) { return (double)low[i]; };
     std::vector<double> tops, bots;
@@ -221,9 +225,9 @@ inline void breakFlags(H& high, L& low, int n, std::vector<signed char>& up, std
     for (int i = 1; i < n; ++i) {
         if (!std::isfinite(hi(i)) || !std::isfinite(lo(i)) || hi(i) < lo(i)) continue;
         if (!tops.empty()) { double P = tops.back(); signed char w = 1; if (tops.size() >= 2 && tops[tops.size() - 2] > P) { P = tops[tops.size() - 2]; w = 2; }
-            if (lo(i) < P && hi(i) > P) up[i] = w; }
+            if (lo(i) < P && hi(i) > P) { up[i] = w; if (upPx) (*upPx)[i] = P; } }
         if (!bots.empty()) { double Q = bots.back(); signed char w = 1; if (bots.size() >= 2 && bots[bots.size() - 2] < Q) { Q = bots[bots.size() - 2]; w = 2; }
-            if (lo(i) < Q && hi(i) > Q) dn[i] = w; }
+            if (lo(i) < Q && hi(i) > Q) { dn[i] = w; if (dnPx) (*dnPx)[i] = Q; } }
         if (dirn == 1) {
             if (hi(i) > hi(ext)) ext = i;
             else if (lo(i) < lo(i - 1) && i != ext) { tops.push_back(hi(ext)); ext = i; dirn = -1; }
@@ -233,6 +237,11 @@ inline void breakFlags(H& high, L& low, int n, std::vector<signed char>& up, std
         }
     }
 }
+template <class H, class L>
+inline void breakFlags(H& high, L& low, int n, std::vector<signed char>& up, std::vector<signed char>& dn) {
+    breakFlagsPx(high, low, n, up, dn, (std::vector<double>*)nullptr, (std::vector<double>*)nullptr);
+}
+
 // ---- (1.11.0) near a level --------------------------------------------------------------------------------------------------------
 // A print at price p on candle i is NEAR level L when p is within [L - dn x ATR, L + up x ATR] (ATR = the average range of the 14
 // closed 3-min candles before i), OR the print is part of a SWEEP of L: the candle or one of the 2 before it traded through L, the
@@ -911,5 +920,121 @@ inline int firstCat(const long long zz[4], long long vol, const bool pass[4]) {
     for (int q = 0; q < 4; ++q) { const int k = ord[q]; if (zz[k] <= 0 || vol < zz[k]) continue; if (k == 3 || pass[k]) return k; }
     return -1;
 }
+// ---- (1.21.0, Rassul approved breakout-mockup-v2 at 20:10 CT 2026-10-21: "no dashed pivot line. yes build") BREAKOUT / BREAKDOWN -----
+// Decided ONCE on the candle's close, never repainted (kept in <stem>-breakouts-<session>.csv as BBO| lines):
+//   BO needs all of: (1) the candle trades THROUGH the higher of the last two pivot highs (breakFlags: low below P, high above P - no
+//   close beyond needed); (2) its high is the highest high of the last 10 candles (itself included); (3) its range >= the prior
+//   candle's range; (4) its volume > the prior candle's volume OR its range > the prior candle's range.
+//   BD = the mirror (the lower of the last two pivot lows, a 10-candle low). Both on one outside candle: BO is judged first.
+//   THE PRINT: the candle's biggest BUY cell (lots bought at the ask at one price) for BO / biggest SELL cell (at the bid) for BD; drawn
+//   only when bigger than the prior candle's biggest cell of that side; its "biggest in N" = consecutive prior candles whose biggest
+//   same-side cell it beats, capped at 50. A breakout with no qualifying print gets the letter alone.
+static const int BO_LOOK = 10, BO_CAP = 50;
+enum BoReason { BO_R_NONE = 0, BO_R_FIRED = 1, BO_R_NOT_EXTREME = 2, BO_R_RANGE = 3, BO_R_VOLRANGE = 4, BO_R_TIME = 5 };
+inline const char* boReasonName(int r) {
+    return r == BO_R_FIRED ? "fired" : r == BO_R_NOT_EXTREME ? "not_10bar_extreme" : r == BO_R_RANGE ? "range_below_prior"
+         : r == BO_R_VOLRANGE ? "no_volume_or_range_up" : r == BO_R_TIME ? "time_filter" : "none";
+}
+// one candle's inputs: whole-tick high / low keys, the bar volume, the biggest cell per side (0 = sell at the bid, 1 = buy at the ask)
+struct BoIn { bool known = false; long long hk = 0, lk = 0, vol = 0; long long big[2] = { 0, 0 }, bigKey[2] = { 0, 0 }; };
+struct BoDec {
+    long long t = 0;
+    int dir = 0;                 // +1 BO, -1 BD, 0 = no pivot traded through (not a candidate)
+    int reason = BO_R_NONE;      // BO_R_FIRED or why not
+    bool fired = false;
+    double piv = 0; int which = 0;        // the pivot traded through; 1 = the prior pivot, 2 = the one 2 back (higher / lower)
+    long long hk = 0, lk = 0, range = 0, prange = 0, vol = 0, pvol = 0;   // ticks / lots
+    long long lots = 0, key = 0, prior = 0; int n = 0;                       // the print: lots at key, the prior candle's biggest, biggest in N
+    bool print = false;          // the print qualifies (lots > the prior candle's same-side biggest)
+};
+// candle i from in[] (known inputs) and the breakFlagsPx vectors; wait = some needed input not known yet (decide later)
+inline BoDec breakoutAt(const std::vector<BoIn>& in, const std::vector<signed char>& up, const std::vector<signed char>& dn,
+                        const std::vector<double>& upPx, const std::vector<double>& dnPx, int i, bool& wait) {
+    BoDec D; wait = false;
+    const int n = (int)in.size();
+    if (i < 1 || i >= n || i >= (int)up.size() || i >= (int)dn.size()) return D;
+    const int u = up[(size_t)i], d = dn[(size_t)i];
+    if (!u && !d) return D;                                                  // not a candidate: nothing traded through
+    if (!in[(size_t)i].known || !in[(size_t)(i - 1)].known) { wait = true; return D; }
+    const BoIn& c = in[(size_t)i]; const BoIn& p = in[(size_t)(i - 1)];
+    D.hk = c.hk; D.lk = c.lk; D.range = c.hk - c.lk; D.prange = p.hk - p.lk; D.vol = c.vol; D.pvol = p.vol;
+    const bool base = D.range >= D.prange && (D.vol > D.pvol || D.range > D.prange);
+    auto extreme = [&](int dir) {
+        for (int k = i - 1; k >= 0 && k > i - BO_LOOK; --k) { if (!in[(size_t)k].known) return -1; if (dir > 0 ? in[(size_t)k].hk > c.hk : in[(size_t)k].lk < c.lk) return 0; }
+        return i - (BO_LOOK - 1) >= 0 ? 1 : 0;                                // fewer than 10 candles on the chart: no 10-candle extreme
+    };
+    int exU = 0, exD = 0;
+    if (u) { exU = extreme(+1); if (exU < 0) { wait = true; return D; } }
+    if (d) { exD = extreme(-1); if (exD < 0) { wait = true; return D; } }
+    if (u && exU == 1 && base) D.dir = +1;                                   // BO judged first
+    else if (d && exD == 1 && base) D.dir = -1;
+    if (D.dir) { D.fired = true; D.reason = BO_R_FIRED; }
+    else {                                                                   // why not: named for the side traded through (BO first,
+        D.dir = u ? +1 : -1;                                                 // unless only the BD side made its 10-candle extreme)
+        if (u && d && exU != 1 && exD == 1) D.dir = -1;
+        const int ex = D.dir > 0 ? exU : exD;
+        D.reason = ex != 1 ? BO_R_NOT_EXTREME : D.range < D.prange ? BO_R_RANGE : BO_R_VOLRANGE;
+    }
+    D.which = D.dir > 0 ? u : d; D.piv = D.dir > 0 ? upPx[(size_t)i] : dnPx[(size_t)i];
+    const int sd = D.dir > 0 ? 1 : 0;
+    D.lots = c.big[sd]; D.key = c.bigKey[sd]; D.prior = p.big[sd];
+    if (D.lots > 0) {
+        for (int k = i - 1; k >= 0 && D.n < BO_CAP; --k) {
+            if (!in[(size_t)k].known) { if (D.fired) { wait = true; return BoDec(); } break; }
+            if (in[(size_t)k].big[sd] >= D.lots) break;
+            ++D.n;
+        }
+    }
+    D.print = D.lots > 0 && D.lots > D.prior;                                // == biggest in N >= 1
+    return D;
+}
+// the record line: BBO|t|dir|fired|reason|pivot|which|high_key|low_key|range|prior_range|vol|prior_vol|lots|key|prior_big|n|print|rth|version
+static const char* const BO_HEADER = "BBO|t|dir|fired|reason|pivot|which|high_key|low_key|range|prior_range|vol|prior_vol|lots|key|prior_big|n|print|rth|version";
+inline std::string boLine(const BoDec& D, int rth, const char* ver) {
+    char b[400]; std::snprintf(b, sizeof(b), "BBO|%lld|%d|%d|%s|%.10g|%d|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%lld|%d|%d|%d|%s",
+        D.t, D.dir, D.fired ? 1 : 0, boReasonName(D.reason), D.piv, D.which, D.hk, D.lk, D.range, D.prange, D.vol, D.pvol, D.lots, D.key, D.prior, D.n, D.print ? 1 : 0, rth, ver);
+    return b;
+}
+inline bool parseBoLine(const std::string& line0, BoDec& D) {
+    std::string line = line0; while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
+    std::vector<std::string> f; { std::string cur; for (char c : line) { if (c == '|') { f.push_back(cur); cur.clear(); } else cur.push_back(c); } f.push_back(cur); }
+    if (f.size() != 20 || f[0] != "BBO") return false;
+    long long x = 0; D = BoDec();
+    auto I = [&](size_t k, long long& o) { return sInt(f[k], o); };
+    if (!I(1, D.t) || D.t <= 0) return false;
+    if (!I(2, x) || (x != 1 && x != -1)) return false;
+    D.dir = (int)x;
+    if (!I(3, x) || (x != 0 && x != 1)) return false;
+    D.fired = x == 1;
+    D.reason = BO_R_NONE; for (int r = 1; r <= BO_R_TIME; ++r) if (f[4] == boReasonName(r)) D.reason = r;
+    if (D.reason == BO_R_NONE || (D.fired != (D.reason == BO_R_FIRED))) return false;
+    { char* e = nullptr; D.piv = std::strtod(f[5].c_str(), &e); if (!e || *e || !std::isfinite(D.piv)) return false; }
+    if (!I(6, x) || x < 1 || x > 2) return false;
+    D.which = (int)x;
+    if (!I(7, D.hk) || !I(8, D.lk) || !I(9, D.range) || !I(10, D.prange) || !I(11, D.vol) || !I(12, D.pvol) || !I(13, D.lots) || !I(14, D.key) || !I(15, D.prior)) return false;
+    if (!I(16, x) || x < 0 || x > BO_CAP) return false;
+    D.n = (int)x;
+    if (!I(17, x) || (x != 0 && x != 1)) return false;
+    D.print = x == 1;
+    if (D.hk < D.lk || D.lots < 0 || D.vol < 0) return false;
+    return true;
+}
+// the details line (the status file; the hovers are off since 1.17.1) in his order: the question, what happened, how to use it
+inline std::string boDetail(const BoDec& D, double tick, const std::string& clock) {
+    auto x = [](long long a, long long b) { char r[24]; if (b <= 0) return std::string(a > 0 ? "new" : "n/a"); std::snprintf(r, sizeof(r), "%.1fx", (double)a / (double)b); return std::string(r); };
+    const bool bo = D.dir > 0;
+    std::string s = clock + "," + (bo ? "BO" : "BD") + "," + (D.fired ? "fired" : std::string("not fired: ") + boReasonName(D.reason));
+    s += ",Q: did " + std::string(bo ? "buyers break out" : "sellers break down") + " with real size?";
+    s += ",pivot " + price((long long)std::llround(D.piv / tick), tick) + (D.which == 2 ? (bo ? " (higher pivot 2 back)" : " (lower pivot 2 back)") : " (prior pivot)") + " traded through";
+    s += std::string(",") + (bo ? "10-candle high " : "10-candle low ") + price(bo ? D.hk : D.lk, tick);
+    s += ",range " + x(D.range, D.prange) + " prior,volume " + x(D.vol, D.pvol) + " prior";
+    if (D.lots > 0) s += ",print " + commas(D.lots) + " lots " + (bo ? "bought" : "sold") + " at " + price(D.key, tick) + " (prior candle's biggest " + commas(D.prior) + ")" + (D.print ? ",biggest in " + std::to_string(D.n) : ",not bigger than the prior candle: letter only");
+    else s += ",no print: letter only";
+    s += bo ? ",use: buyers took out the swing high with size - hold longs while price stays above " + price((long long)std::llround(D.piv / tick), tick) + "; back below it = a trap"
+            : ",use: sellers took out the swing low with size - hold shorts while price stays below " + price((long long)std::llround(D.piv / tick), tick) + "; back above it = a trap";
+    s += ",status: decided at the close, never repainted";
+    return s;
+}
+
 } // namespace bba
 #endif

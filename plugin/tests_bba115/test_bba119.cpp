@@ -21,7 +21,7 @@ static void logic() {
     ss::Values W; CHECK(ss::parse(S, ss::M_ES, ss::format(S, V), W) && W.i(bbaset::K_BIGGEST_IN) == 30 && W.i(bbaset::K_SKIP_FIRST) == 60 && W.i(bbaset::K_SKIP_LAST) == 30 && W.i(bbaset::K_FONT) == 12 && W.c(bbaset::K_COL_BID) == 0x0000FFul, "[set] file round trip");
     ss::Values B; ss::parse(S, ss::M_ES, "SPEC1|BigBidAsk|1.19.0|ES\nbiggest_in=999\nskip_first=-5\nfont=99\n", B);
     CHECK(B.i(bbaset::K_BIGGEST_IN) == 10 && B.i(bbaset::K_SKIP_FIRST) == 15 && B.i(bbaset::K_FONT) == 10, "[set] out-of-range values -> defaults");
-    CHECK(bbaset::CAP == 50 && std::string(bba::VERSION) == "1.20.0" && std::string(bbaset::PLUGIN_VERSION) == "1.20.0", "[ver] cap 50, version 1.19.0");
+    CHECK(bbaset::CAP == 50 && std::string(bba::VERSION) == "1.21.0" && std::string(bbaset::PLUGIN_VERSION) == "1.21.0", "[ver] cap 50, version 1.21.0");
 }
 static const unsigned long DAY = 86400, START = 1791133200UL;   // Sun 2026-10-04 17:00
 static std::vector<mock::Bar> quiet(int todayBars, std::map<int, std::pair<long, long>> plant) {

@@ -326,8 +326,8 @@ int main() {
     setenv("TZ", "UTC", 1); tzset();
     boxLogic(); catLogic(); dockLogic(); keepOutLogic(); setLogic(); hostTests();
     {   const std::string src = [] { std::ifstream f("../BigBidAsk.cpp", std::ios::binary); std::ostringstream o; o << f.rdbuf(); return o.str(); }();
-        CHECK(std::string(BBA_VERSION) == "1.20.0" && std::string(bba::VERSION) == "1.20.0" && src.find("p->setVersion(\"1.20.0\")") != std::string::npos, "[ver] 1.19.0 everywhere");
-        CHECK(src.find("ss::registerAll(") != std::string::npos && src.find("\"BigBidAsk.settings-\" +") == std::string::npos && bbaset::spec().paramVersion == 9, "[ver] (1.19.0) rows from the table, parameter version 8, the old BBA7 file never opened");
+        CHECK(std::string(BBA_VERSION) == "1.21.0" && std::string(bba::VERSION) == "1.21.0" && src.find("p->setVersion(\"1.21.0\")") != std::string::npos, "[ver] 1.21.0 everywhere");
+        CHECK(src.find("ss::registerAll(") != std::string::npos && src.find("\"BigBidAsk.settings-\" +") == std::string::npos && bbaset::spec().paramVersion == 10, "[ver] (1.21.0) rows from the table, parameter version 10, the old BBA7 file never opened");
     }
     std::cout << "RESULT " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
