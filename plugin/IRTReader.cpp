@@ -117,6 +117,7 @@
 #endif
 #include "DealerLogic.h"
 #include "IRTReaderLogic.h"
+#include "ArrivalStamp.h"     // (0.8.2) arrival-time stamps for dbo_HH.csv
 #include "HostSlot.h"
 #include <fstream>
 #include <sstream>
@@ -137,7 +138,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* IR_VERSION = "0.8.1";   // (0.8.1) the book object parked at done() / destroy() - IRT faulted inside its destructor at every quit; (0.8.0) the depth recorder: chart-context open, 250 ms guarded clock, valid books only, hourly dom_HH / dbo_HH, coverage; stuck-bar skip; pass watchdog
+static const char* IR_VERSION = "0.8.2";   // (0.8.2, 2026-10-22 MBO recorder fix P1) dbo_HH rows stamped by ARRIVAL time (ArrivalStamp.h): a row IRT stamps with the resting order's old time gets the latest time already written, so it lands in the right hour file and replays in feed order; status DBO adds restamped / max_back_s; (0.8.1) the book object parked at done() / destroy() - IRT faulted inside its destructor at every quit; (0.8.0) the depth recorder: chart-context open, 250 ms guarded clock, valid books only, hourly dom_HH / dbo_HH, coverage; stuck-bar skip; pass watchdog
 //   // (0.7.1 audit) complete VAP bars and cursor advancement are durable-only; fixed-market readers remain footprint-only; MBO is accurately labelled on CQG and bounded per pass.
 //   // (0.6.5) times every step: any step over 250 ms is traced as SLOW (the IRT freeze hunt, 2026-10-08)   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
 #ifndef IR_FIXED
@@ -247,6 +248,7 @@ struct DepthState {
     int timerId = 0; bool timerOn = false, timerTried = false; long long ticks = 0;
     irl::FillCoverage cov; long long firstBarKey = -1;
     unsigned long long tsKey = 0; struct tm tsTm; std::string tsSess, tsHH;
+    arr::Clock arrival;                                   // (0.8.2) stale order-feed stamps -> the latest time already written
     long long statusMs = -1, lastChartMs = -1; std::string err;
     DepthState() { memset(&tsTm, 0, sizeof(tsTm)); }
     ~DepthState() { delete md; delete dbo; }
@@ -1091,7 +1093,7 @@ void IRTReader::depthIdentify(DepthState& D)
     delete D.md; D.md = nullptr; delete D.dbo; D.dbo = nullptr;
     D.mdDead = D.mdBlocked = D.dboDead = D.dboBlocked = D.dboCqg = D.dboLive = false; D.clockDomOff = D.clockDboOff = false;
     D.avail = false; D.maxLevels = 0; D.availMs = -1; D.domHash = 0; D.domSec = -1; D.timerTried = false;
-    D.owner = false; D.ownerMs = -1; D.firstBarKey = -1; D.cov = irl::FillCoverage(); D.dboSkip = false; D.skipCheckMs = -1;
+    D.owner = false; D.ownerMs = -1; D.firstBarKey = -1; D.cov = irl::FillCoverage(); D.dboSkip = false; D.skipCheckMs = -1; D.arrival.reset();
     D.id = id; D.mkt = mkt; D.sym = sym; D.root = root; D.tick = tick; D.spb = spb; D.folder = RSet().folder;
 }
 
@@ -1271,11 +1273,15 @@ void IRTReader::dboRead(DepthState& D, bool chart, long long now)
         if (o.action == 3) D.cov.addFill((long long)o.timestamp, (long long)o.size);
         if (D.dboSkip) { D.dboNotWritten++; continue; }
         if (!tsOf(D, (unsigned long long)o.timestamp)) { D.dropped++; continue; }
-        const std::string f = D.folder + "\\" + D.tsSess + "\\" + D.mkt + "\\dbo_" + D.tsHH + ".csv";
-        if (f != file) { out(); file = f; D.lastDboFile = f; }
-        const struct tm& t = D.tsTm;
         if (!std::isfinite(o.price) || !std::isfinite(o.previousPrice) || !std::isfinite(o.bid) || !std::isfinite(o.ask)) { D.dropped++; continue; }
-        snprintf(line, sizeof(line), "%04d-%02d-%02d %02d:%02d:%02d|%s|%s|%s|%lu|%d|%d|%c|%s|%s\n", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec,
+        // (0.8.2) arrival time: a row stamped before the latest time already written takes that time (and its hour file)
+        int aY = D.tsTm.tm_year + 1900, aMo = D.tsTm.tm_mon + 1, aD = D.tsTm.tm_mday, aH = D.tsTm.tm_hour, aMi = D.tsTm.tm_min, aS = D.tsTm.tm_sec;
+        std::string aSess = D.tsSess, aHH = D.tsHH;
+        if (D.arrival.apply(aY, aMo, aD, aH, aMi, aS)) { aSess = irl::sessionOf(aY, aMo, aD, aH); char hb[8]; snprintf(hb, sizeof(hb), "%02d", aH); aHH = hb; }
+        if (aSess.empty()) { D.dropped++; continue; }
+        const std::string f = D.folder + "\\" + aSess + "\\" + D.mkt + "\\dbo_" + aHH + ".csv";
+        if (f != file) { out(); file = f; D.lastDboFile = f; }
+        snprintf(line, sizeof(line), "%04d-%02d-%02d %02d:%02d:%02d|%s|%s|%s|%lu|%d|%d|%c|%s|%s\n", aY, aMo, aD, aH, aMi, aS,
                  o.action < 4 ? ACT[o.action] : "?", irl::px(o.price, D.tick).c_str(), irl::px(o.previousPrice, D.tick).c_str(), (unsigned long)o.size, o.orderID,
                  o.aggressorOrderID, o.buySell == 1 ? 'B' : o.buySell == 0 ? 'S' : '?', irl::px(o.bid, D.tick).c_str(), irl::px(o.ask, D.tick).c_str());
         rows += line; D.rowsDbo++;
@@ -1318,7 +1324,7 @@ void IRTReader::depthStatus(DepthState& D, long long now, bool force)
       << ",rows " << D.rowsDom << ",file " << (D.lastDomFile.empty() ? "none yet" : D.lastDomFile)
       << "\nDBO," << (D.dboCqg ? "unsupported on CQG" : D.dboBlocked ? "blocked" : D.dboDead ? "stopped (fault)" : !D.dbo ? (D.dboSkip ? "not opened - " + D.skipWhy : std::string("not opened")) : D.dboSkip ? "read, not written - " + D.skipWhy : std::string("recording"))
       << ",events " << D.dboEvents << " (clock " << D.dboClock << " / chart " << D.dboChart << "),rows " << D.rowsDbo << ",not_written " << D.dboNotWritten
-      << ",caps " << D.dboCaps << ",clock " << (D.clockDboOff ? "off (fault)" : D.dboLive ? "on" : "waiting for the chart's first read") << ",faults " << D.dboFaults
+      << ",caps " << D.dboCaps << ",restamped " << D.arrival.restamped << ",max_back_s " << D.arrival.maxBackS << ",clock " << (D.clockDboOff ? "off (fault)" : D.dboLive ? "on" : "waiting for the chart's first read") << ",faults " << D.dboFaults
       << ",file " << (D.lastDboFile.empty() ? "none yet" : D.lastDboFile)
       << "\nMBO_COVERAGE,";
     if (D.cov.lastPct < 0) o << "no closed bar checked yet (fills read vs bar volume, each closed bar >= 5 s after it closes)";

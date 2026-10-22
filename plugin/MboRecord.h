@@ -1,6 +1,11 @@
 #ifndef LS_MBORECORD_H
 #define LS_MBORECORD_H
-// MboRecord.h (1.1.0, 2026-10-14) -- lsPullStats' "Record order feed" (Rassul approved 2026-10-13; settings audit 2026-10-14).
+// MboRecord.h (1.2.0, 2026-10-22) -- lsPullStats' "Record order feed" (Rassul approved 2026-10-13; settings audit 2026-10-14).
+// 1.2.0 (2026-10-22, MBO recorder fix P1, Rassul 07:08 "complete the fixes"): rows are stamped by ARRIVAL time. IRT stamps a few
+//   MOD / DEL / FILL rows with the resting order's own time and re-sends the resting book with old times after a re-subscription
+//   (ES 10-19: 33 stale rows + 2,962 at the 17:08 re-subscription); such a row now gets the latest time already written, so it goes
+//   to the right hour file and replays in feed order (ArrivalStamp.h; a jump back of 30 min or more = the DST hour, kept). The status
+//   line adds "restamped N,max_back_s M". The host today is lsBookFlow (lsPullStats retired 2026-10-16).
 // 1.1.0 (2026-10-14 evening, LIQ-DAY review "the ES MBO recorder drops events under load"): the hour file's path is built once per
 //   clock hour (not per event) and the host keeps one clock conversion per second (tsKey / tsTm), so a 50,000-event burst costs a
 //   snprintf + an append per event; the host (PullStats 1.3.0) now feeds every event read by its 250 ms order-feed clock and flushes
@@ -23,6 +28,7 @@
 // than we wrote: this recorder stops and drops its lines (so no event is written twice) and resumes only after the file has stood
 // still for 10 s. Under 2 GB free on the drive: paused with a status note (checked every 30 s).
 #include <cerrno>
+#include "ArrivalStamp.h"           // (1.2.0) arrival-time stamps
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -39,7 +45,7 @@
 
 namespace mrec {
 
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";
 static const char* const HEADER = "time|action|price|prev_price|size|order_id|aggressor_id|side|bid|ask";
 static const long long MIN_FREE = 2LL * 1024 * 1024 * 1024;           // 2 GB
 static const size_t SOFT_CAP = 4u * 1024 * 1024, HARD_CAP = 32u * 1024 * 1024;
@@ -170,6 +176,7 @@ struct Recorder {
     std::string dirsMade;
     unsigned long long tsKey = 0; struct tm tsTm;     // (1.1.0) the host's last clock conversion (one per event second)
     long long pathKey = -1; std::string pathNow;      // (1.1.0) the hour file of the last event (built once per clock hour)
+    arr::Clock arrival;                               // (1.2.0) stale stamps -> the latest time already written
 
     Recorder() { std::memset(&tsTm, 0, sizeof(tsTm)); }
     Recorder(const Recorder&) = delete; Recorder& operator=(const Recorder&) = delete;
@@ -179,7 +186,7 @@ struct Recorder {
         if (m == market) return;
         if (on && !buf.empty()) flush(lastNow + FLUSH_MS);
         if (!market.empty()) drop(market, this);
-        market = m; expect.clear(); foreign = false; owner = false; pathKey = -1; pathNow.clear();
+        market = m; expect.clear(); foreign = false; owner = false; pathKey = -1; pathNow.clear(); arrival.reset();
     }
     void setOn(bool v) {
         if (v == on) return;
@@ -188,8 +195,9 @@ struct Recorder {
         else note = "waiting for the order feed";
     }
     void dropBuffer(bool count) { if (count) for (std::map<std::string, std::string>::const_iterator i = buf.begin(); i != buf.end(); ++i) dropped += linesIn(i->second); buf.clear(); bufBytes = 0; }
-    void add(const Ev& e) {
+    void add(const Ev& ev) {
         if (!on || market.empty()) return;
+        Ev e = ev; arrival.apply(e.y, e.mo, e.d, e.h, e.mi, e.s);           // (1.2.0) arrival time
         const long long key = (((long long)e.y * 13 + e.mo) * 32 + e.d) * 24 + e.h;   // (1.1.0) one path per clock hour
         if (key != pathKey || pathNow.empty()) { pathNow = pathOf(root(), market, e); pathKey = pathNow.empty() ? -1 : key; }
         const std::string& p = pathNow;
@@ -257,7 +265,7 @@ struct Recorder {
     }
     void status(std::ostream& o) const {
         o << "\nMBO_RECORD," << (on ? note : std::string("off (setting)")) << ",rows " << rows << ",bytes " << bytes << ",fails " << fails
-          << ",dropped " << dropped << ",flushes " << flushes << ",biggest_flush " << biggestFlush
+          << ",dropped " << dropped << ",restamped " << arrival.restamped << ",max_back_s " << arrival.maxBackS << ",flushes " << flushes << ",biggest_flush " << biggestFlush
           << ",free_gb " << (freeNow < 0 ? std::string("n/a") : std::to_string(freeNow / 1073741824LL)) << ",file " << (lastPath.empty() ? std::string("none yet") : lastPath)
           << "\nMBO_RECORD_FORMAT," << HEADER << " (data\\irt\\<session>\\<MKT>\\mbo_HH.csv, archived nightly by lra.mbo_live)";
     }
