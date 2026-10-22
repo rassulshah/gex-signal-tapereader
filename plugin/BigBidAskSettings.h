@@ -35,7 +35,7 @@ inline const ss::Spec& spec() {
         ss::boolRow("ob", "Order block (OB) boxes", true),
         ss::same(ss::boolRow("bo_box", "Breakout (BO) boxes", true)),
         ss::boolRow("ob_any", "Strong waves without trend (lighter)", true),
-        ss::same(ss::floatRow("ob_atr", "Strong wave (x ATR)", 3.0, 2.0, 10.0, 50)),
+        ss::floatRow("ob_atr", "Strong wave (x ATR)", 3.0, 2.0, 10.0, 50),
         ss::intRow("ob_origin", "OB origin candles", 2, 1, 2, 50),
         ss::colorRow("col_ob_up", "OB / BO up", 0x22C55E, 40),
         ss::same(ss::colorRow("col_ob_dn", "OB / BO down", 0xEF4444, 40)),
