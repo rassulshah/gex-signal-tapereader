@@ -178,7 +178,7 @@ int main() {
         CHECK(src.find("hlg::hvlFromGex(S->gex)") != std::string::npos && src.find("S->view.gexStale.empty()") != std::string::npos, "HodLod.cpp uses it only while the Gex S/R file is LIVE");
     }
     std::printf("[5] versions\n");
-    {   CHECK(std::string(hl::HL_VERSION) == "2.6.0" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == hlset::PLUGIN_VERSION == 2.6.0");
+    {   CHECK(std::string(hl::HL_VERSION) == "2.7.0" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == hlset::PLUGIN_VERSION == 2.6.0");
         const std::string src = readAll("../HodLod.cpp"); CHECK(src.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos, "HodLod setVersion literal");
         CHECK(hlset::spec().paramVersion == 8 && ss::find(hlset::spec(), "offset_x") < 0 && ss::find(hlset::spec(), "offset_y") < 0, "Offset X / Y removed, parameter version 8 (2.6.0: + the pre-open rows)");
         const std::string b = readAll("../BigBidAsk.cpp"), bl = readAll("../BigBidAskLogic.h"), bs = readAll("../BigBidAskSettings.h");

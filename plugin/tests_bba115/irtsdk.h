@@ -29,12 +29,12 @@ class BARSTATISTICS { public: long buyVolume, sellVolume, totalVolume, maxPriceV
 namespace mock {
 struct VRow { float price; long ask, bid; };     // ask = bought at the ask (buyVolume), bid = sold at the bid (sellVolume)
 struct Bar { unsigned long time = 0, volume = 0; float open = 100, high = 101, low = 99, close = 100; std::vector<VRow> rows; bool noVap = false; };
-struct Draw { std::string type, text; int l, t, r, b; COLOR color; int width, pattern, font; bool bold; };
+struct Draw { std::string type, text; int l, t, r, b; COLOR color; int width, pattern, font; bool bold; COLOR fill = 0; int mode = 0; };   // (1.25.0) + fill colour / draw mode (translucent) for the OB / BO boxes
 struct Host {
     std::vector<Bar> bars; void* data = nullptr; bool noSlot = false;
     std::string symbol = "ESZ6", root = "ES", chart = "ES 3m"; int seconds = 180; unsigned long now = 0;
     int paneTop = 0, paneBottom = 800, paneLeft = 0, paneRight = 2600, scaleW = 60; float priceBase = 7700; float pxPerTick = 12;
-    COLOR ink = 0, pen = 0; short font = 12; bool bold = false; std::vector<Draw> draws; float tick = 0.25f;
+    COLOR ink = 0, pen = 0, brush = 0; short font = 12; bool bold = false; std::vector<Draw> draws; float tick = 0.25f;
     int barOffset = 0, barW = 60;   // x of bar i = 20 + (i - barOffset) * barW (left), +barW/4 centre .. +barW/2 right
     int visStart = -1, visEnd = -1;
     bool inDialog = false; std::map<int, int> ints; std::map<int, float> floats; std::map<int, bool> boxes;   // the dialog's values
@@ -51,7 +51,7 @@ public:
     enum BRUSH_STYLE { PAT_NONE, PAT_HOLLOW, PAT_SOLID };
     enum BAR_POSITION { kBarLeft, kBarCenter, kBarRight };
     struct FONT { FONT_ID id = HELVETICA; short size = 12; FONT_STYLE style = PLAIN; };
-    struct CBRUSH { CBRUSH(COLOR, BRUSH_STYLE) {} void set() {} };
+    struct CBRUSH { COLOR c; CBRUSH(COLOR c_, BRUSH_STYLE) : c(c_) {} void set() { mock::current->brush = c; } };
     struct PNT {
         short v = 0, h = 0;
         RTX_RESULT set(int bar, float price, BAR_POSITION pos = kBarLeft) {
@@ -66,8 +66,12 @@ public:
         void set(short l, short t, short r, short b) { left = l; top = t; right = r; bottom = b; }
         void getPaneRect(RTBOOL = false) { set((short)mock::current->paneLeft, (short)mock::current->paneTop, (short)mock::current->paneRight, (short)mock::current->paneBottom); }
         void getScaleRect(void) { set((short)(mock::current->paneRight - mock::current->scaleW), (short)mock::current->paneTop, (short)mock::current->paneRight, (short)mock::current->paneBottom); }
-        void draw(short width = 0, COLOR border = 0, COLOR fill = 0, DRAWTYPE = DRAW_OPAQUE, BRUSH_STYLE pat = PAT_SOLID) {
-            mock::Draw d; d.type = "rect"; d.l = left; d.t = top; d.r = right; d.b = bottom; d.color = border; d.width = width; d.pattern = (int)pat; (void)fill; d.font = 0; d.bold = false;
+        void draw(short width = 0, COLOR border = 0, COLOR fill = 0, DRAWTYPE mode = DRAW_OPAQUE, BRUSH_STYLE pat = PAT_SOLID) {
+            mock::Draw d; d.type = "rect"; d.l = left; d.t = top; d.r = right; d.b = bottom; d.color = border; d.width = width; d.pattern = (int)pat; d.fill = fill; d.mode = (int)mode; d.font = 0; d.bold = false;
+            mock::current->draws.push_back(d);
+        }
+        void drawOval(DRAWTYPE mode = DRAW_OPAQUE) {
+            mock::Draw d; d.type = "oval"; d.l = left; d.t = top; d.r = right; d.b = bottom; d.color = mock::current->pen; d.fill = mock::current->brush; d.width = 1; d.pattern = 0; d.mode = (int)mode; d.font = 0; d.bold = false;
             mock::current->draws.push_back(d);
         }
         void drawRounded(int, int) {

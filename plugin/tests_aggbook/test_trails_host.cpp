@@ -1,4 +1,4 @@
-// test_trails_host.cpp -- lsDefenseLines 1.10.0 TRAILS on the mock host (2026-10-22, Rassul "ROLLING BIDS / OFFERS DURING THE MOVE"):
+// test_trails_host.cpp -- lsDefenseLines 1.11.0 TRAILS on the mock host (2026-10-22, Rassul "ROLLING BIDS / OFFERS DURING THE MOVE"):
 // reads lsBookFlow's trail file incrementally, draws the thin stepped line (green bid / red offer), the end marks (dot / x / "B?"),
 // at most 2 per side, decides + records each end once, NO REPAINT across a restart (even with other settings), settings checkbox /
 // colours real, the hover (question / what / why / use / example) only on a trail.
@@ -27,6 +27,8 @@ int main() {
     char tmpl[] = "/tmp/trlXXXXXX"; const char* tmp = mkdtemp(tmpl); setenv("USERPROFILE", tmp, 1);
     const std::string flex = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels";
     mkdir(flex.c_str(), 0700); mkdir((flex + "\\BookFlow").c_str(), 0700);
+    auto trailParams = [&](const char* body) { std::ofstream f((flex + "\\LRA-Trails-ES.csv").c_str()); f << "VERSION,1\nMARKET,ES\n" << body; };   // (1.11.0) the nightly's SHOW / LOG file
+    trailParams("PARAM,SHOW,SHOW\nPARAM,SHOW_B,SHOW\n");
     mock::Host h; mock::current = &h; h.tick = 0.25f; h.seconds = 180; h.symbol = "ESZ6"; h.root = "ES"; h.paneBottom = 600; h.paneRight = 2000; h.ppb = 10; h.barW = 20;
     // a rally: each candle 1 point range, up 0.75 a candle (ATR ~ 1.75 pts = 7 ticks; 0.5 ATR ~ 3.5 ticks)
     for (int i = 0; i < 40; ++i) { mock::Bar b; b.time = T0 + 180UL * i; b.low = 7000 + 0.75f * i; b.high = b.low + 1.0f; b.open = b.low + 0.25f; b.close = b.high - 0.25f; h.bars.push_back(b); }
@@ -59,7 +61,7 @@ int main() {
     CHECK(countOf(rec1, "TR|1|") == 3 && countOf(rec1, "|B|") == 1 && countOf(rec1, "|X|") == 1 && countOf(rec1, "|F|") == 1, "each end recorded once for the nightly");
     redraw(p, h); CHECK(countOf(slurp(rp), "TR|1|") == 3, "a redraw never records twice");
     {   std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string b((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
-        CHECK(b.find("VERSION,1.10.0") != std::string::npos && b.find("TRAILS,on,3 trails") != std::string::npos && b.find("recorded 3") != std::string::npos, "status line: version + trails"); }
+        CHECK(b.find("VERSION,1.11.0") != std::string::npos && b.find("TRAILS,on,3 trails") != std::string::npos && b.find("recorded 3") != std::string::npos, "status line: version + trails"); }
     // incremental read: the half line completes, a 4th trail (bid 11) starts and is still following (no end mark, runs to the last candle)
     {   std::ofstream f(tp.c_str(), std::ios::app); f << "|9|1|1|0\n"; f << "TS|11|0|50|" << key(36) << "|20000|28140\n" << "TP|11|" << key(36) << "|20000|28142|0\n" << "TP|11|" << key(37) << "|21000|28145|0\n"; }
     redraw(p, h);
@@ -79,6 +81,13 @@ int main() {
     CHECK(segs(h, (COLOR)0x3B82F6, true) >= 2 && segs(h, GRN, true) == 0, "bid colour setting applied");
     settings(flex, { { dlset::K_SHOW_TRAILS, 0 } }); redraw(p, h);
     CHECK(s->trailsDrawn == 0 && text(h, "B?") == nullptr && segs(h, RED, true) == 0 && countOf(slurp(rp), "TR|1|") == 3, "Trails unchecked: nothing drawn, the records stay");
+    // (1.11.0) the nightly's verdict LOG ONLY (default in every market): nothing drawn with the checkbox on, records kept; SHOW_B LOG = lines without B?
+    settings(flex, {}); trailParams("# log only\nPARAM,SHOW,0\nPARAM,SHOW_B,0\n"); usleep(3200000); redraw(p, h);
+    CHECK(s->trailsDrawn == 0 && text(h, "B?") == nullptr && segs(h, RED, true) == 0 && segs(h, GRN, true) == 0 && countOf(slurp(rp), "TR|1|") == 3, "LRA-Trails SHOW 0: LOG ONLY - nothing drawn, the records stay");
+    trailParams("PARAM,SHOW,SHOW\nPARAM,SHOW_B,LOG\n"); usleep(3200000); redraw(p, h);
+    CHECK(s->trailsDrawn > 0 && text(h, "B?") == nullptr && segs(h, GRN, true) >= 2, "SHOW + SHOW_B LOG: the lines without B?");
+    { struct stat st0; const bool none = stat((flex + "\\LRA-Trails-GC.csv").c_str(), &st0) != 0; CHECK(none && mp::mode("Trails", "GC", "SHOW", mp::LOG) == mp::LOG, "no file = LOG (the default)"); }
+    trailParams("PARAM,SHOW,SHOW\nPARAM,SHOW_B,SHOW\n# back on for the restart test\n"); usleep(3200000);
     // NO REPAINT across a restart: a new instance with N = 5 and gap 2.0 ATR still shows B? at candle 9 and writes nothing new
     std::vector<std::string> before; settings(flex, {}); redraw(p, h); for (auto& d : h.draws) if (d.type == "text" || (d.type == "line" && (d.pen == GRN || d.pen == RED))) before.push_back(d.type + std::to_string(d.x0) + "," + std::to_string(d.y0) + "-" + std::to_string(d.x) + "," + std::to_string(d.y) + d.text);
     p->destroy(); p->~DefenseLines(); ::operator delete(p);

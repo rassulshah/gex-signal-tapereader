@@ -186,8 +186,8 @@ int main() {
     }
     {   // [8] versions and settings
         const std::string src = readAll("../HodLod.cpp");
-        CHECK(std::string(hl::HL_VERSION) == "2.6.0" && std::string(hlset::PLUGIN_VERSION) == "2.6.0", "HL_VERSION / PLUGIN_VERSION 2.6.0");
-        CHECK(src.find("p->setVersion(\"2.6.0\")") != std::string::npos, "setVersion literal 2.6.0");
+        CHECK(std::string(hl::HL_VERSION) == "2.7.0" && std::string(hlset::PLUGIN_VERSION) == "2.7.0", "HL_VERSION / PLUGIN_VERSION 2.6.0");
+        CHECK(src.find("p->setVersion(\"2.7.0\")") != std::string::npos, "setVersion literal 2.6.0");
         CHECK(src.find("static const bool HL_HOVERS = false;") != std::string::npos && src.find("static const bool HL_PRE_HOVER = true;") != std::string::npos, "hovers: only the Pre row");
         CHECK(src.find("((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0)") != std::string::npos, "TRACK_MOUSE only through the switches");
         const ss::Spec& S = hlset::spec();

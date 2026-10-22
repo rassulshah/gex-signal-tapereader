@@ -241,7 +241,7 @@ static void host(const std::vector<Fx>& F) {
         c.view(i1048 - 6, i1048 + 6);
         CHECK(textAt(c, "124", 0x00FFFFFF, i1048) && textAt(c, "BO", 0x0022C55E, i1048), "[host] 10:48 BO 124 drawn on its candle");
         const std::string stt = slurp(HOME + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.status-NQ-NQZ6-180.txt");
-        CHECK(stt.find("VERSION,1.23.0\n") == 0 && stt.find("\nBREAKOUTS,on,today BO ") != std::string::npos && stt.find("BO_EVENT,9:03 AM,BO,fired,Q: did buyers break out with real size?") != std::string::npos
+        CHECK(stt.find(std::string("VERSION,") + BBA_VERSION + "\n") == 0 && stt.find("\nBREAKOUTS,on,today BO ") != std::string::npos && stt.find("BO_EVENT,9:03 AM,BO,fired,Q: did buyers break out with real size?") != std::string::npos
               && stt.find("print 56 lots bought at 29,890.00") != std::string::npos && stt.find("BO_EVENT,8:33 AM,BO,not fired: wick_wave_ended") != std::string::npos && stt.find("\nBREAKOUT_RULES,1.23.0") != std::string::npos, "[host] status: version, BREAKOUTS counts, the 9:03 details, the 8:33 failed wick break, the rules line");
         // no repaint: recomputes + a later bar changing nothing already decided
         std::map<long long, std::string> before; for (const auto& kv : S.boDec) if (kv.second.dir) before[kv.first] = bba::boLine(kv.second, 0, "x");
@@ -331,8 +331,8 @@ static void host(const std::vector<Fx>& F) {
     { const std::string src = slurp("../BigBidAsk.cpp");
       const size_t a = src.find("(1.21.0) BREAKOUT / BREAKDOWN (decided in boPass"), b = src.find("the hover: only while the cursor");
       CHECK(a != std::string::npos && b > a && src.substr(a, b - a).find("P_DASH") == std::string::npos && src.substr(a, b - a).find("drawLineTo") == std::string::npos, "[host] no dashed / pivot line in the breakout drawing");
-      CHECK(std::string(BBA_VERSION) == "1.23.0" && std::string(bba::VERSION) == "1.23.0" && std::string(bbaset::PLUGIN_VERSION) == "1.23.0" && src.find("p->setVersion(\"1.23.0\")") != std::string::npos, "[ver] 1.21.0 everywhere");
-      CHECK(bbaset::spec().rows[bbaset::K_BREAKOUT].def == 1 && bbaset::spec().paramVersion == 10, "[set] Breakout / breakdown on by default; parameter version 10"); }
+      CHECK(std::string(BBA_VERSION) == "1.25.1" && std::string(bba::VERSION) == "1.25.1" && std::string(bbaset::PLUGIN_VERSION) == "1.25.1" && src.find("p->setVersion(\"1.25.1\")") != std::string::npos, "[ver] 1.25.0 everywhere");
+      CHECK(bbaset::spec().rows[bbaset::K_BREAKOUT].def == 1 && bbaset::spec().paramVersion == 12, "[set] Breakout / breakdown on by default; parameter version 12 (1.25.0 + OB / BO)"); }
 }
 
 int main() {

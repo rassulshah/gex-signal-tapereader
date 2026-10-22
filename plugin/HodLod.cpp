@@ -127,6 +127,9 @@ static const bool HL_PRE_HOVER = true;
 #include "BoxDock.h"             // (2.4.1) the table rectangle for the Big Lot box (lsBigBidAsk) to dock to
 #include <chrono>
 #include "PreOpenLogic.h"        // (2.6.0) the PRE-OPEN BOOK row (SDK-free)
+#include "DayTypeLogic.h"        // (2.7.0) the day type in the header trend (SDK-free, price only)
+#include "MarkParams.h"          // (2.7.0) per-market SHOW / LOG params (LRA-PreOpen / LRA-DayType-<MKT>.csv)
+#include "NewsWindow.h"          // (2.7.0) the News / settle window and the Feed ? rows
 #include <map>
 #include "VwapTrendLogic.h"      // (2.0.5) the header's trend: the Tape Reader TREND vote's rule, computed here from the chart's closed bars
 #include <sys/stat.h>
@@ -257,6 +260,9 @@ struct HLState {
     RTDATE preStampKey = 0; long long preStampMs = 0; long long preRouted = 0; std::string preState = "not started"; double preTick = 0; std::string preSym; long prePer = 0;
     po::Line preLine; long long preLineMs = -100000; bool preShow = true; int preMin = 15;
     bool inPre = false, lastPreOk = false, lastPreHoverOk = false; hl::Box lastPreRow = { 0, 0, 0, 0 }, lastPreHover = { 0, 0, 0, 0 }; int preCurX = -100000, preCurY = -100000; long long preHovers = 0;
+    // (2.7.0) the hovered row: 0 = Pre, 1 = the day type, 2 + k = note row k; the drawn targets (kind, box)
+    int hovWhich = 0; std::vector<std::pair<int, hl::Box> > lastTargets;
+    dtl::Result day; dtl::Params dayP; std::string dayLine = "DAYTYPE,not run", dayParamWhy, newsLine = "NEWS,none", preParamWhy; int dayLogged = -99; std::string dayLoggedKey; long long dayLogs = 0, dayLogFails = 0; int preParamShow = 0;
     ~HLState() { delete T; }
 };
 
@@ -662,6 +668,36 @@ static void hlTrend(HLState& S, const std::vector<hl::Bar>& B, long long per)
     S.view.trendVia = t.ready ? hl::csvSafe(t.strength == vtl::STR_STRONG ? std::string(vtl::strengthLabel(t)) : std::string(vtl::viaLabel(t))) : std::string();
 }
 
+static bool hlAppend(const std::string& p, const std::string& header, const std::string& text);   // (2.7.0) defined with the pre-open record below
+// (2.7.0) the DAY TYPE (DayTypeLogic.h): today's CLOSED RTH bars only (the live session; nothing outside RTH / before the open), the
+// per-market params from LRA-DayType-<MKT>.csv (strict; missing = defaults), shown in the header trend while called and SHOW != LOG
+static void hlDayType(HLState& S, const std::vector<hl::Bar>& B, long long per, long long nowCt)
+{
+    S.view.dayText.clear(); S.view.dayHover.clear(); S.day = dtl::Result();
+    const mp::Params P = mp::get("DayType", S.mkt);
+    dtl::Params dp; dp.ibMin = (int)mp::num(P, "IB_MIN", 60, 15, 120); dp.extX = mp::num(P, "EXT_X", 1.5, 1.0, 5.0); dp.vwapHold = mp::num(P, "VWAP_HOLD", 0.80, 0.5, 1.0);
+    dp.closePct = mp::num(P, "CLOSE_PCT", 0.35, 0.05, 0.5); dp.rotX = mp::num(P, "ROT_X", 1.25, 1.0, 3.0); dp.rotCross = (int)mp::num(P, "ROT_CROSS", 4, 1, 50);
+    dp.rotMin = (int)mp::num(P, "ROT_MIN", 120, 60, 400); dp.mboTells = (int)mp::num(P, "MBO_TELLS", 0, 0, 1); dp.show = mp::mode(P, "SHOW", mp::SHOWQ) != mp::LOG ? 1 : 0;
+    S.dayP = dp; S.dayParamWhy = P.missing ? "LRA-DayType-" + S.mkt + ".csv missing - defaults" : P.why;
+    int om = 0, cm = 0;
+    if (B.empty() || per <= 0 || nowCt <= 0 || !svl::rthOf(S.mkt.c_str(), om, cm)) { S.dayLine = "DAYTYPE," + std::string(dtl::VERSION) + ",no RTH hours / bars"; return; }
+    const long long today = nowCt / 86400;
+    std::vector<dtl::Bar> v;
+    for (size_t i = 0; i < B.size(); i++) {
+        const long long a = B[i].absEnd; if (a / 86400 != today) continue;
+        const int endMin = (int)((a % 86400) / 60) - om; const int startMin = endMin - (int)(per / 60);
+        if (startMin < 0 || endMin > cm - om) continue;          // RTH bars only (bar END stamps)
+        dtl::Bar b; b.h = B[i].h; b.l = B[i].l; b.c = B[i].c; b.v = std::isfinite(B[i].v) ? B[i].v : 0; b.endMin = endMin; v.push_back(b);
+    }
+    S.day = dtl::classify(v, dp);
+    S.dayLine = dtl::statusLine(S.day, dp) + (S.dayParamWhy.empty() ? "" : "," + S.dayParamWhy);
+    if (S.day.kind == dtl::NONE || !dp.show) return;
+    S.view.dayText = S.day.text;
+    S.view.dayCol = S.day.kind == dtl::TREND_UP ? hl::C_GREEN : S.day.kind == dtl::TREND_DN ? hl::C_RED : hl::C_SLATE;
+    const std::vector<std::string> h = dtl::hover(S.day);
+    for (size_t i = 0; i < h.size(); i++) S.view.dayHover.push_back(hl::Line{ hl::Seg{ h[i], i == 0 ? S.view.dayCol : (h[i].compare(0, 4, "  + ") == 0 ? hl::C_SLATE : hl::C_GREY) } });
+}
+
 void HodLod::recompute(HLState& S, long n)
 {
     S.recomputes++;
@@ -700,6 +736,16 @@ void HodLod::recompute(HLState& S, long n)
     hl::ReadOut rd = rows.empty() ? hl::ReadOut() : rows.back().out;
     S.view = hl::buildView(T, rd, &rows, &S.mq, &lock);
     hlTrend(S, B, per);                       // (2.0.5) "Regime: Neg / Uptrend" - the trend from the closed bars only (no repaint)
+    hlDayType(S, B, per, hlNowCt());          // (2.7.0) the day type (header trend text while called), from the same closed bars
+    {   // (2.7.0) the day-type log for the nightly: one line each time the call changes (a restart logs the current call once again)
+        const std::string key = std::to_string(hlNowCt() / 86400) + "," + std::to_string(S.day.kind);
+        if (S.day.ready && key != S.dayLoggedKey && !B.empty()) {
+            const std::string p = flexPath("HodLod\\DayType-" + S.mkt + ".csv");
+            const long long a = B.back().absEnd; char ts[32]; std::snprintf(ts, sizeof ts, "%lld,%02d:%02d", a / 86400, (int)((a % 86400) / 3600), (int)((a % 3600) / 60));
+            if (!p.empty() && hlAppend(p, "# lsHodLod day type log: D,<CT day number>,<bar end HH:MM>,<status fields>", std::string("D,") + ts + "," + S.dayLine + "," + hl::HL_VERSION + "\n")) { S.dayLoggedKey = key; S.dayLogs++; }
+            else S.dayLogFails++;
+        }
+    }
     computeFx(S, n, per);                     // (2.0.0) the 1st Extreme model on the same chart (this recompute's bar size)
     S.view.fxSegs = hlfx::headerLine(S.fxView, S.fxHave);
     S.projIdx = -1;                           // (1.1.0) the 1st extreme's bar on this chart, matched by its END stamp
@@ -1283,12 +1329,41 @@ int HodLod::draw(void)
         preTick(*S);
         const long long nowMs = hlNowCt() * 1000LL, st = hlNowMs();
         if (st - S->preLineMs >= 1000 || st < S->preLineMs) { S->preLine = po::lineAt(S->pre, nowMs, S->preFeed.lastEventMs >= 0 ? 1 : 0); S->preLineMs = st; }
-        S->view.preOn = S->preShow && S->preLine.show && S->pre.dayMs >= 0 && S->preState != "weekend";
+        {   // (2.7.0) VALIDATE-CONTEXT-MARKS 2026-10-22: the Pre row is LOG ONLY until the nightly promotes it (LRA-PreOpen-<MKT>.csv PARAM,SHOW); it keeps recording
+            const mp::Params PP = mp::get("PreOpen", S->mkt); S->preParamShow = mp::mode(PP, "SHOW", mp::LOG); S->preParamWhy = PP.missing ? "no file - LOG" : PP.why;
+        }
+        S->view.preOn = S->preShow && S->preParamShow != mp::LOG && S->preLine.show && S->pre.dayMs >= 0 && S->preState != "weekend";
         S->view.preText = S->preLine.s;
         S->view.preCol = S->preLine.col == po::COL_GREEN ? hl::C_GREEN : S->preLine.col == po::COL_RED ? hl::C_RED : hl::C_GREY;
         S->view.preHover.clear();
-        if (HL_PRE_HOVER && S->inPre && S->view.preOn)
+        if (HL_PRE_HOVER && S->inPre && S->hovWhich == 0 && S->view.preOn)
             for (const po::HLine& h : po::hover(S->pre, nowMs)) S->view.preHover.push_back(hl::Line{ hl::Seg{ h.s, h.col == po::COL_GREEN ? hl::C_GREEN : h.col == po::COL_RED ? hl::C_RED : (h.bold ? hl::C_SLATE : hl::C_GREY) } });
+    }
+    {   // (2.7.0) the NEWS / SETTLE window row and the Feed ? row (NewsWindow.h), checked every draw against the PC's CT clock
+        S->view.notes.clear();
+        const nw::Gate g = nw::atCtSec(S->mkt, hlNowCt());
+        if (g.news) {
+            hl::View::Note N; N.label = "News"; N.col = hl::C_AMBER;
+            N.text = g.label + " \xB7 -" + std::to_string(g.pre) + " / +" + std::to_string(g.post) + " min \xB7 marks ?";
+            const char* H[] = { "News / settle window ?  ", "Question: is a scheduled release or the settlement moving price right now?",
+                "What it is: the window around a tier-1 release (CPI / NFP 7:30 AM, FOMC 1:00 PM), the EIA reports (CL Wed / NG Thu 9:30 AM) or this market's daily settlement.",
+                "Why it matters: inside the window sweeps run wider and order-flow marks are not proven, so every mark drawn in it carries '?'.",
+                "How to use: a level is a plan, not a trade, until the window ends; judge stops in R and prefer the CoB over the reversal bar.",
+                "Example: ES CPI day 7:25 - 7:45 AM: an Sr at 7:31 shows as 'Sr?'." };
+            for (int i = 0; i < 6; i++) N.hover.push_back(hl::Line{ hl::Seg{ i == 0 ? std::string(H[0]) + g.label : std::string(H[i]), i == 0 ? hl::C_AMBER : hl::C_SLATE } });
+            S->view.notes.push_back(N);
+        }
+        if (g.feedBad) {
+            hl::View::Note N; N.label = "Feed"; N.col = hl::C_AMBER; N.text = "? live MBO feed does not match \xB7 MBO marks record only";
+            const char* H[] = { "Feed ?", "Question: can the order-by-order (MBO) marks on this market be trusted today?",
+                "What it is: the nightly compares this PC's recorded MBO feed with the exchange data (LRA-FeedCheck file); here they did not match.",
+                "Why it matters: Sr, St, turn orders, the queue-meter call and the reversal stages are built from that feed.",
+                "How to use: those marks are recorded only (not drawn) on this market until the check passes again; price, options and levels are unaffected.",
+                "Example: NQ feed dropped 3% of the book events overnight -> 'Feed ?' and no Sr / St on NQ." };
+            for (int i = 0; i < 6; i++) N.hover.push_back(hl::Line{ hl::Seg{ i == 0 ? std::string(H[0]) + "  " + g.feedWhy : std::string(H[i]), i == 0 ? hl::C_AMBER : hl::C_SLATE } });
+            S->view.notes.push_back(N);
+        }
+        S->newsLine = std::string("NEWS,") + nw::VERSION + "," + (g.news ? g.label : std::string("none")) + ",feed " + (g.feedBad ? "BAD (" + g.feedWhy + ")" : std::string("ok"));
     }
     S->placeLine = "PLACE,pos " + std::to_string(PL.pos) + ",dx " + std::to_string(O.dx) + ",dy " + std::to_string(O.dy) + (PL.why.empty() ? "" : "," + PL.why)
                  + "\nOPTS,table " + (O.table ? "on" : "off (Show table unchecked in Settings)") + ",projection " + (O.proj ? "on" : "off") + ",mark " + (O.mark ? "on" : "off") + ",moves " + std::to_string(S->hyst.moves) + "\n";
@@ -1306,7 +1381,9 @@ int HodLod::draw(void)
                             L.table.l += dx; L.table.r += dx; L.table.t += dy; L.table.b += dy;
                             if (L.gexOk) { L.gexRow.l += dx; L.gexRow.r += dx; L.gexRow.t += dy; L.gexRow.b += dy; }
                             if (L.qOk) { L.qBox.l += dx; L.qBox.r += dx; L.qBox.t += dy; L.qBox.b += dy; }
-                            if (L.preOk) { L.preRow.l += dx; L.preRow.r += dx; L.preRow.t += dy; L.preRow.b += dy; } }   // (2.6.0)
+                            if (L.preOk) { L.preRow.l += dx; L.preRow.r += dx; L.preRow.t += dy; L.preRow.b += dy; }   // (2.6.0)
+                            if (L.dayOk) { L.dayBox.l += dx; L.dayBox.r += dx; L.dayBox.t += dy; L.dayBox.b += dy; }   // (2.7.0)
+                            for (size_t q = 0; q < L.noteRows.size(); ++q) { L.noteRows[q].l += dx; L.noteRows[q].r += dx; L.noteRows[q].t += dy; L.noteRows[q].b += dy; } }
         }
     }
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
@@ -1323,7 +1400,13 @@ int HodLod::draw(void)
         if (S->inQ) { int cx = 0, cy = 0; if (hlCursor(cx, cy) && (std::abs(cx - S->qCurX) > 8 || std::abs(cy - S->qCurY) > 8)) S->inQ = false; }   // (2.3.0) the Q-Scores' detail
         if (HL_HOVERS && S->inQ && L.qOk && !S->inGex) hl::layoutQHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
         if (S->inPre) { int cx = 0, cy = 0; if (hlCursor(cx, cy) && (std::abs(cx - S->preCurX) > 8 || std::abs(cy - S->preCurY) > 8)) S->inPre = false; }   // (2.6.0) the Pre row's detail
-        if (HL_PRE_HOVER && S->inPre && L.preOk) hl::layoutPreHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
+        if (HL_PRE_HOVER && S->inPre) {   // (2.7.0) the hovered row's detail: Pre / day type / a note row
+            const std::vector<hl::Line>* hv = nullptr; const int w = S->hovWhich;
+            if (w == 0 && L.preOk) hv = &S->view.preHover;
+            else if (w == 1 && L.dayOk) hv = &S->view.dayHover;
+            else if (w >= 2 && (size_t)(w - 2) < S->view.notes.size() && (size_t)(w - 2) < L.noteRows.size()) hv = &S->view.notes[(size_t)(w - 2)].hover;
+            if (hv) hl::layoutRowHover(L, *hv, pb, pe > 0 ? pe : pb.r, M);
+        }
     }
     hl::applyOpts(L, O);                      // (2.0.5) the Settings checkboxes and colours
     S->lastGexOk = L.gexOk && L.tableOk; S->lastGexRow = L.gexRow; S->lastHoverOk = L.gexHoverOk && L.tableOk; S->lastGexHover = L.gexHover;
@@ -1331,6 +1414,13 @@ int HodLod::draw(void)
     S->lastQOk = L.qOk && L.tableOk; S->lastQBox = L.qBox; S->lastQHoverOk = L.qHoverOk && L.tableOk; S->lastQHover = L.qHover;
     if (!S->lastQOk) S->inQ = false;
     S->lastPreOk = L.preOk && L.tableOk; S->lastPreRow = L.preRow; S->lastPreHoverOk = L.preHoverOk && L.tableOk; S->lastPreHover = L.preHover;   // (2.6.0)
+    S->lastTargets.clear();                                                // (2.7.0) every row with a hover
+    if (L.tableOk) {
+        if (L.preOk) S->lastTargets.push_back(std::make_pair(0, L.preRow));
+        if (L.dayOk) S->lastTargets.push_back(std::make_pair(1, L.dayBox));
+        for (size_t q = 0; q < L.noteRows.size(); ++q) S->lastTargets.push_back(std::make_pair(2 + (int)q, L.noteRows[q]));
+    }
+    S->lastPreOk = !S->lastTargets.empty();
     if (!S->lastPreOk) S->inPre = false;
     S->placeLine += hlq::statusLine(S->qf, S->qWhy, S->qJudged ? &S->qV : nullptr) + "Q_BOX," + (S->lastQOk ? std::to_string(L.qBox.l) + "," + std::to_string(L.qBox.t) + "," + std::to_string(L.qBox.r) + "," + std::to_string(L.qBox.b) : std::string("none"))
                   + ",hover " + (S->lastQHoverOk ? std::to_string(L.qHover.l) + "," + std::to_string(L.qHover.t) + "," + std::to_string(L.qHover.r) + "," + std::to_string(L.qHover.b) : std::string("off")) + ",hovers " + std::to_string(S->qHovers) + "\n";
@@ -1348,7 +1438,8 @@ int HodLod::draw(void)
     }
     {   // (2.6.0) the PRE-OPEN BOOK's status
         const long long nowMs = hlNowCt() * 1000LL; const po::Engine& E = S->pre;
-        S->placeLine += "PREOPEN," + std::string(po::VERSION) + ",state " + S->preState + ",show " + (S->preShow ? "on" : "off") + ",window " + std::to_string(E.P.windowMin) + " min"
+        S->placeLine += S->dayLine + ",logged " + std::to_string(S->dayLogs) + ",log fails " + std::to_string(S->dayLogFails) + "\n" + S->newsLine + "\n";   // (2.7.0)
+        S->placeLine += "PREOPEN," + std::string(po::VERSION) + ",state " + S->preState + ",show " + (S->preShow ? "on" : "off") + ",param SHOW " + mp::modeName(S->preParamShow) + " (" + S->preParamWhy + ")" + ",window " + std::to_string(E.P.windowMin) + " min"
                       + (E.dayMs >= 0 ? ",session " + po::sessionKey(E.dayMs) + ",open " + po::hm12(E.openMin) : std::string()) + ",near " + std::to_string(E.nearTicks) + " ticks,s20 " + std::to_string(E.s20)
                       + ",snap " + (E.snapDone ? "done" : "no") + ",imb " + (E.imbDone ? "done" : "no") + ",restored " + std::to_string(S->preRestored) + ",written " + std::to_string(S->preWrites) + ",fails " + std::to_string(S->preWriteFails)
                       + ",line '" + S->preLine.s + "',row " + (S->lastPreOk ? std::to_string(S->lastPreRow.l) + "," + std::to_string(S->lastPreRow.t) + "," + std::to_string(S->lastPreRow.r) + "," + std::to_string(S->lastPreRow.b) : std::string("none")) + ",hovers " + std::to_string(S->preHovers) + "\n"
@@ -1412,8 +1503,10 @@ int HodLod::mouse(RTX_EVENT* e)
     if (HL_PRE_HOVER && (e->type == E_MOUSE_MOVE || e->type == E_MOUSE_HOVER)) {   // (2.6.0) the Pre row (or its open detail): the one hover
         const int mh = e->v.mouse.h, mv = e->v.mouse.v, g = S->inPre ? 6 : 0;
         auto inB = [&](const hl::Box& b) { return mh >= b.l - g && mh <= b.r + g && mv >= b.t - g && mv <= b.b + g; };
-        const bool ip = S->lastPreOk && (inB(S->lastPreRow) || (S->inPre && S->lastPreHoverOk && inB(S->lastPreHover)));
+        int which = -1; for (size_t q = 0; q < S->lastTargets.size() && which < 0; ++q) if (inB(S->lastTargets[q].second)) which = S->lastTargets[q].first;   // (2.7.0) Pre / day / notes
+        const bool ip = S->lastPreOk && (which >= 0 || (S->inPre && S->lastPreHoverOk && inB(S->lastPreHover)));
         if (ip) hlCursor(S->preCurX, S->preCurY);
+        if (which >= 0 && which != S->hovWhich) { S->hovWhich = which; if (S->inPre) invalidateChart(false); }
         if (ip != S->inPre) { S->inPre = ip; if (ip) ++S->preHovers; invalidateChart(false); }
     }
     if (!HL_HOVERS) return RTX_FAIL;                                         // (2.4.6) no hovers: the mouse is never used
@@ -1439,6 +1532,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.6.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.7.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

@@ -171,15 +171,15 @@ int main() {
             const FileT& t = f.t[0];
             CHECK(t.side == BID && t.anchor == 31000.0 && t.name == "G1" && t.q0 == 20 && t.q == 15 && std::fabs(t.pct - 0.75) < 1e-9, "the row: G1 bids 15 / 20 = 75%");
             CHECK(f.last == 31000.0 && f.atr > 29 && f.atr < 31 && f.tick == 0.25, "LAST / ATR / TICK");
-            CHECK(badgeText("G1", t, 0) == "G1 Q75%", "badge text 'G1 Q75%'");
+            CHECK(badgeText("G1", t, 0) == "G1  Q 75%", "badge text 'G1  Q 75%' (1.2.0: wider gap, space after Q)");
             CHECK(std::fabs(fillFrac(t) - 0.75) < 1e-9, "fill = 75% of the badge");
         }
         CHECK(!parseFile(L, "ES").ok, "wrong market refused");
         std::vector<std::string> G = L; G[0] = "MARKET,NQ"; CHECK(!parseFile(G, "NQ").ok, "no VERSION first refused");
         std::vector<std::string> H = L; for (auto& x : H) if (x.rfind("T,", 0) == 0) x = x.substr(0, x.rfind(',')); CHECK(!parseFile(H, "NQ").ok, "a torn T row refused");
         FileT w; w.pct = 0.33; w.warn = true;
-        CHECK(badgeText("", w, 0) == "Q33% . orig 0%" && badgeText("", w, 1) == "Q33%" && badgeText("9:24 low", w, 2) == "Q33%", "warning text and the shorter fits");
-        FileT big; big.pct = 1.4; CHECK(fillFrac(big) == 1.0 && badgeText("G1", big, 0) == "G1 Q140%", "more than the start: full fill, true number");
+        CHECK(badgeText("", w, 0) == "Q 33% . orig 0%" && badgeText("", w, 1) == "Q 33%" && badgeText("9:24 low", w, 2) == "Q 33%", "warning text and the shorter fits");
+        FileT big; big.pct = 1.4; CHECK(fillFrac(big) == 1.0 && badgeText("G1", big, 0) == "G1  Q 140%", "more than the start: full fill, true number");
         const Hover h = hover(f.t.empty() ? w : f.t[0], "G1", "31000.00");
         CHECK(h.title.find("?") != std::string::npos && h.title.find("not proven yet") != std::string::npos, "hover header carries ? (not proven yet)");
         bool order = false; size_t iq = 0, iw = 0, iy = 0, ih = 0, ie = 0;
@@ -272,7 +272,7 @@ int main() {
         CHECK(!f.ok, "file of ES read as NQ: refused");
         f = parseFile(split(fileText(E, T0 + 20000, 31000.0), '\n'), "ES");
         CHECK(f.ok && f.t.size() == 1 && f.t[0].call == 0 && f.t[0].mark == M_SHOW && outlineCall(f.t[0]) == 0, "file round trip: call RED, mark SHOW, red outline");
-        FileT q = f.t.empty() ? FileT() : f.t[0]; q.mark = M_SHOWQ; CHECK(badgeText("G1", q, 0).back() == '?', "SHOW?: the badge text ends with '?'");
+        FileT q = f.t.empty() ? FileT() : f.t[0]; q.mark = M_SHOWQ; CHECK(badgeText("G1", q, 0).back() != '?', "SHOW?: no '?' on the badge (1.2.0, Rassul 17:55)");
         q.mark = M_LOG; CHECK(outlineCall(q) == -1 && badgeText("G1", q, 0).back() != '?', "LOG market: no call outline, no '?'");
         const Hover h = hover(f.t.empty() ? q : f.t[0], "G1", "31000.00", "ES"); bool odds = false; for (auto& x : h.lines) if (x.find("broke 76% of the time (base 30%)") != std::string::npos) odds = true;
         CHECK(odds && h.title.find('?') == std::string::npos, "hover: ES odds line; no '?' in a SHOW market's header");

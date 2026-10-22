@@ -55,7 +55,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.6.0";   // (2.6.0, 2026-10-22, Rassul 15:57 CT "yes hod lod box", MBO Roadmap T-20261022-29) the PRE-OPEN BOOK row "Pre" under Est (PreOpenLogic.h): from 30 min before the RTH open to 60 min after, the MBO book near price in the last N minutes before the open (bids vs offers, % that stayed, the opening imbalance) and an untested lean "1st LOW early ?"; its own hover (question / what / why / how / example + the numbers);   // (2.5.0, 2026-10-21 10:56 CT, Rassul approved mockup v1 "ok.. build") the Gex S/R LADDER low -> high (supports, the spot with its distance to the nearest S / R, resistances) as the card's top band; the header band with a +GAMMA / -GAMMA pill and the trend in full ("Strong Uptrend"); the regime from the LIVE Gex S/R file's HVL0 when the HVL book is stale; row dividers; footer "Options exp 3:00 PM" . version right;   // (2.4.6, 2026-10-18 20:28 CT, Rassul "remove the hoverover on gext strikes and the hod lod box") the Gex S/R strip and header hovers are off (HodLod.cpp HL_HOVERS);  // (2.4.5, 2026-10-18 19:13 CT, Rassul "right justify the 2nd column" + outside RTH "just keep it blank" - "prior RTH 10/16 ... doesnt make any sense") the 2nd column (heading, Exp, Act, Est) is right-aligned to the table edge; the Est row stays (same height) but is empty while the box shows the prior session;  // (2.4.4, 2026-10-18, Rassul approved 17:13 CT "build") the COMPACT table (~350 px, columns sized to their text; Exp / Act / Est; header "ES M2 O0 V2  Neg . S.Dn"; footer "Exp 3:00 PM . v2.4.4") + the Gex S/R on its own strip ABOVE it (R green / S red); the removed words in the hovers; Offset X / Y removed (9-spot Position only);   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
+static const char* const HL_VERSION = "2.7.0";   // (2.7.0, 2026-10-22 evening, Rassul approved 17:39 CT) the DAY TYPE folded into the header trend ("Uptrend \xB7 Trend day ?" green / "Dntrend \xB7 Trend day ?" red / "Balance \xB7 Rotation day ?" plain; DayTypeLogic.h, price only, live from closed bars; hover = what fired); the NEWS / SETTLE window note row and the "Feed ?" row (NewsWindow.h); the Pre row is LOG ONLY by default (LRA-PreOpen-<MKT>.csv PARAM,SHOW - VALIDATE-CONTEXT-MARKS 2026-10-22: the call never fired, 0 of 42 sessions);   // (2.6.0, 2026-10-22, Rassul 15:57 CT "yes hod lod box", MBO Roadmap T-20261022-29) the PRE-OPEN BOOK row "Pre" under Est (PreOpenLogic.h): from 30 min before the RTH open to 60 min after, the MBO book near price in the last N minutes before the open (bids vs offers, % that stayed, the opening imbalance) and an untested lean "1st LOW early ?"; its own hover (question / what / why / how / example + the numbers);   // (2.5.0, 2026-10-21 10:56 CT, Rassul approved mockup v1 "ok.. build") the Gex S/R LADDER low -> high (supports, the spot with its distance to the nearest S / R, resistances) as the card's top band; the header band with a +GAMMA / -GAMMA pill and the trend in full ("Strong Uptrend"); the regime from the LIVE Gex S/R file's HVL0 when the HVL book is stale; row dividers; footer "Options exp 3:00 PM" . version right;   // (2.4.6, 2026-10-18 20:28 CT, Rassul "remove the hoverover on gext strikes and the hod lod box") the Gex S/R strip and header hovers are off (HodLod.cpp HL_HOVERS);  // (2.4.5, 2026-10-18 19:13 CT, Rassul "right justify the 2nd column" + outside RTH "just keep it blank" - "prior RTH 10/16 ... doesnt make any sense") the 2nd column (heading, Exp, Act, Est) is right-aligned to the table edge; the Est row stays (same height) but is empty while the box shows the prior session;  // (2.4.4, 2026-10-18, Rassul approved 17:13 CT "build") the COMPACT table (~350 px, columns sized to their text; Exp / Act / Est; header "ES M2 O0 V2  Neg . S.Dn"; footer "Exp 3:00 PM . v2.4.4") + the Gex S/R on its own strip ABOVE it (R green / S red); the removed words in the hovers; Offset X / Y removed (9-spot Position only);   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
 // (2.3.0)   // (2.3.0, Rassul 2026-10-17 19:53-20:20) MenthorQ Q-Scores "Q: M1 O1 V4" top left (hover = the meaning), "Reg: Neg / S. Dntrend" top right; Gex S/R = the BAND rule: 3 biggest abs-GEX strikes from the RTH open up to the 1.38 extension of the 1D Max (red, a drawn up triangle first) | price | 3 down to the 1.38 extension of the 1D Min (green, a down triangle first)
 // (2.2.4)   // (2.2.4, Rassul 2026-10-17) Gex S/R row: the 3 nearest levels ABOVE price first (red), the current price, then the 3 nearest BELOW (green), MenthorQ name BEFORE each price (blue);   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
 #ifndef HL_SHOW_CALLED
@@ -692,6 +692,11 @@ struct View {
     bool has = false, prior = false;
     // (2.6.0) the PRE-OPEN BOOK row (PreOpenLogic.h): shown only while preOn; preHover = its hover lines (question / what / why / how / example)
     bool preOn = false; std::string preText; unsigned preCol = 0x00B8BEC8; std::vector<Line> preHover;
+    // (2.7.0) the day type (replaces the header trend text while called; empty = the trend word as before) and the note rows under
+    // the table (News window, Feed ?): label + one line of text + its hover
+    std::string dayText; unsigned dayCol = 0x00B8BEC8; std::vector<Line> dayHover;
+    struct Note { std::string label, text; unsigned col = 0x00B8BEC8; std::vector<Line> hover; };
+    std::vector<Note> notes;
     std::string market, session;           // session = YYYY-MM-DD of the RTH shown
     int side = 0;                          // 0 not clear, 1 LOD first, 2 HOD first
     bool secondPrinted = false, reclaimed = false, complete = false;
@@ -1364,7 +1369,9 @@ struct Layout {
     Box qBox = { 0, 0, 0, 0 }; bool qOk = false;               // (2.3.0) the Q-Scores in the header (the mouse-over target)
     Box qHover = { 0, 0, 0, 0 }; bool qHoverOk = false;        // (2.3.0) their detail box
     Box preRow = { 0, 0, 0, 0 }; bool preOk = false;           // (2.6.0) the Pre-open row (the mouse-over target)
-    Box preHover = { 0, 0, 0, 0 }; bool preHoverOk = false;    // (2.6.0) its detail box
+    Box preHover = { 0, 0, 0, 0 }; bool preHoverOk = false;    // (2.6.0) its detail box (2.7.0: the detail of whichever row is hovered)
+    Box dayBox = { 0, 0, 0, 0 }; bool dayOk = false;           // (2.7.0) the day type text in the header (the mouse-over target)
+    std::vector<Box> noteRows;                                  // (2.7.0) the note rows (News / Feed)
 };
 
 inline int lineH(int fs) { return (int)(fs * 1.7f + 0.5f); }   // as SessionInfo (a 9 pt font is 12 px at 96 dpi)
@@ -1787,8 +1794,8 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
     const std::string verTxt = std::string("v") + HL_VERSION;   // his rule: the version on the panel
     const Ladder lad = ladderOf(v);                          // (2.5.0) the Gex S/R ladder (low -> high, the spot in the middle)
     const Seg pill = gammaPill(v);                           // (2.5.0) +GAMMA / -GAMMA / GAMMA STALE
-    const std::string trendTxt = v.trendReady ? trendFull(v.trendLvl) : std::string();
-    const unsigned trendC = trendCol(v.trendLvl);
+    const std::string trendTxt = !v.dayText.empty() ? v.dayText : (v.trendReady ? trendFull(v.trendLvl) : std::string());   // (2.7.0) the day type, when called
+    const unsigned trendC = !v.dayText.empty() ? v.dayCol : trendCol(v.trendLvl);
     const std::string expLong = expTxt.compare(0, 4, "Exp ") == 0 ? "Options exp " + expTxt.substr(4) : expTxt;   // (2.5.0) footer words in full
     static const char* const HDR[3] = { "", "1ST", "2ND" };
     for (int attempt = 0; attempt < 2; attempt++) {
@@ -1804,7 +1811,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             return w;
         };
         auto segsW = [&](const std::vector<Seg>& S, bool bold) { int w = 0; for (size_t q = 0; q < S.size(); q++) w += M(S[q].s, fs, bold); return w; };
-        const int lw = (std::max)((std::max)((std::max)(M("Exp", fs, false), M("Act", fs, false)), M("Est", fs, false)), v.preOn ? M("Pre", fs, false) : 0) + 14;   // (2.4.5) the Est row is always there; (2.6.0) + Pre
+        const int lw = (std::max)((std::max)((std::max)(M("Exp", fs, false), M("Act", fs, false)), M("Est", fs, false)), (std::max)(v.preOn ? M("Pre", fs, false) : 0, v.notes.empty() ? 0 : (std::max)(M("News", fs, false), M("Feed", fs, false)))) + 14;   // (2.4.5) the Est row is always there; (2.6.0) + Pre
         std::vector<int> cw((size_t)ncol, 0); int sumC = 0;
         for (int j = 1; j < NSHOWN; j++) { const int c = SHOWN[j], k = j - 1;
             cw[(size_t)k] = (std::max)((std::max)(M(HDR[j < 3 ? j : 2], fs, false), cellWf(eRow[c])), (std::max)(cellWf(aRow[c]), est[(size_t)k].s.empty() ? 0 : M(est[(size_t)k].s, fs, false))) + 14;
@@ -1814,9 +1821,10 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int sW = lad.ok ? geo.W : 0;
         int W = (std::max)((std::max)(8 + lw + sumC, headW), (std::max)(footW, sW));   // the strip never wraps: the table widens to it
         if (v.preOn) W = (std::max)(W, 8 + lw + M(v.preText, fs, false) + 10);            // (2.6.0) the Pre row never wraps either
+        for (size_t q = 0; q < v.notes.size(); q++) W = (std::max)(W, 8 + lw + M(v.notes[q].text, fs, false) + 10);   // (2.7.0) nor the note rows
         cw[(size_t)(ncol - 1)] += W - (8 + lw + sumC);                                   // the spare width goes to the last column
         const int hdrH = rowH + 4;                         // (2.5.0) the header band, a little taller
-        const int H = 1 + hdrH + 1 + rowH + rowH + rowH + rowH + (v.preOn ? rowH : 0) + 3 + 1 + footH + 2;   // (2.4.5) the Est row always (blank outside RTH) so the box keeps one height; (2.6.0) + the Pre row while it is shown
+        const int H = 1 + hdrH + 1 + rowH + rowH + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3 + 1 + footH + 2;   // (2.4.5) the Est row always (blank outside RTH) so the box keeps one height; (2.6.0) + the Pre row while it is shown
         const int Htot = H + (lad.ok ? stripH + STRIP_GAP : 0);
         if (W > area.r - area.l && attempt == 0) continue;
         if (area.l + W > pane.r - pad) continue;
@@ -1843,6 +1851,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                 addText(L, xr + 6, y + 3, y + hdrH - 3, pill.s, pill.col, fs, true, pillW - 12, R_TABLE, -1); xr += pillW + 10;
             }
             if (!trendTxt.empty()) addText(L, xr, y + 2, y + hdrH - 2, trendTxt, trendC, fs, true, M(trendTxt, fs, true), R_TABLE, -1);
+            if (!v.dayText.empty() && !v.dayHover.empty()) { L.dayBox = Box{ xr - 2, y, xr + M(trendTxt, fs, true) + 2, y + hdrH }; L.dayOk = true; }   // (2.7.0)
             L.qBox = Box{ T.l, T.t, T.r, y + hdrH }; L.qOk = true;
         }
         y += hdrH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
@@ -1878,6 +1887,14 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             addText(L, T.l + 8, y, y + rowH, "Pre", C_SLATE, fs, false, M("Pre", fs, false), R_TABLE, -1);
             addText(L, x0, y, y + rowH, v.preText, v.preCol, fs, false, M(v.preText, fs, false), R_TABLE, -1);
             L.preRow = Box{ T.l, y, T.r, y + rowH }; L.preOk = true;
+            y += rowH;
+        }
+        L.noteRows.clear();
+        for (size_t q = 0; q < v.notes.size(); q++) {   // (2.7.0) the note rows: "News  CPI 7:30 AM . -5 / +15 min . marks ?" / "Feed  ? ..."
+            addLine(L, T.l + 1, y, T.r - 1, y, C_DIV, 1, R_TABLE);
+            addText(L, T.l + 8, y, y + rowH, v.notes[q].label, C_SLATE, fs, false, M(v.notes[q].label, fs, false), R_TABLE, -1);
+            addText(L, x0, y, y + rowH, v.notes[q].text, v.notes[q].col, fs, false, M(v.notes[q].text, fs, false), R_TABLE, -1);
+            L.noteRows.push_back(Box{ T.l, y, T.r, y + rowH });
             y += rowH;
         }
         y += 3; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
@@ -2033,18 +2050,18 @@ inline void layoutQHover(Layout& L, const View& v, const Box& pane, int freeR, c
 
 // (2.6.0) the Pre-open row's detail (mouse over "Pre ..."): the question, what it is, why it matters, how to use it, an example, then the
 // numbers; word-wrapped, placed like the Q-Scores detail (above the table, else below / beside it)
-inline void layoutPreHover(Layout& L, const View& v, const Box& pane, int freeR, const Measure& M)
+inline void layoutRowHover(Layout& L, const std::vector<Line>& hov, const Box& pane, int freeR, const Measure& M)
 {
     L.preHoverOk = false;
-    if (!L.preOk || v.preHover.empty()) return;
+    if (!L.tableOk || hov.empty()) return;
     const int fs = 10, lh = lineH(fs), pad = 8, ind = 12;
     if (freeR <= pane.l + 200) freeR = pane.r;
     const int maxW = (std::min)(720, freeR - pane.l - 2 * pad - 8);
     if (maxW < 220) return;
     struct WL { std::string s; unsigned col; bool bold; int x; };
     std::vector<WL> lines; int W = 0;
-    for (size_t i = 0; i < v.preHover.size(); i++) {
-        std::string full; unsigned col = C_SLATE; for (size_t k = 0; k < v.preHover[i].size(); k++) { full += v.preHover[i][k].s; if (k == 0) col = v.preHover[i][k].col; }
+    for (size_t i = 0; i < hov.size(); i++) {
+        std::string full; unsigned col = C_SLATE; for (size_t k = 0; k < hov[i].size(); k++) { full += hov[i][k].s; if (k == 0) col = hov[i][k].col; }
         if (full.empty()) continue;
         const bool bold = i == 0;
         std::vector<std::string> w = wrapText(full, maxW - ind, M, fs, bold);
@@ -2068,6 +2085,7 @@ inline void layoutPreHover(Layout& L, const View& v, const Box& pane, int freeR,
     for (const WL& l : lines) { addText(L, B.l + pad + l.x, yy, yy + lh, l.s, l.col, fs, l.bold, M(l.s, fs, l.bold), R_TABLE, -1); yy += lh; }
     L.preHover = B; L.preHoverOk = true; L.blocks.push_back(B);
 }
+inline void layoutPreHover(Layout& L, const View& v, const Box& pane, int freeR, const Measure& M) { if (L.preOk) layoutRowHover(L, v.preHover, pane, freeR, M); else L.preHoverOk = false; }
 
 struct Block { std::vector<Line> lines; int fs; int w = 0, h = 0; Box at = { 0, 0, 0, 0 }; bool side = false; };
 

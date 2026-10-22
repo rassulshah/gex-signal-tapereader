@@ -39,7 +39,7 @@
 #include <vector>
 
 namespace dh {
-static const char* const VERSION = "0.1.1";
+static const char* const VERSION = "0.2.0";   // 0.2.0 (2026-10-22 evening, VALIDATE-CONTEXT-MARKS OH-1, Rassul approved 17:39 CT): PARAM,SHOW (0 = LOG ONLY, the default in every market: oH lit LESS at gamma levels than at random prices, 0.75x - 0.83x): nothing drawn, no hover, the Z / L record kept
 typedef long long Tick;
 enum { BUY = 0, SELL = 1 };                        // side 0 = bids / aggressive buys (green), 1 = offers / aggressive sells (red)
 enum { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -68,6 +68,7 @@ struct Params {
     int refWinMs = 10000;       // an add counts as a refill when its price was hit this recently
     int liveHoldS = 20;         // LIVE lasts this long after the last qualifying second
     int freshS = 5;             // a second qualifies only with new zone activity on that side in the last freshS seconds
+    int show = 0;               // (0.2.0) PARAM,SHOW: 0 = log only (record, draw nothing), 1 = draw with "?", 2 = draw
     int normMin = 30;           // rolling normal: the last normMin minutes ...
     int normNeedMin = 10;       // ... needs at least this many
     int normSessions = 5;       // slot normal: median of the last N sessions' slot rows (needs 2)
@@ -143,6 +144,7 @@ inline ParamLoad parseParams(const std::string& text, bool found, const std::str
         else if (nm == "FRESH_S") { ok = v >= 1 && v <= 60 && v == std::floor(v); if (ok) p.freshS = (int)v; }
         else if (nm == "LIVE_HOLD_S") { ok = v >= 2 && v <= 600 && v == std::floor(v); if (ok) p.liveHoldS = (int)v; }
         else if (nm == "NORM_MIN") { ok = v >= 5 && v <= 240 && v == std::floor(v); if (ok) p.normMin = (int)v; }
+        else if (nm == "SHOW") { ok = v >= 0 && v <= 2 && v == std::floor(v); if (ok) p.show = (int)v; }   // (0.2.0)
         else if (nm == "ATR_LEN") { ok = v >= 2 && v <= 100 && v == std::floor(v); if (ok) p.atrLen = (int)v; }
         else { L.notes.push_back("unknown PARAM " + nm); continue; }
         if (!ok) L.notes.push_back("out of range: " + nm); else ++used;

@@ -19,7 +19,7 @@ int main() {
     char tmpl[] = "/tmp/ohhXXXXXX"; const char* tmp = mkdtemp(tmpl); setenv("USERPROFILE", tmp, 1);
     const std::string flex = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels";
     { std::ofstream f((flex + "\\MenthorQLevels.csv").c_str()); f << "SYMBOL,PRICE,LABEL\nEPZ26,7840,CR 0D / GW 0D\nEPZ26,7800,HVL\nEPH27,7900,CR\n"; }
-    { std::ofstream f((flex + "\\LRA-DealerHedge-ES.csv").c_str()); f << "VERSION,1\nMARKET,ES\nPARAM,MIN_LOTS,10\nPARAM,REP_MIN_LOTS,3\n"; for (int s = 0; s < 1440; s += 30) f << "NORM," << s << ",5,5,5,5\n"; }
+    { std::ofstream f((flex + "\\LRA-DealerHedge-ES.csv").c_str()); f << "VERSION,1\nMARKET,ES\nPARAM,SHOW,2\nPARAM,MIN_LOTS,10\nPARAM,REP_MIN_LOTS,3\n"; for (int s = 0; s < 1440; s += 30) f << "NORM," << s << ",5,5,5,5\n"; }
     const unsigned long day = (unsigned long)(civilDays(2026, 10, 7) * 86400LL), t0 = day + 10 * 3600;
     mock::Host h; mock::current = &h;
     h.tick = 0.25f; h.seconds = 180; h.symbol = "ESZ26"; h.root = "ES"; h.priceBase = 7820; h.pxPer = 20; h.barW = 10; h.barX0 = 50; h.paneBottom = 1000; h.paneRight = 2000; h.scaleLeft = 1980;
@@ -70,14 +70,20 @@ int main() {
     // status file
     p->release();   // writes the status, flushes, releases the slot (= IRT removing / reloading the indicator)
     const std::string st = readAll(flex + "\\DealerHedge.status-ES-ESZ26-180.txt");
-    CHECK(st.find("VERSION,0.1.1") != std::string::npos && st.find("STATUS_LINE,oH 0.1.1") != std::string::npos && st.find("ZONE,CR 0DTE/GW 0DTE 7,840.00 BUY") != std::string::npos, "status file: version, status line, the zone");
+    CHECK(st.find("VERSION,0.2.0") != std::string::npos && st.find("STATUS_LINE,oH 0.2.0") != std::string::npos && st.find("SHOW,2 (drawn)") != std::string::npos && st.find("ZONE,CR 0DTE/GW 0DTE 7,840.00 BUY") != std::string::npos, "status file: version, status line, the zone");
     // restart: a new chart object -> the zone comes back from the record, settled, identical
     mock::feed.ev.clear(); mock::feed.at = 0;
+    // (0.2.0) the nightly's verdict LOG ONLY: PARAM,SHOW,0 -> nothing drawn after the restart, the record still read / kept
+    { std::ofstream f((flex + "\\LRA-DealerHedge-ES.csv").c_str()); f << "VERSION,1\nMARKET,ES\nPARAM,SHOW,0\nPARAM,MIN_LOTS,10\nPARAM,REP_MIN_LOTS,3\n"; for (int s = 0; s < 1440; s += 30) f << "NORM," << s << ",5,5,5,5\n"; }
     DealerHedge* q = static_cast<DealerHedge*>(CreateExtension()); h.now = t0 - 30; q->calc(0);
     DHState* R = static_cast<DHState*>(h.data);
     const dh::Zone* rz = nullptr; for (const dh::Zone& x : R->E.zones) if (x.state != dh::HIDDEN) rz = &x;
     CHECK(R->restored == 1 && rz && rz->state == dh::SETTLED && rz->side == dh::BUY && rz->barKey == (long long)h.bars.back().time, "restart: the zone is redrawn from the record (settled)");
     CHECK(rz && R->E.zLine(*rz) == recText.substr(recText.find("Z|"), recText.find('\n', recText.find("Z|")) - recText.find("Z|")), "restart: byte-identical Z line (no repaint)");
+    h.draws.clear(); q->draw(); CHECK(R->E.P.show == 0 && boxes(h, 1) == 0 && !hasText(h, "oH") && !hasText(h, "oH?") && readAll(rec) == recText, "SHOW 0 (LOG ONLY): nothing drawn, the record unchanged");
+    { std::ofstream f((flex + "\\LRA-DealerHedge-ES.csv").c_str()); f << "VERSION,1\nMARKET,ES\n# promoted\nPARAM,SHOW,1\nPARAM,MIN_LOTS,10\nPARAM,REP_MIN_LOTS,3\n"; for (int s = 0; s < 1440; s += 30) f << "NORM," << s << ",5,5,5,5\n"; }
+    usleep(5200000); h.now = t0 - 29; q->calc(0); h.draws.clear(); q->draw();
+    CHECK(R->E.P.show == 1 && boxes(h, 1) >= 1 && hasText(h, "oH?"), "SHOW 1: band + 'oH?'");
     // a second chart (NQ) on the same DLL keeps its own state
     mock::Host h2; mock::current = &h2; h2.tick = 0.25f; h2.seconds = 60; h2.symbol = "NQZ26"; h2.root = "NQ";
     for (int i = 0; i < 30; ++i) { mock::Bar bb; bb.time = t0 - (29 - i) * 60; bb.open = 29800; bb.high = 29805; bb.low = 29795; bb.close = 29800; h2.bars.push_back(bb); }

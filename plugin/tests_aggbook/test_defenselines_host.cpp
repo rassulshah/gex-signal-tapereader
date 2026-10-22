@@ -87,7 +87,7 @@ int main() {
     std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string body((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
     CHECK(body.find("failed lines removed") != std::string::npos, "(1.2.0) the status counts the removed lines");
     CHECK(body.find("LABELS,none") != std::string::npos, "(1.9.0) status: LABELS,none");
-    CHECK(body.find(std::string("VERSION,") + DL_VERSION) != std::string::npos && std::string(DL_VERSION) == "1.10.0" && std::string(dlset::PLUGIN_VERSION) == DL_VERSION && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    CHECK(body.find(std::string("VERSION,") + DL_VERSION) != std::string::npos && std::string(DL_VERSION) == "1.11.0" && std::string(dlset::PLUGIN_VERSION) == DL_VERSION && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
     {   // (1.3.0, Top Defender #5) lsBookFlow decided the defenders hit back after the A: the label reads "R A H ?"; "absorbed only" keeps "R A ?"
         { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); dt::Counter C; C.t = b.t; C.side = b.side; C.H = true; C.lots = 640; C.attack = 266; C.at = b.t + 360; f << dt::hLineOf(C) << "\n"; }
         s->lastCheckMs = -100000; h.draws.clear(); p->draw();

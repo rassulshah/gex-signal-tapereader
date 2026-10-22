@@ -32,6 +32,8 @@ int main() {
     char tmpl[] = "/tmp/tor100XXXXXX"; const char* tmp = mkdtemp(tmpl); setenv("USERPROFILE", tmp, 1);
     const std::string flex = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels";
     mkdir((std::string(tmp) + "\\InvestorRT").c_str(), 0700);
+    auto torParams = [&](const char* mkt, const std::string& body) { std::ofstream f((flex + "\\LRA-TurnOrder-" + mkt + ".csv").c_str()); f << "VERSION,1\nMARKET," << mkt << "\n" << body; };   // (1.1.0)
+    torParams("ES", "PARAM,MARK,SHOW\nPARAM,DRAW_THICK,1\nPARAM,DRAW_FILLED,1\n"); torParams("NQ", "PARAM,MARK,SHOW\nPARAM,DRAW_THICK,1\nPARAM,DRAW_FILLED,1\n");
     mock::Host h; mock::current = &h; h.tick = 0.25f; h.seconds = 180; h.symbol = "ESZ6"; h.root = "ES"; h.period = "3 Minutes"; h.paneBottom = 600; h.priceBase = 980; h.ppb = 10; h.barW = 12;
     h.visFrom = 0; h.visTo = 23; lowChart(h); h.now = (RTDATE)(T0 + 23 * 180 + 30); lowFeed();
     const COLOR GRN = 0x22C55E, RED = 0xEF4444;
@@ -53,7 +55,7 @@ int main() {
     if (body.empty()) { for (int dd = 1; dd <= 31 && body.empty(); ++dd) { char b[32]; std::snprintf(b, sizeof b, "202610%02d", dd); body = readAll(flex + "\\TurnOrder\\ES-180-" + b + ".csv"); } }
     CHECK(body.find("\nM|1.0.0|B|") != std::string::npos && body.find("|994.75|80|0|") != std::string::npos && body[0] == '#', "the record: header + the M line (price 994.75, 80 shown, 0 filled)");
     const std::string st = readAll(flex + "\\TurnOrder.status-ES-180.txt");
-    CHECK(st.find("VERSION,1.0.0") == 0 && st.find("MARKET,ES") != std::string::npos && st.find("BAR_SECONDS,180") != std::string::npos && st.find("MARKS,1 on record") != std::string::npos && st.find("FEED,") != std::string::npos, "status file: version, market, bar size, marks, feed");
+    CHECK(st.find("VERSION,1.1.0") == 0 && st.find("MARKET,ES") != std::string::npos && st.find("BAR_SECONDS,180") != std::string::npos && st.find("MARKS,1 on record") != std::string::npos && st.find("FEED,") != std::string::npos, "status file: version, market, bar size, marks, feed");
     // the hover: the cursor on the bar
     hb::fakeCursor() = 7; RTX_EVENT e; std::memset(&e, 0, sizeof e); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)pt.h; e.v.mouse.v = (short)pt.v; p->mouse(&e);
     h.draws.clear(); p->draw();
@@ -83,6 +85,28 @@ int main() {
     { std::ofstream f((flex + "\\TurnOrder.settings-ES.txt").c_str()); f << "garbage\n"; }
     S2->setCheckMs = -100000; S2->setStore = ss::Store(); off::off_test_now_ms += 3000; h.draws.clear(); q->draw();
     CHECK(boxes(h, GRN).size() == 1 && S2->E.P.gateAtr == 0.5, "garbled settings: defaults (green, 0.5 ATR)");
+    // (1.1.0) the nightly's per-market verdict (LRA-TurnOrder-<MKT>.csv): ES = SHOW? + TOO THICK only -> a "?" at the order price, no bar
+    { std::remove((flex + "\\TurnOrder.settings-ES.txt").c_str()); S2->setCheckMs = -100000; S2->setStore = ss::Store(); }
+    auto txts = [&]() { std::vector<const mock::Draw*> o; for (auto& d : h.draws) if (d.type == "text") o.push_back(&d); return o; };
+    torParams("ES", "# proposal\nPARAM,MARK,SHOW?\nPARAM,DRAW_FILLED,0\nPARAM,DRAW_THICK,1\n"); usleep(3200000); off::off_test_now_ms += 3000; h.draws.clear(); q->draw();
+    { std::vector<const mock::Draw*> T = txts(); cppExtension::PNT pq; pq.set(20, 994.75f);
+      CHECK(boxes(h, GRN).empty() && T.size() == 1 && T[0]->text == "?" && T[0]->color == GRN && std::abs(T[0]->y - pq.v) <= 8 && S2->drawnNow == 1, "ES SHOW? + DRAW_THICK: a green '?' at the retest price (994.75), no bar"); }
+    torParams("ES", "# filled only\nPARAM,MARK,SHOW?\nPARAM,DRAW_FILLED,1\nPARAM,DRAW_THICK,0\n"); usleep(3200000); off::off_test_now_ms += 3000; h.draws.clear(); q->draw();
+    CHECK(txts().empty() && boxes(h, GRN).empty(), "DRAW_THICK 0: a TOO THICK mark is not drawn");
+    torParams("ES", "# log\nPARAM,MARK,LOG\nPARAM,DRAW_THICK,1\n"); usleep(3200000); off::off_test_now_ms += 3000; h.draws.clear(); q->draw();
+    CHECK(txts().empty() && boxes(h, GRN).empty() && S2->E.marks.size() == 1, "MARK LOG: recorded only, nothing drawn");
+    { std::remove((flex + "\\LRA-TurnOrder-ES.csv").c_str()); usleep(3200000); off::off_test_now_ms += 3000; h.draws.clear(); q->draw(); CHECK(txts().empty() && boxes(h, GRN).empty(), "no params file = LOG (the default)"); }
+    // a news window at the decision time: SHOW -> "?" instead of the bar; a failed feed check -> nothing drawn
+    torParams("ES", "# show\nPARAM,MARK,SHOW\nPARAM,DRAW_THICK,1\nPARAM,DRAW_FILLED,1\n");
+    { const long long ds = S2->E.marks[0].decideMs / 1000; const time_t tt = (time_t)ds; struct tm tm0; gmtime_r(&tt, &tm0); char ev[96];
+      std::snprintf(ev, sizeof ev, "EVENT,%04d-%02d-%02d,%02d:%02d,TEST,ES\n", tm0.tm_year + 1900, tm0.tm_mon + 1, tm0.tm_mday, tm0.tm_hour, tm0.tm_min);
+      std::ofstream f((flex + "\\LRA-News-ALL.csv").c_str()); f << "VERSION,1\nMARKET,ALL\n" << ev; }
+    usleep(3200000); off::off_test_now_ms += 3000; h.draws.clear(); q->draw();
+    { std::vector<const mock::Draw*> T = txts(); CHECK(boxes(h, GRN).empty() && T.size() == 1 && T[0]->text == "?", "inside a news window: '?' instead of the bar"); }
+    { std::ofstream f((flex + "\\LRA-FeedCheck-ES.csv").c_str()); f << "VERSION,1\nMARKET,ES\nPARAM,match_ok,0\n"; }
+    usleep(3200000); off::off_test_now_ms += 3000; h.draws.clear(); q->draw();
+    CHECK(txts().empty() && boxes(h, GRN).empty(), "feed check failed: recorded only");
+    std::remove((flex + "\\LRA-FeedCheck-ES.csv").c_str()); std::remove((flex + "\\LRA-News-ALL.csv").c_str());
     q->release();
     // a high: a red bar for the offer that stopped the rally (a fresh market folder: NQ)
     {

@@ -1,4 +1,4 @@
-// tests_strips/test_stage_host.cpp -- lsReversalStage 1.0.0 end to end on the mock host (2026-10-22): the letters read from the Strips folder
+// tests_strips/test_stage_host.cpp -- lsReversalStage 1.1.0 end to end on the mock host (2026-10-22): the letters read from the Strips folder
 // records, each closed candle decided once when settled and appended to RS-<MKT>-<spb>.csv, drawn only from the record; a restart redraws
 // the same; bar-by-bar with a restart after every bar = one straight pass; a late letter never changes a decided candle; the forming
 // candle is never decided; settings (show steps / colours / names / Now box / Position) really change the drawing; the hover; two charts.
@@ -47,7 +47,7 @@ int main() {
     h.bars = day(); h.now = keyOf(29) + 5;                                 // 5 s after candle 28 closed... the forming bar is 29
     Ind* p = make(); p->calc(0); p->draw();
     RSState* S = p->stateFor();
-    CHECK(S && std::string(rsl::VERSION) == "1.0.0" && std::string(RS_VERSION) == "1.0.0" && std::string(rsset::PLUGIN_VERSION) == "1.0.0" && h.flags == (unsigned long)(POST_DRAWING | NO_UI | TRACK_MOUSE), "lsReversalStage 1.0.0, its own pane, mouse tracked");
+    CHECK(S && std::string(rsl::VERSION) == "1.1.0" && std::string(RS_VERSION) == "1.1.0" && std::string(rsset::PLUGIN_VERSION) == "1.1.0" && h.flags == (unsigned long)(POST_DRAWING | NO_UI | TRACK_MOUSE), "lsReversalStage 1.0.0, its own pane, mouse tracked");
     const std::string r1 = readAll(rec);
     std::vector<std::string> lines; { std::stringstream ss(r1); std::string ln; while (std::getline(ss, ln)) lines.push_back(ln); }
     CHECK(lines.size() == 29, ("29 closed candles decided (the forming one never): " + std::to_string(lines.size())).c_str());
@@ -131,6 +131,25 @@ int main() {
         CHECK(tipOk && q, "hover on a step: the stage, the question, the letters");
         rs_test_cursor_ok = false; h.draws.clear(); p->draw();
         tipOk = false; for (const mock::Draw& d : h.draws) if (d.type == "text") tipOk = tipOk || d.text.find("Reversal stage") == 0; CHECK(!tipOk, "the hover goes when the cursor leaves");
+        dispose(p); h.data = nullptr;
+    }
+    // (1.1.0) news / settle window "?" over a step decided in it; a failed feed check = recorded only (NewsWindow.h)
+    {
+        std::remove((flex + "\\ReversalStage.settings-ES.txt").c_str()); h.bars = day(); h.now = keyOf(29) + 5;
+        p = make(); rs_test_now_ms += 10000; h.draws.clear(); p->calc(0); p->draw();
+        auto stepsOf = [&]() { int n = 0; for (const mock::Draw& d : h.draws) if (d.type == "box" && d.width == 0 && d.b == 128) ++n; return n; };
+        auto qOf = [&]() { int n = 0; for (const mock::Draw& d : h.draws) if (d.type == "text" && d.text == "?") ++n; return n; };
+        const int base = stepsOf(); CHECK(base > 0 && qOf() == 0, "steps drawn, no '?' outside a window");
+        writeAll(flex + "\\LRA-FeedCheck-ES.csv", "VERSION,1\nMARKET,ES\nPARAM,match_ok,0\n"); usleep(3200000);
+        rs_test_now_ms += 10000; h.draws.clear(); p->calc(0); p->draw();
+        CHECK(stepsOf() == 0 && readAll(rec).find("RS|1|") != std::string::npos, "feed check failed: no steps drawn, the record kept");
+        std::remove((flex + "\\LRA-FeedCheck-ES.csv").c_str());
+        { const time_t tt = (time_t)keyOf(12); struct tm tm0; gmtime_r(&tt, &tm0); char ev[96];
+          std::snprintf(ev, sizeof ev, "EVENT,%04d-%02d-%02d,%02d:%02d,TEST,ALL\n", tm0.tm_year + 1900, tm0.tm_mon + 1, tm0.tm_mday, tm0.tm_hour, tm0.tm_min);
+          writeAll(flex + "\\LRA-News-ALL.csv", std::string("VERSION,1\nMARKET,ALL\n") + ev); }
+        usleep(3200000); rs_test_now_ms += 10000; h.draws.clear(); p->calc(0); p->draw();
+        CHECK(stepsOf() == base && qOf() >= 1, "a step inside a news window: still drawn, with '?' over it");
+        std::remove((flex + "\\LRA-News-ALL.csv").c_str());
         dispose(p); h.data = nullptr;
     }
     // two charts: NQ on another host has its own state and record

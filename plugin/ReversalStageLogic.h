@@ -26,7 +26,7 @@
 
 namespace rsl {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0) the host adds the news / settle "?" and the feed check (NewsWindow.h); the stage logic is unchanged
 enum { LOW = lst::LOW, HIGH = lst::HIGH };
 enum Status { NONE = 0, FORMING = 1, FAILED = 2, COMPLETE = 3, EXPIRED = 4 };
 static const int EXT_BARS = 5, ATR_BARS = 14, IDLE_BARS = 5, MAX_BARS = 30, FAIL = -1;

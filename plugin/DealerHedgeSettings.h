@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace dhset {
-static const char* const PLUGIN_VERSION = "0.1.1";
+static const char* const PLUGIN_VERSION = "0.2.0";
 enum K { K_SHOW_ZONES, K_BUY_COLOR, K_SELL_COLOR, K_FAINT_PCT, K_PULSE, K_SHOW_LABELS, K_SHOW_HOVER, K_WIDTH_ATR, K_FLOW_X, K_REP_N, K_REF_N, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

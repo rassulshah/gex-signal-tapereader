@@ -34,6 +34,7 @@
 #include "TurnOrderSettings.h"
 #include "SettingsHost.h"
 #include "HoverBoard.h"
+#include "NewsWindow.h"        // (1.1.0) news / settle window "?" + the feed check (also MarkParams.h: LRA-TurnOrder-<MKT>.csv)
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -51,7 +52,7 @@
 #pragma comment(lib, "user32.lib")   // GetCursorPos / WindowFromPoint (HoverBoard.h, off::cursorWindow)
 #endif
 
-static const char* TOR_VERSION = "1.0.0";   // 1.0.0 (2026-10-22 15:45 CT Rassul, T-20261022-25): the TURN ORDER mark
+static const char* TOR_VERSION = "1.1.0";   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE 2026-10-22, Rassul approved 17:39 CT): per-market MARK from lsFlexLevels\LRA-TurnOrder-<MKT>.csv - SHOW = the bar as before, SHOW? = a "?" at the order price (the retest price), LOG = recorded only (the default); DRAW_THICK / DRAW_FILLED choose which results draw (ES: TOO THICK only); a mark decided in a news / settle window gets "?", a failed feed check = recorded only (NewsWindow.h);  // 1.0.0 (2026-10-22 15:45 CT Rassul, T-20261022-25): the TURN ORDER mark
 static long long torSteadyMs() { return off::steadyMs(); }   // the order feed's clock (a test clock under OFF_TEST_CLOCK)
 static std::string torFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void torMakeDir(const std::string& p) {
@@ -65,6 +66,7 @@ static bool torStat(const std::string& p, long long& sz) { struct stat st; if (p
 
 struct TorState {
     std::string mkt, symbol; int spb = 0; double tick = 0;
+    int markMode = mp::LOG; bool drawThick = false, drawFilled = false;   // (1.1.0) LRA-TurnOrder-<MKT>.csv
     off::Conn feed; std::string feedState = "MBO: not opened";
     tor::Engine E;
     long long lastBarMs = 0;             // the last candle (CT ms end) given to the engine
@@ -234,7 +236,7 @@ void TurnOrder::writeStatus(TorState& S, long long now) {
     fx << "VERSION," << TOR_VERSION << "\nMARKET," << S.mkt << "\nSYMBOL," << S.symbol << "\nBAR_SECONDS," << S.spb << "\nLOGIC," << tor::VERSION
        << "\nMARKS," << S.E.marks.size() << " on record (" << T.marks << " this run: FILLED " << T.absorbed << " TOO THICK " << T.thick << "),drawn now " << S.drawnNow
        << "\nPIVOTS," << T.pivots << " seen,no order " << T.noOrder << ",not confirmed " << T.noConfirm << ",broken first " << T.broken << ",before the feed " << T.noFeed
-       << "\nSETTINGS," << S.set.why << ",show " << (S.set.b(torset::K_SHOW) ? "on" : "off") << ",gate " << S.E.P.gateAtr << " ATR,min size " << S.s20 << " (" << S.s20Src << ")"
+       << "\nSETTINGS," << S.set.why << ",show " << (S.set.b(torset::K_SHOW) ? "on" : "off") << ",param MARK " << mp::modeName(S.markMode) << " (thick " << (S.drawThick ? 1 : 0) << ", filled " << (S.drawFilled ? 1 : 0) << ")" << ",gate " << S.E.P.gateAtr << " ATR,min size " << S.s20 << " (" << S.s20Src << ")"
        << "\nRECORD," << S.recPath << ",restored " << S.restored << " (" << S.restoreBad << " unreadable),written " << S.writes << ",fails " << S.fails << "\n";
     const std::string fixed = fx.str();
     if (fixed == S.statusFixed && now - S.statusMs < 30000 && now >= S.statusMs) return;
@@ -294,6 +296,9 @@ int TurnOrder::draw(void) {
     try {
         TorState& S = *s; S.hits.clear(); S.drawnNow = 0;
         if (!S.set.b(torset::K_SHOW)) return RTX_OK;
+        const mp::Params TP = mp::get("TurnOrder", S.mkt);                 // (1.1.0) the nightly's per-market verdict
+        S.markMode = mp::mode(TP, "MARK", mp::LOG); S.drawThick = mp::num(TP, "DRAW_THICK", 0, 0, 1) >= 0.5; S.drawFilled = mp::num(TP, "DRAW_FILLED", 0, 0, 1) >= 0.5;
+        if (S.markMode == mp::LOG) return RTX_OK;                        // LOG ONLY: recorded, nothing drawn
         const long n = getBarCount(); if (n < 2) return RTX_OK;
         int v0 = 0, v1 = (int)n - 1;
         if (getVisibleBars(&v0, &v1) != RTX_OK) { v0 = std::max(0, (int)n - 200); v1 = (int)n - 1; }
@@ -307,8 +312,16 @@ int TurnOrder::draw(void) {
         const COLOR cBid = (COLOR)S.set.c(torset::K_COL_BID), cOff = (COLOR)S.set.c(torset::K_COL_OFFER);
         for (size_t k = 0; k < S.E.marks.size(); ++k) {
             const tor::Mark& m = S.E.marks[k];
+            if (m.absorbed ? !S.drawFilled : !S.drawThick) continue;            // (1.1.0) which results this market draws (ES: TOO THICK only)
             std::map<long long, int>::const_iterator it = idx.find(m.pivotEnd); if (it == idx.end()) continue;
+            const nw::Gate ng = nw::atCtSec(S.mkt, m.decideMs > 0 ? m.decideMs / 1000 : m.pivotEnd / 1000); if (ng.feedBad) continue;   // (1.1.0) feed check failed = recorded only
             PNT p; if (p.set(it->second, (float)((double)m.px * S.tick), kBarCenter) != RTX_OK) continue;
+            if (S.markMode == mp::SHOWQ || ng.news) {                           // (1.1.0) SHOW? / news window: "?" at the order (retest) price, in the side's colour
+                FONT qf; qf.id = HELVETICA; qf.size = 11; qf.style = BOLD; setFont(qf);
+                const int tw = (int)getTextWidth("?", -1) + 4, l = p.h - tw / 2, t = p.v - 8;
+                setTextColor(m.side == tor::BID ? cBid : cOff); RCT qr; qr.set((short)l, (short)t, (short)(l + tw), (short)(t + 16)); qr.drawText("?", true, false);
+                S.hits.push_back(TorState::Hit{ k, l - 2, t - 2, l + tw + 2, t + 18 }); ++S.drawnNow; continue;
+            }
             const int l = p.h - w / 2, r = l + w, t = p.v - th / 2, b = t + th;
             off::fillFlat(this, l, t, r, b, m.side == tor::BID ? cBid : cOff);   // solid, no outline
             S.hits.push_back(TorState::Hit{ k, l - 2, t - 3, r + 2, b + 3 }); ++S.drawnNow;
@@ -352,6 +365,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Turn Order - the resting limit order that made each pivot. At every local pivot (a 5-candle extreme low / high that turns) it finds THE real resting order that stopped the move: the largest single order (one order id, rested 30 s or more, at least the market's Big Lot S20 or the Min size setting) at or just beyond the extreme. It is drawn as ONE short, thick bar at that order's price on the turn candle: GREEN = a bid that stopped a selloff, RED = an offer that stopped a rally. It is drawn only AFTER the turn is confirmed (a later candle closed 0.5 ATR or more away from the order - setting), so the bar always means 'this order made the pivot', never 'this might hold'. Hover the bar for the size, how long it rested, FILLED (it absorbed the attack) or TOO THICK (barely touched), whether it was pulled later and how far price turned. One per pivot, never repainted; each mark is recorded to lsFlexLevels\\TurnOrder for the nightly. Example: ES Oct 7, the 11:03 AM candle low - a green bar at 7838.00 = a 100-lot bid that filled all 100 and held; price turned 1.6 ATR. Needs the order-by-order (MBO) feed; marks start once the indicator has watched the book.");
-    p->setVersion("1.0.0");   // TOR_VERSION
+    p->setVersion("1.1.0");   // TOR_VERSION
     return p;
 }

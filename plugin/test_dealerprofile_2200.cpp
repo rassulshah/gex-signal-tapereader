@@ -271,7 +271,7 @@ int main()
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && std::string(DP_VERSION) == "2.21.0", "version 2.21.0: DP_VERSION = setVersion literal = settings table");
+        check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && std::string(DP_VERSION) == "2.22.0", "version 2.22.0: DP_VERSION = setVersion literal = settings table");
         const ss::Spec& sp = dprset::spec();
         check(sp.paramVersion == 9 && std::string(sp.rows[dprset::K_QUEUE_METER].key) == "queue_meter" && std::string(sp.rows[dprset::K_QM_REACH].key) == "qm_reach"
               && sp.rows[dprset::K_QM_BID].type == ss::T_COLOR && sp.rows[dprset::K_QM_WARN].type == ss::T_COLOR && sp.rows[dprset::K_QM_REACH].type == ss::T_FLOAT, "settings: Queue meter checkbox, Reach (ATR) float, 3 colours; parameter version 9");
@@ -292,10 +292,10 @@ int main()
     DealerProfile::ColsState c = colsOf(X, a);
     std::vector<Op> M = meterTexts(O);
     const Op* pdh = nullptr; const Op* piv = nullptr; bool far = false;
-    for (auto& t : M) { if (t.text.find("Q76%") != std::string::npos) pdh = &t; if (t.text.rfind("Q33%", 0) == 0) piv = &t; if (t.text.find("Q80%") != std::string::npos) far = true; }
-    check(pdh && pdh->text.rfind("PD", 0) == 0 && pdh->text.find(" Q76%") != std::string::npos, "the PDH badge reads 'PDH Q76%' (" + std::string(pdh ? pdh->text : "none") + ")");
+    for (auto& t : M) { if (t.text.find("Q 76%") != std::string::npos) pdh = &t; if (t.text.rfind("Q 33%", 0) == 0) piv = &t; if (t.text.find("Q 80%") != std::string::npos) far = true; }
+    check(pdh && pdh->text.rfind("PD", 0) == 0 && pdh->text.find("  Q 76%") != std::string::npos, "the PDH badge reads 'PDH  Q 76%' (" + std::string(pdh ? pdh->text : "none") + ")");
     check(pdh && pdh->col == 0xFFFFFF, "normal state: white text");
-    check(piv && piv->text == "Q33% . orig 0%" && piv->col == 0xFACC15, "a pivot with no level: unlabeled 'Q33% . orig 0%' in yellow (" + std::string(piv ? piv->text : "none") + ")");
+    check(piv && piv->text == "Q 33% . orig 0%" && piv->col == 0xFACC15, "a pivot with no level: unlabeled 'Q33% . orig 0%' in yellow (" + std::string(piv ? piv->text : "none") + ")");
     check(!far, "a test beyond the reach (PFL 18.75 pts away, reach 1 x 12) keeps its normal badge");
     int out = 0; for (auto& t : M) if (t.l < c.lay.levels.l || t.r > c.lay.levels.r) ++out;
     check(out == 0, "meter text inside the Levels column (" + std::to_string(out) + " outside)");
@@ -349,7 +349,7 @@ int main()
         put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { T_PDH, T_FAR })); reloadQm(X, a);
         CUR = &a; X.loadHostState(); X.saveHostState();
         std::vector<Op> W = drawOn(X, a, MOCK_CHART); W = drawOn(X, a, MOCK_CHART);
-        bool farOn = false; for (auto& t : meterTexts(W)) if (t.text.find("Q80%") != std::string::npos) farOn = true;
+        bool farOn = false; for (auto& t : meterTexts(W)) if (t.text.find("Q 80%") != std::string::npos) farOn = true;
         check(farOn, "reach 2 ATR: the PFL test (18.75 pts, 1.6 ATR) becomes a meter");
         bool blue = false; const unsigned long want = (unsigned long)mix((COLOR)0x0000FF, 0.45f) & 0xFFFFFF; for (auto& q : W) if (q.kind == "box" && q.col == want) blue = true;
         check(blue, "the bid colour setting is used (the PFL meter's fill is blue)");
@@ -369,10 +369,10 @@ int main()
         put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { q })); reloadQm(X, a);
         CUR = &a; X.loadHostState(); X.saveHostState();
         std::vector<Op> W = drawOn(X, a, MOCK_CHART); W = drawOn(X, a, MOCK_CHART);
-        bool qm2 = false; for (auto& t : meterTexts(W)) if (t.text.find("Q76%?") != std::string::npos) qm2 = true;
-        check(qm2, "SHOW? market: 'PDH Q76%?'");
+        bool qm2 = false; for (auto& t : meterTexts(W)) if (t.text.find("Q 76%") != std::string::npos && t.text.find("?") == std::string::npos) qm2 = true;
+        check(qm2, "SHOW? market: 'PDH  Q 76%' - no '?' on the badge (1.2.0, Rassul 17:55)");
         put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { T_PDH })); reloadQm(X, a);
-        W = drawOn(X, a, MOCK_CHART); const Op* t0 = nullptr; for (auto& t : meterTexts(W)) if (t.text.find("Q76%") != std::string::npos) t0 = &t;
+        W = drawOn(X, a, MOCK_CHART); const std::vector<Op> MT = meterTexts(W); const Op* t0 = nullptr; for (auto& t : MT) if (t.text.find("Q 76%") != std::string::npos) t0 = &t;
         if (t0) { RTX_EVENT e; memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)(t0->l + 3); e.v.mouse.v = (short)((t0->t + t0->b) / 2); e.v.mouse.bar = -1; e.v.mouse.price = NAN;
             CUR = &a; X.mouse(&e); std::vector<Op> H = drawOn(X, a, MOCK_CHART); bool odds = false, rec = true;
             for (auto& o : H) if (o.kind == "text" && o.text.find("broke 76% of the time (base 30%)") != std::string::npos) odds = true;

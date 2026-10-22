@@ -34,6 +34,7 @@
 #include "SettingsGuard.h"
 #include "ReversalStageSettings.h"
 #include "SettingsHost.h"
+#include "NewsWindow.h"          // (1.1.0) news / settle window "?" + the feed check
 
 #include <algorithm>
 #include <chrono>
@@ -55,7 +56,8 @@
 #pragma comment(lib, "user32.lib")   // GetCursorPos / WindowFromPoint (the hover stops when the cursor leaves the pane)
 #endif
 
-#define RS_VERSION "1.0.0"   // keep equal to rsl::VERSION, rsset::PLUGIN_VERSION and the setVersion literal below
+#define RS_VERSION "1.1.0"   // 1.1.0 (2026-10-22 evening, Rassul approved 17:39 CT): a step decided inside a news / settle window gets a "?" over its column; a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = recorded only, not drawn (NewsWindow.h)
+// 1.0.0:   // keep equal to rsl::VERSION, rsset::PLUGIN_VERSION and the setVersion literal below
 
 static const COLOR C_GRID = 0x00374151, C_LABEL = 0x009CA3AF, C_TEXT = 0x00E5E7EB, C_BOX_BG = 0x000F1520, C_TIP_BG = 0x00111827;
 static const long long SETTLE_SEC = 20;      // a candle is decided 20 s after its close (or once the next candle has closed)
@@ -342,10 +344,13 @@ void ReversalStage::render(RSState& s) {
             std::map<long long, rsl::Step>::const_iterator it = s.steps.find((long long)times[i]); if (it == s.steps.end()) continue;
             const rsl::Look k = rsl::lookOf(it->second); if (k.height <= 0 && !k.stub) continue;
             const int xc = xOf(i); if (xc < pane.left || xc > lastR) continue;
+            nw::Gate ng; { struct tm tk; std::memset(&tk, 0, sizeof(tk)); if (getLocaltime((RTDATE)times[i], &tk)) ng = nw::atTm(s.market, tk); }   // (1.1.0)
+            if (ng.feedBad) continue;                                      // (1.1.0) feed check failed: recorded only
             COLOR c = (COLOR)(k.colour == lst::GREEN ? V.c(K_COL_LOW) : V.c(K_COL_HIGH));
             if (k.dim) c = (COLOR)((((c >> 16) & 0xFF) * 55 / 100) << 16 | (((c >> 8) & 0xFF) * 55 / 100) << 8 | ((c & 0xFF) * 55 / 100));   // stage 1 / a failed stub: the same hue, darker
             const int yTop = k.stub ? bot - std::max(3, (bot - top) / 26) : rsl::yOf(k.height, top, bot);
             setPen(c, 1, P_SOLID); RCT r; r.set(coord(xc - w / 2), coord(yTop), coord(xc - w / 2 + w), coord(bot)); r.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
+            if (ng.news && yTop - 13 > top) { setTextColor(c); RCT qr; qr.set(coord(xc - 6), coord(yTop - 13), coord(xc + 7), coord(yTop - 1)); qr.drawText("?", true, false); setFont(f); }   // (1.1.0) news / settle window
             RSState::Hit h; h.l = xc - std::max(w, slot) / 2; h.r = h.l + std::max(w, slot); h.t = top; h.b = bot + 1; h.key = it->first; s.hits.push_back(h);
             ++s.drawn;
         }
@@ -413,6 +418,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);
     p->setDescription("LRA Reversal Stage: which stage is the local pivot in? A staircase per closed candle: 1 Attack, 2 Absorbed, 3 Exhausted, 4 Turn, 5 Re-test, 6 Expansion - green = a low pivot being built, red = a high pivot, a step dropping back = the attempt failed. Built from the letters lsBidAskStats and lsBookFlow record; decided once per closed candle, never repainted. Odds: not proven yet.");
-    p->setVersion("1.0.0");   // RS_VERSION
+    p->setVersion("1.1.0");   // RS_VERSION
     return p;
 }

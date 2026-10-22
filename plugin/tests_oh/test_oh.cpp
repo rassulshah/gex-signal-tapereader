@@ -1,4 +1,4 @@
-// test_oh.cpp -- DealerHedgeLogic.h 0.1.1 (lsDealerHedge "oH" zones): params, levels, ATR, each detection path alone, the side logic,
+// test_oh.cpp -- DealerHedgeLogic.h 0.2.0 (lsDealerHedge "oH" zones): params, levels, ATR, each detection path alone, the side logic,
 // LIVE -> SETTLED -> LIVE again, never removed / never changed, the record round trip (no repaint), the null shift, hover, pulse.
 // From plugin\:  g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I. tests_oh/test_oh.cpp -o /tmp/toh && /tmp/toh
 #include "DealerHedgeLogic.h"

@@ -37,9 +37,10 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "NewsWindow.h"   // (1.2.0) the news / settle window and the feed check for the call
 
 namespace qm {
-static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE-2026-10-22.md): the 10-s CALL (red < 40% left / green >= 100% + holding) per market, C lines; the candle-close Q is a record only
+static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-10-22 evening, Rassul 17:55 CT "more readable"): the badge reads "G1  Q 76%" (two spaces after the name, a space after Q; unlabelled "Q 41%"), NO "?" on the badge in any market (NQ / GC still draw the red call only); a call made inside a news / settle window says so in its hover, a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = the call is recorded only (no outline) - NewsWindow.h;   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE-2026-10-22.md): the 10-s CALL (red < 40% left / green >= 100% + holding) per market, C lines; the candle-close Q is a record only
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -565,7 +566,7 @@ private:
 // 1.0.0 are still read, with no call)
 struct FileT { int side = BID, kind = K_LEVEL; double anchor = 0, lo = 0, hi = 0; std::string name; long long q0 = 0, q = 0, t0 = 0;
                double pct = 0, origPct = -1, eat = 0, norm = 0, pull = 0, refill = 0, tte = -1; bool high = false, warn = false, contact = false; int decided = -1; std::string why;
-               int call = -1, mark = M_LOG; };
+               int call = -1, mark = M_LOG; std::string news; bool feedBad = false; };   // (1.2.0) news: the window label at the test start ("CPI 7:30 AM"); feedBad: the call recorded only
 struct File { bool ok = false; std::string version, market, why = "not read"; long long asof = 0; double tick = 0, last = 0, atr = 0; std::vector<FileT> t; };
 
 inline std::string fmtPx(double v, double tick) {
@@ -612,6 +613,11 @@ inline File parseFile(const std::vector<std::string>& lines, const std::string& 
         }
     }
     if (!ver || f.market.empty()) { File z; z.why = !ver ? "empty" : "no MARKET"; return z; }
+    for (size_t i = 0; i < f.t.size(); ++i) {   // (1.2.0) the window / feed check at the test start (t0 = CT wall ms)
+        const nw::Gate g = nw::atCtSec(f.market, f.t[i].t0 > 0 ? f.t[i].t0 / 1000 : 0);
+        if (g.news) f.t[i].news = g.label;
+        if (g.feedBad) { f.t[i].feedBad = true; f.t[i].mark = M_LOG; }
+    }
     f.ok = true; f.why = "ok"; return f;
 }
 
@@ -619,12 +625,11 @@ inline File parseFile(const std::vector<std::string>& lines, const std::string& 
 inline std::string badgeText(const std::string& name, const FileT& t, int variant) {
     // variant 0 = full, 1 = no " orig 0%", 2 = just Q
     const int p = (int)std::lround(std::max(0.0, std::min(9.99, t.pct)) * 100);
-    std::string q = "Q" + std::to_string(p) + "%";
-    std::string s = name.empty() ? q : name + " " + q;
+    std::string q = "Q " + std::to_string(p) + "%";                      // (1.2.0, Rassul 17:55 CT) a space after Q
+    std::string s = name.empty() ? q : name + "  " + q;                  // (1.2.0) a wider gap after the level name
     if (variant == 0 && t.warn) s += " . orig 0%";
     if (variant == 2) s = q;
-    if (t.mark == M_SHOWQ && (t.call == 0 || t.call == 1)) s += "?";   // (1.1.0) the call is "?" in NQ / GC
-    return s;
+    return s;                                                            // (1.2.0) no "?" on the badge in any market
 }
 inline double fillFrac(const FileT& t) { return std::max(0.0, std::min(1.0, t.pct)); }
 // (1.1.0) the badge outline follows the CALL: 0 red, 1 green, -1 none (neutral) - only where the market's rule draws it
@@ -650,12 +655,14 @@ inline Hover hover(const FileT& t, const std::string& levelName, const std::stri
     else if (t.call == -1) h.lines.push_back("10-s call: pending (made 10 s after price first traded into the zone)");
     else h.lines.push_back("10-s call: none (neither under 40% nor 100%+ and holding, or price already broke / left)");
     if ((t.call == 0 || t.call == 1) && !callOdds(market, t.call).empty()) h.lines.push_back(callOdds(market, t.call));
+    if (!t.news.empty()) h.lines.push_back("News / settle window (" + t.news + "): sweeps run wider here - the call is not proven inside the window.");   // (1.2.0)
+    if (t.feedBad) h.lines.push_back("Feed ?: the nightly feed check says the live MBO feed does not match - the call is recorded only (no outline).");   // (1.2.0)
     if (t.decided >= 0) h.lines.push_back(std::string("Candle-close Q (a record for the nightly, not a forecast): ") + (t.decided == 1 ? "held / refilled" : "drained / broke"));
     h.lines.push_back(std::string("Question: is the queue ") + (bid ? "of bids defending this low" : "of offers defending this high") + " running out?");
     h.lines.push_back("What it is: the lots resting in the zone now vs when price first traded into it, from every order in the book (MBO).");
     h.lines.push_back("Why it matters: a level breaks when its queue empties - pulled orders break it faster than eaten ones.");
     h.lines.push_back("How to use: act on the 10-s call - a RED outline (under 40% left 10 s after contact) = expect the break; a GREEN outline (100%+ left and refilling) = defenders holding. The candle-close Q is only a record.");
-    h.lines.push_back("Example: NQ Oct 9 9:42:26 AM - Q33%, orig 0%, 21 lots / (5.5 eaten + 14.5 pulled) = about 1 s to empty; it broke 2 s later.");
+    h.lines.push_back("Example: NQ Oct 9 9:42:26 AM - Q 33%, orig 0%, 21 lots / (5.5 eaten + 14.5 pulled) = about 1 s to empty; it broke 2 s later.");
     return h;
 }
 } // namespace qm

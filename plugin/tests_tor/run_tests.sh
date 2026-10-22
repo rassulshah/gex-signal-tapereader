@@ -1,5 +1,5 @@
 #!/bin/sh
-# lsTurnOrder 1.0.0 tests: logic + mock host (ASan / UBSan, -Werror) + MinGW real-SDK syntax (-Dsmall=char). Replay: replay_tor <events.csv> <MKT>
+# lsTurnOrder 1.1.0 tests: logic + mock host (ASan / UBSan, -Werror) + MinGW real-SDK syntax (-Dsmall=char). Replay: replay_tor <events.csv> <MKT>
 set -eu
 D=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd); P=$(CDPATH= cd -- "$D/.." && pwd); B=${BUILD:-/tmp/tor-build}; mkdir -p "$B"; rm -f "$B/t_tor" "$B/t_tor_host"
 g++ -std=c++17 -Wall -Wextra -Werror -g -fsanitize=address,undefined "$D/test_tor.cpp" -o "$B/t_tor" && "$B/t_tor"

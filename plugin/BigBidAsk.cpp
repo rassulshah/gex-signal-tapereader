@@ -120,6 +120,7 @@
 #include "ZoneNear.h"              // (1.2.0) location first: bold / circles away from a zone are dimmed
 #include "RallyLogic.h"             // (1.24.0) the Rly (rally) signal, rly2.py v0.2 port
 #include "OrderBlockLogic.h"        // (1.25.0) OB / BO boxes of strong waves
+#include "MarkParams.h"             // (1.25.1) LRA-OrderBlock-<MKT>.csv PARAM,SHOW (LOG ONLY by default: VALIDATE-CONTEXT-MARKS 2026-10-22)
 #include "VwapTrendLogic.h"         // (1.13.0) his vwapTrend, natively from the chart's bars (the pullback setup)
 #include "KeyLevelsLogic.h"        // (1.11.0) the key levels from the chart's own bars (same code as lsDealerProfile), per candle
 #if defined(_MSC_VER)
@@ -148,7 +149,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.25.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.25.1"          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
 static const bool BBA_HOVERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
@@ -330,6 +331,7 @@ struct BBState {
     // new bar), the boxes still waiting for their session's tiers or volume at price (id -> first try ms), the drawn boxes (hover)
     std::map<long long, obk::Box> obRec; std::map<long long, obk::Track> obTrk; std::map<long long, long long> obEndT; std::set<std::string> obTestDone;
     std::vector<std::pair<long long, std::string>> obPending; std::map<long long, long long> obWait; long long obLast = 0, obFlushMs = -1, obRecFails = 0, obRetryMs = -1; long obCount = -1;
+    int obShowP = mp::LOG;   // (1.25.1) the nightly's per-market verdict for the OB / BO boxes (LOG = recorded, not drawn)
     bool obOn = true, obBoOn = true, obAny = true; double obAtr = 3.0; int obOrigin = 2; unsigned obUpCol = 0x0022C55E, obDnCol = 0x00EF4444;
     int obDrawn = 0, obFaint = 0, obLive = 0, obLabels = 0, obNoLabel = 0, obDots = 0, obLoaded = 0, obBad = 0, obNoVap = 0; long long obLastStamp = 0;
     struct ObHov { bba::Box box; long long id = 0; }; std::vector<ObHov> obTargets;
@@ -876,7 +878,7 @@ void BigBidAsk::status(BBState& S, long long now) {
                 const int st = e - (S.spb > 0 ? S.spb : 180);
                 ev += std::string(" | ") + (b.kind == obk::OB ? "OB " : "BO ") + (b.dir > 0 ? "up " : "down ") + bba::clock12(st / 3600, st / 60 % 60) + (b.cls == obk::CLS_RLY ? " Rly" : " 3ATR")
                     + " prints " + std::to_string(b.prints.size()) + (b.tierKnown ? "" : " (tier learning)") + " tests " + (ts.empty() ? std::string("-") : ts); }
-            o << "ORDER_BLOCK," << (S.spb != 180 ? "3-min charts only (this chart " + std::to_string(S.spb) + " s)" : std::string(S.obOn ? "OB on" : "OB off") + (S.obBoOn ? " / BO on" : " / BO off") + (S.obAny ? " / 3+ ATR waves on" : " / 3+ ATR waves off"))
+            o << "ORDER_BLOCK," << (S.spb != 180 ? "3-min charts only (this chart " + std::to_string(S.spb) + " s)" : std::string("param SHOW ") + mp::modeName(S.obShowP) + (S.obShowP == mp::LOG ? " (LOG ONLY - recorded, not drawn)" : "") + " / " + std::string(S.obOn ? "OB on" : "OB off") + (S.obBoOn ? " / BO on" : " / BO off") + (S.obAny ? " / 3+ ATR waves on" : " / 3+ ATR waves off"))
               << ",logic " << obk::VERSION << ",x ATR " << rly::fmtD(S.obAtr, 1) << ",origin candles " << S.obOrigin << ",today OB " << nOB << " / BO " << nBO << " (Rly waves " << nA << " / 3+ ATR " << nB << "),faint " << faint
               << ",tests held " << held << " / swept " << swept << " / broke " << broke << ",on screen " << S.obDrawn << " (live " << S.obLive << ", dots " << S.obDots << ", labels " << S.obLabels << ", no room for label " << S.obNoLabel << ")"
               << ",record loaded " << S.obLoaded << " / bad lines " << S.obBad << ",waiting " << S.obWait.size() << ",no volume at price " << S.obNoVap << ",pending " << S.obPending.size() << ",record fails " << S.obRecFails << ev << "\n";
@@ -1618,7 +1620,8 @@ void BigBidAsk::render(BBState& S) {
     // sized by lots, buyers green / sellers red (the box colours of the prints). Labels come after the letters (never over them).
     struct ObLab { bba::Box box; int dir = 0; int kind = 0; };
     std::vector<ObLab> obLabs;
-    if (S.spb == 180 && (S.obOn || S.obBoOn) && !S.obRec.empty()) {
+    S.obShowP = mp::mode("OrderBlock", S.market, "SHOW", mp::LOG);   // (1.25.1) OB / BO boxes LOG ONLY until LRA-OrderBlock-<MKT>.csv says SHOW (OBX / OBT still recorded)
+    if (S.spb == 180 && S.obShowP != mp::LOG && (S.obOn || S.obBoOn) && !S.obRec.empty()) {
         int lastX = area.r; { PNT pe; if (pe.set((int)count - 1, cl[(int)count - 1], kBarRight) == RTX_OK && pe.h > area.l) lastX = std::min(area.r, (int)pe.h); }
         for (const auto& kv : S.obRec) {
             const obk::Box& b = kv.second;
@@ -2122,6 +2125,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.24.0) TRACK_MOUSE for the Rly hover only (print hovers stay off: BBA_HOVERS)
     p->setDescription("LRA Big Bid / Ask 1.25.0: OB / BO boxes (3-min) = the origin (order block) and the breakout area of a strong wave (an Rly wave, or any wave of 3+ ATR drawn lighter), big prints inside as dots, faint = no big prints; they end when a candle closes through them - test 1 = BO, test 2 = OB: act only with a close back / your reversal bar or CoB (not proven yet). Rly (3-min) = the end of a confirmed trend wave (3+ bars, 2.5+ ATR, tagged VWAP +/-1 SD, a 20-bar high / low, vwapTrend Uptrend / Dntrend): green above / red below the bar - don't chase it, wait for the pullback to VWAP / 1 SD and a trigger, trend only. BO / BD = context, not an entry: a confirmed break - don't fade against it (in the test it continued ~49%, like any candle in the wave). A breakout (breakdown) candle through the higher (lower) of the last 2 pivots with a 10-candle high (low), range and volume up; BO only on a green candle closing above the pivot, BD only on a red candle closing below it - a wick-only break counts when a later candle of the same wave closes beyond the pivot (the letter goes on that candle); failed wick breaks are logged only. Its biggest buy (sell) print in lots on the candle. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.25.0");   // BBA_VERSION
+    p->setVersion("1.25.1");   // BBA_VERSION
     return p;
 }

@@ -58,7 +58,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define DH_VERSION "0.1.1"   // = setVersion literal = dhset::PLUGIN_VERSION = dh::VERSION
+#define DH_VERSION "0.2.0"   // = setVersion literal = dhset::PLUGIN_VERSION = dh::VERSION
 
 static long long steadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static long long wallMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(); }
@@ -257,7 +257,7 @@ int DealerHedge::timer(RTX_EVENT* e) {
     if (!S || !e || e->v.timer.id != dhTimerId(S)) return RTX_FAIL;
     ++S->timerTicks;
     bool live = false; for (const dh::Zone& z : S->E.zones) if (z.state == dh::LIVE) { live = true; break; }
-    if (live && S->set.b(dhset::K_SHOW_ZONES) && S->set.b(dhset::K_PULSE)) { ++S->redrawsAsked; invalidateChart(false); }
+    if (live && S->E.P.show != 0 && S->set.b(dhset::K_SHOW_ZONES) && S->set.b(dhset::K_PULSE)) { ++S->redrawsAsked; invalidateChart(false); }
     return RTX_OK;
 }
 
@@ -428,7 +428,7 @@ void DealerHedge::writeStatus(DHState& S, bool force) {
       << "\nFEED," << (S.via.empty() ? "not opened" : S.via) << " flag " << S.flag << " events " << S.events << " slices capped " << S.caps << " faults " << S.faults
       << "\nLEVELS," << S.levelsWhy << " (" << S.mqN << ") | nodes " << S.nodesWhy << " (" << S.nodeN << ")\nPARAMS," << S.PL.source;
     for (const std::string& n : S.PL.notes) o << " | " << n;
-    o << "\nTHRESHOLDS,width " << S.E.P.widthAtr << " ATR, flow " << S.E.P.flowX << "x, min lots " << S.E.P.minLots << ", repeats " << S.E.P.repN << " (cv < " << S.E.P.repCv << ", >= " << S.E.P.repMinLots << " lots), refills " << S.E.P.refN << ", burst " << S.E.P.burstX << "x, window " << S.E.P.winS << " s, live hold " << S.E.P.liveHoldS << " s"
+    o << "\nSHOW," << S.E.P.show << (S.E.P.show == 0 ? " (LOG ONLY - recorded, nothing drawn)" : S.E.P.show == 1 ? " (drawn with ?)" : " (drawn)") << "\nTHRESHOLDS,width " << S.E.P.widthAtr << " ATR, flow " << S.E.P.flowX << "x, min lots " << S.E.P.minLots << ", repeats " << S.E.P.repN << " (cv < " << S.E.P.repCv << ", >= " << S.E.P.repMinLots << " lots), refills " << S.E.P.refN << ", burst " << S.E.P.burstX << "x, window " << S.E.P.winS << " s, live hold " << S.E.P.liveHoldS << " s"
       << "\nNORMAL," << S.E.normSrc << " (" << S.E.slotNorm.size() << " slot rows)\nRECORD," << S.recPath << " rows " << S.recRows << " fails " << S.recFails << " restored " << S.restored
       << "\nPULSE," << (S.timerOn ? "timer 250 ms" : "timer refused: pulses on redraws only") << " ticks " << S.timerTicks << " redraws asked " << S.redrawsAsked
       << "\nDECIDED,buy " << S.E.tally.decided[0] << " sell " << S.E.tally.decided[1] << " episodes " << S.E.tally.episodes << " paths a " << S.E.tally.pathA << " b " << S.E.tally.pathB << " c " << S.E.tally.pathC << "\n";
@@ -446,7 +446,7 @@ template <class Times> static int indexOf(Times& times, long count, long long t)
 }
 void DealerHedge::render(DHState& S) {
     S.targets.clear();
-    if (S.E.zones.empty()) return;
+    if (S.E.zones.empty() || S.E.P.show == 0) return;                    // (0.2.0) PARAM,SHOW 0 = LOG ONLY: recorded, nothing drawn, no hover
     RCT pane; pane.getPaneRect(false);
     const long count = getBarCount(); if (count < 2 || pane.bottom - pane.top < 40) return;
     RTARRAYI times(barDateTime); RTARRAY lo(barLow); if (times.count < count || lo.count < count) return;
@@ -482,10 +482,11 @@ void DealerHedge::render(DHState& S) {
         for (const auto& kv : labelSide) {
             const int bi = indexOf(times, count, kv.first); if (bi < 0) continue;
             PNT p; p.set(bi, lo[bi], kBarCenter); if (p.h < pane.left || p.h > edge) continue;
-            const int w = getTextWidth("oH", -1) + 4, t = p.v + 4;
+            const char* lab = S.E.P.show == 1 ? "oH?" : "oH";   // (0.2.0) SHOW 1 = drawn with "?"
+            const int w = getTextWidth(lab, -1) + 4, t = p.v + 4;
             RCT r; r.set(coord(p.h - w / 2), coord(t), coord(p.h + w / 2 + 1), coord(t + 14));
             if (r.bottom > pane.bottom) continue;
-            setTextColor((COLOR)col[kv.second == 1 ? 1 : 0]); ko::text(r, "oH", true, false);
+            setTextColor((COLOR)col[kv.second == 1 ? 1 : 0]); ko::text(r, lab, true, false);
             for (const dh::Zone& z : S.E.zones) if (z.state != dh::HIDDEN && z.barKey == kv.first) { HoverT H; H.key = z.key; H.l = r.left; H.t = r.top; H.r = r.right; H.b = r.bottom; S.targets.insert(S.targets.begin(), H); break; }
         }
     }
@@ -527,7 +528,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setExtendedFlags(CALL_CONTINUOUSLY);                  // the order feed is drained while no trade prints
-    p->setDescription("LRA Dealer Hedge (oH) v0.1.1: are dealers hedging in the futures book at a gamma level? Each MenthorQ level near price (CR / PS / HVL / 0DTE / gamma walls / G levels, + CME gamma nodes) gets a zone of +/- 0.5 ATR, invisible until the order book shows programmatic flow inside it (2x normal + same-size repeats, refills or a burst). It then pulses green (dealers buying) or red (selling) while live and settles to a faint band - never removed. oH below the candle where it was first seen; hover for the details. ? = not proven yet.");
-    p->setVersion("0.1.1");   // DH_VERSION
+    p->setDescription("LRA Dealer Hedge (oH) v0.2.0 (LOG ONLY by default: the nightly test found no edge, so zones are recorded but not drawn until LRA-DealerHedge-<MKT>.csv PARAM,SHOW is 1 or 2): are dealers hedging in the futures book at a gamma level? Each MenthorQ level near price (CR / PS / HVL / 0DTE / gamma walls / G levels, + CME gamma nodes) gets a zone of +/- 0.5 ATR, invisible until the order book shows programmatic flow inside it (2x normal + same-size repeats, refills or a burst). It then pulses green (dealers buying) or red (selling) while live and settles to a faint band - never removed. oH below the candle where it was first seen; hover for the details. ? = not proven yet.");
+    p->setVersion("0.2.0");   // DH_VERSION
     return p;
 }

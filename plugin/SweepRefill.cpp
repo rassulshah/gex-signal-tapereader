@@ -43,6 +43,7 @@
 #include "SweepRefillSettings.h"
 #include "SettingsHost.h"
 #include "SettingsGuard.h"
+#include "NewsWindow.h"   // (2026-10-22 evening) news / settle window "?" + the feed check (record only) - shared, SDK-free
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -418,7 +419,8 @@ void SweepRefill::render(SwrState& S) {
         const int yEdge = up ? p.v - 2 - LANES_RESERVED * lane : p.v + 2 + LANES_RESERVED * lane;
         const int t = up ? yEdge - th : yEdge, b = t + th;
         if (t <= pane.top + 1 || b >= pane.bottom - 1 || x <= pane.left || x >= pane.right) continue;
-        const char* txt = "Sr";
+        struct tm tkNw; std::memset(&tkNw, 0, sizeof tkNw); const nw::Gate ng = getLocaltime((RTDATE)e.barT, &tkNw) ? nw::atTm(S.market, tkNw) : nw::Gate(); if (ng.feedBad) continue;   // NewsWindow.h
+        const std::string txtNw = nw::q("Sr", ng); const char* txt = txtNw.c_str();
         const int w = (int)getTextWidth(txt, -1) + 4, x0 = x - w / 2;
         setTextColor((COLOR)(up ? S.set.c(swrset::K_COL_BULL) : S.set.c(swrset::K_COL_BEAR)));
         RCT r; r.set(swrC(x0), swrC(t), swrC(x0 + w), swrC(b)); r.drawText(txt, true, false);

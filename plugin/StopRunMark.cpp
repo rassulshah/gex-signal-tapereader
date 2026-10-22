@@ -46,6 +46,7 @@
 #include "StopRunMarkSettings.h"
 #include "SettingsHost.h"
 #include "SettingsGuard.h"
+#include "NewsWindow.h"   // (2026-10-22 evening) news / settle window "?" + the feed check (record only) - shared, SDK-free
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -426,7 +427,8 @@ void StopRunMark::render(SrmState& S) {
         if (idx < 0 || (long long)times[(int)idx] != e.barT) continue;
         PNT p; p.set((int)idx, (float)((double)e.stPx * S.tick)); const int x = p.h, y = p.v;
         if (y <= pane.top + th || y >= pane.bottom - th || x <= pane.left || x >= pane.right) continue;
-        const std::string txt = stl::markText(e);
+        struct tm tkNw; std::memset(&tkNw, 0, sizeof tkNw); const nw::Gate ng = getLocaltime((RTDATE)e.barT, &tkNw) ? nw::atTm(S.market, tkNw) : nw::Gate(); if (ng.feedBad) continue;   // NewsWindow.h
+        const std::string txt = nw::q(stl::markText(e), ng);
         const int w = (int)getTextWidth(txt.c_str(), -1) + 4;
         int x0 = x - w / 2;
         for (size_t j = 0; j < placed.size(); ++j) if (placed[j].first == (int)idx && std::abs(placed[j].second.second - y) < th && std::abs(placed[j].second.first - x0) < w) x0 = placed[j].second.first + w + 2;
