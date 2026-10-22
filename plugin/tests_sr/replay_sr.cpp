@@ -1,4 +1,4 @@
-// replay_sr.cpp -- lsSweepRefill 1.0.0 replay on real CME MBO through the SAME SweepRefillLogic.h the plugin runs.
+// replay_sr.cpp -- lsSweepRefill 1.1.0 replay on real CME MBO through the SAME SweepRefillLogic.h the plugin runs.
 // Input: a binary of Databento MBO records for ONE contract (replay/export.py: ts_ns, ct_sec, px_ticks, oid, sz, act, side) and a
 // levels file (replay/levels.py): "K <name> <px>" key levels for the session, "M <ct_sec> <name> <px>" MenthorQ intraday snapshots.
 // Databento -> IRT DEPTH_BY_ORDER semantics: A = NEW; M = MOD (new size / price); C = a cancel of `size` lots -> MOD (the rest) or DEL;
@@ -26,14 +26,16 @@ struct Snap { long long ct; std::vector<swr::Level> lv; };
 struct Out { swr::Event e; long long up = 0, dn = 0; int first = 0; long long decidedCt = 0; };   // first +1 = up first, -1 = down, 0 = none
 
 int main(int argc, char** argv) {
-    if (argc < 4) { std::fprintf(stderr, "usage: replay_sr <bin> <levels> <tag> [minPrices] [minLots] [refillPct] [refillMs] [gap]\n"); return 2; }
+    if (argc < 4) { std::fprintf(stderr, "usage: replay_sr <bin> <levels> <tag> [LRA-StopSweep-<MKT>.csv]\n"); return 2; }
     swr::Detector D;
-    if (argc > 4) D.P.minPrices = std::atoi(argv[4]);
-    if (argc > 5) D.P.minLots = std::atoi(argv[5]);
-    if (argc > 6) D.P.refillPct = std::atof(argv[6]);
-    if (argc > 7) D.P.refillMs = std::atoi(argv[7]);
-    if (argc > 8) D.P.gapBars = std::atoi(argv[8]);
+    if (argc > 4) {   // the per-market params file (as the plugin reads it); missing = defaults with every mark LOG
+        std::ifstream f(argv[4]); std::vector<std::string> L; std::string ln; while (std::getline(f, ln)) L.push_back(ln);
+        const swg::StopSweep X = swg::parseStopSweep(L, std::string(argv[3]).substr(0, 2)); swr::applyParams(D.P, X);
+        std::fprintf(stderr, "params %s: %s, min prices %d, refill %.0f%% within %d s + %d s, pivots %d\n", argv[4], X.why.c_str(), D.P.minPrices, D.P.refillPct, D.P.windowS, D.P.stayS, D.P.refPivots);
+    }
     const std::string tag = argv[3];
+    { int o = 0, c = 0; if (!swg::rthOf(tag.substr(0, 2), o, c)) { o = 510; c = 900; } D.setRth(o, c); }
+    int rthO = 510, rthC = 900; swg::rthOf(tag.substr(0, 2), rthO, rthC);
     // levels
     std::vector<swr::Level> keys; std::vector<Snap> mq;
     { std::ifstream f(argv[2]); std::string ln;
@@ -43,6 +45,9 @@ int main(int argc, char** argv) {
           else if (k == "M") { long long ct; std::string n; double px; s >> ct >> n >> px; if (mq.empty() || mq.back().ct != ct) { Snap z; z.ct = ct; mq.push_back(z); }
               swr::Level L; L.name = n; L.px = (long long)llround(px / 0.25); L.kind = swr::REF_MQ; L.dir = 0; mq.back().lv.push_back(L); }
       } }
+    // no-repaint restart check (always on): after every candle close a FRESH ZigZag built from all candles so far (a restart) must
+    // equal the running one, and every record line written so far must read back byte-identical (the record is what a restart redraws)
+    std::vector<swr::Bar> allBars; std::vector<std::vector<std::pair<long long, double> > > allRows; std::map<long long, double> formRows; std::vector<std::string> recLines; long long restartChecks = 0, restartFails = 0;
     size_t mqAt = 0; long long mqCur = -1;
     auto setLevels = [&](long long ct) {
         while (mqAt < mq.size() && mq[mqAt].ct <= ct) { mqCur = (long long)mqAt; ++mqAt; }
@@ -52,13 +57,13 @@ int main(int argc, char** argv) {
     std::unordered_map<unsigned long long, std::pair<long long, long long> > db;   // oid -> (px, size)
     std::FILE* in = std::fopen(argv[1], "rb"); if (!in) { std::perror("open"); return 2; }
     std::vector<Rec> buf(1 << 16);
-    long long barEnd = 0, bh = 0, bl = 0, bc = 0, lastCt = 0; bool haveBar = false; long long nRec = 0;
+    long long barEnd = 0, bo = 0, bh = 0, bl = 0, bc = 0, lastCt = 0; bool haveBar = false; long long nRec = 0;
     std::vector<Out> outs; std::vector<size_t> open;   // decided candidates still waiting for their 1 ATR outcome
     long long lastLevelsCt = -1;
     auto sessionOf = [](long long ct) { return (ct + 7 * 3600) / 86400; };
     auto collect = [&](long long ct) {
         for (size_t i = 0; i < D.decided.size(); ++i) {
-            Out o; o.e = D.decided[i]; o.decidedCt = ct;
+            Out o; o.e = D.decided[i]; o.decidedCt = ct; recLines.push_back(swr::recLine(o.e, 0.25));
             const long long a = (long long)llround(o.e.atrTicks > 0 ? o.e.atrTicks : 1), ext = swr::bullish(o.e) ? o.e.loPx : o.e.hiPx;
             o.up = ext + a; o.dn = ext - a; outs.push_back(o); open.push_back(outs.size() - 1);
         }
@@ -74,10 +79,22 @@ int main(int argc, char** argv) {
             if (r.act == 'F' && r.px > 0) {
                 const long long end = (ct / D.P.spb + 1) * D.P.spb;
                 if (haveBar && end != barEnd) {
-                    swr::Bar b; b.t = barEnd; b.h = bh; b.l = bl; b.c = bc; b.session = sessionOf(barEnd - 1); D.advance(ms); collect(ct); D.barClose(b); haveBar = false;
+                    swr::Bar b; b.t = barEnd; b.o = bo; b.h = bh; b.l = bl; b.c = bc; b.session = sessionOf(barEnd - 1);
+                    b.day = barEnd / 86400; b.rth = swg::isRth((int)(barEnd % 86400), (int)D.P.spb, rthO, rthC); D.advance(ms); collect(ct);
+                    std::vector<std::pair<long long, double> > rows(formRows.begin(), formRows.end()); formRows.clear();
+                    D.barClose(b, &rows); haveBar = false;
+                    allBars.push_back(b); allRows.push_back(rows);
+                    { swr::Detector R; R.P = D.P; R.Z.rthLenSec = D.Z.rthLenSec; for (size_t q = 0; q < allBars.size(); ++q) if (allBars[q].t > allBars.back().t - 86400) R.barClose(allBars[q], &allRows[q]);
+                      bool same = R.Z.swings.size() == D.Z.swings.size();
+                      for (size_t q = 0; same && q < R.Z.swings.size(); ++q) same = R.Z.swings[q].px == D.Z.swings[q].px && R.Z.swings[q].barT == D.Z.swings[q].barT && R.Z.swings[q].dir == D.Z.swings[q].dir;
+                      same = same && R.V.now.poc == D.V.now.poc && R.V.now.vah == D.V.now.vah && R.V.now.val == D.V.now.val;
+                      const std::vector<swr::Event> back = swr::parseRecord(recLines, 0.25);
+                      same = same && back.size() == recLines.size();
+                      for (size_t q = 0; same && q < back.size(); ++q) same = swr::recLine(back[q], 0.25) == recLines[q];
+                      ++restartChecks; if (!same) ++restartFails; }
                 }
-                if (!haveBar) { haveBar = true; barEnd = end; bh = bl = bc = r.px; }
-                bh = std::max(bh, (long long)r.px); bl = std::min(bl, (long long)r.px); bc = r.px;
+                if (!haveBar) { haveBar = true; barEnd = end; bo = bh = bl = bc = r.px; }
+                bh = std::max(bh, (long long)r.px); bl = std::min(bl, (long long)r.px); bc = r.px; formRows[r.px] += r.sz;
                 for (size_t q = 0; q < open.size();) {
                     Out& o = outs[open[q]];
                     if (r.px >= o.up) o.first = 1; else if (r.px <= o.dn) o.first = -1;
@@ -104,14 +121,15 @@ int main(int argc, char** argv) {
     }
     std::fclose(in);
     D.advance(D.nowMs + 10000); collect(lastCt);
-    std::printf("tag,day_ct,sec,bar_t,side,prices,lots,pre,post,refill,refilled,gap_ok,ref_kind,ref,ref_px,ttr_ms,atr,first\n");
+    std::printf("tag,day_ct,sec,bar_t,side,prices,lots,pre,post,refill,refilled,gap_ok,ref_kind,ref,ref_px,ttr_ms,atr,first,ref_t,ref_back,show,peak\n");
     for (size_t i = 0; i < outs.size(); ++i) {
         const swr::Event& e = outs[i].e;
-        std::printf("%s,%lld,%lld,%lld,%s,%d,%lld,%lld,%lld,%.1f,%d,%d,%d,%s,%.2f,%lld,%.2f,%d\n", tag.c_str(), (e.sec + 7 * 3600) / 86400, e.sec, e.barT,
+        std::printf("%s,%lld,%lld,%lld,%s,%d,%lld,%lld,%lld,%.1f,%d,%d,%d,%s,%.2f,%lld,%.2f,%d,%lld,%d,%s,%.1f\n", tag.c_str(), (e.sec + 7 * 3600) / 86400, e.sec, e.barT,
                     swr::bullish(e) ? "bull" : "bear", e.prices, e.lots, e.pre, e.post, e.refill, e.refilled ? 1 : 0, e.gapOk ? 1 : 0, e.refKind, e.ref.c_str(), (double)e.refPx * 0.25,
-                    e.ttrMs, e.atrTicks * 0.25, outs[i].first);
+                    e.ttrMs, e.atrTicks * 0.25, outs[i].first, e.refT, e.refBack, swg::showText(e.show).c_str(), e.peak);
     }
-    std::fprintf(stderr, "%s: %lld records, fills %lld, sweeps %lld, big %lld, at extreme %lld, took out %lld, candidates %lld, refilled %lld, drawn %lld, book resets %lld, unknown fills %lld\n",
-                 tag.c_str(), nRec, D.fills, D.sweeps, D.bigSweeps, D.atExtreme, D.tookOut, D.candidates, D.refilledN, D.drawnN, D.bookResets, D.unknownFills);
-    return 0;
+    std::fprintf(stderr, "%s: %lld records, fills %lld, sweeps %lld, big %lld, took out %lld, candidates %lld, refilled %lld, drawn %lld, book resets %lld, unknown fills %lld\n",
+                 tag.c_str(), nRec, D.fills, D.sweeps, D.bigSweeps, D.tookOut, D.candidates, D.refilledN, D.drawnN, D.bookResets, D.unknownFills);
+    std::fprintf(stderr, "%s: restart checks %lld, failed %lld\n", tag.c_str(), restartChecks, restartFails);
+    return restartFails ? 1 : 0;
 }

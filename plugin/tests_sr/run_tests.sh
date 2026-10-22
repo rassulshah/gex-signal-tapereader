@@ -1,5 +1,5 @@
 #!/bin/sh
-# lsSweepRefill 1.0.0 tests: logic + host (mock SDK, ASan/UBSan, -Werror) + replay build + MinGW syntax check against the REAL irtsdk.h (-Dsmall=char).
+# lsSweepRefill 1.1.0 tests: logic + host (mock SDK, ASan/UBSan, -Werror) + replay build + MinGW syntax check against the REAL irtsdk.h (-Dsmall=char).
 # usage: tests_sr/run_tests.sh [path-to-real-sdk-include]
 set -eu
 D=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd); B=${BUILD:-/tmp/swr-tests}; mkdir -p "$B"; rm -f "$B"/t_sr_*

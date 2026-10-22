@@ -1,25 +1,36 @@
 /********************************************************************************
- *  SweepRefill.cpp  --  Investor/RT RTX extension  lsSweepRefill  1.0.0  (2026-10-22)
+ *  SweepRefill.cpp  --  Investor/RT RTX extension  lsSweepRefill  1.1.0  (2026-10-22)
  *
  *  THE SWEEP-REFILLED MARK "Sr" on the PRICE chart (MBO Roadmap "Did the swept prices refill fast after a sweep?").
- *  Rassul 16:16 CT (build approved; "Sr only happens when a level or pivot high or low was taken out"; "you can put it on top of the
- *  bar for a bullish reclaim"), 16:18 CT ("it should not be on adjacent candles"), 16:28 CT (the red Sr at NQ 9:55 / 10:03 are
- *  valid - draw bearish too; widen the pivot rule; mockup v3 sweep-refill-mockup-v3.png):
- *    - green "Sr" ABOVE the candle: sellers swept 8+ bid prices through a level / pivot low at a local low and the bids came back
- *      (70%+ of the pre-sweep resting size within 3 s);
- *    - red "Sr" BELOW the candle: the mirror (buyers swept the offers through a level / pivot high, the offers came back);
- *    - never on two adjacent candles (per side): the later one is recorded only; the first one is never moved or removed;
- *    - short text, no box, no border; decided once (4 s after the sweep), recorded, redrawn from the record - never repainted.
+ *  1.0.0: Rassul 16:16 CT (build approved; "Sr only happens when a level or pivot high or low was taken out"), 16:18 CT ("it should
+ *  not be on adjacent candles"), 16:28 CT (draw bearish too).
+ *  1.1.0: Rassul approved the mockup v4 rule at 17:39 CT (sweep-refill-mockup-v4.png) - SwingRef.h, shared with lsStopRun 1.2.0:
+ *    - the swept reference is an INTACT swing among the last 3 swings of the 1-bar ZigZag from the RTH open (1 back always; 2 back
+ *      if beyond 1; 3 back if beyond 1 and 2), or a key level (ONH/ONL PDH/PDL PFH/PFL LonHI/LonLO PWH/PWL AsiaHI/AsiaLO) or a
+ *      MenthorQ level; 5-candle extremes and overnight pivots no longer count;
+ *    - taken out = the sweep ends beyond it, starts <= 0.5 ATR past it, and no candle before the last one had traded through it;
+ *      more than one = the deepest;
+ *    - green "Sr" UNDER the swept wick (sellers swept the bids through a swing low and the bids came back - the locked rule per market,
+ *      NQ 50% within 5 s and still there 5 s later); red "Sr" OVER the swept high (the mirror);
+ *    - a short line from the swing taken out to the sweep candle; the hover names the swing ("took out the swing low from 8:48 AM,
+ *      2 swings back");
+ *    - the ZigZag drawn as a thin line (setting, default on, colour changeable);
+ *    - (Rassul 18:07 CT) VOLUME-PROFILE levels count too: POC / VAH / VAL of this session (as of the last closed candle) and of the
+ *      prior session, plus naked prior POCs - from the chart's own volume at price (VAP_REQUIRED, 70% value area; SwingRef.h);
+ *    - (coordinator 2026-10-22, VALIDATE-STOPRUN-SWEEP-2026-10-22.md) the locked rule and SHOW / ? / LOG per market and side from
+ *      lsFlexLevels\LRA-StopSweep-<MKT>.csv: NQ bull SHOW, NQ bear "Sr?", GC bull SHOW; everything else recorded only. The verdict
+ *      is stamped on each mark when it is decided (a later params change never repaints a mark).
+ *    - never on two adjacent candles (per side); decided once (4 s after the sweep), recorded, redrawn from the record - never repainted.
  *  The hover (mouse over the mark): header "Sweep refilled?" ("?" = not proven), the read, the numbers, then
  *  question / what it is / why it matters / how to use / example.
- *  Rules: SweepRefillLogic.h (SDK-free, unit-tested; replay on real MBO in tests_sr/replay_sr.cpp).
+ *  Rules: SweepRefillLogic.h + SwingRef.h (SDK-free, unit-tested; replay on real MBO in tests_sr/replay_sr.cpp).
  *
  *  FEED: one DEPTH_BY_ORDER per chart, kept alive for the chart's life, opened from calc / draw only behind a crash-guard file,
  *  drained <= 5,000 events / ~8 ms per call (CALL_CONTINUOUSLY keeps calc coming while the chart is quiet). Every NEW / MOD / DEL /
  *  FILL keeps the order book; the event clock = the exchange second + the arrival ms inside it (swr::Clock). There is NO historical
  *  order-by-order data: Sr exists from the moment the indicator is on the chart; the session record brings the marks back.
- *  Levels (read-only, the same files his other plugins read): lsFlexLevels\LRA-KeyLevels-<MKT>.csv (ONH/ONL PDH/PDL PFH/PFL LonHI/
- *  LonLO), LRA-Dealer-<MKT>.csv and LRA-Levels-<MKT>.csv (MenthorQ), fresh <= 18 h, MenthorQ only for the chart's contract.
+ *  Levels (read-only, the same files his other plugins read): lsFlexLevels\LRA-KeyLevels-<MKT>.csv, LRA-Dealer-<MKT>.csv and
+ *  LRA-Levels-<MKT>.csv (MenthorQ), fresh <= 18 h, MenthorQ only for the chart's contract.
  *  FILES (lsFlexLevels\SweepRefill\):  <MKT>-<spb>-<yyyymmdd>.csv  every candidate (refilled or not), one SR line each, append-only
  *                                      SweepRefill.status-<MKT>-<spb>.txt  the status, on change or every 30 s
  *  Settings: lsFlexLevels\SweepRefill.settings-<MKT>.txt via SettingsSpec / SettingsHost (SweepRefillSettings.h).
@@ -38,12 +49,13 @@
 #undef near
 #endif
 #include "SweepRefillLogic.h"
+#include "SwingRef.h"
+#include "NewsWindow.h"   // (2026-10-22 evening) news / settle window "?" + the feed check (record only) - shared, SDK-free
 #include "NearLevels.h"
 #include "HostSlot.h"
 #include "SweepRefillSettings.h"
 #include "SettingsHost.h"
 #include "SettingsGuard.h"
-#include "NewsWindow.h"   // (2026-10-22 evening) news / settle window "?" + the feed check (record only) - shared, SDK-free
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -60,7 +72,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define SWR_VERSION "1.0.0"     // = swr::VERSION = swrset::PLUGIN_VERSION = the setVersion literal
+#define SWR_VERSION "1.1.0"     // = swr::VERSION = swrset::PLUGIN_VERSION = the setVersion literal
 
 #ifdef SWR_TEST_CLOCK
 long long swrTestClockMs();
@@ -90,12 +102,56 @@ static bool swrExists(const std::string& p) { struct stat st; return !p.empty() 
 
 struct HitBox { int l, t, r, b; size_t idx; };
 
+// ---- the chart's volume at price (only trivial values live in these MSVC SEH helpers, as lsBigBidAsk) ------------------------------
+static int swrStats(cppExtension::RTARRAYP* vap, int bar, cppExtension::BARSTATISTICS* st) {
+#if defined(_MSC_VER)
+    __try {
+#endif
+        if (!vap || !st || bar < 0) return -2;
+        std::memset(st, 0, sizeof(*st));
+        if (vap->getBarStatistics(bar, *st) != RTX_OK) return -2;
+        if (st->prices < 0) return -2;
+        return st->prices;
+#if defined(_MSC_VER)
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#endif
+}
+static int swrRowsRaw(cppExtension::RTARRAYP* vap, int bar, cppExtension::VOLPROFILE* rows, int count) {
+#if defined(_MSC_VER)
+    __try {
+#endif
+        if (!vap || count < 0 || (count > 0 && !rows)) return -2;
+        for (int i = 0; i < count; ++i) { std::memset(&rows[i], 0, sizeof(rows[i])); if (vap->getVolumeProfile(bar, i, rows[i]) != RTX_OK) return -2; }
+        return count;                                                  // any row failure rejects the whole bar, never a prefix
+#if defined(_MSC_VER)
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#endif
+}
+// one candle's volume at price -> (tick, lots); -1 = a fault (stop reading VAP), 0 = none yet, 1 = ok
+static int swrVap(cppExtension::RTARRAYP& vap, int bar, double tick, std::vector<std::pair<long long, double> >& out) {
+    out.clear();
+    cppExtension::BARSTATISTICS st; const int n = swrStats(&vap, bar, &st);
+    if (n == -1) return -1;
+    if (n <= 0 || n > 5000) return 0;
+    std::vector<cppExtension::VOLPROFILE> rows((size_t)n);
+    const int got = swrRowsRaw(&vap, bar, &rows[0], n);
+    if (got == -1) return -1;
+    if (got != n) return 0;
+    for (size_t i = 0; i < rows.size(); ++i) {
+        long long k = 0; const double v = (double)rows[i].totalVolume;
+        if (!swr::toTicks((double)rows[i].price, tick, k) || !(v > 0) || !swr::finite(v)) continue;
+        out.push_back(std::make_pair(k, v));
+    }
+    return 1;
+}
+
 struct SwrState {
     // identity
     std::string identity, market, symbol; int spb = 0; double tick = 0;
     // feed
     cppExtension::DEPTH_BY_ORDER* dbo = nullptr; bool dboDead = false, blocked = false; int attempt = 0; int flag = -1;
     long long events = 0, fillsLots = 0, lastResubMs = -1, backlogSlices = 0, lastStampSec = 0, garbage = 0;
+    bool vapFault = false; long long vapBars = 0, vapMissing = 0;   // the volume-profile levels (POC / VAH / VAL) from the chart's VAP
     // detector + bars
     swr::Detector D; swr::Clock clk; bool primed = false; long long lastClosedT = 0;
     // levels
@@ -104,6 +160,8 @@ struct SwrState {
     std::vector<swr::Event> marks; std::string session, recPath; long long recFails = 0, recLines = 0, recBad = 0; bool loaded = false;
     // settings
     ss::Store setStore; ss::Values set = ss::defaults(swrset::spec(), -1); long long setCheckMs = -100000;
+    // the per-market params (lsFlexLevels\LRA-StopSweep-<MKT>.csv): the locked rule + SHOW / ? / LOG per side
+    swg::StopSweep prm; long long prmCheckMs = -100000, prmMtime = -1, prmSize = -1;
     // hover
     std::vector<HitBox> hits; int hover = -1;
     // status
@@ -148,6 +206,7 @@ private:
     void identify(SwrState& S);
     void settings(SwrState& S, long long now);
     void levels(SwrState& S, long long now);
+    void params(SwrState& S, long long now);
     void openFeed(SwrState& S);
     void drain(SwrState& S, long long now);
     void bars(SwrState& S);
@@ -156,6 +215,7 @@ private:
     void collect(SwrState& S);
     void status(SwrState& S, long long now);
     std::string ctText(long long stamp);
+    std::string hmText(long long stamp);
     std::string sessionOf(RTDATE stamp);
     long long sessionKey(long long stamp);
     void render(SwrState& S);
@@ -172,6 +232,13 @@ std::string SweepRefill::ctText(long long stamp) {
     if (stamp <= 0 || !getLocaltime((RTDATE)stamp, &t)) return std::string();      // IRT's local clock = Central on his PC
     const int h12 = t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12;
     char b[64]; std::snprintf(b, sizeof b, "%d:%02d:%02d %s", h12, t.tm_min, t.tm_sec, t.tm_hour < 12 ? "AM" : "PM"); return b;
+}
+// "8:48 AM" (the swing candle's START = its END - seconds per bar)
+std::string SweepRefill::hmText(long long stamp) {
+    struct tm t; std::memset(&t, 0, sizeof t);
+    if (stamp <= 0 || !getLocaltime((RTDATE)stamp, &t)) return std::string();
+    const int h12 = t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12;
+    char b[32]; std::snprintf(b, sizeof b, "%d:%02d %s", h12, t.tm_min, t.tm_hour < 12 ? "AM" : "PM"); return b;
 }
 // the 17:00 CT trading day: an event at or after 17:00 belongs to the next day's session
 std::string SweepRefill::sessionOf(RTDATE stamp) {
@@ -200,10 +267,26 @@ void SweepRefill::identify(SwrState& S) {
     delete S.dbo; S.dbo = nullptr;
     S.identity = id; S.market = mkt; S.symbol = sym; S.spb = spb; S.tick = tick;
     S.dboDead = S.blocked = false; S.attempt = 0; S.flag = -1; S.events = S.fillsLots = S.garbage = 0; S.lastResubMs = -1; S.lastStampSec = 0;
+    S.vapFault = false; S.vapBars = S.vapMissing = 0;
     S.D = swr::Detector(); S.clk = swr::Clock(); S.primed = false; S.lastClosedT = 0;
     S.keySrc = nl::Source(); S.dealerSrc = nl::Source(); S.mqSrc = nl::Source(); S.levelCheckMs = -100000;
     S.marks.clear(); S.session.clear(); S.recPath.clear(); S.loaded = false;
     S.setStore = ss::Store(); S.setCheckMs = -100000; S.hits.clear(); S.hover = -1; S.statusBody.clear();
+    S.prm = swg::StopSweep(); S.prmCheckMs = -100000; S.prmMtime = S.prmSize = -1;
+}
+
+// the params file, re-read only when its stamp (mtime + size) changes, at most every 5 s; missing / garbled = defaults, every mark LOG
+void SweepRefill::params(SwrState& S, long long now) {
+    if (now - S.prmCheckMs < 5000 && now >= S.prmCheckMs) return;
+    S.prmCheckMs = now;
+    const std::string f = swrFlex(); if (f.empty() || S.market.empty()) return;
+    const std::string p = f + SWR_SEP "LRA-StopSweep-" + S.market + ".csv";
+    struct stat st; if (stat(p.c_str(), &st) != 0) { if (S.prmMtime != -2) { S.prm = swg::StopSweep(); S.prm.why = "no file (defaults, every mark LOG)"; S.prmMtime = -2; } return; }
+    if ((long long)st.st_mtime == S.prmMtime && (long long)st.st_size == S.prmSize) return;
+    std::vector<std::string> lines;
+    if (!nl::readBoundedLines(p, lines, 64 * 1024, 512, 512)) return;                       // torn / oversized: keep the last good copy
+    struct stat st2; if (stat(p.c_str(), &st2) != 0 || st2.st_mtime != st.st_mtime || st2.st_size != st.st_size) return;
+    S.prm = swg::parseStopSweep(lines, S.market); S.prmMtime = (long long)st.st_mtime; S.prmSize = (long long)st.st_size;
 }
 
 void SweepRefill::settings(SwrState& S, long long now) {
@@ -213,8 +296,9 @@ void SweepRefill::settings(SwrState& S, long long now) {
     if (S.setStore.path != sp) { S.setStore = ss::Store(); S.setStore.S = &swrset::spec(); S.setStore.path = sp; }
     S.set = sp.empty() ? ss::defaults(swrset::spec(), ss::marketIndex(S.market)) : S.setStore.load(ss::marketIndex(S.market), now);
     swr::Params& P = S.D.P;   // a change applies from now on; decided marks never change
-    P.minPrices = S.set.i(swrset::K_MIN_PRICES); P.minLots = S.set.i(swrset::K_MIN_LOTS); P.refillPct = (double)S.set.i(swrset::K_REFILL_PCT);
-    P.refillMs = 1000 * S.set.i(swrset::K_WINDOW_S); P.gapBars = S.set.i(swrset::K_GAP_BARS); P.spb = S.spb > 0 ? S.spb : 180;
+    swr::applyParams(P, S.prm);                                  // the locked rule per market (params file)
+    P.gapBars = S.set.i(swrset::K_GAP_BARS); P.spb = S.spb > 0 ? S.spb : 180;
+    int oMin = 0, cMin = 0; if (swg::rthOf(S.market, oMin, cMin)) S.D.setRth(oMin, cMin); else S.D.setRth(0, 0);   // no RTH table = levels only
 }
 
 // key levels (his session levels only) + MenthorQ (dealer / levels files, the chart's contract only), as NearLevels.h reads them
@@ -289,17 +373,34 @@ void SweepRefill::drain(SwrState& S, long long now) {
     else S.D.advance(S.clk.idle(now));                                               // the feed is caught up: time passes
 }
 
-// closed candles (a later bar exists), strictly in order, each once; history at the first pass gives the pivots / ATR context
+// closed candles (a later bar exists), strictly in order, each once; history at the first pass gives the ZigZag (from today's RTH
+// open) and the ATR context. Each candle's CT day / RTH flag from IRT's local clock (Central on his PC).
 void SweepRefill::bars(SwrState& S) {
     const long n = getBarCount(); if (n < 2) return;
-    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
-    if ((long)times.count < n || (long)hi.count < n || (long)lo.count < n || (long)cl.count < n) return;
-    auto bar = [&](int i, swr::Bar& b) { b.t = (long long)times[i]; b.session = sessionKey(b.t - 1); return swr::toTicks(hi[i], S.tick, b.h) && swr::toTicks(lo[i], S.tick, b.l) && swr::toTicks(cl[i], S.tick, b.c); };
+    RTARRAYI times(barDateTime); RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose); RTARRAYP vap(barVolumeProfile);
+    if ((long)times.count < n || (long)op.count < n || (long)hi.count < n || (long)lo.count < n || (long)cl.count < n) return;
+    const bool haveVap = (long)vap.count >= n;
+    int oMin = 0, cMin = 0; const bool haveRth = swg::rthOf(S.market, oMin, cMin);
+    auto bar = [&](int i, swr::Bar& b) {
+        b.t = (long long)times[i]; b.session = sessionKey(b.t - 1);
+        struct tm t; std::memset(&t, 0, sizeof t);
+        if (getLocaltime((RTDATE)b.t, &t)) {
+            b.day = (long long)(t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday;
+            b.rth = haveRth && swg::isRth(t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec, S.spb, oMin, cMin);
+        }
+        return swr::toTicks(op[i], S.tick, b.o) && swr::toTicks(hi[i], S.tick, b.h) && swr::toTicks(lo[i], S.tick, b.l) && swr::toTicks(cl[i], S.tick, b.c);
+    };
     const int lastClosed = (int)n - 2;
     int from;
-    if (!S.primed) { S.primed = true; from = std::max(0, lastClosed - 60); }
+    if (!S.primed) { S.primed = true; from = std::max(0, lastClosed - 2000); }            // ~4 sessions of 3-min candles: prior day + naked POCs
     else { if ((long long)times[lastClosed] <= S.lastClosedT) return; from = lastClosed; while (from > 0 && (long long)times[from - 1] > S.lastClosedT) --from; }
-    for (int i = from; i <= lastClosed; ++i) { swr::Bar b; if (!bar(i, b)) continue; S.D.barClose(b); }
+    std::vector<std::pair<long long, double> > rows;
+    for (int i = from; i <= lastClosed; ++i) {
+        swr::Bar b; if (!bar(i, b)) continue;
+        int vr = 0; if (haveVap && !S.vapFault) { vr = swrVap(vap, i, S.tick, rows); if (vr < 0) S.vapFault = true; }
+        if (vr > 0) ++S.vapBars; else ++S.vapMissing;
+        S.D.barClose(b, vr > 0 ? &rows : nullptr);
+    }
     S.lastClosedT = (long long)times[lastClosed];
 }
 
@@ -314,7 +415,7 @@ void SweepRefill::loadRecord(SwrState& S) {
     if (S.recPath.empty() || !nl::readBoundedLines(S.recPath, lines, 4 * 1024 * 1024, 20000, 1024)) return;
     S.marks = swr::parseRecord(lines, S.tick, &S.recBad);
     for (size_t i = 0; i < S.marks.size(); ++i) {                 // the gap rule continues from the record (a restart never draws an adjacent Sr)
-        const swr::Event& e = S.marks[i];
+        swr::Event& e = S.marks[i]; if (e.refT > 0) e.refCt = hmText(e.refT - S.spb);
         if (e.refilled && e.gapOk && e.barT > S.D.lastDrawnBar[e.side]) S.D.lastDrawnBar[e.side] = e.barT;
     }
 }
@@ -335,7 +436,7 @@ void SweepRefill::append(SwrState& S, const std::string& line) {
 // decided candidates -> marks + record (once per key)
 void SweepRefill::collect(SwrState& S) {
     for (size_t i = 0; i < S.D.decided.size(); ++i) {
-        swr::Event e = S.D.decided[i]; e.ct = ctText(e.sec);
+        swr::Event e = S.D.decided[i]; e.ct = ctText(e.sec); if (e.refT > 0) e.refCt = hmText(e.refT - S.spb);
         bool dup = false; for (size_t k = 0; k < S.marks.size() && !dup; ++k) dup = S.marks[k].key == e.key;
         if (dup) continue;
         S.marks.push_back(e); append(S, swr::recLine(e, S.tick));
@@ -346,15 +447,21 @@ void SweepRefill::collect(SwrState& S) {
 
 void SweepRefill::status(SwrState& S, long long now) {
     const std::string d = swrFlex(); if (d.empty() || S.market.empty()) return;
-    long long gb = 0, rb = 0, rec = 0; for (size_t i = 0; i < S.marks.size(); ++i) { const swr::Event& e = S.marks[i]; if (e.refilled && e.gapOk) { if (swr::bullish(e)) ++gb; else ++rb; } else ++rec; }
+    long long gb = 0, rb = 0, rec = 0; for (size_t i = 0; i < S.marks.size(); ++i) { const swr::Event& e = S.marks[i]; if (e.refilled && e.gapOk && e.show != swg::LOG) { if (swr::bullish(e)) ++gb; else ++rb; } else ++rec; }
     std::ostringstream o;
     o << "VERSION," << SWR_VERSION << "\nMARKET," << S.market << ",SYMBOL," << S.symbol << ",SECONDS_PER_BAR," << S.spb << "\n";
     o << "STATUS,lsSweepRefill v" << SWR_VERSION << " | MBO " << (S.blocked ? "not opened (crash guard file present)" : S.dboDead ? "faulted" : S.flag == 1 ? "subscribed" : S.flag == 0 ? "not subscribed" : "opening")
       << " | " << S.events << " events, " << S.fillsLots << " lots filled, book " << S.D.book.size() << " orders | sweeps " << S.D.sweeps << ", big " << S.D.bigSweeps
-      << ", at a local extreme " << S.D.atExtreme << ", took out a level / pivot " << S.D.tookOut << " | Sr today green " << gb << ", red " << rb << ", recorded only " << rec << "\n";
-    o << "LEVELS," << S.levelNote << ",pivots " << S.D.pivots.size() << "\nRECORD," << S.recPath << ",lines " << S.recLines << ",failed " << S.recFails << ",bad lines " << S.recBad << "\n";
-    o << "SETTINGS," << S.set.why << ",bullish " << (S.set.b(swrset::K_SHOW_BULL) ? "on" : "off") << ",bearish " << (S.set.b(swrset::K_SHOW_BEAR) ? "on" : "off") << ",min prices " << S.D.P.minPrices
-      << ",min lots " << S.D.P.minLots << ",refill " << S.D.P.refillPct << "%,within " << S.D.P.refillMs / 1000 << " s,gap " << S.D.P.gapBars << " candles\nBACKLOG_SLICES," << S.backlogSlices
+      << ", took out a swing / level " << S.D.tookOut << " | Sr today green " << gb << ", red " << rb << ", recorded only " << rec << "\n";
+    o << "VOLUME_PROFILE," << (S.vapFault ? "VAP fault - remove and re-add the indicator" : "ok") << ",candles " << S.vapBars << ",no VAP " << S.vapMissing;
+    if (S.D.V.now.ok) o << ",POC " << swr::pxText(S.D.V.now.poc, S.tick) << ",VAH " << swr::pxText(S.D.V.now.vah, S.tick) << ",VAL " << swr::pxText(S.D.V.now.val, S.tick);
+    o << ",prior sessions " << S.D.V.done.size() << "\n";
+    o << "LEVELS," << S.levelNote << ",ZigZag " << S.D.Z.bars.size() << " RTH candles " << S.D.Z.swings.size() << " swings (SwingRef " << swg::VERSION << ")\nRECORD," << S.recPath << ",lines " << S.recLines << ",failed " << S.recFails << ",bad lines " << S.recBad << "\n";
+    o << "PARAMS,LRA-StopSweep-" << S.market << ".csv " << S.prm.why << ",min prices " << S.D.P.minPrices << ",refill " << S.D.P.refillPct << "% within " << S.D.P.windowS
+      << " s and still there " << S.D.P.stayS << " s later,orders resting " << S.D.P.minRestS << " s+,swings back " << S.D.P.refPivots << ",key " << (S.D.P.useKey ? "on" : "off")
+      << ",MenthorQ " << (S.D.P.useMq ? "on" : "off") << ",bullish " << swg::showText(S.D.P.showBull) << ",bearish " << swg::showText(S.D.P.showBear) << "\n";
+    o << "SETTINGS," << S.set.why << ",bullish " << (S.set.b(swrset::K_SHOW_BULL) ? "on" : "off") << ",bearish " << (S.set.b(swrset::K_SHOW_BEAR) ? "on" : "off")
+      << ",ZigZag " << (S.set.b(swrset::K_SHOW_ZZ) ? "on" : "off") << ",swing line " << (S.set.b(swrset::K_SHOW_REF) ? "on" : "off") << ",gap " << S.D.P.gapBars << " candles\nBACKLOG_SLICES," << S.backlogSlices
       << ",garbage " << S.garbage << ",book resets " << S.D.bookResets << "\n";
     const std::string body = o.str();
     if (body == S.statusBody && now - S.statusMs < 30000 && now >= S.statusMs) return;
@@ -376,6 +483,7 @@ void SweepRefill::pump(bool fromDraw) {
         const long long now = swrMs();
         identify(*S);
         if (S->market.empty() || !(S->tick > 0) || S->spb <= 0) return;
+        params(*S, now);
         settings(*S, now);
         levels(*S, now);
         loadRecord(*S);
@@ -400,29 +508,52 @@ static short swrC(int v) { return (short)(v < -32768 ? -32768 : v > 32767 ? 3276
 
 void SweepRefill::render(SwrState& S) {
     S.hits.clear();
-    const bool showBull = S.set.b(swrset::K_SHOW_BULL), showBear = S.set.b(swrset::K_SHOW_BEAR);
-    if ((!showBull && !showBear) || S.marks.empty() || !(S.tick > 0)) return;
+    const bool showBull = S.set.b(swrset::K_SHOW_BULL), showBear = S.set.b(swrset::K_SHOW_BEAR), showZz = S.set.b(swrset::K_SHOW_ZZ), showRef = S.set.b(swrset::K_SHOW_REF);
+    if (!(S.tick > 0)) return;
     const long n = getBarCount(); if (n < 1) return;
     RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow); if ((long)times.count < n || (long)hi.count < n || (long)lo.count < n) return;
     RCT pane; pane.getPaneRect(false);
+    auto barIdx = [&](long long t) -> long {          // the candle whose time (IRT bar END) == t, else -1
+        long l0 = 0, h0 = n - 1, idx = -1;
+        while (l0 <= h0) { const long mid = (l0 + h0) / 2; if ((long long)times[(int)mid] >= t) { idx = mid; h0 = mid - 1; } else l0 = mid + 1; }
+        return idx >= 0 && (long long)times[(int)idx] == t ? idx : -1;
+    };
+    auto inPane = [&](int x, int y) { return x > pane.left && x < pane.right && y > pane.top && y < pane.bottom; };
+    // the 1-bar ZigZag of today's RTH: a thin line through the CONFIRMED swing ends (a confirmed point never moves)
+    if (showZz && S.D.Z.swings.size() >= 2) {
+        setPen((COLOR)S.set.c(swrset::K_COL_ZZ), 1, P_SOLID);
+        bool have = false; int px0 = 0, py0 = 0;
+        for (size_t k = 0; k < S.D.Z.swings.size(); ++k) {
+            const swg::Swing& w = S.D.Z.swings[k]; const long i = barIdx(w.barT); if (i < 0) { have = false; continue; }
+            PNT p; p.set((int)i, (float)((double)w.px * S.tick));
+            if (have && inPane(p.h, p.v) && inPane(px0, py0)) { PNT a; a.set((int)i, 0.0f); a.h = (short)px0; a.v = (short)py0; a.setDrawPosition(); p.drawLineTo(); }
+            have = true; px0 = p.h; py0 = p.v;
+        }
+    }
+    if ((!showBull && !showBear) || S.marks.empty()) return;
     const int fpt = std::max(8, std::min(14, S.set.i(swrset::K_FONT)));
     FONT f; f.id = HELVETICA; f.size = (short)fpt; f.style = BOLD; setFont(f);
     const int th = fpt + 4, lane = th + 2;
     for (size_t k = 0; k < S.marks.size(); ++k) {
         const swr::Event& e = S.marks[k]; if (!swr::shown(e, showBull, showBear)) continue;
-        long l0 = 0, h0 = n - 1, idx = -1;      // the candle: the bar whose time (IRT bar END) == the mark's bar key
-        while (l0 <= h0) { const long mid = (l0 + h0) / 2; if ((long long)times[(int)mid] >= e.barT) { idx = mid; h0 = mid - 1; } else l0 = mid + 1; }
-        if (idx < 0 || (long long)times[(int)idx] != e.barT) continue;
+        const long idx = barIdx(e.barT); if (idx < 0) continue;
         const bool up = swr::bullish(e);
-        PNT p; p.set((int)idx, up ? hi[(int)idx] : lo[(int)idx]); const int x = p.h;
-        // past the reserved lanes (lsBigBidAsk's BO / BD and Rly sit right at the candle): green above the high, red below the low
-        const int yEdge = up ? p.v - 2 - LANES_RESERVED * lane : p.v + 2 + LANES_RESERVED * lane;
-        const int t = up ? yEdge - th : yEdge, b = t + th;
+        const COLOR col = (COLOR)(up ? S.set.c(swrset::K_COL_BULL) : S.set.c(swrset::K_COL_BEAR));
+        // the short line from the swing (or level) taken out to the sweep candle, at the swing's price
+        if (showRef && e.refPx > 0) {
+            long i0 = e.refT > 0 ? barIdx(e.refT) : -1; if (i0 < 0 || i0 > idx) i0 = std::max(0L, idx - 3);
+            PNT a; a.set((int)i0, (float)((double)e.refPx * S.tick)); PNT b; b.set((int)idx, (float)((double)e.refPx * S.tick));
+            if (inPane(a.h, a.v) && inPane(b.h, b.v)) { setPen(col, 1, P_SOLID); a.setDrawPosition(); b.h = (short)(b.h + 4); b.drawLineTo(); }
+        }
+        // green UNDER the swept wick (the candle's low), red OVER the swept high - past the reserved lanes (lsBigBidAsk's BO / BD, Rly)
+        PNT p; p.set((int)idx, up ? lo[(int)idx] : hi[(int)idx]); const int x = p.h;
+        const int yEdge = up ? p.v + 2 + LANES_RESERVED * lane : p.v - 2 - LANES_RESERVED * lane;
+        const int t = up ? yEdge : yEdge - th, b = t + th;
         if (t <= pane.top + 1 || b >= pane.bottom - 1 || x <= pane.left || x >= pane.right) continue;
         struct tm tkNw; std::memset(&tkNw, 0, sizeof tkNw); const nw::Gate ng = getLocaltime((RTDATE)e.barT, &tkNw) ? nw::atTm(S.market, tkNw) : nw::Gate(); if (ng.feedBad) continue;   // NewsWindow.h
-        const std::string txtNw = nw::q("Sr", ng); const char* txt = txtNw.c_str();
+        const std::string txtNw = nw::q(swr::markText(e), ng); const char* txt = txtNw.c_str();   // "Sr" (SHOW) / "Sr?" (promising or a news window)
         const int w = (int)getTextWidth(txt, -1) + 4, x0 = x - w / 2;
-        setTextColor((COLOR)(up ? S.set.c(swrset::K_COL_BULL) : S.set.c(swrset::K_COL_BEAR)));
+        setTextColor(col);
         RCT r; r.set(swrC(x0), swrC(t), swrC(x0 + w), swrC(b)); r.drawText(txt, true, false);
         HitBox hb; hb.l = x0; hb.t = t; hb.r = x0 + w; hb.b = b; hb.idx = k; S.hits.push_back(hb);
     }
@@ -431,7 +562,7 @@ void SweepRefill::render(SwrState& S) {
         const HitBox* at = nullptr; for (size_t k = 0; k < S.hits.size(); ++k) if ((int)S.hits[k].idx == S.hover) at = &S.hits[k];
         if (!at) return;
         const swr::Event& e = S.marks[(size_t)S.hover];
-        const std::vector<std::string> rows = swr::hoverRows(e, S.tick, S.D.P.refillMs / 1000, S.D.P.refillPct);
+        const std::vector<std::string> rows = swr::hoverRows(e, S.tick, S.D.P.windowS, S.D.P.stayS, S.D.P.refillPct);
         FONT hf; hf.id = HELVETICA; hf.size = HOVER_PT; hf.style = PLAIN; setFont(hf);
         int w = 0; for (size_t k = 0; k < rows.size(); ++k) w = std::max(w, (int)getTextWidth(rows[k].c_str(), -1));
         w += 12; const int h = (int)rows.size() * HOVER_LH + 8;
@@ -460,9 +591,9 @@ int SweepRefill::draw(void) {
 extern "C" cppExtension* CreateExtension(void) {
     SweepRefill* p = new SweepRefill();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
-    p->setExtendedFlags(CALL_CONTINUOUSLY);   // the 3 s refill window is decided and the feed drained while the chart is quiet
-    p->setDescription("LRA Sweep Refill v1.0.0 - Sr on the price chart. Green Sr above the candle: sellers swept 8+ bid prices through a level or pivot low at a local low, and the bids came right back (70%+ of the size that rested there, within 3 s) - the sweep was absorbed. Red Sr below the candle: the mirror at a high. Never on two adjacent candles. Decided once, never repainted; every sweep is recorded for the nightly test. Hover a mark for the numbers. Needs the market-by-order feed; works from the moment it is on the chart. Example: NQ 8:55 AM, 19 prices swept through G1 31000, 87% back in 3 s -> green Sr.");
-    p->setVersion("1.0.0");   // SWR_VERSION
+    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.1.0) VAP: the POC / VAH / VAL levels
+    p->setExtendedFlags(CALL_CONTINUOUSLY);   // the refill window is decided and the feed drained while the chart is quiet
+    p->setDescription("LRA Sweep Refill v1.1.0 - Sr on the price chart. Green Sr under the swept wick: sellers swept 8+ bid prices through an intact swing low (one of the last 3 swings of the 1-bar ZigZag from the RTH open) or a key / MenthorQ level, at a local low, and the bids came back (half the size that rested there within 5 s, still there 5 s later on NQ; per market from the validation) - the stops were run and absorbed. Red Sr over the swept high: the mirror. Sr? = promising, not proven yet; markets / sides not proven are recorded only. A short line joins the swing taken out to the sweep candle; the thin line is the ZigZag. Never on two adjacent candles. Decided once, never repainted; every sweep is recorded for the nightly test. Hover a mark for the numbers. Needs the market-by-order feed; works from the moment it is on the chart. Example: NQ Oct 9 8:55 AM, 19 prices swept through the swing low from 8:48 AM, 87% back in 3 s -> green Sr.");
+    p->setVersion("1.1.0");   // SWR_VERSION
     return p;
 }

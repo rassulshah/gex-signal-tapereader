@@ -1,8 +1,9 @@
-// replay_st.cpp -- lsStopRun 1.1.0 REPLAY on real Databento MBO (T = aggressor trades, F = resting fills), 3-min candles.
-// usage: replay_st <csv> <levels> <tick> <market> <out_events.csv> [decideS] [requireReclaim 0/1] [sharePct] [useKeys 0/1] [pivot confirm candles]
-//   csv: ms,sec_ct,act,side,px,sz,oid ; levels: NAME PX AVAIL_SEC (session levels + MenthorQ codes)
-// The SAME stl::Detector the plugin runs. Databento T rows carry no aggressor order id -> the "distinct aggressor ids" rule is not
-// applied here (the plugin applies it when IRT names the aggressor). decided_px = the last trade at the live decision moment.
+// replay_st.cpp -- lsStopRun 1.2.0 REPLAY on real Databento MBO (T = aggressor trades, F = resting fills), 3-min candles.
+// usage: replay_st <csv> <levels> <tick> <market> <out_events.csv> [LRA-StopSweep-<MKT>.csv]
+//   csv: ms,sec_ct,act,side,px,sz,oid ; levels: the replay_sr format ("K <name> <px>" session levels, "M <ct_sec> <code> <px>" MenthorQ
+//   snapshots, the latest at or before the moment) or the 1.1 format "NAME PX AVAIL_SEC".
+// The SAME stl::Detector + SwingRef.h the plugin runs (ZigZag from the RTH open, volume profile from the T prints). Databento T rows
+// carry no aggressor order id -> the "distinct aggressor ids" rule is not applied here (the plugin applies it when IRT names it).
 #include "../StopRunLogic.h"
 #include <cstdio>
 #include <fstream>
@@ -11,33 +12,40 @@
 #include <deque>
 
 int main(int argc, char** argv) {
-    if (argc < 6) { std::fprintf(stderr, "usage\n"); return 2; }
+    if (argc < 6) { std::fprintf(stderr, "usage: replay_st <csv> <levels> <tick> <market> <out.csv> [params.csv]\n"); return 2; }
     const double tick = std::atof(argv[3]); const std::string mkt = argv[4];
-    std::vector<std::pair<stl::Ref, long long> > lv;
-    { std::ifstream f(argv[2]); std::string n; double px; long long t; while (f >> n >> px >> t) { stl::Ref r; r.name = n; if (!stl::toTicks(px, tick, r.px)) continue; r.dir = stl::keyDir(n, r.rank); if (r.dir) lv.push_back(std::make_pair(r, t)); } }
+    std::vector<std::pair<swg::Lvl, long long> > keys; std::vector<std::pair<long long, std::vector<swg::Lvl> > > mq;
+    { std::ifstream f(argv[2]); std::string ln;
+      while (std::getline(f, ln)) {
+          std::istringstream s(ln); std::string a; s >> a; if (a.empty()) continue;
+          int rank = 0;
+          if (a == "K") { std::string n; double px; s >> n >> px; swg::Lvl L; L.name = n; const int d = stl::keyDir(n, rank); if (d == 0 || d == 2 || !stl::toTicks(px, tick, L.px)) continue; L.dir = d; L.kind = swg::KEY; keys.push_back(std::make_pair(L, 0LL)); }
+          else if (a == "M") { long long ct; std::string n; double px; s >> ct >> n >> px; swg::Lvl L; L.name = n; L.kind = swg::MQ; L.dir = 0; if (!stl::toTicks(px, tick, L.px)) { const double t = px / tick; L.px = (long long)llround(t); }
+              if (mq.empty() || mq.back().first != ct) { mq.push_back(std::make_pair(ct, std::vector<swg::Lvl>())); }
+              mq.back().second.push_back(L); }
+          else { double px; long long t; s >> px >> t; swg::Lvl L; L.name = a; const int d = stl::keyDir(a, rank); if (d == 0 || !stl::toTicks(px, tick, L.px)) continue; L.dir = d == 2 ? 0 : d; L.kind = d == 2 ? swg::MQ : swg::KEY; keys.push_back(std::make_pair(L, t)); }
+      } }
     stl::Detector D; const stl::MarketDefaults md = stl::marketDefaults(mkt);
-    D.P.nearTicks = md.nearTicks; D.P.bigLots = md.bigLots; D.P.seedLots = md.seedLots;
-    if (argc > 6) D.P.decideS = std::atoi(argv[6]);
-    if (argc > 7) D.P.requireReclaim = std::atoi(argv[7]) != 0;
-    if (argc > 8) D.P.sharePct = std::atoi(argv[8]);
-    if (argc > 9) D.P.useKeys = std::atoi(argv[9]) != 0;
-    const int confirm = argc > 10 ? std::atoi(argv[10]) : 2;
+    swg::StopSweep X; X.stNearTicks = md.nearTicks; X.staBigLots = md.bigLots;
+    if (argc > 6) { std::ifstream f(argv[6]); std::vector<std::string> L; std::string l; while (std::getline(f, l)) L.push_back(l); X = swg::parseStopSweep(L, mkt); std::fprintf(stderr, "params %s: %s\n", argv[6], X.why.c_str()); }
+    stl::applyParams(D.P, X); D.P.seedLots = md.seedLots;
+    int oMin = 510, cMin = 900; swg::rthOf(mkt, oMin, cMin); D.setRth(oMin, cMin, 180);
     std::ifstream in(argv[1]); std::string line;
     const long long SPB = 180;
-    long long formEnd = 0; stl::Bar forming; bool haveForm = false; std::deque<stl::Bar> closed;
+    long long formEnd = 0; stl::Bar forming; bool haveForm = false; std::map<long long, double> formRows;
     std::ofstream out(argv[5]);
-    out << "key,fired_ms,fired_sec,bar_t,side,ref,ref_kind,ref_px,st_px,lots,fills,norm,ratio,minute,atr_ticks,outcome,bars,big_ids,share_pct,exc_atr,reclaimed,new_ext,decided_t,decided_sec,decided_ms,decided_px\n";
-    std::map<std::string, double> atrAt; std::map<std::string, int> minAt;
-    long long rows = 0, lastPx = 0;
+    out << "key,fired_ms,fired_sec,bar_t,side,ref,ref_kind,ref_px,st_px,lots,fills,norm,ratio,ref_t,ref_back,outcome,big_ids,big_max,reclaimed,decided_sec,show_fire,show\n";
+    std::map<std::string, stl::Event> fired;
+    long long rows = 0; size_t mqAt = 0; long long mqCur = -1;
     auto flush = [&]() {
-        for (size_t i = 0; i < D.fired.size(); ++i) { atrAt[D.fired[i].key] = D.atrTicks; minAt[D.fired[i].key] = D.minuteOfDay; }
+        for (size_t i = 0; i < D.fired.size(); ++i) fired[D.fired[i].key] = D.fired[i];
         D.fired.clear();
         for (size_t i = 0; i < D.decided.size(); ++i) {
             const stl::Event& e = D.decided[i];
-            out << e.key << "," << e.firedMs << "," << e.firedSec << "," << e.barT << "," << (e.side < 0 ? "down" : "up") << "," << e.ref << "," << e.refKind << ","
-                << e.refPx * tick << "," << e.stPx * tick << "," << e.lots << "," << e.fills << "," << e.norm << "," << e.ratio << "," << minAt[e.key] << "," << atrAt[e.key] << ","
-                << (e.outcome == stl::ABSORBED ? "absorbed" : "not") << "," << e.bars << "," << e.bigIds << "," << e.sharePct << "," << e.excAtr << "," << (e.reclaimed ? 1 : 0) << "," << (e.newExt ? 1 : 0) << ","
-                << e.decidedT << "," << e.decidedSec << "," << e.decidedMs << "," << lastPx * tick << "\n";
+            out << e.key << "," << e.firedMs << "," << e.firedSec << "," << e.barT << "," << (e.side < 0 ? "down" : "up") << "," << e.ref << "," << stl::kindText(e.refKind) << ","
+                << e.refPx * tick << "," << e.stPx * tick << "," << e.lots << "," << e.fills << "," << e.norm << "," << e.ratio << "," << e.refT << "," << e.refBack << ","
+                << (e.outcome == stl::ABSORBED ? "absorbed" : "not") << "," << e.bigIds << "," << e.bigLotsMax << "," << (e.reclaimed ? 1 : 0) << "," << e.decidedSec << ","
+                << swg::showText(e.showFire) << "," << swg::showText(e.show) << "\n";
         }
         D.decided.clear();
     };
@@ -53,25 +61,24 @@ int main(int argc, char** argv) {
             const long long end = (sec / SPB + 1) * SPB;
             if (!haveForm || end > formEnd) {
                 if (haveForm) {
-                    D.barClose(forming); closed.push_back(forming); if (closed.size() > 20) closed.pop_front();
-                    { std::vector<stl::Bar> cv(closed.begin(), closed.end()); stl::pivot5(cv, D.haveX5lo, D.x5lo, D.haveX5hi, D.x5hi, confirm); D.haveX5 = D.haveX5lo || D.haveX5hi; }
-                    double s = 0; int n = 0; for (size_t k = closed.size() > 14 ? closed.size() - 14 : 0; k < closed.size(); ++k) { s += (double)(closed[k].h - closed[k].l); ++n; }
-                    D.atrTicks = n ? s / n : 0;
+                    std::vector<std::pair<long long, double> > r(formRows.begin(), formRows.end()); formRows.clear();
+                    D.barClose(forming, &r, (forming.t - 1 + 7 * 3600) / 86400); flush();
                 }
-                forming = stl::Bar(); forming.t = end; forming.h = forming.l = forming.c = px; formEnd = end; haveForm = true;
+                forming = stl::Bar(); forming.t = end; forming.o = forming.h = forming.l = forming.c = px; forming.day = end / 86400;
+                forming.rth = swg::isRth((int)(end % 86400), (int)SPB, oMin, cMin); formEnd = end; haveForm = true;
                 D.formingT = end;
-                D.keys.clear(); for (size_t k = 0; k < lv.size(); ++k) if (sec >= lv[k].second) D.keys.push_back(lv[k].first);
+                while (mqAt < mq.size() && mq[mqAt].first <= sec) { mqCur = (long long)mqAt; ++mqAt; }
+                D.levels.clear(); for (size_t k = 0; k < keys.size(); ++k) if (sec >= keys[k].second) D.levels.push_back(keys[k].first);
+                if (mqCur >= 0) D.levels.insert(D.levels.end(), mq[(size_t)mqCur].second.begin(), mq[(size_t)mqCur].second.end());
             }
-            forming.h = std::max(forming.h, px); forming.l = std::min(forming.l, px); forming.c = px;
+            forming.h = std::max(forming.h, px); forming.l = std::min(forming.l, px); forming.c = px; formRows[px] += (double)sz;
             D.minuteOfDay = (int)(((sec % 86400) + 86400) % 86400 / 60);
-            lastPx = px;
             if (side == 'B' || side == 'A') D.aggFill(ms, sec, side == 'B' ? stl::UP : stl::DOWN, px, sz, 0);
         } else if (act == 'F') {
             if (side == 'B' || side == 'A') D.restFill(ms, side == 'B' ? stl::DOWN : stl::UP, px, sz, oid);
         }
         flush();
     }
-    std::vector<long long> all; for (std::map<int, std::vector<long long> >::iterator it = D.slotLots.begin(); it != D.slotLots.end(); ++it) all.insert(all.end(), it->second.begin(), it->second.end());
-    std::fprintf(stderr, "%s rows %lld bursts %lld qualifying %lld (median lots %lld) near-level %lld sized %lld runs %lld pending-at-end %zu\n", argv[1], rows, D.bursts, D.qualifying, stl::median(all), D.nearLevel, D.sized, D.runs, D.pending.size());
+    std::fprintf(stderr, "%s rows %lld bursts %lld qualifying %lld near-level %lld sized %lld runs %lld pending-at-end %zu\n", argv[1], rows, D.bursts, D.qualifying, D.nearLevel, D.sized, D.runs, D.pending.size());
     return 0;
 }

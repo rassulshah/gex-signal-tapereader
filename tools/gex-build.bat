@@ -38,7 +38,7 @@ REM (2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator alway
 REM   anymore") THE SETTINGS CONTRACT GATES EVERY BUILD: plugin\tests_settings\settings_contract.cpp (SettingsSpec.h + every <Name>Settings.h +
 REM   the migrated sources) is compiled and run first; FAIL = nothing is built this tick (the installed DLLs stay), the log says why once,
 REM   plugin\out\SETTINGS-CONTRACT.txt has every failing check. SETSRC = the plugin sources on the layer (add one when it migrates).
-set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp KeyLevels.cpp DealerHedge.cpp ReversalStage.cpp"
+set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp KeyLevels.cpp DealerHedge.cpp ReversalStage.cpp SweepRefill.cpp StopRunMark.cpp"
 call :settings
 if defined SETFAIL (
   call :status
@@ -136,13 +136,14 @@ REM (2026-10-22) lsBigBidAsk 1.24.0 Rly (rally) on 3-min charts: RallyLogic.h 1.
 REM (2026-10-22) lsBigBidAsk 1.25.0 OB / BO boxes of strong waves: OrderBlockLogic.h 1.0.0 added to its hash list (agreed with Rassul 16:00-16:01 CT)
 call :one BigBidAsk lsBigBidAsk AbsorbLogic.h RallyLogic.h OrderBlockLogic.h BigBidAskLogic.h ColumnBoard.h HoverBoard.h BoxPlace.h BannerBoard.h HostSlot.h SignalBoard.h ZoneNear.h VwapTrendLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h BoxDock.h BigBidAskSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h OnTouchParams.h SharedAbsorb.h MarkParams.h
 REM (2026-10-22) lsStopRun 1.0.0 - St / Sta stop-run mark on the price chart (Rassul 15:33-15:37 CT "show yes", "Sta can indicate the stop run absorbed"; MBO Roadmap T-20261022-15)
-call :one StopRunMark lsStopRun StopRunLogic.h StopRunMarkSettings.h NearLevels.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h NewsWindow.h MarkParams.h
+REM (2026-10-22 evening) lsStopRun 1.2.0 + lsSweepRefill 1.1.0 - the SHARED swing / level reference SwingRef.h 1.0.0 (Rassul 17:39 / 18:05 / 18:07 CT; ZigZag last 3 swings, key / MenthorQ / volume-profile levels; per-market params LRA-StopSweep-<MKT>.csv); StopRunMark also reads the Sr record (SweepRefillLogic.h)
+call :one StopRunMark lsStopRun StopRunLogic.h StopRunMarkSettings.h NearLevels.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h NewsWindow.h MarkParams.h SwingRef.h SweepRefillLogic.h
 REM (2026-10-22) lsTurnOrder 1.0.0 - the TURN ORDER mark: the resting limit order that made each pivot (Rassul 15:45 CT "I'll go with your recommendation"; MBO Roadmap T-20261022-25)
 call :one TurnOrder lsTurnOrder TurnOrderLogic.h TurnOrderSettings.h OrderFlowFeed.h LmtZonesLogic.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h HoverBoard.h BoxPlace.h LargeLotPool.h MoveLogic.h NearLevels.h OptionsFlow.h ZoneRead.h ZoneRule.h NewsWindow.h MarkParams.h
 REM (2026-10-22) lsDealerHedge 0.1.0 - "oH" dealer-hedging zones on the price pane (Rassul agreed 15:23-15:24 CT, build 15:31 CT; MBO Roadmap T-20261022-27): gamma level +/- 0.5 ATR, lights / pulses on programmatic MBO flow, settles faint, never removed
 call :one DealerHedge lsDealerHedge DealerHedgeLogic.h DealerHedgeSettings.h HostSlot.h HoverBoard.h KeepOutDraw.h BoxDock.h BannerBoard.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 REM (2026-10-22) lsSweepRefill 1.0.0 - "Sr" SWEEP REFILLED on the price chart (Rassul approved 16:16 CT, 16:18 no adjacent candles, 16:28 bearish drawn + the v3 taken-out rule; MBO Roadmap "Did the swept prices refill fast after a sweep?")
-call :one SweepRefill lsSweepRefill SweepRefillLogic.h SweepRefillSettings.h NearLevels.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h NewsWindow.h MarkParams.h
+call :one SweepRefill lsSweepRefill SweepRefillLogic.h SweepRefillSettings.h NearLevels.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h NewsWindow.h MarkParams.h SwingRef.h
 REM (2026-10-18 HOT-RELOAD) hot-reload test indicator lsHotReloadDemo: its implementation publishes WHILE IRT IS OPEN (refresh the chart),
 REM   the shim installs only when IRT is closed - tools\gex-hot-build.bat, docs\build\HOT-RELOAD.md
 if not defined HOLD if exist "%REPO%\tools\gex-hot-build.bat" call "%REPO%\tools\gex-hot-build.bat" HotReloadDemo

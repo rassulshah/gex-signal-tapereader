@@ -1,5 +1,7 @@
-// lsStopRun 1.1.0 host tests on the mock SDK: feed -> grey St drawn at the stop price -> decided -> Sta green; record ST + SA;
-// restart redraws the same; never repainted; settings show / colour; hover box; two charts on one DLL.
+// lsStopRun 1.2.0 host tests on the mock SDK: RTH candles -> the ZigZag swing low 7672.50; the feed -> a 3x burst through it -> grey
+// "St?" (GC-style verdict) at the stop price -> 10 s later back above + a 25-lot bid filled -> green "Sta?" (NQ-style verdict); record
+// ST + SA (1.2.0 fields, the verdicts stamped); restart redraws the same; never repainted (params changed to LOG later); settings show /
+// colour / font; hover box; the same-candle rule (a drawn Sr hides the St); no params file = recorded, not drawn; VAP flag; two charts.
 #include "irtsdk.h"
 namespace mock { Feed feed; Host* current = nullptr; }
 static long long g_ms = 1000000;
@@ -18,97 +20,113 @@ static void fill(unsigned long stamp, float px, unsigned long sz, int restId, in
 }
 static std::vector<std::string> lines(const std::string& p) { std::vector<std::string> v; std::ifstream f(p.c_str()); std::string l; while (std::getline(f, l)) v.push_back(l); return v; }
 static int drawOnce(StopRunMark* p) { mock::current->draws.clear(); return p->draw(); }
-static void setup(mock::Host& h) {
-    h.symbol = "ESZ26"; h.root = "ES"; h.tick = 0.25f; h.seconds = 180; h.priceBase = 7660; h.paneTop = 0; h.paneBottom = 1000; h.paneRight = 2000; h.barW = 10;
-    const unsigned long T0 = 1791500400UL;   // a bar END time
-    for (int i = 0; i < 10; ++i) addBar(h, T0 + 180UL * (unsigned long)i, 7674, 7676, 7673, 7674.5f);
-    h.bars[6].low = 7672.5f;                 // the 5-candle pivot low = the level (confirmed: candles 7 and 8 stayed above it)
-    h.now = T0 + 180UL * 9 - 100;            // inside the forming candle (bar 9)
+static const unsigned long T0 = 20735UL * 86400UL + 9UL * 3600UL;   // 9:00 bar END (the mock clock is UTC = CT here)
+static void setup(mock::Host& h, const char* sym, const char* root) {
+    h.symbol = sym; h.root = root; h.tick = 0.25f; h.seconds = 180; h.priceBase = 7660; h.paneTop = 0; h.paneBottom = 1000; h.paneRight = 2000; h.barW = 10;
+    addBar(h, T0, 7676, 7680, 7675, 7679);              // 0 green: up
+    addBar(h, T0 + 180, 7678, 7679, 7673, 7673.5f);     // 1 lower low -> swing high 7680
+    addBar(h, T0 + 360, 7673.5f, 7676, 7672.5f, 7675);  // 2 the low extends
+    addBar(h, T0 + 540, 7675, 7679, 7674, 7678);        // 3 higher high -> swing low 7672.50
+    for (int i = 4; i < 9; ++i) addBar(h, T0 + 180UL * (unsigned long)i, 7678, 7680, 7675, 7679);
+    addBar(h, T0 + 180UL * 9, 7676, 7677, 7673, 7674);  // 9 forming
+    for (size_t i = 0; i < h.bars.size(); ++i) { mock::Price a; a.price = 7677; a.buy = 60; a.sell = 40; a.total = 100; h.bars[i].rows.push_back(a); }
+    h.now = T0 + 180UL * 9 - 100;
+}
+static void params(const std::string& flex, const std::string& m, const char* grey, const char* bull) {
+    std::ofstream f((flex + "/LRA-StopSweep-" + m + ".csv").c_str());
+    f << "VERSION,1\nMARKET," << m << "\nPARAM,stRefPivots,1\nPARAM,stRatio,3.0\nPARAM,stNearTicks,4\nPARAM,staBigLots,20\nPARAM,staDecideLive,1\nPARAM,staReclaimSec,10\n"
+      << "STA_BULL_SHOW," << bull << "\nSTA_BEAR_SHOW,LOG\nST_GREY_SHOW," << grey << "\n";
+}
+// the burst: 10 sellers' fills 7673.00 -> 7672.00 hitting bids (5 lots each, distinct aggressor ids) incl. a 25-lot bid id at 7672.25
+static void burst(unsigned long st) {
+    for (int i = 0; i < 9; ++i) fill(st, 7673.0f - 0.25f * (float)(i / 2), 5, 9000 + i, 500 + i, 1);
+    fill(st, 7672.25f, 25, 4242, 777, 1);
 }
 int main() {
     char tmpl[] = "/tmp/srm_host_XXXXXX"; HOME = mkdtemp(tmpl); setenv("USERPROFILE", HOME.c_str(), 1);
     const std::string flex = HOME + "/InvestorRT/rtx/lsFlexLevels"; std::system(("mkdir -p " + flex).c_str());
-    mock::Host h; mock::current = &h; setup(h);
+    params(flex, "ES", "?", "?");
+    mock::Host h; mock::current = &h; setup(h, "ESZ26", "ES");
     StopRunMark* p = static_cast<StopRunMark*>(CreateExtension());
     p->setup();
-    CHECK((h.flags & TRACK_MOUSE) && (h.flags & OVERLAY), "price-pane overlay that tracks the mouse");
-    drawOnce(p);                                                   // primes: opens the feed, the closed candles are context only
-    CHECK(mock::feed.opens == 1 && mock::feed.lastTicker == "ESZ26", "one MBO object, opened with the chart symbol");
-    const unsigned long st = (unsigned long)h.now;
-    // the burst: 10 sellers' fills 7672.75 -> 7672.00 hitting bids, distinct aggressor ids, 3 lots each + a 25-lot bid id at 7672.25
-    for (int i = 0; i < 10; ++i) fill(st, 7672.75f - 0.25f * (float)(i / 3), 3, 9000 + i, 500 + i, 1);
-    fill(st, 7672.25f, 25, 4242, 777, 1);
-    g_ms += 10; drawOnce(p);
-    g_ms += 200; drawOnce(p);                                      // the window passed: the burst is over -> St
+    CHECK((h.flags & TRACK_MOUSE) && (h.flags & OVERLAY) && (h.flags & VAP_REQUIRED), "price-pane overlay, tracks the mouse, volume at price");
+    drawOnce(p);
     SrmState* S = p->testState();
-    CHECK(S && S->marks.size() == 1, "one stop run");
-    std::vector<mock::Draw> t = texts("St");
-    CHECK(t.size() == 1 && t[0].color == 0x9CA3AF, "a grey St drawn");
-    if (t.size() == 1) { cppExtension::PNT q; q.set(9, 7672.25f); CHECK(std::abs(t[0].y - q.v) <= 1 && std::abs((t[0].x + t[0].r) / 2 - q.h) <= 3, "at the stop price, on the forming candle"); }
-    const std::string rec = S ? S->recPath : std::string();
+    CHECK(mock::feed.opens == 1 && mock::feed.lastTicker == "ESZ26", "one MBO object, opened with the chart symbol");
+    CHECK(S && S->D.Z.swings.size() == 2 && S->D.Z.swings[1].px == 7672.5 * 4 && S->D.V.now.ok && S->D.V.now.poc == 7677 * 4, "ZigZag + volume profile from the closed candles");
+    CHECK(S && S->prm.loaded && S->D.P.ratio == 3.0 && S->D.P.refPivots == 3 && S->D.P.showGrey == swg::QUERY, "params loaded (stRefPivots 1 ignored: the last 3 swings, as Sr)");
+    const unsigned long st = (unsigned long)h.now;
+    burst(st);
+    g_ms += 10; drawOnce(p);
+    g_ms += 200; drawOnce(p);
+    CHECK(S->marks.size() == 1 && S->marks[0].refKind == stl::REF_SWING && S->marks[0].refPx == 7672.5 * 4 && S->marks[0].refBack == 1, "one stop run through the swing low");
+    std::vector<mock::Draw> t = texts("St?");
+    CHECK(t.size() == 1 && t[0].color == 0x9CA3AF, "a grey St? drawn (verdict ?)");
+    if (t.size() == 1) { cppExtension::PNT q; q.set(9, 7672.25f); CHECK(std::abs(t[0].y - q.v) <= 1, "at the stop price"); }
+    const std::string rec = S->recPath;
     std::vector<std::string> L = lines(rec);
-    CHECK(L.size() == 2 && L[1].compare(0, 3, "ST|") == 0 && L[1].find("|down|5-candle low|7672.50|7672.25|") != std::string::npos, "the fire recorded (ST line)");
-    // hover: the mouse over the mark -> the box with the header and the 9 rows
+    CHECK(L.size() == 2 && L[1].compare(0, 3, "ST|") == 0 && L[1].find("|down|swing low|7672.50|7672.25|") != std::string::npos && L[1].find("|swing|" + std::to_string(T0 + 360) + "|1|?") != std::string::npos, "the fire recorded (ST, 19 fields, verdict ?)");
     if (!S->hits.empty()) { RTX_EVENT e; std::memset(&e, 0, sizeof e); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)((S->hits[0].l + S->hits[0].r) / 2); e.v.mouse.v = (short)((S->hits[0].t + S->hits[0].b) / 2);
         CHECK(p->mouse(&e) == RTX_FAIL && S->hover == 0, "hover found, event not swallowed"); drawOnce(p);
-        int rows = 0; bool header = false; for (const mock::Draw& d : h.draws) if (d.type == "text" && d.fsize == 10 && d.text != "St") { ++rows; if (d.text.find("Stop run?") != std::string::npos) header = true; }
-        CHECK(rows == 9 && header, "hover box: 9 rows, header 'Stop run?'");
-        bool box = false; for (const mock::Draw& d : h.draws) if (d.type == "box" && d.width == 1) box = true; CHECK(box, "hover box drawn with a solid 1 px border");
+        int rows = 0; bool header = false, head = false; for (const mock::Draw& d : h.draws) if (d.type == "text" && d.fsize == 10 && d.text != "St?") { ++rows; if (d.text.find("St?  Stop run?") == 0) header = true; if (d.text.find("Stop run at 7672.25 below the swing low 7672.50 from 9:03 AM: ") == 0) head = true; }
+        CHECK(rows == 9 && header && head, "hover box: 9 rows, header, names the swing");
         e.v.mouse.h = 5; e.v.mouse.v = 5; p->mouse(&e); CHECK(S->hover == -1, "mouse away: no hover"); }
-    // LIVE decision (1.1.0): 2 s later 10 more lots into the same 25-lot bid (35 / 55 = 63%) and a buyer lifts 7672.75 (back above
-    // 7672.50) -> absorbed at once, inside the same candle, no candle close needed
-    fill(st + 2, 7672.0f, 10, 4242, 801, 1); fill(st + 2, 7672.75f, 1, 7001, 802, 0);
+    // a buyer lifts 7672.75 (back above 7672.50) 2 s later; at 10 s: back above + the 25-lot bid filled -> absorbed
+    fill(st + 2, 7672.75f, 1, 7001, 802, 0);
     g_ms += 2000; drawOnce(p);
-    std::vector<mock::Draw> a = texts("Sta");
-    CHECK(a.size() == 1 && a[0].color == 0x22C55E && texts("St").empty(), "upgraded once to a green Sta, live (same candle)");
+    CHECK(S->marks[0].outcome == stl::PENDING, "not decided before 10 s");
+    g_ms += 8500; drawOnce(p);
+    std::vector<mock::Draw> a = texts("Sta?");
+    CHECK(a.size() == 1 && a[0].color == 0x22C55E && texts("St?").empty(), "upgraded once to a green Sta? at 10 s");
     L = lines(rec);
-    CHECK(L.size() == 3 && L[2].compare(0, 3, "SA|") == 0 && L[2].find("|absorbed|1|1|") != std::string::npos && L[2].substr(L[2].rfind('|') + 1) == std::to_string(st + 2), "the decision recorded (SA: absorbed, 1 big id, decision second)");
-    CHECK(S->marks[0].sharePct == 63 && S->marks[0].decidedSec == (long long)st + 2, "share + decision second kept on the mark");
-    { std::vector<std::string> hr = stl::hoverRows(S->marks[0], 0.25, 10); CHECK(hr[3] == "Absorbed in 2 s: 1 big bid order took 63%, back above the level", "hover outcome row"); }
-    // later candles never change it (no repaint)
-    for (int k = 0; k < 4; ++k) { addBar(h, h.bars.back().time + 180, 7660, 7661, 7650, 7651); h.now += 180; g_ms += 1000; drawOnce(p); }
-    fill((unsigned long)h.now, 7650.0f, 50, 4343, 900, 1); g_ms += 20000; drawOnce(p);
-    CHECK(texts("Sta").size() == 1 && lines(rec).size() == 3, "never decided again, the mark never moves");
-    std::vector<mock::Draw> before = texts("Sta");
-    // RESTART: a new object + state, same chart -> the record redraws the same mark
+    CHECK(L.size() == 3 && L[2].compare(0, 3, "SA|") == 0 && L[2].find("|absorbed|") != std::string::npos && L[2].find("|25|?") != std::string::npos, "the decision recorded (SA: absorbed, biggest 25 lots, verdict ?)");
+    { std::vector<std::string> hr = stl::hoverRows(S->marks[0], 0.25, 10, 20); CHECK(hr[3].find("Absorbed at ") == 0 && hr[3].find("back above the level, 1 big resting bid filled (biggest 25 lots)") != std::string::npos, "hover outcome row"); }
+    // later candles never change it
+    for (int k = 0; k < 3; ++k) { addBar(h, h.bars.back().time + 180, 7660, 7661, 7650, 7651); h.now += 180; g_ms += 1000; drawOnce(p); }
+    CHECK(texts("Sta?").size() == 1 && lines(rec).size() == 3, "never decided again, never moves");
+    std::vector<mock::Draw> before = texts("Sta?");
+    // the params change to LOG: the decided mark keeps its stamped verdict (never repainted); RESTART redraws the same
+    params(flex, "ES", "LOG", "LOG");
     p->destroy(); delete p; mock::feed.ev.clear(); mock::feed.at = 0;
-    StopRunMark* q = static_cast<StopRunMark*>(CreateExtension()); q->setup(); g_ms += 5000; drawOnce(q);
-    std::vector<mock::Draw> after = texts("Sta");
-    CHECK(after.size() == 1 && before.size() == 1 && after[0].x == before[0].x && after[0].y == before[0].y && after[0].color == before[0].color, "restart: identical Sta at the same place");
-    CHECK(lines(rec).size() == 3, "restart writes nothing new");
-    // settings: colour + show off, from the per-market keyed file
-    { std::ofstream f((flex + "/StopRunMark.settings-ES.txt").c_str()); f << "SPEC1|StopRunMark|1.0.0|ES\nshow=1\ncol_st=9CA3AF\ncol_bull=123456\ncol_bear=EF4444\nwindow_ms=50\nmin_fills=5\nratio=2\nmin_ids=2\nnear_ticks=4\nbig_lots=20\nabsorb_bars=3\nfont=12\n"; }
+    StopRunMark* q = static_cast<StopRunMark*>(CreateExtension()); q->setup(); g_ms += 6000; drawOnce(q);
+    std::vector<mock::Draw> after = texts("Sta?");
+    CHECK(after.size() == 1 && before.size() == 1 && after[0].x == before[0].x && after[0].y == before[0].y && after[0].color == before[0].color, "restart (params now LOG): identical Sta? at the same place");
+    CHECK(lines(rec).size() == 3 && q->testState()->D.P.showBull == swg::LOG, "restart writes nothing; new marks would be LOG");
+    // settings: colour + font, show off
+    const std::string sf = flex + "/StopRunMark.settings-ES.txt";
+    { std::ofstream f(sf.c_str()); f << "SPEC1|StopRunMark|1.2.0|ES\nshow=1\ncol_st=9CA3AF\ncol_bull=123456\ncol_bear=EF4444\nmin_ids=2\nfont=12\n"; }
     g_ms += 5000; drawOnce(q);
-    a = texts("Sta"); CHECK(a.size() == 1 && a[0].color == 0x123456 && a[0].fsize == 12, "colour + font from the settings file");
-    { std::ofstream f((flex + "/StopRunMark.settings-ES.txt").c_str()); f << "SPEC1|StopRunMark|1.0.0|ES\nshow=0\ncol_st=9CA3AF\ncol_bull=123456\ncol_bear=EF4444\nwindow_ms=50\nmin_fills=5\nratio=2\nmin_ids=2\nnear_ticks=4\nbig_lots=20\nabsorb_bars=3\nfont=12\n"; }
+    a = texts("Sta?"); CHECK(a.size() == 1 && a[0].color == 0x123456 && a[0].fsize == 12, "colour + font from the settings file");
+    { std::ofstream f(sf.c_str()); f << "SPEC1|StopRunMark|1.2.0|ES\nshow=0\n"; }
     g_ms += 5000; drawOnce(q);
-    CHECK(texts("Sta").empty() && texts("St").empty(), "show off: nothing drawn");
-    { std::ofstream f((flex + "/StopRunMark.settings-ES.txt").c_str()); f << "SPEC1|StopRunMark|1.0.0|ES\nshow=1\nwindow_ms=99999\nfont=abc\n"; }
-    g_ms += 5000; drawOnce(q);
-    SrmState* S2 = q->testState(); CHECK(S2 && S2->D.P.windowMs == 50 && texts("Sta").size() == 1 && texts("Sta")[0].fsize == 10, "garbage values = the defaults");
-    // status file
-    std::vector<std::string> st2 = lines(flex + "/StopRun/StopRun.status-ES-180.txt");
-    CHECK(st2.size() >= 3 && st2[0] == "VERSION,1.1.0" && st2[2].find("STATUS,lsStopRun v1.1.0") == 0, "status line written with the version");
-    { bool dec = false; for (const std::string& l : st2) if (l.find("decide within 10 s,big orders took >= 50%,reclaim or no new extreme,session levels on,MenthorQ on") != std::string::npos) dec = true;
-      CHECK(dec, "status shows the live-decision settings"); }
-    // levels: a session level + a MenthorQ level + a non-level are read; MenthorQ off drops it
-    { std::ofstream f((flex + "/LRA-KeyLevels-ES.csv").c_str()); f << "KEYLV,1," << (long long)std::time(nullptr) << "\nL|LonLO|7672.50|x\nL|VWAP|7680.00|x\n"; }
-    { std::ofstream f((flex + "/LRA-Levels-ES.csv").c_str()); f << "SYMBOL|ESZ26\nLEVEL|HVL|HVL|7700|x\nLEVEL|G1|GEX 1|7710|x\n"; }
-    g_ms += 6000; drawOnce(q);
-    CHECK(q->testState()->D.keys.size() == 2 && q->testState()->nKey == 1 && q->testState()->nMq == 1, "LonLO + HVL read (VWAP / G1 are not stop levels)");
-    { std::ofstream f((flex + "/StopRunMark.settings-ES.txt").c_str()); f << "SPEC1|StopRunMark|1.1.0|ES\nshow=1\nmq_levels=0\n"; }
-    g_ms += 6000; drawOnce(q);
-    CHECK(q->testState()->D.keys.size() == 1 && q->testState()->D.keys[0].name == "LonLO", "MenthorQ levels off");
-    // a second chart (NQ) on the same DLL: its own state, its own record, nothing of ES drawn
-    mock::Host h2; mock::current = &h2; setup(h2); h2.symbol = "NQZ26"; h2.root = "NQ";
-    StopRunMark* r = static_cast<StopRunMark*>(CreateExtension()); g_ms += 1000; drawOnce(r);
-    CHECK(texts("Sta").empty() && texts("St").empty() && r->testState() && r->testState()->market == "NQ", "second chart: separate state");
-    r->destroy(); delete r; mock::current = &h; q->destroy(); delete q;
-    // garbled record: torn / foreign lines are skipped, good lines kept
-    { std::ofstream f(rec.c_str(), std::ios::app); f << "SA|zzz|1|absorbed|1|1|0|1\nST|half\n"; }
-    StopRunMark* z = static_cast<StopRunMark*>(CreateExtension()); g_ms += 1000; drawOnce(z);
-    CHECK(texts("Sta").size() == 1 && z->testState()->recBad == 2, "bad lines counted, the good mark kept");
-    z->destroy(); delete z;
+    CHECK(texts("Sta?").empty(), "show off: nothing drawn");
+    std::remove(sf.c_str()); g_ms += 5000; drawOnce(q);
+    // the same-candle rule: a drawn Sr on this candle -> only the Sr (the St / Sta is hidden, still recorded)
+    {
+        const std::string srDir = flex + "/SweepRefill"; std::system(("mkdir -p " + srDir).c_str());
+        SrmState* Q = q->testState();
+        swr::Event e; e.key = "1-b-1"; e.barT = Q->marks[0].barT; e.sec = st; e.ct = "9:27:00 AM"; e.side = swr::BID; e.ref = "swing low"; e.refKind = swr::REF_PIVOT; e.refPx = 7672 * 4;
+        e.hiPx = 7673 * 4; e.loPx = 7672 * 4; e.prices = 8; e.lots = 40; e.pre = 40; e.post = 30; e.refill = 75; e.ttrMs = 2000; e.refilled = true; e.gapOk = true; e.show = swg::SHOW;
+        std::ofstream f((srDir + "/ES-180-" + Q->session + ".csv").c_str()); f << swr::REC_HEAD << "\n" << swr::recLine(e, 0.25) << "\n"; f.close();
+        g_ms += 4000; drawOnce(q);
+        CHECK(texts("Sta?").empty() && Q->srBars.count(Q->marks[0].barT) == 1 && Q->marks.size() == 1, "a drawn Sr on the candle: only the Sr (the Sta is hidden, still recorded)");
+        std::remove((srDir + "/ES-180-" + Q->session + ".csv").c_str());
+    }
+    std::vector<std::string> stt = lines(flex + "/StopRun/StopRun.status-ES-180.txt");
+    bool ver = stt.size() > 2 && stt[0] == "VERSION,1.2.0" && stt[2].find("STATUS,lsStopRun v1.2.0") == 0, prm = false, ref = false;
+    for (const std::string& x : stt) { if (x.find("PARAMS,LRA-StopSweep-ES.csv loaded") == 0 && x.find("Sta bullish LOG") != std::string::npos) prm = true; if (x.find("REFERENCE,ZigZag") == 0 && x.find("POC 7677.00") != std::string::npos) ref = true; }
+    CHECK(ver && prm && ref, "status: version, params, the reference (ZigZag, POC)");
+    q->destroy(); delete q;
+    // a second chart (NQ) with NO params file: a run is recorded, nothing drawn (every mark LOG)
+    {
+        mock::Host h2; mock::current = &h2; setup(h2, "NQZ26", "NQ");
+        StopRunMark* r = static_cast<StopRunMark*>(CreateExtension()); r->setup(); drawOnce(r);
+        CHECK(r->testState()->prm.why.find("no file") == 0 && r->testState()->D.P.showGrey == swg::LOG, "no params file: every mark LOG");
+        for (int i = 0; i < 12; ++i) fill((unsigned long)h2.now, 7673.0f - 0.25f * (float)(i / 3), 5, 19000 + i, 1500 + i, 1);
+        g_ms += 10; drawOnce(r); g_ms += 200; drawOnce(r);
+        CHECK(r->testState()->market == "NQ" && r->testState()->marks.size() == 1 && texts("St").empty() && texts("St?").empty(), "NQ chart: its own state; the run recorded, not drawn");
+        r->destroy(); delete r; mock::current = &h;
+    }
     std::printf("%d checks, %d failed\n", checks, fails);
     std::system(("rm -rf " + HOME).c_str());
     return fails ? 1 : 0;

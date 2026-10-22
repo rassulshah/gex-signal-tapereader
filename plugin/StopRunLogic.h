@@ -1,33 +1,31 @@
 #ifndef LS_STOPRUN_LOGIC_H
 #define LS_STOPRUN_LOGIC_H
-// StopRunLogic.h (1.1.0, 2026-10-22) -- SDK-free rules of lsStopRun, the "St" / "Sta" STOP-RUN mark on the PRICE chart.
+// StopRunLogic.h (1.2.0, 2026-10-22) -- SDK-free rules of lsStopRun, the "St" / "Sta" STOP-RUN mark on the PRICE chart.
 // Rassul 2026-10-22 15:33-15:34 CT (MBO Roadmap row "Were stops triggered - and were they absorbed after?", T-20261022-15) "show yes";
-// 15:37 CT "Sta can indicate the stop run absorbed". 1.1.0 (approved 16:13 CT): FEWER (real pivots + key levels only) and an EARLIER,
-// LIVE absorbed decision (seconds after the burst, not at a later candle close).
+// 15:37 CT "Sta can indicate the stop run absorbed"; 1.1.0 approved 16:13 CT (real levels only, live decision).
+// 1.2.0 (Rassul approved 17:39 CT the Sr mockup v4 rule "and the SAME swing rule on St / Sta"; 18:05 CT "St / Sta use the SAME
+// reference as Sr - last 3 swings, not most recent only"): the reference = SwingRef.h (an intact swing among the last 3 swings of the
+// 1-bar ZigZag from the RTH open, or a key / MenthorQ level; 5-candle extremes no longer count). The St / Sta validation
+// (VALIDATE-STOPRUN-SWEEP-2026-10-22.md, iteration 3, held-out tested) per market from lsFlexLevels\LRA-StopSweep-<MKT>.csv:
+// burst >= stRatio (3.0x) normal; Sta decided LIVE at burst end + staReclaimSec (NQ 10 s) = the last trade is back across the level
+// AND >= 1 resting order at / beyond the level filled >= staBigLots lots (NQ 5); the 1.1 "50% eaten" and "no new extreme" rules are
+// gone; staDecideLive 0 = decided at candle closes (a close back across + the big resting fill within staAbsorbBars candles).
+// Drawn per verdict: SHOW, ? ("Sta?" / "St?"), LOG = recorded only (today: NQ green Sta "?", GC grey St "?", everything else LOG).
+// On a candle that also has an Sr (lsSweepRefill) only the Sr is drawn (the host reads the Sr record).
 //
-// WHAT IS DRAWN
-//   * every time stops get triggered at a REAL level: a small GREY "St" at the price where the stops fired, on that candle (decided once,
-//     the moment the burst ends; never moved, never removed).
-//   * once, within `decideS` seconds (default 10) of the burst, the outcome is decided LIVE:
-//       ABSORBED = big resting orders (>= `bigLots` each, per market) at / beyond the level took >= `sharePct` % of the burst's lots AND
-//       price traded back across the level - or (unless `requireReclaim`) made no new extreme beyond the burst for the whole window.
-//       A reclaim with the absorption already in decides at once; otherwise the decision is taken when the window ends.
-//       -> the same mark becomes "Sta": green = stops BELOW a low absorbed (bullish), red = stops ABOVE a high (bearish).
-//       NOT absorbed -> it stays grey "St"; the hover says "not absorbed - continuation".
-//     The upgrade happens at most once and is never changed again. Both the fire (ST line) and the decision (SA line + its second) are recorded.
-//   * the hover (header "Stop run?" - "?" = not proven yet): question / what it is / why it matters / how to use / example.
+// WHAT IS DRAWN (when its verdict is not LOG)
+//   * grey "St" where stops fired through a reference, on that candle (decided once, the moment the burst ends);
+//   * the decision upgrades it once to "Sta": green = stops BELOW a low absorbed (bullish), red = ABOVE a high (bearish);
+//     not absorbed = grey "St" (continuation). Never changed again. Both lines (ST fire, SA decision) are recorded.
 //
-// DETECTION (how the platforms do it: ATAS Stops Tracker groups a burst by a ms window + min ticks + min count; Bookmap Stops & Icebergs
-// uses the MBO event order; CME MDP elects stops as aggressor orders that never rested, in the same match event):
-//   1. BURST: aggressive fills on ONE side, each within `windowMs` (default 50 ms) of the burst's first fill and in the same or next
-//      exchange second (a drained backlog arriving in one ms can never glue seconds of trading into one burst).
-//   2. THROUGH A REAL LEVEL: the burst starts at most `nearTicks` before a reference and trades >= 1 tick through it. References only
-//      (1.1.0 dropped the prior candle's high / low): a KEY level - his session levels PFH/PFL PDH/PDL PWH/PWL ONH/ONL LonHI/LonLO
-//      AsiaHI/AsiaLO and the MenthorQ levels CR PS HVL CR0 PS0 HVL0 GW0 1DH 1DL (setting on / off) - or the 5-candle PIVOT extreme
-//      (the lowest low / highest high of the last 5 closed candles, ZigZag-style swing).
-//   3. SIZE: >= `minFills` fills AND lots >= `ratio` (2.0x) x the NORMAL STOP BURST = the median lots of the bursts with >= minFills
-//      fills in the same 30-min slot this session (>= 20 of them), else the last 300 such bursts of any slot (>= 20), else the market seed.
-//   4. MANY ORDERS: when the feed names aggressor orders, >= `minIds` (2) distinct aggressor ids (stops elect as separate orders).
+// DETECTION (ATAS Stops Tracker groups a burst by a ms window + min ticks + min count; Bookmap Stops & Icebergs uses the MBO event
+// order; CME MDP elects stops as aggressor orders that never rested, in the same match event):
+//   1. BURST: aggressive fills on ONE side, each within `windowMs` (50 ms) of the burst's first fill and in the same or next second.
+//   2. THROUGH A REFERENCE (SwingRef.h, the same rule as Sr; incl. the volume-profile POC / VAH / VAL, prior day, naked POCs): the burst ENDS beyond the swing / level, STARTS <= 0.5 ATR past it and
+//      at most `nearTicks` before it, and no candle before the last one had traded through it; the deepest one wins.
+//   3. SIZE: >= `minFills` fills AND lots >= `ratio` (3.0x) x the NORMAL STOP BURST = the median lots of the bursts with >= minFills
+//      fills in the same 30-min slot this session (>= 20 of them), else the last 300 such bursts of any slot (>= 20), else the seed.
+//   4. MANY ORDERS: when the feed names aggressor orders, >= `minIds` (2) distinct aggressor ids.
 //   St price = the first fill price beyond the level.
 #include <algorithm>
 #include <cerrno>
@@ -39,13 +37,14 @@
 #include <set>
 #include <string>
 #include <vector>
+#include "SwingRef.h"
 
 namespace stl {
 
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";
 enum Side { DOWN = -1, UP = 1 };            // DOWN = sellers hit bids through a low; UP = buyers lift offers through a high
 enum Outcome { PENDING = 0, ABSORBED = 1, NOT_ABSORBED = 2 };
-enum RefKind { REF_KEY = 0, REF_X5 = 1, REF_PRIOR = 2 };   // REF_PRIOR: 1.0.0 records only (1.1.0 never fires on it)
+enum RefKind { REF_KEY = 0, REF_X5 = 1, REF_PRIOR = 2, REF_SWING = 3, REF_MQ = 4, REF_VP = 5 };   // REF_X5 / REF_PRIOR: 1.0 / 1.1 records only
 static const int SLOT_MIN = 20, ANY_MAX = 300, IDS_CAP = 64, PX_CAP = 512, REST_CAP = 4096, PENDING_CAP = 64;
 
 inline bool finite(double v) { return v == v && v < 1e300 && v > -1e300; }
@@ -65,10 +64,17 @@ inline MarketDefaults marketDefaults(const std::string& m) {
 }
 
 struct Params {
-    int windowMs = 50, minFills = 5, nearTicks = 4, bigLots = 20, minIds = 2;
-    int decideS = 10, sharePct = 50; bool requireReclaim = false, useKeys = true;
-    double ratio = 2.0, seedLots = 14;
+    int windowMs = 50, minFills = 5, nearTicks = 4, bigLots = 5, minIds = 2;
+    int reclaimS = 10, absorbBars = 1, refPivots = 3; bool decideLive = true, useKey = true, useMq = true;
+    double ratio = 3.0, seedLots = 14;
+    int showBull = swg::LOG, showBear = swg::LOG, showGrey = swg::LOG;   // the verdicts (params file), stamped on each mark
 };
+// the per-market params file -> the detector (stRefPivots is NOT applied: Rassul 18:05 "the SAME reference as Sr", the last 3 swings)
+inline void applyParams(Params& P, const swg::StopSweep& X) {
+    P.windowMs = X.stWindowMs; P.minFills = X.stMinFills; P.ratio = X.stRatio; P.nearTicks = X.stNearTicks; P.bigLots = X.staBigLots;
+    P.decideLive = X.staDecideLive != 0; P.reclaimS = X.staReclaimSec; P.absorbBars = X.staAbsorbBars; P.refPivots = 3;
+    P.useKey = X.stKey != 0; P.useMq = X.stMq != 0; P.showBull = X.staBull; P.showBear = X.staBear; P.showGrey = X.stGrey;
+}
 
 // ---- inputs ------------------------------------------------------------------------------------------------------------------
 struct Ref { std::string name; long long px = 0; int dir = 0; int kind = REF_KEY; int rank = 9; };   // dir +1 = a high, -1 = a low
@@ -81,18 +87,7 @@ inline int keyDir(const std::string& n, int& rank) {
     return 0;
 }
 inline bool isMq(const std::string& n) { int r = 0; return keyDir(n, r) == 2; }
-struct Bar { long long t = 0; long long h = 0, l = 0, c = 0; };   // a CLOSED candle in ticks; t = its key (IRT: the bar END time)
-
-// ---- the 5-candle PIVOT (ZigZag-style swing) from the closed candles, oldest first: the lowest low / highest high of the last 5
-//      closed candles counts only when it is CONFIRMED - at least `confirm` (2) later candles did not go beyond it. A running extreme
-//      (the last candle making a new low in a slide) is not a pivot, so a trend does not fire St at every new candle low.
-inline void pivot5(const std::vector<Bar>& c, bool& haveLo, long long& lo, bool& haveHi, long long& hi, int confirm = 2) {
-    haveLo = haveHi = false; const int n = (int)c.size(); if (n < 5) return;
-    int il = n - 5, ih = n - 5;
-    for (int k = n - 5; k < n; ++k) { if (c[k].l <= c[il].l) il = k; if (c[k].h >= c[ih].h) ih = k; }   // ties: the latest
-    if (il <= n - 1 - confirm) { haveLo = true; lo = c[il].l; }
-    if (ih <= n - 1 - confirm) { haveHi = true; hi = c[ih].h; }
-}
+struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; long long day = 0; bool rth = false; };   // a CLOSED candle in ticks; t = its END; day / rth from the host (CT)
 
 // ---- the record of one stop run ------------------------------------------------------------------------------------------------
 struct Event {
@@ -106,8 +101,11 @@ struct Event {
     bool drawn = true;               // false = the candle already had 2 marks (recorded, not drawn)
     int outcome = PENDING; long long decidedT = 0; int bars = 0; int bigIds = 0; double excAtr = 0; bool reclaimed = false;
     long long decidedSec = 0, decidedMs = 0;   // the exchange second / feed ms of the LIVE decision (decidedSec 0 = a 1.0.0 record)
-    int sharePct = -1;                         // % of the burst's lots taken by big resting orders (-1 = not known: reloaded record)
-    bool newExt = false;                       // price made a new extreme beyond the burst inside the window
+    int sharePct = -1;                         // 1.1 records: % of the burst's lots taken by big resting orders (-1 = not known)
+    bool newExt = false;                       // price made a new extreme beyond the burst before the decision
+    long long refT = 0; int refBack = 0; std::string refCt;   // the swing's candle (END; 0 = a level), swings back, host "8:48 AM"
+    int bigLotsMax = 0;                        // the biggest resting order filled at / beyond the level (lots)
+    int showFire = swg::SHOW, show = swg::SHOW;   // the verdicts stamped when fired (grey St) and when decided (Sta / St); old records = SHOW
     std::string ct;                  // 12-hour Central time of the fire, for the hover / record
 };
 inline int bullish(const Event& e) { return e.side == DOWN ? 1 : 0; }   // an absorbed DOWN run = trapped sellers = bullish
@@ -121,7 +119,7 @@ struct Burst {
     void clear() { *this = Burst(); }
 };
 // a fired run waiting for its live decision: resting fills at / beyond the level since the burst started, the burst's extreme, reclaim
-struct Pending { Event e; std::map<long long, long long> rest; long long ext = 0; int k = 0; long long endMs = 0, endSec = 0, extPx = 0; bool reclaimed = false, newExt = false; };
+struct Pending { Event e; std::map<long long, long long> rest; long long ext = 0; int k = 0; long long endMs = 0, endSec = 0, extPx = 0, lastPx = 0; bool reclaimed = false, newExt = false, closeBack = false; };
 
 inline long long median(std::vector<long long> v) {
     if (v.empty()) return 0;
@@ -139,8 +137,9 @@ struct Detector {
     std::vector<Event> fired, decided;                  // output queues (the host drains them)
     long long bursts = 0, qualifying = 0, nearLevel = 0, sized = 0, runs = 0, lastCloseT = 0;
     // the context the host keeps current (known data only: closed candles, the forming candle's key)
-    std::vector<Ref> keys; Bar prior; bool havePrior = false; long long x5hi = 0, x5lo = 0; bool haveX5 = false, haveX5lo = true, haveX5hi = true;
+    std::vector<swg::Lvl> levels; swg::ZigZag Z; swg::BarWin W; swg::VolProf V;
     long long formingT = 0; int minuteOfDay = -1; double atrTicks = 0;
+    void setRth(int openMin, int closeMin, int spb) { Z.rthLenSec = closeMin > openMin ? (closeMin - openMin) * 60 : 0; Z.spb = spb > 0 ? spb : 180; }
     std::map<long long, int> marksPerBar;
     std::set<std::pair<int, long long> > used;           // (side, level px): the stops at a level fire ONCE per session
     void markUsed(int side, long long px) { used.insert(std::make_pair(side, px)); }
@@ -151,24 +150,15 @@ struct Detector {
         if ((int)anyLots.size() >= SLOT_MIN) return (double)median(anyLots);
         return P.seedLots > 0 ? P.seedLots : 1;
     }
-    // ---- the reference this burst ran through (priority key > 5-candle extreme > prior candle); none = no stop run --------
-    bool pickRef(const Burst& x, Ref& out) const {
-        const int side = x.side;
-        const long long thr = side == DOWN ? x.lo : x.hi;
-        auto through = [&](long long px) {
-            if (used.count(std::make_pair(side, px))) return false;
-            if (side == DOWN) return x.firstPx >= px && x.firstPx - px <= P.nearTicks && thr <= px - 1;
-            return x.firstPx <= px && px - x.firstPx <= P.nearTicks && thr >= px + 1;
-        };
-        bool got = false; Ref best;
-        if (P.useKeys) for (size_t i = 0; i < keys.size(); ++i) {
-            const Ref& r = keys[i];
-            if (!through(r.px)) continue;
-            if (!got || r.rank < best.rank || (r.rank == best.rank && std::llabs(r.px - x.firstPx) < std::llabs(best.px - x.firstPx))) { best = r; got = true; }
-        }
-        if (got) { best.kind = REF_KEY; out = best; return true; }
-        if (haveX5 && (side == DOWN ? haveX5lo : haveX5hi)) { const long long px = side == DOWN ? x5lo : x5hi; if (through(px)) { out.name = side == DOWN ? "5-candle low" : "5-candle high"; out.px = px; out.kind = REF_X5; out.dir = side == DOWN ? -1 : 1; return true; } }
-        return false;
+    // ---- the reference this burst ran through (SwingRef.h, the same rule as Sr) + at most nearTicks before it; none = no stop run --
+    bool pickRef(const Burst& x, Ref& out, long long& fromT, int& back) const {
+        swg::Sweep w; w.down = x.side == DOWN; w.ext = w.down ? x.lo : x.hi; w.start = x.firstPx; w.barT = formingT;
+        swg::Params sp; sp.maxBack = P.refPivots; sp.useKey = P.useKey; sp.useMq = P.useMq; sp.maxBefore = P.nearTicks;
+        std::vector<swg::Lvl> all = levels; V.levels(all);                              // + the volume-profile levels (closed candles)
+        const swg::Ref r = swg::pick(Z, W, all, w, Z.spb, sp);
+        if (!r.ok || used.count(std::make_pair(x.side, r.px))) return false;     // the stops at a reference fire once per session
+        out.name = r.name; out.px = r.px; out.dir = w.down ? -1 : 1; out.kind = r.kind == swg::SWING ? REF_SWING : r.kind == swg::MQ ? REF_MQ : r.kind == swg::VP ? REF_VP : REF_KEY;
+        fromT = r.fromT; back = r.back; return true;
     }
     void close(long long nowMs) {
         if (!b.on) return;
@@ -180,7 +170,7 @@ struct Detector {
         const double norm = normNow(slot);
         std::vector<long long>& sl = slotLots[slot]; sl.push_back(x.lots); if (sl.size() > 2000) sl.erase(sl.begin());   // AFTER the norm: no look-ahead
         anyLots.push_back(x.lots); if ((int)anyLots.size() > ANY_MAX) anyLots.erase(anyLots.begin());
-        Ref r; if (!pickRef(x, r)) return;
+        Ref r; long long fromT = 0; int back = 0; if (!pickRef(x, r, fromT, back)) return;
         ++nearLevel;
         const double ratio = norm > 0 ? (double)x.lots / norm : 0;
         if (ratio + 1e-9 < P.ratio) return;
@@ -190,12 +180,12 @@ struct Detector {
         long long st = x.side == DOWN ? r.px - 1 : r.px + 1;
         for (size_t i = 0; i < x.pxs.size(); ++i) if (x.side == DOWN ? x.pxs[i] < r.px : x.pxs[i] > r.px) { st = x.pxs[i]; break; }
         Event e;
-        e.barT = formingT; e.firedSec = x.startSec; e.firedMs = x.startMs; e.side = x.side; e.ref = r.name; e.refKind = r.kind; e.refPx = r.px; e.stPx = st;
+        e.barT = formingT; e.firedSec = x.startSec; e.firedMs = x.startMs; e.side = x.side; e.ref = r.name; e.refKind = r.kind; e.refPx = r.px; e.stPx = st; e.refT = fromT; e.refBack = back; e.showFire = P.showGrey;
         e.lots = x.lots; e.fills = x.fills; e.ids = x.idsKnown ? (long long)x.ids.size() : -1; e.norm = norm; e.ratio = ratio; e.slot = slot;
         char k[64]; std::snprintf(k, sizeof k, "%lld-%s-%lld", x.startSec, x.side == DOWN ? "d" : "u", st); e.key = k;
         int& m = marksPerBar[e.barT]; e.drawn = m < 2; if (e.drawn) ++m;
         ++runs; markUsed(x.side, r.px);
-        Pending p; p.e = e; p.ext = 0; p.endMs = x.lastMs; p.endSec = x.startSec; p.extPx = x.side == DOWN ? x.lo : x.hi;
+        Pending p; p.e = e; p.ext = 0; p.endMs = x.lastMs; p.endSec = x.startSec; p.extPx = x.side == DOWN ? x.lo : x.hi; p.lastPx = x.side == DOWN ? x.lo : x.hi;
         for (std::map<long long, long long>::const_iterator it = x.rest.begin(); it != x.rest.end(); ++it) {
             const long long px = x.restPx[it->first];
             if (x.side == DOWN ? px <= r.px : px >= r.px) p.rest[it->first] += it->second;
@@ -206,6 +196,7 @@ struct Detector {
     }
     // ---- feed: one AGGRESSIVE fill. side: DOWN = a seller hit a bid, UP = a buyer lifted an offer. aggId 0 = not named ----------
     void aggFill(long long ms, long long sec, int side, long long px, long long lots, long long aggId) {
+        lastMs = ms; lastSec = sec;
         if ((side != DOWN && side != UP) || lots <= 0 || lots > 10000000 || px <= 0) return;
         if (b.on && (side != b.side || ms - b.startMs > P.windowMs || ms < b.lastMs || sec - b.startSec > 1 || sec < b.startSec)) close(ms);
         if (!b.on) { b.on = true; b.side = side; b.startMs = ms; b.startSec = sec; b.firstPx = px; b.lo = px; b.hi = px; }
@@ -218,36 +209,38 @@ struct Detector {
     void trade(long long ms, long long sec, long long px) {
         for (size_t i = 0; i < pending.size(); ++i) {
             Pending& p = pending[i];
+            p.lastPx = px;
             if (p.e.side == DOWN) { if (px > p.e.refPx) p.reclaimed = true; if (px < p.extPx) { p.extPx = px; p.newExt = true; } }
             else { if (px < p.e.refPx) p.reclaimed = true; if (px > p.extPx) { p.extPx = px; p.newExt = true; } }
         }
         decide(ms, sec);
     }
-    int share(const Pending& p, int& big) const {
-        long long took = 0; big = 0;
-        for (std::map<long long, long long>::const_iterator it = p.rest.begin(); it != p.rest.end(); ++it) if (it->second >= P.bigLots) { ++big; took += it->second; }
-        if (p.e.lots <= 0) return 0;
-        const long long pc = took * 100 / p.e.lots; return (int)(pc > 999 ? 999 : pc);
+    // the resting orders at / beyond the level filled >= bigLots (count) and the biggest one
+    int bigCount(const Pending& p, int& maxLots) const {
+        int big = 0; maxLots = 0;
+        for (std::map<long long, long long>::const_iterator it = p.rest.begin(); it != p.rest.end(); ++it) { if (it->second >= P.bigLots) ++big; if (it->second > maxLots) maxLots = (int)std::min(it->second, 1000000LL); }
+        return big;
     }
-    // the LIVE decision: absorbed at once on a reclaim once big resting orders took >= sharePct of the burst; at the window's end
-    // (decideS after the burst, by exchange second or feed ms) absorbed = that share AND (reclaimed OR no new extreme unless requireReclaim)
+    void finish(size_t i, bool absorbed, long long ms, long long sec) {
+        Pending& p = pending[i]; Event e = p.e; int mx = 0;
+        e.bigIds = bigCount(p, mx); e.bigLotsMax = mx; e.reclaimed = p.reclaimed; e.newExt = p.newExt; e.bars = p.k + 1; e.decidedT = formingT; e.decidedSec = sec; e.decidedMs = ms;
+        const long long x = p.e.side == DOWN ? p.e.refPx - p.extPx : p.extPx - p.e.refPx;
+        e.excAtr = atrTicks > 0 && x > 0 ? (double)x / atrTicks : 0;
+        e.outcome = absorbed ? ABSORBED : NOT_ABSORBED;
+        e.show = absorbed ? (p.e.side == DOWN ? P.showBull : P.showBear) : P.showGrey;
+        decided.push_back(e);
+        pending.erase(pending.begin() + (long)i);
+    }
+    // LIVE (staDecideLive): at burst end + reclaimS = the last trade is back across the level AND a big resting order (>= bigLots)
+    // at / beyond the level was filled. Candle mode: decided at candle closes (barClose).
     void decide(long long ms, long long sec) {
+        if (!P.decideLive) return;
         for (size_t i = 0; i < pending.size();) {
             Pending& p = pending[i];
-            int big = 0; const int sh = share(p, big);
-            const bool took = big >= 1 && sh >= P.sharePct;
-            const bool due = sec - p.endSec > P.decideS || ms - p.endMs >= (long long)P.decideS * 1000;
-            if ((took && p.reclaimed) || due) {
-                Event e = p.e;
-                e.bigIds = big; e.sharePct = sh; e.reclaimed = p.reclaimed; e.newExt = p.newExt; e.bars = p.k + 1; e.decidedT = formingT; e.decidedSec = sec; e.decidedMs = ms;
-                const long long x = p.e.side == DOWN ? p.e.refPx - p.extPx : p.extPx - p.e.refPx;
-                e.excAtr = atrTicks > 0 && x > 0 ? (double)x / atrTicks : 0;
-                e.outcome = took && (p.reclaimed || (!P.requireReclaim && !p.newExt)) ? ABSORBED : NOT_ABSORBED;
-                decided.push_back(e);
-                pending.erase(pending.begin() + (long)i);
-                continue;
-            }
-            ++i;
+            const bool due = sec - p.endSec > P.reclaimS || ms - p.endMs >= (long long)P.reclaimS * 1000;
+            if (!due) { ++i; continue; }
+            int mx = 0; const bool back = p.e.side == DOWN ? p.lastPx > p.e.refPx : p.lastPx < p.e.refPx;
+            finish(i, back && bigCount(p, mx) >= 1, ms, sec);
         }
     }
     // one RESTING fill (the order that was hit). restSide: DOWN = a resting BID (hit by sellers), UP = a resting offer.
@@ -263,11 +256,26 @@ struct Detector {
     }
     // time passes with no fill: a burst older than the window is over
     void tick(long long ms, long long sec) { if (b.on && (ms - b.startMs > P.windowMs || sec - b.startSec > 1)) close(ms); decide(ms, sec); }
-    // ---- a CLOSED candle (strictly in time order): counts the candles a pending run has waited (the decision itself is live) -------
-    void barClose(const Bar& c) {
+    long long lastMs = 0, lastSec = 0;
+    // ---- a CLOSED candle (strictly in time order): the ZigZag / ATR context; candle mode decides here --------------------------
+    // rows = the candle's volume at price (tick -> lots) for the volume-profile levels; session = its 17:00 CT trading day
+    void barClose(const Bar& c, const std::vector<std::pair<long long, double> >* rows = nullptr, long long session = 0) {
         if (c.t <= lastCloseT) return;
         lastCloseT = c.t;
-        for (size_t i = 0; i < pending.size(); ++i) if (c.t >= pending[i].e.barT) ++pending[i].k;
+        if (rows) V.add(c.t, session, c.h, c.l, *rows);
+        swg::ZBar z; z.t = c.t; z.o = c.o; z.h = c.h; z.l = c.l; z.c = c.c; z.day = c.day; z.rth = c.rth;
+        Z.add(z); W.add(z); atrTicks = W.atr(c.t + 1);
+        for (size_t i = 0; i < pending.size();) {
+            Pending& p = pending[i];
+            if (c.t < p.e.barT) { ++i; continue; }
+            ++p.k;
+            if (P.decideLive) { ++i; continue; }
+            int mx = 0;
+            const bool back = p.e.side == DOWN ? c.c > p.e.refPx : c.c < p.e.refPx;
+            if (back && bigCount(p, mx) >= 1) { finish(i, true, lastMs, lastSec); continue; }
+            if (p.k >= (P.absorbBars < 1 ? 1 : P.absorbBars)) { finish(i, false, lastMs, lastSec); continue; }
+            ++i;
+        }
     }
 };
 
@@ -278,58 +286,65 @@ inline std::string pxText(long long ticks, double tick) {
     int dec = 0; for (double t = tick; dec < 6 && std::fabs(t - std::floor(t + 1e-9)) > 1e-9; t *= 10) ++dec;
     std::snprintf(b, sizeof b, "%.*f", dec, p); return b;
 }
-inline std::string markText(const Event& e) { return e.outcome == ABSORBED ? "Sta" : "St"; }
+// the mark now: decided -> Sta (absorbed) / St (not); pending -> St. Its verdict: decided -> show; pending -> showFire
+inline int verdict(const Event& e) { return e.outcome == PENDING ? e.showFire : e.show; }
+inline std::string markText(const Event& e) { return std::string(e.outcome == ABSORBED ? "Sta" : "St") + (verdict(e) == swg::QUERY ? "?" : ""); }
+inline bool drawn(const Event& e) { return e.drawn && verdict(e) != swg::LOG; }
 // 0 = grey, 1 = green (bullish), 2 = red (bearish)
 inline int markColour(const Event& e) { return e.outcome == ABSORBED ? (bullish(e) ? 1 : 2) : 0; }
 inline std::string secs(long long n) { return n == 1 ? "1 s" : std::to_string(n < 0 ? 0 : n) + " s"; }
-inline std::string outcomeText(const Event& e, double tick, int decideS) {
-    const std::string idSide = e.side == DOWN ? "bid" : "offer", dir = e.side == DOWN ? "above" : "below", ext = e.side == DOWN ? "low" : "high";
+inline std::string refText(const Event& e, double tick) {
+    if (e.refKind == REF_SWING && e.refT > 0) return "the " + e.ref + " " + pxText(e.refPx, tick) + (e.refCt.empty() ? std::string() : " from " + e.refCt) + swg::backText(e.refBack);
+    return e.ref + " " + pxText(e.refPx, tick);
+}
+inline std::string outcomeText(const Event& e, double tick, int decideS, int bigLots) {
+    const std::string idSide = e.side == DOWN ? "bid" : "offer", dir = e.side == DOWN ? "above" : "below";
     if (e.outcome == PENDING && e.orphan) return "Absorbed? not decided - Investor/RT restarted inside the " + secs(decideS) + " window";
-    if (e.outcome == PENDING) return "Absorbed? deciding - watching " + secs(decideS) + " for big resting " + idSide + "s and a move back " + dir + " " + pxText(e.refPx, tick);
+    if (e.outcome == PENDING) return "Absorbed? deciding - at " + secs(decideS) + ": back " + dir + " " + pxText(e.refPx, tick) + " and a resting " + idSide + " of " + std::to_string(bigLots) + "+ lots filled there?";
     const long long took = e.decidedSec > 0 && e.firedSec > 0 ? e.decidedSec - e.firedSec : -1;
-    const std::string when = took >= 0 ? " in " + secs(took) : std::string();
-    const std::string pct = e.sharePct >= 0 ? " took " + std::to_string(e.sharePct > 100 ? 100 : e.sharePct) + "%" : std::string();
-    char a[32]; std::snprintf(a, sizeof a, "%.1f", e.excAtr);
-    if (e.outcome == ABSORBED) return "Absorbed" + when + ": " + std::to_string(e.bigIds) + " big " + idSide + (e.bigIds == 1 ? " order" : " orders") + pct + ", " + (e.reclaimed ? "back " + dir + " the level" : "no new " + ext);
-    if (e.bigIds == 0) return "Not absorbed - continuation: no big resting " + idSide + " took the burst";
-    if (e.sharePct >= 0 && !e.reclaimed && e.newExt) return std::string("Not absorbed - continuation: new ") + ext + ", " + a + " ATR past the level";
-    return "Not absorbed - continuation: big " + idSide + "s took too little of the burst";
+    const std::string when = took >= 0 ? " at " + secs(took) : std::string();
+    if (e.outcome == ABSORBED) return "Absorbed" + when + ": back " + dir + " the level, " + std::to_string(e.bigIds) + " big resting " + idSide + (e.bigIds == 1 ? "" : "s") + " filled (biggest " + std::to_string(e.bigLotsMax) + " lots)";
+    if (!e.reclaimed || (e.side == DOWN ? false : false)) return "Not absorbed - continuation: price stayed " + std::string(e.side == DOWN ? "below" : "above") + " the level" + when;
+    return "Not absorbed - continuation: no resting " + idSide + " of " + std::to_string(bigLots) + "+ lots filled at the level" + when;
 }
 inline std::string headline(const Event& e, double tick) {
-    std::string s = "Stop run at " + pxText(e.stPx, tick) + (e.side == DOWN ? " below " : " above ") + e.ref + " " + pxText(e.refPx, tick) + ": " + ratioText(e.ratio) + " normal stop burst";
-    return s;
+    return "Stop run at " + pxText(e.stPx, tick) + (e.side == DOWN ? " below " : " above ") + refText(e, tick) + ": " + ratioText(e.ratio) + " normal stop burst";
 }
 // the hover: header + the question / what it is / why it matters / how to use / example (Rassul's hover structure)
-inline std::vector<std::string> hoverRows(const Event& e, double tick, int decideS) {
+inline std::vector<std::string> hoverRows(const Event& e, double tick, int decideS, int bigLots) {
     std::vector<std::string> r;
-    r.push_back(std::string(e.outcome == ABSORBED ? "Sta" : "St") + "  Stop run?  " + e.ct + "   (? = not proven yet)");
+    const int v = verdict(e);
+    r.push_back(markText(e) + "  Stop run?  " + e.ct + (v == swg::QUERY ? "   (? = promising, not proven yet)" : v == swg::SHOW ? "   (proven on held-out days)" : "   (recorded only)"));
     r.push_back(headline(e, tick));
     r.push_back(std::to_string(e.lots) + " lots, " + std::to_string(e.fills) + " fills" + (e.ids >= 0 ? ", " + std::to_string(e.ids) + " orders" : std::string()) + " in one burst (normal " + std::to_string((long long)std::llround(e.norm)) + " lots)");
-    r.push_back(outcomeText(e, tick, decideS));
+    r.push_back(outcomeText(e, tick, decideS, bigLots));
     r.push_back("Question: were stops triggered here - and were they absorbed after?");
-    r.push_back("What it is: many small market orders fired at once just through a level - the stops parked there.");
+    r.push_back("What it is: many small market orders fired at once just through an intact swing (last 3) or a key / MenthorQ level - the stops parked there.");
     r.push_back("Why it matters: absorbed = reversal fuel (trapped traders); not absorbed = continuation fuel - don't fade it.");
-    r.push_back("How to use: green Sta at a low / red Sta at a high = look for the turn; grey St = trade with the break.");
-    r.push_back("Example: St at 7672.25 below LonLO, 3.1x; 4 s later 2 big bids took 70%, back above -> green Sta.");
+    r.push_back("How to use: green Sta at a low / red Sta at a high = look for the turn with your reversal bar; grey St = trade with the break.");
+    r.push_back("Example: St at 7672.25 below the swing low from 8:48 AM, 3.4x; 10 s later back above and a 12-lot bid filled -> green Sta.");
     return r;
 }
 
 // ---- the session record ----------------------------------------------------------------------------------------------------
-// ST|key|bar_t|fired_sec|ct|side|ref|ref_px|st_px|lots|fills|ids|norm_x10|ratio_x100|drawn
-// SA|key|decided_t|outcome|bars|big_ids|exc_atr_x100|reclaimed|decided_sec      (1.1.0 adds decided_sec; 1.0.0 lines without it still read)
-static const char* const REC_HEAD = "# ST|key|bar_t|fired_sec|ct|side|ref|ref_px|st_px|lots|fills|ids|norm_x10|ratio_x100|drawn  /  SA|key|decided_t|outcome|bars|big_ids|exc_atr_x100|reclaimed|decided_sec";
+// ST|key|bar_t|fired_sec|ct|side|ref|ref_px|st_px|lots|fills|ids|norm_x10|ratio_x100|drawn|ref_kind|ref_t|ref_back|show
+// SA|key|decided_t|outcome|bars|big_ids|exc_atr_x100|reclaimed|decided_sec|big_max|show
+// (1.1.0 added decided_sec; 1.2.0 adds ref_kind / ref_t / ref_back / show to ST and big_max / show to SA; older lines still read = SHOW)
+static const char* const REC_HEAD = "# ST|key|bar_t|fired_sec|ct|side|ref|ref_px|st_px|lots|fills|ids|norm_x10|ratio_x100|drawn|ref_kind|ref_t|ref_back|show  /  SA|key|decided_t|outcome|bars|big_ids|exc_atr_x100|reclaimed|decided_sec|big_max|show";
+inline const char* kindText(int k) { return k == REF_SWING ? "swing" : k == REF_MQ ? "mq" : k == REF_VP ? "vp" : k == REF_X5 ? "x5" : k == REF_PRIOR ? "prior" : "key"; }
+inline int showOf(const std::string& t) { return t == "SHOW" ? swg::SHOW : t == "?" ? swg::QUERY : t == "LOG" ? swg::LOG : -1; }
 inline std::string clean(const std::string& s, size_t n) { std::string o; for (char c : s) { if (o.size() >= n) break; o += (c == '|' || c == '\n' || c == '\r') ? ' ' : c; } return o; }
 inline std::string stLine(const Event& e, double tick) {
     char b[512];
-    std::snprintf(b, sizeof b, "ST|%s|%lld|%lld|%s|%s|%s|%s|%s|%lld|%lld|%lld|%lld|%lld|%d", clean(e.key, 48).c_str(), e.barT, e.firedSec, clean(e.ct, 12).c_str(),
+    std::snprintf(b, sizeof b, "ST|%s|%lld|%lld|%s|%s|%s|%s|%s|%lld|%lld|%lld|%lld|%lld|%d|%s|%lld|%d|%s", clean(e.key, 48).c_str(), e.barT, e.firedSec, clean(e.ct, 12).c_str(),
                   e.side == DOWN ? "down" : "up", clean(e.ref, 24).c_str(), pxText(e.refPx, tick).c_str(), pxText(e.stPx, tick).c_str(), e.lots, e.fills, e.ids,
-                  (long long)std::llround(e.norm * 10), (long long)std::llround(e.ratio * 100), e.drawn ? 1 : 0);
+                  (long long)std::llround(e.norm * 10), (long long)std::llround(e.ratio * 100), e.drawn ? 1 : 0, kindText(e.refKind), e.refT, e.refBack, swg::showText(e.showFire).c_str());
     return b;
 }
 inline std::string saLine(const Event& e) {
     char b[256];
-    std::snprintf(b, sizeof b, "SA|%s|%lld|%s|%d|%d|%lld|%d|%lld", clean(e.key, 48).c_str(), e.decidedT, e.outcome == ABSORBED ? "absorbed" : "not", e.bars, e.bigIds,
-                  (long long)std::llround((finite(e.excAtr) ? e.excAtr : 0) * 100), e.reclaimed ? 1 : 0, e.decidedSec);
+    std::snprintf(b, sizeof b, "SA|%s|%lld|%s|%d|%d|%lld|%d|%lld|%d|%s", clean(e.key, 48).c_str(), e.decidedT, e.outcome == ABSORBED ? "absorbed" : "not", e.bars, e.bigIds,
+                  (long long)std::llround((finite(e.excAtr) ? e.excAtr : 0) * 100), e.reclaimed ? 1 : 0, e.decidedSec, e.bigLotsMax, swg::showText(e.show).c_str());
     return b;
 }
 inline std::vector<std::string> split(const std::string& s) { std::vector<std::string> o; size_t a = 0; for (;;) { size_t p = s.find('|', a); o.push_back(s.substr(a, p == std::string::npos ? std::string::npos : p - a)); if (p == std::string::npos) break; a = p + 1; } return o; }
@@ -357,7 +372,7 @@ inline std::vector<Event> parseRecord(const std::vector<std::string>& lines, dou
         const std::vector<std::string> c = split(ln);
         long long x = 0; double d = 0;
         if (c[0] == "ST") {
-            if (c.size() != 15 || c[1].empty() || at.count(c[1])) { ++nb; continue; }
+            if ((c.size() != 15 && c.size() != 19) || c[1].empty() || at.count(c[1])) { ++nb; continue; }
             Event e; e.key = c[1];
             if (!whole(c[2], 1, 4000000000000LL, e.barT) || !whole(c[3], 0, 4000000000000LL, e.firedSec)) { ++nb; continue; }
             e.ct = c[4];
@@ -368,15 +383,23 @@ inline std::vector<Event> parseRecord(const std::vector<std::string>& lines, dou
             if (!whole(c[12], 0, 1000000000, x)) { ++nb; continue; } e.norm = (double)x / 10.0;
             if (!whole(c[13], 0, 100000000, x)) { ++nb; continue; } e.ratio = (double)x / 100.0;
             if (c[14] != "0" && c[14] != "1") { ++nb; continue; } e.drawn = c[14] == "1";
+            if (c.size() == 19) {
+                e.refKind = c[15] == "swing" ? REF_SWING : c[15] == "mq" ? REF_MQ : c[15] == "vp" ? REF_VP : c[15] == "key" ? REF_KEY : c[15] == "x5" ? REF_X5 : c[15] == "prior" ? REF_PRIOR : -1;
+                if (e.refKind < 0 || !whole(c[16], 0, 4000000000000LL, e.refT) || !whole(c[17], 0, 3, x) || showOf(c[18]) < 0) { ++nb; continue; }
+                e.refBack = (int)x; e.showFire = showOf(c[18]);
+            }
             at[e.key] = v.size(); v.push_back(e);
         } else if (c[0] == "SA") {
-            if (c.size() != 8 && c.size() != 9) { ++nb; continue; }
+            if (c.size() != 8 && c.size() != 9 && c.size() != 11) { ++nb; continue; }
             std::map<std::string, size_t>::iterator it = at.find(c[1]); if (it == at.end()) { ++nb; continue; }
             Event& e = v[it->second]; if (e.outcome != PENDING) continue;   // decided once
             long long t = 0, bars = 0, big = 0, exc = 0;
             long long dsec = 0;
             if (!whole(c[2], 0, 4000000000000LL, t) || (c[3] != "absorbed" && c[3] != "not") || !whole(c[4], 0, 10000, bars) || !whole(c[5], 0, 100000, big) || !whole(c[6], 0, 100000000, exc) || (c[7] != "0" && c[7] != "1")
-                || (c.size() == 9 && !whole(c[8], 0, 4000000000000LL, dsec))) { ++nb; continue; }
+                || (c.size() >= 9 && !whole(c[8], 0, 4000000000000LL, dsec))) { ++nb; continue; }
+            long long bm = 0; int sh = swg::SHOW;
+            if (c.size() == 11) { if (!whole(c[9], 0, 1000000, bm) || showOf(c[10]) < 0) { ++nb; continue; } sh = showOf(c[10]); }
+            e.bigLotsMax = (int)bm; e.show = sh;
             e.decidedT = t; e.decidedSec = dsec; e.outcome = c[3] == "absorbed" ? ABSORBED : NOT_ABSORBED; e.bars = (int)bars; e.bigIds = (int)big; e.excAtr = (double)exc / 100.0; e.reclaimed = c[7] == "1";
         } else ++nb;
     }
