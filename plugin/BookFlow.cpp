@@ -1,5 +1,12 @@
 /********************************************************************************
  *  BookFlow.cpp  --  Investor/RT RTX extension  lsBookFlow  1.5.0  (2026-10-19; 1.0.0 2026-10-16)
+ *  1.23.0 (2026-10-22, Rassul approved layout-stages-2strips.png 11:41-11:46 CT, build ordered 15:20 CT): the badge row becomes TWO LETTER
+ *        STRIPS (LetterStrips.h 1.0.0), each its own row with a small left label: "Holding" (stages 2-3: A > Q > W > P > B; Q only when the
+ *        queue meter's record lsFlexLevels\Strips\QUEUE-<MKT>-<spb>.csv exists) and "Turn & re-test" (stages 4-5: H > L > X). ONE letter per
+ *        strip per candle (the strongest; the others in the hover), coloured by the side that ACTS (defenders: bids at a low green, offers at a
+ *        high red; P / B the book side that moved; warnings W / B / X in the colour of the side they hurt), no boxes / borders; a letter that
+ *        would touch its neighbour drops to the lower half-row. Hovers per strip. Every letter appended to lsFlexLevels\Strips\DEF-<MKT>-<spb>.csv
+ *        for lsReversalStage 1.0.0. The net bars sit below the strips (scale() keeps their rows). Bars, rows box, records: unchanged.
  *  1.5.0 (2026-10-19, Rassul 11:05 "build", 11:19 "show Refill Effort, Refilled X and Pace. The rest can be there but invisible ... keep the
  *        read below", 11:20 "remove the questions", 11:15 "use 4.5x instead of percentage", 11:53 "lets just build and replace the pace.
  *        also on the labels"): the box shows REFILL EFFORT (the net = added - pulled, vs its 20-candle average; was "Net") and REFILLED
@@ -78,13 +85,14 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.22.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.23.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 #include "DefenseTurn.h"          // (1.12.0) the pivot turn marks + the refill line decisions (drawn on the price chart by lsDefenseLines)
 #include "DefenseLinesSettings.h" // (1.12.0) their show / colour settings (one file with lsDefenseLines)
 #include "SharedAbsorb.h"        // (1.22.0) the SHARED absorption A: the Defense badge A read from the one shared record
 #include "TrapLogic.h"           // (1.19.0, Middle Attacker #1) the Delta Profile's TR record (read only)
+#include "LetterStrips.h"        // (1.23.0) the two letter strips + the letter record for lsReversalStage
 #include <fstream>
 #include <set>
 
@@ -97,6 +105,14 @@ public:
     BookFlow() : off::MboPane<bf::Logic>() {}
     virtual bool barMarks() const { return false; }                        // no letters / dash drawn; hover + records keep them
     virtual bool netBars() const { return true; }
+    int topReserve() const { return lst::STRIPS * lst::ROW_H + 2; }   // (1.23.0) the two letter strips under the question line (the net bars below them)
+    // (1.23.0) the pane's axis = the base axis with the strips' rows kept free at the top (the same px the drawing uses: g.reserve + topReserve)
+    virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax) {
+        const int r = off::MboPane<bf::Logic>::scale(iStartBar, iEndBar, dMin, dMax);
+        S_* S = static_cast<S_*>(getUserData());
+        if (S && dMin && dMax) { double mn = 0, mx = 10; off::axisFor(S->axisTop, S->paneH, off::pairPx(S->paneH, off::textReserve(S->paneH, gmode(S->set.mode)) + off::QUESTION_H + topReserve()), mn, mx); *dMin = mn; *dMax = mx; }
+        return r;
+    }
     virtual bool textOff() const { return false; }
     virtual std::string boxKeep() const { return "Refill Effort;Refilled;Counter;Re-test;Moved;At level"; }   // (1.21.0, Rassul 20:11-20:23 CT) the Attackers row removed (G moved to the attacker pane)   // (1.19.0) + Attackers (Top Attacker #2 G) + At level (Top Defender #2 W)   // (1.17.0) + Moved (Top Defender #3)   // (1.16.0) + Re-test (Top Defender #4)   // (1.15.0) + Counter (Top Defender #5)   // (1.8.0, Rassul 19:19) Reward removed - it repeats Aggression's Reward;   // (1.6.0, Rassul 17:42 "build it already") + Reward (EffortReward.h)    // (1.5.0, Rassul 11:19 / 11:53) the two defense rows; the rest hidden   // (1.4.0, 23:56 CT) + Added / Pulled (their plain 20-candle ratios, as the pull marker)            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
     virtual bool boxOnly() const { return true; }                         // (1.2.0, Rassul 2026-10-16 22:00) the left-justified numbers box in the pane, no read / options lines                          // (1.1.0, Rassul 2026-10-16 18:14) no read / numbers / options lines on the pane; the records and the tape reader keep every number
@@ -150,6 +166,9 @@ public:
         // (1.19.0) the badges' hover: each badge's rectangle and its text (letters, numbers, the letters with no room); the one under the mouse
         std::vector<std::pair<off::IconRect, std::string> > badgeHit; int badgeTip = -1; long long badgeDropped = 0;
         long long badgeTipNoRoom = 0, badgeTipCompact = 0; dt::TipRect lastTip; int lastTipLevel = -1;                   // (1.20.0) hovers with no free spot (status); the last drawn hover box (tests)
+        // (1.23.0) the letter strips: the DEF record ids already written, the queue meter's Q letters [candle raw key], counters
+        std::set<std::string> stripIds; std::string stripPath, stripQPath; long long stripMs = -1, stripQOff = 0, stripQRead = 0, stripQBad = 0, stripWritten = 0, stripFail = 0, stripsDrawn = 0, stripSkipped = 0;
+        std::map<long long, std::vector<lst::Lt> > stripQ;
         std::map<long long, bf::PullStat> pulls; long long markersDrawn = 0; // (1.4.0) closed candles' pull decisions (decided once, never cleared: no repaint)               // (1.3.4) the pane on the screen; the live candle's events last drawn
     };
     Ext* ext(S_& S) {
@@ -179,7 +198,7 @@ public:
         r->add(e);
     }
     virtual void afterPump(S_& S, long long now, bool fromDraw) { trackOn(S); mrec::Recorder* r = rec(S); if (r) r->tick(now, fromDraw); post(S, now); try { checkX(S); } catch (...) {}
-        try { checkW(S); } catch (...) {} try { Ext* e = ext(S); if (e) readTraps(S, *e, now); } catch (...) {} try { sharedA(S, now); } catch (...) {} }
+        try { checkW(S); } catch (...) {} try { Ext* e = ext(S); if (e) readTraps(S, *e, now); } catch (...) {} try { sharedA(S, now); } catch (...) {} try { strips(S, now); } catch (...) {} }
     // (1.22.0, 2026-10-22 Rassul 06:43 "then do it") THE SHARED A (SharedAbsorb.h): this pane no longer decides its own A - the badge A comes
     // from the one shared record lsBidAskStats / lsDeltaProfile decide into (the same A on every pane and the price chart). This pane adds
     // what only it knows: the attackers pulling their own orders after the extreme (its G read, x normal) as an SABX extra, once per A.
@@ -234,6 +253,7 @@ public:
           << "\nGIVE_UP," << (e ? std::to_string(e->dtG.size()) + " decided at 5-candle extremes (" + std::to_string(e->dtGWritten) + " written, " + std::to_string(e->gUndecided) + " without the feed / < 20 s after the extreme), G drawn: pulled >= 2x normal net of moves, pulled > added, attack died, no initiative candle" : std::string("n/a"))
           << "\nTRAPS," << (e ? std::to_string(e->dtTr.size()) + " Delta Profile TR lines read (" + std::to_string(e->trBad) + " bad), file " + e->trPath : std::string("n/a"))
           << "\nAT_LEVEL," << (e ? std::to_string(e->lwLevels.size()) + " key levels watched, " + std::to_string(e->lw.touchesSeen) + " touches (" + std::to_string(e->lw.deduped) + " within 15 min), " + std::to_string(e->lw.open.size()) + " measuring, " + std::to_string(e->dtW.size()) + " decided (" + std::to_string(e->dtWWritten) + " written), W drawn at supports only" : std::string("n/a"))
+          << "\nSTRIPS," << (e ? std::string(lst::VERSION) + ",drawn " + std::to_string(e->stripsDrawn) + ",skipped " + std::to_string(e->stripSkipped) + ",exported " + std::to_string(e->stripWritten) + ",export_fail " + std::to_string(e->stripFail) + ",queue Q read " + std::to_string(e->stripQRead) + " (" + std::to_string(e->stripQBad) + " bad) from " + e->stripQPath + ",file " + e->stripPath : std::string("n/a"))
           << "\nBADGES," << (e ? std::to_string(e->badgesDrawn) + " row draws, " + std::to_string(e->badgeDropped) + " badges with letters moved to the hover (max " + std::to_string(dt::BADGE_MAX) + "), hover no room " + std::to_string(e->badgeTipNoRoom) : std::string("n/a"))
           << "\nMARKET_STATE,BOOK " << (!e || e->chart.empty() ? std::string("waiting for the chart label") : "bar " + std::to_string(e->mstBar ? e->mstCt : 0) + ",posts " + std::to_string(e->mstPosts) + ",keys " + std::to_string(e->mstKv.size()));
     }
@@ -637,60 +657,141 @@ public:
         }
         e.lastTip = at;
     }
-    // (1.15.0, Rassul 11:22 / 11:25 CT, defender5-mockup-v2 "we could also have multiple like A|H and adjust font size as needed") the
-    // BADGE ROW: a thin solid strip at the top of the pane; on each closed candle ONE badge with the behaviours decided on it ("A", "H",
-    // "A|H"), letters only (1.20.0: no "?" - the proof status is in the hover), green where buyers defend a low / red where sellers defend a high, the font shrinking (9 -> 6
-    // pt) to fit the candle's slot; never over the box; drawn only when a badge is on screen. (1.19.0) dt::badgeSegs7: + Tr / G / W, at most
-    // 4 letters (A, H, Tr, G, W, P/B, L/X - the rest in the hover); every badge's rectangle + hover text kept for the mouse.
+    // ==== (1.23.0, 2026-10-22 Rassul approved layout-stages-2strips.png 11:41-11:46 CT, build 15:20 CT) THE TWO LETTER STRIPS (LetterStrips.h):
+    // "Holding" A > Q > W > P > B and "Turn & re-test" H > L > X, one letter per strip per closed candle in the colour of the side that acts,
+    // no boxes / borders, hovers per strip; every letter appended to lsFlexLevels\Strips\DEF-<MKT>-<spb>.csv for lsReversalStage; the queue
+    // meter's Q read from lsFlexLevels\Strips\QUEUE-<MKT>-<spb>.csv when that record exists (else no Q).
+    // the Defense letters of one candle (raw key) from this pane's records, with their pivot, book side and key numbers
+    void defLetters(S_& S, Ext& e, long long key, std::vector<lst::Lt>& v) {
+        (void)S; v.clear(); char b[96];
+        for (int sd = 0; sd < 2; ++sd) { const sab::Rec* rr = e.sab.st.atRaw(sd, key); if (rr) { std::snprintf(b, sizeof b, "%lld lots %.1fx", rr->att, rr->effort); v.push_back(lst::make(lst::DEF, "A", sd, -1, b)); break; } }
+        std::map<long long, std::vector<lst::Lt> >::const_iterator q = e.stripQ.find(key);
+        if (q != e.stripQ.end()) for (size_t k = 0; k < q->second.size(); ++k) v.push_back(q->second[k]);
+        for (std::map<std::pair<long long, long long>, dt::WRead>::const_iterator w = e.dtW.lower_bound(std::make_pair(key, (long long)LLONG_MIN)); w != e.dtW.end() && w->first.first == key; ++w)
+            if (dt::wDrawn(w->second)) { const long long net = std::max<long long>(0, w->second.pulled - w->second.added); std::snprintf(b, sizeof b, "%s %lld lots pulled", w->second.name.c_str(), net); v.push_back(lst::make(lst::DEF, "W", w->second.side, -1, b)); break; }
+        for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, mvl::Read>::const_iterator m = e.dtM.find(std::make_pair(sd, key)); if (m == e.dtM.end()) continue;
+            for (int book = 0; book < 2; ++book) { const char L = mvl::letterOf(m->second, book); if (!L) continue;
+                const bool in_ = L == 'P'; std::snprintf(b, sizeof b, "%s %lld lots %lldt", book == 0 ? "bids" : "offers", in_ ? m->second.s.in[book] : m->second.s.out[book], in_ ? m->second.s.ticksIn[book] : m->second.s.ticksOut[book]);
+                v.push_back(lst::make(lst::DEF, std::string(1, L), m->second.ext == 0 ? lst::LOW : lst::HIGH, book, b)); } }
+        for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator h = e.dtH.begin(); h != e.dtH.end(); ++h) if (h->second.H && h->second.at == key) {
+            std::snprintf(b, sizeof b, "%lld lots %.1fx", h->second.lots, h->second.attack > 0 ? (double)h->second.lots / (double)h->second.attack : 0.0); v.push_back(lst::make(lst::DEF, "H", h->second.side == dt::HIGH ? lst::HIGH : lst::LOW, -1, b)); break; }
+        for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator r = e.dtQ.begin(); r != e.dtQ.end(); ++r) if (r->second.at == key && (r->second.res == 'L' || r->second.res == 'X')) {
+            std::snprintf(b, sizeof b, "%lld lots %.1fx", r->second.rest, r->second.ratio); v.push_back(lst::make(lst::DEF, std::string(1, r->second.res), r->second.side == dt::HIGH ? lst::HIGH : lst::LOW, -1, b)); break; }
+    }
+    // every 3 s: read the queue meter's new Q lines; append the letters not yet in the DEF record (first line per candle + letter + pivot wins)
+    void strips(S_& S, long long now) {
+        Ext* e = ext(S); if (!e || S.market.empty() || S.spb <= 0) return;
+        if (e->stripMs >= 0 && now >= e->stripMs && now - e->stripMs < 3000) return;
+        e->stripMs = now;
+        const std::string f = off::flexDir(); if (f.empty()) return;
+        const std::string d = f + "\\Strips", p = d + "\\" + lst::fileName(lst::DEF, S.market, (int)S.spb), qp = d + "\\" + lst::fileName(lst::QUE, S.market, (int)S.spb);
+        if (p != e->stripPath) { e->stripPath = p; e->stripIds.clear(); e->stripQ.clear(); e->stripQOff = 0; off::makeDir(d);
+            long long o0 = 0; stripTail(p, o0, [&](const std::string& ln) { lst::Rec r; if (lst::parse(ln, r) && r.pane == lst::DEF) e->stripIds.insert(lst::idOf(lst::DEF, r.key, r.l.code, r.l.pivot)); }, 4LL * 1024 * 1024); }
+        e->stripQPath = qp;
+        stripTail(qp, e->stripQOff, [&](const std::string& ln) { lst::Rec r; if (!lst::parse(ln, r) || r.pane != lst::QUE) { ++e->stripQBad; return; }
+            std::vector<lst::Lt>& v = e->stripQ[r.key]; for (size_t k = 0; k < v.size(); ++k) if (v[k].pivot == r.l.pivot) return; v.push_back(r.l); ++e->stripQRead; }, 4LL * 1024 * 1024);
+        while (e->stripQ.size() > 4000) e->stripQ.erase(e->stripQ.begin());
+        std::set<long long> keys;
+        for (std::map<std::pair<int, long long>, sab::Rec>::const_iterator it = e->sab.st.byKey.begin(); it != e->sab.st.byKey.end(); ++it) if (it->second.raw > 0) keys.insert(it->second.raw);
+        for (std::map<std::pair<long long, long long>, dt::WRead>::const_iterator it = e->dtW.begin(); it != e->dtW.end(); ++it) keys.insert(it->first.first);
+        for (std::map<std::pair<int, long long>, mvl::Read>::const_iterator it = e->dtM.begin(); it != e->dtM.end(); ++it) keys.insert(it->first.second);
+        for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator it = e->dtH.begin(); it != e->dtH.end(); ++it) if (it->second.H) keys.insert(it->second.at);
+        for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator it = e->dtQ.begin(); it != e->dtQ.end(); ++it) if (it->second.at > 0) keys.insert(it->second.at);
+        std::string out; std::vector<std::string> ids;
+        for (std::set<long long>::const_iterator k = keys.begin(); k != keys.end(); ++k) {
+            if (*k <= 0) continue;
+            std::vector<lst::Lt> v; defLetters(S, *e, *k, v);
+            for (size_t q = 0; q < v.size(); ++q) { if (v[q].code == "Q") continue;   // Q is the queue meter's own record
+                const std::string id = lst::idOf(lst::DEF, *k, v[q].code, v[q].pivot); if (e->stripIds.count(id) || std::find(ids.begin(), ids.end(), id) != ids.end()) continue;
+                out += lst::line(lst::DEF, *k, v[q]) + "\n"; ids.push_back(id); }
+        }
+        if (out.empty()) return;
+        std::ofstream o(p.c_str(), std::ios::binary | std::ios::app); if (o) { o.write(out.data(), (std::streamsize)out.size()); o.flush(); }
+        if (o) { for (size_t k = 0; k < ids.size(); ++k) e->stripIds.insert(ids[k]); e->stripWritten += (long long)ids.size(); } else ++e->stripFail;
+        while (e->stripIds.size() > 20000) e->stripIds.erase(e->stripIds.begin());
+    }
+    // the new whole lines of path from off0 (bounded; a shorter file = read again from the start)
+    template <class Fn> static void stripTail(const std::string& path, long long& off0, Fn fn, long long maxRead) {
+        std::ifstream in(path.c_str(), std::ios::binary); if (!in.is_open()) return;
+        in.seekg(0, std::ios::end); const long long size = (long long)in.tellg(); if (size < 0) return;
+        if (size < off0) off0 = 0; if (size == off0) return;
+        if (size - off0 > maxRead) off0 = size - maxRead;
+        in.seekg(off0, std::ios::beg); std::string buf((size_t)(size - off0), '\0'); in.read(&buf[0], (std::streamsize)buf.size());
+        if (!in && in.gcount() != (std::streamsize)buf.size()) return;
+        const size_t last = buf.rfind('\n'); if (last == std::string::npos) return;
+        off0 += (long long)last + 1;
+        size_t a = 0;
+        while (a <= last) { const size_t b = buf.find('\n', a); std::string ln = buf.substr(a, b - a); a = b + 1; if (!ln.empty() && ln.back() == '\r') ln.pop_back(); if (!ln.empty()) fn(ln); }
+    }
+    // the hover of one strip on one candle: the strip header, its question rows, the letters' blocks (strongest first)
+    std::string stripTipText(S_& S, Ext& e, long long key, int strip, const std::vector<lst::Lt>& v, const lst::Pick& pk) {
+        dt::BadgeIn in; in.defSide = dt::LOW; std::vector<std::string> others; std::vector<std::string> extra;
+        for (size_t q = 0; q < pk.order[strip].size(); ++q) {
+            const lst::Lt& l = v[(size_t)pk.order[strip][q]];
+            if (q > 0) others.push_back(l.code);
+            if (l.code == "A") { in.A = true; in.defSide = l.pivot; } else if (l.code == "H") { in.H = true; in.defSide = l.pivot; }
+            else if (l.code == "L" || l.code == "X") { in.Q = l.code[0]; in.defSide = l.pivot; } else if (l.code == "W") in.w = true;
+            else if (l.code == "P" || l.code == "B") {                       // each move letter its own block (both pivots' reads on one candle may give P and B)
+                const int book = l.book == 1 ? mvl::OFFERS : mvl::BIDS; long long n = 0;
+                for (std::map<std::pair<int, long long>, mvl::Read>::const_iterator it = e.dtM.begin(); it != e.dtM.end(); ++it) n += mvl::letterOf(it->second, book) == l.code[0] ? 1 : 0;
+                std::map<std::pair<int, long long>, mvl::Read>::const_iterator m = e.dtM.find(std::make_pair(l.pivot, key));
+                if (m != e.dtM.end() && mvl::letterOf(m->second, book) == l.code[0]) {
+                    const mvl::Read& R = m->second; const int def = R.ext == 0 ? mvl::BIDS : mvl::OFFERS; const bool in_ = l.code == "P";
+                    const int cs = book == def ? (in_ ? mvl::C_DEF_IN : mvl::C_DEF_OUT) : (in_ ? mvl::C_ATT_IN : mvl::C_ATT_OUT);
+                    const dt::HoverBlock hb = dt::hoverMove(l.code[0], book, in_ ? R.s.in[book] : R.s.out[book], in_ ? R.s.ticksIn[book] : R.s.ticksOut[book], R.x[cs], false, n);
+                    std::string blk; for (size_t r = 0; r < hb.rows.size(); ++r) blk += (r ? "\n" : "") + dt::wrapRow(hb.rows[r]); extra.push_back(blk); } }
+            else if (l.code == "Q") extra.push_back("Q  Queue - is the queue at the defenders' price holding (refilling faster than it is eaten)?\n   " + (l.nums.empty() ? std::string("queue meter read") : l.nums) + "\n   Use: the queue is still there - the hold has fuel\n   Status: still learning (the queue meter's record)");
+        }
+        const std::string full = badgeTipText(S, e, key, in, std::string(), std::vector<std::string>());
+        std::vector<std::string> parts; { size_t a = 0; for (;;) { const size_t b = full.find("\n\n", a); parts.push_back(full.substr(a, b == std::string::npos ? std::string::npos : b - a)); if (b == std::string::npos) break; a = b + 2; } }
+        std::vector<std::string> blocks; for (size_t k = 1; k < parts.size(); ++k) if (!parts[k].empty()) blocks.push_back(parts[k]);
+        for (size_t k = 0; k < extra.size(); ++k) blocks.push_back(extra[k]);
+        auto codeOf = [](const std::string& blk) { const size_t sp = blk.find(' '); return blk.substr(0, sp); };
+        std::stable_sort(blocks.begin(), blocks.end(), [&](const std::string& a, const std::string& b) { return lst::rankOf(lst::DEF, codeOf(a)) < lst::rankOf(lst::DEF, codeOf(b)); });
+        struct tm x; std::memset(&x, 0, sizeof(x));
+        const std::string when = key > 0 && getLocaltime((RTDATE)key, &x) ? off::clock12(x.tm_hour, x.tm_min) : std::string();
+        std::string t = lst::header(lst::DEF, strip, v[(size_t)pk.shown[strip]].code, when, others);
+        const std::vector<std::string> qr = lst::stripQuestion(lst::DEF, strip);
+        t += "\n"; for (size_t k = 0; k < qr.size(); ++k) t += "\n" + dt::wrapRow(qr[k]);
+        for (size_t k = 0; k < blocks.size(); ++k) t += "\n\n" + blocks[k];
+        return t;
+    }
     template <class XOf>
     void badgeRow(S_& S, Ext& e, const off::PaneGeo& g, int v0, int v1, int last, int slot, RTARRAYI& times, XOf xOf, const bp::Box* box) {
-        struct B { int x; std::vector<dt::BadgeSeg> segs; std::string s, tip; };   // (1.18.0) coloured parts per letter
-        std::vector<B> bs;
+        (void)slot;
         e.badgeHit.clear();
+        const int y0 = g.top + g.reserve + 1;
+        if (y0 + lst::STRIPS * lst::ROW_H + 10 > g.bottom) { e.badgeTip = -1; return; }   // pane too short
+        struct C { long long key; int xc; std::vector<lst::Lt> v; lst::Pick pk; };
+        std::vector<C> cs;
         for (int i = std::max(0, v0); i <= v1 && i < last; ++i) {
             const long long key = (long long)times[i];
-            dt::BadgeIn in; int side = -1;
-            for (int sd = 0; sd < 2; ++sd) if (e.sab.st.atRaw(sd, key)) { in.A = true; side = sd; }   // (1.22.0) the SHARED A (the T line's own A is no longer drawn)
-            for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator h = e.dtH.begin(); h != e.dtH.end(); ++h) if (h->second.H && h->second.at == key) { in.H = true; if (side < 0) side = h->second.side; }
-            for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator qq = e.dtQ.begin(); qq != e.dtQ.end(); ++qq) if (qq->second.at == key && (qq->second.res == 'L' || qq->second.res == 'X')) { in.Q = qq->second.res; if (side < 0) side = qq->second.side; }   // (1.16.0)
-            for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, mvl::Read>::const_iterator m = e.dtM.find(std::make_pair(sd, key)); if (m == e.dtM.end()) continue;   // (1.18.0) every move case, per BOOK side
-                const char lb = mvl::letterOf(m->second, mvl::BIDS), lo = mvl::letterOf(m->second, mvl::OFFERS); if (lb && !in.bidMove) in.bidMove = lb; if (lo && !in.offerMove) in.offerMove = lo; if ((lb || lo) && side < 0) side = sd; }
-            // (1.21.0, Rassul 20:11-20:23 CT) Tr and G are drawn on the attacker pane (lsBidAskStats 1.26.0), not here: in.tr / in.g stay -1
-            // (G is still decided and written here - its G lines are what the attacker pane reads)
-            for (std::map<std::pair<long long, long long>, dt::WRead>::const_iterator w = e.dtW.lower_bound(std::make_pair(key, (long long)LLONG_MIN)); w != e.dtW.end() && w->first.first == key && !in.w; ++w) if (dt::wDrawn(w->second)) in.w = true;   // (1.19.0) W (supports)
-            if (side < 0) side = dt::LOW;
-            in.defSide = side;
-            std::vector<std::string> dropped;
-            const std::vector<dt::BadgeSeg> segs = dt::badgeSegs7(in, &dropped); if (segs.empty()) continue;   // (1.16.0) X alone: the opposite colour
             const int xc = xOf(i); if (xc < g.left || xc > g.edge) continue;
-            if (!dropped.empty()) ++e.badgeDropped;
-            const std::string txt = dt::segsText(segs);
-            bs.push_back(B{ xc, segs, txt, badgeTipText(S, e, key, in, txt, dropped) });
+            C c; c.key = key; c.xc = xc; defLetters(S, e, key, c.v); if (c.v.empty()) continue;
+            c.pk = lst::pick(lst::DEF, c.v); cs.push_back(c);
         }
-        if (bs.empty()) return;
-        const int y0 = g.top + g.reserve + 1, h = 15, y1 = y0 + h;
-        if (y1 + 10 > g.bottom) return;                                    // pane too short
-        off::fillFlat(this, g.left, y0, g.edge, y1, (COLOR)0x000B0F15);
-        off::fillFlat(this, g.left, y1, g.edge, y1, (COLOR)0x00374151);
-        const int maxW = std::max(12, slot - 2);
-        int prevR = INT_MIN;                                               // (1.19.0) a badge wider than its slot never covers the one before it
-        for (size_t k = 0; k < bs.size(); ++k) {
-            auto colOf = [&](int key) { return (COLOR)(key == dt::HIGH ? e.dlSet.c(dlset::K_COL_HIGH) : e.dlSet.c(dlset::K_COL_LOW)); };
-            const COLOR col = colOf(bs[k].segs.front().colourKey);         // the border: the first letter's colour
-            FONT f; f.id = HELVETICA; f.style = BOLD;
-            const int fs = dt::fitFont([&](int pt) { f.size = pt; setFont(f); return (int)getTextWidth(bs[k].s.c_str(), -1) + 4; }, maxW, 9, 6);
-            f.size = fs; setFont(f); const int w = (int)getTextWidth(bs[k].s.c_str(), -1) + 4;
-            int l = bs[k].x - w / 2; if (prevR != INT_MIN && l <= prevR + 1) l = prevR + 2;   // shifted right past the badge before it
-            const int r = l + w;
-            if (box && l < box->r && r > box->l && y0 < box->b && y1 > box->t) continue;   // never over the box
-            if (r > g.edge) continue;                                         // no room left on the pane
-            prevR = r;
-            off::fillFlat(this, l, y0 + 1, r, y0 + 1, col); off::fillFlat(this, l, y1 - 1, r, y1 - 1, col);
-            off::fillFlat(this, l, y0 + 1, l, y1 - 1, col); off::fillFlat(this, r, y0 + 1, r, y1 - 1, col);
-            int xt = l + 2;                                                    // (1.18.0) each letter in its side's colour
-            for (size_t q = 0; q < bs[k].segs.size(); ++q) { const std::string& part = bs[k].segs[q].s; const int pw = (int)getTextWidth(part.c_str(), -1);
-                setTextColor(colOf(bs[k].segs[q].colourKey)); RCT rc; rc.set(off::coord(xt), off::coord(y0 + 1), off::coord(std::min(r - 1, xt + pw + 1)), off::coord(y1 - 1)); rc.drawText(part.c_str(), false, false); xt += pw; }
-            off::IconRect ir; ir.l = l; ir.t = y0 + 1; ir.r = r; ir.b = y1 - 1; e.badgeHit.push_back(std::make_pair(ir, bs[k].tip));   // (1.19.0) the hover
+        off::fillFlat(this, g.left, y0, g.edge, y0 + lst::STRIPS * lst::ROW_H, (COLOR)0x000B0F15);
+        off::fillFlat(this, g.left, y0 + lst::STRIPS * lst::ROW_H, g.edge, y0 + lst::STRIPS * lst::ROW_H, (COLOR)0x00374151);
+        FONT f; f.id = HELVETICA; f.size = 8; f.style = BOLD;
+        auto colOf = [&](int c) { return (COLOR)(c == lst::GREEN ? e.dlSet.c(dlset::K_COL_LOW) : e.dlSet.c(dlset::K_COL_HIGH)); };
+        for (int s = 0; s < lst::STRIPS; ++s) {
+            const int yr = y0 + s * lst::ROW_H;
+            FONT fl = f; fl.style = PLAIN; setFont(fl); setTextColor((COLOR)0x009CA3AF);
+            { RCT rc; rc.set(off::coord(g.left + 3), off::coord(yr + 4), off::coord(g.left + lst::LABEL_W), off::coord(yr + 4 + lst::SUB_H + 2)); rc.drawText(lst::stripName(lst::DEF, s), false, false); }
+            setFont(f);
+            std::vector<lst::Item> items; std::vector<size_t> idx;
+            for (size_t k = 0; k < cs.size(); ++k) { if (cs[k].pk.shown[s] < 0) continue; lst::Item it; it.xc = cs[k].xc; it.w = (int)getTextWidth(cs[k].v[(size_t)cs[k].pk.shown[s]].code.c_str(), -1) + 1; items.push_back(it); idx.push_back(k); }
+            const std::vector<lst::Placed> pl = lst::placeStrip(items, g.left + lst::LABEL_W, g.edge);
+            for (size_t q = 0; q < pl.size(); ++q) {
+                if (!pl[q].drawn) { ++e.stripSkipped; continue; }
+                const C& c = cs[idx[q]]; const lst::Lt& l = c.v[(size_t)c.pk.shown[s]];
+                const int t = yr + pl[q].sub * lst::SUB_H, b = t + lst::SUB_H;
+                if (box && pl[q].l < box->r && pl[q].r > box->l && t < box->b && b > box->t) { ++e.stripSkipped; continue; }   // never over the box
+                setTextColor(colOf(l.colour));
+                RCT rc; rc.set(off::coord(pl[q].l), off::coord(t), off::coord(pl[q].r + 1), off::coord(b)); rc.drawText(l.code.c_str(), false, false);
+                off::IconRect ir; ir.l = pl[q].l; ir.t = t; ir.r = pl[q].r; ir.b = b; e.badgeHit.push_back(std::make_pair(ir, stripTipText(S, e, c.key, s, c.v, c.pk)));
+                ++e.stripsDrawn;
+            }
         }
         if (e.badgeTip >= (int)e.badgeHit.size()) e.badgeTip = -1;
         ++e.badgesDrawn;
@@ -893,6 +994,8 @@ public:
         S.paneH = pane.bottom - pane.top;
         off::PaneGeo g = off::paneGeo(this, gmode(S.set.mode));
         g.reserve += off::QUESTION_H;                                      // (1.8.0) the question line on top
+        const int stripRes = g.reserve;                                    // (1.23.0) the two letter strips start here; the net bars below them
+        g.reserve += topReserve();
         const int hov = S.hov.hover.bar >= 0 && S.hov.hover.bar < last ? S.hov.hover.bar : -1;
         const int mb = hov >= 0 ? hov : last - 1;
         const long long mt = (long long)times[mb];
@@ -1084,7 +1187,7 @@ public:
                     for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, dt::Turn>::const_iterator it = e->dtTurns.find(std::make_pair(sd, (long long)times[i])); if (it != e->dtTurns.end()) mark(i, it->second, false); }
                 if (e->dtHaveLive && last <= v1) mark(last, e->dtLive, true);
             }
-            if (top > 0) badgeRow(S, *e, g, v0, v1, last, slot, times, xOf, P.ok ? &P.box : nullptr);   // (1.15.0) the badge row
+            { off::PaneGeo gs = g; gs.reserve = stripRes; if (top > 0) badgeRow(S, *e, gs, v0, v1, last, slot, times, xOf, P.ok ? &P.box : nullptr); else { e->badgeHit.clear(); e->badgeTip = -1; } }   // (1.23.0) the two letter strips
         }
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
         off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
@@ -1222,6 +1325,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.22.0");   // BF_VERSION
+    p->setVersion("1.23.0");   // BF_VERSION
     return p;
 }

@@ -38,7 +38,7 @@ REM (2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator alway
 REM   anymore") THE SETTINGS CONTRACT GATES EVERY BUILD: plugin\tests_settings\settings_contract.cpp (SettingsSpec.h + every <Name>Settings.h +
 REM   the migrated sources) is compiled and run first; FAIL = nothing is built this tick (the installed DLLs stay), the log says why once,
 REM   plugin\out\SETTINGS-CONTRACT.txt has every failing check. SETSRC = the plugin sources on the layer (add one when it migrates).
-set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp KeyLevels.cpp DealerHedge.cpp"
+set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp KeyLevels.cpp DealerHedge.cpp ReversalStage.cpp"
 call :settings
 if defined SETFAIL (
   call :status
@@ -106,7 +106,7 @@ REM (2026-10-13) lsBidAskStats 1.3.0 - who is attacking: S / L letters from the 
 REM (2026-10-13 of140) BidAskStats 1.5.0 / PullStats 1.1.0 / StackStats 1.1.0 also hash OptionsFlow.h (BidAskStats StopRun.h); TapeReader 1.1.0 hashes OptionsFlow.h
 REM (2026-10-13 fix1) BidAskStats 1.5.1 / PullStats 1.1.1 / StackStats 1.1.1 / TapeReader 1.1.1 / LiquidityProfile also hash HoverBoard.h (the chart-wide hover)
 REM (2026-10-21 20:23 CT) lsBidAskStats 1.26.0 attacker letters: AttackLogic.h + DefenseTurn.h / TrapLogic.h / DefenseLinesSettings.h hashed (G / Tr / Defense letters read from lsBookFlow / the Delta Profile records)
-call :one BidAskStats lsBidAskStats SignalBoard.h BidAskStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h StopRun.h OptionsFlow.h HoverBoard.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h OrderFlowPaneSettings.h SettingsSpec.h SettingsHost.h BigLotTiers.h SessionVWAPLogic.h PaneCursor.h BoxRead.h BoxReadDraw.h EffortReward.h LargeLotPool.h OnTouchLogic.h OnTouchParams.h SettingsGuard.h MoveLogic.h AttackLogic.h DefenseTurn.h TrapLogic.h DefenseLinesSettings.h SharedAbsorb.h
+call :one BidAskStats lsBidAskStats SignalBoard.h BidAskStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h StopRun.h OptionsFlow.h HoverBoard.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h OrderFlowPaneSettings.h SettingsSpec.h SettingsHost.h BigLotTiers.h SessionVWAPLogic.h PaneCursor.h BoxRead.h BoxReadDraw.h EffortReward.h LargeLotPool.h OnTouchLogic.h OnTouchParams.h SettingsGuard.h MoveLogic.h AttackLogic.h DefenseTurn.h TrapLogic.h DefenseLinesSettings.h SharedAbsorb.h LetterStrips.h
 REM (2026-10-14 night) lsPullStats 1.5.0 - lsPulling's arrival read merged in (ZoneRead.h 1.1.0; the line shows only the locked read)
 REM (2026-10-13) lsPullStats 1.0.0 - who is leaving: resting orders pulled near price per candle (MBO), L, message line + info box (Rassul "number of bids and ask pulled like a histogram")
 REM (retired 2026-10-16) call :one PullStats lsPullStats PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h
@@ -115,10 +115,12 @@ REM (retired 2026-10-16) call :one StackStats lsStackStats StackStatsLogic.h Ord
 REM (2026-10-16 Rassul 07:49 CT "dont keep the old panes, replace them") lsPullStats + lsStackStats RETIRED from the build: lsBookFlow 1.0.0 replaces both
 REM   (one net bar per side; it still writes the StackStats\ and PullStats\ records and the PullStats zone read). Their sources stay in plugin\ for reference.
 REM (2026-10-21) lsBookFlow 1.19.0 reads the Delta Profile's TR record (Tr on the Defense badge): TrapLogic.h hashed
-call :one BookFlow lsBookFlow BookFlowLogic.h StackStatsLogic.h PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h OrderFlowPaneSettings.h SettingsSpec.h SettingsHost.h PaneCursor.h BoxRead.h BoxReadDraw.h DefenseTurn.h DefenseLinesSettings.h EffortReward.h LargeLotPool.h SettingsGuard.h MoveLogic.h TrapLogic.h SharedAbsorb.h ArrivalStamp.h
+call :one BookFlow lsBookFlow BookFlowLogic.h StackStatsLogic.h PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h OrderFlowPaneSettings.h SettingsSpec.h SettingsHost.h PaneCursor.h BoxRead.h BoxReadDraw.h DefenseTurn.h DefenseLinesSettings.h EffortReward.h LargeLotPool.h SettingsGuard.h MoveLogic.h TrapLogic.h SharedAbsorb.h ArrivalStamp.h LetterStrips.h
 REM (2026-10-20 Rassul 12:22 CT "first build the lines, do it now") lsDefenseLines 1.0.0 - the Defense pane's pivot turns + refill lines on the price chart
 REM (2026-10-22) lsDefenseLines 1.10.0 trails (MoveLogic 1.2.0) + the trail hover: HoverBoard.h hashed
 call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h HoverBoard.h
+REM (2026-10-22 Rassul approved layout-stages-2strips.png 11:41-11:46 CT, build 15:20 CT) lsReversalStage 1.0.0 - "Which stage is the pivot in?" staircase pane, reads the Strips\ letter records of lsBidAskStats 1.28.0 / lsBookFlow 1.23.0
+call :one ReversalStage lsReversalStage ReversalStageLogic.h LetterStrips.h HostSlot.h SettingsGuard.h ReversalStageSettings.h SettingsSpec.h SettingsHost.h
 REM (2026-10-20 22:41 CT Rassul "a seperate levels indicator without the open .. for my hourly charts") lsKeyLevels 1.0.0 - key levels across the chart, badges right-justified
 call :one KeyLevels lsKeyLevels KeyLevelsHLogic.h KeyLevelsHSettings.h DealerProfileAuditLogic.h DealerLogic.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h BoxDock.h BannerBoard.h KeepOutDraw.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
@@ -304,7 +306,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - new builds install after 15:15 CT, when Investor/RT is closed ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines KeyLevels TapeReader CobImpulse BigBidAsk StopRunMark DealerHedge TurnOrder SweepRefill) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines ReversalStage KeyLevels TapeReader CobImpulse BigBidAsk StopRunMark DealerHedge TurnOrder SweepRefill) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"

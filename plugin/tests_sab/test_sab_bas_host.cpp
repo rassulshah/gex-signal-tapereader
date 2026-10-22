@@ -18,7 +18,7 @@ static int fails = 0, passes = 0;
 static std::string readAll(const std::string& p) { std::ifstream f(p.c_str(), std::ios::binary); std::stringstream s; s << f.rdbuf(); return s.str(); }
 static void dispose(Ind* p) { p->destroy(); p->~Ind(); ::operator delete(p); }
 static Ind* make() { Ind* p = static_cast<Ind*>(CreateExtension()); static bool once = false; if (!once) { once = true; p->setup(); } return p; }
-static RTX_EVENT moveAt(int h, int v, long bar) { RTX_EVENT e; std::memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)h; e.v.mouse.v = (short)v; e.v.mouse.bar = bar; return e; }
+[[maybe_unused]] static RTX_EVENT moveAt(int h, int v, long bar) { RTX_EVENT e; std::memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)h; e.v.mouse.v = (short)v; e.v.mouse.bar = bar; return e; }
 static const unsigned long T0 = 1791900000UL;
 static unsigned long keyOf(int k) { return T0 + 60UL * (unsigned long)k; }
 static const int KA = 25, KR = 31, KH = 37;                 // KA: bullish A (green at a low); KR: same effort, RED at a low (no A); KH: bearish A at a high
@@ -41,7 +41,7 @@ int main() {
     for (int k = 0; k <= 45; ++k) h.bars.push_back(barFor(k));
     Ind* p = make(); for (int r = 0; r < 4; ++r) { NOW += 1500; p->calc(0); p->draw(); }
     BASState* S = p->testState();
-    CHECK(S && std::string(BAS_VERSION) == "1.27.0" && std::string(sab::VERSION) == "1.0.0", "lsBidAskStats 1.27.0 with SharedAbsorb 1.0.0");
+    CHECK(S && std::string(BAS_VERSION) == "1.28.0" && std::string(sab::VERSION) == "1.0.0", "lsBidAskStats 1.28.0 with SharedAbsorb 1.0.0");
     const std::string recPath = flex + "\\SharedAbsorb\\SAB-ES-60.csv";
     std::string rec = readAll(recPath);
     std::vector<std::string> lines; { std::stringstream ss(rec); std::string ln; while (std::getline(ss, ln)) if (ln.compare(0, 4, "SAB|") == 0) lines.push_back(ln); }
@@ -55,32 +55,19 @@ int main() {
     bool anyGreenHigh = false; for (auto& l : lines) { sab::Rec q; if (sab::parse(l, q) && ((q.side == sab::LOW) != (q.close == 'G'))) anyGreenHigh = true; }
     CHECK(!anyGreenHigh, "no record line is on an attacker-colour candle");
     h.draws.clear(); p->draw();
-    auto badgeText = [&](long long key, std::vector<std::pair<std::string, COLOR> >* parts = nullptr) {
-        std::string b; const int xc = 50 + (int)((key - (long long)T0) / 60) * h.barW;
-        for (size_t q = 0; q < S->badgeHit.size(); ++q) { const off::IconRect& r = S->badgeHit[q].first; if (xc < r.l - 12 || xc > r.r + 12) continue;
-            for (auto& d : h.draws) if (d.type == "text" && d.x >= r.l - 1 && d.x <= r.r && d.y >= r.t - 3 && d.y <= r.b) { b += d.text; if (parts) parts->push_back(std::make_pair(d.text, d.color)); } break; }
-        return b; };
-    {   std::vector<std::pair<std::string, COLOR> > pa; const std::string ba = badgeText(kA, &pa);
-        CHECK(ba.compare(0, 1, "A") == 0 && !pa.empty() && pa[0].second == C_ASK, ("KA: the attacker badge starts with A in green (" + ba + ")").c_str()); }
-    CHECK(badgeText(kR).find('A') == std::string::npos, "KR (attacker-colour candle): no A on the badge");
-    {   std::vector<std::pair<std::string, COLOR> > ph; const std::string bh = badgeText(kH, &ph);
-        CHECK(bh.compare(0, 1, "A") == 0 && !ph.empty() && ph[0].second == C_BID, ("KH: the badge starts with A in red (" + bh + ")").c_str()); }
-    // the hover on KA: the shared block in the agreed order
-    {   const off::IconRect* r = nullptr; const int xc = 50 + KA * h.barW; for (auto& b : S->badgeHit) if (xc >= b.first.l - 12 && xc <= b.first.r + 12) r = &b.first;
-        CHECK(r != nullptr, "the KA badge's rectangle kept for the mouse");
-        if (r) {
-            std::string tip = [&]() { for (auto& b : S->badgeHit) if (&b.first == r) return b.second; return std::string(); }();
-            for (size_t w = tip.find("\n     "); w != std::string::npos; w = tip.find("\n     ")) tip.replace(w, 6, " ");   // unwrap continuation rows
+    // (lsBidAskStats 1.28.0) the shared A is decided and recorded here but DRAWN on the Defense pane only (the attacker strips: S K L / R Tr G)
+    auto drawnA = [&](long long key) { const int xc = 50 + (int)((key - (long long)T0) / 60) * h.barW;
+        for (auto& b : S->badgeHit) if (xc >= b.first.l - 8 && xc <= b.first.r + 8) for (auto& d : h.draws) if (d.type == "text" && d.text == "A" && d.x == b.first.l) return true; return false; };
+    CHECK(!drawnA(kA) && !drawnA(kH) && !drawnA(kR), "(1.28.0) no A on the attacker pane (the Defense pane draws the shared A)");
+    {   const sab::Rec* rr = S->sab.st.atRaw(sab::LOW, kA); CHECK(rr != nullptr, "KA: the shared A recorded (LOW)");
+        CHECK(S->sab.st.atRaw(sab::HIGH, kH) != nullptr && S->sab.st.atRaw(sab::LOW, kR) == nullptr && S->sab.st.atRaw(sab::HIGH, kR) == nullptr, "KH recorded (HIGH); KR (attacker-colour candle) never");
+        if (rr) {
+            std::string tip; for (const std::string& row : sab::hover(*rr, S->sab.P)) tip += "\n" + row;
             const size_t q = tip.find("A  Absorbed - will this low hold?"), e = tip.find("Effort: 4.0x (2.0x)"), c = tip.find("Close: green"),
                          bk = tip.find("Book: n/a"), pl = tip.find("Pulling:"), at = tip.find("Attack:"), lv = tip.find("Level:"), hd = tip.find("this low held 66% vs 51%"),
                          us = tip.find("arms your reversal bar / CoB entry - not a direction call"), ex = tip.find("Example:");
             CHECK(q != std::string::npos && e != std::string::npos && q < e && e < c && c < bk && bk < pl && pl < at && at < lv && lv < hd && hd < us && us < ex,
-                  "hover: question, effort vs threshold, close, book, pulling, attack, level + gamma, held rate with n, not an entry, example - in that order");
-            bas_test_cursor_wnd = (void*)0x1; pc::test_ok = true; const off::IconRect rr = *r;
-            pc::test_cx = (rr.l + rr.r) / 2 + 1000; pc::test_cy = (rr.t + rr.b) / 2 + 500;
-            RTX_EVENT ev = moveAt((rr.l + rr.r) / 2, (rr.t + rr.b) / 2, KA); p->mouse(&ev); h.draws.clear(); p->draw();
-            CHECK(S->badgeTip >= 0 && S->lastTip.r > S->lastTip.l && S->lastTip.b <= h.paneBottom - 2, "mouse on the A badge: the hover drawn inside the pane");
-            pc::test_cy = 2000; NOW += 300; p->calc(0); h.draws.clear(); p->draw();
+                  "the shared A hover (drawn by the Defense pane): question, effort vs threshold, close, book, pulling, attack, level + gamma, held rate with n, not an entry, example - in that order");
         }
     }
     {   const std::string st = readAll(flex + "\\BidAskStats.status-ES-60.txt").empty() ? std::string() : std::string("x");
@@ -93,7 +80,7 @@ int main() {
     Ind* p2 = make(); for (int r = 0; r < 4; ++r) { NOW += 1500; p2->calc(0); p2->draw(); }
     S = p2->testState(); h.draws.clear(); p2->draw();
     CHECK(readAll(recPath) == rec, "restart: nothing decided again, nothing written");
-    CHECK(S->sab.st.atRaw(sab::LOW, kA) && S->sab.st.atRaw(sab::HIGH, kH) && S->sab.fired == 0 && badgeText(kA).compare(0, 1, "A") == 0, "restart: the same A's from the record");
+    CHECK(S->sab.st.atRaw(sab::LOW, kA) && S->sab.st.atRaw(sab::HIGH, kH) && S->sab.fired == 0, "restart: the same A's from the record");
     dispose(p2);
     // a line another plugin wrote first wins (adopted): a fresh chart, KA's line pre-written by "DP" with effort 3.3
     {   std::remove(recPath.c_str());

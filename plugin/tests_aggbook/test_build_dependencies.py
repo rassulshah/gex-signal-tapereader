@@ -11,7 +11,8 @@ for target in ['BidAskStats','BookFlow','DefenseLines',
                # (2026-10-21) every plugin that now includes KeepOutDraw.h / BoxDock.h / BannerBoard.h (the HOD/LOD keep-out)
                'KeyLevels','DeltaProfile','TapeFlowMarks','CobImpulse','DealerSig','KingTracker','SessionVWAP','LiquidityProfile',
                'BigBidAsk',   # (1.21.0) breakout / breakdown
-               'DealerProfile','LiquidityFlow']:   # (DP 2.19.0) LevelPctLogic.h; ColumnBoard.h 1.3.0
+               'DealerProfile','LiquidityFlow',
+               'ReversalStage']:   # (2026-10-22) lsReversalStage 1.0.0   # (DP 2.19.0) LevelPctLogic.h; ColumnBoard.h 1.3.0
     closure=set();todo=[target+'.cpp']
     while todo:
         name=todo.pop()

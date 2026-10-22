@@ -1,5 +1,12 @@
 /********************************************************************************
  *  BidAskStats.cpp  --  Investor/RT RTX extension  lsBidAskStats (the "Aggression" pane)  1.15.0 (2026-10-18)
+ *  1.28.0 (2026-10-22, Rassul approved layout-stages-2strips.png 11:41-11:46 CT, build ordered 15:20 CT): the badge row becomes TWO LETTER
+ *        STRIPS (LetterStrips.h 1.0.0), each its own row with a small left label: "Attack" (stage 1: S > K > L) and "Running out" (stages
+ *        3-4: R > Tr > G). ONE letter per strip per candle (the strongest by that fixed priority; the others in the hover), coloured by the
+ *        side that ACTS (buyers green, sellers red: buyers attacking a high = green, sellers at a low = red), no boxes / borders, no grey
+ *        sub-text; a letter that would touch its neighbour drops to the strip's lower half-row. The shared A is no longer drawn here (Defense
+ *        pane only). Hovers per strip (the existing per-letter blocks). Every letter is also appended to lsFlexLevels\Strips\ATK-<MKT>-<spb>.csv
+ *        (first line per candle + letter wins) for the Reversal Stage pane (lsReversalStage 1.0.0). Histogram, box, records: unchanged.
  *  1.26.0 (2026-10-21 20:11-20:23 CT, Rassul approved attacker-mockup-v2.png - "the attacker pane"): question "Who is aggressive?" (was
  *        "Is the effort rewarded?"); a BADGE ROW under it, above the bars (AttackLogic.h 1.0.0), one badge per closed candle, at most 4 letters
  *        (the font shrinks to fit, the rest in the hover), colour by meaning (bearish red / bullish green: buyers attacking or giving up at a
@@ -166,6 +173,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include "BoxReadDraw.h"
 #include "SignalBoard.h"              // (1.25.0) posts the order-book absorption prices (kind 'O')
 #include "EffortReward.h"            // (1.16.0) Attack Effort + Reward rows and their read
+#include "LetterStrips.h"            // (1.28.0) the two letter strips + the letter record for lsReversalStage
 #include "AttackLogic.h"             // (1.26.0) the attacker letters S / K / G / Tr / R / L: badge row, hover, K / S / AS lines
 #include "SharedAbsorb.h"            // (1.27.0) the SHARED absorption A: decided here at the close, one record for every plugin
 #include "DefenseLinesSettings.h"    // (1.26.0) dlset::turnsPath - lsBookFlow's turns file (G lines + the Defense letters, read only)
@@ -188,7 +196,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.27.0"          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.28.0"          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -201,7 +209,7 @@ static const COLOR C_ASK_BAR = 0x001F9D55, C_BID_BAR = 0x00962D2D;     // normal
 static const COLOR C_ASK_SPIKE = 0x0000FF00, C_BID_SPIKE = 0x00FF3B3B; // spikes: bright green (buyers) / bright red (sellers)
 static const COLOR C_BIG_LOT = 0x0000FFFF;                            // (1.14.0) the Big Lot cap: cyan = Big Lot in lsBigBidAsk too
 static const int BIG_LOT_CAP_PX = 3;
-static const int BAS_BADGE_H = 16;            // (1.26.0) the attacker badge row under the question line (bars start below it)
+static const int BAS_BADGE_H = 2 * lst::ROW_H + 2;   // (1.28.0) the two letter strips under the question line (bars start below them); 1.26.0: one 16 px badge row
 static const COLOR C_SR_GREEN = 0x00168A42, C_SR_RED = 0x00E0242A;     // (1.4.0) the R mark's letter on its white box (readable on white)
 static const size_t MAX_HOVER_WNDS = 8;
 static const int BAS_NUMS = 4 + off::REC_NUMS;                         // session record: bid|ask|bbid|bask + the order-feed numbers
@@ -334,6 +342,8 @@ struct BASState {
     std::vector<std::pair<off::IconRect, std::string> > badgeHit; int badgeTip = -1; dt::TipRect lastTip; int lastTipLevel = -1;
     // (1.27.0) THE SHARED A (SharedAbsorb.h): the record host, candles already judged, the store size last copied to atkO.SA
     sab::Host sab; std::set<long long> sabDone; size_t sabSeen = (size_t)-1; bool sabDir = false;
+    // (1.28.0) the letter record for lsReversalStage (lsFlexLevels\Strips\ATK-<MKT>-<spb>.csv): ids already in the file, counters
+    std::set<std::string> stripIds; std::string stripPath; long long stripReadMs = -1, stripWritten = 0, stripFail = 0, stripsDrawn = 0, stripSkipped = 0;
 };
 // (1.23.0, Rassul 2026-10-20 07:43 "do it") ORDER-BY-ORDER TOTALS: each side's aggressive lots from the exchange's order feed (the
 // aggressor order's own fills: bid hit = sellers, offer lifted = buyers) - what every tested turn rate was measured on (Databento MBO).
@@ -428,6 +438,9 @@ private:
     void attack(BASState& S, long long t, const off::Rec& r, const atk::Pace pace[2], const llp::Tiers& tiers, int ch);   // (1.26.0) K / S / AS at the close
     void sharedAbs(BASState& S, long long now);                           // (1.27.0) the shared A: decide + record + read
     void readOthers(BASState& S, long long now);                          // (1.26.0) lsBookFlow's G + Defense letters, the Delta Profile's TR
+    void candleLetters(BASState& S, long long key, bool isHigh, bool isLow, std::vector<lst::Lt>& v);   // (1.28.0) the strip letters of one closed candle
+    void exportStrips(BASState& S, long long now);                        // (1.28.0) lsFlexLevels\Strips\ATK-<MKT>-<spb>.csv
+    std::string stripTipText(BASState& S, long long key, int strip, const std::vector<lst::Lt>& v, const lst::Pick& pk);
     std::string secClock(long long sec);                                  // (1.26.0) "11:39:18 AM"
     std::string badgeTipText(BASState& S, long long key, const atk::BadgeIn& in, bool isHigh, bool isLow, const std::string& badge, const std::vector<std::string>& dropped);
     template <class XOf> void badgeRow(BASState& S, const off::PaneGeo& g, int v0, int v1, int last, int slot, RTARRAYI& times, XOf xOf, const bp::Box* box);
@@ -535,6 +548,7 @@ void BidAskStats::identify(BASState& S) {
     S.blSession.clear(); S.blRows.clear(); S.blFile.clear(); S.blRowsWritten.clear(); S.blRejected = 0;
     S.atkK.clear(); S.atkS.clear(); S.atkAS.clear(); S.atkO = atk::Others(); S.atkOff.clear(); S.atkReadMs = -1; S.atkTurnsPath.clear(); S.atkTrPath.clear();   // (1.26.0)
     S.sab = sab::Host(); S.sabDone.clear(); S.sabSeen = (size_t)-1; S.sabDir = false;   // (1.27.0)
+    S.stripIds.clear(); S.stripPath.clear(); S.stripReadMs = -1; S.stripWritten = S.stripFail = S.stripsDrawn = S.stripSkipped = 0;   // (1.28.0)
     S.atkKn = S.atkSn = S.atkUndecided = S.atkLoaded = S.atkRejected = 0; S.badgeHit.clear(); S.badgeTip = -1; S.lastTip = dt::TipRect(); S.lastTipLevel = -1;
     { int o = 0, c = 0; if (svl::rthOf(S.market.c_str(), o, c)) { S.openMin = o; S.closeMin = c; } else { S.openMin = 510; S.closeMin = 900; } }
 }
@@ -1281,6 +1295,7 @@ void BidAskStats::status(BASState& S, long long now) {
       << "\nATTACK,K " << S.atkKn << ",S " << S.atkSn << ",K_lines " << S.atkK.size() << ",S_lines " << S.atkS.size() << ",AS " << S.atkAS.size() << ",undecided " << S.atkUndecided
       << ",reloaded " << S.atkLoaded << ",rejected " << S.atkRejected << ",badges " << S.badgesDrawn << ",cut " << S.badgeDropped << ",hover_no_room " << S.badgeTipNoRoom << ",hover_compact " << S.badgeTipCompact
       << "\n" << S.sab.statusLine() << ",record SAB lines (nightly read SHARED_A)"
+      << "\nSTRIPS," << lst::VERSION << ",drawn " << S.stripsDrawn << ",skipped " << S.stripSkipped << ",exported " << S.stripWritten << ",export_fail " << S.stripFail << ",file " << S.stripPath
       << "\nATTACK_READS,G " << S.atkO.G.size() << ",TR " << S.atkO.Tr.size() << ",TR_bad " << S.atkO.bad << ",turns " << S.atkTurnsPath << ",tr " << S.atkTrPath      << "\nOPTIONS," << S.opt.why << ",asof " << S.opt.last.asof << ",reads " << S.opt.reads << ",arrived " << S.opt.hist.v.size()
       << "\nPARAMS_SOURCE," << S.params.load.source << "\nPARAMS," << off::paramsText(S.params.load.p);
     for (size_t i = 0; i < S.params.load.notes.size() && i < 20; ++i) o << "\nPARAMS_NOTE," << S.params.load.notes[i];
@@ -1342,7 +1357,8 @@ void BidAskStats::pump() {
                 finalize(S, now);
                 stopRuns(S);
                 marketState(S, now); obPublish(S, now);
-                sharedAbs(S, now);                                         // (1.27.0) after the order book of each candle is posted                                       // (1.13.0) SRC AGG, behind the scenes
+                sharedAbs(S, now);                                         // (1.27.0) after the order book of each candle is posted
+                exportStrips(S, now);                                      // (1.28.0) the letter record for lsReversalStage                                       // (1.13.0) SRC AGG, behind the scenes
                 bigLots(S);                                                // (1.14.0) the Big Lot sizes + each closed candle's mark, once
             }
             if (count >= 2 && !S.faulted) {                                // (1.6.0) the zone read line
@@ -1567,65 +1583,134 @@ std::string BidAskStats::badgeTipText(BASState& S, long long key, const atk::Bad
     const std::string when = key > 0 && getLocaltime((RTDATE)key, &x) ? bas::clock12(x.tm_hour, x.tm_min) : std::string();
     return atk::hoverText(badge, when, L.empty() ? -1 : L.front().colourKey, dropped, blocks, paceSide >= 0 ? atk::paceRow(pace, paceSide) : std::string());
 }
-// the badge row: a thin solid strip under the question line; on each closed candle ONE badge with the attacker letters decided on it, each
-// letter in its colour by meaning, "|" between, the font shrinking (9 -> 6 pt) to fit the candle's slot, never over the box (as lsBookFlow)
+// (1.28.0) the strip letters of one closed candle: S / K / L (Attack) and R / Tr / G (Running out), each with its pivot side, the book side
+// for L and the key numbers for the Reversal Stage hover. The shared A is not an attacker-pane letter any more (Defense pane only).
+void BidAskStats::candleLetters(BASState& S, long long key, bool isHigh, bool isLow, std::vector<lst::Lt>& v) {
+    v.clear(); char b[96];
+    for (int sd = 1; sd >= 0; --sd) {
+        const std::pair<int, long long> kk(sd, key);
+        std::map<std::pair<int, long long>, atk::SRead>::const_iterator w = S.atkS.find(kk);
+        if (w != S.atkS.end() && w->second.S) { std::snprintf(b, sizeof b, "%lld lots %lld prices", w->second.lots, w->second.nPx); v.push_back(lst::make(lst::ATK, "S", sd, -1, b)); }
+        std::map<std::pair<int, long long>, atk::KRead>::const_iterator k = S.atkK.find(kk);
+        if (k != S.atkK.end() && k->second.K) { std::snprintf(b, sizeof b, "%lld lots", k->second.lots); v.push_back(lst::make(lst::ATK, "K", sd, -1, b)); }
+        std::map<std::pair<int, long long>, dt::GiveUp>::const_iterator g = S.atkO.G.find(kk);
+        if (g != S.atkO.G.end() && g->second.G) { std::snprintf(b, sizeof b, "pulled %.1fx", g->second.x); v.push_back(lst::make(lst::ATK, "G", sd, -1, b)); }
+        std::map<std::pair<int, long long>, trapl::Rec>::const_iterator t = S.atkO.Tr.find(kk);
+        if (t != S.atkO.Tr.end()) { std::snprintf(b, sizeof b, "%.0f lots %.1fx", t->second.lots, t->second.x); v.push_back(lst::make(lst::ATK, "Tr", sd, -1, b)); }
+    }
+    { std::map<long long, std::vector<sr::Event> >::const_iterator se = S.srEv.find(key);
+      if (se != S.srEv.end()) for (size_t q = 0; q < se->second.size(); ++q) { const sr::Event& e = se->second[q]; if (e.show == sr::SHOW_OFF) continue;
+          std::snprintf(b, sizeof b, "%s %dt", e.level.c_str(), e.ticks); v.push_back(lst::make(lst::ATK, "R", e.dir > 0 ? lst::HIGH : lst::LOW, -1, b)); break; } }
+    { std::map<long long, atk::AS>::const_iterator a = S.atkAS.find(key);
+      if (a != S.atkAS.end()) for (int rs = 1; rs >= 0; --rs) if (atk::lOf(a->second, rs)) {
+          // the pivot an L order points at: buyers lifting = a high attempt, sellers hitting = a low attempt (at an extreme: that extreme)
+          const int piv = isHigh && !isLow ? lst::HIGH : isLow && !isHigh ? lst::LOW : (rs == off::ASK ? lst::HIGH : lst::LOW);
+          std::snprintf(b, sizeof b, "%lld lots", a->second.big[rs]); v.push_back(lst::make(lst::ATK, "L", piv, rs == off::ASK ? 1 : 0, b)); break; } }
+}
+// (1.28.0) every 3 s: append the strip letters of the closed candles (last 600) not yet in lsFlexLevels\Strips\ATK-<MKT>-<spb>.csv. First
+// line per candle + letter + pivot wins (another chart on the same market may have written it); an id counts as written only after a good
+// flushed append. The file is read once per binding (bounded 4 MB) to know what is already there.
+void BidAskStats::exportStrips(BASState& S, long long now) {
+    if (S.stripReadMs >= 0 && now >= S.stripReadMs && now - S.stripReadMs < 3000) return;
+    S.stripReadMs = now;
+    const std::string f = flexDir(); if (f.empty() || S.market.empty() || S.spb <= 0 || !(S.tick > 0)) return;
+    const std::string d = f + "\\Strips", p = d + "\\" + lst::fileName(lst::ATK, S.market, (int)S.spb);
+    if (p != S.stripPath) {
+        S.stripPath = p; S.stripIds.clear(); makeDir(d);
+        long long off0 = 0; atk::tailRead(p, off0, [&](const std::string& ln) { lst::Rec r; if (lst::parse(ln, r) && r.pane == lst::ATK) S.stripIds.insert(lst::idOf(lst::ATK, r.key, r.l.code, r.l.pivot)); }, 4LL * 1024 * 1024);
+    }
+    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow);
+    const int n = (int)std::min((long)times.count, std::min((long)hi.count, (long)lo.count));
+    if (n < 2) return;
+    std::string out; std::vector<std::string> ids;
+    for (int i = std::max(0, n - 601); i <= n - 2; ++i) {
+        const long long key = (long long)times[i]; if (key <= 0) continue;
+        bool isHigh = false, isLow = false;
+        if (i >= atk::EXT_BARS) { std::vector<long long> H, Lw; bool ok = true;
+            for (int j = i - atk::EXT_BARS; j <= i && ok; ++j) { off::Tick h = 0, l = 0; ok = off::toTick((double)hi[j], S.tick, h) && off::toTick((double)lo[j], S.tick, l); H.push_back(h); Lw.push_back(l); }
+            if (ok) atk::extremeOf(H, Lw, isHigh, isLow); }
+        std::vector<lst::Lt> v; candleLetters(S, key, isHigh, isLow, v);
+        for (size_t k = 0; k < v.size(); ++k) { const std::string id = lst::idOf(lst::ATK, key, v[k].code, v[k].pivot); if (S.stripIds.count(id) || std::find(ids.begin(), ids.end(), id) != ids.end()) continue;
+            out += lst::line(lst::ATK, key, v[k]) + "\n"; ids.push_back(id); }
+    }
+    if (out.empty()) return;
+    std::ofstream o(p.c_str(), std::ios::binary | std::ios::app); if (o) { o.write(out.data(), (std::streamsize)out.size()); o.flush(); }
+    if (o) { for (size_t k = 0; k < ids.size(); ++k) S.stripIds.insert(ids[k]); S.stripWritten += (long long)ids.size(); } else ++S.stripFail;
+    while (S.stripIds.size() > 20000) S.stripIds.erase(S.stripIds.begin());
+}
+// (1.28.0) the hover of one strip on one candle: the strip header (letter shown, the time, the others), the strip's question rows, then the
+// existing per-letter blocks (strongest first) and the pace line - the badge hover's blocks, now per strip
+std::string BidAskStats::stripTipText(BASState& S, long long key, int strip, const std::vector<lst::Lt>& v, const lst::Pick& pk) {
+    atk::BadgeIn in; std::vector<std::string> others;
+    for (size_t q = 0; q < pk.order[strip].size(); ++q) {
+        const lst::Lt& l = v[(size_t)pk.order[strip][q]];
+        if (q > 0) others.push_back(l.code);
+        const int key6 = l.pivot;
+        if (l.code == "S") in.S = key6; else if (l.code == "K") in.K = key6; else if (l.code == "G") in.G = key6; else if (l.code == "Tr") in.Tr = key6;
+        else if (l.code == "R") in.R = key6; else if (l.code == "L") in.L = key6;
+    }
+    const std::string full = badgeTipText(S, key, in, false, false, std::string(), std::vector<std::string>());
+    // split into header / blocks / pace (blocks are separated by an empty line; the pace line starts "Hover only:")
+    std::vector<std::string> parts; { size_t a = 0; for (;;) { const size_t b = full.find("\n\n", a); parts.push_back(full.substr(a, b == std::string::npos ? std::string::npos : b - a)); if (b == std::string::npos) break; a = b + 2; } }
+    std::vector<std::string> blocks; std::string pace;
+    for (size_t k = 1; k < parts.size(); ++k) { if (parts[k].compare(0, 11, "Hover only:") == 0) pace = parts[k]; else if (!parts[k].empty()) blocks.push_back(parts[k]); }
+    auto codeOf = [](const std::string& blk) { const size_t sp = blk.find(' '); return blk.substr(0, sp); };
+    std::stable_sort(blocks.begin(), blocks.end(), [&](const std::string& a, const std::string& b) { return lst::rankOf(lst::ATK, codeOf(a)) < lst::rankOf(lst::ATK, codeOf(b)); });
+    struct tm x; std::memset(&x, 0, sizeof(x));
+    const std::string when = key > 0 && getLocaltime((RTDATE)key, &x) ? bas::clock12(x.tm_hour, x.tm_min) : std::string();
+    std::string t = lst::header(lst::ATK, strip, v[(size_t)pk.shown[strip]].code, when, others);
+    const std::vector<std::string> qr = lst::stripQuestion(lst::ATK, strip);
+    t += "\n"; for (size_t k = 0; k < qr.size(); ++k) t += "\n" + dt::wrapRow(qr[k]);
+    for (size_t k = 0; k < blocks.size(); ++k) t += "\n\n" + blocks[k];
+    if (!pace.empty()) t += "\n\n" + pace;
+    return t;
+}
+// (1.28.0, Rassul approved layout-stages-2strips.png) the TWO LETTER STRIPS under the question line: "Attack" (S > K > L) and "Running out"
+// (R > Tr > G), a small grey label at the left of each; ONE letter per strip per closed candle in the colour of the side that acts, no
+// boxes / borders; neighbours never touch (lst::placeStrip: the lower half-row, else a small shift, else not drawn); never over the box.
+// Every drawn letter keeps its rectangle + its strip's hover for the mouse.
 template <class XOf>
 void BidAskStats::badgeRow(BASState& S, const off::PaneGeo& g, int v0, int v1, int last, int slot, RTARRAYI& times, XOf xOf, const bp::Box* box) {
-    struct B { int x; std::vector<dt::BadgeSeg> segs; std::string s, tip; };
-    std::vector<B> bs; S.badgeHit.clear();
+    (void)slot;
+    S.badgeHit.clear();
+    const int y0 = g.top + g.reserve + 1;
+    if (y0 + lst::STRIPS * lst::ROW_H + 10 > g.bottom) { S.badgeTip = -1; return; }   // pane too short
     RTARRAY hi(barHigh), lo(barLow);
+    struct C { int i; long long key; int xc; std::vector<lst::Lt> v; lst::Pick pk; };
+    std::vector<C> cs;
     for (int i = std::max(0, v0); i <= v1 && i < last; ++i) {
         const long long key = (long long)times[i];
-        atk::BadgeIn in;
-        for (int sd = 1; sd >= 0; --sd) {
-            const std::pair<int, long long> kk(sd, key);
-            std::map<std::pair<int, long long>, atk::SRead>::const_iterator w = S.atkS.find(kk); if (w != S.atkS.end() && w->second.S && in.S < 0) in.S = sd;
-            std::map<std::pair<int, long long>, atk::KRead>::const_iterator k = S.atkK.find(kk); if (k != S.atkK.end() && k->second.K && in.K < 0) in.K = sd;
-            std::map<std::pair<int, long long>, dt::GiveUp>::const_iterator gg = S.atkO.G.find(kk); if (gg != S.atkO.G.end() && gg->second.G && in.G < 0) in.G = sd;
-            if (S.atkO.Tr.count(kk) && in.Tr < 0) in.Tr = sd;
-            if (S.atkO.SA.count(kk) && in.A < 0) in.A = sd;                 // (1.27.0) the shared A (LOW green / HIGH red)
-        }
-        { std::map<long long, std::vector<sr::Event> >::const_iterator se = S.srEv.find(key);
-          if (se != S.srEv.end()) for (size_t q = 0; q < se->second.size() && in.R < 0; ++q) if (se->second[q].show != sr::SHOW_OFF) in.R = se->second[q].dir > 0 ? atk::HIGH : atk::LOW; }
+        const int xc = xOf(i); if (xc < g.left || xc > g.edge) continue;
         bool isHigh = false, isLow = false;
         if (i >= atk::EXT_BARS && S.tick > 0 && i < hi.count && i < lo.count) {
             std::vector<long long> H, Lw; bool ok = true;
             for (int j = i - atk::EXT_BARS; j <= i && ok; ++j) { off::Tick h = 0, l = 0; ok = off::toTick((double)hi[j], S.tick, h) && off::toTick((double)lo[j], S.tick, l); H.push_back(h); Lw.push_back(l); }
             if (ok) atk::extremeOf(H, Lw, isHigh, isLow);
         }
-        { std::map<long long, atk::AS>::const_iterator a = S.atkAS.find(key);
-          if (a != S.atkAS.end()) for (int rs = 1; rs >= 0 && in.L < 0; --rs) if (atk::lOf(a->second, rs)) in.L = atk::lColour(rs, isHigh, isLow); }
-        std::vector<std::string> dropped;
-        const std::vector<dt::BadgeSeg> segs = atk::badgeSegs(in, &dropped); if (segs.empty()) continue;
-        const int xc = xOf(i); if (xc < g.left || xc > g.edge) continue;
-        if (!dropped.empty()) ++S.badgeDropped;
-        const std::string txt = dt::segsText(segs);
-        bs.push_back(B{ xc, segs, txt, badgeTipText(S, key, in, isHigh, isLow, txt, dropped) });
+        C c; c.i = i; c.key = key; c.xc = xc; candleLetters(S, key, isHigh, isLow, c.v); if (c.v.empty()) continue;
+        c.pk = lst::pick(lst::ATK, c.v); cs.push_back(c);
     }
-    if (bs.empty()) { S.badgeTip = -1; return; }
-    const int y0 = g.top + g.reserve + 1, h = 15, y1 = y0 + h;
-    if (y1 + 10 > g.bottom) { S.badgeTip = -1; return; }                  // pane too short
-    off::fillFlat(this, g.left, y0, g.edge, y1, (COLOR)0x000B0F15);
-    off::fillFlat(this, g.left, y1, g.edge, y1, (COLOR)0x00374151);
-    const int maxW = std::max(12, slot - 2);
-    int prevR = INT_MIN;                                                   // a badge wider than its slot never covers the one before it
-    for (size_t k = 0; k < bs.size(); ++k) {
-        auto colOf = [&](int key) { return key == atk::HIGH ? C_BID : C_ASK; };   // by meaning: bearish red, bullish green
-        const COLOR col = colOf(bs[k].segs.front().colourKey);
-        FONT f; f.id = HELVETICA; f.style = BOLD;
-        const int fs = dt::fitFont([&](int pt) { f.size = pt; setFont(f); return (int)getTextWidth(bs[k].s.c_str(), -1) + 4; }, maxW, 9, 6);
-        f.size = fs; setFont(f); const int w = (int)getTextWidth(bs[k].s.c_str(), -1) + 4;
-        int l = bs[k].x - w / 2; if (prevR != INT_MIN && l <= prevR + 1) l = prevR + 2;
-        const int r = l + w;
-        if (box && l < box->r && r > box->l && y0 < box->b && y1 > box->t) continue;   // never over the box
-        if (r > g.edge) continue;
-        prevR = r;
-        off::fillFlat(this, l, y0 + 1, r, y0 + 1, col); off::fillFlat(this, l, y1 - 1, r, y1 - 1, col);
-        off::fillFlat(this, l, y0 + 1, l, y1 - 1, col); off::fillFlat(this, r, y0 + 1, r, y1 - 1, col);
-        int xt = l + 2;
-        for (size_t q = 0; q < bs[k].segs.size(); ++q) { const std::string& part = bs[k].segs[q].s; const int pw = (int)getTextWidth(part.c_str(), -1);
-            setTextColor(colOf(bs[k].segs[q].colourKey)); RCT rc; rc.set(off::coord(xt), off::coord(y0 + 1), off::coord(std::min(r - 1, xt + pw + 1)), off::coord(y1 - 1)); rc.drawText(part.c_str(), false, false); xt += pw; }
-        off::IconRect ir; ir.l = l; ir.t = y0 + 1; ir.r = r; ir.b = y1 - 1; S.badgeHit.push_back(std::make_pair(ir, bs[k].tip));
+    off::fillFlat(this, g.left, y0, g.edge, y0 + lst::STRIPS * lst::ROW_H, (COLOR)0x000B0F15);
+    off::fillFlat(this, g.left, y0 + lst::STRIPS * lst::ROW_H, g.edge, y0 + lst::STRIPS * lst::ROW_H, (COLOR)0x00374151);
+    FONT f; f.id = HELVETICA; f.size = 8; f.style = BOLD;
+    for (int s = 0; s < lst::STRIPS; ++s) {
+        const int yr = y0 + s * lst::ROW_H;
+        FONT fl = f; fl.style = PLAIN; setFont(fl); setTextColor(C_BORDER);
+        { RCT rc; rc.set(off::coord(g.left + 3), off::coord(yr + 4), off::coord(g.left + lst::LABEL_W), off::coord(yr + 4 + lst::SUB_H + 2)); rc.drawText(lst::stripName(lst::ATK, s), false, false); }
+        setFont(f);
+        std::vector<lst::Item> items; std::vector<size_t> idx;
+        for (size_t k = 0; k < cs.size(); ++k) { if (cs[k].pk.shown[s] < 0) continue; lst::Item it; it.xc = cs[k].xc; it.w = (int)getTextWidth(cs[k].v[(size_t)cs[k].pk.shown[s]].code.c_str(), -1) + 1; items.push_back(it); idx.push_back(k); }
+        const std::vector<lst::Placed> pl = lst::placeStrip(items, g.left + lst::LABEL_W, g.edge);
+        for (size_t q = 0; q < pl.size(); ++q) {
+            if (!pl[q].drawn) { ++S.stripSkipped; continue; }
+            const C& c = cs[idx[q]]; const lst::Lt& l = c.v[(size_t)c.pk.shown[s]];
+            const int t = yr + pl[q].sub * lst::SUB_H, b = t + lst::SUB_H;
+            if (box && pl[q].l < box->r && pl[q].r > box->l && t < box->b && b > box->t) { ++S.stripSkipped; continue; }   // never over the box
+            setTextColor(l.colour == lst::GREEN ? C_ASK : C_BID);
+            RCT rc; rc.set(off::coord(pl[q].l), off::coord(t), off::coord(pl[q].r + 1), off::coord(b)); rc.drawText(l.code.c_str(), false, false);
+            off::IconRect ir; ir.l = pl[q].l; ir.t = t; ir.r = pl[q].r; ir.b = b; S.badgeHit.push_back(std::make_pair(ir, stripTipText(S, c.key, s, c.v, c.pk)));
+            ++S.stripsDrawn;
+        }
     }
     if (S.badgeTip >= (int)S.badgeHit.size()) S.badgeTip = -1;
     ++S.badgesDrawn;
@@ -1880,6 +1965,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.27.0");   // BAS_VERSION
+    p->setVersion("1.28.0");   // BAS_VERSION
     return p;
 }

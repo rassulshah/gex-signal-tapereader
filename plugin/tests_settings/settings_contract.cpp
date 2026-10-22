@@ -30,6 +30,7 @@
 #include "../TurnOrderSettings.h"
 #include "../KeyLevelsHSettings.h"
 #include "../BigBidAskSettings.h"
+#include "../ReversalStageSettings.h"
 #include "../DealerHedgeSettings.h"
 #include "../SweepRefillSettings.h"
 
@@ -213,6 +214,7 @@ int main(int argc, char** argv) {
     E.push_back(Entry{ &torset::spec(), "TurnOrder.cpp", nullptr, {}, {} });   // (2026-10-22) lsTurnOrder 1.0.0: show + bid / offer colours, the confirmation gate (ATR), min size
     E.push_back(Entry{ &dhset::spec(), "DealerHedge.cpp", nullptr, {}, {} });   // (2026-10-22) lsDealerHedge 0.1.0 oH zones: show + buy / sell colours, band %, pulse, labels, hover, width, flow x, repeats, refills
     E.push_back(Entry{ &swrset::spec(), "SweepRefill.cpp", nullptr, {}, {} });   // (2026-10-22) lsSweepRefill 1.0.0 Sr: show bullish / bearish + colours, min prices / lots, refill %, window, gap, font
+    E.push_back(Entry{ &rsset::spec(), "ReversalStage.cpp", nullptr, {}, {} });   // (2026-10-22) lsReversalStage 1.0.0: steps show + low / high colours, stage names, Now box show + Position
     if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
         const int mkt = ss::marketIndex(argv[3]);
         for (const Entry& e : E) {

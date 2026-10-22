@@ -41,7 +41,7 @@ int main() {
     for (int k = 0; k <= 15; ++k) h.bars.push_back(bar(keyOf(k), 7000.0f, 7000.5f, 6999.5f, 7000.0f));
     Ind* p = make(); p->calc(0); p->draw(); p->calc(0);
     BASState* S = p->testState();
-    CHECK(S && std::string(bas::QUESTION) == "Who is aggressive?" && std::string(bas::VERSION) == "1.27.0" && std::string(BAS_VERSION) == "1.27.0", "lsBidAskStats 1.27.0, the question 'Who is aggressive?'");
+    CHECK(S && std::string(bas::QUESTION) == "Who is aggressive?" && std::string(bas::VERSION) == "1.28.0" && std::string(BAS_VERSION) == "1.28.0", "lsBidAskStats 1.28.0, the question 'Who is aggressive?'");
     // the Big Lot pool (S20 / S10 / S5): 3 past RTH sessions and 3 overnight ones of a different size
     {   llp::LogDist d; for (int k = 0; k < 200; ++k) d.addN(20, 1); for (int k = 0; k < 20; ++k) d.addN(100, 1); for (int k = 0; k < 10; ++k) d.addN(150, 1); for (int k = 0; k < 5; ++k) d.addN(220, 1);
         llp::LogDist n; for (int k = 0; k < 200; ++k) n.addN(15, 1); for (int k = 0; k < 20; ++k) n.addN(40, 1); for (int k = 0; k < 10; ++k) n.addN(60, 1); for (int k = 0; k < 5; ++k) n.addN(90, 1);
@@ -108,29 +108,38 @@ int main() {
     NOW += 3500; p->calc(0);
     CHECK(S->atkO.G.count(std::make_pair((int)dt::HIGH, kX)) && S->atkO.Tr.count(std::make_pair((int)dt::HIGH, kX)) && S->atkO.D.A.count(std::make_pair((int)dt::HIGH, kX)), "G + the Defense A read from lsBookFlow's turns file, Tr from the Delta Profile's record");
     h.draws.clear(); p->draw();
-    auto badgeText = [&](long long key, std::vector<std::pair<std::string, COLOR> >* parts = nullptr) {
+    // (1.28.0) the TWO LETTER STRIPS: strip 0 "Attack" (S > K > L), strip 1 "Running out" (R > Tr > G); one letter per strip per candle
+    const int sy0 = h.paneTop + off::textReserve(h.paneBottom - h.paneTop, off::MODE_NONE) + off::QUESTION_H + 1;
+    auto stripOf = [&](const off::IconRect& r) { return (r.t - sy0) / lst::ROW_H; };
+    auto badgeText = [&](long long key, int strip, std::vector<std::pair<std::string, COLOR> >* parts = nullptr) {
         std::string b; const int xc = 50 + (int)((key - (long long)T0) / 60) * h.barW;
-        for (size_t q = 0; q < S->badgeHit.size(); ++q) { const off::IconRect& r = S->badgeHit[q].first; if (xc < r.l - 12 || xc > r.r + 12) continue;
-            for (auto& d : h.draws) if (d.type == "text" && d.x >= r.l - 1 && d.x <= r.r && d.y >= r.t - 3 && d.y <= r.b) { b += d.text; if (parts) parts->push_back(std::make_pair(d.text, d.color)); } break; }
+        for (size_t q = 0; q < S->badgeHit.size(); ++q) { const off::IconRect& r = S->badgeHit[q].first; if (stripOf(r) != strip || xc < r.l - 6 || xc > r.r + 6) continue;
+            for (auto& d : h.draws) if (d.type == "text" && d.x >= r.l - 1 && d.x <= r.r && d.y >= r.t && d.y <= r.b) { b += d.text; if (parts) parts->push_back(std::make_pair(d.text, d.color)); } break; }
         return b; };
-    std::vector<std::pair<std::string, COLOR> > px;
-    const std::string bx = badgeText(kX, &px);
-    CHECK(bx == "S|K|G|Tr", ("X badge: the 4 most important letters (S, K, G, Tr; R to the hover): " + bx).c_str());
-    {   bool red = !px.empty(); for (auto& q : px) red = red && q.second == C_BID; CHECK(red, "X: buyers attacking / giving up / trapped at a high - every letter red (bearish)"); }
-    {   std::vector<std::pair<std::string, COLOR> > pz; const std::string bz = badgeText(kZ, &pz);
-        CHECK(bz == "K" && pz.size() == 1 && pz[0].second == C_ASK, ("Z: K green (sellers attacking a low = bullish): " + bz).c_str()); }
-    {   std::vector<std::pair<std::string, COLOR> > pw; const std::string bw = badgeText(kW, &pw);
-        CHECK(bw == "L" && pw.size() == 1 && pw[0].second == C_BID, ("W: L red (a seller, not at a low): " + bw).c_str()); }
-    CHECK(badgeText(kY).empty(), "Y: the initiative candle has no K badge");
-    {   bool q = false; for (auto& d : h.draws) if (d.type == "text" && d.text.find('?') != std::string::npos && d.text != bas::QUESTION) q = true;
-        CHECK(!q, "no '?' anywhere on the pane (letters, message / read line) except the question itself"); }
-    {   const off::IconRect* r = nullptr; for (auto& b : S->badgeHit) if (50 + X * h.barW >= b.first.l - 12 && 50 + X * h.barW <= b.first.r + 12) r = &b.first;
-        CHECK(r && r->t >= off::QUESTION_H && r->b <= r->t + 16, ("the badge row sits under the question line (" + std::to_string(r ? r->t : -1) + ")").c_str());
+    auto hitOf = [&](long long key, int strip) -> const off::IconRect* { const int xc = 50 + (int)((key - (long long)T0) / 60) * h.barW;
+        for (auto& b : S->badgeHit) if (stripOf(b.first) == strip && xc >= b.first.l - 6 && xc <= b.first.r + 6) return &b.first; return nullptr; };
+    {   std::vector<std::pair<std::string, COLOR> > pa, pr; const std::string a = badgeText(kX, 0, &pa), r = badgeText(kX, 1, &pr);
+        CHECK(a == "S" && pa.size() == 1 && pa[0].second == C_ASK, ("X Attack strip: S (the strongest of S, K), green = buyers act: " + a).c_str());
+        CHECK(r == "R" && pr.size() == 1 && pr[0].second == C_ASK, ("X Running out strip: R (the strongest of R, Tr, G), green = buyers' run: " + r).c_str()); }
+    {   std::vector<std::pair<std::string, COLOR> > pz; const std::string bz = badgeText(kZ, 0, &pz);
+        CHECK(bz == "K" && pz.size() == 1 && pz[0].second == C_BID && badgeText(kZ, 1).empty(), ("Z: K red (sellers attacking the low act): " + bz).c_str()); }
+    {   std::vector<std::pair<std::string, COLOR> > pw; const std::string bw = badgeText(kW, 0, &pw);
+        CHECK(bw == "L" && pw.size() == 1 && pw[0].second == C_BID, ("W: L red (a seller): " + bw).c_str()); }
+    CHECK(badgeText(kY, 0).empty() && badgeText(kY, 1).empty(), "Y: the initiative candle has no K");
+    {   bool q = false, aDrawn = false, border = false; for (auto& d : h.draws) { if (d.type == "text" && d.text.find('?') != std::string::npos && d.text != bas::QUESTION) q = true; if (d.type == "text" && d.text == "A") aDrawn = true; }
+        for (auto& b : S->badgeHit) for (auto& d : h.draws) if (d.type == "box" && d.x == b.first.l && d.r == b.first.r && d.b == b.first.b) border = true;
+        CHECK(!q, "no '?' anywhere on the pane (letters, message / read line) except the question itself");
+        CHECK(!aDrawn, "(1.28.0) no A on the attacker pane (Defense pane only)");
+        CHECK(!border, "(1.28.0) no boxes / borders around the letters"); }
+    {   bool la = false, lr = false; for (auto& d : h.draws) if (d.type == "text") { la = la || d.text == "Attack"; lr = lr || d.text == "Running out"; }
+        CHECK(la && lr, "the two strip labels at the left"); }
+    {   const off::IconRect* r = hitOf(kX, 1);
+        CHECK(r && r->t >= sy0 + lst::ROW_H && r->b <= sy0 + 2 * lst::ROW_H, ("the Running out letter sits in the second strip (" + std::to_string(r ? r->t : -1) + ")").c_str());
         int tallest = 1 << 30; for (auto& d : h.draws) if (d.type == "box" && (d.color == C_ASK_BAR || d.color == C_BID_BAR || d.color == C_ASK_SPIKE || d.color == C_BID_SPIKE)) tallest = std::min(tallest, d.y);
-        CHECK(r && tallest > r->b, ("the bars stay below the badge row (top bar y " + std::to_string(tallest) + ")").c_str()); }
+        CHECK(tallest > sy0 + 2 * lst::ROW_H, ("the bars stay below the strips (top bar y " + std::to_string(tallest) + ")").c_str()); }
     // ---- the hover on X: every letter (R cut from the badge), the numbers, the combination with the Defense A, inside the pane, off the box
-    {   const off::IconRect* r = nullptr; for (auto& b : S->badgeHit) if (50 + X * h.barW >= b.first.l - 12 && 50 + X * h.barW <= b.first.r + 12) r = &b.first;
-        CHECK(r != nullptr, "the X badge's rectangle kept for the mouse");
+    {   const off::IconRect* r = hitOf(kX, 1);
+        CHECK(r != nullptr, "the X Running-out letter's rectangle kept for the mouse");
         if (r) {
             bas_test_cursor_wnd = (void*)0x1; pc::test_ok = true;
             const off::IconRect rr = *r; pc::test_cx = (rr.l + rr.r) / 2 + 1000; pc::test_cy = (rr.t + rr.b) / 2 + 500;   // the screen cursor = the event + the pane's screen offset
@@ -141,12 +150,12 @@ int main() {
             std::string joined; for (auto& d : h.draws) if (d.type == "text" && d.x >= S->lastTip.l && d.r <= S->lastTip.r + 1 && d.y >= S->lastTip.t && d.y <= S->lastTip.b) {
                 if (d.text.compare(0, 5, "     ") == 0) joined += " " + d.text.substr(5); else joined += "\n" + d.text; }
             auto has = [&](const std::string& t) { return joined.find(t) != std::string::npos; };
-            CHECK(has("Attack S|K|G|Tr") && has("(+ R: no room on the badge)"), "hover header: the badge and the letter cut from it");
-            CHECK(has("K  Big aggressor - did one big buyer hit the high?") && has("One buy order of " + dt::lotsText(S10 + 51) + " lots at 2:"), "hover K: the question, the lots and the second it hit");
-            CHECK(has("S  Sweep of the leg") && has("took 39 prices") && has("the biggest sweep of the 10 candles before (60 lots)"), "hover S: prices and the leg");
+            CHECK(has("Running out: R") && has("(also on this candle: Tr, G)") && has("Question: are the attackers running out?"), "hover header: the strip, its letter, the others, the strip question");
             CHECK(has("G  Giving up") && has("19,226 pulled vs 18,673 added"), "hover G: lsBookFlow's G line numbers");
             CHECK(has("Tr  Trapped") && has("640 lots"), "hover Tr: the Delta Profile record");
-            CHECK(has("R  Stop run - did buyers get trapped above PDH?"), "hover R (cut from the badge): its own block");
+            CHECK(has("R  Stop run - did buyers get trapped above PDH?"), "hover R: its own block");
+            CHECK(!has("S  Sweep of the leg") && !has("K  Big aggressor"), "the Running-out hover has only its strip's letters");
+            CHECK(joined.find("R  Stop run") < joined.find("Tr  Trapped") && joined.find("Tr  Trapped") < joined.find("G  Giving up"), "blocks strongest first: R, Tr, G");
             CHECK(!has("with Defense A"), "(1.27.0) the Defense T line's own A no longer counts: only the SHARED A (tests_sab) makes an A");
             CHECK(S->lastTipLevel >= 1 || has("Status: still learning, n = "), "status still learning, n");
             const bp::Box& b = S->lastBox; const dt::TipRect& t = S->lastTip;
@@ -158,6 +167,13 @@ int main() {
                 h.paneBottom = pb0; h.draws.clear(); p->draw(); }
             pc::test_cy = 2000; NOW += 300; p->calc(0); h.draws.clear(); p->draw();
             CHECK(S->badgeTip < 0 && S->lastTip.r <= S->lastTip.l, "the cursor leaves the pane: the hover goes");
+            {   const off::IconRect* ra = hitOf(kX, 0); CHECK(ra != nullptr, "the X Attack letter's rectangle");
+                if (ra) { const off::IconRect a = *ra; pc::test_cx = (a.l + a.r) / 2 + 1000; pc::test_cy = (a.t + a.b) / 2 + 500;
+                    RTX_EVENT ev2 = moveAt((a.l + a.r) / 2, (a.t + a.b) / 2, X); p->mouse(&ev2); h.draws.clear(); p->draw();
+                    std::string j2; for (auto& d : h.draws) if (d.type == "text" && d.x >= S->lastTip.l && d.r <= S->lastTip.r + 1 && d.y >= S->lastTip.t && d.y <= S->lastTip.b) { if (d.text.compare(0, 5, "     ") == 0) j2 += " " + d.text.substr(5); else j2 += "\n" + d.text; }
+                    CHECK(j2.find("Attack: S") != std::string::npos && j2.find("(also on this candle: K)") != std::string::npos, "Attack hover header: S, K in the hover");
+                    CHECK(j2.find("S  Sweep of the leg") != std::string::npos && j2.find("took 39 prices") != std::string::npos && j2.find("K  Big aggressor - did one big buyer hit the high?") != std::string::npos, ("hover S + K blocks (level " + std::to_string(S->lastTipLevel) + ")").c_str());
+                    pc::test_cy = 2000; NOW += 300; p->calc(0); h.draws.clear(); p->draw(); } }
             pc::test_ok = false; bas_test_cursor_wnd = nullptr;
         }
     }
@@ -170,7 +186,7 @@ int main() {
     // ---- no repaint: later candles never change X; a restart reads the same letters back
     for (int k = 41; k <= 44; ++k) { S->accs[keyOf(k)] = accFor(k); h.bars.push_back(barFor(k + 1)); NOW += 100; p->calc(0); NOW += 600; p->calc(0); }
     h.draws.clear(); p->draw();
-    CHECK(badgeText(kX) == "S|K|G|Tr" && badgeText(kZ) == "K", "later candles: X and Z unchanged (decided once)");
+    CHECK(badgeText(kX, 0) == "S" && badgeText(kX, 1) == "R" && badgeText(kZ, 0) == "K", "later candles: X and Z unchanged (decided once)");
     const std::string rec1 = readAll(S->file.path);
     const size_t nK = linesWith(rec1, "K|").size(), nS = linesWith(rec1, "S|").size(), nA = linesWith(rec1, "AS|").size();
     dispose(p);
@@ -179,7 +195,15 @@ int main() {
     h.draws.clear(); p2->draw();
     S = S2;
     CHECK(S2->atkLoaded == (long long)(nK + nS + nA) && S2->atkRejected == 0, ("restart: every K / S / AS line read back (" + std::to_string(S2->atkLoaded) + ")").c_str());
-    CHECK(badgeText(kX) == "S|K|G|Tr" && badgeText(kZ) == "K" && badgeText(kW) == "L", "restart: the same badges (from the record, G / Tr from the other panes' records)");
+    {   // the stop run R is an event of this pane's own run (not reloaded here: srEv rebuilds from bars); the record-backed letters come back
+        CHECK(badgeText(kX, 0) == "S" && badgeText(kZ, 0) == "K" && badgeText(kW, 0) == "L" && (badgeText(kX, 1) == "Tr" || badgeText(kX, 1) == "R"), ("restart: the same strip letters (from the record, G / Tr from the other panes' records): " + badgeText(kX, 1)).c_str()); }
+    {   // (1.28.0) the letter record for lsReversalStage: one line per candle + letter + pivot, first line wins, nothing written twice
+        NOW += 4000; p2->calc(0);
+        const std::string sp = flex + "\\Strips\\ATK-ES-60.csv"; const std::string st = readAll(sp);
+        std::set<std::string> ids; int n = 0, dup = 0; std::stringstream ss(st); std::string ln;
+        while (std::getline(ss, ln)) { lst::Rec r; if (!lst::parse(ln, r)) continue; ++n; if (!ids.insert(lst::idOf(r.pane, r.key, r.l.code, r.l.pivot)).second) ++dup; }
+        CHECK(n >= 6 && dup == 0, ("the ATK letter record: " + std::to_string(n) + " lines, " + std::to_string(dup) + " duplicates").c_str());
+        CHECK(st.find("LT|1|A|" + std::to_string(kX) + "|S|1|-1|") != std::string::npos && st.find("LT|1|A|" + std::to_string(kZ) + "|K|0|-1|") != std::string::npos && st.find("LT|1|A|" + std::to_string(kW) + "|L|0|0|") != std::string::npos, "S at the high (pivot 1), K at the low (pivot 0), L a seller (book 0)"); }
     NOW += 1000; p2->calc(0);
     const std::string rec2 = readAll(S2->file.path);
     CHECK(linesWith(rec2, "K|") == linesWith(rec1, "K|") && linesWith(rec2, "S|") == linesWith(rec1, "S|") && linesWith(rec2, "AS|") == linesWith(rec1, "AS|"), "restart: nothing decided again, nothing rewritten");
@@ -189,6 +213,6 @@ int main() {
     Ind* p3 = make(); p3->calc(0); p3->draw();
     CHECK(p3->testState()->atkRejected == 1 && p3->testState()->atkK.size() == kN2, "a garbled K line is counted and skipped; the rest load");
     dispose(p3);
-    std::printf("Attack host 1.26.0: %d passed, %d failed\n", passes, fails);
+    std::printf("Attack host 1.28.0 (strips): %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }
