@@ -118,7 +118,7 @@ int main() {
     }
     // ---- the badge ---------------------------------------------------------------------------------------------------------------
     CHECK(dt::badgeText5(true, true, 'L', true, false) == "A|H|L|P" && dt::badgeText5(false, false, 0, true, false) == "P" && dt::badgeText5(true, false, 0, false, false) == "A", "the combined badge A|H|L|P");
-    CHECK(std::string(dt::VERSION) == "1.7.0" && std::string(mvl::VERSION) == "1.1.1" && std::string(off::VERSION) == "1.12.0", "versions");
+    CHECK(std::string(dt::VERSION) == "1.8.0" && std::string(mvl::VERSION) == "1.1.1" && std::string(off::VERSION) == "1.12.0", "versions");
     // ---- (1.1.0 / DefenseTurn 1.6.0, Rassul 14:16 "i want you to draw them") all four cases drawn ----------------------------------
     {   mvl::Read r; r.ext = 0; r.t = 100; r.px = 4000; r.tick = 0.25; r.norm[0] = 5; r.norm[1] = 5;
         r.s.in[0] = 12; r.s.bigSize[0] = 12; r.s.bigOld[0] = 3990; r.s.bigNew[0] = 3992;                 // bids pressed in
@@ -138,14 +138,14 @@ int main() {
         r.s.in[1] = 7; CHECK(mvl::letterOf(r, mvl::OFFERS) == 'P', "(1.1.1) the same flag with 7 offer lots moved in: P");
     }
     {   std::vector<dt::BadgeSeg> v = dt::badgeSegs(true, true, 'L', dt::LOW, 'P', 'B');
-        CHECK(dt::segsText(v) == "A|H|L|P|B?" && v.size() == 3 && v[0].colourKey == dt::LOW && v[1].s == "P|" && v[1].colourKey == dt::LOW && v[2].s == "B?" && v[2].colourKey == dt::HIGH, "badge parts: A|H|L| defending colour, P| bids green, B? offers red");
+        CHECK(dt::segsText(v) == "A|H|L|P|B" && v.size() == 3 && v[0].colourKey == dt::LOW && v[1].s == "P|" && v[1].colourKey == dt::LOW && v[2].s == "B" && v[2].colourKey == dt::HIGH, "badge parts: A|H|L| defending colour, P| bids green, B offers red");
         v = dt::badgeSegs(false, false, 0, dt::HIGH, 0, 'P');
-        CHECK(dt::segsText(v) == "P?" && v.size() == 1 && v[0].colourKey == dt::HIGH, "offers alone: P? red");
+        CHECK(dt::segsText(v) == "P" && v.size() == 1 && v[0].colourKey == dt::HIGH, "offers alone: P red");
         v = dt::badgeSegs(false, false, 'X', dt::LOW, 0, 0);
-        CHECK(dt::segsText(v) == "X?" && v[0].colourKey == dt::HIGH, "X alone: the opposite colour (as 1.4.0)");
+        CHECK(dt::segsText(v) == "X" && v[0].colourKey == dt::HIGH, "X alone: the opposite colour (as 1.4.0)");
         CHECK(dt::badgeSegs(false, false, 0, dt::LOW, 0, 0).empty(), "nothing: no badge");
         v = dt::badgeSegs(true, false, 0, dt::HIGH, 'B', 0);
-        CHECK(dt::segsText(v) == "A|B?" && v[0].colourKey == dt::HIGH && v[1].colourKey == dt::LOW, "A at a high (red) + bids stepped back (green)");
+        CHECK(dt::segsText(v) == "A|B" && v[0].colourKey == dt::HIGH && v[1].colourKey == dt::LOW, "A at a high (red) + bids stepped back (green)");
     }
     // ---- the shared engine (OrderFlowFeed.h 1.11.0) ---------------------------------------------------------------------------------
     {

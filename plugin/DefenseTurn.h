@@ -25,7 +25,7 @@
 #include <limits>
 
 namespace dt {
-static const char* const VERSION = "1.7.0";   // (1.7.0, 2026-10-21 Rassul approved 14:20-14:22 CT) G = the ATTACKERS giving up (giveUpDecide: their own resting orders pulled >= 2x normal after the extreme, net of moves, more pulled than added, attack died; no G on an initiative candle; G lines), W = the DEFENDERS withdrew at a key level (LevelWatch: touch + 60 s, net pulled >= 2x traded; supports drawn; W lines), Tr hover text (the Delta Profile's TR record), badgeSegs7 (A, H, Tr, G, W, P/B, L/X - at most 4 letters, the rest in the hover), attackersText / atLevelText for the box rows;   // (1.6.0, 2026-10-21 14:16-14:18 CT Rassul "i want you to draw them" - B (stepping back) and both offer cases, mockup v4) badgeSegs: every move letter drawn (P / B per BOOK side) in the colour of the side that moved (bids green = LOW colour, offers red = HIGH colour), each letter its own colour in one combined badge;   // (1.5.0, 2026-10-21 Rassul approved defender3-mockup-v3 11:50 CT "lets do it" + 11:59 both sides) Top Defender #3: badgeText5 adds P (the DEFENDERS PRESSING IN: their resting orders moved toward price, MoveLogic.h) - the only move case drawn; the other three cases recorded as M lines;   // (1.4.0, 2026-10-21 Rassul approved defender4-mockup-v1 + L / X 11:32 CT) Top Defender #4: the RE-TEST of the refill level (retestStep): price moved >= 0.5 ATR away, then came back into the zone within 15 min; the defenders' RESTING lots in the zone at the close BEFORE it came back vs the market normal -> L (reloaded) / X (empty) / N; Q lines in the turns file; badge "A|H|L"; box row "Re-test";   // (1.3.0, 2026-10-21 Rassul approved defender5-mockup-v2 11:25 CT "build this") H = the defenders HIT BACK after an A (counterDecide), the H line in the turns file, the pane badge text "A|H" (badgeText), the Counter row text;   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
+static const char* const VERSION = "1.8.0";   // (1.8.0, 2026-10-21 19:48 CT Rassul) no "?" on the badge (badgeSegs / badgeSegs7); the badge hover per letter (hoverA / H / Tr / G / W / Move / Q, statusText, hoverText) built from the records; tipSpot places it inside the pane, never over the info box;   // (1.7.0, 2026-10-21 Rassul approved 14:20-14:22 CT) G = the ATTACKERS giving up (giveUpDecide: their own resting orders pulled >= 2x normal after the extreme, net of moves, more pulled than added, attack died; no G on an initiative candle; G lines), W = the DEFENDERS withdrew at a key level (LevelWatch: touch + 60 s, net pulled >= 2x traded; supports drawn; W lines), Tr hover text (the Delta Profile's TR record), badgeSegs7 (A, H, Tr, G, W, P/B, L/X - at most 4 letters, the rest in the hover), attackersText / atLevelText for the box rows;   // (1.6.0, 2026-10-21 14:16-14:18 CT Rassul "i want you to draw them" - B (stepping back) and both offer cases, mockup v4) badgeSegs: every move letter drawn (P / B per BOOK side) in the colour of the side that moved (bids green = LOW colour, offers red = HIGH colour), each letter its own colour in one combined badge;   // (1.5.0, 2026-10-21 Rassul approved defender3-mockup-v3 11:50 CT "lets do it" + 11:59 both sides) Top Defender #3: badgeText5 adds P (the DEFENDERS PRESSING IN: their resting orders moved toward price, MoveLogic.h) - the only move case drawn; the other three cases recorded as M lines;   // (1.4.0, 2026-10-21 Rassul approved defender4-mockup-v1 + L / X 11:32 CT) Top Defender #4: the RE-TEST of the refill level (retestStep): price moved >= 0.5 ATR away, then came back into the zone within 15 min; the defenders' RESTING lots in the zone at the close BEFORE it came back vs the market normal -> L (reloaded) / X (empty) / N; Q lines in the turns file; badge "A|H|L"; box row "Re-test";   // (1.3.0, 2026-10-21 Rassul approved defender5-mockup-v2 11:25 CT "build this") H = the defenders HIT BACK after an A (counterDecide), the H line in the turns file, the pane badge text "A|H" (badgeText), the Counter row text;   // (1.1.0, 2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png) the gray EXHAUSTION line (attack died AT the price, touch rule) on pivots that have an R; T lines carry the pivot candle; lines at most 3 candles from the candle they refer to (yellow dot)
 // the market's median slowdown at a fresh-price touch ((lots/s 20-60 s) / (lots/s 0-20 s + 0.05)), Databento MBO Oct 5 / 7 / 9 (wall4.py)
 inline double adMedianOf(const std::string& m) {
     return m == "ES" ? 0.095 : m == "NQ" ? 0.029 : m == "CL" ? 0.057 : m == "GC" ? 0.0 : m == "HG" ? 0.0 : m == "NG" ? 0.032 : (m == "EU" || m == "6E") ? 0.067 : 0.05;
@@ -392,8 +392,7 @@ inline std::vector<BadgeSeg> badgeSegs(bool A, bool H, char Q, int defSide, char
     if (!base.empty()) { BadgeSeg b; b.s = base; b.colourKey = (Q == 'X' && !A && !H && !bidMove && !offerMove) ? 1 - defSide : defSide; o.push_back(b); }
     auto add = [&](char L, int key) { if (!L) return; BadgeSeg b; b.s = std::string(o.empty() ? "" : "|") + L; b.colourKey = key; if (!o.empty()) { o.back().s += "|"; b.s = std::string(1, L); } o.push_back(b); };
     add(bidMove, LOW); add(offerMove, HIGH);
-    if (!o.empty()) o.back().s += "?";
-    return o;
+    return o;                                    // (1.8.0, Rassul 19:48 CT) no "?" on the badge: proof status is in the hover
 }
 inline std::string segsText(const std::vector<BadgeSeg>& v) { std::string s; for (size_t k = 0; k < v.size(); ++k) s += v[k].s; return s; }
 
@@ -649,8 +648,151 @@ inline std::vector<BadgeSeg> badgeSegs7(const BadgeIn& b, std::vector<std::strin
         if (!o.empty()) o.back().s += "|";
         BadgeSeg s; s.s = v[k].s; s.colourKey = v[k].colourKey; o.push_back(s); lastBase = v[k].base;
     }
-    if (!o.empty()) o.back().s += "?";
+    return o;                                    // (1.8.0, Rassul 19:48 CT "remove the ? infront of them") no "?": the hover says "still learning"
+}
+
+// ---- (1.8.0, 2026-10-21 19:48 CT Rassul "implement hover over on the defense letters ... that give you detail about what happened") the
+// badge's HOVER: one block per letter decided on the candle (every letter, also the ones with no room on the badge), each in his hover
+// format - the question it answers, what happened (the record's own numbers), how to use it, the proof status. Built only from the records
+// lsBookFlow already keeps (T / H / Q / M / G / W lines, the Delta Profile's TR record) - no new detection. Rows <= ~100 characters (lesson 83).
+inline std::string lotsText(long long v) {                                  // 1540 -> "1,540"
+    const bool neg = v < 0; unsigned long long u = neg ? 0ULL - (unsigned long long)v : (unsigned long long)v;
+    std::string d = std::to_string(u), o; for (size_t k = 0; k < d.size(); ++k) { if (k && (d.size() - k) % 3 == 0) o += ','; o += d[k]; }
+    return neg ? "-" + o : o;
+}
+inline std::string priceText(double px, double tick) {                       // 7751.25 -> "7,751.25"; the tick's decimals; ".00" dropped
+    int d = 2; if (tick > 0) { d = 0; double x = tick; while (d < 8 && std::fabs(x - std::floor(x + 0.5)) > 1e-9) { x *= 10; ++d; } }
+    if (!std::isfinite(px)) return "n/a";
+    char b[64]; std::snprintf(b, sizeof b, "%.*f", d, std::fabs(px)); std::string r = b;
+    const size_t dot = r.find('.'); std::string ip = dot == std::string::npos ? r : r.substr(0, dot), fp = dot == std::string::npos ? std::string() : r.substr(dot);
+    bool zero = true; for (size_t k = 1; k < fp.size(); ++k) if (fp[k] != '0') zero = false; if (zero) fp.clear();
+    std::string o; for (size_t k = 0; k < ip.size(); ++k) { if (k && (ip.size() - k) % 3 == 0) o += ','; o += ip[k]; }
+    return (px < 0 ? "-" : "") + o + fp;
+}
+inline std::string xText(double x) { char b[24]; std::snprintf(b, sizeof b, "%.1fx", std::isfinite(x) ? x : 0.0); return b; }
+// the status row: "proven" once the nightly proves the letter for this market, else "still learning" with how many this chart has decided
+inline std::string statusText(bool proven, long long n) { return proven ? std::string("   Status: proven") : "   Status: still learning, n = " + std::to_string(n) + " (this chart; scored nightly)"; }
+struct HoverBlock { std::string letter; std::vector<std::string> rows; };
+// A: the turn candle absorbed (Turn / T line). side LOW = bids defend a low (sellers attack), HIGH = offers defend a high (buyers attack)
+inline HoverBlock hoverA(const Turn& t, double tick, bool proven, long long n) {
+    const bool low = t.side != HIGH; HoverBlock b; b.letter = "A";
+    b.rows.push_back(std::string("A  Absorbed - did the ") + (low ? "sellers' attack fail against the bids?" : "buyers' attack fail against the offers?"));
+    if (t.attAggr > 0) b.rows.push_back(std::string("   ") + (low ? "Sellers hit " : "Buyers lifted ") + lotsText(t.attAggr) + (low ? " lots into the bids at the low, and the bids held:" : " lots into the offers at the high, and the offers held:"));
+    else b.rows.push_back(std::string("   ") + (low ? "Sellers out-hit the bids at the low (lots not in the record), and the bids held:" : "Buyers out-lifted the offers at the high (lots not in the record), and the offers held:"));   // a T line read back has no attack size
+    b.rows.push_back(std::string("   refill effort ") + (low ? "bids " : "offers ") + lotsText(t.defNet) + (low ? " vs offers " : " vs bids ") + lotsText(t.attNet) + " net lots (" + marginText(t.marginPct) + " bigger), close "
+                     + (low ? "above" : "below") + " the R line " + priceText((double)t.linePx * tick, tick));
+    b.rows.push_back(std::string("   Use: the ") + (low ? "buyers held the low - look for the turn up; it fails on a close below " : "sellers held the high - look for the turn down; it fails on a close above ") + priceText((double)t.linePx * tick, tick));
+    b.rows.push_back(statusText(proven, n)); return b;
+}
+// H: the defenders hit back after the A (Counter / H line)
+inline HoverBlock hoverH(const Counter& c, bool proven, long long n) {
+    const bool low = c.side != HIGH; HoverBlock b; b.letter = "H";
+    b.rows.push_back(std::string("H  Hit back - did the ") + (low ? "buyers" : "sellers") + " strike back after absorbing the attack?");
+    b.rows.push_back(std::string("   Within ") + std::to_string(COUNTER_BARS) + " candles " + (low ? "buyers lifted " : "sellers hit ") + lotsText(c.lots) + " lots = "
+                     + xText(c.attack > 0 ? (double)c.lots / (double)c.attack : 0.0) + " the " + lotsText(c.attack) + "-lot attack; the close got 0.25+ ATR " + (low ? "above the low" : "below the high"));
+    b.rows.push_back(std::string("   Use: the defenders turned attackers - the turn has follow-through (no H = absorbed only)"));
+    b.rows.push_back(statusText(proven, n)); return b;
+}
+// Tr: the Delta Profile's trapped-traders record (top = trapped buyers above the old high)
+inline HoverBlock hoverTr(bool top, double lots, double x, bool proven, long long n) {
+    HoverBlock b; b.letter = "Tr";
+    b.rows.push_back(std::string("Tr  Trapped - are ") + (top ? "buyers" : "sellers") + " stuck on the wrong side of the old " + (top ? "high?" : "low?"));
+    b.rows.push_back(std::string("   ") + (top ? "Buyers" : "Sellers") + " trapped " + lotsText((long long)std::llround(lots)) + " lots (" + xText(x) + " normal) " + (top ? "above the old high" : "below the old low") + " (Delta Profile)");
+    b.rows.push_back(std::string("   Use: they must ") + (top ? "sell" : "buy") + " back to get out - fuel for the move " + (top ? "down" : "up") + "; it fails if price holds " + (top ? "above the old high" : "below the old low"));
+    b.rows.push_back(statusText(proven, n)); return b;
+}
+// G: the attackers giving up (GiveUp / G line). side = the extreme: LOW = sellers (offers) after a low, HIGH = buyers (bids) after a high
+inline HoverBlock hoverG(const GiveUp& g, bool proven, long long n) {
+    const bool high = g.side == HIGH; HoverBlock b; b.letter = "G";
+    b.rows.push_back(std::string("G  Giving up - are the ") + (high ? "buyers" : "sellers") + " (the attackers) pulling their own orders?");
+    std::string pace = g.pace < 0 ? std::string("pace n/a") : "pace down to " + xText(g.pace);
+    b.rows.push_back(std::string("   After the ") + (high ? "high the buyers pulled their bids at " : "low the sellers pulled their offers at ") + xText(g.x) + " normal ("
+                     + lotsText(g.pull) + " pulled vs " + lotsText(g.add) + " added in " + std::to_string(g.secs) + " s); " + pace);
+    b.rows.push_back(std::string("   Use: the attack is leaving - less pressure on the ") + (high ? "high" : "low") + "; weaker if they come back with size");
+    b.rows.push_back(statusText(proven, n)); return b;
+}
+// W: the defenders withdrew at a key-level support (WRead / W line); the price is the level's
+inline HoverBlock hoverW(const WRead& r, double tick, bool proven, long long n) {
+    HoverBlock b; b.letter = "W"; const long long net = std::max<long long>(0, r.pulled - r.added);
+    const double pct = net + r.filled > 0 ? 100.0 * (double)net / (double)(net + r.filled) : 0.0; char p[16]; std::snprintf(p, sizeof p, "%.0f%%", pct);
+    b.rows.push_back("W  Withdrew - did the bids leave the key level when price touched it?");
+    b.rows.push_back("   In the first " + std::to_string(W_SEC) + " s at " + r.name + " " + priceText((double)r.px * tick, tick) + " the bids pulled " + p + ": "
+                     + lotsText(net) + " lots net pulled vs " + lotsText(r.filled) + " traded");
+    b.rows.push_back("   Use: a warning - the support may not hold; wait for the bids to come back before buying it");
+    b.rows.push_back(statusText(proven, n)); return b;
+}
+// P / B for one BOOK side (0 bids, 1 offers): the moved lots, ticks and x normal of the move that qualified (MoveLogic Read / M line)
+inline HoverBlock hoverMove(char letter, int bookSide, long long lots, long long ticks, double x, bool proven, long long n) {
+    const bool bids = bookSide == 0, in = letter == 'P'; HoverBlock b; b.letter = std::string(1, letter);
+    b.rows.push_back(std::string(1, letter) + (in ? "  Pressed in - did the " : "  Stepped back - did the ") + (bids ? "bids" : "offers") + (in ? " move toward price?" : " move away from price?"));
+    b.rows.push_back(std::string("   ") + (bids ? "Bids (buyers) moved " : "Offers (sellers) moved ") + lotsText(lots) + " lots up to " + std::to_string(ticks) + (ticks == 1 ? " tick " : " ticks ")
+                     + (in ? "toward" : "away from") + " price = " + xText(x) + " normal");
+    b.rows.push_back(in ? std::string("   Use: they lean on price with resting size - it backs their side of the level")
+                        : std::string("   Use: they make room - less resting size where price is; their side is weaker here"));
+    b.rows.push_back(statusText(proven, n)); return b;
+}
+// L / X: the re-test of the R line (Retest / Q line); linePx = the turn's R line price (0 = unknown)
+inline HoverBlock hoverQ(const Retest& r, double linePx, double tick, bool proven, long long n) {
+    const bool low = r.side != HIGH, L = r.res == 'L'; HoverBlock b; b.letter = std::string(1, r.res);
+    const char* who = low ? "bids" : "offers";
+    b.rows.push_back(std::string(L ? "L  Reloaded - were the " : "X  Empty - were the ") + who + (L ? " back at the level on the re-test?" : " gone from the level on the re-test?"));
+    b.rows.push_back(std::string("   Re-test of the R line") + (linePx > 0 ? " " + priceText(linePx, tick) : std::string()) + ": " + lotsText(r.rest) + " lots of " + who + " waited in the zone = "
+                     + xText(r.ratio) + " normal (" + (L ? "reloaded at 1.0x or more)" : "empty at 0.35x or less)"));
+    b.rows.push_back(L ? std::string("   Use: the defenders are still there - the level can hold again (a read of them, not an entry)")
+                       : std::string("   Use: nobody is waiting at the level - a re-test is more likely to break"));
+    b.rows.push_back(statusText(proven, n)); return b;
+}
+// the whole hover: the badge, then one block per letter (in badge order), the letters with no room named in the header
+// a row longer than HOVER_WRAP characters continues on the next line (indented 5), broken at a space: narrow columns fit the pane
+static const size_t HOVER_WRAP = 56;
+inline std::string wrapRow(const std::string& row, size_t width = HOVER_WRAP) {
+    std::string o, rest = row; bool first = true;
+    while (rest.size() > width) {
+        size_t cut = rest.rfind(' ', width); if (cut == std::string::npos || cut <= 6) cut = width;
+        o += (first ? "" : "\n") + rest.substr(0, cut); first = false;
+        size_t k = cut; while (k < rest.size() && rest[k] == ' ') ++k;
+        rest = "     " + rest.substr(k);
+    }
+    return o + (first ? "" : "\n") + rest;
+}
+inline std::string hoverText(const std::string& badge, const std::vector<std::string>& dropped, const std::vector<HoverBlock>& blocks) {
+    std::string t = "Defense " + badge; if (!dropped.empty()) { t += "  (+ "; for (size_t k = 0; k < dropped.size(); ++k) t += (k ? ", " : "") + dropped[k]; t += ": no room on the badge)"; }
+    for (size_t k = 0; k < blocks.size(); ++k) { t += "\n"; for (size_t r = 0; r < blocks[k].rows.size(); ++r) t += "\n" + wrapRow(blocks[k].rows[r]); }
+    return t;
+}
+// the fit cascade when the pane is too small for every row: level 1 drops the "Use:" rows, level 2 also the "Status:" rows (the question
+// and the numbers always stay)
+inline std::string hoverCompact(const std::string& t, int level) {
+    if (level <= 0) return t;
+    std::string o, cur; bool first = true, dropping = false;
+    for (size_t i = 0; i <= t.size(); ++i) {
+        if (i < t.size() && t[i] != '\n') { cur += t[i]; continue; }
+        const bool cont = cur.compare(0, 5, "     ") == 0;                 // a wrapped row's continuation follows its row
+        const bool drop = cont ? dropping : (cur.compare(0, 7, "   Use:") == 0 || (level >= 2 && cur.compare(0, 10, "   Status:") == 0));
+        if (!cont) dropping = drop;
+        if (!drop) { if (!first) o += '\n'; o += cur; first = false; }
+        cur.clear();
+    }
     return o;
+}
+// where the hover box goes: below the badge (top = badge bottom + 3), starting at the badge's left, inside the pane, never over the info box
+// (>= 4 px clear); scanning left / right from there; if no spot below the badge, below the box. sizeAt(top, w, h) = the box size at that top.
+struct TipRect { int l = 0, t = 0, r = -1, b = -1; };
+template <class SizeAt> inline bool tipSpot(int L, int T, int R, int B, const TipRect& badge, const TipRect* box, SizeAt sizeAt, TipRect& out) {
+    std::vector<int> tops; tops.push_back(badge.b + 3); if (box && box->r > box->l) tops.push_back(box->b + 4);
+    for (size_t q = 0; q < tops.size(); ++q) {
+        const int top = tops[q]; if (top < T) continue;
+        int w = 0, h = 0; sizeAt(top, w, h);
+        if (w <= 0 || h <= 0 || top + h > B - 2 || w > R - L - 4) continue;
+        const int lo = L + 2, hi = R - 2 - w, l0 = std::max(lo, std::min(hi, badge.l));
+        auto clear = [&](int l) { return !box || box->r <= box->l || l + w + 4 <= box->l || l >= box->r + 4 || top + h + 4 <= box->t || top >= box->b + 4; };
+        for (int d = 0; d <= R - L; d += 2) {
+            if (l0 - d >= lo && clear(l0 - d)) { out.l = l0 - d; out.t = top; out.r = l0 - d + w; out.b = top + h; return true; }
+            if (d && l0 + d <= hi && clear(l0 + d)) { out.l = l0 + d; out.t = top; out.r = l0 + d + w; out.b = top + h; return true; }
+            if (l0 - d < lo && l0 + d > hi) break;
+        }
+    }
+    return false;
 }
 
 // ---- the line's life on the chart (lsDefenseLines) --------------------------------------------------------------------------------------

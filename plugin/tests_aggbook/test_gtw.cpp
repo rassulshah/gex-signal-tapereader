@@ -18,7 +18,7 @@ static dt::Candle hi(long long after, long long secs, long long pull, long long 
 }
 static std::string segs(const std::vector<dt::BadgeSeg>& v) { std::string s; for (size_t k = 0; k < v.size(); ++k) s += (k ? "/" : "") + v[k].s + (v[k].colourKey == dt::HIGH ? "r" : "g"); return s; }
 int main() {
-    CHECK(std::string(dt::VERSION) == "1.7.0", "DefenseTurn 1.7.0");
+    CHECK(std::string(dt::VERSION) == "1.8.0", "DefenseTurn 1.8.0");
     // ---------------- G
     {   const double N = 10.0;                                             // normal 10 lots / s
         dt::GiveUp g;
@@ -101,21 +101,86 @@ int main() {
     {   dt::BadgeIn b; b.A = true; b.defSide = dt::LOW; b.tr = dt::LOW; b.g = dt::LOW;
         std::vector<std::string> dr;
         std::vector<dt::BadgeSeg> v = dt::badgeSegs7(b, &dr);
-        CHECK(dt::segsText(v) == "A|Tr|G?" && dr.empty() && segs(v) == "A|g/Tr|g/G?g", "A|Tr|G? at a low: every letter green (by meaning), nothing dropped");
-        b.defSide = dt::HIGH; b.tr = dt::HIGH; b.g = dt::HIGH; v = dt::badgeSegs7(b, &dr); CHECK(segs(v) == "A|r/Tr|r/G?r", "A|Tr|G? at a high: red");
-        dt::BadgeIn w; w.w = true; v = dt::badgeSegs7(w, &dr); CHECK(segs(v) == "W?r", "W? alone: red (a support at risk)");
-        dt::BadgeIn m; m.A = true; m.H = true; m.Q = 'L'; v = dt::badgeSegs7(m, &dr); CHECK(dt::segsText(v) == "A|H|L?" && v.size() == 1, "A|H|L stays one part (1.16.0 look)");
-        dt::BadgeIn x; x.Q = 'X'; x.defSide = dt::LOW; v = dt::badgeSegs7(x, &dr); CHECK(segs(v) == "X?r", "X alone: the opposite colour (1.16.0)");
+        CHECK(dt::segsText(v) == "A|Tr|G" && dr.empty() && segs(v) == "A|g/Tr|g/Gg", "A|Tr|G at a low: every letter green (by meaning), nothing dropped");
+        b.defSide = dt::HIGH; b.tr = dt::HIGH; b.g = dt::HIGH; v = dt::badgeSegs7(b, &dr); CHECK(segs(v) == "A|r/Tr|r/Gr", "A|Tr|G at a high: red");
+        dt::BadgeIn w; w.w = true; v = dt::badgeSegs7(w, &dr); CHECK(segs(v) == "Wr", "W alone: red (a support at risk)");
+        dt::BadgeIn m; m.A = true; m.H = true; m.Q = 'L'; v = dt::badgeSegs7(m, &dr); CHECK(dt::segsText(v) == "A|H|L" && v.size() == 1, "A|H|L stays one part (1.16.0 look)");
+        dt::BadgeIn x; x.Q = 'X'; x.defSide = dt::LOW; v = dt::badgeSegs7(x, &dr); CHECK(segs(v) == "Xr", "X alone: the opposite colour (1.16.0)");
         dt::BadgeIn all; all.A = true; all.H = true; all.tr = dt::LOW; all.g = dt::LOW; all.w = true; all.bidMove = 'P'; all.offerMove = 'B'; all.Q = 'X'; all.defSide = dt::LOW;
         v = dt::badgeSegs7(all, &dr);
-        CHECK(dt::segsText(v) == "A|H|Tr|G?" && dr.size() == 4 && dr[0] == "W" && dr[1] == "P" && dr[2] == "B" && dr[3] == "X", "8 letters: the 4 most important on the badge (A|H|Tr|G?), W, P, B, X to the hover in that order");
+        CHECK(dt::segsText(v) == "A|H|Tr|G" && dr.size() == 4 && dr[0] == "W" && dr[1] == "P" && dr[2] == "B" && dr[3] == "X", "8 letters: the 4 most important on the badge (A|H|Tr|G), W, P, B, X to the hover in that order");
         dt::BadgeIn five; five.g = dt::HIGH; five.w = true; five.bidMove = 'P'; five.offerMove = 'P'; five.Q = 'L'; five.defSide = dt::HIGH;
-        v = dt::badgeSegs7(five, &dr); CHECK(dt::segsText(v) == "G|W|P|P?" && dr.size() == 1 && dr[0] == "L" && segs(v) == "G|r/W|r/P|g/P?r", "G|W|P|P? (bids P green, offers P red), L to the hover");
+        v = dt::badgeSegs7(five, &dr); CHECK(dt::segsText(v) == "G|W|P|P" && dr.size() == 1 && dr[0] == "L" && segs(v) == "G|r/W|r/P|g/Pr", "G|W|P|P (bids P green, offers P red), L to the hover");
         dt::BadgeIn old; old.A = true; old.bidMove = 'P'; old.offerMove = 'P'; old.defSide = dt::LOW; v = dt::badgeSegs7(old, &dr);
-        CHECK(segs(v) == "A|g/P|g/P?r", "the 1.18.0 badge unchanged: A| P| P? as three parts");
+        CHECK(segs(v) == "A|g/P|g/Pr", "the 1.18.0 badge unchanged: A| P| P as three parts");
         CHECK(dt::badgeSegs7(dt::BadgeIn(), &dr).empty(), "nothing decided: no badge");
         auto wd = [](const std::string& s) { return [s](int pt) { return (int)(s.size() * pt * 0.62) + 4; }; };
-        CHECK(dt::fitFont(wd("A|H|Tr|G?"), 34, 9, 6) == 6 && dt::fitFont(wd("A|Tr|G?"), 34, 9, 6) == 7 && dt::fitFont(wd("W?"), 34, 9, 6) == 9, "the font shrinks: 4 letters 6 pt, 3 letters 7 pt, 1 letter keeps 9 pt");
+        CHECK(dt::fitFont(wd("A|H|Tr|G"), 34, 9, 6) == 6 && dt::fitFont(wd("A|Tr|G"), 34, 9, 6) == 8 && dt::fitFont(wd("W"), 34, 9, 6) == 9, "the font shrinks: 4 letters 6 pt, 3 letters 8 pt (1.8.0: no '?'), 1 letter keeps 9 pt");
+    }
+    // ---------------- (1.8.0, Rassul 19:48 CT) no "?" on any badge; the per-letter hover built from the records
+    {   bool anyQ = false;
+        for (int m = 0; m < 4096; ++m) { dt::BadgeIn b; b.A = m & 1; b.H = m & 2; b.tr = (m & 4) ? dt::LOW : ((m & 8) ? dt::HIGH : -1); b.g = (m & 16) ? dt::HIGH : -1; b.w = m & 32; b.bidMove = (m & 64) ? 'P' : 0; b.offerMove = (m & 128) ? 'B' : 0;
+            b.Q = (m & 256) ? 'L' : ((m & 512) ? 'X' : 0); b.defSide = (m & 1024) ? dt::HIGH : dt::LOW; std::vector<std::string> dr;
+            const std::string t = dt::segsText(dt::badgeSegs7(b, &dr)); if (t.find('?') != std::string::npos) anyQ = true;
+            for (size_t k = 0; k < dr.size(); ++k) if (dr[k].find('?') != std::string::npos) anyQ = true; }
+        CHECK(!anyQ, "(1.8.0) no '?' on any of 4,096 badge combinations (nor in the letters moved to the hover)");
+        CHECK(dt::segsText(dt::badgeSegs(true, true, 'L', dt::LOW, 'P', 'B')).find('?') == std::string::npos, "(1.8.0) the 1.6.0 badgeSegs has no '?' either");
+        dt::Turn t; t.side = dt::LOW; t.attAggr = 640; t.defNet = 820; t.attNet = 310; t.marginPct = 165; t.linePx = 31005; t.A = true;   // 7,751.25 at 0.25
+        dt::HoverBlock a = dt::hoverA(t, 0.25, false, 12);
+        auto has = [](const dt::HoverBlock& b, const std::string& x) { for (size_t k = 0; k < b.rows.size(); ++k) if (b.rows[k].find(x) != std::string::npos) return true; return false; };
+        CHECK(a.letter == "A" && a.rows.size() == 5 && has(a, "Absorbed - did the sellers' attack fail against the bids?") && has(a, "Sellers hit 640 lots into the bids") && has(a, "bids 820 vs offers 310") && has(a, "165% bigger") && has(a, "7,751.25") && has(a, "Use: the buyers held the low") && has(a, "Status: still learning, n = 12 (this chart; scored nightly)"), "(1.8.0) A: question, the record's numbers, use, status");
+        t.side = dt::HIGH; a = dt::hoverA(t, 0.25, true, 3); CHECK(has(a, "Buyers lifted 640 lots into the offers at the high") && has(a, "close below") && has(a, "Status: proven"), "(1.8.0) A at a high mirrors; proven -> 'Status: proven'");
+        dt::Counter c; c.side = dt::LOW; c.H = true; c.lots = 1536; c.attack = 640; dt::HoverBlock hh = dt::hoverH(c, false, 4);
+        CHECK(has(hh, "Within 2 candles buyers lifted 1,536 lots = 2.4x the 640-lot attack") && has(hh, "0.25+ ATR above the low"), "(1.8.0) H: lots, x the attack, the ATR rule");
+        dt::HoverBlock tr = dt::hoverTr(false, 640, 2.9, false, 1); CHECK(has(tr, "Sellers trapped 640 lots (2.9x normal) below the old low") && has(tr, "they must buy back"), "(1.8.0) Tr: lots, x, below the old low");
+        dt::GiveUp g; g.side = dt::HIGH; g.G = true; g.x = 2.4; g.pull = 812; g.add = 120; g.secs = 45; g.pace = 0.4; dt::HoverBlock gb = dt::hoverG(g, false, 2);
+        CHECK(has(gb, "the buyers pulled their bids at 2.4x normal (812 pulled vs 120 added in 45 s); pace down to 0.4x"), "(1.8.0) G: x normal, pulled vs added, pace");
+        g.pace = -1; CHECK(has(dt::hoverG(g, false, 2), "pace n/a"), "(1.8.0) G with no pace: 'pace n/a', never a made-up number");
+        dt::WRead w; w.name = "PDL"; w.px = 31000; w.pulled = 1000; w.added = 100; w.filled = 120; w.W = true; dt::HoverBlock wb = dt::hoverW(w, 0.25, false, 1);
+        CHECK(has(wb, "In the first 60 s at PDL 7,750 the bids pulled 88%: 900 lots net pulled vs 120 traded"), "(1.8.0) W: level, % pulled, net lots vs traded");
+        dt::HoverBlock pb = dt::hoverMove('P', 0, 420, 3, 2.5, false, 5), bb = dt::hoverMove('B', 1, 300, 1, 2.2, false, 2);
+        CHECK(has(pb, "Bids (buyers) moved 420 lots up to 3 ticks toward price = 2.5x normal") && has(bb, "Offers (sellers) moved 300 lots up to 1 tick away from price = 2.2x normal") && pb.letter == "P" && bb.letter == "B", "(1.8.0) P / B: which side, lots, ticks, x normal");
+        dt::Retest q; q.side = dt::LOW; q.res = 'L'; q.rest = 860; q.ratio = 1.2; dt::HoverBlock lb = dt::hoverQ(q, 7751.25, 0.25, false, 3);
+        CHECK(has(lb, "Re-test of the R line 7,751.25: 860 lots of bids waited in the zone = 1.2x normal (reloaded at 1.0x or more)"), "(1.8.0) L: the R line, lots waiting, x normal");
+        q.res = 'X'; q.rest = 40; q.ratio = 0.1; CHECK(has(dt::hoverQ(q, 0, 0.25, false, 3), "Re-test of the R line: 40 lots of bids waited in the zone = 0.1x normal (empty at 0.35x or less)"), "(1.8.0) X: empty on the re-test (unknown line price left out)");
+        std::vector<dt::HoverBlock> all; all.push_back(a); all.push_back(hh); all.push_back(tr); all.push_back(gb); all.push_back(wb); all.push_back(pb); all.push_back(bb); all.push_back(lb);
+        bool longRow = false, qm = false; for (size_t k = 0; k < all.size(); ++k) for (size_t r = 0; r < all[k].rows.size(); ++r) { if (all[k].rows[r].size() > 115) longRow = true; }
+        const std::string ht = dt::hoverText("A|H|Tr|G", std::vector<std::string>{ "W", "P", "B", "L" }, all);
+        for (size_t k = 1; k < all.size(); ++k) for (size_t r = 0; r < all[k].rows.size(); ++r) if (all[k].rows[r].find('?') != std::string::npos && all[k].rows[r].find(" - ") == std::string::npos) qm = true;
+        CHECK(!longRow, "(1.8.0) every hover row <= 115 characters (lesson 83)");
+        { bool wide = false; std::string cur; for (size_t k = 0; k <= ht.size(); ++k) { if (k == ht.size() || ht[k] == '\n') { if (cur.size() > dt::HOVER_WRAP + 5) wide = true; cur.clear(); } else cur += ht[k]; }
+          CHECK(!wide, "(1.8.0) the drawn hover lines are wrapped at 56 characters (narrow columns fit beside the info box)"); }
+        { dt::Turn t0 = t; t0.side = dt::LOW; t0.attAggr = 0; CHECK(has(dt::hoverA(t0, 0.25, false, 1), "Sellers out-hit the bids at the low (lots not in the record)"), "(1.8.0) A read back with no attack size: says so, never '0 lots'"); }
+        CHECK(dt::hoverCompact("x\n   Use: a b\n     c\n   Status: s\nq", 1) == "x\n   Status: s\nq" && dt::hoverCompact("x\n   Use: a b\n     c\n   Status: s\n     t\nq", 2) == "x\nq", "(1.8.0) the fit cascade drops a row with its wrapped continuation");
+        CHECK(!qm, "(1.8.0) '?' only ends a block's question, never a status");
+        CHECK(ht.find("Defense A|H|Tr|G  (+ W, P, B, L: no room on the badge)") == 0 && ht.find("\n\nW  Withdrew") != std::string::npos && ht.find("\n\nL  Reloaded") != std::string::npos, "(1.8.0) the hover lists every letter, including the ones cut from the badge, one block each");
+        CHECK(dt::lotsText(1234567) == "1,234,567" && dt::lotsText(-1540) == "-1,540" && dt::priceText(7751.25, 0.25) == "7,751.25" && dt::priceText(7750, 0.25) == "7,750" && dt::priceText(1.16255, 0.00005) == "1.16255" && dt::priceText(3.215, 0.0005) == "3.2150", "(1.8.0) lots / price text per market");
+        // placement: inside the pane, below the badge, never over the info box (>= 4 px clear); scanning sideways; nothing when no room
+        unsigned seed = 7; auto rnd = [&](int n) { seed = seed * 1103515245u + 12345u; return (int)((seed >> 8) % (unsigned)n); };
+        int placed = 0, none = 0; bool bad = false;
+        for (int it = 0; it < 20000; ++it) {
+            const int L = 0, T = 0, R = 300 + rnd(1500), B = 90 + rnd(260);
+            dt::TipRect badge; badge.l = L + rnd(R - 20); badge.r = badge.l + 10 + rnd(30); badge.t = T + 5; badge.b = badge.t + 13;
+            dt::TipRect box; box.l = rnd(R); box.r = std::min(R, box.l + 60 + rnd(260)); box.t = rnd(B / 2); box.b = std::min(B, box.t + 30 + rnd(120));
+            const int w = 60 + rnd(900), h = 20 + rnd(200); dt::TipRect at;
+            if (dt::tipSpot(L, T, R, B, badge, rnd(5) ? &box : nullptr, [&](int, int& ww, int& hh2) { ww = w; hh2 = h; }, at)) { ++placed;
+                if (at.l < L + 2 || at.r > R - 2 || at.b > B - 2 || at.t < badge.b) bad = true;
+                const bool over = at.l < box.r + 4 && at.r + 4 > box.l && at.t < box.b + 4 && at.b + 4 > box.t; (void)over; }
+            else ++none;
+        }
+        CHECK(!bad && placed > 5000 && none > 100, ("(1.8.0) 20,000 random panes: the hover always inside the pane, below the badge (" + std::to_string(placed) + " placed, " + std::to_string(none) + " no room)").c_str());
+        bool overBox = false; seed = 11;
+        for (int it = 0; it < 20000; ++it) {
+            const int R = 300 + rnd(1500), B = 90 + rnd(260); dt::TipRect badge; badge.l = rnd(R - 20); badge.r = badge.l + 20; badge.t = 5; badge.b = 18;
+            dt::TipRect box; box.l = rnd(R); box.r = std::min(R, box.l + 60 + rnd(260)); box.t = rnd(B / 2); box.b = std::min(B, box.t + 30 + rnd(120));
+            const int w = 60 + rnd(900), h = 20 + rnd(200); dt::TipRect at;
+            if (dt::tipSpot(0, 0, R, B, badge, &box, [&](int, int& ww, int& hh2) { ww = w; hh2 = h; }, at) && at.l < box.r + 4 && at.r + 4 > box.l && at.t < box.b + 4 && at.b + 4 > box.t) overBox = true;
+        }
+        CHECK(!overBox, "(1.8.0) 20,000 random boxes: the hover never within 4 px of the info box");
+        dt::TipRect badge; badge.l = 100; badge.r = 130; badge.t = 5; badge.b = 18; dt::TipRect box; box.l = 0; box.r = 400; box.t = 0; box.b = 200; dt::TipRect at;
+        CHECK(!dt::tipSpot(0, 0, 400, 200, badge, &box, [&](int, int& ww, int& hh2) { ww = 100; hh2 = 40; }, at), "(1.8.0) the box fills the pane: no hover (counted in the status), never drawn over it");
+        box.l = 0; box.r = 150; box.t = 20; box.b = 80;
+        CHECK(dt::tipSpot(0, 0, 600, 200, badge, &box, [&](int, int& ww, int& hh2) { ww = 200; hh2 = 60; }, at) && at.l >= 154 && at.t == 21, "(1.8.0) a box left of the badge: the hover slides right of it, same height under the badge");
     }
     printf("G / Tr / W: %d passed, %d failed\n", p, f);
     return f ? 1 : 0;

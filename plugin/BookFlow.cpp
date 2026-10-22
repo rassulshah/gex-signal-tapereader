@@ -78,7 +78,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.19.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.20.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 #include "DefenseTurn.h"          // (1.12.0) the pivot turn marks + the refill line decisions (drawn on the price chart by lsDefenseLines)
@@ -147,6 +147,7 @@ public:
         dt::LevelWatch lw; LwSink lwSink; std::vector<dt::WLevel> lwLevels; std::map<std::pair<long long, long long>, dt::WRead> dtW; long long dtWWritten = 0;
         // (1.19.0) the badges' hover: each badge's rectangle and its text (letters, numbers, the letters with no room); the one under the mouse
         std::vector<std::pair<off::IconRect, std::string> > badgeHit; int badgeTip = -1; long long badgeDropped = 0;
+        long long badgeTipNoRoom = 0, badgeTipCompact = 0; dt::TipRect lastTip; int lastTipLevel = -1;                   // (1.20.0) hovers with no free spot (status); the last drawn hover box (tests)
         std::map<long long, bf::PullStat> pulls; long long markersDrawn = 0; // (1.4.0) closed candles' pull decisions (decided once, never cleared: no repaint)               // (1.3.4) the pane on the screen; the live candle's events last drawn
     };
     Ext* ext(S_& S) {
@@ -215,7 +216,7 @@ public:
           << "\nGIVE_UP," << (e ? std::to_string(e->dtG.size()) + " decided at 5-candle extremes (" + std::to_string(e->dtGWritten) + " written, " + std::to_string(e->gUndecided) + " without the feed / < 20 s after the extreme), G drawn: pulled >= 2x normal net of moves, pulled > added, attack died, no initiative candle" : std::string("n/a"))
           << "\nTRAPS," << (e ? std::to_string(e->dtTr.size()) + " Delta Profile TR lines read (" + std::to_string(e->trBad) + " bad), file " + e->trPath : std::string("n/a"))
           << "\nAT_LEVEL," << (e ? std::to_string(e->lwLevels.size()) + " key levels watched, " + std::to_string(e->lw.touchesSeen) + " touches (" + std::to_string(e->lw.deduped) + " within 15 min), " + std::to_string(e->lw.open.size()) + " measuring, " + std::to_string(e->dtW.size()) + " decided (" + std::to_string(e->dtWWritten) + " written), W drawn at supports only" : std::string("n/a"))
-          << "\nBADGES," << (e ? std::to_string(e->badgesDrawn) + " row draws, " + std::to_string(e->badgeDropped) + " badges with letters moved to the hover (max " + std::to_string(dt::BADGE_MAX) + ")" : std::string("n/a"))
+          << "\nBADGES," << (e ? std::to_string(e->badgesDrawn) + " row draws, " + std::to_string(e->badgeDropped) + " badges with letters moved to the hover (max " + std::to_string(dt::BADGE_MAX) + "), hover no room " + std::to_string(e->badgeTipNoRoom) : std::string("n/a"))
           << "\nMARKET_STATE,BOOK " << (!e || e->chart.empty() ? std::string("waiting for the chart label") : "bar " + std::to_string(e->mstBar ? e->mstCt : 0) + ",posts " + std::to_string(e->mstPosts) + ",keys " + std::to_string(e->mstKv.size()));
     }
     // the old panes' session records (StackStats\ and PullStats\), opened with the session, one row per decided candle, saved with the main record
@@ -544,29 +545,89 @@ public:
     // (1.19.0) the badge's hover text: the badge, one line per letter (what it means + its numbers - numbers never on the chart), the letters
     // with no room on the badge, the "?" note. Drawn as the info icon's tip box while the mouse is on the badge.
     std::string badgeTipText(S_& S, Ext& e, long long key, const dt::BadgeIn& in, const std::string& badge, const std::vector<std::string>& dropped) {
-        std::string t = badge;
-        const char* dn = in.defSide == dt::HIGH ? "sellers (offers)" : "buyers (bids)";
-        if (in.A) t += std::string("\nA  absorbed: attackers out-hit the ") + dn + ", lost the close";
-        if (in.H) t += "\nH  the defenders hit back after the A";
-        if (in.tr >= 0) { std::map<std::pair<int, long long>, trapl::Rec>::const_iterator r = e.dtTr.find(std::make_pair(in.tr, key));
-            if (r != e.dtTr.end()) t += "\nTr  " + dt::trapHover(r->second.top, r->second.lots, r->second.x); }
-        if (in.g >= 0) { std::map<std::pair<int, long long>, dt::GiveUp>::const_iterator g = e.dtG.find(std::make_pair(in.g, key));
-            if (g != e.dtG.end()) { char b[220]; std::snprintf(b, sizeof b, "\nG  attackers giving up (%s at the %s):\n    %s pulled %.1fx normal, %lld pulled vs %lld added, pace %.1fx",
-                in.g == dt::HIGH ? "buyers" : "sellers", in.g == dt::HIGH ? "high" : "low", in.g == dt::HIGH ? "bids" : "offers", g->second.x, g->second.pull, g->second.add, g->second.pace < 0 ? 0.0 : g->second.pace); t += b; } }
-        if (in.w) for (std::map<std::pair<long long, long long>, dt::WRead>::const_iterator w = e.dtW.lower_bound(std::make_pair(key, (long long)LLONG_MIN)); w != e.dtW.end() && w->first.first == key; ++w) {
-            if (!dt::wDrawn(w->second)) continue;
-            char b[220]; std::snprintf(b, sizeof b, "\nW  defenders withdrew at %s %s:\n    %lld bid lots pulled (net) vs %lld traded in 1 min", w->second.name.c_str(), zread::pxText(w->second.px, S.tick).c_str(),
-                std::max(0LL, w->second.pulled - w->second.added), w->second.filled); t += b; }
-        if (in.bidMove) t += std::string("\n") + in.bidMove + (in.bidMove == 'P' ? "  bids pressed in (moved toward price)" : "  bids stepped back (moved away)");
-        if (in.offerMove) t += std::string("\n") + in.offerMove + (in.offerMove == 'P' ? "  offers pressed in (moved toward price)" : "  offers stepped back (moved away)");
-        if (in.Q == 'L') t += "\nL  reloaded on the re-test"; else if (in.Q == 'X') t += "\nX  empty on the re-test";
-        if (!dropped.empty()) { std::string d; for (size_t k = 0; k < dropped.size(); ++k) d += (k ? ", " : "") + dropped[k]; t += "\nNot on the badge (no room): " + d; }
-        t += "\n? = not proven yet for this market";
-        return t;
+        // (1.20.0, Rassul 19:48 CT) one block per letter (every letter on the candle, also the ones with no room), his hover format, the
+        // numbers from the records; proof status in the hover (no "?" on the badge). n = how many of that letter this chart has decided.
+        const bool proven = false;                                         // no Defense letter is proven yet (TURN-TEST / nightly); the badge had "?" on all
+        std::vector<dt::HoverBlock> blocks;
+        const std::vector<dt::BadgeLetter> letters = dt::badgeLetters(in);
+        for (size_t k = 0; k < letters.size(); ++k) {
+            const std::string& L = letters[k].s;
+            if (L == "A") { long long n = 0; for (std::map<std::pair<int, long long>, dt::Turn>::const_iterator it = e.dtTurns.begin(); it != e.dtTurns.end(); ++it) n += it->second.A ? 1 : 0;
+                std::map<std::pair<int, long long>, dt::Turn>::const_iterator t = e.dtTurns.find(std::make_pair(in.defSide, key));
+                if (t == e.dtTurns.end()) t = e.dtTurns.find(std::make_pair(1 - in.defSide, key));
+                if (t != e.dtTurns.end()) { dt::Turn tt = t->second;               // the attackers' lots: decided this session, else the H line's attack, else the session candle
+                    if (tt.attAggr <= 0) { std::map<std::pair<int, long long>, dt::Counter>::const_iterator hc = e.dtH.find(std::make_pair(tt.side, tt.t)); if (hc != e.dtH.end()) tt.attAggr = hc->second.attack; }
+                    if (tt.attAggr <= 0) { std::map<long long, dt::Candle>::const_iterator cd = e.dtc.find(key); if (cd != e.dtc.end() && cd->second.ok) tt.attAggr = cd->second.aggr[tt.side == dt::HIGH ? 1 : 0]; }
+                    blocks.push_back(dt::hoverA(tt, S.tick, proven, n)); } }
+            else if (L == "H") { long long n = 0; const dt::Counter* c = nullptr;
+                for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator h = e.dtH.begin(); h != e.dtH.end(); ++h) if (h->second.H) { ++n; if (!c && h->second.at == key) c = &h->second; }
+                if (c) blocks.push_back(dt::hoverH(*c, proven, n)); }
+            else if (L == "Tr") { std::map<std::pair<int, long long>, trapl::Rec>::const_iterator r = e.dtTr.find(std::make_pair(in.tr, key));
+                if (r != e.dtTr.end()) blocks.push_back(dt::hoverTr(r->second.top, r->second.lots, r->second.x, proven, (long long)e.dtTr.size())); }
+            else if (L == "G") { long long n = 0; for (std::map<std::pair<int, long long>, dt::GiveUp>::const_iterator it = e.dtG.begin(); it != e.dtG.end(); ++it) n += it->second.G ? 1 : 0;
+                std::map<std::pair<int, long long>, dt::GiveUp>::const_iterator g = e.dtG.find(std::make_pair(in.g, key));
+                if (g != e.dtG.end()) blocks.push_back(dt::hoverG(g->second, proven, n)); }
+            else if (L == "W") { long long n = 0; for (std::map<std::pair<long long, long long>, dt::WRead>::const_iterator it = e.dtW.begin(); it != e.dtW.end(); ++it) n += dt::wDrawn(it->second) ? 1 : 0;
+                for (std::map<std::pair<long long, long long>, dt::WRead>::const_iterator w = e.dtW.lower_bound(std::make_pair(key, (long long)LLONG_MIN)); w != e.dtW.end() && w->first.first == key; ++w)
+                    if (dt::wDrawn(w->second)) blocks.push_back(dt::hoverW(w->second, S.tick, proven, n)); }
+            else if (L == "P" || L == "B") {
+                const int book = letters[k].colourKey == dt::HIGH ? mvl::OFFERS : mvl::BIDS;   // P / B colour = the BOOK side that moved
+                long long n = 0; for (std::map<std::pair<int, long long>, mvl::Read>::const_iterator it = e.dtM.begin(); it != e.dtM.end(); ++it) n += mvl::letterOf(it->second, book) == L[0] ? 1 : 0;
+                for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, mvl::Read>::const_iterator m = e.dtM.find(std::make_pair(sd, key)); if (m == e.dtM.end() || mvl::letterOf(m->second, book) != L[0]) continue;
+                    const mvl::Read& R = m->second; const int def = R.ext == 0 ? mvl::BIDS : mvl::OFFERS; const bool in_ = L == "P";
+                    const int cs = book == def ? (in_ ? mvl::C_DEF_IN : mvl::C_DEF_OUT) : (in_ ? mvl::C_ATT_IN : mvl::C_ATT_OUT);
+                    blocks.push_back(dt::hoverMove(L[0], book, in_ ? R.s.in[book] : R.s.out[book], in_ ? R.s.ticksIn[book] : R.s.ticksOut[book], R.x[cs], proven, n)); break; } }
+            else if (L == "L" || L == "X") { long long n = 0; const dt::Retest* q = nullptr;
+                for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator it = e.dtQ.begin(); it != e.dtQ.end(); ++it) if (it->second.res == L[0]) { ++n; if (!q && it->second.at == key) q = &it->second; }
+                if (q) { std::map<std::pair<int, long long>, dt::Turn>::const_iterator t = e.dtTurns.find(std::make_pair(q->side, q->t));
+                         blocks.push_back(dt::hoverQ(*q, t != e.dtTurns.end() ? (double)t->second.linePx * S.tick : 0.0, S.tick, proven, n)); } }
+        }
+        return dt::hoverText(badge, dropped, blocks);
+    }
+    // (1.20.0) the badge's hover box: measured like the info tip (first line bold, columns when the pane is short), placed by dt::tipSpot
+    // below the badge, inside the pane and left of the price axis, never over the info box; nothing drawn when no spot is free (counted)
+    struct TipLay { std::vector<std::string> lines; std::vector<int> w; std::vector<off::TipCol> cols; int boxW = 0, boxH = 0, pt = 9; };
+    TipLay tipLayout(const std::string& text, int top, int bottom, int pt = 9) {
+        TipLay T; { std::string cur; for (size_t k = 0; k < text.size(); ++k) { if (text[k] == '\n') { T.lines.push_back(cur); cur.clear(); } else cur += text[k]; } T.lines.push_back(cur); }
+        FONT fb; fb.id = HELVETICA; fb.size = pt; fb.style = BOLD; FONT fp = fb; fp.style = PLAIN;
+        T.w.assign(T.lines.size(), 0);
+        for (size_t k = 0; k < T.lines.size(); ++k) { setFont(k == 0 ? fb : fp); T.w[k] = T.lines[k].empty() ? 0 : (int)getTextWidth(T.lines[k].c_str(), -1); }
+        const int lh = pt + 4, pad = 6, gap = 18, rows = std::max(1, (bottom - 2 - top - 2 * pad) / lh);
+        T.cols = off::tipColumns(T.lines, T.w, rows);
+        int used = 0; T.boxW = 2 * pad; for (size_t c = 0; c < T.cols.size(); ++c) { T.boxW += T.cols[c].w + (c ? gap : 0); used = std::max(used, (int)(T.cols[c].to - T.cols[c].from)); }
+        T.boxH = 2 * pad + used * lh; T.pt = pt; return T;
+    }
+    void drawBadgeTip(Ext& e, const off::PaneGeo& g, const off::IconRect& badge, const std::string& text, const bp::Box* box) {
+        const int R = std::min(g.right, g.edge);
+        dt::TipRect br; br.l = badge.l; br.t = badge.t; br.r = badge.r; br.b = badge.b;
+        dt::TipRect bx; if (box) { bx.l = box->l; bx.t = box->t; bx.r = box->r; bx.b = box->b; }
+        dt::TipRect at; std::string shown; int level = -1;
+        for (int lv = 0; lv < 4 && level < 0; ++lv) {                      // fit cascade: all rows -> without "Use" -> without "Use" / "Status" -> that at 8 pt (lesson 54: decided here, tested)
+            const std::string t = dt::hoverCompact(text, std::min(lv, 2)); const int pt = lv < 3 ? 9 : 8;
+            if (dt::tipSpot(g.left, g.top, R, g.bottom, br, box ? &bx : nullptr, [&](int top, int& w, int& h) { const TipLay T = tipLayout(t, top, g.bottom, pt); w = T.boxW; h = T.boxH; }, at)) { level = lv; shown = t; }
+        }
+        if (level < 0) { ++e.badgeTipNoRoom; e.lastTip = dt::TipRect(); e.lastTipLevel = -1; return; }
+        e.lastTipLevel = level; if (level > 0) ++e.badgeTipCompact;
+        const TipLay T = tipLayout(shown, at.t, g.bottom, level < 3 ? 9 : 8);
+        setPen(off::C_TIP_BORDER, 1, P_SOLID);
+        off::fillRect(at.l, at.t, at.r, at.b, off::C_TIP_BORDER, off::C_TIP_BG, 1);
+        setTextColor(off::C_TIP_TEXT);
+        FONT fb; fb.id = HELVETICA; fb.size = T.pt; fb.style = BOLD; FONT fp = fb; fp.style = PLAIN;
+        int cx = at.l + 6; const int lh = T.pt + 4;
+        for (size_t c = 0; c < T.cols.size(); ++c) {
+            int y = at.t + 6;
+            for (size_t k = T.cols[c].from; k < T.cols[c].to; ++k, y += lh) {
+                if (T.lines[k].empty()) continue;
+                setFont(k == 0 ? fb : fp);
+                RCT t; t.set(off::coord(cx), off::coord(y), off::coord(std::min(at.r - 2, cx + T.cols[c].w + 4)), off::coord(y + lh)); t.drawText(T.lines[k].c_str(), false, false);
+            }
+            cx += T.cols[c].w + 18;
+        }
+        e.lastTip = at;
     }
     // (1.15.0, Rassul 11:22 / 11:25 CT, defender5-mockup-v2 "we could also have multiple like A|H and adjust font size as needed") the
     // BADGE ROW: a thin solid strip at the top of the pane; on each closed candle ONE badge with the behaviours decided on it ("A", "H",
-    // "A|H"), letters only + "?" until proven, green where buyers defend a low / red where sellers defend a high, the font shrinking (9 -> 6
+    // "A|H"), letters only (1.20.0: no "?" - the proof status is in the hover), green where buyers defend a low / red where sellers defend a high, the font shrinking (9 -> 6
     // pt) to fit the candle's slot; never over the box; drawn only when a badge is on screen. (1.19.0) dt::badgeSegs7: + Tr / G / W, at most
     // 4 letters (A, H, Tr, G, W, P/B, L/X - the rest in the hover); every badge's rectangle + hover text kept for the mouse.
     template <class XOf>
@@ -756,6 +817,7 @@ public:
         if (e->cur.inside(off::cursorWindow(), ok, cx, cy)) return false;
         bool ch = S.hov.hover.set(-1);
         if (S.inBox) { S.inBox = false; ch = true; }
+        if (e->badgeTip >= 0) { e->badgeTip = -1; ch = true; }             // (1.20.0) the badge hover only while the cursor is inside this pane
         return ch;
     }
     virtual int mouse(RTX_EVENT* ev) {
@@ -1017,8 +1079,9 @@ public:
         br::draw(this, P, info, rp, rd);                                  // (1.4.0) the Read word + lines over its rows
         { Ext* ex = ext(S); off::IconRect tmp; if (P.ok) off::drawQuestionIn(this, P.box, bf::QUESTION, ex ? &ex->infoIcon : &tmp); else if (ex) ex->infoIcon = off::IconRect();   // (1.15.0) inside the box, upper left   // (1.8.0) the question; (1.10.0) + the info icon
           if (ex && ex->infoTipOn) off::drawInfoTip(this, g, ex->infoIcon, bf::INFO_TIP);   // (1.11.0) the description box while the mouse is on the icon
-          if (ex && !ex->infoTipOn && ex->badgeTip >= 0 && ex->badgeTip < (int)ex->badgeHit.size()) { off::PaneGeo tg = g; tg.right = std::min(g.right, g.edge);   // (1.19.0) the badge's hover, kept left of the price axis
-              off::drawInfoTip(this, tg, ex->badgeHit[(size_t)ex->badgeTip].first, ex->badgeHit[(size_t)ex->badgeTip].second.c_str()); } }
+          if (ex) ex->lastTip = dt::TipRect();
+          if (ex && !ex->infoTipOn && ex->badgeTip >= 0 && ex->badgeTip < (int)ex->badgeHit.size())   // (1.19.0) the badge's hover; (1.20.0) per letter, never over the box
+              drawBadgeTip(*ex, g, ex->badgeHit[(size_t)ex->badgeTip].first, ex->badgeHit[(size_t)ex->badgeTip].second, P.ok ? &P.box : nullptr); }
     }
     // (1.5.0) where candle i sits: a new 10-bar low / high and its volume vs the 20 before it (bf::spotOf), from the chart's own bars
     bf::Spot spotAt(int i) {
@@ -1147,6 +1210,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.19.0");   // BF_VERSION
+    p->setVersion("1.20.0");   // BF_VERSION
     return p;
 }

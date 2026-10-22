@@ -33,10 +33,11 @@ struct Bar {
     int failStats,failPrice,reportedPrices;
     Bar():time(0),volume(0),open(100),high(101),low(99),close(100),failStats(0),failPrice(-1),reportedPrices(-1){}
 };
-struct Draw { std::string type,text; int x,y; COLOR color; int r=0,b=0; COLOR border=0; int width=0; int pat=0; int fid=0,fsize=0,fstyle=0; COLOR pen=0; int penW=0; Draw(const char* t,int a,int b_,const std::string& s="",COLOR c=0):type(t),text(s),x(a),y(b_),color(c){} };
+struct Draw { std::string type,text; int x,y; COLOR color; int r=0,b=0; COLOR border=0; int width=0; int pat=0; int fid=0,fsize=0,fstyle=0; COLOR pen=0; int penW=0; int x0=0,y0=0; Draw(const char* t,int a,int b_,const std::string& s="",COLOR c=0):type(t),text(s),x(a),y(b_),color(c){} };
 struct Feed { bool subscribe = true; bool throwOnNext = false; std::vector<DEPTH_ORDER> ev; size_t at = 0; long long getNext = 0, opens = 0, live = 0, nullOpens = 0; std::string lastTicker;
     void push(unsigned char a, unsigned char side, float px, unsigned long size, RTDATE t, int id) { DEPTH_ORDER o; std::memset(&o, 0, sizeof(o)); o.timestamp = t; o.price = px; o.size = size; o.orderID = id; o.action = a; o.buySell = side; ev.push_back(o); } };
 extern Feed feed;
+inline int& lastMoveH() { static int x = 0; return x; } inline int& lastMoveV() { static int y = 0; return y; }   // the line start (setDrawPosition)
 struct Host {
     std::vector<DEPTH_LEVEL> depth; bool depthOn=true; unsigned long now=0; int depthObjects=0;
     std::vector<Bar> bars; void* data; bool noSlot; float tick; int seconds;
@@ -78,7 +79,7 @@ public:
     struct PNT {
         short h,v;
         int set(int bar,float price,int=0) { h=static_cast<short>(50+bar*mock::current->barW); v=static_cast<short>(mock::current->paneBottom-(price-mock::current->priceBase)*20); return 0; }
-        void setDrawPosition(){} void drawLineTo(){ mock::current->draws.push_back(mock::Draw("line",h,v)); mock::current->draws.back().pen=mock::current->pen; }
+        void setDrawPosition(){ mock::lastMoveH()=h; mock::lastMoveV()=v; } void drawLineTo(){ mock::current->draws.push_back(mock::Draw("line",h,v)); mock::current->draws.back().pen=mock::current->pen; mock::current->draws.back().x0=mock::lastMoveH(); mock::current->draws.back().y0=mock::lastMoveV(); mock::lastMoveH()=h; mock::lastMoveV()=v; }   // (2026-10-21) the start point too (render checks)
         int showHelpTip(const char* s){ mock::current->draws.push_back(mock::Draw("tip",h,v,s)); return 0; } int hideHelpTip(){ mock::current->draws.push_back(mock::Draw("tipoff",h,v)); return 0; }   // (1.22.0) the info icon
     };
     struct RCT {
