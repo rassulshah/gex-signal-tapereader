@@ -1,4 +1,4 @@
-// DealerHedgeSettings.h  (lsDealerHedge 0.1.0, 2026-10-22)  -  the ONE table of the oH settings window (controls only, no how-to).
+// DealerHedgeSettings.h  (lsDealerHedge 0.1.1, 2026-10-22)  -  the ONE table of the oH settings window (controls only, no how-to).
 // File: lsFlexLevels\DealerHedge.settings-<MKT>.txt (keyed, per market). Show / hide + colours for what it draws, the zone width and the
 // detection thresholds Rassul can change (the rest are PARAM rows of lsFlexLevels\LRA-DealerHedge-<MKT>.csv from the nightly test).
 // A value set here wins over the params file for the same number.
@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace dhset {
-static const char* const PLUGIN_VERSION = "0.1.0";
+static const char* const PLUGIN_VERSION = "0.1.1";
 enum K { K_SHOW_ZONES, K_BUY_COLOR, K_SELL_COLOR, K_FAINT_PCT, K_PULSE, K_SHOW_LABELS, K_SHOW_HOVER, K_WIDTH_ATR, K_FLOW_X, K_REP_N, K_REF_N, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

@@ -1,5 +1,5 @@
 /********************************************************************************
- *  DealerHedge.cpp  --  Investor/RT RTX extension  lsDealerHedge  0.1.0  (2026-10-22)
+ *  DealerHedge.cpp  --  Investor/RT RTX extension  lsDealerHedge  0.1.1  (2026-10-22; 0.1.1 the same day before any use: a feed snapshot stamped with old times is not flow)
  *  "oH" DEALER-HEDGING ZONES. Rassul agreed the design 15:23-15:24 CT, ordered the build 15:31 CT (MBO Roadmap "Are dealers hedging
  *  in the futures book at the gamma level?", T-20261022-27). Put ONE on the PRICE pane of each futures chart (any bar size).
  *    - Each gamma level near price (the Dealer Profile's MenthorQLevels.csv set: CR / PS / HVL / 0DTE / GW / G1-G10, + the CME gamma
@@ -58,7 +58,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define DH_VERSION "0.1.0"   // = setVersion literal = dhset::PLUGIN_VERSION = dh::VERSION
+#define DH_VERSION "0.1.1"   // = setVersion literal = dhset::PLUGIN_VERSION = dh::VERSION
 
 static long long steadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static long long wallMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(); }
@@ -406,6 +406,7 @@ void DealerHedge::pump(bool fromDraw) {
         if (atr > 0) { S->atr = atr; S->E.setAtr(atr); }
         if (S->E.lastPx <= 0 || S->E.tally.events == 0) S->E.trade((dh::Tick)std::llround(cl[(int)cnt - 1] / S->tick));
         S->barKey = (long long)times[(int)cnt - 1];
+        S->E.clock(ctNow);                                           // (0.1.1) the chart clock first: snapshot stamps are stale
         feed(*S, now);
         S->E.evaluate(std::max(ctNow, S->E.nowMs), S->barKey);
         flushRecord(*S);
@@ -526,7 +527,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setExtendedFlags(CALL_CONTINUOUSLY);                  // the order feed is drained while no trade prints
-    p->setDescription("LRA Dealer Hedge (oH) v0.1.0: are dealers hedging in the futures book at a gamma level? Each MenthorQ level near price (CR / PS / HVL / 0DTE / gamma walls / G levels, + CME gamma nodes) gets a zone of +/- 0.5 ATR, invisible until the order book shows programmatic flow inside it (2x normal + same-size repeats, refills or a burst). It then pulses green (dealers buying) or red (selling) while live and settles to a faint band - never removed. oH below the candle where it was first seen; hover for the details. ? = not proven yet.");
-    p->setVersion("0.1.0");   // DH_VERSION
+    p->setDescription("LRA Dealer Hedge (oH) v0.1.1: are dealers hedging in the futures book at a gamma level? Each MenthorQ level near price (CR / PS / HVL / 0DTE / gamma walls / G levels, + CME gamma nodes) gets a zone of +/- 0.5 ATR, invisible until the order book shows programmatic flow inside it (2x normal + same-size repeats, refills or a burst). It then pulses green (dealers buying) or red (selling) while live and settles to a faint band - never removed. oH below the candle where it was first seen; hover for the details. ? = not proven yet.");
+    p->setVersion("0.1.1");   // DH_VERSION
     return p;
 }

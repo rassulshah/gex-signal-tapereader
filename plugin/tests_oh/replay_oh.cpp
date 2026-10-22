@@ -20,6 +20,10 @@ static bool loadEv(const char* p, std::vector<Ev>& v) {
         e.t = (e.t / 1000) * 1000;                       // IRT stamps whole seconds
         v.push_back(e);
     }
+    // the file starts with the exchange's book snapshot, stamped with each order's ORIGINAL time (days earlier): those orders are
+    // placed at the first trade's time, so the session / clock start at the replay window
+    long long t0 = -1; for (const Ev& e : v) if (e.kind == 1) { t0 = e.t; break; }
+    if (t0 > 0) for (Ev& e : v) if (e.t < t0 - 6 * 3600000LL) e.t = t0;
     return !v.empty();
 }
 static std::vector<Level> loadLv(const char* p) {
@@ -95,6 +99,7 @@ int main(int argc, char** argv) {
         if (!B.sameRestart || zb != zl) { ++fails; std::printf("FAIL: restart after every bar changed the record (%d vs %d)\n", zb, zl); }
         else std::printf("   restart from the record after every bar: identical Z lines (no repaint)\n");
         for (auto& r : A.E.normRows) normHist.push_back(r);
+        std::printf("   slot rows written %zu (history %zu)\n", A.E.normRows.size(), normHist.size());
         totL += lit; totLR += litR; totN += (nUp + nDn) / 2.0; totNR += (nUpR + nDnR) / 2.0;
     }
     std::printf("\nTOTAL %s: lit at the levels %lld (RTH %lld) vs NULL (+/-2 ATR average) %.1f (RTH %.1f)\n", m.c_str(), totL, totLR, totN, totNR);

@@ -1,4 +1,4 @@
-// test_oh.cpp -- DealerHedgeLogic.h 0.1.0 (lsDealerHedge "oH" zones): params, levels, ATR, each detection path alone, the side logic,
+// test_oh.cpp -- DealerHedgeLogic.h 0.1.1 (lsDealerHedge "oH" zones): params, levels, ATR, each detection path alone, the side logic,
 // LIVE -> SETTLED -> LIVE again, never removed / never changed, the record round trip (no repaint), the null shift, hover, pulse.
 // From plugin\:  g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I. tests_oh/test_oh.cpp -o /tmp/toh && /tmp/toh
 #include "DealerHedgeLogic.h"
@@ -155,6 +155,14 @@ int main() {
       CHECK(pulse(0) < 0.01 && pulse(500) > 0.99 && pulse(1000) < 0.01, "pulse: 1 s breath from the wall clock");
       CHECK(blend(0x00FF0000, 0, 0.5) == 0x00800000 && blend(0x0000FF00, 0, 0) == 0, "blend toward the background");
       CHECK(intensity(LIVE, 0, true, 30) >= 0.45 && intensity(LIVE, 500, true, 30) <= 0.85 + 1e-9 && std::fabs(intensity(SETTLED, 0, true, 30) - 0.30) < 1e-9 && intensity(HIDDEN, 0, true, 30) == 0, "intensity: live 0.45-0.85, settled faint, hidden 0"); }
+    // ---- (0.1.1) a feed snapshot stamped with old times: not flow, the normal does not start early ----
+    { Engine E; E.market = "ES"; E.tick = TK; E.P = defaultsFor(M_ES); E.P.minLots = 10; E.P.burstX = 2; E.newSession(sessionOf(at(10, 0)));
+      Level L; L.name = "PS"; L.px = 7840; L.prio = 5; E.setLevels({ L }); E.setAtr(4.0); E.trade(T(7840));
+      E.clock(at(10, 0, 0));
+      for (int i = 0; i < 50; ++i) E.onEvent(NEW, 0, T(7840), 30, 5000 + i, at(8, 0, i));     // resting since 8:00
+      E.evaluate(at(10, 0, 1), 1);
+      CHECK(E.atoms.empty() && E.mins.empty() && E.normSrc == "learning" && E.zones[0].state == HIDDEN, "snapshot orders (8:00 stamps at 10:00) are book only: no flow, no early normal");
+      CHECK(E.book.size() == 50, "... but they are in the book (their fills / pulls are tracked)"); }
     // ---- session change: a new session starts invisible again ----
     { Engine E = make(2.0); E.onEvent(NEW, 0, T(7841), 40, 904, at(10, 0, 0)); E.evaluate(at(10, 0, 1), 9);
       E.evaluate(at(17, 0, 5), 20); CHECK(zoneOf(E, "CR 0DTE") && zoneOf(E, "CR 0DTE")->state == HIDDEN, "17:00 CT: the new session's zones start hidden"); }

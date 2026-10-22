@@ -1,4 +1,4 @@
-// test_oh_host.cpp -- lsDealerHedge 0.1.0 on the mock host: MenthorQLevels.csv + the chart's order feed -> an oH zone that lights,
+// test_oh_host.cpp -- lsDealerHedge 0.1.1 on the mock host: MenthorQLevels.csv + the chart's order feed -> an oH zone that lights,
 // pulses (the 250 ms timer asks for redraws only while live), settles, is recorded, comes back identical after a restart, the
 // settings remove / colour what is drawn, the hover answers, the status file has the status line. Two charts on one DLL.
 // From plugin\:  g++ -std=c++17 -Wall -Wextra -fsanitize=address,undefined -Itests_oh/mock -I. tests_oh/test_oh_host.cpp -o /tmp/tohh && /tmp/tohh
@@ -70,7 +70,7 @@ int main() {
     // status file
     p->release();   // writes the status, flushes, releases the slot (= IRT removing / reloading the indicator)
     const std::string st = readAll(flex + "\\DealerHedge.status-ES-ESZ26-180.txt");
-    CHECK(st.find("VERSION,0.1.0") != std::string::npos && st.find("STATUS_LINE,oH 0.1.0") != std::string::npos && st.find("ZONE,CR 0DTE/GW 0DTE 7,840.00 BUY") != std::string::npos, "status file: version, status line, the zone");
+    CHECK(st.find("VERSION,0.1.1") != std::string::npos && st.find("STATUS_LINE,oH 0.1.1") != std::string::npos && st.find("ZONE,CR 0DTE/GW 0DTE 7,840.00 BUY") != std::string::npos, "status file: version, status line, the zone");
     // restart: a new chart object -> the zone comes back from the record, settled, identical
     mock::feed.ev.clear(); mock::feed.at = 0;
     DealerHedge* q = static_cast<DealerHedge*>(CreateExtension()); h.now = t0 - 30; q->calc(0);

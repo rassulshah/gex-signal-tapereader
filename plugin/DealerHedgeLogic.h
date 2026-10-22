@@ -1,6 +1,7 @@
 #ifndef LS_DEALERHEDGELOGIC_H
 #define LS_DEALERHEDGELOGIC_H
-// DealerHedgeLogic.h  0.1.0  (2026-10-22, lsDealerHedge 0.1.0)  --  "oH" DEALER-HEDGING ZONES, the SDK-free logic (unit-tested on Linux).
+// DealerHedgeLogic.h  0.1.1  (2026-10-22, lsDealerHedge 0.1.1; 0.1.1: events older than the window - an order-feed snapshot stamped with
+// the orders' original times - are never flow and never start the normal; the host sets the chart clock before draining)  --  "oH" DEALER-HEDGING ZONES, the SDK-free logic (unit-tested on Linux).
 // Rassul agreed the design 15:23-15:24 CT and ordered the build 15:31 CT (MBO Roadmap row "Are dealers hedging in the futures book at
 // the gamma level?", ticket T-20261022-27, "special attention").
 //
@@ -38,7 +39,7 @@
 #include <vector>
 
 namespace dh {
-static const char* const VERSION = "0.1.0";
+static const char* const VERSION = "0.1.1";
 typedef long long Tick;
 enum { BUY = 0, SELL = 1 };                        // side 0 = bids / aggressive buys (green), 1 = offers / aggressive sells (red)
 enum { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -377,6 +378,9 @@ public:
         zones = keep; for (const Zone& z : hid) zones.push_back(z);
     }
     void trade(Tick px) { if (px > 0) lastPx = px; }
+    // (0.1.1) the chart's own clock (CT ms) before the feed is drained: an order-feed snapshot stamped with the orders' ORIGINAL times
+    // (minutes / days earlier) then never counts as flow and never starts the normal early
+    void clock(long long ms) { if (ms > nowMs) nowMs = ms; }
 
     // one order-book event (side: 0 bid / buy, 1 offer / sell; FILL: the aggressor's side, as IRT and the replay send it)
     void onEvent(int act, int side, Tick px, long long size, long long id, long long ms) {
@@ -526,6 +530,7 @@ public:
 private:
     struct Read { bool ok = false; double flowX = 0, norm = 0; long long adds = 0, fills = 0, repSize = 0, repMedMs = 0; int repCount = 0, refCount = 0; Tick refPx = 0; std::string paths; };
     void atom(const Atom& a) {
+        if (a.ms < nowMs - (long long)P.winS * 1000) return;            // (0.1.1) older than the window (a snapshot / backlog): not flow
         if (lastPx > 0 && atrTicks > 0 && std::fabs((double)(a.px - lastPx)) > P.reachAtr * atrTicks + 2 * halfW() + 4) { nearCount(a); return; }
         atoms.push_back(a); nearCount(a);
     }
@@ -547,9 +552,9 @@ private:
     }
     // the near-price flow (the yardstick): atoms within +/- halfW of the price at the time, per minute
     void nearCount(const Atom& a) {
-        if (lastPx <= 0 || atrTicks <= 0) return;
+        if (lastPx <= 0 || atrTicks <= 0 || a.ms < nowMs - 60000) return;
         const long long m = a.ms / 60000;
-        if (firstValidMinute == LLONG_MIN) firstValidMinute = m + 1;     // the first whole minute that can be measured
+        if (firstValidMinute == LLONG_MIN) firstValidMinute = nowMs / 60000 + 1;   // the first whole minute that can be measured (the clock, not a stale stamp)
         if (std::fabs((double)(a.px - lastPx)) > halfW()) return;
         if (mins.empty() || mins.back().m < m) { Minute x; x.m = m; mins.push_back(x); }
         Minute& b = mins.back(); if (b.m != m) return;          // an out-of-order stamp from an older minute: dropped
