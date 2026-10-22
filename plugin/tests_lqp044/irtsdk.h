@@ -82,7 +82,7 @@ public:
     struct PNT {
         short h,v;
         int set(int bar,float price,int=0) { h=static_cast<short>(mock::current->barX0+bar*mock::current->barW); v=static_cast<short>(mock::current->paneBottom-(price-mock::current->priceBase)*mock::current->pxPer); return 0; }
-        void setDrawPosition(){} void drawLineTo(){ mock::current->draws.push_back(mock::Draw("line",h,v)); }
+        void setDrawPosition(){} void drawLineTo(){ mock::Draw d("line",h,v); d.pen=mock::current->pen; d.penW=mock::current->penW; mock::current->draws.push_back(d); }   // (LP 0.48.0 tests) the pen of a line
     };
     struct RCT {
         short left,top,right,bottom;

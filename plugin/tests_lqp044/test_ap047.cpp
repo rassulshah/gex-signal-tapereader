@@ -280,7 +280,7 @@ static void partB(const char* tmp) {
         std::remove((flex + "LiquidityProfile.airpocket-CL.txt").c_str());
         CHECK(R.p->fileValues().v[lpset::K_AIR_POCKET] == 1, "B9 no file: on (the default)");
         const ss::Spec& sp = lpset::profileSpec();
-        CHECK(sp.n == lpset::K_N && std::string(sp.rows[lpset::K_AIR_POCKET].key) == "air_pocket" && sp.paramVersion == 7, "B9 the row air_pocket, param version 7");
+        CHECK(sp.n == lpset::K_N && std::string(sp.rows[lpset::K_AIR_POCKET].key) == "air_pocket" && sp.paramVersion >= 7, "B9 the row air_pocket, param version 7+ (0.48.0: 8, the LMT zones rows appended)");
     }
     {   // a high turn (path down open): red band below the close, red badge, dark red tint, inside the column
         LQState& S3 = R.S(); apl::Case z; z.dir = -1; z.closeTk = 7997; z.t1Tk = 7983; z.fired = true; z.why = "air pocket"; z.ratio = 0.4; z.turnMs = S3.apNowMs - 1000;
@@ -294,7 +294,7 @@ static void partB(const char* tmp) {
         }
         CHECK(red == 1 && redTint == 1 && green == 0, "B10 path down open at a high: red band close..T1 below, red AP? badge, inside the column");
     }
-    CHECK(std::string(LQ_VERSION) == "0.47.1" && std::string(lqp::VERSION) == "0.47.1" && std::string(lpset::PLUGIN_VERSION) == "0.47.1" && std::string(apl::VERSION) == "1.0.0", "versions 0.47.0 / AirPocketLogic 1.0.0");
+    CHECK(std::string(LQ_VERSION) == "0.48.0" && std::string(lqp::VERSION) == "0.48.0" && std::string(lpset::PLUGIN_VERSION) == "0.48.0" && std::string(apl::VERSION) == "1.0.0", "versions 0.47.0 / AirPocketLogic 1.0.0");
     R.p->destroy(); R.p->slot_.release(R.p); R.p->flushPark(); delete R.p;
 }
 

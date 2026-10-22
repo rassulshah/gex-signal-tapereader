@@ -28,7 +28,10 @@ P = {   # plugin: (switch, mouse signature, hover-draw gate text, TRACK_MOUSE al
 for f, (sw, msig, gates, allowTM) in P.items():
     s = open(f, encoding='latin-1').read()
     check(re.search(r'static const bool ' + sw + r' = false;', s) is not None, f + ': ' + sw + ' = false')
-    if msig:
+    if msig and f == 'LiquidityProfile.cpp':   # (LP 0.48.0, Rassul approved the LMT zones mockup v3 with hovers, 2026-10-22 09:34 CT) the ONE exception:
+        b = body(s, msig)                      # the LMT zone hover is handled first; every other price-chart hover still returns while LQ_HOVERS is off
+        mb = s[s.find(msig):s.find(msig) + 3000]; check(mb.find('lzHits') >= 0 and mb.find('if (!LQ_HOVERS) return RTX_FAIL;') > mb.find('lzHits') and mb.find('if (!LQ_HOVERS) return RTX_FAIL;') < mb.find('LQState* S = slot_'), f + ': mouse() = the LMT zone hover, then RTX_FAIL while LQ_HOVERS is off')
+    elif msig:
         b = body(s, msig)
         first = [l for l in b.split('\n') if l.strip() and not l.strip().startswith(('#', '//'))][0]   # first statement (skip #ifndef / comments)
         check(sw in first and 'return RTX_FAIL' in first, f + ': mouse() returns RTX_FAIL first while ' + sw + ' is off')
@@ -39,6 +42,7 @@ for f, (sw, msig, gates, allowTM) in P.items():
     for l in fl:
         code = l.split('//')[0]
         if allowTM: check('TRACK_MOUSE' in code, f + ': TRACK_MOUSE kept for the candle follow')
+        elif f == 'LiquidityProfile.cpp': check(re.search(r'\|\s*TRACK_MOUSE\b', code) is not None, f + ': TRACK_MOUSE for the LMT zone hover (0.48.0)')
         elif f == 'DealerProfile.cpp': check(re.search(r'\|\s*TRACK_MOUSE\b', code) is None and '((DP_HOVERS || DP_PCT_HOVERS) ? TRACK_MOUSE : 0)' in code, f + ': TRACK_MOUSE only through DP_HOVERS / DP_PCT_HOVERS')
         else: check(re.search(r'\|\s*TRACK_MOUSE\b', code) is None and ('(' + sw + ' ? TRACK_MOUSE : 0)') in code, f + ': TRACK_MOUSE only through ' + sw)
 # HodLod (2.4.6) already off - leave it, but prove it stays off

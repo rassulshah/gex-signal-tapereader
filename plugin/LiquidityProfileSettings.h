@@ -9,9 +9,11 @@
 
 namespace lpset {
 
-static const char* const PLUGIN_VERSION = "0.47.1";   // (0.47.0) the air pocket (AP? band) row; (0.46.1) book object parked at done / destroy; (0.46.0) LMT F only
+static const char* const PLUGIN_VERSION = "0.48.0";   // (0.48.0) the LMT zones rows (appended: earlier rows keep their positions; parameter version 8)   // (0.47.0) the air pocket (AP? band) row; (0.46.1) book object parked at done / destroy; (0.46.0) LMT F only
 enum K { K_WIDTH, K_FONT, K_SOLID_BG, K_BIG_ORDERS, K_BIG_REACH, K_BIG_MIN_LOTS, K_BIG_KEEP, K_BIG_FONT,
-         K_BANNER, K_BANNER_BG, K_BANNER_FONT, K_BANNER_COLOR, K_AIR_POCKET, K_N };
+         K_BANNER, K_BANNER_BG, K_BANNER_FONT, K_BANNER_COLOR, K_AIR_POCKET,
+         K_LMZ, K_LMZ_PRINT, K_LMZ_ORIGIN, K_LMZ_NEAR, K_LMZ_FAR, K_LMZ_ABC, K_LMZ_GAMMA, K_LMZ_DIAMOND,
+         K_LMZ_C_OFFER, K_LMZ_C_BID, K_LMZ_C_GREY, K_LMZ_C_GAMMA, K_N };
 
 inline const ss::Spec& profileSpec() {
     static const ss::Row R[K_N] = {
@@ -29,8 +31,22 @@ inline const ss::Spec& profileSpec() {
         ss::in(ss::intRow("banner_font", "Banner font pt", 11, 7, 16, 40), "banner"),
         ss::same(ss::in(ss::colorRow("banner_color", "Banner background", 0x141414), "banner")),
         ss::boolRow("air_pocket", "Air pocket (AP band)", true),            // (0.47.0) the band from the turn's close to T1 while the path is open
+        // (0.48.0, Rassul approved LMT zones mockup v3 2026-10-22 09:34 CT) the zones of real resting orders + LMT / LMT F columns; which kinds a
+        // market draws is set by the study (per-market rule / nightly params) - these boxes can only hide them
+        ss::masterOf(ss::boolRow("lmz", "LMT zones (real resting orders)", true)),
+        ss::in(ss::boolRow("lmz_print", "BD / BO print zones", true), "lmz"),
+        ss::same(ss::in(ss::boolRow("lmz_origin", "Origin zones", true), "lmz")),
+        ss::same(ss::in(ss::boolRow("lmz_near", "Near order zones", true), "lmz")),
+        ss::in(ss::boolRow("lmz_far", "Far orders (thin)", true), "lmz"),
+        ss::same(ss::in(ss::boolRow("lmz_abc", "ABC breaks (grey)", true), "lmz")),
+        ss::in(ss::boolRow("lmz_gamma", "Gamma lines (grey)", true), "lmz"),
+        ss::same(ss::in(ss::boolRow("lmz_diamond", "Gamma diamond", true), "lmz")),
+        ss::in(ss::colorRow("lmz_c_offer", "Offer zone colour", 0xEF4444), "lmz"),
+        ss::same(ss::in(ss::colorRow("lmz_c_bid", "Bid zone colour", 0x22C55E), "lmz")),
+        ss::in(ss::colorRow("lmz_c_grey", "ABC colour", 0x8A8F98), "lmz"),
+        ss::same(ss::in(ss::colorRow("lmz_c_gamma", "Gamma line colour", 0x6B7280), "lmz")),
     };
-    static const ss::Spec S = { "LiquidityProfile", PLUGIN_VERSION, 7, R, K_N, 0 };
+    static const ss::Spec S = { "LiquidityProfile", PLUGIN_VERSION, 8, R, K_N, 0 };
     return S;
 }
 // lsLiquidityFlow (the same source built with LQ_FLOW): Font only
