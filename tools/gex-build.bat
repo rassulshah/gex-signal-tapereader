@@ -10,6 +10,10 @@ REM  is open the copy fails harmlessly and is retried every tick -- close IRT
 REM  and the new build installs itself within two minutes; reopen IRT to load it.
 REM  Nothing changed = nothing happens. Never interactive.
 REM  Log: tools\gex-build.log   Status: plugin\out\BUILD-STATUS.txt
+REM  (2026-10-22, MBO recorder fix P3) NO INSTALLS ON WEEKDAYS 07:00-15:15 CT: a build made in trading hours is HELD and installs
+REM  only after 15:15 (when IRT is closed). An IRT crash or close at midday no longer loads new, unwatched code into the recording
+REM  session (10-20 12:43-12:50: 5 installs right after the 12:49 crash; 10-21 11:59-12:30: 47 installs after an 11:52 close).
+REM  Rassul can still ask for a midday install: Claude creates plugin\out\INSTALL-NOW.flag (honoured until 15:15, then deleted).
 REM  NO POWERSHELL ANYWHERE (Avast flags it: IDP.HELU.PSE88).
 REM ============================================================================
 set REPO=C:\Dev\gex-signal-tapereader
@@ -26,6 +30,7 @@ if not exist "%PLUG%" exit /b 1
 if exist "%LOCK%" exit /b 0
 echo %DATE% %TIME% > "%LOCK%"
 if not exist "%OUT%" mkdir "%OUT%"
+call :window
 
 set VCOK=
 set ANY=
@@ -61,14 +66,14 @@ REM (CR204 2026-10-12) lsFirstExtreme: the First Final Extreme v2 model, shadow 
 call :one FirstExtreme lsFirstExtreme FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp HostSlot.h
 call :one TradeManager lsTradeManager DealerLogic.h HostSlot.h TradeGuardLayout.h ClaimGates.h TradeManagerSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h
 call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h OnTouchParams.h OnTouchLogic.h VwapTrendLogic.h VwapOddsLogic.h VwapOddsParams.h SessionVWAPStyle.h MarketState.h BannerBoard.h SessionVWAPSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h BoxDock.h KeepOutDraw.h
-call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
-call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
-call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
-call :one FootprintReaderCL lsFootprintReaderCL IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
-call :one FootprintReaderGC lsFootprintReaderGC IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
-call :one FootprintReaderHG lsFootprintReaderHG IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
-call :one FootprintReaderNG lsFootprintReaderNG IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
-call :one FootprintReaderEU lsFootprintReaderEU IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h
+call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h
+call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h
+call :one FootprintReaderCL lsFootprintReaderCL IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h
+call :one FootprintReaderGC lsFootprintReaderGC IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h
+call :one FootprintReaderHG lsFootprintReaderHG IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h
+call :one FootprintReaderNG lsFootprintReaderNG IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h
+call :one FootprintReaderEU lsFootprintReaderEU IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h
 call :one TapeFlowES lsTapeFlowES TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 call :one TapeFlowNQ lsTapeFlowNQ TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 call :one TapeFlowCL lsTapeFlowCL TapeFlow.cpp TapeFlowLogic.h TapeFlowSupport.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
@@ -123,7 +128,7 @@ REM (2026-10-18) lsBigBidAsk 1.16.0 compact Big Lot box docked to the lsHodLod 2
 call :one BigBidAsk lsBigBidAsk AbsorbLogic.h BigBidAskLogic.h ColumnBoard.h HoverBoard.h BoxPlace.h BannerBoard.h HostSlot.h SignalBoard.h ZoneNear.h VwapTrendLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h BoxDock.h BigBidAskSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h OnTouchParams.h SharedAbsorb.h
 REM (2026-10-18 HOT-RELOAD) hot-reload test indicator lsHotReloadDemo: its implementation publishes WHILE IRT IS OPEN (refresh the chart),
 REM   the shim installs only when IRT is closed - tools\gex-hot-build.bat, docs\build\HOT-RELOAD.md
-if exist "%REPO%\tools\gex-hot-build.bat" call "%REPO%\tools\gex-hot-build.bat" HotReloadDemo
+if not defined HOLD if exist "%REPO%\tools\gex-hot-build.bat" call "%REPO%\tools\gex-hot-build.bat" HotReloadDemo
 del "%LOCK%" >nul 2>&1
 exit /b 0
 
@@ -160,15 +165,22 @@ if exist "%OUT%\%NAME%.installed" set /p INST=<"%OUT%\%NAME%.installed"
 if "!INST!"=="!BUILT!" goto :eof
 if not exist "%OUT%\%DLL%" goto :eof
 if not exist "%DLLDIR%" ( call :log %NAME%: extension folder not found: %DLLDIR% & goto :eof )
+if defined HOLD (
+  REM (P3) trading hours: never copy now; say so once per build
+  if not exist "%OUT%\%NAME%.held" ( call :log %NAME%: HELD - built in trading hours !HOLDWHY!, installs after 15:15 CT when Investor/RT is closed - do not restart IRT for it & > "%OUT%\%NAME%.held" echo !BUILT! )
+  call :status
+  goto :eof
+)
 copy /Y "%OUT%\%DLL%" "%DLLDIR%\%DLL%" >nul 2>&1
 if errorlevel 1 (
   REM the DLL is loaded (Investor/RT open) - retried next tick; say so once per build
-  if not exist "%OUT%\%NAME%.pending" ( call :log %NAME%: PENDING - close Investor/RT and it installs itself within 2 min & > "%OUT%\%NAME%.pending" echo !BUILT! )
+  if not exist "%OUT%\%NAME%.pending" ( call :log %NAME%: PENDING - installs by itself within 2 min of closing Investor/RT after 15:15 CT & > "%OUT%\%NAME%.pending" echo !BUILT! )
   call :status
   goto :eof
 )
 > "%OUT%\%NAME%.installed" echo !BUILT!
 del "%OUT%\%NAME%.pending" >nul 2>&1
+del "%OUT%\%NAME%.held" >nul 2>&1
 call :log %NAME%: INSTALLED %DLLDIR%\%DLL% - reopen Investor/RT to load it
 call :status
 goto :eof
@@ -248,15 +260,42 @@ del "%OUT%\settings-contract.fail" >nul 2>&1
 call :log SETTINGS CONTRACT PASSED
 goto :eof
 
+REM ---- :window  (P3, 2026-10-22) HOLD=1 on Monday-Friday 07:00-15:15 (this PC's clock = Central) unless plugin\out\INSTALL-NOW.flag
+REM   exists. %TIME% is " 7:05:12.34" or "07:05:12.34"; %DATE% starts with the day name ("Thu 10/22/2026"). The "1HH*60 + 1MM - 6100"
+REM   form avoids cmd reading 08 / 09 as octal. An unreadable time or day name counts as a weekday in the window (holds: the safe side).
+:window
+set HOLD=
+set HOLDWHY=
+set "HT=%TIME: =0%"
+set HMIN=
+set /a HMIN=1!HT:~0,2!*60 + 1!HT:~3,2! - 6100 >nul 2>&1
+if not defined HMIN set HMIN=-1
+if !HMIN! GTR 1439 set HMIN=-1
+set "HDAY=%DATE:~0,3%"
+set WEEKEND=
+if /i "!HDAY!"=="Sat" set WEEKEND=1
+if /i "!HDAY!"=="Sun" set WEEKEND=1
+if defined WEEKEND ( set "HOLDWHY=(!HDAY! - weekend)" & goto :windowflag )
+if !HMIN! LSS 0 ( set HOLD=1& set "HOLDWHY=(clock unreadable: %TIME%)" & goto :windowflag )
+if !HMIN! GEQ 420 if !HMIN! LSS 915 ( set HOLD=1& set "HOLDWHY=(!HDAY! %TIME:~0,5% CT, 07:00-15:15)" )
+if not defined HOLD set "HOLDWHY=(!HDAY! %TIME:~0,5% CT)"
+:windowflag
+if exist "%OUT%\INSTALL-NOW.flag" (
+  if defined HOLD ( set HOLD=& set "HOLDWHY=!HOLDWHY! - INSTALL-NOW.flag: Rassul asked for a midday install" ) else ( del "%OUT%\INSTALL-NOW.flag" >nul 2>&1 )
+)
+goto :eof
+
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
+if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - new builds install after 15:15 CT, when Investor/RT is closed ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
 for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines KeyLevels TapeReader CobImpulse BigBidAsk) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
-  if exist "%OUT%\%%N.pending" set "P=- PENDING, close Investor/RT and it installs itself" 
+  if exist "%OUT%\%%N.pending" set "P=- PENDING, installs when Investor/RT is closed after 15:15 CT"
+  if exist "%OUT%\%%N.held" if defined HOLD set "P=- HELD until 15:15 CT (trading hours), do not restart Investor/RT for it"
   if "!B!"=="" ( >> "%STATUS%" echo %%N: not built yet ) else if "!B!"=="!I!" ( >> "%STATUS%" echo %%N: installed ) else ( >> "%STATUS%" echo %%N: built, not installed !P! )
 )
 goto :eof
