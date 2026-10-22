@@ -122,6 +122,7 @@
 #include "HoverBoard.h"
 #include "BoxPlace.h"
 #include "ZoneRead.h"          // (1.5.0) the one-line zone reads
+#include "ImpliedFill.h"       // (1.14.0) implied (spread-driven) fills: side "?" FILLs, excluded from every aggressor count, kept in volume
 #include "MoveLogic.h"         // (1.11.0, Top Defender #3) resting orders MOVED toward / away from price (lsBookFlow only: Engine.trackMoves)
 #include <algorithm>
 #include <cctype>
@@ -146,7 +147,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.13.0";   // 1.13.0 (2026-10-21 20:11-20:23 CT Rassul, attacker letters K / S on lsBidAskStats 1.26.0): each aggressor order keeps its first fill second and its lowest / highest fill price (Aggr t0 / lo / hi); a decided Rec carries the candle's BIGGEST aggressor order and its biggest SWEEP (>= sweepLevels prices, by lots) per side (Rec::big / Rec::sweep: lots, second, prices - not in the record line, the host writes its own K / S / AS lines); Acc keeps the lots hit per second per side (hitSec, the attack pace into / after the extreme); SessionFile reads / keeps more than one extra-line tag (moreTags) up to extraCap lines;   // 1.12.0 (2026-10-21, Top Attacker #2 G / Top Defender #2 W, lsBookFlow 1.19.0): Acc keeps the pulls / adds / moves up to the candle's low / high fill (pullLo / pullHi / addLo / addHi / movLo / movHi: the part after the extreme = total - these); Engine.sink (BookSink) gets every classified near-price add / pull / fill (side, price, second, candle) - lsBookFlow only; an InfoRow cell side 2 = grey;   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.14.0";   // 1.14.0 (2026-10-22 evening, Rassul 17:16 CT approved IMPLIED FILLS option B; ImpliedFill.h 1.0.0): a FILL whose raw side is neither bid nor offer (the recorder's "?", the implied / spread-driven fills: CL 10%, NG 5.4%, HG 3.3%, 6E 2.6%, GC 0.7%, ES / NQ 0 of volume) is flagged on the Ev (Ev::implied, set ONCE in evOf for every consumer) and, while LRA-Implied-<MKT>.csv says exclude (or the file is missing), it still takes its lots from the resting order and sets the last trade, but is NOT a hit, an aggressor order, a sweep, a big lot, a pace second, a touch or a refill trigger; Acc / Rec carry fillAll (every filled lot incl. implied) and fillImpl (implied lots) - not in the record line - for the hover row "Implied: NN% of this candle's volume"; Engine.ip = the params, impliedFills / impliedLots counted for the status IMPLIED line;   // 1.13.0 (2026-10-21 20:11-20:23 CT Rassul, attacker letters K / S on lsBidAskStats 1.26.0): each aggressor order keeps its first fill second and its lowest / highest fill price (Aggr t0 / lo / hi); a decided Rec carries the candle's BIGGEST aggressor order and its biggest SWEEP (>= sweepLevels prices, by lots) per side (Rec::big / Rec::sweep: lots, second, prices - not in the record line, the host writes its own K / S / AS lines); Acc keeps the lots hit per second per side (hitSec, the attack pace into / after the extreme); SessionFile reads / keeps more than one extra-line tag (moreTags) up to extraCap lines;   // 1.12.0 (2026-10-21, Top Attacker #2 G / Top Defender #2 W, lsBookFlow 1.19.0): Acc keeps the pulls / adds / moves up to the candle's low / high fill (pullLo / pullHi / addLo / addHi / movLo / movHi: the part after the extreme = total - these); Engine.sink (BookSink) gets every classified near-price add / pull / fill (side, price, second, candle) - lsBookFlow only; an InfoRow cell side 2 = grey;   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -373,12 +374,14 @@ struct Ev {
     long long size = 0, id = 0, aggr = 0;   // size, the exchange order id, FILL: the aggressor's order id (0 = none)
     long long arrMs = 0;       // arrival (steady clock, ms)
     long long stamp = 0;       // the event's own time (RTDATE, whole seconds), 0 = none
+    bool implied = false;      // (1.14.0) a FILL whose raw side is neither bid nor offer (the recorder's "?"): an implied (spread-driven) fill
 };
 inline int sideOfRaw(unsigned buySell) { return buySell == 1 ? BID : buySell == 0 ? ASK : -1; }
 // a DEPTH_ORDER (any struct with its fields) -> Ev; a bad price -> px 0 (the engine counts it as garbage)
 template <class O> Ev evOf(const O& o, double tick, long long arrMs) {
     Ev x; x.action = o.action <= 3 ? (int)o.action : 99; x.side = sideOfRaw((unsigned)o.buySell);
     x.size = (long long)o.size; x.id = (long long)o.orderID; x.aggr = (long long)o.aggressorOrderID; x.arrMs = arrMs; x.stamp = (long long)o.timestamp;
+    x.implied = x.action == FILL && imp::unknownSide((long long)o.buySell);   // (1.14.0) flagged once here: every consumer gets it
     if (!finite((double)o.price) || (double)o.price <= 0 || !toTick((double)o.price, tick, x.px)) x.px = 0;
     return x;
 }
@@ -397,6 +400,7 @@ struct Acc {
     std::vector<std::pair<long long, long long> > addT[2];   // (1.2.0) (event stamp s, cumulative lots added near price) - the reset clock
     std::unordered_map<long long, long long> addBy[2];  // order id -> contracts added in this candle (concentration)
     bool orderCap = false, aggrCap = false;
+    long long fillAll = 0, fillImpl = 0;                 // (1.14.0) every filled lot (incl. implied) / the implied lots - total volume keeps them
     std::map<Tick, Ice> ice[2];
     std::set<Tick> refPx[2];                             // prices with a refill this candle
     std::map<Tick, int> refAt[2];                        // (1.7.0) refills per price this candle (capped like refPx)
@@ -446,6 +450,7 @@ struct Rec {
     // its biggest sweep (one aggressor order at >= sweepLevels prices, the most lots) per RESTING side hit - the attacker letters K / S
     struct Top { long long lots = 0, sec = -1, nPx = 0; Tick lo = 0, hi = 0; };
     Top big[2], sweep[2];
+    long long fillAll = 0, fillImpl = 0;                 // (1.14.0) NOT in the record line: filled lots incl. implied / implied lots (the hover row)
 };
 static const int REC_NUMS_V1 = 38, REC_NEW = 15, REC_NUMS = REC_NUMS_V1 + REC_NEW;
 static const char* const REC_COLS = "partial|events|pull_n_b|pull_n_a|pull_cts_b|pull_cts_a|pull_max_b|pull_max_a|pull_close_b|pull_close_a|"
@@ -490,6 +495,9 @@ public:
     // when a channel has enough orders, L = the 1SD tier of that pool (rank 84.13% of the orders >= mean + 2 SD); chan is set by the caller before close()
     llp::Pool lp; int chan = 0; bool useLP = false;
     SizeDist aggrBar, restBar;                         // (1.3.0) this session's per-candle, per-side BIGGEST aggressor / resting (add or pull) order
+    imp::Params ip;                                    // (1.14.0) LRA-Implied-<MKT>.csv (default: exclude side "?" fills)
+    long long impliedFills = 0, impliedLots = 0;       // (1.14.0) implied fills seen (status IMPLIED)
+    bool skipImplied(const Ev& e) const { return e.implied && e.action == FILL && ip.exclude && ip.code == '?'; }
     long long events = 0, garbage = 0, unknownDel = 0, unknownMod = 0, unknownFill = 0, dupNew = 0, bookDrops = 0, bookResets = 0;
     long long perAction[4] = {0, 0, 0, 0};
     // (DefenseTurn 1.1.0, 2026-10-20 13:54 CT Rassul "okay build" - the gray E line) EXHAUSTION AT THE PRICE, per fresh-price touch: a fill at a
@@ -626,7 +634,8 @@ public:
         std::unordered_map<long long, Ord>::iterator it = book.find(e.id);
         int s = e.side;
         if (it != book.end() && e.action != NEW) s = it->second.side;     // the order's own side wins
-        if (s != BID && s != ASK) { garbage++; return; }                  // an unknown side cannot be classified
+        const bool impl = skipImplied(e);                                  // (1.14.0) an implied fill: book + volume only
+        if (s != BID && s != ASK && !impl) { garbage++; return; }         // an unknown side cannot be classified
         events++; perAction[e.action]++; a.events++;
         evTs = e.stamp > 0 ? e.stamp : e.arrMs / 1000;                     // (1.12.0) the event second for the sink
         if (trackMoves) {                                                   // (1.11.0) moves whose 0.5 s rest is done join this candle
@@ -653,6 +662,17 @@ public:
             }
             break; }
         case FILL: {
+            a.fillAll += e.size;                                           // (1.14.0) total volume keeps every fill (implied too)
+            if (impl) {                                                    // (1.14.0) IMPLIED: not an attacker - no hit, aggressor, sweep, big lot, pace, touch, refill
+                impliedFills++; impliedLots += e.size; a.fillImpl += e.size;
+                if (it != book.end() && it->second.known) {                // the resting order still lost these lots (the book stays right)
+                    Ord& o = it->second; const long long take = e.size < o.size ? e.size : o.size;
+                    restAdd(o.side, o.px, -take); o.size -= take; o.filledLast = true; o.traded = true;
+                } else if (it != book.end()) { it->second.filledLast = true; it->second.traded = true; }
+                ref = e.px; haveRef = true; lastFillMs = e.arrMs;          // it did print: the last trade
+                if (trackMoves) mvt.fill(e.id, e.px, e.size, e.arrMs);
+                break;
+            }
             Ice* ic = nullptr;
             {
                 std::map<Tick, Ice>::iterator ii = a.ice[s].find(e.px);
@@ -747,7 +767,7 @@ public:
     // a candle is decided: its numbers, the large thresholds AS OF the candles before it, then its sizes join the distributions
     // the numbers only (nothing recorded): the forming candle's live look uses this
     Rec numbers(const Acc& a, bool partial, const Params& P) const {
-        Rec r; r.partial = partial; r.events = a.events;
+        Rec r; r.partial = partial; r.events = a.events; r.fillAll = a.fillAll; r.fillImpl = a.fillImpl;   // (1.14.0)
         r.thrAggr = rareThreshold(aggrDist, aggrBar, P.largeLotAggr, P);
         if (useLP && P.largeLotAggr <= 0) { const llp::Tiers T = lp.tiersFor(chan); if (T.ok) r.thrAggr = std::max(1LL, T.t[0]); }   // a fixed lot size in the params file still wins
         r.thrRest = rareThreshold(restDist, restBar, P.largeLotResting, P);
@@ -1363,6 +1383,13 @@ static const int MODE_READ = 0, MODE_NUMBERS = 1, MODE_NONE = 2;   // (1.9.0) MO
 static const char* const MODE_CHOICES = "Read;Numbers";
 static const int READ_W = 360, BOX_PAD = 5, READ_PT = 10, OPT_PT = 9, READ_LH = 15, OPT_LH = 13, READ_MAX = 3, OPT_MAX = 2, NUM_PT = 10, NUM_LH = 15;
 typedef std::function<int(const std::string&, int, bool)> TextW;   // px width of a string at pt / bold
+// (1.14.0) the candle-stats hover row "Implied: 23% of this candle's volume" (label | "23% of" | "volume", white); false = no row (no
+// LRA-Implied file, or no fills read for the candle - e.g. a candle reloaded from the record after a restart)
+inline bool impliedRow(const imp::Params& P, long long fillAll, long long fillImpl, InfoRow& r) {
+    std::string pct; if (!imp::hoverPct(P, fillImpl, fillAll, pct)) return false;
+    r.label = "Implied"; r.v[0] = pct + " of"; r.v[1] = "volume"; r.side[0] = r.side[1] = -1;
+    return true;
+}
 inline int clampMode(long long m) { return m == MODE_NUMBERS ? MODE_NUMBERS : MODE_READ; }
 // word wrap into at most maxLines lines of <= w px; more text = the last line cut with "..." (fitText); a single over-long word is cut
 inline std::vector<std::string> wrapText(const std::string& s, int w, int maxLines, int pt, bool bold, const TextW& M) {
@@ -1680,6 +1707,25 @@ inline bool refreshParams(ParamCache& C, const std::string& dir, const std::stri
     std::string t = L.source + "|" + paramsText(L.p); for (size_t i = 0; i < L.notes.size(); ++i) t += "|" + L.notes[i];
     if (t == C.text) return false;
     C.text = t; C.load = L;
+    return true;
+}
+// (1.14.0) the implied-fill params of a market (LRA-Implied-<MKT>.csv; the nightly may name 6E "6E" while the chart says "EU"),
+// re-read only when its stamp changes (checked at most every 5 s, once a minute regardless); true = the params changed
+struct ImpCache { long long stamp = -3, checked = -1, readMs = -1; std::string text = "\x01"; imp::Params p; };   // p: copy into Engine.ip every pass (an engine reset keeps it)
+inline bool refreshImplied(ImpCache& C, const std::string& dir, const std::string& market, long long nowMs) {
+    if (C.checked >= 0 && nowMs >= C.checked && nowMs - C.checked < 5000) return false;
+    C.checked = nowMs;
+    std::string p = dir.empty() || market.empty() ? std::string() : dir + "\\LRA-Implied-" + market + ".csv";
+    long long st = p.empty() ? -1 : fileStamp(p);
+    if (st < 0 && market == "EU" && !dir.empty()) { const std::string q = dir + "\\LRA-Implied-6E.csv"; const long long s2 = fileStamp(q); if (s2 >= 0) { p = q; st = s2; } }
+    if (st == C.stamp && C.readMs >= 0 && nowMs >= C.readMs && nowMs - C.readMs < 60000) return false;
+    C.stamp = st; C.readMs = nowMs;
+    std::vector<std::string> lines; bool ok = false;
+    if (st >= 0) ok = nl::readBoundedLines(p, lines, 64 * 1024, 400, 512) && fileStamp(p) == st;   // torn-safe: the stamp before and after
+    const imp::Params P = imp::parse(st >= 0, ok, lines, market);
+    const std::string t = std::string(P.exclude ? "1" : "0") + P.code + (P.fromFile ? "f" : "d") + P.why;
+    if (t == C.text) return false;
+    C.text = t; C.p = P;
     return true;
 }
 
@@ -2756,6 +2802,7 @@ template <class L> struct PaneState {
     long long lateDropped = 0, noBar = 0, orphans = 0, finalized = 0, decidedLate = 0;
     std::string curSession; SessionFile file; bool loaded = false; long long sessionResets = 0; int histSessions = 0;   // (1.8.0) earlier sessions read for the slot yardstick
     nl::Cache lv; std::vector<nl::Level> levels;
+    ImpCache impC;                                       // (1.14.0) LRA-Implied-<MKT>.csv -> e.ip
     ParamCache params; PaneSettings set; SpikeCfg dlgSpike; long long settingsCheckMs = -1, settingsStamp = -2;
     HoverTrack hov; long long axisTop = 0, axisUp = -1, axisDown = -1, netUp = -1, netDown = -1; int paneH = 0;   // (1.5.1) axisUp / axisDown: the biggest + / - net on screen (net panes)
     long long statusMs = -1, changed = 0;
@@ -2976,6 +3023,7 @@ public:
             const long long now = steadyMs();
             settings(S, now);
             if (refreshParams(S.params, flexDir(), S.market, now)) applyParams(S);
+            refreshImplied(S.impC, flexDir(), S.market, now); S.e.ip = S.impC.p;   // (1.14.0) implied fills: exclude (default) / include
             const long count = getBarCount();
             if (S.formingKey > 0) refreshOptions(S.opt, flexDir(), S.market, now, [&](long long mt) { return arrivalBar(S, mt); });   // (1.2.0)
             if (S.tick <= 0) S.state = "native tick size unavailable";
@@ -3261,6 +3309,7 @@ private:
           << "\nEVENTS_PER_MIN," << f.roll.perMin(now) << "\nEVENTS_TOTAL," << e.events
           << "\nACTIONS,NEW " << e.perAction[0] << ",MOD " << e.perAction[1] << ",DEL " << e.perAction[2] << ",FILL " << e.perAction[3]
           << "\nUNKNOWN,del " << e.unknownDel << ",mod " << e.unknownMod << ",fill " << e.unknownFill << ",dup_new " << e.dupNew << ",garbage " << e.garbage
+          << "\nIMPLIED," << e.ip.why << ",fills " << e.impliedFills << ",lots " << e.impliedLots
           << "\nDROPPED,late " << S.lateDropped << ",no_bar " << S.noBar << ",orphan_bars " << S.orphans << ",decided_with_backlog " << S.decidedLate
           << "\nBOOK,orders " << e.book.size() << ",drops " << e.bookDrops << ",resets " << e.bookResets
           << "\nNEAR_TICKS," << e.near << (S.set.nearTicks > 0 ? " (setting)" : " (auto)") << "\nATR," << S.atr << "\nLAST_PRICE_TICKS," << e.ref

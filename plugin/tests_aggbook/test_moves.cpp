@@ -118,7 +118,7 @@ int main() {
     }
     // ---- the badge ---------------------------------------------------------------------------------------------------------------
     CHECK(dt::badgeText5(true, true, 'L', true, false) == "A|H|L|P" && dt::badgeText5(false, false, 0, true, false) == "P" && dt::badgeText5(true, false, 0, false, false) == "A", "the combined badge A|H|L|P");
-    CHECK(std::string(dt::VERSION) == "1.8.0" && std::string(mvl::VERSION) == "1.2.0" && std::string(off::VERSION).compare(0, 5, "1.13.") == 0, "versions");   // (MoveLogic 1.2.0) off: any 1.13.x (other plugins bump it)
+    CHECK(std::string(dt::VERSION) == "1.8.0" && std::string(mvl::VERSION) == "1.2.0" && std::string(off::VERSION).compare(0, 2, "1.") == 0 && std::string(off::VERSION) >= "1.13.", "versions");   // (MoveLogic 1.2.0) off: 1.13.x or later (1.14.0 implied fills) (other plugins bump it)
     // ---- (1.1.0 / DefenseTurn 1.6.0, Rassul 14:16 "i want you to draw them") all four cases drawn ----------------------------------
     {   mvl::Read r; r.ext = 0; r.t = 100; r.px = 4000; r.tick = 0.25; r.norm[0] = 5; r.norm[1] = 5;
         r.s.in[0] = 12; r.s.bigSize[0] = 12; r.s.bigOld[0] = 3990; r.s.bigNew[0] = 3992;                 // bids pressed in

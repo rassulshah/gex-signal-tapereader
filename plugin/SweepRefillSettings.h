@@ -14,7 +14,7 @@
 #endif
 
 namespace swrset {
-static const char* const PLUGIN_VERSION = "1.1.0";
+static const char* const PLUGIN_VERSION = "1.1.1";
 enum K { K_VERSION, K_SHOW_BULL, K_COL_BULL, K_SHOW_BEAR, K_COL_BEAR, K_SHOW_ZZ, K_COL_ZZ, K_SHOW_REF, K_GAP_BARS, K_FONT, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

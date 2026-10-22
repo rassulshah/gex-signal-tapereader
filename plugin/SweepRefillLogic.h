@@ -49,7 +49,7 @@
 
 namespace swr {
 
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.1.1";   // (1.1.1, 2026-10-22 evening, Rassul 17:16 CT IMPLIED FILLS option B) an implied fill (Ev::implied, the feed's side "?" FILL - ImpliedFill.h) is never a sweep trade: it only takes its lots off the resting order
 enum Side { BID = 0, ASK = 1 };                    // the RESTING side: a sweep of BIDs = sellers sweeping down = a bullish Sr candidate
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum RefKind { REF_PIVOT = 0, REF_KEY = 1, REF_MQ = 2, REF_X5 = 3, REF_VP = 4 };   // REF_PIVOT = a ZigZag swing (1.1.0); REF_VP = POC / VAH / VAL (1.1.0); REF_X5 = 1.0.0 records only
@@ -73,7 +73,7 @@ inline void applyParams(Params& P, const swg::StopSweep& X) {
 typedef swg::Lvl Level;                             // name, px (ticks), dir (-1 low / +1 high / 0 either), kind (swg::KEY / swg::MQ)
 inline int keyDir(const std::string& n) { return swg::keyDir(n); }   // ONL PDL PFL LonLO PWL AsiaLO -1, the highs +1, else 0
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; long long session = 0; long long day = 0; bool rth = false; };   // a CLOSED candle in ticks; t = its END (IRT bar time); day / rth from the host (CT)
-struct Ev { int action = NEW; int side = -1; long long px = 0, size = 0, id = 0, ms = 0, sec = 0; };
+struct Ev { int action = NEW; int side = -1; long long px = 0, size = 0, id = 0, ms = 0, sec = 0; bool implied = false; };   // implied: (1.1.1) a FILL with raw side "?"
 
 // ---- the hybrid event clock (IRT stamps whole seconds; arrival ms orders events inside a second, never across one) -------------
 struct Clock {
@@ -122,6 +122,7 @@ struct Detector {
     // book
     std::unordered_map<long long, Ord> book; std::map<long long, std::set<long long> > at[2];   // price -> order ids resting there
     long long bookResets = 0, unknownFills = 0;
+    bool skipImplied = true; long long impliedFills = 0, impliedLots = 0;   // (1.1.1) LRA-Implied-<MKT>.csv exclude (default on)
     // flow
     Burst b; std::vector<Pending> pending; std::vector<Event> decided;   // the host drains `decided`
     long long nowMs = 0;
@@ -181,6 +182,11 @@ struct Detector {
             if (it != book.end()) { restOff(it->second, e.id); book.erase(it); }
             break; }
         case FILL: {
+            if (e.implied && skipImplied) {             // (1.1.1) implied: not a sweep / refill trade; the resting order still loses the lots
+                ++impliedFills; impliedLots += e.size;
+                if (it != book.end()) { Ord& o = it->second; o.size -= std::min(o.size, e.size); }
+                break;
+            }
             int side = e.side;
             if (it != book.end()) side = it->second.side; else ++unknownFills;
             if (side != BID && side != ASK) return;

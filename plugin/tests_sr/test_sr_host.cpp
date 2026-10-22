@@ -109,7 +109,7 @@ int main() {
     g_ms += 5000; drawOnce(q);
     SwrState* S2 = q->testState(); CHECK(S2 && S2->D.P.gapBars == 1 && texts("Sr").size() == 1 && texts("Sr")[0].fsize == 10, "garbage values = the defaults");
     std::vector<std::string> st2 = lines(flex + "/SweepRefill/SweepRefill.status-ES-180.txt");
-    CHECK(st2.size() >= 4 && st2[0] == "VERSION,1.1.0" && st2[2].find("STATUS,lsSweepRefill v1.1.0") == 0, "status line written with the version");
+    CHECK(st2.size() >= 4 && st2[0] == "VERSION,1.1.1" && st2[2].find("STATUS,lsSweepRefill v1.1.1") == 0, "status line written with the version");
     bool pl = false; for (const std::string& x : st2) if (x.find("PARAMS,LRA-StopSweep-ES.csv loaded") == 0 && x.find("bullish SHOW,bearish LOG") != std::string::npos) pl = true;
     CHECK(pl, "status: the params file and the verdicts");
     bool vp = false; for (const std::string& x : st2) if (x.find("VOLUME_PROFILE,ok") == 0 && x.find("POC 7677.00") != std::string::npos) vp = true;

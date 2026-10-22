@@ -50,6 +50,7 @@
 #endif
 #include "SweepRefillLogic.h"
 #include "SwingRef.h"
+#include "ImpliedFill.h"   // (1.1.1) implied fills (side "?" FILLs) are not sweep trades - shared, SDK-free
 #include "NewsWindow.h"   // (2026-10-22 evening) news / settle window "?" + the feed check (record only) - shared, SDK-free
 #include "NearLevels.h"
 #include "HostSlot.h"
@@ -72,7 +73,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define SWR_VERSION "1.1.0"     // = swr::VERSION = swrset::PLUGIN_VERSION = the setVersion literal
+#define SWR_VERSION "1.1.1"     // = swr::VERSION = swrset::PLUGIN_VERSION = the setVersion literal
 
 #ifdef SWR_TEST_CLOCK
 long long swrTestClockMs();
@@ -151,6 +152,7 @@ struct SwrState {
     // feed
     cppExtension::DEPTH_BY_ORDER* dbo = nullptr; bool dboDead = false, blocked = false; int attempt = 0; int flag = -1;
     long long events = 0, fillsLots = 0, lastResubMs = -1, backlogSlices = 0, lastStampSec = 0, garbage = 0;
+    imp::Params imp; long long impMtime = -3, impSize = -1;   // (1.1.1) LRA-Implied-<MKT>.csv
     bool vapFault = false; long long vapBars = 0, vapMissing = 0;   // the volume-profile levels (POC / VAH / VAL) from the chart's VAP
     // detector + bars
     swr::Detector D; swr::Clock clk; bool primed = false; long long lastClosedT = 0;
@@ -275,10 +277,24 @@ void SweepRefill::identify(SwrState& S) {
     S.prm = swg::StopSweep(); S.prmCheckMs = -100000; S.prmMtime = S.prmSize = -1;
 }
 
+// (1.1.1) LRA-Implied-<MKT>.csv (6E may be named 6E): exclude side "?" fills (missing / garbled = exclude anyway, the safe default)
+static void swrImplied(SwrState& S) {
+    const std::string f = swrFlex(); if (f.empty() || S.market.empty()) return;
+    std::string p = f + SWR_SEP "LRA-Implied-" + S.market + ".csv";
+    struct stat st; bool have = stat(p.c_str(), &st) == 0;
+    if (!have && S.market == "EU") { p = f + SWR_SEP "LRA-Implied-6E.csv"; have = stat(p.c_str(), &st) == 0; }
+    if (!have) { if (S.impMtime != -2) { S.imp = imp::Params(); S.impMtime = -2; } S.D.skipImplied = S.imp.exclude; return; }
+    if ((long long)st.st_mtime == S.impMtime && (long long)st.st_size == S.impSize) return;
+    std::vector<std::string> lines; const bool ok = nl::readBoundedLines(p, lines, 64 * 1024, 400, 512);
+    struct stat st2; if (!ok || stat(p.c_str(), &st2) != 0 || st2.st_mtime != st.st_mtime || st2.st_size != st.st_size) return;   // torn: retry later
+    S.imp = imp::parse(true, true, lines, S.market); S.impMtime = (long long)st.st_mtime; S.impSize = (long long)st.st_size;
+    S.D.skipImplied = S.imp.exclude;
+}
 // the params file, re-read only when its stamp (mtime + size) changes, at most every 5 s; missing / garbled = defaults, every mark LOG
 void SweepRefill::params(SwrState& S, long long now) {
     if (now - S.prmCheckMs < 5000 && now >= S.prmCheckMs) return;
     S.prmCheckMs = now;
+    swrImplied(S);
     const std::string f = swrFlex(); if (f.empty() || S.market.empty()) return;
     const std::string p = f + SWR_SEP "LRA-StopSweep-" + S.market + ".csv";
     struct stat st; if (stat(p.c_str(), &st) != 0) { if (S.prmMtime != -2) { S.prm = swg::StopSweep(); S.prm.why = "no file (defaults, every mark LOG)"; S.prmMtime = -2; } return; }
@@ -288,6 +304,7 @@ void SweepRefill::params(SwrState& S, long long now) {
     struct stat st2; if (stat(p.c_str(), &st2) != 0 || st2.st_mtime != st.st_mtime || st2.st_size != st.st_size) return;
     S.prm = swg::parseStopSweep(lines, S.market); S.prmMtime = (long long)st.st_mtime; S.prmSize = (long long)st.st_size;
 }
+
 
 void SweepRefill::settings(SwrState& S, long long now) {
     if (now - S.setCheckMs < 1000 && now >= S.setCheckMs) return;
@@ -362,6 +379,7 @@ void SweepRefill::drain(SwrState& S, long long now) {
             e.side = o.buySell == 1 ? swr::BID : o.buySell == 0 ? swr::ASK : -1;
             if (!swr::toTicks((double)o.price, S.tick, e.px)) { ++S.garbage; continue; }
             e.size = (long long)o.size; e.id = (long long)o.orderID;
+            e.implied = e.action == swr::FILL && imp::isImplied(S.imp, (long long)o.buySell);   // (1.1.1) side "?" FILL
             long long sec = (long long)o.timestamp; if (sec < S.lastStampSec && S.lastStampSec - sec < 1800) sec = S.lastStampSec;   // a stale stamp (ArrivalStamp.h)
             S.lastStampSec = sec; e.sec = sec; e.ms = S.clk.at(sec, now);
             if (e.action == swr::FILL) S.fillsLots += e.size;
@@ -463,6 +481,7 @@ void SweepRefill::status(SwrState& S, long long now) {
     o << "SETTINGS," << S.set.why << ",bullish " << (S.set.b(swrset::K_SHOW_BULL) ? "on" : "off") << ",bearish " << (S.set.b(swrset::K_SHOW_BEAR) ? "on" : "off")
       << ",ZigZag " << (S.set.b(swrset::K_SHOW_ZZ) ? "on" : "off") << ",swing line " << (S.set.b(swrset::K_SHOW_REF) ? "on" : "off") << ",gap " << S.D.P.gapBars << " candles\nBACKLOG_SLICES," << S.backlogSlices
       << ",garbage " << S.garbage << ",book resets " << S.D.bookResets << "\n";
+    o << "IMPLIED," << S.imp.why << ",fills " << S.D.impliedFills << ",lots " << S.D.impliedLots << " (side '?' FILLs: never sweep trades)\n";
     const std::string body = o.str();
     if (body == S.statusBody && now - S.statusMs < 30000 && now >= S.statusMs) return;
     if (now - S.statusMs < 1000 && now >= S.statusMs) return;
@@ -594,6 +613,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.1.0) VAP: the POC / VAH / VAL levels
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the refill window is decided and the feed drained while the chart is quiet
     p->setDescription("LRA Sweep Refill v1.1.0 - Sr on the price chart. Green Sr under the swept wick: sellers swept 8+ bid prices through an intact swing low (one of the last 3 swings of the 1-bar ZigZag from the RTH open) or a key / MenthorQ level, at a local low, and the bids came back (half the size that rested there within 5 s, still there 5 s later on NQ; per market from the validation) - the stops were run and absorbed. Red Sr over the swept high: the mirror. Sr? = promising, not proven yet; markets / sides not proven are recorded only. A short line joins the swing taken out to the sweep candle; the thin line is the ZigZag. Never on two adjacent candles. Decided once, never repainted; every sweep is recorded for the nightly test. Hover a mark for the numbers. Needs the market-by-order feed; works from the moment it is on the chart. Example: NQ Oct 9 8:55 AM, 19 prices swept through the swing low from 8:48 AM, 87% back in 3 s -> green Sr.");
-    p->setVersion("1.1.0");   // SWR_VERSION
+    p->setVersion("1.1.1");   // SWR_VERSION
     return p;
 }
