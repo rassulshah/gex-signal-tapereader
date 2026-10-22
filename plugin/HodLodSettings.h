@@ -1,13 +1,13 @@
-// HodLodSettings.h  (lsHodLod 2.4.4: Offset X / Y removed, the old files' offsets are ignored; 2.4.2, 2026-10-18 settings audit)  -  the ONE table of the HOD / LOD settings window (SettingsSpec.h).
+// HodLodSettings.h  (lsHodLod 2.6.0: Show pre-open line + Pre-open minutes (the PRE-OPEN BOOK row), parameter version 8; 2.4.4: Offset X / Y removed, the old files' offsets are ignored; 2.4.2, 2026-10-18 settings audit)  -  the ONE table of the HOD / LOD settings window (SettingsSpec.h).
 // File: lsFlexLevels\HodLod.settings-<MKT>.txt (keyed). Migrates once from HodLod.place-<MKT>.txt ("pos,dx,dy,table,proj,mark,5 colours").
 #pragma once
 #include "SettingsSpec.h"
 
 namespace hlset {
 
-static const char* const PLUGIN_VERSION = "2.5.0";
+static const char* const PLUGIN_VERSION = "2.6.0";
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
-enum K { K_POSITION, K_SHOW_TABLE, K_TABLE_BG, K_SHOW_PROJ, K_PROJ_UP, K_PROJ_DN, K_SHOW_MARK, K_MARK_LOD, K_MARK_HOD, K_N };
+enum K { K_POSITION, K_SHOW_TABLE, K_TABLE_BG, K_SHOW_PROJ, K_PROJ_UP, K_PROJ_DN, K_SHOW_MARK, K_MARK_LOD, K_MARK_HOD, K_SHOW_PRE, K_PRE_MIN, K_N };
 
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
@@ -20,8 +20,10 @@ inline const ss::Spec& spec() {
         ss::masterOf(ss::boolRow("show_mark", "Show 1st-extreme mark", true)),
         ss::same(ss::in(ss::colorRow("mark_lod", "LOD call", 0x0022C55E), "show_mark")),
         ss::same(ss::in(ss::colorRow("mark_hod", "HOD call", 0x00EF4444), "show_mark")),
+        ss::masterOf(ss::boolRow("show_pre", "Show pre-open line", true)),                      // (2.6.0) the PRE-OPEN BOOK row
+        ss::same(ss::in(ss::intRow("pre_min", "Pre-open minutes", 15, 5, 60, 50), "show_pre")),   // (2.6.0) N: the minutes before the open measured
     };
-    static const ss::Spec S = { "HodLod", PLUGIN_VERSION, 7, R, K_N, 0 };   // 7 (2.4.4): Offset X / Y removed (the 9-spot Position only); his saved offsets were 0
+    static const ss::Spec S = { "HodLod", PLUGIN_VERSION, 8, R, K_N, 0 };   // 8 (2.6.0): + Show pre-open line / Pre-open minutes; 7 (2.4.4): Offset X / Y removed (the 9-spot Position only); his saved offsets were 0
     return S;
 }
 

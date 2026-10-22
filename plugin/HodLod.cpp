@@ -1,5 +1,16 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.6.0 (2026-10-22, Rassul 15:57 CT "yes hod lod box"; MBO Roadmap "What does the pre-open book say about the first extreme?", ticket
+ *         T-20261022-29): the PRE-OPEN BOOK row "Pre" under Est (PreOpenLogic.h 1.0.0, SDK-free, tested + replayed on ES / NQ MBO): from
+ *         30 min before the RTH open to 60 min after it, ONE line - "Bids 2.1x . 70% stay . open sell 1.8x . 1st LOW early ?" - the MBO
+ *         book within 1 ATR of price in the last N minutes before the open (setting "Pre-open minutes", default 15), the share of the
+ *         size that rested 60 s+ and STAYED into the open, the opening imbalance (first 3 min) and an untested lean ("?" until the nightly
+ *         proves it). Live inside the window, frozen at the open, completed at open + 3 min; recorded to lsFlexLevels\HodLod\PreOpen-
+ *         <MKT>-<spb>.csv (SNAP + IMB lines) and read back after a restart (never repainted). No mark on the price chart. Its own hover
+ *         (HL_PRE_HOVER - the one hover on this box; question / what / why / how / example + the numbers); TRACK_MOUSE for it only.
+ *         The order feed: ONE DEPTH_BY_ORDER per chart (hlpo::Feed, the lsMboCheck / OrderFlowFeed.h off::Conn pattern COPIED, not
+ *         included), opened only from 45 min before the open to 4 min after it, then deleted (once a day), crash-guard file, 250 ms clock.
+ *         Settings: "Show pre-open line" + "Pre-open minutes" (parameter version 8). Status: PREOPEN / PREFEED lines.
  *  2.4.2 (2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator always has its settings verified and tested so there
  *         are not bugs anymore"): the settings window from ONE table (HodLodSettings.h / SettingsSpec.h / SettingsHost.h). Fixed: the
  *         colour rows were filled / read with setIntegerValue / getIntegerValue (swatches BLACK, a picked colour never saved - the place
@@ -108,11 +119,15 @@
 #include "HodLodQ.h"               // (2.3.0) MenthorQ Q-Scores: LRA-QScore-<MKT>.csv parse / header parts / hover (SDK-free)
 // (2.4.6, Rassul 2026-10-18 20:28 "remove the hoverover on gext strikes and the hod lod box") both hovers (Gex S/R strip, header) off
 static const bool HL_HOVERS = false;
+// (2.6.0, Rassul 15:57 CT, the agreed PRE-OPEN BOOK design: "a hover on the line") the ONE hover on this box: the Pre row's detail
+static const bool HL_PRE_HOVER = true;
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
 #include "Fresh.h"               // (2.4.0) the one freshness / STALE rule (Reg / Q / Gex row / Tape Reader status)
 #include "MarketState.h"         // (2.4.0) SRC HODLOD + TREND, once per closed bar
 #include "BoxDock.h"             // (2.4.1) the table rectangle for the Big Lot box (lsBigBidAsk) to dock to
 #include <chrono>
+#include "PreOpenLogic.h"        // (2.6.0) the PRE-OPEN BOOK row (SDK-free)
+#include <map>
 #include "VwapTrendLogic.h"      // (2.0.5) the header's trend: the Tape Reader TREND vote's rule, computed here from the chart's closed bars
 #include <sys/stat.h>
 #include <fstream>
@@ -124,8 +139,76 @@ static const bool HL_HOVERS = false;
 #include <cstring>
 #include <ctime>
 #include <exception>
+#include <new>
+#include <cstdint>
+#include <cmath>
 
 static const COLOR HL_GREY = 0x009CA3AF;
+
+// ---- (2.6.0) the PRE-OPEN BOOK's order feed: ONE DEPTH_BY_ORDER per chart, open only while the pre-open read needs it (45 min before
+// the open to 4 min after it; then deleted - its destructor unsubscribes - once a day), opened from calc / draw only behind a crash-guard
+// file, read by a 250 ms clock (named symbol only) and by calc / draw, at most 20,000 events / ~15 ms per read. The lsMboCheck 1.1.0 /
+// OrderFlowFeed.h off::Conn pattern, COPIED (not included) so this box never depends on the order-flow panes' header (BigLotTiers.h rule).
+namespace hlpo {
+template <class Tag, typename Tag::type M> struct Rob { friend typename Tag::type robbed(Tag) { return M; } };
+struct DboFlag { typedef RTBOOL cppExtension::DEPTH_BY_ORDER::*type; friend type robbed(DboFlag); };
+template struct Rob<DboFlag, &cppExtension::DEPTH_BY_ORDER::bDboSubscribed>;
+inline int safeNext(cppExtension::DEPTH_BY_ORDER* d) {   // 1 = an event, 0 = none, -1 = the native call faulted (never re-entered)
+#if defined(_MSC_VER)
+    __try { return d->getNext() == RTX_OK ? 1 : 0; } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#else
+    try { return d->getNext() == RTX_OK ? 1 : 0; } catch (...) { return -1; }
+#endif
+}
+static const long long TIMER_MS = 250, BUDGET_MS = 15, WAIT_MS = 60000; static const int READ_MAX = 20000;
+struct Feed {
+    cppExtension::DEPTH_BY_ORDER* dbo = nullptr;
+    int attempt = 0, flag = -1; bool blocked = false, dead = false, named = false;
+    long long openMs = -1, lastEventMs = -1, events = 0, faults = 0, capHits = 0, opens = 0; std::string via;
+    Feed() {}
+    Feed(const Feed&) = delete; Feed& operator=(const Feed&) = delete;
+    ~Feed() { delete dbo; }
+    void close() { delete dbo; dbo = nullptr; attempt = 0; flag = -1; dead = false; named = false; openMs = lastEventMs = -1; via.clear(); }
+    // chart context only: 1st the chart symbol spelled out; after 60 s with no event one 2nd try with NULL (= this chart)
+    void open(const std::string& symbol, const std::string& guard, long long now, std::string& state) {
+        if (blocked || dead || attempt >= 2) return;
+        if (attempt == 1 && !(lastEventMs < 0 && openMs >= 0 && now - openMs >= WAIT_MS)) return;
+        if (attempt == 0 && !guard.empty()) { std::ifstream g(guard.c_str()); if (g.is_open()) { blocked = true; state = "IRT closed while opening the order feed last time: delete " + guard + " to retry"; return; } }
+        if (!guard.empty()) { std::ofstream g(guard.c_str(), std::ios::trunc); g << "opening DEPTH_BY_ORDER try " << (attempt + 1) << "\n"; }
+        try {
+            delete dbo; dbo = nullptr;
+            if (attempt == 0 && !symbol.empty()) { dbo = new (std::nothrow) cppExtension::DEPTH_BY_ORDER(symbol.c_str()); via = "chart symbol " + symbol; named = true; attempt = 1; }
+            else { dbo = new (std::nothrow) cppExtension::DEPTH_BY_ORDER(NULL); via = "default (NULL = this chart)"; named = false; attempt = 2; }
+            ++opens;
+        } catch (...) { faults++; dead = true; }
+        flag = -1; openMs = now;
+        if (!dbo && !dead) { dead = true; state = "order feed unavailable (out of memory)"; }
+        if (!guard.empty()) std::remove(guard.c_str());
+    }
+    template <class Clock, class Sink> int read(long long now, Clock clock, Sink sink, bool timerPath) {
+        if (!dbo || dead || (timerPath && (!named || flag != 1))) return 0;
+        const long long t0 = clock(); int n = 0;
+        for (;;) {
+            if (n >= READ_MAX || ((n & 511) == 511 && clock() - t0 > BUDGET_MS)) { capHits++; break; }
+            const int r = safeNext(dbo);
+            if (r < 0) { faults++; dead = true; break; }
+            if (r == 0) break;
+            ++n; sink(dbo->dbo);
+        }
+        if (!dead) { try { flag = (dbo->*robbed(DboFlag())) ? 1 : 0; } catch (...) { faults++; dead = true; } }
+        if (n > 0) { lastEventMs = now; events += n; }
+        return n;
+    }
+    std::string stateText(long long now) const {
+        if (blocked) return "blocked (crash guard)";
+        if (dead) return "order feed fault: reload the indicator";
+        if (!dbo) return "closed";
+        if (flag == 0) return "MBO: not subscribed";
+        if (lastEventMs < 0) return now - openMs >= WAIT_MS && attempt >= 2 ? "MBO: no events" : "MBO: waiting";
+        return "ready";
+    }
+};
+} // namespace hlpo
 
 struct HLState {
     std::string root, mkt; int mi = -1;
@@ -168,6 +251,12 @@ struct HLState {
     std::string mstSym, mstChart; long mstSpb = 0; bool mstPosted = false; long long mstBar = -1, mstMs = -1; std::string mstSig;
     std::map<std::string, std::string> mstKv, mstTrendKv;
     bp::Hyst hyst; long long hystPlaceSig = -3; std::string placeLine; hl::Box hystPane = { 0, 0, 0, 0 };                           // (2.0.6) the table's place: no ping-pong (reset when the settings change)
+    // (2.6.0) the PRE-OPEN BOOK: the engine of today's open, its order feed (+ 250 ms clock), the record, the row's hover
+    po::Engine pre; hlpo::Feed preFeed; int preTimerId = 0; bool preTimerOn = false, preTimerTried = false, preBusy = false;
+    long long preDay = -1; bool preNearFrozen = false; bool preSnapWritten = false, preImbWritten = false; long long preWrites = 0, preWriteFails = 0, preRestored = 0;
+    RTDATE preStampKey = 0; long long preStampMs = 0; long long preRouted = 0; std::string preState = "not started"; double preTick = 0; std::string preSym; long prePer = 0;
+    po::Line preLine; long long preLineMs = -100000; bool preShow = true; int preMin = 15;
+    bool inPre = false, lastPreOk = false, lastPreHoverOk = false; hl::Box lastPreRow = { 0, 0, 0, 0 }, lastPreHover = { 0, 0, 0, 0 }; int preCurX = -100000, preCurY = -100000; long long preHovers = 0;
     ~HLState() { delete T; }
 };
 
@@ -176,7 +265,13 @@ public:
     SS_SAFE_DIALOG(HodLod, "HodLod")   // (SettingsGuard 1.1.0) every window call guarded + logged; a chart-less copy opens filled
     HodLod() : cppExtension() {}
     virtual int draw(void);
-    virtual int mouse(RTX_EVENT* e);                                 // (2.1.0) the GEX row's hover
+    virtual int mouse(RTX_EVENT* e);                                 // (2.1.0) the GEX row's hover; (2.6.0) the Pre row's hover
+    virtual int timer(RTX_EVENT* e);                                 // (2.6.0) the pre-open order feed's 250 ms clock
+    void preTick(HLState& S);                                        // (2.6.0) the PRE-OPEN BOOK: feed, engine, record (calc / draw)
+    void preRoute(HLState& S, const DEPTH_ORDER& o);
+    void preRestore(HLState& S);
+    void preStopTimer(HLState& S) { if (S.preTimerOn) { destroyTimer(S.preTimerId); S.preTimerOn = false; } if (S.preTimerId) preTimers().erase(S.preTimerId); S.preTimerId = 0; }
+    static std::map<int, HLState*>& preTimers() { static std::map<int, HLState*> m; return m; }
     void loadGex(HLState& S);
     void loadQ(HLState& S);                                          // (2.3.0)
     // (HL105, Rassul "you should have setting where to put them like upper left etc.") ONE setting: Position (9 spots), default
@@ -193,7 +288,7 @@ public:
     ss::Store& storeFor(const std::string& mkt);
     // (2.0.6) the per-market settings: "pos,dx,dy,table,proj,mark,tableBg,projUp,projDn,markLod,markHod" (colours 0..0xFFFFFF, -1 =
     // default); a 2.0.5 file ("7") = that position with everything else default
-    struct Place { int pos = hl::POS_DEFAULT; hl::Opts o; long long col[5] = { -1, -1, -1, -1, -1 }; std::string why; long long sig = -3; };
+    struct Place { int pos = hl::POS_DEFAULT; hl::Opts o; long long col[5] = { -1, -1, -1, -1, -1 }; std::string why; long long sig = -3; bool preShow = true; int preMin = 15; };   // (2.6.0) + the pre-open line
     Place readPlace(const std::string& mkt);
     static Place toPlace(const ss::Values& V);
     hl::Opts opts(const Place& P);
@@ -210,6 +305,7 @@ public:
         HLState* S = slot_.get(this, false);
         if (S && S->hlbPosted) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); bdk::clearHodLodTable(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; }   // (2.4.1)
         if (S && S->mstPosted) { mst::clear("HODLOD", S->mstSym, S->mstSpb, S->mstChart); mst::clear("TREND", S->mstSym, S->mstSpb, S->mstChart); S->mstPosted = false; }
+        if (S) { preStopTimer(*S); S->preFeed.close(); }            // (2.6.0) the clock stops before the state goes; the feed unsubscribes
         slot_.release(this);
     }
     void refresh(HLState& S);
@@ -250,6 +346,7 @@ int cppExtension::calc(int)
     HodLod* x = static_cast<HodLod*>(this);
     HLState* S = x->state(true);
     if (S) x->refresh(*S);
+    if (S && S->mi >= 0) x->preTick(*S);                               // (2.6.0) the pre-open book's feed is read on every calc too
     return RTX_OK;
 }
 
@@ -868,6 +965,7 @@ HodLod::Place HodLod::toPlace(const ss::Values& V)
     P.o.table = V.b(K_SHOW_TABLE); P.o.proj = V.b(K_SHOW_PROJ); P.o.mark = V.b(K_SHOW_MARK);
     const int ck[5] = { K_TABLE_BG, K_PROJ_UP, K_PROJ_DN, K_MARK_LOD, K_MARK_HOD };
     for (int k = 0; k < 5; ++k) P.col[k] = (long long)V.c(ck[k]);
+    P.preShow = V.b(K_SHOW_PRE); P.preMin = V.i(K_PRE_MIN); if (P.preMin < 5 || P.preMin > 60) P.preMin = 15;   // (2.6.0)
     P.why = V.why; return P;
 }
 static long long hlNowMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -1002,6 +1100,133 @@ int HodLod::priceEdge()
     return p.h > 0 ? (int)p.h : -1;
 }
 
+// ---- (2.6.0) the PRE-OPEN BOOK ----------------------------------------------------------------------------------------------------
+// one order event -> the engine, on the Central clock of the event's own stamp (whole seconds; cached per stamp)
+void HodLod::preRoute(HLState& S, const DEPTH_ORDER& o)
+{
+    S.preRouted++;
+    if (!(S.preTick > 0) || !std::isfinite((double)o.price) || o.price <= 0) { S.pre.ignored++; return; }
+    const double q = (double)o.price / S.preTick; if (!(q > 0 && q < 4e12)) { S.pre.ignored++; return; }
+    const long long px = (long long)std::llround(q);
+    long long ms = 0;
+    if (o.timestamp != 0 && o.timestamp == S.preStampKey) ms = S.preStampMs;
+    else if (o.timestamp != 0) {
+        struct tm t; memset(&t, 0, sizeof t);
+        if (getLocaltime((RTDATE)o.timestamp, &t) && t.tm_mon >= 0 && t.tm_mon <= 11 && t.tm_mday >= 1 && t.tm_mday <= 31) {
+            ms = (hl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday) * 86400LL + t.tm_hour * 3600LL + t.tm_min * 60LL + t.tm_sec) * 1000LL;
+            S.preStampKey = o.timestamp; S.preStampMs = ms;
+        }
+    }
+    if (ms <= 0) { S.pre.ignored++; return; }
+    const int side = o.buySell == 1 ? po::BID : o.buySell == 0 ? po::ASK : -1;
+    S.pre.onEvent((int)o.action, side, px, (long long)o.size, (unsigned long long)(unsigned int)o.orderID, ms);
+}
+// the record of today's session (SNAP / IMB lines) -> the frozen read after a restart (no repaint); bounded read (256 KiB, 4,000 lines)
+void HodLod::preRestore(HLState& S)
+{
+    const std::string p = flexPath("HodLod\\PreOpen-" + S.mkt + "-" + std::to_string(S.prePer) + ".csv"); if (p.empty()) return;
+    std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) return;
+    const std::string ses = po::sessionKey(S.pre.dayMs); std::string ln; int lines = 0; long long bytes = 0;
+    bool gotSnap = false, gotImb = false;
+    while (lines++ < 4000 && bytes < 262144 && std::getline(f, ln)) {
+        bytes += (long long)ln.size() + 1;
+        po::Snap sn; po::Imb im; const int k = po::parseRec(ln, ses, S.mkt, S.prePer, S.pre.dayMs, sn, im);
+        if (k == 1 && !gotSnap) { S.pre.restoreSnap(sn); gotSnap = true; S.preRestored++; }
+        else if (k == 2 && !gotImb) { if (!gotSnap) { S.pre.restoreSnap(sn); gotSnap = true; } S.pre.restoreImb(im); gotImb = true; S.preRestored++; }
+    }
+    S.preSnapWritten = gotSnap; S.preImbWritten = gotImb;
+}
+static bool hlAppend(const std::string& p, const std::string& header, const std::string& text)
+{
+    bool fresh = true; { std::ifstream t(p.c_str(), std::ios::binary); if (t.is_open()) { t.seekg(0, std::ios::end); fresh = t.tellg() <= 0; } }
+    std::ofstream f(p.c_str(), std::ios::binary | std::ios::app); if (!f.is_open()) return false;
+    if (fresh) f << header << "\n";
+    f << text; f.flush(); return f.good();
+}
+// calc / draw (chart context): today's engine, the chart's near band, the feed while it is wanted, the decisions, the record
+void HodLod::preTick(HLState& S)
+{
+    if (S.mi < 0 || S.preBusy) return;
+    S.preBusy = true;
+    struct Unbusy { HLState* s; ~Unbusy() { s->preBusy = false; } } unbusy = { &S };
+    try {
+        const long per = getSecondsPerBar();
+        const float tk = getProperty(SYM_TICKINCR);
+        if (!(std::isfinite(tk) && tk > 0)) { S.preState = "no tick size"; return; }
+        if (S.pre.mkt != S.mkt || S.pre.openMin != hl::MKTS[S.mi].open || per != S.prePer || (double)tk != S.preTick) {   // a new market / bar size: start clean
+            preStopTimer(S); S.preFeed.close(); S.pre = po::Engine(); S.pre.mkt = S.mkt; S.pre.openMin = hl::MKTS[S.mi].open; S.pre.s20 = po::s20Of(S.mkt);
+            S.preDay = -1; S.prePer = per; S.preTick = (double)tk; S.preTimerTried = false; S.preStampKey = 0; S.preRouted = 0;
+        }
+        const long long nowCt = hlNowCt(); if (nowCt <= 0) { S.preState = "no clock"; return; }
+        const long long nowMs = nowCt * 1000LL, dayMs = (nowCt / 86400LL) * 86400000LL;
+        if (dayMs != S.preDay) {
+            preStopTimer(S); S.preFeed.close(); S.preTimerTried = false;
+            S.pre.setDay(dayMs); S.preDay = dayMs; S.preNearFrozen = false; S.preSnapWritten = S.preImbWritten = false; S.preLineMs = -100000;
+            preRestore(S);
+        }
+        const int wday = (int)(((nowCt / 86400LL) + 4) % 7);   // 1970-01-01 was a Thursday: 0 = Sunday
+        if (wday == 0 || wday == 6) { if (S.preFeed.dbo) { preStopTimer(S); S.preFeed.close(); } S.preState = "weekend"; return; }
+        if (!S.preShow) { if (S.preFeed.dbo) { preStopTimer(S); S.preFeed.close(); } S.preState = "off (Show pre-open line unchecked)"; return; }
+        if (!S.pre.snapDone && nowMs < S.pre.winStartMs() - 60000LL && S.pre.P.windowMin != S.preMin) S.pre.P.windowMin = S.preMin;   // a new N applies before the window only
+        {   // the near band = 1 ATR(14) of the chart's closed candles (>= 4 ticks), frozen at the window's start; the fallback reference = the last close
+            const long n = getBarCount(); RTARRAY hA(barHigh), lA(barLow), cA(barClose);
+            if (n >= 3 && (long)hA.count >= n && (long)lA.count >= n && (long)cA.count >= n) {
+                const double last = (double)cA[(int)n - 1]; if (std::isfinite(last) && last > 0) S.pre.refFallback = (long long)std::llround(last / (double)tk);
+                if (!S.preNearFrozen) {
+                    double sum = 0; int k = 0;
+                    for (long i = n - 2; i >= 1 && k < 14; --i, ++k) {
+                        const double h = hA[(int)i], l = lA[(int)i], pc = cA[(int)i - 1];
+                        if (!(std::isfinite(h) && std::isfinite(l) && std::isfinite(pc)) || h < l) { k--; continue; }
+                        sum += (std::max)(h - l, (std::max)(std::fabs(h - pc), std::fabs(l - pc)));
+                    }
+                    if (k > 0) S.pre.nearTicks = (std::max)(4, (int)std::lround(sum / k / (double)tk));
+                    if (nowMs >= S.pre.winStartMs()) S.preNearFrozen = true;
+                }
+            }
+        }
+        const long long st = hlNowMs();
+        const bool want = S.pre.wantFeed(nowMs) && !(S.pre.snapDone && S.pre.imbDone);
+        if (want) {
+            const char* sy = getSymbol(); S.preSym = sy ? sy : "";
+            const std::string dir = flexPath("HodLod");
+#if defined(_WIN32)
+            if (!dir.empty()) CreateDirectoryA(dir.c_str(), NULL);
+#endif
+            S.preFeed.open(S.preSym, dir.empty() ? std::string() : flexPath("HodLod\\_opening-dbo-" + S.mkt + "-" + std::to_string(per) + ".txt"), st, S.preState);
+            S.preFeed.read(st, hlNowMs, [&](const DEPTH_ORDER& o) { preRoute(S, o); }, false);
+            if (!S.preTimerTried && !S.preTimerOn && S.preFeed.named && S.preFeed.flag == 1) {
+                S.preTimerTried = true; int id = 7600 + (int)(((uintptr_t)&S >> 4) % 1000);
+                while (preTimers().count(id)) ++id;
+                if (createTimer(id, (int)hlpo::TIMER_MS) == RTX_OK) { S.preTimerId = id; S.preTimerOn = true; preTimers()[id] = &S; }
+            }
+            S.preState = "reading (" + S.preFeed.stateText(st) + ")";
+        } else if (S.preFeed.dbo) { preStopTimer(S); S.preFeed.close(); S.preState = "feed closed (read done for today)"; }
+        else S.preState = nowMs < S.pre.feedStartMs() ? "waiting for " + po::hm12(S.pre.openMin - S.pre.P.windowMin - S.pre.P.leadMin) : "idle";
+        S.pre.tick(nowMs);
+        // the record: SNAP once frozen at the open, IMB once the opening imbalance is in (first line per session + kind wins)
+        if ((S.pre.snapDone && !S.preSnapWritten) || (S.pre.imbDone && !S.preImbWritten)) {
+            const std::string p = flexPath("HodLod\\PreOpen-" + S.mkt + "-" + std::to_string(per) + ".csv");
+            if (!p.empty()) {
+                if (S.pre.snapDone && !S.preSnapWritten) { if (hlAppend(p, po::REC_HEADER, po::recLine(S.pre, per, false))) { S.preSnapWritten = true; S.preWrites++; } else S.preWriteFails++; }
+                if (S.pre.imbDone && !S.preImbWritten && S.preSnapWritten) { if (hlAppend(p, po::REC_HEADER, po::recLine(S.pre, per, true))) { S.preImbWritten = true; S.preWrites++; } else S.preWriteFails++; }
+            }
+        }
+    } catch (...) { S.preState = "pre-open error (kept the last read)"; }
+}
+// the 250 ms clock: reads the named stream between IRT's calc / draw calls (IRT keeps only the last few thousand events per subscriber)
+int HodLod::timer(RTX_EVENT* e)
+{
+    if (!e) return RTX_FAIL;
+    HLState* S = nullptr;
+    { std::map<int, HLState*>::const_iterator it = preTimers().find(e->v.timer.id); if (it != preTimers().end()) S = it->second; }
+    if (!S) return RTX_FAIL;                                                // not ours
+    if (S->preBusy) return RTX_OK;
+    S->preBusy = true;
+    struct Unbusy { HLState* s; ~Unbusy() { s->preBusy = false; } } unbusy = { S };
+    try { S->preFeed.read(hlNowMs(), hlNowMs, [&](const DEPTH_ORDER& o) { preRoute(*S, o); }, true); if (S->preFeed.dead) preStopTimer(*S); } catch (...) {}
+    return RTX_OK;
+}
+
 int HodLod::draw(void)
 {
     HLState* S = state(true);
@@ -1053,6 +1278,18 @@ int HodLod::draw(void)
     const std::vector<hl::Box> avoid = hlAvoid(*S, pb, pe);
     const Place PL = position(S->mkt);
     const hl::Opts O = opts(PL);
+    {   // (2.6.0) the PRE-OPEN BOOK row: the read (cached 1 s - a live read walks the book), its hover only while the mouse is on it
+        S->preShow = PL.preShow; S->preMin = PL.preMin;
+        preTick(*S);
+        const long long nowMs = hlNowCt() * 1000LL, st = hlNowMs();
+        if (st - S->preLineMs >= 1000 || st < S->preLineMs) { S->preLine = po::lineAt(S->pre, nowMs, S->preFeed.lastEventMs >= 0 ? 1 : 0); S->preLineMs = st; }
+        S->view.preOn = S->preShow && S->preLine.show && S->pre.dayMs >= 0 && S->preState != "weekend";
+        S->view.preText = S->preLine.s;
+        S->view.preCol = S->preLine.col == po::COL_GREEN ? hl::C_GREEN : S->preLine.col == po::COL_RED ? hl::C_RED : hl::C_GREY;
+        S->view.preHover.clear();
+        if (HL_PRE_HOVER && S->inPre && S->view.preOn)
+            for (const po::HLine& h : po::hover(S->pre, nowMs)) S->view.preHover.push_back(hl::Line{ hl::Seg{ h.s, h.col == po::COL_GREEN ? hl::C_GREEN : h.col == po::COL_RED ? hl::C_RED : (h.bold ? hl::C_SLATE : hl::C_GREY) } });
+    }
     S->placeLine = "PLACE,pos " + std::to_string(PL.pos) + ",dx " + std::to_string(O.dx) + ",dy " + std::to_string(O.dy) + (PL.why.empty() ? "" : "," + PL.why)
                  + "\nOPTS,table " + (O.table ? "on" : "off (Show table unchecked in Settings)") + ",projection " + (O.proj ? "on" : "off") + ",mark " + (O.mark ? "on" : "off") + ",moves " + std::to_string(S->hyst.moves) + "\n";
     hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, pe, PL.pos, projX, &avoid, &O);
@@ -1068,7 +1305,8 @@ int HodLod::draw(void)
             if (dx || dy) { for (size_t i = 0; i < L.items.size(); ++i) if (L.items[i].role == hl::R_TABLE || L.items[i].role == hl::R_NOTE) { L.items[i].l += dx; L.items[i].r += dx; L.items[i].t += dy; L.items[i].b += dy; }
                             L.table.l += dx; L.table.r += dx; L.table.t += dy; L.table.b += dy;
                             if (L.gexOk) { L.gexRow.l += dx; L.gexRow.r += dx; L.gexRow.t += dy; L.gexRow.b += dy; }
-                            if (L.qOk) { L.qBox.l += dx; L.qBox.r += dx; L.qBox.t += dy; L.qBox.b += dy; } }
+                            if (L.qOk) { L.qBox.l += dx; L.qBox.r += dx; L.qBox.t += dy; L.qBox.b += dy; }
+                            if (L.preOk) { L.preRow.l += dx; L.preRow.r += dx; L.preRow.t += dy; L.preRow.b += dy; } }   // (2.6.0)
         }
     }
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
@@ -1084,12 +1322,16 @@ int HodLod::draw(void)
         if (HL_HOVERS && S->inGex && L.gexOk) hl::layoutGexHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
         if (S->inQ) { int cx = 0, cy = 0; if (hlCursor(cx, cy) && (std::abs(cx - S->qCurX) > 8 || std::abs(cy - S->qCurY) > 8)) S->inQ = false; }   // (2.3.0) the Q-Scores' detail
         if (HL_HOVERS && S->inQ && L.qOk && !S->inGex) hl::layoutQHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
+        if (S->inPre) { int cx = 0, cy = 0; if (hlCursor(cx, cy) && (std::abs(cx - S->preCurX) > 8 || std::abs(cy - S->preCurY) > 8)) S->inPre = false; }   // (2.6.0) the Pre row's detail
+        if (HL_PRE_HOVER && S->inPre && L.preOk) hl::layoutPreHover(L, S->view, pb, pe > 0 ? pe : pb.r, M);
     }
     hl::applyOpts(L, O);                      // (2.0.5) the Settings checkboxes and colours
     S->lastGexOk = L.gexOk && L.tableOk; S->lastGexRow = L.gexRow; S->lastHoverOk = L.gexHoverOk && L.tableOk; S->lastGexHover = L.gexHover;
     if (!S->lastGexOk) S->inGex = false;
     S->lastQOk = L.qOk && L.tableOk; S->lastQBox = L.qBox; S->lastQHoverOk = L.qHoverOk && L.tableOk; S->lastQHover = L.qHover;
     if (!S->lastQOk) S->inQ = false;
+    S->lastPreOk = L.preOk && L.tableOk; S->lastPreRow = L.preRow; S->lastPreHoverOk = L.preHoverOk && L.tableOk; S->lastPreHover = L.preHover;   // (2.6.0)
+    if (!S->lastPreOk) S->inPre = false;
     S->placeLine += hlq::statusLine(S->qf, S->qWhy, S->qJudged ? &S->qV : nullptr) + "Q_BOX," + (S->lastQOk ? std::to_string(L.qBox.l) + "," + std::to_string(L.qBox.t) + "," + std::to_string(L.qBox.r) + "," + std::to_string(L.qBox.b) : std::string("none"))
                   + ",hover " + (S->lastQHoverOk ? std::to_string(L.qHover.l) + "," + std::to_string(L.qHover.t) + "," + std::to_string(L.qHover.r) + "," + std::to_string(L.qHover.b) : std::string("off")) + ",hovers " + std::to_string(S->qHovers) + "\n";
     S->placeLine += hlg::statusLine(S->gex, S->view, S->gexWhy) + "GEX_BOX," + (S->lastGexOk ? std::to_string(L.gexRow.l) + "," + std::to_string(L.gexRow.t) + "," + std::to_string(L.gexRow.r) + "," + std::to_string(L.gexRow.b) : std::string("none"))
@@ -1103,6 +1345,16 @@ int HodLod::draw(void)
                       + ",data " + (S->hvl.ok ? std::string(fr::word(S->regV.st)) + " " + fr::ageShort(S->regV.ageSec) : std::string("-"))
                       + ",FLIP " + (S->hvl.flipTxt.empty() ? std::string("-") : S->hvl.flipTxt) + " not used,session GAM " + (S->sessGam.empty() ? std::string("-") : S->sessGam) + " not used"
                       + (S->hvlWhy.empty() ? "" : "," + S->hvlWhy) + "\n";
+    }
+    {   // (2.6.0) the PRE-OPEN BOOK's status
+        const long long nowMs = hlNowCt() * 1000LL; const po::Engine& E = S->pre;
+        S->placeLine += "PREOPEN," + std::string(po::VERSION) + ",state " + S->preState + ",show " + (S->preShow ? "on" : "off") + ",window " + std::to_string(E.P.windowMin) + " min"
+                      + (E.dayMs >= 0 ? ",session " + po::sessionKey(E.dayMs) + ",open " + po::hm12(E.openMin) : std::string()) + ",near " + std::to_string(E.nearTicks) + " ticks,s20 " + std::to_string(E.s20)
+                      + ",snap " + (E.snapDone ? "done" : "no") + ",imb " + (E.imbDone ? "done" : "no") + ",restored " + std::to_string(S->preRestored) + ",written " + std::to_string(S->preWrites) + ",fails " + std::to_string(S->preWriteFails)
+                      + ",line '" + S->preLine.s + "',row " + (S->lastPreOk ? std::to_string(S->lastPreRow.l) + "," + std::to_string(S->lastPreRow.t) + "," + std::to_string(S->lastPreRow.r) + "," + std::to_string(S->lastPreRow.b) : std::string("none")) + ",hovers " + std::to_string(S->preHovers) + "\n"
+                      + "PREFEED," + S->preFeed.stateText(hlNowMs()) + ",via " + (S->preFeed.via.empty() ? std::string("-") : S->preFeed.via) + ",opens " + std::to_string(S->preFeed.opens) + ",events " + std::to_string(S->preFeed.events)
+                      + ",routed " + std::to_string(S->preRouted) + ",book " + std::to_string(E.book.size()) + ",ignored " + std::to_string(E.ignored) + ",caps " + std::to_string(S->preFeed.capHits) + ",faults " + std::to_string(S->preFeed.faults)
+                      + ",clock " + (S->preTimerOn ? "on" : "off") + ",want " + (E.wantFeed(nowMs) ? "yes" : "no") + "\n";
     }
     postMst(*S);                             // (2.4.0) the Market State (behind the scenes; nothing drawn changes)
     execute(L);
@@ -1157,6 +1409,13 @@ int HodLod::mouse(RTX_EVENT* e)
 {
     if (!e) return RTX_FAIL;
     HLState* S = state(false); if (!S) return RTX_FAIL;
+    if (HL_PRE_HOVER && (e->type == E_MOUSE_MOVE || e->type == E_MOUSE_HOVER)) {   // (2.6.0) the Pre row (or its open detail): the one hover
+        const int mh = e->v.mouse.h, mv = e->v.mouse.v, g = S->inPre ? 6 : 0;
+        auto inB = [&](const hl::Box& b) { return mh >= b.l - g && mh <= b.r + g && mv >= b.t - g && mv <= b.b + g; };
+        const bool ip = S->lastPreOk && (inB(S->lastPreRow) || (S->inPre && S->lastPreHoverOk && inB(S->lastPreHover)));
+        if (ip) hlCursor(S->preCurX, S->preCurY);
+        if (ip != S->inPre) { S->inPre = ip; if (ip) ++S->preHovers; invalidateChart(false); }
+    }
     if (!HL_HOVERS) return RTX_FAIL;                                         // (2.4.6) no hovers: the mouse is never used
     if (e->type != E_MOUSE_MOVE && e->type != E_MOUSE_HOVER) return RTX_FAIL;
     const int mh = e->v.mouse.h, mv = e->v.mouse.v, g = S->inGex ? 6 : 0;
@@ -1178,8 +1437,8 @@ extern "C" cppExtension *CreateExtension(void)
 {
     HodLod *p = new HodLod();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | (HL_HOVERS ? TRACK_MOUSE : 0));   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
-    p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live.");
-    p->setVersion("2.5.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
+    p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
+    p->setVersion("2.6.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
