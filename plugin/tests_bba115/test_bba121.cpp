@@ -88,16 +88,16 @@ static void logic() {
         bba::BoDec E = bba::breakoutAt(x, u, d, pu, pd, 10, wait); CHECK(E.fired && E.dir == 1, "[logic] an outside candle through both: BO judged first");
     }
     {   // the record line
-        bba::BoDec R = D; R.t = 1792575180; std::string ln = bba::boLine(R, 1, "1.21.0"); bba::BoDec Q;
+        bba::BoDec R = D; R.t = 1792575180; R.t0 = R.t; std::string ln = bba::boLine(R, 1, "1.23.0"); bba::BoDec Q;   // (1.23.0) 24 fields, t0 = breakout candle
         CHECK(bba::parseBoLine(ln, Q) && Q.t == R.t && Q.dir == 1 && Q.fired && Q.reason == bba::BO_R_FIRED && Q.piv == 105 && Q.which == 2 && Q.lots == 60 && Q.key == 424 && Q.n == 10 && Q.print && Q.prior == 40 && Q.vol == 150 && Q.pvol == 100,
               "[logic] BBO| line round trip");
-        CHECK(ln.compare(0, 4, "BBO|") == 0 && std::count(ln.begin(), ln.end(), '|') == 19 && std::string(bba::BO_HEADER).find("BBO|t|dir|fired|reason") == 0, "[logic] 20 fields, header names them");
-        bba::BoDec T2 = R; T2.fired = false; T2.reason = bba::BO_R_TIME; CHECK(bba::parseBoLine(bba::boLine(T2, 1, "1.21.0"), Q) && !Q.fired && Q.reason == bba::BO_R_TIME, "[logic] a not-fired decision keeps its reason");
+        CHECK(ln.compare(0, 4, "BBO|") == 0 && std::count(ln.begin(), ln.end(), '|') == 23 && std::string(bba::BO_HEADER).find("BBO|t|t0|dir|fired|reason") == 0, "[logic] 24 fields (1.23.0), header names them");
+        bba::BoDec T2 = R; T2.fired = false; T2.reason = bba::BO_R_TIME; CHECK(bba::parseBoLine(bba::boLine(T2, 1, "1.23.0"), Q) && !Q.fired && Q.reason == bba::BO_R_TIME, "[logic] a not-fired decision keeps its reason");
         const char* bad[] = { "", "BBO|", "garbage", "BBO|1|2|1|fired|1|1|1|1|1|1|1|1|1|1|1|1|1|1|x", "BBO|1|1|0|fired|1|1|1|1|1|1|1|1|1|1|1|1|1|1|v", "BBO|1|1|1|fired|1|1|1|1|1|1|1|1|1|1|1|51|1|1|v", "BBO|1|1|1|fired|nan|1|1|1|1|1|1|1|1|1|1|1|1|1|v" };
         for (const char* b : bad) CHECK(!bba::parseBoLine(b, Q), std::string("[logic] garbage refused: ") + b);
         const std::string det = bba::boDetail(R, 0.25, "8:33 AM");
         CHECK(det.find("Q: did buyers break out with real size?") != std::string::npos && det.find("pivot 105.00 (higher pivot 2 back)") != std::string::npos && det.find("range 2.0x prior,volume 1.5x prior") != std::string::npos
-              && det.find("print 60 lots bought at 106.00") != std::string::npos && det.find("biggest in 10") != std::string::npos && det.find("never repainted") != std::string::npos, "[logic] the details line in his order");
+              && det.find("print 60 lots bought at 106.00") != std::string::npos && det.find("biggest in 10") != std::string::npos && det.find("never repainted") != std::string::npos && det.find("don't fade it") != std::string::npos && det.find("Not an entry") != std::string::npos, "[logic] the details line in his order");
     }
 }
 
@@ -201,56 +201,48 @@ static void host(const std::vector<Fx>& F) {
     {   home("skip0", &V0);
         Chart c(nqBars(F, F.size())); c.pump(14, false);
         BBState& S = c.st();
-        int fired = 0, match = 0;
+        int fired = 0, match = 0;   // (1.23.0) the 20 1.21 breakout candles are all decided (keyed by the breakout candle t0); 10 fire under green / red + same wave
         for (int k = 0; k < NWANT; ++k) {
             const auto it = S.boDec.find((long long)stampOf(std::string("2026-10-21 ") + WANT[k].t));
             if (it == S.boDec.end()) continue;
-            const bba::BoDec& D = it->second; if (D.fired) ++fired;
-            if (D.fired && D.dir == WANT[k].dir && D.lots == WANT[k].lots && D.n == WANT[k].n && std::fabs(D.key * 0.25 - WANT[k].px) < 1e-9) ++match;
+            ++match; if (it->second.fired) ++fired;
         }
-        CHECK(fired == NWANT && match == NWANT, "[host] the chart decides the 20 mockup events (skip 0): fired " + std::to_string(fired) + ", match " + std::to_string(match));
+        CHECK(match == NWANT && fired == 10, "[host] the 20 1.21 candidates are all decided (skip 0); 10 fire under the 1.23 rules: decided " + std::to_string(match) + ", fired " + std::to_string(fired));
         int extra = 0; for (const auto& kv : S.boDec) { const std::string e = [&] { time_t v = (time_t)kv.first; struct tm m; gmtime_r(&v, &m); char b[32]; std::strftime(b, sizeof(b), "%Y-%m-%d %H:%M", &m); return std::string(b); }();
             if (kv.second.fired && e >= "2026-10-21 08:33" && e <= "2026-10-21 15:00") { bool w = false; for (int k = 0; k < NWANT; ++k) if (e.substr(11) == WANT[k].t) w = true; if (!w) ++extra; } }
         CHECK(extra == 0, "[host] no breakout the mockup does not have (8:33 AM - 3:00 PM)");
         const std::string rec = slurp(recPath(c));
         CHECK(rec.compare(0, std::strlen(bba::BO_HEADER), bba::BO_HEADER) == 0, "[host] the record starts with the BBO header");
-        CHECK(rec.find("BBO|" + std::to_string(stampOf("2026-10-21 08:33")) + "|1|1|fired|29903|") != std::string::npos, "[host] record: 8:33 BO fired through 29,903");
-        CHECK(rec.find("BBO|" + std::to_string(stampOf("2026-10-21 08:42")) + "|-1|1|fired|") != std::string::npos, "[host] record: 8:42 BD fired (letter only, no print)");
+        CHECK(rec.find("BBO|" + std::to_string(stampOf("2026-10-21 08:33")) + "|" + std::to_string(stampOf("2026-10-21 08:33")) + "|1|0|wick_wave_ended|29903|") != std::string::npos, "[host] record: 8:33 BO through 29,903 on a RED candle, the up-wave ended there: logged wick_wave_ended (1.23.0)");
+        CHECK(rec.find("BBO|" + std::to_string(stampOf("2026-10-21 08:45")) + "|" + std::to_string(stampOf("2026-10-21 08:42")) + "|-1|1|fired|") != std::string::npos, "[host] record: the 8:42 wick break down confirmed by the 8:45 red close (mark on 8:45, 1.23.0)");
         int notFired = 0; { std::istringstream in(rec); std::string ln; while (std::getline(in, ln)) { bba::BoDec D; if (bba::parseBoLine(ln, D) && !D.fired) ++notFired; } }
         CHECK(notFired > 0, "[host] decisions that did not fire are recorded too, with the reason (" + std::to_string(notFired) + ")");
         // the draw: 8:30 - 9:06 in view
         c.view(i833 - 2, i833 + 12);
         if (std::getenv("BBA_DBG")) for (const auto& d : c.H.draws) if (d.color != 0) std::cout << d.type << " '" << d.text << "' " << d.l << "," << d.t << "," << d.r << "," << d.b << " col " << std::hex << d.color << std::dec << "\n";
         if (std::getenv("BBA_DBG")) std::cout << "x833 " << barX(c.H, i833) << " hi " << pxY(c.H, F[(size_t)i833].h) << " lo " << pxY(c.H, F[(size_t)i833].l) << "\n";
-        const mock::Draw* p80 = textAt(c, "80", 0x00FFFFFF, i833); const mock::Draw* bo = textAt(c, "BO", 0x0022C55E, i833);
-        CHECK(p80 && std::abs((p80->l + p80->r) / 2 - barX(c.H, i833)) <= 2, "[host] 8:33: the 80 is drawn ON the breakout candle");
-        CHECK(p80 && std::abs((p80->t + p80->b) / 2 - pxY(c.H, 29891.75)) <= 8, "[host] 8:33: the 80 at its price 29,891.75");
-        int rings833 = 0; for (const auto& d : c.H.draws) if (d.type == "ring" && d.color != 0 && p80 && std::abs((d.l + d.r) / 2 - barX(c.H, i833)) <= 2 && !(d.b < p80->t || d.t > p80->b)) ++rings833;
-        CHECK(rings833 == 1, "[host] 8:33: the ask cell that is also a Big Bid/Ask print (biggest in 50) is drawn ONCE - as the breakout print 80 (the 50 left is the bid side's own print)");
-        { int fifties = 0; for (const auto& d : c.H.draws) if (d.type == "ctext" && d.text == "50" && d.color != 0 && std::abs((d.l + d.r) / 2 - barX(c.H, i833)) <= 2 && p80 && !(d.b < p80->t || d.t > p80->b)) ++fifties;
-          CHECK(fifties == 0, "[host] 8:33: no 50 on the 80's row"); }
-        bool ringG = false; for (const auto& d : c.H.draws) if (d.type == "ring" && d.color == 0x0022C55E && p80 && d.l <= p80->l && d.r >= p80->r) ringG = true;
-        CHECK(ringG, "[host] 8:33: the 80's box outlined green");
-        CHECK(bo && std::abs((bo->l + bo->r) / 2 - barX(c.H, i833)) <= 2 && (bo->t + bo->b) / 2 < pxY(c.H, F[(size_t)i833].h), "[host] 8:33: BO green ABOVE the candle");
+        // (1.23.0) 8:33 was a BO on a RED candle whose wave ended: no BO letter and no green breakout box there (the 1.21 mark is gone)
+        CHECK(!textAt(c, "BO", 0x0022C55E, i833), "[host] 8:33: no BO (red candle, failed wick break - logged only)");
+        CHECK(!textAt(c, "FB", 0x0022C55E) && !textAt(c, "FB", 0x00EF4444), "[host] no FB mark is ever drawn");
         const mock::Draw* p72 = textAt(c, "72", 0x00FFFFFF, i845);
         CHECK(p72 && std::abs((p72->l + p72->r) / 2 - barX(c.H, i845)) <= 2 && std::abs((p72->t + p72->b) / 2 - pxY(c.H, 29781.0)) <= 8, "[host] 8:45: the 72 ON its candle at 29,781");
         bool ringR = false; for (const auto& d : c.H.draws) if (d.type == "ring" && d.color == 0x00EF4444 && p72 && d.l <= p72->l && d.r >= p72->r) ringR = true;
         CHECK(ringR, "[host] 8:45: the 72's box outlined red");
         int bdBelow = 0; for (const auto& d : c.H.draws) if (d.type == "ctext" && d.text == "BD" && d.color == 0x00EF4444) {
             const int x = (d.l + d.r) / 2; if (x == barX(c.H, i845) && (d.t + d.b) / 2 > pxY(c.H, F[(size_t)i845].l)) ++bdBelow; if (x == barX(c.H, i842) && (d.t + d.b) / 2 > pxY(c.H, F[(size_t)i842].l)) ++bdBelow; }
-        CHECK(bdBelow == 2, "[host] 8:42 (letter only) and 8:45: BD red BELOW the candle");
+        CHECK(bdBelow == 1 && !textAt(c, "BD", 0x00EF4444, i842), "[host] 8:45 (the confirming red close): BD red BELOW the candle; nothing on the 8:42 wick candle");
         CHECK(countText(c, "47") == 0, "[host] 8:42's 47 is not bigger than the prior candle's biggest sell (59): no number");
         int lines = 0; for (const auto& d : c.H.draws) if (d.type != "ctext" && d.type != "ring" && d.type != "rect" && d.type != "text") ++lines;
         CHECK(lines == 0, "[host] nothing but numbers, boxes and letters: no pivot line");
         // nothing drawn overlaps: the letters vs every box / number
         std::vector<const mock::Draw*> L, B; for (const auto& d : c.H.draws) if (d.color != 0) { if (d.type == "ctext" && (d.text == "BO" || d.text == "BD")) L.push_back(&d); else if (d.type == "ring") B.push_back(&d); }
         int ov = 0; for (auto* a : L) for (auto* b : B) if (!(a->r < b->l || a->l > b->r || a->b + 2 < b->t || a->t + 2 > b->b)) ++ov;
-        CHECK(ov == 0 && L.size() >= 4, "[host] the letters never cover a print box (" + std::to_string(L.size()) + " letters)");
+        CHECK(ov == 0 && L.size() >= 2, "[host] the letters never cover a print box (" + std::to_string(L.size()) + " letters)");
         c.view(i1048 - 6, i1048 + 6);
         CHECK(textAt(c, "124", 0x00FFFFFF, i1048) && textAt(c, "BO", 0x0022C55E, i1048), "[host] 10:48 BO 124 drawn on its candle");
         const std::string stt = slurp(HOME + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.status-NQ-NQZ6-180.txt");
-        CHECK(stt.find("VERSION,1.22.0\n") == 0 && stt.find("\nBREAKOUTS,on,today BO ") != std::string::npos && stt.find("BO_EVENT,8:33 AM,BO,fired,Q: did buyers break out with real size?") != std::string::npos
-              && stt.find("print 80 lots bought at 29,891.75") != std::string::npos && stt.find("biggest in 50") != std::string::npos, "[host] status: version, BREAKOUTS counts, the 8:33 details");
+        CHECK(stt.find("VERSION,1.23.0\n") == 0 && stt.find("\nBREAKOUTS,on,today BO ") != std::string::npos && stt.find("BO_EVENT,9:03 AM,BO,fired,Q: did buyers break out with real size?") != std::string::npos
+              && stt.find("print 56 lots bought at 29,890.00") != std::string::npos && stt.find("BO_EVENT,8:33 AM,BO,not fired: wick_wave_ended") != std::string::npos && stt.find("\nBREAKOUT_RULES,1.23.0") != std::string::npos, "[host] status: version, BREAKOUTS counts, the 9:03 details, the 8:33 failed wick break, the rules line");
         // no repaint: recomputes + a later bar changing nothing already decided
         std::map<long long, std::string> before; for (const auto& kv : S.boDec) if (kv.second.dir) before[kv.first] = bba::boLine(kv.second, 0, "x");
         c.H.bars[(size_t)i833].high += 50; c.H.bars[(size_t)i833 - 1].low -= 50;   // the chart's bars changing under a decided candle
@@ -265,17 +257,18 @@ static void host(const std::vector<Fx>& F) {
         CHECK(!c.st().boDec.count(t833), "[host] 8:33 still forming: not decided");
         for (size_t k = (size_t)i833 + 1; k < (size_t)i1048 + 3; ++k) { c.H.bars.push_back(nqBars(F, k + 1).back()); c.H.now = c.H.bars.back().time; c.pump(2, false); }
         const auto it = c.st().boDec.find(t833);
-        CHECK(it != c.st().boDec.end() && it->second.fired && it->second.lots == 80 && it->second.n == 50, "[host] decided once it closed (BO 80, biggest in 50), unchanged as 40 more bars came");
+        const auto i2 = c.st().boDec.find((long long)stampOf("2026-10-21 10:48"));
+        CHECK(it != c.st().boDec.end() && !it->second.fired && it->second.reason == bba::BO_R_WAVE_ENDED && i2 != c.st().boDec.end() && i2->second.fired && i2->second.lots == 124 && i2->second.n == 2, "[host] decided once closed: 8:33 failed wick break, 10:48 BO 124 (biggest in 2), bar by bar");
     }
     {   // a restart redraws from the record (the record wins: tampered 80 -> 81 shows 81)
         home("restart", &V0);
         { Chart c(nqBars(F, F.size())); c.pump(14, false); }
         std::string path; { Chart c(nqBars(F, F.size())); c.pump(1, false); path = recPath(c); }
-        std::string rec = slurp(path); const std::string key = "BBO|" + std::to_string(stampOf("2026-10-21 08:33")) + "|1|1|fired|";
-        const size_t a = rec.find(key); CHECK(a != std::string::npos, "[host] restart: the 8:33 line is in the record");
-        if (a != std::string::npos) { const size_t e = rec.find('\n', a); std::string ln = rec.substr(a, e - a); bba::BoDec D; bba::parseBoLine(ln, D); D.lots = 81; rec.replace(a, e - a, bba::boLine(D, 1, "1.21.0")); std::ofstream(path.c_str(), std::ios::binary | std::ios::trunc) << rec; }
-        Chart c(nqBars(F, F.size())); c.pump(8, false); c.view(i833 - 2, i833 + 12);
-        CHECK(textAt(c, "81", 0x00FFFFFF) && !textAt(c, "80", 0x00FFFFFF), "[host] restart: the decision is reloaded from the record, not re-judged");
+        std::string rec = slurp(path); const std::string key = "BBO|" + std::to_string(stampOf("2026-10-21 10:48")) + "|" + std::to_string(stampOf("2026-10-21 10:48")) + "|1|1|fired|";
+        const size_t a = rec.find(key); CHECK(a != std::string::npos, "[host] restart: the 10:48 line is in the record");
+        if (a != std::string::npos) { const size_t e = rec.find('\n', a); std::string ln = rec.substr(a, e - a); bba::BoDec D; bba::parseBoLine(ln, D); D.lots = 125; rec.replace(a, e - a, bba::boLine(D, 1, "1.23.0")); std::ofstream(path.c_str(), std::ios::binary | std::ios::trunc) << rec; }
+        Chart c(nqBars(F, F.size())); c.pump(8, false); c.view(i1048 - 6, i1048 + 6);
+        CHECK(textAt(c, "125", 0x00FFFFFF, i1048) && !textAt(c, "124", 0x00FFFFFF, i1048), "[host] restart: the decision is reloaded from the record, not re-judged");
         const std::string after = slurp(path); size_t n833 = 0, p = 0; while ((p = after.find(key, p)) != std::string::npos) { ++n833; ++p; }
         CHECK(n833 == 1, "[host] restart: a candle is recorded once");
     }
@@ -283,7 +276,8 @@ static void host(const std::vector<Fx>& F) {
         home("defaults");
         Chart c(nqBars(F, F.size())); c.pump(14, false);
         const auto a = c.st().boDec.find((long long)stampOf("2026-10-21 08:33")), b = c.st().boDec.find((long long)stampOf("2026-10-21 08:45")), d = c.st().boDec.find((long long)stampOf("2026-10-21 10:48"));
-        CHECK(a != c.st().boDec.end() && !a->second.fired && a->second.reason == bba::BO_R_TIME && b != c.st().boDec.end() && b->second.reason == bba::BO_R_TIME, "[host] skip first 15 (default): 8:33 / 8:45 recorded as time_filter, not fired");
+        const auto b2 = c.st().boDec.find((long long)stampOf("2026-10-21 08:42"));
+        CHECK(a != c.st().boDec.end() && !a->second.fired && b2 != c.st().boDec.end() && b2->second.reason == bba::BO_R_TIME && b2->second.t == (long long)stampOf("2026-10-21 08:45") && b != c.st().boDec.end() && !b->second.fired, "[host] skip first 15 (default): the 8:45 confirmation is inside the skipped minutes: time_filter, not fired");
         CHECK(d != c.st().boDec.end() && d->second.fired, "[host] 10:48 fires with the default skip");
         c.view(i833 - 2, i833 + 12);
         CHECK(!textAt(c, "BO", 0x0022C55E, i833) && !textAt(c, "BD", 0x00EF4444, i845) && !textAt(c, "72", 0x00FFFFFF, i845) && !textAt(c, "80", 0x00FFFFFF, i833), "[host] nothing drawn inside the skipped minutes (8:33 / 8:45)");
@@ -319,13 +313,13 @@ static void host(const std::vector<Fx>& F) {
     {   // his colours
         ss::Values V = V0; V.v[bbaset::K_COL_BO] = 0x00FFFF; V.v[bbaset::K_COL_BD] = 0xFF00FF; home("colours", &V);
         Chart c(nqBars(F, F.size())); c.pump(14, false); c.view(i833 - 2, i833 + 12);
-        CHECK(textAt(c, "BO", 0x0000FFFF, i833) && textAt(c, "BD", 0x00FF00FF, i845), "[host] BO / BD colours from the settings");
+        CHECK(textAt(c, "BO", 0x0000FFFF, idxOf(F, "2026-10-21 09:03")) && textAt(c, "BD", 0x00FF00FF, i845), "[host] BO / BD colours from the settings");
     }
     {   // the HOD/LOD table over the 8:33 BO letter: not drawn there (kept out); nothing of this plugin inside the table
         home("keepout", &V0);
         Chart c(nqBars(F, F.size())); c.pump(14, false);
         c.view(i833 - 2, i833 + 12);
-        const mock::Draw* bo = textAt(c, "BO", 0x0022C55E, i833); CHECK(bo != nullptr, "[host] keep-out: BO there before the table");
+        const mock::Draw* bo = textAt(c, "BO", 0x0022C55E, idxOf(F, "2026-10-21 09:03")); CHECK(bo != nullptr, "[host] keep-out: BO (9:03) there before the table");
         if (bo) {
             const bdk::Box tb = bdk::mk(bo->l - 30, bo->t - 10, bo->r + 30, bo->b + 6);
             for (int k = 0; k < 3; ++k) { bdk::publishHodLod(c.H.symbol, 180, c.H.chart, steadyMs() + k, tb); c.pump(1, true); }
@@ -337,7 +331,7 @@ static void host(const std::vector<Fx>& F) {
     { const std::string src = slurp("../BigBidAsk.cpp");
       const size_t a = src.find("(1.21.0) BREAKOUT / BREAKDOWN (decided in boPass"), b = src.find("the hover: only while the cursor");
       CHECK(a != std::string::npos && b > a && src.substr(a, b - a).find("P_DASH") == std::string::npos && src.substr(a, b - a).find("drawLineTo") == std::string::npos, "[host] no dashed / pivot line in the breakout drawing");
-      CHECK(std::string(BBA_VERSION) == "1.22.0" && std::string(bba::VERSION) == "1.22.0" && std::string(bbaset::PLUGIN_VERSION) == "1.22.0" && src.find("p->setVersion(\"1.22.0\")") != std::string::npos, "[ver] 1.21.0 everywhere");
+      CHECK(std::string(BBA_VERSION) == "1.23.0" && std::string(bba::VERSION) == "1.23.0" && std::string(bbaset::PLUGIN_VERSION) == "1.23.0" && src.find("p->setVersion(\"1.23.0\")") != std::string::npos, "[ver] 1.21.0 everywhere");
       CHECK(bbaset::spec().rows[bbaset::K_BREAKOUT].def == 1 && bbaset::spec().paramVersion == 10, "[set] Breakout / breakdown on by default; parameter version 10"); }
 }
 

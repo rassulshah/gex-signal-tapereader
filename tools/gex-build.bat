@@ -126,6 +126,7 @@ REM (2026-10-14) lsCobImpulse 0.1.0 - CoB impulse tag Cob+R? / Cob+V? / Cob+RV? 
 call :one CobImpulse lsCobImpulse CobImpulseLogic.h HostSlot.h HoverBoard.h ClaimGates.h CobOdds.h OddsTable.h MarketState.h BannerBoard.h CobImpulseSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h BoxDock.h KeepOutDraw.h
 REM (2026-10-14 night) lsBigBidAsk 1.0.0 - biggest bid (red, left) / biggest ask (green, right) lots on every candle of the price chart, bold >= 2.0x, thin circle = absorption (Rassul approved the mockup 20:41 CT)
 REM (2026-10-18) lsBigBidAsk 1.16.0 compact Big Lot box docked to the lsHodLod 2.4.1 table (BoxDock.h), category order 1 > 4 > 2 / 3, settings window fixes
+REM (2026-10-22) lsBigBidAsk 1.23.0 BO / BD: green / red only + the same-wave confirmation (bba::boWaves in BigBidAskLogic.h, already hashed); failed wick breaks logged only
 call :one BigBidAsk lsBigBidAsk AbsorbLogic.h BigBidAskLogic.h ColumnBoard.h HoverBoard.h BoxPlace.h BannerBoard.h HostSlot.h SignalBoard.h ZoneNear.h VwapTrendLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h BoxDock.h BigBidAskSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h OnTouchParams.h SharedAbsorb.h
 REM (2026-10-18 HOT-RELOAD) hot-reload test indicator lsHotReloadDemo: its implementation publishes WHILE IRT IS OPEN (refresh the chart),
 REM   the shim installs only when IRT is closed - tools\gex-hot-build.bat, docs\build\HOT-RELOAD.md

@@ -1,5 +1,13 @@
 /********************************************************************************
  *  BigBidAsk.cpp  --  Investor/RT RTX extension  lsBigBidAsk  1.0.0  (2026-10-14 night)
+ *  1.23.0 (2026-10-22, Rassul approved the BO / BD rules; built on his 11:00 CT "go restart"): BO only on a GREEN candle, BD only
+ *         on a RED candle. SAME-WAVE rule: a wick-only break of the pivot is confirmed when the breakout candle OR any later candle of
+ *         the same up-wave (BO) / down-wave (BD) CLOSES beyond the pivot ("as long as there is a close in the same upwave"); decided on
+ *         closed candles, the mark goes ON the confirming candle and never repaints (bba::boWaves, a pure function of the closed
+ *         candles + the record). No FB mark: a failed wick break (the wave ended first) is logged to the record only (wick_wave_ended).
+ *         Record lines now 24 fields (t0 = breakout candle, t = mark candle); the 1.21 / 1.22 lines are ignored (not redrawn).
+ *         Context, not an entry: the BO / BD test found close-beyond and same-wave breaks continue ~49%, the same as a random candle
+ *         of the wave - "a confirmed break: don't fade against it". No other letter changed.
  *  1.21.0 (2026-10-21, Rassul approved breakout-mockup-v2 at 20:10 CT: "no dashed pivot line. yes build"): BREAKOUT / BREAKDOWN.
  *         A candle that trades THROUGH the higher of the last two pivot highs (bba::breakFlagsPx, his 1-bar ZigZag), makes the highest
  *         high of the last 10 candles, has range >= the prior candle's and (volume > prior OR range > prior) = BO; the mirror = BD.
@@ -116,7 +124,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.22.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.23.0"          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
 static const bool BBA_HOVERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
@@ -287,6 +295,9 @@ struct BBState {
     std::map<long long, bba::BoDec> boDec; std::vector<std::pair<long long, std::string>> boPending; long long boLast = 0, boMs = -1, boFlushMs = -1, boRecFails = 0;
     bool boOn = true; unsigned boCol = 0x0022C55E, bdCol = 0x00EF4444;
     int boLetters = 0, boPrints = 0, boShared = 0, boKept = 0, boNoRoom = 0;
+    // (1.23.0) the same-wave rule: boDec is keyed by the BREAKOUT candle (t0); the wick breaks still waiting for a close in their wave
+    // ([1] BO / [0] BD, not recorded - rebuilt from the candles every pass); pre-1.23 record lines ignored (the old rule's letters)
+    bool boWaitOn[2] = { false, false }; long long boWaitT0[2] = { 0, 0 }; double boWaitPiv[2] = { 0, 0 }; int boLegacy = 0, boDup = 0;
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
 };
 
@@ -697,7 +708,9 @@ void BigBidAsk::load(BBState& S) {
         const std::string path = boPath(S, k); std::string text; long long st = -1;
         if (!statFile(path, st) || !readSmall(path, REC_FILE_MAX, text)) continue;
         std::istringstream in(text); std::string line;
-        while (std::getline(in, line)) { bba::BoDec D; if (bba::parseBoLine(line, D) && !S.boDec.count(D.t)) S.boDec[D.t] = D; }
+        while (std::getline(in, line)) { bba::BoDec D;
+            if (bba::parseBoLine(line, D)) { if (!S.boDec.count(D.t0)) S.boDec[D.t0] = D; }       // (1.23.0) first line per breakout candle wins
+            else if (line.compare(0, 4, "BBO|") == 0 && line.compare(0, 6, "BBO|t|") != 0) ++S.boLegacy; }   // a 1.21 / 1.22 line: not redrawn
     }
     for (long long k = S.session - 10; k <= S.session; ++k) {   // (1.11.0) back 10 days: 5 complete sessions for the statistics
         const std::string path = d + BBA_SEP + stem(S) + "-" + std::to_string(k) + ".csv";
@@ -767,16 +780,24 @@ void BigBidAsk::status(BBState& S, long long now) {
     {   // (1.21.0) BREAKOUTS: today's counts (the session of the last bar) + the details of today's breakouts (the hovers are off)
         const long count = getBarCount(); long long today = -1;
         if (count > 0) { RTARRAYI times(barDateTime); if (times.count >= count) today = sessionOf((long long)times[(int)count - 1]); }
-        int bo = 0, boP = 0, bd = 0, bdP = 0, cand = 0, tf = 0, nx = 0, nr = 0, nv = 0;
+        int bo = 0, boP = 0, bd = 0, bdP = 0, cand = 0, tf = 0, nx = 0, nr = 0, nv = 0, wk = 0, fb = 0, sw = 0;
         std::vector<const bba::BoDec*> ev;
-        for (const auto& kv : S.boDec) { const bba::BoDec& D = kv.second; if (D.dir == 0 || sessionOf(kv.first) != today) continue;
+        for (const auto& kv : S.boDec) { const bba::BoDec& D = kv.second; if (D.dir == 0 || sessionOf(D.t) != today) continue;
             ++cand;
-            if (D.fired) { if (D.dir > 0) { ++bo; if (D.print) ++boP; } else { ++bd; if (D.print) ++bdP; } ev.push_back(&D); }
+            if (D.fired) { if (D.dir > 0) { ++bo; if (D.print) ++boP; } else { ++bd; if (D.print) ++bdP; } if (D.wick) ++wk; ev.push_back(&D); }
+            else if (D.reason == bba::BO_R_WAVE_ENDED) { ++fb; ev.push_back(&D); }
+            else if (D.reason == bba::BO_R_SAME_WAVE) ++sw;
             else if (D.reason == bba::BO_R_TIME) ++tf; else if (D.reason == bba::BO_R_NOT_EXTREME) ++nx; else if (D.reason == bba::BO_R_RANGE) ++nr; else ++nv; }
+        std::sort(ev.begin(), ev.end(), [](const bba::BoDec* x, const bba::BoDec* y) { return x->t != y->t ? x->t < y->t : x->t0 < y->t0; });
         o << "BREAKOUTS," << (S.boOn ? "on" : "off (unchecked in Settings)") << ",today BO " << bo << " (with a print " << boP << ") / BD " << bd << " (with a print " << bdP << ")"
           << ",candidates " << cand << ",not fired: time filter " << tf << " / not a 10-candle extreme " << nx << " / range below prior " << nr << " / no volume or range up " << nv
           << ",on screen letters " << S.boLetters << " / own prints " << S.boPrints << " / on a Big Bid/Ask print " << S.boShared << " / kept out of the HOD/LOD box " << S.boKept << " / no room " << S.boNoRoom
           << ",decided " << S.boDec.size() << ",pending " << S.boPending.size() << ",record fails " << S.boRecFails << "\n";
+        o << "BREAKOUT_RULES,1.23.0 BO only on a green candle / BD only on a red candle; a wick break is confirmed by a close beyond the pivot in the same wave (mark on the confirming candle); failed wick breaks logged only (no mark)"
+          << ",today confirmed later in the same wave " << wk << ",failed wick breaks (wave ended first - logged only) " << fb << ",same wave already broken / waiting " << sw
+          << ",waiting for a close: BO " << (S.boWaitOn[1] ? std::string("since ") + clockOf(S.boWaitT0[1]) + " pivot " + bba::price((long long)std::llround(S.boWaitPiv[1] / S.tick), S.tick) : std::string("none"))
+          << " / BD " << (S.boWaitOn[0] ? std::string("since ") + clockOf(S.boWaitT0[0]) + " pivot " + bba::price((long long)std::llround(S.boWaitPiv[0] / S.tick), S.tick) : std::string("none"))
+          << ",old-rule record lines ignored " << S.boLegacy << ",duplicates kept out " << S.boDup << "\n";
         const size_t a = ev.size() > 30 ? ev.size() - 30 : 0;
         for (size_t k = a; k < ev.size(); ++k) o << "BO_EVENT," << bba::boDetail(*ev[k], S.tick, clockOf(ev[k]->t)) << "\n";
     }
@@ -1173,17 +1194,24 @@ void BigBidAsk::boardPass(BBState& S, long long now) {
 // recorded as BBO| lines - fired or not, with the reason - and reloaded on a restart (load), so a candle is never judged twice.
 void BigBidAsk::boPass(BBState& S, long long now) {
     const long count = getBarCount(); if (count < 12 || S.tick <= 0) return;
-    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow); RTARRAYI vo(barVolume);
-    if (times.count < count || hi.count < count || lo.count < count || vo.count < count) return;
+    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), op(barOpen), cl(barClose); RTARRAYI vo(barVolume);   // (1.23.0) open / close: the candle colour and the close beyond the pivot
+    if (times.count < count || hi.count < count || lo.count < count || op.count < count || cl.count < count || vo.count < count) return;
     const long long lastT = (long long)times[(int)count - 1];
     if (!(lastT == S.boLast && S.boMs >= 0 && now >= S.boMs && now - S.boMs < 1000)) {   // once a second or on a new bar
         S.boLast = lastT; S.boMs = now;
-        std::vector<signed char> up, dn; std::vector<double> upPx, dnPx;
+        std::vector<signed char> up, dn, zd; std::vector<double> upPx, dnPx;
         bba::breakFlagsPx(hi, lo, (int)count, up, dn, &upPx, &dnPx);
-        const int from = std::max(1, (int)count - 1 - 300), fill0 = std::max(0, from - (bba::BO_CAP + 12));
-        std::vector<bba::BoIn> in((size_t)count);
+        bba::zigDir(hi, lo, (int)count, zd);                                  // (1.23.0) the wave of every candle (same walk)
+        const int emitFrom = std::max(1, (int)count - 1 - 300), from = std::max(1, emitFrom - 60), fill0 = std::max(0, from - (bba::BO_CAP + 12));
+        std::vector<bba::BoIn> in((size_t)count); std::vector<bba::BoBar> bars((size_t)count); std::vector<char> skip((size_t)count, 0);
+        std::vector<int> rthOf((size_t)count, 0);
         for (int k = fill0; k < (int)count - 1; ++k) {
-            const auto it = S.fin.find((long long)times[k]); if (it == S.fin.end()) continue;
+            const long long t = (long long)times[k];
+            bba::BoBar& bb = bars[(size_t)k]; bb.ok = keyOf(op[k], S.tick, bb.o) && keyOf(cl[k], S.tick, bb.c);
+            long days = 0; int endSec = 0; svl::Cls cls; cls.kind = svl::NONE;
+            if (parts(t, days, endSec)) cls = svl::classify(days, endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin);
+            rthOf[(size_t)k] = cls.kind == svl::RTH ? 1 : 0; skip[(size_t)k] = (cls.kind == svl::NONE || timeSkipped(S.set, cls, endSec, S.openMin, S.closeMin)) ? 1 : 0;
+            const auto it = S.fin.find(t); if (it == S.fin.end()) continue;
             bba::BoIn& b = in[(size_t)k];
             if (!keyOf(hi[k], S.tick, b.hk) || !keyOf(lo[k], S.tick, b.lk)) continue;
             b.vol = (long long)vo[k]; b.known = true;
@@ -1191,18 +1219,21 @@ void BigBidAsk::boPass(BBState& S, long long now) {
             if (F.valid && F.bid.ok) { b.big[0] = F.bid.vol; b.bigKey[0] = F.bid.key; }
             if (F.valid && F.ask.ok) { b.big[1] = F.ask.vol; b.bigKey[1] = F.ask.key; }
         }
-        for (int i = from; i < (int)count - 1; ++i) {
-            const long long t = (long long)times[i];
-            if (S.boDec.count(t)) continue;
-            bool wait = false; bba::BoDec D = bba::breakoutAt(in, up, dn, upPx, dnPx, i, wait);
-            if (wait) continue;
-            D.t = t;
-            long days = 0; int endSec = 0; svl::Cls cls; cls.kind = svl::NONE;
-            if (D.dir != 0 && parts(t, days, endSec)) cls = svl::classify(days, endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin);
-            if (D.dir != 0 && D.fired && (cls.kind == svl::NONE || timeSkipped(S.set, cls, endSec, S.openMin, S.closeMin))) { D.fired = false; D.reason = bba::BO_R_TIME; }
-            S.boDec[t] = D;
-            if (D.dir != 0) { const long long sess = sessionOf(t); if (sess > 0) S.boPending.push_back({ sess, bba::boLine(D, cls.kind == svl::RTH ? 1 : 0, BBA_VERSION) }); }
+        // (1.23.0) green / red + the same-wave rule over the closed candles (a pure function of them); only decisions not yet recorded
+        // are added - a breakout candle already decided (t0 in the record) is never decided again, and a fired break whose recorded mark
+        // already covers this break (same side and pivot, marked at or after its breakout candle) is not drawn twice (no repaint)
+        const bba::BoRun R = bba::boWaves(in, bars, zd, up, dn, upPx, dnPx, skip, S.tick, from, (int)count - 1, emitFrom);
+        for (bba::BoDec D : R.ev) {
+            if (D.i0 < 0 || D.im < 0 || D.im >= (int)count - 1) continue;
+            D.t0 = (long long)times[D.i0]; D.t = (long long)times[D.im];
+            if (S.boDec.count(D.t0)) continue;
+            if (D.fired) { bool dup = false;
+                for (const auto& kv : S.boDec) { const bba::BoDec& O = kv.second; if (O.fired && O.dir == D.dir && O.piv == D.piv && O.t >= D.t0) { dup = true; break; } }
+                if (dup) { ++S.boDup; continue; } }
+            S.boDec[D.t0] = D;
+            const long long sess = sessionOf(D.t); if (sess > 0) S.boPending.push_back({ sess, bba::boLine(D, rthOf[(size_t)D.im], BBA_VERSION) });
         }
+        for (int sd = 0; sd < 2; ++sd) { S.boWaitOn[sd] = R.pendOn[sd] && R.pend[sd].i0 >= 0; S.boWaitT0[sd] = S.boWaitOn[sd] ? (long long)times[R.pend[sd].i0] : 0; S.boWaitPiv[sd] = S.boWaitOn[sd] ? R.pend[sd].piv : 0; }
         while (S.boDec.size() > 20000) S.boDec.erase(S.boDec.begin());
     }
     if (S.boPending.empty() || (S.boFlushMs >= 0 && now >= S.boFlushMs && now - S.boFlushMs < 1000)) return;
@@ -1386,10 +1417,12 @@ void BigBidAsk::render(BBState& S) {
     std::vector<int> boDir(cands.size(), 0); std::vector<char> boOwn(cands.size(), 0);
     struct BoLetter { int bar = 0, dir = 0; };
     std::vector<BoLetter> letters;
+    std::map<long long, const bba::BoDec*> boMark;                         // (1.23.0) the fired breaks by their MARK candle (t; keyed by t0 in boDec)
+    if (S.boOn) for (const auto& kv : S.boDec) if (kv.second.fired && !boMark.count(kv.second.t)) boMark[kv.second.t] = &kv.second;
     if (S.boOn) for (int i = std::max(from, vs); i <= ve && i < (int)count - 1; ++i) {
         const long long t = (long long)times[i];
-        const auto it = S.boDec.find(t); if (it == S.boDec.end() || !it->second.fired) continue;
-        const bba::BoDec& D = it->second; const int sd = D.dir > 0 ? +1 : -1;
+        const auto it = boMark.find(t); if (it == boMark.end()) continue;
+        const bba::BoDec& D = *it->second; const int sd = D.dir > 0 ? +1 : -1;
         letters.push_back(BoLetter{ i, D.dir });
         if (!D.print || D.lots <= 0) continue;
         size_t hit = cands.size();
@@ -1676,7 +1709,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (BBA_HOVERS ? TRACK_MOUSE : 0) | VAP_REQUIRED);   // (1.17.1) no TRACK_MOUSE while the hovers are off
-    p->setDescription("LRA Big Bid / Ask 1.21.0: BO / BD = a breakout (breakdown) candle through the higher (lower) of the last 2 pivots with a 10-candle high (low), range and volume up, its biggest buy (sell) print in lots on the candle. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.22.0");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask 1.23.0: BO / BD = context, not an entry: a confirmed break - don't fade against it (in the test it continued ~49%, like any candle in the wave). A breakout (breakdown) candle through the higher (lower) of the last 2 pivots with a 10-candle high (low), range and volume up; BO only on a green candle closing above the pivot, BD only on a red candle closing below it - a wick-only break counts when a later candle of the same wave closes beyond the pivot (the letter goes on that candle); failed wick breaks are logged only. Its biggest buy (sell) print in lots on the candle. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
+    p->setVersion("1.23.0");   // BBA_VERSION
     return p;
 }
