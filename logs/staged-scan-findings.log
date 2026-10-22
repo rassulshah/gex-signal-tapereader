@@ -1,3 +1,8 @@
-findings=0 allowed=0 staged_files=1 bytes=124
+findings=0 allowed=0 staged_files=6 bytes=290845
 largest staged blobs (bytes, path):
-SIZE	124	logs/staged-scan-findings.log
+SIZE	113623	plugin/BookFlow.cpp
+SIZE	86727	plugin/BUILD-LESSONS.md
+SIZE	31151	plugin/KingTracker.cpp
+SIZE	22287	plugin/MoveLogic.h
+SIZE	19628	plugin/DealerSig.cpp
+SIZE	17429	plugin/tests_aggbook/test_moves.cpp
