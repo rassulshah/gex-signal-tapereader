@@ -85,3 +85,31 @@
 - The live layout on his charts: screenshots / ChartView after the restart.
 - The arrival-time clock of the feed.
 - Per-market behaviour outside NQ.
+
+## 1.1.0: the validation verdict (2026-10-22 evening)
+lsDealerProfile 2.21.0 + lsLiquidityProfile 0.50.0, QueueMeter.h 1.1.0.
+
+The verdict is in `research-artifacts\learning\VALIDATE-DEFENDER-SIZE-2026-10-22.md`.
+
+- **The 10-s CALL.** It is decided once, 10 s after price first trades into the zone. A test that has already broken or left gets no call.
+  - RED: queue left < 40%.
+  - GREEN: 100% or more left, and holding. ES and CL only.
+  - Each call is written as an append-only `C|t0|t_call|side|anchor|R/G/N|pct|orig|tte|kind|ver` line in the queue record.
+- **Per-market rule.** It comes from `lsFlexLevels\LRA-QueueMeter-<MKT>.csv` (PARAM lines, strict; garbled or wrong market = defaults). The defaults equal the verdict:
+  - ES / CL: SHOW, red + green.
+  - NQ / GC: SHOW?, red only.
+  - HG / NG / 6E: LOG.
+- **File names.** The live file is now `LRA-QueueLive-<MKT>.csv`, because that params name was taken. Old 22-field rows are still read, with no call.
+- **Dealer Profile.**
+  - The badge outline follows the call: 2 px red / green.
+  - With no call: grey 1 px, or yellow 2 px when the originals are gone.
+  - "?" after the text in NQ / GC.
+  - The hover gives the market's out-of-sample odds.
+- **The candle-close Q** stays a record for the nightly (no edge after it is decided, 47-54%). It is also written to `Strips\QUEUE-<MKT>-<spb>.csv` for the Defense Holding strip (lsBookFlow 1.23.0).
+- **Tests.**
+  - test_qm: 92.
+  - replay_qm: 17. NQ 10-09: red 24, green 0, none 184. The two mockup tests read 65% at 10 s, so neither got a call.
+  - LP host: 16.
+  - DP host 2200: 28.
+  - MinGW real SDK: clean.
+  - Settings contract: PASS.

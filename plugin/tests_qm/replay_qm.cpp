@@ -22,7 +22,7 @@ struct Bar { long long ms; double h, l, c; };
 static long long ctMs(int h, int m, int s) { return 1791504000000LL + (h * 3600LL + m * 60 + s) * 1000; }   // 2026-10-09 00:00 CT (naive epoch)
 
 static void setup(qm::Engine& E) {
-    E.market = "NQ"; E.tick = 0.25;
+    E.market = "NQ"; E.tick = 0.25; E.rule = qm::callRuleFor("NQ");   // (1.1.0) NQ: SHOW? red only
     if (const char* z = std::getenv("QM_ZONE")) E.P.zoneAtr = std::atof(z);      // exploration only (the defaults are what ships)
     if (const char* o = std::getenv("QM_ORIG")) E.P.origTicks = std::atoi(o);
     std::vector<qm::Anchor> L;
@@ -59,13 +59,14 @@ static void show(const char* tag, const qm::Live* v) {
 int main(int argc, char** argv) {
     if (argc < 3) { std::printf("usage: rqm <events> <bars>\n"); return 2; }
     std::vector<Ev> ev; ev.reserve(20000000);
-    { FILE* f = std::fopen(argv[1], "r"); if (!f) { std::printf("no events\n"); return 2; }
+    { const std::string ap = argv[1]; const bool gz = ap.size() > 3 && ap.compare(ap.size() - 3, 3, ".gz") == 0;
+      FILE* f = gz ? popen(("gzip -dc '" + ap + "'").c_str(), "r") : std::fopen(argv[1], "r"); if (!f) { std::printf("no events\n"); return 2; }
       char ln[256];
       while (std::fgets(ln, sizeof(ln), f)) {
           Ev e{}; if (ln[0] == 'R') { e.t = std::atoll(ln + 2); e.reset = true; ev.push_back(e); continue; }
           if (std::sscanf(ln, "E,%lld,%d,%d,%lld,%lld,%lld", &e.t, &e.act, &e.side, &e.pt, &e.sz, &e.oid) == 6) ev.push_back(e);
       }
-      std::fclose(f); }
+      if (gz) pclose(f); else std::fclose(f); }
     std::vector<Bar> B;
     { std::ifstream f(argv[2]); std::string ln; while (std::getline(f, ln)) { Bar b; if (std::sscanf(ln.c_str(), "%lld,%lf,%lf,%lf", &b.ms, &b.h, &b.l, &b.c) == 4) B.push_back(b); } }
     std::printf("events %zu bars %zu\n", ev.size(), B.size());
@@ -82,6 +83,9 @@ int main(int argc, char** argv) {
         const bool hold = s.first < ctMs(9, 0, 0);
         show(tag, near(s.second, qm::BID, hold ? 31000.0 : 31026.0));
     }
+    for (auto& r : A.rec) if (r.rfind("C|", 0) == 0) { long long t0 = std::atoll(r.c_str() + 2); const long long x = (t0 / 1000) % 86400; if ((x >= 8 * 3600 + 54 * 60 && x <= 8 * 3600 + 56 * 60) || (x >= 9 * 3600 + 41 * 60 && x <= 9 * 3600 + 43 * 60)) std::printf("  call %s\n", r.c_str()); }
+    { long long nr = 0, ng = 0, nn = 0; for (auto& r : A.rec) if (r.rfind("C|", 0) == 0) { if (r.find("|R|") != std::string::npos) ++nr; else if (r.find("|G|") != std::string::npos) ++ng; else ++nn; }
+      std::printf("calls: red %lld green %lld none %lld\n", nr, ng, nn); CHECK(ng == 0 && nr > 0, "NQ: red calls only (green off), some red calls"); }
     const qm::Live* h = nullptr; const qm::Live* b = nullptr;
     for (auto& s : A.snaps) { if (s.first == MH) h = near(s.second, qm::BID, 31000.0); if (s.first == MB) b = near(s.second, qm::BID, 31026.0); }
     CHECK(h != nullptr, "8:55:39 a bid test at G1 31000");

@@ -17,6 +17,8 @@ static void warm(Engine& E, long long endMs = T0 - 60000) {
     E.market = "NQ"; E.tick = TK;
     for (int i = 20; i >= 1; --i) { const double b = 31050 + (i % 2) * 5; E.closeBar(endMs - i * 180000LL, b + 15, b - 15, b); }
 }
+static std::string firstQ(const std::vector<std::string>& r) { for (auto& x : r) if (x.rfind("Q|", 0) == 0) return x; return std::string(); }
+static size_t nQ(const std::vector<std::string>& r) { size_t n = 0; for (auto& x : r) if (x.rfind("Q|", 0) == 0) ++n; return n; }
 static void lvl(Engine& E, double px, const char* name) { Anchor a; a.px = tk(px); a.name = name; std::vector<Anchor> L = E.levels; L.push_back(a); E.setLevels(L); }
 static long long oid = 1000;
 static long long add(Engine& E, int side, double px, long long sz, long long t) { const long long o = ++oid; E.onEvent(NEW, side, tk(px), sz, o, t); return o; }
@@ -95,8 +97,8 @@ int main() {
         CHECK(E.closeBar(T0 + 60000, 31006, 30999, 31000) == 0, "in contact at the close: waits");
         const long long lo = add(E, BID, 30990, 3, T0 + 61000); hitBid(E, lo, 30990, 1, T0 + 62000);   // 30990 < zone low (30996.50) - 2 ticks
         CHECK(!E.tests.empty() && E.tests[0].broke, "a trade 2+ ticks below the zone = broke");
-        CHECK(E.closeBar(T0 + 240000, 31001, 30989, 31000) == 1 && !E.rows.empty(), "decided at the next close: one Q row");
-        Engine::QRec r; CHECK(!E.rows.empty() && Engine::parseRec(E.rows[0], r) && r.g == 0 && r.why == "broke", "red Q: broke");
+        CHECK(E.closeBar(T0 + 240000, 31001, 30989, 31000) == 1 && nQ(E.rows) == 1, "decided at the next close: one Q row");
+        Engine::QRec r; CHECK(nQ(E.rows) > 0 && Engine::parseRec(firstQ(E.rows), r) && r.g == 0 && r.why == "broke", "red Q: broke");
         CHECK(E.closeBar(T0 + 420000, 31001, 30989, 31000) == 0, "never decided twice");
     }
     {   Engine E; warm(E); lvl(E, 31000, "G1");
@@ -105,15 +107,15 @@ int main() {
         const long long up = add(E, ASK, 31012, 3, T0 + 1000); hitAsk(E, up, 31012, 1, T0 + 2000);   // 31012 > zone top 31000.50 + 0.25 ATR (7.5)
         CHECK(!E.tests.empty() && E.tests[0].left, "price left the zone on the defenders' side = held");
         CHECK(E.closeBar(T0 + 60000, 31012, 30999, 31010) == 1, "decided at the close");
-        Engine::QRec r; CHECK(!E.rows.empty() && Engine::parseRec(E.rows[0], r) && r.g == 1 && r.why == "held" && r.name == "G1" && r.kind == K_LEVEL, "green Q: held, named G1");
+        Engine::QRec r; CHECK(nQ(E.rows) > 0 && Engine::parseRec(firstQ(E.rows), r) && r.g == 1 && r.why == "held" && r.name == "G1" && r.kind == K_LEVEL, "green Q: held, named G1");
     }
     {   Engine E; warm(E); lvl(E, 31000, "G1");
         const long long q1 = add(E, BID, 31000, 20, T0 - 10000); const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
         hitBid(E, q1, 31000, 2, T0);
         E.closeBar(T0 + 60000, 31006, 30999, 31000); E.closeBar(T0 + 240000, 31003, 30999, 31000);
-        CHECK(E.rows.empty(), "two closes in contact: still waiting");
+        CHECK(nQ(E.rows) == 0, "two closes in contact: still waiting");
         CHECK(E.closeBar(T0 + 420000, 31003, 30999, 31000) == 1, "the 3rd close decides by the queue");
-        Engine::QRec r; CHECK(!E.rows.empty() && Engine::parseRec(E.rows[0], r) && r.g == 1 && r.why == "refilled", "90% left, originals there = green 'refilled'");
+        Engine::QRec r; CHECK(nQ(E.rows) > 0 && Engine::parseRec(firstQ(E.rows), r) && r.g == 1 && r.why == "refilled", "90% left, originals there = green 'refilled'");
     }
     // ---- 5) no look-ahead: a break AFTER the close is not used for that close
     {   Engine E; warm(E); lvl(E, 31000, "G1");
@@ -128,8 +130,8 @@ int main() {
         hitBid(E, q1, 31000, 5, T0);
         const long long lo = add(E, BID, 30990, 3, T0 + 1000); hitBid(E, lo, 30990, 1, T0 + 2000);
         E.closeBar(T0 + 60000, 31006, 30989, 31000);
-        CHECK(E.rows.size() == 1, "one Q");
-        const std::string line = E.rows.empty() ? std::string() : E.rows[0];
+        CHECK(nQ(E.rows) == 1, "one Q");
+        const std::string line = firstQ(E.rows);
         Engine::QRec r; CHECK(Engine::parseRec(line, r) && r.anchor == tk(31000) && r.side == BID && r.startBar == T0 + 60000, "round trip");
         CHECK(!Engine::parseRec(line.substr(0, line.size() / 2), r), "a torn line is refused");
         CHECK(!Engine::parseRec("Q|x|1|B|1|G|held|1|1|1|L|G1|1", r), "a garbled number is refused");
@@ -140,7 +142,7 @@ int main() {
         const long long q2 = add(F, BID, 31000, 20, T0 - 10000); const long long m2 = add(F, BID, 31006, 1, T0 - 9000); hitBid(F, m2, 31006, 1, T0 - 50);
         hitBid(F, q2, 31000, 5, T0 + 3000);
         const long long lo2 = add(F, BID, 30990, 3, T0 + 4000); hitBid(F, lo2, 30990, 1, T0 + 5000);
-        CHECK(F.closeBar(T0 + 60000, 31006, 30989, 31000) == 0 && F.rows.empty(), "restart: the recorded Q is not written again");
+        CHECK(F.closeBar(T0 + 60000, 31006, 30989, 31000) == 0 && nQ(F.rows) == 0, "restart: the recorded Q is not written again");
     }
     // ---- 7) the nightly norms: strict, per market, used per slot; else this session's
     {   Norms n = parseNorms({ "VERSION,1", "MARKET,NQ", "SLOT,0830,15.9,14.2", "SLOT,0900,12.0,11.0" }, "NQ");
@@ -243,6 +245,51 @@ int main() {
         add(E, BID, 30000, 1, nextSession);
         CHECK(E.tests.empty() && E.normal(BID, nextSession) == 0, "a new session: tests and the session's normal reset");
         CHECK(E.atr > 0, "the candles (ATR) are kept across the session change");
+    }
+    // ---- 13) (1.1.0) the 10-s CALL, per market rule; params strict; file fields; badge "?"; outline
+    {   CallRule es = callRuleFor("ES"), nq = callRuleFor("NQ"), hg = callRuleFor("HG");
+        CHECK(es.mark == M_SHOW && es.greenShow && nq.mark == M_SHOWQ && !nq.greenShow && hg.mark == M_LOG, "defaults: ES SHOW red+green, NQ SHOW? red only, HG LOG");
+        bool ok = false;
+        CallRule p = parseCallRule({ "VERSION,1", "MARKET,GC", "# c", "PARAM,MARK,SHOW?", "PARAM,CALL_AT_S,10", "PARAM,RED_PCT,0.40", "PARAM,GREEN_PCT,1.00", "PARAM,GREEN_NEEDS_HOLDING,1", "PARAM,GREEN_SHOW,0", "PARAM,Q_CLOSE_RECORD,LOG" }, "GC", ok);
+        CHECK(ok && p.mark == M_SHOWQ && p.callAtS == 10 && p.redPct == 0.40 && !p.greenShow, "the GC params file (as written by the validation)");
+        CallRule w = parseCallRule({ "VERSION,1", "MARKET,ES", "PARAM,MARK,SHOW" }, "CL", ok);
+        CHECK(!ok && w.mark == M_SHOW && w.src.find("wrong market") != std::string::npos, "wrong market: CL defaults");
+        w = parseCallRule({ "VERSION,1", "MARKET,ES", "PARAM,RED_PCT,1.7" }, "ES", ok); CHECK(!ok && w.redPct == 0.40, "garbled RED_PCT: defaults");
+        w = parseCallRule({ "VERSION,1", "MARKET,ES", "PARAM,MARK,MAYBE" }, "ES", ok); CHECK(!ok, "garbled MARK refused");
+        // red: the queue under 40% at 10 s, still in the zone
+        Engine E; warm(E); E.market = "ES"; lvl(E, 31000, "G1"); E.rule = callRuleFor("ES");
+        const long long q1 = add(E, BID, 31000, 20, T0 - 10000), q2 = add(E, BID, 30999, 20, T0 - 10000); (void)q2;
+        const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
+        hitBid(E, q1, 31000, 5, T0);
+        E.onEvent(DEL, BID, tk(30999), 20, q2, T0 + 3000);   // pulled: 15 of 40 left = 38%
+        E.stepCalls(T0 + 9000); CHECK(!E.tests.empty() && E.tests[0].call == -1, "no call before 10 s");
+        E.stepCalls(T0 + 10000);
+        CHECK(!E.tests.empty() && E.tests[0].call == 0, "RED at 10 s: 38% left");
+        bool cl = false; for (auto& r : E.rows) if (r.rfind("C|", 0) == 0 && r.find("|B|124000|R|38|") != std::string::npos) cl = true;
+        CHECK(cl, "C line written: C|t0|t|B|anchor|R|38|...");
+        const size_t nr = E.rows.size(); E.stepCalls(T0 + 20000); CHECK(E.rows.size() == nr && E.tests[0].call == 0, "decided once (never repainted)");
+        File f = parseFile(split(fileText(E, T0 + 20000, 31000.0), '\n'), "NQ");
+        CHECK(!f.ok, "file of ES read as NQ: refused");
+        f = parseFile(split(fileText(E, T0 + 20000, 31000.0), '\n'), "ES");
+        CHECK(f.ok && f.t.size() == 1 && f.t[0].call == 0 && f.t[0].mark == M_SHOW && outlineCall(f.t[0]) == 0, "file round trip: call RED, mark SHOW, red outline");
+        FileT q = f.t.empty() ? FileT() : f.t[0]; q.mark = M_SHOWQ; CHECK(badgeText("G1", q, 0).back() == '?', "SHOW?: the badge text ends with '?'");
+        q.mark = M_LOG; CHECK(outlineCall(q) == -1 && badgeText("G1", q, 0).back() != '?', "LOG market: no call outline, no '?'");
+        const Hover h = hover(f.t.empty() ? q : f.t[0], "G1", "31000.00", "ES"); bool odds = false; for (auto& x : h.lines) if (x.find("broke 76% of the time (base 30%)") != std::string::npos) odds = true;
+        CHECK(odds && h.title.find('?') == std::string::npos, "hover: ES odds line; no '?' in a SHOW market's header");
+        // green: 100%+ and holding, only where GREEN_SHOW
+        for (int pass = 0; pass < 2; ++pass) {
+            Engine G; warm(G); lvl(G, 31000, "G1"); G.rule = callRuleFor(pass == 0 ? "ES" : "NQ");
+            const long long g1 = add(G, BID, 31000, 20, T0 - 10000); const long long gm = add(G, BID, 31006, 1, T0 - 9000); hitBid(G, gm, 31006, 1, T0 - 50);
+            hitBid(G, g1, 31000, 2, T0);
+            add(G, BID, 30999.75, 10, T0 + 5000);   // refill that stays: 28 / 20 = 140%
+            G.stepCalls(T0 + 10000);
+            CHECK(!G.tests.empty() && G.tests[0].call == (pass == 0 ? 1 : 2), pass == 0 ? "ES GREEN: 140% left and holding" : "NQ: no green (red only) -> none");
+        }
+        // broke before the call -> none
+        Engine B; warm(B); lvl(B, 31000, "G1"); B.rule = callRuleFor("CL");
+        const long long b1 = add(B, BID, 31000, 20, T0 - 10000); const long long bm = add(B, BID, 31006, 1, T0 - 9000); hitBid(B, bm, 31006, 1, T0 - 50);
+        hitBid(B, b1, 31000, 2, T0); const long long lo = add(B, BID, 30990, 3, T0 + 1000); hitBid(B, lo, 30990, 1, T0 + 2000);
+        B.stepCalls(T0 + 10000); CHECK(!B.tests.empty() && B.tests[0].call == 2, "broke before 10 s: no call (none)");
     }
     std::printf("test_qm: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

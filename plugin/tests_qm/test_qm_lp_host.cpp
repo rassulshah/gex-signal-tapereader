@@ -39,8 +39,8 @@ int main() {
     for (int s = 0; s < 3; ++s) { h.now = t0 - 9 + s; p->calc(0); usleep(5000); }
     CHECK(S->qmE.tests.size() == 1 && S->qmE.tests[0].side == qm::BID && S->qmE.tests[0].q0 == 38, "a bid test at G1: q0 = 38 lots (30 + 8)");
     usleep(1100000); h.now = t0 - 6; p->calc(0);
-    const std::string live = readAll(flex + "\\LRA-QueueMeter-CL.csv");
-    CHECK(live.compare(0, 14, "VERSION,1.0.0\n") == 0 && live.find("\nMARKET,CL\n") != std::string::npos && live.find("\nT,B,79.80,") != std::string::npos, "the live file: VERSION / MARKET / the G1 test row");
+    const std::string live = readAll(flex + "\\LRA-QueueLive-CL.csv");
+    CHECK(live.compare(0, 9 + std::strlen(qm::VERSION), std::string("VERSION,") + qm::VERSION + "\n") == 0 && live.find("\nMARKET,CL\n") != std::string::npos && live.find("\nT,B,79.80,") != std::string::npos, "the live file: VERSION / MARKET / the G1 test row");
     qm::File f = qm::parseFile(qm::split(live, '\n'), "CL");
     CHECK(f.ok && f.t.size() == 1 && f.t[0].q == 32 && f.t[0].pct > 0.83 && f.t[0].pct < 0.85, "the Dealer Profile parses it: 32 of 38 left (84%)");
     // the break before the close, then the candle closes: a red Q in the record, decided once
@@ -54,6 +54,9 @@ int main() {
     const std::string rec = readAll(recPath);
     int nq = 0; { std::istringstream in(rec); std::string ln; while (std::getline(in, ln)) if (ln.rfind("Q|", 0) == 0 && ln.find("|R|broke|") != std::string::npos) ++nq; }
     CHECK(nq == 1, "the record holds one red Q (broke) for the G1 test");
+    { int nc = 0; std::istringstream in(rec); std::string ln; while (std::getline(in, ln)) if (ln.rfind("C|", 0) == 0 && ln.find("|B|7980|N|") != std::string::npos) ++nc;
+      CHECK(nc == 1, "the 10-s call: broke before 10 s -> one C line 'N' (no call)"); }
+    CHECK(S->qmE.rule.mark == qm::M_SHOW && S->qmE.rule.greenShow, "CL: the verdict's defaults (SHOW, green on) with no params file");
     {   // (coordinator) the same Q as a Holding-strip letter: LetterStrips.h line format, pane Q, the decision candle's raw bar time, pivot 0 (low)
         const std::string strip = readAll(flex + "\\Strips\\QUEUE-CL-180.csv");
         const std::string want = "LT|1|Q|" + std::to_string(t0) + "|Q|0|-1|broke ";
@@ -61,8 +64,8 @@ int main() {
         CHECK(strip.rfind(want, 0) == 0 && n == 1 && fields == 8, "Strips\\QUEUE-CL-180.csv: one LT|1|Q|<bar key>|Q|0|-1|<numbers> line (8 fields)");
     }
     const std::string st = readAll(flex + "\\LiquidityProfile.status-CL-180.txt");
-    CHECK(st.find("QUEUE_METER,1.0.0,") != std::string::npos && st.find("Q rows written 1") != std::string::npos, "status: QUEUE_METER line");
-    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0 && std::string(LQ_VERSION) == "0.49.0", "status VERSION 0.49.0");
+    CHECK(st.find(std::string("QUEUE_METER,") + qm::VERSION + ",") != std::string::npos && st.find("Q rows written ") != std::string::npos && st.find(",call SHOW at 10 s") != std::string::npos, "status: QUEUE_METER line");
+    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0 && std::string(LQ_VERSION) == "0.50.0", "status VERSION 0.50.0");
     // nothing new is drawn on the price chart by the meter (the Dealer Profile draws it in the Levels column)
     h.draws.clear(); p->draw(); bool qtext = false; for (auto& d : h.draws) if (d.type == "text" && d.text.find("Q") == 0 && d.text.find('%') != std::string::npos) qtext = true;
     CHECK(!qtext, "no meter text drawn by the Liquidity Profile");
@@ -78,6 +81,6 @@ int main() {
     { int n = 0; std::istringstream in(readAll(flex + "\\Strips\\QUEUE-CL-180.csv")); std::string ln; while (std::getline(in, ln)) if (ln.rfind("LT|", 0) == 0) ++n;
       CHECK(n == 1, "restart: no second strip line"); }
     q->destroy(); q->mdPark_.clear(); delete q;
-    std::printf("lsLiquidityProfile 0.49.0 queue meter host: %d passed, %d failed\n", passes, fails);
+    std::printf("lsLiquidityProfile 0.50.0 queue meter host: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

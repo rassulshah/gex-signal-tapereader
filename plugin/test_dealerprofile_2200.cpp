@@ -250,9 +250,9 @@ static std::string qmFile(const std::string& mkt, double atr, const std::vector<
     for (auto& r : rows) s += r + "\n";
     return s;
 }
-static const std::string T_PDH = "T,A,7863.25,7861.75,7866.75,L,PDH,120,91,76,40,5.0,9.0,1.0,4.0,-1,L,refilling,0,1,-1,1791536000000";
-static const std::string T_PIV = "T,B,7849.00,7845.50,7849.50,P,,63,21,33,0,5.5,15.9,14.5,0.0,1.0,H,pulled,1,1,-1,1791536050000";
-static const std::string T_FAR = "T,B,7834.50,7831.00,7835.00,L,PFL,50,40,80,50,1.0,9.0,0.0,0.0,-1,L,eaten,0,1,-1,1791536060000";
+static const std::string T_PDH = "T,A,7863.25,7861.75,7866.75,L,PDH,120,91,76,40,5.0,9.0,1.0,4.0,-1,L,refilling,0,1,-1,1791536000000,0,1";   // (2.21.0) call RED, ES = SHOW
+static const std::string T_PIV = "T,B,7849.00,7845.50,7849.50,P,,63,21,33,0,5.5,15.9,14.5,0.0,1.0,H,pulled,1,1,-1,1791536050000,-1,1";   // call pending
+static const std::string T_FAR = "T,B,7834.50,7831.00,7835.00,L,PFL,50,40,80,50,1.0,9.0,0.0,0.0,-1,L,eaten,0,1,-1,1791536060000";   // a 1.0.0 row (22 fields): still read, no call
 static void reloadQm(DealerProfile& X, Chart& a) { CUR = &a; X.loadHostState(); X.cs.qmChecked = -1; X.cs.qmStamp = -3; X.saveHostState(); }
 static std::vector<Op> meterTexts(const std::vector<Op>& O) {
     std::vector<Op> r;
@@ -271,7 +271,7 @@ int main()
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && std::string(DP_VERSION) == "2.20.0", "version 2.20.0: DP_VERSION = setVersion literal = settings table");
+        check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && std::string(DP_VERSION) == "2.21.0", "version 2.21.0: DP_VERSION = setVersion literal = settings table");
         const ss::Spec& sp = dprset::spec();
         check(sp.paramVersion == 9 && std::string(sp.rows[dprset::K_QUEUE_METER].key) == "queue_meter" && std::string(sp.rows[dprset::K_QM_REACH].key) == "qm_reach"
               && sp.rows[dprset::K_QM_BID].type == ss::T_COLOR && sp.rows[dprset::K_QM_WARN].type == ss::T_COLOR && sp.rows[dprset::K_QM_REACH].type == ss::T_FLOAT, "settings: Queue meter checkbox, Reach (ATR) float, 3 colours; parameter version 9");
@@ -285,9 +285,9 @@ int main()
     MOCK_CHART = "ES 3m #1"; cb::publish(cb::DELTA, a.sym, a.spb, MOCK_CHART, 1, 80);
     // 0) no file: normal badges, the reason on the status line
     std::vector<Op> base = drawOn(X, a, MOCK_CHART); cb::publish(cb::DELTA, a.sym, a.spb, MOCK_CHART, 2, 80); base = drawOn(X, a, MOCK_CHART);
-    check(meterTexts(base).empty() && slurp(fl("DealerProfile.status.txt")).find("QUEUE_METER,on,reach 1 ATR,file no file LRA-QueueMeter-ES.csv") != std::string::npos, "no file: no meter, reason in the status");
+    check(meterTexts(base).empty() && slurp(fl("DealerProfile.status.txt")).find("QUEUE_METER,on,reach 1 ATR,file no file LRA-QueueLive-ES.csv") != std::string::npos, "no file: no meter, reason in the status");
     // 1) a live file: PDH offers 76% (a level badge becomes the meter), a pivot 33% with originals gone (unlabeled, yellow), PFL beyond the reach
-    put("LRA-QueueMeter-ES.csv", qmFile("ES", 12.0, { T_PDH, T_PIV, T_FAR })); reloadQm(X, a);
+    put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { T_PDH, T_PIV, T_FAR })); reloadQm(X, a);
     std::vector<Op> O = drawOn(X, a, MOCK_CHART);
     DealerProfile::ColsState c = colsOf(X, a);
     std::vector<Op> M = meterTexts(O);
@@ -308,7 +308,7 @@ int main()
         }
         check(bgW > 0 && std::abs(fillW - (int)std::lround(bgW * 0.76)) <= 1, "fill = 76% of the badge (" + std::to_string(fillW) + " of " + std::to_string(bgW) + ")");
         check(bgW == c.lay.levels.w() - 3, "the meter spans the Levels column, never past it (" + std::to_string(bgW) + " / " + std::to_string(c.lay.levels.w()) + ")");
-        check(redLine, "offers: red outline");
+        check(redLine, "the 10-s call RED: red outline");
     }
     {   std::vector<Op> fills; for (auto& q2 : O) if (q2.kind == "box" && q2.l >= c.lay.levels.l && q2.r <= c.lay.levels.r && q2.col == 0x191919) fills.push_back(q2);
         int ov = 0; for (size_t i = 0; i < fills.size(); ++i) for (size_t j = i + 1; j < fills.size(); ++j)
@@ -327,32 +327,35 @@ int main()
         bool q = false, ql = false, tte = false, risk = false, ex = false, use = false;
         for (auto& o : H) if (o.kind == "text") {
             const std::string& t = o.text;
-            if (t.find("Queue meter ?") != std::string::npos) q = true;
+            if (t.find("Queue meter ?") != std::string::npos) q = true;   // ES is SHOW (2.21.0): no '?' 
             if (t.find("Queue left: 91 of 120") != std::string::npos) ql = true;
             if (t.find("Time to empty") != std::string::npos) tte = true;
             if (t.find("Break risk: LOW") != std::string::npos) risk = true;
             if (t.find("Example") != std::string::npos) ex = true;
             if (t.find("How to use") != std::string::npos) use = true;
         }
-        check(q && ql && tte && risk && ex && use, "hover: '?' header, queue left, time to empty, break risk, how to use, example");
+        check(ql && tte && risk && ex && use && !q, "hover (ES = SHOW: no '?' in the header), queue left, time to empty, break risk, how to use, example");
         e.v.mouse.h = 5; CUR = &a; X.mouse(&e); drawOn(X, a, MOCK_CHART);
     }
     // 3) stale (the Liquidity Profile stopped) / wrong market / torn row: normal badges
-    {   struct utimbuf u; u.actime = u.modtime = time(nullptr) - 30; utime(fl("LRA-QueueMeter-ES.csv").c_str(), &u); reloadQm(X, a);
+    {   struct utimbuf u; u.actime = u.modtime = time(nullptr) - 30; utime(fl("LRA-QueueLive-ES.csv").c_str(), &u); reloadQm(X, a);
         std::vector<Op> W = drawOn(X, a, MOCK_CHART); check(meterTexts(W).empty(), "a stale file (30 s old): normal badges"); }
-    {   put("LRA-QueueMeter-ES.csv", qmFile("NQ", 12.0, { T_PDH })); reloadQm(X, a);
+    {   put("LRA-QueueLive-ES.csv", qmFile("NQ", 12.0, { T_PDH })); reloadQm(X, a);
         std::vector<Op> W = drawOn(X, a, MOCK_CHART); check(meterTexts(W).empty() && slurp(fl("DealerProfile.status.txt")).find("file wrong market") != std::string::npos, "wrong market: normal badges + reason"); }
-    {   put("LRA-QueueMeter-ES.csv", qmFile("ES", 12.0, { T_PDH.substr(0, 40) })); reloadQm(X, a);
+    {   put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { T_PDH.substr(0, 40) })); reloadQm(X, a);
         std::vector<Op> W = drawOn(X, a, MOCK_CHART); check(meterTexts(W).empty() && slurp(fl("DealerProfile.status.txt")).find("garbled T row") != std::string::npos, "torn row: normal badges + reason"); }
     // 4) the reach setting is real (2.0 ATR brings PFL in); the colour setting is used; the checkbox removes the meter
-    {   put("DealerProfile.settings-ES.txt", std::string(ss::MAGIC) + "|DealerProfile|2.20.0|ES\nqm_reach=2\nqm_bid=255\n");
-        put("LRA-QueueMeter-ES.csv", qmFile("ES", 12.0, { T_PDH, T_FAR })); reloadQm(X, a);
+    {   put("DealerProfile.settings-ES.txt", std::string(ss::MAGIC) + "|DealerProfile|2.20.0|ES\nqm_reach=2\nqm_bid=0000FF\n");
+        put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { T_PDH, T_FAR })); reloadQm(X, a);
         CUR = &a; X.loadHostState(); X.saveHostState();
         std::vector<Op> W = drawOn(X, a, MOCK_CHART); W = drawOn(X, a, MOCK_CHART);
         bool farOn = false; for (auto& t : meterTexts(W)) if (t.text.find("Q80%") != std::string::npos) farOn = true;
         check(farOn, "reach 2 ATR: the PFL test (18.75 pts, 1.6 ATR) becomes a meter");
-        bool blue = false; for (auto& q : W) if (q.kind == "line" && q.col == 0x0000FF) blue = true;
-        check(blue, "the bid colour setting is used (blue outline)");
+        bool blue = false; const unsigned long want = (unsigned long)mix((COLOR)0x0000FF, 0.45f) & 0xFFFFFF; for (auto& q : W) if (q.kind == "box" && q.col == want) blue = true;
+        check(blue, "the bid colour setting is used (the PFL meter's fill is blue)");
+        if (!blue) { for (auto& q : W) if (q.kind == "box" && q.l > 900) std::printf("  box %d-%d %d-%d col %06lx\n", q.l, q.r, q.t, q.b, q.col); }
+        bool grey = false; for (auto& q : W) if (q.kind == "line" && q.col == (C_MUTED & 0xFFFFFF)) grey = true;
+        check(grey, "no call (a 1.0.0 row): 1 px grey outline");
         put("DealerProfile.settings-ES.txt", std::string(ss::MAGIC) + "|DealerProfile|2.20.0|ES\nqueue_meter=0\n");
         CUR = &a; X.loadHostState(); X.saveHostState();
         W = drawOn(X, a, MOCK_CHART); W = drawOn(X, a, MOCK_CHART);
@@ -360,9 +363,26 @@ int main()
         int nb = 0; for (auto& q : W) if (q.kind == "text" && q.text.rfind("PD", 0) == 0) ++nb;
         check(nb >= 1, "the normal PDH badge is back");
     }
+    // 4b) the call in a SHOW? market: "?" after the text; the hover gives the market's odds line
+    {   put("DealerProfile.settings-ES.txt", std::string(ss::MAGIC) + "|DealerProfile|2.20.0|ES\n");
+        std::string q = T_PDH; q.replace(q.size() - 1, 1, "2");   // mark SHOW?
+        put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { q })); reloadQm(X, a);
+        CUR = &a; X.loadHostState(); X.saveHostState();
+        std::vector<Op> W = drawOn(X, a, MOCK_CHART); W = drawOn(X, a, MOCK_CHART);
+        bool qm2 = false; for (auto& t : meterTexts(W)) if (t.text.find("Q76%?") != std::string::npos) qm2 = true;
+        check(qm2, "SHOW? market: 'PDH Q76%?'");
+        put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { T_PDH })); reloadQm(X, a);
+        W = drawOn(X, a, MOCK_CHART); const Op* t0 = nullptr; for (auto& t : meterTexts(W)) if (t.text.find("Q76%") != std::string::npos) t0 = &t;
+        if (t0) { RTX_EVENT e; memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)(t0->l + 3); e.v.mouse.v = (short)((t0->t + t0->b) / 2); e.v.mouse.bar = -1; e.v.mouse.price = NAN;
+            CUR = &a; X.mouse(&e); std::vector<Op> H = drawOn(X, a, MOCK_CHART); bool odds = false, rec = true;
+            for (auto& o : H) if (o.kind == "text" && o.text.find("broke 76% of the time (base 30%)") != std::string::npos) odds = true;
+            check(odds, "hover: ES odds 'queue left under 40% at 10 s broke 76% of the time (base 30%)'");
+            e.v.mouse.h = 5; CUR = &a; X.mouse(&e); drawOn(X, a, MOCK_CHART); (void)rec; }
+        else check(false, "the PDH meter for the hover");
+    }
     // 5) a narrow Levels column: the text shrinks / shortens and still never leaves the column
     {   put("DealerProfile.settings-ES.txt", std::string(ss::MAGIC) + "|DealerProfile|2.20.0|ES\nlevels_w=30\nlevel_pct=0\n");
-        put("LRA-QueueMeter-ES.csv", qmFile("ES", 12.0, { T_PDH, T_PIV })); reloadQm(X, a);
+        put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { T_PDH, T_PIV })); reloadQm(X, a);
         CUR = &a; X.loadHostState(); X.saveHostState();
         std::vector<Op> W = drawOn(X, a, MOCK_CHART); W = drawOn(X, a, MOCK_CHART);
         DealerProfile::ColsState c2 = colsOf(X, a); int o2 = 0, n2 = 0; for (auto& t : meterTexts(W)) { ++n2; if (t.l < c2.lay.levels.l || t.r > c2.lay.levels.r) ++o2; }

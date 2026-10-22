@@ -115,6 +115,7 @@
 #include "AirPocketLogic.h"    // (0.47.0) MBO roadmap Middle Ahead #1: the air pocket band (SDK-free, tested)
 #include "LmtZonesLogic.h"     // (0.48.0) LMT ZONES: real large resting orders as zones + the LMT / LMT F columns (SDK-free, tested)
 #include "QueueMeter.h"        // (0.49.0) the QUEUE METER engine: tests at levels / pivots / defended prices -> LRA-QueueMeter-<MKT>.csv for the Levels column (SDK-free, tested)
+#define E_MARK_NAME(m) ((m) == qm::M_SHOW ? "SHOW" : (m) == qm::M_SHOWQ ? "SHOW?" : "LOG")
 #include "BigOrderLines.h"     // (0.18.0) the biggest resting order lines on the price chart (SDK-free, tested)
 #include "BigFlow.h"          // (0.28.0) big MARKET orders (the MKT column) + icebergs (the "i" box), SDK-free, tested
 #if defined(_MSC_VER)
@@ -143,7 +144,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.49.0"          // (0.49.0, 2026-10-22, Rassul approved the QUEUE METER 13:51-13:52 CT, build ordered 15:20 CT) the queue meter engine (QueueMeter.h 1.0.0) runs on this chart's MBO book: a test starts when price trades into a key / MenthorQ level zone, a recent pivot zone or a suddenly defended price; queue left vs the start, originals left (rested 1 s+), eaten / pulled / refill-that-stayed lots/s, time to empty; written to lsFlexLevels\\LRA-QueueMeter-<MKT>.csv for the Dealer Profile's Levels column (nothing new drawn here); Q decided once at a candle close (G held / refilled, R drained / broke) to <stem>-queuemeter-<session>.csv, read back after a restart; status QUEUE_METER //          // (0.48.0, 2026-10-22, Rassul approved LMT zones mockup v3 09:34 CT "Ok build it" + gamma lines grey + only zone / far orders drawn) LMT ZONES (LmtZonesLogic.h 1.0.0): a real large resting LIMIT order (one MBO id >= Big Lot S20, rested 30 s+, re-priced <= 1x) drawn as a zone - BD print (with-trend) / Origin / Near / Far (thin) / ABC (grey context) - per market from PULLBACK-ZONES-FINAL-2026-10-22 (NG / HG offers, NQ offers ?, CL offers on a gamma level, ES BD-print offers ?, GC / 6E log only, bids never drawn); X = pulled / moved (void), ring = first fill; yellow diamond on a gamma level; thin grey gamma lines (the whole MenthorQ set); the BIG column becomes LMT | LMT F (the same order ids); hover with the study numbers; settings rows (parameter version 8); record <stem>-lmtzones-<session>.csv (no repaint); nightly params LRA-LmtZones-<MKT>.csv; TRACK_MOUSE again for the zone hover only // (0.47.1, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") the biggest resting order lines stop at the lsHodLod table's edges (KeepOutDraw.h; the lines, records and counts unchanged) // keep equal to lqp::VERSION and the setVersion literal below
+#define LQ_VERSION "0.50.0"          // (0.50.0, 2026-10-22 evening, the queue meter validation verdict VALIDATE-DEFENDER-SIZE-2026-10-22.md) QueueMeter.h 1.1.0: the 10-s CALL (red < 40% left; green >= 100% + holding, ES / CL) per market from lsFlexLevels\\LRA-QueueMeter-<MKT>.csv (PARAM lines; defaults = the verdict), C lines in the record; the live file renamed LRA-QueueLive-<MKT>.csv; the candle-close Q stays a record (+ the Holding-strip Q line) //          // (0.49.0, 2026-10-22, Rassul approved the QUEUE METER 13:51-13:52 CT, build ordered 15:20 CT) the queue meter engine (QueueMeter.h 1.0.0) runs on this chart's MBO book: a test starts when price trades into a key / MenthorQ level zone, a recent pivot zone or a suddenly defended price; queue left vs the start, originals left (rested 1 s+), eaten / pulled / refill-that-stayed lots/s, time to empty; written to lsFlexLevels\\LRA-QueueMeter-<MKT>.csv for the Dealer Profile's Levels column (nothing new drawn here); Q decided once at a candle close (G held / refilled, R drained / broke) to <stem>-queuemeter-<session>.csv, read back after a restart; status QUEUE_METER //          // (0.48.0, 2026-10-22, Rassul approved LMT zones mockup v3 09:34 CT "Ok build it" + gamma lines grey + only zone / far orders drawn) LMT ZONES (LmtZonesLogic.h 1.0.0): a real large resting LIMIT order (one MBO id >= Big Lot S20, rested 30 s+, re-priced <= 1x) drawn as a zone - BD print (with-trend) / Origin / Near / Far (thin) / ABC (grey context) - per market from PULLBACK-ZONES-FINAL-2026-10-22 (NG / HG offers, NQ offers ?, CL offers on a gamma level, ES BD-print offers ?, GC / 6E log only, bids never drawn); X = pulled / moved (void), ring = first fill; yellow diamond on a gamma level; thin grey gamma lines (the whole MenthorQ set); the BIG column becomes LMT | LMT F (the same order ids); hover with the study numbers; settings rows (parameter version 8); record <stem>-lmtzones-<session>.csv (no repaint); nightly params LRA-LmtZones-<MKT>.csv; TRACK_MOUSE again for the zone hover only // (0.47.1, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") the biggest resting order lines stop at the lsHodLod table's edges (KeepOutDraw.h; the lines, records and counts unchanged) // keep equal to lqp::VERSION and the setVersion literal below
 // (0.45.3, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") every PRICE-CHART hover is off: the
 // near-zone makeup box and the big-order line box (the code is kept - set LQ_HOVERS true to bring them back); the price chart no longer asks
 // IRT for mouse events (no TRACK_MOUSE). The Liquidity Flow pane (LQ_FLOW) keeps its candle-follow. Column inks lighter: lqp::colInk.
@@ -472,6 +473,7 @@ struct LQState {
     int lzDrawnNow = 0, lzLmtRows = 0, lzFRows = 0, lzGammaDrawn = 0;
     // (0.49.0) the QUEUE METER (QueueMeter.h): its own order book + candles; the live file for the Dealer Profile's Levels column; the Q record
     qm::Engine qmE; std::string qmMkt, qmNormWhy = "not read"; long long qmSession = -1, qmFlushMs = -1, qmPubMs = -1, qmWrites = 0, qmFails = 0, qmPubs = 0, qmPubFails = 0;
+    long long qmRuleT = -2, qmRuleN = -2;   // (0.50.0) the per-market call params file LRA-QueueMeter-<MKT>.csv (stamp)
     std::vector<std::string> qmStripRows; long long qmStripWrites = 0, qmStripFails = 0;   // (0.49.0) the Q letters for the Defense pane's Holding strip
     long long qmRestored = 0, qmNormT = -2, qmNormN = -2, qmNormMs = -1, qmStamp = 0, qmStampMs = 0; long qmBarCount = 0; size_t qmLastLive = 0; bool qmPubEmpty = true;
 #endif
@@ -1551,6 +1553,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
             o << "QUEUE_METER," << qm::VERSION << ",tests live " << QL.size() << ",started " << S.qmE.nStarted << ",anchors levels " << S.qmE.levels.size() << " pivots " << S.qmE.pivots.size()
               << ",ATR " << S.qmE.atr << ",zone " << S.qmE.zoneW() << " ticks,book " << S.qmE.book.size() << ",events " << S.qmE.nEvents << ",unknown fills " << S.qmE.nUnknownFill
               << ",normal bids " << S.qmE.normal(qm::BID, qn) << " offers " << S.qmE.normal(qm::ASK, qn) << " lots/s (" << S.qmE.normSrc(qm::BID, qn) << "),nightly normal " << S.qmNormWhy
+              << ",call " << (E_MARK_NAME(S.qmE.rule.mark)) << " at " << S.qmE.rule.callAtS << " s red < " << S.qmE.rule.redPct << (S.qmE.rule.greenShow ? " green >= " + std::to_string(S.qmE.rule.greenPct).substr(0, 4) : std::string(" no green")) << " (" << S.qmE.rule.src << "),calls red " << S.qmE.nCalls[0] << " green " << S.qmE.nCalls[1] << " none " << S.qmE.nCalls[2]
               << ",Q rows written " << S.qmWrites << " fails " << S.qmFails << ",restored " << S.qmRestored << ",live file writes " << S.qmPubs << " fails " << S.qmPubFails << ",Holding-strip Q lines written " << S.qmStripWrites << " fails " << S.qmStripFails << " (Strips\\QUEUE-" << S.market << "-" << S.spb << ".csv)\n"; }
 #ifndef LQ_FLOW
         {   // (0.47.0) the air pocket: the setting, the cases decided this run, the last one's reason and ratio (numbers here, never on the chart)
@@ -2671,7 +2674,7 @@ void LiquidityProfile::lzAfter(LQState& S, long count) {
 // (0.49.0) a new market on this chart (or the first pass): a fresh engine - called before the first event is fed AND before the candles
 static void qmMarket(LQState& S) {
     if (S.qmMkt == S.market && S.qmE.market == S.market) { S.qmE.tick = S.tick; return; }
-    S.qmE = qm::Engine(); S.qmE.market = S.market; S.qmE.tick = S.tick; S.qmMkt = S.market; S.qmSession = -1; S.qmBarCount = 0; S.qmNormT = S.qmNormN = -2; S.qmNormMs = -1;
+    S.qmE = qm::Engine(); S.qmE.market = S.market; S.qmE.tick = S.tick; S.qmE.rule = qm::callRuleFor(S.market); S.qmRuleT = S.qmRuleN = -2; S.qmMkt = S.market; S.qmSession = -1; S.qmBarCount = 0; S.qmNormT = S.qmNormN = -2; S.qmNormMs = -1;
 }
 // (0.49.0) THE QUEUE METER. The rules are QueueMeter.h (unit-tested and replayed on the real NQ 2026-10-09 MBO); here: this chart's
 // anchors (key levels + MenthorQ levels of this contract), the nightly normal (LRA-QueueNorms-<MKT>.csv), the session record
@@ -2699,6 +2702,16 @@ void LiquidityProfile::qmAfter(LQState& S, long count, long long st) {
             E.norms = pt < 0 ? qm::Norms() : qm::parseNorms(L, S.market);
             S.qmNormWhy = pt < 0 ? std::string("none - this session's own") : E.norms.src;
         }
+        // (0.50.0) the 10-s call rule per market: lsFlexLevels\LRA-QueueMeter-<MKT>.csv (PARAM lines), else the verdict's defaults
+        const std::string rp = d.empty() ? std::string() : d + "\\LRA-QueueMeter-" + S.market + ".csv";
+        long long rt = -1, rn = -1; if (rp.empty() || !statSub(rp, rt, rn)) { rt = -1; rn = -1; }
+        if (rt != S.qmRuleT || rn != S.qmRuleN) {
+            S.qmRuleT = rt; S.qmRuleN = rn;
+            std::vector<std::string> L; std::ifstream in; std::string ln; int k = 0;
+            if (rt >= 0 && openBoundedInput(rp, in)) while (k++ < 200 && readBoundedLine(in, ln)) L.push_back(ln);
+            bool ok = false; E.rule = rt < 0 ? qm::callRuleFor(S.market) : qm::parseCallRule(L, S.market, ok);
+            if (rt < 0) E.rule.src = "no params file - the verdict's defaults";
+        }
     }
     if (S.session >= 0 && S.session != S.qmSession && !S.symbol.empty()) {   // a new session: read back its Q lines (restart = nothing decided twice)
         S.qmSession = S.session;
@@ -2706,6 +2719,7 @@ void LiquidityProfile::qmAfter(LQState& S, long count, long long st) {
         if (!p.empty() && statFile(p) && openBoundedInput(p, in)) { std::string line; int n = 0; while (readBoundedLine(in, line) && ++n < 20000) rows.push_back(line); }
         S.qmRestored = E.adopt(rows);
     }
+    {   const long long nowCt = S.haveOffset ? st + S.ctOffset : 0; if (nowCt > 0 && nowCt < E.lastT + 60000) E.stepCalls(std::max(nowCt, E.lastT)); }   // (0.50.0) the 10-s call even when the feed is quiet
     if (count >= 2) {   // every newly CLOSED candle once, in order (the engine skips the ones it has by end time)
         RTARRAYI times(barDateTime); RTARRAY close(barClose), high(barHigh), low(barLow);
         if (times.count >= count && close.count >= count && high.count >= count && low.count >= count) {
@@ -2745,8 +2759,9 @@ void LiquidityProfile::qmAfter(LQState& S, long count, long long st) {
     if ((nLive > 0 && since >= 1000) || (nLive == 0 && !S.qmPubEmpty) || since >= 30000) {
         const std::string d = flexDir(); if (d.empty()) return;
         makeDir(d);
+        // (0.50.0) renamed LRA-QueueLive-<MKT>.csv: LRA-QueueMeter-<MKT>.csv is the per-market params file
         const long long now = E.lastT > 0 ? std::max(E.lastT, S.haveOffset ? st + S.ctOffset : 0LL) : (S.haveOffset ? st + S.ctOffset : 0LL);
-        if (publishFile(d + "\\LRA-QueueMeter-" + S.market + ".csv", qm::fileText(E, now, E.lastPx * S.tick))) { S.qmPubs++; S.qmPubMs = st; S.qmPubEmpty = nLive == 0; }
+        if (publishFile(d + "\\LRA-QueueLive-" + S.market + ".csv", qm::fileText(E, now, E.lastPx * S.tick))) { S.qmPubs++; S.qmPubMs = st; S.qmPubEmpty = nLive == 0; }
         else { S.qmPubFails++; S.qmPubMs = st; }
     }
 }
@@ -4033,6 +4048,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.49.0");   // LQ_VERSION
+    p->setVersion("0.50.0");   // LQ_VERSION
     return p;
 }

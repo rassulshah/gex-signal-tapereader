@@ -19,6 +19,13 @@
 // Who uses it: lsLiquidityProfile (owns the chart's MBO book) runs the Engine and writes lsFlexLevels\LRA-QueueMeter-<MKT>.csv about once
 // a second; lsDealerProfile (draws the Levels column, has no order feed) reads that file and draws the meter in its badges.
 // No look-ahead: everything is computed from events up to "now"; a refill counts only once it has rested 1 s.
+// 1.1.0 (2026-10-22 evening) THE VALIDATION VERDICT (research-artifacts\learning\VALIDATE-DEFENDER-SIZE-2026-10-22.md, out-of-sample on
+// NQ / ES / GC / CL): the LIVE call 10 s after contact works, the candle-close Q has no edge (47-54%) -> kept as a record only.
+//   - CALL at t0 + CALL_AT_S (10 s), only if the test has not broken / left: RED when queue left < RED_PCT (40%); GREEN when queue left
+//     >= GREEN_PCT (100%) and holding (time to empty = holding), only where GREEN_SHOW = 1. Decided once, append-only C line, never repainted.
+//   - Per market (LRA-QueueMeter-<MKT>.csv PARAM lines, defaults = the verdict): ES / CL SHOW red + green; NQ / GC SHOW? red only;
+//     other markets LOG (not tested: no call drawn).
+//   OOS: ES red broke 76% (base 30%), green held 90% (base 70%); CL red 80% (46%), green 74% (54%); NQ red 75% (60%); GC red 73% (53%).
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
@@ -32,7 +39,7 @@
 #include <vector>
 
 namespace qm {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE-2026-10-22.md): the 10-s CALL (red < 40% left / green >= 100% + holding) per market, C lines; the candle-close Q is a record only
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -101,6 +108,50 @@ inline Norms parseNorms(const std::vector<std::string>& lines, const std::string
     n.ok = true; n.src = "nightly (" + std::to_string(rows) + " slots)"; return n;
 }
 
+// the per-market CALL rule (LRA-QueueMeter-<MKT>.csv: VERSION / MARKET / PARAM,<name>,<value>; unknown names ignored)
+enum Mark { M_LOG = 0, M_SHOW = 1, M_SHOWQ = 2 };
+struct CallRule { int mark = M_LOG; int callAtS = 10; double redPct = 0.40, greenPct = 1.00; bool greenNeedsHolding = true, greenShow = false; std::string src = "defaults"; };
+inline CallRule callRuleFor(const std::string& m) {
+    CallRule r;
+    if (m == "ES" || m == "CL") { r.mark = M_SHOW; r.greenShow = true; }
+    else if (m == "NQ" || m == "GC") { r.mark = M_SHOWQ; r.greenShow = false; }
+    r.src = "defaults (the 2026-10-22 verdict)"; return r;
+}
+inline CallRule parseCallRule(const std::vector<std::string>& lines, const std::string& mkt, bool& ok) {
+    CallRule r = callRuleFor(mkt); ok = false; bool ver = false, mk = false; int n = 0;
+    for (size_t i = 0; i < lines.size() && i < 256; ++i) {
+        std::vector<std::string> c; { std::string cur; for (char ch : lines[i]) { if (ch == ',') { c.push_back(cur); cur.clear(); } else if (ch != '\r') cur += ch; } c.push_back(cur); }
+        if (c.empty() || c[0].empty() || c[0][0] == '#') continue;
+        if (!ver) { if (c[0] != "VERSION") { r = callRuleFor(mkt); r.src = "garbled (no VERSION first) - defaults"; return r; } ver = true; continue; }
+        if (c[0] == "MARKET") { if (c.size() < 2 || c[1] != mkt) { r = callRuleFor(mkt); r.src = "wrong market - defaults"; return r; } mk = true; continue; }
+        if (c[0] != "PARAM" || c.size() < 3) continue;
+        const std::string& k = c[1]; const std::string& v = c[2]; double d = 0; char* e = nullptr;
+        if (k == "MARK") { if (v == "SHOW") r.mark = M_SHOW; else if (v == "SHOW?") r.mark = M_SHOWQ; else if (v == "LOG") r.mark = M_LOG; else { r = callRuleFor(mkt); r.src = "garbled MARK - defaults"; return r; } ++n; continue; }
+        errno = 0; d = std::strtod(v.c_str(), &e);
+        const bool num = !v.empty() && e && !*e && !errno && d == d;
+        if (k == "CALL_AT_S") { if (!num || d < 2 || d > 120) { r = callRuleFor(mkt); r.src = "garbled CALL_AT_S - defaults"; return r; } r.callAtS = (int)d; ++n; }
+        else if (k == "RED_PCT") { if (!num || d <= 0 || d >= 1) { r = callRuleFor(mkt); r.src = "garbled RED_PCT - defaults"; return r; } r.redPct = d; ++n; }
+        else if (k == "GREEN_PCT") { if (!num || d < 0.5 || d > 5) { r = callRuleFor(mkt); r.src = "garbled GREEN_PCT - defaults"; return r; } r.greenPct = d; ++n; }
+        else if (k == "GREEN_NEEDS_HOLDING") { if (!num || (d != 0 && d != 1)) { r = callRuleFor(mkt); r.src = "garbled GREEN_NEEDS_HOLDING - defaults"; return r; } r.greenNeedsHolding = d == 1; ++n; }
+        else if (k == "GREEN_SHOW") { if (!num || (d != 0 && d != 1)) { r = callRuleFor(mkt); r.src = "garbled GREEN_SHOW - defaults"; return r; } r.greenShow = d == 1; ++n; }
+    }
+    if (!ver || !mk) { r = callRuleFor(mkt); r.src = !ver ? "empty - defaults" : "no MARKET - defaults"; return r; }
+    ok = true; r.src = "params file (" + std::to_string(n) + " rows)"; return r;
+}
+// the out-of-sample odds behind each call (the hover)
+inline std::string callOdds(const std::string& m, int call) {
+    if (call == 0) {
+        if (m == "ES") return "ES: queue left under 40% at 10 s broke 76% of the time (base 30%)";
+        if (m == "CL") return "CL: queue left under 40% at 10 s broke 80% of the time (base 46%)";
+        if (m == "NQ") return "NQ: queue left under 40% at 10 s broke 75% of the time (base 60%) ?";
+        if (m == "GC") return "GC: queue left under 40% at 10 s broke 73% of the time (base 53%) ?";
+    } else if (call == 1) {
+        if (m == "ES") return "ES: 100%+ left and holding at 10 s held 90% of the time (base 70%)";
+        if (m == "CL") return "CL: 100%+ left and holding at 10 s held 74% of the time (base 54%)";
+    }
+    return std::string();
+}
+
 // the live numbers of one test (what the badge and its hover show)
 struct Live {
     int id = 0, side = BID, kind = K_LEVEL; Tick anchor = 0, lo = 0, hi = 0; std::string name;
@@ -110,7 +161,9 @@ struct Live {
     double tte = -1;                                          // seconds to empty, -1 = holding (refills that stay >= drain)
     bool high = false, warn = false, contact = false, broke = false, left = false;
     std::string why;                                          // "pulled" / "eaten" / "refilling"
-    int decided = -1;                                         // -1 live, 0 = red Q, 1 = green Q
+    int decided = -1;                                         // -1 live, 0 = red Q, 1 = green Q (the candle-close RECORD, not drawn)
+    int call = -1;                                            // the 10-s call: -1 pending, 0 RED, 1 GREEN, 2 none (no call / too late)
+    int mark = M_LOG;                                         // this market's rule: LOG / SHOW / SHOW?
 };
 
 class Engine {
@@ -124,6 +177,7 @@ public:
         std::unordered_map<long long, long long> orig; long long origSum = 0;
         std::deque<Flow> flows; bool broke = false, left = false, contact = true;
         double pctAtDecision = 0, origAtDecision = -1;
+        int call = -1; long long tCall = 0;   // (1.1.0) the 10-s call, decided once
         Live atBreak; bool haveBreak = false;   // the numbers the moment it broke (what the Q record keeps for a break)
     };
     std::unordered_map<long long, Ord> book;
@@ -135,7 +189,9 @@ public:
     double atr = 0;
     long long lastT = 0, lastTradeT = 0; Tick lastPx = 0, prevPx = 0;
     std::deque<std::pair<long long, Tick> > minQ, maxQ;   // monotonic windows of trade prices (new local low / high)
-    std::vector<std::string> rows;            // decided Q lines waiting to be appended
+    std::vector<std::string> rows;            // decided Q lines waiting to be appended (and, 1.1.0, the C call lines)
+    CallRule rule;                            // (1.1.0) this market's call rule (host sets it from the params file / defaults)
+    long long nCalls[3] = { 0, 0, 0 };        // red / green / none
     std::set<std::string> keys;               // decided keys (from the record too): never decided twice
     long long session = -1; int nextId = 1; long long lastSuddenT[2] = { 0, 0 };
     // this session's eaten lots and active seconds per slot / side (normal fallback)
@@ -177,6 +233,7 @@ public:
         if (t <= 0 || oid == 0) return;
         ++nEvents;
         if (t > lastT) lastT = t;
+        if (!tests.empty()) stepCalls(t);   // (1.1.0) before this event: the call sees the book as it was at its moment
         const long long ses = sessionOf(t);
         if (session != ses) { if (session >= 0) { tests.clear(); pivots.clear(); minQ.clear(); maxQ.clear(); } session = ses; resetNorms(); }   // candles kept (ATR)
         std::unordered_map<long long, Ord>::iterator it = book.find(oid);
@@ -225,6 +282,24 @@ public:
         if (act == DEL) { if (it != book.end()) remove(it, t, true); }
     }
 
+    // (1.1.0) the 10-s CALL: decided once at the first moment >= t0 + CALL_AT_S (called on every event and by the host each pass)
+    void stepCalls(long long now) {
+        for (size_t i = 0; i < tests.size(); ++i) {
+            Test& T = tests[i];
+            if (T.call >= 0 || now < T.t0 + (long long)rule.callAtS * 1000) continue;
+            T.tCall = now; int c = 2;
+            const Live v = snapshot(T, now);
+            if (!T.broke && !T.left) {
+                if (v.pct < rule.redPct) c = 0;
+                else if (rule.greenShow && v.pct >= rule.greenPct && (!rule.greenNeedsHolding || v.tte < 0)) c = 1;
+            }
+            T.call = c; ++nCalls[c];
+            char b[256];
+            std::snprintf(b, sizeof(b), "C|%lld|%lld|%s|%lld|%s|%d|%d|%.1f|%s|%s", T.t0, now, T.side == BID ? "B" : "A", (long long)T.anchor, c == 0 ? "R" : c == 1 ? "G" : "N",
+                          (int)std::lround(v.pct * 100), v.origPct < 0 ? -1 : (int)std::lround(v.origPct * 100), v.tte < 0 ? -1.0 : std::min(v.tte, 9999.0), kindCode(T.kind), VERSION);
+            rows.push_back(b);
+        }
+    }
     // a trade price (a FILL, or the host's last price when there is no feed row). Starts / updates tests.
     void trade(Tick p, long long t) {
         if (p <= 0) return;
@@ -349,7 +424,7 @@ public:
     Live snapshot(const Test& T, long long now) const {
         Live v; v.id = T.id; v.side = T.side; v.kind = T.kind; v.anchor = T.anchor; v.lo = T.lo; v.hi = T.hi; v.name = T.name;
         v.t0 = T.t0; v.q0 = T.q0; v.q = zoneSum(T.side, T.lo, T.hi); v.pct = T.q0 > 0 ? (double)v.q / (double)T.q0 : 0;
-        v.contact = T.contact; v.broke = T.broke; v.left = T.left; v.decided = T.decided;
+        v.contact = T.contact; v.broke = T.broke; v.left = T.left; v.decided = T.decided; v.call = T.call; v.mark = rule.mark;
         if (T.origSum > 0) {
             long long left = 0;
             for (std::unordered_map<long long, long long>::const_iterator o = T.orig.begin(); o != T.orig.end(); ++o) {
@@ -383,7 +458,7 @@ public:
     }
 
     static std::string key(int side, Tick anchor, long long startBar) { return std::string(side == BID ? "B" : "A") + "|" + std::to_string(anchor) + "|" + std::to_string(startBar); }
-    static std::string header() { return "Q|t0_ms|decided_ms|side|anchor_tick|G/R|why|pct|orig_pct|q0|kind|name|start_bar_ms"; }
+    static std::string header() { return "Q|t0_ms|decided_ms|side|anchor_tick|G/R|why|pct|orig_pct|q0|kind|name|start_bar_ms  (record only) ; C|t0_ms|call_ms|side|anchor_tick|R/G/N|pct|orig_pct|tte_s|kind|ver  (the 10-s call)"; }
     std::string recordLine(const Test& T, long long endMs, const Live& v) const {
         char b[256];
         std::snprintf(b, sizeof(b), "Q|%lld|%lld|%s|%lld|%s|%s|%d|%d|%lld|%s|%s|%lld", T.t0, endMs, T.side == BID ? "B" : "A", (long long)T.anchor,
@@ -485,9 +560,12 @@ private:
 // ---- the live file lsLiquidityProfile writes and lsDealerProfile reads: lsFlexLevels\LRA-QueueMeter-<MKT>.csv
 // VERSION,<qm version> / MARKET,<MKT> / ASOF,<ct ms> / TICK,<tick> / LAST,<price> / ATR,<points> /
 // T,<B|A>,<anchor px>,<lo px>,<hi px>,<kind L|P|D>,<name>,<q0>,<q>,<pct%>,<orig% | -1>,<eat>,<norm>,<pull>,<refill>,<tte s | -1>,
-//   <H|L>,<why>,<warn 0|1>,<contact 0|1>,<decided -1|0|1>,<t0 ms>
+//   <H|L>,<why>,<warn 0|1>,<contact 0|1>,<decided -1|0|1>,<t0 ms>,<call -1 pending|0 red|1 green|2 none>,<mark 0 LOG|1 SHOW|2 SHOW?>
+// (1.1.0: the live file is lsFlexLevels\LRA-QueueLive-<MKT>.csv - LRA-QueueMeter-<MKT>.csv is the nightly PARAMS file; 22-field rows of
+// 1.0.0 are still read, with no call)
 struct FileT { int side = BID, kind = K_LEVEL; double anchor = 0, lo = 0, hi = 0; std::string name; long long q0 = 0, q = 0, t0 = 0;
-               double pct = 0, origPct = -1, eat = 0, norm = 0, pull = 0, refill = 0, tte = -1; bool high = false, warn = false, contact = false; int decided = -1; std::string why; };
+               double pct = 0, origPct = -1, eat = 0, norm = 0, pull = 0, refill = 0, tte = -1; bool high = false, warn = false, contact = false; int decided = -1; std::string why;
+               int call = -1, mark = M_LOG; };
 struct File { bool ok = false; std::string version, market, why = "not read"; long long asof = 0; double tick = 0, last = 0, atr = 0; std::vector<FileT> t; };
 
 inline std::string fmtPx(double v, double tick) {
@@ -500,10 +578,10 @@ inline std::string fileText(const Engine& E, long long now, double lastPx) {
     const std::vector<Live> L = E.live(now);
     for (size_t i = 0; i < L.size(); ++i) {
         const Live& v = L[i]; char b[512];
-        std::snprintf(b, sizeof(b), "T,%s,%s,%s,%s,%s,%s,%lld,%lld,%d,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%s,%s,%d,%d,%d,%lld\n", v.side == BID ? "B" : "A",
+        std::snprintf(b, sizeof(b), "T,%s,%s,%s,%s,%s,%s,%lld,%lld,%d,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%s,%s,%d,%d,%d,%lld,%d,%d\n", v.side == BID ? "B" : "A",
                       fmtPx(v.anchor * E.tick, E.tick).c_str(), fmtPx(v.lo * E.tick, E.tick).c_str(), fmtPx(v.hi * E.tick, E.tick).c_str(), kindCode(v.kind), Engine::clean(v.name).c_str(),
                       v.q0, v.q, (int)std::lround(v.pct * 100), v.origPct < 0 ? -1 : (int)std::lround(v.origPct * 100), v.eat, v.norm, v.pull, v.refill, v.tte < 0 ? -1.0 : std::min(v.tte, 9999.0),
-                      v.high ? "H" : "L", v.why.c_str(), v.warn ? 1 : 0, v.contact ? 1 : 0, v.decided > 1 ? -1 : v.decided, v.t0);
+                      v.high ? "H" : "L", v.why.c_str(), v.warn ? 1 : 0, v.contact ? 1 : 0, v.decided > 1 ? -1 : v.decided, v.t0, v.call, v.mark);
         o += b;
     }
     return o;
@@ -522,13 +600,14 @@ inline File parseFile(const std::vector<std::string>& lines, const std::string& 
             continue;
         }
         if (c[0] == "T") {
-            if (c.size() != 22) { File z; z.why = "garbled T row"; return z; }
+            if (c.size() != 22 && c.size() != 24) { File z; z.why = "garbled T row"; return z; }
             FileT t; double n[16]; const int idx[16] = { 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 19, 20, 21 };
             for (int k = 0; k < 16; ++k) if (!numTok(c[(size_t)idx[k]], n[k])) { File z; z.why = "garbled T number"; return z; }
             if ((c[1] != "B" && c[1] != "A") || kindOf(c[5]) < 0 || (c[16] != "H" && c[16] != "L") || n[0] <= 0 || n[1] <= 0 || n[2] < n[1] || n[3] < 0 || n[4] < 0) { File z; z.why = "garbled T field"; return z; }
             t.side = c[1] == "B" ? BID : ASK; t.anchor = n[0]; t.lo = n[1]; t.hi = n[2]; t.kind = kindOf(c[5]); t.name = c[6]; t.q0 = (long long)n[3]; t.q = (long long)n[4];
             t.pct = n[5] / 100.0; t.origPct = n[6] < 0 ? -1 : n[6] / 100.0; t.eat = n[7]; t.norm = n[8]; t.pull = n[9]; t.refill = n[10]; t.tte = n[11];
             t.high = c[16] == "H"; t.why = c[17]; t.warn = n[12] != 0; t.contact = n[13] != 0; t.decided = (int)n[14]; t.t0 = (long long)n[15];
+            if (c.size() == 24) { double cc = 0, mm = 0; if (!numTok(c[22], cc) || !numTok(c[23], mm) || cc < -1 || cc > 2 || mm < 0 || mm > 2) { File z; z.why = "garbled T call"; return z; } t.call = (int)cc; t.mark = (int)mm; }
             f.t.push_back(t);
         }
     }
@@ -544,16 +623,20 @@ inline std::string badgeText(const std::string& name, const FileT& t, int varian
     std::string s = name.empty() ? q : name + " " + q;
     if (variant == 0 && t.warn) s += " . orig 0%";
     if (variant == 2) s = q;
+    if (t.mark == M_SHOWQ && (t.call == 0 || t.call == 1)) s += "?";   // (1.1.0) the call is "?" in NQ / GC
     return s;
 }
 inline double fillFrac(const FileT& t) { return std::max(0.0, std::min(1.0, t.pct)); }
+// (1.1.0) the badge outline follows the CALL: 0 red, 1 green, -1 none (neutral) - only where the market's rule draws it
+inline int outlineCall(const FileT& t) { return t.mark != M_LOG && (t.call == 0 || t.call == 1) ? t.call : -1; }
 
 // ---- the hover: question / what it is / why it matters / how to use / example, then the live numbers
 struct Hover { std::string title; std::vector<std::string> lines; };
 inline std::string f1(double v) { char b[32]; std::snprintf(b, sizeof(b), "%.1f", v); return b; }
-inline Hover hover(const FileT& t, const std::string& levelName, const std::string& pxTxt) {
+inline Hover hover(const FileT& t, const std::string& levelName, const std::string& pxTxt, const std::string& market = std::string()) {
     Hover h; const bool bid = t.side == BID;
-    h.title = "Queue meter ? - " + (levelName.empty() ? std::string(bid ? "bids at " : "offers at ") + pxTxt : levelName + " " + pxTxt) + " (not proven yet)";
+    const bool proven = t.mark == M_SHOW;
+    h.title = std::string("Queue meter") + (proven ? "" : " ?") + " - " + (levelName.empty() ? std::string(bid ? "bids at " : "offers at ") + pxTxt : levelName + " " + pxTxt) + (proven ? "" : t.mark == M_SHOWQ ? " (red call only, not fully proven)" : " (not proven yet)");
     char b[200];
     std::snprintf(b, sizeof(b), "Queue left: %lld of %lld lots (%d%%)", t.q, t.q0, (int)std::lround(t.pct * 100)); h.lines.push_back(b);
     h.lines.push_back(t.origPct < 0 ? std::string("Originals left: not known (no order rested 1 s+ when the test began)")
@@ -563,11 +646,15 @@ inline Hover hover(const FileT& t, const std::string& levelName, const std::stri
     h.lines.push_back("Refill that stayed: " + f1(t.refill) + " lots/s");
     h.lines.push_back(t.tte < 0 ? std::string("Time to empty: holding (refills that stay keep up)") : "Time to empty: about " + f1(t.tte) + " s (pulled + eaten - refills that stay)");
     h.lines.push_back(std::string("Break risk: ") + (t.high ? "HIGH" : "LOW") + " - defenders " + (t.why == "refilling" ? "refilling" : t.why == "pulled" ? "pulled" : t.why == "eaten" ? "eaten" : "quiet"));
-    if (t.decided >= 0) h.lines.push_back(std::string("Decided at the candle close: ") + (t.decided == 1 ? "green Q (held / refilled)" : "red Q (drained / broke)"));
+    if (t.call == 0 || t.call == 1) h.lines.push_back(std::string("10-s call: ") + (t.call == 0 ? "RED - expect the break" : "GREEN - defenders holding") + (t.mark == M_SHOWQ ? " ?" : ""));
+    else if (t.call == -1) h.lines.push_back("10-s call: pending (made 10 s after price first traded into the zone)");
+    else h.lines.push_back("10-s call: none (neither under 40% nor 100%+ and holding, or price already broke / left)");
+    if ((t.call == 0 || t.call == 1) && !callOdds(market, t.call).empty()) h.lines.push_back(callOdds(market, t.call));
+    if (t.decided >= 0) h.lines.push_back(std::string("Candle-close Q (a record for the nightly, not a forecast): ") + (t.decided == 1 ? "held / refilled" : "drained / broke"));
     h.lines.push_back(std::string("Question: is the queue ") + (bid ? "of bids defending this low" : "of offers defending this high") + " running out?");
     h.lines.push_back("What it is: the lots resting in the zone now vs when price first traded into it, from every order in the book (MBO).");
     h.lines.push_back("Why it matters: a level breaks when its queue empties - pulled orders break it faster than eaten ones.");
-    h.lines.push_back("How to use: a full or refilling meter = defenders holding; a falling meter, yellow 'orig 0%' or a few seconds to empty = expect the break.");
+    h.lines.push_back("How to use: act on the 10-s call - a RED outline (under 40% left 10 s after contact) = expect the break; a GREEN outline (100%+ left and refilling) = defenders holding. The candle-close Q is only a record.");
     h.lines.push_back("Example: NQ Oct 9 9:42:26 AM - Q33%, orig 0%, 21 lots / (5.5 eaten + 14.5 pulled) = about 1 s to empty; it broke 2 s later.");
     return h;
 }
