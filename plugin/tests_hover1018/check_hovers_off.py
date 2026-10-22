@@ -19,7 +19,8 @@ def ext_flags(src):
     return [l for l in s.splitlines() if 'setFlags(' in l]
 P = {   # plugin: (switch, mouse signature, hover-draw gate text, TRACK_MOUSE allowed)
     'LiquidityProfile.cpp': ('LQ_HOVERS', 'int LiquidityProfile::mouse(RTX_EVENT* e)', ['if (!LQ_HOVERS) { S.boHovKey = 0; return; }', 'if (!LQ_HOVERS) { S.hovId = 0; S.hovState = "off"; return; }'], False),
-    'DealerProfile.cpp':    ('DP_HOVERS', 'int DealerProfile::mouse(RTX_EVENT* e)', ['DP_HOVERS ? hovered() : nullptr'], False),
+    # (DP 2.19.0, Rassul approved Option B 2026-10-21) the ONE exception: the level % block's hover (DP_PCT_HOVERS); every other DP hover off
+    'DealerProfile.cpp':    ('DP_HOVERS', 'int DealerProfile::mouse(RTX_EVENT* e)', ['(DP_HOVERS || DP_PCT_HOVERS) ? hovered() : nullptr', 'if ((DP_HOVERS || hovT[i].pct) && hitTarget(hovT[i]))'], False),
     'BigBidAsk.cpp':        ('BBA_HOVERS', 'int BigBidAsk::mouse(RTX_EVENT* e)', ['if (!BBA_HOVERS || !S.msHas'], False),
     'CobImpulse.cpp':       ('CI_HOVERS', 'int CobImpulse::mouse(RTX_EVENT* e)', ['if (!CI_HOVERS || !S.msHas'], False),
     'TapeReader.cpp':       ('TR_BANNER_HOVER', None, ['const bool in = TR_BANNER_HOVER && '], True),
@@ -38,6 +39,7 @@ for f, (sw, msig, gates, allowTM) in P.items():
     for l in fl:
         code = l.split('//')[0]
         if allowTM: check('TRACK_MOUSE' in code, f + ': TRACK_MOUSE kept for the candle follow')
+        elif f == 'DealerProfile.cpp': check(re.search(r'\|\s*TRACK_MOUSE\b', code) is None and '((DP_HOVERS || DP_PCT_HOVERS) ? TRACK_MOUSE : 0)' in code, f + ': TRACK_MOUSE only through DP_HOVERS / DP_PCT_HOVERS')
         else: check(re.search(r'\|\s*TRACK_MOUSE\b', code) is None and ('(' + sw + ' ? TRACK_MOUSE : 0)') in code, f + ': TRACK_MOUSE only through ' + sw)
 # HodLod (2.4.6) already off - leave it, but prove it stays off
 s = open('HodLod.cpp', encoding='latin-1').read()

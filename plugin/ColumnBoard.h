@@ -30,7 +30,7 @@
 #include "BannerBoard.h"
 
 namespace cb {
-static const char* const VERSION = "1.2.0";   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
+static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
 static const int GAP_PX = 20;            // between the last bar and the Levels column
 static const int MIN_PRICE_PX = 160;     // price area kept on a narrow chart
 enum Col { LIQ = 0, LEVELS = 1, DELTA = 2, DEALER = 3, BIG = 4, NCOL = 5 };
@@ -39,7 +39,7 @@ inline Range range(int c)
 {
     switch (c) {
     case LIQ: return Range{ 20, 200, 60 };
-    case LEVELS: return Range{ 30, 150, 78 };   // (Rassul 11:39 CT) 40 -> 78 so "LonLO | HL 1.5K" fits
+    case LEVELS: return Range{ 30, 250, 78 };   // (1.3.0) hi 150 -> 250 (DP 2.19.0 publishes 150 + the % block); the setting stays 30-150   // (Rassul 11:39 CT) 40 -> 78 so "LonLO | HL 1.5K" fits
     case DELTA: return Range{ 40, 250, 80 };
     case BIG: return Range{ 30, 180, 44 };   // (LP 0.37.0, Rassul 13:23) three narrow columns LMT F | MKT | LMT R = 168
     default: return Range{ 40, 250, 80 };

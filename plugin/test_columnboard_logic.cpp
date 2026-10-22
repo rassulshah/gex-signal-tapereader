@@ -17,7 +17,7 @@ static int w6(const std::string& s) { return (int)s.size() * 6; }
 static void ranges()
 {
     check(cb::range(cb::LIQ).lo == 20 && cb::range(cb::LIQ).hi == 200 && cb::range(cb::LIQ).def == 60, "Liquidity 20-200, default 60");
-    check(cb::range(cb::LEVELS).lo == 30 && cb::range(cb::LEVELS).hi == 150 && cb::range(cb::LEVELS).def == 78, "Levels 30-150, default 78 (11:39 CT)");
+    check(cb::range(cb::LEVELS).lo == 30 && cb::range(cb::LEVELS).hi == 250 && cb::range(cb::LEVELS).def == 78, "Levels 30-250 (ColumnBoard 1.3.0: 150 + the DP 2.19.0 % block), default 78 (11:39 CT)");
     check(cb::range(cb::DELTA).lo == 40 && cb::range(cb::DELTA).hi == 250 && cb::range(cb::DELTA).def == 80, "Delta 40-250, default 80");
     check(cb::range(cb::DEALER).lo == 40 && cb::range(cb::DEALER).hi == 250 && cb::range(cb::DEALER).def == 80, "Dealer 40-250, default 80");
     int v = 0;

@@ -6,10 +6,11 @@
 #include "SettingsSpec.h"
 
 namespace dprset {
-static const char* const PLUGIN_VERSION = "2.18.2";
+static const char* const PLUGIN_VERSION = "2.19.0";
+// (2.19.0, Rassul 2026-10-21 approved Option B) + "Level % badges" (on by default) -> parameter version 8
 // (2.17.2, his decision list) "Snapshot outline" removed (dashed: against his no-dashed rule; a saved snap key is ignored);
 // Market / Clock offset / Indicators text hidden (kept in the file with their defaults / saved values, not shown) -> parameter version 7.
-enum K { K_MARKET, K_WIDTH, K_LEVELS_W, K_BADGE_FONT, K_LIQ_BADGE, K_FONT, K_CLOCK, K_LABELS, K_FADEFAR, K_BANNER, K_INDS, K_N };
+enum K { K_MARKET, K_WIDTH, K_LEVELS_W, K_BADGE_FONT, K_LIQ_BADGE, K_LEVEL_PCT, K_FONT, K_CLOCK, K_LABELS, K_FADEFAR, K_BANNER, K_INDS, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
         ss::hide(ss::listRow("market", "Market", 0, "Auto;ES;NQ;CL;GC;HG;NG;EU", 70)),
@@ -17,6 +18,7 @@ inline const ss::Spec& spec() {
         ss::intRow("levels_w", "Levels column px (30-150)", 78, 30, 150, 50),
         ss::same(ss::intRow("badge_font", "Badge font (pt)", 9, 8, 14, 50)),
         ss::boolRow("liq_badge", "Liquidity in badge", true),
+        ss::boolRow("level_pct", "Level % badges", true),
         ss::same(ss::intRow("font", "Font size (pt)", 10, 10, 24, 50)),
         ss::hide(ss::intRow("clock", "Clock offset (min)", 0, -720, 720, 50)),
         ss::boolRow("labels", "Show buy / sell text in node", true),
@@ -24,7 +26,7 @@ inline const ss::Spec& spec() {
         ss::same(ss::boolRow("banner", "Whole-book banner", false)),
         ss::hide(ss::textRow("inds", "Indicators in the bar file", "cob_bull,cob_bear", 160, 160)),
     };
-    static const ss::Spec S = { "DealerProfile", PLUGIN_VERSION, 7, R, K_N, 0 };
+    static const ss::Spec S = { "DealerProfile", PLUGIN_VERSION, 8, R, K_N, 0 };
     return S;
 }
 
