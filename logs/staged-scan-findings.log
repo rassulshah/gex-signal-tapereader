@@ -1,18 +1,3 @@
-findings=0 allowed=0 staged_files=16 bytes=870126
+findings=0 allowed=0 staged_files=1 bytes=787
 largest staged blobs (bytes, path):
-SIZE	350812	plugin/HodLodReadTables.h
-SIZE	113624	plugin/BookFlow.cpp
-SIZE	81074	plugin/BUILD-LESSONS.md
-SIZE	67752	plugin/tests_aggbook/test_aggbook_host.cpp
-SIZE	66203	plugin/DefenseTurn.h
-SIZE	41522	plugin/BookFlowLogic.h
-SIZE	27017	plugin/DefenseLines.cpp
-SIZE	23792	plugin/tests_aggbook/test_gtw.cpp
-SIZE	22053	plugin/tests_aggbook/test_defenselines_host.cpp
-SIZE	20727	plugin/tests_aggbook/test_aggbook_113.cpp
-SIZE	18140	plugin/tests_aggbook/test_defenseturn.cpp
-SIZE	17427	plugin/tests_aggbook/test_moves.cpp
-SIZE	14902	plugin/tests_aggbook/mock/irtsdk.h
-SIZE	2630	plugin/OrderFlowPaneSettings.h
-SIZE	2294	plugin/DefenseLinesSettings.h
-SIZE	157	logs/staged-scan-findings.log
+SIZE	787	logs/staged-scan-findings.log
