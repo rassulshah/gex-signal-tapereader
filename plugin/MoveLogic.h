@@ -1,6 +1,6 @@
 #ifndef LS_MOVE_LOGIC_H
 #define LS_MOVE_LOGIC_H
-// MoveLogic.h 1.1.0 (2026-10-21; 1.1.0 14:18 CT Rassul "i want you to draw them" - all FOUR cases drawn, mockup v4: P = pressing in /
+// MoveLogic.h 1.1.2 (2026-10-21; 1.1.2 23:30 CT: counter `small` renamed smallSz - Windows rpcndr.h #define small char broke MSVC builds; 1.1.0 14:18 CT Rassul "i want you to draw them" - all FOUR cases drawn, mockup v4: P = pressing in /
 // B = stepping back, the letter and the price boxes in the colour of the SIDE that moved (bids green, offers red); "they may be weak
 // for other reasons and may require additional confluences" - drawn with "?" while the confluence study + the nightly score them),
 // 1.0.0 (2026-10-21, MBO Roadmap TOP DEFENDER #3 "are the defenders stepping back or pressing in?" - Rassul approved
@@ -56,7 +56,7 @@ class Tracker {
 public:
     long long minLots = 3;
     // counters (status / tests)
-    long long seenM = 0, seenR = 0, following = 0, ladder = 0, shortRest = 0, small = 0, ambiguous = 0, confirmed = 0;
+    long long seenM = 0, seenR = 0, following = 0, ladder = 0, shortRest = 0, smallSz = 0, ambiguous = 0, confirmed = 0;
     // PATH M: a known order re-priced. ref = the last trade now; refAt = the last trade when it was placed / last moved
     void modify(long long id, int side, long long oldPx, long long newPx, long long size, long long refAt, long long ref, long long ms) {
         if (oldPx == newPx || side < 0 || side > 1) return;
@@ -104,7 +104,7 @@ public:
             if (p.dead) continue;
             if (ladderCount(p.m.side, p.m.newPx - p.m.oldPx, p.m.ms) >= LADDER_N) { ++ladder; continue; }
             if (p.m.viaR && cancelMatches(p.cancelId) != 1) { ++ambiguous; continue; }
-            if (p.m.size < minLots) { ++small; continue; }
+            if (p.m.size < minLots) { ++smallSz; continue; }
             ++confirmed; out.push_back(p.m);
         }
         rebase();

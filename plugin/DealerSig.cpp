@@ -41,6 +41,12 @@
  *  Data: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\LRA-Dealer-<MKT>.csv rows SIG|<yyyy-mm-dd HH:MM:SS CT>|<code>|B|S|<v>|<text>
  *  (LRA analytics/lra/forced.py via dealer_irt.py, file 1.6); grammar in DealerLogic.h. Never black lines: the chart is black.
  ********************************************************************************/
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#if defined(_WIN32)
+#include <windows.h>   // before irtsdk.h: KeepOutDraw.h -> BannerBoard.h pulls in windows.h (RTBOOL clash if after)
+#endif
 #include "irtsdk.h"
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far

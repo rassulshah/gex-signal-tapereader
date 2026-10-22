@@ -35,6 +35,12 @@
  *
  *  Parameter indices numbered EXPLICITLY (pc++); NO setLabelParameter headers.
  ********************************************************************************/
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#if defined(_WIN32)
+#include <windows.h>   // before irtsdk.h: KeepOutDraw.h -> BannerBoard.h pulls in windows.h (RTBOOL clash if after)
+#endif
 #include "irtsdk.h"
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "ContractOffsetLogic.h"   // (shared) the anchor-bar rule, tested

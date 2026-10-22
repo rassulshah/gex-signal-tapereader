@@ -28,7 +28,7 @@ int main() {
         t.modify(3, mvl::BIDS, 996, 998, 10, 1000, 1002, 30000);   // the trade moved up 2 as well: same distance = following
         v = confirmAll(t, 30600); CHECK(v.empty() && t.following == 1, "M: same distance to the trade = following the market: dropped");
         t.modify(4, mvl::BIDS, 996, 998, 5, 1000, 1000, 40000);    // 5 < the ES floor 6
-        v = confirmAll(t, 40600); CHECK(v.empty() && t.small == 1, "size under the market's q90 floor: dropped");
+        v = confirmAll(t, 40600); CHECK(v.empty() && t.smallSz == 1, "size under the market's q90 floor: dropped");
         t.modify(5, mvl::BIDS, 996, 998, 6, 1000, 1000, 50000);
         v = confirmAll(t, 50600); CHECK(v.size() == 1, "size AT the floor counts");
     }
