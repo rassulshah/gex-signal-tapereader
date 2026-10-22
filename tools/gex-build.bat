@@ -116,7 +116,8 @@ REM   (one net bar per side; it still writes the StackStats\ and PullStats\ reco
 REM (2026-10-21) lsBookFlow 1.19.0 reads the Delta Profile's TR record (Tr on the Defense badge): TrapLogic.h hashed
 call :one BookFlow lsBookFlow BookFlowLogic.h StackStatsLogic.h PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h OrderFlowPaneSettings.h SettingsSpec.h SettingsHost.h PaneCursor.h BoxRead.h BoxReadDraw.h DefenseTurn.h DefenseLinesSettings.h EffortReward.h LargeLotPool.h SettingsGuard.h MoveLogic.h TrapLogic.h SharedAbsorb.h ArrivalStamp.h
 REM (2026-10-20 Rassul 12:22 CT "first build the lines, do it now") lsDefenseLines 1.0.0 - the Defense pane's pivot turns + refill lines on the price chart
-call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h
+REM (2026-10-22) lsDefenseLines 1.10.0 trails (MoveLogic 1.2.0) + the trail hover: HoverBoard.h hashed
+call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h HoverBoard.h
 REM (2026-10-20 22:41 CT Rassul "a seperate levels indicator without the open .. for my hourly charts") lsKeyLevels 1.0.0 - key levels across the chart, badges right-justified
 call :one KeyLevels lsKeyLevels KeyLevelsHLogic.h KeyLevelsHSettings.h DealerProfileAuditLogic.h DealerLogic.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h BoxDock.h BannerBoard.h KeepOutDraw.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
