@@ -146,7 +146,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.12.0";   // 1.12.0 (2026-10-21, Top Attacker #2 G / Top Defender #2 W, lsBookFlow 1.19.0): Acc keeps the pulls / adds / moves up to the candle's low / high fill (pullLo / pullHi / addLo / addHi / movLo / movHi: the part after the extreme = total - these); Engine.sink (BookSink) gets every classified near-price add / pull / fill (side, price, second, candle) - lsBookFlow only; an InfoRow cell side 2 = grey;   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.13.0";   // 1.13.0 (2026-10-21 20:11-20:23 CT Rassul, attacker letters K / S on lsBidAskStats 1.26.0): each aggressor order keeps its first fill second and its lowest / highest fill price (Aggr t0 / lo / hi); a decided Rec carries the candle's BIGGEST aggressor order and its biggest SWEEP (>= sweepLevels prices, by lots) per side (Rec::big / Rec::sweep: lots, second, prices - not in the record line, the host writes its own K / S / AS lines); Acc keeps the lots hit per second per side (hitSec, the attack pace into / after the extreme); SessionFile reads / keeps more than one extra-line tag (moreTags) up to extraCap lines;   // 1.12.0 (2026-10-21, Top Attacker #2 G / Top Defender #2 W, lsBookFlow 1.19.0): Acc keeps the pulls / adds / moves up to the candle's low / high fill (pullLo / pullHi / addLo / addHi / movLo / movHi: the part after the extreme = total - these); Engine.sink (BookSink) gets every classified near-price add / pull / fill (side, price, second, candle) - lsBookFlow only; an InfoRow cell side 2 = grey;   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -156,6 +156,7 @@ static const size_t BOOK_CAP = 200000;             // tracked orders at most (fa
 static const size_t PER_ORDER_CAP = 50000;         // per bar per side: orders tracked for the concentration line
 static const size_t ICE_CAP = 2000;                // per bar per side: prices tracked for the iceberg check
 static const size_t FILLMEM_CAP = 5000;            // per side: recent fill prices remembered for refills
+static const size_t HITSEC_CAP = 7200;              // (1.13.0) seconds kept per candle side (a 2-hour candle)
 static const size_t AGGR_CAP = 50000;              // per bar: aggressor orders tracked
 static const size_t REST_SIZES_CAP = 20000;        // per bar: resting sizes kept for the session distribution
 static const int AGGR_PX_MAX = 24;                 // distinct prices remembered per aggressor order (more = "24+")
@@ -383,7 +384,7 @@ template <class O> Ev evOf(const O& o, double tick, long long arrMs) {
 }
 
 struct Ice { long long traded = 0, shown = 0, rebuilt = 0; bool unknown = false; };   // rebuilt: (1.2.1) lots credited as re-added at this price (<= traded)
-struct Aggr { int side = -1; long long size = 0; Tick px[AGGR_PX_MAX]; int nPx = 0; bool more = false; };
+struct Aggr { int side = -1; long long size = 0; Tick px[AGGR_PX_MAX]; int nPx = 0; bool more = false; long long t0 = -1; Tick lo = 0, hi = 0; };   // (1.13.0) t0 = its first fill second, lo / hi = its lowest / highest fill price
 // what one candle collected (open while the candle is forming / closing)
 struct Acc {
     long long events = 0;
@@ -406,6 +407,7 @@ struct Acc {
     // (1.12.0, Top Attacker #2 G) the pulls / adds near price per resting side and the moves seen, UP TO the candle's low / high fill (the
     // part after the extreme = the candle's total minus these): at a high the buyers' own bids, at a low the sellers' own offers
     long long pullLo[2] = {0, 0}, pullHi[2] = {0, 0}, addLo[2] = {0, 0}, addHi[2] = {0, 0}; size_t movLo = 0, movHi = 0;
+    std::map<long long, long long> hitSec[2];            // (1.13.0) lots hit per event second per RESTING side (the attack pace; capped HITSEC_CAP seconds)
 };
 // (1.12.0, Top Defender #2 W) one classified book event for a host that watches prices itself (lsBookFlow's key-level watch): kind 0 = added
 // near price, 1 = pulled near price (a cancel / size cut that was not a fill; a moved order = a pull at its old price + an add at the new),
@@ -440,6 +442,10 @@ struct Rec {
     long long pace100[2] = {0, 0};                       // pace x 100 vs the norm (0 = n/a), decided once at the close
     long long paceNote[2] = {0, 0};                      // 0 = not notable, 1 = fast, 2 = slowly
     long long paceGate = 1;                              // the PACE_SHOW gate in force (0 off, 1 ?, 2 on)
+    // (1.13.0) NOT in the record line (recNums / recFrom ignore them; a reloaded Rec has them 0): the candle's biggest aggressor order and
+    // its biggest sweep (one aggressor order at >= sweepLevels prices, the most lots) per RESTING side hit - the attacker letters K / S
+    struct Top { long long lots = 0, sec = -1, nPx = 0; Tick lo = 0, hi = 0; };
+    Top big[2], sweep[2];
 };
 static const int REC_NUMS_V1 = 38, REC_NEW = 15, REC_NUMS = REC_NUMS_V1 + REC_NEW;
 static const char* const REC_COLS = "partial|events|pull_n_b|pull_n_a|pull_cts_b|pull_cts_a|pull_max_b|pull_max_a|pull_close_b|pull_close_a|"
@@ -608,6 +614,10 @@ public:
         Aggr& g = it->second;
         if (g.side != restingSide) return;                                 // an id seen on both sides: keep the first (garbage guard)
         g.size += e.size;
+        {   const long long ts = e.stamp > 0 ? e.stamp : e.arrMs / 1000;     // (1.13.0) the order's first fill second and its price range
+            if (g.t0 < 0 || (ts >= 0 && ts < g.t0)) g.t0 = ts;
+            if (g.lo == 0 || e.px < g.lo) g.lo = e.px;
+            if (g.hi == 0 || e.px > g.hi) g.hi = e.px; }
         for (int i = 0; i < g.nPx; ++i) if (g.px[i] == e.px) return;
         if (g.nPx < AGGR_PX_MAX) g.px[g.nPx++] = e.px; else g.more = true;
     }
@@ -650,6 +660,9 @@ public:
             }
             if (ic) { const long long r = restAt(s, e.px); if (r > ic->shown) ic->shown = r; ic->traded += e.size; }
             if (e.size > 0) a.hitC[s] += e.size;                           // (1.2.0) the hit size (rebuilt % = re-added / hit)
+            if (e.size > 0) { const long long hs = e.stamp > 0 ? e.stamp : e.arrMs / 1000;   // (1.13.0) the pace per second
+                std::map<long long, long long>::iterator q = a.hitSec[s].find(hs);
+                if (q != a.hitSec[s].end()) q->second += e.size; else if (a.hitSec[s].size() < HITSEC_CAP) a.hitSec[s][hs] = e.size; }
             {   const long long ts = e.stamp > 0 ? e.stamp : e.arrMs / 1000;     // (DefenseTurn 2026-10-20) when the candle's low / high printed and the hits up to it
                 if (a.tFirst < 0) { a.tFirst = ts; }
                 a.tLast = ts;
@@ -755,9 +768,15 @@ public:
         for (std::unordered_map<long long, Aggr>::const_iterator i = a.aggr.begin(); i != a.aggr.end(); ++i) {
             const Aggr& g = i->second; if (g.side != BID && g.side != ASK) continue;
             const int s = g.side; const long long lv = g.nPx + (g.more ? 1 : 0);
+            const long long px = g.more && g.hi >= g.lo ? std::max(lv, (long long)(g.hi - g.lo + 1)) : lv;   // (1.13.0) over 24 prices: the price span (lowest .. highest fill)
             if (g.size > r.aggrMax[s]) r.aggrMax[s] = g.size;
             r.aggrN[s]++; r.aggrC[s] += g.size;                            // (1.2.0) aggressor orders / their lots on this side
             if (lv > bestLv[s] || (lv == bestLv[s] && g.size > bestSz[s])) { bestLv[s] = lv; bestSz[s] = g.size; }
+            // (1.13.0) the biggest order (ties: the earlier one) and the biggest sweep by lots (>= sweepLevels prices; ties: the earlier one)
+            Rec::Top& b = r.big[s];
+            if (g.size > b.lots || (g.size == b.lots && g.size > 0 && g.t0 >= 0 && (b.sec < 0 || g.t0 < b.sec))) { b.lots = g.size; b.sec = g.t0; b.nPx = px; b.lo = g.lo; b.hi = g.hi; }
+            Rec::Top& w = r.sweep[s];
+            if (lv >= P.sweepLevels && (g.size > w.lots || (g.size == w.lots && g.size > 0 && g.t0 >= 0 && (w.sec < 0 || g.t0 < w.sec)))) { w.lots = g.size; w.sec = g.t0; w.nPx = px; w.lo = g.lo; w.hi = g.hi; }
         }
         for (int s = 0; s < 2; ++s) { r.sweepLv[s] = bestLv[s]; r.sweepSize[s] = bestSz[s]; r.sweepIsMax[s] = bestSz[s] > 0 && bestSz[s] >= r.aggrMax[s] ? 1 : 0; }
         return r;
@@ -1716,8 +1735,14 @@ struct SessionFile {
     std::string sizesText; bool sizesDirty = false;
     // 1.1.0: extra event lines kept after the candle rows (prefix extraTag, e.g. "SR|"), bounded; extraHead is written once above them
     std::string extraTag, extraHead; std::vector<std::string> extra;
+    std::vector<std::string> moreTags; size_t extraCap = 2000;           // (1.13.0) more extra-line tags (lsBidAskStats K| / S| / AS|), the line cap
+    bool isExtra(const std::string& ln) const {
+        if (!extraTag.empty() && ln.compare(0, extraTag.size(), extraTag) == 0) return true;
+        for (size_t k = 0; k < moreTags.size(); ++k) if (!moreTags[k].empty() && ln.compare(0, moreTags[k].size(), moreTags[k]) == 0) return true;
+        return false;
+    }
     bool putExtra(const std::string& ln) {
-        if (extraTag.empty() || ln.compare(0, extraTag.size(), extraTag) != 0 || ln.size() > 1024 || extra.size() >= 2000) return false;
+        if (!isExtra(ln) || ln.size() > 1024 || extra.size() >= extraCap || rows.size() + extra.size() + 8 >= SESSION_MAX_LINES) return false;   // (1.13.0) the whole file stays readable (readBoundedLines refuses > 6,000 lines)
         if (std::find(extra.begin(), extra.end(), ln) != extra.end()) return false;
         extra.push_back(ln); dirty = true; return true;
     }
@@ -1731,7 +1756,7 @@ struct SessionFile {
         if (!nl::readBoundedLines(path, lines, (size_t)SESSION_MAX_BYTES, SESSION_MAX_LINES, 4096)) return false;
         for (size_t i = 0; i < lines.size(); ++i) {
             if (lines[i].empty() || lines[i][0] == '#' || lines[i].compare(0, 9, "bar_time|") == 0) continue;
-            if (!extraTag.empty() && lines[i].compare(0, extraTag.size(), extraTag) == 0) { if (extra.size() < 2000 && lines[i].size() <= 1024) extra.push_back(lines[i]); continue; }
+            if (isExtra(lines[i])) { if (extra.size() < extraCap && lines[i].size() <= 1024) extra.push_back(lines[i]); continue; }
             Row r; if (parseRow(lines[i], nNums, r)) { rows[r.t] = r; loaded++; } else rejected++;
         }
         return true;

@@ -36,6 +36,8 @@ compile_run big_lot_logic test_aggbook_114.cpp
 compile_run bidask_big_lot_host test_aggbook_114_host.cpp -Wno-misleading-indentation -DBAS_TEST_CLOCK -DPC_TEST_CURSOR -I"$D/mock"
 compile_run bookflow_host test_aggbook_host.cpp -Wno-misleading-indentation -DBOOK -DOFF_TEST_CLOCK -DPC_TEST_CURSOR -I"$D/mock"
 compile_run defense_lines_host test_defenselines_host.cpp -Wno-misleading-indentation -I"$D/mock"
+compile_run attack_logic test_attack_126.cpp -Wno-misleading-indentation   # (2026-10-21) lsBidAskStats 1.26.0 attacker letters
+compile_run attack_host test_attack_126_host.cpp -Wno-misleading-indentation -DBAS_TEST_CLOCK -DPC_TEST_CURSOR -I"$D/mock"
 compile_run defense_real_header_audit test_defense_114_audit.cpp -Wno-misleading-indentation -I"$D/mock"
 echo 'All included logic and mock-host test targets passed.'
 # Default relative to this script, not the caller's current directory.

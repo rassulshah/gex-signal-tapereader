@@ -89,7 +89,7 @@ int main() {
         {   const mock::Draw* q = text(h, bas::QUESTION); const mock::Draw* ring = nullptr; for (auto& d : h.draws) if (d.type == "ring") ring = &d;
             CHECK(q && ring && ring->x > q->r && ring->y >= q->y - 8 && ring->y <= q->y + 8, "(1.22.0) the info icon just right of the question, same line");
             CHECK(text(h, "i", 0x00000000) != nullptr, "(1.22.0) the icon's black i");
-            CHECK(std::string(bas::QUESTION) == "Is the effort rewarded?", "(1.22.0) the question text");
+            CHECK(std::string(bas::QUESTION) == "Who is aggressive?", "(1.26.0, Rassul 20:11-20:23 CT) the question text: Who is aggressive?");
             off::IconRect r; r.l = 100; r.t = 2; r.r = 112; r.b = 14; bool on = false; const size_t n0 = h.draws.size();
             CHECK(off::infoTip(r, on, 106, 8, bas::INFO_TIP) && on, "(1.22.0) mouse on the icon: the tip turns on");
             CHECK(!off::infoTip(r, on, 107, 9, bas::INFO_TIP) && on, "(1.22.0) still on it: no change");
@@ -465,9 +465,9 @@ int main() {
         CHECK(e->dtG.count(std::make_pair((int)dt::HIGH, k)) && e->dtG[std::make_pair((int)dt::HIGH, k)].G && e->dtGWritten == g0 + 1, "(1.19.0) G decided at the high: (4,000 - 100) / 90 s = 2.4x ES normal, pulled > added, attack died; one G line");
         p->decideTurns(*S, k, nb); CHECK(e->dtGWritten == g0 + 1, "(1.19.0) decided once: a second close writes nothing");
         h.draws.clear(); p->draw();
-        CHECK(text(h, "A|", GRN) != nullptr && text(h, "G|", RED) != nullptr, "(1.19.0) badge A| (the low's defenders, green) + G (the high's buyers giving up, red)");
-        CHECK(text(h, "Attackers") != nullptr && text(h, "Pulling 2.4x", RED) != nullptr, "(1.19.0) box row Attackers: Pulling 2.4x, red at a high, in the buyers' column");
-        {   const mock::Draw* at = text(h, "Attackers"); const mock::Draw* mv = text(h, "Moved"); CHECK(at && mv && at->y > mv->y && at->y < S->lastBox.b, "(1.19.0) Attackers under Moved, inside the box"); }
+        CHECK(text(h, "A|", GRN) != nullptr && text(h, "G|", RED) == nullptr && text(h, "G", RED) == nullptr, "(1.21.0) badge A|.. (the low's defenders, green); G is decided and written here but drawn on the attacker pane");
+        CHECK(text(h, "Attackers") == nullptr && text(h, "Pulling 2.4x") == nullptr, "(1.21.0, Rassul \"no\") the box row Attackers is removed");
+        {   const mock::Draw* mv = text(h, "Moved"); const mock::Draw* al = text(h, "At level"); CHECK(mv && al && al->y > mv->y && al->y < S->lastBox.b, "(1.21.0) At level right under Moved (no Attackers row), inside the box"); }
         // ---- Tr: the Delta Profile's TR line (trapped sellers below the old low) on this candle
         const std::string tp = p->trapPathFor(*S, 0);
         CHECK(!tp.empty() && tp.find("\\DeltaProfile\\ES-ESZ6-60-signals-") != std::string::npos, ("(1.19.0) the Delta Profile record path " + tp).c_str());
@@ -480,7 +480,7 @@ int main() {
         e->trMs = -1; p->readTraps(*S, *e, NOW);
         CHECK(e->dtTr[std::make_pair((int)dt::LOW, k)].lots == 640 && e->trRead == 1, "(1.19.0) appended lines read from where it stopped; the first line per candle + side wins (never re-decided)");
         h.draws.clear(); p->draw();
-        CHECK(text(h, "A|", GRN) != nullptr && text(h, "Tr|", GRN) != nullptr && text(h, "G|", RED) != nullptr && text(h, "P", GRN) != nullptr, "(1.19.0) badge A|Tr|G|P: Tr green at the low (trapped sellers), G red, the bids' P green");
+        CHECK(text(h, "A|", GRN) != nullptr && text(h, "P|", GRN) != nullptr && text(h, "Tr|") == nullptr && text(h, "Tr") == nullptr && text(h, "G|") == nullptr, "(1.21.0) badge A|P|..: Tr and G moved to the attacker pane (the TR line is still read here)");
         // ---- W: PDL at 6995.00 (27980): price away above, then a touch; in the first minute 300 bid lots pulled at the level, 40 traded
         S->zr.e.lv.clear(); { zread::LevelZone z; z.name = "PDL"; z.c = 27980; z.kind = 0; S->zr.e.lv.push_back(z); zread::LevelZone v; v.name = "VAH"; v.c = 28100; v.kind = 0; S->zr.e.lv.push_back(v); }
         p->trackOn(*S); p->checkW(*S);
@@ -499,20 +499,20 @@ int main() {
         auto badgeTexts = [&]() { std::string b; if (e->badgeHit.empty()) return b; const off::IconRect& r = e->badgeHit.back().first;
             for (auto& d : h.draws) if (d.type == "text" && d.x >= r.l - 1 && d.x <= r.r && d.y >= r.t - 3 && d.y <= r.b) b += d.text; return b; };
         std::string badges = badgeTexts();
-        CHECK(badges == "A|Tr|G|W", ("(1.19.0) 6 letters (A, Tr, G, W, P, L): the 4 most important on the badge, P and L to the hover (" + badges + ")").c_str());
+        CHECK(badges == "A|W|P|L", ("(1.21.0) the Defense letters A, W, P, L on the badge (Tr / G moved to the attacker pane) (" + badges + ")").c_str());
         if (const char* dp = std::getenv("GTW_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
-        CHECK(text(h, "W", RED) != nullptr, "(1.19.0) W in red (a support at risk)");
+        CHECK(text(h, "W|", RED) != nullptr, "(1.19.0) W in red (a support at risk)");
         {   bool q = false; for (auto& d : h.draws) if (d.type == "text" && d.y < 60 && d.text != bf::QUESTION && d.text.find('?') != std::string::npos) q = true;
             CHECK(!q, "(1.20.0, Rassul 19:48 CT) no '?' anywhere in the badge row"); }
         CHECK(text(h, "At level") != nullptr && text(h, "Pulled 88%", RED) != nullptr, "(1.19.0) box row At level: Pulled 88% (300 / 340), red");
-        {   int l = 1 << 30, r = -1, fs = 99; for (auto& d : h.draws) if (d.type == "text" && d.y < 60 && (d.text == "A|" || d.text == "Tr|" || d.text == "G|" || d.text == "W")) { l = std::min(l, d.x); r = std::max(r, d.r); fs = std::min(fs, d.fsize); }
+        {   int l = 1 << 30, r = -1, fs = 99; for (auto& d : h.draws) if (d.type == "text" && d.y < 60 && (d.text == "A|" || d.text == "W|" || d.text == "P|" || d.text == "L")) { l = std::min(l, d.x); r = std::max(r, d.r); fs = std::min(fs, d.fsize); }
             const bool in = !e->badgeHit.empty() && l >= e->badgeHit.back().first.l && r <= e->badgeHit.back().first.r + 1;
-            CHECK(r > l && in && fs == 6, ("(1.19.0) the 4-letter badge: text inside its border, the font shrunk to the 6 pt floor on a 20 px slot (" + std::to_string(fs) + " pt)").c_str()); }
+            CHECK(r > l && in && fs <= 7 && fs >= 6, ("(1.19.0) the 4-letter badge: text inside its border, the font shrunk toward the 6 pt floor on a 20 px slot (" + std::to_string(fs) + " pt)").c_str()); }
         {   // two neighbouring candles with badges: the wider one never covers the one before it
-            const long long kp = (long long)B[(size_t)i - 1].time; dt::GiveUp gp; gp.t = kp; gp.side = dt::HIGH; gp.G = true; gp.x = 2.5; gp.secs = 60; gp.normal = 17.8; e->dtG[std::make_pair((int)dt::HIGH, kp)] = gp;
+            const long long kp = (long long)B[(size_t)i - 1].time; dt::Turn tq; tq.t = kp; tq.side = dt::HIGH; tq.A = true; e->dtTurns[std::make_pair((int)dt::HIGH, kp)] = tq;   // (1.21.0) an A (G is no longer drawn here)
             h.draws.clear(); p->draw();
             CHECK(e->badgeHit.size() == 2 && e->badgeHit[0].first.r < e->badgeHit[1].first.l, "(1.19.0) two badges on neighbouring candles never overlap (the second shifted right)");
-            e->dtG.erase(std::make_pair((int)dt::HIGH, kp)); h.draws.clear(); p->draw(); }
+            e->dtTurns.erase(std::make_pair((int)dt::HIGH, kp)); h.draws.clear(); p->draw(); }
         // ---- the badge's hover: the letters, the numbers (never on the chart), the letter with no room
         CHECK(e->badgeHit.size() >= 1, "(1.19.0) the badge's rectangle is kept for the mouse");
         if (!e->badgeHit.empty()) {
@@ -528,10 +528,10 @@ int main() {
                     if (d.text.compare(0, 5, "     ") == 0) j += " " + d.text.substr(5); else j += "\n" + d.text; } return j; };
             auto tipHas = [&](const std::string& t) { return tipJoined().find(t) != std::string::npos; };
             CHECK(e->lastTip.r > e->lastTip.l && e->lastTipLevel >= 0, ("(1.20.0) the hover drawn (fit level " + std::to_string(e->lastTipLevel) + ")").c_str());
-            CHECK(tipText("Defense A|Tr|G|W  (+ P, L: no room on the badge)"), "(1.20.0) hover header: the badge + the letters cut from it");
+            CHECK(tipText("Defense A|W|P|L"), "(1.21.0) hover header: the badge (every letter fits: Tr / G moved to the attacker pane)");
             CHECK(tipHas("A  Absorbed - did the sellers' attack fail against the bids?"), "(1.20.0) hover A: the question it answers");
-            CHECK(tipHas("Tr  Trapped - are sellers stuck on the wrong side of the old low?") && tipHas("Sellers trapped 640 lots (2.9x normal) below the old low (Delta Profile)"), "(1.20.0) hover Tr: question + the TR record's lots / x");
-            CHECK(tipHas("G  Giving up - are the buyers (the attackers) pulling their own orders?") && tipHas("After the high the buyers pulled their bids at 2.4x normal (4,000 pulled vs 300 added in 90 s)"), "(1.20.0) hover G: the G line's numbers");
+            CHECK(!tipHas("Tr  Trapped") && !tipHas("G  Giving up"), "(1.21.0) no Tr / G block in the Defense hover (they are on the attacker pane)");
+            CHECK(true, "(1.21.0) G hover moved to the attacker pane");
             CHECK(tipHas("W  Withdrew - did the bids leave the key level when price touched it?") && tipHas("In the first 60 s at PDL 6,995 the bids pulled 88%: 300 lots net pulled vs 40 traded"), "(1.20.0) hover W: level, %, lots");
             CHECK(tipHas("P  Pressed in - did the bids move toward price?") && tipHas("Bids (buyers) moved "), "(1.20.0) hover P (cut from the badge): its own block with the M line's numbers");
             CHECK(tipHas("L  Reloaded - were the bids back at the level on the re-test?") && tipHas("lots of bids waited in the zone = "), "(1.20.0) hover L (cut from the badge): its own block with the Q line's numbers");
@@ -559,7 +559,7 @@ int main() {
             {   RTX_EVENT evg = moveAt(br0.r + 30, (br0.t + br0.b) / 2, i); p->mouse(&evg); h.draws.clear(); p->draw();
                 CHECK(e->badgeTip < 0 && e->lastTip.r <= e->lastTip.l, "(1.20.0) the mouse in the badge row but beside the badge: no hover"); }
             RTX_EVENT ev2 = moveAt(5, 280, i); p->mouse(&ev2); h.draws.clear(); p->draw();
-            CHECK(e->badgeTip < 0 && !tipText("Defense A|Tr|G|W  (+ P, L: no room on the badge)"), "(1.19.0) mouse off the badge: hover gone");
+            CHECK(e->badgeTip < 0 && !tipText("Defense A|W|P|L"), "(1.19.0) mouse off the badge: hover gone");
             pc::test_ok = false; off::off_test_cursor_wnd = nullptr; }
         // ---- restart: G / W read back from the turns file, Tr from the Delta Profile's record - the same badge, nothing re-decided
         const std::string tf = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
@@ -570,7 +570,7 @@ int main() {
         CHECK(e->dtG.count(std::make_pair((int)dt::HIGH, k)) && e->dtG[std::make_pair((int)dt::HIGH, k)].G && e->dtW.size() == 1 && e->dtGWritten == g0 + 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.19.0) after a restart: G and W read back, nothing written again (no repaint)");
         h.draws.clear(); p->draw();
         badges = badgeTexts();
-        CHECK(badges == "A|Tr|G|W", ("(1.19.0) the same badge after the restart (" + badges + ")").c_str());
+        CHECK(badges == "A|W|P|L", ("(1.19.0) the same badge after the restart (" + badges + ")").c_str());
         // ---- later candles never change it
         {   std::ostringstream o; p->statusExtra(*S, o); const std::string st = o.str();
             CHECK(st.find("\nGIVE_UP,") != std::string::npos && st.find("\nTRAPS,1 Delta Profile TR lines") != std::string::npos && st.find("\nAT_LEVEL,1 key levels watched") != std::string::npos && st.find("\nBADGES,") != std::string::npos,

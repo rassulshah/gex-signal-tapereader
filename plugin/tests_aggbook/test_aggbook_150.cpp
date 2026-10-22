@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
       EQS(I.rows[0].v[1], "+400 (4.8x)"); EQS(I.rows[1].v[0], "2010"); EQS(I.rows[2].v[0], "2.0x STRONG"); EQS(I.rows[2].v[1], "2.1x STRONG");
       off::Info I0 = bf::info(nullptr, P, nullptr, "ES"); EQS(I0.rows[2].v[0], "n/a"); }
     { const std::string h = slurp(dir + "/BookFlow.cpp");
-      CHECK(h.find("return \"Refill Effort;Refilled;Counter;Re-test;Moved;Attackers;At level\";") != std::string::npos);   // (1.17.0) + Moved
+      CHECK(h.find("return \"Refill Effort;Refilled;Counter;Re-test;Moved;At level\";") != std::string::npos && h.find(";Attackers;") == std::string::npos);   // (1.17.0) + Moved; (1.21.0) Attackers removed
       CHECK(h.find("bf::info(mbar, S.params.load.p, shownNs, S.market)") != std::string::npos);
       CHECK(h.find("bf::refillRead(mbar->r, S.market, spotAt(") != std::string::npos);
       CHECK(h.find("1) REFILL EFFORT - Question: how much defense is there compared with normal?") != std::string::npos && h.find("2) REFILLED - Question: did they put back what was taken, compared with normal for this market?") != std::string::npos && h.find("Refilled = 2.0x STRONG") != std::string::npos && h.find("How to read: 1.0x = the usual refill") != std::string::npos);

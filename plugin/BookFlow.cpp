@@ -78,7 +78,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.20.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.21.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 #include "DefenseTurn.h"          // (1.12.0) the pivot turn marks + the refill line decisions (drawn on the price chart by lsDefenseLines)
@@ -97,7 +97,7 @@ public:
     virtual bool barMarks() const { return false; }                        // no letters / dash drawn; hover + records keep them
     virtual bool netBars() const { return true; }
     virtual bool textOff() const { return false; }
-    virtual std::string boxKeep() const { return "Refill Effort;Refilled;Counter;Re-test;Moved;Attackers;At level"; }   // (1.19.0) + Attackers (Top Attacker #2 G) + At level (Top Defender #2 W)   // (1.17.0) + Moved (Top Defender #3)   // (1.16.0) + Re-test (Top Defender #4)   // (1.15.0) + Counter (Top Defender #5)   // (1.8.0, Rassul 19:19) Reward removed - it repeats Aggression's Reward;   // (1.6.0, Rassul 17:42 "build it already") + Reward (EffortReward.h)    // (1.5.0, Rassul 11:19 / 11:53) the two defense rows; the rest hidden   // (1.4.0, 23:56 CT) + Added / Pulled (their plain 20-candle ratios, as the pull marker)            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
+    virtual std::string boxKeep() const { return "Refill Effort;Refilled;Counter;Re-test;Moved;At level"; }   // (1.21.0, Rassul 20:11-20:23 CT) the Attackers row removed (G moved to the attacker pane)   // (1.19.0) + Attackers (Top Attacker #2 G) + At level (Top Defender #2 W)   // (1.17.0) + Moved (Top Defender #3)   // (1.16.0) + Re-test (Top Defender #4)   // (1.15.0) + Counter (Top Defender #5)   // (1.8.0, Rassul 19:19) Reward removed - it repeats Aggression's Reward;   // (1.6.0, Rassul 17:42 "build it already") + Reward (EffortReward.h)    // (1.5.0, Rassul 11:19 / 11:53) the two defense rows; the rest hidden   // (1.4.0, 23:56 CT) + Added / Pulled (their plain 20-candle ratios, as the pull marker)            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
     virtual bool boxOnly() const { return true; }                         // (1.2.0, Rassul 2026-10-16 22:00) the left-justified numbers box in the pane, no read / options lines                          // (1.1.0, Rassul 2026-10-16 18:14) no read / numbers / options lines on the pane; the records and the tape reader keep every number
     virtual long long netOf(const off::Rec& r, int s) const { return bf::netOf(r, s); }
     // the label numbers of one net bar: ratio / pace / lots of the part that spiked (up = added, down = pulled; pace only for added)
@@ -643,10 +643,10 @@ public:
             for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator qq = e.dtQ.begin(); qq != e.dtQ.end(); ++qq) if (qq->second.at == key && (qq->second.res == 'L' || qq->second.res == 'X')) { in.Q = qq->second.res; if (side < 0) side = qq->second.side; }   // (1.16.0)
             for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, mvl::Read>::const_iterator m = e.dtM.find(std::make_pair(sd, key)); if (m == e.dtM.end()) continue;   // (1.18.0) every move case, per BOOK side
                 const char lb = mvl::letterOf(m->second, mvl::BIDS), lo = mvl::letterOf(m->second, mvl::OFFERS); if (lb && !in.bidMove) in.bidMove = lb; if (lo && !in.offerMove) in.offerMove = lo; if ((lb || lo) && side < 0) side = sd; }
-            for (int sd = 1; sd >= 0 && in.tr < 0; --sd) if (e.dtTr.count(std::make_pair(sd, key))) in.tr = sd;                      // (1.19.0) Tr: the Delta Profile's decision
-            for (int sd = 1; sd >= 0 && in.g < 0; --sd) { std::map<std::pair<int, long long>, dt::GiveUp>::const_iterator gg = e.dtG.find(std::make_pair(sd, key)); if (gg != e.dtG.end() && gg->second.G) in.g = sd; }   // (1.19.0) G
+            // (1.21.0, Rassul 20:11-20:23 CT) Tr and G are drawn on the attacker pane (lsBidAskStats 1.26.0), not here: in.tr / in.g stay -1
+            // (G is still decided and written here - its G lines are what the attacker pane reads)
             for (std::map<std::pair<long long, long long>, dt::WRead>::const_iterator w = e.dtW.lower_bound(std::make_pair(key, (long long)LLONG_MIN)); w != e.dtW.end() && w->first.first == key && !in.w; ++w) if (dt::wDrawn(w->second)) in.w = true;   // (1.19.0) W (supports)
-            if (side < 0) side = in.tr >= 0 ? in.tr : (in.g >= 0 ? in.g : dt::LOW);
+            if (side < 0) side = dt::LOW;
             in.defSide = side;
             std::vector<std::string> dropped;
             const std::vector<dt::BadgeSeg> segs = dt::badgeSegs7(in, &dropped); if (segs.empty()) continue;   // (1.16.0) X alone: the opposite colour
@@ -964,7 +964,7 @@ public:
             }
             info.rows.push_back(mr);
         }
-        {   // (1.19.0, Top Attacker #2) the ATTACKERS row: the latest G decision (at a 5-candle high / low) within 12 candles of the shown candle, in
+        if (false) {   // (1.21.0, Rassul 20:11-20:23 CT "no") REMOVED - G moved to the attacker pane, its numbers in the attacker hover. (1.19.0, Top Attacker #2) the ATTACKERS row: the latest G decision (at a 5-candle high / low) within 12 candles of the shown candle, in
             // the attackers' column (buyers at a high, sellers at a low), coloured by meaning: "Pulling 2.9x" red at a high / green at a low (G),
             // "Still in 0.6x" the other colour (decided, no G); else "-"
             off::InfoRow ar; ar.label = "Attackers"; ar.v[0] = ar.v[1] = "-";
@@ -1210,6 +1210,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.20.0");   // BF_VERSION
+    p->setVersion("1.21.0");   // BF_VERSION
     return p;
 }
