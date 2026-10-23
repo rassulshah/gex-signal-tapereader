@@ -35,6 +35,12 @@ static std::vector<dtl::Bar> day(const std::vector<double>& closes, double ibLo 
 static bool sameRes(const dtl::Result& a, const dtl::Result& b) { return a.kind == b.kind && a.text == b.text && a.crosses == b.crosses && a.ib == b.ib && a.range == b.range && a.checks.size() == b.checks.size(); }
 
 int main() {
+    {   // [6] (2.7.1) DAYTYPE "log fails 17": the day-type log's folder lsFlexLevels\HodLod did not exist - hlAppend now creates it
+        std::ifstream sf("../HodLod.cpp"); std::stringstream ss; ss << sf.rdbuf(); const std::string src = ss.str();
+        const size_t a = src.find("static void hlMakeParent"), b = src.find("static bool hlAppend(const std::string& p, const std::string& header, const std::string& text)\n{");
+        CHECK(a != std::string::npos && b != std::string::npos && a < b && src.find("hlMakeParent(p);", b) != std::string::npos && src.find("hlMakeParent(p);", b) < b + 200, "hlAppend makes the parent folder first");
+        CHECK(src.find("CreateDirectoryA(d.c_str(), NULL);") != std::string::npos, "Windows: CreateDirectoryA on the record's folder");
+    }
     std::printf("HodLod %s / DayType %s / NewsWindow %s / MarkParams %s\n", hl::HL_VERSION, dtl::VERSION, nw::VERSION, mp::VERSION);
     const dtl::Params P;
     {   // [1] day types
@@ -154,7 +160,7 @@ int main() {
     }
     {   // [5] versions
         const std::string src = readAll("../HodLod.cpp");
-        CHECK(std::string(hl::HL_VERSION) == "2.7.0" && std::string(hlset::PLUGIN_VERSION) == "2.7.0" && src.find("p->setVersion(\"2.7.0\")") != std::string::npos, "versions 2.7.0 everywhere");
+        CHECK(std::string(hl::HL_VERSION) == "2.7.1" && std::string(hlset::PLUGIN_VERSION) == "2.7.1" && src.find("p->setVersion(\"2.7.1\")") != std::string::npos, "versions 2.7.0 everywhere");
         CHECK(src.find("mp::get(\"PreOpen\", S->mkt)") != std::string::npos && src.find("S->preParamShow != mp::LOG") != std::string::npos, "Pre row gated by LRA-PreOpen SHOW (LOG by default)");
     }
     std::printf("%d passed, %d failed\n", passes, fails);

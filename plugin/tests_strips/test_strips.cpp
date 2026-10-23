@@ -45,7 +45,8 @@ int main() {
     { std::vector<lst::Item> it; for (int k = 0; k < 40; ++k) { lst::Item x; x.xc = 100 + 11 * k; x.w = (k % 3 == 0) ? 12 : 7; it.push_back(x); }
       const std::vector<lst::Placed> p = lst::placeStrip(it, 80, 1000); int drawn = 0, lower = 0;
       for (size_t a = 0; a < p.size(); ++a) { drawn += p[a].drawn; lower += p[a].drawn && p[a].sub == 1; for (size_t b = a + 1; b < p.size(); ++b) CHECK(!lst::touches(p[a], p[b])); }
-      CHECK(drawn == 40); CHECK(lower > 0);
+      CHECK(drawn >= 26); CHECK(lower == 0);   // (LetterStrips 1.1.0) ONE row per strip: the tight ones shift or are skipped, never touching
+      CHECK(lst::ROW_H == 11 && lst::SUB_ROWS == 1 && lst::SUB_H == 11);
       for (size_t a = 0; a < p.size(); ++a) if (p[a].drawn) CHECK(std::abs((p[a].l + p[a].r) / 2 - it[a].xc) <= 4); }
     { std::vector<lst::Item> it; for (int k = 0; k < 30; ++k) { lst::Item x; x.xc = 100 + 4 * k; x.w = 12; it.push_back(x); }   // zoomed out: some are skipped, never touching
       const std::vector<lst::Placed> p = lst::placeStrip(it, 80, 1000); int drawn = 0;
@@ -90,6 +91,17 @@ int main() {
         for (size_t k = 0; k < s.size(); ++k) { rsl::Step r; CHECK(rsl::parse(rsl::line(s[k]), r)); CHECK(r == s[k]); }
         const std::vector<std::string> nw = rsl::nowRows(s[12], "12:42 PM"); CHECK(nw[0] == "Now 12:42 PM" && nw[1] == "LOW attempt" && nw[2] == "Stage 4 Turn" && nw[3] == "Chain K A . Tr . H" && nw[4].find("Odds ?") == 0);
         CHECK(rsl::lookOf(s[12]).height == 4 && rsl::lookOf(s[12]).colour == lst::GREEN && !rsl::lookOf(s[12]).dim);
+    }
+    {   // (ReversalStage 1.2.0) a queue Q steps only at the attempt's own extreme (tk anchor within max(4, 0.3 ATR) ticks)
+        std::vector<std::array<long long, 3> > h = base; h.push_back({{1001, 990, 992}}); h.push_back({{995, 991, 993}});
+        std::multimap<long long, Ev> E; ev(E, keyOf(10), lst::ATK, "K", lst::LOW); ev(E, keyOf(11), lst::QUE, "Q", lst::LOW, -1, "held 120% orig 97% q0 130 tk991");
+        std::vector<rsl::Step> s = rsl::run(bars(h), E);
+        CHECK(s[11].stage == 2 && s[11].chain == "K . Q"); CHECK(s[11].here.find("tk") == std::string::npos);
+        std::multimap<long long, Ev> F; ev(F, keyOf(10), lst::ATK, "K", lst::LOW); ev(F, keyOf(11), lst::QUE, "Q", lst::LOW, -1, "held 120% orig 97% q0 130 tk1040");
+        s = rsl::run(bars(h), F); CHECK(s[11].stage == 1 && s[11].chain == "K . Q*");          // a Q far from the extreme: hover only
+        std::multimap<long long, Ev> G; ev(G, keyOf(10), lst::ATK, "K", lst::LOW); ev(G, keyOf(11), lst::QUE, "Q", lst::LOW, -1, "held 120% orig 97% q0 130");
+        s = rsl::run(bars(h), G); CHECK(s[11].stage == 1);                                         // no anchor (older record): hover only
+        CHECK(rsl::qAnchorOf("broke 4% q0 24 tk29115") == 29115 && rsl::qAnchorOf("q0 24") == 0 && rsl::qAnchorOf("x tk12a") == 0 && rsl::qTolTicks(40) == 12 && rsl::qTolTicks(2) == 4);
     }
     {   // complete: the close leaves the low by >= 1 ATR (ATR ~ 4-11 ticks here)
         std::vector<std::array<long long, 3> > h = base; h.push_back({{1001, 990, 992}}); h.push_back({{1003, 991, 1002}});

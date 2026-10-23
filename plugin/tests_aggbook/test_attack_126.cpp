@@ -14,7 +14,7 @@ static off::Ev fill(int restSide, off::Tick px, long long size, long long id, lo
 }
 static std::string segs(const std::vector<dt::BadgeSeg>& v) { std::string s; for (size_t k = 0; k < v.size(); ++k) s += (k ? "/" : "") + v[k].s + (v[k].colourKey == atk::HIGH ? "r" : "g"); return s; }
 int main() {
-    CHECK(std::string(atk::VERSION) == "1.1.0" && std::string(off::VERSION).compare(0, 6, "1.14.0") == 0, "AttackLogic 1.1.0, OrderFlowFeed 1.14.0");
+    CHECK(std::string(atk::VERSION) == "1.1.0" && std::string(off::VERSION).compare(0, 6, "1.15.0") == 0, "AttackLogic 1.1.0, OrderFlowFeed 1.15.0");
     // ---------------- OrderFlowFeed 1.13.0: the biggest order and the biggest sweep per side, its first second and prices
     off::Params P; P.sweepLevels = 3;
     {   off::Engine e; off::Acc a;

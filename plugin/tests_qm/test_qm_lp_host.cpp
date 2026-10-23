@@ -32,6 +32,7 @@ int main() {
     LiquidityProfile* p = static_cast<LiquidityProfile*>(CreateExtension());
     for (int s = 0; s < 6; ++s) { h.now = t0 - 100 + s; p->calc(0); usleep(5000); }
     LQState* S = static_cast<LQState*>(h.data); if (!S) { std::printf("no state\n"); return 1; }
+    S->qmE.q0Seen.assign(5, 20);   // (0.51.0 / QueueMeter 1.3.0) this session's normal queue at touched levels = 20 lots (the 38-lot G1 queue is above it)
     CHECK(S->qmE.book.size() == 4, "the queue meter keeps its own book from the chart's order feed");
     CHECK(S->qmE.atr > 0 && S->qmE.levels.size() >= 3, "ATR from the chart's candles; the MenthorQ levels are anchors");
     mock::feed.push(3, 0, 79.85f, 1, (RTDATE)(t0 - 20), 8002, 9001);   // a seller hits 79.85 (price above the G1 zone)
@@ -62,10 +63,11 @@ int main() {
         const std::string want = "LT|1|Q|" + std::to_string(t0) + "|Q|0|-1|broke ";
         int n = 0, fields = 0; { std::istringstream in(strip); std::string ln; while (std::getline(in, ln)) if (ln.rfind("LT|", 0) == 0) { ++n; fields = 1; for (char c : ln) if (c == '|') ++fields; } }
         CHECK(strip.rfind(want, 0) == 0 && n == 1 && fields == 8, "Strips\\QUEUE-CL-180.csv: one LT|1|Q|<bar key>|Q|0|-1|<numbers> line (8 fields)");
+        CHECK(strip.find(" tk7980") != std::string::npos, "(0.51.0) the strip line carries the Q anchor tk7980 (lsReversalStage 1.2.0)");
     }
     const std::string st = readAll(flex + "\\LiquidityProfile.status-CL-180.txt");
     CHECK(st.find(std::string("QUEUE_METER,") + qm::VERSION + ",") != std::string::npos && st.find("Q rows written ") != std::string::npos && st.find(",call SHOW at 10 s") != std::string::npos, "status: QUEUE_METER line");
-    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0 && std::string(LQ_VERSION) == "0.50.0", "status VERSION 0.50.0");
+    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0 && std::string(LQ_VERSION) == "0.51.0", "status VERSION 0.51.0");
     // nothing new is drawn on the price chart by the meter (the Dealer Profile draws it in the Levels column)
     h.draws.clear(); p->draw(); bool qtext = false; for (auto& d : h.draws) if (d.type == "text" && d.text.find("Q") == 0 && d.text.find('%') != std::string::npos) qtext = true;
     CHECK(!qtext, "no meter text drawn by the Liquidity Profile");

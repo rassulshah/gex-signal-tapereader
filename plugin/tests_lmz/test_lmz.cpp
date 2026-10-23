@@ -49,6 +49,8 @@ int main() {
       E.onEvent(NEW, ASK, last.level + 1, 10, 13, t);                 // small: never a zone
       E.onEvent(NEW, BID, last.close - 4, 120, 14, t);                // a bid: log only everywhere
       E.onEvent(NEW, ASK, last.close + 15, 300, 15, t + 170000);      // big but rested only 10 s at the next close: not yet
+      // (1.1.0) the live book around price: 41 small resting bids of 4 lots -> median 4 lots -> LMT >= max(ES floor 10, 3 x 4 = 12) = 12 lots
+      for (int k = 0; k < 41; ++k) E.onEvent(NEW, BID, last.close - 12 - (k % 8), 4, 500 + k, t);
       // the next bar closes 3 min later: orders rested >= 30 s, the feed known long enough (30 s + 30 s)
       E.closeBar(B[i], 45); ++i;
       int nPrint = 0, nNear = 0, nBid = 0; bool printQ = false, nearDrawn = true, bidDrawn = true;
@@ -116,6 +118,7 @@ int main() {
             const Tick px = B2[B2.size() - 2].c + 5;
             if (withG) C.setGamma({ px + 1 });
             C.onEvent(NEW, ASK, px, 40, 21, B2.back().endMs - 170000);
+            for (int k = 0; k < 21; ++k) C.onEvent(NEW, BID, B2[B2.size() - 2].c - 3 - (k % 5), 3, 600 + k, B2.back().endMs - 170000);   // (1.1.0) median 3 lots -> LMT >= 9
             C.closeBar(B2.back(), 15);
             bool made = false, drawn = false, conf = false; for (const Zone& z : C.zones) if (z.oid == 21) { made = true; drawn = z.drawn; conf = z.conf; }
             CHECK(made, "CL: the near offer is tracked either way");
@@ -157,6 +160,32 @@ int main() {
         for (const Row& r : v) { if (r.text.size() > 118) fits = false; if (r.text.find("close back") != std::string::npos) close = true; if (r.text.find("n 11") != std::string::npos) study = true; if (r.ink == INK_YELLOW) diamond = true; }
         for (const Row& r : v) std::printf("    | %s\n", r.text.c_str());
         CHECK(fits && close && study && diamond, "hover: question / what / why / how (close back, not the touch) / study / example");
+    }
+    // 11) (1.1.0) the live-median rule: the threshold adapts to the book, the floor, hysteresis 2.5x, params strict
+    {   Engine E; E.market = "ES"; E.R = ruleFor("ES"); E.W.fixedAtr = 20; int m = 0;
+        std::vector<Bar> B3 = path({ 1000, 1010, 1000, 1010, 1000, 1010, 1000, 1010, 1000 }, T0, m);
+        for (size_t k = 0; k + 1 < B3.size(); ++k) E.closeBar(B3[k], 194);   // the night S20 194 never gates any more
+        const Tick c = B3[B3.size() - 2].c; const long long t = B3.back().endMs - 170000;
+        for (int k = 0; k < 31; ++k) E.onEvent(NEW, k % 2 ? ASK : BID, k % 2 ? c + 3 + (k % 7) : c - 3 - (k % 7), 5, 700 + k, t);   // the book: 5-lot orders
+        E.onEvent(NEW, ASK, c + 6, 40, 31, t);   // 40 lots = 8x the median: an LMT (the old S20 194 rule found 0 all night)
+        E.onEvent(NEW, ASK, c + 8, 14, 32, t);   // 14 < 3 x 5 = 15: not an LMT
+        E.closeBar(B3.back(), 194);
+        CHECK(E.medLots == 5 && E.threshold() == 15 && E.keepLots == 13, "median 5 lots -> LMT >= 15, kept while >= 13 (2.5x)");
+        bool z31 = false, z32 = false; for (const Zone& z : E.zones) { if (z.oid == 31) z31 = true; if (z.oid == 32) z32 = true; }
+        CHECK(z31 && !z32, "40 lots is an LMT, 14 is not (S20 194 is context only)");
+        Engine G; G.R = ruleFor("ES"); G.W.fixedAtr = 20; for (size_t k = 0; k + 1 < B3.size(); ++k) G.closeBar(B3[k], 194);
+        for (int k = 0; k < 11; ++k) G.onEvent(NEW, BID, c - 3 - k, 1, 800 + k, t);   // a thin 1-lot book: 3 x 1 = 3 < the ES floor 10
+        G.closeBar(B3.back(), 194); CHECK(G.threshold() == 10, "the per-market floor (ES 10) holds in a thin book");
+        CHECK(floorFor("ES") == 10 && floorFor("NQ") == 5 && floorFor("CL") == 5 && floorFor("GC") == 3 && floorFor("HG") == 3 && floorFor("NG") == 3 && floorFor("EU") == 5, "floors per market");
+        Rule r = parseParams({ "VERSION,1", "MARKET,ES", "PARAM,MULT,4.0", "PARAM,KEEP_MULT,5", "PARAM,FLOOR,12" }, "ES");
+        CHECK(r.mult == 4.0 && r.keepMult == 4.0 && r.floorLots == 12, "params: MULT / FLOOR read; KEEP_MULT never above MULT");
+        r = parseParams({ "VERSION,1", "MARKET,ES", "PARAM,MULT,nan", "PARAM,MULT,0.5" }, "ES"); CHECK(r.mult == 3.0, "garbled / out-of-range MULT ignored (default 3.0)");
+        // hysteresis: the order shrinks to 14 (still >= 13): kept; then 12: SHRANK
+        int zi = -1; for (size_t k = 0; k < E.zones.size(); ++k) if (E.zones[k].oid == 31) zi = (int)k;
+        Bar nb = B3.back(); nb.endMs += 180000; E.onEvent(MOD, ASK, c + 6, 14, 31, nb.endMs - 100000); E.closeBar(nb, 194);
+        CHECK(zi >= 0 && E.zones[(size_t)zi].end == LIVE, "shrank to 14 (>= 2.5x = 13): kept (no flicker)");
+        nb.endMs += 180000; E.onEvent(MOD, ASK, c + 6, 12, 31, nb.endMs - 100000); E.closeBar(nb, 194);
+        CHECK(zi >= 0 && E.zones[(size_t)zi].end == SHRANK && std::string(endCode(SHRANK)) == "SHRANK" && endOf("SHRANK") == SHRANK, "under 2.5x: ends SHRANK (recorded once)");
     }
     std::printf("LmtZonesLogic %s: %d passed, %d failed\n", VERSION, P, F);
     return F ? 1 : 0;

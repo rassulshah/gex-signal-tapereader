@@ -15,6 +15,7 @@ static Tick tk(double px) { return (Tick)(px / TK + 0.5); }
 // a quiet market: ATR from 20 candles of 30 points (120 ticks): zone = 0.12 ATR = 14 ticks
 static void warm(Engine& E, long long endMs = T0 - 60000) {
     E.market = "NQ"; E.tick = TK;
+    E.q0Seen.assign(5, 10);   // (1.3.0) this session's normal queue at touched levels = 10 lots (the scenarios below start at / above it)
     for (int i = 20; i >= 1; --i) { const double b = 31050 + (i % 2) * 5; E.closeBar(endMs - i * 180000LL, b + 15, b - 15, b); }
 }
 static std::string firstQ(const std::vector<std::string>& r) { for (auto& x : r) if (x.rfind("Q|", 0) == 0) return x; return std::string(); }
@@ -171,15 +172,18 @@ int main() {
             const FileT& t = f.t[0];
             CHECK(t.side == BID && t.anchor == 31000.0 && t.name == "G1" && t.q0 == 20 && t.q == 15 && std::fabs(t.pct - 0.75) < 1e-9, "the row: G1 bids 15 / 20 = 75%");
             CHECK(f.last == 31000.0 && f.atr > 29 && f.atr < 31 && f.tick == 0.25, "LAST / ATR / TICK");
-            CHECK(badgeText("G1", t, 0) == "G1  Q 75%", "badge text 'G1  Q 75%' (1.2.0: wider gap, space after Q)");
+            CHECK(badgeText("G1", t, 0) == "G1  Q 15 (1.5x)", "badge text 'G1  Q 15 (1.5x)' (1.3.0: lots + ratio to the normal 10)");
+            CHECK(t.base == 20 && t.normQ == 10 && t.pctOk, "1.3.0 fields: base 20 = max(q0 20, normal 10), normal 10");
             CHECK(std::fabs(fillFrac(t) - 0.75) < 1e-9, "fill = 75% of the badge");
         }
         CHECK(!parseFile(L, "ES").ok, "wrong market refused");
         std::vector<std::string> G = L; G[0] = "MARKET,NQ"; CHECK(!parseFile(G, "NQ").ok, "no VERSION first refused");
         std::vector<std::string> H = L; for (auto& x : H) if (x.rfind("T,", 0) == 0) x = x.substr(0, x.rfind(',')); CHECK(!parseFile(H, "NQ").ok, "a torn T row refused");
-        FileT w; w.pct = 0.33; w.warn = true;
-        CHECK(badgeText("", w, 0) == "Q 33% . orig 0%" && badgeText("", w, 1) == "Q 33%" && badgeText("9:24 low", w, 2) == "Q 33%", "warning text and the shorter fits");
-        FileT big; big.pct = 1.4; CHECK(fillFrac(big) == 1.0 && badgeText("G1", big, 0) == "G1  Q 140%", "more than the start: full fill, true number");
+        FileT w; w.pct = 0.33; w.warn = true; w.q = 7; w.normQ = 21;
+        CHECK(badgeText("", w, 0) == "Q 7 (0.3x) . orig 0%" && badgeText("", w, 1) == "Q 7 (0.3x)" && badgeText("9:24 low", w, 2) == "Q 7 (0.3x)", "warning text and the shorter fits");
+        FileT big; big.pct = 1.4; big.q = 28; big.normQ = 20; CHECK(fillFrac(big) == 1.0 && badgeText("G1", big, 0) == "G1  Q 28 (1.4x)", "more than the start: full fill, lots + ratio");
+        FileT un; un.q = 9; un.pctOk = false; un.pct = 3.0; CHECK(badgeText("", un, 0) == "Q 9" && fillFrac(un) == 0.0, "normal unknown / building: lots only, no fill");
+        CHECK(pctText(11.14) == "200%+" && pctText(1.999) == "200%" && pctText(0.47) == "47%", "percent capped 200%+");
         const Hover h = hover(f.t.empty() ? w : f.t[0], "G1", "31000.00");
         CHECK(h.title.find("?") != std::string::npos && h.title.find("not proven yet") != std::string::npos, "hover header carries ? (not proven yet)");
         bool order = false; size_t iq = 0, iw = 0, iy = 0, ih = 0, ie = 0;
@@ -290,6 +294,41 @@ int main() {
         const long long b1 = add(B, BID, 31000, 20, T0 - 10000); const long long bm = add(B, BID, 31006, 1, T0 - 9000); hitBid(B, bm, 31006, 1, T0 - 50);
         hitBid(B, b1, 31000, 2, T0); const long long lo = add(B, BID, 30990, 3, T0 + 1000); hitBid(B, lo, 30990, 1, T0 + 2000);
         B.stepCalls(T0 + 10000); CHECK(!B.tests.empty() && B.tests[0].call == 2, "broke before 10 s: no call (none)");
+    }
+    // ---- 14) (1.3.0) the 19:09-19:48 CT live defects: q0 of a few lots, the Q flood, defended prices
+    {   // q0 7 lots under a normal of 60: no percent, no call, no Q row (the record showed "held 1114% q0 7")
+        Engine E; warm(E); E.q0Seen.assign(5, 60); E.market = "ES"; E.rule = callRuleFor("ES"); lvl(E, 31000, "G1");
+        const long long q1 = add(E, BID, 31000, 7, T0 - 10000); const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
+        hitBid(E, q1, 31000, 1, T0);
+        for (int i = 0; i < 8; ++i) add(E, BID, 30999.75, 6, T0 + 100 + i);   // 48 more lots: 54 = still under 60
+        CHECK(!E.tests.empty() && E.tests[0].normQ == 60 && !E.tests[0].established, "q0 6 under the normal 60: building");
+        if (!E.tests.empty()) { const Live v = E.snapshot(E.tests[0], T0 + 2000); CHECK(!v.pctOk && v.pct == 0 && !v.high, "building: no percent, no risk from the percent"); }
+        E.stepCalls(T0 + 10000); CHECK(!E.tests.empty() && E.tests[0].call == 2, "building at 10 s: no call");
+        const long long up = add(E, ASK, 31012, 3, T0 + 11000); hitAsk(E, up, 31012, 1, T0 + 12000);
+        CHECK(E.closeBar(T0 + 60000, 31012, 30999, 31010) == 0 && nQ(E.rows) == 0 && E.nThin == 1, "held but never reached the normal: no Q row");
+        File f = parseFile(split(fileText(E, T0 + 20000, 31000.0), '\n'), "ES");
+        CHECK(f.ok && !f.t.empty() && !f.t[0].pctOk && f.t[0].normQ == 60, "live file: base -1 (building), normal 60");
+        // the queue then builds past the normal: the percent starts, base = max(q0, normal)
+        Engine G; warm(G); G.q0Seen.assign(5, 60); lvl(G, 31000, "G1");
+        const long long g1 = add(G, BID, 31000, 7, T0 - 10000); const long long gm = add(G, BID, 31006, 1, T0 - 9000); hitBid(G, gm, 31006, 1, T0 - 50);
+        hitBid(G, g1, 31000, 1, T0); add(G, BID, 30999.75, 80, T0 + 500); hitBid(G, g1, 31000, 1, T0 + 600);
+        if (!G.tests.empty()) { const Live v = G.snapshot(G.tests[0], T0 + 2000); CHECK(G.tests[0].established && v.pctOk && v.base == 60 && v.q == 85 && std::fabs(v.pct - 85.0 / 60) < 1e-9, "built past the normal: base 60, 142% (not 1,214% of q0 7)"); }
+        else CHECK(false, "the build-up test started");
+    }
+    {   // one Q per level per touch, none within one candle of the last Q there; a defended price gets no Q row
+        Engine E; warm(E); lvl(E, 31000, "G1");
+        const long long q1 = add(E, BID, 31000, 20, T0 - 10000); const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
+        hitBid(E, q1, 31000, 2, T0);
+        const long long up = add(E, ASK, 31012, 3, T0 + 1000); hitAsk(E, up, 31012, 1, T0 + 2000);
+        CHECK(E.closeBar(T0 + 60000, 31012, 30999, 31010) == 1, "first touch: one Q");
+        add(E, BID, 31000, 20, T0 + 61000); const long long dn = add(E, BID, 31000, 20, T0 + 61500); hitBid(E, dn, 31000, 1, T0 + 62000);   // back into the zone at once
+        const long long up2 = add(E, ASK, 31012, 3, T0 + 63000); hitAsk(E, up2, 31012, 1, T0 + 64000);
+        CHECK(E.closeBar(T0 + 240000, 31012, 30999, 31010) == 0 && nQ(E.rows) == 1 && E.nDebounced == 1, "the next candle at the same level: debounced (no 2nd Q)");
+        Engine D; warm(D);
+        for (int i = 0; i < 40; ++i) add(D, BID, 31030 - 0.25 * i, 2, T0 - 20000);
+        const long long big = add(D, BID, 31030, 80, T0 - 15000); const long long dm = add(D, BID, 31045, 1, T0 - 15000); hitBid(D, dm, 31045, 1, T0 - 10000);
+        hitBid(D, big, 31030, 1, T0); const long long u = add(D, ASK, 31045, 3, T0 + 1000); hitAsk(D, u, 31045, 1, T0 + 2000);
+        CHECK(!D.tests.empty() && D.tests[0].kind == K_DEFENDED && D.closeBar(T0 + 60000, 31045, 31029, 31040) == 0 && D.nNotAnchor == 1, "a defended price (no level / pivot): live badge only, no Q row");
     }
     std::printf("test_qm: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

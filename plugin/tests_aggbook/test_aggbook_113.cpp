@@ -7,6 +7,7 @@
 #include "OrderFlowPaneSettings.h"
 #include "BidAskStatsLogic.h"
 #include "BookFlowLogic.h"
+#include "LetterStrips.h"
 #include "MarketState.h"
 #include <cstdio>
 #include <fstream>
@@ -226,8 +227,8 @@ static void versions(const std::string& dir) {
     // (2026-10-18 settings layer) the window rows live in OrderFlowPaneSettings.h (one table per pane; registered by SettingsHost.h)
     const std::string t = slurp(dir + "/OrderFlowPaneSettings.h");
     const std::string ta = t.substr(0, t.find("bookFlowSpec")), tb = t.substr(t.find("bookFlowSpec"));
-    EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.29.0"); EQS(ofset::BAS_VERSION, bas::VERSION);   // (1.13.2 settings layer; 1.14.0 Big Lot mark)
-    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.24.0"); EQS(ofset::BF_VERSION, bf::VERSION);
+    EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.30.0"); EQS(ofset::BAS_VERSION, bas::VERSION);   // (1.13.2 settings layer; 1.14.0 Big Lot mark)
+    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.25.0"); EQS(ofset::BF_VERSION, bf::VERSION);
     // every dialog row the chart reads; the removed rows are gone
     CHECK(ta.find("\"Spike vs prior biggest\"") == std::string::npos && ta.find("\"Box shows\"") == std::string::npos && ta.find("\"Spike lookback\"") == std::string::npos && ta.find("\"Spike vs average\"") != std::string::npos);
     CHECK(tb.find("\"Spike vs prior biggest\"") == std::string::npos && tb.find("\"Box shows\"") == std::string::npos && tb.find("\"Spike lookback\"") == std::string::npos && tb.find("\"Spike vs average\"") != std::string::npos);
@@ -259,7 +260,31 @@ static void aggBeats() {
     EQS(bas::beatText(bas::statOf(bm(100, 5), fortynine, fortynine, 20).bBid, false, true), "49");
     EQS(bas::beatText(0, false, false), "n/a");
 }
+// (2026-10-22 evening fix build) the squashed bars, the compact strips, the one-line Implied row
+static void fixBuild() {
+    const int H[3] = { 80, 100, 150 };
+    for (int k = 0; k < 3; ++k) {
+        const int h = H[k];
+        const int reserve = off::textReserve(h, off::MODE_NONE) + off::QUESTION_H + 2 * lst::ROW_H + 2;   // lsBidAskStats' reserve (question + 2 strips)
+        const int px = off::pairPx(h, reserve);
+        CHECK(px * 2 >= h && px * 10 <= h * 9);                                     // the tallest bar = 50 - 90% of the pane
+        double mn = 0, mx = 0; off::axisFor(800, h, px, mn, mx);
+        CHECK(mx >= 800 / 0.9 - 1 && mx <= 800 / 0.5 + 1);                          // axis top ~ the tallest bar / (0.5 - 0.9): never 20,000 vs 800-lot bars
+    }
+    CHECK(off::pairPx(100, 90) >= 50);                                              // even a huge reserve keeps half the pane
+    CHECK(lst::ROW_H == 11 && lst::SUB_ROWS == 1 && std::string(lst::VERSION).compare(0, 5, "1.1.0") == 0);
+    imp::Params P; P.fromFile = true; off::InfoRow r;
+    CHECK(off::impliedRow(P, 1000, 0, r) && r.wide && r.label == "Implied: 0% of volume" && r.v[0].empty() && r.v[1].empty());
+    off::Info I; I.twoCol = true; I.colHead[0] = "Buyers"; I.colHead[1] = "Sellers";
+    off::InfoRow a; a.label = "Lots"; a.v[0] = "120 (1.0x)"; a.v[1] = "80 (0.7x)"; I.rows.push_back(a); I.rows.push_back(r);
+    const off::TextW M = [](const std::string& s, int, bool) { return (int)s.size() * 7; };
+    const off::NumGeom n1 = off::numGeom(I, 400, M);
+    off::Info J = I; J.rows.pop_back(); const off::NumGeom n0 = off::numGeom(J, 400, M);
+    CHECK(n1.lw == n0.lw && n1.vw == n0.vw);                                        // the wide row never widens the label / value columns
+    CHECK(n1.W >= (int)r.label.size() * 7 + 2 * off::BOX_PAD);                      // ... and the box fits it on one line
+}
 int main(int argc, char** argv) {
+    fixBuild();
     aggBeats(); aggSpikeRule(); aggNoRepaint(); aggLook(); aggFacts();
     bookNetRule(); bookSeries(); bookLook(); bookFacts();
     marketState();

@@ -41,7 +41,7 @@ int main() {
     for (int k = 0; k <= 15; ++k) h.bars.push_back(bar(keyOf(k), 7000.0f, 7000.5f, 6999.5f, 7000.0f));
     Ind* p = make(); p->calc(0); p->draw(); p->calc(0);
     BASState* S = p->testState();
-    CHECK(S && std::string(bas::QUESTION) == "Who is aggressive?" && std::string(bas::VERSION) == "1.29.0" && std::string(BAS_VERSION) == "1.29.0", "lsBidAskStats 1.29.0, the question 'Who is aggressive?'");
+    CHECK(S && std::string(bas::QUESTION) == "Who is aggressive?" && std::string(bas::VERSION) == "1.30.0" && std::string(BAS_VERSION) == "1.30.0", "lsBidAskStats 1.29.0, the question 'Who is aggressive?'");
     // the Big Lot pool (S20 / S10 / S5): 3 past RTH sessions and 3 overnight ones of a different size
     {   llp::LogDist d; for (int k = 0; k < 200; ++k) d.addN(20, 1); for (int k = 0; k < 20; ++k) d.addN(100, 1); for (int k = 0; k < 10; ++k) d.addN(150, 1); for (int k = 0; k < 5; ++k) d.addN(220, 1);
         llp::LogDist n; for (int k = 0; k < 200; ++k) n.addN(15, 1); for (int k = 0; k < 20; ++k) n.addN(40, 1); for (int k = 0; k < 10; ++k) n.addN(60, 1); for (int k = 0; k < 5; ++k) n.addN(90, 1);

@@ -26,7 +26,8 @@
 
 namespace rsl {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0) the host adds the news / settle "?" and the feed check (NewsWindow.h); the stage logic is unchanged
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-10-22 evening fix build: "NOW HIGH stage 2 failed chain Q" - stages climbed on queue letters alone) a Q steps (stage 2) only when its anchor (the "tk<N>" token lsLiquidityProfile 0.51.0 writes) is AT the attempt's own extreme: within max(4 ticks, 0.3 ATR); a Q without an anchor or elsewhere = hover only
+   // (1.1.0) the host adds the news / settle "?" and the feed check (NewsWindow.h); the stage logic is unchanged
 enum { LOW = lst::LOW, HIGH = lst::HIGH };
 enum Status { NONE = 0, FORMING = 1, FAILED = 2, COMPLETE = 3, EXPIRED = 4 };
 static const int EXT_BARS = 5, ATR_BARS = 14, IDLE_BARS = 5, MAX_BARS = 30, FAIL = -1;
@@ -65,6 +66,25 @@ inline int stepOf(const Ev& e, int cur) {
     if (e.pane == lst::DEF && (c == "L" || c == "X") && cur < NEED_RETEST) return 0;
     if (e.pane == lst::DEF && c == "B" && st == FAIL && cur < NEED_B) return 0;
     return st;
+}
+
+// (1.2.0) the Q's anchor in ticks from its key numbers ("held 120% orig 97% q0 130 tk30826"); 0 = not given (older records)
+inline long long qAnchorOf(const std::string& nums) {
+    const size_t p = nums.rfind(" tk"); if (p == std::string::npos) return 0;
+    long long v = 0; size_t k = p + 3; if (k >= nums.size()) return 0;
+    for (; k < nums.size(); ++k) { const char c = nums[k]; if (c < '0' || c > '9') return 0; v = v * 10 + (c - '0'); if (v > 4000000000000LL) return 0; }
+    return v;
+}
+inline std::string numsShown(const std::string& n) { const size_t p = n.rfind(" tk"); return p != std::string::npos && qAnchorOf(n) > 0 ? n.substr(0, p) : n; }
+inline long long qTolTicks(double atr) { return std::max(4LL, (long long)std::llround(0.3 * atr)); }
+// (1.2.0) the step of a letter for THIS attempt: a queue Q only at the attempt's own extreme
+inline int stepFor(const Ev& e, int cur, long long ext, double atr) {
+    if (e.pane == lst::QUE) {
+        if (e.l.code != "Q") return 0;
+        const long long at = qAnchorOf(e.l.nums); if (at <= 0) return 0;
+        return std::llabs(at - ext) <= qTolTicks(atr) ? 2 : 0;
+    }
+    return stepOf(e, cur);
 }
 
 // one candle's step (what the pane draws and records)
@@ -109,10 +129,10 @@ inline std::vector<Step> run(const std::vector<Bar>& b, const std::multimap<long
             std::vector<const Ev*> v = here[sd];
             std::stable_sort(v.begin(), v.end(), [](const Ev* a, const Ev* b) { const int x = stageOf(*a), y = stageOf(*b); return (x == FAIL ? 99 : x) < (y == FAIL ? 99 : y); });
             for (const Ev* e : v) {
-                const int st = stepOf(*e, cur); if (st > 0) cur = std::max(cur, st);
+                const int st = stepFor(*e, cur, A.ext, atr); if (st > 0) cur = std::max(cur, st);
                 const std::string tag = e->l.code + (st == FAIL ? "!" : st == 0 ? "*" : "");
                 chainPart += (chainPart.empty() ? "" : " ") + tag;
-                hereTxt += (hereTxt.empty() ? "" : "; ") + e->l.code + (e->l.nums.empty() ? std::string() : " " + e->l.nums) + (st == 0 ? " (hover only)" : st == FAIL ? " (failed it)" : "");
+                hereTxt += (hereTxt.empty() ? "" : "; ") + e->l.code + (e->l.nums.empty() ? std::string() : " " + numsShown(e->l.nums)) + (st == 0 ? " (hover only)" : st == FAIL ? " (failed it)" : "");
             }
         };
         if (!b[i].ok) { out.push_back(s); continue; }
@@ -144,7 +164,7 @@ inline std::vector<Step> run(const std::vector<Bar>& b, const std::multimap<long
             bool failed = false; int m = A.stage;
             {   std::vector<const Ev*> v = here[A.side];             // the candle's letters in step order: A before H before L / X
                 std::stable_sort(v.begin(), v.end(), [](const Ev* a, const Ev* b) { const int x = stageOf(*a), y = stageOf(*b); return (x == FAIL ? 99 : x) < (y == FAIL ? 99 : y); });
-                for (const Ev* e : v) { const int st = stepOf(*e, m); if (st == FAIL) failed = true; else m = std::max(m, st); } }
+                for (const Ev* e : v) { const int st = stepFor(*e, m, A.ext, atr); if (st == FAIL) failed = true; else m = std::max(m, st); } }
             if (failed && m >= 1) {                                  // (the stage this candle reached before the warning)
                 A.stage = m;
                 const std::string fwhy = "the defenders' warning letter (" + part + ")";

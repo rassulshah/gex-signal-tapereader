@@ -47,7 +47,7 @@ int main() {
     h.bars = day(); h.now = keyOf(29) + 5;                                 // 5 s after candle 28 closed... the forming bar is 29
     Ind* p = make(); p->calc(0); p->draw();
     RSState* S = p->stateFor();
-    CHECK(S && std::string(rsl::VERSION) == "1.1.0" && std::string(RS_VERSION) == "1.1.0" && std::string(rsset::PLUGIN_VERSION) == "1.1.0" && h.flags == (unsigned long)(POST_DRAWING | NO_UI | TRACK_MOUSE), "lsReversalStage 1.0.0, its own pane, mouse tracked");
+    CHECK(S && std::string(rsl::VERSION) == "1.2.0" && std::string(RS_VERSION) == "1.2.0" && std::string(rsset::PLUGIN_VERSION) == "1.2.0" && h.flags == (unsigned long)(POST_DRAWING | NO_UI | TRACK_MOUSE), "lsReversalStage 1.0.0, its own pane, mouse tracked");
     const std::string r1 = readAll(rec);
     std::vector<std::string> lines; { std::stringstream ss(r1); std::string ln; while (std::getline(ss, ln)) lines.push_back(ln); }
     CHECK(lines.size() == 29, ("29 closed candles decided (the forming one never): " + std::to_string(lines.size())).c_str());

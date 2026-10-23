@@ -29,10 +29,11 @@ int main() {
     mock::feed.push(0, 0, 80.10f, 40, (RTDATE)(t0 - 150), 7001);
     mock::feed.push(0, 0, 80.08f, 5, (RTDATE)(t0 - 150), 7002);
     mock::feed.push(0, 1, 79.95f, 30, (RTDATE)(t0 - 150), 7003);
+    for (int k = 0; k < 21; ++k) mock::feed.push(0, 1, (float)(79.97 - 0.01 * (k % 6)), 3, (RTDATE)(t0 - 150), 7100 + k);   // (0.51.0 / LmtZones 1.1.0) the book: 3-lot bids -> median 3 -> LMT >= 9
     LiquidityProfile* p = static_cast<LiquidityProfile*>(CreateExtension());
     for (int s = 0; s < 6; ++s) { h.now = t0 - 100 + s; p->calc(0); usleep(5000); }
     LQState* S = static_cast<LQState*>(h.data); if (!S) { std::printf("no state\n"); return 1; }
-    CHECK(S->lz.book.size() == 3, "the zone engine keeps its own book from the chart's order feed");
+    CHECK(S->lz.book.size() == 24, "the zone engine keeps its own book from the chart's order feed");
     CHECK(S->lz.zones.empty(), "no zone before a bar closes");
     { mock::Bar b; b.time = t0 + 180; b.open = b.high = b.low = b.close = 80.03f; b.rows.push_back(mock::Price(80.03f, 1, 1, 2)); h.bars.push_back(b); }   // bar 30 (end t0) closes
     for (int s = 0; s < 4; ++s) { h.now = t0 + 5 + s; p->calc(0); usleep(5000); }
@@ -41,7 +42,8 @@ int main() {
     CHECK(offer >= 0 && S->lz.zones[(size_t)offer].kind == lmz::K_NEAR && S->lz.zones[(size_t)offer].conf && S->lz.zones[(size_t)offer].drawn, "CL: the 40-lot offer on the gamma level is a drawn zone with the diamond");
     CHECK(bid >= 0 && !S->lz.zones[(size_t)bid].drawn, "the bid is tracked (LMT columns) but not drawn");
     bool small = false; for (auto& z : S->lz.zones) if (z.oid == 7002) small = true;
-    CHECK(!small, "the 5-lot offer is under S20: no zone");
+    CHECK(!small, "the 5-lot offer is under 3x the median (9 lots): no zone");
+    CHECK(S->lz.medLots == 3 && S->lz.threshold() == 9, "(0.51.0) LMT >= 3x the live median resting order (3) = 9 lots, not the S20");
     h.draws.clear(); p->draw();
     const COLOR RED = 0xEF4444, GAM = 0x6B7280;
     const int yOrd = (int)(h.paneBottom - (80.10f - h.priceBase) * h.pxPer);
@@ -72,7 +74,7 @@ int main() {
     const std::string rec = readAll(flex + "\\LiquidityProfile\\CL-CLEX26-180-lmtzones-" + std::to_string(S->lzSession) + ".csv");
     CHECK(rec.find("\nZ|") != std::string::npos && rec.find("|7001|") != std::string::npos, "the zone is recorded (Z line)");
     const std::string st = readAll(flex + "\\LiquidityProfile.status-CL-180.txt");
-    CHECK(st.find("LMT_ZONES,1.0.0,on") != std::string::npos, "status: LMT_ZONES line");
+    CHECK(st.find("LMT_ZONES,1.1.0,on") != std::string::npos && st.find("LMT rule >= 3x the median resting order") != std::string::npos && st.find("= 9 lots") != std::string::npos, "status: LMT_ZONES line with the live-median rule");
     CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0, "status VERSION = LQ_VERSION (compared, never typed)");
     // the order is pulled -> X, the zone ends once
     mock::feed.push(2, 0, 80.10f, 40, (RTDATE)(t0 + 30), 7001);

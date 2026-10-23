@@ -56,7 +56,7 @@
 #pragma comment(lib, "user32.lib")   // GetCursorPos / WindowFromPoint (the hover stops when the cursor leaves the pane)
 #endif
 
-#define RS_VERSION "1.1.0"   // 1.1.0 (2026-10-22 evening, Rassul approved 17:39 CT): a step decided inside a news / settle window gets a "?" over its column; a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = recorded only, not drawn (NewsWindow.h)
+#define RS_VERSION "1.2.0"   // 1.2.0 (2026-10-22 evening fix build) ReversalStageLogic 1.2.0: a queue Q steps only at the attempt's own extreme (its tk anchor within max(4 ticks, 0.3 ATR)); LetterStrips 1.1.0 //    // 1.1.0 (2026-10-22 evening, Rassul approved 17:39 CT): a step decided inside a news / settle window gets a "?" over its column; a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = recorded only, not drawn (NewsWindow.h)
 // 1.0.0:   // keep equal to rsl::VERSION, rsset::PLUGIN_VERSION and the setVersion literal below
 
 static const COLOR C_GRID = 0x00374151, C_LABEL = 0x009CA3AF, C_TEXT = 0x00E5E7EB, C_BOX_BG = 0x000F1520, C_TIP_BG = 0x00111827;
@@ -418,6 +418,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);
     p->setDescription("LRA Reversal Stage: which stage is the local pivot in? A staircase per closed candle: 1 Attack, 2 Absorbed, 3 Exhausted, 4 Turn, 5 Re-test, 6 Expansion - green = a low pivot being built, red = a high pivot, a step dropping back = the attempt failed. Built from the letters lsBidAskStats and lsBookFlow record; decided once per closed candle, never repainted. Odds: not proven yet.");
-    p->setVersion("1.1.0");   // RS_VERSION
+    p->setVersion("1.2.0");   // RS_VERSION
     return p;
 }
