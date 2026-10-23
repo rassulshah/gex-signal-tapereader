@@ -9,7 +9,7 @@
 //   1 TRAP       (liquidity)  P stacking (defenders' book), Q queue held BEFORE contact.  Fail: W / B (floor pulled before tested).
 //   2 COLLISION  (execution)  an attack S / K / L at the zone AND a result A / Q held after contact, on the same candle or within
 //                             1 candle.  Step 1 alone never confirms.  Fail: Q! (the queue at the extreme broke / drained).
-//   3 TRAPPED    (fuel)       E pace fading, Tr, G, D (MBO CVD divergence within 5 candles of the collision, at the gate), or the
+//   3 TRAPPED    (fuel)       E pace fading, Tr, G, D (MBO CVD divergence within 5 candles of the collision, its low within 1 ATR of the extreme), or the
 //                             attackers underwater: close vs their average fill >= 0.25 ATR ("sellers -6 ticks, 1,840 lots").
 //                             Fail: a new extreme beyond the floor.
 //   4 RELEASE    (the turn)   H defenders hit back or R reclaim; then L re-test held.  Fail: X.
@@ -399,7 +399,7 @@ inline std::vector<Step> run(const std::vector<Bar>& b, const std::multimap<long
                         else if (a.anchor && ecause != a.anchor) { a.flags |= F_LINEAGE_REJECTED; why = "different defended cause"; }
                         else {
                             if (!a.anchor) a.anchor = ecause;
-                            if (!(a.flags & F_ATTACK) && a.stage < TRAP) { a.stage = TRAP; a.flags |= F_TRAP_QUEUE; storyAdd(a.story, 0, "Q " + numsShown(e->l.nums)); }
+                            if (!(a.flags & F_ATTACK) && a.stage < COLLISION) { a.stage = std::max(a.stage, (int)TRAP); a.flags |= F_TRAP_QUEUE; storyAdd(a.story, 0, "Q " + numsShown(e->l.nums)); }   // before contact = the trap
                             else { a.resKey = b[i].key; a.flags |= F_DEFENSE_QUEUE; }
                             applied = true;
                         }
@@ -447,7 +447,7 @@ inline std::vector<Step> run(const std::vector<Bar>& b, const std::multimap<long
                     if (a.stage < COLLISION) why = "trapped needs a collision first";
                     else { a.stage = std::max(a.stage, (int)TRAPPED); a.flags |= c == "G" ? F_WEAKEN_G : F_WEAKEN_TR; storyAdd(a.story, 2, c); applied = true; }
                 } else if (e->pane == lst::ATK && c == "D") {
-                    const long long near = std::max(qTolTicks(atr), (long long)std::llround(0.5 * atr));
+                    const long long near = std::max(qTolTicks(atr), (long long)std::llround(atr));   // the higher low sits above the extreme: within 1 ATR of it (ES 10-22 10:45: 26 ticks, ATR 28)
                     if (a.stage < COLLISION) why = "D needs a collision first";
                     else if (a.collAge < 0 || a.age - a.collAge > D_BARS) why = "D more than 5 candles after the collision";
                     else if (e->m.basis != rse::MBO || !knownPrice(*e) || std::llabs(e->m.priceTicks - a.ext) > near) why = "D not at the gate level";

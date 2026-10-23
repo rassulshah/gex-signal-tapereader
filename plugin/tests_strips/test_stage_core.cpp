@@ -144,7 +144,16 @@ int main() {
         const rsl::Step dls = rsl::run(bars(), dl)[16];
         CHECK(!(dls.flags & rsl::F_CVD_DIV) && dls.here.find("more than 5 candles") != std::string::npos);
         std::multimap<long long, rsl::Ev> df = nv0; add(df, event(12, lst::ATK, "D", keyOf(12), 1010, rse::MBO, rse::NA, 1240));
-        CHECK(!(rsl::run(bars(), df)[12].flags & rsl::F_CVD_DIV));
+        CHECK(!(rsl::run(bars(), df)[12].flags & rsl::F_CVD_DIV));          // 20 ticks above the extreme > 1 ATR
+        std::multimap<long long, rsl::Ev> dn = nv0; add(dn, event(12, lst::ATK, "D", keyOf(12), 994, rse::MBO, rse::NA, 1240));
+        CHECK(rsl::run(bars(), dn)[12].flags & rsl::F_CVD_DIV);              // a higher low 4 ticks up = within 1 ATR
+        // Q before contact + P = both in the trap; the later attack + A = the collision (ES 10-22 10:42 order)
+        std::multimap<long long, rsl::Ev> tq; rsl::Ev p1 = event(10, lst::DEF, "P", keyOf(10), 990); p1.l.nums = "2.3x"; p1.received = 1; add(tq, p1);
+        rsl::Ev q1 = event(10, lst::QUE, "Q", keyOf(10), 990, rse::MBO, rse::HELD); q1.l.nums = "143 (2.4x)"; q1.received = 2; add(tq, q1);
+        rsl::Ev k1 = event(10, lst::ATK, "K", keyOf(10), 990, rse::MBO, rse::NA, 300); k1.received = 3; add(tq, k1);
+        rsl::Ev a1 = event(10, lst::DEF, "A", keyOf(10), 990, rse::MBO, rse::NA, 200); a1.received = 4; add(tq, a1);
+        const rsl::Step tqs = rsl::run(bars(), tq)[10];
+        CHECK(rsl::storyPart(tqs.story, 0) == "bids 2.3x, Q 143 (2.4x)" && rsl::storyPart(tqs.story, 1) == "300 sold, held (A)" && tqs.stage == rsl::COLLISION);
         std::multimap<long long, rsl::Ev> d0; add(d0, event(12, lst::ATK, "D", keyOf(12), 991, rse::MBO, rse::NA, 1240));
         CHECK(rsl::run(bars(), d0)[12].stage == 0);
         // the attackers underwater: avg fill 990.00, close 993 = 3 ticks >= 0.25 ATR
