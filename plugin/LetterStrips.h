@@ -36,13 +36,16 @@
 
 namespace lst {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // 1.1.0: compact strips (ROW_H 11, one row per strip)
 enum { LOW = 0, HIGH = 1 };                    // the pivot being built (= dt::LOW / dt::HIGH): LOW = a low pivot (green defenders)
 enum { GREEN = 0, RED = 1 };                   // the colour of the side that acts: buyers green, sellers red
 enum Pane { ATK = 0, DEF = 1, QUE = 2 };       // QUE = the queue meter's letters, drawn on the Defense pane's Holding strip
 static const int STRIPS = 2;
-static const int ROW_H = 22;                   // one strip: two half-rows of 11 px (the letters are 8 pt)
-static const int SUB_H = ROW_H / 2;
+// (1.1.0, 2026-10-22 evening fix build: the 46 px strip band squashed the bars on his ~100 px panes) COMPACT strips: ONE 11 px row per strip
+// (8-pt letters); a letter that would touch the one before it shifts right a little or is not drawn (its hover stays on the candle)
+static const int ROW_H = 11;                   // one strip = one 11 px row (the letters are 8 pt)
+static const int SUB_ROWS = 1;                 // (1.0.0 had 2 half-rows of 11 px)
+static const int SUB_H = ROW_H / SUB_ROWS;
 static const int LABEL_W = 74;                 // the strip label column at the pane's left ("Turn & re-test" at 8 pt)
 static const int GAP = 1;                      // letters never touch: >= 1 px between rectangles in the same half-row
 
@@ -113,11 +116,11 @@ inline std::vector<Placed> placeStrip(const std::vector<Item>& it, int lo, int h
     for (size_t k = 0; k < it.size(); ++k) {
         const int w = std::max(1, it[k].w); const int l0 = it[k].xc - w / 2;
         Placed p; bool done = false;
-        for (int sub = 0; sub < 2 && !done; ++sub) {
+        for (int sub = 0; sub < SUB_ROWS && !done; ++sub) {
             if (l0 >= lastR[sub] + GAP + 1 && l0 >= lo && l0 + w <= hi) { p.l = l0; p.sub = sub; done = true; }
         }
         if (!done) {                                         // shift right a little on the half-row with the most room
-            const int sub = lastR[0] <= lastR[1] ? 0 : 1; const int l = std::max(l0, std::max(lo, lastR[sub] + GAP + 1));
+            const int sub = (SUB_ROWS > 1 && lastR[1] < lastR[0]) ? 1 : 0; const int l = std::max(l0, std::max(lo, lastR[sub] + GAP + 1));
             if (l - l0 <= std::max(2, w / 3) && l + w <= hi) { p.l = l; p.sub = sub; done = true; }
         }
         if (done) { p.r = p.l + w; p.drawn = true; lastR[p.sub] = p.r; }

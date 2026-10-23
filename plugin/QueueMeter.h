@@ -38,9 +38,10 @@
 #include <unordered_map>
 #include <vector>
 #include "NewsWindow.h"   // (1.2.0) the news / settle window and the feed check for the call
+#include "SwingRef.h"     // (1.3.0) the pivots = the last-3 intact swings of the 1-bar ZigZag (the St / Sr rule)
 
 namespace qm {
-static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-10-22 evening, Rassul 17:55 CT "more readable"): the badge reads "G1  Q 76%" (two spaces after the name, a space after Q; unlabelled "Q 41%"), NO "?" on the badge in any market (NQ / GC still draw the red call only); a call made inside a news / settle window says so in its hover, a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = the call is recorded only (no outline) - NewsWindow.h;   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE-2026-10-22.md): the 10-s CALL (red < 40% left / green >= 100% + holding) per market, C lines; the candle-close Q is a record only
+static const char* const VERSION = "1.3.0";   // 1.3.0 (2026-10-22 evening fix build, live records 19:09-19:48 CT: "held 1114% q0 7", live 397% / 999%, ES 29 / NQ 30 Q rows in 45 min): the BASE = max(q0, the NORMAL queue there) - normal = this session's median q0 at touched levels (5+ tests), else the median resting lots per tick within 1 ATR x the zone's ticks; NO percent and NO call while the queue is under the normal ("building"); percent shown capped "200%+"; the badge reads "G1  Q 143 (2.4x)" (lots + the ratio to the normal); Q rows (record + Holding strip) only at key / MenthorQ levels and CONFIRMED pivots (SwingRef.h last-3 intact swings of the session's 1-bar ZigZag), one per level per touch, none within 1 candle of the last one at that level, none for a test that never reached the normal;   // 1.2.0 (2026-10-22 evening, Rassul 17:55 CT "more readable"): the badge reads "G1  Q 76%" (two spaces after the name, a space after Q; unlabelled "Q 41%"), NO "?" on the badge in any market (NQ / GC still draw the red call only); a call made inside a news / settle window says so in its hover, a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = the call is recorded only (no outline) - NewsWindow.h;   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE-2026-10-22.md): the 10-s CALL (red < 40% left / green >= 100% + holding) per market, C lines; the candle-close Q is a record only
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -156,7 +157,8 @@ inline std::string callOdds(const std::string& m, int call) {
 // the live numbers of one test (what the badge and its hover show)
 struct Live {
     int id = 0, side = BID, kind = K_LEVEL; Tick anchor = 0, lo = 0, hi = 0; std::string name;
-    long long t0 = 0, q0 = 0, q = 0; double pct = 0;          // queue left = q / q0
+    long long t0 = 0, q0 = 0, q = 0; double pct = 0;          // queue left = q / base (1.3.0; was q / q0)
+    long long base = 0, normQ = 0; bool pctOk = false;        // (1.3.0) base = max(q0, normal queue); pctOk = the queue reached the normal (else "building": no percent, no call)
     double origPct = -1;                                      // originals still resting (-1 = no original order known)
     double eat = 0, pull = 0, refill = 0, norm = 0;           // lots / s (norm = this slot's normal eaten lots / s, 0 = unknown)
     double tte = -1;                                          // seconds to empty, -1 = holding (refills that stay >= drain)
@@ -180,6 +182,7 @@ public:
         double pctAtDecision = 0, origAtDecision = -1;
         int call = -1; long long tCall = 0;   // (1.1.0) the 10-s call, decided once
         Live atBreak; bool haveBreak = false;   // the numbers the moment it broke (what the Q record keeps for a break)
+        long long normQ = 0, base = 0; bool established = false;   // (1.3.0) the normal queue at the start; base latched once q >= normal
     };
     std::unordered_map<long long, Ord> book;
     std::map<Tick, long long> lv[2];          // resting lots per price per side
@@ -202,6 +205,8 @@ public:
     std::deque<Bar> bars;
     long long lastBarMs = 0;
     long long nUnknownFill = 0, nEvents = 0, nStarted = 0;
+    // (1.3.0) the session's 1-bar ZigZag (SwingRef.h) -> confirmed intact pivots; q0 at touched levels (the normal queue); Q row debounce
+    swg::ZigZag zz; std::vector<long long> q0Seen; std::map<Tick, long long> lastQAt; long long nThin = 0, nDebounced = 0, nNotAnchor = 0;
 
     Engine() { resetNorms(); }
     void resetNorms() { for (int i = 0; i < 48; ++i) eatLots[i][0] = eatLots[i][1] = eatSecs[i][0] = eatSecs[i][1] = 0; lastEatSec[0] = lastEatSec[1] = -1; }
@@ -236,7 +241,7 @@ public:
         if (t > lastT) lastT = t;
         if (!tests.empty()) stepCalls(t);   // (1.1.0) before this event: the call sees the book as it was at its moment
         const long long ses = sessionOf(t);
-        if (session != ses) { if (session >= 0) { tests.clear(); pivots.clear(); minQ.clear(); maxQ.clear(); } session = ses; resetNorms(); }   // candles kept (ATR)
+        if (session != ses) { if (session >= 0) { tests.clear(); pivots.clear(); minQ.clear(); maxQ.clear(); q0Seen.clear(); lastQAt.clear(); } session = ses; resetNorms(); }   // candles kept (ATR)
         std::unordered_map<long long, Ord>::iterator it = book.find(oid);
         if (act == FILL) {
             if (it == book.end()) { ++nUnknownFill; if (px > 0) trade(px, t); return; }
@@ -290,7 +295,7 @@ public:
             if (T.call >= 0 || now < T.t0 + (long long)rule.callAtS * 1000) continue;
             T.tCall = now; int c = 2;
             const Live v = snapshot(T, now);
-            if (!T.broke && !T.left) {
+            if (!T.broke && !T.left && v.pctOk) {   // (1.3.0) no call while the queue is under the normal
                 if (v.pct < rule.redPct) c = 0;
                 else if (rule.greenShow && v.pct >= rule.greenPct && (!rule.greenNeedsHolding || v.tte < 0)) c = 1;
             }
@@ -326,6 +331,8 @@ public:
                 T.contact = p <= T.hi + P.breakTicks && p >= T.lo - zoneW();
             }
         }
+        // (1.3.0) the base latches once the queue reaches the normal (or started at / over it)
+        for (size_t i = 0; i < tests.size(); ++i) { Test& T = tests[i]; if (!T.established && T.normQ > 0 && (T.q0 >= T.normQ || zoneSum(T.side, T.lo, T.hi) >= T.normQ)) T.established = true; }
         // drop decided tests far away / long done
         for (size_t i = tests.size(); i-- > 0;) {
             const Test& T = tests[i];
@@ -379,20 +386,11 @@ public:
             for (size_t i = bars.size() - 1; i >= 1 && n < P.atrN; --i, ++n) { const Bar& x = bars[i]; const Bar& pv = bars[i - 1]; s += std::max(x.h, pv.c) - std::min(x.l, pv.c); }
             if (n > 0) atr = s / n;
         }
-        // pivots: candle i with a lower low (higher high) than the pivotL before and the pivotR after it
-        const int L = P.pivotL, R = P.pivotR, n = (int)bars.size();
-        if (n >= L + R + 1 && tick > 0) {
-            const int i = n - 1 - R; const Bar& x = bars[(size_t)i];
-            bool lowP = true, highP = true;
-            for (int j = i - L; j <= i + R; ++j) { if (j == i) continue; if (!(x.l < bars[(size_t)j].l)) lowP = false; if (!(x.h > bars[(size_t)j].h)) highP = false; }
-            if (lowP) addPivot(BID, x.l);
-            if (highP) addPivot(ASK, x.h);
-        }
-        // a pivot price closed through is no longer defended
-        for (size_t k = pivots.size(); k-- > 0;) {
-            const Tick px = pivots[k].px; const Tick ct = tick > 0 ? (Tick)std::llround(c / tick) : 0;
-            if ((pivots[k].side == BID && ct < px - P.breakTicks) || (pivots[k].side == ASK && ct > px + P.breakTicks)) pivots.erase(pivots.begin() + (long)k);
-        }
+        // (1.3.0) pivots = the CONFIRMED swings of the session's 1-bar ZigZag (SwingRef.h, from the 17:00 CT session start), the last 3
+        // intact per side by the St / Sr rule (1 back always; 2 back if beyond 1 back; 3 back if beyond both); a swing traded through is gone
+        if (tick > 0) { swg::ZBar zb; zb.t = endMs; zb.day = ses; zb.rth = true; zb.o = (Tick)std::llround((bars.size() >= 2 ? bars[bars.size() - 2].c : c) / tick);
+            zb.h = (Tick)std::llround(h / tick); zb.l = (Tick)std::llround(l / tick); zb.c = (Tick)std::llround(c / tick); zz.add(zb); }
+        pivots = swingPivots();
         int made = 0;
         for (size_t i = 0; i < tests.size(); ++i) {
             Test& T = tests[i];
@@ -411,6 +409,12 @@ public:
             const std::string k = key(T.side, T.anchor, T.startBar);
             if (keys.count(k)) continue;
             keys.insert(k);
+            // (1.3.0) the Q row only at a key / MenthorQ level or a confirmed pivot, only once the queue reached the normal, one per level
+            // per touch and none within one candle of the last Q at that level (either side) - no queue echo on the strips / stages
+            if (T.kind == K_DEFENDED) { ++nNotAnchor; continue; }
+            if (!T.established) { ++nThin; continue; }
+            if (debounced(T.anchor, endMs)) { ++nDebounced; continue; }
+            lastQAt[T.anchor] = endMs;
             rows.push_back(recordLine(T, endMs, v));
             ++made;
         }
@@ -424,7 +428,10 @@ public:
     }
     Live snapshot(const Test& T, long long now) const {
         Live v; v.id = T.id; v.side = T.side; v.kind = T.kind; v.anchor = T.anchor; v.lo = T.lo; v.hi = T.hi; v.name = T.name;
-        v.t0 = T.t0; v.q0 = T.q0; v.q = zoneSum(T.side, T.lo, T.hi); v.pct = T.q0 > 0 ? (double)v.q / (double)T.q0 : 0;
+        v.t0 = T.t0; v.q0 = T.q0; v.q = zoneSum(T.side, T.lo, T.hi); v.normQ = T.normQ;
+        // (1.3.0) base = max(q0, the normal queue); the percent only once the queue reached the normal (latched by trade() / established)
+        v.pctOk = T.established || (T.normQ > 0 && v.q >= T.normQ) || (T.normQ > 0 && T.q0 >= T.normQ);
+        v.base = std::max(T.q0, T.normQ); v.pct = v.pctOk && v.base > 0 ? (double)v.q / (double)v.base : 0;
         v.contact = T.contact; v.broke = T.broke; v.left = T.left; v.decided = T.decided; v.call = T.call; v.mark = rule.mark;
         if (T.origSum > 0) {
             long long left = 0;
@@ -454,7 +461,7 @@ public:
         v.why = (v.refill > 0 && v.refill >= v.eat + v.pull) ? "refilling" : (v.pull >= v.eat ? "pulled" : "eaten");
         if (v.eat + v.pull + v.refill <= 0) v.why = "quiet";
         v.warn = T.origSum > 0 && v.origPct <= 0.005;
-        v.high = T.broke || (v.tte >= 0 && v.tte <= P.riskTte) || v.pct < P.riskPct;
+        v.high = T.broke || (v.tte >= 0 && v.tte <= P.riskTte) || (v.pctOk && v.pct < P.riskPct);
         return v;
     }
 
@@ -484,6 +491,46 @@ public:
         // a live test whose key is recorded is already decided (restart in the middle of a test)
         for (size_t i = 0; i < tests.size(); ++i) if (tests[i].startBar > 0 && keys.count(key(tests[i].side, tests[i].anchor, tests[i].startBar)) && tests[i].decided < 0) tests[i].decided = 2;
         return n;
+    }
+
+    // (1.3.0) the normal queue of a zone: this session's median q0 at touched levels / pivots (5+ tests), else the median resting lots per
+    // tick on that side within 1 ATR of the anchor x the zone's ticks (5+ non-empty ticks); 0 = unknown (no percent, no call)
+    long long normalQueue(int side, Tick anchor, Tick lo, Tick hi) const {
+        if (q0Seen.size() >= 5) { std::vector<long long> v(q0Seen); std::nth_element(v.begin(), v.begin() + (long)(v.size() / 2), v.end()); return std::max<long long>(1, v[v.size() / 2]); }
+        const Tick r = ticksOf(1.0); std::vector<long long> per;
+        for (std::map<Tick, long long>::const_iterator it = lv[side].lower_bound(anchor - r); it != lv[side].end() && it->first <= anchor + r; ++it) if (it->second > 0) per.push_back(it->second);
+        if (per.size() < 5) return 0;
+        std::nth_element(per.begin(), per.begin() + (long)(per.size() / 2), per.end());
+        return std::max<long long>(1, per[per.size() / 2] * (long long)(hi - lo + 1));
+    }
+    // (1.3.0) one Q per level per touch: none within one candle (the last candle's length) of the last Q at this level or one within the zone
+    bool debounced(Tick anchor, long long endMs) const {
+        const long long bar = bars.size() >= 2 ? std::max(1000LL, bars.back().endMs - bars[bars.size() - 2].endMs) : 180000LL;
+        const Tick w = zoneW();
+        for (std::map<Tick, long long>::const_iterator it = lastQAt.begin(); it != lastQAt.end(); ++it) {
+            const Tick d = it->first > anchor ? it->first - anchor : anchor - it->first;
+            if (d <= w && endMs - it->second <= bar) return true;
+        }
+        return false;
+    }
+    // (1.3.0) the confirmed intact swings of the ZigZag, the last 3 per side by the St / Sr rule
+    std::vector<Anchor> swingPivots() const {
+        std::vector<Anchor> out; if (zz.bars.empty()) return out;
+        for (int dir = -1; dir <= 1; dir += 2) {
+            std::vector<const swg::Swing*> sw;
+            for (size_t i = zz.swings.size(); i-- > 0 && sw.size() < 3;) if (zz.swings[i].dir == dir) sw.push_back(&zz.swings[i]);
+            for (size_t k = 0; k < sw.size(); ++k) {
+                bool counts = k == 0;
+                if (k == 1) counts = dir < 0 ? sw[1]->px < sw[0]->px : sw[1]->px > sw[0]->px;
+                if (k == 2) counts = dir < 0 ? (sw[2]->px < sw[0]->px && sw[2]->px < sw[1]->px) : (sw[2]->px > sw[0]->px && sw[2]->px > sw[1]->px);
+                if (!counts) continue;
+                bool intact = true;   // no closed candle after the pivot candle traded through it
+                for (size_t j = (size_t)sw[k]->idx + 1; j < zz.bars.size() && intact; ++j) if (dir < 0 ? zz.bars[j].l < sw[k]->px : zz.bars[j].h > sw[k]->px) intact = false;
+                if (!intact) continue;
+                Anchor a; a.px = sw[k]->px; a.side = dir < 0 ? BID : ASK; a.kind = K_PIVOT; out.push_back(a);
+            }
+        }
+        return out;
     }
 
 private:
@@ -547,6 +594,9 @@ private:
         Test T; T.id = nextId++; T.side = side; T.kind = kind; T.anchor = anchor; T.lo = lo; T.hi = hi; T.name = name; T.t0 = t;
         T.q0 = zoneSum(side, lo, hi);
         if (T.q0 <= 0) return;
+        T.normQ = normalQueue(side, anchor, lo, hi);                           // (1.3.0) the normal queue for this zone
+        T.established = T.normQ > 0 && T.q0 >= T.normQ;
+        if (kind != K_DEFENDED) { q0Seen.push_back(T.q0); if (q0Seen.size() > 400) q0Seen.erase(q0Seen.begin()); }
         for (std::unordered_map<long long, Ord>::const_iterator it = book.begin(); it != book.end(); ++it) {
             const Ord& o = it->second;
             if (o.side != side || o.px < lo || o.px > hi || o.size <= 0 || t - o.tAt < P.restMs) continue;   // < 1 s = flicker, not an original
@@ -566,7 +616,8 @@ private:
 // 1.0.0 are still read, with no call)
 struct FileT { int side = BID, kind = K_LEVEL; double anchor = 0, lo = 0, hi = 0; std::string name; long long q0 = 0, q = 0, t0 = 0;
                double pct = 0, origPct = -1, eat = 0, norm = 0, pull = 0, refill = 0, tte = -1; bool high = false, warn = false, contact = false; int decided = -1; std::string why;
-               int call = -1, mark = M_LOG; std::string news; bool feedBad = false; };   // (1.2.0) news: the window label at the test start ("CPI 7:30 AM"); feedBad: the call recorded only
+               int call = -1, mark = M_LOG; std::string news; bool feedBad = false;
+               long long base = 0, normQ = 0; bool pctOk = true; };   // (1.3.0) 26-field rows: base / normal queue (0 = unknown); pctOk false = "building" (no percent)   // (1.2.0) news: the window label at the test start ("CPI 7:30 AM"); feedBad: the call recorded only
 struct File { bool ok = false; std::string version, market, why = "not read"; long long asof = 0; double tick = 0, last = 0, atr = 0; std::vector<FileT> t; };
 
 inline std::string fmtPx(double v, double tick) {
@@ -579,10 +630,11 @@ inline std::string fileText(const Engine& E, long long now, double lastPx) {
     const std::vector<Live> L = E.live(now);
     for (size_t i = 0; i < L.size(); ++i) {
         const Live& v = L[i]; char b[512];
-        std::snprintf(b, sizeof(b), "T,%s,%s,%s,%s,%s,%s,%lld,%lld,%d,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%s,%s,%d,%d,%d,%lld,%d,%d\n", v.side == BID ? "B" : "A",
+        std::snprintf(b, sizeof(b), "T,%s,%s,%s,%s,%s,%s,%lld,%lld,%d,%d,%.1f,%.1f,%.1f,%.1f,%.1f,%s,%s,%d,%d,%d,%lld,%d,%d,%lld,%lld\n", v.side == BID ? "B" : "A",
                       fmtPx(v.anchor * E.tick, E.tick).c_str(), fmtPx(v.lo * E.tick, E.tick).c_str(), fmtPx(v.hi * E.tick, E.tick).c_str(), kindCode(v.kind), Engine::clean(v.name).c_str(),
                       v.q0, v.q, (int)std::lround(v.pct * 100), v.origPct < 0 ? -1 : (int)std::lround(v.origPct * 100), v.eat, v.norm, v.pull, v.refill, v.tte < 0 ? -1.0 : std::min(v.tte, 9999.0),
-                      v.high ? "H" : "L", v.why.c_str(), v.warn ? 1 : 0, v.contact ? 1 : 0, v.decided > 1 ? -1 : v.decided, v.t0, v.call, v.mark);
+                      v.high ? "H" : "L", v.why.c_str(), v.warn ? 1 : 0, v.contact ? 1 : 0, v.decided > 1 ? -1 : v.decided, v.t0, v.call, v.mark,
+                      v.pctOk ? v.base : -1LL, v.normQ);   // (1.3.0) base (-1 = building: no percent) / normal queue
         o += b;
     }
     return o;
@@ -601,14 +653,17 @@ inline File parseFile(const std::vector<std::string>& lines, const std::string& 
             continue;
         }
         if (c[0] == "T") {
-            if (c.size() != 22 && c.size() != 24) { File z; z.why = "garbled T row"; return z; }
+            if (c.size() != 22 && c.size() != 24 && c.size() != 26) { File z; z.why = "garbled T row"; return z; }
             FileT t; double n[16]; const int idx[16] = { 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 19, 20, 21 };
             for (int k = 0; k < 16; ++k) if (!numTok(c[(size_t)idx[k]], n[k])) { File z; z.why = "garbled T number"; return z; }
             if ((c[1] != "B" && c[1] != "A") || kindOf(c[5]) < 0 || (c[16] != "H" && c[16] != "L") || n[0] <= 0 || n[1] <= 0 || n[2] < n[1] || n[3] < 0 || n[4] < 0) { File z; z.why = "garbled T field"; return z; }
             t.side = c[1] == "B" ? BID : ASK; t.anchor = n[0]; t.lo = n[1]; t.hi = n[2]; t.kind = kindOf(c[5]); t.name = c[6]; t.q0 = (long long)n[3]; t.q = (long long)n[4];
             t.pct = n[5] / 100.0; t.origPct = n[6] < 0 ? -1 : n[6] / 100.0; t.eat = n[7]; t.norm = n[8]; t.pull = n[9]; t.refill = n[10]; t.tte = n[11];
             t.high = c[16] == "H"; t.why = c[17]; t.warn = n[12] != 0; t.contact = n[13] != 0; t.decided = (int)n[14]; t.t0 = (long long)n[15];
-            if (c.size() == 24) { double cc = 0, mm = 0; if (!numTok(c[22], cc) || !numTok(c[23], mm) || cc < -1 || cc > 2 || mm < 0 || mm > 2) { File z; z.why = "garbled T call"; return z; } t.call = (int)cc; t.mark = (int)mm; }
+            if (c.size() >= 24) { double cc = 0, mm = 0; if (!numTok(c[22], cc) || !numTok(c[23], mm) || cc < -1 || cc > 2 || mm < 0 || mm > 2) { File z; z.why = "garbled T call"; return z; } t.call = (int)cc; t.mark = (int)mm; }
+            if (c.size() == 26) { double bs = 0, nq = 0; if (!numTok(c[24], bs) || !numTok(c[25], nq) || bs < -1 || nq < 0) { File z; z.why = "garbled T base"; return z; }
+                t.pctOk = bs >= 0; t.base = bs < 0 ? 0 : (long long)bs; t.normQ = (long long)nq; if (!t.pctOk) t.pct = 0; }   // (1.3.0)
+            else t.base = t.q0;   // a 1.0.0 - 1.2.0 row: the base was q0
             f.t.push_back(t);
         }
     }
@@ -621,17 +676,21 @@ inline File parseFile(const std::vector<std::string>& lines, const std::string& 
     f.ok = true; f.why = "ok"; return f;
 }
 
-// ---- the badge text, fitted: "G1 Q76%" / "Q33% . orig 0%" / "Q33%" (IRT text is ASCII: the approved middle dot is drawn as " . ", as the merged level names)
+// ---- the badge text (1.3.0, 2026-10-22 evening fix build): "G1  Q 143 (2.4x)" = the lots resting in the zone now and their ratio to the
+// NORMAL queue there (no ratio while the normal is unknown); " . orig 0%" when the original defenders are gone; unlabelled "Q 143 (2.4x)".
+// Two spaces after the level name, no "?" (1.2.0). The percent of the base lives in the hover, capped "200%+".
+inline std::string ratioX(double r) { char b[32]; if (r >= 9.95) std::snprintf(b, sizeof(b), "%.0fx", std::min(r, 99.0)); else std::snprintf(b, sizeof(b), "%.1fx", r); return b; }
+inline std::string pctText(double pct) { if (pct >= 2.0) return "200%+"; return std::to_string((int)std::lround(std::max(0.0, pct) * 100)) + "%"; }
 inline std::string badgeText(const std::string& name, const FileT& t, int variant) {
     // variant 0 = full, 1 = no " orig 0%", 2 = just Q
-    const int p = (int)std::lround(std::max(0.0, std::min(9.99, t.pct)) * 100);
-    std::string q = "Q " + std::to_string(p) + "%";                      // (1.2.0, Rassul 17:55 CT) a space after Q
-    std::string s = name.empty() ? q : name + "  " + q;                  // (1.2.0) a wider gap after the level name
+    std::string q = "Q " + std::to_string(std::max(0LL, t.q));
+    if (t.normQ > 0) q += " (" + ratioX((double)t.q / (double)t.normQ) + ")";
+    std::string s = name.empty() ? q : name + "  " + q;
     if (variant == 0 && t.warn) s += " . orig 0%";
     if (variant == 2) s = q;
-    return s;                                                            // (1.2.0) no "?" on the badge in any market
+    return s;
 }
-inline double fillFrac(const FileT& t) { return std::max(0.0, std::min(1.0, t.pct)); }
+inline double fillFrac(const FileT& t) { return t.pctOk ? std::max(0.0, std::min(1.0, t.pct)) : 0.0; }
 // (1.1.0) the badge outline follows the CALL: 0 red, 1 green, -1 none (neutral) - only where the market's rule draws it
 inline int outlineCall(const FileT& t) { return t.mark != M_LOG && (t.call == 0 || t.call == 1) ? t.call : -1; }
 
@@ -643,7 +702,9 @@ inline Hover hover(const FileT& t, const std::string& levelName, const std::stri
     const bool proven = t.mark == M_SHOW;
     h.title = std::string("Queue meter") + (proven ? "" : " ?") + " - " + (levelName.empty() ? std::string(bid ? "bids at " : "offers at ") + pxTxt : levelName + " " + pxTxt) + (proven ? "" : t.mark == M_SHOWQ ? " (red call only, not fully proven)" : " (not proven yet)");
     char b[200];
-    std::snprintf(b, sizeof(b), "Queue left: %lld of %lld lots (%d%%)", t.q, t.q0, (int)std::lround(t.pct * 100)); h.lines.push_back(b);
+    if (t.pctOk && t.base > 0) { std::snprintf(b, sizeof(b), "Queue left: %lld of %lld lots (%s; base = the bigger of %lld at first touch and the normal %lld)", t.q, t.base, pctText(t.pct).c_str(), t.q0, t.normQ); h.lines.push_back(b); }
+    else if (t.normQ > 0) { std::snprintf(b, sizeof(b), "Queue: %lld lots - building (under the normal %lld lots here: no percent, no call yet; %lld at first touch)", t.q, t.normQ, t.q0); h.lines.push_back(b); }
+    else { std::snprintf(b, sizeof(b), "Queue: %lld lots (%lld at first touch; the normal queue here is not known yet: no percent, no call)", t.q, t.q0); h.lines.push_back(b); }
     h.lines.push_back(t.origPct < 0 ? std::string("Originals left: not known (no order rested 1 s+ when the test began)")
                                     : "Originals left: " + std::to_string((int)std::lround(t.origPct * 100)) + "% of the lots resting when the test began");
     h.lines.push_back("Eaten: " + f1(t.eat) + " lots/s" + (t.norm > 0 ? " (" + f1(t.eat / t.norm) + "x normal " + f1(t.norm) + "/s)" : " (normal: learning)"));

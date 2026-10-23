@@ -30,21 +30,21 @@
 #include <vector>
 
 namespace lmz {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-22 evening fix build; Rassul 19:19 CT "the big lot methodology is causing too much filtering" - zones 0 in ES / NQ all evening, ES S20 194 = the RTH tail at night): an LMT = ONE resting order >= MULT (3.0x) the MEDIAN resting order size in the live book within +/- 2 ATR of price (computed at each bar close, so RTH / overnight adapt by themselves), above a per-market floor (ES 10, NQ 5, CL 5, GC 3, HG 3, NG 3, 6E 5 lots), rested >= 30 s; HYSTERESIS: a live zone ends (SHRANK) only when its order falls under KEEP_MULT (2.5x) the median, or is pulled / filled; S5 / S10 / S20 stay only as context (the LMT / LMT F column footer, the s20 field of the record); params MULT / KEEP_MULT / FLOOR / MED_ATR in LRA-LmtZones-<MKT>.csv
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum Kind { K_PRINT = 0, K_ABC = 1, K_ORIGIN = 2, K_NEAR = 3, K_FAR = 4, K_N = 5 };
-enum End { LIVE = 0, FILLED = 1, PULLED = 2, MOVED = 3, BROKEN = 4, EXPIRED = 5, SESSION = 6, LEFT = 7, NEARED = 8 };
+enum End { LIVE = 0, FILLED = 1, PULLED = 2, MOVED = 3, BROKEN = 4, EXPIRED = 5, SESSION = 6, LEFT = 7, NEARED = 8, SHRANK = 9, END_N = 10 };   // (1.1.0) SHRANK = under KEEP_MULT x the median
 enum Ink { INK_WHITE = 0, INK_GREEN = 1, INK_RED = 2, INK_GREY = 3, INK_YELLOW = 4 };
 
 inline const char* kindCode(int k) { static const char* c[K_N] = { "PRINT", "ABC", "ORIGIN", "NEAR", "FAR" }; return k >= 0 && k < K_N ? c[k] : "?"; }
 inline int kindOf(const std::string& s) { for (int k = 0; k < K_N; ++k) if (s == kindCode(k)) return k; return -1; }
 inline const char* endCode(int e) {
-    static const char* c[] = { "LIVE", "FILLED", "PULLED", "MOVED", "BROKEN", "EXPIRED", "SESSION", "LEFT", "NEARED" };
-    return e >= 0 && e <= NEARED ? c[e] : "?";
+    static const char* c[] = { "LIVE", "FILLED", "PULLED", "MOVED", "BROKEN", "EXPIRED", "SESSION", "LEFT", "NEARED", "SHRANK" };
+    return e >= 0 && e < END_N ? c[e] : "?";
 }
-inline int endOf(const std::string& s) { for (int e = LIVE; e <= NEARED; ++e) if (s == endCode(e)) return e; return -1; }
+inline int endOf(const std::string& s) { for (int e = LIVE; e < END_N; ++e) if (s == endCode(e)) return e; return -1; }
 inline bool finiteD(double v) { return v == v && v < 1e300 && v > -1e300; }
 
 // ---- per-market rules ---------------------------------------------------------------------------------------------------------
@@ -59,11 +59,19 @@ struct Rule {
     int restS = 30, maxMoves = 1;
     double nearAtr = 2.0, farAtr = 3.0, confAtr = 0.25, brokenAtr = 1.0;
     int expireMin = 240;
-    bool s20Set = false;                   // the nightly params file set S20_RTH / S20_ON (then it wins over the live footer)
+    bool s20Set = false;                   // the nightly params file set S20_RTH / S20_ON (context only since 1.1.0)
+    double mult = 3.0, keepMult = 2.5, medAtr = 2.0;   // (1.1.0) LMT = >= mult x the median resting order within +/- medAtr ATR; kept while >= keepMult x
+    long long floorLots = 5;               // (1.1.0) per-market floor (lots)
     bool ok = true; std::string src = "defaults";
 };
+inline long long floorFor(const std::string& m) {   // (1.1.0) Rassul-approved floors
+    if (m == "ES") return 10;
+    if (m == "NQ" || m == "CL" || m == "EU" || m == "6E") return 5;
+    if (m == "GC" || m == "HG" || m == "NG") return 3;
+    return 5;
+}
 inline Rule ruleFor(const std::string& m) {
-    Rule r;
+    Rule r; r.floorLots = floorFor(m);
     if (m == "NG") { r.print = 2; r.origin = 2; r.nearO = 1; r.s20Rth = 10; r.s20On = 10; }
     else if (m == "HG") { r.print = 2; r.origin = 2; r.nearO = 1; r.s20Rth = 5; r.s20On = 5; }
     else if (m == "NQ") { r.print = 2; r.origin = 2; r.nearO = 2; r.s20Rth = 20; r.s20On = 15; }
@@ -123,11 +131,16 @@ inline Rule parseParams(const std::vector<std::string>& lines, const std::string
         else if (n == "FAR_ATR" && numD(f[2], 0.5, 10.0, d)) z.farAtr = d;
         else if (n == "CONF_ATR" && numD(f[2], 0.0, 2.0, d)) z.confAtr = d;
         else if (n == "EXPIRE_MIN" && numLL(f[2], 15, 1440, v)) z.expireMin = (int)v;
+        else if (n == "MULT" && numD(f[2], 1.5, 20.0, d)) z.mult = d;                  // (1.1.0)
+        else if (n == "KEEP_MULT" && numD(f[2], 1.0, 20.0, d)) z.keepMult = d;
+        else if (n == "FLOOR" && numLL(f[2], 1, 100000, v)) z.floorLots = v;
+        else if (n == "MED_ATR" && numD(f[2], 0.5, 10.0, d)) z.medAtr = d;
         else ok = false;
         if (ok) ++used;
     }
     if (!mk) { r.src = "params: no MARKET line - defaults"; return r; }
     if (z.farAtr <= z.nearAtr) z.farAtr = z.nearAtr + 1.0;
+    if (z.keepMult > z.mult) z.keepMult = z.mult;   // (1.1.0) the keep line is never above the entry line
     z.src = "params file (" + std::to_string(used) + " rows)"; return z;
 }
 
@@ -226,7 +239,7 @@ struct Zone {
 };
 struct Fill { int zone = 0; long long t = 0; long long lots = 0; Tick px = 0; };
 
-struct Tally { long long made[2][K_N] = { { 0 } }, drawn = 0, ends[NEARED + 1] = { 0 }, events = 0, unknownFill = 0, bookDrop = 0; };
+struct Tally { long long made[2][K_N] = { { 0 } }, drawn = 0, ends[END_N] = { 0 }, events = 0, unknownFill = 0, bookDrop = 0; };
 
 class Engine {
 public:
@@ -242,6 +255,19 @@ public:
     int nextId = 1; long long session = -1;
     Tally tally; size_t bookCap = 300000; int farKeep = 1;   // far: the single biggest per side (replay HG 10-20: 2 per side = 48 far lines a day)
     long long lastBarMs = 0;
+    long long medLots = 0, thrLots = 0, keepLots = 0; size_t medN = 0;   // (1.1.0) the live median resting order (+/- medAtr ATR), the entry / keep lines
+
+    // (1.1.0) the median resting order size within +/- medAtr ATR of price c (ticks), from the live book; 0 = no orders there
+    static long long medianOf(std::vector<long long>& v) { if (v.empty()) return 0; std::nth_element(v.begin(), v.begin() + (long)(v.size() / 2), v.end()); return v[v.size() / 2]; }
+    void bookMedian(Tick c, double a) {
+        std::vector<long long> v; v.reserve(4096);
+        const double reach = R.medAtr * a;
+        for (auto& kv : book) { const Ord& o = kv.second; if (o.size <= 0) continue; if (std::fabs((double)(o.px - c)) <= reach) v.push_back(o.size); }
+        medN = v.size(); medLots = medianOf(v);
+        thrLots = std::max(R.floorLots, (long long)std::ceil(R.mult * (double)medLots - 1e-9));
+        keepLots = std::max(R.floorLots, (long long)std::ceil(R.keepMult * (double)medLots - 1e-9));
+    }
+    long long threshold() const { return thrLots > 0 ? thrLots : R.floorLots; }
 
     void setGamma(const std::vector<Tick>& g) { gamma = g; std::sort(gamma.begin(), gamma.end()); }
     // one MBO event. side is used only on NEW (a FILL row carries the aggressor's side, never the order's)
@@ -294,11 +320,13 @@ public:
         const double a = W.atr;
         if (!(a > 0)) return;
         const long long t = b.endMs;
+        bookMedian(b.c, a);   // (1.1.0) the live entry / keep lines
         // 1) the price / time ends of live zones
         for (size_t k = 0; k < live.size(); ++k) {
             Zone& z = zones[(size_t)live[k]]; if (z.end != LIVE || z.t0 >= t) continue;   // (a restored zone never judged on a bar before its start)
             const Tick p = z.px(); const double dist = z.side == ASK ? (double)(p - b.c) : (double)(b.c - p);   // > 0 = still on its side
             if (-dist > R.brokenAtr * a) { finish(live[k], BROKEN, t); continue; }
+            if (medN > 0 && liveSize(z) < keepLots) { finish(live[k], SHRANK, t); continue; }   // (1.1.0) hysteresis: under KEEP_MULT x the median
             if (t - z.t0 > (long long)R.expireMin * 60000LL) { finish(live[k], EXPIRED, t); continue; }
             if (z.kind == K_FAR && dist > (R.farAtr + 0.5) * a) { finish(live[k], LEFT, t); continue; }
             if (z.kind == K_FAR && dist > 0 && dist <= R.nearAtr * a) { finish(live[k], NEARED, t); continue; }   // the near rules take it
@@ -312,7 +340,7 @@ public:
         const std::vector<Break> rb = W.recent(t, 3LL * 3600000LL);
         for (auto& kv : book) {
             const Ord& o = kv.second;
-            if (o.zone >= 0 || o.size < s20 || o.moves > R.maxMoves || t - o.tAtPx < restMs || usedOid.count(kv.first)) continue;
+            if (o.zone >= 0 || o.size < threshold() || o.moves > R.maxMoves || t - o.tAtPx < restMs || usedOid.count(kv.first)) continue;
             const double dist = o.side == ASK ? (double)(o.px - b.c) : (double)(b.c - o.px);
             if (!(dist > 0)) continue;
             C c; c.oid = kv.first; c.o = &o; c.dist = dist; c.kind = K_NEAR; c.hasBr = false;
@@ -537,7 +565,7 @@ inline std::vector<Row> hoverRows(const Zone& z, const HoverCtx& c) {
     if (z.kind == K_FAR) v.push_back(Row{ "Question: where is the next big real " + who + " if price keeps going?", INK_WHITE });
     else if (z.kind == K_ABC) v.push_back(Row{ "Question: is this break just a pullback inside the bigger wave?", INK_WHITE });
     else v.push_back(Row{ std::string("Question: is a real ") + who + " waiting here, so a " + (ask ? "rally / retest can fail" : "pullback can hold") + "?", INK_WHITE });
-    std::string what = "What: ONE resting " + std::string(ask ? "sell" : "buy") + " order of " + std::to_string(z.size0) + " lots (Big Lot S20 " + std::to_string(z.s20) + "), rested "
+    std::string what = "What: ONE resting " + std::string(ask ? "sell" : "buy") + " order of " + std::to_string(z.size0) + " lots (>= 3x the median resting order near price; Big Lot S20 " + std::to_string(z.s20) + " for context), rested "
         + (z.startKnown ? "" : "at least ") + dur(z.restMs) + ", moved " + std::to_string(z.moves) + "x.";
     v.push_back(Row{ what, INK_WHITE });
     if (z.kind == K_PRINT) v.push_back(Row{ "It sits where the with-trend " + std::string(ask ? "breakdown" : "breakout") + " printed (" + clock12(z.boMs) + ", level " + price(z.level, c.tick) + ").", INK_WHITE });
@@ -554,7 +582,7 @@ inline std::vector<Row> hoverRows(const Zone& z, const HoverCtx& c) {
     std::string now;
     if (z.end == LIVE) now = "Now: resting " + std::to_string(c.sizeLive) + " lots" + (z.traded > 0 ? ", filled " + std::to_string(z.traded) + " (LMT F)" : std::string()) + ", since " + clock12(z.t0) + ".";
     else now = std::string("Ended ") + clock12(z.t1) + ": " + (z.end == FILLED ? "FILLED (ring)" : z.end == PULLED ? "PULLED (X) - void" : z.end == MOVED ? "MOVED away (X) - void"
-        : z.end == BROKEN ? "price closed 1 ATR through it" : z.end == EXPIRED ? "4 h old" : z.end == NEARED ? "price came within 2 ATR" : z.end == LEFT ? "price moved away" : "session end")
+        : z.end == BROKEN ? "price closed 1 ATR through it" : z.end == EXPIRED ? "4 h old" : z.end == NEARED ? "price came within 2 ATR" : z.end == SHRANK ? "the order shrank under 2.5x the median resting order" : z.end == LEFT ? "price moved away" : "session end")
         + (z.traded > 0 ? ", filled " + std::to_string(z.traded) + " lots" : std::string()) + ".";
     v.push_back(Row{ now, INK_WHITE });
     if (v.size() > 12) v.resize(12);

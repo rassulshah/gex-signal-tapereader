@@ -85,7 +85,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.24.0"          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.25.0"          // 1.25.0 (2026-10-22 evening fix build) compact strips, bars >= 50% of the pane, one-line Implied row, the Q hover hides the anchor token;          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 #include "DefenseTurn.h"          // (1.12.0) the pivot turn marks + the refill line decisions (drawn on the price chart by lsDefenseLines)
@@ -740,7 +740,7 @@ public:
                     const int cs = book == def ? (in_ ? mvl::C_DEF_IN : mvl::C_DEF_OUT) : (in_ ? mvl::C_ATT_IN : mvl::C_ATT_OUT);
                     const dt::HoverBlock hb = dt::hoverMove(l.code[0], book, in_ ? R.s.in[book] : R.s.out[book], in_ ? R.s.ticksIn[book] : R.s.ticksOut[book], R.x[cs], false, n);
                     std::string blk; for (size_t r = 0; r < hb.rows.size(); ++r) blk += (r ? "\n" : "") + dt::wrapRow(hb.rows[r]); extra.push_back(blk); } }
-            else if (l.code == "Q") extra.push_back("Q  Queue - is the queue at the defenders' price holding (refilling faster than it is eaten)?\n   " + (l.nums.empty() ? std::string("queue meter read") : l.nums) + "\n   Use: the queue is still there - the hold has fuel\n   Status: still learning (the queue meter's record)");
+            else if (l.code == "Q") extra.push_back("Q  Queue - is the queue at the defenders' price holding (refilling faster than it is eaten)?\n   " + (l.nums.empty() ? std::string("queue meter read") : (l.nums.rfind(" tk") != std::string::npos ? l.nums.substr(0, l.nums.rfind(" tk")) : l.nums)) + "\n   Use: the queue is still there - the hold has fuel\n   Status: still learning (the queue meter's record)");
         }
         const std::string full = badgeTipText(S, e, key, in, std::string(), std::vector<std::string>());
         std::vector<std::string> parts; { size_t a = 0; for (;;) { const size_t b = full.find("\n\n", a); parts.push_back(full.substr(a, b == std::string::npos ? std::string::npos : b - a)); if (b == std::string::npos) break; a = b + 2; } }
@@ -777,7 +777,7 @@ public:
         for (int s = 0; s < lst::STRIPS; ++s) {
             const int yr = y0 + s * lst::ROW_H;
             FONT fl = f; fl.style = PLAIN; setFont(fl); setTextColor((COLOR)0x009CA3AF);
-            { RCT rc; rc.set(off::coord(g.left + 3), off::coord(yr + 4), off::coord(g.left + lst::LABEL_W), off::coord(yr + 4 + lst::SUB_H + 2)); rc.drawText(lst::stripName(lst::DEF, s), false, false); }
+            { RCT rc; rc.set(off::coord(g.left + 3), off::coord(yr), off::coord(g.left + lst::LABEL_W), off::coord(yr + lst::ROW_H)); rc.drawText(lst::stripName(lst::DEF, s), false, false); }
             setFont(f);
             std::vector<lst::Item> items; std::vector<size_t> idx;
             for (size_t k = 0; k < cs.size(); ++k) { if (cs[k].pk.shown[s] < 0) continue; lst::Item it; it.xc = cs[k].xc; it.w = (int)getTextWidth(cs[k].v[(size_t)cs[k].pk.shown[s]].code.c_str(), -1) + 1; items.push_back(it); idx.push_back(k); }
@@ -1328,6 +1328,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.24.0");   // BF_VERSION
+    p->setVersion("1.25.0");   // BF_VERSION
     return p;
 }

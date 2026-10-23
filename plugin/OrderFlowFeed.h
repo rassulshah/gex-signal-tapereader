@@ -147,7 +147,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.14.0";   // 1.14.0 (2026-10-22 evening, Rassul 17:16 CT approved IMPLIED FILLS option B; ImpliedFill.h 1.0.0): a FILL whose raw side is neither bid nor offer (the recorder's "?", the implied / spread-driven fills: CL 10%, NG 5.4%, HG 3.3%, 6E 2.6%, GC 0.7%, ES / NQ 0 of volume) is flagged on the Ev (Ev::implied, set ONCE in evOf for every consumer) and, while LRA-Implied-<MKT>.csv says exclude (or the file is missing), it still takes its lots from the resting order and sets the last trade, but is NOT a hit, an aggressor order, a sweep, a big lot, a pace second, a touch or a refill trigger; Acc / Rec carry fillAll (every filled lot incl. implied) and fillImpl (implied lots) - not in the record line - for the hover row "Implied: NN% of this candle's volume"; Engine.ip = the params, impliedFills / impliedLots counted for the status IMPLIED line;   // 1.13.0 (2026-10-21 20:11-20:23 CT Rassul, attacker letters K / S on lsBidAskStats 1.26.0): each aggressor order keeps its first fill second and its lowest / highest fill price (Aggr t0 / lo / hi); a decided Rec carries the candle's BIGGEST aggressor order and its biggest SWEEP (>= sweepLevels prices, by lots) per side (Rec::big / Rec::sweep: lots, second, prices - not in the record line, the host writes its own K / S / AS lines); Acc keeps the lots hit per second per side (hitSec, the attack pace into / after the extreme); SessionFile reads / keeps more than one extra-line tag (moreTags) up to extraCap lines;   // 1.12.0 (2026-10-21, Top Attacker #2 G / Top Defender #2 W, lsBookFlow 1.19.0): Acc keeps the pulls / adds / moves up to the candle's low / high fill (pullLo / pullHi / addLo / addHi / movLo / movHi: the part after the extreme = total - these); Engine.sink (BookSink) gets every classified near-price add / pull / fill (side, price, second, candle) - lsBookFlow only; an InfoRow cell side 2 = grey;   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.15.0";   // 1.15.0 (2026-10-22 evening fix build): pairPx floor = 50% of the pane (pairFloorPx / pairTopRow) - the squashed pair bars;   // 1.14.0 (2026-10-22 evening, Rassul 17:16 CT approved IMPLIED FILLS option B; ImpliedFill.h 1.0.0): a FILL whose raw side is neither bid nor offer (the recorder's "?", the implied / spread-driven fills: CL 10%, NG 5.4%, HG 3.3%, 6E 2.6%, GC 0.7%, ES / NQ 0 of volume) is flagged on the Ev (Ev::implied, set ONCE in evOf for every consumer) and, while LRA-Implied-<MKT>.csv says exclude (or the file is missing), it still takes its lots from the resting order and sets the last trade, but is NOT a hit, an aggressor order, a sweep, a big lot, a pace second, a touch or a refill trigger; Acc / Rec carry fillAll (every filled lot incl. implied) and fillImpl (implied lots) - not in the record line - for the hover row "Implied: NN% of this candle's volume"; Engine.ip = the params, impliedFills / impliedLots counted for the status IMPLIED line;   // 1.13.0 (2026-10-21 20:11-20:23 CT Rassul, attacker letters K / S on lsBidAskStats 1.26.0): each aggressor order keeps its first fill second and its lowest / highest fill price (Aggr t0 / lo / hi); a decided Rec carries the candle's BIGGEST aggressor order and its biggest SWEEP (>= sweepLevels prices, by lots) per side (Rec::big / Rec::sweep: lots, second, prices - not in the record line, the host writes its own K / S / AS lines); Acc keeps the lots hit per second per side (hitSec, the attack pace into / after the extreme); SessionFile reads / keeps more than one extra-line tag (moreTags) up to extraCap lines;   // 1.12.0 (2026-10-21, Top Attacker #2 G / Top Defender #2 W, lsBookFlow 1.19.0): Acc keeps the pulls / adds / moves up to the candle's low / high fill (pullLo / pullHi / addLo / addHi / movLo / movHi: the part after the extreme = total - these); Engine.sink (BookSink) gets every classified near-price add / pull / fill (side, price, second, candle) - lsBookFlow only; an InfoRow cell side 2 = grey;   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -1179,7 +1179,10 @@ inline void axisFor(long long top, int paneH, int px, double& mn, double& mx) {
 // "who is aggressive - and is it moving price" / "who is defending - and are they refilling", "build") PAIR BARS: two bars per candle,
 // both from the bottom up, green (buyers) LEFT, red (sellers) RIGHT in both panes; the question line on top of each pane.
 static const int QUESTION_H = 16;                                          // the question line's rows at the top of the pane
-inline int pairPx(int paneH, int reserve) { const int p = paneH - reserve - (2 * LABEL_LH + 4) - 3; return p < 4 ? 4 : p; }   // the tallest bar: room for 2 label rows above it
+// (1.15.0, 2026-10-22 19:09-19:48 CT live: on his ~100 px panes the tallest bar got ~4 px and the axis read 20,000 against ~800-lot bars)
+// the tallest bar is NEVER under half the pane: the spike labels / strips share the band above it instead of squeezing the bars
+inline int pairFloorPx(int paneH) { return paneH > 1 ? (paneH + 1) / 2 : 1; }
+inline int pairPx(int paneH, int reserve) { int p = paneH - reserve - (2 * LABEL_LH + 4) - 3; const int f = pairFloorPx(paneH); if (p < f) p = f; return p < 4 ? 4 : p; }   // the tallest bar: room for 2 label rows above it, >= 50% of the pane
 // (1.7.0, BookFlow) net bars geometry: SDK-free so it is unit-tested
 struct NetGeo { int yTop = 0, yBot = 0, y0 = 0, maxPx = 1, downPx = 1; long long upTop = 0, downTop = 0; };   // rows from the pane's top: usable rows, the zero line, the tallest up / down bar; upTop / downTop = the value drawn maxPx / downPx tall
 // (BookFlow 1.5.1, Rassul 2026-10-19 13:37 "there is a lot of black space .. get rid of the extra black space") up / down = the
@@ -1366,7 +1369,7 @@ inline std::string fitMessage(const std::string& l1, int width, const std::funct
 // the first top line: "10:24 <message>"
 inline std::string line1Of(const std::string& ct, const std::string& msg) { return ct.empty() ? msg : ct + " " + msg; }   // (1.2.0) SPEC: one space
 // (12:05) the info box's content (drawn by drawInfo): label | left value | right value; side -1 = white
-struct InfoRow { std::string label, v[2]; int side[2] = {0, 1}; };          // side -1 = white, (1.12.0) 2 = grey
+struct InfoRow { std::string label, v[2]; int side[2] = {0, 1}; bool wide = false; };   // (1.15.0) wide = ONE text across the whole row (label holds it; not split into the Buyers / Sellers columns)          // side -1 = white, (1.12.0) 2 = grey
 struct Info { std::string head; bool twoCol = true; std::string colHead[2]; std::vector<InfoRow> rows; std::string tmpl = "9999 (99.9x)";
               int topLines = 0, topW = 0; };   // (2026-10-21, lsBookFlow 1.15.0) lines kept free at the box's top for the question + info icon, and their width
 
@@ -1387,7 +1390,7 @@ typedef std::function<int(const std::string&, int, bool)> TextW;   // px width o
 // LRA-Implied file, or no fills read for the candle - e.g. a candle reloaded from the record after a restart)
 inline bool impliedRow(const imp::Params& P, long long fillAll, long long fillImpl, InfoRow& r) {
     std::string pct; if (!imp::hoverPct(P, fillImpl, fillAll, pct)) return false;
-    r.label = "Implied"; r.v[0] = pct + " of"; r.v[1] = "volume"; r.side[0] = r.side[1] = -1;
+    r.label = "Implied: " + pct + " of volume"; r.v[0].clear(); r.v[1].clear(); r.side[0] = r.side[1] = -1; r.wide = true;   // (1.15.0) one row, not spread over the columns
     return true;
 }
 inline int clampMode(long long m) { return m == MODE_NUMBERS ? MODE_NUMBERS : MODE_READ; }
@@ -1438,11 +1441,13 @@ inline NumGeom numGeom(const Info& I, int maxH, const TextW& M) {
     NumGeom g; const int head = 1 + (I.twoCol ? 1 : 0) + I.topLines;
     int fit = (maxH - BOX_PAD + 2) / NUM_LH - head; if (fit < 0) fit = 0;   // a row fits when its text ends inside the box (as 1.2.1 drew them)
     g.rows = std::min((int)I.rows.size(), fit);
-    for (int k = 0; k < g.rows; ++k) { g.lw = std::max(g.lw, M(I.rows[(size_t)k].label, NUM_PT, true)); g.vw = std::max(g.vw, M(rowTmpl(I.rows[(size_t)k].label, I.tmpl), NUM_PT, true)); }
+    int wideW = 0;
+    for (int k = 0; k < g.rows; ++k) { if (I.rows[(size_t)k].wide) { wideW = std::max(wideW, M(I.rows[(size_t)k].label, NUM_PT, true)); continue; } g.lw = std::max(g.lw, M(I.rows[(size_t)k].label, NUM_PT, true)); g.vw = std::max(g.vw, M(rowTmpl(I.rows[(size_t)k].label, I.tmpl), NUM_PT, true)); }
     if (I.twoCol) for (int s = 0; s < 2; ++s) g.vw = std::max(g.vw, M(I.colHead[s], NUM_PT, true));
     const int hw = std::max(M("12:59 PM", NUM_PT, true), M(I.head, NUM_PT, true));
     g.W = std::max(I.twoCol ? BOX_PAD + g.lw + 8 + g.vw + 8 + g.vw + BOX_PAD : BOX_PAD + g.lw + 10 + g.vw + BOX_PAD, hw + 2 * BOX_PAD);
     if (I.topLines > 0) g.W = std::max(g.W, I.topW + 2 * BOX_PAD);
+    if (wideW > 0) g.W = std::max(g.W, wideW + 2 * BOX_PAD);
     g.H = std::min(maxH, BOX_PAD + NUM_LH * (head + g.rows) + BOX_PAD - 2);
     return g;
 }
@@ -1454,9 +1459,10 @@ inline GridGeom gridGeom(const Info& I, int H, const TextW& M) {
     int x = BOX_PAD + M("12:59 PM", NUM_PT, true) + 12;                     // the candle's time on the left of the header row
     for (size_t from = 0; from < I.rows.size(); from += (size_t)o.rowsPer) {
         GridGeom::G g; g.from = from; g.n = std::min((size_t)o.rowsPer, I.rows.size() - from); g.x = x;
-        for (size_t k = from; k < from + g.n; ++k) { g.lw = std::max(g.lw, M(I.rows[k].label, NUM_PT, true)); g.vw = std::max(g.vw, M(rowTmpl(I.rows[k].label, I.tmpl), NUM_PT, true)); }
+        int wideW = 0;
+        for (size_t k = from; k < from + g.n; ++k) { if (I.rows[k].wide) { wideW = std::max(wideW, M(I.rows[k].label, NUM_PT, true)); continue; } g.lw = std::max(g.lw, M(I.rows[k].label, NUM_PT, true)); g.vw = std::max(g.vw, M(rowTmpl(I.rows[k].label, I.tmpl), NUM_PT, true)); }
         if (I.twoCol) for (int s = 0; s < 2; ++s) g.vw = std::max(g.vw, M(I.colHead[s], NUM_PT, true));
-        o.g.push_back(g); x += g.lw + 8 + g.vw + 8 + g.vw + 18;
+        o.g.push_back(g); x += std::max(g.lw + 8 + g.vw + 8 + g.vw, wideW) + 18;
     }
     o.W = x - 18 + BOX_PAD; return o;
 }
@@ -2095,6 +2101,8 @@ struct BarLook { bool ok = false; long long v[2] = {0, 0}; bool spike[2] = {fals
                  std::string lab1[2], lab2[2]; };                      // (1.18.0) pair bars: ready-made label rows (Book Flow: ratio, R refilled); empty = from ratio / pace
 inline bool hiOf(const BarLook& b, int s) { return b.spike[s] || (b.ratioOk[s] && b.ratio[s] >= HIGH_X); }   // (1.9.0) a side at 2.0x+ its average (or a spike)
 struct PaneGeo { int left = 0, top = 0, right = 0, bottom = 0, yBase = 0, px = 1, reserve = 0, edge = 0; };
+// the highest row a pair bar may reach: under the reserve, but never lower than the 50% floor line
+inline int pairTopRow(const PaneGeo& g) { const int h = g.bottom - g.top; return std::min(g.top + g.reserve + 1, g.bottom - 1 - pairFloorPx(h)); }
 // the pane geometry: bars from yBase = bottom - 1 up px pixels; the text area ends at the last bar (never the empty space right
 // of price) and never over the price axis
 inline PaneGeo paneGeo(cppExtension* x, int mode) {
@@ -2271,7 +2279,7 @@ inline ValY paneValY(int bar, long long top, const PaneGeo& g) {
 }
 // a bar's height and its zero row the same way drawPairBars places it (for things drawn on top of a bar: marks, caps)
 inline int pairBarH(const ValY* vy, const PaneGeo& g, long long top, long long v, int& yb) {
-    if (vy && vy->ok) { yb = std::min(g.bottom - 1, vy->yOf(0)); int a = 0, b = 0; bool c = false; return v > 0 ? axisBar(*vy, g.top + g.reserve + 1, g.bottom - 1, v, a, b, c) : 0; }
+    if (vy && vy->ok) { yb = std::min(g.bottom - 1, vy->yOf(0)); int a = 0, b = 0; bool c = false; return v > 0 ? axisBar(*vy, pairTopRow(g), g.bottom - 1, v, a, b, c) : 0; }
     yb = g.bottom - 1; return v > 0 ? barHeight(v, top, pairPx(g.bottom - g.top, g.reserve)) : 0;
 }
 // (Effort Reward 1.24.0 / Defense 1.14.0, Rassul 2026-10-20 14:33 "get rid of the labels like 2.4 etc and R1 2, keep percentages instead")
@@ -2295,7 +2303,7 @@ inline void drawPairBars(cppExtension* x, const PaneGeo& g, int v0, int v1, int 
             const int l = p.l[pos], r = p.r[pos];
             if (v < 0) { if (view && yb > g.top + g.reserve) fillFlat(x, l, yb - 1, r, yb, normal[s]); continue; }   // more pulled than added: a stub, never below zero
             int h = 0; bool cap = false;
-            if (ax) { int yt = 0, ybb = 0; h = axisBar(*vy, g.top + g.reserve + 1, g.bottom - 1, v, yt, ybb, cap); }
+            if (ax) { int yt = 0, ybb = 0; h = axisBar(*vy, pairTopRow(g), g.bottom - 1, v, yt, ybb, cap); }
             else { h = barHeight(v, top, px); cap = v > top; }
             if (h <= 0) continue;
             const bool hi = hiOf(b, s);
@@ -2593,6 +2601,7 @@ inline void numbersAt(cppExtension* x, int x0, int y0, int lw, int vw, const Inf
     if (head && I.twoCol) { for (int s = 0; s < 2; ++s) textAt(x, rc[s] - M(I.colHead[s], NUM_PT, true), y, NUM_LH - 1, I.colHead[s], col[s], NUM_PT, true); y += NUM_LH; }
     for (size_t k = from; k < from + n && k < I.rows.size(); ++k, y += NUM_LH) {
         textAt(x, x0, y, NUM_LH - 1, I.rows[k].label, C_WHITE, NUM_PT, true);
+        if (I.rows[k].wide) continue;                                     // (1.15.0) one text across the row
         for (int s = 0; s < (I.twoCol ? 2 : 1); ++s) {
             const std::string v = nl::fitText(I.rows[k].v[s], vw, [&](const std::string& u) { return M(u, NUM_PT, true); }); if (v.empty()) continue;
             const int sd = I.rows[k].side[s];

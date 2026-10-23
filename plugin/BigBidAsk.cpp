@@ -161,7 +161,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.26.0"          // keep equal to bba::VERSION and the setVersion literal below
+#define BBA_VERSION "1.27.0"          // 1.27.0 (2026-10-22 evening fix build) the BL5 / BL10 / BL20 box next to the HOD/LOD table is no longer drawn (tiers only in the LMT / LMT F footers; numbers kept in BL_BOX status);          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
 static const bool BBA_HOVERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
@@ -178,6 +178,7 @@ static const bool BBA_HOVERS = false;
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444;
 static const COLOR C_BUY_DIM = 0x00157A3D, C_SELL_DIM = 0x00933030;   // (1.1.0, Rassul 10-15 "like the 96") normal-size numbers dim, the big ones full colour           // buyers green, sellers red (the Delta Profile's colours)
 static const COLOR C_HOVBG = 0x00111827, C_HOVEDGE = 0x009CA3AF, C_INK = 0x00F3F4F6;
+static const bool BBA_BL_BOX = false;   // (1.27.0) the Big Lot box is not drawn (Rassul: tiers only in the LMT / LMT F footers)
 static const COLOR C_BLBG = 0x000F1520, C_BLEDGE = 0x00374151;   // (1.16.0) the Big Lot box = the HOD/LOD table's panel / border colours
 static const int LEAD = 30;                 // candles laid out left of the view, so a scroll does not re-decide what stays in view
 static const int READS_MAX = 900;           // VAP bars read per pass (the rest next pass)
@@ -1924,9 +1925,11 @@ void BigBidAsk::render(BBState& S) {
     }
     // (1.16.0, Rassul 15:03 CT) the compact Big Lot box: BL5 / BL10 / BL20 = the rolling average of the CURRENT session type, docked to
     // the HOD/LOD table when it is on this chart (BoxDock.h), else his 9-spot Position; only up to the LAST BAR, never over another box
+    // (1.27.0, 2026-10-22 evening fix build, Rassul: the Big Lot tiers only in the LMT / LMT F column footers) the BL5 / BL10 / BL20 box
+    // is NO LONGER DRAWN (BBA_BL_BOX false; the code is kept). The averages stay computed: the BL_BOX status line keeps the numbers.
     S.blOn = false;
     {   long dd = 0; int ee = 0; S.blNightNow = parts((long long)times[(int)count - 1], dd, ee) ? !dayOf(S, ee / 60) : false; }
-    if (set.statsChart) {
+    if (BBA_BL_BOX && set.statsChart) {
         const bba::TypeAvg& A = S.blNightNow ? S.blNight : S.blDay;
         const std::vector<std::pair<std::string, std::string>> rows = bba::boxRows(A);
         FONT lf; lf.id = HELVETICA; lf.size = 10; lf.style = BOLD; FONT vf = lf; vf.style = PLAIN;
@@ -1955,7 +1958,7 @@ void BigBidAsk::render(BBState& S) {
                 setFont(vf); { const int tw = getTextWidth(rows[k].second.c_str(), -1); RCT tr; tr.set(coord(B.r - padX - tw), coord(y0), coord(B.r - padX + 2), coord(y0 + lh)); tr.drawText(rows[k].second.c_str(), false, false); }
             }
         }
-    } else S.blWhy = "off (Big Lot box unchecked in Settings)";
+    } else S.blWhy = std::string("removed 1.27.0 (tiers in the LMT / LMT F column footers only),type ") + (S.blNightNow ? "overnight" : "RTH");
     // (1.24.0) the Rly hover (the only hover on this indicator): question / what / why / how to use / example with the wave numbers
     if (S.msHas && S.msWnd != 0 && !S.rlyTargets.empty() && hb::hbCursor() == S.msWnd) {
         const BBState::RlyHov* T = nullptr;
@@ -2114,6 +2117,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.24.0) TRACK_MOUSE for the Rly hover only (print hovers stay off: BBA_HOVERS)
     p->setDescription("LRA Big Bid / Ask 1.26.0: OB (3-min) = the order block print of a strong wave (an Rly wave, or any wave of 3+ ATR): the biggest bid / ask volume on the pivot candle and the next 1 - 3 candles (the 2nd biggest when the BO already shows the biggest), its lots in the side box + OB below the candle of an up-wave / above for a down-wave; decided when the wave is confirmed, never repainted (not proven yet). Rly (3-min) = the end of a confirmed trend wave (3+ bars, 2.5+ ATR, tagged VWAP +/-1 SD, a 20-bar high / low, vwapTrend Uptrend / Dntrend): green above / red below the bar - don't chase it, wait for the pullback to VWAP / 1 SD and a trigger, trend only. BO = context, not an entry: a confirmed break - don't fade against it (in the test it continued ~49%, like any candle in the wave). A breakout (breakdown) candle through one of the last 3 intact swing highs (lows) of the 1-bar ZigZag with a 10-candle high (low), range and volume up; BO green above a green candle closing above the swing, BO red below a red candle closing below it - a wick-only break counts when a later candle of the same wave closes beyond the pivot (the letter goes on that candle); failed wick breaks are logged only. Its biggest buy (sell) print in lots on the candle. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.26.0");   // BBA_VERSION
+    p->setVersion("1.27.0");   // BBA_VERSION
     return p;
 }
