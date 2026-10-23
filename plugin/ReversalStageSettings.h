@@ -5,7 +5,7 @@
 #include "SettingsSpec.h"
 
 namespace rsset {
-static const char* const PLUGIN_VERSION = "1.3.0";
+static const char* const PLUGIN_VERSION = "2.0.0";
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 enum K { K_SHOW_STEPS, K_COL_LOW, K_COL_HIGH, K_SHOW_NAMES, K_SHOW_NOW, K_POSITION, K_N };
 inline const ss::Spec& spec() {

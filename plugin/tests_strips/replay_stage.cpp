@@ -5,13 +5,17 @@
 //   g++ -std=c++17 -Wall -Wextra -Werror -I.. replay_stage.cpp && ./a.out replay/ES-180-20261022-bars.csv replay/ES-180-turns-20261022.csv
 #include "../ReversalStageLogic.h"
 #include "../DefenseTurn.h"
+#include "../SwingRef.h"   // (2.0.0) the gate: the ZigZag swings of the replayed day
 #include <cstdio>
 #include <fstream>
 #include <sstream>
 int main(int argc, char** argv) {
     if (argc < 3) { std::printf("usage: bars.csv turns.csv\n"); return 2; }
     std::vector<rsl::Bar> B; { std::ifstream f(argv[1]); std::string ln; while (std::getline(f, ln)) { if (ln.empty() || ln[0] == '#') continue; rsl::Bar b; char c;
-        std::stringstream s(ln); s >> b.key >> c >> b.h >> c >> b.l >> c >> b.c; b.ok = true; B.push_back(b); } }
+        std::stringstream s(ln); s >> b.key >> c >> b.h >> c >> b.l >> c >> b.c; b.ok = true; b.quality = rse::COMPLETE; B.push_back(b); } }
+    // (2.0.0) gates: every confirmed ZigZag swing of the day (one day, all candles; open = the prior close) - the gate rule then keeps the last 3 intact
+    std::vector<rsl::Gate> G; { swg::ZigZag Z; Z.spb = 180; Z.rthLenSec = 86400; for (size_t i = 0; i < B.size(); ++i) { swg::ZBar z; z.t = B[i].key; z.h = B[i].h; z.l = B[i].l; z.c = B[i].c; z.o = i ? B[i - 1].c : B[i].c; z.day = 1; z.rth = true; Z.add(z); }
+      for (const swg::Swing& w : Z.swings) { rsl::Gate g; g.kind = rsl::G_SWING; g.dir = w.dir; g.px = w.px; g.pivKey = w.barT; g.fromKey = Z.bars[(size_t)w.confirmIdx].t; g.label = w.dir < 0 ? "swing low" : "swing high"; G.push_back(g); } }
     std::multimap<long long, rsl::Ev> E; int nA = 0, nH = 0, nL = 0, nX = 0;
     auto add = [&](long long key, const char* code, int piv, const std::string& nums) { rsl::Ev e; e.key = key; e.pane = lst::DEF; e.l = lst::make(lst::DEF, code, piv, -1, nums); E.insert(std::make_pair(key, e)); };
     { std::ifstream f(argv[2]); std::string ln; while (std::getline(f, ln)) {
@@ -19,13 +23,19 @@ int main(int argc, char** argv) {
         if (dt::parseLine(ln, L) && L.kind == 'T' && L.A) { add(L.t, "A", L.side == dt::HIGH ? lst::HIGH : lst::LOW, "margin " + std::to_string(L.margin) + "%"); ++nA; }
         else if (dt::parseH(ln, h) && h.H) { add(h.at, "H", h.side == dt::HIGH ? lst::HIGH : lst::LOW, std::to_string(h.lots) + " lots"); ++nH; }
         else if (dt::parseQ(ln, q) && (q.res == 'L' || q.res == 'X')) { add(q.at, q.res == 'L' ? "L" : "X", q.side == dt::HIGH ? lst::HIGH : lst::LOW, std::to_string(q.rest) + " lots"); q.res == 'L' ? ++nL : ++nX; } } }
-    const std::vector<rsl::Step> full = rsl::run(B, E);
-    int bad = 0; for (size_t n = 1; n <= B.size(); ++n) { std::vector<rsl::Bar> p(B.begin(), B.begin() + (long)n); const std::vector<rsl::Step> s = rsl::run(p, E); for (size_t k = 0; k < n; ++k) if (!(s[k] == full[k])) ++bad; }
+    const std::vector<rsl::Step> full = rsl::run(B, E, nullptr, &G);
+    int bad = 0; for (size_t n = 1; n <= B.size(); ++n) { std::vector<rsl::Bar> p(B.begin(), B.begin() + (long)n); const std::vector<rsl::Step> s = rsl::run(p, E, nullptr, &G); for (size_t k = 0; k < n; ++k) if (!(s[k] == full[k])) ++bad; }
     int attempts = 0, comp = 0, fail = 0, exp = 0, maxStage[7] = {0, 0, 0, 0, 0, 0, 0}; int inB = 0;
     for (const rsl::Step& s : full) { if (s.key >= B.front().key) ++inB; if (s.status == rsl::COMPLETE) ++comp; if (s.status == rsl::FAILED) ++fail; if (s.status == rsl::EXPIRED) ++exp; }
     { long long cur = -1; int best = 0; for (const rsl::Step& s : full) { if (s.side >= 0 && s.start != cur) { if (cur >= 0) ++maxStage[best]; cur = s.start; best = 0; ++attempts; } if (s.side >= 0) best = std::max(best, s.status == rsl::FAILED && s.stage == 0 ? s.failedStage : s.stage); } if (cur >= 0) ++maxStage[best]; }
     std::printf("ES 3-min %zu candles, letters A %d H %d L %d X %d in the bars' range\n", B.size(), nA, nH, nL, nX);
     std::printf("attempts %d: complete (1 ATR) %d, failed %d, expired %d; highest stage 0:%d 1:%d 2:%d 3:%d 4:%d 5:%d 6:%d\n", attempts, comp, fail, exp, maxStage[0], maxStage[1], maxStage[2], maxStage[3], maxStage[4], maxStage[5], maxStage[6]);
+    // restart replay: freeze the decided prefix (through its RS3 line) after every candle, run on - must equal the straight pass
+    int restartBad = 0; for (size_t n = 1; n < B.size(); ++n) { std::map<long long, rsl::Step> f; for (size_t k = 0; k < n; ++k) { rsl::Step p; if (!rsl::parse(rsl::line(full[k]), p)) { ++restartBad; continue; } f[p.key] = p; }
+        const std::vector<rsl::Step> s = rsl::run(B, E, &f, &G); for (size_t k = 0; k < B.size(); ++k) if (!(s[k] == full[k])) ++restartBad; }
+    int gated = 0; for (const rsl::Step& s : full) if (s.resume.on && s.resume.start == s.key) ++gated;
+    std::printf("gates %zu swings, gated attempts started %d; restart-replay differences %d\n", G.size(), gated, restartBad);
+    bad += restartBad;
     std::printf("prefix runs that differ from the full run (repaint): %d\n", bad);
     if (argc > 3) for (const rsl::Step& s : full) if (s.side >= 0 && (s.stage > 0 || s.status == rsl::FAILED)) {
         const long long t = s.key % 86400; std::printf("%02lld:%02lld %s stage %d %s %s %s\n", t / 3600, (t / 60) % 60, rsl::sideWord(s.side).c_str(), s.stage, rsl::statusName(s.status), s.chain.c_str(), s.why.c_str()); }

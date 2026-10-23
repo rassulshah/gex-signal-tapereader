@@ -197,7 +197,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.31.0"          // 1.30.0 (2026-10-22 evening fix build) compact strips (LetterStrips 1.1.0: 11 px per strip), bars >= 50% of the pane (OrderFlowFeed 1.15.0 pairPx floor), the Implied row one line "Implied: 0% of volume";          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.32.0"          // 1.32.0 (2026-10-23 4-step stage revamp) new D letter (MBO CVD divergence, Trapped strip) + the attack average fill " vw" in S / K / L nums for the Reversal Stage underwater measure; // was 1.31.0:          // 1.30.0 (2026-10-22 evening fix build) compact strips (LetterStrips 1.1.0: 11 px per strip), bars >= 50% of the pane (OrderFlowFeed 1.15.0 pairPx floor), the Implied row one line "Implied: 0% of volume";          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -347,6 +347,9 @@ struct BASState {
     // (1.28.0) the letter record for lsReversalStage (lsFlexLevels\Strips\ATK-<MKT>-<spb>.csv): ids already in the file, counters
     std::set<std::string> stripIds; std::string stripPath; long long stripReadMs = -1, stripWritten = 0, stripFail = 0, stripsDrawn = 0, stripSkipped = 0;
     rse::Publisher evidence; std::string evidencePath; long long evidenceWritten = 0, evidenceFail = 0; // one publisher per host binding
+    // (1.32.0) per finalized candle: the aggressive fills' average price x100 per RESTING side (BID = sellers hitting bids), from the
+    // aggressor orders' fill ranges (each order at the middle of its lowest / highest fill, size-weighted); and the D divergences
+    std::map<long long, std::pair<long long, long long> > fillVw; std::map<std::pair<int, long long>, std::pair<long long, long long> > atkD; long long dCount = 0;
 };
 // (1.23.0, Rassul 2026-10-20 07:43 "do it") ORDER-BY-ORDER TOTALS: each side's aggressive lots from the exchange's order feed (the
 // aggressor order's own fills: bid hit = sellers, offer lifted = buyers) - what every tested turn rate was measured on (Databento MBO).
@@ -550,7 +553,7 @@ void BidAskStats::identify(BASState& S) {
     S.zr = zread::Host(); S.zrCount = -1; S.zrSession = -1;               // (1.6.0)
     S.blBook = blt::Book(); S.blLoaded = false; S.blWritten.clear(); S.blBarsN = (size_t)-1; S.blLast = -1; S.blMarks.clear();   // (1.14.0)
     S.blSession.clear(); S.blRows.clear(); S.blFile.clear(); S.blRowsWritten.clear(); S.blRejected = 0;
-    S.atkK.clear(); S.atkS.clear(); S.atkAS.clear(); S.atkO = atk::Others(); S.atkOff.clear(); S.atkReadMs = -1; S.atkTurnsPath.clear(); S.atkTrPath.clear();   // (1.26.0)
+    S.atkK.clear(); S.atkS.clear(); S.atkAS.clear(); S.fillVw.clear(); S.atkD.clear(); S.atkO = atk::Others(); S.atkOff.clear(); S.atkReadMs = -1; S.atkTurnsPath.clear(); S.atkTrPath.clear();   // (1.26.0)
     S.sab = sab::Host(); S.sabDone.clear(); S.sabSeen = (size_t)-1; S.sabDir = false;   // (1.27.0)
     S.stripIds.clear(); S.stripPath.clear(); S.stripReadMs = -1; S.stripWritten = S.stripFail = S.stripsDrawn = S.stripSkipped = 0;   // (1.28.0)
     S.atkKn = S.atkSn = S.atkUndecided = S.atkLoaded = S.atkRejected = 0; S.badgeHit.clear(); S.badgeTip = -1; S.lastTip = dt::TipRect(); S.lastTipLevel = -1;
@@ -992,6 +995,15 @@ void BidAskStats::finalize(BASState& S, long long now) {
                         if (S.obEv.size() > sb::CAP_O) S.obEv.erase(S.obEv.begin(), S.obEv.begin() + (long)(S.obEv.size() - sb::CAP_O));
                         S.obMs = -1;
                     }
+                }
+                if (!incomplete && a != S.accs.end()) {   // (1.32.0) the aggressive fills' average price per resting side (x100 ticks)
+                    long double num[2] = {0, 0}; long long den[2] = {0, 0};
+                    for (std::unordered_map<long long, off::Aggr>::const_iterator g = a->second.aggr.begin(); g != a->second.aggr.end(); ++g) {
+                        const int rs = g->second.side; if ((rs != off::BID && rs != off::ASK) || g->second.size <= 0 || g->second.lo <= 0 || g->second.hi < g->second.lo) continue;
+                        num[rs] += (long double)g->second.size * (long double)(g->second.lo + g->second.hi) * 50.0L; den[rs] += g->second.size;
+                    }
+                    S.fillVw[t] = std::make_pair(den[0] > 0 ? (long long)std::llround((double)(num[0] / den[0])) : 0LL, den[1] > 0 ? (long long)std::llround((double)(num[1] / den[1])) : 0LL);
+                    while (S.fillVw.size() > 800) S.fillVw.erase(S.fillVw.begin());
                 }
                 if (a != S.accs.end()) S.accs.erase(a);
                 S.closedAt.erase(c);
@@ -1592,14 +1604,20 @@ std::string BidAskStats::badgeTipText(BASState& S, long long key, const atk::Bad
 // (1.28.0) the strip letters of one closed candle: S / K / L (Attack) and R / Tr / G (Running out), each with its pivot side, the book side
 // for L and the key numbers for the Reversal Stage hover. The shared A is not an attacker-pane letter any more (Defense pane only).
 static int basEvidenceQuality(const BASState& S, long long key);
+// (1.32.0) " vw<avg fill x100 ticks>" of one resting side on a finalized candle, or "" (restarted / incomplete = no token)
+static std::string basVwTok(const BASState& S, long long key, int restSide) {
+    std::map<long long, std::pair<long long, long long> >::const_iterator f = S.fillVw.find(key); if (f == S.fillVw.end()) return std::string();
+    const long long v = restSide == off::ASK ? f->second.second : f->second.first; return v > 0 ? " vw" + std::to_string(v) : std::string();
+}
 void BidAskStats::candleLetters(BASState& S, long long key, bool isHigh, bool isLow, std::vector<lst::Lt>& v) {
     v.clear(); char b[96];
     for (int sd = 1; sd >= 0; --sd) {
         const std::pair<int, long long> kk(sd, key);
         std::map<std::pair<int, long long>, atk::SRead>::const_iterator w = S.atkS.find(kk);
-        if (w != S.atkS.end() && w->second.S) { std::snprintf(b, sizeof b, "%lld lots %lld prices", w->second.lots, w->second.nPx); v.push_back(lst::make(lst::ATK, "S", sd, -1, b)); }
+        const std::string vw = basVwTok(S, key, sd == lst::HIGH ? off::ASK : off::BID);   // (1.32.0) the attackers' average fill (hidden token)
+        if (w != S.atkS.end() && w->second.S) { std::snprintf(b, sizeof b, "%lld lots %lld prices", w->second.lots, w->second.nPx); v.push_back(lst::make(lst::ATK, "S", sd, -1, b + vw)); }
         std::map<std::pair<int, long long>, atk::KRead>::const_iterator k = S.atkK.find(kk);
-        if (k != S.atkK.end() && k->second.K) { std::snprintf(b, sizeof b, "%lld lots", k->second.lots); v.push_back(lst::make(lst::ATK, "K", sd, -1, b)); }
+        if (k != S.atkK.end() && k->second.K) { std::snprintf(b, sizeof b, "%lld lots", k->second.lots); v.push_back(lst::make(lst::ATK, "K", sd, -1, b + vw)); }
         const long long fade = w != S.atkS.end() && w->second.S ? w->second.p.e100 : k != S.atkK.end() && k->second.K ? k->second.p.e100 : -1;
         if (fade >= 0 && fade <= atk::E_SHOW100 && basEvidenceQuality(S, key) == rse::COMPLETE) {
             std::snprintf(b, sizeof b, "executed pace %.2fx after extreme", (double)fade / 100.0);
@@ -1609,6 +1627,8 @@ void BidAskStats::candleLetters(BASState& S, long long key, bool isHigh, bool is
         if (g != S.atkO.G.end() && g->second.G) { std::snprintf(b, sizeof b, "pulled %.1fx", g->second.x); v.push_back(lst::make(lst::ATK, "G", sd, -1, b)); }
         std::map<std::pair<int, long long>, trapl::Rec>::const_iterator t = S.atkO.Tr.find(kk);
         if (t != S.atkO.Tr.end()) { std::snprintf(b, sizeof b, "%.0f lots %.1fx", t->second.lots, t->second.x); v.push_back(lst::make(lst::ATK, "Tr", sd, -1, b)); }
+        std::map<std::pair<int, long long>, std::pair<long long, long long> >::const_iterator dv = S.atkD.find(kk);   // (1.32.0) D
+        if (dv != S.atkD.end()) { std::snprintf(b, sizeof b, "delta %lld new %s, candle %s", dv->second.first, sd == lst::LOW ? "low" : "high", sd == lst::LOW ? "higher low" : "lower high"); v.push_back(lst::make(lst::ATK, "D", sd, -1, b)); }
     }
     { std::map<long long, std::vector<sr::Event> >::const_iterator se = S.srEv.find(key);
       if (se != S.srEv.end()) for (size_t q = 0; q < se->second.size(); ++q) { const sr::Event& e = se->second[q]; if (e.show == sr::SHOW_OFF) continue;
@@ -1617,7 +1637,7 @@ void BidAskStats::candleLetters(BASState& S, long long key, bool isHigh, bool is
       if (a != S.atkAS.end()) for (int rs = 1; rs >= 0; --rs) if (atk::lOf(a->second, rs)) {
           // the pivot an L order points at: buyers lifting = a high attempt, sellers hitting = a low attempt (at an extreme: that extreme)
           const int piv = isHigh && !isLow ? lst::HIGH : isLow && !isHigh ? lst::LOW : (rs == off::ASK ? lst::HIGH : lst::LOW);
-          std::snprintf(b, sizeof b, "%lld lots", a->second.big[rs]); v.push_back(lst::make(lst::ATK, "L", piv, rs == off::ASK ? 1 : 0, b)); break; } }
+          std::snprintf(b, sizeof b, "%lld lots", a->second.big[rs]); v.push_back(lst::make(lst::ATK, "L", piv, rs == off::ASK ? 1 : 0, b + basVwTok(S, key, rs))); break; } }
 }
 // Typed evidence is deliberately built from the same already-decided source records as LT.
 // No source calculation, ordering, or legacy line is altered here.  A persisted letter without
@@ -1684,6 +1704,9 @@ void BidAskStats::attackEvidence(BASState& S, long long key, const lst::Lt& l, l
     } else if (l.code == "Tr") {
         std::map<std::pair<int, long long>, trapl::Rec>::const_iterator t = S.atkO.Tr.find(kk);
         if (t != S.atkO.Tr.end()) put(key, (long long)t->second.barRaw, rse::IMPORTED, rse::UNVERIFIED, t->second.extreme > 0 ? t->second.extreme : LLONG_MIN, basEvidenceDoubleLots(t->second.lots), -1, -1, basEvidenceRatio(t->second.x), "-Tr-" + std::to_string(t->second.id));
+    } else if (l.code == "D") {   // (1.32.0) MBO CVD divergence: decided from complete order-feed totals only
+        std::map<std::pair<int, long long>, std::pair<long long, long long> >::const_iterator d = S.atkD.find(kk);
+        if (d != S.atkD.end() && basEvidenceQuality(S, key) == rse::COMPLETE) put(key, key, rse::MBO, rse::COMPLETE, d->second.second, basEvidenceLots(d->second.first < 0 ? -d->second.first : d->second.first), -1, -1, -1, "-D");
     } else if (l.code == "R") {
         std::map<long long, std::vector<sr::Event> >::const_iterator s = S.srEv.find(key);
         if (s != S.srEv.end()) for (size_t n = 0; n < s->second.size(); ++n) { const sr::Event& r = s->second[n];
@@ -1716,6 +1739,17 @@ void BidAskStats::exportStrips(BASState& S, long long now) {
         if (i >= atk::EXT_BARS) { std::vector<long long> H, Lw; bool ok = true;
             for (int j = i - atk::EXT_BARS; j <= i && ok; ++j) { off::Tick h = 0, l = 0; ok = off::toTick((double)hi[j], S.tick, h) && off::toTick((double)lo[j], S.tick, l); H.push_back(h); Lw.push_back(l); }
             if (ok) atk::extremeOf(H, Lw, isHigh, isLow); }
+        if (i >= 5) {   // (1.32.0) D: the order feed's cumulative delta over this + the 5 candles before vs the candle's low / high
+            long long dl[6], lw[6], hg[6]; bool ok[6];
+            for (int j = 0; j < 6; ++j) { const int ix = i - 5 + j; long long tt[2] = {0, 0}; off::Tick h = 0, l = 0;
+                ok[j] = mboTotOf(S, (long long)times[ix], tt) && off::toTick((double)hi[ix], S.tick, h) && off::toTick((double)lo[ix], S.tick, l);
+                dl[j] = tt[1] - tt[0]; lw[j] = l; hg[j] = h; }
+            const int piv = lst::cvdDiv(dl, lw, hg, ok, 6);
+            if (piv >= 0) {
+                const std::pair<int, long long> dk(piv, key);
+                if (!S.atkD.count(dk)) { S.atkD[dk] = std::make_pair(dl[5], piv == lst::LOW ? lw[5] : hg[5]); ++S.dCount; while (S.atkD.size() > 800) S.atkD.erase(S.atkD.begin()); }
+            }
+        }
         std::vector<lst::Lt> v; candleLetters(S, key, isHigh, isLow, v);
         if (published > 0) for (size_t k = 0; k < v.size(); ++k) attackEvidence(S, key, v[k], published, evidence);
         for (size_t k = 0; k < v.size(); ++k) { const std::string id = lst::idOf(lst::ATK, key, v[k].code, v[k].pivot); if (S.stripIds.count(id) || std::find(ids.begin(), ids.end(), id) != ids.end()) continue;
@@ -1757,6 +1791,7 @@ std::string BidAskStats::stripTipText(BASState& S, long long key, int strip, con
     for (size_t q = 0; q < pk.order[strip].size(); ++q) {
         const lst::Lt& l = v[(size_t)pk.order[strip][q]];
         if (l.code == "E") t += "\n\nE " + l.nums + "\nMeasured classified MBO executions; >=20s after the extreme. Fading is not a reversal guarantee.";
+        if (l.code == "D") t += "\n\nD " + l.nums + "\nWhat: the order feed's cumulative delta (buyers - sellers, implied fills excluded) made a new " + std::string(l.pivot == lst::LOW ? "low" : "high") + " over this and the 5 candles before, but the candle did not." + "\nWhy it matters: the attackers hit harder and price would not follow - they are trapped (step 3 of the Reversal Stage, counted within 5 candles of a collision at the level)." + "\nExample: red D at a low = sellers -1,240 delta, yet the low held 3 ticks above the prior low.";
     }
     for (size_t k = 0; k < blocks.size(); ++k) t += "\n\n" + blocks[k];
     if (!pace.empty()) t += "\n\n" + pace;
@@ -2066,6 +2101,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.31.0");   // BAS_VERSION
+    p->setVersion("1.32.0");   // BAS_VERSION
     return p;
 }

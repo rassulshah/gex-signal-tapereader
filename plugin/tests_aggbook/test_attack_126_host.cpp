@@ -41,7 +41,7 @@ int main() {
     for (int k = 0; k <= 15; ++k) h.bars.push_back(bar(keyOf(k), 7000.0f, 7000.5f, 6999.5f, 7000.0f));
     Ind* p = make(); p->calc(0); p->draw(); p->calc(0);
     BASState* S = p->testState();
-    CHECK(S && std::string(bas::QUESTION) == "Who is aggressive?" && std::string(bas::VERSION) == "1.31.0" && std::string(BAS_VERSION) == "1.31.0", "lsBidAskStats 1.29.0, the question 'Who is aggressive?'");
+    CHECK(S && std::string(bas::QUESTION) == "Who is aggressive?" && std::string(bas::VERSION) == "1.32.0" && std::string(BAS_VERSION) == "1.32.0", "lsBidAskStats 1.29.0, the question 'Who is aggressive?'");
     // the Big Lot pool (S20 / S10 / S5): 3 past RTH sessions and 3 overnight ones of a different size
     {   llp::LogDist d; for (int k = 0; k < 200; ++k) d.addN(20, 1); for (int k = 0; k < 20; ++k) d.addN(100, 1); for (int k = 0; k < 10; ++k) d.addN(150, 1); for (int k = 0; k < 5; ++k) d.addN(220, 1);
         llp::LogDist n; for (int k = 0; k < 200; ++k) n.addN(15, 1); for (int k = 0; k < 20; ++k) n.addN(40, 1); for (int k = 0; k < 10; ++k) n.addN(60, 1); for (int k = 0; k < 5; ++k) n.addN(90, 1);
@@ -131,7 +131,7 @@ int main() {
         CHECK(!q, "no '?' anywhere on the pane (letters, message / read line) except the question itself");
         CHECK(!aDrawn, "(1.28.0) no A on the attacker pane (Defense pane only)");
         CHECK(!border, "(1.28.0) no boxes / borders around the letters"); }
-    {   bool la = false, lr = false; for (auto& d : h.draws) if (d.type == "text") { la = la || d.text == "Attack"; lr = lr || d.text == "Running out"; }
+    {   bool la = false, lr = false; for (auto& d : h.draws) if (d.type == "text") { la = la || d.text == "Attack"; lr = lr || d.text == "Trapped"; }
         CHECK(la && lr, "the two strip labels at the left"); }
     {   const off::IconRect* r = hitOf(kX, 1);
         CHECK(r && r->t >= sy0 + lst::ROW_H && r->b <= sy0 + 2 * lst::ROW_H, ("the Running out letter sits in the second strip (" + std::to_string(r ? r->t : -1) + ")").c_str());
@@ -150,7 +150,7 @@ int main() {
             std::string joined; for (auto& d : h.draws) if (d.type == "text" && d.x >= S->lastTip.l && d.r <= S->lastTip.r + 1 && d.y >= S->lastTip.t && d.y <= S->lastTip.b) {
                 if (d.text.compare(0, 5, "     ") == 0) joined += " " + d.text.substr(5); else joined += "\n" + d.text; }
             auto has = [&](const std::string& t) { return joined.find(t) != std::string::npos; };
-            CHECK(has("Running out: R") && has("(also on this candle: Tr, E, G)") && has("Question: are the attackers running out?"), "hover header: the strip, its letter, the others, the strip question");
+            CHECK(has("Trapped: R") && has("(also on this candle: Tr, E, G)") && has("Question: are the attackers trapped?"), "hover header: the strip, its letter, the others, the strip question");
             CHECK(has("E executed pace 0.02x after extreme") && has("Measured classified MBO executions"), "new E is measured execution fading, separate from G withdrawal");
             CHECK(has("G  Giving up") && has("19,226 pulled vs 18,673 added"), "hover G: lsBookFlow's G line numbers");
             CHECK(has("Tr  Trapped") && has("640 lots"), "hover Tr: the Delta Profile record");

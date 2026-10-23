@@ -1,5 +1,11 @@
 /********************************************************************************
- *  ReversalStage.cpp  --  Investor/RT RTX extension  lsReversalStage  1.0.0  (2026-10-22)
+ *  ReversalStage.cpp  --  Investor/RT RTX extension  lsReversalStage  2.0.0  (2026-10-23)
+ *  2.0.0 (Rassul approved the 4-step design 05:47-05:50 CT, build ordered option B 05:55 CT): a GATE (the last 3 intact swing lows / highs
+ *  of today's RTH ZigZag - SwingRef.h - or a key / MenthorQ level from the same files lsSweepRefill reads, or a typed held queue at the
+ *  extreme) then a 4-step staircase TRAP / COLLISION / TRAPPED / RELEASE and a RESULT line (1 ATR). The Now box reads like
+ *  "LOW at 7,696 (swing low 8:48 AM) / Trap: bids 2.3x, Q 143 / Collision: 1,840 sold, held (A, Q) / Trapped: sellers -6 ticks, D /
+ *  Release: waiting for H / R". New record RS3 (2.0.0 steps mean something else; the 1.x RS records are not adopted).
+ *  (history) lsReversalStage  1.0.0  (2026-10-22)
  *  Rassul approved layout-stages-2strips.png (11:41-11:46 CT, MBO-UI-LAYOUT-PLAN.md option A + the stage view), build ordered 15:20 CT.
  *
  *  "WHICH STAGE IS THE PIVOT IN?" - its own pane. A STAIRCASE per closed candle for the current LOCAL PIVOT ATTEMPT (a 5-candle low /
@@ -36,6 +42,8 @@
 #include "ReversalStageSettings.h"
 #include "SettingsHost.h"
 #include "NewsWindow.h"          // (1.1.0) news / settle window "?" + the feed check
+#include "SwingRef.h"            // (2.0.0) the gate: the last 3 intact swings (the ZigZag rule lsSweepRefill / lsStopRun use)
+#include "NearLevels.h"          // (2.0.0) the gate: key / MenthorQ levels (the files lsSweepRefill reads)
 
 #include <algorithm>
 #include <chrono>
@@ -57,7 +65,7 @@
 #pragma comment(lib, "user32.lib")   // GetCursorPos / WindowFromPoint (the hover stops when the cursor leaves the pane)
 #endif
 
-#define RS_VERSION "1.3.0"   // typed MBO observations, arrival journal, immutable post-decision checkpoints
+#define RS_VERSION "2.0.0"   // (2.0.0) the 4-step model: gate + Trap / Collision / Trapped / Release + result // (1.3.0) typed MBO observations, arrival journal, immutable post-decision checkpoints
 // 1.0.0:   // keep equal to rsl::VERSION, rsset::PLUGIN_VERSION and the setVersion literal below
 
 static const COLOR C_GRID = 0x00374151, C_LABEL = 0x009CA3AF, C_TEXT = 0x00E5E7EB, C_BOX_BG = 0x000F1520, C_TIP_BG = 0x00111827;
@@ -118,6 +126,9 @@ struct RSState {
     std::map<long long, rsl::Step> steps; long long recOff = 0, recBad = 0, written = 0, writeFail = 0, adopted = 0; std::string recPath; bool dirMade = false;
     long long lastPassMs = -1; long lastCount = -1; long long lastLetters = -1;
     rsl::Step now; bool haveNow = false;
+    // (2.0.0) the gate: key / MenthorQ level sources (re-read at most every 5 s), the gate list of the last pass, counts for the status
+    nl::Source keySrc, dealerSrc, mqSrc; long long levelCheckMs = -100000; std::vector<rsl::Gate> levelGates; std::string levelNote = "not read yet";
+    std::vector<rsl::Gate> gates; long long gateSwings = 0;
     // drawing + hover
     struct Hit { int l = 0, t = 0, r = 0, b = 0; long long key = 0; };
     std::vector<Hit> hits; long long hoverKey = 0; void* hoverWnd = nullptr; int dx = 0, dy = 0; bool haveWnd = false;
@@ -133,7 +144,7 @@ public:
     ReversalStage() : cppExtension() {}
     virtual int draw(void);
     virtual int mouse(RTX_EVENT* e);
-    virtual int scale(int, int, double* dMin, double* dMax) { if (dMin) *dMin = 0; if (dMax) *dMax = rsl::AXIS_MAX; return RTX_OK; }   // the pane's own axis: stages 0 - 6
+    virtual int scale(int, int, double* dMin, double* dMax) { if (dMin) *dMin = 0; if (dMax) *dMax = rsl::AXIS_MAX; return RTX_OK; }   // the pane's own axis: steps 0 - 4
     virtual int parmsTitle(char* pStr, int size) { if (!pStr || size < 2) return RTX_FAIL; std::snprintf(pStr, (size_t)size, "Reversal stage v%s", RS_VERSION); return RTX_OK; }
     virtual int parmsLoadBody(void) {
         if (!ss::inDialog(this)) return RTX_OK;
@@ -166,6 +177,7 @@ private:
     void readLetters(RSState& s);
     void readRecord(RSState& s);
     void decide(RSState& s);
+    void levels(RSState& s, long long now);
     void writeStatus(RSState& s, long long now);
     long long civil(long long raw);
     std::string clockOf(long long raw);
@@ -229,18 +241,50 @@ void ReversalStage::readRecord(RSState& s) {
     if (!s.dirMade) { makeDir(f); makeDir(d); s.dirMade = true; }
     std::ostringstream tick; tick.precision(17); tick << s.tick;
     const std::string binding = std::string(RS_VERSION) + "-" + rse::token(s.market) + "-" + rse::token(s.symbol) + "-T" + rse::token(tick.str()) + "-" + std::to_string(s.spb);
-    const std::string p = d + "\\RS-" + binding + ".csv";
+    const std::string p = d + "\\RS3-" + binding + ".csv";   // (2.0.0) new record: the 4-step meaning
     s.journalPath = d + "\\RJ-" + binding + ".csv";
     if (p != s.recPath) { s.recPath = p; s.recOff = 0; s.steps.clear(); }
-    rsh::tail(p, s.recOff, [&](const std::string& ln) { rsl::Step st; if (ln.compare(0, 5, "RS|2|") != 0 || !rsl::parse(ln, st)) { ++s.recBad; return; } if (st.decided > (long long)currentDate()) { ++s.recBad; return; } if (!s.steps.count(st.key)) { s.steps[st.key] = st; ++s.adopted; } });
+    rsh::tail(p, s.recOff, [&](const std::string& ln) { rsl::Step st; if (ln.compare(0, 5, "RS|3|") != 0 || !rsl::parse(ln, st)) { ++s.recBad; return; } if (st.decided > (long long)currentDate()) { ++s.recBad; return; } if (!s.steps.count(st.key)) { s.steps[st.key] = st; ++s.adopted; } });
     while (s.steps.size() > 20000) s.steps.erase(s.steps.begin());
+}
+// (2.0.0) key levels (his session levels: ONL PDL PFL LonLO PWL AsiaLO and the highs) + MenthorQ (dealer / levels files, the chart's
+// contract only) - the same files and freshness rule as lsSweepRefill (SweepRefill::levels)
+void ReversalStage::levels(RSState& s, long long now) {
+    if (now - s.levelCheckMs < 5000 && now >= s.levelCheckMs) return;
+    s.levelCheckMs = now;
+    const std::string f = flexDir(); if (f.empty() || s.market.empty() || !(s.tick > 0)) return;
+    nl::loadSource(f + "\\LRA-KeyLevels-" + s.market + ".csv", s.keySrc, 0);
+    nl::loadSource(f + "\\LRA-Dealer-" + s.market + ".csv", s.dealerSrc, 1);
+    nl::loadSource(f + "\\LRA-Levels-" + s.market + ".csv", s.mqSrc, 2);
+    const long long wall = (long long)std::time(nullptr);
+    auto fresh = [&](const nl::Source& X) { return X.sig >= 0 && X.at > 0 && wall - X.at <= 18 * 3600 && X.at - wall <= 600; };
+    auto ticks = [&](double px, long long& out) { const double q = px / s.tick; if (!std::isfinite(q) || q <= 0 || q > 9e15) return false; out = (long long)std::llround(q); return true; };
+    std::vector<rsl::Gate> v; int nk = 0, nm = 0;
+    if (fresh(s.keySrc)) for (size_t i = 0; i < s.keySrc.v.size(); ++i) {
+        rsl::Gate g; g.label = s.keySrc.v[i].name; g.dir = swg::keyDir(g.label); g.kind = rsl::G_KEY;
+        if (g.dir == 0 || !ticks(s.keySrc.v[i].px, g.px)) continue;
+        v.push_back(g); ++nk;
+    }
+    const nl::Source* mq[2] = { &s.dealerSrc, &s.mqSrc };
+    for (int k = 0; k < 2; ++k) {
+        const nl::Source& X = *mq[k];
+        if (!fresh(X) || X.stale || !nl::sameContract(s.symbol, X.sym)) continue;
+        for (size_t i = 0; i < X.v.size(); ++i) {
+            rsl::Gate g; g.label = "MQ " + X.v[i].name; g.kind = rsl::G_MQ; g.dir = 0;
+            if (!ticks(X.v[i].px, g.px)) continue;
+            bool dup = false; for (size_t j = 0; j < v.size() && !dup; ++j) dup = v[j].kind == rsl::G_MQ && v[j].px == g.px;
+            if (!dup) { v.push_back(g); ++nm; }
+        }
+    }
+    s.levelGates.swap(v);
+    s.levelNote = std::to_string(nk) + " key, " + std::to_string(nm) + " MenthorQ" + (s.keySrc.sig < 0 ? " (key file missing)" : "");
 }
 // Only a new latest closed decision is admitted. Older prices warm the reference;
 // new letters never pass through frozen historical decisions.
 void ReversalStage::decide(RSState& s) {
-    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
+    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose), op(barOpen);
     const long count = getBarCount();
-    const int n = (int)std::min<long>(count, std::min(std::min((long)times.count, (long)hi.count), std::min((long)lo.count, (long)cl.count)));
+    const int n = (int)std::min<long>(std::min(count, (long)op.count), std::min(std::min((long)times.count, (long)hi.count), std::min((long)lo.count, (long)cl.count)));
     if (n < 2) return;
     const int last = n - 1, from = std::max(0, last - WINDOW);
     std::vector<rsl::Bar> B; B.reserve((size_t)(last - from));
@@ -264,6 +308,25 @@ void ReversalStage::decide(RSState& s) {
         B.push_back(b);
     }
     if (B.empty()) return;
+    {   // (2.0.0) THE GATE: today's RTH ZigZag swings (SwingRef.h, closed candles only) + the key / MenthorQ levels
+        swg::ZigZag Z; Z.spb = s.spb; int oMin = 0, cMin = 0; const bool haveRth = swg::rthOf(s.market, oMin, cMin);
+        Z.rthLenSec = haveRth ? (cMin - oMin) * 60 : 0;
+        for (int i = from; i < last; ++i) {
+            const rsl::Bar& rb = B[(size_t)(i - from)]; if (!rb.ok || !haveRth) continue;
+            struct tm t; std::memset(&t, 0, sizeof t); if (!getLocaltime((RTDATE)times[i], &t)) continue;
+            swg::ZBar z; z.t = rb.key; z.h = rb.h; z.l = rb.l; z.c = rb.c; z.day = (long long)(t.tm_year + 1900) * 10000 + (t.tm_mon + 1) * 100 + t.tm_mday;
+            const double o = (double)op[i] / s.tick; if (!std::isfinite(o)) continue; z.o = (long long)std::llround(o);
+            z.rth = swg::isRth(t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec, s.spb, oMin, cMin);
+            Z.add(z);
+        }
+        s.gates = s.levelGates; s.gateSwings = 0;
+        for (size_t k = 0; k < Z.swings.size(); ++k) {
+            const swg::Swing& w = Z.swings[k]; if (w.confirmIdx <= 0 || (size_t)w.confirmIdx >= Z.bars.size()) continue;
+            rsl::Gate g; g.kind = rsl::G_SWING; g.dir = w.dir; g.px = w.px; g.pivKey = w.barT; g.fromKey = Z.bars[(size_t)w.confirmIdx].t;
+            g.label = std::string(w.dir < 0 ? "swing low " : "swing high ") + clockOf(w.barT);
+            s.gates.push_back(g); ++s.gateSwings;
+        }
+    }
     const long long rawNow = (long long)currentDate(), nowC = civil(rawNow), key = B.back().key;
     const bool settled = nowC != LLONG_MIN && civil(key) != LLONG_MIN && nowC >= civil(key) + SETTLE_SEC;
     const bool fresh = !s.steps.count(key) && (s.steps.empty() || key > s.steps.rbegin()->first);
@@ -273,7 +336,7 @@ void ReversalStage::decide(RSState& s) {
         if (!s.inbox.admit(key, rawNow, admitted)) { s.state = "WAITING - evidence journal write failed"; return; }
         for (const rsh::Assignment& a : admitted) addAssignment(s, a);
     }
-    const std::vector<rsl::Step> st = rsl::run(B, s.evs, &s.steps); if (st.empty()) return;
+    const std::vector<rsl::Step> st = rsl::run(B, s.evs, &s.steps, &s.gates); if (st.empty()) return;
     s.now = st.back(); s.haveNow = true; s.provisional = !s.steps.count(key);
     if (!fresh) { s.provisional = false; s.state = "running - confirmed journal"; return; }
     if (!ready) { s.state = s.inbox.terminal(key) ? "WAITING - candle settlement" : "WAITING - typed ATK/DEF source acknowledgement"; return; }
@@ -300,6 +363,7 @@ void ReversalStage::writeStatus(RSState& s, long long now) {
       << "\nREADINESS," << rsl::readinessName(rsl::readinessOf(s.now.flags, s.now.stage, liveQuality, false)) << "\nPROVISIONAL," << (s.provisional ? 1 : 0)
       << "\nJOURNAL," << s.journalPath << "\nPENDING_EVIDENCE," << s.inbox.pendingCount() << "\nIGNORED_HISTORY," << s.inbox.ignoredHistory
       << "\nWRONG_CONTRACT," << s.inbox.wrongContract << "\nEVIDENCE_WRITE_FAILURES," << s.inbox.writeFails << "\nDROPPED_EVIDENCE," << s.inbox.dropped
+      << "\nGATE," << s.gates.size() << " locations (" << s.gateSwings << " swings, levels " << s.levelNote << ", SwingRef " << swg::VERSION << ")"
       << "\nDRAWN," << s.drawn << "\nODDS,? not proven yet (" << rsl::ODDS_TICKET << ")\n";
     const std::string t = o.str();
     if (t == s.statusText && s.statusMs >= 0 && now - s.statusMs < 30000) return;
@@ -321,7 +385,7 @@ void ReversalStage::pump() {
         if (s->lastPassMs >= 0 && now >= s->lastPassMs && now - s->lastPassMs < 1000 && count == s->lastCount) return;   // at most once a second unless a bar closed
         s->lastPassMs = now; s->lastCount = count;
         static std::mutex journalMutex; std::lock_guard<std::mutex> journalLock(journalMutex);
-        readRecord(*s); readLetters(*s); decide(*s);
+        readRecord(*s); readLetters(*s); levels(*s, now); decide(*s);
         writeStatus(*s, now);
     } catch (...) { s->fault = true; s->state = "STOPPED - error, reload the chart"; }
 }
@@ -364,12 +428,12 @@ void ReversalStage::render(RSState& s) {
     const int lastR = std::min((int)pane.right, xOf(last) + slot / 2 + 2);  // the layout ends at the last candle
     // the faint stage lines and the stage names right of the last candle (full names when there is room, else the numbers)
     FONT f; f.id = HELVETICA; f.size = 8; f.style = PLAIN; setFont(f);
-    for (int st = 1; st <= 6; ++st) { const int y = rsl::yOf(st, top, bot); setPen(C_GRID, 1, P_SOLID); RCT g; g.set(coord(pane.left), coord(y), coord(lastR), coord(y)); g.draw(0, C_GRID, C_GRID, DRAW_OPAQUE, PAT_SOLID); }
+    for (int st = 1; st <= rsl::STEPS; ++st) { const int y = rsl::yOf(st, top, bot); setPen(C_GRID, 1, P_SOLID); RCT g; g.set(coord(pane.left), coord(y), coord(lastR), coord(y)); g.draw(0, C_GRID, C_GRID, DRAW_OPAQUE, PAT_SOLID); }
     if (V.b(K_SHOW_NAMES)) {
-        const int room = pane.right - lastR - 4; int wFull = 0; for (int st = 1; st <= 6; ++st) { char b[24]; std::snprintf(b, sizeof b, "%d %s", st, rsl::stageName(st)); wFull = std::max(wFull, getTextWidth(b, -1)); }
+        const int room = pane.right - lastR - 4; int wFull = 0; for (int st = 1; st <= rsl::STEPS; ++st) { char b[24]; std::snprintf(b, sizeof b, "%d %s", st, rsl::stageName(st)); wFull = std::max(wFull, getTextWidth(b, -1)); }
         const bool full = room >= wFull + 2, digits = room >= 10;
         setTextColor(C_LABEL);
-        if (full || digits) for (int st = 1; st <= 6; ++st) { char b[24]; if (full) std::snprintf(b, sizeof b, "%d %s", st, rsl::stageName(st)); else std::snprintf(b, sizeof b, "%d", st);
+        if (full || digits) for (int st = 1; st <= rsl::STEPS; ++st) { char b[24]; if (full) std::snprintf(b, sizeof b, "%d %s", st, rsl::stageName(st)); else std::snprintf(b, sizeof b, "%d", st);
             const int y = rsl::yOf(st, top, bot); RCT r; r.set(coord(lastR + 4), coord(y - 6), coord(pane.right - 1), coord(y + 6)); r.drawText(b, false, false); }
     }
     // the steps, from the record only (closed, decided candles)
@@ -398,18 +462,22 @@ void ReversalStage::render(RSState& s) {
         if (liveQuality != rse::COMPLETE) { display.quality = liveQuality; display.readiness = rsl::readinessOf(display.flags, display.stage, liveQuality, false); }
         nw::Gate currentGate; { struct tm tm0; std::memset(&tm0, 0, sizeof(tm0)); if (getLocaltime((RTDATE)currentDate(), &tm0)) currentGate = nw::atTm(s.market, tm0); }
         if (currentGate.feedBad) { display.quality = rse::UNAVAILABLE; display.readiness = 0; }
-        std::vector<std::string> rows = rsl::nowRows(display, s.haveNow ? clockOf(s.now.key) : std::string("-"));
+        std::vector<std::string> rows = rsl::wrap(rsl::nowRows(display, s.haveNow ? clockOf(s.now.key) : std::string("-"), s.tick), 40);
         if (!rows.empty()) rows[0] = std::string(s.provisional ? "Provisional " : "Confirmed ") + (s.haveNow ? clockOf(s.now.key) : std::string("-"));
         FONT fb = f; fb.style = BOLD; fb.size = 9; FONT fp = fb; fp.style = PLAIN;
-        const int lh = 13, bw = 216, bh = (int)rows.size() * lh + 8; int x = 0, y = 0;
+        // (2.0.0) one column when the pane is tall enough, else 2 - 3 columns side by side (his ~100 px panes): never cut, never taller than the pane
+        const int lh = 13, colW = 250, n = (int)rows.size();
+        const int cols = rsl::nowCols(n, pane.bottom - pane.top, lh), per = (n + cols - 1) / cols;
+        const int bw = colW * cols, bh = per * lh + 8; int x = 0, y = 0;
         if (rsl::boxAt(V.i(K_POSITION), pane.left, pane.top, lastR, pane.bottom, bw, bh, 4, x, y)) {
             setPen(C_LABEL, 1, P_SOLID); RCT b; b.set(coord(x), coord(y), coord(x + bw), coord(y + bh)); b.draw(1, C_LABEL, C_BOX_BG, DRAW_OPAQUE, PAT_SOLID);
-            for (size_t k = 0; k < rows.size(); ++k) {
+            for (int k = 0; k < n; ++k) {
                 setFont(k == 0 ? fb : fp);
                 COLOR c = C_TEXT;
-                if (k == 1 && s.haveNow && s.now.side >= 0 && rows[k] != "No attempt" && display.quality == rse::COMPLETE) c = (COLOR)(s.now.side == rsl::LOW ? V.c(K_COL_LOW) : V.c(K_COL_HIGH));
-                if (k + 1 == rows.size()) c = C_LABEL;
-                setTextColor(c); RCT r; r.set(coord(x + 6), coord(y + 4 + (int)k * lh), coord(x + bw - 4), coord(y + 4 + (int)(k + 1) * lh)); r.drawText(rows[k].c_str(), false, false);
+                if (k == 1 && s.haveNow && s.now.side >= 0 && rows[(size_t)k] != "No attempt at a level" && display.quality == rse::COMPLETE) c = (COLOR)(s.now.side == rsl::LOW ? V.c(K_COL_LOW) : V.c(K_COL_HIGH));
+                if (k + 1 == n) c = C_LABEL;
+                const int cx = x + (k / per) * colW, ry = k % per;
+                setTextColor(c); RCT r; r.set(coord(cx + 6), coord(y + 4 + ry * lh), coord(cx + colW - 4), coord(y + 4 + (ry + 1) * lh)); r.drawText(rows[(size_t)k].c_str(), false, false);
             }
             s.boxL = x; s.boxT = y; s.boxR = x + bw; s.boxB = y + bh; s.boxOn = true;
             for (size_t k = 0; k < s.hits.size();) { const RSState::Hit& h = s.hits[k]; if (h.l < s.boxR && h.r > s.boxL) s.hits.erase(s.hits.begin() + (long)k); else ++k; }   // no hover under the box
@@ -427,7 +495,7 @@ void ReversalStage::tip(RSState& s, int top, int bottom, int left, int right) {
     std::map<long long, rsl::Step>::const_iterator it = s.steps.find(s.hoverKey); if (it == s.steps.end()) return;
     int hx = -1; for (size_t k = 0; k < s.hits.size(); ++k) if (s.hits[k].key == s.hoverKey) hx = s.hits[k].r;
     if (hx < 0) return;
-    const std::vector<std::string> all = rsl::hoverRows(it->second, clockOf(it->second.key));
+    const std::vector<std::string> all = rsl::hoverRows(it->second, clockOf(it->second.key), s.tick);
     // the fit cascade: every row -> without Use / Example -> also without the Odds row; 9 then 8 pt; one column, then two
     for (int lv = 0; lv < 3; ++lv) for (int pt = 9; pt >= 8; --pt) for (int cols = 1; cols <= 2; ++cols) {
         std::vector<std::string> keep;
@@ -459,7 +527,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ReversalStage* p = new ReversalStage();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);
-    p->setDescription("LRA Reversal Stage: typed MBO evidence for Attack, Defense, Attack weakening, Turn, Re-test and Expansion. Queue outcomes and causal turn identities are preserved. Actual receipt is journaled; closed decisions restore immutable checkpoints. Provisional and incomplete data are not confirmed trade signals. BookFlow bar calculations are unchanged. Odds remain unproven.");
-    p->setVersion("1.3.0");   // RS_VERSION
+    p->setDescription("LRA Reversal Stage: at a swing / key / MenthorQ level or queue zone, typed MBO evidence for 4 steps - Trap (stacked floor), Collision (attack met by absorption / a held queue), Trapped (pace fade, D divergence, attackers underwater) and Release (hit back / reclaim, re-test held) - then the 1 ATR result. Closed decisions are recorded and never repainted. Odds remain unproven.");
+    p->setVersion("2.0.0");   // RS_VERSION
     return p;
 }

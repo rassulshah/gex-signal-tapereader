@@ -1,8 +1,23 @@
 #ifndef LS_REVERSAL_STAGE_LOGIC_H
 #define LS_REVERSAL_STAGE_LOGIC_H
-// ReversalStageLogic.h 1.2.0 (2026-10-22) -- SDK-free, typed-evidence core for
-// local pivot attempts.  A stage reports observations; it is not a trade model,
-// probability, entry recommendation, or performance claim.
+// ReversalStageLogic.h 2.0.0 (2026-10-23) -- SDK-free, typed-evidence core for local pivot attempts.
+// THE 4-STEP REVAMP (Rassul approved 05:47-05:50 CT, build ordered option B 05:55 CT):
+//   GATE (not a step)  an attempt is tracked only at a meaningful location: one of the last 3 intact swing lows / highs
+//                      (SwingRef.h rule), a key / MenthorQ level, or a live queue / LMT zone (a typed held Q at the extreme).
+//                      The new 5-candle extreme start is kept; the extreme must trade into the gate zone (max(4 ticks, 0.3 ATR)
+//                      before it, at most max(that, 0.5 ATR) through it).
+//   1 TRAP       (liquidity)  P stacking (defenders' book), Q queue held BEFORE contact.  Fail: W / B (floor pulled before tested).
+//   2 COLLISION  (execution)  an attack S / K / L at the zone AND a result A / Q held after contact, on the same candle or within
+//                             1 candle.  Step 1 alone never confirms.  Fail: Q! (the queue at the extreme broke / drained).
+//   3 TRAPPED    (fuel)       E pace fading, Tr, G, D (MBO CVD divergence within 5 candles of the collision, at the gate), or the
+//                             attackers underwater: close vs their average fill >= 0.25 ATR ("sellers -6 ticks, 1,840 lots").
+//                             Fail: a new extreme beyond the floor.
+//   4 RELEASE    (the turn)   H defenders hit back or R reclaim; then L re-test held.  Fail: X.
+//   RESULT       the close leaves the extreme by 1 ATR after a release (a result line, not a step).
+// A stage reports observations; it is not a trade model, probability, entry recommendation, or performance claim.
+// Kept: never-repaint frozen checkpoints, typed-evidence rules (only typed COMPLETE evidence steps), Q only at the attempt's own
+// extreme (1.2.0 fix #7).  Not wired yet (documented in NOTES-STAGE4-1023.md): Sr refill and Sta stop-run (their records live in
+// lsSweepRefill / lsStopRun), volume-profile gate levels (needs VAP in this pane).
 #include <algorithm>
 #include <cmath>
 #include <climits>
@@ -15,19 +30,13 @@
 
 namespace rsl {
 
-static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-10-23 merge) the outside review's typed MBO evidence engine (EV-ATK / EV-DEF / EV-QUEUE, E letter, Q!, causal checkpoints) + the 1.2.0 fix-build rule: a Q steps only at the attempt's own extreme (max(4 ticks, 0.3 ATR))
+static const char* const VERSION = "2.0.0";   // (2.0.0, 2026-10-23) the 4-step model: gate + Trap / Collision / Trapped / Release + result; D divergence, attackers underwater // (1.3.0) typed MBO evidence engine + Q at the own extreme
 enum { LOW = lst::LOW, HIGH = lst::HIGH };
 enum Status { NONE = 0, FORMING = 1, FAILED = 2, COMPLETE = 3, EXPIRED = 4 };
+enum Step4 { TRAP = 1, COLLISION = 2, TRAPPED = 3, RELEASE = 4, STEPS = 4 };
 enum Readiness {
-    READ_UNKNOWN = 0,       // no complete evidence establishes this read
-    READ_REVIEW = 1,        // an attempt exists, but is not confirmed
-    READ_CONFIRMED = 2,     // typed, complete evidence established a phase
-    READ_PARTIAL = 3,       // partial evidence was present: review only
-    READ_UNAVAILABLE = 4,   // a source/bar was unavailable: do not infer neutral
-    READ_PENDING = 5        // a future-dependent source has not resolved
+    READ_UNKNOWN = 0, READ_REVIEW = 1, READ_CONFIRMED = 2, READ_PARTIAL = 3, READ_UNAVAILABLE = 4, READ_PENDING = 5
 };
-// Flags are independent observations/diagnostics, not a score.  In particular,
-// ABSORB_MBO is deliberately distinct from P and queue support.
 enum EvidenceFlag {
     F_ATTACK = 1 << 0,
     F_ATTACK_MBO = 1 << 1,
@@ -39,7 +48,7 @@ enum EvidenceFlag {
     F_QUEUE_UNKNOWN = 1 << 7,
     F_WEAKEN_G = 1 << 8,
     F_WEAKEN_TR = 1 << 9,
-    F_PACE_FADE = 1 << 10, // existing atk::Pace.e100 <= 50; no new alpha
+    F_PACE_FADE = 1 << 10,
     F_TURN_MBO = 1 << 11,
     F_TURN_HYBRID = 1 << 12,
     F_RETEST_EXECUTED_HELD = 1 << 13,
@@ -49,20 +58,23 @@ enum EvidenceFlag {
     F_PENDING_CONTEXT = 1 << 17,
     F_LINEAGE_REJECTED = 1 << 18,
     F_STOCKED_ONLY = 1 << 19,
-    F_WEAKEN_MBO = 1 << 20,
-    F_WEAKEN_HYBRID = 1 << 21,
-    F_WEAKEN_IMPORTED = 1 << 22,
-    F_TURN_IMPORTED = 1 << 23,
-    F_WEAKEN_UNKNOWN = 1 << 24,
-    F_TURN_UNKNOWN = 1 << 25
+    F_CVD_DIV = 1 << 20,          // (2.0.0) D: MBO delta new local extreme while the candle holds a higher low / lower high
+    F_UNDERWATER = 1 << 21,       // (2.0.0) the collision's attackers are >= 0.25 ATR underwater vs their average fill
+    F_TRAP_QUEUE = 1 << 22,       // (2.0.0) a held queue BEFORE contact (Trap)
+    F_GATED = 1 << 23,            // (2.0.0) the attempt passed the location gate
+    F_COLLISION = 1 << 24,        // (2.0.0) attack + execution result within 1 candle
+    F_TURN_OTHER = 1 << 25        // imported / unknown-source turn
 };
 static const int EXT_BARS = 5, ATR_BARS = 14, IDLE_BARS = 5, MAX_BARS = 30, FAIL = -1;
-static const int E_SHOW100 = 50;       // existing AttackLogic threshold, only named here
+static const int E_SHOW100 = 50;          // existing AttackLogic threshold, only named here
+static const int D_BARS = 5;              // (2.0.0) D counts within 5 candles after the collision
+static const double UNDERWATER_ATR = 0.25; // (2.0.0) start value: attackers >= 0.25 ATR underwater (0.5 x the tick-normalised threshold)
+static const double GATE_THROUGH_ATR = 0.5;
 static const char* const ODDS_TICKET = "T-20261022-39";
 
 inline const char* stageName(int s) {
-    static const char* const N[] = { "", "Attack", "Defense", "Attack weakening", "Turn", "Re-test", "Expansion" };
-    return s >= 1 && s <= 6 ? N[s] : "";
+    static const char* const N[] = { "", "Trap", "Collision", "Trapped", "Release" };
+    return s >= 1 && s <= STEPS ? N[s] : "";
 }
 inline const char* statusName(int s) { return s == FORMING ? "forming" : s == FAILED ? "failed" : s == COMPLETE ? "complete" : s == EXPIRED ? "expired" : ""; }
 inline const char* readinessName(int r) {
@@ -72,8 +84,6 @@ inline const char* basisName(int b) {
     return b == rse::MBO ? "MBO" : b == rse::HYBRID ? "hybrid" : b == rse::IMPORTED ? "imported" : "unknown";
 }
 
-// Prices are integer ticks.  quality applies to the closed bar frame; default
-// UNVERIFIED is deliberately not treated as complete/neutral evidence.
 struct Bar {
     long long key = 0, h = 0, l = 0, c = 0;
     bool ok = false;
@@ -81,31 +91,33 @@ struct Bar {
 };
 struct Ev {
     long long key = 0;
-    // key is the journaled effective decision bar.  sourceKey keeps the
-    // original LE decision bar and received keeps first consumer receipt;
-    // neither is substituted for producer publication time.
     long long received = 0, sourceKey = 0;
     int pane = lst::ATK;
     lst::Lt l;
     rse::Meta m;
 };
+// (2.0.0) a gate location.  dir -1 a low, +1 a high, 0 either side (MenthorQ).  kind 0 swing (needs pivKey = the swing's candle,
+// fromKey = the candle that confirmed it), 1 key level, 2 MenthorQ level.  label = what the Now box shows ("swing low 8:48 AM").
+enum GateKind { G_SWING = 0, G_KEY = 1, G_MQ = 2, G_QUEUE = 3 };
+struct Gate { long long px = 0; int dir = 0, kind = G_KEY; long long pivKey = 0, fromKey = 0; std::string label; };
 
-// Persisted post-bar active-attempt state.  `anchor` is the defended cause
-// through stage 3 and becomes the established turn cause at stage 4+.  It is
-// intentionally the agreed compact contract: no inferred sub-bar ordering.
+// Persisted post-bar active-attempt state (the exact replay checkpoint).
 struct Checkpoint {
     bool on = false;
     int side = -1, stage = 0, flags = 0;
     long long ext = 0, start = 0, anchor = 0;
     int age = 0;
     std::string chain;
+    // (2.0.0) the 4-step facts
+    long long atkKey = 0, resKey = 0, vw100 = 0, atkLots = 0, gatePx = 0;
+    int collAge = -1;
+    std::string gate, story;   // story = "trap~collision~trapped~release" texts
     bool operator==(const Checkpoint& o) const {
-        return on == o.on && side == o.side && stage == o.stage && flags == o.flags && ext == o.ext && start == o.start && anchor == o.anchor && age == o.age && chain == o.chain;
+        return on == o.on && side == o.side && stage == o.stage && flags == o.flags && ext == o.ext && start == o.start && anchor == o.anchor && age == o.age && chain == o.chain
+            && atkKey == o.atkKey && resKey == o.resKey && vw100 == o.vw100 && atkLots == o.atkLots && gatePx == o.gatePx && collAge == o.collAge && gate == o.gate && story == o.story;
     }
 };
 
-// One immutable decision record.  stage is achieved phase only; quality and
-// readiness disclose data/evidence state independently.
 struct Step {
     long long key = 0;
     int side = -1, stage = 0, status = NONE;
@@ -113,10 +125,13 @@ struct Step {
     int failedStage = 0;
     std::string why, chain, here;
     int quality = rse::UNVERIFIED, flags = 0, readiness = READ_UNKNOWN;
-    long long decided = 0;              // host stamps actual native decision clock
-    Checkpoint resume;                  // exact true post-bar state for replay
+    long long decided = 0;
+    Checkpoint resume;
+    // (2.0.0) display facts of the attempt this step belongs to (also after it ended)
+    std::string gate, story; long long gatePx = 0, under = LLONG_MIN, atkLots = 0;   // under = attackers underwater in ticks (LLONG_MIN = n/a)
     bool operator==(const Step& o) const {
-        return key == o.key && side == o.side && stage == o.stage && status == o.status && ext == o.ext && start == o.start && failedStage == o.failedStage && why == o.why && chain == o.chain && here == o.here && quality == o.quality && flags == o.flags && readiness == o.readiness && decided == o.decided && resume == o.resume;
+        return key == o.key && side == o.side && stage == o.stage && status == o.status && ext == o.ext && start == o.start && failedStage == o.failedStage && why == o.why && chain == o.chain && here == o.here && quality == o.quality && flags == o.flags && readiness == o.readiness && decided == o.decided && resume == o.resume
+            && gate == o.gate && story == o.story && gatePx == o.gatePx && under == o.under && atkLots == o.atkLots;
     }
 };
 
@@ -130,8 +145,6 @@ inline double atrAt(const std::vector<Bar>& b, size_t i) {
     }
     return k >= 5 ? s / k : 0.0;
 }
-// Strict five-candle local extreme.  The trigger/ATR/expiry constants remain
-// the established defaults, not optimized parameters.
 inline void extremeOf(const std::vector<Bar>& b, size_t i, bool& isLow, bool& isHigh) {
     isLow = isHigh = false;
     if (i < (size_t)EXT_BARS || !b[i].ok) return;
@@ -148,43 +161,52 @@ struct Attempt {
     int side = LOW, stage = 0, flags = 0, age = 0;
     long long ext = 0, start = 0, anchor = 0;
     std::string chain;
+    long long atkKey = 0, resKey = 0, vw100 = 0, atkLots = 0, gatePx = 0; int collAge = -1; std::string gate, story;
 };
 inline Checkpoint checkpointOf(const Attempt& a) {
-    Checkpoint c; c.on = a.on; c.side = a.on ? a.side : -1; c.stage = a.on ? a.stage : 0; c.flags = a.on ? a.flags : 0;
-    c.ext = a.on ? a.ext : 0; c.start = a.on ? a.start : 0; c.anchor = a.on ? a.anchor : 0; c.age = a.on ? a.age : 0; c.chain = a.on ? a.chain : std::string();
+    Checkpoint c; if (!a.on) return c;
+    c.on = true; c.side = a.side; c.stage = a.stage; c.flags = a.flags; c.ext = a.ext; c.start = a.start; c.anchor = a.anchor; c.age = a.age; c.chain = a.chain;
+    c.atkKey = a.atkKey; c.resKey = a.resKey; c.vw100 = a.vw100; c.atkLots = a.atkLots; c.gatePx = a.gatePx; c.collAge = a.collAge; c.gate = a.gate; c.story = a.story;
     return c;
 }
 inline Attempt attemptOf(const Checkpoint& c) {
-    Attempt a;
-    if (!c.on) return a;
+    Attempt a; if (!c.on) return a;
     a.on = true; a.side = c.side; a.stage = c.stage; a.flags = c.flags; a.ext = c.ext; a.start = c.start; a.anchor = c.anchor; a.age = c.age; a.chain = c.chain;
+    a.atkKey = c.atkKey; a.resKey = c.resKey; a.vw100 = c.vw100; a.atkLots = c.atkLots; a.gatePx = c.gatePx; a.collAge = c.collAge; a.gate = c.gate; a.story = c.story;
     return a;
 }
 
 inline bool typedComplete(const Ev& e) { return e.m.typed && e.m.quality == rse::COMPLETE; }
 inline bool knownPrice(const Ev& e) { return e.m.priceTicks != LLONG_MIN; }
-// A delayed LE keeps its original sourceKey.  Never reinterpret a late source
-// as caused on its journaled effective bar merely because m.cause is absent.
 inline long long causeOf(const Ev& e) { return e.m.cause > 0 ? e.m.cause : e.sourceKey > 0 ? e.sourceKey : e.key; }
 inline long long orderOf(const Ev& e) { return e.received > 0 ? e.received : e.m.published; }
-inline bool causeWithin(const Ev& e, const Attempt& a) {
-    const long long c = causeOf(e);
-    return c >= a.start && c <= e.key;
-}
-// The only zone relationship asserted without a newly invented distance rule:
-// a low defense is not below the established low; a high defense is not above it.
+inline bool causeWithin(const Ev& e, const Attempt& a) { const long long c = causeOf(e); return c >= a.start && c <= e.key; }
 inline bool zoneMatches(const Ev& e, const Attempt& a) {
     return knownPrice(e) && causeWithin(e, a) && (a.side == LOW ? e.m.priceTicks >= a.ext : e.m.priceTicks <= a.ext);
 }
-// (1.3.0, keeps the 1.2.0 fix-build rule "NOW HIGH stage 2 failed chain Q") a queue Q steps only AT the attempt's own
-// extreme: its line within max(4 ticks, 0.3 ATR) of the extreme.  Legacy strip lines carry the anchor as " tk<N>".
+// a number token " <tag><digits>" at the end of / inside the strip nums ("tk29115" queue anchor, "vw2911550" attack avg fill x100)
+inline long long tagOf(const std::string& nums, const char* tag) {
+    const std::string t = std::string(" ") + tag; const size_t p = nums.rfind(t); if (p == std::string::npos) return 0;
+    long long v = 0; size_t k = p + t.size(); if (k >= nums.size()) return 0;
+    for (; k < nums.size() && nums[k] != ' '; ++k) { const char c = nums[k]; if (c < '0' || c > '9') return 0; v = v * 10 + (c - '0'); if (v > 400000000000000LL) return 0; }
+    return v;
+}
 inline long long qAnchorOf(const std::string& nums) {
     const size_t p = nums.rfind(" tk"); if (p == std::string::npos) return 0;
     long long v = 0; size_t k = p + 3; if (k >= nums.size()) return 0;
     for (; k < nums.size(); ++k) { const char c = nums[k]; if (c < '0' || c > '9') return 0; v = v * 10 + (c - '0'); if (v > 4000000000000LL) return 0; }
     return v;
 }
-inline std::string numsShown(const std::string& n) { const size_t p = n.rfind(" tk"); return p != std::string::npos && qAnchorOf(n) > 0 ? n.substr(0, p) : n; }
+// the nums as shown: the hidden " tk<N>" / " vw<N>" tokens removed
+inline std::string numsShown(const std::string& n0) {
+    std::string n = n0;
+    for (const char* tag : { " tk", " vw" }) {
+        const size_t p = n.rfind(tag); if (p == std::string::npos) continue;
+        size_t e = p + 3; bool digits = e < n.size(); while (e < n.size() && n[e] != ' ') { if (n[e] < '0' || n[e] > '9') digits = false; ++e; }
+        if (digits) n.erase(p, e - p);
+    }
+    return n;
+}
 inline long long qTolTicks(double atr) { return std::max(4LL, (long long)std::llround(0.3 * (std::isfinite(atr) ? atr : 0.0))); }
 inline bool qAtExtreme(const Ev& e, const Attempt& a, double atr) {
     const long long px = knownPrice(e) ? e.m.priceTicks : qAnchorOf(e.l.nums);
@@ -199,20 +221,16 @@ inline int dataFlag(const Ev& e) {
     return e.m.quality == rse::PARTIAL ? F_PARTIAL_CONTEXT : e.m.quality == rse::UNAVAILABLE ? F_UNAVAILABLE_CONTEXT : e.m.quality == rse::PENDING ? F_PENDING_CONTEXT : 0;
 }
 inline int stepQuality(const Bar& b, const std::vector<const Ev*>& v) {
-    int q = b.quality;
-    bool partial = false, pending = false, unavailable = false, complete = false;
+    bool partial = false, pending = false, unavailable = false;
     for (const Ev* e : v) if (e->m.typed) {
         partial = partial || e->m.quality == rse::PARTIAL;
         pending = pending || e->m.quality == rse::PENDING;
         unavailable = unavailable || e->m.quality == rse::UNAVAILABLE;
-        complete = complete || e->m.quality == rse::COMPLETE;
     }
     if (b.quality == rse::UNAVAILABLE || unavailable) return rse::UNAVAILABLE;
     if (b.quality == rse::PENDING || pending) return rse::PENDING;
     if (b.quality == rse::PARTIAL || partial) return rse::PARTIAL;
-    if (b.quality == rse::COMPLETE) return rse::COMPLETE;
-    (void)complete;
-    return q;
+    return b.quality;
 }
 inline int readinessOf(int flags, int stage, int quality, bool active) {
     if (quality == rse::UNAVAILABLE || (flags & F_UNAVAILABLE_CONTEXT)) return READ_UNAVAILABLE;
@@ -222,9 +240,6 @@ inline int readinessOf(int flags, int stage, int quality, bool active) {
     if (stage > 0) return READ_CONFIRMED;
     return active ? READ_REVIEW : READ_UNKNOWN;
 }
-
-// Legacy/untyped, incomplete, and rejected letters stay visible in `here` and
-// the chain with `*`; they cannot promote/fail a confirmed attempt.
 inline std::string contextText(const Ev& e, const char* reason) {
     std::string t = e.l.code;
     if (e.m.typed) t += std::string(" [") + basisName(e.m.basis) + ", " + rse::qualityName(e.m.quality) + "]";
@@ -235,42 +250,72 @@ inline std::string contextText(const Ev& e, const char* reason) {
 }
 inline void appendToken(std::string& s, const std::string& token) { s += (s.empty() ? "" : " ") + token; }
 inline void appendText(std::string& s, const std::string& text) { s += (s.empty() ? "" : "; ") + text; }
-
-// Stage compatibility helpers keep callers that only draw letter context from
-// breaking; run() is the authoritative typed/provenance-aware classifier.
-inline int stageOf(const Ev& e) {
-    if (!typedComplete(e)) return 0;
-    const std::string& c = e.l.code;
-    if (e.pane == lst::ATK) return (c == "S" || c == "K" || c == "L") ? 1 : (c == "G" || c == "Tr") ? 3 : c == "R" ? 4 : 0;
-    if (e.pane == lst::QUE) return rse::supportive(e.m.outcome) ? 2 : 0;
-    if (c == "A") return 2;
-    if (c == "P" && defenderBook(e)) return 2;
-    if (c == "B" && defenderBook(e)) return FAIL;
-    if (c == "H") return 4;
-    if (c == "L") return 5;
-    if (c == "X") return FAIL;
-    return 0;
+inline std::string thousands(long long v) {
+    const bool neg = v < 0; unsigned long long u = neg ? (unsigned long long)(-(v + 1)) + 1ULL : (unsigned long long)v;
+    std::string d = std::to_string(u), o; int n = 0;
+    for (size_t k = d.size(); k-- > 0;) { o.insert(o.begin(), d[k]); if (++n % 3 == 0 && k > 0) o.insert(o.begin(), ','); }
+    return neg ? "-" + o : o;
 }
-inline int stepOf(const Ev& e, int cur) {
-    const int st = stageOf(e); const std::string& c = e.l.code;
-    if (e.pane == lst::DEF && c == "H" && cur < 2) return 0;
-    if (e.pane == lst::DEF && (c == "L" || c == "X") && cur < 4) return 0;
-    if (e.pane == lst::DEF && c == "B" && st == FAIL && cur < 2) return 0;
-    return st;
+// the story part k (0 trap, 1 collision, 2 trapped, 3 release) of "a~b~c~d"
+inline std::string storyPart(const std::string& s, int k) {
+    size_t a = 0; for (int i = 0; i < k; ++i) { const size_t p = s.find('~', a); if (p == std::string::npos) return std::string(); a = p + 1; }
+    const size_t e = s.find('~', a); return s.substr(a, e == std::string::npos ? std::string::npos : e - a);
+}
+inline void storyAdd(std::string& s, int k, const std::string& t) {
+    std::string p[4]; for (int i = 0; i < 4; ++i) p[i] = storyPart(s, i);
+    if (t.empty() || p[k].find(t) != std::string::npos) return;
+    p[k] += (p[k].empty() ? "" : ", ") + t; if (p[k].size() > 60) p[k] = p[k].substr(0, 60);
+    s = p[0] + "~" + p[1] + "~" + p[2] + "~" + p[3];
+}
+// attackers underwater (ticks, > 0 = underwater) at close c: sellers at a low sold at vw -> underwater when the close is above it
+inline long long underwater(const Attempt& a, long long c) {
+    if (a.vw100 <= 0 || a.atkLots <= 0) return LLONG_MIN;
+    const long long d100 = a.side == LOW ? c * 100 - a.vw100 : a.vw100 - c * 100;
+    return d100 >= 0 ? (d100 + 50) / 100 : -((-d100 + 50) / 100);
 }
 
-// Replays closed bars oldest first.  Frozen decisions are copied byte-for-byte
-// as Steps and their persisted checkpoint, so late letters cannot invisibly
-// alter later state.  Non-frozen Steps retain a true post-bar checkpoint.
-inline std::vector<Step> run(const std::vector<Bar>& b, const std::multimap<long long, Ev>& evs, const std::map<long long, Step>* frozen = nullptr) {
+// (2.0.0) THE GATE: the location the 5-candle extreme at bar i traded into, or false.  Swings: the last 3 confirmed (fromKey <
+// this candle) swings of that side, 2 back only if beyond 1 back, 3 back only if beyond both (SwingRef.h), intact (no candle after the
+// swing's own candle and before this one traded through it).  Levels: key (dir matches) and MenthorQ (either).  Nearest wins; a swing
+// wins a tie.
+inline bool gateFor(const std::vector<Bar>& b, size_t i, const std::vector<Gate>& gates, int side, double atr, Gate& out) {
+    const long long tol = qTolTicks(atr), thr = std::max(tol, (long long)std::llround(GATE_THROUGH_ATR * (std::isfinite(atr) ? atr : 0.0)));
+    const long long x = side == LOW ? b[i].l : b[i].h; const int dir = side == LOW ? -1 : 1;
+    const auto inZone = [&](long long px) { return side == LOW ? (x <= px + tol && x >= px - thr) : (x >= px - tol && x <= px + thr); };
+    bool found = false; long long best = 0;
+    const auto take = [&](const Gate& g) { const long long d = std::llabs(x - g.px); if (!found || d < best) { found = true; best = d; out = g; } };
+    std::vector<const Gate*> sw;
+    for (const Gate& g : gates) if (g.kind == G_SWING && g.dir == dir && g.fromKey > 0 && g.fromKey < b[i].key) sw.push_back(&g);
+    std::stable_sort(sw.begin(), sw.end(), [](const Gate* p, const Gate* q) { return p->fromKey < q->fromKey; });
+    const int n = (int)sw.size();
+    for (int k = 0; k < 3 && k < n; ++k) {
+        const Gate& g = *sw[(size_t)(n - 1 - k)]; bool elig = true;
+        for (int q = 0; q < k && elig; ++q) { const Gate& r = *sw[(size_t)(n - 1 - q)]; elig = side == LOW ? g.px < r.px : g.px > r.px; }
+        if (!elig || !inZone(g.px)) continue;
+        bool intact = true;
+        for (size_t j = 0; j < i && intact; ++j) if (b[j].ok && b[j].key > g.pivKey) intact = side == LOW ? b[j].l >= g.px : b[j].h <= g.px;
+        if (intact) take(g);
+    }
+    const bool swingFound = found;
+    for (const Gate& g : gates) {
+        if (g.kind == G_SWING || g.kind == G_QUEUE) continue;
+        if (g.dir != 0 && g.dir != dir) continue;
+        if (!inZone(g.px)) continue;
+        if (swingFound && std::llabs(x - g.px) >= best) continue;
+        take(g);
+    }
+    return found;
+}
+
+// Replays closed bars oldest first.  gates == nullptr = the gate is off (tests of the step rules only).
+inline std::vector<Step> run(const std::vector<Bar>& b, const std::multimap<long long, Ev>& evs, const std::map<long long, Step>* frozen = nullptr, const std::vector<Gate>* gates = nullptr) {
     std::vector<Step> out; out.reserve(b.size());
     Attempt a;
+    const auto finish = [&](Step& s, const Attempt& x) { s.gate = x.gate; s.story = x.story; s.gatePx = x.gatePx; s.atkLots = x.atkLots; };
     for (size_t i = 0; i < b.size(); ++i) {
         if (frozen) {
             const std::map<long long, Step>::const_iterator fixed = frozen->find(b[i].key);
-            if (fixed != frozen->end()) {
-                out.push_back(fixed->second); a = attemptOf(fixed->second.resume); continue;
-            }
+            if (fixed != frozen->end()) { out.push_back(fixed->second); a = attemptOf(fixed->second.resume); continue; }
         }
         Step s; s.key = b[i].key;
         std::vector<const Ev*> all, here[2];
@@ -279,61 +324,56 @@ inline std::vector<Step> run(const std::vector<Bar>& b, const std::multimap<long
         }
         s.quality = stepQuality(b[i], all);
         for (const Ev* e : all) s.flags |= dataFlag(*e);
-
-        // A bad / unavailable intermediate bar is a data gap, not neutral
-        // evidence.  It cannot carry a defended state across the gap.
         if (!b[i].ok || b[i].quality != rse::COMPLETE) {
-            if (a.on) { s.side = a.side; s.ext = a.ext; s.start = a.start; s.chain = a.chain; s.failedStage = a.stage; s.status = EXPIRED; s.why = "data unavailable; attempt not carried across an unobserved bar"; }
+            if (a.on) { s.side = a.side; s.ext = a.ext; s.start = a.start; s.chain = a.chain; s.failedStage = a.stage; s.status = EXPIRED; s.why = "data unavailable; attempt not carried across an unobserved bar"; finish(s, a); }
             a = Attempt(); s.quality = b[i].quality; s.readiness = readinessOf(s.flags, s.stage, s.quality, false); s.resume = checkpointOf(a); out.push_back(s); continue;
         }
-
         bool isLow = false, isHigh = false; extremeOf(b, i, isLow, isHigh);
         const double atr = atrAt(b, i);
+        const long long prevKey = i > 0 ? b[i - 1].key : 0;
         auto endAttempt = [&](int status, const std::string& why) {
-            s.status = status; s.failedStage = a.stage; s.why = why; s.side = a.side; s.ext = a.ext; s.start = a.start; s.chain = a.chain; s.flags |= a.flags; a = Attempt();
+            s.status = status; s.failedStage = a.stage; s.why = why; s.side = a.side; s.ext = a.ext; s.start = a.start; s.chain = a.chain; s.flags |= a.flags; finish(s, a); a = Attempt();
         };
-        // First advance/fail the existing attempt.  age exactly persists across
-        // frozen windows and preserves the legacy 5/30-bar defaults.
         if (a.on) {
             ++a.age;
             const bool takenOut = a.side == LOW ? b[i].l < a.ext : b[i].h > a.ext;
-            if (takenOut && a.stage >= 2) endAttempt(FAILED, a.side == LOW ? "the low was taken out" : "the high was taken out");
+            if (takenOut && a.stage >= COLLISION) endAttempt(FAILED, a.side == LOW ? "the attack re-accelerated: a new low beyond the floor" : "the attack re-accelerated: a new high beyond the floor");
             else if (takenOut) a.ext = a.side == LOW ? b[i].l : b[i].h;
             else {
                 const int other = 1 - a.side; const bool otherExt = other == LOW ? isLow : isHigh;
-                if (otherExt && a.stage <= 1) endAttempt(EXPIRED, "a new extreme on the other side");
+                if (otherExt && a.stage <= TRAP) endAttempt(EXPIRED, "a new extreme on the other side");
                 else if ((a.stage == 0 && a.age >= IDLE_BARS) || a.age >= MAX_BARS) endAttempt(EXPIRED, "no progress in time");
             }
         }
         const bool ended = s.status != NONE;
-        // A failed/expired attempt may be followed by a new strict extreme on
-        // this same bar.  This is a bar fact, not a reordering of evidence.
         if (!a.on) {
             int sd = -1;
             if (isLow && isHigh) {
-                // A tie is intentionally ambiguous.  Typed complete events may
-                // break it only by counts, never a stage-rank cascade.
                 int low = 0, high = 0;
                 for (const Ev* e : here[LOW]) low += typedComplete(*e);
                 for (const Ev* e : here[HIGH]) high += typedComplete(*e);
                 sd = low > high ? LOW : high > low ? HIGH : -1;
             } else if (isLow) sd = LOW; else if (isHigh) sd = HIGH;
-            if (sd >= 0) { a.on = true; a.side = sd; a.ext = sd == LOW ? b[i].l : b[i].h; a.start = b[i].key; a.age = 0; }
+            if (sd >= 0) {
+                Attempt n; n.on = true; n.side = sd; n.ext = sd == LOW ? b[i].l : b[i].h; n.start = b[i].key; n.age = 0;
+                bool pass = gates == nullptr; Gate g;
+                if (gates && gateFor(b, i, *gates, sd, atr, g)) { pass = true; n.gate = g.label; n.gatePx = g.px; n.flags |= F_GATED; }
+                if (gates && !pass) {   // a typed held queue AT this extreme = a live queue / LMT zone
+                    for (const Ev* e : here[sd]) if (e->pane == lst::QUE && e->l.code == "Q" && typedComplete(*e) && rse::supportive(e->m.outcome) && qAtExtreme(*e, n, atr)) {
+                        pass = true; n.gate = "queue zone"; n.gatePx = knownPrice(*e) ? e->m.priceTicks : qAnchorOf(e->l.nums); n.flags |= F_GATED; break; }
+                }
+                if (pass) a = n;
+                else if (!ended) { s.here = std::string("5-candle ") + (sd == LOW ? "low" : "high") + " not at a swing / key / MenthorQ level or queue zone (no attempt)"; }
+            }
         }
         if (a.on) {
             std::vector<const Ev*> v = here[a.side];
-            // Do not manufacture a causal path.  We sort only when *every*
-            // same-bar observation has a distinct known receipt (else its
-            // producer publication); tied/unknown summaries retain journal
-            // order and cannot gain a synthetic rank ordering.
             bool fullyOrdered = !v.empty(); std::map<long long, int> pubs;
-            for (const Ev* e : v) {
-                const long long ord = orderOf(*e);
-                if (!e->m.typed || ord <= 0 || ++pubs[ord] != 1) { fullyOrdered = false; break; }
-            }
+            for (const Ev* e : v) { const long long ord = orderOf(*e); if (!e->m.typed || ord <= 0 || ++pubs[ord] != 1) { fullyOrdered = false; break; } }
             if (fullyOrdered) std::stable_sort(v.begin(), v.end(), [](const Ev* x, const Ev* y) { return orderOf(*x) < orderOf(*y); });
-            std::string part, hereText;
-            bool failed = false;
+            std::string part, hereText; bool failed = false;
+            std::vector<const Ev*> later;   // trapped / release letters: decided after this candle's collision check
+            const char* sold = a.side == LOW ? "sold" : "bought";
             for (const Ev* e : v) {
                 const std::string& c = e->l.code;
                 const int df = dataFlag(*e);
@@ -345,88 +385,115 @@ inline std::vector<Step> run(const std::vector<Bar>& b, const std::multimap<long
                 if (e->pane == lst::ATK && (c == "S" || c == "K" || c == "L")) {
                     if (!atZone) why = "outside current attempt";
                     else {
-                        a.stage = std::max(a.stage, 1); a.flags |= F_ATTACK; if (e->m.basis == rse::MBO && e->m.lots > 0) a.flags |= F_ATTACK_MBO;
-                        // Pace is a separate execution-fading observation.  50
-                        // is the existing E_SHOW100 display threshold, not tuned.
-                        if (e->m.basis == rse::MBO && e->m.lots > 0 && e->m.pace100 >= 0 && e->m.pace100 <= E_SHOW100) { a.flags |= F_PACE_FADE; a.stage = std::max(a.stage, 3); }
+                        a.flags |= F_ATTACK; if (e->m.basis == rse::MBO && e->m.lots > 0) a.flags |= F_ATTACK_MBO;
+                        a.atkKey = b[i].key;
+                        if (e->m.lots > a.atkLots) { a.atkLots = e->m.lots; const long long vw = tagOf(e->l.nums, "vw"); if (vw > 0) a.vw100 = vw; }
+                        if (e->m.basis == rse::MBO && e->m.lots > 0 && e->m.pace100 >= 0 && e->m.pace100 <= E_SHOW100) later.push_back(e);   // its pace fade = E
                         applied = true;
                     }
-                } else if (e->pane == lst::ATK && c == "E") {
-                    if (e->m.basis != rse::MBO || !atZone || e->m.lots <= 0 || e->m.pace100 < 0 || e->m.pace100 > E_SHOW100) why = "needs measured complete MBO execution fade";
-                    else { a.stage = std::max(a.stage, 3); a.flags |= F_ATTACK | F_ATTACK_MBO | F_PACE_FADE; applied = true; }
-                } else if (e->pane == lst::ATK && (c == "G" || c == "Tr")) {
-                    if (a.stage < 1) why = "needs prior attack";
-                    else {
-                        a.stage = std::max(a.stage, 3); a.flags |= c == "G" ? F_WEAKEN_G : F_WEAKEN_TR;
-                        a.flags |= e->m.basis == rse::MBO ? F_WEAKEN_MBO : e->m.basis == rse::HYBRID ? F_WEAKEN_HYBRID : e->m.basis == rse::IMPORTED ? F_WEAKEN_IMPORTED : F_WEAKEN_UNKNOWN;
-                        if ((a.flags & F_ATTACK_MBO) && e->m.pace100 >= 0 && e->m.pace100 <= E_SHOW100) a.flags |= F_PACE_FADE;
-                        applied = true;
-                    }
-                } else if (e->pane == lst::ATK && c == "R") {
-                    if (a.stage < 1) why = "needs current attack";
-                    else if (e->m.basis != rse::HYBRID || e->m.cause <= 0 || !atZone) why = "needs hybrid reclaim with explicit current cause";
-                    else { a.stage = std::max(a.stage, 4); a.anchor = e->m.cause; a.flags |= F_TURN_HYBRID; applied = true; }
-                } else if (e->pane == lst::QUE && c == "Q") {
+                } else if (e->pane == lst::ATK && (c == "E" || c == "G" || c == "Tr" || c == "D" || c == "R")) { later.push_back(e); continue; }
+                else if (e->pane == lst::QUE && c == "Q") {
                     if (rse::supportive(e->m.outcome)) {
                         if (!atZone) why = "outside current attempt";
                         else if (!qAtExtreme(*e, a, atr)) why = "queue not at the attempt's own extreme";
                         else if (a.anchor && ecause != a.anchor) { a.flags |= F_LINEAGE_REJECTED; why = "different defended cause"; }
-                        else { if (!a.anchor) a.anchor = ecause; a.stage = std::max(a.stage, 2); a.flags |= F_DEFENSE_QUEUE; applied = true; }
+                        else {
+                            if (!a.anchor) a.anchor = ecause;
+                            if (!(a.flags & F_ATTACK) && a.stage < TRAP) { a.stage = TRAP; a.flags |= F_TRAP_QUEUE; storyAdd(a.story, 0, "Q " + numsShown(e->l.nums)); }
+                            else { a.resKey = b[i].key; a.flags |= F_DEFENSE_QUEUE; }
+                            applied = true;
+                        }
                     } else if (rse::adverse(e->m.outcome)) {
                         a.flags |= F_QUEUE_ADVERSE;
-                        if (a.stage >= 2 && atZone && exactAnchor(*e, a)) { adverse = true; why = "queue broke/drained at the defended cause"; }
-                        else { a.flags |= F_LINEAGE_REJECTED; why = "queue adverse warning not tied to an active defended cause"; }
+                        if (a.stage >= TRAP && a.stage <= COLLISION && atZone && (exactAnchor(*e, a) || (!a.anchor && qAtExtreme(*e, a, atr)))) { adverse = true; why = "Q!: the queue at the extreme broke / drained"; }
+                        else { a.flags |= F_LINEAGE_REJECTED; why = "queue adverse warning not tied to the defended extreme"; }
                     } else { a.flags |= F_QUEUE_UNKNOWN; why = "queue outcome unknown"; }
-                } else if (e->pane == lst::DEF && (c == "A" || c == "P")) {
-                    if (c == "P" && !defenderBook(*e)) why = "attackers' book: review only";
-                    else if (!atZone) why = "outside current attempt";
-                    else if (a.anchor && ecause != a.anchor) { a.flags |= F_LINEAGE_REJECTED; why = "different defended cause"; }
-                    else {
-                        if (!a.anchor) a.anchor = ecause;
-                        a.stage = std::max(a.stage, 2);
-                        if (c == "P") a.flags |= F_DEFENSE_P;
-                        else { a.flags |= F_DEFENSE_A; if (e->m.basis == rse::MBO && e->m.lots > 0) a.flags |= F_ABSORB_MBO; }
-                        applied = true;
-                    }
-                } else if (e->pane == lst::DEF && c == "H") {
-                    const bool parentMatches = e->m.parentCause > 0 && e->m.parentCause == (a.anchor > 0 ? a.anchor : a.start);
-                    const bool linked = exactAnchor(*e, a) || parentMatches;
-                    const bool attackPath = (a.flags & F_ATTACK_MBO) && parentMatches && e->m.basis == rse::MBO;
-                    if (a.stage < 2 && !attackPath) why = "needs known defense or a linked MBO attack";
-                    else if (e->m.lots <= 0 || e->m.auxLots <= 0 || !atZone || !linked) { a.flags |= F_LINEAGE_REJECTED; why = "needs complete executable response matching native pivot/turn lineage"; }
-                    else { a.stage = std::max(a.stage, 4); a.anchor = e->m.cause; a.flags |= e->m.basis == rse::MBO ? F_TURN_MBO : e->m.basis == rse::HYBRID ? F_TURN_HYBRID : e->m.basis == rse::IMPORTED ? F_TURN_IMPORTED : F_TURN_UNKNOWN; applied = true; }
-                } else if (e->pane == lst::DEF && c == "L") {
-                    const bool closesHeld = knownPrice(*e) && (a.side == LOW ? b[i].c >= e->m.priceTicks : b[i].c <= e->m.priceTicks);
-                    if (a.stage < 4) why = "needs prior turn";
-                    else if (!exactAnchor(*e, a)) { a.flags |= F_LINEAGE_REJECTED; why = "different turn cause"; }
-                    else if (e->m.auxLots <= 0 || !knownPrice(*e) || !closesHeld) { a.flags |= F_STOCKED_ONLY; why = "stocked book only; no executed held re-test"; }
-                    else { a.stage = std::max(a.stage, 5); a.flags |= F_RETEST_EXECUTED_HELD; applied = true; }
-                } else if (e->pane == lst::DEF && c == "X") {
-                    if (a.stage < 4) why = "needs prior turn";
-                    else if (!exactAnchor(*e, a) || !atZone) { a.flags |= F_LINEAGE_REJECTED; why = "different turn cause"; }
-                    else { adverse = true; why = "matched turned re-test was adverse"; }
-                } else if (e->pane == lst::DEF && c == "B") {
+                } else if (e->pane == lst::DEF && c == "P") {
                     if (!defenderBook(*e)) why = "attackers' book: review only";
-                    else if (a.stage < 2) why = "needs prior defense";
-                    else if (!atZone || !exactAnchor(*e, a)) { a.flags |= F_LINEAGE_REJECTED; why = "different defended cause"; }
-                    else { adverse = true; why = "defenders stepped back at the defended cause"; }
-                } else why = "context only"; // W and unsupported combinations
-
+                    else if (!atZone) why = "outside current attempt";
+                    else if (a.stage >= COLLISION) why = "context: already past the trap";
+                    else { a.stage = std::max(a.stage, (int)TRAP); a.flags |= F_DEFENSE_P; storyAdd(a.story, 0, std::string(a.side == LOW ? "bids " : "offers ") + numsShown(e->l.nums)); applied = true; }
+                } else if (e->pane == lst::DEF && c == "A") {
+                    if (!atZone) why = "outside current attempt";
+                    else if (a.anchor && ecause != a.anchor && a.stage >= COLLISION) { a.flags |= F_LINEAGE_REJECTED; why = "different defended cause"; }
+                    else { if (!a.anchor) a.anchor = ecause; a.resKey = b[i].key; a.flags |= F_DEFENSE_A; if (e->m.basis == rse::MBO && e->m.lots > 0) a.flags |= F_ABSORB_MBO; applied = true; }
+                } else if (e->pane == lst::DEF && (c == "W" || c == "B")) {
+                    if (c == "B" && !defenderBook(*e)) why = "attackers' book: review only";
+                    else if (!atZone) why = "outside current attempt";
+                    else if (a.stage == TRAP) { adverse = true; why = "the floor was pulled before it was tested"; }
+                    else if (c == "B" && a.stage >= COLLISION && exactAnchor(*e, a)) { adverse = true; why = "defenders stepped back at the defended cause"; }
+                    else why = "context only";
+                } else if (e->pane == lst::DEF && (c == "H" || c == "L" || c == "X")) { later.push_back(e); continue; }
+                else why = "context only";
                 if (adverse) { appendToken(part, c + "!"); appendText(hereText, contextText(*e, why)); failed = true; break; }
                 appendToken(part, c + (applied ? "" : "*")); appendText(hereText, contextText(*e, applied ? "" : why));
             }
+            // COLLISION: the attack and an execution result on this candle, or one of them on the candle before
+            if (!failed && a.stage < COLLISION && a.atkKey > 0 && a.resKey > 0 && (a.atkKey == b[i].key || a.resKey == b[i].key)
+                && (a.atkKey == b[i].key || a.atkKey == prevKey) && (a.resKey == b[i].key || a.resKey == prevKey)) {
+                a.stage = COLLISION; a.collAge = a.age; a.flags |= F_COLLISION;
+                std::string res; if (a.flags & F_DEFENSE_A) res += "A"; if (a.flags & F_DEFENSE_QUEUE) res += res.empty() ? "Q" : ", Q";
+                storyAdd(a.story, 1, (a.atkLots > 0 ? thousands(a.atkLots) + " " + sold + ", " : std::string()) + "held (" + res + ")");
+            }
+            if (!failed) for (const Ev* e : later) {
+                const std::string& c = e->l.code; const bool atZone = zoneMatches(*e, a);
+                bool applied = false, adverse = false; const char* why = "";
+                if (e->pane == lst::ATK && (c == "S" || c == "K" || c == "L" || c == "E")) {   // E (or the attack's own pace fade)
+                    if (a.stage < COLLISION) why = "trapped needs a collision first";
+                    else if (e->m.basis != rse::MBO || !atZone || e->m.lots <= 0 || e->m.pace100 < 0 || e->m.pace100 > E_SHOW100) why = "needs measured complete MBO execution fade";
+                    else { a.stage = std::max(a.stage, (int)TRAPPED); a.flags |= F_PACE_FADE; storyAdd(a.story, 2, "E"); applied = true; }
+                    if (c != "E") { if (applied) appendToken(part, "E"); continue; }
+                } else if (e->pane == lst::ATK && (c == "G" || c == "Tr")) {
+                    if (a.stage < COLLISION) why = "trapped needs a collision first";
+                    else { a.stage = std::max(a.stage, (int)TRAPPED); a.flags |= c == "G" ? F_WEAKEN_G : F_WEAKEN_TR; storyAdd(a.story, 2, c); applied = true; }
+                } else if (e->pane == lst::ATK && c == "D") {
+                    const long long near = std::max(qTolTicks(atr), (long long)std::llround(0.5 * atr));
+                    if (a.stage < COLLISION) why = "D needs a collision first";
+                    else if (a.collAge < 0 || a.age - a.collAge > D_BARS) why = "D more than 5 candles after the collision";
+                    else if (e->m.basis != rse::MBO || !knownPrice(*e) || std::llabs(e->m.priceTicks - a.ext) > near) why = "D not at the gate level";
+                    else { a.stage = std::max(a.stage, (int)TRAPPED); a.flags |= F_CVD_DIV; storyAdd(a.story, 2, "D"); applied = true; }
+                } else if (e->pane == lst::ATK && c == "R") {
+                    if (a.stage < COLLISION) why = "release needs a collision first";
+                    else if (e->m.basis != rse::HYBRID || e->m.cause <= 0 || !atZone) why = "needs hybrid reclaim with explicit current cause";
+                    else { a.stage = std::max(a.stage, (int)RELEASE); a.anchor = e->m.cause; a.flags |= F_TURN_HYBRID; storyAdd(a.story, 3, "R reclaim"); applied = true; }
+                } else if (e->pane == lst::DEF && c == "H") {
+                    const bool parentMatches = e->m.parentCause > 0 && e->m.parentCause == (a.anchor > 0 ? a.anchor : a.start);
+                    const bool linked = exactAnchor(*e, a) || parentMatches;
+                    if (a.stage < COLLISION) why = "release needs a collision first";
+                    else if (e->m.lots <= 0 || e->m.auxLots <= 0 || !atZone || !linked) { a.flags |= F_LINEAGE_REJECTED; why = "needs complete executable response matching native pivot/turn lineage"; }
+                    else { a.stage = std::max(a.stage, (int)RELEASE); a.anchor = e->m.cause; a.flags |= e->m.basis == rse::MBO ? F_TURN_MBO : e->m.basis == rse::HYBRID ? F_TURN_HYBRID : F_TURN_OTHER; storyAdd(a.story, 3, "H " + thousands(e->m.lots)); applied = true; }
+                } else if (e->pane == lst::DEF && c == "L") {
+                    const bool closesHeld = knownPrice(*e) && (a.side == LOW ? b[i].c >= e->m.priceTicks : b[i].c <= e->m.priceTicks);
+                    if (a.stage < RELEASE) why = "needs a release first";
+                    else if (!exactAnchor(*e, a)) { a.flags |= F_LINEAGE_REJECTED; why = "different turn cause"; }
+                    else if (e->m.auxLots <= 0 || !knownPrice(*e) || !closesHeld) { a.flags |= F_STOCKED_ONLY; why = "stocked book only; no executed held re-test"; }
+                    else { a.flags |= F_RETEST_EXECUTED_HELD; storyAdd(a.story, 3, "L re-test held"); applied = true; }
+                } else if (e->pane == lst::DEF && c == "X") {
+                    if (a.stage < RELEASE) why = "needs a release first";
+                    else if (!exactAnchor(*e, a) || !atZone) { a.flags |= F_LINEAGE_REJECTED; why = "different turn cause"; }
+                    else { adverse = true; why = "the re-test after the release was empty"; }
+                }
+                if (adverse) { appendToken(part, c + "!"); appendText(hereText, contextText(*e, why)); failed = true; break; }
+                appendToken(part, c + (applied ? "" : "*")); appendText(hereText, contextText(*e, applied ? "" : why));
+            }
+            // the attackers underwater (the collision's average fill vs this close)
+            if (!failed && a.stage >= COLLISION) {
+                const long long u = underwater(a, b[i].c);
+                if (u != LLONG_MIN && atr > 0 && (double)u >= UNDERWATER_ATR * atr) {
+                    if (!(a.flags & F_UNDERWATER)) appendToken(part, "uw");
+                    a.flags |= F_UNDERWATER; a.stage = std::max(a.stage, (int)TRAPPED);
+                }
+            }
             if (!part.empty()) a.chain += (a.chain.empty() ? "" : " . ") + part;
             s.here = hereText;
+            const long long uNow = a.on && a.stage >= COLLISION ? underwater(a, b[i].c) : LLONG_MIN;
             if (failed) {
-                const std::string reason = hereText.empty() ? std::string("matched adverse evidence") : hereText;
-                endAttempt(FAILED, reason);
-            } else if (a.on && atr > 0 && a.stage >= 4 && (a.flags & (F_TURN_MBO | F_TURN_HYBRID | F_TURN_IMPORTED | F_TURN_UNKNOWN)) && b[i].quality == rse::COMPLETE && (a.side == LOW ? (long double)b[i].c - a.ext : (long double)a.ext - b[i].c) >= atr) {
-                s.here = hereText; a.stage = 6; s.stage = 6; s.status = COMPLETE; s.side = a.side; s.ext = a.ext; s.start = a.start; s.chain = a.chain + " . 1 ATR"; s.why = "the close left the extreme by 1 ATR after a confirmed turn"; s.flags = a.flags; a = Attempt();
+                endAttempt(FAILED, hereText.empty() ? std::string("matched adverse evidence") : hereText);
+            } else if (atr > 0 && a.stage >= RELEASE && (a.flags & (F_TURN_MBO | F_TURN_HYBRID | F_TURN_OTHER)) && (a.side == LOW ? (long double)b[i].c - a.ext : (long double)a.ext - b[i].c) >= atr) {
+                s.stage = RELEASE; s.status = COMPLETE; s.side = a.side; s.ext = a.ext; s.start = a.start; s.chain = a.chain + " . 1 ATR"; s.why = "Result: the close left the extreme by 1 ATR after the release"; s.flags = a.flags; finish(s, a); s.under = uNow; a = Attempt();
             } else if (!ended) {
-                s.side = a.side; s.stage = a.stage; s.status = a.stage > 0 ? FORMING : NONE; s.ext = a.ext; s.start = a.start; s.chain = a.chain;
+                s.side = a.side; s.stage = a.stage; s.status = a.stage > 0 ? FORMING : NONE; s.ext = a.ext; s.start = a.start; s.chain = a.chain; finish(s, a); s.under = uNow;
             } else if (a.stage > 0) {
-                // The visual Step remains the old terminal status, while its
-                // resume checkpoint faithfully records the new post-bar attempt.
                 s.stage = a.stage; s.here += (s.here.empty() ? "" : "; ") + std::string("new ") + (a.side == LOW ? "LOW" : "HIGH") + " attempt";
                 if (s.side != a.side) { s.why += " - now a " + std::string(a.side == LOW ? "LOW" : "HIGH") + " attempt"; s.side = a.side; }
             }
@@ -441,49 +508,48 @@ inline std::vector<Step> run(const std::vector<Bar>& b, const std::multimap<long
     return out;
 }
 
-// ---- immutable decision record -------------------------------------------------
-// RS|2|key|side|stage|status|ext|start|failedStage|quality|flags|readiness|decided|
-//      resumeOn|resumeSide|resumeStage|resumeFlags|resumeExt|resumeStart|resumeAnchor|
-//      resumeAge|resumeChain|why|chain|here
+// ---- immutable decision record (RS|3, 2.0.0) -----------------------------------------------------------------------------------
+// RS|3|key|side|stage|status|ext|start|failedStage|quality|flags|readiness|decided|
+//      resumeOn|resumeSide|resumeStage|resumeFlags|resumeExt|resumeStart|resumeAnchor|resumeAge|
+//      atkKey|resKey|vw100|atkLots|gatePx|collAge|resumeGate|resumeStory|resumeChain|
+//      gate|story|gatePx|under|atkLots|why|chain|here          (38 fields)
 inline std::string cleanF(const std::string& s) { std::string o; for (char c : s) if (c != '|' && c != '\r' && c != '\n') o += c; return o.size() > 200 ? o.substr(0, 200) : o; }
 inline std::string line(const Step& s) {
-    char b[360];
-    std::snprintf(b, sizeof b, "RS|2|%lld|%d|%d|%d|%lld|%lld|%d|%d|%d|%d|%lld|%d|%d|%d|%d|%lld|%lld|%lld|%d|",
+    char b[600];
+    std::snprintf(b, sizeof b, "RS|3|%lld|%d|%d|%d|%lld|%lld|%d|%d|%d|%d|%lld|%d|%d|%d|%d|%lld|%lld|%lld|%d|%lld|%lld|%lld|%lld|%lld|%d|",
         s.key, s.side, s.stage, s.status, s.ext, s.start, s.failedStage, s.quality, s.flags, s.readiness, s.decided,
-        s.resume.on ? 1 : 0, s.resume.side, s.resume.stage, s.resume.flags, s.resume.ext, s.resume.start, s.resume.anchor, s.resume.age);
-    return std::string(b) + cleanF(s.resume.chain) + "|" + cleanF(s.why) + "|" + cleanF(s.chain) + "|" + cleanF(s.here);
+        s.resume.on ? 1 : 0, s.resume.side, s.resume.stage, s.resume.flags, s.resume.ext, s.resume.start, s.resume.anchor, s.resume.age,
+        s.resume.atkKey, s.resume.resKey, s.resume.vw100, s.resume.atkLots, s.resume.gatePx, s.resume.collAge);
+    char t[96]; std::snprintf(t, sizeof t, "|%lld|%lld|%lld|", s.gatePx, s.under, s.atkLots);
+    return std::string(b) + cleanF(s.resume.gate) + "|" + cleanF(s.resume.story) + "|" + cleanF(s.resume.chain) + "|" + cleanF(s.gate) + "|" + cleanF(s.story) + t + cleanF(s.why) + "|" + cleanF(s.chain) + "|" + cleanF(s.here);
 }
 inline bool parseNumber(const std::string& f, long long& n) { return lst::fullLL(f, n); }
 inline bool validCheckpoint(const Checkpoint& c) {
-    if (!c.on) return c.side == -1 && c.stage == 0 && c.flags == 0 && c.ext == 0 && c.start == 0 && c.anchor == 0 && c.age == 0 && c.chain.empty();
-    return c.side >= LOW && c.side <= HIGH && c.stage >= 0 && c.stage <= 6 && c.flags >= 0 && c.start > 0 && c.age >= 0 && c.anchor >= 0;
+    if (!c.on) return c.side == -1 && c.stage == 0 && c.flags == 0 && c.ext == 0 && c.start == 0 && c.anchor == 0 && c.age == 0 && c.chain.empty() && c.atkKey == 0 && c.resKey == 0 && c.vw100 == 0 && c.atkLots == 0 && c.gatePx == 0 && c.collAge == -1 && c.gate.empty() && c.story.empty();
+    return c.side >= LOW && c.side <= HIGH && c.stage >= 0 && c.stage <= STEPS && c.flags >= 0 && c.start > 0 && c.age >= 0 && c.anchor >= 0 && c.atkKey >= 0 && c.resKey >= 0 && c.vw100 >= 0 && c.atkLots >= 0 && c.collAge >= -1;
 }
 inline bool parse(const std::string& s0, Step& s) {
     std::string t = s0; while (!t.empty() && (t.back() == '\r' || t.back() == '\n')) t.pop_back();
     std::vector<std::string> f; size_t a = 0;
-    for (;;) { const size_t p = t.find('|', a); f.push_back(t.substr(a, p == std::string::npos ? std::string::npos : p - a)); if (p == std::string::npos) break; a = p + 1; if (f.size() > 25) return false; }
-    if (f.size() == 12 && f[0] == "RS" && f[1] == "1") {
-        long long key = 0, side = 0, stage = 0, st = 0, ext = 0, start = 0, fs = 0;
-        if (!parseNumber(f[2], key) || key <= 0 || !parseNumber(f[3], side) || side < -1 || side > 1 || !parseNumber(f[4], stage) || stage < 0 || stage > 6 || !parseNumber(f[5], st) || st < NONE || st > EXPIRED || !parseNumber(f[6], ext) || !parseNumber(f[7], start) || start < 0 || !parseNumber(f[8], fs) || fs < 0 || fs > 6 || (side < 0 && (stage != 0 || st != NONE))) return false;
-        Step x; x.key = key; x.side = (int)side; x.stage = (int)stage; x.status = (int)st; x.ext = ext; x.start = start; x.failedStage = (int)fs; x.why = f[9]; x.chain = f[10]; x.here = f[11];
-        // RS|1 has no durable post-bar state.  It remains display-compatible but
-        // is never trusted as a v2 replay checkpoint.
-        s = x; return true;
-    }
-    if (f.size() != 25 || f[0] != "RS" || f[1] != "2") return false;
-    long long key = 0, side = 0, stage = 0, st = 0, ext = 0, start = 0, fs = 0, q = 0, flags = 0, ready = 0, decided = 0;
-    long long on = 0, rs = 0, rst = 0, rf = 0, rext = 0, rstart = 0, ranchor = 0, rage = 0;
-    if (!parseNumber(f[2], key) || key <= 0 || !parseNumber(f[3], side) || side < -1 || side > 1 || !parseNumber(f[4], stage) || stage < 0 || stage > 6 || !parseNumber(f[5], st) || st < NONE || st > EXPIRED || !parseNumber(f[6], ext) || !parseNumber(f[7], start) || start < 0 || !parseNumber(f[8], fs) || fs < 0 || fs > 6 || !parseNumber(f[9], q) || q < rse::UNVERIFIED || q > rse::PENDING || !parseNumber(f[10], flags) || flags < 0 || flags >= (1LL << 26) || !parseNumber(f[11], ready) || ready < READ_UNKNOWN || ready > READ_PENDING || !parseNumber(f[12], decided) || decided < 0 || !parseNumber(f[13], on) || (on != 0 && on != 1) || !parseNumber(f[14], rs) || !parseNumber(f[15], rst) || !parseNumber(f[16], rf) || rf < 0 || rf >= (1LL << 26) || !parseNumber(f[17], rext) || !parseNumber(f[18], rstart) || !parseNumber(f[19], ranchor) || !parseNumber(f[20], rage) || rage > INT_MAX) return false;
+    for (;;) { const size_t p = t.find('|', a); f.push_back(t.substr(a, p == std::string::npos ? std::string::npos : p - a)); if (p == std::string::npos) break; a = p + 1; if (f.size() > 38) return false; }
+    if (f.size() != 38 || f[0] != "RS" || f[1] != "3") return false;
+    long long n[40] = {0};
+    for (int k = 2; k <= 26; ++k) if (!parseNumber(f[(size_t)k], n[k])) return false;
+    for (int k = 32; k <= 34; ++k) if (!parseNumber(f[(size_t)k], n[k])) return false;
+    const long long key = n[2], side = n[3], stage = n[4], st = n[5], fs = n[8], q = n[9], flags = n[10], ready = n[11], decided = n[12];
+    if (key <= 0 || side < -1 || side > 1 || stage < 0 || stage > STEPS || st < NONE || st > EXPIRED || n[7] < 0 || fs < 0 || fs > STEPS || q < rse::UNVERIFIED || q > rse::PENDING
+        || flags < 0 || flags >= (1LL << 26) || ready < READ_UNKNOWN || ready > READ_PENDING || decided < 0 || (n[13] != 0 && n[13] != 1)
+        || n[14] < -1 || n[14] > 1 || n[15] < 0 || n[15] > STEPS || n[16] < 0 || n[16] >= (1LL << 26) || n[20] < 0 || n[20] > INT_MAX || n[26] < -1 || n[26] > INT_MAX || n[34] < 0) return false;
     if (side < 0 && (stage != 0 || st != NONE)) return false;
-    Checkpoint c; c.on = on != 0; c.side = (int)rs; c.stage = (int)rst; c.flags = (int)rf; c.ext = rext; c.start = rstart; c.anchor = ranchor; c.age = (int)rage; c.chain = f[21];
-    if (rs < -1 || rs > 1 || rst < 0 || rst > 6 || rf < 0 || rage < 0 || !validCheckpoint(c)) return false;
-    // line() emits ...age|resumeChain|why|chain|here.  The exact 25-field
-    // count above rejects a truncated or extended journal line.
-    Step x; x.key = key; x.side = (int)side; x.stage = (int)stage; x.status = (int)st; x.ext = ext; x.start = start; x.failedStage = (int)fs; x.quality = (int)q; x.flags = (int)flags; x.readiness = (int)ready; x.decided = decided; x.resume = c; x.why = f[22]; x.chain = f[23]; x.here = f[24];
+    Checkpoint c; c.on = n[13] != 0; c.side = (int)n[14]; c.stage = (int)n[15]; c.flags = (int)n[16]; c.ext = n[17]; c.start = n[18]; c.anchor = n[19]; c.age = (int)n[20];
+    c.atkKey = n[21]; c.resKey = n[22]; c.vw100 = n[23]; c.atkLots = n[24]; c.gatePx = n[25]; c.collAge = (int)n[26]; c.gate = f[27]; c.story = f[28]; c.chain = f[29];
+    if (!validCheckpoint(c)) return false;
+    Step x; x.key = key; x.side = (int)side; x.stage = (int)stage; x.status = (int)st; x.ext = n[6]; x.start = n[7]; x.failedStage = (int)fs; x.quality = (int)q; x.flags = (int)flags; x.readiness = (int)ready; x.decided = decided; x.resume = c;
+    x.gate = f[30]; x.story = f[31]; x.gatePx = n[32]; x.under = n[33]; x.atkLots = n[34]; x.why = f[35]; x.chain = f[36]; x.here = f[37];
     s = x; return true;
 }
-inline std::string fileName(const std::string& mkt, int spb) { return "RS2-" + (mkt == "6E" ? std::string("EU") : mkt) + "-" + std::to_string(spb) + ".csv"; }
-inline std::string fileName(const std::string& mkt, const std::string& contract, int spb) { return "RS2-" + (mkt == "6E" ? std::string("EU") : mkt) + "-" + rse::token(contract) + "-" + std::to_string(spb) + ".csv"; }
+inline std::string fileName(const std::string& mkt, int spb) { return "RS3-" + (mkt == "6E" ? std::string("EU") : mkt) + "-" + std::to_string(spb) + ".csv"; }
+inline std::string fileName(const std::string& mkt, const std::string& contract, int spb) { return "RS3-" + (mkt == "6E" ? std::string("EU") : mkt) + "-" + rse::token(contract) + "-" + std::to_string(spb) + ".csv"; }
 
 // ---- drawing/layout helpers retained for the host --------------------------------
 struct Look { int height = 0; int colour = lst::GREEN; bool dim = false; bool stub = false; };
@@ -492,7 +558,7 @@ inline Look lookOf(const Step& s) {
     k.colour = s.side == LOW ? lst::GREEN : lst::RED;
     if (s.status == FAILED && s.stage == 0) { k.stub = true; k.dim = true; return k; }
     if (s.status == EXPIRED && s.stage == 0) return k;
-    k.height = s.stage; k.dim = s.stage <= 1; return k;
+    k.height = s.stage; k.dim = s.stage <= TRAP; return k;
 }
 inline bool boxAt(int pos, int l, int t, int r, int b, int w, int h, int margin, int& x, int& y) {
     if (pos < 0 || pos > 8) pos = 0;
@@ -502,62 +568,96 @@ inline bool boxAt(int pos, int l, int t, int r, int b, int w, int h, int margin,
     y = row == 0 ? t + margin : row == 1 ? t + (b - t - h) / 2 : b - margin - h;
     return true;
 }
-static const double AXIS_MAX = 6.5;
+static const double AXIS_MAX = 4.5;
 inline int yOf(double v, int top, int bottom) { return bottom - (int)std::lround(v / AXIS_MAX * (double)(bottom - top)); }
 inline std::string sideWord(int side) { return side == LOW ? "LOW" : side == HIGH ? "HIGH" : "-"; }
 inline std::string evidenceSummary(int f) {
     std::vector<std::string> p;
+    if (f & F_GATED) p.push_back("at a gate level");
+    if (f & F_DEFENSE_P) p.push_back("P stacking");
+    if (f & F_TRAP_QUEUE) p.push_back("queue before contact");
+    if (f & F_COLLISION) p.push_back("collision");
     if (f & F_ABSORB_MBO) p.push_back("MBO absorption");
-    if (f & F_DEFENSE_P) p.push_back("P/book support");
-    if (f & F_DEFENSE_QUEUE) p.push_back("held/refilled queue");
-    if (f & F_WEAKEN_G) p.push_back("G withdrawal");
-    if (f & F_WEAKEN_TR) p.push_back("Tr weakening");
-    if (f & F_WEAKEN_MBO) p.push_back("MBO weakening");
-    if (f & F_WEAKEN_HYBRID) p.push_back("hybrid weakening");
-    if (f & F_WEAKEN_IMPORTED) p.push_back("imported weakening");
-    if (f & F_WEAKEN_UNKNOWN) p.push_back("unknown-source weakening");
-    if (f & F_PACE_FADE) p.push_back("execution pace fade");
+    if (f & F_DEFENSE_QUEUE) p.push_back("queue held after contact");
+    if (f & F_PACE_FADE) p.push_back("E pace fade");
+    if (f & F_WEAKEN_TR) p.push_back("Tr trapped");
+    if (f & F_WEAKEN_G) p.push_back("G pulling");
+    if (f & F_CVD_DIV) p.push_back("D CVD divergence");
+    if (f & F_UNDERWATER) p.push_back("attackers underwater");
     if (f & F_TURN_MBO) p.push_back("MBO turn");
     if (f & F_TURN_HYBRID) p.push_back("hybrid turn");
-    if (f & F_TURN_IMPORTED) p.push_back("imported turn");
-    if (f & F_TURN_UNKNOWN) p.push_back("unknown-source turn");
-    if (f & F_RETEST_EXECUTED_HELD) p.push_back("executed held re-test");
+    if (f & F_TURN_OTHER) p.push_back("imported turn");
+    if (f & F_RETEST_EXECUTED_HELD) p.push_back("re-test held");
     if (f & F_QUEUE_ADVERSE) p.push_back("adverse queue");
     if (f & F_STOCKED_ONLY) p.push_back("stocked-only L");
     if (p.empty()) return "none";
     std::string o; for (size_t i = 0; i < p.size(); ++i) o += (i ? ", " : "") + p[i]; return o;
 }
-inline std::vector<std::string> nowRows(const Step& s, const std::string& when) {
+// price text from ticks ("7,696" / "7,696.25")
+inline std::string priceText(long long ticks, double tick) {
+    if (!(tick > 0) || !std::isfinite(tick)) return std::to_string(ticks);
+    const double px = (double)ticks * tick; char b[48];
+    int dec = 0; for (double t = tick; dec < 6 && std::fabs(t - std::round(t)) > 1e-9; t *= 10) ++dec;
+    std::snprintf(b, sizeof b, "%.*f", dec, px);
+    std::string s = b; const size_t dot = s.find('.'); std::string ip = s.substr(0, dot), fp = dot == std::string::npos ? std::string() : s.substr(dot);
+    long long iv = 0; if (!lst::fullLL(ip, iv)) return s;
+    return thousands(iv) + fp;
+}
+// the 4 step texts + the underwater text ("sellers -6 ticks, 1,840 lots")
+inline std::string underText(const Step& s) {
+    if (s.under == LLONG_MIN || s.atkLots <= 0) return std::string();
+    return std::string(s.side == LOW ? "sellers " : "buyers ") + (s.under > 0 ? "-" : "+") + std::to_string(std::llabs(s.under)) + " ticks, " + thousands(s.atkLots) + " lots";
+}
+inline std::string stepText(const Step& s, int k) {
+    std::string t = storyPart(s.story, k - 1);
+    if (k == TRAPPED) { const std::string u = (s.flags & F_UNDERWATER) ? underText(s) : std::string(); if (!u.empty()) t = t.empty() ? u : u + ", " + t; }
+    if (!t.empty()) return t;
+    if (s.status == FAILED && s.failedStage == k - 1) return "failed";
+    if (s.stage >= k) return "yes";
+    if (k == RELEASE && s.stage >= COLLISION) return "waiting for H / R";
+    if (k == TRAPPED && s.stage >= COLLISION) return "waiting for E / Tr / D";
+    if (k == COLLISION) return "waiting for an attack + A / Q";
+    return "-";
+}
+// THE NOW BOX: "LOW at 7,696 (swing low 8:48 AM) · Trap: ... · Collision: ... · Trapped: ... · Release: ..." as rows
+inline std::vector<std::string> nowRows(const Step& s, const std::string& when, double tick = 0) {
     std::vector<std::string> r; r.push_back("Now " + when);
-    if (s.side < 0 || (s.stage == 0 && s.status != FAILED)) { r.push_back("No attempt"); r.push_back("Phase -"); r.push_back("Evidence " + std::string(rse::qualityName(s.quality)) + ", " + readinessName(s.readiness)); }
+    if (s.side < 0 || (s.stage == 0 && s.status != FAILED && s.gate.empty())) { r.push_back("No attempt at a level"); r.push_back("Evidence " + std::string(rse::qualityName(s.quality)) + ", " + readinessName(s.readiness)); }
     else {
-        r.push_back(sideWord(s.side) + " attempt");
-        if (s.status == FAILED && s.stage == 0) r.push_back("Phase " + std::to_string(s.failedStage) + ", failed");
-        else if (s.status == COMPLETE) r.push_back("Phase 6, complete");
-        else r.push_back("Phase " + std::to_string(s.stage) + " " + stageName(s.stage) + (s.status == FAILED ? " (last failed)" : ""));
-        r.push_back("Data " + std::string(rse::qualityName(s.quality)) + ", evidence " + readinessName(s.readiness));
-        r.push_back("Evidence " + evidenceSummary(s.flags));
-        r.push_back("Chain " + (s.chain.empty() ? std::string("-") : s.chain));
+        std::string head = sideWord(s.side) + " at " + priceText(s.ext, tick);
+        if (!s.gate.empty()) head += " (" + s.gate + ")";
+        if (s.status == FAILED) head += " - failed";
+        else if (s.status == COMPLETE) head += " - result 1 ATR";
+        else if (s.status == EXPIRED) head += " - ended";
+        r.push_back(head);
+        for (int k = TRAP; k <= RELEASE; ++k) r.push_back(std::string(stageName(k)) + ": " + stepText(s, k));
+        r.push_back("Evidence " + std::string(rse::qualityName(s.quality)) + ", " + readinessName(s.readiness));
     }
     r.push_back(std::string("Odds ?  (") + ODDS_TICKET + ")"); return r;
 }
-inline std::vector<std::string> hoverRows(const Step& s, const std::string& when) {
+inline std::vector<std::string> hoverRows(const Step& s, const std::string& when, double tick = 0) {
     std::vector<std::string> r;
-    const std::string piv = s.side == LOW ? "LOW" : s.side == HIGH ? "HIGH" : "-";
-    std::string head = "Reversal stage  " + when + "  -  " + piv + " attempt";
-    if (s.status == FAILED && s.stage == 0) head += ", failed at phase " + std::to_string(s.failedStage);
-    else head += ", phase " + std::to_string(s.stage) + " " + stageName(s.stage) + (s.status == COMPLETE ? " (complete)" : s.status == FAILED ? " (the attempt before failed)" : "");
+    std::string head = "Reversal stage  " + when + "  -  " + sideWord(s.side) + " attempt";
+    if (s.status == FAILED && s.stage == 0) head += ", failed at step " + std::to_string(s.failedStage) + " " + stageName(s.failedStage);
+    else head += ", step " + std::to_string(s.stage) + " " + stageName(s.stage) + (s.status == COMPLETE ? " (result: 1 ATR)" : s.status == FAILED ? " (the attempt before failed)" : "");
     r.push_back(head);
-    r.push_back("Question: which observed phase is this local pivot in - attack, defense, weakening, turn, re-test, expansion?");
-    r.push_back("   Data: " + std::string(rse::qualityName(s.quality)) + "; evidence: " + readinessName(s.readiness));
-    r.push_back("   Evidence: " + evidenceSummary(s.flags));
-    r.push_back("   Letters behind it: " + (s.chain.empty() ? std::string("none yet (the 5-candle extreme only)") : s.chain));
+    r.push_back("Question: is this low / high a trap that is turning? Gate, then Trap > Collision > Trapped > Release.");
+    if (!s.gate.empty()) r.push_back("   Gate: " + s.gate + " at " + priceText(s.gatePx, tick));
+    for (int k = TRAP; k <= RELEASE; ++k) r.push_back(std::string("   ") + std::to_string(k) + " " + stageName(k) + ": " + stepText(s, k));
+    r.push_back("   Evidence: " + evidenceSummary(s.flags) + "  (data " + rse::qualityName(s.quality) + ", " + readinessName(s.readiness) + ")");
+    r.push_back("   Letters: " + (s.chain.empty() ? std::string("none yet (the 5-candle extreme at the gate only)") : s.chain));
     if (!s.here.empty()) r.push_back("   On this candle: " + s.here);
     if (!s.why.empty()) r.push_back("   " + std::string(s.status == FAILED ? "Failed: " : s.status == EXPIRED ? "Ended: " : "") + s.why);
-    r.push_back("   Use: phase, evidence readiness, and data quality are separate; neither implies odds or a trade entry.");
-    r.push_back("   A stocked L alone is context, not proof that a re-test held.");
-    r.push_back(std::string("   Odds: ? - not proven (" ) + ODDS_TICKET + ")");
+    r.push_back("   Use: a step needs typed MBO evidence; Trap alone never confirms. Collision = attack + held on the same / next candle.");
+    r.push_back("   Example: LOW at a swing low, bids stacked (Trap), 1,840 sold and absorbed (Collision), sellers -6 ticks + D (Trapped), H (Release).");
+    r.push_back(std::string("   Odds: ? - not proven (") + ODDS_TICKET + ")");
     return r;
+}
+// (2.0.0) how many Now-box columns a pane of paneH px needs for n rows of lh px (1 - 3; the box is never taller than the pane)
+inline int nowCols(int n, int paneH, int lh) {
+    const int fit = std::max(1, (paneH - 16) / std::max(1, lh));
+    for (int c = 1; c < 3; ++c) if ((n + c - 1) / c <= fit) return c;
+    return 3;
 }
 inline std::vector<std::string> wrap(const std::vector<std::string>& rows, size_t width = 78) {
     std::vector<std::string> o;
@@ -567,6 +667,18 @@ inline std::vector<std::string> wrap(const std::vector<std::string>& rows, size_
         o.push_back(r);
     }
     return o;
+}
+// compatibility helper (letter -> the step it can feed); run() is authoritative
+inline int stageOf(const Ev& e) {
+    if (!typedComplete(e)) return 0;
+    const std::string& c = e.l.code;
+    if (e.pane == lst::ATK) return (c == "E" || c == "G" || c == "Tr" || c == "D") ? TRAPPED : c == "R" ? RELEASE : (c == "S" || c == "K" || c == "L") ? COLLISION : 0;
+    if (e.pane == lst::QUE) return rse::supportive(e.m.outcome) ? TRAP : rse::adverse(e.m.outcome) ? FAIL : 0;
+    if (c == "P" && defenderBook(e)) return TRAP;
+    if (c == "A") return COLLISION;
+    if (c == "H") return RELEASE;
+    if (c == "W" || c == "B" || c == "X") return FAIL;
+    return 0;
 }
 } // namespace rsl
 #endif

@@ -227,8 +227,8 @@ static void versions(const std::string& dir) {
     // (2026-10-18 settings layer) the window rows live in OrderFlowPaneSettings.h (one table per pane; registered by SettingsHost.h)
     const std::string t = slurp(dir + "/OrderFlowPaneSettings.h");
     const std::string ta = t.substr(0, t.find("bookFlowSpec")), tb = t.substr(t.find("bookFlowSpec"));
-    EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.31.0"); EQS(ofset::BAS_VERSION, bas::VERSION);   // (1.13.2 settings layer; 1.14.0 Big Lot mark)
-    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.26.0"); EQS(ofset::BF_VERSION, bf::VERSION);
+    EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.32.0"); EQS(ofset::BAS_VERSION, bas::VERSION);   // (1.13.2 settings layer; 1.14.0 Big Lot mark)
+    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.27.0"); EQS(ofset::BF_VERSION, bf::VERSION);
     // every dialog row the chart reads; the removed rows are gone
     CHECK(ta.find("\"Spike vs prior biggest\"") == std::string::npos && ta.find("\"Box shows\"") == std::string::npos && ta.find("\"Spike lookback\"") == std::string::npos && ta.find("\"Spike vs average\"") != std::string::npos);
     CHECK(tb.find("\"Spike vs prior biggest\"") == std::string::npos && tb.find("\"Box shows\"") == std::string::npos && tb.find("\"Spike lookback\"") == std::string::npos && tb.find("\"Spike vs average\"") != std::string::npos);
@@ -272,7 +272,7 @@ static void fixBuild() {
         CHECK(mx >= 800 / 0.9 - 1 && mx <= 800 / 0.5 + 1);                          // axis top ~ the tallest bar / (0.5 - 0.9): never 20,000 vs 800-lot bars
     }
     CHECK(off::pairPx(100, 90) >= 50);                                              // even a huge reserve keeps half the pane
-    CHECK(lst::ROW_H == 11 && lst::SUB_ROWS == 1 && std::string(lst::VERSION).compare(0, 5, "1.2.0") == 0);
+    CHECK(lst::ROW_H == 11 && lst::SUB_ROWS == 1 && std::string(lst::VERSION).compare(0, 5, "1.3.0") == 0);
     imp::Params P; P.fromFile = true; off::InfoRow r;
     CHECK(off::impliedRow(P, 1000, 0, r) && r.wide && r.label == "Implied: 0% of volume" && r.v[0].empty() && r.v[1].empty());
     off::Info I; I.twoCol = true; I.colHead[0] = "Buyers"; I.colHead[1] = "Sellers";
