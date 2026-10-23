@@ -390,7 +390,7 @@ int main() {
         const mock::Draw* bd = text(h, "A", 0x22C55E);
         CHECK(strip(h, e, 0, true) == "A@G" && strip(h, e, 1, true) == "H@G", ("(1.23.0) A in the Holding strip, H in the Turn & re-test strip, both the defenders' green: " + strip(h, e, 0, true) + " / " + strip(h, e, 1, true)).c_str());
         CHECK(bd && bd->y >= stripY0(h) && bd->y < stripY0(h) + 2 * lst::ROW_H, "(1.23.0) the strips sit at the top of the pane, under the question line");
-        {   bool lab = text(h, "Holding") != nullptr && text(h, "Turn & re-test") != nullptr; bool border = false;
+        {   bool lab = text(h, "Floor") != nullptr && text(h, "Release") != nullptr; bool border = false;
             for (auto& hit : e->badgeHit) for (auto& d : h.draws) if (d.type == "box" && d.x == hit.first.l && d.r == hit.first.r && d.b == hit.first.b) border = true;
             CHECK(lab && !border, "(1.23.0) the strip labels at the left; no boxes / borders around the letters"); }
         {   bool over = false; if (bd) over = bd->x < S->lastBox.r && bd->x + 10 > S->lastBox.l && bd->y < S->lastBox.b && bd->y + 10 > S->lastBox.t;
@@ -552,7 +552,7 @@ int main() {
             auto tipHas = [&](const std::string& t) { return tipJoined().find(t) != std::string::npos; };
             CHECK(e->lastTip.r > e->lastTip.l && e->lastTipLevel >= 0, ("(1.20.0) the hover drawn (fit level " + std::to_string(e->lastTipLevel) + ")").c_str());
             if (std::getenv("TIP_DUMP")) std::printf("TIP level %d:%s\n", e->lastTipLevel, tipJoined().c_str());
-            CHECK(tipHas("Holding: A") && tipHas("(also on this candle: W, P, B)") && tipHas("Question: are the defenders holding this extreme?"), "(1.23.0) hover header: the Holding strip, A, the others (W, P, B), the strip question");
+            CHECK(tipHas("Floor: A") && tipHas("(also on this candle: W, P, B)") && tipHas("Question: is there a floor at this level"), "(1.23.0) hover header: the Holding strip, A, the others (W, P, B), the strip question");
             CHECK(tipHas("A  Absorbed - will this low hold?"), "(1.20.0) hover A: the question it answers");
             CHECK(!tipHas("Tr  Trapped") && !tipHas("G  Giving up"), "(1.21.0) no Tr / G block in the Defense hover (they are on the attacker pane)");
             CHECK(true, "(1.21.0) G hover moved to the attacker pane");
@@ -584,10 +584,10 @@ int main() {
             {   RTX_EVENT evg = moveAt(br0.r + 30, (br0.t + br0.b) / 2, i); p->mouse(&evg); h.draws.clear(); p->draw();
                 CHECK(e->badgeTip < 0 && e->lastTip.r <= e->lastTip.l, "(1.20.0) the mouse in the badge row but beside the badge: no hover"); }
             RTX_EVENT ev2 = moveAt(5, 280, i); p->mouse(&ev2); h.draws.clear(); p->draw();
-            CHECK(e->badgeTip < 0 && !tipHas("Holding: A"), "(1.19.0) mouse off the letters: hover gone");
+            CHECK(e->badgeTip < 0 && !tipHas("Floor: A"), "(1.19.0) mouse off the letters: hover gone");
             {   const off::IconRect* t1 = stripHit(h, e, 1); CHECK(t1 != nullptr, "(1.23.0) the Turn & re-test letter's rectangle");
                 if (t1) { const off::IconRect tr1 = *t1; RTX_EVENT ev3 = moveAt((tr1.l + tr1.r) / 2, (tr1.t + tr1.b) / 2, i); p->mouse(&ev3); h.draws.clear(); p->draw();
-                    CHECK(tipHas("Turn & re-test: L") && tipHas("L  Reloaded - were the bids back at the level on the re-test?") && tipHas("lots of bids waited in the zone = "), "(1.23.0) the Turn & re-test hover: L with the Q line's numbers"); } }
+                    CHECK(tipHas("Release: L") && tipHas("L  Reloaded - were the bids back at the level on the re-test?") && tipHas("lots of bids waited in the zone = "), "(1.23.0) the Turn & re-test hover: L with the Q line's numbers"); } }
             pc::test_ok = false; off::off_test_cursor_wnd = nullptr; }
         // ---- restart: G / W read back from the turns file, Tr from the Delta Profile's record - the same badge, nothing re-decided
         const std::string tf = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
