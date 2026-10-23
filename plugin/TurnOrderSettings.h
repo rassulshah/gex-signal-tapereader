@@ -4,7 +4,7 @@
 #include "SettingsSpec.h"
 
 namespace torset {
-static const char* const PLUGIN_VERSION = "1.1.0";
+static const char* const PLUGIN_VERSION = "1.1.1";
 enum K { K_SHOW, K_COL_BID, K_COL_OFFER, K_GATE_ATR, K_MIN_SIZE, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

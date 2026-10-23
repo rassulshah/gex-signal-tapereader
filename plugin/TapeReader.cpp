@@ -98,7 +98,7 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.3.3"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.3.4"          // keep equal to tr::VERSION and the setVersion literal below
 // (1.3.3, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the banner's BUYERS / SELLERS / OPTIONS detail popup on mouse-over is OFF (TR_BANNER_HOVER; code kept). TRACK_MOUSE stays
 // only for the chart-wide candle follow (HoverBoard: the banner and the order-flow panes read the candle under the mouse) - no popup.
 static const bool TR_BANNER_HOVER = false;
@@ -171,8 +171,7 @@ static bool writeAtomic(const std::string& path, const std::string& text) {
 }
 static short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 
-// one input file: path, stamp, when it was checked, what happened
-struct Src { std::string path; long long sig = -2, checked = -1, mtime = 0, size = 0, readAt = -1; int res = tr::RD_MISSING; std::string note = "not read"; bool good = false; };
+using Src = tr::InputSource;    // path-aware source identity / cache state (TapeReaderLogic.h)
 
 struct TRState {
     std::string identity, root, symbol, mkt; int spb = 0; double tick = 0; std::string state = "starting"; bool faulted = false;
@@ -329,14 +328,7 @@ bool TapeReader::readBars(TRState& S, long n)
 // stat at most every `every` ms; true when the file changed (or appeared / vanished) since it was last read
 bool TapeReader::check(Src& s, long long nowMs, long long every)
 {
-    if (s.checked >= 0 && nowMs >= s.checked && nowMs - s.checked < every) return false;
-    s.checked = nowMs;
-    long long mt = 0, sz = 0; const long long sig = tr::fileSig(s.path, &mt, &sz);
-    // a small file is re-read every 10 s even with the same stamp (a same-size rewrite inside the stamp's resolution)
-    const bool recheck = sig >= 0 && sz <= 256 * 1024 && (s.readAt < 0 || nowMs - s.readAt >= 10000 || nowMs < s.readAt);
-    if (sig == s.sig && !recheck) return false;
-    s.sig = sig; s.mtime = mt; s.size = sz; s.readAt = nowMs;
-    return true;
+    return tr::checkInput(s, nowMs, every);
 }
 
 void TapeReader::loadInputs(TRState& S, long long nowMs)
@@ -930,6 +922,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. A 1-2 line banner at the top left (the read + the Liquidity warning); mouse over it for BUYERS / SELLERS / OPTIONS. Settings: Position, Offset X / Y, Banner background.");
-    p->setVersion("1.3.3");   // TR_VERSION = tr::VERSION = trset::PLUGIN_VERSION
+    p->setVersion("1.3.4");   // TR_VERSION = tr::VERSION = trset::PLUGIN_VERSION
     return p;
 }

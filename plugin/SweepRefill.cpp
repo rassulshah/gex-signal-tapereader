@@ -73,7 +73,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define SWR_VERSION "1.1.1"     // = swr::VERSION = swrset::PLUGIN_VERSION = the setVersion literal
+#define SWR_VERSION "1.1.2"     // = swr::VERSION = swrset::PLUGIN_VERSION = the setVersion literal
 
 #ifdef SWR_TEST_CLOCK
 long long swrTestClockMs();
@@ -613,6 +613,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.1.0) VAP: the POC / VAH / VAL levels
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the refill window is decided and the feed drained while the chart is quiet
     p->setDescription("LRA Sweep Refill v1.1.0 - Sr on the price chart. Green Sr under the swept wick: sellers swept 8+ bid prices through an intact swing low (one of the last 3 swings of the 1-bar ZigZag from the RTH open) or a key / MenthorQ level, at a local low, and the bids came back (half the size that rested there within 5 s, still there 5 s later on NQ; per market from the validation) - the stops were run and absorbed. Red Sr over the swept high: the mirror. Sr? = promising, not proven yet; markets / sides not proven are recorded only. A short line joins the swing taken out to the sweep candle; the thin line is the ZigZag. Never on two adjacent candles. Decided once, never repainted; every sweep is recorded for the nightly test. Hover a mark for the numbers. Needs the market-by-order feed; works from the moment it is on the chart. Example: NQ Oct 9 8:55 AM, 19 prices swept through the swing low from 8:48 AM, 87% back in 3 s -> green Sr.");
-    p->setVersion("1.1.1");   // SWR_VERSION
+    p->setVersion("1.1.2");   // SWR_VERSION
     return p;
 }

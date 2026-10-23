@@ -1,5 +1,5 @@
 /********************************************************************************
- *  MboCheck.cpp  --  Investor/RT RTX extension  lsMboCheck  (1.1.1, 2026-10-12)
+ *  MboCheck.cpp  --  Investor/RT RTX extension  lsMboCheck  (1.1.2, 2026-10-22)
  *
  *  MBO CHECK: does this chart's data feed deliver market-by-order data (DBO / MBO: every order's NEW / MOD / DEL / FILL with
  *  its order id) to plugins through the SDK's DEPTH_BY_ORDER class, and how much full market depth (MARKET_DEPTH) does it give?
@@ -33,10 +33,11 @@
  *    - Opened from calc / draw only (the chart's own context). 1st try: the chart's symbol spelled out; if after 60 s there
  *      is no event, one 2nd try with NULL. A crash guard file (MboCheck\_opening-<contract-period-identity>.txt) marks each open; if IRT
  *      dies inside it, the next start shows "not checked" instead of opening it again (delete the file to try again).
- *  (1.1.1, LQ010 2026-10-12, the MBO RECORDER) every DBO event this chart receives is also appended, raw and unchanged, to
- *  lsFlexLevels\MboCheck\raw\<contract-period-identity>-<session>.csv (session = the 17:00 CT trading day, yyyymmdd):
+ *  (1.1.2, LQ010 2026-10-22, the MBO RECORDER) every DBO event this chart receives is also appended, raw and unchanged, to
+ *  lsFlexLevels\MboCheck\raw\<contract-period-identity>-<session>.csv (session = the event's 17:00 CT trading day, yyyymmdd;
+ *  UNASSIGNED when IRT cannot convert the event timestamp):
  *      seq|ct_time|steady_ms|action|side|price|prev_price|size|order_id|aggressor_id|bid|ask|bid_size|ask_size
- *  one append per drained slice (never per event), after the slice; a failed append is counted and the slice's lines are
+ *  one buffered append per represented session in a drained slice (never per event), after the slice; a failed append is counted and its lines are
  *  dropped (never retried in a loop). Nothing is interpreted: the nightly check compares these records with Databento's MBO of
  *  the same contract and day to settle what NEW / MOD / DEL / FILL mean on this feed before any signal uses them.
  *  Logic without the SDK: MboCheckLogic.h (tested). Per-chart state: HostSlot.h.
@@ -61,6 +62,7 @@
 #include <chrono>
 #include <cstdint>
 #include <fstream>
+#include <map>
 #include <string>
 #include <vector>
 #include <cmath>
@@ -72,7 +74,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define MC_VERSION "1.1.1"          // keep equal to mbo::VERSION and the setVersion literal below
+#define MC_VERSION "1.1.2"          // keep equal to mbo::VERSION and the setVersion literal below
 
 enum { CTX_CALC = 0, CTX_DRAW = 1, CTX_TIMER = 2 };
 
@@ -181,7 +183,7 @@ private:
     void open(MCState& S, const std::string& sym);
     void drain(MCState& S, int ctx, long long nowMs);
     void readDepth(MCState& S, long long nowMs);
-    void record(MCState& S, const std::string& lines, RTDATE stamp);
+    void record(MCState& S, const std::string& session, const std::string& lines);
     void status(MCState& S, long long nowMs);
     void render(MCState& S);
 };
@@ -246,7 +248,7 @@ void MboCheck::drain(MCState& S, int ctx, long long nowMs)
     if (p.flag != 1 && S.lastResubMs >= 0 && nowMs - S.lastResubMs < 1000 && nowMs >= S.lastResubMs) return;
     const long long t0 = steadyMs();
     int n = 0; bool cap = false, haveLast = false; RTDATE lastStamp = 0;
-    std::string rec; rec.reserve(64 * 256);                          // (1.1.0) this slice's raw lines
+    std::map<std::string, std::string> rec;                           // one raw append per event-derived session in this drain
     try {
         if (!(S.dbo->*mcMember(McDboFlag()))) S.lastResubMs = nowMs;
         while (true) {
@@ -260,11 +262,16 @@ void MboCheck::drain(MCState& S, int ctx, long long nowMs)
                 char line[256];
                 struct tm et; std::memset(&et, 0, sizeof(et));
                 char ts[24] = "";
-                if (getLocaltime(o.timestamp, &et)) std::snprintf(ts, sizeof(ts), "%04d%02d%02d %02d:%02d:%02d", et.tm_year + 1900, et.tm_mon + 1, et.tm_mday, et.tm_hour, et.tm_min, et.tm_sec);
+                std::string session = mbo::RECORDER_UNASSIGNED_SESSION;
+                if (getLocaltime(o.timestamp, &et)) {
+                    std::snprintf(ts, sizeof(ts), "%04d%02d%02d %02d:%02d:%02d", et.tm_year + 1900, et.tm_mon + 1, et.tm_mday, et.tm_hour, et.tm_min, et.tm_sec);
+                    const std::string tagged = mbo::recorderSession(et.tm_year + 1900, et.tm_mon + 1, et.tm_mday, et.tm_hour);
+                    if (!tagged.empty()) session = tagged; else S.p.recorderUnassignedLines++;
+                } else S.p.recorderUnassignedLines++;
                 std::snprintf(line, sizeof(line), "%lld|%s|%lld|%u|%u|%.9g|%.9g|%lu|%d|%d|%.9g|%.9g|%lu|%lu\n", ++S.recSeq, ts, nowMs, (unsigned)o.action, (unsigned)o.buySell,
                               (double)o.price, (double)o.previousPrice, (unsigned long)o.size, o.orderID, o.aggressorOrderID, (double)o.bid, (double)o.ask,
                               (unsigned long)o.bidsize, (unsigned long)o.asksize);
-                rec += line;
+                rec[session] += line;
             }
             if (p.samples.size() < (size_t)mbo::SAMPLE_MAX) {
                 mbo::Sample e;
@@ -280,35 +287,25 @@ void MboCheck::drain(MCState& S, int ctx, long long nowMs)
     } catch (...) { p.faults++; S.dboDead = true; }                  // never re-enter a faulting call (#30)
     if (haveLast) p.lastEventWhen = timeText(lastStamp, true);
     mbo::noteSlice(p, n, cap);
-    if (!rec.empty()) record(S, rec, lastStamp);
+    for (std::map<std::string, std::string>::const_iterator it = rec.begin(); it != rec.end(); ++it) record(S, it->first, it->second);
 }
 
-// (1.1.1) append one slice of raw DBO lines to this contract-period session file; header on a new file; failures counted, never looped
-void MboCheck::record(MCState& S, const std::string& lines, RTDATE stamp)
+// (1.1.2) append one drain's rows for ONE event-derived session. A boundary-spanning backlog must not put pre-17:00 rows
+// into the next trading day just because that happens to be the slice's final event.
+void MboCheck::record(MCState& S, const std::string& session, const std::string& lines)
 {
-    const std::string dir = flexDir(); if (dir.empty() || S.id.market.empty()) return;
-    struct tm t; std::memset(&t, 0, sizeof(t));
-    if (!getLocaltime(stamp, &t)) return;
-    // the 17:00 Central trading day: an event at or after 17:00 belongs to the next day's session
-    std::time_t day = 0;
-    { struct tm d = t; d.tm_hour = 12; d.tm_min = d.tm_sec = 0; d.tm_isdst = -1; day = std::mktime(&d); if (day == (std::time_t)-1) return; }
-    if (t.tm_hour >= 17) day += 86400;
-    struct tm sd; std::memset(&sd, 0, sizeof(sd));
-#if defined(_WIN32)
-    localtime_s(&sd, &day);
-#else
-    localtime_r(&day, &sd);
-#endif
-    char sess[16]; std::snprintf(sess, sizeof(sess), "%04d%02d%02d", sd.tm_year + 1900, sd.tm_mon + 1, sd.tm_mday);
+    const long long count = (long long)std::count(lines.begin(), lines.end(), '\n');
+    const std::string dir = flexDir();
+    if (dir.empty() || S.id.market.empty() || session.empty()) { S.p.recorderFailures++; S.p.recorderLostLines += count; return; }
     makeDir(dir + "\\MboCheck"); makeDir(dir + "\\MboCheck\\raw");
-    const std::string path = dir + "\\MboCheck\\raw\\" + mbo::fileStem(S.id) + "-" + sess + ".csv";
+    const std::string path = dir + "\\MboCheck\\raw\\" + mbo::fileStem(S.id) + "-" + session + ".csv";
     const bool fresh = !statFile(path);
     std::ofstream f(path.c_str(), std::ios::binary | std::ios::app);
-    if (!f) { S.p.recorderFailures++; return; }
+    if (!f) { S.p.recorderFailures++; S.p.recorderLostLines += count; return; }
     if (fresh) f << "seq|ct_time|steady_ms|action|side|price|prev_price|size|order_id|aggressor_id|bid|ask|bid_size|ask_size\n";
     f.write(lines.data(), (std::streamsize)lines.size()); f.flush();
-    if (!f) { S.p.recorderFailures++; return; }
-    S.p.recorderLines += (long long)std::count(lines.begin(), lines.end(), '\n');
+    if (!f) { S.p.recorderFailures++; S.p.recorderLostLines += count; return; }
+    S.p.recorderLines += count;
 }
 
 // once a second, from the chart's own calls only (the SDK's available() always asks about "this chart")
@@ -427,6 +424,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the verdict must appear (and age) while the feed is idle, without forcing repaints
     p->setDescription("LRA MboCheck: shows whether this chart's feed delivers market-by-order (MBO / DBO) events and full depth. One line on the chart; no settings.");
-    p->setVersion("1.1.1");   // MC_VERSION
+    p->setVersion("1.1.2");   // MC_VERSION
     return p;
 }

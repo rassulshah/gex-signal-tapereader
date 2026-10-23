@@ -49,7 +49,7 @@
 
 namespace tr {
 
-static const char* const VERSION = "1.3.3";   // 1.3.3 (2026-10-18 23:37 CT, Rassul "get rid of the hover over ..."): the banner detail popup off (TapeReader.cpp TR_BANNER_HOVER), logic unchanged; // 1.3.2 (2026-10-18, his decision list): Offset X / Y removed (9-spot Position only);  1.3.1 (2026-10-18 settings audit): the settings window from TapeReaderSettings.h / SettingsSpec.h (keyed TapeReader.settings-<MKT>.txt, migrated once from TapeReader.place-<MKT>.txt); same rows, drawing unchanged // 1.3.0 (2026-10-18): the Market State (MarketState.h) - every indicator's facts read, the zone story (ZoneStory.h) stepped per closed bar, odds ZONE_HOLD, SRC READ posted, lsFlexLevels\MarketState\<MKT>-<spb>.json every 2 s for Claude; nothing new drawn. // was 1.2.1;   // 1.2.1 (2026-10-14 20:07, Rassul "no AE"): AE records no longer read - no AE text, tag or vote. // 1.2.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 3): line 1 shows no BULLISH / BEARISH n of 4 bias (ClaimGates.h LRA_SHOW_TAPE_BIAS) and no turn / swing % - "Turn odds learning" (LRA_SHOW_TURN_ODDS); Tgt without %; Pull lines without "support / resistance leaving"; "Added at PDL: 42 bids, 150 lots (4.4x) fast, 90% re-added after hits"; "reloading? (I 2.1x)", "iceberg?"; "(Ex?)" without "exhausted"; "Bids 2.6x normal at PDL ?"; "+GEX PDL 6,020 (model, 7m old) ?"; the OPTIONS lines keep their ? (ODEX too) and say the grid age. Logged reads unchanged except the reworded phrases.  // 1.1.4 (2026-10-14, Rassul 15:07 CT approval, peer review E "Delta Profile A ... INVALID"): the A (absorption) is no longer a FLOW vote or a BUYERS / SELLERS message (ClaimGates.h LRA_SHOW_ABSORPTION_REASON, default hidden; the A circle stays on the chart); the LEVELS line shows the gamma node without the "(dlrs buy dips / sell rips / chase)" cause (LRA_SHOW_HVL_CUSHION).   // 1.1.3 (2026-10-14 CR4800, Rassul 07:13 variant B): the ONE banner top left (bias / turn / swing / next + the Liquidity warning, 11 pt, solid background), the BUYERS / SELLERS / OPTIONS detail on its hover, Position Top left + Offset X / Y; 1.1.2 (2026-10-14): the hourly swings (HrHI / HrLO, pivot_1h) are no longer targets ("Next:"), AsiaHI / AsiaLO and CWH / CWL bucketed as asia / current_week; 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
+static const char* const VERSION = "1.3.4";   // 1.3.3 (2026-10-18 23:37 CT, Rassul "get rid of the hover over ..."): the banner detail popup off (TapeReader.cpp TR_BANNER_HOVER), logic unchanged; // 1.3.2 (2026-10-18, his decision list): Offset X / Y removed (9-spot Position only);  1.3.1 (2026-10-18 settings audit): the settings window from TapeReaderSettings.h / SettingsSpec.h (keyed TapeReader.settings-<MKT>.txt, migrated once from TapeReader.place-<MKT>.txt); same rows, drawing unchanged // 1.3.0 (2026-10-18): the Market State (MarketState.h) - every indicator's facts read, the zone story (ZoneStory.h) stepped per closed bar, odds ZONE_HOLD, SRC READ posted, lsFlexLevels\MarketState\<MKT>-<spb>.json every 2 s for Claude; nothing new drawn. // was 1.2.1;   // 1.2.1 (2026-10-14 20:07, Rassul "no AE"): AE records no longer read - no AE text, tag or vote. // 1.2.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 3): line 1 shows no BULLISH / BEARISH n of 4 bias (ClaimGates.h LRA_SHOW_TAPE_BIAS) and no turn / swing % - "Turn odds learning" (LRA_SHOW_TURN_ODDS); Tgt without %; Pull lines without "support / resistance leaving"; "Added at PDL: 42 bids, 150 lots (4.4x) fast, 90% re-added after hits"; "reloading? (I 2.1x)", "iceberg?"; "(Ex?)" without "exhausted"; "Bids 2.6x normal at PDL ?"; "+GEX PDL 6,020 (model, 7m old) ?"; the OPTIONS lines keep their ? (ODEX too) and say the grid age. Logged reads unchanged except the reworded phrases.  // 1.1.4 (2026-10-14, Rassul 15:07 CT approval, peer review E "Delta Profile A ... INVALID"): the A (absorption) is no longer a FLOW vote or a BUYERS / SELLERS message (ClaimGates.h LRA_SHOW_ABSORPTION_REASON, default hidden; the A circle stays on the chart); the LEVELS line shows the gamma node without the "(dlrs buy dips / sell rips / chase)" cause (LRA_SHOW_HVL_CUSHION).   // 1.1.3 (2026-10-14 CR4800, Rassul 07:13 variant B): the ONE banner top left (bias / turn / swing / next + the Liquidity warning, 11 pt, solid background), the BUYERS / SELLERS / OPTIONS detail on its hover, Position Top left + Offset X / Y; 1.1.2 (2026-10-14): the hourly swings (HrHI / HrLO, pivot_1h) are no longer targets ("Next:"), AsiaHI / AsiaLO and CWH / CWL bucketed as asia / current_week; 1.1.1 (2026-10-13 9:40 PM): 12 / 11 pt, never over the HOD / LOD table or price; 1.1.0 (2026-10-13): LEVELS removed, OPTIONS (blue), BUYERS / SELLERS in the panes' SPEC language (lots / ratio / pace), default Bottom centre
 // (6:40 PM) StackStats' one-order clause = st::ONE_ORDER_TAIL (StackStatsLogic.h); test_tr_ofcompat.cpp checks the two are equal
 static const char* const STACK_ONE_ORDER = "may not reload ?";
 enum { NEUTRAL = 0, BULL = 1, BEAR = -1 };
@@ -183,6 +183,32 @@ inline std::vector<std::string> lines(const std::string& text, bool completeOnly
         a = e + 1;
     }
     return v;
+}
+
+// Tape Reader's own input cache. A path is part of a source identity: at a session rollover the new
+// record file must be read even if its size/time signature collides with the previous session's file.
+struct InputSource {
+    std::string path, seenPath;
+    long long sig = -2, checked = -1, mtime = 0, size = 0, readAt = -1;
+    int res = RD_MISSING; std::string note = "not read"; bool good = false;
+    bool resetForPath() {
+        if (path == seenPath) return false;
+        seenPath = path; sig = -2; checked = -1; mtime = size = 0; readAt = -1;
+        res = RD_MISSING; note = "path changed"; good = false;
+        return true;
+    }
+};
+// Stat at most every `every` ms. A changed path resets identity before throttling or comparing the
+// path-independent file stamp, so a session/timeframe switch cannot reuse an older snapshot.
+inline bool checkInput(InputSource& s, long long nowMs, long long every) {
+    s.resetForPath();
+    if (s.checked >= 0 && nowMs >= s.checked && nowMs - s.checked < every) return false;
+    s.checked = nowMs;
+    long long mt = 0, sz = 0; const long long sig = fileSig(s.path, &mt, &sz);
+    const bool recheck = sig >= 0 && sz <= 256 * 1024 && (s.readAt < 0 || nowMs - s.readAt >= 10000 || nowMs < s.readAt);
+    if (sig == s.sig && !recheck) return false;
+    s.sig = sig; s.mtime = mt; s.size = sz; s.readAt = nowMs;
+    return true;
 }
 
 // ---- the chart's bars ------------------------------------------------------------------------------------------------------

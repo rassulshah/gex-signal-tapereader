@@ -66,7 +66,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define SRM_VERSION "1.2.0"     // = stl::VERSION = srmset::PLUGIN_VERSION = the setVersion literal
+#define SRM_VERSION "1.2.1"     // = stl::VERSION = srmset::PLUGIN_VERSION = the setVersion literal
 
 #ifdef SRM_TEST_CLOCK
 long long srmTestClockMs();
@@ -581,6 +581,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.2.0) VAP: the POC / VAH / VAL levels
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the burst ends and the feed is drained while the chart is quiet
     p->setDescription("LRA Stop Run v1.2.0 - St / Sta on the price chart. St marks where stop orders fired: a burst of many small market orders in one moment (3x the normal burst), just through an intact swing (one of the last 3 swings of the 1-bar ZigZag from the RTH open), a key level, a MenthorQ level or a volume-profile level (POC / VAH / VAL). 10 s later (NQ) it is decided live: back across the level and a big resting order filled there = Sta, green when stops below a low were absorbed (bullish), red above a high. Shown per market only where the validation proved it (NQ green Sta?, GC grey St?); everything else is recorded, not drawn. On a candle with an Sr only the Sr is drawn. Hover a mark for the numbers. Needs the market-by-order feed. Example: St at 7672.25 below the swing low from 8:48 AM, 3.4x; 10 s later back above and a 12-lot bid filled -> green Sta.");
-    p->setVersion("1.2.0");   // SRM_VERSION
+    p->setVersion("1.2.1");   // SRM_VERSION
     return p;
 }

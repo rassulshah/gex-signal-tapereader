@@ -138,7 +138,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* IR_VERSION = "0.8.2";   // (0.8.2, 2026-10-22 MBO recorder fix P1) dbo_HH rows stamped by ARRIVAL time (ArrivalStamp.h): a row IRT stamps with the resting order's old time gets the latest time already written, so it lands in the right hour file and replays in feed order; status DBO adds restamped / max_back_s; (0.8.1) the book object parked at done() / destroy() - IRT faulted inside its destructor at every quit; (0.8.0) the depth recorder: chart-context open, 250 ms guarded clock, valid books only, hourly dom_HH / dbo_HH, coverage; stuck-bar skip; pass watchdog
+static const char* IR_VERSION = "0.8.3";   // (0.8.2, 2026-10-22 MBO recorder fix P1) dbo_HH rows stamped by ARRIVAL time (ArrivalStamp.h): a row IRT stamps with the resting order's old time gets the latest time already written, so it lands in the right hour file and replays in feed order; status DBO adds restamped / max_back_s; (0.8.1) the book object parked at done() / destroy() - IRT faulted inside its destructor at every quit; (0.8.0) the depth recorder: chart-context open, 250 ms guarded clock, valid books only, hourly dom_HH / dbo_HH, coverage; stuck-bar skip; pass watchdog
 //   // (0.7.1 audit) complete VAP bars and cursor advancement are durable-only; fixed-market readers remain footprint-only; MBO is accurately labelled on CQG and bounded per pass.
 //   // (0.6.5) times every step: any step over 250 ms is traced as SLOW (the IRT freeze hunt, 2026-10-08)   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
 #ifndef IR_FIXED
@@ -1087,13 +1087,18 @@ void IRTReader::depthIdentify(DepthState& D)
     const int spb = getSecondsPerBar();
     const std::string id = mkt + "|" + sym + "|" + std::to_string(spb);
     if (id == D.id && tick == D.tick) return;
+    // A period change is a lifecycle reset for coverage and SDK objects, but
+    // not for the market/contract's DBO arrival order.  The new subscription
+    // can immediately resend resting orders with older timestamps.
+    const bool sameDboStream = irl::sameMboStream(D.mkt, D.sym, mkt, sym);
     depthStop(D);
     try { depthFlush(D, irSteadyMs(), true); } catch (...) {}
     if (D.owner && !D.folder.empty() && !D.mkt.empty()) std::remove((D.folder + "\\_depth-owner-" + D.mkt + ".txt").c_str());
     delete D.md; D.md = nullptr; delete D.dbo; D.dbo = nullptr;
     D.mdDead = D.mdBlocked = D.dboDead = D.dboBlocked = D.dboCqg = D.dboLive = false; D.clockDomOff = D.clockDboOff = false;
     D.avail = false; D.maxLevels = 0; D.availMs = -1; D.domHash = 0; D.domSec = -1; D.timerTried = false;
-    D.owner = false; D.ownerMs = -1; D.firstBarKey = -1; D.cov = irl::FillCoverage(); D.dboSkip = false; D.skipCheckMs = -1; D.arrival.reset();
+    D.owner = false; D.ownerMs = -1; D.firstBarKey = -1; D.cov = irl::FillCoverage(); D.dboSkip = false; D.skipCheckMs = -1;
+    if (!sameDboStream) D.arrival.reset();  // contract/market changed; a prior stream's arrival order no longer applies
     D.id = id; D.mkt = mkt; D.sym = sym; D.root = root; D.tick = tick; D.spb = spb; D.folder = RSet().folder;
 }
 

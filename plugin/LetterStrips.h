@@ -36,7 +36,7 @@
 
 namespace lst {
 
-static const char* const VERSION = "1.1.0";   // 1.1.0: compact strips (ROW_H 11, one row per strip)
+static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-10-23 MBO review merge): E (attack pace faded to half) in Running-out, Q! (queue broke / drained) shown as a warning first // 1.1.0: compact strips (ROW_H 11, one row per strip)
 enum { LOW = 0, HIGH = 1 };                    // the pivot being built (= dt::LOW / dt::HIGH): LOW = a low pivot (green defenders)
 enum { GREEN = 0, RED = 1 };                   // the colour of the side that acts: buyers green, sellers red
 enum Pane { ATK = 0, DEF = 1, QUE = 2 };       // QUE = the queue meter's letters, drawn on the Defense pane's Holding strip
@@ -56,23 +56,24 @@ inline const char* stripName(int pane, int strip) {
 // the strip of a letter on its pane (-1 = not a strip letter on that pane). 'L' is the large order on the attacker pane and the
 // re-test reloaded on the Defense pane.
 inline int stripOf(int pane, const std::string& c) {
-    if (pane == ATK) { if (c == "S" || c == "K" || c == "L") return 0; if (c == "R" || c == "Tr" || c == "G") return 1; return -1; }
-    if (c == "A" || c == "Q" || c == "W" || c == "P" || c == "B") return 0;
+    if (pane == ATK) { if (c == "S" || c == "K" || c == "L") return 0; if (c == "R" || c == "Tr" || c == "E" || c == "G") return 1; return -1; }
+    if (c == "A" || c == "Q" || c == "Q!" || c == "W" || c == "P" || c == "B") return 0;
     if (c == "H" || c == "L" || c == "X") return 1;
     return -1;
 }
 // the fixed priority inside a strip: 0 = strongest. Approved 2026-10-22: Defense A > W > P > B (Q right after A), then H > L > X;
 // Attacker S > K > L, then R > Tr > G.
 inline int rankOf(int pane, const std::string& c) {
-    static const char* const atk0[] = { "S", "K", "L" }; static const char* const atk1[] = { "R", "Tr", "G" };
+    if (pane != ATK && c == "Q!") return -1; // never hide a broken/drained queue behind a positive A or Q
+    static const char* const atk0[] = { "S", "K", "L" }; static const char* const atk1[] = { "R", "Tr", "E", "G" };
     static const char* const def0[] = { "A", "Q", "W", "P", "B" }; static const char* const def1[] = { "H", "L", "X" };
     const int s = stripOf(pane, c); if (s < 0) return 99;
     const char* const* v = pane == ATK ? (s == 0 ? atk0 : atk1) : (s == 0 ? def0 : def1);
-    const int n = pane == ATK ? 3 : (s == 0 ? 5 : 3);
+    const int n = pane == ATK ? (s == 0 ? 3 : 4) : (s == 0 ? 5 : 3);
     for (int k = 0; k < n; ++k) if (c == v[k]) return k;
     return 99;
 }
-inline bool isWarning(int pane, const std::string& c) { return pane != ATK && (c == "W" || c == "B" || c == "X"); }
+inline bool isWarning(int pane, const std::string& c) { return pane != ATK && (c == "Q!" || c == "W" || c == "B" || c == "X"); }
 
 // one letter decided on a candle
 struct Lt {
@@ -147,16 +148,16 @@ inline std::vector<std::string> stripQuestion(int pane, int strip) {
         r.push_back("   Use: the attack is the fuel - watch the Defense pane for an A on the same candle. Example: red K at a low = a big seller hit it");
     } else if (pane == ATK) {
         r.push_back("Question: are the attackers running out? (stages 3-4 of the pivot)");
-        r.push_back("   How: one letter per candle - R stop run reclaimed > Tr trapped > G attackers pulling their orders");
-        r.push_back("   Use: after an A, a Running-out letter is the exhaustion step. Example: red G at a low = the sellers gave up");
+        r.push_back("   How: R reclaimed > Tr trapped > E executed attack pace <= half > G withdrawal/weakening");
+        r.push_back("   Use: E = the attack is fading (pace halved), G = attackers pulling. Example: red E at a low = sellers slowing");
     } else if (strip == 0) {
         r.push_back("Question: are the defenders holding this extreme? (stages 2-3 of the pivot)");
         r.push_back("   How: one letter per candle - A absorbed > Q queue > W withdrew (warning) > P pressed in > B stepped back (warning)");
-        r.push_back("   Use: A is the hold; W / B are warnings in the colour of the side they hurt. Example: green A at a low = bids absorbed the sellers");
+        r.push_back("   Use: A = absorption candidate, Q = queue held, Q! = queue broke. Example: green A at a low = bids absorbed sellers");
     } else {
         r.push_back("Question: did the defenders turn it and hold the re-test? (stages 4-5 of the pivot)");
         r.push_back("   How: one letter per candle - H hit back > L re-test reloaded > X re-test empty (warning)");
-        r.push_back("   Use: H = the turn; L = the re-test held (entry zone); X = the re-test is empty. Example: green L = bids reloaded at the low");
+        r.push_back("   Use: H = the counter-attack; L = re-test liquidity (confirm fills). Example: green L = bids reloaded at the low");
     }
     return r;
 }

@@ -203,6 +203,16 @@ inline bool domValid(const std::vector<double>& v, double tick, std::string& why
 // hour file name of a CT hour: dom_09.csv / dbo_09.csv
 inline std::string hourFile(const char* kind, int hh) { char b[32]; snprintf(b, sizeof(b), "%s_%02d.csv", kind, hh < 0 ? 0 : hh > 23 ? 23 : hh); return b; }
 
+// DBO arrival ordering belongs to the subscribed market/contract, not the
+// chart period.  A period-only chart rebind recreates the SDK subscription;
+// retaining the arrival clock keeps a resent resting order with an older
+// timestamp from being written before the last row already recorded.
+inline bool sameMboStream(const std::string& oldMarket, const std::string& oldSymbol,
+                          const std::string& newMarket, const std::string& newSymbol)
+{
+    return !oldMarket.empty() && !oldSymbol.empty() && oldMarket == newMarket && oldSymbol == newSymbol;
+}
+
 // (0.8.0) a footprint bar whose volume-at-price IRT never loads (HG 2026-10-09 16:00, the maintenance boundary: the cursor stayed
 // there 5 days, 2,006 "not loaded yet" passes, nothing written) is skipped - and logged - once it failed `tries` passes AND it is
 // either 10+ minutes old or on the 16:00-17:00 CT boundary. A bar that loads late is still written if it loads before that.

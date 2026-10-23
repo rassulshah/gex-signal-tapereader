@@ -39,7 +39,7 @@
 #include <vector>
 
 namespace dh {
-static const char* const VERSION = "0.2.0";   // 0.2.0 (2026-10-22 evening, VALIDATE-CONTEXT-MARKS OH-1, Rassul approved 17:39 CT): PARAM,SHOW (0 = LOG ONLY, the default in every market: oH lit LESS at gamma levels than at random prices, 0.75x - 0.83x): nothing drawn, no hover, the Z / L record kept
+static const char* const VERSION = "0.2.1";   // 0.2.0 (2026-10-22 evening, VALIDATE-CONTEXT-MARKS OH-1, Rassul approved 17:39 CT): PARAM,SHOW (0 = LOG ONLY, the default in every market: oH lit LESS at gamma levels than at random prices, 0.75x - 0.83x): nothing drawn, no hover, the Z / L record kept
 typedef long long Tick;
 enum { BUY = 0, SELL = 1 };                        // side 0 = bids / aggressive buys (green), 1 = offers / aggressive sells (red)
 enum { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -402,13 +402,20 @@ public:
         } else if (act == DEL) {
             book.erase(id);
         } else {                                                                                                     // FILL
+            // A zero-sized fill has no executed quantity, so it cannot create a
+            // price "hit" for the refill detector or add fill flow.
+            if (size <= 0) { ++tally.garbage; return; }
             std::unordered_map<long long, Ord>::iterator it = book.find(id);
             int rest = it != book.end() ? it->second.side : (side == 0 || side == 1 ? 1 - side : -1);
             if (rest < 0) { ++tally.garbage; return; }
             const int aggr = 1 - rest;
             if (it != book.end()) { it->second.lastFill = ms; it->second.size = std::max(0LL, it->second.size - size); }
-            lastHit[rest][px] = ms;
-            atom(Atom{ ms, aggr, px, size, size, true, false });
+            // Snapshots and old backlog remain useful book state, but they are not
+            // live executions and must not become the antecedent of a later "refill".
+            if (inFlowWindow(ms)) {
+                lastHit[rest][px] = ms;
+                atom(Atom{ ms, aggr, px, size, size, true, false });
+            }
         }
     }
     // once a second (or faster: it rate-limits itself), with the CT ms clock and the forming candle's key
@@ -531,13 +538,15 @@ public:
 
 private:
     struct Read { bool ok = false; double flowX = 0, norm = 0; long long adds = 0, fills = 0, repSize = 0, repMedMs = 0; int repCount = 0, refCount = 0; Tick refPx = 0; std::string paths; };
+    bool inFlowWindow(long long ms) const { return ms >= nowMs - (long long)P.winS * 1000; }
     void atom(const Atom& a) {
-        if (a.ms < nowMs - (long long)P.winS * 1000) return;            // (0.1.1) older than the window (a snapshot / backlog): not flow
+        if (!inFlowWindow(a.ms)) return;                                // (0.1.1) older than the window (a snapshot / backlog): not flow
         if (lastPx > 0 && atrTicks > 0 && std::fabs((double)(a.px - lastPx)) > P.reachAtr * atrTicks + 2 * halfW() + 4) { nearCount(a); return; }
         atoms.push_back(a); nearCount(a);
     }
     void add(int side, Tick px, long long lots, long long size, bool isNew, long long ms, long long id) {
         if (lots <= 0) return;
+        if (!inFlowWindow(ms)) return;                                 // a stale NEW/MOD is book state only, never a refill candidate
         std::unordered_map<Tick, long long>::const_iterator h = lastHit[side].find(px);
         if (h != lastHit[side].end() && ms - h->second <= P.refWinMs && ms >= h->second) pend.push_back(PendRef{ ms, side, px, id });
         atom(Atom{ ms, side, px, lots, size, false, isNew });

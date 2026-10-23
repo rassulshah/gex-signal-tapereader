@@ -49,7 +49,7 @@
 
 namespace swr {
 
-static const char* const VERSION = "1.1.1";   // (1.1.1, 2026-10-22 evening, Rassul 17:16 CT IMPLIED FILLS option B) an implied fill (Ev::implied, the feed's side "?" FILL - ImpliedFill.h) is never a sweep trade: it only takes its lots off the resting order
+static const char* const VERSION = "1.1.2";   // (1.1.1, 2026-10-22 evening, Rassul 17:16 CT IMPLIED FILLS option B) an implied fill (Ev::implied, the feed's side "?" FILL - ImpliedFill.h) is never a sweep trade: it only takes its lots off the resting order
 enum Side { BID = 0, ASK = 1 };                    // the RESTING side: a sweep of BIDs = sellers sweeping down = a bullish Sr candidate
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum RefKind { REF_PIVOT = 0, REF_KEY = 1, REF_MQ = 2, REF_X5 = 3, REF_VP = 4 };   // REF_PIVOT = a ZigZag swing (1.1.0); REF_VP = POC / VAH / VAL (1.1.0); REF_X5 = 1.0.0 records only
@@ -153,7 +153,9 @@ struct Detector {
         }
         return s;
     }
-    void clearBook() { book.clear(); at[0].clear(); at[1].clear(); ++bookResets; }
+    // A reset makes both the burst's pre-liquidity and any pending refill observation incomplete.
+    // Keep already-decided marks, but never bridge an MBO data gap with a new Sr decision.
+    void clearBook() { book.clear(); at[0].clear(); at[1].clear(); b = Burst(); pending.clear(); ++bookResets; }
 
     // ---- one order-book event (IRT DEPTH_BY_ORDER semantics; ms = the event clock) --------------------------------------------
     void onEvent(const Ev& e) {
@@ -182,16 +184,17 @@ struct Detector {
             if (it != book.end()) { restOff(it->second, e.id); book.erase(it); }
             break; }
         case FILL: {
+            if (e.size == 0) return;                       // a zero-lot FILL is not an execution / swept price
             if (e.implied && skipImplied) {             // (1.1.1) implied: not a sweep / refill trade; the resting order still loses the lots
                 ++impliedFills; impliedLots += e.size;
                 if (it != book.end()) { Ord& o = it->second; o.size -= std::min(o.size, e.size); }
                 break;
             }
-            int side = e.side;
-            if (it != book.end()) side = it->second.side; else ++unknownFills;
+            if (it == book.end()) { ++unknownFills; ++fills; return; }  // keep feed accounting, never infer aged liquidity from an unmapped ID
+            const int side = it->second.side;
             if (side != BID && side != ASK) return;
-            fill(side, e.px, e.size, e.sec);            // the sweep sees the book BEFORE this fill takes its lots
-            if (it != book.end()) { Ord& o = it->second; o.size -= std::min(o.size, e.size); }
+            fill(side, e.px, e.size, e.sec);             // verified resting ID; observes the book BEFORE this execution takes its lots
+            { Ord& o = it->second; o.size -= std::min(o.size, e.size); }
             break; }
         default: break;
         }

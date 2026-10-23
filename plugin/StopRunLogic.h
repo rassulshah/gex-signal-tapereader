@@ -36,12 +36,13 @@
 #include <map>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 #include "SwingRef.h"
 
 namespace stl {
 
-static const char* const VERSION = "1.2.0";
+static const char* const VERSION = "1.2.1";
 enum Side { DOWN = -1, UP = 1 };            // DOWN = sellers hit bids through a low; UP = buyers lift offers through a high
 enum Outcome { PENDING = 0, ABSORBED = 1, NOT_ABSORBED = 2 };
 enum RefKind { REF_KEY = 0, REF_X5 = 1, REF_PRIOR = 2, REF_SWING = 3, REF_MQ = 4, REF_VP = 5 };   // REF_X5 / REF_PRIOR: 1.0 / 1.1 records only
@@ -114,8 +115,9 @@ inline int bullish(const Event& e) { return e.side == DOWN ? 1 : 0; }   // an ab
 struct Burst {
     bool on = false; int side = 0; long long startMs = 0, lastMs = 0, startSec = 0; long long firstPx = 0, lo = 0, hi = 0;
     long long lots = 0, fills = 0; std::vector<long long> ids; bool idsKnown = false; std::vector<long long> pxs;
-    std::map<long long, long long> rest;   // resting order id -> lots filled in this burst (both sides; filtered at evaluation)
-    std::map<long long, long long> restPx; // resting order id -> its fill price (ticks)
+    // Resting executions retain their price: a single order id can have fills before and through the reference.  At close, only
+    // its through-reference lots are transferred to Pending, so pre-level partial fills cannot satisfy the Sta big-order rule.
+    std::map<std::pair<long long, long long>, long long> rest;   // (resting order id, fill price) -> lots; bounded by REST_CAP
     void clear() { *this = Burst(); }
 };
 // a fired run waiting for its live decision: resting fills at / beyond the level since the burst started, the burst's extreme, reclaim
@@ -186,10 +188,8 @@ struct Detector {
         int& m = marksPerBar[e.barT]; e.drawn = m < 2; if (e.drawn) ++m;
         ++runs; markUsed(x.side, r.px);
         Pending p; p.e = e; p.ext = 0; p.endMs = x.lastMs; p.endSec = x.startSec; p.extPx = x.side == DOWN ? x.lo : x.hi; p.lastPx = x.side == DOWN ? x.lo : x.hi;
-        for (std::map<long long, long long>::const_iterator it = x.rest.begin(); it != x.rest.end(); ++it) {
-            const long long px = x.restPx[it->first];
-            if (x.side == DOWN ? px <= r.px : px >= r.px) p.rest[it->first] += it->second;
-        }
+        for (std::map<std::pair<long long, long long>, long long>::const_iterator it = x.rest.begin(); it != x.rest.end(); ++it)
+            if (x.side == DOWN ? it->first.second <= r.px : it->first.second >= r.px) p.rest[it->first.first] += it->second;
         if (pending.size() >= (size_t)PENDING_CAP) pending.erase(pending.begin());
         pending.push_back(p);
         fired.push_back(e);
@@ -247,7 +247,8 @@ struct Detector {
     void restFill(long long ms, int restSide, long long px, long long lots, long long restId) {
         (void)ms;
         if (restId == 0 || lots <= 0 || lots > 10000000) return;
-        if (b.on && restSide == b.side && (int)b.rest.size() < REST_CAP) { b.rest[restId] += lots; b.restPx[restId] = px; }
+        const std::pair<long long, long long> k = std::make_pair(restId, px);
+        if (b.on && restSide == b.side && ((int)b.rest.size() < REST_CAP || b.rest.count(k))) b.rest[k] += lots;
         for (size_t i = 0; i < pending.size(); ++i) {
             Pending& p = pending[i]; if (p.e.side != restSide) continue;
             if (p.e.side == DOWN ? px > p.e.refPx : px < p.e.refPx) continue;

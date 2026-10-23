@@ -41,7 +41,7 @@
 #include "SwingRef.h"     // (1.3.0) the pivots = the last-3 intact swings of the 1-bar ZigZag (the St / Sr rule)
 
 namespace qm {
-static const char* const VERSION = "1.3.0";   // 1.3.0 (2026-10-22 evening fix build, live records 19:09-19:48 CT: "held 1114% q0 7", live 397% / 999%, ES 29 / NQ 30 Q rows in 45 min): the BASE = max(q0, the NORMAL queue there) - normal = this session's median q0 at touched levels (5+ tests), else the median resting lots per tick within 1 ATR x the zone's ticks; NO percent and NO call while the queue is under the normal ("building"); percent shown capped "200%+"; the badge reads "G1  Q 143 (2.4x)" (lots + the ratio to the normal); Q rows (record + Holding strip) only at key / MenthorQ levels and CONFIRMED pivots (SwingRef.h last-3 intact swings of the session's 1-bar ZigZag), one per level per touch, none within 1 candle of the last one at that level, none for a test that never reached the normal;   // 1.2.0 (2026-10-22 evening, Rassul 17:55 CT "more readable"): the badge reads "G1  Q 76%" (two spaces after the name, a space after Q; unlabelled "Q 41%"), NO "?" on the badge in any market (NQ / GC still draw the red call only); a call made inside a news / settle window says so in its hover, a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = the call is recorded only (no outline) - NewsWindow.h;   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE-2026-10-22.md): the 10-s CALL (red < 40% left / green >= 100% + holding) per market, C lines; the candle-close Q is a record only
+static const char* const VERSION = "1.4.0";   // 1.3.0 (2026-10-22 evening fix build, live records 19:09-19:48 CT: "held 1114% q0 7", live 397% / 999%, ES 29 / NQ 30 Q rows in 45 min): the BASE = max(q0, the NORMAL queue there) - normal = this session's median q0 at touched levels (5+ tests), else the median resting lots per tick within 1 ATR x the zone's ticks; NO percent and NO call while the queue is under the normal ("building"); percent shown capped "200%+"; the badge reads "G1  Q 143 (2.4x)" (lots + the ratio to the normal); Q rows (record + Holding strip) only at key / MenthorQ levels and CONFIRMED pivots (SwingRef.h last-3 intact swings of the session's 1-bar ZigZag), one per level per touch, none within 1 candle of the last one at that level, none for a test that never reached the normal;   // 1.2.0 (2026-10-22 evening, Rassul 17:55 CT "more readable"): the badge reads "G1  Q 76%" (two spaces after the name, a space after Q; unlabelled "Q 41%"), NO "?" on the badge in any market (NQ / GC still draw the red call only); a call made inside a news / settle window says so in its hover, a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = the call is recorded only (no outline) - NewsWindow.h;   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE-2026-10-22.md): the 10-s CALL (red < 40% left / green >= 100% + holding) per market, C lines; the candle-close Q is a record only
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -173,7 +173,10 @@ class Engine {
 public:
     Params P; std::string market; double tick = 0.25;
     struct Ord { int side = BID; Tick px = 0; long long size = 0, tAt = 0; bool filledLast = false; };
-    struct Flow { long long t; int k; long long lots, oid; };
+    // before is the already-resting quantity immediately before an F_ADD.  A
+    // size increase can reuse an old order id, so the current order size alone
+    // cannot prove that the added lots still rest.
+    struct Flow { long long t; int k; long long lots, oid, before = 0; };
     struct Test {
         int id = 0, side = BID, kind = K_LEVEL; Tick anchor = 0, lo = 0, hi = 0; std::string name;
         long long t0 = 0, q0 = 0, tBroke = 0, tLeft = 0, startBar = 0, tDecided = 0; int barsSeen = 0, decided = -1; std::string why;
@@ -279,7 +282,7 @@ public:
                 if (o.size > 0) flow(o.side, o.px, F_ADD, o.size, oid, t);
             } else {
                 const long long d = size - o.size;
-                if (d > 0) flow(o.side, o.px, F_ADD, d, oid, t);
+                if (d > 0) flow(o.side, o.px, F_ADD, d, oid, t, o.size);
                 else if (d < 0 && t - o.tAt >= P.restMs) flow(o.side, o.px, F_PULL, -d, oid, t);
                 adj(o.side, o.px, d); o.size = std::max(0LL, size); o.filledLast = false;
             }
@@ -450,8 +453,14 @@ public:
             else if (f->k == F_PULL) pu += f->lots;
             else if (now - f->t >= P.restMs) {     // a refill that STAYED: still resting at this price, rested >= 1 s
                 std::unordered_map<long long, Ord>::const_iterator b = book.find(f->oid);
-                if (b != book.end() && b->second.side == T.side && b->second.px >= T.lo && b->second.px <= T.hi && b->second.tAt <= f->t)
-                    rf += std::min(f->lots, b->second.size);
+                if (b != book.end() && b->second.side == T.side && b->second.px >= T.lo && b->second.px <= T.hi && b->second.tAt <= f->t) {
+                    // For a same-id MOD increase, only the quantity above the
+                    // pre-increase remainder can be attributed to this add.
+                    // Otherwise an old order that grows and then shrinks back
+                    // would falsely make the withdrawn addition look retained.
+                    const long long retained = std::max(0LL, b->second.size - f->before);
+                    rf += std::min(f->lots, retained);
+                }
             }
         }
         const double s = (double)span / 1000.0;
@@ -558,13 +567,13 @@ private:
         const int s = slotOf(t); eatLots[s][side] += lots;
         const long long sec = t / 1000; if (sec != lastEatSec[side]) { lastEatSec[side] = sec; ++eatSecs[s][side]; }
     }
-    void flow(int side, Tick px, int k, long long lots, long long oid, long long t) {
+    void flow(int side, Tick px, int k, long long lots, long long oid, long long t, long long before = 0) {
         if (lots <= 0) return;
         for (size_t i = 0; i < tests.size(); ++i) {
             Test& T = tests[i];
             if (T.side != side || px < T.lo || px > T.hi) continue;
             if (k != F_EAT && !T.contact) continue;            // the clean-up after price left is not a pull / refill
-            T.flows.push_back(Flow{ t, k, lots, oid });
+            T.flows.push_back(Flow{ t, k, lots, oid, before });
             while (!T.flows.empty() && T.flows.front().t < t - P.winMs - P.restMs) T.flows.pop_front();
             if (T.flows.size() > 20000) T.flows.pop_front();
         }

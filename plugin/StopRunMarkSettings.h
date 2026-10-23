@@ -14,7 +14,7 @@
 #endif
 
 namespace srmset {
-static const char* const PLUGIN_VERSION = "1.2.0";
+static const char* const PLUGIN_VERSION = "1.2.1";
 enum K { K_VERSION, K_SHOW, K_COL_ST, K_COL_BULL, K_COL_BEAR, K_MIN_IDS, K_FONT, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

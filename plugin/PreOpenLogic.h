@@ -30,7 +30,7 @@
 
 namespace po {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 enum { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum { ASK = 0, BID = 1 };
 static const size_t BOOK_CAP = 300000;              // orders tracked at most (the farthest dropped first)
@@ -96,7 +96,10 @@ inline void decideCall(Snap& s, const Params& P) {
 
 struct Imb { bool ok = false; long long buy = 0, sell = 0; int min = 0; };
 
-struct Ord { int side = 0; long long px = 0, size = 0, t0 = 0; bool afterFill = false; };
+// `size` is the currently unfilled resting quantity.  A FILL reduces it before
+// a later DEL/MOD is assessed, so an actual execution is never labelled a pull
+// but an explicit cancellation/reprice of the remaining quantity is.
+struct Ord { int side = 0; long long px = 0, size = 0, t0 = 0; };
 
 // the engine of ONE market and ONE trading day (setDay() starts a new one). Times are CT wall-clock ms (the event's own stamp).
 class Engine {
@@ -142,7 +145,7 @@ public:
             lastTrade = px;
             if (ms >= openMs() && ms < imbEndMs() && (side == BID || side == ASK)) fillLots[side == ASK ? 0 : 1] += size;   // offer filled = buy
             auto it = book.find(id);
-            if (it != book.end()) { it->second.afterFill = true; it->second.size = std::max(0LL, it->second.size - size); }
+            if (it != book.end()) it->second.size = std::max(0LL, it->second.size - size);
             return;
         }
         if (side != BID && side != ASK) { ignored++; return; }
@@ -153,18 +156,18 @@ public:
         if (action == DEL) {
             if (it == book.end()) return;                              // rested before the feed: unknown
             const Ord& o = it->second;
-            if (!o.afterFill && inWin) pull(o, o.size, ms);
+            if (inWin) pull(o, o.size, ms);   // size is the residual after any real fills
             book.erase(it); return;
         }
         // MOD
         if (it == book.end()) { Ord o; o.side = side; o.px = px; o.size = size; o.t0 = ms; book[id] = o; prune(); return; }
         Ord& o = it->second;
         if (px != o.px) {                                               // moved: a pull from the old price
-            if (!o.afterFill && inWin) pull(o, o.size, ms);
-            o.px = px; o.size = size; o.t0 = ms; o.side = side; o.afterFill = false; return;
+            if (inWin) pull(o, o.size, ms);   // only the unfilled residual was moved away
+            o.px = px; o.size = size; o.t0 = ms; o.side = side; return;
         }
-        if (size < o.size && !o.afterFill && inWin) pull(o, o.size - size, ms);   // cut at the same price
-        o.size = size; o.afterFill = false;
+        if (size < o.size && inWin) pull(o, o.size - size, ms);   // cut at the same price
+        o.size = size;
     }
     // time passes with no event (the chart's clock): decide what is due
     void tick(long long nowMs) { if (dayMs >= 0) advance(nowMs - 5000); }   // 5 s for the feed to deliver what was stamped before

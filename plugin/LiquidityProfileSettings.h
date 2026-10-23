@@ -9,7 +9,7 @@
 
 namespace lpset {
 
-static const char* const PLUGIN_VERSION = "0.51.0";   // (0.49.0) the queue meter (no new rows) // (0.48.0) the LMT zones rows (appended: earlier rows keep their positions; parameter version 8)   // (0.47.0) the air pocket (AP? band) row; (0.46.1) book object parked at done / destroy; (0.46.0) LMT F only
+static const char* const PLUGIN_VERSION = "0.52.0";   // (0.49.0) the queue meter (no new rows) // (0.48.0) the LMT zones rows (appended: earlier rows keep their positions; parameter version 8)   // (0.47.0) the air pocket (AP? band) row; (0.46.1) book object parked at done / destroy; (0.46.0) LMT F only
 enum K { K_WIDTH, K_FONT, K_SOLID_BG, K_BIG_ORDERS, K_BIG_REACH, K_BIG_MIN_LOTS, K_BIG_KEEP, K_BIG_FONT,
          K_BANNER, K_BANNER_BG, K_BANNER_FONT, K_BANNER_COLOR, K_AIR_POCKET,
          K_LMZ, K_LMZ_PRINT, K_LMZ_ORIGIN, K_LMZ_NEAR, K_LMZ_FAR, K_LMZ_ABC, K_LMZ_GAMMA, K_LMZ_DIAMOND,

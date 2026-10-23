@@ -30,6 +30,7 @@
 #undef near
 #endif
 #include "ReversalStageLogic.h"
+#include "ReversalStageStream.h"
 #include "HostSlot.h"
 #include "SettingsGuard.h"
 #include "ReversalStageSettings.h"
@@ -56,12 +57,12 @@
 #pragma comment(lib, "user32.lib")   // GetCursorPos / WindowFromPoint (the hover stops when the cursor leaves the pane)
 #endif
 
-#define RS_VERSION "1.2.0"   // 1.2.0 (2026-10-22 evening fix build) ReversalStageLogic 1.2.0: a queue Q steps only at the attempt's own extreme (its tk anchor within max(4 ticks, 0.3 ATR)); LetterStrips 1.1.0 //    // 1.1.0 (2026-10-22 evening, Rassul approved 17:39 CT): a step decided inside a news / settle window gets a "?" over its column; a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = recorded only, not drawn (NewsWindow.h)
+#define RS_VERSION "1.3.0"   // typed MBO observations, arrival journal, immutable post-decision checkpoints
 // 1.0.0:   // keep equal to rsl::VERSION, rsset::PLUGIN_VERSION and the setVersion literal below
 
 static const COLOR C_GRID = 0x00374151, C_LABEL = 0x009CA3AF, C_TEXT = 0x00E5E7EB, C_BOX_BG = 0x000F1520, C_TIP_BG = 0x00111827;
 static const long long SETTLE_SEC = 20;      // a candle is decided 20 s after its close (or once the next candle has closed)
-static const int WINDOW = 600, WARM = 40;    // the staircase is re-run over the last 600 closed candles; the first 40 only warm it up
+static const int WINDOW = 600;              // price reference window; recorded post-bar states are authoritative
 
 #ifdef RS_TEST_CLOCK
 extern long long rs_test_now_ms; extern void* rs_test_cursor_wnd; extern int rs_test_cx, rs_test_cy; extern bool rs_test_cursor_ok;
@@ -112,6 +113,7 @@ struct RSState {
     // the letters (LetterStrips record lines), first line per id wins
     std::multimap<long long, rsl::Ev> evs; std::set<std::string> evIds; long long offA = 0, offD = 0, offQ = 0, letBad = 0;
     std::string pathA, pathD, pathQ;
+    rsh::Inbox inbox; std::string journalPath; bool provisional = true;
     // the record: decided candles [raw key] -> step; the newest key
     std::map<long long, rsl::Step> steps; long long recOff = 0, recBad = 0, written = 0, writeFail = 0, adopted = 0; std::string recPath; bool dirMade = false;
     long long lastPassMs = -1; long lastCount = -1; long long lastLetters = -1;
@@ -198,36 +200,43 @@ void ReversalStage::identify(RSState& s) {
     s.identity = id; s.symbol = sym; s.spb = spb; s.tick = tick; s.fault = false; s.market = lst::marketName(root.empty() ? sym : root);
     s.evs.clear(); s.evIds.clear(); s.offA = s.offD = s.offQ = 0; s.letBad = 0; s.steps.clear(); s.recOff = 0; s.recBad = 0; s.recPath.clear(); s.dirMade = false;
     s.lastPassMs = -1; s.lastCount = -1; s.lastLetters = -1; s.haveNow = false; s.hoverKey = 0; s.hits.clear(); s.statusText.clear();
+    s.inbox = rsh::Inbox(); s.journalPath.clear(); s.provisional = true;
     if (!(std::isfinite(tick) && tick > 0 && tick < 1000)) { s.fault = true; s.state = "NO TICK SIZE"; return; }
     if (spb <= 0 || spb > 3600) { s.fault = true; s.state = "NEEDS A TIME CHART (1 s - 60 min)"; return; }
     s.state = "running";
 }
+static void addAssignment(RSState& s, const rsh::Assignment& a) {
+    if (!s.evIds.insert(a.event.m.id).second) return;
+    rsl::Ev e; e.key = a.key; e.sourceKey = a.event.key; e.received = a.received;
+    e.pane = a.event.pane; e.l = a.event.l; e.m = a.event.m;
+    s.evs.insert(std::make_pair(e.key, e));
+}
 void ReversalStage::readLetters(RSState& s) {
     const std::string f = flexDir(); if (f.empty()) return;
-    s.pathA = f + "\\Strips\\" + lst::fileName(lst::ATK, s.market, s.spb);
-    s.pathD = f + "\\Strips\\" + lst::fileName(lst::DEF, s.market, s.spb);
-    s.pathQ = f + "\\Strips\\" + lst::fileName(lst::QUE, s.market, s.spb);
-    auto add = [&](const std::string& ln, int want) {
-        lst::Rec r; if (!lst::parse(ln, r) || r.pane != want) { ++s.letBad; return; }
-        const std::string id = lst::idOf(r.pane, r.key, r.l.code, r.l.pivot); if (s.evIds.count(id)) return;
-        s.evIds.insert(id); rsl::Ev e; e.key = r.key; e.pane = r.pane; e.l = r.l; s.evs.insert(std::make_pair(r.key, e));
-    };
-    tailRead(s.pathA, s.offA, [&](const std::string& ln) { add(ln, lst::ATK); });
-    tailRead(s.pathD, s.offD, [&](const std::string& ln) { add(ln, lst::DEF); });
-    tailRead(s.pathQ, s.offQ, [&](const std::string& ln) { add(ln, lst::QUE); });
+    RTARRAYI times(barDateTime);
+    const int n = (int)std::min<long>(getBarCount(), (long)times.count); if (n < 2 || s.journalPath.empty()) return;
+    const long long latest = (long long)times[n - 2], oldest = (long long)times[std::max(0, n - rsl::MAX_BARS - 3)];
+    s.inbox.bind(f + "\\Strips", s.market, s.symbol, s.spb, s.journalPath);
+    s.inbox.read((long long)currentDate(), latest, oldest, !s.steps.empty());
+    for (const rsh::Assignment& a : s.inbox.takeRestored()) addAssignment(s, a);
+    s.pathA = s.inbox.paths[lst::ATK]; s.pathD = s.inbox.paths[lst::DEF]; s.pathQ = s.inbox.paths[lst::QUE];
+    s.letBad = s.inbox.bad;
     while (s.evs.size() > 40000) { const long long k = s.evs.begin()->first; s.evs.erase(k); }
-    if (s.evIds.size() > 60000) s.evIds.clear();   // ids only guard duplicates of lines already read; the offsets keep the reads incremental
 }
 void ReversalStage::readRecord(RSState& s) {
     const std::string f = flexDir(); if (f.empty()) return;
     const std::string d = f + "\\ReversalStage";
     if (!s.dirMade) { makeDir(f); makeDir(d); s.dirMade = true; }
-    const std::string p = d + "\\" + rsl::fileName(s.market, s.spb);
+    std::ostringstream tick; tick.precision(17); tick << s.tick;
+    const std::string binding = std::string(RS_VERSION) + "-" + rse::token(s.market) + "-" + rse::token(s.symbol) + "-T" + rse::token(tick.str()) + "-" + std::to_string(s.spb);
+    const std::string p = d + "\\RS-" + binding + ".csv";
+    s.journalPath = d + "\\RJ-" + binding + ".csv";
     if (p != s.recPath) { s.recPath = p; s.recOff = 0; s.steps.clear(); }
-    tailRead(p, s.recOff, [&](const std::string& ln) { rsl::Step st; if (!rsl::parse(ln, st)) { ++s.recBad; return; } if (!s.steps.count(st.key)) { s.steps[st.key] = st; ++s.adopted; } });
+    rsh::tail(p, s.recOff, [&](const std::string& ln) { rsl::Step st; if (ln.compare(0, 5, "RS|2|") != 0 || !rsl::parse(ln, st)) { ++s.recBad; return; } if (st.decided > (long long)currentDate()) { ++s.recBad; return; } if (!s.steps.count(st.key)) { s.steps[st.key] = st; ++s.adopted; } });
     while (s.steps.size() > 20000) s.steps.erase(s.steps.begin());
 }
-// decide every closed, settled candle of the window that is not in the record (the staircase re-run from the closed candles - lesson 136)
+// Only a new latest closed decision is admitted. Older prices warm the reference;
+// new letters never pass through frozen historical decisions.
 void ReversalStage::decide(RSState& s) {
     RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
     const long count = getBarCount();
@@ -238,38 +247,64 @@ void ReversalStage::decide(RSState& s) {
     for (int i = from; i < last; ++i) {
         rsl::Bar b; b.key = (long long)times[i];
         const double h = (double)hi[i], l = (double)lo[i], c = (double)cl[i];
-        b.ok = b.key > 0 && std::isfinite(h) && std::isfinite(l) && std::isfinite(c) && h >= l;
-        if (b.ok) { b.h = (long long)std::floor(h / s.tick + 0.5); b.l = (long long)std::floor(l / s.tick + 0.5); b.c = (long long)std::floor(c / s.tick + 0.5); }
+        b.ok = b.key > 0 && std::isfinite(h) && std::isfinite(l) && std::isfinite(c) && h >= l && c >= l && c <= h;
+        // A finite positive tick is not enough on its own: a corrupt tiny value can make
+        // price/tick non-finite or outside long long before the cast below.  Treat that
+        // candle as unavailable rather than invoking an undefined floating-point cast.
+        const auto ticks = [&](double price, long long& out) {
+            const double q = price / s.tick, hiTick = (double)LLONG_MAX - 1024.0;
+            if (!std::isfinite(q) || q < (double)LLONG_MIN || q > hiTick) return false;
+            const double rounded = std::floor(q + 0.5);
+            if (!std::isfinite(rounded) || rounded < (double)LLONG_MIN || rounded > hiTick) return false;
+            out = (long long)rounded;
+            return true;
+        };
+        if (b.ok && (!ticks(h, b.h) || !ticks(l, b.l) || !ticks(c, b.c))) b.ok = false;
+        b.quality = s.inbox.quality(b.key);
         B.push_back(b);
     }
     if (B.empty()) return;
-    const std::vector<rsl::Step> st = rsl::run(B, s.evs);
-    const long long nowC = civil((long long)currentDate());
-    long long newest = 0; for (std::map<long long, rsl::Step>::const_reverse_iterator it = s.steps.rbegin(); it != s.steps.rend(); ++it) { newest = it->first; break; }
-    std::string out; std::vector<rsl::Step> add;
-    for (size_t k = (from == 0 ? 0 : (size_t)WARM); k < st.size(); ++k) {
-        const long long key = st[k].key; if (key <= 0 || s.steps.count(key) || key <= newest) continue;
-        const bool settled = k + 1 < st.size() || (nowC != LLONG_MIN && civil(key) != LLONG_MIN && nowC >= civil(key) + SETTLE_SEC);
-        if (!settled) break;
-        out += rsl::line(st[k]) + "\n"; add.push_back(st[k]);
+    const long long rawNow = (long long)currentDate(), nowC = civil(rawNow), key = B.back().key;
+    const bool settled = nowC != LLONG_MIN && civil(key) != LLONG_MIN && nowC >= civil(key) + SETTLE_SEC;
+    const bool fresh = !s.steps.count(key) && (s.steps.empty() || key > s.steps.rbegin()->first);
+    const bool ready = fresh && settled && s.inbox.terminal(key);
+    if (ready) {
+        std::vector<rsh::Assignment> admitted;
+        if (!s.inbox.admit(key, rawNow, admitted)) { s.state = "WAITING - evidence journal write failed"; return; }
+        for (const rsh::Assignment& a : admitted) addAssignment(s, a);
     }
-    if (add.empty() || s.recPath.empty()) return;
-    std::ofstream o(s.recPath.c_str(), std::ios::binary | std::ios::app); if (o) { o.write(out.data(), (std::streamsize)out.size()); o.flush(); }
-    if (o) { for (size_t k = 0; k < add.size(); ++k) s.steps[add[k].key] = add[k]; s.written += (long long)add.size(); }   // read back later = the same lines (first wins)
-    else ++s.writeFail;
+    const std::vector<rsl::Step> st = rsl::run(B, s.evs, &s.steps); if (st.empty()) return;
+    s.now = st.back(); s.haveNow = true; s.provisional = !s.steps.count(key);
+    if (!fresh) { s.provisional = false; s.state = "running - confirmed journal"; return; }
+    if (!ready) { s.state = s.inbox.terminal(key) ? "WAITING - candle settlement" : "WAITING - typed ATK/DEF source acknowledgement"; return; }
+    rsl::Step decided = st.back(); decided.decided = rawNow;
+    if (s.recPath.empty()) return;
+    const std::string record = rsl::line(decided); rsl::Step durable;
+    if (!rsl::parse(record, durable)) { ++s.writeFail; s.state = "WAITING - invalid stage serialization"; return; }
+    if (rsh::append(s.recPath, record + "\n")) {
+        s.steps[durable.key] = durable; ++s.written; s.now = durable; s.provisional = false;
+        s.state = decided.quality == rse::COMPLETE ? "running - MBO evidence confirmed" : "BLOCKED - incomplete/unavailable MBO";
+    } else { ++s.writeFail; s.state = "WAITING - stage journal write failed"; }
 }
 void ReversalStage::writeStatus(RSState& s, long long now) {
     const std::string f = flexDir(); if (f.empty() || s.market.empty()) return;
+    int liveQuality = s.haveNow ? s.inbox.quality(s.now.key) : rse::PENDING;
+    struct tm current; std::memset(&current, 0, sizeof(current));
+    if (getLocaltime((RTDATE)currentDate(), &current) && nw::atTm(s.market, current).feedBad) liveQuality = rse::UNAVAILABLE;
     std::ostringstream o;
     o << "VERSION," << RS_VERSION << "\nMARKET," << s.market << "\nSYMBOL," << s.symbol << "\nSPB," << s.spb << "\nSTATE," << s.state
       << "\nLETTERS," << s.evs.size() << " read (" << s.letBad << " bad lines), files " << s.pathA << " | " << s.pathD << " | " << s.pathQ
       << "\nRECORD," << s.steps.size() << " candles (" << s.written << " written here, " << s.writeFail << " write fails, " << s.recBad << " bad lines), file " << s.recPath
       << "\nNOW," << (s.haveNow ? rsl::sideWord(s.now.side) + " stage " + std::to_string(s.now.stage) + " " + rsl::statusName(s.now.status) + " chain " + s.now.chain : std::string("none"))
+      << "\nQUALITY," << rse::qualityName(liveQuality) << "\nACHIEVED_QUALITY," << (s.haveNow ? rse::qualityName(s.now.quality) : "pending")
+      << "\nREADINESS," << rsl::readinessName(rsl::readinessOf(s.now.flags, s.now.stage, liveQuality, false)) << "\nPROVISIONAL," << (s.provisional ? 1 : 0)
+      << "\nJOURNAL," << s.journalPath << "\nPENDING_EVIDENCE," << s.inbox.pendingCount() << "\nIGNORED_HISTORY," << s.inbox.ignoredHistory
+      << "\nWRONG_CONTRACT," << s.inbox.wrongContract << "\nEVIDENCE_WRITE_FAILURES," << s.inbox.writeFails << "\nDROPPED_EVIDENCE," << s.inbox.dropped
       << "\nDRAWN," << s.drawn << "\nODDS,? not proven yet (" << rsl::ODDS_TICKET << ")\n";
     const std::string t = o.str();
     if (t == s.statusText && s.statusMs >= 0 && now - s.statusMs < 30000) return;
     s.statusMs = now;
-    const std::string d = f + "\\ReversalStage", p = d + "\\status-" + s.market + "-" + std::to_string(s.spb) + ".txt", tmp = p + ".tmp";
+    const std::string d = f + "\\ReversalStage", p = s.recPath + ".status.txt", tmp = p + ".tmp";
     makeDir(f); makeDir(d);
     { std::ofstream w(tmp.c_str(), std::ios::binary | std::ios::trunc); if (!w) return; w << t; w.flush(); if (!w) return; }
     std::remove(p.c_str()); if (std::rename(tmp.c_str(), p.c_str()) == 0) s.statusText = t;
@@ -285,8 +320,8 @@ void ReversalStage::pump() {
         const long long now = steadyMs(); const long count = getBarCount();
         if (s->lastPassMs >= 0 && now >= s->lastPassMs && now - s->lastPassMs < 1000 && count == s->lastCount) return;   // at most once a second unless a bar closed
         s->lastPassMs = now; s->lastCount = count;
-        readLetters(*s); readRecord(*s); decide(*s);
-        if (!s->steps.empty()) { s->now = s->steps.rbegin()->second; s->haveNow = true; }
+        static std::mutex journalMutex; std::lock_guard<std::mutex> journalLock(journalMutex);
+        readRecord(*s); readLetters(*s); decide(*s);
         writeStatus(*s, now);
     } catch (...) { s->fault = true; s->state = "STOPPED - error, reload the chart"; }
 }
@@ -347,6 +382,7 @@ void ReversalStage::render(RSState& s) {
             nw::Gate ng; { struct tm tk; std::memset(&tk, 0, sizeof(tk)); if (getLocaltime((RTDATE)times[i], &tk)) ng = nw::atTm(s.market, tk); }   // (1.1.0)
             if (ng.feedBad) continue;                                      // (1.1.0) feed check failed: recorded only
             COLOR c = (COLOR)(k.colour == lst::GREEN ? V.c(K_COL_LOW) : V.c(K_COL_HIGH));
+            if (it->second.quality != rse::COMPLETE) c = C_LABEL;
             if (k.dim) c = (COLOR)((((c >> 16) & 0xFF) * 55 / 100) << 16 | (((c >> 8) & 0xFF) * 55 / 100) << 8 | ((c & 0xFF) * 55 / 100));   // stage 1 / a failed stub: the same hue, darker
             const int yTop = k.stub ? bot - std::max(3, (bot - top) / 26) : rsl::yOf(k.height, top, bot);
             setPen(c, 1, P_SOLID); RCT r; r.set(coord(xc - w / 2), coord(yTop), coord(xc - w / 2 + w), coord(bot)); r.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
@@ -357,15 +393,21 @@ void ReversalStage::render(RSState& s) {
     }
     // the Now box
     if (V.b(K_SHOW_NOW)) {
-        const std::vector<std::string> rows = rsl::nowRows(s.haveNow ? s.now : rsl::Step(), s.haveNow ? clockOf(s.now.key) : std::string("-"));
+        rsl::Step display = s.haveNow ? s.now : rsl::Step();
+        const int liveQuality = s.haveNow ? s.inbox.quality(s.now.key) : rse::PENDING;
+        if (liveQuality != rse::COMPLETE) { display.quality = liveQuality; display.readiness = rsl::readinessOf(display.flags, display.stage, liveQuality, false); }
+        nw::Gate currentGate; { struct tm tm0; std::memset(&tm0, 0, sizeof(tm0)); if (getLocaltime((RTDATE)currentDate(), &tm0)) currentGate = nw::atTm(s.market, tm0); }
+        if (currentGate.feedBad) { display.quality = rse::UNAVAILABLE; display.readiness = 0; }
+        std::vector<std::string> rows = rsl::nowRows(display, s.haveNow ? clockOf(s.now.key) : std::string("-"));
+        if (!rows.empty()) rows[0] = std::string(s.provisional ? "Provisional " : "Confirmed ") + (s.haveNow ? clockOf(s.now.key) : std::string("-"));
         FONT fb = f; fb.style = BOLD; fb.size = 9; FONT fp = fb; fp.style = PLAIN;
-        const int lh = 13, bw = 168, bh = (int)rows.size() * lh + 8; int x = 0, y = 0;
+        const int lh = 13, bw = 216, bh = (int)rows.size() * lh + 8; int x = 0, y = 0;
         if (rsl::boxAt(V.i(K_POSITION), pane.left, pane.top, lastR, pane.bottom, bw, bh, 4, x, y)) {
             setPen(C_LABEL, 1, P_SOLID); RCT b; b.set(coord(x), coord(y), coord(x + bw), coord(y + bh)); b.draw(1, C_LABEL, C_BOX_BG, DRAW_OPAQUE, PAT_SOLID);
             for (size_t k = 0; k < rows.size(); ++k) {
                 setFont(k == 0 ? fb : fp);
                 COLOR c = C_TEXT;
-                if (k == 1 && s.haveNow && s.now.side >= 0 && rows[k] != "No attempt") c = (COLOR)(s.now.side == rsl::LOW ? V.c(K_COL_LOW) : V.c(K_COL_HIGH));
+                if (k == 1 && s.haveNow && s.now.side >= 0 && rows[k] != "No attempt" && display.quality == rse::COMPLETE) c = (COLOR)(s.now.side == rsl::LOW ? V.c(K_COL_LOW) : V.c(K_COL_HIGH));
                 if (k + 1 == rows.size()) c = C_LABEL;
                 setTextColor(c); RCT r; r.set(coord(x + 6), coord(y + 4 + (int)k * lh), coord(x + bw - 4), coord(y + 4 + (int)(k + 1) * lh)); r.drawText(rows[k].c_str(), false, false);
             }
@@ -417,7 +459,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ReversalStage* p = new ReversalStage();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);
-    p->setDescription("LRA Reversal Stage: which stage is the local pivot in? A staircase per closed candle: 1 Attack, 2 Absorbed, 3 Exhausted, 4 Turn, 5 Re-test, 6 Expansion - green = a low pivot being built, red = a high pivot, a step dropping back = the attempt failed. Built from the letters lsBidAskStats and lsBookFlow record; decided once per closed candle, never repainted. Odds: not proven yet.");
-    p->setVersion("1.2.0");   // RS_VERSION
+    p->setDescription("LRA Reversal Stage: typed MBO evidence for Attack, Defense, Attack weakening, Turn, Re-test and Expansion. Queue outcomes and causal turn identities are preserved. Actual receipt is journaled; closed decisions restore immutable checkpoints. Provisional and incomplete data are not confirmed trade signals. BookFlow bar calculations are unchanged. Odds remain unproven.");
+    p->setVersion("1.3.0");   // RS_VERSION
     return p;
 }

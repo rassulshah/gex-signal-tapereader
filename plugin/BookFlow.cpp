@@ -85,7 +85,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.25.0"          // 1.25.0 (2026-10-22 evening fix build) compact strips, bars >= 50% of the pane, one-line Implied row, the Q hover hides the anchor token;          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.26.0"          // 1.25.0 (2026-10-22 evening fix build) compact strips, bars >= 50% of the pane, one-line Implied row, the Q hover hides the anchor token;          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 #include "DefenseTurn.h"          // (1.12.0) the pivot turn marks + the refill line decisions (drawn on the price chart by lsDefenseLines)
@@ -93,6 +93,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "SharedAbsorb.h"        // (1.22.0) the SHARED absorption A: the Defense badge A read from the one shared record
 #include "TrapLogic.h"           // (1.19.0, Middle Attacker #1) the Delta Profile's TR record (read only)
 #include "LetterStrips.h"        // (1.23.0) the two letter strips + the letter record for lsReversalStage
+#include "ReversalEvidence.h"    // additive typed sidecar; legacy LT strips stay independent
 #include <fstream>
 #include <set>
 
@@ -169,6 +170,9 @@ public:
         // (1.23.0) the letter strips: the DEF record ids already written, the queue meter's Q letters [candle raw key], counters
         std::set<std::string> stripIds; std::string stripPath, stripQPath; long long stripMs = -1, stripQOff = 0, stripQRead = 0, stripQBad = 0, stripWritten = 0, stripFail = 0, stripsDrawn = 0, stripSkipped = 0;
         std::map<long long, std::vector<lst::Lt> > stripQ;
+        rse::Publisher evidence; std::string evidencePath; long long evidenceWritten = 0, evidenceFail = 0; // one publisher per pane host
+        std::map<long long, int> evidenceNative; // closed-bar MBO coverage retained before the accumulator is dropped
+        std::map<long long, std::map<off::Tick, off::Ice> > evidenceIce[2]; // exact-price execution provenance only; last 64 bars
         std::map<long long, bf::PullStat> pulls; long long markersDrawn = 0; // (1.4.0) closed candles' pull decisions (decided once, never cleared: no repaint)               // (1.3.4) the pane on the screen; the live candle's events last drawn
     };
     Ext* ext(S_& S) {
@@ -284,6 +288,14 @@ public:
         try { decideTurns(S, key, nb); } catch (...) {}                    // (1.12.0) the pivot turn of this closed candle, decided once
     }
     virtual void onAccClosed(S_& S, long long key, const off::Acc& a) { trackOn(S); Ext* e = ext(S); if (e) { fillAcc(e->dtc[key], a); e->dtc[key].t = key;
+        // The aggregate record does not persist the cap / missing-aggressor flags.  Keep
+        // them only for sidecar provenance while the host is alive; no old/reloaded record
+        // is promoted to COMPLETE without this direct native coverage observation.
+        try {
+        e->evidenceNative[key] = (a.orderCap || a.aggrCap || a.aggrUnknown > 0) ? rse::PARTIAL : rse::COMPLETE;
+        while (e->evidenceNative.size() > 5000) e->evidenceNative.erase(e->evidenceNative.begin());
+        for (int side = 0; side < 2; ++side) { e->evidenceIce[side][key] = a.ice[side]; while (e->evidenceIce[side].size() > 64) e->evidenceIce[side].erase(e->evidenceIce[side].begin()); }
+        } catch (...) { e->evidenceNative.erase(key); e->evidenceIce[0].erase(key); e->evidenceIce[1].erase(key); }
         e->mvByKey[key] = a.moves; while (e->mvByKey.size() > 60) e->mvByKey.erase(e->mvByKey.begin()); } }   // (1.17.0) the candle's confirmed moves
     // (1.17.0) the shared engine tracks order moves only for this pane (MoveLogic.h; size floor = the market's q90 of moves)
     void trackOn(S_& S) { S.e.trackMoves = true; S.e.mvt.minLots = mvl::minLotsOf(S.market);
@@ -661,12 +673,98 @@ public:
     // "Holding" A > Q > W > P > B and "Turn & re-test" H > L > X, one letter per strip per closed candle in the colour of the side that acts,
     // no boxes / borders, hovers per strip; every letter appended to lsFlexLevels\Strips\DEF-<MKT>-<spb>.csv for lsReversalStage; the queue
     // meter's Q read from lsFlexLevels\Strips\QUEUE-<MKT>-<spb>.csv when that record exists (else no Q).
+    // Typed sidecar helpers.  They inspect completed records only; they never participate in
+    // finalization, renderNet, bar ratios, normalizers, scaling, or legacy strip priority.
+    static long long evidenceLots(long long v) { return v >= 0 && v <= 1000000000000LL ? v : -1; }
+    static long long evidencePace(long long v) { return v >= 0 && v <= 100000000 ? v : -1; }
+    static double evidenceRatio(double v) { return std::isfinite(v) && v >= 0 && v <= 1000000000.0 ? v : -1; }
+    static int evidenceQuality(const S_& S, const Ext& e, long long key) {
+        typename std::map<long long, off::PaneBar>::const_iterator b = S.ser.bars.find(key);
+        if (b != S.ser.bars.end() && b->second.ok) {
+            if (b->second.r.partial) return rse::PARTIAL;
+            typename std::map<long long, int>::const_iterator n = e.evidenceNative.find(key);
+            // A reloaded record has no retained native cap / aggressor-ID coverage fields.
+            return n != e.evidenceNative.end() ? n->second : rse::UNVERIFIED;
+        }
+        return S.accs.count(key) || S.closedAt.count(key) ? rse::PENDING : rse::UNAVAILABLE;
+    }
+    static int evidenceWindowQuality(const S_& S, const Ext& e, long long cause, long long decision) {
+        if (cause <= 0 || decision < cause) return rse::UNVERIFIED;
+        typename std::map<long long, int>::const_iterator p = S.barEnds.lower_bound(cause); bool any = false, partial = false, unverified = false;
+        for (; p != S.barEnds.end() && p->first <= decision; ++p) {
+            any = true; const int q = evidenceQuality(S, e, p->first);
+            if (q == rse::PENDING || q == rse::UNAVAILABLE) return q;
+            partial = partial || q == rse::PARTIAL;
+            unverified = unverified || q == rse::UNVERIFIED;
+        }
+        return !any || unverified ? rse::UNVERIFIED : partial ? rse::PARTIAL : rse::COMPLETE;
+    }
+    static long long evidenceWDecisionKey(const S_& S, const dt::WRead& r) {
+        // r.t0 is the native feed second.  Select the actual chart bar END containing
+        // the known 60-second verdict horizon; no civil timestamp is synthesized.
+        if (r.t0 <= 0 || r.t0 > LLONG_MAX - dt::W_SEC) return 0;
+        typename std::map<long long, int>::const_iterator b = S.barEnds.lower_bound(r.t0 + dt::W_SEC);
+        return b == S.barEnds.end() ? 0 : b->first;
+    }
+    static long long evidenceAbsPrice(const sab::Rec& r, double tick) {
+        off::Tick p = 0; return tick > 0 && std::isfinite(r.extPx) && r.extPx > 0 && off::toTick(r.extPx, tick, p) ? (long long)p : LLONG_MIN;
+    }
+    void defEvidence(S_& S, Ext& e, long long legacyKey, const lst::Lt& l, long long published, std::vector<rse::Event>& out) {
+        if (legacyKey <= 0 || published <= 0 || S.symbol.empty()) return;
+        auto put = [&](long long decision, long long cause, int basis, int quality, long long price, long long lots, long long aux, long long pace, double ratio, const std::string& suffix) {
+            if (decision <= 0) return;
+            rse::Event x; x.key = decision; x.pane = lst::DEF; x.l = l; x.m.typed = true; x.m.basis = basis; x.m.quality = quality;
+            x.m.cause = cause > 0 ? cause : 0; x.m.published = published; x.m.priceTicks = price; x.m.lots = lots; x.m.auxLots = aux; x.m.pace100 = pace; x.m.ratio = ratio;
+            x.m.contract = S.symbol; x.m.id = rse::eventId(x.pane, x.key, x.l, x.m.cause) + suffix; out.push_back(x);
+        };
+        if (l.code == "A") {
+            const sab::Rec* r = e.sab.st.atRaw(l.pivot, legacyKey);
+            if (r) put(legacyKey, r->raw, r->book == 1 ? rse::MBO : rse::HYBRID, r->book == 1 ? evidenceQuality(S, e, legacyKey) : rse::COMPLETE, evidenceAbsPrice(*r, S.tick), evidenceLots(r->att), r->book == 1 ? evidenceLots(r->bookLots) : -1, evidencePace(r->refills), evidenceRatio(r->effort), "-A");
+        } else if (l.code == "W") {
+            for (std::map<std::pair<long long, long long>, dt::WRead>::const_iterator w = e.dtW.lower_bound(std::make_pair(legacyKey, (long long)LLONG_MIN)); w != e.dtW.end() && w->first.first == legacyKey; ++w) {
+                const dt::WRead& r = w->second; const long long decision = evidenceWDecisionKey(S, r);
+                if (dt::wDrawn(r) && r.side == l.pivot && decision > 0) { put(decision, r.key, rse::MBO, r.partial ? rse::PARTIAL : evidenceQuality(S, e, decision), r.px, evidenceLots(r.pulled), evidenceLots(r.added), evidencePace(r.filled), evidenceRatio(r.fillX), "-W-" + std::to_string(r.px) + "-" + std::to_string(r.t0)); break; }
+            }
+        } else if (l.code == "P" || l.code == "B") {
+            std::map<std::pair<int, long long>, mvl::Read>::const_iterator m = e.dtM.find(std::make_pair(l.pivot, legacyKey));
+            if (m != e.dtM.end() && (l.book == mvl::BIDS || l.book == mvl::OFFERS) && mvl::letterOf(m->second, l.book) == l.code[0]) {
+                const bool in = l.code == "P"; const int def = m->second.ext == 0 ? mvl::BIDS : mvl::OFFERS;
+                const int c = l.book == def ? (in ? mvl::C_DEF_IN : mvl::C_DEF_OUT) : (in ? mvl::C_ATT_IN : mvl::C_ATT_OUT);
+                put(legacyKey, m->second.t, rse::MBO, evidenceQuality(S, e, legacyKey), m->second.px, evidenceLots(in ? m->second.s.in[l.book] : m->second.s.out[l.book]), -1, -1, evidenceRatio(m->second.x[c]), std::string("-") + l.code + "-" + std::to_string(l.book));
+            }
+        } else if (l.code == "H") {
+            for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator h = e.dtH.begin(); h != e.dtH.end(); ++h) if (h->second.H && h->second.at == legacyKey && h->second.side == l.pivot) {
+                const dt::Counter& r = h->second; std::map<std::pair<int, long long>, dt::Turn>::const_iterator t = e.dtTurns.find(std::make_pair(r.side, r.t));
+                const long long line = t != e.dtTurns.end() && t->second.linePx > 0 ? t->second.linePx : LLONG_MIN;
+                put(r.at, r.t, rse::MBO, evidenceWindowQuality(S, e, r.t, r.at), line, evidenceLots(r.lots), evidenceLots(r.attack), -1, r.attack > 0 ? evidenceRatio((double)r.lots / (double)r.attack) : -1, "-H");
+                if (!out.empty() && t != e.dtTurns.end()) out.back().m.parentCause = t->second.pivotT;
+                break;
+            }
+        } else if (l.code == "L" || l.code == "X") {
+            for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator q = e.dtQ.begin(); q != e.dtQ.end(); ++q) if (q->second.at == legacyKey && q->second.res == l.code[0] && q->second.side == l.pivot) {
+                const dt::Retest& r = q->second; long long line = r.linePx;
+                std::map<std::pair<int, long long>, dt::Turn>::const_iterator t = e.dtTurns.find(std::make_pair(r.side, r.t)); if (line <= 0 && t != e.dtTurns.end()) line = t->second.linePx;
+                long long attack = -1;
+                const int resting = r.side == dt::HIGH ? off::ASK : off::BID;
+                const auto bar = e.evidenceIce[resting].find(r.at);
+                if (bar != e.evidenceIce[resting].end() && evidenceQuality(S, e, r.at) == rse::COMPLETE) {
+                    const auto at = bar->second.find(line);
+                    if (at != bar->second.end() && !at->second.unknown) attack = evidenceLots(at->second.traded);
+                }
+                put(r.at, r.t, rse::MBO, evidenceWindowQuality(S, e, r.t, r.at), line > 0 ? line : LLONG_MIN, evidenceLots(r.rest), attack, -1, evidenceRatio(r.ratio), std::string("-") + l.code + "-" + std::to_string(r.t)); break;
+            }
+        }
+    }
     // the Defense letters of one candle (raw key) from this pane's records, with their pivot, book side and key numbers
     void defLetters(S_& S, Ext& e, long long key, std::vector<lst::Lt>& v) {
         (void)S; v.clear(); char b[96];
         for (int sd = 0; sd < 2; ++sd) { const sab::Rec* rr = e.sab.st.atRaw(sd, key); if (rr) { std::snprintf(b, sizeof b, "%lld lots %.1fx", rr->att, rr->effort); v.push_back(lst::make(lst::DEF, "A", sd, -1, b)); break; } }
         std::map<long long, std::vector<lst::Lt> >::const_iterator q = e.stripQ.find(key);
-        if (q != e.stripQ.end()) for (size_t k = 0; k < q->second.size(); ++k) v.push_back(q->second[k]);
+        if (q != e.stripQ.end()) for (size_t k = 0; k < q->second.size(); ++k) {
+            lst::Lt value = q->second[k];
+            if (value.nums.compare(0, 5, "broke") == 0 || value.nums.compare(0, 7, "drained") == 0) value.code = "Q!";
+            v.push_back(value);
+        }
         for (std::map<std::pair<long long, long long>, dt::WRead>::const_iterator w = e.dtW.lower_bound(std::make_pair(key, (long long)LLONG_MIN)); w != e.dtW.end() && w->first.first == key; ++w)
             if (dt::wDrawn(w->second)) { const long long net = std::max<long long>(0, w->second.pulled - w->second.added); std::snprintf(b, sizeof b, "%s %lld lots pulled", w->second.name.c_str(), net); v.push_back(lst::make(lst::DEF, "W", w->second.side, -1, b)); break; }
         for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, mvl::Read>::const_iterator m = e.dtM.find(std::make_pair(sd, key)); if (m == e.dtM.end()) continue;
@@ -697,17 +795,28 @@ public:
         for (std::map<std::pair<int, long long>, mvl::Read>::const_iterator it = e->dtM.begin(); it != e->dtM.end(); ++it) keys.insert(it->first.second);
         for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator it = e->dtH.begin(); it != e->dtH.end(); ++it) if (it->second.H) keys.insert(it->second.at);
         for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator it = e->dtQ.begin(); it != e->dtQ.end(); ++it) if (it->second.at > 0) keys.insert(it->second.at);
-        std::string out; std::vector<std::string> ids;
+        const long long published = (long long)currentDate();
+        std::string out; std::vector<std::string> ids; std::vector<rse::Event> evidence; std::vector<rse::Frame> frames;
+        if (published > 0 && !S.symbol.empty()) {
+            RTARRAYI times(barDateTime); const int n = (int)times.count;
+            for (int i = std::max(0, n - 601); i <= n - 2; ++i) { const long long key = (long long)times[i]; if (key > 0) { rse::Frame f0; f0.key = key; f0.pane = lst::DEF; f0.quality = evidenceQuality(S, *e, key); f0.contract = S.symbol; f0.published = published; frames.push_back(f0); } }
+        }
         for (std::set<long long>::const_iterator k = keys.begin(); k != keys.end(); ++k) {
             if (*k <= 0) continue;
             std::vector<lst::Lt> v; defLetters(S, *e, *k, v);
+            if (published > 0) for (size_t q = 0; q < v.size(); ++q) if (v[q].code != "Q") defEvidence(S, *e, *k, v[q], published, evidence);
             for (size_t q = 0; q < v.size(); ++q) { if (v[q].code == "Q") continue;   // Q is the queue meter's own record
                 const std::string id = lst::idOf(lst::DEF, *k, v[q].code, v[q].pivot); if (e->stripIds.count(id) || std::find(ids.begin(), ids.end(), id) != ids.end()) continue;
                 out += lst::line(lst::DEF, *k, v[q]) + "\n"; ids.push_back(id); }
         }
-        if (out.empty()) return;
-        std::ofstream o(p.c_str(), std::ios::binary | std::ios::app); if (o) { o.write(out.data(), (std::streamsize)out.size()); o.flush(); }
-        if (o) { for (size_t k = 0; k < ids.size(); ++k) e->stripIds.insert(ids[k]); e->stripWritten += (long long)ids.size(); } else ++e->stripFail;
+        if (!out.empty()) {
+            std::ofstream o(p.c_str(), std::ios::binary | std::ios::app); if (o) { o.write(out.data(), (std::streamsize)out.size()); o.flush(); }
+            if (o) { for (size_t k = 0; k < ids.size(); ++k) e->stripIds.insert(ids[k]); e->stripWritten += (long long)ids.size(); } else ++e->stripFail;
+        }
+        if (published > 0 && (!evidence.empty() || !frames.empty())) {
+            const std::string ep = d + "\\" + rse::fileName(lst::DEF, S.market, S.symbol, (int)S.spb); e->evidencePath = ep;
+            if (e->evidence.append(ep, evidence, frames)) e->evidenceWritten += (long long)evidence.size(); else ++e->evidenceFail;
+        }
         while (e->stripIds.size() > 20000) e->stripIds.erase(e->stripIds.begin());
     }
     // the new whole lines of path from off0 (bounded; a shorter file = read again from the start)
@@ -1328,6 +1437,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.25.0");   // BF_VERSION
+    p->setVersion("1.26.0");   // BF_VERSION
     return p;
 }

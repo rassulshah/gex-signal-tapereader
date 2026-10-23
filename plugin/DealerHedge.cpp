@@ -58,7 +58,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define DH_VERSION "0.2.0"   // = setVersion literal = dhset::PLUGIN_VERSION = dh::VERSION
+#define DH_VERSION "0.2.1"   // = setVersion literal = dhset::PLUGIN_VERSION = dh::VERSION
 
 static long long steadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static long long wallMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count(); }
@@ -529,6 +529,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setExtendedFlags(CALL_CONTINUOUSLY);                  // the order feed is drained while no trade prints
     p->setDescription("LRA Dealer Hedge (oH) v0.2.0 (LOG ONLY by default: the nightly test found no edge, so zones are recorded but not drawn until LRA-DealerHedge-<MKT>.csv PARAM,SHOW is 1 or 2): are dealers hedging in the futures book at a gamma level? Each MenthorQ level near price (CR / PS / HVL / 0DTE / gamma walls / G levels, + CME gamma nodes) gets a zone of +/- 0.5 ATR, invisible until the order book shows programmatic flow inside it (2x normal + same-size repeats, refills or a burst). It then pulses green (dealers buying) or red (selling) while live and settles to a faint band - never removed. oH below the candle where it was first seen; hover for the details. ? = not proven yet.");
-    p->setVersion("0.2.0");   // DH_VERSION
+    p->setVersion("0.2.1");   // DH_VERSION
     return p;
 }

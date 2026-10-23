@@ -17,6 +17,8 @@
 //   - At most ONE per pivot. Decided once at a candle close, recorded append-only (M / N / P lines), never repainted.
 // No look-ahead: a pivot is only seen 2 candles after its extreme (the 5-candle rule), the order must have rested 30 s BEFORE the
 // extreme printed, and the book is only trusted 30 s after the order feed started (orders first seen by a MOD count from then).
+// A known feed discontinuity invalidates the live book and selected-but-unconfirmed pivots: missing MBO fills/pulls must never become
+// a FILLED or TOO THICK assertion. The next mark waits for a new 30-second observed feed interval.
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
@@ -100,7 +102,7 @@ struct Mark {
 };
 struct NoMark { int side = BID; long long pivotEnd = 0; Tick ext = 0; std::string why; long long decideMs = 0; };
 
-struct Tally { long long pivots = 0, marks = 0, absorbed = 0, thick = 0, noOrder = 0, noConfirm = 0, broken = 0, noFeed = 0, events = 0, unknownFill = 0, pruned = 0; };
+struct Tally { long long pivots = 0, marks = 0, absorbed = 0, thick = 0, noOrder = 0, noConfirm = 0, broken = 0, noFeed = 0, feedGaps = 0, events = 0, unknownFill = 0, pruned = 0; };
 
 inline std::string keyOf(int side, long long pivotEnd) { return std::to_string(side) + ":" + std::to_string(pivotEnd); }
 
@@ -221,6 +223,12 @@ public:
         return n;
     }
     void clearSession() { marks.clear(); nos.clear(); done.clear(); pend.clear(); }
+    // Conn explicitly reports only two recoverable discontinuities to this engine: its queue dropped events, or its watchdog
+    // destroyed/reopened the DBO subscription. In either case the identity book and any selected result spanning the gap are partial.
+    void onFeedGap() {
+        for (size_t k = 0; k < pend.size(); ++k) { noMark(pend[k], "order feed gap before confirmation", lastBarEnd); ++tally.noFeed; }
+        pend.clear(); live.clear(); gone.clear(); secs.clear(); feedStartMs = 0; lastT = 0; ++tally.feedGaps;
+    }
     // ---- the record lines ----------------------------------------------------------------------------------------------------
     static const char* header() { return "# lsTurnOrder record: M|ver|side(B/A)|pivot_end_ms|t_ext_ms|ext_tick|oid|px_tick|price|shown|filled|rest_s|start_known|atr_x10|run_x100|decide_ms|result(FILLED/THICK)  /  N|ver|side|pivot_end_ms|ext_tick|why|decide_ms  /  P|side|pivot_end_ms|oid|t_ms|how(P pulled/M moved/F filled out)|traded"; }
     static std::string mLine(const Mark& m, double tick) {

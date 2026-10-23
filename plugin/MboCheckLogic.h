@@ -1,6 +1,6 @@
 #ifndef LS_MBO_CHECK_LOGIC_H
 #define LS_MBO_CHECK_LOGIC_H
-// MboCheckLogic.h (1.1.1, 2026-10-12) -- the SDK-free half of lsMboCheck: counting the order-by-order (DBO / MBO) events,
+// MboCheckLogic.h (1.1.2, 2026-10-22) -- the SDK-free half of lsMboCheck: counting the order-by-order (DBO / MBO) events,
 // the verdict (YES / NO / subscribed but silent / waiting), the one chart line and the status file text.
 // Tested on Linux by tests/test_mbocheck_logic.cpp; the plugin (MboCheck.cpp) only feeds it what the SDK hands over.
 #include <string>
@@ -11,7 +11,7 @@
 
 namespace mbo {
 
-static const char* const VERSION = "1.1.1";     // keep equal to MC_VERSION / setVersion in MboCheck.cpp
+static const char* const VERSION = "1.1.2";     // keep equal to MC_VERSION / setVersion in MboCheck.cpp
 static const int SLICE_MAX = 5000;               // at most this many getNext() events per call (never blocks IRT)
 static const long long SLICE_BUDGET_MS = 8;      // and at most ~8 ms per call, checked every 512 events
 static const long long WAIT_MS = 60000;          // "waiting" for the first 60 s
@@ -82,6 +82,8 @@ struct Probe {
     bool blocked = false;               // a crash guard file says IRT died while opening DBO last time
     long long recorderLines = 0;        // raw DBO lines durably appended after flush
     long long recorderFailures = 0;     // append/header/flush failures; lines are deliberately not retried
+    long long recorderLostLines = 0;    // rows in failed append transactions (not silently presented as durable)
+    long long recorderUnassignedLines = 0; // rows whose RTDATE could not be converted to a local session tag
 };
 
 // one call's worth of events has been read: n events, cap = the slice cap or the time budget ended the call
@@ -179,7 +181,8 @@ inline std::string changeKey(const Probe& p, long long nowMs)
 {
     return std::string(verdictName(verdict(p, nowMs))) + "|" + std::to_string(p.flag) + "|" + std::to_string(p.attempt) + "|"
         + (p.depthSeen ? (p.depthAvail ? "A" : "N") : "?") + std::to_string(p.depthLevels) + "|" + std::to_string(p.depthMax)
-        + "|" + (p.samples.size() >= (size_t)SAMPLE_MAX ? "S" : "s");
+        + "|" + (p.samples.size() >= (size_t)SAMPLE_MAX ? "S" : "s")
+        + "|rf" + std::to_string(p.recorderFailures) + "|rl" + std::to_string(p.recorderLostLines) + "|ru" + std::to_string(p.recorderUnassignedLines);
 }
 inline bool statusDue(const std::string& key, const std::string& lastKey, long long nowMs, long long lastWriteMs)
 {
@@ -236,6 +239,24 @@ inline std::string safeFilePart(const std::string& in)
     if (out.size() > 32) out.resize(32);
     return out;
 }
+// The raw MBO files are checked by the 17:00 CT trading day, not by calendar day. The input is already the SDK's local/CT
+// date, so this uses civil-date arithmetic instead of mktime: a host timezone or daylight-saving offset must not move it.
+// Empty means an invalid time, which the recorder writes to its explicit UNASSIGNED file rather than guessing a session.
+inline bool leapYear(int year) { return year >= 1 && (year % 4 == 0) && (year % 100 != 0 || year % 400 == 0); }
+inline int daysInMonth(int year, int month)
+{
+    static const int D[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    if (month < 1 || month > 12) return 0;
+    return month == 2 && leapYear(year) ? 29 : D[month - 1];
+}
+inline std::string recorderSession(int year, int month, int day, int hour)
+{
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month) || hour < 0 || hour > 23) return std::string();
+    if (hour >= 17 && ++day > daysInMonth(year, month)) { day = 1; if (++month > 12) { month = 1; ++year; } }
+    char out[16]; std::snprintf(out, sizeof(out), "%04d%02d%02d", year, month, day);
+    return out;
+}
+static const char* const RECORDER_UNASSIGNED_SESSION = "UNASSIGNED";
 inline unsigned long long fnv1a64(const std::string& in)
 {
     unsigned long long h = 1469598103934665603ULL;
@@ -283,7 +304,8 @@ inline std::string statusText(const Probe& p, const Ident& id, long long nowMs, 
          + commas(p.bestBidSize) + ",best_ask " + px(p.bestAsk) + " x " + commas(p.bestAskSize) + "\n";
     o += "READS,calls " + commas(p.calls) + ",slice_cap_hits " + commas(p.capHits) + ",longest_backlog_calls " + commas(p.longestBacklog)
          + ",faults " + commas(p.faults) + ",slice_max " + std::to_string(SLICE_MAX) + "\n";
-    o += "RECORDER,durable_lines " + commas(p.recorderLines) + ",append_failures " + commas(p.recorderFailures) + "\n";
+    o += "RECORDER,durable_lines " + commas(p.recorderLines) + ",append_failures " + commas(p.recorderFailures)
+         + ",lost_lines " + commas(p.recorderLostLines) + ",unassigned_timestamp_lines " + commas(p.recorderUnassignedLines) + "\n";
     o += "SAMPLE_COLUMNS,n,time,action,side,price,previous_price,size,order_id,aggressor_order_id,bid,ask,bid_size,ask_size\n";
     for (size_t i = 0; i < p.samples.size(); i++) {
         const Sample& e = p.samples[i];
