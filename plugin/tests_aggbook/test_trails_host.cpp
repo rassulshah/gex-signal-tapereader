@@ -61,7 +61,7 @@ int main() {
     CHECK(countOf(rec1, "TR|1|") == 3 && countOf(rec1, "|B|") == 1 && countOf(rec1, "|X|") == 1 && countOf(rec1, "|F|") == 1, "each end recorded once for the nightly");
     redraw(p, h); CHECK(countOf(slurp(rp), "TR|1|") == 3, "a redraw never records twice");
     {   std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string b((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
-        CHECK(b.find("VERSION,1.11.0") != std::string::npos && b.find("TRAILS,on,3 trails") != std::string::npos && b.find("recorded 3") != std::string::npos, "status line: version + trails"); }
+        CHECK(b.find("VERSION,1.11.1") != std::string::npos && b.find("TRAILS,on,3 trails") != std::string::npos && b.find("recorded 3") != std::string::npos, "status line: version + trails"); }
     // incremental read: the half line completes, a 4th trail (bid 11) starts and is still following (no end mark, runs to the last candle)
     {   std::ofstream f(tp.c_str(), std::ios::app); f << "|9|1|1|0\n"; f << "TS|11|0|50|" << key(36) << "|20000|28140\n" << "TP|11|" << key(36) << "|20000|28142|0\n" << "TP|11|" << key(37) << "|21000|28145|0\n"; }
     redraw(p, h);
@@ -112,6 +112,21 @@ int main() {
         auto sorted = [](const std::string& x) { std::vector<std::string> v; std::stringstream ss(x); std::string l; while (std::getline(ss, l)) v.push_back(l); std::sort(v.begin(), v.end()); return v; };
         CHECK(sorted(straight) == sorted(stepwise) && !straight.empty(), "candle-by-candle with a restart after every candle = one straight pass (same records)");
         h.bars = all;
+    }
+    {   // A BookFlow trail end must bind to its recorded chart key.  An RTH/session chart can omit the
+        // source candle; mapping that immutable F/X/B end to the first later bar is a false timestamp.
+        char tmpl3[] = "/tmp/trlgapXXXXXX"; const char* tmp3 = mkdtemp(tmpl3); setenv("USERPROFILE", tmp3, 1);
+        const std::string flex3 = std::string(tmp3) + "\\InvestorRT\\rtx\\lsFlexLevels";
+        mkdir(flex3.c_str(), 0700); mkdir((flex3 + "\\BookFlow").c_str(), 0700);
+        { std::ofstream f((flex3 + "\\LRA-Trails-GC.csv").c_str()); f << "VERSION,1\nMARKET,GC\nPARAM,SHOW,SHOW\nPARAM,SHOW_B,SHOW\n"; }
+        mock::Host h3; mock::current = &h3; h3.tick = 0.25f; h3.seconds = 180; h3.symbol = "GCZ6"; h3.root = "GC"; h3.paneBottom = 600; h3.paneRight = 2000; h3.ppb = 10; h3.barW = 20;
+        for (int i = 0; i < 20; ++i) { if (i == 9) continue; mock::Bar b; b.time = T0 + 180UL * (unsigned long)i; b.low = 7000; b.high = 7001; b.open = 7000.25f; b.close = 7000.75f; h3.bars.push_back(b); }
+        const std::string tp3 = flex3 + "\\BookFlow\\GC-180-trails.csv";
+        { std::ofstream f(tp3.c_str());
+          f << "RS|0|0.25\n" << "TS|31|0|40|" << key(5) << "|1000|28000\n" << "TP|31|" << key(5) << "|1000|28002|0\n" << "TP|31|" << key(6) << "|2000|28004|0\n" << "TF|31|" << key(9) << "|3000|28004|40\n"; }
+        DefenseLines* q = static_cast<DefenseLines*>(CreateExtension()); q->setup(); q->draw(); DlState* s3 = q->stateFor();
+        CHECK(s3 && s3->trails.v.size() == 1 && s3->trails.v[0].end == 'F' && s3->trailsDrawn == 0, "a final trail end on a missing chart candle is not shifted to the next bar");
+        q->destroy(); q->~DefenseLines(); ::operator delete(q);
     }
     std::printf("Trails host: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

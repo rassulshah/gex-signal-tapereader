@@ -1,7 +1,8 @@
 // build: g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. t_po260.cpp -o t260 && ./t260   (from plugin\tests_hodlod)
 // lsHodLod 2.6.0 PRE-OPEN BOOK (PreOpenLogic.h 1.0.0, Rassul 15:57 CT 2026-10-22 "yes hod lod box", T-20261022-29) tests, SDK-free:
 //  [1] engine: near band, resting lots per side, STAYED (rested >= 60 s, still there) vs PULLED (rested >= 60 s, then cancelled / cut /
-//      moved inside the window); a fill then DEL / MOD is never a pull; flashed orders (< 60 s) count in neither; unknown orders ignored
+//      moved inside the window); actual filled lots are never a pull, but an explicit DEL / MOD of unfilled residuals is; flashed orders
+//      (< 60 s) count in neither; unknown orders ignored
 //  [2] the call: bids 1.5x + 50% stay -> 1st LOW; 2.0x + 60% -> early; offers -> 1st HIGH; even -> no lean; heavy but pulled -> no lean
 //  [3] timing: frozen at the first event at / after the open (the book as it was), imbalance after open + 3 min (offer fills = buys);
 //      a feed that started after the window = "started late"; the window setting; another day's events ignored
@@ -45,9 +46,9 @@ int main() {
         E.onEvent(po::MOD, po::ASK, 30050, 10, 4, at(8, 25));          // the new price is far (not near): not counted at the open
         E.onEvent(po::NEW, po::ASK, 30003, 12, 5, at(8, 0));           // offer 12, cut to 4 at 8:22 -> pulled 8, stays 4
         E.onEvent(po::MOD, po::ASK, 30003, 4, 5, at(8, 22));
-        E.onEvent(po::NEW, po::BID, 29999, 6, 6, at(8, 1));            // bid 6 filled 2 then MOD to 4 (after fill: not a pull)
+        E.onEvent(po::NEW, po::BID, 29999, 6, 6, at(8, 1));            // bid 6 filled 2 then unchanged residual 4 (not a pull)
         E.onEvent(po::FILL, po::BID, 29999, 2, 6, at(8, 21)); E.onEvent(po::MOD, po::BID, 29999, 4, 6, at(8, 21));
-        E.onEvent(po::NEW, po::BID, 29999, 9, 7, at(8, 1));            // bid 9 fully filled then DEL: not a pull
+        E.onEvent(po::NEW, po::BID, 29999, 9, 7, at(8, 1));            // bid 9 fully filled then DEL: no residual pull
         E.onEvent(po::FILL, po::BID, 29999, 9, 7, at(8, 23)); E.onEvent(po::DEL, po::BID, 29999, 0, 7, at(8, 23));
         E.onEvent(po::DEL, po::BID, 29999, 99, 77777, at(8, 24));      // never seen: ignored
         E.onEvent(po::NEW, po::BID, 29950, 500, 8, at(8, 0));          // far bid (50 ticks): never counted
@@ -98,6 +99,23 @@ int main() {
               && H[3].s.compare(0, 14, "How to use it:") == 0 && H[4].s.compare(0, 8, "Example:") == 0, "hover: question / what / why / how / example");
         CHECK(H[5].s.find("At the open 8:30 AM: bids 61 lots") != std::string::npos, "hover numbers: " + H[5].s);
         CHECK(H[7].s.find("buyers 30 lots vs sellers 11 lots") != std::string::npos, "hover open: " + H[7].s);
+    }
+    {   // [1b] a FILL is actual execution, but an explicit action later removes its unfilled residual from the book
+        po::Engine E = mk(); trade(E, 30000, at(7, 46));
+        E.onEvent(po::NEW, po::BID, 29999, 10, 201, at(8, 16));
+        E.onEvent(po::FILL, po::BID, 29999, 4, 201, at(8, 18));
+        E.onEvent(po::DEL, po::BID, 29999, 6, 201, at(8, 20));          // 6 unfilled lots cancelled
+        E.onEvent(po::NEW, po::ASK, 30001, 10, 202, at(8, 16));
+        E.onEvent(po::FILL, po::ASK, 30001, 3, 202, at(8, 18));
+        E.onEvent(po::MOD, po::ASK, 30001, 4, 202, at(8, 20));          // 3 unfilled lots cut at the price
+        E.onEvent(po::NEW, po::ASK, 30002, 10, 203, at(8, 16));
+        E.onEvent(po::FILL, po::ASK, 30002, 2, 203, at(8, 18));
+        E.onEvent(po::MOD, po::ASK, 30050, 8, 203, at(8, 20));          // 8 unfilled lots repriced away
+        const po::Snap s = E.readAt(at(8, 29));
+        CHECK(s.pulled[po::BID] == 6 && s.pulled[po::ASK] == 11,
+              "partial-fill residuals: DEL bid 6 + same-price cut ask 3 + reprice ask 8 (" + std::to_string(s.pulled[po::BID]) + "/" + std::to_string(s.pulled[po::ASK]) + ")");
+        CHECK(E.book.find(201) == E.book.end() && E.book.find(202) != E.book.end() && E.book.find(203) != E.book.end(),
+              "DEL removes cancelled order; MOD keeps the re-sized/repriced orders");
     }
     {   // [2] the call variants
         po::Params P; po::Snap s;

@@ -108,7 +108,20 @@ int main() {
         Bar b; b.t = s.D.formingT; b.o = 2001; b.h = 2004; b.l = 1997; b.c = 2003; b.day = DAY; b.rth = true; s.D.barClose(b);
         CHECK(s.D.decided.size() == 1 && s.D.decided[0].outcome == ABSORBED, "closed back above with the big fill: absorbed");
     }
-    // ---- 5. determinism: the same stream twice -> identical lines -----------------------------------------------------------------
+    // ---- 5. An order's fills before the level do not count toward its at/beyond-level Sta size -----------------------------------
+    {
+        Detector d; d.P.minFills = 2; d.P.minIds = 1; d.P.ratio = 1.0; d.P.seedLots = 1.0; d.P.bigLots = 5; d.P.reclaimS = 10; d.formingT = 1000;
+        swg::Lvl L; L.name = "PDL"; L.px = 100; L.dir = -1; L.kind = swg::KEY; d.levels.push_back(L);
+        d.aggFill(0, 100, DOWN, 102, 2, 1); d.restFill(0, DOWN, 102, 2, 4242);   // same bid: 2 lots before the level
+        d.aggFill(1, 100, DOWN, 99, 4, 2); d.restFill(1, DOWN, 99, 4, 4242);    // only 4 lots at/beyond the level
+        d.tick(100, 100);
+        CHECK(d.fired.size() == 1 && d.pending.size() == 1, "mixed-price resting order still produces a pending St");
+        d.aggFill(2000, 102, UP, 101, 1, 3);                                     // price reclaimed the level before the decision
+        d.tick(10100, 110);
+        CHECK(d.decided.size() == 1 && d.decided[0].outcome == NOT_ABSORBED && d.decided[0].bigIds == 0 && d.decided[0].bigLotsMax == 4,
+              "only the 4 at/beyond-level lots count; the 2 pre-level lots cannot make a 5-lot Sta");
+    }
+    // ---- 6. determinism: the same stream twice -> identical lines -----------------------------------------------------------------
     {
         std::string out[2];
         for (int r = 0; r < 2; ++r) {
@@ -120,7 +133,7 @@ int main() {
         }
         CHECK(!out[0].empty() && out[0] == out[1], "same stream -> identical record");
     }
-    // ---- 6. garbage never crashes ------------------------------------------------------------------------------------------------
+    // ---- 7. garbage never crashes ------------------------------------------------------------------------------------------------
     { Detector D; D.aggFill(1, 1, 7, 100, 5, 1); D.aggFill(1, 1, DOWN, -5, 5, 1); D.aggFill(1, 1, DOWN, 100, 0, 1); D.restFill(1, DOWN, 100, 5, 0); D.tick(5000, 5);
       CHECK(D.bursts == 0 && D.fired.empty(), "garbage ignored"); }
     std::printf("%d checks, %d failed\n", checks, fails);

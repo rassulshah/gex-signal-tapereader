@@ -271,7 +271,7 @@ int main()
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && std::string(DP_VERSION) == "2.23.0", "version 2.23.0: DP_VERSION = setVersion literal = settings table");
+        check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && std::string(DP_VERSION) == "2.24.0", "version 2.24.0: DP_VERSION = setVersion literal = settings table");
         const ss::Spec& sp = dprset::spec();
         check(sp.paramVersion == 9 && std::string(sp.rows[dprset::K_QUEUE_METER].key) == "queue_meter" && std::string(sp.rows[dprset::K_QM_REACH].key) == "qm_reach"
               && sp.rows[dprset::K_QM_BID].type == ss::T_COLOR && sp.rows[dprset::K_QM_WARN].type == ss::T_COLOR && sp.rows[dprset::K_QM_REACH].type == ss::T_FLOAT, "settings: Queue meter checkbox, Reach (ATR) float, 3 colours; parameter version 9");
@@ -317,7 +317,7 @@ int main()
     {   int yl = 0; for (auto& q : O) if (q.kind == "line" && q.col == 0xFACC15 && q.font == 2) ++yl;
         check(yl >= 4, "originals gone: 2 px yellow outline (" + std::to_string(yl) + ")"); }
     const std::string st = slurp(fl("DealerProfile.status.txt"));
-    check(st.find("QUEUE_METER,on,reach 1 ATR,file ok,live tests 3") != std::string::npos && st.find("on a level badge 1,unlabeled 1,beyond reach 1") != std::string::npos, "status QUEUE_METER line");
+    check(st.find("QUEUE_METER,on,reach 1 ATR,file ok,records 3") != std::string::npos && st.find("on a level badge 1,unlabeled 1,beyond reach 1") != std::string::npos, "status QUEUE_METER line");
     if (st.find("on a level badge 1,unlabeled 1,beyond reach 1") == std::string::npos) { size_t p = st.find("QUEUE_METER"); if (p != std::string::npos) std::printf("  %s\n", st.substr(p, 220).c_str()); }
     // 2) the hover on the meter: ? not proven yet, the numbers, question / what / why / how / example
     if (pdh) {
@@ -340,6 +340,22 @@ int main()
     // 3) stale (the Liquidity Profile stopped) / wrong market / torn row: normal badges
     {   struct utimbuf u; u.actime = u.modtime = time(nullptr) - 30; utime(fl("LRA-QueueLive-ES.csv").c_str(), &u); reloadQm(X, a);
         std::vector<Op> W = drawOn(X, a, MOCK_CHART); check(meterTexts(W).empty(), "a stale file (30 s old): normal badges"); }
+    // A fresh filesystem timestamp alone is not enough: the queue display has no trustworthy live identity without all producer metadata.
+    {   std::string q = qmFile("ES", 12.0, { T_PDH }); const size_t p = q.find("ASOF,");
+        if (p != std::string::npos) q.erase(p, q.find('\n', p) - p + 1);
+        put("LRA-QueueLive-ES.csv", q); reloadQm(X, a);
+        std::vector<Op> W = drawOn(X, a, MOCK_CHART);
+        check(meterTexts(W).empty() && slurp(fl("DealerProfile.status.txt")).find("incomplete live header: ASOF") != std::string::npos, "missing ASOF: normal badges + incomplete-live-header reason"); }
+    // The producer retains records long enough to make its candle-close Q record. They are no longer a live queue display once contact ends
+    // or a close has decided them, even if the file remains fresh and price is still inside the user-selected reach.
+    {   std::string q = T_PDH; const size_t p = q.find(",0,1,-1,");
+        if (p != std::string::npos) q.replace(p, std::strlen(",0,1,-1,"), ",0,0,-1,");
+        put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { q })); reloadQm(X, a);
+        std::vector<Op> W = drawOn(X, a, MOCK_CHART); check(meterTexts(W).empty() && slurp(fl("DealerProfile.status.txt")).find("inactive 1") != std::string::npos, "contact ended: retained queue record is not drawn as live"); }
+    {   std::string q = T_PDH; const size_t p = q.find(",0,1,-1,");
+        if (p != std::string::npos) q.replace(p, std::strlen(",0,1,-1,"), ",0,1,0,");
+        put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { q })); reloadQm(X, a);
+        std::vector<Op> W = drawOn(X, a, MOCK_CHART); check(meterTexts(W).empty(), "decided queue record is not drawn as live"); }
     {   put("LRA-QueueLive-ES.csv", qmFile("NQ", 12.0, { T_PDH })); reloadQm(X, a);
         std::vector<Op> W = drawOn(X, a, MOCK_CHART); check(meterTexts(W).empty() && slurp(fl("DealerProfile.status.txt")).find("file wrong market") != std::string::npos, "wrong market: normal badges + reason"); }
     {   put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { T_PDH.substr(0, 40) })); reloadQm(X, a);

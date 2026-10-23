@@ -67,7 +67,7 @@ int main() {
     }
     const std::string st = readAll(flex + "\\LiquidityProfile.status-CL-180.txt");
     CHECK(st.find(std::string("QUEUE_METER,") + qm::VERSION + ",") != std::string::npos && st.find("Q rows written ") != std::string::npos && st.find(",call SHOW at 10 s") != std::string::npos, "status: QUEUE_METER line");
-    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0 && std::string(LQ_VERSION) == "0.51.0", "status VERSION 0.51.0");
+    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0 && std::string(LQ_VERSION) == "0.52.0", "status VERSION 0.52.0");
     // nothing new is drawn on the price chart by the meter (the Dealer Profile draws it in the Levels column)
     h.draws.clear(); p->draw(); bool qtext = false; for (auto& d : h.draws) if (d.type == "text" && d.text.find("Q") == 0 && d.text.find('%') != std::string::npos) qtext = true;
     CHECK(!qtext, "no meter text drawn by the Liquidity Profile");

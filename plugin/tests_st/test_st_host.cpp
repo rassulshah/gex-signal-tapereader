@@ -113,7 +113,7 @@ int main() {
         std::remove((srDir + "/ES-180-" + Q->session + ".csv").c_str());
     }
     std::vector<std::string> stt = lines(flex + "/StopRun/StopRun.status-ES-180.txt");
-    bool ver = stt.size() > 2 && stt[0] == "VERSION,1.2.0" && stt[2].find("STATUS,lsStopRun v1.2.0") == 0, prm = false, ref = false;
+    bool ver = stt.size() > 2 && stt[0] == "VERSION,1.2.1" && stt[2].find("STATUS,lsStopRun v1.2.1") == 0, prm = false, ref = false;
     for (const std::string& x : stt) { if (x.find("PARAMS,LRA-StopSweep-ES.csv loaded") == 0 && x.find("Sta bullish LOG") != std::string::npos) prm = true; if (x.find("REFERENCE,ZigZag") == 0 && x.find("POC 7677.00") != std::string::npos) ref = true; }
     CHECK(ver && prm && ref, "status: version, params, the reference (ZigZag, POC)");
     q->destroy(); delete q;

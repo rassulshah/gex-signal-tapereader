@@ -83,6 +83,14 @@ int main() {
         Engine E; E.P.minSize = 20; E.onEvent(NEW, BID, 3979, 80, 2, T0 + 20 * BAR + 20000); run(E, scenario(3990, 3992));
         CHECK(E.marks.empty() && E.nos.empty() && E.tally.noFeed >= 1, "feed started inside the pivot candle: nothing decided");
     }
+    { // a Conn queue loss / watchdog reconnect means the selected order's fills and pull are partial: do not label it FILLED or TOO THICK
+        Engine E; E.P.minSize = 20; book(E); Sc s = scenario(3982, 3982); run(E, s);
+        CHECK(E.marks.empty() && E.pend.size() == 1, "a candidate waits for its confirmation before the feed gap");
+        E.onFeedGap(); s.bars.push_back(mk(23, 3982, 3985, 3981, 3984)); run(E, s);
+        CHECK(E.marks.empty() && E.pend.empty() && E.live.empty() && E.tally.feedGaps == 1 && !E.nos.empty() && E.nos.back().why == "order feed gap before confirmation", "known feed gap writes a no-mark, clears order ids, and prevents a partial FILLED / TOO THICK result");
+        E.onEvent(NEW, BID, 3979, 80, 2, TEXT + 1000);
+        CHECK(E.feedStartMs == TEXT + 1000, "the next observed event starts a fresh 30-second feed warm-up");
+    }
     { // an order first seen by a MOD (rested before the feed): its age is unknown, counted from first seen; marked "at least"
         Engine E; E.P.minSize = 20; E.onEvent(NEW, ASK, 4010, 5, 999, T0 + 1000); E.onEvent(MOD, BID, 3979, 90, 7, T0 + 19 * BAR);
         E.onEvent(FILL, ASK, 3980, 1, 999999, TEXT); run(E, scenario(3990, 3992));

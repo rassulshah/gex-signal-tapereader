@@ -288,6 +288,36 @@ int main() {
         CHECK(s.D.book.empty() && s.D.fills == 1 && s.D.unknownFills == 1, "garbage ignored; an unknown fill still counts as a print");
         swg::BarWin W; CHECK(W.atr(100) == 0, "no candles: ATR 0");
     }
+    // ---- 11. only a positive FILL of a locally mapped resting ID can add a swept price ------------------------------------------
+    {
+        Sim s; s.D.P.minPrices = 4; s.candles(dayA());
+        const long long base = (s.lastEnd() + 30) * 1000;
+        const std::vector<long long> ids = s.rest(BID, 2003, 3, 10, base - 5000);
+        for (size_t k = 0; k < ids.size(); ++k) { const long long px = 2003 - (long long)k, t = base + 2 * (long long)k; s.ev(FILL, BID, px, 10, ids[k], t); s.ev(DEL, BID, px, 0, ids[k], t); }
+        s.ev(FILL, BID, 1999, 10, 999999, base + 6);       // would make a false 4-price sweep without an order-map match
+        s.D.advance(base + 100);
+        CHECK(s.D.pending.empty() && s.D.unknownFills == 1 && s.D.fills == 4, "unmapped fill remains feed-accounted but cannot create a sweep candidate");
+    }
+    {
+        Sim s; s.D.P.minPrices = 4; s.candles(dayA());
+        const long long base = (s.lastEnd() + 30) * 1000;
+        const std::vector<long long> ids = s.rest(BID, 2003, 3, 10, base - 5000); const long long zeroId = ++s.id;
+        s.ev(NEW, BID, 1999, 10, zeroId, base - 5000);
+        for (size_t k = 0; k < ids.size(); ++k) { const long long px = 2003 - (long long)k, t = base + 2 * (long long)k; s.ev(FILL, BID, px, 10, ids[k], t); s.ev(DEL, BID, px, 0, ids[k], t); }
+        s.ev(FILL, BID, 1999, 0, zeroId, base + 6);         // a non-execution cannot consume / qualify the resting order
+        s.D.advance(base + 100);
+        CHECK(s.D.pending.empty() && s.D.book.count(zeroId) == 1 && s.D.book[zeroId].size == 10 && s.D.fills == 3, "zero-lot fill neither creates a sweep price nor consumes liquidity");
+    }
+    // ---- 12. a local MBO reset aborts incomplete burst/refill observations, not a false "still empty" decision -----------------
+    {
+        Sim s; s.candles(dayA());
+        const long long base = (s.lastEnd() + 30) * 1000;
+        const std::vector<long long> ids = s.rest(BID, 2003, 10, 10, base - 5000);
+        const long long end = s.sweep(BID, ids, 2003, 10, base); s.D.advance(end + 60);
+        CHECK(s.D.pending.size() == 1, "candidate pending before the simulated MBO reset");
+        s.D.clearBook(); s.D.advance(end + 10000);
+        CHECK(s.D.pending.empty() && !s.D.b.on && s.D.decided.empty() && s.D.bookResets == 1, "book reset aborts incomplete observations instead of deciding a false non-refill");
+    }
     std::printf("%d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

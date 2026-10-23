@@ -68,95 +68,10 @@ int main() {
     CHECK(lst::fileName(lst::ATK, "6E", 180) == "ATK-EU-180.csv" && lst::fileName(lst::QUE, "ES", 60) == "QUEUE-ES-60.csv");
     CHECK(lst::marketName("ESZ6") == "ES" && lst::marketName("@NQ") == "NQ" && lst::marketName("6EZ6") == "EU" && lst::marketName("QM") == "CL");
 
-    // ================= the stage state machine =================
-    using rsl::Bar; using rsl::Ev;
-    // flat bars around 1000 (range 4 ticks) then a drop to a 5-candle low at index 10
-    auto bars = [](const std::vector<std::array<long long, 3> >& hlc) { std::vector<Bar> b; long long key = 1000; for (auto& x : hlc) { Bar y; y.key = key; key += 180; y.h = x[0]; y.l = x[1]; y.c = x[2]; y.ok = true; b.push_back(y); } return b; };
-    std::vector<std::array<long long, 3> > base; for (int k = 0; k < 10; ++k) base.push_back({{1004, 1000, 1002}});
-    auto ev = [](std::multimap<long long, Ev>& m, long long key, int pane, const char* c, int pivot, int book = -1, const char* nums = "") { Ev e; e.key = key; e.pane = pane; e.l = lst::make(pane == lst::QUE ? lst::DEF : pane, c, pivot, book, nums); m.insert(std::make_pair(key, e)); };
-    auto keyOf = [](int i) { return 1000LL + 180LL * i; };
-    {   // forming: K (1) . A (2) . Tr (3) . H (4) . L (5), price stays near the low (no expansion)
-        std::vector<std::array<long long, 3> > h = base; h.push_back({{1001, 990, 992}}); h.push_back({{995, 991, 993}}); h.push_back({{995, 991, 993}}); h.push_back({{995, 992, 993}}); h.push_back({{995, 992, 993}}); h.push_back({{995, 992, 993}});
-        std::multimap<long long, Ev> E; ev(E, keyOf(10), lst::ATK, "K", lst::LOW, -1, "450 lots"); ev(E, keyOf(10), lst::DEF, "A", lst::LOW, -1, "1,940 lots 2.6x");
-        ev(E, keyOf(11), lst::ATK, "Tr", lst::LOW); ev(E, keyOf(12), lst::DEF, "H", lst::LOW); ev(E, keyOf(13), lst::DEF, "W", lst::LOW); ev(E, keyOf(14), lst::DEF, "L", lst::LOW);
-        const std::vector<rsl::Step> s = rsl::run(bars(h), E);
-        CHECK(s[9].side == -1);
-        CHECK(s[10].side == rsl::LOW && s[10].stage == 2 && s[10].status == rsl::FORMING && s[10].chain == "K A");
-        CHECK(s[11].stage == 3 && s[12].stage == 4 && s[13].stage == 4 && s[14].stage == 5 && s[15].stage == 5);
-        CHECK(s[14].chain == "K A . Tr . H . W* . L"); CHECK(s[13].here.find("hover only") != std::string::npos);
-        CHECK(s[10].here.find("1,940 lots 2.6x") != std::string::npos);
-        // prefix runs identical (no repaint as candles arrive)
-        for (size_t m = 1; m <= h.size(); ++m) { std::vector<std::array<long long, 3> > hp(h.begin(), h.begin() + (long)m); const std::vector<rsl::Step> sp = rsl::run(bars(hp), E); for (size_t k = 0; k < m; ++k) CHECK(sp[k] == s[k]); }
-        // record round trip
-        for (size_t k = 0; k < s.size(); ++k) { rsl::Step r; CHECK(rsl::parse(rsl::line(s[k]), r)); CHECK(r == s[k]); }
-        const std::vector<std::string> nw = rsl::nowRows(s[12], "12:42 PM"); CHECK(nw[0] == "Now 12:42 PM" && nw[1] == "LOW attempt" && nw[2] == "Stage 4 Turn" && nw[3] == "Chain K A . Tr . H" && nw[4].find("Odds ?") == 0);
-        CHECK(rsl::lookOf(s[12]).height == 4 && rsl::lookOf(s[12]).colour == lst::GREEN && !rsl::lookOf(s[12]).dim);
-    }
-    {   // (ReversalStage 1.2.0) a queue Q steps only at the attempt's own extreme (tk anchor within max(4, 0.3 ATR) ticks)
-        std::vector<std::array<long long, 3> > h = base; h.push_back({{1001, 990, 992}}); h.push_back({{995, 991, 993}});
-        std::multimap<long long, Ev> E; ev(E, keyOf(10), lst::ATK, "K", lst::LOW); ev(E, keyOf(11), lst::QUE, "Q", lst::LOW, -1, "held 120% orig 97% q0 130 tk991");
-        std::vector<rsl::Step> s = rsl::run(bars(h), E);
-        CHECK(s[11].stage == 2 && s[11].chain == "K . Q"); CHECK(s[11].here.find("tk") == std::string::npos);
-        std::multimap<long long, Ev> F; ev(F, keyOf(10), lst::ATK, "K", lst::LOW); ev(F, keyOf(11), lst::QUE, "Q", lst::LOW, -1, "held 120% orig 97% q0 130 tk1040");
-        s = rsl::run(bars(h), F); CHECK(s[11].stage == 1 && s[11].chain == "K . Q*");          // a Q far from the extreme: hover only
-        std::multimap<long long, Ev> G; ev(G, keyOf(10), lst::ATK, "K", lst::LOW); ev(G, keyOf(11), lst::QUE, "Q", lst::LOW, -1, "held 120% orig 97% q0 130");
-        s = rsl::run(bars(h), G); CHECK(s[11].stage == 1);                                         // no anchor (older record): hover only
-        CHECK(rsl::qAnchorOf("broke 4% q0 24 tk29115") == 29115 && rsl::qAnchorOf("q0 24") == 0 && rsl::qAnchorOf("x tk12a") == 0 && rsl::qTolTicks(40) == 12 && rsl::qTolTicks(2) == 4);
-    }
-    {   // complete: the close leaves the low by >= 1 ATR (ATR ~ 4-11 ticks here)
-        std::vector<std::array<long long, 3> > h = base; h.push_back({{1001, 990, 992}}); h.push_back({{1003, 991, 1002}});
-        std::multimap<long long, Ev> E; ev(E, keyOf(10), lst::ATK, "S", lst::LOW); ev(E, keyOf(10), lst::DEF, "A", lst::LOW);
-        const std::vector<rsl::Step> s = rsl::run(bars(h), E);
-        CHECK(s[11].stage == 6 && s[11].status == rsl::COMPLETE && s[11].chain == "S A . 1 ATR");
-        CHECK(rsl::lookOf(s[11]).height == 6);
-    }
-    {   // failed: X (re-test empty) after A; the step drops back (stub)
-        std::vector<std::array<long long, 3> > h = base; h.push_back({{1001, 990, 992}}); h.push_back({{995, 991, 994}}); h.push_back({{995, 991, 993}});
-        std::multimap<long long, Ev> E; ev(E, keyOf(10), lst::ATK, "K", lst::LOW); ev(E, keyOf(10), lst::DEF, "A", lst::LOW); ev(E, keyOf(11), lst::DEF, "H", lst::LOW); ev(E, keyOf(12), lst::DEF, "X", lst::LOW);
-        const std::vector<rsl::Step> s = rsl::run(bars(h), E);
-        CHECK(s[11].stage == 4 && s[12].status == rsl::FAILED && s[12].stage == 0 && s[12].failedStage == 4 && rsl::lookOf(s[12]).stub);
-        CHECK(rsl::nowRows(s[12], "x")[2] == "Stage 4, failed");
-        // the order gate (replay ES 2026-10-22): an older turn's re-test L / X on a fresh extreme is hover only; H before an A too
-        std::multimap<long long, Ev> G; ev(G, keyOf(10), lst::DEF, "L", lst::LOW); ev(G, keyOf(11), lst::DEF, "X", lst::LOW); ev(G, keyOf(12), lst::DEF, "H", lst::LOW);
-        const std::vector<rsl::Step> g = rsl::run(bars(h), G);
-        CHECK(g[10].stage == 0 && g[11].status != rsl::FAILED && g[12].stage == 0 && g[11].chain == "L* . X*");
-        std::multimap<long long, Ev> G2; ev(G2, keyOf(10), lst::DEF, "A", lst::LOW); ev(G2, keyOf(10), lst::DEF, "H", lst::LOW); ev(G2, keyOf(10), lst::DEF, "L", lst::LOW);
-        CHECK(rsl::run(bars(h), G2)[10].stage == 5);   // one candle: A then H then L in step order
-        std::multimap<long long, Ev> G3; ev(G3, keyOf(10), lst::DEF, "A", lst::LOW); ev(G3, keyOf(10), lst::DEF, "H", lst::LOW); ev(G3, keyOf(10), lst::DEF, "X", lst::LOW);
-        { const rsl::Step x = rsl::run(bars(h), G3)[10]; CHECK(x.status == rsl::FAILED && x.failedStage == 4 && x.stage == 0); }   // one candle: A, H, then X fails it at stage 4
-    }
-    {   // failed: B on the DEFENDERS' book fails; B on the attackers' book is hover only
-        std::vector<std::array<long long, 3> > h = base; h.push_back({{1001, 990, 992}}); h.push_back({{995, 991, 994}}); h.push_back({{995, 991, 993}});
-        std::multimap<long long, Ev> E; ev(E, keyOf(10), lst::DEF, "A", lst::LOW); ev(E, keyOf(11), lst::DEF, "B", lst::LOW, 1); ev(E, keyOf(12), lst::DEF, "B", lst::LOW, 0);
-        const std::vector<rsl::Step> s = rsl::run(bars(h), E);
-        CHECK(s[11].status == rsl::FORMING && s[11].stage == 2 && s[12].status == rsl::FAILED);
-        ev(E, keyOf(11), lst::DEF, "P", lst::LOW, 1); CHECK(rsl::run(bars(h), E)[11].stage == 2);   // P by the attackers' book: no step
-    }
-    {   // the extreme taken out at stage 2+ = failed (and the same candle starts the next attempt); at stage 1 the extreme just moves
-        std::vector<std::array<long long, 3> > h = base; h.push_back({{1001, 990, 992}}); h.push_back({{995, 991, 994}}); h.push_back({{994, 985, 986}}); h.push_back({{990, 986, 988}});
-        std::multimap<long long, Ev> E; ev(E, keyOf(10), lst::DEF, "A", lst::LOW); ev(E, keyOf(12), lst::ATK, "K", lst::LOW);
-        std::vector<rsl::Step> s = rsl::run(bars(h), E);
-        CHECK(s[12].status == rsl::FAILED && s[12].failedStage == 2 && s[12].stage == 1 && s[12].side == rsl::LOW && s[12].why.find("taken out") != std::string::npos);
-        CHECK(s[13].status == rsl::FORMING && s[13].ext == 985 && s[13].chain == "K");
-        std::multimap<long long, Ev> E2; ev(E2, keyOf(10), lst::ATK, "K", lst::LOW);
-        s = rsl::run(bars(h), E2);
-        CHECK(s[12].status == rsl::FORMING && s[12].stage == 1 && s[12].ext == 985 && s[12].start == keyOf(10));
-    }
-    {   // a HIGH attempt (red), and the other side's extreme replaces a stage-1 attempt
-        std::vector<std::array<long long, 3> > h = base; h.push_back({{1010, 1003, 1008}}); h.push_back({{1009, 1005, 1006}}); h.push_back({{1006, 995, 996}});
-        std::multimap<long long, Ev> E; ev(E, keyOf(10), lst::ATK, "K", lst::HIGH); ev(E, keyOf(12), lst::ATK, "S", lst::LOW);
-        const std::vector<rsl::Step> s = rsl::run(bars(h), E);
-        CHECK(s[10].side == rsl::HIGH && s[10].stage == 1 && rsl::lookOf(s[10]).colour == lst::RED);
-        CHECK(s[12].side == rsl::LOW && s[12].stage == 1 && s[12].status == rsl::EXPIRED);
-    }
-    {   // expiry: stage 0 after 5 idle candles
-        std::vector<std::array<long long, 3> > h = base; h.push_back({{1001, 990, 992}}); for (int k = 0; k < 6; ++k) h.push_back({{995, 991, 993}});
-        const std::vector<rsl::Step> s = rsl::run(bars(h), std::multimap<long long, Ev>());
-        bool exp = false; for (size_t k = 10; k < s.size(); ++k) { CHECK(s[k].stage == 0); exp = exp || s[k].status == rsl::EXPIRED; } CHECK(exp);
-        for (size_t k = 0; k < s.size(); ++k) CHECK(rsl::lookOf(s[k]).height == 0 && !rsl::lookOf(s[k]).stub);
-    }
-    {   rsl::Step r; CHECK(!rsl::parse("RS|1|100|-1|3|1|0|0|0|||", r)); CHECK(!rsl::parse("RS|1|100|0|7|1|0|0|0|||", r)); CHECK(rsl::parse("RS|1|100|-1|0|0|0|0|0|||", r));
-        CHECK(!rsl::parse("RS|1|100|0|2|1|0|0|0||", r)); CHECK(rsl::fileName("6E", 180) == "RS-EU-180.csv"); }
+
+    // Typed stage semantics, causal provenance, frozen checkpoints, and RS2
+    // records live in test_stage_core.cpp.  This file deliberately retains the
+    // strip priority/colour/layout and legacy LT parser assertions above.
     std::printf("%s: %d checks, %d failed\n", fails ? "FAILED" : "PASSED", n, fails);
     return fails ? 1 : 0;
 }

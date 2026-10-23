@@ -90,6 +90,27 @@ int main() {
             CHECK(a.refill == 0 && b.refill > 0, "a refill counts only once it has rested 1 s");
             CHECK(b.tte < 0 && b.why == "refilling", "refills that stay >= drain: holding / refilling");
         } else CHECK(false, "the refill test started");
+        // A MOD size increase can reuse an order id that was already resting.
+        // If that added slice is withdrawn, it must not be counted as a refill
+        // merely because the older remainder under the same id still rests.
+        Engine M; warm(M); lvl(M, 31000, "G1");
+        const long long mo = add(M, BID, 31000, 20, T0 - 10000), mm2 = add(M, BID, 31006, 1, T0 - 9000);
+        hitBid(M, mm2, 31006, 1, T0 - 50); hitBid(M, mo, 31000, 2, T0);  // 18 old lots remain at contact
+        M.onEvent(MOD, BID, tk(31000), 28, mo, T0 + 100);                 // add 10 onto the same old id
+        M.onEvent(MOD, BID, tk(31000), 18, mo, T0 + 500);                 // then pull exactly that 10
+        if (!M.tests.empty()) {
+            const Live v = M.snapshot(M.tests[0], T0 + 2000);
+            CHECK(std::fabs(v.refill) < 1e-9, "a same-id MOD refill withdrawn before it can stay is not credited");
+            CHECK(v.pull > 4.9 && v.pull < 5.1 && v.tte > 2.9 && v.tte < 3.1, "the withdrawn MOD add keeps the true fast drain");
+        } else CHECK(false, "the MOD refill test started");
+        Engine R; warm(R); lvl(R, 31000, "G1");
+        const long long ro = add(R, BID, 31000, 20, T0 - 10000), rm2 = add(R, BID, 31006, 1, T0 - 9000);
+        hitBid(R, rm2, 31006, 1, T0 - 50); hitBid(R, ro, 31000, 2, T0);
+        R.onEvent(MOD, BID, tk(31000), 28, ro, T0 + 100);                 // the same-id add remains resting
+        if (!R.tests.empty()) {
+            const Live v = R.snapshot(R.tests[0], T0 + 2000);
+            CHECK(v.refill > 4.9 && v.refill < 5.1 && v.tte < 0, "a same-id MOD refill that stays still holds the queue");
+        } else CHECK(false, "the retained MOD refill test started");
     }
     // ---- 4) decisions at the candle close: broke = red, held = green, undecided waits, 3 closes = by the queue; recorded once
     {   Engine E; warm(E); lvl(E, 31000, "G1");

@@ -55,7 +55,10 @@ int main() {
     if (body.empty()) { for (int dd = 1; dd <= 31 && body.empty(); ++dd) { char b[32]; std::snprintf(b, sizeof b, "202610%02d", dd); body = readAll(flex + "\\TurnOrder\\ES-180-" + b + ".csv"); } }
     CHECK(body.find("\nM|1.0.0|B|") != std::string::npos && body.find("|994.75|80|0|") != std::string::npos && body[0] == '#', "the record: header + the M line (price 994.75, 80 shown, 0 filled)");
     const std::string st = readAll(flex + "\\TurnOrder.status-ES-180.txt");
-    CHECK(st.find("VERSION,1.1.0") == 0 && st.find("MARKET,ES") != std::string::npos && st.find("BAR_SECONDS,180") != std::string::npos && st.find("MARKS,1 on record") != std::string::npos && st.find("FEED,") != std::string::npos, "status file: version, market, bar size, marks, feed");
+    CHECK(st.find("VERSION,1.1.1") == 0 && st.find("MARKET,ES") != std::string::npos && st.find("BAR_SECONDS,180") != std::string::npos && st.find("MARKS,1 on record") != std::string::npos && st.find("FEED,") != std::string::npos, "status file: version, market, bar size, marks, feed");
+    // an explicit shared-feed queue loss makes all prior live IDs incomplete; the wrapper must pass it to the MBO engine before routing again
+    S->feed.qDropped++; h.draws.clear(); p->draw();
+    CHECK(S->E.tally.feedGaps == 1 && S->E.live.empty() && S->feedState.find("queue dropped") != std::string::npos, "queue drop: stale MBO ids cleared and the feed re-warms before another turn-order assertion");
     // the hover: the cursor on the bar
     hb::fakeCursor() = 7; RTX_EVENT e; std::memset(&e, 0, sizeof e); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)pt.h; e.v.mouse.v = (short)pt.v; p->mouse(&e);
     h.draws.clear(); p->draw();

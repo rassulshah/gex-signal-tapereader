@@ -163,6 +163,30 @@ int main() {
       E.evaluate(at(10, 0, 1), 1);
       CHECK(E.atoms.empty() && E.mins.empty() && E.normSrc == "learning" && E.zones[0].state == HIDDEN, "snapshot orders (8:00 stamps at 10:00) are book only: no flow, no early normal");
       CHECK(E.book.size() == 50, "... but they are in the book (their fills / pulls are tracked)"); }
+    // An old fill is also book history, not proof that a fresh add is a refill.  Its
+    // time is inside REF_WIN_MS but outside WIN_S, the case that used to manufacture path b.
+    { Engine E = make(); E.P.refWinMs = 120000; E.clock(at(10, 0));
+      for (int i = 0; i < 5; ++i) {
+          const long long old = at(9, 58, 59 - i);
+          E.onEvent(NEW, BUY, T(7840), 1, 7000 + i, old - 1000);
+          E.onEvent(FILL, SELL, T(7840), 1, 7000 + i, old);
+          E.onEvent(DEL, BUY, T(7840), 0, 7000 + i, old);
+          E.onEvent(NEW, BUY, T(7840), 5 + i, 7100 + i, at(10, 0, 2 * i));
+          E.evaluate(at(10, 0, 2 * i + 2), 4);
+      }
+      CHECK(zoneOf(E, "CR 0DTE")->state == HIDDEN, "a stale fill cannot make fresh adds look like refills"); }
+    // Zero quantity is not an execution.  It cannot be the "hit" that turns later
+    // fresh adds into refills, even if each add rests long enough to be confirmed.
+    { Engine E = make(); long long id = 7200;
+      for (int i = 0; i < 5; ++i) {
+          const long long t0 = at(10, 0, 3 * i);
+          E.onEvent(NEW, BUY, T(7840), 1 + i, id, t0);
+          E.onEvent(FILL, SELL, T(7840), 0, id, t0 + 100);
+          E.onEvent(DEL, BUY, T(7840), 0, id++, t0 + 200);
+          E.onEvent(NEW, BUY, T(7840), 5 + i, id++, t0 + 300);
+          E.evaluate(t0 + 1500, 4);
+      }
+      CHECK(zoneOf(E, "CR 0DTE")->state == HIDDEN && E.tally.garbage >= 5, "zero-size fills cannot manufacture refill evidence"); }
     // ---- session change: a new session starts invisible again ----
     { Engine E = make(2.0); E.onEvent(NEW, 0, T(7841), 40, 904, at(10, 0, 0)); E.evaluate(at(10, 0, 1), 9);
       E.evaluate(at(17, 0, 5), 20); CHECK(zoneOf(E, "CR 0DTE") && zoneOf(E, "CR 0DTE")->state == HIDDEN, "17:00 CT: the new session's zones start hidden"); }

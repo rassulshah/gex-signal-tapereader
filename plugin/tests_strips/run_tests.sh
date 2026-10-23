@@ -1,11 +1,15 @@
 #!/bin/sh
-# LetterStrips.h 1.0.0 + ReversalStageLogic.h 1.0.0 + lsReversalStage 1.0.0 (2026-10-22): the strip priority / colours / offsets / record,
-# the stage state machine (forming / failed / complete / order gate), the plugin on the mock host (record, no repaint across restarts,
-# bar by bar, settled, settings, hover, two charts) and the replay on Rassul's real ES 3-min day. The strip drawing on the two panes:
-# tests_aggbook/test_attack_126_host.cpp (attacker) and test_aggbook_host.cpp -DBOOK (Defense). Run from plugin/tests_strips.
-set -e
+# Typed reversal pipeline 1.2.0. Synthetic integrity tests, not a trading backtest.
+set -eu
+D=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+P=$(CDPATH= cd -- "$D/.." && pwd)
 B=${BUILD:-/tmp/strips-build}; mkdir -p "$B"
-CXX="g++ -std=c++17 -Wall -Wextra -Werror -O0 -fsanitize=address,undefined -fno-sanitize-recover=all"
-$CXX -I.. -include array -include cstdlib test_strips.cpp -o "$B/test_strips" && "$B/test_strips"
-$CXX -DRS_TEST_CLOCK -I.. -I../tests_aggbook/mock test_stage_host.cpp -o "$B/test_stage_host" && "$B/test_stage_host"
-g++ -std=c++17 -Wall -Wextra -Werror -O1 -I.. replay_stage.cpp -o "$B/replay_stage" && "$B/replay_stage" replay/ES-180-20261022-bars.csv replay/ES-180-turns-20261022.csv
+CXX=${CXX:-g++}
+F='-std=c++17 -Wall -Wextra -Werror -O0 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-pie -no-pie'
+for N in test_strips test_stage_core test_evidence_transport; do
+    "$CXX" $F -I"$P" "$D/$N.cpp" -o "$B/$N"
+    "$B/$N"
+done
+"$CXX" $F -DRS_TEST_CLOCK -I"$P" -I"$P/tests_aggbook/mock" "$D/test_stage_pipeline.cpp" -o "$B/test_stage_pipeline"
+"$B/test_stage_pipeline"
+echo 'Typed strip/core/transport/host tests passed. Old untyped stage replay is not a live confirmation or performance test.'

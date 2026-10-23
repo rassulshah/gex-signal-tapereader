@@ -70,7 +70,7 @@ int main() {
     // status file
     p->release();   // writes the status, flushes, releases the slot (= IRT removing / reloading the indicator)
     const std::string st = readAll(flex + "\\DealerHedge.status-ES-ESZ26-180.txt");
-    CHECK(st.find("VERSION,0.2.0") != std::string::npos && st.find("STATUS_LINE,oH 0.2.0") != std::string::npos && st.find("SHOW,2 (drawn)") != std::string::npos && st.find("ZONE,CR 0DTE/GW 0DTE 7,840.00 BUY") != std::string::npos, "status file: version, status line, the zone");
+    CHECK(st.find("VERSION,0.2.1") != std::string::npos && st.find("STATUS_LINE,oH 0.2.1") != std::string::npos && st.find("SHOW,2 (drawn)") != std::string::npos && st.find("ZONE,CR 0DTE/GW 0DTE 7,840.00 BUY") != std::string::npos, "status file: version, status line, the zone");
     // restart: a new chart object -> the zone comes back from the record, settled, identical
     mock::feed.ev.clear(); mock::feed.at = 0;
     // (0.2.0) the nightly's verdict LOG ONLY: PARAM,SHOW,0 -> nothing drawn after the restart, the record still read / kept

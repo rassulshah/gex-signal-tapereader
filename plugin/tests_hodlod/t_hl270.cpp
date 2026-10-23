@@ -160,7 +160,7 @@ int main() {
     }
     {   // [5] versions
         const std::string src = readAll("../HodLod.cpp");
-        CHECK(std::string(hl::HL_VERSION) == "2.7.1" && std::string(hlset::PLUGIN_VERSION) == "2.7.1" && src.find("p->setVersion(\"2.7.1\")") != std::string::npos, "versions 2.7.0 everywhere");
+        CHECK(std::string(hl::HL_VERSION) == "2.7.2" && std::string(hlset::PLUGIN_VERSION) == "2.7.2" && src.find("p->setVersion(\"2.7.2\")") != std::string::npos, "versions 2.7.0 everywhere");
         CHECK(src.find("mp::get(\"PreOpen\", S->mkt)") != std::string::npos && src.find("S->preParamShow != mp::LOG") != std::string::npos, "Pre row gated by LRA-PreOpen SHOW (LOG by default)");
     }
     std::printf("%d passed, %d failed\n", passes, fails);
