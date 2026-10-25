@@ -1,4 +1,4 @@
-// DeltaProfileSettings.h  (lsDeltaProfile 2.22.0: wick rows hidden (wick A retired); 2.21.0: + Trapped traders; 2.20.0: + Wick absorption on / Wick attack x normal; was 2.18.2, 2026-10-18 settings audit)  -  the ONE table of the Delta Profile settings window.
+// DeltaProfileSettings.h  (lsDeltaProfile 2.23.0: + Draw late A (not tested); 2.22.0: wick rows hidden (wick A retired); 2.21.0: + Trapped traders; 2.20.0: + Wick absorption on / Wick attack x normal; was 2.18.2, 2026-10-18 settings audit)  -  the ONE table of the Delta Profile settings window.
 // File: lsFlexLevels\DeltaProfile.settings-<MKT>.txt (keyed, per MARKET - the old file was keyed per contract root, so every roll
 // (EPZ26 -> EPH27) silently fell back to defaults). Migrates once from DeltaProfile.settings.txt ("<root>|0|width|gap|font|...").
 #pragma once
@@ -6,8 +6,8 @@
 
 namespace dpset {
 
-static const char* const PLUGIN_VERSION = "2.22.0";
-enum K { K_WIDTH, K_FONT, K_DELTA_TEXT, K_WICK_ON, K_WICK_X, K_TRAP_ON, K_N };
+static const char* const PLUGIN_VERSION = "2.23.0";
+enum K { K_WIDTH, K_FONT, K_DELTA_TEXT, K_WICK_ON, K_WICK_X, K_TRAP_ON, K_DRAW_LATE, K_N };
 
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
@@ -23,8 +23,11 @@ inline const ss::Spec& spec() {
         ss::hide(ss::floatRow("wick_x", "Wick attack x normal", 3.0, 1.0, 20.0, 40)),
         // (2.21.0, Rassul approved 2026-10-21 11:43) trapped traders on the profile: Tr? / A|Tr? beside the outlined rows
         ss::boolRow("trap_on", "Trapped traders (Tr)", true),
+        // (2.23.0, 2026-10-25) the A drawn is the researched A (decided at its candle's or the next candle's close); an A the old path finds
+        // later is logged (code AL, its delay) and drawn only when this is ticked - it has no test behind it, so off by default
+        ss::boolRow("draw_late", "Draw late A (not tested)", false),
     };
-    static const ss::Spec S = { "DeltaProfile", PLUGIN_VERSION, 16, R, K_N, 0 };   // (2.22.0) parameter version 16: wick rows hidden; (2.21.0) parameter version 15: + trap row; (2.20.0) 14: + wick rows
+    static const ss::Spec S = { "DeltaProfile", PLUGIN_VERSION, 17, R, K_N, 0 };   // (2.23.0) parameter version 17: + Draw late A; (2.22.0) parameter version 16: wick rows hidden; (2.21.0) parameter version 15: + trap row; (2.20.0) 14: + wick rows
     return S;
 }
 

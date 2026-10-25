@@ -1,7 +1,7 @@
 #ifndef LS_DELTA_PROFILE_CORE_H
 #define LS_DELTA_PROFILE_CORE_H
 
-// DeltaProfileCore.h 2.22.0 (2.22.0: host only - the shared A (SharedAbsorb.h) and one circle per candle) 2.21.2 (2.21.2: host only - the HOD/LOD keep-out, KeepOutDraw.h) 2.21.1 (2.21.1: host only - badge placement) 2.21.0 (2.21.0: host only - the trapped traders read lives in TrapLogic.h) 2.20.0 (2.20.0: host only - the wick absorption A lives in AbsorbLogic.h) 2.19.1 (2.19.1: host colour only) 2.19.0 (2.19.0, Rassul 2026-10-19: grayPick - one gray circle per candle for a big node with no coloured A) 2.18.3 (2026-10-18: host settings only - font default 10, core unchanged) / 2.18.2 (settings audit) / 2.18.0 (2.18.0, Rassul 2026-10-18: aStep / nextPivotOk - the A close may come from the node's own candle OR the next candle, a next-candle A needs the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; swingPivot also returns each bar's pivot bar; labelKeys - Rassul 12:49 CT: the ratio label only on the 3 biggest profile bars by abs delta, at any ratio) 2.17.0 (2.17.0, 2026-10-18: tentStep - the tentative-A life cycle (final / shown / hidden / failed), boardFlag (SignalBoard A flag 1 final / 2 tentative), dpFacts - the Market State "DP" facts of one closed bar) 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
+// DeltaProfileCore.h 2.23.0 (2.23.0, 2026-10-25: researchA - the researched A, decided only on its own candle or the next candle) 2.22.0 (2.22.0: host only - the shared A (SharedAbsorb.h) and one circle per candle) 2.21.2 (2.21.2: host only - the HOD/LOD keep-out, KeepOutDraw.h) 2.21.1 (2.21.1: host only - badge placement) 2.21.0 (2.21.0: host only - the trapped traders read lives in TrapLogic.h) 2.20.0 (2.20.0: host only - the wick absorption A lives in AbsorbLogic.h) 2.19.1 (2.19.1: host colour only) 2.19.0 (2.19.0, Rassul 2026-10-19: grayPick - one gray circle per candle for a big node with no coloured A) 2.18.3 (2026-10-18: host settings only - font default 10, core unchanged) / 2.18.2 (settings audit) / 2.18.0 (2.18.0, Rassul 2026-10-18: aStep / nextPivotOk - the A close may come from the node's own candle OR the next candle, a next-candle A needs the lows (bullish) / highs (bearish) of BOTH bars beyond the pivot bar's high / low; swingPivot also returns each bar's pivot bar; labelKeys - Rassul 12:49 CT: the ratio label only on the 3 biggest profile bars by abs delta, at any ratio) 2.17.0 (2.17.0, 2026-10-18: tentStep - the tentative-A life cycle (final / shown / hidden / failed), boardFlag (SignalBoard A flag 1 final / 2 tentative), dpFacts - the Market State "DP" facts of one closed bar) 2.16.0 (2.16.0, Rassul 2026-10-17: the pivot rule against the peak bar's own swing - swingPivot - may repaint until the pivot is confirmed) 2.15.0 (2.15.0, Rassul 2026-10-17: the 2.6.0 rules - top 3 rows, no halfway rule, more than one bubble per candle - plus the pivot rule and the same-candle close) 2.13.0 (2.13.0, Rassul 2026-10-16: absorption only - every row >= 2.0x the average |delta| is a candidate (Snapshot::cands, no top-3 cap), no 10%-of-net gate in classify, ONE bubble per candle (the higher ratio)) 2.8.5 (2.8.5, 2026-10-14 23:05 CT: versionBefore / recheckA / oneBubblePerCandle - display only, records unchanged) 2.8.4 (2.8.4: halfwayOk / pivotOk shared with the host; 2.8.2 halfway rule in classify) 2.7.0 (absorption unchanged since 2.6.2: the peak bar's own close; 2.7.0 adds exh:: the thin-extreme exhaustion candidate) -- SDK-independent C++11 calculation layer. No drawing, files, static chart state,
 // wall clock, market aliases, or pixel coordinates influence these results.
 #include <algorithm>
 #include <cmath>
@@ -426,6 +426,79 @@ inline State classify(const std::vector<Bar>& bars, Tick low, Tick high,
         if (static_cast<std::size_t>(formed + 1) < bars.size() && initiative) {
             out.code = "I?"; out.support = !sell;
         }
+    }
+    return out;
+}
+// ---- (2.23.0, 2026-10-25, Iteration 6 parity: the live A was decided a median 36 min after its candle, Jaccard 0.01-0.04 vs the
+// researched A) THE RESEARCHED A, decided ONLY at the close of its own candle or of the next candle, exactly as the research detector
+// (iter6 a6_indep.detect: 60 rows, top 3, 2.0x, pivot rule) decides it. Pure function of the closed window - the same answer live, after
+// a restart, or in a replay. w = the window's CLOSED bars in chart order (the 90 minutes ending with the decision candle k = w.back();
+// 30 bars on a 3-min chart), rows normalized (unique ascending keys). Steps at k's close:
+//  1. profile = per-price delta over the window; rows = ceil(span / nRows) ticks each, cut from the window's LOWEST traded price;
+//  2. the 3 biggest rows by |delta| (ties: the lower row), each >= 2.0x the average non-zero |row|;
+//  3. the row's peak candle = the window candle with the biggest same-side delta on it (the first one on a tie); it must be k (same-candle
+//     A) or k-1 (next-candle A) - any other peak is never an A here (the old late path);
+//  4. selling row = bullish: the candle closes green above the row's top tick; buying row = bearish: red close below its bottom tick.
+//     Same: the peak candle k closes beyond. Next: the peak candle k-1 did NOT, k does, and k's low (bullish) is below the pivot
+//     bar's high (bearish: k's high above the pivot bar's low);
+//  5. pivot rule: the pivot bar = the lowest low (bullish) / highest high (bearish) of [peak-5, k] (the first one); the peak candle is
+//     that bar or its low is below that bar's high (bearish: its high above that bar's low).
+struct RaHit { int pk = -1, k = -1, formed = -1, rank = 0; bool sell = false; int conf = CONF_NONE; Tick lo = 0, hi = 0; double ratio = 0, net = 0; };
+inline std::vector<RaHit> researchA(const std::vector<Bar>& w, double tick, int nRows = 60, int top = 3, double ratioMin = 2.0, bool needPivot = true) {
+    std::vector<RaHit> out;
+    const int n = static_cast<int>(w.size());
+    if (n < 7 || !finite(tick) || tick <= 0 || nRows < 1) return out;
+    std::map<Tick, std::pair<double, double> > prof;   // key -> (delta, volume)
+    for (const Bar& b : w) for (const Row& r : b.rows) { std::pair<double, double>& p = prof[r.key]; p.first += r.delta; p.second += r.volume; }
+    std::vector<Tick> present;
+    for (std::map<Tick, std::pair<double, double> >::const_iterator i = prof.begin(); i != prof.end(); ++i) if (i->second.second > 0) present.push_back(i->first);
+    if (present.size() < 5) return out;
+    const Tick lo = present.front(), hi = present.back(), span = hi - lo;
+    const Tick tpr = std::max<Tick>(1, (span + nRows - 1) / nRows);
+    const Tick nrow = span / tpr + 1;
+    if (nrow > 100000) return out;
+    std::vector<double> rows(static_cast<std::size_t>(nrow), 0.0);
+    for (std::map<Tick, std::pair<double, double> >::const_iterator i = prof.begin(); i != prof.end(); ++i)
+        if (i->first >= lo && i->first <= hi) rows[static_cast<std::size_t>((i->first - lo) / tpr)] += i->second.first;
+    double sum = 0; int nz = 0;
+    for (double v : rows) if (std::fabs(v) > 0) { sum += std::fabs(v); ++nz; }
+    if (nz < 3) return out;
+    const double mean = sum / nz;
+    std::vector<int> order(rows.size()); for (std::size_t i = 0; i < order.size(); ++i) order[i] = static_cast<int>(i);
+    std::stable_sort(order.begin(), order.end(), [&rows](int a, int b) { return std::fabs(rows[static_cast<std::size_t>(a)]) > std::fabs(rows[static_cast<std::size_t>(b)]); });
+    auto key = [tick](double p, Tick& k) -> bool { const double q = p / tick; if (!finite(q) || std::fabs(q) >= 9.0e15) return false; k = static_cast<Tick>(std::llround(q)); return true; };
+    std::vector<Tick> O(n), H(n), L(n), C(n);
+    for (int i = 0; i < n; ++i) if (!key(w[i].open, O[i]) || !key(w[i].high, H[i]) || !key(w[i].low, L[i]) || !key(w[i].close, C[i])) return out;
+    const int k = n - 1;
+    for (int rank = 0; rank < top && rank < static_cast<int>(order.size()); ++rank) {
+        const int r = order[static_cast<std::size_t>(rank)];
+        const double ratio = std::fabs(rows[static_cast<std::size_t>(r)]) / mean;
+        if (ratio < ratioMin) break;
+        const Tick rlo = lo + r * tpr, rhi = std::min<Tick>(rlo + tpr - 1, hi);
+        const bool sell = rows[static_cast<std::size_t>(r)] < 0;
+        int pk = -1, formed = -1; double best = 0;
+        for (int i = 0; i < n; ++i) {
+            const double d = regionalDelta(w[i], rlo, rhi) * (sell ? -1.0 : 1.0);
+            if (d > 0) { formed = i; if (pk < 0 || d > best) { best = d; pk = i; } }
+        }
+        if (pk < 0 || (pk != k && pk != k - 1)) continue;
+        auto conf = [&](int q) { return sell ? (C[q] > O[q] && C[q] > rhi) : (C[q] < O[q] && C[q] < rlo); };
+        const bool a0 = conf(pk);
+        const int s0 = std::max(0, pk - 5);
+        int pb = s0;
+        for (int i = s0 + 1; i <= k; ++i) if (sell ? L[i] < L[pb] : H[i] > H[pb]) pb = i;
+        const bool pivOk = pb == pk || (sell ? L[pk] < H[pb] : H[pk] > L[pb]);
+        int how;
+        if (pk == k) { if (!a0) continue; how = CONF_SAME; }
+        else {
+            if (a0) continue;
+            const bool nxt = sell ? L[k] < H[pb] : H[k] > L[pb];
+            if (!(conf(k) && nxt)) continue;
+            how = CONF_NEXT;
+        }
+        if (needPivot && !pivOk) continue;
+        RaHit h; h.pk = pk; h.k = k; h.formed = formed; h.rank = rank; h.sell = sell; h.conf = how; h.lo = rlo; h.hi = rhi; h.ratio = ratio; h.net = rows[static_cast<std::size_t>(r)];
+        out.push_back(h);
     }
     return out;
 }
