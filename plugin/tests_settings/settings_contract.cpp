@@ -34,6 +34,7 @@
 #include "../DealerHedgeSettings.h"
 #include "../SweepRefillSettings.h"
 #include "../StopRunMarkSettings.h"
+#include "../TrappedSettings.h"
 
 struct LegacyCase { const char* text; int market; const char* key; double want; };   // key == nullptr: must NOT be recognised
 struct Entry {
@@ -217,6 +218,8 @@ int main(int argc, char** argv) {
     E.push_back(Entry{ &swrset::spec(), "SweepRefill.cpp", nullptr, {}, {} });   // (2026-10-22) lsSweepRefill 1.1.0 Sr: show bullish / bearish + colours, ZigZag show + colour, swing line, gap, font (the detection numbers: LRA-StopSweep-<MKT>.csv)
     E.push_back(Entry{ &srmset::spec(), "StopRunMark.cpp", nullptr, {}, {} });   // (2026-10-22) lsStopRun 1.2.0 St / Sta: show + colours, min orders, font (the detection numbers: LRA-StopSweep-<MKT>.csv)
     E.push_back(Entry{ &rsset::spec(), "ReversalStage.cpp", nullptr, {}, {} });   // (2026-10-22) lsReversalStage 1.0.0: steps show + low / high colours, stage names, Now box show + Position
+    E.push_back(Entry{ &trpset::paneSpec(), "Trapped.cpp", nullptr, {}, {} });    // (2026-10-24) lsTrapped 1.0.0 pane: fuel line, spike labels, message line, big x, sellers / buyers colours
+    E.push_back(Entry{ &trpset::marksSpec(), "Trapped.cpp", nullptr, {}, {} });   // (2026-10-24) lsTrappedMarks 1.0.0 (TrappedMarks.cpp = Trapped.cpp + TRP_MARKS): Tr letters, small traps, big x, colours
     if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
         const int mkt = ss::marketIndex(argv[3]);
         for (const Entry& e : E) {
