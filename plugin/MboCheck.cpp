@@ -74,7 +74,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define MC_VERSION "1.1.2"          // keep equal to mbo::VERSION and the setVersion literal below
+#define MC_VERSION "1.1.3"          // keep equal to mbo::VERSION and the setVersion literal below
 
 enum { CTX_CALC = 0, CTX_DRAW = 1, CTX_TIMER = 2 };
 
@@ -95,7 +95,7 @@ struct MCState {
     std::string line; int colour = 0;
     long long writes = 0;              // test counter (#31)
     long long recSeq = 0;              // raw recorder sequence, per chart state
-    ~MCState() { delete dbo; delete md; }
+    ~MCState() { delete dbo; }   // (1.1.3) (2026-10-24 crash fix) IRT fast-fails (0xC0000409 in investorRT.exe) when a MARKET_DEPTH is deleted - adding an indicator to a chart restarts its indicators -> done() -> the next calc deleted the parked book. A MARKET_DEPTH is NEVER deleted any more (a few hundred bytes leaked per symbol / bar-size change).
 };
 
 #ifdef MC_TEST_CLOCK
@@ -424,6 +424,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the verdict must appear (and age) while the feed is idle, without forcing repaints
     p->setDescription("LRA MboCheck: shows whether this chart's feed delivers market-by-order (MBO / DBO) events and full depth. One line on the chart; no settings.");
-    p->setVersion("1.1.2");   // MC_VERSION
+    p->setVersion("1.1.3");   // MC_VERSION
     return p;
 }

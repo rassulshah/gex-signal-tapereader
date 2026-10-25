@@ -138,7 +138,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* IR_VERSION = "0.8.3";   // (0.8.2, 2026-10-22 MBO recorder fix P1) dbo_HH rows stamped by ARRIVAL time (ArrivalStamp.h): a row IRT stamps with the resting order's old time gets the latest time already written, so it lands in the right hour file and replays in feed order; status DBO adds restamped / max_back_s; (0.8.1) the book object parked at done() / destroy() - IRT faulted inside its destructor at every quit; (0.8.0) the depth recorder: chart-context open, 250 ms guarded clock, valid books only, hourly dom_HH / dbo_HH, coverage; stuck-bar skip; pass watchdog
+static const char* IR_VERSION = "0.8.4";   // (0.8.4, 2026-10-24) (2026-10-24 crash fix) IRT fast-fails (0xC0000409 in investorRT.exe) when a MARKET_DEPTH is deleted - adding an indicator to a chart restarts its indicators -> done() -> the next calc deleted the parked book. A MARKET_DEPTH is NEVER deleted any more (a few hundred bytes leaked per symbol / bar-size change).
+// prior: "0.8.3";   // (0.8.2, 2026-10-22 MBO recorder fix P1) dbo_HH rows stamped by ARRIVAL time (ArrivalStamp.h): a row IRT stamps with the resting order's old time gets the latest time already written, so it lands in the right hour file and replays in feed order; status DBO adds restamped / max_back_s; (0.8.1) the book object parked at done() / destroy() - IRT faulted inside its destructor at every quit; (0.8.0) the depth recorder: chart-context open, 250 ms guarded clock, valid books only, hourly dom_HH / dbo_HH, coverage; stuck-bar skip; pass watchdog
 //   // (0.7.1 audit) complete VAP bars and cursor advancement are durable-only; fixed-market readers remain footprint-only; MBO is accurately labelled on CQG and bounded per pass.
 //   // (0.6.5) times every step: any step over 250 ms is traced as SLOW (the IRT freeze hunt, 2026-10-08)   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
 #ifndef IR_FIXED
@@ -251,7 +252,7 @@ struct DepthState {
     arr::Clock arrival;                                   // (0.8.2) stale order-feed stamps -> the latest time already written
     long long statusMs = -1, lastChartMs = -1; std::string err;
     DepthState() { memset(&tsTm, 0, sizeof(tsTm)); }
-    ~DepthState() { delete md; delete dbo; }
+    ~DepthState() { delete dbo; }   // (0.8.4) (2026-10-24 crash fix) IRT fast-fails (0xC0000409 in investorRT.exe) when a MARKET_DEPTH is deleted - adding an indicator to a chart restarts its indicators -> done() -> the next calc deleted the parked book. A MARKET_DEPTH is NEVER deleted any more (a few hundred bytes leaked per symbol / bar-size change).
     DepthState(const DepthState&) = delete; DepthState& operator=(const DepthState&) = delete;
 };
 static std::map<int, DepthState*>& irClocks() { static std::map<int, DepthState*> m; return m; }
@@ -277,7 +278,7 @@ public:
     // next calc / draw of this chart (a symbol / bar-size change) deletes it in chart context. At quit nothing follows, so it is never
     // deleted (the process ends). A chart closed during the day keeps its book object until IRT exits (one depth subscription).
     std::vector<cppExtension::MARKET_DEPTH*> mdPark_;
-    void flushPark() { for (size_t i = 0; i < mdPark_.size(); ++i) delete mdPark_[i]; mdPark_.clear(); }
+    void flushPark() { mdPark_.clear(); }   // (0.8.4) parked books are dropped, never deleted
     virtual int parmsLoadBody(void);
     virtual int parmsApplyBody(void);
     virtual int parmsUpdtBody(unsigned int iParmNumber);
@@ -1094,7 +1095,7 @@ void IRTReader::depthIdentify(DepthState& D)
     depthStop(D);
     try { depthFlush(D, irSteadyMs(), true); } catch (...) {}
     if (D.owner && !D.folder.empty() && !D.mkt.empty()) std::remove((D.folder + "\\_depth-owner-" + D.mkt + ".txt").c_str());
-    delete D.md; D.md = nullptr; delete D.dbo; D.dbo = nullptr;
+    D.md = nullptr; delete D.dbo; D.dbo = nullptr;   // (0.8.4) never delete a MARKET_DEPTH
     D.mdDead = D.mdBlocked = D.dboDead = D.dboBlocked = D.dboCqg = D.dboLive = false; D.clockDomOff = D.clockDboOff = false;
     D.avail = false; D.maxLevels = 0; D.availMs = -1; D.domHash = 0; D.domSec = -1; D.timerTried = false;
     D.owner = false; D.ownerMs = -1; D.firstBarKey = -1; D.cov = irl::FillCoverage(); D.dboSkip = false; D.skipCheckMs = -1;
