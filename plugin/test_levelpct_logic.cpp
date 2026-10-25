@@ -43,12 +43,12 @@ int main()
     // hover: what, both numbers with n, random, means, how to use, example
     r = lpct::lookup(T, "PDL", "LOD", used);
     lpct::Hover h = lpct::hover("NQ", "PDL", used, "29771.00", *r, T);
-    CHECK(any(h, "What:") && any(h, "within 0.25 ADR of PDL") && any(h, "below the RTH open"), "hover: what it is");
-    CHECK(any(h, "of 150 days whose FIRST extreme was the LOD") && any(h, "of 320 days with PDL below the open, the day's FINAL LOD"), "hover: both numbers with n");
-    CHECK(any(h, "A random price the same distance away: 5%  /  20%."), "hover: the random comparison");
-    CHECK(any(h, "Means: GREEN") && any(h, "1st and final LOD") && any(h, "How to use:") && any(h, "Example: \"10%  /  38%\""), "hover: means / use / example");
+    CHECK(any(h, "= the day's FIRST low reached PDL on 15 of 150 days"), "hover: 1st number as a day count");
+    CHECK(any(h, "= the day's FINAL low reached PDL on 122 of 320 days"), "hover: 2nd number as a day count");
+    CHECK(any(h, "below the RTH open") && any(h, "within 0.25 ADR") && any(h, "Green outline = beats a random price that far away (5% / 20%)."), "hover: basis + random");
+    CHECK(h.lines.size() == 4, "hover: 4 short lines");
     r = lpct::lookup(T, "PDH", "HOD", used); h = lpct::hover("NQ", "PDH", used, "30113.00", *r, T);
-    CHECK(any(h, "Means: GREY = no better than a random price") && any(h, "above the RTH open") && any(h, "HOD"), "grey hover");
+    CHECK(any(h, "Grey outline = no better than a random price") && any(h, "above the RTH open") && any(h, "high"), "grey hover");
     for (const auto& s : h.lines) CHECK(s.find('?') == std::string::npos, "no ? in hover lines");
     r = lpct::lookup(T, "PFH", "HOD", used); h = lpct::hover("NQ", "PFH \xB7 PDH", used, "30113.00", *r, T);
     CHECK(any(h, "only 10 days") && any(h, "too few (20 needed)"), "dash explained in the hover");

@@ -19,7 +19,7 @@
 #include <vector>
 
 namespace lpct {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-10-24) the hover is 4 short lines with day counts ("27 of 50 days")
 static const int MIN_N = 20;
 static const size_t MAX_BYTES = 65536, MAX_LINES = 512;
 
@@ -138,30 +138,26 @@ inline unsigned long outline(const Row& r) { return green(r) ? C_GREEN : C_GREY;
 
 struct Hover { std::string title; std::vector<std::string> lines; };
 // the hover in plain words: what it is, both numbers with n, the random comparison, what it means, how to use it, an example
+// (1.1.0, Rassul 2026-10-24 21:29 "a simple brief explanation ... like 30 out of 50 days") short: what each number is, as a day count
+inline long daysOf(int pct, long n) { return pct < 0 || n <= 0 ? 0 : (long)std::lround(pct * (double)n / 100.0); }
 inline Hover hover(const std::string& mkt, const std::string& shownName, const std::string& used, const std::string& priceTxt,
                    const Row& r, const Table& T)
 {
     Hover h; const bool lod = r.side == "LOD";
-    const std::string ext = lod ? "low" : "high", EXT = lod ? "LOD" : "HOD", where = lod ? "below" : "above";
+    const std::string ext = lod ? "low" : "high", where = lod ? "below" : "above";
     char z[16]; std::snprintf(z, sizeof(z), "%.2f", T.zone);
-    h.title = shownName + " " + priceTxt + " \xB7 " + text(r) + " \xB7 does the " + mkt + " " + ext + " of the day end up here?";
-    h.lines.push_back("What: how often " + mkt + "'s " + EXT + " came within " + z + " ADR of " + used + " (swept it or stopped just short) on days "
-                      "it sat " + where + " the RTH open. " + mkt + " days only" + (T.first.empty() ? std::string(".") : " (" + T.first + " to " + T.last + ")."));
-    char a[200];
-    if (r.p1 >= 0) std::snprintf(a, sizeof(a), "1st number %d%%: of %ld days whose FIRST extreme was the %s, that %s came here on %d%%.", r.p1, r.n1, EXT.c_str(), ext.c_str(), r.p1);
-    else std::snprintf(a, sizeof(a), "1st number -: only %ld days whose first extreme was the %s - too few (20 needed).", r.n1, EXT.c_str());
+    (void)mkt;
+    h.title = shownName + " " + priceTxt + " \xB7 " + text(r);
+    char a[220];
+    if (r.p1 >= 0) std::snprintf(a, sizeof(a), "%d%% = the day's FIRST %s reached %s on %ld of %ld days.", r.p1, ext.c_str(), used.c_str(), daysOf(r.p1, r.n1), r.n1);
+    else std::snprintf(a, sizeof(a), "1st -: only %ld days so far - too few (20 needed).", r.n1);
     h.lines.push_back(a);
-    if (r.p2 >= 0) std::snprintf(a, sizeof(a), "2nd number %d%%: of %ld days with %s %s the open, the day's FINAL %s came here on %d%%.", r.p2, r.n2, used.c_str(), where.c_str(), EXT.c_str(), r.p2);
-    else std::snprintf(a, sizeof(a), "2nd number -: only %ld days - too few (20 needed).", r.n2);
+    if (r.p2 >= 0) std::snprintf(a, sizeof(a), "%d%% = the day's FINAL %s reached %s on %ld of %ld days.", r.p2, ext.c_str(), used.c_str(), daysOf(r.p2, r.n2), r.n2);
+    else std::snprintf(a, sizeof(a), "2nd -: only %ld days so far - too few (20 needed).", r.n2);
     h.lines.push_back(a);
-    h.lines.push_back("A random price the same distance away: " + pctTxt(r.r1) + "  /  " + pctTxt(r.r2) + ".");
-    if (green(r)) h.lines.push_back(std::string("Means: GREEN = ") + used + " beats a random price (" + ((r.beats & 1) ? "1st" : "") +
-                                    ((r.beats & 3) == 3 ? " and " : "") + ((r.beats & 2) ? "final" : "") + " " + EXT + ") - the level itself draws the turn, not just its distance.");
-    else h.lines.push_back("Means: GREY = no better than a random price at that distance - the odds come from how far it is from the open, not from the level.");
-    h.lines.push_back(std::string("How to use: ") + (green(r) ? "a green level is a place to look for the " + EXT + " - still wait for your sweep + RB / CoB trigger." :
-                                                          "do not trade a grey level on its name; take the turn only on your sweep + RB / CoB trigger and the tape."));
-    std::snprintf(a, sizeof(a), "Example: \"%s\" = the first %s landed here on %s of those days, the final %s on %s.", text(r).c_str(), ext.c_str(), pctTxt(r.p1).c_str(), ext.c_str(), pctTxt(r.p2).c_str());
+    std::snprintf(a, sizeof(a), "Counted on days the level was %s the RTH open; reached = within %s ADR.", where.c_str(), z);
     h.lines.push_back(a);
+    h.lines.push_back(std::string(green(r) ? "Green outline = beats" : "Grey outline = no better than") + " a random price that far away (" + pctTxt(r.r1) + " / " + pctTxt(r.r2) + ").");
     return h;
 }
 
