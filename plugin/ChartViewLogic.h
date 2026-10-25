@@ -34,7 +34,7 @@
 
 namespace cvl {
 
-static const char* const CV_VERSION_STR = "1.2.1";
+static const char* const CV_VERSION_STR = "1.3.0";
 static const int   MAX_LABELS      = 40;       // labels read per chart
 static const int   MAX_ARRAYS      = 16;       // arrays read per label (0..15, stop at the first that fails)
 static const int   FIXED_BARS      = 300;      // (task #300) always the last 300 bars - no setting

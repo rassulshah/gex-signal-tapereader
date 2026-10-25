@@ -47,6 +47,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -62,7 +63,8 @@
 #include <unistd.h>
 #endif
 
-#define CV_VERSION "1.2.1"          // keep equal to cvl::CV_VERSION_STR and the setVersion literal below
+#define CV_VERSION "1.3.0"          // (1.3.0, 2026-10-24 crash fix) IRT fast-failed (0xC0000409 in investorRT.exe) inside a ChartView lookup - found by parking indicators one group at a time (round 9). No getCustomIndicator() any more (it made IRT recalculate RTL custom indicators from inside the plugin, incl. names IRT no longer knows: DPoc / WPoc), and a crash guard quarantines any label whose lookup brings IRT down (ChartView.skip.txt)
+// prior: "1.2.1"          // keep equal to cvl::CV_VERSION_STR and the setVersion literal below
 
 enum { CTX_CALC = 0, CTX_DRAW = 1, CTX_TIMER = 2 };
 
@@ -318,6 +320,22 @@ int cppExtension::setup(void)
 
 // ---- one label: each lookup name, arrays 0, 1, ... until one fails (array 0 also as the default array -1); last the RTL
 // custom indicator by name (calculated by IRT only from calc on a new bar / request, like DealerProfile's bar file).
+// (1.3.0) the lookup crash guard: before the FIRST lookup of a label in this IRT session the label is written to
+// ChartView.lookup-guard.txt and removed right after. If IRT dies inside the lookup the file survives; at the next load its label
+// goes into ChartView.skip.txt and is never looked up again (delete its line to retry).
+static std::set<std::string>& cvSkip() { static std::set<std::string> s; return s; }
+static std::set<std::string>& cvProven() { static std::set<std::string> s; return s; }
+static void cvGuardBoot(const std::string& dir)
+{
+    static bool done = false; if (done || dir.empty()) return; done = true;
+    const std::string g = dir + "\\ChartView.lookup-guard.txt", k = dir + "\\ChartView.skip.txt";
+    { std::ifstream in(g); std::string lab; if (in && std::getline(in, lab) && !lab.empty()) { std::ofstream o(k, std::ios::app); if (o) o << lab << "\n"; } }
+    std::remove(g.c_str());
+    std::ifstream in(k); std::string line; while (std::getline(in, line)) { if (!line.empty() && line.back() == '\r') line.pop_back(); if (!line.empty()) cvSkip().insert(line); }
+}
+static void cvGuardSet(const std::string& dir, const std::string& lab) { if (dir.empty()) return; std::ofstream o(dir + "\\ChartView.lookup-guard.txt", std::ios::trunc); if (o) o << lab << "\n"; }
+static void cvGuardClear(const std::string& dir) { if (!dir.empty()) std::remove((dir + "\\ChartView.lookup-guard.txt").c_str()); }
+
 bool ChartView::readSeries(const std::string& label, long n, long from, bool mayCalc, cvl::Series& out, std::string& diag)
 {
     out = cvl::Series(); out.label = label;
@@ -351,13 +369,8 @@ bool ChartView::readSeries(const std::string& label, long n, long from, bool may
         if (!out.values.empty()) { out.foundAs = names[v]; out.via = "chart"; return true; }
         diag += (diag.empty() ? "" : "; ") + std::string("chart '") + names[v] + "' not found";
     }
-    const std::string cn = cvl::customName(label);
-    if (!cn.empty()) {
-        char buf[96]; memset(buf, 0, sizeof(buf)); strncpy(buf, cn.c_str(), sizeof(buf) - 1);
-        RTARRAY a(fEmptyArray);
-        if (a.getCustomIndicator(buf, 1, mayCalc) == RTX_OK && a.count > 0) { take(a, 0); out.foundAs = cn; out.via = mayCalc ? "custom" : "custom (not recalculated)"; return true; }
-        diag += std::string("; custom '") + cn + "' not found" + (mayCalc ? "" : " (not recalculated here: tried again on the next new bar)");
-    }
+    // (1.3.0) no getCustomIndicator(): asking IRT to calculate an RTL custom indicator from inside the plugin crashed IRT (10-24)
+    diag += "; custom lookups are off (1.3.0 crash fix): put the indicator on the chart to export it";
     return false;
 }
 
@@ -561,9 +574,15 @@ void ChartView::pump(int ctx)
         s.watchFromFile = (int)labels.size();
         const bool mayCalc = ctx == CTX_CALC && (why == cvl::FIRST || why == cvl::NEWBAR || why == cvl::WANT);
         if (C.seriesCache.size() > (size_t)cvl::MAX_LABELS * 2) C.seriesCache.clear();
+        cvGuardBoot(dir);                                                       // (1.3.0)
         for (size_t k = 0; k < labels.size(); k++) {
             cvl::Series x; std::string diag;
-            if (readSeries(labels[k], n, from, mayCalc, x, diag)) { s.series.push_back(x); C.seriesCache[labels[k]] = std::make_pair(lastT, x); continue; }
+            if (cvSkip().count(labels[k])) { s.missing.push_back(labels[k]); s.lookup.push_back(labels[k] + ": skipped - its lookup crashed IRT before (ChartView.skip.txt; delete the line to retry)"); continue; }
+            const bool firstTime = !cvProven().count(labels[k]);
+            if (firstTime) cvGuardSet(dir, labels[k]);
+            const bool got = readSeries(labels[k], n, from, mayCalc, x, diag);
+            if (firstTime) { cvGuardClear(dir); cvProven().insert(labels[k]); }
+            if (got) { s.series.push_back(x); C.seriesCache[labels[k]] = std::make_pair(lastT, x); continue; }
             auto it = C.seriesCache.find(labels[k]);
             if (it != C.seriesCache.end() && it->second.first == lastT) {          // read on this same bar from calc: reuse it
                 cvl::Series y = it->second.second; y.via += " +cached"; s.series.push_back(y); continue;
@@ -599,6 +618,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | CALC_LAST);
     p->setDescription("LRA ChartView: writes this chart's bars and indicator values to lsFlexLevels\\ChartView for Claude, and takes a picture of this chart on request. Draws nothing; no settings.");
-    p->setVersion("1.2.1");   // CV_VERSION
+    p->setVersion("1.3.0");   // CV_VERSION
     return p;
 }
