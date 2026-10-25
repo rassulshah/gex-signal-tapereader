@@ -1,3 +1,4 @@
+// RallyLogic.h 1.1.0 (2026-10-24: condition 3 = tagged +-1 SD OR a 30-bar high / low; Rassul 21:42 CT "modify 3 so that it can be either that or a 30 bar high")
 // RallyLogic.h 1.0.0 (2026-10-22) -- the "Rly" (rally) signal, SDK-free. Rassul approved mockup v0.2 (rly-mockup-v2.png) at
 // 15:10-15:15 CT 2026-10-22 ("keep 4 a day as it is now"). Exact port of the research twin rly2.py session() (v0.2):
 //   - RTH bars only (svl::rthOf: ES / NQ 08:30, CL / NG 08:00, GC / HG / 6E 07:20 CT), the chart's own bars (3-min).
@@ -8,7 +9,7 @@
 //     low <= -1 SD); mirror down. Both up and down: the MORE RECENT +-2 SD tag decides (no tag on one side = Balance).
 //   - 1-bar ZigZag over the session's bars (green / red tie rules as rly2.py).
 //   - Signal on the END of a CONFIRMED wave (decided on the bar where the ZigZag turns): wave pivot p -> extreme e with
-//     e - p >= 3, size >= 2.5 x ATR(14 Wilder, chart bars incl. overnight) at e, a bar of the wave tagged +1 SD (high >= u1),
+//     e - p >= 3, size >= 2.5 x ATR(14 Wilder, chart bars incl. overnight) at e, a bar of the wave tagged +1 SD (high >= u1) OR (1.1.0) high e = the 30-bar high,
 //     high e = the 20-bar high (session bars), trend at e Uptrend / Strong Uptrend. Mirror for the down side (-1 SD, 20-bar low,
 //     Dntrend / Strong Dntrend). Drawn "Rly" on bar e: green above (up) / red below (down). Never changes afterwards: the host
 //     records every judged wave and never judges a recorded wave again.
@@ -23,11 +24,12 @@
 
 namespace rly {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 static const int MIN_BARS = 3;          // e - p
 static const double ATR_MULT = 2.5;
 static const int ATR_LEN = 14;
 static const int EXT_BARS = 20;         // 20-bar high / low (incl. bar e)
+static const int ALT_BARS = 30;         // (1.1.0) condition 3 alternative: high e = the 30-bar high (low e = the 30-bar low), session bars incl. bar e
 static const int TREND_FROM = 9;        // trend from the 10th RTH bar
 static const int TREND_WIN = 20;
 
@@ -121,9 +123,11 @@ struct Wave {
     double from = 0, to = 0;               // low p -> high e (up) / high p -> low e (down)
     double vw = 0, band1 = 0;              // VWAP and the +1 SD (up) / -1 SD (down) band at e
     bool c[5] = { false, false, false, false, false };   // 3+ bars, 2.5 ATR, tag 1 SD, 20-bar extreme, trend
+    bool via30 = false;                    // (1.1.0) condition 3 passed by the 30-bar extreme only (no +-1 SD tag)
     bool fired = false;
 };
-static const char* const COND_NAMES[5] = { "3+ bars", "2.5 ATR", "tag 1SD", "20-bar ext", "trend" };
+static const char* const COND_NAMES[5] = { "3+ bars", "2.5 ATR", "tag 1SD", "20-bar ext", "trend" };   // (1.1.0) "tag 1SD" failed = no +-1 SD tag AND no 30-bar extreme
+static const char* const VIA30 = "via 30-bar ext";   // (1.1.0) the failed field of a fired wave that passed condition 3 by the 30-bar extreme
 
 // judge every confirmed wave of one session (closed bars only)
 inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Sess& S, std::vector<Wave>& out) {
@@ -137,17 +141,19 @@ inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Ses
         if (conf < 0) continue;
         Wave W; W.sess = S.sess; W.nb = e - p; W.gp = S.g[(size_t)p]; W.ge = S.g[(size_t)e]; W.gc = S.g[(size_t)conf];
         W.atr = atr[(size_t)W.ge]; W.trend = S.trend[(size_t)e];
-        const int a20 = e - (EXT_BARS - 1) > 0 ? e - (EXT_BARS - 1) : 0;
+        const int a20 = e - (EXT_BARS - 1) > 0 ? e - (EXT_BARS - 1) : 0, a30 = e - (ALT_BARS - 1) > 0 ? e - (ALT_BARS - 1) : 0;
         if (P[q + 1].type == 1) {
             W.dir = 1; W.from = X(p).l; W.to = X(e).h; W.size = W.to - W.from;
             bool tag = false; for (int k = p; k <= e; ++k) if (X(k).h >= S.u1[(size_t)k]) { tag = true; break; }
             double mx = X(a20).h; for (int k = a20; k <= e; ++k) if (X(k).h > mx) mx = X(k).h;
-            W.c[2] = tag; W.c[3] = X(e).h >= mx; W.c[4] = W.trend >= 1; W.band1 = S.u1[(size_t)e];
+            double m30 = X(a30).h; for (int k = a30; k <= e; ++k) if (X(k).h > m30) m30 = X(k).h;
+            const bool h30 = X(e).h >= m30; W.c[2] = tag || h30; W.via30 = !tag && h30; W.c[3] = X(e).h >= mx; W.c[4] = W.trend >= 1; W.band1 = S.u1[(size_t)e];
         } else {
             W.dir = -1; W.from = X(p).h; W.to = X(e).l; W.size = W.from - W.to;
             bool tag = false; for (int k = p; k <= e; ++k) if (X(k).l <= S.d1[(size_t)k]) { tag = true; break; }
             double mn = X(a20).l; for (int k = a20; k <= e; ++k) if (X(k).l < mn) mn = X(k).l;
-            W.c[2] = tag; W.c[3] = X(e).l <= mn; W.c[4] = W.trend <= -1; W.band1 = S.d1[(size_t)e];
+            double n30 = X(a30).l; for (int k = a30; k <= e; ++k) if (X(k).l < n30) n30 = X(k).l;
+            const bool l30 = X(e).l <= n30; W.c[2] = tag || l30; W.via30 = !tag && l30; W.c[3] = X(e).l <= mn; W.c[4] = W.trend <= -1; W.band1 = S.d1[(size_t)e];
         }
         W.c[0] = W.nb >= MIN_BARS; W.c[1] = std::isfinite(W.atr) && W.size >= ATR_MULT * W.atr;
         W.ratio = std::isfinite(W.atr) && W.atr > 0 ? W.size / W.atr : 0; W.vw = S.vw[(size_t)e];
@@ -176,14 +182,14 @@ inline std::vector<Wave> run(const std::vector<Bar>& B, int per, int openMin, in
 // ---- record (lsFlexLevels\Rly\<MKT>-<CONTRACT>-<spb>-<session>.csv): every judged wave, fired or not, one line, never rewritten
 static const char* const REC_HEADER = "RLY|t_e|t_p|t_conf|dir|fired|nb|size|atr|ratio|trend|from|to|vwap|band1|failed|version";
 inline std::string fmtD(double x, int d) { char b[48]; std::snprintf(b, sizeof b, "%.*f", d, std::isfinite(x) ? x : 0.0); return b; }
-inline std::string failed(const Wave& W) { std::string s; for (int k = 0; k < 5; ++k) if (!W.c[k]) { if (!s.empty()) s += ";"; s += COND_NAMES[k]; } return s.empty() ? "-" : s; }
+inline std::string failed(const Wave& W) { std::string s; for (int k = 0; k < 5; ++k) if (!W.c[k]) { if (!s.empty()) s += ";"; s += COND_NAMES[k]; } return s.empty() ? (W.via30 ? std::string(VIA30) : std::string("-")) : s; }
 inline std::string line(const Wave& W, long long te, long long tp, long long tc, const char* ver) {
     return "RLY|" + std::to_string(te) + "|" + std::to_string(tp) + "|" + std::to_string(tc) + "|" + std::to_string(W.dir) + "|" + (W.fired ? "1" : "0")
         + "|" + std::to_string(W.nb) + "|" + fmtD(W.size, 4) + "|" + fmtD(W.atr, 4) + "|" + fmtD(W.ratio, 2) + "|" + std::to_string(W.trend)
         + "|" + fmtD(W.from, 4) + "|" + fmtD(W.to, 4) + "|" + fmtD(W.vw, 4) + "|" + fmtD(W.band1, 4) + "|" + failed(W) + "|" + ver;
 }
 // a recorded wave (what the chart redraws)
-struct Rec { long long te = 0, tp = 0, tc = 0; int dir = 0; bool fired = false; int nb = 0; double size = 0, atr = 0, ratio = 0; int trend = 0; double from = 0, to = 0, vw = 0, band1 = 0; };
+struct Rec { long long te = 0, tp = 0, tc = 0; int dir = 0; bool fired = false; int nb = 0; double size = 0, atr = 0, ratio = 0; int trend = 0; double from = 0, to = 0, vw = 0, band1 = 0; bool via30 = false; };
 inline bool parseLine(const std::string& s0, Rec& R) {
     std::string s = s0; if (!s.empty() && s.back() == '\r') s.pop_back();
     if (s.compare(0, 4, "RLY|") != 0 || s.compare(0, 6, "RLY|t_") == 0) return false;
@@ -195,21 +201,21 @@ inline bool parseLine(const std::string& s0, Rec& R) {
     if (!ll(f[1], R.te) || !ll(f[2], R.tp) || !ll(f[3], R.tc) || !ll(f[4], d) || !ll(f[5], fi) || !ll(f[6], nb) || !ll(f[10], tr)) return false;
     if (!dd(f[7], R.size) || !dd(f[8], R.atr) || !dd(f[9], R.ratio) || !dd(f[11], R.from) || !dd(f[12], R.to) || !dd(f[13], R.vw) || !dd(f[14], R.band1)) return false;
     if ((d != 1 && d != -1) || (fi != 0 && fi != 1) || nb < 0 || nb > 100000 || tr < -2 || tr > 2 || R.te <= 0) return false;
-    R.dir = (int)d; R.fired = fi == 1; R.nb = (int)nb; R.trend = (int)tr;
+    R.dir = (int)d; R.fired = fi == 1; R.nb = (int)nb; R.trend = (int)tr; R.via30 = f[15] == VIA30;
     return true;
 }
 inline Rec toRec(const Wave& W, long long te, long long tp, long long tc) {
     Rec R; R.te = te; R.tp = tp; R.tc = tc; R.dir = W.dir; R.fired = W.fired; R.nb = W.nb; R.size = W.size; R.atr = W.atr; R.ratio = W.ratio;
-    R.trend = W.trend; R.from = W.from; R.to = W.to; R.vw = W.vw; R.band1 = W.band1; return R;
+    R.trend = W.trend; R.from = W.from; R.to = W.to; R.vw = W.vw; R.band1 = W.band1; R.via30 = W.via30; return R;
 }
 
 // the hover (approved mockup v0.2 wording); clock = "9:24 AM", px() formats a price
 inline std::vector<std::string> hover(const Rec& R, const std::string& clock, const std::string& fromPx, const std::string& toPx, const std::string& sizePx) {
     std::vector<std::string> L; const bool up = R.dir > 0;
-    L.push_back(std::string("Rly - confirmed ") + (up ? "up" : "down") + "-wave " + std::to_string(R.nb) + " bars, " + fmtD(R.ratio, 1) + " ATR, tagged "
-                + (up ? "+1 SD, 20-bar high, " : "-1 SD, 20-bar low, ") + trendName(R.trend) + "   (" + clock + ")");
+    L.push_back(std::string("Rly - confirmed ") + (up ? "up" : "down") + "-wave " + std::to_string(R.nb) + " bars, " + fmtD(R.ratio, 1) + " ATR, "
+                + (R.via30 ? (up ? "30-bar high (no +1 SD tag), " : "30-bar low (no -1 SD tag), ") : (up ? "tagged +1 SD, 20-bar high, " : "tagged -1 SD, 20-bar low, ")) + trendName(R.trend) + "   (" + clock + ")");
     L.push_back(up ? "Question: is this up-move a real trend rally I can join?" : "Question: is this down-move a real trend sell-off I can join?");
-    L.push_back(std::string("What it is: a 1-bar ZigZag ") + (up ? "up" : "down") + "-wave of 3+ bars and 2.5+ ATR that reaches VWAP " + (up ? "+1 SD and makes a 20-bar high" : "-1 SD and makes a 20-bar low")
+    L.push_back(std::string("What it is: a 1-bar ZigZag ") + (up ? "up" : "down") + "-wave of 3+ bars and 2.5+ ATR that reaches VWAP " + (up ? "+1 SD (or makes a 30-bar high) and makes a 20-bar high" : "-1 SD (or makes a 30-bar low) and makes a 20-bar low")
                 + " while vwapTrend is " + (up ? "Uptrend." : "Dntrend."));
     L.push_back(up ? "Why it matters: in a trend day the rallies that tag +1 SD at a new 20-bar high show buyers in control; the pullback after it is the with-trend entry zone."
                    : "Why it matters: in a trend day the drops that tag -1 SD at a new 20-bar low show sellers in control; the bounce after it is the with-trend entry zone.");
