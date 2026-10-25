@@ -37,22 +37,22 @@ static void extra()
     long thu = svl::daysFromCivil(2026, 10, 8), wed = thu - 1;
     std::vector<Bar> B = sess(wed, 100, {});
     // 17:30 high 130 (NOT Asia: the reopen hour), 18:03 high 106 (Asia), 01:59-> bar ending 02:00 low 93 (Asia), 02:03 low 90 (London)
-    auto T = sess(thu, 100, {{17 * 60 + 30, 130, 100}, {18 * 60 + 3, 106, 100}, {2 * 60, 100, 93}, {2 * 60 + 3, 100, 90}, {24 * 60, 104, 100}}, 10 * 60);
+    auto T = sess(thu, 100, {{17 * 60 + 30, 130, 100}, {18 * 60 + 3, 106, 100}, {1 * 60, 100, 93}, {2 * 60 + 3, 100, 90}, {24 * 60, 104, 100}}, 10 * 60);
     B.insert(B.end(), T.begin(), T.end());
     auto L = compute(B, 180, 510, 900, 0.25);
     CHECK(get(L, "AsiaHI") == 106, "AsiaHI: 18:03 bar in, 17:30 reopen bar out");
-    CHECK(get(L, "AsiaLO") == 93, "AsiaLO: the bar ending 02:00 is in, 02:03 (London) is out");
+    CHECK(get(L, "AsiaLO") == 93, "AsiaLO: the bar ending 01:00 is in (his session 18:00-01:00), 02:03 (London) is out");
     CHECK(get(L, "ONH") == 130 && get(L, "LonLO") == 90, "ON / London unchanged");
-    // shown only after 02:00
+    // shown only after 01:00
     {
         auto cut = [&](int endMin) { std::vector<Bar> v; for (auto& b : B) { if (b.days < thu || (b.days == thu && b.endSec <= endMin * 60) || (b.days == thu - 1)) v.push_back(b); } return v; };
-        CHECK(!has(compute(cut(60), 180, 510, 900, 0.25), "AsiaHI"), "01:00: Asia still forming - not drawn");
-        CHECK(!has(compute(cut(120), 180, 510, 900, 0.25), "AsiaHI"), "02:00: last Asia bar just closed - drawn from the next bar");
-        CHECK(get(compute(cut(123), 180, 510, 900, 0.25), "AsiaHI") == 106, "02:03: drawn");
+        CHECK(!has(compute(cut(57), 180, 510, 900, 0.25), "AsiaHI"), "00:57: Asia still forming - not drawn");
+        CHECK(!has(compute(cut(60), 180, 510, 900, 0.25), "AsiaHI"), "01:00: last Asia bar just closed - drawn from the next bar");
+        CHECK(get(compute(cut(63), 180, 510, 900, 0.25), "AsiaHI") == 106, "01:03: drawn");
         // no repaint: the same Asia prices at every later bar of the session
         bool same = true;
-        for (int e = 123; e <= 600; e += 3) { auto x = compute(cut(e), 180, 510, 900, 0.25); if (get(x, "AsiaHI") != 106 || get(x, "AsiaLO") != 93) same = false; }
-        CHECK(same, "no repaint: AsiaHI / AsiaLO fixed from 02:03 to 10:00");
+        for (int e = 63; e <= 600; e += 3) { auto x = compute(cut(e), 180, 510, 900, 0.25); if (get(x, "AsiaHI") != 106 || get(x, "AsiaLO") != 93) same = false; }
+        CHECK(same, "no repaint: AsiaHI / AsiaLO fixed from 01:03 to 10:00");
     }
     // partly loaded Asia window: history starts 19:00 -> no Asia level
     {
@@ -61,7 +61,7 @@ static void extra()
         std::vector<Bar> Q; for (auto& b : T) if (!(b.days == thu - 1 && b.endSec <= 17 * 3600 + 45 * 60)) Q.push_back(b);
         CHECK(has(compute(Q, 180, 510, 900, 0.25), "AsiaHI"), "history from 17:45: the Asia window is whole - drawn");
     }
-    int s = 0, e = 0; asiaWindow("GC", s, e); CHECK(s == 18 * 60 && e == 2 * 60, "asia window table");
+    int s = 0, e = 0; asiaWindow("GC", s, e); CHECK(s == 18 * 60 && e == 1 * 60, "asia window table: his IRT session 18:00-01:00");
     // ---- merge: new levels within N ticks join, else their own line; existing ones only on the tick
     {
         std::vector<Level> X = {{"ONH", 100.00, false}, {"PDH", 100.50, false}, {"AsiaHI", 100.75, false}, {"CWH", 102.00, false}, {"AsiaLO", 99.00, false}, {"ONL", 98.75, false}, {"PFH", 100.75, false}};
@@ -74,8 +74,7 @@ static void extra()
         CHECK(merge({{"PFH", 100.00, false}, {"CWH", 101.25, false}}, 0.25, 4).size() == 2, "N+1 ticks: separate");
         CHECK(merge({{"PFH", 100.00, false}, {"CWH", 101.00, false}}, 0.25, 4)[0].name == "PFH/CWH", "exactly N ticks: merged");
         CHECK(merge({{"PDH", 100.00, false}, {"ONH", 100.75, false}, {"AsiaHI", 100.50, false}}, 0.25, 4)[1].name == "ONH/AsiaHI", "nearest line wins");
-        CHECK(mergeTicksFor("ES") == 4 && mergeTicksFor("NQ") == 8 && mergeTicksFor("CL") == 4 && mergeTicksFor("GC") == 8 && mergeTicksFor("HG") == 2 && mergeTicksFor("NG") == 2 && mergeTicksFor("EU") == 2, "merge ticks = Liquidity zone hwMin");
-        for (const char* m : {"ES", "NQ", "CL", "GC", "HG", "NG", "EU"}) CHECK(mergeTicksFor(m) == nl::zoneFor(m).hwMin, "same as NearLevels zoneFor().hwMin");
+        for (const char* m : {"ES", "NQ", "CL", "GC", "HG", "NG", "EU"}) CHECK(mergeTicksFor(m) == 0, "(2026-10-24) new levels merge only on the exact tick");
         CHECK(displayName("ONH/AsiaHI") == std::string("ONH \xB7 AsiaHI") && displayName("PDH") == "PDH", "badge name: middle dot");
     }
     // ---- current week: Mon 2026-10-05 .. Fri 2026-10-09, each weekday x case

@@ -7,7 +7,7 @@
 //   PWH / PWL   the Monday-Friday sessions of the previous week
 //   ONH / ONL   this session's overnight bars (17:00 -> the RTH open); shown once RTH has started
 //   LonHI/LonLO this session's London bars (END in (02:00, 07:30]); shown after 07:30
-//   AsiaHI/LO   (2.10.0) this session's Asia bars (END in (18:00, 02:00] CT, per-market table asiaWindow); shown after 02:00
+//   AsiaHI/LO   (2.10.0) this session's Asia bars (END in (18:00, 01:00] - his IRT session #119 CT, per-market table asiaWindow); shown after 02:00
 //               (docs/study-methods/level-definitions-asia-week.md, reviewed 2026-10-14)
 //   CWH / CWL   (2.10.0) this week's high / low set BEFORE the prior session: the max / min of this week's completed sessions
 //               older than yesterday's; shown only when beyond the prior session's PFH / PFL (so never Monday or Tuesday).
@@ -34,16 +34,16 @@ struct Agg { double h = -1e300, l = 1e300; int n = 0; void add(double hi, double
 // ends where London starts); kept per market so the nightly studies can tune it.
 inline void asiaWindow(const char* m, int& startMin, int& endMin)
 {
-    startMin = 18 * 60; endMin = 2 * 60;
+    startMin = 18 * 60; endMin = 1 * 60;   // (2026-10-24) his IRT Asia session #119 = 18:00-01:00 (was 02:00)
     (void)m;
 }
 // (2.10.0) the merge distance for a NEW level (AsiaHI/LO, CWH/CWL) joining an existing line: the Liquidity Profile zone
 // half-width minimum in ticks (NearLevels.h nl::zoneFor().hwMin) - ES 4, NQ 8, CL 4, GC 8, HG 2, NG 2, EU 2
 inline int mergeTicksFor(const std::string& m)
 {
-    if (m == "NQ" || m == "GC") return 8;
-    if (m == "HG" || m == "NG" || m == "EU") return 2;
-    return 4;
+    // (2026-10-24, Rassul 21:30 "option 1") a new level (AsiaHI/LO, CWH/CWL) merges ONLY on the exact same tick, like every other
+    // level: within-4-ticks merging made "LonHI/AsiaHI" show London's 7712.25 for an Asia high of 7711.75. Close tags stack instead.
+    (void)m; return 0;
 }
 inline bool isNewCode(const std::string& c) { return c.compare(0, 4, "Asia") == 0 || c.compare(0, 2, "CW") == 0; }
 
@@ -99,7 +99,7 @@ inline int profileRowTicks(const std::string& m) { (void)m; return 1; }
 struct ProfDiag { double dayCover = 0, weekCover = 0; double dpoc1 = NAN, dpoc2 = NAN, dpoc4 = NAN, wpoc1 = NAN, wpoc4 = NAN; bool dayUsed = false, weekUsed = false; };
 
 inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int openMin, int closeMin, double tick,
-                                  int asiaStartMin = 18 * 60, int asiaEndMin = 2 * 60,
+                                  int asiaStartMin = 18 * 60, int asiaEndMin = 1 * 60,
                                   const std::vector<std::vector<Vap>>* vap = nullptr, int rowTicks = 1, ProfDiag* diag = nullptr)
 {
     std::vector<Level> out;
