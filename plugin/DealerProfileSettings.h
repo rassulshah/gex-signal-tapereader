@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace dprset {
-static const char* const PLUGIN_VERSION = "2.24.0";   // (2.21.0) the outline follows the 10-s call (no new rows)
+static const char* const PLUGIN_VERSION = "2.25.0";   // (2.25.0) badges: no ratio, no level line (no new rows)   // (2.21.0) the outline follows the 10-s call (no new rows)
 // (2.20.0, Rassul approved the QUEUE METER 2026-10-22 13:51 CT) + "Queue meter" on / off, "Queue meter reach (ATR)", its bid / offer / warning
 // colours, appended (earlier rows keep their positions) -> parameter version 9
 // (2.19.0, Rassul 2026-10-21 approved Option B) + "Level % badges" (on by default) -> parameter version 8
