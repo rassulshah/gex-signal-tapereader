@@ -780,7 +780,9 @@ inline std::string label(const Zone& z) {
 }
 // (1.2.0) the state tag texts; (1.3.0) HELD is logged only - the drawn tags are FILLING (grey) and the after-fill read
 inline const char* tagText(bool held) { return held ? "HELD?" : "FILLING"; }
-inline const char* afterText(int read) { return read == 1 ? "RE-BID" : read == 2 ? "ACCEPTED" : ""; }
+// (lsLiquidityProfile 0.54.1, 2026-10-25) the DRAWN word is "RE-BID?" - not yet proven on LMT zone orders (zone replay 45.8% vs 40.6% failed
+// sweeps, t 0.84; only HG holds) - his rule: unproven reads show with "?". The record (R lines, afterCode) still says RE-BID; ACCEPTED unchanged.
+inline const char* afterText(int read) { return read == 1 ? "RE-BID?" : read == 2 ? "ACCEPTED" : ""; }
 struct Row { std::string text; int ink = INK_WHITE; };
 // (1.3.0) the hover's example row (real cases from the replay of the research MBO; see NOTES-LP0540.md)
 static const char* const EXAMPLE_ROW = "Example: HG Oct 22 12:20 PM offer 10 filled -> RE-BID, back 5 ATR. NG Oct 14 bid 40 filled -> ACCEPTED, fell 6 ATR.";
@@ -805,7 +807,8 @@ inline std::vector<Row> hoverRows(const Zone& z, const HoverCtx& c) {
     v.push_back(Row{ "Why: 57% of big orders at turns end FILLED and price goes through - the size is the liquidity the attack wants.", INK_WHITE });
     v.push_back(Row{ "Odds: reverses here 30% vs 35% at a random price. Once filled: RE-BID sweeps failed 53%, ACCEPTED 39%.", INK_WHITE });
     v.push_back(Row{ "How: never fade the touch. FILLING = being filled. X = pulled before contact - no read either way.", INK_WHITE });
-    v.push_back(Row{ "   30 s after it fills: RE-BID = new size stacked beyond + delta back = sweep failing; else ACCEPTED = through.", INK_WHITE });
+    v.push_back(Row{ "   30 s after it fills: RE-BID? = new size stacked beyond + delta back = sweep failing; else ACCEPTED = through.", INK_WHITE });
+    v.push_back(Row{ "   RE-BID? = not yet proven on zone orders - judged nightly (zone replay: failed 46% vs ACCEPTED 41%).", INK_WHITE });   // (0.54.1)
     if (z.conf) v.push_back(Row{ "Diamond: the order also sits on a gamma level (" + price(z.confPx, c.tick) + ").", INK_YELLOW });
     v.push_back(Row{ EXAMPLE_ROW, INK_WHITE });
     const long long shownMax = std::max(z.maxShown, z.size0), pct = shownMax > 0 ? (long long)std::llround(100.0 * (double)z.traded / (double)shownMax) : 0;

@@ -9,7 +9,7 @@
 
 namespace lpset {
 
-static const char* const PLUGIN_VERSION = "0.54.0";   // (0.54.0) LMT zones 1.3.0: the tags row is now "After-fill tags (RE-BID / ACCEPTED)" (default on), the colour rows "RE-BID offer / bid colour"; parameter version 10 so old saved windows reload once
+static const char* const PLUGIN_VERSION = "0.54.1";   // (0.54.1) label-only build (RE-BID?): rows, keys and parameter version 10 unchanged   // (0.54.0) LMT zones 1.3.0: the tags row is now "After-fill tags (RE-BID / ACCEPTED)" (default on), the colour rows "RE-BID offer / bid colour"; parameter version 10 so old saved windows reload once
 // history: (0.53.0) LMT zones 1.2.0: the "State tags" row appended (parameter version 9); the colour rows relabelled to what they colour now (keys / positions unchanged)   // (0.52.1) never delete MARKET_DEPTH (crash fix)   // (0.49.0) the queue meter (no new rows) // (0.48.0) the LMT zones rows (appended: earlier rows keep their positions; parameter version 8)   // (0.47.0) the air pocket (AP? band) row; (0.46.1) book object parked at done / destroy; (0.46.0) LMT F only
 enum K { K_WIDTH, K_FONT, K_SOLID_BG, K_BIG_ORDERS, K_BIG_REACH, K_BIG_MIN_LOTS, K_BIG_KEEP, K_BIG_FONT,
          K_BANNER, K_BANNER_BG, K_BANNER_FONT, K_BANNER_COLOR, K_AIR_POCKET,

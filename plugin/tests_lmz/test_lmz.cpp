@@ -1,4 +1,4 @@
-// test_lmz.cpp -- LmtZonesLogic.h 1.2.0 (lsLiquidityProfile 0.53.0: grey map lines, pooled draw rule, FILLING / HELD? tags; 1.0.0 = 0.48.0 mockup v3).
+// test_lmz.cpp -- (lsLiquidityProfile 0.54.1: drawn word RE-BID?, hover not-yet-proven row) LmtZonesLogic.h 1.2.0 (lsLiquidityProfile 0.53.0: grey map lines, pooled draw rule, FILLING / HELD? tags; 1.0.0 = 0.48.0 mockup v3).
 // From plugin\:  g++ -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror -I. tests_lmz/test_lmz.cpp -o tlmz && ./tlmz
 #include "LmtZonesLogic.h"
 #include <cstdio>
@@ -186,6 +186,10 @@ int main() {
         {   Zone y = z; y.end = FILLED; y.t1 = T0 + 380000; y.afFillMs = T0 + 380000; y.afDecMs = T0 + 410000; y.afRead = 1; y.afStack = 42; y.afDelta = 17;
             bool rb = false, fitsY = true; for (const Row& r : hoverRows(y, c)) { if (r.text.size() > 118) fitsY = false; if (r.text.find("RE-BID") != std::string::npos && r.text.find("stack 42, delta 17") != std::string::npos && r.ink == INK_RED) rb = true; }
             CHECK(rb && fitsY, "(1.3.0) hover: an offer's RE-BID (time, stack, delta) in red, rows <= 118");
+            {   const std::vector<Row> w = hoverRows(y, c); bool unp = false, nowRb = false;   // (0.54.1) worst case: PRINT row + diamond + after-fill read = 12 rows, Now row kept
+                for (const Row& r : w) { if (r.text.find("RE-BID? = not yet proven on zone orders - judged nightly") != std::string::npos) unp = true;
+                    if (r.text.find("Ended") == 0 && r.text.find("RE-BID? ") != std::string::npos) nowRb = true; }
+                CHECK(unp && nowRb && w.size() == 12 && w.back().text.find("Ended") == 0, "(0.54.1) hover: 'RE-BID? = not yet proven on zone orders - judged nightly' + the Ended row says RE-BID?, 12 rows, last row kept"); }
             y.afRead = 2; bool ac = false; for (const Row& r : hoverRows(y, c)) if (r.text.find("ACCEPTED") != std::string::npos && r.ink == INK_GREY) ac = true;
             CHECK(ac, "(1.3.0) hover: ACCEPTED in grey"); }
         z.end = PULLED; z.t1 = T0 + 200000; z.tContact = 0; z.tagHeldMs = 0; z.traded = 0;
@@ -337,7 +341,8 @@ int main() {
         const Zone& z = E.zones[(size_t)U.zi];
         CHECK(E.pend.empty() && z.afRead == 1 && z.afDecMs == t1 + 30000 && z.afStack == 16 && z.afDelta == 3 && E.tally.rebid == 1, "RE-BID: stack +16 (nb 0.67 >= NQ line) and delta +3 > 0, decided at fill + 30 s");
         CHECK(countRows(E.rows, "R|" + std::to_string(z.id) + "|" + std::to_string(t1) + "|" + std::to_string(t1 + 30000) + "|RE-BID|16|3|20|4") == 1, "recorded: R|id|fill|decide|RE-BID|stack|delta|adds|cancels");
-        Settings st; CHECK(afterShown(z, st, true) && std::string(afterText(z.afRead)) == "RE-BID", "drawn: RE-BID on the offer zone");
+        Settings st; CHECK(afterShown(z, st, true) && std::string(afterText(z.afRead)) == "RE-BID?", "(0.54.1) drawn: RE-BID? (unproven on zone orders) on the offer zone");
+        CHECK(std::string(afterCode(z.afRead)) == "RE-BID" && std::string(afterText(2)) == "ACCEPTED" && std::string(afterCode(2)) == "ACCEPTED", "(0.54.1) only the drawn word has the ?: the record word stays RE-BID, ACCEPTED unchanged");
         st.tags = false; CHECK(!afterShown(z, st, true), "the after-fill box hides it");
         // NO REPAINT: a fresh engine reads the record and is fed every bar again -> the same read, no new R line, nothing pending
         std::vector<std::string> rec = E.rows; Engine R2; R2.market = "NQ"; R2.R = E.R; R2.W.fixedAtr = 20; long long bad = -1; R2.restore(rec, &bad);
