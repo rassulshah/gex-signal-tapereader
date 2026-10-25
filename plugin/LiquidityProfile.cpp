@@ -145,7 +145,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.53.0"          // (0.53.0, 2026-10-25, Rassul approved option A + the v0.49 LMT mockup) LMT ZONES = LmtZonesLogic.h 1.2.0: every drawn zone kind (PRINT / ABC / ORIGIN / NEAR offers) is a thin grey MAP line (a target / magnet, not a wall) with "LMT <lots> (<KIND>)" left of its start, one pooled draw rule in all 7 markets (bids never drawn), STATE TAGS on closed bars - FILLING (grey) / HELD? (red offer, green bid) - recorded as T lines and read back (no repaint), the grey X for pulled, FAST / DRIFT / EATEN / STEPPED logged only, the hover with the honest odds; settings: "State tags" checkbox (parameter version 9); the ring on the first fill dropped (the FILLING tag says it)
+#define LQ_VERSION "0.54.0"          // (0.54.0, 2026-10-25, Rassul's go: the research's PROVEN read H6-FILL) LMT ZONES = LmtZonesLogic.h 1.3.0: the drawn HELD? tag removed (HELD still logged); the AFTER-FILL READ - 30 s after a zone's order is FULLY filled (in the study's RTH window): RE-BID (new defender size stacked at a fixed band beyond the filled price AND the defender side wins the delta 10-30 s after; red for an offer swept above, green for a bid swept below - bid zones get the tag without a line) or ACCEPTED (grey) - decided once, recorded as R lines, read back, never repainted; FILLING (grey) and the grey X stay; settings: the "State tags" box is now "After-fill tags (RE-BID / ACCEPTED)" (default on), colour rows relabelled "RE-BID offer / bid colour", parameter version 10;   // (0.53.0, 2026-10-25, Rassul approved option A + the v0.49 LMT mockup) LMT ZONES = LmtZonesLogic.h 1.2.0: every drawn zone kind (PRINT / ABC / ORIGIN / NEAR offers) is a thin grey MAP line (a target / magnet, not a wall) with "LMT <lots> (<KIND>)" left of its start, one pooled draw rule in all 7 markets (bids never drawn), STATE TAGS on closed bars - FILLING (grey) / HELD? (red offer, green bid) - recorded as T lines and read back (no repaint), the grey X for pulled, FAST / DRIFT / EATEN / STEPPED logged only, the hover with the honest odds; settings: "State tags" checkbox (parameter version 9); the ring on the first fill dropped (the FILLING tag says it)
 // prior: "0.52.1"          // (0.52.1, 2026-10-24) (2026-10-24 crash fix) IRT fast-fails (0xC0000409 in investorRT.exe) when a MARKET_DEPTH is deleted - adding an indicator to a chart restarts its indicators -> done() -> the next calc deleted the parked book. A MARKET_DEPTH is NEVER deleted any more (a few hundred bytes leaked per symbol / bar-size change).
 // prior: "0.52.0"          // (0.52.0, 2026-10-23 MBO review merge) typed EV-QUEUE evidence beside the native Q / LT rows (same level / pivot gating), QueueMeter 1.4.0 (a withdrawn same-id add is not a refill) // (0.51.0, (2026-10-22 evening fix build) ) QueueMeter.h 1.3.0 (base = max(q0, normal queue), no percent / call while building, "200%+" cap, Q rows only at levels / confirmed ZigZag pivots, debounced; the strip line carries tk<anchor>); LMT ZONES LmtZonesLogic.h 1.1.0 (an LMT = >= 3.0x the live median resting order within 2 ATR, per-market floor, hysteresis 2.5x; S20 context only) //          // (0.50.0, 2026-10-22 evening, the queue meter validation verdict VALIDATE-DEFENDER-SIZE-2026-10-22.md) QueueMeter.h 1.1.0: the 10-s CALL (red < 40% left; green >= 100% + holding, ES / CL) per market from lsFlexLevels\\LRA-QueueMeter-<MKT>.csv (PARAM lines; defaults = the verdict), C lines in the record; the live file renamed LRA-QueueLive-<MKT>.csv; the candle-close Q stays a record (+ the Holding-strip Q line) //          // (0.49.0, 2026-10-22, Rassul approved the QUEUE METER 13:51-13:52 CT, build ordered 15:20 CT) the queue meter engine (QueueMeter.h 1.0.0) runs on this chart's MBO book: a test starts when price trades into a key / MenthorQ level zone, a recent pivot zone or a suddenly defended price; queue left vs the start, originals left (rested 1 s+), eaten / pulled / refill-that-stayed lots/s, time to empty; written to lsFlexLevels\\LRA-QueueMeter-<MKT>.csv for the Dealer Profile's Levels column (nothing new drawn here); Q decided once at a candle close (G held / refilled, R drained / broke) to <stem>-queuemeter-<session>.csv, read back after a restart; status QUEUE_METER //          // (0.48.0, 2026-10-22, Rassul approved LMT zones mockup v3 09:34 CT "Ok build it" + gamma lines grey + only zone / far orders drawn) LMT ZONES (LmtZonesLogic.h 1.0.0): a real large resting LIMIT order (one MBO id >= Big Lot S20, rested 30 s+, re-priced <= 1x) drawn as a zone - BD print (with-trend) / Origin / Near / Far (thin) / ABC (grey context) - per market from PULLBACK-ZONES-FINAL-2026-10-22 (NG / HG offers, NQ offers ?, CL offers on a gamma level, ES BD-print offers ?, GC / 6E log only, bids never drawn); X = pulled / moved (void), ring = first fill; yellow diamond on a gamma level; thin grey gamma lines (the whole MenthorQ set); the BIG column becomes LMT | LMT F (the same order ids); hover with the study numbers; settings rows (parameter version 8); record <stem>-lmtzones-<session>.csv (no repaint); nightly params LRA-LmtZones-<MKT>.csv; TRACK_MOUSE again for the zone hover only // (0.47.1, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") the biggest resting order lines stop at the lsHodLod table's edges (KeepOutDraw.h; the lines, records and counts unchanged) // keep equal to lqp::VERSION and the setVersion literal below
 // (0.45.3, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") every PRICE-CHART hover is off: the
@@ -473,7 +473,7 @@ struct LQState {
     long lzBarCount = 0; long long lzS20 = 0; std::string lzS20Src = "-";
     struct LzHit { int zone = -1; int b0 = 0, b1 = 0; long long lo = 0, hi = 0; };
     std::vector<LzHit> lzHits; int lzHov = -1, lzHovBar = -1; double lzHovPrice = 0; void* lzHovWnd = nullptr; std::string lzHovState = "none";
-    int lzDrawnNow = 0, lzLmtRows = 0, lzFRows = 0, lzGammaDrawn = 0, lzTagsDrawn = 0;   // (0.53.0) state tags on the chart now
+    int lzDrawnNow = 0, lzLmtRows = 0, lzFRows = 0, lzGammaDrawn = 0, lzTagsDrawn = 0, lzAfterDrawn = 0;   // (0.54.0) + after-fill reads on the chart now   // (0.53.0) state tags on the chart now
     // (0.49.0) the QUEUE METER (QueueMeter.h): its own order book + candles; the live file for the Dealer Profile's Levels column; the Q record
     qm::Engine qmE; std::string qmMkt, qmNormWhy = "not read"; long long qmSession = -1, qmFlushMs = -1, qmPubMs = -1, qmWrites = 0, qmFails = 0, qmPubs = 0, qmPubFails = 0;
     long long qmRuleT = -2, qmRuleN = -2;   // (0.50.0) the per-market call params file LRA-QueueMeter-<MKT>.csv (stamp)
@@ -1552,7 +1552,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
               << " near " << T.made[1][lmz::K_NEAR] << " far " << T.made[1][lmz::K_FAR] << "),drawn by rule " << T.drawn << ",live " << S.lz.live.size() << ",on chart now " << S.lzDrawnNow
               << ",ends filled " << T.ends[lmz::FILLED] << " pulled " << T.ends[lmz::PULLED] << " moved " << T.ends[lmz::MOVED] << " broken " << T.ends[lmz::BROKEN] << " shrank " << T.ends[lmz::SHRANK] << " expired " << T.ends[lmz::EXPIRED]
               << ",LMT rows " << S.lzLmtRows << " LMT F rows " << S.lzFRows << ",gamma levels " << S.lzGamma.size() << " drawn " << S.lzGammaDrawn << ",book " << S.lz.book.size()
-              << ",tags " << (S.lzSet.tags ? "on" : "off") << " filling " << T.filling << " held " << T.held << " pulled " << T.ends[lmz::PULLED] << " (on chart now " << S.lzTagsDrawn << "),log only fast " << T.fast << " mid " << T.mid << " drift " << T.drift << " eaten " << T.eaten << " stepped " << T.stepped << ",judged to " << S.lz.judgedMs
+              << ",tags filling " << T.filling << " held (log only) " << T.held << " pulled " << T.ends[lmz::PULLED] << " (on chart now " << S.lzTagsDrawn << "),after-fill " << (S.lzSet.tags ? "on" : "off") << " re-bid " << T.rebid << " accepted " << T.accepted << " watching " << S.lz.pend.size() << " (skipped: repeat price " << T.afDup << " outside RTH " << T.afOff << " hit < 30 s " << T.afYoung << " re-priced " << T.afMoved << " lost " << T.afLost << "; stack line " << S.lz.R.nbMin << ", RTH from " << S.lz.R.rth0Min / 60 << ":" << (S.lz.R.rth0Min % 60 < 10 ? "0" : "") << S.lz.R.rth0Min % 60 << " CT),log only fast " << T.fast << " mid " << T.mid << " drift " << T.drift << " eaten " << T.eaten << " stepped " << T.stepped << ",judged to " << S.lz.judgedMs
               << ",restored " << S.lzRestored << " bad " << S.lzBad << " unknown line types " << T.unknownLines << ",writes " << S.lzWrites << " fails " << S.lzFails << ",hover " << S.lzHovState << "\n"; }
         {   const long long qn = S.qmE.lastT; const std::vector<qm::Live> QL = S.qmE.live(qn);   // (0.49.0) the queue meter (numbers here; the meter is drawn by the Dealer Profile)
             o << "QUEUE_METER," << qm::VERSION << ",tests live " << QL.size() << ",started " << S.qmE.nStarted << ",anchors levels " << S.qmE.levels.size() << " pivots (ZigZag last-3 intact) " << S.qmE.pivots.size() << ",Q rows skipped: building " << S.qmE.nThin << " debounced " << S.qmE.nDebounced << " not a level / pivot " << S.qmE.nNotAnchor
@@ -2810,9 +2810,11 @@ void LiquidityProfile::qmAfter(LQState& S, long count, long long st) {
 // (0.53.0, LmtZonesLogic 1.2.0 - Rassul approved option A + the v0.49 mockup) every drawn zone (PRINT / ABC / ORIGIN / NEAR offers) and every
 // far order is a THIN GREY MAP LINE (1 px, the zone-line grey) at the order's price - a target / magnet, not a wall; its label "LMT <lots>
 // (<KIND>)" (far: the size) LEFT of the line start, in the same grey; the yellow diamond left of the label (a real order on a gamma level);
-// the STATE TAGS at the line on the bar they were decided (never repainted): FILLING (grey), HELD? (red offer / green bid; the only
-// retest-place mark), above an offer line / below a bid line; X (grey) = pulled / moved away. The gamma levels stay thin grey lines.
-// Only zones the rule drew AND his checkboxes allow (lmz::shown; tags also need the "State tags" box).
+// the STATE TAGS at the line on the bar they were decided (never repainted): FILLING (grey), above an offer line / below a bid line; X
+// (grey) = pulled / moved away. The gamma levels stay thin grey lines. Only zones the rule drew AND his checkboxes allow (lmz::shown).
+// (0.54.0, LmtZonesLogic 1.3.0) HELD? is no longer drawn (logged only). The AFTER-FILL READ on the bar of its decision (fill + 30 s), at the
+// filled price: RE-BID (red above an offer, green below a bid - a bid zone has no line, only this tag) or ACCEPTED (grey); behind the
+// "After-fill tags" box and the zone kind's box; short words only, no numbers, no borders (the hover has the numbers).
 void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX) {
     S.lzHits.clear(); S.lzDrawnNow = 0; S.lzGammaDrawn = 0;
     const double tick = S.tick; if (!(tick > 0) || !S.lzSet.on || !S.boSet.on) return;
@@ -2832,7 +2834,7 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
     const int fh = rowPx(std::max(10, std::min(12, S.boSet.font)));
     std::vector<std::pair<int, int> > labels;                          // label rows taken (y top, x left) - a label never prints over another
     std::vector<std::pair<int, int> > tagSpots;                        // tag rows taken (y top, x centre)
-    S.lzTagsDrawn = 0;
+    S.lzTagsDrawn = 0; S.lzAfterDrawn = 0;
     for (size_t zi = 0; zi < S.lz.zones.size(); ++zi) {
         const lmz::Zone& z = S.lz.zones[zi];
         if (!lmz::shown(z, S.lzSet) || z.segs.empty()) continue;
@@ -2879,18 +2881,32 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
         // (1.2.0) the state tags, each on the bar it was decided (recorded, never moved): FILLING grey, HELD? red (offer) / green (bid);
         // above an offer line, below a bid line, centred on the bar, stepped away from another tag
         if (lmz::tagsShown(z, S.lzSet)) {
-            for (int k = 0; k < 2; ++k) {
-                const long long tms = k == 0 ? z.tagFillMs : z.tagHeldMs; if (tms <= 0) continue;
+            for (int k = 0; k < 1; ++k) {                                   // (0.54.0) FILLING only: HELD is logged, never drawn
+                const long long tms = z.tagFillMs; if (tms <= 0) continue;
                 const int b = barOfT(tms); const int x = xOfBar(b), y = yOfPx(z.pxAt(tms));
                 const char* tt = lmz::tagText(k == 1); const int ttw = (int)getTextWidth(tt, -1) + 2;
                 int tx0 = std::max(xMin, std::min(x - ttw / 2, xMax - ttw)), ty = z.side == lmz::ASK ? y - fh - 2 : y + 2;
                 for (int tries = 0; tries < 3; ++tries) { bool clash = false; for (size_t q = 0; q < tagSpots.size(); ++q) if (std::abs(tagSpots[q].first - ty) < fh && std::abs(tagSpots[q].second - tx0) < ttw + 4) clash = true; if (!clash) break; ty += z.side == lmz::ASK ? -fh : fh; }
                 if (ty <= top + 14 || ty + fh >= bottom) continue;
-                setTextColor(k == 0 ? cGrey : z.side == lmz::ASK ? cOffer : cBid);
+                setTextColor(cGrey);
                 RCT tr; tr.set(coord(tx0), coord(ty), coord(tx0 + ttw), coord(ty + fh)); ko::text(tr, tt, false, false);
                 tagSpots.push_back(std::make_pair(ty, tx0)); ++S.lzTagsDrawn;
             }
         }
+    }
+    // (0.54.0) the AFTER-FILL READ: every decided zone the boxes allow (drawn offers, and bid zones - tag only), on its decision bar
+    const bool bidsOk = !lmz::logOnly(S.lz.R);
+    for (size_t zi = 0; zi < S.lz.zones.size(); ++zi) {
+        const lmz::Zone& z = S.lz.zones[zi];
+        if (!lmz::afterShown(z, S.lzSet, bidsOk) || z.segs.empty()) continue;
+        const int b = barOfT(z.afDecMs); const int x = std::min(xMax, std::max(xMin, xOfBar(b))), y = yOfPx(z.pxAt(z.afFillMs));
+        const char* tt = lmz::afterText(z.afRead); const int ttw = (int)getTextWidth(tt, -1) + 2;
+        int tx0 = std::max(xMin, std::min(x - ttw / 2, xMax - ttw)), ty = z.side == lmz::ASK ? y - fh - 2 : y + 2;
+        for (int tries = 0; tries < 3; ++tries) { bool clash = false; for (size_t q = 0; q < tagSpots.size(); ++q) if (std::abs(tagSpots[q].first - ty) < fh && std::abs(tagSpots[q].second - tx0) < ttw + 4) clash = true; if (!clash) break; ty += z.side == lmz::ASK ? -fh : fh; }
+        if (ty <= top + 14 || ty + fh >= bottom) continue;
+        setTextColor(z.afRead == 1 ? (z.side == lmz::ASK ? cOffer : cBid) : cGrey);
+        RCT tr; tr.set(coord(tx0), coord(ty), coord(tx0 + ttw), coord(ty + fh)); ko::text(tr, tt, false, false);
+        tagSpots.push_back(std::make_pair(ty, tx0)); ++S.lzTagsDrawn; ++S.lzAfterDrawn;
     }
 }
 void LiquidityProfile::renderZoneHover(LQState& S, int paneRight) {
@@ -4094,6 +4110,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.53.0");   // LQ_VERSION
+    p->setVersion("0.54.0");   // LQ_VERSION
     return p;
 }

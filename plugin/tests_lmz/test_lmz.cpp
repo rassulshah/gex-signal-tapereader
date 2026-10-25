@@ -153,7 +153,8 @@ int main() {
     }
     // 12) settings line round trip + garbled; the checkboxes hide kinds
     {
-        Settings s; s.print = false; s.cOffer = 0x123456; s.tags = false; Settings b; CHECK(parseSettings(settingsLine(s), b) && !b.print && b.cOffer == 0x123456 && !b.tags && settingsLine(s).compare(0, 5, "LMZ2,") == 0, "settings round trip (LMZ2 with the tags box)");
+        Settings s; s.print = false; s.cOffer = 0x123456; s.tags = false; Settings b; CHECK(parseSettings(settingsLine(s), b) && !b.print && b.cOffer == 0x123456 && !b.tags && settingsLine(s).compare(0, 5, "LMZ3,") == 0, "(1.3.0) settings round trip (LMZ3 with the after-fill box)");
+        { Settings o2; CHECK(parseSettings("LMZ2,1,1,1,1,1,1,1,1,15680580,2278750,9080728,7041664,0", o2) && o2.tags, "(1.3.0) an LMZ2 file (0.53, old State tags box off) loads with the after-fill tags ON (default)"); }
         Settings o; CHECK(parseSettings("LMZ1,1,0,1,1,1,1,1,1,15680580,2278750,9080728,7041664", o) && !o.print && o.tags, "(1.2.0) an old LMZ1 file (0.48-0.52) still loads: tags default on");
         CHECK(!parseSettings("LMZ2,1,1,1,1,1,1,1,1,0,0,0,0,2", o) && !parseSettings("LMZ2,1,1,1,1,1,1,1,1,0,0,0,0", o), "LMZ2 garbled / short tags field rejected");
         CHECK(!parseSettings("LMZ1,1,1", b) && !parseSettings("LMZ1,1,1,1,1,1,1,1,2,0,0,0,0", b), "garbled settings rejected");
@@ -168,20 +169,25 @@ int main() {
         const std::vector<Row> v = hoverRows(z, c); bool fits = v.size() <= 12, magnet = false, odds = false, xm = false, age = false, traded = false, held = false, q = false, ex = false, how = false, diamond = false;
         for (const Row& r : v) { const std::string& t = r.text; if (t.size() > 118) fits = false;
             if (t.find("TARGET / magnet, not a wall") != std::string::npos) magnet = true;
-            if (t.find("reverses here 30% vs 35% at a random price; held + close back: retest P(2R) 32% (random 30%)") != std::string::npos) odds = true;
+            if (t.find("reverses here 30% vs 35% at a random price. Once filled: RE-BID sweeps failed 53%, ACCEPTED 39%") != std::string::npos) odds = true;
             if (t.find("13x the median resting order (8 lots)") != std::string::npos) xm = true;
             if (t.find("age at contact 4 min") != std::string::npos) age = true;
             if (t.find("traded 30 (30% of 100 shown)") != std::string::npos) traded = true;
-            if (t.find("Now: HELD?") == 0 && r.ink == INK_RED) held = true;
+            if (t.find("Now: RESTING") == 0 && r.ink == INK_WHITE && t.find("HELD") == std::string::npos) held = true;   // (1.3.0) HELD is never shown
             if (t.find("Question:") == 0) q = true;
             if (t.find("Example:") == 0) ex = true;
-            if (t.find("FILLING = being filled - no entry") != std::string::npos) how = true;
+            if (t.find("FILLING = being filled") != std::string::npos) how = true;
             if (r.ink == INK_YELLOW) diamond = true; }
         for (const Row& r : v) std::printf("    | %s\n", r.text.c_str());
         CHECK(fits && q && ex && how, "hover: question / what / why / how / example, every row <= 118 chars");
         CHECK(magnet && odds, "hover: a target / magnet, not a wall + the honest odds line");
         CHECK(xm && age && traded, "hover: lots x median, age at contact, traded so far (lots, % of shown)");
-        CHECK(held && diamond, "hover: status HELD? in red (offer) + the gamma diamond row");
+        CHECK(held && diamond, "(1.3.0) hover: status RESTING (HELD never shown) + the gamma diamond row");
+        {   Zone y = z; y.end = FILLED; y.t1 = T0 + 380000; y.afFillMs = T0 + 380000; y.afDecMs = T0 + 410000; y.afRead = 1; y.afStack = 42; y.afDelta = 17;
+            bool rb = false, fitsY = true; for (const Row& r : hoverRows(y, c)) { if (r.text.size() > 118) fitsY = false; if (r.text.find("RE-BID") != std::string::npos && r.text.find("stack 42, delta 17") != std::string::npos && r.ink == INK_RED) rb = true; }
+            CHECK(rb && fitsY, "(1.3.0) hover: an offer's RE-BID (time, stack, delta) in red, rows <= 118");
+            y.afRead = 2; bool ac = false; for (const Row& r : hoverRows(y, c)) if (r.text.find("ACCEPTED") != std::string::npos && r.ink == INK_GREY) ac = true;
+            CHECK(ac, "(1.3.0) hover: ACCEPTED in grey"); }
         z.end = PULLED; z.t1 = T0 + 200000; z.tContact = 0; z.tagHeldMs = 0; z.traded = 0;
         bool pulled = false; for (const Row& r : hoverRows(z, c)) if (r.text.find("PULLED before contact (X) - no read") != std::string::npos && r.ink == INK_GREY) pulled = true;
         CHECK(pulled, "hover: pulled before contact = grey, no read");
@@ -240,8 +246,8 @@ int main() {
         E.closeBar(bar(U, px - 8, px - 2, px - 12, px - 9), 45);                                 // a second close back
         CHECK(E.tally.held == 1 && countRows(E.rows, "T|") == 1, "HELD once per zone (never twice, never moved)");
         // the label / tag text / tagsShown
-        Settings st; CHECK(tagsShown(z, st) && std::string(tagText(true)) == "HELD?" && std::string(tagText(false)) == "FILLING", "tags shown with the box on: HELD? / FILLING");
-        st.tags = false; CHECK(!tagsShown(z, st) && shown(z, st), "the State tags box hides the tags only (the line stays)");
+        Settings st; CHECK(tagsShown(z, st) && std::string(tagText(false)) == "FILLING", "FILLING shown with the zone line");
+        st.tags = false; CHECK(tagsShown(z, st) && shown(z, st) && !afterShown(z, st, true), "(1.3.0) the after-fill box does not hide FILLING or the line");
         // a later FILLING may follow the HELD (later bar)
         const Bar fb = bar(U, px - 9, px + 1, px - 10, px - 2); E.onEvent(FILL, BID, px, 20, 77, fb.endMs - 30000); E.closeBar(fb, 45);
         CHECK(E.zones[(size_t)U.zi].tagFillMs == fb.endMs && E.zones[(size_t)U.zi].tagHeldMs == hb.endMs, "a later FILLING follows; the HELD stays as printed");
@@ -309,6 +315,92 @@ int main() {
         CHECK(V.E.zones[(size_t)V.zi].arrival == 3, "DRIFT: 2 ticks = 0.1 ATR in the 60 s before contact (<= 0.37 for HG)");
         std::vector<std::string> rec = E.rows; Engine R5; long long b5 = -1; R5.restore(rec, &b5);
         CHECK(b5 == 0 && R5.zones[(size_t)U.zi].arrival == 1 && R5.zones[(size_t)U.zi].eaten && R5.zones[(size_t)U.zi].stepped, "the log-only lines read back (no double logging after a restart)");
+    }
+    // ================= (1.3.0) THE AFTER-FILL READ (H6-FILL) =================
+    // an offer zone (60 lots, oid 77) at px; ATR 20 -> band beyond = px+1 .. px+5 (floor(max(1, 0.25 x 20)) = 5); delta from fill + 10 s
+    auto fillSetup = [&](Setup& U, const char* m) { setup(m, ASK, U); U.E.R.rth0Min = 0; U.E.R.rth1Min = 1440; };   // (T0 is 16:00 CT)   // RTH gate tested on its own below
+    {   Setup U; fillSetup(U, "NQ"); Engine& E = U.E; const Tick px = U.px; const long long t1 = U.tEnd + 10000;
+        E.onEvent(NEW, ASK, px + 3, 4, 7001, t1 - 5000);                                // an offer already resting beyond (cancelled later)
+        E.onEvent(FILL, BID, px, 40, 77, t1 - 1000);                                    // partly filled: no read yet
+        CHECK(E.pend.empty() && E.zones[(size_t)U.zi].afFillMs == 0, "partial fill: no after-fill read");
+        E.onEvent(FILL, BID, px, 20, 77, t1); E.onEvent(DEL, ASK, px, 0, 77, t1);      // fully filled (60 of 60) + the DEL
+        CHECK(E.pend.size() == 1 && E.zones[(size_t)U.zi].afFillMs == t1 && E.zones[(size_t)U.zi].end == FILLED, "full fill: the 30 s watch starts (zone FILLED)");
+        E.onEvent(NEW, ASK, px + 2, 20, 7002, t1 + 5000);                               // new offers stacked beyond: +20
+        E.onEvent(NEW, ASK, px + 6, 50, 7003, t1 + 6000);                               // beyond the band (px+6): not counted
+        E.onEvent(NEW, BID, px - 1, 50, 7004, t1 + 6000);                               // the other side: not counted
+        E.onEvent(DEL, ASK, px + 3, 0, 7001, t1 + 7000);                                // a cancel beyond: -4 (its last shown size)
+        E.onEvent(FILL, ASK, U.c - 30, 5, 900, t1 + 8000);                              // sellers hit a bid BEFORE +10 s: not in the delta
+        E.onEvent(FILL, ASK, U.c - 32, 5, 902, t1 + 15000);                             // sellers hit a bid at +15 s: defender (offer) delta +5
+        E.onEvent(FILL, BID, U.c + 31, 2, 901, t1 + 20000);                             // buyers lift an offer at +20 s: -2
+        CHECK(E.pend.size() == 1 && E.pend[0].adds == 20 && E.pend[0].cans == 4 && E.pend[0].delta == 3, "window: adds 20, cancels 4 beyond (fixed band, defender side), delta +3 from +10 s");
+        E.onEvent(NEW, ASK, px + 1, 99, 7005, t1 + 30000);                              // AT fill + 30 s: decided first, not counted
+        const Zone& z = E.zones[(size_t)U.zi];
+        CHECK(E.pend.empty() && z.afRead == 1 && z.afDecMs == t1 + 30000 && z.afStack == 16 && z.afDelta == 3 && E.tally.rebid == 1, "RE-BID: stack +16 (nb 0.67 >= NQ line) and delta +3 > 0, decided at fill + 30 s");
+        CHECK(countRows(E.rows, "R|" + std::to_string(z.id) + "|" + std::to_string(t1) + "|" + std::to_string(t1 + 30000) + "|RE-BID|16|3|20|4") == 1, "recorded: R|id|fill|decide|RE-BID|stack|delta|adds|cancels");
+        Settings st; CHECK(afterShown(z, st, true) && std::string(afterText(z.afRead)) == "RE-BID", "drawn: RE-BID on the offer zone");
+        st.tags = false; CHECK(!afterShown(z, st, true), "the after-fill box hides it");
+        // NO REPAINT: a fresh engine reads the record and is fed every bar again -> the same read, no new R line, nothing pending
+        std::vector<std::string> rec = E.rows; Engine R2; R2.market = "NQ"; R2.R = E.R; R2.W.fixedAtr = 20; long long bad = -1; R2.restore(rec, &bad);
+        for (const Bar& b : E.W.bars) R2.closeBar(b, 45);
+        std::printf("  restart R2: bad %lld afRead %d dec %lld stack %lld R rows %d pend %zu rebid %lld\n", bad, R2.zones[(size_t)U.zi].afRead, R2.zones[(size_t)U.zi].afDecMs, R2.zones[(size_t)U.zi].afStack, countRows(R2.rows, "R|"), R2.pend.size(), R2.tally.rebid);
+        CHECK(bad == 0 && R2.zones[(size_t)U.zi].afRead == 1 && R2.zones[(size_t)U.zi].afDecMs == t1 + 30000 && R2.zones[(size_t)U.zi].afStack == 16 && countRows(R2.rows, "R|") == 0 && R2.pend.empty() && R2.tally.rebid == 1,
+              "restart: the R line reads back identically, re-fed bars decide nothing again");
+        CHECK(R2.afDone.count(std::make_pair((int)ASK, px)) == 1, "restart: the dedup key is rebuilt from the R line");
+        // strict dedup: another zone at the same side / price this session is never read again
+        Zone d2 = E.zones[(size_t)U.zi]; d2.afRead = 0; d2.afFillMs = 0; d2.id = 99; E.zones.push_back(d2); Ord od; od.tBig = 1; od.tFill1 = t1; E.afStart((int)E.zones.size() - 1, t1 + 400000, od);
+        CHECK(E.pend.empty() && E.tally.afDup == 1, "strict dedup: one read per side / price per session");
+        std::vector<std::string> g = { rec[0], "R|1|5|4|RE-BID|1|1|1|0", "R|1|5|9|MAYBE|1|1|1|0", "R|1|5|9|RE-BID|1|1" }; Engine R3; long long b3 = -1; R3.restore(g, &b3);
+        CHECK(b3 == 3, "garbled R lines (decide before fill, unknown read, short) are bad, never applied");
+    }
+    {   // ACCEPTED (a): stack beyond but the attackers win the tape (delta < 0); (b) delta positive but more cancelled than added
+        Setup U; fillSetup(U, "ES"); Engine& E = U.E; const Tick px = U.px; const long long t1 = U.tEnd + 10000;
+        E.onEvent(FILL, BID, px, 60, 77, t1); E.onEvent(DEL, ASK, px, 0, 77, t1);
+        E.onEvent(NEW, ASK, px + 1, 30, 7101, t1 + 2000);
+        E.onEvent(FILL, BID, U.c + 31, 5, 901, t1 + 12000);                             // buyers lift: offer-defender delta -5
+        E.onEvent(NEW, ASK, U.c + 40, 1, 7102, t1 + 31000);
+        CHECK(E.zones[(size_t)U.zi].afRead == 2 && E.tally.accepted == 1 && [&]() { int n = 0; for (auto& x : E.rows) if (x[0] == 'R' && x.find("|ACCEPTED|30|-5|30|0") != std::string::npos) ++n; return n; }() == 1, "ACCEPTED: stacked 30 but delta -5 (attackers kept lifting)");
+        Setup V; fillSetup(V, "ES"); Engine& F2 = V.E; const Tick p2 = V.px; const long long t2 = V.tEnd + 10000;
+        F2.onEvent(NEW, ASK, p2 + 2, 30, 7201, t2 - 20000);
+        F2.onEvent(FILL, BID, p2, 60, 77, t2); F2.onEvent(DEL, ASK, p2, 0, 77, t2);
+        F2.onEvent(NEW, ASK, p2 + 1, 10, 7202, t2 + 1000); F2.onEvent(DEL, ASK, p2 + 2, 0, 7201, t2 + 2000);
+        F2.onEvent(FILL, ASK, V.c - 30, 5, 900, t2 + 12000);
+        F2.onEvent(NEW, ASK, V.c + 40, 1, 7203, t2 + 30500);
+        CHECK(F2.zones[(size_t)V.zi].afRead == 2 && F2.zones[(size_t)V.zi].afStack == -20 && F2.zones[(size_t)V.zi].afDelta == 5, "ACCEPTED: delta +5 but stack -20 (the size beyond left)");
+    }
+    {   // a BID zone swept below: RE-BID (green); the delta is signed for the bid defender (buyers)
+        Setup U; setup("CL", BID, U); U.E.R.rth0Min = 0; U.E.R.rth1Min = 1440; Engine& E = U.E; const Tick px = U.px; const long long t1 = U.tEnd + 10000;
+        E.onEvent(FILL, ASK, px, 60, 77, t1); E.onEvent(DEL, BID, px, 0, 77, t1);
+        E.onEvent(NEW, BID, px - 3, 12, 7301, t1 + 3000);                               // new bids stacked below the filled bid
+        E.onEvent(FILL, BID, U.c + 31, 4, 901, t1 + 11000);                             // buyers lift an offer: bid-defender delta +4
+        E.onEvent(NEW, ASK, U.c + 40, 1, 7302, t1 + 30000);
+        const Zone& z = E.zones[(size_t)U.zi];
+        CHECK(z.side == BID && z.afRead == 1 && z.afStack == 12 && z.afDelta == 4, "bid zone: RE-BID (stack 12 below, buyers +4)");
+        Settings st; CHECK(!z.drawn && afterShown(z, st, true) && !afterShown(z, st, false), "a bid's read is drawn (no line) in a market with a draw rule, never in a log-only market");
+        st.nearO = false; CHECK(!afterShown(z, st, true), "the bid's kind box hides its read too");
+    }
+    {   // RTH gate, idle feed, lost window, FAR never, params
+        Setup U; setup("ES", ASK, U); Engine& E = U.E; E.R.rth0Min = 0; E.R.rth1Min = 1; const long long t1 = U.tEnd + 10000;   // window 00:00-00:01 CT: outside
+        E.onEvent(FILL, BID, U.px, 60, 77, t1);
+        CHECK(E.pend.empty() && E.tally.afOff == 1 && E.zones[(size_t)U.zi].afRead == 0, "outside the study's RTH window: no read (counted)");
+        const long long M0 = T0 - 16LL * 3600000LL; Engine Q; Q.R = ruleFor("GC"); CHECK(Q.inRth(M0 + 440LL * 60000LL) && !Q.inRth(M0 + 440LL * 60000LL - 1) && Q.inRth(M0 + 900LL * 60000LL) && !Q.inRth(M0 + 900LL * 60000LL + 1), "GC RTH = 7:20 .. 15:00 CT (the study)");
+        CHECK(ruleFor("ES").rth0Min == 510 && ruleFor("HG").rth0Min == 430 && ruleFor("CL").rth0Min == 480 && ruleFor("EU").rth0Min == 440 && ruleFor("NG").nbMin > 0.04 && ruleFor("GC").nbMin < 0, "per-market RTH start and stack line (research)");
+        Setup V; fillSetup(V, "HG"); const long long t2 = V.tEnd + 10000;
+        V.E.onEvent(FILL, BID, V.px, 60, 77, t2);
+        Bar ib = bar(V, V.c, V.c + 1, V.c - 1, V.c); ib.endMs = t2 + 60000; V.E.closeBar(ib, 45);
+        CHECK(V.E.pend.size() == 1, "idle feed: not decided at a bar close < 60 s after the window");
+        Bar ib2 = ib; ib2.endMs = t2 + 240000; V.E.closeBar(ib2, 45);
+        CHECK(V.E.pend.empty() && V.E.zones[(size_t)V.zi].afRead == 2, "idle feed: decided at the first bar close >= 60 s after the window (nothing stacked: ACCEPTED)");
+        Setup L; fillSetup(L, "GC"); L.E.onEvent(FILL, BID, L.px, 60, 77, L.tEnd + 10000); L.E.endSession(L.tEnd + 20000);
+        CHECK(L.E.tally.afLost == 1 && L.E.zones[(size_t)L.zi].afRead == 0 && countRows(L.E.rows, "R|") == 0, "a window cut by the session end: never decided (lost)");
+        Setup Fz; fillSetup(Fz, "NQ"); Fz.E.zones[(size_t)Fz.zi].kind = K_FAR; Fz.E.onEvent(FILL, BID, Fz.px, 60, 77, Fz.tEnd + 10000);
+        CHECK(Fz.E.pend.empty(), "a FAR zone never gets an after-fill read");
+        Rule r = parseParams({ "VERSION,1", "MARKET,ES", "PARAM,FILL_NB,0.05", "PARAM,FILL_NB,7" }, "ES"); CHECK(r.nbMin == 0.05, "params: FILL_NB read (out of range ignored)");
+        Setup Y; fillSetup(Y, "NQ"); Y.E.book[77].tBig = Y.tEnd - 5000;   // as if it reached the floor size only 5 s before the hit (a re-size up)
+        Y.E.onEvent(FILL, BID, Y.px, 60, 77, Y.tEnd + 1000);
+        CHECK(Y.E.pend.empty() && Y.E.tally.afYoung == 1, "first hit < 30 s after it showed the floor size: no read (the study's rule)");
+        Setup Mv; fillSetup(Mv, "NQ"); Mv.E.onEvent(MOD, ASK, Mv.px + 1, 60, 77, Mv.tEnd + 1000);   // the zone follows one re-price (approved), the study would end it MOVED
+        Mv.E.onEvent(FILL, BID, Mv.px + 1, 60, 77, Mv.tEnd + 50000);
+        CHECK(Mv.E.zones[(size_t)Mv.zi].end == LIVE && Mv.E.pend.empty() && Mv.E.tally.afMoved == 1, "an order re-priced after it showed the floor size: the zone follows, but no fill read (the study ended it MOVED)");
     }
     std::printf("LmtZonesLogic %s: %d passed, %d failed\n", VERSION, P, F);
     return F ? 1 : 0;

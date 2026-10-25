@@ -1,8 +1,23 @@
 #ifndef LS_LMTZONESLOGIC_H
 #define LS_LMTZONESLOGIC_H
-// LmtZonesLogic.h 1.2.0 (2026-10-25) -- LMT ZONES of lsLiquidityProfile 0.53.0. SDK-free; tested by tests_lmz/test_lmz.cpp (logic),
-// tests_lmz/test_lmz_host.cpp (mock host) and replayed on recorded MBO sessions (tests_lmz/replay_lmz.cpp).
+// LmtZonesLogic.h 1.3.0 (2026-10-25) -- LMT ZONES of lsLiquidityProfile 0.54.0. SDK-free; tested by tests_lmz/test_lmz.cpp (logic),
+// tests_lmz/test_lmz_host.cpp (mock host) and replayed on recorded MBO sessions (tests_lmz/replay_lmz.cpp, tests_lmz/fill_parity.py).
 //
+// 1.3.0 (Rassul's go 2026-10-25; research iter1024/iter6 ITER6-HARDENING.md 4.2 + Card F1, the PROVEN read H6-FILL, 17,476 fills strict
+// dedup, 7 / 7 markets): the drawn HELD? tag is gone (HELD is still decided and logged as T lines). NEW: the AFTER-FILL READ. When a
+// zone's order is FULLY filled (traded >= the most it ever showed) inside the market's RTH window (the study's RTH0 .. 15:00 CT), the next
+// 30 s are watched (window [fill, fill + 30 s), exactly as lmt6_indep.py):
+//   - stack = NEW lots minus DEL lots of DEFENDER-side orders (the filled order's side) at a FIXED band 1 .. floor(max(1, 0.25 ATR)) ticks
+//     BEYOND the filled price (below a bid / above an offer); a DEL counts the order's last shown size (= the Databento C row size);
+//     nb = stack / (adds + cancels) >= the market's top-third line (strict-dedup q2/3: CL 0.0102 ES 0.0144 6E 0.0114 GC -0.0076 HG 0.0149
+//     NG 0.0414 NQ -0.0068);
+//   - delta = defender-side aggressor lots minus attacker aggressor lots in [fill + 10 s, fill + 30 s) > 0 (the aggressor = the opposite of
+//     the resting order's side in the book; implied / unknown-side fills not counted);
+//   - BOTH -> "RE-BID" (the sweep likely fails: 53% failed vs 39%, research), else "ACCEPTED" (likely continuation).
+// Decided ONCE at fill + 30 s (the first event at / after it; a bar close 60 s later if the feed is idle), recorded as an R line
+// (R|id|fill_ms|decide_ms|RE-BID or ACCEPTED|stack_lots|delta_30s|adds|cancels), read back after a restart, never repainted. Strict dedup:
+// one read per side and price per session (the study's headline). FAR zones never. A read whose 30 s were not seen (an IRT restart inside
+// the window) is never decided (counted as lost). A 1.2.0 reader skips R lines (unknown type, not "bad").
 // 1.2.0 (Rassul approved option A + the v0.49 mockup, LIMIT-PROFILE.md section 7): a big resting order is a MAGNET / TARGET, not a wall
 // (zones reverse 30.1% vs 34.7% at random prices; 57% of large orders at pivot candidates end FILLED and price goes through).
 //   - Every drawn kind (PRINT / ABC / ORIGIN / NEAR offers) is a thin GREY MAP LINE, label "LMT <lots> (<KIND>)" left of its start; FAR as
@@ -44,7 +59,7 @@
 #include <vector>
 
 namespace lmz {
-static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-10-25) grey map lines, pooled draw rule, FILLING / HELD? state tags (T lines), FAST / DRIFT / EATEN / STEPPED log only; 1.1.0 (2026-10-22 evening): (2026-10-22 evening fix build; Rassul 19:19 CT "the big lot methodology is causing too much filtering" - zones 0 in ES / NQ all evening, ES S20 194 = the RTH tail at night): an LMT = ONE resting order >= MULT (3.0x) the MEDIAN resting order size in the live book within +/- 2 ATR of price (computed at each bar close, so RTH / overnight adapt by themselves), above a per-market floor (ES 10, NQ 5, CL 5, GC 3, HG 3, NG 3, 6E 5 lots), rested >= 30 s; HYSTERESIS: a live zone ends (SHRANK) only when its order falls under KEEP_MULT (2.5x) the median, or is pulled / filled; S5 / S10 / S20 stay only as context (the LMT / LMT F column footer, the s20 field of the record); params MULT / KEEP_MULT / FLOOR / MED_ATR in LRA-LmtZones-<MKT>.csv
+static const char* const VERSION = "1.3.0";   // 1.3.0 (2026-10-25) the AFTER-FILL READ RE-BID / ACCEPTED (H6-FILL, R lines), HELD? no longer drawn (still logged);   // 1.2.0 (2026-10-25) grey map lines, pooled draw rule, FILLING / HELD? state tags (T lines), FAST / DRIFT / EATEN / STEPPED log only; 1.1.0 (2026-10-22 evening): (2026-10-22 evening fix build; Rassul 19:19 CT "the big lot methodology is causing too much filtering" - zones 0 in ES / NQ all evening, ES S20 194 = the RTH tail at night): an LMT = ONE resting order >= MULT (3.0x) the MEDIAN resting order size in the live book within +/- 2 ATR of price (computed at each bar close, so RTH / overnight adapt by themselves), above a per-market floor (ES 10, NQ 5, CL 5, GC 3, HG 3, NG 3, 6E 5 lots), rested >= 30 s; HYSTERESIS: a live zone ends (SHRANK) only when its order falls under KEEP_MULT (2.5x) the median, or is pulled / filled; S5 / S10 / S20 stay only as context (the LMT / LMT F column footer, the s20 field of the record); params MULT / KEEP_MULT / FLOOR / MED_ATR in LRA-LmtZones-<MKT>.csv
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -79,6 +94,9 @@ struct Rule {
     double tagAtr = 0.25;                  // (1.2.0) the tag band: order price +/- tagAtr x ATR (the study's w 0.25); tolerance = one more band
     double fastAtr = 0.73, driftAtr = 0.40;   // (1.2.0) arrival terciles (ATR travelled in the 60 s before contact; study, all contacts w 0.25)
     int eatenS = 30;                       // (1.2.0) EATEN = more than this many seconds inside the band
+    double nbMin = 0.0;                    // (1.3.0) after-fill read: net defender adds beyond / (adds + cancels) >= this (the study's top third)
+    int rth0Min = 510, rth1Min = 900;      // (1.3.0) the after-fill read is decided only for fills from rth0Min to rth1Min (CT; the study's RTH .. 15:00)
+    int afterS = 30, afterDeltaS = 10;     // (1.3.0) the window [fill, fill + afterS); delta counted from fill + afterDeltaS
     bool ok = true; std::string src = "defaults";
 };
 inline long long floorFor(const std::string& m) {   // (1.1.0) Rassul-approved floors
@@ -92,13 +110,14 @@ inline long long floorFor(const std::string& m) {   // (1.1.0) Rassul-approved f
 inline Rule ruleFor(const std::string& m) {
     Rule r; r.floorLots = floorFor(m);
     r.print = 1; r.origin = 1; r.nearO = 1; r.gammaOnly = false; r.bids = false; r.abc = true;
-    if (m == "NG") { r.s20Rth = 10; r.s20On = 10; r.fastAtr = 0.75; r.driftAtr = 0.40; }
-    else if (m == "HG") { r.s20Rth = 5; r.s20On = 5; r.fastAtr = 0.67; r.driftAtr = 0.37; }
-    else if (m == "NQ") { r.s20Rth = 20; r.s20On = 15; r.fastAtr = 0.73; r.driftAtr = 0.40; }
-    else if (m == "CL") { r.s20Rth = 15; r.s20On = 20; r.fastAtr = 0.78; r.driftAtr = 0.43; }
-    else if (m == "ES") { r.s20Rth = 45; r.s20On = 25; r.fastAtr = 0.77; r.driftAtr = 0.43; }
-    else if (m == "GC") { r.s20Rth = 9; r.s20On = 12; r.fastAtr = 0.71; r.driftAtr = 0.41; }
-    else if (m == "EU" || m == "6E") { r.farOn = false; r.s20Rth = 42; r.s20On = 41; r.fastAtr = 0.70; r.driftAtr = 0.37; }
+    // (1.3.0) nbMin = the strict-dedup top-third line of nb per market; rth0Min = the study's RTH start (lmt6_indep.py RTH0)
+    if (m == "NG") { r.s20Rth = 10; r.s20On = 10; r.fastAtr = 0.75; r.driftAtr = 0.40; r.nbMin = 0.0414; r.rth0Min = 480; }
+    else if (m == "HG") { r.s20Rth = 5; r.s20On = 5; r.fastAtr = 0.67; r.driftAtr = 0.37; r.nbMin = 0.0149; r.rth0Min = 430; }
+    else if (m == "NQ") { r.s20Rth = 20; r.s20On = 15; r.fastAtr = 0.73; r.driftAtr = 0.40; r.nbMin = -0.0068; r.rth0Min = 510; }
+    else if (m == "CL") { r.s20Rth = 15; r.s20On = 20; r.fastAtr = 0.78; r.driftAtr = 0.43; r.nbMin = 0.0102; r.rth0Min = 480; }
+    else if (m == "ES") { r.s20Rth = 45; r.s20On = 25; r.fastAtr = 0.77; r.driftAtr = 0.43; r.nbMin = 0.0144; r.rth0Min = 510; }
+    else if (m == "GC") { r.s20Rth = 9; r.s20On = 12; r.fastAtr = 0.71; r.driftAtr = 0.41; r.nbMin = -0.0076; r.rth0Min = 440; }
+    else if (m == "EU" || m == "6E") { r.farOn = false; r.s20Rth = 42; r.s20On = 41; r.fastAtr = 0.70; r.driftAtr = 0.37; r.nbMin = 0.0114; r.rth0Min = 440; }
     else { r.print = 0; r.origin = 0; r.nearO = 0; r.abc = false; r.farOn = false; }   // not one of the 7 markets: log only
     return r;
 }
@@ -142,6 +161,7 @@ inline Rule parseParams(const std::vector<std::string>& lines, const std::string
         else if (n == "FAST_ATR" && numD(f[2], 0.01, 10.0, d)) z.fastAtr = d;
         else if (n == "DRIFT_ATR" && numD(f[2], -10.0, 10.0, d)) z.driftAtr = d;
         else if (n == "EATEN_S" && numLL(f[2], 1, 3600, v)) z.eatenS = (int)v;
+        else if (n == "FILL_NB" && numD(f[2], -1.0, 1.0, d)) z.nbMin = d;                 // (1.3.0) the after-fill read's stack line (nightly)
         else if (n == "S20_RTH" && numLL(f[2], 1, 100000, v)) { z.s20Rth = v; z.s20Set = true; }
         else if (n == "S20_ON" && numLL(f[2], 1, 100000, v)) { z.s20On = v; z.s20Set = true; }
         else if (n == "REST_S" && numLL(f[2], 0, 3600, v)) z.restS = (int)v;
@@ -242,6 +262,9 @@ struct Ord {
     int side = BID; Tick px = 0; long long size = 0, maxShown = 0, traded = 0;
     long long tFirst = 0, tAtPx = 0;   // first seen; when it arrived at this price (CT ms)
     int moves = 0; bool startKnown = true; bool filledLast = false; int zone = -1;
+    long long shown = 0;               // (1.3.0) the size at its last NEW / MOD (a DEL counts this: the Databento C row size)
+    long long tBig = 0, tFill1 = 0;    // (1.3.0) when it first showed >= the market floor; its first fill (the study: hit only after resting 30 s)
+    Tick pxBig = 0; bool movedBig = false;   // (1.3.0) its price then; re-priced since (the study ends such an order MOVED: no fill read)
 };
 struct Seg { long long t = 0; Tick px = 0, lo = 0, hi = 0; };
 struct Zone {
@@ -263,6 +286,8 @@ struct Zone {
     // (1.2.0) LOG ONLY (A / W / S lines): the first print in the band, the arrival speed (ATR in the prior 60 s), time inside, stepped
     long long tContact = 0; double speed = 0; int arrival = 0;   // arrival 0 not yet, 1 FAST, 2 MID, 3 DRIFT, 4 unknown (no print 60 s before)
     long long dwellMs = -1; bool eaten = false, stepped = false;
+    // (1.3.0) THE AFTER-FILL READ (R line): the full-fill time, the decision time (fill + 30 s), 1 = RE-BID, 2 = ACCEPTED, the numbers
+    long long afFillMs = 0, afDecMs = 0; int afRead = 0, afSkip = 0; long long afStack = 0, afDelta = 0, afAdds = 0, afCans = 0;   // afSkip (not recorded; replay / status only): 1 dedup, 2 outside RTH, 3 hit < 30 s, 4 re-priced
     Tick px() const { return segs.empty() ? 0 : segs.back().px; }
     Tick pxAt(long long ms) const { Tick p = segs.empty() ? 0 : segs.front().px; for (size_t i = 0; i < segs.size(); ++i) if (segs[i].t <= ms) p = segs[i].px; return p; }   // (1.2.0) the order price in force at ms
     // the tag band half-width in ticks: max(1, tagAtr x the zone's ATR) - from the ATR rounded to 0.1 tick as the record stores it, so a
@@ -275,7 +300,11 @@ inline int arrivalOf(const std::string& s) { for (int a = 1; a <= 4; ++a) if (s 
 struct Fill { int zone = 0; long long t = 0; long long lots = 0; Tick px = 0; };
 
 struct Tally { long long made[2][K_N] = { { 0 } }, drawn = 0, ends[END_N] = { 0 }, events = 0, unknownFill = 0, bookDrop = 0;
-    long long filling = 0, held = 0, fast = 0, mid = 0, drift = 0, eaten = 0, stepped = 0, unknownLines = 0; };   // (1.2.0) tags + log-only states
+    long long filling = 0, held = 0, fast = 0, mid = 0, drift = 0, eaten = 0, stepped = 0, unknownLines = 0;
+    long long rebid = 0, accepted = 0, afDup = 0, afLost = 0, afOff = 0, afYoung = 0, afMoved = 0; };   // afYoung: first hit < 30 s after it showed the floor   // (1.3.0) after-fill reads; dedup skips; 30 s not seen; outside RTH
+inline const char* afterCode(int r) { return r == 1 ? "RE-BID" : r == 2 ? "ACCEPTED" : "-"; }
+// (1.3.0) one after-fill read being watched (the 30 s after a full fill)
+struct Pend { int zone = -1; int side = BID; Tick px = 0, wb = 1; long long f = 0, dec = 0, adds = 0, cans = 0, delta = 0; };   // (1.2.0) tags + log-only states
 
 class Engine {
 public:
@@ -294,6 +323,8 @@ public:
     long long medLots = 0, thrLots = 0, keepLots = 0; size_t medN = 0;   // (1.1.0) the live median resting order (+/- medAtr ATR), the entry / keep lines
     long long judgedMs = 0;                 // (1.2.0) the last bar end whose tags were decided (B / T lines): never decided again after a restart
     std::deque<std::pair<long long, Tick> > prints;   // (1.2.0) the trade prints of the last 90 s (log-only arrival speed)
+    std::vector<Pend> pend;                 // (1.3.0) after-fill reads inside their 30 s
+    std::set<std::pair<int, Tick> > afDone; // (1.3.0) strict dedup: one after-fill read per side / price per session
 
     // (1.1.0) the median resting order size within +/- medAtr ATR of price c (ticks), from the live book; 0 = no orders there
     static long long medianOf(std::vector<long long>& v) { if (v.empty()) return 0; std::nth_element(v.begin(), v.begin() + (long)(v.size() / 2), v.end()); return v[v.size() / 2]; }
@@ -311,22 +342,24 @@ public:
     // one MBO event. side is used only on NEW (a FILL row carries the aggressor's side, never the order's)
     void onEvent(int act, int side, Tick px, long long size, long long oid, long long t) {
         if (t <= 0 || oid == 0) return;
+        if (!pend.empty()) decideDue(t, false);   // (1.3.0) reads whose 30 s are over: decided before this event (window [fill, fill + 30 s))
         ++tally.events; if (feedStartMs == 0) feedStartMs = t; if (t > lastT) lastT = t;
         auto it = book.find(oid);
         if (act == NEW) {
             if (px <= 0 || size <= 0 || (side != BID && side != ASK)) return;
-            if (it != book.end()) { it->second.px = px; it->second.size = size; it->second.tAtPx = t; return; }
+            if (!pend.empty()) afBook(side, px, size, t, true);   // (1.3.0) every NEW row counts (as the study's A rows)
+            if (it != book.end()) { Ord& q = it->second; if (q.tBig && px != q.pxBig) q.movedBig = true; q.px = px; q.size = size; q.shown = size; q.tAtPx = t; if (!q.tBig && size >= R.floorLots) { q.tBig = t; q.pxBig = px; } return; }
             if (book.size() >= bookCap) prune();
-            Ord o; o.side = side; o.px = px; o.size = size; o.maxShown = size; o.tFirst = o.tAtPx = t; book[oid] = o; return;
+            Ord o; o.side = side; o.px = px; o.size = size; o.shown = size; o.maxShown = size; o.tFirst = o.tAtPx = t; if (size >= R.floorLots) { o.tBig = t; o.pxBig = px; } book[oid] = o; return;
         }
         if (act == MOD) {
             if (px <= 0) return;
             if (it == book.end()) {   // rested before the chart opened: the age is NOT known (counted from now)
                 if (size <= 0 || (side != BID && side != ASK)) return;
                 if (book.size() >= bookCap) prune();
-                Ord o; o.side = side; o.px = px; o.size = size; o.maxShown = size; o.tFirst = o.tAtPx = t; o.startKnown = false; book[oid] = o; return;
+                Ord o; o.side = side; o.px = px; o.size = size; o.shown = size; o.maxShown = size; o.tFirst = o.tAtPx = t; o.startKnown = false; if (size >= R.floorLots) { o.tBig = t; o.pxBig = px; } book[oid] = o; return;
             }
-            Ord& o = it->second;
+            Ord& o = it->second; o.shown = size; if (o.tBig && px != o.pxBig) o.movedBig = true; if (!o.tBig && size >= R.floorLots) { o.tBig = t; o.pxBig = px; }
             if (px != o.px) {
                 o.moves++; o.px = px; o.tAtPx = t; o.size = size; o.filledLast = false;
                 if (o.zone >= 0) zoneMoved(o.zone, o, t);
@@ -337,16 +370,19 @@ public:
         if (act == FILL) {
             if (it == book.end()) { ++tally.unknownFill; return; }
             Ord& o = it->second; if (size <= 0) return;
-            o.traded += size; o.size = std::max(0LL, o.size - size); o.filledLast = true;
+            if (!pend.empty() && (side == BID || side == ASK)) afDeltaAdd(o.side, size, t);   // (1.3.0) aggressor = opposite of the resting side; implied (side unknown) not counted
+            o.traded += size; o.size = std::max(0LL, o.size - size); o.filledLast = true; if (!o.tFill1) o.tFill1 = t;
             if (o.zone >= 0) { Zone& z = zones[(size_t)o.zone]; if (z.end == LIVE) {
                 z.traded += size; if (!z.tFill0) z.tFill0 = t; z.tFill = t; z.fillPx = px > 0 ? px : o.px;
-                char b[160]; std::snprintf(b, sizeof(b), "F|%d|%lld|%lld|%lld", z.id, t, z.traded, (long long)z.fillPx); rows.push_back(b); } }
+                char b[160]; std::snprintf(b, sizeof(b), "F|%d|%lld|%lld|%lld", z.id, t, z.traded, (long long)z.fillPx); rows.push_back(b);
+                if (o.traded >= std::max(o.maxShown, z.maxShown)) afStart(o.zone, t, o); } }   // (1.3.0) FULLY filled: watch the next 30 s
             onPrint(t, px > 0 ? px : o.px);   // (1.2.0) the print (log-only arrival / dwell)
             return;
         }
         if (act == DEL) {
             if (it == book.end()) return;
             Ord& o = it->second;
+            if (!pend.empty()) afBook(o.side, o.px, o.shown, t, false);   // (1.3.0) a cancel row (also the one after a full fill, as the study)
             if (o.zone >= 0) { Zone& z = zones[(size_t)o.zone]; if (z.end == LIVE) finish(o.zone, o.size <= 0 ? FILLED : PULLED, t); }
             book.erase(it);
         }
@@ -356,6 +392,7 @@ public:
         if (b.endMs <= lastBarMs) return;   // once per bar, in order
         const long long prevEnd = lastBarMs;
         lastBarMs = b.endMs;
+        if (!pend.empty()) decideDue(b.endMs, true);   // (1.3.0) an idle feed: a read is decided at a bar close >= 60 s after its 30 s
         W.add(b);
         judgeTags(b, prevEnd);   // (1.2.0) FILLING / HELD on this closed bar (zones that were live in it), before any zone ends here
         const double a = W.atr;
@@ -419,12 +456,68 @@ public:
         }
     }
     void endSession(long long t) {
+        if (!pend.empty()) decideDue(t, false);
+        tally.afLost += (long long)pend.size(); pend.clear();   // (1.3.0) a 30 s window not finished by the session end: never decided
         for (size_t k = 0; k < live.size(); ++k) if (zones[(size_t)live[k]].end == LIVE) finish(live[k], SESSION, t);
         compact();
     }
     void clearSession() {
         for (auto& kv : book) kv.second.zone = -1;
-        zones.clear(); live.clear(); usedOid.clear(); nextId = 1; judgedMs = 0;
+        zones.clear(); live.clear(); usedOid.clear(); nextId = 1; judgedMs = 0; pend.clear(); afDone.clear();
+    }
+    // ---- (1.3.0) THE AFTER-FILL READ --------------------------------------------------------------------------------------------------
+    bool inRth(long long t) const {
+        long long d = t % 86400000LL; if (d < 0) d += 86400000LL;
+        return d >= (long long)R.rth0Min * 60000LL && d <= (long long)R.rth1Min * 60000LL;
+    }
+    // a zone's order was FULLY filled at t: watch [t, t + afterS) - one read per side / price per session, never on a far zone
+    void afStart(int idx, long long t, const Ord& o) {
+        Zone& z = zones[(size_t)idx];
+        if (z.kind == K_FAR || z.afFillMs || z.afRead || z.afSkip) return;
+        if (!inRth(t)) { ++tally.afOff; z.afSkip = 2; return; }
+        if (!o.tBig || o.tFill1 - o.tBig < (long long)R.restS * 1000LL) { ++tally.afYoung; z.afSkip = 3; return; }   // the study: first hit >= 30 s after it showed the floor size
+        if (o.movedBig) { ++tally.afMoved; z.afSkip = 4; return; }   // the study: an order re-priced after it showed the floor size ended MOVED (no fill row)
+        const std::pair<int, Tick> key(z.side, z.px());
+        bool dup = afDone.count(key) > 0; for (size_t i = 0; i < pend.size() && !dup; ++i) dup = pend[i].side == z.side && pend[i].px == z.px();
+        if (dup) { ++tally.afDup; z.afSkip = 1; return; }
+        Pend p; p.zone = idx; p.side = z.side; p.px = z.px(); p.f = t; p.dec = t + (long long)R.afterS * 1000LL;
+        const double a = z.atr > 0 ? z.atr : 0; p.wb = std::max<Tick>(1, (Tick)std::floor(std::max(1.0, R.tagAtr * a) + 1e-9));   // the study: int(max(1, 0.25 ATR))
+        z.afFillMs = t; pend.push_back(p);
+    }
+    // a NEW (add) or DEL (cancel) row of `lots` at px on `side`: counted for every read watching that side, at its FIXED band beyond
+    void afBook(int side, Tick px, long long lots, long long t, bool add) {
+        if (lots <= 0) return;
+        for (size_t i = 0; i < pend.size(); ++i) {
+            Pend& p = pend[i]; if (p.side != side || t < p.f || t >= p.dec) continue;
+            const bool in = side == BID ? (px >= p.px - p.wb && px <= p.px - 1) : (px >= p.px + 1 && px <= p.px + p.wb);
+            if (in) { if (add) p.adds += lots; else p.cans += lots; }
+        }
+    }
+    // a fill of `lots` against a resting order of side restSide: the aggressor is the other side; + for the read's defender side
+    void afDeltaAdd(int restSide, long long lots, long long t) {
+        const long long buy = restSide == ASK ? lots : -lots;   // buyers lift offers, sellers hit bids
+        for (size_t i = 0; i < pend.size(); ++i) { Pend& p = pend[i]; if (t >= p.f + (long long)R.afterDeltaS * 1000LL && t < p.dec) p.delta += p.side == BID ? buy : -buy; }
+    }
+    // reads whose window is over at t (idle: only at a bar close >= 60 s after the window, so a slow feed is not cut short)
+    void decideDue(long long t, bool idle) {
+        for (size_t i = 0; i < pend.size();) {
+            const long long need = pend[i].dec + (idle ? 60000LL : 0LL);
+            if (t >= need) { afDecide(pend[i]); pend.erase(pend.begin() + (long)i); } else ++i;
+        }
+    }
+    void afDecide(const Pend& p) {
+        if (p.zone < 0 || p.zone >= (int)zones.size()) return;
+        Zone& z = zones[(size_t)p.zone]; if (z.afRead) return;
+        const long long tot = p.adds + p.cans; const double nb = (double)(p.adds - p.cans) / (double)std::max(tot, 1LL);
+        const bool rebid = nb >= R.nbMin - 1e-12 && p.delta > 0;
+        z.afRead = rebid ? 1 : 2; z.afDecMs = p.dec; z.afStack = p.adds - p.cans; z.afDelta = p.delta; z.afAdds = p.adds; z.afCans = p.cans;
+        if (rebid) ++tally.rebid; else ++tally.accepted;
+        afDone.insert(std::make_pair(p.side, p.px));
+        rows.push_back(afterRow(z));
+    }
+    static std::string afterRow(const Zone& z) {
+        char r[220]; std::snprintf(r, sizeof(r), "R|%d|%lld|%lld|%s|%lld|%lld|%lld|%lld", z.id, z.afFillMs, z.afDecMs, afterCode(z.afRead), z.afStack, z.afDelta, z.afAdds, z.afCans);
+        return r;
     }
     // ---- (1.2.0) the STATE TAGS on a closed bar --------------------------------------------------------------------------------------
     // For every non-FAR zone that was live during the bar (still live, or ended inside it): contact = the bar traded into the band
@@ -485,7 +578,7 @@ public:
         }
     }
     // the session record header (1.2.0 adds T / B and the log-only A / W / S lines)
-    static const char* header() { return "Z|id|oid|side|kind|t0|px|lo|hi|size|drawn|q|conf|s20|atr10|bo_ms|level|close|rest_s|start_known|ver|med  /  M|id|t|px|lo|hi  /  F|id|t|traded|px  /  E|id|t|end|traded  /  T|id|bar_end|FILLING or HELD|traded|resting  /  B|bar_end  /  A|id|t|speed_atr100|FAST/MID/DRIFT/NA  /  W|id|t|dwell_ms|EATEN or IN  /  S|id|t|px (stepped)"; }
+    static const char* header() { return "Z|id|oid|side|kind|t0|px|lo|hi|size|drawn|q|conf|s20|atr10|bo_ms|level|close|rest_s|start_known|ver|med  /  M|id|t|px|lo|hi  /  F|id|t|traded|px  /  E|id|t|end|traded  /  T|id|bar_end|FILLING or HELD|traded|resting  /  B|bar_end  /  A|id|t|speed_atr100|FAST/MID/DRIFT/NA  /  W|id|t|dwell_ms|EATEN or IN  /  S|id|t|px (stepped)  /  R|id|fill_ms|decide_ms|RE-BID or ACCEPTED|stack_lots|delta_30s|adds|cancels"; }
     // ---- the session record -----------------------------------------------------------------------------------------------------
     static std::string zRow(const Zone& z) {
         const Seg& g = z.segs.front(); char b[400];
@@ -544,7 +637,18 @@ public:
                     long long p = 0; if (!numLL(f[3], -9223372036854775807LL, 9223372036854775807LL, p) || z.stepped) { ++nb; continue; }
                     z.stepped = true; ++tally.stepped;
                 }
-            } else if (f[0].size() <= 2 && f[0][0] >= 'A' && f[0][0] <= 'Z' && std::string("ZMFEBTAWS").find(f[0][0]) == std::string::npos) ++tally.unknownLines;   // (1.2.0) a line type from a newer build: skipped, not "bad"
+            } else if (f[0] == "R" && f.size() == 9) {                 // (1.3.0) the after-fill read
+                long long id = 0, tf = 0, td = 0, st = 0, de = 0, ad = 0, ca = 0;
+                const int rd = f[4] == "RE-BID" ? 1 : f[4] == "ACCEPTED" ? 2 : 0;
+                if (!numLL(f[1], 0, 2000000000, id) || !numLL(f[2], 1, 9223372036854775807LL, tf) || !numLL(f[3], 1, 9223372036854775807LL, td) || rd == 0
+                    || !numLL(f[5], -100000000000LL, 100000000000LL, st) || !numLL(f[6], -100000000000LL, 100000000000LL, de) || !numLL(f[7], 0, 100000000000LL, ad)
+                    || !numLL(f[8], 0, 100000000000LL, ca) || td < tf || !idx.count((int)id)) { ++nb; continue; }
+                Zone& z = zones[(size_t)idx[(int)id]];
+                if (z.afRead) { ++nb; continue; }
+                z.afFillMs = tf; z.afDecMs = td; z.afRead = rd; z.afStack = st; z.afDelta = de; z.afAdds = ad; z.afCans = ca;
+                if (rd == 1) ++tally.rebid; else ++tally.accepted;
+                afDone.insert(std::make_pair(z.side, z.pxAt(tf)));
+            } else if (f[0].size() <= 2 && f[0][0] >= 'A' && f[0][0] <= 'Z' && std::string("ZMFEBTAWSR").find(f[0][0]) == std::string::npos) ++tally.unknownLines;   // (1.2.0) a line type from a newer build: skipped, not "bad"
             else ++nb;
         }
         retrack();
@@ -674,9 +778,12 @@ inline std::string label(const Zone& z) {
     if (z.kind == K_FAR) return std::to_string(z.size0);
     return "LMT " + std::to_string(z.size0) + " (" + kindCode(z.kind) + ")";
 }
-// (1.2.0) the state tag texts drawn at the zone line ("" = none for that tag)
+// (1.2.0) the state tag texts; (1.3.0) HELD is logged only - the drawn tags are FILLING (grey) and the after-fill read
 inline const char* tagText(bool held) { return held ? "HELD?" : "FILLING"; }
+inline const char* afterText(int read) { return read == 1 ? "RE-BID" : read == 2 ? "ACCEPTED" : ""; }
 struct Row { std::string text; int ink = INK_WHITE; };
+// (1.3.0) the hover's example row (real cases from the replay of the research MBO; see NOTES-LP0540.md)
+static const char* const EXAMPLE_ROW = "Example: HG Oct 22 12:20 PM offer 10 filled -> RE-BID, back 5 ATR. NG Oct 14 bid 40 filled -> ACCEPTED, fell 6 ATR.";
 struct HoverCtx { std::string market; double tick = 0.25; long long nowMs = 0; long long sizeLive = 0; };
 // (1.2.0) <= 12 rows, <= 118 chars: what it is (a target / magnet, not a wall) / question / what / why / the honest odds / how / example /
 // now (lots, x median, age at contact, traded so far with % of shown, status resting / filling / pulled / held)
@@ -696,24 +803,27 @@ inline std::vector<Row> hoverRows(const Zone& z, const HoverCtx& c) {
     else if (z.kind == K_ABC) v.push_back(Row{ "It sits in an internal (ABC) break at " + clock12(z.boMs) + " - a break against the trend, inside the wave.", INK_WHITE });
     else if (z.kind == K_ORIGIN) v.push_back(Row{ "It sits at the origin of the breakdown wave (" + price(z.level, c.tick) + ").", INK_WHITE });
     v.push_back(Row{ "Why: 57% of big orders at turns end FILLED and price goes through - the size is the liquidity the attack wants.", INK_WHITE });
-    v.push_back(Row{ "Odds: reverses here 30% vs 35% at a random price; held + close back: retest P(2R) 32% (random 30%).", INK_WHITE });
-    v.push_back(Row{ "How: never fade the touch. FILLING = being filled - no entry. X = pulled before contact - no read either way.", INK_WHITE });
-    v.push_back(Row{ "   HELD? = still resting after a 3-min close back: the only retest place - entry at the zone, stop beyond it.", INK_WHITE });
+    v.push_back(Row{ "Odds: reverses here 30% vs 35% at a random price. Once filled: RE-BID sweeps failed 53%, ACCEPTED 39%.", INK_WHITE });
+    v.push_back(Row{ "How: never fade the touch. FILLING = being filled. X = pulled before contact - no read either way.", INK_WHITE });
+    v.push_back(Row{ "   30 s after it fills: RE-BID = new size stacked beyond + delta back = sweep failing; else ACCEPTED = through.", INK_WHITE });
     if (z.conf) v.push_back(Row{ "Diamond: the order also sits on a gamma level (" + price(z.confPx, c.tick) + ").", INK_YELLOW });
-    v.push_back(Row{ "Example: ES Oct 1, 100 lots @ 7708 untouched, closed back = HELD?, retest +2R. NQ Sep 21, 146 lots FILLING, ran 5 ATR.", INK_WHITE });
+    v.push_back(Row{ EXAMPLE_ROW, INK_WHITE });
     const long long shownMax = std::max(z.maxShown, z.size0), pct = shownMax > 0 ? (long long)std::llround(100.0 * (double)z.traded / (double)shownMax) : 0;
     const std::string traded = "traded " + std::to_string(z.traded) + " (" + std::to_string(pct) + "% of " + std::to_string(shownMax) + " shown)";
-    std::string tags; if (z.tagFillMs) tags += " | FILLING " + clock12(z.tagFillMs); if (z.tagHeldMs) tags += " | HELD? " + clock12(z.tagHeldMs);
+    std::string tags; if (z.tagFillMs) tags += " | FILLING " + clock12(z.tagFillMs);
+    if (z.afRead) tags += std::string(" | ") + afterText(z.afRead) + " " + clock12(z.afDecMs) + " (stack " + std::to_string(z.afStack) + ", delta " + std::to_string(z.afDelta) + ")";
+    else if (z.afFillMs) tags += " | filled " + clock12(z.afFillMs) + " - read at +30 s";
     std::string now; int ink = INK_WHITE;
     if (z.end == LIVE) {
-        const char* st = z.tagHeldMs && (!z.tagFillMs || z.tagHeldMs > z.tagFillMs) ? "HELD?" : z.tagFillMs ? "FILLING" : "RESTING";
+        const char* st = z.tagFillMs ? "FILLING" : "RESTING";
         now = "Now: " + std::string(st) + " - resting " + std::to_string(c.sizeLive) + " lots | " + traded + tags + ".";
-        ink = st[0] == 'H' ? (ask ? INK_RED : INK_GREEN) : st[0] == 'F' ? INK_GREY : INK_WHITE;
+        ink = st[0] == 'F' ? INK_GREY : INK_WHITE;
     } else {
         now = std::string("Ended ") + clock12(z.t1) + ": " + (z.end == FILLED ? "FILLED - price went through" : z.end == PULLED ? (z.tContact ? "PULLED (X)" : "PULLED before contact (X) - no read")
             : z.end == MOVED ? "MOVED away (X) - void" : z.end == BROKEN ? "price closed 1 ATR through it" : z.end == EXPIRED ? "4 h old" : z.end == NEARED ? "price came within 2 ATR"
             : z.end == SHRANK ? "shrank under 2.5x the median" : z.end == LEFT ? "price moved away" : "session end") + " | " + traded + tags + ".";
         ink = z.end == PULLED || z.end == MOVED || z.end == FILLED ? INK_GREY : INK_WHITE;
+        if (z.afRead == 1) ink = ask ? INK_RED : INK_GREEN;   // (1.3.0) RE-BID: the reversal side's colour
     }
     v.push_back(Row{ now, ink });
     if (v.size() > 12) v.resize(12);
@@ -722,26 +832,27 @@ inline std::vector<Row> hoverRows(const Zone& z, const HoverCtx& c) {
 }
 
 // ---- the per-market settings file: lsFlexLevels\LiquidityProfile.lmtzones-<MKT>.txt -----------------------------------------
-// "LMZ2,on,print,origin,near,far,abc,gamma_lines,diamond,offer_rgb,bid_rgb,grey_rgb,gamma_rgb,tags" (colours as decimal 0xRRGGBB);
-// (1.2.0) an older "LMZ1,..." line (13 fields, no tags) still loads: tags = on. Colours since 1.2.0: offer / bid = the HELD? text, grey =
-// every zone line, its label, FILLING and the X.
+// "LMZ3,on,print,origin,near,far,abc,gamma_lines,diamond,offer_rgb,bid_rgb,grey_rgb,gamma_rgb,after" (colours as decimal 0xRRGGBB);
+// (1.3.0) the last field = the after-fill tags (RE-BID / ACCEPTED). An older LMZ2 (its last field was the 1.2.0 state tags) or LMZ1 line
+// still loads with the after-fill tags ON (the default; the box means something new). Colours since 1.3.0: offer / bid = the RE-BID text
+// (red offer swept above = bearish, green bid swept below = bullish), grey = every zone line, its label, FILLING, ACCEPTED and the X.
 static const long long C_OFFER = 0xEF4444, C_BID = 0x22C55E, C_GREYZ = 0x8A8F98, C_GAMMA = 0x6B7280;   // IRT COLOR = 0xRRGGBB (as C_BUY 0x22C55E)
 static const long long C_DIAMOND = 0xFACC15;
 struct Settings { bool on = true, print = true, origin = true, nearO = true, farOn = true, abc = true, gammaLines = true, diamond = true, tags = true;
     long long cOffer = C_OFFER, cBid = C_BID, cGrey = C_GREYZ, cGamma = C_GAMMA; bool ok = false; std::string why; };
 inline bool parseSettings(const std::string& line, Settings& out) {
     const std::vector<std::string> f = split(line, ',');
-    const bool v1 = f.size() == 13 && f[0] == "LMZ1", v2 = f.size() == 14 && f[0] == "LMZ2";
-    if (!v1 && !v2) return false;
+    const bool v1 = f.size() == 13 && f[0] == "LMZ1", v2 = f.size() == 14 && f[0] == "LMZ2", v3 = f.size() == 14 && f[0] == "LMZ3";
+    if (!v1 && !v2 && !v3) return false;
     Settings s; long long v = 0; bool* b[8] = { &s.on, &s.print, &s.origin, &s.nearO, &s.farOn, &s.abc, &s.gammaLines, &s.diamond };
     for (int i = 0; i < 8; ++i) { if (!numLL(f[(size_t)i + 1], 0, 1, v)) return false; *b[i] = v == 1; }
     long long* c[4] = { &s.cOffer, &s.cBid, &s.cGrey, &s.cGamma };
     for (int i = 0; i < 4; ++i) { if (!numLL(f[(size_t)i + 9], 0, 0xFFFFFF, v)) return false; *c[i] = v; }
-    if (v2) { if (!numLL(f[13], 0, 1, v)) return false; s.tags = v == 1; }
+    if (v2 || v3) { if (!numLL(f[13], 0, 1, v)) return false; if (v3) s.tags = v == 1; }   // (1.3.0) LMZ2's box was the old state tags: after-fill = on
     s.ok = true; out = s; return true;
 }
 inline std::string settingsLine(const Settings& s) {
-    char b[220]; std::snprintf(b, sizeof(b), "LMZ2,%d,%d,%d,%d,%d,%d,%d,%d,%lld,%lld,%lld,%lld,%d", s.on, s.print, s.origin, s.nearO, s.farOn, s.abc, s.gammaLines, s.diamond, s.cOffer, s.cBid, s.cGrey, s.cGamma, s.tags);
+    char b[220]; std::snprintf(b, sizeof(b), "LMZ3,%d,%d,%d,%d,%d,%d,%d,%d,%lld,%lld,%lld,%lld,%d", s.on, s.print, s.origin, s.nearO, s.farOn, s.abc, s.gammaLines, s.diamond, s.cOffer, s.cBid, s.cGrey, s.cGamma, s.tags);
     return b;
 }
 // does the chart's setting let this zone be drawn (the market rule already decided z.drawn)
@@ -749,7 +860,15 @@ inline bool shown(const Zone& z, const Settings& s) {
     if (!s.on || !z.drawn) return false;
     switch (z.kind) { case K_PRINT: return s.print; case K_ABC: return s.abc; case K_ORIGIN: return s.origin; case K_FAR: return s.farOn; default: return s.nearO; }
 }
-// (1.2.0) are this zone's state tags drawn (the zone is drawn, the tags box is ticked, never on a far line)
-inline bool tagsShown(const Zone& z, const Settings& s) { return s.tags && z.kind != K_FAR && shown(z, s); }
+// (1.2.0) FILLING is drawn with the zone line (1.3.0: no longer behind the tags box - that box is the after-fill read now); never on a far line
+inline bool tagsShown(const Zone& z, const Settings& s) { return z.kind != K_FAR && shown(z, s); }
+// (1.3.0) is this zone's after-fill read drawn: decided, the after-fill box ticked, the zone's kind box ticked; a drawn zone (offers) OR a
+// BID zone (bids have no line - the read is proven on both sides, 54% vs 39% bids / 51% vs 39% offers) in a market with a draw rule
+inline bool afterShown(const Zone& z, const Settings& s, bool bidsOk) {
+    if (!s.on || !s.tags || z.kind == K_FAR || z.afRead == 0) return false;
+    if (shown(z, s)) return true;
+    if (z.side != BID || !bidsOk) return false;
+    switch (z.kind) { case K_PRINT: return s.print; case K_ABC: return s.abc; case K_ORIGIN: return s.origin; default: return s.nearO; }
+}
 } // namespace lmz
 #endif

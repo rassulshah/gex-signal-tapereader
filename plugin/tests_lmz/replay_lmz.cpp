@@ -1,4 +1,5 @@
-// replay_lmz.cpp -- LmtZonesLogic.h (1.2.0: + the FILLING / HELD tags and the log-only FAST / DRIFT / EATEN / STEPPED) replayed on ONE recorded order-by-order session (Databento MBO converted by conv.py:
+// replay_lmz.cpp -- (1.3.0: + the AFTER-FILL READ RE-BID / ACCEPTED: printed, exported with the order id for fill_parity.py
+// (env LMZ_AFTER_OUT=<csv>), restart paths checked for R lines too) LmtZonesLogic.h (1.2.0: + the FILLING / HELD tags and the log-only FAST / DRIFT / EATEN / STEPPED) replayed on ONE recorded order-by-order session (Databento MBO converted by conv.py:
 // "E,t_ct_ms,act,side,tick,size,oid" with NEW 0 / MOD 1 / DEL 2 / FILL 3, and "T,t_ct_ms,tick,lots" trades for the 3-min bars).
 // Usage: replay_lmz <events.csv> <MKT> <s20> [gamma ticks comma list]
 // Prints zones per kind / side, how many are drawn, how they ended, drawn zones per RTH hour, and checks: one E line per zone, never
@@ -25,7 +26,9 @@ static Engine run(const std::vector<Ev>& ev, const std::string& m, long long s20
         E.closeBar(cur, s20); for (auto& r : E.rows) rec.push_back(r); E.rows.clear();
         if (restartEach) {   // a new engine: the record + the same book (the live feed carries on) + the same bars
             Engine N; N.market = m; N.R = E.R; N.setGamma(g); N.book = E.book; for (auto& kv : N.book) kv.second.zone = -1;
-            N.W = E.W; N.feedStartMs = E.feedStartMs; N.lastT = E.lastT; N.lastBarMs = E.lastBarMs; N.prints = E.prints; N.restore(rec); E = N;
+            N.W = E.W; N.feedStartMs = E.feedStartMs; N.lastT = E.lastT; N.lastBarMs = E.lastBarMs; N.prints = E.prints; N.restore(rec);
+            N.pend = E.pend; for (const Pend& p : N.pend) if (p.zone >= 0 && p.zone < (int)N.zones.size()) N.zones[(size_t)p.zone].afFillMs = p.f;   // (1.3.0) the live feed carries on: windows in progress continue
+            E = N;
         }
     };
     for (const Ev& e : ev) {
@@ -64,6 +67,20 @@ int main(int argc, char** argv) {
         std::printf("  LOG ONLY: arrivals FAST %lld MID %lld DRIFT %lld | EATEN %lld | STEPPED %lld\n", A.tally.fast, A.tally.mid, A.tally.drift, A.tally.eaten, A.tally.stepped);
         for (const Zone& z : A.zones) if (z.drawn && z.kind != K_FAR && (z.tagHeldMs || z.tagFillMs)) std::printf("    %s %s %lld @ %lld  %s -> %s %s  FILLING %s HELD %s traded %lld\n", z.side ? "offer" : "bid", kindCode(z.kind), z.size0, (long long)z.segs[0].px, clock12(z.t0).c_str(), endCode(z.end), clock12(z.t1).c_str(), z.tagFillMs ? clock12(z.tagFillMs).c_str() : "-", z.tagHeldMs ? clock12(z.tagHeldMs).c_str() : "-", z.traded);
     }
+    // (1.3.0) the AFTER-FILL READS: every zone (bid + offer, non-far) fully filled in RTH -> RE-BID / ACCEPTED at +30 s
+    {   long long rb[2] = { 0, 0 }, ac[2] = { 0, 0 }, shownN = 0; Settings st; const bool bidsOk = !logOnly(A.R);
+        for (const Zone& z : A.zones) if (z.afRead) { (z.afRead == 1 ? rb : ac)[z.side]++; if (afterShown(z, st, bidsOk)) ++shownN; }
+        std::printf("  AFTER-FILL: RE-BID offers %lld bids %lld | ACCEPTED offers %lld bids %lld | drawn %lld | dedup skips %lld, outside RTH %lld, hit < 30 s %lld, re-priced %lld, lost %lld\n",
+                    rb[1], rb[0], ac[1], ac[0], shownN, A.tally.afDup, A.tally.afOff, A.tally.afYoung, A.tally.afMoved, A.tally.afLost);
+        for (const Zone& z : A.zones) if (z.afRead) std::printf("    %s %s %lld @ %lld  filled %s -> %s %s  stack %lld (add %lld can %lld) delta %lld\n", z.side ? "offer" : "bid", kindCode(z.kind), z.size0, (long long)z.pxAt(z.afFillMs),
+            clock12(z.afFillMs).c_str(), afterCode(z.afRead), clock12(z.afDecMs).c_str(), z.afStack, z.afAdds, z.afCans, z.afDelta);
+        if (const char* out = std::getenv("LMZ_AFTER_OUT")) { FILE* f = std::fopen(out, "w"); if (f) { std::fprintf(f, "mkt,oid,side,kind,px,size,fill_ms,dec_ms,read,stack,adds,cans,delta,drawn,atr10,t0\n");
+            for (const Zone& z : A.zones) if (z.kind != K_FAR) std::fprintf(f, "%s,%lld,%s,%s,%lld,%lld,%lld,%lld,%s,%lld,%lld,%lld,%lld,%d,%lld,%lld\n", argv[2], z.oid, z.side ? "offer" : "bid", kindCode(z.kind), (long long)z.pxAt(z.afFillMs ? z.afFillMs : z.t0),
+                z.size0, z.afFillMs, z.afDecMs, z.afRead ? afterCode(z.afRead) : z.afSkip == 1 ? "DUP" : z.afSkip == 2 ? "OFF" : z.afSkip == 3 ? "YOUNG" : z.afSkip == 4 ? "MOVED" : "-", z.afStack, z.afAdds, z.afCans, z.afDelta, afterShown(z, st, bidsOk) ? 1 : 0, (long long)std::llround(z.atr * 10), z.t0);
+            std::fclose(f); } }
+        int rLines = 0; for (auto& r : rec1) if (r[0] == 'R') ++rLines;
+        if (rLines != (int)(rb[0] + rb[1] + ac[0] + ac[1])) { ++fails; std::printf("FAIL: %d R lines for %lld reads\n", rLines, rb[0] + rb[1] + ac[0] + ac[1]); }
+    }
     int eLines = 0; for (auto& r : rec1) if (r[0] == 'E') ++eLines;
     if (eLines != (int)A.zones.size()) { ++fails; std::printf("FAIL: %d E lines for %zu zones\n", eLines, A.zones.size()); }
     // no repaint: restart after every bar
@@ -71,16 +88,17 @@ int main(int argc, char** argv) {
     bool same = A.zones.size() == B.zones.size();
     for (size_t i = 0; same && i < A.zones.size(); ++i) { const Zone& a = A.zones[i]; const Zone& b = B.zones[i];
         same = a.oid == b.oid && a.kind == b.kind && a.t0 == b.t0 && a.t1 == b.t1 && a.end == b.end && a.segs.size() == b.segs.size() && a.traded == b.traded && a.drawn == b.drawn
-            && a.tagFillMs == b.tagFillMs && a.tagHeldMs == b.tagHeldMs; if (!same) std::printf("  differ at zone %zu\n", i); }
+            && a.tagFillMs == b.tagFillMs && a.tagHeldMs == b.tagHeldMs && a.afRead == b.afRead && a.afDecMs == b.afDecMs && a.afStack == b.afStack && a.afDelta == b.afDelta; if (!same) std::printf("  differ at zone %zu\n", i); }
     if (!same) { ++fails; std::printf("FAIL: restart-after-every-bar differs (%zu vs %zu zones)\n", A.zones.size(), B.zones.size()); }
     else std::printf("  restart after every bar: identical zones and tags (no repaint)\n");
     // (1.2.0) the IRT restart path: a FRESH engine reads the whole record, then every bar comes again -> no tag / end / B line decided again
     {   Engine R; R.market = argv[2]; R.R = ruleFor(argv[2]); R.setGamma(g); long long bad = -1; R.restore(rec1, &bad);
         for (const Bar& b : A.W.bars) R.closeBar(b, std::stoll(argv[3]));
-        int newT = 0, newE = 0, newB = 0; for (auto& r : R.rows) { if (r[0] == 'T') ++newT; if (r[0] == 'E') ++newE; if (r[0] == 'B') ++newB; }
+        int newT = 0, newE = 0, newB = 0, newR = 0; for (auto& r : R.rows) { if (r[0] == 'T') ++newT; if (r[0] == 'E') ++newE; if (r[0] == 'B') ++newB; if (r[0] == 'R') ++newR; }
         bool tagsSame = R.zones.size() == A.zones.size();
-        for (size_t i = 0; tagsSame && i < A.zones.size(); ++i) tagsSame = R.zones[i].tagFillMs == A.zones[i].tagFillMs && R.zones[i].tagHeldMs == A.zones[i].tagHeldMs && R.zones[i].end == A.zones[i].end;
-        if (bad != 0 || newT || newE || newB || !tagsSame) { ++fails; std::printf("FAIL: IRT restart path - bad %lld, new T %d E %d B %d, tags same %d\n", bad, newT, newE, newB, tagsSame ? 1 : 0); }
+        for (size_t i = 0; tagsSame && i < A.zones.size(); ++i) tagsSame = R.zones[i].tagFillMs == A.zones[i].tagFillMs && R.zones[i].tagHeldMs == A.zones[i].tagHeldMs && R.zones[i].end == A.zones[i].end
+            && R.zones[i].afRead == A.zones[i].afRead && R.zones[i].afDecMs == A.zones[i].afDecMs;
+        if (bad != 0 || newT || newE || newB || newR || !tagsSame) { ++fails; std::printf("FAIL: IRT restart path - bad %lld, new T %d E %d B %d R %d, tags same %d\n", bad, newT, newE, newB, newR, tagsSame ? 1 : 0); }
         else std::printf("  IRT restart path (fresh engine, record read, all %zu bars again): 0 new tags / ends, tags identical\n", A.W.bars.size());
     }
     std::printf("replay %s: %s\n", argv[2], fails ? "FAILED" : "ok"); return fails ? 1 : 0;
