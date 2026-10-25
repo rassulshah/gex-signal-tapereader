@@ -9,11 +9,11 @@
 
 namespace lpset {
 
-static const char* const PLUGIN_VERSION = "0.52.1";   // (0.52.1) never delete MARKET_DEPTH (crash fix)   // (0.49.0) the queue meter (no new rows) // (0.48.0) the LMT zones rows (appended: earlier rows keep their positions; parameter version 8)   // (0.47.0) the air pocket (AP? band) row; (0.46.1) book object parked at done / destroy; (0.46.0) LMT F only
+static const char* const PLUGIN_VERSION = "0.53.0";   // (0.53.0) LMT zones 1.2.0: the "State tags" row appended (parameter version 9); the colour rows relabelled to what they colour now (keys / positions unchanged)   // (0.52.1) never delete MARKET_DEPTH (crash fix)   // (0.49.0) the queue meter (no new rows) // (0.48.0) the LMT zones rows (appended: earlier rows keep their positions; parameter version 8)   // (0.47.0) the air pocket (AP? band) row; (0.46.1) book object parked at done / destroy; (0.46.0) LMT F only
 enum K { K_WIDTH, K_FONT, K_SOLID_BG, K_BIG_ORDERS, K_BIG_REACH, K_BIG_MIN_LOTS, K_BIG_KEEP, K_BIG_FONT,
          K_BANNER, K_BANNER_BG, K_BANNER_FONT, K_BANNER_COLOR, K_AIR_POCKET,
          K_LMZ, K_LMZ_PRINT, K_LMZ_ORIGIN, K_LMZ_NEAR, K_LMZ_FAR, K_LMZ_ABC, K_LMZ_GAMMA, K_LMZ_DIAMOND,
-         K_LMZ_C_OFFER, K_LMZ_C_BID, K_LMZ_C_GREY, K_LMZ_C_GAMMA, K_N };
+         K_LMZ_C_OFFER, K_LMZ_C_BID, K_LMZ_C_GREY, K_LMZ_C_GAMMA, K_LMZ_TAGS, K_N };
 
 inline const ss::Spec& profileSpec() {
     static const ss::Row R[K_N] = {
@@ -41,12 +41,14 @@ inline const ss::Spec& profileSpec() {
         ss::same(ss::in(ss::boolRow("lmz_abc", "ABC breaks (grey)", true), "lmz")),
         ss::in(ss::boolRow("lmz_gamma", "Gamma lines (grey)", true), "lmz"),
         ss::same(ss::in(ss::boolRow("lmz_diamond", "Gamma diamond", true), "lmz")),
-        ss::in(ss::colorRow("lmz_c_offer", "Offer zone colour", 0xEF4444), "lmz"),
-        ss::same(ss::in(ss::colorRow("lmz_c_bid", "Bid zone colour", 0x22C55E), "lmz")),
-        ss::in(ss::colorRow("lmz_c_grey", "ABC colour", 0x8A8F98), "lmz"),
+        // (0.53.0) the zones are grey map lines: offer / bid colour = the HELD tag text, the grey = every zone line, label, FILLING and X
+        ss::in(ss::colorRow("lmz_c_offer", "HELD offer colour", 0xEF4444), "lmz"),
+        ss::same(ss::in(ss::colorRow("lmz_c_bid", "HELD bid colour", 0x22C55E), "lmz")),
+        ss::in(ss::colorRow("lmz_c_grey", "Zone line colour", 0x8A8F98), "lmz"),
         ss::same(ss::in(ss::colorRow("lmz_c_gamma", "Gamma line colour", 0x6B7280), "lmz")),
+        ss::in(ss::boolRow("lmz_tags", "State tags (FILLING / HELD)", true), "lmz"),   // (0.53.0) appended: earlier rows keep their positions
     };
-    static const ss::Spec S = { "LiquidityProfile", PLUGIN_VERSION, 8, R, K_N, 0 };
+    static const ss::Spec S = { "LiquidityProfile", PLUGIN_VERSION, 9, R, K_N, 0 };   // (0.53.0) 8 -> 9: one row appended
     return S;
 }
 // lsLiquidityFlow (the same source built with LQ_FLOW): Font only

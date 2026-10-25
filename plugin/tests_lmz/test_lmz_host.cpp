@@ -1,4 +1,4 @@
-// test_lmz_host.cpp -- lsLiquidityProfile 0.48.0 LMT ZONES on the mock host (the whole plugin: order feed -> zone engine -> draw / columns /
+// test_lmz_host.cpp -- lsLiquidityProfile 0.53.0 LMT ZONES (LmtZonesLogic 1.2.0: grey map lines + FILLING / HELD? tags; 0.48.0 first) on the mock host (the whole plugin: order feed -> zone engine -> draw / columns /
 // hover / status / record / settings / restart). CL 3-min, a real 40-lot offer resting 2.5 min on a gamma level.
 // From plugin\:  g++ -std=c++17 -fsanitize=address,undefined -Itests_lqp044 -I. tests_lmz/test_lmz_host.cpp -o tlmzh && ASAN_OPTIONS=detect_leaks=0 ./tlmzh
 #include "LiquidityProfile.cpp"
@@ -45,11 +45,17 @@ int main() {
     CHECK(!small, "the 5-lot offer is under 3x the median (9 lots): no zone");
     CHECK(S->lz.medLots == 3 && S->lz.threshold() == 9, "(0.51.0) LMT >= 3x the live median resting order (3) = 9 lots, not the S20");
     h.draws.clear(); p->draw();
-    const COLOR RED = 0xEF4444, GAM = 0x6B7280;
+    const COLOR RED = 0xEF4444, GAM = 0x6B7280, GREY = (COLOR)lmz::C_GREYZ;
     const int yOrd = (int)(h.paneBottom - (80.10f - h.priceBase) * h.pxPer);
-    int zoneBox = 0; for (auto& d : h.draws) if (d.type == "box" && d.border == RED && d.t <= yOrd && d.b >= yOrd) ++zoneBox;
-    CHECK(zoneBox >= 1, "the zone box at the order's price, red frame");
-    CHECK(hasText(h, "Offer 40", RED), "label 'Offer 40' in red (short, no grey sub-text)");
+    // (0.53.0) the zone = a thin grey 1 px map line at the order's price; no filled red box any more
+    auto zoneLines = [&](COLOR c) { int n = 0; for (auto& d : h.draws) if (d.type == "line" && d.pen == c && d.penW == 1 && std::abs(d.y - yOrd) <= 1) ++n; return n; };
+    CHECK(zoneLines(GREY) >= 1, "(0.53.0) the zone is a thin grey 1 px line at the order's price");
+    CHECK(count(h, "box", RED) == 0, "(0.53.0) no side-colour zone box / fill");
+    const mock::Draw* lab = nullptr; for (auto& d : h.draws) if (d.type == "text" && d.text == "LMT 40 (NEAR)") lab = &d;
+    int lineX0 = 1 << 30; for (auto& d : h.draws) if (d.type == "line" && d.pen == GREY && std::abs(d.y - yOrd) <= 1) lineX0 = std::min(lineX0, d.x);
+    CHECK(lab && lab->color == GREY, "(0.53.0) label 'LMT 40 (NEAR)' in the zone grey");
+    std::printf("  label l %d r %d t %d b %d, line from x %d at y %d\n", lab ? lab->l : -1, lab ? lab->r : -1, lab ? lab->t : -1, lab ? lab->b : -1, lineX0, yOrd);
+    CHECK(lab && (lab->r <= lineX0 || lab->b <= yOrd), "(0.53.0) the label sits LEFT of the line start (or above it when there is no room)");
     int dia = 0; for (auto& d : h.draws) if (d.type == "line" && d.pen == (COLOR)lmz::C_DIAMOND) ++dia;
     CHECK(dia >= 5, "the yellow diamond (a real order on a gamma level)");
     int gl = 0; for (auto& d : h.draws) if (d.type == "line" && d.pen == GAM) ++gl;
@@ -59,62 +65,115 @@ int main() {
     CHECK(hasText(h, "LMT") && hasText(h, "LMT F"), "the BIG column is LMT | LMT F");
     bool lmt40 = false, lmt30 = false; for (auto& d : h.draws) if (d.type == "text") { if (d.text == "40" && d.color == (COLOR)lqp::colInk(false, false)) lmt40 = true; if (d.text == "30" && d.color == (COLOR)lqp::colInk(true, true)) lmt30 = true; }
     CHECK(lmt40, "LMT: 40 in the offer ink (drawn zone = bold / bright)");
-    CHECK(lmt30, "LMT: the bid's 30 in the dim bid ink (log only)");
-    // the hover: mouse over the zone -> the box with the question / how / study rows
+    CHECK(lmt30, "LMT: the bid's 30 in the dim bid ink (log only, bids never drawn)");
+    bool bidLine = false; for (auto& d : h.draws) if (d.type == "text" && d.text.find("LMT 30") == 0) bidLine = true;
+    CHECK(!bidLine, "the 30-lot bid zone is not drawn on the chart");
+    // the hover: mouse over the zone -> question / what / why / odds / how / example / now
     { RTX_EVENT e; std::memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.bar = 31; e.v.mouse.price = 80.10f;
       CHECK(p->mouse(&e) == RTX_FAIL, "mouse() never swallows the event");
       CHECK(S->lzHov == offer, "the mouse on the zone picks it");
       h.draws.clear(); p->draw();
-      CHECK(hasText(h, "Real offer: 40 lots @ 80.10", RED) || [&]() { for (auto& d : h.draws) if (d.type == "text" && d.text.find("Real offer: 40 lots @ 80.10") == 0) return true; return false; }(), "hover title");
-      bool how = false, study = false; for (auto& d : h.draws) if (d.type == "text") { if (d.text.find("close back") != std::string::npos) how = true; if (d.text.find("+32.2") != std::string::npos) study = true; }
-      CHECK(how && study, "hover: how to use (close back, not the touch) + the CL study numbers");
+      bool title = false, odds = false, magnet = false, xm = false, now = false;
+      for (auto& d : h.draws) if (d.type == "text") { const std::string& t = d.text;
+          if (t.find("LMT 40 (NEAR): sell order @ 80.10") == 0) title = true;
+          if (t.find("reverses here 30% vs 35% at a random price") != std::string::npos) odds = true;
+          if (t.find("TARGET / magnet, not a wall") != std::string::npos) magnet = true;
+          if (t.find("13x the median resting order (3 lots)") != std::string::npos) xm = true;
+          if (t.find("Now: RESTING - resting 40 lots | traded 0 (0% of 40 shown)") == 0) now = true; }
+      CHECK(title && magnet, "hover title: LMT 40 (NEAR) - a target / magnet, not a wall");
+      CHECK(odds && xm && now, "hover: the honest odds, x median, traded so far, status RESTING");
       e.v.mouse.price = 79.60f; p->mouse(&e); CHECK(S->lzHov < 0, "the mouse away: no hover"); }
     // the record + status (the record is flushed at most once a second)
     usleep(1100000); h.now = t0 + 20; p->calc(0);
-    const std::string rec = readAll(flex + "\\LiquidityProfile\\CL-CLEX26-180-lmtzones-" + std::to_string(S->lzSession) + ".csv");
+    const std::string recPath = flex + "\\LiquidityProfile\\CL-CLEX26-180-lmtzones-" + std::to_string(S->lzSession) + ".csv";
+    const std::string rec = readAll(recPath);
     CHECK(rec.find("\nZ|") != std::string::npos && rec.find("|7001|") != std::string::npos, "the zone is recorded (Z line)");
     const std::string st = readAll(flex + "\\LiquidityProfile.status-CL-180.txt");
-    CHECK(st.find("LMT_ZONES,1.1.0,on") != std::string::npos && st.find("LMT rule >= 3x the median resting order") != std::string::npos && st.find("= 9 lots") != std::string::npos, "status: LMT_ZONES line with the live-median rule");
-    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0, "status VERSION = LQ_VERSION (compared, never typed)");
-    // the order is pulled -> X, the zone ends once
-    mock::feed.push(2, 0, 80.10f, 40, (RTDATE)(t0 + 30), 7001);
-    for (int s = 0; s < 3; ++s) { h.now = t0 + 31 + s; p->calc(0); usleep(5000); }
+    CHECK(st.find(std::string("LMT_ZONES,") + lmz::VERSION + ",on") != std::string::npos && st.find("LMT rule >= 3x the median resting order") != std::string::npos && st.find("= 9 lots") != std::string::npos, "status: LMT_ZONES line with the live-median rule");
+    CHECK(st.find("pooled: print / abc / origin / near offers as grey map lines") != std::string::npos && st.find(",tags on filling 0 held 0") != std::string::npos, "status: the pooled rule + the tag counts");
+    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0 && std::string(LQ_VERSION) == "0.53.0" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION && std::string(lqp::VERSION) == LQ_VERSION, "status VERSION = LQ_VERSION = PLUGIN_VERSION = lqp::VERSION = 0.53.0");
+    // (0.53.0) HELD?: bar 31 (end t0 + 180) trades into the band (high 80.08 >= 80.10 - 4 ticks) and closes back at 80.02 with the order resting
+    const lmz::Zone& Z0 = S->lz.zones[(size_t)offer];
+    std::printf("  zone atr %.1f ticks, band w %lld ticks\n", Z0.atr, (long long)Z0.w(S->lz.R.tagAtr));
+    h.bars[31].high = 80.08f; h.bars[31].low = 80.00f; h.bars[31].close = 80.02f;
+    { mock::Bar b; b.time = t0 + 360; b.open = b.high = b.low = b.close = 80.03f; b.rows.push_back(mock::Price(80.03f, 1, 1, 2)); h.bars.push_back(b); }   // bar 32 forming -> bar 31 closed
+    for (int s = 0; s < 3; ++s) { h.now = t0 + 200 + s; p->calc(0); usleep(5000); }
+    std::printf("  tags: held %lld fill %lld, contact %lld\n", Z0.tagHeldMs, Z0.tagFillMs, Z0.contactBarMs);
+    CHECK(S->lz.zones[(size_t)offer].tagHeldMs > 0 && S->lz.zones[(size_t)offer].tagFillMs == 0, "HELD decided on bar 31's close (the order still resting)");
+    h.draws.clear(); p->draw();
+    const mock::Draw* held = nullptr; for (auto& d : h.draws) if (d.type == "text" && d.text == "HELD?") held = &d;
+    CHECK(held && held->color == RED && held->b <= yOrd + 1, "'HELD?' in red (offer) above the zone line");
+    // FILLING: bar 32 (end t0 + 360) trades up to the order and lifts 10 lots of it
+    h.bars[32].high = 80.10f; h.bars[32].low = 80.02f; h.bars[32].close = 80.05f;
+    mock::feed.push(3, 1, 80.10f, 10, (RTDATE)(t0 + 300), 7001, 9001);
+    for (int s = 0; s < 3; ++s) { h.now = t0 + 300 + s; p->calc(0); usleep(5000); }
+    { mock::Bar b; b.time = t0 + 540; b.open = b.high = b.low = b.close = 80.05f; b.rows.push_back(mock::Price(80.05f, 1, 1, 2)); h.bars.push_back(b); }   // bar 33 forming -> bar 32 closed
+    for (int s = 0; s < 3; ++s) { h.now = t0 + 380 + s; p->calc(0); usleep(5000); }
+    CHECK(S->lz.zones[(size_t)offer].tagFillMs > S->lz.zones[(size_t)offer].tagHeldMs && S->lz.zones[(size_t)offer].traded == 10, "FILLING on bar 32 (10 lots traded in the band); the HELD stays");
+    h.draws.clear(); p->draw();
+    const mock::Draw* fill = nullptr; for (auto& d : h.draws) if (d.type == "text" && d.text == "FILLING") fill = &d;
+    CHECK(fill && fill->color == GREY, "'FILLING' in grey at the zone line");
+    CHECK(hasText(h, "HELD?", RED), "the HELD? stays drawn after the later FILLING (never changes)");
+    // the order is pulled -> grey X, the zone ends once
+    mock::feed.push(2, 0, 80.10f, 30, (RTDATE)(t0 + 400), 7001);
+    for (int s = 0; s < 3; ++s) { h.now = t0 + 401 + s; p->calc(0); usleep(5000); }
     CHECK(S->lz.zones[(size_t)offer].end == lmz::PULLED, "pulled: the zone ends (void)");
     h.draws.clear(); p->draw();
-    int x = 0; for (auto& d : h.draws) if (d.type == "line" && d.pen == RED) ++x;
-    CHECK(x >= 2, "the X at the pull");
-    usleep(1100000); h.now = t0 + 40; p->calc(0);
-    const std::string rec2 = readAll(flex + "\\LiquidityProfile\\CL-CLEX26-180-lmtzones-" + std::to_string(S->lzSession) + ".csv");
+    int x = 0; for (auto& d : h.draws) if (d.type == "line" && d.pen == GREY && d.penW == 2) ++x;
+    CHECK(x >= 2, "the grey X at the pull");
+    usleep(1100000); h.now = t0 + 420; p->calc(0);
+    const std::string rec2 = readAll(recPath);
     CHECK(rec2.find("|PULLED|") != std::string::npos, "the end is recorded (E line)");
-    // a restart (a new plugin object, the feed empty): the same zones come back from the record - no repaint
-    const size_t nz = S->lz.zones.size();
-    h.draws.clear(); p->draw(); std::vector<std::string> before; for (auto& d : h.draws) if (d.type == "box" && d.border == RED) before.push_back(std::to_string(d.l) + "," + std::to_string(d.t) + "," + std::to_string(d.r) + "," + std::to_string(d.b));
+    CHECK(rec2.find("|HELD|0|40") != std::string::npos && rec2.find("|FILLING|10|30") != std::string::npos && rec2.find("\nB|") != std::string::npos, "the tags are recorded (T lines: HELD resting 40, FILLING traded 10) + the judged bar (B)");
+    // a restart (a new plugin object, the feed empty, every bar fed again): the same zones and tags come back - no repaint
+    const size_t nz = S->lz.zones.size(); const long long hMs = S->lz.zones[(size_t)offer].tagHeldMs, fMs = S->lz.zones[(size_t)offer].tagFillMs;
+    auto snap = [&]() { std::vector<std::string> v; for (auto& d : h.draws) if ((d.type == "line" && (d.pen == GREY || d.pen == (COLOR)lmz::C_DIAMOND)) || (d.type == "text" && (d.text == "HELD?" || d.text == "FILLING" || d.text.find("LMT 40") == 0)))
+        v.push_back(d.type + "|" + d.text + "|" + std::to_string(d.x) + "," + std::to_string(d.y) + "," + std::to_string(d.l) + "," + std::to_string(d.t) + "," + std::to_string(d.r) + "," + std::to_string(d.b) + "|" + std::to_string(d.color) + "|" + std::to_string(d.pen)); return v; };
+    h.draws.clear(); p->draw(); const std::vector<std::string> before = snap();
     p->destroy(); p->mdPark_.clear(); delete p; h.data = nullptr;
     mock::feed.ev.clear(); mock::feed.at = 0;
     LiquidityProfile* q = static_cast<LiquidityProfile*>(CreateExtension());
-    for (int s = 0; s < 4; ++s) { h.now = t0 + 60 + s; q->calc(0); usleep(5000); }
+    for (int s = 0; s < 4; ++s) { h.now = t0 + 460 + s; q->calc(0); usleep(5000); }
     LQState* S2 = static_cast<LQState*>(h.data);
     CHECK(S2 && S2->lz.zones.size() == nz && S2->lz.zones[(size_t)offer].end == lmz::PULLED, "restart: the zones are read back with their ends");
-    h.draws.clear(); q->draw(); std::vector<std::string> after; for (auto& d : h.draws) if (d.type == "box" && d.border == RED) after.push_back(std::to_string(d.l) + "," + std::to_string(d.t) + "," + std::to_string(d.r) + "," + std::to_string(d.b));
-    CHECK(before == after, "restart: the zone is drawn identically (never repaints)");
+    CHECK(S2 && S2->lz.zones[(size_t)offer].tagHeldMs == hMs && S2->lz.zones[(size_t)offer].tagFillMs == fMs && S2->lz.tally.held == 1 && S2->lz.tally.filling == 1, "restart: the tags are read back, none decided again on the re-fed bars");
+    h.draws.clear(); q->draw(); const std::vector<std::string> after = snap();
+    CHECK(!before.empty() && before == after, "restart: the line, label, diamond, X and tags are drawn identically (never repaint)");
+    usleep(1100000); h.now = t0 + 470; q->calc(0);
+    const std::string rec3 = readAll(recPath); int tLines = 0; for (size_t k = rec3.find("\nT|"); k != std::string::npos; k = rec3.find("\nT|", k + 1)) ++tLines;
+    CHECK(tLines == 2, "restart: still exactly 2 T lines in the record");
     // settings: the master off hides everything (zones, gamma lines, LMT column); the file is per market
     { std::ofstream f((flex + "\\LiquidityProfile.lmtzones-CL.txt").c_str()); lmz::Settings z; z.on = false; f << lmz::settingsLine(z) << "\n"; }
     S2->lzCheckMs = -1; usleep(20000);
-    for (int s = 0; s < 3; ++s) { h.now = t0 + 70 + s; q->calc(0); usleep(1100000 / 3); }
+    for (int s = 0; s < 3; ++s) { h.now = t0 + 480 + s; q->calc(0); usleep(1100000 / 3); }
     h.draws.clear(); q->draw();
     int gl2 = 0; for (auto& d : h.draws) if (d.type == "line" && d.pen == GAM) ++gl2;
-    CHECK(!S2->lzSet.on && gl2 == 0 && !hasText(h, "LMT") && count(h, "box", RED) == 0, "LMT zones off: no zones, no gamma lines, LMT F alone again");
-    { std::ofstream f((flex + "\\LiquidityProfile.lmtzones-CL.txt").c_str()); lmz::Settings z; z.gammaLines = false; z.cOffer = 0x112233; f << lmz::settingsLine(z) << "\n"; }
+    CHECK(!S2->lzSet.on && gl2 == 0 && !hasText(h, "LMT") && zoneLines(GREY) == 0 && !hasText(h, "HELD?"), "LMT zones off: no zones, no tags, no gamma lines, LMT F alone again");
+    // the State tags box off: the line stays, the tags go; colours: the HELD offer colour + the zone line colour applied
+    { std::ofstream f((flex + "\\LiquidityProfile.lmtzones-CL.txt").c_str()); lmz::Settings z; z.tags = false; f << lmz::settingsLine(z) << "\n"; }
     S2->lzCheckMs = -1; usleep(20000);
-    for (int s = 0; s < 3; ++s) { h.now = t0 + 80 + s; q->calc(0); usleep(1100000 / 3); }
+    for (int s = 0; s < 3; ++s) { h.now = t0 + 490 + s; q->calc(0); usleep(1100000 / 3); }
+    h.draws.clear(); q->draw();
+    CHECK(!S2->lzSet.tags && zoneLines(GREY) >= 1 && !hasText(h, "HELD?") && !hasText(h, "FILLING") && hasText(h, "LMT 40 (NEAR)"), "State tags box off: no HELD? / FILLING, the line and label stay");
+    { std::ofstream f((flex + "\\LiquidityProfile.lmtzones-CL.txt").c_str()); lmz::Settings z; z.gammaLines = false; z.cOffer = 0x112233; z.cGrey = 0x445566; f << lmz::settingsLine(z) << "\n"; }
+    S2->lzCheckMs = -1; usleep(20000);
+    for (int s = 0; s < 3; ++s) { h.now = t0 + 500 + s; q->calc(0); usleep(1100000 / 3); }
     h.draws.clear(); q->draw();
     int gl3 = 0; for (auto& d : h.draws) if (d.type == "line" && d.pen == GAM) ++gl3;
-    CHECK(S2->lzSet.on && gl3 == 0 && count(h, "box", 0x112233) >= 1, "gamma lines checkbox off; the offer colour setting is applied");
-    { std::ofstream f((flex + "\\LiquidityProfile.lmtzones-CL.txt").c_str()); f << "LMZ1,garbage\n"; }
+    CHECK(S2->lzSet.on && gl3 == 0 && hasText(h, "HELD?", 0x112233) && hasText(h, "FILLING", 0x445566) && zoneLines(0x445566) >= 1 && zoneLines(GREY) == 0, "gamma lines off; the HELD offer colour and the zone line colour are applied");
+    // an old 0.48-0.52 settings file (LMZ1, no tags field) still loads: tags on
+    { std::ofstream f((flex + "\\LiquidityProfile.lmtzones-CL.txt").c_str()); f << "LMZ1,1,1,1,1,1,1,1,1,1122867,2278750,4478310,7041664\n"; }
     S2->lzCheckMs = -1; usleep(20000);
-    for (int s = 0; s < 3; ++s) { h.now = t0 + 90 + s; q->calc(0); usleep(1100000 / 3); }
-    CHECK(S2->lzWhy.find("garbled") != std::string::npos && S2->lzSet.cOffer == 0x112233, "a garbled settings file keeps the last good one");
+    for (int s = 0; s < 3; ++s) { h.now = t0 + 510 + s; q->calc(0); usleep(1100000 / 3); }
+    CHECK(S2->lzWhy == "file" && S2->lzSet.tags && S2->lzSet.cOffer == 1122867, "an old LMZ1 settings file loads (tags default on)");
+    { std::ofstream f((flex + "\\LiquidityProfile.lmtzones-CL.txt").c_str()); f << "LMZ2,garbage\n"; }
+    S2->lzCheckMs = -1; usleep(20000);
+    for (int s = 0; s < 3; ++s) { h.now = t0 + 520 + s; q->calc(0); usleep(1100000 / 3); }
+    CHECK(S2->lzWhy.find("garbled") != std::string::npos && S2->lzSet.cOffer == 1122867, "a garbled settings file keeps the last good one");
+    // the settings window table: the State tags row appended (positions kept), parameter version 9, every colour row labelled by what it colours
+    { const ss::Spec& sp = lpset::profileSpec(); CHECK(sp.paramVersion == 9 && sp.n == lpset::K_N && std::string(sp.rows[lpset::K_LMZ_TAGS].key) == "lmz_tags" && lpset::K_LMZ_TAGS == lpset::K_N - 1
+          && std::string(sp.rows[lpset::K_LMZ_C_OFFER].key) == "lmz_c_offer" && std::string(sp.rows[lpset::K_LMZ_C_GREY].label) == "Zone line colour", "settings table: tags row last, parameter version 9, keys unchanged"); }
     q->destroy(); q->mdPark_.clear(); delete q;
-    std::printf("lsLiquidityProfile 0.48.0 LMT zones host: %d passed, %d failed\n", passes, fails);
+    std::printf("lsLiquidityProfile %s LMT zones host: %d passed, %d failed\n", LQ_VERSION, passes, fails);
     return fails ? 1 : 0;
 }

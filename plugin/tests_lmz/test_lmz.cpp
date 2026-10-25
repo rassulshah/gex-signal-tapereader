@@ -1,4 +1,4 @@
-// test_lmz.cpp -- LmtZonesLogic.h 1.0.0 (lsLiquidityProfile 0.48.0 LMT ZONES, Rassul approved mockup v3 2026-10-22 09:34 CT).
+// test_lmz.cpp -- LmtZonesLogic.h 1.2.0 (lsLiquidityProfile 0.53.0: grey map lines, pooled draw rule, FILLING / HELD? tags; 1.0.0 = 0.48.0 mockup v3).
 // From plugin\:  g++ -std=c++17 -fsanitize=address,undefined -Wall -Wextra -Werror -I. tests_lmz/test_lmz.cpp -o tlmz && ./tlmz
 #include "LmtZonesLogic.h"
 #include <cstdio>
@@ -56,16 +56,19 @@ int main() {
       int nPrint = 0, nNear = 0, nBid = 0; bool printQ = false, nearDrawn = true, bidDrawn = true;
       for (const Zone& z : E.zones) { if (z.kind == K_PRINT && z.side == ASK) { ++nPrint; printQ = z.q && z.drawn; } if (z.kind == K_NEAR && z.side == ASK) { ++nNear; nearDrawn = z.drawn; } if (z.side == BID) { ++nBid; bidDrawn = z.drawn; } }
       std::printf("  zones after the first close: %zu (print %d, near %d, bid %d)\n", E.zones.size(), nPrint, nNear, nBid);
-      CHECK(nPrint == 1 && printQ, "ES: the with-trend BD-print offer is a zone, drawn with ?");
+      bool printDrawn = false; for (const Zone& z : E.zones) if (z.kind == K_PRINT && z.side == ASK) printDrawn = z.drawn;
+      CHECK(nPrint == 1 && printDrawn && !printQ, "(1.2.0) ES: the with-trend BD-print offer is a drawn zone, no ?");
       bool p11 = false; for (const Zone& z : E.zones) if (z.oid == 11 && z.kind == K_PRINT) p11 = true;
+      bool anyQ = false; for (const Zone& z : E.zones) if (z.q) anyQ = true;
       CHECK(p11, "the print zone holds order 11 (the biggest real order in the print area)");
-      CHECK(nNear == 0 || !nearDrawn, "ES: a plain near offer is logged, never drawn");
+      CHECK(nNear == 0 || nearDrawn, "(1.2.0) pooled: a near offer is drawn in ES too (no per-market exception)");
+      CHECK(!anyQ, "(1.2.0) no zone carries the ? any more");
       CHECK(nBid >= 1 && !bidDrawn, "bids: tracked (LMT columns) but never drawn");
       bool small = false, young = false; for (const Zone& z : E.zones) { if (z.oid == 13) small = true; if (z.oid == 15) young = true; }
       CHECK(!small, "an order under S20 is never a zone");
       CHECK(!young, "an order that has not rested 30 s is not a zone yet");
       std::string lab; for (const Zone& z : E.zones) if (z.kind == K_PRINT) lab = label(z);
-      CHECK(lab == "BD print 100?", "label: BD print 100?");
+      CHECK(lab == "LMT 100 (PRINT)", "(1.2.0) label: LMT 100 (PRINT)");
       // 3) the zone follows a first re-price inside its band, then a 2nd move ends it (X)
       int zi = -1; for (size_t k = 0; k < E.zones.size(); ++k) if (E.zones[k].oid == 11) zi = (int)k;
       const Tick lo = E.zones[(size_t)zi].segs[0].lo;
@@ -105,10 +108,11 @@ int main() {
       CHECK(ends == (int)E.zones.size(), "exactly one E line per zone (ends once)");
     }
     // 8) per-market rules
-    { Rule r = ruleFor("CL"); CHECK(r.gammaOnly && r.nearO == 1, "CL: offers only with gamma confluence");
-      r = ruleFor("GC"); CHECK(logOnly(r), "GC: log only"); r = ruleFor("EU"); CHECK(logOnly(r) && !r.farOn, "6E: log only");
-      r = ruleFor("NQ"); CHECK(r.nearO == 2, "NQ: offers with ?"); r = ruleFor("NG"); CHECK(r.nearO == 1 && !r.bids, "NG: offers drawn, bids never");
-      r = ruleFor("ES"); CHECK(r.print == 2 && r.nearO == 0 && r.origin == 0, "ES: only the BD-print offer with ?"); }
+    {   // (1.2.0) one pooled rule in all 7 markets; FAR as before (off in 6E); bids never; floors per market unchanged
+        bool same = true; for (const char* m : { "ES", "NQ", "CL", "GC", "HG", "NG", "EU" }) { Rule r = ruleFor(m); if (!(r.print == 1 && r.origin == 1 && r.nearO == 1 && r.abc && !r.gammaOnly && !r.bids && !logOnly(r))) same = false; }
+        CHECK(same, "(1.2.0) all 7 markets: PRINT / ABC / ORIGIN / NEAR drawn, no gamma-only, no ?, bids never");
+        CHECK(ruleFor("NG").farOn && ruleFor("ES").farOn && !ruleFor("EU").farOn, "FAR stays as it was (on; 6E off)");
+        CHECK(logOnly(ruleFor("ZZ")), "a market that is not one of the 7: log only"); }
     // 9) CL confluence: the near offer is drawn only on a gamma level; the diamond flag
     {
         for (int withG = 0; withG < 2; ++withG) {
@@ -122,7 +126,7 @@ int main() {
             C.closeBar(B2.back(), 15);
             bool made = false, drawn = false, conf = false; for (const Zone& z : C.zones) if (z.oid == 21) { made = true; drawn = z.drawn; conf = z.conf; }
             CHECK(made, "CL: the near offer is tracked either way");
-            CHECK(drawn == (withG == 1) && conf == (withG == 1), withG ? "CL on a gamma level: drawn + diamond" : "CL off gamma: log only");
+            CHECK(drawn && conf == (withG == 1), withG ? "(1.2.0) CL on a gamma level: drawn + diamond" : "(1.2.0) CL off gamma: drawn too (no gamma-only rule), no diamond");
         }
     }
     // 10) far orders: thin, at most 2 per side, beyond 2 ATR; they end NEARED when price comes within 2 ATR (then may become near)
@@ -139,27 +143,48 @@ int main() {
     }
     // 11) params file: strict; wrong market / version = defaults
     {
-        Rule r = parseParams({ "VERSION,1", "MARKET,ES", "PARAM,NEAR,1", "PARAM,S20_RTH,60", "PARAM,BIDS,1", "PARAM,JUNK,5" }, "ES");
-        CHECK(r.nearO == 1 && r.s20Rth == 60 && r.bids && r.src.find("params file") == 0, "params override the defaults (bids can be switched on by the nightly)");
-        r = parseParams({ "VERSION,1", "MARKET,NQ", "PARAM,NEAR,1" }, "ES"); CHECK(r.nearO == 0 && r.src.find("MARKET") != std::string::npos, "wrong market: defaults");
+        Rule r = parseParams({ "VERSION,1", "MARKET,ES", "PARAM,NEAR,0", "PARAM,S20_RTH,60", "PARAM,BIDS,1", "PARAM,GAMMA_ONLY,1", "PARAM,JUNK,5" }, "ES");
+        CHECK(r.nearO == 1 && r.s20Rth == 60 && !r.bids && !r.gammaOnly && r.src.find("params file") == 0 && r.src.find("3 per-market draw rows ignored") != std::string::npos,
+              "(1.2.0) params: thresholds read; the old per-market draw rows (NEAR / BIDS / GAMMA_ONLY) ignored - bids stay off");
+        r = parseParams({ "VERSION,1", "MARKET,NQ", "PARAM,S20_RTH,60" }, "ES"); CHECK(r.s20Rth == 45 && r.src.find("MARKET") != std::string::npos, "wrong market: defaults");
         r = parseParams({ "VERSION,2", "MARKET,ES" }, "ES"); CHECK(r.src.find("VERSION") != std::string::npos, "wrong version: defaults");
-        r = parseParams({ "VERSION,1", "MARKET,ES", "PARAM,NEAR,7", "PARAM,S20_RTH,1e9" }, "ES"); CHECK(r.nearO == 0 && r.s20Rth == 45, "out-of-range values ignored");
+        r = parseParams({ "VERSION,1", "MARKET,ES", "PARAM,TAG_ATR,7", "PARAM,S20_RTH,1e9" }, "ES"); CHECK(r.tagAtr == 0.25 && r.s20Rth == 45, "out-of-range values ignored");
+        r = parseParams({ "VERSION,1", "MARKET,ES", "PARAM,FAST_ATR,0.9", "PARAM,DRIFT_ATR,1.5", "PARAM,EATEN_S,45" }, "ES"); CHECK(r.fastAtr == 0.9 && r.driftAtr == 0.9 && r.eatenS == 45, "(1.2.0) FAST / DRIFT / EATEN params; DRIFT never above FAST");
     }
     // 12) settings line round trip + garbled; the checkboxes hide kinds
     {
-        Settings s; s.print = false; s.cOffer = 0x123456; Settings b; CHECK(parseSettings(settingsLine(s), b) && !b.print && b.cOffer == 0x123456, "settings round trip");
+        Settings s; s.print = false; s.cOffer = 0x123456; s.tags = false; Settings b; CHECK(parseSettings(settingsLine(s), b) && !b.print && b.cOffer == 0x123456 && !b.tags && settingsLine(s).compare(0, 5, "LMZ2,") == 0, "settings round trip (LMZ2 with the tags box)");
+        Settings o; CHECK(parseSettings("LMZ1,1,0,1,1,1,1,1,1,15680580,2278750,9080728,7041664", o) && !o.print && o.tags, "(1.2.0) an old LMZ1 file (0.48-0.52) still loads: tags default on");
+        CHECK(!parseSettings("LMZ2,1,1,1,1,1,1,1,1,0,0,0,0,2", o) && !parseSettings("LMZ2,1,1,1,1,1,1,1,1,0,0,0,0", o), "LMZ2 garbled / short tags field rejected");
         CHECK(!parseSettings("LMZ1,1,1", b) && !parseSettings("LMZ1,1,1,1,1,1,1,1,2,0,0,0,0", b), "garbled settings rejected");
         Zone z; z.kind = K_PRINT; z.drawn = true; CHECK(shown(z, Settings()) && !shown(z, s), "print checkbox hides print zones");
         z.drawn = false; CHECK(!shown(z, Settings()), "a log-only zone is never drawn");
     }
-    // 13) hover: <= 12 rows, <= 118 chars, the close-back rule and study numbers present
+    // 13) (1.2.0) hover: <= 12 rows, <= 118 chars; target / magnet, the honest odds, x median, age at contact, traded %, status
     {
-        Zone z; z.kind = K_PRINT; z.side = ASK; z.size0 = 100; z.s20 = 45; z.restMs = 95000; z.drawn = true; z.q = true; z.conf = true; z.confPx = 30832; Seg g; g.px = 30832; z.segs.push_back(g);
-        HoverCtx c; c.market = "ES"; c.tick = 0.25; c.sizeLive = 100;
-        const std::vector<Row> v = hoverRows(z, c); bool fits = v.size() <= 12, close = false, study = false, diamond = false;
-        for (const Row& r : v) { if (r.text.size() > 118) fits = false; if (r.text.find("close back") != std::string::npos) close = true; if (r.text.find("n 11") != std::string::npos) study = true; if (r.ink == INK_YELLOW) diamond = true; }
+        Zone z; z.kind = K_PRINT; z.side = ASK; z.size0 = 100; z.maxShown = 100; z.med = 8; z.s20 = 45; z.t0 = T0; z.restMs = 95000; z.tContact = T0 + 145000; z.drawn = true; z.conf = true; z.confPx = 30832;
+        z.traded = 30; z.tagHeldMs = T0 + 360000; Seg g; g.px = 30832; z.segs.push_back(g);
+        HoverCtx c; c.market = "ES"; c.tick = 0.25; c.sizeLive = 70; c.nowMs = T0 + 400000;
+        const std::vector<Row> v = hoverRows(z, c); bool fits = v.size() <= 12, magnet = false, odds = false, xm = false, age = false, traded = false, held = false, q = false, ex = false, how = false, diamond = false;
+        for (const Row& r : v) { const std::string& t = r.text; if (t.size() > 118) fits = false;
+            if (t.find("TARGET / magnet, not a wall") != std::string::npos) magnet = true;
+            if (t.find("reverses here 30% vs 35% at a random price; held + close back: retest P(2R) 32% (random 30%)") != std::string::npos) odds = true;
+            if (t.find("13x the median resting order (8 lots)") != std::string::npos) xm = true;
+            if (t.find("age at contact 4 min") != std::string::npos) age = true;
+            if (t.find("traded 30 (30% of 100 shown)") != std::string::npos) traded = true;
+            if (t.find("Now: HELD?") == 0 && r.ink == INK_RED) held = true;
+            if (t.find("Question:") == 0) q = true;
+            if (t.find("Example:") == 0) ex = true;
+            if (t.find("FILLING = being filled - no entry") != std::string::npos) how = true;
+            if (r.ink == INK_YELLOW) diamond = true; }
         for (const Row& r : v) std::printf("    | %s\n", r.text.c_str());
-        CHECK(fits && close && study && diamond, "hover: question / what / why / how (close back, not the touch) / study / example");
+        CHECK(fits && q && ex && how, "hover: question / what / why / how / example, every row <= 118 chars");
+        CHECK(magnet && odds, "hover: a target / magnet, not a wall + the honest odds line");
+        CHECK(xm && age && traded, "hover: lots x median, age at contact, traded so far (lots, % of shown)");
+        CHECK(held && diamond, "hover: status HELD? in red (offer) + the gamma diamond row");
+        z.end = PULLED; z.t1 = T0 + 200000; z.tContact = 0; z.tagHeldMs = 0; z.traded = 0;
+        bool pulled = false; for (const Row& r : hoverRows(z, c)) if (r.text.find("PULLED before contact (X) - no read") != std::string::npos && r.ink == INK_GREY) pulled = true;
+        CHECK(pulled, "hover: pulled before contact = grey, no read");
     }
     // 11) (1.1.0) the live-median rule: the threshold adapts to the book, the floor, hysteresis 2.5x, params strict
     {   Engine E; E.market = "ES"; E.R = ruleFor("ES"); E.W.fixedAtr = 20; int m = 0;
@@ -186,6 +211,104 @@ int main() {
         CHECK(zi >= 0 && E.zones[(size_t)zi].end == LIVE, "shrank to 14 (>= 2.5x = 13): kept (no flicker)");
         nb.endMs += 180000; E.onEvent(MOD, ASK, c + 6, 12, 31, nb.endMs - 100000); E.closeBar(nb, 194);
         CHECK(zi >= 0 && E.zones[(size_t)zi].end == SHRANK && std::string(endCode(SHRANK)) == "SHRANK" && endOf("SHRANK") == SHRANK, "under 2.5x: ends SHRANK (recorded once)");
+    }
+    // ================= (1.2.0) STATE TAGS =================
+    // a NEAR offer zone: ATR fixed 20 ticks -> tag band w = 5 ticks, tolerance = +10; a 5-lot book -> LMT >= 15 lots
+    struct Setup { Engine E; std::vector<Bar> B; Tick c = 0, px = 0; int zi = -1; long long tEnd = 0; };
+    auto setup = [&](const std::string& m, Side side, Setup& U) {
+        U.E = Engine(); U.E.market = m; U.E.R = ruleFor(m); U.E.W.fixedAtr = 20; int k = 0;
+        U.B = path({ 1000, 1010, 1000, 1010, 1000, 1010, 1000, 1010, 1000 }, T0, k);
+        for (size_t i = 0; i + 1 < U.B.size(); ++i) U.E.closeBar(U.B[i], 45);
+        U.c = U.B[U.B.size() - 2].c; const long long t = U.B.back().endMs - 170000;
+        for (int q = 0; q < 31; ++q) U.E.onEvent(NEW, q % 2 ? ASK : BID, q % 2 ? U.c + 30 + (q % 5) : U.c - 30 - (q % 5), 5, 900 + q, t);
+        U.px = side == ASK ? U.c + 12 : U.c - 12;
+        U.E.onEvent(NEW, side, U.px, 60, 77, t);
+        U.E.closeBar(U.B.back(), 45); U.tEnd = U.B.back().endMs;
+        for (size_t i = 0; i < U.E.zones.size(); ++i) if (U.E.zones[i].oid == 77) U.zi = (int)i;
+    };
+    auto bar = [&](Setup& U, Tick o, Tick h, Tick l, Tick c) { Bar b; b.endMs = (U.tEnd += 180000); b.o = o; b.h = h; b.l = l; b.c = c; return b; };
+    auto countRows = [](const std::vector<std::string>& r, const std::string& pre) { int n = 0; for (auto& x : r) if (x.compare(0, pre.size(), pre) == 0) ++n; return n; };
+    // 14) HELD: the bar trades into the band (high px-3 >= px-5), closes back below (px-8 < px-5), the order still rests -> HELD (T line)
+    {   Setup U; setup("NQ", ASK, U); CHECK(U.zi >= 0 && U.E.zones[(size_t)U.zi].kind == K_NEAR && U.E.zones[(size_t)U.zi].drawn, "setup: a drawn NEAR offer zone (60 lots)");
+        Engine& E = U.E; const Tick px = U.px;
+        E.closeBar(bar(U, U.c, U.c + 4, U.c - 2, U.c + 2), 45);                                  // not in the band yet
+        CHECK(E.zones[(size_t)U.zi].tagHeldMs == 0 && E.zones[(size_t)U.zi].contactBarMs == 0, "no contact: no tag");
+        const Bar hb = bar(U, U.c + 2, px - 3, U.c, px - 8); E.closeBar(hb, 45);
+        const Zone& z = E.zones[(size_t)U.zi];
+        CHECK(z.tagHeldMs == hb.endMs && z.tagFillMs == 0 && E.tally.held == 1, "HELD on the close-back bar, order still resting");
+        CHECK(countRows(E.rows, "T|" + std::to_string(z.id) + "|" + std::to_string(hb.endMs) + "|HELD|0|60") == 1, "recorded: T|id|bar|HELD|traded 0|resting 60");
+        E.closeBar(bar(U, px - 8, px - 2, px - 12, px - 9), 45);                                 // a second close back
+        CHECK(E.tally.held == 1 && countRows(E.rows, "T|") == 1, "HELD once per zone (never twice, never moved)");
+        // the label / tag text / tagsShown
+        Settings st; CHECK(tagsShown(z, st) && std::string(tagText(true)) == "HELD?" && std::string(tagText(false)) == "FILLING", "tags shown with the box on: HELD? / FILLING");
+        st.tags = false; CHECK(!tagsShown(z, st) && shown(z, st), "the State tags box hides the tags only (the line stays)");
+        // a later FILLING may follow the HELD (later bar)
+        const Bar fb = bar(U, px - 9, px + 1, px - 10, px - 2); E.onEvent(FILL, BID, px, 20, 77, fb.endMs - 30000); E.closeBar(fb, 45);
+        CHECK(E.zones[(size_t)U.zi].tagFillMs == fb.endMs && E.zones[(size_t)U.zi].tagHeldMs == hb.endMs, "a later FILLING follows; the HELD stays as printed");
+        // NO REPAINT: a fresh engine restores the record, the SAME bars come again (the IRT restart path) -> identical tags, no new T line
+        std::vector<std::string> rec = E.rows; Engine R2; R2.market = "NQ"; R2.R = ruleFor("NQ"); R2.W.fixedAtr = 20; long long bad = -1; R2.restore(rec, &bad);
+        CHECK(bad == 0 && R2.judgedMs == fb.endMs, "restore: no bad lines, judged up to the last bar");
+        const Zone& r2 = R2.zones[(size_t)U.zi];
+        CHECK(r2.tagHeldMs == hb.endMs && r2.tagFillMs == fb.endMs, "restored tags identical (T lines read back)");
+        for (const Bar& b : E.W.bars) R2.closeBar(b, 45);
+        CHECK(countRows(R2.rows, "T|") == 0 && countRows(R2.rows, "B|") == 0 && R2.zones[(size_t)U.zi].tagHeldMs == hb.endMs, "re-fed bars after a restart decide NO tag again (judged bars track only)");
+        CHECK(R2.zones[(size_t)U.zi].contactBarMs == E.zones[(size_t)U.zi].contactBarMs && R2.zones[(size_t)U.zi].extQ == E.zones[(size_t)U.zi].extQ, "the contact / extreme tracking is rebuilt the same from the bars");
+        CHECK(R2.zones[(size_t)U.zi].end == LIVE, "(1.2.0 fix) re-fed old bars before the book refills never end a zone SHRANK (the 1.1.0 restart path did)");
+        // the old 1.1.0 reader (Z needs 21 fields; T / B / A / W unknown) would skip the new lines; the new reader skips unknown types
+        std::vector<std::string> fut = rec; fut.push_back("Q|1|5|NEW"); fut.push_back("X|9"); Engine R3; long long b3 = -1; R3.restore(fut, &b3);
+        CHECK(b3 == 0 && R3.tally.unknownLines == 2 && R3.zones.size() == E.zones.size(), "unknown line types (a newer build) are skipped, not bad");
+        std::vector<std::string> old = { "Z|1|77|1|NEAR|" + std::to_string(T0) + "|1012|1011|1013|60|1|0|0|45|200|0|0|0|40|1|1.1.0", "E|1|" + std::to_string(T0 + 600000) + "|PULLED|0" };
+        Engine R4; long long b4 = -1; CHECK(R4.restore(old, &b4) == 1 && b4 == 0 && R4.zones[0].end == PULLED && R4.zones[0].med == 0, "a 1.1.0 record (21-field Z lines) still loads");
+    }
+    // 15) FILLING: the zone order trades during the bar (price in the band) -> FILLING, never HELD on that bar even if it closes back
+    {   Setup U; setup("CL", ASK, U); Engine& E = U.E; const Tick px = U.px;
+        const Bar b = bar(U, U.c, px, U.c, px - 8); E.onEvent(FILL, BID, px, 25, 77, b.endMs - 60000); E.closeBar(b, 45);
+        const Zone& z = E.zones[(size_t)U.zi];
+        CHECK(z.tagFillMs == b.endMs && z.tagHeldMs == 0 && z.end == LIVE && E.tally.filling == 1, "FILLING (traded 25 in the bar) - not HELD on the same bar");
+        CHECK(countRows(E.rows, "T|" + std::to_string(z.id) + "|" + std::to_string(b.endMs) + "|FILLING|25|35") == 1, "recorded: T|id|bar|FILLING|traded 25|resting 35");
+        // the whole order fills inside a bar (FILL + DEL): the zone ends FILLED and the bar still gets its FILLING tag (no earlier tag)
+        Setup V; setup("HG", ASK, V); const Bar b2 = bar(V, V.c, V.px + 1, V.c, V.px + 1);
+        V.E.onEvent(FILL, BID, V.px, 60, 77, b2.endMs - 50000); V.E.onEvent(DEL, ASK, V.px, 0, 77, b2.endMs - 50000); V.E.closeBar(b2, 45);
+        CHECK(V.E.zones[(size_t)V.zi].end == FILLED && V.E.zones[(size_t)V.zi].tagFillMs == b2.endMs, "filled away inside the bar: FILLED + the FILLING tag on that bar");
+    }
+    // 16) no HELD: (a) no close back, (b) the extreme went beyond the tolerance (+10), (c) the order was PULLED before contact (X)
+    {   Setup U; setup("GC", ASK, U); Engine& E = U.E; const Tick px = U.px;
+        E.closeBar(bar(U, U.c, px - 2, U.c, px - 4), 45);                                         // in the band, close px-4 is NOT below px-5
+        CHECK(E.zones[(size_t)U.zi].tagHeldMs == 0 && E.zones[(size_t)U.zi].contactBarMs > 0, "(a) traded in, no close back: no HELD");
+        E.closeBar(bar(U, px - 4, px + 11, px - 9, px - 9), 45);                                  // a wick to px+11 (> px+10), closes back
+        CHECK(E.zones[(size_t)U.zi].tagHeldMs == 0, "(b) the extreme went past the tolerance: no HELD (swept)");
+        Setup V; setup("ES", ASK, V); V.E.onEvent(DEL, ASK, V.px, 60, 77, V.tEnd + 30000);
+        V.E.closeBar(bar(V, V.c, V.px - 3, V.c, V.px - 8), 45);
+        const Zone& z = V.E.zones[(size_t)V.zi];
+        CHECK(z.end == PULLED && z.tagHeldMs == 0 && z.tagFillMs == 0, "(c) pulled before contact: PULLED (grey X), no tag");
+    }
+    // 17) bids: tracked, tagged (log), never drawn - also with BIDS,1 in an old nightly params file; all 7 markets draw the near offer
+    {   Setup U; setup("NG", BID, U); Engine& E = U.E; const Tick px = U.px;
+        E.closeBar(bar(U, U.c, U.c + 2, px + 3, px + 8), 45);                                     // low into the bid band, close back above
+        const Zone& z = E.zones[(size_t)U.zi];
+        CHECK(z.side == BID && !z.drawn && z.tagHeldMs > 0 && !tagsShown(z, Settings()), "a bid zone: HELD recorded (log), the zone and its tag never drawn");
+        Engine P2; P2.R = parseParams({ "VERSION,1", "MARKET,NG", "PARAM,BIDS,1" }, "NG"); CHECK(!P2.R.bids, "BIDS,1 in the nightly file no longer switches bids on");
+        int drawnAll = 0; for (const char* m : { "ES", "NQ", "CL", "GC", "HG", "NG", "EU" }) { Setup M; setup(m, ASK, M); if (M.zi >= 0 && M.E.zones[(size_t)M.zi].drawn && !M.E.zones[(size_t)M.zi].q) ++drawnAll; }
+        CHECK(drawnAll == 7, "(1.2.0) the near offer zone is drawn in all 7 markets with the same rule");
+    }
+    // 18) LOG ONLY: FAST / DRIFT arrival, EATEN, STEPPED (A / W / S lines; nothing drawn)
+    {   Setup U; setup("ES", ASK, U); Engine& E = U.E; const Tick px = U.px; long long t = U.tEnd + 1000;
+        E.onEvent(FILL, BID, U.c - 10, 1, 901, t);                                 // a print 1 s in: 0.6 ATR below the band edge... (px-5 - (c-10)) = 27 ticks = 1.35 ATR
+        E.onEvent(NEW, ASK, px - 4, 3, 5001, t + 20000); E.onEvent(FILL, BID, px - 4, 3, 5001, t + 20000);   // the first print in the band 20 s later
+        const Zone& z = E.zones[(size_t)U.zi];
+        CHECK(z.tContact == t + 20000 && z.arrival == 1 && countRows(E.rows, "A|" + std::to_string(z.id) + "|") == 1, "FAST: 1.35 ATR in the 60 s before contact (>= 0.77 for ES), A line");
+        E.onEvent(NEW, ASK, px - 3, 3, 5002, t + 60000); E.onEvent(FILL, BID, px - 3, 3, 5002, t + 60000);   // still inside 40 s later
+        E.onEvent(NEW, BID, U.c, 3, 5003, t + 61000); E.onEvent(FILL, ASK, U.c, 3, 5003, t + 61000);         // leaves the band
+        CHECK(z.dwellMs == 41000 && z.eaten && countRows(E.rows, "W|" + std::to_string(z.id) + "|") == 1, "EATEN: 41 s inside the band (> 30 s), W line");
+        E.closeBar(bar(U, U.c, px - 3, U.c - 2, px - 8), 45);                                       // close back: the turn
+        E.onEvent(MOD, ASK, px - 1, 60, 77, U.tEnd + 20000);                                        // re-priced 1 tick TOWARD price after the turn
+        CHECK(z.stepped && countRows(E.rows, "S|" + std::to_string(z.id) + "|") == 1 && E.tally.stepped == 1, "STEPPED: the same id re-priced toward price after the close back, S line");
+        Setup V; setup("HG", ASK, V); long long tv = V.tEnd + 1000;
+        V.E.onEvent(NEW, ASK, V.px - 6, 2, 6001, tv); V.E.onEvent(FILL, BID, V.px - 6, 2, 6001, tv);
+        V.E.onEvent(NEW, ASK, V.px - 4, 2, 6002, tv + 50000); V.E.onEvent(FILL, BID, V.px - 4, 2, 6002, tv + 50000);
+        CHECK(V.E.zones[(size_t)V.zi].arrival == 3, "DRIFT: 2 ticks = 0.1 ATR in the 60 s before contact (<= 0.37 for HG)");
+        std::vector<std::string> rec = E.rows; Engine R5; long long b5 = -1; R5.restore(rec, &b5);
+        CHECK(b5 == 0 && R5.zones[(size_t)U.zi].arrival == 1 && R5.zones[(size_t)U.zi].eaten && R5.zones[(size_t)U.zi].stepped, "the log-only lines read back (no double logging after a restart)");
     }
     std::printf("LmtZonesLogic %s: %d passed, %d failed\n", VERSION, P, F);
     return F ? 1 : 0;
