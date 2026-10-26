@@ -41,7 +41,7 @@ int main() {
     for (int k = 0; k <= 45; ++k) h.bars.push_back(barFor(k));
     Ind* p = make(); for (int r = 0; r < 4; ++r) { NOW += 1500; p->calc(0); p->draw(); }
     BASState* S = p->testState();
-    CHECK(S && std::string(BAS_VERSION) == "1.28.0" && std::string(sab::VERSION) == "1.0.0", "lsBidAskStats 1.28.0 with SharedAbsorb 1.0.0");
+    CHECK(S && std::string(BAS_VERSION) == "1.33.0" && std::string(sab::VERSION) == "1.0.0", "lsBidAskStats 1.33.0 with SharedAbsorb 1.0.0");
     const std::string recPath = flex + "\\SharedAbsorb\\SAB-ES-60.csv";
     std::string rec = readAll(recPath);
     std::vector<std::string> lines; { std::stringstream ss(rec); std::string ln; while (std::getline(ss, ln)) if (ln.compare(0, 4, "SAB|") == 0) lines.push_back(ln); }

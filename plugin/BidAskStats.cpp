@@ -197,7 +197,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.32.0"          // 1.32.0 (2026-10-23 4-step stage revamp) new D letter (MBO CVD divergence, Trapped strip) + the attack average fill " vw" in S / K / L nums for the Reversal Stage underwater measure; // was 1.31.0:          // 1.30.0 (2026-10-22 evening fix build) compact strips (LetterStrips 1.1.0: 11 px per strip), bars >= 50% of the pane (OrderFlowFeed 1.15.0 pairPx floor), the Implied row one line "Implied: 0% of volume";          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.33.0"          // 1.33.0 (2026-10-25, BUILD-SPEC "Attacker pane: bars + S only", Rassul approved 22:29 CT) the pane draws the buy / sell bars and ONE letter strip with the S letter only (one order swept 3+ prices); K / L / R / Tr / D / E / G / PB are still decided and written to the letter + EV records (the Reversal Stage and the nightly read them) but not drawn; the E pace stays in the S hover; new settings row "S letter" (file field 10); // 1.32.0 (2026-10-23 4-step stage revamp) new D letter (MBO CVD divergence, Trapped strip) + the attack average fill " vw" in S / K / L nums for the Reversal Stage underwater measure; // was 1.31.0:          // 1.30.0 (2026-10-22 evening fix build) compact strips (LetterStrips 1.1.0: 11 px per strip), bars >= 50% of the pane (OrderFlowFeed 1.15.0 pairPx floor), the Implied row one line "Implied: 0% of volume";          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -210,7 +210,7 @@ static const COLOR C_ASK_BAR = 0x001F9D55, C_BID_BAR = 0x00962D2D;     // normal
 static const COLOR C_ASK_SPIKE = 0x0000FF00, C_BID_SPIKE = 0x00FF3B3B; // spikes: bright green (buyers) / bright red (sellers)
 static const COLOR C_BIG_LOT = 0x0000FFFF;                            // (1.14.0) the Big Lot cap: cyan = Big Lot in lsBigBidAsk too
 static const int BIG_LOT_CAP_PX = 3;
-static const int BAS_BADGE_H = 2 * lst::ROW_H + 2;   // (1.28.0) the two letter strips under the question line (bars start below them); 1.26.0: one 16 px badge row
+static const int BAS_BADGE_H = 1 * lst::ROW_H + 2;   // (1.33.0) ONE strip (S only); was 2 * lst::ROW_H + 2 -   // (1.28.0) the two letter strips under the question line (bars start below them); 1.26.0: one 16 px badge row
 static const COLOR C_SR_GREEN = 0x00168A42, C_SR_RED = 0x00E0242A;     // (1.4.0) the R mark's letter on its white box (readable on white)
 static const size_t MAX_HOVER_WNDS = 8;
 static const int BAS_NUMS = 4 + off::REC_NUMS;                         // session record: bid|ask|bbid|bask + the order-feed numbers
@@ -239,19 +239,25 @@ using off::coord; using off::flexDir; using off::makeDir; using off::fileStamp; 
 #ifndef BAS_DEFAULT_MODE
 #define BAS_DEFAULT_MODE off::MODE_READ   // (1.5.2) a 2 / 3 / 5-field file (1.5.1 and before) = Read; the 1.4 / 1.5 host suites build with Numbers
 #endif
-struct BasPanel { int dx = 0, dy = 0, mode = BAS_DEFAULT_MODE, bigLot = blt::CHOICE_DEFAULT; };   // (1.14.0) field 9: Big Lot mark 0-3       // (1.5.2) fields 6-8
+struct BasPanel { int dx = 0, dy = 0, mode = BAS_DEFAULT_MODE, bigLot = blt::CHOICE_DEFAULT, showS = 1; };   // (1.33.0) field 10: S letter 0 / 1   // (1.14.0) field 9: Big Lot mark 0-3       // (1.5.2) fields 6-8
 static bool parseSettings(const std::string& line, int& rb, int& pos, bas::SpikeCfg* spike = nullptr, BasPanel* panel = nullptr) {
-    if (line.empty() || line.size() > 52) return false;
+    if (line.empty() || line.size() > 54) return false;   // (1.33.0) 52 -> 54: field 10
     std::vector<std::string> f; size_t a = 0;
     for (;;) { const size_t c = line.find(',', a); f.push_back(line.substr(a, c == std::string::npos ? std::string::npos : c - a)); if (c == std::string::npos) break; a = c + 1; }
     BasPanel bpn;
+    int showS = 1;
+    if (f.size() == 10) {                                                  // (1.33.0) + S letter (a 9-field file = shown)
+        if (f[9] != "0" && f[9] != "1") return false;
+        showS = f[9] == "1" ? 1 : 0; f.resize(9);
+    }
+    bpn.showS = showS;
     if (f.size() == 9) {                                                   // (1.14.0) + Big Lot mark (an 8-field file = the default BL5)
         if (f[8].size() != 1 || f[8][0] < '0' || f[8][0] > '3') return false;
         bpn.bigLot = f[8][0] - '0'; f.resize(8);
     }
     if (f.size() == 8) {                                                   // (1.5.2) Offset X, Offset Y, Box shows
         if (!bp::intTok(f[5], bpn.dx) || !bp::intTok(f[6], bpn.dy) || !bp::offOk(bpn.dx) || !bp::offOk(bpn.dy) || (f[7] != "0" && f[7] != "1")) return false;
-        const int bl = bpn.bigLot; bpn.mode = f[7] == "1" ? off::MODE_NUMBERS : off::MODE_READ; bpn.bigLot = bl; f.resize(5);
+        const int bl = bpn.bigLot; bpn.mode = f[7] == "1" ? off::MODE_NUMBERS : off::MODE_READ; bpn.bigLot = bl; bpn.showS = showS; f.resize(5);
     }
     if (f.size() != 2 && f.size() != 3 && f.size() != 5) return false;
     const size_t maxLen5[5] = { 3, 1, 3, 3, 2 }, maxLen3[3] = { 3, 1, 3 };
@@ -331,7 +337,7 @@ struct BASState {
     std::string chartKey; long long mstBar = 0, mstCt = 0, mstMs = -1, mstPosts = 0; std::map<std::string, std::string> mstKv;
     // (1.14.0) the Big Lot mark: the setting, the market's RTH, the history book (+ its file), each closed candle's mark decided once,
     // this session's record of candles >= BL20 (read back after a restart: the marks stay exactly as decided)
-    int bigLot = blt::CHOICE_DEFAULT, openMin = 510, closeMin = 900;
+    int bigLot = blt::CHOICE_DEFAULT, openMin = 510, closeMin = 900; int showS = 1;   // (1.33.0) S letter
     blt::Book blBook; bool blLoaded = false; std::string blWritten; size_t blBarsN = (size_t)-1; long long blLast = -1;
     std::map<long long, blt::Mark> blMarks;
     std::string blSession; std::map<long long, std::string> blRows; std::map<long long, blt::Mark> blFile; std::string blRowsWritten; long long blRejected = 0;
@@ -635,7 +641,7 @@ void BidAskStats::settings(BASState& S, long long now) {
     int rb = bas::RATIO_DEFAULT, pos = bas::POS_DEFAULT; bas::SpikeCfg sc; BasPanel pn;
     if (st >= 0 && !ln.empty()) { int r = 0, q = 0; bas::SpikeCfg c; BasPanel b2; if (parseSettings(ln, r, q, &c, &b2)) { rb = r; pos = q; sc = c; pn = b2; } }
     if (pos != S.pos) { S.lastBox = bp::Box(); S.inBox = false; }   // (1.5.2) moved: no stale rect
-    S.pos = pos; S.dlgSpike = sc; S.dx = 0; S.dy = 0; S.bigLot = pn.bigLot;   // (1.14.0) Big Lot mark: frozen numbers, a change only changes what is shown   // (1.13.3) a saved Offset X / Y is ignored (the 9-spot Position only)           // (1.13.0) the file's 8th field (old Box shows) is read and ignored
+    S.pos = pos; S.dlgSpike = sc; S.dx = 0; S.dy = 0; S.bigLot = pn.bigLot; S.showS = pn.showS;   // (1.14.0) Big Lot mark: frozen numbers, a change only changes what is shown   // (1.13.3) a saved Offset X / Y is ignored (the 9-spot Position only)           // (1.13.0) the file's 8th field (old Box shows) is read and ignored
     const bas::SpikeCfg eff = effSpike(sc, S.params.load.p);
     const bool reratioed = rb != S.ratioBars;
     if (reratioed) { S.ratioBars = rb; S.ser.reratio(rb); }
@@ -656,6 +662,7 @@ static ss::Values basValues(const BasFile& F) {
     ss::Values V = ss::defaults(ofset::bidAskSpec(), -1);
     V.v[ofset::bask::K_RATIO_BARS] = F.rb; V.v[ofset::bask::K_POSITION] = F.pos; V.v[ofset::bask::K_SPIKE_AVG] = F.sc.avgT / 10.0;
     V.v[ofset::bask::K_BIG_LOT] = F.pn.bigLot;                         // (1.14.0)
+    V.v[ofset::bask::K_SHOW_S] = F.pn.showS;                           // (1.33.0)
     return V;
 }
 int BidAskStats::parmsLoadBody(void) {
@@ -671,13 +678,13 @@ void BidAskStats::saveSettings() {
     const ss::Values V = ss::readDialog(this, ofset::bidAskSpec(), basIds(), basValues(F), snap_);   // untouched -> the file's value; invalid never saved
     // (1.13.0) the file keeps its 8-field layout (older builds read it): the jump / lookback / Box shows fields carry the file's values unchanged
     const int rb = V.i(ofset::bask::K_RATIO_BARS), pos = V.i(ofset::bask::K_POSITION), sa = ofset::tenths(V.f(ofset::bask::K_SPIKE_AVG)), sj = F.sc.jumpT, sl = F.sc.lookback;
-    const int dx = 0, dy = 0, bl = V.i(ofset::bask::K_BIG_LOT);   // (1.13.3) no offsets: the 9-spot Position only; (1.14.0) Big Lot mark
+    const int dx = 0, dy = 0, bl = V.i(ofset::bask::K_BIG_LOT), sS = V.b(ofset::bask::K_SHOW_S) ? 1 : 0;   // (1.13.3) no offsets: the 9-spot Position only; (1.14.0) Big Lot mark
     const int mode = F.pn.mode == off::MODE_NUMBERS ? off::MODE_NUMBERS : off::MODE_READ;
     if (bas::clampRatioBars(rb) < 0 || bl < 0 || bl > 3) return;
     if (bas::clampLineTenths(sa) < 0 || bas::clampLineTenths(sj) < 0 || bas::clampLookback(sl) < 0) return;   // never overwrite a saved choice
     makeDir(flexDir());
     publishFile(p, std::to_string(rb) + "," + std::to_string(pos) + "," + std::to_string(sa) + "," + std::to_string(sj) + "," + std::to_string(sl)
-                   + "," + std::to_string(dx) + "," + std::to_string(dy) + "," + std::to_string(mode) + "," + std::to_string(bl) + "\n");
+                   + "," + std::to_string(dx) + "," + std::to_string(dy) + "," + std::to_string(mode) + "," + std::to_string(bl) + "," + std::to_string(sS) + "\n");
     snap_.take(ss::dialogNow(this, ofset::bidAskSpec(), basIds(), V));
     BASState* S = slot_.get(this, false);
     if (S) { S->settingsCheckMs = -1; S->settingsStamp = -2; S->settingsText = "\x01"; }
@@ -1806,7 +1813,8 @@ void BidAskStats::badgeRow(BASState& S, const off::PaneGeo& g, int v0, int v1, i
     (void)slot;
     S.badgeHit.clear();
     const int y0 = g.top + g.reserve + 1;
-    if (y0 + lst::STRIPS * lst::ROW_H + 10 > g.bottom) { S.badgeTip = -1; return; }   // pane too short
+    const int NS = 1;                                                      // (1.33.0) one strip: the S letter only
+    if (y0 + NS * lst::ROW_H + 10 > g.bottom) { S.badgeTip = -1; return; }   // pane too short
     RTARRAY hi(barHigh), lo(barLow);
     struct C { int i; long long key; int xc; std::vector<lst::Lt> v; lst::Pick pk; };
     std::vector<C> cs;
@@ -1822,16 +1830,17 @@ void BidAskStats::badgeRow(BASState& S, const off::PaneGeo& g, int v0, int v1, i
         C c; c.i = i; c.key = key; c.xc = xc; candleLetters(S, key, isHigh, isLow, c.v); if (c.v.empty()) continue;
         c.pk = lst::pick(lst::ATK, c.v); cs.push_back(c);
     }
-    off::fillFlat(this, g.left, y0, g.edge, y0 + lst::STRIPS * lst::ROW_H, (COLOR)0x000B0F15);
-    off::fillFlat(this, g.left, y0 + lst::STRIPS * lst::ROW_H, g.edge, y0 + lst::STRIPS * lst::ROW_H, (COLOR)0x00374151);
+    off::fillFlat(this, g.left, y0, g.edge, y0 + NS * lst::ROW_H, (COLOR)0x000B0F15);
+    off::fillFlat(this, g.left, y0 + NS * lst::ROW_H, g.edge, y0 + NS * lst::ROW_H, (COLOR)0x00374151);
     FONT f; f.id = HELVETICA; f.size = 8; f.style = BOLD;
-    for (int s = 0; s < lst::STRIPS; ++s) {
+    for (int s = 0; s < NS; ++s) {
         const int yr = y0 + s * lst::ROW_H;
         FONT fl = f; fl.style = PLAIN; setFont(fl); setTextColor(C_BORDER);
         { RCT rc; rc.set(off::coord(g.left + 3), off::coord(yr), off::coord(g.left + lst::LABEL_W), off::coord(yr + lst::ROW_H)); rc.drawText(lst::stripName(lst::ATK, s), false, false); }
         setFont(f);
         std::vector<lst::Item> items; std::vector<size_t> idx;
-        for (size_t k = 0; k < cs.size(); ++k) { if (cs[k].pk.shown[s] < 0) continue; lst::Item it; it.xc = cs[k].xc; it.w = (int)getTextWidth(cs[k].v[(size_t)cs[k].pk.shown[s]].code.c_str(), -1) + 1; items.push_back(it); idx.push_back(k); }
+        for (size_t k = 0; k < cs.size(); ++k) { if (cs[k].pk.shown[s] < 0) continue; if (!S.showS || cs[k].v[(size_t)cs[k].pk.shown[s]].code != "S") continue;   // (1.33.0) S only
+            lst::Item it; it.xc = cs[k].xc; it.w = (int)getTextWidth(cs[k].v[(size_t)cs[k].pk.shown[s]].code.c_str(), -1) + 1; items.push_back(it); idx.push_back(k); }
         const std::vector<lst::Placed> pl = lst::placeStrip(items, g.left + lst::LABEL_W, g.edge);
         for (size_t q = 0; q < pl.size(); ++q) {
             if (!pl[q].drawn) { ++S.stripSkipped; continue; }
@@ -1840,7 +1849,9 @@ void BidAskStats::badgeRow(BASState& S, const off::PaneGeo& g, int v0, int v1, i
             if (box && pl[q].l < box->r && pl[q].r > box->l && t < box->b && b > box->t) { ++S.stripSkipped; continue; }   // never over the box
             setTextColor(l.colour == lst::GREEN ? C_ASK : C_BID);
             RCT rc; rc.set(off::coord(pl[q].l), off::coord(t), off::coord(pl[q].r + 1), off::coord(b)); rc.drawText(l.code.c_str(), false, false);
-            off::IconRect ir; ir.l = pl[q].l; ir.t = t; ir.r = pl[q].r; ir.b = b; S.badgeHit.push_back(std::make_pair(ir, stripTipText(S, c.key, s, c.v, c.pk)));
+            off::IconRect ir; ir.l = pl[q].l; ir.t = t; ir.r = pl[q].r; ir.b = b; std::string tip = stripTipText(S, c.key, s, c.v, c.pk);
+            for (const lst::Lt& e : c.v) if (e.code == "E") tip += "\n\nE  Attack pace (hover only, not drawn): " + e.nums;   // (1.33.0) E pace lives in the S hover
+            S.badgeHit.push_back(std::make_pair(ir, tip));
             ++S.stripsDrawn;
         }
     }
@@ -2101,6 +2112,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.32.0");   // BAS_VERSION
+    p->setVersion("1.33.0");   // BAS_VERSION
     return p;
 }
