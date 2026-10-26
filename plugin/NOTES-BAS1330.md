@@ -14,4 +14,4 @@
 - tests_aggbook/test_attack_126_host: 44/44 - S drawn, K / L / R not drawn, one strip label, S hover with the E pace, no repaint, restart.
 - tests_aggbook/test_aggbook_114_host (Big Lot): 30/30. tests_sab: 17/17 (stale 1.28.0 pin moved).
 - Settings contract 43,863 checks, 0 failures. MinGW with the real irtsdk.h: 0 errors.
-- Pre-existing, not from this build: tests_aggbook/test_aggbook_113 version pins.
+- tests_aggbook/test_aggbook_113: 182/182 (its stale version / settings pins moved with this build, + the S letter row).

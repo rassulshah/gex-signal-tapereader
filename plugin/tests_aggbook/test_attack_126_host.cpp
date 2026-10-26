@@ -131,7 +131,7 @@ int main() {
         CHECK(!q, "no '?' anywhere on the pane (letters, message / read line) except the question itself");
         CHECK(!aDrawn, "(1.28.0) no A on the attacker pane (Defense pane only)");
         CHECK(!border, "(1.28.0) no boxes / borders around the letters"); }
-    {   bool la = false, lr = false; for (auto& d : h.draws) if (d.type == "text") { la = la || d.text == "Attack"; lr = lr || d.text == "Running out"; }
+    {   bool la = false, lr = false; for (auto& d : h.draws) if (d.type == "text") { la = la || d.text == "Attack"; lr = lr || d.text == "Trapped"; }
         CHECK(la && !lr, "(1.33.0) one strip label at the left: Attack"); }
     {   const off::IconRect* r = hitOf(kX, 0);
         CHECK(r && r->t >= sy0 && r->b <= sy0 + lst::ROW_H, ("(1.33.0) the S letter sits in the one strip (" + std::to_string(r ? r->t : -1) + ")").c_str());
@@ -150,7 +150,6 @@ int main() {
             std::string joined; for (auto& d : h.draws) if (d.type == "text" && d.x >= S->lastTip.l && d.r <= S->lastTip.r + 1 && d.y >= S->lastTip.t && d.y <= S->lastTip.b) {
                 if (d.text.compare(0, 5, "     ") == 0) joined += " " + d.text.substr(5); else joined += "\n" + d.text; }
             auto has = [&](const std::string& t) { return joined.find(t) != std::string::npos; };
-            if (std::getenv("ATK_J")) std::printf("JOINED<<%s>>\n", joined.c_str());
             CHECK(has("Attack: S") && has("Question: who is attacking this level"), "(1.33.0) hover header: the S strip, its letter, the strip question");
             CHECK(has("E  Attack pace (hover only, not drawn): executed pace 0.02x after extreme") && has("Hover only:  E fading"), "(1.33.0) the E pace is in the S hover (not drawn)");
             CHECK(has("S  Sweep of the leg") && !has("R  Stop run") && !has("G  Giving up"), "(1.33.0) the S hover: its strip's blocks; R / Tr / G are log only");

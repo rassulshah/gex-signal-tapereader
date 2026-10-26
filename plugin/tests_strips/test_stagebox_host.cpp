@@ -32,7 +32,7 @@ int main() {
     h.now = keyOf(26) + 5;
     Ind* p = static_cast<Ind*>(CreateExtension()); p->setup(); p->calc(0);
     RSState* S = p->stateFor();
-    CHECK(S && std::string(RS_VERSION) == "2.1.0" && std::string(rsl::VERSION) == "2.1.0" && std::string(rsset::PLUGIN_VERSION) == "2.1.0" && std::string(sbx::VERSION) == "1.0.0", "versions 2.1.0 / StageBox 1.0.0");
+    CHECK(S && std::string(RS_VERSION) == "2.1.1" && std::string(rsl::VERSION) == "2.1.1" && std::string(rsset::PLUGIN_VERSION) == "2.1.1" && std::string(sbx::VERSION) == "1.0.0", "versions 2.1.1 / StageBox 1.0.0");
     // the attempt as the engine records it + its letters (injected: the engine itself is covered by its own tests)
     for (int k = 22; k <= 23; ++k) { rsl::Step s; s.key = (long long)keyOf(k); s.side = rsl::LOW; s.start = (long long)keyOf(22); s.ext = 27960; s.stage = 2; s.status = rsl::FORMING; s.story = "bids 7,752 > offers 6,316~2,169 lots taken, Q 117%~~"; S->steps[s.key] = s; }
     { rsl::Ev e; e.key = (long long)keyOf(22); e.pane = lst::ATK; e.l.code = "E"; e.m.pace100 = 40; S->evs.insert(std::make_pair(e.key, e)); }
@@ -77,6 +77,6 @@ int main() {
     CHECK(S->boxes.size() == 1 && S->boxes[0].letters == "1 2 3 C" && S->boxes[0].decided, "the decided box never changes with later bars");
     { const ss::Spec& SP = rsset::spec(); CHECK(SP.paramVersion == 2 && std::string(SP.rows[rsset::K_COL_WARN].key) == "col_warn" && std::string(SP.rows[rsset::K_SHOW_NOW].label) == "Stage info box", "settings rows: Stage info box, F? warning colour, parameter version 2"); }
     p->destroy();
-    std::printf("lsReversalStage 2.1.0 stage box host: %d passed, %d failed\n", passes, fails);
+    std::printf("lsReversalStage 2.1.1 stage box host: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

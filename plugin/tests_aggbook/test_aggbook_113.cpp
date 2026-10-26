@@ -227,14 +227,15 @@ static void versions(const std::string& dir) {
     // (2026-10-18 settings layer) the window rows live in OrderFlowPaneSettings.h (one table per pane; registered by SettingsHost.h)
     const std::string t = slurp(dir + "/OrderFlowPaneSettings.h");
     const std::string ta = t.substr(0, t.find("bookFlowSpec")), tb = t.substr(t.find("bookFlowSpec"));
-    EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.32.0"); EQS(ofset::BAS_VERSION, bas::VERSION);   // (1.13.2 settings layer; 1.14.0 Big Lot mark)
-    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.27.0"); EQS(ofset::BF_VERSION, bf::VERSION);
+    EQS(between(a, "#define BAS_VERSION \""), bas::VERSION); EQS(between(a, "p->setVersion(\""), bas::VERSION); EQS(bas::VERSION, "1.33.0"); EQS(ofset::BAS_VERSION, bas::VERSION);   // (1.13.2 settings layer; 1.14.0 Big Lot mark)
+    EQS(between(b, "#define BF_VERSION \""), bf::VERSION); EQS(between(b, "p->setVersion(\""), bf::VERSION); EQS(bf::VERSION, "1.28.0"); EQS(ofset::BF_VERSION, bf::VERSION);
     // every dialog row the chart reads; the removed rows are gone
     CHECK(ta.find("\"Spike vs prior biggest\"") == std::string::npos && ta.find("\"Box shows\"") == std::string::npos && ta.find("\"Spike lookback\"") == std::string::npos && ta.find("\"Spike vs average\"") != std::string::npos);
     CHECK(tb.find("\"Spike vs prior biggest\"") == std::string::npos && tb.find("\"Box shows\"") == std::string::npos && tb.find("\"Spike lookback\"") == std::string::npos && tb.find("\"Spike vs average\"") != std::string::npos);
-    CHECK(ofset::bidAskSpec().paramVersion == 6 && ofset::bookFlowSpec().paramVersion == 4 && a.find("ss::registerAll(this, ofset::bidAskSpec()") != std::string::npos && b.find("ss::registerAll(this, ofset::bookFlowSpec()") != std::string::npos);
+    CHECK(ofset::bidAskSpec().paramVersion == 7 && ofset::bookFlowSpec().paramVersion == 4 && a.find("ss::registerAll(this, ofset::bidAskSpec()") != std::string::npos && b.find("ss::registerAll(this, ofset::bookFlowSpec()") != std::string::npos);
     {   const ss::Spec& A = ofset::bidAskSpec(); const int k = ss::find(A, "big_lot");   // (1.14.0) the Big Lot mark row: Off / BL5 / BL10 / BL20, default BL5, on the Position line
-        CHECK(k == A.n - 1 && A.rows[k].type == ss::T_LIST && A.rows[k].def == 1 && A.rows[k].hi == 3 && A.rows[k].same && !A.rows[k].hidden && ss::check(A).empty() && ss::visibleLines(A) == 1);
+        CHECK(k == A.n - 2 && A.rows[k].type == ss::T_LIST && A.rows[k].def == 1 && A.rows[k].hi == 3 && A.rows[k].same && !A.rows[k].hidden && ss::check(A).empty() && ss::visibleLines(A) == 2);   // (BAS 1.33.0) + the S letter row after it
+        { const int ks = ss::find(A, "show_s"); CHECK(ks == A.n - 1 && A.rows[ks].type == ss::T_BOOL && A.rows[ks].def == 1 && !A.rows[ks].hidden); }
         CHECK(a.find("K_BIG_LOT") != std::string::npos); }
     CHECK(a.find("mst::publish(\"AGG\"") != std::string::npos && a.find("mst::clear(\"AGG\"") != std::string::npos);
     CHECK(b.find("mst::publish(\"BOOK\"") != std::string::npos && b.find("mst::clear(\"BOOK\"") != std::string::npos);
@@ -272,7 +273,7 @@ static void fixBuild() {
         CHECK(mx >= 800 / 0.9 - 1 && mx <= 800 / 0.5 + 1);                          // axis top ~ the tallest bar / (0.5 - 0.9): never 20,000 vs 800-lot bars
     }
     CHECK(off::pairPx(100, 90) >= 50);                                              // even a huge reserve keeps half the pane
-    CHECK(lst::ROW_H == 11 && lst::SUB_ROWS == 1 && std::string(lst::VERSION).compare(0, 5, "1.3.0") == 0);
+    CHECK(lst::ROW_H == 11 && lst::SUB_ROWS == 1 && std::string(lst::VERSION).compare(0, 5, "1.4.0") == 0);
     imp::Params P; P.fromFile = true; off::InfoRow r;
     CHECK(off::impliedRow(P, 1000, 0, r) && r.wide && r.label == "Implied: 0% of volume" && r.v[0].empty() && r.v[1].empty());
     off::Info I; I.twoCol = true; I.colHead[0] = "Buyers"; I.colHead[1] = "Sellers";

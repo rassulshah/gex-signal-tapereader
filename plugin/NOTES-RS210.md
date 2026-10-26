@@ -1,4 +1,4 @@
-# lsReversalStage 2.1.0 (StageBox.h 1.0.0) - 2026-10-25, Rassul approved the Reversal Stage info box 22:51 CT (stage-box-mockup.html)
+# lsReversalStage 2.1.1 (StageBox.h 1.0.0) - 2026-10-25, Rassul approved the Reversal Stage info box 22:51 CT (stage-box-mockup.html)
 
 ## What changed (display only - the 4-step engine and the RS3 record are unchanged)
 - The pane shows the letters **1 2 3 C** on each pivot bar (bottom row of the pane) instead of the staircase: 1 Trap, 2 Collision,
@@ -30,7 +30,8 @@
 - tests_strips/test_stagebox_host.cpp (plugin on the mock host): 18/18 - letters drawn green on the pivot bar, box title / names /
   values / thresholds, drawn check marks, legend, status line, hover in his format, params file, F? amber row, settings on / off,
   colour setting, parameter version 2.
-- tests_strips: strips 1301, core 117, transport 45 unchanged. test_stage_pipeline 14/18 (4 pre-existing failures since 2.0.0).
+- tests_strips: strips 1303, core 119, transport 45, test_stage_pipeline 18/18 (its display check now reads the stage box), replay 0 repaint differences.
+- 2.1.1: the C row reads the H ratio as lots / attack when the evidence carries no ratio.
 - Settings contract 43,674 checks, 0 failures. MinGW with the real irtsdk.h: 0 errors. tools/gex-build.bat hashes StageBox.h
   (dependency check 349 passed).
 

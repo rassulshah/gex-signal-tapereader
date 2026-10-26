@@ -15,7 +15,7 @@
 - tests_aggbook/test_defenselines_host: 56/56 (6 new: 1 px, dot skipped with the fill file, status, setting off = dot back, width 3, file gone = dots back, no P_DOT in the source). test_trails_host 32/32. DefenseTurn 81, G/Tr/W 77, EffortReward 28, build dependencies 348.
 - tests_oln/test_oln_host (LP): 25/25 (new: LRA-OrderFills-ES-180.txt = one F line, the fill candle's key). LP host regressions unchanged (lmz 34, lqp044 21; lqp453 1 / lqp461 2 failures are the same as on 0.54.1).
 - Settings contract: 43,482 checks, 0 failures. MinGW with the real irtsdk.h: 0 errors (DefenseLines, LiquidityProfile).
-- Pre-existing, not from this build: tests_aggbook/test_aggbook_113 version pins (BookFlow 1.31.0 / BidAskStats 1.26.0).
+- tests_aggbook/test_aggbook_113 is fixed in the lsBookFlow 1.28.0 / lsBidAskStats 1.33.0 commit (182/182).
 
 ## Verify on his chart
 - Titles: lsDefenseLines 1.12.0, lsLiquidityProfile 0.55.1. A refill line at the same price as an order line: thin, no yellow dot on a candle

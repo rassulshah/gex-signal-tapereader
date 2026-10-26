@@ -30,6 +30,8 @@ int main() {
       CHECK(p.order[1].size() == 2 && v[(size_t)p.order[1][1]].code == "X"); }
     CHECK(lst::stripOf(lst::ATK, "A") < 0);              // the shared A is not on the attacker pane
     CHECK(lst::stripOf(lst::DEF, "S") < 0 && lst::stripOf(lst::DEF, "Tr") < 0 && lst::stripOf(lst::DEF, "G") < 0);
+    CHECK(lst::stripOf(lst::DEF, "F?") == 1 && lst::rankOf(lst::DEF, "F?") == 0 && lst::rankOf(lst::DEF, "H") == 1 && lst::rankOf(lst::DEF, "X") == 3);   // (1.4.0) F? first on the Release strip
+    { std::vector<lst::Lt> v; v.push_back(lst::make(lst::DEF, "H", lst::LOW, -1, "")); v.push_back(lst::make(lst::DEF, "F?", lst::LOW, -1, "")); const lst::Pick pk = lst::pick(lst::DEF, v); CHECK(pk.shown[1] == 1); }   // F? beats H
     // ---- colour: the side that acts
     CHECK(lst::make(lst::ATK, "K", lst::HIGH, -1).colour == lst::GREEN);   // buyers attacking a high
     CHECK(lst::make(lst::ATK, "S", lst::LOW, -1).colour == lst::RED);      // sellers sweeping into a low

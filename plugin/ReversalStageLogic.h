@@ -30,7 +30,7 @@
 
 namespace rsl {
 
-static const char* const VERSION = "2.1.0";   // (2.1.0) display only: letters 1 2 3 C + the stage info box (StageBox.h); the engine / record unchanged //   // (2.0.0, 2026-10-23) the 4-step model: gate + Trap / Collision / Trapped / Release + result; D divergence, attackers underwater // (1.3.0) typed MBO evidence engine + Q at the own extreme
+static const char* const VERSION = "2.1.1";   // (2.1.0) display only: letters 1 2 3 C + the stage info box (StageBox.h); the engine / record unchanged //   // (2.0.0, 2026-10-23) the 4-step model: gate + Trap / Collision / Trapped / Release + result; D divergence, attackers underwater // (1.3.0) typed MBO evidence engine + Q at the own extreme
 enum { LOW = lst::LOW, HIGH = lst::HIGH };
 enum Status { NONE = 0, FORMING = 1, FAILED = 2, COMPLETE = 3, EXPIRED = 4 };
 enum Step4 { TRAP = 1, COLLISION = 2, TRAPPED = 3, RELEASE = 4, STEPS = 4 };

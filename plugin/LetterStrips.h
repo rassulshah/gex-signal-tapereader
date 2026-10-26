@@ -36,7 +36,8 @@
 
 namespace lst {
 
-static const char* const VERSION = "1.3.0";   // 1.3.0 (2026-10-23, the 4-step stage revamp): strips renamed Attack / Trapped (attacker) and Floor / Release (Defense); new D (MBO CVD divergence) in Trapped
+static const char* const VERSION = "1.4.0";   // 1.4.0 (2026-10-26): F? (the pivot dies at once, FMirror.h) on the Defense Release strip, strongest of that strip
+// was:   // 1.3.0 (2026-10-23, the 4-step stage revamp): strips renamed Attack / Trapped (attacker) and Floor / Release (Defense); new D (MBO CVD divergence) in Trapped
 // was:   // 1.2.0 (2026-10-23 MBO review merge): E (attack pace faded to half) in Running-out, Q! (queue broke / drained) shown as a warning first // 1.1.0: compact strips (ROW_H 11, one row per strip)
 enum { LOW = 0, HIGH = 1 };                    // the pivot being built (= dt::LOW / dt::HIGH): LOW = a low pivot (green defenders)
 enum { GREEN = 0, RED = 1 };                   // the colour of the side that acts: buyers green, sellers red
@@ -59,7 +60,7 @@ inline const char* stripName(int pane, int strip) {
 inline int stripOf(int pane, const std::string& c) {
     if (pane == ATK) { if (c == "S" || c == "K" || c == "L") return 0; if (c == "R" || c == "Tr" || c == "D" || c == "E" || c == "G") return 1; return -1; }
     if (c == "A" || c == "Q" || c == "Q!" || c == "W" || c == "P" || c == "B") return 0;
-    if (c == "H" || c == "L" || c == "X") return 1;
+    if (c == "F?" || c == "H" || c == "L" || c == "X") return 1;   // (1.4.0) F?
     return -1;
 }
 // the fixed priority inside a strip: 0 = strongest. Approved 2026-10-22: Defense A > W > P > B (Q right after A), then H > L > X;
@@ -67,10 +68,10 @@ inline int stripOf(int pane, const std::string& c) {
 inline int rankOf(int pane, const std::string& c) {
     if (pane != ATK && c == "Q!") return -1; // never hide a broken/drained queue behind a positive A or Q
     static const char* const atk0[] = { "S", "K", "L" }; static const char* const atk1[] = { "R", "Tr", "D", "E", "G" };
-    static const char* const def0[] = { "A", "Q", "W", "P", "B" }; static const char* const def1[] = { "H", "L", "X" };
+    static const char* const def0[] = { "A", "Q", "W", "P", "B" }; static const char* const def1[] = { "F?", "H", "L", "X" };   // (1.4.0) F? first
     const int s = stripOf(pane, c); if (s < 0) return 99;
     const char* const* v = pane == ATK ? (s == 0 ? atk0 : atk1) : (s == 0 ? def0 : def1);
-    const int n = pane == ATK ? (s == 0 ? 3 : 5) : (s == 0 ? 5 : 3);
+    const int n = pane == ATK ? (s == 0 ? 3 : 5) : (s == 0 ? 5 : 4);
     for (int k = 0; k < n; ++k) if (c == v[k]) return k;
     return 99;
 }

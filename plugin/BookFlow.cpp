@@ -85,9 +85,13 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.27.0"          // 1.27.0 (2026-10-23 4-step stage revamp) Defense strips renamed Floor / Release (LetterStrips 1.3.0); // was 1.26.0:          // 1.25.0 (2026-10-22 evening fix build) compact strips, bars >= 50% of the pane, one-line Implied row, the Q hover hides the anchor token;          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.28.0"          // 1.28.0 (2026-10-26, BUILD-SPEC Defense pane, Rassul approved 22:29 CT 2026-10-25): F? (amber, FMirror.h 1.0.0: the pivot likely dies at once - attackers stacking in front + defenders pulling behind in the pivot bar's last 60 s, decided at its close, F lines in BookFlow\<MKT>-<spb>-fmirror.csv, drawn only with the per-market thresholds from lsFlexLevels\LRA-FMirror-<MKT>.csv); the shared A shows as grey "Ab", H as "Hb?" (defender colour) only after an Ab at the same pivot within 10 candles, L / X as "L?" / "X?" with the re-test hover (same order / new big order / small orders only, lots vs normal); letters coloured by meaning (bullish green / bearish red: W, B, X, Q! at a low = red); at most 2 codes per candle (one per strip); records unchanged // 1.27.0 (2026-10-23 4-step stage revamp) Defense strips renamed Floor / Release (LetterStrips 1.3.0); // was 1.26.0:          // 1.25.0 (2026-10-22 evening fix build) compact strips, bars >= 50% of the pane, one-line Implied row, the Q hover hides the anchor token;          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
+#include "FMirror.h"              // (1.28.0) F? the pivot dies at once
+#include "OrderLinesLogic.h"       // (1.28.0) the line floor = a "big order" in the re-test hover
+#include <set>
+struct BfZoneIds { std::set<long long> big; long long bigId = 0, bigLots = 0, maxLots = 0, n = 0; };   // (1.28.0) the re-test zone by order id
 #include "DefenseTurn.h"          // (1.12.0) the pivot turn marks + the refill line decisions (drawn on the price chart by lsDefenseLines)
 #include "DefenseLinesSettings.h" // (1.12.0) their show / colour settings (one file with lsDefenseLines)
 #include "SharedAbsorb.h"        // (1.22.0) the SHARED absorption A: the Defense badge A read from the one shared record
@@ -162,7 +166,11 @@ public:
         // (1.19.0, Middle Attacker #1) Tr: the Delta Profile's TR lines (its session record), read only; [side LOW / HIGH, candle key]
         std::map<std::pair<int, long long>, trapl::Rec> dtTr; std::map<std::string, long long> trOff; long long trMs = -1, trRead = 0, trBad = 0; std::string trPath;
         // (1.19.0, Top Defender #2) W: the key-level watch (fed by the engine's BookSink), the decided reads [candle key, level ticks], W lines
-        struct LwSink : off::BookSink { dt::LevelWatch* w = nullptr; void onBook(int kind, int side, off::Tick px, long long size, long long ts, long long key) { if (w) w->onBook(kind, side, (long long)px, size, ts, key); } };
+        struct LwSink : off::BookSink { dt::LevelWatch* w = nullptr; fmr::Acc* f = nullptr; void onBook(int kind, int side, off::Tick px, long long size, long long ts, long long key) { if (w) w->onBook(kind, side, (long long)px, size, ts, key); if (f) f->on(kind, side, (long long)px, size, ts); } };   // (1.28.0) + the F? window
+        // (1.28.0) F?: the classified adds / pulls of the last 2 minutes, the params, the decided reads [candle key], the F file
+        fmr::Acc fAcc; fmr::Params fPar; std::string fParPath, fPath; long long fParMs = -100000, fWritten = 0, fFails = 0, fArmed = 0; std::map<long long, fmr::Read> fReads;
+        // (1.28.0) the re-test hover: per pending re-test the big order ids in its zone at the turn, the decided classification [side, turn key]
+        std::map<std::pair<int, long long>, std::set<long long> > rtIdsAtTurn; std::map<std::pair<int, long long>, BfZoneIds> rtSnap; std::map<std::pair<int, long long>, std::string> rtInfo; std::string rtPath;
         dt::LevelWatch lw; LwSink lwSink; std::vector<dt::WLevel> lwLevels; std::map<std::pair<long long, long long>, dt::WRead> dtW; long long dtWWritten = 0;
         // (1.19.0) the badges' hover: each badge's rectangle and its text (letters, numbers, the letters with no room); the one under the mouse
         std::vector<std::pair<off::IconRect, std::string> > badgeHit; int badgeTip = -1; long long badgeDropped = 0;
@@ -259,6 +267,8 @@ public:
           << "\nAT_LEVEL," << (e ? std::to_string(e->lwLevels.size()) + " key levels watched, " + std::to_string(e->lw.touchesSeen) + " touches (" + std::to_string(e->lw.deduped) + " within 15 min), " + std::to_string(e->lw.open.size()) + " measuring, " + std::to_string(e->dtW.size()) + " decided (" + std::to_string(e->dtWWritten) + " written), W drawn at supports only" : std::string("n/a"))
           << "\nSTRIPS," << (e ? std::string(lst::VERSION) + ",drawn " + std::to_string(e->stripsDrawn) + ",skipped " + std::to_string(e->stripSkipped) + ",exported " + std::to_string(e->stripWritten) + ",export_fail " + std::to_string(e->stripFail) + ",queue Q read " + std::to_string(e->stripQRead) + " (" + std::to_string(e->stripQBad) + " bad) from " + e->stripQPath + ",file " + e->stripPath : std::string("n/a"))
           << "\nBADGES," << (e ? std::to_string(e->badgesDrawn) + " row draws, " + std::to_string(e->badgeDropped) + " badges with letters moved to the hover (max " + std::to_string(dt::BADGE_MAX) + "), hover no room " + std::to_string(e->badgeTipNoRoom) : std::string("n/a"))
+          << "\nF_MIRROR," << fmr::VERSION << "," << (e ? std::to_string(e->fReads.size()) + " pivot reads (" + std::to_string(e->fWritten) + " written here, " + std::to_string(e->fFails) + " write fails), F? armed " + std::to_string(e->fArmed) + ",thresholds " + (e->fPar.set() ? "front " + std::to_string(e->fPar.front).substr(0, 5) + " behind " + std::to_string(e->fPar.behind).substr(0, 5) : std::string("NOT SET (recorded, not drawn)")) + ",params " + e->fPar.why + ",file " + e->fPath : std::string("n/a"))
+          << "\nRETEST_IDS," << (e ? std::to_string(e->rtInfo.size()) + " classified (same order / new big order / small only), file " + e->rtPath : std::string("n/a"))
           << "\nMARKET_STATE,BOOK " << (!e || e->chart.empty() ? std::string("waiting for the chart label") : "bar " + std::to_string(e->mstBar ? e->mstCt : 0) + ",posts " + std::to_string(e->mstPosts) + ",keys " + std::to_string(e->mstKv.size()));
     }
     // the old panes' session records (StackStats\ and PullStats\), opened with the session, one row per decided candle, saved with the main record
@@ -286,6 +296,7 @@ public:
         off::PaneBar pk = bf::pullView(nb);  ps::Logic::decide(pk, P, false); e->pull.put(legacyRow(base, pk));
         decidedNet(S, key);                                                // (1.3.0) the net spike -> the BookFlow record + the Market State
         try { decideTurns(S, key, nb); } catch (...) {}                    // (1.12.0) the pivot turn of this closed candle, decided once
+        try { decideF(S, key); } catch (...) {}                            // (1.28.0) F? at the pivot-bar close, decided once
     }
     virtual void onAccClosed(S_& S, long long key, const off::Acc& a) { trackOn(S); Ext* e = ext(S); if (e) { fillAcc(e->dtc[key], a); e->dtc[key].t = key;
         // The aggregate record does not persist the cap / missing-aggressor flags.  Keep
@@ -299,7 +310,7 @@ public:
         e->mvByKey[key] = a.moves; while (e->mvByKey.size() > 60) e->mvByKey.erase(e->mvByKey.begin()); } }   // (1.17.0) the candle's confirmed moves
     // (1.17.0) the shared engine tracks order moves only for this pane (MoveLogic.h; size floor = the market's q90 of moves)
     void trackOn(S_& S) { S.e.trackMoves = true; S.e.mvt.minLots = mvl::minLotsOf(S.market);
-        Ext* e = ext(S); if (e) { e->lwSink.w = &e->lw; S.e.sink = &e->lwSink; } }   // (1.19.0) the key-level watch sees every classified book event
+        Ext* e = ext(S); if (e) { e->lwSink.w = &e->lw; e->lwSink.f = &e->fAcc; S.e.sink = &e->lwSink; } }   // (1.19.0) the key-level watch sees every classified book event
     // (1.12.0) from a candle's raw accumulator: the price per side where the most lots were re-posted after a hit (Ice.rebuilt), and the
     // attack at the candle's low / high (lots hit before / after it printed, seconds)
     static void fillAcc(dt::Candle& q, const off::Acc& a) {
@@ -361,6 +372,39 @@ public:
             std::string o; for (size_t k = keep.size() - 2000; k < keep.size(); ++k) o += keep[k] + "\n";
             off::publishFile(p, o);
         }
+    }
+    // (1.28.0) F? (FMirror.h): params (re-read every 60 s), the F file (read back once per market / bar size), one read per pivot-bar close
+    void fFiles(S_& S, Ext& e, long long nowMs) {
+        const std::string f = off::flexDir(); if (f.empty() || S.market.empty() || S.spb <= 0) return;
+        const std::string pp = f + "\\LRA-FMirror-" + S.market + ".csv";
+        if (pp != e.fParPath || nowMs - e.fParMs >= 60000 || nowMs < e.fParMs) {
+            e.fParPath = pp; e.fParMs = nowMs; fmr::Params P; std::ifstream in(pp.c_str(), std::ios::binary); int used = 0;
+            if (in.is_open()) { std::string ln; int n = 0; while (std::getline(in, ln) && ++n < 200) if (fmr::parseParam(ln, P)) ++used; }
+            P.why = in.is_open() ? "file (" + std::to_string(used) + " values)" : std::string("no file");
+            e.fPar = P;
+        }
+        const std::string fp = f + "\\BookFlow\\" + S.market + "-" + std::to_string((long long)S.spb) + "-fmirror.csv";
+        if (fp != e.fPath) {
+            e.fPath = fp; e.fReads.clear(); off::makeDir(f + "\\BookFlow");
+            std::ifstream in(fp.c_str(), std::ios::binary); std::string ln; int n = 0;
+            while (in.is_open() && std::getline(in, ln) && ++n < 200000) { fmr::Read r; if (fmr::parse(ln, r) && !e.fReads.count(r.key)) e.fReads[r.key] = r; }
+        }
+    }
+    void decideF(S_& S, long long key) {
+        Ext* e = ext(S); if (!e || S.market.empty() || !(S.tick > 0)) return;
+        fFiles(S, *e, off::steadyMs());
+        if (e->fReads.count(key) || e->fPath.empty()) return;              // decided once (also across restarts)
+        std::map<long long, int>::const_iterator bi = S.barEnds.find(key); if (bi == S.barEnds.end() || bi->second < fmr::EXT_BARS) return;
+        RTARRAYI times(barDateTime); RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
+        const int i = bi->second; if (i >= times.count || (long long)times[i] != key) return;
+        std::vector<fmr::Bar> B; const int from = std::max(0, i - 20);
+        for (int j = from; j <= i; ++j) { fmr::Bar b; off::Tick o = 0, h = 0, l = 0, c = 0; b.key = (long long)times[j];
+            b.ok = j < op.count && j < hi.count && j < lo.count && j < cl.count && off::toTick((double)op[j], S.tick, o) && off::toTick((double)hi[j], S.tick, h) && off::toTick((double)lo[j], S.tick, l) && off::toTick((double)cl[j], S.tick, c);
+            b.o = o; b.h = h; b.l = l; b.c = c; B.push_back(b); }
+        fmr::Read r; if (!fmr::decide(B, B.size() - 1, e->fAcc, S.market, e->fPar, r)) return;
+        std::ofstream f(e->fPath.c_str(), std::ios::binary | std::ios::app);
+        if (f.is_open()) { f << fmr::lineOf(r) << "\n"; f.flush(); if (f.good()) { e->fReads[key] = r; ++e->fWritten; if (r.armed == 1) ++e->fArmed; } else ++e->fFails; } else ++e->fFails;
+        while (e->fReads.size() > 6000) e->fReads.erase(e->fReads.begin());
     }
     void decideTurns(S_& S, long long key, const off::PaneBar& nb) {
         Ext* e = ext(S); if (!e || S.market.empty()) return;
@@ -514,6 +558,28 @@ public:
     // (1.16.0, Top Defender #4) the resting lots per price now (the engine's book) -> the market normal, and each pending re-test stepped once
     // per closed candle: price left the line by 0.5 ATR, then came back into the zone -> L / X / N from the lots resting there at the close
     // BEFORE the return (no look-ahead). Decided once, written as a Q line. A turn decided this candle starts on the next one.
+    // (1.28.0) the re-test hover: the resting orders in a zone by id - the big ones (>= the market's line floor, OrderLinesLogic) and the biggest
+    BfZoneIds zoneIds(S_& S, int side, long long lo, long long hi) {
+        BfZoneIds z; const int s = side == dt::HIGH ? off::ASK : off::BID; const long long floor = oln::ruleFor(S.market).floorLots;
+        for (std::unordered_map<long long, off::Engine::Ord>::const_iterator it = S.e.book.begin(); it != S.e.book.end(); ++it) {
+            const off::Engine::Ord& o = it->second; if (!o.known || o.side != s || o.size <= 0 || (long long)o.px < lo || (long long)o.px > hi) continue;
+            ++z.n; if (o.size > z.maxLots) z.maxLots = o.size;
+            if (o.size >= floor) { z.big.insert(it->first); if (o.size > z.bigLots) { z.bigLots = o.size; z.bigId = it->first; } }
+        }
+        return z;
+    }
+    void rtFile(S_& S, Ext& e) {
+        const std::string f = off::flexDir(); if (f.empty() || S.market.empty() || S.spb <= 0) return;
+        const std::string p = f + "\\BookFlow\\" + S.market + "-" + std::to_string((long long)S.spb) + "-retest-ids.csv";
+        if (p == e.rtPath) return;
+        e.rtPath = p; e.rtInfo.clear(); std::ifstream in(p.c_str(), std::ios::binary); std::string ln; int n = 0;
+        while (in.is_open() && std::getline(in, ln) && ++n < 100000) {   // R|side|turn key|text
+            if (!ln.empty() && ln.back() == '\r') ln.pop_back(); if (ln.size() < 6 || ln[0] != 'R' || ln[1] != '|') continue;
+            const size_t a1 = ln.find('|', 2), a2 = a1 == std::string::npos ? a1 : ln.find('|', a1 + 1); if (a2 == std::string::npos) continue;
+            const int sd = std::atoi(ln.substr(2, a1 - 2).c_str()); const long long t = std::atoll(ln.substr(a1 + 1, a2 - a1 - 1).c_str());
+            if ((sd == dt::LOW || sd == dt::HIGH) && t > 0 && !e.rtInfo.count(std::make_pair(sd, t))) e.rtInfo[std::make_pair(sd, t)] = ln.substr(a2 + 1);
+        }
+    }
     long long restIn(S_& S, int side, long long lo, long long hi) {
         long long s = 0; for (long long p = lo; p <= hi; ++p) s += std::max(0LL, S.e.restAt(side == dt::HIGH ? off::ASK : off::BID, (off::Tick)p)); return s;
     }
@@ -537,12 +603,26 @@ public:
             if (e->dtQ.count(it->first)) { it = e->dtQPend.erase(it); continue; }
             if (r.t >= key) { ++it; continue; }
             long long a = 0, b = 0; dt::rtRange(r, atr, a, b);
+            const BfZoneIds zNow = zoneIds(S, r.side, a, b);                 // (1.28.0) the ids resting in the zone at this close
+            if (!e->rtIdsAtTurn.count(it->first)) e->rtIdsAtTurn[it->first] = zNow.big;   // the big ids at the turn (first close after it)
+            const BfZoneIds zBefore = e->rtSnap.count(it->first) ? e->rtSnap[it->first] : zNow;
             const int res = dt::retestStep(r, q, atr, restIn(S, r.side, a, b), normalOf(r.side));
+            e->rtSnap[it->first] = zNow;                                   // the snapshot the next candle's decision uses (= restBefore)
             if (res == 0) { ++it; continue; }
             if (res == 1) {
                 e->dtQ[it->first] = r;
+                {   // (1.28.0) same order / new big order / small orders only, lots vs normal -> R line (read back after a restart)
+                    const std::set<long long>& at = e->rtIdsAtTurn[it->first]; char tb[200];
+                    if (zBefore.bigId && at.count(zBefore.bigId)) std::snprintf(tb, sizeof tb, "same order still there (%lld lots)", zBefore.bigLots);
+                    else if (zBefore.bigId) std::snprintf(tb, sizeof tb, "new big order (%lld lots, %zu big ids)", zBefore.bigLots, zBefore.big.size());
+                    else std::snprintf(tb, sizeof tb, "small orders only (%lld orders, biggest %lld lots)", zBefore.n, zBefore.maxLots);
+                    char tv[96]; std::snprintf(tv, sizeof tv, "; %lld lots resting = %.1fx normal", r.rest, r.ratio);
+                    const std::string info = std::string(tb) + tv; e->rtInfo[it->first] = info; rtFile(S, *e);
+                    if (!e->rtPath.empty()) { std::ofstream rf(e->rtPath.c_str(), std::ios::binary | std::ios::app); if (rf.is_open()) rf << "R|" << it->first.first << "|" << it->first.second << "|" << info << "\n"; }
+                }
                 if (!e->dtPath.empty()) { std::ofstream f(e->dtPath.c_str(), std::ios::binary | std::ios::app); if (f.is_open()) { f << dt::qLineOf(r) << "\n"; f.flush(); if (f.good()) ++e->dtQWritten; else ++e->dtFileFails; } else ++e->dtFileFails; }
             } else if (res == -2) ++e->dtQNoBook; else ++e->dtQOver;
+            e->rtSnap.erase(it->first); e->rtIdsAtTurn.erase(it->first);
             it = e->dtQPend.erase(it);
         }
     }
@@ -774,7 +854,13 @@ public:
         for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator h = e.dtH.begin(); h != e.dtH.end(); ++h) if (h->second.H && h->second.at == key) {
             std::snprintf(b, sizeof b, "%lld lots %.1fx", h->second.lots, h->second.attack > 0 ? (double)h->second.lots / (double)h->second.attack : 0.0); v.push_back(lst::make(lst::DEF, "H", h->second.side == dt::HIGH ? lst::HIGH : lst::LOW, -1, b)); break; }
         for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator r = e.dtQ.begin(); r != e.dtQ.end(); ++r) if (r->second.at == key && (r->second.res == 'L' || r->second.res == 'X')) {
-            std::snprintf(b, sizeof b, "%lld lots %.1fx", r->second.rest, r->second.ratio); v.push_back(lst::make(lst::DEF, std::string(1, r->second.res), r->second.side == dt::HIGH ? lst::HIGH : lst::LOW, -1, b)); break; }
+            std::snprintf(b, sizeof b, "%lld lots %.1fx", r->second.rest, r->second.ratio); lst::Lt lt = lst::make(lst::DEF, std::string(1, r->second.res), r->second.side == dt::HIGH ? lst::HIGH : lst::LOW, -1, b);
+            std::map<std::pair<int, long long>, std::string>::const_iterator ri = e.rtInfo.find(r->first); if (ri != e.rtInfo.end()) lt.nums += " - " + ri->second;   // (1.28.0) same / new big / small only
+            v.push_back(lt); break; }
+        {   // (1.28.0) F?: the pivot likely dies at once (drawn only with the market's thresholds)
+            std::map<long long, fmr::Read>::const_iterator fi = e.fReads.find(key);
+            if (fi != e.fReads.end() && fi->second.armed == 1 && e.fPar.show) { std::snprintf(b, sizeof b, "front %.1f behind %.1f floors", fi->second.front, fi->second.behind); v.push_back(lst::make(lst::DEF, "F?", fi->second.side == fmr::HIGH ? lst::HIGH : lst::LOW, -1, b)); }
+        }
     }
     // every 3 s: read the queue meter's new Q lines; append the letters not yet in the DEF record (first line per candle + letter + pivot wins)
     void strips(S_& S, long long now) {
@@ -795,6 +881,7 @@ public:
         for (std::map<std::pair<int, long long>, mvl::Read>::const_iterator it = e->dtM.begin(); it != e->dtM.end(); ++it) keys.insert(it->first.second);
         for (std::map<std::pair<int, long long>, dt::Counter>::const_iterator it = e->dtH.begin(); it != e->dtH.end(); ++it) if (it->second.H) keys.insert(it->second.at);
         for (std::map<std::pair<int, long long>, dt::Retest>::const_iterator it = e->dtQ.begin(); it != e->dtQ.end(); ++it) if (it->second.at > 0) keys.insert(it->second.at);
+        for (std::map<long long, fmr::Read>::const_iterator it = e->fReads.begin(); it != e->fReads.end(); ++it) if (it->second.armed == 1) keys.insert(it->first);   // (1.28.0)
         const long long published = (long long)currentDate();
         std::string out; std::vector<std::string> ids; std::vector<rse::Event> evidence; std::vector<rse::Frame> frames;
         if (published > 0 && !S.symbol.empty()) {
@@ -865,6 +952,16 @@ public:
         for (size_t k = 0; k < blocks.size(); ++k) t += "\n\n" + blocks[k];
         return t;
     }
+    // (1.28.0) the Defense pane's display names: A -> Ab (absorbing), H -> Hb? (hit back), L / X -> L? / X? (re-test); the records keep A / H / L / X
+    static std::string dispCode(const std::string& c) { if (c == "A") return "Ab"; if (c == "H") return "Hb?"; if (c == "L") return "L?"; if (c == "X") return "X?"; return c; }
+    // (1.28.0) colour by MEANING (green bullish / red bearish): the defenders' reads in their colour (a low = green); warnings that hurt them
+    // (W, X, Q!) and B (the book stepping back) in the opposite colour; Ab grey (not a counter-attack yet); F? amber (skip / wait)
+    template <class ColOf> static COLOR meaningCol(const lst::Lt& l, ColOf colOf) {
+        if (l.code == "A") return (COLOR)0x009CA3AF;
+        if (l.code == "F?") return (COLOR)0x00F59E0B;
+        if (l.code == "W" || l.code == "X" || l.code == "Q!" || l.code == "B") return colOf(l.colour == lst::GREEN ? lst::RED : lst::GREEN);
+        return colOf(l.colour);
+    }
     template <class XOf>
     void badgeRow(S_& S, Ext& e, const off::PaneGeo& g, int v0, int v1, int last, int slot, RTARRAYI& times, XOf xOf, const bp::Box* box) {
         (void)slot;
@@ -876,7 +973,20 @@ public:
         for (int i = std::max(0, v0); i <= v1 && i < last; ++i) {
             const long long key = (long long)times[i];
             const int xc = xOf(i); if (xc < g.left || xc > g.edge) continue;
-            C c; c.key = key; c.xc = xc; defLetters(S, e, key, c.v); if (c.v.empty()) continue;
+            C c; c.key = key; c.xc = xc; defLetters(S, e, key, c.v);
+            {   // (1.28.0) Hb? only after an Ab (the shared A) at the same pivot within 10 candles; display only (records unchanged)
+                for (size_t k = 0; k < c.v.size();) {
+                    if (c.v[k].code != "H") { ++k; continue; }
+                    bool ab = false; int n = 0; const int sd = c.v[k].pivot == lst::HIGH ? 1 : 0;
+                    for (std::map<long long, off::PaneBar>::const_iterator bi = S.ser.bars.find(key); n <= 10; ++n) {
+                        if (bi == S.ser.bars.end()) break;
+                        if (e.sab.st.atRaw(sd, bi->first)) { ab = true; break; }
+                        if (bi == S.ser.bars.begin()) break; --bi;
+                    }
+                    if (!ab) c.v.erase(c.v.begin() + (long)k); else ++k;
+                }
+            }
+            if (c.v.empty()) continue;
             c.pk = lst::pick(lst::DEF, c.v); cs.push_back(c);
         }
         off::fillFlat(this, g.left, y0, g.edge, y0 + lst::STRIPS * lst::ROW_H, (COLOR)0x000B0F15);
@@ -889,16 +999,28 @@ public:
             { RCT rc; rc.set(off::coord(g.left + 3), off::coord(yr), off::coord(g.left + lst::LABEL_W), off::coord(yr + lst::ROW_H)); rc.drawText(lst::stripName(lst::DEF, s), false, false); }
             setFont(f);
             std::vector<lst::Item> items; std::vector<size_t> idx;
-            for (size_t k = 0; k < cs.size(); ++k) { if (cs[k].pk.shown[s] < 0) continue; lst::Item it; it.xc = cs[k].xc; it.w = (int)getTextWidth(cs[k].v[(size_t)cs[k].pk.shown[s]].code.c_str(), -1) + 1; items.push_back(it); idx.push_back(k); }
+            for (size_t k = 0; k < cs.size(); ++k) { if (cs[k].pk.shown[s] < 0) continue; lst::Item it; it.xc = cs[k].xc; it.w = (int)getTextWidth(dispCode(cs[k].v[(size_t)cs[k].pk.shown[s]].code).c_str(), -1) + 1; items.push_back(it); idx.push_back(k); }
             const std::vector<lst::Placed> pl = lst::placeStrip(items, g.left + lst::LABEL_W, g.edge);
             for (size_t q = 0; q < pl.size(); ++q) {
                 if (!pl[q].drawn) { ++e.stripSkipped; continue; }
                 const C& c = cs[idx[q]]; const lst::Lt& l = c.v[(size_t)c.pk.shown[s]];
                 const int t = yr + pl[q].sub * lst::SUB_H, b = t + lst::SUB_H;
                 if (box && pl[q].l < box->r && pl[q].r > box->l && t < box->b && b > box->t) { ++e.stripSkipped; continue; }   // never over the box
-                setTextColor(colOf(l.colour));
-                RCT rc; rc.set(off::coord(pl[q].l), off::coord(t), off::coord(pl[q].r + 1), off::coord(b)); rc.drawText(l.code.c_str(), false, false);
-                off::IconRect ir; ir.l = pl[q].l; ir.t = t; ir.r = pl[q].r; ir.b = b; e.badgeHit.push_back(std::make_pair(ir, stripTipText(S, e, c.key, s, c.v, c.pk)));
+                setTextColor(meaningCol(l, colOf));                          // (1.28.0) colour by meaning, Ab grey, F? amber
+                const std::string shown = dispCode(l.code);
+                RCT rc; rc.set(off::coord(pl[q].l), off::coord(t), off::coord(pl[q].r + 1), off::coord(b)); rc.drawText(shown.c_str(), false, false);
+                std::string tip = stripTipText(S, e, c.key, s, c.v, c.pk);
+                for (const lst::Lt& x : c.v) {                                // (1.28.0) the new reads' hovers in his format ("   Use:" rows drop first when space is short)
+                    if (lst::stripOf(lst::DEF, x.code) != s) continue;           // only this strip's letters
+                    if (x.code == "F?") { std::map<long long, fmr::Read>::const_iterator fi = e.fReads.find(c.key); if (fi != e.fReads.end()) {
+                        const std::string h = fmr::hover(fi->second, e.fPar); std::vector<std::string> L; size_t a0 = 0; for (;;) { const size_t b0 = h.find('\n', a0); L.push_back(h.substr(a0, b0 == std::string::npos ? std::string::npos : b0 - a0)); if (b0 == std::string::npos) break; a0 = b0 + 1; }
+                        tip += "\n\nF?  Pivot likely dies at once (amber)";
+                        for (size_t k = 0; k < L.size(); ++k) tip += "\n" + dt::wrapRow(std::string(k >= 2 ? "   Use: " : "   ") + L[k]); } }
+                    if (x.code == "L" || x.code == "X") { tip += "\n\n" + dt::wrapRow(std::string(x.code == "L" ? "L?  Re-test reloaded: " : "X?  Re-test empty: ") + x.nums);
+                        tip += "\n" + dt::wrapRow("   Use: L? = the entry zone is stocked (same order / new big order); X? = only small orders or nothing - skip the entry there. Example: ES 10-22 1:59 PM L? 210 lots at 7,682 (2.7x), 2:01 PM X? small orders only, then the break."); }
+                    if (x.code == "A") tip += "\n" + dt::wrapRow("   Use: Ab (grey) = absorbing - the attack is taken at the level, no counter-attack yet; Hb? follows only when the defenders hit back (>= 1.25x, price off the level).");
+                }
+                off::IconRect ir; ir.l = pl[q].l; ir.t = t; ir.r = pl[q].r; ir.b = b; e.badgeHit.push_back(std::make_pair(ir, tip));
                 ++e.stripsDrawn;
             }
         }
@@ -1437,6 +1559,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.27.0");   // BF_VERSION
+    p->setVersion("1.28.0");   // BF_VERSION
     return p;
 }

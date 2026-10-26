@@ -16,6 +16,7 @@ compile_run() {
  step "$name run" "$B/$name" "$P"
 }
 compile_run defense_turn test_defenseturn.cpp
+compile_run fmirror test_fmirror.cpp   # (lsBookFlow 1.28.0) F?
 compile_run give_up_trap_withdrew test_gtw.cpp -Wno-misleading-indentation
 compile_run effort_reward_audit test_er_audit.cpp
 step 'Native rebuild dependency source checks (not batch execution)' python3 "$D/test_build_dependencies.py"

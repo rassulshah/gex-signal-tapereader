@@ -41,7 +41,7 @@ static std::multimap<long long, rsl::Ev> collision(int resBar = 10) {
 }
 
 int main() {
-    CHECK(std::string(rsl::VERSION) == "2.1.0");
+    CHECK(std::string(rsl::VERSION) == "2.1.1");
     CHECK(std::string(rsl::stageName(1)) == "Trap" && std::string(rsl::stageName(2)) == "Collision" && std::string(rsl::stageName(3)) == "Trapped" && std::string(rsl::stageName(4)) == "Release" && std::string(rsl::stageName(5)).empty());
 
     // ---- THE GATE ----
@@ -144,7 +144,16 @@ int main() {
         const rsl::Step dls = rsl::run(bars(), dl)[16];
         CHECK(!(dls.flags & rsl::F_CVD_DIV) && dls.here.find("more than 5 candles") != std::string::npos);
         std::multimap<long long, rsl::Ev> df = nv0; add(df, event(12, lst::ATK, "D", keyOf(12), 1010, rse::MBO, rse::NA, 1240));
-        CHECK(!(rsl::run(bars(), df)[12].flags & rsl::F_CVD_DIV));
+        CHECK(!(rsl::run(bars(), df)[12].flags & rsl::F_CVD_DIV));          // 20 ticks above the extreme > 1 ATR
+        std::multimap<long long, rsl::Ev> dn = nv0; add(dn, event(12, lst::ATK, "D", keyOf(12), 994, rse::MBO, rse::NA, 1240));
+        CHECK(rsl::run(bars(), dn)[12].flags & rsl::F_CVD_DIV);              // a higher low 4 ticks up = within 1 ATR
+        // Q before contact + P = both in the trap; the later attack + A = the collision (ES 10-22 10:42 order)
+        std::multimap<long long, rsl::Ev> tq; rsl::Ev p1 = event(10, lst::DEF, "P", keyOf(10), 990); p1.l.nums = "2.3x"; p1.received = 1; add(tq, p1);
+        rsl::Ev q1 = event(10, lst::QUE, "Q", keyOf(10), 990, rse::MBO, rse::HELD); q1.l.nums = "143 (2.4x)"; q1.received = 2; add(tq, q1);
+        rsl::Ev k1 = event(10, lst::ATK, "K", keyOf(10), 990, rse::MBO, rse::NA, 300); k1.received = 3; add(tq, k1);
+        rsl::Ev a1 = event(10, lst::DEF, "A", keyOf(10), 990, rse::MBO, rse::NA, 200); a1.received = 4; add(tq, a1);
+        const rsl::Step tqs = rsl::run(bars(), tq)[10];
+        CHECK(rsl::storyPart(tqs.story, 0) == "bids 2.3x, Q 143 (2.4x)" && rsl::storyPart(tqs.story, 1) == "300 sold, held (A)" && tqs.stage == rsl::COLLISION);
         std::multimap<long long, rsl::Ev> d0; add(d0, event(12, lst::ATK, "D", keyOf(12), 991, rse::MBO, rse::NA, 1240));
         CHECK(rsl::run(bars(), d0)[12].stage == 0);
         // the attackers underwater: avg fill 990.00, close 993 = 3 ticks >= 0.25 ATR
@@ -235,7 +244,7 @@ int main() {
 
     // ---- LetterStrips 1.3.0: names, D, the CVD divergence ----
     {
-        CHECK(std::string(lst::VERSION) == "1.3.0");
+        CHECK(std::string(lst::VERSION) == "1.4.0");
         CHECK(std::string(lst::stripName(lst::ATK, 0)) == "Attack" && std::string(lst::stripName(lst::ATK, 1)) == "Trapped" && std::string(lst::stripName(lst::DEF, 0)) == "Floor" && std::string(lst::stripName(lst::DEF, 1)) == "Release");
         CHECK(lst::stripOf(lst::ATK, "D") == 1 && lst::validCode(lst::ATK, "D") && !lst::validCode(lst::DEF, "D") && lst::rankOf(lst::ATK, "Tr") < lst::rankOf(lst::ATK, "D") && lst::rankOf(lst::ATK, "D") < lst::rankOf(lst::ATK, "E"));
         const long long dl[6] = { -100, -50, -80, 20, -30, -200 }, lo[6] = { 1000, 995, 990, 992, 994, 993 }, hi[6] = { 1010, 1005, 1000, 1002, 1004, 1003 };
