@@ -170,6 +170,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include "StopRun.h"
 #include "OptionsFlow.h"
 #include "HoverBoard.h"
+#include "AwareHook.h"                // (1.34.0) the smart-read hook (layer L3)
 #include "MarketState.h"              // (1.13.0) SRC "AGG" facts for the read
 #include "SessionVWAPLogic.h"         // (1.14.0) svl::rthOf / classify (the session and its RTH)
 #include "BigLotTiers.h"              // (1.14.0) the Big Lot sizes per session type
@@ -201,7 +202,7 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.33.1"          // 1.33.0 (2026-10-25, BUILD-SPEC "Attacker pane: bars + S only", Rassul approved 22:29 CT) the pane draws the buy / sell bars and ONE letter strip with the S letter only (one order swept 3+ prices); K / L / R / Tr / D / E / G / PB are still decided and written to the letter + EV records (the Reversal Stage and the nightly read them) but not drawn; the E pace stays in the S hover; new settings row "S letter" (file field 10); // 1.32.0 (2026-10-23 4-step stage revamp) new D letter (MBO CVD divergence, Trapped strip) + the attack average fill " vw" in S / K / L nums for the Reversal Stage underwater measure; // was 1.31.0:          // 1.30.0 (2026-10-22 evening fix build) compact strips (LetterStrips 1.1.0: 11 px per strip), bars >= 50% of the pane (OrderFlowFeed 1.15.0 pairPx floor), the Implied row one line "Implied: 0% of volume";          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.34.0"          // 1.34.0 (2026-10-26) smart-read hook (AwareHook.h 0.1.0, TEAM-DESIGN.md): posts AWAGG for each closed bar once lsContext has posted CTX for it (or after 3 s), records the isolated + aware read in lsFlexLevels\\Context-AWR-<MKT>-<spb>s-<day>.rec; links OFF per market (LRA-Context-<MKT>.csv) so aware = isolated and nothing drawn changes (facts only: no side of its own yet); // 1.33.0 (2026-10-25, BUILD-SPEC "Attacker pane: bars + S only", Rassul approved 22:29 CT) the pane draws the buy / sell bars and ONE letter strip with the S letter only (one order swept 3+ prices); K / L / R / Tr / D / E / G / PB are still decided and written to the letter + EV records (the Reversal Stage and the nightly read them) but not drawn; the E pace stays in the S hover; new settings row "S letter" (file field 10); // 1.32.0 (2026-10-23 4-step stage revamp) new D letter (MBO CVD divergence, Trapped strip) + the attack average fill " vw" in S / K / L nums for the Reversal Stage underwater measure; // was 1.31.0:          // 1.30.0 (2026-10-22 evening fix build) compact strips (LetterStrips 1.1.0: 11 px per strip), bars >= 50% of the pane (OrderFlowFeed 1.15.0 pairPx floor), the Implied row one line "Implied: 0% of volume";          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -338,7 +339,7 @@ struct BASState {
     off::OptCache opt;                                   // (1.5.0) LRA-Options-<MKT>.csv: the blue oHit line
     zread::Host zr; long zrCount = -1; long long zrSession = -1;   // (1.6.0) the zone read line
     // (1.13.0) Market State SRC AGG: the chart label (from the draw), the candle posted, its facts, the last post
-    std::string chartKey; long long mstBar = 0, mstCt = 0, mstMs = -1, mstPosts = 0; std::map<std::string, std::string> mstKv;
+    std::string chartKey; long long mstBar = 0, mstCt = 0, mstMs = -1, mstPosts = 0; std::map<std::string, std::string> mstKv; awh::Hook aw;   // (1.34.0) aw: the smart-read hook
     // (1.14.0) the Big Lot mark: the setting, the market's RTH, the history book (+ its file), each closed candle's mark decided once,
     // this session's record of candles >= BL20 (read back after a restart: the marks stay exactly as decided)
     int bigLot = blt::CHOICE_DEFAULT, openMin = 510, closeMin = 900; int showS = 1;   // (1.33.0) S letter
@@ -423,7 +424,7 @@ public:
     void pump();
     void release() {                                                     // (1.13.0) the Market State entry goes with the indicator
         BASState* S = slot_.get(this, false);
-        if (S && !S->chartKey.empty()) mst::clear("AGG", S->symbol, S->spb, S->chartKey);
+        if (S && !S->chartKey.empty()) { mst::clear("AGG", S->symbol, S->spb, S->chartKey); S->aw.clear(S->symbol, S->spb, S->chartKey); }
         slot_.release(this);
     }
     BASState* testState() { return slot_.get(this, false); }
@@ -549,7 +550,7 @@ void BidAskStats::identify(BASState& S) {
     double tick = (double)getProperty(SYM_TICKINCR); if (!bas::finite(tick) || tick <= 0 || tick >= 1000) tick = 0;
     const std::string id = root + "|" + sym + "|" + std::to_string(spb);
     if (id == S.identity && tick == S.tick) return;
-    if (!S.chartKey.empty() && !S.symbol.empty()) mst::clear("AGG", S.symbol, S.spb, S.chartKey);   // (1.13.0) the old chart identity's facts
+    if (!S.chartKey.empty() && !S.symbol.empty()) { mst::clear("AGG", S.symbol, S.spb, S.chartKey); S.aw.clear(S.symbol, S.spb, S.chartKey); }   // (1.13.0) (1.34.0 + AWAGG) the old chart identity's facts
     S.mstBar = 0; S.mstCt = 0; S.mstMs = -1; S.mstKv.clear();
     S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
     S.ser.bars.clear(); S.naTries.clear(); S.count = 0; S.lastStamp = 0; S.backlog = true; S.lastClosedTime = 0;
@@ -1257,6 +1258,7 @@ void BidAskStats::status(BASState& S, long long now) {
       << "\nSPIKE_VS_AVERAGE," << bas::fmtTenths(S.ser.spike.avgT) << (S.ser.spike.on() ? "" : " (off)")
       << "\nSPIKE_RULE,>= " << bas::fmtTenths(S.ser.spike.avgT) << " the plain " << S.ratioBars << "-candle average of that side, decided at the close; forming candle dim, no label"
       << "\nJUMP_RECORD_FIELD,vs the biggest of the prior " << S.ser.spike.lookback << " candles (not part of the spike rule)"
+      << "\nAWARENESS," << awh::VERSION << " AWAGG decided " << S.aw.writes << " records" << (lsperf::smartAllowed(LSPERF_PLUGIN, S.symbol) ? "" : " (smart off)") << "\nPERF," << lsperf::statusOf(this)   // (1.34.0)
       << "\nMARKET_STATE,AGG " << (S.chartKey.empty() ? std::string("waiting for the chart label") : "bar " + std::to_string(S.mstCt) + ",posts " + std::to_string(S.mstPosts) + ",keys " + std::to_string(S.mstKv.size()));
     o << "\nIMPLIED," << S.e.ip.why << ",fills " << S.e.impliedFills << ",lots " << S.e.impliedLots << " (side '?' FILLs: not hits / aggressors / big lots / letters; kept in volume)";
     o << "\nORDERBOOK_ABS,board O events " << S.obEv.size() << ",absorbed prices posted " << S.obMarks << ",posts " << S.obPosts << " (traded >= 2x shown + >= 2 refills; read by lsDeltaProfile / lsBigBidAsk)";
@@ -1386,6 +1388,7 @@ void BidAskStats::pump() {
                 finalize(S, now);
                 stopRuns(S);
                 marketState(S, now); obPublish(S, now);
+                if (S.mstCt > 0 && !S.chartKey.empty() && lsperf::smartAllowed(LSPERF_PLUGIN, S.symbol)) { S.aw.src = "AGG"; S.aw.tick(S.symbol, S.spb, S.chartKey, S.market, now, S.mstCt, awh::factsRead("aggression")); }   // (1.34.0) L3, links OFF
                 sharedAbs(S, now);                                         // (1.27.0) after the order book of each candle is posted
                 exportStrips(S, now);                                      // (1.28.0) the letter record for lsReversalStage                                       // (1.13.0) SRC AGG, behind the scenes
                 bigLots(S);                                                // (1.14.0) the Big Lot sizes + each closed candle's mark, once
@@ -2116,6 +2119,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.33.1");   // BAS_VERSION
+    p->setVersion("1.34.0");   // BAS_VERSION
     return p;
 }

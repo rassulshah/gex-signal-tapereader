@@ -5,7 +5,7 @@
 
 namespace hlset {
 
-static const char* const PLUGIN_VERSION = "2.7.3";
+static const char* const PLUGIN_VERSION = "2.8.0";
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 enum K { K_POSITION, K_SHOW_TABLE, K_TABLE_BG, K_SHOW_PROJ, K_PROJ_UP, K_PROJ_DN, K_SHOW_MARK, K_MARK_LOD, K_MARK_HOD, K_SHOW_PRE, K_PRE_MIN, K_N };
 

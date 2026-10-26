@@ -48,6 +48,7 @@
 #include "NewsWindow.h"          // (1.1.0) news / settle window "?" + the feed check
 #include "SwingRef.h"            // (2.0.0) the gate: the last 3 intact swings (the ZigZag rule lsSweepRefill / lsStopRun use)
 #include "NearLevels.h"          // (2.0.0) the gate: key / MenthorQ levels (the files lsSweepRefill reads)
+#include "AwareHook.h"          // (2.2.0) the smart-read hook (layer L3) + SRC STAGE
 #include "StageBox.h"            // (2.1.0) the stage info box + letters 1 2 3 C
 
 #include <algorithm>
@@ -70,7 +71,7 @@
 #pragma comment(lib, "user32.lib")   // GetCursorPos / WindowFromPoint (the hover stops when the cursor leaves the pane)
 #endif
 
-#define RS_VERSION "2.1.2"   // (2.1.1, 2026-10-26) the C row reads the H ratio as lots / attack when the evidence carries no ratio // (2.1.0) (2.1.0, 2026-10-25, Rassul approved 22:51 CT stage-box-mockup.html) display only: the pane shows the letters 1 2 3 C (Trap / Collision / Turn / Confirm) on each pivot bar instead of the staircase, and the STAGE INFO BOX for the latest pivot (StageBox.h 1.0.0: stage # / name / what to look for / check / value (threshold); 3 Turn checked by the defenders' close = the HELD trigger, trapped and wick volume description only from lsFlexLevels\LRA-StageBox-<MKT>.csv; C = Hb >= 1.25x + follow-through; amber F? row); the engine and the RS3 record unchanged // (2.0.0) the 4-step model: gate + Trap / Collision / Trapped / Release + result // (1.3.0) typed MBO observations, arrival journal, immutable post-decision checkpoints
+#define RS_VERSION "2.2.0"   // (2.2.0, 2026-10-26) smart-read hook (AwareHook.h 0.1.0, TEAM-DESIGN.md): posts AWSTAGE for each closed bar once lsContext has posted CTX for it (or after 3 s), records the isolated + aware read in lsFlexLevels\\Context-AWR-<MKT>-<spb>s-<day>.rec; links OFF per market (LRA-Context-<MKT>.csv) so aware = isolated and nothing drawn changes; also posts SRC STAGE (stage, side, status) for each decided candle // (2.1.1, 2026-10-26) the C row reads the H ratio as lots / attack when the evidence carries no ratio // (2.1.0) (2.1.0, 2026-10-25, Rassul approved 22:51 CT stage-box-mockup.html) display only: the pane shows the letters 1 2 3 C (Trap / Collision / Turn / Confirm) on each pivot bar instead of the staircase, and the STAGE INFO BOX for the latest pivot (StageBox.h 1.0.0: stage # / name / what to look for / check / value (threshold); 3 Turn checked by the defenders' close = the HELD trigger, trapped and wick volume description only from lsFlexLevels\LRA-StageBox-<MKT>.csv; C = Hb >= 1.25x + follow-through; amber F? row); the engine and the RS3 record unchanged // (2.0.0) the 4-step model: gate + Trap / Collision / Trapped / Release + result // (1.3.0) typed MBO observations, arrival journal, immutable post-decision checkpoints
 // 1.0.0:   // keep equal to rsl::VERSION, rsset::PLUGIN_VERSION and the setVersion literal below
 
 static const COLOR C_GRID = 0x00374151, C_LABEL = 0x009CA3AF, C_TEXT = 0x00E5E7EB, C_BOX_BG = 0x000F1520, C_TIP_BG = 0x00111827;
@@ -128,6 +129,7 @@ struct RSState {
     std::string pathA, pathD, pathQ;
     rsh::Inbox inbox; std::string journalPath; bool provisional = true;
     // the record: decided candles [raw key] -> step; the newest key
+    awh::Hook aw; std::string awChart;   // (2.2.0) the smart-read hook
     std::map<long long, rsl::Step> steps; long long recOff = 0, recBad = 0, written = 0, writeFail = 0, adopted = 0; std::string recPath; bool dirMade = false;
     long long lastPassMs = -1; long lastCount = -1; long long lastLetters = -1;
     rsl::Step now; bool haveNow = false;
@@ -187,6 +189,7 @@ private:
     void levels(RSState& s, long long now);
     void writeStatus(RSState& s, long long now);
     long long civil(long long raw);
+    void aware(RSState& s, long long now);
     std::string clockOf(long long raw);
     void render(RSState& s);
     void tip(RSState& s, int top, int bottom, int left, int right);
@@ -359,6 +362,24 @@ void ReversalStage::decide(RSState& s) {
         s.state = decided.quality == rse::COMPLETE ? "running - MBO evidence confirmed" : "BLOCKED - incomplete/unavailable MBO";
     } else { ++s.writeFail; s.state = "WAITING - stage journal write failed"; }
 }
+// (2.2.0) SRC STAGE + the smart-read hook for the last CLOSED candle once its step is decided (durable); links OFF: aware = isolated
+void ReversalStage::aware(RSState& s, long long now) {
+    if (s.symbol.empty() || s.market.empty()) return;
+    if (!lsperf::smartAllowed(LSPERF_PLUGIN, s.symbol)) return;          // over its perf budget: the smart step is off, the stage pane runs
+    RTARRAYI tt(barDateTime); const long c = getBarCount(); if (c < 2 || (long)tt.count < c) return;
+    const long long key = (long long)tt[(int)c - 2]; const std::map<long long, rsl::Step>::const_iterator it = s.steps.find(key);
+    if (it == s.steps.end()) return;
+    const long long bar = civil(key); if (bar == LLONG_MIN || bar <= 0) return;
+    const char* cl = getChartLabel(); const std::string chart = cl ? cl : "";
+    if (!s.awChart.empty() && s.awChart != chart) { mst::clear("STAGE", s.symbol, s.spb, s.awChart); s.aw.clear(s.symbol, s.spb, s.awChart); }
+    s.awChart = chart;
+    const rsl::Step& st = it->second; s.aw.src = "STAGE";
+    if (s.aw.t != bar || s.aw.postMs < 0 || now - s.aw.postMs >= 15000 || now < s.aw.postMs) {
+        std::map<std::string, std::string> kv; kv["v"] = RS_VERSION; kv["stage"] = std::to_string(st.stage); kv["side"] = st.side == rsl::LOW ? "low" : "high"; kv["status"] = std::to_string(st.status);
+        mst::publish("STAGE", s.symbol, s.spb, chart, now, bar, kv);
+    }
+    s.aw.tick(s.symbol, s.spb, chart, s.market, now, bar, awh::stageRead(st.stage, st.side == rsl::LOW, st.status));
+}
 void ReversalStage::writeStatus(RSState& s, long long now) {
     const std::string f = flexDir(); if (f.empty() || s.market.empty()) return;
     int liveQuality = s.haveNow ? s.inbox.quality(s.now.key) : rse::PENDING;
@@ -375,6 +396,7 @@ void ReversalStage::writeStatus(RSState& s, long long now) {
       << "\nWRONG_CONTRACT," << s.inbox.wrongContract << "\nEVIDENCE_WRITE_FAILURES," << s.inbox.writeFails << "\nDROPPED_EVIDENCE," << s.inbox.dropped
       << "\nGATE," << s.gates.size() << " locations (" << s.gateSwings << " swings, levels " << s.levelNote << ", SwingRef " << swg::VERSION << ")"
       << "\nSTAGE_BOX," << sbx::VERSION << "," << s.boxes.size() << " pivots,latest " << (s.boxes.empty() ? std::string("none") : (s.boxes.back().letters.empty() ? std::string("-") : s.boxes.back().letters)) << ",params " << s.par.why << " trapped " << s.par.trapThr << "x wick " << s.par.wickThr << "x hb " << s.par.hbMin << "x,vap fails " << s.vapFails
+      << "\nAWARENESS," << awh::VERSION << " AWSTAGE decided " << s.aw.writes << " records" << (lsperf::smartAllowed(LSPERF_PLUGIN, s.symbol) ? "" : " (smart off)") << "\nPERF," << lsperf::statusOf(this)   // (2.2.0)
       << "\nDRAWN," << s.drawn << "\nODDS,? not proven yet (" << rsl::ODDS_TICKET << ")\n";
     const std::string t = o.str();
     if (t == s.statusText && s.statusMs >= 0 && now - s.statusMs < 30000) return;
@@ -397,6 +419,7 @@ void ReversalStage::pump() {
         s->lastPassMs = now; s->lastCount = count;
         static std::mutex journalMutex; std::lock_guard<std::mutex> journalLock(journalMutex);
         readRecord(*s); readLetters(*s); levels(*s, now); decide(*s); stageBoxes(*s, now);
+        aware(*s, now);   // (2.2.0) L3, links OFF
         writeStatus(*s, now);
     } catch (...) { s->fault = true; s->state = "STOPPED - error, reload the chart"; }
 }
@@ -638,6 +661,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);
     p->setDescription("LRA Reversal Stage: at a swing / key / MenthorQ level or queue zone, typed MBO evidence for 4 steps - Trap (stacked floor), Collision (attack met by absorption / a held queue), Trapped (pace fade, D divergence, attackers underwater) and Release (hit back / reclaim, re-test held) - then the 1 ATR result. Closed decisions are recorded and never repainted. Odds remain unproven.");
-    p->setVersion("2.1.2");   // RS_VERSION
+    p->setVersion("2.2.0");   // RS_VERSION
     return p;
 }

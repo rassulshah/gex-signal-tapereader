@@ -7,7 +7,7 @@
 
 namespace ofset {
 
-static const char* const BAS_VERSION = "1.33.1";   // (1.33.0) bars + S only; "S letter" row   // (1.14.0) + "Big Lot mark" on the Position line (appended last: no saved value moves)
+static const char* const BAS_VERSION = "1.34.0";   // (1.34.0) the smart-read hook, no window change   // (1.33.0) bars + S only; "S letter" row   // (1.14.0) + "Big Lot mark" on the Position line (appended last: no saved value moves)
 static const char* const BF_VERSION = "1.28.1";   // (1.28.0) F? / Ab / Hb? / L? X? display   // (1.5.0 Refill Effort / Refilled box) (1.3.4) the box follows the mouse only inside the pane, else Live
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 
