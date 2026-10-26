@@ -9,7 +9,7 @@
 
 namespace lpset {
 
-static const char* const PLUGIN_VERSION = "0.54.1";   // (0.54.1) label-only build (RE-BID?): rows, keys and parameter version 10 unchanged   // (0.54.0) LMT zones 1.3.0: the tags row is now "After-fill tags (RE-BID / ACCEPTED)" (default on), the colour rows "RE-BID offer / bid colour"; parameter version 10 so old saved windows reload once
+static const char* const PLUGIN_VERSION = "0.55.0";   // (0.55.0) the LMT zone rows relabelled for the LIMIT-ORDER LINES (same keys / positions; parameter version 11): master, icebergs, ladders, pulled lines, queue Q, line / word colours, words; the zone-only rows (ABC / diamond) hidden   // (0.54.1) label-only build (RE-BID?): rows, keys and parameter version 10 unchanged   // (0.54.0) LMT zones 1.3.0: the tags row is now "After-fill tags (RE-BID / ACCEPTED)" (default on), the colour rows "RE-BID offer / bid colour"; parameter version 10 so old saved windows reload once
 // history: (0.53.0) LMT zones 1.2.0: the "State tags" row appended (parameter version 9); the colour rows relabelled to what they colour now (keys / positions unchanged)   // (0.52.1) never delete MARKET_DEPTH (crash fix)   // (0.49.0) the queue meter (no new rows) // (0.48.0) the LMT zones rows (appended: earlier rows keep their positions; parameter version 8)   // (0.47.0) the air pocket (AP? band) row; (0.46.1) book object parked at done / destroy; (0.46.0) LMT F only
 enum K { K_WIDTH, K_FONT, K_SOLID_BG, K_BIG_ORDERS, K_BIG_REACH, K_BIG_MIN_LOTS, K_BIG_KEEP, K_BIG_FONT,
          K_BANNER, K_BANNER_BG, K_BANNER_FONT, K_BANNER_COLOR, K_AIR_POCKET,
@@ -34,23 +34,23 @@ inline const ss::Spec& profileSpec() {
         ss::boolRow("air_pocket", "Air pocket (AP band)", true),            // (0.47.0) the band from the turn's close to T1 while the path is open
         // (0.48.0, Rassul approved LMT zones mockup v3 2026-10-22 09:34 CT) the zones of real resting orders + LMT / LMT F columns; which kinds a
         // market draws is set by the study (per-market rule / nightly params) - these boxes can only hide them
-        ss::masterOf(ss::boolRow("lmz", "LMT zones (real resting orders)", true)),
-        ss::in(ss::boolRow("lmz_print", "BD / BO print zones", true), "lmz"),
-        ss::same(ss::in(ss::boolRow("lmz_origin", "Origin zones", true), "lmz")),
-        ss::same(ss::in(ss::boolRow("lmz_near", "Near order zones", true), "lmz")),
-        ss::in(ss::boolRow("lmz_far", "Far orders (thin)", true), "lmz"),
-        ss::same(ss::in(ss::boolRow("lmz_abc", "ABC breaks (grey)", true), "lmz")),
+        ss::masterOf(ss::boolRow("lmz", "Limit-order lines (resting 9+ min)", true)),
+        ss::in(ss::boolRow("lmz_print", "Icebergs (I R15 500)", true), "lmz"),
+        ss::same(ss::in(ss::boolRow("lmz_origin", "Ladders (4o 87)", true), "lmz")),
+        ss::in(ss::boolRow("lmz_near", "Pulled lines (very dark)", true), "lmz"),
+        ss::in(ss::boolRow("lmz_far", "Queue Q at levels", true), "lmz"),
+        ss::hide(ss::in(ss::boolRow("lmz_abc", "ABC breaks (grey)", true), "lmz")),   // (0.55.0) zone-only: hidden
         ss::in(ss::boolRow("lmz_gamma", "Gamma lines (grey)", true), "lmz"),
-        ss::same(ss::in(ss::boolRow("lmz_diamond", "Gamma diamond", true), "lmz")),
+        ss::hide(ss::in(ss::boolRow("lmz_diamond", "Gamma diamond", true), "lmz")),   // (0.55.0) zone-only: hidden
         // (0.54.0) offer / bid colour = the RE-BID tag (red: an offer swept above failing = bearish; green: a bid swept below failing =
         // bullish); the grey = every zone line, label, FILLING, ACCEPTED and X
-        ss::in(ss::colorRow("lmz_c_offer", "RE-BID offer colour", 0xEF4444), "lmz"),
-        ss::same(ss::in(ss::colorRow("lmz_c_bid", "RE-BID bid colour", 0x22C55E), "lmz")),
-        ss::in(ss::colorRow("lmz_c_grey", "Zone line colour", 0x8A8F98), "lmz"),
+        ss::in(ss::colorRow("lmz_c_offer", "Offer line colour", 0xEF4444), "lmz"),
+        ss::same(ss::in(ss::colorRow("lmz_c_bid", "Bid line colour", 0x22C55E), "lmz")),
+        ss::in(ss::colorRow("lmz_c_grey", "THRU word colour", 0x8A8F98), "lmz"),
         ss::same(ss::in(ss::colorRow("lmz_c_gamma", "Gamma line colour", 0x6B7280), "lmz")),
-        ss::in(ss::boolRow("lmz_tags", "After-fill tags (RE-BID / ACCEPTED)", true), "lmz"),   // (0.54.0) renamed (was State tags, 0.53.0); same key / position
+        ss::in(ss::boolRow("lmz_tags", "HELD / THRU words", true), "lmz"),   // (0.54.0) renamed (was State tags, 0.53.0); same key / position
     };
-    static const ss::Spec S = { "LiquidityProfile", PLUGIN_VERSION, 10, R, K_N, 0 };   // (0.54.0) 9 -> 10: the tags row means the after-fill read now (old windows reload once); (0.53.0) 8 -> 9: one row appended
+    static const ss::Spec S = { "LiquidityProfile", PLUGIN_VERSION, 11, R, K_N, 0 };   // (0.55.0) 10 -> 11: rows relabelled for the order lines (old windows reload once)   // (0.54.0) 9 -> 10: the tags row means the after-fill read now (old windows reload once); (0.53.0) 8 -> 9: one row appended
     return S;
 }
 // lsLiquidityFlow (the same source built with LQ_FLOW): Font only

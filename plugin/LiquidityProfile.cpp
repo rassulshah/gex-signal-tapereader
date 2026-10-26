@@ -113,6 +113,7 @@
 #define OFF_SDK 1
 #include "OrderFlowFeed.h"
 #include "AirPocketLogic.h"    // (0.47.0) MBO roadmap Middle Ahead #1: the air pocket band (SDK-free, tested)
+#include "OrderLinesLogic.h"   // (0.55.0) THE LIMIT-ORDER LINES (Rassul walk-through 2026-10-25, BUILD-SPEC-2026-10-25.md): SDK-free, tested
 #include "LmtZonesLogic.h"     // (0.48.0) LMT ZONES: real large resting orders as zones + the LMT / LMT F columns (SDK-free, tested)
 #include "QueueMeter.h"        // (0.49.0) the QUEUE METER engine: tests at levels / pivots / defended prices -> LRA-QueueMeter-<MKT>.csv for the Levels column (SDK-free, tested)
 #include "ReversalEvidence.h"  // additive EV-QUEUE sidecar; native Q and LT compatibility records remain unchanged
@@ -145,7 +146,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.54.1"          // (0.54.1, 2026-10-25) the drawn after-fill word is "RE-BID?" (was RE-BID): not yet proven on LMT zone orders (live replay RE-BID 45.8% vs ACCEPTED 40.6% failed sweeps, t 0.84, only HG holds) - his rule "unproven reads show with ?"; the hover adds "RE-BID? = not yet proven on zone orders - judged nightly"; ACCEPTED, the R record lines (still RE-BID), the logic, settings and parameter version 10 unchanged;  // (0.54.0, 2026-10-25, Rassul's go: the research's PROVEN read H6-FILL) LMT ZONES = LmtZonesLogic.h 1.3.0: the drawn HELD? tag removed (HELD still logged); the AFTER-FILL READ - 30 s after a zone's order is FULLY filled (in the study's RTH window): RE-BID (new defender size stacked at a fixed band beyond the filled price AND the defender side wins the delta 10-30 s after; red for an offer swept above, green for a bid swept below - bid zones get the tag without a line) or ACCEPTED (grey) - decided once, recorded as R lines, read back, never repainted; FILLING (grey) and the grey X stay; settings: the "State tags" box is now "After-fill tags (RE-BID / ACCEPTED)" (default on), colour rows relabelled "RE-BID offer / bid colour", parameter version 10;   // (0.53.0, 2026-10-25, Rassul approved option A + the v0.49 LMT mockup) LMT ZONES = LmtZonesLogic.h 1.2.0: every drawn zone kind (PRINT / ABC / ORIGIN / NEAR offers) is a thin grey MAP line (a target / magnet, not a wall) with "LMT <lots> (<KIND>)" left of its start, one pooled draw rule in all 7 markets (bids never drawn), STATE TAGS on closed bars - FILLING (grey) / HELD? (red offer, green bid) - recorded as T lines and read back (no repaint), the grey X for pulled, FAST / DRIFT / EATEN / STEPPED logged only, the hover with the honest odds; settings: "State tags" checkbox (parameter version 9); the ring on the first fill dropped (the FILLING tag says it)
+#define LQ_VERSION "0.55.0"          // (0.55.0, 2026-10-26, Rassul "build" 22:29 CT 2026-10-25) THE LIMIT-ORDER LINES (OrderLinesLogic.h 1.0.0) replace the drawn LMT zones: every big resting order (per-market floor, ES 50; LRA-LimitLines-<MKT>.csv) drawn once it rested 9 min, back to its placement; moved / rolled (re-placed within 15 s, exact size, 1 ATR, one candidate) = one stepping line, no tag; icebergs "I R<n> <lots>"; ladders "<n>o <lots>"; fill dot + HELD / THRU (favourable close within the fill bar + 3, no bar wholly beyond; one word per zone, beside the fill dot); pulled = very dark, no x; no new line after the late-day cut-off; the LMT resting column and RE-BID? / ACCEPTED removed (the LMT zone engine still records); the queue Q (10-s call) as a small badge on the level (ES CL NQ GC EU); settings rows relabelled (parameter version 11)
+#define LQ_VERSION_PREV "0.54.1"          // (0.54.1, 2026-10-25) the drawn after-fill word is "RE-BID?" (was RE-BID): not yet proven on LMT zone orders (live replay RE-BID 45.8% vs ACCEPTED 40.6% failed sweeps, t 0.84, only HG holds) - his rule "unproven reads show with ?"; the hover adds "RE-BID? = not yet proven on zone orders - judged nightly"; ACCEPTED, the R record lines (still RE-BID), the logic, settings and parameter version 10 unchanged;  // (0.54.0, 2026-10-25, Rassul's go: the research's PROVEN read H6-FILL) LMT ZONES = LmtZonesLogic.h 1.3.0: the drawn HELD? tag removed (HELD still logged); the AFTER-FILL READ - 30 s after a zone's order is FULLY filled (in the study's RTH window): RE-BID (new defender size stacked at a fixed band beyond the filled price AND the defender side wins the delta 10-30 s after; red for an offer swept above, green for a bid swept below - bid zones get the tag without a line) or ACCEPTED (grey) - decided once, recorded as R lines, read back, never repainted; FILLING (grey) and the grey X stay; settings: the "State tags" box is now "After-fill tags (RE-BID / ACCEPTED)" (default on), colour rows relabelled "RE-BID offer / bid colour", parameter version 10;   // (0.53.0, 2026-10-25, Rassul approved option A + the v0.49 LMT mockup) LMT ZONES = LmtZonesLogic.h 1.2.0: every drawn zone kind (PRINT / ABC / ORIGIN / NEAR offers) is a thin grey MAP line (a target / magnet, not a wall) with "LMT <lots> (<KIND>)" left of its start, one pooled draw rule in all 7 markets (bids never drawn), STATE TAGS on closed bars - FILLING (grey) / HELD? (red offer, green bid) - recorded as T lines and read back (no repaint), the grey X for pulled, FAST / DRIFT / EATEN / STEPPED logged only, the hover with the honest odds; settings: "State tags" checkbox (parameter version 9); the ring on the first fill dropped (the FILLING tag says it)
 // prior: "0.52.1"          // (0.52.1, 2026-10-24) (2026-10-24 crash fix) IRT fast-fails (0xC0000409 in investorRT.exe) when a MARKET_DEPTH is deleted - adding an indicator to a chart restarts its indicators -> done() -> the next calc deleted the parked book. A MARKET_DEPTH is NEVER deleted any more (a few hundred bytes leaked per symbol / bar-size change).
 // prior: "0.52.0"          // (0.52.0, 2026-10-23 MBO review merge) typed EV-QUEUE evidence beside the native Q / LT rows (same level / pivot gating), QueueMeter 1.4.0 (a withdrawn same-id add is not a refill) // (0.51.0, (2026-10-22 evening fix build) ) QueueMeter.h 1.3.0 (base = max(q0, normal queue), no percent / call while building, "200%+" cap, Q rows only at levels / confirmed ZigZag pivots, debounced; the strip line carries tk<anchor>); LMT ZONES LmtZonesLogic.h 1.1.0 (an LMT = >= 3.0x the live median resting order within 2 ATR, per-market floor, hysteresis 2.5x; S20 context only) //          // (0.50.0, 2026-10-22 evening, the queue meter validation verdict VALIDATE-DEFENDER-SIZE-2026-10-22.md) QueueMeter.h 1.1.0: the 10-s CALL (red < 40% left; green >= 100% + holding, ES / CL) per market from lsFlexLevels\\LRA-QueueMeter-<MKT>.csv (PARAM lines; defaults = the verdict), C lines in the record; the live file renamed LRA-QueueLive-<MKT>.csv; the candle-close Q stays a record (+ the Holding-strip Q line) //          // (0.49.0, 2026-10-22, Rassul approved the QUEUE METER 13:51-13:52 CT, build ordered 15:20 CT) the queue meter engine (QueueMeter.h 1.0.0) runs on this chart's MBO book: a test starts when price trades into a key / MenthorQ level zone, a recent pivot zone or a suddenly defended price; queue left vs the start, originals left (rested 1 s+), eaten / pulled / refill-that-stayed lots/s, time to empty; written to lsFlexLevels\\LRA-QueueMeter-<MKT>.csv for the Dealer Profile's Levels column (nothing new drawn here); Q decided once at a candle close (G held / refilled, R drained / broke) to <stem>-queuemeter-<session>.csv, read back after a restart; status QUEUE_METER //          // (0.48.0, 2026-10-22, Rassul approved LMT zones mockup v3 09:34 CT "Ok build it" + gamma lines grey + only zone / far orders drawn) LMT ZONES (LmtZonesLogic.h 1.0.0): a real large resting LIMIT order (one MBO id >= Big Lot S20, rested 30 s+, re-priced <= 1x) drawn as a zone - BD print (with-trend) / Origin / Near / Far (thin) / ABC (grey context) - per market from PULLBACK-ZONES-FINAL-2026-10-22 (NG / HG offers, NQ offers ?, CL offers on a gamma level, ES BD-print offers ?, GC / 6E log only, bids never drawn); X = pulled / moved (void), ring = first fill; yellow diamond on a gamma level; thin grey gamma lines (the whole MenthorQ set); the BIG column becomes LMT | LMT F (the same order ids); hover with the study numbers; settings rows (parameter version 8); record <stem>-lmtzones-<session>.csv (no repaint); nightly params LRA-LmtZones-<MKT>.csv; TRACK_MOUSE again for the zone hover only // (0.47.1, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") the biggest resting order lines stop at the lsHodLod table's edges (KeepOutDraw.h; the lines, records and counts unchanged) // keep equal to lqp::VERSION and the setVersion literal below
 // (0.45.3, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") every PRICE-CHART hover is off: the
@@ -472,6 +474,10 @@ struct LQState {
     long long lzParT = -2, lzParN = -2, lzParMs = -1; long long lzSession = -1, lzFlushMs = -1, lzWrites = 0, lzFails = 0, lzRestored = 0, lzBad = 0;
     long lzBarCount = 0; long long lzS20 = 0; std::string lzS20Src = "-";
     struct LzHit { int zone = -1; int b0 = 0, b1 = 0; long long lo = 0, hi = 0; };
+    // (0.55.0) THE LIMIT-ORDER LINES (OrderLinesLogic.h): the engine (own book + closed bars), the per-market params, the record, the hover
+    oln::Engine ol; bool olSessionSeen = false; std::string olMkt, olParWhy = "not read"; long long olParT = -2, olParN = -2, olParMs = -1, olWrites = 0, olFails = 0, olRestored = 0;
+    struct OlHit { int line = -1; int b0 = 0, b1 = 0; long long lo = 0, hi = 0; };
+    std::vector<OlHit> olHits; int olHov = -1; int olDrawnNow = 0, olWordsNow = 0, olQNow = 0;
     std::vector<LzHit> lzHits; int lzHov = -1, lzHovBar = -1; double lzHovPrice = 0; void* lzHovWnd = nullptr; std::string lzHovState = "none";
     int lzDrawnNow = 0, lzLmtRows = 0, lzFRows = 0, lzGammaDrawn = 0, lzTagsDrawn = 0, lzAfterDrawn = 0;   // (0.54.0) + after-fill reads on the chart now   // (0.53.0) state tags on the chart now
     // (0.49.0) the QUEUE METER (QueueMeter.h): its own order book + candles; the live file for the Dealer Profile's Levels column; the Q record
@@ -575,6 +581,7 @@ private:
     std::string qmPath(LQState& S) { const std::string d = dir(); return d.empty() || S.qmSession < 0 ? std::string() : d + "\\" + recordStem(S) + "-queuemeter-" + std::to_string(S.qmSession) + ".csv"; }
     void renderZones(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX);
     void renderZoneHover(LQState& S, int paneRight);
+    std::string olPath(LQState& S) { const std::string d = dir(); return d.empty() || S.lzSession < 0 ? std::string() : d + "\\" + recordStem(S) + "-orderlines-" + std::to_string(S.lzSession) + ".csv"; }
     std::string lzPath(LQState& S) { const std::string d = dir(); return d.empty() || S.lzSession < 0 ? std::string() : d + "\\" + recordStem(S) + "-lmtzones-" + std::to_string(S.lzSession) + ".csv"; }
     std::string boPath(LQState& S) { const std::string d = dir(); return d.empty() || S.boSession < 0 ? std::string() : d + "\\" + recordStem(S) + "-bigorders-" + std::to_string(S.boSession) + ".csv"; }
     lqp::HoverIn hoverIn(const LQState& S, const lqp::Zone& z, const std::string& names) const;   // (0.15.0) its inputs
@@ -1554,6 +1561,11 @@ void LiquidityProfile::status(LQState& S, long long now) {
               << ",LMT rows " << S.lzLmtRows << " LMT F rows " << S.lzFRows << ",gamma levels " << S.lzGamma.size() << " drawn " << S.lzGammaDrawn << ",book " << S.lz.book.size()
               << ",tags filling " << T.filling << " held (log only) " << T.held << " pulled " << T.ends[lmz::PULLED] << " (on chart now " << S.lzTagsDrawn << "),after-fill " << (S.lzSet.tags ? "on" : "off") << " re-bid " << T.rebid << " accepted " << T.accepted << " watching " << S.lz.pend.size() << " (skipped: repeat price " << T.afDup << " outside RTH " << T.afOff << " hit < 30 s " << T.afYoung << " re-priced " << T.afMoved << " lost " << T.afLost << "; stack line " << S.lz.R.nbMin << ", RTH from " << S.lz.R.rth0Min / 60 << ":" << (S.lz.R.rth0Min % 60 < 10 ? "0" : "") << S.lz.R.rth0Min % 60 << " CT),log only fast " << T.fast << " mid " << T.mid << " drift " << T.drift << " eaten " << T.eaten << " stepped " << T.stepped << ",judged to " << S.lz.judgedMs
               << ",restored " << S.lzRestored << " bad " << S.lzBad << " unknown line types " << T.unknownLines << ",writes " << S.lzWrites << " fails " << S.lzFails << ",hover " << S.lzHovState << "\n"; }
+        {   const oln::Tally& O = S.ol.tally;   // (0.55.0)
+            o << "ORDER_LINES," << oln::VERSION << "," << (S.lzSet.on ? "on" : "off") << ",params " << S.olParWhy << ",floor " << S.ol.R.floorLots << " lots rest " << S.ol.R.restMin << " min roll " << S.ol.R.rollSec << " s ladder >= " << S.ol.R.ladMinN << " x " << S.ol.R.ladPieceMin << "+ lots in " << S.ol.R.ladSpan << " ticks cut-off " << S.ol.R.cutMin / 60 << ":" << (S.ol.R.cutMin % 60 < 10 ? "0" : "") << S.ol.R.cutMin % 60
+              << ",tracked " << O.lines << " drawn " << O.drawn << " (on chart now " << S.olDrawnNow << ", words " << S.olWordsNow << ", Q " << S.olQNow << ")"
+              << ",filled " << O.filled << " pulled " << O.pulled << " rolls " << O.rolls << " (ambiguous " << O.rollAmbig << ") moves " << O.moves << " ladders " << O.ladders << " icebergs " << O.icebergs
+              << ",held " << O.held << " thru " << O.thru << " (hover only " << O.wordsHidden << "),late skipped " << O.lateSkipped << ",unknown fills " << O.unknownFill << ",restored " << S.olRestored << ",writes " << S.olWrites << " fails " << S.olFails << "\n"; }
         {   const long long qn = S.qmE.lastT; const std::vector<qm::Live> QL = S.qmE.live(qn);   // (0.49.0) the queue meter (numbers here; the meter is drawn by the Dealer Profile)
             o << "QUEUE_METER," << qm::VERSION << ",tests live " << QL.size() << ",started " << S.qmE.nStarted << ",anchors levels " << S.qmE.levels.size() << " pivots (ZigZag last-3 intact) " << S.qmE.pivots.size() << ",Q rows skipped: building " << S.qmE.nThin << " debounced " << S.qmE.nDebounced << " not a level / pivot " << S.qmE.nNotAnchor
               << ",ATR " << S.qmE.atr << ",zone " << S.qmE.zoneW() << " ticks,book " << S.qmE.book.size() << ",events " << S.qmE.nEvents << ",unknown fills " << S.qmE.nUnknownFill
@@ -1862,6 +1874,7 @@ void LiquidityProfile::orders(LQState& S, long long st) {
                 else ms = S.haveOffset ? st + S.ctOffset : 0;
             }
             S.bo.onEvent(ev.action, ev.side, ev.px, ev.size, ev.id, ms);
+            if (ms > 0) S.ol.onEvent(ev.action, ev.side, ev.px, ev.size, ev.id, ms);   // (0.55.0) the limit-order lines keep their own book
             S.lz.onEvent(ev.action, ev.side, ev.px, ev.size, ev.id, ms);   // (0.48.0) the LMT zones keep their own book (side taken from the book, never the FILL row)
             // (0.28.0) the same event to the big market orders (a FILL row: the aggressor's id + side) and the iceberg tracker
             if (ms > 0) {
@@ -1904,7 +1917,7 @@ void LiquidityProfile::orders(LQState& S, long long st) {
     }
     // the mouse left the chart window: the hover goes (as the order-flow panes' HoverTrack)
     if (S.hovId != 0 && S.hovWnd) { void* w = off::cursorWindow(); if (w && w != S.hovWnd) { S.hovId = 0; S.hovWnd = nullptr; invalidateChart(false); } }
-    if (S.lzHov >= 0 && S.lzHovWnd) { void* w = off::cursorWindow(); if (w && w != S.lzHovWnd) { S.lzHov = -1; S.lzHovWnd = nullptr; invalidateChart(false); } }   // (0.48.0)
+    if (S.olHov >= 0 && S.lzHovWnd) { void* w = off::cursorWindow(); if (w && w != S.lzHovWnd) { S.olHov = -1; S.lzHovWnd = nullptr; invalidateChart(false); } }   // (0.55.0) order lines   // (0.48.0)
     if (S.boHovKey != 0 && S.boHovWnd) { void* w = off::cursorWindow(); if (w && w != S.boHovWnd) { S.boHovKey = 0; S.boHovWnd = nullptr; invalidateChart(false); } }   // (0.18.0)
 }
 #endif
@@ -2237,7 +2250,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     (void)ml; (void)mr;
     { RCT bg; bg.set(coord(colL), coord(top), coord(colR), coord(bottom)); bg.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
     FONT fh; fh.id = HELVETICA; fh.size = coord(9); fh.style = BOLD; setFont(fh); setTextColor(C_GREY);
-    const bool lzCols = S.lzSet.on && colR - colL >= 70;               // (0.48.0) LMT | LMT F (the same order ids as the chart zones)
+    const bool lzCols = false && S.lzSet.on && colR - colL >= 70;   // (0.55.0) the LMT resting column removed (Rassul 2026-10-25): the order lines replace it; LMT F stays               // (0.48.0) LMT | LMT F (the same order ids as the chart zones)
     const int midX = colL + (colR - colL) * 45 / 100;
     if (lzCols) {
         { RCT r; r.set(coord(colL), coord(top + 2), coord(midX - 1), coord(top + 14)); r.drawText("LMT", true, false); }
@@ -2619,7 +2632,8 @@ void LiquidityProfile::lzLoad(LQState& S) {
     S.lzCheckMs = now;
     if (S.market.empty()) return;
     const bool newMkt = S.lzMkt != S.market;
-    if (newMkt) { S.lzMkt = S.market; S.lz.market = S.market; S.lz.R = lmz::ruleFor(S.market); S.lzSet = lmz::Settings(); S.lzStampT = S.lzStampN = -2; S.lzParT = S.lzParN = -2; S.lzParMs = -1; }
+    if (newMkt) { S.lzMkt = S.market; S.lz.market = S.market; S.lz.R = lmz::ruleFor(S.market); S.lzSet = lmz::Settings(); S.lzStampT = S.lzStampN = -2; S.lzParT = S.lzParN = -2; S.lzParMs = -1;
+        if (S.olMkt != S.market) { S.ol.market = S.market; S.ol.R = oln::ruleFor(S.market); S.olMkt = S.market; S.olParT = S.olParN = -2; S.olParMs = -1; S.olParWhy = "defaults"; } }
     const std::string p = lzSetPath(S.market);
     long long t = -1, n = -1; if (p.empty() || !statSub(p, t, n)) { t = -1; n = -1; }
     if (t != S.lzStampT || n != S.lzStampN) {
@@ -2639,11 +2653,29 @@ void LiquidityProfile::lzLoad(LQState& S) {
             S.lz.R = lmz::parseParams(L, S.market); S.lzParWhy = S.lz.R.src;
         }
     }
+    // (0.55.0) the limit-order lines' per-market params (the nightly reverse-engineering study): read when its stamp changes, every 60 s
+    if (S.olParMs < 0 || now - S.olParMs >= 60000 || now < S.olParMs) {
+        S.olParMs = now;
+        const std::string d = flexDir(), pp = d.empty() ? std::string() : d + "\\LRA-LimitLines-" + S.market + ".csv";
+        long long pt = -1, pn = -1; if (pp.empty() || !statSub(pp, pt, pn)) { pt = -1; pn = -1; }
+        if (pt != S.olParT || pn != S.olParN) {
+            S.olParT = pt; S.olParN = pn;
+            if (pt < 0) { S.ol.R = oln::ruleFor(S.market); S.olParWhy = "no file: defaults"; }
+            else { std::vector<std::string> L; std::ifstream in; std::string ln; int k = 0;
+                if (openBoundedInput(pp, in)) while (k++ < 200 && readBoundedLine(in, ln)) L.push_back(ln);
+                S.ol.R = oln::parseParams(L, S.market); S.olParWhy = S.ol.R.src; }
+        }
+    }
 }
 void LiquidityProfile::lzFlush(LQState& S, bool force) {
     const long long st = steadyMs();
     if (!force && S.lzFlushMs >= 0 && st >= S.lzFlushMs && st - S.lzFlushMs < 1000) return;
     S.lzFlushMs = st;
+    if (!S.ol.rows.empty()) {   // (0.55.0) the limit-order lines' record
+        const std::string op = olPath(S);
+        if (op.empty()) { if (S.ol.rows.size() > 5000) S.ol.rows.clear(); }
+        else { makeDir(flexDir()); makeDir(dir()); if (appendLines(op, oln::Engine::header(), S.ol.rows)) { S.ol.rows.clear(); S.olWrites++; } else { S.olFails++; if (S.ol.rows.size() > 5000) S.ol.rows.erase(S.ol.rows.begin(), S.ol.rows.begin() + 1000); } }
+    }
     if (S.lz.rows.empty()) return;
     const std::string path = lzPath(S); if (path.empty()) { if (S.lz.rows.size() > 5000) S.lz.rows.clear(); return; }
     makeDir(flexDir()); makeDir(dir());
@@ -2658,6 +2690,13 @@ void LiquidityProfile::lzSessionCheck(LQState& S, long long t) {
     const std::string p = lzPath(S);
     if (!p.empty() && statFile(p) && openBoundedInput(p, in)) { std::string line; int n = 0; while (readBoundedLine(in, line) && ++n < 100000) rows.push_back(line); }
     long long bad = 0; S.lzRestored = (long long)S.lz.restore(rows, &bad); S.lzBad = bad;
+    {   // (0.55.0) the limit-order lines: a fresh engine for the session, the drawn lines / words read back (never repainted)
+        if (S.olRestored >= 0 && S.ol.tally.events > 0 && S.olSessionSeen) { const oln::Rule keepR = S.ol.R; S.ol = oln::Engine(); S.ol.market = S.market; S.ol.R = keepR; }   // a real session change: fresh
+        S.olSessionSeen = true;
+        std::vector<std::string> orow; std::ifstream oin; const std::string op = olPath(S);
+        if (!op.empty() && statFile(op) && openBoundedInput(op, oin)) { std::string line; int n = 0; while (readBoundedLine(oin, line) && ++n < 100000) orow.push_back(line); }
+        S.ol.restore(orow); S.olRestored = (long long)S.ol.lines.size();
+    }
 }
 // every newly CLOSED bar (a later bar exists) goes to the engine once, in order; the S20 in force at the bar's end
 void LiquidityProfile::lzAfter(LQState& S, long count) {
@@ -2679,6 +2718,7 @@ void LiquidityProfile::lzAfter(LQState& S, long count) {
         else if (S.bldOk && S.bldV[0] > 0) { s20 = std::max(1LL, (long long)std::llround(S.bldV[0])); src = "live S20 (LMT footer)"; }
         S.lzS20 = s20; S.lzS20Src = src;
         S.lz.closeBar(b, s20);
+        { oln::Bar ob; ob.endMs = b.endMs; ob.o = b.o; ob.h = b.h; ob.l = b.l; ob.c = b.c; S.ol.closeBar(ob); }   // (0.55.0) HELD / THRU on closed bars
     }
     S.lzBarCount = count;
     lzFlush(S, false);
@@ -2816,7 +2856,14 @@ void LiquidityProfile::qmAfter(LQState& S, long count, long long st) {
 // filled price: RE-BID (red above an offer, green below a bid - a bid zone has no line, only this tag) or ACCEPTED (grey); behind the
 // "After-fill tags" box and the zone kind's box; short words only, no numbers, no borders (the hover has the numbers).
 void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX) {
-    S.lzHits.clear(); S.lzDrawnNow = 0; S.lzGammaDrawn = 0;
+    // (0.55.0) THE LIMIT-ORDER LINES (OrderLinesLogic.h 1.0.0, Rassul's walk-through 2026-10-25 + all-approved-mockup.html). The LMT zone
+    // lines, FILLING / RE-BID? / ACCEPTED tags and the X are no longer drawn (the zone engine still records). Drawn here, in this order:
+    //   1) the gamma levels (thin grey, unchanged);  2) PULLED order lines very dark (under everything);  3) live / filled order lines in the
+    //   side colour (green bid, red offer; a rolled / moved order steps with short vertical risers; ladders and icebergs 3 px, single 2 px);
+    //   4) the fill dot (side colour, white rim);  5) the label left-aligned at the line start ("100", "4o 87", "I R15 500"), stepped away
+    //   from another label;  6) the word HELD (side colour) / THRU (grey) beside its fill dot, once decided;  7) the queue Q badges.
+    S.lzHits.clear(); S.lzDrawnNow = 0; S.lzGammaDrawn = 0; S.olHits.clear(); S.olDrawnNow = 0; S.olWordsNow = 0; S.olQNow = 0;
+    S.lzTagsDrawn = 0; S.lzAfterDrawn = 0;
     const double tick = S.tick; if (!(tick > 0) || !S.lzSet.on || !S.boSet.on) return;
     const int xMin = paneLeft + 1 + std::max(S.width, S.colRight) + 6;
     const int xMax = std::min(lastX, S.colPriceRight > 0 ? S.colPriceRight - 4 : paneRight - 2);
@@ -2824,7 +2871,9 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
     auto xOfBar = [&](int b) { PNT p; p.set(b, 0.0f, kBarCenter); return (int)p.h; };
     auto yOfPx = [&](long long t) { PNT p; p.set(lastBar, (float)((double)t * tick)); return (int)p.v; };
     auto barOfT = [&](long long ms) { return std::max(0, std::min(lastBar, bol::barOf(S.barEndMs, ms))); };
-    const COLOR cOffer = (COLOR)S.lzSet.cOffer, cBid = (COLOR)S.lzSet.cBid, cGrey = (COLOR)S.lzSet.cGrey, cGam = (COLOR)S.lzSet.cGamma, cDia = (COLOR)lmz::C_DIAMOND;
+    const COLOR cOffer = (COLOR)S.lzSet.cOffer, cBid = (COLOR)S.lzSet.cBid, cGrey = (COLOR)S.lzSet.cGrey, cGam = (COLOR)S.lzSet.cGamma;
+    auto dark = [](COLOR c) { const unsigned r = (unsigned)(c >> 16) & 0xFF, g = (unsigned)(c >> 8) & 0xFF, b = (unsigned)c & 0xFF;   // ~30% towards black: the "very dark" pulled line
+        return (COLOR)((((r * 30) / 100) << 16) | (((g * 30) / 100) << 8) | ((b * 30) / 100)); };
     // 1) gamma levels: thin grey lines across the price area, no label (the Levels column names them)
     if (S.lzSet.gammaLines) {
         setPen(cGam, 1, P_SOLID);
@@ -2832,89 +2881,87 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
     }
     FONT f; f.id = HELVETICA; f.size = coord(std::max(10, std::min(12, S.boSet.font))); f.style = BOLD; setFont(f);   // 10 pt minimum (his rule)
     const int fh = rowPx(std::max(10, std::min(12, S.boSet.font)));
-    std::vector<std::pair<int, int> > labels;                          // label rows taken (y top, x left) - a label never prints over another
-    std::vector<std::pair<int, int> > tagSpots;                        // tag rows taken (y top, x centre)
-    S.lzTagsDrawn = 0; S.lzAfterDrawn = 0;
-    for (size_t zi = 0; zi < S.lz.zones.size(); ++zi) {
-        const lmz::Zone& z = S.lz.zones[zi];
-        if (!lmz::shown(z, S.lzSet) || z.segs.empty()) continue;
-        const int bEnd = z.end == lmz::LIVE ? lastBar : barOfT(z.t1);
-        bool any = false; int labX = 0, labY = 0;
-        setPen(cGrey, 1, P_SOLID);
-        for (size_t j = 0; j < z.segs.size(); ++j) {
-            const lmz::Seg& g = z.segs[j];
-            const int b0 = barOfT(g.t), b1 = j + 1 < z.segs.size() ? barOfT(z.segs[j + 1].t) : bEnd;
-            int x0 = std::max(xMin, xOfBar(b0)), x1 = std::min(xMax, j + 1 < z.segs.size() || z.end != lmz::LIVE ? xOfBar(b1) : xMax);
-            x0 = std::max(xMin, std::min(x0, x1 - 16));                     // a zone decided at the last close shows at once (a 16 px stub)
-            if (x1 - x0 < 4) continue;
-            const int y = yOfPx(g.px); if (y <= top + 14 || y >= bottom) continue;
-            ko::line(coord(x0), coord(y), coord(x1), coord(y));          // the thin grey map line at the order's own price
-            if (!any) { labX = x0; labY = y; }
-            any = true;
-            LQState::LzHit h; h.zone = (int)zi; h.b0 = b0; h.b1 = b1;
-            if (z.kind == lmz::K_FAR) { h.lo = g.px - 1; h.hi = g.px + 1; } else { h.lo = std::min(g.lo, g.px - 1); h.hi = std::max(g.hi, g.px + 1); }
-            S.lzHits.push_back(h);
-        }
-        if (!any) continue;
-        ++S.lzDrawnNow;
-        // the label LEFT of the line start ("LMT 100 (PRINT)"), vertically centred on the line; if there is no room on the left it sits
-        // above the line start; stepped away from another label (never prints over one)
-        const std::string tx = lmz::label(z);
-        const int tw = (int)getTextWidth(tx.c_str(), -1) + 2, dia = z.conf && S.lzSet.diamond ? 14 : 0;
-        int lx = labX - 6 - tw, ly = labY - fh / 2;
-        if (lx - dia < xMin) { lx = std::max(xMin, labX); ly = labY - fh - 1; }
-        for (int tries = 0; tries < 4; ++tries) { bool clash = false; for (size_t k = 0; k < labels.size(); ++k) if (std::abs(labels[k].first - ly) < fh && std::abs(labels[k].second - lx) < tw + 40) clash = true; if (!clash) break; ly -= fh; }
-        if (ly > top + 14 && ly + fh < bottom) {
-            setTextColor(cGrey); RCT lr; lr.set(coord(lx), coord(ly), coord(lx + tw), coord(ly + fh)); ko::text(lr, tx.c_str(), false, false);
-            labels.push_back(std::make_pair(ly, lx));
-            if (dia) {   // the yellow diamond just left of the label (a real order on a gamma level)
-                const int cx = lx - 8, cy = ly + fh / 2;
-                setPen(cDia, 1, P_SOLID);
-                for (int d = -4; d <= 4; ++d) { const int w = 4 - std::abs(d); ko::line(coord(cx - w), coord(cy + d), coord(cx + w + 1), coord(cy + d)); }
+    std::vector<std::pair<int, int> > labels;                          // label boxes taken (y top, x left)
+    std::vector<std::pair<int, int> > wordSpots;                       // words taken (y top, x left)
+    const oln::Engine& E = S.ol;
+    for (int pass = 0; pass < 2; ++pass) {                             // pass 0: pulled (dark, underneath); pass 1: live / filled
+        for (size_t li = 0; li < E.lines.size(); ++li) {
+            const oln::Line& L = E.lines[li];
+            if (!E.visible(L) || L.segs.empty()) continue;
+            const bool pulled = L.end == oln::PULLED;
+            if ((pass == 0) != pulled) continue;
+            if (pulled && !S.lzSet.nearO) continue;                     // "Pulled lines (very dark)" box
+            if (L.kind == oln::K_LADDER && !S.lzSet.origin) continue;   // "Ladders" box
+            if (L.kind == oln::K_ONE && L.refills > 0 && !S.lzSet.print) continue;   // "Icebergs" box
+            const bool bid = L.side == oln::BID;
+            const COLOR base = bid ? cBid : cOffer, c = pulled ? dark(base) : base;
+            const int pen = (L.kind == oln::K_LADDER || L.refills > 0 || L.segs.size() > 1) ? 3 : 2;
+            const int bEnd = L.end == oln::LIVE ? lastBar : barOfT(L.endMs);
+            bool any = false; int labX = 0, labY = 0, lastY = -1, lastX1 = -1;
+            setPen(c, pen, P_SOLID);
+            for (size_t j = 0; j < L.segs.size(); ++j) {
+                const oln::Seg& g = L.segs[j];
+                const int b0 = barOfT(g.t), b1 = j + 1 < L.segs.size() ? barOfT(L.segs[j + 1].t) : bEnd;
+                int x0 = std::max(xMin, xOfBar(b0)), x1 = std::min(xMax, j + 1 < L.segs.size() || L.end != oln::LIVE ? xOfBar(b1) : xMax);
+                x0 = std::max(xMin, std::min(x0, x1 - 16));
+                const int y = yOfPx(g.px);
+                if (lastY >= 0 && lastX1 >= xMin && lastX1 <= xMax && y > top + 14 && y < bottom && lastY > top + 14 && lastY < bottom)
+                    ko::line(coord(lastX1), coord(lastY), coord(lastX1), coord(y));   // the step (rolled / moved), at the moment it moved
+                if (x1 - x0 < 2 || y <= top + 14 || y >= bottom) { lastY = y; lastX1 = x1; continue; }
+                ko::line(coord(x0), coord(y), coord(x1), coord(y));
+                if (!any) { labX = x0; labY = y; }
+                any = true; lastY = y; lastX1 = x1;
+                LQState::OlHit h; h.line = (int)li; h.b0 = b0; h.b1 = b1; h.lo = g.px - 1; h.hi = g.px + 1; S.olHits.push_back(h);
             }
-        }
-        // the end mark: X = pulled / moved away (the zone is void), grey
-        if (z.end == lmz::PULLED || z.end == lmz::MOVED) {
-            const int x = std::min(xMax, xOfBar(bEnd)), y = yOfPx(z.px());
-            if (y > top + 14 && y < bottom) { setPen(cGrey, 2, P_SOLID); ko::line(coord(x - 4), coord(y - 4), coord(x + 5), coord(y + 5)); ko::line(coord(x - 4), coord(y + 4), coord(x + 5), coord(y - 5)); }
-        }
-        // (1.2.0) the state tags, each on the bar it was decided (recorded, never moved): FILLING grey, HELD? red (offer) / green (bid);
-        // above an offer line, below a bid line, centred on the bar, stepped away from another tag
-        if (lmz::tagsShown(z, S.lzSet)) {
-            for (int k = 0; k < 1; ++k) {                                   // (0.54.0) FILLING only: HELD is logged, never drawn
-                const long long tms = z.tagFillMs; if (tms <= 0) continue;
-                const int b = barOfT(tms); const int x = xOfBar(b), y = yOfPx(z.pxAt(tms));
-                const char* tt = lmz::tagText(k == 1); const int ttw = (int)getTextWidth(tt, -1) + 2;
-                int tx0 = std::max(xMin, std::min(x - ttw / 2, xMax - ttw)), ty = z.side == lmz::ASK ? y - fh - 2 : y + 2;
-                for (int tries = 0; tries < 3; ++tries) { bool clash = false; for (size_t q = 0; q < tagSpots.size(); ++q) if (std::abs(tagSpots[q].first - ty) < fh && std::abs(tagSpots[q].second - tx0) < ttw + 4) clash = true; if (!clash) break; ty += z.side == lmz::ASK ? -fh : fh; }
-                if (ty <= top + 14 || ty + fh >= bottom) continue;
-                setTextColor(cGrey);
-                RCT tr; tr.set(coord(tx0), coord(ty), coord(tx0 + ttw), coord(ty + fh)); ko::text(tr, tt, false, false);
-                tagSpots.push_back(std::make_pair(ty, tx0)); ++S.lzTagsDrawn;
+            if (!any) continue;
+            ++S.olDrawnNow;
+            // the start tick (placement) when the placement is on the chart
+            if (barOfT(L.t0) > 0 || xOfBar(0) >= xMin) { const int x = xOfBar(barOfT(L.t0)); if (x >= xMin && x <= xMax && labY > top + 14 && labY < bottom) ko::line(coord(x), coord(labY - 5), coord(x), coord(labY + 6)); }
+            // the label: just right of the line start, below a bid line / above an offer line, stepped away from another label
+            const std::string tx = L.label();
+            const int tw = (int)getTextWidth(tx.c_str(), -1) + 2;
+            int lx = std::max(xMin, std::min(labX + 4, xMax - tw)), ly = bid ? labY + 2 : labY - fh - 1;
+            for (int tries = 0; tries < 6; ++tries) { bool clash = false; for (size_t q = 0; q < labels.size(); ++q) if (std::abs(labels[q].first - ly) < fh && std::abs(labels[q].second - lx) < tw + 6) clash = true; if (!clash) break; lx = std::min(xMax - tw, lx + tw + 8); }
+            if (ly > top + 14 && ly + fh < bottom) { setTextColor(c); RCT lr; lr.set(coord(lx), coord(ly), coord(lx + tw), coord(ly + fh)); ko::text(lr, tx.c_str(), false, false); labels.push_back(std::make_pair(ly, lx)); }
+            if (L.end == oln::FILLED) {
+                const long long fm = L.fillMs ? L.fillMs : L.endMs; const oln::Tick fp = L.fillPx ? L.fillPx : L.px();
+                const int x = std::min(xMax, std::max(xMin, xOfBar(barOfT(fm)))), y = yOfPx(fp);
+                if (y > top + 14 && y < bottom) {   // the fill dot: side colour, white rim
+                    for (int d = -4; d <= 4; ++d) { const int w = (int)std::lround(std::sqrt(16.0 - d * d)); setPen(base, 1, P_SOLID); ko::line(coord(x - w), coord(y + d), coord(x + w + 1), coord(y + d)); }
+                    setPen(0x00FFFFFF, 1, P_SOLID); for (int a = 0; a < 24; ++a) { const double t0 = a * 3.14159265 / 12, t1 = (a + 1) * 3.14159265 / 12; ko::line(coord(x + (int)std::lround(5 * std::cos(t0))), coord(y + (int)std::lround(5 * std::sin(t0))), coord(x + (int)std::lround(5 * std::cos(t1))), coord(y + (int)std::lround(5 * std::sin(t1)))); }
+                    if (L.word != oln::W_NONE && L.wordShown && S.lzSet.tags) {   // the word beside its fill dot
+                        const char* wt = oln::wordText(L.word); const int ww = (int)getTextWidth(wt, -1) + 2;
+                        int wx = std::min(xMax - ww, x + 8), wy = y - fh / 2;
+                        for (int tries = 0; tries < 3; ++tries) { bool clash = false; for (size_t q = 0; q < wordSpots.size(); ++q) if (std::abs(wordSpots[q].first - wy) < fh && std::abs(wordSpots[q].second - wx) < ww + 4) clash = true; if (!clash) break; wy += bid ? fh : -fh; }
+                        if (wy > top + 14 && wy + fh < bottom) { setTextColor(L.word == oln::W_HELD ? base : cGrey); RCT wr; wr.set(coord(wx), coord(wy), coord(wx + ww), coord(wy + fh)); ko::text(wr, wt, false, false); wordSpots.push_back(std::make_pair(wy, wx)); ++S.olWordsNow; }
+                    }
+                }
             }
         }
     }
-    // (0.54.0) the AFTER-FILL READ: every decided zone the boxes allow (drawn offers, and bid zones - tag only), on its decision bar
-    const bool bidsOk = !lmz::logOnly(S.lz.R);
-    for (size_t zi = 0; zi < S.lz.zones.size(); ++zi) {
-        const lmz::Zone& z = S.lz.zones[zi];
-        if (!lmz::afterShown(z, S.lzSet, bidsOk) || z.segs.empty()) continue;
-        const int b = barOfT(z.afDecMs); const int x = std::min(xMax, std::max(xMin, xOfBar(b))), y = yOfPx(z.pxAt(z.afFillMs));
-        const char* tt = lmz::afterText(z.afRead); const int ttw = (int)getTextWidth(tt, -1) + 2;
-        int tx0 = std::max(xMin, std::min(x - ttw / 2, xMax - ttw)), ty = z.side == lmz::ASK ? y - fh - 2 : y + 2;
-        for (int tries = 0; tries < 3; ++tries) { bool clash = false; for (size_t q = 0; q < tagSpots.size(); ++q) if (std::abs(tagSpots[q].first - ty) < fh && std::abs(tagSpots[q].second - tx0) < ttw + 4) clash = true; if (!clash) break; ty += z.side == lmz::ASK ? -fh : fh; }
-        if (ty <= top + 14 || ty + fh >= bottom) continue;
-        setTextColor(z.afRead == 1 ? (z.side == lmz::ASK ? cOffer : cBid) : cGrey);
-        RCT tr; tr.set(coord(tx0), coord(ty), coord(tx0 + ttw), coord(ty + fh)); ko::text(tr, tt, false, false);
-        tagSpots.push_back(std::make_pair(ty, tx0)); ++S.lzTagsDrawn; ++S.lzAfterDrawn;
+    // 7) the QUEUE Q (QueueMeter 10-s call): a small solid badge "Q" on the level at the bar of the call; colour by meaning (bids holding /
+    // offers drained = green, bids drained / offers holding = red); only where the market's rule shows the call (ES CL EU both, NQ GC red)
+    if (S.lzSet.farOn) {
+        const qm::Engine& Q = S.qmE;
+        for (size_t i = 0; i < Q.tests.size(); ++i) {
+            const qm::Engine::Test& T = Q.tests[i];
+            if (T.call != 0 && T.call != 1) continue;
+            if (Q.rule.mark == qm::M_LOG || (T.call == 1 && !Q.rule.greenShow)) continue;
+            const bool bull = (T.side == qm::BID) == (T.call == 1);
+            const COLOR qc = bull ? C_BUY : C_SELL;
+            const int x = std::min(xMax - 14, std::max(xMin, xOfBar(barOfT(T.tCall > 0 ? T.tCall : T.t0)))), y = yOfPx(T.anchor);
+            if (y <= top + 14 || y >= bottom) continue;
+            const int qw = (int)getTextWidth("Q", -1) + 6, by = T.side == qm::BID ? y + 3 : y - fh - 3;
+            RCT qb; qb.set(coord(x - qw / 2), coord(by), coord(x - qw / 2 + qw), coord(by + fh)); qb.draw(0, qc, qc, DRAW_OPAQUE, PAT_SOLID);
+            setTextColor(0x00141414); ko::text(qb, "Q", true, false); ++S.olQNow;
+        }
     }
 }
 void LiquidityProfile::renderZoneHover(LQState& S, int paneRight) {
     S.lzHovState = "none";
-    if (S.lzHov < 0 || S.lzHov >= (int)S.lz.zones.size() || !S.lzSet.on) { S.lzHov = -1; return; }
-    const lmz::Zone& z = S.lz.zones[(size_t)S.lzHov];
-    lmz::HoverCtx c; c.market = S.market; c.tick = S.tick; c.nowMs = S.lz.lastT; c.sizeLive = S.lz.liveSize(z);
-    const std::vector<lmz::Row> rows = lmz::hoverRows(z, c);
+    if (S.olHov < 0 || S.olHov >= (int)S.ol.lines.size() || !S.lzSet.on) { S.olHov = -1; return; }
+    const oln::Line& L = S.ol.lines[(size_t)S.olHov];
+    const std::vector<oln::Row> rows = oln::hoverRows(L, S.tick, S.ol.lastT);
     const COLOR cWhite = 0x00E2E8F0, cFill = 0x0011151C;
     int font = 11, W = 0, rowH = 0; const int pad = 6;
     const int x1Lim = (S.colPriceRight > 0 ? std::min(S.colPriceRight, paneRight) : paneRight) - 4, x0Lim = S.boXMin;
@@ -2940,10 +2987,10 @@ void LiquidityProfile::renderZoneHover(LQState& S, int paneRight) {
         while (tx.size() > 4 && (int)getTextWidth(tx.c_str(), -1) > W - 2 * pad - 2) tx.resize(tx.size() - 4);
         if (tx != rows[i].text) tx += "...";
         const int ink = rows[i].ink;
-        setTextColor(ink == lmz::INK_GREEN ? C_BUY : ink == lmz::INK_RED ? C_SELL : ink == lmz::INK_GREY ? C_GREY : ink == lmz::INK_YELLOW ? (COLOR)lmz::C_DIAMOND : cWhite);
+        setTextColor(ink == oln::INK_GREEN ? C_BUY : ink == oln::INK_RED ? C_SELL : ink == oln::INK_GREY ? C_GREY : cWhite);
         const int y = y0 + pad - 1 + (int)i * rowH; RCT r; r.set(coord(x0 + pad), coord(y), coord(x0 + W - 2), coord(y + rowH)); r.drawText(tx.c_str(), false, false);
     }
-    S.lzHovState = "shown " + std::to_string((long long)rows.size()) + " rows";
+    S.lzHovState = "order line shown " + std::to_string((long long)rows.size()) + " rows";
 }
 #endif
 
@@ -3059,8 +3106,8 @@ void LiquidityProfile::render(LQState& S) {
         cb::In in; in.paneL = pane.left; in.paneT = pane.top; in.paneB = pane.bottom; in.axisR = paneRight;
         in.levels = S.peers.on[cb::LEVELS]; in.levelsW = S.peers.w[cb::LEVELS]; in.delta = S.peers.on[cb::DELTA]; in.deltaW = S.peers.w[cb::DELTA];
         in.dealer = S.peers.on[cb::DEALER]; in.dealerW = S.peers.w[cb::DEALER];
-        in.big = S.boSet.on; in.bigW = S.lzSet.on ? LQ_BIG_W_LMZ : LQ_BIG_W;                          // (0.19.0) our BIG column, first after the last bar; (0.22.5) 44 -> 56 px
-        if (S.boSet.on) cb::publish(cb::BIG, S.symbol, S.spb, chart, now, S.lzSet.on ? LQ_BIG_W_LMZ : LQ_BIG_W); else cb::clear(cb::BIG, S.symbol, S.spb, chart);
+        in.big = S.boSet.on; in.bigW = LQ_BIG_W;                          // (0.19.0) our BIG column, first after the last bar; (0.22.5) 44 -> 56 px
+        if (S.boSet.on) cb::publish(cb::BIG, S.symbol, S.spb, chart, now, LQ_BIG_W); else cb::clear(cb::BIG, S.symbol, S.spb, chart);
         const cb::Layout L = cb::layout(in);
         S.colPriceRight = L.margin > 0 ? L.priceRight : -1;
         S.colBigL = L.w[cb::BIG] > 0 && L.margin > 0 ? L.big.l : -1; S.colBigR = S.colBigL >= 0 ? L.big.r : -1;
@@ -4053,11 +4100,11 @@ int LiquidityProfile::mouse(RTX_EVENT* e) {
             const double tick = Z->tick, price = (double)e->v.mouse.price; const long bar = e->v.mouse.bar; int hit = -1;
             if (tick > 0 && lqp::finite(price) && price > 0) {
                 const double t = price / tick;
-                for (size_t i = Z->lzHits.size(); i-- > 0 && hit < 0;) { const LQState::LzHit& h = Z->lzHits[i];
-                    if (t >= (double)h.lo - 0.5 && t <= (double)h.hi + 0.5 && bar >= h.b0 && bar <= h.b1 + 1) hit = h.zone; }
+                for (size_t i = Z->olHits.size(); i-- > 0 && hit < 0;) { const LQState::OlHit& h = Z->olHits[i];   // (0.55.0) the order lines
+                    if (t >= (double)h.lo - 0.5 && t <= (double)h.hi + 0.5 && bar >= h.b0 && bar <= h.b1 + 1) hit = h.line; }
             }
             if (hit >= 0) { Z->lzHovWnd = off::cursorWindow(); Z->lzHovBar = (int)bar; Z->lzHovPrice = price; }
-            if (hit != Z->lzHov || (hit >= 0 && Z->lzHovBar != (int)bar)) { Z->lzHov = hit; invalidateChart(false); }
+            if (hit != Z->olHov || (hit >= 0 && Z->lzHovBar != (int)bar)) { Z->olHov = hit; invalidateChart(false); }
         }
     }
     if (!LQ_HOVERS) return RTX_FAIL;                                    // (0.45.3) hovers off: the mouse is never used on the price chart (except the LMT zones)
@@ -4110,6 +4157,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.54.1");   // LQ_VERSION
+    p->setVersion("0.55.0");   // LQ_VERSION
     return p;
 }

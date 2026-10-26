@@ -117,6 +117,7 @@ inline CallRule callRuleFor(const std::string& m) {
     CallRule r;
     if (m == "ES" || m == "CL") { r.mark = M_SHOW; r.greenShow = true; }
     else if (m == "NQ" || m == "GC") { r.mark = M_SHOWQ; r.greenShow = false; }
+    else if (m == "EU" || m == "6E") { r.mark = M_SHOW; r.greenShow = true; }   // (LP 0.55.0, Rassul 2026-10-25 22:29 "6e also gets q": not validated yet - judged nightly)
     r.src = "defaults (the 2026-10-22 verdict)"; return r;
 }
 inline CallRule parseCallRule(const std::vector<std::string>& lines, const std::string& mkt, bool& ok) {
