@@ -103,14 +103,14 @@ int main() {
         DeltaProfile q; mock::Host h2 = h; h2.data = NULL; redraw(h2, q); redraw(h2, q);
         check(slurp(sabPath()) == rec && ringsOn(h2, PK, false) == 1 && textA(h2, C_SUPPORT) == 1, "[shared] restart: the same A from the record, nothing written twice");
         finish(h2, q); }
-    // [red] attackers' colour: no shared A, no coloured circle - also after the next candle confirms the node A (2.18 next-candle rule)
+    // [red] attackers' colour: no shared A; (2.23.1) the node A confirmed by the next candle's green close is ONE green circle (was gray)
     {   home("red"); mock::Host h = chartS(t0, 101.5, 100.75, 600);
         add(h, 99.5, 103.5, 100, 103);
         DeltaProfile p; redraw(h, p);
         add(h, 99.75, 103.25); redraw(h, p);
         h.bars.back().high = 104.5f; add(h, 100, 105); redraw(h, p); redraw(h, p);
         check(countPrefix(slurp(sabPath()), "SAB|") == 0, "[red] sellers 6x but a RED close at the low: no shared A in the record");
-        check(ringsOn(h, PK, true) == 0 && ringsOn(h, PK, false) == 1 && textA(h, C_SUPPORT) == 0 && textA(h, C_RESISTANCE) == 0, "[red] no coloured circle and no letter A on the attacker-colour candle: one gray circle");
+        check(ringsOn(h, PK, true) == 1 && ringsOn(h, PK, false) == 1 && textA(h, C_RESISTANCE) == 0, "[red] (2.23.1, Rassul 2026-10-25) the node A confirmed by the NEXT candle's green close is coloured green like every A (was: gray)");
         finish(h, p); }
     // [one] two node A's on one green candle, no shared A (no prior sellers): one coloured circle
     {   home("one"); mock::Host h = chart(t0, 100.5, 101);

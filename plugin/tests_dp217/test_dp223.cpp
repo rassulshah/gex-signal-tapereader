@@ -144,7 +144,7 @@ static void hostTests() {
         addq(h); redraw(h, p2);
         check(countPrefix(slurp(path), "RW|") == countPrefix(before, "RW|") + 1, "[host] after the restart only the NEW candle is judged (one RW line)");
         finish(h, p2); }
-    // 2) next-candle A: decided at the next candle's close, delay 1; shown as the gray circle (2.22.0 defenders'-close rule)
+    // 2) next-candle A: decided at the next candle's close, delay 1; (2.23.1) coloured by its confirmation candle's close
     {   const std::string dir = home("next"); const RecPath path = recPath(dir);
         mock::Host h = chart(false, false);
         mock::Bar n = qb(36); n.open = 106; n.close = 108; n.low = 105.5f; n.high = 109; h.bars.push_back(n);   // 36 forming
@@ -153,7 +153,7 @@ static void hostTests() {
         addq(h); redraw(h, p); redraw(h, p);                                            // 36 closed
         const std::vector<std::vector<std::string> > d = dRows(slurp(path), "A");
         check(d.size() == 1 && d[0].size() == 29 && d[0][24] == "conf=next" && d[0][26] == "delay_bars=1" && d[0][27] == "delay_min=3" && d[0][28] == "late=0", "[host] next: D line conf=next delay 1 candle / 3 min");
-        check(colourRings(h) == 0 && grayRings(h) == 1, "[host] next: the one circle is gray (node candle closed in the attackers' colour, 2.22.0 rule)");
+        check(colourRings(h) == 1 && grayRings(h) == 0, "[host] next: (2.23.1) the circle is GREEN - its confirmation candle (36) closed green, like every A");
         finish(h, p); }
     // 3) late: the row is only the 4th at its candle's close, reaches the top 3 later -> old path: AL, rule=old, late=1, not drawn
     {   const std::string dir = home("late"); const RecPath path = recPath(dir);
@@ -182,16 +182,16 @@ static void hostTests() {
 }
 static void settingsTests() {
     const ss::Spec& S = dpset::spec();
-    check(S.paramVersion == 17 && std::string(S.version) == "2.23.0", "[set] parameter version 17, spec version 2.23.0");
+    check(S.paramVersion == 17 && std::string(S.version) == "2.23.1", "[set] parameter version 17, spec version 2.23.1");
     const int k = ss::find(S, "draw_late");
     check(k == dpset::K_DRAW_LATE && S.rows[k].type == ss::T_BOOL && S.rows[k].def == 0 && !S.rows[k].hidden && std::string(S.rows[k].label) == "Draw late A (not tested)", "[set] Draw late A (not tested): visible checkbox, default off");
 }
 int main() {
     g_sabGraceMs = 1LL << 60;   // the shared A (SharedAbsorb.h) never decides here: every ring below is a node A of this plugin
     coreTests(); hostTests(); settingsTests();
-    check(std::string(DLT_VERSION) == "2.23.0" && std::string(dpset::PLUGIN_VERSION) == DLT_VERSION, "[ver] DLT_VERSION = settings version");
-    check(slurp("../DeltaProfile.cpp").find("p->setVersion(\"2.23.0\")") != std::string::npos, "[ver] setVersion literal");
+    check(std::string(DLT_VERSION) == "2.23.1" && std::string(dpset::PLUGIN_VERSION) == DLT_VERSION, "[ver] DLT_VERSION = settings version");
+    check(slurp("../DeltaProfile.cpp").find("p->setVersion(\"2.23.1\")") != std::string::npos, "[ver] setVersion literal");
     check(slurp("../DeltaProfileCore.h").find("DeltaProfileCore.h 2.23.0") != std::string::npos, "[ver] core header");
-    std::cout << "dp 2.23.0 researched A: " << passed << " passed, " << failed << " failed\n";
+    std::cout << "dp 2.23.1 researched A: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

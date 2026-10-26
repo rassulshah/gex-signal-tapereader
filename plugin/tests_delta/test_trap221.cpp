@@ -172,7 +172,7 @@ int main(){
         for(const L& l:lays){std::string why;const bool ok=layoutOk(l.top,l.nodes,l.origin,l.scale,l.font,why);check(ok,std::string("[layout] ")+l.name+(ok?"":": "+why));}
     }
     std::cout<<"[3] versions / settings\n";
-    {   check(std::string(DLT_VERSION)=="2.23.0"&&std::string(dpset::PLUGIN_VERSION)=="2.23.0","versions 2.23.0");   // (2.23.0) pins moved with the build
+    {   check(std::string(DLT_VERSION)=="2.23.1"&&std::string(dpset::PLUGIN_VERSION)=="2.23.1","versions 2.23.1");   // (2.23.0) pins moved with the build
         const ss::Spec& S=dpset::spec();
         check(S.paramVersion==17&&std::string(S.rows[dpset::K_TRAP_ON].key)=="trap_on"&&S.rows[dpset::K_TRAP_ON].def==1,"settings row trap_on (on), parameter version 17 (2.23.0)");
         check(std::string(trapl::VERSION)=="1.0.0"&&trapl::MIN_X==1.0&&trapl::LOOKBACK==20,"TrapLogic 1.0.0: 20 candles, 1.0x");
