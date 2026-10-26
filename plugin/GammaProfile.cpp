@@ -49,6 +49,10 @@
  *  numbering and silently scrambles every setting read after it.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "GammaProfile"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "GammaProfileLogic.h"     // (v0.45) the decisions, testable without IRT
 #include "ContractOffsetLogic.h"   // (shared) the anchor-bar rule, tested
@@ -63,7 +67,7 @@
 #include <algorithm>
 #include <ctime>
 
-static const char* GP_VERSION = "0.80";   // ONE version string: the factory and the status file both read it
+static const char* GP_VERSION = "0.81";   // ONE version string: the factory and the status file both read it
 
 // ---- default palette (matches the Skylit tape) ----------------------------
 static const COLOR D_POS  = 0x00E3C341;  // +gamma  (yellow/gold)
@@ -1294,7 +1298,7 @@ short GammaProfile::barThickness(const Settings& S, const std::vector<GStrike>& 
 
 // ---- draw() ---------------------------------------------------------------
 int GammaProfile::draw(void)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     syncSettings();   // (v0.78) the saved settings reach the draw — and a v7 instance is repaired the moment its values arrive
     load();
     gpl::RailLayout RLY = gpl::railLayout(cfg.book, cfg.side, cfg.width, cfg.spywidth);   // (v0.61)

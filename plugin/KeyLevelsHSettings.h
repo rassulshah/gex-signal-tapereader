@@ -14,7 +14,7 @@
 #endif
 
 namespace klhset {
-static const char* const PLUGIN_VERSION = "1.2.0";
+static const char* const PLUGIN_VERSION = "1.2.1";
 enum K {
     K_SHOW_PF, K_COL_PF, K_SHOW_PD, K_COL_PD, K_SHOW_PW, K_COL_PW, K_SHOW_CW, K_COL_CW, K_SHOW_ON, K_COL_ON,
     K_SHOW_LON, K_COL_LON, K_SHOW_ASIA, K_COL_ASIA, K_SHOW_DPOC, K_COL_DPOC, K_SHOW_VA, K_COL_VA, K_SHOW_WPOC, K_COL_WPOC,

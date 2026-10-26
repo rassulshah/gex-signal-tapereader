@@ -21,6 +21,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "Exhaustion"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
@@ -50,7 +54,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.2.3"          // keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.2.4"          // keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
@@ -243,8 +247,8 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<Exhaustion*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<Exhaustion*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void)   { setParameterVersion(1); return RTX_OK; }
-int cppExtension::calc(int)     { static_cast<Exhaustion*>(this)->pump(); return RTX_OK; }
-int Exhaustion::draw(void) {
+int cppExtension::calc(int)     { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<Exhaustion*>(this)->pump(); return RTX_OK; }
+int Exhaustion::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     pump();
     EXState* S = slot_.get(this, false);
     if (S && !S->faulted) { try { render(*S); } catch (...) { S->state = "draw error"; } }
@@ -475,6 +479,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA Exhaustion: is the side pushing price running out? Red = buyers fading at a new high (bearish), green = sellers fading at a new low (bullish): their peak pace in the push / their pace now, 1.0 when price is not at a new extreme. E = the first RTH bar at or over the market's line (from the nightly study), recorded and never repainted.");
-    p->setVersion("0.2.3");   // EX_VERSION
+    p->setVersion("0.2.4");   // EX_VERSION
     return p;
 }

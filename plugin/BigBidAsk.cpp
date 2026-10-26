@@ -125,6 +125,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "BigBidAsk"
+#endif
 #ifdef far
 #undef far
 #endif
@@ -174,7 +178,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.28.0"          // 1.28.0 (2026-10-24, Rassul 21:38 CT) BO wave confirmation (higher high + higher close in the same wave, closes beyond the pivot), counter-trend needs a 30-bar high / low, letter on the BO bar, BO / OB boxes show biggest-in-N
+#define BBA_VERSION "1.28.1"          // 1.28.0 (2026-10-24, Rassul 21:38 CT) BO wave confirmation (higher high + higher close in the same wave, closes beyond the pivot), counter-trend needs a 30-bar high / low, letter on the BO bar, BO / OB boxes show biggest-in-N
 // prev:          // 1.27.1 (2026-10-24, Rassul 21:42 CT) Rly condition 3: tagged +-1 SD OR a 30-bar high / low (RallyLogic.h 1.1.0; waves already recorded are not re-judged)
 // prev:          // 1.27.0 (2026-10-22 evening fix build) the BL5 / BL10 / BL20 box next to the HOD/LOD table is no longer drawn (tiers only in the LMT / LMT F footers; numbers kept in BL_BOX status);          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
@@ -505,8 +509,8 @@ int cppExtension::setup(void) {
     ss::registerAll(this, bbaset::spec(), BigBidAsk::bbaIds());
     return RTX_OK;
 }
-int cppExtension::calc(int) { static_cast<BigBidAsk*>(this)->pump(false); return RTX_OK; }
-int BigBidAsk::draw(void) {
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<BigBidAsk*>(this)->pump(false); return RTX_OK; }
+int BigBidAsk::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     pump(true);
     BBState* S = slot_.get(this, false);
     if (S) { try { render(*S); } catch (...) { S->state = "draw error"; } }
@@ -2143,6 +2147,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.24.0) TRACK_MOUSE for the Rly hover only (print hovers stay off: BBA_HOVERS)
     p->setDescription("LRA Big Bid / Ask 1.28.0: OB (3-min) = the order block print of a strong wave (an Rly wave, or any wave of 3+ ATR): the biggest bid / ask volume on the pivot candle and the next 1 - 3 candles (the 2nd biggest when the BO already shows the biggest), its lots in the side box + OB below the candle of an up-wave / above for a down-wave; decided when the wave is confirmed, never repainted (not proven yet). Rly (3-min) = the end of a confirmed trend wave (3+ bars, 2.5+ ATR, tagged VWAP +/-1 SD, a 20-bar high / low, vwapTrend Uptrend / Dntrend): green above / red below the bar - don't chase it, wait for the pullback to VWAP / 1 SD and a trigger, trend only. BO = context, not an entry: a confirmed break - don't fade against it. A green breakout (red breakdown) candle through one of the last 3 intact swing highs (lows) of the 1-bar ZigZag with a 10-candle high (low), range and volume up (a wick break counts); confirmed when the next qualifying candle of the same wave is the same colour with a higher high and higher close (lower low and lower close) and closes beyond the swing; against the vwapTrend the wave must also make a 30-bar high (low). BO green above / red below the breakout candle, shown when the confirming candle closes; failures are logged only. Its biggest buy (sell) print on the candle, the box = biggest in N candles. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.28.0");   // BBA_VERSION
+    p->setVersion("1.28.1");   // BBA_VERSION
     return p;
 }

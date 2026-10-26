@@ -108,6 +108,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "IRTReader"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 // Windows headers may define far as a legacy memory-model macro.  DealerLogic
 // legitimately uses Node::far, so remove only that obsolete macro before the
@@ -138,7 +142,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* IR_VERSION = "0.8.4";   // (0.8.4, 2026-10-24) (2026-10-24 crash fix) IRT fast-fails (0xC0000409 in investorRT.exe) when a MARKET_DEPTH is deleted - adding an indicator to a chart restarts its indicators -> done() -> the next calc deleted the parked book. A MARKET_DEPTH is NEVER deleted any more (a few hundred bytes leaked per symbol / bar-size change).
+static const char* IR_VERSION = "0.8.5";   // (0.8.4, 2026-10-24) (2026-10-24 crash fix) IRT fast-fails (0xC0000409 in investorRT.exe) when a MARKET_DEPTH is deleted - adding an indicator to a chart restarts its indicators -> done() -> the next calc deleted the parked book. A MARKET_DEPTH is NEVER deleted any more (a few hundred bytes leaked per symbol / bar-size change).
 // prior: "0.8.3";   // (0.8.2, 2026-10-22 MBO recorder fix P1) dbo_HH rows stamped by ARRIVAL time (ArrivalStamp.h): a row IRT stamps with the resting order's old time gets the latest time already written, so it lands in the right hour file and replays in feed order; status DBO adds restamped / max_back_s; (0.8.1) the book object parked at done() / destroy() - IRT faulted inside its destructor at every quit; (0.8.0) the depth recorder: chart-context open, 250 ms guarded clock, valid books only, hourly dom_HH / dbo_HH, coverage; stuck-bar skip; pass watchdog
 //   // (0.7.1 audit) complete VAP bars and cursor advancement are durable-only; fixed-market readers remain footprint-only; MBO is accurately labelled on CQG and bounded per pass.
 //   // (0.6.5) times every step: any step over 250 ms is traced as SLOW (the IRT freeze hunt, 2026-10-08)   // (0.6.4) audit 0.6.3 fixes, one reader per DLL (timer-safe)
@@ -407,7 +411,7 @@ int cppExtension::destroy(void)
     return RTX_OK;
 }
 int cppExtension::calc(int)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "calc");
     IRTReader* me = static_cast<IRTReader*>(this);
     me->flushPark();                                                 // (0.8.1) a book parked by done() (symbol change): delete it here
     IRTReader::StateGuard guard(*me);
@@ -433,7 +437,7 @@ void IRTReader::pump(const char* via)
 }
 
 int IRTReader::draw(void)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     flushPark();                                                     // (0.8.1)
     StateGuard guard(*this);
     pump("draw");

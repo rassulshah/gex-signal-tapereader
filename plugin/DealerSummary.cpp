@@ -16,6 +16,10 @@
  *  Never black text: the chart background is black.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "DealerSummary"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 // windows.h may define the legacy `far` macro before the RTX source is included.
 // DealerLogic's shared Node member is named far, so contain that SDK/Windows macro here.
@@ -35,7 +39,7 @@
 #include <ctime>
 #include <cctype>
 
-static const char* DSUM_VERSION = "1.0.1";
+static const char* DSUM_VERSION = "1.0.2";
 static const COLOR C_BOXBG  = 0x0005070C;
 static const COLOR C_BORDER = 0x00334155;
 static const COLOR C_INK    = 0x00E5E7EB;
@@ -223,7 +227,7 @@ void DealerSummary::writeStatus(const DSState& S, const char* what, int age)
 }
 
 int DealerSummary::draw(void)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     DSState* S = state(true);
     load(*S);
     if (!S->sm.ok) { writeStatus(*S, S->mkt.empty() ? "no market" : (S->loadError.empty() ? "no read yet (the Reader has not sent one)" : S->loadError.c_str()), -1); return RTX_OK; }

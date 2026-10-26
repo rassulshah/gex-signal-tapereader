@@ -44,6 +44,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "CobImpulse"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
@@ -82,7 +86,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CI_VERSION "0.5.2"          // (0.5.2, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") a Cob label or impulse box that would touch the lsHodLod table is not painted there (records unchanged; KeepOutDraw.h; status UNDER_HODLOD) // (0.5.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the Cob label / impulse box hover is OFF (CI_HOVERS; code kept), no TRACK_MOUSE; (0.5.0, 2026-10-18, Rassul "I'll go with your recommendation") a settings window: Cob labels + Impulse bar box, each Show + colour, per market (CobImpulseSettings.h); defaults = what 0.4.1 drew; the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
+#define CI_VERSION "0.5.3"          // (0.5.2, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") a Cob label or impulse box that would touch the lsHodLod table is not painted there (records unchanged; KeepOutDraw.h; status UNDER_HODLOD) // (0.5.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the Cob label / impulse box hover is OFF (CI_HOVERS; code kept), no TRACK_MOUSE; (0.5.0, 2026-10-18, Rassul "I'll go with your recommendation") a settings window: Cob labels + Impulse bar box, each Show + colour, per market (CobImpulseSettings.h); defaults = what 0.4.1 drew; the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
 static const bool CI_HOVERS = false;   // (0.5.1) true brings the hover back
 
 static const COLOR C_LABEL = 0x0080FFFF;   // his IRT Cob label colour (light cyan), unchanged
@@ -273,8 +277,8 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<CobImpulse*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<CobImpulse*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void)   { ss::registerAll(this, ciset::spec(), ciIds()); return RTX_OK; }   // (0.5.0) the rows from CobImpulseSettings.h
-int cppExtension::calc(int)     { static_cast<CobImpulse*>(this)->pump(true); return RTX_OK; }
-int CobImpulse::draw(void) {
+int cppExtension::calc(int)     { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<CobImpulse*>(this)->pump(true); return RTX_OK; }
+int CobImpulse::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     pump(false);
     CIState* S = slot_.get(this, false);
     if (S) { try {
@@ -754,6 +758,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (CI_HOVERS ? TRACK_MOUSE : 0) | CALC_LAST);   // (0.5.1) no TRACK_MOUSE while the hovers are off   // CALC_LAST: it reads his RTL results
     p->setDescription("LRA Cob Impulse v0.4.1: what are the odds this CoB reaches 1R (shown after the label, e.g. Cob 63%, from the nightly CoB Lab, LRA-Odds-<MKT>.csv; ODDS 0 hides it), did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
-    p->setVersion("0.5.2");   // CI_VERSION
+    p->setVersion("0.5.3");   // CI_VERSION
     return p;
 }

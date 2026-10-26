@@ -24,7 +24,7 @@
 #include <sstream>
 
 namespace delta_profile_hourly {
-static const char* const DPH_VERSION = "1.0.3";
+static const char* const DPH_VERSION = "1.0.4";
 static const int REC_FIELDS = 23;
 static const std::size_t REC_MAX_BYTES = 4u * 1024u * 1024u;   // checklist #33: a record file larger than this is not read
 static const std::size_t REC_MAX_LATCHES = 600;

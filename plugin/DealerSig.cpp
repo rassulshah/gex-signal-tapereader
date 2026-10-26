@@ -48,6 +48,10 @@
 #include <windows.h>   // before irtsdk.h: KeepOutDraw.h -> BannerBoard.h pulls in windows.h (RTBOOL clash if after)
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "DealerSig"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
@@ -66,7 +70,7 @@
 #include <cstring>
 #include <ctime>
 
-static const char* DS_VERSION = "1.8.0";   // 1.8.0 (2026-10-21 16:05 CT Rassul "fix this, it should be solid"): a reason code that would touch the lsHodLod table is not painted there (KeepOutDraw.h; the signal files unchanged). 1.7.0 (2026-10-14 18:25 CT audit display list): footprint codes "?", options codes / ledger / Abs follow the claim gates.  1.5.5 settings audit (2026-10-13): "Dealer ledger marks" is a check box (was an Off / On list). 1.5.4 audit: file changes clear old signals; source identity and status writes are explicit/cached
+static const char* DS_VERSION = "1.8.1";   // 1.8.0 (2026-10-21 16:05 CT Rassul "fix this, it should be solid"): a reason code that would touch the lsHodLod table is not painted there (KeepOutDraw.h; the signal files unchanged). 1.7.0 (2026-10-14 18:25 CT audit display list): footprint codes "?", options codes / ledger / Abs follow the claim gates.  1.5.5 settings audit (2026-10-13): "Dealer ledger marks" is a check box (was an Off / On list). 1.5.4 audit: file changes clear old signals; source identity and status writes are explicit/cached
 static const COLOR S_GREEN = 0x0022C55E;
 static const COLOR S_RED   = 0x00EF4444;
 
@@ -121,7 +125,7 @@ public:
 int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { return RTX_OK; }
-int cppExtension::calc(int iStartBar) { static_cast<DealerSig*>(this)->fillSignals(iStartBar); return RTX_OK; }
+int cppExtension::calc(int iStartBar) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<DealerSig*>(this)->fillSignals(iStartBar); return RTX_OK; }
 
 int DealerSig::parmsLoadBody(void)  { if (dialogReady()) readSettings(cfg); return RTX_OK; }
 int DealerSig::parmsApplyBody(void) { if (dialogReady()) readSettings(cfg); return RTX_OK; }
@@ -252,7 +256,7 @@ void DealerSig::writeStatus(const char* what)
 }
 
 int DealerSig::draw(void)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     // (2026-10-05) IRT runs ONE object of this DLL for every chart: read THIS chart's settings on every draw (the HG chart's settings
     // leaked into the GC chart - status files showed MARKET HG while drawing GC)
     if (dialogReady()) readSettings(cfg);
@@ -322,6 +326,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(2);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | ARRAY1_IS_SIGNAL | ARRAY2_IS_SIGNAL);
     p->setDescription("LRA Dealer Sig: the Turn's reversal reasons on the turn's bars - green under a low, red above a high.");
-    p->setVersion("1.8.0");
+    p->setVersion("1.8.1");
     return p;
 }

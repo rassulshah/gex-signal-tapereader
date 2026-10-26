@@ -20,6 +20,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "CVD"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
@@ -55,7 +59,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CVD_VERSION "1.3.0"   // 1.3.0 (2026-10-18, Rassul "I'll go with your recommendation") a settings window: CVD line / Delta % bars / Marks each with Show + colour(s), kept per market in CVD.settings-<MKT>.txt (CVDSettings.h / SettingsHost.h); defaults = what 1.2.0 drew;  // 1.2.0 (2026-10-14 audit display list) the confirmed marks read Div? / Exh? / BR?
+#define CVD_VERSION "1.3.1"   // 1.3.0 (2026-10-18, Rassul "I'll go with your recommendation") a settings window: CVD line / Delta % bars / Marks each with Show + colour(s), kept per market in CVD.settings-<MKT>.txt (CVDSettings.h / SettingsHost.h); defaults = what 1.2.0 drew;  // 1.2.0 (2026-10-14 audit display list) the confirmed marks read Div? / Exh? / BR?
 
 static const COLOR C_BULL = 0x0034D399;       // green  (bullish setup)
 static const COLOR C_BEAR = 0x00F87171;       // red    (bearish setup)
@@ -220,8 +224,8 @@ int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::done(void) { static_cast<CVD*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<CVD*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) { ss::registerAll(this, cvdset::spec(), cvdIds()); return RTX_OK; }   // (1.3.0) the rows from CVDSettings.h
-int cppExtension::calc(int) { static_cast<CVD*>(this)->pump(); return RTX_OK; }
-int CVD::draw(void) {
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<CVD*>(this)->pump(); return RTX_OK; }
+int CVD::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     RuntimeState* s = slot_.get(this, false);
     if (!s) return RTX_OK;
     std::unique_lock<std::recursive_mutex> lock(s->mutex, std::try_to_lock);
@@ -563,6 +567,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA CVD (testing): blue line = cumulative delta (ask-traded minus bid-traded volume) since the 5:00 PM session start; bars = each bar's delta as a % of its volume. Marks sit on the CVD line where a reversal or breakout was confirmed by price and flow at a prior-day or prior-session high / low (PDH PDL PFH PFL): Div = price made a new high / low but CVD did not; Exh = the pushing side faded at the new extreme; BR = broke the level, retested it and held. Green below the line = bullish, red above = bearish. Only setups with a stop within 4x the normal bar range are shown. Closed bars only; nothing drawn ever changes.");
-    p->setVersion("1.3.0");   // keep equal to CVD_VERSION (the build log reads this literal)
+    p->setVersion("1.3.1");   // keep equal to CVD_VERSION (the build log reads this literal)
     return p;
 }

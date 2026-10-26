@@ -42,6 +42,10 @@
 #include <windows.h>   // before irtsdk.h: KeepOutDraw.h -> BannerBoard.h pulls in windows.h (RTBOOL clash if after)
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "KingTracker"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "ContractOffsetLogic.h"   // (shared) the anchor-bar rule, tested
 #include <map>
@@ -427,7 +431,7 @@ void KingTracker::writeStatus(const Settings& S)
     for (int b = 0; b < NBOOK; b++) f << ktl::statusLine(S.sourceIF, famStr, BOOK_NAME[b], BOOK_FAM[b], book[b], lastOffset) << "\n";
     f << "ASOF," << asofSo << "\n";
 }
-int KingTracker::draw(void) {
+int KingTracker::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     load(); applyContractOffset();
     {   const char* sy = getSymbol(); const char* cl = getChartLabel(); const long spb = getSecondsPerBar();   // (0.18) the HOD/LOD table: nothing painted over it
         bdk::TableWatch& keep = keeps_[std::string(sy ? sy : "") + "|" + std::to_string(spb) + "|" + (cl ? cl : "")];
@@ -519,6 +523,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("King ? (vendor): King tracker stepped lines (SPX/SPY on ES, QQQ/NDX on NQ), reads lsFlexLevels\\GammaProfile.csv");   // (0.17, 2026-10-14 audit display list) title "King ? (vendor)": the vendor King strike is context
-    p->setVersion("0.18");
+    p->setVersion("0.19");
     return p;
 }

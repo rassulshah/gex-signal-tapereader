@@ -47,6 +47,10 @@
  *  DealerLogic.h. Parameters read only in the parms callbacks. Never black lines: the chart is black.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "DealerRead"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 // windows.h may expose the legacy far macro; DealerLogic's existing Node::far
 // member must remain visible in this implementation unit.
@@ -1755,7 +1759,7 @@ void DealerRead::renderTurn(const Settings& S)
 }
 
 int DealerRead::draw(void)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     // (2026-10-05) IRT runs ONE object of this DLL for every chart: read THIS chart's settings on every draw (the HG chart's settings
     // leaked into the GC chart - status files showed MARKET HG while drawing GC)
     if (dialogReady()) readSettings(cfg);
@@ -1772,6 +1776,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // (4.5.6) FRONT_DRAWING: the box is drawn after every other indicator, so no line shows through it;   // (2.2.0) TRACK_MOUSE: drag the grid
     p->setDescription("LRA Dealer Read: the Turn - why price turned at the level, as numbered sentences.");
-    p->setVersion("4.7.0");   // (4.7.0, 2026-10-14 18:25 CT audit display list) control word + Analyst hidden, FUTURES chips "?" + " - context", solid frames; (4.6.0, 2026-10-14 15:07 CT approval) claim gates (ClaimGates.h): no VERDICT / Strength, no OPTIONS-column causes, no forced-futures numbers, no footprint absorption cause - hidden until the external audit; (4.5.9, 2026-10-14 CR4800) Offset X / Y on the 9-spot Position (clamped, per market, the dialog filled from the file); (4.5.8) settings audit: Font size kept per market, dead Clock offset / Background rows removed, stale "drag" text gone; (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
+    p->setVersion("4.7.1");   // (4.7.0, 2026-10-14 18:25 CT audit display list) control word + Analyst hidden, FUTURES chips "?" + " - context", solid frames; (4.6.0, 2026-10-14 15:07 CT approval) claim gates (ClaimGates.h): no VERDICT / Strength, no OPTIONS-column causes, no forced-futures numbers, no footprint absorption cause - hidden until the external audit; (4.5.9, 2026-10-14 CR4800) Offset X / Y on the 9-spot Position (clamped, per market, the dialog filled from the file); (4.5.8) settings audit: Font size kept per market, dead Clock offset / Background rows removed, stale "drag" text gone; (4.5.7) no read text; FUTURES section name; (4.5.6) drawn on top of the other indicators (lines no longer cross the solid box); (4.5.5) solid background always; (4.5.4) host-scoped SDK user-data state with done/destroy cleanup; (4.5.3) calendar-aware ASOF age, finite meter guard, bounded status writes; (4.5.2) Background (Solid / See-through) kept after the settings window closes; (4.5.1) the box no longer shakes when two charts share the profiles' status files; (4.5.0) height follows the content; (4.4.2) DEMAND green / SUPPLY red in the header; (4.4.1) "data N min old" from 10 min;   // (4.4.0) see-through, outline by control, 1-line header, 2 lines a point, centred section names, stale / no-footprint states;   // (4.3.0) 9-spot Position setting, fixed size, no drag;   // (4.2.0) bottom-left default, never over the profiles, Move right / Lift settings, Analyst settings gone;   // (4.1.2) 12-hour clock, drag from anywhere on the box, 3 lines a point;   // (4.1.1) header centred, every border solid;   // (4.0.0) OPTIONS | FOOTPRINT split; (4.1.0) the read line + the Last 90 min read
     return p;
 }

@@ -7,6 +7,10 @@
  *  now - two writers would duplicate the shadow log). The 1.0.1 source is kept as plugin\retired\FirstExtreme_1_0_1.cpp.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "FirstExtreme"
+#endif
 #ifdef far
 #undef far
 #endif
@@ -40,7 +44,7 @@ int cppExtension::setup(void)
 }
 
 int FirstExtreme::draw(void)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     RCT pane; pane.getPaneRect(false);
     if (pane.right - pane.left > 300 && pane.bottom - pane.top > 40)
         text(pane.left + 8, pane.top + 14, "1st Extreme is now inside HOD/LOD - remove this indicator", FX_GREY, 8);
@@ -53,6 +57,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("RETIRED: the 1st Extreme model now runs inside the HOD / LOD indicator (lsHodLod 2.0.0). Remove this indicator from the chart.");
-    p->setVersion("2.0.0");
+    p->setVersion("2.0.1");
     return p;
 }

@@ -27,6 +27,10 @@
  * atomic); where a restart resumes: lsFlexLevels\DeltaProfileHourly\<MKT>-<spb>-progress-<root>.txt (every >= 30 s).
  * Tests: plugin\tests_dph (engine, two-chart adapter mock, replay == live, forming bar, MinGW vs the real SDK, ASan/UBSan).
  ********************************************************************************/
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "DeltaProfileHourly"
+#endif
 #include <string>
 #include <ctime>
 #include <cstring>
@@ -483,7 +487,7 @@ int DeltaProfileHourly::timer(RTX_EVENT* e) {
     h->lastTimerTick = wallNow();
     return RTX_OK;
 }
-int DeltaProfileHourly::calc(int) {
+int DeltaProfileHourly::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc");
     HostState* h = bind(true); if (!h) return RTX_OK;
     try {
         if (!identify(*h) || h->quarantined) return RTX_OK;
@@ -932,7 +936,7 @@ bool DeltaProfileHourly::render(HostState& h) {
     }
     return true;
 }
-int DeltaProfileHourly::draw() {
+int DeltaProfileHourly::draw() { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     HostState* h = bind(true); if (!h) return RTX_OK;
     try {
         ++h->draws;
@@ -969,6 +973,6 @@ extern "C" cppExtension* CreateExtension() {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile Hourly - DLT-H");
-    p->setVersion("1.0.3");                        // a literal: gex-build's :ver prints it - the tests check it equals dph::DPH_VERSION
+    p->setVersion("1.0.4");                        // a literal: gex-build's :ver prints it - the tests check it equals dph::DPH_VERSION
     return p;
 }

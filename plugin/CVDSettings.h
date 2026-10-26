@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace cvdset {
-static const char* const PLUGIN_VERSION = "1.3.0";
+static const char* const PLUGIN_VERSION = "1.3.1";
 enum K { K_SHOW_LINE, K_LINE_COLOR, K_SHOW_BARS, K_BAR_UP, K_BAR_DN, K_SHOW_MARKS, K_MARK_BULL, K_MARK_BEAR, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

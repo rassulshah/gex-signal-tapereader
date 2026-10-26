@@ -39,7 +39,7 @@
 #include <vector>
 
 namespace dh {
-static const char* const VERSION = "0.2.1";   // 0.2.0 (2026-10-22 evening, VALIDATE-CONTEXT-MARKS OH-1, Rassul approved 17:39 CT): PARAM,SHOW (0 = LOG ONLY, the default in every market: oH lit LESS at gamma levels than at random prices, 0.75x - 0.83x): nothing drawn, no hover, the Z / L record kept
+static const char* const VERSION = "0.2.2";   // 0.2.0 (2026-10-22 evening, VALIDATE-CONTEXT-MARKS OH-1, Rassul approved 17:39 CT): PARAM,SHOW (0 = LOG ONLY, the default in every market: oH lit LESS at gamma levels than at random prices, 0.75x - 0.83x): nothing drawn, no hover, the Z / L record kept
 typedef long long Tick;
 enum { BUY = 0, SELL = 1 };                        // side 0 = bids / aggressive buys (green), 1 = offers / aggressive sells (red)
 enum { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };

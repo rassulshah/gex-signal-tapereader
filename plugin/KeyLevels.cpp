@@ -21,6 +21,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "KeyLevels"
+#endif
 #include "HostSlot.h"
 #include "KeyLevelsHSettings.h"
 #include "KeyLevelsHLogic.h"
@@ -42,7 +46,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* KL_VERSION = "1.2.0";   // (1.2.0, 2026-10-21 16:05 CT, Rassul "fix this, it should be solid") level lines stop at the lsHodLod table's edges, a badge that would touch it is not painted (KeepOutDraw.h); (1.1.0, 2026-10-21) one right edge; a crowded group shrinks its font, then spreads (klh::layoutStack)
+static const char* KL_VERSION = "1.2.1";   // (1.2.0, 2026-10-21 16:05 CT, Rassul "fix this, it should be solid") level lines stop at the lsHodLod table's edges, a badge that would touch it is not painted (KeepOutDraw.h); (1.1.0, 2026-10-21) one right edge; a crowded group shrinks its font, then spreads (klh::layoutStack)
 static long long klSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string klFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + KLH_SEP "InvestorRT" KLH_SEP "rtx" KLH_SEP "lsFlexLevels" : std::string(); }
 static void klMakeDir(const std::string& p) {
@@ -156,7 +160,7 @@ void KeyLevels::writeStatus(KlState& s, const std::vector<klh::Line>& L, size_t 
     if (f.is_open()) { f << body; s.statusBody = body; }
 }
 
-int KeyLevels::draw(void) {
+int KeyLevels::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     KlState* s = slot_.get(this, true);
     if (!s) return RTX_OK;
     try {
@@ -230,6 +234,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Key Levels - for hourly charts. A line across the chart at each key level, with its name and price in a badge at the right edge. Price levels: prior full (PFH / PFL), prior day (PDH / PDL), prior week (PWH / PWL), this week (CWH / CWL), overnight (ONH / ONL), London (LonHI / LonLO), Asia (AsiaHI / AsiaLO). Volume levels: prior day POC (DPoc), value area (VAH / VAL), prior week POC (WPoc). MenthorQ levels (CR / PS / HVL / G) are off by default - tick the box to show them. No Open. Levels on one price share one line (PFH \xB7 PDH). The numbers are the ones lsDealerProfile computes on the market's 3-min chart (it must be open). Example: ES 60-min - an orange line at 7710.25 with the badge PDL  7710.25.");
-    p->setVersion("1.2.0");   // KL_VERSION
+    p->setVersion("1.2.1");   // KL_VERSION
     return p;
 }

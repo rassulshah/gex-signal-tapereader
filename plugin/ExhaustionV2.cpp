@@ -15,6 +15,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "ExhaustionV2"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
@@ -48,7 +52,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX2_VERSION "2.0.2"   // 2.0.2 (2026-10-14 audit display list) marks hidden - retired, log only;   // 2.0.1 (LRA integration 2026-10-11): real barVolume array, 2% VAP/bar-volume tolerance, frontier resync by bar time, his header format
+#define EX2_VERSION "2.0.3"   // 2.0.2 (2026-10-14 audit display list) marks hidden - retired, log only;   // 2.0.1 (LRA integration 2026-10-11): real barVolume array, 2% VAP/bar-volume tolerance, frontier resync by bar time, his header format
 
 static const COLOR C_BUY_FADE = 0x00EF4444; // red: buyers fading at a high
 static const COLOR C_SELL_FADE = 0x0022C55E; // green: sellers fading at a low
@@ -397,8 +401,8 @@ int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::done(void) { static_cast<Exhaustion*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<Exhaustion*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) { setParameterVersion(2); return RTX_OK; }
-int cppExtension::calc(int) { static_cast<Exhaustion*>(this)->pump(); return RTX_OK; }
-int Exhaustion::draw(void) {
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<Exhaustion*>(this)->pump(); return RTX_OK; }
+int Exhaustion::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     RuntimeState* s = slot_.get(this, false);
     if (!s) return RTX_OK;
     std::unique_lock<std::recursive_mutex> lock(s->mutex, std::try_to_lock);
@@ -827,6 +831,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA Exhaustion V2 - pullback read (research only): red buyer-fade is an uptrend exit warning; green seller-fade is a pullback setup only after a causal confirmation. Completed 180-second VAP bars only; calibration is exact-contract and prior-session-only.");
-    p->setVersion("2.0.2");   // keep equal to EX2_VERSION (the build log reads this literal)
+    p->setVersion("2.0.3");   // keep equal to EX2_VERSION (the build log reads this literal)
     return p;
 }

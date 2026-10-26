@@ -66,6 +66,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "BookFlow"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include <deque>
 #ifdef far
@@ -85,7 +89,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
 
-#define BF_VERSION "1.28.0"          // 1.28.0 (2026-10-26, BUILD-SPEC Defense pane, Rassul approved 22:29 CT 2026-10-25): F? (amber, FMirror.h 1.0.0: the pivot likely dies at once - attackers stacking in front + defenders pulling behind in the pivot bar's last 60 s, decided at its close, F lines in BookFlow\<MKT>-<spb>-fmirror.csv, drawn only with the per-market thresholds from lsFlexLevels\LRA-FMirror-<MKT>.csv); the shared A shows as grey "Ab", H as "Hb?" (defender colour) only after an Ab at the same pivot within 10 candles, L / X as "L?" / "X?" with the re-test hover (same order / new big order / small orders only, lots vs normal); letters coloured by meaning (bullish green / bearish red: W, B, X, Q! at a low = red); at most 2 codes per candle (one per strip); records unchanged // 1.27.0 (2026-10-23 4-step stage revamp) Defense strips renamed Floor / Release (LetterStrips 1.3.0); // was 1.26.0:          // 1.25.0 (2026-10-22 evening fix build) compact strips, bars >= 50% of the pane, one-line Implied row, the Q hover hides the anchor token;          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
+#define BF_VERSION "1.28.1"          // 1.28.0 (2026-10-26, BUILD-SPEC Defense pane, Rassul approved 22:29 CT 2026-10-25): F? (amber, FMirror.h 1.0.0: the pivot likely dies at once - attackers stacking in front + defenders pulling behind in the pivot bar's last 60 s, decided at its close, F lines in BookFlow\<MKT>-<spb>-fmirror.csv, drawn only with the per-market thresholds from lsFlexLevels\LRA-FMirror-<MKT>.csv); the shared A shows as grey "Ab", H as "Hb?" (defender colour) only after an Ab at the same pivot within 10 candles, L / X as "L?" / "X?" with the re-test hover (same order / new big order / small orders only, lots vs normal); letters coloured by meaning (bullish green / bearish red: W, B, X, Q! at a low = red); at most 2 codes per candle (one per strip); records unchanged // 1.27.0 (2026-10-23 4-step stage revamp) Defense strips renamed Floor / Release (LetterStrips 1.3.0); // was 1.26.0:          // 1.25.0 (2026-10-22 evening fix build) compact strips, bars >= 50% of the pane, one-line Implied row, the Q hover hides the anchor token;          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
 #include "FMirror.h"              // (1.28.0) F? the pivot dies at once
@@ -1141,7 +1145,7 @@ public:
     virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, ofset::bookFlowSpec(), bfIds(), (int)i, snapBf_); saveBf(); return RTX_OK; }
 
     // ---- (1.3.0) the pane: the numbers box (Net, Pace) + one net bar per side per candle, coloured by side ----------------------------
-    virtual int draw(void) {
+    virtual int draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
         {   S_* S0 = testState();                                          // the chart label (Market State key), read in the draw as BigBidAsk
             if (S0) { Ext* e = ext(*S0); const char* cl = getChartLabel(); const std::string c = cl ? cl : "";
                       if (e && !c.empty() && c != e->chart) { if (!e->chart.empty() && !S0->symbol.empty()) mst::clear("BOOK", S0->symbol, S0->spb, e->chart); e->chart = c; e->mstMs = -1; } } }
@@ -1551,7 +1555,7 @@ int cppExtension::setup(void) {
     ss::registerAll(this, ofset::bookFlowSpec(), bfIds());
     return RTX_OK;
 }
-int cppExtension::calc(int) { static_cast<BookFlow*>(this)->bfCalc(); return RTX_OK; }   // (1.3.4)
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<BookFlow*>(this)->bfCalc(); return RTX_OK; }   // (1.3.4)
 
 extern "C" cppExtension* CreateExtension(void) {
     BookFlow* p = new BookFlow();
@@ -1559,6 +1563,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.28.0");   // BF_VERSION
+    p->setVersion("1.28.1");   // BF_VERSION
     return p;
 }
