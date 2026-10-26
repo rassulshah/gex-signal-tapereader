@@ -47,16 +47,16 @@ int main() {
     CHECK(lineCount(h, RED, yHi) == 1, "(1.2.0) the high line closed through 2 candles later is removed; only the third (holding) high line is drawn in red");
     CHECK(lineCount(h, GRN, yR) == 1, "the low turn's refill line: green at 6998.25");
     const int rEnd = lastLine(h, GRN, yR) ? lastLine(h, GRN, yR)->x : -1;
-    CHECK(lineCount(h, GRY, yE) == 1, "the gray exhaustion line at 6998.0");
+    CHECK(lineCount(h, GRY, yE) == 0 && s->xs.size() == 1, "(1.13.0, Rassul 2026-10-26 17:55 CT) the gray exhaustion line is NOT drawn; its X record is still read");
     CHECK(texts(h) == 0, "(1.9.0) NO text on any line: no 'R A ?', no 'E ?', no 'R ?' (draw-call check)");
     CHECK(text(h, "R A ?") == nullptr && text(h, "E ?") == nullptr && text(h, "R ?") == nullptr && text(h, "E") == nullptr && text(h, "?") == nullptr, "(1.9.0) none of the old labels");
     const int all = lines(h);
     settings(flex, dlset::K_SHOW_DOTS, 0); s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
     CHECK(lines(h) < all && lineCount(h, GRN, yR) == 1 && texts(h) == 0, "dots off: fewer strokes, the lines stay");
-    settings(flex, dlset::K_SHOW_E, 0); s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
-    CHECK(lineCount(h, GRY, yE) == 0 && lineCount(h, GRN, yR) == 1, "E lines off: no E line, R stays");
+    { int eKeys = 0; const ss::Spec& SP = dlset::spec(); for (int k = 0; k < SP.n; ++k) if (std::string(SP.rows[k].key) == "show_e" || std::string(SP.rows[k].key) == "col_e") ++eKeys;
+      CHECK(eKeys == 0 && SP.paramVersion == 5, "(1.13.0) no E settings rows, parameter version 5"); }
     settings(flex, dlset::K_SHOW_LINES, 0); s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
-    CHECK(lineCount(h, GRN, yR) == 0 && lineCount(h, GRY, yE) == 1, "R lines off: no R line, E stays");
+    CHECK(lineCount(h, GRN, yR) == 0 && lineCount(h, GRY, yE) == 0, "R lines off: no R line (and no E line: retired 1.13.0)");
     settings(flex, dlset::K_MAX_CANDLES, 1); s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
     CHECK(lineCount(h, RED, yHi) == 2 && texts(h) == 0, "1 candle: the high line ends before the close through, so it stays (2 red lines, no text)");
     settings(flex, -1, 0);
@@ -106,11 +106,11 @@ int main() {
     // a shorter (torn) file never removes drawn lines
     { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str()); f << dt::lineOf('T', a, 0.25) << "\n"; }
     s->lastCheckMs = -100000; h.draws.clear(); p->draw();
-    CHECK(s->lines.size() == 3 && s->xs.size() == 1 && lineCount(h, GRN, yR) == 1 && lineCount(h, GRY, yE) == 1, "a torn shorter file: the lines stay (no repaint)");
+    CHECK(s->lines.size() == 3 && s->xs.size() == 1 && lineCount(h, GRN, yR) == 1 && lineCount(h, GRY, yE) == 0, "a torn shorter file: the lines stay (no repaint)");
     std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string body((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
     CHECK(body.find("failed lines removed") != std::string::npos, "(1.2.0) the status counts the removed lines");
     CHECK(body.find("LABELS,none") != std::string::npos, "(1.9.0) status: LABELS,none");
-    CHECK(body.find(std::string("VERSION,") + DL_VERSION) != std::string::npos && std::string(DL_VERSION) == "1.12.0" && std::string(dlset::PLUGIN_VERSION) == DL_VERSION && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    CHECK(body.find(std::string("VERSION,") + DL_VERSION) != std::string::npos && std::string(DL_VERSION) == "1.13.0" && std::string(dlset::PLUGIN_VERSION) == DL_VERSION && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
     {   // (1.3.0, Top Defender #5) lsBookFlow decided the defenders hit back after the A: the label reads "R A H ?"; "absorbed only" keeps "R A ?"
         { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); dt::Counter C; C.t = b.t; C.side = b.side; C.H = true; C.lots = 640; C.attack = 266; C.at = b.t + 360; f << dt::hLineOf(C) << "\n"; }
         s->lastCheckMs = -100000; h.draws.clear(); p->draw();
@@ -141,39 +141,17 @@ int main() {
             { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); f << mvl::mLineOf(R) << "\n" << mvl::mLineOf(B2) << "\n" << mvl::mLineOf(N) << "\n" << mvl::mLineOf(D) << "\nM|garbage\n"; }
             s->lastCheckMs = -100000; h.draws.clear(); p->draw();
             if (const char* dp = std::getenv("D3_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\t' << d.x0 << '\t' << d.y0 << '\t' << d.pen << '\n'; }   // render check (not a test)
-            CHECK(s->ms.size() == 4 && s->lastBoxes.size() == 5, ("(1.6.0) 4 M lines read (a garbled one skipped), 5 boxes: P, B, the 1-tick P, both sides of one candle (" + std::to_string(s->lastBoxes.size()) + ")").c_str());
-            {   cppExtension::PNT pb; pb.set(30, 6997.0f); const mock::Draw* t12b = nullptr; for (auto& d : h.draws) if (d.type == "text" && d.text == "12" && std::abs(d.y - pb.v) <= 8) t12b = &d;
-                CHECK(t12b != nullptr, "(1.6.0) stepping back (B) boxed: the solid box with 12 at the new, lower price 6997.00"); }
-            if (const char* bp = std::getenv("D3_BOXES")) { std::ofstream o(bp); for (auto& bx : s->lastBoxes) o << bx.side << '\t' << bx.l << '\t' << bx.r << '\t' << bx.ot << '\t' << bx.ob << '\t' << bx.nt << '\t' << bx.nb << '\n';
-                for (auto& d : h.draws) if (d.type == "text" && !d.text.empty() && d.text.find_first_not_of("0123456789") == std::string::npos) o << "T\t" << d.x << '\t' << d.y << '\t' << d.text << '\n'; }   // render check (not a test)
-            {   std::vector<DlState::BoxRec> c35; cppExtension::PNT pc; pc.set(35, 6998.0f); for (auto& bx : s->lastBoxes) if (bx.l <= pc.h + 30 && bx.r >= pc.h - 30) c35.push_back(bx);
-                bool sides = c35.size() == 2 && c35[0].side != c35[1].side;
-                bool apart = sides && (c35[0].r < c35[1].l || c35[1].r < c35[0].l);
-                CHECK(sides && apart, "(1.6.0) both sides on one candle: a bids box and an offers box, side by side, never overlapping");
-                const mock::Draw* t11 = text(h, "11"); CHECK(t11 != nullptr, "(1.6.0) the offers box shows its lots (11)");
-                bool red = false; for (auto& d : h.draws) if (d.type == "line" && d.pen == (COLOR)0xEF4444 && d.x > pc.h && d.x <= pc.h + 30) red = true;
-                CHECK(red, "(1.6.0) the offers box in the offers colour (the HIGH colour)"); }
-            const mock::Draw* t12 = text(h, "12"); const mock::Draw* t7 = text(h, "7");
-            CHECK(t12 && t12->color == 0 && t7, "(1.5.0) the solid box shows only the lot size, black text");
-            {   cppExtension::PNT pn; pn.set(21, 6998.0f); cppExtension::PNT po; po.set(21, 6997.5f);
-                CHECK(t12 && t12->y - 1 <= pn.v && t12->b >= pn.v && t12->x >= po.h - 20 && t12->r <= po.h + 20, "(1.5.0) the lot size sits in the solid box at the new price (6998.00), on the candle");
-                bool hollow = false; for (auto& d : h.draws) if (d.type == "line" && d.y == po.v + 5) hollow = true;
-                CHECK(hollow, "(1.5.0) the hollow box at the old price (6997.50)"); }
-            {   cppExtension::PNT pn; pn.set(25, 6998.0f); int lo = 1 << 30; for (auto& d : h.draws) if (d.type == "line" && d.x >= pn.h - 15 && d.x <= pn.h + 15) lo = std::min(lo, d.y);
-                int maxY = -1; for (auto& d : h.draws) if (d.type == "line" && d.x >= pn.h - 15 && d.x <= pn.h + 15) maxY = std::max(maxY, d.y);
-                CHECK(t7 && maxY >= pn.v + 15 && lo >= pn.v - 5, "(1.5.0) a 1-tick move: the hollow box sits under the solid one, never on top of it"); }
-            if (std::getenv("DL_DBG")) for (auto& d : h.draws) std::printf("%s %d %d %d %06X %s\n", d.type.c_str(), d.x, d.y, d.r, (unsigned)d.pen, d.text.c_str());
-            CHECK(lineAt(h, GRN, yR, rEnd) != nullptr && digitsOnly(h), "(1.5.0) the R line unchanged by the boxes; (1.9.0) the only texts are the boxes' lot sizes");
-            const long long n0 = s->boxesDrawn; s->lastCheckMs = -100000; h.draws.clear(); p->draw();
-            CHECK(s->boxesDrawn - n0 == 5 && text(h, "12") != nullptr, "(1.6.0) redrawn the same on the next refresh (no repaint)"); }
+            CHECK(s->ms.size() == 4 && s->lastBoxes.empty() && s->boxesDrawn == 0, ("(1.13.0, Rassul 2026-10-26 17:59 CT) 4 M lines read (a garbled one skipped), NO move boxes drawn (" + std::to_string(s->lastBoxes.size()) + ")").c_str());
+            CHECK(text(h, "12") == nullptr && text(h, "11") == nullptr && text(h, "7") == nullptr && text(h, "9") == nullptr, "(1.13.0) no lot-size text of a pressed-in / stepped-back box");
+            CHECK(lineAt(h, GRN, yR, rEnd) != nullptr && texts(h) == 0 && digitsOnly(h), "(1.13.0) the R line unchanged; no text on the price chart"); }
     }
     { std::ofstream f(livePath.c_str()); f << liveSecond << "\n"; }
     s->lastCheckMs = -100000; h.draws.clear(); p->draw();
     CHECK(s->haveLive && lineAt(h, GRN, yOf(0, 6997.75), liveEnd) != nullptr, "live fixture restored before the bar-period switch");
     {   // (1.8.0, Rassul 16:05 CT 2026-10-21 "fix this, it should be solid") the lsHodLod table on this chart: nothing painted over it
         s->lastCheckMs = -100000; h.draws.clear(); p->draw();
-        const mock::Draw* e0p = lastLine(h, GRY, yE); const mock::Draw* r0 = lastLine(h, GRN, yR);
-        CHECK(e0p && r0, "(1.8.0) the E and R lines drawn with no table");
+        const mock::Draw* e0p = lastLine(h, GRN, yR); const mock::Draw* r0 = lastLine(h, GRN, yR);   // (1.13.0) the R line is the reference (E retired)
+        CHECK(e0p && r0, "(1.8.0) the R line drawn with no table");
         const mock::Draw e0c = e0p ? *e0p : mock::Draw("none", 0, 0); const mock::Draw* e0 = e0p ? &e0c : nullptr;
         if (e0 && r0) {
             const int el = e0->x - 12, et = e0->y - 20, er = e0->x + 5, eb = e0->y + 2;   // (1.9.0) a table over the E line's right end (no label any more)
@@ -185,23 +163,23 @@ int main() {
             bool inside = false; for (auto& d : h.draws) if (bdk::hitsTable(T, d.x, d.y, d.type == "text" || d.type == "box" ? d.r : d.x, d.type == "text" || d.type == "box" ? d.b : d.y)) inside = true;
             CHECK(!inside, "(1.8.0) nothing drawn inside the table (+2 px): labels, line ends, dots");
             if (std::getenv("DL_DBG")) { std::printf("table %d..%d y %d..%d e0 %d,%d\n", el, er, et, eb, e0->x, e0->y); for (auto& d : h.draws) if (d.pen == GRY) std::printf("  gry %s %d %d\n", d.type.c_str(), d.x, d.y); }
-            { const mock::Draw* ec = nullptr; for (auto& d : h.draws) if (d.type == "line" && d.pen == GRY && std::abs(d.y - yE) <= 1) ec = &d; CHECK(ec && ec->x < el && s->xs.size() == xs0 && s->lines.size() == lines0, "(1.8.0) the E line is cut at the table's edge, the E record is still kept"); }
+            { const mock::Draw* ec = nullptr; for (auto& d : h.draws) if (d.type == "line" && d.pen == GRN && std::abs(d.y - yR) <= 1) ec = &d; CHECK(ec && ec->x < el && s->xs.size() == xs0 && s->lines.size() == lines0, "(1.8.0) the R line is cut at the table's edge, the records are still kept"); }
             CHECK(lines(h) > 0 && lines(h) <= strokes0 + 4, "(1.8.0) lines are cut at the table, not dropped");
             std::ifstream st2((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string b2((std::istreambuf_iterator<char>(st2)), std::istreambuf_iterator<char>());
             CHECK(b2.find("UNDER_HODLOD,table on") != std::string::npos, "(1.8.0) status: UNDER_HODLOD line");
             const std::string chart0 = h.chart; h.chart = "another chart";
             s->lastCheckMs = -100000; h.draws.clear(); p->draw();
-            { const mock::Draw* ec = lastLine(h, GRY, yE); CHECK(ec && ec->x == e0->x, "(1.8.0) a table on ANOTHER chart: no effect"); }
+            { const mock::Draw* ec = lastLine(h, GRN, yR); CHECK(ec && ec->x == e0->x, "(1.8.0) a table on ANOTHER chart: no effect"); }
             h.chart = chart0; const std::string sym0 = h.symbol; h.symbol = "NQZ6";
             s->lastCheckMs = -100000; h.draws.clear(); p->draw();
-            { const mock::Draw* ec = lastLine(h, GRY, yE); CHECK(ec && ec->x == e0->x, "(1.8.0) a table for another symbol: no effect"); }
+            { const mock::Draw* ec = lastLine(h, GRN, yR); CHECK(ec && ec->x == e0->x, "(1.8.0) a table for another symbol: no effect"); }
             h.symbol = sym0;
             bdk::publishHodLod(h.symbol, h.seconds, h.chart, ms - 600000, T);   // lsHodLod stopped drawing 10 minutes ago (no clear: a fault)
             for (int k = 0; k < 4; ++k) { s->lastCheckMs = -100000; h.draws.clear(); p->draw(); }
-            { const mock::Draw* ec = lastLine(h, GRY, yE); CHECK(ec && ec->x == e0->x, "(1.8.0) a stale table (stamp 10 min old, unchanged for 4 draws): no effect"); }
+            { const mock::Draw* ec = lastLine(h, GRN, yR); CHECK(ec && ec->x == e0->x, "(1.8.0) a stale table (stamp 10 min old, unchanged for 4 draws): no effect"); }
             bdk::clearHodLod(h.symbol, h.seconds, h.chart);
             s->lastCheckMs = -100000; h.draws.clear(); p->draw();
-            { const mock::Draw* ec = lastLine(h, GRY, yE); CHECK(ec && ec->x == e0->x, "(1.8.0) table cleared: drawn again"); }
+            { const mock::Draw* ec = lastLine(h, GRN, yR); CHECK(ec && ec->x == e0->x, "(1.8.0) table cleared: drawn again"); }
         }
     }
     // Changing the turns or live file must not carry data into an identically named market with another bar period.

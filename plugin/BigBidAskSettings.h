@@ -8,10 +8,10 @@
 #include "SettingsSpec.h"
 
 namespace bbaset {
-static const char* const PLUGIN_VERSION = "1.28.1";   // (1.28.0) no settings change (BO wave confirmation + biggest-in-N boxes);   // (1.27.1) Rly condition 3: +-1 SD tag OR a 30-bar high / low (RallyLogic 1.1.0);   // (1.26.0) the BO boxes row is gone (no boxes), OB candles after the pivot 1 - 3, BO / BD -> BO up / down; (1.25.0) + OB / BO boxes of strong waves (checkboxes, 3+ ATR waves, ATR, origin candles, colours); (1.24.0) + Rly (rally): show checkbox + up / down colours; (1.23.0) BO / BD green / red + same-wave rule
+static const char* const PLUGIN_VERSION = "1.29.0";   // (1.29.0, Rassul 2026-10-26 17:55 CT "get rid of them") the 6 OB rows are gone (OB not drawn);   // (1.28.0) no settings change (BO wave confirmation + biggest-in-N boxes);   // (1.27.1) Rly condition 3: +-1 SD tag OR a 30-bar high / low (RallyLogic 1.1.0);   // (1.26.0) the BO boxes row is gone (no boxes), OB candles after the pivot 1 - 3, BO / BD -> BO up / down; (1.25.0) + OB / BO boxes of strong waves (checkboxes, 3+ ATR waves, ATR, origin candles, colours); (1.24.0) + Rly (rally): show checkbox + up / down colours; (1.23.0) BO / BD green / red + same-wave rule
 static const int CAP = 50;                      // the number shown never goes above 50 (Rassul 21:47 "cap the max at 50")
 enum K { K_BIGGEST_IN, K_SKIP_FIRST, K_SKIP_LAST, K_FONT, K_COL_NUM, K_COL_BID, K_COL_ASK, K_ABS_CIRCLE, K_BREAKOUT, K_COL_BO, K_COL_BD, K_RLY, K_COL_RLY_UP, K_COL_RLY_DN,
-         K_OB, K_OB_ANY, K_OB_ATR, K_OB_ORIGIN, K_COL_OB_UP, K_COL_OB_DN, K_N };
+         K_N };   // (1.29.0) K_OB / K_OB_ANY / K_OB_ATR / K_OB_ORIGIN / K_COL_OB_UP / K_COL_OB_DN removed (OB not drawn)
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
         ss::intRow("biggest_in", "Biggest in (candles)", 10, 2, CAP, 50),
@@ -31,16 +31,10 @@ inline const ss::Spec& spec() {
         ss::boolRow("rly", "Rally (Rly)", true),
         ss::colorRow("col_rly_up", "Rly up", 0x22C55E, 40),
         ss::same(ss::colorRow("col_rly_dn", "Rly down", 0xEF4444, 40)),
-        // (1.25.0, agreed with Rassul 16:00-16:01 CT 2026-10-22) ORDER BLOCK (OB) + BREAKOUT (BO) boxes of strong waves (OrderBlockLogic.h)
-        // (1.26.0, Rassul 18:01 CT) the OB print + letter (no boxes): the "Breakout (BO) boxes" row is gone
-        ss::boolRow("ob", "Order block (OB)", true),
-        ss::same(ss::boolRow("ob_any", "OB on 3+ ATR waves", true)),
-        ss::floatRow("ob_atr", "Strong wave (x ATR)", 3.0, 2.0, 10.0, 50),
-        ss::intRow("ob_origin", "OB candles after pivot", 2, 1, 3, 50),
-        ss::colorRow("col_ob_up", "OB up", 0x22C55E, 40),
-        ss::same(ss::colorRow("col_ob_dn", "OB down", 0xEF4444, 40)),
+        // (1.29.0, Rassul 2026-10-26 17:55 CT "right now we have OB and OB prints, get rid of them") the OB rows are gone: the OB print
+        // and letter are not drawn; the OB decision + record (OBX / OBT) run on the fixed defaults (3.0 ATR, 2 candles after the pivot)
     };
-    static const ss::Spec S = { "BigBidAsk", PLUGIN_VERSION, 13, R, K_N, 0 };   // parameter version 13 (1.26.0: - bo_box; ob_origin 1 - 3); 12 (1.25.0: + ob / bo_box / ob_any / ob_atr / ob_origin / col_ob_up / col_ob_dn); 11 (1.24.0: + rly / col_rly_up / col_rly_dn); 10 (1.21.0: + breakout / col_bo / col_bd; 9 = 1.20 + abs_circle; 8 = 1.19, 7 had no rows)
+    static const ss::Spec S = { "BigBidAsk", PLUGIN_VERSION, 14, R, K_N, 0 };   // parameter version 14 (1.29.0: - ob / ob_any / ob_atr / ob_origin / col_ob_up / col_ob_dn); 13 (1.26.0: - bo_box; ob_origin 1 - 3); 12 (1.25.0: + ob / bo_box / ob_any / ob_atr / ob_origin / col_ob_up / col_ob_dn); 11 (1.24.0: + rly / col_rly_up / col_rly_dn); 10 (1.21.0: + breakout / col_bo / col_bd; 9 = 1.20 + abs_circle; 8 = 1.19, 7 had no rows)
     return S;
 }
 inline std::string settingsPath(const std::string& flex, const std::string& mkt) { return flex.empty() || mkt.empty() ? std::string() : flex + "\\BigBidAsk.settings2-" + mkt + ".txt"; }

@@ -5,16 +5,15 @@
 #include "SettingsSpec.h"
 
 namespace dlset {
-static const char* const PLUGIN_VERSION = "1.12.1";   // (1.12.0) line width row, skip the dot on an order-fill candle
-enum K { K_SHOW_LINES, K_COL_LOW, K_COL_HIGH, K_SHOW_E, K_COL_E, K_SHOW_DOTS, K_COL_DOT, K_SHOW_MARKS, K_MAX_CANDLES,
+static const char* const PLUGIN_VERSION = "1.13.0";   // (1.13.0, Rassul 2026-10-26 17:55 CT) the gray exhaustion (E) line rows are gone (not drawn); (1.12.0) line width row, skip the dot on an order-fill candle
+enum K { K_SHOW_LINES, K_COL_LOW, K_COL_HIGH, K_SHOW_DOTS, K_COL_DOT, K_SHOW_MARKS, K_MAX_CANDLES,
          K_SHOW_TRAILS, K_COL_TRAIL_BID, K_COL_TRAIL_OFF, K_TRAIL_GAP, K_TRAIL_N, K_LINE_W, K_DOT_SKIP_FILL, K_N };   // (1.12.0) line width, dot skipped where lsLiquidityProfile drew a fill dot   // (1.10.0) the trails of big orders following price (MoveLogic 1.2.0)
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
         ss::masterOf(ss::boolRow("show_lines", "Refill lines (R)", true)),
         ss::same(ss::in(ss::colorRow("col_low", "At lows", 0x22C55E, 0), "show_lines")),
         ss::same(ss::in(ss::colorRow("col_high", "At highs", 0xEF4444, 0), "show_lines")),
-        ss::masterOf(ss::boolRow("show_e", "Exhaustion lines (E)", true)),
-        ss::same(ss::in(ss::colorRow("col_e", "Colour", 0xA3A3A3, 0), "show_e")),
+        // (1.13.0, Rassul 2026-10-26 17:55 CT "get rid of the exhaustion lines - the gray ones") the E rows are gone: the line is not drawn
         ss::masterOf(ss::boolRow("show_dots", "Dot on the candle", true)),
         ss::same(ss::in(ss::colorRow("col_dot", "Colour", 0xFACC15, 0), "show_dots")),
         ss::boolRow("show_marks", "Turn marks (Defense pane)", true),
@@ -27,7 +26,7 @@ inline const ss::Spec& spec() {
         ss::in(ss::intRow("line_w", "Line width (px)", 1, 1, 3, 50), "show_lines"),   // (1.12.0, BUILD-SPEC 22:29 "the Defense Line is thinner") was 2
         ss::in(ss::boolRow("dot_skip_fill", "No dot where an order fill dot is", true), "show_dots"),   // (1.12.0) lsLiquidityProfile's fill dot wins its candle
     };
-    static const ss::Spec S = { "DefenseLines", PLUGIN_VERSION, 4, R, K_N, 0 };   // parameter version 4: line width + dot skip (1.12.0); 3: the trail rows (1.10.0); 2: the rows changed (1.1.0)
+    static const ss::Spec S = { "DefenseLines", PLUGIN_VERSION, 5, R, K_N, 0 };   // parameter version 5: - show_e / col_e (1.13.0); 4: line width + dot skip (1.12.0); 3: the trail rows (1.10.0); 2: the rows changed (1.1.0)
     return S;
 }
 inline std::string settingsPath(const std::string& flex, const std::string& mkt) { return flex.empty() || mkt.empty() ? std::string() : flex + "\\DefenseLines.settings-" + mkt + ".txt"; }

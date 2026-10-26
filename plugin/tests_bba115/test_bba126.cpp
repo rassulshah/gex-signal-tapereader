@@ -211,12 +211,12 @@ static void day(const std::string& mkt, const std::string& sym, const std::strin
         CHECK(rects == 0, tag + "no rectangles in the OB / BO colours (boxes / zones / bands gone)");
         CHECK(bd == 0, tag + "no BD letter: both sides are BO");
         CHECK(boL > 0 && boBad == 0, tag + "BO green above a breakout / red below a breakdown (" + std::to_string(boL) + " letters, " + std::to_string(boBad) + " wrong)");
-        CHECK(obL > 0 && obBad == 0, tag + "OB below an up-wave candle (green) / above a down-wave candle (red) (" + std::to_string(obL) + " letters, " + std::to_string(obBad) + " wrong)");
+        (void)obBad; CHECK(obL == 0, tag + "1.29.0 (Rassul 2026-10-26 17:55 CT): no OB letter is drawn (" + std::to_string(obL) + ")");
         CHECK(obPrintMissing == 0, tag + "every OB letter has its print box on the candle at the print's price");
         CHECK(overlap == 0, tag + "no letter over another letter or a print box (" + std::to_string(overlap) + ")");
         const std::string stt = slurp(HOME + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.status-" + mkt + "-" + sym + "-180.txt");
-        CHECK(stt.find("VERSION,1.26.0\n") == 0 && stt.find("\nORDER_BLOCK,OB on") != std::string::npos && stt.find("logic 2.0.0 (prints + letters only; no boxes)") != std::string::npos
-              && stt.find("(nightly param SHOW LOG - the 1.25 boxes' verdict, not applied to the letters)") != std::string::npos, tag + "status: version 1.26.0 + ORDER_BLOCK line; the 1.25.1 LOG param (present) reported, letters still drawn");
+        CHECK(stt.find("VERSION,1.29.0\n") == 0 && stt.find("\nORDER_BLOCK,OB not drawn (retired 1.29.0") != std::string::npos && stt.find("logic 2.0.0 (prints + letters only; no boxes)") != std::string::npos,
+              tag + "status: version 1.29.0 + ORDER_BLOCK 'not drawn' line; OB still decided + recorded");
         // the list for Rassul
         std::cout << "  " << mkt << " " << date << " RTH labels:\n";
         std::map<long long, std::string> L;
@@ -227,12 +227,10 @@ static void day(const std::string& mkt, const std::string& sym, const std::strin
             L[(b.has() ? q.t : b.tp) * 10 + 2] = "    " + clk(b.has() ? q.t : b.tp) + "  OB " + (b.dir > 0 ? "up-wave  (green, below)" : "down-wave (red, above) ") + (b.cls == obk::CLS_RLY ? " Rly " : " 3ATR")
                 + " " + rly::fmtD(b.ratio, 1) + " ATR to " + clk(b.te) + (b.has() ? "  print " + std::to_string(q.lots) + (q.side > 0 ? " at the ask " : " at the bid ") + bba::price((long long)std::llround(q.px / 0.25), 0.25) + (b.rank == 2 ? " (2nd: top = BO print)" : "") : "  no print (not drawn)") + skipTag(b.has() ? q.t : b.tp); }
         for (const auto& kv : L) std::cout << kv.second << "\n";
-        // settings: OB off removes the OB letters (and their own print boxes), BO stays
-        ss::Values V1 = V0; V1.v[bbaset::K_OB] = 0; sleep(2);                   // the settings file stamp has 1-s resolution
-        { std::ofstream f((HOME + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.settings2-" + mkt + ".txt").c_str()); f << ss::format(bbaset::spec(), V1); }
-        c.st().setCheckMs = -1; c.pump(3, false);
-        int ob2 = 0, bo2 = 0; for (int v0 = i830; v0 <= iEnd - 1; v0 += 45) { c.view(v0, std::min(iEnd, v0 + 49)); for (const auto& d : c.H.draws) if (d.type == "ctext" && d.color != 0) { if (d.text == "OB") ++ob2; if (d.text == "BO") ++bo2; } }
-        CHECK(ob2 == 0 && bo2 > 0, tag + "setting 'Order block (OB)' off: no OB letters, BO letters stay (" + std::to_string(ob2) + " / " + std::to_string(bo2) + ")");
+        // (1.29.0) the OB settings rows are gone: no "ob*" key in the spec; the OB print box at an OB's own price (not a Big Bid/Ask print) is never drawn
+        { int obKeys = 0; const ss::Spec& SP = bbaset::spec(); for (int k = 0; k < SP.n; ++k) if (std::string(SP.rows[k].key).compare(0, 2, "ob") == 0 || std::string(SP.rows[k].key).find("_ob_") != std::string::npos) ++obKeys;
+          CHECK(obKeys == 0 && SP.paramVersion == 14, tag + "1.29.0: no OB settings rows (" + std::to_string(obKeys) + "), parameter version 14"); }
+        CHECK(!c.st().obOn, tag + "1.29.0: the OB draw switch is off for good (decision + record kept: " + std::to_string(sOB.size()) + " OB lines)");
     }
     {   // no repaint: a restart after EVERY candle 8:30 AM - 12:00 PM = one straight pass to 12:00
         home(mkt + "-straight12", &V0);
