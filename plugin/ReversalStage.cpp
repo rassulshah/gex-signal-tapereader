@@ -44,6 +44,7 @@
 #include "NewsWindow.h"          // (1.1.0) news / settle window "?" + the feed check
 #include "SwingRef.h"            // (2.0.0) the gate: the last 3 intact swings (the ZigZag rule lsSweepRefill / lsStopRun use)
 #include "NearLevels.h"          // (2.0.0) the gate: key / MenthorQ levels (the files lsSweepRefill reads)
+#include "StageBox.h"            // (2.1.0) the stage info box + letters 1 2 3 C
 
 #include <algorithm>
 #include <chrono>
@@ -65,7 +66,7 @@
 #pragma comment(lib, "user32.lib")   // GetCursorPos / WindowFromPoint (the hover stops when the cursor leaves the pane)
 #endif
 
-#define RS_VERSION "2.0.0"   // (2.0.0) the 4-step model: gate + Trap / Collision / Trapped / Release + result // (1.3.0) typed MBO observations, arrival journal, immutable post-decision checkpoints
+#define RS_VERSION "2.1.0"   // (2.1.0, 2026-10-25, Rassul approved 22:51 CT stage-box-mockup.html) display only: the pane shows the letters 1 2 3 C (Trap / Collision / Turn / Confirm) on each pivot bar instead of the staircase, and the STAGE INFO BOX for the latest pivot (StageBox.h 1.0.0: stage # / name / what to look for / check / value (threshold); 3 Turn checked by the defenders' close = the HELD trigger, trapped and wick volume description only from lsFlexLevels\LRA-StageBox-<MKT>.csv; C = Hb >= 1.25x + follow-through; amber F? row); the engine and the RS3 record unchanged // (2.0.0) the 4-step model: gate + Trap / Collision / Trapped / Release + result // (1.3.0) typed MBO observations, arrival journal, immutable post-decision checkpoints
 // 1.0.0:   // keep equal to rsl::VERSION, rsset::PLUGIN_VERSION and the setVersion literal below
 
 static const COLOR C_GRID = 0x00374151, C_LABEL = 0x009CA3AF, C_TEXT = 0x00E5E7EB, C_BOX_BG = 0x000F1520, C_TIP_BG = 0x00111827;
@@ -134,6 +135,8 @@ struct RSState {
     std::vector<Hit> hits; long long hoverKey = 0; void* hoverWnd = nullptr; int dx = 0, dy = 0; bool haveWnd = false;
     int paneL = 0, paneT = 0, paneR = 0, paneB = 0; int boxL = 0, boxT = 0, boxR = 0, boxB = 0; bool boxOn = false;
     long long drawn = 0, statusMs = -1; std::string statusText;
+    // (2.1.0) the stage info box: params (re-read every 60 s), VAP sums per closed candle (immutable: cached by key), the boxes
+    sbx::Params par; std::string parPath; long long parMs = -100000, parMt = -2; std::map<long long, sbx::Bar> vapCache; std::vector<sbx::Box> boxes; long long vapFails = 0;
 };
 
 static ss::Ids& rsIds() { static ss::Ids I; return I; }
@@ -183,6 +186,9 @@ private:
     std::string clockOf(long long raw);
     void render(RSState& s);
     void tip(RSState& s, int top, int bottom, int left, int right);
+    void stageBoxes(RSState& s, long long now);   // (2.1.0)
+    static int readStats(RTARRAYP* vap, int bar, BARSTATISTICS* st);
+    static int readRow(RTARRAYP* vap, int bar, int k, VOLPROFILE* row);
 };
 
 int cppExtension::init(void) { return RTX_OK; }
@@ -364,6 +370,7 @@ void ReversalStage::writeStatus(RSState& s, long long now) {
       << "\nJOURNAL," << s.journalPath << "\nPENDING_EVIDENCE," << s.inbox.pendingCount() << "\nIGNORED_HISTORY," << s.inbox.ignoredHistory
       << "\nWRONG_CONTRACT," << s.inbox.wrongContract << "\nEVIDENCE_WRITE_FAILURES," << s.inbox.writeFails << "\nDROPPED_EVIDENCE," << s.inbox.dropped
       << "\nGATE," << s.gates.size() << " locations (" << s.gateSwings << " swings, levels " << s.levelNote << ", SwingRef " << swg::VERSION << ")"
+      << "\nSTAGE_BOX," << sbx::VERSION << "," << s.boxes.size() << " pivots,latest " << (s.boxes.empty() ? std::string("none") : (s.boxes.back().letters.empty() ? std::string("-") : s.boxes.back().letters)) << ",params " << s.par.why << " trapped " << s.par.trapThr << "x wick " << s.par.wickThr << "x hb " << s.par.hbMin << "x,vap fails " << s.vapFails
       << "\nDRAWN," << s.drawn << "\nODDS,? not proven yet (" << rsl::ODDS_TICKET << ")\n";
     const std::string t = o.str();
     if (t == s.statusText && s.statusMs >= 0 && now - s.statusMs < 30000) return;
@@ -385,7 +392,7 @@ void ReversalStage::pump() {
         if (s->lastPassMs >= 0 && now >= s->lastPassMs && now - s->lastPassMs < 1000 && count == s->lastCount) return;   // at most once a second unless a bar closed
         s->lastPassMs = now; s->lastCount = count;
         static std::mutex journalMutex; std::lock_guard<std::mutex> journalLock(journalMutex);
-        readRecord(*s); readLetters(*s); levels(*s, now); decide(*s);
+        readRecord(*s); readLetters(*s); levels(*s, now); decide(*s); stageBoxes(*s, now);
         writeStatus(*s, now);
     } catch (...) { s->fault = true; s->state = "STOPPED - error, reload the chart"; }
 }
@@ -410,6 +417,85 @@ int ReversalStage::draw(void) {
     return RTX_OK;
 }
 
+// (2.1.0) THE STAGE INFO BOX (StageBox.h): params, the VAP sums of the closed candles (cached by key - a closed candle never changes),
+// the attempts from the record, the letters from the typed evidence; recomputed from closed data only, so a box never changes once decided
+int ReversalStage::readStats(RTARRAYP* vap, int bar, BARSTATISTICS* st) {
+#if defined(_MSC_VER) || (defined(__clang__) && defined(_WIN32))
+    __try {
+#endif
+        if (!vap || !st || bar < 0) return -2;
+        std::memset(st, 0, sizeof(*st));
+        if (vap->getBarStatistics(bar, *st) != RTX_OK) return -2;
+        return st->prices < 0 ? -2 : st->prices;
+#if defined(_MSC_VER) || (defined(__clang__) && defined(_WIN32))
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#endif
+}
+int ReversalStage::readRow(RTARRAYP* vap, int bar, int k, VOLPROFILE* row) {
+#if defined(_MSC_VER) || (defined(__clang__) && defined(_WIN32))
+    __try {
+#endif
+        if (!vap || !row) return -2;
+        std::memset(row, 0, sizeof(*row));
+        return vap->getVolumeProfile(bar, k, *row) == RTX_OK ? 0 : -2;
+#if defined(_MSC_VER) || (defined(__clang__) && defined(_WIN32))
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#endif
+}
+void ReversalStage::stageBoxes(RSState& s, long long now) {
+    if (s.market.empty() || !(s.tick > 0)) return;
+    {   // params: lsFlexLevels\LRA-StageBox-<MKT>.csv (missing = the built-in TRAPPED.md defaults)
+        const std::string f = flexDir(); const std::string pp = f.empty() ? std::string() : f + "\\LRA-StageBox-" + s.market + ".csv";
+        if (pp != s.parPath || now - s.parMs >= 60000 || now < s.parMs) {
+            s.parPath = pp; s.parMs = now; sbx::Params P = sbx::defaultsFor(s.market);
+            std::ifstream in(pp.c_str(), std::ios::binary); int used = 0;
+            if (in.is_open()) { std::string ln; int n = 0; while (std::getline(in, ln) && ++n < 200) if (sbx::parseParam(ln, P)) ++used; }
+            P.why = in.is_open() ? (used ? "file (" + std::to_string(used) + " values)" : std::string("file (no values) - defaults")) : std::string("defaults (no file)");
+            s.par = P;
+        }
+    }
+    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose), op(barOpen); RTARRAYP vap(barVolumeProfile);
+    const long count = getBarCount();
+    const int n = (int)std::min<long>(count, std::min(std::min((long)times.count, (long)hi.count), std::min(std::min((long)lo.count, (long)cl.count), (long)op.count)));
+    if (n < 3) return;
+    const int last = n - 1, from = std::max(0, last - 400);              // the forming candle (last) is never used
+    std::vector<sbx::Bar> B; B.reserve((size_t)(last - from));
+    for (int i = from; i < last; ++i) {
+        const long long key = (long long)times[i];
+        std::map<long long, sbx::Bar>::const_iterator c = s.vapCache.find(key);
+        if (c != s.vapCache.end()) { B.push_back(c->second); continue; }
+        sbx::Bar b; b.key = key;
+        const double o = (double)op[i] / s.tick, h = (double)hi[i] / s.tick, l = (double)lo[i] / s.tick, cc = (double)cl[i] / s.tick;
+        b.ok = key > 0 && std::isfinite(o) && std::isfinite(h) && std::isfinite(l) && std::isfinite(cc) && std::fabs(h) < 1e15 && std::fabs(l) < 1e15 && h >= l;
+        if (b.ok) { b.o = std::llround(o); b.h = std::llround(h); b.l = std::llround(l); b.c = std::llround(cc); }
+        if (b.ok) {
+            BARSTATISTICS st; const int np = readStats(&vap, i, &st);
+            if (np > 0 && np < 5000) {
+                std::vector<sbx::Row> rows; rows.reserve((size_t)np); bool bad = false;
+                for (int k = 0; k < np; ++k) { VOLPROFILE v; if (readRow(&vap, i, k, &v) != 0) { bad = true; break; } const double q = (double)v.price / s.tick; if (!std::isfinite(q)) { bad = true; break; }
+                    sbx::Row r; r.px = std::llround(q); r.buy = (double)v.buyVolume; r.sell = (double)v.sellVolume; r.total = (double)v.totalVolume; rows.push_back(r); }
+                if (!bad) sbx::fillVap(b, rows); else ++s.vapFails;
+            }
+        }
+        if (s.vapCache.size() > 3000) s.vapCache.erase(s.vapCache.begin());
+        s.vapCache[key] = b; B.push_back(b);
+    }
+    std::vector<sbx::Letter> L; L.reserve(s.evs.size());
+    for (std::multimap<long long, rsl::Ev>::const_iterator it = s.evs.begin(); it != s.evs.end(); ++it) {
+        sbx::Letter x; x.key = it->first; x.pane = it->second.pane; x.code = it->second.l.code; x.nums = it->second.l.nums; x.ratio = it->second.m.ratio; x.pace100 = it->second.m.pace100; x.lots = it->second.m.lots;
+        L.push_back(x);
+    }
+    const std::vector<sbx::Attempt> A = sbx::attemptsOf(s.steps);
+    std::vector<sbx::Box> out;
+    const long long oldest = B.empty() ? 0 : B.front().key;
+    for (size_t k = A.size() > 40 ? A.size() - 40 : 0; k < A.size(); ++k) {
+        if (A[k].lastKey < oldest) continue;
+        sbx::Box X = sbx::build(A[k], B, L, s.par, s.tick); if (!X.on) continue;
+        X.title = std::string("YOUR 3 REVERSAL STAGES · ") + (X.side == sbx::LOW ? "low " : "high ") + sbx::px(X.ext, s.tick) + " (pivot bar " + clockOf(X.pivKey) + ")" + (X.side == sbx::LOW ? " · bullish" : " · bearish");
+        out.push_back(X);
+    }
+    s.boxes.swap(out);
+}
 void ReversalStage::render(RSState& s) {
     using namespace rsset;
     const ss::Values& V = s.set;
@@ -426,61 +512,74 @@ void ReversalStage::render(RSState& s) {
     int slot = (int)getPixelsPerBar(); if (slot <= 0 || slot > 400) slot = v1 > v0 ? std::max(2, std::abs(xOf(v1) - xOf(v1 - 1))) : 8;
     const int top = pane.top + 2, bot = pane.bottom - 2;
     const int lastR = std::min((int)pane.right, xOf(last) + slot / 2 + 2);  // the layout ends at the last candle
-    // the faint stage lines and the stage names right of the last candle (full names when there is room, else the numbers)
-    FONT f; f.id = HELVETICA; f.size = 8; f.style = PLAIN; setFont(f);
-    for (int st = 1; st <= rsl::STEPS; ++st) { const int y = rsl::yOf(st, top, bot); setPen(C_GRID, 1, P_SOLID); RCT g; g.set(coord(pane.left), coord(y), coord(lastR), coord(y)); g.draw(0, C_GRID, C_GRID, DRAW_OPAQUE, PAT_SOLID); }
+    FONT f; f.id = HELVETICA; f.size = 10; f.style = BOLD; setFont(f);   // 10 pt minimum (his rule)
+    // (2.1.0) the legend right of the last candle (when there is room)
     if (V.b(K_SHOW_NAMES)) {
-        const int room = pane.right - lastR - 4; int wFull = 0; for (int st = 1; st <= rsl::STEPS; ++st) { char b[24]; std::snprintf(b, sizeof b, "%d %s", st, rsl::stageName(st)); wFull = std::max(wFull, getTextWidth(b, -1)); }
-        const bool full = room >= wFull + 2, digits = room >= 10;
-        setTextColor(C_LABEL);
-        if (full || digits) for (int st = 1; st <= rsl::STEPS; ++st) { char b[24]; if (full) std::snprintf(b, sizeof b, "%d %s", st, rsl::stageName(st)); else std::snprintf(b, sizeof b, "%d", st);
-            const int y = rsl::yOf(st, top, bot); RCT r; r.set(coord(lastR + 4), coord(y - 6), coord(pane.right - 1), coord(y + 6)); r.drawText(b, false, false); }
+        static const char* const LEG[] = { "1 Trap", "2 Collision", "3 Turn", "C Confirm" };
+        const int room = pane.right - lastR - 4; int wl = 0; for (int k = 0; k < 4; ++k) wl = std::max(wl, getTextWidth(LEG[k], -1));
+        if (room >= wl + 2 && bot - top >= 4 * 13) { setTextColor(C_LABEL); for (int k = 0; k < 4; ++k) { RCT r; r.set(coord(lastR + 4), coord(top + k * 13), coord(pane.right - 1), coord(top + (k + 1) * 13)); r.drawText(LEG[k], false, false); } }
     }
-    // the steps, from the record only (closed, decided candles)
+    // (2.1.0) the letters 1 2 3 C on each pivot bar (closed data only), green = a low, red = a high; an F? pivot gets an amber "F?"
+    std::map<long long, int> barOf; for (int i = std::max(0, v0 - 2); i <= v1 && i < last; ++i) barOf[(long long)times[i]] = i;
     if (V.b(K_SHOW_STEPS)) {
-        const int w = std::max(2, std::min(slot - 2, (int)std::lround(slot * 0.7)));
-        for (int i = std::max(0, v0); i <= v1 && i < last; ++i) {
-            std::map<long long, rsl::Step>::const_iterator it = s.steps.find((long long)times[i]); if (it == s.steps.end()) continue;
-            const rsl::Look k = rsl::lookOf(it->second); if (k.height <= 0 && !k.stub) continue;
-            const int xc = xOf(i); if (xc < pane.left || xc > lastR) continue;
-            nw::Gate ng; { struct tm tk; std::memset(&tk, 0, sizeof(tk)); if (getLocaltime((RTDATE)times[i], &tk)) ng = nw::atTm(s.market, tk); }   // (1.1.0)
-            if (ng.feedBad) continue;                                      // (1.1.0) feed check failed: recorded only
-            COLOR c = (COLOR)(k.colour == lst::GREEN ? V.c(K_COL_LOW) : V.c(K_COL_HIGH));
-            if (it->second.quality != rse::COMPLETE) c = C_LABEL;
-            if (k.dim) c = (COLOR)((((c >> 16) & 0xFF) * 55 / 100) << 16 | (((c >> 8) & 0xFF) * 55 / 100) << 8 | ((c & 0xFF) * 55 / 100));   // stage 1 / a failed stub: the same hue, darker
-            const int yTop = k.stub ? bot - std::max(3, (bot - top) / 26) : rsl::yOf(k.height, top, bot);
-            setPen(c, 1, P_SOLID); RCT r; r.set(coord(xc - w / 2), coord(yTop), coord(xc - w / 2 + w), coord(bot)); r.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
-            if (ng.news && yTop - 13 > top) { setTextColor(c); RCT qr; qr.set(coord(xc - 6), coord(yTop - 13), coord(xc + 7), coord(yTop - 1)); qr.drawText("?", true, false); setFont(f); }   // (1.1.0) news / settle window
-            RSState::Hit h; h.l = xc - std::max(w, slot) / 2; h.r = h.l + std::max(w, slot); h.t = top; h.b = bot + 1; h.key = it->first; s.hits.push_back(h);
+        std::vector<std::pair<int, int> > taken;                           // (x left, x right) of letters already drawn
+        for (size_t k = 0; k < s.boxes.size(); ++k) {
+            const sbx::Box& X = s.boxes[k];
+            std::map<long long, int>::const_iterator b = barOf.find(X.pivKey); if (b == barOf.end()) continue;
+            const int xc = xOf(b->second); if (xc < pane.left || xc > lastR) continue;
+            nw::Gate ng; { struct tm tk; std::memset(&tk, 0, sizeof(tk)); if (getLocaltime((RTDATE)X.pivKey, &tk)) ng = nw::atTm(s.market, tk); }
+            if (ng.feedBad) continue;                                      // feed check failed: recorded only
+            bool warn = false; for (const sbx::BoxRow& r : X.rows) if (r.state == sbx::WARN) warn = true;
+            const std::string txt = X.letters.empty() ? (warn ? std::string("F?") : std::string()) : X.letters;
+            if (txt.empty()) continue;
+            const int tw = getTextWidth(txt.c_str(), -1) + 4, lh = 13;
+            int xl = xc - tw / 2; for (size_t q = 0; q < taken.size(); ++q) if (xl < taken[q].second + 2 && xl + tw > taken[q].first - 2) xl = taken[q].second + 3;
+            if (xl + tw > pane.right - 1) continue;
+            const int yt = std::max(top, bot - lh);                          // the bottom row of the pane (the info box sits at the top)
+            const COLOR c = (warn && X.letters.empty()) ? (COLOR)V.c(K_COL_WARN) : (COLOR)(X.side == sbx::LOW ? V.c(K_COL_LOW) : V.c(K_COL_HIGH));
+            setTextColor(c); RCT r; r.set(coord(xl), coord(yt), coord(xl + tw), coord(yt + lh)); r.drawText(txt.c_str(), false, false);
+            if (warn && !X.letters.empty() && yt - lh >= top) { setTextColor((COLOR)V.c(K_COL_WARN)); RCT w; w.set(coord(xl), coord(yt - lh), coord(xl + tw), coord(yt)); w.drawText("F?", false, false); }
+            taken.push_back(std::make_pair(xl, xl + tw));
+            RSState::Hit h; h.l = xl; h.r = xl + tw; h.t = yt - (warn ? lh : 0); h.b = bot + 1; h.key = X.pivKey; s.hits.push_back(h);
             ++s.drawn;
         }
     }
-    // the Now box
-    if (V.b(K_SHOW_NOW)) {
-        rsl::Step display = s.haveNow ? s.now : rsl::Step();
-        const int liveQuality = s.haveNow ? s.inbox.quality(s.now.key) : rse::PENDING;
-        if (liveQuality != rse::COMPLETE) { display.quality = liveQuality; display.readiness = rsl::readinessOf(display.flags, display.stage, liveQuality, false); }
-        nw::Gate currentGate; { struct tm tm0; std::memset(&tm0, 0, sizeof(tm0)); if (getLocaltime((RTDATE)currentDate(), &tm0)) currentGate = nw::atTm(s.market, tm0); }
-        if (currentGate.feedBad) { display.quality = rse::UNAVAILABLE; display.readiness = 0; }
-        std::vector<std::string> rows = rsl::wrap(rsl::nowRows(display, s.haveNow ? clockOf(s.now.key) : std::string("-"), s.tick), 40);
-        if (!rows.empty()) rows[0] = std::string(s.provisional ? "Provisional " : "Confirmed ") + (s.haveNow ? clockOf(s.now.key) : std::string("-"));
-        FONT fb = f; fb.style = BOLD; fb.size = 9; FONT fp = fb; fp.style = PLAIN;
-        // (2.0.0) one column when the pane is tall enough, else 2 - 3 columns side by side (his ~100 px panes): never cut, never taller than the pane
-        const int lh = 13, colW = 250, n = (int)rows.size();
-        const int cols = rsl::nowCols(n, pane.bottom - pane.top, lh), per = (n + cols - 1) / cols;
-        const int bw = colW * cols, bh = per * lh + 8; int x = 0, y = 0;
-        if (rsl::boxAt(V.i(K_POSITION), pane.left, pane.top, lastR, pane.bottom, bw, bh, 4, x, y)) {
+    // (2.1.0) THE STAGE INFO BOX: the latest pivot. Rows: code (side colour / grey / amber), stage name, what to look for, check / dash, value
+    if (V.b(K_SHOW_NOW) && !s.boxes.empty()) {
+        const sbx::Box& X = s.boxes.back();
+        const COLOR side = (COLOR)(X.side == sbx::LOW ? V.c(K_COL_LOW) : V.c(K_COL_HIGH)), warnC = (COLOR)V.c(K_COL_WARN);
+        FONT fb = f; FONT fp = f; fp.style = PLAIN;
+        const int lh = 13, n = (int)X.rows.size() + 1;
+        int wCode = 0, wName = 0, wLook = 0, wVal = 0;
+        setFont(fb); for (const sbx::BoxRow& r : X.rows) { wCode = std::max(wCode, getTextWidth(r.code.c_str(), -1)); wName = std::max(wName, getTextWidth(r.name.c_str(), -1)); }
+        setFont(fp); for (const sbx::BoxRow& r : X.rows) { wLook = std::max(wLook, getTextWidth(r.look.c_str(), -1)); wVal = std::max(wVal, getTextWidth(r.value.c_str(), -1)); }
+        setFont(fb); const int wTitle = getTextWidth(X.title.c_str(), -1);
+        int boxR = lastR; if (boxR - pane.left - 8 < 420) boxR = pane.right;   // a short chart: the box may use the whole pane width
+        const int avail = boxR - pane.left - 8;
+        bool showLook = true; int bw = 12 + wCode + 10 + wName + 10 + wLook + 10 + 14 + 10 + wVal;
+        if (bw > avail) { showLook = false; bw = 12 + wCode + 10 + wName + 10 + 14 + 10 + wVal; }   // a narrow pane: the "what to look for" column goes to the hover
+        bw = std::max(bw, wTitle + 12);
+        const int bh = n * lh + 8; int x = 0, y = 0;
+        if (bh <= pane.bottom - pane.top && bw <= avail + 8 && rsl::boxAt(V.i(K_POSITION), pane.left, pane.top, boxR, pane.bottom, bw, bh, 4, x, y)) {
             setPen(C_LABEL, 1, P_SOLID); RCT b; b.set(coord(x), coord(y), coord(x + bw), coord(y + bh)); b.draw(1, C_LABEL, C_BOX_BG, DRAW_OPAQUE, PAT_SOLID);
-            for (int k = 0; k < n; ++k) {
-                setFont(k == 0 ? fb : fp);
-                COLOR c = C_TEXT;
-                if (k == 1 && s.haveNow && s.now.side >= 0 && rows[(size_t)k] != "No attempt at a level" && display.quality == rse::COMPLETE) c = (COLOR)(s.now.side == rsl::LOW ? V.c(K_COL_LOW) : V.c(K_COL_HIGH));
-                if (k + 1 == n) c = C_LABEL;
-                const int cx = x + (k / per) * colW, ry = k % per;
-                setTextColor(c); RCT r; r.set(coord(cx + 6), coord(y + 4 + ry * lh), coord(cx + colW - 4), coord(y + 4 + (ry + 1) * lh)); r.drawText(rows[(size_t)k].c_str(), false, false);
+            setFont(fb); setTextColor(C_TEXT); { RCT r; r.set(coord(x + 6), coord(y + 4), coord(x + bw - 4), coord(y + 4 + lh)); r.drawText(X.title.c_str(), false, false); }
+            for (int k = 0; k < (int)X.rows.size(); ++k) {
+                const sbx::BoxRow& R = X.rows[(size_t)k]; const int yy = y + 4 + (k + 1) * lh; int cx = x + 6;
+                const COLOR c = R.state == sbx::WARN ? warnC : R.state == sbx::SEEN ? side : C_LABEL;
+                setFont(fb); setTextColor(c); { RCT r; r.set(coord(cx), coord(yy), coord(cx + wCode + 4), coord(yy + lh)); r.drawText(R.code.c_str(), false, false); } cx += wCode + 10;
+                setTextColor(C_TEXT); { RCT r; r.set(coord(cx), coord(yy), coord(cx + wName + 4), coord(yy + lh)); r.drawText(R.name.c_str(), false, false); } cx += wName + 10;
+                if (showLook) { setFont(fp); setTextColor(C_TEXT); RCT r; r.set(coord(cx), coord(yy), coord(cx + wLook + 4), coord(yy + lh)); r.drawText(R.look.c_str(), false, false); cx += wLook + 10; }
+                if (R.state == sbx::SEEN) {                                  // a drawn check mark (no font glyph needed)
+                    setPen(c, 2, P_SOLID); PNT a1; a1.set(0, 0.0f); a1.h = coord(cx + 1); a1.v = coord(yy + 7); a1.setDrawPosition(); PNT a2; a2.set(0, 0.0f); a2.h = coord(cx + 5); a2.v = coord(yy + 11); a2.drawLineTo();
+                    PNT a3; a3.set(0, 0.0f); a3.h = coord(cx + 12); a3.v = coord(yy + 2); a3.drawLineTo();
+                } else { setFont(fb); setTextColor(c); RCT r; r.set(coord(cx), coord(yy), coord(cx + 14), coord(yy + lh)); r.drawText(R.state == sbx::WARN ? "!" : "\x96", false, false); }   // "\x96" = en dash (cp1252)
+                cx += 14 + 10; setFont(fb);
+                setTextColor(c); { RCT r; r.set(coord(cx), coord(yy), coord(x + bw - 4), coord(yy + lh)); r.drawText(R.value.c_str(), false, false); }
             }
             s.boxL = x; s.boxT = y; s.boxR = x + bw; s.boxB = y + bh; s.boxOn = true;
-            for (size_t k = 0; k < s.hits.size();) { const RSState::Hit& h = s.hits[k]; if (h.l < s.boxR && h.r > s.boxL) s.hits.erase(s.hits.begin() + (long)k); else ++k; }   // no hover under the box
+            RSState::Hit bh2; bh2.l = x; bh2.r = x + bw; bh2.t = y; bh2.b = y + bh; bh2.key = X.pivKey;
+            for (size_t k = 0; k < s.hits.size();) { const RSState::Hit& h = s.hits[k]; if (h.l < s.boxR && h.r > s.boxL && h.t < s.boxB && h.b > s.boxT) s.hits.erase(s.hits.begin() + (long)k); else ++k; }   // no letter hover under the box
+            s.hits.push_back(bh2);                                       // the box itself hovers the latest pivot
         }
     }
     // the hover: only while the cursor is still over this pane
@@ -492,14 +591,20 @@ void ReversalStage::render(RSState& s) {
 }
 // the step's hover box: inside the pane, left of the price axis, beside the step (right of it, else left), never over the Now box
 void ReversalStage::tip(RSState& s, int top, int bottom, int left, int right) {
-    std::map<long long, rsl::Step>::const_iterator it = s.steps.find(s.hoverKey); if (it == s.steps.end()) return;
     int hx = -1; for (size_t k = 0; k < s.hits.size(); ++k) if (s.hits[k].key == s.hoverKey) hx = s.hits[k].r;
     if (hx < 0) return;
-    const std::vector<std::string> all = rsl::hoverRows(it->second, clockOf(it->second.key), s.tick);
+    std::vector<std::string> all;
+    for (size_t k = 0; k < s.boxes.size(); ++k) if (s.boxes[k].pivKey == s.hoverKey) {   // (2.1.0) the pivot's stage box in his format
+        const sbx::Box& X = s.boxes[k]; all.push_back(X.title);
+        for (const std::string& h : X.hover) all.push_back("   " + h);
+        for (const sbx::BoxRow& r : X.rows) all.push_back("   " + r.code + (r.state == sbx::SEEN ? " seen: " : r.state == sbx::WARN ? " warning: " : " not seen: ") + r.value);
+        break;
+    }
+    if (all.empty()) { std::map<long long, rsl::Step>::const_iterator it = s.steps.find(s.hoverKey); if (it == s.steps.end()) return; all = rsl::hoverRows(it->second, clockOf(it->second.key), s.tick); }
     // the fit cascade: every row -> without Use / Example -> also without the Odds row; 9 then 8 pt; one column, then two
-    for (int lv = 0; lv < 3; ++lv) for (int pt = 9; pt >= 8; --pt) for (int cols = 1; cols <= 2; ++cols) {
+    for (int lv = 0; lv < 3; ++lv) for (int pt = 9; pt >= 8; --pt) for (int cols = 1; cols <= 3; ++cols) {   // (2.1.0) up to 3 columns (his ~100 px panes)
         std::vector<std::string> keep;
-        for (const std::string& r : all) { if (lv >= 1 && (r.compare(0, 7, "   Use:") == 0 || r.compare(0, 11, "   Example:") == 0)) continue; if (lv >= 2 && r.compare(0, 8, "   Odds:") == 0) continue; keep.push_back(r); }
+        for (const std::string& r : all) { if (lv >= 1 && (r.compare(0, 7, "   Use:") == 0 || r.compare(0, 11, "   Example:") == 0 || r.compare(0, 14, "   How to use:") == 0)) continue; if (lv >= 2 && r.compare(0, 8, "   Odds:") == 0) continue; keep.push_back(r); }
         const std::vector<std::string> rows = rsl::wrap(keep, cols == 1 ? 78 : 60);
         FONT fb; fb.id = HELVETICA; fb.size = pt; fb.style = BOLD; FONT fp = fb; fp.style = PLAIN;
         const size_t per = (rows.size() + (size_t)cols - 1) / (size_t)cols;
@@ -528,6 +633,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);
     p->setDescription("LRA Reversal Stage: at a swing / key / MenthorQ level or queue zone, typed MBO evidence for 4 steps - Trap (stacked floor), Collision (attack met by absorption / a held queue), Trapped (pace fade, D divergence, attackers underwater) and Release (hit back / reclaim, re-test held) - then the 1 ATR result. Closed decisions are recorded and never repainted. Odds remain unproven.");
-    p->setVersion("2.0.0");   // RS_VERSION
+    p->setVersion("2.1.0");   // RS_VERSION
     return p;
 }

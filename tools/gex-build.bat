@@ -124,7 +124,8 @@ REM (2026-10-22) lsDefenseLines 1.10.0 trails (MoveLogic 1.2.0) + the trail hove
 call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h HoverBoard.h MarkParams.h
 REM (2026-10-22 Rassul approved layout-stages-2strips.png 11:41-11:46 CT, build 15:20 CT) lsReversalStage 1.0.0 - "Which stage is the pivot in?" staircase pane, reads the Strips\ letter records of lsBidAskStats 1.28.0 / lsBookFlow 1.23.0
 REM (2026-10-23) lsReversalStage 2.0.0 - the 4-step model; the gate reads SwingRef.h (swings) + NearLevels.h (key / MenthorQ levels)
-call :one ReversalStage lsReversalStage ReversalStageLogic.h LetterStrips.h HostSlot.h SettingsGuard.h ReversalStageSettings.h SettingsSpec.h SettingsHost.h NewsWindow.h MarkParams.h ReversalEvidence.h ReversalStageStream.h SwingRef.h NearLevels.h
+REM (2026-10-25) lsReversalStage 2.1.0: StageBox.h hashed (the stage info box + letters 1 2 3 C)
+call :one ReversalStage lsReversalStage ReversalStageLogic.h LetterStrips.h HostSlot.h SettingsGuard.h ReversalStageSettings.h SettingsSpec.h SettingsHost.h NewsWindow.h MarkParams.h ReversalEvidence.h ReversalStageStream.h SwingRef.h NearLevels.h StageBox.h
 REM (2026-10-20 22:41 CT Rassul "a seperate levels indicator without the open .. for my hourly charts") lsKeyLevels 1.0.0 - key levels across the chart, badges right-justified
 call :one KeyLevels lsKeyLevels KeyLevelsHLogic.h KeyLevelsHSettings.h DealerProfileAuditLogic.h DealerLogic.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h BoxDock.h BannerBoard.h KeepOutDraw.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task
