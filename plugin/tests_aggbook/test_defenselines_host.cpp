@@ -8,6 +8,7 @@
 #include <utime.h>
 namespace mock { Host* current = nullptr; Feed feed; }
 static int fails = 0, passes = 0;
+static std::string slurpSrc(const std::string& f) { for (const char* d : { "", "../", "../../" }) { std::ifstream in((std::string(d) + f).c_str()); if (in) return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()); } return std::string(); }
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %d %s\n", __LINE__, m); } } while (0)
 static const mock::Draw* text(mock::Host& h, const std::string& t) { for (auto& d : h.draws) if (d.type == "text" && d.text == t) return &d; return nullptr; }
 static int lines(mock::Host& h) { int n = 0; for (auto& d : h.draws) n += d.type == "line"; return n; }
@@ -59,6 +60,28 @@ int main() {
     settings(flex, dlset::K_MAX_CANDLES, 1); s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
     CHECK(lineCount(h, RED, yHi) == 2 && texts(h) == 0, "1 candle: the high line ends before the close through, so it stays (2 red lines, no text)");
     settings(flex, -1, 0);
+    {   // (1.12.0, BUILD-SPEC 22:29) thinner line (1 px), and NO yellow dot on a candle where lsLiquidityProfile drew an order fill dot
+        const COLOR YEL = (COLOR)0xFACC15;
+        auto yel = [&]() { int n = 0; for (auto& d : h.draws) n += d.type == "line" && d.pen == YEL && std::abs(d.y - yR) <= 3; return n; };
+        auto rW = [&]() { int w = -1; for (auto& d : h.draws) if (d.type == "line" && d.pen == GRN && d.y == yR) w = d.penW; return w; };
+        s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
+        const int y0 = yel();
+        CHECK(y0 > 0 && rW() == 1, "(1.12.0) the R line is 1 px (was 2) and its yellow dot is drawn (no fill file)");
+        const std::string fills = flex + "\\LRA-OrderFills-ES-180.txt";
+        { std::ofstream f(fills.c_str()); f << "VERSION,0.55.1\nF," << h.bars[20].time << "\nF,garbage\n"; }
+        s->lastCheckMs = -100000; h.draws.clear(); p->draw();
+        CHECK(yel() == 0 && s->fillKeys.size() == 1 && s->dotsSkipped >= 1 && lineCount(h, GRN, yR) == 1, "(1.12.0) an order fill dot on the pivot candle: the yellow dot is skipped, the line stays");
+        { std::ifstream st0((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string b0((std::istreambuf_iterator<char>(st0)), std::istreambuf_iterator<char>());
+          CHECK(b0.find("FILL_DOTS,") != std::string::npos && b0.find("1 order-fill candles,yellow dots skipped ") != std::string::npos, "(1.12.0) status FILL_DOTS"); }
+        settings(flex, dlset::K_DOT_SKIP_FILL, 0); s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
+        CHECK(yel() == y0, "(1.12.0) 'No dot where an order fill dot is' unticked: the yellow dot is back");
+        settings(flex, dlset::K_LINE_W, 3); s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
+        CHECK(rW() == 3, "(1.12.0) Line width 3: the R line is 3 px");
+        settings(flex, -1, 0); std::remove(fills.c_str());
+        s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
+        CHECK(yel() == y0 && s->fillKeys.empty(), "(1.12.0) the fill file gone: every dot drawn again");
+        CHECK(slurpSrc("DefenseLines.cpp").find("P_DOT") == std::string::npos, "(1.12.0) no dotted / dashed pen anywhere (his rule)");
+    }
     // the live "?" on the forming candle
     dt::Turn lv; lv.t = (long long)h.bars[39].time; lv.side = dt::LOW; lv.pivotPx = 27990; lv.linePx = 27990; lv.marginPct = 12;
     const std::string livePath = flex + "\\BookFlow\\ES-180-turns-live.txt";
@@ -67,7 +90,7 @@ int main() {
     { std::ofstream f(livePath.c_str()); f << liveFirst << "\n"; }
     s->lastCheckMs = -100000; s->setStore = ss::Store(); h.draws.clear(); p->draw();
     const int liveEnd = lastLine(h, GRN, yOf(0, 6997.25)) ? lastLine(h, GRN, yOf(0, 6997.25))->x : -1;
-    CHECK(lineCount(h, GRN, yOf(0, 6997.25)) == 1 && texts(h) == 0 && s->haveLive && s->liveLine.linePx == 6997.25, "the forming candle: a dotted line, no '? R' text (1.9.0)");
+    CHECK(lineCount(h, GRN, yOf(0, 6997.25)) == 1 && texts(h) == 0 && s->haveLive && s->liveLine.linePx == 6997.25, "the forming candle: a solid 1 px line (1.12.0), no '? R' text (1.9.0)");
     struct stat liveStat; CHECK(stat(livePath.c_str(), &liveStat) == 0, "live fixture stat");
     { std::ofstream f(livePath.c_str()); f << liveSecond << "\n"; }
     struct utimbuf sameLiveTime; sameLiveTime.actime = liveStat.st_atime; sameLiveTime.modtime = liveStat.st_mtime;
@@ -87,7 +110,7 @@ int main() {
     std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string body((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
     CHECK(body.find("failed lines removed") != std::string::npos, "(1.2.0) the status counts the removed lines");
     CHECK(body.find("LABELS,none") != std::string::npos, "(1.9.0) status: LABELS,none");
-    CHECK(body.find(std::string("VERSION,") + DL_VERSION) != std::string::npos && std::string(DL_VERSION) == "1.11.1" && std::string(dlset::PLUGIN_VERSION) == DL_VERSION && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
+    CHECK(body.find(std::string("VERSION,") + DL_VERSION) != std::string::npos && std::string(DL_VERSION) == "1.12.0" && std::string(dlset::PLUGIN_VERSION) == DL_VERSION && body.find("3 turns") != std::string::npos && body.find("exhaustion lines 1") != std::string::npos, "status file");
     {   // (1.3.0, Top Defender #5) lsBookFlow decided the defenders hit back after the A: the label reads "R A H ?"; "absorbed only" keeps "R A ?"
         { std::ofstream f((flex + "\\BookFlow\\ES-180-turns.csv").c_str(), std::ios::app); dt::Counter C; C.t = b.t; C.side = b.side; C.H = true; C.lots = 640; C.attack = 266; C.at = b.t + 360; f << dt::hLineOf(C) << "\n"; }
         s->lastCheckMs = -100000; h.draws.clear(); p->draw();

@@ -61,7 +61,7 @@
 #pragma comment(lib, "user32.lib")   // (1.10.0) GetCursorPos / WindowFromPoint via HoverBoard.h
 #endif
 
-static const char* DL_VERSION = "1.11.1";   // 1.11.0 (2026-10-22 evening, VALIDATE-CONTEXT-MARKS TR-2, Rassul approved 17:39 CT): the trails and B? are LOG ONLY by default in every market (B? = coin flip vs a matched-extension control): drawn only when lsFlexLevels\LRA-Trails-<MKT>.csv says PARAM,SHOW (lines, dots, x) / PARAM,SHOW_B (B?); every end still decided and recorded (trails-rec.csv); 1.10.0 (2026-10-22 15:20 CT Rassul, T-20261022-17): TRAILS of big orders following price (MoveLogic 1.2.0), decided / recorded once, hover; TRACK_MOUSE for the trail hover only; 1.9.0 (2026-10-21 19:48 CT Rassul "keep them both clean"): no text on the refill / exhaustion / forming lines (the letters are in the Defense pane's badge + its hover); 1.8.0 (2026-10-21 16:05 CT, Rassul "fix this, it should be solid"): lines stop at the lsHodLod table's edges, labels / dots / boxes that would touch it are not painted (still in the turns file and counted; KeepOutDraw.h); 1.7.0 (2026-10-21, lsBookFlow 1.19.0): the turns file's new G (attackers giving up) and W (defenders withdrew at a key level) lines are read and kept out of the bad-line count; nothing new drawn on the price chart (the letters are in the Defense pane's badge);   // 1.6.0 (2026-10-21 14:16-14:18 CT Rassul "i want you to draw them", mockup v4): every move case drawn - per BOOK side the largest qualifying move (P: in, B: out), hollow box at the old price, solid box + lots at the new price, in the side's colour (bids green, offers red); both sides on one candle side by side, never overlapping;   // 1.5.0 (2026-10-21, Rassul approved defender3-mockup-v3 11:50 CT, Top Defender #3): on a candle where the Defense pane drew P (the defenders PRESSED IN), the largest such move on the price chart: a HOLLOW box at the old price, a SOLID box at the new price with only its lot size (M lines, MoveLogic.h); never repainted;   // 1.4.0 (2026-10-21, Top Defender #4): the turns file's Q lines (the re-test L / X, DefenseTurn 1.4.0) are read and kept out of the bad-line count; the line label stays "R A H ?" - L / X are in the Defense pane's badge row (Rassul 11:26 "if the refill line gets too complicated ... they are in the pane"; the line is usually gone by the re-test: at most 3 candles);   // 1.3.0 (2026-10-21, Rassul approved defender5-mockup-v2 11:25 CT): the line label adds H when lsBookFlow decided the defenders hit back after the A ("R A H ?"; DefenseTurn 1.3.0 H lines);    // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
+static const char* DL_VERSION = "1.12.0";   // 1.12.0 (2026-10-25, BUILD-SPEC "Defense Lines vs order lines at the same price", Rassul approved 22:29 CT): the line is THINNER (1 px, setting "Line width"), still no label; its yellow dot is NOT drawn on a candle where lsLiquidityProfile drew an order fill dot (lsFlexLevels\LRA-OrderFills-<MKT>-<spb>.txt, LP 0.55.1; setting "No dot where an order fill dot is"); the forming candle's line is solid 1 px (no dotted / dashed lines); the order line goes on top by chart order (lsLiquidityProfile listed after lsDefenseLines); 1.11.0 (2026-10-22 evening, VALIDATE-CONTEXT-MARKS TR-2, Rassul approved 17:39 CT): the trails and B? are LOG ONLY by default in every market (B? = coin flip vs a matched-extension control): drawn only when lsFlexLevels\LRA-Trails-<MKT>.csv says PARAM,SHOW (lines, dots, x) / PARAM,SHOW_B (B?); every end still decided and recorded (trails-rec.csv); 1.10.0 (2026-10-22 15:20 CT Rassul, T-20261022-17): TRAILS of big orders following price (MoveLogic 1.2.0), decided / recorded once, hover; TRACK_MOUSE for the trail hover only; 1.9.0 (2026-10-21 19:48 CT Rassul "keep them both clean"): no text on the refill / exhaustion / forming lines (the letters are in the Defense pane's badge + its hover); 1.8.0 (2026-10-21 16:05 CT, Rassul "fix this, it should be solid"): lines stop at the lsHodLod table's edges, labels / dots / boxes that would touch it are not painted (still in the turns file and counted; KeepOutDraw.h); 1.7.0 (2026-10-21, lsBookFlow 1.19.0): the turns file's new G (attackers giving up) and W (defenders withdrew at a key level) lines are read and kept out of the bad-line count; nothing new drawn on the price chart (the letters are in the Defense pane's badge);   // 1.6.0 (2026-10-21 14:16-14:18 CT Rassul "i want you to draw them", mockup v4): every move case drawn - per BOOK side the largest qualifying move (P: in, B: out), hollow box at the old price, solid box + lots at the new price, in the side's colour (bids green, offers red); both sides on one candle side by side, never overlapping;   // 1.5.0 (2026-10-21, Rassul approved defender3-mockup-v3 11:50 CT, Top Defender #3): on a candle where the Defense pane drew P (the defenders PRESSED IN), the largest such move on the price chart: a HOLLOW box at the old price, a SOLID box at the new price with only its lot size (M lines, MoveLogic.h); never repainted;   // 1.4.0 (2026-10-21, Top Defender #4): the turns file's Q lines (the re-test L / X, DefenseTurn 1.4.0) are read and kept out of the bad-line count; the line label stays "R A H ?" - L / X are in the Defense pane's badge row (Rassul 11:26 "if the refill line gets too complicated ... they are in the pane"; the line is usually gone by the re-test: at most 3 candles);   // 1.3.0 (2026-10-21, Rassul approved defender5-mockup-v2 11:25 CT): the line label adds H when lsBookFlow decided the defenders hit back after the A ("R A H ?"; DefenseTurn 1.3.0 H lines);    // 1.2.2 (2026-10-20 night): the settings window behind a fault guard (SettingsGuard.h) - IRT faulted inside parmsLoad / parmsApply of 1.1.0 on a window copy with no chart; 1.2.1 (2026-10-20 evening, Rassul "implement" the audit): stricter turns-file parsing, stale live-line fix, WATCH waits for the full 20-60 s window, touch freshness / stale-event guards, incomplete order totals marked partial, invalid effort / reward inputs rejected; // 1.2.0 (2026-10-20 14:19-14:23 CT Rassul): a turn needs the close beyond the R line; a line a candle closes through is removed (no dimmed x); 1.1.0 (2026-10-20 13:54 CT Rassul "okay build", defense-E-R-mockup.png): gray exhaustion line E, yellow dot on the candle each line refers to, lines at most 3 candles (or the next line), no price triangles;   // 1.0.1 (2026-10-20 13:37 CT Rassul "remove the exhaustion indicators for now"): no E on the labels
 static long long dlSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string dlFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void dlMakeDir(const std::string& p) {
@@ -105,6 +105,7 @@ struct DlState {
     int trShowP = mp::LOG, trShowB = mp::LOG;    // (1.11.0) LRA-Trails-<MKT>.csv SHOW / SHOW_B
     std::vector<TrHit> trHits;                    // the drawn trails' segments (+ 3 px), for the hover
     bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
+    File fills; std::set<long long> fillKeys; long long dotsSkipped = 0;   // (1.12.0) LP's fill-dot candles (bar datetime keys)
 };
 static ss::Ids& dlIds() { static ss::Ids I; return I; }
 
@@ -183,6 +184,17 @@ void DefenseLines::refresh(DlState& s) {
         s.turns.mt = mt; s.turns.sz = sz; s.reads++; s.bad = bad;
     }
     refreshTrails(s);                                                     // (1.10.0)
+    {   // (1.12.0) the candles where lsLiquidityProfile drew an order fill dot: our yellow dot is skipped there
+        const std::string fp = f.empty() || s.mkt.empty() ? std::string() : f + "\\LRA-OrderFills-" + s.mkt + "-" + std::to_string(s.spb) + ".txt";
+        if (fp != s.fills.path) { s.fills = DlState::File(); s.fills.path = fp; s.fillKeys.clear(); }
+        long long fmt = -1, fsz = -1;
+        if (!dlStat(fp, fmt, fsz)) s.fillKeys.clear();                    // no LP order lines on this market: every dot drawn
+        else if ((fmt != s.fills.mt || fsz != s.fills.sz) && fsz < 1024 * 1024) {
+            std::ifstream in(fp.c_str(), std::ios::binary); std::string ln; std::set<long long> k;
+            while (std::getline(in, ln)) { if (ln.size() > 2 && ln[0] == 'F' && ln[1] == ',') { char* e = nullptr; const long long v = std::strtoll(ln.c_str() + 2, &e, 10); if (e && e != ln.c_str() + 2 && v > 0) k.insert(v); } }
+            s.fillKeys.swap(k); s.fills.mt = fmt; s.fills.sz = fsz;
+        }
+    }
     if (lp != s.live.path) { s.live = DlState::File(); s.live.path = lp; s.haveLive = false; s.liveLine = dt::Line(); }
     // This is a tiny, volatile file: re-read on each two-second poll. mtime is only second-granularity on some hosts, so a same-size
     // overwrite could otherwise leave a stale forming "?" on the chart. Missing / oversized / malformed live input fails closed.
@@ -197,7 +209,7 @@ void DefenseLines::writeStatus(DlState& s, size_t drawn, size_t failed) {
     const std::string d = dlFlex(); if (d.empty() || s.mkt.empty()) return;
     std::ostringstream o;
     o << "VERSION," << DL_VERSION << "\nMARKET," << s.mkt << "\nBAR_SECONDS," << s.spb << "\nTURNS_FILE," << s.turns.path << "," << s.lines.size() << " turns, "
-      << s.bad << " unreadable lines\nLIVE," << (s.haveLive ? "dotted line on the forming candle" : "none") << "\nDRAWN_NOW," << drawn << ",failed lines removed " << failed
+      << s.bad << " unreadable lines\nLIVE," << (s.haveLive ? "solid 1 px line on the forming candle" : "none") << "\nDRAWN_NOW," << drawn << ",failed lines removed " << failed << "\nFILL_DOTS," << s.fills.path << "," << s.fillKeys.size() << " order-fill candles,yellow dots skipped " << s.dotsSkipped
       << "\nSETTINGS," << s.set.why << ",lines " << (s.set.b(dlset::K_SHOW_LINES) ? "on" : "off") << ",E " << (s.set.b(dlset::K_SHOW_E) ? "on" : "off") << ",dots " << (s.set.b(dlset::K_SHOW_DOTS) ? "on" : "off")
       << ",pane marks " << (s.set.b(dlset::K_SHOW_MARKS) ? "on" : "off") << ",candles " << s.set.i(dlset::K_MAX_CANDLES) << ",exhaustion lines " << s.xs.size() << "\nLABELS,none (1.9.0: clean lines; the letters are in the Defense pane's badge)\n"
       << "TRAILS," << (s.set.b(dlset::K_SHOW_TRAILS) ? (s.trShowP == mp::LOG ? "log only" : "on") : "off") << "," << s.trails.v.size() << " trails (" << s.trails.bad << " unreadable lines, " << s.trails.restarts << " feed starts),drawn " << s.trailsDrawn
@@ -365,6 +377,8 @@ int DefenseLines::draw(void) {
         const ss::Values& V = s->set;
         const bool showLines = V.b(dlset::K_SHOW_LINES), showE = V.b(dlset::K_SHOW_E), showDots = V.b(dlset::K_SHOW_DOTS);
         const int maxBars = std::max(1, V.i(dlset::K_MAX_CANDLES));
+        const int lineW = std::max(1, std::min(3, V.i(dlset::K_LINE_W))); const bool skipFill = V.b(dlset::K_DOT_SKIP_FILL);   // (1.12.0)
+        s->dotsSkipped = 0;
         const long n = getBarCount(); if (n <= 2) { writeStatus(*s, 0); return RTX_OK; }
         int v0 = 0, v1 = (int)n - 1;
         if (getVisibleBars(&v0, &v1) != RTX_OK) { v0 = std::max(0, (int)n - 200); v1 = (int)n - 1; }
@@ -398,9 +412,9 @@ int DefenseLines::draw(void) {
             if (j < v0) return;
             PNT a; a.set(st, (float)px, kBarCenter); PNT b; b.set(j, (float)px, kBarCenter);
             const int xa = a.h - ppb / 2, xb = b.h + ppb / 2;
-            setPen(col, 2, P_SOLID);
+            setPen(col, lineW, P_SOLID);                                      // (1.12.0) thinner (was 2)
             ko::line(xa, a.v, xb, a.v);                                       // (1.8.0) cut at the HOD/LOD table
-            if (showDots && st >= v0) dot(a.h, a.v, colDot);
+            if (showDots && st >= v0) { if (skipFill && s->fillKeys.count((long long)dtA[st])) ++s->dotsSkipped; else dot(a.h, a.v, colDot); }   // (1.12.0) the order fill dot wins its candle
             ++drawn;
         };
         for (size_t k = 0; k < s->lines.size(); ++k) {
@@ -452,12 +466,12 @@ int DefenseLines::draw(void) {
             }
         }
         drawTrails(*s, V, (int)n, v0, v1, dtA, hiA, loA, clA, ppb, drawn);   // (1.10.0)
-        if (s->haveLive && showLines) {                                      // the forming candle: dotted, 2 bars long, no text (1.9.0)
+        if (s->haveLive && showLines) {                                      // the forming candle: 2 bars long, no text (1.9.0); (1.12.0) solid 1 px - no dotted / dashed lines
             const dt::Line& L = s->liveLine; const int i = indexOf(L.t);
             if (i >= 0 && i >= (int)n - 2 && i <= v1 + 1) {
                 const COLOR col = L.side == dt::HIGH ? colHigh : colLow;
                 PNT a; a.set(i, (float)L.linePx, kBarCenter);
-                setPen(col, 1, P_DOT);
+                setPen(col, 1, P_SOLID);
                 ko::line(a.h - ppb / 2, a.v, a.h + 2 * ppb, a.v);
                 ++drawn;
             }
@@ -478,6 +492,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // (1.10.0) TRACK_MOUSE for the trail hover only (never swallows an event)
     p->setDescription("LRA Defense Lines - the Defense pane's pivot turns on the price chart. A TURN = your pivot rule (the candle making the new high / low, or the next one trading back into it) + the defending side's Defense bar bigger (offers red at a high, bids green at a low) + the candle closing in the defending colour AND beyond the R line (above it at a low, below it at a high). R LINE (red at a high, green at a low) = the price near the pivot where the defenders re-posted the most of what was eaten. E LINE (gray) = exhaustion: the price near the pivot where the attack died AT the price (the attackers' hits there in seconds 20-60 slowed to the market's median or less vs seconds 0-20, and at least half the resting size stayed); decided about a minute after the close; only on turns that have an R. Yellow dot = the candle each line refers to. The lines carry no text: the letters (A absorbed, H hit back, L / X re-test ...) are in the Defense pane's badge row - hover a badge there for its numbers. Each line runs at most 3 candles (setting), until the next turn's lines, or until a candle closes through it (then it is removed). Dotted line = the forming candle, gone if it does not confirm. Example: 8:48 AM ES low: green R at 7827.25, gray E at 7826.75, dots on the 8:48 candle. TRAILS (1.10.0): a thin stepped line = ONE big resting order (one order id) re-priced again and again behind price during the move - green = a bid stepping up under a rally, red = an offer stepping down above a selloff; it ends once: dot = it traded, x = pulled, B? = it stopped following (price ran 0.5 ATR on and it did not follow in 2 candles) or stepped back - support / resistance quitting; hover a trail for its numbers. At most 2 per side. Needs lsBookFlow (Defense) on the same chart.");
-    p->setVersion("1.11.1");   // DL_VERSION
+    p->setVersion("1.12.0");   // DL_VERSION
     return p;
 }

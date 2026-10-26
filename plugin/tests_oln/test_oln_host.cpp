@@ -1,4 +1,4 @@
-// test_oln_host.cpp -- lsLiquidityProfile 0.55.0 THE LIMIT-ORDER LINES on the mock host (order feed -> OrderLines engine -> draw / hover /
+// test_oln_host.cpp -- lsLiquidityProfile 0.55.1 (0.55.0) THE LIMIT-ORDER LINES on the mock host (order feed -> OrderLines engine -> draw / hover /
 // status / record / settings / restart). ES 3-min; a 100-lot bid rolled 7,675 -> 7,680, filled, green close above = HELD; a 50-lot offer
 // pulled = very dark line; no LMT column; no RE-BID? / ACCEPTED / X.
 // From plugin\:  g++ -std=c++17 -fsanitize=address,undefined -Itests_lqp044 -I. tests_oln/test_oln_host.cpp -o tolnh && ASAN_OPTIONS=detect_leaks=0 ./tolnh
@@ -87,6 +87,12 @@ int main() {
     CHECK(held && held->color == GREEN && std::abs((held->t + held->b) / 2 - yNew) <= 12, "HELD in green beside the fill dot at 7,680");
     int dot = 0; for (auto& d : h.draws) if (d.type == "line" && d.pen == GREEN && std::abs(d.y - yNew) <= 5 && d.y != yNew) ++dot;
     CHECK(dot >= 5, "the fill dot");
+    {   // (0.55.1) the fill-dot candle published for lsDefenseLines (bar datetime key of the fill bar)
+        const std::string ff = readAll(flex + "\\LRA-OrderFills-ES-180.txt");
+        int nF = 0; size_t at = 0; while ((at = ff.find("\nF,", at)) != std::string::npos) { ++nF; ++at; }
+        bool keyOk = false; for (size_t i = 0; i < h.bars.size(); ++i) if (ff.find("\nF," + std::to_string((long long)h.bars[i].time) + "\n") != std::string::npos) keyOk = true;
+        CHECK(ff.rfind("VERSION,0.55.1\n", 0) == 0 && nF == 1 && keyOk, "LRA-OrderFills-ES-180.txt: one F line = the fill candle's bar key");
+    }
     // hover on the bid line
     { RTX_EVENT e; std::memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.bar = 34; e.v.mouse.price = 7680.0f;
       p->mouse(&e); CHECK(S->olHov >= 0, "the mouse on the line picks it");
@@ -101,7 +107,7 @@ int main() {
     CHECK(rec.find("\nN|") != std::string::npos && rec.find("\nS|") != std::string::npos && rec.find("\nE|") != std::string::npos && rec.find("|HELD|") != std::string::npos, "record: N / S / E / W lines");
     const std::string st = readAll(flex + "\\LiquidityProfile.status-ES-180.txt");
     CHECK(st.find(std::string("ORDER_LINES,") + oln::VERSION + ",on") != std::string::npos && st.find("floor 50 lots rest 9 min roll 15 s") != std::string::npos && st.find(",held 1 ") != std::string::npos, "status: ORDER_LINES line");
-    CHECK(std::string(LQ_VERSION) == "0.55.0" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION && std::string(lqp::VERSION) == LQ_VERSION, "versions = 0.55.0");
+    CHECK(std::string(LQ_VERSION) == "0.55.1" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION && std::string(lqp::VERSION) == LQ_VERSION, "versions = 0.55.1");
     // the settings rows: relabelled, parameter version 11
     { const ss::Spec& sp = lpset::profileSpec(); bool m = false, ice = false, lad = false, pul = false, q = false, wd = false;
       for (int k = 0; k < sp.n; ++k) { const std::string lb = sp.rows[k].label; if (lb == "Limit-order lines (resting 9+ min)") m = true; if (lb == "Icebergs (I R15 500)") ice = true; if (lb == "Ladders (4o 87)") lad = true; if (lb == "Pulled lines (very dark)") pul = true; if (lb == "Queue Q at levels") q = true; if (lb == "HELD / THRU words") wd = true; }

@@ -79,7 +79,7 @@ public:
     struct PNT {
         short h,v;
         int set(int bar,float price,int=0) { h=static_cast<short>(50+bar*mock::current->barW); v=static_cast<short>(mock::current->paneBottom-(price-mock::current->priceBase)*20); return 0; }
-        void setDrawPosition(){ mock::lastMoveH()=h; mock::lastMoveV()=v; } void drawLineTo(){ mock::current->draws.push_back(mock::Draw("line",h,v)); mock::current->draws.back().pen=mock::current->pen; mock::current->draws.back().x0=mock::lastMoveH(); mock::current->draws.back().y0=mock::lastMoveV(); mock::lastMoveH()=h; mock::lastMoveV()=v; }   // (2026-10-21) the start point too (render checks)
+        void setDrawPosition(){ mock::lastMoveH()=h; mock::lastMoveV()=v; } void drawLineTo(){ mock::current->draws.push_back(mock::Draw("line",h,v)); mock::current->draws.back().pen=mock::current->pen; mock::current->draws.back().penW=mock::current->penW; mock::current->draws.back().x0=mock::lastMoveH(); mock::current->draws.back().y0=mock::lastMoveV(); mock::lastMoveH()=h; mock::lastMoveV()=v; }   // (2026-10-21) the start point too (render checks)
         int showHelpTip(const char* s){ mock::current->draws.push_back(mock::Draw("tip",h,v,s)); return 0; } int hideHelpTip(){ mock::current->draws.push_back(mock::Draw("tipoff",h,v)); return 0; }   // (1.22.0) the info icon
     };
     struct RCT {

@@ -61,7 +61,7 @@ int main() {
     CHECK(countOf(rec1, "TR|1|") == 3 && countOf(rec1, "|B|") == 1 && countOf(rec1, "|X|") == 1 && countOf(rec1, "|F|") == 1, "each end recorded once for the nightly");
     redraw(p, h); CHECK(countOf(slurp(rp), "TR|1|") == 3, "a redraw never records twice");
     {   std::ifstream st((flex + "\\DefenseLines.status-ES.txt").c_str()); std::string b((std::istreambuf_iterator<char>(st)), std::istreambuf_iterator<char>());
-        CHECK(b.find("VERSION,1.11.1") != std::string::npos && b.find("TRAILS,on,3 trails") != std::string::npos && b.find("recorded 3") != std::string::npos, "status line: version + trails"); }
+        CHECK(b.find("VERSION,1.12.0") != std::string::npos && b.find("TRAILS,on,3 trails") != std::string::npos && b.find("recorded 3") != std::string::npos, "status line: version + trails"); }
     // incremental read: the half line completes, a 4th trail (bid 11) starts and is still following (no end mark, runs to the last candle)
     {   std::ofstream f(tp.c_str(), std::ios::app); f << "|9|1|1|0\n"; f << "TS|11|0|50|" << key(36) << "|20000|28140\n" << "TP|11|" << key(36) << "|20000|28142|0\n" << "TP|11|" << key(37) << "|21000|28145|0\n"; }
     redraw(p, h);
