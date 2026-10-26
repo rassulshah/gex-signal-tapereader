@@ -49,7 +49,7 @@
 
 namespace swr {
 
-static const char* const VERSION = "1.1.2";   // (1.1.1, 2026-10-22 evening, Rassul 17:16 CT IMPLIED FILLS option B) an implied fill (Ev::implied, the feed's side "?" FILL - ImpliedFill.h) is never a sweep trade: it only takes its lots off the resting order
+static const char* const VERSION = "1.1.3";   // (1.1.1, 2026-10-22 evening, Rassul 17:16 CT IMPLIED FILLS option B) an implied fill (Ev::implied, the feed's side "?" FILL - ImpliedFill.h) is never a sweep trade: it only takes its lots off the resting order
 enum Side { BID = 0, ASK = 1 };                    // the RESTING side: a sweep of BIDs = sellers sweeping down = a bullish Sr candidate
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum RefKind { REF_PIVOT = 0, REF_KEY = 1, REF_MQ = 2, REF_X5 = 3, REF_VP = 4 };   // REF_PIVOT = a ZigZag swing (1.1.0); REF_VP = POC / VAH / VAL (1.1.0); REF_X5 = 1.0.0 records only

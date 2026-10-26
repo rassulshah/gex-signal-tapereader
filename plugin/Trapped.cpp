@@ -33,6 +33,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "Trapped"
+#endif
 #ifdef far
 #undef far
 #endif
@@ -68,7 +72,7 @@
 #include <dirent.h>
 #endif
 
-#define TRP_VERSION "1.0.0"     // = trp::VERSION = trpset::PLUGIN_VERSION = the setVersion literal
+#define TRP_VERSION "1.0.1"     // = trp::VERSION = trpset::PLUGIN_VERSION = the setVersion literal
 #ifdef TRP_MARKS
 #define TRP_SPEC trpset::marksSpec
 #define TRP_NAME "TrappedMarks"
@@ -244,7 +248,7 @@ int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::done(void) { static_cast<Trapped*>(this)->slot_.release(this); return RTX_OK; }      // symbol / period change: start clean
 int cppExtension::destroy(void) { static_cast<Trapped*>(this)->slot_.release(this); return RTX_OK; }
 int cppExtension::setup(void) { ss::registerAll(this, TRP_SPEC(), trpIds()); return RTX_OK; }
-int cppExtension::calc(int) { static_cast<Trapped*>(this)->pump(); return RTX_OK; }
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<Trapped*>(this)->pump(); return RTX_OK; }
 
 // IRT's local clock (Central on his PC) as civil seconds
 long long Trapped::ctSec(long long t) {
@@ -619,7 +623,7 @@ void Trapped::renderPane(TrpState& S) {
 }
 #endif
 
-int Trapped::draw(void) {
+int Trapped::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     pump();
     TrpState* S = slot_.get(this, false);
     if (S) {
@@ -644,6 +648,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE | VAP_REQUIRED);    // its own pane, draws itself; mouse events even when not selected
     p->setDescription("LRA Trapped v1.0.0 - trapped traders and their fuel. A spike on the Tr candle = the lots trapped by a failed sweep vs the normal trap (the market's median over 20 sessions): green up = sellers trapped below a swing low (buying to come as they cover), red down = buyers trapped above a swing high. Bright at 2.0x+, muted when small; '3,140 \xB7 7.1x' on big spikes. The thin line after a spike = fuel left: the trapped lots still offside, burned by their estimated covering; it ends when they are freed (a close back beyond their average) or the fuel is spent. Decided once on closed candles from the chart's own volume at price, recorded, never repainted. Hover a spike for the numbers. Add lsTrappedMarks to the price chart for the Tr letters. Example: ES Oct 5 9:03, sellers trapped 3,140 lots (7.1x) below the 8:48 low.");
 #endif
-    p->setVersion("1.0.0");   // TRP_VERSION
+    p->setVersion("1.0.1");   // TRP_VERSION
     return p;
 }

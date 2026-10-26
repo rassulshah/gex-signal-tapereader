@@ -24,6 +24,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "TapeFlowMarks"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #include "TapeFlowLogic.h"
 #include "HostSlot.h"
@@ -45,7 +49,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-static const char* TFM_VERSION = "1.3.0";   // (1.3.0, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") an A? that would touch the lsHodLod table is not painted there (the TapeFlow record unchanged; KeepOutDraw.h)   // (1.2.0, 2026-10-14 audit display list) the candle mark is always "A?" (never "A")   // (1.1.1) current cache is published before status; same-size atomic rewrites use native-resolution write times; a transient bad file never erases a drawn mark
+static const char* TFM_VERSION = "1.3.1";   // (1.3.0, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") an A? that would touch the lsHodLod table is not painted there (the TapeFlow record unchanged; KeepOutDraw.h)   // (1.2.0, 2026-10-14 audit display list) the candle mark is always "A?" (never "A")   // (1.1.1) current cache is published before status; same-size atomic rewrites use native-resolution write times; a transient bad file never erases a drawn mark
 static const COLOR C_BUY  = 0x0022C55E;
 static const COLOR C_SELL = 0x00EF4444;
 static const COLOR C_GRAY = 0x0064748B;
@@ -175,7 +179,7 @@ int cppExtension::setup(void)
     return RTX_OK;
 }
 int cppExtension::calc(int)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "calc");
     TapeFlowMarks* me = static_cast<TapeFlowMarks*>(this);
     MarksState* s = me->slot_.get(this, true);
     if (!s) return RTX_OK;
@@ -284,7 +288,7 @@ int TapeFlowMarks::timer(RTX_EVENT* e)
 }
 
 int TapeFlowMarks::draw(void)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     MarksState* s = slot_.get(this, true);
     if (!s) return RTX_OK;
     try {

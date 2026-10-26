@@ -13,7 +13,7 @@
 #endif
 
 namespace trpset {
-static const char* const PLUGIN_VERSION = "1.0.0";
+static const char* const PLUGIN_VERSION = "1.0.1";
 // the pane (lsTrapped)
 enum K { K_VERSION, K_SHOW_FUEL, K_SHOW_LABELS, K_SHOW_MSG, K_BIG_X, K_COL_BULL, K_COL_BEAR, K_N };
 inline const ss::Spec& paneSpec() {

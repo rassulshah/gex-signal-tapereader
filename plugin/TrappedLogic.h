@@ -42,7 +42,7 @@
 
 namespace trp {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";
 static const int FORMAT = 1;                       // record format major (lines of another major are "old" and ignored)
 enum Kind { KIND_SWEEP = 0, KIND_PULLBACK = 1 };   // KIND_PULLBACK reserved (not decided by 1.0.0)
 enum Side { SELLERS = 1, BUYERS = -1 };            // SELLERS trapped = bullish (buying to come, green, spike up)

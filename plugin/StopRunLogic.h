@@ -42,7 +42,7 @@
 
 namespace stl {
 
-static const char* const VERSION = "1.2.1";
+static const char* const VERSION = "1.2.2";
 enum Side { DOWN = -1, UP = 1 };            // DOWN = sellers hit bids through a low; UP = buyers lift offers through a high
 enum Outcome { PENDING = 0, ABSORBED = 1, NOT_ABSORBED = 2 };
 enum RefKind { REF_KEY = 0, REF_X5 = 1, REF_PRIOR = 2, REF_SWING = 3, REF_MQ = 4, REF_VP = 5 };   // REF_X5 / REF_PRIOR: 1.0 / 1.1 records only

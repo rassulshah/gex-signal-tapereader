@@ -638,6 +638,9 @@ public:
         if (s != BID && s != ASK && !impl) { garbage++; return; }         // an unknown side cannot be classified
         events++; perAction[e.action]++; a.events++;
         evTs = e.stamp > 0 ? e.stamp : e.arrMs / 1000;                     // (1.12.0) the event second for the sink
+#ifdef LSPERF_H
+        lsperf::noteEvent(e.stamp);                                        // (PerfGuard 1.0.0) feed lag
+#endif
         if (trackMoves) {                                                   // (1.11.0) moves whose 0.5 s rest is done join this candle
             mvt.key = curKey; mvt.trailNear = near;                         // (MoveLogic 1.2.0) the candle of this event + the near band, for the trails
             mvTmp.clear(); mvt.confirm(e.arrMs, mvTmp);

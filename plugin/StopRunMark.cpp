@@ -35,6 +35,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "StopRunMark"
+#endif
 #ifdef far
 #undef far
 #endif
@@ -66,7 +70,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define SRM_VERSION "1.2.1"     // = stl::VERSION = srmset::PLUGIN_VERSION = the setVersion literal
+#define SRM_VERSION "1.2.2"     // = stl::VERSION = srmset::PLUGIN_VERSION = the setVersion literal
 
 #ifdef SRM_TEST_CLOCK
 long long srmTestClockMs();
@@ -219,7 +223,7 @@ int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::done(void) { static_cast<StopRunMark*>(this)->slot_.release(this); return RTX_OK; }      // symbol / period change: start clean
 int cppExtension::destroy(void) { static_cast<StopRunMark*>(this)->slot_.release(this); return RTX_OK; }
 int cppExtension::setup(void) { ss::registerAll(this, srmset::spec(), srmIds()); return RTX_OK; }
-int cppExtension::calc(int) { static_cast<StopRunMark*>(this)->pump(false); return RTX_OK; }
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<StopRunMark*>(this)->pump(false); return RTX_OK; }
 
 std::string StopRunMark::ctText(long long stamp) {
     struct tm t; std::memset(&t, 0, sizeof t);
@@ -568,7 +572,7 @@ void StopRunMark::render(SrmState& S) {
     }
 }
 
-int StopRunMark::draw(void) {
+int StopRunMark::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     pump(true);
     SrmState* S = slot_.get(this, false);
     if (S) { try { render(*S); } catch (...) {} }
@@ -581,6 +585,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.2.0) VAP: the POC / VAH / VAL levels
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the burst ends and the feed is drained while the chart is quiet
     p->setDescription("LRA Stop Run v1.2.0 - St / Sta on the price chart. St marks where stop orders fired: a burst of many small market orders in one moment (3x the normal burst), just through an intact swing (one of the last 3 swings of the 1-bar ZigZag from the RTH open), a key level, a MenthorQ level or a volume-profile level (POC / VAH / VAL). 10 s later (NQ) it is decided live: back across the level and a big resting order filled there = Sta, green when stops below a low were absorbed (bullish), red above a high. Shown per market only where the validation proved it (NQ green Sta?, GC grey St?); everything else is recorded, not drawn. On a candle with an Sr only the Sr is drawn. Hover a mark for the numbers. Needs the market-by-order feed. Example: St at 7672.25 below the swing low from 8:48 AM, 3.4x; 10 s later back above and a 12-lot bid filled -> green Sta.");
-    p->setVersion("1.2.1");   // SRM_VERSION
+    p->setVersion("1.2.2");   // SRM_VERSION
     return p;
 }

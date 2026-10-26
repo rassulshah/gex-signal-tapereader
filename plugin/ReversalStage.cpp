@@ -29,6 +29,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "ReversalStage"
+#endif
 #ifdef far
 #undef far
 #endif
@@ -66,7 +70,7 @@
 #pragma comment(lib, "user32.lib")   // GetCursorPos / WindowFromPoint (the hover stops when the cursor leaves the pane)
 #endif
 
-#define RS_VERSION "2.1.1"   // (2.1.1, 2026-10-26) the C row reads the H ratio as lots / attack when the evidence carries no ratio // (2.1.0) (2.1.0, 2026-10-25, Rassul approved 22:51 CT stage-box-mockup.html) display only: the pane shows the letters 1 2 3 C (Trap / Collision / Turn / Confirm) on each pivot bar instead of the staircase, and the STAGE INFO BOX for the latest pivot (StageBox.h 1.0.0: stage # / name / what to look for / check / value (threshold); 3 Turn checked by the defenders' close = the HELD trigger, trapped and wick volume description only from lsFlexLevels\LRA-StageBox-<MKT>.csv; C = Hb >= 1.25x + follow-through; amber F? row); the engine and the RS3 record unchanged // (2.0.0) the 4-step model: gate + Trap / Collision / Trapped / Release + result // (1.3.0) typed MBO observations, arrival journal, immutable post-decision checkpoints
+#define RS_VERSION "2.1.2"   // (2.1.1, 2026-10-26) the C row reads the H ratio as lots / attack when the evidence carries no ratio // (2.1.0) (2.1.0, 2026-10-25, Rassul approved 22:51 CT stage-box-mockup.html) display only: the pane shows the letters 1 2 3 C (Trap / Collision / Turn / Confirm) on each pivot bar instead of the staircase, and the STAGE INFO BOX for the latest pivot (StageBox.h 1.0.0: stage # / name / what to look for / check / value (threshold); 3 Turn checked by the defenders' close = the HELD trigger, trapped and wick volume description only from lsFlexLevels\LRA-StageBox-<MKT>.csv; C = Hb >= 1.25x + follow-through; amber F? row); the engine and the RS3 record unchanged // (2.0.0) the 4-step model: gate + Trap / Collision / Trapped / Release + result // (1.3.0) typed MBO observations, arrival journal, immutable post-decision checkpoints
 // 1.0.0:   // keep equal to rsl::VERSION, rsset::PLUGIN_VERSION and the setVersion literal below
 
 static const COLOR C_GRID = 0x00374151, C_LABEL = 0x009CA3AF, C_TEXT = 0x00E5E7EB, C_BOX_BG = 0x000F1520, C_TIP_BG = 0x00111827;
@@ -195,7 +199,7 @@ int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::done(void) { static_cast<ReversalStage*>(this)->release(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<ReversalStage*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) { ss::registerAll(this, rsset::spec(), rsIds()); return RTX_OK; }
-int cppExtension::calc(int) { static_cast<ReversalStage*>(this)->pump(); return RTX_OK; }
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<ReversalStage*>(this)->pump(); return RTX_OK; }
 
 long long ReversalStage::civil(long long raw) {
     struct tm x; std::memset(&x, 0, sizeof(x)); if (raw <= 0 || !getLocaltime((RTDATE)raw, &x)) return LLONG_MIN;
@@ -410,7 +414,7 @@ int ReversalStage::mouse(RTX_EVENT* e) {
     return RTX_FAIL;                                                       // never swallow the event
 }
 
-int ReversalStage::draw(void) {
+int ReversalStage::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     RSState* s = slot_.get(this, false); if (!s) return RTX_OK;
     std::unique_lock<std::recursive_mutex> lock(s->mutex, std::try_to_lock); if (!lock.owns_lock()) return RTX_OK;
     try { render(*s); } catch (...) {}
@@ -634,6 +638,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);
     p->setDescription("LRA Reversal Stage: at a swing / key / MenthorQ level or queue zone, typed MBO evidence for 4 steps - Trap (stacked floor), Collision (attack met by absorption / a held queue), Trapped (pace fade, D divergence, attackers underwater) and Release (hit back / reclaim, re-test held) - then the 1 ATR result. Closed decisions are recorded and never repainted. Odds remain unproven.");
-    p->setVersion("2.1.1");   // RS_VERSION
+    p->setVersion("2.1.2");   // RS_VERSION
     return p;
 }

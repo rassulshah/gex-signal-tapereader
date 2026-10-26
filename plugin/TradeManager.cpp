@@ -44,6 +44,10 @@
 #endif
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "TradeManager"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 // windows.h may define the obsolete `far` macro, which conflicts with DealerLogic's Node::far member.
 #ifdef far
@@ -73,7 +77,7 @@ static ss::Ids& tmIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <climits>
 #include <new>
 
-static const char* const TM_VERSION = "1.3.2";   // (1.3.2, 2026-10-18 his decision list) Font default 10 pt (was 8; an 8 written by 1.3.1 reads as 10);  // (1.3.1, 2026-10-18 settings audit) the window from TradeManagerSettings.h / SettingsHost.h, keyed TradeManager.settings-<MKT>.txt (migrated once from the place file); Font now reaches the chart (it was read only while the window was open);   // (1.3.0, 2026-10-14 18:25 CT audit display list) READY only from his checklist (key level, before 11:00 AM CT, no news, limits OK; unknown / stale = WAIT), no "Read" item, no in-trade HOLD / EXIT? (ClaimGates.h LRA_SHOW_CONTROL_WORD / LRA_SHOW_READ_EXIT)   // (1.2.0) drag the box, per-chart spot, never over the profiles / past price;
+static const char* const TM_VERSION = "1.3.3";   // (1.3.2, 2026-10-18 his decision list) Font default 10 pt (was 8; an 8 written by 1.3.1 reads as 10);  // (1.3.1, 2026-10-18 settings audit) the window from TradeManagerSettings.h / SettingsHost.h, keyed TradeManager.settings-<MKT>.txt (migrated once from the place file); Font now reaches the chart (it was read only while the window was open);   // (1.3.0, 2026-10-14 18:25 CT audit display list) READY only from his checklist (key level, before 11:00 AM CT, no news, limits OK; unknown / stale = WAIT), no "Read" item, no in-trade HOLD / EXIT? (ClaimGates.h LRA_SHOW_CONTROL_WORD / LRA_SHOW_READ_EXIT)   // (1.2.0) drag the box, per-chart spot, never over the profiles / past price;
                                                   // (1.1.2) per-chart state, validated bridge inputs, bounded sizing
 static const COLOR C_INK = 0x00E5E7EB, C_MUTED = 0x009CA3AF, C_BOXBG = 0x000B1220, C_BORDER = 0x00334155;
 static const COLOR C_AMBER = 0x00F59E0B, C_RED = 0x00EF4444, C_GREEN = 0x0022C55E, C_DKRED = 0x007F1D1D, C_DKGRN = 0x00166534, C_TRACK = 0x001F2937;
@@ -444,7 +448,7 @@ void TradeManager::load(TMState& s)
 }
 
 int TradeManager::draw(void)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     TMState* state = this->state(); if (!state) return RTX_OK;
     TMState& S = *state;
     TSet& cfg = S.cfg; std::string& mkt = S.mkt; std::string& status = S.status; std::string (&alertsTx)[6] = S.alertsTx; int& nAlerts = S.nAlerts;
@@ -702,6 +706,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);   // TRACK_MOUSE: drag without selecting it first
     p->setDescription("LRA Trade Manager: your Topstep day, the checklist for the next trade, and how to manage the open one. Drag the box to move it (kept per chart); double-click it to go back to the Position setting.");
-    p->setVersion("1.3.2");   // = TM_VERSION; a literal so gex-build.log shows the number (it showed "TM_VERSION")
+    p->setVersion("1.3.3");   // = TM_VERSION; a literal so gex-build.log shows the number (it showed "TM_VERSION")
     return p;
 }

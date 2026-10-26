@@ -69,6 +69,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "TapeReader"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
@@ -98,7 +102,7 @@
 #include <string>
 #include <vector>
 
-#define TR_VERSION "1.3.4"          // keep equal to tr::VERSION and the setVersion literal below
+#define TR_VERSION "1.3.5"          // keep equal to tr::VERSION and the setVersion literal below
 // (1.3.3, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the banner's BUYERS / SELLERS / OPTIONS detail popup on mouse-over is OFF (TR_BANNER_HOVER; code kept). TRACK_MOUSE stays
 // only for the chart-wide candle follow (HoverBoard: the banner and the order-flow panes read the candle under the mouse) - no popup.
 static const bool TR_BANNER_HOVER = false;
@@ -273,7 +277,7 @@ int cppExtension::setup(void)
     return RTX_OK;
 }
 int cppExtension::calc(int)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "calc");
     TapeReader* x = static_cast<TapeReader*>(this);
     x->pump();
     TRState* S = x->testState();
@@ -766,7 +770,7 @@ void TapeReader::execute(const tr::Layout& L)
 }
 
 int TapeReader::draw(void)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     pump();
     TRState* S = testState();
     if (!S) return RTX_OK;
@@ -922,6 +926,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Tape Reader: one box with the combined read of the other indicators - the bias (FLOW, LEVEL, GAMMA, TREND votes), the turn / swing odds at the level in play and the next level; what BUYERS and SELLERS did, in lots with the ratio and the pace, levels named inside (green = bullish, red = bearish, grey = quiet); and OPTIONS (blue): who traded options and what dealers must do in futures, from the latest MenthorQ snapshot that has arrived (hidden when older than 20 min, '?' until proven in this market). Mouse over a candle shows the read logged for it. A 1-2 line banner at the top left (the read + the Liquidity warning); mouse over it for BUYERS / SELLERS / OPTIONS. Settings: Position, Offset X / Y, Banner background.");
-    p->setVersion("1.3.4");   // TR_VERSION = tr::VERSION = trset::PLUGIN_VERSION
+    p->setVersion("1.3.5");   // TR_VERSION = tr::VERSION = trset::PLUGIN_VERSION
     return p;
 }

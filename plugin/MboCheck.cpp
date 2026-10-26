@@ -49,6 +49,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "MboCheck"
+#endif
 #include "SettingsGuard.h"   // (2026-10-21) SS_SAFE_DIALOG: the settings window never faults, never opens blank
 #ifdef far
 #undef far
@@ -74,7 +78,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define MC_VERSION "1.1.3"          // keep equal to mbo::VERSION and the setVersion literal below
+#define MC_VERSION "1.1.4"          // keep equal to mbo::VERSION and the setVersion literal below
 
 enum { CTX_CALC = 0, CTX_DRAW = 1, CTX_TIMER = 2 };
 
@@ -192,8 +196,8 @@ int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { static_cast<MboCheck*>(this)->release(); return RTX_OK; }   // symbol / period change: start clean
 int cppExtension::destroy(void) { static_cast<MboCheck*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void)   { setParameterVersion(1); return RTX_OK; }                     // no settings at all
-int cppExtension::calc(int)     { static_cast<MboCheck*>(this)->pump(CTX_CALC); return RTX_OK; }
-int MboCheck::draw(void)        { pump(CTX_DRAW); MCState* S = slot_.get(this, false); if (S) render(*S); return RTX_OK; }
+int cppExtension::calc(int)     { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<MboCheck*>(this)->pump(CTX_CALC); return RTX_OK; }
+int MboCheck::draw(void)        { LSPERF_SCOPE(LSPERF_PLUGIN, "draw"); pump(CTX_DRAW); MCState* S = slot_.get(this, false); if (S) render(*S); return RTX_OK; }
 int MboCheck::timer(RTX_EVENT* e)
 {
     MCState* S = slot_.get(this, false);
@@ -424,6 +428,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the verdict must appear (and age) while the feed is idle, without forcing repaints
     p->setDescription("LRA MboCheck: shows whether this chart's feed delivers market-by-order (MBO / DBO) events and full depth. One line on the chart; no settings.");
-    p->setVersion("1.1.3");   // MC_VERSION
+    p->setVersion("1.1.4");   // MC_VERSION
     return p;
 }

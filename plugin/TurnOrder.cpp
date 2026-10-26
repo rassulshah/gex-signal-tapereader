@@ -19,6 +19,10 @@
 #include <windows.h>
 #endif
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "TurnOrder"
+#endif
 #ifdef far
 #undef far
 #endif
@@ -52,7 +56,7 @@
 #pragma comment(lib, "user32.lib")   // GetCursorPos / WindowFromPoint (HoverBoard.h, off::cursorWindow)
 #endif
 
-static const char* TOR_VERSION = "1.1.1";   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE 2026-10-22, Rassul approved 17:39 CT): per-market MARK from lsFlexLevels\LRA-TurnOrder-<MKT>.csv - SHOW = the bar as before, SHOW? = a "?" at the order price (the retest price), LOG = recorded only (the default); DRAW_THICK / DRAW_FILLED choose which results draw (ES: TOO THICK only); a mark decided in a news / settle window gets "?", a failed feed check = recorded only (NewsWindow.h);  // 1.0.0 (2026-10-22 15:45 CT Rassul, T-20261022-25): the TURN ORDER mark
+static const char* TOR_VERSION = "1.1.2";   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE 2026-10-22, Rassul approved 17:39 CT): per-market MARK from lsFlexLevels\LRA-TurnOrder-<MKT>.csv - SHOW = the bar as before, SHOW? = a "?" at the order price (the retest price), LOG = recorded only (the default); DRAW_THICK / DRAW_FILLED choose which results draw (ES: TOO THICK only); a mark decided in a news / settle window gets "?", a failed feed check = recorded only (NewsWindow.h);  // 1.0.0 (2026-10-22 15:45 CT Rassul, T-20261022-25): the TURN ORDER mark
 static long long torSteadyMs() { return off::steadyMs(); }   // the order feed's clock (a test clock under OFF_TEST_CLOCK)
 static std::string torFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 static void torMakeDir(const std::string& p) {
@@ -303,7 +307,7 @@ int TurnOrder::mouse(RTX_EVENT* e) {
     return RTX_FAIL;                                                       // never swallows the event
 }
 
-int TurnOrder::draw(void) {
+int TurnOrder::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     pump();
     TorState* s = slot_.get(this, false); if (!s || s->mkt.empty()) return RTX_OK;
     try {
@@ -371,13 +375,13 @@ int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::done(void) { return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<TurnOrder*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void) { ss::registerAll(this, torset::spec(), torIds()); return RTX_OK; }
-int cppExtension::calc(int) { static_cast<TurnOrder*>(this)->pump(); return RTX_OK; }
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<TurnOrder*>(this)->pump(); return RTX_OK; }
 
 extern "C" cppExtension* CreateExtension(void) {
     TurnOrder* p = new TurnOrder();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE);
     p->setDescription("LRA Turn Order - the resting limit order that made each pivot. At every local pivot (a 5-candle extreme low / high that turns) it finds THE real resting order that stopped the move: the largest single order (one order id, rested 30 s or more, at least the market's Big Lot S20 or the Min size setting) at or just beyond the extreme. It is drawn as ONE short, thick bar at that order's price on the turn candle: GREEN = a bid that stopped a selloff, RED = an offer that stopped a rally. It is drawn only AFTER the turn is confirmed (a later candle closed 0.5 ATR or more away from the order - setting), so the bar always means 'this order made the pivot', never 'this might hold'. Hover the bar for the size, how long it rested, FILLED (it absorbed the attack) or TOO THICK (barely touched), whether it was pulled later and how far price turned. One per pivot, never repainted; each mark is recorded to lsFlexLevels\\TurnOrder for the nightly. Example: ES Oct 7, the 11:03 AM candle low - a green bar at 7838.00 = a 100-lot bid that filled all 100 and held; price turned 1.6 ATR. Needs the order-by-order (MBO) feed; marks start once the indicator has watched the book.");
-    p->setVersion("1.1.1");   // TOR_VERSION
+    p->setVersion("1.1.2");   // TOR_VERSION
     return p;
 }

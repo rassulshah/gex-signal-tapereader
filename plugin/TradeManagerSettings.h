@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace tmset {
-static const char* const PLUGIN_VERSION = "1.3.2";
+static const char* const PLUGIN_VERSION = "1.3.3";
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 enum K { K_MARKET, K_FONT, K_POSITION, K_N };
 inline const ss::Spec& spec() {

@@ -6,6 +6,10 @@
  *  indicator to be removed from the chart and does nothing else. The 1.7.2 source is kept as plugin\retired\SessionInfo_1_7_2.cpp.
  ********************************************************************************/
 #include "irtsdk.h"
+#include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
+#ifndef LSPERF_PLUGIN
+#define LSPERF_PLUGIN "SessionInfo"
+#endif
 #ifdef far
 #undef far
 #endif
@@ -39,7 +43,7 @@ int cppExtension::setup(void)
 }
 
 int SessionInfo::draw(void)
-{
+{ LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     RCT pane; pane.getPaneRect(false);
     if (pane.right - pane.left > 300 && pane.bottom - pane.top > 40)
         text(pane.left + 8, pane.top + 14, "Session Info is now inside HOD/LOD - remove this indicator", SI_GREY, 8);
@@ -52,6 +56,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("RETIRED: the Regime and options Expiry are now in the HOD / LOD table header (lsHodLod 2.0.2). Remove this indicator from the chart.");
-    p->setVersion("2.0.0");
+    p->setVersion("2.0.1");
     return p;
 }
