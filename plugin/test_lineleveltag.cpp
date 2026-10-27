@@ -9,9 +9,10 @@ int main() {
     ck(kindOf("HVL") == GAMMA && kindOf("CR") == GAMMA && kindOf("PS0") == GAMMA && kindOf("G1") == GAMMA && kindOf("GW") == GAMMA, "gamma levels");
     std::vector<Level> L = { {"PDH", 7739.50}, {"VAH", 7736.50}, {"HVL", 7720.00}, {"DPoc", 7714.50} };
     ck(tagFor(7739.50, L, 0.25, 4.0).text() == "PDH?", "an order on PDH -> PDH?");
-    ck(tagFor(7740.50, L, 0.25, 4.0).text() == "PDH?", "close enough: 4 ticks away is inside the zone (0.25 x ATR 4 = 1.00)");
-    ck(tagFor(7740.75, L, 0.25, 4.0).text().empty(), "5 ticks away: outside the zone, no tag");
-    ck(tagFor(7720.25, L, 0.25, 4.0).text() == "HVL?" && tagFor(7720.25, L, 0.25, 4.0).kind == GAMMA, "gamma tag");
+    ck(tagFor(7743.50, L, 0.25, 4.0).text() == "PDH?", "PDH + 1 ATR (4.00) is still tagged PDH (his 1 ATR rule)");
+    ck(tagFor(7743.75, L, 0.25, 4.0).text().empty(), "beyond PDH + 1 ATR: no tag");
+    { std::vector<Level> D = { {"PDL", 7700.0} }; ck(tagFor(7696.0, D, 0.25, 4.0).text() == "PDL?" && tagFor(7695.75, D, 0.25, 4.0).text().empty(), "PDL - 1 ATR tagged, beyond it not"); }
+    ck(tagFor(7720.25, L, 0.25, 4.0).text() == "HVL?" && tagFor(7720.25, L, 0.25, 4.0).kind == GAMMA, "gamma tag (nearest level wins)");
     std::vector<Level> T = { {"PDL", 7714.50}, {"DPoc", 7714.50} };
     ck(tagFor(7714.50, T, 0.25, 4.0).text() == "DPoc?", "same price: volume beats key");
     ck(tagFor(7715.00, T, 0.25, 0.0).text() == "DPoc?" && tagFor(7715.25, T, 0.25, 0.0).text().empty(), "no ATR: the 2-tick floor still works");

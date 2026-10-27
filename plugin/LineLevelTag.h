@@ -14,10 +14,10 @@
 #include <vector>
 #include <cctype>
 namespace llt {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 11:27 "use 1atr, for example the large order is within pdh+1atr or pdl-1atr")
 static const double TOL_TICKS = 2.0;     // PARAM
-static const double TOL_ATR = 0.25;      // PARAM: the level ZONE half-width (definitions.py zone_halfwidth = 0.25 x 3-min ATR) -
-                                         // Rassul 11:17 "it doesnt have to be the exact level, if its close enough it should be badged"
+static const double TOL_ATR = 1.0;       // HIS RULE (2026-10-27 11:27): within 1 x the 3-min ATR of the level (e.g. up to PDH + 1 ATR, down to
+                                         // PDL - 1 ATR); 11:17 "it doesnt have to be the exact level, if its close enough it should be badged"
 enum Kind { NONE = 0, KEY = 1, VOLUME = 2, GAMMA = 3 };
 struct Level { std::string name; double px = 0; };
 struct Tag { Kind kind = NONE; std::string name; double dist = 0; std::string text() const { return kind == NONE ? std::string() : name + "?"; } };

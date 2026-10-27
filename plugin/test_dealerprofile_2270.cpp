@@ -23,6 +23,6 @@ int main() {
     const std::string lp = slurp("LiquidityProfile.cpp");
     ck(lp.find("if (false && S.lzSet.farOn)") != std::string::npos, "LP: the Q badge is never drawn");
     ck(lp.find("\\\\Strips\\\\QUEUE-") != std::string::npos, "LP: the queue Strip record is still written");
-    ck(lp.find("#define LQ_VERSION \"0.59.0\"") != std::string::npos && lp.find("p->setVersion(\"0.59.0\")") != std::string::npos, "LP versions agree 0.59.0");
+    ck(lp.find("#define LQ_VERSION \"0.59.1\"") != std::string::npos && lp.find("p->setVersion(\"0.59.1\")") != std::string::npos, "LP versions agree 0.59.1");
     std::cout << (fail ? "FAILED " : "ALL PASS ") << fail << "\n"; return fail != 0;
 }
