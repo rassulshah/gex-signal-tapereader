@@ -97,17 +97,21 @@ static void coreTests() {
         w[29] = mkb(29, 107, 111, 104, 108, { Row(105, -300, 300), Row(106, -300, 300) });   // (2.27.0) open 107: the row below the body
         std::vector<RaHit> h = researchA(w, 1.0);
         check(h.size() == 1 && h[0].lo == 105 && h[0].hi == 106, "[core] 60 rows cut from the window's lowest price: 105-106 is one row"); }
-    // (2.27.0, Rassul 14:09 CT) the body rule: bullish node below BOTH the open and the close, bearish above both
-    {   std::vector<Bar> w = quiet(30); w[29] = mkb(29, 104.2, 111, 103, 107, { Row(105, -500, 500) });   // green, open 104: node 105 inside the body
-        check(researchA(w, 1.0).empty(), "[body] bullish node inside the body (above the open) = no A");
-        check(researchA(w, 1.0, 60, 3, 2.0, true, false).size() == 1, "[body] the same without the body rule = A (the rule is what blocks it)");
-        w[29] = mkb(29, 106, 111, 103, 107, { Row(105, -500, 500) });
-        check(researchA(w, 1.0).size() == 1, "[body] bullish node below the open 106 and close 107 = A");
+    // (2.27.0, Rassul 15:04 CT) the open rule (node at / below the open, bullish) and the halfway rule (node middle at / below (H+L)/2)
+    {   std::vector<Bar> w = quiet(30); w[29] = mkb(29, 104.2, 111, 103, 107, { Row(105, -500, 500) });   // green, open 104: node 105 above the open
+        check(researchA(w, 1.0).empty(), "[open] bullish node above the open = no A");
+        check(researchA(w, 1.0, 60, 3, 2.0, true, false).size() == 1, "[open] the same without the rules = A (the rule is what blocks it)");
         w[29] = mkb(29, 105.2, 111, 103, 107, { Row(105, -500, 500) });
-        check(researchA(w, 1.0).empty(), "[body] node AT the open (105) touches the body = no A"); }
-    {   std::vector<Bar> w = quiet(30); w[28] = mkb(28, 104.2, 111, 103, 104, { Row(105, -500, 500) });   // red peak, node above its open / close
-        w[29] = mkb(29, 104, 109, 103.5, 108, { Row(110, 1, 3) });
-        check(researchA(w, 1.0).empty(), "[body] next-candle A: the body rule is on the node's own (peak) candle"); }
+        check(researchA(w, 1.0).size() == 1, "[open] node AT the open (105) = A (at or below)");
+        w[29] = mkb(29, 106, 111, 103, 107, { Row(105, -500, 500) });
+        check(researchA(w, 1.0).size() == 1, "[open] node below the open 106 = A (the close no longer matters for it)"); }
+    {   std::vector<Bar> w = quiet(30); w[29] = mkb(29, 110.2, 112, 104, 111, { Row(109, -500, 500) });   // node 109 below open 110, but (112+104)/2 = 108 < 109
+        check(researchA(w, 1.0).empty(), "[half] bullish node above the halfway mark = no A");
+        w[29] = mkb(29, 110.2, 114, 104, 111, { Row(109, -500, 500) });                                    // halfway 109: at it
+        check(researchA(w, 1.0).size() == 1, "[half] node at the halfway mark = A"); }
+    {   std::vector<Bar> w = quiet(30); w[24].low = 100; w[24].high = 104;                                // pivot bar high 104 = the candle's low 104
+        w[29] = mkb(29, 105.5, 111, 104, 107, { Row(105, -500, 500) });
+        check(researchA(w, 1.0).size() == 1, "[pivot] low AT the down-pivot bar's high = A (at or below)"); }
 }
 
 // ---------------- host ----------------

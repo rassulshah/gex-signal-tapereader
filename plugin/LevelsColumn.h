@@ -1,6 +1,6 @@
 #ifndef LS_LEVELS_COLUMN_H
 #define LS_LEVELS_COLUMN_H
-// LevelsColumn.h 1.0.0 (2026-10-27, Rassul approved 13:30-13:39 CT, mockup levels_final.png "i think this is a cleaner approach. build")
+// LevelsColumn.h 1.1.0 (1.1.0: attach reachAtr (0.5 ATR), rank top 10) 1.0.0 (2026-10-27, Rassul approved 13:30-13:39 CT, mockup levels_final.png "i think this is a cleaner approach. build")
 // SDK-free logic of lsDealerProfile 2.28.0's combined LEVELS + LIQUIDITY column (tested by tests_lvc/test_levelscolumn.cpp):
 //   one row per price: [rank] [liquidity: the big limit orders at the level, "800 + 50"] [level chips] [price] [odds]
 //   * every level type in one column: key price levels, volume levels, gamma levels (+ big unnamed gamma strikes "GEX")
@@ -20,7 +20,9 @@
 #include "LineLevelTag.h"
 
 namespace lvc {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-10-27 14:55-14:58 CT Rassul "rank up to top 10 liquidity levels", "liquidity close to the level" -> 0.5 ATR) attach reach + top-10 rank
+static const double TAG_ATR = 0.5;        // an order counts for a level only within 0.5 ATR of it (Rassul 14:58 "i'll just go with your recommendation")
+static const int MAX_RANK = 10;           // ranks 1-10; an 11th+ row keeps its bar in the column but no number
 enum Fam { KEY = 0, VOLUME = 1, GAMMA = 2 };
 static const double MERGE_ATR = 0.3;      // PARAM (mockup: "about 1 point in ES")
 static const double MERGE_TICKS = 2.0;    // PARAM (floor)
@@ -123,11 +125,14 @@ inline bool parseOrders(const std::string& text, long long nowUnix, std::vector<
     return true;
 }
 // each order joins the row holding its level (same price on the tick grid, else its level's name, else within the merge tolerance)
-inline void attach(std::vector<Row>& rows, const std::vector<In>& in, const std::vector<Order>& ords, double tick, double atr, double lastPx)
+inline void attach(std::vector<Row>& rows, const std::vector<In>& in, const std::vector<Order>& ords, double tick, double atr, double lastPx, double reachAtr = 0)
 {
     const double half = (tick > 0 ? tick : 0.01) * 0.5, tol = mergeTol(tick, atr);
+    // (1.1.0) reachAtr > 0: the order must sit within reachAtr x ATR (at least 2 ticks) of the level it is joined to
+    const double reach = reachAtr > 0 ? std::max(2.0 * (tick > 0 ? tick : 0.0), reachAtr * ((std::isfinite(atr) && atr > 0) ? atr : 0.0)) + (tick > 0 ? tick * 1e-6 : 1e-9) : 1e300;
     std::vector<std::vector<size_t> > by(rows.size());
     for (size_t o = 0; o < ords.size(); ++o) {
+        if (reachAtr > 0 && std::fabs(ords[o].px - ords[o].levelPx) > reach) continue;
         int best = -1; double bestD = 1e300;
         for (size_t r = 0; r < rows.size() && best < 0; ++r)
             for (size_t m : rows[r].members) if (std::fabs(in[m].px - ords[o].levelPx) <= half) { best = (int)r; break; }
@@ -155,7 +160,7 @@ inline void rank(std::vector<Row>& rows, const std::vector<size_t>& onScreen, do
         if (rows[a].lots != rows[b].lots) return rows[a].lots > rows[b].lots;
         return std::fabs(rows[a].px - lastPx) < std::fabs(rows[b].px - lastPx); });
     for (size_t r = 0; r < rows.size(); ++r) rows[r].rank = 0;
-    for (size_t k = 0; k < v.size(); ++k) rows[v[k]].rank = (int)k + 1;
+    for (size_t k = 0; k < v.size() && (int)k < MAX_RANK; ++k) rows[v[k]].rank = (int)k + 1;   // (1.1.0) top 10 only
 }
 // the nearest level off screen above / below ("^ 1DH 7,783.75 (+30.00)")
 inline std::string offText(const std::string& name, const std::string& pxTxt, double dist, int dec)

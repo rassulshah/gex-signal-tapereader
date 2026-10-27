@@ -15,8 +15,8 @@ int main() {
     ck(sp.paramVersion == 10, "DP parameter version 10 (rows hidden)");
     const std::string cpp = slurp("DealerProfile.cpp");
     ck(cpp.find("c.qm = false;") != std::string::npos, "DP: the meter is never on");
-    ck(cpp.find("DP_VERSION = \"2.28.0\"") != std::string::npos && cpp.find("p->setVersion(\"2.28.0\")") != std::string::npos
-       && std::string(dprset::PLUGIN_VERSION) == "2.28.0", "DP versions agree 2.28.0");
+    ck(cpp.find("DP_VERSION = \"2.29.0\"") != std::string::npos && cpp.find("p->setVersion(\"2.29.0\")") != std::string::npos
+       && std::string(dprset::PLUGIN_VERSION) == "2.29.0", "DP versions agree 2.29.0");
     const ss::Spec& lq = lpset::profileSpec(); bool hid = false;
     for (int k = 0; k < lq.n; ++k) if (std::string(lq.rows[k].key) == "lmz_far") hid = lq.rows[k].hidden;
     ck(hid, "LP row 'Queue Q at levels' hidden");

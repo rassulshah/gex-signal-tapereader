@@ -1,3 +1,4 @@
+// SUPERSEDED by test_dealerprofile_2290.cpp (2026-10-27, DP 2.29.0 level lines replace the 2.28.0 combined column) - kept for history, expected to fail
 // test_dealerprofile_2280.cpp -- lsDealerProfile 2.28.0 THE COMBINED LEVELS + LIQUIDITY COLUMN (Rassul approved 2026-10-27 13:30-13:39 CT,
 // mockup levels_final.png) through the REAL DealerProfile.cpp on the mocked host of test_dealerprofile_2190.cpp (13 Oct ES fixture):
 // rows in price order, never overlapping, chips key > volume > gamma, merged rows, liquidity + rank from LRA-LmtLevels-ES-180.txt, no
@@ -252,7 +253,7 @@ int main()
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && std::string(DP_VERSION) == "2.28.0", "versions 2.28.0 agree");
+        check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && std::string(DP_VERSION) == "2.29.0", "versions 2.28.0 agree");
         check(std::string(cb::VERSION) == "1.5.0" && cb::range(cb::LEVELS).hi >= DP_LVC_W, "ColumnBoard 1.5.0: the Levels column can be 420 px");
         check(DP_LVC && !DP_BARS, "the combined column on, the Dealer bars off");
     }
