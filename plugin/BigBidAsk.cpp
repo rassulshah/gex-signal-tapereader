@@ -186,7 +186,7 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.30.1"          // 1.30.1 (2026-10-27 14:00 CT) nothing drawn under the left Delta column (ColumnBoard 1.5.0);          // 1.30.0 (2026-10-27, Rassul 13:00 CT) BO rule 4: the next candle must follow through (green, higher high + higher close; BD mirror); 1.29.0 records decided again;          // 1.29.0 (2026-10-26, Rassul 17:55 CT) the OB print + OB letter are not drawn, OB settings rows removed (decision + record kept)
+#define BBA_VERSION "1.30.2"          // 1.30.2 (2026-10-27 17:23 CT) FIX: old BO records (1.28 / 1.29, no follow-through) were still drawn - the record version was read from the wrong field; they are now decided again under rule 4 (follow-through bar);          // 1.30.1 (2026-10-27 14:00 CT) nothing drawn under the left Delta column (ColumnBoard 1.5.0);          // 1.30.0 (2026-10-27, Rassul 13:00 CT) BO rule 4: the next candle must follow through (green, higher high + higher close; BD mirror); 1.29.0 records decided again;          // 1.29.0 (2026-10-26, Rassul 17:55 CT) the OB print + OB letter are not drawn, OB settings rows removed (decision + record kept)
 // prev:          // 1.28.0 (2026-10-24, Rassul 21:38 CT) BO wave confirmation (higher high + higher close in the same wave, closes beyond the pivot), counter-trend needs a 30-bar high / low, letter on the BO bar, BO / OB boxes show biggest-in-N
 // prev:          // 1.27.1 (2026-10-24, Rassul 21:42 CT) Rly condition 3: tagged +-1 SD OR a 30-bar high / low (RallyLogic.h 1.1.0; waves already recorded are not re-judged)
 // prev:          // 1.27.0 (2026-10-22 evening fix build) the BL5 / BL10 / BL20 box next to the HOD/LOD table is no longer drawn (tiers only in the LMT / LMT F footers; numbers kept in BL_BOX status);          // keep equal to bba::VERSION and the setVersion literal below
@@ -794,10 +794,14 @@ void BigBidAsk::load(BBState& S) {
         if (!statFile(path, st) || !readSmall(path, REC_FILE_MAX, text)) continue;
         std::istringstream in(text); std::string line;
         while (std::getline(in, line)) { bba::BoDec D;
-            const size_t vb = line.find_last_of('|'); std::string lv = vb == std::string::npos ? std::string() : line.substr(vb + 1); while (!lv.empty() && (lv.back() == '\r' || lv.back() == '\n')) lv.pop_back();
+            // (1.30.2 FIX, Rassul 17:23 CT "how many times have i told you that breakouts need a followthrough bar") the version is field 23
+            // of a 27-field line (|version|rule|trend|ext30 follow it); 1.28 - 1.30.1 read the LAST field (ext30 = "0" / "1") as the version,
+            // so old rule-2 / rule-3 BO lines (no follow-through) were never recognised as old and stayed drawn
+            std::string lv; { std::vector<std::string> fv; size_t p0 = 0; for (;;) { const size_t q = line.find('|', p0); fv.push_back(line.substr(p0, q == std::string::npos ? std::string::npos : q - p0)); if (q == std::string::npos) break; p0 = q + 1; }
+                lv = fv.size() >= 27 ? fv[23] : (fv.empty() ? std::string() : fv.back()); while (!lv.empty() && (lv.back() == '\r' || lv.back() == '\n')) lv.pop_back(); }
             const bool oldRule = lv == "1.21.0" || lv == "1.22.0" || lv == "1.23.0" || lv == "1.24.0" || lv == "1.25.0"
-                              || lv == "1.26.0" || lv == "1.27.0" || lv == "1.27.1" || lv == "1.28.0" || lv == "1.29.0";   // (1.30.0) rule 3 (no follow-through) is gone: decided again   // (1.29.0) the close / follow-through / RTH rules are gone: decided again   // (1.26.0) the old pivot rule: decided again
-            if (!oldRule && bba::parseBoLine(line, D)) { if (!S.boDec.count(D.t0)) S.boDec[D.t0] = D; }       // (1.23.0) first line per breakout candle wins; (1.28.0) 24-field = rule 1 (kept, drawn where it was), 27-field = rule 2
+                              || lv == "1.26.0" || lv == "1.27.0" || lv == "1.27.1" || lv == "1.28.0" || lv == "1.29.0" || lv.compare(0, 5, "1.28.") == 0 || lv.compare(0, 5, "1.29.") == 0;   // (1.30.0) rule 3 (no follow-through) is gone: decided again   // (1.29.0) the close / follow-through / RTH rules are gone: decided again   // (1.26.0) the old pivot rule: decided again
+            if (!oldRule && bba::parseBoLine(line, D) && D.rule >= 4) { if (!S.boDec.count(D.t0)) S.boDec[D.t0] = D; }   // (1.30.2) only rule-4 (follow-through) decisions are kept; any older rule is decided again       // (1.23.0) first line per breakout candle wins; (1.28.0) 24-field = rule 1 (kept, drawn where it was), 27-field = rule 2
             else if (line.compare(0, 4, "BBO|") == 0 && line.compare(0, 6, "BBO|t|") != 0) ++S.boLegacy; }   // a 1.21 / 1.22 line: not redrawn
     }
     for (long long k = S.session - 3; k <= S.session; ++k) {    // (1.24.0) the Rly waves already judged: never judged again (no repaint)
@@ -2154,6 +2158,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.24.0) TRACK_MOUSE for the Rly hover only (print hovers stay off: BBA_HOVERS)
     p->setDescription("LRA Big Bid / Ask 1.30.0: Rly (3-min) = the end of a confirmed trend wave (3+ bars, 2.5+ ATR, tagged VWAP +/-1 SD, a 20-bar high / low, vwapTrend Uptrend / Dntrend): green above / red below the bar - don't chase it, wait for the pullback to VWAP / 1 SD and a trigger, trend only. BO = context, not an entry: a confirmed break - don't fade against it. A green breakout (red breakdown) candle that trades through one of the last 3 intact swing highs (lows) of the full-session 1-bar ZigZag (a swing stays intact until a candle closes beyond it), with a 10-candle high (low), range >= the prior candle's and volume or range up; no close beyond the swing needed, but the NEXT candle must follow through (green with a higher high and a higher close; breakdown: red, lower low, lower close) - decided at that candle's close, in every session; against the vwapTrend the wave must also make a 20-bar high (low); one per wave. BO green above / red below the breakout candle; failures are logged only. Its biggest buy (sell) print on the candle, the box = biggest in N candles. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.30.1");   // BBA_VERSION
+    p->setVersion("1.30.2");   // BBA_VERSION
     return p;
 }

@@ -215,7 +215,7 @@ static void day(const std::string& mkt, const std::string& sym, const std::strin
         CHECK(obPrintMissing == 0, tag + "every OB letter has its print box on the candle at the print's price");
         CHECK(overlap == 0, tag + "no letter over another letter or a print box (" + std::to_string(overlap) + ")");
         const std::string stt = slurp(HOME + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.status-" + mkt + "-" + sym + "-180.txt");
-        CHECK(stt.find("VERSION,1.29.0\n") == 0 && stt.find("\nORDER_BLOCK,OB not drawn (retired 1.29.0") != std::string::npos && stt.find("logic 2.0.0 (prints + letters only; no boxes)") != std::string::npos,
+        CHECK(stt.find("VERSION,1.30.2\n") == 0 && stt.find("\nORDER_BLOCK,OB not drawn (retired 1.29.0") != std::string::npos && stt.find("logic 2.0.0 (prints + letters only; no boxes)") != std::string::npos,
               tag + "status: version 1.29.0 + ORDER_BLOCK 'not drawn' line; OB still decided + recorded");
         // the list for Rassul
         std::cout << "  " << mkt << " " << date << " RTH labels:\n";
@@ -249,6 +249,16 @@ static void day(const std::string& mkt, const std::string& sym, const std::strin
         { std::ofstream o(obp.c_str(), std::ios::app); o << "OBX|BO|1|1|" << SINCE << "|" << SINCE << "|" << SINCE << "|" << SINCE + 900 << "|" << SINCE + 1080 << "|10|11|10|3|3.0|2|1|300|0|-|1.25.0\n"; }
         Chart c2(bars(F, (size_t)i1200 + 1)); c2.pump(3, false);
         CHECK(c2.st().obLegacy == 1 && obLines(c2) == sOB12, tag + "a 1.25.0 box line in the record is ignored (counted), the OBs are unchanged");
+        // (1.30.2, Rassul 17:23 CT) an OLD fired BO line (1.29.0, rule 3 = no follow-through) on a candle the rule-4 logic does NOT fire
+        // must not be drawn: a fresh record holding only that line, then the chart -> the same BO marks as the straight pass
+        {   const bba::BoDec* nf = nullptr; for (const auto& kv : c.st().boDec) if (!kv.second.fired && kv.second.reason == bba::BO_R_NO_CONFIRM && kv.second.t0 >= SINCE) { nf = &kv.second; break; }
+            CHECK(nf != nullptr, tag + "a no-follow-through BO candle exists to test with");
+            if (nf) { bba::BoDec O = *nf; O.fired = true; O.reason = bba::BO_R_FIRED; O.rule = 3; O.t = O.t0;
+                const long long sess = c.st().session; home(mkt + "-oldrec", &V0);
+                const std::string bp = HOME + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk/" + mkt + "-" + sym + "-180-breakouts-" + std::to_string(sess) + ".csv";
+                { std::ofstream o(bp.c_str(), std::ios::binary); o << bba::boLine(O, 1, "1.29.0") << "\n"; }
+                Chart c3(bars(F, (size_t)i1200 + 1)); c3.pump(4, false);
+                CHECK(boFired(c3) == sBO12, tag + "1.30.2: an old 1.29.0 fired BO (no follow-through) in the record is decided again, not drawn (" + std::to_string(boFired(c3).size()) + " / " + std::to_string(sBO12.size()) + ")"); } }
     }
 }
 
