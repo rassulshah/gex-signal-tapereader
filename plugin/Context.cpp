@@ -1,5 +1,5 @@
 /********************************************************************************
- *  lsContext 0.1.0 (2026-10-26) -- the SHARED CONTEXT (L2) and TEAM READ (L4) of the smart indicators. Draws NOTHING.
+ *  lsContext 0.2.0 (2026-10-26; 0.2.0 awareness_plus: expectations, news / shock gate, source health, market personality) -- the SHARED CONTEXT (L2) and TEAM READ (L4) of the smart indicators. Draws NOTHING.
  *
  *  Rassul 2026-10-26 12:25-12:53 CT: "create a shared context ... make sure the indicators are aware of this context and ... aware of
  *  the others' read" / "build the architecture, its layers .. then build the team and the processes of communication".
@@ -16,7 +16,9 @@
  *    - appends CTX / TEAM lines to lsFlexLevels\Context-<MKT>-<spb>s-<yyyymmdd>.rec (the nightly link test reads them) and writes
  *      Context-<MKT>-<spb>s.status.txt
  *  Links are SWITCHED OFF per market (LRA-Context-<MKT>.csv, default all off): until a link is proven and switched on, no indicator
- *  changes what it shows. The team read is INTERNAL (Rassul 13:28 "no team box"): posted, recorded, read by Claude - never drawn.
+ *  changes what it shows. (0.2.0) awareness_plus (awareness_plus/DESIGN.md): per market LRA-MarketProfile-<MKT>.csv (personality,
+ *  slot normals, expectation K/N, news windows, expected sources), PLUS,0 in LRA-Context-<MKT>.csv turns it off; posts EXP / NEWS /
+ *  HEALTH, records EXP / EXPREG / NEWS / HEALTH lines; METRIC fields only, nothing drawn. The team read is INTERNAL (Rassul 13:28 "no team box"): posted, recorded, read by Claude - never drawn.
  ********************************************************************************/
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -49,7 +51,7 @@
 #include <string>
 #include <vector>
 
-#define CX_VERSION "0.1.0"   // + PerfGuard 1.0.0 (smart step paused while over budget), vocabulary v2 (ContextPump / ContextLogic / ContextRead 0.2.0)
+#define CX_VERSION "0.2.0"   // (0.2.0) + awareness_plus (ap::Plus inside the paused-when-over-budget step)  // 0.1.0 + PerfGuard 1.0.0 (smart step paused while over budget), vocabulary v2 (ContextPump / ContextLogic / ContextRead 0.2.0)
 static const int CX_BARS = 400;          // closed bars copied per calc (ATR, legs, the 100-bar ATR base)
 static const int CX_TIMER_MS = 250;
 
@@ -66,6 +68,17 @@ static bool cxWrite(const std::string& p, const std::string& text) {
     return std::rename(tmp.c_str(), p.c_str()) == 0;
 #endif
 }
+// (0.2.0) a file's age in seconds (the IRT Reader heartbeat); -1 = no file
+static long long cxFileAgeS(const std::string& p) {
+#if defined(_WIN32)
+    WIN32_FILE_ATTRIBUTE_DATA a; if (!GetFileAttributesExA(p.c_str(), GetFileExInfoStandard, &a)) return -1;
+    FILETIME now; GetSystemTimeAsFileTime(&now);
+    ULARGE_INTEGER w, n; w.LowPart = a.ftLastWriteTime.dwLowDateTime; w.HighPart = a.ftLastWriteTime.dwHighDateTime; n.LowPart = now.dwLowDateTime; n.HighPart = now.dwHighDateTime;
+    return n.QuadPart > w.QuadPart ? (long long)((n.QuadPart - w.QuadPart) / 10000000ULL) : 0;
+#else
+    (void)p; return -1;
+#endif
+}
 static int cxTimerId(const void* me) { return 8311 + (int)(((uintptr_t)me >> 4) % 100000); }
 
 struct CXState {
@@ -74,6 +87,7 @@ struct CXState {
     std::string day;                       // yyyymmdd of the last closed bar (the record file's day)
     long long linksMs = -1, statusMs = -1; std::string linksStamp;
     long ctxN = 0, teamN = 0, writeFails = 0; std::string lastState;
+    long plusN = 0;                        // (0.2.0) awareness_plus record lines written
 };
 
 class Context : public cppExtension {
@@ -130,8 +144,18 @@ void Context::loadFiles(CXState& S, long long now)
     S.linksMs = now; const std::string dir = cxDir(); if (dir.empty()) return;
     std::string text;
     S.P.links = cxReadFile(dir + "\\LRA-Context-" + S.P.market + ".csv", text) ? cr::parseLinks(text, S.P.market) : cr::Links();
+    S.P.plus.enabled = ap::plusOn(text);                                  // (0.2.0) PLUS,0 turns awareness_plus off for this market
     text.clear();
     S.P.trust = cxReadFile(dir + "\\LRA-Context-trust-" + S.P.market + ".csv", text) ? cp::parseTrust(text, S.P.market) : std::map<std::string, double>();
+    // (0.2.0) awareness_plus: the market's personality file (missing -> built-in defaults) + the recording states (smart work: not while over budget)
+    if (!lsperf::smartAllowed(LSPERF_PLUGIN, S.P.sym)) return;
+    text.clear(); if (!cxReadFile(dir + "\\LRA-MarketProfile-" + S.P.market + ".csv", text)) text.clear();
+    S.P.plus.loadIfChanged(S.P.market, text, S.P.tick);
+    text.clear(); if (!cxReadFile(dir + "\\LRA-Memory-" + S.P.market + ".csv", text)) text.clear();
+    S.P.plus.loadMemoryIfChanged(text);                                  // memory beyond today (missing file -> '?')
+    text.clear(); const std::string hb = dir + "\\IRTReader.status-" + S.P.market + ".txt"; const bool hbThere = cxReadFile(hb, text);
+    S.P.plus.reader = aph::readerState(hbThere, hbThere ? cxFileAgeS(hb) : -1, text);
+    text.clear(); S.P.plus.mbo = cxReadFile(dir + "\\LRA-Recording.csv", text) ? aph::mboState(text, S.P.market, (long long)std::time(nullptr)) : std::string("?");
 }
 
 void Context::step(CXState& S, long long now)
@@ -143,8 +167,9 @@ void Context::step(CXState& S, long long now)
     cp::Out o; if (allowed) o = S.P.step(now); else o.state = "paused (perf budget)";
     const std::string dir = cxDir();
     const std::string base = dir.empty() ? std::string() : dir + "\\Context-" + S.P.market + "-" + std::to_string(S.P.spb) + "s";
-    if (!base.empty() && (!o.ctxLine.empty() || !o.teamLine.empty())) {
+    if (!base.empty() && (!o.ctxLine.empty() || !o.teamLine.empty() || !o.plusLines.empty())) {
         std::string rec; if (!o.ctxLine.empty()) { rec += o.ctxLine + "\n"; ++S.ctxN; } if (!o.teamLine.empty()) { rec += o.teamLine + "\n"; ++S.teamN; }
+        for (const auto& l : o.plusLines) { rec += l + "\n"; ++S.plusN; }   // (0.2.0) EXP / EXPREG / NEWS / HEALTH
         if (!cxAppend(base + "-" + S.day + ".rec", rec)) ++S.writeFails;
     }
     S.lastState = o.state;
@@ -155,7 +180,9 @@ void Context::step(CXState& S, long long now)
            << "\nLAST_CLOSED," << S.P.lastClosed() << "\nCTX_BAR," << S.P.ctxBar << "\nTEAM_BAR," << S.P.teamBar << "\nSTATE," << S.lastState
            << "\nLINKS_ON," << (on.empty() ? "none" : on) << "\nLINKS_FILE," << S.P.links.note << "\nTIMEOUT_MS," << S.P.links.timeoutMs
            << "\nTRUST_ROWS," << S.P.trust.size() << "\nCLOCK," << (S.timerOn ? "on" : "off") << "\nCTX_LINES," << S.ctxN << "\nTEAM_LINES," << S.teamN
-           << "\nWRITE_FAILS," << S.writeFails << "\nPERF," << lsperf::statusOf(this) << "\n";
+           << "\nWRITE_FAILS," << S.writeFails << "\nPERF," << lsperf::statusOf(this)
+           << "\nPLUS," << (S.P.plus.enabled ? "on" : "off") << "\nPROFILE," << S.P.plus.prof.note << "\nNEWS," << ap::Plus::kvLine(S.P.plus.gate.kv)
+           << "\nHEALTH," << ap::Plus::kvLine(S.P.plus.mon.kv) << "\nEXP," << ap::Plus::kvLine(S.P.plus.expKv) << "\nMEMORY," << S.P.plus.mem.note << "\nPLUS_LINES," << S.plusN << "\n";
         cxWrite(base + ".status.txt", st.str());
     }
 }
@@ -188,6 +215,6 @@ extern "C" cppExtension* CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | CALC_LAST);   // CALC_LAST: after the indicators whose facts it reads
     p->setDescription("LRA Context: the shared context of the smart indicators - per closed bar it collects every indicator's facts from the Market State (wave, leg, level, session, trend, VWAP, order flow), posts CTX and the team read, and records both for the nightly link test. Draws nothing; links are off per market until proven.");
-    p->setVersion("0.1.0");   // = CX_VERSION
+    p->setVersion("0.2.0");   // = CX_VERSION
     return p;
 }

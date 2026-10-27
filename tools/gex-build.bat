@@ -128,7 +128,7 @@ REM (2026-10-23) lsReversalStage 2.0.0 - the 4-step model; the gate reads SwingR
 REM (2026-10-25) lsReversalStage 2.1.0: StageBox.h hashed (the stage info box + letters 1 2 3 C)
 call :one ReversalStage lsReversalStage AwareHook.h ContextRead.h MarketState.h BannerBoard.h ReversalStageLogic.h LetterStrips.h HostSlot.h SettingsGuard.h ReversalStageSettings.h SettingsSpec.h SettingsHost.h NewsWindow.h MarkParams.h ReversalEvidence.h ReversalStageStream.h SwingRef.h NearLevels.h StageBox.h PerfGuard.h SelfAware.h
 REM (2026-10-26) lsContext 0.1.0 - Market Awareness Layer: the shared context (CTX) + team read (TEAM), draws nothing, perf-guarded, links OFF per market (TEAM-DESIGN.md)
-call :one Context lsContext ContextPump.h ContextLogic.h ContextRead.h MarketState.h BannerBoard.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
+call :one Context lsContext ContextPump.h ContextLogic.h ContextRead.h MarketState.h BannerBoard.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h AwarePlus.h MarketProfile.h Expectations.h NewsGate.h SourceHealth.h Memory.h CrossTf.h
 REM (2026-10-20 22:41 CT Rassul "a seperate levels indicator without the open .. for my hourly charts") lsKeyLevels 1.0.0 - key levels across the chart, badges right-justified
 call :one KeyLevels lsKeyLevels KeyLevelsHLogic.h KeyLevelsHSettings.h DealerProfileAuditLogic.h DealerLogic.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h BoxDock.h BannerBoard.h KeepOutDraw.h PerfGuard.h
 REM (2026-10-13) lsTapeReader - the Tape Reader (bias, voters, turn odds from LRA-Turns / LRA-TapeReader); sources deployed by the 4:05 PM task

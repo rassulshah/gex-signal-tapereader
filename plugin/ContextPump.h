@@ -18,10 +18,11 @@
 #include <cstdlib>
 #include "ContextLogic.h"
 #include "ContextRead.h"
+#include "AwarePlus.h"     // (0.3.0) awareness_plus: expectations, news / shock, source health, market personality
 
 namespace cp {
 
-static const char* const VERSION = "0.2.0";
+static const char* const VERSION = "0.3.0";   // (0.3.0, 2026-10-26) awareness_plus (ap::Plus): EXP / NEWS / HEALTH, METRIC fields in CTX, nothing drawn changes
 // the teammates whose aware reads make up TEAM (P3: the first four hooks)
 static const char* const AW_SOURCES[] = { "AWSTAGE", "AWDP", "AWAGG", "AWHODLOD", nullptr };
 // the sources lsContext waits for besides MarketState::SOURCES (posted by the P3 hooks / later sources)
@@ -81,7 +82,7 @@ inline std::vector<ctx::Level> levelsFromFacts(const std::map<std::string, mst::
     return L;
 }
 
-struct Out { bool ctxPosted = false, teamPosted = false; std::string ctxLine, teamLine, state; };
+struct Out { bool ctxPosted = false, teamPosted = false; std::string ctxLine, teamLine, state; std::vector<std::string> plusLines; };
 
 struct Pump {
     std::string sym, chart, market; long spb = 0;
@@ -92,6 +93,7 @@ struct Pump {
     ctx::Collector col;
     long long ctxBar = -1, teamBar = -1, ctxMs = -1, teamMs = -1, teamOpenMs = -1;
     std::map<std::string, std::string> ctxKv, teamKv;
+    ap::Plus plus;                         // (0.3.0) awareness_plus (the shell loads its market file + switch)
 
     long long lastClosed() const { return bars.empty() ? -1 : bars.back().t; }
 
@@ -102,6 +104,8 @@ struct Pump {
         // what is on the board for this chart
         std::map<std::string, mst::Facts> F = mst::readAll(sym, spb, chart, nowMs);
         for (const char* const* s = EXTRA_SOURCES; *s; ++s) { mst::Facts f = mst::read(*s, sym, spb, chart, nowMs); if (f.ok) F[*s] = f; }
+        // (0.3.0) graceful failure: a stale / lagging / missing source is a team fact and is left out of CTX(t) (and TEAM below)
+        { const std::set<std::string> excl = plus.preCtx(sym, spb, chart, nowMs, bars); for (const auto& e : excl) F.erase(e); }
         std::set<std::string> present; std::map<std::string, long long> posted;
         for (const auto& kv : F) { present.insert(kv.first); posted[kv.first] = kv.second.bar; }
         // 1. CTX(t), decided once
@@ -115,6 +119,8 @@ struct Pump {
                 ctxKv = ctx::buildCtx(in, t);
                 { const ctx::Bar& lb = bars.back(); ctxKv["bar_h"] = mst::num(lb.h, 12); ctxKv["bar_l"] = mst::num(lb.l, 12); ctxKv["bar_c"] = mst::num(lb.c, 12); }   // the nightly link test scores reads from these
                 ctxKv = ctx::tagCtx(ctxKv);                      // vocabulary v2: D. / M. facts, R. opinions (value~conf~source)
+                plus.foldCtx(ctxKv);                             // (0.3.0) M.news / M.shock / M.src_* / M.exp_* / D.mkt_* (METRIC, never READ)
+                plus.foldNext(ctxKv, sym, spb, nowMs, bars, rthOpenMin);   // (0.3.0) memory beyond today + the other timeframes (keyed tf<spb>_)
                 ctxBar = t; ctxMs = -1; teamOpenMs = nowMs; teamBar = -1;
                 o.ctxLine = "CTX|" + std::to_string(t) + "|" + kvLine(ctxKv);
             } else { o.state = "waiting"; }
@@ -125,6 +131,7 @@ struct Pump {
             std::vector<ctx::AwareRead> R; int presentAw = 0, atT = 0;
             for (const char* const* s = AW_SOURCES; *s; ++s) {
                 mst::Facts f = mst::read(*s, sym, spb, chart, nowMs); if (!f.ok) continue;
+                if (!plus.mon.usable(*s) || !plus.mon.usable(std::string(*s).substr(2))) continue;   // (0.3.0) a stale source is not a teammate now
                 ++presentAw; if (f.bar == t) ++atT;
                 if (f.bar > t) continue;                      // never a read decided after t
                 ctx::AwareRead a; a.src = std::string(*s).substr(2); a.side = (int)mst::getD(f, "side", 0); a.conf = (int)mst::getD(f, "conf", 0); a.bar = f.bar;
@@ -132,15 +139,20 @@ struct Pump {
             }
             if ((presentAw > 0 && atT == presentAw) || nowMs - teamOpenMs >= links.timeoutMs) {   // nobody posting reads yet -> wait the timeout
                 teamKv = ctx::teamRead(t, R, trust); teamKv["class"] = "READ"; teamKv["aw_present"] = std::to_string(presentAw); teamKv["aw_at_t"] = std::to_string(atT);
+                plus.foldTeam(teamKv, ctxKv);                // (0.3.0) conf_x + news flag + excluded sources + agreement across timeframes
                 teamBar = t; teamMs = -1;
+                plus.postTeam(sym, spb, chart, nowMs, bars, ctxKv);   // (0.3.0) each aware read registers what it expects next
                 o.teamLine = "TEAM|" + std::to_string(t) + "|" + kvLine(teamKv);
             }
         }
         if (teamBar == t && (teamMs < 0 || nowMs - teamMs >= 10000 || nowMs < teamMs)) { mst::publish("TEAM", sym, spb, chart, nowMs, t, teamKv); teamMs = nowMs; o.teamPosted = true; }
+        if (ctxBar == t) plus.publish(sym, spb, chart, nowMs);   // (0.3.0) EXP / NEWS / HEALTH, every 10 s
+        if (teamBar == t) plus.publishTf(sym, spb, nowMs);       // (0.3.0) this chart for the other timeframes (TF, chart-agnostic key)
+        o.plusLines = plus.take();
         if (o.state.empty()) o.state = ctxBar == t ? (teamBar == t ? "ok" : "ctx ok, team waiting") : "waiting";
         return o;
     }
-    void clear() { if (!sym.empty()) { mst::clear("CTX", sym, spb, chart); mst::clear("TEAM", sym, spb, chart); } ctxBar = teamBar = -1; col.reset(); }
+    void clear() { if (!sym.empty()) { mst::clear("CTX", sym, spb, chart); mst::clear("TEAM", sym, spb, chart); plus.clear(sym, spb, chart); } ctxBar = teamBar = -1; col.reset(); }
     static std::string kvLine(const std::map<std::string, std::string>& kv) {
         std::string s; for (const auto& p : kv) { if (!s.empty()) s += ";"; s += p.first + "=" + mst::clean(p.second, 200); } return s;
     }
