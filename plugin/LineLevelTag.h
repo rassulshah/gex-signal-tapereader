@@ -14,7 +14,7 @@
 #include <vector>
 #include <cctype>
 namespace llt {
-static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 11:27 "use 1atr, for example the large order is within pdh+1atr or pdl-1atr")
+static const char* const VERSION = "1.2.0";   // (1.2.0, Rassul 11:32 "it should be PDH + 1ATR, meaning the level or slightly higher within the 1 ATR range, it cannot be below PDH") ONE-SIDED   // (1.1.0, Rassul 11:27 "use 1atr, for example the large order is within pdh+1atr or pdl-1atr")
 static const double TOL_TICKS = 2.0;     // PARAM
 static const double TOL_ATR = 1.0;       // HIS RULE (2026-10-27 11:27): within 1 x the 3-min ATR of the level (e.g. up to PDH + 1 ATR, down to
                                          // PDL - 1 ATR); 11:17 "it doesnt have to be the exact level, if its close enough it should be badged"
@@ -32,18 +32,39 @@ inline Kind kindOf(const std::string& nameIn) {
         || n.find("PUT") != std::string::npos || n.find("GAMMA") != std::string::npos) return GAMMA;
     return KEY;
 }
-inline Tag tagFor(double px, const std::vector<Level>& levels, double tick, double atr) {
+// (1.2.0) which side of the level the tag reaches: +1 = the level up to level + 1 ATR (a HIGH: PDH, ONH, LonHI, PFH, AsiaH, VAH, CR call
+// resistance), -1 = the level down to level - 1 ATR (a LOW: PDL, ONL, LonLO, PFL, AsiaL, VAL, PS put support), 0 = a level with no
+// high / low meaning (POC, HVL, Open, G-levels, GW): the order's own side decides - an offer (resistance) up, a bid (support) down.
+inline int dirOf(const std::string& nameIn) {
+    const std::string n = upper(nameIn);
+    if (n == "VAH" || n.compare(0, 2, "CR") == 0) return 1;
+    if (n == "VAL" || n.compare(0, 2, "PS") == 0) return -1;
+    if (n.find("POC") != std::string::npos || n == "HVL" || n == "OPEN") return 0;
+    const size_t k = n.size();
+    if (k >= 4 && (n.compare(k - 4, 4, "HIGH") == 0)) return 1;
+    if (k >= 3 && (n.compare(k - 3, 3, "LOW") == 0)) return -1;
+    if (k >= 2 && n.compare(k - 2, 2, "HI") == 0) return 1;
+    if (k >= 2 && n.compare(k - 2, 2, "LO") == 0) return -1;
+    if (k >= 2 && n[k - 1] == 'H' && std::isalpha((unsigned char)n[k - 2])) return 1;    // PDH, ONH, PFH, AsiaH, PWH ...
+    if (k >= 2 && n[k - 1] == 'L' && std::isalpha((unsigned char)n[k - 2]) && n != "HVL") return -1;   // PDL, ONL, PFL, AsiaL ...
+    return 0;
+}
+// offer = true for a sell order (resistance), false for a bid (support): used only for a level with no high / low meaning
+inline Tag tagFor(double px, const std::vector<Level>& levels, double tick, double atr, bool offer) {
     Tag best; if (!(tick > 0) || !std::isfinite(px)) return best;
     const double tol = std::max(TOL_TICKS * tick, (std::isfinite(atr) && atr > 0) ? TOL_ATR * atr : 0.0) + tick * 1e-6;
     double bestD = 1e300;
     for (size_t i = 0; i < levels.size(); ++i) {
         const Level& L = levels[i]; if (!(L.px > 0) || !std::isfinite(L.px) || L.name.empty()) continue;
-        const double d = std::fabs(L.px - px); if (d > tol) continue;
+        int dir = dirOf(L.name); if (dir == 0) dir = offer ? 1 : -1;
+        const double d = (px - L.px) * dir;                     // >= 0 = on the level or beyond it, on its own side
+        if (d < -tick * 1e-6 || d > tol) continue;             // below a high / above a low: never tagged (his 11:32 rule)
         const Kind k = kindOf(L.name);
         if (d < bestD - tick * 1e-6 || (std::fabs(d - bestD) <= tick * 1e-6 && k > best.kind)) { bestD = d; best.kind = k; best.name = L.name.substr(0, 8); best.dist = d; }
     }
     return best;
 }
+inline Tag tagFor(double px, const std::vector<Level>& levels, double tick, double atr) { return tagFor(px, levels, tick, atr, true); }   // (old call shape)
 inline const char* kindName(Kind k) { return k == GAMMA ? "gamma" : k == VOLUME ? "volume" : k == KEY ? "key" : "none"; }
 }  // namespace llt
 #endif
