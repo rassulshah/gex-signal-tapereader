@@ -116,28 +116,54 @@ int main() {
     {   Engine E; warm(E); lvl(E, 31000, "G1");
         const long long q1 = add(E, BID, 31000, 20, T0 - 10000); const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
         hitBid(E, q1, 31000, 5, T0);
-        CHECK(E.closeBar(T0 + 60000, 31006, 30999, 31000) == 0, "in contact at the close: waits");
-        const long long lo = add(E, BID, 30990, 3, T0 + 61000); hitBid(E, lo, 30990, 1, T0 + 62000);   // 30990 < zone low (30996.50) - 2 ticks
-        CHECK(!E.tests.empty() && E.tests[0].broke, "a trade 2+ ticks below the zone = broke");
-        CHECK(E.closeBar(T0 + 240000, 31001, 30989, 31000) == 1 && nQ(E.rows) == 1, "decided at the next close: one Q row");
+        CHECK(E.closeBar(T0 + 60000, 31006, 30999, 31000, 31002) == 0, "in contact at the close (red, at the bid): waits");
+        const long long l9 = add(E, BID, 30990, 3, T0 + 61000); hitBid(E, l9, 30990, 1, T0 + 62000);   // (1.5.0) 30990 > zone low 30996.50 - 0.25 ATR (7.5) = 30989
+        CHECK(!E.tests.empty() && !E.tests[0].broke, "1.5.0: 6.5 points under the zone (the old 2 ticks) is NOT a live break any more (0.25 ATR = 7.5)");
+        const long long lo = add(E, BID, 30985, 3, T0 + 63000); hitBid(E, lo, 30985, 1, T0 + 64000);
+        CHECK(!E.tests.empty() && E.tests[0].broke, "a trade 0.25 ATR+ below the zone = live broke (the badge)");
+        CHECK(E.closeBar(T0 + 240000, 30999.75, 30984, 30986, 30998) == 1 && nQ(E.rows) == 1, "HIS RULE: a bar whose HIGH is below the bid = broke, one Q row");
         Engine::QRec r; CHECK(nQ(E.rows) > 0 && Engine::parseRec(firstQ(E.rows), r) && r.g == 0 && r.why == "broke", "red Q: broke");
-        CHECK(E.closeBar(T0 + 420000, 31001, 30989, 31000) == 0, "never decided twice");
+        CHECK(E.closeBar(T0 + 420000, 31020, 30984, 31015, 30990) == 0, "never decided twice (a later green close does not repaint it)");
     }
     {   Engine E; warm(E); lvl(E, 31000, "G1");
         const long long q1 = add(E, BID, 31000, 20, T0 - 10000); const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
         hitBid(E, q1, 31000, 5, T0);
         const long long up = add(E, ASK, 31012, 3, T0 + 1000); hitAsk(E, up, 31012, 1, T0 + 2000);   // 31012 > zone top 31000.50 + 0.25 ATR (7.5)
         CHECK(!E.tests.empty() && E.tests[0].left, "price left the zone on the defenders' side = held");
-        CHECK(E.closeBar(T0 + 60000, 31012, 30999, 31010) == 1, "decided at the close");
+        CHECK(E.closeBar(T0 + 60000, 31012, 30999, 31010, 31000) == 1, "HIS RULE: a GREEN bar closing above the bid (high not below it) = held");
         Engine::QRec r; CHECK(nQ(E.rows) > 0 && Engine::parseRec(firstQ(E.rows), r) && r.g == 1 && r.why == "held" && r.name == "G1" && r.kind == K_LEVEL, "green Q: held, named G1");
     }
     {   Engine E; warm(E); lvl(E, 31000, "G1");
         const long long q1 = add(E, BID, 31000, 20, T0 - 10000); const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
         hitBid(E, q1, 31000, 2, T0);
-        E.closeBar(T0 + 60000, 31006, 30999, 31000); E.closeBar(T0 + 240000, 31003, 30999, 31000);
-        CHECK(nQ(E.rows) == 0, "two closes in contact: still waiting");
-        CHECK(E.closeBar(T0 + 420000, 31003, 30999, 31000) == 1, "the 3rd close decides by the queue");
-        Engine::QRec r; CHECK(nQ(E.rows) > 0 && Engine::parseRec(firstQ(E.rows), r) && r.g == 1 && r.why == "refilled", "90% left, originals there = green 'refilled'");
+        E.closeBar(T0 + 60000, 31006, 30999, 31000, 31002); E.closeBar(T0 + 240000, 31003, 30999, 31000, 31001);
+        CHECK(nQ(E.rows) == 0, "contact bar + 1 bar, no green close above the bid: still waiting");
+        CHECK(E.closeBar(T0 + 420000, 31003, 30999, 31000, 31000) == 0, "bar 2 after contact (a doji at the bid): still waiting");
+        CHECK(E.closeBar(T0 + 600000, 31003, 30999, 31000, 31002) == 1, "bar 3 after contact without the green close = decided");
+        Engine::QRec r; CHECK(nQ(E.rows) > 0 && Engine::parseRec(firstQ(E.rows), r) && r.g == 0 && r.why == "not held", "90% left does not decide any more: red 'not held' (1.5.0, his rule)");
+    }
+    {   Engine E; warm(E); lvl(E, 31000, "G1");
+        const long long q1 = add(E, BID, 31000, 20, T0 - 10000); const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
+        hitBid(E, q1, 31000, 2, T0);
+        E.closeBar(T0 + 60000, 31006, 30999, 31000, 31002); E.closeBar(T0 + 240000, 31003, 30999, 31000, 31001);
+        CHECK(E.closeBar(T0 + 420000, 31004, 30999.5, 31003, 31000) == 1, "a green close above the bid on bar 2 after contact = held");
+        Engine::QRec r; CHECK(nQ(E.rows) > 0 && Engine::parseRec(firstQ(E.rows), r) && r.g == 1 && r.why == "held", "green Q: held (late but within 3 bars)");
+    }
+    {   Engine E; warm(E); lvl(E, 31000, "G1");   // a green bar that closes above the bid but whose HIGH ... is above: held; a green close BELOW the bid is not
+        const long long q1 = add(E, BID, 31000, 20, T0 - 10000); const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
+        hitBid(E, q1, 31000, 2, T0);
+        CHECK(E.closeBar(T0 + 60000, 31001, 30995, 30999, 30996) == 0, "a green bar closing BELOW the bid is not held");
+        CHECK(!E.tests.empty() && E.tests[0].decided < 0, "undecided");
+    }
+    {   Engine E; warm(E); lvl(E, 31100, "HVL0");   // offers mirror of his rule
+        const long long a1 = add(E, ASK, 31100, 20, T0 - 10000); const long long m = add(E, ASK, 31094, 1, T0 - 9000); hitAsk(E, m, 31094, 1, T0 - 50);
+        hitAsk(E, a1, 31100, 2, T0);
+        CHECK(E.closeBar(T0 + 60000, 31101, 31088, 31090, 31099) == 1, "offer: a RED bar closing below the offer (low not above it) = held");
+        Engine::QRec r; CHECK(nQ(E.rows) > 0 && Engine::parseRec(firstQ(E.rows), r) && r.g == 1 && r.side == ASK && r.why == "held", "offer held");
+        Engine F; warm(F); lvl(F, 31100, "HVL0");
+        const long long b1 = add(F, ASK, 31100, 20, T0 - 10000); const long long mm = add(F, ASK, 31094, 1, T0 - 9000); hitAsk(F, mm, 31094, 1, T0 - 50);
+        hitAsk(F, b1, 31100, 2, T0);
+        CHECK(F.closeBar(T0 + 60000, 31120, 31100.25, 31115, 31101) == 1 && nQ(F.rows) == 1 && Engine::parseRec(firstQ(F.rows), r) && r.why == "broke", "offer: a bar whose LOW is above the offer = broke");
     }
     // ---- 5) no look-ahead: a break AFTER the close is not used for that close
     {   Engine E; warm(E); lvl(E, 31000, "G1");
@@ -150,8 +176,8 @@ int main() {
     {   Engine E; warm(E); lvl(E, 31000, "G1");
         const long long q1 = add(E, BID, 31000, 20, T0 - 10000); const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
         hitBid(E, q1, 31000, 5, T0);
-        const long long lo = add(E, BID, 30990, 3, T0 + 1000); hitBid(E, lo, 30990, 1, T0 + 2000);
-        E.closeBar(T0 + 60000, 31006, 30989, 31000);
+        const long long lo = add(E, BID, 30985, 3, T0 + 1000); hitBid(E, lo, 30985, 1, T0 + 2000);
+        E.closeBar(T0 + 60000, 30999, 30984, 30990, 30998);
         CHECK(nQ(E.rows) == 1, "one Q");
         const std::string line = firstQ(E.rows);
         Engine::QRec r; CHECK(Engine::parseRec(line, r) && r.anchor == tk(31000) && r.side == BID && r.startBar == T0 + 60000, "round trip");
@@ -253,8 +279,8 @@ int main() {
         const long long a1 = add(E, ASK, 31100, 25, T0 - 10000); const long long m = add(E, ASK, 31094, 1, T0 - 9000); hitAsk(E, m, 31094, 1, T0 - 50);
         hitAsk(E, a1, 31100, 5, T0);
         CHECK(E.tests.size() == 1 && E.tests[0].side == ASK && E.tests[0].hi == tk(31100) + E.zoneW() && E.tests[0].lo == tk(31100) - 2, "offers: zone anchor - 2 ticks .. anchor + 0.12 ATR");
-        const long long hi = add(E, ASK, 31110, 3, T0 + 1000); hitAsk(E, hi, 31110, 1, T0 + 2000);
-        CHECK(!E.tests.empty() && E.tests[0].broke, "offers broke: traded 2+ ticks above the zone");
+        const long long hi = add(E, ASK, 31115, 3, T0 + 1000); hitAsk(E, hi, 31115, 1, T0 + 2000);
+        CHECK(!E.tests.empty() && E.tests[0].broke, "offers broke (live): traded 0.25 ATR+ above the zone");
     }
     // ---- 12) the clean-up after price left is not a pull; one test per anchor; a new session starts clean
     {   Engine E; warm(E); lvl(E, 31000, "G1");
@@ -297,7 +323,8 @@ int main() {
         CHECK(!f.ok, "file of ES read as NQ: refused");
         f = parseFile(split(fileText(E, T0 + 20000, 31000.0), '\n'), "ES");
         CHECK(f.ok && f.t.size() == 1 && f.t[0].call == 0 && f.t[0].mark == M_SHOW && outlineCall(f.t[0]) == 0, "file round trip: call RED, mark SHOW, red outline");
-        FileT q = f.t.empty() ? FileT() : f.t[0]; q.mark = M_SHOWQ; CHECK(badgeText("G1", q, 0).back() != '?', "SHOW?: no '?' on the badge (1.2.0, Rassul 17:55)");
+        FileT q = f.t.empty() ? FileT() : f.t[0]; q.mark = M_SHOWQ; CHECK(badgeText("G1", q, 0).back() == '?' && badgeText("G1", q, 0).find("G1  Q") == 0, "SHOW?: ' ?' on the badge until the nightly proves it (1.5.0, Rassul 21:29)");
+        { FileT s = q; s.mark = M_SHOW; CHECK(badgeText("G1", s, 0).back() != '?', "SHOW (proven): no '?'"); }
         q.mark = M_LOG; CHECK(outlineCall(q) == -1 && badgeText("G1", q, 0).back() != '?', "LOG market: no call outline, no '?'");
         const Hover h = hover(f.t.empty() ? q : f.t[0], "G1", "31000.00", "ES"); bool odds = false; for (auto& x : h.lines) if (x.find("broke 76% of the time (base 30%)") != std::string::npos) odds = true;
         CHECK(odds && h.title.find('?') == std::string::npos, "hover: ES odds line; no '?' in a SHOW market's header");
@@ -326,7 +353,7 @@ int main() {
         if (!E.tests.empty()) { const Live v = E.snapshot(E.tests[0], T0 + 2000); CHECK(!v.pctOk && v.pct == 0 && !v.high, "building: no percent, no risk from the percent"); }
         E.stepCalls(T0 + 10000); CHECK(!E.tests.empty() && E.tests[0].call == 2, "building at 10 s: no call");
         const long long up = add(E, ASK, 31012, 3, T0 + 11000); hitAsk(E, up, 31012, 1, T0 + 12000);
-        CHECK(E.closeBar(T0 + 60000, 31012, 30999, 31010) == 0 && nQ(E.rows) == 0 && E.nThin == 1, "held but never reached the normal: no Q row");
+        CHECK(E.closeBar(T0 + 60000, 31012, 30999, 31010, 31000) == 0 && nQ(E.rows) == 0 && E.nThin == 1, "held but never reached the normal: no Q row");
         File f = parseFile(split(fileText(E, T0 + 20000, 31000.0), '\n'), "ES");
         CHECK(f.ok && !f.t.empty() && !f.t[0].pctOk && f.t[0].normQ == 60, "live file: base -1 (building), normal 60");
         // the queue then builds past the normal: the percent starts, base = max(q0, normal)
@@ -341,15 +368,21 @@ int main() {
         const long long q1 = add(E, BID, 31000, 20, T0 - 10000); const long long m = add(E, BID, 31006, 1, T0 - 9000); hitBid(E, m, 31006, 1, T0 - 50);
         hitBid(E, q1, 31000, 2, T0);
         const long long up = add(E, ASK, 31012, 3, T0 + 1000); hitAsk(E, up, 31012, 1, T0 + 2000);
-        CHECK(E.closeBar(T0 + 60000, 31012, 30999, 31010) == 1, "first touch: one Q");
+        CHECK(E.closeBar(T0 + 60000, 31012, 30999, 31010, 31000) == 1, "first touch: one Q");
         add(E, BID, 31000, 20, T0 + 61000); const long long dn = add(E, BID, 31000, 20, T0 + 61500); hitBid(E, dn, 31000, 1, T0 + 62000);   // back into the zone at once
         const long long up2 = add(E, ASK, 31012, 3, T0 + 63000); hitAsk(E, up2, 31012, 1, T0 + 64000);
-        CHECK(E.closeBar(T0 + 240000, 31012, 30999, 31010) == 0 && nQ(E.rows) == 1 && E.nDebounced == 1, "the next candle at the same level: debounced (no 2nd Q)");
+        CHECK(E.closeBar(T0 + 240000, 31012, 30999, 31010, 31000) == 0 && nQ(E.rows) == 1 && E.nDebounced == 1, "the next candle at the same level: debounced (no 2nd Q)");
         Engine D; warm(D);
         for (int i = 0; i < 40; ++i) add(D, BID, 31030 - 0.25 * i, 2, T0 - 20000);
         const long long big = add(D, BID, 31030, 80, T0 - 15000); const long long dm = add(D, BID, 31045, 1, T0 - 15000); hitBid(D, dm, 31045, 1, T0 - 10000);
         hitBid(D, big, 31030, 1, T0); const long long u = add(D, ASK, 31045, 3, T0 + 1000); hitAsk(D, u, 31045, 1, T0 + 2000);
-        CHECK(!D.tests.empty() && D.tests[0].kind == K_DEFENDED && D.closeBar(T0 + 60000, 31045, 31029, 31040) == 0 && D.nNotAnchor == 1, "a defended price (no level / pivot): live badge only, no Q row");
+        CHECK(!D.tests.empty() && D.tests[0].kind == K_DEFENDED && D.closeBar(T0 + 60000, 31045, 31029, 31040, 31031) == 0 && D.nNotAnchor == 1, "a defended price (no level / pivot): live badge only, no Q row");
+    }
+    // ---- 15) (1.5.0) the break distance is ATR-based (PARAM breakAtr 0.25); before ATR exists the old breakTicks is the fallback
+    {   Engine E; warm(E);
+        CHECK(std::fabs(E.atr - 30.0) < 1.5 && E.brk() == (Tick)std::llround(0.25 * E.atr / TK), "brk = 0.25 x ATR in ticks (NQ warm: ~30 ticks, was 2)");
+        Engine Z; Z.market = "NQ"; Z.tick = TK; CHECK(Z.brk() == (Tick)Z.P.breakTicks, "no ATR yet: the breakTicks fallback");
+        CHECK(std::fabs(Engine().P.breakAtr - 0.25) < 1e-12 && Engine().P.maxWaitBars == 3, "PARAM breakAtr 0.25, maxWaitBars 3 (his rule)");
     }
     std::printf("test_qm: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

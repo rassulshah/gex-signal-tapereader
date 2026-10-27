@@ -47,8 +47,14 @@ int main() {
     // the break before the close, then the candle closes: a red Q in the record, decided once
     mock::feed.push(3, 0, 79.70f, 1, (RTDATE)(t0 - 5), 8003, 9003);
     for (int s = 0; s < 2; ++s) { h.now = t0 - 4 + s; p->calc(0); usleep(5000); }
-    CHECK(!S->qmE.tests.empty() && S->qmE.tests[0].broke, "traded 2+ ticks under the zone: broke");
-    { mock::Bar b; b.time = t0 + 180; b.open = b.high = b.low = b.close = 79.75f; b.rows.push_back(mock::Price(79.75f, 1, 1, 2)); h.bars.push_back(b); }   // bar 30 (end t0) closes
+    CHECK(!S->qmE.tests.empty() && S->qmE.tests[0].broke, "traded 0.25 ATR+ under the zone: live broke (the badge)");
+    // (0.57.0, QueueMeter 1.5.0 HIS HELD rule) the contact candle (bar 30: traded 79.85 .. 79.70) cannot decide a break - it traded AT the bid;
+    // the next candle (bar 31) lies wholly under the bid (high 79.76 < 79.80) = broke, decided at its close (bar 32 opens)
+    h.bars.back().open = 79.86f; h.bars.back().high = 79.86f; h.bars.back().low = 79.70f; h.bars.back().close = 79.72f;
+    { mock::Bar b; b.time = t0 + 180; b.open = 79.72f; b.high = 79.76f; b.low = 79.70f; b.close = 79.74f; b.rows.push_back(mock::Price(79.75f, 1, 1, 2)); h.bars.push_back(b); }   // bar 30 (end t0) closes: in contact, no green close above -> waits
+    for (int s = 0; s < 2; ++s) { h.now = t0 + 2 + s; p->calc(0); usleep(5000); }
+    CHECK(S->qmE.tests.empty() || S->qmE.tests[0].decided < 0, "the contact candle closed: undecided (no bar wholly beyond, no green close above)");
+    { mock::Bar b; b.time = t0 + 360; b.open = b.high = b.low = b.close = 79.74f; b.rows.push_back(mock::Price(79.74f, 1, 1, 2)); h.bars.push_back(b); }   // bar 31 closes: wholly under the bid
     for (int s = 0; s < 3; ++s) { h.now = t0 + 5 + s; p->calc(0); usleep(400000); }
     usleep(1100000); h.now = t0 + 10; p->calc(0);
     const std::string recPath = flex + "\\LiquidityProfile\\CL-CLEX26-180-queuemeter-" + std::to_string(S->qmSession) + ".csv";
@@ -60,14 +66,14 @@ int main() {
     CHECK(S->qmE.rule.mark == qm::M_SHOW && S->qmE.rule.greenShow, "CL: the verdict's defaults (SHOW, green on) with no params file");
     {   // (coordinator) the same Q as a Holding-strip letter: LetterStrips.h line format, pane Q, the decision candle's raw bar time, pivot 0 (low)
         const std::string strip = readAll(flex + "\\Strips\\QUEUE-CL-180.csv");
-        const std::string want = "LT|1|Q|" + std::to_string(t0) + "|Q|0|-1|broke ";
+        const std::string want = "LT|1|Q|" + std::to_string(t0 + 180) + "|Q|0|-1|broke ";   // (0.57.0) the decision candle = bar 31
         int n = 0, fields = 0; { std::istringstream in(strip); std::string ln; while (std::getline(in, ln)) if (ln.rfind("LT|", 0) == 0) { ++n; fields = 1; for (char c : ln) if (c == '|') ++fields; } }
         CHECK(strip.rfind(want, 0) == 0 && n == 1 && fields == 8, "Strips\\QUEUE-CL-180.csv: one LT|1|Q|<bar key>|Q|0|-1|<numbers> line (8 fields)");
         CHECK(strip.find(" tk7980") != std::string::npos, "(0.51.0) the strip line carries the Q anchor tk7980 (lsReversalStage 1.2.0)");
     }
     const std::string st = readAll(flex + "\\LiquidityProfile.status-CL-180.txt");
     CHECK(st.find(std::string("QUEUE_METER,") + qm::VERSION + ",") != std::string::npos && st.find("Q rows written ") != std::string::npos && st.find(",call SHOW at 10 s") != std::string::npos, "status: QUEUE_METER line");
-    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0 && std::string(LQ_VERSION) == "0.52.0", "status VERSION 0.52.0");
+    CHECK(st.compare(0, 8 + std::strlen(LQ_VERSION), std::string("VERSION,") + LQ_VERSION) == 0 && std::string(LQ_VERSION) == "0.57.0", "status VERSION 0.57.0");
     // nothing new is drawn on the price chart by the meter (the Dealer Profile draws it in the Levels column)
     h.draws.clear(); p->draw(); bool qtext = false; for (auto& d : h.draws) if (d.type == "text" && d.text.find("Q") == 0 && d.text.find('%') != std::string::npos) qtext = true;
     CHECK(!qtext, "no meter text drawn by the Liquidity Profile");

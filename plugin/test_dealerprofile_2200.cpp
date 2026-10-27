@@ -385,8 +385,8 @@ int main()
         put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { q })); reloadQm(X, a);
         CUR = &a; X.loadHostState(); X.saveHostState();
         std::vector<Op> W = drawOn(X, a, MOCK_CHART); W = drawOn(X, a, MOCK_CHART);
-        bool qm2 = false; for (auto& t : meterTexts(W)) if (t.text.find("Q 91") != std::string::npos && t.text.find("?") == std::string::npos) qm2 = true;
-        check(qm2, "SHOW? market: 'PDH  Q 91' - no '?' on the badge (1.2.0, Rassul 17:55)");
+        bool qm2 = false; for (auto& t : meterTexts(W)) if (t.text.find("Q 91") != std::string::npos && t.text.size() >= 2 && t.text.compare(t.text.size() - 2, 2, " ?") == 0) qm2 = true;
+        check(qm2, "SHOW? market: 'PDH  Q 91 ?' - '?' on the badge until the nightly proves it (QueueMeter 1.5.0, Rassul 21:29 2026-10-26)");
         put("LRA-QueueLive-ES.csv", qmFile("ES", 12.0, { T_PDH })); reloadQm(X, a);
         W = drawOn(X, a, MOCK_CHART); const std::vector<Op> MT = meterTexts(W); const Op* t0 = nullptr; for (auto& t : MT) if (t.text.find("Q 91") != std::string::npos) t0 = &t;
         if (t0) { RTX_EVENT e; memset(&e, 0, sizeof(e)); e.type = E_MOUSE_MOVE; e.v.mouse.h = (short)(t0->l + 3); e.v.mouse.v = (short)((t0->t + t0->b) / 2); e.v.mouse.bar = -1; e.v.mouse.price = NAN;

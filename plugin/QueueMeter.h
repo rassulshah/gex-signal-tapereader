@@ -13,7 +13,7 @@
 //   - ORIGINALS = the defender order ids resting in the zone when the test began, each counted once, with a lifetime filter: an order
 //     resting < 1 s at the start is re-price flicker (~60% of added size lives < 1 s) and is not an original; pulls after price has left
 //     (the clean-up) are not counted.
-//   - LIVE like the forming candle; the DECIDED signal is a Q record at a candle close (G = refilled / held, R = drained / broke),
+//   - LIVE like the forming candle; the DECIDED signal is a Q record at a candle close (1.5.0 his HELD rule: G = held, R = broke / not held; older records: refilled / drained),
 //     append-only, never changed (first line per side + anchor + start candle wins).
 //   - Per-market normal "eaten lots/s" by 30-min CT slot from the nightly params file (LRA-QueueNorms-<MKT>.csv), else this session's.
 // Who uses it: lsLiquidityProfile (owns the chart's MBO book) runs the Engine and writes lsFlexLevels\LRA-QueueMeter-<MKT>.csv about once
@@ -41,7 +41,7 @@
 #include "SwingRef.h"     // (1.3.0) the pivots = the last-3 intact swings of the 1-bar ZigZag (the St / Sr rule)
 
 namespace qm {
-static const char* const VERSION = "1.4.0";   // 1.3.0 (2026-10-22 evening fix build, live records 19:09-19:48 CT: "held 1114% q0 7", live 397% / 999%, ES 29 / NQ 30 Q rows in 45 min): the BASE = max(q0, the NORMAL queue there) - normal = this session's median q0 at touched levels (5+ tests), else the median resting lots per tick within 1 ATR x the zone's ticks; NO percent and NO call while the queue is under the normal ("building"); percent shown capped "200%+"; the badge reads "G1  Q 143 (2.4x)" (lots + the ratio to the normal); Q rows (record + Holding strip) only at key / MenthorQ levels and CONFIRMED pivots (SwingRef.h last-3 intact swings of the session's 1-bar ZigZag), one per level per touch, none within 1 candle of the last one at that level, none for a test that never reached the normal;   // 1.2.0 (2026-10-22 evening, Rassul 17:55 CT "more readable"): the badge reads "G1  Q 76%" (two spaces after the name, a space after Q; unlabelled "Q 41%"), NO "?" on the badge in any market (NQ / GC still draw the red call only); a call made inside a news / settle window says so in its hover, a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = the call is recorded only (no outline) - NewsWindow.h;   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE-2026-10-22.md): the 10-s CALL (red < 40% left / green >= 100% + holding) per market, C lines; the candle-close Q is a record only
+static const char* const VERSION = "1.5.0";   // 1.5.0 (2026-10-26, Rassul 21:29 approved Quality Check item 1): the decided Q = HIS HELD rule (definitions registry 2026-10-25: at a bid, no bar's HIGH below the bid AND a GREEN bar closes above it within 3 bars after the contact bar; offer mirror) - a bar fully beyond = broke, no such close by the 3rd bar after contact = not held (the queue-left fallback no longer decides); the BREAK / contact distance is ATR-based (breakAtr 0.25 x ATR, PARAM - the old 2 ticks meant 0.02 ATR in NQ and 0.4 in 6E; held rate 11%-66% across 1-8 ticks); the badge gets " ?" while the market's MARK is SHOW? (not proven: 20+ a side with lift);   // 1.3.0 (2026-10-22 evening fix build, live records 19:09-19:48 CT: "held 1114% q0 7", live 397% / 999%, ES 29 / NQ 30 Q rows in 45 min): the BASE = max(q0, the NORMAL queue there) - normal = this session's median q0 at touched levels (5+ tests), else the median resting lots per tick within 1 ATR x the zone's ticks; NO percent and NO call while the queue is under the normal ("building"); percent shown capped "200%+"; the badge reads "G1  Q 143 (2.4x)" (lots + the ratio to the normal); Q rows (record + Holding strip) only at key / MenthorQ levels and CONFIRMED pivots (SwingRef.h last-3 intact swings of the session's 1-bar ZigZag), one per level per touch, none within 1 candle of the last one at that level, none for a test that never reached the normal;   // 1.2.0 (2026-10-22 evening, Rassul 17:55 CT "more readable"): the badge reads "G1  Q 76%" (two spaces after the name, a space after Q; unlabelled "Q 41%"), NO "?" on the badge in any market (NQ / GC still draw the red call only); a call made inside a news / settle window says so in its hover, a failed nightly feed check (LRA-FeedCheck-<MKT>.csv) = the call is recorded only (no outline) - NewsWindow.h;   // 1.1.0 (2026-10-22 evening, VALIDATE-DEFENDER-SIZE-2026-10-22.md): the 10-s CALL (red < 40% left / green >= 100% + holding) per market, C lines; the candle-close Q is a record only
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -62,8 +62,9 @@ struct Params {
     long long restMs = 1000;    // lifetime filter: a refill counts once it rested 1 s; a pull counts only for an order that rested 1 s
     double suddenX = 2.5;       // a defended price with no level: the zone holds >= 2.5x the typical size per tick there (1 ATR)
     long long lookMs = 120000;  // ... at a new 2-min low (bids) / high (offers)
-    int maxWaitBars = 3;        // undecided after 3 closes in contact: decided by the queue left
-    double holdPct = 0.5;       // ... >= 50% left and originals not all gone = G
+    int maxWaitBars = 3;        // (1.5.0) RASSUL HELD: the green close must come within 3 bars AFTER the contact bar, else "not held"
+    double holdPct = 0.5;       // (1.4.x) the old queue-left fallback - no longer decides
+    double breakAtr = 0.25;     // (1.5.0) PARAM: the live BROKE / contact distance past the zone = 0.25 x ATR (was breakTicks 2) - no learned value yet
     double riskTte = 10.0, riskPct = 0.4;   // Break risk HIGH: empty within 10 s, or under 40% left, or broke
     int pivotL = 1, pivotR = 2, pivotKeep = 6;
     int atrN = 14;
@@ -205,7 +206,7 @@ public:
     // this session's eaten lots and active seconds per slot / side (normal fallback)
     long long eatLots[48][2], eatSecs[48][2], lastEatSec[2] = { -1, -1 };
     size_t bookCap = 400000;
-    struct Bar { long long endMs; double h, l, c; };
+    struct Bar { long long endMs; double h, l, c, o; };   // (1.5.0) + open (his HELD needs a GREEN / RED close)
     std::deque<Bar> bars;
     long long lastBarMs = 0;
     long long nUnknownFill = 0, nEvents = 0, nStarted = 0;
@@ -217,6 +218,7 @@ public:
     static int slotOf(long long tMs) { long long s = (tMs / 1000) % 86400; if (s < 0) s += 86400; return (int)(s / 1800); }
     static long long sessionOf(long long tMs) { return (tMs / 1000 + 7 * 3600) / 86400; }   // 17:00 CT starts a session
     Tick zoneW() const { const double w = atr > 0 && tick > 0 ? P.zoneAtr * atr / tick : 0; return std::max<Tick>(2, (Tick)std::llround(w)); }
+    Tick brk() const { return atr > 0 && tick > 0 ? ticksOf(P.breakAtr) : (Tick)P.breakTicks; }   // (1.5.0) ATR-based break distance
     Tick ticksOf(double atrMult) const { return atr > 0 && tick > 0 ? std::max<Tick>(1, (Tick)std::llround(atrMult * atr / tick)) : 1; }
 
     void setLevels(const std::vector<Anchor>& L) { levels = L; }
@@ -326,13 +328,13 @@ public:
         for (size_t i = 0; i < tests.size(); ++i) {
             Test& T = tests[i];
             if (T.side == BID) {
-                if (!T.broke && p < T.lo - P.breakTicks) { T.broke = true; T.tBroke = t; T.atBreak = snapshot(T, t); T.haveBreak = true; }
+                if (!T.broke && p < T.lo - brk()) { T.broke = true; T.tBroke = t; T.atBreak = snapshot(T, t); T.haveBreak = true; }
                 if (!T.left && !T.broke && p > T.hi + lea) { T.left = true; T.tLeft = t; }
-                T.contact = p >= T.lo - P.breakTicks && p <= T.hi + zoneW();
+                T.contact = p >= T.lo - brk() && p <= T.hi + zoneW();
             } else {
-                if (!T.broke && p > T.hi + P.breakTicks) { T.broke = true; T.tBroke = t; T.atBreak = snapshot(T, t); T.haveBreak = true; }
+                if (!T.broke && p > T.hi + brk()) { T.broke = true; T.tBroke = t; T.atBreak = snapshot(T, t); T.haveBreak = true; }
                 if (!T.left && !T.broke && p < T.lo - lea) { T.left = true; T.tLeft = t; }
-                T.contact = p <= T.hi + P.breakTicks && p >= T.lo - zoneW();
+                T.contact = p <= T.hi + brk() && p >= T.lo - zoneW();
             }
         }
         // (1.3.0) the base latches once the queue reaches the normal (or started at / over it)
@@ -353,7 +355,7 @@ public:
                 for (int sd = 0; sd < 2; ++sd) {
                     if (a.side >= 0 && a.side != sd) continue;
                     const Tick lo = sd == BID ? a.px - w : a.px - P.innerTicks, hi = sd == BID ? a.px + P.innerTicks : a.px + w;
-                    const bool enter = sd == BID ? (prevPx > hi && p <= hi && p >= lo - P.breakTicks) : (prevPx < lo && p >= lo && p <= hi + P.breakTicks);
+                    const bool enter = sd == BID ? (prevPx > hi && p <= hi && p >= lo - brk()) : (prevPx < lo && p >= lo && p <= hi + brk());
                     if (enter) start(sd, a.kind, a.px, lo, hi, a.name, t);
                 }
             }
@@ -378,12 +380,13 @@ public:
     }
 
     // a closed candle (CT end time ms): ATR, pivots, and the Q decisions. Returns the number of new Q rows.
-    int closeBar(long long endMs, double h, double l, double c) {
+    int closeBar(long long endMs, double h, double l, double c, double o = std::nan("")) {
         if (endMs <= lastBarMs || !finiteD(h) || !finiteD(l) || !finiteD(c) || h < l) return 0;
+        if (!finiteD(o)) o = bars.empty() ? c : bars.back().c;   // (1.5.0) no open from the host: the prior close
         const long long ses = sessionOf(endMs - 1);
         if (session >= 0 && ses != session) { /* the feed has not reached the new session yet: keep */ }
         lastBarMs = endMs;
-        Bar b; b.endMs = endMs; b.h = h; b.l = l; b.c = c; bars.push_back(b); while (bars.size() > 80) bars.pop_front();
+        Bar b; b.endMs = endMs; b.h = h; b.l = l; b.c = c; b.o = o; bars.push_back(b); while (bars.size() > 80) bars.pop_front();
         // ATR (the mean true range of the last atrN closed candles)
         if (bars.size() >= 6) {
             double s = 0; int n = 0;
@@ -401,12 +404,15 @@ public:
             if (T.decided >= 0 || T.t0 >= endMs) continue;
             if (T.startBar == 0) T.startBar = endMs;
             int g = -1; std::string why;
-            if (T.broke && T.tBroke < endMs) { g = 0; why = "broke"; }
-            else if (T.left && T.tLeft < endMs) { g = 1; why = "held"; }
-            else if (++T.barsSeen >= P.maxWaitBars) {
-                const Live v = snapshot(T, endMs);
-                if (v.pct >= P.holdPct && !v.warn) { g = 1; why = "refilled"; } else { g = 0; why = "drained"; }
-            }
+            // (1.5.0) HIS HELD rule on closed bars (decided once, never repainted): the contact bar is bar 0, then up to 3 more.
+            //   bid: a bar whose HIGH is below the bid = broke; a GREEN bar (close > open) closing above the bid = held.
+            //   offer: a bar whose LOW is above the offer = broke; a RED bar closing below the offer = held. Neither by bar 3 = not held.
+            const double A = (double)T.anchor * tick, eps = tick * 1e-6;
+            const bool beyond = T.side == BID ? h < A - eps : l > A + eps;
+            const bool fav = T.side == BID ? (c > o + eps && c > A + eps) : (c < o - eps && c < A - eps);
+            if (beyond) { g = 0; why = "broke"; }
+            else if (fav) { g = 1; why = "held"; }
+            else if (T.barsSeen++ >= P.maxWaitBars) { g = 0; why = "not held"; }
             if (g < 0) continue;
             const Live v = g == 0 && why == "broke" && T.haveBreak ? T.atBreak : snapshot(T, endMs);
             T.decided = g; T.why = why; T.tDecided = endMs; T.pctAtDecision = v.pct; T.origAtDecision = v.origPct;
@@ -580,7 +586,7 @@ private:
         }
     }
     bool covered(int side, Tick p) const {
-        for (size_t i = 0; i < tests.size(); ++i) if (tests[i].side == side && tests[i].decided < 0 && p >= tests[i].lo - P.breakTicks && p <= tests[i].hi + P.breakTicks) return true;
+        for (size_t i = 0; i < tests.size(); ++i) if (tests[i].side == side && tests[i].decided < 0 && p >= tests[i].lo - brk() && p <= tests[i].hi + brk()) return true;
         return false;
     }
     void addPivot(int side, double px) {
@@ -698,6 +704,7 @@ inline std::string badgeText(const std::string& name, const FileT& t, int varian
     std::string s = name.empty() ? q : name + "  " + q;
     if (variant == 0 && t.warn) s += " . orig 0%";
     if (variant == 2) s = q;
+    if (t.mark == M_SHOWQ) s += " ?";   // (1.5.0, Rassul 21:29) '?' on the mark until the nightly proves it (20+ a side with lift)
     return s;
 }
 inline double fillFrac(const FileT& t) { return t.pctOk ? std::max(0.0, std::min(1.0, t.pct)) : 0.0; }
