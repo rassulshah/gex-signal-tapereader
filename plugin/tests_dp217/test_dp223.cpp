@@ -165,7 +165,9 @@ static void hostTests() {
         mock::Host h = chart(false, false);
         mock::Bar n = qb(36); n.open = 106; n.close = 108; n.low = 105.5f; n.high = 109; h.bars.push_back(n);   // 36 forming
         DeltaProfile p; redraw(h, p);
-        check(dRows(slurp(path), "A").empty() && colourRings(h) == 0, "[host] next: nothing while the next candle forms");
+        check(dRows(slurp(path), "A").empty() && colourRings(h) == 1, "[host] next: no record line while the next candle forms, but the LIVE A shows (2.27.0, 15:16 live then confirm)");
+        { mock::Bar& f = h.bars.back(); const float o0 = f.open, c0 = f.close; f.close = 104.5f; f.open = 106; redraw(h, p);
+          check(dRows(slurp(path), "A").empty() && colourRings(h) == 0, "[host] next: the live A vanishes when the forming candle breaks the rule"); f.open = o0; f.close = c0; redraw(h, p); }
         addq(h); redraw(h, p); redraw(h, p);                                            // 36 closed
         const std::vector<std::vector<std::string> > d = dRows(slurp(path), "A");
         check(d.size() == 1 && d[0].size() == 29 && d[0][24] == "conf=next" && d[0][26] == "delay_bars=1" && d[0][27] == "delay_min=3" && d[0][28] == "late=0", "[host] next: D line conf=next delay 1 candle / 3 min");
