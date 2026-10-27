@@ -111,7 +111,8 @@ static void coreTests() {
         check(researchA(w, 1.0).size() == 1, "[half] node at the halfway mark = A"); }
     {   std::vector<Bar> w = quiet(30); w[24].low = 100; w[24].high = 104;                                // pivot bar high 104 = the candle's low 104
         w[29] = mkb(29, 105.5, 111, 104, 107, { Row(105, -500, 500) });
-        check(researchA(w, 1.0).size() == 1, "[pivot] low AT the down-pivot bar's high = A (at or below)"); }
+        check(researchA(w, 1.0).empty(), "[pivot] low AT the down-pivot bar's high = no A (strictly below, 15:07)");
+        w[24].high = 105; check(researchA(w, 1.0).size() == 1, "[pivot] low below the down-pivot bar's high = A"); }
 }
 
 // ---------------- host ----------------
