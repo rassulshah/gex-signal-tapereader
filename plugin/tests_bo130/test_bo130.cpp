@@ -52,24 +52,25 @@ int main(int argc, char** argv) {
     CHECK(B.size() > 250, "[real] ES bars loaded (" + std::to_string(B.size()) + ")");
     const Run X = run(B, (int)B.size(), true);
     std::map<std::string, int> reasons; int fired = 0; for (const bba::BoDec& D : X.R.ev) { ++reasons[bba::boReasonName(D.reason)]; if (D.fired) ++fired; }
-    CHECK(bba::BO_RULE == 4, "rule 4 (follow-through)");
+    CHECK(bba::BO_RULE == 5, "rule 5 (follow-through = any later candle of the same wave, Rassul 17:29 CT)");
     for (const bba::BoDec& D : X.R.ev) {
-        if (D.rule < 4 || D.i0 + 1 >= (int)X.B.size()) continue;
-        const Bar& a = X.B[(size_t)D.i0]; const Bar& f = X.B[(size_t)D.i0 + 1]; const bool bo = D.dir > 0;
-        const bool ft = bo ? (f.c > f.o && f.h > a.h && f.c > a.c) : (f.c < f.o && f.l < a.l && f.c < a.c);
-        if (D.fired) CHECK(D.im == D.i0 + 1 && ft, "fired " + a.clk + (bo ? " BO" : " BD") + " followed through by " + f.clk);
-        if (D.reason == bba::BO_R_NO_CONFIRM) CHECK(D.im == D.i0 + 1 && !ft, "no_confirm " + a.clk + (bo ? " BO" : " BD") + ": " + f.clk + " did not follow through");
+        if (D.rule < 5 || (!D.fired && D.reason != bba::BO_R_NO_CONFIRM)) continue;
+        const Bar& a = X.B[(size_t)D.i0]; const bool bo = D.dir > 0;
+        auto ftAt = [&](int k) { const Bar& f = X.B[(size_t)k]; return bo ? (f.c > f.o && f.h > a.h && f.c > a.c) : (f.c < f.o && f.l < a.l && f.c < a.c); };
+        int first = -1; for (int k = D.i0 + 1; k <= D.im && k < (int)X.B.size(); ++k) if (ftAt(k)) { first = k; break; }
+        if (D.fired) CHECK(first == D.im && D.im > D.i0, "fired " + a.clk + (bo ? " BO" : " BD") + ": the FIRST later candle that follows through is " + X.B[(size_t)D.im].clk + " (" + std::to_string(D.im - D.i0) + " candles later)");
+        else CHECK(first < 0, "no_confirm " + a.clk + (bo ? " BO" : " BD") + ": no candle followed through before the wave ended (" + X.B[(size_t)D.im].clk + ")");
     }
     const bba::BoDec* d = at(X, "12:45", +1);
-    if (d) CHECK(!d->fired, std::string("12:45 BO (Rassul's screenshot): not drawn - the 12:48 candle was red (") + bba::boReasonName(d->reason) + ")");
+    if (d) std::printf("INFO 12:45 BO: %s (%s)\n", d->fired ? "fired" : "not drawn", bba::boReasonName(d->reason));
     else std::printf("INFO 12:45: no BO candidate on this data\n");
     { int same = 0, diff = 0; for (int cut = 140; cut < (int)B.size(); cut += 7) { const Run P = run(B, cut, true);
         for (const bba::BoDec& D : P.R.ev) { bool ok = false; for (const bba::BoDec& E : X.R.ev) if (E.i0 == D.i0 && E.dir == D.dir && E.fired == D.fired && E.reason == D.reason) ok = true; ok ? ++same : ++diff; } }
       CHECK(diff == 0 && same > 0, "prefix runs decide the same (no repaint) (" + std::to_string(same) + " / " + std::to_string(diff) + ")"); }
     { bba::BoDec D; for (const bba::BoDec& E : X.R.ev) if (E.fired) { D = E; break; }
-      D.t0 = 3875852880; D.t = D.t0 + 180; bba::BoDec P; CHECK(bba::parseBoLine(bba::boLine(D, 1, "1.30.0"), P) && P.rule == 4 && P.fired == D.fired, "rule-4 record line round trip (t = t0 + 1 candle)");
-      bba::BoDec D2 = D; D2.t = D.t0; bba::BoDec P2; CHECK(!bba::parseBoLine(bba::boLine(D2, 1, "1.30.0"), P2) || !D2.fired, "a fired rule-4 line with t == t0 is refused"); }
-    std::printf("rule 4: %d fired;", fired); for (const auto& kv : reasons) std::printf(" %s %d;", kv.first.c_str(), kv.second); std::printf("\n");
+      D.t0 = 3875852880; D.t = D.t0 + 180; bba::BoDec P; CHECK(bba::parseBoLine(bba::boLine(D, 1, "1.31.0"), P) && P.rule == 5 && P.fired == D.fired, "rule-5 record line round trip");
+      bba::BoDec D2 = D; D2.t = D.t0; bba::BoDec P2; CHECK(!bba::parseBoLine(bba::boLine(D2, 1, "1.31.0"), P2) || !D2.fired, "a fired rule-5 line with t == t0 is refused"); }
+    std::printf("rule 5: %d fired;", fired); for (const auto& kv : reasons) std::printf(" %s %d;", kv.first.c_str(), kv.second); std::printf("\n");
     for (const bba::BoDec& D : X.R.ev) if (D.fired || D.reason == bba::BO_R_NO_CONFIRM) std::printf("  %s %s %s pivot %.2f\n", X.B[(size_t)D.i0].clk.c_str(), D.dir > 0 ? "BO" : "BD", D.fired ? "FIRED" : "no follow-through", D.piv);
     std::printf("RESULT %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
