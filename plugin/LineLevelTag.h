@@ -14,13 +14,13 @@
 #include <vector>
 #include <cctype>
 namespace llt {
-static const char* const VERSION = "1.2.0";   // (1.2.0, Rassul 11:32 "it should be PDH + 1ATR, meaning the level or slightly higher within the 1 ATR range, it cannot be below PDH") ONE-SIDED   // (1.1.0, Rassul 11:27 "use 1atr, for example the large order is within pdh+1atr or pdl-1atr")
+static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-10-27 LP 0.60.0) Tag.px = the level's price (the order -> its row in the Dealer Profile 2.28.0 Levels column)     // (1.2.0, Rassul 11:32 "it should be PDH + 1ATR, meaning the level or slightly higher within the 1 ATR range, it cannot be below PDH") ONE-SIDED   // (1.1.0, Rassul 11:27 "use 1atr, for example the large order is within pdh+1atr or pdl-1atr")
 static const double TOL_TICKS = 2.0;     // PARAM
 static const double TOL_ATR = 1.0;       // HIS RULE (2026-10-27 11:27): within 1 x the 3-min ATR of the level (e.g. up to PDH + 1 ATR, down to
                                          // PDL - 1 ATR); 11:17 "it doesnt have to be the exact level, if its close enough it should be badged"
 enum Kind { NONE = 0, KEY = 1, VOLUME = 2, GAMMA = 3 };
 struct Level { std::string name; double px = 0; };
-struct Tag { Kind kind = NONE; std::string name; double dist = 0; std::string text() const { return kind == NONE ? std::string() : name + "?"; } };
+struct Tag { Kind kind = NONE; std::string name; double dist = 0; double px = 0; std::string text() const { return kind == NONE ? std::string() : name + "?"; } };
 inline std::string upper(const std::string& s) { std::string o; for (char c : s) o += (char)std::toupper((unsigned char)c); return o; }
 inline Kind kindOf(const std::string& nameIn) {
     const std::string n = upper(nameIn);
@@ -60,7 +60,7 @@ inline Tag tagFor(double px, const std::vector<Level>& levels, double tick, doub
         const double d = (px - L.px) * dir;                     // >= 0 = on the level or beyond it, on its own side
         if (d < -tick * 1e-6 || d > tol) continue;             // below a high / above a low: never tagged (his 11:32 rule)
         const Kind k = kindOf(L.name);
-        if (d < bestD - tick * 1e-6 || (std::fabs(d - bestD) <= tick * 1e-6 && k > best.kind)) { bestD = d; best.kind = k; best.name = L.name.substr(0, 8); best.dist = d; }
+        if (d < bestD - tick * 1e-6 || (std::fabs(d - bestD) <= tick * 1e-6 && k > best.kind)) { bestD = d; best.kind = k; best.name = L.name.substr(0, 8); best.dist = d; best.px = L.px; }
     }
     return best;
 }

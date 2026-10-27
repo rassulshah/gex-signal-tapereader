@@ -46,7 +46,9 @@ int main() {
     int nb = 0, no = 0; for (auto& d : h.draws) if (d.type == "line") { if (d.pen == GREEN && std::abs(d.y - yBid) <= 1) ++nb; if (d.pen == RED && std::abs(d.y - yOff) <= 1) ++no; }
     CHECK(nb >= 1 && no >= 1, "the bid line (green) and the offer line (red) at their prices");
     const mock::Draw* l100 = text(h, "100"); const mock::Draw* l50 = text(h, "50");
-    CHECK(l100 && l100->color == GREEN && l50 && l50->color == RED, "labels = size only, in the side colour");
+    CHECK(!l100 && !l50, "(0.60.1) no text on the order lines (the lots + level live in the Dealer Profile Levels column)"); (void)l100; (void)l50;
+    { const std::string lm = readAll(flex + "\\LRA-LmtLevels-ES-180.txt");
+      CHECK(lm.rfind("LMTL,1,", 0) == 0, "(0.60.1) LRA-LmtLevels-ES-180.txt written (header; no order sits at a level here)"); }
     CHECK(!hasText(h, "LMT") && !hasText(h, "RE-BID?") && !hasText(h, "ACCEPTED") && !hasText(h, "FILLING"), "no LMT column header, no RE-BID? / ACCEPTED / FILLING");
     CHECK(hasText(h, "LMT F"), "LMT F stays");
     // the roll: a new 100-lot bid at 7,680 (id 3), the old one cancelled 0.5 s later; 20 s later the roll is decided
@@ -69,7 +71,7 @@ int main() {
         if (std::abs(d.y - yOff) <= 1 && d.pen == (COLOR)0x471414) darkOff = true;
         if (d.penW == 2 && d.pen == (COLOR)0x8A8F98) xMark = true; }
     CHECK(oldSeg && newSeg, "the line steps: a segment at 7,675 and one at 7,680");
-    CHECK(darkOff, "the pulled offer line is very dark red (0x471414)");
+    CHECK(!darkOff, "(0.60.1) a pulled line is not drawn (still recorded)");
     CHECK(!xMark, "no grey X");
     // filled at 7,680, the next bar closes green above it -> HELD beside the fill dot
     mock::feed.push(3, 0, 7680.0f, 100, (RTDATE)(t0 + 700), 3, 777);
@@ -98,7 +100,7 @@ int main() {
       p->mouse(&e); CHECK(S->olHov >= 0, "the mouse on the line picks it");
       h.draws.clear(); p->draw();
       bool q = false, r = false, x = false, w = false; for (auto& d : h.draws) if (d.type == "text") { if (d.text.rfind("Question:", 0) == 0) q = true; if (d.text.find("Rolled: 7675.00 -> 7680.00") == 0) r = true; if (d.text.rfind("Example:", 0) == 0) x = true; if (d.text.rfind("HELD:", 0) == 0) w = true; }
-      CHECK(q && r && x && w, "hover: question / rolled path / HELD reason / example");
+      CHECK(!q && !r && !x && !w, "(0.60.1, Rassul 13:02) no hover box on the order lines");
       e.v.mouse.price = 7620.0f; p->mouse(&e); CHECK(S->olHov < 0, "the mouse away: no hover"); }
     // record + status + restart
     usleep(1100000); h.now = t0 + 8 * 180 + 30; p->calc(0);
@@ -107,7 +109,7 @@ int main() {
     CHECK(rec.find("\nN|") != std::string::npos && rec.find("\nS|") != std::string::npos && rec.find("\nE|") != std::string::npos && rec.find("|HELD|") != std::string::npos, "record: N / S / E / W lines");
     const std::string st = readAll(flex + "\\LiquidityProfile.status-ES-180.txt");
     CHECK(st.find(std::string("ORDER_LINES,") + oln::VERSION + ",on") != std::string::npos && st.find("floor 50 lots rest 9 min roll 15 s") != std::string::npos && st.find(",held 1 ") != std::string::npos, "status: ORDER_LINES line");
-    CHECK(std::string(LQ_VERSION) == "0.59.2" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION, "versions = 0.59.2 (2026-10-27; lqp::VERSION has stayed 0.55.2 since 0.56)");
+    CHECK(std::string(LQ_VERSION) == "0.60.1" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION, "versions = 0.60.1 (2026-10-27; lqp::VERSION has stayed 0.55.2 since 0.56)");
     // the settings rows: relabelled, parameter version 11
     { const ss::Spec& sp = lpset::profileSpec(); bool m = false, ice = false, lad = false, pul = false, q = false, wd = false;
       for (int k = 0; k < sp.n; ++k) { const std::string lb = sp.rows[k].label; if (lb == "Limit-order lines (resting 9+ min)") m = true; if (lb == "Icebergs (I R15 500)") ice = true; if (lb == "Ladders (4o 87)") lad = true; if (lb == "Pulled lines (very dark)") pul = true; if (lb == "Queue Q at levels") q = true; if (lb == "HELD / THRU words") wd = true; }

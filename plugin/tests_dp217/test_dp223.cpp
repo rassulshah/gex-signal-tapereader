@@ -87,16 +87,27 @@ static void coreTests() {
         check(researchA(w, 1.0).empty(), "[core] under 2.0x the average row = no A"); }
     {   std::vector<Bar> w = quiet(30); for (Bar& b : w) { b.open = 220 - b.open; b.close = 220 - b.close; const double hh = 220 - b.low; b.low = 220 - b.high; b.high = hh;
             for (Row& r : b.rows) r.key = 220 - r.key; std::reverse(b.rows.begin(), b.rows.end()); }
-        w[29] = mkb(29, 114.5, 116, 109, 113, { Row(115, 500, 500) });
+        w[29] = mkb(29, 114.2, 116, 109, 113, { Row(115, 500, 500) });   // (2.27.0) open in ticks 114: the row above the body
         std::vector<RaHit> h = researchA(w, 1.0);
         check(h.size() == 1 && !h[0].sell && h[0].conf == CONF_SAME && h[0].lo == 115, "[core] bearish mirror: buying row, red close below it"); }
     {   std::vector<Bar> w = quiet(6); w[5] = mkb(5, 105.5, 111, 104, 107, { Row(105, -500, 500) });
         check(researchA(w, 1.0).empty(), "[core] a window under 7 candles = no A"); }
     {   // rows cut from the window LOW: span 0..119 ticks -> 2 ticks a row starting at the low 1 (rows [1,2] [3,4] ...); 105 and 106 share a row
         std::vector<Bar> w = quiet(30); w[0].low = 1; w[0].rows.push_back(Row(1, 1, 1)); w[1].high = 120; w[1].rows.push_back(Row(120, 1, 1));
-        w[29] = mkb(29, 104.5, 111, 104, 108, { Row(105, -300, 300), Row(106, -300, 300) });
+        w[29] = mkb(29, 107, 111, 104, 108, { Row(105, -300, 300), Row(106, -300, 300) });   // (2.27.0) open 107: the row below the body
         std::vector<RaHit> h = researchA(w, 1.0);
         check(h.size() == 1 && h[0].lo == 105 && h[0].hi == 106, "[core] 60 rows cut from the window's lowest price: 105-106 is one row"); }
+    // (2.27.0, Rassul 14:09 CT) the body rule: bullish node below BOTH the open and the close, bearish above both
+    {   std::vector<Bar> w = quiet(30); w[29] = mkb(29, 104.2, 111, 103, 107, { Row(105, -500, 500) });   // green, open 104: node 105 inside the body
+        check(researchA(w, 1.0).empty(), "[body] bullish node inside the body (above the open) = no A");
+        check(researchA(w, 1.0, 60, 3, 2.0, true, false).size() == 1, "[body] the same without the body rule = A (the rule is what blocks it)");
+        w[29] = mkb(29, 106, 111, 103, 107, { Row(105, -500, 500) });
+        check(researchA(w, 1.0).size() == 1, "[body] bullish node below the open 106 and close 107 = A");
+        w[29] = mkb(29, 105.2, 111, 103, 107, { Row(105, -500, 500) });
+        check(researchA(w, 1.0).empty(), "[body] node AT the open (105) touches the body = no A"); }
+    {   std::vector<Bar> w = quiet(30); w[28] = mkb(28, 104.2, 111, 103, 104, { Row(105, -500, 500) });   // red peak, node above its open / close
+        w[29] = mkb(29, 104, 109, 103.5, 108, { Row(110, 1, 3) });
+        check(researchA(w, 1.0).empty(), "[body] next-candle A: the body rule is on the node's own (peak) candle"); }
 }
 
 // ---------------- host ----------------
@@ -182,16 +193,16 @@ static void hostTests() {
 }
 static void settingsTests() {
     const ss::Spec& S = dpset::spec();
-    check(S.paramVersion == 17 && std::string(S.version) == "2.26.0", "[set] parameter version 17, spec version 2.26.0");
+    check(S.paramVersion == 17 && std::string(S.version) == "2.27.0", "[set] parameter version 17, spec version 2.27.0");
     const int k = ss::find(S, "draw_late");
     check(k == dpset::K_DRAW_LATE && S.rows[k].type == ss::T_BOOL && S.rows[k].def == 0 && !S.rows[k].hidden && std::string(S.rows[k].label) == "Draw late A (not tested)", "[set] Draw late A (not tested): visible checkbox, default off");
 }
 int main() {
     g_sabGraceMs = 1LL << 60;   // the shared A (SharedAbsorb.h) never decides here: every ring below is a node A of this plugin
     coreTests(); hostTests(); settingsTests();
-    check(std::string(DLT_VERSION) == "2.26.0" && std::string(dpset::PLUGIN_VERSION) == DLT_VERSION, "[ver] DLT_VERSION = settings version");
-    check(slurp("../DeltaProfile.cpp").find("p->setVersion(\"2.26.0\")") != std::string::npos, "[ver] setVersion literal");
-    check(slurp("../DeltaProfileCore.h").find("DeltaProfileCore.h 2.23.0") != std::string::npos, "[ver] core header");
+    check(std::string(DLT_VERSION) == "2.27.0" && std::string(dpset::PLUGIN_VERSION) == DLT_VERSION, "[ver] DLT_VERSION = settings version");
+    check(slurp("../DeltaProfile.cpp").find("p->setVersion(\"2.27.0\")") != std::string::npos, "[ver] setVersion literal");
+    check(slurp("../DeltaProfileCore.h").find("DeltaProfileCore.h 2.27.0") != std::string::npos, "[ver] core header");
     std::cout << "dp 2.23.1 researched A: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }
