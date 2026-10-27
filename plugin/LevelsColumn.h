@@ -21,7 +21,7 @@
 
 namespace lvc {
 static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-10-27 14:55-14:58 CT Rassul "rank up to top 10 liquidity levels", "liquidity close to the level" -> 0.5 ATR) attach reach + top-10 rank
-static const double TAG_ATR = 0.5;        // an order counts for a level only within 0.5 ATR of it (Rassul 14:58 "i'll just go with your recommendation")
+static const double TAG_ATR = 0;          // (15:4x CT Rassul chose HIS rule over 0.5 ATR) 0 = no extra reach: the order's level comes from lsLiquidityProfile's LineLevelTag - ONE-SIDED, from the level out to 1 ATR BEYOND it (PDH up to PDH + 1 ATR, PDL down to PDL - 1 ATR), never inside
 static const int MAX_RANK = 10;           // ranks 1-10; an 11th+ row keeps its bar in the column but no number
 enum Fam { KEY = 0, VOLUME = 1, GAMMA = 2 };
 static const double MERGE_ATR = 0.3;      // PARAM (mockup: "about 1 point in ES")

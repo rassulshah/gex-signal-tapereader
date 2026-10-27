@@ -253,7 +253,7 @@ int main()
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
         check(src.find(std::string("p->setVersion(\"") + DP_VERSION + "\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && std::string(DP_VERSION) == "2.29.0", "versions 2.29.0 agree");
-        check(DP_LINES && !DP_GAMMA && std::string(lvc::VERSION) == "1.1.0" && lvc::TAG_ATR == 0.5 && lvc::MAX_RANK == 10, "level lines on, gamma off, 0.5 ATR, top 10");
+        check(DP_LINES && !DP_GAMMA && std::string(lvc::VERSION) == "1.1.0" && lvc::TAG_ATR == 0 && lvc::MAX_RANK == 10, "level lines on, gamma off, his one-sided 1 ATR tag (LP), top 10");
     }
     dealerFile(true);
     std::vector<klv::Merged> lv;
