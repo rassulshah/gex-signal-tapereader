@@ -41,7 +41,7 @@ int main() {
     for (int k = 0; k <= 15; ++k) h.bars.push_back(bar(keyOf(k), 7000.0f, 7000.5f, 6999.5f, 7000.0f));
     Ind* p = make(); p->calc(0); p->draw(); p->calc(0);
     BASState* S = p->testState();
-    CHECK(S && std::string(bas::QUESTION) == "Who is aggressive?" && std::string(bas::VERSION) == "1.33.0" && std::string(BAS_VERSION) == "1.33.0", "lsBidAskStats 1.33.0, the question 'Who is aggressive?'");
+    CHECK(S && std::string(bas::QUESTION) == "Who is aggressive?" && std::string(bas::VERSION) == "1.36.0" && std::string(BAS_VERSION) == "1.36.0", "lsBidAskStats 1.36.0, the question 'Who is aggressive?'");
     // the Big Lot pool (S20 / S10 / S5): 3 past RTH sessions and 3 overnight ones of a different size
     {   llp::LogDist d; for (int k = 0; k < 200; ++k) d.addN(20, 1); for (int k = 0; k < 20; ++k) d.addN(100, 1); for (int k = 0; k < 10; ++k) d.addN(150, 1); for (int k = 0; k < 5; ++k) d.addN(220, 1);
         llp::LogDist n; for (int k = 0; k < 200; ++k) n.addN(15, 1); for (int k = 0; k < 20; ++k) n.addN(40, 1); for (int k = 0; k < 10; ++k) n.addN(60, 1); for (int k = 0; k < 5; ++k) n.addN(90, 1);
@@ -119,7 +119,7 @@ int main() {
     auto hitOf = [&](long long key, int strip) -> const off::IconRect* { const int xc = 50 + (int)((key - (long long)T0) / 60) * h.barW;
         for (auto& b : S->badgeHit) if (stripOf(b.first) == strip && xc >= b.first.l - 6 && xc <= b.first.r + 6) return &b.first; return nullptr; };
     {   std::vector<std::pair<std::string, COLOR> > pa, pr; const std::string a = badgeText(kX, 0, &pa), r = badgeText(kX, 1, &pr);
-        CHECK(a == "S" && pa.size() == 1 && pa[0].second == C_ASK, ("X Attack strip: S (the strongest of S, K), green = buyers act: " + a).c_str());
+        CHECK(a.empty() && pa.empty(), ("(1.36.0, Rassul 18:33) X: S decided, NOT drawn (no letters on the pane): " + a).c_str());
         CHECK(r.empty(), ("(1.33.0) no second strip: R / Tr / G are log only: " + r).c_str()); }
     {   std::vector<std::pair<std::string, COLOR> > pz; const std::string bz = badgeText(kZ, 0, &pz);
         CHECK(bz.empty() && badgeText(kZ, 1).empty(), ("(1.33.0) Z: K is not drawn (S only): " + bz).c_str()); }
@@ -132,14 +132,14 @@ int main() {
         CHECK(!aDrawn, "(1.28.0) no A on the attacker pane (Defense pane only)");
         CHECK(!border, "(1.28.0) no boxes / borders around the letters"); }
     {   bool la = false, lr = false; for (auto& d : h.draws) if (d.type == "text") { la = la || d.text == "Attack"; lr = lr || d.text == "Trapped"; }
-        CHECK(la && !lr, "(1.33.0) one strip label at the left: Attack"); }
+        CHECK(!la && !lr, "(1.36.0) no strip label (no strip)"); }
     {   const off::IconRect* r = hitOf(kX, 0);
-        CHECK(r && r->t >= sy0 && r->b <= sy0 + lst::ROW_H, ("(1.33.0) the S letter sits in the one strip (" + std::to_string(r ? r->t : -1) + ")").c_str());
+        CHECK(r == nullptr && BAS_BADGE_H == 0, ("(1.36.0) no S letter rectangle; the strip row goes to the bars (" + std::to_string(r ? r->t : -1) + ")").c_str());
         int tallest = 1 << 30; for (auto& d : h.draws) if (d.type == "box" && (d.color == C_ASK_BAR || d.color == C_BID_BAR || d.color == C_ASK_SPIKE || d.color == C_BID_SPIKE)) tallest = std::min(tallest, d.y);
-        CHECK(tallest > sy0 + 1 * lst::ROW_H, ("the bars stay below the strip (top bar y " + std::to_string(tallest) + ")").c_str()); }
+        CHECK(tallest > sy0, ("the bars stay below the question line (top bar y " + std::to_string(tallest) + ")").c_str()); }
     // ---- the hover on X: every letter (R cut from the badge), the numbers, the combination with the Defense A, inside the pane, off the box
     {   const off::IconRect* r = hitOf(kX, 0);
-        CHECK(r != nullptr, "(1.33.0) the X S letter's rectangle kept for the mouse");
+        CHECK(r == nullptr && S->badgeHit.empty(), "(1.36.0) no letter rectangle (no strip hover; letters stay in the records)");
         if (r) {
             bas_test_cursor_wnd = (void*)0x1; pc::test_ok = true;
             const off::IconRect rr = *r; pc::test_cx = (rr.l + rr.r) / 2 + 1000; pc::test_cy = (rr.t + rr.b) / 2 + 500;   // the screen cursor = the event + the pane's screen offset
@@ -183,7 +183,7 @@ int main() {
     // ---- no repaint: later candles never change X; a restart reads the same letters back
     for (int k = 41; k <= 44; ++k) { S->accs[keyOf(k)] = accFor(k); h.bars.push_back(barFor(k + 1)); NOW += 100; p->calc(0); NOW += 600; p->calc(0); }
     h.draws.clear(); p->draw();
-    CHECK(badgeText(kX, 0) == "S" && badgeText(kX, 1).empty() && badgeText(kZ, 0).empty(), "later candles: X unchanged (decided once), Z still not drawn");
+    CHECK(badgeText(kX, 0).empty() && badgeText(kX, 1).empty() && badgeText(kZ, 0).empty(), "(1.36.0) later candles: still no letters drawn");
     const std::string rec1 = readAll(S->file.path);
     const size_t nK = linesWith(rec1, "K|").size(), nS = linesWith(rec1, "S|").size(), nA = linesWith(rec1, "AS|").size();
     dispose(p);
@@ -193,7 +193,7 @@ int main() {
     S = S2;
     CHECK(S2->atkLoaded == (long long)(nK + nS + nA) && S2->atkRejected == 0, ("restart: every K / S / AS line read back (" + std::to_string(S2->atkLoaded) + ")").c_str());
     {   // the stop run R is an event of this pane's own run (not reloaded here: srEv rebuilds from bars); the record-backed letters come back
-        CHECK(badgeText(kX, 0) == "S" && badgeText(kZ, 0).empty() && badgeText(kW, 0).empty() && badgeText(kX, 1).empty(), ("restart: the same S letter (the others recorded, not drawn): " + badgeText(kX, 1)).c_str()); }
+        CHECK(badgeText(kX, 0).empty() && badgeText(kZ, 0).empty() && badgeText(kW, 0).empty() && badgeText(kX, 1).empty(), ("(1.36.0) restart: still no letters drawn: " + badgeText(kX, 1)).c_str()); }
     {   // (1.28.0) the letter record for lsReversalStage: one line per candle + letter + pivot, first line wins, nothing written twice
         NOW += 4000; p2->calc(0);
         const std::string sp = flex + "\\Strips\\ATK-ES-60.csv"; const std::string st = readAll(sp);

@@ -7,8 +7,8 @@
 
 namespace ofset {
 
-static const char* const BAS_VERSION = "1.35.0";   // (1.35.0, 2026-10-26) self-awareness SELFAGG (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (1.34.0) the smart-read hook, no window change   // (1.33.0) bars + S only; "S letter" row   // (1.14.0) + "Big Lot mark" on the Position line (appended last: no saved value moves)
-static const char* const BF_VERSION = "1.29.0";   // (1.29.0, 2026-10-26) self-awareness SELFDEF (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (1.28.0) F? / Ab / Hb? / L? X? display   // (1.5.0 Refill Effort / Refilled box) (1.3.4) the box follows the mouse only inside the pane, else Live
+static const char* const BAS_VERSION = "1.36.0";   // (1.36.0) no letters drawn: "S letter" row hidden (file field kept)     // (1.35.0, 2026-10-26) self-awareness SELFAGG (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (1.34.0) the smart-read hook, no window change   // (1.33.0) bars + S only; "S letter" row   // (1.14.0) + "Big Lot mark" on the Position line (appended last: no saved value moves)
+static const char* const BF_VERSION = "1.30.0";   // (1.30.0) the letter strips are not drawn (no window change)     // (1.29.0, 2026-10-26) self-awareness SELFDEF (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (1.28.0) F? / Ab / Hb? / L? X? display   // (1.5.0 Refill Effort / Refilled box) (1.3.4) the box follows the mouse only inside the pane, else Live
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 
 // (1.13.3 / 1.3.3, Rassul 2026-10-18 "I'll go with your recommendation") Offset X / Y removed (the 9-spot Position only), Ratio bars and
@@ -20,9 +20,9 @@ inline const ss::Spec& bidAskSpec() {
         ss::listRow("position", "Position", 0, POS_CHOICES, 110),
         ss::hide(ss::floatRow("spike_avg", "Spike vs average", 2.0, 0.0, 10.0, 50)),
         ss::same(ss::listRow("big_lot", "Big Lot mark", 1, "Off;BL5;BL10;BL20", 70)),   // (1.14.0) cyan cap on a closed bar >= the session type's Big Lot size
-        ss::boolRow("show_s", "S letter (one order swept 3+ prices)", true),   // (1.33.0, BUILD-SPEC 2026-10-25) the only letter on this pane
+        ss::hide(ss::boolRow("show_s", "S letter (one order swept 3+ prices)", true)),   // (1.36.0) hidden: no letter is drawn any more (kept in the file)   // (1.33.0, BUILD-SPEC 2026-10-25) the only letter on this pane
     };
-    static const ss::Spec S = { "BidAskStats", BAS_VERSION, 7, R, bask::K_N, 0 };   // 7: + S letter (1.33.0); 6: the window rows changed
+    static const ss::Spec S = { "BidAskStats", BAS_VERSION, 8, R, bask::K_N, 0 };   // 8: "S letter" hidden (1.35.0);   // 7: + S letter (1.33.0); 6: the window rows changed
     return S;
 }
 

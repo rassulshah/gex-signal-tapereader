@@ -376,6 +376,9 @@ int main() {
         CHECK(lines == 1 && tf.compare(0, 2, "T|") == 0, "(1.12.0) one line in the turns file (decided once, not twice)");
         h.draws.clear(); p->draw();
         CHECK(text(h, "50%", 0x22C55E) != nullptr, "(1.12.0) the pane mark +50% in green over the bids' bar");
+        {   const mock::Draw* pm = text(h, "50%", 0x22C55E); int over = 0;   // (BF 1.29.0, Rassul 18:33) the % stays; nothing drawn over it (no letters any more)
+            if (pm) for (auto& d : h.draws) if (d.type == "text" && &d != pm && d.y < pm->b && d.b > pm->y && d.x < pm->r && d.r > pm->x && d.text != "50%") ++over;
+            CHECK(pm && over == 0, ("(BF 1.29.0) the turn % kept, no text over it (" + std::to_string(over) + ")").c_str()); }
         CHECK(readAll(flex + "\\BookFlow\\ES-60-turns-live.txt").size() >= 2, "(1.12.0) the live file is published (N or the forming ?)");
         { std::ofstream f((flex + "\\DefenseLines.settings-ES.txt").c_str()); f << ss::format(dlset::spec(), [] { ss::Values V = ss::defaults(dlset::spec(), 0); V.v[dlset::K_SHOW_MARKS] = 0; return V; }()); }
         NOW += 1500; h.draws.clear(); p->draw();
@@ -386,16 +389,16 @@ int main() {
         // (1.15.0, Top Defender #5) the A turn is waiting for its counter; then H decided on that candle: the badge row + the Counter row
         CHECK(e->dtPendH.empty() || e->dtPendH.back() == std::make_pair((int)dt::LOW, k), "(1.15.0) the A turn waits for its counter (or the reload cleared it)");
         h.draws.clear(); p->draw();
-        CHECK(strip(h, e, 0, true) == "Ab@g", ("(1.23.0) Holding strip: A in green on the turn candle (buyers defend a low): " + strip(h, e, 0, true)).c_str());
+        CHECK(strip(h, e, 0, true).empty(), ("(1.23.0) Holding strip: A in green on the turn candle (buyers defend a low): " + strip(h, e, 0, true)).c_str());
         {   dt::Counter C; C.t = k; C.side = dt::LOW; C.H = true; C.lots = 920; C.attack = 400; C.at = k; e->dtH[std::make_pair((int)dt::LOW, k)] = C; }
         h.draws.clear(); p->draw();
         if (const char* dp = std::getenv("D5_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
         const mock::Draw* bd = text(h, "Ab", 0x9CA3AF);   // (BF 1.28.0) the shared A shows as grey Ab
-        CHECK(strip(h, e, 0, true) == "Ab@g" && strip(h, e, 1, true) == "Hb?@G", ("(1.23.0) A in the Holding strip, H in the Turn & re-test strip, both the defenders' green: " + strip(h, e, 0, true) + " / " + strip(h, e, 1, true)).c_str());
-        CHECK(bd && bd->y >= stripY0(h) && bd->y < stripY0(h) + 2 * lst::ROW_H, "(1.23.0) the strips sit at the top of the pane, under the question line");
+        CHECK(strip(h, e, 0, true).empty() && strip(h, e, 1, true).empty(), ("(1.23.0) A in the Holding strip, H in the Turn & re-test strip, both the defenders' green: " + strip(h, e, 0, true) + " / " + strip(h, e, 1, true)).c_str());
+        CHECK(bd == nullptr && text(h, "Floor") == nullptr && text(h, "Release") == nullptr, "(BF 1.29.0) no strips: no Ab, no strip labels; the rows go to the bars");
         {   bool lab = text(h, "Floor") != nullptr && text(h, "Release") != nullptr; bool border = false;
             for (auto& hit : e->badgeHit) for (auto& d : h.draws) if (d.type == "box" && d.x == hit.first.l && d.r == hit.first.r && d.b == hit.first.b) border = true;
-            CHECK(lab && !border, "(1.23.0) the strip labels at the left; no boxes / borders around the letters"); }
+            CHECK(!lab && !border, "(BF 1.29.0) no strip labels and no letter boxes"); }
         {   bool over = false; if (bd) over = bd->x < S->lastBox.r && bd->x + 10 > S->lastBox.l && bd->y < S->lastBox.b && bd->y + 10 > S->lastBox.t;
             CHECK(!over, "(1.15.0) the badge never over the info box"); }
         CHECK(text(h, "Counter") != nullptr && text(h, "Hit back 2.3x") != nullptr, "(1.15.0) the box row Counter: Hit back 2.3x (920 / 400)");
@@ -408,7 +411,7 @@ int main() {
             CHECK(q && e->infoIcon.l - (q->r - 2) >= 4, ("(1.18.0) the (i) icon " + std::to_string(q ? e->infoIcon.l - (q->r - 2) : -1) + " px right of the question text (>= 4)").c_str()); }
         }
         e->dtH[std::make_pair((int)dt::LOW, k)].H = false; h.draws.clear(); p->draw();
-        CHECK(strip(h, e, 0) == "Ab" && strip(h, e, 1).empty() && text(h, "Absorbed only") != nullptr, "(1.15.0) decided without a counter: A only, Counter = Absorbed only");
+        CHECK(strip(h, e, 0).empty() && strip(h, e, 1).empty() && text(h, "Absorbed only") != nullptr, "(1.15.0) decided without a counter: A only, Counter = Absorbed only");
         // (1.16.0, Top Defender #4) the re-test: the engine's resting lots in the zone are read; a decided L on the candle -> one badge A|L?, box Re-test
         S->e.restAdd(off::BID, 27990, 300); S->e.restAdd(off::BID, 27995, 50);
         CHECK(p->restIn(*S, dt::LOW, 27988, 27992) == 300 && p->restIn(*S, dt::LOW, 27988, 27995) == 350, "(1.16.0) restIn sums the defenders' resting lots in the zone");
@@ -416,12 +419,12 @@ int main() {
         e->dtH[std::make_pair((int)dt::LOW, k)].H = true;
         h.draws.clear(); p->draw();
         if (const char* dp = std::getenv("D4_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
-        CHECK(strip(h, e, 0, true) == "Ab@g" && strip(h, e, 1, true) == "Hb?@G", "(1.23.0) H > L: the Turn & re-test strip shows H (L in its hover)");
+        CHECK(strip(h, e, 0, true).empty() && strip(h, e, 1, true).empty(), "(1.23.0) H > L: the Turn & re-test strip shows H (L in its hover)");
         CHECK(text(h, "Re-test") != nullptr && text(h, "Reloaded 1.9x") != nullptr, "(1.16.0) the box row Re-test: Reloaded 1.9x");
         {   const mock::Draw* rr = text(h, "Re-test"); const mock::Draw* cc = text(h, "Counter"); CHECK(rr && cc && rr->y > cc->y && rr->y < S->lastBox.b, "(1.16.0) Re-test under Counter, inside the box"); }
         e->dtQ[std::make_pair((int)dt::LOW, k)].res = 'X'; e->dtQ[std::make_pair((int)dt::LOW, k)].ratio = 0.2; e->dtH[std::make_pair((int)dt::LOW, k)].H = false;
         h.draws.clear(); p->draw();
-        CHECK(strip(h, e, 1, true) == "X?@R" && text(h, "Empty 0.2x") != nullptr, ("(1.23.0) X (a warning) in the colour of the side it hurts (the low's buyers, green); box Empty 0.2x: " + strip(h, e, 1, true)).c_str());
+        CHECK(strip(h, e, 1, true).empty() && text(h, "Empty 0.2x") != nullptr, ("(1.23.0) X (a warning) in the colour of the side it hurts (the low's buyers, green); box Empty 0.2x: " + strip(h, e, 1, true)).c_str());
         {   const std::string tf0 = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
             { std::ofstream f((flex + "\\BookFlow\\ES-60-turns.csv").c_str(), std::ios::app); dt::Retest q; q.t = k; q.side = dt::LOW; q.res = 'L'; q.ratio = 1.25; q.rest = 625; q.at = k; f << dt::qLineOf(q) << "\n"; }
             e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb); mirrorA(p, *S);
@@ -446,7 +449,7 @@ int main() {
                 h.draws.clear(); p->draw();
                 if (const char* dp = std::getenv("D3_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
                 std::string badges; for (auto& d : h.draws) if (d.type == "text" && d.y < 60) badges += d.text + " ";
-                CHECK(strip(h, e, 0, true) == "Ab@g", ("(1.23.0) A > P: the Holding strip shows A (P in its hover) (" + badges + ")").c_str());
+                CHECK(strip(h, e, 0, true).empty(), ("(1.23.0) A > P: the Holding strip shows A (P in its hover) (" + badges + ")").c_str());
                 {   const mock::Draw* mv = text(h, "Moved"); const mock::Draw* rr = text(h, "Re-test");
                     CHECK(mv && text(h, "In 2t 2.5x") != nullptr && rr && mv->y > rr->y && mv->y < S->lastBox.b, "(1.17.0) the box row Moved: In 2t 2.5x under Re-test, inside the box"); }
                 e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = true;
@@ -454,18 +457,18 @@ int main() {
                 CHECK(text(h, "B") == nullptr && text(h, "In 0t 0.0x") == nullptr && text(h, "Out 0t 0.0x") == nullptr, "(1.19.0, MoveLogic 1.1.1) a case flag with NO lots moved that way: no letter, the Moved row shows '-' (was 'In 0t 0.0x')");
                 e->dtM[std::make_pair(0, k)].s.out[0] = 10; e->dtM[std::make_pair(0, k)].s.ticksOut[0] = 2;   // the bids really stepped back 10 lots
                 h.draws.clear(); p->draw();
-                CHECK(strip(h, e, 0, true) == "Ab@g", "(1.23.0) stepping back (B): A still shown (A > B; B in the hover)");
+                CHECK(strip(h, e, 0, true).empty(), "(1.23.0) stepping back (B): A still shown (A > B; B in the hover)");
                 {   e->sab.st = sab::Store(); h.draws.clear(); p->draw();
-                    CHECK(strip(h, e, 0, true) == "B@R", ("(1.23.0) without the A the warning B shows, in the bids' green (the side it hurts): " + strip(h, e, 0, true)).c_str());
+                    CHECK(strip(h, e, 0, true).empty(), ("(1.23.0) without the A the warning B shows, in the bids' green (the side it hurts): " + strip(h, e, 0, true)).c_str());
                     mirrorA(p, *S); h.draws.clear(); p->draw(); }
                 e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_ATT_IN] = true;   // offers pressed in at the low
                 e->dtM[std::make_pair(0, k)].s.in[1] = 6; e->dtM[std::make_pair(0, k)].s.ticksIn[1] = 1;
                 h.draws.clear(); p->draw();
-                CHECK(strip(h, e, 0, true) == "Ab@g", "(1.23.0) offers pressing in at a low: A shown, the offers' P in the hover");
+                CHECK(strip(h, e, 0, true).empty(), "(1.23.0) offers pressing in at a low: A shown, the offers' P in the hover");
                 e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = true;                                                                   // both sides on one candle
                 h.draws.clear(); p->draw();
                 if (const char* dp = std::getenv("D3_DUMP2")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
-                CHECK(strip(h, e, 0) == "Ab", "(1.23.0) both sides moved: one letter per strip (A)");
+                CHECK(strip(h, e, 0).empty(), "(1.23.0) both sides moved: one letter per strip (A)");
                 e->dtM[std::make_pair(0, k)].q[mvl::C_ATT_IN] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = true; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = false;
                 e->dtLoaded = false; e->dtPath.clear(); e->mvByKey.clear(); p->decideTurns(*S, k, nb); mirrorA(p, *S);
                 CHECK(e->dtM.count(std::make_pair(0, k)) == 1 && mvl::drawP(e->dtM[std::make_pair(0, k)]) && e->dtMWritten == w0 + 1, "(1.18.0) after a reload the M line is read back the same (no repaint, nothing re-written)");
@@ -488,7 +491,7 @@ int main() {
         CHECK(e->dtG.count(std::make_pair((int)dt::HIGH, k)) && e->dtG[std::make_pair((int)dt::HIGH, k)].G && e->dtGWritten == g0 + 1, "(1.19.0) G decided at the high: (4,000 - 100) / 90 s = 2.4x ES normal, pulled > added, attack died; one G line");
         p->decideTurns(*S, k, nb); mirrorA(p, *S); CHECK(e->dtGWritten == g0 + 1, "(1.19.0) decided once: a second close writes nothing");
         h.draws.clear(); p->draw();
-        CHECK(strip(h, e, 0, true) == "Ab@g" && text(h, "G", RED) == nullptr && text(h, "G", GRN) == nullptr, "(1.21.0) A (the low's defenders, green); G is decided and written here but drawn on the attacker pane");
+        CHECK(strip(h, e, 0, true).empty() && text(h, "Ab") == nullptr && text(h, "G", RED) == nullptr && text(h, "G", GRN) == nullptr, "(BF 1.29.0, Rassul 18:33) no letters drawn: A / G decided and written, never drawn");
         CHECK(text(h, "Attackers") == nullptr && text(h, "Pulling 2.4x") == nullptr, "(1.21.0, Rassul \"no\") the box row Attackers is removed");
         {   const mock::Draw* mv = text(h, "Moved"); const mock::Draw* al = text(h, "At level"); CHECK(mv && al && al->y > mv->y && al->y < S->lastBox.b, "(1.21.0) At level right under Moved (no Attackers row), inside the box"); }
         // ---- Tr: the Delta Profile's TR line (trapped sellers below the old low) on this candle
@@ -503,7 +506,7 @@ int main() {
         e->trMs = -1; p->readTraps(*S, *e, NOW);
         CHECK(e->dtTr[std::make_pair((int)dt::LOW, k)].lots == 640 && e->trRead == 1, "(1.19.0) appended lines read from where it stopped; the first line per candle + side wins (never re-decided)");
         h.draws.clear(); p->draw();
-        CHECK(strip(h, e, 0, true) == "Ab@g" && text(h, "Tr") == nullptr && text(h, "G") == nullptr, "(1.21.0) Tr and G moved to the attacker pane (the TR line is still read here)");
+        CHECK(strip(h, e, 0, true).empty() && text(h, "Tr") == nullptr && text(h, "G") == nullptr, "(BF 1.29.0) no letters drawn (the TR line is still read here)");
         // ---- W: PDL at 6995.00 (27980): price away above, then a touch; in the first minute 300 bid lots pulled at the level, 40 traded
         S->zr.e.lv.clear(); { zread::LevelZone z; z.name = "PDL"; z.c = 27980; z.kind = 0; S->zr.e.lv.push_back(z); zread::LevelZone v; v.name = "VAH"; v.c = 28100; v.kind = 0; S->zr.e.lv.push_back(v); }
         p->trackOn(*S); p->checkW(*S);
@@ -523,24 +526,24 @@ int main() {
             for (auto& d : h.draws) if (d.type == "text") { if (r0 && d.x == r0->l && d.y >= r0->t && d.y <= r0->b) a += d.text; if (r1 && d.x == r1->l && d.y >= r1->t && d.y <= r1->b) b += d.text; }
             (void)y0; return a + "/" + b; };
         std::string badges = badgeTexts();
-        CHECK(badges == "Ab/L?", ("(1.23.0) A, W, P, L on the candle: Holding shows A (W, P in its hover), Turn & re-test shows L (" + badges + ")").c_str());
+        CHECK(badges == "/" && text(h, "Ab") == nullptr && text(h, "L?") == nullptr && text(h, "W") == nullptr && text(h, "P") == nullptr, ("(BF 1.29.0) A, W, P, L decided on the candle, none drawn (" + badges + ")").c_str());
         if (const char* dp = std::getenv("GTW_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
         CHECK(text(h, "W") == nullptr, "(1.23.0) W is not drawn when A is on the candle (A > W)");
         {   bool q = false; for (auto& d : h.draws) if (d.type == "text" && d.y < 60 && d.text != bf::QUESTION && d.text.find('?') != std::string::npos && d.text != "Hb?" && d.text != "L?" && d.text != "X?" && d.text != "F?") q = true;
             CHECK(!q, "(BF 1.28.0, BUILD-SPEC 22:29 supersedes 19:48) a '?' only on the approved codes Hb? / L? / X? / F?"); }
         CHECK(text(h, "At level") != nullptr && text(h, "Pulled 88%", RED) != nullptr, "(1.19.0) box row At level: Pulled 88% (300 / 340), red");
         {   int fs = 99; bool bold = true; for (auto& d : h.draws) if (d.type == "text" && (d.text == "Ab" || d.text == "L?") && d.y >= stripY0(h) && d.y < stripY0(h) + 2 * lst::ROW_H) { fs = std::min(fs, d.fsize); bold = bold && d.fstyle == 1; }
-            CHECK(fs == 8 && bold, ("(1.23.0) the strip letters: 8 pt bold (" + std::to_string(fs) + " pt)").c_str()); }
+            (void)bold; CHECK(fs == 99, ("(BF 1.29.0) no strip letters at all (" + std::to_string(fs) + ")").c_str()); }
         {   // two neighbouring candles with badges: the wider one never covers the one before it
             const long long kp = (long long)B[(size_t)i - 1].time; dt::Turn tq; tq.t = kp; tq.side = dt::HIGH; tq.A = true; e->dtTurns[std::make_pair((int)dt::HIGH, kp)] = tq; mirrorA(p, *S);   // (1.21.0) an A (G is no longer drawn here)
             h.draws.clear(); p->draw();
             {   bool touch = false; const int y0 = stripY0(h);
                 for (size_t a = 0; a < e->badgeHit.size(); ++a) for (size_t b = a + 1; b < e->badgeHit.size(); ++b) { const off::IconRect& x = e->badgeHit[a].first; const off::IconRect& y = e->badgeHit[b].first;
                     if ((x.t - y0) / lst::ROW_H == (y.t - y0) / lst::ROW_H && x.t == y.t && x.l <= y.r + 1 && y.l <= x.r + 1) touch = true; }
-                CHECK(e->badgeHit.size() >= 3 && !touch, ("(1.23.0) letters on neighbouring candles never touch (" + std::to_string(e->badgeHit.size()) + " letters)").c_str()); }
+                CHECK(e->badgeHit.empty() && !touch, ("(BF 1.29.0) no letters on neighbouring candles (" + std::to_string(e->badgeHit.size()) + " letters)").c_str()); }
             e->dtTurns.erase(std::make_pair((int)dt::HIGH, kp)); h.draws.clear(); p->draw(); }
         // ---- the badge's hover: the letters, the numbers (never on the chart), the letter with no room
-        CHECK(e->badgeHit.size() >= 1, "(1.19.0) the badge's rectangle is kept for the mouse");
+        CHECK(e->badgeHit.empty() && e->badgeTip < 0, "(BF 1.29.0) no letter rectangles (no strip hover; the letters stay in the records + status)");
         if (!e->badgeHit.empty()) {
             const off::IconRect br0 = *stripHit(h, e, 0); void* W = (void*)0x1; off::off_test_cursor_wnd = W; pc::test_ok = true;
             RTX_EVENT ev = moveAt((br0.l + br0.r) / 2, (br0.t + br0.b) / 2, i); p->mouse(&ev);
@@ -602,7 +605,7 @@ int main() {
         CHECK(e->dtG.count(std::make_pair((int)dt::HIGH, k)) && e->dtG[std::make_pair((int)dt::HIGH, k)].G && e->dtW.size() == 1 && e->dtGWritten == g0 + 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.19.0) after a restart: G and W read back, nothing written again (no repaint)");
         h.draws.clear(); p->draw();
         badges = badgeTexts();
-        CHECK(badges == "Ab/L?", ("(1.19.0) the same strip letters after the restart (" + badges + ")").c_str());
+        CHECK(badges == "/", ("(BF 1.29.0) still nothing drawn after the restart (" + badges + ")").c_str());
         {   // (1.23.0) the DEF letter record for lsReversalStage: every letter once, first line wins
             e->stripMs = -1; p->strips(*S, NOW + 5000); const std::string sr = readAll(flex + "\\Strips\\DEF-ES-60.csv");
             std::set<std::string> ids; int nl = 0, dup = 0; std::stringstream ss(sr); std::string ln; while (std::getline(ss, ln)) { lst::Rec r; if (!lst::parse(ln, r)) continue; ++nl; if (!ids.insert(lst::idOf(r.pane, r.key, r.l.code, r.l.pivot)).second) ++dup; }
@@ -610,7 +613,7 @@ int main() {
             e->stripMs = -1; p->strips(*S, NOW + 9000); CHECK(readAll(flex + "\\Strips\\DEF-ES-60.csv") == sr, "(1.23.0) nothing written twice");
             {   std::ofstream q((flex + "\\Strips\\QUEUE-ES-60.csv").c_str(), std::ios::binary); q << lst::line(lst::QUE, k, lst::make(lst::DEF, "Q", lst::LOW, -1, "queue refill 0.4 s")) << "\nLT|garbage\n"; }
             e->stripMs = -1; p->strips(*S, NOW + 13000); h.draws.clear(); p->draw();
-            CHECK(e->stripQRead == 1 && e->stripQBad == 1 && badgeTexts() == "Ab/L?", "(1.23.0) the queue meter's Q read (A > Q: A still shown), a garbled line counted"); }
+            CHECK(e->stripQRead == 1 && e->stripQBad == 1 && badgeTexts() == "/", "(1.23.0) the queue meter's Q read, a garbled line counted (BF 1.29.0: nothing drawn)"); }
         // ---- later candles never change it
         {   std::ostringstream o; p->statusExtra(*S, o); const std::string st = o.str();
             CHECK(st.find("\nGIVE_UP,") != std::string::npos && st.find("\nTRAPS,1 Delta Profile TR lines") != std::string::npos && st.find("\nAT_LEVEL,1 key levels watched") != std::string::npos && st.find("\nBADGES,") != std::string::npos,
@@ -618,11 +621,11 @@ int main() {
         {   // (BF 1.28.0) F? on the Release strip in amber once the market's thresholds are set; the re-test hover (same / new big / small only)
             fmr::Read fr; fr.key = k; fr.side = fmr::LOW; fr.front = 2.0; fr.behind = 1.0; fr.armed = 1; e->fReads[k] = fr; e->fPar.front = 1.3; e->fPar.behind = 0.7; e->fPar.show = true;
             h.draws.clear(); p->draw();
-            CHECK(strip(h, e, 1, true) == "F?@A", ("(BF 1.28.0) F? (amber) wins the Release strip on its pivot bar: " + strip(h, e, 1, true)).c_str());
-            CHECK(lst::STRIPS == 2 && strip(h, e, 0, true).find("Ab@g") != std::string::npos, "(BF 1.28.0) at most 2 codes per candle (one per strip): Ab + F? on the pivot bar");
+            CHECK(strip(h, e, 1, true).empty() && text(h, "F?") == nullptr, ("(BF 1.29.0) F? decided, not drawn: " + strip(h, e, 1, true)).c_str());
+            CHECK(lst::STRIPS == 2 && strip(h, e, 0, true).empty(), "(BF 1.29.0) no strip codes drawn");
             {   std::ostringstream o; p->statusExtra(*S, o); const std::string st = o.str(); CHECK(st.find("\nF_MIRROR,1.0.0,") != std::string::npos && st.find("thresholds front 1.3") != std::string::npos && st.find("\nRETEST_IDS,") != std::string::npos, "(BF 1.28.0) status F_MIRROR / RETEST_IDS"); }
             e->fPar.show = false; h.draws.clear(); p->draw();
-            CHECK(strip(h, e, 1) == "L?", "(BF 1.28.0) F? SHOW 0 in the params file: not drawn (L? back)");
+            CHECK(strip(h, e, 1).empty(), "(BF 1.29.0) F? SHOW 0: still nothing drawn");
             e->fReads.erase(k); e->fPar = fmr::Params();
             for (auto& q : e->dtQ) if (q.second.at == k) e->rtInfo[q.first] = "new big order (150 lots, 1 big ids); 62 lots resting = 0.8x normal";
             std::vector<lst::Lt> v; p->defLetters(*S, *e, k, v); bool got = false; for (auto& l : v) if (l.code == "L" && l.nums.find("new big order (150 lots") != std::string::npos) got = true;

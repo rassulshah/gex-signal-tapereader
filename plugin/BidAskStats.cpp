@@ -203,7 +203,8 @@ static ss::Ids& basIds() { static ss::Ids I; return I; }   // the row ids IRT ga
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define BAS_VERSION "1.35.0"          // (1.35.0, 2026-10-26) self-awareness SELFAGG (SelfAware.h, SELF-AWARE.md; ships OFF per market) // 1.34.0 (2026-10-26) smart-read hook (AwareHook.h 0.1.0, TEAM-DESIGN.md): posts AWAGG for each closed bar once lsContext has posted CTX for it (or after 3 s), records the isolated + aware read in lsFlexLevels\\Context-AWR-<MKT>-<spb>s-<day>.rec; links OFF per market (LRA-Context-<MKT>.csv) so aware = isolated and nothing drawn changes (facts only: no side of its own yet); // 1.33.0 (2026-10-25, BUILD-SPEC "Attacker pane: bars + S only", Rassul approved 22:29 CT) the pane draws the buy / sell bars and ONE letter strip with the S letter only (one order swept 3+ prices); K / L / R / Tr / D / E / G / PB are still decided and written to the letter + EV records (the Reversal Stage and the nightly read them) but not drawn; the E pace stays in the S hover; new settings row "S letter" (file field 10); // 1.32.0 (2026-10-23 4-step stage revamp) new D letter (MBO CVD divergence, Trapped strip) + the attack average fill " vw" in S / K / L nums for the Reversal Stage underwater measure; // was 1.31.0:          // 1.30.0 (2026-10-22 evening fix build) compact strips (LetterStrips 1.1.0: 11 px per strip), bars >= 50% of the pane (OrderFlowFeed 1.15.0 pairPx floor), the Implied row one line "Implied: 0% of volume";          // keep equal to bas::VERSION and the setVersion literal below
+#define BAS_VERSION "1.36.0"          // 1.36.0 (2026-10-26, Rassul 18:33 CT) no letters drawn: the S strip, the bar letters and the stop-run R / R? mark are recorded only; the strip row goes to the bars; "S letter" row hidden
+// prev:          // (1.35.0, 2026-10-26) self-awareness SELFAGG (SelfAware.h, SELF-AWARE.md; ships OFF per market) // 1.34.0 (2026-10-26) smart-read hook (AwareHook.h 0.1.0, TEAM-DESIGN.md): posts AWAGG for each closed bar once lsContext has posted CTX for it (or after 3 s), records the isolated + aware read in lsFlexLevels\\Context-AWR-<MKT>-<spb>s-<day>.rec; links OFF per market (LRA-Context-<MKT>.csv) so aware = isolated and nothing drawn changes (facts only: no side of its own yet); // 1.33.0 (2026-10-25, BUILD-SPEC "Attacker pane: bars + S only", Rassul approved 22:29 CT) the pane draws the buy / sell bars and ONE letter strip with the S letter only (one order swept 3+ prices); K / L / R / Tr / D / E / G / PB are still decided and written to the letter + EV records (the Reversal Stage and the nightly read them) but not drawn; the E pace stays in the S hover; new settings row "S letter" (file field 10); // 1.32.0 (2026-10-23 4-step stage revamp) new D letter (MBO CVD divergence, Trapped strip) + the attack average fill " vw" in S / K / L nums for the Reversal Stage underwater measure; // was 1.31.0:          // 1.30.0 (2026-10-22 evening fix build) compact strips (LetterStrips 1.1.0: 11 px per strip), bars >= 50% of the pane (OrderFlowFeed 1.15.0 pairPx floor), the Implied row one line "Implied: 0% of volume";          // keep equal to bas::VERSION and the setVersion literal below
 
 static const COLOR C_ASK = 0x0022C55E, C_BID = 0x00EF4444, C_LABEL = 0x00FFFFFF, C_BORDER = 0x009CA3AF, C_BLACK = 0x00000000;
 static const int WINDOW_BARS = 3000;          // closed bars read back from the last one (BBid is capped at the bars available)
@@ -216,7 +217,7 @@ static const COLOR C_ASK_BAR = 0x001F9D55, C_BID_BAR = 0x00962D2D;     // normal
 static const COLOR C_ASK_SPIKE = 0x0000FF00, C_BID_SPIKE = 0x00FF3B3B; // spikes: bright green (buyers) / bright red (sellers)
 static const COLOR C_BIG_LOT = 0x0000FFFF;                            // (1.14.0) the Big Lot cap: cyan = Big Lot in lsBigBidAsk too
 static const int BIG_LOT_CAP_PX = 3;
-static const int BAS_BADGE_H = 1 * lst::ROW_H + 2;   // (1.33.0) ONE strip (S only); was 2 * lst::ROW_H + 2 -   // (1.28.0) the two letter strips under the question line (bars start below them); 1.26.0: one 16 px badge row
+static const int BAS_BADGE_H = 0;   // (1.35.0, Rassul 18:33 CT "remove all the signal letters") no strip: the row goes to the bars; was 1 * lst::ROW_H + 2   // (1.33.0) ONE strip (S only); was 2 * lst::ROW_H + 2 -   // (1.28.0) the two letter strips under the question line (bars start below them); 1.26.0: one 16 px badge row
 static const COLOR C_SR_GREEN = 0x00168A42, C_SR_RED = 0x00E0242A;     // (1.4.0) the R mark's letter on its white box (readable on white)
 static const size_t MAX_HOVER_WNDS = 8;
 static const int BAS_NUMS = 4 + off::REC_NUMS;                         // session record: bid|ask|bbid|bask + the order-feed numbers
@@ -2096,12 +2097,12 @@ void BidAskStats::render(BASState& S) {
         if (i != last) { const std::array<er::Side, 2> ef = erSides(S, i, times, last);   // bright + its ratio at 2.0x+ Attack Effort (closed candles only, no repaint)
             for (int q = 0; q < 2; ++q) { k.ratioOk[q] = ef[q].effOk; k.ratio[q] = ef[q].eff; } }
         if (i < op.count && i < cl.count) { const float o = op[i], c = cl[i]; if (std::isfinite(o) && std::isfinite(c)) k.dir = c > o ? 1 : c < o ? -1 : 0; }
-        if (i != last) { std::map<long long, BasFin>::const_iterator ff = S.fin.find((long long)times[i]); if (ff != S.fin.end()) { k.let[0] = ff->second.let[0]; k.let[1] = ff->second.let[1]; /* (1.22.0) no pace on the bar labels (unproven) */ } }
+        if (i != last) { std::map<long long, BasFin>::const_iterator ff = S.fin.find((long long)times[i]); if (ff != S.fin.end()) { (void)ff; /* (1.35.0) the bar letters are recorded only, never drawn */ /* (1.22.0) no pace on the bar labels (unproven) */ } }
         if (i != last) {                                                   // (1.4.0) the stop-run mark on the break bar's attacking side
             std::map<long long, std::vector<sr::Event> >::const_iterator se = S.srEv.find((long long)times[i]);
             if (se != S.srEv.end()) for (size_t q = 0; q < se->second.size(); ++q) {
                 const sr::Event& e = se->second[q]; if (e.show == sr::SHOW_OFF) continue;
-                k.mark[e.side()] = sr::markText(e); k.markCol[e.side()] = e.dir > 0 ? C_SR_RED : C_SR_GREEN;
+                (void)e;   // (1.35.0) the stop-run R / R? mark is recorded only, never drawn
             }
         }
         return k;
@@ -2120,7 +2121,7 @@ void BidAskStats::render(BASState& S) {
         }
     }
     {   off::PaneGeo gb = g; gb.reserve = badgeY0 - g.top - 1;             // (1.26.0) the attacker badge row (one badge per candle, never over the box)
-        if (top > 0) badgeRow(S, gb, v0, v1, last, slot, times, xOf, P.ok ? &P.box : nullptr); else { S.badgeHit.clear(); S.badgeTip = -1; } }
+        (void)gb; S.badgeHit.clear(); S.badgeTip = -1; }   // (1.35.0) the S strip is not drawn (still decided + exported)
     const COLOR vcol[2] = { C_ASK, C_BID };                                // (1.21.0) column 1 Buyers green, column 2 Sellers red - headings and values (1.20.0 had the headings swapped)
     off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
     br::draw(this, P, info, rp, rd);                                      // (1.15.0) the Read word + lines over its rows
@@ -2138,6 +2139,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);       // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                                // (1.3.0) the order feed is drained while no trade prints
     p->setDescription("LRA Aggression: who is PRESSING - aggressive sellers hitting the bid or aggressive buyers lifting the offer. One bar per candle = the bigger side: green = buyers (the most contracts bought at the ask at one price in the candle), red = sellers (the most contracts sold into the bid at one price). A CLOSED candle is drawn bright, with its ratio (yellow, e.g. 2.4 = 2.4x) and its pace (grey, aggressive lots per second vs the same time of day) above the bar, only when that side is at least Spike vs average (default 2.0x) its plain average over the prior Ratio bars (default 20) closed candles - decided once at the close and never changed. Every other candle is drawn dim with no label; the forming candle stays dim until it closes. The numbers box in the pane shows Lots (ratio), Pace, BBI / BAI (how many prior candles in a row the biggest bid / ask beats, up to 50+) and the Read (BULLISH / BEARISH / NEUTRAL: who is attacking, in words) for sellers and buyers of the candle under the mouse while it is inside this pane, else the live forming candle. Big Lot mark (Off / BL5 / BL10 / BL20): a cyan cap on a closed candle whose bar is at least the Big Lot size of its session type (RTH / overnight: the average of the 5th / 10th / 20th biggest print of the latest 5 complete earlier sessions, as in Big Bid/Ask; no cap while fewer than 3 are known), decided at the close and never changed; the box shows that size. Settings: Position (the box), Big Lot mark.");
-    p->setVersion("1.35.0");   // BAS_VERSION
+    p->setVersion("1.36.0");   // BAS_VERSION
     return p;
 }
