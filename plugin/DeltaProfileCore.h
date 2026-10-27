@@ -823,5 +823,13 @@ inline bool attackerFade(const std::vector<Bar>& bars, int upTo, std::int64_t si
     return true;
 }
 } // namespace exh
+// (2.26.0, Rassul 2026-10-27 00:36-00:38 CT "for bullish it needs to be below the open and close and for bearish, it needs to be above
+// the open and close" - placement only) the A / gray circle's vertical centre in pixels (y grows downward): a bullish circle sits wholly
+// below the candle body (below both the open and the close), a bearish one wholly above it. The node price still decides the A;
+// a node already outside the body keeps its own place. yBodyTop / yBodyBottom = the pixels of max(open, close) / min(open, close).
+inline int outsideBodyY(int yNode, int yBodyTop, int yBodyBottom, int half, bool bullish) {
+    if (bullish) return yNode - half <= yBodyBottom ? yBodyBottom + half + 1 : yNode;
+    return yNode + half >= yBodyTop ? yBodyTop - half - 1 : yNode;
+}
 } // namespace delta_profile
 #endif

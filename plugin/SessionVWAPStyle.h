@@ -22,6 +22,7 @@
 //   BANDW,<width 1-4>                    every band's width
 //   ON,<0|1>                             the overnight VWAP + bands (17:00 -> the RTH open)
 //   PRIOR,<0|1>,<RRGGBB>                 the prior RTH session's VWAP, drawn overnight
+//   PIVOT,<0|1>                          (1.8.0) the 3-bar pivot VWAP (green / red) instead of the RTH VWAP line; absent = on
 #ifndef SESSION_VWAP_STYLE_H
 #define SESSION_VWAP_STYLE_H
 
@@ -58,14 +59,15 @@ struct Style {
     int vwapW, bandW;
     bool on;            // the overnight VWAP + bands
     bool prior;         // the prior RTH VWAP (overnight)
+    bool pivot;         // (1.8.0) the 3-bar pivot VWAP replaces the RTH VWAP line (green / red by the close)
     Colour priorCol;
-    Style() : vwapW(D_VWAP_W), bandW(D_BAND_W), on(true), prior(true), priorCol(D_PRTH) {
+    Style() : vwapW(D_VWAP_W), bandW(D_BAND_W), on(true), prior(true), pivot(true), priorCol(D_PRTH) {
         const Colour d[K_N] = { D_VWAP, D_P1, D_M1, D_P2, D_M2 };
         for (int k = 0; k < K_N; ++k) { show[k] = true; col[k] = d[k]; }
     }
     bool operator==(const Style& o) const {
         for (int k = 0; k < K_N; ++k) if (show[k] != o.show[k] || col[k] != o.col[k]) return false;
-        return vwapW == o.vwapW && bandW == o.bandW && on == o.on && prior == o.prior && priorCol == o.priorCol;
+        return vwapW == o.vwapW && bandW == o.bandW && on == o.on && prior == o.prior && pivot == o.pivot && priorCol == o.priorCol;
     }
     bool operator!=(const Style& o) const { return !(*this == o); }
 };
@@ -123,6 +125,7 @@ inline std::string toText(const Style& s) {
     o += "BANDW,"; o += (char)('0' + s.bandW); o += '\n';
     o += "ON,"; o += s.on ? '1' : '0'; o += '\n';
     o += "PRIOR,"; o += s.prior ? '1' : '0'; o += ','; o += hex(s.priorCol); o += '\n';
+    o += "PIVOT,"; o += s.pivot ? '1' : '0'; o += '\n';   // (1.8.0)
     return o;
 }
 
@@ -155,6 +158,8 @@ inline bool fromText(const std::string& text, Style& out, int* bad = NULL) {
         } else if (f[0] == "PRIOR") {
             bool b; Colour c; if (f.size() != 3 || !parseBit(f[1], b) || !parseHex(f[2], c) || nearBlack(c)) { ++nb; continue; }
             s.prior = b; s.priorCol = c;
+        } else if (f[0] == "PIVOT") {   // (1.8.0) absent in an older file = the default (on)
+            bool b; if (f.size() != 2 || !parseBit(f[1], b)) { ++nb; continue; } s.pivot = b;
         }   // unknown keys: ignored (a newer file read by an older plugin)
     }
     if (!versionOk) { if (bad) *bad = 1; return false; }
@@ -169,6 +174,7 @@ enum Row {
     R_P1, R_P1_COL, R_M1, R_M1_COL,
     R_P2, R_P2_COL, R_M2, R_M2_COL,
     R_BAND_W, R_ON, R_PRIOR, R_PRIOR_COL,
+    R_PIVOT,            // (1.8.0) appended: the 3-bar pivot VWAP on / off
     R_COUNT
 };
 static const char* WIDTH_CHOICES = "1 px;2 px;3 px;4 px";
@@ -178,7 +184,7 @@ struct Dialog {
     int vwapW = -1, bandW = -1;
     bool show[K_N] = { true, true, true, true, true };
     Colour col[K_N] = { 0, 0, 0, 0, 0 };
-    bool on = true, prior = true;
+    bool on = true, prior = true, pivot = true;
     Colour priorCol = 0;
 };
 // The window's values -> a Style. False = the window is not really open (its width lists do not read a real choice), so
@@ -188,7 +194,7 @@ inline bool fromDialog(const Dialog& d, const Style& keep, Style& out) {
     Style s = keep;
     s.vwapW = W_MIN + d.vwapW; s.bandW = W_MIN + d.bandW;
     for (int k = 0; k < K_N; ++k) { s.show[k] = d.show[k]; const Colour c = d.col[k] & 0xFFFFFFUL; if (!nearBlack(c)) s.col[k] = c; }
-    s.on = d.on; s.prior = d.prior;
+    s.on = d.on; s.prior = d.prior; s.pivot = d.pivot;
     { const Colour c = d.priorCol & 0xFFFFFFUL; if (!nearBlack(c)) s.priorCol = c; }
     out = s; return true;
 }

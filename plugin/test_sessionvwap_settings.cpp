@@ -144,8 +144,8 @@ static void testPlugin(const std::string& profile)
     mock::Host H; H.root = "ES"; mock::current = &H;
     CHECK(x.setup() == RTX_OK, "setup");
     // the window: 15 rows, controls only, the right kinds, defaults = 1.4.2's look
-    CHECK(mock::declared.size() == (size_t)svs::R_COUNT, "15 settings rows (the 11 outputs are not rows in the mock)");
-    const int kind[svs::R_COUNT] = { 1, 2, 3, 1, 2, 1, 2, 1, 2, 1, 2, 3, 1, 1, 2 };
+    CHECK(mock::declared.size() == (size_t)svs::R_COUNT, "16 settings rows (1.8.0 + pivot; the 11 outputs are not rows in the mock)");
+    const int kind[svs::R_COUNT] = { 1, 2, 3, 1, 2, 1, 2, 1, 2, 1, 2, 3, 1, 1, 2, 1 };
     for (int r = 0; r < svs::R_COUNT; ++r) CHECK(mock::declared[(size_t)x.P[r]].type == kind[r], "row " << r << " is a " << (kind[r] == 1 ? "checkbox" : kind[r] == 2 ? "colour" : "list"));
     CHECK(mock::declared[(size_t)x.P[svs::R_VWAP_W]].list == 1 && mock::declared[(size_t)x.P[svs::R_VWAP_W]].listCount == 4, "VWAP width list 1-4 px, default 2 px");
     CHECK(mock::declared[(size_t)x.P[svs::R_BAND_W]].list == 0, "band width default 1 px");
@@ -163,7 +163,8 @@ static void testPlugin(const std::string& profile)
     std::map<std::pair<unsigned long, int>, int> m = drawn(H);
     int want[11]; for (int k = 0; k < 11; ++k) want[k] = segments(H, k);
     CHECK(want[0] > 20 && want[1] > 20 && want[5] > 20 && want[10] > 0, "the scenario has RTH, O/N and prior-RTH segments on screen");
-    CHECK(m[std::make_pair(0xFF80FFUL, 2)] == want[0] + want[5], "VWAP drawn magenta 2 px (RTH + O/N)");
+    CHECK(m[std::make_pair(0xFF80FFUL, 2)] == want[5], "(1.8.0) VWAP magenta 2 px only overnight: the RTH line is the 3-bar pivot VWAP");
+    CHECK(m[std::make_pair(0x22C55EUL, 2)] + m[std::make_pair(0xEF4444UL, 2)] > 0, "(1.8.0) the 3-bar pivot VWAP is drawn green / red at the VWAP width");
     CHECK(m[std::make_pair(0x008000UL, 1)] == want[1] + want[6], "+1 SD green 1 px");
     CHECK(m[std::make_pair(0xFF0000UL, 1)] == want[4] + want[9], "-2 SD red 1 px");
     CHECK(m[std::make_pair(0x6B7280UL, 1)] == want[10], "prior RTH VWAP grey");
@@ -181,8 +182,9 @@ static void testPlugin(const std::string& profile)
     CHECK(svs::fileStamp(esFile) >= 0, "a change in the window is saved for the market");
     H.lines.clear(); x.draw(); m = drawn(H);
     CHECK(m[std::make_pair(0x008000UL, 1)] == 0, "+1 SD unticked: its line is gone (RTH and O/N)");
-    CHECK(m[std::make_pair(0xFF80FFUL, 2)] == want[0] + want[5] && m[std::make_pair(0xFF8080UL, 1)] == want[2] + want[7], "the other lines stay");
-    CHECK((int)H.lines.size() == total - want[1] - want[6], "exactly the +1 SD segments removed");
+    CHECK(m[std::make_pair(0xFF80FFUL, 2)] == want[5] && m[std::make_pair(0xFF8080UL, 1)] == want[2] + want[7], "the other lines stay");
+    const int pv0 = m[std::make_pair(0x22C55EUL, 2)] + m[std::make_pair(0xEF4444UL, 2)];
+    CHECK((int)H.lines.size() == total - want[0] + pv0 - want[1] - want[6], "exactly the +1 SD segments removed (1.8.0: RTH VWAP segments = pivot segments)");
 
     // every line, one at a time: ticked -> drawn, unticked -> gone
     const int showRow[5] = { svs::R_VWAP, svs::R_P1, svs::R_M1, svs::R_P2, svs::R_M2 };
@@ -206,7 +208,7 @@ static void testPlugin(const std::string& profile)
     H.lines.clear(); x.draw(); m = drawn(H);
     CHECK(m[std::make_pair(0xFFFF00UL, 2)] == want[4] + want[9], "-2 SD in the new colour, at the band width");
     CHECK(m[std::make_pair(0xFF0000UL, 1)] == 0 && m[std::make_pair(0xFF0000UL, 2)] == 0, "the old -2 SD colour is gone");
-    CHECK(m[std::make_pair(0xFF80FFUL, 4)] == want[0] + want[5], "VWAP at 4 px");
+    CHECK(m[std::make_pair(0xFF80FFUL, 4)] == want[5] && m[std::make_pair(0x22C55EUL, 4)] + m[std::make_pair(0xEF4444UL, 4)] > 0, "VWAP at 4 px (and the pivot VWAP)");
     CHECK(m[std::make_pair(0x008000UL, 2)] == want[1] + want[6], "bands at 2 px");
 
     // a black swatch read back from the window keeps the saved colour (no invisible lines on his black chart)
@@ -223,7 +225,7 @@ static void testPlugin(const std::string& profile)
     H2.dialog = false; H2.lines.clear(); x.draw();
     CHECK(drawn(H2)[std::make_pair(0xFFFF00UL, 2)] == want[4] + want[9], "the second ES chart draws the same style");
     mock::Host H3; H3.root = "NQ"; mock::current = &H3; bars(H3, true); x.fill(0); H3.lines.clear(); x.draw();
-    CHECK(drawn(H3)[std::make_pair(0xFF0000UL, 1)] == want[4] + want[9] && drawn(H3)[std::make_pair(0xFF80FFUL, 2)] == want[0] + want[5], "NQ keeps the defaults (settings are per market)");
+    CHECK(drawn(H3)[std::make_pair(0xFF0000UL, 1)] == want[4] + want[9] && drawn(H3)[std::make_pair(0xFF80FFUL, 2)] == want[5], "NQ keeps the defaults (settings are per market)");
     // (1.6.2, msglog 2026-10-21 09:51 "lsSessionVWAP Ver 1.6.1 in chart "???" calling parmsLoad()") a window copy with NO chart:
     // it used to open blank (VWAP / bands unticked, colour black). Now it opens on this plugin's last market (ES) - filled - and OK on
     // the real chart saves only what he changed; an Apply that still has no chart saves nothing.
@@ -250,7 +252,7 @@ static void testPlugin(const std::string& profile)
     // a damaged file: defaults, no crash; then a good file again is picked up without a restart (stamp change)
     { std::ofstream f(esFile.c_str(), std::ios::trunc); f << "garbage\x01\x02"; }
     mock::Host H4; H4.root = "ES"; mock::current = &H4; bars(H4, true); x.fill(0); H4.lines.clear(); x.draw();
-    CHECK(drawn(H4)[std::make_pair(0xFF80FFUL, 2)] == want[0] + want[5], "garbled file = the defaults");
+    CHECK(drawn(H4)[std::make_pair(0xFF80FFUL, 2)] == want[5], "garbled file = the defaults");
     svs::Style s; s.show[svs::K_VWAP] = false;
     sleep(1);                                                            // a new mtime second (the stamp) and past the 1 s check
     { std::ofstream f(esFile.c_str(), std::ios::trunc); f << svs::toText(s); }

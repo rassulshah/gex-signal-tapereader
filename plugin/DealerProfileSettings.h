@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace dprset {
-static const char* const PLUGIN_VERSION = "2.26.0";   // (2.26.0, 2026-10-26) self-awareness SELFGEX (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (2.25.0) badges: no ratio, no level line (no new rows)   // (2.21.0) the outline follows the 10-s call (no new rows)
+static const char* const PLUGIN_VERSION = "2.27.0";   // (2.27.0, 2026-10-27) the 5 queue meter rows hidden (meter not drawn; values kept in the file) //   // (2.26.0, 2026-10-26) self-awareness SELFGEX (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (2.25.0) badges: no ratio, no level line (no new rows)   // (2.21.0) the outline follows the 10-s call (no new rows)
 // (2.20.0, Rassul approved the QUEUE METER 2026-10-22 13:51 CT) + "Queue meter" on / off, "Queue meter reach (ATR)", its bid / offer / warning
 // colours, appended (earlier rows keep their positions) -> parameter version 9
 // (2.19.0, Rassul 2026-10-21 approved Option B) + "Level % badges" (on by default) -> parameter version 8
@@ -27,13 +27,13 @@ inline const ss::Spec& spec() {
         ss::boolRow("fadefar", "Fade strikes beyond 1.2 EM", true),
         ss::same(ss::boolRow("banner", "Whole-book banner", false)),
         ss::hide(ss::textRow("inds", "Indicators in the bar file", "cob_bull,cob_bear", 160, 160)),
-        ss::boolRow("queue_meter", "Queue meter", true),
-        ss::same(ss::floatRow("qm_reach", "Reach (ATR)", 1.0, 0.25, 2.0, 50)),
-        ss::colorRow("qm_bid", "Meter bids", 0x22C55E, 40),
-        ss::same(ss::colorRow("qm_ask", "Meter offers", 0xEF4444, 40)),
-        ss::same(ss::colorRow("qm_warn", "Originals gone", 0xFACC15, 40)),
+        ss::hide(ss::boolRow("queue_meter", "Queue meter", true)),
+        ss::hide(ss::floatRow("qm_reach", "Reach (ATR)", 1.0, 0.25, 2.0, 50)),
+        ss::hide(ss::colorRow("qm_bid", "Meter bids", 0x22C55E, 40)),
+        ss::hide(ss::colorRow("qm_ask", "Meter offers", 0xEF4444, 40)),
+        ss::hide(ss::colorRow("qm_warn", "Originals gone", 0xFACC15, 40)),
     };
-    static const ss::Spec S = { "DealerProfile", PLUGIN_VERSION, 9, R, K_N, 0 };
+    static const ss::Spec S = { "DealerProfile", PLUGIN_VERSION, 10, R, K_N, 0 };   // (2.27.0) 9 -> 10: the queue rows hidden
     return S;
 }
 

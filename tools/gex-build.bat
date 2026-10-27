@@ -67,7 +67,8 @@ call :one HodLod       lsHodLod       HodLodLogic.h HodLodGex.h HodLodExpected.h
 REM (CR204 2026-10-12) lsFirstExtreme: the First Final Extreme v2 model, shadow mode - (CR210) RETIRED stub 2.0.0: the model runs inside lsHodLod 2.0.0
 call :one FirstExtreme lsFirstExtreme FirstExtremeLogic.h FirstExtremeView.h first_extreme_inference.cpp first_extreme_state.hpp HostSlot.h PerfGuard.h
 call :one TradeManager lsTradeManager DealerLogic.h HostSlot.h TradeGuardLayout.h ClaimGates.h TradeManagerSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h PerfGuard.h
-call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h OnTouchParams.h OnTouchLogic.h VwapTrendLogic.h VwapOddsLogic.h VwapOddsParams.h SessionVWAPStyle.h MarketState.h BannerBoard.h SessionVWAPSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h BoxDock.h KeepOutDraw.h PerfGuard.h SelfAware.h
+REM (2026-10-27) lsSessionVWAP 1.8.0: + PivotVwapLogic.h (the 3-bar pivot VWAP)
+call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h OnTouchParams.h OnTouchLogic.h VwapTrendLogic.h VwapOddsLogic.h VwapOddsParams.h SessionVWAPStyle.h MarketState.h BannerBoard.h SessionVWAPSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h BoxDock.h KeepOutDraw.h PerfGuard.h SelfAware.h PivotVwapLogic.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
 call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
 call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h

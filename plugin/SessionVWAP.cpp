@@ -74,6 +74,7 @@
 #include "VwapOddsLogic.h"        // (1.4.0) the calibration layer + the proven flag per market / session (VwapOddsParams.h, nightly)
 #include "SessionVWAPStyle.h"     // (1.5.0) show / colour / width per line, kept per market (no SDK; tested)
 #include "SessionVWAPSettings.h"  // (1.6.1) the settings window table (SettingsSpec.h)
+#include "PivotVwapLogic.h"       // (1.8.0) the 3-bar pivot VWAP (SDK-free, tested: test_pivotvwap.cpp)
 #include "SettingsHost.h"
 static ss::Ids& svIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
 #include "KeepOutDraw.h"          // (1.6.3) BoxDock.h 1.2.0 keep-out: nothing painted over the HOD/LOD table
@@ -96,7 +97,7 @@ static ss::Ids& svIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <atomic>
 
 static const bool SV_SHOW_BADGES = false;   // (1.4.1) Rassul 18:07: VWAP odds off the chart for now
-static const char* SV_VERSION = "1.7.0";        // (1.7.0, 2026-10-26) self-awareness SELFVWAP (SelfAware.h, SELF-AWARE.md; ships OFF per market) // 1.6.3 (2026-10-21 16:05 CT Rassul "fix this, it should be solid"): the VWAP / band lines stop at the lsHodLod table's edges (KeepOutDraw.h; values, odds and Market State unchanged).        // 1.6.1 (2026-10-18 settings audit): the window from SessionVWAPSettings.h / SettingsHost.h (same rows, same file); each line's show box greys its colour.        // 1.6.0 (2026-10-18): Market State SRC VWAP (vwap, bands, pos, slope) for the last closed bar, cleared on removal.        // 1.5.1 (2026-10-17): FIX unchecking / re-checking a line in the settings did not stick - only the window saves, nothing while it loads, untouched controls keep the file.        // 1.5.0 (2026-10-14; built as 1.4.3 on 10-13, never shipped): real settings - every line has a show box and a colour, VWAP / band widths, the overnight set on / off; kept per market (SessionVWAPStyle.h). 1.4.2: vwapTrend cache also keys the detected bar period, so a chart periodicity change cannot retain trend state computed with different session boundaries. 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const char* SV_VERSION = "1.8.0";        // (1.8.0, 2026-10-27, Rassul 09:46 CT "modify the vwap to the 3bar pivot") the RTH VWAP LINE is drawn as the 3-BAR PIVOT VWAP (PivotVwapLogic.h 1.0.0): anchored at the last confirmed 3-bar-reversal pivot of the session, restarted at each new pivot, green while the bar closed above it, red below; never repainted; setting "3-bar pivot VWAP" (appended row, default on; off = the old magenta RTH VWAP). The 11 outputs, the bands, the odds, vwapTrend and the Market State are unchanged (still the session VWAP). //        // (1.7.0, 2026-10-26) self-awareness SELFVWAP (SelfAware.h, SELF-AWARE.md; ships OFF per market) // 1.6.3 (2026-10-21 16:05 CT Rassul "fix this, it should be solid"): the VWAP / band lines stop at the lsHodLod table's edges (KeepOutDraw.h; values, odds and Market State unchanged).        // 1.6.1 (2026-10-18 settings audit): the window from SessionVWAPSettings.h / SettingsHost.h (same rows, same file); each line's show box greys its colour.        // 1.6.0 (2026-10-18): Market State SRC VWAP (vwap, bands, pos, slope) for the last closed bar, cleared on removal.        // 1.5.1 (2026-10-17): FIX unchecking / re-checking a line in the settings did not stick - only the window saves, nothing while it loads, untouched controls keep the file.        // 1.5.0 (2026-10-14; built as 1.4.3 on 10-13, never shipped): real settings - every line has a show box and a colour, VWAP / band widths, the overnight set on / off; kept per market (SessionVWAPStyle.h). 1.4.2: vwapTrend cache also keys the detected bar period, so a chart periodicity change cannot retain trend state computed with different session boundaries. 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 // (1.5.0) the default colours (0x00RRGGBB) live in SessionVWAPStyle.h (svs::D_*) - the settings window starts from them
 static const COLOR C_VWAP = (COLOR)svs::D_VWAP;   // (1.2.0) Rassul's own settings 22:37 - VWAP magenta (the outputs' nominal pen)
 static const COLOR C_DARK = 0x000B0F19;
@@ -205,7 +206,7 @@ public:
     SVState* state(bool create);
     HostSlot<SVState> slot_;
     void clearState();
-    void drawLines(long n, const svs::Style& st);
+    void drawLines(long n, const svs::Style& st, int per = 0, int openMin = -1, int closeMin = -1);
     void postMst(long n, SVState& S, const std::string& market, int openMin, int closeMin);   // (1.6.0) SRC VWAP
     // Volatility is cached per chart/bar; distance updates each draw.
     bool forecast(const TPLaw& L, long n, const std::string& market, SVState& S);
@@ -265,6 +266,7 @@ static ss::Values svValues(const svs::Style& s)
     for (int k = 0; k < svs::K_N; ++k) { V.v[(size_t)show[k]] = s.show[k] ? 1 : 0; V.v[(size_t)col[k]] = (double)(s.col[k] & 0xFFFFFFUL); }
     V.v[K_VWAP_WIDTH] = s.vwapW - svs::W_MIN; V.v[K_BAND_WIDTH] = s.bandW - svs::W_MIN;
     V.v[K_OVERNIGHT] = s.on ? 1 : 0; V.v[K_PRIOR] = s.prior ? 1 : 0; V.v[K_PRIOR_COLOR] = (double)(s.priorCol & 0xFFFFFFUL);
+    V.v[K_PIVOT] = s.pivot ? 1 : 0;   // (1.8.0)
     return V;
 }
 static svs::Style svStyle(const ss::Values& V, const svs::Style& keep)
@@ -274,7 +276,7 @@ static svs::Style svStyle(const ss::Values& V, const svs::Style& keep)
     const int show[svs::K_N] = { K_VWAP, K_P1, K_M1, K_P2, K_M2 }, col[svs::K_N] = { K_VWAP_COLOR, K_P1_COLOR, K_M1_COLOR, K_P2_COLOR, K_M2_COLOR };
     for (int k = 0; k < svs::K_N; ++k) { s.show[k] = V.b(show[k]); const svs::Colour c = (svs::Colour)V.c(col[k]); if (!svs::nearBlack(c)) s.col[k] = c; }
     s.vwapW = svs::W_MIN + V.i(K_VWAP_WIDTH); s.bandW = svs::W_MIN + V.i(K_BAND_WIDTH);
-    s.on = V.b(K_OVERNIGHT); s.prior = V.b(K_PRIOR);
+    s.on = V.b(K_OVERNIGHT); s.prior = V.b(K_PRIOR); s.pivot = V.b(K_PIVOT);   // (1.8.0)
     { const svs::Colour c = (svs::Colour)V.c(K_PRIOR_COLOR); if (!svs::nearBlack(c)) s.priorCol = c; }
     return s;
 }
@@ -541,7 +543,7 @@ bool SessionVWAP::forecast(const TPLaw& L, long n, const std::string& market, SV
 
 // (1.2.0) the lines: each series joins consecutive non-zero bars only, so the O/N, RTH and prior-RTH lines never join each other
 // and nothing is drawn where a session has no value. (1.5.0) each series in its own style: an unticked line is not drawn at all.
-void SessionVWAP::drawLines(long n, const svs::Style& st)
+void SessionVWAP::drawLines(long n, const svs::Style& st, int per, int openMin, int closeMin)
 {
     int a = 0, b = (int)n - 1;
     if (getVisibleBars(&a, &b) != RTX_OK || a < 0 || b >= (int)n || a > b) { a = std::max(0, (int)n - 400); b = (int)n - 1; }
@@ -551,6 +553,7 @@ void SessionVWAP::drawLines(long n, const svs::Style& st)
     for (int k = 10; k >= 0; k--) {                                       // the dim prior-RTH line underneath
         const svs::Pen pen = svs::penFor(st, k);
         if (!pen.show) continue;                                          // (1.5.0) unticked: no line
+        if (k == 0 && st.pivot && openMin >= 0) continue;                 // (1.8.0) the RTH VWAP line is the 3-bar pivot VWAP below
         setPen((COLOR)pen.col, (short)pen.width, P_SOLID);
         RTARRAY& v = *O[k];
         for (int i = a + 1; i <= b; i++) {
@@ -560,6 +563,32 @@ void SessionVWAP::drawLines(long n, const svs::Style& st)
             PNT p1; p1.set(i, y1, kBarCenter);
             ko::linePts(p0, p1);                                          // (1.6.3) cut at the HOD/LOD table
         }
+    }
+    // (1.8.0) THE 3-BAR PIVOT VWAP, RTH only, natively from the chart's bars: each RTH session that reaches the visible bars is computed
+    // from its own first RTH bar (PivotVwapLogic.h); a segment joins two bars of the same session and the same anchor; green / red by
+    // that bar's close vs the line. Shown with the "VWAP" box ticked and "3-bar pivot VWAP" on; width = the VWAP width.
+    if (!st.pivot || openMin < 0 || !st.show[svs::K_VWAP]) return;
+    RTARRAY hi(barHigh), lo(barLow), cl(barClose); RTARRAYI vo(barVolume), dt(barDateTime);   // as fill() reads them
+    const int pp = per > 0 ? per : 180;
+    auto clsOf = [&](int i) { struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+        return svl::classify(svl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday), t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec, pp, openMin, closeMin); };
+    int i = a;
+    { const svl::Cls c0 = clsOf(i); if (c0.kind == svl::RTH) while (i > 0) { const svl::Cls q = clsOf(i - 1); if (q.kind != svl::RTH || q.sess != c0.sess) break; --i; } }
+    const short w = (short)std::max(1, st.vwapW);
+    while (i <= b) {
+        const svl::Cls c0 = clsOf(i);
+        if (c0.kind != svl::RTH) { ++i; continue; }
+        int j = i; std::vector<double> H, L, C, V;
+        while (j <= b) { const svl::Cls q = clsOf(j); if (q.kind != svl::RTH || q.sess != c0.sess) break;
+            H.push_back(hi[j]); L.push_back(lo[j]); C.push_back(cl[j]); V.push_back(vo[j]); ++j; }
+        const pvw::Out o = pvw::compute(H, L, C, V);
+        for (int k = 1; k < (int)o.line.size(); ++k) {
+            if (!std::isfinite(o.line[k - 1]) || !std::isfinite(o.line[k]) || o.anchor[k] != o.anchor[k - 1] || o.state[k] == 0) continue;
+            setPen(o.state[k] > 0 ? (COLOR)0x0022C55EUL : (COLOR)0x00EF4444UL, w, P_SOLID);
+            PNT p0; p0.set(i + k - 1, (float)o.line[k - 1], kBarCenter); PNT p1; p1.set(i + k, (float)o.line[k], kBarCenter);
+            ko::linePts(p0, p1);
+        }
+        i = j;
     }
 }
 
@@ -576,7 +605,7 @@ int SessionVWAP::draw(void)
     const svs::Style& st = styleFor(*S, market);                         // (1.5.0) this market's show / colour / width choices
     S->keep.refresh(getSymbol(), getSecondsPerBar(), getChartLabel());   // (1.6.3) the HOD/LOD table: nothing painted over it this draw
     bdk::KeepScope keepScope(S->keep);
-    drawLines(n, st);                                                     // the lines first, whatever the session
+    drawLines(n, st, S->per > 0 ? S->per : 180, openMin, closeMin);       // the lines first, whatever the session; (1.8.0) + the pivot VWAP
     postMst(n, *S, market, openMin, closeMin);                            // (1.6.0) the Market State (behind the scenes)
     RTARRAYI dtk(barDateTime);
     int last = (int)n - 1;
@@ -806,6 +835,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(11);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("LRA Session VWAP: the session VWAP with its +-1 and +-2 SD bands - RTH in the day session, the overnight VWAP and the prior RTH VWAP overnight.");
-    p->setVersion("1.7.0");   // = SV_VERSION (gex-build reads this literal; test_sessionvwap_settings checks they match)
+    p->setVersion("1.8.0");   // = SV_VERSION (gex-build reads this literal; test_sessionvwap_settings checks they match)
     return p;
 }

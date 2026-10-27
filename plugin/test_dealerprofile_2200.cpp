@@ -1,3 +1,4 @@
+// (2026-10-27, lsDealerProfile 2.27.0) the queue meter is no longer drawn (Rassul 00:43 "remove it but you can continue logging it"): this suite's meter-drawing checks fail by design; test_dealerprofile_2270.cpp covers 2.27.0. Kept for history.
 // test_dealerprofile_2200.cpp -- lsDealerProfile 2.20.0 (2026-10-22, Rassul approved the QUEUE METER 13:51 CT): the meter in the Levels column
 // through the REAL DealerProfile.cpp on the mocked host (harness copied from test_dealerprofile_2190.cpp): a level badge becomes "PDH Q76%"
 // with the fill, a tested price with no level gets a small unlabeled badge, the yellow originals-gone state, reach / stale / garbled /

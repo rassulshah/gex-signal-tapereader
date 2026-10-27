@@ -6,7 +6,7 @@
 
 namespace dpset {
 
-static const char* const PLUGIN_VERSION = "2.25.0";
+static const char* const PLUGIN_VERSION = "2.26.0";
 enum K { K_WIDTH, K_FONT, K_DELTA_TEXT, K_WICK_ON, K_WICK_X, K_TRAP_ON, K_DRAW_LATE, K_N };
 
 inline const ss::Spec& spec() {

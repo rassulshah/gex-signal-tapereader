@@ -21,7 +21,7 @@ enum DRAW_FLAGS { CONNECT_CNONZERO = 1, NO_AUTOSCALE = 2 };
 enum BRUSH_STYLE { PAT_SOLID };
 enum { POST_DRAWING = 1 << 0, OVERLAY = 1 << 1, INSTRUMENT_SCALE = 1 << 2 };
 enum { DRAW_OPAQUE = 0 };
-enum fARRAY { fOut1, fOut2, fOut3, fOut4, fOut5, fOut6, fOut7, fOut8, fOut9, fOut10, fOut11, barHigh, barLow, barClose };
+enum fARRAY { fOut1, fOut2, fOut3, fOut4, fOut5, fOut6, fOut7, fOut8, fOut9, fOut10, fOut11, barHigh, barLow, barClose, barOpen };   // (2026-10-27) + barOpen (SessionVWAP 1.7.0 self-awareness reads it)
 enum iARRAY { barVolume, barDateTime };
 enum BAR_POSITION { kBarCenter };
 enum FONT_ID { HELVETICA };
@@ -42,7 +42,7 @@ struct Host {
     COLOR pen = 0; short penW = 1;
     int curBar = 0; float curPx = 0;                          // the draw position (setDrawPosition)
     std::string root;
-    std::vector<float> f[14];
+    std::vector<float> f[15];
     std::vector<unsigned long> i[2];
     void* userData = NULL;
     int fontPt = 9;
@@ -61,17 +61,21 @@ inline std::vector<unsigned long>& ints(iARRAY a) { return current->i[(int)a]; }
 
 class RTARRAY {
 public:
-    explicit RTARRAY(fARRAY a) : values(&mock::floats(a)) {}
+    explicit RTARRAY(fARRAY a) : values(&mock::floats(a)), count((long)mock::floats(a).size()) {}
     float& operator[](int n) { return (*values)[(size_t)n]; }
 private:
     std::vector<float>* values;
+public:
+    long count;   // (2026-10-27) like the SDK's RTARRAY::count
 };
 class RTARRAYI {
 public:
-    explicit RTARRAYI(iARRAY a) : values(&mock::ints(a)) {}
+    explicit RTARRAYI(iARRAY a) : values(&mock::ints(a)), count((long)mock::ints(a).size()) {}
     unsigned long& operator[](int n) { return (*values)[(size_t)n]; }
 private:
     std::vector<unsigned long>* values;
+public:
+    long count;
 };
 class CPEN {
 public:
