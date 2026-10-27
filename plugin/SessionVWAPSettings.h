@@ -5,7 +5,7 @@
 #include "SettingsSpec.h"
 
 namespace svset {
-static const char* const PLUGIN_VERSION = "1.6.4";
+static const char* const PLUGIN_VERSION = "1.7.0";
 static const char* const WIDTHS = "1 px;2 px;3 px;4 px";
 // the order of svs::Row (R_VWAP .. R_PRIOR_COL)
 enum K { K_VWAP, K_VWAP_COLOR, K_VWAP_WIDTH, K_P1, K_P1_COLOR, K_M1, K_M1_COLOR, K_P2, K_P2_COLOR, K_M2, K_M2_COLOR, K_BAND_WIDTH,

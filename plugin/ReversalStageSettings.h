@@ -5,7 +5,7 @@
 #include "SettingsSpec.h"
 
 namespace rsset {
-static const char* const PLUGIN_VERSION = "2.1.2";   // (2.1.0) letters 1 2 3 C + the stage info box
+static const char* const PLUGIN_VERSION = "2.3.0";   // (2.3.0, 2026-10-26) self-awareness SELFRS (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (2.1.0) letters 1 2 3 C + the stage info box
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 enum K { K_SHOW_STEPS, K_COL_LOW, K_COL_HIGH, K_SHOW_NAMES, K_SHOW_NOW, K_POSITION, K_COL_WARN, K_N };   // (2.1.0) K_COL_WARN: the amber F? row
 inline const ss::Spec& spec() {

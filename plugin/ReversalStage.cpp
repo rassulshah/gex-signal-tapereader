@@ -49,6 +49,7 @@
 #include "SwingRef.h"            // (2.0.0) the gate: the last 3 intact swings (the ZigZag rule lsSweepRefill / lsStopRun use)
 #include "NearLevels.h"          // (2.0.0) the gate: key / MenthorQ levels (the files lsSweepRefill reads)
 #include "AwareHook.h"          // (2.2.0) the smart-read hook (layer L3) + SRC STAGE
+#include "SelfAware.h"           // (2.3.0) self-awareness
 #include "StageBox.h"            // (2.1.0) the stage info box + letters 1 2 3 C
 
 #include <algorithm>
@@ -71,7 +72,7 @@
 #pragma comment(lib, "user32.lib")   // GetCursorPos / WindowFromPoint (the hover stops when the cursor leaves the pane)
 #endif
 
-#define RS_VERSION "2.2.0"   // (2.2.0, 2026-10-26) smart-read hook (AwareHook.h 0.1.0, TEAM-DESIGN.md): posts AWSTAGE for each closed bar once lsContext has posted CTX for it (or after 3 s), records the isolated + aware read in lsFlexLevels\\Context-AWR-<MKT>-<spb>s-<day>.rec; links OFF per market (LRA-Context-<MKT>.csv) so aware = isolated and nothing drawn changes; also posts SRC STAGE (stage, side, status) for each decided candle // (2.1.1, 2026-10-26) the C row reads the H ratio as lots / attack when the evidence carries no ratio // (2.1.0) (2.1.0, 2026-10-25, Rassul approved 22:51 CT stage-box-mockup.html) display only: the pane shows the letters 1 2 3 C (Trap / Collision / Turn / Confirm) on each pivot bar instead of the staircase, and the STAGE INFO BOX for the latest pivot (StageBox.h 1.0.0: stage # / name / what to look for / check / value (threshold); 3 Turn checked by the defenders' close = the HELD trigger, trapped and wick volume description only from lsFlexLevels\LRA-StageBox-<MKT>.csv; C = Hb >= 1.25x + follow-through; amber F? row); the engine and the RS3 record unchanged // (2.0.0) the 4-step model: gate + Trap / Collision / Trapped / Release + result // (1.3.0) typed MBO observations, arrival journal, immutable post-decision checkpoints
+#define RS_VERSION "2.3.0"   // (2.3.0, 2026-10-26) self-awareness SELFRS (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (2.2.0, 2026-10-26) smart-read hook (AwareHook.h 0.1.0, TEAM-DESIGN.md): posts AWSTAGE for each closed bar once lsContext has posted CTX for it (or after 3 s), records the isolated + aware read in lsFlexLevels\\Context-AWR-<MKT>-<spb>s-<day>.rec; links OFF per market (LRA-Context-<MKT>.csv) so aware = isolated and nothing drawn changes; also posts SRC STAGE (stage, side, status) for each decided candle // (2.1.1, 2026-10-26) the C row reads the H ratio as lots / attack when the evidence carries no ratio // (2.1.0) (2.1.0, 2026-10-25, Rassul approved 22:51 CT stage-box-mockup.html) display only: the pane shows the letters 1 2 3 C (Trap / Collision / Turn / Confirm) on each pivot bar instead of the staircase, and the STAGE INFO BOX for the latest pivot (StageBox.h 1.0.0: stage # / name / what to look for / check / value (threshold); 3 Turn checked by the defenders' close = the HELD trigger, trapped and wick volume description only from lsFlexLevels\LRA-StageBox-<MKT>.csv; C = Hb >= 1.25x + follow-through; amber F? row); the engine and the RS3 record unchanged // (2.0.0) the 4-step model: gate + Trap / Collision / Trapped / Release + result // (1.3.0) typed MBO observations, arrival journal, immutable post-decision checkpoints
 // 1.0.0:   // keep equal to rsl::VERSION, rsset::PLUGIN_VERSION and the setVersion literal below
 
 static const COLOR C_GRID = 0x00374151, C_LABEL = 0x009CA3AF, C_TEXT = 0x00E5E7EB, C_BOX_BG = 0x000F1520, C_TIP_BG = 0x00111827;
@@ -129,7 +130,7 @@ struct RSState {
     std::string pathA, pathD, pathQ;
     rsh::Inbox inbox; std::string journalPath; bool provisional = true;
     // the record: decided candles [raw key] -> step; the newest key
-    awh::Hook aw; std::string awChart;   // (2.2.0) the smart-read hook
+    awh::Hook aw; std::string awChart; sa::Hook self;   // (2.2.0) the smart-read hook
     std::map<long long, rsl::Step> steps; long long recOff = 0, recBad = 0, written = 0, writeFail = 0, adopted = 0; std::string recPath; bool dirMade = false;
     long long lastPassMs = -1; long lastCount = -1; long long lastLetters = -1;
     rsl::Step now; bool haveNow = false;
@@ -371,7 +372,7 @@ void ReversalStage::aware(RSState& s, long long now) {
     if (it == s.steps.end()) return;
     const long long bar = civil(key); if (bar == LLONG_MIN || bar <= 0) return;
     const char* cl = getChartLabel(); const std::string chart = cl ? cl : "";
-    if (!s.awChart.empty() && s.awChart != chart) { mst::clear("STAGE", s.symbol, s.spb, s.awChart); s.aw.clear(s.symbol, s.spb, s.awChart); }
+    if (!s.awChart.empty() && s.awChart != chart) { mst::clear("STAGE", s.symbol, s.spb, s.awChart); s.self.clear(s.symbol, s.spb, s.awChart); s.aw.clear(s.symbol, s.spb, s.awChart); }
     s.awChart = chart;
     const rsl::Step& st = it->second; s.aw.src = "STAGE";
     if (s.aw.t != bar || s.aw.postMs < 0 || now - s.aw.postMs >= 15000 || now < s.aw.postMs) {
@@ -379,6 +380,22 @@ void ReversalStage::aware(RSState& s, long long now) {
         mst::publish("STAGE", s.symbol, s.spb, chart, now, bar, kv);
     }
     s.aw.tick(s.symbol, s.spb, chart, s.market, now, bar, awh::stageRead(st.stage, st.side == rsl::LOW, st.status));
+    if (lsperf::smartAllowed(LSPERF_PLUGIN, s.symbol)) {   // (2.3.0) PerfGuard: self-awareness only while this indicator is within budget
+    {   // (2.3.0) SELF-AWARENESS (SelfAware.h, SELF-AWARE.md): the stage's own turn call (the same side the smart read takes: a stage-2/3 pivot
+        // low = up, high = down, a failed attempt = none) is a signal once per new call; HIT = 1 ATR its way before 1 ATR against (later
+        // bars only). Value = the stage. Display unchanged (SWITCH OFF per market).
+        RTARRAY op(barOpen), hi(barHigh), lo(barLow), cz(barClose); const int i = (int)c - 2;
+        if (op.count > i && hi.count > i && lo.count > i && cz.count > i) {
+            const int sd = awh::stageRead(st.stage, st.side == rsl::LOW, st.status).side;
+            std::map<std::string, std::string> kv; kv["stage"] = std::to_string(st.stage); kv["status"] = std::to_string(st.status);
+            kv["side"] = st.side == rsl::LOW ? "low" : "high"; kv["turn"] = sd > 0 ? "up" : sd < 0 ? "down" : "none";
+            static const sa::Spec SP = [] { sa::Spec x; x.valueKey = "stage"; x.sideKey = "turn"; x.onChange = true; x.rearm = true;
+                x.why = { "stage", "status", "side" }; return x; }();
+            s.self.ind = "RS";
+            sa::fromFacts(s.self, SP, s.symbol, s.spb, chart, s.market, now, sa::Bar{ bar, op[i], hi[i], lo[i], cz[i] }, kv);
+        }
+    }
+    }
 }
 void ReversalStage::writeStatus(RSState& s, long long now) {
     const std::string f = flexDir(); if (f.empty() || s.market.empty()) return;
@@ -661,6 +678,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);
     p->setDescription("LRA Reversal Stage: at a swing / key / MenthorQ level or queue zone, typed MBO evidence for 4 steps - Trap (stacked floor), Collision (attack met by absorption / a held queue), Trapped (pace fade, D divergence, attackers underwater) and Release (hit back / reclaim, re-test held) - then the 1 ATR result. Closed decisions are recorded and never repainted. Odds remain unproven.");
-    p->setVersion("2.2.0");   // RS_VERSION
+    p->setVersion("2.3.0");   // RS_VERSION
     return p;
 }

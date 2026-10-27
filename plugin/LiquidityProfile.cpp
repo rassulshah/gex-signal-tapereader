@@ -110,6 +110,7 @@
 #include "ZoneNear.h"              // (0.20.0) the zone + level names for the banner verdict
 #include "BannerSettings.h"    // (0.24.0) the verdict banner settings (SDK-free, tested)
 #include "ColumnBoard.h"           // (0.16.0) the right-side columns (Levels / Delta / Dealer) and this column's width on the board
+#include "SelfAware.h"           // (0.56.0) self-awareness
 #include "MarketState.h"           // (0.44.0) SRC LIQ / LOTS facts for the Tape Reader (MARKET-STATE-SPEC.md 1.0), behind the scenes
 #ifndef LQ_FLOW
 // (0.15.0) the order-by-order feed and its order book: the shared order-flow header, reused as is (lsBidAskStats / PullStats /
@@ -150,7 +151,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.55.2"          // (0.55.1, 2026-10-25, BUILD-SPEC "Defense Line vs order line at the same price") the candles that carry a drawn fill dot are published to lsFlexLevels\LRA-OrderFills-<MKT>-<spb>.txt (one bar datetime key per line) so lsDefenseLines skips its yellow dot there; drawing unchanged // (0.55.0, 2026-10-25, Rassul "build" 22:29 CT 2026-10-25) THE LIMIT-ORDER LINES (OrderLinesLogic.h 1.0.0) replace the drawn LMT zones: every big resting order (per-market floor, ES 50; LRA-LimitLines-<MKT>.csv) drawn once it rested 9 min, back to its placement; moved / rolled (re-placed within 15 s, exact size, 1 ATR, one candidate) = one stepping line, no tag; icebergs "I R<n> <lots>"; ladders "<n>o <lots>"; fill dot + HELD / THRU (favourable close within the fill bar + 3, no bar wholly beyond; one word per zone, beside the fill dot); pulled = very dark, no x; no new line after the late-day cut-off; the LMT resting column and RE-BID? / ACCEPTED removed (the LMT zone engine still records); the queue Q (10-s call) as a small badge on the level (ES CL NQ GC EU); settings rows relabelled (parameter version 11)
+#define LQ_VERSION "0.56.0"          // (0.56.0, 2026-10-26) self-awareness SELFLIQ (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (0.55.1, 2026-10-25, BUILD-SPEC "Defense Line vs order line at the same price") the candles that carry a drawn fill dot are published to lsFlexLevels\LRA-OrderFills-<MKT>-<spb>.txt (one bar datetime key per line) so lsDefenseLines skips its yellow dot there; drawing unchanged // (0.55.0, 2026-10-25, Rassul "build" 22:29 CT 2026-10-25) THE LIMIT-ORDER LINES (OrderLinesLogic.h 1.0.0) replace the drawn LMT zones: every big resting order (per-market floor, ES 50; LRA-LimitLines-<MKT>.csv) drawn once it rested 9 min, back to its placement; moved / rolled (re-placed within 15 s, exact size, 1 ATR, one candidate) = one stepping line, no tag; icebergs "I R<n> <lots>"; ladders "<n>o <lots>"; fill dot + HELD / THRU (favourable close within the fill bar + 3, no bar wholly beyond; one word per zone, beside the fill dot); pulled = very dark, no x; no new line after the late-day cut-off; the LMT resting column and RE-BID? / ACCEPTED removed (the LMT zone engine still records); the queue Q (10-s call) as a small badge on the level (ES CL NQ GC EU); settings rows relabelled (parameter version 11)
 #define LQ_VERSION_PREV "0.55.0"          // (0.54.1, 2026-10-25) the drawn after-fill word is "RE-BID?" (was RE-BID): not yet proven on LMT zone orders (live replay RE-BID 45.8% vs ACCEPTED 40.6% failed sweeps, t 0.84, only HG holds) - his rule "unproven reads show with ?"; the hover adds "RE-BID? = not yet proven on zone orders - judged nightly"; ACCEPTED, the R record lines (still RE-BID), the logic, settings and parameter version 10 unchanged;  // (0.54.0, 2026-10-25, Rassul's go: the research's PROVEN read H6-FILL) LMT ZONES = LmtZonesLogic.h 1.3.0: the drawn HELD? tag removed (HELD still logged); the AFTER-FILL READ - 30 s after a zone's order is FULLY filled (in the study's RTH window): RE-BID (new defender size stacked at a fixed band beyond the filled price AND the defender side wins the delta 10-30 s after; red for an offer swept above, green for a bid swept below - bid zones get the tag without a line) or ACCEPTED (grey) - decided once, recorded as R lines, read back, never repainted; FILLING (grey) and the grey X stay; settings: the "State tags" box is now "After-fill tags (RE-BID / ACCEPTED)" (default on), colour rows relabelled "RE-BID offer / bid colour", parameter version 10;   // (0.53.0, 2026-10-25, Rassul approved option A + the v0.49 LMT mockup) LMT ZONES = LmtZonesLogic.h 1.2.0: every drawn zone kind (PRINT / ABC / ORIGIN / NEAR offers) is a thin grey MAP line (a target / magnet, not a wall) with "LMT <lots> (<KIND>)" left of its start, one pooled draw rule in all 7 markets (bids never drawn), STATE TAGS on closed bars - FILLING (grey) / HELD? (red offer, green bid) - recorded as T lines and read back (no repaint), the grey X for pulled, FAST / DRIFT / EATEN / STEPPED logged only, the hover with the honest odds; settings: "State tags" checkbox (parameter version 9); the ring on the first fill dropped (the FILLING tag says it)
 // prior: "0.52.1"          // (0.52.1, 2026-10-24) (2026-10-24 crash fix) IRT fast-fails (0xC0000409 in investorRT.exe) when a MARKET_DEPTH is deleted - adding an indicator to a chart restarts its indicators -> done() -> the next calc deleted the parked book. A MARKET_DEPTH is NEVER deleted any more (a few hundred bytes leaked per symbol / bar-size change).
 // prior: "0.52.0"          // (0.52.0, 2026-10-23 MBO review merge) typed EV-QUEUE evidence beside the native Q / LT rows (same level / pivot gating), QueueMeter 1.4.0 (a withdrawn same-id add is not a refill) // (0.51.0, (2026-10-22 evening fix build) ) QueueMeter.h 1.3.0 (base = max(q0, normal queue), no percent / call while building, "200%+" cap, Q rows only at levels / confirmed ZigZag pivots, debounced; the strip line carries tk<anchor>); LMT ZONES LmtZonesLogic.h 1.1.0 (an LMT = >= 3.0x the live median resting order within 2 ATR, per-market floor, hysteresis 2.5x; S20 context only) //          // (0.50.0, 2026-10-22 evening, the queue meter validation verdict VALIDATE-DEFENDER-SIZE-2026-10-22.md) QueueMeter.h 1.1.0: the 10-s CALL (red < 40% left; green >= 100% + holding, ES / CL) per market from lsFlexLevels\\LRA-QueueMeter-<MKT>.csv (PARAM lines; defaults = the verdict), C lines in the record; the live file renamed LRA-QueueLive-<MKT>.csv; the candle-close Q stays a record (+ the Holding-strip Q line) //          // (0.49.0, 2026-10-22, Rassul approved the QUEUE METER 13:51-13:52 CT, build ordered 15:20 CT) the queue meter engine (QueueMeter.h 1.0.0) runs on this chart's MBO book: a test starts when price trades into a key / MenthorQ level zone, a recent pivot zone or a suddenly defended price; queue left vs the start, originals left (rested 1 s+), eaten / pulled / refill-that-stayed lots/s, time to empty; written to lsFlexLevels\\LRA-QueueMeter-<MKT>.csv for the Dealer Profile's Levels column (nothing new drawn here); Q decided once at a candle close (G held / refilled, R drained / broke) to <stem>-queuemeter-<session>.csv, read back after a restart; status QUEUE_METER //          // (0.48.0, 2026-10-22, Rassul approved LMT zones mockup v3 09:34 CT "Ok build it" + gamma lines grey + only zone / far orders drawn) LMT ZONES (LmtZonesLogic.h 1.0.0): a real large resting LIMIT order (one MBO id >= Big Lot S20, rested 30 s+, re-priced <= 1x) drawn as a zone - BD print (with-trend) / Origin / Near / Far (thin) / ABC (grey context) - per market from PULLBACK-ZONES-FINAL-2026-10-22 (NG / HG offers, NQ offers ?, CL offers on a gamma level, ES BD-print offers ?, GC / 6E log only, bids never drawn); X = pulled / moved (void), ring = first fill; yellow diamond on a gamma level; thin grey gamma lines (the whole MenthorQ set); the BIG column becomes LMT | LMT F (the same order ids); hover with the study numbers; settings rows (parameter version 8); record <stem>-lmtzones-<session>.csv (no repaint); nightly params LRA-LmtZones-<MKT>.csv; TRACK_MOUSE again for the zone hover only // (0.47.1, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") the biggest resting order lines stop at the lsHodLod table's edges (KeepOutDraw.h; the lines, records and counts unchanged) // keep equal to lqp::VERSION and the setVersion literal below
@@ -395,7 +396,7 @@ struct LQState {
     std::vector<lqp::Tick> lzGammaParsed, lzGamma;                  // (0.48.0) every MenthorQ level of this contract (CR / PS / HVL / GW / G1..) for the LMT zones
     std::vector<Lvl> mqParsed; long long mqMtime = 0; std::string mqNote = "not read yet";   // (0.44.0) the rows of THIS contract; used only while the file is <= 18 h old
     std::string bpMkt, bpState = "not loaded"; long long bpWriteMs = -1;                     // (0.44.0) LiquidityProfile.bandnorms-<MKT>.txt (5-session per-slot pool)
-    long long mstBar = -1, mstMs = -1; bool mstPub = false; std::string mstChart;            // (0.44.0) Market State: the closed bar posted, when, under which chart key
+    long long mstBar = -1, mstMs = -1; bool mstPub = false; std::string mstChart; sa::Hook self;            // (0.44.0) Market State: the closed bar posted, when, under which chart key
     std::map<std::string, std::string> mstLiq, mstLotsBar;                                   // (0.44.0) the facts frozen for that bar (LIQ all; LOTS the per-bar keys)
     double avgRth = 0; int avgRthN = 0, rthOpen = -1, rthClose = -1;
     double expRange = 0; long long hlStamp = -2; std::string reachSrc = "6x 3-min range";
@@ -527,7 +528,7 @@ public:
 #ifndef LQ_FLOW
         LQState* S = slot_.get(this, false); if (S && S->published) { bb::clearWarn(S->symbol, S->spb, S->chartKey); S->published = false; }
         if (S && S->colPublished) { cb::clear(cb::LIQ, S->symbol, S->spb, S->chartKey); S->colPublished = false; }
-        if (S && S->mstPub) { mst::clear("LIQ", S->symbol, S->spb, S->mstChart); mst::clear("LOTS", S->symbol, S->spb, S->mstChart); S->mstPub = false; }   // (0.44.0)
+        if (S && S->mstPub) { mst::clear("LIQ", S->symbol, S->spb, S->mstChart); S->self.clear(S->symbol, S->spb, S->mstChart); mst::clear("LOTS", S->symbol, S->spb, S->mstChart); S->mstPub = false; }   // (0.44.0)
         if (S && !S->bpMkt.empty()) bandSave(*S);                       // (0.44.0) keep the pool's current session
 #endif
     }
@@ -567,6 +568,7 @@ public:
 private:
 #ifndef LQ_FLOW
     void postState(LQState& S, long count, long long st);   // (0.44.0) Market State SRC LIQ / LOTS, once per closed bar
+    void selfAware(LQState& S, long count, long long st, const std::string& chart);   // (0.56.0) self-awareness SELFLIQ
     void orders(LQState& S, long long st);          // (0.15.0) the order-by-order feed -> order book, hits / rebuilds, makeup
     void renderHover(LQState& S, int left, int top, int bottom, int paneRight);   // (0.15.0) the hovered near zone's box
     void loadBig(LQState& S);                       // (0.18.0) the big-order settings of this market (file, by its sub-second stamp)
@@ -907,7 +909,7 @@ void LiquidityProfile::identify(LQState& S) {
         const int w = S.width, f = S.font; const bool bg = S.bg;
 #ifndef LQ_FLOW
         if (S.colPublished) { cb::clear(cb::LIQ, S.symbol, S.spb, S.chartKey); S.colPublished = false; }   // (0.16.0) the old chart's entry
-        if (S.mstPub) { mst::clear("LIQ", S.symbol, S.spb, S.mstChart); mst::clear("LOTS", S.symbol, S.spb, S.mstChart); S.mstPub = false; }   // (0.44.0)
+        if (S.mstPub) { mst::clear("LIQ", S.symbol, S.spb, S.mstChart); S.self.clear(S.symbol, S.spb, S.mstChart); mst::clear("LOTS", S.symbol, S.spb, S.mstChart); S.mstPub = false; }   // (0.44.0)
         if (!S.bpMkt.empty()) bandSave(S);                              // (0.44.0) the old market's pool first
 #endif
         S.mstBar = -1; S.mstMs = -1; S.mstLiq.clear(); S.mstLotsBar.clear(); S.bpMkt.clear(); S.bpWriteMs = -1; S.bpState = "not loaded";
@@ -1752,6 +1754,20 @@ void LiquidityProfile::bandSave(LQState& S) {
 // (0.44.0) MARKET STATE (MARKET-STATE-SPEC.md 1.0): SRC LIQ (the zone price is working or the nearest drawn level zone) and SRC LOTS (the
 // MKT / LMT columns), decided once per CLOSED bar and frozen for it; the slow state (tiers, the biggest resting orders) refreshes when the
 // entry is re-posted every 15 s (the reader ignores an entry older than 60 s). Behind the scenes only: nothing here draws.
+// (0.56.0) SELF-AWARENESS (SelfAware.h, SELF-AWARE.md): the zone this indicator says price is working, and whether it HELD (1 ATR away)
+// or went THRU (1 ATR beyond) - judged by bars after the call only. Value = the zone's x-normal. Display unchanged (SWITCH OFF per market).
+void LiquidityProfile::selfAware(LQState& S, long count, long long st, const std::string& chart) {
+    if (S.symbol.empty() || S.market.empty() || count < 3 || S.mstBar <= 0) return;
+    if (!lsperf::smartAllowed(LSPERF_PLUGIN, S.symbol)) return;                    // PerfGuard: smart features OFF while slow
+    RTARRAYI times(barDateTime); RTARRAY open(barOpen), high(barHigh), low(barLow), close(barClose);
+    const int i = (int)count - 2;
+    if (times.count < count || open.count < count || high.count < count || low.count < count || close.count < count) return;
+    if (ctSec((RTDATE)times[i]) != S.mstBar) return;                       // the facts are of another bar: wait
+    static const sa::Spec SP = [] { sa::Spec s; s.valueKey = "zone_x"; s.sideKey = "zone_side"; s.eventKey = "zone_id"; s.onChange = true;
+        s.gateKey = "zone_step"; s.why = { "zone_id", "zone_step", "zone_lots", "zone_x", "absorb_lots", "pulled_before_pct" }; return s; }();
+    S.self.ind = "LIQ";
+    sa::fromFacts(S.self, SP, S.symbol, S.spb, chart, S.market, st, sa::Bar{ S.mstBar, open[i], high[i], low[i], close[i] }, S.mstLiq);
+}
 void LiquidityProfile::postState(LQState& S, long count, long long st) {
     if (S.symbol.empty() || count < 3 || !(S.e.P.tick > 0)) return;
     RTARRAYI times(barDateTime); if (times.count < count) return;
@@ -1760,7 +1776,7 @@ void LiquidityProfile::postState(LQState& S, long count, long long st) {
     const char* cl = getChartLabel(); const std::string chart = cl ? std::string(cl) : std::string();
     const bool newBar = barCt != S.mstBar;
     if (!newBar && S.mstPub && chart == S.mstChart && st >= S.mstMs && st - S.mstMs < 15000) return;
-    if (S.mstPub && chart != S.mstChart) { mst::clear("LIQ", S.symbol, S.spb, S.mstChart); mst::clear("LOTS", S.symbol, S.spb, S.mstChart); }
+    if (S.mstPub && chart != S.mstChart) { mst::clear("LIQ", S.symbol, S.spb, S.mstChart); S.self.clear(S.symbol, S.spb, S.mstChart); mst::clear("LOTS", S.symbol, S.spb, S.mstChart); }
     const double tick = S.e.P.tick;
     const bool feed = S.bfNow > 0;                                       // the order-by-order feed has delivered events
     if (newBar) {
@@ -1821,6 +1837,7 @@ void LiquidityProfile::postState(LQState& S, long count, long long st) {
     for (std::map<std::string, std::string>::const_iterator it = S.mstLotsBar.begin(); it != S.mstLotsBar.end(); ++it) kv[it->first] = it->second;
     mst::publish("LOTS", S.symbol, S.spb, chart, st, S.mstBar, kv);
     mst::publish("LIQ", S.symbol, S.spb, chart, st, S.mstBar, S.mstLiq);
+    selfAware(S, count, st, chart);   // (0.56.0) self-awareness
     S.mstMs = st; S.mstChart = chart; S.mstPub = true;
 }
 #endif
@@ -4174,6 +4191,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.55.2");   // LQ_VERSION
+    p->setVersion("0.56.0");   // LQ_VERSION
     return p;
 }

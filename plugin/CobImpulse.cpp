@@ -61,6 +61,7 @@
 #include "HostSlot.h"
 #include "KeepOutDraw.h"   // (0.5.2) BoxDock.h 1.2.0 keep-out: nothing painted over the HOD/LOD table
 #include "ClaimGates.h"                 // (0.3.0) cgate::kShowHvlCushion - the HVL regime text in the gamma hover
+#include "SelfAware.h"           // (0.6.0) self-awareness
 #include "MarketState.h"                // (0.4.1) SRC COB for the last closed bar
 #include "CobImpulseSettings.h"          // (0.5.0) the settings table (show / hide + colour: label, impulse box)
 #include "SettingsHost.h"
@@ -86,7 +87,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define CI_VERSION "0.5.3"          // (0.5.2, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") a Cob label or impulse box that would touch the lsHodLod table is not painted there (records unchanged; KeepOutDraw.h; status UNDER_HODLOD) // (0.5.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the Cob label / impulse box hover is OFF (CI_HOVERS; code kept), no TRACK_MOUSE; (0.5.0, 2026-10-18, Rassul "I'll go with your recommendation") a settings window: Cob labels + Impulse bar box, each Show + colour, per market (CobImpulseSettings.h); defaults = what 0.4.1 drew; the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
+#define CI_VERSION "0.6.0"          // (0.6.0, 2026-10-26) self-awareness SELFCOB (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (0.5.2, 2026-10-21 16:05 CT Rassul "fix this, it should be solid") a Cob label or impulse box that would touch the lsHodLod table is not painted there (records unchanged; KeepOutDraw.h; status UNDER_HODLOD) // (0.5.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the Cob label / impulse box hover is OFF (CI_HOVERS; code kept), no TRACK_MOUSE; (0.5.0, 2026-10-18, Rassul "I'll go with your recommendation") a settings window: Cob labels + Impulse bar box, each Show + colour, per market (CobImpulseSettings.h); defaults = what 0.4.1 drew; the plugin = the setVersion literal below; (0.4.1) cimp::VERSION is the LOGIC version (0.4.0, unchanged - only the Market State post was added)
 static const bool CI_HOVERS = false;   // (0.5.1) true brings the hover back
 
 static const COLOR C_LABEL = 0x0080FFFF;   // his IRT Cob label colour (light cyan), unchanged
@@ -204,7 +205,7 @@ struct CIState {
     // hover
     std::vector<HoverT> targets; bool msHas = false; int msH = 0, msV = 0; unsigned long long msWnd = 0; std::string hovKey;
     // (0.4.1) the Market State entry of this chart
-    bool mstPosted = false; std::string mstSym, mstChart; long mstSpb = 0; long long mstBar = -1, mstMs = -1; std::string mstSig;
+    bool mstPosted = false; std::string mstSym, mstChart; long mstSpb = 0; long long mstBar = -1, mstMs = -1; std::string mstSig; sa::Hook self;
     ss::Store setStore; ss::Values set = ss::defaults(ciset::spec(), -1);   // (0.5.0) CobImpulse.settings-<MKT>.txt (re-read by stamp, at most once a second)
 };
 static ss::Ids& ciIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
@@ -228,7 +229,7 @@ public:
     void pump(bool mayCalc);
     void release() {   // (0.4.1) the Market State entry leaves the board first
         CIState* S = slot_.get(this, false);
-        if (S && S->mstPosted) { mst::clear("COB", S->mstSym, S->mstSpb, S->mstChart); S->mstPosted = false; }
+        if (S && S->mstPosted) { mst::clear("COB", S->mstSym, S->mstSpb, S->mstChart); S->self.clear(S->mstSym, S->mstSpb, S->mstChart); S->mstPosted = false; }
         slot_.release(this);
     }
     CIState* testState() { return slot_.get(this, false); }
@@ -648,11 +649,24 @@ void CobImpulse::postMst(CIState& S, long count) {
     const std::map<std::string, std::string> kv = ciMstFacts(S.recs, S.pending, S.oddsRec, S.pendOdds, t);
     std::string sig; for (const auto& p : kv) sig += p.first + "=" + p.second + ";";
     const long long now = steadyMs();
-    if (S.mstPosted && (S.symbol != S.mstSym || S.spb != S.mstSpb || chart != S.mstChart)) { mst::clear("COB", S.mstSym, S.mstSpb, S.mstChart); S.mstPosted = false; }
+    if (S.mstPosted && (S.symbol != S.mstSym || S.spb != S.mstSpb || chart != S.mstChart)) { mst::clear("COB", S.mstSym, S.mstSpb, S.mstChart); S.self.clear(S.mstSym, S.mstSpb, S.mstChart); S.mstPosted = false; }
     const bool changed = bar != S.mstBar || sig != S.mstSig;
     if (!changed && S.mstPosted && S.mstMs >= 0 && now >= S.mstMs && now - S.mstMs < 10000) return;
     mst::publish("COB", S.symbol, S.spb, chart, now, bar, kv);
     S.mstPosted = true; S.mstSym = S.symbol; S.mstSpb = S.spb; S.mstChart = chart; S.mstBar = bar; S.mstSig = sig; S.mstMs = now;
+    if (lsperf::smartAllowed(LSPERF_PLUGIN, S.symbol)) {   // (0.6.0) PerfGuard: self-awareness only while this indicator is within budget
+    {   // (0.6.0) SELF-AWARENESS (SelfAware.h, SELF-AWARE.md): each recorded CoB (bull = up, bear = down) is a signal; its base confidence =
+        // the live odds the label shows (else 50); a record written seconds after the close still counts for that bar. HIT = 1 ATR its way
+        // first (later bars only). Value = the odds. Display unchanged (SWITCH OFF per market).
+        RTARRAY op(barOpen), hi(barHigh), lo(barLow), cz(barClose); const int i = (int)count - 2;
+        if (op.count > i && hi.count > i && lo.count > i && cz.count > i && !S.market.empty()) {
+            static const sa::Spec SP = [] { sa::Spec x; x.valueKey = "cob_odds"; x.sideKey = "cob"; x.confKey = "cob_odds"; x.allowLate = true;
+                x.why = { "cob", "cob_odds", "cob_odds_base", "cob_odds_n", "cob_tag", "cob_gamma" }; return x; }();
+            S.self.ind = "COB";
+            sa::fromFacts(S.self, SP, S.symbol, S.spb, chart, S.market, now, sa::Bar{ bar, op[i], hi[i], lo[i], cz[i] }, kv);
+        }
+    }
+    }
 }
 // the bar index whose time is t (closed bars only), -1 = none
 template <class Times> static int indexOf(Times& times, long count, long long t) {
@@ -758,6 +772,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | (CI_HOVERS ? TRACK_MOUSE : 0) | CALC_LAST);   // (0.5.1) no TRACK_MOUSE while the hovers are off   // CALC_LAST: it reads his RTL results
     p->setDescription("LRA Cob Impulse v0.4.1: what are the odds this CoB reaches 1R (shown after the label, e.g. Cob 63%, from the nightly CoB Lab, LRA-Odds-<MKT>.csv; ODDS 0 hides it), did the CoB leg start with force, and is a MenthorQ level near its start? Labels each CoB (his cob_bull_3m_1b / cob_bear_3m_1b) Cob, Cob+ R / V / C and / or + a gamma name (e.g. Cob+RV?, Cob+R+CR?, Cob+GM?): R = a bar from the leg's pivot to 2 bars after it, inside the pivot bar, with the biggest range in 35+ bars; V = the biggest volume in 35+ bars; C = a climax at the origin (an opposite-colour biggest-volume bar from 2 bars before to 2 after the pivot, then a close beyond it). Gamma = ONE MenthorQ level from GammaProfile-MQ-<MKT>.csv at the CoB close: the leg started in its zone, crossed the HVL, or a big node is ahead within the expected move (CR PS HVL CR0 PS0 HVL0 GW0, GM = a top-3 gamma strike); always ? (still testing). A thin white box marks the impulse bar. Per-market file LRA-CobImpulse-<MKT>.csv: MODE off / abs / always; PROVEN 1 drops the impulse ?; GAMMA 1 / 0, GAMMA_W, GAMMA_EM. Decided at the CoB's close, recorded, never repainted.");
-    p->setVersion("0.5.3");   // CI_VERSION
+    p->setVersion("0.6.0");   // CI_VERSION
     return p;
 }

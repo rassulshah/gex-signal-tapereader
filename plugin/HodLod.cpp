@@ -128,6 +128,7 @@ static const bool HL_PRE_HOVER = true;
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
 #include "Fresh.h"               // (2.4.0) the one freshness / STALE rule (Reg / Q / Gex row / Tape Reader status)
 #include "AwareHook.h"           // (2.8.0) the smart-read hook (layer L3)
+#include "SelfAware.h"           // (2.9.0) self-awareness
 #include "MarketState.h"         // (2.4.0) SRC HODLOD + TREND, once per closed bar
 #include "BoxDock.h"             // (2.4.1) the table rectangle for the Big Lot box (lsBigBidAsk) to dock to
 #include <chrono>
@@ -257,7 +258,7 @@ struct HLState {
     // (2.4.0) the Market State posts: this chart's identity, the facts decided for the last closed bar, when they were last posted
     std::string hlbSym, hlbChart; long hlbSpb = 0; bool hlbPosted = false;   // (2.4.1) the published table rectangle (BoxDock.h)
     std::string mstSym, mstChart; long mstSpb = 0; bool mstPosted = false; long long mstBar = -1, mstMs = -1; std::string mstSig;
-    std::map<std::string, std::string> mstKv, mstTrendKv; awh::Hook aw;   // (2.8.0) aw: the smart-read hook
+    std::map<std::string, std::string> mstKv, mstTrendKv; sa::Hook selfHL, selfTR; sa::Bar selfBar; awh::Hook aw;   // (2.8.0) aw: the smart-read hook
     bp::Hyst hyst; long long hystPlaceSig = -3; std::string placeLine; hl::Box hystPane = { 0, 0, 0, 0 };                           // (2.0.6) the table's place: no ping-pong (reset when the settings change)
     // (2.6.0) the PRE-OPEN BOOK: the engine of today's open, its order feed (+ 250 ms clock), the record, the row's hover
     po::Engine pre; hlpo::Feed preFeed; int preTimerId = 0; bool preTimerOn = false, preTimerTried = false, preBusy = false;
@@ -315,7 +316,7 @@ public:
     {   // (2.4.0) this chart's Market State entries leave the board (removal, symbol / period change), then the state goes
         HLState* S = slot_.get(this, false);
         if (S && S->hlbPosted) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); bdk::clearHodLodTable(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; }   // (2.4.1)
-        if (S && S->mstPosted) { mst::clear("HODLOD", S->mstSym, S->mstSpb, S->mstChart); mst::clear("TREND", S->mstSym, S->mstSpb, S->mstChart); S->aw.clear(S->mstSym, S->mstSpb, S->mstChart); S->mstPosted = false; }
+        if (S && S->mstPosted) { mst::clear("HODLOD", S->mstSym, S->mstSpb, S->mstChart); mst::clear("TREND", S->mstSym, S->mstSpb, S->mstChart); S->selfHL.clear(S->mstSym, S->mstSpb, S->mstChart); S->selfTR.clear(S->mstSym, S->mstSpb, S->mstChart); S->aw.clear(S->mstSym, S->mstSpb, S->mstChart); S->mstPosted = false; }
         if (S) { preStopTimer(*S); S->preFeed.close(); }            // (2.6.0) the clock stops before the state goes; the feed unsubscribes
         slot_.release(this);
     }
@@ -733,7 +734,8 @@ void HodLod::recompute(HLState& S, long n)
         b.v = haveVol ? (double)vo[i] : NAN;
         B.push_back(b);
     }
-    if (!B.empty()) { S.lastClosedAbs = B.back().absEnd; S.lastClose = B.back().c; }   // (2.4.0) the regime's price + the Market State's bar
+    if (!B.empty()) { S.lastClosedAbs = B.back().absEnd; S.lastClose = B.back().c; }
+    if (!B.empty()) { S.selfBar = sa::Bar{ B.back().absEnd, B.back().o, B.back().h, B.back().l, B.back().c }; }   // (2.9.0) self-awareness: the closed bar   // (2.4.0) the regime's price + the Market State's bar
     hl::Cfg c; c.mkt = S.mi; c.per = per; c.tick = tick; c.readOpen = hl::readOpenFor(S.mi); c.readN = hl::readNFor(S.mi);
     std::vector<hl::ReadRow> rows;
     hl::ProjLock lock;   // (1.1.6) the target stays where it was set until the 1st extreme is taken out
@@ -1498,7 +1500,7 @@ void HodLod::postMst(HLState& S)
     const char* sy = getSymbol(); const char* cl = getChartLabel();
     const std::string sym = sy ? sy : "", chart = cl ? cl : ""; const long spb = getSecondsPerBar();
     if (sym.empty()) return;
-    if (S.mstPosted && (sym != S.mstSym || spb != S.mstSpb || chart != S.mstChart)) { mst::clear("HODLOD", S.mstSym, S.mstSpb, S.mstChart); mst::clear("TREND", S.mstSym, S.mstSpb, S.mstChart); S.aw.clear(S.mstSym, S.mstSpb, S.mstChart); S.mstPosted = false; }
+    if (S.mstPosted && (sym != S.mstSym || spb != S.mstSpb || chart != S.mstChart)) { mst::clear("HODLOD", S.mstSym, S.mstSpb, S.mstChart); mst::clear("TREND", S.mstSym, S.mstSpb, S.mstChart); S.selfHL.clear(S.mstSym, S.mstSpb, S.mstChart); S.selfTR.clear(S.mstSym, S.mstSpb, S.mstChart); S.aw.clear(S.mstSym, S.mstSpb, S.mstChart); S.mstPosted = false; }
     hl::MstIn in; in.tick = S.tick; in.dec = hl::MKTS[S.mi].dec; in.regime = S.regSign;
     in.dataAgeMin = (S.hvl.ok && S.regV.known) ? S.regV.ageSec / 60 : -1;
     in.qOk = S.qf.ok && S.qJudged && !S.qV.stale(); in.qm = S.qf.m; in.qo = S.qf.o; in.qv = S.qf.v;
@@ -1512,6 +1514,21 @@ void HodLod::postMst(HLState& S)
     if (!(newBar || changed || !S.mstPosted || S.mstMs < 0 || now - S.mstMs >= 10000 || now < S.mstMs)) return;
     mst::publish("HODLOD", sym, spb, chart, now, S.mstBar, S.mstKv);
     mst::publish("TREND", sym, spb, chart, now, S.mstBar, S.mstTrendKv);
+    if (lsperf::smartAllowed(LSPERF_PLUGIN, sym)) {   // (2.9.0) PerfGuard: self-awareness only while this indicator is within budget
+    if (S.selfBar.t == S.mstBar && S.mstBar > 0) {   // (2.9.0) SELF-AWARENESS (SelfAware.h, SELF-AWARE.md), display unchanged (SWITCH OFF per market)
+        // HL: the box's first extreme of the day - HOD first = down from here, LOD first = up; once per new call. Value = range used.
+        // TREND: the trend engine turning up / down (a new sign of the trend level). Value = the trend level. HIT = 1 ATR its way first.
+        const std::string mk = hl::MKTS[S.mi].code;
+        static const sa::Spec HL = [] { sa::Spec x; x.valueKey = "range_used"; x.sideKey = "first_extreme"; x.onChange = true;
+            x.why = { "first_extreme", "hod", "lod", "proj_hi", "proj_lo", "range_used", "regime", "trend_word" }; return x; }();
+        S.selfHL.ind = "HL"; sa::fromFacts(S.selfHL, HL, sym, spb, chart, mk, now, S.selfBar, S.mstKv);
+        std::map<std::string, std::string> tk = S.mstTrendKv; const double lv = sa::factNum(tk, "trend");
+        tk["dir"] = !(lv == lv) ? "?" : lv > 0 ? "up" : lv < 0 ? "down" : "none";
+        static const sa::Spec TR = [] { sa::Spec x; x.valueKey = "trend"; x.sideKey = "dir"; x.onChange = true; x.rearm = true;
+            x.why = { "trend", "trend_word" }; return x; }();
+        S.selfTR.ind = "TREND"; sa::fromFacts(S.selfTR, TR, sym, spb, chart, mk, now, S.selfBar, tk);
+    }
+    }
     S.mstSym = sym; S.mstSpb = spb; S.mstChart = chart; S.mstPosted = true; S.mstMs = now;
 }
 
@@ -1552,6 +1569,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.8.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.9.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
