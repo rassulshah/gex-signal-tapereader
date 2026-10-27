@@ -1,6 +1,6 @@
 #ifndef LS_MARKETPROFILE_H
 #define LS_MARKETPROFILE_H
-// MarketProfile.h 0.1.0 (2026-10-26) -- the PERSONALITY of one market (awareness_plus item 10), SDK-free (unit-tested on Linux).
+// MarketProfile.h 0.1.1 (2026-10-26; 0.1.1 night: ONE refill rule, refill_window_ms) -- the PERSONALITY of one market (awareness_plus item 10), SDK-free (unit-tested on Linux).
 // Rassul 2026-10-26 13:46: "es is a thicker market and might be totally different than euro" -> every threshold, expectation K/N,
 // news window and expected source is PER MARKET, read from one file the nightly writes (partial pooling done there, never here):
 //
@@ -22,7 +22,11 @@
 
 namespace apm {
 
-static const char* const VERSION = "0.1.0";
+static const char* const VERSION = "0.1.1";   // 0.1.1 (2026-10-26 night, Rassul 21:29 approved Quality Check item 6): refill_share in the file
+// is THE refill rule for every market (lra.refill_rule 1.0.0): a fill at (side, price) is refilled when the next fill-or-refill event there
+// is a NEW order or a SIZE INCREASE on the same side at the same price within refill_window_ms (1,000 ms, RASSUL / PARAM). The old value
+// counted native CME iceberg refills only (6E showed 0% vs 21-24% in the raw book). Default refill_window_ms = 1000; refill_share stays
+// unknown ('?') until the nightly measured it.
 
 struct Slot { int min = 0; double rngMed = -1, rngP95 = -1, volMed = -1, volP95 = -1; };
 struct KN { int K = 0; double N = 0; };
@@ -62,6 +66,7 @@ inline bool toI(const std::string& s, int& x) { double d; if (!toD(s, d)) return
 inline Profile defaults(const std::string& market) {
     Profile P; P.market = market;
     P.p["shock_rng_x"] = 3.0; P.p["shock_vol_x"] = 2.5; P.p["news_conf_x"] = 0.5;
+    P.p["refill_window_ms"] = 1000;   // (0.1.1) the one refill rule's window (RASSUL 2026-10-26); refill_share itself has no default
     const char* kinds[] = { "turn", "collision", "trap", "d2_turn", "confirm", "absorb", "stage3", "held", nullptr };
     const int Ks[] = { 3, 5, 5, 5, 3, 5, 8, 3 }; const double Ns[] = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0, 0 };
     for (int i = 0; kinds[i]; ++i) P.kn[std::string(kinds[i]) + "|all"] = KN{ Ks[i], Ns[i] };

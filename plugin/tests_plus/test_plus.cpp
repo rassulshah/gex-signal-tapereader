@@ -172,6 +172,10 @@ int main() {
         CHECK(Off.preCtx("ESZ26", 180, "c1", now, b1).empty() && Off.take().empty(), "disabled = no effect");
         std::map<std::string, std::string> k2; Off.foldCtx(k2); CHECK(k2.empty(), "disabled = CTX unchanged");
     }
+    {   const apm::Profile D = apm::defaults("EU");   // (MarketProfile 0.1.1) the one refill rule: window 1,000 ms by default, refill_share unknown until measured
+        CHECK(D.get("refill_window_ms", 0) == 1000 && !D.has("refill_share"), "MarketProfile 0.1.1: refill_window_ms 1000 default, refill_share unknown");
+        const apm::Profile F = apm::parse("VERSION,1\nMARKET,EU\nP,refill_share,0.213\nP,refill_window_ms,1000\n", "EU");
+        CHECK(F.loaded && F.get("refill_share", -1) > 0.21 && F.get("refill_share", -1) < 0.22, "6E refill_share from the file (one rule): 21.3%"); }
     std::printf("test_plus: %d passed, %d failed\n", pass, fail);
     return fail ? 1 : 0;
 }
