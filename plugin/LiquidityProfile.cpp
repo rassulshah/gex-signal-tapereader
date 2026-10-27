@@ -121,6 +121,7 @@
 #include "OrderLinesLogic.h"   // (0.55.0) THE LIMIT-ORDER LINES (Rassul walk-through 2026-10-25, BUILD-SPEC-2026-10-25.md): SDK-free, tested
 #include "LineLevelTag.h"      // (0.59.0) the level tag on a limit-order line ("100 PDH?")
 #include "LmtZonesLogic.h"     // (0.48.0) LMT ZONES: real large resting orders as zones + the LMT / LMT F columns (SDK-free, tested)
+#include "ExhaustLogic.h"      // (0.61.0) the Ex mark at key price levels (SDK-free, tests_ex/test_ex.cpp + parity with mbo_study.exh_at_zone)
 #include "QueueMeter.h"        // (0.49.0) the QUEUE METER engine: tests at levels / pivots / defended prices -> LRA-QueueMeter-<MKT>.csv for the Levels column (SDK-free, tested)
 #include "ReversalEvidence.h"  // additive EV-QUEUE sidecar; native Q and LT compatibility records remain unchanged
 #define E_MARK_NAME(m) ((m) == qm::M_SHOW ? "SHOW" : (m) == qm::M_SHOWQ ? "SHOW?" : "LOG")
@@ -152,7 +153,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.60.1"          // (0.60.1, 2026-10-27 14:00 CT "move the delta profile to the left") order lines start right of the left Delta column
+#define LQ_VERSION "0.61.0"          // (0.61.0, 2026-10-27 evening, Rassul "ok lets build it. i will take your recommendation" = Ex option A; 17:49 CT "lets just use key price levels only") THE Ex MARK (ExhaustLogic.h 1.0.0): at a KEY PRICE level zone, attackers' contracts / s at the zone in the 2nd half of the 180 s after arrival / the 1st half <= 0.164 with price at the zone >= 50% of the time -> "Ex" / "Ex?" on the decision candle (red above at a resistance, green below at a support), decided at that candle's close, recorded (<stem>-exhaust-<session>.csv), never repainted; "Ex" only where LRA-Exhaust-<MKT>.csv says 30+ key-level cases (none yet = "Ex?" everywhere); settings row "Exhaustion (Ex)"; status EXHAUST   // prior 0.60.1: (0.60.1, 2026-10-27 14:00 CT "move the delta profile to the left") order lines start right of the left Delta column
 #define LQ_VERSION_PREV "0.60.0"          // (0.60.0, 2026-10-27, Rassul approved 13:30-13:39 CT "i think this is a cleaner approach. build"; 13:02 "remove the hoverover on the big bid and ask limit orders") the order lines carry NO text on the chart; each LIVE line tagged to a level (LineLevelTag 1.3.0) goes to lsFlexLevels\\LRA-LmtLevels-<MKT>-<spb>.txt for the Dealer Profile 2.28.0 combined Levels + Liquidity column ("800 + 50", rank); no hovers (order lines / LMT zones / column); the left Liquidity column is not drawn (LQ_LEFT_COL) - its zones still feed LRA-LiqZones / LRA-LiqLevels
 // was: "0.59.2"          // (0.59.2, 2026-10-27 11:32) the level tag is ONE-SIDED: a high up to +1 ATR, a low down to -1 ATR (LineLevelTag 1.2.0)
 // prior: "0.59.1"          // (0.59.1, 2026-10-27 11:27) the level tag reaches 1 ATR from the level (LineLevelTag 1.1.0)
@@ -499,6 +500,11 @@ struct LQState {
     std::vector<LzHit> lzHits; int lzHov = -1, lzHovBar = -1; double lzHovPrice = 0; void* lzHovWnd = nullptr; std::string lzHovState = "none";
     int lzDrawnNow = 0, lzLmtRows = 0, lzFRows = 0, lzGammaDrawn = 0, lzTagsDrawn = 0, lzAfterDrawn = 0;   // (0.54.0) + after-fill reads on the chart now   // (0.53.0) state tags on the chart now
     // (0.49.0) the QUEUE METER (QueueMeter.h): its own order book + candles; the live file for the Dealer Profile's Levels column; the Q record
+    // (0.61.0) the Ex mark: engine, setting, gate, record, other plugins' letters on this chart (BO record / Delta Profile A on the SignalBoard), counts
+    exh::Engine ex; std::vector<exh::Level> exKeys; bool exOn = true; std::string exSetWhy = "not read", exMkt;
+    long long exSetT = -2, exSetN = -2, exSetMs = -1, exGateT = -2, exGateN = -2, exGateMs = -1, exSession = -1, exBarCount = 0, exZonesMs = -1, exFlushMs = -1;
+    long long exStamp = -1, exStampMs = 0, exWrites = 0, exFails = 0, exRestored = 0, exBoT = -2, exBoMs = -1;
+    long long exDrawn = 0, exNudged = 0, exNoRoom = 0, exKept = 0, exOffView = 0; std::map<long long, int> exBo; std::string exBoWhy = "not read";
     qm::Engine qmE; std::string qmMkt, qmNormWhy = "not read"; long long qmSession = -1, qmFlushMs = -1, qmPubMs = -1, qmWrites = 0, qmFails = 0, qmPubs = 0, qmPubFails = 0;
     long long qmRuleT = -2, qmRuleN = -2;   // (0.50.0) the per-market call params file LRA-QueueMeter-<MKT>.csv (stamp)
     std::vector<std::string> qmStripRows; long long qmStripWrites = 0, qmStripFails = 0;   // (0.49.0) the Q letters for the Defense pane's Holding strip
@@ -596,6 +602,10 @@ private:
     void lzSessionCheck(LQState& S, long long t);   // (0.48.0) a new session: end / flush / restore the zones
     void lzAfter(LQState& S, long count);           // (0.48.0) every newly closed bar -> the zone engine; record flush
     void lzFlush(LQState& S, bool force);
+    void exAfter(LQState& S, long count, long long st);   // (0.61.0) the Ex mark: setting, gate, session record, zones, closed candles, clock, record flush
+    void renderEx(LQState& S);                            // (0.61.0) the Ex letters on their decision candles
+    void saveEx(const ss::Values& V);                     // (0.61.0) the "Exhaustion (Ex)" row -> LiquidityProfile.exhaust-<MKT>.txt
+    std::string exPath(LQState& S, long long sess) { const std::string d = dir(); return d.empty() || sess < 0 ? std::string() : d + "\\" + recordStem(S) + "-exhaust-" + std::to_string(sess) + ".csv"; }
     void qmAfter(LQState& S, long count, long long st);   // (0.49.0) the queue meter: market / levels / norms / session record, closed candles, Q rows, live file
     std::string qmPath(LQState& S) { const std::string d = dir(); return d.empty() || S.qmSession < 0 ? std::string() : d + "\\" + recordStem(S) + "-queuemeter-" + std::to_string(S.qmSession) + ".csv"; }
     void renderZones(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX);
@@ -699,6 +709,10 @@ static std::string airPocketPath(cppExtension* x) {                     // (0.47
     if (mkt.empty() || dirp.empty()) return std::string();
     return dirp + "\\LiquidityProfile.airpocket-" + mkt + ".txt";
 }
+static std::string exSetPath(cppExtension* x) {                         // (0.61.0) "1" / "0": the Ex mark on / off for the market
+    const std::string a = airPocketPath(x); const size_t k = a.rfind("airpocket-");
+    return k == std::string::npos ? std::string() : a.substr(0, k) + "exhaust-" + a.substr(k + 10);
+}
 static int readAirPocket(const std::string& p) {                        // 1 on / 0 off / -1 no file or garbled
     std::ifstream in; std::string ln;
     if (p.empty() || !statFile(p) || !openBoundedInput(p, in) || !readBoundedLine(in, ln)) return -1;
@@ -728,6 +742,7 @@ ss::Values LiquidityProfile::fileValues() {
         if (!p3.empty()) { std::ifstream in; std::string ln; if (statFile(p3) && openBoundedInput(p3, in) && readBoundedLine(in, ln)) { bns::Settings q; if (bns::parse(ln, q)) b = q; } }
         V.v[K_BANNER] = b.on ? 1 : 0; V.v[K_BANNER_BG] = b.bg ? 1 : 0; V.v[K_BANNER_FONT] = b.font; V.v[K_BANNER_COLOR] = (double)(b.bgc & 0x00FFFFFF); }
     {   const int a = readAirPocket(airPocketPath(this)); if (a >= 0) V.v[K_AIR_POCKET] = a; }   // (0.47.0) no file = on (the default)
+    {   const int a = readAirPocket(exSetPath(this)); if (a >= 0) V.v[K_EX] = a; }               // (0.61.0) the Ex mark, no file = on (the default)
     {   lmz::Settings z; std::string why; readLz(lzSetPath(mkt), z, why);   // (0.48.0) the LMT zones rows (no / garbled file = the defaults)
         V.v[K_LMZ] = z.on; V.v[K_LMZ_PRINT] = z.print; V.v[K_LMZ_ORIGIN] = z.origin; V.v[K_LMZ_NEAR] = z.nearO; V.v[K_LMZ_FAR] = z.farOn; V.v[K_LMZ_ABC] = z.abc;
         V.v[K_LMZ_GAMMA] = z.gammaLines; V.v[K_LMZ_DIAMOND] = z.diamond; V.v[K_LMZ_C_OFFER] = (double)z.cOffer; V.v[K_LMZ_C_BID] = (double)z.cBid;
@@ -745,6 +760,9 @@ int LiquidityProfile::parmsApplyBody(void) {
     if (!ss::inDialog(this)) return RTX_OK;                              // (0.45.0) never from the chart copy
     const ss::Values V = ss::readDialog(this, LQ_SPEC, lqIds(), fileValues(), snap_);   // untouched -> the files' values; invalid never saved
     saveSize(V); saveBig(V); saveBanner(V); saveAirPocket(V); saveLmz(V);
+#ifndef LQ_FLOW
+    saveEx(V);                                                           // (0.61.0)
+#endif
     snap_.take(ss::dialogNow(this, LQ_SPEC, lqIds(), V));
     return RTX_OK;
 }
@@ -890,6 +908,7 @@ int LiquidityProfile::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
 #else
     if (S && !S->faulted) { try { loadBanner(*S); } catch (...) {} }      // (0.24.0) the banner settings of this market
     if (S && !S->faulted) { try { renderWarning(*S); render(*S); } catch (...) { S->state = "draw error"; } }   // (0.11.3) no price-chart letters
+    if (S && !S->faulted) { try { renderEx(*S); } catch (...) {} }      // (0.61.0) the Ex letters (drawn even before the book is there: they come from the record)
 #endif
     return RTX_OK;
 }
@@ -938,6 +957,8 @@ void LiquidityProfile::identify(LQState& S) {
         if (S.boSession >= 0) boFlush(S, true);                         // (0.18.0) the old chart's pending rows go to ITS file first
         S.bo = bol::Engine(); S.boMkt.clear(); S.boStampT = S.boStampN = -2; S.boCheckMs = -1; S.boSession = -1; S.boLastH = 0; S.boLastStamp = -1;
         S.barEndMs.clear(); S.boAtrCount = -1; S.boHits.clear(); S.boHovKey = 0; S.boHovWnd = nullptr;
+        if (S.exSession >= 0 && !S.ex.rows.empty()) { const std::string xp = exPath(S, S.exSession); if (!xp.empty()) { makeDir(flexDir()); makeDir(dir()); appendLines(xp, exh::header(), S.ex.rows); } }   // (0.61.0) the old chart's rows first
+        S.ex = exh::Engine(); S.exKeys.clear(); S.exMkt.clear(); S.exSession = -1; S.exBarCount = 0; S.exZonesMs = -1; S.exGateT = S.exGateN = -2; S.exGateMs = -1; S.exStamp = -1; S.exBo.clear(); S.exBoT = -2; S.exBoMs = -1;
 #endif
         S.atr = 0; S.finSeen = 0; S.hoverBar = -1; S.bookHist.clear(); S.winHist.clear(); S.winKeys.clear(); S.flowLines.clear(); S.lastStatusText.clear();
         S.identity = id; S.root = root; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
@@ -1271,8 +1292,14 @@ void LiquidityProfile::loadLevels(LQState& S, long count) {
     }
     const std::vector<klv::Level> L = klv::compute(B, per, S.rthOpen, S.rthClose, S.tick);
     S.levels.clear();
+#ifndef LQ_FLOW
+    S.exKeys.clear();
+#endif
     for (size_t i = 0; i < L.size(); ++i) {
-        const std::string& c = L[i].code;                                   // his trade levels only (no weekly, no hourly swings)
+        const std::string& c = L[i].code;
+#ifndef LQ_FLOW
+        if (exh::isKeyCode(c)) { exh::Level k; k.name = c; if (lqp::tryToTick(L[i].price, S.tick, k.px)) S.exKeys.push_back(k); }   // (0.61.0) the Ex zones: key price levels only                                   // his trade levels only (no weekly, no hourly swings)
+#endif
         if (c == "PDH" || c == "PDL" || c == "PFH" || c == "PFL" || c == "ONH" || c == "ONL" || c == "LonHI" || c == "LonLO") {
             LQState::Lvl v; if (!lqp::tryToTick(L[i].price, S.tick, v.px)) continue; v.code = c; S.levels.push_back(v);
         }
@@ -1600,6 +1627,16 @@ void LiquidityProfile::status(LQState& S, long long now) {
               << ",last why " << S.apWhy << ",last ratio " << rb << ",live " << liveN << " (drawn " << S.apLive << ")" << ",ended " << S.apEnded << ",restored " << S.apRestored
               << ",rule ahead <= " << apl::Params().shrinkMax << "x of 60 s before + pulls > fills + closeback >= " << apl::Params().closeBackMin << ",T1 close +/- " << apl::Params().atrMult << " ATR,ends T1 / size back / 15 min\n";
         }
+        {   // (0.61.0) the Ex mark: the numbers here, only the letter on the chart
+            const exh::Tally& X = S.ex.tally; long long exNow = 0, exQ = 0; for (const exh::Dec& d : S.ex.decided) if (d.isEx) { ++exNow; if (d.label == "Ex?") ++exQ; }
+            o << "EXHAUST," << exh::VERSION << "," << (S.exOn ? "on" : "off") << ",settings " << S.exSetWhy << ",gate " << exh::label(S.ex.gate) << " (" << S.ex.gate.why << ")"
+              << ",rule key price levels only, exh <= " << exh::THR << " and at the zone >= " << exh::SHARE_MIN * 100 << "% of " << exh::DEC_S << " s after arrival"
+              << ",key levels " << S.exKeys.size() << " zones " << S.ex.zones.size() << " armed " << S.ex.armed.size() << " half-width " << exh::halfWidth(S.ex.cfg, S.tick > 0 ? S.atr / S.tick : 0) << " ticks"
+              << ",trades " << X.trades << ",visits " << X.visits << " live " << S.ex.active.size() << ",decided " << X.decided << " (Ex " << X.ex << ", not " << X.notEx << ", too little time at the zone " << X.tooShort << ")"
+              << ",outside RTH " << X.outRth << ",same-place skipped " << X.skippedDup << ",restored " << S.exRestored << ",Ex in memory " << exNow << " (Ex? " << exQ << ")"
+              << ",drawn " << S.exDrawn << " nudged " << S.exNudged << " no room " << S.exNoRoom << " under the HOD/LOD table " << S.exKept
+              << ",BO letters known " << S.exBo.size() << " (" << S.exBoWhy << "),record writes " << S.exWrites << " fails " << S.exFails << "\n";
+        }
 #endif
         for (size_t i = 0; i < S.e.zones.size(); ++i) {
             const lqp::Zone& z = S.e.zones[i]; if (!z.shown || !z.near) continue;
@@ -1897,6 +1934,14 @@ void LiquidityProfile::orders(LQState& S, long long st) {
                     if (!S.qmEvidenceUnknownAtStart.count(id)) S.qmEvidenceUnknownAtStart[id] = unknown;
                 }
                 while (S.qmEvidenceUnknownAtStart.size() > 5000) S.qmEvidenceUnknownAtStart.erase(S.qmEvidenceUnknownAtStart.begin()); }
+        }
+        if (S.exOn && ev.action == off::FILL && ev.px > 0 && ev.size > 0 && !S.market.empty() && S.exSession >= 0 && S.exSession == S.session) {   // (0.61.0) the Ex mark: every trade (once this session's record is read back), CT ms inside its own second
+            long long xms = 0;
+            if (ev.stamp > 0 && ev.stamp == S.exStamp) xms = S.exStampMs; else { xms = ev.stamp > 0 ? ctSec((RTDATE)ev.stamp) * 1000LL : 0; if (xms > 0) { S.exStamp = ev.stamp; S.exStampMs = xms; } }
+            if (S.haveOffset) { const long long a = ev.arrMs + S.ctOffset; xms = xms > 0 ? std::min(xms + 999, std::max(xms, a)) : a; }
+            // the aggressor = the side that hit the RESTING order (taken from the book, as the order-flow engine does); implied = no attacker
+            const int ag = ev.implied ? exh::NOATT : restSide == off::BID ? exh::SELLER : restSide == off::ASK ? exh::BUYER : exh::NOATT;
+            if (xms > 0) S.ex.onTrade(xms, ev.px, (double)ev.size, ag);
         }
         S.ob.apply(S.obAcc, ev);
         if (S.boSet.on) {                                               // (0.18.0) the same event to the big-order lines, on the Central clock
@@ -2890,6 +2935,134 @@ void LiquidityProfile::qmAfter(LQState& S, long count, long long st) {
 // (0.54.0, LmtZonesLogic 1.3.0) HELD? is no longer drawn (logged only). The AFTER-FILL READ on the bar of its decision (fill + 30 s), at the
 // filled price: RE-BID (red above an offer, green below a bid - a bid zone has no line, only this tag) or ACCEPTED (grey); behind the
 // "After-fill tags" box and the zone kind's box; short words only, no numbers, no borders (the hover has the numbers).
+// ---- (0.61.0) THE Ex MARK (ExhaustLogic.h): at a KEY PRICE level zone (Rassul 17:49 CT 2026-10-27 "lets just use key price levels only"),
+// the attackers' pace at the zone in the 2nd half of the 180 s after arrival over the 1st half <= 0.164, price at the zone >= 50% of the
+// window -> "Ex" (30+ tested key-level cases for this market in LRA-Exhaust-<MKT>.csv) or "Ex?" on the DECISION candle, red ABOVE at a
+// resistance (buyers exhausted), green BELOW at a support (sellers exhausted), once that candle has closed. Every decision is one record
+// line (<stem>-exhaust-<session>.csv) for the nightly, read back after a restart: never decided twice, never repainted.
+void LiquidityProfile::saveEx(const ss::Values& V) {
+    const std::string p = exSetPath(this); if (p.empty()) return;
+    makeDir(flexDir());
+    if (publishFile(p, std::string(V.b(lpset::K_EX) ? "1" : "0") + "\n")) { LQState* S = slot_.get(this, false); if (S) { S->exSetT = S->exSetN = -2; S->exSetMs = -1; } }
+}
+void LiquidityProfile::exAfter(LQState& S, long count, long long st) {
+    if (S.market.empty() || !(S.tick > 0)) return;
+    exh::Engine& E = S.ex;
+    if (S.exMkt != S.market) { E.setMarket(S.market); S.exMkt = S.market; S.exGateT = S.exGateN = -2; S.exGateMs = -1; }
+    const std::string fd = flexDir();
+    if (S.exSetMs < 0 || st - S.exSetMs >= 1000 || st < S.exSetMs) {      // the setting: at most once a second
+        S.exSetMs = st;
+        const std::string p = fd.empty() ? std::string() : fd + "\\LiquidityProfile.exhaust-" + S.market + ".txt";
+        long long t = -1, n = -1; if (p.empty() || !statSub(p, t, n)) { t = -1; n = -1; }
+        if (t != S.exSetT || n != S.exSetN) { S.exSetT = t; S.exSetN = n;
+            if (t < 0) { S.exOn = true; S.exSetWhy = "no file: on (default)"; }
+            else { const int a = readAirPocket(p); if (a == 1) { S.exOn = true; S.exSetWhy = "file: on"; } else if (a == 0) { S.exOn = false; S.exSetWhy = "file: off"; } else S.exSetWhy = "file garbled - last good kept"; } }
+    }
+    if (S.exGateMs < 0 || st - S.exGateMs >= 60000 || st < S.exGateMs) {  // the gate (the nightly params): stamp-checked every 60 s
+        S.exGateMs = st;
+        const std::string gp = fd.empty() ? std::string() : fd + "\\LRA-Exhaust-" + S.market + ".csv";
+        long long t = -1, n = -1; if (gp.empty() || !statSub(gp, t, n)) { t = -1; n = -1; }
+        if (t != S.exGateT || n != S.exGateN) { S.exGateT = t; S.exGateN = n;
+            std::vector<std::string> L; std::ifstream in; std::string ln; int k = 0;
+            if (t >= 0 && openBoundedInput(gp, in)) while (k++ < 200 && readBoundedLine(in, ln)) L.push_back(ln);
+            E.gate = t < 0 ? exh::Gate() : exh::parseGate(L, S.market); }
+    }
+    if (S.session >= 0 && S.session != S.exSession && !S.symbol.empty()) {   // a new session: this one and the 3 before read back (scroll-back + restart)
+        if (S.exSession >= 0 && !E.rows.empty()) { const std::string op = exPath(S, S.exSession); if (!op.empty()) { makeDir(fd); makeDir(dir()); if (appendLines(op, exh::header(), E.rows)) E.rows.clear(); } }
+        S.exSession = S.session;
+        for (long long k = S.session - 3; k <= S.session; ++k) {
+            std::vector<std::string> rows; std::ifstream in; const std::string p = exPath(S, k);
+            if (!p.empty() && statFile(p) && openBoundedInput(p, in)) { std::string line; int n = 0; while (readBoundedLine(in, line) && ++n < 20000) rows.push_back(line); }
+            S.exRestored += E.adopt(rows);
+        }
+    }
+    if (!S.exOn) return;
+    if (S.exZonesMs < 0 || st - S.exZonesMs >= 1000 || st < S.exZonesMs) {   // the key level zones (half-width from the 3-min ATR)
+        S.exZonesMs = st;
+        E.setZones(S.exKeys, exh::halfWidth(E.cfg, S.atr > 0 ? S.atr / S.tick : 0));   // S.atr is already the 3-min ATR (closedBars scales other candle lengths)
+    }
+    if (count >= 2) {   // every newly CLOSED candle once, in order: arms the zones it stayed fully outside of
+        RTARRAY close(barClose), high(barHigh), low(barLow);
+        if (close.count >= count && high.count >= count && low.count >= count) {
+            if (count < S.exBarCount) S.exBarCount = 0;
+            const long from = std::max(S.exBarCount > 0 ? (long)S.exBarCount - 1 : 0L, count - 3);   // only the last closed candle matters for arming
+            for (long i = from; i <= count - 2; ++i) {
+                lqp::Tick h = 0, l = 0, c = 0;
+                if (lqp::tryToTick((double)high[(int)i], S.tick, h) && lqp::tryToTick((double)low[(int)i], S.tick, l) && lqp::tryToTick((double)close[(int)i], S.tick, c)) E.closeBar(h, l, c);
+            }
+            S.exBarCount = count;
+        }
+    }
+    {   const long long nowCt = S.haveOffset ? st + S.ctOffset : 0; if (nowCt > 0) E.step(nowCt); }   // decided even when the feed is quiet
+    if (!E.rows.empty() && (S.exFlushMs < 0 || st - S.exFlushMs >= 1000 || st < S.exFlushMs)) {   // the record: append, cleared only after a good write
+        S.exFlushMs = st; const std::string path = exPath(S, S.exSession);
+        if (!path.empty()) { makeDir(fd); makeDir(dir());
+            if (appendLines(path, exh::header(), E.rows)) { E.rows.clear(); S.exWrites++; } else { S.exFails++; if (E.rows.size() > 2000) E.rows.erase(E.rows.begin(), E.rows.begin() + 500); } }
+        else if (E.rows.size() > 2000) E.rows.clear();
+    }
+    if (S.exBoMs < 0 || st - S.exBoMs >= 5000 || st < S.exBoMs) {        // lsBigBidAsk's fired BO / BD letters on this chart (to stay clear of them)
+        S.exBoMs = st;
+        const std::string bd = fd.empty() ? std::string() : fd + "\\BigBidAsk\\" + S.market + "-" + off::fileKey(S.symbol) + "-" + std::to_string(S.spb) + "-breakouts-";
+        long long tsum = 0; std::vector<std::string> paths;
+        for (long long k = S.session - 1; k <= S.session && !bd.empty() && S.session >= 0; ++k) { const std::string p = bd + std::to_string(k) + ".csv"; long long t = -1, n = -1; if (statSub(p, t, n)) { tsum += t + n; paths.push_back(p); } }
+        if (tsum != S.exBoT) { S.exBoT = tsum; S.exBo.clear();
+            for (const std::string& p : paths) { std::ifstream in; std::string ln; int n = 0;
+                if (openBoundedInput(p, in)) while (readBoundedLine(in, ln) && ++n < 20000) { long long t0 = 0; int dir = 0; if (exh::parseBoMark(ln, t0, dir)) S.exBo[t0] = dir; } }
+            S.exBoWhy = paths.empty() ? "no BigBidAsk breakout record" : std::to_string(paths.size()) + " record file(s)"; }
+    }
+}
+void LiquidityProfile::renderEx(LQState& S) {
+    S.exDrawn = S.exNudged = S.exNoRoom = S.exKept = S.exOffView = 0;   // counts of THIS draw (the status shows the last one)
+    if (!S.exOn || S.ex.decided.empty()) return;
+    const long count = getBarCount(); if (count < 2) return;
+    RTARRAYI times(barDateTime); RTARRAY high(barHigh), low(barLow);
+    if (times.count < count || high.count < count || low.count < count) return;
+    int vs = 0, ve = -1; if (getVisibleBars(&vs, &ve) != RTX_OK || vs < 0 || ve < vs) { vs = (int)std::max(0L, count - 400); ve = (int)count - 1; }
+    ve = std::min(ve, (int)count - 1); vs = std::max(0, vs);
+    std::vector<long long> ends((size_t)count); for (long i = 0; i < count; ++i) ends[(size_t)i] = ctSec((RTDATE)times[(int)i]) * 1000LL;
+    for (long i = 1; i < count; ++i) if (ends[(size_t)i] < ends[(size_t)i - 1]) return;   // unordered stamps: draw nothing rather than guess
+    const std::map<int, exh::Mark> M = exh::marksByBar(S.ex.decided, ends, S.spb, (int)count - 2);
+    if (M.empty()) return;
+    RCT pane, scale; pane.getPaneRect(false); scale.getScaleRect();
+    int paneRight = pane.right; if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) paneRight = scale.left - 2;
+    exh::Box area; area.l = pane.left; area.t = warnTop(pane.top); area.r = paneRight; area.b = pane.bottom;
+    S.keep.refresh(getSymbol(), getSecondsPerBar(), getChartLabel());
+    exh::Box keep; if (S.keep.on) { keep.l = S.keep.box.l - bdk::KEEP_MARGIN; keep.t = S.keep.box.t - bdk::KEEP_MARGIN; keep.r = S.keep.box.r + bdk::KEEP_MARGIN; keep.b = S.keep.box.b + bdk::KEEP_MARGIN; }
+    FONT f; f.id = HELVETICA; f.size = 10; f.style = BOLD; setFont(f);   // the BO letter's font (lsBigBidAsk: Helvetica bold, its default 10)
+    const int lh = rowPx(10), lift = 2;                                   // one text row of the 10-pt font (rowPx), the glyphs lifted as the BO letter's
+    // the Delta Profile's A circles (SignalBoard, final + tentative) and the BO letters: boxes to stay clear of
+    std::vector<sb::Ev> evA; { const char* cl = getChartLabel(); sb::readAll('A', S.symbol, S.spb, cl ? std::string(cl) : std::string(), steadyMs(), evA); }
+    const int boW = getTextWidth("BO", -1) + 2;
+    std::vector<exh::Box> placed;
+    for (const auto& kv : M) {
+        const int bar = kv.first; const exh::Mark& m = kv.second;
+        if (bar < vs || bar > ve) { ++S.exOffView; continue; }
+        const char* tx = m.label == "Ex" ? "Ex" : "Ex?";
+        const int w = getTextWidth(tx, -1) + 2;
+        PNT a; a.set(bar, high[bar], kBarCenter); PNT b; b.set(bar, low[bar], kBarCenter);
+        const int cx = a.h, top = std::min(a.v, b.v), bot = std::max(a.v, b.v);
+        std::vector<exh::Box> others = placed;
+        const long long key = (long long)times[bar], keyCt = ends[(size_t)bar] / 1000;
+        {   const auto it = S.exBo.find(key);                                  // a BO letter on this candle: just beyond its extreme (above +1 / below -1)
+            if (it != S.exBo.end()) { exh::Box o; o.l = cx - boW / 2 - 1; o.r = cx + boW / 2 + 1;
+                if (it->second > 0) { o.b = top - 1; o.t = top - 2 - 2 * lh; } else { o.t = bot + 1; o.b = bot + 2 + 2 * lh; } others.push_back(o); } }   // the BO letter + room for its print
+        for (const sb::Ev& e : evA) {                                          // an A circle on this candle on the same side (bullish below / bearish above)
+            if (e.bar != keyCt) continue;
+            PNT q; q.set(bar, (float)e.px, kBarCenter); const int r = lh / 2 + 3; exh::Box o; o.l = cx - r; o.r = cx + r;
+            if (e.side > 0) { o.t = std::min((int)q.v, bot) - r; o.b = std::max((int)q.v, bot) + 2 * r; } else { o.t = std::min((int)q.v, top) - 2 * r; o.b = std::max((int)q.v, top) + r; }
+            others.push_back(o);
+        }
+        const exh::Place P = exh::place(cx, top, bot, m.side, w, lh, others, keep, area);
+        if (!P.ok) { if (P.kept) ++S.exKept; else ++S.exNoRoom; continue; }
+        placed.push_back(P.box); ++S.exDrawn; if (P.nudged) ++S.exNudged;
+        const COLOR col = m.side == exh::SUP ? C_BUY : C_SELL;
+        setTextColor(0x00000000);                                              // the BO letter's thin dark outline
+        for (int d = 0; d < 4; ++d) { const int dx = d == 0 ? -1 : d == 1 ? 1 : 0, dy = d == 2 ? -1 : d == 3 ? 1 : 0;
+            RCT r; r.set(coord(P.box.l + dx), coord(P.box.t - lift + dy), coord(P.box.r + dx), coord(P.box.b - lift + dy)); r.drawText(tx, true, false); }
+        setTextColor(col);
+        { RCT r; r.set(coord(P.box.l), coord(P.box.t - lift), coord(P.box.r), coord(P.box.b - lift)); r.drawText(tx, true, false); }
+    }
+}
 void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX) {
     // (0.55.0) THE LIMIT-ORDER LINES (OrderLinesLogic.h 1.0.0, Rassul's walk-through 2026-10-25 + all-approved-mockup.html). The LMT zone
     // lines, FILLING / RE-BID? / ACCEPTED tags and the X are no longer drawn (the zone engine still records). Drawn here, in this order:
@@ -3150,6 +3323,7 @@ void LiquidityProfile::pump() {
         apStep(S, t);                                                   // (0.47.0) live bands end once (T1 / size back / 15 min); records flushed
         boAfter(S, count, st);                                          // (0.18.0) ATR, bar ends, price, time steps, book check, record
         lzAfter(S, count);                                              // (0.48.0) every newly closed bar -> the LMT zones (decided once), record
+        exAfter(S, count, st);                                          // (0.61.0) the Ex mark: zones, closed candles, decisions, record
         qmAfter(S, count, st);                                          // (0.49.0) the queue meter: closed candles -> Q (decided once), the live file
 #endif
         if (S.e.haveBook && (S.lastZones < 0 || t - S.lastZones >= ZONES_EVERY_MS || t < S.lastZones)) {
@@ -4267,6 +4441,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.60.1");   // LQ_VERSION
+    p->setVersion("0.61.0");   // LQ_VERSION
     return p;
 }
