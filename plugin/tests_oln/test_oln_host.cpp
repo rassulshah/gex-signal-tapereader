@@ -107,11 +107,11 @@ int main() {
     CHECK(rec.find("\nN|") != std::string::npos && rec.find("\nS|") != std::string::npos && rec.find("\nE|") != std::string::npos && rec.find("|HELD|") != std::string::npos, "record: N / S / E / W lines");
     const std::string st = readAll(flex + "\\LiquidityProfile.status-ES-180.txt");
     CHECK(st.find(std::string("ORDER_LINES,") + oln::VERSION + ",on") != std::string::npos && st.find("floor 50 lots rest 9 min roll 15 s") != std::string::npos && st.find(",held 1 ") != std::string::npos, "status: ORDER_LINES line");
-    CHECK(std::string(LQ_VERSION) == "0.55.1" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION && std::string(lqp::VERSION) == LQ_VERSION, "versions = 0.55.1");
+    CHECK(std::string(LQ_VERSION) == "0.59.0" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION, "versions = 0.59.0 (2026-10-27; lqp::VERSION has stayed 0.55.2 since 0.56)");
     // the settings rows: relabelled, parameter version 11
     { const ss::Spec& sp = lpset::profileSpec(); bool m = false, ice = false, lad = false, pul = false, q = false, wd = false;
       for (int k = 0; k < sp.n; ++k) { const std::string lb = sp.rows[k].label; if (lb == "Limit-order lines (resting 9+ min)") m = true; if (lb == "Icebergs (I R15 500)") ice = true; if (lb == "Ladders (4o 87)") lad = true; if (lb == "Pulled lines (very dark)") pul = true; if (lb == "Queue Q at levels") q = true; if (lb == "HELD / THRU words") wd = true; }
-      CHECK(m && ice && lad && pul && q && wd && sp.paramVersion == 11, "settings rows relabelled, parameter version 11"); }
+      CHECK(m && ice && lad && pul && q && wd && sp.paramVersion == 13, "settings rows relabelled, parameter version 13 (0.58.0 queue Q hidden, 0.59.0 level tag shown)"); }
     // restart: a new plugin instance reads the record back - the same line, step, end and word
     {   p->destroy(); p->mdPark_.clear(); delete p; h.data = nullptr;
         LiquidityProfile* p2 = static_cast<LiquidityProfile*>(CreateExtension());

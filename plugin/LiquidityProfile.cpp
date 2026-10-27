@@ -119,6 +119,7 @@
 #include "OrderFlowFeed.h"
 #include "AirPocketLogic.h"    // (0.47.0) MBO roadmap Middle Ahead #1: the air pocket band (SDK-free, tested)
 #include "OrderLinesLogic.h"   // (0.55.0) THE LIMIT-ORDER LINES (Rassul walk-through 2026-10-25, BUILD-SPEC-2026-10-25.md): SDK-free, tested
+#include "LineLevelTag.h"      // (0.59.0) the level tag on a limit-order line ("100 PDH?")
 #include "LmtZonesLogic.h"     // (0.48.0) LMT ZONES: real large resting orders as zones + the LMT / LMT F columns (SDK-free, tested)
 #include "QueueMeter.h"        // (0.49.0) the QUEUE METER engine: tests at levels / pivots / defended prices -> LRA-QueueMeter-<MKT>.csv for the Levels column (SDK-free, tested)
 #include "ReversalEvidence.h"  // additive EV-QUEUE sidecar; native Q and LT compatibility records remain unchanged
@@ -151,7 +152,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.58.0"          // (0.58.0, 2026-10-27) the queue Q badge is not drawn (Rassul 2026-10-27 00:43 CT "i dont see the queue helping at all, remove it but you can continue logging it"); logging unchanged
+#define LQ_VERSION "0.59.0"          // (0.59.0, 2026-10-27, Rassul 11:16 CT "build", 11:17 "close enough") the LEVEL TAG on a limit-order line: an order within the level ZONE, max(2 ticks, 0.25 ATR), of a named key / volume / gamma level shows the level name + "?" after its label ("100 PDH?"); "?" until the nightly proves it per market and kind; setting row "Level tag on lines" (the hidden zone-only diamond row reused, parameter version 13)
+// prior: "0.58.0"          // (0.58.0, 2026-10-27) the queue Q badge is not drawn (Rassul 2026-10-27 00:43 CT "i dont see the queue helping at all, remove it but you can continue logging it"); logging unchanged
 // prior: "0.57.0"          // (0.57.0, 2026-10-26 night, Rassul 21:29 approved) QueueMeter.h 1.5.0: the decided Q = HIS HELD rule (bid: no bar HIGH below the bid + a GREEN close above it within 3 bars; offer mirror; else "not held"), break distance 0.25 ATR (PARAM), " ?" on the badge while MARK is SHOW?; closeBar now gets the bar OPEN; strip / typed rows carry "not held" (adverse)  // (0.56.0, 2026-10-26) self-awareness SELFLIQ (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (0.55.1, 2026-10-25, BUILD-SPEC "Defense Line vs order line at the same price") the candles that carry a drawn fill dot are published to lsFlexLevels\LRA-OrderFills-<MKT>-<spb>.txt (one bar datetime key per line) so lsDefenseLines skips its yellow dot there; drawing unchanged // (0.55.0, 2026-10-25, Rassul "build" 22:29 CT 2026-10-25) THE LIMIT-ORDER LINES (OrderLinesLogic.h 1.0.0) replace the drawn LMT zones: every big resting order (per-market floor, ES 50; LRA-LimitLines-<MKT>.csv) drawn once it rested 9 min, back to its placement; moved / rolled (re-placed within 15 s, exact size, 1 ATR, one candidate) = one stepping line, no tag; icebergs "I R<n> <lots>"; ladders "<n>o <lots>"; fill dot + HELD / THRU (favourable close within the fill bar + 3, no bar wholly beyond; one word per zone, beside the fill dot); pulled = very dark, no x; no new line after the late-day cut-off; the LMT resting column and RE-BID? / ACCEPTED removed (the LMT zone engine still records); the queue Q (10-s call) as a small badge on the level (ES CL NQ GC EU); settings rows relabelled (parameter version 11)
 #define LQ_VERSION_PREV "0.56.0"          // (0.54.1, 2026-10-25) the drawn after-fill word is "RE-BID?" (was RE-BID): not yet proven on LMT zone orders (live replay RE-BID 45.8% vs ACCEPTED 40.6% failed sweeps, t 0.84, only HG holds) - his rule "unproven reads show with ?"; the hover adds "RE-BID? = not yet proven on zone orders - judged nightly"; ACCEPTED, the R record lines (still RE-BID), the logic, settings and parameter version 10 unchanged;  // (0.54.0, 2026-10-25, Rassul's go: the research's PROVEN read H6-FILL) LMT ZONES = LmtZonesLogic.h 1.3.0: the drawn HELD? tag removed (HELD still logged); the AFTER-FILL READ - 30 s after a zone's order is FULLY filled (in the study's RTH window): RE-BID (new defender size stacked at a fixed band beyond the filled price AND the defender side wins the delta 10-30 s after; red for an offer swept above, green for a bid swept below - bid zones get the tag without a line) or ACCEPTED (grey) - decided once, recorded as R lines, read back, never repainted; FILLING (grey) and the grey X stay; settings: the "State tags" box is now "After-fill tags (RE-BID / ACCEPTED)" (default on), colour rows relabelled "RE-BID offer / bid colour", parameter version 10;   // (0.53.0, 2026-10-25, Rassul approved option A + the v0.49 LMT mockup) LMT ZONES = LmtZonesLogic.h 1.2.0: every drawn zone kind (PRINT / ABC / ORIGIN / NEAR offers) is a thin grey MAP line (a target / magnet, not a wall) with "LMT <lots> (<KIND>)" left of its start, one pooled draw rule in all 7 markets (bids never drawn), STATE TAGS on closed bars - FILLING (grey) / HELD? (red offer, green bid) - recorded as T lines and read back (no repaint), the grey X for pulled, FAST / DRIFT / EATEN / STEPPED logged only, the hover with the honest odds; settings: "State tags" checkbox (parameter version 9); the ring on the first fill dropped (the FILLING tag says it)
 // prior: "0.52.1"          // (0.52.1, 2026-10-24) (2026-10-24 crash fix) IRT fast-fails (0xC0000409 in investorRT.exe) when a MARKET_DEPTH is deleted - adding an indicator to a chart restarts its indicators -> done() -> the next calc deleted the parked book. A MARKET_DEPTH is NEVER deleted any more (a few hundred bytes leaked per symbol / bar-size change).
@@ -484,7 +486,7 @@ struct LQState {
     oln::Engine ol; bool olSessionSeen = false; std::string olMkt, olParWhy = "not read"; long long olParT = -2, olParN = -2, olParMs = -1, olWrites = 0, olFails = 0, olRestored = 0;
     struct OlHit { int line = -1; int b0 = 0, b1 = 0; long long lo = 0, hi = 0; };
     std::set<long long> olFillKeys, olFillPub; long long olFillPubMs = -1; int olFillPubFails = 0;   // (0.55.1) fill-dot candles (bar datetime keys) for lsDefenseLines
-    std::vector<OlHit> olHits; int olHov = -1; int olDrawnNow = 0, olWordsNow = 0, olQNow = 0;
+    std::vector<OlHit> olHits; int olHov = -1; int olDrawnNow = 0, olWordsNow = 0, olQNow = 0, olTagsNow = 0;   // (0.59.0) + level tags drawn
     std::vector<LzHit> lzHits; int lzHov = -1, lzHovBar = -1; double lzHovPrice = 0; void* lzHovWnd = nullptr; std::string lzHovState = "none";
     int lzDrawnNow = 0, lzLmtRows = 0, lzFRows = 0, lzGammaDrawn = 0, lzTagsDrawn = 0, lzAfterDrawn = 0;   // (0.54.0) + after-fill reads on the chart now   // (0.53.0) state tags on the chart now
     // (0.49.0) the QUEUE METER (QueueMeter.h): its own order book + candles; the live file for the Dealer Profile's Levels column; the Q record
@@ -1571,7 +1573,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
               << ",restored " << S.lzRestored << " bad " << S.lzBad << " unknown line types " << T.unknownLines << ",writes " << S.lzWrites << " fails " << S.lzFails << ",hover " << S.lzHovState << "\n"; }
         {   const oln::Tally& O = S.ol.tally;   // (0.55.0)
             o << "ORDER_LINES," << oln::VERSION << "," << (S.lzSet.on ? "on" : "off") << ",params " << S.olParWhy << ",floor " << S.ol.R.floorLots << " lots rest " << S.ol.R.restMin << " min roll " << S.ol.R.rollSec << " s ladder >= " << S.ol.R.ladMinN << " x " << S.ol.R.ladPieceMin << "+ lots in " << S.ol.R.ladSpan << " ticks cut-off " << S.ol.R.cutMin / 60 << ":" << (S.ol.R.cutMin % 60 < 10 ? "0" : "") << S.ol.R.cutMin % 60
-              << ",tracked " << O.lines << " drawn " << O.drawn << " (on chart now " << S.olDrawnNow << ", words " << S.olWordsNow << ", Q " << S.olQNow << ")"
+              << ",tracked " << O.lines << " drawn " << O.drawn << " (on chart now " << S.olDrawnNow << ", words " << S.olWordsNow << ", Q " << S.olQNow << ", level tags " << S.olTagsNow << " (LineLevelTag " << llt::VERSION << ")" << ")"
               << ",filled " << O.filled << " pulled " << O.pulled << " rolls " << O.rolls << " (ambiguous " << O.rollAmbig << ") moves " << O.moves << " ladders " << O.ladders << " icebergs " << O.icebergs
               << ",held " << O.held << " thru " << O.thru << " (hover only " << O.wordsHidden << "),late skipped " << O.lateSkipped << ",unknown fills " << O.unknownFill << ",restored " << S.olRestored << ",writes " << S.olWrites << " fails " << S.olFails << "\n"; }
         {   const long long qn = S.qmE.lastT; const std::vector<qm::Live> QL = S.qmE.live(qn);   // (0.49.0) the queue meter (numbers here; the meter is drawn by the Dealer Profile)
@@ -2908,6 +2910,18 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
     std::vector<std::pair<int, int> > labels;                          // label boxes taken (y top, x left)
     std::vector<std::pair<int, int> > wordSpots;                       // words taken (y top, x left)
     const oln::Engine& E = S.ol;
+    // (0.59.0, Rassul 2026-10-27 11:16 CT "build") the LEVEL TAG: an order resting ON a named level (key / volume / gamma) gets the level's
+    // name and "?" after its label (LineLevelTag.h); the "Level tag on lines" box (was the hidden zone-only "Gamma diamond" row) turns it off
+    std::vector<llt::Level> olLv;
+    if (S.lzSet.diamond) {
+        for (size_t i = 0; i < S.levels.size(); ++i) { llt::Level q; q.name = S.levels[i].code; q.px = (double)S.levels[i].px * tick; olLv.push_back(q); }
+        for (size_t i = 0; i < S.mqLevels.size(); ++i) { llt::Level q; q.name = S.mqLevels[i].code; q.px = (double)S.mqLevels[i].px * tick; olLv.push_back(q); }
+#ifndef LQ_FLOW
+        const std::vector<zn::NL>& nm = zn::levelsNamed(flexDir(), S.market, S.symbol, steadyMs());
+        for (size_t i = 0; i < nm.size(); ++i) { llt::Level q; q.name = nm[i].name; q.px = nm[i].px; olLv.push_back(q); }
+#endif
+    }
+    S.olTagsNow = 0;
     RTARRAYI olDt(barDateTime);                                        // (0.55.1) the fill-dot candles' keys for lsDefenseLines
     for (int pass = 0; pass < 2; ++pass) {                             // pass 0: pulled (dark, underneath); pass 1: live / filled
         for (size_t li = 0; li < E.lines.size(); ++li) {
@@ -2944,7 +2958,8 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
             // the start tick (placement) when the placement is on the chart
             if (barOfT(L.t0) > 0 || xOfBar(0) >= xMin) { const int x = xOfBar(barOfT(L.t0)); if (x >= xMin && x <= xMax && labY > top + 14 && labY < bottom) ko::line(coord(x), coord(labY - 5), coord(x), coord(labY + 6)); }
             // the label: just right of the line start, below a bid line / above an offer line, stepped away from another label
-            const std::string tx = L.label();
+            std::string tx = L.label();
+            if (!olLv.empty()) { const llt::Tag tg = llt::tagFor((double)L.px() * tick, olLv, tick, S.atr); if (tg.kind != llt::NONE) { tx += "  " + tg.text(); ++S.olTagsNow; } }   // (0.59.0)
             const int tw = (int)getTextWidth(tx.c_str(), -1) + 2;
             int lx = std::max(xMin, std::min(labX + 4, xMax - tw)), ly = bid ? labY + 2 : labY - fh - 1;
             for (int tries = 0; tries < 6; ++tries) { bool clash = false; for (size_t q = 0; q < labels.size(); ++q) if (std::abs(labels[q].first - ly) < fh && std::abs(labels[q].second - lx) < tw + 6) clash = true; if (!clash) break; lx = std::min(xMax - tw, lx + tw + 8); }
@@ -4193,6 +4208,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.58.0");   // LQ_VERSION
+    p->setVersion("0.59.0");   // LQ_VERSION
     return p;
 }
