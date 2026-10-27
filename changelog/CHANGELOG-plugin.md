@@ -1,5 +1,8 @@
 # CHANGELOG — IRT Gamma-Profile Plugin (separate from the 1 MB panel CHANGELOG.md)
 
+## 2026-10-26 - lsTrappedTraders 0.1.0 (NEW, 'LRA Trapped Traders')
+- NEW pane "Who is trapped?": green = sell lots below the close, red = buy lots above it; Stage 3 triangle + ratio at his pivot (levels only by default, Everywhere / Off in settings); live box Sellers | Buyers vs the same-time normal; hover question / what / how / use / example. VAP source, per-chart state, TTB / TTT records (no repaint), PerfGuard, TRAPTR board post. Nightly part trapped_traders (2e.3). See plugin/NOTES-TT010.md.
+
 ## 2026-09-13 — lsGammaProfile v0.2 (working, full settings)
 **Built the RTX gamma-profile plugin end to end.** New C++ Investor/RT extension
 `lsGammaProfile.dll` that draws a per-strike gamma histogram + level rail on the EPU26 chart.

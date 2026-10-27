@@ -38,7 +38,7 @@ REM (2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator alway
 REM   anymore") THE SETTINGS CONTRACT GATES EVERY BUILD: plugin\tests_settings\settings_contract.cpp (SettingsSpec.h + every <Name>Settings.h +
 REM   the migrated sources) is compiled and run first; FAIL = nothing is built this tick (the installed DLLs stay), the log says why once,
 REM   plugin\out\SETTINGS-CONTRACT.txt has every failing check. SETSRC = the plugin sources on the layer (add one when it migrates).
-set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp KeyLevels.cpp DealerHedge.cpp ReversalStage.cpp SweepRefill.cpp StopRunMark.cpp Trapped.cpp"
+set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp KeyLevels.cpp DealerHedge.cpp ReversalStage.cpp SweepRefill.cpp StopRunMark.cpp Trapped.cpp TrappedTraders.cpp"
 call :settings
 if defined SETFAIL (
   call :status
@@ -156,6 +156,8 @@ call :one SweepRefill lsSweepRefill SweepRefillLogic.h SweepRefillSettings.h Nea
 REM (2026-10-24) lsTrapped 1.0.0 (pane: trap spike vs normal + fuel-left line + message line) and lsTrappedMarks 1.0.0 (the "Tr" letter on the price chart; TrappedMarks.cpp = Trapped.cpp + TRP_MARKS) - Rassul 23:28 CT "istrapped is a go" (Option A mockup)
 call :one Trapped lsTrapped TrappedLogic.h TrappedSettings.h SwingRef.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h KeepOutDraw.h BoxDock.h BannerBoard.h PerfGuard.h
 call :one TrappedMarks lsTrappedMarks Trapped.cpp TrappedLogic.h TrappedSettings.h SwingRef.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h KeepOutDraw.h BoxDock.h BannerBoard.h PerfGuard.h
+REM (2026-10-26) lsTrappedTraders 0.1.0 "LRA Trapped Traders" (pane "Who is trapped?": green = sell lots below the close, red = buy lots above it; stage 3 trigger at his pivot, levels only by default) - Rassul 20:15 CT "lets just call underwater traders trapped traders. build it." lsTrapped unchanged
+call :one TrappedTraders lsTrappedTraders TrappedTradersLogic.h TrappedTradersSettings.h HostSlot.h SettingsSpec.h SettingsHost.h SettingsGuard.h NearLevels.h MarketState.h BannerBoard.h PerfGuard.h
 REM (2026-10-18 HOT-RELOAD) hot-reload test indicator lsHotReloadDemo: its implementation publishes WHILE IRT IS OPEN (refresh the chart),
 REM   the shim installs only when IRT is closed - tools\gex-hot-build.bat, docs\build\HOT-RELOAD.md
 if not defined HOLD if exist "%REPO%\tools\gex-hot-build.bat" call "%REPO%\tools\gex-hot-build.bat" HotReloadDemo
@@ -320,7 +322,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - new builds install after 15:15 CT, when Investor/RT is closed ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines ReversalStage Context KeyLevels TapeReader CobImpulse BigBidAsk StopRunMark DealerHedge TurnOrder SweepRefill Trapped TrappedMarks) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines ReversalStage Context KeyLevels TapeReader CobImpulse BigBidAsk StopRunMark DealerHedge TurnOrder SweepRefill Trapped TrappedMarks TrappedTraders) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
