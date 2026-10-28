@@ -1,4 +1,4 @@
-// WavePOCLogic.h  1.3.0  (2026-10-28; 1.3.0 = + CoB legs (Rassul approved 17:27 CT): every CoB leg gets a profile; 1.1.0 = + the liquidity nodes, WavePOCLiq.h, Rassul 11:27 CT; 1.1.1 = liquidity nodes 1.9x + raw-row separation)  -  lsWavePOC "Wave POC": every rule, the files and the layout, SDK-free (unit-tested on Linux).
+// WavePOCLogic.h  1.1.1  (2026-10-28; 1.1.0 = + the liquidity nodes, WavePOCLiq.h, Rassul 11:27 CT; 1.1.1 = liquidity nodes 1.9x + raw-row separation)  -  lsWavePOC "Wave POC": every rule, the files and the layout, SDK-free (unit-tested on Linux).
 // Rassul 2026-10-28 (approved 10:59 CT "just build now", mockup wavepoc_v3): per-wave volume-profile nodes as pullback targets.
 //   PIVOTS   N-bar reversal highs / lows (N = "Reversal bars", default 3): bar i is a swing high when its high is the highest of bars
 //            i-N .. i+N (low mirror); consecutive same-type pivots collapse to the more extreme one (equal = the later) -> zigzag.
@@ -17,15 +17,6 @@
 //            confirmation bar (N bars after the extreme). A line STOPS at the first of: price touches the node (circle); another new
 //            qualifying wave confirms (end tick); a close beyond the wave's start pivot (end tick). Confirmed = never repainted
 //            (the record file lsFlexLevels\WavePOC\<MKT>-<spb>-nodes.csv redraws recorded waves after a restart).
-//   COB LEGS (1.3.0, Rassul approved 17:27 CT 2026-10-28 "every CoB leg automatically gets a Wave POC profile"): a zigzag leg that holds a
-//            CoB of its own direction (bull CoB on an up leg, bear on a down leg; the trigger bar inside the leg, start .. end pivot) gets
-//            the same profile / nodes / liquidity nodes as a qualifying wave even when it fails the 20-bar / average rule. The CoB is his
-//            locked rule = the SAME source as the CoB marks: IRT's RTL custom indicators cob_bull_3m_1b / cob_bear_3m_1b, as lsCobImpulse
-//            reads them (host: cobFn per closed bar, captured when the bar is fed - never re-read). Decided when the leg's end pivot is
-//            confirmed (N bars after the extreme - no earlier, no provisional CoB leg, never repainted). One profile per CoB (a later
-//            extension of the same leg does not draw it again); a leg that is also a qualifying wave is drawn once (kind BOTH).
-//            Stops: touch; a later qualifying wave (any direction, as 1.0) or a later CoB leg of the SAME direction; a close beyond the
-//            leg's start. Record lines carry the kind WAVE / COB / BOTH (+ the CoB bar time on the WAVE line) for the nightly.
 #pragma once
 #include <algorithm>
 #include <cmath>
@@ -35,7 +26,6 @@
 #include <cerrno>
 #include <functional>
 #include <map>
-#include <set>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -44,11 +34,10 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
-// was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
 static const double PROF_SCALE = 0.67;   // (1.2.0) the wave profile max width factor
 static const double LNODE_W = 40;        // (1.2.0) the liquidity node max width (was 60 px)
-#define WPC_VERSION "1.3.0"
+#define WPC_VERSION "1.2.0"
 
 // fixed rules (from the approved mockup / reference wp2.py + wp3.py)
 static const int LOOKBACK = 20;        // 20-bar high / low
@@ -61,9 +50,6 @@ static const int STORE_CAP = 1000;     // candidates kept per direction in the f
 static const int N_MIN = 2, N_MAX = 10, N_DEF = 3;
 
 enum Stop { OPEN = 0, TOUCH = 1, NEWWAVE = 2, ORIGIN = 3 };
-enum Kind { K_WAVE = 1, K_COB = 2, K_BOTH = 3 };   // (1.3.0) why a leg is drawn
-inline const char* kindName(int k) { return k == K_BOTH ? "BOTH" : k == K_COB ? "COB" : "WAVE"; }
-inline int kindOf(const std::string& s) { return s == "BOTH" ? K_BOTH : s == "COB" ? K_COB : s == "WAVE" ? K_WAVE : 0; }
 inline const char* stopName(int s) { return s == TOUCH ? "touch" : s == NEWWAVE ? "new wave" : s == ORIGIN ? "origin close" : "open"; }
 
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };      // prices in whole ticks; t = IRT bar END, local wall clock seconds
@@ -91,8 +77,6 @@ struct Wave {
     bool provisional = false, fromRecord = false, pending = false, recorded = false;
     int vapMissing = 0;                   // bars of the wave IRT had no VAP for
     int scanned = 0;                      // stop rules evaluated up to this bar
-    int kind = K_WAVE;                    // (1.3.0) WAVE / COB / BOTH
-    long long cobT = 0;                   // (1.3.0) the CoB bar's time (0 = no CoB in the leg)
 };
 
 // ---------- small helpers ----------
@@ -251,7 +235,7 @@ inline bool storeFromText(const std::string& text, const std::string& mkt, int s
 }
 
 // ---------- the node record (append-only; recorded waves are redrawn as recorded) ----------
-struct RecWave { int dir = 0; int kind = K_WAVE; long long cobT = 0; std::vector<Node> nodes; std::vector<LNode> lnodes; };
+struct RecWave { int dir = 0; std::vector<Node> nodes; std::vector<LNode> lnodes; };
 inline std::string hm(long long t) {      // local wall clock seconds -> "YYYY-MM-DD HH:MM"
     const long long d = floorDiv(t, 86400), s = t - d * 86400;
     long long z = d + 719468; const long long era = floorDiv(z, 146097); const long long doe = z - era * 146097;
@@ -264,28 +248,28 @@ inline std::string waveLine(const Wave& w, int n, double tick) {
     std::ostringstream o;
     o << "WAVE," << VERSION << "," << n << "," << (w.dir > 0 ? "up" : "down") << "," << w.t0 << "," << w.t1 << "," << w.tConf << "," << hm(w.t0) << "," << hm(w.t1) << ","
       << hm(w.tConf) << "," << pxText(w.p0, tick) << "," << pxText(w.p1, tick) << "," << pxText(w.size, tick) << "," << pxText(std::llround(w.avg), tick) << ","
-      << w.nHist << "," << w.rowTicks << "," << w.rows.size() << "," << w.nodes.size() << "," << w.vapMissing << "," << kindName(w.kind) << "," << w.cobT;
+      << w.nHist << "," << w.rowTicks << "," << w.rows.size() << "," << w.nodes.size() << "," << w.vapMissing;
     return o.str();
 }
 inline std::string nodeLine(const Wave& w, const Node& nd, double tick) {
     std::ostringstream o; char r[24]; std::snprintf(r, sizeof r, "%.3f", nd.ratio);
-    o << "NODE," << w.t0 << "," << w.t1 << "," << nd.rank << "," << pxText(nd.tick, tick) << "," << nd.vol << "," << r << "," << kindName(w.kind);
+    o << "NODE," << w.t0 << "," << w.t1 << "," << nd.rank << "," << pxText(nd.tick, tick) << "," << nd.vol << "," << r;
     return o.str();
 }
 inline std::string stopLine(const Wave& w, const Node& nd, long long tStop, double tick) {
-    std::ostringstream o; o << "STOP," << w.t0 << "," << w.t1 << "," << pxText(nd.tick, tick) << "," << stopName(nd.stop) << "," << tStop << "," << hm(tStop) << "," << kindName(w.kind);
+    std::ostringstream o; o << "STOP," << w.t0 << "," << w.t1 << "," << pxText(nd.tick, tick) << "," << stopName(nd.stop) << "," << tStop << "," << hm(tStop);
     return o.str();
 }
 inline std::string lnodeLine(const Wave& w, const LNode& nd, double tick) {
     std::ostringstream o; char r[24], l[32]; std::snprintf(r, sizeof r, "%.3f", nd.ratio); std::snprintf(l, sizeof l, "%.1f", nd.lots);
-    o << "LNODE," << w.t0 << "," << w.t1 << "," << nd.rank << "," << pxText(nd.tick, tick) << "," << l << "," << r << "," << (nd.side ? "bid" : "offer") << "," << (nd.nearVol ? "near_volume_node" : "alone") << "," << kindName(w.kind);
+    o << "LNODE," << w.t0 << "," << w.t1 << "," << nd.rank << "," << pxText(nd.tick, tick) << "," << l << "," << r << "," << (nd.side ? "bid" : "offer") << "," << (nd.nearVol ? "near_volume_node" : "alone");
     return o.str();
 }
 inline std::string lstopLine(const Wave& w, const LNode& nd, long long tStop, double tick) {
-    std::ostringstream o; o << "LSTOP," << w.t0 << "," << w.t1 << "," << pxText(nd.tick, tick) << "," << stopName(nd.stop) << "," << tStop << "," << hm(tStop) << "," << kindName(w.kind);
+    std::ostringstream o; o << "LSTOP," << w.t0 << "," << w.t1 << "," << pxText(nd.tick, tick) << "," << stopName(nd.stop) << "," << tStop << "," << hm(tStop);
     return o.str();
 }
-static const char* const REC_HEAD = "# WavePOC record: WAVE,ver,N,dir,t0,t1,tConf,start,end,confirmed,startPx,endPx,size,avg,nHist,rowTicks,rows,nodes,vapMissing,kind,cobTime | NODE,t0,t1,rank,price,vol,ratio,kind | STOP,t0,t1,price,reason,tStop,time,kind | LNODE,t0,t1,rank,price,lots,ratio,bid/offer,near_volume_node/alone,kind | LSTOP,t0,t1,price,reason,tStop,time,kind  (kind WAVE / COB / BOTH from 1.3.0; older lines have no kind = WAVE)";
+static const char* const REC_HEAD = "# WavePOC record: WAVE,ver,N,dir,t0,t1,tConf,start,end,confirmed,startPx,endPx,size,avg,nHist,rowTicks,rows,nodes,vapMissing | NODE,t0,t1,rank,price,vol,ratio | STOP,t0,t1,price,reason,tStop,time | LNODE,t0,t1,rank,price,lots,ratio,bid/offer,near_volume_node/alone | LSTOP,t0,t1,price,reason,tStop,time";
 // WAVE lines of THIS N and their NODE lines; garbled lines counted and skipped
 inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std::vector<std::string>& lines, int n, double tick, int& bad,
                                                                      std::map<std::pair<long long, long long>, std::vector<std::pair<long long, int> > >* stops = nullptr) {
@@ -295,14 +279,12 @@ inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std:
         const std::vector<std::string> f = splitCsv(raw);
         if (f[0] == "WAVE") {
             long long nn = 0, t0 = 0, t1 = 0;
-            long long ct = 0; int kd = K_WAVE;   // (1.3.0) 21 fields = + kind, CoB time; 19 = an older WAVE line
-            if ((f.size() != 19 && f.size() != 21) || !parseLL(f[2], nn) || !parseLL(f[4], t0) || !parseLL(f[5], t1) || (f[3] != "up" && f[3] != "down")) { ++bad; continue; }
-            if (f.size() == 21 && ((kd = kindOf(f[19])) == 0 || !parseLL(f[20], ct) || ct < 0)) { ++bad; continue; }
+            if (f.size() != 19 || !parseLL(f[2], nn) || !parseLL(f[4], t0) || !parseLL(f[5], t1) || (f[3] != "up" && f[3] != "down")) { ++bad; continue; }
             if (nn != n) continue;
-            RecWave& r = m[std::make_pair(t0, t1)]; r.dir = f[3] == "up" ? 1 : -1; r.kind = kd; r.cobT = ct; r.nodes.clear(); r.lnodes.clear();
+            RecWave& r = m[std::make_pair(t0, t1)]; r.dir = f[3] == "up" ? 1 : -1; r.nodes.clear(); r.lnodes.clear();
         } else if (f[0] == "NODE") {
             long long t0 = 0, t1 = 0, rank = 0, vol = 0; double px = 0, ratio = 0; long long tk = 0;
-            if ((f.size() != 7 && !(f.size() == 8 && kindOf(f[7]))) || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseLL(f[3], rank) || !parseD(f[4], px) || !parseLL(f[5], vol) || !parseD(f[6], ratio)
+            if (f.size() != 7 || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseLL(f[3], rank) || !parseD(f[4], px) || !parseLL(f[5], vol) || !parseD(f[6], ratio)
                 || !toTicks(px, tick, tk) || rank < 0 || rank >= MAX_NODES) { ++bad; continue; }
             auto it = m.find(std::make_pair(t0, t1)); if (it == m.end()) continue;    // a node of another N (or a torn WAVE line)
             bool dup = false; for (const Node& x : it->second.nodes) dup = dup || x.rank == (int)rank;
@@ -310,17 +292,17 @@ inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std:
             Node nd; nd.tick = tk; nd.vol = vol; nd.ratio = ratio; nd.rank = (int)rank; it->second.nodes.push_back(nd);
         } else if (f[0] == "LNODE") {   // (1.1.0)
             long long t0 = 0, t1 = 0, rank = 0, tk = 0; double px = 0, lots = 0, ratio = 0;
-            if ((f.size() != 9 && !(f.size() == 10 && kindOf(f[9]))) || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseLL(f[3], rank) || !parseD(f[4], px) || !parseD(f[5], lots) || !parseD(f[6], ratio)
+            if (f.size() != 9 || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseLL(f[3], rank) || !parseD(f[4], px) || !parseD(f[5], lots) || !parseD(f[6], ratio)
                 || !toTicks(px, tick, tk) || rank < 0 || rank >= MAX_NODES || (f[7] != "bid" && f[7] != "offer")) { ++bad; continue; }
             auto it = m.find(std::make_pair(t0, t1)); if (it == m.end()) continue;
             if ((int)rank != (int)it->second.lnodes.size()) continue;
             LNode nd; nd.tick = tk; nd.lots = lots; nd.ratio = ratio; nd.rank = (int)rank; nd.side = f[7] == "bid" ? 1 : 0; nd.nearVol = f[8] == "near_volume_node"; it->second.lnodes.push_back(nd);
         } else if (f[0] == "LSTOP") {
             long long t0 = 0, t1 = 0, ts = 0, tk = 0; double px = 0;
-            if ((f.size() != 7 && !(f.size() == 8 && kindOf(f[7]))) || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseD(f[3], px) || !toTicks(px, tick, tk) || !parseLL(f[5], ts)) { ++bad; continue; }
+            if (f.size() != 7 || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseD(f[3], px) || !toTicks(px, tick, tk) || !parseLL(f[5], ts)) { ++bad; continue; }
         } else if (f[0] == "STOP") {
             long long t0 = 0, t1 = 0, ts = 0, tk = 0; double px = 0;
-            if ((f.size() != 7 && !(f.size() == 8 && kindOf(f[7]))) || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseD(f[3], px) || !toTicks(px, tick, tk) || !parseLL(f[5], ts)) { ++bad; continue; }
+            if (f.size() != 7 || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseD(f[3], px) || !toTicks(px, tick, tk) || !parseLL(f[5], ts)) { ++bad; continue; }
             if (stops) (*stops)[std::make_pair(t0, t1)].push_back(std::make_pair(tk, 0));
         } else ++bad;
     }
@@ -328,7 +310,7 @@ inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std:
 }
 
 // ---------- the engine: closed bars in, waves / nodes / stops out (incremental: each bar is processed once) ----------
-struct Counters { long long legs = 0, cand[2] = {0, 0}, qual[2] = {0, 0}, stops[4] = {0, 0, 0, 0}, vapMissing = 0, vapFault = 0, recordUsed = 0, superseded = 0, liqWaves = 0, liqNoBook = 0, lnodes = 0, cobBars[2] = {0, 0}, cobOnly = 0, cobBoth = 0, cobRepeat = 0; };   // (1.3.0) CoB bars seen bull / bear, legs drawn COB / BOTH, legs whose CoB already had a profile
+struct Counters { long long legs = 0, cand[2] = {0, 0}, qual[2] = {0, 0}, stops[4] = {0, 0, 0, 0}, vapMissing = 0, vapFault = 0, recordUsed = 0, superseded = 0, liqWaves = 0, liqNoBook = 0, lnodes = 0; };
 
 class Engine {
 public:
@@ -338,12 +320,7 @@ public:
     std::vector<Bar> B;                                              // closed bars, in order
     std::vector<Pivot> alt;                                          // the zigzag (confirmed pivots)
     std::vector<Wave> waves;                                         // qualified waves, confirmation order
-    std::vector<int> confs;                                          // confirmation bars of the qualifying waves (sorted; stop every direction)
-    std::vector<int> confsCob[2];                                    // (1.3.0) confirmation bars of COB-only legs, [0] up / [1] down (stop that direction)
-    std::vector<signed char> cob;                                    // (1.3.0) per closed bar: 1 bull CoB, 2 bear CoB (3 both), captured when the bar is added
-    std::set<long long> cobUsed;                                     // (1.3.0) CoB bar times that already have a profile (one per CoB)
-    bool cobLegs = true;                                             // (1.3.0) setting "CoB legs"
-    std::function<int(int)> cobFn;                                   // (1.3.0) host: the CoB flags of closed bar k (the RTL cob_bull_3m_1b / cob_bear_3m_1b)
+    std::vector<int> confs;                                          // their confirmation bars (sorted)
     std::vector<std::string> out;                                    // record lines to append (host drains)
     Counters C;
     double tick = 0.25;
@@ -371,7 +348,7 @@ public:
         w.recorded = true; RecWave& r = rec[std::make_pair(w.t0, w.t1)]; r.dir = w.dir; r.nodes = w.nodes; r.lnodes = w.lnodes;
     }
 
-    void reset() { B.clear(); alt.clear(); waves.clear(); confs.clear(); confsCob[0].clear(); confsCob[1].clear(); cob.clear(); cobUsed.clear(); out.clear(); C = Counters(); }
+    void reset() { B.clear(); alt.clear(); waves.clear(); confs.clear(); out.clear(); C = Counters(); }
     int lastBar() const { return (int)B.size() - 1; }
 
     // 20-bar high / low at bar i (the bar itself included)
@@ -412,8 +389,7 @@ public:
     void advance(Wave& w, int upto, bool record) {
         for (int k = std::max(w.scanned + 1, w.i1 + 1); k <= upto; ++k) {
             const Bar& b = B[(size_t)k];
-            const std::vector<int>& cc = confsCob[w.dir > 0 ? 0 : 1];
-            const bool nw = (std::binary_search(confs.begin(), confs.end(), k) || std::binary_search(cc.begin(), cc.end(), k)) && k > w.conf && !w.provisional;   // (1.3.0) + a CoB leg of the same direction
+            const bool nw = std::binary_search(confs.begin(), confs.end(), k) && k > w.conf && !w.provisional;
             const bool org = w.dir > 0 ? b.c < w.p0 : b.c > w.p0;
             for (Node& nd : w.nodes) {
                 if (nd.stop != OPEN) continue;
@@ -446,22 +422,11 @@ public:
             q = w.nHist >= MIN_HIST && (double)w.size > w.avg + 1e-9;
             if (store) store->add(w.dir, w.t1, w.size);
         }
-        // (1.3.0) a CoB of the leg's own direction on a bar of the leg (start .. end pivot) that has no profile yet
-        int cobBar = -1;
-        if (cobLegs) for (int j = w.i0; j <= w.i1 && j < (int)cob.size(); ++j) {
-            if (!(cob[(size_t)j] & (w.dir > 0 ? 1 : 2))) continue;
-            if (cobUsed.count(B[(size_t)j].t)) { ++C.cobRepeat; continue; }
-            cobBar = j; break;
-        }
-        const bool recHit = rk != rec.end() && rk->second.dir == w.dir && (cobLegs || (rk->second.kind & K_WAVE));   // CoB legs off: recorded COB-only legs are not drawn
-        w.kind = (q ? K_WAVE : 0) | (cobBar >= 0 ? K_COB : 0); w.cobT = cobBar >= 0 ? B[(size_t)cobBar].t : 0;
-        if (recHit) { w.kind = rk->second.kind; w.cobT = rk->second.cobT; }             // recorded = drawn as recorded (never repainted)
-        if (!w.kind) return;
-        if (w.cobT > 0) cobUsed.insert(w.cobT);
-        if (w.kind & K_WAVE) { ++C.qual[w.dir > 0 ? 0 : 1]; confs.insert(std::upper_bound(confs.begin(), confs.end(), k), k); }
-        else { std::vector<int>& cc = confsCob[w.dir > 0 ? 0 : 1]; cc.insert(std::upper_bound(cc.begin(), cc.end(), k), k); }
-        if (w.kind == K_COB) ++C.cobOnly; else if (w.kind == K_BOTH) ++C.cobBoth;
-        if (recHit && !rk->second.nodes.empty()) {
+        if (rk != rec.end() && rk->second.dir == w.dir) q = true;                       // recorded = drawn (never repainted)
+        if (!q) return;
+        ++C.qual[w.dir > 0 ? 0 : 1];
+        confs.insert(std::upper_bound(confs.begin(), confs.end(), k), k);
+        if (rk != rec.end() && rk->second.dir == w.dir && !rk->second.nodes.empty()) {
             w.fromRecord = true; w.recorded = true; w.nodes = rk->second.nodes; w.lnodes = rk->second.lnodes; w.liqTried = true; w.liqOk = !w.lnodes.empty(); ++C.recordUsed;
             for (Node& nd : w.nodes) { nd.stop = OPEN; nd.stopBar = -1; }
             for (LNode& nd : w.lnodes) { nd.stop = OPEN; nd.stopBar = -1; }
@@ -478,7 +443,6 @@ public:
     // a closed bar (index = B.size()); everything for it is decided now and never again
     void addBar(const Bar& b, VapFn& vap) {
         B.push_back(b); const int k = lastBar();
-        { const int f = cobFn ? cobFn(k) : 0; cob.push_back((signed char)(f & 3)); if (f & 1) ++C.cobBars[0]; if (f & 2) ++C.cobBars[1]; }   // (1.3.0) captured once, at the close
         const int i = k - N;
         if (i >= N) {
             for (int type : { +1, -1 }) {
@@ -496,7 +460,6 @@ public:
         }
         for (Wave& w : waves) if (!w.pending) advance(w, k, true);
         if (alt.size() > 4000) alt.erase(alt.begin(), alt.begin() + 2000);
-        if (cobUsed.size() > 20000) cobUsed.erase(cobUsed.begin(), std::next(cobUsed.begin(), 10000));
     }
     // waves whose VAP was missing: try again (host calls this every 10 min); the stops are then replayed from the wave's end
     int retryPending(VapFn& vap) {
@@ -691,8 +654,6 @@ inline std::string statusText(const Engine& E, const std::string& mkt, int spb, 
       << ",tags hidden (no room right of the last bar) " << (sc ? sc->tagsHidden : 0) << ",provisional " << (provShown ? "yes" : "no") << "\n";
     o << "STOPS,touch " << E.C.stops[TOUCH] << ",new wave " << E.C.stops[NEWWAVE] << ",origin close " << E.C.stops[ORIGIN] << "\n";
     o << "LIQUIDITY_NODES,waves with liquidity " << E.C.liqWaves << ",waves without book " << E.C.liqNoBook << ",liquidity nodes " << E.C.lnodes << ",drawn now " << (sc ? sc->lnodesDrawn : 0) << "\n";
-    o << "COB_LEGS," << (E.cobLegs ? "on" : "off") << ",CoB bars bull " << E.C.cobBars[0] << " bear " << E.C.cobBars[1] << ",legs drawn COB only " << E.C.cobOnly << " BOTH (also a wave) " << E.C.cobBoth
-      << ",CoB already profiled " << E.C.cobRepeat << "\n";
     o << "RECORD," << recWhy << ",bad lines " << recBad << "\n";
     return o.str();
 }

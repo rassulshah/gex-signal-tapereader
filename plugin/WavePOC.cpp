@@ -1,13 +1,5 @@
 /********************************************************************************
- *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.3.0  (2026-10-28)
- *
- *  1.3.0 (Rassul approved 17:27 CT 2026-10-28): EVERY CoB LEG gets a Wave POC profile, even when it fails the wave rule (20-bar extreme +
- *    bigger than the direction's average). CoB = his locked rule from the SAME source as the Cob marks: IRT's RTL custom indicators
- *    cob_bull_3m_1b / cob_bear_3m_1b, read natively here exactly as lsCobImpulse reads them (getCustomIndicator); each closed bar's flags
- *    are captured once when the bar is fed. A zigzag leg holding a CoB of its own direction gets the same profile / nodes / liquidity nodes
- *    at its START, decided when its end pivot is confirmed (never earlier, never repainted); a leg that is also a wave is drawn once (BOTH).
- *    Setting "CoB legs" (default on; parameter version 2 - parmsInit carries an older set's Reversal bars / Show zigzag over).
- *    Record lines carry kind WAVE / COB / BOTH (+ the CoB bar time on WAVE lines); status COB_LEGS + COB_SOURCE lines.
+ *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.1.1  (2026-10-28)
  *
  *  Rassul 2026-10-28 (idea "Wave POC" -> mockups v1-v3 -> approved 10:59 CT "just build now"): every BIG wave's own volume profile,
  *  its separate high-volume nodes as pullback targets.
@@ -79,7 +71,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.3.0";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.2.0";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -118,16 +110,12 @@ static bool wpReadSmall(const std::string& path, std::string& out, size_t cap) {
 
 // the parameter set IRT keeps for this indicator: one token per settings row, in row order
 namespace wpp {
-struct Parms { int revBars; RTBOOL zigzag; RTBOOL cob; };   // (1.3.0) + CoB legs (parameter version 2)
-static const char* const TEMPLATE = "IBB";
-static const char* const DEFAULTS = "3,0,1";
-struct Parms1 { int revBars; RTBOOL zigzag; };              // parameter version 1 (1.0.0 - 1.2.0)
-static const char* const TEMPLATE1 = "IB";
-static const char* const DEFAULTS1 = "3,0";
+struct Parms { int revBars; RTBOOL zigzag; };
+static const char* const TEMPLATE = "IB";
+static const char* const DEFAULTS = "3,0";
 inline bool valid(const Parms& p, std::string& why) {
     if (p.revBars < wpc::N_MIN || p.revBars > wpc::N_MAX) { why = "reversal bars out of range"; return false; }
     if (p.zigzag != 0 && p.zigzag != 1) { why = "box not 0/1"; return false; }
-    if (p.cob != 0 && p.cob != 1) { why = "CoB legs box not 0/1"; return false; }
     why = "ok"; return true;
 }
 } // namespace wpp
@@ -138,7 +126,6 @@ struct WState {
     wpl::Book book; wpl::Sampler samp; std::string bookSym;
     std::string mkt, sym; int spb = 0; double tick = 0; long long tickKey = 0; int N = wpc::N_DEF; bool zz = false; std::string parms = "none";
     bool keyed = false;
-    bool cobLegs = true; std::vector<signed char> cobFlags; std::string cobSrc = "not read yet";   // (1.3.0) per chart bar: 1 bull CoB, 2 bear CoB
     wpc::Store store; std::string storeWhy = "not loaded", storePath, recPath, statusPath, recWhy = "not loaded"; int recBad = 0;
     wpc::Engine E;
     std::vector<RTDATE> raw;   // the chart stamps fed, chart index off + j
@@ -169,7 +156,6 @@ public:
         lastWindowN_ = V.i(wpset::K_REV_BARS);
         return RTX_OK;
     }
-    virtual int parmsInit(unsigned int iVersion);   // (1.3.0) an older saved set -> the new rows (CoB legs on), his N / zigzag kept
     virtual int parmsUpdt(unsigned int i) { if (wpIds().ok) ss::onUpdate(this, wpset::spec(), wpIds(), (int)i, snap_); return RTX_OK; }
     ss::Snap snap_; int lastWindowN_ = 0;
     bool nativeParms(wpp::Parms& p, std::string& why);
@@ -190,7 +176,6 @@ public:
     void openFeed(WState& S);
     void drainBook(WState& S, long long now);
     void bindLiq(WState& S);
-    bool readFlags(const char* name, long count, std::vector<float>& out);
 };
 
 int cppExtension::init(void) { return RTX_OK; }
@@ -200,25 +185,6 @@ int cppExtension::calc(int) { WavePOC* me = static_cast<WavePOC*>(this); try { m
 int cppExtension::setup(void) {
     ss::registerAll(this, wpset::spec(), wpIds());   // the window: Reversal bars, Show zigzag (controls only)
     return RTX_OK;
-}
-
-// (1.3.0) IRT hands a saved set of an older parameter version (1 = Reversal bars, Show zigzag): keep those two, CoB legs = on (default)
-int WavePOC::parmsInit(unsigned int iVersion) {
-    if (iVersion >= wpset::spec().paramVersion) return RTX_OK;
-    wpp::Parms p; std::memset(&p, 0, sizeof p); p.revBars = wpc::N_DEF; p.zigzag = 0; p.cob = 1;
-    wpp::Parms1 o; std::memset(&o, 0, sizeof o);
-    if (getParameters(&o, sizeof o, wpp::TEMPLATE1, wpp::DEFAULTS1) == RTX_OK && o.revBars >= wpc::N_MIN && o.revBars <= wpc::N_MAX && (o.zigzag == 0 || o.zigzag == 1)) { p.revBars = o.revBars; p.zigzag = o.zigzag; }
-    return saveParameters(&p, sizeof p, wpp::TEMPLATE) == RTX_OK ? RTX_OK : RTX_FAIL;
-}
-// (1.3.0) a custom indicator's (RTL) values per chart bar, as lsCobImpulse::readFlags (the same CoB source as the Cob marks)
-bool WavePOC::readFlags(const char* name, long count, std::vector<float>& out) {
-    out.assign((size_t)std::max(0L, count), 0.0f);
-    char nb[96]; std::memset(nb, 0, sizeof(nb)); std::strncpy(nb, name, sizeof(nb) - 1);
-    RTARRAY a(fEmptyArray);
-    if (a.getCustomIndicator(nb, 1, true) != RTX_OK || a.count <= 0 || a.count > count) return false;
-    const long shift = count - (long)a.count;
-    for (long i = shift; i < count; ++i) { const float v = a[(int)(i - shift)]; out[(size_t)i] = (v == v) ? v : 0.0f; }
-    return true;
 }
 
 // SEH-guarded VAP reads (only trivial values inside, /EHsc compatible) - as lsDeltaProfile
@@ -289,8 +255,8 @@ bool WavePOC::nativeParms(wpp::Parms& p, std::string& why) {
 void WavePOC::readSettings(WState& S) {
     const ss::Spec& T = wpset::spec();
     wpp::Parms p; std::string why;
-    if (!nativeParms(p, why)) { S.N = wpc::clampN((long long)T.rows[wpset::K_REV_BARS].def); S.zz = T.rows[wpset::K_ZIGZAG].def != 0; S.cobLegs = T.rows[wpset::K_COB_LEGS].def != 0; S.parms = "defaults," + why; return; }
-    S.N = wpc::clampN(p.revBars); S.zz = p.zigzag != 0; S.cobLegs = p.cob != 0; S.parms = "native,ok";
+    if (!nativeParms(p, why)) { S.N = wpc::clampN((long long)T.rows[wpset::K_REV_BARS].def); S.zz = T.rows[wpset::K_ZIGZAG].def != 0; S.parms = "defaults," + why; return; }
+    S.N = wpc::clampN(p.revBars); S.zz = p.zigzag != 0; S.parms = "native,ok";
 }
 
 bool WavePOC::identify(WState& S) {
@@ -304,9 +270,9 @@ bool WavePOC::identify(WState& S) {
     if (mkt.empty()) return false;
     readSettings(S);
     const long long tk = std::llround(tick * 1e9);
-    if (!S.keyed || mkt != S.mkt || sym != S.sym || spb != S.spb || tk != S.tickKey || S.N != S.E.N || S.cobLegs != S.E.cobLegs) {
+    if (!S.keyed || mkt != S.mkt || sym != S.sym || spb != S.spb || tk != S.tickKey || S.N != S.E.N) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
-        S.E.reset(); S.E.N = S.N; S.E.cobLegs = S.cobLegs; S.E.tick = tick; S.E.store = &S.store; S.raw.clear(); S.off = 0; S.provAt = -2; S.provOk = false;
+        S.E.reset(); S.E.N = S.N; S.E.tick = tick; S.E.store = &S.store; S.raw.clear(); S.off = 0; S.provAt = -2; S.provOk = false;
         if (S.bookSym != sym) { delete S.dbo; S.dbo = nullptr; S.dboDead = false; S.blocked = false; S.attempt = 0; S.book = wpl::Book(); S.samp = wpl::Sampler(); S.bookSym = sym; }
         bindLiq(S);
         loadFiles(S);
@@ -337,8 +303,6 @@ void WavePOC::bindLiq(WState& S) {
         std::vector<long long> ts; for (int j = w.i0; j <= w.i1 && j < (int)P->E.B.size(); ++j) ts.push_back(P->E.B[(size_t)j].t);
         return P->samp.average(ts, w.e0, w.rowTicks, w.rows.size(), rows, bids);
     };
-    // (1.3.0) the CoB flags of engine bar k (= chart bar k + off), as read when the bar was fed
-    S.E.cobFn = [P](int k) { const long c = (long)k + P->off; return c >= 0 && c < (long)P->cobFlags.size() ? (int)P->cobFlags[(size_t)c] : 0; };
 }
 // chart context only, behind the crash guard; 1st try the chart's symbol, 2nd try NULL (= this chart) - as lsSweepRefill
 void WavePOC::openFeed(WState& S) {
@@ -389,20 +353,11 @@ void WavePOC::feed(WState& S) {
         if (lastIdx >= closed || (RTDATE)times[lastIdx] != S.raw.back() || (RTDATE)times[S.off] != S.raw.front()) redo = true;
     }
     if (redo) {
-        S.E.reset(); S.E.N = S.N; S.E.cobLegs = S.cobLegs; S.E.tick = S.tick; S.E.store = &S.store; S.raw.clear(); S.provAt = -2;   // the store + record stay (superset)
+        S.E.reset(); S.E.N = S.N; S.E.tick = S.tick; S.E.store = &S.store; S.raw.clear(); S.provAt = -2;   // the store + record stay (superset)
         bindLiq(S);
     }
     if (S.raw.empty()) S.off = std::max(0, closed - WP_MAX_BARS);
     wpc::VapFn vap = [this, &S](int j, std::vector<wpc::VRow>& out) { return vapRows(S, j + S.off, out); };
-    if (S.off + (int)S.raw.size() < closed) {   // (1.3.0) new closed bars: their CoB flags (the RTL arrays), read once per batch of new bars
-        S.cobFlags.assign((size_t)n, 0);
-        if (S.cobLegs) {
-            std::vector<float> fb, fs;
-            const bool okB = readFlags("cob_bull_3m_1b", n, fb), okS = readFlags("cob_bear_3m_1b", n, fs);
-            for (long i = 0; i < n; ++i) S.cobFlags[(size_t)i] = (signed char)((okB && fb[(size_t)i] >= 0.5f ? 1 : 0) | (okS && fs[(size_t)i] >= 0.5f ? 2 : 0));
-            S.cobSrc = std::string("RTL cob_bull_3m_1b ") + (okB ? "ok" : "NOT FOUND") + ", cob_bear_3m_1b " + (okS ? "ok" : "NOT FOUND") + " (the Cob marks' source)";
-        } else S.cobSrc = "CoB legs off (not read)";
-    }
     for (int i = S.off + (int)S.raw.size(); i < closed; ++i) {
         wpc::Bar b; b.t = localSec((RTDATE)times[i]);
         if (!wpc::toTicks(op[i], S.tick, b.o) || !wpc::toTicks(hi[i], S.tick, b.h) || !wpc::toTicks(lo[i], S.tick, b.l) || !wpc::toTicks(cl[i], S.tick, b.c)) { b.o = b.h = b.l = b.c = S.E.B.empty() ? 0 : S.E.B.back().c; }
@@ -439,7 +394,7 @@ void WavePOC::status(WState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;              // calc comes on every tick: build the text at most once a second
     const std::string body = wpc::statusText(S.E, S.mkt, S.spb, S.parms, S.storeWhy, S.recWhy + (S.recFails ? ", append failures " + std::to_string(S.recFails) : std::string()), S.recBad, &S.last, S.provOk, S.retries)
-                           + "SETTINGS,show zigzag " + (S.zz ? "on" : "off") + ",CoB legs " + (S.cobLegs ? "on" : "off") + "\nCOB_SOURCE," + S.cobSrc + "\nDRAWING," + (S.sawPre ? "profile behind the candles (pre-draw)" : "profile drawn after the candles (no pre-draw call seen)") + "\n"
+                           + "SETTINGS,show zigzag " + (S.zz ? "on" : "off") + "\nDRAWING," + (S.sawPre ? "profile behind the candles (pre-draw)" : "profile drawn after the candles (no pre-draw call seen)") + "\n"
                            + (S.vapFault ? "VAP_FAULT,remove and re-add the indicator\n" : "")
                            + "MBO," + (S.blocked ? "not opened (crash guard file present)" : S.dboDead ? "faulted" : S.dbo ? "open" : "opening") + ",events " + std::to_string(S.dboEvents)
                            + ",orders " + std::to_string(S.book.book.size()) + ",samples " + std::to_string(S.samp.samples) + ",bars sampled " + std::to_string(S.samp.bars.size())
@@ -521,7 +476,7 @@ extern "C" cppExtension* CreateExtension(void) {
     WavePOC* p = new WavePOC();
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Wave POC v1.3.0 - each big wave's (and each CoB leg's) own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as pullback targets.");
-    p->setVersion("1.3.0");   // = WP_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Wave POC v1.1.1 - each big wave's own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as lines to the right until touched.");
+    p->setVersion("1.2.0");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }
