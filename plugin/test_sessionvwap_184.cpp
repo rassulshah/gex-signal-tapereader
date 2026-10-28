@@ -190,7 +190,7 @@ static void testAll(const std::string& dir)
         CHECK(agree(y, H), "restart: window == chart");
         mock::current = &H; y.fill(0);
         const std::string st = readStatus(dir);
-        CHECK(st.find("VERSION,1.8.4\n") != std::string::npos && st.find("PARMS,native,ok\n") != std::string::npos, "status: VERSION 1.8.4, PARMS native ok");
+        CHECK(st.find("VERSION,1.8.5\n") != std::string::npos && st.find("PARMS,native,ok\n") != std::string::npos, "status: VERSION 1.8.4, PARMS native ok");
         mock::current = &H; y.done();
     }
 
@@ -230,7 +230,7 @@ static void testVersion()
     std::ifstream f("SessionVWAP.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
     const size_t a = src.find("setVersion(\""), b = src.find("SV_VERSION = \"");
     const std::string v1 = src.substr(a + 12, src.find('"', a + 12) - a - 12), v2 = src.substr(b + 14, src.find('"', b + 14) - b - 14);
-    CHECK(v1 == v2 && v1 == "1.8.4" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.4 (setVersion literal = SV_VERSION = PLUGIN_VERSION)");
+    CHECK(v1 == v2 && v1 == "1.8.5" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.4 (setVersion literal = SV_VERSION = PLUGIN_VERSION)");
 }
 
 int main()

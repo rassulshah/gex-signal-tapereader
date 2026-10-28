@@ -19,7 +19,8 @@
 #endif
 #endif
 namespace svset {
-static const char* const PLUGIN_VERSION = "1.8.4";   // (1.8.4, 2026-10-28 16:26 CT Rassul "the chart is extremely messy", remove the Pivot VWAP line) parameter version 11: every older set is reset once to the new defaults = NO line drawn (pivot VWAP off too); he can tick any line back
+static const char* const PLUGIN_VERSION = "1.8.5";   // (1.8.5) Key Levels column keep-out (drawing only; parameter version stays 11)
+// was 1.8.4:   // (1.8.4, 2026-10-28 16:26 CT Rassul "the chart is extremely messy", remove the Pivot VWAP line) parameter version 11: every older set is reset once to the new defaults = NO line drawn (pivot VWAP off too); he can tick any line back
 // was "1.8.3";   // (1.8.3, 2026-10-28 14:08 CT, Rassul: only 1 VWAP drawn = the 3-bar pivot VWAP) parameter version 10: every older set is reset once to the new defaults (pivot VWAP on; session VWAP, bands, overnight, prior off)
 //   // (1.8.2, 2026-10-28, Rassul 11:27 CT "did you fix the session vwap. as you can see it
 // isnt working properly") parameter version 9 (rows unchanged): every older saved set is replaced by the intended defaults (parmsInit)

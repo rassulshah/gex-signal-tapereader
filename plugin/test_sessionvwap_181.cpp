@@ -211,7 +211,7 @@ static void testVersion()
     std::ifstream f("SessionVWAP.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
     const size_t a = src.find("setVersion(\""), b = src.find("SV_VERSION = \"");
     const std::string v1 = src.substr(a + 12, src.find('"', a + 12) - a - 12), v2 = src.substr(b + 14, src.find('"', b + 14) - b - 14);
-    CHECK(v1 == v2 && v1 == "1.8.4" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.2");
+    CHECK(v1 == v2 && v1 == "1.8.5" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.2");
 }
 
 int main()

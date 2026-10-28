@@ -34,13 +34,15 @@ namespace mock {
 // unchecked and a colour black (what our plugins found on his IRT) - `dialog` switches between the two.
 struct Param { int type = 0; bool b = false; COLOR c = 0; int list = 0, listCount = 0; std::string name; };   // type 1 bool, 2 colour, 3 list
 inline std::vector<Param> declared;                    // C++17 inline: one list for every test TU
-struct Line { COLOR c; short w; int b0 = 0, b1 = 0; float p0 = 0, p1 = 0; };   // pen + (bar, price) ends, for the render check
+struct Line { COLOR c; short w; int b0 = 0, b1 = 0; float p0 = 0, p1 = 0; int h0 = 0, v0 = 0, h1 = 0, v1 = 0; };   // (SessionVWAP 1.8.5) + pixel ends   // pen + (bar, price) ends, for the render check
 struct Host {
     bool dialog = false;
     std::vector<Param> val;                                   // this chart's saved values (empty = the declared defaults)
     std::vector<Line> lines;                                  // every drawLineTo, with the pen in force
     COLOR pen = 0; short penW = 1;
     int curBar = 0; float curPx = 0;                          // the draw position (setDrawPosition)
+    int curH = 0, curV = 0;                                   // (SessionVWAP 1.8.5) its pixels
+    int pxBar = 0, bar0 = 0;                                  // (SessionVWAP 1.8.5) > 0: PNT::set maps bar -> x = (bar - bar0) * pxBar, price -> y (0 = old fixed 400 / 100)
     std::string root;
     std::vector<float> f[15];
     std::vector<unsigned long> i[2];
@@ -97,9 +99,12 @@ class PNT {
 public:
     short v = 100, h = 400;
     int bar = 0; float px = 0;
-    RTX_RESULT set(int b, float p, BAR_POSITION = kBarCenter) { bar = b; px = p; return RTX_OK; }
-    void setDrawPosition() { if (mock::current) { mock::current->curBar = bar; mock::current->curPx = px; } }
-    void drawLineTo() { if (mock::current) { mock::Line l; l.c = mock::current->pen; l.w = mock::current->penW; l.b0 = mock::current->curBar; l.p0 = mock::current->curPx; l.b1 = bar; l.p1 = px; mock::current->lines.push_back(l); mock::current->curBar = bar; mock::current->curPx = px; } }
+    RTX_RESULT set(int b, float p, BAR_POSITION = kBarCenter) { bar = b; px = p;
+        if (mock::current && mock::current->pxBar > 0) { h = (short)((b - mock::current->bar0) * mock::current->pxBar); v = (short)(300.0f - (p - 5800.0f) * 4.0f); }
+        return RTX_OK; }
+    void setDrawPosition() { if (mock::current) { mock::current->curBar = bar; mock::current->curPx = px; mock::current->curH = h; mock::current->curV = v; } }
+    void drawLineTo() { if (mock::current) { mock::Line l; l.c = mock::current->pen; l.w = mock::current->penW; l.b0 = mock::current->curBar; l.p0 = mock::current->curPx; l.b1 = bar; l.p1 = px;
+        l.h0 = mock::current->curH; l.v0 = mock::current->curV; l.h1 = h; l.v1 = v; mock::current->lines.push_back(l); mock::current->curBar = bar; mock::current->curPx = px; mock::current->curH = h; mock::current->curV = v; } }
 };
 class RCT {
 public:
