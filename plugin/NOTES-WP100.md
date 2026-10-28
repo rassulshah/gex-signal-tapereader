@@ -57,3 +57,13 @@ volume nodes" (highlight = the bar fill only). Committed before 15:10 CT so the 
   coverage; host 48/48 incl. a live mock book (LPOC = the 400-lot bid, the re-pricing 900-lot market maker left out, feed destroyed
   with the chart). Run: `g++ -std=c++17 -I.. test_wavepoc_logic.cpp -o t && ./t wavepoc_es1022.csv wavepoc_es1022_liq.csv`.
 - Not verified on his IRT: the order feed on the price chart (status MBO line: open / events / orders / samples).
+
+# lsWavePOC 1.1.1 - liquidity nodes: 1.9x + raw-row separation (2026-10-28, small approved change)
+- Liquidity nodes only (volume nodes unchanged): threshold 2.0x -> 1.9x of the wave's median non-zero liquidity row.
+- Separation on the RAW rows (no smoothing): two liquidity nodes are separate when >= 3 rows apart AND the minimum raw row between
+  them <= 0.7x the smaller node's raw value. 1.1.0 used the 3-row smoothed valley, which merged single-tick orders on a flat ES book.
+  Reference: wp9.py pick_raw.
+- Oct 22 ES fixture: wave 11:18-11:48 LPOC 7688.25 (2.31x), 7707.25 (2.01x), 7710.25 (1.92x); wave 12:33-13:03 LPOC 7685.25 (4.53x),
+  7680.25 (4.01x), 7682.25 (2.85x), 7689.25 (2.39x).
+- Tests: test_wavepoc_logic 109/109, test_wavepoc_host 48/48, settings contract PASS (24 tables). Version 1.1.1 everywhere
+  (WP_VERSION, setVersion literal, wpc::VERSION, wpl::VERSION, PLUGIN_VERSION).

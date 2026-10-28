@@ -1,4 +1,4 @@
-// WavePOCLogic.h  1.1.0  (2026-10-28; 1.1.0 = + the liquidity nodes, WavePOCLiq.h, Rassul 11:27 CT)  -  lsWavePOC "Wave POC": every rule, the files and the layout, SDK-free (unit-tested on Linux).
+// WavePOCLogic.h  1.1.1  (2026-10-28; 1.1.0 = + the liquidity nodes, WavePOCLiq.h, Rassul 11:27 CT; 1.1.1 = liquidity nodes 1.9x + raw-row separation)  -  lsWavePOC "Wave POC": every rule, the files and the layout, SDK-free (unit-tested on Linux).
 // Rassul 2026-10-28 (approved 10:59 CT "just build now", mockup wavepoc_v3): per-wave volume-profile nodes as pullback targets.
 //   PIVOTS   N-bar reversal highs / lows (N = "Reversal bars", default 3): bar i is a swing high when its high is the highest of bars
 //            i-N .. i+N (low mirror); consecutive same-type pivots collapse to the more extreme one (equal = the later) -> zigzag.
@@ -34,8 +34,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.1.0";
-#define WPC_VERSION "1.1.0"
+static const char* const VERSION = "1.1.1";
+#define WPC_VERSION "1.1.1"
 
 // fixed rules (from the approved mockup / reference wp2.py + wp3.py)
 static const int LOOKBACK = 20;        // 20-bar high / low

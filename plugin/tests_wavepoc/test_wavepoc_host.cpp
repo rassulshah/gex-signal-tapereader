@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.1.0" && std::string(wpl::VERSION) == "1.1.0", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.1.1" && std::string(wpl::VERSION) == "1.1.1", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();
@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
         const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt"), sto = slurp(flex() + "/WavePOC/ES-180.csv");
         size_t nw = 0; for (size_t p = rec.find("\nWAVE,"); p != std::string::npos; p = rec.find("\nWAVE,", p + 1)) ++nw;
         CHECK(nw == 2 && rec.find("NODE,") != std::string::npos && rec.find("STOP,") != std::string::npos, "record: 2 waves with nodes and stops");
-        CHECK(st.rfind("VERSION,1.1.0", 0) == 0 && st.find("qualified up 0 down 2") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
+        CHECK(st.rfind("VERSION,1.1.1", 0) == 0 && st.find("qualified up 0 down 2") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
         CHECK(st.find("touch 5,new wave 2,origin close 0") != std::string::npos, "status: stops by reason");
         wpc::Store chk; std::string why; CHECK(wpc::storeFromText(sto, "ES", 180, 3, 250000000LL, chk, why) && chk.dn.size() == 24, "store saved atomically with the day's 4 down candidates (" << why << ", " << chk.dn.size() << ")");
     }

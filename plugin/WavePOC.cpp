@@ -1,5 +1,5 @@
 /********************************************************************************
- *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.1.0  (2026-10-28)
+ *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.1.1  (2026-10-28)
  *
  *  Rassul 2026-10-28 (idea "Wave POC" -> mockups v1-v3 -> approved 10:59 CT "just build now"): every BIG wave's own volume profile,
  *  its separate high-volume nodes as pullback targets.
@@ -17,8 +17,8 @@
  *  1.1.0 (Rassul approved 11:27 CT, mockups wavepoc_lpoc_w1 / w2, wp8.py): LIQUIDITY NODES on the LEFT of the wave start - from IRT's
  *    live order-by-order book (DEPTH_BY_ORDER, one per chart kept alive, opened behind a crash-guard file, drained <= 5,000 events / 8 ms
  *    per call), market-maker orders removed (re-priced >= 2x in 5 min), sampled once a second into the forming bar; a wave's liquidity
- *    = average resting lots per profile row over its bars; nodes on the raw rows (>= 2.0x median, separated like the volume nodes,
- *    max 5, biggest = LPOC); drawn as nodes only: bars pointing left (max 60 px), LPOC bright green (bids) / red (offers), others 60%,
+ *    = average resting lots per profile row over its bars; nodes on the raw rows (1.1.1: >= 1.9x median; separate when >= 3 rows apart
+ *    and the min RAW row between <= 0.7x the smaller node - no smoothing; max 5, biggest = LPOC); drawn as nodes only: bars pointing left (max 60 px), LPOC bright green (bids) / red (offers), others 60%,
  *    faint dotted line right (same stop rules), no tags, no boxes. Waves formed before the indicator loaded have no book -> none.
  *    Each liquidity node + "near_volume_node" (within 2 ticks of a volume node) / "alone" is recorded (LNODE lines) for the nightly.
  *  Rules, files and layout: WavePOCLogic.h (SDK-free, tested: test_wavepoc_logic.cpp on the Oct 22 ES data of the approved mockup;
@@ -68,7 +68,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.1.0";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.1.1";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -473,7 +473,7 @@ extern "C" cppExtension* CreateExtension(void) {
     WavePOC* p = new WavePOC();
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Wave POC v1.1.0 - each big wave's own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as lines to the right until touched.");
-    p->setVersion("1.1.0");   // = WP_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Wave POC v1.1.1 - each big wave's own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as lines to the right until touched.");
+    p->setVersion("1.1.1");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

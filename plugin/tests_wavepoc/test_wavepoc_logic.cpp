@@ -229,7 +229,7 @@ static void testLayout(const Fix& F) {
     CHECK(amberLine3 && amberBox2 && whiteLine1 && noBoxes, "WPOC stands out: bright amber row + 3 px amber line; other nodes 1 px white; no outline boxes");
     CHECK(sc.nodesDrawn <= 5 * sc.wavesDrawn && sc.nodesDrawn == 7, "nodes drawn = 4 + 3, at most 5 per wave");
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.1.0", "header 'Wave POC v1.1.0'");
+    CHECK(header && std::string(wpc::VERSION) == "1.1.1", "header 'Wave POC v1.1.1'");
     // no room right of the last bar: no tags at all (counted)
     wpc::View v2 = v; v2.r = (int)xLast + 20; const wpc::Scene s2 = wpc::layout(E, nullptr, v2);
     int t2 = 0; for (const wpc::Prim& p : s2.p) t2 += p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0;
@@ -275,23 +275,23 @@ static void testLiquidityReference(const Fix& F) {
     CHECK(E.waves.size() == 2, "two waves with the liquidity function on");
     if (E.waves.size() != 2) return;
     const wpc::Wave& a = E.waves[0]; const wpc::Wave& b = E.waves[1];
-    CHECK(a.liqOk && a.lnodes.size() == 2 && b.lnodes.size() == 3, "liquidity nodes: 2 (wave 1) and 3 (wave 2) as wp8.py (" << a.lnodes.size() << "/" << b.lnodes.size() << ")");
-    const char* ea[2] = { "7688.25", "7707.25" }; const double ra[2] = { 2.31, 2.01 };
-    for (size_t k = 0; k < 2 && k < a.lnodes.size(); ++k) CHECK(px(a.lnodes[k].tick) == ea[k] && std::fabs(a.lnodes[k].ratio - ra[k]) < 0.006 && a.lnodes[k].side == 1,
+    CHECK(a.liqOk && a.lnodes.size() == 3 && b.lnodes.size() == 4, "liquidity nodes (1.1.1: 1.9x, raw-row valley): 3 (wave 1) and 4 (wave 2) as wp9.py (" << a.lnodes.size() << "/" << b.lnodes.size() << ")");
+    const char* ea[3] = { "7688.25", "7707.25", "7710.25" }; const double ra[3] = { 2.31, 2.01, 1.92 };
+    for (size_t k = 0; k < 3 && k < a.lnodes.size(); ++k) CHECK(px(a.lnodes[k].tick) == ea[k] && std::fabs(a.lnodes[k].ratio - ra[k]) < 0.006 && a.lnodes[k].side == 1,
         "wave 1 liquidity node " << k << " = " << ea[k] << " " << ra[k] << "x bids (got " << px(a.lnodes[k].tick) << " " << a.lnodes[k].ratio << ")");
-    const char* eb[3] = { "7685.25", "7680.25", "7689.25" }; const double rb[3] = { 4.53, 4.01, 2.39 };
-    for (size_t k = 0; k < 3 && k < b.lnodes.size(); ++k) CHECK(px(b.lnodes[k].tick) == eb[k] && std::fabs(b.lnodes[k].ratio - rb[k]) < 0.006 && b.lnodes[k].side == 1,
+    const char* eb[4] = { "7685.25", "7680.25", "7682.25", "7689.25" }; const double rb[4] = { 4.53, 4.01, 2.85, 2.39 };
+    for (size_t k = 0; k < 4 && k < b.lnodes.size(); ++k) CHECK(px(b.lnodes[k].tick) == eb[k] && std::fabs(b.lnodes[k].ratio - rb[k]) < 0.006 && b.lnodes[k].side == 1,
         "wave 2 liquidity node " << k << " = " << eb[k] << " " << rb[k] << "x bids (got " << px(b.lnodes[k].tick) << " " << b.lnodes[k].ratio << ")");
-    CHECK(a.lnodes.size() == 2 && !a.lnodes[0].nearVol && a.lnodes[1].nearVol, "7707.25 sits on the volume node 7707.25 (within 2 ticks), 7688.25 alone");
-    CHECK(b.lnodes.size() == 3 && b.lnodes[0].stop == wpc::TOUCH && b.lnodes[0].stopBar > b.i1, "liquidity lines stop by the same rules (LPOC 7685.25 touched later)");
+    CHECK(a.lnodes.size() == 3 && !a.lnodes[0].nearVol && a.lnodes[1].nearVol, "7707.25 sits on the volume node 7707.25 (within 2 ticks), 7688.25 alone");
+    CHECK(b.lnodes.size() == 4 && b.lnodes[0].stop == wpc::TOUCH && b.lnodes[0].stopBar > b.i1, "liquidity lines stop by the same rules (LPOC 7685.25 touched later)");
     int nl = 0, ls = 0; for (const std::string& l : E.out) { nl += l.rfind("LNODE,", 0) == 0; ls += l.rfind("LSTOP,", 0) == 0; }
-    CHECK(nl == 5 && ls == 5, "record: 5 LNODE lines (+ near / alone) and 5 LSTOP lines (" << nl << "/" << ls << ")");
+    CHECK(nl == 7 && ls == 7, "record: 7 LNODE lines (+ near / alone) and 7 LSTOP lines (" << nl << "/" << ls << ")");
     bool nearTxt = false; for (const std::string& l : E.out) nearTxt = nearTxt || (l.rfind("LNODE,", 0) == 0 && l.find(",7707.25,") != std::string::npos && l.find("near_volume_node") != std::string::npos);
     CHECK(nearTxt, "LNODE line says near_volume_node");
     // restart without a book: the recorded liquidity nodes come back from the record
     int bad = 0; wpc::Store S2; seed(S2, F.B[0].t, 189, 172);
     wpc::Engine R; R.store = &S2; R.N = 3; R.tick = 0.25; R.rec = wpc::parseRecord(E.out, 3, 0.25, bad); run(R, F, (int)F.B.size() - 1, vap);
-    CHECK(bad == 0 && R.waves.size() == 2 && R.waves[1].lnodes.size() == 3 && R.waves[1].lnodes[0].tick == b.lnodes[0].tick && R.waves[1].lnodes[0].stopBar == b.lnodes[0].stopBar, "restart: liquidity nodes redrawn from the record");
+    CHECK(bad == 0 && R.waves.size() == 2 && R.waves[1].lnodes.size() == 4 && R.waves[1].lnodes[0].tick == b.lnodes[0].tick && R.waves[1].lnodes[0].stopBar == b.lnodes[0].stopBar, "restart: liquidity nodes redrawn from the record");
     // no book (waves formed before the indicator loaded): no liquidity nodes, no error
     wpc::Store S3; seed(S3, F.B[0].t, 189, 172);
     wpc::Engine Nb; Nb.store = &S3; Nb.N = 3; Nb.liqFn = [](const wpc::Wave&, std::vector<double>&, std::vector<double>&) { return false; }; run(Nb, F, (int)F.B.size() - 1, vap);
@@ -313,7 +313,7 @@ static void testLiquidityReference(const Fix& F) {
         if (p.k == wpc::Prim::TEXT) ++texts;
         if (p.k == wpc::Prim::BOX) left = false;
     }
-    CHECK(sc.lnodesDrawn == 5 && bright == 2 && dim == 3 && left, "liquidity bars: left of the wave start, <= 60 px, LPOC bright, others 60% (" << bright << "/" << dim << ")");
+    CHECK(sc.lnodesDrawn == 7 && bright == 2 && dim == 5 && left, "liquidity bars: left of the wave start, <= 60 px, LPOC bright, others 60% (" << bright << "/" << dim << ")");
     CHECK(dots > 20, "faint dotted lines to the right");
     const wpc::Scene s0 = wpc::layout(Nb, nullptr, v); int t0 = 0; for (const wpc::Prim& p : s0.p) t0 += p.k == wpc::Prim::TEXT;
     CHECK(texts == t0, "no price tags for liquidity nodes");

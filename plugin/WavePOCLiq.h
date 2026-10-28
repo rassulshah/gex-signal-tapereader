@@ -1,4 +1,4 @@
-// WavePOCLiq.h  1.1.0  (2026-10-28)  -  lsWavePOC 1.1.0 LIQUIDITY NODES, SDK-free (tested in tests_wavepoc\test_wavepoc_logic.cpp).
+// WavePOCLiq.h  1.1.1  (2026-10-28)  -  lsWavePOC 1.1.1 LIQUIDITY NODES, SDK-free (tested in tests_wavepoc\test_wavepoc_logic.cpp).
 // Rassul approved 11:27 CT (mockups wavepoc_lpoc_w1 / w2, reference wp8.py): the resting real-order liquidity of each wave, drawn as
 // compact bars pointing LEFT from the wave start, nodes only.
 //   BOOK      IRT's live order-by-order book (DEPTH_BY_ORDER): NEW / MOD / DEL / FILL keep every resting order (price, side, lots).
@@ -7,8 +7,9 @@
 //             bar's sums; the bar's sample count kept. A wave's liquidity = the average resting lots per profile row over the wave's
 //             bars (sum of samples / number of samples). Bars with no samples (before the indicator loaded) = no book: a wave needs
 //             samples on >= 90% of its bars, otherwise it simply has no liquidity nodes (no error).
-//   NODES     rows >= 2.0x the wave's median non-zero row; a peak on the RAW rows (a row >= both neighbours, edges included); the
-//             separation exactly as the volume nodes (>= 3 rows apart, 3-row smoothed valley between <= 0.7x the smaller); max 5;
+//   NODES     (1.1.1) rows >= 1.9x the wave's median non-zero row; a peak on the RAW rows (a row >= both neighbours, edges included);
+//             two nodes are separate when >= 3 rows apart AND the minimum RAW row between them <= 0.7x the smaller node's raw value
+//             (1.1.0 used the 3-row smoothed valley, which merged single-tick orders on a flat ES book - wp9.pick_raw); max 5;
 //             the biggest = LPOC. Side = bids if bids are at least half of the row's lots, else offers.
 #pragma once
 #include <algorithm>
@@ -22,7 +23,7 @@
 
 namespace wpl {
 
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.1.1";
 static const long long MM_WINDOW_MS = 5LL * 60 * 1000;   // re-priced >= 2x in 5 min = market maker
 static const int MM_REPRICES = 2;
 static const long long SAMPLE_MS = 1000;
@@ -30,6 +31,8 @@ static const long long BAND_TICKS = 300;                  // sampled prices arou
 static const size_t BAR_CAP = 1500;                       // bars of samples kept
 static const size_t BOOK_CAP = 400000;
 static const double COVER_MIN = 0.9;                      // share of a wave's bars that must have samples
+static const double LIQ_RATIO = 1.9;                      // (1.1.1, was 2.0) a node row >= 1.9x the wave's median non-zero row
+static const double LIQ_VALLEY = 0.7;                     // separate: min RAW row between <= 0.7x the smaller node
 
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 struct Ev { int action = -1; int side = -1; long long tick = 0; long long size = 0; long long id = 0; };   // side 1 bid, 0 offer
@@ -119,23 +122,21 @@ public:
     }
 };
 
-// the liquidity nodes of a wave's rows (wp8.pick_raw): indexes, biggest first; med = the median of the non-zero rows
+// the liquidity nodes of a wave's rows (1.1.1: wp9.pick_raw - 1.9x, raw-row valley): indexes, biggest first; med = the median of the non-zero rows
 inline std::vector<int> pickRaw(const std::vector<double>& v, double& med) {
     std::vector<int> out; med = 0; const int n = (int)v.size(); if (n < 1) return out;
     std::vector<double> nz; for (double x : v) if (x > 0) nz.push_back(x);
     if (nz.empty()) return out;
     std::sort(nz.begin(), nz.end()); const size_t m = nz.size(); med = m % 2 ? nz[m / 2] : (nz[m / 2 - 1] + nz[m / 2]) / 2;
-    std::vector<double> s((size_t)n, 0);
-    for (int j = 0; j < n; ++j) s[(size_t)j] = ((j > 0 ? v[(size_t)j - 1] : 0) + v[(size_t)j] + (j + 1 < n ? v[(size_t)j + 1] : 0)) / 3.0;
     std::vector<int> peaks;
-    for (int j = 0; j < n; ++j) if (v[(size_t)j] >= v[(size_t)std::max(0, j - 1)] && v[(size_t)j] >= v[(size_t)std::min(n - 1, j + 1)] && v[(size_t)j] >= 2 * med && v[(size_t)j] > 0) peaks.push_back(j);
+    for (int j = 0; j < n; ++j) if (v[(size_t)j] >= v[(size_t)std::max(0, j - 1)] && v[(size_t)j] >= v[(size_t)std::min(n - 1, j + 1)] && v[(size_t)j] >= LIQ_RATIO * med && v[(size_t)j] > 0) peaks.push_back(j);
     std::stable_sort(peaks.begin(), peaks.end(), [&](int a, int b) { return v[(size_t)a] > v[(size_t)b]; });
     for (int j : peaks) {
         bool ok = true;
         for (int c : out) {
             if (std::abs(j - c) < 3) { ok = false; break; }
-            double mn = s[(size_t)std::min(j, c)]; for (int k = std::min(j, c); k <= std::max(j, c); ++k) mn = std::min(mn, s[(size_t)k]);
-            if (mn > 0.7 * std::min(s[(size_t)j], s[(size_t)c]) + 1e-12) { ok = false; break; }
+            double mn = v[(size_t)std::min(j, c)]; for (int k = std::min(j, c); k <= std::max(j, c); ++k) mn = std::min(mn, v[(size_t)k]);   // RAW rows (1.1.1)
+            if (mn > LIQ_VALLEY * std::min(v[(size_t)j], v[(size_t)c]) + 1e-12) { ok = false; break; }
         }
         if (ok) out.push_back(j);
         if ((int)out.size() == 5) break;
