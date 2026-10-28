@@ -1,6 +1,6 @@
 #ifndef LS_FRESH_H
 #define LS_FRESH_H
-// Fresh.h 1.0.0 (2026-10-18) -- ONE rule for "how old is this input and is it STALE", shared by every LRA plugin. SDK-free, tested
+// Fresh.h 1.1.0 (2026-10-28; 1.0.0 2026-10-18) -- ONE rule for "how old is this input and is it STALE", shared by every LRA plugin. SDK-free, tested
 // (tests_fresh/test_fresh.cpp). Audit C finding 7 (2026-10-17): the same MenthorQ grid was "STALE" on one indicator and live on another
 // (HodLodGex 20 min, Dealer Profile fade 20 / badge 25 min, Tape Reader 18 h outside RTH, CobImpulse its own), and the HOD / LOD box drew
 // "Reg: Neg" from a session file 1,902 min old with no mark. Rassul's rule: stale data is never shown as live.
@@ -16,6 +16,12 @@
 //       every ~10-15 min, so 20 min = one refresh missed), else STALE. A feed the bridge reports STOPPED is STALE at any age.
 //     * outside those hours (the evening pause, the weekend): PAUSED - the closing set, shown with its time - when it was written no
 //       earlier than 20 min (PAUSE_SLACK_MIN) before the last update window closed (the last weekday 16:00 CT); older = STALE.
+//     * (1.1.0, 2026-10-28) the LIVE limit depends on the session: 20 min in RTH (weekday 08:30-16:00 CT), 45 min (LIVE_MAX_MIN_ON)
+//       from 16:00 to 08:30 CT - overnight MenthorQ's own as-of stamp runs ~20 min behind the clock, so a just-arrived set read
+//       "STALE 20m" (HOD / LOD "GAMMA STALE" on 10-27 22:00-23:00 CT while sets were arriving every 5 min).
+//     * (1.1.0) judgeArrived(): when the caller knows WHEN the set arrived (the file's write time), freshness is judged by the ARRIVAL
+//       age; the as-of stays for display and must itself be within the limit + ASOF_EXTRA_MIN (a file re-written with an old set is
+//       not live). judge() without an arrival time keeps judging the as-of, with the same session limits.
 //   daily inputs (K_QSCORE, MenthorQ Q-Scores, end of day): LIVE when the date is the latest weekday whose scores are due by now
 //     (due 22:00 CT that day, QSCORE_DUE_MIN; the bridge receives them ~20:10), else STALE. Exchange holidays are not known here: on
 //     the day after a holiday the scores read STALE (honest: no new scores were published).
@@ -28,10 +34,14 @@
 
 namespace fr {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 enum Kind { K_MQ_LEVELS = 0, K_DEALER, K_SESSION, K_QSCORE, K_GEX, K_TAPE_STATUS };
 enum State { LIVE = 0, PAUSED = 1, STALE = 2 };
-static const int LIVE_MAX_MIN = 20;
+static const int LIVE_MAX_MIN = 20;          // RTH (weekday 08:30-16:00 CT)
+static const int LIVE_MAX_MIN_ON = 45;       // (1.1.0) 16:00-08:30 CT and Sunday evening
+static const int ASOF_EXTRA_MIN = 45;        // (1.1.0) judgeArrived: the as-of may lag the arrival by at most this on top of the limit
+static const int RTH_START_MIN = 8 * 60 + 30;
+static const int RTH_END_MIN = 16 * 60;
 static const int PAUSE_SLACK_MIN = 20;
 static const int UPDATE_END_MIN = 16 * 60;          // 16:00 CT: MenthorQ stops updating futures
 static const int UPDATE_START_MIN = 21 * 60 + 40;   // 21:40 CT: it starts again (Sunday to Thursday evenings)
@@ -74,6 +84,12 @@ inline bool updateHours(int wd, int min)
     return !(min > UPDATE_END_MIN && min < UPDATE_START_MIN);
 }
 inline bool updateHoursAt(long long ct) { const long long d = floorDiv(ct, 86400); return updateHours(weekday(d), (int)((ct - d * 86400) / 60)); }
+// (1.1.0) the LIVE limit (minutes) at nowCt: 20 in RTH (Mon-Fri 08:30-16:00 CT), 45 otherwise
+inline int liveLimitMinAt(long long ct)
+{
+    const long long d = floorDiv(ct, 86400); const int wd = weekday(d); const int mn = (int)((ct - d * 86400) / 60);
+    return (wd >= 1 && wd <= 5 && mn >= RTH_START_MIN && mn < RTH_END_MIN) ? LIVE_MAX_MIN : LIVE_MAX_MIN_ON;
+}
 // the latest close of an update window (a weekday 16:00 CT) at or before nowCt
 inline long long lastUpdateEnd(long long nowCt)
 {
@@ -106,11 +122,25 @@ inline Verdict judge(Kind k, long long asofCt, long long nowCt, bool feedStopped
     if (asofCt <= 0 || nowCt <= 0 || asofCt > nowCt + FUTURE_SLACK_SEC) return staleV(-1, false);
     const long long age = asofCt > nowCt ? 0 : nowCt - asofCt;
     if (updateHoursAt(nowCt)) {
-        if (age <= LIVE_MAX_MIN * 60LL && !feedStopped) { Verdict v; v.st = LIVE; v.ageSec = age; v.known = true; return v; }
+        if (age <= liveLimitMinAt(nowCt) * 60LL && !feedStopped) { Verdict v; v.st = LIVE; v.ageSec = age; v.known = true; return v; }
         return staleV(age, true);
     }
     if (asofCt >= lastUpdateEnd(nowCt) - PAUSE_SLACK_MIN * 60LL) { Verdict v; v.st = PAUSED; v.ageSec = age; v.known = true; v.tag = "PAUSED"; return v; }
     return staleV(age, true);
+}
+// (1.1.0) the same input with its ARRIVAL time known (arrivedCt = when the set was written here, CT wall-clock seconds; <= 0 = unknown ->
+// judge()). In MenthorQ hours: LIVE when it arrived within the limit (20 min RTH / 45 min otherwise), its as-of is within the limit +
+// ASOF_EXTRA_MIN, and the feed is not stopped. ageSec / the tag show the AS-OF age (what the data describes). Outside the hours: judge().
+inline Verdict judgeArrived(Kind k, long long asofCt, long long arrivedCt, long long nowCt, bool feedStopped = false)
+{
+    if (arrivedCt <= 0) return judge(k, asofCt, nowCt, feedStopped);
+    if (asofCt <= 0 || nowCt <= 0 || asofCt > nowCt + FUTURE_SLACK_SEC || arrivedCt > nowCt + FUTURE_SLACK_SEC) return staleV(-1, false);
+    if (!updateHoursAt(nowCt)) return judge(k, asofCt, nowCt, feedStopped);
+    const long long age = asofCt > nowCt ? 0 : nowCt - asofCt;
+    const long long arrAge = arrivedCt > nowCt ? 0 : nowCt - arrivedCt;
+    const long long lim = liveLimitMinAt(nowCt) * 60LL;
+    if (!feedStopped && arrAge <= lim && age <= lim + ASOF_EXTRA_MIN * 60LL) { Verdict v; v.st = LIVE; v.ageSec = age; v.known = true; return v; }
+    return staleV(arrAge > lim ? arrAge : age, true);
 }
 // the Q-Scores day that must be on file at nowCt (civil days): the latest weekday whose scores were due by now
 inline long long requiredDay(long long nowCt)

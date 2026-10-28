@@ -1,4 +1,4 @@
-// test_fresh.cpp -- Fresh.h 1.0.0 (2026-10-18), the one freshness / STALE rule. SDK-free.
+// test_fresh.cpp -- Fresh.h 1.1.0 (2026-10-28; 1.0.0 2026-10-18), the one freshness / STALE rule. SDK-free.
 //   g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. test_fresh.cpp -o tf && ./tf   (from plugin\tests_fresh)
 #include "Fresh.h"
 #include <cstdio>
@@ -60,6 +60,28 @@ int main()
     // every intraday kind follows the same rule (consistency across indicators)
     for (int k = fr::K_MQ_LEVELS; k <= fr::K_GEX; ++k) { if (k == fr::K_QSCORE) continue;
         CHECK(fr::judge((fr::Kind)k, mon10 - 25 * 60, mon10).stale() && fr::judge((fr::Kind)k, mon10 - 10 * 60, mon10).st == fr::LIVE, "kind " + std::to_string(k) + " same thresholds"); }
+    // (1.1.0) the overnight limit: 45 min from 16:00 to 08:30 CT, 20 min in RTH
+    const long long tue2245 = at(2026, 10, 27, 22, 45), tue0820 = at(2026, 10, 27, 8, 20), tue0835 = at(2026, 10, 27, 8, 35);
+    CHECK(fr::liveLimitMinAt(mon10) == 20 && fr::liveLimitMinAt(tue2245) == 45 && fr::liveLimitMinAt(tue0820) == 45 && fr::liveLimitMinAt(tue0835) == 20, "limit: RTH 20, overnight 45");
+    CHECK(fr::liveLimitMinAt(at(2026, 10, 19, 15, 59)) == 20 && fr::liveLimitMinAt(at(2026, 10, 19, 16, 0)) == 45, "16:00 switches to 45");
+    CHECK(fr::liveLimitMinAt(at(2026, 10, 18, 22, 0)) == 45, "Sunday evening = 45");
+    v = fr::judge(fr::K_MQ_LEVELS, tue2245 - 25 * 60, tue2245); CHECK(v.st == fr::LIVE, "the 10-27 case: 22:45 with a 22:20 as-of = LIVE now (was STALE 25m)");
+    v = fr::judge(fr::K_MQ_LEVELS, tue2245 - 46 * 60, tue2245); CHECK(v.st == fr::STALE && v.tag == "STALE 46m", "46 min overnight = STALE: " + v.tag);
+    v = fr::judge(fr::K_MQ_LEVELS, mon10 - 25 * 60, mon10); CHECK(v.stale(), "RTH still 20 min");
+    // (1.1.0) judgeArrived: by arrival, as-of for display
+    v = fr::judgeArrived(fr::K_MQ_LEVELS, tue2245 - 40 * 60, tue2245 - 3 * 60, tue2245);
+    CHECK(v.st == fr::LIVE && v.ageSec == 40 * 60 && v.tag.empty(), "arrived 3 min ago with a 40-min as-of overnight = LIVE, age shows the as-of");
+    v = fr::judgeArrived(fr::K_MQ_LEVELS, tue2245 - 50 * 60, tue2245 - 46 * 60, tue2245);
+    CHECK(v.st == fr::STALE && v.tag == "STALE 46m", "nothing arrived for 46 min overnight = STALE 46m: " + v.tag);
+    v = fr::judgeArrived(fr::K_MQ_LEVELS, mon10 - 18 * 60, mon10 - 2 * 60, mon10); CHECK(v.st == fr::LIVE, "RTH: arrived 2 min ago, as-of 18 = LIVE");
+    v = fr::judgeArrived(fr::K_MQ_LEVELS, mon10 - 30 * 60, mon10 - 21 * 60, mon10); CHECK(v.stale() && v.tag == "STALE 21m", "RTH: nothing for 21 min = STALE 21m: " + v.tag);
+    v = fr::judgeArrived(fr::K_MQ_LEVELS, mon10 - 70 * 60, mon10 - 1 * 60, mon10); CHECK(v.stale() && v.tag == "STALE 70m", "RTH: a file re-written with a 70-min-old set is not live (as-of > 20 + 45): " + v.tag);
+    v = fr::judgeArrived(fr::K_MQ_LEVELS, mon10 - 60 * 60, mon10 - 1 * 60, mon10); CHECK(v.st == fr::LIVE, "RTH: as-of 60 min with a fresh arrival = within 20 + 45 (as-of lag allowance)");
+    v = fr::judgeArrived(fr::K_GEX, mon10 - 5 * 60, mon10 - 1 * 60, mon10, true); CHECK(v.stale(), "a STOPPED feed = STALE even if a file just arrived");
+    v = fr::judgeArrived(fr::K_GEX, mon10 - 25 * 60, 0, mon10); CHECK(v.stale() && v.tag == "STALE 25m", "unknown arrival = the old as-of rule");
+    v = fr::judgeArrived(fr::K_GEX, mon10 - 5 * 60, mon10 + 600, mon10); CHECK(v.stale() && !v.known, "arrival in the future = STALE ?");
+    v = fr::judgeArrived(fr::K_SESSION, at(2026, 10, 16, 16, 5), at(2026, 10, 16, 16, 6), sat); CHECK(v.st == fr::PAUSED, "outside hours: the closing set stays PAUSED");
+    v = fr::judgeArrived(fr::K_SESSION, at(2026, 10, 15, 16, 0), sat - 60, sat); CHECK(v.stale(), "outside hours: Thursday's set re-written Saturday = STALE (as-of rule)");
     std::printf("Fresh.h %s: %d checks, %d failures\n", fr::VERSION, n, f);
     return f ? 1 : 0;
 }

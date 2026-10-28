@@ -41,6 +41,7 @@ struct Mem { std::string strikeTxt, chartTxt, name; double share = NAN, absM = N
 struct Loc { int ord = 0; char side = 'T'; std::string loTxt, hiTxt; char sign = 'M'; bool grow = false; int n = 0; std::vector<Mem> mem; };
 struct File {
     bool ok = false; std::string why, market, state, asofTxt, stampTxt, basis = "-", basisWhy, side = "none"; long long asof = 0; double vwap = NAN, basisApplied = NAN;
+    long long arrived = 0;   // (HodLod 2.9.2, Fresh.h 1.1.0) when this file was written here (unix s, its mtime); 0 = unknown
     std::vector<Loc> locs;
     // (3.0.0 file / HodLod 2.3.0) the BAND row: BAND|open|kind|top|bottom|max_1d|min_1d|ext|at|src (kind RTH / ON / ON*)
     bool band = false; double bandOpen = NAN, bandTop = NAN, bandBot = NAN, bandMax = NAN, bandMin = NAN, bandExt = NAN; std::string bandKind, bandAt, bandSrc, bandOpenTxt, bandTopTxt, bandBotTxt, bandMaxTxt, bandMinTxt;
@@ -175,10 +176,10 @@ inline void toView(hl::View& v, const File& F, double price, long long now, int 
     v.gexItems.clear(); v.gexStale.clear(); v.gexHover.clear();
     if (!showable(F)) return;
     if (F.asof > now + 120) return;                           // (audit) received in the future = clock / file wrong: never shown
-    {   // (2.1.0, audit C finding 7) one rule (Fresh.h): STALE in MenthorQ hours past 20 min, and outside them when older than the last close
+    {   // (2.1.0, audit C finding 7; 2.9.2 Fresh.h 1.1.0) one rule: STALE in MenthorQ hours when it ARRIVED over 20 min ago in RTH / 45 min overnight, and outside them when older than the last close
         (void)wd;
         const long long off = fr::offsetFromClock(now, min);
-        const fr::Verdict fv = fr::judge(fr::K_GEX, fr::ctFromUnix(F.asof, off), fr::ctFromUnix(now, off), false);
+        const fr::Verdict fv = fr::judgeArrived(fr::K_GEX, fr::ctFromUnix(F.asof, off), F.arrived > 0 ? fr::ctFromUnix(F.arrived, off) : 0, fr::ctFromUnix(now, off), false);   // (2.9.2) by arrival
         v.gexStale = fv.stale() ? fv.tag : ((F.state == "STALE" && fv.st == fr::LIVE) ? staleText(F, now, true) : std::string());
     }
     bool bandMode = false; for (const Loc& L : F.locs) if (L.side == 'A' || L.side == 'B') bandMode = true;
@@ -259,7 +260,7 @@ inline std::string statusLine(const File& F, const hl::View& v, const std::strin
 // said "Reg: Neg" while the HVL badge said price was above HVL. FLIP is kept only for the status line (not used).
 //   STRIKE,<price>,<pct>,<rank>,<isKing>,<type CR0+GW0 / HVL0 / PS0+HVL0 ...>,<strike>,,<first-seen>   MARKET,<mkt>   SESSION,<date>
 //   FLIP,<price>   ASOF,<CT sec of day>[,<date>]
-struct HvlBook { bool ok = false; std::string why, hvlTxt, flipTxt, session; double hvl = NAN, flip = NAN; long long asofCt = 0; };
+struct HvlBook { bool ok = false; std::string why, hvlTxt, flipTxt, session; double hvl = NAN, flip = NAN; long long asofCt = 0; long long arrivedCt = 0; };   // (2.9.2) arrivedCt = the file's write time (CT wall s), 0 = unknown
 inline HvlBook parseHvl(const std::string& text, const std::string& market)
 {
     HvlBook B; if (text.size() > MAX_BYTES) { B.why = "over 64 KiB"; return B; }

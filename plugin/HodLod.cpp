@@ -529,6 +529,7 @@ void HodLod::loadGex(HLState& S)
     {   std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) { S.gexStamp = -2; S.gexWhy = "unreadable (kept the last copy)"; return; }
         text.resize(hlg::MAX_BYTES + 1); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); }
     hlg::File F = hlg::parse(text, S.mkt);
+    F.arrived = (long long)st.st_mtime;   // (2.9.2) arrival time for Fresh.h 1.1.0 (judged by arrival, the as-of for display)
     S.gexLoads++;
     if (!F.ok) { S.gexWhy = "garbled (" + F.why + "): kept the last good copy"; S.gexStamp = -2; return; }   // a torn write: re-read next time
     S.gex = F; S.gexWhy = F.why;
@@ -613,6 +614,7 @@ void HodLod::loadHvl(HLState& S)
     {   std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) { S.hvlStamp = -2; S.hvlWhy = "unreadable (kept the last copy)"; return; }
         text.resize(hlg::MAX_BYTES + 1); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount()); }
     hlg::HvlBook B = hlg::parseHvl(text, S.mkt);
+    B.arrivedCt = hlLocalAbs((time_t)st.st_mtime);   // (2.9.2) when the set arrived here (CT wall s)
     if (!B.ok && S.hvl.ok && B.why != "no HVL0 strike in the book" && B.why != "book is for another market") { S.hvlWhy = "garbled (" + B.why + "): kept the last good book"; S.hvlStamp = -2; return; }
     S.hvl = B; S.hvlWhy = B.ok ? std::string() : B.why;
 }
@@ -630,7 +632,7 @@ static void hlSessSegs(HLState& S)
     S.view.sessSegs.clear();
     S.regSign = 0; S.regV = fr::Verdict();
     if (S.hvl.ok) {
-        S.regV = fr::judge(fr::K_MQ_LEVELS, S.hvl.asofCt, hlNowCt());
+        S.regV = fr::judgeArrived(fr::K_MQ_LEVELS, S.hvl.asofCt, S.hvl.arrivedCt, hlNowCt());   // (2.9.2) by arrival: overnight MenthorQ's as-of lags ~20 min
         const int sg = hlg::regimeSign(S.hvl, S.lastClose);
         if (S.regV.stale()) S.view.sessSegs.push_back(hl::Seg{ "Regime: STALE", hl::C_GREY });
         else if (sg != 0) {
@@ -1579,6 +1581,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.9.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.9.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

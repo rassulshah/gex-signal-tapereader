@@ -19,7 +19,7 @@
 #include "Fresh.h"   // (1.2.0) the one freshness rule (the header hover states it)
 
 namespace dcol {
-static const char* const VERSION = "1.2.0";   // 1.2.0 (DP 2.17.0, 2026-10-18): the Market State GEX facts (mstGex), the header hover states the Fresh.h rule // 1.1.0 (2026-10-14 18:25 CT audit display list): model-not-forecast hovers, "HL?", reach-only odds, the locked trigger in "How to use"
+static const char* const VERSION = "1.2.1";   // 1.2.1 (2026-10-28): header hover states Fresh.h 1.1.0 (20 min RTH / 45 min overnight)   // 1.2.0 (DP 2.17.0, 2026-10-18): the Market State GEX facts (mstGex), the header hover states the Fresh.h rule // 1.1.0 (2026-10-14 18:25 CT audit display list): model-not-forecast hovers, "HL?", reach-only odds, the locked trigger in "How to use"
 static const unsigned long C_POS = 0x0014B8A6UL;   // teal: + net gamma (dealers long gamma: they lean against moves)
 static const unsigned long C_NEG = 0x00F97316UL;   // orange: - net gamma (dealers short gamma: they chase moves)
 static const int BADGE_FONT_MIN = 8, BADGE_FONT_MAX = 14, BADGE_FONT_DEF = 9;
@@ -246,7 +246,7 @@ inline dpaudit::Hover headerHoverC(const std::string& ver, const dpaudit::BookAs
     dpaudit::Hover h;
     h.title = stale ? "Why is the dealer data STALE?" : "How fresh is the dealer data?";
     h.lines.push_back("Grid " + (a.ok() ? dpaudit::clock12(a.so) : std::string("time unknown")) + (age >= 0 ? " (" + dpaudit::ageShort(age) + " ago)" : std::string()) + " \xB7 Dealer Profile v" + ver);
-    h.lines.push_back("STALE = over 20 min old while MenthorQ updates (older than the last close while it pauses): nodes fade, don't trade them");   // (1.2.0) Fresh.h, the same rule as the HOD / LOD box
+    h.lines.push_back("STALE = no new set for over 20 min in RTH (45 min overnight) while MenthorQ updates (older than the last close while it pauses): nodes fade, don't trade them");   // (1.2.0) Fresh.h, the same rule as the HOD / LOD box
     h.lines.push_back("Use: when STALE, trade key levels + footprint only");
     return h;
 }
