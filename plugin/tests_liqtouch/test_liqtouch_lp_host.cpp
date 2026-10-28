@@ -57,12 +57,18 @@ int main() {
     int id = 100;
     mock::feed.push(0, 1, 7688.0f, 150, (RTDATE)(t0 - 60), 10);   // the big bid 150 @ 7688.00
     mock::feed.push(0, 1, 7686.0f, 50, (RTDATE)(t0 - 60), 11);    // a 50-lot bid (under the 72 tier) @ 7686.00
+    for (int i = 0; i < 5; ++i) mock::feed.push(0, 1, 7685.0f - 1.0f * i, 30, (RTDATE)(t0 - 60), 300 + i);   // (LiqTouch 1.1.0) five 30-lot bids 4 ticks apart: bid median 30 -> the 2.0x gate = 60 lots
     mock::feed.push(0, 0, 7690.0f, 400, (RTDATE)(t0 - 60), 12);   // offers at 7690 to trade against
     for (int i = 1; i <= 12; ++i) mock::feed.push(0, 0, 7690.0f + 0.25f * i, 5, (RTDATE)(t0 - 60), 200 + i);   // a book of 12 small offers (the per-minute book sample needs 10+ levels)
     for (unsigned long s = t0 - 60; s < t0 - 18; s += 3) mock::feed.push(3, 0, 7690.0f, 1, (RTDATE)s, 12, ++id);   // prints at 7690 (last = 7690, 8 ticks above the bid)
     run(t0 - 67, t0 - 18);
     LQState* S = static_cast<LQState*>(h.data); if (!S) { std::printf("no state\n"); return 1; }
-    CHECK(S->lt.followed() >= 1, "the 150-lot bid is followed (>= tier 72 for 30 s, 2 ticks .. 3 ATR from price)");
+    {   bool c150 = false, c50 = false; for (const ltc::Zone& z : S->lt.candidates()) { if (z.side == ltc::BID && z.px == 30752) c150 = z.lots == 150; if (z.px == 30744) c50 = true; }
+        CHECK(c150 && !c50 && std::fabs(S->lt.median(ltc::BID) - 30.0) < 1e-9, "(1.1.0) zone candidates: the 150 bid in, the 50 bid out (median 30, gate 60)");
+        std::vector<sb::Fact> B; sb::readFacts('B', S->symbol, S->spb, S->chartKey, -1, B, false); bool b2 = false; for (auto& f : B) if (f.code == 2 && std::fabs(f.lo - 7688.0) < 1e-6 && f.val == 150 && f.side == 1) b2 = true;
+        bool onlyZones = !B.empty(); for (auto& f : B) if (f.code != 2) onlyZones = false;
+        CHECK(b2 && onlyZones, "(0.67.0) B facts = the zone candidates only (code 2, 150 @ 7688.00 bid)"); }
+    CHECK(S->lt.followed() >= 1, "the 150-lot bid is followed (zone 150 >= 2.0x the bid median 30, real after 30 s)");
     // the touch: 30 lots of the bid traded, a 40-lot refill, price back to 7690 within 2 s
     const unsigned long tt = t0 - 17;
     mock::feed.push(3, 1, 7688.0f, 30, (RTDATE)tt, 10, ++id); mock::feed.push(1, 1, 7688.0f, 120, (RTDATE)tt, 10);
@@ -77,7 +83,7 @@ int main() {
     const std::string recPath = findFile(tmp, "-liqtouch-");
     std::string rec = readAll(recPath);
     CHECK(rec.find("kind,touch_ms,sec_end,side,px_tick") == 0 && rec.find("\nT,") != std::string::npos && rec.find(",BID,30752,7688,STAYS+,2,2,0,150,") != std::string::npos, "record: header + the T line (bid 7688.00, STAYS+, vote +2, def 2, att 0, 150 lots at the touch)");
-    CHECK(rec.find(",7686,") == std::string::npos, "the 50-lot bid (under the tier) is never followed / recorded");
+    CHECK(rec.find(",7686,") == std::string::npos, "the 50-lot bid (zone 50 < 2.0x median = 60) is never followed / recorded");
     // the outcome: price 3 points up (0.5 ATR away first) -> HELD
     mock::feed.push(0, 0, 7692.0f, 100, (RTDATE)(t0 + 5), 30);
     for (unsigned long s = t0 + 6; s < t0 + 14; ++s) mock::feed.push(3, 0, 7692.0f, 1, (RTDATE)s, 30, ++id);

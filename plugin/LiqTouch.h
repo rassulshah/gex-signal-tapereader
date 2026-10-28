@@ -1,5 +1,13 @@
 #ifndef LS_LIQTOUCH_H
 #define LS_LIQTOUCH_H
+// LiqTouch.h 1.1.0 (2026-10-28 14:04 CT, Rassul approved the new liquidity-column candidate rule): with Params.zoneGate (lsLiquidityProfile
+// sets it live) a BIG LEVEL is no longer "size >= the p97 tier" but a ZONE CANDIDATE (pickZones below, one rule shared with lsDealerProfile):
+//   real orders only (rested >= 30 s at their price, re-priced < 2x in 5 min - quoting / market-maker style orders excluded); zone = the real
+//   lots at a price + its +-1 tick neighbours (same side), at the price with the most lots; passes when zone >= 2.0x the MEDIAN real level
+//   (non-zero, same side, within 3 ATR; the median recomputed every 60 s); each node its own distribution (>= 3 ticks from a bigger node and
+//   the smallest raw level between them <= 0.7x the smaller, else the bigger is kept); bids within 3 ATR below the last trade, offers above.
+//   Every passing node is followed at once (its orders already rested 30 s); a touch = the first trade inside the zone (price +-1 tick).
+//   The p97 tier is kept as a LOG field only in that mode. zoneGate false = the 1.0.0 study engine exactly (parity tests).
 // LiqTouch.h 1.0.0 (2026-10-28, Rassul approved the liquidity-column build 11:05 CT; HELD added 11:08 CT "i also like the held signal ...
 // i like to show it when it held") -- THE TOUCH TAG of a big resting level, decided natively from the order-by-order feed (IRT
 // DEPTH_BY_ORDER) inside lsLiquidityProfile. SDK-free, C++11, no files except the params parse.
@@ -37,7 +45,7 @@
 #include <algorithm>
 #include <sstream>
 namespace ltc {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum Tag { T_PENDING = 0, T_STAYS_PLUS = 1, T_STAYS = 2, T_STAYS_WEAK = 3, T_GONE = 4, T_GONE_PLUS = 5, T_MID = 6, T_EARLY = 7 };
@@ -64,7 +72,51 @@ struct Params {
     int farWait[2] = { 60, 60 };                            // far-king (> 3 ATR) bright wait, seconds (0 = none) - read by lsDealerProfile
     int dwellPlus = 4, dwellWeak = 14; double churnCut = 15.0;   // churnCut 0 = no churn rule (NG)
     bool fromFile = false; std::string why = "defaults (no params file)";
+    // (1.1.0) the zone candidate rule (zoneGate false = the 1.0.0 tier gate)
+    bool zoneGate = false; double zoneX = 2.0, sepX = 0.7; int sepTicks = 3, perSide = 3; double reachAtr = 3.0;
+    long long realMs = 30000, moveWinMs = 300000, medEveryMs = 60000; int maxMoves = 2;
 };
+// (1.1.0) ONE candidate rule for the liquidity column and the touch engine. real[sd]: price (ticks) -> REAL resting lots (already filtered:
+// rested >= realMs, re-priced < maxMoves in moveWinMs). Bids are taken at last-R .. last-1, offers at last+1 .. last+R. med[sd] = the median
+// real level of that side (caller recomputes it every 60 s). Returns every passing, distinct node per side, biggest first (not capped: the
+// caller shows perSide per side; the rest are challengers for the steady board).
+struct Zone { int side = BID; long long px = 0, lots = 0, raw = 0; };
+inline double medianOf(std::vector<long long> v) {
+    if (v.empty()) return 0.0;
+    std::sort(v.begin(), v.end()); const size_t n = v.size();
+    return n % 2 ? (double)v[n / 2] : 0.5 * ((double)v[n / 2 - 1] + (double)v[n / 2]); }
+inline double sideMedian(const std::map<long long, long long>& real, int sd, long long last, long long R) {
+    std::vector<long long> v; for (std::map<long long, long long>::const_iterator i = real.begin(); i != real.end(); ++i) {
+        if (i->second <= 0) continue;
+        const long long d = sd == BID ? last - i->first : i->first - last; if (d >= 1 && d <= R) v.push_back(i->second); }
+    return medianOf(v); }
+inline std::vector<Zone> pickZones(const std::map<long long, long long>& real, int sd, long long last, long long R, double med, const Params& P) {
+    std::vector<Zone> c; if (!(med > 0) || last <= 0 || R <= 0) return c;
+    auto at = [&](long long p) -> long long { std::map<long long, long long>::const_iterator i = real.find(p); return i == real.end() ? 0 : std::max(0LL, i->second); };
+    std::map<long long, Zone> byPx;                                   // the zone price -> the best window that names it
+    for (long long j = 1; j <= R; ++j) {
+        const long long p = sd == BID ? last - j : last + j; if (p <= 0) break;
+        const long long a = at(p - 1), m = at(p), b = at(p + 1), z = a + m + b; if (m <= 0 && a <= 0 && b <= 0) continue;
+        if ((double)z < P.zoneX * med) continue;
+        long long zp = p, zm = m; if (a > zm) { zp = p - 1; zm = a; } if (b > zm) { zp = p + 1; zm = b; }   // ties keep the window centre
+        const long long dz = sd == BID ? last - zp : zp - last; if (dz < 1 || dz > R) continue;
+        std::map<long long, Zone>::iterator h = byPx.find(zp);
+        if (h == byPx.end() || z > h->second.lots) { Zone Z; Z.side = sd; Z.px = zp; Z.lots = z; Z.raw = zm; byPx[zp] = Z; }
+    }
+    std::vector<Zone> all; for (std::map<long long, Zone>::const_iterator i = byPx.begin(); i != byPx.end(); ++i) all.push_back(i->second);
+    std::sort(all.begin(), all.end(), [](const Zone& x, const Zone& y) { return x.lots != y.lots ? x.lots > y.lots : x.px < y.px; });
+    for (const Zone& z : all) {
+        bool ok = true;
+        for (const Zone& k : c) {
+            const long long lo = std::min(k.px, z.px), hi = std::max(k.px, z.px);
+            if (hi - lo < P.sepTicks) { ok = false; break; }
+            long long mn = -1; for (long long p = lo + 1; p < hi; ++p) { const long long v = at(p); if (mn < 0 || v < mn) mn = v; }
+            if ((double)mn > P.sepX * (double)z.lots) { ok = false; break; }   // no valley between them: the same distribution - keep the bigger
+        }
+        if (ok) c.push_back(z);
+    }
+    return c;
+}
 inline Params defaults(const std::string& m) {
     Params p; p.market = m;
     long long t = 72; int w = 60; double ch = 15.0;
@@ -182,7 +234,7 @@ public:
     long long nEvents = 0, nTouches = 0, nEpisodes = 0, nUnknown = 0, nGap = 0;
     explicit Engine(const Params& p = Params()) : P(p) {}
     void newSession() { live.clear(); out.clear(); }   // a new 17:00 session: touches start again, the book and the followed levels go on
-    void reset() { ord.clear(); lev.clear(); eps.clear(); live.clear(); out.clear(); hist.clear(); blocks.clear(); nextT = 0; last = hi = lo = -1; bv = sv = 0; lastSec = -1; started = false; }
+    void reset() { cand.clear(); medAt = -1; med[0] = med[1] = 0; ord.clear(); lev.clear(); eps.clear(); live.clear(); out.clear(); hist.clear(); blocks.clear(); nextT = 0; last = hi = lo = -1; bv = sv = 0; lastSec = -1; started = false; }
     // tests: start the 1-s clock at a boundary and seed the last trade (the live engine starts at its first event)
     void begin(long long boundaryMs, long long lastPx) { nextT = boundaryMs; started = true; if (lastPx > 0) last = lastPx; }
     // one MBO event. side: the event's raw side (BID / ASK, -1 unknown); implied: a spread-driven fill (no aggressor)
@@ -195,12 +247,12 @@ public:
         switch (act) {
         case NEW:
             if (side != BID && side != ASK) return;
-            if (it != ord.end()) { Lev& o = L(it->second.side, it->second.px); o.size -= it->second.size; it->second = Ord{ side, px, size }; L(side, px).size += size; return; }
-            ord[id] = Ord{ side, px, size }; { Lev& l = L(side, px); l.size += size; l.cAdd += size; } return;
+            if (it != ord.end()) { Lev& o = L(it->second.side, it->second.px); o.size -= it->second.size; it->second = Ord{ side, px, size, ms }; L(side, px).size += size; return; }
+            ord[id] = Ord{ side, px, size, ms }; { Lev& l = L(side, px); l.size += size; l.cAdd += size; } return;
         case MOD:
-            if (it == ord.end()) { if (side != BID && side != ASK) return; ord[id] = Ord{ side, px, size }; Lev& l = L(side, px); l.size += size; l.cAdd += size; return; }
+            if (it == ord.end()) { if (side != BID && side != ASK) return; ord[id] = Ord{ side, px, size, ms }; Lev& l = L(side, px); l.size += size; l.cAdd += size; return; }
             {   Ord& o = it->second;
-                if (px != o.px) { Lev& a = L(o.side, o.px); a.size -= o.size; a.cPull += o.size; Lev& b = L(o.side, px); b.size += size; b.cAdd += size; o.px = px; o.size = size; return; }
+                if (px != o.px) { Lev& a = L(o.side, o.px); a.size -= o.size; a.cPull += o.size; Lev& b = L(o.side, px); b.size += size; b.cAdd += size; o.px = px; o.size = size; o.mv1 = o.mv0; o.mv0 = ms; o.t0 = ms; return; }
                 const long long ch = size - o.size; Lev& l = L(o.side, o.px); l.size += ch; if (ch < 0) l.cPull += -ch; else l.cAdd += ch; o.size = size; }
             return;
         case DEL:
@@ -210,10 +262,11 @@ public:
             const int rs = it != ord.end() ? it->second.side : side;
             last = px; if (hi < 0 || px > hi) hi = px; if (lo < 0 || px < lo) lo = px;
             if (!implied) { if (rs == BID) sv += size; else if (rs == ASK) bv += size; }
-            for (int sd = 0; sd < 2; ++sd) {                               // the first trade at a followed level = its touch
-                std::unordered_map<long long, Lev>::iterator lv = lev.find(key(sd, px));
+            for (int sd = 0; sd < 2; ++sd) for (int dj = 0; dj <= (P.zoneGate ? 2 : 0); ++dj) {   // the first trade at a followed level = its touch ((1.1.0) zone: inside +-1 tick)
+                const long long q = px + (dj == 0 ? 0 : dj == 1 ? -1 : 1);
+                std::unordered_map<long long, Lev>::iterator lv = lev.find(key(sd, q));
                 if (lv == lev.end() || lv->second.ep < 0) continue;
-                touch(sd, px, lv->second, ms);
+                touch(sd, q, lv->second, ms);
             }
             if (it != ord.end()) { Ord& o = it->second; const long long take = std::min(size, o.size); Lev& l = L(o.side, o.px); l.size -= take; l.cEat += take; o.size -= take; }
             else ++nUnknown;
@@ -243,9 +296,13 @@ public:
         for (std::unordered_map<long long, Lev>::const_iterator i = lev.begin(); i != lev.end(); ++i) { const long long px = i->first >> 1; if (i->second.size > 0 && px != last && std::llabs(px - last) <= R) v.push_back(i->second.size); }
         return v; }
     long long lastPx() const { return last; }
+    // (1.1.0) the zone candidates of the last 1-s boundary (zoneGate), biggest first per side; the medians used
+    const std::vector<Zone>& candidates() const { return cand; }
+    double median(int sd) const { return med[sd & 1]; }
+    long long realNearCount() const { return nReal; }
     long long levelSize(int sd, long long px) const { std::unordered_map<long long, Lev>::const_iterator i = lev.find(key(sd, px)); return i == lev.end() ? 0 : i->second.size; }
 private:
-    struct Ord { int side; long long px, size; };
+    struct Ord { int side; long long px, size; long long t0 = 0, mv0 = -1, mv1 = -1; };   // (1.1.0) t0 = at this price since; the last two re-price times
     struct Lev { long long size = 0, cAdd = 0, cEat = 0, cPull = 0, qsince = 0; int ep = -1; };
     struct Ep { int side; long long px, t0, sz0, mx, hist60, sz60, lowSince; };
     struct Sec { long long end, last, hi, lo; };
@@ -256,6 +313,27 @@ private:
     std::deque<Sec> hist;                                 // 6 h of 1-s last / high / low (tap number)
     std::deque<Block> blocks;                             // 3-min blocks (ATR)
     long long nextT = 0, last = -1, hi = -1, lo = -1, bv = 0, sv = 0, lastSec = -1; bool started = false;
+    std::vector<Zone> cand; double med[2] = { 0, 0 }; long long medAt = -1, nReal = 0;   // (1.1.0)
+    void zoneStep(long long sl, double atr) {
+        cand.clear(); if (sl <= 0 || !(atr > 0)) return;
+        const long long R = (long long)(P.reachAtr * atr) + 1;
+        std::map<long long, long long> real[2]; nReal = 0;
+        for (std::unordered_map<long long, Ord>::const_iterator i = ord.begin(); i != ord.end(); ++i) {
+            const Ord& o = i->second; if (o.size <= 0 || (o.side != BID && o.side != ASK)) continue;
+            const long long d = o.side == BID ? sl - o.px : o.px - sl; if (d < 0 || d > R + 1) continue;
+            if (nextT - o.t0 < P.realMs) continue;                                                     // rested < 30 s
+            const int mv = (o.mv0 >= 0 && nextT - o.mv0 <= P.moveWinMs ? 1 : 0) + (o.mv1 >= 0 && nextT - o.mv1 <= P.moveWinMs ? 1 : 0);
+            if (mv >= P.maxMoves) continue;                                                            // quoting / re-pricing
+            real[o.side][o.px] += o.size; ++nReal;
+        }
+        if (medAt < 0 || nextT - medAt >= P.medEveryMs || nextT < medAt || !(med[0] > 0) || !(med[1] > 0)) {   // every 60 s (sooner while a side has no real level yet)
+            for (int sd = 0; sd < 2; ++sd) med[sd] = sideMedian(real[sd], sd, sl, R);
+            medAt = nextT; }
+        for (int sd = 0; sd < 2; ++sd) { std::vector<Zone> z = pickZones(real[sd], sd, sl, R, med[sd], P); cand.insert(cand.end(), z.begin(), z.end()); }
+        for (const Zone& z : cand) { Lev& l = L(z.side, z.px); if (l.ep >= 0 || eps.size() >= 3000) continue;
+            Ep e; e.side = z.side; e.px = z.px; e.t0 = nextT; e.sz0 = l.size; e.mx = l.size; e.hist60 = 0; e.sz60 = l.size; e.lowSince = 0;
+            l.ep = ++epSeq; eps[l.ep] = e; ++nEpisodes; }
+    }
     static long long key(int sd, long long px) { return (px << 1) | (long long)(sd & 1); }
     Lev& L(int sd, long long px) { return lev[key(sd, px)]; }
     long long blockIdx(long long secEnd) const {
@@ -319,7 +397,8 @@ private:
         const double atr = atrFor(nextT);
         const long long tier = P.tier[rthIdx(P.market, nextT)];
         // 2) big levels: 2 ticks .. 3 ATR from the last trade, at the tier for 30 s
-        if (sl > 0 && atr > 0) {
+        if (P.zoneGate) zoneStep(sl, atr);                            // (1.1.0) the zone candidates (tier = log only)
+        else if (sl > 0 && atr > 0) {
             const long long R = (long long)(3.0 * atr) + 1;
             for (int sd = 0; sd < 2; ++sd) for (long long j = 2; j <= R; ++j) {
                 const long long p = sd == BID ? sl - j : sl + j; if (p <= 0) break;

@@ -158,7 +158,8 @@ static const char* LT_HEADER = "kind,touch_ms,sec_end,side,px_tick,price,tag,vot
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.66.1"          // (0.66.1, 2026-10-28 12:16 CT Rassul "a column for levels ... move the hod lod box aligned ... on the left") the top read banner and the order lines start right of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0 leftKeep) - the HOD/LOD table docks at that column's top
+#define LQ_VERSION "0.67.0"          // (0.67.0, 2026-10-28 14:04 CT Rassul approved) the liquidity column candidates = zones >= 2.0x the median real level (LiqTouch 1.1.0 pickZones), posted as SignalBoard B code 2; the touch engine follows the same zones (the p97 tier = log only)
+#define LQ_VERSION_0661 "0.66.1"          // (0.66.1, 2026-10-28 12:16 CT Rassul "a column for levels ... move the hod lod box aligned ... on the left") the top read banner and the order lines start right of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0 leftKeep) - the HOD/LOD table docks at that column's top
 #define LQ_VERSION_0660 "0.66.0"          // (0.66.0, 2026-10-28, Rassul approved the liquidity-column build 11:05 CT + 11:08 CT "i like the held signal ... show it when it held") THE TOUCH TAG (LiqTouch.h 1.0.0, the 10-28 liquidity study ported exactly): every big resting level (the market tier, p97 of book levels: ES 72 / NQ 12 / CL 16 / GC 10 / HG 10 / NG 30 / 6E 128 lots, nightly LRA-LiqTouch-<MKT>.csv) is followed natively from the order-by-order feed; 15 s after its first trade it is STAYS+ / STAYS / STAYS weak / GONE / GONE+ (or MID / EARLY, logged), with the Tape Reader votes; then HELD / BROKE / EXPIRED; posted as SignalBoard facts kind S for lsDealerProfile (tag in the Liquidity column, HELD on the chart - nothing new drawn here); every touch recorded to <stem>-liqtouch-<session>.csv (T / D 30-s / O lines, the log-only reads: king, dominance, MenthorQ, tap, seconds at the level, refill, churn, attacker mix) and read back after a restart (no repaint); status LIQ_TOUCH   // was (0.65.2)  (0.65.2, 2026-10-28 09:31 CT Rassul approved the split LMT F) BIDS FILLED in the LEFT half (green), OFFERS FILLED in the RIGHT half (red), each on its exact price row, centred in its half; collisions resolved per side only (a bid and an offer at the same price both show)
 #define LQ_VERSION_0651 "0.65.1"          // (0.65.1, 2026-10-28 09:05 CT Rassul "it would be horrible if ... the limit F is showing it at the wrong location") LMT F / live iceberg labels are drawn AT THEIR PRICE ROW or not at all (LabelPlace.h 1.0.0, biggest print wins a collision); 0.65.0 pushed colliding labels down a row at a time, so ES "2x 1571" (bids filled at 7773.00) showed near 7771
 #define LQ_VERSION_0650 "0.65.0"          // (0.65.0, 2026-10-28 06:43 CT Rassul "why are we using boxes?", "the values are not properly centered") LMT F = the number only, centred in the column and on its row, in the resting side's colour; S20 dim / S10 bright / S5 bright + bold; no boxes
@@ -481,7 +482,7 @@ struct LQState {
     // the last 5 sessions (S20 / S10 / S5 = sizes ~20 / 10 / 5 orders a session reach) - lsFlexLevels\\LRA-LmtF-<MKT>.csv written by the nightly part
     // lmtf_read; [0] = overnight, [1] = RTH; missing file = the Big Lot tiers above (said so in the status)
     long long lmtF[2][3] = { {0, 0, 0}, {0, 0, 0} }; bool lmtFOk = false; std::string lmtFWhy = "not read yet"; long long lmtFAt = -100000; int lmtFRth = -1;
-    std::vector<sb::Fact> factsP, factsB; long long factsAt = -100000; int lmtFRest = 0; int bLevels = 0;
+    std::vector<sb::Fact> factsP, factsB; long long factsAt = -100000; int lmtFRest = 0; int bLevels = 0; int bZones = 0;   // (0.67.0) bZones = zone candidates posted
     lft::Prints lfp; lft::Tiers lftT; int lftPart = -1; bool lftAdapt = false; long long lftCut[3] = { 0, 0, 0 }; int bMoving = 0; int lftShown = 0, lftPartPrints = 0, lftF0 = 510, lftF1 = 900; long long lftPartStart = 0;   // (0.64.0) the LMT F prints (lots filled at a price per candle)   // (0.62.1) depth price levels posted as B
     long long boUnder1sd = 0;                       // (0.26.0) live big orders not drawn: under 1SD
     long long boBase = 0;                           // (0.25.0) the tier base (lots): Big >= base, Bigger >= 2x, Biggest >= 3x
@@ -1581,6 +1582,7 @@ static std::string ltStatus(LQState& S) {
     (void)S; return std::string();
 #else
     std::ostringstream o; o.imbue(std::locale::classic());
+    o << "\nLIQ_CANDIDATES,rule " << (S.lt.P.zoneGate ? "zone >= " : "OFF (tier) ") << S.lt.P.zoneX << "x the median real level (+-1 tick zones, rested " << S.lt.P.realMs / 1000 << " s+, re-priced < " << S.lt.P.maxMoves << "x in 5 min; median every " << S.lt.P.medEveryMs / 1000 << " s; " << S.lt.P.reachAtr << " ATR; own distribution >= " << S.lt.P.sepTicks << " ticks + valley <= " << S.lt.P.sepX << "x),median bid " << S.lt.median(ltc::BID) << " / offer " << S.lt.median(ltc::ASK) << " lots,real orders near " << S.lt.realNearCount() << ",candidates posted (B code 2) " << S.bZones << ",p97 tier (log only) RTH " << S.lt.P.tier[1] << " / ON " << S.lt.P.tier[0];
     o << "\nLIQ_TOUCH,LiqTouch " << ltc::VERSION << ",params " << S.ltWhy << ",tier RTH " << S.lt.P.tier[1] << " / ON " << S.lt.P.tier[0] << " lots,far-king wait RTH " << S.lt.P.farWait[1] << " s / ON " << S.lt.P.farWait[0]
       << " s,STAYS+ <= " << S.lt.P.dwellPlus << " s,weak >= " << S.lt.P.dwellWeak << " s,churn " << (S.lt.P.churnCut > 0 ? std::to_string((int)S.lt.P.churnCut) + "x" : std::string("off"))
       << ",session " << S.ltSession << ",events " << S.lt.nEvents << ",big levels followed " << S.lt.followed() << " (episodes " << S.lt.nEpisodes << "),touches " << S.lt.nTouches << ",pending " << S.lt.pending().size()
@@ -1961,6 +1963,7 @@ static void ltAfter(LQState& S, long long st, const std::string& d, const std::s
         if (!fd.empty()) { std::ifstream in((fd + "\\LRA-LiqTouch-" + S.market + ".csv").c_str(), std::ios::binary);
             if (in) { std::string buf(70000, '\0'); in.read(&buf[0], 70000); buf.resize((size_t)in.gcount()); text.swap(buf); have = true; } }
         ltc::Params p = have ? ltc::parse(text, S.market) : ltc::defaults(S.market); if (!have) p.why = "no LRA-LiqTouch-" + S.market + ".csv - defaults";
+        p.zoneGate = true;   // (0.67.0, Rassul 14:04 CT) the zone candidate rule (LiqTouch 1.1.0 pickZones) - the same levels the column shows; the p97 tier = log only
         S.lt.P = p; S.ltWhy = p.why;
     }
     if (S.mqLevels.size() != S.ltMqN) { S.ltMqN = S.mqLevels.size(); S.lt.mq.clear(); for (size_t i = 0; i < S.mqLevels.size(); ++i) { ltc::MqLevel m; m.px = (long long)S.mqLevels[i].px; m.name = S.mqLevels[i].code; S.lt.mq.push_back(m); } }
@@ -2760,6 +2763,18 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         }
         std::sort(S.factsB.begin(), S.factsB.end(), [](const sb::Fact& a, const sb::Fact& b) { return a.val > b.val; });
         if (S.factsB.size() > 60) S.factsB.resize(60);
+        // (0.67.0, Rassul approved 14:04 CT) THE CANDIDATES = the touch engine's zone candidates (LiqTouch 1.1.0 pickZones: real orders only -
+        // rested 30 s+, re-priced < 2x in 5 min; zone = a price + its +-1 tick neighbours; >= 2.0x the median real level of that side within
+        // 3 ATR, median every 60 s; one node per distribution; bids below / offers above). Posted as code 2 (val = zone lots, state 0); the
+        // touch tags follow exactly these levels. No order-by-order feed yet (no events) = the 0.66 list above (lsDealerProfile's old path).
+        S.bZones = 0;
+        if (S.lt.P.zoneGate && S.lt.nEvents > 0) {
+            S.factsB.clear();
+            for (const ltc::Zone& z : S.lt.candidates()) { sb::Fact f; f.bar = nowT / 1000; f.lo = f.hi = (double)z.px * tick; f.side = z.side == ltc::BID ? 1 : -1;
+                f.val = (double)z.lots; f.code = 2; f.state = 0; f.proven = (int)std::min<long long>(z.raw, 1000000000LL); S.factsB.push_back(f); ++S.bZones; }
+            std::sort(S.factsB.begin(), S.factsB.end(), [](const sb::Fact& a, const sb::Fact& b) { return a.val > b.val; });
+            if (S.factsB.size() > 60) S.factsB.resize(60);
+        }
         const long long nm = nowMs(S);
         if (nm - S.factsAt >= 1000) { const long long sm = steadyMs(); sb::postFacts('P', S.symbol, S.spb, S.chartKey, sm, S.factsP); sb::postFacts('B', S.symbol, S.spb, S.chartKey, sm, S.factsB);
             ltFacts(S, S.haveOffset ? steadyMs() + S.ctOffset : 0); sb::postFacts('S', S.symbol, S.spb, S.chartKey, sm, S.factsS); S.factsAt = nm; }   // (0.66.0) + the touch tags   // SignalBoard stamps = the steady clock (as every poster)
@@ -4727,6 +4742,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.66.1");   // LQ_VERSION
+    p->setVersion("0.67.0");   // LQ_VERSION
     return p;
 }
