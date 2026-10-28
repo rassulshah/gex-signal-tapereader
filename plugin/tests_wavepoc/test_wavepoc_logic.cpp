@@ -226,10 +226,24 @@ static void testLayout(const Fix& F) {
         if (p.k == wpc::Prim::LINE && p.col == 0xE5E7EB && p.w == 1) whiteLine1 = true;
     }
     CHECK(texts > 0 && tagsRight, "price tags only right of the last bar (never over candles)");
-    CHECK(amberLine3 && amberBox2 && whiteLine1 && noBoxes, "WPOC stands out: bright amber row + 3 px amber line; other nodes 1 px white; no outline boxes");
+    (void)whiteLine1;
+    {   // (1.2.0, Rassul 16:26 CT "remove the drawing of levels across the chart and from the wave pocs") no line / circle at all (zigzag off)
+        int lines = 0, ovals = 0; for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::LINE && std::min(p.x0, p.x1) < xLast - 1) ++lines; if (p.k == wpc::Prim::OVAL) ++ovals; }   // (the tag leader right of the last bar is the tag itself)
+        CHECK(!amberLine3 && lines == 0 && ovals == 0 && amberBox2 && noBoxes, "(1.2.0) no node lines / touch circles / end ticks; WPOC = the bright amber row; no outline boxes (" << lines << " lines, " << ovals << " ovals)");
+        // tags only for nodes still OPEN (untouched, wave not replaced, origin not broken)
+        int open = 0, closed = 0; for (const wpc::Wave& w : E.waves) if (!w.pending) for (const wpc::Node& nd : w.nodes) { if (nd.stop == wpc::OPEN) ++open; else ++closed; }
+        CHECK(closed > 0 && sc.tagsShown + sc.tagsHidden == open, "(1.2.0) tags only for OPEN nodes (" << sc.tagsShown + sc.tagsHidden << " tags, " << open << " open, " << closed << " closed)");
+        // (1.2.0, Rassul 16:31 CT "the wave poc lines are too large ... 33% less") the profile max width x 0.67
+        bool wOk = true; int waves = 0;
+        for (const wpc::Wave& w : E.waves) { if (w.pending || w.rows.empty() || w.maxVol <= 0) continue;
+            const double x0 = v.X(w.i0) - v.bw * 0.45, PW0 = std::max(4.0, std::min(170.0, (v.X(w.i1) - x0) * 0.95));
+            int mx = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.x0 == (int)std::lround(x0) && (p.col == 0x334155 || p.col == 0xC88C14 || p.col == 0xB4BECD)) mx = std::max(mx, p.x1 - p.x0);
+            ++waves; if (std::abs(mx - (int)std::lround(0.67 * PW0)) > 1) wOk = false; }
+        CHECK(waves > 0 && wOk && wpc::PROF_SCALE == 0.67, "(1.2.0) wave profile max bar width = 0.67 x the 1.1 width (" << waves << " waves)");
+    }
     CHECK(sc.nodesDrawn <= 5 * sc.wavesDrawn && sc.nodesDrawn == 7, "nodes drawn = 4 + 3, at most 5 per wave");
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.1.1", "header 'Wave POC v1.1.1'");
+    CHECK(header && std::string(wpc::VERSION) == "1.2.0", "header 'Wave POC v1.2.0'");
     // no room right of the last bar: no tags at all (counted)
     wpc::View v2 = v; v2.r = (int)xLast + 20; const wpc::Scene s2 = wpc::layout(E, nullptr, v2);
     int t2 = 0; for (const wpc::Prim& p : s2.p) t2 += p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0;
@@ -307,14 +321,15 @@ static void testLiquidityReference(const Fix& F) {
             if (p.col == 0x22C55E) ++bright; else ++dim;
             const int e1 = (int)std::lround(v.X(6) - v.bw * 0.45 - 2), e2 = (int)std::lround(v.X(31) - v.bw * 0.45 - 2);
             if (p.x0 >= p.x1 || (std::abs(p.x1 - e1) > 1 && std::abs(p.x1 - e2) > 1)) left = false;
-            if (p.x1 - p.x0 > 61) left = false;
+            if (p.x1 - p.x0 > 41) left = false;   // (1.2.0) 60 -> 40 px
         }
         if (p.k == wpc::Prim::LINE && p.w == 1 && (p.col == wpc::mix(0x22C55E, 0x0B0F17, 0.8) || p.col == wpc::mix(0x22C55E, 0x0B0F17, 0.5)) && p.x1 - p.x0 <= 2) ++dots;
         if (p.k == wpc::Prim::TEXT) ++texts;
         if (p.k == wpc::Prim::BOX) left = false;
     }
-    CHECK(sc.lnodesDrawn == 7 && bright == 2 && dim == 5 && left, "liquidity bars: left of the wave start, <= 60 px, LPOC bright, others 60% (" << bright << "/" << dim << ")");
-    CHECK(dots > 20, "faint dotted lines to the right");
+    CHECK(sc.lnodesDrawn == 7 && bright == 2 && dim == 5 && left, "(1.2.0) liquidity bars: left of the wave start, <= 40 px, LPOC bright, others 60% (" << bright << "/" << dim << ")");
+    { int mxw = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.col == 0x22C55E) mxw = std::max(mxw, p.x1 - p.x0);
+      CHECK(dots == 0 && mxw == 40 && wpc::LNODE_W == 40, "(1.2.0) no dotted liquidity lines; LPOC bar = 40 px max (" << dots << " dots, " << mxw << " px)"); }
     const wpc::Scene s0 = wpc::layout(Nb, nullptr, v); int t0 = 0; for (const wpc::Prim& p : s0.p) t0 += p.k == wpc::Prim::TEXT;
     CHECK(texts == t0, "no price tags for liquidity nodes");
 }

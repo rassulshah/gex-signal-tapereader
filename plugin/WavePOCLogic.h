@@ -34,8 +34,10 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.1.1";
-#define WPC_VERSION "1.1.1"
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
+static const double PROF_SCALE = 0.67;   // (1.2.0) the wave profile max width factor
+static const double LNODE_W = 40;        // (1.2.0) the liquidity node max width (was 60 px)
+#define WPC_VERSION "1.2.0"
 
 // fixed rules (from the approved mockup / reference wp2.py + wp3.py)
 static const int LOOKBACK = 20;        // 20-bar high / low
@@ -526,7 +528,7 @@ inline void addLine(Scene& s, double x0, double y0, double x1, double y1, unsign
 inline void addDashed(Scene& s, double x0, double x1, double y, unsigned long c, int w) { for (double x = x0; x < x1; x += 9) addLine(s, x, y, std::min(x + 5, x1), y, c, w, true); }
 
 // one wave: profile rows at the wave start pointing right, highlighted nodes, the node lines (dashed until confirmed)
-inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, std::vector<std::pair<const Wave*, const Node*> >& tagNodes, bool latest) {
+inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, std::vector<std::pair<const Wave*, const Node*> >& tagNodes, bool /*latest*/) {
     const int endShown = v.lastBar;
     // visible? the wave start .. its longest line end
     int far = w.i1; for (const Node& nd : w.nodes) far = std::max(far, nd.stop == OPEN ? endShown : nd.stopBar);
@@ -534,7 +536,8 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
     if (far < v.first || w.i0 > v.last) return;
     ++s.wavesDrawn;
     const double x0 = v.X(w.i0) - v.bw * 0.45;
-    const double PW = std::max(4.0, std::min(170.0, (v.X(w.i1) - x0) * 0.95));
+    // (1.2.0, Rassul 16:31 CT "the wave poc lines are too large can you make them about 33% less") the profile's max width x 0.67
+    const double PW = PROF_SCALE * std::max(4.0, std::min(170.0, (v.X(w.i1) - x0) * 0.95));
     // row j spans ticks [lo - 0.5, lo + rowTicks - 0.5) so the node price (lo + rowTicks / 2) sits inside its own row
     auto rowY = [&](int j, double& top, double& bot) {
         const double lo = (double)(w.e0 + (long long)j * w.rowTicks);
@@ -548,28 +551,23 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
             if (p.x1 > p.x0 && p.y1 >= p.y0) s.p.push_back(p);
         }
     }
-    const double xs = x0 + PW + 2;
     // (1.1.0) the liquidity nodes: compact bars pointing LEFT from the wave start (max 60 px), LPOC in the bright side colour, the others
     // 60% of it; a faint dotted line to the right (same stop rules); no outline boxes, no price tags
     if (!w.lnodes.empty() && w.lnodes[0].lots > 0) {
-        const double LW = 60, lmx = w.lnodes[0].lots;
+        const double LW = LNODE_W, lmx = w.lnodes[0].lots;   // (1.2.0) 60 -> 40 px
         for (const LNode& nd : w.lnodes) {
             const double yc = v.Y((double)nd.tick); if (yc < v.t - 10 || yc > v.b + 10) continue;
             ++s.lnodesDrawn;
             const bool lp = nd.rank == 0; const unsigned long side = nd.side ? C.bid : C.offer;
-            const unsigned long fill = lp ? side : mix(side, C.bg, 0.6), dot = mix(side, C.bg, lp ? 0.8 : 0.5);
+            const unsigned long fill = lp ? side : mix(side, C.bg, 0.6);
             const long long r0 = w.e0 + floorDiv(nd.tick - w.e0, w.rowTicks) * w.rowTicks;
             const double top = v.Y((double)r0 + w.rowTicks - 0.5), bot = v.Y((double)r0 - 0.5);
             Prim f; f.k = Prim::FILL; f.x1 = ci(x0 - 2); f.x0 = ci(x0 - 2 - LW * std::min(1.0, nd.lots / lmx)); f.y0 = ci(top); f.y1 = ci(std::max(top + 1.0, bot)); f.col = fill; f.back = true;
-            if (f.x1 > f.x0) s.p.push_back(f);
-            int endBar = nd.stop == OPEN ? endShown : nd.stopBar;
-            if (nd.stop == OPEN && v.haveForming && v.lastBar > w.scanned && v.formL <= nd.tick && nd.tick <= v.formH) endBar = v.lastBar;
-            const double xe = v.X(endBar);
-            for (double x = xs + 2; x < xe; x += 6) addLine(s, x, yc, std::min(x + 2, xe), yc, dot, 1, true);
+            if (f.x1 > f.x0) s.p.push_back(f);   // (1.2.0, Rassul 16:26 CT "the chart is extremely messy") no dotted line across the chart
         }
     }
     for (const Node& nd : w.nodes) {
-        const bool poc = nd.rank == 0; const unsigned long col = poc ? C.amber : C.white;
+        const bool poc = nd.rank == 0;
         const double yc = v.Y((double)nd.tick);
         if (yc < v.t - 10 || yc > v.b + 10) continue;
         ++s.nodesDrawn;
@@ -578,18 +576,11 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
             double top, bot; rowY(nd.row, top, bot);
             Prim f; f.k = Prim::FILL; f.x0 = ci(x0); f.x1 = ci(x0 + PW * (double)nd.vol / (double)w.maxVol); f.y0 = ci(top - 1); f.y1 = ci(bot + 1); f.col = poc ? C.amberFill : C.whiteFill; f.back = true; s.p.push_back(f);
         }
-        // the line: dashed to the confirmation (or all of it while provisional), solid after; ends at the stop
-        int endBar = nd.stop == OPEN ? endShown : nd.stopBar; bool liveTouch = false;
-        if (nd.stop == OPEN && v.haveForming && v.lastBar > w.scanned && v.formL <= nd.tick && nd.tick <= v.formH) { endBar = v.lastBar; liveTouch = true; }
-        const double xe = v.X(endBar);
-        const int lw = poc ? 3 : 1;
-        const double xc = w.provisional ? xe : std::min(v.X(w.conf), xe);
-        if (xc > xs) addDashed(s, xs, xc, yc, col, lw);
-        if (xe > std::max(xs, xc)) addLine(s, std::max(xs, xc), yc, xe, yc, col, lw, true);
-        const int st = liveTouch ? TOUCH : nd.stop;
-        if (st == TOUCH) { Prim o; o.k = Prim::OVAL; o.x0 = ci(xe - 4); o.x1 = ci(xe + 4); o.y0 = ci(yc - 4); o.y1 = ci(yc + 4); o.col = col; o.w = 2; o.back = true; s.p.push_back(o); }
-        else if (st == NEWWAVE || st == ORIGIN) addLine(s, xe, yc - 5, xe, yc + 5, col, 2, true);
-        if (st == OPEN || latest) tagNodes.push_back(std::make_pair(&w, &nd));
+        // (1.2.0, Rassul 16:26 CT "remove the drawing of levels across the chart and from the wave pocs") no node line, no touch circle,
+        // no end tick; the right-edge tag only while the node is still OPEN (untouched - the forming bar included -, wave not replaced,
+        // origin not broken); the stop rules still decide and record open / closed
+        const bool liveTouch = nd.stop == OPEN && v.haveForming && v.lastBar > w.scanned && v.formL <= nd.tick && nd.tick <= v.formH;
+        if (nd.stop == OPEN && !liveTouch) tagNodes.push_back(std::make_pair(&w, &nd));
     }
 }
 

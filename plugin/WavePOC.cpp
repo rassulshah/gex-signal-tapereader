@@ -13,6 +13,9 @@
  *      (N bars later), never repainted after; a line stops at the first touch (circle), the next qualifying wave or a close beyond the
  *      wave's start (end tick);
  *    - right-edge price tags "WPOC 7700.25 6.3x" / "7693.75 2.5x" only (right of the last bar, never over candles), stacked;
+ *    (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul "the chart is extremely messy" / "the wave poc lines are too large ... 33% less"): NO node lines,
+ *      liquidity dotted lines, touch circles or end ticks - the stop rules below still decide and RECORD open / closed; tags only for OPEN
+ *      nodes; the profile max width x 0.67 and the liquidity nodes max 40 px. The 1.1.x text below describes the record / stops.
  *    - optional zigzag (off by default); header "Wave POC v1.0.0" small top-left.
  *  1.1.0 (Rassul approved 11:27 CT, mockups wavepoc_lpoc_w1 / w2, wp8.py): LIQUIDITY NODES on the LEFT of the wave start - from IRT's
  *    live order-by-order book (DEPTH_BY_ORDER, one per chart kept alive, opened behind a crash-guard file, drained <= 5,000 events / 8 ms
@@ -68,7 +71,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.1.1";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.2.0";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -474,6 +477,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setDescription("LRA Wave POC v1.1.1 - each big wave's own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as lines to the right until touched.");
-    p->setVersion("1.1.1");   // = WP_VERSION (gex-build reads this literal)
+    p->setVersion("1.2.0");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

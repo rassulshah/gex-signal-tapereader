@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.1.1" && std::string(wpl::VERSION) == "1.1.1", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.2.0" && std::string(wpl::VERSION) == "1.1.1", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();
@@ -95,15 +95,21 @@ int main(int argc, char** argv) {
             if (p.k == 'F' && p.col == 0x334155) profInPost = true;
         }
         CHECK(pre > 20 && preOnlyBack, "pre-draw: the profile, nodes and lines (no text) - behind the candles");
-        CHECK(header && tags > 0 && tagsRight, "post-draw: header + price tags, only right of the last bar (" << tags << " tags)");
+        CHECK(header && tagsRight, "post-draw: header + price tags, only right of the last bar (" << tags << " tags; 1.2.0: this fixture's nodes are all touched / replaced by the last bar = no tags)");
         CHECK(!profInPost, "the profile is not drawn again over the candles once IRT pre-draws");
         bool amber3 = false, amberBox = false; int whiteBoxes = 0, amberBoxes = 0, anyBox = 0;
         mock::current = &A; A.drawn.clear(); A.reason = REASON_PREDRAW; x.draw();
         for (const mock::Prim& p : A.drawn) { if (p.k == 'L' && p.col == 0xF5B428 && p.w == 3) amber3 = true; if (p.k == 'F' && p.col == 0xC88C14) { amberBox = true; ++amberBoxes; } if (p.k == 'F' && p.col == 0xB4BECD) ++whiteBoxes; if (p.k == 'B') ++anyBox; }
-        CHECK(amber3 && amberBox && anyBox == 0, "WPOC stands out: bright amber row + 3 px amber line; no outline boxes anywhere");
+        CHECK(!amber3 && amberBox && anyBox == 0, "(1.2.0) WPOC = the bright amber row only (no 3 px line); no outline boxes anywhere");
         CHECK(amberBoxes == 3 && whiteBoxes == 5 && S->provOk && S->prov.i0 == 75 && S->prov.i1 == 78, "one WPOC per wave (2 confirmed + the live provisional 14:15-14:24 up wave), the other 5 nodes white " << amberBoxes << "/" << whiteBoxes);
-        int dashes = 0, solid = 0; for (const mock::Prim& p : A.drawn) if (p.k == 'L' && p.col == 0xF5B428 && p.w == 3 && p.y0 == p.y1) { if (p.x1 - p.x0 <= 5) ++dashes; else ++solid; }
-        CHECK(dashes > 5 && solid >= 1, "WPOC lines: dashed until confirmed (and the provisional wave), solid after (" << dashes << " dashes, " << solid << " solid)");
+        {   // (1.2.0, Rassul 16:26 CT "remove the drawing of levels across the chart and from the wave pocs"): no line / circle / tick op at all
+            int other = 0; for (const mock::Prim& p : A.drawn) if (p.k != 'F') ++other;
+            std::vector<mock::Prim> pre2 = A.drawn; A.drawn.clear(); A.reason = REASON_DRAW; x.draw();
+            const int xL2 = mockX(79) + 5; int across = 0, tg = 0; for (const mock::Prim& p : A.drawn) { if (p.k != 'F' && p.k != 'T' && std::min(p.x0, p.x1) < xL2) ++across; tg += p.k == 'T'; }
+            int open = 0; for (const wpc::Wave& w : S->E.waves) if (!w.pending) for (const wpc::Node& nd : w.nodes) open += nd.stop == wpc::OPEN; if (S->provOk) for (const wpc::Node& nd : S->prov.nodes) open += nd.stop == wpc::OPEN;
+            CHECK(other == 0 && across == 0, "(1.2.0) pre-draw = fills only (profile rows, nodes, liquidity bars); no line / circle / tick over the chart (" << other << " / " << across << ")");
+            CHECK(tg - 1 <= open, "(1.2.0) price tags only for OPEN nodes (" << tg - 1 << " tags, " << open << " open)");
+            A.drawn = pre2; }
         bool inPane = true; for (const mock::Prim& p : A.drawn) inPane = inPane && p.x0 >= A.paneL && p.x1 <= A.paneR && std::min(p.y0, p.y1) >= A.paneT && std::max(p.y0, p.y1) <= A.paneB;
         CHECK(inPane, "everything inside the pane");
     }
@@ -112,7 +118,7 @@ int main(int argc, char** argv) {
         const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt"), sto = slurp(flex() + "/WavePOC/ES-180.csv");
         size_t nw = 0; for (size_t p = rec.find("\nWAVE,"); p != std::string::npos; p = rec.find("\nWAVE,", p + 1)) ++nw;
         CHECK(nw == 2 && rec.find("NODE,") != std::string::npos && rec.find("STOP,") != std::string::npos, "record: 2 waves with nodes and stops");
-        CHECK(st.rfind("VERSION,1.1.1", 0) == 0 && st.find("qualified up 0 down 2") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
+        CHECK(st.rfind("VERSION,1.2.0", 0) == 0 && st.find("qualified up 0 down 2") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
         CHECK(st.find("touch 5,new wave 2,origin close 0") != std::string::npos, "status: stops by reason");
         wpc::Store chk; std::string why; CHECK(wpc::storeFromText(sto, "ES", 180, 3, 250000000LL, chk, why) && chk.dn.size() == 24, "store saved atomically with the day's 4 down candidates (" << why << ", " << chk.dn.size() << ")");
     }

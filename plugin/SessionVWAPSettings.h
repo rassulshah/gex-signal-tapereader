@@ -11,8 +11,16 @@
 #define SVS_DEF_ON false
 #endif
 #endif
+#ifndef SVS_PIV_DEF   // (1.8.4) = SessionVWAPStyle.h: the pivot VWAP default - false in the plugin; old suites (all-on): true
+#ifdef SVS_TEST_ALL_ON_DEFAULTS
+#define SVS_PIV_DEF true
+#else
+#define SVS_PIV_DEF false
+#endif
+#endif
 namespace svset {
-static const char* const PLUGIN_VERSION = "1.8.3";   // (1.8.3, 2026-10-28 14:08 CT, Rassul: only 1 VWAP drawn = the 3-bar pivot VWAP) parameter version 10: every older set is reset once to the new defaults (pivot VWAP on; session VWAP, bands, overnight, prior off)
+static const char* const PLUGIN_VERSION = "1.8.4";   // (1.8.4, 2026-10-28 16:26 CT Rassul "the chart is extremely messy", remove the Pivot VWAP line) parameter version 11: every older set is reset once to the new defaults = NO line drawn (pivot VWAP off too); he can tick any line back
+// was "1.8.3";   // (1.8.3, 2026-10-28 14:08 CT, Rassul: only 1 VWAP drawn = the 3-bar pivot VWAP) parameter version 10: every older set is reset once to the new defaults (pivot VWAP on; session VWAP, bands, overnight, prior off)
 //   // (1.8.2, 2026-10-28, Rassul 11:27 CT "did you fix the session vwap. as you can see it
 // isnt working properly") parameter version 9 (rows unchanged): every older saved set is replaced by the intended defaults (parmsInit)
 // (1.8.0, 2026-10-27) + "3-bar pivot VWAP" (appended row, parameter version 7)
@@ -39,12 +47,12 @@ inline const ss::Spec& spec() {
         ss::boolRow("overnight", "Overnight VWAP + bands", SVS_DEF_ON),
         ss::masterOf(ss::boolRow("prior", "Prior RTH VWAP (overnight)", SVS_DEF_ON)),
         ss::same(ss::in(ss::colorRow("prior_color", "Prior RTH VWAP colour", 0x6B7280), "prior")),
-        ss::masterOf(ss::boolRow("pivot", "3-bar pivot VWAP", true)),   // (1.8.0, Rassul 2026-10-27 09:46 CT)
+        ss::masterOf(ss::boolRow("pivot", "3-bar pivot VWAP", SVS_PIV_DEF)),   // (1.8.4) default off   // (1.8.0, Rassul 2026-10-27 09:46 CT)
         ss::same(ss::in(ss::colorRow("piv_up", "Above", 0x22C55E), "pivot")),   // (1.8.1) colour while the bar closed above it
         ss::same(ss::in(ss::colorRow("piv_dn", "Below", 0xEF4444), "pivot")),   // (1.8.1) colour while the bar closed below it
         ss::in(ss::listRow("piv_width", "Pivot VWAP width", 1, WIDTHS, 70), "pivot"),   // (1.8.1) default 2 px (own line: the pivot line is full)
     };
-    static const ss::Spec S = { "SessionVWAP", PLUGIN_VERSION, 10, R, K_N, 0 };   // (1.8.3) 10: reset to the pivot-only defaults   // (1.8.0) 7: + the pivot row; (1.8.1) 8: + colours, width; (1.8.2) 9: reset to the defaults
+    static const ss::Spec S = { "SessionVWAP", PLUGIN_VERSION, 11, R, K_N, 0 };   // (1.8.4) 11: reset once to all-off   // (1.8.3) 10: reset to the pivot-only defaults   // (1.8.0) 7: + the pivot row; (1.8.1) 8: + colours, width; (1.8.2) 9: reset to the defaults
     return S;
 }
 } // namespace svset

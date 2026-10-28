@@ -71,7 +71,7 @@ static void testTemplate()
         const char want = S.rows[k].type == ss::T_BOOL ? 'B' : S.rows[k].type == ss::T_COLOR ? 'U' : S.rows[k].type == ss::T_LIST ? 'S' : '?';
         CHECK(t == want, "template token " << k << " matches the row type (" << S.rows[k].label << ")");
     }
-    CHECK(S.paramVersion == 10, "parameter version 9 (1.8.2: older sets reset to the defaults; rows unchanged since 1.8.1)");
+    CHECK(S.paramVersion == 11, "parameter version 9 (1.8.2: older sets reset to the defaults; rows unchanged since 1.8.1)");
     int commas = 0; const std::string d = svp::defaults(); for (char c : d) commas += c == ',';
     CHECK(commas == svs::R_COUNT - 1, "the defaults string has one value per row");
     svp::Parms z; std::memset(&z, 0, sizeof z); std::string why;
@@ -211,7 +211,7 @@ static void testVersion()
     std::ifstream f("SessionVWAP.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
     const size_t a = src.find("setVersion(\""), b = src.find("SV_VERSION = \"");
     const std::string v1 = src.substr(a + 12, src.find('"', a + 12) - a - 12), v2 = src.substr(b + 14, src.find('"', b + 14) - b - 14);
-    CHECK(v1 == v2 && v1 == "1.8.3" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.2");
+    CHECK(v1 == v2 && v1 == "1.8.4" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.2");
 }
 
 int main()

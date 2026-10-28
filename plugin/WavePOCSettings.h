@@ -7,7 +7,7 @@
 #include "SettingsSpec.h"
 
 namespace wpset {
-static const char* const PLUGIN_VERSION = "1.1.1";   // (1.1.0) liquidity nodes; (1.1.1) liquidity 1.9x + raw separation; same two rows
+static const char* const PLUGIN_VERSION = "1.2.0";   // (1.2.0) no lines across the chart, smaller profile; (1.1.0) liquidity nodes; (1.1.1) liquidity 1.9x + raw separation; same two rows
 enum K { K_REV_BARS, K_ZIGZAG, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
