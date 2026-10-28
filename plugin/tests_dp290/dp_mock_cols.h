@@ -11,6 +11,8 @@ static std::map<std::string, MockOpts> MOCK_OPTS;              // by chart label
 static int MOCK_INT[32]; static bool MOCK_CHK[32]; static std::string MOCK_TXT[32]; static int MOCK_LIST[32];
 static MockOpts& mockOpt() { return MOCK_OPTS[MOCK_CHART]; }
 char* cppExtension::getChartLabel(void) { return (char*)MOCK_CHART.c_str(); }
+static COLOR MOCK_BG = 0x00141821;   // (DP 2.36.1) the chart background colour the mocked host reports
+COLOR cppExtension::getBackgroundColor(void) { return MOCK_BG; }
 RTX_RESULT cppExtension::getChartOption(CHART_OPTION w, int* v)
 {
     MockOpts& o = mockOpt(); if (o.fail || !v) return RTX_FAIL;

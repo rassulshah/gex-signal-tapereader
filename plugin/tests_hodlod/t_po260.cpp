@@ -184,7 +184,7 @@ int main() {
             CHECK(B.preRow.t >= B.table.t && B.preRow.b <= B.table.b && B.preRow.l == B.table.l && B.preRow.r == B.table.r, "Pre row inside the table");
             bool estAbove = false, inside = true, overl = false; std::vector<hl::Item> T;
             for (const hl::Item& it : B.items) if (it.k == hl::K_TEXT && it.role == hl::R_TABLE) {
-                if (it.s == "Est" && it.b <= B.preRow.t + 1) estAbove = true;
+                if (it.s == "Act" && it.b <= B.preRow.t + 1) estAbove = true;   // (2.12.0) no Est row: Act is the last row above Pre
                 if (it.l < B.table.l || it.r > B.table.r) inside = false;
                 T.push_back(it);
             }
