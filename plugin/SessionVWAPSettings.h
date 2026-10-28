@@ -5,7 +5,9 @@
 #include "SettingsSpec.h"
 
 namespace svset {
-static const char* const PLUGIN_VERSION = "1.8.1";   // (1.8.0, 2026-10-27) + "3-bar pivot VWAP" (appended row, parameter version 7)
+static const char* const PLUGIN_VERSION = "1.8.2";   // (1.8.2, 2026-10-28, Rassul 11:27 CT "did you fix the session vwap. as you can see it
+// isnt working properly") parameter version 9 (rows unchanged): every older saved set is replaced by the intended defaults (parmsInit)
+// (1.8.0, 2026-10-27) + "3-bar pivot VWAP" (appended row, parameter version 7)
 // (1.8.1, 2026-10-27 22:50 CT, Rassul "the settings never work") + the pivot VWAP's above / below colour and width (appended rows,
 // parameter version 8); the chart now reads these rows from IRT's own per-indicator parameters (svp:: in SessionVWAP.cpp)
 static const char* const WIDTHS = "1 px;2 px;3 px;4 px";
@@ -34,7 +36,7 @@ inline const ss::Spec& spec() {
         ss::same(ss::in(ss::colorRow("piv_dn", "Below", 0xEF4444), "pivot")),   // (1.8.1) colour while the bar closed below it
         ss::in(ss::listRow("piv_width", "Pivot VWAP width", 1, WIDTHS, 70), "pivot"),   // (1.8.1) default 2 px (own line: the pivot line is full)
     };
-    static const ss::Spec S = { "SessionVWAP", PLUGIN_VERSION, 8, R, K_N, 0 };   // (1.8.0) 7: + the pivot row; (1.8.1) 8: + colours, width
+    static const ss::Spec S = { "SessionVWAP", PLUGIN_VERSION, 9, R, K_N, 0 };   // (1.8.0) 7: + the pivot row; (1.8.1) 8: + colours, width; (1.8.2) 9: reset to the defaults
     return S;
 }
 } // namespace svset

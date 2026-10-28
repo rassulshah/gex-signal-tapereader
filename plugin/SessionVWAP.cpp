@@ -44,6 +44,12 @@
  *  every draw by its stamp, so a change shows without restarting IRT (SessionVWAPStyle.h). The stale badge text is gone from
  *  the description (the badges have not been drawn since 1.4.1).
  *
+ *  1.8.2 (2026-10-28, Rassul 11:27 CT "did you fix the session vwap. as you can see it isnt working properly. can you fix this too and
+ *  test it"): the settings window and the chart agree, and a fresh / upgraded indicator starts on the intended defaults. Parameter
+ *  version 9: IRT hands every older saved set to parmsInit, which saves the defaults (VWAP magenta 2 px, +-1 / +-2 SD bands, overnight
+ *  set, prior RTH VWAP, 3-bar pivot VWAP). The 1.8.1 carried-over set (VWAP off / black / 1 px) is also read as the defaults if IRT
+ *  keeps it. parmsLoad always fills the window with what the chart draws. Status file: STYLE line = the drawn style.
+ *
  *  1.6.0 (2026-10-18 night, Rassul approved the Market State): posts SRC "VWAP" (MarketState.h, MARKET-STATE-SPEC 1.0) - vwap,
  *  sd1_hi / sd1_lo, sd2_hi / sd2_lo, pos (above2 .. below2), slope (5 bars, 0.1 SD) - for the last CLOSED bar of its session (RTH,
  *  the frozen RTH lines after the close, or the overnight set), re-posted every 10 s so readers see it, cleared on removal. The VWAP
@@ -97,7 +103,7 @@ static ss::Ids& svIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <atomic>
 
 static const bool SV_SHOW_BADGES = false;   // (1.4.1) Rassul 18:07: VWAP odds off the chart for now
-static const char* SV_VERSION = "1.8.1";        // (1.8.1, 2026-10-27 22:50 CT, Rassul "the settings never work for any indicator") the chart reads its settings from IRT's OWN per-indicator parameters (cppExtension::getParameters, template svp::TEMPLATE) - every chart keeps its own, set from the Add Indicator window or the chart, kept by IRT across restarts; the per-market file is only the fallback when IRT hands back no valid set (status PARMS line). The 3-bar pivot VWAP is drawn on its own (the VWAP box no longer hides it, it no longer hides the session VWAP) with its own above / below colours and width (rows appended, parameter version 8; parmsInit carries a version-7 set over). // (1.8.0, 2026-10-27, Rassul 09:46 CT "modify the vwap to the 3bar pivot") the RTH VWAP LINE is drawn as the 3-BAR PIVOT VWAP (PivotVwapLogic.h 1.0.0): anchored at the last confirmed 3-bar-reversal pivot of the session, restarted at each new pivot, green while the bar closed above it, red below; never repainted; setting "3-bar pivot VWAP" (appended row, default on; off = the old magenta RTH VWAP). The 11 outputs, the bands, the odds, vwapTrend and the Market State are unchanged (still the session VWAP). //        // (1.7.0, 2026-10-26) self-awareness SELFVWAP (SelfAware.h, SELF-AWARE.md; ships OFF per market) // 1.6.3 (2026-10-21 16:05 CT Rassul "fix this, it should be solid"): the VWAP / band lines stop at the lsHodLod table's edges (KeepOutDraw.h; values, odds and Market State unchanged).        // 1.6.1 (2026-10-18 settings audit): the window from SessionVWAPSettings.h / SettingsHost.h (same rows, same file); each line's show box greys its colour.        // 1.6.0 (2026-10-18): Market State SRC VWAP (vwap, bands, pos, slope) for the last closed bar, cleared on removal.        // 1.5.1 (2026-10-17): FIX unchecking / re-checking a line in the settings did not stick - only the window saves, nothing while it loads, untouched controls keep the file.        // 1.5.0 (2026-10-14; built as 1.4.3 on 10-13, never shipped): real settings - every line has a show box and a colour, VWAP / band widths, the overnight set on / off; kept per market (SessionVWAPStyle.h). 1.4.2: vwapTrend cache also keys the detected bar period, so a chart periodicity change cannot retain trend state computed with different session boundaries. 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
+static const char* SV_VERSION = "1.8.2";        // (1.8.2, 2026-10-28, Rassul 11:27 CT "did you fix the session vwap. as you can see it isnt working properly") his ES chart's own set, carried over by 1.8.1's parmsInit from the 1.8.0 record, held VWAP unticked / black / 1 px (values the 1.5-1.8.0 window stored in IRT while the chart drew from the file) and the window opened on them unfilled: parameter version 9 + parmsInit resets every older set to the defaults; that legacy set is also recognised and drawn as the defaults; the window is always filled with exactly what the chart draws; the status file has a STYLE line. // (1.8.1, 2026-10-27 22:50 CT, Rassul "the settings never work for any indicator") the chart reads its settings from IRT's OWN per-indicator parameters (cppExtension::getParameters, template svp::TEMPLATE) - every chart keeps its own, set from the Add Indicator window or the chart, kept by IRT across restarts; the per-market file is only the fallback when IRT hands back no valid set (status PARMS line). The 3-bar pivot VWAP is drawn on its own (the VWAP box no longer hides it, it no longer hides the session VWAP) with its own above / below colours and width (rows appended, parameter version 8; parmsInit carries a version-7 set over). // (1.8.0, 2026-10-27, Rassul 09:46 CT "modify the vwap to the 3bar pivot") the RTH VWAP LINE is drawn as the 3-BAR PIVOT VWAP (PivotVwapLogic.h 1.0.0): anchored at the last confirmed 3-bar-reversal pivot of the session, restarted at each new pivot, green while the bar closed above it, red below; never repainted; setting "3-bar pivot VWAP" (appended row, default on; off = the old magenta RTH VWAP). The 11 outputs, the bands, the odds, vwapTrend and the Market State are unchanged (still the session VWAP). //        // (1.7.0, 2026-10-26) self-awareness SELFVWAP (SelfAware.h, SELF-AWARE.md; ships OFF per market) // 1.6.3 (2026-10-21 16:05 CT Rassul "fix this, it should be solid"): the VWAP / band lines stop at the lsHodLod table's edges (KeepOutDraw.h; values, odds and Market State unchanged).        // 1.6.1 (2026-10-18 settings audit): the window from SessionVWAPSettings.h / SettingsHost.h (same rows, same file); each line's show box greys its colour.        // 1.6.0 (2026-10-18): Market State SRC VWAP (vwap, bands, pos, slope) for the last closed bar, cleared on removal.        // 1.5.1 (2026-10-17): FIX unchecking / re-checking a line in the settings did not stick - only the window saves, nothing while it loads, untouched controls keep the file.        // 1.5.0 (2026-10-14; built as 1.4.3 on 10-13, never shipped): real settings - every line has a show box and a colour, VWAP / band widths, the overnight set on / off; kept per market (SessionVWAPStyle.h). 1.4.2: vwapTrend cache also keys the detected bar period, so a chart periodicity change cannot retain trend state computed with different session boundaries. 1.4.1: the odds badges are NOT drawn (Rassul 2026-10-11 18:07 "the chart is very messy ... get rid of the probabilities for vwap and its bands"); the odds are still computed and logged (SessionVWAP-<MKT>.odds.txt) for the nightly check.        // 1.4.0: calibrated odds (VwapOddsParams.h: per line + vwapTrend + time of day, adopted only out of sample) and one "?" rule for RTH and overnight (proven per market / session).        // 1.3.4: no options at all in the settings window (outputs OUTPUT_NO_UI); -1 SD light red instead of yellow.        // 1.3.3: his colours (VWAP magenta, +1 SD green, -1 SD yellow, +2 SD lime, -2 SD red), VWAP 2 px, bands 1 px, no options in the settings window.        // 1.3.2: no badges in the first 30 min of the RTH (and of the 17:00 overnight) session - too clustered while the bands are tight.        // 1.3.1: the overnight odds use the nightly champion (window / tail / scale from OnTouchParams.h); the "?" goes when the study calls the market ready.        // 1.3.0: overnight touch odds on the O/N VWAP + bands ("42%?" - native, tested nightly by lra.on_vwap_study; the "?" stays until proven).        // 1.2.0: automatic overnight / RTH / closed switch. 1.1.1-audit:   // badges are computed locally from chart bars; the law is compiled in from TouchParams.h
 // (1.5.0) the default colours (0x00RRGGBB) live in SessionVWAPStyle.h (svs::D_*) - the settings window starts from them
 static const COLOR C_VWAP = (COLOR)svs::D_VWAP;   // (1.2.0) Rassul's own settings 22:37 - VWAP magenta (the outputs' nominal pen)
 static const COLOR C_DARK = 0x000B0F19;
@@ -181,7 +187,7 @@ struct SVState {
     std::string styleMkt;
     long long styleStamp = -2, styleCheckMs = -1;
     int styleBad = 0;
-    std::string parmsSrc = "none", parmsWhy, statusParms;   // (1.8.1) which settings drew this chart: native (IRT's own) / file
+    std::string parmsSrc = "none", parmsWhy, statusParms, parmsStyle;   // (1.8.2) parmsStyle = what this chart drew last (status STYLE line)   // (1.8.1) which settings drew this chart: native (IRT's own) / file
     // (1.6.0) the Market State entry of this chart: identity, the facts decided for the last closed bar, when last posted
     bool mstPosted = false; std::string mstSym, mstChart; long mstSpb = 0; long long mstBar = -1, mstMs = -1; sa::Hook self;
     std::map<std::string, std::string> mstKv;
@@ -372,6 +378,28 @@ inline Parms from7(const Parms7& o) {
     p.pivot = o.pivot; p.pivUp = (COLOR)c24(d.pivUp); p.pivDn = (COLOR)c24(d.pivDn); p.pivW = (short)(d.pivW - svs::W_MIN);
     return p;
 }
+// (1.8.2) a drawing style -> a set (padding bytes zeroed), as parmsInit saves it
+inline Parms fromStyle(const svs::Style& s) {
+    Parms p; std::memset(&p, 0, sizeof(p));
+    p.vwap = s.show[svs::K_VWAP] ? 1 : 0; p.vwapCol = (COLOR)c24(s.col[svs::K_VWAP]); p.vwapW = (short)(s.vwapW - svs::W_MIN);
+    p.p1 = s.show[svs::K_P1] ? 1 : 0; p.p1Col = (COLOR)c24(s.col[svs::K_P1]); p.m1 = s.show[svs::K_M1] ? 1 : 0; p.m1Col = (COLOR)c24(s.col[svs::K_M1]);
+    p.p2 = s.show[svs::K_P2] ? 1 : 0; p.p2Col = (COLOR)c24(s.col[svs::K_P2]); p.m2 = s.show[svs::K_M2] ? 1 : 0; p.m2Col = (COLOR)c24(s.col[svs::K_M2]);
+    p.bandW = (short)(s.bandW - svs::W_MIN); p.on = s.on ? 1 : 0; p.prior = s.prior ? 1 : 0; p.priorCol = (COLOR)c24(s.priorCol);
+    p.pivot = s.pivot ? 1 : 0; p.pivUp = (COLOR)c24(s.pivUp); p.pivDn = (COLOR)c24(s.pivDn); p.pivW = (short)(s.pivW - svs::W_MIN);
+    return p;
+}
+// (1.8.2) the set 1.8.1 carried over on his ES chart (2026-10-28 11:25 CT window): VWAP unticked, VWAP colour 0 (black), VWAP width
+// index 0 (1 px). The 1.8.2 window always opens filled with a visible VWAP colour, so it never saves this; read = the defaults.
+inline bool legacy(const Parms& p) { return p.vwap == 0 && (unsigned long)p.vwapCol == 0UL && p.vwapW == 0; }
+// (1.8.2) the status file's STYLE line: what this chart drew (1 = on, colour hex, width px)
+inline std::string describe(const svs::Style& s) {
+    char b[256];
+    std::snprintf(b, sizeof b, "VWAP %d %06lX %dpx|+1 %d %06lX|-1 %d %06lX|+2 %d %06lX|-2 %d %06lX|bands %dpx|ON %d|PRIOR %d %06lX|PIVOT %d %06lX %06lX %dpx",
+        s.show[svs::K_VWAP] ? 1 : 0, c24(s.col[svs::K_VWAP]), s.vwapW, s.show[svs::K_P1] ? 1 : 0, c24(s.col[svs::K_P1]),
+        s.show[svs::K_M1] ? 1 : 0, c24(s.col[svs::K_M1]), s.show[svs::K_P2] ? 1 : 0, c24(s.col[svs::K_P2]), s.show[svs::K_M2] ? 1 : 0, c24(s.col[svs::K_M2]),
+        s.bandW, s.on ? 1 : 0, s.prior ? 1 : 0, c24(s.priorCol), s.pivot ? 1 : 0, c24(s.pivUp), c24(s.pivDn), s.pivW);
+    return b;
+}
 inline std::string hexOf(const void* b, size_t n) { static const char* H = "0123456789ABCDEF"; std::string o; const unsigned char* c = (const unsigned char*)b;
     for (size_t i = 0; i < n; ++i) { o += H[c[i] >> 4]; o += H[c[i] & 15]; } return o; }
 } // namespace svp
@@ -404,7 +432,10 @@ int SessionVWAP::parmsLoadBody(void)
     struct Unload { bool& f; ~Unload() { f = false; } } unload = { loading_ };
     loading_ = true;
     if (!svInDialog(this) || !svIds().ok) return RTX_OK;
-    { svs::Style own; std::string why; if (nativeStyle(own, why)) return RTX_OK; }   // (1.8.1) IRT shows this indicator's own values
+    // (1.8.2) the window is filled with EXACTLY what this indicator's chart draws (its own set as drawn: a black swatch shows the colour
+    // drawn, the legacy 1.8.1 set shows the defaults). 1.8.1 returned here without filling: the window opened on the raw set (VWAP
+    // unticked, black, 1 px) and its boxes were never greyed / tracked (snap_ stale).
+    { svs::Style own; std::string why; if (nativeStyle(own, why)) { ss::fillDialog(this, svset::spec(), svIds(), svValues(own), snap_); return RTX_OK; } }
     const std::string path = svs::pathFor(getenv("USERPROFILE"), marketNow());
     std::string text; long long st = -1; svs::Style s;                    // no file / unreadable = the defaults (svs::Style())
     if (!path.empty() && svs::readFile(path, text, st) == 0) { svs::Style r; if (svs::fromText(text, r)) s = r; }
@@ -420,18 +451,18 @@ bool SessionVWAP::nativeStyle(svs::Style& out, std::string& why)
     const std::string def = svp::defaults();
     if (getParameters(&p, sizeof(p), svp::TEMPLATE, def.c_str()) != RTX_OK) { why = "refused"; return false; }
     if (!svp::valid(p, &why)) { why += " " + svp::hexOf(&p, sizeof(p)); return false; }
+    if (svp::legacy(p)) { out = svs::Style(); why = "legacy 1.8.1 set (VWAP off, black, 1 px) drawn as the defaults"; return true; }   // (1.8.2)
     out = svp::toStyle(p); why = "ok"; return true;
 }
-// (1.8.1) IRT calls this when the indicator's saved set is an older parameter version: a version-7 set (1.8.0) keeps every value and
-// gains the pivot colours / width defaults; anything older = IRT's defaults (RTX_FAIL)
+// (1.8.2) IRT calls this when the indicator's saved set is an older parameter version (irtsdk C header: "DLL get REASON_PARMS called
+// if parmsVersion is higher than that of saved parms"). 1.8.1 carried a version-7 set over field by field - on his ES chart that set
+// held VWAP unticked / black / 1 px, stored by IRT from the 1.5-1.8.0 windows while those versions drew from the per-market file, so
+// 1.8.1 drew no session VWAP and its window opened on those values. Now every older set (7 and 8 included) is replaced by the intended
+// defaults (= svs::Style(): VWAP magenta 2 px, all four bands, overnight set, prior RTH VWAP, pivot VWAP green / red 2 px).
 int SessionVWAP::parmsInit(unsigned int iVersion)
 {
-    if (iVersion != 7) return iVersion >= 8 ? RTX_OK : RTX_FAIL;
-    std::string def = svp::defaults(); { int commas = 0; for (size_t i = 0; i < def.size(); ++i) if (def[i] == ',' && ++commas == 16) { def.resize(i); break; } }
-    svp::Parms7 o; std::memset(&o, 0, sizeof(o));
-    if (getFormerParameters(&o, sizeof(o), svp::TEMPLATE7, def.c_str()) != RTX_OK) return RTX_FAIL;
-    svp::Parms p = svp::from7(o);
-    if (!svp::valid(p)) return RTX_FAIL;
+    if (iVersion >= (unsigned)svset::spec().paramVersion) return RTX_OK;
+    svp::Parms p = svp::fromStyle(svs::Style());
     return saveParameters(&p, sizeof(p), svp::TEMPLATE) == RTX_OK ? RTX_OK : RTX_FAIL;
 }
 
@@ -726,6 +757,7 @@ int SessionVWAP::draw(void)
     const bool native = nativeStyle(own, why);
     S->parmsSrc = native ? "native" : "file"; S->parmsWhy = why;
     const svs::Style& st = native ? own : styleFor(*S, market);          // (1.5.0) else this market's file (fallback)
+    S->parmsStyle = svp::describe(st);                                    // (1.8.2) the status STYLE line = what this draw used
     S->keep.refresh(getSymbol(), getSecondsPerBar(), getChartLabel());   // (1.6.3) the HOD/LOD table: nothing painted over it this draw
     bdk::KeepScope keepScope(S->keep);
     drawLines(n, st, S->per > 0 ? S->per : 180, openMin, closeMin);       // the lines first, whatever the session; (1.8.0) + the pivot VWAP
@@ -945,12 +977,13 @@ void SessionVWAP::writeStatus(const char* what, int nRth, const std::string& mar
     const char* up = getenv("USERPROFILE"); if (!up) return;
     time_t now_ = time(nullptr);
     const std::string parms = S ? S->parmsSrc + "," + S->parmsWhy : std::string("none,");
-    bool changed = !S || S->statusWhat != what || S->statusNRth != nRth || S->statusMkt != market || S->statusParms != parms;
+    const std::string styleTxt = S ? S->parmsStyle : std::string();   // (1.8.2)
+    bool changed = !S || S->statusWhat != what || S->statusNRth != nRth || S->statusMkt != market || S->statusParms != parms + "|" + styleTxt;
     if (S && !changed && now_ - S->lastStatusWrite < 30) return;
     std::ostringstream text;
-    text << "VERSION," << SV_VERSION << "\nMARKET," << market << "\nRTH_BARS," << nRth << "\nON_BARS," << nOn << "\nSTATE," << what << "\nPARMS," << parms << "\n";   // (1.8.1) native = IRT's own per-indicator set
+    text << "VERSION," << SV_VERSION << "\nMARKET," << market << "\nRTH_BARS," << nRth << "\nON_BARS," << nOn << "\nSTATE," << what << "\nPARMS," << parms << "\nSTYLE," << styleTxt << "\n";   // (1.8.1) native = IRT's own per-indicator set
     if (!svPublishText(svRecordPath(this, up, market, S ? S->per : 180, "status.txt"), text.str())) return;
-    if (S) { S->lastStatusWrite = now_; S->statusWhat = what; S->statusNRth = nRth; S->statusMkt = market; S->statusParms = parms; }
+    if (S) { S->lastStatusWrite = now_; S->statusWhat = what; S->statusNRth = nRth; S->statusMkt = market; S->statusParms = parms + "|" + styleTxt; }
 }
 
 extern "C" cppExtension *CreateExtension(void)
@@ -959,6 +992,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(11);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE);
     p->setDescription("LRA Session VWAP: the session VWAP with its +-1 and +-2 SD bands - RTH in the day session, the overnight VWAP and the prior RTH VWAP overnight.");
-    p->setVersion("1.8.1");   // = SV_VERSION (gex-build reads this literal; test_sessionvwap_settings checks they match)
+    p->setVersion("1.8.2");   // = SV_VERSION (gex-build reads this literal; test_sessionvwap_settings checks they match)
     return p;
 }

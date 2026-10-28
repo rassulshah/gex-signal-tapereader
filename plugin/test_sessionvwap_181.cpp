@@ -71,7 +71,7 @@ static void testTemplate()
         const char want = S.rows[k].type == ss::T_BOOL ? 'B' : S.rows[k].type == ss::T_COLOR ? 'U' : S.rows[k].type == ss::T_LIST ? 'S' : '?';
         CHECK(t == want, "template token " << k << " matches the row type (" << S.rows[k].label << ")");
     }
-    CHECK(S.paramVersion == 8, "parameter version 8 (rows appended in 1.8.1)");
+    CHECK(S.paramVersion == 9, "parameter version 9 (1.8.2: older sets reset to the defaults; rows unchanged since 1.8.1)");
     int commas = 0; const std::string d = svp::defaults(); for (char c : d) commas += c == ',';
     CHECK(commas == svs::R_COUNT - 1, "the defaults string has one value per row");
     svp::Parms z; std::memset(&z, 0, sizeof z); std::string why;
@@ -192,18 +192,16 @@ static void testPlugin(const std::string& profile)
         z.done();
     }
 
-    // ---- version upgrade: a version-7 set (1.8.0) is carried over, the new rows get their defaults
+    // ---- version upgrade (1.8.2 replaces the 1.8.1 carry-over): ANY older set (7 = 1.8.0, 8 = 1.8.1) becomes the defaults;
+    // the full migration cases are in test_sessionvwap_182.cpp
     {
         SessionVWAP v; mock::declared.clear(); mock::Host H8; H8.root = "ES"; mock::current = &H8; v.setup(); bars(H8); v.fill(0);
-        std::vector<mock::Param> old(mock::declared.begin(), mock::declared.begin() + 16);
-        old[(size_t)v.P[svs::R_VWAP]].b = false; old[(size_t)v.P[svs::R_P1_COL]].c = 0x112233; old[(size_t)v.P[svs::R_VWAP_W]].list = 3;
-        H8.former = old;
-        H8.val = mock::declared; for (size_t i = 0; i < H8.val.size(); ++i) { H8.val[i].b = false; H8.val[i].c = 0; H8.val[i].list = 0; }   // what IRT holds before the carry-over
-        CHECK(v.parmsInit(7) == RTX_OK, "parmsInit(7) carries the version-7 set over");
+        H8.val = mock::declared; for (size_t i = 0; i < H8.val.size(); ++i) { H8.val[i].b = false; H8.val[i].c = 0; H8.val[i].list = 0; }
+        CHECK(v.parmsInit(7) == RTX_OK, "parmsInit(7) saves the defaults");
         m = redraw(v, H8);
-        CHECK(m[std::make_pair(0xFF80FFUL, 4)] == 0 && m[std::make_pair(0x112233UL, 1)] == want[1] + want[6] && pivotSegs(m, 0x22C55E, 0xEF4444, 2) == pv,
-              "carried over: VWAP off, +1 SD colour, VWAP width kept; pivot colours / width = defaults");
-        CHECK(v.parmsInit(8) == RTX_OK && v.parmsInit(5) == RTX_FAIL, "version 8 = nothing to do; older than 7 = IRT's defaults");
+        CHECK(m[std::make_pair(0xFF80FFUL, 2)] == want[0] + want[5] && m[std::make_pair(0x008000UL, 1)] == want[1] + want[6] && pivotSegs(m, 0x22C55E, 0xEF4444, 2) == pv,
+              "after parmsInit(7): VWAP magenta 2 px, +1 SD green, pivot green / red 2 px");
+        CHECK(v.parmsInit(9) == RTX_OK && v.parmsInit(5) == RTX_OK, "version 9 = nothing to do; any older = the defaults");
         v.done();
     }
 }
@@ -213,7 +211,7 @@ static void testVersion()
     std::ifstream f("SessionVWAP.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
     const size_t a = src.find("setVersion(\""), b = src.find("SV_VERSION = \"");
     const std::string v1 = src.substr(a + 12, src.find('"', a + 12) - a - 12), v2 = src.substr(b + 14, src.find('"', b + 14) - b - 14);
-    CHECK(v1 == v2 && v1 == "1.8.1" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.1");
+    CHECK(v1 == v2 && v1 == "1.8.2" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.2");
 }
 
 int main()
