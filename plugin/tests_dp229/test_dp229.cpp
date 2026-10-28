@@ -52,7 +52,7 @@ int main() {
     // 1) HOLDING at the node -> A+? ; decided once, the record wins after a restart even if the ladder changes
     {   home("hold"); g_tierWaitMs = 20000; bb::bbSet(sb::ladderKey("ESZ26", 180, "test"), "");
         mock::Host h = chart(); addq(h); DeltaProfile p; redraw(h, p); redraw(h, p);
-        ChartState& s = state(h); const int l = s.lay.delta.l, r = s.lay.delta.l + 30;
+        ChartState& s = state(h); const int l = s.lay.delta.l, r = s.lay.delta.l + 44;
         check(textIn(h, "A", l, r) && s.tierWait.size() == 1, "[wait] no ladder yet: plain A while waiting (<= 20 s) for lsBookFlow");
         postLadder(bar35, 3000, 100); redraw(h, p);
         check(textIn(h, "A+?", l, r) && !textIn(h, "A", l, r), "[A+?] same candle, RTH mid, the bids HELD at the node (added 3000, pulled 100): A+?");
@@ -67,7 +67,7 @@ int main() {
         finish(h, p);
         postLadder(bar35, 100, 3000);   // the board now says PULLING - a restart must keep the decided A+?
         mock::Host h2 = chart(); addq(h2); DeltaProfile p2; redraw(h2, p2); redraw(h2, p2);
-        check(textIn(h2, "A+?", state(h2).lay.delta.l, state(h2).lay.delta.l + 30), "[no repaint] after a restart the recorded A+? stands (the ladder changed)");
+        check(textIn(h2, "A+?", state(h2).lay.delta.l, state(h2).lay.delta.l + 44), "[no repaint] after a restart the recorded A+? stands (the ladder changed)");
         int tl = 0; { std::istringstream in(slurp(state(h2).tierPath)); std::string x; while (std::getline(in, x)) if (x.compare(0, 2, "T,") == 0) ++tl; }
         check(tl == 1, "[no repaint] never written twice");
         finish(h2, p2);
@@ -75,7 +75,7 @@ int main() {
     // 2) PULLING at the node -> A (net -2.9x, read 2)
     {   home("pull"); postLadder(bar35, 100, 3000);
         mock::Host h = chart(); addq(h); DeltaProfile p; redraw(h, p); redraw(h, p);
-        check(textIn(h, "A", state(h).lay.delta.l, state(h).lay.delta.l + 30), "[A] the bids PULLED at the node: plain A");
+        check(textIn(h, "A", state(h).lay.delta.l, state(h).lay.delta.l + 44), "[A] the bids PULLED at the node: plain A");
         std::vector<sb::Fact> Y; sb::readFacts('Y', "ESZ26", 180, "test", steadyMs(), Y, true); const sb::Fact* y = yAt(Y, bar35);
         check(y && y->code == 12 && y->val < -2.8, "[Y] tier A / pulling, net -2.9x");
         finish(h, p);
@@ -83,7 +83,7 @@ int main() {
     // 3) no order book on the chart: after the wait, plain A, read 0 (no Y for lsBookFlow to show)
     {   home("nobook"); bb::bbSet(sb::ladderKey("ESZ26", 180, "test"), ""); g_tierWaitMs = 0;
         mock::Host h = chart(); addq(h); DeltaProfile p; redraw(h, p); redraw(h, p); redraw(h, p);
-        check(textIn(h, "A", state(h).lay.delta.l, state(h).lay.delta.l + 30) && state(h).tierNoBook == 1, "[no book] plain A, counted 'no book'");
+        check(textIn(h, "A", state(h).lay.delta.l, state(h).lay.delta.l + 44) && state(h).tierNoBook == 1, "[no book] plain A, counted 'no book'");
         std::vector<sb::Fact> Y; sb::readFacts('Y', "ESZ26", 180, "test", steadyMs(), Y, true); const sb::Fact* y = yAt(Y, bar35);
         check(y && y->code == 10, "[Y] code 10 = A without a read (lsBookFlow draws nothing for it)");
         finish(h, p); g_tierWaitMs = 20000;
@@ -91,7 +91,7 @@ int main() {
     // 4) late (post-close 15:55 CT): holding, but never A+
     {   home("late"); const unsigned long keep = T0; T0 = 1790000000UL; const long long b2 = (long long)(T0 + 35 * 180); postLadder(b2, 3000, 100);
         mock::Host h = chart(); addq(h); DeltaProfile p; redraw(h, p); redraw(h, p);
-        check(textIn(h, "A", state(h).lay.delta.l, state(h).lay.delta.l + 30) && !textIn(h, "A+?", state(h).lay.delta.l, state(h).lay.delta.l + 30) && state(h).tierLate == 1, "[late] post-close candle: A, never A+");
+        check(textIn(h, "A", state(h).lay.delta.l, state(h).lay.delta.l + 44) && !textIn(h, "A+?", state(h).lay.delta.l, state(h).lay.delta.l + 44) && state(h).tierLate == 1, "[late] post-close candle: A, never A+");
         std::vector<sb::Fact> Y; sb::readFacts('Y', "ESZ26", 180, "test", steadyMs(), Y, true); const sb::Fact* y = yAt(Y, b2);
         check(y && y->code == 11, "[late] still read as holding (code 11) for the Defense pane");
         finish(h, p); T0 = keep;
@@ -100,7 +100,7 @@ int main() {
     {   home("next"); bb::bbSet(sb::ladderKey("ESZ26", 180, "test"), "");
         mock::Host h = chart(true); addq(h); DeltaProfile p; redraw(h, p); redraw(h, p);
         const int l = state(h).lay.delta.l;
-        check(textIn(h, "A?", l, l + 30) && state(h).tierNext == 1, "[A?] the next candle confirmed it: A?");
+        check(textIn(h, "A?", l, l + 44) && state(h).tierNext == 1, "[A?] the next candle confirmed it: A?");
         finish(h, p);
     }
     // 6) the combiner's swing odds with "?" (round-2 weights): SHOW -> "swing NN% ?", per-market LOG -> nothing; turn LOG never draws "NN%"
@@ -123,7 +123,7 @@ int main() {
         check(!textPrefix(h2, "swing "), "[swing] STATUS,swing,LOG,ES: nothing drawn on ES");
         finish(h2, p2);
     }
-    check(std::string(DLT_VERSION) == "2.29.0" && std::string(dpset::PLUGIN_VERSION) == DLT_VERSION && std::string(cmb::VERSION) == "0.2.0" && std::string(nl2::VERSION) == "1.0.0" && std::string(sb::VERSION) == "1.5.0", "[ver] 2.29.0 / CombinerLogic 0.2.0 / NodeLadder 1.0.0 / SignalBoard 1.5.0");
+    check(std::string(DLT_VERSION) == "2.30.0" && std::string(dpset::PLUGIN_VERSION) == DLT_VERSION && std::string(cmb::VERSION) == "0.2.0" && std::string(nl2::VERSION) == "1.0.0" && std::string(sb::VERSION) == "1.5.0", "[ver] 2.30.0 / CombinerLogic 0.2.0 / NodeLadder 1.0.0 / SignalBoard 1.5.0");
     std::cout << "dp 2.29.0: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

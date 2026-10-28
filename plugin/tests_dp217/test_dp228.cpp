@@ -45,8 +45,8 @@ int main() {
         ChartState& s = state(h);
         check(!cb::DELTA_LEFT && s.lay.delta.r > s.lay.priceRight && s.lay.delta.l > s.lay.priceRight, "[layout] the Delta column is on the RIGHT of the price room");
         std::vector<const mock::Draw*> a = texts(h, "A");
-        bool inStrip = false; for (const mock::Draw* d : a) if (d->x >= s.lay.delta.l && d->x <= s.lay.delta.l + 30) inStrip = true;
-        check(inStrip && s.readDrawn == 1, "[read] the A is drawn in the READ strip (first 26 px of the column)");
+        bool inStrip = false; for (const mock::Draw* d : a) if (d->x >= s.lay.delta.l && d->x <= s.lay.delta.l + 44) inStrip = true;
+        check(inStrip && s.readDrawn == 1, "[read] the A is drawn in the READ strip (first 40 px of the column, 2.30.0)");
         bool aPrefix = false; for (const mock::Draw& d : h.draws) if (d.type == "text" && d.text.compare(0, 2, "A ") == 0) aPrefix = true;
         check(!aPrefix, "[read] no \"A 7.2x\" labels: the bars carry the ratio only");
         bool ratio = false; for (const mock::Draw& d : h.draws) if (d.type == "text" && d.text.size() > 1 && d.text.back() == 'x' && d.x > s.lay.delta.l + 26) ratio = true;
@@ -67,7 +67,7 @@ int main() {
             check(mst::getS(F, "cmb") == "bull" && mst::getD(F, "cmb_turn") > 0 && mst::getS(F, "cmb_a") == "1" && mst::getS(F, "cmb_status") == "SHOW",
                   "[awareness] Market State SRC DP carries the combiner read of the closed candle (cmb bull, odds, A, status)"); }
         const std::string st = slurp(flex + "DeltaProfile.status-ES-180.txt");
-        check(st.find("COMBINER,0.") != std::string::npos && st.find("READ,strip 26 px,A drawn 1") != std::string::npos && st.find("FACTS,SignalBoard 1.") != std::string::npos, "[status] READ / FACTS / COMBINER lines");
+        check(st.find("COMBINER,0.") != std::string::npos && st.find("READ,strip 40 px,A drawn 1") != std::string::npos && st.find("FACTS,SignalBoard 1.") != std::string::npos, "[status] READ / FACTS / COMBINER lines");
         const int k0 = kLines(rec);
         for (int i = 0; i < 30; ++i) { addq(h); redraw(h, p); }
         check(kLines(rec) == k0, "[combiner] quiet candles after it: no new reads (not pivot-reversal candles), the read is never re-scored");

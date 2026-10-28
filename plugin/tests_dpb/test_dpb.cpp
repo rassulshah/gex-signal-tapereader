@@ -1,4 +1,4 @@
-// test_dpb.cpp -- DpBanner.h 1.0.0: the top read = the Delta Profile read (fresh / stale / broken, tiers, Y / T detail, level name).
+// test_dpb.cpp -- DpBanner.h 1.1.0: the top read = the Delta Profile read (fresh / stale / broken, tiers, Y / T detail, level name).
 // From tests_dpb/: g++ -std=c++17 -O1 -I.. test_dpb.cpp -o /tmp/t_dpb && /tmp/t_dpb
 #include "../DpBanner.h"
 #include <iostream>
@@ -24,5 +24,11 @@ int main() {
     sb::Fact fut = r; fut.bar = t0 + 180; b = dpb::build({fut}, {}, {}, t0, 7763.0, spb, tk, lv); C(!b.any, "a forming-candle fact ignored");
     sb::Fact a1 = r; a1.code = 1; a1.bar = t0 - 540; b = dpb::build({a1, r}, {}, {}, t0, 7763.0, spb, tk, lv); C(b.name.compare(0, 3, "A? ") == 0, "newest wins");
     b = dpb::build({}, {}, {}, t0, 7763.0, spb, tk, lv); C(!b.any && !b.fresh, "none");
+    // (1.1.0) the hourly flow: H code 1 at the read's candle, same side -> "with 4h flow (sellers), pullback ?"; code 0 / other side / other bar -> nothing
+    sb::Fact h; h.bar = r.bar; h.side = -1; h.code = 1; h.val = -900; h.lo = h.hi = 120; h.proven = 2;
+    b = dpb::build({r}, {}, {}, {h}, t0, 7763.75, spb, tk, lv); C(b.detail.find("with 4h flow (sellers), pullback ?") != std::string::npos, "flow: " + b.detail);
+    sb::Fact h0 = h; h0.code = 0; b = dpb::build({r}, {}, {}, {h0}, t0, 7763.75, spb, tk, lv); C(b.detail.find("4h flow") == std::string::npos, "no pullback: no flow phrase");
+    sb::Fact h2 = h; h2.side = 1; b = dpb::build({r}, {}, {}, {h2}, t0, 7763.75, spb, tk, lv); C(b.detail.find("4h flow") == std::string::npos, "other side: no flow phrase");
+    sb::Fact h9 = h; h9.code = 9; b = dpb::build({r}, {}, {}, {h9}, t0, 7763.75, spb, tk, lv); C(b.detail.find("4h flow") == std::string::npos, "the current-flow fact is not the read's flow");
     std::cout << "DpBanner " << dpb::VERSION << ": " << ok << " passed, " << bad << " failed\n"; return bad ? 1 : 0;
 }

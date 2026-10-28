@@ -14,7 +14,7 @@
 #include <functional>
 #include "SignalBoard.h"
 namespace dpb {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-10-28) + the hourly flow (kind H from lsDeltaProfile 2.30.0): "with 4h flow (buyers), pullback ?"
 static const int FRESH_BARS = 4;
 struct Banner { bool fresh = false, any = false; std::string name, detail; int favour = 0; double nodePx = 0; };
 inline std::string fx1(double v) { char b[32]; std::snprintf(b, sizeof(b), "%.1fx", std::fabs(v)); return b; }
@@ -25,7 +25,7 @@ inline std::string px(double v, double tick) {
 inline std::string clock12(long long ct) { const long long sd = ((ct % 86400) + 86400) % 86400; const int h = (int)(sd / 3600), m = (int)(sd % 3600 / 60);
     char b[24]; std::snprintf(b, sizeof(b), "%d:%02d %s", h % 12 == 0 ? 12 : h % 12, m, h < 12 ? "AM" : "PM"); return b; }
 // R / Y / T facts (decided), the last CLOSED candle's Central end second + close, seconds per bar, tick, the level name at a price ("" none)
-inline Banner build(const std::vector<sb::Fact>& R, const std::vector<sb::Fact>& Y, const std::vector<sb::Fact>& T,
+inline Banner build(const std::vector<sb::Fact>& R, const std::vector<sb::Fact>& Y, const std::vector<sb::Fact>& T, const std::vector<sb::Fact>& H,
                     long long lastCt, double lastClose, long spb, double tick, const std::function<std::string(double)>& levelAt) {
     Banner b; if (spb <= 0 || !(tick > 0)) return b;
     const sb::Fact* best = nullptr;
@@ -50,7 +50,16 @@ inline Banner build(const std::vector<sb::Fact>& R, const std::vector<sb::Fact>&
         b.detail += std::string(" \xB7 ") + (bull ? "bids " : "offers ") + (hold ? "holding " : "pulling ") + v + (y.proven == 1 ? "" : " ?"); break; }
     for (const sb::Fact& t : T) if (t.side == best->side && t.bar >= best->bar - spb && t.bar <= best->bar + 2 * spb) {
         b.detail += std::string(" \xB7 ") + (bull ? "sellers" : "buyers") + " trapped " + fx1(t.val) + " ?"; break; }
+    // (1.1.0) the hourly flow at the read's candle (H code 1 = a pullback in its favour: the A's side won the 4 closed hours, the last hour went
+    // against it - the research: turn 82% vs 71%, swing 57% vs 46%; "?" until the nightly proves it per market)
+    for (const sb::Fact& h : H) if (h.bar == best->bar && h.side == best->side && h.code == 1) {
+        b.detail += std::string(" \xB7 with 4h flow (") + (bull ? "buyers" : "sellers") + "), pullback" + (h.proven == 1 ? "" : " ?"); break; }
     return b;
+}
+// (1.1.0) the 1.0.0 call (no hourly flow)
+inline Banner build(const std::vector<sb::Fact>& R, const std::vector<sb::Fact>& Y, const std::vector<sb::Fact>& T,
+                    long long lastCt, double lastClose, long spb, double tick, const std::function<std::string(double)>& levelAt) {
+    return build(R, Y, T, std::vector<sb::Fact>(), lastCt, lastClose, spb, tick, levelAt);
 }
 }  // namespace dpb
 #endif

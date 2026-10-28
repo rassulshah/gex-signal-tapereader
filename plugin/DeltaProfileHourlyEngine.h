@@ -13,6 +13,7 @@
 // lines, so a restart that re-reads the record and re-plays the minutes equals one straight pass (tests: replay == live).
 // All times are the Central wall clock as epoch seconds (the chart's getLocaltime), so 17:00 is the session change.
 #include "DeltaProfileHourlyCore.h"
+#include "DeltaProfileHourlyRead.h"   // 1.1.0: the same-candle hourly A + the 4-hour flow (the hourly research, 2026-10-28)
 #include <cerrno>
 #include <climits>
 #include <cstdio>
@@ -24,7 +25,7 @@
 #include <sstream>
 
 namespace delta_profile_hourly {
-static const char* const DPH_VERSION = "1.0.4";
+static const char* const DPH_VERSION = "1.1.0";
 static const int REC_FIELDS = 23;
 static const std::size_t REC_MAX_BYTES = 4u * 1024u * 1024u;   // checklist #33: a record file larger than this is not read
 static const std::size_t REC_MAX_LATCHES = 600;
@@ -62,6 +63,16 @@ struct Latch {
     long long id = -1, tFirst = 0, tDecided = 0, decidedBy = 0;
 };
 struct JLine { long long session, te; std::string text; };
+// 1.1.0: a same-candle hourly A (dph_read::sameCandleA), decided at its candle's close, never changed. Record line (9 fields, the
+// nightly's 23-field reader skips it): S|end|bull(1/0)|lo_ticks|hi_ticks|ratio|price_lo|price_hi|version
+struct SameA { long long end = 0; bool bull = false; Tick lo = 0, hi = 0; double ratio = 0; };
+inline std::string num(double v, const char* format);
+inline std::string sameALine(const SameA& a, double tick) {
+    std::ostringstream o; o.imbue(std::locale::classic());
+    o << "S|" << a.end << '|' << (a.bull ? 1 : 0) << '|' << a.lo << '|' << a.hi << '|' << num(a.ratio, "%.2f") << '|'
+      << num(static_cast<double>(a.lo) * tick, "%.10g") << '|' << num(static_cast<double>(a.hi) * tick, "%.10g") << '|' << DPH_VERSION;
+    return o.str();
+}
 
 inline bool decidedCode(const std::string& c) { return !c.empty() && c.back() != '?'; }
 inline bool sellNode(const std::string& c, bool sup) {
@@ -145,6 +156,15 @@ inline bool parseRecordLine(const std::string& line, double chartTick, int spb, 
     return true;
 }
 
+inline bool parseSameA(const std::string& line, SameA& a) {
+    const std::vector<std::string> c = fields(line);
+    if (c.size() != 9 || c[0] != "S") return false;
+    long long e, b, lo, hi; double r;
+    if (!parseWhole(c[1], 1, 32503680000LL, e) || !parseWhole(c[2], 0, 1, b) || !parseWhole(c[3], -9000000000000000LL, 9000000000000000LL, lo) ||
+        !parseWhole(c[4], -9000000000000000LL, 9000000000000000LL, hi) || lo > hi || !parseReal(c[5], r) || r < 0) return false;
+    a.end = e; a.bull = b == 1; a.lo = lo; a.hi = hi; a.ratio = r; return true;
+}
+
 class Engine {
 public:
     Params P;
@@ -157,6 +177,8 @@ public:
     long long lastAdded = LLONG_MIN, cursor = LLONG_MIN;
     std::vector<Latch> latches; long long nextId = 0;
     std::vector<JLine> journal;
+    // 1.1.0: same-candle hourly A's (drawn as A?) and the 4-hour flow of the closed hours (the header)
+    std::vector<SameA> sameA; dph_read::Flow flowNow; dph_read::Params RP; long long linesS = 0, sameASeeded = 0;
     // the last snapshot (what is drawn)
     Snapshot snap; std::vector<long long> winEnds; long long snapTe = LLONG_MIN;
     bool ready = false, complete = false, provisional = false; std::string state = "no 1-minute data yet";
@@ -214,6 +236,12 @@ public:
         while (std::getline(in, line)) {
             if (!line.empty() && line.back() == '\r') line.pop_back();
             if (line.empty() || line[0] == '#' || line.compare(0, 8, "t_first|") == 0) continue;
+            if (line.compare(0, 2, "S|") == 0) {                       // 1.1.0 same-candle A line
+                SameA a; if (!parseSameA(line, a)) { ++seedRejected; continue; }
+                bool have = false; for (const SameA& x : sameA) if (x.end == a.end && x.bull == a.bull) have = true;
+                if (!have && sameA.size() < REC_MAX_LATCHES) { sameA.push_back(a); ++sameASeeded; }
+                continue;
+            }
             RecordEvent r;
             if (!parseRecordLine(line, tick, spb, r)) { ++seedRejected; continue; }
             if (r.root != root) continue;
@@ -296,6 +324,7 @@ private:
             if (!winEnds.empty()) aggs.erase(aggs.begin(), aggs.lower_bound(win.front()->end));
             return;
         }
+        sameCandle(bars, m.te, allowed, record);
         Snapshot candidate = build(bars, tick, allowed, std::min(zoneCount, bars.size()), P);
         ++builds; snapTe = m.te;
         // drop host bars older than this window (the window only moves forward)
@@ -307,6 +336,27 @@ private:
         state = !ready ? "no volume at price in the window" : !complete ? "short 1-minute history: no signals yet" :
                 provisional ? "missing 1-minute volume at price: provisional" : "ready";
         pruneHistory(m.te);
+    }
+    // 1.1.0: the hourly READ on the CLOSED host bars of the window (dph_read): the 4-hour flow every minute, and when a host bar has
+    // just closed (this minute ends it) its same-candle A - decided once, recorded once, never changed
+    void sameCandle(const std::vector<Bar>& bars, long long nowT, bool allowed, bool record) {
+        std::vector<dph_read::HBar> hb; hb.reserve(bars.size());
+        for (const Bar& b : bars) {
+            if (!b.closed) continue;
+            dph_read::HBar h; h.end = b.time;
+            h.o = priceKey(b.open, tick); h.h = priceKey(b.high, tick); h.l = priceKey(b.low, tick); h.c = priceKey(b.close, tick);
+            for (const Row& r : b.rows) h.rows.push_back(dph_read::Row{r.key, r.delta, r.volume});
+            hb.push_back(std::move(h));
+        }
+        flowNow = dph_read::flow(hb);
+        if (!allowed || hb.empty() || hb.back().end != nowT || static_cast<int>(hb.size()) < RP.window) return;
+        std::vector<dph_read::HBar> w(hb.end() - RP.window, hb.end());
+        const dph_read::Decision d = dph_read::sameCandleA(w, RP);
+        if (!d.ok) return;
+        for (const SameA& x : sameA) if (x.end == d.end && x.bull == d.bull) return;
+        if (sameA.size() >= REC_MAX_LATCHES) return;
+        SameA a; a.end = d.end; a.bull = d.bull; a.lo = d.lo; a.hi = d.hi; a.ratio = d.ratio; sameA.push_back(a);
+        if (record) { journal.push_back(JLine{sessionKey(nowT), nowT, sameALine(a, tick)}); ++linesS; }
     }
     long long endOf(int idx) const { return idx >= 0 && idx < static_cast<int>(winEnds.size()) ? winEnds[static_cast<std::size_t>(idx)] : 0; }
     void adoptCodes(Snapshot& c) {
@@ -378,6 +428,7 @@ private:
         const long long oldest = sessionKey(nowT) - HISTORY_SESSIONS + 1;
         latches.erase(std::remove_if(latches.begin(), latches.end(), [&](const Latch& L) {
             return !live(L) && sessionKey(L.tFirst) < oldest; }), latches.end());
+        sameA.erase(std::remove_if(sameA.begin(), sameA.end(), [&](const SameA& a) { return sessionKey(a.end) < oldest; }), sameA.end());
     }
 };
 } // namespace delta_profile_hourly

@@ -1,5 +1,8 @@
 /********************************************************************************
- * DeltaProfileHourly.cpp -- lsDeltaProfileHourly 1.0.3 (DLT-H), 2026-10-12: A / A? circles are placed before I circles (an A is never the
+ * DeltaProfileHourly.cpp -- lsDeltaProfileHourly 1.1.0 (DLT-H), 2026-10-28 (Rassul 22:41 CT, the hourly research - report "Hourly Delta
+ *   Profile"): the candle marks are the SAME-CANDLE hourly A only (A?), the old next-candle A / A? / I and the zones are record only;
+ *   the profile labels show the ratio only; the header shows the 4-hour flow (buyers / sellers, "pullback" when the last hour went
+ *   against it); same-candle A's are recorded as S lines and re-read at a restart. 1.0.3 (DLT-H), 2026-10-12: A / A? circles are placed before I circles (an A is never the
  *   one skipped for a nearby I). 1.0.2: the profile at the price scale (no Dealer Profile
  *   reserve on the hourly chart); every absorption candidate gets its circle (several per candle at different prices). 1.0.1: minutes older than the asked window are skipped and old
  *   minutes without volume at price are not waited on (NQ showed NO 1M: IRT returned 6 weeks of minutes). 1.0.0 2026-10-09, task #302
@@ -688,7 +691,7 @@ void DeltaProfileHourly::status(Feed& f, HostState& h, bool force) {
     const dph::Engine& e = *f.eng;
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << dph::DPH_VERSION << "\nPARAMS," << dphp::PARAMS_ID << "\nROOT," << f.root << "\nMARKET," << f.market
-      << "\nSYMBOL," << f.symbol << "\nSPB," << f.spb << "\nSESSION," << f.session << "\nMODE," << (proven(f.market) ? "LIVE" : "TESTING")
+      << "\nSYMBOL," << f.symbol << "\nSPB," << f.spb << "\nSESSION," << f.session << "\nMODE," << (proven(f.market) ? "LIVE" : "TESTING") << " (1.1.0: marks = same-candle A? only; old A / A? / I / zones record only)"
       << "\nSTATE," << safeField(e.quarantined ? e.state : h.quarantined ? "quarantined: " + h.quarantineWhy : e.state)
       << "\nREQUEST," << safeField(f.reqNote) << ",kind " << (f.reqKind ? f.reqKind : '-') << ",asked " << f.requests
       << ",bars " << f.reqCount << (f.baseBlocked ? ",BASE BLOCKED" : "") << (f.tailBlocked ? ",TAIL BLOCKED" : "")
@@ -700,6 +703,9 @@ void DeltaProfileHourly::status(Feed& f, HostState& h, bool force) {
       << "\nRECORD," << safeField(recordFolder()) << ",loaded " << e.seedLoaded << ",rejected " << e.seedRejected << ",F " << e.linesF
       << ",D " << e.linesD << ",pending " << e.journal.size() << ",resume_after " << e.resumeAfter << ',' << safeField(f.recordNote)
       << "\nDRAWN,rows " << h.drawnRows << ",rings " << h.ringsDrawn << ",letters " << h.lettersDrawn << ",suppressed " << h.suppressed
+      << "\nSAME_A," << e.sameA.size() << " held (seeded " << e.sameASeeded << ", recorded " << e.linesS << "),drawn as A? (same-candle hourly A, dph_read " << dph_read::VERSION << ")"
+      << "\nFLOW_4H," << (e.flowNow.ok ? (e.flowNow.net4 > 0 ? "buyers" : e.flowNow.net4 < 0 ? "sellers" : "flat") : "short") << ",net4 " << e.flowNow.net4
+      << ",net1 " << e.flowNow.net1 << ",pullback " << dph_read::pullback(e.flowNow)
       << "\nTIMING,max_pass_ms " << f.maxPassMs << "\nERROR," << safeField(f.err) << '\n';
     for (const dph::Latch& L : e.latches)
         if (e.live(L)) o << "SIGNAL," << L.code << ',' << (L.support ? "support" : "resistance") << ',' << L.low * f.tick << ','
@@ -793,7 +799,8 @@ bool DeltaProfileHourly::render(HostState& h) {
     if (left <= pane.left + 40 || base >= paneRight || bottom - top < 40) { h.state = "pane too small: not drawn"; return false; }   // #35
     Feed* f = h.feed.get();
     const bool live = f && proven(f->market);
-    textRight(base, pane.top + 8, std::string("DLT-H ") + DPH_VERSION_TEXT + (live ? "" : " TESTING"), C_INK, 8, true);
+    (void)live;
+    textRight(base, pane.top + 8, std::string("DLT-H ") + DPH_VERSION_TEXT, C_INK, 8, true);
     if (!f) { textRight(base - 2, top + 12, "NO 1M", C_SELL, 8, true); return false; }
     std::unique_lock<std::recursive_mutex> lock(f->mx, std::try_to_lock);
     if (!lock.owns_lock() || !f->eng) { textRight(base - 2, top + 12, "NO 1M", C_SELL, 8, true); return false; }
@@ -803,6 +810,14 @@ bool DeltaProfileHourly::render(HostState& h) {
         (f->hostTickAt && wallNow() - f->hostTickAt < 120 && f->lastIngestAt && wallNow() - f->lastIngestAt > 600) ? "STALE" : "";
     if (badge[0]) textRight(base - 2, top + 12, badge, badge[0] == 'N' || badge[0] == 'B' ? C_SELL : C_INK, 8, true);
     if (!e.ready) return false;
+    // 1.1.0 (the hourly research, 2026-10-28): the 4-hour flow - who won the last 4 closed hours on net delta - and "pullback" when the
+    // last closed hour went against it (the context that lifts a 3-min A); left of the version, green buyers / red sellers
+    if (e.flowNow.ok && e.flowNow.net4 != 0) {
+        const bool buyers = e.flowNow.net4 > 0;
+        const std::string ft = std::string("4h ") + (buyers ? "buyers" : "sellers") + (dph_read::pullback(e.flowNow) != 0 ? " - pullback" : "");
+        const int vw = textWidth(std::string("DLT-H ") + DPH_VERSION_TEXT, 8, true);
+        textRight(base - vw - 10, pane.top + 8, ft, buyers ? C_BUY : C_SELL, 8, true);
+    }
     stroke(base, top, base, bottom, C_SLATE, 1);
     const dph::Snapshot& profile = e.snap;
     const int lastBar = static_cast<int>(h.barCount) - 1, full = L_WIDTH - 2;
@@ -849,20 +864,20 @@ bool DeltaProfileHourly::render(HostState& h) {
     std::vector<int> used;
     for (const VisibleNode& v : nodes) {
         const dph::Node& n = *v.node;
-        const bool absorbing = n.state.code == "A" || n.state.code == "A?";
-        std::string label = n.state.code + " " + ratioText(n.ratio);
+        const bool absorbing = false;                     // 1.1.0: the profile shows the ratio only - the reads are the candle marks
+        std::string label = ratioText(n.ratio);
         int width = textWidth(label, L_FONT, true);
-        if (v.edge - 4 - width < pane.left + 2 && absorbing) { label = n.state.code; width = textWidth(label, L_FONT, true); }
         if (v.edge - 4 - width < pane.left + 2) continue;
         int y = v.y;
         if (!used.empty() && y - used.back() < L_FONT + 2) y = used.back() + L_FONT + 2;
         if (y + L_FONT / 2 >= bottom || y - L_FONT / 2 <= top) { if (!absorbing) continue; y = std::max(top + L_FONT / 2 + 1, std::min(bottom - L_FONT / 2 - 1, v.y)); }
-        const COLOR color = n.state.support ? C_SUPPORT : C_RESISTANCE;
+        const COLOR color = C_INK;
         textRight(v.edge - 4, y, label, color, L_FONT, true); used.push_back(y);
         taken.push_back(MarkBox{v.edge - 4 - width, y - L_FONT, v.edge - 4, y + L_FONT});
         if (y != v.y) stroke(v.edge - 2, v.y, v.edge - 2, y, color, 1);
     }
     for (const dph::Zone& z : profile.zones) {
+        if (true) continue;                               // 1.1.0: zones are record only (not tested to add anything)
         if (z.code != "A" && z.code != "A?") continue;   // 2.5.0: absorption only
         int yt = yOf(lastBar, (static_cast<double>(z.high) + 0.5) * profile.tick);
         int yb = yOf(lastBar, (static_cast<double>(z.low) - 0.5) * profile.tick);
@@ -896,8 +911,34 @@ bool DeltaProfileHourly::render(HostState& h) {
     // (1.0.2, Rassul 11:13 "the circles are not being displayed at the bottom where the delta profile has 14.4 and other
     // values") every candidate gets its circle - several on one candle when they sit at different prices - biggest |net| first;
     // one that would overlap a circle / label already drawn is skipped (never overlapping)
+    // 1.1.0: the candle marks are the SAME-CANDLE hourly A's only (A?: +0.33R / +0.39R, not yet proven); the old next-candle A / A? / I
+    // (tested -0.64R) are recorded by the engine and no longer drawn
+    for (const dph::SameA& a : e.sameA) {
+        const std::vector<long long>::const_iterator at = std::lower_bound(h.ends.begin(), h.ends.end(), a.end);
+        if (at == h.ends.end() || *at != a.end) continue;
+        const int bar = static_cast<int>(at - h.ends.begin());
+        if (bar < v0 || bar > v1) continue;
+        const double price = (static_cast<double>(a.lo) + static_cast<double>(a.hi)) * 0.5 * profile.tick;
+        PNT c; c.set(bar, static_cast<float>(price), kBarCenter);
+        PNT n; n.set(bar > 0 ? bar - 1 : bar + 1, static_cast<float>(price), kBarCenter);
+        const int spacing = std::max(1, std::abs(static_cast<int>(n.h) - static_cast<int>(c.h)));
+        const int r = std::max(2, std::min(6, spacing / 2 - 1));
+        const int font = 8; const std::string letter = "A?"; const int w = textWidth(letter, font, true);
+        const int ly = c.v - r - 2 - font / 2 - 1;
+        const MarkBox ring{c.h - r, c.v - r, c.h + r + 1, c.v + r + 1}, text{c.h - w / 2 - 1, ly - font / 2 - 1, c.h + w / 2 + 2, ly + font / 2 + 1};
+        const MarkBox both{std::min(ring.l, text.l), std::min(ring.t, text.t), std::max(ring.r, text.r), std::max(ring.b, text.b)};
+        bool clash = both.l < pane.left || both.r > left - 4 || both.t < top || both.b > bottom;
+        for (const MarkBox& t : taken) if (overlaps(both, t)) clash = true;
+        if (clash) { ++h.suppressed; continue; }
+        const COLOR color = a.bull ? C_SUPPORT : C_RESISTANCE;
+        setPen(color, 2, P_SOLID); CBRUSH brush(color, PAT_HOLLOW); brush.set();
+        RCT o; o.set(coordinate(c.h - r), coordinate(c.v - r), coordinate(c.h + r), coordinate(c.v + r)); o.drawOval(DRAW_OPAQUE);
+        textCentre(c.h, ly, letter, color, font, true);
+        ++h.ringsDrawn; ++h.lettersDrawn; taken.push_back(both);
+    }
     std::vector<std::pair<int, const dph::Latch*> > marks;
     for (const dph::Latch& L : e.latches) {
+        if (true) continue;                               // 1.1.0: record only
         if (L.code != "A" && L.code != "A?" && L.code != "I") continue;
         const std::vector<long long>::const_iterator at = std::lower_bound(h.ends.begin(), h.ends.end(), L.peakEnd);
         if (at == h.ends.end() || *at != L.peakEnd) continue;
@@ -973,6 +1014,6 @@ extern "C" cppExtension* CreateExtension() {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA Delta Profile Hourly - DLT-H");
-    p->setVersion("1.0.4");                        // a literal: gex-build's :ver prints it - the tests check it equals dph::DPH_VERSION
+    p->setVersion("1.1.0");                        // a literal: gex-build's :ver prints it - the tests check it equals dph::DPH_VERSION
     return p;
 }

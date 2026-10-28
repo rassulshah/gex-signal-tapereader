@@ -24,7 +24,7 @@
 #include <map>
 #include <set>
 namespace chain {
-static const char* const VERSION = "1.2.0";   // (1.2.0) + lsLiquidityProfile.Banner (layer 25, display: R / Y / T)
+static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-10-28) + kind H (the hourly flow at each tiered A + the current flow) from lsDeltaProfile.READ, read by the Banner (display); the nightly joins the T-line flow to the scored combiner reads (not a live combiner input yet)   // (1.2.0) + lsLiquidityProfile.Banner (layer 25, display: R / Y / T)
 enum Use { DECIDE = 0, DISPLAY = 1 };
 struct Node { std::string name; int layer; };
 struct Edge { std::string from, to; char kind; Use use; };   // 'from' produces kind, 'to' reads it
@@ -45,6 +45,7 @@ inline std::vector<Producer> producers() {
              {'V', "lsDealerProfile", 15, "key / volume / gamma levels with odds (owns the level list and the ATR used to tag)"},
              {'Q', "lsDealerProfile", 15, "liquidity top 10 with rank (owns the rank)"},
              {'R', "lsDeltaProfile.READ", 20, "READ codes (A)"},
+             {'H', "lsDeltaProfile.READ", 20, "the hourly flow: 4 closed hours vs the last hour at each tiered A (F?) + the current flow (DLT 2.30.0)"},
              {'X', "lsLiquidityProfile.Ex", 20, "Ex / Ex? at key levels"},
              {'L', "lsBigBidAsk", 20, "BO / BD letters (SignalBoard 1.3.0 kind L)"},
              {'K', "lsDeltaProfile.Combiner", 30, "the combined read: turn / swing odds"} };
@@ -67,6 +68,7 @@ inline std::vector<Edge> edges() {
              {"lsDeltaProfile.READ", "lsBookFlow.AtNode", 'Y', DISPLAY},
              {"lsDeltaProfile.READ", "lsLiquidityProfile.Banner", 'R', DISPLAY},   // (1.2.0) the top read = the Delta Profile read (DpBanner.h)
              {"lsDeltaProfile.READ", "lsLiquidityProfile.Banner", 'Y', DISPLAY},
+             {"lsDeltaProfile.READ", "lsLiquidityProfile.Banner", 'H', DISPLAY},   // (1.3.0) the banner's "with 4h flow, pullback ?"
              {"lsTrappedTraders", "lsLiquidityProfile.Banner", 'T', DISPLAY} };    // (1.1.0) the Defense pane's At node row + mark (display only)        // Ex stacks against the BO letter (placement only)
 }
 struct Report { bool ok = true; std::vector<std::string> problems; };
