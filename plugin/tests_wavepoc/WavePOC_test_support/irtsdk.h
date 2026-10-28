@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -23,7 +24,7 @@ enum DRAWTYPE { DRAW_OPAQUE, DRAW_TRANSLUCENT };
 enum RTX_REASON { REASON_DRAW = 5, REASON_PREDRAW = 7 };
 enum { NO_UI = 1 << 12, POST_DRAWING = 1 << 18, OVERLAY = 1 << 19, PRE_DRAWING = 1 << 21, INSTRUMENT_SCALE = 1 << 30 };
 static const unsigned long VAP_REQUIRED = 1UL << 31;
-enum fARRAY { barOpen, barHigh, barLow, barClose };
+enum fARRAY { barOpen, barHigh, barLow, barClose, fEmptyArray };
 enum iARRAY { barDateTime };
 enum pARRAY { barVolumeProfile };
 enum SYMBOL_PROPERTY_ID { SYM_TICKINCR = 171 };
@@ -46,7 +47,9 @@ struct Host {
     std::vector<int> vapMissing;                                   // bars that read "no VAP"
     void* userData = nullptr;
     int parmsMode = 0;   // 0 = hands the saved set, 1 = refuses, 2 = blank (all zero)
-    int revBars = 3; bool zigzag = false;
+    int revBars = 3; bool zigzag = false; bool cobLegs = true;   // (1.3.0) row 3
+    std::map<std::string, std::vector<float> > cust;   // (1.3.0) RTL custom indicators by name (getCustomIndicator)
+    std::vector<int> saved; std::string savedTmpl;     // (1.3.0) saveParameters
     int paneL = 0, paneT = 0, paneR = 1600, paneB = 800, rightMargin = 300;
     RTX_REASON reason = REASON_DRAW;
     bool dialog = false;   // the settings window copy (no bar size)
@@ -58,7 +61,9 @@ struct Host {
 extern Host* current;
 }
 
-class RTARRAY { public: explicit RTARRAY(fARRAY a) : a_(a), count((long)mock::current->f[(int)a].size()) {} float operator[](int n) const { return mock::current->f[(int)a_][(size_t)n]; } private: fARRAY a_; public: long count; };
+class RTARRAY { public: explicit RTARRAY(fARRAY a) : v_(a == fEmptyArray ? nullptr : &mock::current->f[(int)a]), count(v_ ? (long)v_->size() : 0) {} float operator[](int n) const { return (*v_)[(size_t)n]; }
+    RTX_RESULT getCustomIndicator(char* name, int = 1, RTBOOL = false, const char* = nullptr, int = 0) { auto it = mock::current->cust.find(name); if (it == mock::current->cust.end()) return RTX_FAIL; v_ = &it->second; count = (long)v_->size(); return RTX_OK; }
+private: const std::vector<float>* v_; public: long count; };
 class RTARRAYI { public: explicit RTARRAYI(iARRAY) : count((long)mock::current->t.size()) {} RTDATE operator[](int n) const { return mock::current->t[(size_t)n]; } long count; };
 class RTARRAYP {
 public:
@@ -149,7 +154,16 @@ public:
         unsigned char* b = static_cast<unsigned char*>(pStruct); std::memset(b, 0, sz); size_t o = 0; int k = 0;
         for (const char* c = t; *c; ++c, ++k) {
             if (*c == 'I') { o = (o + alignof(int) - 1) / alignof(int) * alignof(int); int v = H.parmsMode == 2 ? 0 : (k == 0 ? H.revBars : 0); if (o + sizeof v > sz) return RTX_FAIL; std::memcpy(b + o, &v, sizeof v); o += sizeof v; }
-            else if (*c == 'B') { o = (o + alignof(RTBOOL) - 1) / alignof(RTBOOL) * alignof(RTBOOL); RTBOOL v = (RTBOOL)(H.parmsMode == 2 ? 0 : (k == 1 && H.zigzag ? 1 : 0)); if (o + sizeof v > sz) return RTX_FAIL; std::memcpy(b + o, &v, sizeof v); o += sizeof v; }
+            else if (*c == 'B') { o = (o + alignof(RTBOOL) - 1) / alignof(RTBOOL) * alignof(RTBOOL); RTBOOL v = (RTBOOL)(H.parmsMode == 2 ? 0 : H.parmsMode == 3 && k == 2 ? 7 : ((k == 1 && H.zigzag) || (k == 2 && H.cobLegs) ? 1 : 0)); if (o + sizeof v > sz) return RTX_FAIL; std::memcpy(b + o, &v, sizeof v); o += sizeof v; }
+            else return RTX_FAIL;
+        }
+        return RTX_OK;
+    }
+    RTX_RESULT saveParameters(void* pStruct, size_t sz, const char* t) {   // (1.3.0) records the values saved (I / B tokens)
+        mock::Host& H = *mock::current; H.saved.clear(); H.savedTmpl = t; const unsigned char* b = static_cast<const unsigned char*>(pStruct); size_t o = 0;
+        for (const char* c = t; *c; ++c) {
+            if (*c == 'I') { o = (o + alignof(int) - 1) / alignof(int) * alignof(int); int v; if (o + sizeof v > sz) return RTX_FAIL; std::memcpy(&v, b + o, sizeof v); H.saved.push_back(v); o += sizeof v; }
+            else if (*c == 'B') { o = (o + alignof(RTBOOL) - 1) / alignof(RTBOOL) * alignof(RTBOOL); RTBOOL v; if (o + sizeof v > sz) return RTX_FAIL; std::memcpy(&v, b + o, sizeof v); H.saved.push_back(v); o += sizeof v; }
             else return RTX_FAIL;
         }
         return RTX_OK;

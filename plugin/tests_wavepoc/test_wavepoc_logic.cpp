@@ -243,7 +243,7 @@ static void testLayout(const Fix& F) {
     }
     CHECK(sc.nodesDrawn <= 5 * sc.wavesDrawn && sc.nodesDrawn == 7, "nodes drawn = 4 + 3, at most 5 per wave");
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.2.0", "header 'Wave POC v1.2.0'");
+    CHECK(header && std::string(wpc::VERSION) == "1.3.0", "header 'Wave POC v1.3.0'");
     // no room right of the last bar: no tags at all (counted)
     wpc::View v2 = v; v2.r = (int)xLast + 20; const wpc::Scene s2 = wpc::layout(E, nullptr, v2);
     int t2 = 0; for (const wpc::Prim& p : s2.p) t2 += p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0;
@@ -358,12 +358,121 @@ static void testBook() {
     std::vector<double> edge = { 9, 1, 1, 1, 1, 1 }; CHECK(wpl::pickRaw(edge, med).size() == 1, "a peak on the edge row counts (raw, as wp8)");
 }
 
+// ---- (1.3.0, Rassul approved 17:27 CT) CoB legs: every CoB leg gets a profile even when it is not a qualifying wave
+// the synthetic down leg of testProvisionalAndOrigin (bar 10 high 125 -> bar 24 low 93, confirmed at bar 27); store average 1000 ticks =
+// it can never qualify as a wave, so anything drawn comes from the CoB rule
+struct Syn { std::vector<wpc::Bar> B; std::vector<std::vector<wpc::VRow> > V; };
+static Syn synth() {
+    Syn s; long long t = 1000000;
+    auto add = [&](long long h, long long l, long long c) { wpc::Bar b; b.t = (t += 180); b.h = h; b.l = l; b.o = (h + l) / 2; b.c = c; s.B.push_back(b); };
+    for (int i = 0; i < 10; ++i) add(100 + 2 * i, 97 + 2 * i, 99 + 2 * i);
+    add(125, 120, 121);
+    for (int j = 0; j < 14; ++j) add(122 - 2 * j, 119 - 2 * j, 119 - 2 * j);
+    for (int j = 0; j < 3; ++j) add(98 + j, 95 + j, 97 + j);
+    for (int j = 0; j < 6; ++j) add(100, 96, 98);         // bars 28..33: inside, touch no node above 100, close below the origin
+    s.V.resize(s.B.size());
+    for (size_t i = 0; i < s.B.size(); ++i) for (long long p = s.B[i].l; p <= s.B[i].h; ++p) s.V[i].push_back({ p, 10 });
+    s.V[14].push_back({ 112, 400 }); s.V[19].push_back({ 101, 250 });
+    return s;
+}
+static void testCobSynthetic() {
+    const Syn Y = synth();
+    wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = Y.V[(size_t)i]; return 1; };
+    auto store = [](wpc::Store& S, long long sz) { for (int k = 0; k < 6; ++k) { S.add(-1, 1000 + k, sz); S.add(1, 2000 + k, sz); } };
+    std::map<int, int> flags; flags[13] = 2;                                         // a bear CoB on bar 13, inside the down leg 10 -> 24
+    // 1) the CoB leg is NOT a qualifying wave: it still gets the profile, at the confirmation (bar 27) - never before, never provisional
+    wpc::Store S; store(S, 1000);
+    wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25; E.cobFn = [&](int k) { auto it = flags.find(k); return it == flags.end() ? 0 : it->second; };
+    bool early = false, prov = false;
+    for (int k = 0; k <= 26; ++k) { E.addBar(Y.B[(size_t)k], vap); wpc::Wave p; early = early || !E.waves.empty(); prov = prov || E.provisional(p, vap); }
+    CHECK(!early && !prov, "CoB leg: nothing drawn before its end pivot is confirmed, no provisional CoB leg");
+    E.addBar(Y.B[27], vap);
+    CHECK(E.waves.size() == 1 && E.waves[0].kind == wpc::K_COB && E.waves[0].i0 == 10 && E.waves[0].i1 == 24 && E.waves[0].conf == 27, "CoB leg 10 -> 24 (not a wave) drawn at its confirmation, kind COB");
+    if (E.waves.size() != 1) return;
+    const wpc::Wave& w = E.waves[0];
+    CHECK(E.C.qual[0] == 0 && E.C.qual[1] == 0 && E.C.cobOnly == 1 && E.C.cobBars[1] == 1, "counted as a CoB leg, not as a qualified wave");
+    CHECK(!w.nodes.empty() && px(w.nodes[0].tick) == px(112) && w.nodes[0].rank == 0 && w.nodes.size() <= 5, "same profile rules: WPOC = the 400-lot row, max 5 nodes");
+    CHECK(w.cobT == Y.B[13].t && E.cobUsed.count(Y.B[13].t) == 1, "the CoB bar time is kept with the leg");
+    bool kindLines = false; int nw = 0;
+    for (const std::string& l : E.out) { if (l.rfind("WAVE,", 0) == 0) { ++nw; kindLines = wpc::splitCsv(l).size() == 21 && l.find(",COB," + std::to_string(Y.B[13].t)) != std::string::npos; } if (l.rfind("NODE,", 0) == 0 && l.substr(l.size() - 4) != ",COB") kindLines = false; }
+    CHECK(nw == 1 && kindLines, "record: WAVE line with kind COB + the CoB time, NODE lines with kind COB");
+    // the stop rules: an opposite-direction CoB leg does NOT stop it, a same-direction CoB leg does; touch / origin as for waves
+    E.confsCob[0].push_back(29); E.confsCob[1].push_back(31);
+    for (int k = 28; k <= 30; ++k) E.addBar(Y.B[(size_t)k], vap);
+    bool openAt30 = true; for (const wpc::Node& n : E.waves[0].nodes) openAt30 = openAt30 && (n.stop == wpc::OPEN || n.tick <= 100);
+    CHECK(openAt30, "a CoB leg of the OTHER direction (bar 29) does not stop its nodes");
+    E.addBar(Y.B[31], vap);
+    bool nwAt31 = true; for (const wpc::Node& n : E.waves[0].nodes) if (n.tick > 100) nwAt31 = nwAt31 && n.stop == wpc::NEWWAVE && n.stopBar == 31;
+    CHECK(nwAt31, "a later CoB leg of the SAME direction (bar 31) stops them (new wave)");
+    bool stopKind = false; for (const std::string& l : E.out) stopKind = stopKind || (l.rfind("STOP,", 0) == 0 && l.find(",new wave,") != std::string::npos && l.substr(l.size() - 4) == ",COB");
+    CHECK(stopKind, "STOP lines carry the kind");
+    // 2) the CoB leg is ALSO a qualifying wave: drawn once, kind BOTH
+    wpc::Store S2; store(S2, 8);
+    wpc::Engine D; D.store = &S2; D.N = 3; D.tick = 0.25; D.cobFn = E.cobFn;
+    for (int k = 0; k <= 27; ++k) D.addBar(Y.B[(size_t)k], vap);
+    CHECK(D.waves.size() == 1 && D.waves[0].kind == wpc::K_BOTH && D.C.qual[1] == 1 && D.C.cobBoth == 1, "CoB leg that is also a qualifying wave: ONE profile, kind BOTH");
+    bool both = false; for (const std::string& l : D.out) both = both || (l.rfind("WAVE,", 0) == 0 && l.find(",BOTH,") != std::string::npos);
+    CHECK(both, "record: kind BOTH");
+    // 3) a bull CoB on a down leg / CoB legs off: nothing
+    std::map<int, int> bull; bull[13] = 1;
+    wpc::Store S3; store(S3, 1000); wpc::Engine U; U.store = &S3; U.N = 3; U.tick = 0.25; U.cobFn = [&](int k) { auto it = bull.find(k); return it == bull.end() ? 0 : it->second; };
+    for (int k = 0; k <= 27; ++k) U.addBar(Y.B[(size_t)k], vap);
+    CHECK(U.waves.empty(), "a bull CoB inside a DOWN leg does not make it a CoB leg");
+    wpc::Store S4; store(S4, 1000); wpc::Engine O; O.store = &S4; O.N = 3; O.tick = 0.25; O.cobFn = E.cobFn; O.cobLegs = false;
+    for (int k = 0; k <= 27; ++k) O.addBar(Y.B[(size_t)k], vap);
+    CHECK(O.waves.empty() && O.C.cobBars[1] == 1, "setting CoB legs OFF: no CoB leg (the CoB bar is still seen)");
+    // 4) restart: the record redraws the COB leg as recorded even with no CoB flags; with CoB legs off it is not drawn
+    std::vector<std::string> lines(E.out.begin(), E.out.end()); int bad = 0; const auto rec = wpc::parseRecord(lines, 3, 0.25, bad);
+    CHECK(bad == 0 && rec.size() == 1 && rec.begin()->second.kind == wpc::K_COB && rec.begin()->second.cobT == Y.B[13].t, "record parses back: kind COB, CoB time");
+    wpc::Store S5; store(S5, 1000); wpc::Engine R; R.store = &S5; R.N = 3; R.tick = 0.25; R.rec = rec;
+    for (int k = 0; k <= 27; ++k) R.addBar(Y.B[(size_t)k], vap);
+    CHECK(R.waves.size() == 1 && R.waves[0].fromRecord && R.waves[0].kind == wpc::K_COB && R.waves[0].nodes[0].tick == w.nodes[0].tick, "restart: the recorded CoB leg is redrawn as recorded (never vanishes)");
+    wpc::Store S6; store(S6, 1000); wpc::Engine R2; R2.store = &S6; R2.N = 3; R2.tick = 0.25; R2.rec = rec; R2.cobLegs = false;
+    for (int k = 0; k <= 27; ++k) R2.addBar(Y.B[(size_t)k], vap);
+    CHECK(R2.waves.empty(), "CoB legs OFF: a recorded COB-only leg is not drawn");
+    // 5) bar by bar with a restart after every bar = one straight pass (no repaint)
+    std::vector<std::string> recL; bool same = true;
+    wpc::Store S7; store(S7, 1000); wpc::Engine A; A.store = &S7; A.N = 3; A.tick = 0.25; A.cobFn = E.cobFn;
+    for (int k = 0; k < (int)Y.B.size(); ++k) {
+        A.addBar(Y.B[(size_t)k], vap); recL.insert(recL.end(), A.out.begin(), A.out.end()); A.out.clear();
+        wpc::Store Sx; store(Sx, 1000); wpc::Engine X; X.store = &Sx; X.N = 3; X.tick = 0.25; X.cobFn = E.cobFn; int b2 = 0; X.rec = wpc::parseRecord(recL, 3, 0.25, b2);
+        for (int j = 0; j <= k; ++j) X.addBar(Y.B[(size_t)j], vap);
+        if (X.waves.size() != A.waves.size()) same = false;
+        for (size_t q = 0; q < X.waves.size() && q < A.waves.size(); ++q) {
+            if (X.waves[q].kind != A.waves[q].kind || X.waves[q].nodes.size() != A.waves[q].nodes.size()) same = false;
+            for (size_t n = 0; n < X.waves[q].nodes.size() && n < A.waves[q].nodes.size(); ++n) same = same && X.waves[q].nodes[n].tick == A.waves[q].nodes[n].tick && X.waves[q].nodes[n].stop == A.waves[q].nodes[n].stop && X.waves[q].nodes[n].stopBar == A.waves[q].nodes[n].stopBar;
+        }
+    }
+    CHECK(same, "CoB legs: a restart after every bar = one straight pass (no repaint)");
+    // 6) old (1.2.0) record lines still parse: 19-field WAVE, 7-field NODE / STOP = kind WAVE; a bad kind is a bad line
+    std::vector<std::string> old = { "WAVE,1.2.0,3,down,100,200,300,a,b,c,1,2,3,4,5,1,10,1,0", "NODE,100,200,0,7700.25,500,3.000", "STOP,100,200,7700.25,touch,400,x",
+                                     "WAVE,1.3.0,3,up,500,600,700,a,b,c,1,2,3,4,5,1,10,1,0,MAYBE,0" };
+    int bo = 0; const auto ro = wpc::parseRecord(old, 3, 0.25, bo);
+    CHECK(bo == 1 && ro.size() == 1 && ro.begin()->second.kind == wpc::K_WAVE && ro.begin()->second.nodes.size() == 1, "1.2.0 record lines parse (kind WAVE); an unknown kind is a bad line");
+}
+// the Oct 22 ES data: the 13:06-13:24 up leg (bars 41 -> 47) is not a qualifying wave; a bull CoB on bar 43 gives it a profile, the two
+// sell waves are unchanged (an up CoB leg does not stop the down waves' nodes)
+static void testCobReal(const Fix& F) {
+    wpc::Store S; seed(S, F.B[0].t, 189, 172);
+    wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25; E.cobFn = [](int k) { return k == 43 ? 1 : 0; };
+    wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = F.V[(size_t)i]; return 1; };
+    run(E, F, (int)F.B.size() - 1, vap);
+    wpc::Store S0; seed(S0, F.B[0].t, 189, 172); wpc::Engine P; P.store = &S0; P.N = 3; P.tick = 0.25; run(P, F, (int)F.B.size() - 1, vap);
+    CHECK(E.waves.size() == 3 && E.waves[2].kind == wpc::K_COB && E.waves[2].i0 == 41 && E.waves[2].i1 == 47 && E.waves[2].dir == 1 && E.waves[2].conf == 50, "Oct 22: the 13:06-13:24 up leg with a bull CoB gets a profile (kind COB, confirmed 3 bars after its high)");
+    bool same = P.waves.size() == 2;
+    for (size_t w = 0; same && w < 2; ++w) for (size_t n = 0; n < P.waves[w].nodes.size(); ++n) same = same && P.waves[w].nodes[n].stop == E.waves[w].nodes[n].stop && P.waves[w].nodes[n].stopBar == E.waves[w].nodes[n].stopBar;
+    CHECK(same && E.waves[0].kind == wpc::K_WAVE && E.waves[1].kind == wpc::K_WAVE, "the two sell waves: kind WAVE, stops unchanged by the up CoB leg");
+    if (E.waves.size() == 3) CHECK(!E.waves[2].nodes.empty() && E.waves[2].nodes.size() <= 5 && E.waves[2].rows.size() > 0, "the CoB leg has its own profile + nodes (" << E.waves[2].nodes.size() << " nodes)");
+    const std::string st = wpc::statusText(E, "ES", 180, "native,ok", "loaded", "loaded", 0, nullptr, false, 0);
+    CHECK(st.find("COB_LEGS,on,CoB bars bull 1 bear 0,legs drawn COB only 1 BOTH (also a wave) 0") != std::string::npos, "status COB_LEGS line");
+}
+
 int main(int argc, char** argv) {
     const char* path = argc > 1 ? argv[1] : "wavepoc_es1022.csv";
     const Fix F = load(path, 0.25);
     CHECK(F.B.size() == 80, "fixture: 80 bars (" << F.B.size() << ")");
     if (F.B.size() != 80) { std::cerr << "no fixture\n"; return 1; }
-    testReference(F); testNoRepaint(F); testN5(F); testProvisionalAndOrigin(); testStoreAndHelpers(); testLayout(F);
+    testReference(F); testNoRepaint(F); testN5(F); testProvisionalAndOrigin(); testStoreAndHelpers(); testLayout(F); testCobSynthetic(); testCobReal(F);
     loadLiq(argc > 2 ? argv[2] : "wavepoc_es1022_liq.csv"); testLiquidityReference(F); testBook();
     std::cout << "test_wavepoc_logic: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;

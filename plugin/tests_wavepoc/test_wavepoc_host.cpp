@@ -55,12 +55,13 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.2.0" && std::string(wpl::VERSION) == "1.1.1", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.3.0" && std::string(wpl::VERSION) == "1.1.1", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();
-    CHECK(mock::declared.size() == 2 && mock::declared[0].type == 2 && mock::declared[0].i == 3 && mock::declared[0].name == "Reversal bars", "row 1: Reversal bars (int, default 3)");
-    CHECK(mock::declared.size() == 2 && mock::declared[1].type == 1 && !mock::declared[1].b && mock::declared[1].name == "Show zigzag", "row 2: Show zigzag (box, default off)");
+    CHECK(mock::declared.size() == 3 && mock::declared[2].type == 1 && mock::declared[2].b && mock::declared[2].name == "CoB legs" && wpset::spec().paramVersion == 2, "(1.3.0) row 3: CoB legs (box, default ON), parameter version 2");
+    CHECK(mock::declared.size() == 3 && mock::declared[0].type == 2 && mock::declared[0].i == 3 && mock::declared[0].name == "Reversal bars", "row 1: Reversal bars (int, default 3)");
+    CHECK(mock::declared.size() == 3 && mock::declared[1].type == 1 && !mock::declared[1].b && mock::declared[1].name == "Show zigzag", "row 2: Show zigzag (box, default off)");
     CHECK(wpIds().ok && wpIds().id[0] == 0 && wpIds().id[1] == 1, "row ids registered");
     CHECK(std::strlen(wpp::TEMPLATE) == (size_t)wpset::K_N, "one template token per row");
 
@@ -73,6 +74,7 @@ int main(int argc, char** argv) {
         CHECK(x.parmsLoad() == RTX_OK && !x.snap_.ok, "window with IRT's own set: IRT shows its values (not overwritten)");
         CHECK(W.userData == nullptr && W2.userData == nullptr, "the window copy keeps no chart state");
     }
+    mock::current = &A;   // (1.3.0 test fix) the window hosts above are out of scope: ASan stack-use-after-scope in x.calc otherwise
     // ---- chart A: ES 3-min, Oct 22, the store seeded with 20 earlier waves (avg 23.625 / 21.5 pts as the reference day)
     seedStore("ES", 180, 3, (long long)F.t[0]);
     chart(A, F, 79); x.calc(0); drawBoth(x, A);
@@ -118,7 +120,7 @@ int main(int argc, char** argv) {
         const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt"), sto = slurp(flex() + "/WavePOC/ES-180.csv");
         size_t nw = 0; for (size_t p = rec.find("\nWAVE,"); p != std::string::npos; p = rec.find("\nWAVE,", p + 1)) ++nw;
         CHECK(nw == 2 && rec.find("NODE,") != std::string::npos && rec.find("STOP,") != std::string::npos, "record: 2 waves with nodes and stops");
-        CHECK(st.rfind("VERSION,1.2.0", 0) == 0 && st.find("qualified up 0 down 2") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
+        CHECK(st.rfind("VERSION,1.3.0", 0) == 0 && st.find("qualified up 0 down 2") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
         CHECK(st.find("touch 5,new wave 2,origin close 0") != std::string::npos, "status: stops by reason");
         wpc::Store chk; std::string why; CHECK(wpc::storeFromText(sto, "ES", 180, 3, 250000000LL, chk, why) && chk.dn.size() == 24, "store saved atomically with the day's 4 down candidates (" << why << ", " << chk.dn.size() << ")");
     }
@@ -233,6 +235,65 @@ int main(int argc, char** argv) {
         x.clear();
         CHECK(mock::dboAlive == alive0, "chart removed: the feed object is destroyed (unsubscribed)");
     }
+
+    // ---- (1.3.0, Rassul approved 17:27 CT) CoB legs: the RTL cob_bull_3m_1b / cob_bear_3m_1b (the Cob marks' source) through the host
+    {
+        // a saved set of parameter version 1 (Reversal bars 5, zigzag on): parmsInit keeps both, CoB legs on; version 2 = untouched
+        mock::Host P1; P1.revBars = 5; P1.zigzag = true; P1.cobLegs = false; mock::current = &P1;
+        CHECK(x.parmsInit(1) == RTX_OK && P1.savedTmpl == "IBB" && P1.saved.size() == 3 && P1.saved[0] == 5 && P1.saved[1] == 1 && P1.saved[2] == 1, "parmsInit(1): his N 5 / zigzag kept, CoB legs = on");
+        P1.saved.clear(); CHECK(x.parmsInit(2) == RTX_OK && P1.saved.empty(), "parmsInit(2): his set is left alone");
+        mock::Host Bad = P1; Bad.parmsMode = 3; Bad.userData = nullptr; mock::current = &Bad; chart(Bad, F, 79); x.calc(0); WState* sb = static_cast<WState*>(Bad.userData);
+        CHECK(sb && sb->parms.find("CoB legs box not 0/1") != std::string::npos && sb->cobLegs, "a garbled CoB box -> the defaults (CoB legs on)");
+        x.clear();
+
+        wipe(); seedStore("ES", 180, 3, (long long)F.t[0]);
+        auto flags = [&](mock::Host& H, int upto) { H.cust["cob_bull_3m_1b"].assign((size_t)upto + 1, 0.0f); H.cust["cob_bear_3m_1b"].assign((size_t)upto + 1, 0.0f); if (upto >= 43) H.cust["cob_bull_3m_1b"][43] = 1.0f; };
+        // bar by bar: the up leg 13:06-13:24 (bars 41 -> 47, NOT a qualifying wave) holds a bull CoB on bar 43
+        mock::Host K; mock::current = &K; int beforeConf = -1;
+        for (int k = 1; k <= 79; ++k) {
+            chart(K, F, k); flags(K, k); x.calc(0); if (k % 5 == 0) drawBoth(x, K);
+            WState* s = static_cast<WState*>(K.userData);
+            if (s && beforeConf < 0) for (const wpc::Wave& w : s->E.waves) if (w.kind == wpc::K_COB) beforeConf = s->E.lastBar();
+        }
+        WState* sk = static_cast<WState*>(K.userData);
+        CHECK(sk && sk->E.waves.size() == 3 && sk->E.waves[2].kind == wpc::K_COB && sk->E.waves[2].i0 == 41 && sk->E.waves[2].i1 == 47, "CoB leg 41 -> 47 (not a wave) gets a profile through the host (" << (sk ? sk->E.waves.size() : 0) << " legs)");
+        CHECK(beforeConf == 50, "drawn only once its end pivot is confirmed (bar 50 = 3 bars after the 13:24 high), not before (" << beforeConf << ")");
+        if (sk && sk->E.waves.size() == 3) CHECK(!sk->E.waves[2].nodes.empty() && sk->E.waves[0].kind == wpc::K_WAVE && sk->E.waves[1].kind == wpc::K_WAVE, "its own nodes; the two sell waves stay kind WAVE");
+        {   // drawn at the leg START (bar 41), its WPOC amber
+            mock::current = &K; K.drawn.clear(); K.reason = REASON_PREDRAW; x.draw();
+            PNT p; p.set(41, 0.0f, kBarCenter); const int x0 = p.h - (int)std::lround(10 * 0.45); int at = 0, amb = 0;
+            for (const mock::Prim& q : K.drawn) if (q.k == 'F' && std::abs(q.x0 - x0) <= 1) { ++at; amb += q.col == 0xC88C14; }
+            CHECK(at > 5 && amb == 1, "the CoB leg's profile is drawn at its start (bar 41) with one amber WPOC (" << at << " rows, " << amb << ")");
+        }
+        sk->statusMs = -1; mock::current = &K; x.calc(0);   // the status is written at most once a second: force the latest one
+        const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt");
+        CHECK(rec.find(",COB," + std::to_string((long long)F.t[43]) + "\n") != std::string::npos && rec.find("\nNODE,") != std::string::npos, "record: the WAVE line has kind COB + the CoB bar time");
+        CHECK(rec.find(",WAVE,0\n") != std::string::npos && rec.find("NODE,") != std::string::npos && rec.find(",COB\n") != std::string::npos, "record: waves = kind WAVE, the CoB leg's NODE / STOP lines = COB");
+        CHECK(st.find("COB_LEGS,on,CoB bars bull 1 bear 0,legs drawn COB only 1") != std::string::npos && st.find("COB_SOURCE,RTL cob_bull_3m_1b ok, cob_bear_3m_1b ok") != std::string::npos && st.find("CoB legs on") != std::string::npos, "status: COB_LEGS + COB_SOURCE + SETTINGS lines");
+        // restart (same files, no RTL any more): the recorded CoB leg comes back as recorded, never written twice
+        mock::current = &K; x.clear();
+        mock::Host R2; mock::current = &R2; chart(R2, F, 79); x.calc(0); WState* sr = static_cast<WState*>(R2.userData);
+        CHECK(sr && sr->E.waves.size() == 3 && sr->E.waves[2].kind == wpc::K_COB && sr->E.waves[2].fromRecord && sr->cobSrc.find("NOT FOUND") != std::string::npos, "restart without the RTL: the CoB leg is redrawn from the record; status says NOT FOUND");
+        const std::string rec2 = slurp(flex() + "/WavePOC/ES-180-nodes.csv"); size_t nw = 0; for (size_t p = rec2.find("\nWAVE,"); p != std::string::npos; p = rec2.find("\nWAVE,", p + 1)) ++nw;
+        CHECK(nw == 3, "3 WAVE lines (2 waves + 1 CoB leg), none written twice (" << nw << ")");
+        x.clear();
+        // the setting off: no CoB leg (recorded COB legs not drawn either); the waves unchanged
+        mock::Host Off; Off.cobLegs = false; mock::current = &Off; chart(Off, F, 79); flags(Off, 79); x.calc(0); WState* so = static_cast<WState*>(Off.userData);
+        CHECK(so && !so->cobLegs && so->E.waves.size() == 2 && so->cobSrc == "CoB legs off (not read)", "CoB legs unticked: only the 2 waves");
+        // the CoB on a down leg's bar with only the bull flag: not a CoB leg (direction must match)
+        x.clear(); wipe(); seedStore("ES", 180, 3, (long long)F.t[0]);
+        mock::Host Dn; mock::current = &Dn; chart(Dn, F, 79); Dn.cust["cob_bull_3m_1b"].assign(80, 0.0f); Dn.cust["cob_bull_3m_1b"][58] = 1.0f; x.calc(0);
+        WState* sd = static_cast<WState*>(Dn.userData);
+        CHECK(sd && sd->E.waves.size() == 2, "a bull CoB inside a down leg (13:48-14:03) draws nothing");
+        // an RTL shorter than the chart (shifted to the right end, as lsCobImpulse) - the CoB lands on the same bar
+        x.clear(); wipe(); seedStore("ES", 180, 3, (long long)F.t[0]);
+        mock::Host Sh; mock::current = &Sh; chart(Sh, F, 79); Sh.cust["cob_bull_3m_1b"].assign(60, 0.0f); Sh.cust["cob_bull_3m_1b"][43 - 20] = 1.0f; x.calc(0);
+        WState* ss2 = static_cast<WState*>(Sh.userData);
+        CHECK(ss2 && ss2->E.waves.size() == 3 && ss2->E.waves[2].cobT == (long long)ss2->E.B[43].t, "an RTL array shorter than the chart is aligned to its last bar");
+        x.clear();
+    }
+    mock::current = &A; x.clear();   // (1.3.0 test fix) chart A removed at the end (LeakSanitizer)
+    CHECK(A.userData == nullptr, "chart A removed: its state is freed");
     wipe(); rmdir(home.c_str());
     std::cout << "test_wavepoc_host: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;

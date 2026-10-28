@@ -282,3 +282,9 @@ Rules (every new or changed indicator):
 - (2026-10-28 DP 2.36.0) Mixed index vectors: DealerProfile's tag rows pushed (size_t)-1 into `drawn` and the next tag's loop indexed topq[drawn[d]]
   with it (heap overflow, only with 2+ tag-only rows). Any vector that mixes real indices with a sentinel must skip the sentinel at EVERY read.
   Proof: test_dealerprofile_2360 under ASan (HELD + tag-only rows) - was a heap-buffer-overflow, now 93/0.
+- (2026-10-28 WavePOC 1.3.0, CoB legs) (1) A NOTES line "host 49/0" was a run WITHOUT the sanitizers: under ASan the 1.2.0 host suite
+  read a destroyed settings-window host (mock::current left pointing at a scoped Host - stack-use-after-scope) and never removed chart A
+  (LeakSanitizer). Always run the host suite with -fsanitize=address,undefined and reset mock::current after a scoped host. Proof:
+  test_wavepoc_host 66/0 under ASan/UBSan. (2) A signal another plugin already draws (CoB) is taken from the SAME native source (the RTL
+  cob_bull_3m_1b / cob_bear_3m_1b via getCustomIndicator, as lsCobImpulse) - not re-implemented - so the marks and the new use cannot
+  drift; each bar's flags are captured once when the bar is fed (no repaint). Proof: test_wavepoc_logic testCobSynthetic / testCobReal.
