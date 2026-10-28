@@ -543,8 +543,13 @@ int main()
                 DealerProfile Y; prime(Y, a, "ES", &lv);
                 { CUR = &a; Y.loadHostState(); t10::Params P0; P0.persistMs = 0; P0.n = 3; Y.cs.zBid = t10::Board(P0); Y.cs.zAsk = t10::Board(P0); Y.cs.zInit = true; Y.saveHostState(); }
                 std::vector<sb::Fact> ZZ = { zf(offerPx, -1, 900), zf(bidPx, 1, 300) };
-                sb::postFacts('B', a.sym, a.spb, MOCK_CHART, dpNowMs(), ZZ); drawOn(Y, a, MOCK_CHART); Ops = drawOn(Y, a, MOCK_CHART); cc = colsOf(Y, a); };
+                sb::postFacts('B', a.sym, a.spb, MOCK_CHART, dpNowMs(), ZZ); drawOn(Y, a, MOCK_CHART);
+                { CUR = &a; Y.loadHostState(); Y.cs.liqLastMs = -1; Y.cs.lpMedMs = -1; Y.saveHostState(); }   // the liqlevels file: the throttle (tested below) lets this draw write
+                Ops = drawOn(Y, a, MOCK_CHART); cc = colsOf(Y, a); };
             auto snap = [&](double p) { return std::round(p * 4.0) / 4.0; };
+            put("LiquidityProfile.status-ES-180.txt", "VERSION,0.67.0\nLIQ_CANDIDATES,rule zone >= 2x,median bid 100 / offer 300 lots,real orders near 9\n");   // (2.36.0) the LP medians for the ratio
+            const std::string LQ = fl("DealerProfile\\ES-liqlevels.csv");
+            auto rowsOf = [&](const std::string& txt) { std::vector<std::vector<std::string> > out; std::istringstream in(txt); std::string l; while (std::getline(in, l)) { std::vector<std::string> f; std::string c; std::istringstream ls(l); while (std::getline(ls, c, ',')) f.push_back(c); if (!l.empty() && l.back() == ',') f.push_back(""); out.push_back(f); } return out; };
             std::vector<Op> R1; DealerProfile::ColsState c1;
             run(snap(Lr + 0.5 * atr), snap(Ls - 0.5 * atr), R1, c1);
             const Op* pr = nullptr; const Op* ch = chipOn(R1, Lr, c1, &pr); const Op* ps = nullptr; const Op* cs2 = chipOn(R1, Ls, c1, &ps);
@@ -567,6 +572,38 @@ int main()
             std::vector<Op> R3; DealerProfile::ColsState c3b;   // more than 1 ATR beyond: no chip
             run(snap(Lr + 1.6 * atr), snap(Ls - 1.6 * atr), R3, c3b);
             const Op* p3 = nullptr; check(!chipOn(R3, Lr, c3b, &p3) && p3 && !chipOn(R3, Ls, c3b, nullptr), "(2.36.0) a zone more than 1 ATR beyond gives no chip (badge unchanged)");
+            {   // (2.36.0, 16:51 CT) lsFlexLevels\DealerProfile\<MKT>-liqlevels.csv - format, rows = the badges, the chip's match, NONE rows, atomic, throttle
+                run(snap(Lr + 0.5 * atr), snap(Ls - 0.5 * atr), R1, c1);
+                const std::string t1 = slurp(LQ); const auto F = rowsOf(t1);
+                bool fmt = !F.empty() && F[0].size() == 2 && F[0][0] == "VERSION" && F[0][1] == "1"; for (size_t i = 1; i < F.size(); ++i) fmt = fmt && F[i].size() == 13 && F[i][1] == "ES" && !F[i][0].empty() && std::atoll(F[i][0].c_str()) > 1700000000000LL;
+                check(fmt && (int)F.size() - 1 == c1.liqRows && c1.liqRows >= 4, "(2.36.0) liqlevels.csv: VERSION,1 + one 13-field row per badge (" + std::to_string(F.size() - 1) + " rows / " + std::to_string(c1.liqRows) + ")");
+                const std::string pR = dpaudit::priceText("ES", Lr), pS = dpaudit::priceText("ES", Ls); const double oR = snap(Lr + 0.5 * atr), bS = snap(Ls - 0.5 * atr);
+                const std::vector<std::string>* rr = nullptr; const std::vector<std::string>* rs = nullptr; int none = 0;
+                for (size_t i = 1; i < F.size(); ++i) { if (F[i][3] == pR) rr = &F[i]; if (F[i][3] == pS) rs = &F[i]; if (F[i][4] == "NONE") { ++none; if (!(F[i][5] == "0" && F[i][7] == "0" && F[i][8] == "0" && F[i][9].empty())) none = -99; } }
+                check(rr && (*rr)[4] == "ASK" && (*rr)[5] == "900" && (*rr)[6] == "3.00" && (*rr)[7] == "1" && (*rr)[8] == "1" && (*rr)[9] == dpaudit::priceText("ES", oR - 0.25) && (*rr)[10] == dpaudit::priceText("ES", oR + 0.25) && (*rr)[11] == std::to_string(std::llround((oR - Lr) / 0.25)),
+                      "(2.36.0) resistance row: ASK 900 lots, 3.00x the LP offer median, rank 1, king, zone +-1 tick, distance in ticks" + (rr ? " (" + (*rr)[4] + " " + (*rr)[5] + " " + (*rr)[6] + " r" + (*rr)[7] + " " + (*rr)[9] + "-" + (*rr)[10] + " d" + (*rr)[11] + ")" : std::string(" (missing)")));
+                check(rs && (*rs)[4] == "BID" && (*rs)[5] == "300" && (*rs)[6] == "3.00" && (*rs)[7] == "2" && (*rs)[8] == "0" && (*rs)[11] == std::to_string(std::llround((Ls - bS) / 0.25)), "(2.36.0) support row: BID 300, 3.00x, rank 2, not king");
+                check(none >= 1, "(2.36.0) levels with no liquidity 0..1 ATR beyond: side NONE, lots 0, rank 0, king 0, empty zone (" + std::to_string(none) + ")");
+                { bool namesOk = false; for (size_t i = 1; i < F.size(); ++i) if (F[i][2].find('/') != std::string::npos) namesOk = true; check(namesOk, "(2.36.0) merged rows: names '/' separated"); }
+                std::ifstream tf((LQ + ".tmp").c_str()); check(!tf.good(), "(2.36.0) atomic: no .tmp left behind");
+                check(slurp(fl("DealerProfile.status-ES-180.txt")).find("LIQLEVELS,") != std::string::npos, "(2.36.0) status LIQLEVELS line");
+                run(snap(Lr + 1.6 * atr), snap(Ls - 1.6 * atr), R3, c3b);
+                { const auto G = rowsOf(slurp(LQ)); const std::vector<std::string>* r3 = nullptr; for (size_t i = 1; i < G.size(); ++i) if (G[i][3] == pR) r3 = &G[i];
+                  check(r3 && (*r3)[4] == "NONE" && (*r3)[7] == "0", "(2.36.0) zone > 1 ATR beyond: the level's row is NONE / rank 0"); }
+                // throttle: same rows = no rewrite inside 60 s; changed rows = rewrite only after 5 s
+                DealerProfile Y; prime(Y, a, "ES", &lv);
+                { CUR = &a; Y.loadHostState(); t10::Params P0; P0.persistMs = 0; P0.n = 3; Y.cs.zBid = t10::Board(P0); Y.cs.zAsk = t10::Board(P0); Y.cs.zInit = true; Y.cs.liqLastMs = -1; Y.saveHostState(); }
+                std::vector<sb::Fact> ZZ = { zf(oR, -1, 900), zf(bS, 1, 300) };
+                sb::postFacts('B', a.sym, a.spb, MOCK_CHART, dpNowMs(), ZZ); drawOn(Y, a, MOCK_CHART); drawOn(Y, a, MOCK_CHART);
+                const int w0 = colsOf(Y, a).liqWrites; drawOn(Y, a, MOCK_CHART); drawOn(Y, a, MOCK_CHART);
+                check(w0 >= 1 && colsOf(Y, a).liqWrites == w0, "(2.36.0) throttle: unchanged rows are not rewritten on every repaint (" + std::to_string(w0) + " / " + std::to_string(colsOf(Y, a).liqWrites) + ")");
+                ZZ[0].val = 950; sb::postFacts('B', a.sym, a.spb, MOCK_CHART, dpNowMs(), ZZ); drawOn(Y, a, MOCK_CHART);
+                check(colsOf(Y, a).liqWrites == w0, "(2.36.0) throttle: a change inside 5 s waits");
+                { CUR = &a; Y.loadHostState(); Y.cs.liqLastMs -= 6000; Y.saveHostState(); } drawOn(Y, a, MOCK_CHART);
+                check(colsOf(Y, a).liqWrites == w0 + 1 && slurp(LQ).find(",ASK,950,") != std::string::npos, "(2.36.0) throttle: the change is written after 5 s");
+                { CUR = &a; Y.loadHostState(); Y.cs.liqLastMs -= 61000; Y.saveHostState(); } drawOn(Y, a, MOCK_CHART);
+                check(colsOf(Y, a).liqWrites == w0 + 2, "(2.36.0) throttle: rewritten once a minute even when unchanged");
+            }
             sb::postFacts('B', a.sym, a.spb, MOCK_CHART, dpNowMs(), ZB); drawOn(Z, a, MOCK_CHART);
         }
         {   // viewport independence

@@ -279,6 +279,7 @@ public:
         int needPx = 0, ppb = 0, marginRead = -1, marginAsked = -1, setOk = 0, setFail = 0, gapSeen = -1;
         int badgesShown = 0, badgesDropped = 0, nodeTexts = 0, nodeTextsHidden = 0, nodesTiny = 0;
         double vwapPx = 0; int vwapBadges = 0, keysFiltered = 0, ttHeldClipped = 0;   // (2.34.0)
+        long long liqLastMs = -1, lpMedMs = -1; std::string liqLastBody, liqWhy = "not yet"; int liqWrites = 0, liqRows = 0; double lpMedB = 0, lpMedA = 0;   // (2.36.0) <MKT>-liqlevels.csv
         int keysW = 0, keysL = 0, keysTop = 0, keysMoved = 0, keysOddsCut = 0, keysRankChips = 0; bool keysDocked = false, keysPosted = false; std::string keysSym, keysChart; long keysSpb = 0;   // (2.33.0) the Key Levels column
         long long firstMs = -1;
         dcol::LiqLevels liqL; long long liqLStamp = -2, liqLChecked = -1; std::string liqLWhy;   // (11:39 CT) the per-level liquidity file
@@ -544,6 +545,7 @@ int DealerProfile::destroy(void)
 // was keyed by the contract root, so every roll reset the settings - it is migrated once and left in place for older readers).
 static ss::Ids& dpIds() { static ss::Ids I; return I; }   // the row ids IRT gave the table (one DLL = one parameter list, written once in setup)
 static std::string dpFlexDir() { const char* up = getenv("USERPROFILE"); return std::string(up ? up : "C:") + "\\InvestorRT\\rtx\\lsFlexLevels\\"; }
+static std::string dpLiqPath(const std::string& mkt) { return dpFlexDir() + "DealerProfile\\" + mkt + "-liqlevels.csv"; }   // (2.36.0)
 static std::string dpSettingsPath() { return dpFlexDir() + "DealerProfile.settings.txt"; }
 static long long dpNowMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static Settings dpFromValues(const ss::Values& V)
@@ -1180,6 +1182,7 @@ void DealerProfile::writeStatus(const char* what)
       << ",candidates " << (cs.zMode ? "ZONES from lsLiquidityProfile (B code 2: >= 2.0x the median real level, +-1 tick zones, own distribution, 3 ATR)" : "old B list (no code-2 facts)") << " " << cs.zCands << ",shown bids " << cs.zShownB << " / offers " << cs.zShownA << " (max " << DP_SIDEN << " a side)"
       << ",shown top " << (cs.zMode ? 2 * DP_SIDEN : DP_TOPN) << " (both sides),steady Top10Stable " << t10::VERSION << " (in 30 s + 1.20x, out 10 s, swap 1.25x),book levels on screen " << cs.qBoard << ",ranked over the whole posted book (not the visible pane) " << cs.qBoard << " levels,off screen in the top 10 " << cs.qOff << ",king off screen (edge marker) " << cs.qKingOff << ",moving / quoting dimmed ~ (LevelFade " << lfd::VERSION << ", never dropped) " << cs.qQuoting << ",king ~ " << cs.qMovedMarks << ",tracked " << cs.top10.tracked() << ",place " << (cb::LEVELS_LEFT ? "left" : cb::LEVELS_OUTER ? "right, after Delta (rank | bar | lots)" : "right") << "\n"
       << "KEYS_COLUMN,left edge (ColumnBoard " << cb::VERSION << "),x " << cs.keysL << ",width " << cs.keysW << ",HOD/LOD table " << (cs.keysDocked ? "docked bottom-left, right of the column" : "not docked") << ",VWAP " << cs.vwapPx << " (badges " << cs.vwapBadges << "),filtered (gamma / VWAP bands) " << cs.keysFiltered << ",layout odds left | name + price right" << ",badges from y " << cs.keysTop << ",moved (tick) " << cs.keysMoved << ",odds cut " << cs.keysOddsCut << ",liquidity rank chips " << cs.keysRankChips << ",in the price area 0\n"
+      << "LIQLEVELS," << dpLiqPath(mkt) << ",rows " << cs.liqRows << ",writes " << cs.liqWrites << "," << cs.liqWhy << ",LP median bid " << cs.lpMedB << " / offer " << cs.lpMedA << "\n"
       << "LEVELS_COLUMN," << (DP_LINES ? "lines (LevelsColumn " : DP_LVC ? "combined (LevelsColumn " : "off (") << lvc::VERSION << ")" << ",rows " << cs.lvcRows << ",merged rows " << cs.lvcMerged << ",with liquidity " << cs.lvcLiq << ",GEX rows " << cs.lvcGex << ",chips cut " << cs.lvcChipsCut << ",orders " << cs.lmtO.size() << ",order file " << (cs.lmtWhy.empty() ? std::string("ok") : cs.lmtWhy) << ",dealer bars " << (DP_BARS ? "on" : "off") << ",off-screen " << (offUp.have ? offUp.name : std::string("-")) << " / " << (offDn.have ? offDn.name : std::string("-")) << "\n"
       << "LEVEL_PCT," << (cfg.levelPct ? "on" : "off (setting)") << ",file " << (cs.lpWhy.empty() ? std::string("ok") : cs.lpWhy) << ",rows " << cs.lpT.rows.size()
       << ",built " << (cs.lpT.built.empty() ? std::string("-") : cs.lpT.built) << ",shown " << cs.lpShown << ",green " << cs.lpGreen << ",no row " << cs.lpNoRow << ",no room " << cs.lpNoRoom << "\n"
@@ -2166,6 +2169,56 @@ void DealerProfile::flushColumn(const Settings& S)
 // bids, white = #1]. Levels within the merge tolerance share one line and badge. A badge that would overlap another slides sideways
 // on its own line (the line never moves). The LIQUIDITY column on the right: rank + the big limit orders within 0.5 ATR of the level,
 // top 10 ranked, on the level's own line. Off-screen nearest levels as text at the top / bottom of the price area. No hovers.
+// (2.36.0) <MKT>-liqlevels.csv: the rows (without the time) - one per level badge in the Key Levels column
+struct DpLiqRow { std::string names; double px = 0; int side = 0; long long lots = 0; double ratio = 0; int rank = 0; bool king = false; double zlo = 0, zhi = 0; long long dist = 0; };
+static std::string dpLiqBody(const std::string& mkt, const std::vector<DpLiqRow>& rows, double atr, int dec)
+{
+    std::string o; char b[512];
+    for (const DpLiqRow& r : rows) {
+        std::string nm = r.names; for (char& c : nm) if (c == ',' || c == '\n' || c == '\r') c = ' ';
+        const std::string px = dpaudit::priceText(mkt, r.px);
+        if (r.side == 0) snprintf(b, sizeof b, ",%s,%s,%s,NONE,0,0.00,0,0,,,,%.*f\n", mkt.c_str(), nm.c_str(), px.c_str(), dec + 2, std::isfinite(atr) ? atr : 0.0);
+        else snprintf(b, sizeof b, ",%s,%s,%s,%s,%lld,%.2f,%d,%d,%s,%s,%lld,%.*f\n", mkt.c_str(), nm.c_str(), px.c_str(), r.side > 0 ? "BID" : "ASK", r.lots,
+                      std::isfinite(r.ratio) ? r.ratio : 0.0, r.rank, r.king ? 1 : 0, dpaudit::priceText(mkt, r.zlo).c_str(), dpaudit::priceText(mkt, r.zhi).c_str(), r.dist, dec + 2, std::isfinite(atr) ? atr : 0.0);
+        o += b; }
+    return o;
+}
+// the time goes in front of every row; VERSION,1 first
+static std::string dpLiqText(const std::string& body, long long tCtMs)
+{
+    std::string o = "VERSION,1\n"; const std::string t = std::to_string(tCtMs); size_t a = 0;
+    while (a < body.size()) { const size_t e = body.find('\n', a); o += t + body.substr(a, (e == std::string::npos ? body.size() : e + 1) - a); if (e == std::string::npos) break; a = e + 1; }
+    return o;
+}
+// written once a minute, or when the rows change (at most every 5 s); atomic (.tmp -> replace); a failed write keeps the old file
+static bool dpLiqWrite(long long& lastMs, std::string& lastBody, std::string& why, int& writes, const std::string& mkt, const std::string& body, long long tCtMs, long long nowMs)
+{
+    if (mkt.empty()) { why = "no market"; return false; }
+    const bool changed = body != lastBody;
+    if (lastMs >= 0 && nowMs >= lastMs && !((changed && nowMs - lastMs >= 5000) || nowMs - lastMs >= 60000)) return false;
+    const std::string dir = dpFlexDir() + "DealerProfile";
+#ifdef _WIN32
+    CreateDirectoryA(dir.c_str(), NULL);
+#endif
+    const std::string path = dpLiqPath(mkt), tmp = path + ".tmp";
+    bool ok = false; { std::ofstream f(tmp.c_str(), std::ios::binary | std::ios::trunc); if (f) { const std::string t = dpLiqText(body, tCtMs); f.write(t.data(), (std::streamsize)t.size()); f.flush(); ok = (bool)f; } }
+    lastMs = nowMs;   // a failure also waits (never retried on every repaint)
+    if (ok && dpReplaceFile(tmp, path)) { lastBody = body; ++writes; why = "ok"; return true; }
+    std::remove(tmp.c_str()); why = "write failed"; return false;
+}
+// the median real level per side from lsLiquidityProfile's status line LIQ_CANDIDATES ("median bid X / offer Y lots"), read at most every 10 s
+static void dpLiqMedians(double& mb, double& ma, long long& at, const std::string& mkt, long spb, long long nowMs)
+{
+    if (at >= 0 && nowMs >= at && nowMs - at < 10000) return;
+    at = nowMs;
+    std::ifstream f((dpFlexDir() + "LiquidityProfile.status-" + mkt + "-" + std::to_string(spb) + ".txt").c_str(), std::ios::binary);
+    if (!f) { mb = ma = 0; return; }
+    std::string t(65536, '\0'); f.read(&t[0], (std::streamsize)t.size()); t.resize((size_t)f.gcount());
+    const size_t p = t.find("median bid "); if (p == std::string::npos) { mb = ma = 0; return; }
+    char* e = nullptr; const double b = std::strtod(t.c_str() + p + 11, &e);
+    const size_t q = t.find(" / offer ", p); double a = 0; if (q != std::string::npos && q < p + 64) a = std::strtod(t.c_str() + q + 9, nullptr);
+    mb = std::isfinite(b) && b > 0 ? b : 0; ma = std::isfinite(a) && a > 0 ? a : 0;
+}
 void DealerProfile::flushLines(const Settings& S)
 {
     cs.badgesShown = cs.badgesDropped = 0; cs.lvcRows = cs.lvcLiq = cs.lvcMerged = cs.lvcChipsCut = 0; cs.qMovedMarks = 0;
@@ -2251,6 +2304,7 @@ void DealerProfile::flushLines(const Settings& S)
     // never inside (his rule, 2026-10-27). No 'B' producer = the 2.29.0 ranking from the level-tagged order file (said so in the status).
     struct TopQ { double px; long long lots; bool bid; int rank; int y; int moves = 0; bool dim = false; bool on = true; };
     std::vector<TopQ> topq;
+    std::vector<int> rowQ(rows.size(), -1);   // (2.36.0) each row's matched liquidity level (index into topq) for the badge chip + liqlevels.csv
     {   std::vector<sb::Fact> B; const long long nowMs = (long long)time(nullptr) * 1000LL;
         cs.qFromBoard = sb::readFacts('B', cs.sym, cs.spb, cs.chart, dpNowMs(), B, false) && !B.empty(); (void)nowMs;
         if (cs.qFromBoard) {
@@ -2293,11 +2347,12 @@ void DealerProfile::flushLines(const Settings& S)
                 q.on = !(p.v - bh / 2 <= pane.top + bh + 4 || p.v + bh / 2 >= pane.bottom - 4); if (!q.on) ++cs.qOff;
                 topq.push_back(q); }
             { std::vector<std::pair<double, int> > sh; for (const TopQ& q : topq) sh.push_back(std::make_pair(q.px, q.bid ? 1 : -1)); ttUpdate(sh, tick); }   // (2.32.0)
+            if (rowQ.size() < rows.size()) rowQ.assign(rows.size(), -1);
             for (size_t r : shown) {
                 lvc::Row& R = rows[r]; R.rank = 0;
                 const bool above = R.px > lastPx; const double reach = (std::isfinite(atr) && atr > 0) ? atr : 4 * tick;
                 for (const TopQ& q : topq) { const bool beyond = above ? (q.px >= R.px - tick * 1e-6 && q.px <= R.px + reach) : (q.px <= R.px + tick * 1e-6 && q.px >= R.px - reach);
-                    if (beyond && (R.rank == 0 || q.rank < R.rank)) { R.rank = q.rank; R.bid = q.bid; } }
+                    if (beyond && (R.rank == 0 || q.rank < R.rank)) { R.rank = q.rank; R.bid = q.bid; rowQ[r] = (int)(&q - &topq[0]); } }
             }
         }
         cs.qShown = (int)topq.size();
@@ -2418,6 +2473,21 @@ void DealerProfile::flushLines(const Settings& S)
     // (2.32.0) HELD (Rassul 11:08 / 11:27 CT "the HELD lines that show held and the line"): a shown level that HELD after its touch - its line
     // BRIGHT (side colour, 2 px) from the touch candle to the HELD candle and the word HELD right of the HELD candle; never over a candle or a
     // level badge (steps right a candle at a time, else no word - the line stays); final: drawn from the latched record, never repainted
+    // (2.36.0, Rassul 16:51 CT approved) lsFlexLevels\DealerProfile\<MKT>-liqlevels.csv: one row per level badge shown in the Key Levels
+    // column with the same liquidity match as its rank chip (the shown zones from the level out to 1 ATR beyond it, one-sided) - the data
+    // for the MenthorQ Reader's liquidity section. Written once a minute, or on a change (at most every 5 s); atomic; small (<= ~20 rows).
+    {   std::vector<DpLiqRow> lr;
+        dpLiqMedians(cs.lpMedB, cs.lpMedA, cs.lpMedMs, mkt, cs.spb, dpNowMs());
+        for (const BG& g : bgs) { if (!g.on) continue; const lvc::Row& R = rows[g.r]; DpLiqRow x; x.px = R.px;
+            for (size_t ci = 0; ci < R.chips.size(); ++ci) x.names += (ci ? "/" : "") + R.chips[ci].text;
+            const int qi = (cs.qFromBoard && g.r < rowQ.size()) ? rowQ[g.r] : -1;
+            if (qi >= 0 && (size_t)qi < topq.size()) { const TopQ& q = topq[(size_t)qi]; x.side = q.bid ? 1 : -1; x.lots = q.lots; x.rank = q.rank; x.king = q.rank == 1;
+                x.zlo = q.px - tick; x.zhi = q.px + tick; x.dist = tick > 0 ? std::llround(std::fabs(q.px - R.px) / tick) : 0;
+                const double med = q.bid ? cs.lpMedB : cs.lpMedA; x.ratio = med > 0 ? (double)q.lots / med : 0; }
+            lr.push_back(x); }
+        cs.liqRows = (int)lr.size();
+        dpLiqWrite(cs.liqLastMs, cs.liqLastBody, cs.liqWhy, cs.liqWrites, mkt, dpLiqBody(mkt, lr, atr, dec), ctNowSec() * 1000LL, dpNowMs());
+    }
     // (2.36.0, Rassul 16:26 CT: remove the Liquidity HELD lines) no HELD line / word in the price area any more; HELD shows as the tag in the
     // liquidity column's tag lane (below); the touch record and the outcome logic are unchanged
     cs.ttHeld = cs.ttHeldText = cs.ttHeldNoRoom = cs.ttHeldClipped = 0;
