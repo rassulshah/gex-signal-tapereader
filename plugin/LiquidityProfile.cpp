@@ -122,6 +122,7 @@
 #include "OrderLinesLogic.h"   // (0.55.0) THE LIMIT-ORDER LINES (Rassul walk-through 2026-10-25, BUILD-SPEC-2026-10-25.md): SDK-free, tested
 #include "LineLevelTag.h"      // (0.59.0) the level tag on a limit-order line ("100 PDH?")
 #include "LmtZonesLogic.h"     // (0.48.0) LMT ZONES: real large resting orders as zones + the LMT / LMT F columns (SDK-free, tested)
+#include "LabelPlace.h"        // (0.65.1) price labels at their own row or not drawn (tests_lmtf/test_labelplace.cpp)
 #include "LmtFTiers.h"         // (0.64.0) LMT F = lots filled at a price per candle, tiers per session part + adaptive floor (SDK-free, tests_lmtf/test_lft.cpp)
 #include "ExhaustLogic.h"      // (0.61.0) the Ex mark at key price levels (SDK-free, tests_ex/test_ex.cpp + parity with mbo_study.exh_at_zone)
 #include "QueueMeter.h"        // (0.49.0) the QUEUE METER engine: tests at levels / pivots / defended prices -> LRA-QueueMeter-<MKT>.csv for the Levels column (SDK-free, tested)
@@ -155,7 +156,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.65.0"          // (0.65.0, 2026-10-28 06:43 CT Rassul "why are we using boxes?", "the values are not properly centered") LMT F = the number only, centred in the column and on its row, in the resting side's colour; S20 dim / S10 bright / S5 bright + bold; no boxes
+#define LQ_VERSION "0.65.2"          // (0.65.2, 2026-10-28 09:31 CT Rassul approved the split LMT F) BIDS FILLED in the LEFT half (green), OFFERS FILLED in the RIGHT half (red), each on its exact price row, centred in its half; collisions resolved per side only (a bid and an offer at the same price both show)
+#define LQ_VERSION_0651 "0.65.1"          // (0.65.1, 2026-10-28 09:05 CT Rassul "it would be horrible if ... the limit F is showing it at the wrong location") LMT F / live iceberg labels are drawn AT THEIR PRICE ROW or not at all (LabelPlace.h 1.0.0, biggest print wins a collision); 0.65.0 pushed colliding labels down a row at a time, so ES "2x 1571" (bids filled at 7773.00) showed near 7771
+#define LQ_VERSION_0650 "0.65.0"          // (0.65.0, 2026-10-28 06:43 CT Rassul "why are we using boxes?", "the values are not properly centered") LMT F = the number only, centred in the column and on its row, in the resting side's colour; S20 dim / S10 bright / S5 bright + bold; no boxes
 #define LQ_VERSION_0640 "0.64.0"          // (0.64.0, 2026-10-28, Rassul 23:00 CT "are you overfiltering for the overnight session ... determining what large is based on session") LMT F = lots FILLED AT ONE PRICE IN ONE CANDLE over every resting order there (LmtFTiers.h 1.0.0; 0.62.0 took only the biggest single order the big-order tracker followed - 68+ lots on ES, so nothing overnight), tiers per SESSION PART (EVE / ASIA / LON / OPEN / MID / CLOSE / POST) from lmtf_read 2.0.0 >= a floor, and an adaptive live floor after 10 quiet candles of a part
 #define LQ_VERSION_0630 "0.63.0"          // (0.63.0, 2026-10-28 overnight, Rassul 22:31 / 22:37 CT) THE TOP READ = the Delta Profile read (DpBanner.h 1.0.0: the latest decided A / A? / A+ from the SignalBoard while fresh, its attack ratio + close, the defenders at the node, the trapped side; else a quiet grey line) - the book warning / REV verdict / ABS tag are still decided + logged, not shown in the badge
 static const bool LQ_DP_BANNER = true;
@@ -2512,26 +2515,29 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     // (0.37.0, Rassul "executed LMT should show iceberg in white and I") LMT F: a live iceberg prints as "450 I" (lots traded so far, growing live); the number is the side's
     // colour (bid green, offer red; dim under 1SD), the I is white and sits after the number like the sweep S in MKT. Floor = Big mu.
     S.iceLive = 0;
-    std::vector<std::pair<int, int> > usedF;                          // y bands taken in LMT F
-    auto freeF = [&](int t0, int b0) { for (size_t i = 0; i < usedF.size(); ++i) if (!(b0 < usedF[i].first || t0 > usedF[i].second)) return false; return true; };
-    auto putF = [&](int t0, int h, const std::string& num, COLOR c, bool ice) {
-        const std::string tail = " I";
-        (void)tail;   // (0.65.0) centred in the cell by the SDK (column width x row), the iceberg I at the right edge
-        RCT a; a.set(coord(fl + 1), coord(t0), coord(fr - 1), coord(t0 + h)); setTextColor(c); a.drawText(num.c_str(), true, false);
-        if (ice) { RCT b; b.set(coord(fl + 1), coord(t0), coord(fr - 1), coord(t0 + h)); setTextColor(C_WHITE); b.drawText("I", false, true); }
+    // (0.65.2) LMT F is split: BIDS FILLED in the LEFT half, OFFERS FILLED in the RIGHT half; each half keeps its own taken y bands,
+    // so a bid and an offer at the same price both show (ES 10-28: 1571 bids and 741 offers filled at 7773.00)
+    const int fm = (fl + fr) / 2;
+    auto halfL = [&](bool bid) { return bid ? fl + 1 : fm + 1; };
+    auto halfR = [&](bool bid) { return bid ? fm - 1 : fr - 1; };
+    std::vector<std::pair<int, int> > usedFS[2];                      // y bands taken in LMT F, per half: [0] bids, [1] offers
+    auto freeF = [&](bool bid, int t0, int b0) { const std::vector<std::pair<int, int> >& u = usedFS[bid ? 0 : 1]; for (size_t i = 0; i < u.size(); ++i) if (!(b0 < u[i].first || t0 > u[i].second)) return false; return true; };
+    auto putF = [&](bool bid, int t0, int h, const std::string& num, COLOR c, bool ice) {
+        // (0.65.0) centred in its cell by the SDK, the iceberg I at the half's right edge
+        RCT a; a.set(coord(halfL(bid)), coord(t0), coord(halfR(bid)), coord(t0 + h)); setTextColor(c); a.drawText(num.c_str(), true, false);
+        if (ice) { RCT b; b.set(coord(halfL(bid)), coord(t0), coord(halfR(bid)), coord(t0 + h)); setTextColor(C_WHITE); b.drawText("I", false, true); }
     };
     {   const long long iFloor = S.bldOk ? std::max(1LL, (long long)std::llround(S.bldMu)) : std::max(10LL, 2 * minShow);
         const std::vector<std::pair<long long, bfl::Ice::Ord> > lv = S.ice.live(iFloor, 2);
         for (size_t i = 0; i < lv.size(); ++i) {
             const bfl::Ice::Ord& o = lv[i].second; const int s = o.side;
             const int tier = o.traded >= tcut[2] ? 3 : o.traded >= tcut[0] ? 2 : 1;
-            int y = yOfPx(o.px), t0 = y - boxH / 2, tries = 0;
-            while (tries < 4 && !freeF(t0, t0 + boxH)) { t0 += (tries % 2 ? -1 : 1) * (tries / 2 + 1) * (boxH + 1); ++tries; }
-            if (!freeF(t0, t0 + boxH) || t0 < top + 14 || t0 + boxH > fBottom) continue;
+            const int y = yOfPx(o.px), t0 = y - boxH / 2;   // (0.65.1) at its own price row or not drawn - never moved to another row
             const bool bull = s == bfl::BID;
+            if (!freeF(bull, t0, t0 + boxH) || t0 < top + 14 || t0 + boxH > fBottom) continue;
             setFont(tier == 3 ? fb : fp1);   // (0.65.0) bold = S5 only
-            putF(t0, boxH, std::to_string(o.traded), (COLOR)lqp::colInk(bull, tier == 1), true);   // (0.45.3) lighter inks
-            usedF.push_back(std::make_pair(t0, t0 + boxH)); ++S.iceLive;
+            putF(bull, t0, boxH, std::to_string(o.traded), (COLOR)lqp::colInk(bull, tier == 1), true);   // (0.45.3) lighter inks
+            usedFS[bull ? 0 : 1].push_back(std::make_pair(t0, t0 + boxH)); ++S.iceLive;
         }
     }
     // executed in the last 60 min, merged by side + price; the 5 biggest per side
@@ -2572,25 +2578,32 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     FONT fsp; fsp.id = HELVETICA; fsp.size = coord(sfont); fsp.style = PLAIN;
     FONT fsb = fsp; fsb.style = BOLD;
     const int sh = rowPx(sfont) + 1;
+    // (0.65.1) placement: every label sits on ITS OWN price row; when two would overlap the bigger print is drawn and the other is not (its fact is still posted)
+    std::vector<char> drawIt(keep.size(), 0);
+    for (int hs = 0; hs < 2; ++hs) {   // (0.65.2) per half: bids (hs 0) and offers (hs 1) never compete for a row
+        std::vector<lpl::Cand> cand; std::vector<size_t> idx;
+        for (size_t i = 0; i < keep.size(); ++i) { if ((keep[i].side == bol::BID ? 0 : 1) != hs) continue; lpl::Cand c; c.y = yOfPx(keep[i].px); c.weight = keep[i].lots; cand.push_back(c); idx.push_back(i); }
+        const std::vector<size_t> ok = lpl::place(cand, sh, usedFS[hs]);
+        for (size_t k = 0; k < ok.size(); ++k) drawIt[idx[ok[k]]] = 1; }
     for (size_t i = 0; i < keep.size(); ++i) {
         const Ex& e = keep[i]; const int y = yOfPx(e.px);
         const long long tl = e.ice ? e.lots : e.top;   // (0.64.0) the print (lots filled at the price in one candle)
         const int tier = e.ice ? (tl >= fcut[2] ? 3 : tl >= fcut[1] ? 2 : 1) : std::max(1, e.tier);   // (0.65.0) S20 dim / S10 bright / S5 bright + bold (0.62.0: plain / bold / boxed)
         const std::string tx = (e.n > 1 ? std::to_string(e.n) + "\xD7 " : std::string()) + std::to_string(e.lots);   // "3\xD7 410"; an iceberg adds a white I after the number
-        int t0 = y - sh / 2, tries = 0;
-        while (tries < 6 && !freeF(t0, t0 + sh)) { t0 += sh + 1; ++tries; }   // never over another mark
-        if (tries >= 6 || t0 < top + 14 || t0 + sh > fBottom) continue;
+        const int t0 = y - sh / 2;   // (0.65.1) exactly on the price row (0.65.0 walked a colliding label down sh + 1 px up to 6 times)
+        const bool show = drawIt[i] && t0 >= top + 14 && t0 + sh <= fBottom;
         // (0.65.0, Rassul 06:43 CT "why are we using boxes?", "the values are not properly centered") NUMBER ONLY in the resting side's colour,
         // centred in the column and on its price row (the SDK centres the text in the cell); tier by brightness and weight: S20 dim, S10 bright,
         // S5 bright + bold; no boxes, no outlines; a white I (traded more than it showed) at the column's right edge, the resting dot at its left
         const bool dim = tier == 1;
         const bool green = lqp::lmtFillGreen(e.side == bol::BID);   // (0.45.2, Rassul 20:06) the RESTING side: filled bid GREEN (buyers absorbed), filled offer RED (sellers absorbed); icebergs the same (0.19.1-0.45.1: coloured by who hit it)
         setFont(tier >= 3 ? fsb : fsp);
-        {   RCT a; a.set(coord(fl + 1), coord(t0), coord(fr - 1), coord(t0 + sh)); setTextColor((COLOR)lqp::colInk(green, dim)); a.drawText(tx.c_str(), true, false);
-            if (e.ice) { RCT b; b.set(coord(fl + 1), coord(t0), coord(fr - 1), coord(t0 + sh)); setTextColor(C_WHITE); b.drawText("I", false, true); }
-            if (e.rest) { RCT rd; rd.set(coord(fl + 1), coord(t0), coord(fr - 1), coord(t0 + sh)); setTextColor((COLOR)0x00FFFFFF); rd.drawText("\x95", false, false); ++S.lmtFRest; }   // (0.62.0) still resting after the fill
+        const bool bidH = e.side == bol::BID; const int hl = halfL(bidH), hr = halfR(bidH);   // (0.65.2) bids left half, offers right half
+        if (show) {   RCT a; a.set(coord(hl), coord(t0), coord(hr), coord(t0 + sh)); setTextColor((COLOR)lqp::colInk(green, dim)); a.drawText(tx.c_str(), true, false);
+            if (e.ice) { RCT b; b.set(coord(hl), coord(t0), coord(hr), coord(t0 + sh)); setTextColor(C_WHITE); b.drawText("I", false, true); }
+            if (e.rest) { RCT rd; rd.set(coord(hl), coord(t0), coord(hr), coord(t0 + sh)); setTextColor((COLOR)0x00FFFFFF); rd.drawText("\x95", false, false); ++S.lmtFRest; }   // (0.62.0) still resting after the fill
         }
-        usedF.push_back(std::make_pair(t0, t0 + sh)); ++S.boExec;
+        if (show) { usedFS[bidH ? 0 : 1].push_back(std::make_pair(t0, t0 + sh)); ++S.boExec; }
         sb::Fact f; f.bar = e.ice ? ((e.last / 1000) / std::max(1, S.spb) + 1) * std::max(1, S.spb) : e.last / 1000; ++S.lftShown; f.lo = f.hi = (double)e.px * tick;   // the fill's candle (bar END stamp, Central seconds)
         f.side = e.side == bol::BID ? 1 : -1; f.val = (double)tl; f.code = tier + (e.ice ? 8 : 0) + (e.rest ? 16 : 0); f.state = e.rest ? 0 : 1; f.proven = 0;
         S.factsP.push_back(f);
@@ -4585,6 +4598,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.65.0");   // LQ_VERSION
+    p->setVersion("0.65.2");   // LQ_VERSION
     return p;
 }
