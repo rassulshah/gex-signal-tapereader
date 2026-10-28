@@ -1,5 +1,5 @@
 /********************************************************************************
- *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.0.0  (2026-10-28)
+ *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.1.0  (2026-10-28)
  *
  *  Rassul 2026-10-28 (idea "Wave POC" -> mockups v1-v3 -> approved 10:59 CT "just build now"): every BIG wave's own volume profile,
  *  its separate high-volume nodes as pullback targets.
@@ -14,6 +14,13 @@
  *      wave's start (end tick);
  *    - right-edge price tags "WPOC 7700.25 6.3x" / "7693.75 2.5x" only (right of the last bar, never over candles), stacked;
  *    - optional zigzag (off by default); header "Wave POC v1.0.0" small top-left.
+ *  1.1.0 (Rassul approved 11:27 CT, mockups wavepoc_lpoc_w1 / w2, wp8.py): LIQUIDITY NODES on the LEFT of the wave start - from IRT's
+ *    live order-by-order book (DEPTH_BY_ORDER, one per chart kept alive, opened behind a crash-guard file, drained <= 5,000 events / 8 ms
+ *    per call), market-maker orders removed (re-priced >= 2x in 5 min), sampled once a second into the forming bar; a wave's liquidity
+ *    = average resting lots per profile row over its bars; nodes on the raw rows (>= 2.0x median, separated like the volume nodes,
+ *    max 5, biggest = LPOC); drawn as nodes only: bars pointing left (max 60 px), LPOC bright green (bids) / red (offers), others 60%,
+ *    faint dotted line right (same stop rules), no tags, no boxes. Waves formed before the indicator loaded have no book -> none.
+ *    Each liquidity node + "near_volume_node" (within 2 ticks of a volume node) / "alone" is recorded (LNODE lines) for the nightly.
  *  Rules, files and layout: WavePOCLogic.h (SDK-free, tested: test_wavepoc_logic.cpp on the Oct 22 ES data of the approved mockup;
  *  host: test_wavepoc_host.cpp on a mock SDK). Settings: WavePOCSettings.h, read from IRT's own per-indicator parameters
  *  (getParameters - the SessionVWAP 1.8.1 native pattern; refused / invalid = the defaults).
@@ -61,7 +68,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.0.0";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.1.0";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -111,6 +118,9 @@ inline bool valid(const Parms& p, std::string& why) {
 } // namespace wpp
 
 struct WState {
+    ~WState() { delete dbo; dbo = nullptr; }   // (1.1.0) the destructor unsubscribes the order-by-order feed
+    cppExtension::DEPTH_BY_ORDER* dbo = nullptr; bool dboDead = false, blocked = false; int attempt = 0; long long dboEvents = 0, garbage = 0, backlog = 0;
+    wpl::Book book; wpl::Sampler samp; std::string bookSym;
     std::string mkt, sym; int spb = 0; double tick = 0; long long tickKey = 0; int N = wpc::N_DEF; bool zz = false; std::string parms = "none";
     bool keyed = false;
     wpc::Store store; std::string storeWhy = "not loaded", storePath, recPath, statusPath, recWhy = "not loaded"; int recBad = 0;
@@ -160,6 +170,9 @@ public:
     static int readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
     static int readPrices(RTARRAYP* vap, int bar, VOLPROFILE* rows, int count);
     void render(WState& S, bool back, bool front);
+    void openFeed(WState& S);
+    void drainBook(WState& S, long long now);
+    void bindLiq(WState& S);
 };
 
 int cppExtension::init(void) { return RTX_OK; }
@@ -257,6 +270,8 @@ bool WavePOC::identify(WState& S) {
     if (!S.keyed || mkt != S.mkt || sym != S.sym || spb != S.spb || tk != S.tickKey || S.N != S.E.N) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
         S.E.reset(); S.E.N = S.N; S.E.tick = tick; S.E.store = &S.store; S.raw.clear(); S.off = 0; S.provAt = -2; S.provOk = false;
+        if (S.bookSym != sym) { delete S.dbo; S.dbo = nullptr; S.dboDead = false; S.blocked = false; S.attempt = 0; S.book = wpl::Book(); S.samp = wpl::Sampler(); S.bookSym = sym; }
+        bindLiq(S);
         loadFiles(S);
     }
     return true;
@@ -278,6 +293,51 @@ void WavePOC::loadFiles(WState& S) {
 }
 
 // closed bars in order, each once; a changed history (first stamp, fewer bars, a stamp moved) = replay from the start
+// (1.1.0) a wave's liquidity = the book samples of its bars (engine bar j = chart bar j + off; stamps as the engine's bars)
+void WavePOC::bindLiq(WState& S) {
+    WState* P = &S;
+    S.E.liqFn = [P](const wpc::Wave& w, std::vector<double>& rows, std::vector<double>& bids) {
+        std::vector<long long> ts; for (int j = w.i0; j <= w.i1 && j < (int)P->E.B.size(); ++j) ts.push_back(P->E.B[(size_t)j].t);
+        return P->samp.average(ts, w.e0, w.rowTicks, w.rows.size(), rows, bids);
+    };
+}
+// chart context only, behind the crash guard; 1st try the chart's symbol, 2nd try NULL (= this chart) - as lsSweepRefill
+void WavePOC::openFeed(WState& S) {
+    if (S.dbo || S.dboDead || S.blocked || S.attempt >= 2) return;
+    const std::string dir = wpFlex() + WP_SEP "WavePOC";
+    const std::string guard = wpFlex().empty() ? std::string() : dir + WP_SEP "_opening-" + S.mkt + "-" + std::to_string(S.spb) + ".txt";
+    if (S.attempt == 0 && wpExists(guard)) { S.blocked = true; return; }
+    if (!guard.empty()) { wpMkdir(wpFlex()); wpMkdir(dir); std::ofstream g(guard.c_str(), std::ios::trunc); g << "opening DEPTH_BY_ORDER\n"; }
+    try { S.dbo = new (std::nothrow) DEPTH_BY_ORDER(S.attempt == 0 && !S.sym.empty() ? S.sym.c_str() : NULL); }
+    catch (...) { S.dboDead = true; }
+    ++S.attempt;
+    if (!guard.empty()) std::remove(guard.c_str());
+}
+// every order event into the book (<= 5,000 events / ~8 ms per call, the rest next call), then one sample a second into the forming bar
+void WavePOC::drainBook(WState& S, long long now) {
+    openFeed(S);
+    if (S.dbo && !S.dboDead) {
+        const long long t0 = wpMs(); int n = 0; bool cap = false;
+        try {
+            while (true) {
+                if (n >= 5000) { cap = true; break; }
+                if ((n & 511) == 511 && wpMs() - t0 > 8) { cap = true; break; }
+                if (S.dbo->getNext() != RTX_OK) break;
+                ++n; ++S.dboEvents;
+                const DEPTH_ORDER& o = S.dbo->dbo;
+                wpl::Ev e; e.action = o.action <= 3 ? (int)o.action : 99; e.side = o.buySell == 1 ? 1 : o.buySell == 0 ? 0 : -1;
+                if (!wpc::toTicks((double)o.price, S.tick, e.tick)) { ++S.garbage; continue; }
+                e.size = (long long)o.size; e.id = (long long)o.orderID;
+                S.book.onEvent(e, now);
+            }
+        } catch (...) { S.dboDead = true; }
+        if (cap) ++S.backlog;
+    }
+    const long n = getBarCount(); if (n < 1) return;
+    RTARRAYI times(barDateTime); if ((long)times.count < n) return;
+    S.samp.sample(S.book, localSec((RTDATE)times[(int)n - 1]), now);
+}
+
 void WavePOC::feed(WState& S) {
     const long n = getBarCount(); if (n < 2) return;
     RTARRAYI times(barDateTime); RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
@@ -291,6 +351,7 @@ void WavePOC::feed(WState& S) {
     }
     if (redo) {
         S.E.reset(); S.E.N = S.N; S.E.tick = S.tick; S.E.store = &S.store; S.raw.clear(); S.provAt = -2;   // the store + record stay (superset)
+        bindLiq(S);
     }
     if (S.raw.empty()) S.off = std::max(0, closed - WP_MAX_BARS);
     wpc::VapFn vap = [this, &S](int j, std::vector<wpc::VRow>& out) { return vapRows(S, j + S.off, out); };
@@ -331,7 +392,10 @@ void WavePOC::status(WState& S, long long now) {
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;              // calc comes on every tick: build the text at most once a second
     const std::string body = wpc::statusText(S.E, S.mkt, S.spb, S.parms, S.storeWhy, S.recWhy + (S.recFails ? ", append failures " + std::to_string(S.recFails) : std::string()), S.recBad, &S.last, S.provOk, S.retries)
                            + "SETTINGS,show zigzag " + (S.zz ? "on" : "off") + "\nDRAWING," + (S.sawPre ? "profile behind the candles (pre-draw)" : "profile drawn after the candles (no pre-draw call seen)") + "\n"
-                           + (S.vapFault ? "VAP_FAULT,remove and re-add the indicator\n" : "");
+                           + (S.vapFault ? "VAP_FAULT,remove and re-add the indicator\n" : "")
+                           + "MBO," + (S.blocked ? "not opened (crash guard file present)" : S.dboDead ? "faulted" : S.dbo ? "open" : "opening") + ",events " + std::to_string(S.dboEvents)
+                           + ",orders " + std::to_string(S.book.book.size()) + ",samples " + std::to_string(S.samp.samples) + ",bars sampled " + std::to_string(S.samp.bars.size())
+                           + ",market-maker orders left out " + std::to_string(S.samp.mmSeen) + ",backlog slices " + std::to_string(S.backlog) + ",garbage " + std::to_string(S.garbage) + "\n";
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     wpMkdir(wpFlex()); wpPublish(S.statusPath, body);
@@ -340,8 +404,9 @@ void WavePOC::status(WState& S, long long now) {
 void WavePOC::pump() {
     WState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
-    feed(*S);
     const long long now = wpMs();
+    drainBook(*S, now);   // (1.1.0) before the new closed bars: the forming bar's samples are complete when it closes
+    feed(*S);
     flush(*S, now);
     status(*S, now);
 }
@@ -408,7 +473,7 @@ extern "C" cppExtension* CreateExtension(void) {
     WavePOC* p = new WavePOC();
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Wave POC v1.0.0 - each big wave's own volume profile at its start and its high-volume nodes (WPOC amber) as lines to the right until touched.");
-    p->setVersion("1.0.0");   // = WP_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Wave POC v1.1.0 - each big wave's own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as lines to the right until touched.");
+    p->setVersion("1.1.0");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

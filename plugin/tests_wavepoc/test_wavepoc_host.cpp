@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.0.0", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.1.0" && std::string(wpl::VERSION) == "1.1.0", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();
@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
         A.drawn.clear(); A.reason = REASON_DRAW; x.draw();
         bool tagsRight = true, header = false; int tags = 0; const int xLast = mockX(79) + 5; bool profInPost = false;
         for (const mock::Prim& p : A.drawn) {
-            if (p.k == 'T') { if (p.text == "Wave POC v1.0.0") header = true; else { ++tags; tagsRight = tagsRight && p.x0 > xLast; } }
+            if (p.k == 'T') { if (p.text == std::string("Wave POC v") + WP_VERSION) header = true; else { ++tags; tagsRight = tagsRight && p.x0 > xLast; } }
             if (p.k == 'F' && p.col == 0x334155) profInPost = true;
         }
         CHECK(pre > 20 && preOnlyBack, "pre-draw: the profile, nodes and lines (no text) - behind the candles");
@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
         const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt"), sto = slurp(flex() + "/WavePOC/ES-180.csv");
         size_t nw = 0; for (size_t p = rec.find("\nWAVE,"); p != std::string::npos; p = rec.find("\nWAVE,", p + 1)) ++nw;
         CHECK(nw == 2 && rec.find("NODE,") != std::string::npos && rec.find("STOP,") != std::string::npos, "record: 2 waves with nodes and stops");
-        CHECK(st.rfind("VERSION,1.0.0", 0) == 0 && st.find("qualified up 0 down 2") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
+        CHECK(st.rfind("VERSION,1.1.0", 0) == 0 && st.find("qualified up 0 down 2") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
         CHECK(st.find("touch 5,new wave 2,origin close 0") != std::string::npos, "status: stops by reason");
         wpc::Store chk; std::string why; CHECK(wpc::storeFromText(sto, "ES", 180, 3, 250000000LL, chk, why) && chk.dn.size() == 24, "store saved atomically with the day's 4 down candidates (" << why << ", " << chk.dn.size() << ")");
     }
@@ -193,6 +193,39 @@ int main(int argc, char** argv) {
         WState* sc = static_cast<WState*>(C.userData);
         CHECK(sc && sc->mkt == "GC" && std::fabs(sc->E.tick - 0.1) < 1e-6 && sc->E.waves.empty(), "symbol change -> GC, its own tick and store " << (sc ? sc->mkt : "") << " " << (sc ? sc->E.tick : 0) << " " << (sc ? sc->E.waves.size() : 9));
         x.clear();
+    }
+    // (1.1.0) liquidity from the live order-by-order book: big resting bids inside wave 2, a market maker that keeps re-pricing
+    {
+        wipe(); seedStore("ES", 180, 3, (long long)F.t[0]);
+        const int alive0 = mock::dboAlive; mock::Host M; mock::current = &M; int oid = 1;
+        auto order = [&](int act, int side, float px, unsigned long sz, int id) { DEPTH_ORDER o; std::memset(&o, 0, sizeof o); o.action = (unsigned char)act; o.buySell = (unsigned char)side; o.price = px; o.size = sz; o.orderID = id; M.mbo.push_back(o); };
+        // a thin book every tick 7670 .. 7730 (5 lots a side), + 400 lots bid at 7685.25 and 250 at 7680.25 (real orders)
+        for (int k = 0; k <= 240; ++k) { const float px = 7670.0f + 0.25f * (float)k; order(0, px < 7700 ? 1 : 0, px, 5, oid++); }
+        order(0, 1, 7685.25f, 400, oid++); order(0, 1, 7680.25f, 250, oid++);
+        const int mmId = oid++; order(0, 1, 7695.25f, 900, mmId);   // a market maker: 900 lots, re-priced every bar
+        for (int k = 1; k <= 79; ++k) {
+            chart(M, F, k);
+            order(1, 1, (k % 2) ? 7695.75f : 7695.25f, 900, mmId);
+            WState* sm = static_cast<WState*>(M.userData); if (sm) sm->samp.lastMs = -1;   // one sample per bar in the test (IRT: once a second)
+            x.calc(0);
+        }
+        WState* sm = static_cast<WState*>(M.userData);
+        CHECK(sm && sm->dbo && mock::dboAlive == alive0 + 1 && sm->dboEvents > 240 && sm->book.book.size() == 244, "the order-by-order feed is open, every event in the book (" << (sm ? sm->book.book.size() : 0) << ")");
+        CHECK(sm && sm->samp.bars.size() >= 78, "a sample in every bar");
+        bool ok = sm && sm->E.waves.size() == 2;
+        if (ok) {
+            const wpc::Wave& w2 = sm->E.waves[1];
+            CHECK(w2.liqOk && !w2.lnodes.empty() && wpc::pxText(w2.lnodes[0].tick, 0.25) == "7685.25" && w2.lnodes[0].side == 1, "LPOC of wave 2 = the 400-lot bid at 7685.25 (" << (w2.lnodes.empty() ? "none" : wpc::pxText(w2.lnodes[0].tick, 0.25)) << ")");
+            bool mm = false; for (const wpc::LNode& n : w2.lnodes) mm = mm || n.tick == 30781 || n.tick == 30783;
+            CHECK(!mm, "the re-pricing 900-lot market maker is left out");
+        } else CHECK(false, "two waves on the live-book chart");
+        drawBoth(x, M); int lp = 0, tags = 0; for (const mock::Prim& p : M.drawn) { lp += p.k == 'F' && p.col == 0x22C55E; tags += p.k == 'T'; }
+        CHECK(lp >= 1, "LPOC drawn in bright green (bids)");
+        const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt");
+        CHECK(rec.find("\nLNODE,") != std::string::npos && (rec.find("near_volume_node") != std::string::npos || rec.find(",alone") != std::string::npos), "record: LNODE lines with near / alone");
+        CHECK(st.find("MBO,open,events") != std::string::npos && st.find("LIQUIDITY_NODES,waves with liquidity") != std::string::npos, "status: MBO + LIQUIDITY_NODES lines");
+        x.clear();
+        CHECK(mock::dboAlive == alive0, "chart removed: the feed object is destroyed (unsubscribed)");
     }
     wipe(); rmdir(home.c_str());
     std::cout << "test_wavepoc_host: " << passed << " passed, " << failed << " failed\n";

@@ -1,11 +1,12 @@
 // test_wavepoc_logic.cpp - lsWavePOC 1.0.0 logic suite (WavePOCLogic.h, no SDK).
-//   (in plugin\tests_wavepoc) g++ -std=c++17 -Wall -Wextra -Werror -I.. test_wavepoc_logic.cpp -o t && ./t wavepoc_es1022.csv
+//   (in plugin\tests_wavepoc) g++ -std=c++17 -Wall -Wextra -Werror -I.. test_wavepoc_logic.cpp -o t && ./t wavepoc_es1022.csv wavepoc_es1022_liq.csv
 // Fixture wavepoc_es1022.csv: ES 2026-10-22 11:00-15:00 CT, 3-min bars + volume at price (Databento trades) - the data of the approved
 // mockup (wavepoc_v3, reference wp2.py / wp3.py). The reference used the DAY's average wave (down 23.625 pts, up 21.5 pts); here the
 // rolling average is seeded with 20 earlier waves of exactly those sizes, so the no-look-ahead rule picks the same two waves.
 #include "WavePOCLogic.h"
 #include <fstream>
 #include <iostream>
+#include <map>
 
 static int passed = 0, failed = 0;
 #define CHECK(c, t) do { if (c) ++passed; else { ++failed; std::cerr << "FAIL: " << t << " (line " << __LINE__ << ")\n"; } } while (0)
@@ -227,8 +228,8 @@ static void testLayout(const Fix& F) {
     CHECK(texts > 0 && tagsRight, "price tags only right of the last bar (never over candles)");
     CHECK(amberLine3 && amberBox2 && whiteLine1 && noBoxes, "WPOC stands out: bright amber row + 3 px amber line; other nodes 1 px white; no outline boxes");
     CHECK(sc.nodesDrawn <= 5 * sc.wavesDrawn && sc.nodesDrawn == 7, "nodes drawn = 4 + 3, at most 5 per wave");
-    bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == "Wave POC v1.0.0");
-    CHECK(header, "header 'Wave POC v1.0.0'");
+    bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
+    CHECK(header && std::string(wpc::VERSION) == "1.1.0", "header 'Wave POC v1.1.0'");
     // no room right of the last bar: no tags at all (counted)
     wpc::View v2 = v; v2.r = (int)xLast + 20; const wpc::Scene s2 = wpc::layout(E, nullptr, v2);
     int t2 = 0; for (const wpc::Prim& p : s2.p) t2 += p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0;
@@ -246,12 +247,109 @@ static void testLayout(const Fix& F) {
     CHECK(profAtStart, "profile drawn at the wave start (behind the candles)");
 }
 
+// ---- (1.1.0) liquidity nodes ----
+// the wave's average resting lots per price and side from the ES Oct 22 MBO snapshots (market makers removed), as wp8.py
+static std::map<std::pair<int, int>, std::vector<std::pair<long long, std::pair<double, double> > > > LQ;   // (i0, i1) -> tick, (bid, offer)
+static void loadLiq(const char* path) {
+    std::ifstream f(path); std::string line;
+    while (std::getline(f, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        const std::vector<std::string> x = wpc::splitCsv(line); if (x.size() != 6 || x[0] != "L") continue;
+        long long tk = 0; wpc::toTicks(std::atof(x[4].c_str()), 0.25, tk); const double v = std::atof(x[5].c_str());
+        auto& vec = LQ[std::make_pair(std::atoi(x[1].c_str()), std::atoi(x[2].c_str()))];
+        vec.push_back(std::make_pair(tk, std::make_pair(x[3] == "0" ? v : 0.0, x[3] == "1" ? v : 0.0)));
+    }
+}
+static bool fixLiq(const wpc::Wave& w, std::vector<double>& rows, std::vector<double>& bids) {
+    rows.assign(w.rows.size(), 0); bids.assign(w.rows.size(), 0);
+    auto it = LQ.find(std::make_pair(w.i0, w.i1)); if (it == LQ.end()) return false;
+    for (const auto& e : it->second) { const long long d = e.first - w.e0; if (d < 0) continue; const long long k = d / w.rowTicks; if (k >= (long long)rows.size()) continue;
+        rows[(size_t)k] += e.second.first + e.second.second; bids[(size_t)k] += e.second.first; }
+    return true;
+}
+static void testLiquidityReference(const Fix& F) {
+    wpc::Store S; seed(S, F.B[0].t, 189, 172);
+    wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25; E.liqFn = fixLiq;
+    wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = F.V[(size_t)i]; return 1; };
+    run(E, F, (int)F.B.size() - 1, vap);
+    CHECK(E.waves.size() == 2, "two waves with the liquidity function on");
+    if (E.waves.size() != 2) return;
+    const wpc::Wave& a = E.waves[0]; const wpc::Wave& b = E.waves[1];
+    CHECK(a.liqOk && a.lnodes.size() == 2 && b.lnodes.size() == 3, "liquidity nodes: 2 (wave 1) and 3 (wave 2) as wp8.py (" << a.lnodes.size() << "/" << b.lnodes.size() << ")");
+    const char* ea[2] = { "7688.25", "7707.25" }; const double ra[2] = { 2.31, 2.01 };
+    for (size_t k = 0; k < 2 && k < a.lnodes.size(); ++k) CHECK(px(a.lnodes[k].tick) == ea[k] && std::fabs(a.lnodes[k].ratio - ra[k]) < 0.006 && a.lnodes[k].side == 1,
+        "wave 1 liquidity node " << k << " = " << ea[k] << " " << ra[k] << "x bids (got " << px(a.lnodes[k].tick) << " " << a.lnodes[k].ratio << ")");
+    const char* eb[3] = { "7685.25", "7680.25", "7689.25" }; const double rb[3] = { 4.53, 4.01, 2.39 };
+    for (size_t k = 0; k < 3 && k < b.lnodes.size(); ++k) CHECK(px(b.lnodes[k].tick) == eb[k] && std::fabs(b.lnodes[k].ratio - rb[k]) < 0.006 && b.lnodes[k].side == 1,
+        "wave 2 liquidity node " << k << " = " << eb[k] << " " << rb[k] << "x bids (got " << px(b.lnodes[k].tick) << " " << b.lnodes[k].ratio << ")");
+    CHECK(a.lnodes.size() == 2 && !a.lnodes[0].nearVol && a.lnodes[1].nearVol, "7707.25 sits on the volume node 7707.25 (within 2 ticks), 7688.25 alone");
+    CHECK(b.lnodes.size() == 3 && b.lnodes[0].stop == wpc::TOUCH && b.lnodes[0].stopBar > b.i1, "liquidity lines stop by the same rules (LPOC 7685.25 touched later)");
+    int nl = 0, ls = 0; for (const std::string& l : E.out) { nl += l.rfind("LNODE,", 0) == 0; ls += l.rfind("LSTOP,", 0) == 0; }
+    CHECK(nl == 5 && ls == 5, "record: 5 LNODE lines (+ near / alone) and 5 LSTOP lines (" << nl << "/" << ls << ")");
+    bool nearTxt = false; for (const std::string& l : E.out) nearTxt = nearTxt || (l.rfind("LNODE,", 0) == 0 && l.find(",7707.25,") != std::string::npos && l.find("near_volume_node") != std::string::npos);
+    CHECK(nearTxt, "LNODE line says near_volume_node");
+    // restart without a book: the recorded liquidity nodes come back from the record
+    int bad = 0; wpc::Store S2; seed(S2, F.B[0].t, 189, 172);
+    wpc::Engine R; R.store = &S2; R.N = 3; R.tick = 0.25; R.rec = wpc::parseRecord(E.out, 3, 0.25, bad); run(R, F, (int)F.B.size() - 1, vap);
+    CHECK(bad == 0 && R.waves.size() == 2 && R.waves[1].lnodes.size() == 3 && R.waves[1].lnodes[0].tick == b.lnodes[0].tick && R.waves[1].lnodes[0].stopBar == b.lnodes[0].stopBar, "restart: liquidity nodes redrawn from the record");
+    // no book (waves formed before the indicator loaded): no liquidity nodes, no error
+    wpc::Store S3; seed(S3, F.B[0].t, 189, 172);
+    wpc::Engine Nb; Nb.store = &S3; Nb.N = 3; Nb.liqFn = [](const wpc::Wave&, std::vector<double>&, std::vector<double>&) { return false; }; run(Nb, F, (int)F.B.size() - 1, vap);
+    CHECK(Nb.waves.size() == 2 && Nb.waves[0].lnodes.empty() && Nb.C.liqNoBook == 2 && Nb.waves[0].nodes.size() == 4, "no book: no liquidity nodes, the volume nodes unchanged");
+    // layout: left of the wave start, <= 60 px, LPOC bright green, others 60%, dotted lines, no tags for liquidity
+    wpc::View v; v.l = 0; v.t = 0; v.r = 1400; v.b = 700; v.first = 0; v.last = 79; v.lastBar = 79; v.bw = 1200.0 / 80;
+    v.X = [&](int i) { return 100 + (i + 0.5) * v.bw; }; v.Y = [&](double tk) { return 690 - (tk * 0.25 - 7672) / 60.0 * 680; };
+    v.textW = [](const std::string& s2, bool) { return (int)s2.size() * 7; }; v.tick = 0.25;
+    const wpc::Scene sc = wpc::layout(E, nullptr, v);
+    bool left = true; int bright = 0, dim = 0, dots = 0, texts = 0;
+    for (const wpc::Prim& p : sc.p) {
+        if (p.k == wpc::Prim::FILL && (p.col == 0x22C55E || p.col == wpc::mix(0x22C55E, 0x0B0F17, 0.6))) {
+            if (p.col == 0x22C55E) ++bright; else ++dim;
+            const int e1 = (int)std::lround(v.X(6) - v.bw * 0.45 - 2), e2 = (int)std::lround(v.X(31) - v.bw * 0.45 - 2);
+            if (p.x0 >= p.x1 || (std::abs(p.x1 - e1) > 1 && std::abs(p.x1 - e2) > 1)) left = false;
+            if (p.x1 - p.x0 > 61) left = false;
+        }
+        if (p.k == wpc::Prim::LINE && p.w == 1 && (p.col == wpc::mix(0x22C55E, 0x0B0F17, 0.8) || p.col == wpc::mix(0x22C55E, 0x0B0F17, 0.5)) && p.x1 - p.x0 <= 2) ++dots;
+        if (p.k == wpc::Prim::TEXT) ++texts;
+        if (p.k == wpc::Prim::BOX) left = false;
+    }
+    CHECK(sc.lnodesDrawn == 5 && bright == 2 && dim == 3 && left, "liquidity bars: left of the wave start, <= 60 px, LPOC bright, others 60% (" << bright << "/" << dim << ")");
+    CHECK(dots > 20, "faint dotted lines to the right");
+    const wpc::Scene s0 = wpc::layout(Nb, nullptr, v); int t0 = 0; for (const wpc::Prim& p : s0.p) t0 += p.k == wpc::Prim::TEXT;
+    CHECK(texts == t0, "no price tags for liquidity nodes");
+}
+static void testBook() {
+    wpl::Book b; long long now = 1000000;
+    auto ev = [&](int a, int side, long long tk, long long sz, long long id) { wpl::Ev e; e.action = a; e.side = side; e.tick = tk; e.size = sz; e.id = id; b.onEvent(e, now); };
+    ev(wpl::NEW, 1, 100, 50, 1); ev(wpl::NEW, 0, 104, 30, 2); ev(wpl::NEW, 1, 99, 20, 3); ev(wpl::NEW, 1, 98, 10, 4);
+    std::map<long long, std::pair<long long, long long> > snap; long long mm = 0;
+    b.snapshot(now, snap, mm); CHECK(snap[100].first == 50 && snap[104].second == 30 && mm == 0, "book: resting lots per price and side");
+    ev(wpl::FILL, 1, 100, 20, 1); ev(wpl::DEL, 1, 99, 0, 3); b.snapshot(now, snap, mm);
+    CHECK(snap[100].first == 30 && snap.count(99) == 0, "FILL takes lots off, DEL removes");
+    ev(wpl::MOD, 1, 97, 10, 4); now += 60000; ev(wpl::MOD, 1, 96, 10, 4); b.snapshot(now, snap, mm);
+    CHECK(snap.count(96) == 0 && mm == 1, "re-priced 2x within 5 min = market maker, not counted");
+    now += 6 * 60000; b.snapshot(now, snap, mm);
+    CHECK(snap[96].first == 10 && mm == 0, "after 5 quiet minutes it counts again");
+    ev(wpl::MOD, 1, 96, 25, 4); b.snapshot(now, snap, mm); CHECK(snap[96].first == 25, "a size change is not a re-price");
+    wpl::Sampler sp;
+    CHECK(sp.sample(b, 500, now) && !sp.sample(b, 500, now + 500) && sp.sample(b, 500, now + 1000), "sampled at most once a second");
+    sp.sample(b, 680, now + 2000);
+    std::vector<double> rows, bids;
+    CHECK(sp.average({ 500, 680 }, 96, 2, 6, rows, bids) && std::fabs(rows[0] - 25) < 1e-9 && std::fabs(rows[2] - 30) < 1e-9 && std::fabs(bids[4]) < 1e-9 && std::fabs(rows[4] - 30) < 1e-9,
+          "average lots per row over the wave's bars (" << rows[0] << "," << rows[2] << "," << rows[4] << ")");
+    CHECK(!sp.average({ 500, 680, 860 }, 96, 2, 6, rows, bids), "a wave with bars before the book was read: no liquidity (< 90% covered)");
+    std::vector<double> r = { 1, 1, 9, 1, 1, 1, 8, 1, 1, 1, 1 }; double med = 0; const std::vector<int> pk = wpl::pickRaw(r, med);
+    CHECK(pk.size() == 2 && pk[0] == 2 && pk[1] == 6 && std::fabs(med - 1) < 1e-9, "raw peaks, separated, biggest first");
+    std::vector<double> edge = { 9, 1, 1, 1, 1, 1 }; CHECK(wpl::pickRaw(edge, med).size() == 1, "a peak on the edge row counts (raw, as wp8)");
+}
+
 int main(int argc, char** argv) {
     const char* path = argc > 1 ? argv[1] : "wavepoc_es1022.csv";
     const Fix F = load(path, 0.25);
     CHECK(F.B.size() == 80, "fixture: 80 bars (" << F.B.size() << ")");
     if (F.B.size() != 80) { std::cerr << "no fixture\n"; return 1; }
     testReference(F); testNoRepaint(F); testN5(F); testProvisionalAndOrigin(); testStoreAndHelpers(); testLayout(F);
+    loadLiq(argc > 2 ? argv[2] : "wavepoc_es1022_liq.csv"); testLiquidityReference(F); testBook();
     std::cout << "test_wavepoc_logic: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

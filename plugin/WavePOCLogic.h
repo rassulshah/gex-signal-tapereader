@@ -1,4 +1,4 @@
-// WavePOCLogic.h  1.0.0  (2026-10-28)  -  lsWavePOC "Wave POC": every rule, the files and the layout, SDK-free (unit-tested on Linux).
+// WavePOCLogic.h  1.1.0  (2026-10-28; 1.1.0 = + the liquidity nodes, WavePOCLiq.h, Rassul 11:27 CT)  -  lsWavePOC "Wave POC": every rule, the files and the layout, SDK-free (unit-tested on Linux).
 // Rassul 2026-10-28 (approved 10:59 CT "just build now", mockup wavepoc_v3): per-wave volume-profile nodes as pullback targets.
 //   PIVOTS   N-bar reversal highs / lows (N = "Reversal bars", default 3): bar i is a swing high when its high is the highest of bars
 //            i-N .. i+N (low mirror); consecutive same-type pivots collapse to the more extreme one (equal = the later) -> zigzag.
@@ -30,11 +30,12 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "WavePOCLiq.h"
 
 namespace wpc {
 
-static const char* const VERSION = "1.0.0";
-#define WPC_VERSION "1.0.0"
+static const char* const VERSION = "1.1.0";
+#define WPC_VERSION "1.1.0"
 
 // fixed rules (from the approved mockup / reference wp2.py + wp3.py)
 static const int LOOKBACK = 20;        // 20-bar high / low
@@ -56,6 +57,8 @@ typedef std::function<int(int bar, std::vector<VRow>& out)> VapFn;  // 1 = rows 
 struct Pivot { int i = 0; int type = 0; long long px = 0; };       // type +1 swing high, -1 swing low
 
 struct Node { long long tick = 0; long long vol = 0; double ratio = 0; int rank = 0; int row = -1; int stop = OPEN; int stopBar = -1; };
+// (1.1.0) a liquidity node: average resting real-order lots of its row over the wave; side 1 = mostly bids, 0 = mostly offers
+struct LNode { long long tick = 0; double lots = 0; double ratio = 0; int rank = 0; int side = 1; bool nearVol = false; int stop = OPEN; int stopBar = -1; };
 
 struct Wave {
     int dir = 0;                    // +1 up (ends at a swing high), -1 down
@@ -67,6 +70,8 @@ struct Wave {
     std::vector<long long> rows;          // volume per row (empty = no VAP)
     long long med2 = 0, maxVol = 0;       // 2 x the median non-zero row; the biggest row
     std::vector<Node> nodes;              // rank order: [0] = WPOC
+    std::vector<LNode> lnodes;            // (1.1.0) liquidity nodes, [0] = LPOC (empty = no book for this wave)
+    bool liqTried = false, liqOk = false;
     bool provisional = false, fromRecord = false, pending = false, recorded = false;
     int vapMissing = 0;                   // bars of the wave IRT had no VAP for
     int scanned = 0;                      // stop rules evaluated up to this bar
@@ -228,7 +233,7 @@ inline bool storeFromText(const std::string& text, const std::string& mkt, int s
 }
 
 // ---------- the node record (append-only; recorded waves are redrawn as recorded) ----------
-struct RecWave { int dir = 0; std::vector<Node> nodes; };
+struct RecWave { int dir = 0; std::vector<Node> nodes; std::vector<LNode> lnodes; };
 inline std::string hm(long long t) {      // local wall clock seconds -> "YYYY-MM-DD HH:MM"
     const long long d = floorDiv(t, 86400), s = t - d * 86400;
     long long z = d + 719468; const long long era = floorDiv(z, 146097); const long long doe = z - era * 146097;
@@ -253,7 +258,16 @@ inline std::string stopLine(const Wave& w, const Node& nd, long long tStop, doub
     std::ostringstream o; o << "STOP," << w.t0 << "," << w.t1 << "," << pxText(nd.tick, tick) << "," << stopName(nd.stop) << "," << tStop << "," << hm(tStop);
     return o.str();
 }
-static const char* const REC_HEAD = "# WavePOC record: WAVE,ver,N,dir,t0,t1,tConf,start,end,confirmed,startPx,endPx,size,avg,nHist,rowTicks,rows,nodes,vapMissing | NODE,t0,t1,rank,price,vol,ratio | STOP,t0,t1,price,reason,tStop,time";
+inline std::string lnodeLine(const Wave& w, const LNode& nd, double tick) {
+    std::ostringstream o; char r[24], l[32]; std::snprintf(r, sizeof r, "%.3f", nd.ratio); std::snprintf(l, sizeof l, "%.1f", nd.lots);
+    o << "LNODE," << w.t0 << "," << w.t1 << "," << nd.rank << "," << pxText(nd.tick, tick) << "," << l << "," << r << "," << (nd.side ? "bid" : "offer") << "," << (nd.nearVol ? "near_volume_node" : "alone");
+    return o.str();
+}
+inline std::string lstopLine(const Wave& w, const LNode& nd, long long tStop, double tick) {
+    std::ostringstream o; o << "LSTOP," << w.t0 << "," << w.t1 << "," << pxText(nd.tick, tick) << "," << stopName(nd.stop) << "," << tStop << "," << hm(tStop);
+    return o.str();
+}
+static const char* const REC_HEAD = "# WavePOC record: WAVE,ver,N,dir,t0,t1,tConf,start,end,confirmed,startPx,endPx,size,avg,nHist,rowTicks,rows,nodes,vapMissing | NODE,t0,t1,rank,price,vol,ratio | STOP,t0,t1,price,reason,tStop,time | LNODE,t0,t1,rank,price,lots,ratio,bid/offer,near_volume_node/alone | LSTOP,t0,t1,price,reason,tStop,time";
 // WAVE lines of THIS N and their NODE lines; garbled lines counted and skipped
 inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std::vector<std::string>& lines, int n, double tick, int& bad,
                                                                      std::map<std::pair<long long, long long>, std::vector<std::pair<long long, int> > >* stops = nullptr) {
@@ -265,7 +279,7 @@ inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std:
             long long nn = 0, t0 = 0, t1 = 0;
             if (f.size() != 19 || !parseLL(f[2], nn) || !parseLL(f[4], t0) || !parseLL(f[5], t1) || (f[3] != "up" && f[3] != "down")) { ++bad; continue; }
             if (nn != n) continue;
-            RecWave& r = m[std::make_pair(t0, t1)]; r.dir = f[3] == "up" ? 1 : -1; r.nodes.clear();
+            RecWave& r = m[std::make_pair(t0, t1)]; r.dir = f[3] == "up" ? 1 : -1; r.nodes.clear(); r.lnodes.clear();
         } else if (f[0] == "NODE") {
             long long t0 = 0, t1 = 0, rank = 0, vol = 0; double px = 0, ratio = 0; long long tk = 0;
             if (f.size() != 7 || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseLL(f[3], rank) || !parseD(f[4], px) || !parseLL(f[5], vol) || !parseD(f[6], ratio)
@@ -274,6 +288,16 @@ inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std:
             bool dup = false; for (const Node& x : it->second.nodes) dup = dup || x.rank == (int)rank;
             if (dup || (int)rank != (int)it->second.nodes.size()) continue;
             Node nd; nd.tick = tk; nd.vol = vol; nd.ratio = ratio; nd.rank = (int)rank; it->second.nodes.push_back(nd);
+        } else if (f[0] == "LNODE") {   // (1.1.0)
+            long long t0 = 0, t1 = 0, rank = 0, tk = 0; double px = 0, lots = 0, ratio = 0;
+            if (f.size() != 9 || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseLL(f[3], rank) || !parseD(f[4], px) || !parseD(f[5], lots) || !parseD(f[6], ratio)
+                || !toTicks(px, tick, tk) || rank < 0 || rank >= MAX_NODES || (f[7] != "bid" && f[7] != "offer")) { ++bad; continue; }
+            auto it = m.find(std::make_pair(t0, t1)); if (it == m.end()) continue;
+            if ((int)rank != (int)it->second.lnodes.size()) continue;
+            LNode nd; nd.tick = tk; nd.lots = lots; nd.ratio = ratio; nd.rank = (int)rank; nd.side = f[7] == "bid" ? 1 : 0; nd.nearVol = f[8] == "near_volume_node"; it->second.lnodes.push_back(nd);
+        } else if (f[0] == "LSTOP") {
+            long long t0 = 0, t1 = 0, ts = 0, tk = 0; double px = 0;
+            if (f.size() != 7 || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseD(f[3], px) || !toTicks(px, tick, tk) || !parseLL(f[5], ts)) { ++bad; continue; }
         } else if (f[0] == "STOP") {
             long long t0 = 0, t1 = 0, ts = 0, tk = 0; double px = 0;
             if (f.size() != 7 || !parseLL(f[1], t0) || !parseLL(f[2], t1) || !parseD(f[3], px) || !toTicks(px, tick, tk) || !parseLL(f[5], ts)) { ++bad; continue; }
@@ -284,7 +308,7 @@ inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std:
 }
 
 // ---------- the engine: closed bars in, waves / nodes / stops out (incremental: each bar is processed once) ----------
-struct Counters { long long legs = 0, cand[2] = {0, 0}, qual[2] = {0, 0}, stops[4] = {0, 0, 0, 0}, vapMissing = 0, vapFault = 0, recordUsed = 0, superseded = 0; };
+struct Counters { long long legs = 0, cand[2] = {0, 0}, qual[2] = {0, 0}, stops[4] = {0, 0, 0, 0}, vapMissing = 0, vapFault = 0, recordUsed = 0, superseded = 0, liqWaves = 0, liqNoBook = 0, lnodes = 0; };
 
 class Engine {
 public:
@@ -298,6 +322,29 @@ public:
     std::vector<std::string> out;                                    // record lines to append (host drains)
     Counters C;
     double tick = 0.25;
+    // (1.1.0) the wave's average resting lots per row + the bid part (host: the once-a-second book samples); false = no book
+    std::function<bool(const Wave&, std::vector<double>&, std::vector<double>&)> liqFn;
+
+    void liquidity(Wave& w) {
+        w.liqTried = true; w.lnodes.clear(); w.liqOk = false;
+        if (!liqFn || w.rows.empty()) return;
+        std::vector<double> rows, bids;
+        if (!liqFn(w, rows, bids) || rows.size() != w.rows.size()) { if (!w.provisional) ++C.liqNoBook; return; }
+        double med = 0; const std::vector<int> pk = wpl::pickRaw(rows, med);
+        for (size_t r = 0; r < pk.size(); ++r) {
+            const int k = pk[r]; LNode nd; nd.rank = (int)r; nd.lots = rows[(size_t)k]; nd.ratio = med > 0 ? rows[(size_t)k] / med : 0;
+            nd.tick = w.e0 + (long long)k * w.rowTicks + w.rowTicks / 2; nd.side = bids[(size_t)k] >= rows[(size_t)k] / 2 ? 1 : 0;
+            for (const Node& v : w.nodes) nd.nearVol = nd.nearVol || std::llabs(v.tick - nd.tick) <= 2;
+            w.lnodes.push_back(nd);
+        }
+        w.liqOk = true;
+        if (!w.provisional) { ++C.liqWaves; C.lnodes += (long long)w.lnodes.size(); }
+    }
+    void recordWave(Wave& w) {
+        out.push_back(waveLine(w, N, tick)); for (const Node& nd : w.nodes) out.push_back(nodeLine(w, nd, tick));
+        for (const LNode& nd : w.lnodes) out.push_back(lnodeLine(w, nd, tick));
+        w.recorded = true; RecWave& r = rec[std::make_pair(w.t0, w.t1)]; r.dir = w.dir; r.nodes = w.nodes; r.lnodes = w.lnodes;
+    }
 
     void reset() { B.clear(); alt.clear(); waves.clear(); confs.clear(); out.clear(); C = Counters(); }
     int lastBar() const { return (int)B.size() - 1; }
@@ -348,6 +395,12 @@ public:
                 nd.stopBar = k;
                 if (record) { ++C.stops[nd.stop]; out.push_back(stopLine(w, nd, b.t, tick)); }
             }
+            for (LNode& nd : w.lnodes) {   // (1.1.0) the same stop rules
+                if (nd.stop != OPEN) continue;
+                if (b.l <= nd.tick && nd.tick <= b.h) nd.stop = TOUCH; else if (nw) nd.stop = NEWWAVE; else if (org) nd.stop = ORIGIN; else continue;
+                nd.stopBar = k;
+                if (record) out.push_back(lstopLine(w, nd, b.t, tick));
+            }
         }
         if (upto > w.scanned) w.scanned = upto;
     }
@@ -372,16 +425,16 @@ public:
         ++C.qual[w.dir > 0 ? 0 : 1];
         confs.insert(std::upper_bound(confs.begin(), confs.end(), k), k);
         if (rk != rec.end() && rk->second.dir == w.dir && !rk->second.nodes.empty()) {
-            w.fromRecord = true; w.recorded = true; w.nodes = rk->second.nodes; ++C.recordUsed;
+            w.fromRecord = true; w.recorded = true; w.nodes = rk->second.nodes; w.lnodes = rk->second.lnodes; w.liqTried = true; w.liqOk = !w.lnodes.empty(); ++C.recordUsed;
             for (Node& nd : w.nodes) { nd.stop = OPEN; nd.stopBar = -1; }
+            for (LNode& nd : w.lnodes) { nd.stop = OPEN; nd.stopBar = -1; }
             profile(w, vap);                                                             // the histogram only (nodes stay as recorded)
             for (Node& nd : w.nodes) nd.row = rowOf(w, nd.tick);
             C.vapMissing += w.vapMissing;
         } else if (profile(w, vap)) {
-            nodesFromRows(w);
+            nodesFromRows(w); liquidity(w);
         } else { w.pending = true; C.vapMissing += w.vapMissing; }
-        if (!w.pending && !w.recorded) { out.push_back(waveLine(w, N, tick)); for (const Node& nd : w.nodes) out.push_back(nodeLine(w, nd, tick)); w.recorded = true;
-            rec[std::make_pair(w.t0, w.t1)].dir = w.dir; rec[std::make_pair(w.t0, w.t1)].nodes = w.nodes; }
+        if (!w.pending && !w.recorded) recordWave(w);
         w.scanned = w.i1;
         waves.push_back(w);
     }
@@ -412,9 +465,8 @@ public:
         for (Wave& w : waves) {
             if (!w.pending) continue;
             if (!profile(w, vap)) continue;
-            w.pending = false; nodesFromRows(w); ++done;
-            out.push_back(waveLine(w, N, tick)); for (const Node& nd : w.nodes) out.push_back(nodeLine(w, nd, tick)); w.recorded = true;
-            rec[std::make_pair(w.t0, w.t1)].dir = w.dir; rec[std::make_pair(w.t0, w.t1)].nodes = w.nodes;
+            w.pending = false; nodesFromRows(w); liquidity(w); ++done;
+            recordWave(w);
             w.scanned = w.i1; advance(w, lastBar(), true);
         }
         return done;
@@ -440,7 +492,7 @@ public:
         w.avg = store ? store->avgBefore(dir, w.t1, w.nHist) : 0;
         if (!(w.nHist >= MIN_HIST && (double)w.size > w.avg + 1e-9)) return false;
         if (!profile(w, vap)) return false;
-        nodesFromRows(w); w.scanned = w.i1; advance(w, k, false);
+        nodesFromRows(w); liquidity(w); w.scanned = w.i1; advance(w, k, false);
         return true;
     }
 };
@@ -450,7 +502,11 @@ struct Prim {
     enum K { FILL, BOX, LINE, OVAL, TEXT } k = FILL;
     int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned long col = 0; int w = 1; std::string text; bool back = true; int bold = 0;
 };
-struct Colours { unsigned long prof = 0x334155, amber = 0xF5B428, amberFill = 0xC88C14, white = 0xE5E7EB, whiteFill = 0xB4BECD, zz = 0x78849A, zzBig = 0xCBD5E1, grey = 0x94A3B8; };
+struct Colours { unsigned long prof = 0x334155, amber = 0xF5B428, amberFill = 0xC88C14, white = 0xE5E7EB, whiteFill = 0xB4BECD, zz = 0x78849A, zzBig = 0xCBD5E1, grey = 0x94A3B8, bid = 0x22C55E, offer = 0xEF4444, bg = 0x0B0F17; };
+inline unsigned long mix(unsigned long c, unsigned long bg, double a) {   // a of the colour over the background
+    unsigned long o = 0; for (int sh = 0; sh <= 16; sh += 8) { const double x = (double)((bg >> sh) & 255) + ((double)((c >> sh) & 255) - (double)((bg >> sh) & 255)) * a; o |= (unsigned long)std::lround(std::max(0.0, std::min(255.0, x))) << sh; }
+    return o;
+}
 struct View {
     int l = 0, t = 0, r = 800, b = 600;           // the pane (price area)
     int first = 0, last = 0;                      // visible bars
@@ -463,7 +519,7 @@ struct View {
     bool zigzag = false;
     double tick = 0.25;
 };
-struct Scene { std::vector<Prim> p; int tagsShown = 0, tagsHidden = 0, nodesDrawn = 0, wavesDrawn = 0; };
+struct Scene { std::vector<Prim> p; int tagsShown = 0, tagsHidden = 0, nodesDrawn = 0, wavesDrawn = 0, lnodesDrawn = 0; };
 
 inline int ci(double v) { return v < -30000 ? -30000 : v > 30000 ? 30000 : (int)std::lround(v); }
 inline void addLine(Scene& s, double x0, double y0, double x1, double y1, unsigned long c, int w, bool back) { Prim p; p.k = Prim::LINE; p.x0 = ci(x0); p.y0 = ci(y0); p.x1 = ci(x1); p.y1 = ci(y1); p.col = c; p.w = w; p.back = back; s.p.push_back(p); }
@@ -474,6 +530,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
     const int endShown = v.lastBar;
     // visible? the wave start .. its longest line end
     int far = w.i1; for (const Node& nd : w.nodes) far = std::max(far, nd.stop == OPEN ? endShown : nd.stopBar);
+    for (const LNode& nd : w.lnodes) far = std::max(far, nd.stop == OPEN ? endShown : nd.stopBar);
     if (far < v.first || w.i0 > v.last) return;
     ++s.wavesDrawn;
     const double x0 = v.X(w.i0) - v.bw * 0.45;
@@ -492,6 +549,25 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
         }
     }
     const double xs = x0 + PW + 2;
+    // (1.1.0) the liquidity nodes: compact bars pointing LEFT from the wave start (max 60 px), LPOC in the bright side colour, the others
+    // 60% of it; a faint dotted line to the right (same stop rules); no outline boxes, no price tags
+    if (!w.lnodes.empty() && w.lnodes[0].lots > 0) {
+        const double LW = 60, lmx = w.lnodes[0].lots;
+        for (const LNode& nd : w.lnodes) {
+            const double yc = v.Y((double)nd.tick); if (yc < v.t - 10 || yc > v.b + 10) continue;
+            ++s.lnodesDrawn;
+            const bool lp = nd.rank == 0; const unsigned long side = nd.side ? C.bid : C.offer;
+            const unsigned long fill = lp ? side : mix(side, C.bg, 0.6), dot = mix(side, C.bg, lp ? 0.8 : 0.5);
+            const long long r0 = w.e0 + floorDiv(nd.tick - w.e0, w.rowTicks) * w.rowTicks;
+            const double top = v.Y((double)r0 + w.rowTicks - 0.5), bot = v.Y((double)r0 - 0.5);
+            Prim f; f.k = Prim::FILL; f.x1 = ci(x0 - 2); f.x0 = ci(x0 - 2 - LW * std::min(1.0, nd.lots / lmx)); f.y0 = ci(top); f.y1 = ci(std::max(top + 1.0, bot)); f.col = fill; f.back = true;
+            if (f.x1 > f.x0) s.p.push_back(f);
+            int endBar = nd.stop == OPEN ? endShown : nd.stopBar;
+            if (nd.stop == OPEN && v.haveForming && v.lastBar > w.scanned && v.formL <= nd.tick && nd.tick <= v.formH) endBar = v.lastBar;
+            const double xe = v.X(endBar);
+            for (double x = xs + 2; x < xe; x += 6) addLine(s, x, yc, std::min(x + 2, xe), yc, dot, 1, true);
+        }
+    }
     for (const Node& nd : w.nodes) {
         const bool poc = nd.rank == 0; const unsigned long col = poc ? C.amber : C.white;
         const double yc = v.Y((double)nd.tick);
@@ -586,6 +662,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, int spb, 
     o << "NODES,total " << nodes << ",drawn now " << (sc ? sc->nodesDrawn : 0) << ",waves drawn " << (sc ? sc->wavesDrawn : 0) << ",tags " << (sc ? sc->tagsShown : 0)
       << ",tags hidden (no room right of the last bar) " << (sc ? sc->tagsHidden : 0) << ",provisional " << (provShown ? "yes" : "no") << "\n";
     o << "STOPS,touch " << E.C.stops[TOUCH] << ",new wave " << E.C.stops[NEWWAVE] << ",origin close " << E.C.stops[ORIGIN] << "\n";
+    o << "LIQUIDITY_NODES,waves with liquidity " << E.C.liqWaves << ",waves without book " << E.C.liqNoBook << ",liquidity nodes " << E.C.lnodes << ",drawn now " << (sc ? sc->lnodesDrawn : 0) << "\n";
     o << "RECORD," << recWhy << ",bad lines " << recBad << "\n";
     return o.str();
 }

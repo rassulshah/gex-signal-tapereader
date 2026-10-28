@@ -34,6 +34,7 @@ static const short kParmAppendSameLine = 1;
 class VOLPROFILE { public: float price; long long buyVolume, sellVolume, totalVolume; };
 class BARSTATISTICS { public: int prices; long long buyVolume, sellVolume, totalVolume; };
 
+typedef struct DEPTH_ORDER { RTDATE timestamp; float price; float previousPrice; float bid, ask; unsigned long bidsize, asksize; unsigned long size; int orderID; int aggressorOrderID; unsigned char action; unsigned char buySell; } DEPTH_ORDER;
 namespace mock {
 struct Param { int type = 0; bool b = false; int i = 0; std::string name; };   // 1 bool, 2 int, 3 other
 inline std::vector<Param> declared;
@@ -51,6 +52,7 @@ struct Host {
     bool dialog = false;   // the settings window copy (no bar size)
     std::vector<Prim> drawn; COLOR pen = 0; int penW = 1; COLOR text = 0; bool bold = false; int curH = 0, curV = 0;
     double lo = 0, hi = 0;   // price scale of the pane
+    std::vector<DEPTH_ORDER> mbo; size_t mboAt = 0;   // (1.1.0) the order-by-order queue this chart's feed hands out
     int first = 0;           // first visible bar
 };
 extern Host* current;
@@ -71,6 +73,17 @@ public:
         if (bar < 0 || bar >= count || i < 0 || i >= (int)mock::current->vap[(size_t)bar].size()) return RTX_FAIL;
         v.price = mock::current->vap[(size_t)bar][(size_t)i].first; v.totalVolume = mock::current->vap[(size_t)bar][(size_t)i].second; v.buyVolume = v.totalVolume / 2; v.sellVolume = v.totalVolume - v.buyVolume; return RTX_OK;
     }
+};
+namespace mock { inline int dboAlive = 0, dboMade = 0; }
+class DEPTH_BY_ORDER {
+public:
+    explicit DEPTH_BY_ORDER(const char* = nullptr) { ++mock::dboAlive; ++mock::dboMade; host = mock::current; std::memset(&dbo, 0, sizeof dbo); }
+    ~DEPTH_BY_ORDER() { --mock::dboAlive; }
+    char symbol[24] = { 0 };
+    DEPTH_ORDER dbo;
+    RTX_RESULT getNext(void) { mock::Host* H = mock::current; if (!H || H->mboAt >= H->mbo.size()) return RTX_FAIL; dbo = H->mbo[H->mboAt++]; return RTX_OK; }
+private:
+    mock::Host* host;
 };
 class FONT { public: FONT_ID id = HELVETICA; short size = 12; FONT_STYLE style = PLAIN; };
 class CBRUSH { public: CBRUSH(COLOR = 0, BRUSH_STYLE = PAT_SOLID) {} void set() {} };
@@ -95,6 +108,7 @@ public:
 
 class cppExtension {
 public:
+    typedef ::DEPTH_BY_ORDER DEPTH_BY_ORDER;   // nested in the real SDK
     cppExtension() {}
     virtual ~cppExtension() {}
     virtual int init(void); virtual int setup(void); virtual int calc(int); virtual int done(void); virtual int destroy(void);

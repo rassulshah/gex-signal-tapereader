@@ -38,3 +38,22 @@ volume nodes" (highlight = the bar fill only). Committed before 15:10 CT so the 
 - PRE_DRAWING (first plugin to use it) - check the status DRAWING line; native getParameters on his IRT; VAP history depth (waves whose
   VAP is missing stay pending and are retried every 10 min).
 - Screenshots in 2+ markets after the restart.
+
+# lsWavePOC 1.1.0 - liquidity nodes (2026-10-28, Rassul approved 11:27 CT for tonight's restart)
+
+- WavePOCLiq.h (new, SDK-free): IRT's live order-by-order book (DEPTH_BY_ORDER, one per chart, kept alive, crash-guard file
+  lsFlexLevels\WavePOC\_opening-<MKT>-<spb>.txt, drained <= 5,000 events / 8 ms per call). Market-maker orders (re-priced >= 2x in
+  5 min) left out. Sampled once a second (+-300 ticks of the book's middle) into the forming bar.
+- A wave's liquidity = average resting lots per volume-profile row over its bars (needs samples on >= 90% of its bars; waves formed
+  before the indicator loaded have none - no error, status LIQUIDITY_NODES "waves without book").
+- Nodes on the RAW rows (>= 2.0x median, a row >= both neighbours), separated like the volume nodes, max 5, biggest = LPOC; side =
+  bids if bids >= half the row.
+- Drawn: nodes only, bars pointing LEFT from the wave start (max 60 px), LPOC bright green (bids) / red (offers), others 60%; faint
+  dotted line to the right (same stop rules); no tags, no outline boxes (none on the volume nodes either - Rassul 11:21 CT).
+- Record: LNODE,t0,t1,rank,price,lots,ratio,bid|offer,near_volume_node|alone (within 2 ticks of a volume node) + LSTOP lines; recorded
+  liquidity nodes are redrawn after a restart (the book itself is not historical).
+- Tests: logic 107/107 (wp8.py reference on the Oct 22 MBO snapshots, wavepoc_es1022_liq.csv: wave 1 LPOC 7688.25 2.31x bids +
+  7707.25 2.01x near the volume node; wave 2 LPOC 7685.25 4.53x, 7680.25 4.01x, 7689.25 2.39x - all match), book / MM / sampler /
+  coverage; host 48/48 incl. a live mock book (LPOC = the 400-lot bid, the re-pricing 900-lot market maker left out, feed destroyed
+  with the chart). Run: `g++ -std=c++17 -I.. test_wavepoc_logic.cpp -o t && ./t wavepoc_es1022.csv wavepoc_es1022_liq.csv`.
+- Not verified on his IRT: the order feed on the price chart (status MBO line: open / events / orders / samples).

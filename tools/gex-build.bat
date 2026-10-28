@@ -74,7 +74,8 @@ call :one TradeManager lsTradeManager DealerLogic.h HostSlot.h TradeGuardLayout.
 REM (2026-10-27) lsSessionVWAP 1.8.0: + PivotVwapLogic.h (the 3-bar pivot VWAP)
 call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h OnTouchParams.h OnTouchLogic.h VwapTrendLogic.h VwapOddsLogic.h VwapOddsParams.h SessionVWAPStyle.h MarketState.h BannerBoard.h SessionVWAPSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h BoxDock.h KeepOutDraw.h PerfGuard.h SelfAware.h PivotVwapLogic.h
 REM (2026-10-28) lsWavePOC 1.0.0 "Wave POC" (Rassul approved 10:59 CT "just build now"): each big wave's own volume profile + its nodes as lines; WavePOCLogic.h / WavePOCSettings.h (native parameters, SessionVWAP 1.8.1 pattern)
-call :one WavePOC lsWavePOC WavePOCLogic.h WavePOCSettings.h SettingsSpec.h SettingsHost.h HostSlot.h
+REM (2026-10-28 11:4x CT) lsWavePOC 1.1.0: + WavePOCLiq.h (liquidity nodes from the order-by-order book, Rassul approved 11:27 CT)
+call :one WavePOC lsWavePOC WavePOCLogic.h WavePOCLiq.h WavePOCSettings.h SettingsSpec.h SettingsHost.h HostSlot.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
 call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
 call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
