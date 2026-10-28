@@ -324,24 +324,22 @@ int main()
             std::vector<sb::Fact> Q2; sb::readFacts('Q', a.sym, a.spb, MOCK_CHART, dpNowMs(), Q2, false);
             bool same = Q2.size() == 5; for (size_t k = 0; same && k < Q2.size() && k < Q.size(); ++k) same = Q2[k].lo == Q[k].lo;
             check(same, "(b) steady: small size changes and a weak 11th order do not reshuffle the top 10"); }
-        {   // (2.31.1) moving / quoting: a 2000-lot order re-priced 3x is NOT dropped - it is ranked (king, rank 1) and dimmed with "~"; a 1x-moved one dimmed too
+        {   // (2.31.2, Rassul 10:06 "top 5 nodes that are real") a 2000-lot order re-priced 3x in 5 min is quoting: NOT shown, never king; a 1x-moved one is real (shown plainly, no "~")
             sb::Fact qf; qf.bar = 1; qf.lo = qf.hi = 7847.0; qf.side = 1; qf.val = 2000; qf.state = 3; B.push_back(qf);
             for (auto& f : B) if (f.val == 330) f.state = 1;
             sb::postFacts('B', a.sym, a.spb, MOCK_CHART, dpNowMs(), B); drawOn(X, a, MOCK_CHART); std::vector<Op> O3 = drawOn(X, a, MOCK_CHART);
-            check(hasText(O3, "~2000"), "moving king order kept, dimmed with ~ (never dropped)");
-            check(hasText(O3, "~330"), "a 1x-moved order dimmed with ~");
-            check(!hasText(O3, "2000") && !hasText(O3, "330"), "no undimmed copy of the moving orders");
+            check(!hasText(O3, "2000") && !hasText(O3, "~2000"), "quoting 2000 (re-priced 3x) not shown");
+            bool anyTilde = false; for (auto& q : O3) if (q.kind == "text" && !q.text.empty() && q.text[0] == '~') anyTilde = true;
+            check(!anyTilde, "no ~ rows at all");
             std::vector<sb::Fact> Q3; sb::readFacts('Q', a.sym, a.spb, MOCK_CHART, dpNowMs(), Q3, false);
-            check(Q3.size() == 5 && Q3[0].val == 2000 && Q3[0].code == 1 && Q3[0].state == 1, "king = the biggest (2000) even while moving, marked (state 1)");
+            check(Q3.size() == 5 && Q3[0].val == 900 && Q3[0].code == 1, "king = the biggest REAL order (900), not the quoting 2000");
             int chips = 0; for (auto& q : O3) if (q.kind == "text" && q.l >= c2.lay.levels.l && q.l < c2.lay.levels.l + 24 && q.text.size() <= 2 && std::isdigit((unsigned char)q.text[0])) ++chips;
             check(chips <= 5, "never more than 5 rows (" + std::to_string(chips) + ")");
-            const std::string st3 = slurp(fl("DealerProfile.status-ES-180.txt"));
-            check(st3.find("never dropped) 2") != std::string::npos && st3.find("king ~ 1") != std::string::npos, "status: 2 dimmed, king ~ 1");
-            // same size re-added at the same price under a new order id (LP state 0 again): the same level - still dimmed (no new move, no reset)
+            // it stops re-pricing (state 0): now real -> the biggest -> king
             for (auto& f : B) if (f.val == 2000) f.state = 0;
-            sb::postFacts('B', a.sym, a.spb, MOCK_CHART, dpNowMs(), B); std::vector<Op> O4 = drawOn(X, a, MOCK_CHART);
-            check(hasText(O4, "~2000"), "same-size re-add at the same price = the same level (kept, still ~)");
-            for (auto& f : B) if (f.val == 2000) { f.state = 0; }
+            sb::postFacts('B', a.sym, a.spb, MOCK_CHART, dpNowMs(), B); drawOn(X, a, MOCK_CHART); drawOn(X, a, MOCK_CHART);
+            std::vector<sb::Fact> Q4; sb::readFacts('Q', a.sym, a.spb, MOCK_CHART, dpNowMs(), Q4, false);
+            check(!Q4.empty() && Q4[0].val == 2000 && Q4[0].code == 1, "once it rests (no more re-pricing) the 2000 is king");
             for (auto& f : B) if (f.val == 330) f.state = 0;
         }
         {   // (2.31.1, Rassul 09:47 "when I scroll up I see another king node") two viewports, the same book = the same king and the same ranks
