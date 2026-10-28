@@ -186,7 +186,8 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.31.2"          // 1.31.2 (2026-10-28 overnight, live 22:06) nothing drawn under the LEFT Liquidity column (ColumnBoard Levels box)
+#define BBA_VERSION "1.31.3"          // 1.31.3 (2026-10-28 12:16 CT) nothing drawn under lsDealerProfile 2.33.0's Key Levels column at the pane's LEFT edge (ColumnBoard 1.9.0 leftKeep)
+#define BBA_VERSION_1312 "1.31.2"          // 1.31.2 (2026-10-28 overnight, live 22:06) nothing drawn under the LEFT Liquidity column (ColumnBoard Levels box)
 // was 1.31.1:          // 1.31.1 (2026-10-27 19:00 CT) the BO letters as drawn are posted on the SignalBoard (kind L) so the Ex letter of lsLiquidityProfile stacks straight against BO on the same candle; nothing drawn changes;          // 1.31.0 (2026-10-27 17:29 CT Rassul) BO follow-through = any later candle of the same up-wave, green, higher high + higher close than the BO bar (BD mirror); older BO records decided again;          // 1.30.2 (2026-10-27 17:23 CT) FIX: old BO records (1.28 / 1.29, no follow-through) were still drawn - the record version was read from the wrong field; they are now decided again under rule 4 (follow-through bar);          // 1.30.1 (2026-10-27 14:00 CT) nothing drawn under the left Delta column (ColumnBoard 1.5.0);          // 1.30.0 (2026-10-27, Rassul 13:00 CT) BO rule 4: the next candle must follow through (green, higher high + higher close; BD mirror); 1.29.0 records decided again;          // 1.29.0 (2026-10-26, Rassul 17:55 CT) the OB print + OB letter are not drawn, OB settings rows removed (decision + record kept)
 // prev:          // 1.28.0 (2026-10-24, Rassul 21:38 CT) BO wave confirmation (higher high + higher close in the same wave, closes beyond the pivot), counter-trend needs a 30-bar high / low, letter on the BO bar, BO / OB boxes show biggest-in-N
 // prev:          // 1.27.1 (2026-10-24, Rassul 21:42 CT) Rly condition 3: tagged +-1 SD OR a 30-bar high / low (RallyLogic.h 1.1.0; waves already recorded are not re-judged)
@@ -1637,7 +1638,8 @@ void BigBidAsk::render(BBState& S) {
         S.priceRight = (L.ok && L.margin > 0) ? L.priceRight : axisR;
         S.leftLimit = pane.left + (S.peers.on[cb::LIQ] ? S.peers.w[cb::LIQ] + 2 : 2);
         if (cb::DELTA_LEFT && L.w[cb::DELTA] > 0) S.leftLimit = std::max(S.leftLimit, L.delta.r + 2);   // (ColumnBoard 1.5.0) nothing under the left Delta column
-        if (cb::LEVELS_LEFT && L.w[cb::LEVELS] > 0) S.leftLimit = std::max(S.leftLimit, L.levels.r + 2);   // (1.31.2, ColumnBoard 1.6.0+) nothing under the left Liquidity column (live 10-27 22:06: the 13 / 22 / 23 boxes sat on it)
+        if (cb::LEVELS_LEFT && L.w[cb::LEVELS] > 0) S.leftLimit = std::max(S.leftLimit, L.levels.r + 2);
+        S.leftLimit = std::max(S.leftLimit, cb::leftKeep(sym, getSecondsPerBar(), chart, (int)pane.left, steadyMs()));   // (1.31.3) nothing under the Key Levels column (lsDealerProfile 2.33.0)   // (1.31.2, ColumnBoard 1.6.0+) nothing under the left Liquidity column (live 10-27 22:06: the 13 / 22 / 23 boxes sat on it)
         // the Tape Reader's banner (BannerBoard.h) - the one other indicator box this plugin can see: never covered
         bb::Rect r; long long ms = -1; const bool have = bb::peekBanner(sym, getSecondsPerBar(), chart, r, ms);
         S.trOn = S.trBeat.step(have, ms, steadyMs());
@@ -2164,6 +2166,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.24.0) TRACK_MOUSE for the Rly hover only (print hovers stay off: BBA_HOVERS)
     p->setDescription("LRA Big Bid / Ask 1.30.0: Rly (3-min) = the end of a confirmed trend wave (3+ bars, 2.5+ ATR, tagged VWAP +/-1 SD, a 20-bar high / low, vwapTrend Uptrend / Dntrend): green above / red below the bar - don't chase it, wait for the pullback to VWAP / 1 SD and a trigger, trend only. BO = context, not an entry: a confirmed break - don't fade against it. A green breakout (red breakdown) candle that trades through one of the last 3 intact swing highs (lows) of the full-session 1-bar ZigZag (a swing stays intact until a candle closes beyond it), with a 10-candle high (low), range >= the prior candle's and volume or range up; no close beyond the swing needed, but the NEXT candle must follow through (green with a higher high and a higher close; breakdown: red, lower low, lower close) - decided at that candle's close, in every session; against the vwapTrend the wave must also make a 20-bar high (low); one per wave. BO green above / red below the breakout candle; failures are logged only. Its biggest buy (sell) print on the candle, the box = biggest in N candles. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.31.2");   // BBA_VERSION
+    p->setVersion("1.31.3");   // BBA_VERSION
     return p;
 }

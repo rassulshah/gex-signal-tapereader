@@ -31,7 +31,8 @@
 #include "BannerBoard.h"
 
 namespace cb {
-static const char* const VERSION = "1.8.0";   // (1.8.0, 2026-10-28 06:42 CT Rassul "keep the liquidity profile behind the delta profile", option R) the Levels / liquidity column moves to the RIGHT as its own column after the Delta Profile: gap, BIG = LMT F, Delta (READ + bars), Levels (liquidity top 10), Dealer, axis; the left side is free (leftKeep = the pane edge)   // (1.7.0, 2026-10-28 overnight, live 22:06 overlap on the left column) leftKeep: the one rule every plugin uses to keep its marks / boxes right of the left columns;   // (1.6.0, 2026-10-28) Levels (liquidity) LEFT, Delta back on the right after LMT F;   // (1.5.0, 2026-10-27 14:00 CT) the Delta column at the pane's LEFT edge (DELTA_LEFT);   // (1.4.0, 2026-10-27 DP 2.28.0) Levels column up to 460 px (the combined Levels + Liquidity column);   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
+static const char* const VERSION = "1.9.0";   // (1.9.0, 2026-10-28 12:16-12:18 CT Rassul "i want a column for levels and move all the level badges in the levels column because the chart is too messy. also move the hod lod box aligned with the liquidity profile on the left") the KEY LEVELS column (lsDealerProfile 2.33.0) at the pane's LEFT edge: its own board key LRA_COLV_, leftKeep keeps every plugin right of it (lsHodLod docks INSIDE it, leftKeep(..., false))
+// was 1.8.0:   // (1.8.0, 2026-10-28 06:42 CT Rassul "keep the liquidity profile behind the delta profile", option R) the Levels / liquidity column moves to the RIGHT as its own column after the Delta Profile: gap, BIG = LMT F, Delta (READ + bars), Levels (liquidity top 10), Dealer, axis; the left side is free (leftKeep = the pane edge)   // (1.7.0, 2026-10-28 overnight, live 22:06 overlap on the left column) leftKeep: the one rule every plugin uses to keep its marks / boxes right of the left columns;   // (1.6.0, 2026-10-28) Levels (liquidity) LEFT, Delta back on the right after LMT F;   // (1.5.0, 2026-10-27 14:00 CT) the Delta column at the pane's LEFT edge (DELTA_LEFT);   // (1.4.0, 2026-10-27 DP 2.28.0) Levels column up to 460 px (the combined Levels + Liquidity column);   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
 static const int GAP_PX = 20;            // between the last bar and the Levels column
 static const int MIN_PRICE_PX = 160;     // price area kept on a narrow chart
 // (1.5.0, 2026-10-27 14:00 CT Rassul "to save space move the delta profile to the left") the Delta Profile column sits at the LEFT
@@ -189,9 +190,12 @@ inline bool peek(int c, const std::string& sym, long spb, const std::string& cha
 // liquidity column when LEVELS_LEFT, the Delta column when DELTA_LEFT) + 2 px, while their producer is posting (stamp within LEFT_FRESH_MS of
 // nowMs, the steady clock every poster uses); else the pane's left edge. Stateless (a reader with Peers uses Layout.levels.r + 2 instead).
 static const long long LEFT_FRESH_MS = 10000;
-inline int leftKeep(const std::string& sym, long spb, const std::string& chart, int paneL, long long nowMs)
+inline bool keysFresh(const std::string& sym, long spb, const std::string& chart, long long nowMs, int& w);
+// (1.9.0) withKeys = false: the Key Levels column is NOT a keep-out (lsHodLod: its table docks inside that column)
+inline int leftKeep(const std::string& sym, long spb, const std::string& chart, int paneL, long long nowMs, bool withKeys = true)
 {
     int x = paneL, w = 0; long long ms = -1;
+    if (withKeys && keysFresh(sym, spb, chart, nowMs, w)) x = std::max(x, paneL + 1 + w + 2);
     if (LEVELS_LEFT && peek(LEVELS, sym, spb, chart, w, ms) && nowMs >= ms && nowMs - ms <= LEFT_FRESH_MS) x = std::max(x, paneL + 1 + w + 2);
     if (DELTA_LEFT && peek(DELTA, sym, spb, chart, w, ms) && nowMs >= ms && nowMs - ms <= LEFT_FRESH_MS) x = std::max(x, paneL + 1 + w + 2);
     return x;
@@ -209,6 +213,42 @@ struct Peers {
         }
     }
 };
+
+// ---- (1.9.0) the KEY LEVELS column at the pane's LEFT edge (lsDealerProfile 2.33.0): the level badges, the HOD/LOD table docked at its top
+static const bool KEYS_LEFT = true;
+inline Range keysRange() { return Range{ 120, 460, 230 }; }
+inline int cleanKeysW(long long v) { const Range r = keysRange(); return (v >= r.lo && v <= r.hi) ? (int)v : r.def; }
+inline void publishKeys(const std::string& sym, long spb, const std::string& chart, long long ms, int w)
+{ if (!sym.empty()) bb::bbSet(bb::key("LRA_COLV_", sym, spb, chart), enc(ms, cleanKeysW(w))); }
+inline void clearKeys(const std::string& sym, long spb, const std::string& chart) { if (!sym.empty()) bb::bbSet(bb::key("LRA_COLV_", sym, spb, chart), std::string()); }
+inline bool peekKeys(const std::string& sym, long spb, const std::string& chart, int& w, long long& ms)
+{
+    std::string v; w = 0; ms = -1;
+    if (sym.empty() || !bb::bbGet(bb::key("LRA_COLV_", sym, spb, chart), v) || v.empty() || v.size() > 40) return false;
+    const size_t k = v.find('|'); if (k == std::string::npos) return false;
+    long long m = 0; if (!bb::num(v.substr(0, k), m) || m < 0) return false;
+    const std::string t = v.substr(k + 1); if (t.empty() || t.size() > 4) return false;
+    for (size_t i = 0; i < t.size(); ++i) if (t[i] < '0' || t[i] > '9') return false;
+    const long long x = std::strtoll(t.c_str(), nullptr, 10); const Range r = keysRange(); if (x < r.lo || x > r.hi) return false;
+    w = (int)x; ms = m; return true;
+}
+// the Key Levels column is on THIS chart now (its producer posted within LEFT_FRESH_MS of nowMs): its box = [paneL + 1, paneL + 1 + w]
+inline bool keysFresh(const std::string& sym, long spb, const std::string& chart, long long nowMs, int& w)
+{
+    long long ms = -1; if (!KEYS_LEFT || !peekKeys(sym, spb, chart, w, ms) || nowMs < ms || nowMs - ms > 10000) { w = 0; return false; }
+    return true;
+}
+
+// (1.9.0) where lsHodLod's table (its union with the strip / Q header / rows: [ul, ut, ur, ub]) docks while the Key Levels column is on the
+// chart: top-left INSIDE the column, under the IRT title row; ok = false when the table is taller than the pane (then it keeps its own spot)
+struct Dock { int dx = 0, dy = 0; bool ok = false; };
+inline Dock dockKeys(int ul, int ut, int ur, int ub, int paneL, int paneT, int paneB)
+{
+    Dock d; const int title = (paneB - paneT) >= 200 ? 22 : 0;
+    const int l = paneL + 3, t = paneT + title + 2;
+    if (ur <= ul || ub <= ut || t + (ub - ut) > paneB - 4) return d;
+    d.dx = l - ul; d.dy = t - ut; d.ok = true; return d;
+}
 
 // ---- the level badges: stacking and the name that fits ------------------------------------------------------------------------
 struct Item { int want = 0; int h = 0; int y = 0; bool shown = false; };   // want = the line's y; y = the badge's centre

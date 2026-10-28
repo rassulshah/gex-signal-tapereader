@@ -158,7 +158,8 @@ static const char* LT_HEADER = "kind,touch_ms,sec_end,side,px_tick,price,tag,vot
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.66.0"          // (0.66.0, 2026-10-28, Rassul approved the liquidity-column build 11:05 CT + 11:08 CT "i like the held signal ... show it when it held") THE TOUCH TAG (LiqTouch.h 1.0.0, the 10-28 liquidity study ported exactly): every big resting level (the market tier, p97 of book levels: ES 72 / NQ 12 / CL 16 / GC 10 / HG 10 / NG 30 / 6E 128 lots, nightly LRA-LiqTouch-<MKT>.csv) is followed natively from the order-by-order feed; 15 s after its first trade it is STAYS+ / STAYS / STAYS weak / GONE / GONE+ (or MID / EARLY, logged), with the Tape Reader votes; then HELD / BROKE / EXPIRED; posted as SignalBoard facts kind S for lsDealerProfile (tag in the Liquidity column, HELD on the chart - nothing new drawn here); every touch recorded to <stem>-liqtouch-<session>.csv (T / D 30-s / O lines, the log-only reads: king, dominance, MenthorQ, tap, seconds at the level, refill, churn, attacker mix) and read back after a restart (no repaint); status LIQ_TOUCH   // was (0.65.2)  (0.65.2, 2026-10-28 09:31 CT Rassul approved the split LMT F) BIDS FILLED in the LEFT half (green), OFFERS FILLED in the RIGHT half (red), each on its exact price row, centred in its half; collisions resolved per side only (a bid and an offer at the same price both show)
+#define LQ_VERSION "0.66.1"          // (0.66.1, 2026-10-28 12:16 CT Rassul "a column for levels ... move the hod lod box aligned ... on the left") the top read banner and the order lines start right of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0 leftKeep) - the HOD/LOD table docks at that column's top
+#define LQ_VERSION_0660 "0.66.0"          // (0.66.0, 2026-10-28, Rassul approved the liquidity-column build 11:05 CT + 11:08 CT "i like the held signal ... show it when it held") THE TOUCH TAG (LiqTouch.h 1.0.0, the 10-28 liquidity study ported exactly): every big resting level (the market tier, p97 of book levels: ES 72 / NQ 12 / CL 16 / GC 10 / HG 10 / NG 30 / 6E 128 lots, nightly LRA-LiqTouch-<MKT>.csv) is followed natively from the order-by-order feed; 15 s after its first trade it is STAYS+ / STAYS / STAYS weak / GONE / GONE+ (or MID / EARLY, logged), with the Tape Reader votes; then HELD / BROKE / EXPIRED; posted as SignalBoard facts kind S for lsDealerProfile (tag in the Liquidity column, HELD on the chart - nothing new drawn here); every touch recorded to <stem>-liqtouch-<session>.csv (T / D 30-s / O lines, the log-only reads: king, dominance, MenthorQ, tap, seconds at the level, refill, churn, attacker mix) and read back after a restart (no repaint); status LIQ_TOUCH   // was (0.65.2)  (0.65.2, 2026-10-28 09:31 CT Rassul approved the split LMT F) BIDS FILLED in the LEFT half (green), OFFERS FILLED in the RIGHT half (red), each on its exact price row, centred in its half; collisions resolved per side only (a bid and an offer at the same price both show)
 #define LQ_VERSION_0651 "0.65.1"          // (0.65.1, 2026-10-28 09:05 CT Rassul "it would be horrible if ... the limit F is showing it at the wrong location") LMT F / live iceberg labels are drawn AT THEIR PRICE ROW or not at all (LabelPlace.h 1.0.0, biggest print wins a collision); 0.65.0 pushed colliding labels down a row at a time, so ES "2x 1571" (bids filled at 7773.00) showed near 7771
 #define LQ_VERSION_0650 "0.65.0"          // (0.65.0, 2026-10-28 06:43 CT Rassul "why are we using boxes?", "the values are not properly centered") LMT F = the number only, centred in the column and on its row, in the resting side's colour; S20 dim / S10 bright / S5 bright + bold; no boxes
 #define LQ_VERSION_0640 "0.64.0"          // (0.64.0, 2026-10-28, Rassul 23:00 CT "are you overfiltering for the overnight session ... determining what large is based on session") LMT F = lots FILLED AT ONE PRICE IN ONE CANDLE over every resting order there (LmtFTiers.h 1.0.0; 0.62.0 took only the biggest single order the big-order tracker followed - 68+ lots on ES, so nothing overnight), tiers per SESSION PART (EVE / ASIA / LON / OPEN / MID / CLOSE / POST) from lmtf_read 2.0.0 >= a floor, and an adaptive live floor after 10 quiet candles of a part
@@ -3651,7 +3652,8 @@ void LiquidityProfile::render(LQState& S) {
         if (S.boSet.on) cb::publish(cb::BIG, S.symbol, S.spb, chart, now, LQ_BIG_W); else cb::clear(cb::BIG, S.symbol, S.spb, chart);
         const cb::Layout L = cb::layout(in);
         S.colPriceRight = L.margin > 0 ? L.priceRight : -1;
-        S.colDeltaR = (cb::DELTA_LEFT && L.w[cb::DELTA] > 0) ? L.delta.r : (cb::LEVELS_LEFT && L.w[cb::LEVELS] > 0) ? L.levels.r : 0;   // (0.60.1) order lines start right of the left Delta column; (0.62.0) of the left Liquidity (Levels) column
+        S.colDeltaR = (cb::DELTA_LEFT && L.w[cb::DELTA] > 0) ? L.delta.r : (cb::LEVELS_LEFT && L.w[cb::LEVELS] > 0) ? L.levels.r : 0;
+        { int kw = 0; if (cb::keysFresh(S.symbol, S.spb, chart, now, kw)) S.colDeltaR = std::max(S.colDeltaR, in.paneL + 1 + kw); }   // (0.66.1) order lines start right of the Key Levels column   // (0.60.1) order lines start right of the left Delta column; (0.62.0) of the left Liquidity (Levels) column
         S.colBigL = L.w[cb::BIG] > 0 && L.margin > 0 ? L.big.l : -1; S.colBigR = S.colBigL >= 0 ? L.big.r : -1;
     }
     // (0.16.0, Rassul 11:00 CT) the column's own SOLID dark background (Solid background): from under the banner / header to the
@@ -4237,7 +4239,9 @@ void LiquidityProfile::renderWarning(LQState& S) {
     if (!have && vdir == 0 && !absTag) { S.warnRows = 2; S.warnPx = warnBlockH(bf, 2); return; }
     RCT pane; pane.getPaneRect(false);
     PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int right = std::min((int)pl.h, (int)pane.right) - 4;
-    const int x0 = pane.left + 6, y0 = warnTop(pane.top);                     // (0.14.1) below the chart title, never over it
+    int x0 = pane.left + 6; const int y0 = warnTop(pane.top);                 // (0.14.1) below the chart title, never over it
+    {   const char* clk = getChartLabel(); const int kx = cb::leftKeep(S.symbol, S.spb, clk ? std::string(clk) : std::string(), (int)pane.left, steadyMs());
+        if (kx > pane.left) x0 = std::max(x0, kx + 4); }                        // (0.66.1) right of the Key Levels column (its HOD/LOD table sits at the column's top)
     if (right - x0 < 120) { S.warnPx = 0; return; }
     FONT f; f.id = HELVETICA; f.size = coord(bf + 1); f.style = BOLD;     // (0.32.3) badge font 1 pt smaller
     FONT g; g.id = HELVETICA; g.size = coord(std::max(8, bf)); g.style = PLAIN;
@@ -4723,6 +4727,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.66.0");   // LQ_VERSION
+    p->setVersion("0.66.1");   // LQ_VERSION
     return p;
 }
