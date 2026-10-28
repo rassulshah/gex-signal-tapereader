@@ -215,7 +215,7 @@ static void day(const std::string& mkt, const std::string& sym, const std::strin
         CHECK(obPrintMissing == 0, tag + "every OB letter has its print box on the candle at the print's price");
         CHECK(overlap == 0, tag + "no letter over another letter or a print box (" + std::to_string(overlap) + ")");
         const std::string stt = slurp(HOME + "/InvestorRT/rtx/lsFlexLevels/BigBidAsk.status-" + mkt + "-" + sym + "-180.txt");
-        CHECK(stt.find("VERSION,1.31.0\n") == 0 && stt.find("\nORDER_BLOCK,OB not drawn (retired 1.29.0") != std::string::npos && stt.find("logic 2.0.0 (prints + letters only; no boxes)") != std::string::npos,
+        CHECK(stt.find("VERSION,1.31.1\n") == 0 && stt.find("\nORDER_BLOCK,OB not drawn (retired 1.29.0") != std::string::npos && stt.find("logic 2.0.0 (prints + letters only; no boxes)") != std::string::npos,
               tag + "status: version 1.29.0 + ORDER_BLOCK 'not drawn' line; OB still decided + recorded");
         // the list for Rassul
         std::cout << "  " << mkt << " " << date << " RTH labels:\n";

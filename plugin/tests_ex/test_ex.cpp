@@ -155,16 +155,15 @@ int main(int argc, char** argv) {
         Place p = place(500, 300, 400, RES, 20, 14, {}, none, area); CHECK(p.ok && p.box.b == 298 && p.box.t == 284 && p.box.l == 490 && !p.nudged);
         p = place(500, 300, 400, SUP, 20, 14, {}, none, area); CHECK(p.ok && p.box.t == 402);
         Box bo; bo.l = 488; bo.r = 512; bo.t = 284; bo.b = 298;                              // a BO letter in the same spot
-        p = place(500, 300, 400, RES, 20, 14, { bo }, none, area); CHECK(p.ok && p.nudged && !hits(p.box, bo) && p.box.b <= bo.t && p.box.l == 490);   // one step aside is not free: further out, still centred
+        p = place(500, 300, 400, RES, 20, 14, { bo }, none, area); CHECK(p.ok && p.nudged && p.box.b == bo.t - 1 && p.box.t == bo.t - 15 && p.box.l == 490);   // (1.0.1) stacked straight against the BO letter, 1 px, centred
         Box nar; nar.l = 486; nar.r = 496; nar.t = 284; nar.b = 298;                         // a small circle: one step sideways clears it
-        p = place(500, 300, 400, RES, 20, 14, { nar }, none, area); CHECK(p.ok && p.nudged && !hits(p.box, nar) && p.box.t == 284 && p.box.l != 490);
-        Box nbR; nbR.l = 506; nbR.r = 520; nbR.t = 200; nbR.b = 420; Box nbL = nbR; nbL.l = 480; nbL.r = 494;   // neighbour candles both sides
-        p = place(500, 300, 400, RES, 20, 14, { nar, nbR, nbL }, none, area); CHECK(p.ok && !hits(p.box, nar) && !hits(p.box, nbR) && !hits(p.box, nbL));
+        p = place(500, 300, 400, RES, 20, 14, { nar }, none, area); CHECK(p.ok && p.nudged && !hits(p.box, nar) && p.box.b == nar.t - 1 && p.box.l == 490);   // (1.0.1) never sideways: straight out past the circle
+        p = place(500, 300, 400, SUP, 20, 14, { Box{488, 402, 512, 430} }, none, area); CHECK(p.ok && p.box.t == 431 && p.box.l == 490);   // (1.0.1) below: stacked under a BD letter + print, 1 px
         Box table; table.l = 470; table.r = 700; table.t = 250; table.b = 300;               // the HOD/LOD table over it
         p = place(500, 300, 400, RES, 20, 14, {}, table, area); CHECK(p.ok ? !hits(p.box, table) : p.kept);
         Box wide; wide.l = 0; wide.r = 1000; wide.t = 0; wide.b = 300;
         p = place(500, 300, 400, RES, 20, 14, {}, wide, area); CHECK(!p.ok && p.kept);      // nowhere outside it: not drawn
-        p = place(5, 300, 400, RES, 20, 14, {}, none, area); CHECK(p.ok && p.box.l >= 0);   // at the left edge: nudged inside
+        p = place(5, 300, 400, RES, 20, 14, {}, none, area); CHECK(!p.ok);                 // (1.0.1) a candle cut by the left edge: not drawn rather than moved off its candle
         p = place(500, 5, 400, RES, 20, 14, {}, none, area); CHECK(!p.ok);                  // no room above the candle
     }
     // ---- other plugins' records ----

@@ -153,7 +153,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.61.0"          // (0.61.0, 2026-10-27 evening, Rassul "ok lets build it. i will take your recommendation" = Ex option A; 17:49 CT "lets just use key price levels only") THE Ex MARK (ExhaustLogic.h 1.0.0): at a KEY PRICE level zone, attackers' contracts / s at the zone in the 2nd half of the 180 s after arrival / the 1st half <= 0.164 with price at the zone >= 50% of the time -> "Ex" / "Ex?" on the decision candle (red above at a resistance, green below at a support), decided at that candle's close, recorded (<stem>-exhaust-<session>.csv), never repainted; "Ex" only where LRA-Exhaust-<MKT>.csv says 30+ key-level cases (none yet = "Ex?" everywhere); settings row "Exhaustion (Ex)"; status EXHAUST   // prior 0.60.1: (0.60.1, 2026-10-27 14:00 CT "move the delta profile to the left") order lines start right of the left Delta column
+#define LQ_VERSION "0.61.1"          // (0.61.1, 2026-10-27 18:50 CT Rassul "fix it": the Ex? read as belonging to the next candle) the Ex letter stays centred on ITS candle, never moved sideways; with a BO letter on that candle it is stacked straight against BO (1 px), using the BO letter's drawn size from the SignalBoard (lsBigBidAsk 1.31.1, kind L); without a board entry the old 2-row room is kept
+// prev:          // (0.61.0, 2026-10-27 evening, Rassul "ok lets build it. i will take your recommendation" = Ex option A; 17:49 CT "lets just use key price levels only") THE Ex MARK (ExhaustLogic.h 1.0.0): at a KEY PRICE level zone, attackers' contracts / s at the zone in the 2nd half of the 180 s after arrival / the 1st half <= 0.164 with price at the zone >= 50% of the time -> "Ex" / "Ex?" on the decision candle (red above at a resistance, green below at a support), decided at that candle's close, recorded (<stem>-exhaust-<session>.csv), never repainted; "Ex" only where LRA-Exhaust-<MKT>.csv says 30+ key-level cases (none yet = "Ex?" everywhere); settings row "Exhaustion (Ex)"; status EXHAUST   // prior 0.60.1: (0.60.1, 2026-10-27 14:00 CT "move the delta profile to the left") order lines start right of the left Delta column
 #define LQ_VERSION_PREV "0.60.0"          // (0.60.0, 2026-10-27, Rassul approved 13:30-13:39 CT "i think this is a cleaner approach. build"; 13:02 "remove the hoverover on the big bid and ask limit orders") the order lines carry NO text on the chart; each LIVE line tagged to a level (LineLevelTag 1.3.0) goes to lsFlexLevels\\LRA-LmtLevels-<MKT>-<spb>.txt for the Dealer Profile 2.28.0 combined Levels + Liquidity column ("800 + 50", rank); no hovers (order lines / LMT zones / column); the left Liquidity column is not drawn (LQ_LEFT_COL) - its zones still feed LRA-LiqZones / LRA-LiqLevels
 // was: "0.59.2"          // (0.59.2, 2026-10-27 11:32) the level tag is ONE-SIDED: a high up to +1 ATR, a low down to -1 ATR (LineLevelTag 1.2.0)
 // prior: "0.59.1"          // (0.59.1, 2026-10-27 11:27) the level tag reaches 1 ATR from the level (LineLevelTag 1.1.0)
@@ -3033,6 +3034,7 @@ void LiquidityProfile::renderEx(LQState& S) {
     // the Delta Profile's A circles (SignalBoard, final + tentative) and the BO letters: boxes to stay clear of
     std::vector<sb::Ev> evA; { const char* cl = getChartLabel(); sb::readAll('A', S.symbol, S.spb, cl ? std::string(cl) : std::string(), steadyMs(), evA); }
     const int boW = getTextWidth("BO", -1) + 2;
+    std::vector<sb::Ev> evL; { const char* cl = getChartLabel(); sb::readAll('L', S.symbol, S.spb, cl ? std::string(cl) : std::string(), steadyMs(), evL); }   // (0.61.1) BO letters as drawn
     std::vector<exh::Box> placed;
     for (const auto& kv : M) {
         const int bar = kv.first; const exh::Mark& m = kv.second;
@@ -3045,7 +3047,9 @@ void LiquidityProfile::renderEx(LQState& S) {
         const long long key = (long long)times[bar], keyCt = ends[(size_t)bar] / 1000;
         {   const auto it = S.exBo.find(key);                                  // a BO letter on this candle: just beyond its extreme (above +1 / below -1)
             if (it != S.exBo.end()) { exh::Box o; o.l = cx - boW / 2 - 1; o.r = cx + boW / 2 + 1;
-                if (it->second > 0) { o.b = top - 1; o.t = top - 2 - 2 * lh; } else { o.t = bot + 1; o.b = bot + 2 + 2 * lh; } others.push_back(o); } }   // the BO letter + room for its print
+                int reach = 2 + 2 * lh;                                          // no board entry yet: the BO letter + room for its print (0.61.0)
+                for (const sb::Ev& e : evL) if (e.bar == keyCt && e.side == it->second && e.val > 0 && e.val < 400) reach = (int)e.val;   // (0.61.1) as drawn
+                if (it->second > 0) { o.b = top - 1; o.t = top - reach; } else { o.t = bot + 1; o.b = bot + reach; } others.push_back(o); } }
         for (const sb::Ev& e : evA) {                                          // an A circle on this candle on the same side (bullish below / bearish above)
             if (e.bar != keyCt) continue;
             PNT q; q.set(bar, (float)e.px, kBarCenter); const int r = lh / 2 + 3; exh::Box o; o.l = cx - r; o.r = cx + r;
@@ -4441,6 +4445,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.61.0");   // LQ_VERSION
+    p->setVersion("0.61.1");   // LQ_VERSION
     return p;
 }

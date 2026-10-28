@@ -33,7 +33,7 @@
 #include <vector>
 
 namespace exh {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // (1.0.1) placement: never sideways, stacked straight against the BO letter
 typedef long long Tick;
 static const double THR = 0.164;            // exh at or below = exhausted
 static const double SHARE_MIN = 0.5;        // price at the zone at least half the window
@@ -284,10 +284,10 @@ struct Box { int l = 0, t = 0, r = 0, b = 0; bool valid() const { return r > l &
 inline bool hits(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
 inline bool inside(const Box& a, const Box& area) { return a.l >= area.l && a.r <= area.r && a.t >= area.t && a.b <= area.b; }
 struct Place { bool ok = false; Box box; int nudged = 0; bool kept = false; };
-// the letter just beyond the candle (above for RES, below for SUP), 2 px off its high / low. If it touches another letter, circle or a
-// neighbouring candle: nudged SIDEWAYS one step (half its width, right then left); if that is not free, moved further OUT past what it
-// touched (up to 3 times, still centred on its candle); only then 2 - 3 steps sideways. Never inside the keep-out (the HOD/LOD table),
-// never outside the price area - then not drawn.
+// (1.0.1, Rassul 2026-10-27 18:50 CT "fix it": the Ex? read as belonging to the neighbouring candle) the letter just beyond the candle
+// (above for RES, below for SUP), 2 px off its high / low, ALWAYS centred on its own candle: never moved sideways. If it touches another
+// letter or circle on that candle (the BO letter, an A circle) it is stacked straight against it, 1 px further out (up to 4 times).
+// Never inside the keep-out (the HOD/LOD table), never outside the price area - then not drawn.
 inline Place place(int cx, int candleTop, int candleBot, int side, int w, int h, const std::vector<Box>& others, const Box& keepOut, const Box& area) {
     Place p; Box f; f.l = cx - w / 2; f.r = f.l + w;
     if (side == RES) { f.b = candleTop - 2; f.t = f.b - h; } else { f.t = candleBot + 2; f.b = f.t + h; }
@@ -299,15 +299,14 @@ inline Place place(int cx, int candleTop, int candleBot, int side, int w, int h,
         if (clashOf(g)) return false;
         p.ok = true; p.box = g; p.nudged = nudged; p.kept = false; return true;
     };
+    (void)step;
     if (ok(f, 0)) return p;
-    for (int sgn : { 1, -1 }) { Box g = f; g.l += sgn * step; g.r += sgn * step; if (ok(g, 1)) return p; }
     Box g = f;
-    for (int k = 0; k < 3; ++k) {                       // further out, past the box it touches
+    for (int k = 0; k < 4; ++k) {                       // (1.0.1) straight out, stacked 1 px past the box it touches - never sideways
         const Box* c = clashOf(g); if (!c) break;
-        if (side == RES) { g.b = c->t - 2; g.t = g.b - h; } else { g.t = c->b + 2; g.b = g.t + h; }
+        if (side == RES) { g.b = c->t - 1; g.t = g.b - h; } else { g.t = c->b + 1; g.b = g.t + h; }
         if (ok(g, 1)) return p;
     }
-    for (int k = 2; k <= 3; ++k) for (int sgn : { 1, -1 }) { Box q = f; q.l += sgn * k * step; q.r += sgn * k * step; if (ok(q, 1)) return p; }
     return p;
 }
 

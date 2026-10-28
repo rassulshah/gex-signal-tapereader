@@ -1,5 +1,7 @@
 #ifndef LS_SIGNALBOARD_H
 #define LS_SIGNALBOARD_H
+// SignalBoard.h 1.3.0 (1.3.0, 2026-10-27: kind 'L' = lsBigBidAsk BO letters as drawn: bar, side +1 above / -1 below the candle, val = pixels from
+// the candle's extreme (high above / low below) to the letter's OUTER edge - lsLiquidityProfile stacks its Ex letter straight against it)
 // SignalBoard.h 1.2.0 (1.2.0, 2026-10-21: kind 'O' = lsBidAskStats ORDER-BOOK ABSORPTION per decided candle, up to 160 events)
 // SignalBoard.h 1.1.0 (1.0.0 2026-10-15, Rassul "how can you better ensure integration between the indicators and signals so they are aware
 // of each other") - the per-chart SIGNAL board: each indicator posts its latest decided events for THIS chart (process environment,
@@ -27,10 +29,10 @@
 #include <cmath>
 #include "BannerBoard.h"
 namespace sb {
-static const char* const VERSION = "1.2.0";
+static const char* const VERSION = "1.3.0";
 static const long long FRESH_MS = 60000; static const size_t CAP = 40;
 struct Ev { long long bar = 0; double px = 0; int side = 0; double val = 0; int flag = 0; };
-inline const char* prefix(char k) { return k == 'A' ? "LRA_SGA_" : k == 'B' ? "LRA_SGB_" : k == 'O' ? "LRA_SGO_" : "LRA_SGF_"; }
+inline const char* prefix(char k) { return k == 'A' ? "LRA_SGA_" : k == 'B' ? "LRA_SGB_" : k == 'O' ? "LRA_SGO_" : k == 'L' ? "LRA_SGL_" : "LRA_SGF_"; }
 static const size_t CAP_O = 160;   // (1.2.0) kind 'O' carries several prices per candle
 inline size_t capOf(char k) { return k == 'O' ? CAP_O : CAP; }
 inline int obFlag(long long shown, int refills) { if (shown < 0) shown = 0; if (shown > 20000000) shown = 20000000; return (int)(shown * 100 + (refills > 99 ? 99 : refills < 0 ? 0 : refills)); }

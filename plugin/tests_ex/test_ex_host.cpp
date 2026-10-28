@@ -1,4 +1,4 @@
-// test_ex_host.cpp -- lsLiquidityProfile 0.61.0 THE Ex MARK on the mock host (order feed -> ExhaustLogic engine -> record -> the letter on
+// test_ex_host.cpp -- lsLiquidityProfile 0.61.1 THE Ex MARK on the mock host (order feed -> ExhaustLogic engine -> record -> the letter on
 // the decision candle -> restart reads the record back -> the params file gate). ES 3-min, a key price level (PDH) from the chart's own
 // bars: buyers lift into PDH from below and fade (exhausted at a top) -> red "Ex?" ABOVE the decision candle; later sellers hit PDH from
 // above and fade with a params file of 31 key-level cases -> green "Ex" BELOW. A lsBigBidAsk BO on the first decision candle -> nudged.
@@ -82,8 +82,15 @@ int main(int argc, char** argv) {
     cppExtension::PNT hiP; hiP.set(decBar, 7712.25f); const int cx = h.barX0 + decBar * h.barW;
     CHECK(X.size() == 1 && X[0]->text == "Ex?" && X[0]->color == RED, "one red Ex? (buyers exhausted at a top)");
     CHECK(X.size() == 1 && X[0]->b <= hiP.v, "ABOVE the decision candle's high");
-    CHECK(X.size() == 1 && X[0]->b < hiP.v - 2 - rowPx(10), "moved clear of the BO letter (one step aside was not free: further out, on its candle)");
-    CHECK(X.size() == 1 && std::abs((X[0]->l + X[0]->r) / 2 - cx) <= (X[0]->r - X[0]->l) + 4, "still at its candle (beside the BO letter, within one letter width)");
+    CHECK(X.size() == 1 && X[0]->b < hiP.v - 2 - rowPx(10), "moved clear of the BO letter + its print room (no board entry: 2 rows)");
+    CHECK(X.size() == 1 && std::abs((X[0]->l + X[0]->r) / 2 - cx) <= 1, "(0.61.1) centred on ITS candle, never sideways");
+    {   // (0.61.1) lsBigBidAsk 1.31.1 posts the BO letter as drawn (kind L: 15 px from the high to its top) -> Ex stacked straight on it, 1 px
+        std::vector<sb::Ev> L1(1); L1[0].bar = S->ex.decided.empty() ? 0 : (long long)h.bars[(size_t)decBar].time; L1[0].side = 1; L1[0].val = 15;
+        sb::publish('L', S->symbol, 180, std::string(p->getChartLabel() ? p->getChartLabel() : ""), steadyMs(), L1);
+        h.draws.clear(); p->draw(); std::vector<const mock::Draw*> Y = exTexts(h);
+        CHECK(Y.size() == 1 && Y[0]->b == (int)hiP.v - 15 - 1 - 2 &&   /* the glyph lift (2 px, as the BO letter) */ std::abs((Y[0]->l + Y[0]->r) / 2 - cx) <= 1, "(0.61.1) stacked straight against the drawn BO letter: no gap, same candle");
+        sb::publish('L', S->symbol, 180, std::string(p->getChartLabel() ? p->getChartLabel() : ""), steadyMs(), std::vector<sb::Ev>());
+        h.draws.clear(); p->draw(); X = exTexts(h); }
     int outlines = 0; for (auto& d : h.draws) if (d.type == "text" && d.text == "Ex?" && d.color == 0) ++outlines;
     CHECK(outlines == 4, "the BO letter's dark outline (4 offsets)");
     usleep(1100000); h.now = t0 + 370; p->calc(0);
@@ -92,7 +99,7 @@ int main(int argc, char** argv) {
     CHECK(rec.rfind("EXH|ver|", 0) == 0 && std::count(rec.begin(), rec.end(), '\n') == 2 && rec.find("PDH") != std::string::npos && rec.find("|T|R|") != std::string::npos && rec.find("|1|Ex?|-1\n") != std::string::npos, "the record: header + one decision line (PDH, resistance, is_ex 1, Ex?)");
     const std::string st = readAll(flex + "\\LiquidityProfile.status-ES-180.txt");
     CHECK(st.find(std::string("EXHAUST,") + exh::VERSION + ",on,settings no file: on (default),gate Ex? (no params file)") != std::string::npos && st.find("decided 1 (Ex 1,") != std::string::npos && st.find("drawn 1 nudged 1") != std::string::npos, "status: EXHAUST line");
-    CHECK(std::string(LQ_VERSION) == "0.61.0" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION, "versions = 0.61.0");
+    CHECK(std::string(LQ_VERSION) == "0.61.1" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION, "versions = 0.61.1");
     { const ss::Spec& sp = lpset::profileSpec(); bool ex = false; for (int k = 0; k < sp.n; ++k) if (std::string(sp.rows[k].label) == "Exhaustion (Ex)" && sp.rows[k].def == 1) ex = k == sp.n - 1;
       CHECK(ex && sp.paramVersion == 14, "settings: \"Exhaustion (Ex)\" appended, default on, parameter version 14"); }
     const int boxL = X.empty() ? 0 : X[0]->l, boxT = X.empty() ? 0 : X[0]->t;
@@ -133,7 +140,7 @@ int main(int argc, char** argv) {
     cppExtension::PNT loP; loP.set(dec2, 7711.75f);
     const mock::Draw* g = nullptr; const mock::Draw* r = nullptr; for (auto* d : X) { if (d->text == "Ex" && d->color == GREEN) g = d; if (d->text == "Ex?" && d->color == RED) r = d; }
     CHECK(g && g->t >= loP.v && std::abs(barOfX(h, (g->l + g->r) / 2) - dec2) <= 0, "a green Ex BELOW its decision candle (sellers exhausted at a bottom)");
-    CHECK(r && r->b <= hiP.v && std::abs((r->l + r->r) / 2 - cx) <= (r->r - r->l) + 4, "the old red Ex? still there, still Ex? (its label was decided then; it only stepped off the new neighbour candle)");
+    CHECK(r && r->b <= hiP.v && std::abs((r->l + r->r) / 2 - cx) <= 1, "the old red Ex? still there, still Ex?, still centred on its candle");
     dump(h, argc > 1 ? argv[1] : nullptr, (int)h.bars.size() - 26, decBar);
     // the setting off: nothing drawn, nothing measured
     { std::ofstream f((flex + "\\LiquidityProfile.exhaust-ES.txt").c_str()); f << "0\n"; }
