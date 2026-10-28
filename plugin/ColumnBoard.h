@@ -1,6 +1,7 @@
 #ifndef LS_COLUMNBOARD_H
 #define LS_COLUMNBOARD_H
-// ColumnBoard.h 1.5.0 (1.5.0, 2026-10-27: the Delta column at the pane's LEFT edge) 1.0.0 (2026-10-14, CR5200) -- the right-side columns of the price chart, shared by lsDealerProfile 2.11.0,
+// ColumnBoard.h 1.6.0 (1.6.0, 2026-10-28: Rassul 19:08 / 19:25 CT layout - the Liquidity (Levels) column at the pane's LEFT edge; on the right, out from the
+// candles: gap, BIG = LMT F, Delta (READ strip + profile), Dealer, axis) 1.5.0 (1.5.0, 2026-10-27: the Delta column at the pane's LEFT edge) 1.0.0 (2026-10-14, CR5200) -- the right-side columns of the price chart, shared by lsDealerProfile 2.11.0,
 // lsDeltaProfile 2.8.0 and lsLiquidityProfile 0.16.0. SDK-free; tested by test_columnboard_logic.cpp.
 //
 // Rassul approved 2026-10-14 11:00 CT (mockup-columns.png, 10:53): right of the last bar, left to right: a 20 px gap, the Levels
@@ -30,12 +31,15 @@
 #include "BannerBoard.h"
 
 namespace cb {
-static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-10-27 14:00 CT) the Delta column at the pane's LEFT edge (DELTA_LEFT);   // (1.4.0, 2026-10-27 DP 2.28.0) Levels column up to 460 px (the combined Levels + Liquidity column);   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
+static const char* const VERSION = "1.6.0";   // (1.6.0, 2026-10-28) Levels (liquidity) LEFT, Delta back on the right after LMT F;   // (1.5.0, 2026-10-27 14:00 CT) the Delta column at the pane's LEFT edge (DELTA_LEFT);   // (1.4.0, 2026-10-27 DP 2.28.0) Levels column up to 460 px (the combined Levels + Liquidity column);   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
 static const int GAP_PX = 20;            // between the last bar and the Levels column
 static const int MIN_PRICE_PX = 160;     // price area kept on a narrow chart
 // (1.5.0, 2026-10-27 14:00 CT Rassul "to save space move the delta profile to the left") the Delta Profile column sits at the LEFT
 // edge of the price pane (over the oldest bars, solid background) and no longer widens the right margin
-static const bool DELTA_LEFT = true;
+static const bool DELTA_LEFT = false;   // (1.6.0) the Delta column is back on the right (READ strip + bars pointing toward price)
+// (1.6.0, 2026-10-28, Rassul 19:08 / 19:25 CT "on the left we have liquidity profile top 10 levels ... on the right we have LMTF then delta profile")
+// the Levels column (lsDealerProfile's liquidity top 10) sits at the LEFT edge of the price pane on a solid background, bars toward price
+static const bool LEVELS_LEFT = true;
 enum Col { LIQ = 0, LEVELS = 1, DELTA = 2, DEALER = 3, BIG = 4, NCOL = 5 };
 struct Range { int lo, hi, def; };
 inline Range range(int c)
@@ -78,12 +82,12 @@ inline Layout layout(const In& in)
     Layout L; L.axisR = in.axisR; L.paneL = in.paneL;
     int wl = in.levels ? cleanWidth(LEVELS, in.levelsW) : 0, wd = in.delta ? cleanWidth(DELTA, in.deltaW) : 0,
         wg = in.dealer ? cleanWidth(DEALER, in.dealerW) : 0, wb = in.big ? cleanWidth(BIG, in.bigW) : 0;
-    const int sum = wl + (DELTA_LEFT ? 0 : wd) + wg + wb;
+    const int sum = (LEVELS_LEFT ? 0 : wl) + (DELTA_LEFT ? 0 : wd) + wg + wb;
     const int avail = in.axisR - in.paneL - GAP_PX - MIN_PRICE_PX;
     if (sum > 0 && sum > avail) {                        // a narrow chart: shrink in proportion, never under each minimum
         L.squeezed = true;
         const double f = avail > 0 ? (double)avail / sum : 0.0;
-        if (in.levels) wl = std::max(range(LEVELS).lo, (int)std::floor(wl * f));
+        if (in.levels && !LEVELS_LEFT) wl = std::max(range(LEVELS).lo, (int)std::floor(wl * f));
         if (in.delta && !DELTA_LEFT) wd = std::max(range(DELTA).lo, (int)std::floor(wd * f));
         if (in.dealer) wg = std::max(range(DEALER).lo, (int)std::floor(wg * f));
         if (in.big) wb = std::max(range(BIG).lo, (int)std::floor(wb * f));
@@ -95,9 +99,10 @@ inline Layout layout(const In& in)
     // (1.2.0, Rassul 18:57 "note the big column and how far it is from the delta profile .. fix alignment") the BIG column sits right
     // next to the Delta Profile: gap, Levels, BIG, Delta, Dealer (was gap, BIG, Levels, Delta, Dealer)
     L.big = bp::mk(rightOfBig - wb, t, rightOfBig, b);
-    L.levels = bp::mk(L.big.l - wl, t, L.big.l, b);
-    const int used = wl + (DELTA_LEFT ? 0 : wd) + wg + wb;
-    L.priceRight = used > 0 ? L.levels.l - GAP_PX : in.axisR;
+    L.levels = LEVELS_LEFT ? bp::mk(in.paneL + 1, t, in.paneL + 1 + wl, b) : bp::mk(L.big.l - wl, t, L.big.l, b);
+    const int used = (LEVELS_LEFT ? 0 : wl) + (DELTA_LEFT ? 0 : wd) + wg + wb;
+    const int rightMost = LEVELS_LEFT ? L.big.l : L.levels.l;   // (1.6.0) the leftmost right-side column
+    L.priceRight = used > 0 ? rightMost - GAP_PX : in.axisR;
     L.margin = in.axisR - L.priceRight;
     L.w[LEVELS] = wl; L.w[DELTA] = wd; L.w[DEALER] = wg; L.w[BIG] = wb;
     L.ok = L.priceRight >= in.paneL + 40 && b > t;      // a chart with no room left for price: the columns are not drawn
@@ -108,7 +113,7 @@ inline bool columnsClean(const Layout& L)
 {
     const bp::Box* c[4] = { &L.levels, &L.delta, &L.dealer, &L.big };
     for (int i = 0; i < 4; ++i) {
-        const bool leftCol = DELTA_LEFT && c[i] == &L.delta;   // (1.5.0) the left Delta column: inside the pane, left of the price room
+        const bool leftCol = (DELTA_LEFT && c[i] == &L.delta) || (LEVELS_LEFT && c[i] == &L.levels);   // (1.5.0 / 1.6.0) a left column: inside the pane, left of the price room
         if (c[i]->r < c[i]->l || c[i]->r > L.axisR) return false;
         if (leftCol ? (c[i]->w() > 0 && (c[i]->l < L.paneL || c[i]->r > L.priceRight)) : (c[i]->w() > 0 && c[i]->l < L.priceRight + GAP_PX)) return false;
         for (int j = i + 1; j < 4; ++j) if (c[i]->w() > 0 && c[j]->w() > 0 && bp::overlap(*c[i], *c[j])) return false;

@@ -89,8 +89,11 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include "MboRecord.h"              // Record order feed
 #include "SelfAware.h"           // (1.29.0) self-awareness
 #include "MarketState.h"            // (1.3.0) SRC "BOOK" facts for the read
+#include <chrono>
+#include "SignalBoard.h"            // (1.31.0) kind D facts (decided candles' defense)
 
-#define BF_VERSION "1.30.0"          // 1.30.0 (2026-10-26, Rassul 18:33 CT) the letter strips are not drawn (letters recorded / exported / in the status), their rows go to the bars; the turn % marks stay
+#define BF_VERSION "1.31.0"          // 1.31.0 (2026-10-28 overnight) the decided candle's defense posted on the SignalBoard as kind D (bf::defenseFact; layer 1a, one owner)
+// prev:         // 1.30.0 (2026-10-26, Rassul 18:33 CT) the letter strips are not drawn (letters recorded / exported / in the status), their rows go to the bars; the turn % marks stay
 // prev:          // (1.29.0, 2026-10-26) self-awareness SELFDEF (SelfAware.h, SELF-AWARE.md; ships OFF per market) // 1.28.0 (2026-10-26, BUILD-SPEC Defense pane, Rassul approved 22:29 CT 2026-10-25): F? (amber, FMirror.h 1.0.0: the pivot likely dies at once - attackers stacking in front + defenders pulling behind in the pivot bar's last 60 s, decided at its close, F lines in BookFlow\<MKT>-<spb>-fmirror.csv, drawn only with the per-market thresholds from lsFlexLevels\LRA-FMirror-<MKT>.csv); the shared A shows as grey "Ab", H as "Hb?" (defender colour) only after an Ab at the same pivot within 10 candles, L / X as "L?" / "X?" with the re-test hover (same order / new big order / small orders only, lots vs normal); letters coloured by meaning (bullish green / bearish red: W, B, X, Q! at a low = red); at most 2 codes per candle (one per strip); records unchanged // 1.27.0 (2026-10-23 4-step stage revamp) Defense strips renamed Floor / Release (LetterStrips 1.3.0); // was 1.26.0:          // 1.25.0 (2026-10-22 evening fix build) compact strips, bars >= 50% of the pane, one-line Implied row, the Q hover hides the anchor token;          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
 #include "BoxReadDraw.h"          // (1.4.0, Rassul approved 23:48 CT bookflow-read-mockup.png) the box rows Net, Pace, Read
@@ -148,6 +151,7 @@ public:
         // (1.3.0) the net decisions of closed candles (decided once; only a Ratio bars / Spike vs average change re-decides), the chart
         // label + identity they belong to, the Market State facts posted
         std::map<long long, bf::NetStat> net; int netRb = -1; long long netAvg = -1; std::string identity, chart;
+        std::map<long long, sb::Fact> dFacts; long long dPostMs = -100000; size_t dPosted = 0;   // (1.31.0) SignalBoard D
         long long mstBar = 0, mstCt = 0, mstMs = -1, mstPosts = 0; std::map<std::string, std::string> mstKv; sa::Hook self;
         pc::Tracker cur; long long liveEv = -1, liveMs = -1;
         br::Read lastRead; std::vector<std::string> lastReadLines;        // (1.4.0) the Read last drawn (tests)
@@ -273,6 +277,7 @@ public:
           << "\nAT_LEVEL," << (e ? std::to_string(e->lwLevels.size()) + " key levels watched, " + std::to_string(e->lw.touchesSeen) + " touches (" + std::to_string(e->lw.deduped) + " within 15 min), " + std::to_string(e->lw.open.size()) + " measuring, " + std::to_string(e->dtW.size()) + " decided (" + std::to_string(e->dtWWritten) + " written), W drawn at supports only" : std::string("n/a"))
           << "\nSTRIPS," << (e ? std::string(lst::VERSION) + ",drawn " + std::to_string(e->stripsDrawn) + ",skipped " + std::to_string(e->stripSkipped) + ",exported " + std::to_string(e->stripWritten) + ",export_fail " + std::to_string(e->stripFail) + ",queue Q read " + std::to_string(e->stripQRead) + " (" + std::to_string(e->stripQBad) + " bad) from " + e->stripQPath + ",file " + e->stripPath : std::string("n/a"))
           << "\nBADGES," << (e ? std::to_string(e->badgesDrawn) + " row draws, " + std::to_string(e->badgeDropped) + " badges with letters moved to the hover (max " + std::to_string(dt::BADGE_MAX) + "), hover no room " + std::to_string(e->badgeTipNoRoom) : std::string("n/a"))
+          << "\nFACTS,SignalBoard " << sb::VERSION << ",D posted " << (e ? std::to_string(e->dPosted) : std::string("n/a"))
           << "\nF_MIRROR," << fmr::VERSION << "," << (e ? std::to_string(e->fReads.size()) + " pivot reads (" + std::to_string(e->fWritten) + " written here, " + std::to_string(e->fFails) + " write fails), F? armed " + std::to_string(e->fArmed) + ",thresholds " + (e->fPar.set() ? "front " + std::to_string(e->fPar.front).substr(0, 5) + " behind " + std::to_string(e->fPar.behind).substr(0, 5) : std::string("NOT SET (recorded, not drawn)")) + ",params " + e->fPar.why + ",file " + e->fPath : std::string("n/a"))
           << "\nRETEST_IDS," << (e ? std::to_string(e->rtInfo.size()) + " classified (same order / new big order / small only), file " + e->rtPath : std::string("n/a"))
           << "\nMARKET_STATE,BOOK " << (!e || e->chart.empty() ? std::string("waiting for the chart label") : "bar " + std::to_string(e->mstBar ? e->mstCt : 0) + ",posts " + std::to_string(e->mstPosts) + ",keys " + std::to_string(e->mstKv.size()));
@@ -1118,6 +1123,17 @@ public:
         e->mstMs = now; e->mstPosts++;
         mst::publish("BOOK", S.symbol, S.spb, e->chart, now, e->mstCt, e->mstKv);
         selfAware(S, *e, now);   // (1.29.0) self-awareness
+        postD(S, *e, now);       // (1.31.0)
+    }
+    // (1.31.0) SignalBoard 1.4.0 kind D: every decided candle's defense (kept 200), posted with the steady clock beside SRC BOOK
+    void postD(S_& S, Ext& e, long long) {
+        const bf::DFact d = bf::defenseFact(e.mstCt, e.mstKv);
+        if (d.ok) { sb::Fact f; f.bar = d.bar; f.lo = d.lo; f.hi = d.hi; f.side = d.side; f.val = d.val; f.code = d.code; f.state = 1; f.proven = 2; e.dFacts[d.bar] = f; }
+        while (e.dFacts.size() > sb::FACT_CAP) e.dFacts.erase(e.dFacts.begin());
+        if (e.dFacts.empty()) return;
+        std::vector<sb::Fact> v; v.reserve(e.dFacts.size()); for (const auto& kv : e.dFacts) v.push_back(kv.second);
+        const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        sb::postFacts('D', S.symbol, S.spb, e.chart, ms, v); e.dPostMs = ms; e.dPosted = v.size();
     }
     void release() {                                                       // the Market State entry goes with the indicator
         S_* S = testState();
@@ -1583,6 +1599,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.30.0");   // BF_VERSION
+    p->setVersion("1.31.0");   // BF_VERSION
     return p;
 }

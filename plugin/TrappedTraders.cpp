@@ -1,5 +1,10 @@
 /********************************************************************************
- *  TrappedTraders.cpp  --  Investor/RT RTX extension  lsTrappedTraders 0.1.0  (its own pane, "Who is trapped?")  (2026-10-26)
+ *  TrappedTraders.cpp  --  Investor/RT RTX extension  lsTrappedTraders 0.1.1  (its own pane, "Who is trapped?")  (2026-10-28; 0.1.0 2026-10-26)
+ *  0.1.1 (Rassul 20:21 / 20:31 CT 10-27): his ES chart showed "candles 135 (without volume at price 135)" - the pane got no volume at price.
+ *        Now: (1) the status says WHICH branch (array short / rows not loaded / fault); (2) a candle without volume at price takes the
+ *        trap lots lsDeltaProfile 2.28.0 posts for it (SignalBoard 1.4.0 kind 'C': sellers below the close, buyers above it, decided);
+ *        (3) marks everywhere by default (every forming pivot's Stage 3 trigger; "Levels only" stays a choice); (4) each decided trigger is
+ *        posted as kind 'T' (layer 1a, read by the READ / combiner only where the tests show value).
  *
  *  Rassul 2026-10-26 20:14-20:15 CT: "this makes the other underwater trader better" / "lets just call underwater traders trapped
  *  traders. build it. its also simple and complements defense better right ?". Replaces the 'Who is aggressive?' read as the partner of
@@ -43,6 +48,7 @@
 #include "SettingsGuard.h"
 #include "NearLevels.h"
 #include "MarketState.h"
+#include "SignalBoard.h"   // (0.1.1) reads lsDeltaProfile's candle trap lots (C), posts the decided triggers (T)
 #include <algorithm>
 #include <chrono>
 #include <cctype>
@@ -63,7 +69,7 @@
 #include <dirent.h>
 #endif
 
-#define TTR_VERSION "0.1.0"     // = ttr::VERSION = ttrset::PLUGIN_VERSION = the setVersion literal
+#define TTR_VERSION "0.1.1"     // = ttr::VERSION = ttrset::PLUGIN_VERSION = the setVersion literal
 
 static const int HOVER_PT = 10, HOVER_LH = 14;
 static const int VAP_READS_PER_PASS = 400, VAP_RETRY_PASSES = 20;
@@ -168,6 +174,8 @@ struct TtState {
     std::string identity, market, symbol, chart; int spb = 0; double tick = 0;
     ttr::Engine E; bool loaded = false; long long lastFedT = 0, retryT = 0; int retries = 0; bool vapFault = false;
     long long fed = 0, noVap = 0, recLines = 0, recFails = 0, recBad = 0, files = 0;
+    long long vapShort = 0, vapNotLoaded = 0, vapOk = 0, fromC = 0, cWaits = 0; long vapCount = 0, barCount = 0; bool cProducer = false; size_t cFacts = 0;   // (0.1.1)
+    long long tPostMs = -100000; size_t tPosted = 0; long long startMs = -1;
     ss::Store setStore; ss::Values set = ss::defaults(ttrset::spec(), -1); long long setCheckMs = -100000;
     nl::Cache lv; std::string lvNote; long long lvMs = -100000;
     std::vector<HitBox> hits; int hover = -1; double top = 1; int paneH = 0;
@@ -215,6 +223,7 @@ private:
     void bars(TtState& S);
     void flush(TtState& S);
     void post(TtState& S, long long now);
+    void postT(TtState& S, long long now);
     void status(TtState& S, long long now);
     long long ctSec(long long t);
     std::string hm(long long t);
@@ -266,13 +275,14 @@ void TrappedTraders::identify(TtState& S) {
     S.identity = id; S.market = mkt; S.symbol = sym; S.chart = chart; S.spb = spb; S.tick = tick;
     S.E = ttr::Engine(); S.loaded = false; S.lastFedT = 0; S.retryT = 0; S.retries = 0; S.vapFault = false;
     S.fed = S.noVap = S.recLines = S.recFails = S.recBad = S.files = 0;
+    S.vapShort = S.vapNotLoaded = S.vapOk = S.fromC = S.cWaits = 0; S.vapCount = S.barCount = 0; S.cProducer = false; S.cFacts = 0; S.tPostMs = -100000; S.tPosted = 0; S.startMs = -1;
     S.setStore = ss::Store(); S.setCheckMs = -100000; S.lv = nl::Cache(); S.lvMs = -100000; S.hits.clear(); S.hover = -1; S.statusBody.clear(); S.postedT = 0;
 }
 void TrappedTraders::settings(TtState& S, long long now) {
     if (now - S.setCheckMs < 1000 && now >= S.setCheckMs) return;
     S.setCheckMs = now;
     const std::string sp = ttrset::settingsPath(ttFlex(), S.market);
-    if (S.setStore.path != sp) { S.setStore = ss::Store(); S.setStore.S = &ttrset::spec(); S.setStore.path = sp; }
+    if (S.setStore.path != sp) { S.setStore = ss::Store(); S.setStore.S = &ttrset::spec(); S.setStore.path = sp; S.setStore.upgrade = &ttrset::upgrade; }
     S.set = sp.empty() ? ss::defaults(ttrset::spec(), ss::marketIndex(S.market)) : S.setStore.load(ss::marketIndex(S.market), now);
 }
 void TrappedTraders::loadFiles(TtState& S) {
@@ -306,10 +316,16 @@ void TrappedTraders::bars(TtState& S) {
     RTARRAYI times(barDateTime); RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose); RTARRAYP vap(barVolumeProfile);
     if ((long)times.count < n || (long)op.count < n || (long)hi.count < n || (long)lo.count < n || (long)cl.count < n) return;
     const bool haveVap = (long)vap.count >= n;
+    S.vapCount = (long)vap.count; S.barCount = n;
+    if (S.startMs < 0) S.startMs = ttMs();
     const int lastClosed = (int)n - 2;
     if ((long long)times[lastClosed] <= S.lastFedT) return;
     const int MAXB = (int)S.E.maxBars;
     int from = lastClosed; while (from > 0 && (long long)times[from - 1] > S.lastFedT && lastClosed - from < MAXB) --from;
+    // (0.1.1) lsDeltaProfile's candle trap lots (C, decided), keyed by the candle's Central seconds (its localSec = ctSec here)
+    std::map<long long, std::pair<double, double> > cmap; long long cMax = 0, cMin = 0;
+    {   std::vector<sb::Fact> cf; S.cProducer = sb::readFacts('C', S.symbol, S.spb, S.chart, ttMs(), cf, true); S.cFacts = cf.size();
+        for (size_t k = 0; k < cf.size(); ++k) { cmap[cf[k].bar] = std::make_pair(cf[k].lo, cf[k].hi); if (cf[k].bar > cMax) cMax = cf[k].bar; if (!cMin || cf[k].bar < cMin) cMin = cf[k].bar; } }
     int reads = 0; std::vector<ttr::Cell> cells;
     for (int i = from; i <= lastClosed; ++i) {
         const long long t = (long long)times[i]; if (t <= S.lastFedT) continue;
@@ -319,6 +335,7 @@ void TrappedTraders::bars(TtState& S) {
         b.sod = (int)(((cs % 86400) + 86400) % 86400);
         if (!ttr::toTicks(op[i], S.tick, b.o) || !ttr::toTicks(hi[i], S.tick, b.h) || !ttr::toTicks(lo[i], S.tick, b.l) || !ttr::toTicks(cl[i], S.tick, b.c)) { S.lastFedT = t; continue; }
         bool ok = false;
+        if (!haveVap) ++S.vapShort;
         if (haveVap && !S.vapFault) {
             if (reads >= VAP_READS_PER_PASS) break;                      // the rest next pass (no heavy work in one call)
             ++reads;
@@ -327,12 +344,40 @@ void TrappedTraders::bars(TtState& S) {
             else if (r == 0) {
                 if (S.retryT != t) { S.retryT = t; S.retries = 0; }
                 if (++S.retries < VAP_RETRY_PASSES) break;                 // not loaded yet: retry, then feed without it
+                ++S.vapNotLoaded;
             }
-            ok = r > 0;
+            ok = r > 0; if (ok) ++S.vapOk;
+        }
+        if (!ok) {
+            // (0.1.1) no volume at price in this pane: the C fact of the same candle (one cell below the close = sellers, one above = buyers)
+            std::map<long long, std::pair<double, double> >::const_iterator c = cmap.find(cs);
+            if (c != cmap.end()) {
+                cells.clear(); ttr::Cell dn, up; dn.px = b.c - 1; dn.bid = (long long)std::llround(c->second.first); up.px = b.c + 1; up.ask = (long long)std::llround(c->second.second);
+                cells.push_back(dn); cells.push_back(up); ok = true; ++S.fromC;
+            } else if (!S.cProducer && !haveVap && ttMs() - S.startMs < 15000) {
+                ++S.cWaits; break;                                         // load order: lsDeltaProfile may not have posted yet (15 s, then without)
+            } else if (S.cProducer && cs > cMax && i >= lastClosed - 2) {
+                // the producer is there but has not posted this candle yet (it posts once a second): wait, bounded, then feed without
+                if (S.retryT != t) { S.retryT = t; S.retries = 0; }
+                if (++S.retries < VAP_RETRY_PASSES) { ++S.cWaits; break; }
+            }
         }
         if (!ok) { cells.clear(); ++S.noVap; }
         S.E.feed(b, cells, ok); S.lastFedT = t; ++S.fed;
     }
+    (void)cMin;
+}
+// (0.1.1) the decided Stage 3 triggers on the SignalBoard (kind 'T', layer 1a): bar = the mark candle's Central seconds, lo = hi = the
+// extreme's price, side, val = the ratio, code = 1 at a level / 0 elsewhere, decided, "?" (proven = 2: the tests show no edge on their own yet)
+void TrappedTraders::postT(TtState& S, long long now) {
+    if (now - S.tPostMs < 1000 && now >= S.tPostMs) return;
+    S.tPostMs = now;
+    std::vector<sb::Fact> v; const size_t from = S.E.trig.size() > sb::FACT_CAP ? S.E.trig.size() - sb::FACT_CAP : 0;
+    for (size_t i = from; i < S.E.trig.size(); ++i) {
+        const ttr::Trigger& T = S.E.trig[i]; sb::Fact f; f.bar = ctSec(T.t); if (f.bar <= 0) continue;
+        f.lo = f.hi = (double)T.ext * S.tick; f.side = T.side; f.val = T.ratio; f.code = T.atLevel ? 1 : 0; f.state = 1; f.proven = 2; v.push_back(f);
+    }
+    sb::postFacts('T', S.symbol, S.spb, S.chart, now, v); S.tPosted = v.size();
 }
 void TrappedTraders::flush(TtState& S) {
     if (S.E.newLines.empty()) return;
@@ -375,6 +420,11 @@ void TrappedTraders::status(TtState& S, long long now) {
     o << "VERSION," << TTR_VERSION << "\nMARKET," << S.market << ",SYMBOL," << S.symbol << ",SECONDS_PER_BAR," << S.spb << "\n";
     o << "STATUS,lsTrappedTraders v" << TTR_VERSION << " | candles " << S.fed << " (without volume at price " << S.noVap << ")"
       << (S.vapFault ? " | VAP FAULT - remove and re-add the indicator" : "") << " | extremes " << S.E.candidates << ", triggers " << S.E.decided << "\n";
+    o << "VAP,array " << S.vapCount << " of " << S.barCount << " candles" << (S.vapCount < S.barCount ? " (SHORT: this pane gets no volume at price)" : "")
+      << ",read ok " << S.vapOk << ",not loaded after retries " << S.vapNotLoaded << ",array short " << S.vapShort << (S.vapFault ? ",FAULT" : "") << "\n";
+    o << "FALLBACK,lsDeltaProfile candle trap lots (C) " << (S.cProducer ? "on the board" : "MISSING - add lsDeltaProfile to this chart") << ",facts " << S.cFacts
+      << ",candles fed from C " << S.fromC << ",waits " << S.cWaits << "\n";
+    o << "FACTS,SignalBoard " << sb::VERSION << ",T posted " << S.tPosted << "\n";
     int today = 0, atLv = 0; std::string list; const long long sess = S.E.bars.empty() ? 0 : S.E.bars.back().sess;
     for (size_t i = 0; i < S.E.trig.size(); ++i) {
         const ttr::Trigger& T = S.E.trig[i]; if (T.sess != sess) continue;
@@ -414,6 +464,7 @@ void TrappedTraders::pump() {
         bars(*S);
         flush(*S);
         post(*S, now);
+        postT(*S, ttMs());
         status(*S, now);
     } catch (...) {}
 }
@@ -563,7 +614,7 @@ extern "C" cppExtension* CreateExtension(void) {
     TrappedTraders* p = new TrappedTraders();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE | VAP_REQUIRED);     // its own pane, draws itself; mouse events even when not selected
-    p->setDescription("LRA Trapped Traders v0.1.0 - Who is trapped? Per candle, green = sell lots that traded BELOW the close (sellers trapped), red = buy lots that traded ABOVE the close (buyers trapped), from the chart's volume at price. Green > red = bullish, red > green = bearish. A triangle with the ratio marks the Stage 3 trigger: at a forming pivot (1-bar ZigZag, the extreme candle through 3 after it) the first candle where the turn side's trapped lots move ahead. Default: marks only at the trade levels (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) and gamma levels, approached from the right side. Decided once on closed candles, recorded, never repainted. Read it with the Defense pane: take the turn when Defense agrees and the candle closes in the turn colour. Example: ES Oct 26 9:12 AM low, sellers trapped 8,333 vs buyers 3,887 = 2.1x.");
-    p->setVersion("0.1.0");   // TTR_VERSION
+    p->setDescription("LRA Trapped Traders v0.1.1 - Who is trapped? Per candle, green = sell lots that traded BELOW the close (sellers trapped), red = buy lots that traded ABOVE the close (buyers trapped), from the chart's volume at price. Green > red = bullish, red > green = bearish. A triangle with the ratio marks the Stage 3 trigger: at a forming pivot (1-bar ZigZag, the extreme candle through 3 after it) the first candle where the turn side's trapped lots move ahead. Default: marks at every forming pivot; the Levels only choice keeps the trade levels (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) and gamma levels, approached from the right side. Without volume at price in its pane it reads the trap lots lsDeltaProfile posts for each candle. Decided once on closed candles, recorded, never repainted. Read it with the Defense pane: take the turn when Defense agrees and the candle closes in the turn colour. Example: ES Oct 26 9:12 AM low, sellers trapped 8,333 vs buyers 3,887 = 2.1x.");
+    p->setVersion("0.1.1");   // TTR_VERSION
     return p;
 }

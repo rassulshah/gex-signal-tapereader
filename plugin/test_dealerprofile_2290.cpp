@@ -1,3 +1,4 @@
+// SUPERSEDED by test_dealerprofile_2300.cpp (2.30.0 moved the liquidity column to the left) - kept for history, not run
 // test_dealerprofile_2280.cpp -- lsDealerProfile 2.28.0 THE COMBINED LEVELS + LIQUIDITY COLUMN (Rassul approved 2026-10-27 13:30-13:39 CT,
 // mockup levels_final.png) through the REAL DealerProfile.cpp on the mocked host of test_dealerprofile_2190.cpp (13 Oct ES fixture):
 // rows in price order, never overlapping, chips key > volume > gamma, merged rows, liquidity + rank from LRA-LmtLevels-ES-180.txt, no

@@ -95,8 +95,8 @@ int main(int argc, char** argv) {
     { ttr::Engine E; const int bad = E.loadRecord({ "TTREC,1", "TTT|x|y", "TTB|10|1|5|6|-1", "TTT|20|10|1|1|240|1000|1|PDL" }); CHECK(bad == 1 && E.rec.size() == 1 && E.recLastT == 20 && E.recBar.size() == 1, "record: 1 bad line counted, 1 bar + 1 trigger loaded"); }
     // trimming keeps the engine consistent
     { const Fx F = load(dir + "/nq_1022.txt"); ttr::Engine E; E.maxBars = 40; for (size_t i = 0; i < F.bars.size(); ++i) E.feed(F.bars[i], F.cells[i], true); CHECK(E.bars.size() <= 40 && !E.bars.empty(), "trim keeps the last bars only"); }
-    // settings table: 6 rows, real controls, defaults levels-only / ratio on / box on / green / red
-    { const ss::Spec& S = ttrset::spec(); const ss::Values V = ss::defaults(S, 0); CHECK(S.n == 6 && V.i(ttrset::K_MARKS) == ttrset::MARKS_LEVELS && V.b(ttrset::K_SHOW_RATIO) && V.b(ttrset::K_SHOW_BOX) && V.c(ttrset::K_COL_BULL) == 0x22C55E && V.c(ttrset::K_COL_BEAR) == 0xEF4444, "settings defaults"); CHECK(std::string(S.version) == ttr::VERSION, "settings version = logic version"); }
+    // settings table: 6 rows, real controls, defaults (0.1.1) everywhere / ratio on / box on / green / red
+    { const ss::Spec& S = ttrset::spec(); const ss::Values V = ss::defaults(S, 0); CHECK(S.n == 6 && V.i(ttrset::K_MARKS) == ttrset::MARKS_ALL && V.b(ttrset::K_SHOW_RATIO) && V.b(ttrset::K_SHOW_BOX) && V.c(ttrset::K_COL_BULL) == 0x22C55E && V.c(ttrset::K_COL_BEAR) == 0xEF4444, "settings defaults"); CHECK(std::string(S.version) == ttr::VERSION, "settings version = logic version"); }
     // no overlap: on any pane size the bars and their triangle + ratio stay under the title and the live box, and placed marks never touch
     {
         unsigned seed = 7; auto rnd = [&](int m) { seed = seed * 1103515245u + 12345u; return (int)((seed >> 8) % (unsigned)m); };

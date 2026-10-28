@@ -70,7 +70,9 @@ static std::string recPath(const std::string& dir) { return dir + "ES-ESZ26-60-s
 //   [red]    the same attack on a RED candle: no shared A, no coloured circle (gray only), even after the next candle confirms the node A
 //   [one]    two node A's on one candle (no shared A): ONE coloured circle (the biggest |delta|)
 //   [adopt]  an attacker pane on the chart (fresh SignalBoard 'O'): this plugin never decides, it draws the record's line
-static int textA(const mock::Host& h, COLOR c) { int n = 0; for (const mock::Draw& d : h.draws) if (d.type == "text" && d.text == "A" && d.color == c) ++n; return n; }
+// (2.28.0) the READ strip's "A" (inside the Delta column) is not a candle mark: only the letters left of the column count here
+static int textA(const mock::Host& h, COLOR c) { const int colL = h.data ? static_cast<const ChartState*>(h.data)->lay.delta.l : 1 << 30; int n = 0;
+    for (const mock::Draw& d : h.draws) if (d.type == "text" && d.text == "A" && d.color == c && d.x < colL) ++n; return n; }
 // circles on the candle at chart bar `bar` (its x from the mock's bar geometry: any ring whose centre is within half a bar of that x)
 static int ringsOn(const mock::Host& h, int bar, bool colourOnly) { const int qh = 50 + (bar - h.barOffset) * 10; int n = 0; if (std::getenv("DBG")) { std::cerr << "qh " << qh << ":"; for (const mock::Draw& d : h.draws) if (d.type == "ring") std::cerr << " " << d.x << "/" << std::hex << d.color << std::dec; std::cerr << "\n"; }
     for (const mock::Draw& d : h.draws) if (d.type == "ring" && std::abs(d.x - qh) <= 4 && (!colourOnly || (d.color != 0x009CA3AF && d.color != dimGray()))) ++n; return n; }

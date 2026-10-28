@@ -1,5 +1,8 @@
 #ifndef LS_SIGNALBOARD_H
 #define LS_SIGNALBOARD_H
+// SignalBoard.h 1.4.0 (1.4.0, 2026-10-28: the STANDARD FACT form - sb::Fact {bar, lo, hi, side, val, kind, state, proven} - posted by every
+// layer-1 / layer-2 producer under its own fact kind (FACT_KINDS below, one owner each, ChainSpec.h); readers take DECIDED facts (state 1) for
+// anything final and LIVE facts (state 0) only for live display; facts are versioned by bar time, 60 s fresh, at most 200 per kind)
 // SignalBoard.h 1.3.0 (1.3.0, 2026-10-27: kind 'L' = lsBigBidAsk BO letters as drawn: bar, side +1 above / -1 below the candle, val = pixels from
 // the candle's extreme (high above / low below) to the letter's OUTER edge - lsLiquidityProfile stacks its Ex letter straight against it)
 // SignalBoard.h 1.2.0 (1.2.0, 2026-10-21: kind 'O' = lsBidAskStats ORDER-BOOK ABSORPTION per decided candle, up to 160 events)
@@ -29,7 +32,7 @@
 #include <cmath>
 #include "BannerBoard.h"
 namespace sb {
-static const char* const VERSION = "1.3.0";
+static const char* const VERSION = "1.4.0";
 static const long long FRESH_MS = 60000; static const size_t CAP = 40;
 struct Ev { long long bar = 0; double px = 0; int side = 0; double val = 0; int flag = 0; };
 inline const char* prefix(char k) { return k == 'A' ? "LRA_SGA_" : k == 'B' ? "LRA_SGB_" : k == 'O' ? "LRA_SGO_" : k == 'L' ? "LRA_SGL_" : "LRA_SGF_"; }
@@ -94,6 +97,60 @@ inline const Ev* nearestFinal(const std::vector<Ev>& v, double p, double tol, lo
         if (!best || v[i].val > best->val) best = &v[i];
     }
     return best;
+}
+
+// ---- (1.4.0, 2026-10-28, Rassul 20:11-20:18 CT "all the indicators communicating ... the right architecture") THE STANDARD FACT -----
+// One form for every fact on the chart. bar = the candle's Central wall-clock seconds (the bar the fact belongs to); lo / hi = the price
+// zone (lo == hi for a single price); side +1 bullish / support / bid side, -1 bearish / resistance / offer side, 0 none; val = strength
+// (a ratio, lots or odds x 100 - the kind says which); code = a small number the kind defines; state 0 = LIVE (may still change on the
+// forming candle), 1 = DECIDED (closed candle, never changes again); proven 1 = proven, 2 = "?" (strong, not yet proven), 0 = record only.
+// Kinds (one producer each - ChainSpec.h checks it):
+//   'P' LMT F print       lsLiquidityProfile  val = lots of the biggest single resting order filled at lo, code = tier (1 S20, 2 S10, 3 S5)
+//                                             + 8 iceberg + 16 still resting at the candle close
+//   'Q' liquidity top 10  lsDealerProfile     val = resting lots at lo, code = rank 1-10, side +1 bids / -1 offers (live)
+//   'V' level             lsDealerProfile     val = turn odds % (0 = none), code = level id (lvc), side +1 below price / -1 above,
+//                                             code + 1000 = a MenthorQ gamma level
+//   'N' delta node        lsDeltaProfile      val = ratio, lo / hi = the row, side +1 buying / -1 selling, code = rank 1-3
+//   'R' READ code         lsDeltaProfile      code 1 = A (val = ratio), 2 = Ex (from lsLiquidityProfile, mirrored), side = winner
+//   'C' candle trap lots  lsDeltaProfile      lo = sellers' lots traded BELOW the close, hi = buyers' lots traded ABOVE it (decided)
+//   'D' defending         lsBookFlow          val = refill effort ratio, code 1 = refilling / 2 = pulling, side = defending side
+//   'T' trapped           lsTrappedTraders    val = lots trapped vs normal (x), side +1 sellers trapped (bullish) / -1 buyers trapped
+//   'K' combined read     lsDeltaProfile's combiner (layer 3)  val = turn odds %, lo = swing odds %, side = direction, code 1 = shown
+struct Fact { long long bar = 0; double lo = 0, hi = 0; int side = 0; double val = 0; int code = 0, state = 0, proven = 0; };
+static const size_t FACT_CAP = 200;
+inline std::string factKey(char kind, const std::string& sym, long spb, const std::string& chart)
+{ return bb::key((std::string("LRA_SF") + kind + "_").c_str(), sym, spb, chart); }
+inline std::string encF(long long ms, const std::vector<Fact>& v)
+{
+    std::string o = std::to_string(ms) + "|"; const size_t from = v.size() > FACT_CAP ? v.size() - FACT_CAP : 0;
+    for (size_t i = from; i < v.size(); ++i) { char b[160]; std::snprintf(b, sizeof(b), "%lld,%.10g,%.10g,%d,%.6g,%d,%d,%d;", v[i].bar, v[i].lo, v[i].hi, v[i].side, v[i].val, v[i].code, v[i].state, v[i].proven); o += b; }
+    return o;
+}
+inline bool decF(const std::string& s, long long nowMs, std::vector<Fact>& out)
+{
+    out.clear(); if (s.empty() || s.size() > 64000) return false;
+    const size_t bar = s.find('|'); if (bar == std::string::npos) return false;
+    long long ms = 0; if (!bb::num(s.substr(0, bar), ms)) return false;
+    if (nowMs >= 0 && (nowMs < ms || nowMs - ms > FRESH_MS)) return false;
+    size_t a = bar + 1;
+    while (a < s.size() && out.size() < FACT_CAP) {
+        const size_t e = s.find(';', a); if (e == std::string::npos) break;
+        Fact f; long long b2 = 0; double lo = 0, hi = 0, val = 0; int side = 0, code = 0, st = 0, pr = 0;
+        if (std::sscanf(s.substr(a, e - a).c_str(), "%lld,%lf,%lf,%d,%lf,%d,%d,%d", &b2, &lo, &hi, &side, &val, &code, &st, &pr) == 8 && std::isfinite(lo) && std::isfinite(hi) && std::isfinite(val)) {
+            f.bar = b2; f.lo = lo; f.hi = hi; f.side = side; f.val = val; f.code = code; f.state = st; f.proven = pr; out.push_back(f); }
+        a = e + 1;
+    }
+    return true;
+}
+inline void postFacts(char kind, const std::string& sym, long spb, const std::string& chart, long long ms, const std::vector<Fact>& v)
+{ if (!sym.empty()) bb::bbSet(factKey(kind, sym, spb, chart), encF(ms, v)); }
+// decidedOnly: drop LIVE facts (a decision / record uses decided facts only); a missing or stale producer = false and an empty list
+inline bool readFacts(char kind, const std::string& sym, long spb, const std::string& chart, long long nowMs, std::vector<Fact>& out, bool decidedOnly)
+{
+    std::string v; out.clear();
+    if (sym.empty() || !bb::bbGet(factKey(kind, sym, spb, chart), v) || !decF(v, nowMs, out)) return false;
+    if (decidedOnly) { std::vector<Fact> d; for (size_t i = 0; i < out.size(); ++i) if (out[i].state == 1) d.push_back(out[i]); out.swap(d); }
+    return true;
 }
 }  // namespace sb
 #endif

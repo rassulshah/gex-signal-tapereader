@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
     CHECK(rec.rfind("EXH|ver|", 0) == 0 && std::count(rec.begin(), rec.end(), '\n') == 2 && rec.find("PDH") != std::string::npos && rec.find("|T|R|") != std::string::npos && rec.find("|1|Ex?|-1\n") != std::string::npos, "the record: header + one decision line (PDH, resistance, is_ex 1, Ex?)");
     const std::string st = readAll(flex + "\\LiquidityProfile.status-ES-180.txt");
     CHECK(st.find(std::string("EXHAUST,") + exh::VERSION + ",on,settings no file: on (default),gate Ex? (no params file)") != std::string::npos && st.find("decided 1 (Ex 1,") != std::string::npos && st.find("drawn 1 nudged 1") != std::string::npos, "status: EXHAUST line");
-    CHECK(std::string(LQ_VERSION) == "0.61.1" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION, "versions = 0.61.1");
+    CHECK(std::string(LQ_VERSION) == "0.62.0" && std::string(lpset::PLUGIN_VERSION) == LQ_VERSION, "versions = 0.62.0");
     { const ss::Spec& sp = lpset::profileSpec(); bool ex = false; for (int k = 0; k < sp.n; ++k) if (std::string(sp.rows[k].label) == "Exhaustion (Ex)" && sp.rows[k].def == 1) ex = k == sp.n - 1;
       CHECK(ex && sp.paramVersion == 14, "settings: \"Exhaustion (Ex)\" appended, default on, parameter version 14"); }
     const int boxL = X.empty() ? 0 : X[0]->l, boxT = X.empty() ? 0 : X[0]->t;
