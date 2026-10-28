@@ -53,6 +53,13 @@ int main() {
     CHECK(text(h, "350") != nullptr, "the 350-lot fill is shown (>= S20)");
     CHECK(text(h, "150") != nullptr, "the 150-lot fill of the still-resting offer is shown");
     CHECK(text(h, "60") == nullptr, "the 60-lot fill is not shown (under S20 100)");
+    {   // (0.65.0) number only, centred in the column cell; S5 bold, S20 / S10 plain; no hollow boxes in the LMT F column
+        const mock::Draw* d350 = text(h, "350"); const mock::Draw* d150 = text(h, "150");
+        CHECK(d350 && d350->centred && d150 && d150->centred && d350->l == d150->l && d350->r == d150->r, "(0.65.0) prints centred in the same column-wide cell");
+        CHECK(d350 && d350->fstyle != 0 && d150 && d150->fstyle == 0, "(0.65.0) S5 bold, S20 plain");
+        int hollow = 0; for (auto& d : h.draws) if (d.type == "box" && d.pat == PAT_HOLLOW && d.l >= (d350 ? d350->l - 4 : 0) && d.r <= (d350 ? d350->r + 4 : 0)) { ++hollow; std::printf("  box pat %d l %d t %d r %d b %d fill %06lx border %06lx\n", d.pat, d.l, d.t, d.r, d.b, (unsigned long)d.color, (unsigned long)d.border); }
+        CHECK(hollow == 0, "(0.65.0) no boxes around the prints");
+    }
     bool dot = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "\x95") dot = true;
     CHECK(dot && S->lmtFRest >= 1, "a white dot after the still-resting order's print");
     std::vector<sb::Fact> P, B;

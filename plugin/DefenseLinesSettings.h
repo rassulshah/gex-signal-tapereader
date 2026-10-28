@@ -5,7 +5,7 @@
 #include "SettingsSpec.h"
 
 namespace dlset {
-static const char* const PLUGIN_VERSION = "1.13.1";   // (1.13.1) no settings change   // (1.13.0, Rassul 2026-10-26 17:55 CT) the gray exhaustion (E) line rows are gone (not drawn); (1.12.0) line width row, skip the dot on an order-fill candle
+static const char* const PLUGIN_VERSION = "1.14.0";   // (1.14.0) no settings change (trails not drawn; their rows stay for the record)   // (1.13.1) no settings change   // (1.13.0, Rassul 2026-10-26 17:55 CT) the gray exhaustion (E) line rows are gone (not drawn); (1.12.0) line width row, skip the dot on an order-fill candle
 enum K { K_SHOW_LINES, K_COL_LOW, K_COL_HIGH, K_SHOW_DOTS, K_COL_DOT, K_SHOW_MARKS, K_MAX_CANDLES,
          K_SHOW_TRAILS, K_COL_TRAIL_BID, K_COL_TRAIL_OFF, K_TRAIL_GAP, K_TRAIL_N, K_LINE_W, K_DOT_SKIP_FILL, K_N };   // (1.12.0) line width, dot skipped where lsLiquidityProfile drew a fill dot   // (1.10.0) the trails of big orders following price (MoveLogic 1.2.0)
 inline const ss::Spec& spec() {

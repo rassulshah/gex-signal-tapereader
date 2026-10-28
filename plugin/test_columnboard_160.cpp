@@ -1,3 +1,4 @@
+// SUPERSEDED by test_columnboard_180.cpp (ColumnBoard 1.8.0: Levels on the right) - kept for history, expected to fail
 // test_columnboard_160.cpp - ColumnBoard 1.6.0 (2026-10-28, Rassul 19:08 / 19:25 CT): Liquidity (Levels) at the pane's LEFT edge; on the right,
 // out from the candles: gap, BIG (LMT F), Delta (READ strip + profile), Dealer, axis.   g++ -std=c++17 -I. test_columnboard_160.cpp && ./a.out
 #include "ColumnBoard.h"

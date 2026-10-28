@@ -1,3 +1,4 @@
+// SUPERSEDED for drawing by test_trails_140.cpp (lsDefenseLines 1.14.0 does not draw trails) - kept for history, its draw checks fail by design
 // test_trails_host.cpp -- lsDefenseLines 1.11.0 TRAILS on the mock host (2026-10-22, Rassul "ROLLING BIDS / OFFERS DURING THE MOVE"):
 // reads lsBookFlow's trail file incrementally, draws the thin stepped line (green bid / red offer), the end marks (dot / x / "B?"),
 // at most 2 per side, decides + records each end once, NO REPAINT across a restart (even with other settings), settings checkbox /

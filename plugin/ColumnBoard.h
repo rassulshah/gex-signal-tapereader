@@ -31,7 +31,7 @@
 #include "BannerBoard.h"
 
 namespace cb {
-static const char* const VERSION = "1.7.0";   // (1.7.0, 2026-10-28 overnight, live 22:06 overlap on the left column) leftKeep: the one rule every plugin uses to keep its marks / boxes right of the left columns;   // (1.6.0, 2026-10-28) Levels (liquidity) LEFT, Delta back on the right after LMT F;   // (1.5.0, 2026-10-27 14:00 CT) the Delta column at the pane's LEFT edge (DELTA_LEFT);   // (1.4.0, 2026-10-27 DP 2.28.0) Levels column up to 460 px (the combined Levels + Liquidity column);   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
+static const char* const VERSION = "1.8.0";   // (1.8.0, 2026-10-28 06:42 CT Rassul "keep the liquidity profile behind the delta profile", option R) the Levels / liquidity column moves to the RIGHT as its own column after the Delta Profile: gap, BIG = LMT F, Delta (READ + bars), Levels (liquidity top 10), Dealer, axis; the left side is free (leftKeep = the pane edge)   // (1.7.0, 2026-10-28 overnight, live 22:06 overlap on the left column) leftKeep: the one rule every plugin uses to keep its marks / boxes right of the left columns;   // (1.6.0, 2026-10-28) Levels (liquidity) LEFT, Delta back on the right after LMT F;   // (1.5.0, 2026-10-27 14:00 CT) the Delta column at the pane's LEFT edge (DELTA_LEFT);   // (1.4.0, 2026-10-27 DP 2.28.0) Levels column up to 460 px (the combined Levels + Liquidity column);   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
 static const int GAP_PX = 20;            // between the last bar and the Levels column
 static const int MIN_PRICE_PX = 160;     // price area kept on a narrow chart
 // (1.5.0, 2026-10-27 14:00 CT Rassul "to save space move the delta profile to the left") the Delta Profile column sits at the LEFT
@@ -39,7 +39,9 @@ static const int MIN_PRICE_PX = 160;     // price area kept on a narrow chart
 static const bool DELTA_LEFT = false;   // (1.6.0) the Delta column is back on the right (READ strip + bars pointing toward price)
 // (1.6.0, 2026-10-28, Rassul 19:08 / 19:25 CT "on the left we have liquidity profile top 10 levels ... on the right we have LMTF then delta profile")
 // the Levels column (lsDealerProfile's liquidity top 10) sits at the LEFT edge of the price pane on a solid background, bars toward price
-static const bool LEVELS_LEFT = true;
+static const bool LEVELS_LEFT = false;   // (1.8.0) back on the right
+// (1.8.0, option R) the Levels (liquidity top 10) column sits OUTSIDE the Delta column, next to the Dealer column / axis
+static const bool LEVELS_OUTER = true;
 enum Col { LIQ = 0, LEVELS = 1, DELTA = 2, DEALER = 3, BIG = 4, NCOL = 5 };
 struct Range { int lo, hi, def; };
 inline Range range(int c)
@@ -94,14 +96,16 @@ inline Layout layout(const In& in)
     }
     const int t = in.paneT, b = in.paneB;
     L.dealer = bp::mk(in.axisR - wg, t, in.axisR, b);
-    L.delta = DELTA_LEFT ? bp::mk(in.paneL + 1, t, in.paneL + 1 + wd, b) : bp::mk(L.dealer.l - wd, t, L.dealer.l, b);
-    const int rightOfBig = DELTA_LEFT ? L.dealer.l : L.delta.l;
+    const int outerL = (LEVELS_OUTER && !LEVELS_LEFT) ? L.dealer.l - wl : L.dealer.l;   // (1.8.0) the Levels column between Delta and Dealer
+    if (LEVELS_OUTER && !LEVELS_LEFT) L.levels = bp::mk(outerL, t, L.dealer.l, b);
+    L.delta = DELTA_LEFT ? bp::mk(in.paneL + 1, t, in.paneL + 1 + wd, b) : bp::mk(outerL - wd, t, outerL, b);
+    const int rightOfBig = DELTA_LEFT ? outerL : L.delta.l;
     // (1.2.0, Rassul 18:57 "note the big column and how far it is from the delta profile .. fix alignment") the BIG column sits right
     // next to the Delta Profile: gap, Levels, BIG, Delta, Dealer (was gap, BIG, Levels, Delta, Dealer)
     L.big = bp::mk(rightOfBig - wb, t, rightOfBig, b);
-    L.levels = LEVELS_LEFT ? bp::mk(in.paneL + 1, t, in.paneL + 1 + wl, b) : bp::mk(L.big.l - wl, t, L.big.l, b);
+    if (!(LEVELS_OUTER && !LEVELS_LEFT)) L.levels = LEVELS_LEFT ? bp::mk(in.paneL + 1, t, in.paneL + 1 + wl, b) : bp::mk(L.big.l - wl, t, L.big.l, b);
     const int used = (LEVELS_LEFT ? 0 : wl) + (DELTA_LEFT ? 0 : wd) + wg + wb;
-    const int rightMost = LEVELS_LEFT ? L.big.l : L.levels.l;   // (1.6.0) the leftmost right-side column
+    const int rightMost = (LEVELS_LEFT || LEVELS_OUTER) ? L.big.l : L.levels.l;   // (1.6.0 / 1.8.0) the leftmost right-side column   // (1.6.0) the leftmost right-side column
     L.priceRight = used > 0 ? rightMost - GAP_PX : in.axisR;
     L.margin = in.axisR - L.priceRight;
     L.w[LEVELS] = wl; L.w[DELTA] = wd; L.w[DEALER] = wg; L.w[BIG] = wb;

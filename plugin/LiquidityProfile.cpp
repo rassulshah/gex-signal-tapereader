@@ -155,7 +155,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.64.0"          // (0.64.0, 2026-10-28, Rassul 23:00 CT "are you overfiltering for the overnight session ... determining what large is based on session") LMT F = lots FILLED AT ONE PRICE IN ONE CANDLE over every resting order there (LmtFTiers.h 1.0.0; 0.62.0 took only the biggest single order the big-order tracker followed - 68+ lots on ES, so nothing overnight), tiers per SESSION PART (EVE / ASIA / LON / OPEN / MID / CLOSE / POST) from lmtf_read 2.0.0 >= a floor, and an adaptive live floor after 10 quiet candles of a part
+#define LQ_VERSION "0.65.0"          // (0.65.0, 2026-10-28 06:43 CT Rassul "why are we using boxes?", "the values are not properly centered") LMT F = the number only, centred in the column and on its row, in the resting side's colour; S20 dim / S10 bright / S5 bright + bold; no boxes
+#define LQ_VERSION_0640 "0.64.0"          // (0.64.0, 2026-10-28, Rassul 23:00 CT "are you overfiltering for the overnight session ... determining what large is based on session") LMT F = lots FILLED AT ONE PRICE IN ONE CANDLE over every resting order there (LmtFTiers.h 1.0.0; 0.62.0 took only the biggest single order the big-order tracker followed - 68+ lots on ES, so nothing overnight), tiers per SESSION PART (EVE / ASIA / LON / OPEN / MID / CLOSE / POST) from lmtf_read 2.0.0 >= a floor, and an adaptive live floor after 10 quiet candles of a part
 #define LQ_VERSION_0630 "0.63.0"          // (0.63.0, 2026-10-28 overnight, Rassul 22:31 / 22:37 CT) THE TOP READ = the Delta Profile read (DpBanner.h 1.0.0: the latest decided A / A? / A+ from the SignalBoard while fresh, its attack ratio + close, the defenders at the node, the trapped side; else a quiet grey line) - the book warning / REV verdict / ABS tag are still decided + logged, not shown in the badge
 static const bool LQ_DP_BANNER = true;
 // was 0.62.1: (0.62.1, 2026-10-28 overnight, live 22:06 the left Liquidity column empty) the B facts carry the depth book's resting lots per price within reach (code 1) beside the big-order lines - lsDealerProfile ranks the top 10 of them // (0.62.0, 2026-10-28 overnight build, research "LMT F and Delta Read") LMT F = the biggest single resting order FILLED at a price, S20 / S10 / S5 per market x RTH / overnight from the nightly LRA-LmtF-<MKT>.csv (four tier methods tested head to head: no size predicts a hold by itself, so the tiers are set for meaning - ~20 / 10 / 5 a session, overnight included), plain / bold / boxed, a white I = traded more than it showed, a white dot = still resting after the fill ("?"); posts SignalBoard 1.4.0 facts P (prints) and B (resting big orders, for lsDealerProfile's rank - one owner); the order lines start right of the left Liquidity column (ColumnBoard 1.6.0) // was 0.61.1: (0.61.1, 2026-10-27 18:50 CT Rassul "fix it": the Ex? read as belonging to the next candle) the Ex letter stays centred on ITS candle, never moved sideways; with a BO letter on that candle it is stacked straight against BO (1 px), using the BO letter's drawn size from the SignalBoard (lsBigBidAsk 1.31.1, kind L); without a board entry the old 2-row room is kept
@@ -475,7 +476,7 @@ struct LQState {
     // lmtf_read; [0] = overnight, [1] = RTH; missing file = the Big Lot tiers above (said so in the status)
     long long lmtF[2][3] = { {0, 0, 0}, {0, 0, 0} }; bool lmtFOk = false; std::string lmtFWhy = "not read yet"; long long lmtFAt = -100000; int lmtFRth = -1;
     std::vector<sb::Fact> factsP, factsB; long long factsAt = -100000; int lmtFRest = 0; int bLevels = 0;
-    lft::Prints lfp; lft::Tiers lftT; int lftPart = -1; bool lftAdapt = false; long long lftCut[3] = { 0, 0, 0 }; int lftShown = 0, lftPartPrints = 0, lftF0 = 510, lftF1 = 900; long long lftPartStart = 0;   // (0.64.0) the LMT F prints (lots filled at a price per candle)   // (0.62.1) depth price levels posted as B
+    lft::Prints lfp; lft::Tiers lftT; int lftPart = -1; bool lftAdapt = false; long long lftCut[3] = { 0, 0, 0 }; int bMoving = 0; int lftShown = 0, lftPartPrints = 0, lftF0 = 510, lftF1 = 900; long long lftPartStart = 0;   // (0.64.0) the LMT F prints (lots filled at a price per candle)   // (0.62.1) depth price levels posted as B
     long long boUnder1sd = 0;                       // (0.26.0) live big orders not drawn: under 1SD
     long long boBase = 0;                           // (0.25.0) the tier base (lots): Big >= base, Bigger >= 2x, Biggest >= 3x
     int boTier[2] = {0, 0};                         // (0.25.0) the BIG box tier per side: 0 none, 1 biggest (dim), 2 big, 3 huge (outline)
@@ -1606,7 +1607,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
               + " / 2SD " + std::to_string((long long)std::llround(v[1])) + " / 3SD " + std::to_string((long long)std::llround(v[2])) : std::string(",learning"))
               << ",drawn " << S.mktDrawn << ",held " << S.mkt.held.size() << ",tiers " << (S.mkPool.ok ? "5-session pool" : S.mktOk ? "session (pool learning)" : "learning") << ",norm " << (S.mnSrc.empty() ? std::string("none (session-learned)") : S.mnSrc) << ",lmtnorm " << (S.lnSrc.empty() ? std::string("none (session-learned)") : S.lnSrc) << "\nABS_BADGE,0.32.0,dir " << S.absDir << ",px " << S.absPx << ",layers " << S.absBits << " (" << absCount(S.absBits) << "/4),mkt lots " << S.absMLots << " sweep " << S.absSweep << ",lmt fill " << S.absFill << " ice " << S.absIce << ",dp ax " << S.absAx << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
         }
-        o << "LMT_F2," << lft::VERSION << ",print = lots filled at a price per candle,part " << (S.lftPart >= 0 ? lft::PART_NAME[S.lftPart] : "-") << ",cuts " << S.lftCut[0] << "/" << S.lftCut[1] << "/" << S.lftCut[2] << (S.lftAdapt ? " ADAPTIVE (quiet part: its own biggest prints)" : (S.lftT.ok ? " (file)" : " (no file: Big Lot)")) << ",prints this part " << S.lftPartPrints << ",shown " << S.lftShown << ",fills " << S.lfp.fills << ",cells " << S.lfp.cells.size() << ",dropped " << S.lfp.dropped << "\n";
+        o << "LMT_F2," << lft::VERSION << ",print = lots filled at a price per candle,part " << (S.lftPart >= 0 ? lft::PART_NAME[S.lftPart] : "-") << ",cuts " << S.lftCut[0] << "/" << S.lftCut[1] << "/" << S.lftCut[2] << (S.lftAdapt ? " ADAPTIVE (quiet part: its own biggest prints)" : (S.lftT.ok ? " (file)" : " (no file: Big Lot)")) << ",prints this part " << S.lftPartPrints << ",B lines re-priced in 5 min " << S.bMoving << ",shown " << S.lftShown << ",fills " << S.lfp.fills << ",cells " << S.lfp.cells.size() << ",dropped " << S.lfp.dropped << "\n";
         o << "LMT_F,tiers " << (S.lmtFOk ? "LRA-LmtF file" : "Big Lot (" + S.lmtFWhy + ")") << "," << (S.lmtFRth == 1 ? "RTH" : S.lmtFRth == 0 ? "overnight" : "-") << " S20 " << S.lmtF[S.lmtFRth == 1 ? 1 : 0][0] << " S10 " << S.lmtF[S.lmtFRth == 1 ? 1 : 0][1] << " S5 " << S.lmtF[S.lmtFRth == 1 ? 1 : 0][2] << ",still resting shown " << S.lmtFRest << ",facts SignalBoard " << sb::VERSION << " P/B (B " << S.factsB.size() << ", depth levels " << S.bLevels << ")\n";
         o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",lines under 1SD (not drawn) " << S.boUnder1sd << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 = 1SD dim, 2 = 2SD full colour, 3 = 3SD full colour + outline),start " << S.boBase << " lots,big lots " << S.bldN << (S.bldOk ? std::string(",Big mu ") + std::to_string((long long)std::llround(S.bldMu)) + " Big Lot S20 " + std::to_string((long long)std::llround(S.bldV[0])) + " S10 " + std::to_string((long long)std::llround(S.bldV[1])) + " S5 " + std::to_string((long long)std::llround(S.bldV[2])) : std::string(",learning (needs 30) - steps of the start used")) << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
@@ -2515,10 +2516,9 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     auto freeF = [&](int t0, int b0) { for (size_t i = 0; i < usedF.size(); ++i) if (!(b0 < usedF[i].first || t0 > usedF[i].second)) return false; return true; };
     auto putF = [&](int t0, int h, const std::string& num, COLOR c, bool ice) {
         const std::string tail = " I";
-        const int w1 = (int)getTextWidth(num.c_str(), -1), w2 = ice ? (int)getTextWidth(tail.c_str(), -1) : 0;
-        const int x = fl + 2 + std::max(0, ((fr - fl - 4) - (w1 + w2)) / 2);
-        RCT a; a.set(coord(x), coord(t0), coord(fr - 1), coord(t0 + h)); setTextColor(c); a.drawText(num.c_str(), false, false);
-        if (ice) { RCT b; b.set(coord(x + w1), coord(t0), coord(fr - 1), coord(t0 + h)); setTextColor(C_WHITE); b.drawText(tail.c_str(), false, false); }
+        (void)tail;   // (0.65.0) centred in the cell by the SDK (column width x row), the iceberg I at the right edge
+        RCT a; a.set(coord(fl + 1), coord(t0), coord(fr - 1), coord(t0 + h)); setTextColor(c); a.drawText(num.c_str(), true, false);
+        if (ice) { RCT b; b.set(coord(fl + 1), coord(t0), coord(fr - 1), coord(t0 + h)); setTextColor(C_WHITE); b.drawText("I", false, true); }
     };
     {   const long long iFloor = S.bldOk ? std::max(1LL, (long long)std::llround(S.bldMu)) : std::max(10LL, 2 * minShow);
         const std::vector<std::pair<long long, bfl::Ice::Ord> > lv = S.ice.live(iFloor, 2);
@@ -2529,7 +2529,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
             while (tries < 4 && !freeF(t0, t0 + boxH)) { t0 += (tries % 2 ? -1 : 1) * (tries / 2 + 1) * (boxH + 1); ++tries; }
             if (!freeF(t0, t0 + boxH) || t0 < top + 14 || t0 + boxH > fBottom) continue;
             const bool bull = s == bfl::BID;
-            setFont(tier == 1 ? fp1 : fb);
+            setFont(tier == 3 ? fb : fp1);   // (0.65.0) bold = S5 only
             putF(t0, boxH, std::to_string(o.traded), (COLOR)lqp::colInk(bull, tier == 1), true);   // (0.45.3) lighter inks
             usedF.push_back(std::make_pair(t0, t0 + boxH)); ++S.iceLive;
         }
@@ -2575,20 +2575,20 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     for (size_t i = 0; i < keep.size(); ++i) {
         const Ex& e = keep[i]; const int y = yOfPx(e.px);
         const long long tl = e.ice ? e.lots : e.top;   // (0.64.0) the print (lots filled at the price in one candle)
-        const int tier = e.ice ? (tl >= fcut[2] ? 3 : tl >= fcut[1] ? 2 : 1) : std::max(1, e.tier);   // (0.62.0) S20 plain / S10 bold / S5 boxed (a climax fill)
+        const int tier = e.ice ? (tl >= fcut[2] ? 3 : tl >= fcut[1] ? 2 : 1) : std::max(1, e.tier);   // (0.65.0) S20 dim / S10 bright / S5 bright + bold (0.62.0: plain / bold / boxed)
         const std::string tx = (e.n > 1 ? std::to_string(e.n) + "\xD7 " : std::string()) + std::to_string(e.lots);   // "3\xD7 410"; an iceberg adds a white I after the number
         int t0 = y - sh / 2, tries = 0;
         while (tries < 6 && !freeF(t0, t0 + sh)) { t0 += sh + 1; ++tries; }   // never over another mark
         if (tries >= 6 || t0 < top + 14 || t0 + sh > fBottom) continue;
-        const bool old = nowT - e.last > 1800000LL;                  // older than 30 min: dimmer
-        const bool dim = old || tier == 1;
+        // (0.65.0, Rassul 06:43 CT "why are we using boxes?", "the values are not properly centered") NUMBER ONLY in the resting side's colour,
+        // centred in the column and on its price row (the SDK centres the text in the cell); tier by brightness and weight: S20 dim, S10 bright,
+        // S5 bright + bold; no boxes, no outlines; a white I (traded more than it showed) at the column's right edge, the resting dot at its left
+        const bool dim = tier == 1;
         const bool green = lqp::lmtFillGreen(e.side == bol::BID);   // (0.45.2, Rassul 20:06) the RESTING side: filled bid GREEN (buyers absorbed), filled offer RED (sellers absorbed); icebergs the same (0.19.1-0.45.1: coloured by who hit it)
-        setFont(tier >= 2 ? fsb : fsp);
-        putF(t0, sh, tx, (COLOR)lqp::colInk(green, dim), e.ice);   // (0.45.3, Rassul 23:37 "i can barely see them") lighter inks
-        {   const int w1 = (int)getTextWidth(tx.c_str(), -1), w2 = e.ice ? (int)getTextWidth(" I", -1) : 0;
-            const int x = fl + 2 + std::max(0, ((fr - fl - 4) - (w1 + w2)) / 2);
-            if (tier == 3) { RCT rb; rb.set(coord(x - 2), coord(t0), coord(x + w1 + 2), coord(t0 + sh)); rb.draw(1, (COLOR)0x00F1F5F9, (COLOR)0, DRAW_OPAQUE, PAT_HOLLOW); }   // (0.62.0) S5 = boxed
-            if (e.rest) { RCT rd; rd.set(coord(x + w1 + w2 + 1), coord(t0), coord(fr - 1), coord(t0 + sh)); setTextColor((COLOR)0x00FFFFFF); rd.drawText("\x95", false, false); ++S.lmtFRest; }   // (0.62.0) still resting after the fill
+        setFont(tier >= 3 ? fsb : fsp);
+        {   RCT a; a.set(coord(fl + 1), coord(t0), coord(fr - 1), coord(t0 + sh)); setTextColor((COLOR)lqp::colInk(green, dim)); a.drawText(tx.c_str(), true, false);
+            if (e.ice) { RCT b; b.set(coord(fl + 1), coord(t0), coord(fr - 1), coord(t0 + sh)); setTextColor(C_WHITE); b.drawText("I", false, true); }
+            if (e.rest) { RCT rd; rd.set(coord(fl + 1), coord(t0), coord(fr - 1), coord(t0 + sh)); setTextColor((COLOR)0x00FFFFFF); rd.drawText("\x95", false, false); ++S.lmtFRest; }   // (0.62.0) still resting after the fill
         }
         usedF.push_back(std::make_pair(t0, t0 + sh)); ++S.boExec;
         sb::Fact f; f.bar = e.ice ? ((e.last / 1000) / std::max(1, S.spb) + 1) * std::max(1, S.spb) : e.last / 1000; ++S.lftShown; f.lo = f.hi = (double)e.px * tick;   // the fill's candle (bar END stamp, Central seconds)
@@ -2597,8 +2597,14 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     }
     {   // (0.62.0) the resting big orders near price as SignalBoard 1.4.0 facts kind 'B' (live) - lsDealerProfile ranks them (one owner of the rank)
         S.factsB.clear();
+        // (0.65.0, Rassul 06:54 CT "the king node moved") an order that keeps RE-PRICING with price is quoting, not a wall: each resting line carries
+        // how often its order (same id) moved in the last 5 min in f.state; lsDealerProfile marks it (moved) and drops it from the top 10 when it keeps moving
+        std::map<long long, int> movesOf; S.bMoving = 0;
+        for (size_t k = 0; k < S.bo.lines.size(); ++k) { const bol::Line& L = S.bo.lines[k]; if (L.end == bol::MOVED && L.tEnd >= nowT - 300000LL) ++movesOf[L.oid]; }
         for (size_t k = 0; k < S.bo.lines.size(); ++k) { const bol::Line& L = S.bo.lines[k]; if (L.end != bol::RESTING || L.left <= 0) continue;
-            sb::Fact f; f.bar = nowT / 1000; f.lo = f.hi = (double)L.px * tick; f.side = L.side == bol::BID ? 1 : -1; f.val = (double)L.left; f.state = 0; S.factsB.push_back(f); }
+            sb::Fact f; f.bar = nowT / 1000; f.lo = f.hi = (double)L.px * tick; f.side = L.side == bol::BID ? 1 : -1; f.val = (double)L.left;
+            const std::map<long long, int>::const_iterator mv = movesOf.find(L.oid); f.state = mv == movesOf.end() ? 0 : mv->second; if (f.state > 0) ++S.bMoving;
+            S.factsB.push_back(f); }
         // (0.62.1, live 10-27 22:06: the left column was EMPTY - the big-order lines need 50+ lots resting 9 min and overnight there were none)
         // the resting LIQUIDITY of the depth book within reach: every price's displayed lots (code 1), the big-order lines kept (code 0, the
         // bigger of the two at one price); lsDealerProfile ranks the top 10 of these
@@ -4579,6 +4585,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.64.0");   // LQ_VERSION
+    p->setVersion("0.65.0");   // LQ_VERSION
     return p;
 }

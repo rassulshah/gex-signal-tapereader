@@ -222,6 +222,7 @@ struct Feed {
 
 struct HLState {
     int leftKeepX = 0;   // (2.9.1) the left keep-out x in force (ColumnBoard leftKeep)
+    int candleAvoid = 0;   // (2.9.3) candle keep-out boxes in force
     std::string root, mkt; int mi = -1;
     long nBars = -1; RTDATE lastStamp = 0, firstStamp = 0; float lastTick = 0;
     long long per = 0; double tick = 0;
@@ -966,7 +967,7 @@ void HodLod::writeStatus(HLState& S, const hl::Layout* L)
     if (S.mi < 0) return;
     std::string text;
     if (S.T && L) text = hl::statusText(S.view, *L, *S.T, S.rd, (int)S.per, S.state) + "CHART," + S.root + "," + std::to_string(S.per) + "\n" + S.placeLine;   // (HL105) chart identity for SessionInfo; (2.0.6) PLACE / OPTS
-    else text = std::string("VERSION,") + hl::HL_VERSION + "\nMARKET," + S.mkt + "\nPER," + std::to_string(S.per) + "\nSTATE," + S.state + "\nLEFT_KEEP," + std::to_string(S.leftKeepX) + " (ColumnBoard " + cb::VERSION + ")\n";
+    else text = std::string("VERSION,") + hl::HL_VERSION + "\nMARKET," + S.mkt + "\nPER," + std::to_string(S.per) + "\nSTATE," + S.state + "\nLEFT_KEEP," + std::to_string(S.leftKeepX) + " (ColumnBoard " + cb::VERSION + ")\nCANDLE_KEEPOUT," + std::to_string(S.candleAvoid) + " boxes (the table + strip never cover candles when a clear spot exists)\n";
     text += std::string("AWARENESS,") + awh::VERSION + " AWHODLOD decided " + std::to_string(S.aw.writes) + " records\nPERF," + lsperf::statusOf(this) + "\n";   // (2.8.0)
     time_t now = time(nullptr);
     bool changed = text != S.lastStatus;
@@ -1354,7 +1355,23 @@ int HodLod::draw(void)
     S->qV = hlq::fresh(S->qf, hlNowCt()); S->qJudged = S->qf.ok;   // (2.4.0) their age: stale -> "Q: STALE"
     hlq::toView(S->view, S->qf, S->view.trendReady ? hl::trendWord(S->view.trendLvl) : std::string(), S->view.trendLvl, &S->qV);
     const int pe = priceEdge();
-    const std::vector<hl::Box> avoid = hlAvoid(*S, pb, pe);
+    std::vector<hl::Box> avoid = hlAvoid(*S, pb, pe);
+    {   // (2.9.3, 2026-10-28 06:38 CT, Rassul's rule "callouts never cover candles"; the left side is free again - ColumnBoard 1.8.0) the
+        // visible candles are keep-outs too: grouped into ~40 px columns (high .. low + 4 px), so the table + strip dock where no candle is
+        const long n = getBarCount(); RTARRAY hi(barHigh), lo(barLow); S->candleAvoid = 0;
+        if (n > 0 && (long)hi.count >= n && (long)lo.count >= n) {
+            int sl = 0, sr = -1, st = 0, sb = 0, seen = 0;
+            for (long i = n - 1; i >= 0 && seen < 800; --i, ++seen) {
+                PNT a, c; if (a.set((int)i, (float)hi[(int)i], kBarLeft) != RTX_OK || c.set((int)i, (float)lo[(int)i], kBarRight) != RTX_OK) break;
+                const int xl = (int)a.h, xr = (int)c.h; if (xr < pb.l) break; if (xl > pb.r) continue;
+                const int yt = (std::min)((int)a.v, (int)c.v) - 4, yb = (std::max)((int)a.v, (int)c.v) + 4;
+                if (sr < 0) { sl = xl; sr = xr; st = yt; sb = yb; continue; }
+                if (sr - xl > 40) { avoid.push_back(hl::Box{ sl, st, sr, sb }); ++S->candleAvoid; sl = xl; sr = xr; st = yt; sb = yb; }
+                else { sl = (std::min)(sl, xl); st = (std::min)(st, yt); sb = (std::max)(sb, yb); }
+            }
+            if (sr >= 0) { avoid.push_back(hl::Box{ sl, st, sr, sb }); ++S->candleAvoid; }
+        }
+    }
     const Place PL = position(S->mkt);
     const hl::Opts O = opts(PL);
     {   // (2.6.0) the PRE-OPEN BOOK row: the read (cached 1 s - a live read walks the book), its hover only while the mouse is on it
@@ -1581,6 +1598,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.9.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.9.3");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
