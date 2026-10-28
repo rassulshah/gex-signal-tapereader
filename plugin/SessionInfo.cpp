@@ -5,6 +5,14 @@
  *  table's header (lsHodLod 2.0.2, read from the same LRA-Session-<MKT>.csv). This stub draws one grey line asking for the
  *  indicator to be removed from the chart and does nothing else. The 1.7.2 source is kept as plugin\retired\SessionInfo_1_7_2.cpp.
  ********************************************************************************/
+// (2026-10-28) windows.h BEFORE irtsdk.h (Linnsoft note, irtsdk.h:123): PerfGuard.h pulls windows.h after it,
+// which broke the build on Windows SDK 10.0.26100 (C2371 RTBOOL). Same pattern as CVD / the plugins that compile.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 #include "irtsdk.h"
 #include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
 #ifndef LSPERF_PLUGIN

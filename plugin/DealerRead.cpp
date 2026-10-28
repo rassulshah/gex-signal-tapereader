@@ -46,6 +46,14 @@
  *  Data: %USERPROFILE%\InvestorRT\rtx\lsFlexLevels\LRA-Dealer-<MKT>.csv (LRA analytics/lra/dealer_irt.py); grammar in
  *  DealerLogic.h. Parameters read only in the parms callbacks. Never black lines: the chart is black.
  ********************************************************************************/
+// (2026-10-28) windows.h BEFORE irtsdk.h (Linnsoft note, irtsdk.h:123): PerfGuard.h pulls windows.h after it,
+// which broke the build on Windows SDK 10.0.26100 (C2371 RTBOOL). Same pattern as CVD / the plugins that compile.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 #include "irtsdk.h"
 #include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
 #ifndef LSPERF_PLUGIN

@@ -15,6 +15,14 @@
  *  Settings window: controls only. Parameters are read ONLY in the parms callbacks (GAMMA-PROFILE-PLUGIN.md gotcha 3).
  *  Never black text: the chart background is black.
  ********************************************************************************/
+// (2026-10-28) windows.h BEFORE irtsdk.h (Linnsoft note, irtsdk.h:123): PerfGuard.h pulls windows.h after it,
+// which broke the build on Windows SDK 10.0.26100 (C2371 RTBOOL). Same pattern as CVD / the plugins that compile.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 #include "irtsdk.h"
 #include "PerfGuard.h"   // (PerfGuard 1.0.0, 2026-10-26) calc / draw timing, memory, lag, budgets -> lsFlexLevels\Perf
 #ifndef LSPERF_PLUGIN
