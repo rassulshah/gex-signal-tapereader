@@ -1,0 +1,15 @@
+VERSION,1
+# LRA-LmtF-ES.csv - LMT F tiers (print = lots filled at one price in one candle), written 2026-10-28 (seed from Databento MBO, same method) by lmtf_read 2.0.0 (2026-10-28 23:00 CT LMT F print = lots filled at a price per candle, tiers per session part; 1.1.0 2026-10-28 overnight, lsDeltaProfile 2.29.0 READ tiers / NodeLadder 1.0.0 / CombinerLogic 0.2.0 / ChainSpec 1.1.0)
+MARKET,ES
+TIER,RTH,533,658,798
+TIER,ON,143,196,338
+FLOOR,RTH,179
+FLOOR,ON,33
+PART,EVE,36,49,76
+PART,ASIA,73,97,124
+PART,LON,124,183,335
+PART,OPEN,294,373,452
+PART,MID,465,597,753
+PART,CLOSE,323,405,506
+PART,POST,1288,1852,2184
+# sessions 2026-10-16 2026-10-19 2026-10-20 2026-10-21 2026-10-22
