@@ -130,6 +130,7 @@ static const bool HL_PRE_HOVER = true;
 #include "AwareHook.h"           // (2.8.0) the smart-read hook (layer L3)
 #include "SelfAware.h"           // (2.9.0) self-awareness
 #include "MarketState.h"         // (2.4.0) SRC HODLOD + TREND, once per closed bar
+#include "ColumnBoard.h"          // (2.9.x, 2026-10-28) cb::leftKeep: the table stays right of the left Liquidity column
 #include "BoxDock.h"             // (2.4.1) the table rectangle for the Big Lot box (lsBigBidAsk) to dock to
 #include <chrono>
 #include "PreOpenLogic.h"        // (2.6.0) the PRE-OPEN BOOK row (SDK-free)
@@ -220,6 +221,7 @@ struct Feed {
 } // namespace hlpo
 
 struct HLState {
+    int leftKeepX = 0;   // (2.9.1) the left keep-out x in force (ColumnBoard leftKeep)
     std::string root, mkt; int mi = -1;
     long nBars = -1; RTDATE lastStamp = 0, firstStamp = 0; float lastTick = 0;
     long long per = 0; double tick = 0;
@@ -962,7 +964,7 @@ void HodLod::writeStatus(HLState& S, const hl::Layout* L)
     if (S.mi < 0) return;
     std::string text;
     if (S.T && L) text = hl::statusText(S.view, *L, *S.T, S.rd, (int)S.per, S.state) + "CHART," + S.root + "," + std::to_string(S.per) + "\n" + S.placeLine;   // (HL105) chart identity for SessionInfo; (2.0.6) PLACE / OPTS
-    else text = std::string("VERSION,") + hl::HL_VERSION + "\nMARKET," + S.mkt + "\nPER," + std::to_string(S.per) + "\nSTATE," + S.state + "\n";
+    else text = std::string("VERSION,") + hl::HL_VERSION + "\nMARKET," + S.mkt + "\nPER," + std::to_string(S.per) + "\nSTATE," + S.state + "\nLEFT_KEEP," + std::to_string(S.leftKeepX) + " (ColumnBoard " + cb::VERSION + ")\n";
     text += std::string("AWARENESS,") + awh::VERSION + " AWHODLOD decided " + std::to_string(S.aw.writes) + " records\nPERF," + lsperf::statusOf(this) + "\n";   // (2.8.0)
     time_t now = time(nullptr);
     bool changed = text != S.lastStatus;
@@ -1302,6 +1304,14 @@ int HodLod::draw(void)
     if (S->mi < 0) return RTX_OK;
     RCT pane; pane.getPaneRect(false);
     hl::Box pb = { pane.left, pane.top, pane.right, pane.bottom };
+    {   // (2026-10-28 overnight, Rassul 22:06 CT screenshot: the table sat over the LEFT Liquidity column) the table and everything this indicator
+        // places from the pane's left edge keep right of the left columns (ColumnBoard leftKeep - the one rule for every plugin)
+        const char* sy = getSymbol(); const char* cl = getChartLabel();
+        const long long nowMs = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        const int keep = cb::leftKeep(sy ? sy : "", getSecondsPerBar(), cl ? cl : "", (int)pane.left, nowMs);
+        if (keep > pb.l && pb.r - keep > 260) pb.l = keep;
+        S->leftKeepX = keep;
+    }
     if (!S->have || !S->T) {
         std::string s = "HOD/LOD: " + S->state;
         if (pb.r - pb.l > 200 && pb.b - pb.t > 40) text(pb.l + 8, pb.b - 14, s, HL_GREY, 8, false);
@@ -1569,6 +1579,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.9.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.9.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

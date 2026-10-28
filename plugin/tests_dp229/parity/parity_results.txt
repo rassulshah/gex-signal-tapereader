@@ -1,0 +1,6 @@
+GC 2026-09-22 parity: 6874804 events, 10 nodes, exact 7, within 10% 10, total abs diff 12 of 48282 lots (0.0%), rows dropped 2476
+EU 2026-10-05 parity: 2354150 events, 8 nodes, exact 0, within 10% 8, total abs diff 76 of 47192 lots (0.2%), rows dropped 0
+CL 2026-09-30 parity: 3340083 events, 10 nodes, exact 8, within 10% 10, total abs diff 75 of 29348 lots (0.3%), rows dropped 0
+NQ 2026-09-28 parity: 0 events, 0 nodes, exact 0, within 10% 0, total abs diff 0 of 0 lots (0.0%), rows dropped 0
+HG 2026-09-22 parity: 917079 events, 9 nodes, exact 6, within 10% 9, total abs diff 21 of 14778 lots (0.1%), rows dropped 0
+NG 2026-09-23 parity: 0 events, 0 nodes, exact 0, within 10% 0, total abs diff 0 of 0 lots (0.0%), rows dropped 0

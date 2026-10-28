@@ -92,7 +92,8 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <chrono>
 #include "SignalBoard.h"            // (1.31.0) kind D facts (decided candles' defense)
 
-#define BF_VERSION "1.31.0"          // 1.31.0 (2026-10-28 overnight) the decided candle's defense posted on the SignalBoard as kind D (bf::defenseFact; layer 1a, one owner)
+#define BF_VERSION "1.32.0"          // 1.32.0 (2026-10-28 overnight, Rassul 21:52 / 21:57 CT) the NODE LADDER owner (OrderFlowFeed 1.16.0 Engine.ladder -> SignalBoard 1.5.0 LRA_SLD_ every second), the AT NODE box row and the node mark (white square inside the defenders' bar: filled = holding, hollow = pulling) from lsDeltaProfile's kind Y read (display only, nothing recomputed)
+// 1.31.0 was:          // 1.31.0 (2026-10-28 overnight) the decided candle's defense posted on the SignalBoard as kind D (bf::defenseFact; layer 1a, one owner)
 // prev:         // 1.30.0 (2026-10-26, Rassul 18:33 CT) the letter strips are not drawn (letters recorded / exported / in the status), their rows go to the bars; the turn % marks stay
 // prev:          // (1.29.0, 2026-10-26) self-awareness SELFDEF (SelfAware.h, SELF-AWARE.md; ships OFF per market) // 1.28.0 (2026-10-26, BUILD-SPEC Defense pane, Rassul approved 22:29 CT 2026-10-25): F? (amber, FMirror.h 1.0.0: the pivot likely dies at once - attackers stacking in front + defenders pulling behind in the pivot bar's last 60 s, decided at its close, F lines in BookFlow\<MKT>-<spb>-fmirror.csv, drawn only with the per-market thresholds from lsFlexLevels\LRA-FMirror-<MKT>.csv); the shared A shows as grey "Ab", H as "Hb?" (defender colour) only after an Ab at the same pivot within 10 candles, L / X as "L?" / "X?" with the re-test hover (same order / new big order / small orders only, lots vs normal); letters coloured by meaning (bullish green / bearish red: W, B, X, Q! at a low = red); at most 2 codes per candle (one per strip); records unchanged // 1.27.0 (2026-10-23 4-step stage revamp) Defense strips renamed Floor / Release (LetterStrips 1.3.0); // was 1.26.0:          // 1.25.0 (2026-10-22 evening fix build) compact strips, bars >= 50% of the pane, one-line Implied row, the Q hover hides the anchor token;          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
 #include "PaneCursor.h"           // (1.3.4)
@@ -128,7 +129,7 @@ public:
         return r;
     }
     virtual bool textOff() const { return false; }
-    virtual std::string boxKeep() const { return "Refill Effort;Refilled;Counter;Re-test;Moved;At level"; }   // (1.21.0, Rassul 20:11-20:23 CT) the Attackers row removed (G moved to the attacker pane)   // (1.19.0) + Attackers (Top Attacker #2 G) + At level (Top Defender #2 W)   // (1.17.0) + Moved (Top Defender #3)   // (1.16.0) + Re-test (Top Defender #4)   // (1.15.0) + Counter (Top Defender #5)   // (1.8.0, Rassul 19:19) Reward removed - it repeats Aggression's Reward;   // (1.6.0, Rassul 17:42 "build it already") + Reward (EffortReward.h)    // (1.5.0, Rassul 11:19 / 11:53) the two defense rows; the rest hidden   // (1.4.0, 23:56 CT) + Added / Pulled (their plain 20-candle ratios, as the pull marker)            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
+    virtual std::string boxKeep() const { return "Refill Effort;Refilled;Counter;Re-test;Moved;At level;At node"; }   // (1.32.0) + At node (the label carries the price: kept by prefix, see keepRow)   // (1.21.0, Rassul 20:11-20:23 CT) the Attackers row removed (G moved to the attacker pane)   // (1.19.0) + Attackers (Top Attacker #2 G) + At level (Top Defender #2 W)   // (1.17.0) + Moved (Top Defender #3)   // (1.16.0) + Re-test (Top Defender #4)   // (1.15.0) + Counter (Top Defender #5)   // (1.8.0, Rassul 19:19) Reward removed - it repeats Aggression's Reward;   // (1.6.0, Rassul 17:42 "build it already") + Reward (EffortReward.h)    // (1.5.0, Rassul 11:19 / 11:53) the two defense rows; the rest hidden   // (1.4.0, 23:56 CT) + Added / Pulled (their plain 20-candle ratios, as the pull marker)            // (1.2.1, Rassul 22:54) the box: Net and Pace only (1.3.0: Net = "+120 (2.4x)")
     virtual bool boxOnly() const { return true; }                         // (1.2.0, Rassul 2026-10-16 22:00) the left-justified numbers box in the pane, no read / options lines                          // (1.1.0, Rassul 2026-10-16 18:14) no read / numbers / options lines on the pane; the records and the tape reader keep every number
     virtual long long netOf(const off::Rec& r, int s) const { return bf::netOf(r, s); }
     // the label numbers of one net bar: ratio / pace / lots of the part that spiked (up = added, down = pulled; pace only for added)
@@ -152,6 +153,8 @@ public:
         // label + identity they belong to, the Market State facts posted
         std::map<long long, bf::NetStat> net; int netRb = -1; long long netAvg = -1; std::string identity, chart;
         std::map<long long, sb::Fact> dFacts; long long dPostMs = -100000; size_t dPosted = 0;   // (1.31.0) SignalBoard D
+        nl2::Ladder ladder; long long ladPostMs = -100000; size_t ladPosted = 0, ladBytes = 0; long long ladTooBig = 0;   // (1.32.0) the node ladder (NodeLadder.h): this pane owns it, posts the last closed candles
+        std::vector<sb::Fact> yFacts; long long yReadMs = -100000; long long nodeMarks = 0; std::string nodeRowText;       // (1.32.0) the Delta Profile's node defender reads (kind Y), read for display only
         long long mstBar = 0, mstCt = 0, mstMs = -1, mstPosts = 0; std::map<std::string, std::string> mstKv; sa::Hook self;
         pc::Tracker cur; long long liveEv = -1, liveMs = -1;
         br::Read lastRead; std::vector<std::string> lastReadLines;        // (1.4.0) the Read last drawn (tests)
@@ -321,7 +324,8 @@ public:
         e->mvByKey[key] = a.moves; while (e->mvByKey.size() > 60) e->mvByKey.erase(e->mvByKey.begin()); } }   // (1.17.0) the candle's confirmed moves
     // (1.17.0) the shared engine tracks order moves only for this pane (MoveLogic.h; size floor = the market's q90 of moves)
     void trackOn(S_& S) { S.e.trackMoves = true; S.e.mvt.minLots = mvl::minLotsOf(S.market);
-        Ext* e = ext(S); if (e) { e->lwSink.w = &e->lw; e->lwSink.f = &e->fAcc; S.e.sink = &e->lwSink; } }   // (1.19.0) the key-level watch sees every classified book event
+        Ext* e = ext(S); if (e) { e->lwSink.w = &e->lw; e->lwSink.f = &e->fAcc; S.e.sink = &e->lwSink;
+                                 S.e.ladder = &e->ladder; e->ladder.spb = S.spb > 0 ? (long long)S.spb : 180; } }   // (1.32.0) the node ladder sees every classified near-price event   // (1.19.0) the key-level watch sees every classified book event
     // (1.12.0) from a candle's raw accumulator: the price per side where the most lots were re-posted after a hit (Ice.rebuilt), and the
     // attack at the candle's low / high (lots hit before / after it printed, seconds)
     static void fillAcc(dt::Candle& q, const off::Acc& a) {
@@ -1113,6 +1117,7 @@ public:
     void post(S_& S, long long now) {
         Ext* e = ext(S); if (!e || e->chart.empty() || S.symbol.empty()) return;
         sync(S, *e);
+        postLadder(S, *e);   // (1.32.0) every second, before the 15 s Market State throttle
         if (e->mstKv.empty() && S.lastClosedKey > 0) {                     // after a restart: the last closed candle read back from the record
             std::map<long long, off::PaneBar>::const_iterator b = S.ser.bars.find(S.lastClosedKey);
             const bf::NetStat* n = b != S.ser.bars.end() && b->second.ok ? netAt(S, S.lastClosedKey) : nullptr;
@@ -1124,6 +1129,32 @@ public:
         mst::publish("BOOK", S.symbol, S.spb, e->chart, now, e->mstCt, e->mstKv);
         selfAware(S, *e, now);   // (1.29.0) self-awareness
         postD(S, *e, now);       // (1.31.0)
+    }
+    // (1.32.0) the bar's Central wall-clock seconds (the SignalBoard bar stamp every plugin uses) from the pane's candle key
+    long long ctOf(long long key) {
+        struct tm x; std::memset(&x, 0, sizeof(x)); if (key <= 0 || !getLocaltime((RTDATE)key, &x)) return 0;
+        return off::civilDays(x.tm_year + 1900, (unsigned)x.tm_mon + 1, (unsigned)x.tm_mday) * 86400 + x.tm_hour * 3600 + x.tm_min * 60 + x.tm_sec;
+    }
+    static long long steadyNow() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+    // (1.32.0) SignalBoard 1.5.0 channel LRA_SLD_: the node ladder of the last 3 CLOSED candles (fewer when the text would pass 30,000
+    // characters), once a second; lsDeltaProfile reads it to decide A / A+ at its node (NodeLadder.h nodeRead)
+    void postLadder(S_& S, Ext& e) {
+        if (e.chart.empty() || S.symbol.empty() || !(S.tick > 0)) return;
+        const long long ms = steadyNow();
+        if (e.ladPostMs >= 0 && ms >= e.ladPostMs && ms - e.ladPostMs < 1000) return;
+        e.ladPostMs = ms;
+        for (size_t cnt = 3; cnt >= 1; --cnt) {
+            const std::vector<nl2::PBar> v = nl2::closedBars(e.ladder, S.formingKey, S.tick, cnt, [&](long long k) { return ctOf(k); });
+            const std::string enc = nl2::encode(ms, v);
+            if (enc.size() <= 30000) { sb::postLadder(S.symbol, S.spb, e.chart, enc); e.ladPosted = v.size(); e.ladBytes = enc.size(); return; }
+            ++e.ladTooBig;
+        }
+    }
+    // (1.32.0) the Delta Profile's node defender reads (kind Y, decided only), read at most once a second
+    const std::vector<sb::Fact>& yRead(S_& S, Ext& e) {
+        const long long ms = steadyNow();
+        if (e.yReadMs < 0 || ms < e.yReadMs || ms - e.yReadMs >= 1000) { e.yReadMs = ms; std::vector<sb::Fact> v; if (sb::readFacts('Y', S.symbol, S.spb, e.chart, ms, v, true)) e.yFacts.swap(v); else e.yFacts.clear(); }
+        return e.yFacts;
     }
     // (1.31.0) SignalBoard 1.4.0 kind D: every decided candle's defense (kept 200), posted with the steady clock beside SRC BOOK
     void postD(S_& S, Ext& e, long long) {
@@ -1386,8 +1417,29 @@ public:
             }
             info.rows.push_back(lr);
         }
+        {   // (1.32.0, Rassul 21:57 CT) the AT NODE row: the latest Delta Profile A node (decided, kind Y) within 12 candles of the shown candle -
+            // its defenders HOLDING / PULLING at the node, "Hold +1.8x ?" in the defenders' column, coloured by meaning (bids holding green,
+            // bids pulling red; offers holding red, offers pulling green); the node's price in the label; "-" when there is none
+            off::InfoRow nr; nr.label = "At node"; nr.v[0] = nr.v[1] = "-";
+            if (Ext* e = ext(S)) {
+                const long long sk = liveBox ? (long long)times[last] : mt;
+                std::map<long long, int>::const_iterator si = S.barEnds.find(sk);
+                const int sIdx = si != S.barEnds.end() ? si->second : (liveBox ? last : -1);
+                const long long sct = ctOf(sk), span = 12LL * (S.spb > 0 ? S.spb : 180);
+                const sb::Fact* best = nullptr;
+                for (const sb::Fact& f : yRead(S, *e)) { if (f.code % 10 == 0 || f.bar > sct || sct - f.bar > span || sIdx < 0) continue; if (!best || f.bar > best->bar) best = &f; }
+                if (best) {
+                    const bool bull = best->side > 0, hold = best->code % 10 == 1; const int col = bull ? 0 : 1;
+                    nr.label = "At node " + bf::priceText((best->lo + best->hi) / 2, S.tick);
+                    nr.v[col] = std::string(hold ? "Hold " : "Pull ") + nl2::ratioText(best->val) + (best->proven == 1 ? "" : " ?");
+                    nr.side[col] = (bull == hold) ? 0 : 1;
+                }
+                e->nodeRowText = nr.label + " " + nr.v[0] + " | " + nr.v[1];
+            }
+            info.rows.push_back(nr);
+        }
         {   const std::string keep = ";" + boxKeep() + ";"; std::vector<off::InfoRow> kept;   // (1.2.1) Net and Pace only
-            for (size_t k = 0; k < info.rows.size(); ++k) if (keep.find(";" + info.rows[k].label + ";") != std::string::npos) kept.push_back(info.rows[k]);
+            for (size_t k = 0; k < info.rows.size(); ++k) if (keep.find(";" + info.rows[k].label + ";") != std::string::npos || info.rows[k].label.compare(0, 7, "At node") == 0) kept.push_back(info.rows[k]);
             info.rows.swap(kept); }
         if (shownPs && shownPs->ok) for (size_t k = 0; k < info.rows.size(); ++k) {   // (1.4.0) Added / Pulled with the plain 20-candle ratios (the marker's yardstick)
             const bool ad = info.rows[k].label == "Added", pu = info.rows[k].label == "Pulled"; if (!ad && !pu) continue;
@@ -1462,6 +1514,28 @@ public:
                 if (e->dtHaveLive && last <= v1) mark(last, e->dtLive, true);
             }
             { off::PaneGeo gs = g; gs.reserve = stripRes; (void)gs; e->badgeHit.clear(); e->badgeTip = -1;   /* (1.29.0) the letter strips are not drawn (still decided + exported) */ }   // (1.23.0) the two letter strips
+            if (top > 0) {   // (1.32.0, Rassul 22:0x CT) the NODE MARK inside the BOTTOM of the defenders' bar of the A node's candle: green bar when the
+                // buyers (bids) defend, red bar when the sellers (offers) do; white FILLED square = holding, white HOLLOW square = pulling (white
+                // reads on both bar colours); its hover = the question, the numbers, how to use it, an example
+                std::map<long long, const sb::Fact*> byCt; for (const sb::Fact& f : yRead(S, *e)) if (f.code % 10 != 0) byCt[f.bar] = &f;
+                e->nodeMarks = 0;
+                for (int i = v0; i <= v1 && i < last && !byCt.empty(); ++i) {
+                    const std::map<long long, const sb::Fact*>::const_iterator it = byCt.find(ctOf((long long)times[i])); if (it == byCt.end()) continue;
+                    const sb::Fact& f = *it->second; const off::PaneBar* pb = barOf(i); if (!pb) continue;
+                    const int xc = xOf(i); if (xc < g.left || xc > g.edge) continue;
+                    const int s = f.side > 0 ? 0 : 1; const off::Pair pr = off::pairIn(xc, slot);
+                    const long long v = netOf(pb->r, s); int yb = g.bottom - 1; off::pairBarH(&vyNow, g, top, v, yb);
+                    const int cx = (pr.l[s] + pr.r[s]) / 2, hw = std::max(2, std::min(3, (pr.r[s] - pr.l[s]) / 2 - 1));
+                    const int l = cx - hw, r = cx + hw, b2 = yb - 2, t2 = b2 - 2 * hw;
+                    const bool hold = f.code % 10 == 1;
+                    if (hold) off::fillFlat(this, l, t2, r + 1, b2 + 1, off::C_WHITE);
+                    else { off::fillFlat(this, l, t2, r + 1, t2 + 1, off::C_WHITE); off::fillFlat(this, l, b2, r + 1, b2 + 1, off::C_WHITE);
+                           off::fillFlat(this, l, t2, l + 1, b2 + 1, off::C_WHITE); off::fillFlat(this, r, t2, r + 1, b2 + 1, off::C_WHITE); }
+                    off::IconRect ir; ir.l = l; ir.t = t2; ir.r = r; ir.b = b2;
+                    e->badgeHit.push_back(std::make_pair(ir, bf::nodeTip(f, S.tick, S.market)));
+                    ++e->nodeMarks;
+                }
+            }
         }
         const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
         off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
@@ -1599,6 +1673,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.31.0");   // BF_VERSION
+    p->setVersion("1.32.0");   // BF_VERSION
     return p;
 }

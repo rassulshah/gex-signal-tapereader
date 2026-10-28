@@ -69,7 +69,7 @@
 #include <dirent.h>
 #endif
 
-#define TTR_VERSION "0.1.1"     // = ttr::VERSION = ttrset::PLUGIN_VERSION = the setVersion literal
+#define TTR_VERSION "0.1.2"     // = ttr::VERSION = ttrset::PLUGIN_VERSION = the setVersion literal
 
 static const int HOVER_PT = 10, HOVER_LH = 14;
 static const int VAP_READS_PER_PASS = 400, VAP_RETRY_PASSES = 20;
@@ -174,7 +174,8 @@ struct TtState {
     std::string identity, market, symbol, chart; int spb = 0; double tick = 0;
     ttr::Engine E; bool loaded = false; long long lastFedT = 0, retryT = 0; int retries = 0; bool vapFault = false;
     long long fed = 0, noVap = 0, recLines = 0, recFails = 0, recBad = 0, files = 0;
-    long long vapShort = 0, vapNotLoaded = 0, vapOk = 0, fromC = 0, cWaits = 0; long vapCount = 0, barCount = 0; bool cProducer = false; size_t cFacts = 0;   // (0.1.1)
+    long long vapShort = 0, vapNotLoaded = 0, vapOk = 0, fromC = 0, cWaits = 0; bool vapDead = false;   // (0.1.2) vapDead: this pane never gets volume at price - stop retrying it
+    long vapCount = 0, barCount = 0; bool cProducer = false; size_t cFacts = 0;   // (0.1.1)
     long long tPostMs = -100000; size_t tPosted = 0; long long startMs = -1;
     ss::Store setStore; ss::Values set = ss::defaults(ttrset::spec(), -1); long long setCheckMs = -100000;
     nl::Cache lv; std::string lvNote; long long lvMs = -100000;
@@ -275,7 +276,7 @@ void TrappedTraders::identify(TtState& S) {
     S.identity = id; S.market = mkt; S.symbol = sym; S.chart = chart; S.spb = spb; S.tick = tick;
     S.E = ttr::Engine(); S.loaded = false; S.lastFedT = 0; S.retryT = 0; S.retries = 0; S.vapFault = false;
     S.fed = S.noVap = S.recLines = S.recFails = S.recBad = S.files = 0;
-    S.vapShort = S.vapNotLoaded = S.vapOk = S.fromC = S.cWaits = 0; S.vapCount = S.barCount = 0; S.cProducer = false; S.cFacts = 0; S.tPostMs = -100000; S.tPosted = 0; S.startMs = -1;
+    S.vapShort = S.vapNotLoaded = S.vapOk = S.fromC = S.cWaits = 0; S.vapDead = false; S.vapCount = S.barCount = 0; S.cProducer = false; S.cFacts = 0; S.tPostMs = -100000; S.tPosted = 0; S.startMs = -1;
     S.setStore = ss::Store(); S.setCheckMs = -100000; S.lv = nl::Cache(); S.lvMs = -100000; S.hits.clear(); S.hover = -1; S.statusBody.clear(); S.postedT = 0;
 }
 void TrappedTraders::settings(TtState& S, long long now) {
@@ -336,15 +337,16 @@ void TrappedTraders::bars(TtState& S) {
         if (!ttr::toTicks(op[i], S.tick, b.o) || !ttr::toTicks(hi[i], S.tick, b.h) || !ttr::toTicks(lo[i], S.tick, b.l) || !ttr::toTicks(cl[i], S.tick, b.c)) { S.lastFedT = t; continue; }
         bool ok = false;
         if (!haveVap) ++S.vapShort;
-        if (haveVap && !S.vapFault) {
+        if (haveVap && !S.vapFault && !S.vapDead) {
             if (reads >= VAP_READS_PER_PASS) break;                      // the rest next pass (no heavy work in one call)
             ++reads;
             const int r = ttVap(vap, i, S.tick, cells);
             if (r < 0) S.vapFault = true;
             else if (r == 0) {
                 if (S.retryT != t) { S.retryT = t; S.retries = 0; }
-                if (++S.retries < VAP_RETRY_PASSES) break;                 // not loaded yet: retry, then feed without it
-                ++S.vapNotLoaded;
+                if (i >= lastClosed && ++S.retries < VAP_RETRY_PASSES) break;   // not loaded yet: retry (the newest closed candle only - (0.1.2) an older one is not
+                ++S.vapNotLoaded;                                                //  waited for: it is loaded or never will be), then feed without it
+                if (S.vapNotLoaded >= 3 && S.vapOk == 0) S.vapDead = true;   // (0.1.2, live 10-27 22:06: 4 candles in 40 min) IRT gives this pane no volume at price: stop the 4-pass retry per candle, use C
             }
             ok = r > 0; if (ok) ++S.vapOk;
         }
@@ -615,6 +617,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE | VAP_REQUIRED);     // its own pane, draws itself; mouse events even when not selected
     p->setDescription("LRA Trapped Traders v0.1.1 - Who is trapped? Per candle, green = sell lots that traded BELOW the close (sellers trapped), red = buy lots that traded ABOVE the close (buyers trapped), from the chart's volume at price. Green > red = bullish, red > green = bearish. A triangle with the ratio marks the Stage 3 trigger: at a forming pivot (1-bar ZigZag, the extreme candle through 3 after it) the first candle where the turn side's trapped lots move ahead. Default: marks at every forming pivot; the Levels only choice keeps the trade levels (ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO) and gamma levels, approached from the right side. Without volume at price in its pane it reads the trap lots lsDeltaProfile posts for each candle. Decided once on closed candles, recorded, never repainted. Read it with the Defense pane: take the turn when Defense agrees and the candle closes in the turn colour. Example: ES Oct 26 9:12 AM low, sellers trapped 8,333 vs buyers 3,887 = 2.1x.");
-    p->setVersion("0.1.1");   // TTR_VERSION
+    p->setVersion("0.1.2");   // TTR_VERSION
     return p;
 }

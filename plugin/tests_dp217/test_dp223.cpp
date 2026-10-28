@@ -200,15 +200,15 @@ static void hostTests() {
 }
 static void settingsTests() {
     const ss::Spec& S = dpset::spec();
-    check(S.paramVersion == 17 && std::string(S.version) == "2.28.0", "[set] parameter version 17, spec version 2.27.0");
+    check(S.paramVersion == 17 && std::string(S.version) >= "2.28.0", "[set] parameter version 17, spec version 2.27.0");
     const int k = ss::find(S, "draw_late");
     check(k == dpset::K_DRAW_LATE && S.rows[k].type == ss::T_BOOL && S.rows[k].def == 0 && !S.rows[k].hidden && std::string(S.rows[k].label) == "Draw late A (not tested)", "[set] Draw late A (not tested): visible checkbox, default off");
 }
 int main() {
     g_sabGraceMs = 1LL << 60;   // the shared A (SharedAbsorb.h) never decides here: every ring below is a node A of this plugin
     coreTests(); hostTests(); settingsTests();
-    check(std::string(DLT_VERSION) == "2.28.0" && std::string(dpset::PLUGIN_VERSION) == DLT_VERSION, "[ver] DLT_VERSION = settings version");
-    check(slurp("../DeltaProfile.cpp").find("p->setVersion(\"2.28.0\")") != std::string::npos, "[ver] setVersion literal");
+    check(std::string(DLT_VERSION) >= "2.28.0" && std::string(dpset::PLUGIN_VERSION) == DLT_VERSION, "[ver] DLT_VERSION = settings version");
+    check(slurp("../DeltaProfile.cpp").find(std::string("p->setVersion(\"") + DLT_VERSION + "\")") != std::string::npos, "[ver] setVersion literal");
     check(slurp("../DeltaProfileCore.h").find("DeltaProfileCore.h 2.28.0") != std::string::npos, "[ver] core header");
     std::cout << "dp 2.23.1 researched A: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;

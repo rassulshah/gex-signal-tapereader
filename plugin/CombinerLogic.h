@@ -1,5 +1,8 @@
 #ifndef LS_COMBINERLOGIC_H
 #define LS_COMBINERLOGIC_H
+// CombinerLogic.h 0.2.0 (2026-10-28 overnight, Rassul 21:52 CT "go"): STATUS per outcome - the TURN and the SWING odds each SHOW or LOG on
+// their own (STATUS,turn|swing,SHOW|LOG), a per-market LOG override (STATUS,swing,LOG,ES), the swing odds drawn with "?" from SHOW,swing,<p>
+// (round 2: swing beat its best single input and the base on untuned days, turn did not; ES beat its base on neither -> ES log only)
 // CombinerLogic.h 0.1.0 (2026-10-28, Rassul 20:14 / 20:18 CT approved "the combiner" - layer 3 of ChainSpec.h) -- ONE read with odds at every
 // closed pivot-reversal candle (a 6-candle low that closes green in its upper half; high mirror): the chance of a TURN (+1 ATR before the
 // candle's extreme breaks by 0.25 ATR) and of a SWING (+2.5 ATR first), from a logistic model whose weights come from the nightly fit
@@ -20,7 +23,7 @@
 #include <fstream>
 #include <sstream>
 namespace cmb {
-static const char* const VERSION = "0.1.0";
+static const char* const VERSION = "0.2.0";
 static const char* const FEATURES[] = { "A", "wick", "node", "logvol", "body", "counter", "withtr", "mom", "late", "london", "open_hr", "atr_rel", "key",
                                         "gamma", "bigfill", "risk_atr" };
 static const int NF = 16;
@@ -28,6 +31,7 @@ struct Model { bool ok = false; double b0 = 0; double w[NF] = {0}; };
 struct Params {
     bool ok = false; std::string why = "no params file";
     Model turn, swing; double showTurn = 0.72; bool showOn = true; std::map<std::string, double> atrMed;
+    double showSwing = 0.55; bool swingOn = false; std::map<std::string, int> logMkt;   // (0.2.0) swing status + threshold; market -> 1 turn LOG / 2 swing LOG (bits)
 };
 // the 2026-10-28 fit (used when the nightly file is missing, said so in the status)
 inline Params defaults() {
@@ -61,6 +65,9 @@ inline Params parse(const std::string& text) {
         else if (f[0] == "ATR_MED" && f.size() == 3) { double v; if (num(f[2], v) && v > 0) p.atrMed[f[1]] = v; }
         else if (f[0] == "SHOW" && f.size() == 3 && f[1] == "turn") { double v; if (num(f[2], v) && v > 0.5 && v < 1) p.showTurn = v; }
         else if (f[0] == "STATUS" && f.size() == 3 && f[1] == "turn") p.showOn = f[2] == "SHOW";
+        else if (f[0] == "STATUS" && f.size() == 3 && f[1] == "swing") p.swingOn = f[2] == "SHOW";                       // (0.2.0)
+        else if (f[0] == "STATUS" && f.size() == 4 && (f[1] == "turn" || f[1] == "swing") && f[2] == "LOG") p.logMkt[f[3]] |= f[1] == "turn" ? 1 : 2;   // (0.2.0) per market
+        else if (f[0] == "SHOW" && f.size() == 3 && f[1] == "swing") { double v; if (num(f[2], v) && v > 0.2 && v < 1) p.showSwing = v; }   // (0.2.0)
     }
     if (!ver || !feat || models < 2) return p;
     p.ok = true; p.why = "nightly params"; return p;
@@ -73,7 +80,7 @@ inline Params load(const std::string& path) {
 }
 struct Candle { double o = 0, h = 0, l = 0, c = 0, v = 0; int mod = 0; };   // mod = Central minutes since midnight of the candle's start
 struct Inputs { bool A = false, wick = false, node = false, key = false, gamma = false, bigfill = false; };
-struct Read { bool pivot = false, bull = false; double turn = 0, swing = 0; double f[NF] = {0}; bool show = false; };
+struct Read { bool pivot = false, bull = false; double turn = 0, swing = 0; double f[NF] = {0}; bool show = false, showSwing = false; };   // (0.2.0) showSwing = the swing odds drawn with "?"
 // a pivot-reversal candle: the 6-candle extreme that closes back in its own direction in its own upper / lower half
 inline bool pivotShape(const std::vector<Candle>& c, int k, bool bull) {
     if (k < 5 || k >= (int)c.size()) return false;
@@ -112,7 +119,10 @@ inline Read score(const Params& P, const std::vector<Candle>& c, int k, bool bul
     f[15] = std::min(5.0, std::max(0.0, std::fabs(c[k].c - stop) / at));
     double zt = P.turn.b0, zs = P.swing.b0;
     for (int i = 0; i < NF; ++i) { zt += P.turn.w[i] * f[i]; zs += P.swing.w[i] * f[i]; }
-    r.turn = sigm(zt); r.swing = sigm(zs); r.show = P.showOn && r.turn >= P.showTurn;
+    r.turn = sigm(zt); r.swing = sigm(zs);
+    const std::map<std::string, int>::const_iterator lm = P.logMkt.find(mkt); const int logBits = lm == P.logMkt.end() ? 0 : lm->second;
+    r.show = P.showOn && !(logBits & 1) && r.turn >= P.showTurn;
+    r.showSwing = P.swingOn && !(logBits & 2) && r.swing >= P.showSwing;   // (0.2.0)
     return r;
 }
 }  // namespace cmb

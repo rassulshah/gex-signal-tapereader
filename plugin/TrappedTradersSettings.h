@@ -12,7 +12,7 @@
 #endif
 
 namespace ttrset {
-static const char* const PLUGIN_VERSION = "0.1.1";
+static const char* const PLUGIN_VERSION = "0.1.2";
 enum MarksMode { MARKS_LEVELS = 0, MARKS_ALL = 1, MARKS_OFF = 2 };
 static const char* const MARKS_CHOICES = "Levels only;Everywhere;Off";
 enum K { K_VERSION, K_MARKS, K_SHOW_RATIO, K_SHOW_BOX, K_COL_BULL, K_COL_BEAR, K_N };
@@ -23,7 +23,7 @@ inline void upgrade(const std::string& fileVersion, ss::Values& V) {
 }
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
-        ss::labelRow("version", "LRA Trapped Traders v0.1.1", 200),
+        ss::labelRow("version", "LRA Trapped Traders v0.1.2", 200),
         ss::listRow("marks", "Trigger marks", MARKS_ALL, MARKS_CHOICES, 110),
         ss::same(ss::boolRow("show_ratio", "Ratio on marks", true)),
         ss::boolRow("show_box", "Live box", true),

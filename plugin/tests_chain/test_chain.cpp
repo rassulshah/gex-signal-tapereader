@@ -22,8 +22,13 @@ int main() {
       chain::Report q = chain::check(N, P, E); bool cyc = false; for (auto& p : q.problems) if (p.find("cycle") != std::string::npos) cyc = true;
       CHECK(!q.ok && cyc, "[graph] a same-layer cycle is caught"); }
     { auto N = chain::nodes(); auto P = chain::producers(); auto E = chain::edges();
-      E.push_back({"lsBookFlow", "lsDeltaProfile.Combiner", 'Z', chain::DECIDE});
+      E.push_back({"lsBookFlow", "lsDeltaProfile.Combiner", 'W', chain::DECIDE});
       CHECK(!chain::check(N, P, E).ok, "[graph] a read with no producer is caught"); }
+    // (1.1.0) the node ladder Z feeds the READ, the READ's Y is read only by the Defense pane's display stage (layer 25): clean; the same Y
+    // read by lsBookFlow itself (layer 10) would be an upward read + a cycle and is caught
+    { chain::Report q = chain::checkDefault(); CHECK(q.ok, "[1.1.0] Z (ladder) -> READ -> Y -> lsBookFlow.AtNode: clean");
+      auto N = chain::nodes(); auto P = chain::producers(); auto E = chain::edges(); E.push_back({"lsDeltaProfile.READ", "lsBookFlow", 'Y', chain::DISPLAY});
+      CHECK(!chain::check(N, P, E).ok, "[1.1.0] Y read by lsBookFlow's layer-1 stage is caught (upward + cycle)"); }
     // every consumer's inputs have a producer (input coverage)
     { std::set<char> owned; for (auto& p : chain::producers()) owned.insert(p.kind); bool all = true;
       for (auto& e : chain::edges()) if (!owned.count(e.kind)) all = false; CHECK(all, "[coverage] every input has a producer"); }

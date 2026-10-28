@@ -32,7 +32,7 @@
 
 namespace ttr {
 
-static const char* const VERSION = "0.1.1";
+static const char* const VERSION = "0.1.2";   // (0.1.2) volume at price retried 3 candles only, then the Delta Profile C facts
 static const int WINDOW = 3;            // RASSUL: his rule (2026-10-26 19:34) - the pivot candle + up to 3 after it
 static const int APPROACH = 10;         // PLACEHOLDER: candles before the extreme checked for "price came into the level" (the nightly trapped_traders part measures 5 / 10 / 20)
 static const int NORMAL_SESSIONS = 20;  // PLACEHOLDER: sessions in the same-time normal (shared convention of the zone-read normals)

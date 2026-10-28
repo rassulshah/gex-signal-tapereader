@@ -106,6 +106,7 @@
 #include "KeepOutDraw.h"   // (0.47.1) BoxDock.h 1.2.0 keep-out: the big-order lines stop at the HOD/LOD table
 #include "BannerBoard.h"           // (0.15.3) the one top banner: the warning handed to the Tape Reader
 #include "BoxPlace.h"              // (CR5000) the LIQ label Offset X / Y: validation + clamping (shared, as is)
+#include "DpBanner.h"             // (0.63.0) the top read = the Delta Profile read
 #include "SignalBoard.h"           // (0.21.0) reads / posts the chart's signals (Delta Profile A, Big Bid/Ask, big fills)
 #include "ZoneNear.h"              // (0.20.0) the zone + level names for the banner verdict
 #include "BannerSettings.h"    // (0.24.0) the verdict banner settings (SDK-free, tested)
@@ -153,7 +154,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.62.0"          // (0.62.0, 2026-10-28 overnight build, research "LMT F and Delta Read") LMT F = the biggest single resting order FILLED at a price, S20 / S10 / S5 per market x RTH / overnight from the nightly LRA-LmtF-<MKT>.csv (four tier methods tested head to head: no size predicts a hold by itself, so the tiers are set for meaning - ~20 / 10 / 5 a session, overnight included), plain / bold / boxed, a white I = traded more than it showed, a white dot = still resting after the fill ("?"); posts SignalBoard 1.4.0 facts P (prints) and B (resting big orders, for lsDealerProfile's rank - one owner); the order lines start right of the left Liquidity column (ColumnBoard 1.6.0) // was 0.61.1: (0.61.1, 2026-10-27 18:50 CT Rassul "fix it": the Ex? read as belonging to the next candle) the Ex letter stays centred on ITS candle, never moved sideways; with a BO letter on that candle it is stacked straight against BO (1 px), using the BO letter's drawn size from the SignalBoard (lsBigBidAsk 1.31.1, kind L); without a board entry the old 2-row room is kept
+#define LQ_VERSION "0.63.0"          // (0.63.0, 2026-10-28 overnight, Rassul 22:31 / 22:37 CT) THE TOP READ = the Delta Profile read (DpBanner.h 1.0.0: the latest decided A / A? / A+ from the SignalBoard while fresh, its attack ratio + close, the defenders at the node, the trapped side; else a quiet grey line) - the book warning / REV verdict / ABS tag are still decided + logged, not shown in the badge
+static const bool LQ_DP_BANNER = true;
+// was 0.62.1: (0.62.1, 2026-10-28 overnight, live 22:06 the left Liquidity column empty) the B facts carry the depth book's resting lots per price within reach (code 1) beside the big-order lines - lsDealerProfile ranks the top 10 of them // (0.62.0, 2026-10-28 overnight build, research "LMT F and Delta Read") LMT F = the biggest single resting order FILLED at a price, S20 / S10 / S5 per market x RTH / overnight from the nightly LRA-LmtF-<MKT>.csv (four tier methods tested head to head: no size predicts a hold by itself, so the tiers are set for meaning - ~20 / 10 / 5 a session, overnight included), plain / bold / boxed, a white I = traded more than it showed, a white dot = still resting after the fill ("?"); posts SignalBoard 1.4.0 facts P (prints) and B (resting big orders, for lsDealerProfile's rank - one owner); the order lines start right of the left Liquidity column (ColumnBoard 1.6.0) // was 0.61.1: (0.61.1, 2026-10-27 18:50 CT Rassul "fix it": the Ex? read as belonging to the next candle) the Ex letter stays centred on ITS candle, never moved sideways; with a BO letter on that candle it is stacked straight against BO (1 px), using the BO letter's drawn size from the SignalBoard (lsBigBidAsk 1.31.1, kind L); without a board entry the old 2-row room is kept
 // prev:          // (0.61.0, 2026-10-27 evening, Rassul "ok lets build it. i will take your recommendation" = Ex option A; 17:49 CT "lets just use key price levels only") THE Ex MARK (ExhaustLogic.h 1.0.0): at a KEY PRICE level zone, attackers' contracts / s at the zone in the 2nd half of the 180 s after arrival / the 1st half <= 0.164 with price at the zone >= 50% of the time -> "Ex" / "Ex?" on the decision candle (red above at a resistance, green below at a support), decided at that candle's close, recorded (<stem>-exhaust-<session>.csv), never repainted; "Ex" only where LRA-Exhaust-<MKT>.csv says 30+ key-level cases (none yet = "Ex?" everywhere); settings row "Exhaustion (Ex)"; status EXHAUST   // prior 0.60.1: (0.60.1, 2026-10-27 14:00 CT "move the delta profile to the left") order lines start right of the left Delta column
 #define LQ_VERSION_PREV "0.60.0"          // (0.60.0, 2026-10-27, Rassul approved 13:30-13:39 CT "i think this is a cleaner approach. build"; 13:02 "remove the hoverover on the big bid and ask limit orders") the order lines carry NO text on the chart; each LIVE line tagged to a level (LineLevelTag 1.3.0) goes to lsFlexLevels\\LRA-LmtLevels-<MKT>-<spb>.txt for the Dealer Profile 2.28.0 combined Levels + Liquidity column ("800 + 50", rank); no hovers (order lines / LMT zones / column); the left Liquidity column is not drawn (LQ_LEFT_COL) - its zones still feed LRA-LiqZones / LRA-LiqLevels
 // was: "0.59.2"          // (0.59.2, 2026-10-27 11:32) the level tag is ONE-SIDED: a high up to +1 ATR, a low down to -1 ATR (LineLevelTag 1.2.0)
@@ -389,6 +392,7 @@ struct LQState {
     // VAP of the bar being read: tick -> (buy, sell) already counted
     int vapBar = -1; RTDATE vapStamp = 0; std::map<lqp::Tick, std::pair<long long, long long>> vapRows;
     bool trBanner = false; bb::Rect trRect; long long handed = 0;
+    bool dpBanner = false, dpFresh = false;   // (0.63.0) the top read is the Delta Profile read
     bb::Beat trBeat; std::string chartKey; bool published = false;   // (CR5000) the Tape Reader heartbeat; this chart's key; my warning entry is out
     int labDx = 0, labDy = 0; std::string sizeWhy; bp::Box labBox;                    // (CR5000) the LIQ label Offset X / Y (size file); why the file was refused   // (0.15.3) a Tape Reader banner on this chart: its reserved rectangle; warnings handed over
     long barCount = 0;
@@ -468,7 +472,7 @@ struct LQState {
     // the last 5 sessions (S20 / S10 / S5 = sizes ~20 / 10 / 5 orders a session reach) - lsFlexLevels\\LRA-LmtF-<MKT>.csv written by the nightly part
     // lmtf_read; [0] = overnight, [1] = RTH; missing file = the Big Lot tiers above (said so in the status)
     long long lmtF[2][3] = { {0, 0, 0}, {0, 0, 0} }; bool lmtFOk = false; std::string lmtFWhy = "not read yet"; long long lmtFAt = -100000; int lmtFRth = -1;
-    std::vector<sb::Fact> factsP, factsB; long long factsAt = -100000; int lmtFRest = 0;
+    std::vector<sb::Fact> factsP, factsB; long long factsAt = -100000; int lmtFRest = 0; int bLevels = 0;   // (0.62.1) depth price levels posted as B
     long long boUnder1sd = 0;                       // (0.26.0) live big orders not drawn: under 1SD
     long long boBase = 0;                           // (0.25.0) the tier base (lots): Big >= base, Bigger >= 2x, Biggest >= 3x
     int boTier[2] = {0, 0};                         // (0.25.0) the BIG box tier per side: 0 none, 1 biggest (dim), 2 big, 3 huge (outline)
@@ -1599,7 +1603,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
               + " / 2SD " + std::to_string((long long)std::llround(v[1])) + " / 3SD " + std::to_string((long long)std::llround(v[2])) : std::string(",learning"))
               << ",drawn " << S.mktDrawn << ",held " << S.mkt.held.size() << ",tiers " << (S.mkPool.ok ? "5-session pool" : S.mktOk ? "session (pool learning)" : "learning") << ",norm " << (S.mnSrc.empty() ? std::string("none (session-learned)") : S.mnSrc) << ",lmtnorm " << (S.lnSrc.empty() ? std::string("none (session-learned)") : S.lnSrc) << "\nABS_BADGE,0.32.0,dir " << S.absDir << ",px " << S.absPx << ",layers " << S.absBits << " (" << absCount(S.absBits) << "/4),mkt lots " << S.absMLots << " sweep " << S.absSweep << ",lmt fill " << S.absFill << " ice " << S.absIce << ",dp ax " << S.absAx << "\nICEBERGS,reloads " << S.ice.reloadsSeen << ",live drawn " << S.iceLive << ",ended marks " << S.iceEnded << ",tracked " << S.ice.ord.size() << "\n";
         }
-        o << "LMT_F,tiers " << (S.lmtFOk ? "LRA-LmtF file" : "Big Lot (" + S.lmtFWhy + ")") << "," << (S.lmtFRth == 1 ? "RTH" : S.lmtFRth == 0 ? "overnight" : "-") << " S20 " << S.lmtF[S.lmtFRth == 1 ? 1 : 0][0] << " S10 " << S.lmtF[S.lmtFRth == 1 ? 1 : 0][1] << " S5 " << S.lmtF[S.lmtFRth == 1 ? 1 : 0][2] << ",still resting shown " << S.lmtFRest << ",facts SignalBoard " << sb::VERSION << " P/B\n";
+        o << "LMT_F,tiers " << (S.lmtFOk ? "LRA-LmtF file" : "Big Lot (" + S.lmtFWhy + ")") << "," << (S.lmtFRth == 1 ? "RTH" : S.lmtFRth == 0 ? "overnight" : "-") << " S20 " << S.lmtF[S.lmtFRth == 1 ? 1 : 0][0] << " S10 " << S.lmtF[S.lmtFRth == 1 ? 1 : 0][1] << " S5 " << S.lmtF[S.lmtFRth == 1 ? 1 : 0][2] << ",still resting shown " << S.lmtFRest << ",facts SignalBoard " << sb::VERSION << " P/B (B " << S.factsB.size() << ", depth levels " << S.bLevels << ")\n";
         o << "BIG_ORDERS," << bol::VERSION << "," << (S.boSet.on ? "on" : "off") << "," << S.boState << ",lines under 1SD (not drawn) " << S.boUnder1sd << ",box tiers bid " << S.boTier[0] << " ask " << S.boTier[1] << " (1 = 1SD dim, 2 = 2SD full colour, 3 = 3SD full colour + outline),start " << S.boBase << " lots,big lots " << S.bldN << (S.bldOk ? std::string(",Big mu ") + std::to_string((long long)std::llround(S.bldMu)) + " Big Lot S20 " + std::to_string((long long)std::llround(S.bldV[0])) + " S10 " + std::to_string((long long)std::llround(S.bldV[1])) + " S5 " + std::to_string((long long)std::llround(S.bldV[2])) : std::string(",learning (needs 30) - steps of the start used")) << ",settings " << S.boWhy << ",floor " << S.bo.P.floor
           << ",min_lots_now " << S.bo.threshold() << ",top_0.1pct " << (S.bo.hist.n >= S.bo.P.pctMinN ? S.bo.hist.pct(S.bo.P.pct) : 0) << " (orders " << S.bo.hist.n << ")"
           << ",reach " << S.bo.P.reachAtr << " ATR = " << S.bo.reach << " ticks (ATR14 " << S.bo.atrPrice << "),keep " << S.bo.P.keep << ",font " << S.boSet.font
@@ -2566,6 +2570,21 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         S.factsB.clear();
         for (size_t k = 0; k < S.bo.lines.size(); ++k) { const bol::Line& L = S.bo.lines[k]; if (L.end != bol::RESTING || L.left <= 0) continue;
             sb::Fact f; f.bar = nowT / 1000; f.lo = f.hi = (double)L.px * tick; f.side = L.side == bol::BID ? 1 : -1; f.val = (double)L.left; f.state = 0; S.factsB.push_back(f); }
+        // (0.62.1, live 10-27 22:06: the left column was EMPTY - the big-order lines need 50+ lots resting 9 min and overnight there were none)
+        // the resting LIQUIDITY of the depth book within reach: every price's displayed lots (code 1), the big-order lines kept (code 0, the
+        // bigger of the two at one price); lsDealerProfile ranks the top 10 of these
+        S.bLevels = 0;
+        const long long bReach = S.e.P.reachTicks > 0 ? (long long)S.e.P.reachTicks : (S.bo.reach > 0 ? (long long)S.bo.reach : 40LL);   // the column's reach; before it is known the big-order reach
+        if (S.e.haveBook && S.depthAvail && S.bo.havePx) {
+            std::map<std::pair<int, long long>, size_t> at; for (size_t k = 0; k < S.factsB.size(); ++k) at[std::make_pair(S.factsB[k].side, (long long)std::llround(S.factsB[k].lo / tick))] = k;
+            for (int sd = 0; sd < 2; ++sd) for (std::map<lqp::Tick, double>::const_iterator it = S.e.book[sd].begin(); it != S.e.book[sd].end(); ++it) {
+                if (!(it->second > 0) || std::llabs((long long)(it->first - S.bo.px)) > bReach) continue;
+                const int side = sd == lqp::BID ? 1 : -1; const std::pair<int, long long> key(side, (long long)it->first);
+                const std::map<std::pair<int, long long>, size_t>::const_iterator h = at.find(key);
+                if (h != at.end()) { if (it->second > S.factsB[h->second].val) { S.factsB[h->second].val = it->second; S.factsB[h->second].code = 1; } continue; }
+                sb::Fact f; f.bar = nowT / 1000; f.lo = f.hi = (double)it->first * tick; f.side = side; f.val = it->second; f.code = 1; f.state = 0; S.factsB.push_back(f); ++S.bLevels;
+            }
+        }
         std::sort(S.factsB.begin(), S.factsB.end(), [](const sb::Fact& a, const sb::Fact& b) { return a.val > b.val; });
         if (S.factsB.size() > 60) S.factsB.resize(60);
         const long long nm = nowMs(S);
@@ -3702,7 +3721,25 @@ lqp::HoverIn LiquidityProfile::hoverIn(const LQState& S, const lqp::Zone& z, con
 // (0.7.0) the warning for the zone price is in now: name in its colour (green = good for buyers, red = good for sellers, grey = not
 // decided) with a border, the plain words after it; top left of the price area, never past the last bar
 void LiquidityProfile::renderWarning(LQState& S) {
-    lqp::Warn w; const bool have = S.e.warning(S.e.bookT, w, S.e.P.tick);
+    lqp::Warn w; bool have = S.e.warning(S.e.bookT, w, S.e.P.tick);
+    // (0.63.0, Rassul 22:31 / 22:37 CT) THE TOP READ = the Delta Profile read (DpBanner.h): the latest decided A / A? / A+ while fresh,
+    // else a quiet grey line; it replaces the book warning / REV verdict / ABS tag in this badge (those are still decided and logged)
+    S.dpBanner = false;
+#ifndef LQ_FLOW
+    if (LQ_DP_BANNER) {
+        const long cnt = getBarCount(); RTARRAY cl0(barClose);
+        const char* cl = getChartLabel(); const std::string chart = cl ? std::string(cl) : std::string(); const long long sm = steadyMs();
+        if (cnt >= 3 && cl0.count >= cnt && (long)S.barEndMs.size() >= cnt - 1 && !S.symbol.empty()) {
+            std::vector<sb::Fact> R, Y, T;
+            sb::readFacts('R', S.symbol, S.spb, chart, sm, R, true); sb::readFacts('Y', S.symbol, S.spb, chart, sm, Y, true); sb::readFacts('T', S.symbol, S.spb, chart, sm, T, true);
+            const std::vector<zn::NL>& nm0 = zn::levelsNamed(flexDir(), S.market, S.symbol, sm);
+            const double tk = S.e.P.tick;
+            auto lvAt = [&](double p0) { std::string best; double bd = 1e18; for (const zn::NL& l : nm0) { const double d = std::fabs(l.px - p0); if (d <= 2 * tk + 1e-9 && d < bd && l.name.find("VWAP") == std::string::npos) { bd = d; best = l.name; } } return best; };
+            const dpb::Banner db = dpb::build(R, Y, T, S.barEndMs[(size_t)(cnt - 2)] / 1000, (double)cl0[cnt - 2], S.spb, tk, lvAt);
+            if (db.any || !R.empty()) { w = lqp::Warn(); w.name = db.any ? db.name : std::string("NO DELTA READ YET"); w.detail = db.detail; w.favour = db.favour; have = true; S.dpBanner = true; S.dpFresh = db.fresh; }
+        }
+    }
+#endif
     {   const std::string wn = have ? w.name : std::string(); if (wn != S.warnSeen) { S.warnSeen = wn; S.warnSinceMs = nowMs(S); } }   // (0.22.9)
     {   // (0.15.3) the one banner: publish the warning (or "none") for this chart; a Tape Reader banner here = it shows the warning
         const char* cl = getChartLabel(); const std::string chart = cl ? std::string(cl) : std::string(); const long long now = steadyMs();
@@ -3970,8 +4007,9 @@ void LiquidityProfile::renderWarning(LQState& S) {
     const int bf = std::max(bns::FONT_MIN, std::min(bns::FONT_MAX, S.bn.font));   // (0.24.0) the banner's own font (settings)
     if (!S.bn.on) { S.warnRows = 2; S.warnPx = 0; return; }              // (0.24.0) banner off: nothing drawn, nothing reserved
     // (0.31.0) ABS: the tag (no REV yet) / the count + chips (with a REV), its words
-    const bool absHave = S.absDir != 0 && (vdir != 0 ? S.absDir == vdir : absCount(S.absBits) >= 2);
-    const bool absFail = vdir == 0 && S.absDir == 0 && S.absFailBar >= 0 && lastBar <= S.absFailBar + 1;
+    if (S.dpBanner) { vdir = 0; absorbTxt.clear(); }                     // (0.63.0) the Delta Profile read owns the badge
+    const bool absHave = !S.dpBanner && S.absDir != 0 && (vdir != 0 ? S.absDir == vdir : absCount(S.absBits) >= 2);
+    const bool absFail = !S.dpBanner && vdir == 0 && S.absDir == 0 && S.absFailBar >= 0 && lastBar <= S.absFailBar + 1;
     const bool absTag = vdir == 0 && (absHave || absFail);
     std::string absA1, absA2, absWhen;
     if (absHave) {
@@ -4068,7 +4106,7 @@ void LiquidityProfile::renderWarning(LQState& S) {
         for (size_t i = 0; i < sides.size(); ++i) {
             const int sd = sideOf(sides[i]);
             std::string t = sides[i];
-            if (i == 0 && !lv.name.empty()) t = (lv.name.find("VWAP") == std::string::npos ? lv.name : pxTxt(lv.px)) + " \xB7 " + t;   // key / gamma by name, else the price  // (0.24.0) the level by name only (was name + price)
+            if (i == 0 && !S.dpBanner && !lv.name.empty()) t = (lv.name.find("VWAP") == std::string::npos ? lv.name : pxTxt(lv.px)) + " \xB7 " + t;   // key / gamma by name, else the price  // (0.24.0) the level by name only (was name + price)
             gl.push_back(GL{ t, sd });
         }
         cBook = w.favour > 0 ? C_BUY : w.favour < 0 ? C_SELL : C_GREY;
@@ -4508,6 +4546,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.62.0");   // LQ_VERSION
+    p->setVersion("0.63.0");   // LQ_VERSION
     return p;
 }

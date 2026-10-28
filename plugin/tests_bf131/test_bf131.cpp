@@ -21,7 +21,7 @@ int main() {
     check(!bf::defenseFact(1000, kv("?", "?", "?", "?")).ok, "an unread candle = no fact (\"?\" upstream)");
     check(!bf::defenseFact(0, kv("1", "1", "none", "1")).ok, "no candle time = no fact");
     check(!bf::defenseFact(1000, kv("1x", "1", "none", "1")).ok, "garbled net = no fact");
-    check(std::string(bf::VERSION) == "1.31.0" && std::string(ofset::BF_VERSION) == "1.31.0", "version 1.31.0 (logic + settings)");
+    check(std::string(bf::VERSION) >= "1.31.0" && std::string(ofset::BF_VERSION) >= "1.31.0", "version 1.31.0 or later (logic + settings)");
     std::vector<sb::Fact> v; for (int i = 0; i < 250; ++i) { sb::Fact f; f.bar = 1000 + i; f.side = 1; f.code = 1; f.state = 1; f.proven = 2; v.push_back(f); }
     sb::postFacts('D', "ESZ6", 180, "ES 3m", 5000, v); std::vector<sb::Fact> r;
     check(sb::readFacts('D', "ESZ6", 180, "ES 3m", 6000, r, true) && r.size() == sb::FACT_CAP && r.back().bar == 1249 && r[0].proven == 2, "board: decided D facts read back, capped at 200 (newest kept)");

@@ -1,5 +1,8 @@
 #ifndef LS_CHAINSPEC_H
 #define LS_CHAINSPEC_H
+// ChainSpec.h 1.1.0 (2026-10-28 overnight, Rassul 21:52 / 21:57 CT): the NODE LADDER (kind Z, lsBookFlow -> the READ tiers A / A? / A+),
+// the node defender read (kind Y, the READ -> lsBookFlow's At node row + mark = a DISPLAY stage of that plugin at layer 25, so the graph
+// keeps one direction: lsBookFlow (10) -> READ (20) -> lsBookFlow.AtNode (25), nothing fed back); B = depth levels + big-order lines (LP 0.62.1)
 // ChainSpec.h 1.0.0 (2026-10-28, Rassul 20:11-20:18 CT "all the indicators communicating ... be careful not to create any infinite or
 // redundant loops ... the right architecture so each indicator has what it needs as input and outputs what others can use") -- the STATIC
 // dependency graph of the price chart's indicators: who produces which fact (one owner each) and who reads it, by LAYER:
@@ -21,17 +24,19 @@
 #include <map>
 #include <set>
 namespace chain {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.2.0";   // (1.2.0) + lsLiquidityProfile.Banner (layer 25, display: R / Y / T)
 enum Use { DECIDE = 0, DISPLAY = 1 };
 struct Node { std::string name; int layer; };
 struct Edge { std::string from, to; char kind; Use use; };   // 'from' produces kind, 'to' reads it
 struct Producer { char kind; std::string owner; int layer; const char* what; };
 inline std::vector<Node> nodes() {
     return { {"IRT", 0}, {"lsLiquidityProfile", 10}, {"lsDeltaProfile", 10}, {"lsBookFlow", 10}, {"lsTrappedTraders", 10}, {"lsDealerProfile", 15},
-             {"lsDeltaProfile.READ", 20}, {"lsLiquidityProfile.Ex", 20}, {"lsBigBidAsk", 20}, {"lsDeltaProfile.Combiner", 30} };
+             {"lsDeltaProfile.READ", 20}, {"lsLiquidityProfile.Ex", 20}, {"lsBigBidAsk", 20}, {"lsBookFlow.AtNode", 25}, {"lsLiquidityProfile.Banner", 25}, {"lsDeltaProfile.Combiner", 30} };
 }
 inline std::vector<Producer> producers() {
-    return { {'B', "lsLiquidityProfile", 10, "resting orders near price (live orders file LRA-LmtLevels-<MKT>-<spb>.txt)"},
+    return { {'B', "lsLiquidityProfile", 10, "resting liquidity within reach: the depth book's lots per price + the big-order lines (0.62.1)"},
+             {'Z', "lsBookFlow", 10, "the node ladder: added / pulled / filled lots per price per closed candle (SignalBoard 1.5.0 LRA_SLD_)"},
+             {'Y', "lsDeltaProfile.READ", 20, "the node defender read of each tiered A (holding / pulling, net x)"},
              {'P', "lsLiquidityProfile", 10, "LMT F prints (biggest single resting order filled, S20 / S10 / S5)"},
              {'N', "lsDeltaProfile", 10, "delta nodes (top 3 rows of the 90-min profile, ratio)"},
              {'C', "lsDeltaProfile", 10, "candle trap lots (sellers below the close / buyers above it)"},
@@ -57,7 +62,12 @@ inline std::vector<Edge> edges() {
              {"lsLiquidityProfile", "lsDeltaProfile.Combiner", 'P', DECIDE},  // big fill at the candle
              {"lsDeltaProfile.READ", "lsDeltaProfile.Combiner", 'R', DECIDE}, // A at the candle
              {"lsDeltaProfile", "lsDeltaProfile.Combiner", 'N', DECIDE},      // node / ratio
-             {"lsBigBidAsk", "lsLiquidityProfile.Ex", 'L', DISPLAY} };        // Ex stacks against the BO letter (placement only)
+             {"lsBigBidAsk", "lsLiquidityProfile.Ex", 'L', DISPLAY},          // Ex stacks against the BO letter (placement only)
+             {"lsBookFlow", "lsDeltaProfile.READ", 'Z', DECIDE},              // (1.1.0) the READ tier: the defenders at the A node (A+ / A)
+             {"lsDeltaProfile.READ", "lsBookFlow.AtNode", 'Y', DISPLAY},
+             {"lsDeltaProfile.READ", "lsLiquidityProfile.Banner", 'R', DISPLAY},   // (1.2.0) the top read = the Delta Profile read (DpBanner.h)
+             {"lsDeltaProfile.READ", "lsLiquidityProfile.Banner", 'Y', DISPLAY},
+             {"lsTrappedTraders", "lsLiquidityProfile.Banner", 'T', DISPLAY} };    // (1.1.0) the Defense pane's At node row + mark (display only)        // Ex stacks against the BO letter (placement only)
 }
 struct Report { bool ok = true; std::vector<std::string> problems; };
 namespace detail {

@@ -94,7 +94,7 @@ int main() {
         const std::string t = statusOf();
         check(t.find("VAP,array 0 of 30 candles (SHORT") != std::string::npos, "[status] the VAP branch is named: array short");
         check(t.find("FALLBACK,lsDeltaProfile candle trap lots (C) MISSING") != std::string::npos, "[status] the fallback says lsDeltaProfile is missing");
-        check(t.find("VERSION,0.1.1") != std::string::npos && t.find("marks everywhere") != std::string::npos, "[status] 0.1.1, marks everywhere by default");
+        check(t.find("VERSION,0.1.2") != std::string::npos && t.find("marks everywhere") != std::string::npos, "[status] 0.1.1, marks everywhere by default");
         X.destroy(); }
     std::system(("rm -rf '" + fl("TrappedTraders") + "'").c_str());
     // (b) lsDeltaProfile posts C: every candle is fed from it, g / r exact, the low's trigger decided + posted as T
@@ -120,11 +120,18 @@ int main() {
         TrappedTraders Y; Chart b = a; b.user = nullptr; calcN(Y, b, 3); TtState& S2 = st(Y, b);
         check(S2.E.trig.size() == nT, "[restart] the same triggers after a restart (" + std::to_string(S2.E.trig.size()) + " vs " + std::to_string(nT) + ")");
         Y.destroy(); }
+    // (e) (0.1.2, live 10-27 22:06 "candles 4 (without volume at price 4)") the VAP array is FULL but never loads: after 3 candles the pane
+    //     stops retrying it (4 passes per candle) and feeds every candle at once, the recent ones from the Delta Profile's C facts
+    {   Chart a = chart(30); a.vapN = 30; a.label = "ES 3m e"; TrappedTraders X;
+        { std::vector<sb::Fact> v = cfacts(a, 29); sb::postFacts('C', a.sym, a.spb, a.label, ttMs(), v); }
+        calcN(X, a, 30); TtState& S = st(X, a);
+        check(S.vapDead && S.fed == 29 && S.fromC >= 25, "[0.1.2] VAP never loads: retried for 3 candles only, then all 29 fed (" + std::to_string(S.fed) + " fed, " + std::to_string(S.fromC) + " from C)");
+        X.destroy(); }
     // (d) settings: a 0.1.0 file with Levels only (the old default) = Everywhere; a 0.1.1 file with Levels only stays Levels only
     {   ss::Values V = ss::defaults(ttrset::spec(), 0); check(V.i(ttrset::K_MARKS) == ttrset::MARKS_ALL, "[settings] default = Everywhere");
         V.v[ttrset::K_MARKS] = ttrset::MARKS_LEVELS; ttrset::upgrade("0.1.0", V); check(V.i(ttrset::K_MARKS) == ttrset::MARKS_ALL, "[settings] a 0.1.0 file's Levels only (old default) -> Everywhere");
         V.v[ttrset::K_MARKS] = ttrset::MARKS_LEVELS; ttrset::upgrade("0.1.1", V); check(V.i(ttrset::K_MARKS) == ttrset::MARKS_LEVELS, "[settings] Levels only chosen under 0.1.1 stays");
-        check(std::string(ttrset::PLUGIN_VERSION) == "0.1.1" && std::string(ttr::VERSION) == "0.1.1" && std::string(TTR_VERSION) == "0.1.1", "[version] 0.1.1 everywhere"); }
+        check(std::string(ttrset::PLUGIN_VERSION) == "0.1.2" && std::string(ttr::VERSION) == "0.1.2" && std::string(TTR_VERSION) == "0.1.2", "[version] 0.1.2 everywhere"); }
     std::printf("tt011: %d passed, %d failed\n", PASSES, FAILS);
     return FAILS ? 1 : 0;
 }

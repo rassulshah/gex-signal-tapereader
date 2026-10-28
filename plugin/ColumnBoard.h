@@ -31,7 +31,7 @@
 #include "BannerBoard.h"
 
 namespace cb {
-static const char* const VERSION = "1.6.0";   // (1.6.0, 2026-10-28) Levels (liquidity) LEFT, Delta back on the right after LMT F;   // (1.5.0, 2026-10-27 14:00 CT) the Delta column at the pane's LEFT edge (DELTA_LEFT);   // (1.4.0, 2026-10-27 DP 2.28.0) Levels column up to 460 px (the combined Levels + Liquidity column);   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
+static const char* const VERSION = "1.7.0";   // (1.7.0, 2026-10-28 overnight, live 22:06 overlap on the left column) leftKeep: the one rule every plugin uses to keep its marks / boxes right of the left columns;   // (1.6.0, 2026-10-28) Levels (liquidity) LEFT, Delta back on the right after LMT F;   // (1.5.0, 2026-10-27 14:00 CT) the Delta column at the pane's LEFT edge (DELTA_LEFT);   // (1.4.0, 2026-10-27 DP 2.28.0) Levels column up to 460 px (the combined Levels + Liquidity column);   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
 static const int GAP_PX = 20;            // between the last bar and the Levels column
 static const int MIN_PRICE_PX = 160;     // price area kept on a narrow chart
 // (1.5.0, 2026-10-27 14:00 CT Rassul "to save space move the delta profile to the left") the Delta Profile column sits at the LEFT
@@ -179,6 +179,18 @@ inline bool peek(int c, const std::string& sym, long spb, const std::string& cha
 {
     std::string v; w = 0; ms = -1;
     return !sym.empty() && bb::bbGet(bb::key(prefix(c), sym, spb, chart), v) && dec(c, v, w, ms);
+}
+// (1.7.0, 2026-10-28, Rassul 22:06 CT screenshot: the HOD/LOD box, the Big Lot number boxes and the fill dots drew over the LEFT Liquidity
+// column) THE LEFT KEEP-OUT: the x every plugin keeps its marks, labels and boxes right of - the right edge of the left columns (the Levels /
+// liquidity column when LEVELS_LEFT, the Delta column when DELTA_LEFT) + 2 px, while their producer is posting (stamp within LEFT_FRESH_MS of
+// nowMs, the steady clock every poster uses); else the pane's left edge. Stateless (a reader with Peers uses Layout.levels.r + 2 instead).
+static const long long LEFT_FRESH_MS = 10000;
+inline int leftKeep(const std::string& sym, long spb, const std::string& chart, int paneL, long long nowMs)
+{
+    int x = paneL, w = 0; long long ms = -1;
+    if (LEVELS_LEFT && peek(LEVELS, sym, spb, chart, w, ms) && nowMs >= ms && nowMs - ms <= LEFT_FRESH_MS) x = std::max(x, paneL + 1 + w + 2);
+    if (DELTA_LEFT && peek(DELTA, sym, spb, chart, w, ms) && nowMs >= ms && nowMs - ms <= LEFT_FRESH_MS) x = std::max(x, paneL + 1 + w + 2);
+    return x;
 }
 // the other plugins' columns on this chart, kept per chart by the reader; step() once per own draw
 struct Peers {

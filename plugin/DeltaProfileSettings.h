@@ -6,7 +6,7 @@
 
 namespace dpset {
 
-static const char* const PLUGIN_VERSION = "2.28.0";   // (2.28.0) no settings change (right column + READ strip, facts, combiner)   // (2.27.1) no settings change (trap badges off the column)   // (2.27.0) no settings change (left column, body rule)
+static const char* const PLUGIN_VERSION = "2.29.0";   // (2.29.0) no settings change (READ tiers, swing odds)   // (2.28.0) no settings change (right column + READ strip, facts, combiner)   // (2.27.1) no settings change (trap badges off the column)   // (2.27.0) no settings change (left column, body rule)
 enum K { K_WIDTH, K_FONT, K_DELTA_TEXT, K_WICK_ON, K_WICK_X, K_TRAP_ON, K_DRAW_LATE, K_N };
 
 inline const ss::Spec& spec() {

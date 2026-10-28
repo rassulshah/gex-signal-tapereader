@@ -62,6 +62,9 @@ int main() {
     CHECK(s5, "P: the 350 bid = tier 3 (S5), decided, bullish side");
     CHECK(rest, "P: the 150 offer = tier 1 (S20 <= 150 < S10 200), still resting (code + 16), live");
     CHECK(sb::readFacts('B', S->symbol, S->spb, S->chartKey, -1, B, false) && !B.empty() && B[0].val == 100 && B[0].side == -1, "SignalBoard B: the resting 100-lot offer");
+    { int lv = 0; for (const sb::Fact& f : B) if (f.code == 1 && f.val == 10) ++lv;
+      std::printf("  B %zu, depth levels %d, code1x10 %d, haveBook %d depthAvail %d havePx %d reach %lld\n", B.size(), S->bLevels, lv, (int)S->e.haveBook, (int)S->depthAvail, (int)S->bo.havePx, (long long)S->e.P.reachTicks);
+      CHECK(lv >= 20 && S->bLevels >= 20, "(0.63.0) SignalBoard B also carries the depth book's resting lots per price within reach (code 1)"); }
     usleep(1100000); h.now = t0 + 200; p->calc(0); h.draws.clear(); p->draw(); usleep(1100000); h.now = t0 + 202; p->calc(0);
     const std::string st = readAll(flex + "\\LiquidityProfile.status-ES-180.txt");
     CHECK(st.find("LMT_F,tiers LRA-LmtF file,RTH S20 100 S10 200 S5 300") != std::string::npos, "status LMT_F line");

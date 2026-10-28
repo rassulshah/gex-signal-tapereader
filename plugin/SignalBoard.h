@@ -1,5 +1,8 @@
 #ifndef LS_SIGNALBOARD_H
 #define LS_SIGNALBOARD_H
+// SignalBoard.h 1.5.0 (1.5.0, 2026-10-28 overnight: the NODE LADDER channel LRA_SLD_ - lsBookFlow posts the per-price added / pulled / filled
+// lots of its last closed candles (NodeLadder.h); lsDeltaProfile sums its node zone; fact kind 'Y' = the node defender read lsDeltaProfile
+// decides from it, read for display by lsBookFlow's "At node" row)
 // SignalBoard.h 1.4.0 (1.4.0, 2026-10-28: the STANDARD FACT form - sb::Fact {bar, lo, hi, side, val, kind, state, proven} - posted by every
 // layer-1 / layer-2 producer under its own fact kind (FACT_KINDS below, one owner each, ChainSpec.h); readers take DECIDED facts (state 1) for
 // anything final and LIVE facts (state 0) only for live display; facts are versioned by bar time, 60 s fresh, at most 200 per kind)
@@ -32,7 +35,7 @@
 #include <cmath>
 #include "BannerBoard.h"
 namespace sb {
-static const char* const VERSION = "1.4.0";
+static const char* const VERSION = "1.5.0";
 static const long long FRESH_MS = 60000; static const size_t CAP = 40;
 struct Ev { long long bar = 0; double px = 0; int side = 0; double val = 0; int flag = 0; };
 inline const char* prefix(char k) { return k == 'A' ? "LRA_SGA_" : k == 'B' ? "LRA_SGB_" : k == 'O' ? "LRA_SGO_" : k == 'L' ? "LRA_SGL_" : "LRA_SGF_"; }
@@ -116,6 +119,11 @@ inline const Ev* nearestFinal(const std::vector<Ev>& v, double p, double tol, lo
 //   'D' defending         lsBookFlow          val = refill effort ratio, code 1 = refilling / 2 = pulling, side = defending side
 //   'T' trapped           lsTrappedTraders    val = lots trapped vs normal (x), side +1 sellers trapped (bullish) / -1 buyers trapped
 //   'K' combined read     lsDeltaProfile's combiner (layer 3)  val = turn odds %, lo = swing odds %, side = direction, code 1 = shown
+//                                             (1.5.0) code 2 = the swing odds shown with "?"
+//   'Y' node defender     lsDeltaProfile (1.5.0)  the defenders at a decided A node: lo / hi = the node rows (prices), side +1 bullish node
+//       read                                  (bids defend) / -1 bearish (offers defend), val = the defenders' net x (added - pulled vs
+//                                             that hour's normal), code = tier x 10 + read (tier 1 A, 2 A?, 3 A+; read 1 HOLDING,
+//                                             2 PULLING, 0 no order book), proven 1 / 2 "?"
 struct Fact { long long bar = 0; double lo = 0, hi = 0; int side = 0; double val = 0; int code = 0, state = 0, proven = 0; };
 static const size_t FACT_CAP = 200;
 inline std::string factKey(char kind, const std::string& sym, long spb, const std::string& chart)
@@ -152,5 +160,11 @@ inline bool readFacts(char kind, const std::string& sym, long spb, const std::st
     if (decidedOnly) { std::vector<Fact> d; for (size_t i = 0; i < out.size(); ++i) if (out[i].state == 1) d.push_back(out[i]); out.swap(d); }
     return true;
 }
+// ---- (1.5.0) the NODE LADDER channel: one string per chart, lsBookFlow the only producer (NodeLadder.h encode / decode) ---------------
+inline std::string ladderKey(const std::string& sym, long spb, const std::string& chart) { return bb::key("LRA_SLD_", sym, spb, chart); }
+inline void postLadder(const std::string& sym, long spb, const std::string& chart, const std::string& encoded)
+{ if (!sym.empty() && encoded.size() <= 30000) bb::bbSet(ladderKey(sym, spb, chart), encoded); }
+inline bool readLadder(const std::string& sym, long spb, const std::string& chart, std::string& out)
+{ out.clear(); return !sym.empty() && bb::bbGet(ladderKey(sym, spb, chart), out); }
 }  // namespace sb
 #endif

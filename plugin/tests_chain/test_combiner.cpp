@@ -35,6 +35,15 @@ int main(int argc, char** argv) {
     CHECK(okT == n && okS == n, "[parity] the native odds equal the research model on all 300 candles");
     std::vector<cmb::Candle> flat(30); for (int i = 0; i < 30; ++i) { flat[i].o = 100; flat[i].h = 101; flat[i].l = 99; flat[i].c = 100; flat[i].v = 10; flat[i].mod = 600; }
     CHECK(!cmb::score(P, flat, 29, true, cmb::Inputs(), "ES", 510, 900, 0.25).pivot, "[shape] a flat candle is no read");
+    // (0.2.0) STATUS per outcome and per market: the installed round-2 file = turn LOG, swing SHOW (>= 0.55 here), ES swing LOG
+    CHECK(!P.showOn && P.swingOn && std::fabs(P.showSwing - 0.55) < 1e-9 && P.logMkt.count("ES") && P.logMkt["ES"] == 2, "[0.2.0] STATUS turn LOG, swing SHOW 0.55, ES swing LOG");
+    {   cmb::Params Q = P; Q.showSwing = 0.3; int shownGC = 0, shownES = 0, turnShown = 0; std::ifstream in2((dir + "/parity_combiner.txt").c_str()); std::string l2;
+        while (std::getline(in2, l2)) { const size_t b2 = l2.find('|'); const std::vector<std::string> h = cmb::split(l2.substr(0, b2), ','); const std::vector<std::string> cs = cmb::split(l2.substr(b2 + 1), ';');
+            std::vector<cmb::Candle> c; for (const std::string& x : cs) { const std::vector<std::string> v = cmb::split(x, ':'); cmb::Candle k; cmb::num(v[0], k.o); cmb::num(v[1], k.h); cmb::num(v[2], k.l); cmb::num(v[3], k.c); cmb::num(v[4], k.v); double md; cmb::num(v[5], md); k.mod = (int)md; c.push_back(k); }
+            cmb::Inputs I; double tick; cmb::num(h[10], tick);
+            const cmb::Read r1 = cmb::score(Q, c, (int)c.size() - 1, h[1] == "1", I, "GC", 440, 810, tick), r2 = cmb::score(Q, c, (int)c.size() - 1, h[1] == "1", I, "ES", 510, 900, tick);
+            if (r1.showSwing) ++shownGC; if (r2.showSwing) ++shownES; if (r1.show || r2.show) ++turnShown; }
+        CHECK(shownGC > 0 && shownES == 0 && turnShown == 0, "[0.2.0] swing shown with '?' where SHOW (GC), never on ES (LOG override), turn never (LOG)"); }
     std::printf("CombinerLogic %s: %d passed, %d failed\n", cmb::VERSION, passes, fails);
     return fails ? 1 : 0;
 }
