@@ -29,6 +29,10 @@ int main() {
     { chain::Report q = chain::checkDefault(); CHECK(q.ok, "[1.1.0] Z (ladder) -> READ -> Y -> lsBookFlow.AtNode: clean");
       auto N = chain::nodes(); auto P = chain::producers(); auto E = chain::edges(); E.push_back({"lsDeltaProfile.READ", "lsBookFlow", 'Y', chain::DISPLAY});
       CHECK(!chain::check(N, P, E).ok, "[1.1.0] Y read by lsBookFlow's layer-1 stage is caught (upward + cycle)"); }
+    // (ChainSpec 1.4.0) the touch tags: one owner (lsLiquidityProfile, layer 10), read by lsDealerProfile for display only
+    { int own = 0; for (auto& p : chain::producers()) if (p.kind == 'S') { ++own; CHECK(p.owner == "lsLiquidityProfile" && p.layer == 10, "[S] owned by lsLiquidityProfile at layer 10"); }
+      bool dp = false; for (auto& e : chain::edges()) if (e.kind == 'S' && e.from == "lsLiquidityProfile" && e.to == "lsDealerProfile" && e.use == chain::DISPLAY) dp = true;
+      CHECK(own == 1 && dp, "[S] exactly one producer; lsDealerProfile reads it for display"); }
     // every consumer's inputs have a producer (input coverage)
     { std::set<char> owned; for (auto& p : chain::producers()) owned.insert(p.kind); bool all = true;
       for (auto& e : chain::edges()) if (!owned.count(e.kind)) all = false; CHECK(all, "[coverage] every input has a producer"); }

@@ -24,7 +24,7 @@
 #include <map>
 #include <set>
 namespace chain {
-static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-10-28) + kind H (the hourly flow at each tiered A + the current flow) from lsDeltaProfile.READ, read by the Banner (display); the nightly joins the T-line flow to the scored combiner reads (not a live combiner input yet)   // (1.2.0) + lsLiquidityProfile.Banner (layer 25, display: R / Y / T)
+static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-10-28) + kind S (the touch tags: lsLiquidityProfile 0.66.0 decides STAYS+ / STAYS / GONE / GONE+ and HELD / BROKE from the MBO feed, layer 10), read by lsDealerProfile 2.32.0 for DISPLAY (the tag in the Liquidity column, HELD on the chart); the votes ride on the S facts (val) - no combiner / Tape Reader reads them yet (that edge is added when one does)   // (1.3.0, 2026-10-28) + kind H (the hourly flow at each tiered A + the current flow) from lsDeltaProfile.READ, read by the Banner (display); the nightly joins the T-line flow to the scored combiner reads (not a live combiner input yet)   // (1.2.0) + lsLiquidityProfile.Banner (layer 25, display: R / Y / T)
 enum Use { DECIDE = 0, DISPLAY = 1 };
 struct Node { std::string name; int layer; };
 struct Edge { std::string from, to; char kind; Use use; };   // 'from' produces kind, 'to' reads it
@@ -38,6 +38,7 @@ inline std::vector<Producer> producers() {
              {'Z', "lsBookFlow", 10, "the node ladder: added / pulled / filled lots per price per closed candle (SignalBoard 1.5.0 LRA_SLD_)"},
              {'Y', "lsDeltaProfile.READ", 20, "the node defender read of each tiered A (holding / pulling, net x)"},
              {'P', "lsLiquidityProfile", 10, "LMT F prints (biggest single resting order filled, S20 / S10 / S5)"},
+             {'S', "lsLiquidityProfile", 10, "touch tags of big resting levels: 15-s STAYS+ / STAYS / weak / GONE / GONE+ with the signed vote, then HELD / BROKE / EXPIRED (LiqTouch.h 1.0.0)"},
              {'N', "lsDeltaProfile", 10, "delta nodes (top 3 rows of the 90-min profile, ratio)"},
              {'C', "lsDeltaProfile", 10, "candle trap lots (sellers below the close / buyers above it)"},
              {'D', "lsBookFlow", 10, "defending: refill effort / pulling per side"},
@@ -52,6 +53,7 @@ inline std::vector<Producer> producers() {
 }
 inline std::vector<Edge> edges() {
     return { {"lsLiquidityProfile", "lsDealerProfile", 'B', DECIDE},          // the liquidity rank and the level tags come from LP's resting orders
+             {"lsLiquidityProfile", "lsDealerProfile", 'S', DISPLAY},         // (1.4.0) the touch tag in the Liquidity column + HELD on the chart (drawn, latched for shown levels)
              {"lsDeltaProfile", "lsTrappedTraders", 'C', DECIDE},             // Who is trapped? falls back to the Delta Profile's candle lots
              {"lsDealerProfile", "lsDeltaProfile.READ", 'V', DECIDE},         // READ: level context of a node (logged)
              {"lsLiquidityProfile", "lsDeltaProfile.READ", 'P', DECIDE},      // READ: the LMT F print at the node row (logged, not drawn)

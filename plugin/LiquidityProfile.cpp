@@ -129,6 +129,8 @@
 #include "ReversalEvidence.h"  // additive EV-QUEUE sidecar; native Q and LT compatibility records remain unchanged
 #define E_MARK_NAME(m) ((m) == qm::M_SHOW ? "SHOW" : (m) == qm::M_SHOWQ ? "SHOW?" : "LOG")
 #include "BigOrderLines.h"     // (0.18.0) the biggest resting order lines on the price chart (SDK-free, tested)
+#include "LiqTouch.h"          // (0.66.0) THE TOUCH TAG of a big resting level (STAYS+ / STAYS / GONE / GONE+, votes, HELD) - SDK-free, tests_liqtouch/
+static const char* LT_HEADER = "kind,touch_ms,sec_end,side,px_tick,price,tag,vote,def,att,szT,szmax,sz0,sz60,pull60,added,eaten,pulled,left,secs_at_level,churn,refill,net_aggr,attackers,defenders,atr_ticks,tap,king,dominance,king_lots,second_lots,on_mq,mq,age_s,outcome,out_ms,version";
 #include "BigFlow.h"          // (0.28.0) big MARKET orders (the MKT column) + icebergs (the "i" box), SDK-free, tested
 #if defined(_MSC_VER)
 #pragma comment(lib, "user32.lib")   // (0.15.0) GetCursorPos / WindowFromPoint (off::cursorWindow, the hover leaving the chart)
@@ -156,7 +158,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.65.2"          // (0.65.2, 2026-10-28 09:31 CT Rassul approved the split LMT F) BIDS FILLED in the LEFT half (green), OFFERS FILLED in the RIGHT half (red), each on its exact price row, centred in its half; collisions resolved per side only (a bid and an offer at the same price both show)
+#define LQ_VERSION "0.66.0"          // (0.66.0, 2026-10-28, Rassul approved the liquidity-column build 11:05 CT + 11:08 CT "i like the held signal ... show it when it held") THE TOUCH TAG (LiqTouch.h 1.0.0, the 10-28 liquidity study ported exactly): every big resting level (the market tier, p97 of book levels: ES 72 / NQ 12 / CL 16 / GC 10 / HG 10 / NG 30 / 6E 128 lots, nightly LRA-LiqTouch-<MKT>.csv) is followed natively from the order-by-order feed; 15 s after its first trade it is STAYS+ / STAYS / STAYS weak / GONE / GONE+ (or MID / EARLY, logged), with the Tape Reader votes; then HELD / BROKE / EXPIRED; posted as SignalBoard facts kind S for lsDealerProfile (tag in the Liquidity column, HELD on the chart - nothing new drawn here); every touch recorded to <stem>-liqtouch-<session>.csv (T / D 30-s / O lines, the log-only reads: king, dominance, MenthorQ, tap, seconds at the level, refill, churn, attacker mix) and read back after a restart (no repaint); status LIQ_TOUCH   // was (0.65.2)  (0.65.2, 2026-10-28 09:31 CT Rassul approved the split LMT F) BIDS FILLED in the LEFT half (green), OFFERS FILLED in the RIGHT half (red), each on its exact price row, centred in its half; collisions resolved per side only (a bid and an offer at the same price both show)
 #define LQ_VERSION_0651 "0.65.1"          // (0.65.1, 2026-10-28 09:05 CT Rassul "it would be horrible if ... the limit F is showing it at the wrong location") LMT F / live iceberg labels are drawn AT THEIR PRICE ROW or not at all (LabelPlace.h 1.0.0, biggest print wins a collision); 0.65.0 pushed colliding labels down a row at a time, so ES "2x 1571" (bids filled at 7773.00) showed near 7771
 #define LQ_VERSION_0650 "0.65.0"          // (0.65.0, 2026-10-28 06:43 CT Rassul "why are we using boxes?", "the values are not properly centered") LMT F = the number only, centred in the column and on its row, in the resting side's colour; S20 dim / S10 bright / S5 bright + bold; no boxes
 #define LQ_VERSION_0640 "0.64.0"          // (0.64.0, 2026-10-28, Rassul 23:00 CT "are you overfiltering for the overnight session ... determining what large is based on session") LMT F = lots FILLED AT ONE PRICE IN ONE CANDLE over every resting order there (LmtFTiers.h 1.0.0; 0.62.0 took only the biggest single order the big-order tracker followed - 68+ lots on ES, so nothing overnight), tiers per SESSION PART (EVE / ASIA / LON / OPEN / MID / CLOSE / POST) from lmtf_read 2.0.0 >= a floor, and an adaptive live floor after 10 quiet candles of a part
@@ -528,6 +530,10 @@ struct LQState {
     rse::Publisher qmEvidence; std::vector<rse::Event> qmEvidenceRows; std::string qmEvidencePath; std::map<std::string, long long> qmEvidenceUnknownAtStart;
     long long qmEvidenceWrites = 0, qmEvidenceFails = 0; // retried independently of native Q/LT output
     long long qmRestored = 0, qmNormT = -2, qmNormN = -2, qmNormMs = -1, qmStamp = 0, qmStampMs = 0; long qmBarCount = 0; size_t qmLastLive = 0; bool qmPubEmpty = true;
+    // (0.66.0) THE TOUCH TAG (LiqTouch.h): the engine, its params (LRA-LiqTouch-<MKT>.csv), this session's decided touches (read back after a
+    // restart), the record rows waiting for their append, the SignalBoard 'S' facts
+    ltc::Engine lt; std::string ltMkt, ltWhy = "not loaded"; long long ltParamsMs = -100000, ltBookMs = -1, ltSession = -1, ltStamp = -1, ltStampMs = 0, ltRecW = 0, ltRecFail = 0, ltReadBack = 0, ltResumed = 0;
+    std::vector<ltc::Touch> ltDone; std::vector<std::string> ltRows; std::vector<sb::Fact> factsS; size_t ltMqN = (size_t)-1; long long ltTags[8] = {0, 0, 0, 0, 0, 0, 0, 0}, ltOut[4] = {0, 0, 0, 0};
 #endif
     ~LQState() {}   // (0.52.1) (2026-10-24 crash fix) IRT fast-fails (0xC0000409 in investorRT.exe) when a MARKET_DEPTH is deleted - adding an indicator to a chart restarts its indicators -> done() -> the next calc deleted the parked book. A MARKET_DEPTH is NEVER deleted any more (a few hundred bytes leaked per symbol / bar-size change).
 };
@@ -976,6 +982,8 @@ void LiquidityProfile::identify(LQState& S) {
         S.bo = bol::Engine(); S.boMkt.clear(); S.boStampT = S.boStampN = -2; S.boCheckMs = -1; S.boSession = -1; S.boLastH = 0; S.boLastStamp = -1;
         S.barEndMs.clear(); S.boAtrCount = -1; S.boHits.clear(); S.boHovKey = 0; S.boHovWnd = nullptr;
         if (S.exSession >= 0 && !S.ex.rows.empty()) { const std::string xp = exPath(S, S.exSession); if (!xp.empty()) { makeDir(flexDir()); makeDir(dir()); appendLines(xp, exh::header(), S.ex.rows); } }   // (0.61.0) the old chart's rows first
+        if (S.ltSession >= 0 && !S.ltRows.empty()) { const std::string d0 = dir(); if (!d0.empty()) appendLines(d0 + "\\" + recordStem(S) + "-liqtouch-" + std::to_string(S.ltSession) + ".csv", LT_HEADER, S.ltRows); }   // (0.66.0) the old chart's touch rows first
+        S.lt = ltc::Engine(); S.ltMkt.clear(); S.ltSession = -1; S.ltDone.clear(); S.ltRows.clear(); S.ltParamsMs = -100000; S.ltStamp = -1; S.ltMqN = (size_t)-1; S.factsS.clear();
         S.ex = exh::Engine(); S.exKeys.clear(); S.exMkt.clear(); S.exSession = -1; S.exBarCount = 0; S.exZonesMs = -1; S.exGateT = S.exGateN = -2; S.exGateMs = -1; S.exStamp = -1; S.exBo.clear(); S.exBoT = -2; S.exBoMs = -1;
 #endif
         S.atr = 0; S.finSeen = 0; S.hoverBar = -1; S.bookHist.clear(); S.winHist.clear(); S.winKeys.clear(); S.flowLines.clear(); S.lastStatusText.clear();
@@ -1566,6 +1574,21 @@ void LiquidityProfile::persist(LQState& S) {
 #endif
 }
 
+// (0.66.0) the touch tag status line (Profile build only)
+static std::string ltStatus(LQState& S) {
+#ifdef LQ_FLOW
+    (void)S; return std::string();
+#else
+    std::ostringstream o; o.imbue(std::locale::classic());
+    o << "\nLIQ_TOUCH,LiqTouch " << ltc::VERSION << ",params " << S.ltWhy << ",tier RTH " << S.lt.P.tier[1] << " / ON " << S.lt.P.tier[0] << " lots,far-king wait RTH " << S.lt.P.farWait[1] << " s / ON " << S.lt.P.farWait[0]
+      << " s,STAYS+ <= " << S.lt.P.dwellPlus << " s,weak >= " << S.lt.P.dwellWeak << " s,churn " << (S.lt.P.churnCut > 0 ? std::to_string((int)S.lt.P.churnCut) + "x" : std::string("off"))
+      << ",session " << S.ltSession << ",events " << S.lt.nEvents << ",big levels followed " << S.lt.followed() << " (episodes " << S.lt.nEpisodes << "),touches " << S.lt.nTouches << ",pending " << S.lt.pending().size()
+      << ",tags STAYS+ " << S.ltTags[1] << " STAYS " << S.ltTags[2] << " weak " << S.ltTags[3] << " GONE " << S.ltTags[4] << " GONE+ " << S.ltTags[5] << " MID " << S.ltTags[6] << " EARLY " << S.ltTags[7]
+      << ",outcomes HELD " << S.ltOut[1] << " BROKE " << S.ltOut[2] << " EXPIRED " << S.ltOut[3] << ",read back " << S.ltReadBack << " (resumed " << S.ltResumed << "),record rows " << S.ltRecW << " (fails " << S.ltRecFail << "),facts S " << S.factsS.size()
+      << ",feed gaps " << S.lt.nGap;
+    return o.str();
+#endif
+}
 void LiquidityProfile::status(LQState& S, long long now) {
     if (S.lastBuild >= 0 && now - S.lastBuild < 1000 && now >= S.lastBuild) return;   // #32: built at most once a second
     S.lastBuild = now;
@@ -1575,7 +1598,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
       << "\nDEPTH," << (S.mdBlocked ? "blocked" : S.mdDead ? "fault" : !S.md ? "not opened" : S.depthAvail ? "available" : "not available")
       << ",max " << S.depthMax << ",levels " << S.depthLevels << ",reads " << S.depthReads << ",books " << S.e.books << ",bad " << S.e.badBooks << "," << S.e.why
       << "\nCOLUMN,width " << S.width << ",background " << (S.bg ? "on" : "off") << ",right columns end price at " << S.colPriceRight
-      << "\nLIQ_LEVELS,rows " << S.lvlRows << ",writes " << S.lvlWrites
+      << "\nLIQ_LEVELS,rows " << S.lvlRows << ",writes " << S.lvlWrites << ltStatus(S)
       << "\nBANNER," << (S.trBanner ? "Tape Reader banner on this chart: the warning is shown there" : "no Tape Reader banner: the warning is drawn here") << ",handed " << S.handed << ",verdict " << S.verdict << " (agree " << S.verdictScore << "/3)" << ",label offset " << S.labDx << "," << S.labDy << (S.sizeWhy.empty() ? std::string() : "," + S.sizeWhy)
       << "\nTRADES," << S.e.trades << "\nZONE_HW," << S.e.hw << ",atr " << S.atr << ",slot " << S.slot << ",normal " << S.e.normal << ",normal_from " << lqp::normSrcName(S.e.normalSrc) << (S.e.normalSrc == lqp::NS_POOL || S.e.normalSrc == lqp::NS_SESSION ? " (" + std::to_string(S.e.normalPoolN) + " pool sessions for this slot)" : std::string()) << ",norms_file " << (S.e.norms.loaded ? std::to_string(S.e.norms.median.size()) + " slots" : std::string("none")) << ",pool_sessions " << S.e.norms.pool.past.size() << ",pool_file " << S.bpState << "\nPARAMS," << S.params
       << "\nZONES," << S.e.zones.size() << "\nATTEMPTS," << S.e.attempts.size() << "\nMARKS," << S.e.marks.size() << ",written " << S.marksWritten
@@ -1917,12 +1940,105 @@ void LiquidityProfile::postState(LQState& S, long count, long long st) {
 #endif
 
 static void qmMarket(LQState& S);   // (0.49.0) below, with qmAfter
+// (0.66.0) THE TOUCH TAG record: <dir>\<stem>-liqtouch-<session>.csv - T = the 15-s decision (tag, votes and the log-only reads), D = the 30-s
+// read (log), O = the outcome (HELD / BROKE / EXPIRED). Read back for this session after a restart: the same tags / HELD marks (no repaint).
+static std::string ltRow(char k, const ltc::Touch& t, double tick) {
+    const bool d30 = k == 'D';
+    char b[900]; std::snprintf(b, sizeof(b), "%c,%lld,%lld,%s,%lld,%.10g,%s,%d,%d,%d,%lld,%lld,%lld,%lld,%lld,%lld,%lld,%lld,%lld,%d,%.4f,%.4f,%.4f,%lld,%lld,%.4f,%d,%d,%.3f,%lld,%lld,%d,%s,%lld,%s,%lld,%s",
+        k, t.tMs, t.secEnd, t.side == ltc::BID ? "BID" : "ASK", t.px, (double)t.px * tick, ltc::tagName(d30 ? t.tag30 : t.tag), t.vote, t.defV, t.attV, t.szT, t.szMax, t.sz0, t.sz60, t.pull60,
+        d30 ? t.a30 : t.a15, d30 ? t.e30 : t.e15, d30 ? t.p30 : t.p15, d30 ? t.s30 : t.s15, d30 ? t.dwell30 : t.dwell15,
+        (double)((d30 ? t.a30 + t.p30 : t.a15 + t.p15)) / (double)std::max(1LL, t.szT), (double)(d30 ? t.a30 : t.a15) / (double)std::max(1LL, d30 ? t.e30 : t.e15),
+        d30 ? (double)(t.g30 - t.opp30) / (double)std::max(1LL, t.g30 + t.opp30) : t.nd, d30 ? t.g30 : t.g15, d30 ? t.opp30 : t.opp15, t.A, t.tap, t.king ? 1 : 0, t.dom, t.kingSz, t.secondSz,
+        t.onMq ? 1 : 0, t.mqName.find(',') == std::string::npos ? t.mqName.c_str() : "", (t.secEnd - t.t0) / 1000, ltc::outName(t.outcome), t.outMs, ltc::VERSION);
+    return b;
+}
+static void ltAfter(LQState& S, long long st, const std::string& d, const std::string& fd, const std::string& stem) {
+    if (S.market.empty() || !(S.tick > 0) || S.session < 0) return;
+    // the params: lsFlexLevels\LRA-LiqTouch-<MKT>.csv (nightly), looked at every 60 s, bounded read; missing / garbled = the defaults + why
+    if (S.ltMkt != S.market || st - S.ltParamsMs >= 60000 || st < S.ltParamsMs) {
+        S.ltParamsMs = st; S.ltMkt = S.market; std::string text; bool have = false;
+        if (!fd.empty()) { std::ifstream in((fd + "\\LRA-LiqTouch-" + S.market + ".csv").c_str(), std::ios::binary);
+            if (in) { std::string buf(70000, '\0'); in.read(&buf[0], 70000); buf.resize((size_t)in.gcount()); text.swap(buf); have = true; } }
+        ltc::Params p = have ? ltc::parse(text, S.market) : ltc::defaults(S.market); if (!have) p.why = "no LRA-LiqTouch-" + S.market + ".csv - defaults";
+        S.lt.P = p; S.ltWhy = p.why;
+    }
+    if (S.mqLevels.size() != S.ltMqN) { S.ltMqN = S.mqLevels.size(); S.lt.mq.clear(); for (size_t i = 0; i < S.mqLevels.size(); ++i) { ltc::MqLevel m; m.px = (long long)S.mqLevels[i].px; m.name = S.mqLevels[i].code; S.lt.mq.push_back(m); } }
+    const std::string path = d.empty() ? std::string() : d + "\\" + stem + "-liqtouch-" + std::to_string(S.session) + ".csv";
+    if (S.session != S.ltSession) {   // a new session (or the first pass): the old rows to the old file, then this session's record read back
+        if (S.ltSession >= 0 && !S.ltRows.empty() && !d.empty()) { if (appendLines(d + "\\" + stem + "-liqtouch-" + std::to_string(S.ltSession) + ".csv", LT_HEADER, S.ltRows)) S.ltRows.clear(); }
+        S.ltRows.clear(); S.ltDone.clear(); S.lt.newSession(); S.ltSession = S.session; S.ltReadBack = 0; S.ltResumed = 0;
+        for (int k = 0; k < 8; ++k) { S.ltTags[k] = 0; }
+        for (int k = 0; k < 4; ++k) { S.ltOut[k] = 0; }
+        std::ifstream in(path.c_str(), std::ios::binary); std::string line; int n = 0;
+        while (in && std::getline(in, line) && ++n < 20000) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            const std::vector<std::string> f = split(line, ','); if (f.size() < 37 || f[0].size() != 1) continue;
+            long long tm = 0, se = 0, px = 0, om = 0; if (!parseLL(f[1], 1, LLONG_MAX, tm) || !parseLL(f[2], 1, LLONG_MAX, se) || !parseLL(f[4], 1, LLONG_MAX, px)) continue;
+            const int side = f[3] == "BID" ? ltc::BID : f[3] == "ASK" ? ltc::ASK : -1; if (side < 0) continue;
+            if (f[0] == "T") {
+                ltc::Touch t; t.id = tm; t.tMs = tm; t.secEnd = se; t.side = side; t.px = px; t.decided = true;
+                int tg = ltc::T_PENDING; for (int k = 1; k <= 7; ++k) if (f[6] == ltc::tagName(k)) tg = k; if (tg == ltc::T_PENDING) continue;
+                long long v = 0; t.tag = tg; t.vote = parseLL(f[7], -9, 9, v) ? (int)v : 0; double a = 0; t.A = parseD(f[25], a) ? a : 0;
+                bool dup = false; for (size_t i = 0; i < S.ltDone.size(); ++i) if (S.ltDone[i].tMs == tm && S.ltDone[i].px == px && S.ltDone[i].side == side) dup = true;
+                if (!dup && S.ltDone.size() < 5000) { S.ltDone.push_back(t); ++S.ltReadBack; ++S.ltTags[tg]; }
+            } else if (f[0] == "O") {
+                int oc = f[34] == "HELD" ? ltc::O_HELD : f[34] == "BROKE" ? ltc::O_BROKE : f[34] == "EXPIRED" ? ltc::O_EXPIRED : ltc::O_OPEN; if (oc == ltc::O_OPEN) continue;
+                parseLL(f[35], 0, LLONG_MAX, om);
+                for (size_t i = 0; i < S.ltDone.size(); ++i) if (S.ltDone[i].tMs == tm && S.ltDone[i].px == px && S.ltDone[i].side == side && S.ltDone[i].outcome == ltc::O_OPEN) { S.ltDone[i].outcome = oc; S.ltDone[i].outMs = om; S.ltDone[i].outQueued = true; ++S.ltOut[oc]; }
+            }
+        }
+        for (size_t i = 0; i < S.ltDone.size(); ++i) if (S.ltDone[i].outcome == ltc::O_OPEN) { S.lt.resume(S.ltDone[i]); ++S.ltResumed; }   // keep watching what was still open
+    }
+    if (S.haveOffset) S.lt.advance(st + S.ctOffset - 2000);           // a quiet feed still decides (2 s grace for late events)
+    const std::vector<ltc::Engine::Rec> R = S.lt.drain();
+    for (size_t i = 0; i < R.size(); ++i) {
+        const ltc::Engine::Rec& r = R[i];
+        if (r.kind == 'T') { if (S.ltDone.size() >= 5000) S.ltDone.erase(S.ltDone.begin()); S.ltDone.push_back(r.t); if (r.t.tag >= 0 && r.t.tag < 8) ++S.ltTags[r.t.tag]; S.ltRows.push_back(ltRow('T', r.t, S.tick)); }
+        else if (r.kind == 'D') S.ltRows.push_back(ltRow('D', r.t, S.tick));
+        else if (r.kind == 'O') {
+            for (size_t k = S.ltDone.size(); k-- > 0;) if (S.ltDone[k].tMs == r.t.tMs && S.ltDone[k].px == r.t.px && S.ltDone[k].side == r.t.side) { if (S.ltDone[k].outcome == ltc::O_OPEN) { S.ltDone[k].outcome = r.t.outcome; S.ltDone[k].outMs = r.t.outMs; } break; }
+            if (r.t.outcome >= 0 && r.t.outcome < 4) ++S.ltOut[r.t.outcome];
+            S.ltRows.push_back(ltRow('O', r.t, S.tick));
+        }
+    }
+    if (S.haveOffset && (S.ltBookMs < 0 || st + S.ctOffset - S.ltBookMs >= 60000 || st + S.ctOffset < S.ltBookMs)) {   // once a (Central) minute: the book sample for the nightly tier refit (p97 of level sizes within 3 ATR)
+        S.ltBookMs = st + S.ctOffset; const double a = S.lt.atrAt(((st + S.ctOffset) / 1000) * 1000);
+        std::vector<long long> v = S.lt.sizesNear(a > 0 ? (long long)(3.0 * a) + 1 : 0);
+        if (v.size() >= 10) { std::sort(v.begin(), v.end()); const long long p97 = v[(size_t)std::min(v.size() - 1, (size_t)std::floor(0.97 * (double)(v.size() - 1) + 0.5))];
+            char b[160]; std::snprintf(b, sizeof(b), "B,%lld,0,,,,,,,,,,,,,,,,,,,,,,,%.4f,%d,,,%lld,%lld,,,,,,%s", st + S.ctOffset, a, ltc::rthIdx(S.market, st + S.ctOffset), p97, (long long)v.size(), ltc::VERSION); S.ltRows.push_back(b); }
+    }
+    if (!S.ltRows.empty() && !path.empty()) { if (appendLines(path, LT_HEADER, S.ltRows)) { S.ltRecW += (long long)S.ltRows.size(); S.ltRows.clear(); } else { ++S.ltRecFail; if (S.ltRows.size() > 4000) S.ltRows.erase(S.ltRows.begin(), S.ltRows.begin() + 2000); } }
+}
+// (0.66.0) the touch tags as SignalBoard 1.6.0 facts kind 'S' (lsDealerProfile draws them): bar = the touch's Central second, lo = hi = the
+// level, side +1 bid / -1 offer, code 0 = touched (live, not decided yet), 1..7 = the 15-s tag (ltc::Tag; val = the signed vote, + bullish),
+// 11..13 = the outcome HELD / BROKE / EXPIRED (val = seconds from the touch); newest first, the last 20 min (+ outcomes of the last 5 min)
+static void ltFacts(LQState& S, long long nowCt) {
+    S.factsS.clear(); const double tick = S.tick; if (!(tick > 0)) return;
+    const std::vector<ltc::Touch>& P = S.lt.pending();
+    for (size_t i = 0; i < P.size() && S.factsS.size() < 60; ++i) { const ltc::Touch& t = P[i]; if (t.decided) continue;
+        sb::Fact f; f.bar = t.tMs / 1000; f.lo = f.hi = (double)t.px * tick; f.side = t.side == ltc::BID ? 1 : -1; f.val = 0; f.code = ltc::T_PENDING; f.state = 0; f.proven = 0; S.factsS.push_back(f); }
+    for (size_t k = S.ltDone.size(); k-- > 0 && S.factsS.size() < 190;) {
+        const ltc::Touch& t = S.ltDone[k];
+        const bool recent = nowCt <= 0 || nowCt - t.tMs <= 20 * 60000LL || (t.outcome != ltc::O_OPEN && nowCt - t.outMs <= 5 * 60000LL);
+        if (!recent) continue;
+        sb::Fact f; f.bar = t.tMs / 1000; f.lo = f.hi = (double)t.px * tick; f.side = t.side == ltc::BID ? 1 : -1; f.val = t.vote; f.code = t.tag; f.state = 1; f.proven = ltc::drawnTag(t.tag) ? 1 : 0;
+        S.factsS.push_back(f);
+        if (t.outcome != ltc::O_OPEN) { sb::Fact o = f; o.code = 10 + t.outcome; o.val = (double)std::max(0LL, (t.outMs - t.tMs) / 1000); o.proven = 1; S.factsS.push_back(o); }
+    }
+}
 void LiquidityProfile::orders(LQState& S, long long st) {
     if (!S.e.haveBook || !S.depthAvail || S.symbol.empty()) return;
     const std::string d = dir();
     if (!d.empty()) { makeDir(flexDir()); makeDir(d); }
     S.feed.open(S.symbol, d.empty() ? std::string() : d + "\\_opening-dbo-" + stem(S) + ".txt", st, S.feedState);
     const double tick = S.e.P.tick;
+    {   // (0.66.0) the host ATR for the touch engine BEFORE this drain (its own 3-min ATR needs 10 blocks): the chart ATR, else the loaded bars' range
+        double ha = S.atr;
+        if (!(ha > 0)) { const long n = getBarCount(); RTARRAY bh(barHigh), bl(barLow); double sum = 0; int m = 0;
+            for (long i = n - 2; i >= 0 && i < (long)bh.count && i < (long)bl.count && m < 20; --i) { const double r = (double)bh[(int)i] - (double)bl[(int)i]; if (r >= 0 && std::isfinite(r)) { sum += r; ++m; } }
+            if (m > 0) { ha = sum / m; if (S.spb > 0 && S.spb != 180) ha *= std::sqrt(180.0 / (double)S.spb); } }
+        S.lt.hostAtr = (ha > 0 && S.tick > 0) ? ha / S.tick : 0.0;
+    }
     S.feed.drain(st, off::steadyMs, [&](const auto& o) {
         const off::Ev ev = off::evOf(o, tick, st);
         if (ev.px > 0 && ev.action >= off::NEW && ev.action <= off::FILL) {
@@ -1959,6 +2075,13 @@ void LiquidityProfile::orders(LQState& S, long long st) {
                     if (!S.qmEvidenceUnknownAtStart.count(id)) S.qmEvidenceUnknownAtStart[id] = unknown;
                 }
                 while (S.qmEvidenceUnknownAtStart.size() > 5000) S.qmEvidenceUnknownAtStart.erase(S.qmEvidenceUnknownAtStart.begin()); }
+        }
+        if (ev.px > 0 && ev.action >= off::NEW && ev.action <= off::FILL && !S.market.empty() && S.tick > 0 && S.ltSession >= 0 && S.ltSession == S.session) {
+            // (0.66.0) the touch tag engine: every event, CT ms inside the event's own second (as the queue meter); off:: and ltc:: share the codes
+            long long lms = 0;
+            if (ev.stamp > 0 && ev.stamp == S.ltStamp) lms = S.ltStampMs; else { lms = ev.stamp > 0 ? ctSec((RTDATE)ev.stamp) * 1000LL : 0; if (lms > 0) { S.ltStamp = ev.stamp; S.ltStampMs = lms; } }
+            if (S.haveOffset) { const long long a = ev.arrMs + S.ctOffset; lms = lms > 0 ? std::min(lms + 999, std::max(lms, a)) : a; }
+            if (lms > 0) S.lt.onEvent(ev.action, ev.side == off::BID ? ltc::BID : ev.side == off::ASK ? ltc::ASK : -1, (long long)ev.px, ev.size, ev.id, lms, ev.implied);
         }
         if (S.exOn && ev.action == off::FILL && ev.px > 0 && ev.size > 0 && !S.market.empty() && S.exSession >= 0 && S.exSession == S.session) {   // (0.61.0) the Ex mark: every trade (once this session's record is read back), CT ms inside its own second
             long long xms = 0;
@@ -2017,6 +2140,7 @@ void LiquidityProfile::orders(LQState& S, long long st) {
         }
     }
     if (S.obClearMs < 0 || st - S.obClearMs >= 60000 || st < S.obClearMs) { S.obAcc = off::Acc(); S.obClearMs = st; }   // bounded scratch
+    ltAfter(S, st, dir(), flexDir(), recordStem(S));   // (0.66.0) the touch tags: params, read-back, the 1-s clock, records
     for (size_t i = 0; i < S.e.attempts.size(); ++i) {
         lqp::Attempt& a = S.e.attempts[i]; if (a.done) continue;
         a.mk = lqp::makeupOf(S.ob.book, a.side, a.lo, a.hi, S.e.band(a.side, a.lo, a.hi), S.e.P.coverMin, S.e.P.coverMax); a.mkSet = true;
@@ -2636,7 +2760,8 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         std::sort(S.factsB.begin(), S.factsB.end(), [](const sb::Fact& a, const sb::Fact& b) { return a.val > b.val; });
         if (S.factsB.size() > 60) S.factsB.resize(60);
         const long long nm = nowMs(S);
-        if (nm - S.factsAt >= 1000) { const long long sm = steadyMs(); sb::postFacts('P', S.symbol, S.spb, S.chartKey, sm, S.factsP); sb::postFacts('B', S.symbol, S.spb, S.chartKey, sm, S.factsB); S.factsAt = nm; }   // SignalBoard stamps = the steady clock (as every poster)
+        if (nm - S.factsAt >= 1000) { const long long sm = steadyMs(); sb::postFacts('P', S.symbol, S.spb, S.chartKey, sm, S.factsP); sb::postFacts('B', S.symbol, S.spb, S.chartKey, sm, S.factsB);
+            ltFacts(S, S.haveOffset ? steadyMs() + S.ctOffset : 0); sb::postFacts('S', S.symbol, S.spb, S.chartKey, sm, S.factsS); S.factsAt = nm; }   // (0.66.0) + the touch tags   // SignalBoard stamps = the steady clock (as every poster)
         S.factsP.clear();
     }
 }
@@ -4598,6 +4723,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.65.2");   // LQ_VERSION
+    p->setVersion("0.66.0");   // LQ_VERSION
     return p;
 }
