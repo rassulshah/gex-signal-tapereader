@@ -22,7 +22,9 @@
 //   BANDW,<width 1-4>                    every band's width
 //   ON,<0|1>                             the overnight VWAP + bands (17:00 -> the RTH open)
 //   PRIOR,<0|1>,<RRGGBB>                 the prior RTH session's VWAP, drawn overnight
-//   PIVOT,<0|1>                          (1.8.0) the 3-bar pivot VWAP (green / red) instead of the RTH VWAP line; absent = on
+//   PIVOT,<0|1>[,<above RRGGBB>,<below RRGGBB>,<width 1-4>]  (1.8.0) the 3-bar pivot VWAP on / off; (1.8.1) its own colours + width
+//                                        (absent = on, green 22C55E / red EF4444, 2 px). 1.8.1: drawn on its own - it no longer hides
+//                                        the session VWAP line, and the VWAP box no longer hides it.
 #ifndef SESSION_VWAP_STYLE_H
 #define SESSION_VWAP_STYLE_H
 
@@ -47,7 +49,9 @@ static const Colour D_M1   = 0x00FF8080UL;   // -1 SD light red
 static const Colour D_P2   = 0x0000FF00UL;   // +2 SD lime
 static const Colour D_M2   = 0x00FF0000UL;   // -2 SD red
 static const Colour D_PRTH = 0x006B7280UL;   // prior RTH VWAP, dim grey
-static const int W_MIN = 1, W_MAX = 4, D_VWAP_W = 2, D_BAND_W = 1;
+static const Colour D_PIV_UP = 0x0022C55EUL; // (1.8.1) pivot VWAP while the bar closed above it - green
+static const Colour D_PIV_DN = 0x00EF4444UL; // (1.8.1) pivot VWAP while the bar closed below it - red
+static const int W_MIN = 1, W_MAX = 4, D_VWAP_W = 2, D_BAND_W = 1, D_PIV_W = 2;
 static const size_t FILE_MAX = 4096;
 
 // the five line kinds, in the plugin's output order (VWAP, +1, -1, +2, -2)
@@ -59,15 +63,18 @@ struct Style {
     int vwapW, bandW;
     bool on;            // the overnight VWAP + bands
     bool prior;         // the prior RTH VWAP (overnight)
-    bool pivot;         // (1.8.0) the 3-bar pivot VWAP replaces the RTH VWAP line (green / red by the close)
+    bool pivot;         // (1.8.0) the 3-bar pivot VWAP (green / red by the close); (1.8.1) drawn independently of the VWAP line
     Colour priorCol;
-    Style() : vwapW(D_VWAP_W), bandW(D_BAND_W), on(true), prior(true), pivot(true), priorCol(D_PRTH) {
+    Colour pivUp, pivDn; // (1.8.1) the pivot VWAP's two colours
+    int pivW;           // (1.8.1) the pivot VWAP's width
+    Style() : vwapW(D_VWAP_W), bandW(D_BAND_W), on(true), prior(true), pivot(true), priorCol(D_PRTH), pivUp(D_PIV_UP), pivDn(D_PIV_DN), pivW(D_PIV_W) {
         const Colour d[K_N] = { D_VWAP, D_P1, D_M1, D_P2, D_M2 };
         for (int k = 0; k < K_N; ++k) { show[k] = true; col[k] = d[k]; }
     }
     bool operator==(const Style& o) const {
         for (int k = 0; k < K_N; ++k) if (show[k] != o.show[k] || col[k] != o.col[k]) return false;
-        return vwapW == o.vwapW && bandW == o.bandW && on == o.on && prior == o.prior && pivot == o.pivot && priorCol == o.priorCol;
+        return vwapW == o.vwapW && bandW == o.bandW && on == o.on && prior == o.prior && pivot == o.pivot && priorCol == o.priorCol
+            && pivUp == o.pivUp && pivDn == o.pivDn && pivW == o.pivW;
     }
     bool operator!=(const Style& o) const { return !(*this == o); }
 };
@@ -125,7 +132,7 @@ inline std::string toText(const Style& s) {
     o += "BANDW,"; o += (char)('0' + s.bandW); o += '\n';
     o += "ON,"; o += s.on ? '1' : '0'; o += '\n';
     o += "PRIOR,"; o += s.prior ? '1' : '0'; o += ','; o += hex(s.priorCol); o += '\n';
-    o += "PIVOT,"; o += s.pivot ? '1' : '0'; o += '\n';   // (1.8.0)
+    o += "PIVOT,"; o += s.pivot ? '1' : '0'; o += ','; o += hex(s.pivUp); o += ','; o += hex(s.pivDn); o += ','; o += (char)('0' + s.pivW); o += '\n';   // (1.8.0; 1.8.1 + colours, width)
     return o;
 }
 
@@ -159,7 +166,13 @@ inline bool fromText(const std::string& text, Style& out, int* bad = NULL) {
             bool b; Colour c; if (f.size() != 3 || !parseBit(f[1], b) || !parseHex(f[2], c) || nearBlack(c)) { ++nb; continue; }
             s.prior = b; s.priorCol = c;
         } else if (f[0] == "PIVOT") {   // (1.8.0) absent in an older file = the default (on)
-            bool b; if (f.size() != 2 || !parseBit(f[1], b)) { ++nb; continue; } s.pivot = b;
+            bool b; if ((f.size() != 2 && f.size() != 5) || !parseBit(f[1], b)) { ++nb; continue; }
+            if (f.size() == 5) {   // (1.8.1) PIVOT,<b>,<above>,<below>,<width>
+                Colour u, d; int w = 0;
+                if (!parseHex(f[2], u) || nearBlack(u) || !parseHex(f[3], d) || nearBlack(d) || !parseWidth(f[4], w)) { ++nb; continue; }
+                s.pivUp = u; s.pivDn = d; s.pivW = w;
+            }
+            s.pivot = b;
         }   // unknown keys: ignored (a newer file read by an older plugin)
     }
     if (!versionOk) { if (bad) *bad = 1; return false; }
@@ -175,6 +188,7 @@ enum Row {
     R_P2, R_P2_COL, R_M2, R_M2_COL,
     R_BAND_W, R_ON, R_PRIOR, R_PRIOR_COL,
     R_PIVOT,            // (1.8.0) appended: the 3-bar pivot VWAP on / off
+    R_PIV_UP, R_PIV_DN, R_PIV_W,   // (1.8.1) appended: the pivot VWAP's colours + width
     R_COUNT
 };
 static const char* WIDTH_CHOICES = "1 px;2 px;3 px;4 px";

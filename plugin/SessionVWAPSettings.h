@@ -5,11 +5,13 @@
 #include "SettingsSpec.h"
 
 namespace svset {
-static const char* const PLUGIN_VERSION = "1.8.0";   // (1.8.0, 2026-10-27) + "3-bar pivot VWAP" (appended row, parameter version 7)
+static const char* const PLUGIN_VERSION = "1.8.1";   // (1.8.0, 2026-10-27) + "3-bar pivot VWAP" (appended row, parameter version 7)
+// (1.8.1, 2026-10-27 22:50 CT, Rassul "the settings never work") + the pivot VWAP's above / below colour and width (appended rows,
+// parameter version 8); the chart now reads these rows from IRT's own per-indicator parameters (svp:: in SessionVWAP.cpp)
 static const char* const WIDTHS = "1 px;2 px;3 px;4 px";
 // the order of svs::Row (R_VWAP .. R_PRIOR_COL)
 enum K { K_VWAP, K_VWAP_COLOR, K_VWAP_WIDTH, K_P1, K_P1_COLOR, K_M1, K_M1_COLOR, K_P2, K_P2_COLOR, K_M2, K_M2_COLOR, K_BAND_WIDTH,
-         K_OVERNIGHT, K_PRIOR, K_PRIOR_COLOR, K_PIVOT, K_N };
+         K_OVERNIGHT, K_PRIOR, K_PRIOR_COLOR, K_PIVOT, K_PIV_UP, K_PIV_DN, K_PIV_WIDTH, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
         ss::masterOf(ss::boolRow("vwap", "VWAP", true)),
@@ -27,9 +29,12 @@ inline const ss::Spec& spec() {
         ss::boolRow("overnight", "Overnight VWAP + bands", true),
         ss::masterOf(ss::boolRow("prior", "Prior RTH VWAP (overnight)", true)),
         ss::same(ss::in(ss::colorRow("prior_color", "Prior RTH VWAP colour", 0x6B7280), "prior")),
-        ss::boolRow("pivot", "3-bar pivot VWAP", true),   // (1.8.0, Rassul 2026-10-27 09:46 CT)
+        ss::masterOf(ss::boolRow("pivot", "3-bar pivot VWAP", true)),   // (1.8.0, Rassul 2026-10-27 09:46 CT)
+        ss::same(ss::in(ss::colorRow("piv_up", "Above", 0x22C55E), "pivot")),   // (1.8.1) colour while the bar closed above it
+        ss::same(ss::in(ss::colorRow("piv_dn", "Below", 0xEF4444), "pivot")),   // (1.8.1) colour while the bar closed below it
+        ss::in(ss::listRow("piv_width", "Pivot VWAP width", 1, WIDTHS, 70), "pivot"),   // (1.8.1) default 2 px (own line: the pivot line is full)
     };
-    static const ss::Spec S = { "SessionVWAP", PLUGIN_VERSION, 7, R, K_N, 0 };   // (1.8.0) 7: + the pivot row
+    static const ss::Spec S = { "SessionVWAP", PLUGIN_VERSION, 8, R, K_N, 0 };   // (1.8.0) 7: + the pivot row; (1.8.1) 8: + colours, width
     return S;
 }
 } // namespace svset

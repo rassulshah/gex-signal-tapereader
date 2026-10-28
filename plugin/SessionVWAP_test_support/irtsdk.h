@@ -48,6 +48,11 @@ struct Host {
     int fontPt = 9;
     std::string chart = "ES 3 Min";   // (1.6.0) getChartLabel / getSecondsPerBar for the Market State post
     int spb = 180;
+    // (SessionVWAP 1.8.1) IRT's own per-indicator parameter set, handed to the extension by getParameters (any copy, not only the
+    // window): `val` is this indicator's saved set. parmsMode 0 = IRT hands it, 1 = refuses (RTX_FAIL), 2 = hands a blank (all-zero) set.
+    int parmsMode = 0;
+    std::vector<Param> former;                                // an older-version saved set (getFormerParameters), empty = none
+    int getParmsCalls = 0;
 };
 extern Host* current;
 inline Param* param(int i) {
@@ -163,6 +168,44 @@ public:
     void setFlags(unsigned long) {}
     void setDescription(const char*) {}
     void setVersion(const char*) {}
+    // (SessionVWAP 1.8.1) the SDK's parameter-set calls: one template token per row in row order (B RTBOOL, U COLOR, S short list,
+    // I int), fields at their natural alignment as the compiler lays out the plugin's struct
+    static size_t alignUp(size_t o, size_t a) { return (o + a - 1) / a * a; }
+    static RTX_RESULT fillFrom(const std::vector<mock::Param>& src, void* pStruct, size_t sz, const char* t, bool blank) {
+        unsigned char* b = static_cast<unsigned char*>(pStruct); std::memset(b, 0, sz); size_t o = 0; size_t k = 0;
+        for (const char* c = t; *c; ++c, ++k) {
+            const mock::Param* p = k < src.size() ? &src[k] : NULL;
+            if (*c == 'B') { o = alignUp(o, alignof(RTBOOL)); if (o + sizeof(RTBOOL) > sz) return RTX_FAIL; RTBOOL v = (!blank && p && p->type == 1 && p->b) ? 1 : 0; std::memcpy(b + o, &v, sizeof v); o += sizeof v; }
+            else if (*c == 'U') { o = alignUp(o, alignof(COLOR)); if (o + sizeof(COLOR) > sz) return RTX_FAIL; COLOR v = (!blank && p && p->type == 2) ? p->c : 0; std::memcpy(b + o, &v, sizeof v); o += sizeof v; }
+            else if (*c == 'S') { o = alignUp(o, alignof(short)); if (o + sizeof(short) > sz) return RTX_FAIL; short v = (short)((!blank && p && p->type == 3) ? p->list : 0); std::memcpy(b + o, &v, sizeof v); o += sizeof v; }
+            else return RTX_FAIL;
+        }
+        return RTX_OK;
+    }
+    RTX_RESULT getParameters(void* pStruct, size_t sz, const char* t, const char*) {
+        if (!mock::current) return RTX_FAIL;
+        ++mock::current->getParmsCalls;
+        if (mock::current->parmsMode == 1) return RTX_FAIL;
+        if (mock::current->val.size() != mock::declared.size()) mock::current->val = mock::declared;
+        return fillFrom(mock::current->val, pStruct, sz, t, mock::current->parmsMode == 2);
+    }
+    RTX_RESULT getFormerParameters(void* pStruct, size_t sz, const char* t, const char*) {
+        if (!mock::current || mock::current->former.empty()) return RTX_FAIL;
+        return fillFrom(mock::current->former, pStruct, sz, t, false);
+    }
+    RTX_RESULT saveParameters(void* pStruct, size_t sz, const char* t) {
+        if (!mock::current) return RTX_FAIL;
+        if (mock::current->val.size() != mock::declared.size()) mock::current->val = mock::declared;
+        const unsigned char* b = static_cast<const unsigned char*>(pStruct); size_t o = 0, k = 0;
+        for (const char* c = t; *c; ++c, ++k) {
+            mock::Param* p = k < mock::current->val.size() ? &mock::current->val[k] : NULL;
+            if (*c == 'B') { o = alignUp(o, alignof(RTBOOL)); RTBOOL v; if (o + sizeof v > sz) return RTX_FAIL; std::memcpy(&v, b + o, sizeof v); o += sizeof v; if (p) p->b = v != 0; }
+            else if (*c == 'U') { o = alignUp(o, alignof(COLOR)); COLOR v; if (o + sizeof v > sz) return RTX_FAIL; std::memcpy(&v, b + o, sizeof v); o += sizeof v; if (p) p->c = v; }
+            else if (*c == 'S') { o = alignUp(o, alignof(short)); short v; if (o + sizeof v > sz) return RTX_FAIL; std::memcpy(&v, b + o, sizeof v); o += sizeof v; if (p) p->list = v; }
+            else return RTX_FAIL;
+        }
+        return RTX_OK;
+    }
 };
 
 #define localtime_s(out, timep) gmtime_r((timep), (out))

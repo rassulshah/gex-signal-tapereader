@@ -111,7 +111,7 @@ static void testPlugin()
 static void testVersion()
 {
     std::ifstream f("SessionVWAP.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
-    CHECK(src.find("static const char* SV_VERSION = \"1.8.0\";") != std::string::npos && src.find("p->setVersion(\"1.8.0\");") != std::string::npos, "SV_VERSION == setVersion == 1.8.0 (1.6.2 = the settings window guard, 1.6.3 = the HOD/LOD keep-out)");
+    CHECK(src.find("static const char* SV_VERSION = \"1.8.1\";") != std::string::npos && src.find("p->setVersion(\"1.8.1\");") != std::string::npos, "SV_VERSION == setVersion == 1.8.1 (1.8.1 = native per-indicator settings; 1.6.2 = the settings window guard, 1.6.3 = the HOD/LOD keep-out)");
 }
 int main()
 {
