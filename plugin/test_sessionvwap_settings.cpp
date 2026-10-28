@@ -3,7 +3,7 @@
 // test_sessionvwap_settings.cpp -- lsSessionVWAP 1.5.0: the settings window (show box + colour per line, widths, overnight set,
 // prior RTH VWAP), the per-market file, and that the chart follows them (Rassul 2026-10-13 21:23 "session vwap settings don't
 // work. They should allow me to uncheck and remove bands as well as change colors").
-//   g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -ISessionVWAP_test_support -I. test_sessionvwap_settings.cpp
+//   g++ -std=c++17 -Wall -Wextra -Werror -DSVS_TEST_ALL_ON_DEFAULTS -fsanitize=address,undefined -ISessionVWAP_test_support -I. test_sessionvwap_settings.cpp
 // Part 1 = SessionVWAPStyle.h alone. Part 2 = the REAL SessionVWAP.cpp on the mock SDK (SessionVWAP_test_support/irtsdk.h): the
 // mock reads list / box / colour values only while `dialog` is true, as IRT does.
 #include "irtsdk.h"

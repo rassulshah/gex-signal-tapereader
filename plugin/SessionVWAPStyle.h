@@ -57,6 +57,15 @@ static const size_t FILE_MAX = 4096;
 // the five line kinds, in the plugin's output order (VWAP, +1, -1, +2, -2)
 enum { K_VWAP = 0, K_P1, K_M1, K_P2, K_M2, K_N };
 
+// (1.8.3) SVS_DEF_ON = the default of every line except the pivot VWAP: false in the plugin. The pre-1.8.3 test suites (181 / 182 /
+// settings / 160), which exercise the unchanged mechanisms from the old all-on look, compile with -DSVS_TEST_ALL_ON_DEFAULTS.
+#ifndef SVS_DEF_ON
+#ifdef SVS_TEST_ALL_ON_DEFAULTS
+#define SVS_DEF_ON true
+#else
+#define SVS_DEF_ON false
+#endif
+#endif
 struct Style {
     bool show[K_N];
     Colour col[K_N];
@@ -67,9 +76,12 @@ struct Style {
     Colour priorCol;
     Colour pivUp, pivDn; // (1.8.1) the pivot VWAP's two colours
     int pivW;           // (1.8.1) the pivot VWAP's width
-    Style() : vwapW(D_VWAP_W), bandW(D_BAND_W), on(true), prior(true), pivot(true), priorCol(D_PRTH), pivUp(D_PIV_UP), pivDn(D_PIV_DN), pivW(D_PIV_W) {
+    // (1.8.3, 2026-10-28 14:08 CT Rassul "only 1 vwap level should be displayed" - the 3-bar anchored pivot VWAP) defaults: ONLY the
+    // pivot VWAP is drawn (green above / red below, 2 px); session VWAP, the +-1 / +-2 SD bands, the overnight set and the prior RTH
+    // VWAP are off (their colours / widths keep their values, so ticking a box brings the line back in its usual style)
+    Style() : vwapW(D_VWAP_W), bandW(D_BAND_W), on(SVS_DEF_ON), prior(SVS_DEF_ON), pivot(true), priorCol(D_PRTH), pivUp(D_PIV_UP), pivDn(D_PIV_DN), pivW(D_PIV_W) {
         const Colour d[K_N] = { D_VWAP, D_P1, D_M1, D_P2, D_M2 };
-        for (int k = 0; k < K_N; ++k) { show[k] = true; col[k] = d[k]; }
+        for (int k = 0; k < K_N; ++k) { show[k] = SVS_DEF_ON; col[k] = d[k]; }
     }
     bool operator==(const Style& o) const {
         for (int k = 0; k < K_N; ++k) if (show[k] != o.show[k] || col[k] != o.col[k]) return false;

@@ -1,6 +1,6 @@
 // test_sessionvwap_182.cpp -- lsSessionVWAP 1.8.2 (2026-10-28, Rassul 11:27 CT "did you fix the session vwap. as you can see it isnt
 // working properly. can you fix this too and test it").
-//   g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -ISessionVWAP_test_support -I. test_sessionvwap_182.cpp && ./a.out
+//   g++ -std=c++17 -Wall -Wextra -Werror -DSVS_TEST_ALL_ON_DEFAULTS -fsanitize=address,undefined -ISessionVWAP_test_support -I. test_sessionvwap_182.cpp && ./a.out
 // What he saw (screenshot 11:27, Settings-dialog.log 11:25:52-11:26:00): the window of his ES 3m chart opened on VWAP unticked, VWAP
 // colour BLACK, 1 px - the set 1.8.1's parmsInit had carried over from the 1.8.0 record - and the chart drew no session VWAP.
 // Covers: defaults load = the intended 1.8.0 look; his exact record (a) read as the defaults when IRT keeps it, (b) replaced by the
@@ -97,7 +97,7 @@ static std::string readStatus(const std::string& dir)
 static void testAll(const std::string& dir)
 {
     const svs::Style D;
-    CHECK(svset::spec().paramVersion == 9, "parameter version 9 (IRT hands every 1.8.1 / 1.8.0 set to parmsInit)");
+    CHECK(svset::spec().paramVersion == 10, "parameter version 9 (IRT hands every 1.8.1 / 1.8.0 set to parmsInit)");
     CHECK(D.show[svs::K_VWAP] && D.col[svs::K_VWAP] == 0xFF80FF && D.vwapW == 2 && D.bandW == 1 && D.on && D.prior && D.pivot && D.pivW == 2,
           "intended defaults: VWAP on magenta 2 px, bands 1 px, overnight on, prior on, pivot on 2 px");
 
@@ -140,7 +140,7 @@ static void testAll(const std::string& dir)
         m = redraw(x, H);
         CHECK((int)H.lines.size() == total + pv && at2(m, 0xFF80FF, 2) == want[0] + want[5] && why(x, H) == "ok", "parmsInit(" << ver << "): drawn = defaults");
     }
-    { hisRecord(x, H); H.val[(size_t)x.P[svs::R_P1]].b = true; CHECK(x.parmsInit(9) == RTX_OK && H.val[(size_t)x.P[svs::R_VWAP]].b == false, "parmsInit(9): a current set is left alone"); }
+    { hisRecord(x, H); H.val[(size_t)x.P[svs::R_P1]].b = true; CHECK(x.parmsInit(10) == RTX_OK && H.val[(size_t)x.P[svs::R_VWAP]].b == false, "parmsInit(9): a current set is left alone"); }
     H.val = mock::declared;
 
     // ---- 3. every box: off -> its lines gone (only them), the window shows it unticked; on -> back
@@ -189,7 +189,7 @@ static void testAll(const std::string& dir)
         // ---- 7. the status file says what was drawn
         mock::current = &H; y.fill(0);
         const std::string st = readStatus(dir);
-        CHECK(st.find("VERSION,1.8.2\n") != std::string::npos && st.find("PARMS,native,ok\n") != std::string::npos, "status: VERSION 1.8.2, PARMS native ok");
+        CHECK(st.find("VERSION,1.8.3\n") != std::string::npos && st.find("PARMS,native,ok\n") != std::string::npos, "status: VERSION 1.8.2, PARMS native ok");
         CHECK(st.find("STYLE," + before + "\n") != std::string::npos, "status: STYLE line = the drawn style (" << before << ")");
         mock::current = &H; y.done();
     }
@@ -211,7 +211,7 @@ static void testVersion()
     std::ifstream f("SessionVWAP.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
     const size_t a = src.find("setVersion(\""), b = src.find("SV_VERSION = \"");
     const std::string v1 = src.substr(a + 12, src.find('"', a + 12) - a - 12), v2 = src.substr(b + 14, src.find('"', b + 14) - b - 14);
-    CHECK(v1 == v2 && v1 == "1.8.2" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.2 (setVersion literal = SV_VERSION = PLUGIN_VERSION)");
+    CHECK(v1 == v2 && v1 == "1.8.3" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.2 (setVersion literal = SV_VERSION = PLUGIN_VERSION)");
 }
 
 int main()

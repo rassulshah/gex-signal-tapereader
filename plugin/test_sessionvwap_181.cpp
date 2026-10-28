@@ -1,6 +1,6 @@
 // test_sessionvwap_181.cpp -- lsSessionVWAP 1.8.1: the chart reads IRT's OWN per-indicator parameter set (getParameters, template
 // svp::TEMPLATE), not the per-market file (Rassul 2026-10-27 22:47 CT "the settings never work for any indicator").
-//   g++ -std=c++17 -Wall -Wextra -ISessionVWAP_test_support -I. test_sessionvwap_181.cpp
+//   g++ -std=c++17 -Wall -Wextra -DSVS_TEST_ALL_ON_DEFAULTS -ISessionVWAP_test_support -I. test_sessionvwap_181.cpp
 // The mock SDK (SessionVWAP_test_support/irtsdk.h) hands each chart's saved set to getParameters in ANY copy (chart or window), lays the
 // struct out at natural alignment, and can refuse (parmsMode 1) or hand a blank set (parmsMode 2). One mock::Host = one indicator on
 // one chart; the window edits that host's set, as IRT stores the window's OK with the indicator.
@@ -71,7 +71,7 @@ static void testTemplate()
         const char want = S.rows[k].type == ss::T_BOOL ? 'B' : S.rows[k].type == ss::T_COLOR ? 'U' : S.rows[k].type == ss::T_LIST ? 'S' : '?';
         CHECK(t == want, "template token " << k << " matches the row type (" << S.rows[k].label << ")");
     }
-    CHECK(S.paramVersion == 9, "parameter version 9 (1.8.2: older sets reset to the defaults; rows unchanged since 1.8.1)");
+    CHECK(S.paramVersion == 10, "parameter version 9 (1.8.2: older sets reset to the defaults; rows unchanged since 1.8.1)");
     int commas = 0; const std::string d = svp::defaults(); for (char c : d) commas += c == ',';
     CHECK(commas == svs::R_COUNT - 1, "the defaults string has one value per row");
     svp::Parms z; std::memset(&z, 0, sizeof z); std::string why;
@@ -211,7 +211,7 @@ static void testVersion()
     std::ifstream f("SessionVWAP.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
     const size_t a = src.find("setVersion(\""), b = src.find("SV_VERSION = \"");
     const std::string v1 = src.substr(a + 12, src.find('"', a + 12) - a - 12), v2 = src.substr(b + 14, src.find('"', b + 14) - b - 14);
-    CHECK(v1 == v2 && v1 == "1.8.2" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.2");
+    CHECK(v1 == v2 && v1 == "1.8.3" && std::string(svset::PLUGIN_VERSION) == v1, "versions agree: 1.8.2");
 }
 
 int main()

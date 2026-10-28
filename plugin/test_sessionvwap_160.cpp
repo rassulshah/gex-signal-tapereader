@@ -1,5 +1,5 @@
 // test_sessionvwap_160.cpp -- lsSessionVWAP 1.6.0 (2026-10-18): the Market State post SRC "VWAP" (MARKET-STATE-SPEC 1.0).
-//   g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -ISessionVWAP_test_support -I. test_sessionvwap_160.cpp && ./a.out
+//   g++ -std=c++17 -Wall -Wextra -Werror -DSVS_TEST_ALL_ON_DEFAULTS -fsanitize=address,undefined -ISessionVWAP_test_support -I. test_sessionvwap_160.cpp && ./a.out
 // Part 1 = svl::vwapFacts alone (pos bands, slope rule, '?'). Part 2 = the REAL SessionVWAP.cpp on the mock SDK: the post equals the
 // outputs IRT holds at the last CLOSED bar (RTH and overnight), the bar stamp, re-post every 10 s only, decided once per bar, a second
 // chart has its own entry, done() clears it; the version literals.
@@ -111,7 +111,7 @@ static void testPlugin()
 static void testVersion()
 {
     std::ifstream f("SessionVWAP.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
-    CHECK(src.find("static const char* SV_VERSION = \"1.8.2\";") != std::string::npos && src.find("p->setVersion(\"1.8.2\");") != std::string::npos, "SV_VERSION == setVersion == 1.8.2 (1.8.2 = settings reset + window = drawing; 1.8.1 = native per-indicator settings; 1.6.2 = the settings window guard, 1.6.3 = the HOD/LOD keep-out)");
+    CHECK(src.find("static const char* SV_VERSION = \"1.8.3\";") != std::string::npos && src.find("p->setVersion(\"1.8.3\");") != std::string::npos, "SV_VERSION == setVersion == 1.8.3 (1.8.3 = pivot-only defaults + connected pivot line; 1.8.2 = settings reset + window = drawing; 1.8.1 = native per-indicator settings; 1.6.2 = the settings window guard, 1.6.3 = the HOD/LOD keep-out)");
 }
 int main()
 {
