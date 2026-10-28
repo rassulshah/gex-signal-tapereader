@@ -1892,6 +1892,11 @@ void LiquidityProfile::postState(LQState& S, long count, long long st) {
     }
     std::map<std::string, std::string> kv = lqp::lotsKv(L);
     for (std::map<std::string, std::string>::const_iterator it = S.mstLotsBar.begin(); it != S.mstLotsBar.end(); ++it) kv[it->first] = it->second;
+    // (0.62.0, Rassul 19:37 CT "part of the market awareness system") the LMT F tiers in force + where they came from + the last P facts
+    kv["lmtf_src"] = S.lmtFOk ? "file" : "biglot";
+    if (S.lmtFOk && S.lmtFRth >= 0) { kv["lmtf_s20"] = std::to_string(S.lmtF[S.lmtFRth][0]); kv["lmtf_s10"] = std::to_string(S.lmtF[S.lmtFRth][1]); kv["lmtf_s5"] = std::to_string(S.lmtF[S.lmtFRth][2]);
+        kv["lmtf_hrs"] = S.lmtFRth == 1 ? "RTH" : "ON"; }
+    kv["lmtf_prints"] = std::to_string(S.factsP.size());
     mst::publish("LOTS", S.symbol, S.spb, chart, st, S.mstBar, kv);
     mst::publish("LIQ", S.symbol, S.spb, chart, st, S.mstBar, S.mstLiq);
     selfAware(S, count, st, chart);   // (0.56.0) self-awareness

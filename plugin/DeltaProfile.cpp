@@ -911,6 +911,7 @@ private:
     void status(ChartState& s);
     void exhaust(ChartState& s, LatchBook& bk, const std::vector<dp::Bar>& window, double tick);   // (2.7.0)
     void absorbExhaust(ChartState& s, LatchBook& bk, const std::vector<dp::Bar>& window, double tick);   // (2.7.0) AE
+    void cmbFacts(ChartState& s, long long bar);   // (2.28.0) the combiner read in SRC DP
     void postMarketState(ChartState& s);   // (2.17.0) Market State SRC "DP", once per closed bar
     void selfAware(ChartState& s);   // (2.25.0) own values, own A signals + outcomes, SELFDP
     static int readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
@@ -2766,6 +2767,17 @@ void DeltaProfile::selfAware(ChartState& s) {
     const std::string why = "A " + how + " " + side + " x" + x + " @" + px + " node_x " + get("node_x") + " " + get("node_side");
     s.self.signal(s.market, s.colSpb, b.t, side == "bull" ? 1 : -1, std::string(), 50, dpNum(s.mstKv, "a_x"), why, b.c);
 }
+// (2.28.0, 2026-10-28 Rassul 19:37 CT "part of the market awareness system") the combiner's read of the closed candle in SRC DP for the
+// Tape Reader snapshot / lra-tools market_state: cmb = none | pending | bull | bear, cmb_turn / cmb_swing = the odds, cmb_status = SHOW
+// (proven, drawn) or "?" (LOG only - LRA-Combiner.csv STATUS), cmb_a = the READ A on that candle (1 / 0)
+void DeltaProfile::cmbFacts(ChartState& s, long long bar) {
+    std::map<long long, cmb::Read>::const_iterator it = s.cmbReads.find(bar);
+    if (it == s.cmbReads.end()) { s.mstKv["cmb"] = "pending"; return; }
+    if (!it->second.pivot) { s.mstKv["cmb"] = "none"; return; }
+    s.mstKv["cmb"] = it->second.bull ? "bull" : "bear";
+    s.mstKv["cmb_turn"] = mst::num(it->second.turn, 3); s.mstKv["cmb_swing"] = mst::num(it->second.swing, 3);
+    s.mstKv["cmb_status"] = s.cmbParams.showOn ? "SHOW" : "?"; s.mstKv["cmb_a"] = it->second.f[0] > 0.5 ? "1" : "0";
+}
 void DeltaProfile::postMarketState(ChartState& s) {
     if (!s.ready || s.colSym.empty() || s.shortHistory || s.coarseBoundary) return;
     const long count = getBarCount();
@@ -2778,6 +2790,7 @@ void DeltaProfile::postMarketState(ChartState& s) {
     const std::int64_t now = steadyMs();
     if (bar <= 0) return;
     if (bar == s.mstBar) {                                                          // same bar: re-post the same facts to stay fresh
+        if (s.mstKv.count("cmb") == 0 || s.mstKv["cmb"] == "pending") { cmbFacts(s, bar); if (s.mstKv["cmb"] != "pending") s.mstAt = -1; }   // (2.28.0) the combiner decided after the first post
         if (s.mstAt >= 0 && now - s.mstAt < 20000) return;
         mst::publish("DP", s.colSym, s.colSpb, s.chartKey, now, s.mstBar, s.mstKv); s.mstAt = now; s.mstPosted = true; return;
     }
@@ -2800,6 +2813,7 @@ void DeltaProfile::postMarketState(ChartState& s) {
     s.mstDecT = std::max<long long>(maxDec, 0); s.mstFailT = std::max<long long>(maxFail, 0);   // the first post reports no history
     s.mstKv = dp::dpFacts(top, onBar, conf, fail, s.tick);
     s.mstKv["version"] = DLT_VERSION;
+    cmbFacts(s, bar);   // (2.28.0)
     mst::publish("DP", s.colSym, s.colSpb, s.chartKey, now, bar, s.mstKv);
     s.mstBar = bar; s.mstAt = now; s.mstPosted = true;
     s.mstNote = "bar " + std::to_string(bar) + " a " + s.mstKv["a"] + " node " + s.mstKv["node_px"] + " " + s.mstKv["node_x"] + "x";

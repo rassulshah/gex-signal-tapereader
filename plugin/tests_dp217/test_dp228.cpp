@@ -63,6 +63,9 @@ int main() {
         const std::vector<std::string> f = cmb::split(line, ',');
         check(f.size() == 7 + cmb::NF && f[2] == "1" && f[6] == "1" && f[7] == "1" && f[8] == "1" && f[19] == "1", "[combiner] inputs: bullish, levels seen, A = 1, wick = 1, key level = 1");
         std::vector<sb::Fact> K; check(sb::readFacts('K', "ESZ26", 180, "test", steadyMs(), K, true) && !K.empty() && K[0].val > 0 && K[0].val < 100, "[combiner] K fact posted with odds in (0, 100)");
+        {   redraw(h, p); const mst::Facts F = mst::read("DP", "ESZ26", 180, "test", steadyMs());   // (awareness) the read in SRC DP
+            check(mst::getS(F, "cmb") == "bull" && mst::getD(F, "cmb_turn") > 0 && mst::getS(F, "cmb_a") == "1" && mst::getS(F, "cmb_status") == "SHOW",
+                  "[awareness] Market State SRC DP carries the combiner read of the closed candle (cmb bull, odds, A, status)"); }
         const std::string st = slurp(flex + "DeltaProfile.status-ES-180.txt");
         check(st.find("COMBINER,0.1.0") != std::string::npos && st.find("READ,strip 26 px,A drawn 1") != std::string::npos && st.find("FACTS,SignalBoard 1.4.0") != std::string::npos, "[status] READ / FACTS / COMBINER lines");
         const int k0 = kLines(rec);
@@ -78,6 +81,20 @@ int main() {
         std::string kb; bb::bbGet(sb::factKey('C', "ESZ26", 180, "test"), kb);
         check(state(h).cmbReads.size() <= 2000 && kb.size() < 16000, "[bounded] reads and board size bounded over 300 candles");
         finish(h, p2); }
+    // 1b) LOG ONLY: LRA-Combiner.csv STATUS,turn,LOG -> nothing drawn, K facts "?", SRC DP cmb_status "?"
+    {   home("logonly");
+        { std::ofstream f((flex + "LRA-Combiner.csv").c_str()); std::ifstream in("../tests_chain/LRA-Combiner.csv"); std::string l;
+          while (std::getline(in, l)) f << (l == "STATUS,turn,SHOW" ? std::string("STATUS,turn,LOG") : l) << "\n"; }
+        std::vector<sb::Fact> v(1); v[0].bar = 1; v[0].lo = v[0].hi = 104.25; v[0].side = 1; v[0].code = 3; v[0].state = 1;
+        sb::postFacts('V', "ESZ26", 180, "test", steadyMs(), v);
+        mock::Host h = chart(); addq(h);
+        DeltaProfile p; redraw(h, p); redraw(h, p); redraw(h, p);
+        bool pct = false; for (const mock::Draw& d : h.draws) if (d.type == "text" && !d.text.empty() && d.text.back() == '%') pct = true;
+        std::vector<sb::Fact> K; sb::readFacts('K', "ESZ26", 180, "test", steadyMs(), K, true);
+        const mst::Facts F = mst::read("DP", "ESZ26", 180, "test", steadyMs());
+        check(!state(h).cmbParams.showOn && !pct && !K.empty() && K[0].proven == 2 && mst::getS(F, "cmb_status") == "?",
+              "[log only] STATUS LOG: no % drawn, K facts '?', SRC DP cmb_status '?', still scored and logged");
+        finish(h, p); }
     // 2) load order: the level producer arrives AFTER this chart -> the read waits (deferred) and decides WITH the level, same as case 1
     {   home("order");
         bb::bbSet(sb::factKey('V', "ESZ26", 180, "test"), "");

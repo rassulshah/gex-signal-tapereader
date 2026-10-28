@@ -65,6 +65,10 @@ int main() {
     usleep(1100000); h.now = t0 + 200; p->calc(0); h.draws.clear(); p->draw(); usleep(1100000); h.now = t0 + 202; p->calc(0);
     const std::string st = readAll(flex + "\\LiquidityProfile.status-ES-180.txt");
     CHECK(st.find("LMT_F,tiers LRA-LmtF file,RTH S20 100 S10 200 S5 300") != std::string::npos, "status LMT_F line");
+    {   S->mstMs -= 20000; h.now = t0 + 204; p->calc(0);   // the 15 s re-post (the first post of the bar came before the tiers file was read)
+        std::map<std::string, mst::Facts> all = mst::readAll(S->symbol, S->spb, S->chartKey, -1); const mst::Facts& F = all["LOTS"];   // (awareness)
+        CHECK(mst::getS(F, "lmtf_src") == "file" && mst::getS(F, "lmtf_s20") == "100" && mst::getS(F, "lmtf_s5") == "300" && mst::getS(F, "lmtf_hrs") == "RTH",
+              "Market State SRC LOTS carries the LMT F tiers in force (file, RTH, 100 / 200 / 300)"); }
     std::printf("lsLiquidityProfile %s LMT F host: %d passed, %d failed\n", LQ_VERSION, passes, fails);
     return fails ? 1 : 0;
 }
