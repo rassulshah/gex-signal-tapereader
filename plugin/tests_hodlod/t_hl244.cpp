@@ -92,13 +92,21 @@ int main() {
         hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, 1530, 520 }, yOf, measure, 960, 7, -1, nullptr, nullptr);
         const std::vector<hl::Item> tx = texts(L);
         // (2.5.0) the ladder, low -> high: [S] supports green (lowest first) | the spot + distances | resistances red (nearest first) [R]
-        CHECK(has(tx, "S", hl::C_GREEN) && has(tx, "R", hl::C_RED) && has(tx, "7700", hl::C_RED) && has(tx, "7750", hl::C_RED) && has(tx, "7800", hl::C_RED)
+        CHECK(!has(tx, "S", hl::C_GREEN) && !has(tx, "R", hl::C_RED) && has(tx, "7700", hl::C_RED) && has(tx, "7750", hl::C_RED) && has(tx, "7800", hl::C_RED)
               && has(tx, "7650", hl::C_GREEN) && has(tx, "7640", hl::C_GREEN) && has(tx, "7625", hl::C_GREEN) && has(tx, "PS/PS0", hl::C_GREY) && has(tx, "G1", hl::C_GREY),
-              "S + supports GREEN, R + resistances RED, the MenthorQ name under its strike (grey)");
+              "(2.11.0) no S / R squares; supports GREEN, resistances RED, the MenthorQ name under its strike (grey)");
         auto xOf = [&](const std::string& t) { for (const hl::Item& it : tx) if (it.s == t && it.t >= L.gexRow.t && it.b <= L.gexRow.b) return it.l; return -1; };
         const int xS = xOf("S"), x25 = xOf("7625"), x40 = xOf("7640"), x50 = xOf("7650"), xP = xOf("7,717.50"), x00 = xOf("7700"), x75 = xOf("7750"), x80 = xOf("7800"), xR = xOf("R");
-        CHECK(xS >= 0 && xS < x25 && x25 < x40 && x40 < x50 && x50 < xP && xP < x00 && x00 < x75 && x75 < x80 && x80 < xR,
+        CHECK(xS < 0 && xR < 0 && x25 >= 0 && x25 < x40 && x40 < x50 && x50 < xP && xP < x00 && x00 < x75 && x75 < x80,
               "supports BEFORE the spot BEFORE resistances, low -> high (Rassul 10:37)");
+        {   // (2.11.0, Rassul 12:50 CT "make the white price a little smaller so it doesn't fall into the values below it") the spot: 2 steps smaller
+            // (strike font + 1, was + 3), its text box ends above the distance row's box, and its glyph height (pt * 96 / 72) fits its own box
+            const hl::Item* sp = nullptr; const hl::Item* st = nullptr; const hl::Item* ds = nullptr;
+            for (const hl::Item& it : tx) { if (it.s == "7,717.50" && it.t >= L.gexRow.t && it.b <= L.gexRow.b) sp = &it; if (it.s == "7625" && it.t >= L.gexRow.t && it.b <= L.gexRow.b) st = &it;
+                if (it.t >= L.gexRow.t && it.b <= L.gexRow.b && !it.s.empty() && it.s[0] == '-' && it.c1 == hl::C_GREEN) ds = &it; }
+            CHECK(sp && st && sp->fs == st->fs + 1 && sp->c1 == 0x00FFFFFF, "(2.11.0) the spot price 2 steps smaller: strike font + 1 (was + 3)");
+            CHECK(sp && ds && sp->b <= ds->t && (int)(sp->fs * 96.0 / 72.0 + 0.5) <= sp->b - sp->t + 1, "(2.11.0) the spot fits its own row, never into the distance row below" + (sp && ds ? " (" + std::to_string(sp->t) + "-" + std::to_string(sp->b) + " vs " + std::to_string(ds->t) + ")" : std::string()));
+        }
         CHECK(has(tx, "7,717.50", 0x00FFFFFF), "the spot price in the ladder, white, bigger");
         { int fsP = 0, fs0 = 0; for (const hl::Item& it : tx) { if (it.s == "7,717.50") fsP = it.fs; if (it.s == "7700") fs0 = it.fs; } CHECK(fsP > fs0, "the spot's font is bigger than a strike's"); }
         CHECK(has(tx, "-67.50", hl::C_GREEN) && has(tx, "+17.50", hl::C_RED), "distance to the nearest support (green) and resistance (red) under the spot");

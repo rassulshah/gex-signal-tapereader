@@ -55,7 +55,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.10.0";   // (2.10.0, 2026-10-28 12:16 CT Rassul "move the hod lod box aligned with the liquidity profile on the left") the table docks at the TOP-LEFT of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0) while that column is on the chart
+static const char* const HL_VERSION = "2.11.0";   // (2.11.0, 2026-10-28 12:50-12:56 CT Rassul "get rid of the S and R in the hod lod box, make the white price a little smaller so it doesn't fall into the values below it"; his picture circled the green S, the red R and the big price) the Gex S/R ladder has NO S / R squares; the spot price is drawn 2 steps smaller (fs + 1, was fs + 3) inside the top row only (never into the distance row below); the docked table sits bottom-left, right of the Key Levels column (ColumnBoard 1.9.1)   // was (2.10.0, 2026-10-28 12:16 CT Rassul "move the hod lod box aligned with the liquidity profile on the left") the table docks at the TOP-LEFT of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0) while that column is on the chart
 // was 2.9.3:   // (2.9.3, 2026-10-28 06:38 CT) the visible candles are keep-outs: the table + strip dock where they cover no candle (Rassul's rule "callouts never cover candles"); the left Liquidity column is gone (ColumnBoard 1.8.0)   // (2.9.2, 2026-10-28) GAMMA / Gex S/R freshness judged by ARRIVAL (Fresh.h 1.1.0: 20 min RTH, 45 min overnight) - the "GAMMA STALE" overnight while MenthorQ sets were arriving every 5 min   // (2.9.1, 2026-10-28) the table keeps right of the left Liquidity column (ColumnBoard leftKeep)   // (2.9.0, 2026-10-26) self-awareness SELFHL (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (2.8.0, 2026-10-26) smart-read hook (AwareHook.h 0.1.0, TEAM-DESIGN.md): posts AWHODLOD for each closed bar once lsContext has posted CTX for it (or after 3 s), records the isolated + aware read in lsFlexLevels\\Context-AWR-<MKT>-<spb>s-<day>.rec; links OFF per market (LRA-Context-<MKT>.csv) so aware = isolated and nothing drawn changes (facts only)   // (2.7.1, 2026-10-22 evening fix build) the day-type log creates lsFlexLevels\\HodLod first ("log fails 17");   // (2.7.0, 2026-10-22 evening, Rassul approved 17:39 CT) the DAY TYPE folded into the header trend ("Uptrend \xB7 Trend day ?" green / "Dntrend \xB7 Trend day ?" red / "Balance \xB7 Rotation day ?" plain; DayTypeLogic.h, price only, live from closed bars; hover = what fired); the NEWS / SETTLE window note row and the "Feed ?" row (NewsWindow.h); the Pre row is LOG ONLY by default (LRA-PreOpen-<MKT>.csv PARAM,SHOW - VALIDATE-CONTEXT-MARKS 2026-10-22: the call never fired, 0 of 42 sessions);   // (2.6.0, 2026-10-22, Rassul 15:57 CT "yes hod lod box", MBO Roadmap T-20261022-29) the PRE-OPEN BOOK row "Pre" under Est (PreOpenLogic.h): from 30 min before the RTH open to 60 min after, the MBO book near price in the last N minutes before the open (bids vs offers, % that stayed, the opening imbalance) and an untested lean "1st LOW early ?"; its own hover (question / what / why / how / example + the numbers);   // (2.5.0, 2026-10-21 10:56 CT, Rassul approved mockup v1 "ok.. build") the Gex S/R LADDER low -> high (supports, the spot with its distance to the nearest S / R, resistances) as the card's top band; the header band with a +GAMMA / -GAMMA pill and the trend in full ("Strong Uptrend"); the regime from the LIVE Gex S/R file's HVL0 when the HVL book is stale; row dividers; footer "Options exp 3:00 PM" . version right;   // (2.4.6, 2026-10-18 20:28 CT, Rassul "remove the hoverover on gext strikes and the hod lod box") the Gex S/R strip and header hovers are off (HodLod.cpp HL_HOVERS);  // (2.4.5, 2026-10-18 19:13 CT, Rassul "right justify the 2nd column" + outside RTH "just keep it blank" - "prior RTH 10/16 ... doesnt make any sense") the 2nd column (heading, Exp, Act, Est) is right-aligned to the table edge; the Est row stays (same height) but is empty while the box shows the prior session;  // (2.4.4, 2026-10-18, Rassul approved 17:13 CT "build") the COMPACT table (~350 px, columns sized to their text; Exp / Act / Est; header "ES M2 O0 V2  Neg . S.Dn"; footer "Exp 3:00 PM . v2.4.4") + the Gex S/R on its own strip ABOVE it (R green / S red); the removed words in the hovers; Offset X / Y removed (9-spot Position only);   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
 // (2.3.0)   // (2.3.0, Rassul 2026-10-17 19:53-20:20) MenthorQ Q-Scores "Q: M1 O1 V4" top left (hover = the meaning), "Reg: Neg / S. Dntrend" top right; Gex S/R = the BAND rule: 3 biggest abs-GEX strikes from the RTH open up to the 1.38 extension of the 1D Max (red, a drawn up triangle first) | price | 3 down to the 1.38 extension of the 1D Min (green, a down triangle first)
 // (2.2.4)   // (2.2.4, Rassul 2026-10-17) Gex S/R row: the 3 nearest levels ABOVE price first (red), the current price, then the 3 nearest BELOW (green), MenthorQ name BEFORE each price (blue);   // (2.2.3) header "Reg: Neg / S. Uptrend" (shorter);   // (2.2.2) a reached projection: grey line + flag, no callout, table "Proj HOD x hit h:mm"; (2.2.1) projection levels within 10% of the range, with their prices, + the nearest Gex S/R strike //   // (2.2.0, Rassul 10-15 12:01) Gex S/R row above Estimate; the price / gamma level at the projection (table + under the flag) //   // (2.1.2, Rassul 10-15) no "|" in the GEX row - one separator for all strikes //   // (2.1.1, Rassul 22:23) 2.2.0 audit wording reverted - "Regime: Neg", no "in test" / "?" additions; GEX line kept //   // (2.1.0, 2026-10-14) the GEX line (HodLodGex.h)
@@ -1704,28 +1704,28 @@ struct LadderGeo { std::vector<int> ws, wr; int tagW = 0, spotW = 0, sideW = 0, 
 inline int rungW(const Rung& r, const Measure& M, int fs) { return (std::max)(M(r.strike, fs, true) + (r.grow ? gexArrowW(fs) : 0), r.name.empty() ? 0 : M(r.name, fs, false)) + 12; }
 inline LadderGeo ladderGeo(const Ladder& Lr, const Measure& M, int fs)
 {
-    LadderGeo G; G.sfs = fs + 3;
+    LadderGeo G; G.sfs = fs + 1;   // (2.11.0) 2 steps smaller (was fs + 3): it fits its cell, clear of the distance row
     int sl = 0, sr = 0;
     for (const Rung& r : Lr.sup) { G.ws.push_back(rungW(r, M, fs)); sl += G.ws.back(); }
     for (const Rung& r : Lr.res) { G.wr.push_back(rungW(r, M, fs)); sr += G.wr.back(); }
-    G.tagW = M("S", fs, true) + 8;
+    G.tagW = 0;   // (2.11.0) no S / R squares (was M("S", fs, true) + 8)
     const std::string dist = Lr.distS + (Lr.distS.empty() || Lr.distR.empty() ? "" : " \xB7 ") + Lr.distR;
     G.spotW = (std::max)(M(Lr.spot, G.sfs, true), M(dist, fs, false)) + 24;
     G.staleW = Lr.stale.empty() ? 0 : M("  " + Lr.stale, fs, false);
-    G.sideW = (std::max)(8 + G.tagW + 8 + sl, sr + 8 + G.tagW + G.staleW + 8);
+    G.sideW = (std::max)(8 + sl, sr + G.staleW + 8);   // (2.11.0) no tag room
     G.W = 2 * G.sideW + G.spotW;
-    G.H = 3 + lineH(fs) + lineH(fs) - 4 + 3;
+    G.H = 3 + lineH(fs) + lineH(fs) - 1 + 3;   // (2.11.0) the second row starts 1 px (was 4) above the first row's bottom: the spot never reaches it
     return G;
 }
 inline void layoutLadder(Layout& L, const Ladder& Lr, const LadderGeo& G, const Box& Sb, const Measure& M, int fs)
 {
     addRect(L, Sb.l, Sb.t, Sb.r, Sb.b, C_BORDER, C_PANEL, 1, R_TABLE);
     const int cx0 = (Sb.l + Sb.r) / 2 - G.spotW / 2, cx1 = cx0 + G.spotW;
-    const int t1 = Sb.t + 3, b1 = t1 + lineH(fs), t2 = b1 - 4, b2 = Sb.b - 3;
+    const int t1 = Sb.t + 3, b1 = t1 + lineH(fs), t2 = b1 - 1, b2 = Sb.b - 3;   // (2.11.0) t2 = b1 - 1 (was b1 - 4)
     // the spot cell
     addFill(L, cx0, Sb.t + 1, cx1, Sb.b - 1, C_SPOT, R_TABLE);
     addLine(L, cx0, Sb.t + 1, cx0, Sb.b - 1, C_BORDER, 1, R_TABLE); addLine(L, cx1, Sb.t + 1, cx1, Sb.b - 1, C_BORDER, 1, R_TABLE);
-    if (!Lr.spot.empty()) { const int w = M(Lr.spot, G.sfs, true); addText(L, (cx0 + cx1 - w) / 2, t1 - 1, b1 + 1, Lr.spot, 0x00FFFFFF, G.sfs, true, w, R_TABLE, -1); }
+    if (!Lr.spot.empty()) { const int w = M(Lr.spot, G.sfs, true); addText(L, (cx0 + cx1 - w) / 2, t1 - 1, t2 - 1, Lr.spot, 0x00FFFFFF, G.sfs, true, w, R_TABLE, -1); }   // (2.11.0) its own row only (was to b1 + 1, into the distance row)
     {   const std::string sep = Lr.distS.empty() || Lr.distR.empty() ? "" : " \xB7 ";
         const int w = M(Lr.distS + sep + Lr.distR, fs, false); int x = (cx0 + cx1 - w) / 2;
         if (!Lr.distS.empty()) { const int ww = M(Lr.distS, fs, false); addText(L, x, t2, b2, Lr.distS, C_GREEN, fs, false, ww, R_TABLE, -1); x += ww; }
@@ -1739,17 +1739,16 @@ inline void layoutLadder(Layout& L, const Ladder& Lr, const LadderGeo& G, const 
                       addLine(L, ax, y0, ax, y1, col, 2, R_TABLE); addLine(L, ax - 3, y1 + 3, ax, y1, col, 2, R_TABLE); addLine(L, ax + 3, y1 + 3, ax, y1, col, 2, R_TABLE); }
         if (!r.name.empty()) { const int nw = M(r.name, fs, false); addText(L, x + (w - 12 - nw) / 2 + 6, t2, b2, r.name, C_GREY, fs, false, nw, R_TABLE, -1); }
     };
-    auto tag = [&](int x, const char* t, unsigned col) { const int w = G.tagW, yc = (Sb.t + Sb.b) / 2, h = lineH(fs) - 2;
-        addRect(L, x, yc - h / 2, x + w, yc + h / 2, col, C_PANEL, 1, R_TABLE); addText(L, x + 4, yc - h / 2, yc + h / 2, t, col, fs, true, w - 8, R_TABLE, -1); };
+    // (2.11.0) the S / R tag squares are gone (no tag lambda)
     if (!Lr.sup.empty()) {   // supports: lowest first, ending at the spot cell
         int sum = 0; for (int w : G.ws) sum += w;
-        int x = cx0 - 4 - sum; tag(Sb.l + 8, "S", C_GREEN);
+        int x = cx0 - 4 - sum;   // (2.11.0) no "S" square (Rassul 12:50 CT "get rid of the S and R")
         for (size_t i = 0; i < Lr.sup.size(); i++) { rung(Lr.sup[i], x, G.ws[i], C_GREEN); x += G.ws[i]; }
     }
     if (!Lr.res.empty()) {   // resistances: nearest first, from the spot cell
         int x = cx1 + 4;
         for (size_t i = 0; i < Lr.res.size(); i++) { rung(Lr.res[i], x, G.wr[i], C_RED); x += G.wr[i]; }
-        tag(Sb.r - 8 - G.staleW - G.tagW, "R", C_RED);
+        // (2.11.0) no "R" square
     }
     if (!Lr.stale.empty()) { const std::string st = "  " + Lr.stale; addText(L, Sb.r - 8 - G.staleW, Sb.t + 1, Sb.b - 1, st, C_GREY, fs, false, G.staleW, R_TABLE, -1); }
 }

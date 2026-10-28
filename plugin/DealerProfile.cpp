@@ -135,7 +135,8 @@ static void* dpCursorWindow() { return NULL; }
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.33.0";   // (2.33.0, 2026-10-28, Rassul 12:16-12:18 CT "i want a column for levels and move all the level badges in the levels column because the chart is too messy. also move the hod lod box aligned with the liquidity profile on the left"; "build everything and do it now") the KEY LEVELS column at the pane's LEFT edge (ColumnBoard 1.9.0): every level badge in it at its own price row (stacked, tick to its line), the HOD/LOD table docked at its top (lsHodLod 2.10.0), thin level lines from the column to LMT F, no badge in the price area, no liquidity rank chip on the badges
+static const char* DP_VERSION = "2.34.0";   // (2.34.0, 2026-10-28 12:50 CT Rassul "regarding the levels it should only be the key price levels and the volume levels, 1 vwap level which is the latest. lets not have the gamma levels right now. the percentages should be behind the level names to the left justified. and the level name and value should be right justified. the hod lod should be on the right of the level column not in it") the Key Levels column holds ONLY key levels + volume levels + ONE VWAP badge (the latest session VWAP, computed here from the chart bars with SessionVWAPLogic - RTH during / after RTH, else the overnight one; never the +-1 / +-2 bands), no gamma; inside each row the odds are LEFT-justified at the column's left edge and the name chips + price RIGHT-justified at its right edge (next to the candles); the HOD/LOD table no longer docks in the column (lsHodLod 2.11.0 docks it bottom-left, right of it - ColumnBoard 1.9.1): the column keeps its full height and width; HELD words step clear of that table
+// was 2.33.0:   // (2.33.0, 2026-10-28, Rassul 12:16-12:18 CT "i want a column for levels and move all the level badges in the levels column because the chart is too messy. also move the hod lod box aligned with the liquidity profile on the left"; "build everything and do it now") the KEY LEVELS column at the pane's LEFT edge (ColumnBoard 1.9.0): every level badge in it at its own price row (stacked, tick to its line), the HOD/LOD table docked at its top (lsHodLod 2.10.0), thin level lines from the column to LMT F, no badge in the price area, no liquidity rank chip on the badges
 // was 2.32.0:   // (2.32.0, 2026-10-28, Rassul approved the liquidity-column build 11:05 CT; 11:08 CT "i also like the held signal ... show it when it held"; 11:27 CT "the HELD lines that show held and the line", top 3 within 3 ATR) (1) the Liquidity column shows the KING + the next 2 = TOP 3 real orders, ranked over the posted book WITHIN 3 ATR (3-min) of the last price only (DP_TOPN 3, DP_REACH_ATR); the off-screen king edge marker unchanged; (2) HELD: a shown (king / top-3) level that held after its touch (0.5 ATR away before 0.25 ATR through - the 10-28 study outcome, decided by lsLiquidityProfile 0.66.0, SignalBoard S) gets its line BRIGHT in the side colour from the touch candle to the HELD candle and the word HELD right of it (bid green, offer red), never over candles or level badges; final, never repainted (DealerProfile.touch-<MKT>-<spb>.csv keeps what was latched / drawn, read back after a restart); untested lines stay dim; (3) the 15-s TOUCH TAG in the Liquidity column at the level's row (STAYS+ / STAYS / GONE / GONE+; STAYS weak grey): bid STAYS / offer GONE green, offer STAYS / bid GONE red; short text only; shown until the outcome; a level that left the top 3 keeps a tag-only row at its price; only levels that were SHOWN when they were touched (latched at the touch)   // was (2.31.2) (2.31.2, 2026-10-28 10:03 CT Rassul "you have too many nodes .. top 5 means 5 nodes") the liquidity column shows the TOP 5 REAL orders in total (both sides together; real = rested 30 s+ and re-priced under 2 times in 5 min; no "~" rows), DP_TOPN; the steady board still tracks 10 so #6-#10 wait as challengers (no flicker); the rest unchanged   // was (2.31.1, 2026-10-28 09:43-09:47 CT Rassul: the king persistence / fade rule, "I like the way the king node is now", "when I scroll up I see another king node") the liquidity top 10 is ranked over the WHOLE book LiquidityProfile posts (its reach around the current price), never only the levels inside the visible pane - the king / ranks no longer change when the chart is scrolled; only the drawing is clipped (an off-screen king = a small edge marker with K and its price); a moving / quoting order (re-priced in 5 min, LevelFade.h 1.0.0, tracked by level: a same-size re-add at the same price under a new order id is the same level, not a move) is DIMMED with "~" instead of dropped (the 2.31.0 drop at 3 moves is gone); the king = rank 1 exactly as before (biggest in the column's reach), a moving king stays king with "~"; never more than 10 rows   // was (2.31.0, 2026-10-28 06:38-06:45 CT Rassul: "still moves some", "shows more than the top10", "rank and amount should switch places", option R "keep the liquidity profile behind the delta profile") the LIQUIDITY top 10 in its own column on the RIGHT after the Delta Profile (ColumnBoard 1.8.0): rank nearest price | bar pointing toward price | lots at the outer edge; a STEADY top 10 (Top10Stable.h 1.0.0: in after 30 s and 1.20x the #10, out 10 s after the order is gone, ranks swap at 1.25x of the 20 s smoothed size, never more than 10); the level badge rank on the badge RIGHT end (facing the column); level lines stop at the price area (never cross LMT F / Delta); badges keep clear of the HOD/LOD box (BoxDock LRA_HLB_)  // was   // (2.30.0, 2026-10-28 overnight build, Rassul 19:08 CT layout) the LIQUIDITY column at the pane's LEFT edge (ColumnBoard 1.6.0) = the TOP 10 resting big orders on screen from lsLiquidityProfile (SignalBoard 1.4.0 'B'), ranked by lots (this indicator owns the rank), bars pointing toward price, a faint order line toward price; each level's badge carries the rank on its LEFT end (the best-ranked order from the level out to 1 ATR beyond it - his rule); level lines run from the column to the LMT F column; posts 'V' (levels) and 'Q' (top 10) facts // was 2.29.0: (2.29.0, 2026-10-27 Rassul 14:35-14:58 CT, mockups level_lines / liqrank / tag_compare) LEVEL LINES: each key / volume level is a line across the price area (right of the left Delta column) with ONE badge centred on it - chips, price, odds, the liquidity rank (top 10) at its end; DPoc cyan, WPoc bright cyan; gamma levels off for now (DP_GAMMA); the Levels column is now the narrow LIQUIDITY column (rank + the big limit orders within 0.5 ATR of the level, LevelsColumn 1.1.0) // was 2.28.0:   // (2.28.0, 2026-10-27, Rassul approved 13:30-13:39 CT "i think this is a cleaner approach. build", mockup levels_final.png) ONE combined LEVELS + LIQUIDITY column: each row = [rank] [liquidity: the big limit orders at the level from lsLiquidityProfile 0.60.0, "800 + 50", red offers / green bids, fill = lots vs the biggest] [level chips: key (solid, SessionPrices colours) then volume (amber outline) then gamma (violet outline) - his 13:37 order] [price] [the % block]; levels within max(2 ticks, 0.3 ATR) share a row; rank 1 = most resting lots on screen (tie: nearer price); every MenthorQ gamma level shown (G2-G10 no longer hidden) + the 3 biggest unnamed gamma strikes as a violet "GEX" row; the nearest level off screen above / below; the Dealer Profile BARS are off (13:36-13:38 "do we need the dealer profile since it is already mentioned in the level" / "lets just get rid of it") - the header (version / STALE) moves to the top of the Levels column; no hovers, no dealers column, no ratio (LevelsColumn.h 1.0.0)   // was 2.27.0:   // (2.27.0, 2026-10-27) the QUEUE METER is no longer drawn in the Levels column (Rassul 2026-10-27 00:43 CT "i dont see the queue helping at all, remove it but you can continue logging it"); its record / file unchanged (lsLiquidityProfile writes it) //   // (2.26.0, 2026-10-26) self-awareness SELFGEX (SelfAware.h, SELF-AWARE.md; ships OFF per market) // 2.25.0 (2026-10-24) level badges = name | price | % block only: no liquidity ratio, no level line after the badge
 // prior: "2.24.0";   // 2.23.0 (2026-10-22 evening fix build) QueueMeter.h 1.3.0: the meter badge reads "G1  Q 143 (2.4x)" (lots + the ratio to the normal queue there), the fill / percent only once the queue reached the normal, hover percent capped "200%+" //   // 2.22.0 (2026-10-22 evening, Rassul 17:55 CT "more readable"; QueueMeter.h 1.2.0): the meter badge reads "G1  Q 76%" (wider gap, a space after Q; unlabelled "Q 41%"), no "?" on the badge in any market (NQ / GC still red call only); news / settle window and feed-check lines in the meter hover, a failed feed check = no call outline // 2.21.0 (2026-10-22 evening, the queue meter validation verdict VALIDATE-DEFENDER-SIZE-2026-10-22.md): the meter badge OUTLINE follows the 10-s CALL from lsLiquidityProfile 0.50.0 - 2 px red = under 40% left 10 s after contact (expect the break), 2 px green = 100%+ and holding (ES / CL only); "?" after the text in NQ / GC (red only); no call / LOG markets = 1 px grey (yellow 2 px when the originals are gone); the hover gives the market's out-of-sample odds; the candle-close Q is a record only (its hover line says so); the live file is now LRA-QueueLive-<MKT>.csv //   // 2.20.0 (2026-10-22, Rassul approved the QUEUE METER 13:51-13:52 CT, build ordered 15:20 CT, mockup queue-placement.png panel A): the Levels column doubles as the meter column - the level badge at a tested price fills left to right with the queue left vs the start (green bids defending a low, red offers a high), "G1 Q76%"; originals gone = yellow outline / text "Q33% . orig 0%"; a tested price with no key level (pivot / suddenly defended) = a small unlabeled badge "Q33%"; only within the reach (default 1 ATR) of price; text shrinks to fit, never outside the Levels column; hover with the numbers (? not proven yet); from lsLiquidityProfile 0.49.0's lsFlexLevels\\LRA-QueueMeter-<MKT>.csv (QueueMeter.h 1.0.0; missing / stale > 5 s / garbled = normal badges, QUEUE_METER status line); settings Queue meter / Reach (ATR) / colours (parameter version 9) //   // 2.19.0 (2026-10-21 22:30 CT, Rassul approved Option B + 22:52 "show both hod and lod badges tomorrow on all markets"): the level % badges - next to every level badge a block "33%  /  66%" = how often the 1st / the final LOD (level below the RTH open) or HOD (above) came within 0.25 ADR of it, green outline = beats a random price the same distance from the open, grey = no better; from lsFlexLevels\LRA-LevelBadges-<MKT>.csv (nightly lra.hodlod_levels 1.2.0, per market; missing / garbled = no block, LEVEL_PCT status line); the block alone has a hover (DP_PCT_HOVERS); setting "Level % badges" (parameter version 8); Levels column + 92 px (ColumnBoard 1.3.0) // 2.18.2 (2026-10-19 18:51 CT, Rassul) VAH / VAL red, DPoc cyan, WPoc beige // 2.18.1 (2026-10-19 17:45 CT, live check: DPoc 7703 = his ProfPrevDay to the tick; status showed 3,679 bars with no volume-at-price re-read on every recompute) a bar IRT has no rows for is retried every 10 min, not every new bar // 2.18.0 (2026-10-19 13:14-13:35 CT, Rassul "i want an open live also, make its badge and line white .. prior day poc and prior week poc (Wpoc) .. VAH and VAL"; "RTH open"; "prior day poc is full session"; "both use volume"): new key levels from the chart - Open (today's RTH open, white), DPoc / VAH / VAL (the prior full session's volume profile, 70% value area, teal), WPoc (the prior week's volume POC, blue), from IRT's own volume-at-price (barVolumeProfile) summed per session; status PROFILE line // 2.17.3 (2026-10-18 23:37 CT, Rassul "get rid of the hover over on the gex levels and other places"): every hover OFF (level badges CR0 / HVL / G1 ..., nodes, HVL tags, header) - DP_HOVERS = false, the code kept; no TRACK_MOUSE // 2.17.2 (2026-10-18 his decision list): Snapshot outline removed (dashed); Market / Clock offset / Indicators text hidden (kept in the file) // 2.17.1 (2026-10-18 settings audit): the window from DealerProfileSettings.h / SettingsHost.h; settings per MARKET in DealerProfile.settings-<MKT>.txt (the root-keyed DealerProfile.settings.txt reset at every roll; migrated once, left in place); the indicators row no longer cut off; drawing unchanged // 2.17.0 (2026-10-18): STALE by Fresh.h (one rule with HOD / LOD), a status file per chart (DealerProfile.status-<MKT>-<spb>.txt, the old one kept one more version), Market State SRC GEX // 2.16.0 (2026-10-16, Rassul): node text "480 lots" (colour = buy / sell); level badge NAME | price | GAMMA | ratio (yellow) // 2.15.1: node / hedge-text cut-offs vs the whole grid's biggest strike (not the screen's) // 2.15.0: compact hovers (level / node / HVL / header), dynamic hover width, hover clear of the BIG column // 2.14.1: Levels column >= 150 px (NQ prices) //   // 2.14.0 (2026-10-15 10:34, Rassul): level badges NAME | price | liquidity, Levels column >= 124 px //   // 2.13.0 (2026-10-15 09:53, Rassul): level lines only in the Levels column, not across the chart //   // 2.12.1 (2026-10-15): the chart margin also leaves room for the BIG column (ColumnBoard 1.1.0) //   // 2.12.0 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 5): the bar hover "Teal = MenthorQ model shows + net gamma here (vendor model, data N min old). Not a prediction it holds."; MenthorQ badge hover "MenthorQ model level, about 6 to 8 min delayed. Watch price and tape here; it isn't a turn forecast."; touch odds "A chance to REACH only - not hold or reverse."; "How to use: wait for your trigger - a sweep through the exact level, then RB or CoB, before 11:00 AM CT."; HL badge "HL?" + "whether they hold is unknown"; today's pick marked ? in its hover; HVL regime text behind the hvl_cushion gate. The node B / S text and "dealers must BUY N" stay (his call).   // 2.11.1 (MQF100, 2026-10-14 after-close - "STALE 2h - 9:35 AM" with no reason): when the grid is STALE the header adds WHY and what is being done ("no internet - retrying", "signed out - sign in", "tab asleep - retrying") from the bridge's lsFlexLevels\LRA-MQFeed.txt (bridge 1.30.0, read at most every 5 s, used only while written in the last 5 min); the header hover says why / what is being done / what you do   // 2.11.0 (CR5200, Rassul 2026-10-14 11:00 CT): the Levels / Delta / Dealer columns right of price, the chart margin, one-sided teal / orange nodes with B / S hedge text, compact level badges (detail in the hovers)   // 2.10.0 (Rassul 2026-10-14): HrHI / HrLO no longer drawn; AsiaHI / AsiaLO (18:00-02:00 CT, muted purple) and CWH / CWL (this week's high / low set before yesterday, soft blue) added; a new level within the market's merge ticks joins the line ("ONH . AsiaHI")   // 2.9.0: absolute-GEX nodes, W / F, top-3 %, hedge numbers, HVL tags, STALE header, CR0 merge, G2-G10 hidden, hovers   // 2.8.7: audit defect fixes - external files read bounded (a torn / oversized / malformed file keeps the last good one), level matching on the tick grid (no adjacent-tick merge), settings / status written atomically   // 2.8.6: badges always right of the Liquidity Profile column (its published width); a narrow chart gives up right-side room instead   // 2.8.5: a level's Liq tag = the zone holding its price (else the nearest), as the Liquidity column names it   // 2.8.4: the badge column half-way between the left (past the Liquidity column) and the centre   // 2.8.3: Liq tags for every zone the Liquidity Profile draws (1.7x+; it publishes only its picks)   // 2.8.2: badges in one centred column (price bars no longer push them aside), a badge with no room on its row steps up / down with a tick to its line   // 2.8.1: badges keep their place (no left / centre / left), Liq tags held 30 s (no blinking)   // 2.8.0: on an hourly (15-min+) chart the levels only, from the 3-min chart (LRA-KeyLevels-<MKT>.csv); every level badge (key + gamma) shows the liquidity resting on it, "Liq 977 (2.6x)" (green bids / red offers, from the Liquidity Profile); DEALER DATA STALE only past 25 min   // 2.7.4: badges "<price> <NAME>  <odds>", 10 pt bold names, never over price / labels / profiles; partial-history levels dropped; roll / Rithmic contract match; no file I/O per repaint   // 2.7.3: key-level labels centred like the MenthorQ labels, stepping beside a label on the same row, never over the Delta / Dealer Profiles (Rassul 2026-10-11 19:41)   // 2.7.2: the native key-level cache is per chart (host state), not shared by every chart on the DLL - RA1009 regression audit   // 2.7.1: key levels in his SessionPrices colours (PF teal, PD orange, PW blue, ON grey), a bigger font, odds as "33%  /  50%"   // 2.7.0: every key level (PFH/PFL, PDH/PDL, PWH/PWL, ONH/ONL, LonHI/LonLO, HrHI/HrLO) computed natively from the chart and drawn with its odds   // 2.6.3: key-level odds labels only, no extra amber / purple lines   // 2.6.2: no VWAP lines from the key levels (Session VWAP draws them)   // 2.6.1: overnight odds from the nightly champion (OnTouchParams.h), "?" gone when proven   // 2.6.0: outside RTH (no fresh LRA odds) each MenthorQ level shows its 60-min touch odds computed here from the chart's last 20 closes, "1h 45%?"   // 2.5.2: MenthorQ nodes and levels drawn exactly at their strikes on the same contract (no snapshot-noise shift)   // 2.5.1: per-host state, robust external-input handling, atomic bar export. 2.5.0 (2026-10-08): every level's touch odds "55%/70%" (within 90 min / by the RTH close, one law - lra.level_touch): key levels + hourly swings drawn with their odds, MenthorQ labels from the same file, a white box = a pick   // 2.4.1: the odds text from the model ("1h 50%  Exp 50%  CL 50%", nearest first)   // 2.4.0 (2026-10-07): touch odds on each MenthorQ level (1h / by expiry / by close)   // 2.3.0 (2026-10-07): the MenthorQ key levels (FlexLevels replaced)   // 2.2.3 (20:29): width default 50 (all profiles fit on the right). 2.2.1 (2026-10-05 17:55): Profile width default 80 px. 2.2.0 (2026-10-05): per-chart settings + per-market bar export (one DLL object serves every chart)
 static const bool DP_PCT_HOVERS = true;   // (2.19.0) only the level % block has a hover (approved Option B); every other hover stays off
@@ -269,6 +270,7 @@ public:
         std::string sym, chart; long spb = 0; bool published = false;
         int needPx = 0, ppb = 0, marginRead = -1, marginAsked = -1, setOk = 0, setFail = 0, gapSeen = -1;
         int badgesShown = 0, badgesDropped = 0, nodeTexts = 0, nodeTextsHidden = 0, nodesTiny = 0;
+        double vwapPx = 0; int vwapBadges = 0, keysFiltered = 0, ttHeldClipped = 0;   // (2.34.0)
         int keysW = 0, keysL = 0, keysTop = 0, keysMoved = 0, keysOddsCut = 0; bool keysDocked = false, keysPosted = false; std::string keysSym, keysChart; long keysSpb = 0;   // (2.33.0) the Key Levels column
         long long firstMs = -1;
         dcol::LiqLevels liqL; long long liqLStamp = -2, liqLChecked = -1; std::string liqLWhy;   // (11:39 CT) the per-level liquidity file
@@ -1165,10 +1167,10 @@ void DealerProfile::writeStatus(const char* what)
       << ",asked " << cs.marginAsked << ",set ok " << cs.setOk << ",set fail " << cs.setFail << ",gap " << cs.gapSeen << "\n"
       << "BADGES,shown " << cs.badgesShown << ",dropped " << cs.badgesDropped << ",liquidity blocks " << cs.liqBlocks << ",HL " << cs.hlOn
       << ",liquidity file " << (cs.liqLWhy.empty() ? std::string("ok") : cs.liqLWhy) << ",HL line " << cs.liqL.onX << "x / " << cs.liqL.offX << "x" << "\nNODE_TEXT,shown " << cs.nodeTexts << ",hidden " << cs.nodeTextsHidden << ",tiny nodes not drawn " << cs.nodesTiny << "\n"
-      << "TOUCH_TAGS,SignalBoard S " << cs.ttWhy << ",LiqTouch " << ltc::VERSION << ",latched (shown at the touch) " << cs.ttLatched << ",kept " << cs.ttags.size() << ",tags drawn " << cs.ttTagsDrawn << " (tag-only rows " << cs.ttTagOnly << "),HELD lines " << cs.ttHeld << ",HELD words " << cs.ttHeldText << ",no room " << cs.ttHeldNoRoom << ",reach " << DP_REACH_ATR << " ATR = " << cs.qReachPx << ",beyond reach " << cs.qOutReach << "\n"
+      << "TOUCH_TAGS,SignalBoard S " << cs.ttWhy << ",LiqTouch " << ltc::VERSION << ",latched (shown at the touch) " << cs.ttLatched << ",kept " << cs.ttags.size() << ",tags drawn " << cs.ttTagsDrawn << " (tag-only rows " << cs.ttTagOnly << "),HELD lines " << cs.ttHeld << ",HELD words " << cs.ttHeldText << ",no room " << cs.ttHeldNoRoom << ",line parts under the HOD/LOD table skipped " << cs.ttHeldClipped << ",reach " << DP_REACH_ATR << " ATR = " << cs.qReachPx << ",beyond reach " << cs.qOutReach << "\n"
       << "LIQUIDITY_TOP10," << (cs.qFromBoard ? "from SignalBoard B (lsLiquidityProfile)" : "no B producer: 2.29.0 level-tagged orders") << ",shown " << cs.qShown << ",levels posted V " << cs.vPosted
       << ",shown top " << DP_TOPN << " (both sides),steady Top10Stable " << t10::VERSION << " (in 30 s + 1.20x, out 10 s, swap 1.25x),book levels on screen " << cs.qBoard << ",ranked over the whole posted book (not the visible pane) " << cs.qBoard << " levels,off screen in the top 10 " << cs.qOff << ",king off screen (edge marker) " << cs.qKingOff << ",moving / quoting dimmed ~ (LevelFade " << lfd::VERSION << ", never dropped) " << cs.qQuoting << ",king ~ " << cs.qMovedMarks << ",tracked " << cs.top10.tracked() << ",place " << (cb::LEVELS_LEFT ? "left" : cb::LEVELS_OUTER ? "right, after Delta (rank | bar | lots)" : "right") << "\n"
-      << "KEYS_COLUMN,left edge (ColumnBoard " << cb::VERSION << "),x " << cs.keysL << ",width " << cs.keysW << ",HOD/LOD table " << (cs.keysDocked ? "docked at the top" : "not docked") << ",badges from y " << cs.keysTop << ",moved (tick) " << cs.keysMoved << ",odds cut " << cs.keysOddsCut << ",in the price area 0\n"
+      << "KEYS_COLUMN,left edge (ColumnBoard " << cb::VERSION << "),x " << cs.keysL << ",width " << cs.keysW << ",HOD/LOD table " << (cs.keysDocked ? "docked bottom-left, right of the column" : "not docked") << ",VWAP " << cs.vwapPx << " (badges " << cs.vwapBadges << "),filtered (gamma / VWAP bands) " << cs.keysFiltered << ",layout odds left | name + price right" << ",badges from y " << cs.keysTop << ",moved (tick) " << cs.keysMoved << ",odds cut " << cs.keysOddsCut << ",in the price area 0\n"
       << "LEVELS_COLUMN," << (DP_LINES ? "lines (LevelsColumn " : DP_LVC ? "combined (LevelsColumn " : "off (") << lvc::VERSION << ")" << ",rows " << cs.lvcRows << ",merged rows " << cs.lvcMerged << ",with liquidity " << cs.lvcLiq << ",GEX rows " << cs.lvcGex << ",chips cut " << cs.lvcChipsCut << ",orders " << cs.lmtO.size() << ",order file " << (cs.lmtWhy.empty() ? std::string("ok") : cs.lmtWhy) << ",dealer bars " << (DP_BARS ? "on" : "off") << ",off-screen " << (offUp.have ? offUp.name : std::string("-")) << " / " << (offDn.have ? offDn.name : std::string("-")) << "\n"
       << "LEVEL_PCT," << (cfg.levelPct ? "on" : "off (setting)") << ",file " << (cs.lpWhy.empty() ? std::string("ok") : cs.lpWhy) << ",rows " << cs.lpT.rows.size()
       << ",built " << (cs.lpT.built.empty() ? std::string("-") : cs.lpT.built) << ",shown " << cs.lpShown << ",green " << cs.lpGreen << ",no row " << cs.lpNoRow << ",no room " << cs.lpNoRoom << "\n"
@@ -1660,6 +1662,19 @@ static bool dpReadVap(cppExtension::RTARRAYP* vap, int bar, std::vector<klv::Vap
     return true;
 }
 
+// (2.34.0) the latest session VWAP at the last bar from SessionVWAPLogic (svl::run, 11 outputs per bar: [0] RTH VWAP, [5] overnight VWAP);
+// the RTH value while it is non-zero at the last bar (RTH and the frozen post-close lines), else the overnight one; 0 = none
+static double dpLatestVwap(const std::vector<klv::Bar>& B, int per, int openMin, int closeMin)
+{
+    if (B.empty()) return 0.0;
+    std::vector<svl::Bar> sb; sb.reserve(B.size());
+    for (const klv::Bar& b : B) sb.push_back(svl::Bar{ b.days, b.endSec, b.h, b.l, b.c, b.v > 0 ? b.v : 0.0 });
+    std::vector<float> out; svl::run(sb, per, openMin, closeMin, out);
+    const float* o = &out[(B.size() - 1) * 11];
+    if (o[0] > 0 && std::isfinite(o[0])) return (double)o[0];
+    if (o[5] > 0 && std::isfinite(o[5])) return (double)o[5];
+    return 0.0;
+}
 const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m)
 {
     KLC& K = klc[m];
@@ -1732,6 +1747,12 @@ const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m
             if (!ok || !dpReplaceFile(tmp, path)) std::remove(tmp.c_str());
         }
     }
+    {   // (2.34.0, after the hourly-chart export: the shared LRA-KeyLevels file keeps its own codes) Rassul 12:50 CT "1 vwap level which is the latest") the ONE VWAP: the latest session's VWAP at the last bar (SessionVWAPLogic - the
+        // same math as lsSessionVWAP: RTH while / after RTH, else the overnight VWAP), on the tick grid; never its +-1 / +-2 SD bands
+        const double vw = dpLatestVwap(B, per, o, cl);
+        cs.vwapPx = vw;
+        if (vw > 0 && tk > 0) K.v.push_back(klv::Merged{ "VWAP", std::round(vw / tk) * tk, false });
+    }
     return K.v;
 }
 
@@ -1751,6 +1772,7 @@ static COLOR klColor(const std::string& name, bool pivotOnly)
     if (f == "VAH" || f == "VAL") return (COLOR)0x00EF4444;          // (2.18.2, Rassul 2026-10-19 18:51 "make VAH and VAL red and DPOC badge cyan and WPoc beige")
     if (f == "DPoc") return (COLOR)0x0022D3EE;                      // (2.18.2) cyan
     if (f == "WPoc") return (COLOR)0x00E8D5B0;                      // (2.18.2) beige
+    if (f == "VWAP") return (COLOR)0x00CBD5E1;                      // (2.34.0) the one VWAP badge: light slate
     return (COLOR)0x00F59E0B;
 }
 // "33%/50%?" -> "33%  /  50%?" (two spaces each side of the slash between the odds; names are not touched)
@@ -2155,14 +2177,15 @@ void DealerProfile::flushLines(const Settings& S)
     bdk::Box hb; long long hms = -1; bool hbOn = false;
     if (bdk::peekHodLod(cs.sym, cs.spb, cs.chart, hb, hms) && bdk::valid(hb)) { const long long nm = dpNowMs(); hbOn = nm >= hms && nm - hms <= 10000; }
     const int kL = (int)pane.left + 1;
-    const bool hbDocked = hbOn && hb.l >= kL - 2 && hb.l <= kL + 12 && hb.t < (pane.top + pane.bottom) / 2;
+    // (2.34.0, Rassul 12:50 CT "the hod lod should be on the right of the level column not in it ... on the bottom left next to the levels column")
+    // the table docks RIGHT of the column at the bottom (lsHodLod 2.11.0 / ColumnBoard 1.9.1): the column keeps its own width and full height
     int kW = DP_KEYS_W;
-    if (hbDocked) kW = std::max(kW, hb.r - kL + 3);
+    const bool hbDocked = hbOn && hb.l >= kL + kW && hb.l <= kL + kW + 12 && hb.b > (pane.top + pane.bottom) / 2;
     kW = std::min(kW, std::max(cb::keysRange().lo, ((int)pane.right - (int)pane.left) / 3)); kW = std::max(cb::keysRange().lo, std::min(cb::keysRange().hi, kW));
     const int kR = kL + kW;
     if (cs.keysPosted && (cs.keysSym != cs.sym || cs.keysSpb != cs.spb || cs.keysChart != cs.chart)) cb::clearKeys(cs.keysSym, cs.keysSpb, cs.keysChart);
     cb::publishKeys(cs.sym, cs.spb, cs.chart, dpNowMs(), kW); cs.keysPosted = !cs.sym.empty(); cs.keysSym = cs.sym; cs.keysSpb = cs.spb; cs.keysChart = cs.chart;
-    cs.keysW = kW; cs.keysL = kL; cs.keysDocked = hbDocked; cs.keysMoved = cs.keysOddsCut = 0;
+    cs.keysW = kW; cs.keysL = kL; cs.keysDocked = hbDocked; cs.keysMoved = cs.keysOddsCut = 0; cs.vwapBadges = cs.keysFiltered = 0;
     const int xL = cb::KEYS_LEFT ? kR + 3 : (leftCol ? col.r + 3 : ((cb::DELTA_LEFT && cs.lay.delta.w() > 0) ? cs.lay.delta.r + 3 : pane.left + 2));
     const int xR = (leftCol || outerCol) ? ((cs.lay.big.w() > 0 ? cs.lay.big.l : cs.lay.priceRight) - 2) : col.l - 1;
     if (xR - xL < 120) { cs.badgesDropped = (int)pend.size(); pend.clear(); return; }
@@ -2171,7 +2194,7 @@ void DealerProfile::flushLines(const Settings& S)
         const bdk::Box kb = bdk::mk(kL, pane.top, kR, pane.bottom); bdk::Box parts[4]; int np = 0;
         if (hbOn) np = bdk::rectParts(hb, kb, parts, 1); else { parts[0] = kb; np = 1; }
         for (int i = 0; i < np; ++i) box((short)parts[i].l, (short)parts[i].t, (short)parts[i].r, (short)parts[i].b, C_COL);
-        line((short)kR, (short)(hbDocked ? std::max((int)pane.top, hb.b + 2) : (int)pane.top), (short)kR, (short)pane.bottom, 0x00334155, 1);
+        line((short)kR, (short)pane.top, (short)kR, (short)pane.bottom, 0x00334155, 1);   // (2.34.0) full height (the table is right of it)
     }
     {   double age = -1; const bool stale = !nx.empty() && gridVerdict(S.clock, age).stale();
         const std::string h1 = std::string("DP v") + DP_VERSION + "  LIQUIDITY";
@@ -2195,6 +2218,13 @@ void DealerProfile::flushLines(const Settings& S)
     for (size_t i = 0; i < pend.size(); ++i) {
         const PendLbl& P = pend[i]; if (!std::isfinite(P.px)) continue;
         if (!DP_GAMMA && P.src != 0) continue;
+        {   // (2.34.0, Rassul 12:50 CT "only the key price levels and the volume levels, 1 vwap level which is the latest. lets not have the gamma levels")
+            // a gamma-named level, a VWAP band (VWAP+1 / -2 ...) or a second VWAP never reaches the column
+            const std::string nm0 = dcol::compactName(klv::displayName(P.name0));
+            const bool isVw = nm0.compare(0, 4, "VWAP") == 0;
+            if (llt::kindOf(nm0) == llt::GAMMA || (isVw && (nm0 != "VWAP" || cs.vwapBadges >= 1))) { ++cs.keysFiltered; continue; }
+            if (isVw) ++cs.vwapBadges;
+        }
         lvc::In x; x.px = P.px; x.name = dcol::compactName(klv::displayName(P.name0)); x.src = P.src;
         x.col = (unsigned long)P.col; x.pick = P.pick; x.stale = P.stale; x.idx = i; in.push_back(x);
     }
@@ -2267,7 +2297,7 @@ void DealerProfile::flushLines(const Settings& S)
         solid = false; return C_AMBER;
     };
     // pass 1: each row's badge width, line colour / style
-    struct BG { size_t r; int y, w, l = 0; COLOR lc; bool dash; std::string odds; int yb = 0; bool on = true; size_t nChips = 0; };   // (2.33.0) yb = the badge's row in the Key Levels column
+    struct BG { size_t r; int y, w, l = 0; COLOR lc; bool dash; std::string odds; int yb = 0; bool on = true; size_t nChips = 0; int ow = 0; };   // (2.34.0) ow = the odds text width (left-justified)   // (2.33.0) yb = the badge's row in the Key Levels column
     std::vector<BG> bgs;
     for (size_t r : shown) {
         const lvc::Row& R = rows[r]; if (R.chips.empty()) continue;
@@ -2283,12 +2313,13 @@ void DealerProfile::flushLines(const Settings& S)
             for (size_t c = 0; c < R.chips.size() && !pr && !side.empty(); ++c) pr = lpct::lookup(cs.lpT, dcol::compactName(pend[in[R.chips[c].member].idx].name0), side, used);
             if (pr) { g.odds = lpct::text(*pr); ++cs.lpShown; if (lpct::green(*pr)) ++cs.lpGreen; } else ++cs.lpNoRow;
         }
-        if (!g.odds.empty()) w += textW(g.odds.c_str(), sf, false) + 6;
-        // (2.33.0) no liquidity rank chip on the badges (the liquidity column has its own ranks); the badge fits the Key Levels column:
-        // the odds go first, then the last chips of a merged row
+        // (2.34.0, Rassul 12:50 CT "the percentages should be behind the level names to the left justified. and the level name and value should be
+        // right justified") w = the name chips + price badge only (RIGHT-justified at the column's right edge); the odds are separate text
+        // LEFT-justified at the column's left edge; they must not meet (6 px apart) - the odds go first, then the last chips of a merged row
         g.nChips = R.chips.size();
         const int room = kW - 6;
-        if (w + 2 > room && !g.odds.empty()) { w -= textW(g.odds.c_str(), sf, false) + 6; g.odds.clear(); ++cs.keysOddsCut; }
+        g.ow = g.odds.empty() ? 0 : textW(g.odds.c_str(), sf, false);
+        if (!g.odds.empty() && w + 2 + 6 + g.ow + 4 > room) { g.odds.clear(); g.ow = 0; ++cs.keysOddsCut; }
         while (w + 2 > room && g.nChips > 1) { w -= textW(R.chips[g.nChips - 1].text.c_str(), kf, true) + 8 + 3; --g.nChips; ++cs.lvcChipsCut; }
         g.w = std::min(w + 2, room); bgs.push_back(g);
     }
@@ -2297,13 +2328,13 @@ void DealerProfile::flushLines(const Settings& S)
     std::vector<bp::Box> placed;
     std::sort(bgs.begin(), bgs.end(), [](const BG& a, const BG& b) { return a.y < b.y; });
     {   int kTop = (int)pane.top + ((pane.bottom - pane.top) >= 200 ? 22 : 2), kBot = (int)pane.bottom - 4;   // the IRT title row stays clear
-        if (hbOn && hb.l < kR && hb.r > kL) { if (hb.t < (pane.top + pane.bottom) / 2) kTop = std::max(kTop, hb.b + 4); else kBot = std::min(kBot, hb.t - 4); }
+        if (hbOn && hb.l < kR && hb.r > kL) { if (hb.t < (pane.top + pane.bottom) / 2) kTop = std::max(kTop, hb.b + 4); else kBot = std::min(kBot, hb.t - 4); }   // (2.34.0) only a table NOT docked (its own Position over the column)
         cs.keysTop = kTop;
         std::vector<cb::Item> kit; for (const BG& g : bgs) { cb::Item it; it.want = g.y; it.h = bh + 1; kit.push_back(it); }
         int fy = (pane.top + pane.bottom) / 2; if (lastPx > 0) { PNT p; p.set((int)nb - 1, (float)lastPx); fy = p.v; }
         cs.badgesDropped += cb::stack(kit, kTop, kBot, fy);
-        for (size_t i = 0; i < bgs.size(); ++i) { BG& g = bgs[i]; g.on = kit[i].shown; g.yb = kit[i].y; g.l = kL + 3;
-            if (g.on) { placed.push_back(bp::mk(g.l - 1, g.yb - bh / 2 - 1, g.l + g.w + 1, g.yb - bh / 2 + bh + 1)); if (std::abs(g.yb - g.y) > 1) ++cs.keysMoved; } }
+        for (size_t i = 0; i < bgs.size(); ++i) { BG& g = bgs[i]; g.on = kit[i].shown; g.yb = kit[i].y; g.l = kR - 3 - g.w;   // (2.34.0) right-justified
+            if (g.on) { placed.push_back(bp::mk(kL + 1, g.yb - bh / 2 - 1, kR - 1, g.yb - bh / 2 + bh + 1)); if (std::abs(g.yb - g.y) > 1) ++cs.keysMoved; } }
     }
     // the lines (behind the badges), into the liquidity column
     const int lineR = (leftCol || outerCol) ? xR : (int)col.l;   // (2.31.0) the price area only (never through LMT F / Delta)   // (2.30.0) to the LMT F column (left column) / into the right column (old)
@@ -2352,13 +2383,13 @@ void DealerProfile::flushLines(const Settings& S)
         const PendLbl& P0 = pend[in[R.chips.front().member].idx];
         textLJ((short)(x + 1), (short)g.yb, P0.priceTxt.c_str(), (COLOR)0x00F1F5F9, kf, true);
         x += textW(P0.priceTxt.c_str(), kf, true) + 6;
-        if (!g.odds.empty()) { textLJ((short)(x + 1), (short)g.yb, g.odds.c_str(), C_GREYC, sf, false); x += textW(g.odds.c_str(), sf, false) + 6; }
+        if (!g.odds.empty()) textLJ((short)(kL + 4), (short)g.yb, g.odds.c_str(), C_GREYC, sf, false);   // (2.34.0) the odds LEFT-justified at the column's left edge
         ++cs.badgesShown; ++cs.lvcRows;
     }
     // (2.32.0) HELD (Rassul 11:08 / 11:27 CT "the HELD lines that show held and the line"): a shown level that HELD after its touch - its line
     // BRIGHT (side colour, 2 px) from the touch candle to the HELD candle and the word HELD right of the HELD candle; never over a candle or a
     // level badge (steps right a candle at a time, else no word - the line stays); final: drawn from the latched record, never repainted
-    cs.ttHeld = cs.ttHeldText = cs.ttHeldNoRoom = 0;
+    cs.ttHeld = cs.ttHeldText = cs.ttHeldNoRoom = cs.ttHeldClipped = 0;
     if (cs.qFromBoard && !cs.ttags.empty() && nb > 2) {
         RTARRAYI dt(barDateTime); RTARRAY bhi(barHigh), blo(barLow);
         const int nbar = (int)std::min<long>(nb, (long)dt.count); const int from = std::max(0, nbar - 2000);
@@ -2367,6 +2398,7 @@ void DealerProfile::flushLines(const Settings& S)
         auto barOf = [&](long long ct) -> int { for (int i = nbar - 1; i >= from; --i) { const long long e = endCt[(size_t)(i - from)]; if (e > 0 && e <= ct) return i + 1 < nbar ? i + 1 : -1; } return -1; };   // IRT bar time = bar END
         const int hf = std::max(10, kf + 1); const int hw = textW("HELD", hf, true) + 2, hh = dcol::textPx(hf) + 2;
         std::vector<bp::Box> taken = placed;
+        if (hbOn) taken.push_back(bp::mk(hb.l - 3, hb.t - 3, hb.r + 3, hb.b + 3));   // (2.34.0) the HOD/LOD table (bottom-left of the price area): a HELD word steps right of it
         for (std::map<std::string, ColsState::TTag>::const_iterator it = cs.ttags.begin(); it != cs.ttags.end(); ++it) {
             const ColsState::TTag& T = it->second; if (T.outcome != ltc::O_HELD) continue;
             const int b0 = barOf(T.bar), b1 = barOf(T.outSec); if (b0 < 0 || b1 < 0) continue;
@@ -2374,12 +2406,18 @@ void DealerProfile::flushLines(const Settings& S)
             const int y = p0.v; if (y <= pane.top + bh + 4 || y >= pane.bottom - 4) continue;
             const int x0 = std::max(xL, (int)p0.h - 3), x1 = std::min(xR, (int)p1.h + 3); if (x1 < xL || x0 > xR || x1 <= x0) continue;
             const COLOR hc = ltc::heldColour(T.side > 0 ? ltc::BID : ltc::ASK) > 0 ? C_BUY : C_SELL;
-            line((short)x0, (short)y, (short)x1, (short)y, hc, 2); ++cs.ttHeld;
+            if (hbOn && y >= hb.t - 1 && y <= hb.b + 1 && x1 > hb.l - 2 && x0 < hb.r + 2) {   // (2.34.0) never under the HOD/LOD table: the parts outside it
+                if (x0 < hb.l - 2) line((short)x0, (short)y, (short)(hb.l - 2), (short)y, hc, 2);
+                if (x1 > hb.r + 2) line((short)(hb.r + 2), (short)y, (short)x1, (short)y, hc, 2);
+                ++cs.ttHeldClipped;
+            } else line((short)x0, (short)y, (short)x1, (short)y, hc, 2);
+            ++cs.ttHeld;
             int ppb = 6; { PNT pa; pa.set(b1, (float)T.px); PNT pb; pb.set(std::max(0, b1 - 1), (float)T.px); ppb = std::max(2, (int)pa.h - (int)pb.h); }
             bool ok = false; int tx = x1 + 5;
             for (int k = 0; k < 16 && !ok; ++k, tx += ppb) {
                 if (tx + hw > xR - 2) break;
                 const bp::Box bx = bp::mk(tx - 2, y - hh / 2, tx + hw + 2, y + hh / 2);
+                if (hbOn && bp::overlap(bp::mk(hb.l - 3, hb.t - 3, hb.r + 3, hb.b + 3), bx)) { tx = hb.r + 6 - ppb; --k; continue; }   // (2.34.0) step right of the HOD/LOD table at once
                 bool hit = false; for (const bp::Box& q : taken) if (bp::overlap(q, bx)) { hit = true; break; }
                 for (int i = std::max(0, b1 - 2); !hit && i < nbar; ++i) {   // a candle under the word (its high-low span on these columns)
                     PNT c; c.set(i, (float)bhi[i]); PNT d; d.set(i, (float)blo[i]); const int cx = c.h;
@@ -2857,6 +2895,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | ((DP_HOVERS || DP_PCT_HOVERS) ? TRACK_MOUSE : 0));   // (2.17.3) no TRACK_MOUSE while the hovers are off   // (2.9.0) hovers: mouse events even when not selected
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.33.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.34.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }

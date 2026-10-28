@@ -5,7 +5,7 @@
 
 namespace hlset {
 
-static const char* const PLUGIN_VERSION = "2.10.0";   // (2.10.0) no settings change (docks in the Key Levels column)
+static const char* const PLUGIN_VERSION = "2.11.0";   // (2.11.0) no settings change (docks bottom-left, right of the Key Levels column; no S / R squares; smaller spot)
 // was 2.9.3
 static const char* const POS_CHOICES = "Top left;Top centre;Top right;Middle left;Middle centre;Middle right;Bottom left;Bottom centre;Bottom right";
 enum K { K_POSITION, K_SHOW_TABLE, K_TABLE_BG, K_SHOW_PROJ, K_PROJ_UP, K_PROJ_DN, K_SHOW_MARK, K_MARK_LOD, K_MARK_HOD, K_SHOW_PRE, K_PRE_MIN, K_N };

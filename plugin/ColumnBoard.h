@@ -31,7 +31,8 @@
 #include "BannerBoard.h"
 
 namespace cb {
-static const char* const VERSION = "1.9.0";   // (1.9.0, 2026-10-28 12:16-12:18 CT Rassul "i want a column for levels and move all the level badges in the levels column because the chart is too messy. also move the hod lod box aligned with the liquidity profile on the left") the KEY LEVELS column (lsDealerProfile 2.33.0) at the pane's LEFT edge: its own board key LRA_COLV_, leftKeep keeps every plugin right of it (lsHodLod docks INSIDE it, leftKeep(..., false))
+static const char* const VERSION = "1.9.1";   // (1.9.1, 2026-10-28 12:50 CT Rassul "the hod lod should be on the right of the level column not in it. and it should be on the bottom left next to the levels column") dockKeys: lsHodLod's table docks at the BOTTOM-LEFT of the price area, immediately RIGHT of the Key Levels column (left = column right + 4, bottom = pane bottom - 6); the column keeps its full height
+// was 1.9.0: // (1.9.0, 2026-10-28 12:16-12:18 CT Rassul "i want a column for levels and move all the level badges in the levels column because the chart is too messy. also move the hod lod box aligned with the liquidity profile on the left") the KEY LEVELS column (lsDealerProfile 2.33.0) at the pane's LEFT edge: its own board key LRA_COLV_, leftKeep keeps every plugin right of it (lsHodLod docks INSIDE it, leftKeep(..., false))
 // was 1.8.0:   // (1.8.0, 2026-10-28 06:42 CT Rassul "keep the liquidity profile behind the delta profile", option R) the Levels / liquidity column moves to the RIGHT as its own column after the Delta Profile: gap, BIG = LMT F, Delta (READ + bars), Levels (liquidity top 10), Dealer, axis; the left side is free (leftKeep = the pane edge)   // (1.7.0, 2026-10-28 overnight, live 22:06 overlap on the left column) leftKeep: the one rule every plugin uses to keep its marks / boxes right of the left columns;   // (1.6.0, 2026-10-28) Levels (liquidity) LEFT, Delta back on the right after LMT F;   // (1.5.0, 2026-10-27 14:00 CT) the Delta column at the pane's LEFT edge (DELTA_LEFT);   // (1.4.0, 2026-10-27 DP 2.28.0) Levels column up to 460 px (the combined Levels + Liquidity column);   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
 static const int GAP_PX = 20;            // between the last bar and the Levels column
 static const int MIN_PRICE_PX = 160;     // price area kept on a narrow chart
@@ -214,7 +215,7 @@ struct Peers {
     }
 };
 
-// ---- (1.9.0) the KEY LEVELS column at the pane's LEFT edge (lsDealerProfile 2.33.0): the level badges, the HOD/LOD table docked at its top
+// ---- (1.9.0) the KEY LEVELS column at the pane's LEFT edge (lsDealerProfile 2.33.0): the level badges; (1.9.1) the HOD/LOD table docks RIGHT of it at the bottom
 static const bool KEYS_LEFT = true;
 inline Range keysRange() { return Range{ 120, 460, 230 }; }
 inline int cleanKeysW(long long v) { const Range r = keysRange(); return (v >= r.lo && v <= r.hi) ? (int)v : r.def; }
@@ -239,15 +240,19 @@ inline bool keysFresh(const std::string& sym, long spb, const std::string& chart
     return true;
 }
 
-// (1.9.0) where lsHodLod's table (its union with the strip / Q header / rows: [ul, ut, ur, ub]) docks while the Key Levels column is on the
-// chart: top-left INSIDE the column, under the IRT title row; ok = false when the table is taller than the pane (then it keeps its own spot)
+// (1.9.1) where lsHodLod's table (its union with the strip / Q header / rows: [ul, ut, ur, ub]) docks while the Key Levels column is on the
+// chart: BOTTOM-LEFT of the price area, its left edge DOCK_GAP px right of the column ([paneL + 1, paneL + 1 + keysW]), its bottom DOCK_GAP + 2 px
+// above the pane bottom (Rassul 12:50 CT "on the right of the level column not in it ... on the bottom left next to the levels column");
+// ok = false when the table is taller than the pane under the IRT title row (then it keeps its own Position)
 struct Dock { int dx = 0, dy = 0; bool ok = false; };
-inline Dock dockKeys(int ul, int ut, int ur, int ub, int paneL, int paneT, int paneB)
+static const int DOCK_GAP = 4;
+inline Dock dockKeys(int ul, int ut, int ur, int ub, int paneL, int paneT, int paneB, int keysW)
 {
     Dock d; const int title = (paneB - paneT) >= 200 ? 22 : 0;
-    const int l = paneL + 3, t = paneT + title + 2;
-    if (ur <= ul || ub <= ut || t + (ub - ut) > paneB - 4) return d;
-    d.dx = l - ul; d.dy = t - ut; d.ok = true; return d;
+    if (ur <= ul || ub <= ut || keysW <= 0) return d;
+    const int h = ub - ut, l = paneL + 1 + keysW + DOCK_GAP, b = paneB - DOCK_GAP - 2;
+    if (b - h < paneT + title + 2) return d;
+    d.dx = l - ul; d.dy = (b - h) - ut; d.ok = true; return d;
 }
 
 // ---- the level badges: stacking and the name that fits ------------------------------------------------------------------------

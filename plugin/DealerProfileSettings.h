@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace dprset {
-static const char* const PLUGIN_VERSION = "2.33.0";   // (2.33.0) no settings change (the Key Levels column at the left edge)
+static const char* const PLUGIN_VERSION = "2.34.0";   // (2.34.0) no settings change (key + volume levels + one VWAP; odds left, names + price right; HOD/LOD box right of the column)
 // was 2.32.0   // (2.32.0) no settings change (top 3 within 3 ATR, touch tags, HELD)   // (2.31.2) no settings change (top 5 in total)   // (2.31.1) no settings change (liquidity ranked over the whole book, moving levels dimmed ~)   // (2.31.0) no settings change (right liquidity column, steady top 10)   // (2.30.0) no settings change   // (2.29.0) no settings change (level lines, liquidity column)   // (2.28.0) no settings change (the combined Levels + Liquidity column, Dealer bars off)   // (2.27.0, 2026-10-27) the 5 queue meter rows hidden (meter not drawn; values kept in the file) //   // (2.26.0, 2026-10-26) self-awareness SELFGEX (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (2.25.0) badges: no ratio, no level line (no new rows)   // (2.21.0) the outline follows the 10-s call (no new rows)
 // (2.20.0, Rassul approved the QUEUE METER 2026-10-22 13:51 CT) + "Queue meter" on / off, "Queue meter reach (ATR)", its bid / offer / warning
 // colours, appended (earlier rows keep their positions) -> parameter version 9

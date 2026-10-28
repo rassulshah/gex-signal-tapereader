@@ -222,7 +222,7 @@ struct Feed {
 
 struct HLState {
     int leftKeepX = 0;   // (2.9.1) the left keep-out x in force (ColumnBoard leftKeep)
-    bool dockKeys = false; int keysW = 0, docked = 0; std::string dockLine;   // (2.10.0) the table docked at the top of the Key Levels column
+    bool dockKeys = false; int keysW = 0, docked = 0; std::string dockLine;   // (2.11.0) the table docked bottom-left, right of the Key Levels column (2.10.0: at its top)
     int candleAvoid = 0;   // (2.9.3) candle keep-out boxes in force
     std::string root, mkt; int mi = -1;
     long nBars = -1; RTDATE lastStamp = 0, firstStamp = 0; float lastTick = 0;
@@ -1312,7 +1312,7 @@ int HodLod::draw(void)
         // places from the pane's left edge keep right of the left columns (ColumnBoard leftKeep - the one rule for every plugin)
         const char* sy = getSymbol(); const char* cl = getChartLabel();
         const long long nowMs = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
-        const int keep = cb::leftKeep(sy ? sy : "", getSecondsPerBar(), cl ? cl : "", (int)pane.left, nowMs, false);   // (2.10.0) the Key Levels column is not a keep-out: the table docks INSIDE it
+        const int keep = cb::leftKeep(sy ? sy : "", getSecondsPerBar(), cl ? cl : "", (int)pane.left, nowMs);   // (2.11.0) the Key Levels column IS a keep-out again: the table docks RIGHT of it (was 2.10.0: inside it)
         int kw = 0; S->dockKeys = cb::keysFresh(sy ? sy : "", getSecondsPerBar(), cl ? cl : "", nowMs, kw); S->keysW = kw;   // (2.10.0) lsDealerProfile 2.33.0's Key Levels column on this chart
         if (keep > pb.l && pb.r - keep > 260) pb.l = keep;
         S->leftKeepX = keep;
@@ -1438,7 +1438,9 @@ int HodLod::draw(void)
                             for (size_t q = 0; q < L.noteRows.size(); ++q) { L.noteRows[q].l += dx; L.noteRows[q].r += dx; L.noteRows[q].t += dy; L.noteRows[q].b += dy; } }
         }
     }
-    {   // (2.10.0, 2026-10-28, Rassul 12:16 CT "move the hod lod box aligned with the liquidity profile on the left"; the level badges moved into
+    {   // (2.11.0, 2026-10-28 12:50 CT Rassul "the hod lod should be on the right of the level column not in it. and it should be on the bottom left
+        // next to the levels column") the docked table sits at the BOTTOM-LEFT of the price area, immediately RIGHT of the Key Levels column (ColumnBoard 1.9.1)
+        // was (2.10.0, 2026-10-28, Rassul 12:16 CT "move the hod lod box aligned with the liquidity profile on the left"; the level badges moved into
         // lsDealerProfile 2.33.0's Key Levels column at the pane's LEFT edge) while that column is on this chart the table + its strip / Q header /
         // rows dock at the column's TOP-LEFT (under the IRT title row) whatever the Position setting; the column takes the table's width
         S->docked = 0; S->dockLine = S->dockKeys ? "KEYS_DOCK,column " + std::to_string(S->keysW) + " px" : std::string("KEYS_DOCK,no Key Levels column (Position setting)");
@@ -1450,7 +1452,7 @@ int HodLod::draw(void)
             if (L.preOk) add(L.preRow);
             if (L.dayOk) add(L.dayBox);
             for (size_t q = 0; q < L.noteRows.size(); ++q) add(L.noteRows[q]);
-            const cb::Dock d = cb::dockKeys(ul, ut, ur, ub, (int)pane.left, (int)pane.top, (int)pane.bottom);
+            const cb::Dock d = cb::dockKeys(ul, ut, ur, ub, (int)pane.left, (int)pane.top, (int)pane.bottom, S->keysW);   // (2.11.0) bottom-left, right of the column
             if (d.ok) {
                 const int dx = d.dx, dy = d.dy;
                 for (size_t i = 0; i < L.items.size(); ++i) if (L.items[i].role == hl::R_TABLE || L.items[i].role == hl::R_NOTE) { L.items[i].l += dx; L.items[i].r += dx; L.items[i].t += dy; L.items[i].b += dy; }
@@ -1460,7 +1462,7 @@ int HodLod::draw(void)
                 if (L.preOk) { L.preRow.l += dx; L.preRow.r += dx; L.preRow.t += dy; L.preRow.b += dy; }
                 if (L.dayOk) { L.dayBox.l += dx; L.dayBox.r += dx; L.dayBox.t += dy; L.dayBox.b += dy; }
                 for (size_t q = 0; q < L.noteRows.size(); ++q) { L.noteRows[q].l += dx; L.noteRows[q].r += dx; L.noteRows[q].t += dy; L.noteRows[q].b += dy; }
-                S->docked = 1; S->dockLine += ",docked at " + std::to_string(ul + dx) + "," + std::to_string(ut + dy) + " (" + std::to_string(ur - ul) + " x " + std::to_string(ub - ut) + ")";
+                S->docked = 1; S->dockLine += ",docked bottom-left right of the column at " + std::to_string(ul + dx) + "," + std::to_string(ut + dy) + " (" + std::to_string(ur - ul) + " x " + std::to_string(ub - ut) + ")";
             } else S->dockLine += ",table taller than the pane: own Position";
         }
         S->placeLine += S->dockLine + "\n";
@@ -1627,6 +1629,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds); Estimate (range used, the projected opposite extreme). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. 2.3.0: MenthorQ Q-Scores top left (mouse over for the meaning), Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.10.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.11.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

@@ -115,13 +115,13 @@ int main() {
             // (2.5.0 card) "ES" at the 10 px padding, the trend in full ("Strong Downtrend") right-aligned; the ladder tags S green / R red
             for (const hl::Item& it : tx) { if (it.s == "Strong Downtrend" && it.r == L.table.r - 10) ++regR; if (it.s == "ES" && it.l == L.table.l + 10) ++qL; }
             int rs = 0; for (const hl::Item& it : tx) if (it.t >= L.gexRow.t && it.b <= L.gexRow.b && ((it.s == "R" && it.c1 == hl::C_RED) || (it.s == "S" && it.c1 == hl::C_GREEN))) ++rs;
-            if (rs == 2) ++tri;
+            if (rs == 0) ++tri;   // (2.11.0, Rassul 12:50 CT "get rid of the S and R in the hod lod box") no S / R squares
         }
         CHECK(cnt > 30, "the table drawn (" + std::to_string(cnt) + " layouts)");
         CHECK(bad == 0, "Q box inside the table, the table inside the pane, left of the last bar");
         CHECK(overl == 0, "no two texts overlap (" + std::to_string(overl) + ")");
         CHECK(regR == cnt && qL == cnt, "Q: top left (" + std::to_string(qL) + "), Reg / trend right-aligned top right (" + std::to_string(regR) + ") of " + std::to_string(cnt));
-        CHECK(tri == cnt, "(2.5.0) the ladder: green S (support) + red R (resistance)");
+        CHECK(tri == cnt, "(2.11.0) the ladder: no S / R squares (supports green, resistances red without tags)");
         hl::Layout L0 = hl::layoutAll(v0, hl::Box{ 0, 0, 1400, 620 }, yOf, measure, 1200, 7, -1, nullptr, nullptr);
         { int mov = 0; for (const hl::Item& it : L0.items) if (it.k == hl::K_TEXT && (it.s == " M1" || it.s == " O1")) ++mov; CHECK(L0.tableOk && mov == 0, "(2.4.4) no Q file: no M / O / V in the header (the table still drawn)"); }
     }
