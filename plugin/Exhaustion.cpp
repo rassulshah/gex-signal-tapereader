@@ -60,7 +60,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.5.0"          // (0.5.0, 2026-10-29 Rassul approved 12:38 CT, mockup final_exh.html / fx/final.py) + the BOOK from its own order-by-order feed (OrderFlowFeed.h engine, the StackStats / PullStats near-price adds / pulls per closed bar): the book momentum line (1 px light grey, EMA5 of the book, 3-bar change, scaled to 90% of the net scale), the S / P letters on eligible bars (attacking side stacked / other side pulled >= 1.33x the 10-bar average), the mockup info box, hover rows S / P / Book momentum ("order book: n/a" without the feed); per-bar book counts recorded (<stem>-book-<session>.csv, read back) and every bar's 10 / 20-bar ratios logged in the net record   // was 0.4.0: (0.4.0, 2026-10-29 Rassul approved 11:18 CT, mockup artifact FzpVHQZ8ykBaoz4q6LMsHk) THE NET DISPLAY: a histogram of net aggression per closed candle (lots at the ask - lots at the bid; green >= 0 / red < 0, own symmetric scale, 0 line); the fading ratios on NET (peak 2-bar net in the push / now, floor 10% of the peak, cap 10x, ExhaustionLogic computeNet); labels >= 2.0x, one per run at its newest bar (red top = buyers fading, green bottom = sellers fading), only when the push peak >= the median |net| of the last 100 bars (noise cap; else logged); header "EXHAUSTION (net)  Buyers fading: X.Xx (2.0x) \xB7 Sellers fading: X.Xx (2.0x)" + an (i) info box (lines <= 60 chars, one draw call per line, inside the pane); hover on a bar = buy / sell / net / fading; the T mark now uses the NET ratio; every final net label (and the old gross ratio beside it) recorded to <stem>-net-<session>.csv; the old lines / E? are no longer drawn (E still recorded)   // was 0.3.1: (0.3.1, 2026-10-29 Rassul approved 10:23 CT; 0.3.1 because the reverted 05:11 CT pivot / histogram build was 0.3.0) + the T mark at the bottom of the pane: an order-line HELD (lsLiquidityProfile 0.68.0, SignalBoard G) + exhaustion >= 2.0x of the attacking side within the 5 bars before + a close back away within 3 bars after (ex::tMark); red T = a top (offer HELD), green T = a bottom (bid HELD); recorded to <stem>-T-<session>.csv, read back, never repainted   // was 0.2.4: keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.5.1"          // (0.5.1, 2026-10-29 Rassul 13:02 CT) no bar tooltip / (i) icon: ONE info box at the pane's left (explanation; a candle's values while the mouse is on it); no fading ratio labels in the pane; status BOOK text fixed   // was "0.5.0"          // (0.5.0, 2026-10-29 Rassul approved 12:38 CT, mockup final_exh.html / fx/final.py) + the BOOK from its own order-by-order feed (OrderFlowFeed.h engine, the StackStats / PullStats near-price adds / pulls per closed bar): the book momentum line (1 px light grey, EMA5 of the book, 3-bar change, scaled to 90% of the net scale), the S / P letters on eligible bars (attacking side stacked / other side pulled >= 1.33x the 10-bar average), the mockup info box, hover rows S / P / Book momentum ("order book: n/a" without the feed); per-bar book counts recorded (<stem>-book-<session>.csv, read back) and every bar's 10 / 20-bar ratios logged in the net record   // was 0.4.0: (0.4.0, 2026-10-29 Rassul approved 11:18 CT, mockup artifact FzpVHQZ8ykBaoz4q6LMsHk) THE NET DISPLAY: a histogram of net aggression per closed candle (lots at the ask - lots at the bid; green >= 0 / red < 0, own symmetric scale, 0 line); the fading ratios on NET (peak 2-bar net in the push / now, floor 10% of the peak, cap 10x, ExhaustionLogic computeNet); labels >= 2.0x, one per run at its newest bar (red top = buyers fading, green bottom = sellers fading), only when the push peak >= the median |net| of the last 100 bars (noise cap; else logged); header "EXHAUSTION (net)  Buyers fading: X.Xx (2.0x) \xB7 Sellers fading: X.Xx (2.0x)" + an (i) info box (lines <= 60 chars, one draw call per line, inside the pane); hover on a bar = buy / sell / net / fading; the T mark now uses the NET ratio; every final net label (and the old gross ratio beside it) recorded to <stem>-net-<session>.csv; the old lines / E? are no longer drawn (E still recorded)   // was 0.3.1: (0.3.1, 2026-10-29 Rassul approved 10:23 CT; 0.3.1 because the reverted 05:11 CT pivot / histogram build was 0.3.0) + the T mark at the bottom of the pane: an order-line HELD (lsLiquidityProfile 0.68.0, SignalBoard G) + exhaustion >= 2.0x of the attacking side within the 5 bars before + a close back away within 3 bars after (ex::tMark); red T = a top (offer HELD), green T = a bottom (bid HELD); recorded to <stem>-T-<session>.csv, read back, never repainted   // was 0.2.4: keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
@@ -226,13 +226,32 @@ struct EXState {
     long long tFacts = 0, tWrites = 0, tFails = 0; bool tBoard = false;
     ex::NetOut net; std::vector<double> buyV, sellV;        // (0.4.0) the NET display (same index as out)
     std::set<long long> netDone; long long netWrites = 0, netFails = 0, netNoisy = 0;   // final net labels recorded (bar time)
-    int iconL = 0, iconT = 0, iconR = -1, iconB = -1; bool tipOn = false; int hovBar = -1, hovH = 0, hovV = 0;   // (0.4.0) the (i) icon + the bar hover
+    int iconL = 0, iconT = 0, iconR = -1, iconB = -1; bool tipOn = false; int hovBar = -1, hovH = 0, hovV = 0;   // (0.5.1) the (i) icon is gone (iconR stays -1)
+    long curDX = 0, curDY = 0; bool curOk = false;   // (0.5.1) screen - pane coordinates at the last mouse event: the box knows when the mouse left the pane
+    int boxL = 0, boxT = 0, boxR = -1, boxB = -1;   // (0.5.1) the info box drawn last (tests)   // (0.4.0) the (i) icon + the bar hover
     // (0.5.0) the book: its own DEPTH_BY_ORDER (kept alive for the chart's life), the near-price engine, one Acc per candle; decided bars kept
     off::Conn feed; off::Engine eng; off::Acc scratch; std::map<long long, off::Acc> accs; std::map<long long, int> barEnds; std::map<long long, long long> closedAt;
-    long long formingKey = -1, firstBarKey = -1; nl::Zone zone; std::string feedState = "MBO: not opened", bookMkt; bool bookDirty = false;
+    long long formingKey = -1, firstBarKey = -1; nl::Zone zone; std::string feedState = "MBO", bookMkt; bool bookDirty = false;
     std::map<long long, ex::BookBar> bookBars; std::set<long long> bookLogged; long long bookWrites = 0, bookFails = 0, bookLoaded = 0, bookPartial = 0;
     ex::BookOut book;
 };
+
+// (0.5.1) the mouse position on the screen (Windows); elsewhere (tests) unknown = the hover stays until the next mouse event
+static bool exCursor(long& x, long& y) {
+#if defined(_WIN32)
+    POINT p; if (!GetCursorPos(&p)) return false; x = p.x; y = p.y; return true;
+#else
+    (void)x; (void)y; return false;
+#endif
+}
+// (0.5.1) is the mouse still inside this pane? (the last mouse event's screen offset applied to the cursor now)
+static bool exHoverLive(const EXState& S, const cppExtension::RCT& pane) {
+    if (!S.curOk) return true;
+    long sx = 0, sy = 0; if (!exCursor(sx, sy)) return true;
+    const long x = sx - S.curDX, y = sy - S.curDY;
+    return x >= pane.left && x <= pane.right && y >= pane.top && y <= pane.bottom;
+}
+static const COLOR C_LABEL = 0x009CA3AF;   // (0.5.1) the info box's label column
 
 class Exhaustion : public cppExtension {
 public:
@@ -584,6 +603,7 @@ void Exhaustion::pump() {
         calcBars(S, count);
         S.state = count < S.P.N + 2 ? "waiting for bars" : "ready";
         status(S, now);
+        if (S.hovBar >= 0 && S.curOk) { RCT pane; pane.getPaneRect(false); if (!exHoverLive(S, pane)) { S.hovBar = -1; invalidateChart(false); } }   // (0.5.1) mouse left: back to the explanation
     } catch (...) { S.state = "calculation error"; }
 }
 void Exhaustion::render(EXState& S) {
@@ -601,24 +621,19 @@ void Exhaustion::render(EXState& S) {
     {   int x = txt(pane.left + 4, pane.top + 1, "EXHAUSTION (net)   ", C_GREY);
         x = txt(x, pane.top + 1, "Buyers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveB), C_SELL); x = txt(x, pane.top + 1, " (2.0x)  \xB7  ", C_GREY);
         x = txt(x, pane.top + 1, "Sellers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveS), C_BUY); x = txt(x, pane.top + 1, " (2.0x)", C_GREY);
-        const int il = x + 10, it = pane.top + 2, ip = 12;                // the (i) icon (lsBookFlow's look: light grey dot, black i)
-        if (il + ip < pane.right - 80) {
-            setPen(0x009CA3AF, 1, P_SOLID); CBRUSH br(0x009CA3AF, PAT_SOLID); br.set();
-            RCT d; d.set(coord(il), coord(it), coord(il + ip), coord(it + ip)); d.drawOval(DRAW_OPAQUE);
-            FONT fi = f; fi.size = 9; setFont(fi); setTextColor(0x00000000); const int iw = getTextWidth("i", -1);
-            RCT ti; ti.set(coord(il + (ip - iw) / 2), coord(it - 1), coord(il + ip), coord(it + ip)); ti.drawText("i", false, false); setFont(f);
-            S.iconL = il; S.iconT = it; S.iconR = il + ip; S.iconB = it + ip; }
+        // (0.5.1, Rassul 13:02 CT) no (i) icon: the explanation is the info box at the left of the pane (below)
         const std::string vr = std::string("v") + EX_VERSION + "  " + S.proven; const int w = getTextWidth(vr.c_str(), -1); txt(pane.right - w - 8, pane.top + 1, vr, C_GREY);
     }
-    const int top = pane.top + 30, bottom = pane.bottom - 30;            // label rows above / below (top: buyers, bottom: sellers, then T)
+    // (0.5.1) no ratio labels any more (the header carries the live values; the hover the bar's): the histogram uses the room they had
+    const int top = pane.top + 18, bottom = pane.bottom - 16;            // bottom row = the T marks
     if (bottom - top < 20) return;
     std::vector<int> vis;
     for (int i = lastBar; i >= S.outFirst; --i) { const int x = xOf(i); if (x < pane.left) break; if (x <= pane.right) vis.push_back(i); }
     std::reverse(vis.begin(), vis.end());
     auto K = [&](int bar) { return bar - S.outFirst; };
     double mx = 1; for (int i : vis) { const int k = K(i); if (k >= 0 && k < (int)S.net.net.size()) mx = std::max(mx, std::fabs(S.net.net[k])); }
-    const int zero = (top + bottom) / 2, half = (bottom - top) / 2;
-    auto yOf = [&](double v) { return zero - (int)std::lround((double)half * std::max(-1.0, std::min(1.0, v / mx))); };
+    const int zero = (top + bottom) / 2, half = (bottom - top) / 2 - 12;   // 12 px kept for the S / P letters above / below the tallest bars
+    auto yOf = [&](double v) { return zero - (int)std::lround((double)std::max(4, half) * std::max(-1.0, std::min(1.0, v / mx))); };
     setPen(C_AXIS, 1, P_SOLID);
     { PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(zero); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(zero); b.drawLineTo(); }
     int bw = 3; if (vis.size() >= 2) bw = std::max(1, (int)((xOf(vis.back()) - xOf(vis.front())) / (int)(vis.size() - 1) * 0.6 / 2));
@@ -639,64 +654,92 @@ void Exhaustion::render(EXState& S) {
             txt(xOf(i) - w / 2, v >= 0 ? y - 13 : y + 1, S.book.let[k], v >= 0 ? C_BUY : C_SELL); }
         setFont(f);
     }
-    for (int i : vis) {                                                    // the labels: one per run at its newest bar, noise-capped
-        const int k = K(i); if (k < 0 || k >= (int)S.net.net.size()) continue;
-        if (S.net.labB[k]) { const std::string t = xs(S.net.fb[k]); const int w = getTextWidth(t.c_str(), -1); txt(xOf(i) - w / 2, top - 14, t, C_SELL); }
-        if (S.net.labS[k]) { const std::string t = xs(S.net.fs[k]); const int w = getTextWidth(t.c_str(), -1); txt(xOf(i) - w / 2, bottom + 1, t, C_BUY); }
-    }
     RTARRAYI times(barDateTime);                                          // T: the recorded marks at the bottom of the pane (never repainted)
     if (times.count >= count) for (int i : vis) {
         std::map<long long, int>::const_iterator m = S.tmarks.find((long long)times[i]); if (m == S.tmarks.end()) continue;
-        txt(xOf(i) - 3, bottom + 14, "T", m->second < 0 ? C_SELL : C_BUY);
+        txt(xOf(i) - 3, bottom + 1, "T", m->second < 0 ? C_SELL : C_BUY);
     }
-    // a multi-line box: one draw call per line (never one long string - IRT breaks it), sized to the text, kept inside the pane
-    auto box = [&](int ax, int ay, const std::vector<std::string>& L) {
-        if (L.empty()) return;
-        FONT fp = f; fp.size = 9; fp.style = PLAIN; setFont(fp);
-        int w = 0; for (const std::string& t : L) w = std::max(w, (int)getTextWidth(t.c_str(), -1));
-        const int lh = 13, pad = 6, bw2 = w + 2 * pad + 2, bh = (int)L.size() * lh + 2 * pad;
-        int l = std::min(ax, (int)pane.right - 2 - bw2); l = std::max((int)pane.left + 2, l);
-        int t = ay; if (t + bh > pane.bottom - 2) t = std::max((int)pane.top + 2, (int)pane.bottom - 2 - bh);
-        const int r = std::min((int)pane.right - 2, l + bw2), b = std::min((int)pane.bottom - 2, t + bh);
-        setPen(0x009CA3AF, 1, P_SOLID); RCT bg; bg.set(coord(l), coord(t), coord(r), coord(b)); bg.draw(1, 0x009CA3AF, 0x00111827, DRAW_OPAQUE, PAT_SOLID);
-        setTextColor(0x00E5E7EB); int y = t + pad;
-        for (const std::string& line : L) { if (y + lh > b) break; if (!line.empty()) { RCT tr; tr.set(coord(l + pad), coord(y), coord(r - 2), coord(y + lh)); tr.drawText(line.c_str(), false, false); } y += lh; }
-        setFont(f); };
-    if (S.tipOn && S.iconR > S.iconL) { std::vector<std::string> L; for (int q = 0; q < ex::INFO_N; ++q) L.push_back(ex::INFO_LINES[q]); box(S.iconL, S.iconB + 3, L); }   // (0.5.0) the mockup text exactly
-    else if (S.hovBar >= S.outFirst && S.hovBar <= lastBar) {
+    // (0.5.1, Rassul 13:02 CT) ONE info box at the LEFT of the pane, under the header: the explanation by default; while the mouse is on a
+    // candle the same box shows that candle's values; back to the explanation when the mouse leaves. Dark rounded panel, thin grey border,
+    // bold title, label column + value column, buyers green / sellers red; every line its own draw call (<= 60 characters); sized to the
+    // text; never right of the pane's middle (the latest bars stay clear); a short pane gets fewer lines (bar values first).
+    S.boxR = -1;
+    struct Row { std::string label, value; COLOR col; };
+    std::string title; std::vector<Row> rows; bool hover = false;
+    const bool mouseIn = S.hovBar >= S.outFirst && S.hovBar <= lastBar && exHoverLive(S, pane);
+    if (mouseIn) {
         const int k = K(S.hovBar);
-        if (k >= 0 && k < (int)S.net.net.size() && k < (int)S.buyV.size()) {
-            char b1[64], b2[64], b3[64], b4[96]; std::string when;
-            if (times.count > S.hovBar) { struct tm t; std::memset(&t, 0, sizeof(t)); if (getLocaltime((RTDATE)times[S.hovBar], &t)) { char w[32]; std::snprintf(w, sizeof(w), "Candle ending %d:%02d %s", t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12, t.tm_min, t.tm_hour < 12 ? "AM" : "PM"); when = w; } }
-            std::snprintf(b1, sizeof(b1), "Bought at the ask: %.0f lots", S.buyV[k]); std::snprintf(b2, sizeof(b2), "Sold at the bid: %.0f lots", S.sellV[k]);
-            std::snprintf(b3, sizeof(b3), "Net aggression: %+.0f lots", S.net.net[k]);
-            if (S.net.newH[k]) std::snprintf(b4, sizeof(b4), "New high - buyers fading: %.1fx (2.0x)", S.net.fb[k]);
-            else if (S.net.newL[k]) std::snprintf(b4, sizeof(b4), "New low - sellers fading: %.1fx (2.0x)", S.net.fs[k]);
-            else std::snprintf(b4, sizeof(b4), "Not at a new 5-bar high or low: no fading read");
-            std::vector<std::string> L; if (!when.empty()) L.push_back(when); for (const char* q : { b1, b2, b3 }) { std::vector<std::string> w = ex::wrap(q, 60); L.insert(L.end(), w.begin(), w.end()); }
-            {   // (0.5.0) the book rows (mockup): S = the attacking side stacked, P = the other side pulled, the momentum
-                std::map<long long, ex::BookBar>::const_iterator bb = times.count > S.hovBar ? S.bookBars.find((long long)times[S.hovBar]) : S.bookBars.end();
-                if (bb == S.bookBars.end() || !bb->second.have || k >= (int)S.book.sVal.size()) L.push_back("order book: n/a");
-                else { const bool g = S.net.net[k] >= 0; char r1[96], r2[96], r3[64];
-                    std::snprintf(r1, sizeof(r1), "S  %s stacked %.0f lots (%.1fx avg)", g ? "bids" : "offers", S.book.sVal[k], S.book.sX[k]);
-                    std::snprintf(r2, sizeof(r2), "P  %s pulled %.0f lots (%.1fx avg)", g ? "offers" : "bids", S.book.pVal[k], S.book.pX[k]);
-                    if (S.book.momOk[k]) std::snprintf(r3, sizeof(r3), "Book momentum %+.0f", S.book.mom[k]); else std::snprintf(r3, sizeof(r3), "Book momentum n/a");
-                    for (const char* q : { r1, r2, r3 }) { if (std::strlen(q) <= 60) { L.push_back(q); continue; } std::vector<std::string> w = ex::wrap(q, 60); L.insert(L.end(), w.begin(), w.end()); } }   // a line that fits keeps its spacing
+        if (k >= 0 && k < (int)S.net.net.size() && k < (int)S.buyV.size() && k < (int)S.sellV.size()) {
+            hover = true;
+            title = "Candle";
+            if (times.count > S.hovBar) { struct tm t; std::memset(&t, 0, sizeof(t)); if (getLocaltime((RTDATE)times[S.hovBar], &t)) { char w[40]; std::snprintf(w, sizeof(w), "Candle ending %d:%02d %s", t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12, t.tm_min, t.tm_hour < 12 ? "AM" : "PM"); title = w; } }
+            const double nv = S.net.net[k]; const bool g = nv >= 0;
+            rows.push_back({ "Bought at ask", ex::lots(S.buyV[k]) + " lots", C_BUY });
+            rows.push_back({ "Sold at bid", ex::lots(S.sellV[k]) + " lots", C_SELL });
+            rows.push_back({ "Net", (nv > 0 ? "+" : nv < 0 ? "-" : "") + ex::lots(std::fabs(nv)) + " lots", g ? C_BUY : C_SELL });
+            std::map<long long, ex::BookBar>::const_iterator bb = times.count > S.hovBar ? S.bookBars.find((long long)times[S.hovBar]) : S.bookBars.end();
+            if (bb == S.bookBars.end() || !bb->second.have || k >= (int)S.book.sVal.size()) rows.push_back({ "Order book", "n/a (not recorded for this candle)", C_GREY });
+            else {
+                char v1[64], v2[64];
+                std::snprintf(v1, sizeof(v1), "%s %s lots (%.1fx avg)", g ? "bids" : "offers", ex::lots(S.book.sVal[k]).c_str(), S.book.sX[k]);
+                std::snprintf(v2, sizeof(v2), "%s %s lots (%.1fx avg)", g ? "offers" : "bids", ex::lots(S.book.pVal[k]).c_str(), S.book.pX[k]);
+                rows.push_back({ "S  stacked", v1, g ? C_BUY : C_SELL });
+                rows.push_back({ "P  pulled", v2, g ? C_BUY : C_SELL });
+                if (S.book.momOk[k]) { char m[32]; std::snprintf(m, sizeof(m), "%+.0f", S.book.mom[k]); rows.push_back({ "Book momentum", m, S.book.mom[k] >= 0 ? C_BUY : C_SELL }); }
+                else rows.push_back({ "Book momentum", "n/a", C_GREY });
             }
-            { std::vector<std::string> w = ex::wrap(b4, 60); L.insert(L.end(), w.begin(), w.end()); }
-            box(S.hovH + 12, S.hovV + 12, L);
+            char fz[64];
+            if (S.net.newH[k]) { std::snprintf(fz, sizeof(fz), "buyers %.1fx (2.0x)", S.net.fb[k]); rows.push_back({ "Fading", fz, C_SELL }); }
+            else if (S.net.newL[k]) { std::snprintf(fz, sizeof(fz), "sellers %.1fx (2.0x)", S.net.fs[k]); rows.push_back({ "Fading", fz, C_BUY }); }
+            else rows.push_back({ "Fading", "no new 5-bar high / low", C_GREY });
         }
     }
+    if (!hover) { title = "How to read Exhaustion"; for (int q = 0; q < ex::INFO_N; ++q) rows.push_back({ ex::INFO_LINES[q], "", C_LABEL }); }
+    {
+        FONT fp = f; fp.size = 9; fp.style = PLAIN; FONT ft = f; ft.size = 10; ft.style = BOLD;
+        const int lh = 13, th = 16, pad = 7, gap = 12, x0 = pane.left + 4, y0 = pane.top + 17;
+        const int room = (int)pane.bottom - 3 - y0;
+        int fit = (room - 2 * pad - th) / lh;                              // rows that fit under the title
+        if (fit < (int)rows.size() && !hover) {                            // short pane: the spacer lines go first, then the tail
+            std::vector<Row> keep; for (const Row& r : rows) if (!r.label.empty()) keep.push_back(r); rows.swap(keep); }
+        if (fit < (int)rows.size() && hover) {                             // short pane: the bar values first (drop momentum, P, S last)
+            static const char* const DROP[] = { "Book momentum", "P  pulled", "S  stacked", "Order book", "Fading", "Net" };
+            for (const char* d : DROP) { if ((int)rows.size() <= fit) break; for (size_t r = 0; r < rows.size(); ++r) if (rows[r].label == d) { rows.erase(rows.begin() + (long)r); break; } } }
+        if (fit < 1) rows.clear();
+        if ((int)rows.size() > fit) rows.resize((size_t)std::max(0, fit));
+        if (fit >= 1 || hover) {
+            setFont(fp); int lw = 0, vw = 0;
+            for (const Row& r : rows) { const int a = getTextWidth(r.label.c_str(), -1); if (r.value.empty()) vw = std::max(vw, a - lw); else { lw = std::max(lw, a); vw = std::max(vw, (int)getTextWidth(r.value.c_str(), -1)); } }
+            int labelCol = 0; for (const Row& r : rows) if (!r.value.empty()) labelCol = std::max(labelCol, (int)getTextWidth(r.label.c_str(), -1));
+            int textW = 0; for (const Row& r : rows) textW = std::max(textW, r.value.empty() ? (int)getTextWidth(r.label.c_str(), -1) : labelCol + gap + (int)getTextWidth(r.value.c_str(), -1));
+            setFont(ft); textW = std::max(textW, (int)getTextWidth(title.c_str(), -1)); setFont(fp);
+            const int bw2 = textW + 2 * pad, bh = th + (int)rows.size() * lh + 2 * pad - 2;
+            const int maxR = pane.left + (pane.right - pane.left) / 2;     // never over the latest bars (the right half)
+            if (x0 + bw2 <= maxR && y0 + bh <= (int)pane.bottom - 2 && (!rows.empty() || hover)) {
+                setPen(0x004B5563, 1, P_SOLID); CBRUSH br(0x00111827, PAT_SOLID); br.set();
+                RCT bg; bg.set(coord(x0), coord(y0), coord(x0 + bw2), coord(y0 + bh)); bg.drawRounded(8, 8);
+                S.boxL = x0; S.boxT = y0; S.boxR = x0 + bw2; S.boxB = y0 + bh;
+                setFont(ft); setTextColor(0x00F9FAFB); { RCT tr; tr.set(coord(x0 + pad), coord(y0 + pad - 1), coord(x0 + bw2 - 2), coord(y0 + pad - 1 + th)); tr.drawText(title.c_str(), false, false); }
+                setFont(fp); int y = y0 + pad + th - 1;
+                for (const Row& r : rows) {
+                    if (!r.label.empty()) { setTextColor(r.value.empty() ? (COLOR)0x00E5E7EB : C_LABEL); RCT a; a.set(coord(x0 + pad), coord(y), coord(x0 + pad + (r.value.empty() ? textW : labelCol) + 2), coord(y + lh)); a.drawText(r.label.c_str(), false, false); }
+                    if (!r.value.empty()) { setTextColor(r.col); RCT v; v.set(coord(x0 + pad + labelCol + gap), coord(y), coord(x0 + bw2 - 2), coord(y + lh)); v.drawText(r.value.c_str(), false, false); }
+                    y += lh; }
+            }
+        }
+        setFont(f);
+    }
 }
-// (0.4.0) the mouse: the (i) icon shows the info box; on a candle, that candle's numbers. Returns RTX_FAIL so the event is not swallowed.
+// (0.4.0) the mouse; (0.5.1) on a candle the info box shows that candle's numbers (the (i) icon is gone). The screen - pane offset is kept
+// so the box returns to the explanation once the mouse has left the pane. Returns RTX_FAIL so the event is not swallowed.
 int Exhaustion::mouse(RTX_EVENT* ev) {
     EXState* S = slot_.get(this, false);
     if (!S || !ev || (ev->type != E_MOUSE_MOVE && ev->type != E_MOUSE_HOVER)) return RTX_FAIL;
     const int h = ev->v.mouse.h, v = ev->v.mouse.v;
-    const bool on = S->iconR > S->iconL && h >= S->iconL - 2 && h <= S->iconR + 2 && v >= S->iconT - 2 && v <= S->iconB + 2;
     const int bar = (int)ev->v.mouse.bar;
-    const bool changed = on != S->tipOn || bar != S->hovBar;
-    S->tipOn = on; S->hovBar = bar; S->hovH = h; S->hovV = v;
+    long sx = 0, sy = 0; S->curOk = exCursor(sx, sy); if (S->curOk) { S->curDX = sx - h; S->curDY = sy - v; }
+    const bool changed = bar != S->hovBar;
+    S->tipOn = false; S->hovBar = bar; S->hovH = h; S->hovV = v;
     if (changed) invalidateChart(false);
     return RTX_FAIL;
 }
@@ -707,6 +750,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // (0.5.0) the order feed keeps coming while no trade prints (as lsStackStats / lsPullStats)   // (0.4.0) TRACK_MOUSE: the (i) box and the bar hover
     p->setDescription("LRA Exhaustion: is the side pushing price running out? Red = buyers fading at a new high (bearish), green = sellers fading at a new low (bullish): their peak pace in the push / their pace now, 1.0 when price is not at a new extreme. E = the first RTH bar at or over the market's line (from the nightly study), recorded and never repainted.");
-    p->setVersion("0.5.0");   // EX_VERSION
+    p->setVersion("0.5.1");   // EX_VERSION
     return p;
 }

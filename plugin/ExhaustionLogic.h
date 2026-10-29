@@ -13,7 +13,7 @@
 
 namespace ex {
 
-static const char* const VERSION = "0.5.0";   // (0.5.0, 2026-10-29) + the book momentum line and the S / P letters (computeBook)   // (0.4.0, 2026-10-29) the NET display (computeNet, wrap); (0.3.1) + the T mark (tMark)       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
+static const char* const VERSION = "0.5.1";   // (0.5.1) + lots() (thousands separators for the info box)   // was "0.5.0":   // (0.5.0, 2026-10-29) + the book momentum line and the S / P letters (computeBook)   // (0.4.0, 2026-10-29) the NET display (computeNet, wrap); (0.3.1) + the T mark (tMark)       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
 static const int LOOK = 20;
 
 struct Params { int N = 10; int S = 1; double T = 2.0; };
@@ -155,6 +155,13 @@ inline std::vector<std::string> wrap(const std::string& text, size_t w) {
         if (!line.empty()) out.push_back(line);
     }
     return out;
+}
+// (0.5.1) a lot count with thousands separators: 3397 -> "3,397" (rounded, absolute value)
+inline std::string lots(double v) {
+    if (!(v == v)) return "n/a";
+    long long n = (long long)std::llround(std::fabs(v)); std::string d = std::to_string(n), o;
+    for (size_t i = 0; i < d.size(); ++i) { if (i && (d.size() - i) % 3 == 0) o += ','; o += d[i]; }
+    return o;
 }
 // (0.5.0, Rassul approved 12:38 CT, final_exh.html) the info box text, exactly as the mockup: pre-wrapped lines (<= 60 characters), blank
 // spacer lines between the sections; drawn one line per call

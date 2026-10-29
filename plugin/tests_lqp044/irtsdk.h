@@ -93,6 +93,7 @@ public:
         void draw(int w,COLOR border,COLOR fill,int,int pat){ mock::Draw d("box",left,top,"",fill); d.l=left; d.t=top; d.r=right; d.b=bottom; d.border=border; d.width=w; d.pat=pat; d.pen=mock::current->pen; d.penW=mock::current->penW; mock::current->draws.push_back(d); }
         void drawText(const char* tx,bool centred,bool rightAligned){ mock::Draw d("text",rightAligned?right:left,(top+bottom)/2,tx,mock::current->ink); d.l=left; d.t=top; d.r=right; d.b=bottom; d.centred=centred; d.fid=mock::current->fid; d.fsize=mock::current->fsize; d.fstyle=mock::current->fstyle; mock::current->draws.push_back(d); }
         void drawOval(int){ mock::current->draws.push_back(mock::Draw("ring",(left+right)/2,(top+bottom)/2)); }
+        void drawRounded(int,int){ mock::Draw d("rbox",left,top); d.l=left; d.t=top; d.r=right; d.b=bottom; d.pen=mock::current->pen; d.penW=mock::current->penW; mock::current->draws.push_back(d); }   // (Exhaustion 0.5.1) the info box panel
     };
     struct CBRUSH { CBRUSH(COLOR,int){} void set(){} };
     struct VOLPROFILE { float price; long buyVolume,sellVolume,totalVolume,tickCount,maxDelta,minDelta; };
