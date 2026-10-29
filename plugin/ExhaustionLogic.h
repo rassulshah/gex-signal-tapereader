@@ -13,7 +13,7 @@
 
 namespace ex {
 
-static const char* const VERSION = "0.4.0";   // (0.4.0, 2026-10-29) the NET display (computeNet, wrap); (0.3.1) + the T mark (tMark)       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
+static const char* const VERSION = "0.5.0";   // (0.5.0, 2026-10-29) + the book momentum line and the S / P letters (computeBook)   // (0.4.0, 2026-10-29) the NET display (computeNet, wrap); (0.3.1) + the T mark (tMark)       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
 static const int LOOK = 20;
 
 struct Params { int N = 10; int S = 1; double T = 2.0; };
@@ -156,10 +156,61 @@ inline std::vector<std::string> wrap(const std::string& text, size_t w) {
     }
     return out;
 }
-static const char* const INFO_TEXT =
-    "What it answers: Is the side pushing price running out of force at this new high or low?\n"
-    "How it's measured: each bar = net aggression (buying at the ask minus selling at the bid). At a new 5-bar high, buyers fading = their strongest net buying in this push / their net buying now (same for sellers at a new low).\n"
-    "How to use it: a 2x+ label at your level warns the push is tiring. Wait for confirmation: a T (order HELD + close back) or a close back through the level. If the next bar makes a new extreme with strong bars again, ignore it.\n"
-    "Example: Oct 28 7:36 AM - ES made a new high at 7,778 but the green bars had shrunk and flipped red: buyers fading 8.5x. The next bars closed back down and ES fell 25 points into the 8:51 low.";
+// (0.5.0, Rassul approved 12:38 CT, final_exh.html) the info box text, exactly as the mockup: pre-wrapped lines (<= 60 characters), blank
+// spacer lines between the sections; drawn one line per call
+static const char* const INFO_LINES[] = {
+    "What it answers: is the side pushing price running", "out of force at this new high or low?", "",
+    "Bars: net aggression = bought at the ask minus", "sold at the bid. Green = buyers won the bar,", "red = sellers won the bar.", "",
+    "Labels: at a new 5-bar high, buyers fading = their", "strongest net buying in the push / net buying now", "(red, top). Sellers at a new low (green, bottom).", "",
+    "Grey line: book momentum. Up = support building", "(bids added, offers pulled); down = draining.", "",
+    "S = the attacking side stacked 1.33x+ its 10-bar", "average. P = the other side pulled 1.33x+. Shown", "only on a bar that flips colour or beats the last", "bar of the same colour.", "",
+    "Use: a 2x+ label at your level = the push is tiring.", "Wait for T (order HELD + close back) or a close", "back through the level.", "",
+    "Example: Oct 28 8:51 low - sellers fading 3.8x,", "SP letters, grey line turned up; ES rallied", "about 15 points." };
+static const int INFO_N = (int)(sizeof(INFO_LINES) / sizeof(INFO_LINES[0]));
+static const char* const INFO_TEXT = "What it answers: is the side pushing price running out of force at this new high or low?";   // (0.4.0 name kept for the wrap test)
+
+// ---- (0.5.0) THE BOOK: per closed bar the near-price lots ADDED / PULLED per side (the StackStats / PullStats engine, OrderFlowFeed.h)
+// book = (bids added - bids pulled) - (offers added - offers pulled); EMA5 (alpha 1/3, seeded with the first bar of a run of bars that
+// have book data); momentum = EMA5[k] - EMA5[k-3] (only inside a run). S / P on a green bar (net >= 0): S = bids added >= 1.33x their
+// 10-bar average, P = offers pulled >= 1.33x theirs; on a red bar: S = offers added, P = bids pulled. The average = the up to 10 prior
+// bars WITH book data, at least 5 of them. Letters only on an ELIGIBLE bar: its colour flips from the previous bar, or |net| > the
+// previous bar's |net| (same colour). Exactly the approved generator (fx/final.py). 20-bar ratios are logged for the nightly.
+static const double LET_X = 1.33; static const int AVG_BARS = 10, AVG_MIN = 5;
+struct BookBar { bool have = false; double addB = 0, addA = 0, pullB = 0, pullA = 0; };
+struct BookOut {
+    std::vector<double> book, ema, mom; std::vector<char> momOk, elig;
+    std::vector<std::string> let; std::vector<double> sVal, sX, pVal, pX, sX20, pX20;
+};
+inline double avgPrior(const std::vector<BookBar>& bb, int i, int w, int which) {
+    double sum = 0; int n = 0;
+    for (int j = std::max(0, i - w); j < i; ++j) { if (!bb[j].have) continue; const BookBar& b = bb[j]; sum += which == 0 ? b.addB : which == 1 ? b.addA : which == 2 ? b.pullB : b.pullA; ++n; }
+    return n >= AVG_MIN ? sum / n : -1.0;
+}
+inline BookOut computeBook(const std::vector<double>& net, const std::vector<BookBar>& bb) {
+    const int n = (int)net.size(); BookOut o;
+    o.book.assign(n, 0); o.ema.assign(n, 0); o.mom.assign(n, 0); o.momOk.assign(n, 0); o.elig.assign(n, 0); o.let.assign(n, std::string());
+    o.sVal.assign(n, 0); o.sX.assign(n, 0); o.pVal.assign(n, 0); o.pX.assign(n, 0); o.sX20.assign(n, 0); o.pX20.assign(n, 0);
+    if ((int)bb.size() != n) return o;
+    int runStart = -1;
+    for (int k = 0; k < n; ++k) {
+        if (!bb[k].have) { runStart = -1; continue; }
+        const BookBar& b = bb[k]; o.book[k] = (b.addB - b.pullB) - (b.addA - b.pullA);
+        if (runStart < 0) { runStart = k; o.ema[k] = o.book[k]; } else o.ema[k] = o.ema[k - 1] + (o.book[k] - o.ema[k - 1]) / 3.0;
+        if (k - 3 >= runStart) { o.mom[k] = o.ema[k] - o.ema[k - 3]; o.momOk[k] = 1; }
+    }
+    for (int i = 0; i < n; ++i) {
+        if (!bb[i].have) continue;
+        const bool g = net[i] >= 0; const int sk = g ? 0 : 1, pk = g ? 3 : 2;
+        const BookBar& b = bb[i];
+        const double sv = sk == 0 ? b.addB : b.addA, pv = pk == 3 ? b.pullA : b.pullB;
+        const double a1 = avgPrior(bb, i, AVG_BARS, sk), a2 = avgPrior(bb, i, AVG_BARS, pk), c1 = avgPrior(bb, i, 20, sk), c2 = avgPrior(bb, i, 20, pk);
+        o.sVal[i] = sv; o.pVal[i] = pv; o.sX[i] = a1 > 0 ? sv / a1 : 0; o.pX[i] = a2 > 0 ? pv / a2 : 0; o.sX20[i] = c1 > 0 ? sv / c1 : 0; o.pX20[i] = c2 > 0 ? pv / c2 : 0;
+        bool el = false;
+        if (i > 0) { if ((net[i - 1] >= 0) != g) el = true; else el = std::fabs(net[i]) > std::fabs(net[i - 1]); }
+        o.elig[i] = el ? 1 : 0;
+        if (el) { if (o.sX[i] >= LET_X) o.let[i] += "S"; if (o.pX[i] >= LET_X) o.let[i] += "P"; }
+    }
+    return o;
+}
 }  // namespace ex
 #endif

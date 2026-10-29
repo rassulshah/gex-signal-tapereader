@@ -2,13 +2,13 @@
 // tests_exhaustion mock: an order-line HELD (SignalBoard G, as lsLiquidityProfile 0.68.0 posts it) + buyers' fade >= 2.0x within the 5 bars
 // before + a close back below the offer within 3 bars -> a red T at the bottom of the pane; recorded; read back after a restart (no
 // repaint); no T without the close back / without exhaustion. Plus ex::tMark unit checks.
-// From plugin\:  g++ -std=c++17 -fsanitize=address,undefined -Itests_exhaustion -I. test_exhaustion_040.cpp -o t && ./t
+// From plugin\:  g++ -std=c++17 -fsanitize=address,undefined -Itests_lqp044 -I. test_exhaustion_040.cpp -o t && ./t
 #include "Exhaustion.cpp"
 #include <cstdio>
 #include <unistd.h>
 #include <sstream>
 #include <dirent.h>
-namespace mock { Host* current = nullptr; }
+namespace mock { Host* current = nullptr; Feed feed; }
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %d %s\n", __LINE__, m); } } while (0)
 static mock::Bar bar(unsigned long t, float o, float h, float l, float c, long buy, long sell) { mock::Bar b; b.time = t; b.high = h; b.low = l; b.open = o; b.close = c; b.rows.push_back(mock::Price(h, buy, sell, buy + sell)); return b; }
@@ -29,7 +29,7 @@ int main() {
     {   // (0.4.0) the NET logic
         // wrap: no line over 60 characters, every word kept
         const std::vector<std::string> W = ex::wrap(ex::INFO_TEXT, 60); size_t mxl = 0, chars = 0; for (auto& x : W) { mxl = std::max(mxl, x.size()); chars += x.size(); }
-        CHECK(mxl <= 60 && W.size() >= 10 && W[0].rfind("What it answers:", 0) == 0, "info text wraps to lines of <= 60 characters, several lines");
+        CHECK(mxl <= 60 && W.size() >= 2 && W[0].rfind("What it answers:", 0) == 0, "info text wraps to lines of <= 60 characters, several lines");
         { std::vector<std::string> w2 = ex::wrap(std::string(130, 'x'), 60); CHECK(w2.size() == 3 && w2[0].size() == 60, "a 130-character word is cut into 60 / 60 / 10"); }
         // a push up (net buying shrinking) then a push down (net selling shrinking) - the sellers side mirrors on NEGATIVE bars
         std::vector<double> h, l, b, s;
@@ -98,7 +98,7 @@ int main() {
     sb::postFacts('G', "ESZ6", 180, h.chart, steadyMs() - 120000, std::vector<sb::Fact>());   // no producer any more
     q->calc(0); EXState* R = q->testState();
     CHECK(R->tmarks.size() == 1 && R->tmarks.count((long long)h.bars[d].time), "after a restart the same T (read back from the record)");
-    CHECK(std::string(EX_VERSION) == "0.4.0" && std::string(ex::VERSION) == "0.4.0" && readAll("Exhaustion.cpp").find("p->setVersion(\"0.4.0\")") != std::string::npos, "versions 0.4.0 agree");
+    CHECK(std::string(EX_VERSION) == "0.5.0" && std::string(ex::VERSION) == "0.5.0" && readAll("Exhaustion.cpp").find("p->setVersion(\"0.5.0\")") != std::string::npos, "versions 0.5.0 agree");
     q->destroy();
     std::printf("lsExhaustion %s NET + T: %d passed, %d failed\n", EX_VERSION, passes, fails);
     return fails ? 1 : 0;

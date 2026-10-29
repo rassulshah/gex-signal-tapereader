@@ -33,6 +33,11 @@
 #undef near
 #endif
 #include "ExhaustionLogic.h"
+#if defined(_MSC_VER)
+#pragma comment(lib, "user32.lib")   // (0.5.0) OrderFlowFeed.h calls user32 (GetCursorPos / WindowFromPoint): the pragma in the .cpp too (BUILD-LESSONS 2026-10-13)
+#endif
+#define OFF_SDK 1
+#include "OrderFlowFeed.h"   // (0.5.0) the order-by-order feed + the near-price add / pull engine (as lsStackStats / lsPullStats)
 #include "SignalBoard.h"   // (0.3.0) reads lsLiquidityProfile 0.68.0's order-line HELD facts (kind G) for the T mark
 #include "HostSlot.h"
 #include <algorithm>
@@ -55,7 +60,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.4.0"          // (0.4.0, 2026-10-29 Rassul approved 11:18 CT, mockup artifact FzpVHQZ8ykBaoz4q6LMsHk) THE NET DISPLAY: a histogram of net aggression per closed candle (lots at the ask - lots at the bid; green >= 0 / red < 0, own symmetric scale, 0 line); the fading ratios on NET (peak 2-bar net in the push / now, floor 10% of the peak, cap 10x, ExhaustionLogic computeNet); labels >= 2.0x, one per run at its newest bar (red top = buyers fading, green bottom = sellers fading), only when the push peak >= the median |net| of the last 100 bars (noise cap; else logged); header "EXHAUSTION (net)  Buyers fading: X.Xx (2.0x) \xB7 Sellers fading: X.Xx (2.0x)" + an (i) info box (lines <= 60 chars, one draw call per line, inside the pane); hover on a bar = buy / sell / net / fading; the T mark now uses the NET ratio; every final net label (and the old gross ratio beside it) recorded to <stem>-net-<session>.csv; the old lines / E? are no longer drawn (E still recorded)   // was 0.3.1: (0.3.1, 2026-10-29 Rassul approved 10:23 CT; 0.3.1 because the reverted 05:11 CT pivot / histogram build was 0.3.0) + the T mark at the bottom of the pane: an order-line HELD (lsLiquidityProfile 0.68.0, SignalBoard G) + exhaustion >= 2.0x of the attacking side within the 5 bars before + a close back away within 3 bars after (ex::tMark); red T = a top (offer HELD), green T = a bottom (bid HELD); recorded to <stem>-T-<session>.csv, read back, never repainted   // was 0.2.4: keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.5.0"          // (0.5.0, 2026-10-29 Rassul approved 12:38 CT, mockup final_exh.html / fx/final.py) + the BOOK from its own order-by-order feed (OrderFlowFeed.h engine, the StackStats / PullStats near-price adds / pulls per closed bar): the book momentum line (1 px light grey, EMA5 of the book, 3-bar change, scaled to 90% of the net scale), the S / P letters on eligible bars (attacking side stacked / other side pulled >= 1.33x the 10-bar average), the mockup info box, hover rows S / P / Book momentum ("order book: n/a" without the feed); per-bar book counts recorded (<stem>-book-<session>.csv, read back) and every bar's 10 / 20-bar ratios logged in the net record   // was 0.4.0: (0.4.0, 2026-10-29 Rassul approved 11:18 CT, mockup artifact FzpVHQZ8ykBaoz4q6LMsHk) THE NET DISPLAY: a histogram of net aggression per closed candle (lots at the ask - lots at the bid; green >= 0 / red < 0, own symmetric scale, 0 line); the fading ratios on NET (peak 2-bar net in the push / now, floor 10% of the peak, cap 10x, ExhaustionLogic computeNet); labels >= 2.0x, one per run at its newest bar (red top = buyers fading, green bottom = sellers fading), only when the push peak >= the median |net| of the last 100 bars (noise cap; else logged); header "EXHAUSTION (net)  Buyers fading: X.Xx (2.0x) \xB7 Sellers fading: X.Xx (2.0x)" + an (i) info box (lines <= 60 chars, one draw call per line, inside the pane); hover on a bar = buy / sell / net / fading; the T mark now uses the NET ratio; every final net label (and the old gross ratio beside it) recorded to <stem>-net-<session>.csv; the old lines / E? are no longer drawn (E still recorded)   // was 0.3.1: (0.3.1, 2026-10-29 Rassul approved 10:23 CT; 0.3.1 because the reverted 05:11 CT pivot / histogram build was 0.3.0) + the T mark at the bottom of the pane: an order-line HELD (lsLiquidityProfile 0.68.0, SignalBoard G) + exhaustion >= 2.0x of the attacking side within the 5 bars before + a close back away within 3 bars after (ex::tMark); red T = a top (offer HELD), green T = a bottom (bid HELD); recorded to <stem>-T-<session>.csv, read back, never repainted   // was 0.2.4: keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
@@ -222,6 +227,11 @@ struct EXState {
     ex::NetOut net; std::vector<double> buyV, sellV;        // (0.4.0) the NET display (same index as out)
     std::set<long long> netDone; long long netWrites = 0, netFails = 0, netNoisy = 0;   // final net labels recorded (bar time)
     int iconL = 0, iconT = 0, iconR = -1, iconB = -1; bool tipOn = false; int hovBar = -1, hovH = 0, hovV = 0;   // (0.4.0) the (i) icon + the bar hover
+    // (0.5.0) the book: its own DEPTH_BY_ORDER (kept alive for the chart's life), the near-price engine, one Acc per candle; decided bars kept
+    off::Conn feed; off::Engine eng; off::Acc scratch; std::map<long long, off::Acc> accs; std::map<long long, int> barEnds; std::map<long long, long long> closedAt;
+    long long formingKey = -1, firstBarKey = -1; nl::Zone zone; std::string feedState = "MBO: not opened", bookMkt; bool bookDirty = false;
+    std::map<long long, ex::BookBar> bookBars; std::set<long long> bookLogged; long long bookWrites = 0, bookFails = 0, bookLoaded = 0, bookPartial = 0;
+    ex::BookOut book;
 };
 
 class Exhaustion : public cppExtension {
@@ -248,6 +258,8 @@ private:
     void render(EXState& S);
     void tCheck(EXState& S, long count);   // (0.3.0) the T mark
     void netRecord(EXState& S, long count);   // (0.4.0) final net labels -> <stem>-net-<session>.csv
+    void bookStep(EXState& S, long count, long long now);   // (0.5.0) the order feed -> per-candle adds / pulls near price
+    void bookRoute(EXState& S, const off::Ev& x);
 public:
     virtual int mouse(RTX_EVENT* ev);         // (0.4.0) the (i) box + the bar hover
 private:
@@ -280,7 +292,7 @@ void Exhaustion::identify(EXState& S) {
     const std::string id = root + "|" + sym + "|" + std::to_string(spb);
     if (id == S.identity && tick == S.tick) return;
     S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
-    S.P = ex::defaults(S.market); S.params = "study 2026-10-11"; S.vol.clear(); S.marks.clear(); S.markVal.clear(); S.pending.clear();
+    S.P = ex::defaults(S.market); S.params = "study 2026-10-11"; S.vol.clear(); S.marks.clear(); S.markVal.clear(); S.pending.clear(); S.bookBars.clear(); S.bookLogged.clear(); S.bookDirty = true;   // (0.5.0)
     S.count = 0; S.session = -1; S.lastNormsMs = -1; S.lastRecordAttemptMs = -1; S.rthO = S.rthC = -1; rthOf(S.market, S.rthO, S.rthC);
 }
 // the buyers / sellers of one bar from its volume at price (guarded like lsLiquidityProfile: a failed read is "not known")
@@ -299,7 +311,8 @@ bool Exhaustion::barVol(EXState& S, RTARRAYP& vap, int bar, std::pair<double, do
 }
 void Exhaustion::calcBars(EXState& S, long count) {
     if (count < 3 || S.tick <= 0) return;
-    if (count == S.count && !S.out.fb.empty()) { flushRecords(S); return; } // (0.2.2) draw() pumps too: keep the closed-bar snapshot, no VAP re-read
+    if (count == S.count && !S.out.fb.empty() && !S.bookDirty) { flushRecords(S); return; }
+    S.bookDirty = false; // (0.2.2) draw() pumps too: keep the closed-bar snapshot, no VAP re-read
     RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), clo(barClose); RTARRAYP vap(barVolumeProfile);
     if (times.count < count || hi.count < count || lo.count < count || vap.count < count || clo.count < count) return;
     const int first = (int)std::max(0L, count - BARS_MAX);
@@ -319,6 +332,9 @@ void Exhaustion::calcBars(EXState& S, long count) {
     }
     S.out = ex::compute(h, l, b, s, S.P); S.outFirst = first; S.closes.swap(cc);
     S.net = ex::computeNet(h, l, b, s); S.buyV = b; S.sellV = s;   // (0.4.0)
+    {   std::vector<ex::BookBar> bb(h.size());   // (0.5.0) the decided book of each closed bar (none = no line / letters there)
+        for (size_t k = 0; k < bb.size(); ++k) { std::map<long long, ex::BookBar>::const_iterator f = S.bookBars.find((long long)times[first + (int)k]); if (f != S.bookBars.end()) bb[k] = f->second; }
+        S.book = ex::computeBook(S.net.net, bb); }
     if (S.out.fb.empty()) return;
     const int f = (int)count - 2 - first;
     S.liveB = S.out.fb[f]; S.liveS = S.out.fs[f];
@@ -411,6 +427,48 @@ void Exhaustion::tCheck(EXState& S, long count) {
     }
     while (S.tDone.size() > 2000) S.tDone.erase(S.tDone.begin());
 }
+// (0.5.0) THE BOOK (as lsStackStats / lsPullStats, OrderFlowFeed.h): this chart's DEPTH_BY_ORDER (one per chart, kept alive, opened behind
+// a crash-guard file), each event to the candle containing its stamp (bar END stamps), the near band = 1 ATR (auto, as the panes), the
+// candle decided 5 s after it closed: bids / offers ADDED and PULLED lots near price -> bookBars + <stem>-book-<session>.csv (read back).
+// The first candle the feed saw (partial) and candles before it have no book (no line / letters there, hover "order book: n/a").
+void Exhaustion::bookRoute(EXState& S, const off::Ev& x) {
+    const long long key = off::eventKey(S.barEnds, S.formingKey, S.spb, x.stamp);
+    if (key >= 0 && S.firstBarKey < 0) S.firstBarKey = key;
+    if (key < 0 || S.bookBars.count(key) || key < S.firstBarKey) { S.eng.apply(S.scratch, x); if (S.scratch.events > 20000) S.scratch = off::Acc(); return; }
+    S.eng.curKey = key; S.eng.apply(S.accs[key], x);
+}
+void Exhaustion::bookStep(EXState& S, long count, long long now) {
+    if (S.market.empty() || !(S.tick > 0) || count < 3) return;
+    if (S.bookMkt != S.identity) { S.bookMkt = S.identity; S.zone = nl::zoneFor(S.market); S.feed.reset(); S.eng = off::Engine(); S.accs.clear(); S.closedAt.clear(); S.firstBarKey = -1; S.bookDirty = true; }   /* the decided / read-back book is cleared by identify() (before the session load) */
+    RTARRAYI times(barDateTime); RTARRAY high(barHigh), low(barLow), close(barClose);
+    if (times.count < count || high.count < count || low.count < count || close.count < count) return;
+    const long first = std::max(0L, count - 1500L);
+    if (S.barEnds.empty() || S.barEnds.rbegin()->first != (long long)times[(int)count - 1] || (long)S.barEnds.size() != count - first) {
+        S.barEnds.clear(); for (long i = first; i < count; ++i) { const long long bt = (long long)times[(int)i]; if (bt > 0) S.barEnds[bt] = (int)i; } }
+    S.formingKey = (long long)times[(int)count - 1];
+    { std::vector<double> rg; for (int i = (int)count - 2; i >= 0 && rg.size() < 20; --i) rg.push_back((double)high[i] - (double)low[i]);
+      S.eng.near = nl::nearBand(nl::atrOf(rg, S.spb), S.tick, S.zone, 0); }
+    { off::Tick px = 0; if (off::toTick((double)close[(int)count - 1], S.tick, px)) S.eng.fallbackRef(px, now); }
+    const std::string d = dir(); if (!d.empty()) { makeDir(flexDir()); makeDir(d); }
+    S.feed.open(S.symbol, d.empty() ? std::string() : d + "\\_opening-dbo-" + stem(S) + ".txt", now, S.feedState);
+    const double tick = S.tick;
+    S.feed.drain(now, off::steadyMs, [&](const DEPTH_ORDER& o) { bookRoute(S, off::evOf(o, tick, now)); });
+    for (std::map<long long, off::Acc>::iterator it = S.accs.begin(); it != S.accs.end() && it->first < S.formingKey;) {
+        const long long key = it->first;
+        if (!S.barEnds.count(key)) { S.closedAt.erase(key); S.accs.erase(it++); continue; }
+        std::map<long long, long long>::iterator c = S.closedAt.find(key); if (c == S.closedAt.end()) c = S.closedAt.insert(std::make_pair(key, now)).first;
+        if (now >= c->second && now - c->second < 5000) { ++it; continue; }   // decided 5 s after it closed (the drain caught up)
+        ex::BookBar b; b.have = key != S.firstBarKey; if (!b.have) ++S.bookPartial;
+        b.addB = (double)it->second.addC[off::BID]; b.addA = (double)it->second.addC[off::ASK]; b.pullB = (double)it->second.pullC[off::BID]; b.pullA = (double)it->second.pullC[off::ASK];
+        S.bookBars[key] = b; S.bookDirty = true; S.closedAt.erase(key); S.accs.erase(it++);
+        if (b.have && !d.empty()) {   // recorded once; read back after a restart (the feed has no history)
+            const long long cs = ctSec((RTDATE)key); const long long sess = cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : S.session;
+            std::ofstream o((d + "\\" + stem(S) + "-book-" + std::to_string(sess) + ".csv").c_str(), std::ios::binary | std::ios::app);
+            if (o) { o << key << "|" << (long long)b.addB << "|" << (long long)b.addA << "|" << (long long)b.pullB << "|" << (long long)b.pullA << "\n"; o.flush(); }
+            if (o) ++S.bookWrites; else ++S.bookFails; }
+    }
+    while (S.bookBars.size() > 3000) S.bookBars.erase(S.bookBars.begin());
+}
 // (0.4.0) every FINAL net label (its run ended: a later closed bar did not continue it) - labelled or held back by the noise cap - with the
 // old GROSS ratio of the same bar beside it (the nightly compares them): bar|top/bottom|net_x|gross_x|peak_net|median_abs_net|labelled
 void Exhaustion::netRecord(EXState& S, long count) {
@@ -433,6 +491,17 @@ void Exhaustion::netRecord(EXState& S, long count) {
             S.netDone.insert(key); ++S.netWrites; if (!lab) ++S.netNoisy;
         }
     }
+    // (0.5.0) every closed bar with a book: its book, momentum, S / P lots and their 10- and 20-bar ratios, the letters (the nightly's input)
+    if (S.book.book.size() == S.net.net.size()) for (int k = 0; k < (int)S.net.net.size(); ++k) {
+        const long long bt = (long long)times[S.outFirst + k]; std::map<long long, ex::BookBar>::const_iterator bb = S.bookBars.find(bt);
+        if (bb == S.bookBars.end() || !bb->second.have || S.bookLogged.count(bt)) continue;
+        const long long cs = ctSec((RTDATE)bt); const long long sess = cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : S.session;
+        char line[260]; std::snprintf(line, sizeof(line), "%lld|bar|net %.0f|book %.0f|mom %.1f%s|S %.0f %.2fx %.2fx|P %.0f %.2fx %.2fx|let %s\n", bt, S.net.net[k], S.book.book[k], S.book.mom[k], S.book.momOk[k] ? "" : " n/a",
+            S.book.sVal[k], S.book.sX[k], S.book.sX20[k], S.book.pVal[k], S.book.pX[k], S.book.pX20[k], S.book.let[k].empty() ? "-" : S.book.let[k].c_str());
+        std::ofstream o((d + "\\" + stem(S) + "-net-" + std::to_string(sess) + ".csv").c_str(), std::ios::binary | std::ios::app);
+        if (o) { o << line; o.flush(); } if (o) S.bookLogged.insert(bt); else ++S.netFails;
+    }
+    while (S.bookLogged.size() > 6000) S.bookLogged.erase(S.bookLogged.begin());
     while (S.netDone.size() > 6000) S.netDone.erase(S.netDone.begin());
 }
 void Exhaustion::load(EXState& S) {
@@ -449,6 +518,14 @@ void Exhaustion::load(EXState& S) {
             const bool top = ln.compare(a + 1, 3, "top") == 0, bot = ln.compare(a + 1, 6, "bottom") == 0;
             if (top || bot) S.tmarks[bt] = top ? -1 : 1; }
     }
+    for (long long k = S.session - 1; k <= S.session; ++k) {   // (0.5.0) the decided book of each candle (the feed has no history)
+        std::ifstream in((d + "\\" + stem(S) + "-book-" + std::to_string(k) + ".csv").c_str(), std::ios::binary); std::string ln; int n = 0;
+        while (in && n++ < 4000 && std::getline(in, ln)) { long long v[5] = { 0, 0, 0, 0, 0 }; int got = 0; const char* p = ln.c_str();
+            for (int f = 0; f < 5; ++f) { char* e = nullptr; v[f] = std::strtoll(p, &e, 10); if (e == p) break; ++got; p = e; if (*p == '|') ++p; else break; }
+            if (got != 5 || v[0] <= 0 || v[1] < 0 || v[2] < 0 || v[3] < 0 || v[4] < 0) continue;
+            ex::BookBar b; b.have = true; b.addB = (double)v[1]; b.addA = (double)v[2]; b.pullB = (double)v[3]; b.pullA = (double)v[4]; S.bookBars[v[0]] = b; S.bookLogged.insert(v[0]); ++S.bookLoaded; }
+    }
+    S.bookDirty = true;
     for (long long k = S.session - 1; k <= S.session; ++k) {   // (0.4.0) final net labels already recorded (never written twice)
         std::ifstream in((d + "\\" + stem(S) + "-net-" + std::to_string(k) + ".csv").c_str(), std::ios::binary); std::string ln; int n = 0;
         while (in && n++ < 6000 && std::getline(in, ln)) { const size_t a = ln.find('|'); if (a == std::string::npos) continue; const long long bt = std::strtoll(ln.c_str(), nullptr, 10);
@@ -485,6 +562,7 @@ void Exhaustion::status(EXState& S, long long now) {
       << "\nPARAMS,N " << S.P.N << ",S " << S.P.S << ",T " << S.P.T << "," << S.params << "\nRTH," << S.rthO << "," << S.rthC << "\nOVERNIGHT_LINE," << S.tOvernight
       << "\nPROVEN," << S.proven << "\nNOW,buyers_fading " << S.liveB << ",sellers_fading " << S.liveS << "\nMARKS," << S.marks.size() << ",fails " << S.recFails << "\n"
       << "NET,display net aggression (ask - bid lots),labels >= " << ex::NET_LABEL << "x one per run,noise cap = median |net| of the last " << ex::NET_MED_BARS << " bars = " << (S.net.med.empty() ? 0.0 : S.net.med.back()) << " lots,final labels recorded " << S.netWrites << " (held back by the noise cap " << S.netNoisy << ") fails " << S.netFails << "\n"
+      << "BOOK," << S.feed.stateText(steadyMs()) << " (" << S.feedState << "),near " << S.eng.near << " ticks,bars decided " << S.bookBars.size() << " (partial first " << S.bookPartial << ", read back " << S.bookLoaded << "),writes " << S.bookWrites << " fails " << S.bookFails << ",letters >= " << ex::LET_X << "x the " << ex::AVG_BARS << "-bar average\n"
       << "T_MARK,HELD facts (SignalBoard G) " << (S.tBoard ? "read" : "none") << ",checked " << S.tFacts << ",T recorded " << S.tWrites << " fails " << S.tFails << ",shown marks " << S.tmarks.size() << ",rule exh >= " << ex::T_EXH << "x within " << ex::T_BEFORE << " bars before + close back within " << ex::T_AFTER << " bars" << "\n";
     const std::string text = o.str(); if (text == S.lastStatusText) return;
     const std::string f = flexDir(); if (f.empty()) return;
@@ -502,6 +580,7 @@ void Exhaustion::pump() {
         if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; S.marks.clear(); S.markVal.clear(); S.tmarks.clear(); S.tVal.clear(); S.netDone.clear(); load(S); } }
         if (S.lastNormsMs < 0 || now - S.lastNormsMs >= 60000) { S.lastNormsMs = now; norms(S); }
         const long count = getBarCount();
+        bookStep(S, count, now);   // (0.5.0) the order book first: a bar decided now joins this pass
         calcBars(S, count);
         S.state = count < S.P.N + 2 ? "waiting for bars" : "ready";
         status(S, now);
@@ -548,6 +627,18 @@ void Exhaustion::render(EXState& S) {
         const double v = S.net.net[k]; const COLOR c = v >= 0 ? C_BUY : C_SELL; const int x = xOf(i), y = yOf(v);
         RCT r; r.set(coord(x - bw), coord(std::min(y, zero)), coord(x + bw), coord(std::max(y, zero) + (y == zero ? 1 : 0))); r.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
     }
+    if (S.book.mom.size() == S.net.net.size()) {   // (0.5.0) the book momentum line: 1 px light grey, scaled to 90% of the net scale; breaks where there is no book
+        double vm = 0; for (int i : vis) { const int k = K(i); if (k >= 0 && k < (int)S.book.mom.size() && S.book.momOk[k]) vm = std::max(vm, std::fabs(S.book.mom[k])); }
+        if (vm > 0) { setPen(0x00D1D5DB, 1, P_SOLID); bool started = false;
+            for (int i : vis) { const int k = K(i); if (k < 0 || k >= (int)S.book.mom.size() || !S.book.momOk[k]) { started = false; continue; }
+                PNT p; p.set(0, 0.0f); p.h = coord(xOf(i)); p.v = coord(yOf(S.book.mom[k] / vm * mx * 0.9));
+                if (!started) { p.setDrawPosition(); started = true; } else p.drawLineTo(); } }
+        FONT fl = f; fl.size = 9; fl.style = BOLD; setFont(fl);           // the S / P letters: above a green bar, below a red bar, in the bar colour
+        for (int i : vis) { const int k = K(i); if (k < 0 || k >= (int)S.book.let.size() || S.book.let[k].empty()) continue;
+            const double v = S.net.net[k]; const int w = getTextWidth(S.book.let[k].c_str(), -1), y = yOf(v);
+            txt(xOf(i) - w / 2, v >= 0 ? y - 13 : y + 1, S.book.let[k], v >= 0 ? C_BUY : C_SELL); }
+        setFont(f);
+    }
     for (int i : vis) {                                                    // the labels: one per run at its newest bar, noise-capped
         const int k = K(i); if (k < 0 || k >= (int)S.net.net.size()) continue;
         if (S.net.labB[k]) { const std::string t = xs(S.net.fb[k]); const int w = getTextWidth(t.c_str(), -1); txt(xOf(i) - w / 2, top - 14, t, C_SELL); }
@@ -571,7 +662,7 @@ void Exhaustion::render(EXState& S) {
         setTextColor(0x00E5E7EB); int y = t + pad;
         for (const std::string& line : L) { if (y + lh > b) break; if (!line.empty()) { RCT tr; tr.set(coord(l + pad), coord(y), coord(r - 2), coord(y + lh)); tr.drawText(line.c_str(), false, false); } y += lh; }
         setFont(f); };
-    if (S.tipOn && S.iconR > S.iconL) box(S.iconL, S.iconB + 3, ex::wrap(ex::INFO_TEXT, 60));
+    if (S.tipOn && S.iconR > S.iconL) { std::vector<std::string> L; for (int q = 0; q < ex::INFO_N; ++q) L.push_back(ex::INFO_LINES[q]); box(S.iconL, S.iconB + 3, L); }   // (0.5.0) the mockup text exactly
     else if (S.hovBar >= S.outFirst && S.hovBar <= lastBar) {
         const int k = K(S.hovBar);
         if (k >= 0 && k < (int)S.net.net.size() && k < (int)S.buyV.size()) {
@@ -582,7 +673,17 @@ void Exhaustion::render(EXState& S) {
             if (S.net.newH[k]) std::snprintf(b4, sizeof(b4), "New high - buyers fading: %.1fx (2.0x)", S.net.fb[k]);
             else if (S.net.newL[k]) std::snprintf(b4, sizeof(b4), "New low - sellers fading: %.1fx (2.0x)", S.net.fs[k]);
             else std::snprintf(b4, sizeof(b4), "Not at a new 5-bar high or low: no fading read");
-            std::vector<std::string> L; if (!when.empty()) L.push_back(when); for (const char* q : { b1, b2, b3, b4 }) { std::vector<std::string> w = ex::wrap(q, 60); L.insert(L.end(), w.begin(), w.end()); }
+            std::vector<std::string> L; if (!when.empty()) L.push_back(when); for (const char* q : { b1, b2, b3 }) { std::vector<std::string> w = ex::wrap(q, 60); L.insert(L.end(), w.begin(), w.end()); }
+            {   // (0.5.0) the book rows (mockup): S = the attacking side stacked, P = the other side pulled, the momentum
+                std::map<long long, ex::BookBar>::const_iterator bb = times.count > S.hovBar ? S.bookBars.find((long long)times[S.hovBar]) : S.bookBars.end();
+                if (bb == S.bookBars.end() || !bb->second.have || k >= (int)S.book.sVal.size()) L.push_back("order book: n/a");
+                else { const bool g = S.net.net[k] >= 0; char r1[96], r2[96], r3[64];
+                    std::snprintf(r1, sizeof(r1), "S  %s stacked %.0f lots (%.1fx avg)", g ? "bids" : "offers", S.book.sVal[k], S.book.sX[k]);
+                    std::snprintf(r2, sizeof(r2), "P  %s pulled %.0f lots (%.1fx avg)", g ? "offers" : "bids", S.book.pVal[k], S.book.pX[k]);
+                    if (S.book.momOk[k]) std::snprintf(r3, sizeof(r3), "Book momentum %+.0f", S.book.mom[k]); else std::snprintf(r3, sizeof(r3), "Book momentum n/a");
+                    for (const char* q : { r1, r2, r3 }) { if (std::strlen(q) <= 60) { L.push_back(q); continue; } std::vector<std::string> w = ex::wrap(q, 60); L.insert(L.end(), w.begin(), w.end()); } }   // a line that fits keeps its spacing
+            }
+            { std::vector<std::string> w = ex::wrap(b4, 60); L.insert(L.end(), w.begin(), w.end()); }
             box(S.hovH + 12, S.hovV + 12, L);
         }
     }
@@ -603,8 +704,9 @@ int Exhaustion::mouse(RTX_EVENT* ev) {
 extern "C" cppExtension* CreateExtension(void) {
     Exhaustion* p = new Exhaustion();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // (0.4.0) TRACK_MOUSE: the (i) box and the bar hover
+    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);
+    p->setExtendedFlags(CALL_CONTINUOUSLY);   // (0.5.0) the order feed keeps coming while no trade prints (as lsStackStats / lsPullStats)   // (0.4.0) TRACK_MOUSE: the (i) box and the bar hover
     p->setDescription("LRA Exhaustion: is the side pushing price running out? Red = buyers fading at a new high (bearish), green = sellers fading at a new low (bullish): their peak pace in the push / their pace now, 1.0 when price is not at a new extreme. E = the first RTH bar at or over the market's line (from the nightly study), recorded and never repainted.");
-    p->setVersion("0.4.0");   // EX_VERSION
+    p->setVersion("0.5.0");   // EX_VERSION
     return p;
 }
