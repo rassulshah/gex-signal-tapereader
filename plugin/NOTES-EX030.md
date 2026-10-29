@@ -41,3 +41,10 @@ extreme is then a final pivot, confirmed on that reversal bar. Closed bars only.
   (it never deletes its extensions - test-side, pre-existing).
 - MinGW x86_64 -fsyntax-only vs real irtsdk.h (RT_LONG = unsigned long long): clean, no warnings in plugin files.
 - Mockup from real ES 10-27/28 IRT footprint (fp_1m -> 3 min): 59 pivots, 8 at >= 2x (e.g. 05:48 buyers fading 5.6x, 03:36 sellers 3.7x).
+
+## 0.3.1 (2026-10-29, Rassul 05:39 CT "change histogram back to line")
+- Drawing only: two connected lines as 0.2.4, one per side (buyers fading red, sellers fading green). Each line sits at 0 on every
+  visible closed bar and rises to the ratio on a pivot bar at / over 2.0x, "2.9x" at the peak; pivots under 2x stay at 0. No boxes.
+- Unchanged from 0.3.0: pivot rule, 2.0x show rule, records, status, header, colours, no settings.
+- Tests: test_exhaustion_030 17/0 (ASan/UBSan, -Werror): 0 boxes; line points = the 2.0x level + 2 x (bars - 1); off-zero points = the
+  level + one peak per shown pivot (the 1.14x low stays at 0); "4.4x" red at the peak. test_exhaustion_host 9/0. MinGW -fsyntax-only clean.

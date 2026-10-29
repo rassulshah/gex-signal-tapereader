@@ -13,7 +13,7 @@
 
 namespace ex {
 
-static const char* const VERSION = "0.3.0";       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
+static const char* const VERSION = "0.3.1";       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
 static const int LOOK = 20;
 
 struct Params { int N = 10; int S = 1; double T = 2.0; };

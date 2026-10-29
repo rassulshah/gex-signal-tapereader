@@ -1,4 +1,7 @@
 /********************************************************************************
+ *  0.3.1 (2026-10-29, Rassul 05:39 CT "change histogram back to line"): drawing only - two connected lines as 0.2.4 (red = buyers fading,
+ *        green = sellers fading), each at 0 on every bar and rising to the ratio on a pivot bar at / over 2.0x, value at the peak; no
+ *        boxes. Pivot rule, 2.0x show rule, records, header and colours unchanged from 0.3.0.
  *  0.3.0 (2026-10-29, Rassul 05:11 CT "update the exhaustion indicator so it follows the pivot rule and only bars above 2x are shown and
  *        draw it like a histogram instead of connected lines"): the pane is now a HISTOGRAM AT PIVOTS. Pivots = IRT's ZIGZAG, Min Price
  *        Change 3 bars, Use High/Low (the lsWavePOC 1.3.2 rule, copied into ExhaustionPivots.h). At each confirmed pivot HIGH: buyers
@@ -63,7 +66,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.3.0"          // keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.3.1"          // keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
@@ -497,29 +500,37 @@ void Exhaustion::render(EXState& S) {
     if (times.count < count) return;
     // the visible closed bars that are pivots at / over 2.0x
     struct HB { int bar; int type; double r; };
-    std::vector<HB> hb; int firstVis = -1, lastVis = -1;
+    std::vector<HB> hb; std::vector<int> vis;
     for (int i = lastBar; i >= 0; --i) {
         const int x = xOf(i); if (x < pane.left) break; if (x > pane.right) continue;
-        if (lastVis < 0) { lastVis = i; }
-        firstVis = i;
+        vis.push_back(i);
         std::map<long long, std::pair<int, double>>::const_iterator m = S.piv.find((long long)times[i]);
         if (m != S.piv.end() && m->second.second + 1e-9 >= T) { HB e; e.bar = i; e.type = m->second.first; e.r = m->second.second; hb.push_back(e); }
     }
     double mx = 3.0; for (size_t k = 0; k < hb.size(); ++k) mx = std::max(mx, hb[k].r);
     mx = std::min(mx * 1.15, 12.0);
     auto yOf = [&](double v) { return bottom - (int)((bottom - top) * std::min(1.0, std::max(0.0, v / mx))); };
-    // bar width from the chart's bar spacing (60% of it, 3..14 px)
-    int spacing = 6; if (firstVis >= 0 && lastVis > firstVis) spacing = std::max(1, (xOf(lastVis) - xOf(firstVis)) / (lastVis - firstVis));
-    const int half = std::max(1, std::min(7, (spacing * 6 / 10) / 2));
+    std::reverse(vis.begin(), vis.end());
     setPen(C_AXIS, 1, P_SOLID);
     { const int y = yOf(T); PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(y); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(y); b.drawLineTo();
       txt(pane.right - 34, y - 13, xs(T), C_GREY); }
-    // HISTOGRAM: one bar per qualifying pivot, from 0 up to its ratio, the value on top; no connecting lines
-    for (size_t k = 0; k < hb.size(); ++k) {
-        const COLOR c = hb[k].type > 0 ? C_SELL : C_BUY;                 // buyers fading at a high = bearish red, sellers fading at a low = bullish green
-        const int x = xOf(hb[k].bar), y = yOf(hb[k].r);
-        RCT d; d.set(coord(x - half), coord(y), coord(x + half + 1), coord(bottom)); d.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
-        const std::string t = xs(hb[k].r); const int w = getTextWidth(t.c_str(), -1); txt(x - w / 2, y - 14, t, c);
+    // (0.3.1, Rassul 05:39 "change histogram back to line") two connected lines as 0.2.4, one per side: 0 on every bar, rising to the
+    // ratio on a qualifying pivot bar (>= 2.0x) with its value at the peak; pivots under 2x stay at 0
+    std::map<int, std::pair<int, double>> peak; for (size_t k = 0; k < hb.size(); ++k) peak[hb[k].bar] = std::make_pair(hb[k].type, hb[k].r);
+    for (int side = 0; side < 2; ++side) {
+        const int type = side == 0 ? 1 : -1; const COLOR c = type > 0 ? C_SELL : C_BUY;   // buyers fading at a high = bearish red, sellers fading at a low = bullish green
+        setPen(c, 2, P_SOLID); bool started = false;
+        for (size_t k = 0; k < vis.size(); ++k) {
+            std::map<int, std::pair<int, double>>::const_iterator m = peak.find(vis[k]);
+            const double v = (m != peak.end() && m->second.first == type) ? m->second.second : 0.0;
+            PNT q; q.set(0, 0.0f); q.h = coord(xOf(vis[k])); q.v = coord(yOf(v));
+            if (!started) { q.setDrawPosition(); started = true; } else q.drawLineTo();
+        }
+        for (size_t k = 0; k < hb.size(); ++k) {
+            if (hb[k].type != type) continue;
+            const int x = xOf(hb[k].bar), y = yOf(hb[k].r);
+            const std::string t = xs(hb[k].r); const int w = getTextWidth(t.c_str(), -1); txt(x - w / 2, y - 14, t, c);
+        }
     }
 }
 
@@ -527,7 +538,7 @@ extern "C" cppExtension* CreateExtension(void) {
     Exhaustion* p = new Exhaustion();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
-    p->setDescription("LRA Exhaustion at pivots (0.3.0): a histogram bar on each IRT zigzag pivot (3 bars, high/low) once confirmed. Red = buyers fading at a pivot high (bearish): the buyers' peak pace in the up leg / their pace on the pivot bar; green = sellers fading at a pivot low (bullish), the mirror. Only 2.0x and over are drawn; every pivot is recorded; never repainted.");
-    p->setVersion("0.3.0");   // EX_VERSION
+    p->setDescription("LRA Exhaustion at pivots (0.3.1): two lines (one per side) at 0 that peak on each IRT zigzag pivot (3 bars, high/low) once confirmed. Red = buyers fading at a pivot high (bearish): the buyers' peak pace in the up leg / their pace on the pivot bar; green = sellers fading at a pivot low (bullish), the mirror. Only 2.0x and over are drawn; every pivot is recorded; never repainted.");
+    p->setVersion("0.3.1");   // EX_VERSION
     return p;
 }

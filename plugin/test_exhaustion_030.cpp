@@ -92,15 +92,22 @@ int main(int argc, char** argv) {
         char b2[16]; std::snprintf(b2, sizeof(b2), "%.1fx", S->piv.count(tLow) ? S->piv[tLow].second : 0.0); if (d.type == "text" && d.text == b2 && d.color == C_BUY && d.y > 20) low = true;
     }
     long q2 = 0; for (auto& kv : S->piv) q2 += kv.second.second + 1e-9 >= 2.0;
-    CHECK(boxes == q2 && boxes >= 1, "one histogram box per pivot at / over 2.0x - nothing for the < 2x low");
-    CHECK(lines == 1, "no connecting lines: the only line is the 2.0x level");
-    CHECK(lab && head && !e, "4.4x on top of the red bar; header 'EXHAUSTION at pivots'; no E? on the chart");
+    // (0.3.1) lines, not boxes: the 2.0x level + two connected lines (one per side) whose only off-zero points are the shown pivots
+    int base = -100000; for (auto& d : H.draws) if (d.type == "line") base = std::max(base, d.y);
+    int peaks = 0, other = 0; for (auto& d : H.draws) if (d.type == "line" && d.y != base) { if (d.x == H.draws.front().x) {} ++peaks; }
+    for (auto& d : H.draws) if (d.type == "line" && d.y != base) ++other;
+    const int nvis = (int)H.bars.size() - 1;   // closed bars, all on screen in the mock
+    CHECK(boxes == 0, "0.3.1: no histogram boxes");
+    CHECK(lines == 1 + 2 * (nvis - 1), "the 2.0x level + one connected line per side across every closed bar");
+    CHECK(other == 1 + q2 && q2 >= 1, "off-zero line points = the 2.0x level + one peak per pivot at / over 2.0x (the < 2x low stays at 0)");
+    (void)peaks;
+    CHECK(lab && head && !e, "4.4x at the red peak; header 'EXHAUSTION at pivots'; no E? on the chart");
     (void)low;
     const std::string rec = readAll(flex + "\\Exhaustion\\ES-ESZ6-180-pivots-" + std::to_string(S->session) + ".csv");
     CHECK(rec.find(std::to_string(tTop) + "|top|4.44|") != std::string::npos && rec.find("shown") != std::string::npos && rec.find("|bottom|") != std::string::npos && rec.find("logged") != std::string::npos,
           "every pivot recorded: time, side, ratio, conf / leg times, shown|logged");
     const std::string st = readAll(flex + "\\Exhaustion.status-ES-ESZ6-180.txt");
-    CHECK(st.find("VERSION,0.3.0") != std::string::npos && st.find("PIVOTS,zigzag N 3") != std::string::npos, "status: version 0.3.0 + PIVOTS line");
+    CHECK(st.find("VERSION,0.3.1") != std::string::npos && st.find("PIVOTS,zigzag N 3") != std::string::npos, "status: version 0.3.1 + PIVOTS line");
     // no repaint: more bars (a later higher high) do not change the recorded pivot
     const std::map<long long, std::pair<int, double>> before = S->piv;
     H.bars.pop_back(); for (int i = 0; i < 5; ++i) add(7010.0f + i, 7009.0f + i, 50, 50); add(7012.0f, 7011.0f, 10, 10); H.now = t;
