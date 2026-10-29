@@ -59,3 +59,21 @@ extreme is then a final pivot, confirmed on that reversal bar. Closed bars only.
 - Count on real ES 3-min (10-27 17:21 -> 10-28 09:09, IRT fp_1m): 46 bar/side spikes >= 2x (24 buyers, 22 sellers) vs 8 with the pivot rule.
 - Tests: test_exhaustion_030 18/0 (ASan/UBSan, -Werror): off-zero line points = 2.0x level + one spike per closed bar/side >= 2x (more
   than the pivot count), one label per spike, no boxes. test_exhaustion_host 9/0. MinGW -fsyntax-only clean.
+
+## 0.4.0 (2026-10-29, Rassul 07:08 CT approved "implement and then show mockup" - his MACD-style sketch)
+- Everything 0.3.2 draws stays (top 55% of the pane). New PACE band below (ExhaustionPace.h), on its own scale:
+  - PACE per side, every closed bar = aggressive volume (buyers at the ask / sellers at the bid) averaged over S bars (ES/NQ 2).
+  - SIGNAL = EMA(PACE, 9), alpha 0.2, seeded with the first pace.
+  - Only the side attacking the current push is drawn: the last 20 bars, lowest low BEFORE highest high = up push = buyers
+    (pace red, signal yellow), else sellers (pace green, signal dim yellow).
+  - Marks, only when the 20-bar push >= 2.0 x ATR (ATR = mean high-low of the last 14 bars), attacking side only, decided on the
+    close, never repainted (taken only on bars newer than the last processed; restart = the records):
+    SLOWED = pace > signal, pace < the bar before, the bar before had risen -> grey dot on the pace line;
+    TURNED = pace crosses under its signal -> triangle in the side's colour + "T".
+- Record lsFlexLevels\Exhaustion\<MKT>-<CONTRACT>-<spb>-pace-<session>.csv: `time|top(buyers)/bottom(sellers)|pace|high|low|pace
+  slowed|turned buyers|sellers sig X push P atr A dist D S<S>` (dist = bars since the push extreme).
+- Header + "Pace (buyers|sellers): rising / slowed / turned" (turned = pace < signal; slowed = pace falling; else rising). Status PACE line.
+- Tests: test_exhaustion_030 35/0 (ASan/UBSan, -Werror): synthetic push - SLOWED bar 14, TURNED bar 16 (cross), no other marks, flat
+  push < 2 ATR = none, signal = EMA9; real ES fp 3-min (317 bars): 27 slowed / 47 turned, every mark obeys its rule, prefixes agree;
+  host - dots / red T per mark in the pace band, line count, header, pace record, status, later bars keep marks, restart = same marks.
+  test_exhaustion_host 9/0. MinGW -fsyntax-only clean.

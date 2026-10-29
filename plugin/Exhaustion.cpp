@@ -1,4 +1,11 @@
 /********************************************************************************
+ *  0.4.0 (2026-10-29, Rassul 07:08 CT approved "implement and then show mockup", his sketch: the attacker's pace rising then rolling over
+ *        a slower yellow signal line, MACD-style): everything 0.3.2 draws stays (now in the top 55% of the pane); a PACE band below
+ *        (ExhaustionPace.h): the side attacking the current 20-bar push (low before high = buyers, else sellers) - its pace (aggressive
+ *        volume, S-bar average) and SIGNAL = EMA(pace, 9). Marks for pushes >= 2.0 x ATR(14 bar ranges), decided on the close:
+ *        SLOWED (pace > signal, pace below the bar before after rising) = grey dot; TURNED (pace crosses under signal) = triangle + "T".
+ *        Recorded in lsFlexLevels\Exhaustion\<MKT>-<CONTRACT>-<spb>-pace-<session>.csv (time, side, pace, signal, push, ATR, bars from the
+ *        push extreme). Header + "Pace (buyers|sellers): rising / slowed / turned". Status PACE line.
  *  0.3.2 (2026-10-29, Rassul 06:04 CT "because its following the pivot rule it is not showing a lot of exhaustion signals - take off the
  *        pivot rule"): the lines show the 0.2.4 measure again on every closed bar (ex::compute: at a new N-bar high, buyers' peak S-bar
  *        pace since the lowest low of the last 20 bars / their pace on this bar; sellers the mirror; 1.0 otherwise), drawn as the 0.3.1
@@ -49,6 +56,7 @@
 #undef near
 #endif
 #include "ExhaustionLogic.h"
+#include "ExhaustionPace.h"   // (0.4.0) attacker pace vs its 9-bar signal
 #include "ExhaustionPivots.h"   // (0.3.0) IRT zigzag pivots + fade per pivot
 #include "HostSlot.h"
 #include <algorithm>
@@ -71,8 +79,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.3.2"          // keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.4.0"          // keep equal to ex::VERSION and the setVersion literal below
 
+static const COLOR C_SIG = 0x00FACC15, C_SIG_DIM = 0x00A16207, C_DOT = 0x009CA3AF;   // (0.4.0) signal yellow (sellers dimmer), slowed dot grey
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
 static inline bool finiteD(double v) { return v == v && v < 1e300 && v > -1e300; }
@@ -234,6 +243,8 @@ struct EXState {
     ex::Out out; int outFirst = 0; double liveB = 1, liveS = 1;
     // (0.3.0) confirmed pivots: bar time -> (+1 high = buyers fading / -1 low = sellers fading, ratio); added once, never changed
     std::map<long long, std::pair<int, double>> piv; long long pivSeen = 0; long pivLogged = 0;
+    // (0.4.0) pace / signal of the closed bars (same window as out) + the stage marks: bar time -> (push dir +1 / -1, SLOWED / TURNED)
+    pace::Out po; std::map<long long, std::pair<int, int>> paceMarks; long long paceSeen = 0;
 };
 
 class Exhaustion : public cppExtension {
@@ -287,7 +298,7 @@ void Exhaustion::identify(EXState& S) {
     const std::string id = root + "|" + sym + "|" + std::to_string(spb);
     if (id == S.identity && tick == S.tick) return;
     S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
-    S.P = ex::defaults(S.market); S.params = "study 2026-10-11"; S.vol.clear(); S.marks.clear(); S.markVal.clear(); S.pending.clear(); S.piv.clear(); S.pivSeen = 0;
+    S.P = ex::defaults(S.market); S.params = "study 2026-10-11"; S.vol.clear(); S.marks.clear(); S.markVal.clear(); S.pending.clear(); S.piv.clear(); S.pivSeen = 0; S.paceMarks.clear(); S.paceSeen = 0;
     S.count = 0; S.session = -1; S.lastNormsMs = -1; S.lastRecordAttemptMs = -1; S.rthO = S.rthC = -1; rthOf(S.market, S.rthO, S.rthC);
 }
 // the buyers / sellers of one bar from its volume at price (guarded like lsLiquidityProfile: a failed read is "not known")
@@ -325,6 +336,27 @@ void Exhaustion::calcBars(EXState& S, long count) {
         h.push_back(hh); l.push_back(ll); b.push_back(v.first); s.push_back(v.second);
     }
     S.out = ex::compute(h, l, b, s, S.P); S.outFirst = first;
+    // (0.4.0) pace / signal / stage marks; a mark is taken only on a bar NEWER than the last processed one (the sliding window's EMA seed
+    // can never add or move an old mark), queued once to the pace record, and kept as decided
+    S.po = pace::compute(h, l, b, s, S.P.S);
+    if (!S.po.pb.empty()) {
+        long long newest = S.paceSeen;
+        for (int k = 0; k < (int)S.po.pb.size(); ++k) {
+            const int bi = first + k; const long long bt = (long long)times[bi];
+            if (bt <= S.paceSeen) continue;
+            newest = std::max(newest, bt);
+            const int m = S.po.mark[(size_t)k]; if (m == pace::NONE || S.paceMarks.count(bt)) continue;
+            const int dir = S.po.dir[(size_t)k]; S.paceMarks[bt] = std::make_pair(dir, m);
+            const long long cs = ctSec((RTDATE)times[bi]); const long long ses = cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : -1;
+            if (ses < 0 || S.pending.size() >= RECORD_LINES_MAX) { ++S.recFails; continue; }
+            const double pc = dir > 0 ? S.po.pb[(size_t)k] : S.po.ps[(size_t)k], sg = dir > 0 ? S.po.sb[(size_t)k] : S.po.ss[(size_t)k];
+            char line[220]; std::snprintf(line, sizeof(line), "%lld|%s|%.2f|%.6g|%.6g|pace %s %s sig %.2f push %.6g atr %.4g dist %d S%d", bt, dir > 0 ? "top" : "bottom", pc,
+                (double)hi[bi], (double)lo[bi], m == pace::TURNED ? "turned" : "slowed", dir > 0 ? "buyers" : "sellers", sg, S.po.push[(size_t)k], S.po.atr[(size_t)k], S.po.dist[(size_t)k], S.P.S);
+            PendingRecord rec; rec.session = ses; rec.bar = bt; rec.side = dir > 0 ? -1 : 1; rec.val = pc; rec.line = line; rec.kind = 2; S.pending.push_back(rec);
+        }
+        S.paceSeen = newest;
+        while (S.paceMarks.size() > 4000) S.paceMarks.erase(S.paceMarks.begin());
+    }
     if (S.out.fb.empty()) return;
     const int f = (int)count - 2 - first;
     S.liveB = S.out.fb[f]; S.liveS = S.out.fs[f];
@@ -390,13 +422,13 @@ bool Exhaustion::flushRecords(EXState& S) {
     if (d.empty()) { ++S.recFails; return false; }
     makeDir(flexDir()); makeDir(d);
     std::map<long long, std::vector<size_t> > groups;                    // key = session * 2 + kind (0.3.0: E file / pivot file)
-    for (size_t i = 0; i < S.pending.size(); ++i) groups[S.pending[i].session * 2 + S.pending[i].kind].push_back(i);
+    for (size_t i = 0; i < S.pending.size(); ++i) groups[S.pending[i].session * 3 + S.pending[i].kind].push_back(i);
     std::vector<char> committed(S.pending.size(), 0);
     for (std::map<long long, std::vector<size_t> >::const_iterator g = groups.begin(); g != groups.end(); ++g) {
         std::vector<const PendingRecord*> add; add.reserve(g->second.size());
         for (size_t j = 0; j < g->second.size(); ++j) add.push_back(&S.pending[g->second[j]]);
-        const long long ses = g->first / 2; const bool pivot = (g->first % 2) != 0;
-        if (!publishRecords(d + "\\" + stem(S) + (pivot ? "-pivots-" : "-") + std::to_string(ses) + ".csv", add)) { ++S.recFails; continue; }
+        const long long ses = g->first / 3; const int kind = (int)(g->first % 3); const bool pivot = kind != 0;   // (0.4.0) 0 E, 1 pivots, 2 pace
+        if (!publishRecords(d + "\\" + stem(S) + (kind == 1 ? "-pivots-" : kind == 2 ? "-pace-" : "-") + std::to_string(ses) + ".csv", add)) { ++S.recFails; continue; }
         for (size_t j = 0; j < g->second.size(); ++j) {
             const size_t k = g->second[j];
             if (pivot) { committed[k] = 1; continue; } S.marks[S.pending[k].bar] = S.pending[k].side; S.markVal[S.pending[k].bar] = S.pending[k].val; committed[k] = 1;
@@ -413,6 +445,15 @@ void Exhaustion::load(EXState& S) {
         std::vector<DiskRecord> records;                                // (0.2.2) bounded, header-checked
         if (!readRecords(d + "\\" + stem(S) + "-" + std::to_string(k) + ".csv", records)) { ++S.recFails; continue; }
         for (size_t i = 0; i < records.size(); ++i) { S.marks[records[i].bar] = records[i].side; S.markVal[records[i].bar] = records[i].val; }
+        {   // (0.4.0) the recorded pace marks redraw exactly
+            std::vector<DiskRecord> pm;
+            if (readRecords(d + "\\" + stem(S) + "-pace-" + std::to_string(k) + ".csv", pm)) {
+                for (size_t i = 0; i < pm.size(); ++i) {
+                    S.paceMarks[pm[i].bar] = std::make_pair(pm[i].side < 0 ? 1 : -1, pm[i].line.find("|pace turned ") != std::string::npos ? (int)pace::TURNED : (int)pace::SLOWED);
+                    S.paceSeen = std::max(S.paceSeen, pm[i].bar);
+                }
+            } else ++S.recFails;
+        }
         std::vector<DiskRecord> pr;                                     // (0.3.0) the recorded pivots redraw exactly (never recomputed)
         if (!readRecords(d + "\\" + stem(S) + "-pivots-" + std::to_string(k) + ".csv", pr)) { ++S.recFails; continue; }
         for (size_t i = 0; i < pr.size(); ++i) {
@@ -457,6 +498,11 @@ void Exhaustion::status(EXState& S, long long now) {
             if (it->second.second + 1e-9 >= exp3::SHOW) ++shown;
             if (it->second.first > 0) { lh = it->first; rh = it->second.second; } else { ll = it->first; rl = it->second.second; }
         }
+        {
+            const size_t L = S.po.pb.size(); long nt = 0, ns = 0; for (std::map<long long, std::pair<int, int>>::const_iterator it = S.paceMarks.begin(); it != S.paceMarks.end(); ++it) (it->second.second == pace::TURNED ? nt : ns)++;
+            if (L) { const size_t k = L - 1; const bool up = S.po.dir[k] > 0;
+                o << "PACE,side " << (up ? "buyers" : "sellers") << ",pace " << (up ? S.po.pb[k] : S.po.ps[k]) << ",signal " << (up ? S.po.sb[k] : S.po.ss[k]) << ",push " << S.po.push[k] << ",atr " << S.po.atr[k] << ",marks slowed " << ns << " turned " << nt << "\n"; }
+        }
         o << "PIVOTS,zigzag N " << exp3::ZZ_N << ",show " << exp3::SHOW << ",pivots " << S.piv.size() << ",shown " << shown << ",last_high " << lh << " " << rh << ",last_low " << ll << " " << rl << "\n";
     }
     const std::string text = o.str(); if (text == S.lastStatusText) return;
@@ -472,7 +518,7 @@ void Exhaustion::pump() {
         identify(S);
         const long long now = steadyMs();
         const long long ct = ctSec(currentDate());
-        if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; S.marks.clear(); S.markVal.clear(); S.piv.clear(); load(S); } }
+        if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; S.marks.clear(); S.markVal.clear(); S.piv.clear(); S.paceMarks.clear(); load(S); } }
         if (S.lastNormsMs < 0 || now - S.lastNormsMs >= 60000) { S.lastNormsMs = now; norms(S); }
         const long count = getBarCount();
         calcBars(S, count);
@@ -494,11 +540,20 @@ void Exhaustion::render(EXState& S) {
     {
         int x = txt(pane.left + 4, pane.top + 1, "EXHAUSTION   ", C_GREY);
         x = txt(x, pane.top + 1, "Buyers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveB), C_SELL); x = txt(x, pane.top + 1, " (" + xs(T) + ")   ", C_GREY);
-        x = txt(x, pane.top + 1, "Sellers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveS), C_BUY); txt(x, pane.top + 1, " (" + xs(T) + ")", C_GREY);
+        x = txt(x, pane.top + 1, "Sellers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveS), C_BUY); x = txt(x, pane.top + 1, " (" + xs(T) + ")   ", C_GREY);
+        // (0.4.0) the attacker's pace stage on the last closed bar: turned (pace under its signal) / slowed (above it, falling) / rising
+        if (!S.po.pb.empty()) {
+            const size_t k = S.po.pb.size() - 1; const bool up = S.po.dir[k] > 0;
+            const std::vector<double>& pp = up ? S.po.pb : S.po.ps; const std::vector<double>& ss = up ? S.po.sb : S.po.ss;
+            const char* st = pp[k] < ss[k] ? "turned" : (k > 0 && pp[k] < pp[k - 1]) ? "slowed" : "rising";
+            x = txt(x, pane.top + 1, std::string("Pace (") + (up ? "buyers" : "sellers") + "): ", C_GREY); txt(x, pane.top + 1, st, up ? C_SELL : C_BUY);
+        }
         // whether the nightly study has confirmed this market's E on his trade (unseen days): "testing" until it has
         const int w = getTextWidth(S.proven.c_str(), -1); txt(pane.right - w - 8, pane.top + 1, S.proven, C_GREY);
     }
-    const int top = pane.top + 30, bottom = pane.bottom - 4;
+    // (0.4.0) the pane is split: ratio spikes on top (0.3.2, unchanged), the attacker's PACE / SIGNAL band below on its own scale
+    const int split = pane.top + 30 + (pane.bottom - pane.top - 34) * 55 / 100;
+    const int top = pane.top + 30, bottom = split;
     auto val = [&](int bar, bool buyers) { const int k = bar - S.outFirst; if (k < 0 || k >= (int)S.out.fb.size()) return 1.0; return buyers ? S.out.fb[k] : S.out.fs[k]; };
     auto shown = [&](int bar, bool buyers) { const double v = val(bar, buyers); return v + 1e-9 >= T ? v : 0.0; };   // < 2x = 0 (still in the status / data)
     std::vector<int> vis;
@@ -524,13 +579,51 @@ void Exhaustion::render(EXState& S) {
             const std::string t = xs(v); const int w = getTextWidth(t.c_str(), -1); txt(x - w / 2, y - 14, t, c);
         }
     }
+    // (0.4.0) PACE band: the side attacking the current push (last closed bar) - its pace (red buyers / green sellers, 2 px) and its
+    // 9-bar EMA signal (yellow, sellers dimmer, 1 px); stage marks of that side: SLOWED = grey dot on the pace line, TURNED = triangle
+    // in the side's colour at the cross + "T". Marks are the recorded ones (decided on the close, never repainted).
+    if (!S.po.pb.empty() && (int)S.po.pb.size() == (int)S.out.fb.size()) {
+        const int pTop = split + 6, pBot = pane.bottom - 4;
+        const size_t L = S.po.pb.size() - 1; const bool up = S.po.dir[L] > 0;
+        const std::vector<double>& pp = up ? S.po.pb : S.po.ps; const std::vector<double>& sg = up ? S.po.sb : S.po.ss;
+        const COLOR cp = up ? C_SELL : C_BUY, cs = up ? C_SIG : C_SIG_DIM;
+        double pm = 1.0; for (size_t k = 0; k < vis.size(); ++k) { const int j = vis[k] - S.outFirst; if (j >= 0 && j < (int)pp.size()) pm = std::max(pm, std::max(pp[(size_t)j], sg[(size_t)j])); }
+        pm *= 1.1;
+        auto yP = [&](double v) { return pBot - (int)((pBot - pTop) * std::min(1.0, std::max(0.0, v / pm))); };
+        setPen(C_AXIS, 1, P_SOLID);
+        { PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(split + 2); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(split + 2); b.drawLineTo(); }
+        for (int line = 0; line < 2; ++line) {
+            const std::vector<double>& v = line == 0 ? sg : pp; setPen(line == 0 ? cs : cp, line == 0 ? 1 : 2, P_SOLID); bool started = false;
+            for (size_t k = 0; k < vis.size(); ++k) {
+                const int j = vis[k] - S.outFirst; if (j < 0 || j >= (int)v.size()) continue;
+                PNT q; q.set(0, 0.0f); q.h = coord(xOf(vis[k])); q.v = coord(yP(v[(size_t)j]));
+                if (!started) { q.setDrawPosition(); started = true; } else q.drawLineTo();
+            }
+        }
+        RTARRAYI tms(barDateTime);
+        if (tms.count >= count) for (size_t k = 0; k < vis.size(); ++k) {
+            std::map<long long, std::pair<int, int>>::const_iterator m = S.paceMarks.find((long long)tms[vis[k]]);
+            if (m == S.paceMarks.end() || m->second.first != (up ? 1 : -1)) continue;
+            const int j = vis[k] - S.outFirst; if (j < 0 || j >= (int)pp.size()) continue;
+            const int x = xOf(vis[k]), y = yP(pp[(size_t)j]);
+            if (m->second.second == pace::SLOWED) { RCT d; d.set(coord(x - 2), coord(y - 2), coord(x + 3), coord(y + 3)); d.draw(0, C_DOT, C_DOT, DRAW_OPAQUE, PAT_SOLID); }
+            else {
+                setPen(cp, 1, P_SOLID);
+                PNT a; a.set(0, 0.0f); a.h = coord(x); a.v = coord(y + 2); a.setDrawPosition();
+                PNT b; b.set(0, 0.0f); b.h = coord(x - 4); b.v = coord(y + 9); b.drawLineTo();
+                PNT c; c.set(0, 0.0f); c.h = coord(x + 4); c.v = coord(y + 9); c.drawLineTo();
+                PNT e; e.set(0, 0.0f); e.h = coord(x); e.v = coord(y + 2); e.drawLineTo();
+                txt(x - 3, y + 10, "T", cp);
+            }
+        }
+    }
 }
 
 extern "C" cppExtension* CreateExtension(void) {
     Exhaustion* p = new Exhaustion();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
-    p->setDescription("LRA Exhaustion (0.3.2): is the side pushing price running out? Two lines at 0 that rise on a closed bar at / over 2.0x. Red = buyers fading at a new N-bar high (bearish): the buyers' peak pace in the push (since the lowest low of the last 20 bars) / their pace on this bar; green = sellers fading at a new N-bar low (bullish), the mirror. Closed bars only, never repainted.");
-    p->setVersion("0.3.2");   // EX_VERSION
+    p->setDescription("LRA Exhaustion (0.4.0): top - two lines at 0 that rise on a closed bar at / over 2.0x (red = buyers fading at a new N-bar high: their peak pace in the push since the lowest low of the last 20 bars / their pace on this bar; green = sellers fading at a new N-bar low). Bottom - the attacking side's PACE (aggressive volume averaged over S bars) and its 9-bar EMA SIGNAL (yellow): grey dot = slowed, T = pace crossed under its signal (pushes of 2 ATR or more). Closed bars only, never repainted.");
+    p->setVersion("0.4.0");   // EX_VERSION
     return p;
 }
