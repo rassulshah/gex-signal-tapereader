@@ -121,7 +121,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.4.1";   // (1.4.1, 2026-10-29 13:20 CT crash fix) the CoB flags come from getChartIndicator only - no getCustomIndicator (IRT fast-fail 0xC0000409 on opening the Add Indicator window, WER bucket 5c8499f9)   // was 1.4.0: (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.4.2";   // (1.4.2, 2026-10-29 Rassul 13:02 CT) right-edge tags restored as 1.3.4 drew them (the Levels-column "WPOC" he asked for is the WEEKLY POC; lsDealerProfile 2.39.0 drops the Wave POC badge); the version header moved bottom-right (it sat on the REV UP banner)   // was 1.4.1:   // (1.4.1, 2026-10-29 13:20 CT crash fix) the CoB flags come from getChartIndicator only - no getCustomIndicator (IRT fast-fail 0xC0000409 on opening the Add Indicator window, WER bucket 5c8499f9)   // was 1.4.0: (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -629,6 +629,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setDescription("LRA Wave POC v1.3.4 - each big wave's (and each CoB leg's) own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as pullback targets.");
-    p->setVersion("1.4.1");   // = WP_VERSION (gex-build reads this literal)
+    p->setVersion("1.4.2");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

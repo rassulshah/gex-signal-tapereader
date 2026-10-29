@@ -250,7 +250,7 @@ static void testLayout(const Fix& F) {
         if (p.k == wpc::Prim::BOX) noBoxes = false;
         if (p.k == wpc::Prim::LINE && p.col == 0xE5E7EB && p.w == 1) whiteLine1 = true;
     }
-    CHECK(texts == 0 && tagsRight, "(1.4.0) no right-edge price tags (the open WPOC is a badge in lsDealerProfile's Levels column)");
+    CHECK(texts == sc.tagsShown && tagsRight, "(1.4.2) the right-edge price tags are back (1.3.4): every tag right of the last bar (" << texts << " shown)");
     (void)whiteLine1;
     {   // (1.2.0, Rassul 16:26 CT "remove the drawing of levels across the chart and from the wave pocs") no line / circle at all (zigzag off)
         int lines = 0, ovals = 0; for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::LINE && std::min(p.x0, p.x1) < xLast - 1 && !(p.w == 2 && p.x0 == p.x1)) ++lines; /* (1.3.3) not the spines */ if (p.k == wpc::Prim::OVAL) ++ovals; }   // (the tag leader right of the last bar is the tag itself)
@@ -275,7 +275,7 @@ static void testLayout(const Fix& F) {
             sp += n; if (n != 1) ok = false; }
         CHECK(ok && sp == 4, "(1.3.3) spines: 4 waves, one each, green up / red down, spanning the wave's range (" << sp << ")"); }
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.4.1", "header Wave POC v1.4.1");
+    CHECK(header && std::string(wpc::VERSION) == "1.4.2", "header Wave POC v1.4.2");
     {   // (1.4.0) the open WPOC handed to lsDealerProfile: the latest confirmed wave's node [0] while OPEN, else none
         long long tk = 0; const bool has = wpc::latestOpenPoc(E, tk);
         const wpc::Wave* lw = nullptr; for (const wpc::Wave& w : E.waves) if (!w.pending) lw = &w;
@@ -585,8 +585,8 @@ static void test132() {
         bool inside = true; int cut = 0; for (const wpc::Prim& p : s2.p) { if (std::min(p.x0, p.x1) < c.clipL || std::max(p.x0, p.x1) > c.clipR) inside = false; if (p.k == wpc::Prim::FILL && p.col == 0x334155 && p.x0 == c.clipL) ++cut; }
         int sameEnds = 0; for (const wpc::Prim& p : s2.p) if (p.k == wpc::Prim::FILL && p.col == 0x334155 && p.x0 == c.clipL) for (const wpc::Prim& q : sc.p) if (q.k == wpc::Prim::FILL && q.col == 0x334155 && q.y0 == p.y0 && q.x0 == xs && q.x1 == p.x1) { ++sameEnds; break; }
         CHECK(inside && cut > 0 && sameEnds == cut, "(1.3.2) Levels column: nothing drawn left of it, the profile is clipped not shifted (" << cut << " rows cut)");
-        bool hdr = false; for (const wpc::Prim& p : s2.p) hdr = hdr || (p.k == wpc::Prim::TEXT && p.x0 == c.clipL + 4);
-        CHECK(hdr, "(1.3.2) the version header starts right of the Levels column");
+        bool hdr = false; for (const wpc::Prim& p : s2.p) hdr = hdr || (p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC v", 0) == 0 && p.x0 >= c.clipL && p.x1 == std::min(c.r, c.clipR) - 4 && p.y1 == c.b - 3);
+        CHECK(hdr, "(1.4.2) the version header sits bottom-right inside the drawing area (right of the Levels column, off the top-left banner)");
     }
     // (d) profiles never overlap: a profile is cut at the next profile's start
     {   wpc::Engine E; wpc::Wave a; a.dir = -1; a.i0 = 2; a.i1 = 12; a.e0 = 100; a.rowTicks = 1; a.rows.assign(10, 50); a.rows[4] = 400; a.maxVol = 400; a.scanned = 12;

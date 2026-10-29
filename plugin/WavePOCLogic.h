@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.4.1";   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.4.2";   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -771,7 +771,7 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
     auto xNext = [&](const Wave* w) { double x = 1e9; for (const Wave* o : ws) if (o->i0 > w->i0) x = std::min(x, v.X(o->i0) - v.bw * 0.45); return x; };
     for (int ph = 0; ph < 2; ++ph)
         for (const Wave* w : ws) drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w));
-    s.tagsHidden += (int)tags.size(); (void)drawTags;   // (1.4.0, Rassul approved 11:18 CT) the right-edge tags are no longer drawn: the open WPOC is a badge in lsDealerProfile's Levels column
+    drawTags(s, v, C, tags);   // (1.4.2, 2026-10-29 13:02 CT) the right-edge tags are back exactly as 1.3.4 drew them: the "WPOC" Rassul asked for in the Levels column was the WEEKLY POC, not this indicator's   // was (1.4.0): not drawn
     if (v.zigzag) drawZigzag(s, E, v, C);
     // (1.3.2, Rassul 18:24 CT profiles drawn under the Levels column) every primitive kept inside [clipL, clipR]: fills / lines cut
     // (a profile that starts inside the column is clipped, never shifted), text not drawn when it would cross an edge
@@ -787,7 +787,10 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
         }
         s.p.swap(kept);
     }
-    Prim h; h.k = Prim::TEXT; h.text = std::string("Wave POC v") + VERSION; h.x0 = std::max(v.l, v.clipL) + 4; h.y0 = v.t + 22; h.x1 = h.x0 + (v.textW ? v.textW(h.text, false) : 100) + 2; h.y1 = h.y0 + 13; h.col = C.grey; h.back = false; s.p.push_back(h);
+    // (1.4.2) the version header moved to the BOTTOM-RIGHT of the drawing area: at the top-left it sat on the REV UP / HOD-LOD banner (13:03 screenshot)
+    {   Prim h; h.k = Prim::TEXT; h.text = std::string("Wave POC v") + VERSION; const int w = (v.textW ? v.textW(h.text, false) : 100) + 2;
+        h.x1 = std::min(v.r, v.clipR) - 4; h.x0 = h.x1 - w; h.y1 = v.b - 3; h.y0 = h.y1 - 13; h.col = C.grey; h.back = false;
+        if (h.x0 >= std::max(v.l, v.clipL)) s.p.push_back(h); }
     return s;
 }
 

@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace dprset {
-static const char* const PLUGIN_VERSION = "2.38.0";   // (2.38.0) no settings change (zone age, R?)   // was "2.37.0":   // (2.37.0) no settings change (badge order, 0.25 ATR one-level rank, rank history)   // was "2.36.1":   // (2.36.1) no settings change (the Key Levels column ground solid, chart background colour)
+static const char* const PLUGIN_VERSION = "2.39.0";   // (2.39.0) no settings change (weekly POC marker, no Wave POC badge, liquidity column width)   // was "2.38.0":   // (2.38.0) no settings change (zone age, R?)   // was "2.37.0":   // (2.37.0) no settings change (badge order, 0.25 ATR one-level rank, rank history)   // was "2.36.1":   // (2.36.1) no settings change (the Key Levels column ground solid, chart background colour)
 // was 2.36.0:   // (2.36.0) no settings change (no level / order / HELD lines in the price area)
 // was PLUGIN_VERSION "2.35.0";   // (2.35.0) no settings change (the zone candidate rule)
 // was PLUGIN_VERSION "2.34.0";   // (2.34.0) no settings change (key + volume levels + one VWAP; odds left, names + price right; HOD/LOD box right of the column)

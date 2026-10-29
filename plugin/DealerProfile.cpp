@@ -141,7 +141,8 @@ static std::vector<t10::Out> dpMergeSides(const std::vector<t10::Out>& b, const 
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.38.0";   // (2.38.0, 2026-10-29 Rassul approved 11:18 CT) a WPOC badge in the Key Levels column = the latest wave's OPEN Wave POC from lsWavePOC 1.4.0 (SignalBoard W); the KING nodes from lsLiquidityProfile 0.69.0 (B code 3): a K row at their price, off screen the edge marker "K <price> <lots> (x)"; the Liquidity column: the zone's AGE next to its amount ("223 \xB7 48m", from lsLiquidityProfile 0.69.0's first-candidate time); R? after a touch tag when the zone was rebuilt >= what was hit (untested "?"; live only, not recorded)   // was 2.37.0: (2.37.0, 2026-10-29 Rassul approved 09:33 CT, mockup orderlines-levels-mockup.html) Key Levels badge order left to right: odds (left-justified) ... VALUE, NAME chip(s), the LIQUIDITY RANK box right-most (no rank = no box; same 230 px; odds drop first); rank rule option c: a zone counts only from the level out to 0.25 ATR (3-min) BEYOND it (one-sided, away from price) and each zone goes to ONE level (the nearest) - no rank twice (LevelsColumn.h lrk 1.0.0); liqlevels.csv follows the same rule; every rank change appended to lsFlexLevels\\DealerProfile\\<MKT>-liqlevels-history-<session>.csv (time, level, price, rank, lots)   // was 2.36.1: (2.36.1, 2026-10-28 18:24 CT Rassul "you shouldn't be able to see the background") the Key Levels column ground is SOLID: the chart background colour (getBackgroundColor), the full column (pane left edge to the column edge, pane top to bottom, no cut-out), drawn first in the levels pass - before the narrow-chart return - so nothing DealerProfile or an indicator drawn before it paints there shows through; badges / odds / ticks on top
+static const char* DP_VERSION = "2.39.0";   // (2.39.0, 2026-10-29 Rassul 13:02 CT) no Wave POC badge (his "WPOC" = the WEEKLY POC); the weekly POC off screen = its own marker "Weekly POC 7,690.00  (-42.00)" at the Key Levels column's top / bottom edge; liquidity column re-laid out (bars use the column width, the left tag lane wider)
+// was 2.38.0:   // (2.38.0, 2026-10-29 Rassul approved 11:18 CT) a WPOC badge in the Key Levels column = the latest wave's OPEN Wave POC from lsWavePOC 1.4.0 (SignalBoard W); the KING nodes from lsLiquidityProfile 0.69.0 (B code 3): a K row at their price, off screen the edge marker "K <price> <lots> (x)"; the Liquidity column: the zone's AGE next to its amount ("223 \xB7 48m", from lsLiquidityProfile 0.69.0's first-candidate time); R? after a touch tag when the zone was rebuilt >= what was hit (untested "?"; live only, not recorded)   // was 2.37.0: (2.37.0, 2026-10-29 Rassul approved 09:33 CT, mockup orderlines-levels-mockup.html) Key Levels badge order left to right: odds (left-justified) ... VALUE, NAME chip(s), the LIQUIDITY RANK box right-most (no rank = no box; same 230 px; odds drop first); rank rule option c: a zone counts only from the level out to 0.25 ATR (3-min) BEYOND it (one-sided, away from price) and each zone goes to ONE level (the nearest) - no rank twice (LevelsColumn.h lrk 1.0.0); liqlevels.csv follows the same rule; every rank change appended to lsFlexLevels\\DealerProfile\\<MKT>-liqlevels-history-<session>.csv (time, level, price, rank, lots)   // was 2.36.1: (2.36.1, 2026-10-28 18:24 CT Rassul "you shouldn't be able to see the background") the Key Levels column ground is SOLID: the chart background colour (getBackgroundColor), the full column (pane left edge to the column edge, pane top to bottom, no cut-out), drawn first in the levels pass - before the narrow-chart return - so nothing DealerProfile or an indicator drawn before it paints there shows through; badges / odds / ticks on top
 // was 2.36.0:   // (2.36.0, 2026-10-28 16:26 CT Rassul "the chart is extremely messy, remove the drawing of levels across the chart") NO level lines across the price area (badges stay in the Key Levels column, a <= 6 px tick at its edge), no faint liquidity order lines, no HELD line / word on the chart (HELD = a tag in the liquidity column lane; record + outcome logic unchanged), the off-screen level markers in the Key Levels column top / bottom
 // was 2.35.0:   // (2.35.0, 2026-10-28 14:04 CT Rassul approved the new liquidity-column candidate rule) when lsLiquidityProfile 0.67.0 posts its ZONE candidates (SignalBoard B code 2 = LiqTouch 1.1.0 pickZones: real orders only - rested 30 s+, re-priced < 2x in 5 min; a price + its +-1 tick neighbours; >= 2.0x the median real level of that side within 3 ATR, median every 60 s; one node per distribution) the column shows the TOP 3 BIDS below price + the TOP 3 OFFERS above (max 6, fewer when fewer pass), each side on its own steady board (Top10Stable, cap 3), the KING = the biggest of all shown (white chip + K, edge marker unchanged); touch tags + HELD on every shown level; the p97 tier is a log field only (LP status LIQ_CANDIDATES). No code-2 facts (old LP / no order feed) = the 2.34.0 path
 // was 2.34.0 (see the line above for 2.35.0)   // (2.34.0, 2026-10-28 12:50 CT Rassul "regarding the levels it should only be the key price levels and the volume levels, 1 vwap level which is the latest. lets not have the gamma levels right now. the percentages should be behind the level names to the left justified. and the level name and value should be right justified. the hod lod should be on the right of the level column not in it") the Key Levels column holds ONLY key levels + volume levels + ONE VWAP badge (the latest session VWAP, computed here from the chart bars with SessionVWAPLogic - RTH during / after RTH, else the overnight one; never the +-1 / +-2 bands), no gamma; inside each row the odds are LEFT-justified at the column's left edge and the name chips + price RIGHT-justified at its right edge (next to the candles); the HOD/LOD table no longer docks in the column (lsHodLod 2.11.0 docks it bottom-left, right of it - ColumnBoard 1.9.1): the column keeps its full height and width; HELD words step clear of that table
@@ -281,7 +282,9 @@ public:
         int badgesShown = 0, badgesDropped = 0, nodeTexts = 0, nodeTextsHidden = 0, nodesTiny = 0;
         double vwapPx = 0; int vwapBadges = 0, keysFiltered = 0, ttHeldClipped = 0;   // (2.34.0)
         long long liqLastMs = -1, lpMedMs = -1; std::string liqLastBody, liqWhy = "not yet"; int liqWrites = 0, liqRows = 0; double lpMedB = 0, lpMedA = 0;   // (2.36.0) <MKT>-liqlevels.csv
-        bool wpocSeen = false; double wpocPx = 0;   // (2.38.0) the Wave POC badge
+        bool wpocSeen = false; double wpocPx = 0;   // (2.38.0) the Wave POC badge (2.39.0: no longer read)
+        std::string weeklyText;   // (2.39.0) the weekly POC marker drawn last (tests)
+        int lqBarW = 0, lqLotW = 0, lqTagLane = 0;   // (2.39.0) the liquidity column's bar room / amount reserve / tag lane this draw (status, tests)
         struct King { double px = 0; long long lots = 0; bool bid = false; double x = 0; long long since = 0; }; std::vector<King> kings; int kingsOn = 0, kingsEdge = 0;   // (2.38.0)
         double rankReachPx = 0; lrk::History rankHist; int histWrites = 0, histFails = 0, histLines = 0; std::string histMkt;   // (2.37.0) 0.25 ATR rank reach + the rank-change history file
         COLOR keysBg = 0;   // (2.36.1) the Key Levels column ground colour drawn (= getBackgroundColor)
@@ -346,6 +349,7 @@ public:
     double atr14();                              // (2.28.0) the chart's 14-candle ATR (the row merge tolerance)
     struct OffLvl { bool have = false; std::string name; double px = 0, dist = 0; };
     OffLvl offUp, offDn; double lastPxLv = 0;  // (2.28.0) the nearest level above / below the screen, this draw
+    OffLvl offWk;   // (2.39.0) the WEEKLY POC off screen: always its own marker "Weekly POC 7,690.00  (-42.0)" at the column's top / bottom edge
     short rightEdge(const RCT& pane);
     dl::Data D;
     std::string mkt, root;
@@ -1188,7 +1192,8 @@ void DealerProfile::writeStatus(const char* what)
       << ",shown top " << (cs.zMode ? 2 * DP_SIDEN : DP_TOPN) << " (both sides),steady Top10Stable " << t10::VERSION << " (in 30 s + 1.20x, out 10 s, swap 1.25x),book levels on screen " << cs.qBoard << ",ranked over the whole posted book (not the visible pane) " << cs.qBoard << " levels,off screen in the top 10 " << cs.qOff << ",king off screen (edge marker) " << cs.qKingOff << ",moving / quoting dimmed ~ (LevelFade " << lfd::VERSION << ", never dropped) " << cs.qQuoting << ",king ~ " << cs.qMovedMarks << ",tracked " << cs.top10.tracked() << ",place " << (cb::LEVELS_LEFT ? "left" : cb::LEVELS_OUTER ? "right, after Delta (rank | bar | lots)" : "right") << "\n"
       << "KEYS_COLUMN,left edge (ColumnBoard " << cb::VERSION << "),x " << cs.keysL << ",width " << cs.keysW << ",ground solid 0x" << std::hex << (unsigned)cs.keysBg << std::dec << " (chart background, full column)" << ",HOD/LOD table " << (cs.keysDocked ? "docked bottom-left, right of the column" : "not docked") << ",VWAP " << cs.vwapPx << " (badges " << cs.vwapBadges << "),filtered (gamma / VWAP bands) " << cs.keysFiltered << ",layout odds left | name + price right" << ",badges from y " << cs.keysTop << ",moved (tick) " << cs.keysMoved << ",odds cut " << cs.keysOddsCut << ",liquidity rank chips " << cs.keysRankChips << ",in the price area 0\n"
       << "LIQLEVELS," << dpLiqPath(mkt) << ",rows " << cs.liqRows << ",writes " << cs.liqWrites << "," << cs.liqWhy << ",LP median bid " << cs.lpMedB << " / offer " << cs.lpMedA << "\n"
-      << "WPOC_BADGE,lsWavePOC W " << (cs.wpocSeen ? "read" : "none (lsWavePOC 1.4.0 not on this chart)") << ",open WPOC " << cs.wpocPx << "\n"
+      << "WEEKLY_POC," << (offWk.have ? "off screen " + std::string(offWk.dist >= 0 ? "above" : "below") + " (column edge marker)" : std::string("on screen or none (badge)")) << " (2.39.0; the Wave POC badge of 2.38.0 removed)\n"
+      << "LIQ_LAYOUT,bar room " << cs.lqBarW << " px,amount reserve " << cs.lqLotW << " px,tag lane " << cs.lqTagLane << " px (2.39.0: only while a tag is shown)\n"
       << "KING_NODES,from lsLiquidityProfile B code 3: " << cs.kings.size() << ",rows on screen " << cs.kingsOn << ",edge markers " << cs.kingsEdge << "\n"
       << "RANK_RULE,LevelsColumn lrk " << lrk::VERSION << ",reach " << lrk::REACH_ATR << " ATR (3-min) beyond = " << cs.rankReachPx << ",one level per zone,history session " << cs.rankHist.session << " lines " << cs.histLines << " writes " << cs.histWrites << " fails " << cs.histFails << "\n"
       << "LEVELS_COLUMN," << (DP_LINES ? "lines (LevelsColumn " : DP_LVC ? "combined (LevelsColumn " : "off (") << lvc::VERSION << ")" << ",rows " << cs.lvcRows << ",merged rows " << cs.lvcMerged << ",with liquidity " << cs.lvcLiq << ",GEX rows " << cs.lvcGex << ",chips cut " << cs.lvcChipsCut << ",orders " << cs.lmtO.size() << ",order file " << (cs.lmtWhy.empty() ? std::string("ok") : cs.lmtWhy) << ",dealer bars " << (DP_BARS ? "on" : "off") << ",off-screen " << (offUp.have ? offUp.name : std::string("-")) << " / " << (offDn.have ? offDn.name : std::string("-")) << "\n"
@@ -1827,10 +1832,8 @@ void DealerProfile::drawKeyLevels(const Settings& S)
     (void)S;
     if (mkt.empty()) return;
     std::vector<klv::Merged> Lw = nativeLevels(mkt);
-    {   // (2.38.0, Rassul approved 11:18 CT) the WPOC badge: the latest wave's OPEN Wave POC from lsWavePOC 1.4.0 (SignalBoard W, decided), as a level
-        std::vector<sb::Fact> W; cs.wpocSeen = sb::readFacts('W', cs.sym, cs.spb, cs.chart, dpNowMs(), W, true); cs.wpocPx = 0;
-        for (const sb::Fact& f : W) if (f.code == 1 && dpFinite(f.lo) && f.lo > 0) { cs.wpocPx = f.lo; Lw.push_back(klv::Merged{ "WPOC", f.lo, false }); break; }
-    }
+    // (2.39.0, Rassul 13:02 CT) NO Wave POC badge: the "WPOC" he asked for in this column is the WEEKLY POC (WPoc, computed here) - the 2.38.0
+    // badge from lsWavePOC's fact W was a misunderstanding; lsWavePOC 1.4.2 draws its own right-edge tags again
     const std::vector<klv::Merged>& L = Lw;
     if (L.empty()) return;
     RCT pane; pane.getPaneRect(false);
@@ -1853,6 +1856,7 @@ void DealerProfile::drawKeyLevels(const Settings& S)
         if (q.name.empty()) continue;
         PNT pp; pp.set((int)(nb - 1), (float)q.price); short y = pp.v;
         if (y <= pane.top || y >= pane.bottom) {   // (2.28.0) the nearest level off screen above / below
+            if (lastC > 0 && q.name == "WPoc") { offWk.have = true; offWk.name = "Weekly POC"; offWk.px = q.price; offWk.dist = q.price - lastC; continue; }   // (2.39.0) its own marker, never folded into the nearest-level one
             if (DP_LVC && lastC > 0) { OffLvl& o = q.price > lastC ? offUp : offDn; const double d = q.price - lastC;
                 if (!o.have || std::fabs(d) < std::fabs(o.dist)) { o.have = true; o.name = dcol::compactName(klv::displayName(q.name)); o.px = q.price; o.dist = d; } }
             continue;
@@ -2243,6 +2247,16 @@ static void dpLiqMedians(double& mb, double& ma, long long& at, const std::strin
     const size_t q = t.find(" / offer ", p); double a = 0; if (q != std::string::npos && q < p + 64) a = std::strtod(t.c_str() + q + 9, nullptr);
     mb = std::isfinite(b) && b > 0 ? b : 0; ma = std::isfinite(a) && a > 0 ? a : 0;
 }
+// (2.39.0) the weekly POC's off-screen marker text: "^ Weekly POC 7,690.00  (+42.00)" (thousands separators); shorter forms when the column is narrow
+template <class W> static std::string dpWeeklyOffText(double px, double dist, int dec, bool up, W width, int room)
+{
+    char b[48]; std::snprintf(b, sizeof(b), "%.*f", dec, px); std::string t = b, o; const size_t dot = t.find('.'); const size_t ip = dot == std::string::npos ? t.size() : dot;
+    for (size_t i = 0; i < t.size(); ++i) { if (i > 0 && i < ip && (ip - i) % 3 == 0 && t[i - 1] != '-') o += ','; o += t[i]; }
+    char d[32]; std::snprintf(d, sizeof(d), "%s%.*f", dist >= 0 ? "+" : "-", dec, std::fabs(dist));
+    const std::string a = up ? "^ " : "v ";
+    const std::string c1 = a + "Weekly POC " + o + "  (" + d + ")", c2 = a + "Weekly POC " + o, c3 = a + "WPOC " + o;
+    if (width(c1) <= room) return c1; if (width(c2) <= room) return c2; return c3;
+}
 void DealerProfile::flushLines(const Settings& S)
 {
     cs.badgesShown = cs.badgesDropped = 0; cs.lvcRows = cs.lvcLiq = cs.lvcMerged = cs.lvcChipsCut = 0; cs.qMovedMarks = 0;
@@ -2438,6 +2452,12 @@ void DealerProfile::flushLines(const Settings& S)
         if (hbOn && hb.l < kR && hb.r > kL) { if (hb.t < (pane.top + pane.bottom) / 2) kTop = std::max(kTop, hb.b + 4); else kBot = std::min(kBot, hb.t - 4); }   // (2.34.0) only a table NOT docked (its own Position over the column)
         if (offUp.have) { offLine(offUp, kTop + bh / 2, true); kTop += bh + 2; }   // (2.36.0) the off-screen markers in the column
         if (offDn.have) { offLine(offDn, kBot - bh / 2, false); kBot -= bh + 2; }
+        if (offWk.have) {   // (2.39.0, Rassul 13:02 CT "the weekly POC is missing") its own clearly named marker at the edge it is beyond, in the WPoc beige
+            const bool up = offWk.dist >= 0;
+            const std::string t = dpWeeklyOffText(offWk.px, offWk.dist, dec, up, [&](const std::string& x) { return textW(x.c_str(), sf, false); }, kW - 8);
+            if (up) { textLJ((short)(kL + 4), (short)(kTop + bh / 2), t.c_str(), (COLOR)0x00E8D5B0, sf, true); kTop += bh + 2; }
+            else { textLJ((short)(kL + 4), (short)(kBot - bh / 2), t.c_str(), (COLOR)0x00E8D5B0, sf, true); kBot -= bh + 2; }
+            cs.weeklyText = t; }
         cs.keysTop = kTop;
         std::vector<cb::Item> kit; for (const BG& g : bgs) { cb::Item it; it.want = g.y; it.h = bh + 1; kit.push_back(it); }
         int fy = (pane.top + pane.bottom) / 2; if (lastPx > 0) { PNT p; p.set((int)nb - 1, (float)lastPx); fy = p.v; }
@@ -2560,7 +2580,19 @@ void DealerProfile::flushLines(const Settings& S)
         // should switch places": rank nearest price (the column's left edge) | <- bar anchored at the outer side, pointing toward price | lots
         const int TGW = textW("STAYS+ R?", sf, true) + 6;   // (2.38.0) room for " R?"   // (2.32.0) the tag lane right of the rank chip (always reserved: bars never jump)
         // (2.37.0) row = rank | bar | lots | tag ("1 [bar] 92 STAYS"): the tag lane is at the row's RIGHT end, after the amount
-        const int RKX = col.l + 4, BX = RKX + bh + 1, BW = col.r - BX - 34 - TGW, BAR_R = col.r - 34 - TGW, TGX = col.r - TGW + 2;
+        // (2.39.0, Rassul 13:02 CT "a big unused black area right of the size bars / lot numbers") the bars use the column: the reserve right of
+        // the bar = the longest amount label actually drawn (+ 6 px) and the tag lane only while a tag is drawn (was always 34 px + the tag lane)
+        int LOTW = 0; bool anyTag = false;
+        {   const long long nowS0 = ctNowSec();
+            for (const TopQ& q : topq) { if (!q.on) continue; std::string lt0 = (q.dim ? "~" : "") + std::to_string(q.lots);
+                if (q.since > 0) { const long long age = nowS0 > q.since ? (nowS0 - q.since) / 60 : -1; if (age >= 1 && age < 7 * 24 * 60) lt0 += age >= 60 ? " \xB7 0h00" : " \xB7 00m"; }
+                LOTW = std::max(LOTW, textW(lt0.c_str(), sf, false)); }
+            for (size_t k = 0; k < cs.kings.size(); ++k) { char kb0[48]; std::snprintf(kb0, sizeof(kb0), "%lld (%.1fx)", cs.kings[k].lots, cs.kings[k].x); LOTW = std::max(LOTW, textW(kb0, sf, false)); }
+            for (const TagRow& r : trs) if (r.tag >= 0 && r.row >= 0) anyTag = true;
+            LOTW = std::min(LOTW + 6, (col.r - col.l) / 2); }
+        const int TGR = anyTag ? TGW : 0;   // the reserved tag lane, only while a tag is shown
+        const int RKX = col.l + 4, BX = RKX + bh + 1, BW = std::max(12, col.r - BX - 8 - LOTW - TGR), BAR_R = col.r - 8 - LOTW - TGR, TGX = col.r - TGW + 2;
+        cs.lqBarW = BW; cs.lqLotW = LOTW; cs.lqTagLane = TGR;
         auto tagColour = [&](int tag, int side) -> COLOR { const int c = ltc::tagColour(tag, side > 0 ? ltc::BID : ltc::ASK); return c > 0 ? C_BUY : c < 0 ? C_SELL : (COLOR)0x0094A3B8; };
         auto drawTag = [&](size_t d, int yc) { for (const TagRow& r : trs) if (r.row == (long long)d) {
             if (r.tag < 0) continue;   // (2.37.0) never HELD / BREAK in the column
@@ -2597,7 +2629,7 @@ void DealerProfile::flushLines(const Settings& S)
                 const int fl = std::max(6, (int)std::lround((double)BW * (double)K.lots / (double)mxK));
                 box((short)(BAR_R - fl), (short)(t + 3), (short)BAR_R, (short)(b - 3), fade(base, 0.35f));
                 char lb[64]; std::snprintf(lb, sizeof(lb), "%lld (%.1fx)", K.lots, K.x); const int lw = textW(lb, sf, false);
-                textLJ((short)(col.r - 4 - TGW - lw), (short)yc, lb, (COLOR)0x00E5E7EB, sf, false); continue; }
+                textLJ((short)(col.r - 4 - TGR - lw), (short)yc, lb, (COLOR)0x00E5E7EB, sf, false); continue; }
             if (drawn[d] == (size_t)-1) {   // (2.32.0) a tag-only row: the level left the top 3 (eaten / pulled) - its tag at its price, a leader when stacked
                 const int yc = it2[d].y; if (std::abs(yc - it2[d].want) > 1) line((short)col.l, (short)it2[d].want, (short)(col.l + 4), (short)yc, 0x00475569, 1);
                 drawTag(d, yc); continue; }
@@ -2618,7 +2650,7 @@ void DealerProfile::flushLines(const Settings& S)
             const COLOR ltc = q.dim ? (COLOR)0x0094A3B8 : (COLOR)0x00E5E7EB;
             if (outerCol) {
                 box((short)(BAR_R - fl), (short)(t + 3), (short)BAR_R, (short)(b - 3), fade(base, 0.35f));
-                const int lw = textW(lt.c_str(), sf, false); textLJ((short)(col.r - 4 - TGW - lw), (short)yc, lt.c_str(), ltc, sf, false);   // (2.37.0) amount left of the tag lane   // (2.31.1) the 2.31.0 up/down moved mark is replaced by "~"
+                const int lw = textW(lt.c_str(), sf, false); textLJ((short)(col.r - 4 - TGR - lw), (short)yc, lt.c_str(), ltc, sf, false);   // (2.37.0) amount left of the tag lane   // (2.31.1) the 2.31.0 up/down moved mark is replaced by "~"
             } else {
                 box((short)BX, (short)(t + 3), (short)(BX + fl), (short)(b - 3), fade(base, 0.35f));
                 textLJ((short)(BX + fl + 3), (short)yc, lt.c_str(), ltc, sf, false);
@@ -2988,7 +3020,7 @@ int DealerProfile::draw(void)
     load();
     alignContract();
     pend.clear();                             // (2.7.4) this draw's badges
-    offUp = OffLvl(); offDn = OffLvl(); lastPxLv = 0;   // (2.28.0)
+    offUp = OffLvl(); offDn = OffLvl(); offWk = OffLvl(); lastPxLv = 0;   // (2.28.0) (2.39.0 + the weekly POC)
     hovT.clear(); hvlFound = false;           // (2.9.0) this draw's hover targets / HVL
     if (msHas && !hovWnds.empty()) {          // (2.9.0) the mouse left the chart: no hover
         void* w = dpCursorWindow();
@@ -3027,6 +3059,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | ((DP_HOVERS || DP_PCT_HOVERS) ? TRACK_MOUSE : 0));   // (2.17.3) no TRACK_MOUSE while the hovers are off   // (2.9.0) hovers: mouse events even when not selected
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.38.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.39.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }
