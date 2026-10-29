@@ -1,4 +1,12 @@
 /********************************************************************************
+ *  0.3.0 (2026-10-29, Rassul 05:11 CT "update the exhaustion indicator so it follows the pivot rule and only bars above 2x are shown and
+ *        draw it like a histogram instead of connected lines"): the pane is now a HISTOGRAM AT PIVOTS. Pivots = IRT's ZIGZAG, Min Price
+ *        Change 3 bars, Use High/Low (the lsWavePOC 1.3.2 rule, copied into ExhaustionPivots.h). At each confirmed pivot HIGH: buyers
+ *        fading = buyers' peak pace in the up leg into it / their pace on the pivot bar (red bar, bearish); at each pivot LOW: sellers
+ *        fading, the mirror (green bar, bullish). One bar on the pivot bar from 0 up to the ratio with "2.9x" on top, drawn only at
+ *        >= 2.0x, once the pivot is confirmed (the reversal bar closed) - never repainted. Every pivot (also < 2x) is recorded in
+ *        lsFlexLevels\Exhaustion\<MKT>-<CONTRACT>-<spb>-pivots-<session>.csv (pivot time, side, ratio, high, low, conf / leg start time,
+ *        shown|logged). No connecting lines, no E? on the chart (the E records are still written exactly as 0.2.4). No settings.
  *  0.2.3 (2026-10-14, Rassul approved the external-audit display list at 18:25 CT, section 13): the mark reads "E?" (was "E") - untested
  *        as a standalone signal; recorded and drawn exactly as before otherwise.
  *  Exhaustion.cpp  --  Investor/RT RTX extension  lsExhaustion  (0.2.2, 2026-10-13: engineering fixes ported from the 0.3.1 audit - a failed VAP read rejects the snapshot instead of reading as zero volume, prices on the chart tick grid, RTH edge in exact seconds, records published atomically per contract (marks shown only once recorded), status file replaced atomically, bounded norms / record parsing; signal, thresholds and norms unchanged. 0.2.1, 2026-10-12: the reversal read kept as Rassul uses it - "it is showing good reversals" in crude - with the bar in progress no longer read; the pullback read is the separate lsExhaustionV2. 0.2.0, 2026-10-11; 0.2.0: overnight E only at the study's own overnight line T_overnight when both halves agree, else none - Rassul 22:05 "customize the thresholds for time of day .. overnight vs rth")
@@ -33,6 +41,7 @@
 #undef near
 #endif
 #include "ExhaustionLogic.h"
+#include "ExhaustionPivots.h"   // (0.3.0) IRT zigzag pivots + fade per pivot
 #include "HostSlot.h"
 #include <algorithm>
 #include <cerrno>
@@ -54,7 +63,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.2.4"          // keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.3.0"          // keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
@@ -130,7 +139,7 @@ static bool parseLL(const std::string& t, long long& out) {
 static const char* const RECORD_HEADER = "bar_time|side|fade|high|low|params";
 static const size_t RECORD_FILE_MAX = 512 * 1024, RECORD_LINE_MAX = 512, RECORD_LINES_MAX = 5000;
 struct DiskRecord { long long bar; int side; double val; std::string line; };
-struct PendingRecord { long long session, bar; int side; double val; std::string line; };
+struct PendingRecord { long long session, bar; int side; double val; std::string line; int kind = 0; };   // kind 0 = E, 1 = pivot (0.3.0)
 
 static bool parseRecord(const std::string& line, DiskRecord& out) {
     if (line.empty() || line.size() > RECORD_LINE_MAX) return false;
@@ -215,6 +224,8 @@ struct EXState {
     std::map<long long, double> markVal;
     std::vector<PendingRecord> pending; long long recFails = 0;
     ex::Out out; int outFirst = 0; double liveB = 1, liveS = 1;
+    // (0.3.0) confirmed pivots: bar time -> (+1 high = buyers fading / -1 low = sellers fading, ratio); added once, never changed
+    std::map<long long, std::pair<int, double>> piv; long long pivSeen = 0; long pivLogged = 0;
 };
 
 class Exhaustion : public cppExtension {
@@ -268,7 +279,7 @@ void Exhaustion::identify(EXState& S) {
     const std::string id = root + "|" + sym + "|" + std::to_string(spb);
     if (id == S.identity && tick == S.tick) return;
     S.identity = id; S.symbol = sym; S.spb = spb; S.tick = tick; S.market = marketName(root.empty() ? sym : root);
-    S.P = ex::defaults(S.market); S.params = "study 2026-10-11"; S.vol.clear(); S.marks.clear(); S.markVal.clear(); S.pending.clear();
+    S.P = ex::defaults(S.market); S.params = "study 2026-10-11"; S.vol.clear(); S.marks.clear(); S.markVal.clear(); S.pending.clear(); S.piv.clear(); S.pivSeen = 0;
     S.count = 0; S.session = -1; S.lastNormsMs = -1; S.lastRecordAttemptMs = -1; S.rthO = S.rthC = -1; rthOf(S.market, S.rthO, S.rthC);
 }
 // the buyers / sellers of one bar from its volume at price (guarded like lsLiquidityProfile: a failed read is "not known")
@@ -314,7 +325,7 @@ void Exhaustion::calcBars(EXState& S, long count) {
     for (long i = from; i < count - 1; ++i) {
         const int k = (int)(i - first);
         const long long bt = (long long)times[(int)i];
-        bool queued = false; for (size_t p = 0; p < S.pending.size(); ++p) if (S.pending[p].bar == bt) { queued = true; break; }
+        bool queued = false; for (size_t p = 0; p < S.pending.size(); ++p) if (S.pending[p].bar == bt && S.pending[p].kind == 0) { queued = true; break; }
         if (S.marks.count(bt) || queued) continue;
         struct tm t; std::memset(&t, 0, sizeof(t));
         if (!getLocaltime((RTDATE)times[(int)i], &t)) continue;
@@ -336,6 +347,28 @@ void Exhaustion::calcBars(EXState& S, long count) {
         char line[160]; std::snprintf(line, sizeof(line), "%lld|%s|%.2f|%.6g|%.6g|N%d S%d T%.2f%s", bt, side < 0 ? "top" : "bottom", val, (double)hi[(int)i], (double)lo[(int)i], S.P.N, S.P.S, rth ? S.P.T : S.tOvernight, rth ? "" : " overnight");
         PendingRecord rec; rec.session = barSession; rec.bar = bt; rec.side = side; rec.val = val; rec.line = line; S.pending.push_back(rec);
     }
+    // (0.3.0) pivots: IRT zigzag on the same closed bars; a pivot is taken only when its confirmation (reversal) bar is NEWER than the
+    // last bar already processed, so a sliding window can never add / move an older pivot (no repaint); restart = the recorded ones
+    {
+        const std::vector<exp3::PivotEx> pv = exp3::pivots(h, l, b, s, S.P.S);
+        long long newest = S.pivSeen;
+        for (size_t q = 0; q < pv.size(); ++q) {
+            const int bi = first + pv[q].i, ci = first + pv[q].conf, si = first + pv[q].start;
+            const long long pt = (long long)times[bi], ctm = (long long)times[ci];
+            newest = std::max(newest, ctm);
+            if (ctm <= S.pivSeen || S.piv.count(pt)) continue;
+            const double r = std::floor(pv[q].ratio * 100.0 + 0.5) / 100.0;
+            S.piv[pt] = std::make_pair(pv[q].type, r); ++S.pivLogged;
+            const long long cs = ctSec((RTDATE)times[bi]);
+            const long long ses = cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : -1;
+            if (ses < 0 || S.pending.size() >= RECORD_LINES_MAX) { ++S.recFails; continue; }
+            char line[200]; std::snprintf(line, sizeof(line), "%lld|%s|%.2f|%.6g|%.6g|pivot N%d S%d conf %lld leg %lld %s", pt, pv[q].type > 0 ? "top" : "bottom", r,
+                (double)hi[bi], (double)lo[bi], exp3::ZZ_N, S.P.S, ctm, (long long)times[si], r + 1e-9 >= exp3::SHOW ? "shown" : "logged");
+            PendingRecord rec; rec.session = ses; rec.bar = pt; rec.side = pv[q].type > 0 ? -1 : 1; rec.val = r; rec.line = line; rec.kind = 1; S.pending.push_back(rec);
+        }
+        S.pivSeen = newest;
+        while (S.piv.size() > 4000) S.piv.erase(S.piv.begin());
+    }
     S.count = count;
     flushRecords(S);
     while (S.vol.size() > 3000) S.vol.erase(S.vol.begin());
@@ -348,15 +381,17 @@ bool Exhaustion::flushRecords(EXState& S) {
     const std::string d = dir();
     if (d.empty()) { ++S.recFails; return false; }
     makeDir(flexDir()); makeDir(d);
-    std::map<long long, std::vector<size_t> > groups;
-    for (size_t i = 0; i < S.pending.size(); ++i) groups[S.pending[i].session].push_back(i);
+    std::map<long long, std::vector<size_t> > groups;                    // key = session * 2 + kind (0.3.0: E file / pivot file)
+    for (size_t i = 0; i < S.pending.size(); ++i) groups[S.pending[i].session * 2 + S.pending[i].kind].push_back(i);
     std::vector<char> committed(S.pending.size(), 0);
     for (std::map<long long, std::vector<size_t> >::const_iterator g = groups.begin(); g != groups.end(); ++g) {
         std::vector<const PendingRecord*> add; add.reserve(g->second.size());
         for (size_t j = 0; j < g->second.size(); ++j) add.push_back(&S.pending[g->second[j]]);
-        if (!publishRecords(d + "\\" + stem(S) + "-" + std::to_string(g->first) + ".csv", add)) { ++S.recFails; continue; }
+        const long long ses = g->first / 2; const bool pivot = (g->first % 2) != 0;
+        if (!publishRecords(d + "\\" + stem(S) + (pivot ? "-pivots-" : "-") + std::to_string(ses) + ".csv", add)) { ++S.recFails; continue; }
         for (size_t j = 0; j < g->second.size(); ++j) {
-            const size_t k = g->second[j]; S.marks[S.pending[k].bar] = S.pending[k].side; S.markVal[S.pending[k].bar] = S.pending[k].val; committed[k] = 1;
+            const size_t k = g->second[j];
+            if (pivot) { committed[k] = 1; continue; } S.marks[S.pending[k].bar] = S.pending[k].side; S.markVal[S.pending[k].bar] = S.pending[k].val; committed[k] = 1;
         }
     }
     std::vector<PendingRecord> retry; retry.reserve(S.pending.size());
@@ -370,6 +405,13 @@ void Exhaustion::load(EXState& S) {
         std::vector<DiskRecord> records;                                // (0.2.2) bounded, header-checked
         if (!readRecords(d + "\\" + stem(S) + "-" + std::to_string(k) + ".csv", records)) { ++S.recFails; continue; }
         for (size_t i = 0; i < records.size(); ++i) { S.marks[records[i].bar] = records[i].side; S.markVal[records[i].bar] = records[i].val; }
+        std::vector<DiskRecord> pr;                                     // (0.3.0) the recorded pivots redraw exactly (never recomputed)
+        if (!readRecords(d + "\\" + stem(S) + "-pivots-" + std::to_string(k) + ".csv", pr)) { ++S.recFails; continue; }
+        for (size_t i = 0; i < pr.size(); ++i) {
+            S.piv[pr[i].bar] = std::make_pair(pr[i].side < 0 ? 1 : -1, pr[i].val);
+            const size_t c = pr[i].line.find(" conf "); long long ct = 0;
+            if (c != std::string::npos) { const size_t e = pr[i].line.find(' ', c + 6); if (parseLL(pr[i].line.substr(c + 6, e == std::string::npos ? std::string::npos : e - c - 6), ct)) S.pivSeen = std::max(S.pivSeen, ct); }
+        }
     }
 }
 void Exhaustion::norms(EXState& S) {
@@ -401,6 +443,14 @@ void Exhaustion::status(EXState& S, long long now) {
     o << "VERSION," << EX_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nPARAMS,N " << S.P.N << ",S " << S.P.S << ",T " << S.P.T << "," << S.params << "\nRTH," << S.rthO << "," << S.rthC << "\nOVERNIGHT_LINE," << S.tOvernight
       << "\nPROVEN," << S.proven << "\nNOW,buyers_fading " << S.liveB << ",sellers_fading " << S.liveS << "\nMARKS," << S.marks.size() << ",fails " << S.recFails << "\n";
+    {   // (0.3.0) the pivot histogram
+        long shown = 0; long long lh = 0, ll = 0; double rh = 0, rl = 0;
+        for (std::map<long long, std::pair<int, double>>::const_iterator it = S.piv.begin(); it != S.piv.end(); ++it) {
+            if (it->second.second + 1e-9 >= exp3::SHOW) ++shown;
+            if (it->second.first > 0) { lh = it->first; rh = it->second.second; } else { ll = it->first; rl = it->second.second; }
+        }
+        o << "PIVOTS,zigzag N " << exp3::ZZ_N << ",show " << exp3::SHOW << ",pivots " << S.piv.size() << ",shown " << shown << ",last_high " << lh << " " << rh << ",last_low " << ll << " " << rl << "\n";
+    }
     const std::string text = o.str(); if (text == S.lastStatusText) return;
     const std::string f = flexDir(); if (f.empty()) return;
     if (publishFile(f + "\\Exhaustion.status-" + stem(S) + ".txt", text)) S.lastStatusText = text;
@@ -414,7 +464,7 @@ void Exhaustion::pump() {
         identify(S);
         const long long now = steadyMs();
         const long long ct = ctSec(currentDate());
-        if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; S.marks.clear(); S.markVal.clear(); load(S); } }
+        if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; S.marks.clear(); S.markVal.clear(); S.piv.clear(); load(S); } }
         if (S.lastNormsMs < 0 || now - S.lastNormsMs >= 60000) { S.lastNormsMs = now; norms(S); }
         const long count = getBarCount();
         calcBars(S, count);
@@ -431,46 +481,45 @@ void Exhaustion::render(EXState& S) {
     auto txt = [&](int x, int y, const std::string& t, COLOR c) { setTextColor(c); const int w = getTextWidth(t.c_str(), -1); RCT r; r.set(coord(x), coord(y), coord(x + w + 2), coord(y + 12)); r.drawText(t.c_str(), false, false); return x + w; };
     auto xs = [](double v) { char b[16]; std::snprintf(b, sizeof(b), "%.1fx", v); return std::string(b); };
     auto xOf = [&](int bar) { PNT p; p.set(bar, 0.0f, kBarCenter); return (int)p.h; };
-    const double T = S.P.T;
+    const double T = exp3::SHOW;                                          // (0.3.0) the drawn line: 2.0x
+    // header = the last confirmed pivot high (buyers fading) and pivot low (sellers fading)
+    double lastB = 1.0, lastS = 1.0;
+    for (std::map<long long, std::pair<int, double>>::const_iterator it = S.piv.begin(); it != S.piv.end(); ++it) (it->second.first > 0 ? lastB : lastS) = it->second.second;
     {
-        int x = txt(pane.left + 4, pane.top + 1, "EXHAUSTION   ", C_GREY);
-        x = txt(x, pane.top + 1, "Buyers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveB), C_SELL); x = txt(x, pane.top + 1, " (" + xs(T) + ")   ", C_GREY);
-        x = txt(x, pane.top + 1, "Sellers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveS), C_BUY); txt(x, pane.top + 1, " (" + xs(T) + ")", C_GREY);
+        int x = txt(pane.left + 4, pane.top + 1, "EXHAUSTION at pivots   ", C_GREY);
+        x = txt(x, pane.top + 1, "Buyers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(lastB), C_SELL); x = txt(x, pane.top + 1, " (" + xs(T) + ")   ", C_GREY);
+        x = txt(x, pane.top + 1, "Sellers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(lastS), C_BUY); txt(x, pane.top + 1, " (" + xs(T) + ")", C_GREY);
         // whether the nightly study has confirmed this market's E on his trade (unseen days): "testing" until it has
         const int w = getTextWidth(S.proven.c_str(), -1); txt(pane.right - w - 8, pane.top + 1, S.proven, C_GREY);
     }
-    const int top = pane.top + 16, bottom = pane.bottom - 16;
-    std::vector<int> vis;
-    for (int i = lastBar; i >= S.outFirst; --i) { const int x = xOf(i); if (x < pane.left) break; if (x <= pane.right) vis.push_back(i); }
-    std::reverse(vis.begin(), vis.end());
-    auto val = [&](int bar, bool buyers) { const int k = bar - S.outFirst; if (k < 0 || k >= (int)S.out.fb.size()) return 1.0; return buyers ? S.out.fb[k] : S.out.fs[k]; };
-    double mx = std::max(3.0, T * 1.6);
-    for (size_t k = 0; k < vis.size(); ++k) mx = std::max(mx, std::max(val(vis[k], true), val(vis[k], false)));
-    mx = std::min(mx * 1.2, 10.0);
+    const int top = pane.top + 30, bottom = pane.bottom - 4;
+    RTARRAYI times(barDateTime);
+    if (times.count < count) return;
+    // the visible closed bars that are pivots at / over 2.0x
+    struct HB { int bar; int type; double r; };
+    std::vector<HB> hb; int firstVis = -1, lastVis = -1;
+    for (int i = lastBar; i >= 0; --i) {
+        const int x = xOf(i); if (x < pane.left) break; if (x > pane.right) continue;
+        if (lastVis < 0) { lastVis = i; }
+        firstVis = i;
+        std::map<long long, std::pair<int, double>>::const_iterator m = S.piv.find((long long)times[i]);
+        if (m != S.piv.end() && m->second.second + 1e-9 >= T) { HB e; e.bar = i; e.type = m->second.first; e.r = m->second.second; hb.push_back(e); }
+    }
+    double mx = 3.0; for (size_t k = 0; k < hb.size(); ++k) mx = std::max(mx, hb[k].r);
+    mx = std::min(mx * 1.15, 12.0);
     auto yOf = [&](double v) { return bottom - (int)((bottom - top) * std::min(1.0, std::max(0.0, v / mx))); };
+    // bar width from the chart's bar spacing (60% of it, 3..14 px)
+    int spacing = 6; if (firstVis >= 0 && lastVis > firstVis) spacing = std::max(1, (xOf(lastVis) - xOf(firstVis)) / (lastVis - firstVis));
+    const int half = std::max(1, std::min(7, (spacing * 6 / 10) / 2));
     setPen(C_AXIS, 1, P_SOLID);
     { const int y = yOf(T); PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(y); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(y); b.drawLineTo();
       txt(pane.right - 34, y - 13, xs(T), C_GREY); }
-    for (int s = 0; s < 2; ++s) {
-        const bool buyers = s == 0; const COLOR c = buyers ? C_SELL : C_BUY;     // buyers fading = bearish red, sellers fading = bullish green
-        setPen(c, 2, P_SOLID); bool started = false;
-        for (size_t k = 0; k < vis.size(); ++k) {
-            PNT p; p.set(0, 0.0f); p.h = coord(xOf(vis[k])); p.v = coord(yOf(val(vis[k], buyers)));
-            if (!started) { p.setDrawPosition(); started = true; } else p.drawLineTo();
-        }
-        for (size_t k = 0; k < vis.size(); ++k) {
-            const double v = val(vis[k], buyers); if (v <= 1.0 + 1e-9) continue;
-            const int x = xOf(vis[k]), y = yOf(v);
-            RCT d; d.set(coord(x - 2), coord(y - 2), coord(x + 2), coord(y + 2)); d.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
-            if (v + 1e-9 >= T) { const std::string t = xs(v); const int w = getTextWidth(t.c_str(), -1); txt(x - w / 2, y - 15, t, c); }
-        }
-    }
-    // E: the recorded marks (never repainted), at the bottom of the pane under their bar
-    RTARRAYI times(barDateTime);
-    if (times.count >= count) for (size_t k = 0; k < vis.size(); ++k) {
-        std::map<long long, int>::const_iterator m = S.marks.find((long long)times[vis[k]]);
-        if (m == S.marks.end()) continue;
-        txt(xOf(vis[k]) - 6, bottom + 2, "E?", m->second < 0 ? C_SELL : C_BUY);   // (0.2.3, audit list 18:25 CT) "E?" - untested as a standalone signal
+    // HISTOGRAM: one bar per qualifying pivot, from 0 up to its ratio, the value on top; no connecting lines
+    for (size_t k = 0; k < hb.size(); ++k) {
+        const COLOR c = hb[k].type > 0 ? C_SELL : C_BUY;                 // buyers fading at a high = bearish red, sellers fading at a low = bullish green
+        const int x = xOf(hb[k].bar), y = yOf(hb[k].r);
+        RCT d; d.set(coord(x - half), coord(y), coord(x + half + 1), coord(bottom)); d.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
+        const std::string t = xs(hb[k].r); const int w = getTextWidth(t.c_str(), -1); txt(x - w / 2, y - 14, t, c);
     }
 }
 
@@ -478,7 +527,7 @@ extern "C" cppExtension* CreateExtension(void) {
     Exhaustion* p = new Exhaustion();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
-    p->setDescription("LRA Exhaustion: is the side pushing price running out? Red = buyers fading at a new high (bearish), green = sellers fading at a new low (bullish): their peak pace in the push / their pace now, 1.0 when price is not at a new extreme. E = the first RTH bar at or over the market's line (from the nightly study), recorded and never repainted.");
-    p->setVersion("0.2.4");   // EX_VERSION
+    p->setDescription("LRA Exhaustion at pivots (0.3.0): a histogram bar on each IRT zigzag pivot (3 bars, high/low) once confirmed. Red = buyers fading at a pivot high (bearish): the buyers' peak pace in the up leg / their pace on the pivot bar; green = sellers fading at a pivot low (bullish), the mirror. Only 2.0x and over are drawn; every pivot is recorded; never repainted.");
+    p->setVersion("0.3.0");   // EX_VERSION
     return p;
 }

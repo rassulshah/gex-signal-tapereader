@@ -27,11 +27,11 @@ int main() {
     CHECK(S->marks.size() == 1 && S->marks.count(eTime) && S->marks[eTime] == -1, "one top E, at the first new high where buyers trade at a third of their peak");
     h.draws.clear(); p->draw();
     bool head = false, e = false, v = false;
-    for (auto& d : h.draws) { if (d.type == "text" && d.text == "EXHAUSTION   ") head = true; if (d.type == "text" && d.text == "E?" && d.color == C_SELL) e = true; if (d.type == "text" && d.text == "3.3x" && d.color == C_SELL) v = true; }
-    CHECK(head && e && v, "header, the red E and its 3.3x value are drawn");
+    for (auto& d : h.draws) { if (d.type == "text" && d.text == "EXHAUSTION at pivots   ") head = true; if (d.type == "text" && d.text == "E?") e = true; if (d.type == "line") v = true; }
+    CHECK(head && !e && v, "0.3.0: header 'EXHAUSTION at pivots', the E is recorded but not drawn, only the 2.0x level line");
     bool testing = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "testing") testing = true;
     CHECK(testing, "no nightly confirmation yet: the header says testing");
-    const std::string rec = readAll(flex + "\\Exhaustion\\ES-180-" + std::to_string(S->session) + ".csv");
+    const std::string rec = readAll(flex + "\\Exhaustion\\ES-ESZ6-180-" + std::to_string(S->session) + ".csv");
     CHECK(rec.find("|top|3.33|") != std::string::npos, "the E is recorded with its fade");
     // the forming bar never prints an E; after a restart the E is read back (never repainted)
     p->destroy();

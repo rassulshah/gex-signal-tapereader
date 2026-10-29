@@ -38,6 +38,7 @@ extern Host* current;
 }
 enum { E_MOUSE_UP = 7, E_MOUSE_MOVE, E_MOUSE_DBL, E_MOUSE_SCROLL, E_MOUSE_HOVER = 113 };
 typedef struct RTX_EVENT { int type; union { struct { short v, h, shift, control; long bar; float price; } mouse; } v; } RTX_EVENT;
+typedef unsigned short RTBOOL; typedef int RTX_RESULT;
 class cppExtension {
 public:
     enum { HELVETICA=1,BOLD=1,PLAIN=0,P_SOLID=0,P_DASH=2,PAT_SOLID=0,PAT_HOLLOW=1,DRAW_OPAQUE=0,kBarCenter=0,kBarRight=1 };
@@ -95,6 +96,14 @@ public:
     const char* getWorkingDirectoryPath(){return mock::current->directory.c_str();}
     float getProperty(int){return mock::current->tick;} RTDATE currentDate(){return mock::current->now;} void setExtendedFlags(unsigned long){} int getSecondsPerBar(){return mock::current->seconds;}
     tm* getLocaltime(RTDATE stamp,tm* t){time_t v=static_cast<time_t>(stamp);return gmtime_r(&v,t);}
+    // (exh 0.3.0) stubs so SettingsHost.h compiles against this older mock (Exhaustion has no settings rows)
+    int getParameterCount(void){return 0;} RTX_RESULT setBoolParameter(const char*,RTBOOL,short=0){return RTX_OK;}
+    RTX_RESULT setColorParameter(const char*,COLOR,short=0,short=0){return RTX_OK;} RTX_RESULT setFloatParameter(const char*,float,short=0,short=0){return RTX_OK;}
+    RTX_RESULT setListParameter(const char*,short,const char*,short=0,short=0){return RTX_OK;} RTX_RESULT setStringParameter(const char*,const char*,size_t,short=0,short=0){return RTX_OK;}
+    RTX_RESULT setLabelParameter(const char*,short=0,short=0){return RTX_OK;} RTX_RESULT setParameterColor(int,COLOR){return RTX_OK;} COLOR getParameterColor(int){return 0;}
+    RTBOOL isBoxChecked(int){return 0;} RTX_RESULT checkBox(int,RTBOOL){return RTX_OK;} RTX_RESULT enableParameter(int,RTBOOL){return RTX_OK;}
+    int getListIndex(int){return 0;} float getFloatValue(int){return 0;} RTX_RESULT setListIndex(int,int=-1){return RTX_OK;} void setFloatValue(int,float){}
+    RTX_RESULT getParameterText(int,char* t,size_t n){if(t&&n)t[0]=0;return RTX_OK;} RTX_RESULT setParameterText(int,const char*){return RTX_OK;}
     void setParameterVersion(int){} void setParameterDialogHeight(int){} void setIntegerParameter(const char*,int,int,int=0){}
     int getIntegerValue(int i){return mock::current->parms[i];} void setIntegerValue(int i,int v){mock::current->parms[i]=v;}
     void setFont(FONT){} void setTextColor(COLOR c){mock::current->ink=c;}
