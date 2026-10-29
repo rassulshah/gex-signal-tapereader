@@ -289,3 +289,16 @@ Rules (every new or changed indicator):
   cob_bull_3m_1b / cob_bear_3m_1b via getCustomIndicator, as lsCobImpulse) - not re-implemented - so the marks and the new use cannot
   drift; each bar's flags are captured once when the bar is fed (no repaint). Proof: test_wavepoc_logic testCobSynthetic / testCobReal.
 - (2026-10-29 LP 0.68.0 / DP 2.37.0) (1) IRT bar stamps are bar ENDs and bol::barOf(t) returns the FIRST bar whose end is AFTER t, so a time exactly at a bar's end (a decision stamped with the closing bar's endMs) maps to the NEXT bar - anything drawn "at the decision bar" uses barOf(wordMs - 1). (2) The LP mock recorded only each line's END point, so no test could prove where a line STARTS (left-edge / clip rules were untestable): tests_lqp044/irtsdk.h now records the start (Draw.l / .t) and the pen style (penS). Proof: tests_oln/test_oln_host_068.cpp (dashed testing line starts at x = Key Levels column right + 3 = 236) 18/0; test_oln_110.cpp 20/0.
+- (2026-10-29 13:01 CT, IRT crash when Rassul opened the Add Indicator window; lsWavePOC 1.4.1) IRT fast-failed again in WER bucket
+  AppCrash_investorRT.exe_5c8499f9... - the SAME bucket as the 10-24 lsChartView custom-lookup crash (lesson 150). The bucket appears ONLY in
+  sessions with lsWavePOC >= 1.3.0 loaded (10-28 17:52 / 18:08 / 22:58, 10-29 13:01:50; none 10-24 20:46 -> 10-28 17:38), and 1.3.0+ read the
+  RTL cob_bull_3m_1b / cob_bear_3m_1b with getCustomIndicator(name, 1, TRUE) - IRT calculating an RTL from inside a plugin. The 1.3.1 crash
+  guard could not catch it: the read itself returns; IRT dies LATER (opening the indicator window). Rule: NEVER call getCustomIndicator with
+  bCalculate TRUE (or at all) for an RTL; read an indicator that is ON the chart with getChartIndicator only, else go without it and say so in
+  the status. Find a crash by the WER folder's bucket hash + Report.wer mtime (recursive list of ReportArchive) and match it against earlier
+  buckets before suspecting today's builds. Proof: tests_wavepoc/test_wavepoc_host.cpp 108/0 under ASan/UBSan ("0 getCustomIndicator calls,
+  2 chart lookups, NOT ON CHART"). Still to remove (same family, older, not on the crash timeline): lsDealerProfile IRT-bars export
+  (getCustomIndicator(cob_bull,1,true) fallback), lsLiquidityProfile ProfPrevDay / ProfPrevWeekly, lsCobImpulse.
+- (2026-10-29 lsSessionVWAP 1.8.6 / 1.8.7) a default change shipped with NO host test of the ADD path; test_sessionvwap_187.cpp (23/0) now covers
+  setup -> no saved set / parmsInit(7..11) -> first fill -> first draw = the yellow pivot VWAP only. A status file not written since a restart
+  means the indicator is NOT on the chart (here removed at 09:17) - check that before suspecting the code.
