@@ -36,7 +36,7 @@ struct Bar {
     int failStats,failPrice,reportedPrices;
     Bar():time(0),volume(0),open(100),high(101),low(99),close(100),failStats(0),failPrice(-1),reportedPrices(-1){}
 };
-struct Draw { std::string type,text; int x,y; COLOR color; int r=0,b=0; COLOR border=0; int width=0; int pat=0; int fid=0,fsize=0,fstyle=0; COLOR pen=0; int penW=0; int l=0,t=0; bool centred=false;
+struct Draw { std::string type,text; int x,y; COLOR color; int r=0,b=0; COLOR border=0; int width=0; int pat=0; int fid=0,fsize=0,fstyle=0; COLOR pen=0; int penW=0; int penS=0; int l=0,t=0; bool centred=false;
     Draw(const char* tp,int a,int b_,const std::string& s="",COLOR c=0):type(tp),text(s),x(a),y(b_),color(c){} };
 struct Feed { bool subscribe = true; bool throwOnNext = false; std::vector<DEPTH_ORDER> ev; size_t at = 0; long long getNext = 0, opens = 0, live = 0, nullOpens = 0; std::string lastTicker;
     void push(unsigned char a, unsigned char side, float px, unsigned long size, RTDATE t, int id, int aggr = 0) { DEPTH_ORDER o; std::memset(&o, 0, sizeof(o)); o.timestamp = t; o.price = px; o.size = size; o.orderID = id; o.aggressorOrderID = aggr; o.action = a; o.buySell = side; ev.push_back(o); } };
@@ -46,6 +46,7 @@ struct Host {
     std::vector<Bar> bars; void* data; bool noSlot; float tick; int seconds;
     std::string symbol,root,period,chart,directory;
     int parms[3]; int rowCalls,statsCalls; std::vector<Draw> draws;
+    int sx = 0, sy = 0, penS = 0;   // (LP 0.68.0 tests) the line start + pen style
     float priceBase = 80; float pxPer = 20; int barW = 10; int barX0 = 50; double textPx = 0; int invalidates = 0;
     int paneTop,paneBottom,paneLeft,paneRight,scaleLeft;
     COLOR ink; COLOR pen = 0x00FFFFFF; int penW = 1; int fid = 0, fsize = 0, fstyle = 0;
@@ -82,7 +83,7 @@ public:
     struct PNT {
         short h,v;
         int set(int bar,float price,int=0) { h=static_cast<short>(mock::current->barX0+bar*mock::current->barW); v=static_cast<short>(mock::current->paneBottom-(price-mock::current->priceBase)*mock::current->pxPer); return 0; }
-        void setDrawPosition(){} void drawLineTo(){ mock::Draw d("line",h,v); d.pen=mock::current->pen; d.penW=mock::current->penW; mock::current->draws.push_back(d); }   // (LP 0.48.0 tests) the pen of a line
+        void setDrawPosition(){ mock::current->sx=h; mock::current->sy=v; } void drawLineTo(){ mock::Draw d("line",h,v); d.pen=mock::current->pen; d.penW=mock::current->penW; d.penS=mock::current->penS; d.l=mock::current->sx; d.t=mock::current->sy; mock::current->draws.push_back(d); }   // (LP 0.48.0 tests) the pen of a line
     };
     struct RCT {
         short left,top,right,bottom;
@@ -143,7 +144,7 @@ public:
     int getIntegerValue(int i){return mock::current->parms[i];} void setIntegerValue(int i,int v){mock::current->parms[i]=v;}
     void setFont(FONT f){mock::current->fid=f.id;mock::current->fsize=f.size;mock::current->fstyle=f.style;} void setTextColor(COLOR c){mock::current->ink=c;}
     int getTextWidth(const char* t,int){ const int n=static_cast<int>(std::strlen(t)); return mock::current->textPx>0 ? static_cast<int>(n*mock::current->textPx*mock::current->fsize+0.5) : n*6; }
-    void setPen(COLOR c,int w,int){mock::current->pen=c;mock::current->penW=w;} int invalidateChart(bool=false){++mock::current->invalidates;return 0;}
+    void setPen(COLOR c,int w,int st){mock::current->pen=c;mock::current->penW=w;mock::current->penS=st;} int invalidateChart(bool=false){++mock::current->invalidates;return 0;}
     int getListIndex(int){return 0;} void setListParameter(const char*,short,const char*,int=0,int=0){ ++nparm(); } void setFloatParameter(const char*,float,int=0,int=0){ ++nparm(); } float getFloatValue(int){return 1.5f;}
     int getVisibleBars(int*,int*){return RTX_FAIL;} short getPixelsPerBar(){return static_cast<short>(mock::current->barW);} void setExtendedFlags2(unsigned long){}
     virtual int scale(int,int,double*,double*){return RTX_FAIL;}

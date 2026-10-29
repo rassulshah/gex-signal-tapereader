@@ -1,6 +1,17 @@
 #ifndef LS_ORDERLINESLOGIC_H
 #define LS_ORDERLINESLOGIC_H
-// OrderLinesLogic.h 1.0.0 (2026-10-26) -- the LIMIT-ORDER LINES of lsLiquidityProfile 0.55.0. SDK-free; tested by
+// OrderLinesLogic.h 1.1.0 (2026-10-29, lsLiquidityProfile 0.68.0; Rassul approved 09:33 / 10:23 CT, mockups orderlines-levels-mockup.html +
+// artifact AEYuhQfdcywsR8VxmhpUVq) THE TESTED-LINE LIFECYCLE - nothing is drawn for an untouched order (the Liquidity column shows it):
+//  - TOUCH: the first trade AT or THROUGH the order's price (bid: a fill at <= it; offer: >= it) - from the order-by-order FILL events,
+//    a closed bar's range as the fallback - records "T|id|touch_ms|rank": rank = the order's Liquidity-column rank at that moment
+//    (rankFn, the lsDealerProfile 'Q' board), FROZEN; 0 = outside the top 6 (no rank box). The line then shows from its PLACEMENT.
+//  - TESTING: thin dashed while undecided. DECISION (unchanged rule): filled >= half, then the first favourable close within 4 bars =
+//    HELD; a bar wholly beyond / no favourable close in 4 bars = BREAK (the record keeps the old code THRU and adds the new word:
+//    "W|id|THRU|ms|shown|BREAK"). Solid after the decision with [rank] + word at the decision bar.
+//  - LIFETIME (visState): BREAK shown 5 bars after its decision, then gone; HELD solid, never dimmed, to the right edge until a bar
+//    CLOSES through it ("X|id|ms"), the session ends or the order is pulled - but always at least 2 bars after its decision. Pulled
+//    before a decision = gone. At most 3 tested lines (the newest by touch / decision).
+// was: OrderLinesLogic.h 1.0.0 (2026-10-26) -- the LIMIT-ORDER LINES of lsLiquidityProfile 0.55.0. SDK-free; tested by
 // tests_oln/test_oln.cpp (logic) and tests_oln/test_oln_host.cpp (mock host). Spec: BUILD-SPEC-2026-10-25.md (Rassul's walk-through
 // 2026-10-25 20:00-22:29 CT, mockup all-approved-mockup.html, reference renderer stp/final.py).
 //
@@ -25,6 +36,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -32,7 +44,7 @@
 #include <vector>
 
 namespace oln {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -108,6 +120,8 @@ struct Line {
     long long pullDue = 0;                    // a pull waiting for the roll window (0 = none)
     int word = W_NONE; long long wordMs = 0; bool wordShown = false; long long fillMs = 0; Tick fillPx = 0; long long fillBarEnd = 0; int barsSeen = 0;
     long long rollGapMs = -1;                 // the last roll: re-placed this many ms after the pull (negative = before)
+    long long touchMs = 0; int touchRank = 0;  // (1.1.0) the first trade at / through it; its Liquidity-column rank then (0 = not top 6), frozen
+    long long throughMs = 0;                  // (1.1.0) HELD only: the end of the first bar that CLOSED through it
     std::string label() const {
         char b[64];
         if (kind == K_LADDER) std::snprintf(b, sizeof(b), "%do %lld", (int)oids.size(), size);
@@ -126,7 +140,7 @@ struct Ladder { int side = BID; long long t0 = 0; std::vector<long long> oids; b
 struct PendRoll { int line = -1; int side = BID; Tick px = 0; long long size = 0, t = 0, due = 0; };
 struct Bar { long long endMs = 0; Tick o = 0, h = 0, l = 0, c = 0; };
 struct Tally { long long lines = 0, drawn = 0, filled = 0, pulled = 0, rolls = 0, rollAmbig = 0, moves = 0, ladders = 0, icebergs = 0,
-               held = 0, thru = 0, wordsHidden = 0, lateSkipped = 0, events = 0, unknownFill = 0; };
+               held = 0, thru = 0, wordsHidden = 0, lateSkipped = 0, events = 0, unknownFill = 0, touched = 0, through = 0; };
 
 class Engine {
 public:
@@ -141,7 +155,24 @@ public:
     Tally tally; long long lastT = 0; int nextId = 1;
     size_t bookCap = 400000;
 
-    static std::string header() { return "# OrderLines 1.0.0 record: N|id|side|kind|t0|px|label  S|id|t|px  E|id|end|t|px|traded  W|id|word|decide_ms|shown"; }
+    static std::string header() { return "# OrderLines 1.1.0 record: N|id|side|kind|t0|px|label  S|id|t|px  E|id|end|t|px|traded  W|id|word|decide_ms|shown|word2  T|id|touch_ms|rank  X|id|close_through_ms"; }
+    std::function<int(int, Tick)> rankFn;     // (1.1.0) the host's Liquidity-column rank of (side, price) now; 0 = not in the top 6
+    std::vector<int> untouched;               // (1.1.0) live lines not touched yet
+    void touch(int li, long long t) {
+        Line& L = lines[(size_t)li]; if (L.touchMs || L.end != LIVE || L.oids.empty()) return;
+        L.touchMs = t; int rk = rankFn ? rankFn(L.side, L.px()) : 0; if (rk < 0 || rk > 6) rk = 0; L.touchRank = rk;
+        if (!L.drawn) qualify(li, t);
+        char b[96]; std::snprintf(b, sizeof(b), "T|%d|%lld|%d", L.id, t, rk); rows.push_back(b); ++tally.touched;
+    }
+    void touchScan(Tick lo, Tick hi, long long t) {   // a trade (lo == hi) or a closed bar's range
+        for (size_t k = 0; k < untouched.size();) {
+            const int i = untouched[k]; Line& L = lines[(size_t)i];
+            if (L.touchMs || L.end != LIVE || L.oids.empty()) { untouched[k] = untouched.back(); untouched.pop_back(); continue; }
+            const Tick q = L.px();
+            if (q > 0 && (L.side == BID ? lo <= q : hi >= q)) { touch(i, t); untouched[k] = untouched.back(); untouched.pop_back(); continue; }
+            ++k;
+        }
+    }
     static int minuteCT(long long ms) { long long m = (ms / 60000LL) % 1440LL; if (m < 0) m += 1440; return (int)m; }
     double atrTicks() const { return atr > 0 ? atr : 8.0; }
 
@@ -150,6 +181,7 @@ public:
         if (t <= 0 || oid == 0) return;
         ++tally.events; if (t > lastT) lastT = t;
         dueWork(t);
+        if (act == FILL && px > 0 && size > 0 && !untouched.empty()) touchScan(px, px, t);   // (1.1.0) price traded here (any order's fill): every line at / beyond it is touched
         auto it = book.find(oid);
         if (act == NEW || (act == MOD && it == book.end())) {
             if (px <= 0 || size <= 0 || (side != BID && side != ASK)) return;
@@ -213,7 +245,7 @@ public:
         Line L; L.id = nextId++; L.side = o.side; L.kind = kind; L.t0 = o.tAdd; L.oids.push_back(oid);
         if (o.hist.empty()) { Seg s; s.t = o.tAdd; s.px = o.px; L.segs.push_back(s); } else L.segs = o.hist;
         L.size = o.size; L.maxShown = o.maxShown; L.traded = o.traded; L.refills = o.refills;
-        o.line = (int)lines.size(); waiting.push_back(o.line); lines.push_back(L); ++tally.lines; (void)tNow;
+        o.line = (int)lines.size(); waiting.push_back(o.line); untouched.push_back(o.line); lines.push_back(L); ++tally.lines; (void)tNow;
     }
     void addSeg(int li, long long t, Tick px) {
         Line& L = lines[(size_t)li]; if (L.segs.empty() || L.segs.back().px == px) return;
@@ -292,7 +324,7 @@ public:
             Line L; L.id = nextId++; L.side = g.side; L.kind = K_LADDER; L.t0 = g.t0;
             for (long long id : g.oids) if (book.count(id)) { L.oids.push_back(id); book[id].line = (int)lines.size(); }
             Seg s; s.t = g.t0; s.px = (Tick)std::llround((double)w / (double)std::max(1LL, tot)); L.segs.push_back(s);
-            L.size = tot; L.maxShown = tot; g.line = (int)lines.size(); waiting.push_back(g.line); lines.push_back(L); ++tally.lines;
+            L.size = tot; L.maxShown = tot; g.line = (int)lines.size(); waiting.push_back(g.line); untouched.push_back(g.line); lines.push_back(L); ++tally.lines;
         }
         if (ladders.size() > 4000) { /* closed ladders keep indexes for orders; prune only fully closed without lines is unsafe - cap */ }
     }
@@ -333,10 +365,17 @@ public:
           for (size_t k = k0; k < n; ++k) { s += (double)(bars[k].h - bars[k].l); ++m; }
           if (m > 0) atr = s / m; }
         dueWork(b.endMs);
+        if (!untouched.empty()) touchScan(b.l, b.h, b.endMs);   // (1.1.0) fallback: a closed bar traded into it (stamped at the bar end)
+        for (size_t i = 0; i < lines.size(); ++i) {   // (1.1.0) a HELD line: the first bar AFTER the decision bar that CLOSES through it
+            Line& L = lines[i];
+            if (L.word != W_HELD || L.throughMs || b.endMs <= L.wordMs) continue;
+            const Tick q = L.fillPx ? L.fillPx : L.px();
+            if (L.side == BID ? b.c < q : b.c > q) { L.throughMs = b.endMs; ++tally.through; char bb[96]; std::snprintf(bb, sizeof(bb), "X|%d|%lld", L.id, b.endMs); rows.push_back(bb); }
+        }
         std::vector<int> decided;
         for (size_t i = 0; i < lines.size(); ++i) {
             Line& L = lines[i];
-            if (!L.drawn || L.end != FILLED || L.word != W_NONE || L.restored) continue;
+            if (!L.drawn || L.end != FILLED || L.word != W_NONE || L.restored || !L.touchMs) continue;
             if (!L.fillBarEnd) { const long long f = L.fillMs ? L.fillMs : L.endMs; L.fillBarEnd = f; }
             if (b.endMs <= L.fillBarEnd) continue;   // this bar closed before (or exactly at) the fill: not the fill bar yet
             const Tick q = L.fillPx ? L.fillPx : L.px();
@@ -378,7 +417,7 @@ public:
                 L.wordShown = !hide;
                 if (L.word == W_HELD) ++tally.held; else ++tally.thru;
                 if (hide) ++tally.wordsHidden;
-                char bb[160]; std::snprintf(bb, sizeof(bb), "W|%d|%s|%lld|%d", L.id, L.word == W_HELD ? "HELD" : "THRU", L.wordMs, L.wordShown ? 1 : 0); rows.push_back(bb);
+                char bb[160]; std::snprintf(bb, sizeof(bb), "W|%d|%s|%lld|%d|%s", L.id, L.word == W_HELD ? "HELD" : "THRU", L.wordMs, L.wordShown ? 1 : 0, L.word == W_HELD ? "HELD" : "BREAK"); rows.push_back(bb);
             }
         }
     }
@@ -412,8 +451,15 @@ public:
             } else if (f[0] == "W" && f.size() >= 5) {
                 auto it = byId.find(std::atoi(f[1].c_str())); if (it == byId.end()) continue;
                 Line& L = lines[it->second]; L.word = f[2] == "HELD" ? W_HELD : W_THRU; L.wordMs = std::atoll(f[3].c_str()); L.wordShown = f[4] == "1";
+            } else if (f[0] == "T" && f.size() >= 4) {   // (1.1.0)
+                auto it = byId.find(std::atoi(f[1].c_str())); if (it == byId.end()) continue;
+                Line& L = lines[it->second]; if (!L.touchMs) { L.touchMs = std::atoll(f[2].c_str()); L.touchRank = std::atoi(f[3].c_str()); if (L.touchRank < 0 || L.touchRank > 6) L.touchRank = 0; }
+            } else if (f[0] == "X" && f.size() >= 3) {
+                auto it = byId.find(std::atoi(f[1].c_str())); if (it == byId.end()) continue;
+                Line& L = lines[it->second]; if (!L.throughMs) L.throughMs = std::atoll(f[2].c_str());
             }
         }
+        for (size_t i = 0; i < lines.size(); ++i) if (lines[i].end == LIVE && !lines[i].touchMs) untouched.push_back((int)i);   // (1.1.0)
         // restored LIVE lines are ended at the restart as unknown? No: they stay as drawn; with no book they cannot be followed, so they
         // are closed as PULLED-unknown only for drawing purposes when the feed proves the order is gone. Kept LIVE (full colour).
     }
@@ -426,12 +472,30 @@ public:
     bool visible(const Line& L) const { return L.drawn && !L.oids.empty(); }
 };
 
+// ---- (1.1.0) what a line shows now: a pure function of the record + the last CLOSED bar's end (no repaint) ----------------------
+enum Vis { V_NONE = 0, V_TEST = 1, V_BREAK = 2, V_HELD = 3 };
+static const int BREAK_BARS = 5, HELD_MIN_BARS = 2, MAX_TESTED = 3;
+inline int visState(const Line& L, long long lastClosedEnd, long long barMs) {
+    if (!L.drawn || !L.touchMs || L.oids.empty()) return V_NONE;
+    if (L.word == W_NONE) return L.end == PULLED ? V_NONE : V_TEST;     // pulled before a decision = gone
+    if (barMs <= 0) barMs = 180000;
+    if (L.word == W_THRU) return lastClosedEnd < L.wordMs + (long long)BREAK_BARS * barMs ? V_BREAK : V_NONE;
+    if (L.throughMs && lastClosedEnd >= std::max(L.throughMs, L.wordMs + (long long)HELD_MIN_BARS * barMs)) return V_NONE;
+    return V_HELD;
+}
+// the lines to draw: at most MAX_TESTED, the newest by max(touch, decision)
+inline std::vector<int> shownLines(const Engine& E, long long lastClosedEnd, long long barMs) {
+    std::vector<std::pair<long long, int> > v;
+    for (size_t i = 0; i < E.lines.size(); ++i) { const Line& L = E.lines[i]; if (visState(L, lastClosedEnd, barMs) == V_NONE) continue; v.push_back(std::make_pair(std::max(L.touchMs, L.wordMs), (int)i)); }
+    std::sort(v.begin(), v.end(), [](const std::pair<long long, int>& a, const std::pair<long long, int>& b) { return a.first != b.first ? a.first > b.first : a.second > b.second; });
+    std::vector<int> o; for (size_t k = 0; k < v.size() && (int)k < MAX_TESTED; ++k) o.push_back(v[k].second); return o;
+}
 // ---- text / hover --------------------------------------------------------------------------------------------------------------
 inline int decimals(double tick) { int d = 0; double t = tick; while (d < 6 && std::fabs(t - std::round(t)) > 1e-9) { t *= 10; ++d; } return d; }
 inline std::string price(Tick t, double tick) { char b[48]; std::snprintf(b, sizeof(b), "%.*f", decimals(tick), (double)t * tick); return b; }
 inline std::string clock12(long long ms) { long long m = (ms / 60000LL) % 1440LL; if (m < 0) m += 1440; int h = (int)(m / 60), mi = (int)(m % 60), s = (int)((ms / 1000LL) % 60LL); char b[24]; std::snprintf(b, sizeof(b), "%d:%02d:%02d %s", h % 12 == 0 ? 12 : h % 12, mi, s < 0 ? 0 : s, h < 12 ? "AM" : "PM"); return b; }
 inline std::string dur(long long ms) { if (ms < 0) ms = 0; char b[32]; long long m = ms / 60000LL; if (m >= 60) std::snprintf(b, sizeof(b), "%lld h %lld min", m / 60, m % 60); else std::snprintf(b, sizeof(b), "%lld min", m); return b; }
-inline const char* wordText(int w) { return w == W_HELD ? "HELD" : w == W_THRU ? "THRU" : ""; }
+inline const char* wordText(int w) { return w == W_HELD ? "HELD" : w == W_THRU ? "BREAK" : ""; }   // (1.1.0) THRU is drawn as BREAK
 struct Row { std::string text; int ink = INK_WHITE; };
 inline std::vector<Row> hoverRows(const Line& L, double tick, long long nowMs) {
     std::vector<Row> r; char b[300];
@@ -448,6 +512,7 @@ inline std::vector<Row> hoverRows(const Line& L, double tick, long long nowMs) {
         if (L.rolls > 0 && L.rollGapMs >= -60000) { std::snprintf(b, sizeof(b), " (re-placed %+.1f s after the pull)", (double)L.rollGapMs / 1000.0); s += b; }
         r.push_back(Row{ s, INK_WHITE });
     }
+    if (L.touchMs) { if (L.touchRank > 0) std::snprintf(b, sizeof(b), "Tested %s - #%d in the Liquidity column then", clock12(L.touchMs).c_str(), L.touchRank); else std::snprintf(b, sizeof(b), "Tested %s - not in the Liquidity column's top 6 then", clock12(L.touchMs).c_str()); r.push_back(Row{ b, INK_WHITE }); }
     if (L.end == FILLED) {
         std::snprintf(b, sizeof(b), "Filled %s at %s, %lld lots traded", clock12(L.fillMs ? L.fillMs : L.endMs).c_str(), price(L.fillPx ? L.fillPx : L.endPx, tick).c_str(), L.traded); r.push_back(Row{ b, INK_WHITE });
         if (L.word != W_NONE) { std::snprintf(b, sizeof(b), "%s%s: %s", wordText(L.word), L.wordShown ? "" : " (not drawn: same zone as an earlier word)", L.word == W_HELD ? (bid ? "a green bar closed back above it and no bar traded wholly below it" : "a red bar closed back below it and no bar traded wholly above it") : (bid ? "a bar traded wholly below it or no green close above it within 4 bars" : "a bar traded wholly above it or no red close below it within 4 bars")); r.push_back(Row{ b, L.word == W_HELD ? ink : INK_GREY }); }

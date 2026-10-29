@@ -169,4 +169,83 @@ inline std::string offText(const std::string& name, const std::string& pxTxt, do
     return name + " " + pxTxt + "  (" + d + ")";
 }
 }  // namespace lvc
+
+// ---- (2026-10-29) the liquidity RANK rule of lsDealerProfile 2.37.0 (kept in this hashed header so an edit rebuilds the plugin)
+// LiqRankLogic.h 1.0.0 (2026-10-29, lsDealerProfile 2.37.0; Rassul approved 09:33 CT, option c) -- SDK-free.
+//  - RANK REACH: a Key Levels badge takes a Liquidity-column zone only when the zone sits from the level out to 0.25 ATR (3-min ATR)
+//    BEYOND it, one-sided, away from price (a level above price looks up, below price looks down) - never between the level and price.
+//  - ONE LEVEL PER ZONE: each zone is given to at most ONE level - the nearest qualifying level (tie: the level nearer price, then the
+//    first) - so the same rank can never show on two badges. A level with several zones takes the best (lowest) rank.
+//  - HISTORY: every change of a level's rank (incl. to / from none) is one line "time,level,price,rank,lots" appended to
+//    lsFlexLevels\DealerProfile\<MKT>-liqlevels-history-<session>.csv; nothing is appended while ranks stay the same.
+// Tested by test_dealerprofile_2370.cpp and test_dealerprofile_2370.cpp.
+
+namespace lrk {
+static const char* const VERSION = "1.0.0";
+static const double REACH_ATR = 0.25;
+struct Zone { double px = 0; bool bid = false; int rank = 0; long long lots = 0; };
+// level prices (in), zones (in) -> for each level, the index of its zone (-1 = none). reach = REACH_ATR x the 3-min ATR (price units).
+inline std::vector<int> assign(const std::vector<double>& lv, const std::vector<Zone>& zs, double lastPx, double reach, double tick)
+{
+    std::vector<int> out(lv.size(), -1);
+    if (!(reach > 0) || !std::isfinite(reach)) return out;
+    const double eps = (tick > 0 ? tick : 1e-9) * 1e-6;
+    std::vector<int> owner(zs.size(), -1);
+    for (size_t z = 0; z < zs.size(); ++z) {
+        double best = 0; int bi = -1;
+        for (size_t r = 0; r < lv.size(); ++r) {
+            const double L = lv[r]; if (!std::isfinite(L)) continue;
+            const bool above = L > lastPx;
+            const bool beyond = above ? (zs[z].px >= L - eps && zs[z].px <= L + reach + eps) : (zs[z].px <= L + eps && zs[z].px >= L - reach - eps);
+            if (!beyond) continue;
+            const double d = std::fabs(zs[z].px - L);
+            if (bi < 0 || d < best - eps || (std::fabs(d - best) <= eps && std::fabs(L - lastPx) < std::fabs(lv[(size_t)bi] - lastPx) - eps)) { best = d; bi = (int)r; }
+        }
+        owner[z] = bi;
+    }
+    for (size_t z = 0; z < zs.size(); ++z) {
+        const int r = owner[z]; if (r < 0) continue;
+        if (zs[z].rank <= 0) continue;
+        if (out[(size_t)r] < 0 || zs[z].rank < zs[(size_t)out[(size_t)r]].rank) out[(size_t)r] = (int)z;
+    }
+    return out;
+}
+// the session a CT time belongs to (17:00 CT starts the next day's session): yyyymmdd of (CT + 7 h)
+inline std::string sessionKey(long long ctSec)
+{
+    long long d = (ctSec + 7LL * 3600LL); if (d < 0) d = 0; d /= 86400LL;
+    // civil from days (Howard Hinnant)
+    long long z = d + 719468; const long long era = (z >= 0 ? z : z - 146096) / 146097; const unsigned doe = (unsigned)(z - era * 146097);
+    const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; long long y = (long long)yoe + era * 400;
+    const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100); const unsigned mp = (5 * doy + 2) / 153;
+    const unsigned dd = doy - (153 * mp + 2) / 5 + 1; const unsigned mm = mp < 10 ? mp + 3 : mp - 9; if (mm <= 2) ++y;
+    char b[48]; std::snprintf(b, sizeof(b), "%04lld%02u%02u", y, mm, dd); return b;
+}
+struct Row { std::string level, price; int rank = 0; long long lots = 0; };
+struct History {
+    std::string session; std::map<std::string, int> last;   // level key (names + price) -> last rank written (0 = none)
+    // lines to append for this draw (empty = nothing changed). A new session starts empty (every ranked level is written once).
+    std::vector<std::string> changes(const std::string& sess, const std::vector<Row>& rows, long long ctMs)
+    {
+        std::vector<std::string> o;
+        if (sess != session) { session = sess; last.clear(); }
+        std::map<std::string, int> seen;
+        for (const Row& r : rows) {
+            const std::string k = r.level + "@" + r.price;
+            if (seen.count(k)) continue;
+            seen[k] = r.rank;
+            auto it = last.find(k); const int was = it == last.end() ? 0 : it->second;
+            if (it == last.end() && r.rank == 0) { last[k] = 0; continue; }   // first sight without a rank: nothing to record
+            if (was == r.rank && it != last.end()) continue;
+            last[k] = r.rank;
+            std::string nm = r.level; for (char& c : nm) if (c == ',' || c == '\n' || c == '\r') c = ' ';
+            char b[256]; std::snprintf(b, sizeof(b), "%lld,%s,%s,%d,%lld", ctMs, nm.c_str(), r.price.c_str(), r.rank, r.rank > 0 ? r.lots : 0LL);
+            o.push_back(b);
+        }
+        // a level not in this draw's rows (scrolled off, merged) is left alone - scrolling never writes a change
+        return o;
+    }
+};
+inline const char* historyHeader() { return "time_ct_ms,level,price,rank,lots"; }
+}   // namespace lrk
 #endif

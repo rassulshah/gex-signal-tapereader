@@ -158,7 +158,7 @@ static const char* LT_HEADER = "kind,touch_ms,sec_end,side,px_tick,price,tag,vot
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.67.0"          // (0.67.0, 2026-10-28 14:04 CT Rassul approved) the liquidity column candidates = zones >= 2.0x the median real level (LiqTouch 1.1.0 pickZones), posted as SignalBoard B code 2; the touch engine follows the same zones (the p97 tier = log only)
+#define LQ_VERSION "0.68.0"          // (0.68.0, 2026-10-29 Rassul approved 09:33 / 10:23 CT, mockups orderlines-levels-mockup.html + AEYuhQfdcywsR8VxmhpUVq) THE TESTED ORDER LINES (OrderLinesLogic.h 1.1.0): an untouched big order draws nothing (the Liquidity column shows it); when price trades into it a line appears at its price from its PLACEMENT (left edge of the price area right of the Key Levels column when placed earlier), thin dashed while testing; decided (fill >= half, then the first favourable close within 4 bars = HELD; a bar wholly beyond / no favourable close in 4 bars = BREAK - was THRU) = solid, with [rank box] + HELD / BREAK at the decision bar; rank = its Liquidity-column rank at the TOUCH (lsDealerProfile Q board), frozen and recorded (T line), no box outside the top 6; BREAK shown 5 bars; HELD solid, never dimmed, to the right edge until a bar closes through it (X line), min 2 bars after the decision; pulled before a decision = gone; at most 3 tested lines; no fill dots / start labels any more (LRA-OrderFills published empty)   // was 0.67.0: (0.67.0, 2026-10-28 14:04 CT Rassul approved) the liquidity column candidates = zones >= 2.0x the median real level (LiqTouch 1.1.0 pickZones), posted as SignalBoard B code 2; the touch engine follows the same zones (the p97 tier = log only)
 #define LQ_VERSION_0661 "0.66.1"          // (0.66.1, 2026-10-28 12:16 CT Rassul "a column for levels ... move the hod lod box aligned ... on the left") the top read banner and the order lines start right of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0 leftKeep) - the HOD/LOD table docks at that column's top
 #define LQ_VERSION_0660 "0.66.0"          // (0.66.0, 2026-10-28, Rassul approved the liquidity-column build 11:05 CT + 11:08 CT "i like the held signal ... show it when it held") THE TOUCH TAG (LiqTouch.h 1.0.0, the 10-28 liquidity study ported exactly): every big resting level (the market tier, p97 of book levels: ES 72 / NQ 12 / CL 16 / GC 10 / HG 10 / NG 30 / 6E 128 lots, nightly LRA-LiqTouch-<MKT>.csv) is followed natively from the order-by-order feed; 15 s after its first trade it is STAYS+ / STAYS / STAYS weak / GONE / GONE+ (or MID / EARLY, logged), with the Tape Reader votes; then HELD / BROKE / EXPIRED; posted as SignalBoard facts kind S for lsDealerProfile (tag in the Liquidity column, HELD on the chart - nothing new drawn here); every touch recorded to <stem>-liqtouch-<session>.csv (T / D 30-s / O lines, the log-only reads: king, dominance, MenthorQ, tap, seconds at the level, refill, churn, attacker mix) and read back after a restart (no repaint); status LIQ_TOUCH   // was (0.65.2)  (0.65.2, 2026-10-28 09:31 CT Rassul approved the split LMT F) BIDS FILLED in the LEFT half (green), OFFERS FILLED in the RIGHT half (red), each on its exact price row, centred in its half; collisions resolved per side only (a bid and an offer at the same price both show)
 #define LQ_VERSION_0651 "0.65.1"          // (0.65.1, 2026-10-28 09:05 CT Rassul "it would be horrible if ... the limit F is showing it at the wrong location") LMT F / live iceberg labels are drawn AT THEIR PRICE ROW or not at all (LabelPlace.h 1.0.0, biggest print wins a collision); 0.65.0 pushed colliding labels down a row at a time, so ES "2x 1571" (bids filled at 7773.00) showed near 7771
@@ -517,6 +517,8 @@ struct LQState {
     oln::Engine ol; bool olSessionSeen = false; std::string olMkt, olParWhy = "not read"; long long olParT = -2, olParN = -2, olParMs = -1, olWrites = 0, olFails = 0, olRestored = 0;
     struct OlHit { int line = -1; int b0 = 0, b1 = 0; long long lo = 0, hi = 0; };
     std::set<long long> olFillKeys, olFillPub; long long olFillPubMs = -1; int olFillPubFails = 0;   // (0.55.1) fill-dot candles (bar datetime keys) for lsDefenseLines
+    std::vector<int> olShownIds;   // (0.68.0) the tested lines drawn this pass (ids)
+    std::vector<sb::Fact> olQ; long long olQMs = -1; int olQReads = 0;   // (0.68.0) lsDealerProfile's Liquidity column (SignalBoard Q: price, side, rank) for the frozen touch rank
     std::vector<OlHit> olHits; int olHov = -1; int olDrawnNow = 0, olWordsNow = 0, olQNow = 0, olTagsNow = 0, olCutNow = 0; std::string lmtBody; long long lmtAt = -1; int lmtRows = 0, lmtWrites = 0, lmtFails = 0;   // (0.60.0) the level-tagged live orders file   // (0.59.0) + level tags drawn
     std::vector<LzHit> lzHits; int lzHov = -1, lzHovBar = -1; double lzHovPrice = 0; void* lzHovWnd = nullptr; std::string lzHovState = "none";
     int lzDrawnNow = 0, lzLmtRows = 0, lzFRows = 0, lzGammaDrawn = 0, lzTagsDrawn = 0, lzAfterDrawn = 0;   // (0.54.0) + after-fill reads on the chart now   // (0.53.0) state tags on the chart now
@@ -635,6 +637,8 @@ private:
     void qmAfter(LQState& S, long count, long long st);   // (0.49.0) the queue meter: market / levels / norms / session record, closed candles, Q rows, live file
     std::string qmPath(LQState& S) { const std::string d = dir(); return d.empty() || S.qmSession < 0 ? std::string() : d + "\\" + recordStem(S) + "-queuemeter-" + std::to_string(S.qmSession) + ".csv"; }
     void renderZones(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX);
+    int olRank(LQState& S, int side, long long px);   // (0.68.0) the Liquidity-column rank of a price now (0 = not in the top 6)
+    void olBind(LQState& S) { if (!S.ol.rankFn) { LQState* sp = &S; S.ol.rankFn = [this, sp](int sd, oln::Tick px) { return olRank(*sp, sd, (long long)px); }; } }
     void renderZoneHover(LQState& S, int paneRight);
     std::string olPath(LQState& S) { const std::string d = dir(); return d.empty() || S.lzSession < 0 ? std::string() : d + "\\" + recordStem(S) + "-orderlines-" + std::to_string(S.lzSession) + ".csv"; }
     std::string lzPath(LQState& S) { const std::string d = dir(); return d.empty() || S.lzSession < 0 ? std::string() : d + "\\" + recordStem(S) + "-lmtzones-" + std::to_string(S.lzSession) + ".csv"; }
@@ -1657,7 +1661,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
             o << "ORDER_LINES," << oln::VERSION << "," << (S.lzSet.on ? "on" : "off") << ",params " << S.olParWhy << ",floor " << S.ol.R.floorLots << " lots rest " << S.ol.R.restMin << " min roll " << S.ol.R.rollSec << " s ladder >= " << S.ol.R.ladMinN << " x " << S.ol.R.ladPieceMin << "+ lots in " << S.ol.R.ladSpan << " ticks cut-off " << S.ol.R.cutMin / 60 << ":" << (S.ol.R.cutMin % 60 < 10 ? "0" : "") << S.ol.R.cutMin % 60
               << ",tracked " << O.lines << " drawn " << O.drawn << " (on chart now " << S.olDrawnNow << ", words " << S.olWordsNow << ", Q " << S.olQNow << ", level tags " << S.olTagsNow << ", live lines cut (top " << LQ_LIVE_TOP << "/side) " << S.olCutNow << " (LineLevelTag " << llt::VERSION << ")" << ")"
               << ",filled " << O.filled << " pulled " << O.pulled << " rolls " << O.rolls << " (ambiguous " << O.rollAmbig << ") moves " << O.moves << " ladders " << O.ladders << " icebergs " << O.icebergs
-              << ",held " << O.held << " thru " << O.thru << " (hover only " << O.wordsHidden << "),late skipped " << O.lateSkipped << ",unknown fills " << O.unknownFill << ",restored " << S.olRestored << ",writes " << S.olWrites << " fails " << S.olFails << "\n"; }
+              << ",tested lines (OrderLines " << oln::VERSION << ") touched " << O.touched << " closed-through " << O.through << " shown now " << S.olShownIds.size() << " Q reads " << S.olQReads << ",held " << O.held << " break " << O.thru << " (hover only " << O.wordsHidden << "),late skipped " << O.lateSkipped << ",unknown fills " << O.unknownFill << ",restored " << S.olRestored << ",writes " << S.olWrites << " fails " << S.olFails << "\n"; }
         {   const long long qn = S.qmE.lastT; const std::vector<qm::Live> QL = S.qmE.live(qn);   // (0.49.0) the queue meter (numbers here; the meter is drawn by the Dealer Profile)
             o << "QUEUE_METER," << qm::VERSION << ",tests live " << QL.size() << ",started " << S.qmE.nStarted << ",anchors levels " << S.qmE.levels.size() << " pivots (ZigZag last-3 intact) " << S.qmE.pivots.size() << ",Q rows skipped: building " << S.qmE.nThin << " debounced " << S.qmE.nDebounced << " not a level / pivot " << S.qmE.nNotAnchor
               << ",ATR " << S.qmE.atr << ",zone " << S.qmE.zoneW() << " ticks,book " << S.qmE.book.size() << ",events " << S.qmE.nEvents << ",unknown fills " << S.qmE.nUnknownFill
@@ -2105,7 +2109,7 @@ void LiquidityProfile::orders(LQState& S, long long st) {
                 else ms = S.haveOffset ? st + S.ctOffset : 0;
             }
             S.bo.onEvent(ev.action, ev.side, ev.px, ev.size, ev.id, ms);
-            if (ms > 0) S.ol.onEvent(ev.action, ev.side, ev.px, ev.size, ev.id, ms);   // (0.55.0) the limit-order lines keep their own book
+            if (ms > 0) { olBind(S); S.ol.onEvent(ev.action, ev.side, ev.px, ev.size, ev.id, ms); }   // (0.55.0) the limit-order lines keep their own book
             S.lz.onEvent(ev.action, ev.side, ev.px, ev.size, ev.id, ms);   // (0.48.0) the LMT zones keep their own book (side taken from the book, never the FILL row)
             // (0.28.0) the same event to the big market orders (a FILL row: the aggressor's id + side) and the iceberg tracker
             if (ms > 0) {
@@ -3072,7 +3076,7 @@ void LiquidityProfile::lzAfter(LQState& S, long count) {
         else if (S.bldOk && S.bldV[0] > 0) { s20 = std::max(1LL, (long long)std::llround(S.bldV[0])); src = "live S20 (LMT footer)"; }
         S.lzS20 = s20; S.lzS20Src = src;
         S.lz.closeBar(b, s20);
-        { oln::Bar ob; ob.endMs = b.endMs; ob.o = b.o; ob.h = b.h; ob.l = b.l; ob.c = b.c; S.ol.closeBar(ob); }   // (0.55.0) HELD / THRU on closed bars
+        { oln::Bar ob; ob.endMs = b.endMs; ob.o = b.o; ob.h = b.h; ob.l = b.l; ob.c = b.c; olBind(S); S.ol.closeBar(ob); }   // (0.55.0) HELD / THRU on closed bars
     }
     S.lzBarCount = count;
     lzFlush(S, false);
@@ -3341,6 +3345,21 @@ void LiquidityProfile::renderEx(LQState& S) {
         { RCT r; r.set(coord(P.box.l), coord(P.box.t - lift), coord(P.box.r), coord(P.box.b - lift)); r.drawText(tx, true, false); }
     }
 }
+// (0.68.0) the order's rank in lsDealerProfile's Liquidity column NOW (SignalBoard Q: one fact per shown zone, code = rank), read at most
+// once a second; the nearest same-side zone within max(1 tick, 0.25 ATR) of the order's price; rank > 6 or none = 0 (no rank box)
+int LiquidityProfile::olRank(LQState& S, int side, long long px)
+{
+    const double tick = S.tick; if (!(tick > 0) || px <= 0) return 0;
+    const long long now = steadyMs();
+    if (S.olQMs < 0 || now < S.olQMs || now - S.olQMs >= 1000) {
+        S.olQMs = now; S.olQ.clear(); const char* clk = getChartLabel();
+        sb::readFacts('Q', S.symbol, S.spb, clk ? std::string(clk) : std::string(), now, S.olQ, false); ++S.olQReads; }
+    const double p = (double)px * tick, tol = std::max(tick * 1.01, (std::isfinite(S.atr) && S.atr > 0) ? 0.25 * S.atr : 0.0);
+    int best = 0; double bd = 0;
+    for (const sb::Fact& f : S.olQ) { if ((f.side > 0) != (side == oln::BID) || f.code <= 0) continue; const double d = std::fabs(f.lo - p); if (d > tol) continue;
+        if (best == 0 || d < bd) { best = f.code; bd = d; } }
+    return best > 6 ? 0 : best;
+}
 void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int top, int bottom, int lastBar, int lastX) {
     // (0.55.0) THE LIMIT-ORDER LINES (OrderLinesLogic.h 1.0.0, Rassul's walk-through 2026-10-25 + all-approved-mockup.html). The LMT zone
     // lines, FILLING / RE-BID? / ACCEPTED tags and the X are no longer drawn (the zone engine still records). Drawn here, in this order:
@@ -3360,6 +3379,7 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
     const COLOR cOffer = (COLOR)S.lzSet.cOffer, cBid = (COLOR)S.lzSet.cBid, cGrey = (COLOR)S.lzSet.cGrey, cGam = (COLOR)S.lzSet.cGamma;
     auto dark = [](COLOR c) { const unsigned r = (unsigned)(c >> 16) & 0xFF, g = (unsigned)(c >> 8) & 0xFF, b = (unsigned)c & 0xFF;   // ~30% towards black: the "very dark" pulled line
         return (COLOR)((((r * 30) / 100) << 16) | (((g * 30) / 100) << 8) | ((b * 30) / 100)); };
+    (void)dark; (void)cGrey;   // (0.68.0) pulled / grey words are no longer drawn
     // 1) gamma levels: thin grey lines across the price area, no label (the Levels column names them)
     if (S.lzSet.gammaLines) {
         setPen(cGam, 1, P_SOLID);
@@ -3383,91 +3403,61 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
     }
     S.olTagsNow = 0;
     std::vector<std::string> lmtNow;                                   // (0.60.0) this draw's live orders at a level
-    // (0.60.0) which LIVE lines are drawn: the LQ_LIVE_TOP biggest per side whose price is on screen, plus every live line at a level
-    std::vector<char> liveKeep(E.lines.size(), 0); S.olCutNow = 0;
-    {   std::vector<std::pair<long long, size_t> > bySide[2];
-        for (size_t li = 0; li < E.lines.size(); ++li) {
-            const oln::Line& L = E.lines[li];
-            if (!E.visible(L) || L.segs.empty() || L.end != oln::LIVE) continue;
-            const int y = yOfPx(L.px()); if (y <= top + 14 || y >= bottom) continue;
-            const long long lots = L.refills > 0 ? std::max(L.traded, L.size) : std::max(L.maxShown, L.size);
-            bool atLevel = false;
-            if (!olLv.empty()) { const llt::Tag tg = llt::tagFor((double)L.px() * tick, olLv, tick, S.atr, L.side != oln::BID); atLevel = tg.kind != llt::NONE; }
-            if (atLevel) liveKeep[li] = 1; else bySide[L.side == oln::BID ? 0 : 1].push_back(std::make_pair(lots, li));
-        }
-        for (int sd = 0; sd < 2; ++sd) {
-            std::sort(bySide[sd].begin(), bySide[sd].end(), [](const std::pair<long long, size_t>& a, const std::pair<long long, size_t>& b) { return a.first > b.first; });
-            for (size_t k = 0; k < bySide[sd].size(); ++k) { if ((int)k < LQ_LIVE_TOP) liveKeep[bySide[sd][k].second] = 1; else ++S.olCutNow; }
-        }
+    // (0.60.0) the level-tagged LIVE orders (data for the Dealer Profile; nothing drawn for them any more - 0.68.0)
+    S.olCutNow = 0;
+    for (size_t li = 0; li < E.lines.size(); ++li) {
+        const oln::Line& L = E.lines[li];
+        if (!E.visible(L) || L.segs.empty() || L.end != oln::LIVE || olLv.empty()) continue;
+        const llt::Tag tg = llt::tagFor((double)L.px() * tick, olLv, tick, S.atr, L.side != oln::BID); if (tg.kind == llt::NONE) continue;
+        ++S.olTagsNow; const std::string tx = L.label(); const bool bid = L.side == oln::BID;
+        long long lots = 0; { const size_t sp = tx.find_last_of(' '); lots = std::atoll(sp == std::string::npos ? tx.c_str() : tx.c_str() + sp + 1); }
+        char row[160]; std::snprintf(row, sizeof(row), "O,%s,%lld,%s,%s,%.6f,%.6f", bid ? "B" : "A", lots, tx.c_str(), tg.name.c_str(), tg.px, (double)L.px() * tick);
+        if (lots > 0 && tx.find(',') == std::string::npos && tg.name.find(',') == std::string::npos) lmtNow.push_back(row);
     }
-    RTARRAYI olDt(barDateTime);                                        // (0.55.1) the fill-dot candles' keys for lsDefenseLines
-    for (int pass = 0; pass < 2; ++pass) {                             // pass 0: pulled (dark, underneath); pass 1: live / filled
-        for (size_t li = 0; li < E.lines.size(); ++li) {
-            const oln::Line& L = E.lines[li];
-            if (!E.visible(L) || L.segs.empty()) continue;
-            const bool pulled = L.end == oln::PULLED;
-            if ((pass == 0) != pulled) continue;
-            if (pulled && (!LQ_SHOW_PULLED || !S.lzSet.nearO)) continue;   // "Pulled lines (very dark)" box; (0.60.0) never drawn
-            if (L.end == oln::LIVE && !liveKeep[li]) continue;          // (0.60.0) only the biggest live lines per side (+ those at a level)
-            if (L.end == oln::FILLED && E.lastT > 0 && E.lastT - (L.fillMs ? L.fillMs : L.endMs) > LQ_FILLED_KEEP_MS) continue;   // (0.60.0) old fills off
+    // (0.68.0, OrderLinesLogic 1.1.0, Rassul approved 2026-10-29 09:33 / 10:23 CT) THE TESTED LINES: nothing for an untouched order; a line from
+    // its PLACEMENT (left edge of the price area when placed earlier) once price trades into it - thin dashed while testing; solid after the
+    // decision with [rank] + HELD / BREAK at the decision bar; BREAK 5 bars; HELD solid to the right edge until a close through (min 2 bars);
+    // at most 3; everything clipped to the price area (right of the Key Levels column, left of the right-side columns)
+    {   const int kx = cb::leftKeep(S.symbol, S.spb, getChartLabel() ? std::string(getChartLabel()) : std::string(), paneLeft, steadyMs());
+        const int xL = std::max(xMin, kx + 3);
+        const long long lastClosed = E.bars.empty() ? 0 : E.bars.back().endMs, bms = S.spb > 0 ? (long long)S.spb * 1000LL : 180000LL;
+        const std::vector<int> sh = oln::shownLines(E, lastClosed, bms);
+        S.olShownIds.clear();
+        for (size_t si = 0; si < sh.size() && xMax - xL >= 20; ++si) {
+            const size_t li = (size_t)sh[si]; const oln::Line& L = E.lines[li];
             if (L.kind == oln::K_LADDER && !S.lzSet.origin) continue;   // "Ladders" box
             if (L.kind == oln::K_ONE && L.refills > 0 && !S.lzSet.print) continue;   // "Icebergs" box
-            if (L.end == oln::FILLED) { const int fb = barOfT(L.fillMs ? L.fillMs : L.endMs); if (fb >= 0 && fb < olDt.count) S.olFillKeys.insert((long long)olDt[fb]); }   // (0.55.1) this candle has a fill dot (scroll-independent)
-            const bool bid = L.side == oln::BID;
-            const COLOR base = bid ? cBid : cOffer, c = pulled ? dark(base) : base;
-            const int pen = (L.kind == oln::K_LADDER || L.refills > 0 || L.segs.size() > 1) ? 3 : 2;
-            const int bEnd = L.end == oln::LIVE ? lastBar : barOfT(L.endMs);
-            bool any = false; int labX = 0, labY = 0, lastY = -1, lastX1 = -1;
-            setPen(c, pen, P_SOLID);
+            const int vs = oln::visState(L, lastClosed, bms);
+            const bool bid = L.side == oln::BID, test = vs == oln::V_TEST;
+            const COLOR c = bid ? cBid : cOffer;
+            const int decX = L.wordMs > 0 ? xOfBar(barOfT(L.wordMs - 1)) : xMax;   // bar stamps are bar ENDs: the decision bar ends AT wordMs
+            const int xEnd = std::min(xMax, test ? xOfBar(lastBar) : vs == oln::V_BREAK ? decX : xMax);
+            setPen(c, test ? 1 : 2, test ? P_DASH : P_SOLID);
+            bool any = false; int lastY = -1, lastX1 = -1, yLab = -1;
             for (size_t j = 0; j < L.segs.size(); ++j) {
                 const oln::Seg& g = L.segs[j];
-                const int b0 = barOfT(g.t), b1 = j + 1 < L.segs.size() ? barOfT(L.segs[j + 1].t) : bEnd;
-                int x0 = std::max(xMin, xOfBar(b0)), x1 = std::min(xMax, j + 1 < L.segs.size() || L.end != oln::LIVE ? xOfBar(b1) : xMax);
-                x0 = std::max(xMin, std::min(x0, x1 - 16));
+                const int b0 = barOfT(g.t), b1 = j + 1 < L.segs.size() ? barOfT(L.segs[j + 1].t) : lastBar;
+                const int x0 = std::max(xL, xOfBar(b0)), x1 = std::min(xEnd, j + 1 < L.segs.size() ? xOfBar(b1) : xEnd);
                 const int y = yOfPx(g.px);
-                if (lastY >= 0 && lastX1 >= xMin && lastX1 <= xMax && y > top + 14 && y < bottom && lastY > top + 14 && lastY < bottom)
-                    ko::line(coord(lastX1), coord(lastY), coord(lastX1), coord(y));   // the step (rolled / moved), at the moment it moved
-                if (x1 - x0 < 2 || y <= top + 14 || y >= bottom) { lastY = y; lastX1 = x1; continue; }
-                ko::line(coord(x0), coord(y), coord(x1), coord(y));
-                if (!any) { labX = x0; labY = y; }
-                any = true; lastY = y; lastX1 = x1;
+                if (lastY >= 0 && lastX1 >= xL && lastX1 <= xEnd && y > top + 14 && y < bottom && lastY > top + 14 && lastY < bottom) ko::line(coord(lastX1), coord(lastY), coord(lastX1), coord(y));
+                lastY = y; lastX1 = x1;
+                if (x1 - x0 < 2 || y <= top + 14 || y >= bottom) continue;
+                ko::line(coord(x0), coord(y), coord(x1), coord(y)); any = true; yLab = y;
                 LQState::OlHit h; h.line = (int)li; h.b0 = b0; h.b1 = b1; h.lo = g.px - 1; h.hi = g.px + 1; S.olHits.push_back(h);
             }
             if (!any) continue;
-            ++S.olDrawnNow;
-            // the start tick (placement) when the placement is on the chart
-            if (barOfT(L.t0) > 0 || xOfBar(0) >= xMin) { const int x = xOfBar(barOfT(L.t0)); if (x >= xMin && x <= xMax && labY > top + 14 && labY < bottom) ko::line(coord(x), coord(labY - 5), coord(x), coord(labY + 6)); }
-            // the label: just right of the line start, below a bid line / above an offer line, stepped away from another label
-            std::string tx = L.label();
-            llt::Tag tg; if (!olLv.empty()) { tg = llt::tagFor((double)L.px() * tick, olLv, tick, S.atr, !bid); if (tg.kind != llt::NONE) ++S.olTagsNow; }   // (0.59.0)
-            if (tg.kind != llt::NONE && L.end == oln::LIVE && !pulled) {   // (0.60.0) a live order at a level -> the Dealer Profile's Levels column
-                long long lots = 0; { const size_t sp = tx.find_last_of(' '); lots = std::atoll(sp == std::string::npos ? tx.c_str() : tx.c_str() + sp + 1); }
-                char row[160]; std::snprintf(row, sizeof(row), "O,%s,%lld,%s,%s,%.6f,%.6f", bid ? "B" : "A", lots, tx.c_str(), tg.name.c_str(), tg.px, (double)L.px() * tick);
-                if (lots > 0 && tx.find(',') == std::string::npos && tg.name.find(',') == std::string::npos) lmtNow.push_back(row);
-            }
-            if (LQ_LINE_TEXT) {
-                if (tg.kind != llt::NONE) tx += "  " + tg.text();
-                const int tw = (int)getTextWidth(tx.c_str(), -1) + 2;
-                int lx = std::max(xMin, std::min(labX + 4, xMax - tw)), ly = bid ? labY + 2 : labY - fh - 1;
-                for (int tries = 0; tries < 6; ++tries) { bool clash = false; for (size_t q = 0; q < labels.size(); ++q) if (std::abs(labels[q].first - ly) < fh && std::abs(labels[q].second - lx) < tw + 6) clash = true; if (!clash) break; lx = std::min(xMax - tw, lx + tw + 8); }
-                if (ly > top + 14 && ly + fh < bottom) { setTextColor(c); RCT lr; lr.set(coord(lx), coord(ly), coord(lx + tw), coord(ly + fh)); ko::text(lr, tx.c_str(), false, false); labels.push_back(std::make_pair(ly, lx)); }
-            }
-            if (L.end == oln::FILLED) {
-                const long long fm = L.fillMs ? L.fillMs : L.endMs; const oln::Tick fp = L.fillPx ? L.fillPx : L.px();
-                const int x = std::min(xMax, std::max(xMin, xOfBar(barOfT(fm)))), y = yOfPx(fp);
-                if (y > top + 14 && y < bottom) {   // the fill dot: side colour, white rim
-                    for (int d = -4; d <= 4; ++d) { const int w = (int)std::lround(std::sqrt(16.0 - d * d)); setPen(base, 1, P_SOLID); ko::line(coord(x - w), coord(y + d), coord(x + w + 1), coord(y + d)); }
-                    setPen(0x00FFFFFF, 1, P_SOLID); for (int a = 0; a < 24; ++a) { const double t0 = a * 3.14159265 / 12, t1 = (a + 1) * 3.14159265 / 12; ko::line(coord(x + (int)std::lround(5 * std::cos(t0))), coord(y + (int)std::lround(5 * std::sin(t0))), coord(x + (int)std::lround(5 * std::cos(t1))), coord(y + (int)std::lround(5 * std::sin(t1)))); }
-                    if (L.word != oln::W_NONE && L.wordShown && S.lzSet.tags) {   // the word beside its fill dot
-                        const char* wt = oln::wordText(L.word); const int ww = (int)getTextWidth(wt, -1) + 2;
-                        int wx = std::min(xMax - ww, x + 8), wy = y - fh / 2;
-                        for (int tries = 0; tries < 3; ++tries) { bool clash = false; for (size_t q = 0; q < wordSpots.size(); ++q) if (std::abs(wordSpots[q].first - wy) < fh && std::abs(wordSpots[q].second - wx) < ww + 4) clash = true; if (!clash) break; wy += bid ? fh : -fh; }
-                        if (wy > top + 14 && wy + fh < bottom) { setTextColor(L.word == oln::W_HELD ? base : cGrey); RCT wr; wr.set(coord(wx), coord(wy), coord(wx + ww), coord(wy + fh)); ko::text(wr, wt, false, false); wordSpots.push_back(std::make_pair(wy, wx)); ++S.olWordsNow; }
-                    }
-                }
-            }
+            ++S.olDrawnNow; S.olShownIds.push_back(L.id);
+            if (test || L.word == oln::W_NONE || !S.lzSet.tags) continue;
+            // the label at the decision bar, above the line: [rank box] (only for a top-6 rank frozen at the touch) + the word
+            const char* wt = oln::wordText(L.word); const int ww = (int)getTextWidth(wt, -1) + 2, bx = L.touchRank > 0 ? fh : 0;
+            const int lw = bx + (bx ? 3 : 0) + ww, ly = yLab - fh - 2; int lx = std::min(xMax - lw, decX + 3);
+            if (lx < xL || ly <= top + 14 || ly + fh >= bottom) continue;
+            if (bx) { const bool king = L.touchRank == 1; RCT rb; rb.set(coord(lx), coord(ly), coord(lx + bx), coord(ly + fh)); ko::mark(rb, (short)1, c, king ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);
+                      const std::string rk = std::to_string(L.touchRank); setTextColor(king ? (COLOR)0x000F172A : (COLOR)0x00F8FAFC); ko::text(rb, rk.c_str(), true, false); lx += bx + 3; }
+            setTextColor(c); RCT wr; wr.set(coord(lx), coord(ly), coord(lx + ww), coord(ly + fh)); ko::text(wr, wt, false, false); ++S.olWordsNow;
         }
     }
+    RTARRAYI olDt(barDateTime); (void)olDt;                            // (0.68.0) no fill dots any more: the fill-key file is published empty
     // (0.60.0) the level-tagged LIVE orders for the Dealer Profile 2.28.0 Levels column: "LMTL,1,<unix>,<tick>" + one O line per order;
     // rewritten when it changes, and at least every 5 s so the reader can tell a stopped chart (stale after 20 s)
 #ifndef LQ_FLOW
@@ -4742,6 +4732,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.67.0");   // LQ_VERSION
+    p->setVersion("0.68.0");   // LQ_VERSION
     return p;
 }
