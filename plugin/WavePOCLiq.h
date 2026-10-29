@@ -23,7 +23,7 @@
 
 namespace wpl {
 
-static const char* const VERSION = "1.1.1";
+static const char* const VERSION = "1.1.2";   // (1.1.2) a wave bar's samples = every sample stamped inside the bar (span), not only its exact stamp
 static const long long MM_WINDOW_MS = 5LL * 60 * 1000;   // re-priced >= 2x in 5 min = market maker
 static const int MM_REPRICES = 2;
 static const long long SAMPLE_MS = 1000;
@@ -103,15 +103,36 @@ public:
         return true;
     }
     // the average resting lots per row (and the bid part) over bars with stamps ts; false = no book for this wave
-    bool average(const std::vector<long long>& ts, long long e0, int rowTicks, size_t nRows, std::vector<double>& rows, std::vector<double>& bids) const {
+    // (1.1.2) the forming bar closed: every sample stamped with one of its interim stamps moves to its final (closed) stamp
+    void rekey(const std::vector<long long>& from, long long to) {
+        for (long long k : from) {
+            if (k == to) continue;
+            auto it = bars.find(k); if (it == bars.end()) continue;
+            BarSum& d = bars[to]; d.samples += it->second.samples;
+            for (const auto& kv : it->second.lots) { auto& q = d.lots[kv.first]; q.first += kv.second.first; q.second += kv.second.second; }
+            bars.erase(k);
+        }
+    }
+    // (1.1.2, 18:19 CT: the record of 2026-10-28 has NO liquidity node at all) the samples are stamped with the FORMING bar's stamp, which
+    // IRT may move while the bar forms (the last trade's time); the closed bar's stamp then never matched -> no wave ever had a book.
+    // spanSec > 0: a wave bar stamped t (its END) takes every sample stamped in (t - spanSec, t]; 0 = the exact stamp (1.1.1)
+    bool average(const std::vector<long long>& ts, long long e0, int rowTicks, size_t nRows, std::vector<double>& rows, std::vector<double>& bids, long long spanSec = 0) const {
         rows.assign(nRows, 0.0); bids.assign(nRows, 0.0);
         if (ts.empty() || rowTicks < 1 || nRows == 0) return false;
+        auto range = [&](long long t, std::map<long long, BarSum>::const_iterator& a, std::map<long long, BarSum>::const_iterator& z) {
+            if (spanSec > 0) { a = bars.upper_bound(t - spanSec); z = bars.upper_bound(t); }
+            else { a = bars.find(t); z = a; if (a != bars.end()) ++z; }
+        };
         long long n = 0; size_t covered = 0;
-        for (long long t : ts) { auto it = bars.find(t); if (it == bars.end() || it->second.samples <= 0) continue; ++covered; n += it->second.samples; }
+        for (long long t : ts) {
+            std::map<long long, BarSum>::const_iterator a, z; range(t, a, z); long long m = 0;
+            for (auto it = a; it != z; ++it) m += it->second.samples > 0 ? it->second.samples : 0;
+            if (m > 0) { ++covered; n += m; }
+        }
         if (n <= 0 || (double)covered < COVER_MIN * (double)ts.size()) return false;
         for (long long t : ts) {
-            auto it = bars.find(t); if (it == bars.end()) continue;
-            for (const auto& kv : it->second.lots) {
+            std::map<long long, BarSum>::const_iterator a, z; range(t, a, z);
+            for (auto it = a; it != z; ++it) for (const auto& kv : it->second.lots) {
                 const long long d = kv.first - e0; if (d < 0) continue;
                 const long long k = d / rowTicks; if (k >= (long long)nRows) continue;
                 rows[(size_t)k] += (kv.second.first + kv.second.second) / (double)n; bids[(size_t)k] += kv.second.first / (double)n;
