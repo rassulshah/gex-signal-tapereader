@@ -141,7 +141,8 @@ static std::vector<t10::Out> dpMergeSides(const std::vector<t10::Out>& b, const 
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.36.1";   // (2.36.1, 2026-10-28 18:24 CT Rassul "you shouldn't be able to see the background") the Key Levels column ground is SOLID: the chart background colour (getBackgroundColor), the full column (pane left edge to the column edge, pane top to bottom, no cut-out), drawn first in the levels pass - before the narrow-chart return - so nothing DealerProfile or an indicator drawn before it paints there shows through; badges / odds / ticks on top
+static const char* DP_VERSION = "2.36.2";   // (2.36.2, 2026-10-29 04:53 CT Rassul "there was a held line on the chart, add that back") the HELD line + word in the price area restored exactly as 2.35.0 drew it (touch candle -> HELD candle, 2 px, bid green / offer red, word right of the HELD candle, never over candles / badges / the HOD/LOD table); no level lines, no order lines, no THRU line
+// was 2.36.1:   // (2.36.1, 2026-10-28 18:24 CT Rassul "you shouldn't be able to see the background") the Key Levels column ground is SOLID: the chart background colour (getBackgroundColor), the full column (pane left edge to the column edge, pane top to bottom, no cut-out), drawn first in the levels pass - before the narrow-chart return - so nothing DealerProfile or an indicator drawn before it paints there shows through; badges / odds / ticks on top
 // was 2.36.0:   // (2.36.0, 2026-10-28 16:26 CT Rassul "the chart is extremely messy, remove the drawing of levels across the chart") NO level lines across the price area (badges stay in the Key Levels column, a <= 6 px tick at its edge), no faint liquidity order lines, no HELD line / word on the chart (HELD = a tag in the liquidity column lane; record + outcome logic unchanged), the off-screen level markers in the Key Levels column top / bottom
 // was 2.35.0:   // (2.35.0, 2026-10-28 14:04 CT Rassul approved the new liquidity-column candidate rule) when lsLiquidityProfile 0.67.0 posts its ZONE candidates (SignalBoard B code 2 = LiqTouch 1.1.0 pickZones: real orders only - rested 30 s+, re-priced < 2x in 5 min; a price + its +-1 tick neighbours; >= 2.0x the median real level of that side within 3 ATR, median every 60 s; one node per distribution) the column shows the TOP 3 BIDS below price + the TOP 3 OFFERS above (max 6, fewer when fewer pass), each side on its own steady board (Top10Stable, cap 3), the KING = the biggest of all shown (white chip + K, edge marker unchanged); touch tags + HELD on every shown level; the p97 tier is a log field only (LP status LIQ_CANDIDATES). No code-2 facts (old LP / no order feed) = the 2.34.0 path
 // was 2.34.0 (see the line above for 2.35.0)   // (2.34.0, 2026-10-28 12:50 CT Rassul "regarding the levels it should only be the key price levels and the volume levels, 1 vwap level which is the latest. lets not have the gamma levels right now. the percentages should be behind the level names to the left justified. and the level name and value should be right justified. the hod lod should be on the right of the level column not in it") the Key Levels column holds ONLY key levels + volume levels + ONE VWAP badge (the latest session VWAP, computed here from the chart bars with SessionVWAPLogic - RTH during / after RTH, else the overnight one; never the +-1 / +-2 bands), no gamma; inside each row the odds are LEFT-justified at the column's left edge and the name chips + price RIGHT-justified at its right edge (next to the candles); the HOD/LOD table no longer docks in the column (lsHodLod 2.11.0 docks it bottom-left, right of it - ColumnBoard 1.9.1): the column keeps its full height and width; HELD words step clear of that table
@@ -2492,9 +2493,48 @@ void DealerProfile::flushLines(const Settings& S)
         cs.liqRows = (int)lr.size();
         dpLiqWrite(cs.liqLastMs, cs.liqLastBody, cs.liqWhy, cs.liqWrites, mkt, dpLiqBody(mkt, lr, atr, dec), ctNowSec() * 1000LL, dpNowMs());
     }
-    // (2.36.0, Rassul 16:26 CT: remove the Liquidity HELD lines) no HELD line / word in the price area any more; HELD shows as the tag in the
-    // liquidity column's tag lane (below); the touch record and the outcome logic are unchanged
+    // (2.36.2, Rassul 2026-10-29 04:53 CT "there was a held line on the chart, add that back") the 2.32.0-2.35.0 HELD LINE + word restored
+    // exactly as before (code below unchanged): only levels that HELD (no THRU / BROKE line, no order lines, no level lines); clipped to the
+    // price area xL (Key Levels column edge + 3) .. xR (the right-side columns); the HELD tag in the liquidity column lane stays as in 2.36.0
     cs.ttHeld = cs.ttHeldText = cs.ttHeldNoRoom = cs.ttHeldClipped = 0;
+    if (cs.qFromBoard && !cs.ttags.empty() && nb > 2) {
+        RTARRAYI dt(barDateTime); RTARRAY bhi(barHigh), blo(barLow);
+        const int nbar = (int)std::min<long>(nb, (long)dt.count); const int from = std::max(0, nbar - 2000);
+        std::vector<long long> endCt((size_t)(nbar - from), 0);
+        for (int i = from; i < nbar; ++i) { struct tm t; memset(&t, 0, sizeof(t)); if (getLocaltime((RTDATE)dt[i], &t)) endCt[(size_t)(i - from)] = fr::ctAbs(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec); }
+        auto barOf = [&](long long ct) -> int { for (int i = nbar - 1; i >= from; --i) { const long long e = endCt[(size_t)(i - from)]; if (e > 0 && e <= ct) return i + 1 < nbar ? i + 1 : -1; } return -1; };   // IRT bar time = bar END
+        const int hf = std::max(10, kf + 1); const int hw = textW("HELD", hf, true) + 2, hh = dcol::textPx(hf) + 2;
+        std::vector<bp::Box> taken = placed;
+        if (hbOn) taken.push_back(bp::mk(hb.l - 3, hb.t - 3, hb.r + 3, hb.b + 3));   // (2.34.0) the HOD/LOD table (bottom-left of the price area): a HELD word steps right of it
+        for (std::map<std::string, ColsState::TTag>::const_iterator it = cs.ttags.begin(); it != cs.ttags.end(); ++it) {
+            const ColsState::TTag& T = it->second; if (T.outcome != ltc::O_HELD) continue;
+            const int b0 = barOf(T.bar), b1 = barOf(T.outSec); if (b0 < 0 || b1 < 0) continue;
+            PNT p0; p0.set(b0, (float)T.px); PNT p1; p1.set(b1, (float)T.px);
+            const int y = p0.v; if (y <= pane.top + bh + 4 || y >= pane.bottom - 4) continue;
+            const int x0 = std::max(xL, (int)p0.h - 3), x1 = std::min(xR, (int)p1.h + 3); if (x1 < xL || x0 > xR || x1 <= x0) continue;
+            const COLOR hc = ltc::heldColour(T.side > 0 ? ltc::BID : ltc::ASK) > 0 ? C_BUY : C_SELL;
+            if (hbOn && y >= hb.t - 1 && y <= hb.b + 1 && x1 > hb.l - 2 && x0 < hb.r + 2) {   // (2.34.0) never under the HOD/LOD table: the parts outside it
+                if (x0 < hb.l - 2) line((short)x0, (short)y, (short)(hb.l - 2), (short)y, hc, 2);
+                if (x1 > hb.r + 2) line((short)(hb.r + 2), (short)y, (short)x1, (short)y, hc, 2);
+                ++cs.ttHeldClipped;
+            } else line((short)x0, (short)y, (short)x1, (short)y, hc, 2);
+            ++cs.ttHeld;
+            int ppb = 6; { PNT pa; pa.set(b1, (float)T.px); PNT pb; pb.set(std::max(0, b1 - 1), (float)T.px); ppb = std::max(2, (int)pa.h - (int)pb.h); }
+            bool ok = false; int tx = x1 + 5;
+            for (int k = 0; k < 16 && !ok; ++k, tx += ppb) {
+                if (tx + hw > xR - 2) break;
+                const bp::Box bx = bp::mk(tx - 2, y - hh / 2, tx + hw + 2, y + hh / 2);
+                if (hbOn && bp::overlap(bp::mk(hb.l - 3, hb.t - 3, hb.r + 3, hb.b + 3), bx)) { tx = hb.r + 6 - ppb; --k; continue; }   // (2.34.0) step right of the HOD/LOD table at once
+                bool hit = false; for (const bp::Box& q : taken) if (bp::overlap(q, bx)) { hit = true; break; }
+                for (int i = std::max(0, b1 - 2); !hit && i < nbar; ++i) {   // a candle under the word (its high-low span on these columns)
+                    PNT c; c.set(i, (float)bhi[i]); PNT d; d.set(i, (float)blo[i]); const int cx = c.h;
+                    if (cx < bx.l - ppb / 2 || cx > bx.r + ppb / 2) continue;
+                    if (c.v <= bx.b && d.v >= bx.t) hit = true; }
+                if (!hit) { ok = true; taken.push_back(bx); textLJ((short)tx, (short)y, "HELD", hc, hf, true); ++cs.ttHeldText; }
+            }
+            if (!ok) ++cs.ttHeldNoRoom;
+        }
+    }
     // (2.30.0) the LIQUIDITY TOP 10 (left column): rank chip, a bar pointing toward price (grows right), the lots - at each order's own price
     if (cs.qFromBoard) {
         long long mx = 1; for (const TopQ& q : topq) mx = std::max(mx, q.lots);
@@ -2963,6 +3003,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | ((DP_HOVERS || DP_PCT_HOVERS) ? TRACK_MOUSE : 0));   // (2.17.3) no TRACK_MOUSE while the hovers are off   // (2.9.0) hovers: mouse events even when not selected
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.36.1");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.36.2");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }

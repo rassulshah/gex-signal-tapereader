@@ -39,3 +39,18 @@
 
 ## Not verified - needs his IRT
 The look after he exits IRT and restarts (ES + NQ): no lines, rank chips, WavePOC widths, SessionVWAP blank until ticked.
+
+## 2.36.2 (2026-10-29 04:53 CT Rassul "there was a held line on the chart, add that back")
+- DealerProfile 2.36.2: the 2.32.0-2.35.0 HELD LINE + word restored in the price area, code identical to 2.35.0: a liquidity level that
+  was SHOWN in the column when price touched it (latched) and whose outcome is HELD (lsLiquidityProfile: 0.5 ATR away before 0.25 ATR
+  through, SignalBoard S code 11) gets a 2 px line in the side colour (bid green / offer red) at its price from the TOUCH candle to the
+  HELD candle, and the word HELD right of the HELD candle (steps right a candle at a time, never over a candle / badge / the HOD/LOD table;
+  no room = line only). Final, never repainted, read back from DealerProfile.touch-<MKT>-<spb>.csv after a restart; no time limit (kept
+  as long as the touch record keeps it). Clipped to the price area: Key Levels column edge + 3 .. the right-side columns. BROKE / EXPIRED
+  get nothing (no THRU line). Still OFF: level lines, faint order lines. The HELD tag in the liquidity column lane (2.36.0) kept.
+  Status TOUCH_TAGS counts HELD lines / words again. No settings change (PLUGIN_VERSION literal only).
+- Tests: test_dealerprofile_2362.cpp (from 2361) 120/0 under ASan/UBSan (detect_leaks=0; the exit leak is SelfAware Tracker, pre-existing):
+  HELD line green 2 px + word right of it on the line, inside the price area, only bright line (no level / order / BROKE lines), column tag
+  kept, same line + word after a restart, HOD/LOD table: no line part under it and the word steps right (live + restart), LEFT clip: a HELD
+  whose touch candle sits under the Key Levels column starts at the column edge + 3, nothing past the right-side columns; zone mode: the red
+  offer HELD line + word. settings_contract PASS (45759). MinGW -fsyntax-only vs real irtsdk.h (RT_LONG = unsigned long long): 0 errors.
