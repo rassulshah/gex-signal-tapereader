@@ -1,6 +1,12 @@
 /********************************************************************************
- *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.3.1  (2026-10-28)
+ *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.3.3  (2026-10-29)
  *
+ *  1.3.3 (Rassul 04:51 / 04:52 CT 2026-10-29): a wave candidate ends at a 14-bar high / low (was 20) and QUALIFIES when it is bigger than
+ *    the direction's average wave (AVG, unchanged) OR its range (start pivot -> end pivot) is bigger than 3 x the 14-bar ATR of the closed
+ *    bars at its end bar (ATR; simple mean of the true range, native, no look-ahead - the plugin had no ATR). The WAVE record line adds
+ *    qualifiedBy (AVG / ATR / BOTH, "-" = CoB only) + atr14; status QUALIFIED_BY line. Candidate store version 2 (an old 20-bar store is
+ *    rebuilt from the chart). CoB legs unchanged. The profile's SPINE: a 2 px vertical line at the profile start over the wave's range,
+ *    green for an up wave / CoB leg, red for a down one, clipped by the Levels column like everything else. No settings change.
  *  1.3.2 (18:15-18:19 CT 2026-10-28, Rassul: "you highlighted the wrong node because the node above it has more volume", the outlined node,
  *    the left 11:39 profile without nodes, the thick 11:57 nodes, no liquidity on past waves):
  *    - a leg EXTENDED by an equal / more extreme end pivot replaced its wave only in the zigzag: the old wave (same start) stayed and both
@@ -107,7 +113,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.3.2";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.3.3";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -584,7 +590,7 @@ extern "C" cppExtension* CreateExtension(void) {
     WavePOC* p = new WavePOC();
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Wave POC v1.3.2 - each big wave's (and each CoB leg's) own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as pullback targets.");
-    p->setVersion("1.3.2");   // = WP_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Wave POC v1.3.3 - each big wave's (and each CoB leg's) own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as pullback targets.");
+    p->setVersion("1.3.3");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

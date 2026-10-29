@@ -1,12 +1,14 @@
-// WavePOCLogic.h  1.3.2  (2026-10-28; 1.3.2 = IRT's ZIGZAG pivots, node = max raw row of its distribution, one profile per start, 1-tick rows, Levels-column clip; 1.3.0 = + CoB legs (Rassul approved 17:27 CT): every CoB leg gets a profile; 1.1.0 = + the liquidity nodes, WavePOCLiq.h, Rassul 11:27 CT; 1.1.1 = liquidity nodes 1.9x + raw-row separation)  -  lsWavePOC "Wave POC": every rule, the files and the layout, SDK-free (unit-tested on Linux).
+// WavePOCLogic.h  1.3.3  (2026-10-29; 1.3.3 = 14-bar extreme, qualifies by AVG OR 3 ATR, direction-coloured spine (Rassul 04:51 / 04:52 CT); 1.3.2 = IRT's ZIGZAG pivots, node = max raw row of its distribution, one profile per start, 1-tick rows, Levels-column clip; 1.3.0 = + CoB legs (Rassul approved 17:27 CT): every CoB leg gets a profile; 1.1.0 = + the liquidity nodes, WavePOCLiq.h, Rassul 11:27 CT; 1.1.1 = liquidity nodes 1.9x + raw-row separation)  -  lsWavePOC "Wave POC": every rule, the files and the layout, SDK-free (unit-tested on Linux).
 // Rassul 2026-10-28 (approved 10:59 CT "just build now", mockup wavepoc_v3): per-wave volume-profile nodes as pullback targets.
 //   PIVOTS   (1.3.2) IRT's own ZIGZAG, Min Price Change = N BARS (N = "Reversal bars", default 3), Use High/Low: the live leg's extreme
 //            moves to every STRICTLY more extreme bar; a bar whose high beats the previous N bars' highs (low: below their lows) reverses
 //            a down (up) leg - the old extreme is then a final pivot. (1.3.0: an N-bar fractal, equal = the later.)
-//   WAVE     one zigzag leg, both directions. A CANDIDATE ends at a 20-bar high (up) / 20-bar low (down). It QUALIFIES when its size
-//            (points) is bigger than the average of the last 20 earlier candidates of that direction ("it should be bigger than the
-//            average wave making a new 20 bar high (or low)"). No look-ahead: only candidates that ended before it count; at least 5
-//            are needed. The candidates are kept per market and bar size in lsFlexLevels\WavePOC\<MKT>-<spb>.csv (garbled = rebuilt
+//   WAVE     one zigzag leg, both directions. (1.3.3, Rassul 04:51 CT 2026-10-29) A CANDIDATE ends at a 14-bar high (up) / 14-bar low
+//            (down) (was 20). It QUALIFIES when its size (points, start pivot -> end pivot) is bigger than the average of the last 20 earlier
+//            candidates of that direction (AVG; no look-ahead: only candidates that ended before it count; at least 5 are needed) OR
+//            bigger than 3 x ATR (ATR; 14-bar simple ATR of the chart's closed bars ending at the wave's end bar - true range with the
+//            previous close, no look-ahead; the plugin had no ATR). The record line says which: AVG / ATR / BOTH (+ the ATR).
+//            The candidate store is version 2 (14-bar candidates): an older (20-bar) store is rebuilt from the chart's history. The candidates are kept per market and bar size in lsFlexLevels\WavePOC\<MKT>-<spb>.csv (garbled = rebuilt
 //            from the chart's own history).
 //   PROFILE  the wave's own volume at price (IRT's VAP, every bar from the start pivot to the end pivot). (1.3.2) ROW SIZE: 1 tick per
 //            row in every profile (more than 400 ticks: ceil(range / 400)). 1.3.0 ROW SIZE RULE (all markets): rowTicks = max(1, ceil(wave range in ticks / 80)) -> at most 80 rows; waves of 40+ ticks get 40-80 rows,
@@ -47,24 +49,31 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.3.2";   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
+static const char* const VERSION = "1.3.3";   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+// 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
 static const double PROF_SCALE = 0.67;   // (1.2.0) the wave profile max width factor
 static const double LNODE_W = 40;        // (1.2.0) the liquidity node max width (was 60 px)
-#define WPC_VERSION "1.3.2"
+#define WPC_VERSION "1.3.3"
 
 // fixed rules (from the approved mockup / reference wp2.py + wp3.py)
-static const int LOOKBACK = 20;        // 20-bar high / low
+static const int LOOKBACK = 14;        // (1.3.3) 14-bar high / low (was 20)
+static const int ATR_N = 14;           // (1.3.3) 14-bar ATR (simple mean of the true range) at the wave's end bar
+static const double ATR_MULT = 3.0;    // (1.3.3) a wave bigger than 3 ATR qualifies
 static const int AVG_N = 20;           // rolling average of the last 20 candidates per direction
 static const int MIN_HIST = 5;         // candidates needed before anything qualifies (a fresh market warms up)
 static const int MAX_ROWS = 400;       // (1.3.2) row size rule: 1 tick per row (the same row height in every profile) unless > 400 ticks (was 80)
 static const int SEP_ROWS = 3;         // nodes >= 3 rows apart
 static const int MAX_NODES = 5;
+static const int STORE_VER = 2;        // (1.3.3) store version 2 = 14-bar candidates (1 = the 20-bar ones: rebuilt)
 static const int STORE_CAP = 1000;     // candidates kept per direction in the file
 static const int N_MIN = 2, N_MAX = 10, N_DEF = 3;
 
 enum Stop { OPEN = 0, TOUCH = 1, NEWWAVE = 2, ORIGIN = 3 };
+enum QWhy { Q_AVG = 1, Q_ATR = 2 };   // (1.3.3) what qualified the wave (bits; 3 = BOTH)
+inline const char* qName(int q) { return q == 3 ? "BOTH" : q == Q_ATR ? "ATR" : q == Q_AVG ? "AVG" : "-"; }
+inline int qOf(const std::string& s) { return s == "BOTH" ? 3 : s == "ATR" ? Q_ATR : s == "AVG" ? Q_AVG : s == "-" ? 0 : -1; }
 enum Kind { K_WAVE = 1, K_COB = 2, K_BOTH = 3 };   // (1.3.0) why a leg is drawn
 inline const char* kindName(int k) { return k == K_BOTH ? "BOTH" : k == K_COB ? "COB" : "WAVE"; }
 inline int kindOf(const std::string& s) { return s == "BOTH" ? K_BOTH : s == "COB" ? K_COB : s == "WAVE" ? K_WAVE : 0; }
@@ -97,6 +106,7 @@ struct Wave {
     int scanned = 0;                      // stop rules evaluated up to this bar
     int kind = K_WAVE;                    // (1.3.0) WAVE / COB / BOTH
     long long cobT = 0;                   // (1.3.0) the CoB bar's time (0 = no CoB in the leg)
+    int qWhy = 0; double atr = 0;         // (1.3.3) AVG / ATR / BOTH (0 = not a qualifying wave); the 14-bar ATR (ticks, 0 = too few bars)
 };
 
 // ---------- small helpers ----------
@@ -219,7 +229,7 @@ struct Store {
     }
     std::string toText(const std::string& mkt, int spb) const {
         std::ostringstream o;
-        o << "WAVEPOC_STORE,1," << mkt << "," << spb << "," << n << "," << tickKey << "\n";
+        o << "WAVEPOC_STORE," << STORE_VER << "," << mkt << "," << spb << "," << n << "," << tickKey << "\n";
         for (const auto& e : up) o << "U," << e.first << "," << e.second << "\n";
         for (const auto& e : dn) o << "D," << e.first << "," << e.second << "\n";
         o << "END," << (up.size() + dn.size()) << "\n";
@@ -241,7 +251,7 @@ inline std::vector<std::string> splitCsv(const std::string& s) {
     for (char c : s) { if (c == ',') { f.push_back(cur); cur.clear(); } else if (c != '\r' && c != '\n') cur += c; }
     f.push_back(cur); return f;
 }
-// strict: header first (version 1, market, bar size, N, tick must match), every line valid, END count matches; anything else = false
+// strict: header first (version STORE_VER = 2 from 1.3.3, market, bar size, N, tick must match), every line valid, END count matches; anything else = false
 inline bool storeFromText(const std::string& text, const std::string& mkt, int spb, int n, long long tickKey, Store& out, std::string& why) {
     Store s; s.n = n; s.tickKey = tickKey;
     std::istringstream in(text); std::string line; int ln = 0; bool end = false;
@@ -251,7 +261,8 @@ inline bool storeFromText(const std::string& text, const std::string& mkt, int s
         ++ln; const std::vector<std::string> f = splitCsv(line);
         if (ln == 1) {
             long long v = 0, sp = 0, nn = 0, tk = 0;
-            if (f.size() != 6 || f[0] != "WAVEPOC_STORE" || !parseLL(f[1], v) || v != 1) { why = "bad header"; return false; }
+            if (f.size() != 6 || f[0] != "WAVEPOC_STORE" || !parseLL(f[1], v)) { why = "bad header"; return false; }
+            if (v != STORE_VER) { why = "older store version (20-bar candidates) - rebuilt"; return false; }   // (1.3.3)
             if (f[2] != mkt || !parseLL(f[3], sp) || sp != spb) { why = "other market / bar size"; return false; }
             if (!parseLL(f[4], nn) || nn != n) { why = "other reversal bars (N)"; return false; }
             if (!parseLL(f[5], tk) || tk != tickKey) { why = "other tick size"; return false; }
@@ -271,7 +282,7 @@ inline bool storeFromText(const std::string& text, const std::string& mkt, int s
 }
 
 // ---------- the node record (append-only; recorded waves are redrawn as recorded) ----------
-struct RecWave { int dir = 0; int kind = K_WAVE; long long cobT = 0; int rowTicks = 1; std::vector<Node> nodes; std::vector<LNode> lnodes; };
+struct RecWave { int dir = 0; int kind = K_WAVE; int qWhy = 0; long long cobT = 0; int rowTicks = 1; std::vector<Node> nodes; std::vector<LNode> lnodes; };
 inline std::string hm(long long t) {      // local wall clock seconds -> "YYYY-MM-DD HH:MM"
     const long long d = floorDiv(t, 86400), s = t - d * 86400;
     long long z = d + 719468; const long long era = floorDiv(z, 146097); const long long doe = z - era * 146097;
@@ -285,6 +296,8 @@ inline std::string waveLine(const Wave& w, int n, double tick) {
     o << "WAVE," << VERSION << "," << n << "," << (w.dir > 0 ? "up" : "down") << "," << w.t0 << "," << w.t1 << "," << w.tConf << "," << hm(w.t0) << "," << hm(w.t1) << ","
       << hm(w.tConf) << "," << pxText(w.p0, tick) << "," << pxText(w.p1, tick) << "," << pxText(w.size, tick) << "," << pxText(std::llround(w.avg), tick) << ","
       << w.nHist << "," << w.rowTicks << "," << w.rows.size() << "," << w.nodes.size() << "," << w.vapMissing << "," << kindName(w.kind) << "," << w.cobT;
+    char a[40]; std::snprintf(a, sizeof a, "%.*f", decimalsFor(tick) + 2, w.atr * tick);
+    o << "," << qName(w.qWhy) << "," << a;   // (1.3.3) qualified by AVG / ATR / BOTH (- = CoB only), the 14-bar ATR (price)
     return o.str();
 }
 inline std::string nodeLine(const Wave& w, const Node& nd, double tick) {
@@ -311,7 +324,7 @@ inline std::string rowsLine(const Wave& w, double tick) {
     for (size_t j = 0; j < w.rows.size(); ++j) o << (j ? ";" : "") << w.rows[j];
     return o.str();
 }
-static const char* const REC_HEAD = "# WavePOC record: WAVE,ver,N,dir,t0,t1,tConf,start,end,confirmed,startPx,endPx,size,avg,nHist,rowTicks,rows,nodes,vapMissing,kind,cobTime | NODE,t0,t1,rank,price,vol,ratio,kind | STOP,t0,t1,price,reason,tStop,time,kind | LNODE,t0,t1,rank,price,lots,ratio,bid/offer,near_volume_node/alone,kind | LSTOP,t0,t1,price,reason,tStop,time,kind | ROWS,t0,t1,firstRowPrice,rowTicks,vol;vol;...  (ROWS from 1.3.2; kind WAVE / COB / BOTH from 1.3.0; older lines have no kind = WAVE)";
+static const char* const REC_HEAD = "# WavePOC record: WAVE,ver,N,dir,t0,t1,tConf,start,end,confirmed,startPx,endPx,size,avg,nHist,rowTicks,rows,nodes,vapMissing,kind,cobTime,qualifiedBy,atr14 | NODE,t0,t1,rank,price,vol,ratio,kind | STOP,t0,t1,price,reason,tStop,time,kind | LNODE,t0,t1,rank,price,lots,ratio,bid/offer,near_volume_node/alone,kind | LSTOP,t0,t1,price,reason,tStop,time,kind | ROWS,t0,t1,firstRowPrice,rowTicks,vol;vol;...  (qualifiedBy AVG / ATR / BOTH / - + atr14 from 1.3.3; ROWS from 1.3.2; kind WAVE / COB / BOTH from 1.3.0; older lines have no kind = WAVE)";
 // WAVE lines of THIS N and their NODE lines; garbled lines counted and skipped
 inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std::vector<std::string>& lines, int n, double tick, int& bad,
                                                                      std::map<std::pair<long long, long long>, std::vector<std::pair<long long, int> > >* stops = nullptr) {
@@ -321,11 +334,12 @@ inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std:
         const std::vector<std::string> f = splitCsv(raw);
         if (f[0] == "WAVE") {
             long long nn = 0, t0 = 0, t1 = 0;
-            long long ct = 0; int kd = K_WAVE;   // (1.3.0) 21 fields = + kind, CoB time; 19 = an older WAVE line
-            if ((f.size() != 19 && f.size() != 21) || !parseLL(f[2], nn) || !parseLL(f[4], t0) || !parseLL(f[5], t1) || (f[3] != "up" && f[3] != "down")) { ++bad; continue; }
-            if (f.size() == 21 && ((kd = kindOf(f[19])) == 0 || !parseLL(f[20], ct) || ct < 0)) { ++bad; continue; }
+            long long ct = 0; int kd = K_WAVE, qw = 0; double at = 0;   // (1.3.0) 21 fields = + kind, CoB time; 19 = an older WAVE line; (1.3.3) 23 = + qualifiedBy, atr14
+            if ((f.size() != 19 && f.size() != 21 && f.size() != 23) || !parseLL(f[2], nn) || !parseLL(f[4], t0) || !parseLL(f[5], t1) || (f[3] != "up" && f[3] != "down")) { ++bad; continue; }
+            if (f.size() >= 21 && ((kd = kindOf(f[19])) == 0 || !parseLL(f[20], ct) || ct < 0)) { ++bad; continue; }
+            if (f.size() == 23 && ((qw = qOf(f[21])) < 0 || !parseD(f[22], at) || at < 0)) { ++bad; continue; }
             if (nn != n) continue;
-            RecWave& r = m[std::make_pair(t0, t1)]; r.dir = f[3] == "up" ? 1 : -1; r.kind = kd; r.cobT = ct; r.nodes.clear(); r.lnodes.clear();
+            RecWave& r = m[std::make_pair(t0, t1)]; r.dir = f[3] == "up" ? 1 : -1; r.kind = kd; r.qWhy = qw; r.cobT = ct; r.nodes.clear(); r.lnodes.clear();
             { long long rt = 1; r.rowTicks = parseLL(f[15], rt) && rt >= 1 && rt <= 1000 ? (int)rt : 1; }   // (1.3.2) the row height it was recorded with
         } else if (f[0] == "NODE") {
             long long t0 = 0, t1 = 0, rank = 0, vol = 0; double px = 0, ratio = 0; long long tk = 0;
@@ -357,7 +371,7 @@ inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std:
 }
 
 // ---------- the engine: closed bars in, waves / nodes / stops out (incremental: each bar is processed once) ----------
-struct Counters { long long legs = 0, cand[2] = {0, 0}, qual[2] = {0, 0}, stops[4] = {0, 0, 0, 0}, vapMissing = 0, vapFault = 0, recordUsed = 0, superseded = 0, liqWaves = 0, liqNoBook = 0, lnodes = 0, cobBars[2] = {0, 0}, cobOnly = 0, cobBoth = 0, cobRepeat = 0, replaced = 0; };   // (1.3.0) CoB bars seen bull / bear, legs drawn COB / BOTH, legs whose CoB already had a profile
+struct Counters { long long legs = 0, cand[2] = {0, 0}, qual[2] = {0, 0}, stops[4] = {0, 0, 0, 0}, vapMissing = 0, vapFault = 0, recordUsed = 0, superseded = 0, liqWaves = 0, liqNoBook = 0, lnodes = 0, cobBars[2] = {0, 0}, cobOnly = 0, cobBoth = 0, cobRepeat = 0, replaced = 0, qBy[4] = {0, 0, 0, 0}; };   // (1.3.3) qBy[AVG=1 / ATR=2 / BOTH=3]: qualifying waves by what qualified them   // (1.3.0) CoB bars seen bull / bear, legs drawn COB / BOTH, legs whose CoB already had a profile
 
 class Engine {
 public:
@@ -373,6 +387,7 @@ public:
     std::vector<signed char> cob;                                    // (1.3.0) per closed bar: 1 bull CoB, 2 bear CoB (3 both), captured when the bar is added
     std::set<long long> cobUsed;                                     // (1.3.0) CoB bar times that already have a profile (one per CoB)
     bool cobLegs = true;                                             // (1.3.0) setting "CoB legs"
+    double atrMult = ATR_MULT;                                       // (1.3.3) 3 ATR (fixed; the CoB-only unit tests raise it to isolate the CoB rule)
     std::function<int(int)> cobFn;                                   // (1.3.0) host: the CoB flags of closed bar k (the RTL cob_bull_3m_1b / cob_bear_3m_1b)
     std::vector<std::string> out;                                    // record lines to append (host drains)
     Counters C;
@@ -399,13 +414,27 @@ public:
         out.push_back(waveLine(w, N, tick)); for (const Node& nd : w.nodes) out.push_back(nodeLine(w, nd, tick));
         out.push_back(rowsLine(w, tick));   // (1.3.2) the wave's volume rows
         for (const LNode& nd : w.lnodes) out.push_back(lnodeLine(w, nd, tick));
-        w.recorded = true; RecWave& r = rec[std::make_pair(w.t0, w.t1)]; r.dir = w.dir; r.nodes = w.nodes; r.lnodes = w.lnodes;
+        w.recorded = true; RecWave& r = rec[std::make_pair(w.t0, w.t1)]; r.dir = w.dir; r.kind = w.kind; r.qWhy = w.qWhy; r.cobT = w.cobT; r.nodes = w.nodes; r.lnodes = w.lnodes;
     }
 
     void reset() { zDir = 0; zI = zHi = zLo = 0; B.clear(); alt.clear(); waves.clear(); confs.clear(); confsCob[0].clear(); confsCob[1].clear(); cob.clear(); cobUsed.clear(); out.clear(); C = Counters(); }
     int lastBar() const { return (int)B.size() - 1; }
 
-    // 20-bar high / low at bar i (the bar itself included)
+    // (1.3.3) 14-bar ATR at bar i: the simple mean of the true range (high / low vs the previous close) of bars i-13 .. i, closed bars only
+    // (the leg is evaluated at its confirmation bar, after i: no look-ahead); false = fewer than 15 bars
+    bool atrAt(int i, double& atr) const {
+        atr = 0; if (i < ATR_N || i >= (int)B.size()) return false;
+        double sum = 0;
+        for (int k = i - ATR_N + 1; k <= i; ++k) { const Bar& b = B[(size_t)k]; const long long pc = B[(size_t)k - 1].c; sum += (double)(std::max(b.h, pc) - std::min(b.l, pc)); }
+        atr = sum / ATR_N; return true;
+    }
+    // (1.3.3) AVG (> the direction's average) / ATR (> 3 ATR) / both; 0 = does not qualify
+    int qualify(Wave& w, int endBar) const {
+        int q = 0; if (w.nHist >= MIN_HIST && (double)w.size > w.avg + 1e-9) q |= Q_AVG;
+        if (atrAt(endBar, w.atr) && (double)w.size > atrMult * w.atr + 1e-9) q |= Q_ATR;
+        return q;
+    }
+    // (1.3.3) 14-bar high / low at bar i (the bar itself included; was 20)
     bool is20(int i, int dir) const {
         const int lb = std::max(0, i - (LOOKBACK - 1));
         for (int k = lb; k <= i; ++k) { if (dir > 0 ? B[(size_t)k].h > B[(size_t)i].h : B[(size_t)k].l < B[(size_t)i].l) return false; }
@@ -481,9 +510,10 @@ public:
         if (cand) {
             ++C.cand[w.dir > 0 ? 0 : 1];
             w.avg = store ? store->avgBefore(w.dir, w.t1, w.nHist) : 0;
-            q = w.nHist >= MIN_HIST && (double)w.size > w.avg + 1e-9;
+            w.qWhy = qualify(w, z.i); q = w.qWhy != 0;
             if (store) store->add(w.dir, w.t1, w.size);
         }
+        if (!cand) atrAt(z.i, w.atr);   // (1.3.3) the ATR is recorded for every drawn leg (CoB-only legs too)
         // (1.3.0) a CoB of the leg's own direction on a bar of the leg (start .. end pivot) that has no profile yet
         int cobBar = -1;
         if (cobLegs) for (int j = w.i0; j <= w.i1 && j < (int)cob.size(); ++j) {
@@ -493,10 +523,11 @@ public:
         }
         const bool recHit = rk != rec.end() && rk->second.dir == w.dir && (cobLegs || (rk->second.kind & K_WAVE));   // CoB legs off: recorded COB-only legs are not drawn
         w.kind = (q ? K_WAVE : 0) | (cobBar >= 0 ? K_COB : 0); w.cobT = cobBar >= 0 ? B[(size_t)cobBar].t : 0;
-        if (recHit) { w.kind = rk->second.kind; w.cobT = rk->second.cobT; }             // recorded = drawn as recorded (never repainted)
+        if (recHit) { w.kind = rk->second.kind; w.cobT = rk->second.cobT; if (rk->second.qWhy) w.qWhy = rk->second.qWhy; }             // recorded = drawn as recorded (never repainted)
         if (!w.kind) return;
         if (w.cobT > 0) cobUsed.insert(w.cobT);
-        if (w.kind & K_WAVE) { ++C.qual[w.dir > 0 ? 0 : 1]; confs.insert(std::upper_bound(confs.begin(), confs.end(), k), k); }
+        if (!(w.kind & K_WAVE)) w.qWhy = 0;
+        if (w.kind & K_WAVE) { ++C.qual[w.dir > 0 ? 0 : 1]; ++C.qBy[w.qWhy & 3]; confs.insert(std::upper_bound(confs.begin(), confs.end(), k), k); }
         else { std::vector<int>& cc = confsCob[w.dir > 0 ? 0 : 1]; cc.insert(std::upper_bound(cc.begin(), cc.end(), k), k); }
         if (w.kind == K_COB) ++C.cobOnly; else if (w.kind == K_BOTH) ++C.cobBoth;
         if (recHit && !rk->second.nodes.empty()) {
@@ -579,7 +610,7 @@ public:
         w.p0 = a.px; w.p1 = dir > 0 ? B[(size_t)e].h : B[(size_t)e].l; w.size = dir > 0 ? w.p1 - w.p0 : w.p0 - w.p1; w.provisional = true;
         if (!is20(e, dir)) return false;
         w.avg = store ? store->avgBefore(dir, w.t1, w.nHist) : 0;
-        if (!(w.nHist >= MIN_HIST && (double)w.size > w.avg + 1e-9)) return false;
+        w.qWhy = qualify(w, e); if (!w.qWhy) return false;   // (1.3.3) AVG or 3 ATR
         if (!profile(w, vap)) return false;
         nodesFromRows(w); liquidity(w); w.scanned = w.i1; advance(w, k, false);
         return true;
@@ -591,7 +622,7 @@ struct Prim {
     enum K { FILL, BOX, LINE, OVAL, TEXT } k = FILL;
     int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned long col = 0; int w = 1; std::string text; bool back = true; int bold = 0;
 };
-struct Colours { unsigned long prof = 0x334155, amber = 0xF5B428, amberFill = 0xC88C14, white = 0xE5E7EB, whiteFill = 0xB4BECD, zz = 0x78849A, zzBig = 0xCBD5E1, grey = 0x94A3B8, bid = 0x22C55E, offer = 0xEF4444, bg = 0x0B0F17; };
+struct Colours { unsigned long prof = 0x334155, amber = 0xF5B428, amberFill = 0xC88C14, white = 0xE5E7EB, whiteFill = 0xB4BECD, zz = 0x78849A, zzBig = 0xCBD5E1, grey = 0x94A3B8, bid = 0x22C55E, offer = 0xEF4444, bg = 0x0B0F17, up = 0x22C55E, down = 0xEF4444; };   // (1.3.3) up / down = the spine (bullish green, bearish red)
 inline unsigned long mix(unsigned long c, unsigned long bg, double a) {   // a of the colour over the background
     unsigned long o = 0; for (int sh = 0; sh <= 16; sh += 8) { const double x = (double)((bg >> sh) & 255) + ((double)((c >> sh) & 255) - (double)((bg >> sh) & 255)) * a; o |= (unsigned long)std::lround(std::max(0.0, std::min(255.0, x))) << sh; }
     return o;
@@ -641,6 +672,13 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
             Prim p; p.k = Prim::FILL; p.x0 = ci(x0); p.x1 = ci(x0 + PW * (double)w.rows[(size_t)j] / (double)w.maxVol); p.y0 = ci(top + 0.5); p.y1 = ci(std::max(top + 1.0, bot - 0.5)); p.col = C.prof; p.back = true;
             if (p.x1 > p.x0 && p.y1 >= p.y0) s.p.push_back(p);
         }
+    }
+    // (1.3.3, Rassul 04:52 CT 2026-10-29 "the spine of the wavepoc should be red or green depending if the wave is up or dn") the spine:
+    // a 2 px vertical line at the profile's start x over the wave's range (start pivot .. end pivot), green for an UP wave / CoB leg,
+    // red for a DOWN one; clipped by the Levels column / right columns with everything else (layout)
+    if (phase != 1) {
+        const double ya = v.Y((double)std::min(w.p0, w.p1) - 0.5), yb = v.Y((double)std::max(w.p0, w.p1) + 0.5);
+        addLine(s, x0, std::min(ya, yb), x0, std::max(ya, yb), w.dir > 0 ? C.up : C.down, 2, true);
     }
     // (1.1.0) the liquidity nodes: compact bars pointing LEFT from the wave start (max 60 px), LPOC in the bright side colour, the others
     // 60% of it; a faint dotted line to the right (same stop rules); no outline boxes, no price tags
@@ -755,6 +793,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, int spb, 
     o << "BARS," << E.B.size() << ",pivots " << E.alt.size() << ",legs " << E.C.legs << "\n";
     o << "WAVES,candidates up " << E.C.cand[0] << " down " << E.C.cand[1] << ",qualified up " << E.C.qual[0] << " down " << E.C.qual[1] << ",superseded " << E.C.superseded
       << ",pending VAP " << E.pendingCount() << ",from record " << E.C.recordUsed << "\n";
+    o << "QUALIFIED_BY,AVG " << E.C.qBy[Q_AVG] << ",ATR " << E.C.qBy[Q_ATR] << ",BOTH " << E.C.qBy[3] << ",rule " << LOOKBACK << "-bar extreme and (size > average or > " << ATR_MULT << " x ATR" << ATR_N << ")\n";   // (1.3.3)
     if (E.store) {
         int nu = 0, nd = 0; const long long far = (long long)4e18;
         const double au = E.store->avgBefore(1, far, nu), ad = E.store->avgBefore(-1, far, nd);

@@ -50,6 +50,8 @@ struct Host {
     int revBars = 3; bool zigzag = false; bool cobLegs = true;   // (1.3.0) row 3
     std::map<std::string, std::vector<float> > cust;   // (1.3.0) RTL custom indicators by name (getCustomIndicator)
     std::vector<int> saved; std::string savedTmpl;     // (1.3.0) saveParameters
+    bool drawing = false; int customCalls = 0, customInDraw = 0;   // (1.3.1) RTL reads, and those made inside draw() (IRT crash, 1.3.0)
+    bool inParmsInit = false; int parmsReadInInit = 0;             // (1.3.1) getParameters called inside parmsInit
     int paneL = 0, paneT = 0, paneR = 1600, paneB = 800, rightMargin = 300;
     RTX_REASON reason = REASON_DRAW;
     bool dialog = false;   // the settings window copy (no bar size)
@@ -57,12 +59,13 @@ struct Host {
     double lo = 0, hi = 0;   // price scale of the pane
     std::vector<DEPTH_ORDER> mbo; size_t mboAt = 0;   // (1.1.0) the order-by-order queue this chart's feed hands out
     int first = 0;           // first visible bar
+    std::string chartLabel;  // (1.3.2) getChartLabel
 };
 extern Host* current;
 }
 
 class RTARRAY { public: explicit RTARRAY(fARRAY a) : v_(a == fEmptyArray ? nullptr : &mock::current->f[(int)a]), count(v_ ? (long)v_->size() : 0) {} float operator[](int n) const { return (*v_)[(size_t)n]; }
-    RTX_RESULT getCustomIndicator(char* name, int = 1, RTBOOL = false, const char* = nullptr, int = 0) { auto it = mock::current->cust.find(name); if (it == mock::current->cust.end()) return RTX_FAIL; v_ = &it->second; count = (long)v_->size(); return RTX_OK; }
+    RTX_RESULT getCustomIndicator(char* name, int = 1, RTBOOL = false, const char* = nullptr, int = 0) { ++mock::current->customCalls; if (mock::current->drawing) ++mock::current->customInDraw; auto it = mock::current->cust.find(name); if (it == mock::current->cust.end()) return RTX_FAIL; v_ = &it->second; count = (long)v_->size(); return RTX_OK; }
 private: const std::vector<float>* v_; public: long count; };
 class RTARRAYI { public: explicit RTARRAYI(iARRAY) : count((long)mock::current->t.size()) {} RTDATE operator[](int n) const { return mock::current->t[(size_t)n]; } long count; };
 class RTARRAYP {
@@ -105,6 +108,7 @@ class RCT {
 public:
     short top = 0, left = 0, bottom = 0, right = 0;
     void getPaneRect(RTBOOL = false) { mock::Host& H = *mock::current; left = (short)H.paneL; top = (short)H.paneT; right = (short)H.paneR; bottom = (short)H.paneB; }
+    void getScaleRect(void) { mock::Host& H = *mock::current; left = (short)(H.paneR + 1); top = (short)H.paneT; right = (short)(H.paneR + 60); bottom = (short)H.paneB; }   // (1.3.2) the price scale, right of the pane
     void set(short l, short t, short r, short b) { left = l; top = t; right = r; bottom = b; }
     void draw(short w = 0, COLOR border = 0, COLOR fill = 0, DRAWTYPE = DRAW_OPAQUE, BRUSH_STYLE bs = PAT_SOLID) { mock::current->drawn.push_back({ bs == PAT_HOLLOW ? 'B' : 'F', left, top, right, bottom, bs == PAT_HOLLOW ? border : fill, w, "", false }); }
     void drawOval(DRAWTYPE = DRAW_OPAQUE) { mock::Host& H = *mock::current; H.drawn.push_back({ 'O', left, top, right, bottom, H.pen, H.penW, "", false }); }
@@ -125,6 +129,7 @@ public:
     long getBarCount(void) { return (long)mock::current->t.size(); }
     char* getRootSymbol(char* out = nullptr, const char* = nullptr) { if (out) { std::snprintf(out, 32, "%s", mock::current->root.c_str()); return out; } return const_cast<char*>(mock::current->root.c_str()); }
     char* getSymbol(void) { return const_cast<char*>(mock::current->sym.c_str()); }
+    const char* getChartLabel(void) { return mock::current->chartLabel.c_str(); }   // (1.3.2)
     int getSecondsPerBar(void) { return mock::current->spb; }
     float getProperty(SYMBOL_PROPERTY_ID, const char* = nullptr) { return (float)mock::current->tick; }
     double getTickIncrement(const char* = nullptr) { return mock::current->tick; }
@@ -150,7 +155,7 @@ public:
     RTX_RESULT setParameterColor(int, COLOR) { return RTX_OK; } RTX_RESULT setListIndex(int, int = -1) { return RTX_OK; } RTX_RESULT setParameterText(int, const char*) { return RTX_OK; }
     // IRT's own per-indicator set: template tokens I (int) / B (RTBOOL) at natural alignment
     RTX_RESULT getParameters(void* pStruct, size_t sz, const char* t, const char*) {
-        mock::Host& H = *mock::current; if (H.parmsMode == 1) return RTX_FAIL;
+        mock::Host& H = *mock::current; if (H.inParmsInit) ++H.parmsReadInInit; if (H.parmsMode == 1) return RTX_FAIL;
         unsigned char* b = static_cast<unsigned char*>(pStruct); std::memset(b, 0, sz); size_t o = 0; int k = 0;
         for (const char* c = t; *c; ++c, ++k) {
             if (*c == 'I') { o = (o + alignof(int) - 1) / alignof(int) * alignof(int); int v = H.parmsMode == 2 ? 0 : (k == 0 ? H.revBars : 0); if (o + sizeof v > sz) return RTX_FAIL; std::memcpy(b + o, &v, sizeof v); o += sizeof v; }
