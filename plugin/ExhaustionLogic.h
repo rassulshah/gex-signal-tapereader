@@ -13,7 +13,7 @@
 
 namespace ex {
 
-static const char* const VERSION = "0.3.1";   // (0.3.1, 2026-10-29) + the T mark (tMark)       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
+static const char* const VERSION = "0.4.0";   // (0.4.0, 2026-10-29) the NET display (computeNet, wrap); (0.3.1) + the T mark (tMark)       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
 static const int LOOK = 20;
 
 struct Params { int N = 10; int S = 1; double T = 2.0; };
@@ -84,5 +84,82 @@ inline bool tMark(const std::vector<double>& c, const Out& o, const Held& H, int
     }
     return false;
 }
+
+// ---- (0.4.0, 2026-10-29, Rassul approved 11:18 CT, mockup artifact FzpVHQZ8ykBaoz4q6LMsHk) THE NET DISPLAY ---------------------------
+// net[i] = lots at the ask - lots at the bid (the bar's own VAP buy / sell volume). avg2 = the 2-bar average net.
+// At a new 5-bar HIGH (h >= the previous 5 highs): BUYERS FADING = the peak avg2 net BUYING in the push (push start = the lowest low of the
+// last 20 bars) / the net buying now, the denominator floored at 10% of the peak, capped at 10x; no net buying in the push = 1.0.
+// At a new 5-bar LOW: SELLERS FADING, the same with net SELLING (-avg2), push start = the highest high of the last 20 bars.
+// LABEL: >= 2.0x, ONE per run (consecutive closed bars at a new extreme >= 2.0x on that side) at its NEWEST bar; red at the top (buyers
+// fading), green at the bottom (sellers fading). NOISE CAP: labelled only when the push's peak (avg2) net >= the median |net| of the last
+// 100 bars (else logged only). A run's label is final once a later closed bar does not continue it (that is when it is recorded).
+static const int NET_N = 5, NET_LOOK = 20, NET_MED_BARS = 100; static const double NET_LABEL = 2.0, NET_FLOOR = 0.10, NET_CAP = 10.0;
+struct NetOut {
+    std::vector<double> net, fb, fs, peakB, peakS, med;   // per bar: net, buyers / sellers fading, the push peaks, the median |net| (last 100)
+    std::vector<char> newH, newL;
+    std::vector<char> labB, labS;                         // 1 = this bar carries its run's label (the run's newest bar, as of the data given)
+    std::vector<char> noisyB, noisyS;                     // 1 = would be a label but the push peak is under the noise cap (logged only)
+    std::vector<char> runEndB, runEndS;                   // 1 = the run ended (a later bar does not continue it): final
+};
+inline double fadeOf(double peak, double now) {
+    if (!(peak > 0)) return 1.0;
+    const double den = std::max(now, NET_FLOOR * peak);
+    return std::min(NET_CAP, std::max(1.0, peak / den));
+}
+inline NetOut computeNet(const std::vector<double>& h, const std::vector<double>& l, const std::vector<double>& buy, const std::vector<double>& sell) {
+    const int n = (int)h.size(); NetOut o;
+    o.net.assign(n, 0); o.fb.assign(n, 1.0); o.fs.assign(n, 1.0); o.peakB.assign(n, 0); o.peakS.assign(n, 0); o.med.assign(n, 0);
+    o.newH.assign(n, 0); o.newL.assign(n, 0); o.labB.assign(n, 0); o.labS.assign(n, 0); o.noisyB.assign(n, 0); o.noisyS.assign(n, 0); o.runEndB.assign(n, 0); o.runEndS.assign(n, 0);
+    if (n == 0 || (int)l.size() != n || (int)buy.size() != n || (int)sell.size() != n) return o;
+    for (int i = 0; i < n; ++i) if (!std::isfinite(h[i]) || !std::isfinite(l[i]) || !std::isfinite(buy[i]) || !std::isfinite(sell[i]) || buy[i] < 0 || sell[i] < 0) return o;
+    std::vector<double> a2(n);
+    for (int i = 0; i < n; ++i) { o.net[i] = buy[i] - sell[i]; a2[i] = i > 0 ? (o.net[i] + o.net[i - 1]) / 2.0 : o.net[i]; }
+    for (int i = 0; i < n; ++i) {
+        std::vector<double> m; for (int j = std::max(0, i - NET_MED_BARS + 1); j <= i; ++j) m.push_back(std::fabs(o.net[j]));
+        std::nth_element(m.begin(), m.begin() + (long)(m.size() / 2), m.end()); o.med[i] = m[m.size() / 2];
+    }
+    for (int i = NET_N; i < n; ++i) {
+        const int a = std::max(0, i - NET_LOOK);
+        double mh = h[i - NET_N], ml = l[i - NET_N];
+        for (int j = i - NET_N; j < i; ++j) { mh = std::max(mh, h[j]); ml = std::min(ml, l[j]); }
+        if (h[i] >= mh) { o.newH[i] = 1; int j0 = a; for (int j = a; j <= i; ++j) if (l[j] < l[j0]) j0 = j;
+            double pk = 0; for (int j = j0; j <= i; ++j) pk = std::max(pk, a2[j]); o.peakB[i] = pk; o.fb[i] = fadeOf(pk, a2[i]); }
+        if (l[i] <= ml) { o.newL[i] = 1; int j0 = a; for (int j = a; j <= i; ++j) if (h[j] > h[j0]) j0 = j;
+            double pk = 0; for (int j = j0; j <= i; ++j) pk = std::max(pk, -a2[j]); o.peakS[i] = pk; o.fs[i] = fadeOf(pk, -a2[i]); }
+    }
+    for (int side = 0; side < 2; ++side) {
+        const std::vector<char>& nw = side == 0 ? o.newH : o.newL; const std::vector<double>& f = side == 0 ? o.fb : o.fs; const std::vector<double>& pk = side == 0 ? o.peakB : o.peakS;
+        std::vector<char>& lab = side == 0 ? o.labB : o.labS; std::vector<char>& noisy = side == 0 ? o.noisyB : o.noisyS; std::vector<char>& end = side == 0 ? o.runEndB : o.runEndS;
+        for (int i = 0; i < n; ++i) {
+            const bool in = nw[i] && f[i] + 1e-9 >= NET_LABEL; if (!in) continue;
+            const bool next = i + 1 < n && nw[i + 1] && f[i + 1] + 1e-9 >= NET_LABEL;
+            if (next) continue;                                   // the run continues: its label moves to the newer bar
+            if (pk[i] + 1e-9 >= o.med[i]) lab[i] = 1; else noisy[i] = 1;
+            end[i] = i + 1 < n ? 1 : 0;                           // final only when a later bar exists and does not continue the run
+        }
+    }
+    return o;
+}
+// split text into lines of at most `w` characters at spaces (a word longer than w is cut); '\n' starts a new line
+inline std::vector<std::string> wrap(const std::string& text, size_t w) {
+    std::vector<std::string> out; if (w < 8) w = 8;
+    std::string para; std::vector<std::string> paras; for (char c : text) { if (c == '\n') { paras.push_back(para); para.clear(); } else para += c; } paras.push_back(para);
+    for (const std::string& pa : paras) {
+        std::string line, word; std::vector<std::string> words;
+        for (char c : pa) { if (c == ' ') { if (!word.empty()) words.push_back(word); word.clear(); } else word += c; } if (!word.empty()) words.push_back(word);
+        if (words.empty()) { out.push_back(""); continue; }
+        for (std::string wd : words) {
+            while (wd.size() > w) { if (!line.empty()) { out.push_back(line); line.clear(); } out.push_back(wd.substr(0, w)); wd = wd.substr(w); }
+            if (line.empty()) line = wd; else if (line.size() + 1 + wd.size() <= w) line += " " + wd; else { out.push_back(line); line = wd; }
+        }
+        if (!line.empty()) out.push_back(line);
+    }
+    return out;
+}
+static const char* const INFO_TEXT =
+    "What it answers: Is the side pushing price running out of force at this new high or low?\n"
+    "How it's measured: each bar = net aggression (buying at the ask minus selling at the bid). At a new 5-bar high, buyers fading = their strongest net buying in this push / their net buying now (same for sellers at a new low).\n"
+    "How to use it: a 2x+ label at your level warns the push is tiring. Wait for confirmation: a T (order HELD + close back) or a close back through the level. If the next bar makes a new extreme with strong bars again, ignore it.\n"
+    "Example: Oct 28 7:36 AM - ES made a new high at 7,778 but the green bars had shrunk and flipped red: buyers fading 8.5x. The next bars closed back down and ES fell 25 points into the 8:51 low.";
 }  // namespace ex
 #endif

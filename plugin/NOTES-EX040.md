@@ -1,0 +1,16 @@
+# lsExhaustion 0.4.0 - the NET display (2026-10-29, Rassul approved 11:18 CT, mockup artifact FzpVHQZ8ykBaoz4q6LMsHk)
+
+Base: 0.3.1 (the T mark, committed 11:04 CT on top of the PC's 0.2.4). Installs at his next IRT close.
+
+- Histogram: one bar per CLOSED candle = net aggression = lots at the ask - lots at the bid (the plugin's existing VAP read), green >= 0 / red < 0, own symmetric scale (largest |net| on screen), 0 line.
+- Fading ratio (ExhaustionLogic computeNet): at a new 5-bar HIGH, buyers fading = the peak 2-bar-average net buying in the push (push start = the lowest low of the last 20 bars) / the net buying now, the denominator floored at 10% of the peak, capped at 10x (no net buying in the push = 1.0). At a new 5-bar LOW, sellers fading = the same with net selling (-net), push start = the highest high of the last 20 bars.
+- Labels: >= 2.0x only, ONE per run (consecutive closed bars at a new extreme >= 2.0x on that side) at its NEWEST bar; red at the top = buyers fading, green at the bottom = sellers fading. While a run is still going its label sits on its newest bar (it moves forward only while the run continues); once a later closed bar does not continue the run the label is final and recorded.
+- NOISE CAP: a label is drawn only when the push's peak (2-bar-average) net >= the market's median |net| of the last 100 bars; else logged only (status NET line shows the median in lots).
+- Header: "EXHAUSTION (net)  Buyers fading: X.Xx (2.0x) · Sellers fading: X.Xx (2.0x)" (the last CLOSED bar) + an (i) icon in lsBookFlow's look (light grey dot, black i); version + testing at the right.
+- (i) hover = an INFO BOX: the approved text wrapped to lines of <= 60 characters (ex::wrap), EACH LINE ITS OWN DRAW CALL, the box sized to the text and moved to stay inside the pane.
+- Bar hover = that candle's time, bought at the ask, sold at the bid, net, and its fading ratio (or "not at a new 5-bar high or low"), same box rule. TRACK_MOUSE; mouse() returns RTX_FAIL (never swallows the event).
+- T mark kept (0.3.1 rule) - now on the NET fading ratio.
+- Records: every final net label (labelled or held back by the noise cap) -> lsFlexLevels\Exhaustion\<MKT>-<CONTRACT>-<spb>-net-<session>.csv `bar|top/bottom|net_x|gross_x|peak_net|median_abs_net|labelled` - the old GROSS ratio of the same bar beside the net one for the nightly comparison. The gross E records are still written as before (E? is no longer drawn). Nothing repaints: a final label / T / record never changes.
+
+Tests: test_exhaustion_040.cpp 24/0 under ASan/UBSan (wrap <= 60 and long-word cut; one buyers label per run at its newest bar; the sellers side mirrored on negative bars; cap 10x; noise cap logs instead of labelling; every prefix gives the same final label = no repaint; T on the net ratio; header + one histogram box per visible candle; the (i) box = 13 separate text draws, longest 60 chars, inside the pane; bar hover lines; the net record with the gross ratio). test_exhaustion_031.cpp is superseded (its version check expects 0.3.1). MinGW -fsyntax-only vs the real irtsdk.h: 0 errors, no warnings in Exhaustion. settings_contract PASS. The tests_exhaustion mock now records a box's right / bottom / fill and has invalidateChart.
+Not verified - needs his IRT: the info-box and hover placement on his pane height; the median |net| per market on live data.

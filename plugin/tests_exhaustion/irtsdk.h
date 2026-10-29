@@ -24,7 +24,7 @@ struct Bar {
     int failStats,failPrice,reportedPrices;
     Bar():time(0),volume(0),open(100),high(101),low(99),close(100),failStats(0),failPrice(-1),reportedPrices(-1){}
 };
-struct Draw { std::string type,text; int x,y; COLOR color; Draw(const char* t,int a,int b,const std::string& s="",COLOR c=0):type(t),text(s),x(a),y(b),color(c){} };
+struct Draw { std::string type,text; int x,y; COLOR color; int r=0,b=0; Draw(const char* t,int a,int b,const std::string& s="",COLOR c=0):type(t),text(s),x(a),y(b),color(c){} };
 struct Host {
     std::vector<DEPTH_LEVEL> depth; bool depthOn=true; unsigned long now=0; int depthObjects=0;
     std::vector<Bar> bars; void* data; bool noSlot; float tick; int seconds;
@@ -54,7 +54,7 @@ public:
         void set(short l,short t,short r,short b){left=l;top=t;right=r;bottom=b;}
         void getPaneRect(bool){set(mock::current->paneLeft,mock::current->paneTop,mock::current->paneRight,mock::current->paneBottom);}
         void getScaleRect(){set(mock::current->scaleLeft,0,mock::current->paneRight,mock::current->paneBottom);}
-        void draw(int,COLOR,COLOR,int,int){ mock::current->draws.push_back(mock::Draw("box",left,top)); }
+        void draw(int,COLOR,COLOR fill,int,int){ mock::Draw d("box",left,top,"",fill); d.r=right; d.b=bottom; mock::current->draws.push_back(d); }   // (exh 0.4.0) + right / bottom / fill
         void drawText(const char* t,bool,bool rightAligned){ mock::current->draws.push_back(mock::Draw("text",rightAligned?right:left,(top+bottom)/2,t,mock::current->ink)); }
         void drawOval(int){ mock::current->draws.push_back(mock::Draw("ring",(left+right)/2,(top+bottom)/2)); }
     };
@@ -95,6 +95,7 @@ public:
     const char* getPeriodicityLabel(){return mock::current->period.c_str();} const char* getChartLabel(){return mock::current->chart.c_str();}
     const char* getWorkingDirectoryPath(){return mock::current->directory.c_str();}
     float getProperty(int){return mock::current->tick;} RTDATE currentDate(){return mock::current->now;} void setExtendedFlags(unsigned long){} int getSecondsPerBar(){return mock::current->seconds;}
+    int invalidateChart(bool=false){return 0;}   // (exh 0.4.0)
     tm* getLocaltime(RTDATE stamp,tm* t){time_t v=static_cast<time_t>(stamp);return gmtime_r(&v,t);}
     // (exh 0.3.0) stubs so SettingsHost.h compiles against this older mock (Exhaustion has no settings rows)
     int getParameterCount(void){return 0;} RTX_RESULT setBoolParameter(const char*,RTBOOL,short=0){return RTX_OK;}

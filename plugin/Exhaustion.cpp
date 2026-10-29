@@ -55,7 +55,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.3.1"          // (0.3.1, 2026-10-29 Rassul approved 10:23 CT; 0.3.1 because the reverted 05:11 CT pivot / histogram build was 0.3.0) + the T mark at the bottom of the pane: an order-line HELD (lsLiquidityProfile 0.68.0, SignalBoard G) + exhaustion >= 2.0x of the attacking side within the 5 bars before + a close back away within 3 bars after (ex::tMark); red T = a top (offer HELD), green T = a bottom (bid HELD); recorded to <stem>-T-<session>.csv, read back, never repainted   // was 0.2.4: keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.4.0"          // (0.4.0, 2026-10-29 Rassul approved 11:18 CT, mockup artifact FzpVHQZ8ykBaoz4q6LMsHk) THE NET DISPLAY: a histogram of net aggression per closed candle (lots at the ask - lots at the bid; green >= 0 / red < 0, own symmetric scale, 0 line); the fading ratios on NET (peak 2-bar net in the push / now, floor 10% of the peak, cap 10x, ExhaustionLogic computeNet); labels >= 2.0x, one per run at its newest bar (red top = buyers fading, green bottom = sellers fading), only when the push peak >= the median |net| of the last 100 bars (noise cap; else logged); header "EXHAUSTION (net)  Buyers fading: X.Xx (2.0x) \xB7 Sellers fading: X.Xx (2.0x)" + an (i) info box (lines <= 60 chars, one draw call per line, inside the pane); hover on a bar = buy / sell / net / fading; the T mark now uses the NET ratio; every final net label (and the old gross ratio beside it) recorded to <stem>-net-<session>.csv; the old lines / E? are no longer drawn (E still recorded)   // was 0.3.1: (0.3.1, 2026-10-29 Rassul approved 10:23 CT; 0.3.1 because the reverted 05:11 CT pivot / histogram build was 0.3.0) + the T mark at the bottom of the pane: an order-line HELD (lsLiquidityProfile 0.68.0, SignalBoard G) + exhaustion >= 2.0x of the attacking side within the 5 bars before + a close back away within 3 bars after (ex::tMark); red T = a top (offer HELD), green T = a bottom (bid HELD); recorded to <stem>-T-<session>.csv, read back, never repainted   // was 0.2.4: keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
@@ -219,6 +219,9 @@ struct EXState {
     std::vector<double> closes;                             // (0.3.0) the closed bars' closes (same index as out)
     std::map<long long, int> tmarks; std::map<long long, double> tVal; std::set<std::string> tDone;   // (0.3.0) T: bar time -> side; HELD facts already decided
     long long tFacts = 0, tWrites = 0, tFails = 0; bool tBoard = false;
+    ex::NetOut net; std::vector<double> buyV, sellV;        // (0.4.0) the NET display (same index as out)
+    std::set<long long> netDone; long long netWrites = 0, netFails = 0, netNoisy = 0;   // final net labels recorded (bar time)
+    int iconL = 0, iconT = 0, iconR = -1, iconB = -1; bool tipOn = false; int hovBar = -1, hovH = 0, hovV = 0;   // (0.4.0) the (i) icon + the bar hover
 };
 
 class Exhaustion : public cppExtension {
@@ -244,6 +247,10 @@ private:
     void status(EXState& S, long long now);
     void render(EXState& S);
     void tCheck(EXState& S, long count);   // (0.3.0) the T mark
+    void netRecord(EXState& S, long count);   // (0.4.0) final net labels -> <stem>-net-<session>.csv
+public:
+    virtual int mouse(RTX_EVENT* ev);         // (0.4.0) the (i) box + the bar hover
+private:
     std::string dir() { const std::string f = flexDir(); return f.empty() ? f : f + "\\Exhaustion"; }
     std::string stem(EXState& S) { return S.market + "-" + fileKey(S.symbol) + "-" + std::to_string(S.spb); }   // (0.2.2) contract-qualified
 };
@@ -311,9 +318,11 @@ void Exhaustion::calcBars(EXState& S, long count) {
         h.push_back(hh); l.push_back(ll); b.push_back(v.first); s.push_back(v.second); cc.push_back((double)clo[i]);
     }
     S.out = ex::compute(h, l, b, s, S.P); S.outFirst = first; S.closes.swap(cc);
+    S.net = ex::computeNet(h, l, b, s); S.buyV = b; S.sellV = s;   // (0.4.0)
     if (S.out.fb.empty()) return;
     const int f = (int)count - 2 - first;
     S.liveB = S.out.fb[f]; S.liveS = S.out.fs[f];
+    if ((int)S.net.fb.size() > f) { S.liveB = S.net.fb[f]; S.liveS = S.net.fs[f]; }   // (0.4.0) the header shows the NET ratios
     // closed bars: an E in RTH is recorded once (new closed bars only after the first pass)
     const long from = S.count == 0 ? first : std::max((long)first, S.count - 1);
     for (long i = from; i < count - 1; ++i) {
@@ -341,6 +350,7 @@ void Exhaustion::calcBars(EXState& S, long count) {
         char line[160]; std::snprintf(line, sizeof(line), "%lld|%s|%.2f|%.6g|%.6g|N%d S%d T%.2f%s", bt, side < 0 ? "top" : "bottom", val, (double)hi[(int)i], (double)lo[(int)i], S.P.N, S.P.S, rth ? S.P.T : S.tOvernight, rth ? "" : " overnight");
         PendingRecord rec; rec.session = barSession; rec.bar = bt; rec.side = side; rec.val = val; rec.line = line; S.pending.push_back(rec);
     }
+    netRecord(S, count);   // (0.4.0)
     tCheck(S, count);   // (0.3.0)
     S.count = count;
     flushRecords(S);
@@ -386,7 +396,9 @@ void Exhaustion::tCheck(EXState& S, long count) {
         std::map<long long, int>::const_iterator it = idx.find(f.bar); if (it == idx.end()) continue;
         ++S.tFacts;
         ex::Held H; H.bar = it->second; H.side = f.side; H.px = f.lo; ex::TMark M;
-        if (!ex::tMark(S.closes, S.out, H, lastClosed, M)) { if (lastClosed >= H.bar + ex::T_AFTER) S.tDone.insert(key); continue; }   // every window is over
+        ex::Out nr; nr.fb = S.net.fb; nr.fs = S.net.fs;   // (0.4.0) T uses the NET fading ratio
+        if (nr.fb.size() != S.closes.size()) continue;
+        if (!ex::tMark(S.closes, nr, H, lastClosed, M)) { if (lastClosed >= H.bar + ex::T_AFTER) S.tDone.insert(key); continue; }   // every window is over
         const long long bt = (long long)times[S.outFirst + M.bar]; const long long cs = ctSec((RTDATE)bt);
         const long long sess = cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : S.session;
         const std::string d = dir(); if (d.empty()) { ++S.tFails; continue; }
@@ -398,6 +410,30 @@ void Exhaustion::tCheck(EXState& S, long count) {
         S.tmarks[bt] = M.side; S.tVal[bt] = M.exh; S.tDone.insert(key); ++S.tWrites;
     }
     while (S.tDone.size() > 2000) S.tDone.erase(S.tDone.begin());
+}
+// (0.4.0) every FINAL net label (its run ended: a later closed bar did not continue it) - labelled or held back by the noise cap - with the
+// old GROSS ratio of the same bar beside it (the nightly compares them): bar|top/bottom|net_x|gross_x|peak_net|median_abs_net|labelled
+void Exhaustion::netRecord(EXState& S, long count) {
+    if (S.net.fb.empty() || S.net.fb.size() != S.out.fb.size()) return;
+    RTARRAYI times(barDateTime); if (times.count < count) return;
+    const std::string d = dir(); if (d.empty()) return;
+    for (int k = 0; k < (int)S.net.fb.size(); ++k) {
+        for (int side = 0; side < 2; ++side) {
+            const bool fin = side == 0 ? S.net.runEndB[k] : S.net.runEndS[k]; if (!fin) continue;
+            const bool lab = side == 0 ? S.net.labB[k] : S.net.labS[k];
+            const long long bt = (long long)times[S.outFirst + k]; const long long key = bt * 2 + side;
+            if (S.netDone.count(key)) continue;
+            const long long cs = ctSec((RTDATE)bt); const long long sess = cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : S.session;
+            makeDir(flexDir()); makeDir(d);
+            char line[200]; std::snprintf(line, sizeof(line), "%lld|%s|%.2f|%.2f|%.0f|%.0f|%d\n", bt, side == 0 ? "top" : "bottom", side == 0 ? S.net.fb[k] : S.net.fs[k],
+                side == 0 ? S.out.fb[k] : S.out.fs[k], side == 0 ? S.net.peakB[k] : S.net.peakS[k], S.net.med[k], lab ? 1 : 0);
+            std::ofstream o((d + "\\" + stem(S) + "-net-" + std::to_string(sess) + ".csv").c_str(), std::ios::binary | std::ios::app);
+            if (o) { o << line; o.flush(); }
+            if (!o) { ++S.netFails; continue; }
+            S.netDone.insert(key); ++S.netWrites; if (!lab) ++S.netNoisy;
+        }
+    }
+    while (S.netDone.size() > 6000) S.netDone.erase(S.netDone.begin());
 }
 void Exhaustion::load(EXState& S) {
     const std::string d = dir(); if (d.empty()) return;
@@ -412,6 +448,11 @@ void Exhaustion::load(EXState& S) {
             if (e != ln.c_str() + a || bt <= 0) continue;
             const bool top = ln.compare(a + 1, 3, "top") == 0, bot = ln.compare(a + 1, 6, "bottom") == 0;
             if (top || bot) S.tmarks[bt] = top ? -1 : 1; }
+    }
+    for (long long k = S.session - 1; k <= S.session; ++k) {   // (0.4.0) final net labels already recorded (never written twice)
+        std::ifstream in((d + "\\" + stem(S) + "-net-" + std::to_string(k) + ".csv").c_str(), std::ios::binary); std::string ln; int n = 0;
+        while (in && n++ < 6000 && std::getline(in, ln)) { const size_t a = ln.find('|'); if (a == std::string::npos) continue; const long long bt = std::strtoll(ln.c_str(), nullptr, 10);
+            if (bt > 0) S.netDone.insert(bt * 2 + (ln.compare(a + 1, 3, "top") == 0 ? 0 : 1)); }
     }
 }
 void Exhaustion::norms(EXState& S) {
@@ -443,6 +484,7 @@ void Exhaustion::status(EXState& S, long long now) {
     o << "VERSION," << EX_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nPARAMS,N " << S.P.N << ",S " << S.P.S << ",T " << S.P.T << "," << S.params << "\nRTH," << S.rthO << "," << S.rthC << "\nOVERNIGHT_LINE," << S.tOvernight
       << "\nPROVEN," << S.proven << "\nNOW,buyers_fading " << S.liveB << ",sellers_fading " << S.liveS << "\nMARKS," << S.marks.size() << ",fails " << S.recFails << "\n"
+      << "NET,display net aggression (ask - bid lots),labels >= " << ex::NET_LABEL << "x one per run,noise cap = median |net| of the last " << ex::NET_MED_BARS << " bars = " << (S.net.med.empty() ? 0.0 : S.net.med.back()) << " lots,final labels recorded " << S.netWrites << " (held back by the noise cap " << S.netNoisy << ") fails " << S.netFails << "\n"
       << "T_MARK,HELD facts (SignalBoard G) " << (S.tBoard ? "read" : "none") << ",checked " << S.tFacts << ",T recorded " << S.tWrites << " fails " << S.tFails << ",shown marks " << S.tmarks.size() << ",rule exh >= " << ex::T_EXH << "x within " << ex::T_BEFORE << " bars before + close back within " << ex::T_AFTER << " bars" << "\n";
     const std::string text = o.str(); if (text == S.lastStatusText) return;
     const std::string f = flexDir(); if (f.empty()) return;
@@ -457,7 +499,7 @@ void Exhaustion::pump() {
         identify(S);
         const long long now = steadyMs();
         const long long ct = ctSec(currentDate());
-        if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; S.marks.clear(); S.markVal.clear(); S.tmarks.clear(); S.tVal.clear(); load(S); } }
+        if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; S.marks.clear(); S.markVal.clear(); S.tmarks.clear(); S.tVal.clear(); S.netDone.clear(); load(S); } }
         if (S.lastNormsMs < 0 || now - S.lastNormsMs >= 60000) { S.lastNormsMs = now; norms(S); }
         const long count = getBarCount();
         calcBars(S, count);
@@ -466,69 +508,103 @@ void Exhaustion::pump() {
     } catch (...) { S.state = "calculation error"; }
 }
 void Exhaustion::render(EXState& S) {
+    // (0.4.0) THE NET DISPLAY: header + (i), the net histogram (own symmetric scale, 0 line), the 2.0x+ labels (one per run, red top /
+    // green bottom), the T marks at the bottom, the (i) box and the bar hover - every text line its own draw call, <= 60 characters
     RCT pane; pane.getPaneRect(false);
     const long count = getBarCount();
-    if (count < 2 || pane.bottom - pane.top < 40 || pane.right - pane.left < 120 || S.out.fb.empty()) return;
-    const int lastBar = (int)count - 2;                                   // (0.2.1) the last CLOSED bar
-    FONT f; f.id = HELVETICA; f.size = 9; f.style = BOLD; setFont(f);
-    auto txt = [&](int x, int y, const std::string& t, COLOR c) { setTextColor(c); const int w = getTextWidth(t.c_str(), -1); RCT r; r.set(coord(x), coord(y), coord(x + w + 2), coord(y + 12)); r.drawText(t.c_str(), false, false); return x + w; };
+    S.iconR = -1;
+    if (count < 2 || pane.bottom - pane.top < 40 || pane.right - pane.left < 120 || S.net.net.empty()) return;
+    const int lastBar = (int)count - 2;                                   // the last CLOSED bar
+    FONT f; f.id = HELVETICA; f.size = 10; f.style = BOLD; setFont(f);
+    auto txt = [&](int x, int y, const std::string& t, COLOR c) { setTextColor(c); const int w = getTextWidth(t.c_str(), -1); RCT r; r.set(coord(x), coord(y), coord(x + w + 2), coord(y + 13)); r.drawText(t.c_str(), false, false); return x + w; };
     auto xs = [](double v) { char b[16]; std::snprintf(b, sizeof(b), "%.1fx", v); return std::string(b); };
     auto xOf = [&](int bar) { PNT p; p.set(bar, 0.0f, kBarCenter); return (int)p.h; };
-    const double T = S.P.T;
-    {
-        int x = txt(pane.left + 4, pane.top + 1, "EXHAUSTION   ", C_GREY);
-        x = txt(x, pane.top + 1, "Buyers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveB), C_SELL); x = txt(x, pane.top + 1, " (" + xs(T) + ")   ", C_GREY);
-        x = txt(x, pane.top + 1, "Sellers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveS), C_BUY); txt(x, pane.top + 1, " (" + xs(T) + ")", C_GREY);
-        // whether the nightly study has confirmed this market's E on his trade (unseen days): "testing" until it has
-        const int w = getTextWidth(S.proven.c_str(), -1); txt(pane.right - w - 8, pane.top + 1, S.proven, C_GREY);
+    {   int x = txt(pane.left + 4, pane.top + 1, "EXHAUSTION (net)   ", C_GREY);
+        x = txt(x, pane.top + 1, "Buyers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveB), C_SELL); x = txt(x, pane.top + 1, " (2.0x)  \xB7  ", C_GREY);
+        x = txt(x, pane.top + 1, "Sellers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveS), C_BUY); x = txt(x, pane.top + 1, " (2.0x)", C_GREY);
+        const int il = x + 10, it = pane.top + 2, ip = 12;                // the (i) icon (lsBookFlow's look: light grey dot, black i)
+        if (il + ip < pane.right - 80) {
+            setPen(0x009CA3AF, 1, P_SOLID); CBRUSH br(0x009CA3AF, PAT_SOLID); br.set();
+            RCT d; d.set(coord(il), coord(it), coord(il + ip), coord(it + ip)); d.drawOval(DRAW_OPAQUE);
+            FONT fi = f; fi.size = 9; setFont(fi); setTextColor(0x00000000); const int iw = getTextWidth("i", -1);
+            RCT ti; ti.set(coord(il + (ip - iw) / 2), coord(it - 1), coord(il + ip), coord(it + ip)); ti.drawText("i", false, false); setFont(f);
+            S.iconL = il; S.iconT = it; S.iconR = il + ip; S.iconB = it + ip; }
+        const std::string vr = std::string("v") + EX_VERSION + "  " + S.proven; const int w = getTextWidth(vr.c_str(), -1); txt(pane.right - w - 8, pane.top + 1, vr, C_GREY);
     }
-    const int top = pane.top + 16, bottom = pane.bottom - 16;
+    const int top = pane.top + 30, bottom = pane.bottom - 30;            // label rows above / below (top: buyers, bottom: sellers, then T)
+    if (bottom - top < 20) return;
     std::vector<int> vis;
     for (int i = lastBar; i >= S.outFirst; --i) { const int x = xOf(i); if (x < pane.left) break; if (x <= pane.right) vis.push_back(i); }
     std::reverse(vis.begin(), vis.end());
-    auto val = [&](int bar, bool buyers) { const int k = bar - S.outFirst; if (k < 0 || k >= (int)S.out.fb.size()) return 1.0; return buyers ? S.out.fb[k] : S.out.fs[k]; };
-    double mx = std::max(3.0, T * 1.6);
-    for (size_t k = 0; k < vis.size(); ++k) mx = std::max(mx, std::max(val(vis[k], true), val(vis[k], false)));
-    mx = std::min(mx * 1.2, 10.0);
-    auto yOf = [&](double v) { return bottom - (int)((bottom - top) * std::min(1.0, std::max(0.0, v / mx))); };
+    auto K = [&](int bar) { return bar - S.outFirst; };
+    double mx = 1; for (int i : vis) { const int k = K(i); if (k >= 0 && k < (int)S.net.net.size()) mx = std::max(mx, std::fabs(S.net.net[k])); }
+    const int zero = (top + bottom) / 2, half = (bottom - top) / 2;
+    auto yOf = [&](double v) { return zero - (int)std::lround((double)half * std::max(-1.0, std::min(1.0, v / mx))); };
     setPen(C_AXIS, 1, P_SOLID);
-    { const int y = yOf(T); PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(y); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(y); b.drawLineTo();
-      txt(pane.right - 34, y - 13, xs(T), C_GREY); }
-    for (int s = 0; s < 2; ++s) {
-        const bool buyers = s == 0; const COLOR c = buyers ? C_SELL : C_BUY;     // buyers fading = bearish red, sellers fading = bullish green
-        setPen(c, 2, P_SOLID); bool started = false;
-        for (size_t k = 0; k < vis.size(); ++k) {
-            PNT p; p.set(0, 0.0f); p.h = coord(xOf(vis[k])); p.v = coord(yOf(val(vis[k], buyers)));
-            if (!started) { p.setDrawPosition(); started = true; } else p.drawLineTo();
+    { PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(zero); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(zero); b.drawLineTo(); }
+    int bw = 3; if (vis.size() >= 2) bw = std::max(1, (int)((xOf(vis.back()) - xOf(vis.front())) / (int)(vis.size() - 1) * 0.6 / 2));
+    for (int i : vis) {
+        const int k = K(i); if (k < 0 || k >= (int)S.net.net.size()) continue;
+        const double v = S.net.net[k]; const COLOR c = v >= 0 ? C_BUY : C_SELL; const int x = xOf(i), y = yOf(v);
+        RCT r; r.set(coord(x - bw), coord(std::min(y, zero)), coord(x + bw), coord(std::max(y, zero) + (y == zero ? 1 : 0))); r.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
+    }
+    for (int i : vis) {                                                    // the labels: one per run at its newest bar, noise-capped
+        const int k = K(i); if (k < 0 || k >= (int)S.net.net.size()) continue;
+        if (S.net.labB[k]) { const std::string t = xs(S.net.fb[k]); const int w = getTextWidth(t.c_str(), -1); txt(xOf(i) - w / 2, top - 14, t, C_SELL); }
+        if (S.net.labS[k]) { const std::string t = xs(S.net.fs[k]); const int w = getTextWidth(t.c_str(), -1); txt(xOf(i) - w / 2, bottom + 1, t, C_BUY); }
+    }
+    RTARRAYI times(barDateTime);                                          // T: the recorded marks at the bottom of the pane (never repainted)
+    if (times.count >= count) for (int i : vis) {
+        std::map<long long, int>::const_iterator m = S.tmarks.find((long long)times[i]); if (m == S.tmarks.end()) continue;
+        txt(xOf(i) - 3, bottom + 14, "T", m->second < 0 ? C_SELL : C_BUY);
+    }
+    // a multi-line box: one draw call per line (never one long string - IRT breaks it), sized to the text, kept inside the pane
+    auto box = [&](int ax, int ay, const std::vector<std::string>& L) {
+        if (L.empty()) return;
+        FONT fp = f; fp.size = 9; fp.style = PLAIN; setFont(fp);
+        int w = 0; for (const std::string& t : L) w = std::max(w, (int)getTextWidth(t.c_str(), -1));
+        const int lh = 13, pad = 6, bw2 = w + 2 * pad + 2, bh = (int)L.size() * lh + 2 * pad;
+        int l = std::min(ax, (int)pane.right - 2 - bw2); l = std::max((int)pane.left + 2, l);
+        int t = ay; if (t + bh > pane.bottom - 2) t = std::max((int)pane.top + 2, (int)pane.bottom - 2 - bh);
+        const int r = std::min((int)pane.right - 2, l + bw2), b = std::min((int)pane.bottom - 2, t + bh);
+        setPen(0x009CA3AF, 1, P_SOLID); RCT bg; bg.set(coord(l), coord(t), coord(r), coord(b)); bg.draw(1, 0x009CA3AF, 0x00111827, DRAW_OPAQUE, PAT_SOLID);
+        setTextColor(0x00E5E7EB); int y = t + pad;
+        for (const std::string& line : L) { if (y + lh > b) break; if (!line.empty()) { RCT tr; tr.set(coord(l + pad), coord(y), coord(r - 2), coord(y + lh)); tr.drawText(line.c_str(), false, false); } y += lh; }
+        setFont(f); };
+    if (S.tipOn && S.iconR > S.iconL) box(S.iconL, S.iconB + 3, ex::wrap(ex::INFO_TEXT, 60));
+    else if (S.hovBar >= S.outFirst && S.hovBar <= lastBar) {
+        const int k = K(S.hovBar);
+        if (k >= 0 && k < (int)S.net.net.size() && k < (int)S.buyV.size()) {
+            char b1[64], b2[64], b3[64], b4[96]; std::string when;
+            if (times.count > S.hovBar) { struct tm t; std::memset(&t, 0, sizeof(t)); if (getLocaltime((RTDATE)times[S.hovBar], &t)) { char w[32]; std::snprintf(w, sizeof(w), "Candle ending %d:%02d %s", t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12, t.tm_min, t.tm_hour < 12 ? "AM" : "PM"); when = w; } }
+            std::snprintf(b1, sizeof(b1), "Bought at the ask: %.0f lots", S.buyV[k]); std::snprintf(b2, sizeof(b2), "Sold at the bid: %.0f lots", S.sellV[k]);
+            std::snprintf(b3, sizeof(b3), "Net aggression: %+.0f lots", S.net.net[k]);
+            if (S.net.newH[k]) std::snprintf(b4, sizeof(b4), "New high - buyers fading: %.1fx (2.0x)", S.net.fb[k]);
+            else if (S.net.newL[k]) std::snprintf(b4, sizeof(b4), "New low - sellers fading: %.1fx (2.0x)", S.net.fs[k]);
+            else std::snprintf(b4, sizeof(b4), "Not at a new 5-bar high or low: no fading read");
+            std::vector<std::string> L; if (!when.empty()) L.push_back(when); for (const char* q : { b1, b2, b3, b4 }) { std::vector<std::string> w = ex::wrap(q, 60); L.insert(L.end(), w.begin(), w.end()); }
+            box(S.hovH + 12, S.hovV + 12, L);
         }
-        for (size_t k = 0; k < vis.size(); ++k) {
-            const double v = val(vis[k], buyers); if (v <= 1.0 + 1e-9) continue;
-            const int x = xOf(vis[k]), y = yOf(v);
-            RCT d; d.set(coord(x - 2), coord(y - 2), coord(x + 2), coord(y + 2)); d.draw(0, c, c, DRAW_OPAQUE, PAT_SOLID);
-            if (v + 1e-9 >= T) { const std::string t = xs(v); const int w = getTextWidth(t.c_str(), -1); txt(x - w / 2, y - 15, t, c); }
-        }
     }
-    // E: the recorded marks (never repainted), at the bottom of the pane under their bar
-    RTARRAYI times(barDateTime);
-    if (times.count >= count) for (size_t k = 0; k < vis.size(); ++k) {
-        std::map<long long, int>::const_iterator m = S.marks.find((long long)times[vis[k]]);
-        if (m == S.marks.end()) continue;
-        txt(xOf(vis[k]) - 6, bottom + 2, "E?", m->second < 0 ? C_SELL : C_BUY);   // (0.2.3, audit list 18:25 CT) "E?" - untested as a standalone signal
-    }
-    // (0.3.0) T: the recorded marks at the bottom of the pane under their bar (red = a top, green = a bottom); one row above an E? on the same bar
-    if (times.count >= count) for (size_t k = 0; k < vis.size(); ++k) {
-        std::map<long long, int>::const_iterator m = S.tmarks.find((long long)times[vis[k]]);
-        if (m == S.tmarks.end()) continue;
-        const bool withE = S.marks.count((long long)times[vis[k]]) > 0;
-        txt(xOf(vis[k]) - 3, withE ? bottom - 11 : bottom + 2, "T", m->second < 0 ? C_SELL : C_BUY);
-    }
+}
+// (0.4.0) the mouse: the (i) icon shows the info box; on a candle, that candle's numbers. Returns RTX_FAIL so the event is not swallowed.
+int Exhaustion::mouse(RTX_EVENT* ev) {
+    EXState* S = slot_.get(this, false);
+    if (!S || !ev || (ev->type != E_MOUSE_MOVE && ev->type != E_MOUSE_HOVER)) return RTX_FAIL;
+    const int h = ev->v.mouse.h, v = ev->v.mouse.v;
+    const bool on = S->iconR > S->iconL && h >= S->iconL - 2 && h <= S->iconR + 2 && v >= S->iconT - 2 && v <= S->iconB + 2;
+    const int bar = (int)ev->v.mouse.bar;
+    const bool changed = on != S->tipOn || bar != S->hovBar;
+    S->tipOn = on; S->hovBar = bar; S->hovH = h; S->hovV = v;
+    if (changed) invalidateChart(false);
+    return RTX_FAIL;
 }
 
 extern "C" cppExtension* CreateExtension(void) {
     Exhaustion* p = new Exhaustion();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
+    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // (0.4.0) TRACK_MOUSE: the (i) box and the bar hover
     p->setDescription("LRA Exhaustion: is the side pushing price running out? Red = buyers fading at a new high (bearish), green = sellers fading at a new low (bullish): their peak pace in the push / their pace now, 1.0 when price is not at a new extreme. E = the first RTH bar at or over the market's line (from the nightly study), recorded and never repainted.");
-    p->setVersion("0.3.1");   // EX_VERSION
+    p->setVersion("0.4.0");   // EX_VERSION
     return p;
 }
