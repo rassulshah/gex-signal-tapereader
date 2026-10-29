@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.4.1";   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px

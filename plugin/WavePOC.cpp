@@ -121,7 +121,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.4.0";   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.4.1";   // (1.4.1, 2026-10-29 13:20 CT crash fix) the CoB flags come from getChartIndicator only - no getCustomIndicator (IRT fast-fail 0xC0000409 on opening the Add Indicator window, WER bucket 5c8499f9)   // was 1.4.0: (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -260,7 +260,12 @@ bool WavePOC::readFlags(const char* name, long count, std::vector<float>& out) {
     out.assign((size_t)std::max(0L, count), 0.0f);
     char nb[96]; std::memset(nb, 0, sizeof(nb)); std::strncpy(nb, name, sizeof(nb) - 1);
     RTARRAY a(fEmptyArray);
-    if (a.getCustomIndicator(nb, 1, true) != RTX_OK || a.count <= 0 || a.count > count) return false;
+    // (1.4.1 crash fix) getChartIndicator ONLY: the cob_bull_3m_1b / cob_bear_3m_1b values of an indicator already on this chart. 1.3.0-1.4.0
+    // called getCustomIndicator(name, 1, TRUE) - IRT then calculates the RTL from inside the plugin; IRT fast-failed (0xC0000409, WER bucket
+    // AppCrash_investorRT.exe_5c8499f9..., the same bucket as the 10-24 lsChartView custom-lookup crash, lesson 150) at 10-28 17:52 / 18:08 /
+    // 22:58 and 10-29 13:01 when Rassul opened the Add Indicator window - only in sessions with WavePOC >= 1.3.0 loaded. Not on the chart ->
+    // no NEW CoB legs (COB_SOURCE says so); recorded CoB legs still draw; the waves are unaffected.
+    if (a.getChartIndicator(nb) != RTX_OK || a.count <= 0 || a.count > count) return false;
     const long shift = count - (long)a.count;
     for (long i = shift; i < count; ++i) { const float v = a[(int)(i - shift)]; out[(size_t)i] = (v == v) ? v : 0.0f; }
     return true;
@@ -476,7 +481,7 @@ void WavePOC::readCob(WState& S, long n) {
     ++S.cobReads;
     if (!guard.empty()) std::remove(guard.c_str());
     for (long i = 0; i < n; ++i) S.cobFlags[(size_t)i] = (signed char)((okB && fb[(size_t)i] >= 0.5f ? 1 : 0) | (okS && fs[(size_t)i] >= 0.5f ? 2 : 0));
-    S.cobSrc = std::string("RTL cob_bull_3m_1b ") + (okB ? "ok" : "NOT FOUND") + ", cob_bear_3m_1b " + (okS ? "ok" : "NOT FOUND") + " (the Cob marks' source; read in calc only, reads " + std::to_string(S.cobReads) + ")";
+    S.cobSrc = std::string("chart indicator cob_bull_3m_1b ") + (okB ? "ok" : "NOT ON CHART") + ", cob_bear_3m_1b " + (okS ? "ok" : "NOT ON CHART") + " (1.4.1: read from the chart only, never calculated by IRT for the plugin; reads " + std::to_string(S.cobReads) + ")";
 }
 
 void WavePOC::flush(WState& S, long long now) {
@@ -624,6 +629,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setDescription("LRA Wave POC v1.3.4 - each big wave's (and each CoB leg's) own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as pullback targets.");
-    p->setVersion("1.4.0");   // = WP_VERSION (gex-build reads this literal)
+    p->setVersion("1.4.1");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

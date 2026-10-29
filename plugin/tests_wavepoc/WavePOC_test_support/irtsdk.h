@@ -50,7 +50,7 @@ struct Host {
     int revBars = 3; bool zigzag = false; bool cobLegs = true;   // (1.3.0) row 3
     std::map<std::string, std::vector<float> > cust;   // (1.3.0) RTL custom indicators by name (getCustomIndicator)
     std::vector<int> saved; std::string savedTmpl;     // (1.3.0) saveParameters
-    bool drawing = false; int customCalls = 0, customInDraw = 0;   // (1.3.1) RTL reads, and those made inside draw() (IRT crash, 1.3.0)
+    bool drawing = false; int customCalls = 0, customInDraw = 0; int chartCalls = 0, chartInDraw = 0;   // (1.4.1) getChartIndicator reads (the cust map = indicators on the chart)   // (1.3.1) RTL reads, and those made inside draw() (IRT crash, 1.3.0)
     bool inParmsInit = false; int parmsReadInInit = 0;             // (1.3.1) getParameters called inside parmsInit
     int paneL = 0, paneT = 0, paneR = 1600, paneB = 800, rightMargin = 300;
     RTX_REASON reason = REASON_DRAW;
@@ -65,6 +65,7 @@ extern Host* current;
 }
 
 class RTARRAY { public: explicit RTARRAY(fARRAY a) : v_(a == fEmptyArray ? nullptr : &mock::current->f[(int)a]), count(v_ ? (long)v_->size() : 0) {} float operator[](int n) const { return (*v_)[(size_t)n]; }
+    RTX_RESULT getChartIndicator(const char* label, int = -1, int = 0) { ++mock::current->chartCalls; if (mock::current->drawing) ++mock::current->chartInDraw; auto it = mock::current->cust.find(label); if (it == mock::current->cust.end()) return RTX_FAIL; v_ = &it->second; count = (long)v_->size(); return RTX_OK; }
     RTX_RESULT getCustomIndicator(char* name, int = 1, RTBOOL = false, const char* = nullptr, int = 0) { ++mock::current->customCalls; if (mock::current->drawing) ++mock::current->customInDraw; auto it = mock::current->cust.find(name); if (it == mock::current->cust.end()) return RTX_FAIL; v_ = &it->second; count = (long)v_->size(); return RTX_OK; }
 private: const std::vector<float>* v_; public: long count; };
 class RTARRAYI { public: explicit RTARRAYI(iARRAY) : count((long)mock::current->t.size()) {} RTDATE operator[](int n) const { return mock::current->t[(size_t)n]; } long count; };

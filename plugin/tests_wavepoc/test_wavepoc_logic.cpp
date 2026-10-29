@@ -275,7 +275,7 @@ static void testLayout(const Fix& F) {
             sp += n; if (n != 1) ok = false; }
         CHECK(ok && sp == 4, "(1.3.3) spines: 4 waves, one each, green up / red down, spanning the wave's range (" << sp << ")"); }
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.4.0", "header Wave POC v1.4.0");
+    CHECK(header && std::string(wpc::VERSION) == "1.4.1", "header Wave POC v1.4.1");
     {   // (1.4.0) the open WPOC handed to lsDealerProfile: the latest confirmed wave's node [0] while OPEN, else none
         long long tk = 0; const bool has = wpc::latestOpenPoc(E, tk);
         const wpc::Wave* lw = nullptr; for (const wpc::Wave& w : E.waves) if (!w.pending) lw = &w;
