@@ -49,8 +49,8 @@ static const Colour D_M1   = 0x00FF8080UL;   // -1 SD light red
 static const Colour D_P2   = 0x0000FF00UL;   // +2 SD lime
 static const Colour D_M2   = 0x00FF0000UL;   // -2 SD red
 static const Colour D_PRTH = 0x006B7280UL;   // prior RTH VWAP, dim grey
-static const Colour D_PIV_UP = 0x0022C55EUL; // (1.8.1) pivot VWAP while the bar closed above it - green
-static const Colour D_PIV_DN = 0x00EF4444UL; // (1.8.1) pivot VWAP while the bar closed below it - red
+static const Colour D_PIV_UP = 0x00FACC15UL; // (1.8.6) yellow  // was 0x0022C55EUL // (1.8.1) pivot VWAP while the bar closed above it - green
+static const Colour D_PIV_DN = 0x00FACC15UL; // (1.8.6) yellow  // was 0x00EF4444UL // (1.8.1) pivot VWAP while the bar closed below it - red
 static const int W_MIN = 1, W_MAX = 4, D_VWAP_W = 2, D_BAND_W = 1, D_PIV_W = 2;
 static const size_t FILE_MAX = 4096;
 
@@ -72,7 +72,7 @@ enum { K_VWAP = 0, K_P1, K_M1, K_P2, K_M2, K_N };
 #ifdef SVS_TEST_ALL_ON_DEFAULTS
 #define SVS_PIV_DEF true
 #else
-#define SVS_PIV_DEF false
+#define SVS_PIV_DEF true   // (1.8.6, Rassul 2026-10-29 09:46 CT) pivot VWAP on by default, yellow, no bands
 #endif
 #endif
 struct Style {
