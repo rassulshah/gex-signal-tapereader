@@ -1,4 +1,9 @@
 /********************************************************************************
+ *  0.3.2 (2026-10-29, Rassul 06:04 CT "because its following the pivot rule it is not showing a lot of exhaustion signals - take off the
+ *        pivot rule"): the lines show the 0.2.4 measure again on every closed bar (ex::compute: at a new N-bar high, buyers' peak S-bar
+ *        pace since the lowest low of the last 20 bars / their pace on this bar; sellers the mirror; 1.0 otherwise), drawn as the 0.3.1
+ *        lines: 0 on every bar, rising to the ratio on a bar at / over 2.0x with the value at the peak. Header = the last closed bar.
+ *        The pivots record file is still written (cheap, for the nightly) but pivots are no longer drawn. E records unchanged, no E?.
  *  0.3.1 (2026-10-29, Rassul 05:39 CT "change histogram back to line"): drawing only - two connected lines as 0.2.4 (red = buyers fading,
  *        green = sellers fading), each at 0 on every bar and rising to the ratio on a pivot bar at / over 2.0x, value at the peak; no
  *        boxes. Pivot rule, 2.0x show rule, records, header and colours unchanged from 0.3.0.
@@ -66,7 +71,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.3.1"          // keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.3.2"          // keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
@@ -485,51 +490,38 @@ void Exhaustion::render(EXState& S) {
     auto xs = [](double v) { char b[16]; std::snprintf(b, sizeof(b), "%.1fx", v); return std::string(b); };
     auto xOf = [&](int bar) { PNT p; p.set(bar, 0.0f, kBarCenter); return (int)p.h; };
     const double T = exp3::SHOW;                                          // (0.3.0) the drawn line: 2.0x
-    // header = the last confirmed pivot high (buyers fading) and pivot low (sellers fading)
-    double lastB = 1.0, lastS = 1.0;
-    for (std::map<long long, std::pair<int, double>>::const_iterator it = S.piv.begin(); it != S.piv.end(); ++it) (it->second.first > 0 ? lastB : lastS) = it->second.second;
+    // (0.3.2, Rassul 06:04 "take off the pivot rule") the 0.2.4 measure on every closed bar (ex::compute); header = the last closed bar
     {
-        int x = txt(pane.left + 4, pane.top + 1, "EXHAUSTION at pivots   ", C_GREY);
-        x = txt(x, pane.top + 1, "Buyers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(lastB), C_SELL); x = txt(x, pane.top + 1, " (" + xs(T) + ")   ", C_GREY);
-        x = txt(x, pane.top + 1, "Sellers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(lastS), C_BUY); txt(x, pane.top + 1, " (" + xs(T) + ")", C_GREY);
+        int x = txt(pane.left + 4, pane.top + 1, "EXHAUSTION   ", C_GREY);
+        x = txt(x, pane.top + 1, "Buyers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveB), C_SELL); x = txt(x, pane.top + 1, " (" + xs(T) + ")   ", C_GREY);
+        x = txt(x, pane.top + 1, "Sellers fading: ", C_GREY); x = txt(x, pane.top + 1, xs(S.liveS), C_BUY); txt(x, pane.top + 1, " (" + xs(T) + ")", C_GREY);
         // whether the nightly study has confirmed this market's E on his trade (unseen days): "testing" until it has
         const int w = getTextWidth(S.proven.c_str(), -1); txt(pane.right - w - 8, pane.top + 1, S.proven, C_GREY);
     }
     const int top = pane.top + 30, bottom = pane.bottom - 4;
-    RTARRAYI times(barDateTime);
-    if (times.count < count) return;
-    // the visible closed bars that are pivots at / over 2.0x
-    struct HB { int bar; int type; double r; };
-    std::vector<HB> hb; std::vector<int> vis;
-    for (int i = lastBar; i >= 0; --i) {
-        const int x = xOf(i); if (x < pane.left) break; if (x > pane.right) continue;
-        vis.push_back(i);
-        std::map<long long, std::pair<int, double>>::const_iterator m = S.piv.find((long long)times[i]);
-        if (m != S.piv.end() && m->second.second + 1e-9 >= T) { HB e; e.bar = i; e.type = m->second.first; e.r = m->second.second; hb.push_back(e); }
-    }
-    double mx = 3.0; for (size_t k = 0; k < hb.size(); ++k) mx = std::max(mx, hb[k].r);
+    auto val = [&](int bar, bool buyers) { const int k = bar - S.outFirst; if (k < 0 || k >= (int)S.out.fb.size()) return 1.0; return buyers ? S.out.fb[k] : S.out.fs[k]; };
+    auto shown = [&](int bar, bool buyers) { const double v = val(bar, buyers); return v + 1e-9 >= T ? v : 0.0; };   // < 2x = 0 (still in the status / data)
+    std::vector<int> vis;
+    for (int i = lastBar; i >= S.outFirst; --i) { const int x = xOf(i); if (x < pane.left) break; if (x <= pane.right) vis.push_back(i); }
+    std::reverse(vis.begin(), vis.end());
+    double mx = 3.0; for (size_t k = 0; k < vis.size(); ++k) mx = std::max(mx, std::max(shown(vis[k], true), shown(vis[k], false)));
     mx = std::min(mx * 1.15, 12.0);
     auto yOf = [&](double v) { return bottom - (int)((bottom - top) * std::min(1.0, std::max(0.0, v / mx))); };
-    std::reverse(vis.begin(), vis.end());
     setPen(C_AXIS, 1, P_SOLID);
     { const int y = yOf(T); PNT a; a.set(0, 0.0f); a.h = coord(pane.left); a.v = coord(y); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = coord(pane.right); b.v = coord(y); b.drawLineTo();
       txt(pane.right - 34, y - 13, xs(T), C_GREY); }
-    // (0.3.1, Rassul 05:39 "change histogram back to line") two connected lines as 0.2.4, one per side: 0 on every bar, rising to the
-    // ratio on a qualifying pivot bar (>= 2.0x) with its value at the peak; pivots under 2x stay at 0
-    std::map<int, std::pair<int, double>> peak; for (size_t k = 0; k < hb.size(); ++k) peak[hb[k].bar] = std::make_pair(hb[k].type, hb[k].r);
+    // (0.3.1) two connected lines, one per side: 0 on every bar, rising to the ratio on a bar at / over 2.0x, its value at the peak
     for (int side = 0; side < 2; ++side) {
-        const int type = side == 0 ? 1 : -1; const COLOR c = type > 0 ? C_SELL : C_BUY;   // buyers fading at a high = bearish red, sellers fading at a low = bullish green
+        const bool buyers = side == 0; const COLOR c = buyers ? C_SELL : C_BUY;   // buyers fading = bearish red, sellers fading = bullish green
         setPen(c, 2, P_SOLID); bool started = false;
         for (size_t k = 0; k < vis.size(); ++k) {
-            std::map<int, std::pair<int, double>>::const_iterator m = peak.find(vis[k]);
-            const double v = (m != peak.end() && m->second.first == type) ? m->second.second : 0.0;
-            PNT q; q.set(0, 0.0f); q.h = coord(xOf(vis[k])); q.v = coord(yOf(v));
+            PNT q; q.set(0, 0.0f); q.h = coord(xOf(vis[k])); q.v = coord(yOf(shown(vis[k], buyers)));
             if (!started) { q.setDrawPosition(); started = true; } else q.drawLineTo();
         }
-        for (size_t k = 0; k < hb.size(); ++k) {
-            if (hb[k].type != type) continue;
-            const int x = xOf(hb[k].bar), y = yOf(hb[k].r);
-            const std::string t = xs(hb[k].r); const int w = getTextWidth(t.c_str(), -1); txt(x - w / 2, y - 14, t, c);
+        for (size_t k = 0; k < vis.size(); ++k) {
+            const double v = shown(vis[k], buyers); if (v <= 0) continue;
+            const int x = xOf(vis[k]), y = yOf(v);
+            const std::string t = xs(v); const int w = getTextWidth(t.c_str(), -1); txt(x - w / 2, y - 14, t, c);
         }
     }
 }
@@ -538,7 +530,7 @@ extern "C" cppExtension* CreateExtension(void) {
     Exhaustion* p = new Exhaustion();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
-    p->setDescription("LRA Exhaustion at pivots (0.3.1): two lines (one per side) at 0 that peak on each IRT zigzag pivot (3 bars, high/low) once confirmed. Red = buyers fading at a pivot high (bearish): the buyers' peak pace in the up leg / their pace on the pivot bar; green = sellers fading at a pivot low (bullish), the mirror. Only 2.0x and over are drawn; every pivot is recorded; never repainted.");
-    p->setVersion("0.3.1");   // EX_VERSION
+    p->setDescription("LRA Exhaustion (0.3.2): is the side pushing price running out? Two lines at 0 that rise on a closed bar at / over 2.0x. Red = buyers fading at a new N-bar high (bearish): the buyers' peak pace in the push (since the lowest low of the last 20 bars) / their pace on this bar; green = sellers fading at a new N-bar low (bullish), the mirror. Closed bars only, never repainted.");
+    p->setVersion("0.3.2");   // EX_VERSION
     return p;
 }

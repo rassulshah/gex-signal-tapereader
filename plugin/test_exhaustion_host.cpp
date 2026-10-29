@@ -27,8 +27,8 @@ int main() {
     CHECK(S->marks.size() == 1 && S->marks.count(eTime) && S->marks[eTime] == -1, "one top E, at the first new high where buyers trade at a third of their peak");
     h.draws.clear(); p->draw();
     bool head = false, e = false, v = false;
-    for (auto& d : h.draws) { if (d.type == "text" && d.text == "EXHAUSTION at pivots   ") head = true; if (d.type == "text" && d.text == "E?") e = true; if (d.type == "line") v = true; }
-    CHECK(head && !e && v, "0.3.0: header 'EXHAUSTION at pivots', the E is recorded but not drawn, only the 2.0x level line");
+    for (auto& d : h.draws) { if (d.type == "text" && d.text == "EXHAUSTION   ") head = true; if (d.type == "text" && d.text == "E?") e = true; if (d.type == "line") v = true; }
+    CHECK(head && !e && v, "0.3.2: header 'EXHAUSTION', the E is recorded but not drawn, only the 2.0x level line");
     bool testing = false; for (auto& d : h.draws) if (d.type == "text" && d.text == "testing") testing = true;
     CHECK(testing, "no nightly confirmation yet: the header says testing");
     const std::string rec = readAll(flex + "\\Exhaustion\\ES-ESZ6-180-" + std::to_string(S->session) + ".csv");

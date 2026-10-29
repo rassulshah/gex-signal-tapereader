@@ -48,3 +48,14 @@ extreme is then a final pivot, confirmed on that reversal bar. Closed bars only.
 - Unchanged from 0.3.0: pivot rule, 2.0x show rule, records, status, header, colours, no settings.
 - Tests: test_exhaustion_030 17/0 (ASan/UBSan, -Werror): 0 boxes; line points = the 2.0x level + 2 x (bars - 1); off-zero points = the
   level + one peak per shown pivot (the 1.14x low stays at 0); "4.4x" red at the peak. test_exhaustion_host 9/0. MinGW -fsyntax-only clean.
+
+## 0.3.2 (2026-10-29, Rassul 06:04 CT "take off the pivot rule")
+- Measure = 0.2.4 again on every closed bar (ex::compute, unchanged): at a new N-bar high (ES/NQ N 5), BUYERS FADING = buyers' peak pace
+  in the push (pace = buyers' volume at the ask averaged over S bars, ES/NQ S 2; push = from the lowest low of the last 20 bars to this
+  bar) / their pace on this bar; at a new N-bar low SELLERS FADING the mirror; 1.0 when not at a new extreme.
+- Drawn as the 0.3.1 lines: each side at 0, rising to the ratio on a closed bar at / over 2.0x, value at the peak; < 2x = 0. No boxes, no E?.
+- Header "EXHAUSTION  Buyers fading: X.Xx (2.0x)  Sellers fading: X.Xx (2.0x)" = the last closed bar. Closed bars only = no repaint.
+- Pivots are no longer drawn; the pivots record file is still written (cheap) for the nightly. E records unchanged.
+- Count on real ES 3-min (10-27 17:21 -> 10-28 09:09, IRT fp_1m): 46 bar/side spikes >= 2x (24 buyers, 22 sellers) vs 8 with the pivot rule.
+- Tests: test_exhaustion_030 18/0 (ASan/UBSan, -Werror): off-zero line points = 2.0x level + one spike per closed bar/side >= 2x (more
+  than the pivot count), one label per spike, no boxes. test_exhaustion_host 9/0. MinGW -fsyntax-only clean.
