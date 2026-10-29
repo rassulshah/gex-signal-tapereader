@@ -45,7 +45,7 @@
 #include <algorithm>
 #include <sstream>
 namespace ltc {
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-10-29) + the KING nodes above / below (kingStep)
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum Tag { T_PENDING = 0, T_STAYS_PLUS = 1, T_STAYS = 2, T_STAYS_WEAK = 3, T_GONE = 4, T_GONE_PLUS = 5, T_MID = 6, T_EARLY = 7 };
@@ -298,6 +298,12 @@ public:
     long long lastPx() const { return last; }
     // (1.1.0) the zone candidates of the last 1-s boundary (zoneGate), biggest first per side; the medians used
     const std::vector<Zone>& candidates() const { return cand; }
+    // (1.2.0, Rassul approved 11:18 CT) THE KING NODES: per side, the biggest zone (price +-1 tick of REAL orders: rested >= 10 min,
+    // re-priced < 2x in 5 min) BEYOND the 3-ATR candidate reach but inside today's reachable range [kLo, kHi] (host: today's high - ADR ..
+    // today's low + ADR, in ticks), >= 3.0x that side's median real level; the king changes only to a challenger >= 1.25x its size (or when
+    // it stops qualifying). king[sd].lots == 0 = none. kingX[sd] = its size / the median. kingSince[sd] = when it became king (ms).
+    long long kLo = 0, kHi = 0; Zone king[2]; double kingX[2] = { 0, 0 }; long long kingSince[2] = { 0, 0 };
+    static const long long KING_REST_MS = 600000; static constexpr double KING_X = 3.0, KING_SWAP = 1.25;
     double median(int sd) const { return med[sd & 1]; }
     long long realNearCount() const { return nReal; }
     long long levelSize(int sd, long long px) const { std::unordered_map<long long, Lev>::const_iterator i = lev.find(key(sd, px)); return i == lev.end() ? 0 : i->second.size; }
@@ -330,9 +336,40 @@ private:
             for (int sd = 0; sd < 2; ++sd) med[sd] = sideMedian(real[sd], sd, sl, R);
             medAt = nextT; }
         for (int sd = 0; sd < 2; ++sd) { std::vector<Zone> z = pickZones(real[sd], sd, sl, R, med[sd], P); cand.insert(cand.end(), z.begin(), z.end()); }
+        kingStep(sl, R);
         for (const Zone& z : cand) { Lev& l = L(z.side, z.px); if (l.ep >= 0 || eps.size() >= 3000) continue;
             Ep e; e.side = z.side; e.px = z.px; e.t0 = nextT; e.sz0 = l.size; e.mx = l.size; e.hist60 = 0; e.sz60 = l.size; e.lowSince = 0;
             l.ep = ++epSeq; eps[l.ep] = e; ++nEpisodes; }
+    }
+    void kingStep(long long sl, long long R) {
+        std::map<long long, long long> far[2];
+        for (std::unordered_map<long long, Ord>::const_iterator i = ord.begin(); i != ord.end(); ++i) {
+            const Ord& o = i->second; if (o.size <= 0 || (o.side != BID && o.side != ASK)) continue;
+            const long long d = o.side == BID ? sl - o.px : o.px - sl; if (d <= R) continue;               // beyond the candidate reach only
+            if (kLo > 0 && o.px < kLo - 1) continue;                                                    // today's reachable range
+            if (kHi > 0 && o.px > kHi + 1) continue;
+            if (nextT - o.t0 < KING_REST_MS) continue;                                                  // resting >= 10 min
+            const int mv = (o.mv0 >= 0 && nextT - o.mv0 <= P.moveWinMs ? 1 : 0) + (o.mv1 >= 0 && nextT - o.mv1 <= P.moveWinMs ? 1 : 0);
+            if (mv >= P.maxMoves) continue;
+            far[o.side][o.px] += o.size;
+        }
+        for (int sd = 0; sd < 2; ++sd) {
+            auto zoneAt = [&](long long p) { long long z = 0; for (long long q = p - 1; q <= p + 1; ++q) { std::map<long long, long long>::const_iterator f = far[sd].find(q); if (f != far[sd].end()) z += f->second; } return z; };
+            Zone best; for (std::map<long long, long long>::const_iterator f = far[sd].begin(); f != far[sd].end(); ++f) {
+                if (kLo > 0 && f->first < kLo) continue;
+                if (kHi > 0 && f->first > kHi) continue;
+                const long long z = zoneAt(f->first); if (z > best.lots || (z == best.lots && z > 0 && f->second > best.raw)) { best.side = sd; best.px = f->first; best.lots = z; best.raw = f->second; } }
+            const double m = med[sd]; const bool bestOk = m > 0 && (double)best.lots >= KING_X * m;
+            Zone& K = king[sd];
+            if (K.lots > 0) {   // the current king: still there and still qualifying?
+                const long long dz = sd == BID ? sl - K.px : K.px - sl;
+                const long long now = (dz > R && (kLo <= 0 || K.px >= kLo) && (kHi <= 0 || K.px <= kHi)) ? zoneAt(K.px) : 0;
+                if (now > 0 && m > 0 && (double)now >= KING_X * m) { K.lots = now;
+                    if (bestOk && best.px != K.px && (double)best.lots >= KING_SWAP * (double)now) { K = best; kingSince[sd] = nextT; } }
+                else { K = bestOk ? best : Zone(); kingSince[sd] = bestOk ? nextT : 0; }
+            } else if (bestOk) { K = best; kingSince[sd] = nextT; }
+            kingX[sd] = (K.lots > 0 && m > 0) ? (double)K.lots / m : 0;
+        }
     }
     static long long key(int sd, long long px) { return (px << 1) | (long long)(sd & 1); }
     Lev& L(int sd, long long px) { return lev[key(sd, px)]; }

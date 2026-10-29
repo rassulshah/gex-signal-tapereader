@@ -97,6 +97,7 @@
 #include "WavePOCSettings.h"
 #include "SettingsHost.h"
 #include "HostSlot.h"
+#include "SignalBoard.h"   // (1.4.0) posts kind W: the open WPOC (lsDealerProfile reads it)
 #include "ColumnBoard.h"   // (1.3.2) the Levels column (left keep-out) and the right-side columns (price area end) - read only
 #include <algorithm>
 #include <chrono>
@@ -120,7 +121,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.3.4";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.4.0";   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -176,6 +177,7 @@ struct WState {
     wpl::Book book; wpl::Sampler samp; std::string bookSym;
     int formIdx = -1; std::vector<long long> formKeys;
     cb::Peers peers; int clipL = 0, clipR = 0;   // (1.3.2) the other plugins' columns on this chart; the drawn x range   // (1.3.2) the forming bar's interim sample stamps (re-keyed when it closes)
+    long long wFactMs = -1, wPosts = 0; double wOpenPx = 0;   // (1.4.0) the W fact
     std::string mkt, sym; int spb = 0; double tick = 0; long long tickKey = 0; int N = wpc::N_DEF; bool zz = false; std::string parms = "none";
     bool keyed = false;
     bool cobLegs = true; std::vector<signed char> cobFlags; std::string cobSrc = "not read yet";   // (1.3.0) per chart bar: 1 bull CoB, 2 bear CoB
@@ -571,6 +573,11 @@ void WavePOC::render(WState& S, bool back, bool front) {
         S.clipL = v.clipL; S.clipR = v.clipR;
     }
     S.last = wpc::layout(S.E, S.provOk ? &S.prov : nullptr, v);
+    {   // (1.4.0) the latest wave's OPEN WPOC as SignalBoard fact W (code 1, decided): lsDealerProfile 2.38.0 draws it as the WPOC badge
+        const long long ms = wpMs(); long long tk = 0;
+        if (S.wFactMs < 0 || ms - S.wFactMs >= 2000 || ms < S.wFactMs) { S.wFactMs = ms; std::vector<sb::Fact> W;
+            if (wpc::latestOpenPoc(S.E, tk) && S.tick > 0) { sb::Fact f; f.bar = ms / 1000; f.lo = f.hi = (double)tk * S.tick; f.side = 0; f.val = 0; f.code = 1; f.state = 1; f.proven = 0; W.push_back(f); S.wOpenPx = f.lo; } else S.wOpenPx = 0;
+            const char* cl = getChartLabel(); sb::postFacts('W', S.sym, getSecondsPerBar(), cl ? std::string(cl) : std::string(), ms, W); ++S.wPosts; } }
     const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom;
     for (const wpc::Prim& p : S.last.p) {
         if (p.back ? !back : !front) continue;
@@ -617,6 +624,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setDescription("LRA Wave POC v1.3.4 - each big wave's (and each CoB leg's) own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as pullback targets.");
-    p->setVersion("1.3.4");   // = WP_VERSION (gex-build reads this literal)
+    p->setVersion("1.4.0");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

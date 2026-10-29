@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.3.4" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.4.0" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();
@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
         const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt"), sto = slurp(flex() + "/WavePOC/ES-180.csv");
         size_t nw = 0; for (size_t p = rec.find("\nWAVE,"); p != std::string::npos; p = rec.find("\nWAVE,", p + 1)) ++nw;
         CHECK(nw == 5 && rec.find("NODE,") != std::string::npos && rec.find("STOP,") != std::string::npos && rec.find("\nROWS,") != std::string::npos, "(1.3.3) record: 5 waves with nodes, stops and (1.3.2) rows");
-        CHECK(st.rfind("VERSION,1.3.4", 0) == 0 && st.find("qualified up 3 down 2") != std::string::npos && st.find("QUALIFIED_BY,AVG 0,ATR 1,BOTH 4") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
+        CHECK(st.rfind("VERSION,1.4.0", 0) == 0 && st.find("qualified up 3 down 2") != std::string::npos && st.find("QUALIFIED_BY,AVG 0,ATR 1,BOTH 4") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
         CHECK(st.find("touch 13,new wave 3,origin close 0") != std::string::npos, "status: stops by reason (" << st.substr(st.find("STOPS,"), 50) << ")");
         wpc::Store chk; std::string why; CHECK(wpc::storeFromText(sto, "ES", 180, 3, 250000000LL, chk, why) && chk.dn.size() == 25 && sto.rfind("WAVEPOC_STORE,2,", 0) == 0, "(1.3.3) store (version 2) saved atomically with the day's 5 down candidates (14-bar lows) (" << why << ", " << chk.dn.size() << ")");
     }

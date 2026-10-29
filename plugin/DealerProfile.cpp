@@ -141,7 +141,7 @@ static std::vector<t10::Out> dpMergeSides(const std::vector<t10::Out>& b, const 
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.37.0";   // (2.37.0, 2026-10-29 Rassul approved 09:33 CT, mockup orderlines-levels-mockup.html) Key Levels badge order left to right: odds (left-justified) ... VALUE, NAME chip(s), the LIQUIDITY RANK box right-most (no rank = no box; same 230 px; odds drop first); rank rule option c: a zone counts only from the level out to 0.25 ATR (3-min) BEYOND it (one-sided, away from price) and each zone goes to ONE level (the nearest) - no rank twice (LevelsColumn.h lrk 1.0.0); liqlevels.csv follows the same rule; every rank change appended to lsFlexLevels\\DealerProfile\\<MKT>-liqlevels-history-<session>.csv (time, level, price, rank, lots)   // was 2.36.1: (2.36.1, 2026-10-28 18:24 CT Rassul "you shouldn't be able to see the background") the Key Levels column ground is SOLID: the chart background colour (getBackgroundColor), the full column (pane left edge to the column edge, pane top to bottom, no cut-out), drawn first in the levels pass - before the narrow-chart return - so nothing DealerProfile or an indicator drawn before it paints there shows through; badges / odds / ticks on top
+static const char* DP_VERSION = "2.38.0";   // (2.38.0, 2026-10-29 Rassul approved 11:18 CT) a WPOC badge in the Key Levels column = the latest wave's OPEN Wave POC from lsWavePOC 1.4.0 (SignalBoard W); the KING nodes from lsLiquidityProfile 0.69.0 (B code 3): a K row at their price, off screen the edge marker "K <price> <lots> (x)"; the Liquidity column: the zone's AGE next to its amount ("223 \xB7 48m", from lsLiquidityProfile 0.69.0's first-candidate time); R? after a touch tag when the zone was rebuilt >= what was hit (untested "?"; live only, not recorded)   // was 2.37.0: (2.37.0, 2026-10-29 Rassul approved 09:33 CT, mockup orderlines-levels-mockup.html) Key Levels badge order left to right: odds (left-justified) ... VALUE, NAME chip(s), the LIQUIDITY RANK box right-most (no rank = no box; same 230 px; odds drop first); rank rule option c: a zone counts only from the level out to 0.25 ATR (3-min) BEYOND it (one-sided, away from price) and each zone goes to ONE level (the nearest) - no rank twice (LevelsColumn.h lrk 1.0.0); liqlevels.csv follows the same rule; every rank change appended to lsFlexLevels\\DealerProfile\\<MKT>-liqlevels-history-<session>.csv (time, level, price, rank, lots)   // was 2.36.1: (2.36.1, 2026-10-28 18:24 CT Rassul "you shouldn't be able to see the background") the Key Levels column ground is SOLID: the chart background colour (getBackgroundColor), the full column (pane left edge to the column edge, pane top to bottom, no cut-out), drawn first in the levels pass - before the narrow-chart return - so nothing DealerProfile or an indicator drawn before it paints there shows through; badges / odds / ticks on top
 // was 2.36.0:   // (2.36.0, 2026-10-28 16:26 CT Rassul "the chart is extremely messy, remove the drawing of levels across the chart") NO level lines across the price area (badges stay in the Key Levels column, a <= 6 px tick at its edge), no faint liquidity order lines, no HELD line / word on the chart (HELD = a tag in the liquidity column lane; record + outcome logic unchanged), the off-screen level markers in the Key Levels column top / bottom
 // was 2.35.0:   // (2.35.0, 2026-10-28 14:04 CT Rassul approved the new liquidity-column candidate rule) when lsLiquidityProfile 0.67.0 posts its ZONE candidates (SignalBoard B code 2 = LiqTouch 1.1.0 pickZones: real orders only - rested 30 s+, re-priced < 2x in 5 min; a price + its +-1 tick neighbours; >= 2.0x the median real level of that side within 3 ATR, median every 60 s; one node per distribution) the column shows the TOP 3 BIDS below price + the TOP 3 OFFERS above (max 6, fewer when fewer pass), each side on its own steady board (Top10Stable, cap 3), the KING = the biggest of all shown (white chip + K, edge marker unchanged); touch tags + HELD on every shown level; the p97 tier is a log field only (LP status LIQ_CANDIDATES). No code-2 facts (old LP / no order feed) = the 2.34.0 path
 // was 2.34.0 (see the line above for 2.35.0)   // (2.34.0, 2026-10-28 12:50 CT Rassul "regarding the levels it should only be the key price levels and the volume levels, 1 vwap level which is the latest. lets not have the gamma levels right now. the percentages should be behind the level names to the left justified. and the level name and value should be right justified. the hod lod should be on the right of the level column not in it") the Key Levels column holds ONLY key levels + volume levels + ONE VWAP badge (the latest session VWAP, computed here from the chart bars with SessionVWAPLogic - RTH during / after RTH, else the overnight one; never the +-1 / +-2 bands), no gamma; inside each row the odds are LEFT-justified at the column's left edge and the name chips + price RIGHT-justified at its right edge (next to the candles); the HOD/LOD table no longer docks in the column (lsHodLod 2.11.0 docks it bottom-left, right of it - ColumnBoard 1.9.1): the column keeps its full height and width; HELD words step clear of that table
@@ -281,6 +281,8 @@ public:
         int badgesShown = 0, badgesDropped = 0, nodeTexts = 0, nodeTextsHidden = 0, nodesTiny = 0;
         double vwapPx = 0; int vwapBadges = 0, keysFiltered = 0, ttHeldClipped = 0;   // (2.34.0)
         long long liqLastMs = -1, lpMedMs = -1; std::string liqLastBody, liqWhy = "not yet"; int liqWrites = 0, liqRows = 0; double lpMedB = 0, lpMedA = 0;   // (2.36.0) <MKT>-liqlevels.csv
+        bool wpocSeen = false; double wpocPx = 0;   // (2.38.0) the Wave POC badge
+        struct King { double px = 0; long long lots = 0; bool bid = false; double x = 0; long long since = 0; }; std::vector<King> kings; int kingsOn = 0, kingsEdge = 0;   // (2.38.0)
         double rankReachPx = 0; lrk::History rankHist; int histWrites = 0, histFails = 0, histLines = 0; std::string histMkt;   // (2.37.0) 0.25 ATR rank reach + the rank-change history file
         COLOR keysBg = 0;   // (2.36.1) the Key Levels column ground colour drawn (= getBackgroundColor)
         int keysW = 0, keysL = 0, keysTop = 0, keysMoved = 0, keysOddsCut = 0, keysRankChips = 0; bool keysDocked = false, keysPosted = false; std::string keysSym, keysChart; long keysSpb = 0;   // (2.33.0) the Key Levels column
@@ -295,7 +297,7 @@ public:
         bool mstPosted = false; std::string mstSym, mstChart; long mstSpb = 0;                   // (2.17.0) the Market State entry of this chart
         long long mstBar = -1, mstMs = -1; std::string mstSig; std::map<std::string, std::string> mstKv; std::shared_ptr<sa::Hook> self;
         // (2.32.0) the touch tags latched for SHOWN levels (key "bar|tick|side"), persisted per market / seconds per bar; this draw's counts
-        struct TTag { long long bar = 0; double px = 0; int side = 0, tag = 0, vote = 0, outcome = 0; long long outSec = 0; };
+        struct TTag { long long bar = 0; double px = 0; int side = 0, tag = 0, vote = 0, outcome = 0; long long outSec = 0; bool rebuilt = false; };   // (2.38.0) rebuilt = R? (live only)
         std::map<std::string, TTag> ttags; std::string ttFile; bool ttDirty = false; long long ttSaveMs = -100000; std::string ttWhy = "no S producer";
         int ttLatched = 0, ttTagsDrawn = 0, ttTagOnly = 0, ttHeld = 0, ttHeldText = 0, ttHeldNoRoom = 0, qOutReach = 0; double qReachPx = 0;
     };
@@ -1186,6 +1188,8 @@ void DealerProfile::writeStatus(const char* what)
       << ",shown top " << (cs.zMode ? 2 * DP_SIDEN : DP_TOPN) << " (both sides),steady Top10Stable " << t10::VERSION << " (in 30 s + 1.20x, out 10 s, swap 1.25x),book levels on screen " << cs.qBoard << ",ranked over the whole posted book (not the visible pane) " << cs.qBoard << " levels,off screen in the top 10 " << cs.qOff << ",king off screen (edge marker) " << cs.qKingOff << ",moving / quoting dimmed ~ (LevelFade " << lfd::VERSION << ", never dropped) " << cs.qQuoting << ",king ~ " << cs.qMovedMarks << ",tracked " << cs.top10.tracked() << ",place " << (cb::LEVELS_LEFT ? "left" : cb::LEVELS_OUTER ? "right, after Delta (rank | bar | lots)" : "right") << "\n"
       << "KEYS_COLUMN,left edge (ColumnBoard " << cb::VERSION << "),x " << cs.keysL << ",width " << cs.keysW << ",ground solid 0x" << std::hex << (unsigned)cs.keysBg << std::dec << " (chart background, full column)" << ",HOD/LOD table " << (cs.keysDocked ? "docked bottom-left, right of the column" : "not docked") << ",VWAP " << cs.vwapPx << " (badges " << cs.vwapBadges << "),filtered (gamma / VWAP bands) " << cs.keysFiltered << ",layout odds left | name + price right" << ",badges from y " << cs.keysTop << ",moved (tick) " << cs.keysMoved << ",odds cut " << cs.keysOddsCut << ",liquidity rank chips " << cs.keysRankChips << ",in the price area 0\n"
       << "LIQLEVELS," << dpLiqPath(mkt) << ",rows " << cs.liqRows << ",writes " << cs.liqWrites << "," << cs.liqWhy << ",LP median bid " << cs.lpMedB << " / offer " << cs.lpMedA << "\n"
+      << "WPOC_BADGE,lsWavePOC W " << (cs.wpocSeen ? "read" : "none (lsWavePOC 1.4.0 not on this chart)") << ",open WPOC " << cs.wpocPx << "\n"
+      << "KING_NODES,from lsLiquidityProfile B code 3: " << cs.kings.size() << ",rows on screen " << cs.kingsOn << ",edge markers " << cs.kingsEdge << "\n"
       << "RANK_RULE,LevelsColumn lrk " << lrk::VERSION << ",reach " << lrk::REACH_ATR << " ATR (3-min) beyond = " << cs.rankReachPx << ",one level per zone,history session " << cs.rankHist.session << " lines " << cs.histLines << " writes " << cs.histWrites << " fails " << cs.histFails << "\n"
       << "LEVELS_COLUMN," << (DP_LINES ? "lines (LevelsColumn " : DP_LVC ? "combined (LevelsColumn " : "off (") << lvc::VERSION << ")" << ",rows " << cs.lvcRows << ",merged rows " << cs.lvcMerged << ",with liquidity " << cs.lvcLiq << ",GEX rows " << cs.lvcGex << ",chips cut " << cs.lvcChipsCut << ",orders " << cs.lmtO.size() << ",order file " << (cs.lmtWhy.empty() ? std::string("ok") : cs.lmtWhy) << ",dealer bars " << (DP_BARS ? "on" : "off") << ",off-screen " << (offUp.have ? offUp.name : std::string("-")) << " / " << (offDn.have ? offDn.name : std::string("-")) << "\n"
       << "LEVEL_PCT," << (cfg.levelPct ? "on" : "off (setting)") << ",file " << (cs.lpWhy.empty() ? std::string("ok") : cs.lpWhy) << ",rows " << cs.lpT.rows.size()
@@ -1822,7 +1826,12 @@ void DealerProfile::drawKeyLevels(const Settings& S)
     // ("42%/60%" = within 90 min / by the RTH close), otherwise the native 60-min odds ("1h 45%?"). The VWAP is never drawn here.
     (void)S;
     if (mkt.empty()) return;
-    const std::vector<klv::Merged>& L = nativeLevels(mkt);
+    std::vector<klv::Merged> Lw = nativeLevels(mkt);
+    {   // (2.38.0, Rassul approved 11:18 CT) the WPOC badge: the latest wave's OPEN Wave POC from lsWavePOC 1.4.0 (SignalBoard W, decided), as a level
+        std::vector<sb::Fact> W; cs.wpocSeen = sb::readFacts('W', cs.sym, cs.spb, cs.chart, dpNowMs(), W, true); cs.wpocPx = 0;
+        for (const sb::Fact& f : W) if (f.code == 1 && dpFinite(f.lo) && f.lo > 0) { cs.wpocPx = f.lo; Lw.push_back(klv::Merged{ "WPOC", f.lo, false }); break; }
+    }
+    const std::vector<klv::Merged>& L = Lw;
     if (L.empty()) return;
     RCT pane; pane.getPaneRect(false);
     long nb = getBarCount(); if (nb < 1) return;
@@ -2319,7 +2328,7 @@ void DealerProfile::flushLines(const Settings& S)
     // (2.30.0) THE LIQUIDITY TOP 10 from lsLiquidityProfile's resting big orders (SignalBoard 'B', live): the 10 biggest on screen, ranked by lots
     // (this indicator owns the rank - ChainSpec.h); each level's badge rank = the best-ranked of them from the level out to 1 ATR BEYOND it,
     // never inside (his rule, 2026-10-27). No 'B' producer = the 2.29.0 ranking from the level-tagged order file (said so in the status).
-    struct TopQ { double px; long long lots; bool bid; int rank; int y; int moves = 0; bool dim = false; bool on = true; };
+    struct TopQ { double px; long long lots; bool bid; int rank; int y; int moves = 0; bool dim = false; bool on = true; long long since = 0; };   // (2.38.0) since = first a candidate (CT s)
     std::vector<TopQ> topq;
     std::vector<int> rowQ(rows.size(), -1);   // (2.36.0) each row's matched liquidity level (index into topq) for the badge chip + liqlevels.csv
     {   std::vector<sb::Fact> B; const long long nowMs = (long long)time(nullptr) * 1000LL;
@@ -2336,10 +2345,12 @@ void DealerProfile::flushLines(const Settings& S)
             // orders only) - taken as posted: no second reach / moves filter here, so the column and the touch tags follow exactly the same levels
             cs.zMode = false; for (const sb::Fact& f : B) if (f.code == 2) { cs.zMode = true; break; }
             cs.zCands = 0;
+            cs.kings.clear();
+            for (const sb::Fact& f : B) if (f.code == 3 && (f.side == 1 || f.side == -1) && f.val > 0) { ColsState::King k; k.px = f.lo; k.lots = (long long)f.val; k.bid = f.side > 0; k.x = f.proven / 100.0; k.since = f.bar; cs.kings.push_back(k); }   // (2.38.0) the KING nodes
             for (const sb::Fact& f : B) { if (cs.zMode) { if (f.code != 2) continue; ++cs.zCands; } else if (cs.qReachPx > 0 && std::fabs(f.lo - lastPx) > cs.qReachPx + tick * 1e-6) { ++cs.qOutReach; continue; }
                 PNT p; p.set((int)nb - 1, (float)f.lo);
                 bool merged = false; for (TopQ& q : all) if (std::fabs(q.px - f.lo) < tick * 0.5 && q.bid == (f.side > 0)) { q.lots += (long long)f.val; q.moves = std::max(q.moves, (int)f.state); merged = true; }
-                if (!merged) { TopQ nq{ f.lo, (long long)f.val, f.side > 0, 0, p.v }; nq.moves = std::max(0, (int)f.state); all.push_back(nq); } }
+                if (!merged) { TopQ nq{ f.lo, (long long)f.val, f.side > 0, 0, p.v }; nq.moves = std::max(0, (int)f.state); nq.since = f.code == 2 ? f.bar : 0; all.push_back(nq); } }
             // (2.31.0) the STEADY top 10 (Top10Stable.h): what the book shows now is fed in, the board decides who is in and in what order
             // (2.31.0, Rassul 06:54 CT "the king node moved") f.state = how often the order re-priced in 5 min; (2.31.1) such a level is dimmed "~", never dropped
             // (2.31.1) nothing is dropped for moving: every level goes to the steady board; a moving / quoting level (LevelFade.h, by level) is dimmed "~"
@@ -2359,7 +2370,9 @@ void DealerProfile::flushLines(const Settings& S)
                 st = dpMergeSides(ob, oa); cs.zShownB = (int)ob.size(); cs.zShownA = (int)oa.size();
             }
             cs.qBoard = (int)all.size(); cs.qOff = 0; cs.qQuoting = 0; cs.qKingOff = 0; cs.qMovedMarks = 0;
-            for (const t10::Out& o : st) { PNT p; p.set((int)nb - 1, (float)o.px); TopQ q{ o.px, o.lots, o.bid, o.rank, p.v }; if (q.rank > (cs.zMode ? 2 * DP_SIDEN : DP_TOPN)) continue;   // (2.31.2) top 5 in total
+            for (const t10::Out& o : st) { PNT p; p.set((int)nb - 1, (float)o.px); TopQ q{ o.px, o.lots, o.bid, o.rank, p.v };
+                for (const TopQ& a0 : all) if (a0.bid == o.bid && std::fabs(a0.px - o.px) < tick * 0.5) q.since = a0.since;   /* (2.38.0) its age */
+                if (q.rank > (cs.zMode ? 2 * DP_SIDEN : DP_TOPN)) continue;   // (2.31.2) top 5 in total
                 q.dim = false; (void)dimAt;   // (2.31.2) no "~" - quoting orders are left out instead if (q.dim) ++cs.qQuoting;
                 q.on = !(p.v - bh / 2 <= pane.top + bh + 4 || p.v + bh / 2 >= pane.bottom - 4); if (!q.on) ++cs.qOff;
                 topq.push_back(q); }
@@ -2523,17 +2536,21 @@ void DealerProfile::flushLines(const Settings& S)
         long long mx = 1; for (const TopQ& q : topq) mx = std::max(mx, q.lots);
         // (2.31.1) only on-screen levels are drawn in the column; the ranks / king were decided over the whole book
         std::vector<cb::Item> it2; std::vector<size_t> drawn; for (size_t k = 0; k < topq.size(); ++k) if (topq[k].on) { cb::Item it; it.want = topq[k].y; it.h = bh + 1; it2.push_back(it); drawn.push_back(k); }
+        // (2.38.0, Rassul 11:18 CT) the KING nodes (lsLiquidityProfile 0.69.0, B code 3): on screen = their own "K" row at their price; off screen = the edge marker
+        std::vector<int> kingY(cs.kings.size(), 0); cs.kingsOn = cs.kingsEdge = 0;
+        for (size_t k = 0; k < cs.kings.size(); ++k) { PNT p; p.set((int)nb - 1, (float)cs.kings[k].px); kingY[k] = p.v;
+            if (p.v - bh / 2 > pane.top + 2 * bh + 10 && p.v + bh / 2 < pane.bottom - bh - 6) { cb::Item it; it.want = p.v; it.h = bh + 1; it2.push_back(it); drawn.push_back((size_t)-2 - k); ++cs.kingsOn; } }
         // (2.32.0) the touch tags still open (decided at +15 s, no outcome yet, at most 10 min 45 s old): on their level's row, or a tag-only row
-        struct TagRow { double px; int side, tag; int y; long long row = -1; };
+        struct TagRow { double px; int side, tag; int y; long long row = -1; bool rebuilt = false; };
         std::vector<TagRow> trs; cs.ttTagsDrawn = cs.ttTagOnly = 0;
         {   const long long nowCt = ctNowSec();
             for (std::map<std::string, ColsState::TTag>::const_iterator it = cs.ttags.begin(); it != cs.ttags.end(); ++it) { const ColsState::TTag& T = it->second;
                 const bool held = false;   // (2.37.0, Rassul 09:40 CT) HELD / BREAK are no longer drawn in the column (the order lines carry them on the chart); records unchanged
                 if (!held && (!ltc::drawnTag(T.tag) || T.outcome != ltc::O_OPEN || (nowCt > 0 && nowCt - T.bar > 645))) continue;
-                PNT p; p.set((int)nb - 1, (float)T.px); TagRow r{ T.px, T.side, held ? -1 : T.tag, p.v };
+                PNT p; p.set((int)nb - 1, (float)T.px); TagRow r{ T.px, T.side, held ? -1 : T.tag, p.v }; r.rebuilt = T.rebuilt;
                 bool dup = false; for (TagRow& o : trs) if (std::fabs(o.px - T.px) < tick * 0.5 && o.side == T.side) { o.tag = r.tag; dup = true; }   // the newest touch at a price wins (map order = time)
                 if (!dup) trs.push_back(r); }
-            for (TagRow& r : trs) { for (size_t d = 0; d < drawn.size(); ++d) { if (drawn[d] == (size_t)-1) continue; const TopQ& q = topq[drawn[d]]; if (std::fabs(q.px - r.px) < tick * 0.5 && (q.bid ? 1 : -1) == r.side) r.row = (long long)d; }
+            for (TagRow& r : trs) { for (size_t d = 0; d < drawn.size(); ++d) { if (drawn[d] >= topq.size()) continue; const TopQ& q = topq[drawn[d]];   /* (2.38.0) sentinels (king rows) skipped */ if (std::fabs(q.px - r.px) < tick * 0.5 && (q.bid ? 1 : -1) == r.side) r.row = (long long)d; }
                 /* (2.37.0, Rassul 09:40 CT "no floating tags") a tag shows ONLY on the row of a zone the column shows now - no tag-only rows */ }
         }
         int fy = (pane.top + pane.bottom) / 2; if (lastPx > 0) { PNT p; p.set((int)nb - 1, (float)lastPx); fy = p.v; }
@@ -2541,13 +2558,14 @@ void DealerProfile::flushLines(const Settings& S)
         cs.badgesDropped += cb::stack(it2, pane.top + 2 * bh + 10, pane.bottom - 4 - (offBelow ? bh + 2 : 0), fy);
         // (2.31.0) left column: rank | bar -> | lots (bar grows toward price on the right). Right (outer) column, Rassul 06:38 "rank and amount
         // should switch places": rank nearest price (the column's left edge) | <- bar anchored at the outer side, pointing toward price | lots
-        const int TGW = textW("STAYS+", sf, true) + 6;   // (2.32.0) the tag lane right of the rank chip (always reserved: bars never jump)
+        const int TGW = textW("STAYS+ R?", sf, true) + 6;   // (2.38.0) room for " R?"   // (2.32.0) the tag lane right of the rank chip (always reserved: bars never jump)
         // (2.37.0) row = rank | bar | lots | tag ("1 [bar] 92 STAYS"): the tag lane is at the row's RIGHT end, after the amount
         const int RKX = col.l + 4, BX = RKX + bh + 1, BW = col.r - BX - 34 - TGW, BAR_R = col.r - 34 - TGW, TGX = col.r - TGW + 2;
         auto tagColour = [&](int tag, int side) -> COLOR { const int c = ltc::tagColour(tag, side > 0 ? ltc::BID : ltc::ASK); return c > 0 ? C_BUY : c < 0 ? C_SELL : (COLOR)0x0094A3B8; };
         auto drawTag = [&](size_t d, int yc) { for (const TagRow& r : trs) if (r.row == (long long)d) {
             if (r.tag < 0) continue;   // (2.37.0) never HELD / BREAK in the column
-            textLJ((short)TGX, (short)yc, ltc::tagText(r.tag), tagColour(r.tag, r.side), sf, true); ++cs.ttTagsDrawn; } };
+            const std::string tt = std::string(ltc::tagText(r.tag)) + (r.rebuilt ? " R?" : "");   // (2.38.0) R? = rebuilt >= its hit size (untested)
+            textLJ((short)TGX, (short)yc, tt.c_str(), tagColour(r.tag, r.side), sf, true); ++cs.ttTagsDrawn; } };
         std::vector<sb::Fact> qf;
         for (size_t k = 0; k < topq.size(); ++k) { const TopQ& q = topq[k]; sb::Fact f; f.bar = (long long)time(nullptr); f.lo = f.hi = q.px; f.side = q.bid ? 1 : -1; f.val = (double)q.lots; f.code = q.rank; f.state = q.dim ? 1 : 0; qf.push_back(f);
         }
@@ -2556,6 +2574,12 @@ void DealerProfile::flushLines(const Settings& S)
                 for (const TopQ& q : topq) { if (q.on || (q.y <= pane.top + bh + 4) != up) continue; any = true;
                     if (q.rank == 1) { ++cs.qKingOff; ac = q.bid ? C_BUY : C_SELL; txt = std::string(q.dim ? "~K " : "K ") + dpaudit::priceText(mkt, q.px) + (txt.empty() ? "" : " ") + txt; }
                     else txt += (txt.empty() ? "" : " ") + std::string("#") + std::to_string(q.rank); }
+                for (size_t k = 0; k < cs.kings.size(); ++k) {   // (2.38.0) an off-screen KING node: "K <price> <lots> (3.4x)" on its edge
+                    const int y = kingY[k]; if (y - bh / 2 > pane.top + 2 * bh + 10 && y + bh / 2 < pane.bottom - bh - 6) continue;
+                    if ((y <= pane.top + 2 * bh + 10) != up) continue;
+                    char kb[80]; std::snprintf(kb, sizeof(kb), "K %s %lld (%.1fx)", dpaudit::priceText(mkt, cs.kings[k].px).c_str(), cs.kings[k].lots, cs.kings[k].x);
+                    std::string kt = kb; if (!txt.empty() && textW((kt + "  " + txt).c_str(), sf, false) + 14 < col.r - col.l) kt += "  " + txt;
+                    txt = kt; any = true; ac = cs.kings[k].bid ? C_BUY : C_SELL; ++cs.kingsEdge; }
                 if (!any) continue;
                 const int yc = up ? pane.top + 2 * bh + 10 - bh / 2 : pane.bottom - 4 - bh / 2, ax = col.l + 4 + (bh - 2) / 2;
                 for (int d = 0; d < 4; ++d) line((short)(ax - d), (short)(up ? yc - 3 + d : yc + 3 - d), (short)(ax + d), (short)(up ? yc - 3 + d : yc + 3 - d), ac, 1);
@@ -2563,6 +2587,17 @@ void DealerProfile::flushLines(const Settings& S)
         }
         for (size_t d = 0; d < drawn.size(); ++d) {
             if (!it2[d].shown) continue;
+            if (drawn[d] >= (size_t)-2 - cs.kings.size() && drawn[d] <= (size_t)-2) {   // (2.38.0) a KING node row: [K] bar lots (x)
+                const ColsState::King& K = cs.kings[(size_t)-2 - drawn[d]]; const int yc = it2[d].y, t = yc - bh / 2, b = t + bh;
+                if (std::abs(yc - kingY[(size_t)-2 - drawn[d]]) > 1) line((short)col.l, (short)kingY[(size_t)-2 - drawn[d]], (short)(col.l + 4), (short)yc, 0x00475569, 1);
+                const COLOR base = K.bid ? C_BUY : C_SELL;
+                RCT rb; rb.set((short)RKX, (short)(t + 1), (short)(RKX + bh - 2), (short)(b - 1)); rb.draw(1, base, (COLOR)0x00F8FAFC, DRAW_OPAQUE, PAT_SOLID);
+                { const int kw = textW("K", sf, true); textLJ((short)(RKX + (bh - 2) / 2 - kw / 2), (short)yc, "K", C_DARK, sf, true); }
+                long long mxK = 1; for (const TopQ& q : topq) mxK = std::max(mxK, q.lots); mxK = std::max(mxK, K.lots);
+                const int fl = std::max(6, (int)std::lround((double)BW * (double)K.lots / (double)mxK));
+                box((short)(BAR_R - fl), (short)(t + 3), (short)BAR_R, (short)(b - 3), fade(base, 0.35f));
+                char lb[64]; std::snprintf(lb, sizeof(lb), "%lld (%.1fx)", K.lots, K.x); const int lw = textW(lb, sf, false);
+                textLJ((short)(col.r - 4 - TGW - lw), (short)yc, lb, (COLOR)0x00E5E7EB, sf, false); continue; }
             if (drawn[d] == (size_t)-1) {   // (2.32.0) a tag-only row: the level left the top 3 (eaten / pulled) - its tag at its price, a leader when stacked
                 const int yc = it2[d].y; if (std::abs(yc - it2[d].want) > 1) line((short)col.l, (short)it2[d].want, (short)(col.l + 4), (short)yc, 0x00475569, 1);
                 drawTag(d, yc); continue; }
@@ -2575,7 +2610,10 @@ void DealerProfile::flushLines(const Settings& S)
             RCT rb; rb.set((short)RKX, (short)(t + 1), (short)(RKX + bh - 2), (short)(b - 1)); rb.draw(1, base, q.rank == 1 ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);
             const int rkw = textW(rk.c_str(), sf, true); textLJ((short)(RKX + (bh - 2) / 2 - rkw / 2), (short)yc, rk.c_str(), q.rank == 1 ? C_DARK : (COLOR)0x00F8FAFC, sf, true);
             const int fl = std::max(6, (int)std::lround((double)BW * (double)q.lots / (double)mx));
-            const std::string lt = (q.dim ? "~" : "") + std::to_string(q.lots);   // (2.31.1) "~" = this order is moving / quoting
+            std::string lt = (q.dim ? "~" : "") + std::to_string(q.lots);   // (2.31.1) "~" = this order is moving / quoting
+            if (q.since > 0) { const long long nowS = ctNowSec(), age = nowS > q.since ? (nowS - q.since) / 60 : -1;
+              if (age >= 1 && age < 7 * 24 * 60) {   // (2.38.0, Rassul 11:18 CT) "223 \xB7 48m" = resting as a zone 48 min
+                char ab[24]; if (age >= 60) std::snprintf(ab, sizeof(ab), " \xB7 %lldh%02lld", age / 60, age % 60); else std::snprintf(ab, sizeof(ab), " \xB7 %lldm", age); lt += ab; } }
             if (q.dim && q.rank == 1) ++cs.qMovedMarks;
             const COLOR ltc = q.dim ? (COLOR)0x0094A3B8 : (COLOR)0x00E5E7EB;
             if (outerCol) {
@@ -2679,6 +2717,8 @@ void DealerProfile::ttUpdate(const std::vector<std::pair<double, int> >& shown, 
             ColsState::TTag T; T.bar = f.bar; T.px = f.lo; T.side = f.side; cs.ttags[k] = T; cs.ttDirty = true; ++cs.ttLatched;
         } else if (f.code >= 1 && f.code <= 7) {
             if (it != cs.ttags.end() && it->second.tag == ltc::T_PENDING) { it->second.tag = f.code; it->second.vote = (int)std::lround(f.val); cs.ttDirty = true; }
+        } else if (f.code == 20) {   // (2.38.0) R?: the zone was rebuilt >= what was hit (lsLiquidityProfile 0.69.0); display only
+            if (it != cs.ttags.end() && it->second.tag != ltc::T_PENDING) it->second.rebuilt = true;
         } else if (f.code >= 11 && f.code <= 13) {
             if (it != cs.ttags.end() && it->second.outcome == ltc::O_OPEN && it->second.tag != ltc::T_PENDING) { it->second.outcome = f.code - 10; it->second.outSec = f.bar + (long long)std::llround(f.val); cs.ttDirty = true; }
         }
@@ -2987,6 +3027,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | ((DP_HOVERS || DP_PCT_HOVERS) ? TRACK_MOUSE : 0));   // (2.17.3) no TRACK_MOUSE while the hovers are off   // (2.9.0) hovers: mouse events even when not selected
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.37.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.38.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }

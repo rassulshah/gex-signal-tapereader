@@ -107,7 +107,7 @@ int main() {
     {   const std::string st = readAll(flex + "\\LiquidityProfile.status-ES-180.txt");
         { size_t a = st.find("ORDER_LINES"); std::printf("  status: %s\n", a == std::string::npos ? "(no ORDER_LINES)" : st.substr(a, 400).c_str()); }
         CHECK(S->ol.tally.touched == 1 && S->ol.tally.through == 1 && readAll("LiquidityProfile.cpp").find("\",tested lines (OrderLines \" << oln::VERSION") != std::string::npos, "status: tested lines field (touched 1, closed-through 1)"); }
-    CHECK(std::string(LQ_VERSION) == "0.68.0" && std::string(lpset::PLUGIN_VERSION) == "0.68.0" && readAll("LiquidityProfile.cpp").find("p->setVersion(\"0.68.0\")") != std::string::npos, "versions 0.68.0 agree");
+    CHECK(std::string(LQ_VERSION) == "0.69.0" && std::string(lpset::PLUGIN_VERSION) == "0.69.0" && readAll("LiquidityProfile.cpp").find("p->setVersion(\"0.69.0\")") != std::string::npos, "versions 0.69.0 agree");
     p->destroy(); mock::current = nullptr;
     std::printf("lsLiquidityProfile %s TESTED LINES host: %d passed, %d failed\n", LQ_VERSION, passes, fails);
     return fails ? 1 : 0;

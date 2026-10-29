@@ -158,7 +158,7 @@ static const char* LT_HEADER = "kind,touch_ms,sec_end,side,px_tick,price,tag,vot
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.68.0"          // (0.68.0, 2026-10-29 Rassul approved 09:33 / 10:23 CT, mockups orderlines-levels-mockup.html + AEYuhQfdcywsR8VxmhpUVq) THE TESTED ORDER LINES (OrderLinesLogic.h 1.1.0): an untouched big order draws nothing (the Liquidity column shows it); when price trades into it a line appears at its price from its PLACEMENT (left edge of the price area right of the Key Levels column when placed earlier), thin dashed while testing; decided (fill >= half, then the first favourable close within 4 bars = HELD; a bar wholly beyond / no favourable close in 4 bars = BREAK - was THRU) = solid, with [rank box] + HELD / BREAK at the decision bar; rank = its Liquidity-column rank at the TOUCH (lsDealerProfile Q board), frozen and recorded (T line), no box outside the top 6; BREAK shown 5 bars; HELD solid, never dimmed, to the right edge until a bar closes through it (X line), min 2 bars after the decision; pulled before a decision = gone; at most 3 tested lines; no fill dots / start labels any more (LRA-OrderFills published empty)   // was 0.67.0: (0.67.0, 2026-10-28 14:04 CT Rassul approved) the liquidity column candidates = zones >= 2.0x the median real level (LiqTouch 1.1.0 pickZones), posted as SignalBoard B code 2; the touch engine follows the same zones (the p97 tier = log only)
+#define LQ_VERSION "0.69.0"          // (0.69.0, 2026-10-29 Rassul approved 11:18 CT) the zone candidates (SignalBoard B code 2) carry when each zone FIRST became a candidate (f.bar, CT s) for lsDealerProfile's age ("223 \xB7 48m"); a decided touch whose zone was rebuilt >= what was hit in its 15 s posts S code 20 (R?, untested); nothing drawn here changes   // was 0.68.0: (0.68.0, 2026-10-29 Rassul approved 09:33 / 10:23 CT, mockups orderlines-levels-mockup.html + AEYuhQfdcywsR8VxmhpUVq) THE TESTED ORDER LINES (OrderLinesLogic.h 1.1.0): an untouched big order draws nothing (the Liquidity column shows it); when price trades into it a line appears at its price from its PLACEMENT (left edge of the price area right of the Key Levels column when placed earlier), thin dashed while testing; decided (fill >= half, then the first favourable close within 4 bars = HELD; a bar wholly beyond / no favourable close in 4 bars = BREAK - was THRU) = solid, with [rank box] + HELD / BREAK at the decision bar; rank = its Liquidity-column rank at the TOUCH (lsDealerProfile Q board), frozen and recorded (T line), no box outside the top 6; BREAK shown 5 bars; HELD solid, never dimmed, to the right edge until a bar closes through it (X line), min 2 bars after the decision; pulled before a decision = gone; at most 3 tested lines; no fill dots / start labels any more (LRA-OrderFills published empty)   // was 0.67.0: (0.67.0, 2026-10-28 14:04 CT Rassul approved) the liquidity column candidates = zones >= 2.0x the median real level (LiqTouch 1.1.0 pickZones), posted as SignalBoard B code 2; the touch engine follows the same zones (the p97 tier = log only)
 #define LQ_VERSION_0661 "0.66.1"          // (0.66.1, 2026-10-28 12:16 CT Rassul "a column for levels ... move the hod lod box aligned ... on the left") the top read banner and the order lines start right of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0 leftKeep) - the HOD/LOD table docks at that column's top
 #define LQ_VERSION_0660 "0.66.0"          // (0.66.0, 2026-10-28, Rassul approved the liquidity-column build 11:05 CT + 11:08 CT "i like the held signal ... show it when it held") THE TOUCH TAG (LiqTouch.h 1.0.0, the 10-28 liquidity study ported exactly): every big resting level (the market tier, p97 of book levels: ES 72 / NQ 12 / CL 16 / GC 10 / HG 10 / NG 30 / 6E 128 lots, nightly LRA-LiqTouch-<MKT>.csv) is followed natively from the order-by-order feed; 15 s after its first trade it is STAYS+ / STAYS / STAYS weak / GONE / GONE+ (or MID / EARLY, logged), with the Tape Reader votes; then HELD / BROKE / EXPIRED; posted as SignalBoard facts kind S for lsDealerProfile (tag in the Liquidity column, HELD on the chart - nothing new drawn here); every touch recorded to <stem>-liqtouch-<session>.csv (T / D 30-s / O lines, the log-only reads: king, dominance, MenthorQ, tap, seconds at the level, refill, churn, attacker mix) and read back after a restart (no repaint); status LIQ_TOUCH   // was (0.65.2)  (0.65.2, 2026-10-28 09:31 CT Rassul approved the split LMT F) BIDS FILLED in the LEFT half (green), OFFERS FILLED in the RIGHT half (red), each on its exact price row, centred in its half; collisions resolved per side only (a bid and an offer at the same price both show)
 #define LQ_VERSION_0651 "0.65.1"          // (0.65.1, 2026-10-28 09:05 CT Rassul "it would be horrible if ... the limit F is showing it at the wrong location") LMT F / live iceberg labels are drawn AT THEIR PRICE ROW or not at all (LabelPlace.h 1.0.0, biggest print wins a collision); 0.65.0 pushed colliding labels down a row at a time, so ES "2x 1571" (bids filled at 7773.00) showed near 7771
@@ -518,6 +518,7 @@ struct LQState {
     struct OlHit { int line = -1; int b0 = 0, b1 = 0; long long lo = 0, hi = 0; };
     std::set<long long> olFillKeys, olFillPub; long long olFillPubMs = -1; int olFillPubFails = 0;   // (0.55.1) fill-dot candles (bar datetime keys) for lsDefenseLines
     std::vector<int> olShownIds;   // (0.68.0) the tested lines drawn this pass (ids)
+    std::map<long long, std::pair<long long, long long> > zoneSince; std::string kingRange = "not yet";   // (0.69.0) zone key -> (first time a candidate, last time a candidate), CT ms
     std::vector<sb::Fact> olQ; long long olQMs = -1; int olQReads = 0; std::string olGBody; long long olGMs = -1; int olGPosts = 0;   // (0.68.0) + the HELD facts (G) for lsExhaustion's T   // (0.68.0) lsDealerProfile's Liquidity column (SignalBoard Q: price, side, rank) for the frozen touch rank
     std::vector<OlHit> olHits; int olHov = -1; int olDrawnNow = 0, olWordsNow = 0, olQNow = 0, olTagsNow = 0, olCutNow = 0; std::string lmtBody; long long lmtAt = -1; int lmtRows = 0, lmtWrites = 0, lmtFails = 0;   // (0.60.0) the level-tagged live orders file   // (0.59.0) + level tags drawn
     std::vector<LzHit> lzHits; int lzHov = -1, lzHovBar = -1; double lzHovPrice = 0; void* lzHovWnd = nullptr; std::string lzHovState = "none";
@@ -1321,6 +1322,14 @@ void LiquidityProfile::loadLevels(LQState& S, long count) {
         if (!(v > 0)) { v = adr.adrFor(cur, n, 5); shortAdr = v > 0; }
         S.e.zrAdr = v > 0 ? v : -1; S.e.zrSpb = per; S.zrAdrDays = n;
         S.zrNote = v > 0 ? std::to_string(n) + " sessions" + (shortAdr ? " (short: the study uses 10+)" : "") : "under 5 complete sessions on the chart: no zone rule (no labels)";
+#ifndef LQ_FLOW
+        // (0.69.0) the KING nodes' reachable range today: between today's high - ADR and today's low + ADR (no ADR = no kings)
+        double sh = 0, sl = 0; bool any = false;
+        for (size_t i = 0; i < B.size(); ++i) if (zrule::sessionKey((long long)B[i].days * 86400 + B[i].endSec) == cur) { if (!any) { sh = B[i].h; sl = B[i].l; any = true; } else { sh = std::max(sh, (double)B[i].h); sl = std::min(sl, (double)B[i].l); } }
+        lqp::Tick a = 0, b = 0;
+        if (v > 0 && any && lqp::tryToTick(sh - v, S.tick, a) && lqp::tryToTick(sl + v, S.tick, b) && a > 0 && b >= a) { S.lt.kLo = (long long)a; S.lt.kHi = (long long)b; S.kingRange = "today's high - ADR .. low + ADR"; }
+        else { S.lt.kLo = S.lt.kHi = 1; S.kingRange = v > 0 ? "today's range is over 2 ADR: no kings" : "no ADR: no kings"; }
+#endif
     }
     const std::vector<klv::Level> L = klv::compute(B, per, S.rthOpen, S.rthClose, S.tick);
     S.levels.clear();
@@ -1587,6 +1596,7 @@ static std::string ltStatus(LQState& S) {
 #else
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "\nLIQ_CANDIDATES,rule " << (S.lt.P.zoneGate ? "zone >= " : "OFF (tier) ") << S.lt.P.zoneX << "x the median real level (+-1 tick zones, rested " << S.lt.P.realMs / 1000 << " s+, re-priced < " << S.lt.P.maxMoves << "x in 5 min; median every " << S.lt.P.medEveryMs / 1000 << " s; " << S.lt.P.reachAtr << " ATR; own distribution >= " << S.lt.P.sepTicks << " ticks + valley <= " << S.lt.P.sepX << "x),median bid " << S.lt.median(ltc::BID) << " / offer " << S.lt.median(ltc::ASK) << " lots,real orders near " << S.lt.realNearCount() << ",candidates posted (B code 2) " << S.bZones << ",p97 tier (log only) RTH " << S.lt.P.tier[1] << " / ON " << S.lt.P.tier[0];
+    o << "\nKING_NODES,range " << S.kingRange << " [" << S.lt.kLo << " .. " << S.lt.kHi << " ticks],bid " << S.lt.king[0].lots << " lots at " << S.lt.king[0].px << " (" << S.lt.kingX[0] << "x),offer " << S.lt.king[1].lots << " lots at " << S.lt.king[1].px << " (" << S.lt.kingX[1] << "x),rule >= 3.0x median, rested 10 min, beyond 3 ATR, swap at 1.25x";
     o << "\nLIQ_TOUCH,LiqTouch " << ltc::VERSION << ",params " << S.ltWhy << ",tier RTH " << S.lt.P.tier[1] << " / ON " << S.lt.P.tier[0] << " lots,far-king wait RTH " << S.lt.P.farWait[1] << " s / ON " << S.lt.P.farWait[0]
       << " s,STAYS+ <= " << S.lt.P.dwellPlus << " s,weak >= " << S.lt.P.dwellWeak << " s,churn " << (S.lt.P.churnCut > 0 ? std::to_string((int)S.lt.P.churnCut) + "x" : std::string("off"))
       << ",session " << S.ltSession << ",events " << S.lt.nEvents << ",big levels followed " << S.lt.followed() << " (episodes " << S.lt.nEpisodes << "),touches " << S.lt.nTouches << ",pending " << S.lt.pending().size()
@@ -2031,6 +2041,7 @@ static void ltFacts(LQState& S, long long nowCt) {
         if (!recent) continue;
         sb::Fact f; f.bar = t.tMs / 1000; f.lo = f.hi = (double)t.px * tick; f.side = t.side == ltc::BID ? 1 : -1; f.val = t.vote; f.code = t.tag; f.state = 1; f.proven = ltc::drawnTag(t.tag) ? 1 : 0;
         S.factsS.push_back(f);
+        if (ltc::drawnTag(t.tag) && t.e15 > 0 && t.refill + 1e-9 >= 1.0) { sb::Fact r = f; r.code = 20; r.val = t.refill; r.proven = 0; S.factsS.push_back(r); }   // (0.69.0) R? = rebuilt >= what was hit in its 15 s (untested: "?")
         if (t.outcome != ltc::O_OPEN) { sb::Fact o = f; o.code = 10 + t.outcome; o.val = (double)std::max(0LL, (t.outMs - t.tMs) / 1000); o.proven = 1; S.factsS.push_back(o); }
     }
 }
@@ -2774,8 +2785,17 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         S.bZones = 0;
         if (S.lt.P.zoneGate && S.lt.nEvents > 0) {
             S.factsB.clear();
-            for (const ltc::Zone& z : S.lt.candidates()) { sb::Fact f; f.bar = nowT / 1000; f.lo = f.hi = (double)z.px * tick; f.side = z.side == ltc::BID ? 1 : -1;
+            // (0.69.0, Rassul approved 11:18 CT "223 · 48m") f.bar = when this zone FIRST became a candidate (CT seconds, kept while it stays a candidate,
+            // forgotten 60 s after it last was one) - lsDealerProfile shows its age next to the amount
+            for (const ltc::Zone& z : S.lt.candidates()) { sb::Fact f; const long long zk = (z.px << 1) | (z.side == ltc::BID ? 1LL : 0LL);
+                std::map<long long, std::pair<long long, long long> >::iterator zs = S.zoneSince.find(zk);
+                if (zs == S.zoneSince.end()) zs = S.zoneSince.insert(std::make_pair(zk, std::make_pair(nowT, nowT))).first; else zs->second.second = nowT;
+                f.bar = zs->second.first / 1000; f.lo = f.hi = (double)z.px * tick; f.side = z.side == ltc::BID ? 1 : -1;
                 f.val = (double)z.lots; f.code = 2; f.state = 0; f.proven = (int)std::min<long long>(z.raw, 1000000000LL); S.factsB.push_back(f); ++S.bZones; }
+            for (int sd = 0; sd < 2; ++sd) { const ltc::Zone& K = S.lt.king[sd]; if (K.lots <= 0) continue;   // (0.69.0) the KING nodes (code 3): bar = king since, proven = x the median x 100
+                sb::Fact f; f.bar = S.lt.kingSince[sd] / 1000; f.lo = f.hi = (double)K.px * tick; f.side = sd == ltc::BID ? 1 : -1; f.val = (double)K.lots; f.code = 3; f.state = 0;
+                f.proven = (int)std::min(100000.0, std::floor(S.lt.kingX[sd] * 100.0)); S.factsB.push_back(f); }
+            for (std::map<long long, std::pair<long long, long long> >::iterator zs = S.zoneSince.begin(); zs != S.zoneSince.end();) { if (nowT - zs->second.second > 60000 || nowT < zs->second.second - 60000) zs = S.zoneSince.erase(zs); else ++zs; }
             std::sort(S.factsB.begin(), S.factsB.end(), [](const sb::Fact& a, const sb::Fact& b) { return a.val > b.val; });
             if (S.factsB.size() > 60) S.factsB.resize(60);
         }
@@ -4744,6 +4764,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.68.0");   // LQ_VERSION
+    p->setVersion("0.69.0");   // LQ_VERSION
     return p;
 }

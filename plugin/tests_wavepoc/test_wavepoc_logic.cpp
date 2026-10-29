@@ -250,7 +250,7 @@ static void testLayout(const Fix& F) {
         if (p.k == wpc::Prim::BOX) noBoxes = false;
         if (p.k == wpc::Prim::LINE && p.col == 0xE5E7EB && p.w == 1) whiteLine1 = true;
     }
-    CHECK(texts > 0 && tagsRight, "price tags only right of the last bar (never over candles)");
+    CHECK(texts == 0 && tagsRight, "(1.4.0) no right-edge price tags (the open WPOC is a badge in lsDealerProfile's Levels column)");
     (void)whiteLine1;
     {   // (1.2.0, Rassul 16:26 CT "remove the drawing of levels across the chart and from the wave pocs") no line / circle at all (zigzag off)
         int lines = 0, ovals = 0; for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::LINE && std::min(p.x0, p.x1) < xLast - 1 && !(p.w == 2 && p.x0 == p.x1)) ++lines; /* (1.3.3) not the spines */ if (p.k == wpc::Prim::OVAL) ++ovals; }   // (the tag leader right of the last bar is the tag itself)
@@ -275,7 +275,15 @@ static void testLayout(const Fix& F) {
             sp += n; if (n != 1) ok = false; }
         CHECK(ok && sp == 4, "(1.3.3) spines: 4 waves, one each, green up / red down, spanning the wave's range (" << sp << ")"); }
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.3.4", "header 'Wave POC v1.3.4'");
+    CHECK(header && std::string(wpc::VERSION) == "1.4.0", "header Wave POC v1.4.0");
+    {   // (1.4.0) the open WPOC handed to lsDealerProfile: the latest confirmed wave's node [0] while OPEN, else none
+        long long tk = 0; const bool has = wpc::latestOpenPoc(E, tk);
+        const wpc::Wave* lw = nullptr; for (const wpc::Wave& w : E.waves) if (!w.pending) lw = &w;
+        const bool expect = lw && !lw->nodes.empty() && lw->nodes[0].stop == wpc::OPEN;
+        CHECK(has == expect && (!has || tk == lw->nodes[0].tick), "(1.4.0) latestOpenPoc = the latest wave's OPEN WPOC (or none)");
+        wpc::Engine E2 = E; if (!E2.waves.empty()) { for (wpc::Wave& w : E2.waves) if (!w.nodes.empty()) w.nodes[0].stop = wpc::OPEN + 1; }
+        long long t2 = 0; CHECK(!wpc::latestOpenPoc(E2, t2), "(1.4.0) a closed WPOC is never handed over");
+    }
     // no room right of the last bar: no tags at all (counted)
     wpc::View v2 = v; v2.r = (int)xLast + 20; const wpc::Scene s2 = wpc::layout(E, nullptr, v2);
     int t2 = 0; for (const wpc::Prim& p : s2.p) t2 += p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0;

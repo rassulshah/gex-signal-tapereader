@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.3.4";   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -756,6 +756,12 @@ inline void drawZigzag(Scene& s, const Engine& E, const View& v, const Colours& 
 }
 
 // the whole picture: the confirmed waves, the provisional one, tags, zigzag, the version header
+// (1.4.0) the latest (non-pending, confirmed) wave's WPOC while it is still OPEN: true + its tick; false = none (closed / no wave)
+inline bool latestOpenPoc(const Engine& E, long long& tick) {
+    const Wave* latest = nullptr; for (const Wave& w : E.waves) if (!w.pending) latest = &w;
+    if (!latest || latest->nodes.empty() || latest->nodes[0].stop != OPEN) return false;
+    tick = latest->nodes[0].tick; return true;
+}
 inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colours& C = Colours()) {
     Scene s; std::vector<std::pair<const Wave*, const Node*> > tags;
     const Wave* latest = nullptr; for (const Wave& w : E.waves) if (!w.pending) latest = &w;
@@ -765,7 +771,7 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
     auto xNext = [&](const Wave* w) { double x = 1e9; for (const Wave* o : ws) if (o->i0 > w->i0) x = std::min(x, v.X(o->i0) - v.bw * 0.45); return x; };
     for (int ph = 0; ph < 2; ++ph)
         for (const Wave* w : ws) drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w));
-    drawTags(s, v, C, tags);
+    s.tagsHidden += (int)tags.size(); (void)drawTags;   // (1.4.0, Rassul approved 11:18 CT) the right-edge tags are no longer drawn: the open WPOC is a badge in lsDealerProfile's Levels column
     if (v.zigzag) drawZigzag(s, E, v, C);
     // (1.3.2, Rassul 18:24 CT profiles drawn under the Levels column) every primitive kept inside [clipL, clipR]: fills / lines cut
     // (a profile that starts inside the column is clipped, never shifted), text not drawn when it would cross an edge
