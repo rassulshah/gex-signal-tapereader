@@ -8,7 +8,8 @@ Approved by Rassul 09:33 CT (mockup orderlines-levels-mockup.html), add-on 09:40
 - Rank = the order's rank in lsDealerProfile's Liquidity column at the touch (SignalBoard Q, read <= 1/s, nearest same-side zone within max(1 tick, 0.25 ATR)), FROZEN; outside the top 6 = 0 = no rank box.
 - Line from the PLACEMENT time; placed before the visible chart = from the left edge of the price area (cb::leftKeep = right of the Key Levels column + 3 px); right side clipped at the right-side columns / last bar.
 - TESTING = thin dashed (1 px, P_DASH). DECISION unchanged (fill >= half, first favourable close within 4 bars = HELD; a bar wholly beyond / no favourable close in 4 bars = BREAK). THRU renamed BREAK everywhere drawn; the record keeps THRU and adds the word: `W|id|THRU|ms|shown|BREAK`.
-- Decided = solid 2 px; label at the decision bar (bar END stamps: the decision bar is barOf(wordMs - 1)): [rank box] + HELD / BREAK, above the line, kept inside the price area.
+- Decided = solid 2 px; label at the decision bar (bar END stamps: the decision bar is barOf(wordMs - 1)): [rank box] + HELD / BREAK + the order's DISPLAYED size at the touch (Rassul 10:57 CT: "[2] HELD 146"; T line carries it: `T|id|ms|rank|lots`), same colour, above the line, kept inside the price area.
+- Every decided HELD is posted as SignalBoard fact kind 'G' (bar = decision bar END in CT seconds, price, side +1 bid / -1 offer, val = lots, code = rank) for lsExhaustion 0.3.1's T mark; status "G posts N".
 - BREAK: shown 5 bars after its decision, then removed. HELD: solid, never dimmed (10:23 CT), to the right edge until a bar CLOSES through it (`X|id|ms`) or the session ends - always at least 2 bars after its decision. (A HELD line's order is already filled, so "pulled" cannot happen after a decision.) Pulled before a decision = gone. At most 3 tested lines (the newest by touch / decision; older ones are not drawn).
 - No fill dots / start labels / pulled lines any more; LRA-OrderFills-<MKT>-<spb>.txt is published EMPTY (lsDefenseLines draws its own dot again). LRA-LmtLevels file unchanged.
 - Lines restored from a pre-0.68 record (no T line) are not drawn.
@@ -31,3 +32,13 @@ Approved by Rassul 09:33 CT (mockup orderlines-levels-mockup.html), add-on 09:40
 
 ## Not verified - needs his IRT
 - The Q-board match (rank) on live data; P_DASH rendering on his charts; label placement next to other marks. Check after the restart: BUILD-STATUS "installed", status ORDER_LINES "tested lines" and RANK_RULE lines, ChartView export in 2+ markets.
+
+## (same build) lsSessionVWAP 1.8.7 - pivot VWAP anchors = IRT ZigZag (Rassul approved 10:23 CT)
+- PivotVwapLogic.h 1.1.0: anchors() = lsWavePOC's IRT ZIGZAG rule (WavePOCLogic.h 1.3.2): Min Price Change = 3 bars, high/low; the live leg's extreme moves only on a STRICTLY more extreme bar; a bar beyond the previous 3 bars' opposite extreme reverses (the old extreme = the pivot). piv[k] = the last pivot confirmed by bar k's close (no look-ahead, no repaint). No settings change (parameter version stays 12).
+- Test: test_pivotvwap_110.cpp ALL PASS (hand-checked pivots incl. the equal-high case, identical to the transcribed WavePOC rule, every prefix = same anchors / colours). The old test_pivotvwap.cpp tested the 1.0.0 3-close rule and is superseded (2 of its checks now fail by design).
+
+## (same build) lsExhaustion 0.3.1 - the T mark (Rassul approved 10:23 CT; 0.3.1 because the reverted 05:11 CT pivot / histogram build was 0.3.0)
+- Base: the PC's 0.2.4 source. Only added: a T at the bottom of the pane = an order-line HELD (SignalBoard G from lsLiquidityProfile 0.68.0) + exhaustion >= 2.0x of the ATTACKING side (offer HELD: buyers' fade; bid HELD: sellers' fade) on a bar e within the 5 bars before the HELD decision bar (incl. it) + a close back away from the level (offer: below; bid: above) within e+1..e+3. Marked at max(that close, the HELD bar), red T = a top (offer), green T = a bottom (bid); one row above an E? on the same bar.
+- Recorded to lsFlexLevels\Exhaustion\<MKT>-<CONTRACT>-<spb>-T-<session>.csv (`bar|top/bottom|exh|price|held_bar`), shown only after a good append, read back for the last 10 sessions (no repaint). Status T_MARK line.
+- Test: test_exhaustion_031.cpp 10/0 (rule unit checks: >= 2.0x, 5-bar window, 3-bar close-back, never before the HELD bar; host: red T at the HELD bar, drawn, the same after a restart with no producer).
+- Not verified - needs his IRT: lsExhaustion and lsLiquidityProfile must be on the SAME chart (the fact key is per chart label).

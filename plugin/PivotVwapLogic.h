@@ -1,6 +1,6 @@
 #ifndef LS_PIVOTVWAP_H
 #define LS_PIVOTVWAP_H
-// PivotVwapLogic.h 1.0.0 (2026-10-27, Rassul 09:46 CT "lets go with your recommendation and modify the vwap to the 3bar pivot")
+// PivotVwapLogic.h 1.1.0 (2026-10-29): anchors = IRT's ZigZag (3 bars, high/low), see anchors(). Was 1.0.0 (2026-10-27, Rassul 09:46 CT "lets go with your recommendation and modify the vwap to the 3bar pivot")
 // The 3-BAR PIVOT VWAP: a VWAP anchored at the last confirmed 3-bar-reversal pivot of the RTH session, restarted at each new pivot,
 // coloured by the close: green = the bar closed above it, red = below. SDK-free, C++11, no files, no state between calls.
 // Pivot (same rule as the 2026-10-26 trend test, trend_test/code/anchors.py rev3): in an up swing a pivot high is confirmed when
@@ -12,25 +12,28 @@
 #include <vector>
 #include <cmath>
 namespace pvw {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0) IRT ZigZag anchors
 // h, l, c, v: one RTH session's bars in time order. out: line value (NaN = none yet), state (+1 above / -1 below / 0), anchor bar.
 struct Out { std::vector<double> line; std::vector<int> state, anchor; };
-inline void anchors(const std::vector<double>& h, const std::vector<double>& l, const std::vector<double>& c, std::vector<int>& piv) {
-    const int n = (int)c.size(); piv.assign(n, -1); if (n < 2) return;
-    int cur = c[1] >= c[0] ? 1 : -1, ext = 0, last = -1;
-    for (int k = 1; k < n; ++k) {
-        if (cur == 1) {
-            if (h[k] >= h[ext]) ext = k;
-            else if (k - ext >= 3 && c[k] < c[k-1] && c[k-1] < c[k-2] && c[k-2] < c[k-3] && c[k] < l[ext]) {
-                last = ext; cur = -1; int m = ext + 1; for (int j = ext + 1; j <= k; ++j) if (l[j] < l[m]) m = j; ext = m; }
-        } else {
-            if (l[k] <= l[ext]) ext = k;
-            else if (k - ext >= 3 && c[k] > c[k-1] && c[k-1] > c[k-2] && c[k-2] > c[k-3] && c[k] > h[ext]) {
-                last = ext; cur = 1; int m = ext + 1; for (int j = ext + 1; j <= k; ++j) if (h[j] > h[m]) m = j; ext = m; }
+// (1.1.0, 2026-10-29, Rassul approved 10:23 CT) the anchors = IRT's ZIGZAG (the same rule as lsWavePOC, WavePOCLogic.h 1.3.2): Min Price
+// Change = N (3) BARS, Use High/Low: the live leg's extreme moves to every STRICTLY more extreme bar; a bar whose high beats the previous
+// N bars' highs reverses a down leg (low below the previous N bars' lows reverses an up leg) - the old extreme is then a confirmed pivot.
+// piv[k] = the last pivot confirmed by bar k's close (-1 = none yet): no look-ahead, no repaint.
+inline void anchors(const std::vector<double>& h, const std::vector<double>& l, const std::vector<double>& c, std::vector<int>& piv, int N = 3) {
+    const int n = (int)c.size(); piv.assign(n, -1); if (n < 1 || N < 1) return;
+    int zDir = 0, zI = 0, zHi = 0, zLo = 0, last = -1;
+    for (int k = 0; k < n; ++k) {
+        if (k >= N) {
+            double ph = h[k - N], pl = l[k - N]; for (int j = k - N + 1; j < k; ++j) { if (h[j] > ph) ph = h[j]; if (l[j] < pl) pl = l[j]; }
+            if (zDir == 0) { if (h[k] > ph) { last = zLo; zDir = 1; zI = k; } else if (l[k] < pl) { last = zHi; zDir = -1; zI = k; } }
+            else if (zDir > 0) { if (h[k] > h[zI]) zI = k; else if (l[k] < pl) { last = zI; zDir = -1; zI = k; } }
+            else { if (l[k] < l[zI]) zI = k; else if (h[k] > ph) { last = zI; zDir = 1; zI = k; } }
         }
+        if (zDir == 0) { if (h[k] > h[zHi]) zHi = k; if (l[k] < l[zLo]) zLo = k; }
         piv[k] = last;
     }
 }
+// was (1.0.0): the 3-bar-reversal pivot (3 falling closes, >= 3 bars after the swing high, the 3rd close below the swing-high bar's low)
 inline Out compute(const std::vector<double>& h, const std::vector<double>& l, const std::vector<double>& c, const std::vector<double>& v) {
     Out o; const int n = (int)c.size(); o.line.assign(n, NAN); o.state.assign(n, 0); o.anchor.assign(n, -1);
     if (n == 0 || (int)h.size() != n || (int)l.size() != n || (int)v.size() != n) return o;

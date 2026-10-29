@@ -4,7 +4,8 @@
 // artifact AEYuhQfdcywsR8VxmhpUVq) THE TESTED-LINE LIFECYCLE - nothing is drawn for an untouched order (the Liquidity column shows it):
 //  - TOUCH: the first trade AT or THROUGH the order's price (bid: a fill at <= it; offer: >= it) - from the order-by-order FILL events,
 //    a closed bar's range as the fallback - records "T|id|touch_ms|rank": rank = the order's Liquidity-column rank at that moment
-//    (rankFn, the lsDealerProfile 'Q' board), FROZEN; 0 = outside the top 6 (no rank box). The line then shows from its PLACEMENT.
+//    (rankFn, the lsDealerProfile 'Q' board), FROZEN; 0 = outside the top 6 (no rank box) + its displayed size then ("T|id|ms|rank|lots";
+//    the label reads "[2] HELD 146", Rassul 10:57 CT). The line then shows from its PLACEMENT.
 //  - TESTING: thin dashed while undecided. DECISION (unchanged rule): filled >= half, then the first favourable close within 4 bars =
 //    HELD; a bar wholly beyond / no favourable close in 4 bars = BREAK (the record keeps the old code THRU and adds the new word:
 //    "W|id|THRU|ms|shown|BREAK"). Solid after the decision with [rank] + word at the decision bar.
@@ -120,7 +121,8 @@ struct Line {
     long long pullDue = 0;                    // a pull waiting for the roll window (0 = none)
     int word = W_NONE; long long wordMs = 0; bool wordShown = false; long long fillMs = 0; Tick fillPx = 0; long long fillBarEnd = 0; int barsSeen = 0;
     long long rollGapMs = -1;                 // the last roll: re-placed this many ms after the pull (negative = before)
-    long long touchMs = 0; int touchRank = 0;  // (1.1.0) the first trade at / through it; its Liquidity-column rank then (0 = not top 6), frozen
+    long long touchMs = 0; int touchRank = 0; long long touchLots = 0;   // (1.1.0, Rassul 10:57 CT) touchLots = its DISPLAYED size at the touch (the label number)
+     // (1.1.0) the first trade at / through it; its Liquidity-column rank then (0 = not top 6), frozen
     long long throughMs = 0;                  // (1.1.0) HELD only: the end of the first bar that CLOSED through it
     std::string label() const {
         char b[64];
@@ -155,14 +157,15 @@ public:
     Tally tally; long long lastT = 0; int nextId = 1;
     size_t bookCap = 400000;
 
-    static std::string header() { return "# OrderLines 1.1.0 record: N|id|side|kind|t0|px|label  S|id|t|px  E|id|end|t|px|traded  W|id|word|decide_ms|shown|word2  T|id|touch_ms|rank  X|id|close_through_ms"; }
+    static std::string header() { return "# OrderLines 1.1.0 record: N|id|side|kind|t0|px|label  S|id|t|px  E|id|end|t|px|traded  W|id|word|decide_ms|shown|word2  T|id|touch_ms|rank|lots  X|id|close_through_ms"; }
     std::function<int(int, Tick)> rankFn;     // (1.1.0) the host's Liquidity-column rank of (side, price) now; 0 = not in the top 6
     std::vector<int> untouched;               // (1.1.0) live lines not touched yet
     void touch(int li, long long t) {
         Line& L = lines[(size_t)li]; if (L.touchMs || L.end != LIVE || L.oids.empty()) return;
         L.touchMs = t; int rk = rankFn ? rankFn(L.side, L.px()) : 0; if (rk < 0 || rk > 6) rk = 0; L.touchRank = rk;
+        L.touchLots = L.size > 0 ? L.size : L.maxShown;
         if (!L.drawn) qualify(li, t);
-        char b[96]; std::snprintf(b, sizeof(b), "T|%d|%lld|%d", L.id, t, rk); rows.push_back(b); ++tally.touched;
+        char b[128]; std::snprintf(b, sizeof(b), "T|%d|%lld|%d|%lld", L.id, t, rk, L.touchLots); rows.push_back(b); ++tally.touched;
     }
     void touchScan(Tick lo, Tick hi, long long t) {   // a trade (lo == hi) or a closed bar's range
         for (size_t k = 0; k < untouched.size();) {
@@ -453,7 +456,7 @@ public:
                 Line& L = lines[it->second]; L.word = f[2] == "HELD" ? W_HELD : W_THRU; L.wordMs = std::atoll(f[3].c_str()); L.wordShown = f[4] == "1";
             } else if (f[0] == "T" && f.size() >= 4) {   // (1.1.0)
                 auto it = byId.find(std::atoi(f[1].c_str())); if (it == byId.end()) continue;
-                Line& L = lines[it->second]; if (!L.touchMs) { L.touchMs = std::atoll(f[2].c_str()); L.touchRank = std::atoi(f[3].c_str()); if (L.touchRank < 0 || L.touchRank > 6) L.touchRank = 0; }
+                Line& L = lines[it->second]; if (!L.touchMs) { L.touchMs = std::atoll(f[2].c_str()); L.touchRank = std::atoi(f[3].c_str()); if (L.touchRank < 0 || L.touchRank > 6) L.touchRank = 0; if (f.size() >= 5) L.touchLots = std::atoll(f[4].c_str()); }
             } else if (f[0] == "X" && f.size() >= 3) {
                 auto it = byId.find(std::atoi(f[1].c_str())); if (it == byId.end()) continue;
                 Line& L = lines[it->second]; if (!L.throughMs) L.throughMs = std::atoll(f[2].c_str());
@@ -495,6 +498,7 @@ inline int decimals(double tick) { int d = 0; double t = tick; while (d < 6 && s
 inline std::string price(Tick t, double tick) { char b[48]; std::snprintf(b, sizeof(b), "%.*f", decimals(tick), (double)t * tick); return b; }
 inline std::string clock12(long long ms) { long long m = (ms / 60000LL) % 1440LL; if (m < 0) m += 1440; int h = (int)(m / 60), mi = (int)(m % 60), s = (int)((ms / 1000LL) % 60LL); char b[24]; std::snprintf(b, sizeof(b), "%d:%02d:%02d %s", h % 12 == 0 ? 12 : h % 12, mi, s < 0 ? 0 : s, h < 12 ? "AM" : "PM"); return b; }
 inline std::string dur(long long ms) { if (ms < 0) ms = 0; char b[32]; long long m = ms / 60000LL; if (m >= 60) std::snprintf(b, sizeof(b), "%lld h %lld min", m / 60, m % 60); else std::snprintf(b, sizeof(b), "%lld min", m); return b; }
+inline std::string labelText(const Line& L) { std::string t = L.word == W_HELD ? "HELD" : L.word == W_THRU ? "BREAK" : ""; if (!t.empty() && L.touchLots > 0) t += " " + std::to_string(L.touchLots); return t; }   // (1.1.0) "HELD 146"
 inline const char* wordText(int w) { return w == W_HELD ? "HELD" : w == W_THRU ? "BREAK" : ""; }   // (1.1.0) THRU is drawn as BREAK
 struct Row { std::string text; int ink = INK_WHITE; };
 inline std::vector<Row> hoverRows(const Line& L, double tick, long long nowMs) {

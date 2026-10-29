@@ -1,6 +1,6 @@
 #ifndef LS_EXHAUSTION_LOGIC_H
 #define LS_EXHAUSTION_LOGIC_H
-// ExhaustionLogic.h (0.2.2, 2026-10-13) -- the SDK-free half of lsExhaustion. 0.2.2 (audit port): incomplete/non-finite inputs are rejected before a crossing (never an E); 0.1.0 2026-10-11. Rassul 2026-10-11 21:17-21:28: "model the exhaustion
+// ExhaustionLogic.h (0.3.0, 2026-10-29: + the T mark, tMark) (0.2.2, 2026-10-13) -- the SDK-free half of lsExhaustion. 0.2.2 (audit port): incomplete/non-finite inputs are rejected before a crossing (never an E); 0.1.0 2026-10-11. Rassul 2026-10-11 21:17-21:28: "model the exhaustion
 // indicator also with two lines", option A chosen ("lets go with A"), "stick with an exhaustion indicator ... customized for each market
 // to catch tops and bottoms (pivot highs and lows)", "build exhaustion indicator".
 // At a new N-bar HIGH: BUYERS FADING = the buyers' peak pace (aggressive volume, S-bar average) since the lowest low of the last 20 bars /
@@ -13,7 +13,7 @@
 
 namespace ex {
 
-static const char* const VERSION = "0.2.4";       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
+static const char* const VERSION = "0.3.1";   // (0.3.1, 2026-10-29) + the T mark (tMark)       // keep equal to EX_VERSION / setVersion in Exhaustion.cpp
 static const int LOOK = 20;
 
 struct Params { int N = 10; int S = 1; double T = 2.0; };
@@ -63,5 +63,26 @@ inline Out compute(const std::vector<double>& h, const std::vector<double>& l, c
     return o;
 }
 
+
+// ---- (0.3.0, 2026-10-29, Rassul approved 10:23 CT) the T mark: an order-line HELD (lsLiquidityProfile 0.68.0, SignalBoard fact 'G')
+// confirmed by exhaustion of the side that attacked it. At an OFFER that HELD (decision bar d): the BUYERS' fade >= T_EXH (2.0x) on some
+// bar e in [d - 5, d], and a close back below the offer within the 3 bars after e (e + 1 .. e + 3) -> a red T (a top); a BID that
+// HELD: the SELLERS' fade >= 2.0x and a close back above the bid -> a green T (a bottom). Decided on CLOSED bars only, at the bar where
+// the last condition is met (never before the HELD decision bar); once decided it is recorded and never changes.
+static const double T_EXH = 2.0; static const int T_BEFORE = 5, T_AFTER = 3;
+struct Held { int bar = -1; int side = 0; double px = 0; };   // side +1 = a bid HELD (support), -1 = an offer HELD (resistance)
+struct TMark { int bar = -1; int side = 0; int exhBar = -1; double exh = 0; };
+// c = closes of the same closed bars as o (fb / fs); lastClosed = the last index that may be used
+inline bool tMark(const std::vector<double>& c, const Out& o, const Held& H, int lastClosed, TMark& out)
+{
+    const int n = (int)c.size(); if (H.bar < 0 || H.bar >= n || H.side == 0 || (int)o.fb.size() != n || (int)o.fs.size() != n) return false;
+    for (int e = std::max(0, H.bar - T_BEFORE); e <= H.bar; ++e) {
+        const double x = H.side < 0 ? o.fb[e] : o.fs[e]; if (!(x >= T_EXH)) continue;
+        for (int j = e + 1; j <= std::min(e + T_AFTER, lastClosed); ++j) {
+            if (H.side < 0 ? c[j] < H.px : c[j] > H.px) { out.bar = std::max(j, H.bar); out.side = H.side; out.exhBar = e; out.exh = x; return true; }
+        }
+    }
+    return false;
+}
 }  // namespace ex
 #endif

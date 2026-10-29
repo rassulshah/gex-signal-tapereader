@@ -36,11 +36,12 @@ int main() {
         CHECK(E.lines[0].throughMs == T(9, 9) && vis(E, 0, T(9, 9)) == V_HELD, "closed through after 1 bar: still shown (min 2 bars)");
         bar(E, T(9, 12), 995, 1000, 990, 996);
         CHECK(vis(E, 0, T(9, 12)) == V_NONE, "removed at the 2nd bar after the decision");
-        bool hasT = false, hasX = false, hasW = false; for (auto& r : E.rows) { if (r == "T|1|" + std::to_string(T(9, 4, 30)) + "|2") hasT = true; if (r.rfind("X|1|", 0) == 0) hasX = true; if (r.find("|HELD") != std::string::npos && r[0] == 'W') hasW = true; }
-        CHECK(hasT && hasX && hasW, "record: T (touch + rank), W, X");
+        bool hasT = false, hasX = false, hasW = false; for (auto& r : E.rows) { if (r == "T|1|" + std::to_string(T(9, 4, 30)) + "|2|100") hasT = true; if (r.rfind("X|1|", 0) == 0) hasX = true; if (r.find("|HELD") != std::string::npos && r[0] == 'W') hasW = true; }
+        CHECK(hasT && hasX && hasW, "record: T (touch + rank + displayed lots), W, X");
+        CHECK(labelText(E.lines[0]) == "HELD 100", "label text: the word + the displayed size at the touch (\"[2] HELD 100\")");
         Engine R = mk(); R.restore(recs(E));
         bool same = true; for (long long t = T(9, 0); t <= T(9, 15); t += BM) if (visState(R.lines[0], t, BM) != vis(E, 0, t)) same = false;
-        CHECK(same && R.lines[0].touchRank == 2, "restart: the same states from the record (no repaint)");
+        CHECK(same && R.lines[0].touchRank == 2 && R.lines[0].touchLots == 100, "restart: the same states from the record (no repaint)");
     }
     {   // HELD that is NOT closed through stays (solid, never dimmed) to the right edge; a later close through removes it at that close
         Engine E = mk(); rank = 9; E.rankFn = [&](int, Tick) { return rank; };
@@ -61,7 +62,7 @@ int main() {
         E.onEvent(NEW, BID, 1000, 60, 31, T(11, 1));
         E.onEvent(FILL, BID, 1000, 60, 31, T(11, 2)); E.onEvent(DEL, BID, 1000, 0, 31, T(11, 2, 1));
         bar(E, T(11, 3), 1000, 1001, 990, 992); bar(E, T(11, 6), 992, 998, 985, 990);   // high below the bid -> BREAK at 11:06
-        CHECK(E.lines[0].word == W_THRU && std::string(wordText(E.lines[0].word)) == "BREAK", "BREAK drawn as the word BREAK");
+        CHECK(E.lines[0].word == W_THRU && std::string(wordText(E.lines[0].word)) == "BREAK" && labelText(E.lines[0]) == "BREAK 60", "BREAK drawn as \"BREAK 60\"");
         CHECK(vis(E, 0, T(11, 6) + 4 * BM) == V_BREAK && vis(E, 0, T(11, 6) + 5 * BM) == V_NONE, "BREAK shown 5 bars after the decision, then removed");
         bool rec = false; for (auto& r : E.rows) if (r.rfind("W|", 0) == 0 && r.find("|THRU|") != std::string::npos && r.find("|BREAK") != std::string::npos) rec = true;
         CHECK(rec, "record keeps the old code THRU and adds BREAK");

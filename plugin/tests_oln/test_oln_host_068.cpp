@@ -73,11 +73,11 @@ int main() {
     CHECK(B->end == oln::FILLED && B->word == oln::W_HELD && B->touchRank == 2, "filled >= half, green close above = HELD; rank still 2");
     cb::publishKeys(S->symbol, 180, h.chart, ::steadyMs(), 230);
     h.draws.clear(); p->draw();
-    const mock::Draw* held = text(h, "HELD"); const mock::Draw* rk = text(h, "2");
+    const mock::Draw* held = text(h, "HELD 100"); const mock::Draw* rk = text(h, "2");
     {   const LineSum L = linesAt(h, GREEN, yBid);
         std::printf("  held line n %d x %d..%d w %d st %d; HELD %s at l %d t %d b %d; '2' at l %d r %d\n", L.n, L.minX, L.maxX, L.w, L.st, held ? "yes" : "no", held ? held->l : -1, held ? held->t : -1, held ? held->b : -1, rk ? rk->l : -1, rk ? rk->r : -1);
         CHECK(L.n >= 1 && L.w == 2 && L.st == (int)P_SOLID && L.maxX >= 50 + 10 * (int)(h.bars.size() - 1) - 1, "HELD: solid to the right edge of the price area (the last bar - his layout rule)");
-        CHECK(held && held->color == GREEN && held->b <= yBid, "HELD in green above the line");
+        CHECK(held && held->color == GREEN && held->b <= yBid, "\"HELD 100\" (the displayed size at the touch) in green above the line");
         const int decX = 50 + 10 * 36;   // the 12:51 bar (index 36)
         CHECK(held && rk && rk->r < held->l && held->r <= 50 + 10 * (int)(h.bars.size() - 1) && rk->l >= decX - 60, "label at the decision bar (kept inside the price area): [rank box] then the word");
         bool box = false; for (auto& d : h.draws) if (d.type == "box" && rk && d.l <= rk->l && d.r >= rk->r && d.border == GREEN) box = true;
@@ -89,7 +89,7 @@ int main() {
     for (int s = 0; s < 3; ++s) { h.now = t0 + 9 * 180 + 5 + s; p->calc(0); usleep(5000); }
     cb::publishKeys(S->symbol, 180, h.chart, ::steadyMs(), 230);
     h.draws.clear(); p->draw();
-    CHECK(B->throughMs > 0 && linesAt(h, GREEN, yBid).n >= 1 && text(h, "HELD"), "closed through 1 bar after: still shown (min 2 bars)");
+    CHECK(B->throughMs > 0 && linesAt(h, GREEN, yBid).n >= 1 && text(h, "HELD 100"), "closed through 1 bar after: still shown (min 2 bars)");
     std::vector<mock::Draw> keep = h.draws;
     // restart: a fresh indicator reads the record back and draws the same
     usleep(1100000); h.now += 1; p->calc(0); usleep(5000);   // the record flush (at most once a second)
@@ -102,7 +102,7 @@ int main() {
     for (int s = 0; s < 3; ++s) { h.now = t0 + 10 * 180 + 5 + s; p->calc(0); usleep(5000); }
     cb::publishKeys(S->symbol, 180, h.chart, ::steadyMs(), 230);
     h.draws.clear(); p->draw();
-    CHECK(linesAt(h, GREEN, yBid).n == 0 && !text(h, "HELD"), "removed after the 2nd bar (closed through)");
+    CHECK(linesAt(h, GREEN, yBid).n == 0 && !text(h, "HELD 100"), "removed after the 2nd bar (closed through)");
     CHECK(linesAt(h, RED, yOff).n == 0, "the untouched offer never drew");
     {   const std::string st = readAll(flex + "\\LiquidityProfile.status-ES-180.txt");
         { size_t a = st.find("ORDER_LINES"); std::printf("  status: %s\n", a == std::string::npos ? "(no ORDER_LINES)" : st.substr(a, 400).c_str()); }

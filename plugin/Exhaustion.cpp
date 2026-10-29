@@ -33,6 +33,7 @@
 #undef near
 #endif
 #include "ExhaustionLogic.h"
+#include "SignalBoard.h"   // (0.3.0) reads lsLiquidityProfile 0.68.0's order-line HELD facts (kind G) for the T mark
 #include "HostSlot.h"
 #include <algorithm>
 #include <cerrno>
@@ -54,7 +55,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define EX_VERSION "0.2.4"          // keep equal to ex::VERSION and the setVersion literal below
+#define EX_VERSION "0.3.1"          // (0.3.1, 2026-10-29 Rassul approved 10:23 CT; 0.3.1 because the reverted 05:11 CT pivot / histogram build was 0.3.0) + the T mark at the bottom of the pane: an order-line HELD (lsLiquidityProfile 0.68.0, SignalBoard G) + exhaustion >= 2.0x of the attacking side within the 5 bars before + a close back away within 3 bars after (ex::tMark); red T = a top (offer HELD), green T = a bottom (bid HELD); recorded to <stem>-T-<session>.csv, read back, never repainted   // was 0.2.4: keep equal to ex::VERSION and the setVersion literal below
 
 static const COLOR C_BUY = 0x0022C55E, C_SELL = 0x00EF4444, C_GREY = 0x009CA3AF, C_AXIS = 0x00334155;
 static const int BARS_MAX = 1500;
@@ -215,6 +216,9 @@ struct EXState {
     std::map<long long, double> markVal;
     std::vector<PendingRecord> pending; long long recFails = 0;
     ex::Out out; int outFirst = 0; double liveB = 1, liveS = 1;
+    std::vector<double> closes;                             // (0.3.0) the closed bars' closes (same index as out)
+    std::map<long long, int> tmarks; std::map<long long, double> tVal; std::set<std::string> tDone;   // (0.3.0) T: bar time -> side; HELD facts already decided
+    long long tFacts = 0, tWrites = 0, tFails = 0; bool tBoard = false;
 };
 
 class Exhaustion : public cppExtension {
@@ -239,6 +243,7 @@ private:
     void norms(EXState& S);
     void status(EXState& S, long long now);
     void render(EXState& S);
+    void tCheck(EXState& S, long count);   // (0.3.0) the T mark
     std::string dir() { const std::string f = flexDir(); return f.empty() ? f : f + "\\Exhaustion"; }
     std::string stem(EXState& S) { return S.market + "-" + fileKey(S.symbol) + "-" + std::to_string(S.spb); }   // (0.2.2) contract-qualified
 };
@@ -288,10 +293,10 @@ bool Exhaustion::barVol(EXState& S, RTARRAYP& vap, int bar, std::pair<double, do
 void Exhaustion::calcBars(EXState& S, long count) {
     if (count < 3 || S.tick <= 0) return;
     if (count == S.count && !S.out.fb.empty()) { flushRecords(S); return; } // (0.2.2) draw() pumps too: keep the closed-bar snapshot, no VAP re-read
-    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow); RTARRAYP vap(barVolumeProfile);
-    if (times.count < count || hi.count < count || lo.count < count || vap.count < count) return;
+    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), clo(barClose); RTARRAYP vap(barVolumeProfile);
+    if (times.count < count || hi.count < count || lo.count < count || vap.count < count || clo.count < count) return;
     const int first = (int)std::max(0L, count - BARS_MAX);
-    std::vector<double> h, l, b, s; h.reserve(count - first); l.reserve(count - first); b.reserve(count - first); s.reserve(count - first);
+    std::vector<double> h, l, b, s, cc; h.reserve(count - first); cc.reserve(count - first); l.reserve(count - first); b.reserve(count - first); s.reserve(count - first);
     // (0.2.1) CLOSED bars only - the bar in progress (count - 1) is never read: its half-built volume showed a huge fade (GC 7.5x) that
     // then changed (Rassul 2026-10-11 22:26). Everything else is exactly 0.2.0.
     for (int i = first; i < count - 1; ++i) {
@@ -303,9 +308,9 @@ void Exhaustion::calcBars(EXState& S, long count) {
         if (c != S.vol.end()) v = c->second;
         else if (barVol(S, vap, i, v)) S.vol[bt] = v;
         else return;                                                    // (0.2.2) never turn an unavailable VAP bar into zero-volume exhaustion evidence
-        h.push_back(hh); l.push_back(ll); b.push_back(v.first); s.push_back(v.second);
+        h.push_back(hh); l.push_back(ll); b.push_back(v.first); s.push_back(v.second); cc.push_back((double)clo[i]);
     }
-    S.out = ex::compute(h, l, b, s, S.P); S.outFirst = first;
+    S.out = ex::compute(h, l, b, s, S.P); S.outFirst = first; S.closes.swap(cc);
     if (S.out.fb.empty()) return;
     const int f = (int)count - 2 - first;
     S.liveB = S.out.fb[f]; S.liveS = S.out.fs[f];
@@ -336,6 +341,7 @@ void Exhaustion::calcBars(EXState& S, long count) {
         char line[160]; std::snprintf(line, sizeof(line), "%lld|%s|%.2f|%.6g|%.6g|N%d S%d T%.2f%s", bt, side < 0 ? "top" : "bottom", val, (double)hi[(int)i], (double)lo[(int)i], S.P.N, S.P.S, rth ? S.P.T : S.tOvernight, rth ? "" : " overnight");
         PendingRecord rec; rec.session = barSession; rec.bar = bt; rec.side = side; rec.val = val; rec.line = line; S.pending.push_back(rec);
     }
+    tCheck(S, count);   // (0.3.0)
     S.count = count;
     flushRecords(S);
     while (S.vol.size() > 3000) S.vol.erase(S.vol.begin());
@@ -364,12 +370,48 @@ bool Exhaustion::flushRecords(EXState& S) {
     S.pending.swap(retry);
     return S.pending.empty();
 }
+// (0.3.0) the T mark: each order-line HELD fact (lsLiquidityProfile, kind G, decided) mapped to its decision bar (fact bar = the bar END in
+// CT seconds, the same clock as ctSec(bar stamp)); ex::tMark on CLOSED bars; a decided T is appended to <stem>-T-<session>.csv and shown
+// only after a good append (never repainted); a HELD that can no longer qualify (its windows closed) is marked done (no more checks)
+void Exhaustion::tCheck(EXState& S, long count) {
+    std::vector<sb::Fact> G; const char* clk = getChartLabel();
+    S.tBoard = sb::readFacts('G', S.symbol, S.spb, clk ? std::string(clk) : std::string(), steadyMs(), G, true);
+    if (G.empty() || S.out.fb.empty() || S.closes.size() != S.out.fb.size()) return;
+    RTARRAYI times(barDateTime); if (times.count < count) return;
+    std::map<long long, int> idx; for (int k = 0; k < (int)S.closes.size(); ++k) { const long long cs = ctSec((RTDATE)times[S.outFirst + k]); if (cs > 0) idx[cs] = k; }
+    const int lastClosed = (int)S.closes.size() - 1;
+    for (const sb::Fact& f : G) {
+        char kb[96]; std::snprintf(kb, sizeof(kb), "%lld|%d|%.6f", f.bar, f.side, f.lo); const std::string key = kb;
+        if (S.tDone.count(key)) continue;
+        std::map<long long, int>::const_iterator it = idx.find(f.bar); if (it == idx.end()) continue;
+        ++S.tFacts;
+        ex::Held H; H.bar = it->second; H.side = f.side; H.px = f.lo; ex::TMark M;
+        if (!ex::tMark(S.closes, S.out, H, lastClosed, M)) { if (lastClosed >= H.bar + ex::T_AFTER) S.tDone.insert(key); continue; }   // every window is over
+        const long long bt = (long long)times[S.outFirst + M.bar]; const long long cs = ctSec((RTDATE)bt);
+        const long long sess = cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : S.session;
+        const std::string d = dir(); if (d.empty()) { ++S.tFails; continue; }
+        makeDir(flexDir()); makeDir(d);
+        char line[200]; std::snprintf(line, sizeof(line), "%lld|%s|%.2f|%.6g|%lld\n", bt, M.side < 0 ? "top" : "bottom", M.exh, f.lo, f.bar);
+        std::ofstream o((d + "\\" + stem(S) + "-T-" + std::to_string(sess) + ".csv").c_str(), std::ios::binary | std::ios::app);
+        if (o) { o << line; o.flush(); }
+        if (!o) { ++S.tFails; continue; }
+        S.tmarks[bt] = M.side; S.tVal[bt] = M.exh; S.tDone.insert(key); ++S.tWrites;
+    }
+    while (S.tDone.size() > 2000) S.tDone.erase(S.tDone.begin());
+}
 void Exhaustion::load(EXState& S) {
     const std::string d = dir(); if (d.empty()) return;
     for (long long k = S.session - 9; k <= S.session; ++k) {
         std::vector<DiskRecord> records;                                // (0.2.2) bounded, header-checked
         if (!readRecords(d + "\\" + stem(S) + "-" + std::to_string(k) + ".csv", records)) { ++S.recFails; continue; }
         for (size_t i = 0; i < records.size(); ++i) { S.marks[records[i].bar] = records[i].side; S.markVal[records[i].bar] = records[i].val; }
+    }
+    for (long long k = S.session - 9; k <= S.session; ++k) {   // (0.3.0) the T marks (bounded: 2,000 lines)
+        std::ifstream in((d + "\\" + stem(S) + "-T-" + std::to_string(k) + ".csv").c_str(), std::ios::binary); std::string ln; int n = 0;
+        while (in && n++ < 2000 && std::getline(in, ln)) { const size_t a = ln.find('|'); if (a == std::string::npos) continue; char* e = nullptr; const long long bt = std::strtoll(ln.c_str(), &e, 10);
+            if (e != ln.c_str() + a || bt <= 0) continue;
+            const bool top = ln.compare(a + 1, 3, "top") == 0, bot = ln.compare(a + 1, 6, "bottom") == 0;
+            if (top || bot) S.tmarks[bt] = top ? -1 : 1; }
     }
 }
 void Exhaustion::norms(EXState& S) {
@@ -400,7 +442,8 @@ void Exhaustion::status(EXState& S, long long now) {
     std::ostringstream o; o.imbue(std::locale::classic());
     o << "VERSION," << EX_VERSION << "\nMARKET," << S.market << "\nSYMBOL," << S.symbol << "\nSPB," << S.spb << "\nSTATE," << S.state
       << "\nPARAMS,N " << S.P.N << ",S " << S.P.S << ",T " << S.P.T << "," << S.params << "\nRTH," << S.rthO << "," << S.rthC << "\nOVERNIGHT_LINE," << S.tOvernight
-      << "\nPROVEN," << S.proven << "\nNOW,buyers_fading " << S.liveB << ",sellers_fading " << S.liveS << "\nMARKS," << S.marks.size() << ",fails " << S.recFails << "\n";
+      << "\nPROVEN," << S.proven << "\nNOW,buyers_fading " << S.liveB << ",sellers_fading " << S.liveS << "\nMARKS," << S.marks.size() << ",fails " << S.recFails << "\n"
+      << "T_MARK,HELD facts (SignalBoard G) " << (S.tBoard ? "read" : "none") << ",checked " << S.tFacts << ",T recorded " << S.tWrites << " fails " << S.tFails << ",shown marks " << S.tmarks.size() << ",rule exh >= " << ex::T_EXH << "x within " << ex::T_BEFORE << " bars before + close back within " << ex::T_AFTER << " bars" << "\n";
     const std::string text = o.str(); if (text == S.lastStatusText) return;
     const std::string f = flexDir(); if (f.empty()) return;
     if (publishFile(f + "\\Exhaustion.status-" + stem(S) + ".txt", text)) S.lastStatusText = text;
@@ -414,7 +457,7 @@ void Exhaustion::pump() {
         identify(S);
         const long long now = steadyMs();
         const long long ct = ctSec(currentDate());
-        if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; S.marks.clear(); S.markVal.clear(); load(S); } }
+        if (ct > 0) { const long long key = (ct - 17LL * 3600) / 86400LL + 1; if (key != S.session) { S.session = key; S.marks.clear(); S.markVal.clear(); S.tmarks.clear(); S.tVal.clear(); load(S); } }
         if (S.lastNormsMs < 0 || now - S.lastNormsMs >= 60000) { S.lastNormsMs = now; norms(S); }
         const long count = getBarCount();
         calcBars(S, count);
@@ -472,6 +515,13 @@ void Exhaustion::render(EXState& S) {
         if (m == S.marks.end()) continue;
         txt(xOf(vis[k]) - 6, bottom + 2, "E?", m->second < 0 ? C_SELL : C_BUY);   // (0.2.3, audit list 18:25 CT) "E?" - untested as a standalone signal
     }
+    // (0.3.0) T: the recorded marks at the bottom of the pane under their bar (red = a top, green = a bottom); one row above an E? on the same bar
+    if (times.count >= count) for (size_t k = 0; k < vis.size(); ++k) {
+        std::map<long long, int>::const_iterator m = S.tmarks.find((long long)times[vis[k]]);
+        if (m == S.tmarks.end()) continue;
+        const bool withE = S.marks.count((long long)times[vis[k]]) > 0;
+        txt(xOf(vis[k]) - 3, withE ? bottom - 11 : bottom + 2, "T", m->second < 0 ? C_SELL : C_BUY);
+    }
 }
 
 extern "C" cppExtension* CreateExtension(void) {
@@ -479,6 +529,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);
     p->setDescription("LRA Exhaustion: is the side pushing price running out? Red = buyers fading at a new high (bearish), green = sellers fading at a new low (bullish): their peak pace in the push / their pace now, 1.0 when price is not at a new extreme. E = the first RTH bar at or over the market's line (from the nightly study), recorded and never repainted.");
-    p->setVersion("0.2.4");   // EX_VERSION
+    p->setVersion("0.3.1");   // EX_VERSION
     return p;
 }

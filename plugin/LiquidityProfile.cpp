@@ -518,7 +518,7 @@ struct LQState {
     struct OlHit { int line = -1; int b0 = 0, b1 = 0; long long lo = 0, hi = 0; };
     std::set<long long> olFillKeys, olFillPub; long long olFillPubMs = -1; int olFillPubFails = 0;   // (0.55.1) fill-dot candles (bar datetime keys) for lsDefenseLines
     std::vector<int> olShownIds;   // (0.68.0) the tested lines drawn this pass (ids)
-    std::vector<sb::Fact> olQ; long long olQMs = -1; int olQReads = 0;   // (0.68.0) lsDealerProfile's Liquidity column (SignalBoard Q: price, side, rank) for the frozen touch rank
+    std::vector<sb::Fact> olQ; long long olQMs = -1; int olQReads = 0; std::string olGBody; long long olGMs = -1; int olGPosts = 0;   // (0.68.0) + the HELD facts (G) for lsExhaustion's T   // (0.68.0) lsDealerProfile's Liquidity column (SignalBoard Q: price, side, rank) for the frozen touch rank
     std::vector<OlHit> olHits; int olHov = -1; int olDrawnNow = 0, olWordsNow = 0, olQNow = 0, olTagsNow = 0, olCutNow = 0; std::string lmtBody; long long lmtAt = -1; int lmtRows = 0, lmtWrites = 0, lmtFails = 0;   // (0.60.0) the level-tagged live orders file   // (0.59.0) + level tags drawn
     std::vector<LzHit> lzHits; int lzHov = -1, lzHovBar = -1; double lzHovPrice = 0; void* lzHovWnd = nullptr; std::string lzHovState = "none";
     int lzDrawnNow = 0, lzLmtRows = 0, lzFRows = 0, lzGammaDrawn = 0, lzTagsDrawn = 0, lzAfterDrawn = 0;   // (0.54.0) + after-fill reads on the chart now   // (0.53.0) state tags on the chart now
@@ -1661,7 +1661,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
             o << "ORDER_LINES," << oln::VERSION << "," << (S.lzSet.on ? "on" : "off") << ",params " << S.olParWhy << ",floor " << S.ol.R.floorLots << " lots rest " << S.ol.R.restMin << " min roll " << S.ol.R.rollSec << " s ladder >= " << S.ol.R.ladMinN << " x " << S.ol.R.ladPieceMin << "+ lots in " << S.ol.R.ladSpan << " ticks cut-off " << S.ol.R.cutMin / 60 << ":" << (S.ol.R.cutMin % 60 < 10 ? "0" : "") << S.ol.R.cutMin % 60
               << ",tracked " << O.lines << " drawn " << O.drawn << " (on chart now " << S.olDrawnNow << ", words " << S.olWordsNow << ", Q " << S.olQNow << ", level tags " << S.olTagsNow << ", live lines cut (top " << LQ_LIVE_TOP << "/side) " << S.olCutNow << " (LineLevelTag " << llt::VERSION << ")" << ")"
               << ",filled " << O.filled << " pulled " << O.pulled << " rolls " << O.rolls << " (ambiguous " << O.rollAmbig << ") moves " << O.moves << " ladders " << O.ladders << " icebergs " << O.icebergs
-              << ",tested lines (OrderLines " << oln::VERSION << ") touched " << O.touched << " closed-through " << O.through << " shown now " << S.olShownIds.size() << " Q reads " << S.olQReads << ",held " << O.held << " break " << O.thru << " (hover only " << O.wordsHidden << "),late skipped " << O.lateSkipped << ",unknown fills " << O.unknownFill << ",restored " << S.olRestored << ",writes " << S.olWrites << " fails " << S.olFails << "\n"; }
+              << ",tested lines (OrderLines " << oln::VERSION << ") touched " << O.touched << " closed-through " << O.through << " shown now " << S.olShownIds.size() << " Q reads " << S.olQReads << " G posts " << S.olGPosts << ",held " << O.held << " break " << O.thru << " (hover only " << O.wordsHidden << "),late skipped " << O.lateSkipped << ",unknown fills " << O.unknownFill << ",restored " << S.olRestored << ",writes " << S.olWrites << " fails " << S.olFails << "\n"; }
         {   const long long qn = S.qmE.lastT; const std::vector<qm::Live> QL = S.qmE.live(qn);   // (0.49.0) the queue meter (numbers here; the meter is drawn by the Dealer Profile)
             o << "QUEUE_METER," << qm::VERSION << ",tests live " << QL.size() << ",started " << S.qmE.nStarted << ",anchors levels " << S.qmE.levels.size() << " pivots (ZigZag last-3 intact) " << S.qmE.pivots.size() << ",Q rows skipped: building " << S.qmE.nThin << " debounced " << S.qmE.nDebounced << " not a level / pivot " << S.qmE.nNotAnchor
               << ",ATR " << S.qmE.atr << ",zone " << S.qmE.zoneW() << " ticks,book " << S.qmE.book.size() << ",events " << S.qmE.nEvents << ",unknown fills " << S.qmE.nUnknownFill
@@ -3449,13 +3449,25 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
             ++S.olDrawnNow; S.olShownIds.push_back(L.id);
             if (test || L.word == oln::W_NONE || !S.lzSet.tags) continue;
             // the label at the decision bar, above the line: [rank box] (only for a top-6 rank frozen at the touch) + the word
-            const char* wt = oln::wordText(L.word); const int ww = (int)getTextWidth(wt, -1) + 2, bx = L.touchRank > 0 ? fh : 0;
+            const std::string wts = oln::labelText(L); const char* wt = wts.c_str(); const int ww = (int)getTextWidth(wt, -1) + 2, bx = L.touchRank > 0 ? fh : 0;   // (Rassul 10:57 CT) "[2] HELD 146"
             const int lw = bx + (bx ? 3 : 0) + ww, ly = yLab - fh - 2; int lx = std::min(xMax - lw, decX + 3);
             if (lx < xL || ly <= top + 14 || ly + fh >= bottom) continue;
             if (bx) { const bool king = L.touchRank == 1; RCT rb; rb.set(coord(lx), coord(ly), coord(lx + bx), coord(ly + fh)); ko::mark(rb, (short)1, c, king ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);
                       const std::string rk = std::to_string(L.touchRank); setTextColor(king ? (COLOR)0x000F172A : (COLOR)0x00F8FAFC); ko::text(rb, rk.c_str(), true, false); lx += bx + 3; }
             setTextColor(c); RCT wr; wr.set(coord(lx), coord(ly), coord(lx + ww), coord(ly + fh)); ko::text(wr, wt, false, false); ++S.olWordsNow;
         }
+    }
+    {   // (0.68.0) every DECIDED order-line HELD as SignalBoard fact 'G' (decided, final): bar = the decision bar's END (CT seconds, the
+        // same clock as the bar stamps), price, side +1 bid (support) / -1 offer (resistance), val = displayed lots at the touch, code = rank;
+        // lsExhaustion 0.3.0 reads them for its T mark. Re-posted on a change and every 20 s (facts are 60 s fresh); at most the newest 150
+        std::vector<sb::Fact> G; std::string body;
+        for (size_t li = 0; li < E.lines.size(); ++li) { const oln::Line& L = E.lines[li]; if (L.word != oln::W_HELD || L.wordMs <= 0) continue;
+            sb::Fact f; f.bar = L.wordMs / 1000; f.lo = f.hi = (double)(L.fillPx ? L.fillPx : L.px()) * tick; f.side = L.side == oln::BID ? 1 : -1; f.val = (double)L.touchLots; f.code = L.touchRank; f.state = 1; f.proven = 0; G.push_back(f); }
+        if (G.size() > 150) G.erase(G.begin(), G.begin() + (long)(G.size() - 150));
+        for (const sb::Fact& f : G) body += std::to_string(f.bar) + "," + std::to_string(f.side) + "," + std::to_string(f.lo) + ";";
+        const long long st = steadyMs();
+        if (!S.symbol.empty() && (body != S.olGBody || S.olGMs < 0 || st < S.olGMs || st - S.olGMs >= 20000)) {
+            const char* clk = getChartLabel(); sb::postFacts('G', S.symbol, S.spb, clk ? std::string(clk) : std::string(), st, G); S.olGBody = body; S.olGMs = st; ++S.olGPosts; }
     }
     RTARRAYI olDt(barDateTime); (void)olDt;                            // (0.68.0) no fill dots any more: the fill-key file is published empty
     // (0.60.0) the level-tagged LIVE orders for the Dealer Profile 2.28.0 Levels column: "LMTL,1,<unix>,<tick>" + one O line per order;
