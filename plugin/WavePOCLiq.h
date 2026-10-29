@@ -1,12 +1,13 @@
-// WavePOCLiq.h  1.1.1  (2026-10-28)  -  lsWavePOC 1.1.1 LIQUIDITY NODES, SDK-free (tested in tests_wavepoc\test_wavepoc_logic.cpp).
+// WavePOCLiq.h  1.1.3  (2026-10-29)  -  lsWavePOC 1.1.1 LIQUIDITY NODES, SDK-free (tested in tests_wavepoc\test_wavepoc_logic.cpp).
 // Rassul approved 11:27 CT (mockups wavepoc_lpoc_w1 / w2, reference wp8.py): the resting real-order liquidity of each wave, drawn as
 // compact bars pointing LEFT from the wave start, nodes only.
 //   BOOK      IRT's live order-by-order book (DEPTH_BY_ORDER): NEW / MOD / DEL / FILL keep every resting order (price, side, lots).
 //             MARKET-MAKER orders are removed: an order re-priced >= 2 times within 5 minutes does not count while that holds.
 //   SAMPLE    once per second: the resting lots per price and side (within +-300 ticks of the book's middle) added to the forming
 //             bar's sums; the bar's sample count kept. A wave's liquidity = the average resting lots per profile row over the wave's
-//             bars (sum of samples / number of samples). Bars with no samples (before the indicator loaded) = no book: a wave needs
-//             samples on >= 90% of its bars, otherwise it simply has no liquidity nodes (no error).
+//             bars (sum of samples / number of samples). Bars with no samples (before the indicator loaded) = no book. (1.1.3) a wave takes
+//             the bars that HAVE samples once >= 2 of them (>= 3 samples) do (was: >= 90% of its bars - no wave live at an IRT
+//             restart could ever qualify); otherwise it simply has no liquidity nodes (no error).
 //   NODES     (1.1.1) rows >= 1.9x the wave's median non-zero row; a peak on the RAW rows (a row >= both neighbours, edges included);
 //             two nodes are separate when >= 3 rows apart AND the minimum RAW row between them <= 0.7x the smaller node's raw value
 //             (1.1.0 used the 3-row smoothed valley, which merged single-tick orders on a flat ES book - wp9.pick_raw); max 5;
@@ -23,14 +24,17 @@
 
 namespace wpl {
 
-static const char* const VERSION = "1.1.2";   // (1.1.2) a wave bar's samples = every sample stamped inside the bar (span), not only its exact stamp
+static const char* const VERSION = "1.1.3";   // (1.1.3) a wave takes the book of the bars that HAVE samples (>= 2 bars), not 90% of all its bars
+// (1.1.2 note)   // (1.1.2) a wave bar's samples = every sample stamped inside the bar (span), not only its exact stamp
 static const long long MM_WINDOW_MS = 5LL * 60 * 1000;   // re-priced >= 2x in 5 min = market maker
 static const int MM_REPRICES = 2;
 static const long long SAMPLE_MS = 1000;
 static const long long BAND_TICKS = 300;                  // sampled prices around the book's middle
 static const size_t BAR_CAP = 1500;                       // bars of samples kept
 static const size_t BOOK_CAP = 400000;
-static const double COVER_MIN = 0.9;                      // share of a wave's bars that must have samples
+static const double COVER_MIN = 0.9;                      // (1.1.2, no longer used by average) share of a wave's bars that had to have samples
+static const size_t LIQ_MIN_BARS = 2;                    // (1.1.3) a wave needs >= 2 of its bars with book samples (1 if it has 1 bar)
+static const long long LIQ_MIN_SAMPLES = 3;               // (1.1.3) ... and >= 3 samples in them
 static const double LIQ_RATIO = 1.9;                      // (1.1.1, was 2.0) a node row >= 1.9x the wave's median non-zero row
 static const double LIQ_VALLEY = 0.7;                     // separate: min RAW row between <= 0.7x the smaller node
 
@@ -104,9 +108,10 @@ public:
     }
     // the average resting lots per row (and the bid part) over bars with stamps ts; false = no book for this wave
     // (1.1.2) the forming bar closed: every sample stamped with one of its interim stamps moves to its final (closed) stamp
-    void rekey(const std::vector<long long>& from, long long to) {
+    // (1.1.3) lo = the previous closed bar's final stamp: a key <= lo is that bar's own (an interim stamp equal to it) and is never moved
+    void rekey(const std::vector<long long>& from, long long to, long long lo = LLONG_MIN) {
         for (long long k : from) {
-            if (k == to) continue;
+            if (k == to || k <= lo) continue;
             auto it = bars.find(k); if (it == bars.end()) continue;
             BarSum& d = bars[to]; d.samples += it->second.samples;
             for (const auto& kv : it->second.lots) { auto& q = d.lots[kv.first]; q.first += kv.second.first; q.second += kv.second.second; }
@@ -116,22 +121,25 @@ public:
     // (1.1.2, 18:19 CT: the record of 2026-10-28 has NO liquidity node at all) the samples are stamped with the FORMING bar's stamp, which
     // IRT may move while the bar forms (the last trade's time); the closed bar's stamp then never matched -> no wave ever had a book.
     // spanSec > 0: a wave bar stamped t (its END) takes every sample stamped in (t - spanSec, t]; 0 = the exact stamp (1.1.1)
-    bool average(const std::vector<long long>& ts, long long e0, int rowTicks, size_t nRows, std::vector<double>& rows, std::vector<double>& bids, long long spanSec = 0) const {
-        rows.assign(nRows, 0.0); bids.assign(nRows, 0.0);
-        if (ts.empty() || rowTicks < 1 || nRows == 0) return false;
-        auto range = [&](long long t, std::map<long long, BarSum>::const_iterator& a, std::map<long long, BarSum>::const_iterator& z) {
-            if (spanSec > 0) { a = bars.upper_bound(t - spanSec); z = bars.upper_bound(t); }
-            else { a = bars.find(t); z = a; if (a != bars.end()) ++z; }
-        };
-        long long n = 0; size_t covered = 0;
+    // (1.1.3, 2026-10-29 08:40 CT live ES: "waves without book 21", no node on any wave) the samples start when IRT (re)starts; every live
+    // wave began before that (e.g. sampled from 08:13, the live wave from 07:48) -> under the 90%-of-its-bars rule NO wave confirmed in the
+    // session ever had a book. Now: the average over the wave's bars that HAVE samples, once >= LIQ_MIN_BARS bars / LIQ_MIN_SAMPLES samples.
+    void coverage(const std::vector<long long>& ts, long long spanSec, size_t& covered, long long& n) const {
+        covered = 0; n = 0;
         for (long long t : ts) {
-            std::map<long long, BarSum>::const_iterator a, z; range(t, a, z); long long m = 0;
+            std::map<long long, BarSum>::const_iterator a, z; range(t, spanSec, a, z); long long m = 0;
             for (auto it = a; it != z; ++it) m += it->second.samples > 0 ? it->second.samples : 0;
             if (m > 0) { ++covered; n += m; }
         }
-        if (n <= 0 || (double)covered < COVER_MIN * (double)ts.size()) return false;
+    }
+    static bool enough(size_t bars, size_t covered, long long n) { return n >= LIQ_MIN_SAMPLES && covered >= std::min(LIQ_MIN_BARS, bars) && covered > 0; }
+    bool average(const std::vector<long long>& ts, long long e0, int rowTicks, size_t nRows, std::vector<double>& rows, std::vector<double>& bids, long long spanSec = 0) const {
+        rows.assign(nRows, 0.0); bids.assign(nRows, 0.0);
+        if (ts.empty() || rowTicks < 1 || nRows == 0) return false;
+        size_t covered = 0; long long n = 0; coverage(ts, spanSec, covered, n);
+        if (!enough(ts.size(), covered, n)) return false;
         for (long long t : ts) {
-            std::map<long long, BarSum>::const_iterator a, z; range(t, a, z);
+            std::map<long long, BarSum>::const_iterator a, z; range(t, spanSec, a, z);
             for (auto it = a; it != z; ++it) for (const auto& kv : it->second.lots) {
                 const long long d = kv.first - e0; if (d < 0) continue;
                 const long long k = d / rowTicks; if (k >= (long long)nRows) continue;
@@ -140,6 +148,11 @@ public:
         }
         for (double v : rows) if (v > 0) return true;
         return false;
+    }
+private:
+    void range(long long t, long long spanSec, std::map<long long, BarSum>::const_iterator& a, std::map<long long, BarSum>::const_iterator& z) const {
+        if (spanSec > 0) { a = bars.upper_bound(t - spanSec); z = bars.upper_bound(t); }
+        else { a = bars.find(t); z = a; if (a != bars.end()) ++z; }
     }
 };
 

@@ -1,4 +1,4 @@
-// test_wavepoc_host.cpp - lsWavePOC 1.3.3 host suite (1.0.0 origin) on the mock SDK (WavePOC_test_support/irtsdk.h).
+// test_wavepoc_host.cpp - lsWavePOC 1.3.4 host suite (1.0.0 origin) on the mock SDK (WavePOC_test_support/irtsdk.h).
 //   (in plugin\tests_wavepoc) g++ -std=c++17 -Wall -Wextra -IWavePOC_test_support -I.. test_wavepoc_host.cpp -o th && ./th wavepoc_es1022.csv
 // Covers: the settings rows (Reversal bars 3 / Show zigzag off) and the native parameter path (saved set used, refused / blank set =
 // defaults); the Oct 22 ES waves through the real host (VAP read per bar, files written); the draw (pre-draw = profile behind the
@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.3.3" && std::string(wpl::VERSION) == "1.1.2", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.3.4" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();
@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
         const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt"), sto = slurp(flex() + "/WavePOC/ES-180.csv");
         size_t nw = 0; for (size_t p = rec.find("\nWAVE,"); p != std::string::npos; p = rec.find("\nWAVE,", p + 1)) ++nw;
         CHECK(nw == 5 && rec.find("NODE,") != std::string::npos && rec.find("STOP,") != std::string::npos && rec.find("\nROWS,") != std::string::npos, "(1.3.3) record: 5 waves with nodes, stops and (1.3.2) rows");
-        CHECK(st.rfind("VERSION,1.3.3", 0) == 0 && st.find("qualified up 3 down 2") != std::string::npos && st.find("QUALIFIED_BY,AVG 0,ATR 1,BOTH 4") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
+        CHECK(st.rfind("VERSION,1.3.4", 0) == 0 && st.find("qualified up 3 down 2") != std::string::npos && st.find("QUALIFIED_BY,AVG 0,ATR 1,BOTH 4") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
         CHECK(st.find("touch 13,new wave 3,origin close 0") != std::string::npos, "status: stops by reason (" << st.substr(st.find("STOPS,"), 50) << ")");
         wpc::Store chk; std::string why; CHECK(wpc::storeFromText(sto, "ES", 180, 3, 250000000LL, chk, why) && chk.dn.size() == 25 && sto.rfind("WAVEPOC_STORE,2,", 0) == 0, "(1.3.3) store (version 2) saved atomically with the day's 5 down candidates (14-bar lows) (" << why << ", " << chk.dn.size() << ")");
     }
@@ -277,6 +277,68 @@ int main(int argc, char** argv) {
         CHECK(st.find("MBO,open,events") != std::string::npos && st.find("LIQUIDITY_NODES,waves with liquidity") != std::string::npos, "status: MBO + LIQUIDITY_NODES lines");
         x.clear();
         CHECK(mock::dboAlive == alive0, "chart removed: the feed object is destroyed (unsubscribed)");
+    }
+
+    // ---- (1.3.4, live ES 08:40 CT 2026-10-29: "waves without book 21", no liquidity node anywhere) the LIVE path: IRT (re)starts with the
+    // history already on the chart (bars 0 .. L at once), the book opens then and is sampled only from there; the forming bar's stamp
+    // moves while it forms (interim stamps) and is final when the next bar appears; calc comes several times per bar.
+    for (int mode = 0; mode < 3; ++mode) {
+        wipe(); seedStore("ES", 180, 3, (long long)F.t[0]);
+        mock::Host M; mock::current = &M; int oid = 1; const int L = 40;
+        auto order = [&](int act, int side, float px, unsigned long sz, int id) { DEPTH_ORDER o; std::memset(&o, 0, sizeof o); o.action = (unsigned char)act; o.buySell = (unsigned char)side; o.price = px; o.size = sz; o.orderID = id; M.mbo.push_back(o); };
+        for (int k = 0; k <= 240; ++k) { const float px = 7670.0f + 0.25f * (float)k; order(0, px < 7700 ? 1 : 0, px, 5, oid++); }
+        order(0, 1, 7685.25f, 400, oid++); order(0, 1, 7680.25f, 250, oid++); order(0, 0, 7712.75f, 300, oid++);
+        chart(M, F, L); x.calc(0);                                          // load: 40 bars of history, no book for them
+        WState* sm = static_cast<WState*>(M.userData);
+        CHECK(sm && sm->dbo && sm->samp.samples == 1 && sm->E.C.liqWaves == 0, "(1.3.4) load: the book opens, one sample (the forming bar), no wave of the history has a book");
+        int provSeen = 0, provLiq = 0, provDrawn = 0;
+        for (int k = L + 1; k <= 79; ++k) {
+            chart(M, F, k);
+            const RTDATE fin = F.t[(size_t)k];
+            // mode 0: the stamp moves (last trade) then is final; 1: the final stamp from the start; 2: the first interim = the previous bar's stamp
+            const RTDATE interim[3] = { mode == 1 ? fin : (RTDATE)(F.t[(size_t)k - 1] + (mode == 2 ? 0 : 7)), mode == 1 ? fin : (RTDATE)(F.t[(size_t)k - 1] + 95), fin };
+            for (int c = 0; c < 3; ++c) {
+                M.t.back() = interim[c];
+                if (sm) sm->samp.lastMs = -1;                                // a sample on every calc (IRT: once a second)
+                x.calc(0);
+            }
+            sm = static_cast<WState*>(M.userData);
+            if (sm && sm->provOk) {
+                std::vector<long long> ts; for (int j = sm->prov.i0; j <= sm->prov.i1; ++j) ts.push_back(sm->E.B[(size_t)j].t);
+                size_t cov = 0; long long n = 0; sm->samp.coverage(ts, 180, cov, n);
+                if (wpl::Sampler::enough(ts.size(), cov, n)) { ++provSeen; provLiq += sm->prov.liqOk && !sm->prov.lnodes.empty(); drawBoth(x, M); int g = 0; for (const mock::Prim& q : M.drawn) g += q.k == 'F' && (q.col == 0x22C55E || q.col == 0xEF4444 || q.col == wpc::mix(0x22C55E, 0x0B0F17, 0.6) || q.col == wpc::mix(0xEF4444, 0x0B0F17, 0.6)); provDrawn += g > 0; }
+            }
+        }
+        sm = static_cast<WState*>(M.userData);
+        {   // every closed bar 40 .. 78 has its samples under its own final stamp (bar 79 still forming)
+            int good = 0, stray = 0; if (sm) for (const auto& kv : sm->samp.bars) { if (kv.first > (long long)F.t[78]) continue; bool bar = false; for (int j = L; j <= 78; ++j) bar = bar || kv.first == (long long)F.t[(size_t)j]; if (bar && kv.second.samples >= (kv.first == (long long)F.t[L] ? 1 : 3)) ++good; else ++stray; }
+            CHECK(good == 78 - L + 1 && stray == 0, "(1.3.4) the forming bar's interim stamps are re-keyed: every closed bar's samples under its final stamp (" << good << " good, " << stray << " stray, mode " << mode << ")");
+        }
+        int after = 0, afterLiq = 0, beforeLiq = 0;
+        if (sm) for (const wpc::Wave& w : sm->E.waves) {
+            if (w.fromRecord) continue;
+            int sampled = 0; for (int j = w.i0; j <= w.i1; ++j) sampled += j >= L;   // bar L (forming at the load) has samples
+            if (sampled >= 2) { ++after; afterLiq += w.liqOk && !w.lnodes.empty(); }
+            if (w.i1 < L) beforeLiq += !w.lnodes.empty();
+        }
+        int partial = 0; if (sm) for (const wpc::Wave& w : sm->E.waves) partial += w.i0 < L && w.i1 >= L + 1 && !w.lnodes.empty();
+        CHECK(partial >= 1, "(1.3.4 the live bug) a wave that began BEFORE the restart and ended after it has liquidity nodes (" << partial << ", mode " << mode << ")");
+        CHECK(after >= 1 && afterLiq == after, "(1.3.4) every wave confirmed while running with >= 2 sampled bars has liquidity nodes (" << afterLiq << " of " << after << ", mode " << mode << ")");
+        CHECK(beforeLiq == 0, "(1.3.4) waves wholly before the load stay without liquidity (no book then)");
+        CHECK(provSeen >= 1 && provLiq == provSeen && provDrawn == provSeen, "(1.3.4) the live (provisional) wave shows its liquidity nodes once its bars have samples (" << provLiq << " / " << provDrawn << " of " << provSeen << ", mode " << mode << ")");
+        // never repainted: the recorded LNODEs of a confirmed wave do not change with later samples / a replay
+        std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv");
+        CHECK(rec.find("\nLNODE,") != std::string::npos, "(1.3.4) LNODE lines recorded for the live waves");
+        std::vector<std::pair<long long, long long> > before; if (sm) for (const wpc::Wave& w : sm->E.waves) for (const wpc::LNode& n : w.lnodes) before.push_back(std::make_pair(w.t0, n.tick));
+        { M.t.front() = M.t.front() - 1; if (sm) sm->samp.lastMs = -1; x.calc(0); M.t.front() = F.t[0]; x.calc(0); }   // history changed -> replay from the record
+        std::vector<std::pair<long long, long long> > again; sm = static_cast<WState*>(M.userData); if (sm) for (const wpc::Wave& w : sm->E.waves) for (const wpc::LNode& n : w.lnodes) again.push_back(std::make_pair(w.t0, n.tick));
+        CHECK(!before.empty() && before == again, "(1.3.4) a replay redraws the same liquidity nodes (from the record, never repainted)");
+        if (sm) sm->statusMs = -1;
+        x.calc(0);
+        const std::string st = slurp(flex() + "/WavePOC.status-ES-180.txt");
+        CHECK(st.find("LIQ_SAMPLING,since ") != std::string::npos && st.find("LIQ_WAVE,confirmed,") != std::string::npos && st.find(",bars with samples ") != std::string::npos && st.find(" liquidity nodes\n") != std::string::npos, "(1.3.4) status: LIQ_SAMPLING + per-wave LIQ_WAVE lines");
+        if (mode == 0) std::cout << st.substr(st.find("LIQUIDITY_NODES")) ;
+        x.clear();
     }
 
     // ---- (1.3.0, Rassul approved 17:27 CT) CoB legs: the RTL cob_bull_3m_1b / cob_bear_3m_1b (the Cob marks' source) through the host

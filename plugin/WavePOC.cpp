@@ -1,6 +1,13 @@
 /********************************************************************************
- *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.3.3  (2026-10-29)
+ *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.3.4  (2026-10-29)
  *
+ *  1.3.4 (2026-10-29 08:40 CT live ES: no liquidity node on any profile, status "waves without book 21", "bars sampled 9"): the book
+ *    is sampled only from the moment IRT (re)starts, and 1.1.0-1.3.3 required samples on >= 90% of a wave's bars - every wave live at
+ *    the restart (e.g. sampled from 08:13, the live wave from 07:48) could never qualify, so no wave confirmed in the session and no
+ *    live wave ever had a book. Now (WavePOCLiq 1.1.3) a wave takes the average book of the bars that HAVE samples once >= 2 of its bars
+ *    (and >= 3 samples) do; the live (provisional) wave is re-evaluated at every closed bar; a confirmed wave is decided once and
+ *    recorded (never repainted). The re-key of the forming bar's interim stamps never moves a key <= the previous closed bar's stamp.
+ *    Status: LIQ_SAMPLING (since when) + one LIQ_WAVE line per recent wave (bars, bars with samples, samples, result).
  *  1.3.3 (Rassul 04:51 / 04:52 CT 2026-10-29): a wave candidate ends at a 14-bar high / low (was 20) and QUALIFIES when it is bigger than
  *    the direction's average wave (AVG, unchanged) OR its range (start pivot -> end pivot) is bigger than 3 x the 14-bar ATR of the closed
  *    bars at its end bar (ATR; simple mean of the true range, native, no look-ahead - the plugin had no ATR). The WAVE record line adds
@@ -113,7 +120,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.3.3";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.3.4";   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -217,6 +224,7 @@ public:
     void readCob(WState& S, long n);
     void flush(WState& S, long long now);
     void status(WState& S, long long now);
+    std::string liqWaves(WState& S);
     int vapRows(WState& S, int chartBar, std::vector<wpc::VRow>& out);
     long long localSec(RTDATE d);
     static int readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
@@ -410,7 +418,7 @@ void WavePOC::drainBook(WState& S, long long now) {
     const long n = getBarCount(); if (n < 1) return;
     RTARRAYI times(barDateTime); if ((long)times.count < n) return;
     // (1.3.2) the forming bar's stamp may move while it forms: its samples are re-keyed to the closed bar's final stamp once it closes
-    if (S.formIdx >= 0 && S.formIdx != (int)n - 1 && S.formIdx < (int)n) { S.samp.rekey(S.formKeys, localSec((RTDATE)times[S.formIdx])); S.formKeys.clear(); }
+    if (S.formIdx >= 0 && S.formIdx != (int)n - 1 && S.formIdx < (int)n) { S.samp.rekey(S.formKeys, localSec((RTDATE)times[S.formIdx]), S.formIdx > 0 ? localSec((RTDATE)times[S.formIdx - 1]) : LLONG_MIN); S.formKeys.clear(); }
     if (S.formIdx != (int)n - 1) { S.formIdx = (int)n - 1; S.formKeys.clear(); }
     const long long key = localSec((RTDATE)times[(int)n - 1]);
     if (S.samp.sample(S.book, key, now) && std::find(S.formKeys.begin(), S.formKeys.end(), key) == S.formKeys.end() && S.formKeys.size() < 4096) S.formKeys.push_back(key);
@@ -486,6 +494,23 @@ void WavePOC::flush(WState& S, long long now) {
     }
 }
 
+// (1.3.4) per recent wave (the last 6 + the live one): the book samples found inside its bars - diagnosable live
+std::string WavePOC::liqWaves(WState& S) {
+    std::string o = "LIQ_SAMPLING,since " + (S.samp.bars.empty() ? std::string("- (no sample yet)") : wpc::hm(S.samp.bars.begin()->first)) + ",a wave needs >= " + std::to_string(wpl::LIQ_MIN_BARS) + " of its bars with samples and >= " + std::to_string(wpl::LIQ_MIN_SAMPLES) + " samples\n";
+    const long long span = S.spb > 0 ? (long long)S.spb : 0;
+    auto one = [&](const wpc::Wave& w, const char* what) {
+        std::vector<long long> ts; for (int j = w.i0; j <= w.i1 && j >= 0 && j < (int)S.E.B.size(); ++j) ts.push_back(S.E.B[(size_t)j].t);
+        size_t cov = 0; long long n = 0; S.samp.coverage(ts, span, cov, n);
+        std::string res = w.fromRecord ? (w.lnodes.empty() ? "from record, no liquidity recorded" : "from record, " + std::to_string(w.lnodes.size()) + " liquidity nodes")
+                        : w.pending ? "VAP pending" : w.liqOk ? std::to_string(w.lnodes.size()) + " liquidity nodes" : !wpl::Sampler::enough(ts.size(), cov, n) ? "no book (too few samples in its bars)" : "book found, no row qualifies";
+        o += std::string("LIQ_WAVE,") + what + "," + (w.dir > 0 ? "up " : "down ") + wpc::hm(w.t0) + " -> " + wpc::hm(w.t1) + ",bars " + std::to_string(ts.size()) + ",bars with samples " + std::to_string(cov) + ",samples " + std::to_string(n) + "," + res + "\n";
+    };
+    const size_t nw = S.E.waves.size();
+    for (size_t i = nw > 6 ? nw - 6 : 0; i < nw; ++i) one(S.E.waves[i], "confirmed");
+    if (S.provOk) one(S.prov, "live (provisional)");
+    return o;
+}
+
 void WavePOC::status(WState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;              // calc comes on every tick: build the text at most once a second
@@ -494,7 +519,8 @@ void WavePOC::status(WState& S, long long now) {
                            + (S.vapFault ? "VAP_FAULT,remove and re-add the indicator\n" : "")
                            + "MBO," + (S.blocked ? "not opened (crash guard file present)" : S.dboDead ? "faulted" : S.dbo ? "open" : "opening") + ",events " + std::to_string(S.dboEvents)
                            + ",orders " + std::to_string(S.book.book.size()) + ",samples " + std::to_string(S.samp.samples) + ",bars sampled " + std::to_string(S.samp.bars.size())
-                           + ",market-maker orders left out " + std::to_string(S.samp.mmSeen) + ",backlog slices " + std::to_string(S.backlog) + ",garbage " + std::to_string(S.garbage) + "\n";
+                           + ",market-maker orders left out " + std::to_string(S.samp.mmSeen) + ",backlog slices " + std::to_string(S.backlog) + ",garbage " + std::to_string(S.garbage) + "\n"
+                           + liqWaves(S);
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     wpMkdir(wpFlex()); wpPublish(S.statusPath, body);
@@ -590,7 +616,7 @@ extern "C" cppExtension* CreateExtension(void) {
     WavePOC* p = new WavePOC();
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Wave POC v1.3.3 - each big wave's (and each CoB leg's) own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as pullback targets.");
-    p->setVersion("1.3.3");   // = WP_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Wave POC v1.3.4 - each big wave's (and each CoB leg's) own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as pullback targets.");
+    p->setVersion("1.3.4");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

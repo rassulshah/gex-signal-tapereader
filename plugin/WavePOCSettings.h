@@ -7,7 +7,7 @@
 #include "SettingsSpec.h"
 
 namespace wpset {
-static const char* const PLUGIN_VERSION = "1.3.3";   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine - same rows / parameter version 2
+static const char* const PLUGIN_VERSION = "1.3.4";   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine - same rows / parameter version 2
 // 1.3.2:   // (1.3.1) crash fix, same rows / parameter version 2
 // 1.3.0:   // (1.3.0) + "CoB legs" (every CoB leg gets a profile)
 // was 1.2.0:   // (1.2.0) no lines across the chart, smaller profile; (1.1.0) liquidity nodes; (1.1.1) liquidity 1.9x + raw separation; same two rows

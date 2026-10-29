@@ -275,7 +275,7 @@ static void testLayout(const Fix& F) {
             sp += n; if (n != 1) ok = false; }
         CHECK(ok && sp == 4, "(1.3.3) spines: 4 waves, one each, green up / red down, spanning the wave's range (" << sp << ")"); }
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.3.3", "header 'Wave POC v1.3.3'");
+    CHECK(header && std::string(wpc::VERSION) == "1.3.4", "header 'Wave POC v1.3.4'");
     // no room right of the last bar: no tags at all (counted)
     wpc::View v2 = v; v2.r = (int)xLast + 20; const wpc::Scene s2 = wpc::layout(E, nullptr, v2);
     int t2 = 0; for (const wpc::Prim& p : s2.p) t2 += p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0;
@@ -384,7 +384,15 @@ static void testBook() {
     std::vector<double> rows, bids;
     CHECK(sp.average({ 500, 680 }, 96, 2, 6, rows, bids) && std::fabs(rows[0] - 25) < 1e-9 && std::fabs(rows[2] - 30) < 1e-9 && std::fabs(bids[4]) < 1e-9 && std::fabs(rows[4] - 30) < 1e-9,
           "average lots per row over the wave's bars (" << rows[0] << "," << rows[2] << "," << rows[4] << ")");
-    CHECK(!sp.average({ 500, 680, 860 }, 96, 2, 6, rows, bids), "a wave with bars before the book was read: no liquidity (< 90% covered)");
+    // (1.3.4) the 2026-10-29 live bug: a wave whose first bars are before the book was read takes the bars that have samples (>= 2 bars, >= 3 samples)
+    CHECK(sp.average({ 100, 300, 500, 680 }, 96, 2, 6, rows, bids) && std::fabs(rows[0] - 25) < 1e-9 && std::fabs(rows[2] - 30) < 1e-9, "(1.3.4) bars before the book was read are left out: the average of the sampled bars");
+    CHECK(!sp.average({ 100, 300, 500 }, 96, 2, 6, rows, bids), "(1.3.4) only 1 of 3 bars sampled: no liquidity yet");
+    { wpl::Sampler one; one.sample(b, 500, now); one.sample(b, 500, now + 1000); one.sample(b, 500, now + 2000);
+      CHECK(one.average({ 500 }, 96, 2, 6, rows, bids), "(1.3.4) a 1-bar wave with 3 samples has a book");
+      wpl::Sampler two; two.sample(b, 500, now); two.sample(b, 680, now + 1000);
+      CHECK(!two.average({ 500, 680 }, 96, 2, 6, rows, bids), "(1.3.4) fewer than 3 samples: no liquidity"); }
+    { wpl::Sampler rk; rk.sample(b, 500, now); rk.sample(b, 610, now + 1000); rk.sample(b, 680, now + 2000); rk.rekey({ 500, 610 }, 680, 500);
+      CHECK(rk.bars.count(500) == 1 && rk.bars.count(610) == 0 && rk.bars[680].samples == 2, "(1.3.4) re-key never moves the previous closed bar's own stamp"); }
     std::vector<double> r = { 1, 1, 9, 1, 1, 1, 8, 1, 1, 1, 1 }; double med = 0; const std::vector<int> pk = wpl::pickRaw(r, med);
     CHECK(pk.size() == 2 && pk[0] == 2 && pk[1] == 6 && std::fabs(med - 1) < 1e-9, "raw peaks, separated, biggest first");
     std::vector<double> edge = { 9, 1, 1, 1, 1, 1 }; CHECK(wpl::pickRaw(edge, med).size() == 1, "a peak on the edge row counts (raw, as wp8)");
