@@ -336,3 +336,25 @@ DIR,1729373,C:\ProgramData\Windows App Certification Kit
 DIR,0,C:\ProgramData\WindowsPerformanceRecorder
 DIR,369606545,C:\$Recycle.Bin
 ---- video files over 100 MB
+VIDEO,490996984,12/23/2021 12:53 AM,C:\Users\rassul\Downloads\Telegram Desktop\zoom_0.mp4
+VIDEO,883232357,07/16/2026 08:46 AM,C:\Users\rassul\OneDrive\Desktop\Bookmap\Part 1.mp4
+VIDEO,1873125610,07/16/2026 08:47 AM,C:\Users\rassul\OneDrive\Desktop\Bookmap\Part 2.mp4
+VIDEO,1999143572,07/16/2026 08:51 AM,C:\Users\rassul\OneDrive\Desktop\Bookmap\Part 3.mp4
+VIDEO,1905165578,07/16/2026 08:47 AM,C:\Users\rassul\OneDrive\Desktop\Bookmap\Part 4.mp4
+VIDEO,1226684066,07/16/2026 08:46 AM,C:\Users\rassul\OneDrive\Desktop\Bookmap\Part 5.mp4
+VIDEO,271747341,12/13/2022 03:54 PM,C:\Users\rassul\OneDrive\Desktop\School\UTRGV\Analytics\Social Media\Wk 1 - Overview\Lecture\lecture.mp4
+VIDEO,271747341,12/14/2022 09:10 AM,C:\Users\rassul\OneDrive\Desktop\School\UTRGV\Analytics\Social Media\Wk 1 - Overview\Lecture\lecture_1.mp4
+VIDEO,547958519,12/13/2022 03:10 PM,C:\Users\rassul\OneDrive\Desktop\School\UTRGV\Analytics\Social Media\Wk 2 - Sentiment Analysis\Lecture\Sentiment Analysis.mp4
+VIDEO,570607239,12/13/2022 02:06 PM,C:\Users\rassul\OneDrive\Desktop\School\UTRGV\Analytics\Social Media\Wk 3 - Social Network Analysis - Text Mining\Lecture\week3 text mining and social network analysis.mp4
+VIDEO,855152971,12/13/2022 12:58 PM,C:\Users\rassul\OneDrive\Desktop\School\UTRGV\Analytics\Social Media\Wk 4 - Retweet Analysis\Lecture\Week 4.mp4
+VIDEO,351087462,12/12/2022 04:44 PM,C:\Users\rassul\OneDrive\Desktop\School\UTRGV\Analytics\Social Media\Wk 5 - Youtube\Lecture\youtube.mp4
+VIDEO,262969461,12/12/2022 12:41 PM,C:\Users\rassul\OneDrive\Desktop\School\UTRGV\Analytics\Social Media\Wk 6 - Reddit\Lecture\week 6 - Reddit.mp4
+VIDEO,168442134,12/12/2022 12:09 PM,C:\Users\rassul\OneDrive\Desktop\School\UTRGV\Analytics\Social Media\Wk 7 - Wikipedia\Lecture\Lecture.mp4
+VIDEO,851525235,12/13/2022 12:57 PM,C:\Users\rassul\OneDrive\Documents\SM\ScreenCaptureProject1.mkv
+VIDEO,481788510,12/13/2022 11:30 AM,C:\Users\rassul\OneDrive\Documents\SM\ScreenCaptureProject10.mkv
+VIDEO,568008290,12/13/2022 02:04 PM,C:\Users\rassul\OneDrive\Documents\SM\ScreenCaptureProject11.mkv
+VIDEO,545311278,12/13/2022 03:09 PM,C:\Users\rassul\OneDrive\Documents\SM\ScreenCaptureProject12.mkv
+VIDEO,270029702,12/13/2022 03:54 PM,C:\Users\rassul\OneDrive\Documents\SM\ScreenCaptureProject13.mkv
+VIDEO,349307772,12/12/2022 04:43 PM,C:\Users\rassul\OneDrive\Documents\SM\ScreenCaptureProject7.mkv
+VIDEO,1341935953,12/13/2022 10:35 AM,C:\Users\rassul\OneDrive\Documents\SM\ScreenCaptureProject9.mkv
+DONE
