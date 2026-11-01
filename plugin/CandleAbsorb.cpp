@@ -31,6 +31,7 @@
 #endif
 #include "CandleAbsorbLogic.h"
 #include "HostSlot.h"
+#include "SettingsGuard.h"   // (1.0.1) SS_SAFE_DIALOG: the chart-less Add / settings copy never faults
 #include <algorithm>
 #include <chrono>
 #include <climits>
@@ -51,7 +52,7 @@
 #define CA_SEP "/"
 #endif
 
-static const char* CA_VERSION = "1.0.0";   // = cab::VERSION = the setVersion literal (test_candleabsorb_host checks)
+static const char* CA_VERSION = "1.0.1";   // (1.0.1) the Add-window crash fix (SS_SAFE_DIALOG); drawing / rules unchanged   // was "1.0.0"   // = cab::VERSION = the setVersion literal (test_candleabsorb_host checks)
 
 static long long caMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string caFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + CA_SEP "InvestorRT" CA_SEP "rtx" CA_SEP "lsFlexLevels" : std::string(); }
@@ -90,7 +91,12 @@ struct CState {
 
 class CandleAbsorb : public cppExtension {
 public:
+    SS_SAFE_DIALOG(CandleAbsorb, "CandleAbsorb")   // (1.0.1, 2026-11-01 crash fix) IRT gives the Add / settings window a copy with NO chart:
+                                                   // getRootSymbol / getSymbol there crashed IRT (xnmba150.dll, 17:05 CT) - guarded like ChartView
     CandleAbsorb() : cppExtension() {}
+    virtual int parmsLoadBody(void)  { return RTX_OK; }          // no settings: nothing to load or save
+    virtual int parmsApplyBody(void) { return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int) { return RTX_OK; }
     virtual int draw(void);
     HostSlot<CState> slot_;
     void clear() { slot_.release(this); }
@@ -106,7 +112,7 @@ public:
 };
 
 int cppExtension::init(void) { return RTX_OK; }
-int cppExtension::setup(void) { return RTX_OK; }
+int cppExtension::setup(void) { setParameterVersion(1); return RTX_OK; }   // (1.0.1) no settings, as ChartView
 int cppExtension::done(void) { static_cast<CandleAbsorb*>(this)->clear(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<CandleAbsorb*>(this)->clear(); return RTX_OK; }
 int cppExtension::calc(int) { CandleAbsorb* me = static_cast<CandleAbsorb*>(this); try { me->pump(); } catch (...) {} return RTX_OK; }   // bars + VAP read here only
@@ -284,7 +290,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CandleAbsorb* p = new CandleAbsorb();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Candle Absorb v1.0.0 - at ZigZag pivots the bar's delta POC in the extreme end: A absorbed, Ae absorbed + exhausted, D demand, S supply; a delta POC dash on every candle.");
-    p->setVersion("1.0.0");   // = CA_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Candle Absorb v1.0.1 - at ZigZag pivots the bar's delta POC in the extreme end: A absorbed, Ae absorbed + exhausted, D demand, S supply; a delta POC dash on every candle.");
+    p->setVersion("1.0.1");   // = CA_VERSION (gex-build reads this literal)
     return p;
 }

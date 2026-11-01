@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
     mkdir((home + "/InvestorRT").c_str(), 0755); mkdir((home + "/InvestorRT/rtx").c_str(), 0755);   // IRT's own folders
     {   std::string src = slurp("../CandleAbsorb.cpp"); if (src.empty()) src = slurp("CandleAbsorb.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == CA_VERSION && lit == cab::VERSION && lit == "1.0.0", "version literals match (" << lit << ")"); }
+        CHECK(lit == CA_VERSION && lit == cab::VERSION && lit == "1.0.1", "version literals match (" << lit << ")"); }
     CandleAbsorb x; mock::Host A; A.root = "EP"; mock::current = &A;
     chart(A, F, 165, 246); x.calc(0);
     CState* S = static_cast<CState*>(A.userData);
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
     {   const std::string rec = slurp(flex() + "/CandleAbsorb/EP-180.csv"), st = slurp(flex() + "/CandleAbsorb.status-EP-180.txt");
         size_t n = 0; for (size_t p = rec.find("\nMARK,"); p != std::string::npos; p = rec.find("\nMARK,", p + 1)) ++n;
         CHECK(n == S->E.marks.size() && n > 0, "record: every mark once (" << n << ")");
-        CHECK(st.rfind("VERSION,1.0.0", 0) == 0 && st.find("MARKS,A ") != std::string::npos && st.find("RULES,ZigZag 3 bars") != std::string::npos, "status file");
+        CHECK(st.rfind("VERSION,1.0.1", 0) == 0 && st.find("MARKS,A ") != std::string::npos && st.find("RULES,ZigZag 3 bars") != std::string::npos, "status file");
         // restart: a fresh state replays the chart and writes nothing twice
         x.clear(); mock::current = &A; x.calc(0); const std::string rec2 = slurp(flex() + "/CandleAbsorb/EP-180.csv");
         CHECK(rec2 == rec, "a restart never writes a mark twice");

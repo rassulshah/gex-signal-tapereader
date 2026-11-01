@@ -30,7 +30,7 @@
 
 namespace cab {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // (1.0.1) host crash fix only
 static const int N_BARS = 3;          // IRT ZigZag Min Price Change = 3 bars, Use High/Low
 static const int RETEST_TICKS = 4;    // the next bar re-tests the extreme within 4 ticks
 static const double SIZE_X = 2.0;     // delta POC >= 2.0 x the bar's median |delta| row
