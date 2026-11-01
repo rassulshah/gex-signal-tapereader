@@ -26,3 +26,10 @@ Rassul 2026-10-31 20:33-23:10 CT and 2026-11-01 05:50 CT ("implement what we hav
 
 ## Open questions for Rassul
 - Should Pb stop once price breaks the wave's start? Count near misses (e.g. 2:18, 1.50 pts short)?
+
+## 2026-11-01 06:35 CT change (Rassul: "instead of 4 lets shorten it to 2 so the process is to identify 2 largest nodes, box them (solid box), classify them")
+- LET_TOP 4 -> 2: the 2 biggest delta rows (each >= 2x the median) are boxed, then classified (I? / A? / T?); cluster A? unchanged.
+- The border is a SOLID 1 px white box around each node's distribution (was dotted); the separate delta POC box is not drawn when the
+  delta POC is one of the 2 (its solid box marks it).
+- Pb moved one text row further from the bar (PB_GAP 16 px) so lsCandleAbsorb's code on the same pivot bar never overlaps it.
+- Tests: logic 193/0, 1.5.0 31/0, host 109/0 (ASan + UBSan).

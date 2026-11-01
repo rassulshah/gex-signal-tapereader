@@ -20,23 +20,27 @@ static std::vector<wpc::Bar> flat(int n, long long c) { std::vector<wpc::Bar> B(
 static int count(const std::vector<wpc::Letter>& L, char t) { int k = 0; for (auto& x : L) k += x.t == t; return k; }
 
 int main(int argc, char** argv) {
-    // ---- 1. the letters: top 4 first, then location, then the class ----
-    {   // I = with the wave in the first third; A = against, before the last quarter; T = with, last quarter + close back within 5 bars
+    // ---- 1. the letters (Rassul 06:35 CT "identify 2 largest nodes, box them (solid box), classify them") ----
+    {   // I = with the wave in the first third; T = with, last quarter + close back within 5 bars
         std::vector<wpc::Bar> B = flat(12, 195); B[7].c = 188;   // closes back below row 90 (tick 190) 2 bars after the pivot
-        wpc::Wave w = upWave({{10, 100}, {50, -90}, {52, -85}, {90, 80}, {95, 70}});
+        wpc::Wave w = upWave({{10, 100}, {90, 95}, {50, -90}, {52, -85}});
         const auto top = wpc::topDelta(w);
-        CHECK(top.size() == 4 && top[0] == 10 && top[3] == 90, "top 4 by |delta|, biggest first (5th row left out)");
+        CHECK(top.size() == 2 && top[0] == 10 && top[1] == 90 && wpc::LET_TOP == 2, "top 2 by |delta|, biggest first (3rd and 4th left out)");
         const auto L = wpc::letters(w, B);
-        CHECK(count(L, 'I') == 1 && count(L, 'A') == 1 && count(L, 'T') == 1 && L.size() == 3, "I + A + T, the 2nd A within 10 ticks merged (" << L.size() << ")");
+        CHECK(count(L, 'I') == 1 && count(L, 'T') == 1 && count(L, 'A') == 0 && L.size() == 2, "I + T; the 3rd / 4th rows (A candidates) are not classified (" << L.size() << ")");
         for (auto& x : L) {
             if (x.t == 'I') CHECK(x.row == 10 && x.bull, "I? on row 10, wave colour (green for an up wave)");
-            if (x.t == 'A') CHECK(x.row == 50 && x.bull, "A? on the bigger against row, wave colour");
             if (x.t == 'T') CHECK(x.row == 90 && !x.bull, "T? on row 90, opposite colour (red after an up wave)");
         }
         std::vector<wpc::Bar> B2 = flat(12, 195);
         CHECK(count(wpc::letters(w, B2), 'T') == 0, "no close back within 5 bars = no T");
         std::vector<wpc::Bar> B3 = flat(12, 195); B3[11].c = 188;   // 6 bars after the pivot: too late
         CHECK(count(wpc::letters(w, B3), 'T') == 0, "a close back 6 bars after the pivot is too late for T");
+    }
+    {   // A = against the wave before its last quarter, wave colour; two A rows within 10 ticks = one letter
+        wpc::Wave w = upWave({{50, -90}, {52, -85}, {20, 40}});
+        const auto L = wpc::letters(w, flat(12, 195));
+        CHECK(L.size() == 1 && L[0].t == 'A' && L[0].row == 50 && L[0].bull, "A? on the bigger against row, wave colour; the 2nd merged (" << L.size() << ")");
     }
     {   // rows under 2x the median never get a letter; with-wave rows in the middle get none
         wpc::Wave w = upWave({{20, 19}, {60, 200}});
@@ -46,7 +50,7 @@ int main(int argc, char** argv) {
     {   // the far A rows are separate letters; an A in the last quarter is not an A
         wpc::Wave w = upWave({{30, -60}, {60, -70}, {80, -90}});
         const auto L = wpc::letters(w, flat(12, 195));
-        CHECK(count(L, 'A') == 2, "A at 30% and 60% (both before the last quarter), none at 80% (" << count(L, 'A') << ")");
+        CHECK(count(L, 'A') == 1 && L[0].row == 60, "top 2 = 80% and 60%: A at 60%, none at 80% (last quarter) (" << count(L, 'A') << ")");
     }
     {   // down wave mirror: an I in the first third of a down wave is near its TOP and red
         wpc::Wave w = upWave({}); w.dir = -1; w.p0 = 200; w.p1 = 100; w.drows.assign(101, -10); w.drows[95] = -120; w.dMax = 120;
@@ -112,14 +116,17 @@ int main(int argc, char** argv) {
         v.X = [&](int i) { return 40 + (i - first + 0.5) * bw; }; v.Y = [&](double tk) { return H - 20 - (tk - (lo - 8)) / (double)(hi - lo + 16) * (H - 40); };
         v.textW = [](const std::string& s, bool) { return (int)s.size() * 7; };
         const wpc::Scene sc = wpc::layout(E, nullptr, v);
-        CHECK(sc.lettersDrawn > 0 && sc.pbDrawn > 0 && sc.boxesDrawn > 0, "Oct 30 PM: letters, Pb and dotted borders drawn (" << sc.lettersDrawn << " / " << sc.pbDrawn << " / " << sc.boxesDrawn << ")");
+        CHECK(sc.lettersDrawn > 0 && sc.pbDrawn > 0 && sc.boxesDrawn > 0, "Oct 30 PM: letters, Pb and solid node boxes drawn (" << sc.lettersDrawn << " / " << sc.pbDrawn << " / " << sc.boxesDrawn << ")");
         // delta rows: right of each wave start, <= 30 px; the white delta POC box on the biggest row
         bool right = true; int drowsN = 0;
         for (const wpc::Wave& w : E.waves) { if (w.provisional || w.drows.empty() || w.i0 < first) continue; const int x0 = (int)std::lround(v.X(w.i0) - bw * 0.45);
             for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.back && p.x0 == x0 + 1 && (p.col & 0) == 0) { ++drowsN; if (p.x1 > x0 + 1 + wpc::SIDE_W) right = false; } }
         CHECK(drowsN > 0 && right, "delta rows point RIGHT from the wave start, at most 30 px (" << drowsN << " rows)");
         int boxW = 0; for (const wpc::Prim& p : sc.p) boxW += p.k == wpc::Prim::BOX && p.col == 0xE5E7EB;
-        CHECK(boxW > 0, "the delta POC is outlined in white");
+        int front = 0, dots = 0; for (const wpc::Prim& p : sc.p) { front += p.k == wpc::Prim::BOX && p.col == 0xE5E7EB && !p.back; dots += p.k == wpc::Prim::LINE && p.col == 0xE5E7EB; }
+        CHECK(boxW > 0 && front == sc.boxesDrawn && dots == 0, "the 2 biggest nodes' distributions in SOLID white boxes (no dotted lines) (" << front << " / " << sc.boxesDrawn << ")");
+        bool atMost2 = true; for (const wpc::Wave& w : E.waves) if (!w.provisional) atMost2 = atMost2 && wpc::topDelta(w).size() <= 2;
+        CHECK(atMost2, "every wave: at most 2 boxed / classified nodes");
         // letters: the text sits over its row, centred, on a background patch, never more than the 30 px side + its width
         bool letOk = true; int lets = 0;
         for (size_t k = 0; k < sc.p.size(); ++k) { const wpc::Prim& p = sc.p[k]; if (p.k != wpc::Prim::TEXT || p.text.size() != 2 || p.text[1] != '?') continue; ++lets;

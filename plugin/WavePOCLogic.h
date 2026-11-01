@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-4 delta nodes classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -59,7 +59,7 @@ static const double LNODE_W = 40;        // (1.2.0) the liquidity node max width
 // (1.5.0) the profile sides, letters and pullbacks
 static const double SIDE_W = 30;        // px each side: volume (left) / delta (right) (Rassul 10-31 22:48 CT "40 px on both sides is too much, reduce to 30")
 static const double RALLY_MULT = 4.0;   // a rally / decline wave: bigger than 4 ATR on its own
-static const int LET_TOP = 4;           // the 4 biggest delta rows (each >= 2x the wave median |delta|) are classified
+static const int LET_TOP = 2;           // (1.5.0, Rassul 2026-11-01 06:35 CT "instead of 4 lets shorten it to 2") the 2 biggest delta rows (each >= 2x the wave median |delta|) are boxed and classified
 static const int CL_BAND = 8;           // cluster A: 8-tick delta bands
 static const int CL_N = 20, CL_MIN = 10;// cluster A: vs the median of the prior 20 waves (needs 10)
 static const double CL_X = 2.0;         // cluster A: band >= 2.0x that median
@@ -798,10 +798,6 @@ inline int ci(double v) { return v < -30000 ? -30000 : v > 30000 ? 30000 : (int)
 inline void addLine(Scene& s, double x0, double y0, double x1, double y1, unsigned long c, int w, bool back) { Prim p; p.k = Prim::LINE; p.x0 = ci(x0); p.y0 = ci(y0); p.x1 = ci(x1); p.y1 = ci(y1); p.col = c; p.w = w; p.back = back; s.p.push_back(p); }
 inline void addDashed(Scene& s, double x0, double x1, double y, unsigned long c, int w) { for (double x = x0; x < x1; x += 9) addLine(s, x, y, std::min(x + 5, x1), y, c, w, true); }
 // (1.5.0) a dotted rectangle (2 px dots, 2 px gaps), front layer
-inline void addDotBox(Scene& s, double x0, double y0, double x1, double y1, unsigned long c) {
-    for (double x = x0; x < x1; x += 4) { addLine(s, x, y0, std::min(x + 2, x1), y0, c, 1, false); addLine(s, x, y1, std::min(x + 2, x1), y1, c, 1, false); }
-    for (double y = y0; y < y1; y += 4) { addLine(s, x0, y, x0, std::min(y + 2, y1), c, 1, false); addLine(s, x1, y, x1, std::min(y + 2, y1), c, 1, false); }
-}
 
 // one wave (1.5.0, Rassul 2026-10-31 mockups "Wave profile redesign" v5-v13): at the wave start x0
 //   LEFT  : the volume profile as an OUTLINE (grey, 1 px), only the HVN rows filled (light grey) and the WPOC (amber), the liquidity
@@ -883,21 +879,24 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
         const bool liveTouch = nd.stop == OPEN && v.haveForming && v.lastBar > w.scanned && v.formL <= nd.tick && nd.tick <= v.formH;
         if (nd.stop == OPEN && !liveTouch) tagNodes.push_back(std::make_pair(&w, &nd));
     }
-    if (haveDelta && dPoc >= 0) {     // the delta POC outlined in white
+    const std::vector<int> top2 = haveDelta ? topDelta(w) : std::vector<int>();
+    if (haveDelta && dPoc >= 0 && std::find(top2.begin(), top2.end(), dPoc) == top2.end()) {     // the delta POC outlined in white (when it is a top-2 node its solid box already marks it)
         double top, bot; rowY(dPoc, top, bot);
         Prim b; b.k = Prim::BOX; b.x0 = ci(x0 + 1); b.x1 = ci(x0 + 1 + PR * (double)std::llabs(w.drows[(size_t)dPoc]) / (double)w.dMax); b.y0 = ci(top); b.y1 = ci(std::max(top + 1.0, bot)); b.col = C.white; b.w = 1; b.back = true;
         if (b.x1 > b.x0) s.p.push_back(b);
     }
-    // (1.5.0) a dotted border around the distribution of each of the top 4 delta nodes (and the cluster A band)
+    // (1.5.0, Rassul 06:35 CT "identify 2 largest nodes, box them (solid box), classify them") a SOLID white box around the distribution of
+    // each of the 2 biggest delta nodes (and the cluster A band); was a dotted border round the top 4 (05:50 CT)
     if (haveDelta) {
         auto box = [&](int a, int b) {
             double mx = 0; for (int j = a; j <= b; ++j) mx = std::max(mx, PR * (double)std::llabs(w.drows[(size_t)j]) / (double)w.dMax);
             double t1, b1, t2, b2; rowY(b, t1, b1); rowY(a, t2, b2);
             const double y0 = std::min(t1, b2) - 1, y1 = std::max(t1, b2) + 1;
             if (y1 < v.t || y0 > v.b) return;
-            addDotBox(s, x0 + 1, y0, x0 + 3 + std::max(mx, 8.0), y1, C.white); ++s.boxesDrawn;
+            Prim bx; bx.k = Prim::BOX; bx.x0 = ci(x0 + 1); bx.x1 = ci(x0 + 3 + std::max(mx, 8.0)); bx.y0 = ci(y0); bx.y1 = ci(y1); bx.col = C.white; bx.w = 1; bx.back = false;
+            s.p.push_back(bx); ++s.boxesDrawn;
         };
-        for (int r : topDelta(w)) { int a, b; distOf(w, r, a, b); box(a, b); }
+        for (int r : top2) { int a, b; distOf(w, r, a, b); box(a, b); }
         if (bars) for (const Letter& L : letters(w, *bars)) if (L.cluster && L.a >= 0) box(L.a, L.b);
     }
     // the letters, centred on their node (front), each on a small background patch so it reads over the row
