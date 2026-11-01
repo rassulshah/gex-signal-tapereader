@@ -49,13 +49,22 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.4.2";   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-4 delta nodes classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
 static const double PROF_SCALE = 0.67;   // (1.2.0) the wave profile max width factor
 static const double LNODE_W = 40;        // (1.2.0) the liquidity node max width (was 60 px)
-#define WPC_VERSION "1.3.4"
+#define WPC_VERSION "1.5.0"
+// (1.5.0) the profile sides, letters and pullbacks
+static const double SIDE_W = 30;        // px each side: volume (left) / delta (right) (Rassul 10-31 22:48 CT "40 px on both sides is too much, reduce to 30")
+static const double RALLY_MULT = 4.0;   // a rally / decline wave: bigger than 4 ATR on its own
+static const int LET_TOP = 4;           // the 4 biggest delta rows (each >= 2x the wave median |delta|) are classified
+static const int CL_BAND = 8;           // cluster A: 8-tick delta bands
+static const int CL_N = 20, CL_MIN = 10;// cluster A: vs the median of the prior 20 waves (needs 10)
+static const double CL_X = 2.0;         // cluster A: band >= 2.0x that median
+static const int TRAP_BARS = 5;         // T: a close back through the node within 5 bars after the end pivot
+static const int PB_MAX = 3;            // POC pullback: the next 3 pullback pivots after the wave
 
 // fixed rules (from the approved mockup / reference wp2.py + wp3.py)
 static const int LOOKBACK = 14;        // (1.3.3) 14-bar high / low (was 20)
@@ -71,16 +80,16 @@ static const int STORE_CAP = 1000;     // candidates kept per direction in the f
 static const int N_MIN = 2, N_MAX = 10, N_DEF = 3;
 
 enum Stop { OPEN = 0, TOUCH = 1, NEWWAVE = 2, ORIGIN = 3 };
-enum QWhy { Q_AVG = 1, Q_ATR = 2 };   // (1.3.3) what qualified the wave (bits; 3 = BOTH)
-inline const char* qName(int q) { return q == 3 ? "BOTH" : q == Q_ATR ? "ATR" : q == Q_AVG ? "AVG" : "-"; }
-inline int qOf(const std::string& s) { return s == "BOTH" ? 3 : s == "ATR" ? Q_ATR : s == "AVG" ? Q_AVG : s == "-" ? 0 : -1; }
+enum QWhy { Q_AVG = 1, Q_ATR = 2, Q_BO = 4, Q_RALLY = 8 };   // (1.5.0) 3 = REVERSAL (AVG and ATR both), BREAKOUT, RALLY (rally / decline)   // (1.3.3) what qualified the wave (bits; 3 = BOTH)
+inline const char* qName(int q) { return q == 3 ? "BOTH" : q == Q_BO ? "BREAKOUT" : q == Q_RALLY ? "RALLY" : q == Q_ATR ? "ATR" : q == Q_AVG ? "AVG" : "-"; }
+inline int qOf(const std::string& s) { return s == "BOTH" ? 3 : s == "BREAKOUT" ? Q_BO : s == "RALLY" ? Q_RALLY : s == "ATR" ? Q_ATR : s == "AVG" ? Q_AVG : s == "-" ? 0 : -1; }
 enum Kind { K_WAVE = 1, K_COB = 2, K_BOTH = 3 };   // (1.3.0) why a leg is drawn
 inline const char* kindName(int k) { return k == K_BOTH ? "BOTH" : k == K_COB ? "COB" : "WAVE"; }
 inline int kindOf(const std::string& s) { return s == "BOTH" ? K_BOTH : s == "COB" ? K_COB : s == "WAVE" ? K_WAVE : 0; }
 inline const char* stopName(int s) { return s == TOUCH ? "touch" : s == NEWWAVE ? "new wave" : s == ORIGIN ? "origin close" : "open"; }
 
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };      // prices in whole ticks; t = IRT bar END, local wall clock seconds
-struct VRow { long long tick = 0; long long vol = 0; };
+struct VRow { long long tick = 0; long long vol = 0; long long dlt = 0; };   // (1.5.0) dlt = same-price delta (IRT VAP buy - sell volume)
 typedef std::function<int(int bar, std::vector<VRow>& out)> VapFn;  // 1 = rows read, 0 = no VAP for that bar (yet), -1 = fault
 
 struct Pivot { int i = 0; int type = 0; long long px = 0; };       // type +1 swing high, -1 swing low
@@ -106,6 +115,9 @@ struct Wave {
     int scanned = 0;                      // stop rules evaluated up to this bar
     int kind = K_WAVE;                    // (1.3.0) WAVE / COB / BOTH
     long long cobT = 0;                   // (1.3.0) the CoB bar's time (0 = no CoB in the leg)
+    std::vector<long long> drows;         // (1.5.0) same-price delta per row (rows aligned)
+    long long dMax = 0, dMed2 = 0;        // (1.5.0) the biggest |delta| row; 2 x the median |delta| of the rows that traded
+    double clRef = 0;                     // (1.5.0) cluster A reference: median of the prior 20 waves' best mid-wave counter band (0 = too few)
     int qWhy = 0; double atr = 0;         // (1.3.3) AVG / ATR / BOTH (0 = not a qualifying wave); the 14-bar ATR (ticks, 0 = too few bars)
 };
 
@@ -153,6 +165,15 @@ inline void buildRows(const std::vector<std::vector<VRow> >& perBar, long long l
         if (v.vol <= 0) continue;
         long long k = floorDiv(v.tick - e0, rowTicks); if (k < 0) k = 0; if (k >= n) k = n - 1;
         rows[(size_t)k] += v.vol;
+    }
+}
+// (1.5.0) the delta per row, same rows as buildRows (clipped the same way)
+inline void buildDelta(const std::vector<std::vector<VRow> >& perBar, long long e0, size_t n, int rowTicks, std::vector<long long>& drows) {
+    drows.assign(n, 0); if (n == 0 || rowTicks < 1) return;
+    for (const std::vector<VRow>& b : perBar) for (const VRow& v : b) {
+        if (v.vol <= 0) continue;
+        long long k = floorDiv(v.tick - e0, rowTicks); if (k < 0) k = 0; if (k >= (long long)n) k = (long long)n - 1;
+        drows[(size_t)k] += v.dlt;
     }
 }
 inline long long median2(const std::vector<long long>& rows) {     // 2 x the median of the non-zero rows (exact integers)
@@ -371,8 +392,11 @@ inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std:
 }
 
 // ---------- the engine: closed bars in, waves / nodes / stops out (incremental: each bar is processed once) ----------
-struct Counters { long long legs = 0, cand[2] = {0, 0}, qual[2] = {0, 0}, stops[4] = {0, 0, 0, 0}, vapMissing = 0, vapFault = 0, recordUsed = 0, superseded = 0, liqWaves = 0, liqNoBook = 0, lnodes = 0, cobBars[2] = {0, 0}, cobOnly = 0, cobBoth = 0, cobRepeat = 0, replaced = 0, qBy[4] = {0, 0, 0, 0}; };   // (1.3.3) qBy[AVG=1 / ATR=2 / BOTH=3]: qualifying waves by what qualified them   // (1.3.0) CoB bars seen bull / bear, legs drawn COB / BOTH, legs whose CoB already had a profile
+struct Counters { long long pb = 0, letters[3] = {0, 0, 0}, clusterA = 0; long long legs = 0, cand[2] = {0, 0}, qual[2] = {0, 0}, stops[4] = {0, 0, 0, 0}, vapMissing = 0, vapFault = 0, recordUsed = 0, superseded = 0, liqWaves = 0, liqNoBook = 0, lnodes = 0, cobBars[2] = {0, 0}, cobOnly = 0, cobBoth = 0, cobRepeat = 0, replaced = 0, qBy[16] = {}; };   // (1.3.3) qBy[AVG=1 / ATR=2 / BOTH=3]: qualifying waves by what qualified them   // (1.3.0) CoB bars seen bull / bear, legs drawn COB / BOTH, legs whose CoB already had a profile
 
+#ifndef WPC_DEFAULT_RULE
+#define WPC_DEFAULT_RULE 150   // the plugin build never defines it; the legacy host suite compiles with -DWPC_DEFAULT_RULE=133
+#endif
 class Engine {
 public:
     int N = N_DEF;
@@ -387,9 +411,11 @@ public:
     std::vector<signed char> cob;                                    // (1.3.0) per closed bar: 1 bull CoB, 2 bear CoB (3 both), captured when the bar is added
     std::set<long long> cobUsed;                                     // (1.3.0) CoB bar times that already have a profile (one per CoB)
     bool cobLegs = true;                                             // (1.3.0) setting "CoB legs"
+    int rule = WPC_DEFAULT_RULE;   // (1.5.0) 150 = reversal / breakout / rally; 133 = the 1.3.3-1.4.2 rule (AVG or 3 ATR at a 14-bar extreme) - legacy suites pin it
     double atrMult = ATR_MULT;                                       // (1.3.3) 3 ATR (fixed; the CoB-only unit tests raise it to isolate the CoB rule)
     std::function<int(int)> cobFn;                                   // (1.3.0) host: the CoB flags of closed bar k (the RTL cob_bull_3m_1b / cob_bear_3m_1b)
     std::vector<std::string> out;                                    // record lines to append (host drains)
+    std::vector<long long> clHist;                                   // (1.5.0) each drawn wave's best mid-wave counter-delta band |net| (cluster A reference)
     Counters C;
     double tick = 0.25;
     // (1.1.0) the wave's average resting lots per row + the bid part (host: the once-a-second book samples); false = no book
@@ -417,7 +443,7 @@ public:
         w.recorded = true; RecWave& r = rec[std::make_pair(w.t0, w.t1)]; r.dir = w.dir; r.kind = w.kind; r.qWhy = w.qWhy; r.cobT = w.cobT; r.nodes = w.nodes; r.lnodes = w.lnodes;
     }
 
-    void reset() { zDir = 0; zI = zHi = zLo = 0; B.clear(); alt.clear(); waves.clear(); confs.clear(); confsCob[0].clear(); confsCob[1].clear(); cob.clear(); cobUsed.clear(); out.clear(); C = Counters(); }
+    void reset() { clHist.clear(); zDir = 0; zI = zHi = zLo = 0; B.clear(); alt.clear(); waves.clear(); confs.clear(); confsCob[0].clear(); confsCob[1].clear(); cob.clear(); cobUsed.clear(); out.clear(); C = Counters(); }
     int lastBar() const { return (int)B.size() - 1; }
 
     // (1.3.3) 14-bar ATR at bar i: the simple mean of the true range (high / low vs the previous close) of bars i-13 .. i, closed bars only
@@ -428,11 +454,46 @@ public:
         for (int k = i - ATR_N + 1; k <= i; ++k) { const Bar& b = B[(size_t)k]; const long long pc = B[(size_t)k - 1].c; sum += (double)(std::max(b.h, pc) - std::min(b.l, pc)); }
         atr = sum / ATR_N; return true;
     }
-    // (1.3.3) AVG (> the direction's average) / ATR (> 3 ATR) / both; 0 = does not qualify
+    // (1.3.3) AVG (> the direction's average) / ATR (> 3 ATR) / both; 0 = does not qualify  (kept for the 1.3.3 record / unit checks)
     int qualify(Wave& w, int endBar) const {
         int q = 0; if (w.nHist >= MIN_HIST && (double)w.size > w.avg + 1e-9) q |= Q_AVG;
         if (atrAt(endBar, w.atr) && (double)w.size > atrMult * w.atr + 1e-9) q |= Q_ATR;
         return q;
+    }
+    // (1.5.0, Rassul 2026-10-31 20:21 / 22:56 CT) the wave rule:
+    //   REVERSAL (3) = ends at a 14-bar high / low AND bigger than the direction's average AND bigger than 3 ATR (both - the 2:18 profile he circled);
+    //   BREAKOUT     = bigger than 3 ATR and a bar of the wave CLOSES beyond the previous swing of its direction (prevPx; LLONG_MIN = none);
+    //   RALLY        = bigger than 4 ATR on its own (rally up / decline down; also the session's first big waves, which have no average yet).
+    int qualify5(Wave& w, int s0, int endBar, bool cand, long long prevPx) const {
+        const bool atr = atrAt(endBar, w.atr);
+        const bool big3 = atr && (double)w.size > atrMult * w.atr + 1e-9;
+        if (cand && big3 && w.nHist >= MIN_HIST && (double)w.size > w.avg + 1e-9) return Q_AVG | Q_ATR;
+        if (big3 && prevPx != LLONG_MIN) for (int k = std::max(0, s0); k <= endBar && k < (int)B.size(); ++k) if (w.dir > 0 ? B[(size_t)k].c > prevPx : B[(size_t)k].c < prevPx) return Q_BO;
+        if (atr && (double)w.size > atrMult * (RALLY_MULT / ATR_MULT) * w.atr + 1e-9) return Q_RALLY;   // 4 ATR (scales with atrMult: the CoB-only unit tests raise it)
+        return 0;
+    }
+    // (1.5.0) cluster A: the wave's best MIDDLE band (25-75% of the wave) whose net delta is AGAINST the wave, |net| (0 = none)
+    static long long clusterBest(const Wave& w, int* bandLo = nullptr, int* bandHi = nullptr) {
+        if (w.drows.empty() || w.rows.size() != w.drows.size()) return 0;
+        const long long lo = std::min(w.p0, w.p1), hi = std::max(w.p0, w.p1), rng = hi - lo; if (rng <= 0) return 0;
+        const int per = std::max(1, CL_BAND / std::max(1, w.rowTicks));
+        long long best = 0;
+        for (int a = 0; a < (int)w.drows.size(); a += per) {
+            const int b = std::min((int)w.drows.size() - 1, a + per - 1);
+            long long net = 0; for (int j = a; j <= b; ++j) net += w.drows[(size_t)j];
+            const double c = (double)(w.e0 + (long long)a * w.rowTicks + w.e0 + (long long)(b + 1) * w.rowTicks - 1) / 2.0;
+            const double f = w.dir > 0 ? (c - (double)lo) / (double)rng : ((double)hi - c) / (double)rng;
+            if (!(f > 0.25 && f < 0.75) || net * w.dir >= 0) continue;
+            if (std::llabs(net) > best) { best = std::llabs(net); if (bandLo) *bandLo = a; if (bandHi) *bandHi = b; }
+        }
+        return best;
+    }
+    // (1.5.0) the wave's cluster reference from the prior waves (decided once, when its profile is first built), then its own band joins
+    void clusterRef(Wave& w) {
+        std::vector<long long> h(clHist.size() > (size_t)CL_N ? clHist.end() - CL_N : clHist.begin(), clHist.end());
+        w.clRef = 0;
+        if ((int)h.size() >= CL_MIN) { std::sort(h.begin(), h.end()); const size_t m = h.size(); w.clRef = m % 2 ? (double)h[m / 2] : ((double)h[m / 2 - 1] + (double)h[m / 2]) / 2.0; }
+        if (!w.provisional) { const long long b = clusterBest(w); if (b > 0) clHist.push_back(b); if (clHist.size() > 400) clHist.erase(clHist.begin(), clHist.begin() + 200); }
     }
     // (1.3.3) 14-bar high / low at bar i (the bar itself included; was 20)
     bool is20(int i, int dir) const {
@@ -456,6 +517,10 @@ public:
         if (w.vapMissing > 0) { w.rows.clear(); return false; }
         buildRows(per, lo, hi, w.rowTicks, w.e0, w.rows);
         w.med2 = median2(w.rows); w.maxVol = 0; for (long long v : w.rows) w.maxVol = std::max(w.maxVol, v);
+        buildDelta(per, w.e0, w.rows.size(), w.rowTicks, w.drows);   // (1.5.0) the wave's delta profile
+        {   std::vector<long long> a; w.dMax = 0;
+            for (size_t j = 0; j < w.drows.size(); ++j) { const long long d = std::llabs(w.drows[j]); w.dMax = std::max(w.dMax, d); if (w.rows[j] > 0) a.push_back(d); }
+            w.dMed2 = median2(a); }
         return !w.rows.empty();
     }
     void nodesFromRows(Wave& w) {
@@ -510,10 +575,12 @@ public:
         if (cand) {
             ++C.cand[w.dir > 0 ? 0 : 1];
             w.avg = store ? store->avgBefore(w.dir, w.t1, w.nHist) : 0;
-            w.qWhy = qualify(w, z.i); q = w.qWhy != 0;
             if (store) store->add(w.dir, w.t1, w.size);
         }
-        if (!cand) atrAt(z.i, w.atr);   // (1.3.3) the ATR is recorded for every drawn leg (CoB-only legs too)
+        {   // (1.5.0) reversal / breakout / rally; the previous swing of the wave's direction = the pivot before its start pivot
+            const long long prevPx = alt.size() >= 3 && alt[alt.size() - 3].type == z.type ? alt[alt.size() - 3].px : LLONG_MIN;
+            w.qWhy = rule == 133 ? (cand ? qualify(w, z.i) : (atrAt(z.i, w.atr), 0)) : qualify5(w, a.i, z.i, cand, prevPx); q = w.qWhy != 0;
+        }
         // (1.3.0) a CoB of the leg's own direction on a bar of the leg (start .. end pivot) that has no profile yet
         int cobBar = -1;
         if (cobLegs) for (int j = w.i0; j <= w.i1 && j < (int)cob.size(); ++j) {
@@ -527,7 +594,7 @@ public:
         if (!w.kind) return;
         if (w.cobT > 0) cobUsed.insert(w.cobT);
         if (!(w.kind & K_WAVE)) w.qWhy = 0;
-        if (w.kind & K_WAVE) { ++C.qual[w.dir > 0 ? 0 : 1]; ++C.qBy[w.qWhy & 3]; confs.insert(std::upper_bound(confs.begin(), confs.end(), k), k); }
+        if (w.kind & K_WAVE) { ++C.qual[w.dir > 0 ? 0 : 1]; ++C.qBy[w.qWhy & 15]; confs.insert(std::upper_bound(confs.begin(), confs.end(), k), k); }
         else { std::vector<int>& cc = confsCob[w.dir > 0 ? 0 : 1]; cc.insert(std::upper_bound(cc.begin(), cc.end(), k), k); }
         if (w.kind == K_COB) ++C.cobOnly; else if (w.kind == K_BOTH) ++C.cobBoth;
         if (recHit && !rk->second.nodes.empty()) {
@@ -544,6 +611,7 @@ public:
         } else if (profile(w, vap)) {
             nodesFromRows(w); liquidity(w);
         } else { w.pending = true; C.vapMissing += w.vapMissing; }
+        if (!w.pending) clusterRef(w);   // (1.5.0)
         if (recHit) w.recorded = true;   // (1.3.2) a recorded wave is never written again (each restart re-wrote every zero-node wave)
         if (!w.pending && !w.recorded) recordWave(w);
         w.scanned = w.i1;
@@ -590,7 +658,7 @@ public:
         for (Wave& w : waves) {
             if (!w.pending) continue;
             if (!profile(w, vap)) continue;
-            w.pending = false; nodesFromRows(w); liquidity(w); ++done;
+            w.pending = false; nodesFromRows(w); liquidity(w); clusterRef(w); ++done;
             recordWave(w);
             w.scanned = w.i1; advance(w, lastBar(), true);
         }
@@ -608,14 +676,97 @@ public:
         if (dir == 0 || dir != -a.type || e <= a.i || e > k) return false;
         w.dir = dir; w.i0 = a.i; w.i1 = e; w.conf = e + N; w.t0 = B[(size_t)a.i].t; w.t1 = B[(size_t)e].t; w.tConf = 0;
         w.p0 = a.px; w.p1 = dir > 0 ? B[(size_t)e].h : B[(size_t)e].l; w.size = dir > 0 ? w.p1 - w.p0 : w.p0 - w.p1; w.provisional = true;
-        if (!is20(e, dir)) return false;
-        w.avg = store ? store->avgBefore(dir, w.t1, w.nHist) : 0;
-        w.qWhy = qualify(w, e); if (!w.qWhy) return false;   // (1.3.3) AVG or 3 ATR
+        const bool cand = is20(e, dir);
+        w.avg = cand && store ? store->avgBefore(dir, w.t1, w.nHist) : 0;
+        {   const long long prevPx = alt.size() >= 2 && alt[alt.size() - 2].type == dir ? alt[alt.size() - 2].px : LLONG_MIN;   // (1.5.0)
+            if (rule == 133 && !cand) return false;
+            w.qWhy = rule == 133 ? qualify(w, e) : qualify5(w, a.i, e, cand, prevPx); if (!w.qWhy) return false; }
         if (!profile(w, vap)) return false;
-        nodesFromRows(w); liquidity(w); w.scanned = w.i1; advance(w, k, false);
+        nodesFromRows(w); liquidity(w); clusterRef(w); w.scanned = w.i1; advance(w, k, false);
         return true;
     }
 };
+
+// ---------- (1.5.0) the letters on the delta side and the POC pullbacks (pure; decided from closed bars only) ----------
+// Rassul 2026-10-31 (21:07 "lets go with top 4", 22:43 "so identify top 4, consider location, then classify"): the wave's 4 biggest
+// delta rows (each >= 2x the median |delta| of the rows that traded), each classified by WHERE it sits in the wave and WHICH side made it:
+//   I = with the wave, first third (initiation: aggressors pushing away from the turn)                  - the wave's colour
+//   A = against the wave, from the start up to the last quarter (a counter-attack that was absorbed)      - the wave's colour
+//   T = with the wave, last quarter, and a bar closes back through it within 5 bars after the end pivot  - the opposite colour, one per wave
+//   (with the wave in the middle / against it in the last quarter: no letter). The same letter within 10% of the wave (min 8 ticks): the
+//   bigger row keeps it. Cluster A (his 12:51 example): the best middle band (8 ticks) against the wave >= 2.0x the median of the prior 20
+//   waves' best such band gets an A on its biggest row unless an A is already within 8 ticks. All carry "?" (unproven, the nightly scores them).
+// (1.5.0) the wave's 4 biggest delta rows (each >= 2x the median |delta| of the rows that traded), biggest first
+inline std::vector<int> topDelta(const Wave& w) {
+    std::vector<int> cand; if (w.drows.empty() || w.drows.size() != w.rows.size() || w.dMed2 <= 0) return cand;
+    for (int j = 0; j < (int)w.drows.size(); ++j) if (w.drows[(size_t)j] != 0 && std::llabs(w.drows[(size_t)j]) >= w.dMed2) cand.push_back(j);
+    std::stable_sort(cand.begin(), cand.end(), [&](int a, int b) { return std::llabs(w.drows[(size_t)a]) > std::llabs(w.drows[(size_t)b]); });
+    if ((int)cand.size() > LET_TOP) cand.resize((size_t)LET_TOP);
+    return cand;
+}
+// (1.5.0, Rassul 2026-11-01 05:50 CT "i want the dotted border around the distributions for the top 4 nodes") a node's distribution = the
+// rows around it with the SAME sign of delta and at least the median |delta| (half of dMed2), contiguous; [a, b] row range
+inline void distOf(const Wave& w, int row, int& a, int& b) {
+    a = b = row; if (row < 0 || row >= (int)w.drows.size()) return;
+    const long long d = w.drows[(size_t)row]; const long long th = std::max<long long>(1, w.dMed2 / 2);
+    auto same = [&](int j) { const long long x = w.drows[(size_t)j]; return (x > 0) == (d > 0) && x != 0 && std::llabs(x) >= th; };
+    while (a > 0 && same(a - 1)) --a;
+    while (b + 1 < (int)w.drows.size() && same(b + 1)) ++b;
+}
+struct Letter { int row = -1; char t = 0; bool bull = false; bool cluster = false; int a = -1, b = -1; };   // a..b = the cluster band rows
+inline std::vector<Letter> letters(const Wave& w, const std::vector<Bar>& B) {
+    std::vector<Letter> out;
+    if (w.drows.empty() || w.drows.size() != w.rows.size() || w.dMed2 <= 0) return out;
+    const long long lo = std::min(w.p0, w.p1), hi = std::max(w.p0, w.p1), rng = hi - lo; if (rng <= 0) return out;
+    auto tickOf = [&](int j) { return w.e0 + (long long)j * w.rowTicks + w.rowTicks / 2; };
+    auto posf = [&](long long t) { const double f = w.dir > 0 ? (double)(t - lo) / (double)rng : (double)(hi - t) / (double)rng; return std::max(0.0, std::min(1.0, f)); };
+    const std::vector<int> cand = topDelta(w);
+    const bool wc = w.dir > 0;   // the wave's colour: green up, red down
+    const long long sep = std::max<long long>(8, rng / 10);
+    const int lastClosed = (int)B.size() - 1;
+    for (int j : cand) {
+        const long long d = w.drows[(size_t)j], t = tickOf(j); const bool with = d * w.dir > 0; const double f = posf(t);
+        Letter L; L.row = j;
+        if (with && f <= 1.0 / 3.0 + 1e-9) { L.t = 'I'; L.bull = wc; }
+        else if (!with && f < 0.75) { L.t = 'A'; L.bull = wc; }
+        else if (with && f >= 0.75) {
+            bool back = false;
+            for (int k = w.i1 + 1; k <= std::min(w.i1 + TRAP_BARS, lastClosed); ++k) if (w.dir > 0 ? B[(size_t)k].c < t - 1 : B[(size_t)k].c > t + 1) { back = true; break; }
+            if (!back) continue;
+            L.t = 'T'; L.bull = !wc;
+        } else continue;
+        bool dup = false; for (const Letter& o : out) if (o.t == L.t && (L.t == 'T' || std::llabs(tickOf(o.row) - t) <= sep)) dup = true;
+        if (!dup) out.push_back(L);
+    }
+    if (w.clRef > 0) {
+        int a = -1, b = -1; const long long best = Engine::clusterBest(w, &a, &b);
+        if (best > 0 && (double)best >= CL_X * w.clRef && a >= 0) {
+            const long long c0 = tickOf(a) - CL_BAND, c1 = tickOf(b) + CL_BAND; bool near = false;
+            for (const Letter& o : out) if (o.t == 'A' && tickOf(o.row) >= c0 && tickOf(o.row) <= c1) near = true;
+            if (!near) {
+                int pk = -1; for (int j = a; j <= b; ++j) if (w.drows[(size_t)j] * w.dir < 0 && (pk < 0 || std::llabs(w.drows[(size_t)j]) > std::llabs(w.drows[(size_t)pk]))) pk = j;
+                if (pk < 0) pk = a;
+                Letter L; L.row = pk; L.t = 'A'; L.bull = wc; L.cluster = true; L.a = a; L.b = b; out.push_back(L);
+            }
+        }
+    }
+    return out;
+}
+// (1.5.0, Rassul 2026-10-31 23:02 / 23:05 CT) POC pullback: after an UP wave, any of the next 3 pullback LOWS (down pivots) whose bar trades
+// at or below the wave's volume POC while its high stays above it (price tested the POC and held); mirror after a DOWN wave. Returns
+// the pivot bars that qualify (confirmed pivots only - never repainted).
+inline std::vector<int> pullbacks(const Wave& w, const std::vector<Pivot>& alt, const std::vector<Bar>& B) {
+    std::vector<int> out; if (w.nodes.empty() || w.provisional || w.pending) return out;
+    const long long poc = w.nodes[0].tick; int seen = 0;
+    for (const Pivot& p : alt) {
+        if (p.i <= w.i1 || p.type != -w.dir) continue;
+        if (++seen > PB_MAX) break;
+        if (p.i < 0 || p.i >= (int)B.size()) continue;
+        const Bar& b = B[(size_t)p.i];
+        if (w.dir > 0 ? (b.l <= poc && b.h > poc) : (b.h >= poc && b.l < poc)) out.push_back(p.i);
+    }
+    return out;
+}
 
 // ---------- the layout (pixels): what the host draws ----------
 struct Prim {
@@ -640,51 +791,72 @@ struct View {
     double tick = 0.25;
     int clipL = -30000, clipR = 30000;            // (1.3.2) nothing drawn left of the Levels column / right of the price area (ColumnBoard)
 };
-struct Scene { std::vector<Prim> p; int tagsShown = 0, tagsHidden = 0, nodesDrawn = 0, wavesDrawn = 0, lnodesDrawn = 0; };
+struct Scene { std::vector<Prim> p; int tagsShown = 0, tagsHidden = 0, nodesDrawn = 0, wavesDrawn = 0, lnodesDrawn = 0, lettersDrawn = 0, pbDrawn = 0, boxesDrawn = 0; };
 
 inline int ci(double v) { return v < -30000 ? -30000 : v > 30000 ? 30000 : (int)std::lround(v); }
 inline void addLine(Scene& s, double x0, double y0, double x1, double y1, unsigned long c, int w, bool back) { Prim p; p.k = Prim::LINE; p.x0 = ci(x0); p.y0 = ci(y0); p.x1 = ci(x1); p.y1 = ci(y1); p.col = c; p.w = w; p.back = back; s.p.push_back(p); }
 inline void addDashed(Scene& s, double x0, double x1, double y, unsigned long c, int w) { for (double x = x0; x < x1; x += 9) addLine(s, x, y, std::min(x + 5, x1), y, c, w, true); }
+// (1.5.0) a dotted rectangle (2 px dots, 2 px gaps), front layer
+inline void addDotBox(Scene& s, double x0, double y0, double x1, double y1, unsigned long c) {
+    for (double x = x0; x < x1; x += 4) { addLine(s, x, y0, std::min(x + 2, x1), y0, c, 1, false); addLine(s, x, y1, std::min(x + 2, x1), y1, c, 1, false); }
+    for (double y = y0; y < y1; y += 4) { addLine(s, x0, y, x0, std::min(y + 2, y1), c, 1, false); addLine(s, x1, y, x1, std::min(y + 2, y1), c, 1, false); }
+}
 
-// one wave: profile rows at the wave start pointing right, highlighted nodes, the node lines (dashed until confirmed)
-// (1.3.2) phase 0 = the profile rows of every wave, phase 1 = the liquidity nodes + highlights (so no later profile paints over a
-// highlight and leaves its edges as an "outline"); xMax = the next profile's start (profiles never overlap)
-inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, std::vector<std::pair<const Wave*, const Node*> >& tagNodes, bool /*latest*/, int phase = -1, double xMax = 1e9) {
+// one wave (1.5.0, Rassul 2026-10-31 mockups "Wave profile redesign" v5-v13): at the wave start x0
+//   LEFT  : the volume profile as an OUTLINE (grey, 1 px), only the HVN rows filled (light grey) and the WPOC (amber), the liquidity
+//           nodes (bid green / offer red, LPOC bright) grouped with it - all pointing left, 30 px max;
+//   RIGHT : the wave's DELTA profile (green buyers / red sellers; rows >= 2x the median |delta| bright, the rest faint), the delta POC
+//           outlined in white, 30 px max (clipped at the next profile's start), the letters I? / A? / T? centred on their node;
+//   the spine (green up / red down) at x0; POC pullbacks: "Pb" under (after an up wave) / over (after a down wave) the pullback bar,
+//   the WPOC extended as an amber dotted line from the wave to it.
+// phase 0 = outlines / delta rows / spine of every wave, phase 1 = fills, liquidity, letters, pullbacks (no later profile paints over them)
+inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, std::vector<std::pair<const Wave*, const Node*> >& tagNodes, bool /*latest*/, int phase = -1, double xMax = 1e9,
+                     const std::vector<Bar>* bars = nullptr, const std::vector<Pivot>* piv = nullptr) {
     const int endShown = v.lastBar;
-    // visible? the wave start .. its longest line end
+    std::vector<int> pbs; if (bars && piv) pbs = pullbacks(w, *piv, *bars);
     int far = w.i1; for (const Node& nd : w.nodes) far = std::max(far, nd.stop == OPEN ? endShown : nd.stopBar);
     for (const LNode& nd : w.lnodes) far = std::max(far, nd.stop == OPEN ? endShown : nd.stopBar);
+    for (int b : pbs) far = std::max(far, b);
     if (far < v.first || w.i0 > v.last) return;
     if (phase != 1) ++s.wavesDrawn;
     const double x0 = v.X(w.i0) - v.bw * 0.45;
-    // (1.2.0, Rassul 16:31 CT "the wave poc lines are too large can you make them about 33% less") the profile's max width x 0.67
-    double PW = PROF_SCALE * std::max(4.0, std::min(170.0, (v.X(w.i1) - x0) * 0.95));
-    if (xMax - 2 - x0 < PW) PW = std::max(4.0, xMax - 2 - x0);   // (1.3.2) clipped at the next profile's start
-    // row j spans ticks [lo - 0.5, lo + rowTicks - 0.5) so the node price (lo + rowTicks / 2) sits inside its own row
+    const double PL = SIDE_W;                                            // the volume side (left)
+    double PR = SIDE_W; if (xMax - 3 - x0 < PR) PR = std::max(4.0, xMax - 3 - x0);   // the delta row starts at x0 + 1: ends <= next start - 2   // the delta side (right), clipped at the next start
     auto rowY = [&](int j, double& top, double& bot) {
         const double lo = (double)(w.e0 + (long long)j * w.rowTicks);
         top = v.Y(lo + w.rowTicks - 0.5); bot = v.Y(lo - 0.5);
     };
-    if (phase != 1 && !w.rows.empty() && w.maxVol > 0) {
-        for (int j = 0; j < (int)w.rows.size(); ++j) {
-            if (w.rows[(size_t)j] <= 0) continue;
-            double top, bot; rowY(j, top, bot);
-            Prim p; p.k = Prim::FILL; p.x0 = ci(x0); p.x1 = ci(x0 + PW * (double)w.rows[(size_t)j] / (double)w.maxVol); p.y0 = ci(top + 0.5); p.y1 = ci(std::max(top + 1.0, bot - 0.5)); p.col = C.prof; p.back = true;
-            if (p.x1 > p.x0 && p.y1 >= p.y0) s.p.push_back(p);
-        }
-    }
-    // (1.3.3, Rassul 04:52 CT 2026-10-29 "the spine of the wavepoc should be red or green depending if the wave is up or dn") the spine:
-    // a 2 px vertical line at the profile's start x over the wave's range (start pivot .. end pivot), green for an UP wave / CoB leg,
-    // red for a DOWN one; clipped by the Levels column / right columns with everything else (layout)
+    auto vw = [&](int j) { return w.maxVol > 0 && j >= 0 && j < (int)w.rows.size() ? PL * (double)w.rows[(size_t)j] / (double)w.maxVol : 0.0; };
+    const int nr = (int)w.rows.size();
+    const bool haveDelta = !w.drows.empty() && (int)w.drows.size() == nr && w.dMax > 0;
+    int dPoc = -1; if (haveDelta) for (int j = 0; j < nr; ++j) if (dPoc < 0 || std::llabs(w.drows[(size_t)j]) > std::llabs(w.drows[(size_t)dPoc])) dPoc = j;
     if (phase != 1) {
+        if (nr > 0 && w.maxVol > 0) {   // the volume OUTLINE, left
+            for (int j = 0; j < nr; ++j) {
+                double top, bot; rowY(j, top, bot); const double wj = vw(j);
+                if (wj > 0) addLine(s, x0 - wj, top, x0 - wj, bot, C.grey, 1, true);
+                const double wn = j + 1 < nr ? vw(j + 1) : 0.0;                      // the step to the next row (at this row's top)
+                if (std::fabs(wn - wj) >= 0.5) addLine(s, x0 - std::max(wj, wn), top, x0 - std::min(wj, wn), top, C.grey, 1, true);
+                if (j == 0 && wj > 0) addLine(s, x0 - wj, bot, x0, bot, C.grey, 1, true);
+            }
+        }
+        if (haveDelta) {                // the DELTA rows, right
+            for (int j = 0; j < nr; ++j) {
+                const long long d = w.drows[(size_t)j]; if (d == 0) continue;
+                double top, bot; rowY(j, top, bot);
+                const unsigned long base = d > 0 ? C.bid : C.offer;
+                const unsigned long col = j == dPoc ? base : std::llabs(d) >= w.dMed2 && w.dMed2 > 0 ? mix(base, C.bg, 0.75) : mix(base, C.bg, 0.3);
+                Prim p; p.k = Prim::FILL; p.x0 = ci(x0 + 1); p.x1 = ci(x0 + 1 + PR * (double)std::llabs(d) / (double)w.dMax); p.y0 = ci(top + 0.5); p.y1 = ci(std::max(top + 1.0, bot - 0.5)); p.col = col; p.back = true;
+                if (p.x1 > p.x0 && p.y1 >= p.y0) s.p.push_back(p);
+            }
+        }
         const double ya = v.Y((double)std::min(w.p0, w.p1) - 0.5), yb = v.Y((double)std::max(w.p0, w.p1) + 0.5);
-        addLine(s, x0, std::min(ya, yb), x0, std::max(ya, yb), w.dir > 0 ? C.up : C.down, 2, true);
+        addLine(s, x0, std::min(ya, yb), x0, std::max(ya, yb), w.dir > 0 ? C.up : C.down, 2, true);   // (1.3.3) the spine
     }
-    // (1.1.0) the liquidity nodes: compact bars pointing LEFT from the wave start (max 60 px), LPOC in the bright side colour, the others
-    // 60% of it; a faint dotted line to the right (same stop rules); no outline boxes, no price tags
     if (phase == 0) return;
+    // the liquidity nodes, grouped with the volume profile on the left (LPOC bright, others 60%)
     if (!w.lnodes.empty() && w.lnodes[0].lots > 0) {
-        const double LW = LNODE_W, lmx = w.lnodes[0].lots;   // (1.2.0) 60 -> 40 px
+        const double lmx = w.lnodes[0].lots;
         for (const LNode& nd : w.lnodes) {
             const double yc = v.Y((double)nd.tick); if (yc < v.t - 10 || yc > v.b + 10) continue;
             ++s.lnodesDrawn;
@@ -692,28 +864,67 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
             const unsigned long fill = lp ? side : mix(side, C.bg, 0.6);
             const long long r0 = w.e0 + floorDiv(nd.tick - w.e0, w.rowTicks) * w.rowTicks;
             const double top = v.Y((double)r0 + w.rowTicks - 0.5), bot = v.Y((double)r0 - 0.5);
-            Prim f; f.k = Prim::FILL; f.x1 = ci(x0 - 2); f.x0 = ci(x0 - 2 - LW * std::min(1.0, nd.lots / lmx)); f.y0 = ci(top); f.y1 = ci(std::max(top + 1.0, bot)); f.col = fill; f.back = true;
-            if (f.x1 > f.x0) s.p.push_back(f);   // (1.2.0, Rassul 16:26 CT "the chart is extremely messy") no dotted line across the chart
+            Prim f; f.k = Prim::FILL; f.x1 = ci(x0 - 1); f.x0 = ci(x0 - 1 - PL * std::min(1.0, nd.lots / lmx)); f.y0 = ci(top); f.y1 = ci(std::max(top + 1.0, bot)); f.col = fill; f.back = true;
+            if (f.x1 > f.x0) s.p.push_back(f);
         }
     }
-    for (const Node& nd : w.nodes) {
+    for (const Node& nd : w.nodes) {   // HVN rows (light grey) + WPOC (amber), filled, left
         const bool poc = nd.rank == 0;
         const double yc = v.Y((double)nd.tick);
         if (yc < v.t - 10 || yc > v.b + 10) continue;
         ++s.nodesDrawn;
-        // the highlighted node: its bar fill only (Rassul 11:21 CT: no outline boxes) - WPOC bright amber, others bright light grey
-        if (nd.row >= 0 && !w.rows.empty() && w.maxVol > 0) {
+        if (nd.row >= 0 && nd.row < nr && w.maxVol > 0) {
             double top, bot; rowY(nd.row, top, bot);
-            // (1.3.2) exactly its own row (same y as the profile row, no +-1 px band) and its own row's length - a filled row, never an edge
-            const long long rv = nd.row < (int)w.rows.size() && w.rows[(size_t)nd.row] > 0 ? w.rows[(size_t)nd.row] : nd.vol;
-            Prim f; f.k = Prim::FILL; f.x0 = ci(x0); f.x1 = ci(x0 + PW * (double)rv / (double)w.maxVol); f.y0 = ci(top + 0.5); f.y1 = ci(std::max(top + 1.0, bot - 0.5)); f.col = poc ? C.amberFill : C.whiteFill; f.back = true;
+            const double wj = vw(nd.row) > 0 ? vw(nd.row) : PL * (double)nd.vol / (double)w.maxVol;
+            Prim f; f.k = Prim::FILL; f.x1 = ci(x0); f.x0 = ci(x0 - wj); f.y0 = ci(top + 0.5); f.y1 = ci(std::max(top + 1.0, bot - 0.5)); f.col = poc ? C.amberFill : C.whiteFill; f.back = true;
             if (f.x1 > f.x0) s.p.push_back(f);
         }
-        // (1.2.0, Rassul 16:26 CT "remove the drawing of levels across the chart and from the wave pocs") no node line, no touch circle,
-        // no end tick; the right-edge tag only while the node is still OPEN (untouched - the forming bar included -, wave not replaced,
-        // origin not broken); the stop rules still decide and record open / closed
         const bool liveTouch = nd.stop == OPEN && v.haveForming && v.lastBar > w.scanned && v.formL <= nd.tick && nd.tick <= v.formH;
         if (nd.stop == OPEN && !liveTouch) tagNodes.push_back(std::make_pair(&w, &nd));
+    }
+    if (haveDelta && dPoc >= 0) {     // the delta POC outlined in white
+        double top, bot; rowY(dPoc, top, bot);
+        Prim b; b.k = Prim::BOX; b.x0 = ci(x0 + 1); b.x1 = ci(x0 + 1 + PR * (double)std::llabs(w.drows[(size_t)dPoc]) / (double)w.dMax); b.y0 = ci(top); b.y1 = ci(std::max(top + 1.0, bot)); b.col = C.white; b.w = 1; b.back = true;
+        if (b.x1 > b.x0) s.p.push_back(b);
+    }
+    // (1.5.0) a dotted border around the distribution of each of the top 4 delta nodes (and the cluster A band)
+    if (haveDelta) {
+        auto box = [&](int a, int b) {
+            double mx = 0; for (int j = a; j <= b; ++j) mx = std::max(mx, PR * (double)std::llabs(w.drows[(size_t)j]) / (double)w.dMax);
+            double t1, b1, t2, b2; rowY(b, t1, b1); rowY(a, t2, b2);
+            const double y0 = std::min(t1, b2) - 1, y1 = std::max(t1, b2) + 1;
+            if (y1 < v.t || y0 > v.b) return;
+            addDotBox(s, x0 + 1, y0, x0 + 3 + std::max(mx, 8.0), y1, C.white); ++s.boxesDrawn;
+        };
+        for (int r : topDelta(w)) { int a, b; distOf(w, r, a, b); box(a, b); }
+        if (bars) for (const Letter& L : letters(w, *bars)) if (L.cluster && L.a >= 0) box(L.a, L.b);
+    }
+    // the letters, centred on their node (front), each on a small background patch so it reads over the row
+    if (haveDelta && bars) {
+        for (const Letter& L : letters(w, *bars)) {
+            double top, bot; rowY(L.row, top, bot); const double yc = (top + bot) / 2.0;
+            if (yc < v.t + 7 || yc > v.b - 7) continue;
+            const std::string txt = std::string(1, L.t) + "?";
+            const int tw = v.textW ? v.textW(txt, true) : 12;
+            const double len = PR * (double)std::llabs(w.drows[(size_t)L.row]) / (double)w.dMax;
+            const double cx = x0 + 1 + std::max(len / 2.0, tw / 2.0 + 2.0);
+            Prim bg; bg.k = Prim::FILL; bg.x0 = ci(cx - tw / 2.0 - 1); bg.x1 = ci(cx + tw / 2.0 + 1); bg.y0 = ci(yc - 6); bg.y1 = ci(yc + 6); bg.col = C.bg; bg.back = false; s.p.push_back(bg);
+            Prim t; t.k = Prim::TEXT; t.x0 = ci(cx - tw / 2.0); t.x1 = ci(cx + tw / 2.0); t.y0 = ci(yc - 7); t.y1 = ci(yc + 7); t.col = L.bull ? C.up : C.down; t.text = txt; t.bold = 1; t.back = false; s.p.push_back(t);
+            ++s.lettersDrawn;
+        }
+    }
+    // the POC pullbacks
+    if (bars && !w.nodes.empty()) {
+        const double yp = v.Y((double)w.nodes[0].tick);
+        for (int b : pbs) {
+            if (b < v.first || b > v.last) continue;
+            addDashed(s, x0, v.X(b), yp, C.amber, 1);
+            const Bar& br = (*bars)[(size_t)b];
+            const std::string txt = "Pb"; const int tw = v.textW ? v.textW(txt, true) : 14; const double cx = v.X(b);
+            const double ye = w.dir > 0 ? v.Y((double)br.l - 0.5) + 3 : v.Y((double)br.h + 0.5) - 3 - 14;
+            Prim t; t.k = Prim::TEXT; t.x0 = ci(cx - tw / 2.0); t.x1 = ci(cx + tw / 2.0); t.y0 = ci(ye); t.y1 = ci(ye + 14); t.col = w.dir > 0 ? C.up : C.down; t.text = txt; t.bold = 1; t.back = false;
+            if (t.y0 > v.t && t.y1 < v.b) { s.p.push_back(t); ++s.pbDrawn; }
+        }
     }
 }
 
@@ -770,7 +981,7 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
     if (prov) ws.push_back(prov);
     auto xNext = [&](const Wave* w) { double x = 1e9; for (const Wave* o : ws) if (o->i0 > w->i0) x = std::min(x, v.X(o->i0) - v.bw * 0.45); return x; };
     for (int ph = 0; ph < 2; ++ph)
-        for (const Wave* w : ws) drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w));
+        for (const Wave* w : ws) drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w), &E.B, &E.alt);
     drawTags(s, v, C, tags);   // (1.4.2, 2026-10-29 13:02 CT) the right-edge tags are back exactly as 1.3.4 drew them: the "WPOC" Rassul asked for in the Levels column was the WEEKLY POC, not this indicator's   // was (1.4.0): not drawn
     if (v.zigzag) drawZigzag(s, E, v, C);
     // (1.3.2, Rassul 18:24 CT profiles drawn under the Levels column) every primitive kept inside [clipL, clipR]: fills / lines cut
@@ -802,7 +1013,9 @@ inline std::string statusText(const Engine& E, const std::string& mkt, int spb, 
     o << "BARS," << E.B.size() << ",pivots " << E.alt.size() << ",legs " << E.C.legs << "\n";
     o << "WAVES,candidates up " << E.C.cand[0] << " down " << E.C.cand[1] << ",qualified up " << E.C.qual[0] << " down " << E.C.qual[1] << ",superseded " << E.C.superseded
       << ",pending VAP " << E.pendingCount() << ",from record " << E.C.recordUsed << "\n";
-    o << "QUALIFIED_BY,AVG " << E.C.qBy[Q_AVG] << ",ATR " << E.C.qBy[Q_ATR] << ",BOTH " << E.C.qBy[3] << ",rule " << LOOKBACK << "-bar extreme and (size > average or > " << ATR_MULT << " x ATR" << ATR_N << ")\n";   // (1.3.3)
+    o << "QUALIFIED_BY,reversal " << E.C.qBy[3] << ",breakout " << E.C.qBy[Q_BO] << ",rally/decline " << E.C.qBy[Q_RALLY] << ",(older records AVG " << E.C.qBy[Q_AVG] << " ATR " << E.C.qBy[Q_ATR]
+      << "),rule (1.5.0) reversal = " << LOOKBACK << "-bar extreme and > average and > " << ATR_MULT << " x ATR" << ATR_N << " | breakout = > " << ATR_MULT << " x ATR and a close beyond the previous swing | rally / decline = > " << RALLY_MULT << " x ATR\n";
+    o << "PROFILE,(1.5.0) left volume outline + HVN / WPOC + liquidity, right wave delta + delta POC outline, " << SIDE_W << " px a side,letters drawn now " << (sc ? sc->lettersDrawn : 0) << ",POC pullbacks drawn now " << (sc ? sc->pbDrawn : 0) << "\n";
     if (E.store) {
         int nu = 0, nd = 0; const long long far = (long long)4e18;
         const double au = E.store->avgBefore(1, far, nu), ad = E.store->avgBefore(-1, far, nd);

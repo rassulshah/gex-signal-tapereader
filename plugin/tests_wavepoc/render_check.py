@@ -1,7 +1,7 @@
 import sys
 from PIL import Image, ImageDraw, ImageFont
 F=lambda s,b=False: ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans%s.ttf'%('-Bold' if b else ''), s)
-lines=open(sys.argv[1]).read().splitlines(); im=Image.new('RGB',(1700,760),(11,15,23)); d=ImageDraw.Draw(im)
+lines=open(sys.argv[1]).read().splitlines(); im=Image.new('RGB',(1700,900),(11,15,23)); d=ImageDraw.Draw(im)
 col=lambda c:((c>>16)&255,(c>>8)&255,c&255)
 P=[l.split(' ',10) for l in lines if l.startswith('P')]; C=[list(map(float,l.split()[1:])) for l in lines if l.startswith('C')]
 def prim(q):

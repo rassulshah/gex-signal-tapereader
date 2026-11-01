@@ -36,7 +36,7 @@ static std::string px(long long tk) { return wpc::pxText(tk, 0.25); }
 static void testReference(const Fix& F) {
     wpc::Store S; seed(S, F.B[0].t, 189, 172);
     int nu = 0; CHECK(std::fabs(S.avgBefore(-1, F.B[0].t, nu) - 94.5) < 1e-9 && nu == 20, "seeded down average = 23.625 pts");
-    wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25;
+    wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.tick = 0.25;
     wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = F.V[(size_t)i]; return 1; };
     run(E, F, (int)F.B.size() - 1, vap);
     // (1.3.3) 14-bar extreme + (AVG or 3 ATR): 5 waves (was 3) - + 12:12-12:36 up (19.00 pts < the 21.25 up average but > 3 ATR 17.30 = ATR)
@@ -89,7 +89,7 @@ static void testReference(const Fix& F) {
 // the store + record as written so far) rebuilds exactly the same waves
 static void testNoRepaint(const Fix& F) {
     wpc::Store S; seed(S, F.B[0].t, 189, 172);
-    wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25;
+    wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.tick = 0.25;
     wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = F.V[(size_t)i]; return 1; };
     std::vector<std::string> recLines; std::vector<wpc::Wave> seen; bool stable = true, restartSame = true;
     for (int k = 0; k < (int)F.B.size(); ++k) {
@@ -109,7 +109,7 @@ static void testNoRepaint(const Fix& F) {
         wpc::Store S2; std::string why;
         const bool ok = wpc::storeFromText(S.toText("ES", 180), "ES", 180, 3, 250000000LL, S2, why);
         if (!ok) { S2 = S; }
-        wpc::Engine R; R.store = &S2; R.N = 3; R.tick = 0.25; int bad = 0; R.rec = wpc::parseRecord(recLines, 3, 0.25, bad);
+        wpc::Engine R; R.rule = 133; R.store = &S2; R.N = 3; R.tick = 0.25; int bad = 0; R.rec = wpc::parseRecord(recLines, 3, 0.25, bad);
         run(R, F, k, vap);
         if (R.waves.size() != E.waves.size()) restartSame = false;
         for (size_t w = 0; w < R.waves.size() && w < E.waves.size(); ++w) {
@@ -129,7 +129,7 @@ static void testNoRepaint(const Fix& F) {
     { const auto i1 = rec.find(std::make_pair(E.waves[1].t0, E.waves[1].t1)); CHECK(i1 != rec.end() && i1->second.qWhy == wpc::Q_ATR, "(1.3.3) record parses qualifiedBy ATR back"); }
     // a recorded wave is drawn as recorded even when the average (store) would now refuse it
     wpc::Store big; seed(big, F.B[0].t, 2000, 2000);
-    wpc::Engine R; R.store = &big; R.N = 3; R.tick = 0.25; R.rec = rec; run(R, F, (int)F.B.size() - 1, vap);
+    wpc::Engine R; R.rule = 133; R.store = &big; R.N = 3; R.tick = 0.25; R.rec = rec; run(R, F, (int)F.B.size() - 1, vap);
     CHECK(R.waves.size() == 5 && R.C.recordUsed == 5 && R.waves[0].fromRecord, "recorded waves are redrawn from the record (never vanish)");
     // a different N ignores the record
     int bad2 = 0; CHECK(wpc::parseRecord(recLines, 5, 0.25, bad2).empty(), "the record of N=3 is not used at N=5");
@@ -138,9 +138,9 @@ static void testNoRepaint(const Fix& F) {
 static void testN5(const Fix& F) {
     wpc::Store S; seed(S, F.B[0].t, 189, 172);
     wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = F.V[(size_t)i]; return 1; };
-    wpc::Engine A; A.store = &S; A.N = 3; run(A, F, (int)F.B.size() - 1, vap);
+    wpc::Engine A; A.rule = 133; A.store = &S; A.N = 3; run(A, F, (int)F.B.size() - 1, vap);
     wpc::Store S5; seed(S5, F.B[0].t, 189, 172);
-    wpc::Engine Bn; Bn.store = &S5; Bn.N = 5; run(Bn, F, (int)F.B.size() - 1, vap);
+    wpc::Engine Bn; Bn.rule = 133; Bn.store = &S5; Bn.N = 5; run(Bn, F, (int)F.B.size() - 1, vap);
     bool differ = A.alt.size() != Bn.alt.size();
     for (size_t k = 0; !differ && k < A.alt.size(); ++k) differ = A.alt[k].i != Bn.alt[k].i;
     (void)differ;
@@ -167,7 +167,7 @@ static void testProvisionalAndOrigin() {
     for (size_t i = 0; i < B.size(); ++i) { for (long long p = B[i].l; p <= B[i].h; ++p) V[i].push_back({ p, 10 }); }
     V[14].push_back({ 112, 400 }); V[19].push_back({ 101, 250 });             // two volume nodes inside the down wave
     wpc::Store S; for (int k = 0; k < 6; ++k) { S.add(-1, 1000 + k, 8); S.add(1, 2000 + k, 8); }
-    wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25;
+    wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.tick = 0.25;
     wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = V[(size_t)i]; return 1; };
     std::vector<int> provEnd; wpc::Wave last;
     for (int k = 0; k <= 25; ++k) { E.addBar(B[(size_t)k], vap); wpc::Wave p; if (E.provisional(p, vap)) { provEnd.push_back(p.i1); last = p; } else provEnd.push_back(-1); }
@@ -191,7 +191,7 @@ static void testProvisionalAndOrigin() {
     CHECK(allOrigin, "a close above the origin (125) stops every line not touched (origin close)");
     // VAP missing: the wave waits (pending), nothing drawn, retried later; the stops are then replayed from its end
     wpc::Store S2; for (int k = 0; k < 6; ++k) S2.add(-1, 1000 + k, 8);
-    wpc::Engine M; M.store = &S2; M.N = 3; M.tick = 0.25; bool have = false;
+    wpc::Engine M; M.rule = 133; M.store = &S2; M.N = 3; M.tick = 0.25; bool have = false;
     wpc::VapFn vap2 = [&](int i, std::vector<wpc::VRow>& o) { if (!have && i == 17) return 0; o = V[(size_t)i]; return 1; };
     for (int k = 0; k <= 28; ++k) M.addBar(B[(size_t)k], vap2);
     CHECK(M.waves.size() == 1 && M.waves[0].pending && M.waves[0].nodes.empty() && M.pendingCount() == 1, "VAP missing for one bar: the wave is pending, not drawn");
@@ -230,9 +230,11 @@ static void testStoreAndHelpers() {
     CHECK(wpc::pickNodes(many, wpc::median2(many)).size() == 5, "max 5 nodes");
 }
 
+// (1.5.0) a right-edge price tag (not the header, a letter "X?" or a "Pb")
+static bool isTag(const wpc::Prim& p) { return p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0 && p.text != "Pb" && !(p.text.size() == 2 && p.text[1] == '?'); }
 static void testLayout(const Fix& F) {
     wpc::Store S; seed(S, F.B[0].t, 189, 172);
-    wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25;
+    wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.tick = 0.25;
     wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = F.V[(size_t)i]; return 1; };
     run(E, F, 50, vap);    // 13:33: wave 2 lines partly open
     wpc::View v; v.l = 0; v.t = 0; v.r = 1400; v.b = 700; v.first = 0; v.last = 51; v.lastBar = 51; v.bw = 1200.0 / 52;
@@ -244,7 +246,7 @@ static void testLayout(const Fix& F) {
     const double xLast = v.X(51) + v.bw / 2;
     bool tagsRight = true, amberLine3 = false, amberBox2 = false, whiteLine1 = false, noBoxes = true; int texts = 0;
     for (const wpc::Prim& p : sc.p) {
-        if (p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0) { ++texts; if (p.x0 <= xLast) tagsRight = false; }
+        if (isTag(p)) { ++texts; if (p.x0 <= xLast) tagsRight = false; }
         if (p.k == wpc::Prim::LINE && p.col == 0xF5B428 && p.w == 3) amberLine3 = true;
         if (p.k == wpc::Prim::FILL && p.col == 0xC88C14) amberBox2 = true;
         if (p.k == wpc::Prim::BOX) noBoxes = false;
@@ -253,18 +255,18 @@ static void testLayout(const Fix& F) {
     CHECK(texts == sc.tagsShown && tagsRight, "(1.4.2) the right-edge price tags are back (1.3.4): every tag right of the last bar (" << texts << " shown)");
     (void)whiteLine1;
     {   // (1.2.0, Rassul 16:26 CT "remove the drawing of levels across the chart and from the wave pocs") no line / circle at all (zigzag off)
-        int lines = 0, ovals = 0; for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::LINE && std::min(p.x0, p.x1) < xLast - 1 && !(p.w == 2 && p.x0 == p.x1)) ++lines; /* (1.3.3) not the spines */ if (p.k == wpc::Prim::OVAL) ++ovals; }   // (the tag leader right of the last bar is the tag itself)
+        int lines = 0, ovals = 0; for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::LINE && std::min(p.x0, p.x1) < xLast - 1 && !(p.w == 2 && p.x0 == p.x1) && p.col != 0x94A3B8 && p.col != 0xF5B428 && p.col != 0xE5E7EB) ++lines;   /* (1.5.0) not the volume outline (grey), the Pb dotted POC line (amber), the dotted node borders (white) */ /* (1.3.3) not the spines */ if (p.k == wpc::Prim::OVAL) ++ovals; }   // (the tag leader right of the last bar is the tag itself)
         CHECK(!amberLine3 && lines == 0 && ovals == 0 && amberBox2 && noBoxes, "(1.2.0) no node lines / touch circles / end ticks; WPOC = the bright amber row; no outline boxes (" << lines << " lines, " << ovals << " ovals)");
         // tags only for nodes still OPEN (untouched, wave not replaced, origin not broken)
         int open = 0, closed = 0; for (const wpc::Wave& w : E.waves) if (!w.pending) for (const wpc::Node& nd : w.nodes) { if (nd.stop == wpc::OPEN) ++open; else ++closed; }
         CHECK(closed > 0 && sc.tagsShown + sc.tagsHidden == open, "(1.2.0) tags only for OPEN nodes (" << sc.tagsShown + sc.tagsHidden << " tags, " << open << " open, " << closed << " closed)");
-        // (1.2.0, Rassul 16:31 CT "the wave poc lines are too large ... 33% less") the profile max width x 0.67
+        // (1.5.0, Rassul 10-31 22:48 CT "reduce to 30") the volume side: the outline's widest row = 30 px LEFT of the wave start
         bool wOk = true; int waves = 0;
         for (const wpc::Wave& w : E.waves) { if (w.pending || w.rows.empty() || w.maxVol <= 0) continue;
-            const double x0 = v.X(w.i0) - v.bw * 0.45, PW0 = std::max(4.0, std::min(170.0, (v.X(w.i1) - x0) * 0.95));
-            int mx = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.x0 == (int)std::lround(x0) && (p.col == 0x334155 || p.col == 0xC88C14 || p.col == 0xB4BECD)) mx = std::max(mx, p.x1 - p.x0);
-            ++waves; if (std::abs(mx - (int)std::lround(0.67 * PW0)) > 1) wOk = false; }
-        CHECK(waves > 0 && wOk && wpc::PROF_SCALE == 0.67, "(1.2.0) wave profile max bar width = 0.67 x the 1.1 width (" << waves << " waves)");
+            const double x0 = v.X(w.i0) - v.bw * 0.45; int mn = 1 << 30;
+            for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.col == 0x94A3B8 && p.x0 == p.x1 && p.x0 <= (int)std::lround(x0) && p.x0 >= (int)std::lround(x0) - 31) mn = std::min(mn, p.x0);
+            ++waves; if (std::abs(mn - (int)std::lround(x0 - wpc::SIDE_W)) > 1) wOk = false; }
+        CHECK(waves > 0 && wOk && wpc::SIDE_W == 30, "(1.5.0) the volume outline points LEFT, its widest row = 30 px (" << waves << " waves)");
     }
     CHECK(sc.nodesDrawn <= 5 * sc.wavesDrawn && sc.nodesDrawn == 13, "(1.3.3) nodes drawn = 5 + 2 + 3 + 3 (four waves confirmed by 13:33), at most 5 per wave (" << sc.nodesDrawn << ")");
     {   // (1.3.3, Rassul 04:52 CT) the spine: one 2 px vertical line per drawn wave at its profile start x, over start pivot .. end pivot; green up, red down
@@ -275,21 +277,21 @@ static void testLayout(const Fix& F) {
             sp += n; if (n != 1) ok = false; }
         CHECK(ok && sp == 4, "(1.3.3) spines: 4 waves, one each, green up / red down, spanning the wave's range (" << sp << ")"); }
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.4.2", "header Wave POC v1.4.2");
+    CHECK(header && std::string(wpc::VERSION) == "1.5.0", "header Wave POC v1.5.0");
     {   // (1.4.0) the open WPOC handed to lsDealerProfile: the latest confirmed wave's node [0] while OPEN, else none
         long long tk = 0; const bool has = wpc::latestOpenPoc(E, tk);
         const wpc::Wave* lw = nullptr; for (const wpc::Wave& w : E.waves) if (!w.pending) lw = &w;
         const bool expect = lw && !lw->nodes.empty() && lw->nodes[0].stop == wpc::OPEN;
         CHECK(has == expect && (!has || tk == lw->nodes[0].tick), "(1.4.0) latestOpenPoc = the latest wave's OPEN WPOC (or none)");
-        wpc::Engine E2 = E; if (!E2.waves.empty()) { for (wpc::Wave& w : E2.waves) if (!w.nodes.empty()) w.nodes[0].stop = wpc::OPEN + 1; }
+        wpc::Engine E2 = E; E2.rule = 133; if (!E2.waves.empty()) { for (wpc::Wave& w : E2.waves) if (!w.nodes.empty()) w.nodes[0].stop = wpc::OPEN + 1; }
         long long t2 = 0; CHECK(!wpc::latestOpenPoc(E2, t2), "(1.4.0) a closed WPOC is never handed over");
     }
     // no room right of the last bar: no tags at all (counted)
     wpc::View v2 = v; v2.r = (int)xLast + 20; const wpc::Scene s2 = wpc::layout(E, nullptr, v2);
-    int t2 = 0; for (const wpc::Prim& p : s2.p) t2 += p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0;
+    int t2 = 0; for (const wpc::Prim& p : s2.p) t2 += isTag(p);
     CHECK(t2 == 0 && s2.tagsHidden > 0, "tags hidden (not drawn over candles) when there is no room");
     // tags never overlap each other
-    std::vector<std::pair<int, int> > ys; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0) ys.push_back(std::make_pair(p.y0, p.y1));
+    std::vector<std::pair<int, int> > ys; for (const wpc::Prim& p : sc.p) if (isTag(p)) ys.push_back(std::make_pair(p.y0, p.y1));
     std::sort(ys.begin(), ys.end()); bool noOv = true; for (size_t k = 1; k < ys.size(); ++k) noOv = noOv && ys[k].first >= ys[k - 1].second;
     CHECK(noOv, "tags stacked without overlap");
     // zigzag off by default, on = legs + dots
@@ -297,8 +299,9 @@ static void testLayout(const Fix& F) {
     v.zigzag = true; const wpc::Scene s3 = wpc::layout(E, nullptr, v); int zz3 = 0; for (const wpc::Prim& p : s3.p) zz3 += p.col == 0x78849A || p.col == 0xCBD5E1;
     CHECK(zz == 0 && zz3 > 5, "zigzag only when switched on");
     // the profile sits at the wave start, pointing right, behind the candles
-    bool profAtStart = false; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.col == 0x334155) { profAtStart = profAtStart || (std::abs(p.x0 - (int)std::lround(v.X(6) - v.bw * 0.45)) <= 1 && p.back); }
-    CHECK(profAtStart, "profile drawn at the wave start (behind the candles)");
+    bool profAtStart = false; const int xs6 = (int)std::lround(v.X(6) - v.bw * 0.45);
+    for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.col == 0x94A3B8 && p.x0 == p.x1 && p.x0 < xs6 && p.x0 >= xs6 - 31) profAtStart = profAtStart || p.back;
+    CHECK(profAtStart, "(1.5.0) the volume outline drawn left of the wave start (behind the candles)");
 }
 
 // ---- (1.1.0) liquidity nodes ----
@@ -323,7 +326,7 @@ static bool fixLiq(const wpc::Wave& w, std::vector<double>& rows, std::vector<do
 }
 static void testLiquidityReference(const Fix& F) {
     wpc::Store S; seed(S, F.B[0].t, 189, 172);
-    wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25; E.liqFn = fixLiq;
+    wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.tick = 0.25; E.liqFn = fixLiq;
     wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = F.V[(size_t)i]; return 1; };
     run(E, F, (int)F.B.size() - 1, vap);
     CHECK(E.waves.size() == 5, "(1.3.3) five waves with the liquidity function on (the fixture has book data for the 1.3.2 waves only)");
@@ -344,11 +347,11 @@ static void testLiquidityReference(const Fix& F) {
     CHECK(nearTxt, "LNODE line says near_volume_node");
     // restart without a book: the recorded liquidity nodes come back from the record
     int bad = 0; wpc::Store S2; seed(S2, F.B[0].t, 189, 172);
-    wpc::Engine R; R.store = &S2; R.N = 3; R.tick = 0.25; R.rec = wpc::parseRecord(E.out, 3, 0.25, bad); run(R, F, (int)F.B.size() - 1, vap);
+    wpc::Engine R; R.rule = 133; R.store = &S2; R.N = 3; R.tick = 0.25; R.rec = wpc::parseRecord(E.out, 3, 0.25, bad); run(R, F, (int)F.B.size() - 1, vap);
     CHECK(bad == 0 && R.waves.size() == 5 && R.waves[2].lnodes.size() == 5 && R.waves[2].lnodes[0].tick == b.lnodes[0].tick && R.waves[2].lnodes[0].stopBar == b.lnodes[0].stopBar, "restart: liquidity nodes redrawn from the record");
     // no book (waves formed before the indicator loaded): no liquidity nodes, no error
     wpc::Store S3; seed(S3, F.B[0].t, 189, 172);
-    wpc::Engine Nb; Nb.store = &S3; Nb.N = 3; Nb.liqFn = [](const wpc::Wave&, std::vector<double>&, std::vector<double>&) { return false; }; run(Nb, F, (int)F.B.size() - 1, vap);
+    wpc::Engine Nb; Nb.rule = 133; Nb.store = &S3; Nb.N = 3; Nb.liqFn = [](const wpc::Wave&, std::vector<double>&, std::vector<double>&) { return false; }; run(Nb, F, (int)F.B.size() - 1, vap);
     CHECK(Nb.waves.size() == 5 && Nb.waves[0].lnodes.empty() && Nb.C.liqNoBook == 5 && Nb.waves[0].nodes.size() == 5, "no book: no liquidity nodes, the volume nodes unchanged");
     // layout: left of the wave start, <= 60 px, LPOC bright green, others 60%, dotted lines, no tags for liquidity
     wpc::View v; v.l = 0; v.t = 0; v.r = 1400; v.b = 700; v.first = 0; v.last = 79; v.lastBar = 79; v.bw = 1200.0 / 80;
@@ -369,7 +372,7 @@ static void testLiquidityReference(const Fix& F) {
     }
     CHECK(sc.lnodesDrawn == 9 && bright == 2 && dim == 7 && left, "(1.2.0) liquidity bars: left of the wave start, <= 40 px, LPOC bright, others 60% (" << bright << "/" << dim << ")");
     { int mxw = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.col == 0x22C55E) mxw = std::max(mxw, p.x1 - p.x0);
-      CHECK(dots == 0 && mxw == 40 && wpc::LNODE_W == 40, "(1.2.0) no dotted liquidity lines; LPOC bar = 40 px max (" << dots << " dots, " << mxw << " px)"); }
+      CHECK(dots == 0 && mxw == 30 && wpc::SIDE_W == 30, "(1.5.0) no dotted liquidity lines; LPOC bar = 30 px max, grouped with the volume side (" << dots << " dots, " << mxw << " px)"); }
     const wpc::Scene s0 = wpc::layout(Nb, nullptr, v); int t0 = 0; for (const wpc::Prim& p : s0.p) t0 += p.k == wpc::Prim::TEXT;
     CHECK(texts == t0, "no price tags for liquidity nodes");
 }
@@ -431,7 +434,7 @@ static void testCobSynthetic() {
     std::map<int, int> flags; flags[13] = 2;                                         // a bear CoB on bar 13, inside the down leg 10 -> 24
     // 1) the CoB leg is NOT a qualifying wave: it still gets the profile, at the confirmation (bar 27) - never before, never provisional
     wpc::Store S; store(S, 1000);
-    wpc::Engine E; E.store = &S; E.N = 3; E.atrMult = 1e9; E.tick = 0.25; E.cobFn = [&](int k) { auto it = flags.find(k); return it == flags.end() ? 0 : it->second; };
+    wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.atrMult = 1e9; E.tick = 0.25; E.cobFn = [&](int k) { auto it = flags.find(k); return it == flags.end() ? 0 : it->second; };
     bool early = false, prov = false;
     for (int k = 0; k <= 25; ++k) { E.addBar(Y.B[(size_t)k], vap); wpc::Wave p; early = early || !E.waves.empty(); prov = prov || E.provisional(p, vap); }
     CHECK(!early && !prov, "CoB leg: nothing drawn before its end pivot is confirmed, no provisional CoB leg");
@@ -457,34 +460,34 @@ static void testCobSynthetic() {
     CHECK(stopKind, "STOP lines carry the kind");
     // 2) the CoB leg is ALSO a qualifying wave: drawn once, kind BOTH
     wpc::Store S2; store(S2, 8);
-    wpc::Engine D; D.store = &S2; D.N = 3; D.atrMult = 1e9; D.tick = 0.25; D.cobFn = E.cobFn;
+    wpc::Engine D; D.rule = 133; D.store = &S2; D.N = 3; D.atrMult = 1e9; D.tick = 0.25; D.cobFn = E.cobFn;
     for (int k = 0; k <= 27; ++k) D.addBar(Y.B[(size_t)k], vap);
     CHECK(D.waves.size() == 2 && D.waves[1].kind == wpc::K_BOTH && D.waves[1].dir < 0 && D.C.qual[1] == 1 && D.C.cobBoth == 1, "CoB leg that is also a qualifying wave: ONE profile, kind BOTH");
     bool both = false; for (const std::string& l : D.out) both = both || (l.rfind("WAVE,", 0) == 0 && l.find(",BOTH,") != std::string::npos);
     CHECK(both, "record: kind BOTH");
     // 3) a bull CoB on a down leg / CoB legs off: nothing
     std::map<int, int> bull; bull[13] = 1;
-    wpc::Store S3; store(S3, 1000); wpc::Engine U; U.store = &S3; U.N = 3; U.atrMult = 1e9; U.tick = 0.25; U.cobFn = [&](int k) { auto it = bull.find(k); return it == bull.end() ? 0 : it->second; };
+    wpc::Store S3; store(S3, 1000); wpc::Engine U; U.rule = 133; U.store = &S3; U.N = 3; U.atrMult = 1e9; U.tick = 0.25; U.cobFn = [&](int k) { auto it = bull.find(k); return it == bull.end() ? 0 : it->second; };
     for (int k = 0; k <= 27; ++k) U.addBar(Y.B[(size_t)k], vap);
     CHECK(U.waves.empty(), "a bull CoB inside a DOWN leg does not make it a CoB leg");
-    wpc::Store S4; store(S4, 1000); wpc::Engine O; O.store = &S4; O.N = 3; O.atrMult = 1e9; O.tick = 0.25; O.cobFn = E.cobFn; O.cobLegs = false;
+    wpc::Store S4; store(S4, 1000); wpc::Engine O; O.rule = 133; O.store = &S4; O.N = 3; O.atrMult = 1e9; O.tick = 0.25; O.cobFn = E.cobFn; O.cobLegs = false;
     for (int k = 0; k <= 27; ++k) O.addBar(Y.B[(size_t)k], vap);
     CHECK(O.waves.empty() && O.C.cobBars[1] == 1, "setting CoB legs OFF: no CoB leg (the CoB bar is still seen)");
     // 4) restart: the record redraws the COB leg as recorded even with no CoB flags; with CoB legs off it is not drawn
     std::vector<std::string> lines(E.out.begin(), E.out.end()); int bad = 0; const auto rec = wpc::parseRecord(lines, 3, 0.25, bad);
     CHECK(bad == 0 && rec.size() == 1 && rec.begin()->second.kind == wpc::K_COB && rec.begin()->second.cobT == Y.B[13].t, "record parses back: kind COB, CoB time");
-    wpc::Store S5; store(S5, 1000); wpc::Engine R; R.store = &S5; R.N = 3; R.atrMult = 1e9; R.tick = 0.25; R.rec = rec;
+    wpc::Store S5; store(S5, 1000); wpc::Engine R; R.rule = 133; R.store = &S5; R.N = 3; R.atrMult = 1e9; R.tick = 0.25; R.rec = rec;
     for (int k = 0; k <= 27; ++k) R.addBar(Y.B[(size_t)k], vap);
     CHECK(R.waves.size() == 1 && R.waves[0].fromRecord && R.waves[0].kind == wpc::K_COB && R.waves[0].nodes[0].tick == w.nodes[0].tick, "restart: the recorded CoB leg is redrawn as recorded (never vanishes)");
-    wpc::Store S6; store(S6, 1000); wpc::Engine R2; R2.store = &S6; R2.N = 3; R2.atrMult = 1e9; R2.tick = 0.25; R2.rec = rec; R2.cobLegs = false;
+    wpc::Store S6; store(S6, 1000); wpc::Engine R2; R2.rule = 133; R2.store = &S6; R2.N = 3; R2.atrMult = 1e9; R2.tick = 0.25; R2.rec = rec; R2.cobLegs = false;
     for (int k = 0; k <= 27; ++k) R2.addBar(Y.B[(size_t)k], vap);
     CHECK(R2.waves.empty(), "CoB legs OFF: a recorded COB-only leg is not drawn");
     // 5) bar by bar with a restart after every bar = one straight pass (no repaint)
     std::vector<std::string> recL; bool same = true;
-    wpc::Store S7; store(S7, 1000); wpc::Engine A; A.store = &S7; A.N = 3; A.atrMult = 1e9; A.tick = 0.25; A.cobFn = E.cobFn;
+    wpc::Store S7; store(S7, 1000); wpc::Engine A; A.rule = 133; A.store = &S7; A.N = 3; A.atrMult = 1e9; A.tick = 0.25; A.cobFn = E.cobFn;
     for (int k = 0; k < (int)Y.B.size(); ++k) {
         A.addBar(Y.B[(size_t)k], vap); recL.insert(recL.end(), A.out.begin(), A.out.end()); A.out.clear();
-        wpc::Store Sx; store(Sx, 1000); wpc::Engine X; X.store = &Sx; X.N = 3; X.atrMult = 1e9; X.tick = 0.25; X.cobFn = E.cobFn; int b2 = 0; X.rec = wpc::parseRecord(recL, 3, 0.25, b2);
+        wpc::Store Sx; store(Sx, 1000); wpc::Engine X; X.rule = 133; X.store = &Sx; X.N = 3; X.atrMult = 1e9; X.tick = 0.25; X.cobFn = E.cobFn; int b2 = 0; X.rec = wpc::parseRecord(recL, 3, 0.25, b2);
         for (int j = 0; j <= k; ++j) X.addBar(Y.B[(size_t)j], vap);
         if (X.waves.size() != A.waves.size()) same = false;
         for (size_t q = 0; q < X.waves.size() && q < A.waves.size(); ++q) {
@@ -503,17 +506,17 @@ static void testCobSynthetic() {
 // high, > the average and > 3 ATR), so the CoB makes it kind BOTH - one profile; every wave and stop is the same as without the CoB
 static void testCobReal(const Fix& F) {
     wpc::Store S; seed(S, F.B[0].t, 189, 172);
-    wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25; E.cobFn = [](int k) { return k == 43 ? 1 : 0; };
+    wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.tick = 0.25; E.cobFn = [](int k) { return k == 43 ? 1 : 0; };
     wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = F.V[(size_t)i]; return 1; };
     run(E, F, (int)F.B.size() - 1, vap);
-    wpc::Store S0; seed(S0, F.B[0].t, 189, 172); wpc::Engine P; P.store = &S0; P.N = 3; P.tick = 0.25; run(P, F, (int)F.B.size() - 1, vap);
+    wpc::Store S0; seed(S0, F.B[0].t, 189, 172); wpc::Engine P; P.rule = 133; P.store = &S0; P.N = 3; P.tick = 0.25; run(P, F, (int)F.B.size() - 1, vap);
     CHECK(E.waves.size() == 5 && E.waves[3].kind == wpc::K_BOTH && E.waves[3].i0 == 41 && E.waves[3].i1 == 47 && E.waves[3].dir == 1 && E.waves[3].conf == 49 && E.waves[3].qWhy == 3, "(1.3.3) Oct 22: the 13:06-13:24 up leg with a bull CoB = a wave too: ONE profile, kind BOTH (confirmed at IRT's reversal bar 49)");
     bool same = P.waves.size() == 5 && E.waves.size() == 5;
     for (size_t w = 0; same && w < 5; ++w) { same = same && P.waves[w].i0 == E.waves[w].i0 && P.waves[w].i1 == E.waves[w].i1; for (size_t n = 0; same && n < P.waves[w].nodes.size(); ++n) same = same && P.waves[w].nodes[n].stop == E.waves[w].nodes[n].stop && P.waves[w].nodes[n].stopBar == E.waves[w].nodes[n].stopBar; }
     CHECK(same && E.waves[0].kind == wpc::K_WAVE && E.waves[2].kind == wpc::K_WAVE, "the two sell waves: kind WAVE; all waves and stops = the run without the CoB");
     if (E.waves.size() == 5) CHECK(!E.waves[3].nodes.empty() && E.waves[3].nodes.size() <= 5 && E.waves[3].rows.size() > 0, "the BOTH leg has its own profile + nodes (" << E.waves[3].nodes.size() << " nodes)");
     const std::string st = wpc::statusText(E, "ES", 180, "native,ok", "loaded", "loaded", 0, nullptr, false, 0);
-    CHECK(st.find("COB_LEGS,on,CoB bars bull 1 bear 0,legs drawn COB only 0 BOTH (also a wave) 1") != std::string::npos && st.find("QUALIFIED_BY,AVG 0,ATR 1,BOTH 4,rule 14-bar extreme") != std::string::npos, "status COB_LEGS + (1.3.3) QUALIFIED_BY lines");
+    CHECK(st.find("COB_LEGS,on,CoB bars bull 1 bear 0,legs drawn COB only 0 BOTH (also a wave) 1") != std::string::npos && st.find("QUALIFIED_BY,reversal 4,breakout 0,rally/decline 0,(older records AVG 0 ATR 1)") != std::string::npos, "status COB_LEGS + (1.5.0) QUALIFIED_BY lines");
 }
 
 
@@ -548,7 +551,7 @@ static void test132() {
     }
     // (b) a leg EXTENDED by an equal high later replaces its wave: ONE profile at that start (10:03 = 09:57-10:24 and 09:57-10:27)
     {   wpc::Store S; for (int k = 0; k < 20; ++k) { S.add(1, 1000 + k, 8); S.add(-1, 1000 + k, 8); }
-        wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25;
+        wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.tick = 0.25;
         std::vector<wpc::Bar> B; long long t = 100000;
         for (int i = 0; i < 25; ++i) B.push_back(mk(t += 180, 31100 - i * 2, 31102 - i * 2, 31096 - i * 2, 31098 - i * 2));   // a down drift to 31050 lows
         const long long lo = B.back().l - 6;
@@ -570,36 +573,39 @@ static void test132() {
         v.textW = [](const std::string& q, bool) { return (int)q.size() * 7; };
         const wpc::Scene sc = wpc::layout(E, nullptr, v);
         const int xs = (int)std::lround(v.X(25) - 20 * 0.45);
+        // (1.5.0) the volume side points LEFT as an outline: one vertical outline segment per row (no stacked profiles); highlights end at
+        // the start x and reach exactly the outline of their own row; outlines first, highlights after
         std::map<int, int> rowsAtY; int boxes = 0, hl = 0, hlOk = 0;
-        for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::BOX) ++boxes; if (p.k == wpc::Prim::FILL && p.x0 == xs && p.col == 0x334155) ++rowsAtY[p.y0]; }
+        for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::BOX) ++boxes; if (p.k == wpc::Prim::LINE && p.col == 0x94A3B8 && p.x0 == p.x1 && p.x0 < xs && p.x0 >= xs - 31) ++rowsAtY[std::min(p.y0, p.y1)]; }
         bool one = true; for (const auto& kv : rowsAtY) one = one && kv.second == 1;
-        for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.x0 == xs && (p.col == 0xC88C14 || p.col == 0xB4BECD)) { ++hl; for (const wpc::Prim& q : sc.p) if (q.k == wpc::Prim::FILL && q.col == 0x334155 && q.x0 == xs && q.y0 == p.y0 && q.y1 == p.y1 && q.x1 == p.x1) { ++hlOk; break; } }
-        CHECK(!rowsAtY.empty() && one, "(1.3.2) one profile row per price at that start (no stacked profiles)");
-        CHECK(boxes == 0 && hl > 0 && hl == hlOk, "(1.3.2) no outline (BOX) primitive; each highlight = exactly its own profile row (same y and length), filled (" << hl << "/" << hlOk << ")");
-        // rows first, highlights after: no profile row is painted after a highlight
-        bool seenHl = false, after = false; for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD)) seenHl = true; else if (seenHl && p.k == wpc::Prim::FILL && p.col == 0x334155) after = true; }
-        CHECK(seenHl && !after, "(1.3.2) every profile row is drawn before any highlight (nothing paints over a highlight)");
+        for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.x1 == xs && (p.col == 0xC88C14 || p.col == 0xB4BECD)) { ++hl; const int yc = (p.y0 + p.y1) / 2;
+            for (const wpc::Prim& q : sc.p) if (q.k == wpc::Prim::LINE && q.col == 0x94A3B8 && q.x0 == q.x1 && q.x0 == p.x0 && std::min(q.y0, q.y1) <= yc && std::max(q.y0, q.y1) >= yc) { ++hlOk; break; } }
+        CHECK(!rowsAtY.empty() && one, "(1.3.2/1.5.0) one profile outline segment per row at that start (no stacked profiles)");
+        CHECK(boxes == 0 && hl > 0 && hl == hlOk, "(1.5.0) no delta (fixture has none) = no box; each highlight reaches exactly its own row's outline, filled (" << hl << "/" << hlOk << ")");
+        bool seenHl = false, after = false; for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD)) seenHl = true; else if (seenHl && p.k == wpc::Prim::LINE && p.col == 0x94A3B8) after = true; }
+        CHECK(seenHl && !after, "(1.3.2) every profile outline is drawn before any highlight (nothing paints over a highlight)");
         // (c) the Levels column: nothing left of clipL; a profile starting inside it is CLIPPED (its rows keep their right ends)
-        wpc::View c = v; c.clipL = xs + 15; c.clipR = 1200;
+        wpc::View c = v; c.clipL = xs - 12; c.clipR = 1200;
         const wpc::Scene s2 = wpc::layout(E, nullptr, c);
-        bool inside = true; int cut = 0; for (const wpc::Prim& p : s2.p) { if (std::min(p.x0, p.x1) < c.clipL || std::max(p.x0, p.x1) > c.clipR) inside = false; if (p.k == wpc::Prim::FILL && p.col == 0x334155 && p.x0 == c.clipL) ++cut; }
-        int sameEnds = 0; for (const wpc::Prim& p : s2.p) if (p.k == wpc::Prim::FILL && p.col == 0x334155 && p.x0 == c.clipL) for (const wpc::Prim& q : sc.p) if (q.k == wpc::Prim::FILL && q.col == 0x334155 && q.y0 == p.y0 && q.x0 == xs && q.x1 == p.x1) { ++sameEnds; break; }
-        CHECK(inside && cut > 0 && sameEnds == cut, "(1.3.2) Levels column: nothing drawn left of it, the profile is clipped not shifted (" << cut << " rows cut)");
+        bool inside = true; int cut = 0; for (const wpc::Prim& p : s2.p) { if (std::min(p.x0, p.x1) < c.clipL || std::max(p.x0, p.x1) > c.clipR) inside = false; if (p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD) && p.x0 == c.clipL && p.x1 == xs) ++cut; }   /* this start's rows only */
+        int sameEnds = 0; for (const wpc::Prim& p : s2.p) if (p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD) && p.x0 == c.clipL) for (const wpc::Prim& q : sc.p) if (q.k == wpc::Prim::FILL && q.col == p.col && q.y0 == p.y0 && q.x1 == xs && p.x1 == xs && q.x0 <= c.clipL) { ++sameEnds; break; }
+        CHECK(inside && cut > 0 && sameEnds == cut, "(1.3.2) Levels column: nothing drawn left of it, the profile is clipped not shifted (" << cut << " rows cut, " << sameEnds << " same ends, inside " << inside << ")");
         bool hdr = false; for (const wpc::Prim& p : s2.p) hdr = hdr || (p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC v", 0) == 0 && p.x0 >= c.clipL && p.x1 == std::min(c.r, c.clipR) - 4 && p.y1 == c.b - 3);
         CHECK(hdr, "(1.4.2) the version header sits bottom-right inside the drawing area (right of the Levels column, off the top-left banner)");
     }
     // (d) profiles never overlap: a profile is cut at the next profile's start
-    {   wpc::Engine E; wpc::Wave a; a.dir = -1; a.i0 = 2; a.i1 = 12; a.e0 = 100; a.rowTicks = 1; a.rows.assign(10, 50); a.rows[4] = 400; a.maxVol = 400; a.scanned = 12;
+    {   wpc::Engine E; E.rule = 133; wpc::Wave a; a.dir = -1; a.i0 = 2; a.i1 = 12; a.e0 = 100; a.rowTicks = 1; a.rows.assign(10, 50); a.rows[4] = 400; a.maxVol = 400; a.scanned = 12;
+        a.drows.assign(10, -20); a.drows[4] = -300; a.dMax = 300; a.dMed2 = 40; a.p0 = 109; a.p1 = 100;   // (1.5.0) the delta side (right) is the one cut
         wpc::Wave b = a; b.dir = 1; b.i0 = 5; b.i1 = 15; E.waves.push_back(a); E.waves.push_back(b);
-        wpc::View v; v.l = 0; v.t = 0; v.r = 1400; v.b = 700; v.first = 0; v.last = 20; v.lastBar = 20; v.bw = 40; v.tick = 0.25;
-        v.X = [&](int i) { return 20 + (i + 0.5) * 40; }; v.Y = [&](double tk) { return 600 - (tk - 90) * 10.0; };
+        wpc::View v; v.l = 0; v.t = 0; v.r = 1400; v.b = 700; v.first = 0; v.last = 20; v.lastBar = 20; v.bw = 8; v.tick = 0.25;
+        v.X = [&](int i) { return 20 + (i + 0.5) * 8; }; v.Y = [&](double tk) { return 600 - (tk - 90) * 10.0; };
         const wpc::Scene sc = wpc::layout(E, nullptr, v);
-        const int xa = (int)std::lround(v.X(2) - 18), xb = (int)std::lround(v.X(5) - 18); int mx = 0;
-        for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.x0 == xa) mx = std::max(mx, p.x1);
+        const int xa = (int)std::lround(v.X(2) - 3.6), xb = (int)std::lround(v.X(5) - 3.6); int mx = 0;
+        for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.x0 == xa + 1) mx = std::max(mx, p.x1);
         CHECK(mx > xa && mx <= xb - 2, "(1.3.2) a profile ends before the next profile's start (" << mx << " <= " << xb - 2 << ")");
     }
     // (e) a recorded node of 2-tick rows highlights the highest RAW row inside its recorded row
-    {   wpc::Engine E; wpc::Wave w; w.e0 = 1000; w.rowTicks = 1; w.rows = { 5, 5, 300, 700, 5, 5 };
+    {   wpc::Engine E; E.rule = 133; wpc::Wave w; w.e0 = 1000; w.rowTicks = 1; w.rows = { 5, 5, 300, 700, 5, 5 };
         CHECK(E.recRow(w, 1003, 2) == 3 && E.recRow(w, 1003, 1) == 3 && E.recRow(w, 1002, 1) == 2, "(1.3.2) recorded 2-tick node -> its highest raw 1-tick row");
     }
     // (f) liquidity: the forming bar's samples under moving stamps still count for the closed bar (span / re-key)
@@ -627,7 +633,7 @@ static void testIrtZigzag1028(const char* path) {
     const Fix F = load(path, 0.25);
     CHECK(F.B.size() == 300, "10-28 bars fixture (" << F.B.size() << ")");
     if (F.B.size() != 300) return;
-    wpc::Store S; wpc::Engine E; E.store = &S; E.N = 3; E.tick = 0.25; wpc::VapFn vap = [](int, std::vector<wpc::VRow>&) { return 0; };   // (1.3.3) + an (empty) store: the AVG rule warms up
+    wpc::Store S; wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.tick = 0.25; wpc::VapFn vap = [](int, std::vector<wpc::VRow>&) { return 0; };   // (1.3.3) + an (empty) store: the AVG rule warms up
     for (const wpc::Bar& b : F.B) E.addBar(b, vap);
     std::string got; for (const wpc::Pivot& p : E.alt) { const std::string hm2 = wpc::hm(F.B[(size_t)p.i].t).substr(11); if (hm2 >= "09:00" && hm2 <= "14:30") got += hm2 + (p.type > 0 ? "H" : "L") + px(p.px) + " "; }
     // what his IRT ZIGZAG shows: 09:57 L, 10:24 H (not the equal 10:27), 11:39 L (-0.6), 11:57 H (2.0), 12:30 L (not 12:33), 13:18 L (-1.1),
@@ -645,7 +651,7 @@ static void testIrtZigzag1028(const char* path) {
 
 // (1.3.3, Rassul 04:51 CT 2026-10-29) the rule itself: 14-bar extreme; AVG or > 3 x the 14-bar ATR; neither = not a wave
 static void testRule133() {
-    wpc::Engine E; E.N = 3; E.tick = 0.25;
+    wpc::Engine E; E.rule = 133; E.N = 3; E.tick = 0.25;
     for (int i = 0; i < 30; ++i) { wpc::Bar b; b.t = 1000 + 180 * i; b.l = 100; b.h = 104; b.o = 101; b.c = 102; E.B.push_back(b); }
     double atr = 0;
     CHECK(!E.atrAt(13, atr) && E.atrAt(14, atr) && std::fabs(atr - 4) < 1e-12, "(1.3.3) ATR14 = mean true range of the 14 closed bars to the end bar (needs 15 bars)");

@@ -1,5 +1,16 @@
 /********************************************************************************
- *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.3.4  (2026-10-29)
+ *  WavePOC.cpp  --  Investor/RT RTX extension  lsWavePOC  "Wave POC"  1.5.0  (2026-11-01)
+ *
+ *  1.5.0 (Rassul 2026-10-31 20:33-23:10 CT + 2026-11-01 05:50 CT): each profile now has TWO sides of 30 px at the wave start -
+ *    LEFT = the volume profile as a grey outline, HVN rows light grey, WPOC amber, liquidity nodes grouped with it; RIGHT = the wave's
+ *    same-price delta (buy - sell volume from IRT's VAP), green buyers / red sellers, rows >= 2x the median bright, the delta POC outlined
+ *    in white. The top 4 delta rows (each >= 2x the median) are classified by location: I? with the wave in its first third, A? against
+ *    the wave before its last quarter (both the wave's colour), T? with the wave in the last quarter AND a close back through it within
+ *    5 bars after the pivot (opposite colour); cluster A? = an 8-tick middle band against the wave >= 2.0x the prior 20 waves' median
+ *    (10 waves needed). Letters are centred on their node; a dotted border goes round each top-4 node's distribution. POC pullback Pb =
+ *    any of the next 3 pullback pivots after the wave that trades through its volume POC and holds on the far side (amber dotted line).
+ *    Which waves get a profile: reversal (14-bar extreme AND > the average AND > 3 ATR) OR breakout (> 3 ATR and a close beyond the
+ *    previous swing) OR rally / decline (> 4 ATR); CoB legs kept. No settings change.
  *
  *  1.3.4 (2026-10-29 08:40 CT live ES: no liquidity node on any profile, status "waves without book 21", "bars sampled 9"): the book
  *    is sampled only from the moment IRT (re)starts, and 1.1.0-1.3.3 required samples on >= 90% of a wave's bars - every wave live at
@@ -121,7 +132,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.4.2";   // (1.4.2, 2026-10-29 Rassul 13:02 CT) right-edge tags restored as 1.3.4 drew them (the Levels-column "WPOC" he asked for is the WEEKLY POC; lsDealerProfile 2.39.0 drops the Wave POC badge); the version header moved bottom-right (it sat on the REV UP banner)   // was 1.4.1:   // (1.4.1, 2026-10-29 13:20 CT crash fix) the CoB flags come from getChartIndicator only - no getCustomIndicator (IRT fast-fail 0xC0000409 on opening the Add Indicator window, WER bucket 5c8499f9)   // was 1.4.0: (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.5.0";   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") wave delta profile right (same-price delta from the VAP buy / sell volume), volume outline left, top-4 delta letters I? / A? / T?, cluster A?, dotted node borders, POC pullback Pb, reversal / breakout / rally waves   // was "1.4.2":   // (1.4.2, 2026-10-29 Rassul 13:02 CT) right-edge tags restored as 1.3.4 drew them (the Levels-column "WPOC" he asked for is the WEEKLY POC; lsDealerProfile 2.39.0 drops the Wave POC badge); the version header moved bottom-right (it sat on the REV UP banner)   // was 1.4.1:   // (1.4.1, 2026-10-29 13:20 CT crash fix) the CoB flags come from getChartIndicator only - no getCustomIndicator (IRT fast-fail 0xC0000409 on opening the Add Indicator window, WER bucket 5c8499f9)   // was 1.4.0: (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -315,7 +326,7 @@ int WavePOC::vapRows(WState& S, int chartBar, std::vector<wpc::VRow>& out) {
         double vol = (double)v.totalVolume; const double bs = (double)v.buyVolume + (double)v.sellVolume; if (bs > vol + 0.5) vol = bs;
         if (vol <= 0) continue;
         wpc::VRow r; if (!wpc::toTicks((double)v.price, S.tick, r.tick)) continue;
-        r.vol = (long long)std::llround(vol); out.push_back(r);
+        r.vol = (long long)std::llround(vol); r.dlt = (long long)std::llround((double)v.buyVolume - (double)v.sellVolume); out.push_back(r);   // (1.5.0) same-price delta
     }
     return out.empty() ? 0 : 1;
 }
@@ -628,7 +639,7 @@ extern "C" cppExtension* CreateExtension(void) {
     WavePOC* p = new WavePOC();
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Wave POC v1.3.4 - each big wave's (and each CoB leg's) own volume profile at its start, its high-volume nodes (WPOC amber) and resting-liquidity nodes (left, LPOC) as pullback targets.");
-    p->setVersion("1.4.2");   // = WP_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Wave POC v1.5.0 - each big wave's (reversal, breakout, rally) volume profile left and delta profile right at its start, WPOC / HVN / liquidity nodes, the top-4 delta nodes as I? / A? / T?, and POC pullbacks (Pb).");
+    p->setVersion("1.5.0");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

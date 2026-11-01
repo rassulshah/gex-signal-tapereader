@@ -80,7 +80,7 @@ public:
     }
     RTX_RESULT getVolumeProfile(int bar, int i, VOLPROFILE& v) {
         if (bar < 0 || bar >= count || i < 0 || i >= (int)mock::current->vap[(size_t)bar].size()) return RTX_FAIL;
-        v.price = mock::current->vap[(size_t)bar][(size_t)i].first; v.totalVolume = mock::current->vap[(size_t)bar][(size_t)i].second; v.buyVolume = v.totalVolume / 2; v.sellVolume = v.totalVolume - v.buyVolume; return RTX_OK;
+        v.price = mock::current->vap[(size_t)bar][(size_t)i].first; v.totalVolume = mock::current->vap[(size_t)bar][(size_t)i].second; v.buyVolume = v.totalVolume * 3 / 5; v.sellVolume = v.totalVolume - v.buyVolume; return RTX_OK;   // (WavePOC 1.5.0) 60 / 40 split: the delta is not zero
     }
 };
 namespace mock { inline int dboAlive = 0, dboMade = 0; }
