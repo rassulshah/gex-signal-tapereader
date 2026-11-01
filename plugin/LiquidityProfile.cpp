@@ -158,7 +158,7 @@ static const char* LT_HEADER = "kind,touch_ms,sec_end,side,px_tick,price,tag,vot
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.69.0"          // (0.69.0, 2026-10-29 Rassul approved 11:18 CT) the zone candidates (SignalBoard B code 2) carry when each zone FIRST became a candidate (f.bar, CT s) for lsDealerProfile's age ("223 \xB7 48m"); a decided touch whose zone was rebuilt >= what was hit in its 15 s posts S code 20 (R?, untested); nothing drawn here changes   // was 0.68.0: (0.68.0, 2026-10-29 Rassul approved 09:33 / 10:23 CT, mockups orderlines-levels-mockup.html + AEYuhQfdcywsR8VxmhpUVq) THE TESTED ORDER LINES (OrderLinesLogic.h 1.1.0): an untouched big order draws nothing (the Liquidity column shows it); when price trades into it a line appears at its price from its PLACEMENT (left edge of the price area right of the Key Levels column when placed earlier), thin dashed while testing; decided (fill >= half, then the first favourable close within 4 bars = HELD; a bar wholly beyond / no favourable close in 4 bars = BREAK - was THRU) = solid, with [rank box] + HELD / BREAK at the decision bar; rank = its Liquidity-column rank at the TOUCH (lsDealerProfile Q board), frozen and recorded (T line), no box outside the top 6; BREAK shown 5 bars; HELD solid, never dimmed, to the right edge until a bar closes through it (X line), min 2 bars after the decision; pulled before a decision = gone; at most 3 tested lines; no fill dots / start labels any more (LRA-OrderFills published empty)   // was 0.67.0: (0.67.0, 2026-10-28 14:04 CT Rassul approved) the liquidity column candidates = zones >= 2.0x the median real level (LiqTouch 1.1.0 pickZones), posted as SignalBoard B code 2; the touch engine follows the same zones (the p97 tier = log only)
+#define LQ_VERSION "0.70.0"          // (0.70.0, 2026-11-01 Rassul 09:49-10:21 CT, mockup lp_proposal.html) the Liquidity column candidates = the WHOLE BOOK (LiqTouch 1.3.0 bookNodes: real orders rested >= 10 min, re-priced < 2x in 5 min, any distance, price +-1 tick nodes) posted as SignalBoard B code 4 (code 2 / 3 no longer posted); the tested order lines (HELD / BREAK) are no longer drawn and no G facts are posted (records unchanged); the LMT F column is gone (no BIG column on the board)   // was 0.69.0:  (0.69.0, 2026-10-29 Rassul approved 11:18 CT) the zone candidates (SignalBoard B code 2) carry when each zone FIRST became a candidate (f.bar, CT s) for lsDealerProfile's age ("223 \xB7 48m"); a decided touch whose zone was rebuilt >= what was hit in its 15 s posts S code 20 (R?, untested); nothing drawn here changes   // was 0.68.0: (0.68.0, 2026-10-29 Rassul approved 09:33 / 10:23 CT, mockups orderlines-levels-mockup.html + AEYuhQfdcywsR8VxmhpUVq) THE TESTED ORDER LINES (OrderLinesLogic.h 1.1.0): an untouched big order draws nothing (the Liquidity column shows it); when price trades into it a line appears at its price from its PLACEMENT (left edge of the price area right of the Key Levels column when placed earlier), thin dashed while testing; decided (fill >= half, then the first favourable close within 4 bars = HELD; a bar wholly beyond / no favourable close in 4 bars = BREAK - was THRU) = solid, with [rank box] + HELD / BREAK at the decision bar; rank = its Liquidity-column rank at the TOUCH (lsDealerProfile Q board), frozen and recorded (T line), no box outside the top 6; BREAK shown 5 bars; HELD solid, never dimmed, to the right edge until a bar closes through it (X line), min 2 bars after the decision; pulled before a decision = gone; at most 3 tested lines; no fill dots / start labels any more (LRA-OrderFills published empty)   // was 0.67.0: (0.67.0, 2026-10-28 14:04 CT Rassul approved) the liquidity column candidates = zones >= 2.0x the median real level (LiqTouch 1.1.0 pickZones), posted as SignalBoard B code 2; the touch engine follows the same zones (the p97 tier = log only)
 #define LQ_VERSION_0661 "0.66.1"          // (0.66.1, 2026-10-28 12:16 CT Rassul "a column for levels ... move the hod lod box aligned ... on the left") the top read banner and the order lines start right of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0 leftKeep) - the HOD/LOD table docks at that column's top
 #define LQ_VERSION_0660 "0.66.0"          // (0.66.0, 2026-10-28, Rassul approved the liquidity-column build 11:05 CT + 11:08 CT "i like the held signal ... show it when it held") THE TOUCH TAG (LiqTouch.h 1.0.0, the 10-28 liquidity study ported exactly): every big resting level (the market tier, p97 of book levels: ES 72 / NQ 12 / CL 16 / GC 10 / HG 10 / NG 30 / 6E 128 lots, nightly LRA-LiqTouch-<MKT>.csv) is followed natively from the order-by-order feed; 15 s after its first trade it is STAYS+ / STAYS / STAYS weak / GONE / GONE+ (or MID / EARLY, logged), with the Tape Reader votes; then HELD / BROKE / EXPIRED; posted as SignalBoard facts kind S for lsDealerProfile (tag in the Liquidity column, HELD on the chart - nothing new drawn here); every touch recorded to <stem>-liqtouch-<session>.csv (T / D 30-s / O lines, the log-only reads: king, dominance, MenthorQ, tap, seconds at the level, refill, churn, attacker mix) and read back after a restart (no repaint); status LIQ_TOUCH   // was (0.65.2)  (0.65.2, 2026-10-28 09:31 CT Rassul approved the split LMT F) BIDS FILLED in the LEFT half (green), OFFERS FILLED in the RIGHT half (red), each on its exact price row, centred in its half; collisions resolved per side only (a bid and an offer at the same price both show)
 #define LQ_VERSION_0651 "0.65.1"          // (0.65.1, 2026-10-28 09:05 CT Rassul "it would be horrible if ... the limit F is showing it at the wrong location") LMT F / live iceberg labels are drawn AT THEIR PRICE ROW or not at all (LabelPlace.h 1.0.0, biggest print wins a collision); 0.65.0 pushed colliding labels down a row at a time, so ES "2x 1571" (bids filled at 7773.00) showed near 7771
@@ -228,6 +228,8 @@ static int warnBlockH(int font, int rows) { return warnH(font) + std::max(1, row
 static const int LQ_TITLE_ROW_PX = 3;   // (0.27.1, Rassul 18:57 "should be higher because there is black space") the IRT title strip is above the pane: 20 -> 3 px
 static int warnTop(int paneTop) { return paneTop + LQ_TITLE_ROW_PX; }
 static const int LQ_BIG_W_LMZ = 112;   // (0.48.0, Rassul approved LMT zones mockup v3) two columns LMT 50 | LMT F 62 while the LMT zones are on
+static const bool LQ_BIG_COL = false;   // (0.70.0, Rassul 2026-11-01 "get rid of the limit F column") no BIG (LMT F) column
+static const bool LQ_ORDER_LINES_DRAW = false;   // (0.70.0, Rassul 2026-11-01 "get rid of the held lines on the chart") the tested order lines / HELD words are not drawn, no G facts
 static const int LQ_BIG_W = 64;    // (0.46.0, Rassul 2026-10-19 23:38 "ill keep lmt F and remove the others. build"; 23:46 + the resting-order lines off) ONE column, LMT F (was 168: LMT F 52 | MKT 64 | LMT R 52)
 static const bool LQ_SHOW_MKT = false, LQ_SHOW_LMT_R = false;   // (0.46.0) the MKT and LMT R columns are off (their data is still computed and recorded)
 static const int LQ_BIG_W_168 = 168;   // (0.37.0, Rassul 13:23) three narrow columns LMT F 52 | MKT 64 | LMT R 52 (was 120: LMT 64 | MKT 56); the board's maximum is now 180
@@ -1595,7 +1597,7 @@ static std::string ltStatus(LQState& S) {
     (void)S; return std::string();
 #else
     std::ostringstream o; o.imbue(std::locale::classic());
-    o << "\nLIQ_CANDIDATES,rule " << (S.lt.P.zoneGate ? "zone >= " : "OFF (tier) ") << S.lt.P.zoneX << "x the median real level (+-1 tick zones, rested " << S.lt.P.realMs / 1000 << " s+, re-priced < " << S.lt.P.maxMoves << "x in 5 min; median every " << S.lt.P.medEveryMs / 1000 << " s; " << S.lt.P.reachAtr << " ATR; own distribution >= " << S.lt.P.sepTicks << " ticks + valley <= " << S.lt.P.sepX << "x),median bid " << S.lt.median(ltc::BID) << " / offer " << S.lt.median(ltc::ASK) << " lots,real orders near " << S.lt.realNearCount() << ",candidates posted (B code 2) " << S.bZones << ",p97 tier (log only) RTH " << S.lt.P.tier[1] << " / ON " << S.lt.P.tier[0];
+    o << "\nLIQ_CANDIDATES,rule " << (S.lt.P.zoneGate ? "zone >= " : "OFF (tier) ") << S.lt.P.zoneX << "x the median real level (+-1 tick zones, rested " << S.lt.P.realMs / 1000 << " s+, re-priced < " << S.lt.P.maxMoves << "x in 5 min; median every " << S.lt.P.medEveryMs / 1000 << " s; " << S.lt.P.reachAtr << " ATR; own distribution >= " << S.lt.P.sepTicks << " ticks + valley <= " << S.lt.P.sepX << "x),median bid " << S.lt.median(ltc::BID) << " / offer " << S.lt.median(ltc::ASK) << " lots,real orders near " << S.lt.realNearCount() << ",touch candidates (log / touch engine) " << S.lt.candidates().size() << ",WHOLE-BOOK nodes posted (B code 4, rested 10 min, any distance) " << S.bZones << " of real orders " << S.lt.bookReal() << ",p97 tier (log only) RTH " << S.lt.P.tier[1] << " / ON " << S.lt.P.tier[0];
     o << "\nKING_NODES,range " << S.kingRange << " [" << S.lt.kLo << " .. " << S.lt.kHi << " ticks],bid " << S.lt.king[0].lots << " lots at " << S.lt.king[0].px << " (" << S.lt.kingX[0] << "x),offer " << S.lt.king[1].lots << " lots at " << S.lt.king[1].px << " (" << S.lt.kingX[1] << "x),rule >= 3.0x median, rested 10 min, beyond 3 ATR, swap at 1.25x";
     o << "\nLIQ_TOUCH,LiqTouch " << ltc::VERSION << ",params " << S.ltWhy << ",tier RTH " << S.lt.P.tier[1] << " / ON " << S.lt.P.tier[0] << " lots,far-king wait RTH " << S.lt.P.farWait[1] << " s / ON " << S.lt.P.farWait[0]
       << " s,STAYS+ <= " << S.lt.P.dwellPlus << " s,weak >= " << S.lt.P.dwellWeak << " s,churn " << (S.lt.P.churnCut > 0 ? std::to_string((int)S.lt.P.churnCut) + "x" : std::string("off"))
@@ -1668,7 +1670,7 @@ void LiquidityProfile::status(LQState& S, long long now) {
               << ",tags filling " << T.filling << " held (log only) " << T.held << " pulled " << T.ends[lmz::PULLED] << " (on chart now " << S.lzTagsDrawn << "),after-fill " << (S.lzSet.tags ? "on" : "off") << " re-bid " << T.rebid << " accepted " << T.accepted << " watching " << S.lz.pend.size() << " (skipped: repeat price " << T.afDup << " outside RTH " << T.afOff << " hit < 30 s " << T.afYoung << " re-priced " << T.afMoved << " lost " << T.afLost << "; stack line " << S.lz.R.nbMin << ", RTH from " << S.lz.R.rth0Min / 60 << ":" << (S.lz.R.rth0Min % 60 < 10 ? "0" : "") << S.lz.R.rth0Min % 60 << " CT),log only fast " << T.fast << " mid " << T.mid << " drift " << T.drift << " eaten " << T.eaten << " stepped " << T.stepped << ",judged to " << S.lz.judgedMs
               << ",restored " << S.lzRestored << " bad " << S.lzBad << " unknown line types " << T.unknownLines << ",writes " << S.lzWrites << " fails " << S.lzFails << ",hover " << S.lzHovState << "\n"; }
         {   const oln::Tally& O = S.ol.tally;   // (0.55.0)
-            o << "ORDER_LINES," << oln::VERSION << "," << (S.lzSet.on ? "on" : "off") << ",params " << S.olParWhy << ",floor " << S.ol.R.floorLots << " lots rest " << S.ol.R.restMin << " min roll " << S.ol.R.rollSec << " s ladder >= " << S.ol.R.ladMinN << " x " << S.ol.R.ladPieceMin << "+ lots in " << S.ol.R.ladSpan << " ticks cut-off " << S.ol.R.cutMin / 60 << ":" << (S.ol.R.cutMin % 60 < 10 ? "0" : "") << S.ol.R.cutMin % 60
+            o << "ORDER_LINES," << oln::VERSION << (LQ_ORDER_LINES_DRAW ? ",drawn" : ",NOT DRAWN (0.70.0: no HELD lines; records only)") << "," << (S.lzSet.on ? "on" : "off") << ",params " << S.olParWhy << ",floor " << S.ol.R.floorLots << " lots rest " << S.ol.R.restMin << " min roll " << S.ol.R.rollSec << " s ladder >= " << S.ol.R.ladMinN << " x " << S.ol.R.ladPieceMin << "+ lots in " << S.ol.R.ladSpan << " ticks cut-off " << S.ol.R.cutMin / 60 << ":" << (S.ol.R.cutMin % 60 < 10 ? "0" : "") << S.ol.R.cutMin % 60
               << ",tracked " << O.lines << " drawn " << O.drawn << " (on chart now " << S.olDrawnNow << ", words " << S.olWordsNow << ", Q " << S.olQNow << ", level tags " << S.olTagsNow << ", live lines cut (top " << LQ_LIVE_TOP << "/side) " << S.olCutNow << " (LineLevelTag " << llt::VERSION << ")" << ")"
               << ",filled " << O.filled << " pulled " << O.pulled << " rolls " << O.rolls << " (ambiguous " << O.rollAmbig << ") moves " << O.moves << " ladders " << O.ladders << " icebergs " << O.icebergs
               << ",tested lines (OrderLines " << oln::VERSION << ") touched " << O.touched << " closed-through " << O.through << " shown now " << S.olShownIds.size() << " Q reads " << S.olQReads << " G posts " << S.olGPosts << ",held " << O.held << " break " << O.thru << " (hover only " << O.wordsHidden << "),late skipped " << O.lateSkipped << ",unknown fills " << O.unknownFill << ",restored " << S.olRestored << ",writes " << S.olWrites << " fails " << S.olFails << "\n"; }
@@ -2488,6 +2490,10 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         LQState::BoHit h; h.key = L.key; h.b0 = b0; h.b1 = lastBar; h.px = L.px; h.tol = tol; S.boHits.push_back(h);
     }
     // 2) the BIG column
+    // (0.70.0, Rassul 2026-11-01 "get rid of the limit F column") with no LMT F column the code below still RUNS on a virtual column (the prints,
+    // icebergs and the SignalBoard P / B facts other plugins read), but draws nothing (bigDraw false)
+    const bool bigDraw = LQ_BIG_COL;
+    if (!bigDraw) { S.colBigL = 0; S.colBigR = LQ_BIG_W; }
     if (S.colBigL < 0 || S.colBigR - S.colBigL < 20) { S.boState = S.boState + " (no BIG column room)"; return; }
     // (0.37.0, Rassul 13:23 "call the filled column LMT F and the resting column LMT R", mockup 8WY3RzGG2BuG6wtPJsfX9m, "keep + -") THREE narrow columns, left to right:
     // LMT F (filled limit orders + icebergs "450 I") | MKT (big market orders "+ 120 S") | LMT R (the biggest resting orders, "+" stacking / "-" pulled). F is nearest the
@@ -2497,16 +2503,16 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     // (0.46.0, Rassul 23:38) LMT F only: the whole column; the footer (S5 / S10 / S20 / mu) stays at its bottom (the LMT F tiers use those sizes)
     const int ml = colL, mr = colL, fl = colL, fr = colR, cl = colL, cr = colR;
     (void)ml; (void)mr;
-    { RCT bg; bg.set(coord(colL), coord(top), coord(colR), coord(bottom)); bg.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
+    { RCT bg; bg.set(coord(colL), coord(top), coord(colR), coord(bottom)); if (bigDraw) bg.draw(0, C_COLBG, C_COLBG, DRAW_OPAQUE, PAT_SOLID); }
     FONT fh; fh.id = HELVETICA; fh.size = coord(9); fh.style = BOLD; setFont(fh); setTextColor(C_GREY);
     const bool lzCols = false && S.lzSet.on && colR - colL >= 70;   // (0.55.0) the LMT resting column removed (Rassul 2026-10-25): the order lines replace it; LMT F stays               // (0.48.0) LMT | LMT F (the same order ids as the chart zones)
     const int midX = colL + (colR - colL) * 45 / 100;
     if (lzCols) {
-        { RCT r; r.set(coord(colL), coord(top + 2), coord(midX - 1), coord(top + 14)); r.drawText("LMT", true, false); }
-        { RCT r; r.set(coord(midX), coord(top + 2), coord(colR - 2), coord(top + 14)); r.drawText("LMT F", true, false); }
-        setPen(C_AXIS, 1, P_SOLID); ko::line(coord(midX - 1), coord(top + 2), coord(midX - 1), coord(bottom - 2));
+        { RCT r; r.set(coord(colL), coord(top + 2), coord(midX - 1), coord(top + 14)); if (bigDraw) r.drawText("LMT", true, false); }
+        { RCT r; r.set(coord(midX), coord(top + 2), coord(colR - 2), coord(top + 14)); if (bigDraw) r.drawText("LMT F", true, false); }
+        setPen(C_AXIS, 1, P_SOLID); if (bigDraw) ko::line(coord(midX - 1), coord(top + 2), coord(midX - 1), coord(bottom - 2));
     } else
-    { RCT r; r.set(coord(fl), coord(top + 2), coord(fr - 2), coord(top + 14)); r.drawText("LMT F", true, false); }
+    { RCT r; r.set(coord(fl), coord(top + 2), coord(fr - 2), coord(top + 14)); if (bigDraw) r.drawText("LMT F", true, false); }
     int fBottom = bottom;                                                  // (0.46.0) LMT F marks stay above the footer
     {   // (0.26.0) the reference at the bottom of LMT R: this market's large-lot mean and 1 / 2 / 3 SD sizes (lots)
         FONT fr2; fr2.id = HELVETICA; fr2.size = coord(8); fr2.style = BOLD; setFont(fr2); setTextColor(C_GREY);   // (0.37.1) 8 pt: label and number no longer overprint in the narrow column
@@ -2524,8 +2530,8 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         int y = bottom - 4 - (int)rows.size() * rh;
         if (y > top + 30) fBottom = y - 2;
         if (y > top + 30) for (size_t i = 0; i < rows.size(); ++i, y += rh) {
-            RCT a; a.set(coord(cl + 3), coord(y), coord(cr - 3), coord(y + rh)); a.drawText(rows[i].first.c_str(), false, false);
-            a.drawText(rows[i].second.c_str(), false, true);
+            RCT a; a.set(coord(cl + 3), coord(y), coord(cr - 3), coord(y + rh)); if (bigDraw) a.drawText(rows[i].first.c_str(), false, false);
+            if (bigDraw) a.drawText(rows[i].second.c_str(), false, true);
         }
     }
     if (LQ_SHOW_MKT) renderMkt(S, ml, mr, top, bottom);                  // (0.28.0) the MKT column; (0.46.0) off
@@ -2599,11 +2605,11 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         // (0.37.0, Rassul 13:53 "largest orders within 2 ATR; above 2 sd get the background, above 3 sd get the white outline", "keep + -") LMT R: the biggest resting
         // bid / ask within the 2 ATR reach; 1SD = dim text, 2SD = background in the side's colour, 3SD = background + white outline
         RCT r; r.set(coord(cl + 2), coord(t0), coord(cr - 2), coord(b0));
-        if (tier >= 2) { const COLOR fill = bull ? C_BUY : C_SELL; r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID); }
-        if (tier == 3) { setPen(C_WHITE, 2, P_SOLID); RCT o; o.set(coord(cl + 1), coord(t0 - 1), coord(cr - 1), coord(b0 + 1)); o.draw(2, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW); }
+        if (tier >= 2) { const COLOR fill = bull ? C_BUY : C_SELL; if (bigDraw) r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID); }
+        if (tier == 3) { setPen(C_WHITE, 2, P_SOLID); RCT o; o.set(coord(cl + 1), coord(t0 - 1), coord(cr - 1), coord(b0 + 1)); if (bigDraw) o.draw(2, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW); }
         setFont(tier == 1 ? fp1 : fb);
         setTextColor(tier >= 2 ? (bull ? C_INK : C_WHITE) : (COLOR)lqp::colInk(bull, true));   // (0.45.3) the 1SD text lighter (was the dim 0x157A3D / 0x933030)
-        r.drawText(tx.c_str(), true, false);
+        if (bigDraw) r.drawText(tx.c_str(), true, false);
         used.push_back(std::make_pair(t0, b0)); ++S.boLabels; S.boTier[s] = tier;
     }
     {   // (0.37.0, Rassul 13:59 "if an order is 3SD+, show it no matter where it is") the biggest displayed size per side BEYOND the 2 ATR reach, shown at 3SD and over: background + white
@@ -2617,9 +2623,9 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
             const int y = yOfPx(bp); const int t0 = y - boxH / 2, b0 = t0 + boxH;
             if (t0 < top + 14 || b0 > bottom || !freeAt(t0, b0)) continue;
             const bool bull = s == bol::BID; const COLOR fill = bull ? C_BUY : C_SELL;
-            RCT r; r.set(coord(cl + 2), coord(t0), coord(cr - 2), coord(b0)); r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID);
-            setPen(C_WHITE, 2, P_SOLID); RCT o; o.set(coord(cl + 1), coord(t0 - 1), coord(cr - 1), coord(b0 + 1)); o.draw(2, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW);
-            setFont(fb); setTextColor(bull ? C_INK : C_WHITE); r.drawText(std::to_string((long long)std::llround(bn)).c_str(), true, false);
+            RCT r; r.set(coord(cl + 2), coord(t0), coord(cr - 2), coord(b0)); if (bigDraw) r.draw(0, fill, fill, DRAW_OPAQUE, PAT_SOLID);
+            setPen(C_WHITE, 2, P_SOLID); RCT o; o.set(coord(cl + 1), coord(t0 - 1), coord(cr - 1), coord(b0 + 1)); if (bigDraw) o.draw(2, C_WHITE, C_WHITE, DRAW_OPAQUE, PAT_HOLLOW);
+            setFont(fb); setTextColor(bull ? C_INK : C_WHITE); if (bigDraw) r.drawText(std::to_string((long long)std::llround(bn)).c_str(), true, false);
             used.push_back(std::make_pair(t0, b0)); ++S.boLabels;
         }
     }
@@ -2637,7 +2643,7 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
             const long long n = S.lz.liveSize(z); if (n <= 0) continue;
             const bool on = lmz::shown(z, S.lzSet);
             setFont(on ? fz : fzp); setTextColor((COLOR)lqp::colInk(z.side == lmz::BID, !on));
-            RCT a; a.set(coord(colL + 2), coord(t0), coord(midX - 3), coord(t0 + rh2)); a.drawText((std::to_string(n) + (z.q && on ? "?" : "")).c_str(), true, false);
+            RCT a; a.set(coord(colL + 2), coord(t0), coord(midX - 3), coord(t0 + rh2)); if (bigDraw) a.drawText((std::to_string(n) + (z.q && on ? "?" : "")).c_str(), true, false);
             uL.push_back(std::make_pair(t0, t0 + rh2)); ++S.lzLmtRows;
         }
         const long long nowZ = S.lz.lastT > 0 ? S.lz.lastT : nowMs(S);
@@ -2649,8 +2655,8 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
             setFont(old ? fzp : fz);
             const std::string num = std::to_string(z.traded); const int w1 = (int)getTextWidth(num.c_str(), -1), w2 = ice ? (int)getTextWidth(" I", -1) : 0;
             const int x = midX + 2 + std::max(0, ((colR - midX - 4) - (w1 + w2)) / 2);
-            setTextColor((COLOR)lqp::colInk(z.side == lmz::BID, old)); RCT a; a.set(coord(x), coord(t0), coord(colR - 1), coord(t0 + rh2)); a.drawText(num.c_str(), false, false);
-            if (ice) { setTextColor(C_WHITE); RCT b; b.set(coord(x + w1), coord(t0), coord(colR - 1), coord(t0 + rh2)); b.drawText(" I", false, false); }
+            setTextColor((COLOR)lqp::colInk(z.side == lmz::BID, old)); RCT a; a.set(coord(x), coord(t0), coord(colR - 1), coord(t0 + rh2)); if (bigDraw) a.drawText(num.c_str(), false, false);
+            if (ice) { setTextColor(C_WHITE); RCT b; b.set(coord(x + w1), coord(t0), coord(colR - 1), coord(t0 + rh2)); if (bigDraw) b.drawText(" I", false, false); }
             uF.push_back(std::make_pair(t0, t0 + rh2)); ++S.lzFRows;
         }
         return;
@@ -2667,8 +2673,8 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
     auto freeF = [&](bool bid, int t0, int b0) { const std::vector<std::pair<int, int> >& u = usedFS[bid ? 0 : 1]; for (size_t i = 0; i < u.size(); ++i) if (!(b0 < u[i].first || t0 > u[i].second)) return false; return true; };
     auto putF = [&](bool bid, int t0, int h, const std::string& num, COLOR c, bool ice) {
         // (0.65.0) centred in its cell by the SDK, the iceberg I at the half's right edge
-        RCT a; a.set(coord(halfL(bid)), coord(t0), coord(halfR(bid)), coord(t0 + h)); setTextColor(c); a.drawText(num.c_str(), true, false);
-        if (ice) { RCT b; b.set(coord(halfL(bid)), coord(t0), coord(halfR(bid)), coord(t0 + h)); setTextColor(C_WHITE); b.drawText("I", false, true); }
+        RCT a; a.set(coord(halfL(bid)), coord(t0), coord(halfR(bid)), coord(t0 + h)); setTextColor(c); if (bigDraw) a.drawText(num.c_str(), true, false);
+        if (ice) { RCT b; b.set(coord(halfL(bid)), coord(t0), coord(halfR(bid)), coord(t0 + h)); setTextColor(C_WHITE); if (bigDraw) b.drawText("I", false, true); }
     };
     {   const long long iFloor = S.bldOk ? std::max(1LL, (long long)std::llround(S.bldMu)) : std::max(10LL, 2 * minShow);
         const std::vector<std::pair<long long, bfl::Ice::Ord> > lv = S.ice.live(iFloor, 2);
@@ -2742,9 +2748,9 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         const bool green = lqp::lmtFillGreen(e.side == bol::BID);   // (0.45.2, Rassul 20:06) the RESTING side: filled bid GREEN (buyers absorbed), filled offer RED (sellers absorbed); icebergs the same (0.19.1-0.45.1: coloured by who hit it)
         setFont(tier >= 3 ? fsb : fsp);
         const bool bidH = e.side == bol::BID; const int hl = halfL(bidH), hr = halfR(bidH);   // (0.65.2) bids left half, offers right half
-        if (show) {   RCT a; a.set(coord(hl), coord(t0), coord(hr), coord(t0 + sh)); setTextColor((COLOR)lqp::colInk(green, dim)); a.drawText(tx.c_str(), true, false);
-            if (e.ice) { RCT b; b.set(coord(hl), coord(t0), coord(hr), coord(t0 + sh)); setTextColor(C_WHITE); b.drawText("I", false, true); }
-            if (e.rest) { RCT rd; rd.set(coord(hl), coord(t0), coord(hr), coord(t0 + sh)); setTextColor((COLOR)0x00FFFFFF); rd.drawText("\x95", false, false); ++S.lmtFRest; }   // (0.62.0) still resting after the fill
+        if (show) {   RCT a; a.set(coord(hl), coord(t0), coord(hr), coord(t0 + sh)); setTextColor((COLOR)lqp::colInk(green, dim)); if (bigDraw) a.drawText(tx.c_str(), true, false);
+            if (e.ice) { RCT b; b.set(coord(hl), coord(t0), coord(hr), coord(t0 + sh)); setTextColor(C_WHITE); if (bigDraw) b.drawText("I", false, true); }
+            if (e.rest) { RCT rd; rd.set(coord(hl), coord(t0), coord(hr), coord(t0 + sh)); setTextColor((COLOR)0x00FFFFFF); if (bigDraw) rd.drawText("\x95", false, false); ++S.lmtFRest; }   // (0.62.0) still resting after the fill
         }
         if (show) { usedFS[bidH ? 0 : 1].push_back(std::make_pair(t0, t0 + sh)); ++S.boExec; }
         sb::Fact f; f.bar = e.ice ? ((e.last / 1000) / std::max(1, S.spb) + 1) * std::max(1, S.spb) : e.last / 1000; ++S.lftShown; f.lo = f.hi = (double)e.px * tick;   // the fill's candle (bar END stamp, Central seconds)
@@ -2785,16 +2791,15 @@ void LiquidityProfile::renderBig(LQState& S, int paneLeft, int paneRight, int to
         S.bZones = 0;
         if (S.lt.P.zoneGate && S.lt.nEvents > 0) {
             S.factsB.clear();
-            // (0.69.0, Rassul approved 11:18 CT "223 · 48m") f.bar = when this zone FIRST became a candidate (CT seconds, kept while it stays a candidate,
-            // forgotten 60 s after it last was one) - lsDealerProfile shows its age next to the amount
-            for (const ltc::Zone& z : S.lt.candidates()) { sb::Fact f; const long long zk = (z.px << 1) | (z.side == ltc::BID ? 1LL : 0LL);
+            // (0.70.0, Rassul 2026-11-01 "it should be the whole book, no more 3 ATR") THE CANDIDATES = the whole-book real nodes (LiqTouch 1.3.0
+            // bookNodes: rested >= 10 min, re-priced < 2x in 5 min, any distance; node = price +-1 tick; one node per distribution; 20 a side),
+            // posted as code 4 (val = node lots, proven = the biggest single price in it, bar = when it FIRST became a node, CT s - kept while it
+            // stays one, forgotten 60 s after). lsDealerProfile 2.40.0 ranks them (top 5 + level-linked >= 50% of the king). Codes 2 / 3 retired.
+            for (const ltc::Zone& z : S.lt.bookNodes()) { sb::Fact f; const long long zk = (z.px << 1) | (z.side == ltc::BID ? 1LL : 0LL);
                 std::map<long long, std::pair<long long, long long> >::iterator zs = S.zoneSince.find(zk);
                 if (zs == S.zoneSince.end()) zs = S.zoneSince.insert(std::make_pair(zk, std::make_pair(nowT, nowT))).first; else zs->second.second = nowT;
                 f.bar = zs->second.first / 1000; f.lo = f.hi = (double)z.px * tick; f.side = z.side == ltc::BID ? 1 : -1;
-                f.val = (double)z.lots; f.code = 2; f.state = 0; f.proven = (int)std::min<long long>(z.raw, 1000000000LL); S.factsB.push_back(f); ++S.bZones; }
-            for (int sd = 0; sd < 2; ++sd) { const ltc::Zone& K = S.lt.king[sd]; if (K.lots <= 0) continue;   // (0.69.0) the KING nodes (code 3): bar = king since, proven = x the median x 100
-                sb::Fact f; f.bar = S.lt.kingSince[sd] / 1000; f.lo = f.hi = (double)K.px * tick; f.side = sd == ltc::BID ? 1 : -1; f.val = (double)K.lots; f.code = 3; f.state = 0;
-                f.proven = (int)std::min(100000.0, std::floor(S.lt.kingX[sd] * 100.0)); S.factsB.push_back(f); }
+                f.val = (double)z.lots; f.code = 4; f.state = 0; f.proven = (int)std::min<long long>(z.raw, 1000000000LL); S.factsB.push_back(f); ++S.bZones; }
             for (std::map<long long, std::pair<long long, long long> >::iterator zs = S.zoneSince.begin(); zs != S.zoneSince.end();) { if (nowT - zs->second.second > 60000 || nowT < zs->second.second - 60000) zs = S.zoneSince.erase(zs); else ++zs; }
             std::sort(S.factsB.begin(), S.factsB.end(), [](const sb::Fact& a, const sb::Fact& b) { return a.val > b.val; });
             if (S.factsB.size() > 60) S.factsB.resize(60);
@@ -3443,7 +3448,7 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
         const long long lastClosed = E.bars.empty() ? 0 : E.bars.back().endMs, bms = S.spb > 0 ? (long long)S.spb * 1000LL : 180000LL;
         const std::vector<int> sh = oln::shownLines(E, lastClosed, bms);
         S.olShownIds.clear();
-        for (size_t si = 0; si < sh.size() && xMax - xL >= 20; ++si) {
+        for (size_t si = 0; LQ_ORDER_LINES_DRAW && si < sh.size() && xMax - xL >= 20; ++si) {   // (0.70.0) off: no HELD / BREAK lines on the chart
             const size_t li = (size_t)sh[si]; const oln::Line& L = E.lines[li];
             if (L.kind == oln::K_LADDER && !S.lzSet.origin) continue;   // "Ladders" box
             if (L.kind == oln::K_ONE && L.refills > 0 && !S.lzSet.print) continue;   // "Icebergs" box
@@ -3486,7 +3491,7 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
         if (G.size() > 150) G.erase(G.begin(), G.begin() + (long)(G.size() - 150));
         for (const sb::Fact& f : G) body += std::to_string(f.bar) + "," + std::to_string(f.side) + "," + std::to_string(f.lo) + ";";
         const long long st = steadyMs();
-        if (!S.symbol.empty() && (body != S.olGBody || S.olGMs < 0 || st < S.olGMs || st - S.olGMs >= 20000)) {
+        if (LQ_ORDER_LINES_DRAW && !S.symbol.empty() && (body != S.olGBody || S.olGMs < 0 || st < S.olGMs || st - S.olGMs >= 20000)) {   // (0.70.0) no G posts (lsExhaustion retired)
             const char* clk = getChartLabel(); sb::postFacts('G', S.symbol, S.spb, clk ? std::string(clk) : std::string(), st, G); S.olGBody = body; S.olGMs = st; ++S.olGPosts; }
     }
     RTARRAYI olDt(barDateTime); (void)olDt;                            // (0.68.0) no fill dots any more: the fill-key file is published empty
@@ -3685,8 +3690,8 @@ void LiquidityProfile::render(LQState& S) {
         cb::In in; in.paneL = pane.left; in.paneT = pane.top; in.paneB = pane.bottom; in.axisR = paneRight;
         in.levels = S.peers.on[cb::LEVELS]; in.levelsW = S.peers.w[cb::LEVELS]; in.delta = S.peers.on[cb::DELTA]; in.deltaW = S.peers.w[cb::DELTA];
         in.dealer = S.peers.on[cb::DEALER]; in.dealerW = S.peers.w[cb::DEALER];
-        in.big = S.boSet.on; in.bigW = LQ_BIG_W;                          // (0.19.0) our BIG column, first after the last bar; (0.22.5) 44 -> 56 px
-        if (S.boSet.on) cb::publish(cb::BIG, S.symbol, S.spb, chart, now, LQ_BIG_W); else cb::clear(cb::BIG, S.symbol, S.spb, chart);
+        in.big = LQ_BIG_COL && S.boSet.on; in.bigW = LQ_BIG_W;            // (0.19.0) our BIG column, first after the last bar; (0.22.5) 44 -> 56 px
+        if (in.big) cb::publish(cb::BIG, S.symbol, S.spb, chart, now, LQ_BIG_W); else cb::clear(cb::BIG, S.symbol, S.spb, chart);   // (0.70.0) no LMT F column
         const cb::Layout L = cb::layout(in);
         S.colPriceRight = L.margin > 0 ? L.priceRight : -1;
         S.colDeltaR = (cb::DELTA_LEFT && L.w[cb::DELTA] > 0) ? L.delta.r : (cb::LEVELS_LEFT && L.w[cb::LEVELS] > 0) ? L.levels.r : 0;
@@ -4764,6 +4769,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.69.0");   // LQ_VERSION
+    p->setVersion("0.70.0");   // LQ_VERSION
     return p;
 }

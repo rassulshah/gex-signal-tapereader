@@ -1,5 +1,10 @@
 #ifndef LS_LIQTOUCH_H
 #define LS_LIQTOUCH_H
+// LiqTouch.h 1.3.0 (2026-11-01, Rassul 10:12-10:21 CT "it should be the whole book, no more 3 ATR"): + THE WHOLE-BOOK NODES (bookNodes):
+//   real orders = rested >= 10 min at their price and re-priced < 2x in 5 min (the king rule), ANY distance from price (bids below the last
+//   trade, offers above); node = a price +-1 tick (same side) at the price with the most lots; each node its own distribution (>= 3 ticks
+//   from a bigger node and the smallest raw level between them <= 0.7x the smaller); the biggest BOOK_PER_SIDE per side, biggest first.
+//   lsLiquidityProfile 0.70.0 posts them (SignalBoard B code 4); lsDealerProfile 2.40.0 ranks them (top 5 + level-linked >= 50% of the king).
 // LiqTouch.h 1.1.0 (2026-10-28 14:04 CT, Rassul approved the new liquidity-column candidate rule): with Params.zoneGate (lsLiquidityProfile
 // sets it live) a BIG LEVEL is no longer "size >= the p97 tier" but a ZONE CANDIDATE (pickZones below, one rule shared with lsDealerProfile):
 //   real orders only (rested >= 30 s at their price, re-priced < 2x in 5 min - quoting / market-maker style orders excluded); zone = the real
@@ -45,7 +50,7 @@
 #include <algorithm>
 #include <sstream>
 namespace ltc {
-static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-10-29) + the KING nodes above / below (kingStep)
+static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-11-01) + the whole-book nodes (bookNodes)  // was "1.2.0";   // (1.2.0, 2026-10-29) + the KING nodes above / below (kingStep)
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum Tag { T_PENDING = 0, T_STAYS_PLUS = 1, T_STAYS = 2, T_STAYS_WEAK = 3, T_GONE = 4, T_GONE_PLUS = 5, T_MID = 6, T_EARLY = 7 };
@@ -112,6 +117,41 @@ inline std::vector<Zone> pickZones(const std::map<long long, long long>& real, i
             if (hi - lo < P.sepTicks) { ok = false; break; }
             long long mn = -1; for (long long p = lo + 1; p < hi; ++p) { const long long v = at(p); if (mn < 0 || v < mn) mn = v; }
             if ((double)mn > P.sepX * (double)z.lots) { ok = false; break; }   // no valley between them: the same distribution - keep the bigger
+        }
+        if (ok) c.push_back(z);
+    }
+    return c;
+}
+// (1.3.0) the WHOLE-BOOK nodes of one side: real[p] = real lots at tick p (already filtered); bids at p < last, offers at p > last, no reach.
+// Same node rule as pickZones (price +-1 tick, distinct distributions) but no size gate; sparse (only priced ticks are visited), capped.
+inline std::vector<Zone> bookZones(const std::map<long long, long long>& real, int sd, long long last, int sepTicks, double sepX, size_t cap) {
+    std::vector<Zone> c; if (last <= 0 || real.empty() || cap == 0) return c;
+    auto at = [&](long long p) -> long long { std::map<long long, long long>::const_iterator i = real.find(p); return i == real.end() ? 0 : std::max(0LL, i->second); };
+    std::map<long long, Zone> byPx;
+    for (std::map<long long, long long>::const_iterator i = real.begin(); i != real.end(); ++i) {
+        if (i->second <= 0) continue;
+        for (long long p = i->first - 1; p <= i->first + 1; ++p) {
+            if (p <= 0) continue;
+            const long long a = at(p - 1), m = at(p), b = at(p + 1), z = a + m + b; if (z <= 0) continue;
+            long long zp = p, zm = m; if (a > zm) { zp = p - 1; zm = a; } if (b > zm) { zp = p + 1; zm = b; }
+            const long long dz = sd == BID ? last - zp : zp - last; if (dz < 1) continue;
+            std::map<long long, Zone>::iterator h = byPx.find(zp);
+            if (h == byPx.end() || z > h->second.lots) { Zone Z; Z.side = sd; Z.px = zp; Z.lots = z; Z.raw = zm; byPx[zp] = Z; }
+        }
+    }
+    std::vector<Zone> all; for (std::map<long long, Zone>::const_iterator i = byPx.begin(); i != byPx.end(); ++i) all.push_back(i->second);
+    std::sort(all.begin(), all.end(), [](const Zone& x, const Zone& y) { return x.lots != y.lots ? x.lots > y.lots : x.px < y.px; });
+    for (const Zone& z : all) {
+        if (c.size() >= cap) break;
+        bool ok = true;
+        for (const Zone& k : c) {
+            const long long lo = std::min(k.px, z.px), hi = std::max(k.px, z.px);
+            if (hi - lo < sepTicks) { ok = false; break; }
+            // the smallest raw level strictly between them: 0 when any tick there has no real lots (sparse map)
+            long long mn = -1, n = 0;
+            for (std::map<long long, long long>::const_iterator j = real.upper_bound(lo); j != real.end() && j->first < hi; ++j) { ++n; const long long v = std::max(0LL, j->second); if (mn < 0 || v < mn) mn = v; }
+            if (n < hi - lo - 1) mn = 0;
+            if ((double)mn > sepX * (double)z.lots) { ok = false; break; }
         }
         if (ok) c.push_back(z);
     }
@@ -234,7 +274,7 @@ public:
     long long nEvents = 0, nTouches = 0, nEpisodes = 0, nUnknown = 0, nGap = 0;
     explicit Engine(const Params& p = Params()) : P(p) {}
     void newSession() { live.clear(); out.clear(); }   // a new 17:00 session: touches start again, the book and the followed levels go on
-    void reset() { cand.clear(); medAt = -1; med[0] = med[1] = 0; ord.clear(); lev.clear(); eps.clear(); live.clear(); out.clear(); hist.clear(); blocks.clear(); nextT = 0; last = hi = lo = -1; bv = sv = 0; lastSec = -1; started = false; }
+    void reset() { cand.clear(); book.clear(); nBookReal = 0; medAt = -1; med[0] = med[1] = 0; ord.clear(); lev.clear(); eps.clear(); live.clear(); out.clear(); hist.clear(); blocks.clear(); nextT = 0; last = hi = lo = -1; bv = sv = 0; lastSec = -1; started = false; }
     // tests: start the 1-s clock at a boundary and seed the last trade (the live engine starts at its first event)
     void begin(long long boundaryMs, long long lastPx) { nextT = boundaryMs; started = true; if (lastPx > 0) last = lastPx; }
     // one MBO event. side: the event's raw side (BID / ASK, -1 unknown); implied: a spread-driven fill (no aggressor)
@@ -298,6 +338,10 @@ public:
     long long lastPx() const { return last; }
     // (1.1.0) the zone candidates of the last 1-s boundary (zoneGate), biggest first per side; the medians used
     const std::vector<Zone>& candidates() const { return cand; }
+    // (1.3.0) the whole-book real nodes (rested >= 10 min, re-priced < 2x in 5 min, any distance), biggest first per side
+    const std::vector<Zone>& bookNodes() const { return book; }
+    long long bookReal() const { return nBookReal; }
+    static const size_t BOOK_PER_SIDE = 20;
     // (1.2.0, Rassul approved 11:18 CT) THE KING NODES: per side, the biggest zone (price +-1 tick of REAL orders: rested >= 10 min,
     // re-priced < 2x in 5 min) BEYOND the 3-ATR candidate reach but inside today's reachable range [kLo, kHi] (host: today's high - ADR ..
     // today's low + ADR, in ticks), >= 3.0x that side's median real level; the king changes only to a challenger >= 1.25x its size (or when
@@ -320,8 +364,23 @@ private:
     std::deque<Block> blocks;                             // 3-min blocks (ATR)
     long long nextT = 0, last = -1, hi = -1, lo = -1, bv = 0, sv = 0, lastSec = -1; bool started = false;
     std::vector<Zone> cand; double med[2] = { 0, 0 }; long long medAt = -1, nReal = 0;   // (1.1.0)
+    std::vector<Zone> book; long long nBookReal = 0;   // (1.3.0)
+    void bookStep(long long sl) {
+        book.clear(); nBookReal = 0; if (sl <= 0) return;
+        std::map<long long, long long> real[2];
+        for (std::unordered_map<long long, Ord>::const_iterator i = ord.begin(); i != ord.end(); ++i) {
+            const Ord& o = i->second; if (o.size <= 0 || (o.side != BID && o.side != ASK)) continue;
+            const long long d = o.side == BID ? sl - o.px : o.px - sl; if (d < 0) continue;
+            if (nextT - o.t0 < KING_REST_MS) continue;                                                  // resting >= 10 min
+            const int mv = (o.mv0 >= 0 && nextT - o.mv0 <= P.moveWinMs ? 1 : 0) + (o.mv1 >= 0 && nextT - o.mv1 <= P.moveWinMs ? 1 : 0);
+            if (mv >= P.maxMoves) continue;
+            real[o.side][o.px] += o.size; ++nBookReal;
+        }
+        for (int sd = 0; sd < 2; ++sd) { std::vector<Zone> z = bookZones(real[sd], sd, sl, P.sepTicks, P.sepX, BOOK_PER_SIDE); book.insert(book.end(), z.begin(), z.end()); }
+    }
     void zoneStep(long long sl, double atr) {
-        cand.clear(); if (sl <= 0 || !(atr > 0)) return;
+        cand.clear(); bookStep(sl);   // (1.3.0) the whole book needs no ATR
+        if (sl <= 0 || !(atr > 0)) return;
         const long long R = (long long)(P.reachAtr * atr) + 1;
         std::map<long long, long long> real[2]; nReal = 0;
         for (std::unordered_map<long long, Ord>::const_iterator i = ord.begin(); i != ord.end(); ++i) {

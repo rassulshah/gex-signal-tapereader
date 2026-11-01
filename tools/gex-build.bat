@@ -55,7 +55,7 @@ REM (2026-10-27) lsDealerProfile 2.28.0 combined Levels + Liquidity column: Leve
 REM (2026-10-21 night) lsDealerProfile 2.19.0 level % badges: LevelPctLogic.h added to its hash list; ColumnBoard.h 1.3.0 (Levels column up to 250 px) rebuilds Delta / Liquidity / BigBidAsk too
 REM (2026-10-28 07:xx CT) lsDealerProfile 2.31.0 right liquidity column + steady top 10: Top10Stable.h hashed; ColumnBoard.h 1.8.0 (Levels outside Delta) rebuilds Delta / Liquidity / BigBidAsk / DefenseLines / HodLod too
 REM (2026-10-28 09:5x CT) lsDealerProfile 2.31.1 liquidity top 10 ranked over the whole book (not the visible pane), moving levels dimmed ~: LevelFade.h hashed
-call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h HostSlot.h OnTouchParams.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h ColumnBoard.h DealerColumnsLogic.h BoxPlace.h BannerBoard.h ClaimGates.h Fresh.h MarketState.h DealerProfileSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h LevelPctLogic.h QueueMeter.h NewsWindow.h MarkParams.h SwingRef.h PerfGuard.h SelfAware.h LevelsColumn.h LineLevelTag.h SignalBoard.h Top10Stable.h LevelFade.h BoxDock.h LiqTouch.h
+call :one DealerProfile lsDealerProfile DealerLogic.h DealerProfileAuditLogic.h HostSlot.h OnTouchParams.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h ColumnBoard.h DealerColumnsLogic.h BoxPlace.h BannerBoard.h ClaimGates.h Fresh.h MarketState.h DealerProfileSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h LevelPctLogic.h QueueMeter.h NewsWindow.h MarkParams.h SwingRef.h PerfGuard.h SelfAware.h LevelsColumn.h LineLevelTag.h SignalBoard.h Top10Stable.h LevelFade.h BoxDock.h LiqTouch.h LiqTouch.h LiqPick.h
 call :one DealerRead   lsDealerRead   DealerLogic.h HostSlot.h BoxPlace.h ClaimGates.h DealerReadGates.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
 call :one DealerSig    lsDealerSig    DealerLogic.h ClaimGates.h SettingsGuard.h SettingsHost.h SettingsSpec.h BoxDock.h BannerBoard.h KeepOutDraw.h PerfGuard.h
 call :one DealerSummary lsDealerSummary DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
@@ -111,7 +111,7 @@ REM (2026-10-11) lsPulling - who pulled their orders near price, from the order-
 REM (2026-10-14 night) lsPulling RETIRED stub 1.0.0: its read is lsPullStats 1.5.0's line (ZoneRead.h 1.1.0); the stub includes no header (0.3.0 source in plugin\retired\Pulling_0_3_0.cpp)
 call :one Pulling lsPulling
 REM (2026-10-11) lsExhaustion - the pusher fading at a new extreme, per-market settings from lra.exh_study
-call :one Exhaustion lsExhaustion ExhaustionLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
+rem (2026-11-01 Rassul "remove exhaustion indicator") lsExhaustion retired - no longer built: call :one Exhaustion lsExhaustion ExhaustionLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
 REM (2026-10-12) lsExhaustionV2 - pullback watch E? / trend response R? / EXIT? warnings (outside review), calibration from lra.exh2_nightly
 call :one ExhaustionV2 lsExhaustionV2 ExhaustionV2Logic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
 REM (2026-10-12) lsCVD - CVD line + delta-pct bars + Div / Abs / Exh / BR marks on the CVD line (outside package CVD Signals v0.1, reviewed), TESTING
