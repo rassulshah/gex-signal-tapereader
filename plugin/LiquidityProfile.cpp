@@ -158,7 +158,7 @@ static const char* LT_HEADER = "kind,touch_ms,sec_end,side,px_tick,price,tag,vot
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define LQ_VERSION "0.70.0"          // (0.70.0, 2026-11-01 Rassul 09:49-10:21 CT, mockup lp_proposal.html) the Liquidity column candidates = the WHOLE BOOK (LiqTouch 1.3.0 bookNodes: real orders rested >= 10 min, re-priced < 2x in 5 min, any distance, price +-1 tick nodes) posted as SignalBoard B code 4 (code 2 / 3 no longer posted); the tested order lines (HELD / BREAK) are no longer drawn and no G facts are posted (records unchanged); the LMT F column is gone (no BIG column on the board)   // was 0.69.0:  (0.69.0, 2026-10-29 Rassul approved 11:18 CT) the zone candidates (SignalBoard B code 2) carry when each zone FIRST became a candidate (f.bar, CT s) for lsDealerProfile's age ("223 \xB7 48m"); a decided touch whose zone was rebuilt >= what was hit in its 15 s posts S code 20 (R?, untested); nothing drawn here changes   // was 0.68.0: (0.68.0, 2026-10-29 Rassul approved 09:33 / 10:23 CT, mockups orderlines-levels-mockup.html + AEYuhQfdcywsR8VxmhpUVq) THE TESTED ORDER LINES (OrderLinesLogic.h 1.1.0): an untouched big order draws nothing (the Liquidity column shows it); when price trades into it a line appears at its price from its PLACEMENT (left edge of the price area right of the Key Levels column when placed earlier), thin dashed while testing; decided (fill >= half, then the first favourable close within 4 bars = HELD; a bar wholly beyond / no favourable close in 4 bars = BREAK - was THRU) = solid, with [rank box] + HELD / BREAK at the decision bar; rank = its Liquidity-column rank at the TOUCH (lsDealerProfile Q board), frozen and recorded (T line), no box outside the top 6; BREAK shown 5 bars; HELD solid, never dimmed, to the right edge until a bar closes through it (X line), min 2 bars after the decision; pulled before a decision = gone; at most 3 tested lines; no fill dots / start labels any more (LRA-OrderFills published empty)   // was 0.67.0: (0.67.0, 2026-10-28 14:04 CT Rassul approved) the liquidity column candidates = zones >= 2.0x the median real level (LiqTouch 1.1.0 pickZones), posted as SignalBoard B code 2; the touch engine follows the same zones (the p97 tier = log only)
+#define LQ_VERSION "0.70.1"          // (0.70.1, 2026-11-01 cleanup) code that could no longer run removed: the tested order-line drawing (HELD / BREAK) and the G facts (lsExhaustion retired); nothing drawn changes   // was 0.70.0:  (0.70.0, 2026-11-01 Rassul 09:49-10:21 CT, mockup lp_proposal.html) the Liquidity column candidates = the WHOLE BOOK (LiqTouch 1.3.0 bookNodes: real orders rested >= 10 min, re-priced < 2x in 5 min, any distance, price +-1 tick nodes) posted as SignalBoard B code 4 (code 2 / 3 no longer posted); the tested order lines (HELD / BREAK) are no longer drawn and no G facts are posted (records unchanged); the LMT F column is gone (no BIG column on the board)   // was 0.69.0:  (0.69.0, 2026-10-29 Rassul approved 11:18 CT) the zone candidates (SignalBoard B code 2) carry when each zone FIRST became a candidate (f.bar, CT s) for lsDealerProfile's age ("223 \xB7 48m"); a decided touch whose zone was rebuilt >= what was hit in its 15 s posts S code 20 (R?, untested); nothing drawn here changes   // was 0.68.0: (0.68.0, 2026-10-29 Rassul approved 09:33 / 10:23 CT, mockups orderlines-levels-mockup.html + AEYuhQfdcywsR8VxmhpUVq) THE TESTED ORDER LINES (OrderLinesLogic.h 1.1.0): an untouched big order draws nothing (the Liquidity column shows it); when price trades into it a line appears at its price from its PLACEMENT (left edge of the price area right of the Key Levels column when placed earlier), thin dashed while testing; decided (fill >= half, then the first favourable close within 4 bars = HELD; a bar wholly beyond / no favourable close in 4 bars = BREAK - was THRU) = solid, with [rank box] + HELD / BREAK at the decision bar; rank = its Liquidity-column rank at the TOUCH (lsDealerProfile Q board), frozen and recorded (T line), no box outside the top 6; BREAK shown 5 bars; HELD solid, never dimmed, to the right edge until a bar closes through it (X line), min 2 bars after the decision; pulled before a decision = gone; at most 3 tested lines; no fill dots / start labels any more (LRA-OrderFills published empty)   // was 0.67.0: (0.67.0, 2026-10-28 14:04 CT Rassul approved) the liquidity column candidates = zones >= 2.0x the median real level (LiqTouch 1.1.0 pickZones), posted as SignalBoard B code 2; the touch engine follows the same zones (the p97 tier = log only)
 #define LQ_VERSION_0661 "0.66.1"          // (0.66.1, 2026-10-28 12:16 CT Rassul "a column for levels ... move the hod lod box aligned ... on the left") the top read banner and the order lines start right of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0 leftKeep) - the HOD/LOD table docks at that column's top
 #define LQ_VERSION_0660 "0.66.0"          // (0.66.0, 2026-10-28, Rassul approved the liquidity-column build 11:05 CT + 11:08 CT "i like the held signal ... show it when it held") THE TOUCH TAG (LiqTouch.h 1.0.0, the 10-28 liquidity study ported exactly): every big resting level (the market tier, p97 of book levels: ES 72 / NQ 12 / CL 16 / GC 10 / HG 10 / NG 30 / 6E 128 lots, nightly LRA-LiqTouch-<MKT>.csv) is followed natively from the order-by-order feed; 15 s after its first trade it is STAYS+ / STAYS / STAYS weak / GONE / GONE+ (or MID / EARLY, logged), with the Tape Reader votes; then HELD / BROKE / EXPIRED; posted as SignalBoard facts kind S for lsDealerProfile (tag in the Liquidity column, HELD on the chart - nothing new drawn here); every touch recorded to <stem>-liqtouch-<session>.csv (T / D 30-s / O lines, the log-only reads: king, dominance, MenthorQ, tap, seconds at the level, refill, churn, attacker mix) and read back after a restart (no repaint); status LIQ_TOUCH   // was (0.65.2)  (0.65.2, 2026-10-28 09:31 CT Rassul approved the split LMT F) BIDS FILLED in the LEFT half (green), OFFERS FILLED in the RIGHT half (red), each on its exact price row, centred in its half; collisions resolved per side only (a bid and an offer at the same price both show)
 #define LQ_VERSION_0651 "0.65.1"          // (0.65.1, 2026-10-28 09:05 CT Rassul "it would be horrible if ... the limit F is showing it at the wrong location") LMT F / live iceberg labels are drawn AT THEIR PRICE ROW or not at all (LabelPlace.h 1.0.0, biggest print wins a collision); 0.65.0 pushed colliding labels down a row at a time, so ES "2x 1571" (bids filled at 7773.00) showed near 7771
@@ -3401,10 +3401,7 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
     auto xOfBar = [&](int b) { PNT p; p.set(b, 0.0f, kBarCenter); return (int)p.h; };
     auto yOfPx = [&](long long t) { PNT p; p.set(lastBar, (float)((double)t * tick)); return (int)p.v; };
     auto barOfT = [&](long long ms) { return std::max(0, std::min(lastBar, bol::barOf(S.barEndMs, ms))); };
-    const COLOR cOffer = (COLOR)S.lzSet.cOffer, cBid = (COLOR)S.lzSet.cBid, cGrey = (COLOR)S.lzSet.cGrey, cGam = (COLOR)S.lzSet.cGamma;
-    auto dark = [](COLOR c) { const unsigned r = (unsigned)(c >> 16) & 0xFF, g = (unsigned)(c >> 8) & 0xFF, b = (unsigned)c & 0xFF;   // ~30% towards black: the "very dark" pulled line
-        return (COLOR)((((r * 30) / 100) << 16) | (((g * 30) / 100) << 8) | ((b * 30) / 100)); };
-    (void)dark; (void)cGrey;   // (0.68.0) pulled / grey words are no longer drawn
+    const COLOR cGam = (COLOR)S.lzSet.cGamma;   // (0.70.1 cleanup) the order-line / pulled colours are no longer used here
     // 1) gamma levels: thin grey lines across the price area, no label (the Levels column names them)
     if (S.lzSet.gammaLines) {
         setPen(cGam, 1, P_SOLID);
@@ -3412,8 +3409,6 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
     }
     FONT f; f.id = HELVETICA; f.size = coord(std::max(10, std::min(12, S.boSet.font))); f.style = BOLD; setFont(f);   // 10 pt minimum (his rule)
     const int fh = rowPx(std::max(10, std::min(12, S.boSet.font)));
-    std::vector<std::pair<int, int> > labels;                          // label boxes taken (y top, x left)
-    std::vector<std::pair<int, int> > wordSpots;                       // words taken (y top, x left)
     const oln::Engine& E = S.ol;
     // (0.59.0, Rassul 2026-10-27 11:16 CT "build") the LEVEL TAG: an order resting ON a named level (key / volume / gamma) gets the level's
     // name and "?" after its label (LineLevelTag.h); the "Level tag on lines" box (was the hidden zone-only "Gamma diamond" row) turns it off
@@ -3443,57 +3438,8 @@ void LiquidityProfile::renderZones(LQState& S, int paneLeft, int paneRight, int 
     // its PLACEMENT (left edge of the price area when placed earlier) once price trades into it - thin dashed while testing; solid after the
     // decision with [rank] + HELD / BREAK at the decision bar; BREAK 5 bars; HELD solid to the right edge until a close through (min 2 bars);
     // at most 3; everything clipped to the price area (right of the Key Levels column, left of the right-side columns)
-    {   const int kx = cb::leftKeep(S.symbol, S.spb, getChartLabel() ? std::string(getChartLabel()) : std::string(), paneLeft, steadyMs());
-        const int xL = std::max(xMin, kx + 3);
-        const long long lastClosed = E.bars.empty() ? 0 : E.bars.back().endMs, bms = S.spb > 0 ? (long long)S.spb * 1000LL : 180000LL;
-        const std::vector<int> sh = oln::shownLines(E, lastClosed, bms);
-        S.olShownIds.clear();
-        for (size_t si = 0; LQ_ORDER_LINES_DRAW && si < sh.size() && xMax - xL >= 20; ++si) {   // (0.70.0) off: no HELD / BREAK lines on the chart
-            const size_t li = (size_t)sh[si]; const oln::Line& L = E.lines[li];
-            if (L.kind == oln::K_LADDER && !S.lzSet.origin) continue;   // "Ladders" box
-            if (L.kind == oln::K_ONE && L.refills > 0 && !S.lzSet.print) continue;   // "Icebergs" box
-            const int vs = oln::visState(L, lastClosed, bms);
-            const bool bid = L.side == oln::BID, test = vs == oln::V_TEST;
-            const COLOR c = bid ? cBid : cOffer;
-            const int decX = L.wordMs > 0 ? xOfBar(barOfT(L.wordMs - 1)) : xMax;   // bar stamps are bar ENDs: the decision bar ends AT wordMs
-            const int xEnd = std::min(xMax, test ? xOfBar(lastBar) : vs == oln::V_BREAK ? decX : xMax);
-            setPen(c, test ? 1 : 2, test ? P_DASH : P_SOLID);
-            bool any = false; int lastY = -1, lastX1 = -1, yLab = -1;
-            for (size_t j = 0; j < L.segs.size(); ++j) {
-                const oln::Seg& g = L.segs[j];
-                const int b0 = barOfT(g.t), b1 = j + 1 < L.segs.size() ? barOfT(L.segs[j + 1].t) : lastBar;
-                const int x0 = std::max(xL, xOfBar(b0)), x1 = std::min(xEnd, j + 1 < L.segs.size() ? xOfBar(b1) : xEnd);
-                const int y = yOfPx(g.px);
-                if (lastY >= 0 && lastX1 >= xL && lastX1 <= xEnd && y > top + 14 && y < bottom && lastY > top + 14 && lastY < bottom) ko::line(coord(lastX1), coord(lastY), coord(lastX1), coord(y));
-                lastY = y; lastX1 = x1;
-                if (x1 - x0 < 2 || y <= top + 14 || y >= bottom) continue;
-                ko::line(coord(x0), coord(y), coord(x1), coord(y)); any = true; yLab = y;
-                LQState::OlHit h; h.line = (int)li; h.b0 = b0; h.b1 = b1; h.lo = g.px - 1; h.hi = g.px + 1; S.olHits.push_back(h);
-            }
-            if (!any) continue;
-            ++S.olDrawnNow; S.olShownIds.push_back(L.id);
-            if (test || L.word == oln::W_NONE || !S.lzSet.tags) continue;
-            // the label at the decision bar, above the line: [rank box] (only for a top-6 rank frozen at the touch) + the word
-            const std::string wts = oln::labelText(L); const char* wt = wts.c_str(); const int ww = (int)getTextWidth(wt, -1) + 2, bx = L.touchRank > 0 ? fh : 0;   // (Rassul 10:57 CT) "[2] HELD 146"
-            const int lw = bx + (bx ? 3 : 0) + ww, ly = yLab - fh - 2; int lx = std::min(xMax - lw, decX + 3);
-            if (lx < xL || ly <= top + 14 || ly + fh >= bottom) continue;
-            if (bx) { const bool king = L.touchRank == 1; RCT rb; rb.set(coord(lx), coord(ly), coord(lx + bx), coord(ly + fh)); ko::mark(rb, (short)1, c, king ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);
-                      const std::string rk = std::to_string(L.touchRank); setTextColor(king ? (COLOR)0x000F172A : (COLOR)0x00F8FAFC); ko::text(rb, rk.c_str(), true, false); lx += bx + 3; }
-            setTextColor(c); RCT wr; wr.set(coord(lx), coord(ly), coord(lx + ww), coord(ly + fh)); ko::text(wr, wt, false, false); ++S.olWordsNow;
-        }
-    }
-    {   // (0.68.0) every DECIDED order-line HELD as SignalBoard fact 'G' (decided, final): bar = the decision bar's END (CT seconds, the
-        // same clock as the bar stamps), price, side +1 bid (support) / -1 offer (resistance), val = displayed lots at the touch, code = rank;
-        // lsExhaustion 0.3.0 reads them for its T mark. Re-posted on a change and every 20 s (facts are 60 s fresh); at most the newest 150
-        std::vector<sb::Fact> G; std::string body;
-        for (size_t li = 0; li < E.lines.size(); ++li) { const oln::Line& L = E.lines[li]; if (L.word != oln::W_HELD || L.wordMs <= 0) continue;
-            sb::Fact f; f.bar = L.wordMs / 1000; f.lo = f.hi = (double)(L.fillPx ? L.fillPx : L.px()) * tick; f.side = L.side == oln::BID ? 1 : -1; f.val = (double)L.touchLots; f.code = L.touchRank; f.state = 1; f.proven = 0; G.push_back(f); }
-        if (G.size() > 150) G.erase(G.begin(), G.begin() + (long)(G.size() - 150));
-        for (const sb::Fact& f : G) body += std::to_string(f.bar) + "," + std::to_string(f.side) + "," + std::to_string(f.lo) + ";";
-        const long long st = steadyMs();
-        if (LQ_ORDER_LINES_DRAW && !S.symbol.empty() && (body != S.olGBody || S.olGMs < 0 || st < S.olGMs || st - S.olGMs >= 20000)) {   // (0.70.0) no G posts (lsExhaustion retired)
-            const char* clk = getChartLabel(); sb::postFacts('G', S.symbol, S.spb, clk ? std::string(clk) : std::string(), st, G); S.olGBody = body; S.olGMs = st; ++S.olGPosts; }
-    }
+    S.olShownIds.clear();   // (0.70.1 cleanup) the tested order lines (HELD / BREAK) are no longer drawn - the engine and its records are unchanged
+    // (0.70.1 cleanup) no G facts: lsExhaustion (their only reader) is retired
     RTARRAYI olDt(barDateTime); (void)olDt;                            // (0.68.0) no fill dots any more: the fill-key file is published empty
     // (0.60.0) the level-tagged LIVE orders for the Dealer Profile 2.28.0 Levels column: "LMTL,1,<unix>,<tick>" + one O line per order;
     // rewritten when it changes, and at least every 5 s so the reader can tell a stopped chart (stale after 20 s)
@@ -4769,6 +4715,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setExtendedFlags(CALL_CONTINUOUSLY);   // the book keeps moving while no trade prints (#36)
     p->setDescription("LRA Liquidity Profile (LIQ): resting orders by price pointing toward price - only zones ON a level (key, volume POC, gamma) holding 2.0x+ the book behind them (the ratio in the node; a zone stays until a bar closes with it under 2.0x), with the level name and lots (solid = the biggest on its side or near price, outlined = on a level); old 64% + outline = half+ of the zone's size has rested 10 min+ (only in markets where the study confirmed it). LQ? = a 2.5x+ zone on a key / gamma level (unproven). The signals are on the Liquidity Flow panes. TESTING.");
 #endif
-    p->setVersion("0.70.0");   // LQ_VERSION
+    p->setVersion("0.70.1");   // LQ_VERSION
     return p;
 }
