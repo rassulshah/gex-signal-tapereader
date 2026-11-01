@@ -1,0 +1,128 @@
+@echo off
+setlocal EnableExtensions
+rem retire-plugins-2026-11-01.bat - Rassul approved 2026-11-01 11:2x CT: move the plugins no longer loaded on any chart OUT of Investor/RT.
+rem Nothing is deleted: DLLs go to %USERPROFILE%\InvestorRT\_retired-2026-11-01, sources to plugin\retired (git mv). Undo = move them back.
+set "REPO=C:\Dev\gex-signal-tapereader"
+set "DLLDIR=%USERPROFILE%\InvestorRT\dllx64"
+set "RET=%USERPROFILE%\InvestorRT\_retired-2026-11-01"
+set "LOG=%REPO%\tools\retire-plugins.log"
+tasklist /FI "IMAGENAME eq investorRT.exe" 2>nul | find /I "investorRT.exe" >nul
+if not errorlevel 1 ( echo Investor/RT is still open. Close it, then run this file again. & pause & exit /b 1 )
+if not exist "%RET%" mkdir "%RET%"
+echo ==== %date% %time% >> "%LOG%"
+set /a N=0
+set /a S=0
+rem ---- 1) the DLLs (38 unused + 12 leftovers)
+if exist "%DLLDIR%\lsTapeFlowES.dll" ( move /Y "%DLLDIR%\lsTapeFlowES.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTapeFlowES.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTapeFlowNQ.dll" ( move /Y "%DLLDIR%\lsTapeFlowNQ.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTapeFlowNQ.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTapeFlowCL.dll" ( move /Y "%DLLDIR%\lsTapeFlowCL.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTapeFlowCL.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTapeFlowGC.dll" ( move /Y "%DLLDIR%\lsTapeFlowGC.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTapeFlowGC.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTapeFlowHG.dll" ( move /Y "%DLLDIR%\lsTapeFlowHG.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTapeFlowHG.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTapeFlowNG.dll" ( move /Y "%DLLDIR%\lsTapeFlowNG.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTapeFlowNG.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTapeFlowEU.dll" ( move /Y "%DLLDIR%\lsTapeFlowEU.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTapeFlowEU.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTapeFlowMarks.dll" ( move /Y "%DLLDIR%\lsTapeFlowMarks.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTapeFlowMarks.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsCVD.dll" ( move /Y "%DLLDIR%\lsCVD.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsCVD.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsLiquidityFlow.dll" ( move /Y "%DLLDIR%\lsLiquidityFlow.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsLiquidityFlow.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsDealerRead.dll" ( move /Y "%DLLDIR%\lsDealerRead.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsDealerRead.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsDealerSig.dll" ( move /Y "%DLLDIR%\lsDealerSig.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsDealerSig.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsDealerSummary.dll" ( move /Y "%DLLDIR%\lsDealerSummary.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsDealerSummary.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsSessionInfo.dll" ( move /Y "%DLLDIR%\lsSessionInfo.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsSessionInfo.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTapeReader.dll" ( move /Y "%DLLDIR%\lsTapeReader.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTapeReader.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTurnOrder.dll" ( move /Y "%DLLDIR%\lsTurnOrder.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTurnOrder.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsStopRun.dll" ( move /Y "%DLLDIR%\lsStopRun.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsStopRun.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsSweepRefill.dll" ( move /Y "%DLLDIR%\lsSweepRefill.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsSweepRefill.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsReversalStage.dll" ( move /Y "%DLLDIR%\lsReversalStage.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsReversalStage.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsKeyLevels.dll" ( move /Y "%DLLDIR%\lsKeyLevels.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsKeyLevels.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTrappedTraders.dll" ( move /Y "%DLLDIR%\lsTrappedTraders.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTrappedTraders.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTrapped.dll" ( move /Y "%DLLDIR%\lsTrapped.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTrapped.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTrappedMarks.dll" ( move /Y "%DLLDIR%\lsTrappedMarks.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTrappedMarks.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsCobImpulse.dll" ( move /Y "%DLLDIR%\lsCobImpulse.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsCobImpulse.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsDealerHedge.dll" ( move /Y "%DLLDIR%\lsDealerHedge.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsDealerHedge.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsExhaustionV2.dll" ( move /Y "%DLLDIR%\lsExhaustionV2.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsExhaustionV2.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsExhaustion.dll" ( move /Y "%DLLDIR%\lsExhaustion.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsExhaustion.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsMboCheck.dll" ( move /Y "%DLLDIR%\lsMboCheck.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsMboCheck.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsFootprintReaderES.dll" ( move /Y "%DLLDIR%\lsFootprintReaderES.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsFootprintReaderES.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsFootprintReaderNQ.dll" ( move /Y "%DLLDIR%\lsFootprintReaderNQ.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsFootprintReaderNQ.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsFootprintReaderCL.dll" ( move /Y "%DLLDIR%\lsFootprintReaderCL.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsFootprintReaderCL.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsFootprintReaderGC.dll" ( move /Y "%DLLDIR%\lsFootprintReaderGC.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsFootprintReaderGC.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsFootprintReaderHG.dll" ( move /Y "%DLLDIR%\lsFootprintReaderHG.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsFootprintReaderHG.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsFootprintReaderNG.dll" ( move /Y "%DLLDIR%\lsFootprintReaderNG.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsFootprintReaderNG.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsFootprintReaderEU.dll" ( move /Y "%DLLDIR%\lsFootprintReaderEU.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsFootprintReaderEU.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsPulling.dll" ( move /Y "%DLLDIR%\lsPulling.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsPulling.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsKingTracker.dll" ( move /Y "%DLLDIR%\lsKingTracker.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsKingTracker.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsTradeManager.dll" ( move /Y "%DLLDIR%\lsTradeManager.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsTradeManager.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsIRTReaderCL.dll" ( move /Y "%DLLDIR%\lsIRTReaderCL.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsIRTReaderCL.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsIRTReaderES.dll" ( move /Y "%DLLDIR%\lsIRTReaderES.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsIRTReaderES.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsIRTReaderEU.dll" ( move /Y "%DLLDIR%\lsIRTReaderEU.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsIRTReaderEU.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsIRTReaderGC.dll" ( move /Y "%DLLDIR%\lsIRTReaderGC.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsIRTReaderGC.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsIRTReaderHG.dll" ( move /Y "%DLLDIR%\lsIRTReaderHG.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsIRTReaderHG.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsIRTReaderNG.dll" ( move /Y "%DLLDIR%\lsIRTReaderNG.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsIRTReaderNG.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsIRTReaderNQ.dll" ( move /Y "%DLLDIR%\lsIRTReaderNQ.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsIRTReaderNQ.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsDayModel.dll" ( move /Y "%DLLDIR%\lsDayModel.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsDayModel.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsDayStats.dll" ( move /Y "%DLLDIR%\lsDayStats.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsDayStats.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsPullStats.dll" ( move /Y "%DLLDIR%\lsPullStats.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsPullStats.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsStackStats.dll" ( move /Y "%DLLDIR%\lsStackStats.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsStackStats.dll>> "%LOG%" )
+if exist "%DLLDIR%\lsHotReloadDemo.dll" ( move /Y "%DLLDIR%\lsHotReloadDemo.dll" "%RET%\" >nul && set /a N+=1 && echo moved lsHotReloadDemo.dll>> "%LOG%" )
+rem ---- 2) the hot-reload demo folder and the old ChartView backup
+if exist "%USERPROFILE%\InvestorRT\hotreload" ( move /Y "%USERPROFILE%\InvestorRT\hotreload" "%RET%\hotreload" >nul && echo moved hotreload folder>> "%LOG%" )
+if exist "%USERPROFILE%\InvestorRT\dllx64-hold" ( move /Y "%USERPROFILE%\InvestorRT\dllx64-hold" "%RET%\dllx64-hold" >nul && echo moved dllx64-hold folder>> "%LOG%" )
+rem ---- 3) the sources into plugin\retired (kept in git history)
+if not exist "%REPO%\plugin\retired" mkdir "%REPO%\plugin\retired"
+pushd "%REPO%"
+if exist "plugin\TapeFlowES.cpp" ( git mv -f "plugin\TapeFlowES.cpp" "plugin\retired\TapeFlowES.cpp" >nul 2>&1 || move /Y "plugin\TapeFlowES.cpp" "plugin\retired\TapeFlowES.cpp" >nul ) & if exist "plugin\retired\TapeFlowES.cpp" ( set /a S+=1 & echo retired plugin\TapeFlowES.cpp>> "%LOG%" )
+if exist "plugin\TapeFlowNQ.cpp" ( git mv -f "plugin\TapeFlowNQ.cpp" "plugin\retired\TapeFlowNQ.cpp" >nul 2>&1 || move /Y "plugin\TapeFlowNQ.cpp" "plugin\retired\TapeFlowNQ.cpp" >nul ) & if exist "plugin\retired\TapeFlowNQ.cpp" ( set /a S+=1 & echo retired plugin\TapeFlowNQ.cpp>> "%LOG%" )
+if exist "plugin\TapeFlowCL.cpp" ( git mv -f "plugin\TapeFlowCL.cpp" "plugin\retired\TapeFlowCL.cpp" >nul 2>&1 || move /Y "plugin\TapeFlowCL.cpp" "plugin\retired\TapeFlowCL.cpp" >nul ) & if exist "plugin\retired\TapeFlowCL.cpp" ( set /a S+=1 & echo retired plugin\TapeFlowCL.cpp>> "%LOG%" )
+if exist "plugin\TapeFlowGC.cpp" ( git mv -f "plugin\TapeFlowGC.cpp" "plugin\retired\TapeFlowGC.cpp" >nul 2>&1 || move /Y "plugin\TapeFlowGC.cpp" "plugin\retired\TapeFlowGC.cpp" >nul ) & if exist "plugin\retired\TapeFlowGC.cpp" ( set /a S+=1 & echo retired plugin\TapeFlowGC.cpp>> "%LOG%" )
+if exist "plugin\TapeFlowHG.cpp" ( git mv -f "plugin\TapeFlowHG.cpp" "plugin\retired\TapeFlowHG.cpp" >nul 2>&1 || move /Y "plugin\TapeFlowHG.cpp" "plugin\retired\TapeFlowHG.cpp" >nul ) & if exist "plugin\retired\TapeFlowHG.cpp" ( set /a S+=1 & echo retired plugin\TapeFlowHG.cpp>> "%LOG%" )
+if exist "plugin\TapeFlowNG.cpp" ( git mv -f "plugin\TapeFlowNG.cpp" "plugin\retired\TapeFlowNG.cpp" >nul 2>&1 || move /Y "plugin\TapeFlowNG.cpp" "plugin\retired\TapeFlowNG.cpp" >nul ) & if exist "plugin\retired\TapeFlowNG.cpp" ( set /a S+=1 & echo retired plugin\TapeFlowNG.cpp>> "%LOG%" )
+if exist "plugin\TapeFlowEU.cpp" ( git mv -f "plugin\TapeFlowEU.cpp" "plugin\retired\TapeFlowEU.cpp" >nul 2>&1 || move /Y "plugin\TapeFlowEU.cpp" "plugin\retired\TapeFlowEU.cpp" >nul ) & if exist "plugin\retired\TapeFlowEU.cpp" ( set /a S+=1 & echo retired plugin\TapeFlowEU.cpp>> "%LOG%" )
+if exist "plugin\TapeFlowMarks.cpp" ( git mv -f "plugin\TapeFlowMarks.cpp" "plugin\retired\TapeFlowMarks.cpp" >nul 2>&1 || move /Y "plugin\TapeFlowMarks.cpp" "plugin\retired\TapeFlowMarks.cpp" >nul ) & if exist "plugin\retired\TapeFlowMarks.cpp" ( set /a S+=1 & echo retired plugin\TapeFlowMarks.cpp>> "%LOG%" )
+if exist "plugin\CVD.cpp" ( git mv -f "plugin\CVD.cpp" "plugin\retired\CVD.cpp" >nul 2>&1 || move /Y "plugin\CVD.cpp" "plugin\retired\CVD.cpp" >nul ) & if exist "plugin\retired\CVD.cpp" ( set /a S+=1 & echo retired plugin\CVD.cpp>> "%LOG%" )
+if exist "plugin\LiquidityFlow.cpp" ( git mv -f "plugin\LiquidityFlow.cpp" "plugin\retired\LiquidityFlow.cpp" >nul 2>&1 || move /Y "plugin\LiquidityFlow.cpp" "plugin\retired\LiquidityFlow.cpp" >nul ) & if exist "plugin\retired\LiquidityFlow.cpp" ( set /a S+=1 & echo retired plugin\LiquidityFlow.cpp>> "%LOG%" )
+if exist "plugin\DealerRead.cpp" ( git mv -f "plugin\DealerRead.cpp" "plugin\retired\DealerRead.cpp" >nul 2>&1 || move /Y "plugin\DealerRead.cpp" "plugin\retired\DealerRead.cpp" >nul ) & if exist "plugin\retired\DealerRead.cpp" ( set /a S+=1 & echo retired plugin\DealerRead.cpp>> "%LOG%" )
+if exist "plugin\DealerSig.cpp" ( git mv -f "plugin\DealerSig.cpp" "plugin\retired\DealerSig.cpp" >nul 2>&1 || move /Y "plugin\DealerSig.cpp" "plugin\retired\DealerSig.cpp" >nul ) & if exist "plugin\retired\DealerSig.cpp" ( set /a S+=1 & echo retired plugin\DealerSig.cpp>> "%LOG%" )
+if exist "plugin\DealerSummary.cpp" ( git mv -f "plugin\DealerSummary.cpp" "plugin\retired\DealerSummary.cpp" >nul 2>&1 || move /Y "plugin\DealerSummary.cpp" "plugin\retired\DealerSummary.cpp" >nul ) & if exist "plugin\retired\DealerSummary.cpp" ( set /a S+=1 & echo retired plugin\DealerSummary.cpp>> "%LOG%" )
+if exist "plugin\SessionInfo.cpp" ( git mv -f "plugin\SessionInfo.cpp" "plugin\retired\SessionInfo.cpp" >nul 2>&1 || move /Y "plugin\SessionInfo.cpp" "plugin\retired\SessionInfo.cpp" >nul ) & if exist "plugin\retired\SessionInfo.cpp" ( set /a S+=1 & echo retired plugin\SessionInfo.cpp>> "%LOG%" )
+if exist "plugin\TapeReader.cpp" ( git mv -f "plugin\TapeReader.cpp" "plugin\retired\TapeReader.cpp" >nul 2>&1 || move /Y "plugin\TapeReader.cpp" "plugin\retired\TapeReader.cpp" >nul ) & if exist "plugin\retired\TapeReader.cpp" ( set /a S+=1 & echo retired plugin\TapeReader.cpp>> "%LOG%" )
+if exist "plugin\TurnOrder.cpp" ( git mv -f "plugin\TurnOrder.cpp" "plugin\retired\TurnOrder.cpp" >nul 2>&1 || move /Y "plugin\TurnOrder.cpp" "plugin\retired\TurnOrder.cpp" >nul ) & if exist "plugin\retired\TurnOrder.cpp" ( set /a S+=1 & echo retired plugin\TurnOrder.cpp>> "%LOG%" )
+if exist "plugin\StopRunMark.cpp" ( git mv -f "plugin\StopRunMark.cpp" "plugin\retired\StopRunMark.cpp" >nul 2>&1 || move /Y "plugin\StopRunMark.cpp" "plugin\retired\StopRunMark.cpp" >nul ) & if exist "plugin\retired\StopRunMark.cpp" ( set /a S+=1 & echo retired plugin\StopRunMark.cpp>> "%LOG%" )
+if exist "plugin\SweepRefill.cpp" ( git mv -f "plugin\SweepRefill.cpp" "plugin\retired\SweepRefill.cpp" >nul 2>&1 || move /Y "plugin\SweepRefill.cpp" "plugin\retired\SweepRefill.cpp" >nul ) & if exist "plugin\retired\SweepRefill.cpp" ( set /a S+=1 & echo retired plugin\SweepRefill.cpp>> "%LOG%" )
+if exist "plugin\ReversalStage.cpp" ( git mv -f "plugin\ReversalStage.cpp" "plugin\retired\ReversalStage.cpp" >nul 2>&1 || move /Y "plugin\ReversalStage.cpp" "plugin\retired\ReversalStage.cpp" >nul ) & if exist "plugin\retired\ReversalStage.cpp" ( set /a S+=1 & echo retired plugin\ReversalStage.cpp>> "%LOG%" )
+if exist "plugin\KeyLevels.cpp" ( git mv -f "plugin\KeyLevels.cpp" "plugin\retired\KeyLevels.cpp" >nul 2>&1 || move /Y "plugin\KeyLevels.cpp" "plugin\retired\KeyLevels.cpp" >nul ) & if exist "plugin\retired\KeyLevels.cpp" ( set /a S+=1 & echo retired plugin\KeyLevels.cpp>> "%LOG%" )
+if exist "plugin\TrappedTraders.cpp" ( git mv -f "plugin\TrappedTraders.cpp" "plugin\retired\TrappedTraders.cpp" >nul 2>&1 || move /Y "plugin\TrappedTraders.cpp" "plugin\retired\TrappedTraders.cpp" >nul ) & if exist "plugin\retired\TrappedTraders.cpp" ( set /a S+=1 & echo retired plugin\TrappedTraders.cpp>> "%LOG%" )
+if exist "plugin\Trapped.cpp" ( git mv -f "plugin\Trapped.cpp" "plugin\retired\Trapped.cpp" >nul 2>&1 || move /Y "plugin\Trapped.cpp" "plugin\retired\Trapped.cpp" >nul ) & if exist "plugin\retired\Trapped.cpp" ( set /a S+=1 & echo retired plugin\Trapped.cpp>> "%LOG%" )
+if exist "plugin\TrappedMarks.cpp" ( git mv -f "plugin\TrappedMarks.cpp" "plugin\retired\TrappedMarks.cpp" >nul 2>&1 || move /Y "plugin\TrappedMarks.cpp" "plugin\retired\TrappedMarks.cpp" >nul ) & if exist "plugin\retired\TrappedMarks.cpp" ( set /a S+=1 & echo retired plugin\TrappedMarks.cpp>> "%LOG%" )
+if exist "plugin\CobImpulse.cpp" ( git mv -f "plugin\CobImpulse.cpp" "plugin\retired\CobImpulse.cpp" >nul 2>&1 || move /Y "plugin\CobImpulse.cpp" "plugin\retired\CobImpulse.cpp" >nul ) & if exist "plugin\retired\CobImpulse.cpp" ( set /a S+=1 & echo retired plugin\CobImpulse.cpp>> "%LOG%" )
+if exist "plugin\DealerHedge.cpp" ( git mv -f "plugin\DealerHedge.cpp" "plugin\retired\DealerHedge.cpp" >nul 2>&1 || move /Y "plugin\DealerHedge.cpp" "plugin\retired\DealerHedge.cpp" >nul ) & if exist "plugin\retired\DealerHedge.cpp" ( set /a S+=1 & echo retired plugin\DealerHedge.cpp>> "%LOG%" )
+if exist "plugin\ExhaustionV2.cpp" ( git mv -f "plugin\ExhaustionV2.cpp" "plugin\retired\ExhaustionV2.cpp" >nul 2>&1 || move /Y "plugin\ExhaustionV2.cpp" "plugin\retired\ExhaustionV2.cpp" >nul ) & if exist "plugin\retired\ExhaustionV2.cpp" ( set /a S+=1 & echo retired plugin\ExhaustionV2.cpp>> "%LOG%" )
+if exist "plugin\Exhaustion.cpp" ( git mv -f "plugin\Exhaustion.cpp" "plugin\retired\Exhaustion.cpp" >nul 2>&1 || move /Y "plugin\Exhaustion.cpp" "plugin\retired\Exhaustion.cpp" >nul ) & if exist "plugin\retired\Exhaustion.cpp" ( set /a S+=1 & echo retired plugin\Exhaustion.cpp>> "%LOG%" )
+if exist "plugin\MboCheck.cpp" ( git mv -f "plugin\MboCheck.cpp" "plugin\retired\MboCheck.cpp" >nul 2>&1 || move /Y "plugin\MboCheck.cpp" "plugin\retired\MboCheck.cpp" >nul ) & if exist "plugin\retired\MboCheck.cpp" ( set /a S+=1 & echo retired plugin\MboCheck.cpp>> "%LOG%" )
+if exist "plugin\FootprintReaderES.cpp" ( git mv -f "plugin\FootprintReaderES.cpp" "plugin\retired\FootprintReaderES.cpp" >nul 2>&1 || move /Y "plugin\FootprintReaderES.cpp" "plugin\retired\FootprintReaderES.cpp" >nul ) & if exist "plugin\retired\FootprintReaderES.cpp" ( set /a S+=1 & echo retired plugin\FootprintReaderES.cpp>> "%LOG%" )
+if exist "plugin\FootprintReaderNQ.cpp" ( git mv -f "plugin\FootprintReaderNQ.cpp" "plugin\retired\FootprintReaderNQ.cpp" >nul 2>&1 || move /Y "plugin\FootprintReaderNQ.cpp" "plugin\retired\FootprintReaderNQ.cpp" >nul ) & if exist "plugin\retired\FootprintReaderNQ.cpp" ( set /a S+=1 & echo retired plugin\FootprintReaderNQ.cpp>> "%LOG%" )
+if exist "plugin\FootprintReaderCL.cpp" ( git mv -f "plugin\FootprintReaderCL.cpp" "plugin\retired\FootprintReaderCL.cpp" >nul 2>&1 || move /Y "plugin\FootprintReaderCL.cpp" "plugin\retired\FootprintReaderCL.cpp" >nul ) & if exist "plugin\retired\FootprintReaderCL.cpp" ( set /a S+=1 & echo retired plugin\FootprintReaderCL.cpp>> "%LOG%" )
+if exist "plugin\FootprintReaderGC.cpp" ( git mv -f "plugin\FootprintReaderGC.cpp" "plugin\retired\FootprintReaderGC.cpp" >nul 2>&1 || move /Y "plugin\FootprintReaderGC.cpp" "plugin\retired\FootprintReaderGC.cpp" >nul ) & if exist "plugin\retired\FootprintReaderGC.cpp" ( set /a S+=1 & echo retired plugin\FootprintReaderGC.cpp>> "%LOG%" )
+if exist "plugin\FootprintReaderHG.cpp" ( git mv -f "plugin\FootprintReaderHG.cpp" "plugin\retired\FootprintReaderHG.cpp" >nul 2>&1 || move /Y "plugin\FootprintReaderHG.cpp" "plugin\retired\FootprintReaderHG.cpp" >nul ) & if exist "plugin\retired\FootprintReaderHG.cpp" ( set /a S+=1 & echo retired plugin\FootprintReaderHG.cpp>> "%LOG%" )
+if exist "plugin\FootprintReaderNG.cpp" ( git mv -f "plugin\FootprintReaderNG.cpp" "plugin\retired\FootprintReaderNG.cpp" >nul 2>&1 || move /Y "plugin\FootprintReaderNG.cpp" "plugin\retired\FootprintReaderNG.cpp" >nul ) & if exist "plugin\retired\FootprintReaderNG.cpp" ( set /a S+=1 & echo retired plugin\FootprintReaderNG.cpp>> "%LOG%" )
+if exist "plugin\FootprintReaderEU.cpp" ( git mv -f "plugin\FootprintReaderEU.cpp" "plugin\retired\FootprintReaderEU.cpp" >nul 2>&1 || move /Y "plugin\FootprintReaderEU.cpp" "plugin\retired\FootprintReaderEU.cpp" >nul ) & if exist "plugin\retired\FootprintReaderEU.cpp" ( set /a S+=1 & echo retired plugin\FootprintReaderEU.cpp>> "%LOG%" )
+if exist "plugin\Pulling.cpp" ( git mv -f "plugin\Pulling.cpp" "plugin\retired\Pulling.cpp" >nul 2>&1 || move /Y "plugin\Pulling.cpp" "plugin\retired\Pulling.cpp" >nul ) & if exist "plugin\retired\Pulling.cpp" ( set /a S+=1 & echo retired plugin\Pulling.cpp>> "%LOG%" )
+if exist "plugin\KingTracker.cpp" ( git mv -f "plugin\KingTracker.cpp" "plugin\retired\KingTracker.cpp" >nul 2>&1 || move /Y "plugin\KingTracker.cpp" "plugin\retired\KingTracker.cpp" >nul ) & if exist "plugin\retired\KingTracker.cpp" ( set /a S+=1 & echo retired plugin\KingTracker.cpp>> "%LOG%" )
+if exist "plugin\TradeManager.cpp" ( git mv -f "plugin\TradeManager.cpp" "plugin\retired\TradeManager.cpp" >nul 2>&1 || move /Y "plugin\TradeManager.cpp" "plugin\retired\TradeManager.cpp" >nul ) & if exist "plugin\retired\TradeManager.cpp" ( set /a S+=1 & echo retired plugin\TradeManager.cpp>> "%LOG%" )
+if exist "plugin\IRTReaderCL.cpp" ( git mv -f "plugin\IRTReaderCL.cpp" "plugin\retired\IRTReaderCL.cpp" >nul 2>&1 || move /Y "plugin\IRTReaderCL.cpp" "plugin\retired\IRTReaderCL.cpp" >nul ) & if exist "plugin\retired\IRTReaderCL.cpp" ( set /a S+=1 & echo retired plugin\IRTReaderCL.cpp>> "%LOG%" )
+if exist "plugin\IRTReaderES.cpp" ( git mv -f "plugin\IRTReaderES.cpp" "plugin\retired\IRTReaderES.cpp" >nul 2>&1 || move /Y "plugin\IRTReaderES.cpp" "plugin\retired\IRTReaderES.cpp" >nul ) & if exist "plugin\retired\IRTReaderES.cpp" ( set /a S+=1 & echo retired plugin\IRTReaderES.cpp>> "%LOG%" )
+if exist "plugin\IRTReaderEU.cpp" ( git mv -f "plugin\IRTReaderEU.cpp" "plugin\retired\IRTReaderEU.cpp" >nul 2>&1 || move /Y "plugin\IRTReaderEU.cpp" "plugin\retired\IRTReaderEU.cpp" >nul ) & if exist "plugin\retired\IRTReaderEU.cpp" ( set /a S+=1 & echo retired plugin\IRTReaderEU.cpp>> "%LOG%" )
+if exist "plugin\IRTReaderGC.cpp" ( git mv -f "plugin\IRTReaderGC.cpp" "plugin\retired\IRTReaderGC.cpp" >nul 2>&1 || move /Y "plugin\IRTReaderGC.cpp" "plugin\retired\IRTReaderGC.cpp" >nul ) & if exist "plugin\retired\IRTReaderGC.cpp" ( set /a S+=1 & echo retired plugin\IRTReaderGC.cpp>> "%LOG%" )
+if exist "plugin\IRTReaderHG.cpp" ( git mv -f "plugin\IRTReaderHG.cpp" "plugin\retired\IRTReaderHG.cpp" >nul 2>&1 || move /Y "plugin\IRTReaderHG.cpp" "plugin\retired\IRTReaderHG.cpp" >nul ) & if exist "plugin\retired\IRTReaderHG.cpp" ( set /a S+=1 & echo retired plugin\IRTReaderHG.cpp>> "%LOG%" )
+if exist "plugin\IRTReaderNG.cpp" ( git mv -f "plugin\IRTReaderNG.cpp" "plugin\retired\IRTReaderNG.cpp" >nul 2>&1 || move /Y "plugin\IRTReaderNG.cpp" "plugin\retired\IRTReaderNG.cpp" >nul ) & if exist "plugin\retired\IRTReaderNG.cpp" ( set /a S+=1 & echo retired plugin\IRTReaderNG.cpp>> "%LOG%" )
+if exist "plugin\IRTReaderNQ.cpp" ( git mv -f "plugin\IRTReaderNQ.cpp" "plugin\retired\IRTReaderNQ.cpp" >nul 2>&1 || move /Y "plugin\IRTReaderNQ.cpp" "plugin\retired\IRTReaderNQ.cpp" >nul ) & if exist "plugin\retired\IRTReaderNQ.cpp" ( set /a S+=1 & echo retired plugin\IRTReaderNQ.cpp>> "%LOG%" )
+if exist "plugin\DayModel.cpp" ( git mv -f "plugin\DayModel.cpp" "plugin\retired\DayModel.cpp" >nul 2>&1 || move /Y "plugin\DayModel.cpp" "plugin\retired\DayModel.cpp" >nul ) & if exist "plugin\retired\DayModel.cpp" ( set /a S+=1 & echo retired plugin\DayModel.cpp>> "%LOG%" )
+if exist "plugin\DayStats.cpp" ( git mv -f "plugin\DayStats.cpp" "plugin\retired\DayStats.cpp" >nul 2>&1 || move /Y "plugin\DayStats.cpp" "plugin\retired\DayStats.cpp" >nul ) & if exist "plugin\retired\DayStats.cpp" ( set /a S+=1 & echo retired plugin\DayStats.cpp>> "%LOG%" )
+if exist "plugin\PullStats.cpp" ( git mv -f "plugin\PullStats.cpp" "plugin\retired\PullStats.cpp" >nul 2>&1 || move /Y "plugin\PullStats.cpp" "plugin\retired\PullStats.cpp" >nul ) & if exist "plugin\retired\PullStats.cpp" ( set /a S+=1 & echo retired plugin\PullStats.cpp>> "%LOG%" )
+if exist "plugin\StackStats.cpp" ( git mv -f "plugin\StackStats.cpp" "plugin\retired\StackStats.cpp" >nul 2>&1 || move /Y "plugin\StackStats.cpp" "plugin\retired\StackStats.cpp" >nul ) & if exist "plugin\retired\StackStats.cpp" ( set /a S+=1 & echo retired plugin\StackStats.cpp>> "%LOG%" )
+popd
+echo.
+echo Done: %N% DLLs moved to %RET%
+echo        %S% source files moved to plugin\retired
+echo Details: %LOG%
+echo Reopen Investor/RT. If any chart says an indicator is missing, remove that indicator from the chart.
+pause
+exit /b 0
