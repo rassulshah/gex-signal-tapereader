@@ -12,7 +12,7 @@ int main()
     CHECK(daysFromCivil(2026, 3, 1) - daysFromCivil(2026, 2, 28) == 1 && daysFromCivil(2028, 3, 1) - daysFromCivil(2028, 2, 28) == 2, "month ends / leap years");
     int o, c;
     const char* M[7] = { "ES", "NQ", "CL", "NG", "GC", "HG", "EU" };
-    int wantO[7] = { 510, 510, 480, 480, 440, 440, 440 }, wantC[7] = { 900, 900, 810, 810, 750, 750, 840 };
+    int wantO[7] = { 510, 510, 480, 480, 440, 430, 440 }, wantC[7] = { 900, 900, 810, 810, 750, 750, 840 };   // HG 07:10 (2026-11-01 level audit, his locked rule)
     for (int i = 0; i < 7; i++) CHECK(rthOf(M[i], o, c) && o == wantO[i] && c == wantC[i], M[i]);
     CHECK(!rthOf("XX", o, c) && !rthOf("E", o, c) && !rthOf("ESX", o, c), "unknown market refused");
     // ES, 3-min bars stamped at their END

@@ -9,6 +9,9 @@
 //   LonHI/LonLO this session's London bars (END in (02:00, 07:30]); shown after 07:30
 //   AsiaHI/LO   (2.10.0) this session's Asia bars (END in (18:00, 01:00] - his IRT session #119 CT, per-market table asiaWindow); shown after 02:00
 //               (docs/study-methods/level-definitions-asia-week.md, reviewed 2026-10-14)
+//   PHH / PHL   (2026-11-01, Rassul 16:32-16:42 CT "add this as a key level", "prior hour high or low") the high / low of the hour
+//               before this session's RTH open (bars END in (open - 60 min, open]; ES / NQ 07:30-08:30 CT); shown once RTH has started,
+//               fixed for the day (no repaint)
 //   CWH / CWL   (2.10.0) this week's high / low set BEFORE the prior session: the max / min of this week's completed sessions
 //               older than yesterday's; shown only when beyond the prior session's PFH / PFL (so never Monday or Tuesday).
 //               Fixed at the session start - never repaints.
@@ -104,7 +107,7 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
 {
     std::vector<Level> out;
     if (B.empty() || perSec <= 0 || !(tick > 0)) return out;
-    struct S { Agg full, rth, on, lon, asia; double open = NAN; std::map<long long, double> prof; double barVol = 0, vapVol = 0; int barsNoVol = 0; };
+    struct S { Agg full, rth, on, lon, asia, ph; double open = NAN; std::map<long long, double> prof; double barVol = 0, vapVol = 0; int barsNoVol = 0; };
     std::map<long, S> by;                                         // session (civil days) -> aggregates
     std::vector<long> sessOf(B.size(), 0); std::vector<int> kindOf(B.size(), svl::NONE);
     // (2.7.4) the chart's history may start part-way through a session: a level built from a session (or week) that is only
@@ -128,6 +131,7 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
             s.on.add(b.h, b.l);
             int endMin = b.endSec / 60;
             if (endMin > 2 * 60 && endMin <= 7 * 60 + 30 && b.endSec < 17 * 3600) s.lon.add(b.h, b.l);
+            if (b.endSec < 17 * 3600 && endMin > openMin - 60 && endMin <= openMin) s.ph.add(b.h, b.l);   // (2026-11-01) the prior hour
             // (2.10.0) Asia: the evening part after asiaStart, and the early-morning part up to asiaEnd (a bar ending 00:00 = 0)
             if ((b.endSec >= 17 * 3600 && endMin > asiaStartMin) || (b.endSec < 17 * 3600 && endMin <= asiaEndMin)) s.asia.add(b.h, b.l);
         }
@@ -182,6 +186,8 @@ inline std::vector<Level> compute(const std::vector<Bar>& B, int perSec, int ope
     bool rthStarted = kindOf[last] == svl::RTH || kindOf[last] == svl::POST;
     if (rthStarted && cs.on.ok() && complete(cur)) { push("ONH", cs.on.h, false); push("ONL", cs.on.l, false); }
     if (rthStarted && std::isfinite(cs.open)) push("Open", cs.open, false);   // (2.18.0) today's RTH open, from the open on
+    // (2026-11-01) PHH / PHL: the whole prior hour loaded (the session complete, or loaded from before open - 60 min)
+    if (rthStarted && cs.ph.ok() && (complete(cur) || (firstSess == cur && firstStart < (openMin - 60) * 60))) { push("PHH", cs.ph.h, false); push("PHL", cs.ph.l, false); }
     bool lonDone = rthStarted || (B[last].endSec < 17 * 3600 && lastEndMin > 7 * 60 + 30);
     const bool lonComplete = complete(cur) || (firstSess == cur && firstStart < 2 * 3600);   // loaded from before 02:00
     if (lonDone && cs.lon.ok() && lonComplete) { push("LonHI", cs.lon.h, false); push("LonLO", cs.lon.l, false); }

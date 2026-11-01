@@ -31,6 +31,24 @@ static std::vector<Bar> sess(long sessDays, double base, std::vector<Mark> mk, i
     for (int e = 3; e <= upToEndMin; e += 3) { double h, l; at(e, h, l); v.push_back(Bar{sessDays, e * 60, (float)h, (float)l, (float)base}); }
     return v;
 }
+static void prior_hour()
+{
+    // (DP 2.41.0) PHH / PHL = bars END in (open - 60, open] = 07:33 .. 08:30 for ES
+    long thu = svl::daysFromCivil(2026, 10, 8), wed = thu - 1;
+    std::vector<Bar> B = sess(wed, 100, {});
+    auto T = sess(thu, 100, {{7 * 60 + 30, 120, 100}, {7 * 60 + 33, 108, 100}, {8 * 60, 100, 95}, {8 * 60 + 30, 103, 100}, {8 * 60 + 33, 130, 80}}, 10 * 60);
+    B.insert(B.end(), T.begin(), T.end());
+    auto L = compute(B, 180, 510, 900, 0.25);
+    CHECK(get(L, "PHH") == 108 && get(L, "PHL") == 95, "PHH / PHL: 07:33..08:30 only (07:30 bar and RTH bars out)");
+    auto cut = [&](int endMin) { std::vector<Bar> v; for (auto& b : B) if (b.days < thu || (b.days == thu && b.endSec <= endMin * 60) || b.days == thu - 1) v.push_back(b); return v; };
+    CHECK(!has(compute(cut(8 * 60 + 27), 180, 510, 900, 0.25), "PHH"), "08:27: the hour still forming - not drawn");
+    bool same = true;
+    for (int e = 8 * 60 + 33; e <= 600; e += 3) { auto x = compute(cut(e), 180, 510, 900, 0.25); if (get(x, "PHH") != 108 || get(x, "PHL") != 95) same = false; }
+    CHECK(same, "PHH / PHL drawn from the open, fixed (no repaint)");
+    auto G = compute(B, 180, 440, 750, 0.1);
+    CHECK(get(G, "PHH") == 100 && get(G, "PHL") == 100, "GC (open 07:20): its own hour 06:23..07:20");
+    int o = 0, c = 0; svl::rthOf("HG", o, c); CHECK(o == 7 * 60 + 10, "HG RTH opens 07:10");
+}
 static void extra()
 {
     // ---- Asia window: bar END in (18:00, 02:00]
@@ -178,6 +196,7 @@ int main()
         CHECK(!onh && lon, "(2.7.4) loaded from 00:30: no ONH (partial overnight), LonHI kept (London fully loaded)");
     }
     extra();
+    prior_hour();
     printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

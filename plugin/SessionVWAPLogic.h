@@ -46,7 +46,8 @@ inline bool rthOf(const char* m, int& openMin, int& closeMin)
     if (is("CL") || is("NG")) { openMin = 8 * 60;      closeMin = 13 * 60 + 30; return true; }
     // GC / HG / 6E open 07:20. A 3-min chart's bars (07:18-07:21, 07:21-07:24) give the same first bar as lra.markets'
     // 07:21 start; a 1-min chart now also keeps the 07:20 bar.
-    if (is("GC") || is("HG")) { openMin = 7 * 60 + 20; closeMin = 12 * 60 + 30; return true; }
+    if (is("GC")) { openMin = 7 * 60 + 20; closeMin = 12 * 60 + 30; return true; }
+    if (is("HG")) { openMin = 7 * 60 + 10; closeMin = 12 * 60 + 30; return true; }   // (2026-11-01 level audit) HG RTH opens 07:10 CT - Rassul's locked rule 2026-10-18 (lra.markets); was 07:20
     if (is("EU"))             { openMin = 7 * 60 + 20; closeMin = 14 * 60; return true; }
     return false;
 }
