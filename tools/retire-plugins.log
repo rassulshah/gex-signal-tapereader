@@ -1,0 +1,147 @@
+==== Sun 11/01/2026 17:20:17.60 
+moved lsTapeFlowES.dll 
+moved lsTapeFlowNQ.dll 
+moved lsTapeFlowCL.dll 
+moved lsTapeFlowGC.dll 
+moved lsTapeFlowHG.dll 
+moved lsTapeFlowNG.dll 
+moved lsTapeFlowEU.dll 
+moved lsTapeFlowMarks.dll 
+moved lsCVD.dll 
+moved lsLiquidityFlow.dll 
+moved lsDealerRead.dll 
+moved lsDealerSig.dll 
+moved lsDealerSummary.dll 
+moved lsSessionInfo.dll 
+moved lsTapeReader.dll 
+moved lsTurnOrder.dll 
+moved lsStopRun.dll 
+moved lsSweepRefill.dll 
+moved lsReversalStage.dll 
+moved lsKeyLevels.dll 
+moved lsTrappedTraders.dll 
+moved lsTrapped.dll 
+moved lsTrappedMarks.dll 
+moved lsCobImpulse.dll 
+moved lsDealerHedge.dll 
+moved lsExhaustionV2.dll 
+moved lsExhaustion.dll 
+moved lsMboCheck.dll 
+moved lsFootprintReaderES.dll 
+moved lsFootprintReaderNQ.dll 
+moved lsFootprintReaderCL.dll 
+moved lsFootprintReaderGC.dll 
+moved lsFootprintReaderHG.dll 
+moved lsFootprintReaderNG.dll 
+moved lsFootprintReaderEU.dll 
+moved lsPulling.dll 
+moved lsKingTracker.dll 
+moved lsTradeManager.dll 
+moved lsIRTReaderCL.dll 
+moved lsIRTReaderES.dll 
+moved lsIRTReaderEU.dll 
+moved lsIRTReaderGC.dll 
+moved lsIRTReaderHG.dll 
+moved lsIRTReaderNG.dll 
+moved lsIRTReaderNQ.dll 
+moved lsDayModel.dll 
+moved lsDayStats.dll 
+moved lsPullStats.dll 
+moved lsStackStats.dll 
+moved lsHotReloadDemo.dll 
+moved hotreload folder 
+moved dllx64-hold folder 
+retired plugin\TapeFlowES.cpp 
+retired plugin\TapeFlowNQ.cpp 
+retired plugin\TapeFlowCL.cpp 
+retired plugin\TapeFlowGC.cpp 
+retired plugin\TapeFlowHG.cpp 
+retired plugin\TapeFlowNG.cpp 
+retired plugin\TapeFlowEU.cpp 
+retired plugin\TapeFlowMarks.cpp 
+retired plugin\CVD.cpp 
+retired plugin\LiquidityFlow.cpp 
+retired plugin\DealerRead.cpp 
+retired plugin\DealerSig.cpp 
+retired plugin\DealerSummary.cpp 
+retired plugin\SessionInfo.cpp 
+retired plugin\TapeReader.cpp 
+retired plugin\TurnOrder.cpp 
+retired plugin\StopRunMark.cpp 
+retired plugin\SweepRefill.cpp 
+retired plugin\ReversalStage.cpp 
+retired plugin\KeyLevels.cpp 
+retired plugin\TrappedTraders.cpp 
+retired plugin\Trapped.cpp 
+retired plugin\TrappedMarks.cpp 
+retired plugin\CobImpulse.cpp 
+retired plugin\DealerHedge.cpp 
+retired plugin\ExhaustionV2.cpp 
+retired plugin\Exhaustion.cpp 
+retired plugin\MboCheck.cpp 
+retired plugin\FootprintReaderES.cpp 
+retired plugin\FootprintReaderNQ.cpp 
+retired plugin\FootprintReaderCL.cpp 
+retired plugin\FootprintReaderGC.cpp 
+retired plugin\FootprintReaderHG.cpp 
+retired plugin\FootprintReaderNG.cpp 
+retired plugin\FootprintReaderEU.cpp 
+retired plugin\Pulling.cpp 
+retired plugin\KingTracker.cpp 
+retired plugin\TradeManager.cpp 
+retired plugin\IRTReaderCL.cpp 
+retired plugin\IRTReaderES.cpp 
+retired plugin\IRTReaderEU.cpp 
+retired plugin\IRTReaderGC.cpp 
+retired plugin\IRTReaderHG.cpp 
+retired plugin\IRTReaderNG.cpp 
+retired plugin\IRTReaderNQ.cpp 
+retired plugin\DayModel.cpp 
+retired plugin\DayStats.cpp 
+retired plugin\PullStats.cpp 
+retired plugin\StackStats.cpp 
+retired test plugin\DealerSummary_regression_test.cpp 
+retired test plugin\test_cobimpulse_gamma_host.cpp 
+retired test plugin\test_cobimpulse_host.cpp 
+retired test plugin\test_cobimpulse_mst_host.cpp 
+retired test plugin\test_cobimpulse_odds_host.cpp 
+retired test plugin\test_daymodel_lifecycle_mock.cpp 
+retired test plugin\test_dealerread_459.cpp 
+retired test plugin\test_dealerread_regression.cpp 
+retired test plugin\test_dealersig_regression.cpp 
+retired test plugin\test_exhaustion_030.cpp 
+retired test plugin\test_exhaustion_031.cpp 
+retired test plugin\test_exhaustion_040.cpp 
+retired test plugin\test_exhaustion_050.cpp 
+retired test plugin\test_exhaustion_host.cpp 
+retired test plugin\test_exhaustionv2_host.cpp 
+retired test plugin\test_mbocheck_recording.cpp 
+retired test plugin\test_pulling_host.cpp 
+retired test plugin\test_sessioninfo_regression.cpp 
+retired test plugin\test_trademanager_regression.cpp 
+retired test plugin\tests_cobimpulse\wrap_CobImpulse.cpp 
+retired test plugin\tests_cvd\render_day.cpp 
+retired test plugin\tests_cvd\test_cvd_host.cpp 
+retired test plugin\tests_exhaustion_v2\host_replay.cpp 
+retired test plugin\tests_keylevels\test_keylevels.cpp 
+retired test plugin\tests_oh\test_oh_host.cpp 
+retired test plugin\tests_sr\test_sr_host.cpp 
+retired test plugin\tests_sr\wrap_real_sdk.cpp 
+retired test plugin\tests_st\test_st_host.cpp 
+retired test plugin\tests_st\wrap_real_sdk.cpp 
+retired test plugin\tests_strips\test_stage_host.cpp 
+retired test plugin\tests_strips\test_stagebox_host.cpp 
+retired test plugin\tests_tapeflow\sim_backfill_v115.cpp 
+retired test plugin\tests_tapeflow\sim_irt_harness.cpp 
+retired test plugin\tests_tapeflow\sim_marks.cpp 
+retired test plugin\tests_tapeflow\sim_v200.cpp 
+retired test plugin\tests_tapeflow\sim_v202.cpp 
+retired test plugin\tests_tapeflow\sim_v202node.cpp 
+retired test plugin\tests_tapeflow\sim_v203.cpp 
+retired test plugin\tests_tapeflow\sim_v203r.cpp 
+retired test plugin\tests_tapeflow\sim_v204w.cpp 
+retired test plugin\tests_tor\test_tor_host.cpp 
+retired test plugin\tests_trapped\wrap_real_sdk_Trapped.cpp 
+retired test plugin\tests_trapped\wrap_real_sdk_TrappedMarks.cpp 
+retired test plugin\tests_trappedtraders\wrap_TrappedTraders.cpp 
+retired test plugin\tests_tt011\test_tt011.cpp 
