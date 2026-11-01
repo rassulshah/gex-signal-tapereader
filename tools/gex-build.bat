@@ -76,6 +76,8 @@ call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h Ses
 REM (2026-10-28) lsWavePOC 1.0.0 "Wave POC" (Rassul approved 10:59 CT "just build now"): each big wave's own volume profile + its nodes as lines; WavePOCLogic.h / WavePOCSettings.h (native parameters, SessionVWAP 1.8.1 pattern)
 REM (2026-10-28 11:4x CT) lsWavePOC 1.1.0: + WavePOCLiq.h (liquidity nodes from the order-by-order book, Rassul approved 11:27 CT)
 call :one WavePOC lsWavePOC WavePOCLogic.h WavePOCLiq.h WavePOCSettings.h SettingsSpec.h SettingsHost.h HostSlot.h
+REM (2026-11-01) lsCandleAbsorb 1.0.0 "Candle Absorb" (Rassul 2026-10-31 "implement waht we have disuccessed"): A / Ae / D / S at ZigZag pivots + the delta POC dash on every candle; no settings
+call :one CandleAbsorb lsCandleAbsorb CandleAbsorbLogic.h HostSlot.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
 call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
 call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
@@ -333,7 +335,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - new builds install after 15:15 CT, when Investor/RT is closed ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP WavePOC IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines ReversalStage Context KeyLevels TapeReader CobImpulse BigBidAsk StopRunMark DealerHedge TurnOrder SweepRefill Trapped TrappedMarks TrappedTraders) do (
+for %%N in (GammaProfile KingTracker DealerProfile DealerRead DealerSig DealerSummary DeltaProfile DeltaProfileHourly SessionInfo HodLod TradeManager SessionVWAP WavePOC CandleAbsorb IRTReader FootprintReaderES FootprintReaderNQ FootprintReaderCL FootprintReaderGC FootprintReaderHG FootprintReaderNG FootprintReaderEU TapeFlowES TapeFlowNQ TapeFlowCL TapeFlowGC TapeFlowHG TapeFlowNG TapeFlowEU TapeFlowMarks ChartView MboCheck LiquidityProfile LiquidityFlow Pulling Exhaustion ExhaustionV2 CVD FirstExtreme BidAskStats BookFlow DefenseLines ReversalStage Context KeyLevels TapeReader CobImpulse BigBidAsk StopRunMark DealerHedge TurnOrder SweepRefill Trapped TrappedMarks TrappedTraders) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
