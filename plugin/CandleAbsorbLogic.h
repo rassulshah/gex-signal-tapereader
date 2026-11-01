@@ -14,7 +14,7 @@
 //   code        = A  attackers absorbed: sellers' POC at a low / buyers' POC at a high
 //                 Ae A + exhaustion: the next row PAST the POC (toward the extreme) traded <= 20% of the POC's |delta|
 //                 D  demand: buyers' POC at a low          S  supply: sellers' POC at a high
-//                 one code per bar; green at lows, red at highs; "?" until the nightly proves it (his rule: unproven = "?")
+//                 one code per bar; green at lows, red at highs; no "?" (Rassul 2026-11-01 09:17 CT "get rid of the question mark")
 //   dash        = every candle (closed + the forming one): a short bar ON the candle at its delta POC, a little wider than the body,
 //                 black edge, green when buyers made the POC (delta > 0), red when sellers did
 #pragma once
@@ -171,7 +171,7 @@ inline Scene layout(const Engine& E, const View& v, const Colours& C = Colours()
     for (const Mark& m : E.marks) {
         if (m.bar < a || m.bar > z) continue;
         const Bar& b = E.B[(size_t)m.bar];
-        const std::string txt = std::string(codeName(m.code)) + "?";
+        const std::string txt = codeName(m.code);   // (09:17 CT) no "?"
         const int tw = v.textW ? v.textW(txt) : (int)txt.size() * 7; const double xc = v.X(m.bar);
         const double y = m.low ? v.Y((double)b.l - 0.5) + 3 : v.Y((double)b.h + 0.5) - 3 - 14;
         Prim t; t.k = Prim::TEXT; t.x0 = ci(xc - tw / 2.0); t.x1 = ci(xc + tw / 2.0); t.y0 = ci(y); t.y1 = t.y0 + 14; t.col = m.low ? C.up : C.down; t.text = txt;

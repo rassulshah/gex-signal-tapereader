@@ -5,10 +5,10 @@
  *    the candles"): at each IRT ZigZag pivot (3 bars, High/Low) and the next bar when it re-tests the extreme within 4 ticks, the bar's
  *    delta POC (biggest |buy - sell| row of IRT's VAP) in the extreme end (at a low: at / below open and close and in the lower half;
  *    a high mirrored) and >= 2.0x the bar's median row gets ONE code:
- *      A?  attackers absorbed (sellers' POC at a low / buyers' POC at a high)
- *      Ae? A + exhaustion: the next row past the POC <= 20% of it
- *      D?  demand (buyers' POC at a low)      S?  supply (sellers' POC at a high)
- *    green under lows, red over highs; "?" until the nightly scores them (20+ a side). Decided at the bar that confirms the pivot
+ *      A   attackers absorbed (sellers' POC at a low / buyers' POC at a high)
+ *      Ae  A + exhaustion: the next row past the POC <= 20% of it
+ *      D   demand (buyers' POC at a low)      S   supply (sellers' POC at a high)
+ *    green under lows, red over highs; no "?" (Rassul 2026-11-01 09:17 CT "get rid of the question mark"); the nightly still scores them. Decided at the bar that confirms the pivot
  *    (closed bars only), recorded, never repainted. Plus on EVERY candle a short dash ON the candle at its delta POC (a little wider
  *    than the body, black edge; green = buyers made the POC, red = sellers) - the forming candle's dash moves until it closes.
  *  Rules / layout: CandleAbsorbLogic.h (SDK-free, tested: tests_candleabsorb). No settings (controls none, NO_UI).
@@ -284,7 +284,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CandleAbsorb* p = new CandleAbsorb();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Candle Absorb v1.0.0 - at ZigZag pivots the bar's delta POC in the extreme end: A? absorbed, Ae? absorbed + exhausted, D? demand, S? supply; a delta POC dash on every candle.");
+    p->setDescription("LRA Candle Absorb v1.0.0 - at ZigZag pivots the bar's delta POC in the extreme end: A absorbed, Ae absorbed + exhausted, D demand, S supply; a delta POC dash on every candle.");
     p->setVersion("1.0.0");   // = CA_VERSION (gex-build reads this literal)
     return p;
 }

@@ -28,3 +28,7 @@ the delta poc on everybar"; "the dash is supposed to be only on the candles". Ov
 ## Not verified - needs his IRT
 - The dash size on his bar spacing; the label font (10 pt bold) next to other marks on the VS ES chart.
 - No settings (NO_UI). Add "Candle Absorb" to the VS ES chart's price pane.
+
+## 2026-11-01 09:17 CT (Rassul: "get rid of the question mark")
+- Codes drawn as A, Ae, D, S (no "?"); still LEARNING in the nightly scorecards. Tests 32/0, MinGW real-SDK syntax 0 errors.
+- 09:10 CT he chose to keep 1.0.0 as is (no T mark / grey warning from the extreme-aggression study).

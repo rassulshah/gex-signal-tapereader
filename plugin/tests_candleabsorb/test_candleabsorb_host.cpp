@@ -118,10 +118,10 @@ int main(int argc, char** argv) {
         int inView = 0; for (const cab::Mark& m : S->E.marks) inView += m.bar + S->off >= 165;
         CHECK(txt == inView && txt >= 4, "every mark in the view drawn (" << txt << " / " << inView << ")");
         bool where = true; for (const mock::Prim& p : A.drawn) if (p.k == 'T') { const bool low = p.col == 0x22C55E; const std::string t = p.text;
-            if (!(t == "A?" || t == "Ae?" || t == "D?" || t == "S?")) where = false;
-            if (low && t == "S?") where = false;
-            if (!low && t == "D?") where = false; }
-        CHECK(where, "codes A? / Ae? / D? / S?: green under lows, red over highs");
+            if (!(t == "A" || t == "Ae" || t == "D" || t == "S")) where = false;
+            if (low && t == "S") where = false;
+            if (!low && t == "D") where = false; }
+        CHECK(where, "codes A / Ae / D / S (no ?): green under lows, red over highs");
         // the dash colour follows the POC side: bar 246 (forming) and one closed bar
         const cab::BarRead r = S->E.R[(size_t)(230 - S->off)]; int c230 = -1;
         for (const mock::Prim& p : A.drawn) if (p.k == 'F' && p.col != 0 && std::abs((p.x0 + p.x1) / 2 - mockX(230)) <= 1) c230 = (int)(p.col == 0x22C55E);
