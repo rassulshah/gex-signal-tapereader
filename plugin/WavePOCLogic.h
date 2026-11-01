@@ -64,6 +64,7 @@ static const int CL_BAND = 8;           // cluster A: 8-tick delta bands
 static const int CL_N = 20, CL_MIN = 10;// cluster A: vs the median of the prior 20 waves (needs 10)
 static const double CL_X = 2.0;         // cluster A: band >= 2.0x that median
 static const int TRAP_BARS = 5;         // T: a close back through the node within 5 bars after the end pivot
+static const int PB_GAP = 16;   // (1.5.0) Pb one text row away from the bar (the candle code A? / Ae? / D? / S? owns the row next to it)
 static const int PB_MAX = 3;            // POC pullback: the next 3 pullback pivots after the wave
 
 // fixed rules (from the approved mockup / reference wp2.py + wp3.py)
@@ -921,7 +922,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
             addDashed(s, x0, v.X(b), yp, C.amber, 1);
             const Bar& br = (*bars)[(size_t)b];
             const std::string txt = "Pb"; const int tw = v.textW ? v.textW(txt, true) : 14; const double cx = v.X(b);
-            const double ye = w.dir > 0 ? v.Y((double)br.l - 0.5) + 3 : v.Y((double)br.h + 0.5) - 3 - 14;
+            const double ye = w.dir > 0 ? v.Y((double)br.l - 0.5) + 3 + PB_GAP : v.Y((double)br.h + 0.5) - 3 - 14 - PB_GAP;   // (1.5.0) one row past the bar: lsCandleAbsorb's code sits next to the extreme of the same pivot bar
             Prim t; t.k = Prim::TEXT; t.x0 = ci(cx - tw / 2.0); t.x1 = ci(cx + tw / 2.0); t.y0 = ci(ye); t.y1 = ci(ye + 14); t.col = w.dir > 0 ? C.up : C.down; t.text = txt; t.bold = 1; t.back = false;
             if (t.y0 > v.t && t.y1 < v.b) { s.p.push_back(t); ++s.pbDrawn; }
         }
