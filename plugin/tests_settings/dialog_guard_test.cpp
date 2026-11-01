@@ -77,7 +77,9 @@ template <bool B> static void run(const char* tag) {
     c.setParameterColor(c.ids.id[pr::K_COLOR], 0x00FF00);
     const std::string es0 = slurp(fileOf("ES"));
     c.parmsApply();
-    CHECK(slurp(fileOf("ES")) == es0 && slurp(fileOf("NQ")).empty(), T + "Apply with still no chart saves nothing (never into a guessed market)");
+    CHECK(slurp(fileOf("ES")) != es0 && (w.chartReads("ES").c(pr::K_COLOR) & 0xFFFFFF) == 0x00FF00 && slurp(fileOf("NQ")).empty(), T + "(1.2.0) OK in a chart-less window saves the change to the market it opened on (ES), nowhere else");
+    {   Probe<B> u; u.setup(); u.m.dialog = true; u.m.root = ""; const std::string es2 = slurp(fileOf("ES")); u.parmsApply();
+        CHECK(slurp(fileOf("ES")) == es2, T + "a chart-less copy that never opened saves nothing"); }
     c.m.root = "ES"; c.parmsApply();
     const ss::Values es = w.chartReads("ES");
     CHECK((es.c(pr::K_COLOR) & 0xFFFFFF) == 0x00FF00 && !es.b(pr::K_SHOW), T + "OK on the real chart saves the change (green) and keeps 'Show' off");
@@ -94,7 +96,7 @@ template <bool B> static void run(const char* tag) {
     CHECK(ss::guessDialogMarket("NeverUsed") == "ES", T + "nothing remembered: ES");
     // 6 every window call is logged
     const std::string log = slurp(flex() + "Settings-dialog.log");
-    CHECK(log.find(std::string(B ? "ProbeB" : "ProbeA") + ",load,no chart, opened on ES") != std::string::npos && log.find(",apply,no chart (not saved)") != std::string::npos
+    CHECK(log.find(std::string(B ? "ProbeB" : "ProbeA") + ",load,no chart, opened on ES") != std::string::npos && log.find(",apply,no chart, saved to ES (the market it opened on)") != std::string::npos && log.find(",apply,no chart (not saved)") != std::string::npos
           && log.find("change,chart ES") != std::string::npos, T + "the dialog log names chart / no chart / guessed market per call");
 }
 

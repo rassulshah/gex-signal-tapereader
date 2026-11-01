@@ -1,4 +1,9 @@
-// SettingsGuard.h 1.1.0 (2026-10-20 night; 1.1.0 2026-10-21) - the settings window's calls run behind a Windows exception guard, and the
+// SettingsGuard.h 1.2.0 (2026-11-01, Rassul "fix the settings dialogs issues to ensure that the settings work"; Settings-dialog.log showed
+// "load,no chart, opened on ES" then "change / apply,no chart (not saved)" - every change made in a chart-less window copy was thrown away):
+// a window copy that OPENED on a guessed market (filled from that market's file, snapshot taken) now SAVES its changes to that same
+// market on change / OK - only the controls he changed (SettingsHost Snap). A copy that never opened (no load) still saves nothing.
+// The log says "no chart, saved to ES (the market it opened on)".
+// was: SettingsGuard.h 1.1.0 (2026-10-20 night; 1.1.0 2026-10-21) - the settings window's calls run behind a Windows exception guard, and the
 // chart's market is read without ever faulting.
 // (1.1.0, Rassul 2026-10-21 09:55 "you have had constant problems with allowing the user to change settings . fix this issue") msglog
 // 09:51: "C0000005 ... lsSessionVWAP Ver 1.6.1 in chart "???" calling parmsLoad()" - the window opened with VWAP / bands unticked and
@@ -25,6 +30,7 @@
 #pragma once
 #include "SettingsHost.h"
 #include <string>
+#include <map>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -47,7 +53,7 @@ inline void copyIn(SymCall* c, const char* t) { char out[64]; int i = 0; if (t) 
 inline void rootThunk(void* p) { SymCall* c = static_cast<SymCall*>(p); char b[64]; for (int i = 0; i < 64; ++i) b[i] = 0; const char* t = c->x->getRootSymbol(b); copyIn(c, t); }
 inline void symThunk(void* p) { SymCall* c = static_cast<SymCall*>(p); copyIn(c, c->x->getSymbol()); }
 
-struct DialogCtx { const void* loading = nullptr; std::string plugin; std::string guessed; bool faulted = false; };
+struct DialogCtx { const void* loading = nullptr; std::string plugin; std::string guessed; bool faulted = false; std::map<const void*, std::string> opened; };   // (1.2.0) opened = the market each chart-less window copy opened on
 inline DialogCtx& dialogCtx() { static DialogCtx c; return c; }                         // one per DLL (each plugin compiles its own copy)
 // the chart's market ("ES" .. "EU") or "" when the copy has no chart / the call faults; *faulted = a fault was caught
 inline std::string safeMarket(cppExtension* x, bool* faulted = nullptr) {
@@ -121,12 +127,14 @@ template <class T> inline int dialogCall(T* me, const char* plugin, const char* 
     const bool dlg = inDialog(me);
     if (dlg && !real.empty()) noteDialogMarket(plugin, real);
     c.plugin = plugin; c.faulted = false; c.guessed.clear();
-    if (load && dlg && real.empty()) c.guessed = guessDialogMarket(plugin);
-    c.loading = load ? (const void*)me : nullptr;
+    if (load && dlg && real.empty()) { c.guessed = guessDialogMarket(plugin); if (c.opened.size() > 200) c.opened.clear(); c.opened[(const void*)me] = c.guessed; }
+    else if (!load && dlg && real.empty()) { const std::map<const void*, std::string>::const_iterator o = c.opened.find((const void*)me); if (o != c.opened.end()) c.guessed = o->second; }   // (1.2.0) save where it opened
+    else if (dlg && !real.empty()) c.opened.erase((const void*)me);
+    c.loading = (load || !c.guessed.empty()) ? (const void*)me : nullptr;
     BodyCall<T> a; a.me = me; a.f0 = f0; a.f1 = f1; a.i = i; a.rc = RTX_OK;
     const bool fault = sehRun(&BodyCall<T>::run, &a) != 0;
     c.loading = nullptr;
-    if (dlg) dialogLog(plugin, call, std::string(real.empty() ? (c.guessed.empty() ? "no chart (not saved)" : "no chart, opened on " + c.guessed) : "chart " + real)
+    if (dlg) dialogLog(plugin, call, std::string(real.empty() ? (c.guessed.empty() ? "no chart (not saved)" : load ? "no chart, opened on " + c.guessed : "no chart, saved to " + c.guessed + " (the market it opened on)") : "chart " + real)
                                      + (symFault || c.faulted ? ", symbol fault caught" : "") + (fault ? ", FAULT in body caught" : "") + (f1 ? ", item " + std::to_string(i) : std::string()));
     return fault ? RTX_OK : a.rc;
 }
