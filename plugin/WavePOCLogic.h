@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-02 13:28 CT "it should continue to draw as the wave continues") the LIVE wave always drawn, forming bar included   // was "1.6.3":   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.7.1";   // (1.7.1, Rassul 14:31 CT "you should not be delayed") Pb drawn when the pullback bar closes (live, final once confirmed)   // was "1.7.0":   // (1.7.0, Rassul 2026-11-02 13:28 CT "it should continue to draw as the wave continues") the LIVE wave always drawn, forming bar included   // was "1.6.3":   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -69,7 +69,7 @@ static const int TRAP_BARS = 5;         // (unused since 1.6.2) T used to need a
 static const double I_A_ZONE = 0.66;   // (1.6.2, Rassul 09:59 CT "lets make it 66% for initiation and absorbtion") I? / A?: a top-3 node in the first 66% of the wave (with = I, against = A)
 static const bool CLUSTER_A = false;   // (1.6.2) the 8-tick cluster A? is off: letters come from the top-3 nodes only
 static const double T_ZONE = 0.85;   // (1.6.2, Rassul 10:05 CT "we need to change T to 15%") T? = the last 15% of the wave (was 20%)     // (1.6.2, Rassul 2026-11-02 09:44 CT "keep T simple, its an upwave with heavy green delta in the end of the wave near the top (20%) and vice versa") + 09:46 "we should also make it the poc of the wave") T = the wave's biggest with-wave row (green among green in an up wave, red among red in a down wave; 09:51), >= 2x the median, in the last 20%
-static const int PB_GAP = 16;   // (1.5.0) Pb one text row away from the bar (the candle code A? / Ae? / D? / S? owns the row next to it)
+static const int PB_GAP = 30;   // (1.7.1, Rassul 14:32 CT "put Pb a little higher because it is on top of the distance ratio") was 16;   // (1.5.0) Pb one text row away from the bar (the candle code A? / Ae? / D? / S? owns the row next to it)
 static const int PB_MAX = 3;            // POC pullback: the next 3 pullback pivots after the wave
 
 // fixed rules (from the approved mockup / reference wp2.py + wp3.py)
@@ -768,7 +768,10 @@ inline std::vector<Letter> letters(const Wave& w, const std::vector<Bar>& B) {
 // (1.5.0, Rassul 2026-10-31 23:02 / 23:05 CT) POC pullback: after an UP wave, any of the next 3 pullback LOWS (down pivots) whose bar trades
 // at or below the wave's volume POC while its high stays above it (price tested the POC and held); mirror after a DOWN wave. Returns
 // the pivot bars that qualify (confirmed pivots only - never repainted).
-inline std::vector<int> pullbacks(const Wave& w, const std::vector<Pivot>& alt, const std::vector<Bar>& B) {
+// (1.7.1, Rassul 2026-11-02 14:31 CT "you should not be delayed") + the LIVE pullback: the running counter-leg's extreme bar (liveType =
+// that leg's pivot type, liveI its closed extreme bar) counts as soon as it closes; it moves / disappears when a later bar makes a new
+// extreme and is final once the ZigZag confirms it (then it is in alt)
+inline std::vector<int> pullbacks(const Wave& w, const std::vector<Pivot>& alt, const std::vector<Bar>& B, int liveType = 0, int liveI = -1) {
     std::vector<int> out; if (w.nodes.empty() || w.provisional || w.pending) return out;
     const long long poc = w.nodes[0].tick; int seen = 0;
     for (const Pivot& p : alt) {
@@ -777,6 +780,11 @@ inline std::vector<int> pullbacks(const Wave& w, const std::vector<Pivot>& alt, 
         if (p.i < 0 || p.i >= (int)B.size()) continue;
         const Bar& b = B[(size_t)p.i];
         if (w.dir > 0 ? (b.l <= poc && b.h > poc) : (b.h >= poc && b.l < poc)) out.push_back(p.i);
+    }
+    if (liveType == -w.dir && liveI > w.i1 && liveI < (int)B.size() && seen < PB_MAX) {
+        bool known = false; for (const Pivot& p : alt) if (p.i == liveI) known = true;
+        const Bar& b = B[(size_t)liveI];
+        if (!known && (w.dir > 0 ? (b.l <= poc && b.h > poc) : (b.h >= poc && b.l < poc))) out.push_back(liveI);
     }
     return out;
 }
@@ -822,9 +830,9 @@ inline void addDashed(Scene& s, double x0, double x1, double y, unsigned long c,
 //   the WPOC extended as an amber dotted line from the wave to it.
 // phase 0 = outlines / delta rows / spine of every wave, phase 1 = fills, liquidity, letters, pullbacks (no later profile paints over them)
 inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, std::vector<std::pair<const Wave*, const Node*> >& tagNodes, bool /*latest*/, int phase = -1, double xMax = 1e9,
-                     const std::vector<Bar>* bars = nullptr, const std::vector<Pivot>* piv = nullptr) {
+                     const std::vector<Bar>* bars = nullptr, const std::vector<Pivot>* piv = nullptr, int liveType = 0, int liveI = -1) {
     const int endShown = v.lastBar;
-    std::vector<int> pbs; if (bars && piv) pbs = pullbacks(w, *piv, *bars);
+    std::vector<int> pbs; if (bars && piv) pbs = pullbacks(w, *piv, *bars, liveType, liveI);
     int far = w.i1; for (const Node& nd : w.nodes) far = std::max(far, nd.stop == OPEN ? endShown : nd.stopBar);
     for (const LNode& nd : w.lnodes) far = std::max(far, nd.stop == OPEN ? endShown : nd.stopBar);
     for (int b : pbs) far = std::max(far, b);
@@ -1005,7 +1013,7 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
     if (prov) ws.push_back(prov);
     auto xNext = [&](const Wave* w) { double x = 1e9; for (const Wave* o : ws) if (o->i0 > w->i0) x = std::min(x, v.X(o->i0) - v.bw * 0.45); return x; };
     for (int ph = 0; ph < 2; ++ph)
-        for (const Wave* w : ws) drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w), &E.B, &E.alt);
+        for (const Wave* w : ws) drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w), &E.B, &E.alt, E.zDir, E.zI);   // (1.7.1) + the live pullback
     drawTags(s, v, C, tags);   // (1.4.2, 2026-10-29 13:02 CT) the right-edge tags are back exactly as 1.3.4 drew them: the "WPOC" Rassul asked for in the Levels column was the WEEKLY POC, not this indicator's   // was (1.4.0): not drawn
     if (v.zigzag) drawZigzag(s, E, v, C);
     // (1.3.2, Rassul 18:24 CT profiles drawn under the Levels column) every primitive kept inside [clipL, clipR]: fills / lines cut

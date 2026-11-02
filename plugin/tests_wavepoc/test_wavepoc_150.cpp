@@ -83,6 +83,11 @@ int main(int argc, char** argv) {
         const auto pb = wpc::pullbacks(w, alt, B);
         CHECK(pb.size() == 2 && pb[0] == 7 && pb[1] == 12, "Pb at lows 1 and 3 only (touch counts, 4th low is past the limit) (" << pb.size() << ")");
         B[7].h = 150; CHECK(wpc::pullbacks(w, alt, B).size() == 1, "a low whose HIGH is also at / below the POC is not a pullback hold");
+        {   // (1.7.1, Rassul 14:31 CT "you should not be delayed") the LIVE pullback low (not yet a confirmed pivot) counts at its close
+            std::vector<wpc::Bar> L = flat(20, 170); L[7].l = 148; L[7].h = 160; std::vector<wpc::Pivot> a1 = {{5, 1, 200}};
+            CHECK(wpc::pullbacks(w, a1, L).empty() && wpc::pullbacks(w, a1, L, -1, 7).size() == 1, "(1.7.1) a live pullback low through the POC = Pb at its close");
+            CHECK(wpc::pullbacks(w, a1, L, 1, 7).empty(), "(1.7.1) a live UP leg after an up wave is not a pullback");
+            L[8].l = 145; L[8].h = 149; CHECK(wpc::pullbacks(w, a1, L, -1, 8).empty(), "(1.7.1) the live low moved to a bar whose high is below the POC: the Pb goes away (repaint until confirmed)"); }
         w.provisional = true; CHECK(wpc::pullbacks(w, alt, B).empty(), "a provisional wave gets no Pb");
     }
     // ---- 4. the real fixture (ES 10-29 / 10-30 RTH with VAP delta) ----
