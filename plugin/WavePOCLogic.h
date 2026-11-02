@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.6.0";   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.6.1";   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -775,6 +775,7 @@ struct Prim {
     int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned long col = 0; int w = 1; std::string text; bool back = true; int bold = 0;
 };
 static const bool SHOW_VOL_LEFT = false;   // (1.6.0) the left volume profile (outline + HVN / WPOC fills); the WPOC is now cyan on the right
+static const bool SHOW_LIQ_LEFT = false;   // (1.6.1) the liquidity-node bars left of the spine: off (computed, recorded, counted in the status file)
 struct Colours { unsigned long prof = 0x334155, amber = 0xF5B428, amberFill = 0xC88C14, white = 0xE5E7EB, whiteFill = 0xB4BECD, zz = 0x78849A, zzBig = 0xCBD5E1, grey = 0x94A3B8, cyan = 0x22D3EE, bid = 0x22C55E, offer = 0xEF4444, bg = 0x0B0F17, up = 0x22C55E, down = 0xEF4444; };   // (1.3.3) up / down = the spine (bullish green, bearish red)
 inline unsigned long mix(unsigned long c, unsigned long bg, double a) {   // a of the colour over the background
     unsigned long o = 0; for (int sh = 0; sh <= 16; sh += 8) { const double x = (double)((bg >> sh) & 255) + ((double)((c >> sh) & 255) - (double)((bg >> sh) & 255)) * a; o |= (unsigned long)std::lround(std::max(0.0, std::min(255.0, x))) << sh; }
@@ -853,7 +854,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
     }
     if (phase == 0) return;
     // the liquidity nodes, grouped with the volume profile on the left (LPOC bright, others 60%)
-    if (!w.lnodes.empty() && w.lnodes[0].lots > 0) {
+    if (SHOW_LIQ_LEFT && !w.lnodes.empty() && w.lnodes[0].lots > 0) {
         const double lmx = w.lnodes[0].lots;
         for (const LNode& nd : w.lnodes) {
             const double yc = v.Y((double)nd.tick); if (yc < v.t - 10 || yc > v.b + 10) continue;

@@ -277,7 +277,7 @@ static void testLayout(const Fix& F) {
             sp += n; if (n != 1) ok = false; }
         CHECK(ok && sp == 4, "(1.3.3) spines: 4 waves, one each, green up / red down, spanning the wave's range (" << sp << ")"); }
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.6.0", "header Wave POC v1.6.0");
+    CHECK(header && std::string(wpc::VERSION) == "1.6.1", "header Wave POC v1.6.1");
     {   // (1.4.0) the open WPOC handed to lsDealerProfile: the latest confirmed wave's node [0] while OPEN, else none
         long long tk = 0; const bool has = wpc::latestOpenPoc(E, tk);
         const wpc::Wave* lw = nullptr; for (const wpc::Wave& w : E.waves) if (!w.pending) lw = &w;
@@ -370,9 +370,9 @@ static void testLiquidityReference(const Fix& F) {
         if (p.k == wpc::Prim::TEXT) ++texts;
         if (p.k == wpc::Prim::BOX) left = false;
     }
-    CHECK(sc.lnodesDrawn == 9 && bright == 2 && dim == 7 && left, "(1.2.0) liquidity bars: left of the wave start, <= 40 px, LPOC bright, others 60% (" << bright << "/" << dim << ")");
+    CHECK(sc.lnodesDrawn == 0 && bright == 0 && dim == 0 && left, "(1.6.1) no liquidity bars on the left (Rassul 2026-11-02 05:06) (" << bright << "/" << dim << ")");
     { int mxw = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.col == 0x22C55E) mxw = std::max(mxw, p.x1 - p.x0);
-      CHECK(dots == 0 && mxw == 30 && wpc::SIDE_W == 30, "(1.5.0) no dotted liquidity lines; LPOC bar = 30 px max, grouped with the volume side (" << dots << " dots, " << mxw << " px)"); }
+      CHECK(dots == 0 && mxw == 0 && wpc::SIDE_W == 30, "(1.5.0) no dotted liquidity lines; LPOC bar = 30 px max, grouped with the volume side (" << dots << " dots, " << mxw << " px)"); }
     const wpc::Scene s0 = wpc::layout(Nb, nullptr, v); int t0 = 0; for (const wpc::Prim& p : s0.p) t0 += p.k == wpc::Prim::TEXT;
     CHECK(texts == t0, "no price tags for liquidity nodes");
 }
