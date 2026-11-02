@@ -50,7 +50,7 @@
 #include <algorithm>
 #include <sstream>
 namespace ltc {
-static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-11-02) + THE REAL-LIQUIDITY GRADE R S \xACP F (Grade below)   // was "1.3.0";   // (1.3.0, 2026-11-01) + the whole-book nodes (bookNodes)  // was "1.2.0";   // (1.2.0, 2026-10-29) + the KING nodes above / below (kingStep)
+static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-02 13:31 CT "it should not be 1 atr, it should be bar close") HELD = a 3-min bar CLOSES beyond the zone on the defenders' side   // was "1.4.0":   // (1.4.0, 2026-11-02) + THE REAL-LIQUIDITY GRADE R S \xACP F (Grade below)   // was "1.3.0";   // (1.3.0, 2026-11-01) + the whole-book nodes (bookNodes)  // was "1.2.0";   // (1.2.0, 2026-10-29) + the KING nodes above / below (kingStep)
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum Tag { T_PENDING = 0, T_STAYS_PLUS = 1, T_STAYS = 2, T_STAYS_WEAK = 3, T_GONE = 4, T_GONE_PLUS = 5, T_MID = 6, T_EARLY = 7 };
@@ -272,7 +272,7 @@ inline void decide(const Params& P, Touch& t) {
 //   NP NOT PULLED  of the defenders resting at the touch, lots pulled (cancelled / moved out of the zone) by the decision / shown < 0.5
 //   F  FADED       the attackers' volume into the defenders in the 2nd 90 s < 0.5 x the 1st 90 s (no attack at all = passed)
 // Study (7 markets, 11,929 touches, both halves): 0-1 checks held ~45-58%, 4 checks 83%; NQ flat (graded, not drawn by the readers).
-// OUTCOME (study 'hold'): HELD = price 1 ATR from the level the defenders' way before a 3-min block CLOSES beyond the zone's far edge;
+// OUTCOME: (1.5.0, Rassul 2026-11-02 13:31 CT) HELD = the first 3-min bar that CLOSES beyond the zone on the defenders' side (was: price 1 ATR away);
 // BROKE = that close first (also between the touch and the decision); EXPIRED = neither in 60 min. Final once decided.
 enum GradeBit { G_R = 1, G_S = 2, G_NP = 4, G_F = 8 };
 struct ZoneW { double k; int lo, hi; };
@@ -286,7 +286,7 @@ struct Grade {
     int side = BID; long long px = 0, lo = 0, hi = 0, ta = 0, tdc = 0; double A = 0;
     long long shown = 0, pulled = 0, s0 = -1, minS = -1, endS = -1, v1 = 0, v2 = 0, added = 0, quick = 0;
     double res = -1, dur = -1, pull = -1, exh = -1; int mask = 0; bool done = false, lost = false, through = false;   // through = price beyond the far edge at the decision (or a block closed there): the study left these out - shown as broken
-    int outcome = O_OPEN; long long outMs = 0, mfe = 0, lastBlk = -1, lastClose = -1; bool brokeEarly = false;
+    int outcome = O_OPEN; long long outMs = 0, mfe = 0, lastBlk = -1, lastClose = -1; bool brokeEarly = false, heldEarly = false;   // (1.5.0) heldEarly: the held close came before the decision
     std::unordered_map<long long, long long> coh;   // order id -> lots resting in the zone at the touch (the defenders)
     int checks() const { int n = 0; for (int b = 1; b <= 8; b <<= 1) n += (mask & b) ? 1 : 0; return n; }
 };
@@ -448,16 +448,19 @@ private:
             const bool sup = g.side == BID;
             if (sl > 0) {   // a 3-min block closed beyond the far edge?
                 if (g.lastBlk >= 0 && blk != g.lastBlk && g.lastClose > 0 && ((sup && g.lastClose < g.lo) || (!sup && g.lastClose > g.hi))) {
-                    if (!g.done) g.brokeEarly = true; else if (g.outcome == O_OPEN) { g.outcome = O_BROKE; g.outMs = nextT; } }
+                    if (!g.done) { if (!g.heldEarly) g.brokeEarly = true; } else if (g.outcome == O_OPEN) { g.outcome = O_BROKE; g.outMs = nextT; } }
+                // (1.5.0, Rassul 13:31 CT) HELD = the first 3-min bar that CLOSES beyond the zone on the defenders' side (bid: above its top,
+                // offer: below its bottom) - was: price 1 ATR away. The first of held / broke wins.
+                else if (g.lastBlk >= 0 && blk != g.lastBlk && g.lastClose > 0 && ((sup && g.lastClose > g.hi) || (!sup && g.lastClose < g.lo))) {
+                    if (!g.done) { if (!g.brokeEarly) g.heldEarly = true; } else if (g.outcome == O_OPEN) { g.outcome = O_HELD; g.outMs = nextT; } }
                 g.lastBlk = blk; g.lastClose = sl;
             }
             if (!g.done) {
                 const long long z = zoneSize(g.side, g.lo, g.hi); if (z < g.minS) g.minS = z;
-                if (nextT >= g.tdc) { decideGrade(g); if (g.brokeEarly) { g.outcome = O_BROKE; g.outMs = nextT; } }
+                if (nextT >= g.tdc) { decideGrade(g); if (g.brokeEarly) { g.outcome = O_BROKE; g.outMs = nextT; } else if (g.heldEarly) { g.outcome = O_HELD; g.outMs = nextT; } }
             } else if (g.outcome == O_OPEN && sl > 0) {
                 const long long ex = sup ? sh - g.px : g.px - sLo; if (ex > g.mfe) g.mfe = ex;
-                if (g.A > 0 && (double)g.mfe >= g.A) { g.outcome = O_HELD; g.outMs = nextT; }
-                else if (nextT - g.tdc >= GRADE_OUT_MS) { g.outcome = O_EXPIRED; g.outMs = nextT; }
+                if (nextT - g.tdc >= GRADE_OUT_MS) { g.outcome = O_EXPIRED; g.outMs = nextT; }
             }
             if (g.done && g.outcome != O_OPEN) {
                 gOut.push_back(GRec{ 'H', g }); g.coh.clear();

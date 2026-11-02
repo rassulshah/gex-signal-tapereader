@@ -39,9 +39,19 @@ int main(int argc, char** argv) {
         check(g.pulled == 0 && g.v1 == 100 && g.v2 == 10 && g.res >= 0.84 && g.dur >= 0.18, "REAL: pulled 0, attack 100 then 10, rebuilt " + std::to_string(g.res) + ", durable " + std::to_string(g.dur));
         // the outcome: price 1 ATR (20 ticks) above the level -> HELD
         b.t = T0 + 220000; b.ev(NEW, ASK, 1016, 5, 9); b.ev(FILL, ASK, 1016, 5, 9);
-        b.at(T0 + 222000); bool held = false; for (const auto& x : b.E.drainGrades()) if (x.kind == 'H') held = x.g.outcome == O_HELD;
-        check(held && b.E.gradesLive().empty() && b.E.gradesDone().size() == 1 && b.E.gradesDone()[0].outcome == O_HELD, "REAL: HELD once price is 1 ATR away (final, moved to done)");
+        b.at(T0 + 222000 + 181000); bool held = false; for (const auto& x : b.E.drainGrades()) if (x.kind == 'H') held = x.g.outcome == O_HELD;
+        check(held && b.E.gradesLive().empty() && b.E.gradesDone().size() == 1 && b.E.gradesDone()[0].outcome == O_HELD, "(1.5.0) REAL: HELD once a 3-min bar CLOSES above the zone (final, moved to done)");
     }
+    // ---------------------------------------------------------------- 1b. (1.5.0) a bar closes above the zone BEFORE the decision: HELD at the decision
+    {   Book b; b.at(T0); b.ev(NEW, BID, 996, 300, 1); b.ev(NEW, ASK, 1006, 50, 2);
+        b.at(T0 + 31000); b.t = T0 + 31500; b.ev(FILL, BID, 996, 20, 1);   // touch
+        b.t = T0 + 40000; b.ev(FILL, ASK, 1006, 5, 2);                      // price back up to 1006, above the zone's top 1002
+        b.at(T0 + 31500 + 181000); const std::vector<Engine::GRec> r = b.E.drainGrades(); bool held = false; for (const auto& x : r) if (x.kind == 'H') held = x.g.outcome == O_HELD;
+        check(held, "(1.5.0) a 3-min bar closed above the zone before the decision: HELD at the decision"); }
+    {   Book b; b.at(T0); b.ev(NEW, BID, 996, 300, 1);
+        b.at(T0 + 31000); b.t = T0 + 31500; b.ev(FILL, BID, 996, 20, 1);   // touch, price stays IN the zone (996)
+        b.at(T0 + 31500 + 400000); bool held = false; for (const auto& x : b.E.drainGrades()) if (x.kind == 'H') held = held || x.g.outcome == O_HELD;
+        check(!held, "(1.5.0) closes inside the zone are not HELD"); }
     // ---------------------------------------------------------------- 2. FAKE: pulled, churn only, not rebuilt, attack speeding up
     {   Book b; b.at(T0); b.ev(NEW, BID, 996, 300, 1);
         b.at(T0 + 31000); b.t = T0 + 31500; b.ev(FILL, BID, 996, 20, 1);    // touch
