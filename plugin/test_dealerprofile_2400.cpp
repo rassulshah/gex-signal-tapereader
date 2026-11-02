@@ -248,7 +248,7 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.44.0" && src.find("p->setVersion(\"2.44.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.44.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
+        check(std::string(DP_VERSION) == "2.45.0" && src.find("p->setVersion(\"2.45.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.45.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
         check(DP_BOOK && !DP_ODDS && DP_RANK_CHIPS && DP_LIQ_RANK_RIGHT && DP_KEYS_RIGHT && std::string(lpk::VERSION) == "1.0.0" && lpk::TOP == 5 && lpk::PCT == 0.50 && lpk::ATR_X == 1.0 && std::string(ltc::VERSION) == "1.4.0", "whole book, top 5, 50% / 1 ATR, no odds, no rank chips, Key Levels right (LiqPick 1.0.0, LiqTouch 1.3.0)");
     }
     dealerFile(true);
@@ -308,7 +308,13 @@ int main(int argc, char** argv)
         check(ticks >= 3 && badTicks == 0, "each badge's tick runs from the column's LEFT edge (price side) (" + std::to_string(ticks) + ", right-side ticks " + std::to_string(badTicks) + ")"); }
     // ---- the Liquidity column
     const int lqR = c.lay.levels.r;   // (2.42.0, Rassul 10:36 CT "the rank of the liquidity should also be after the level label") the rank at the row's RIGHT end
-    std::vector<std::string> rk; for (auto& q : O) if (q.kind == "text" && q.l >= lqR - 24 && q.r <= lqR + 2 && q.text.size() <= 2) rk.push_back(q.text);
+    // (2.45.0, Rassul 12:10 CT) the rank box right after its row's label (not lined up at the right end); the label 4 px after the bar
+    std::vector<std::string> rk; int rkFar = 0;
+    for (auto& q : O) if (q.kind == "text" && q.l >= lqL && q.r <= lqR + 2 && q.text.size() <= 2 && (std::isdigit((unsigned char)q.text[0]) || q.text == "K")) {
+        rk.push_back(q.text); int best = 9999;
+        for (auto& o : O) if (o.kind == "text" && o.l >= lqL && o.text.find('%') != std::string::npos && std::abs((o.t + o.b) / 2 - (q.t + q.b) / 2) <= 3 && q.l >= o.r) best = std::min(best, q.l - o.r);
+        if (best > 16) ++rkFar; }
+    check(rkFar == 0 && c.lqGapMax == 4, "(2.45.0) every rank box right after its label (" + std::to_string(rkFar) + " far), label 4 px after the bar (" + std::to_string(c.lqGapMax) + ")");
     std::sort(rk.begin(), rk.end()); std::string rks; for (auto& t : rk) rks += t + " ";
     check(rk == std::vector<std::string>({ "2", "3", "4", "5", "6", "7", "8", "K" }), "rank boxes: K + 2-5 + the level-linked 6, 7, 8 with their real ranks, no 9-11 (" + rks + ")");
     auto findText = [&](const std::string& pre) -> const Op* { for (auto& q : O) if (q.kind == "text" && q.l > lqL && q.text.rfind(pre, 0) == 0) return &q; return nullptr; };
@@ -345,6 +351,11 @@ int main(int argc, char** argv)
         check(tst != nullptr, "rank 2 testing: the countdown 1:49");
         check(white == 4 && dark == 4, "4 white tags (all passed) on the king's bar + 4 dark tags on the testing row (" + std::to_string(white) + " / " + std::to_string(dark) + ")");
         check(held == 1 && heldWord == 1 && cg.heldLines == 1, "the HELD line (2 px, offer red) + HELD in the price area (" + std::to_string(held) + " / " + std::to_string(heldWord) + ")");
+        // (2.45.0, Rassul 12:12 CT) the HELD word names the lots and rank frozen at the touch: "HELD  900  K" on the next draw
+        {   std::vector<Op> G2 = drawOn(X, a, MOCK_CHART); DealerProfile::ColsState c2 = colsOf(X, a); std::string hw;
+            if (getenv("DP_GRADE_DUMP2")) { const char* d0 = DUMP; DUMP = getenv("DP_GRADE_DUMP2"); dump(G2, a, c2); DUMP = d0; }
+            for (auto& q : G2) if (q.kind == "text" && q.text.rfind("HELD", 0) == 0 && q.r < lqL) hw = q.text;
+            check(hw == "HELD  900  K" && c2.heldNamed == 1, "(2.45.0) HELD word with lots + rank: '" + hw + "'"); }
         { std::vector<sb::Fact> none; sb::postFacts('S', a.sym, a.spb, MOCK_CHART, dpNowMs(), none); }
     }
     // ---- the steady board: a new node waits 30 s (production persistence), a gone node leaves after 10 s
