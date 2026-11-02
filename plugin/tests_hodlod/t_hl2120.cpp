@@ -112,8 +112,8 @@ int main() {
         CHECK(dOld.ok && ub + dOld.dy == ub + d.dy && (ub - hOld) + dOld.dy < ut + d.dy, "[5] the bottom edge stays put, the top comes down (" + std::to_string(hOld - (ub - ut)) + " px shorter)");
     }
     std::printf("[6] versions\n");
-    {   CHECK(std::string(hl::HL_VERSION) == "2.15.0" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == PLUGIN_VERSION == 2.15.0 (sweep panels off in this view)");
-        const std::string src = readAll("../HodLod.cpp"); CHECK(src.find("p->setVersion(\"2.15.0\")") != std::string::npos, "setVersion literal 2.15.0");
+    {   CHECK(std::string(hl::HL_VERSION) == "2.15.1" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == PLUGIN_VERSION == 2.15.1 (sweep panels off in this view)");
+        const std::string src = readAll("../HodLod.cpp"); CHECK(src.find("p->setVersion(\"2.15.1\")") != std::string::npos, "setVersion literal 2.15.1");
     }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

@@ -132,6 +132,7 @@ static const bool HL_PRE_HOVER = true;
 #include "AwareHook.h"           // (2.8.0) the smart-read hook (layer L3)
 #include "SelfAware.h"           // (2.9.0) self-awareness
 #include "MarketState.h"         // (2.4.0) SRC HODLOD + TREND, once per closed bar
+static const bool HL_CANDLE_KEEPOUT = false;   // (2.15.1) the box never moves sideways to dodge candles (it may cover them)
 #include "ColumnBoard.h"          // (2.9.x, 2026-10-28) cb::leftKeep: the table stays right of the left Liquidity column
 #include "BoxDock.h"             // (2.4.1) the table rectangle for the Big Lot box (lsBigBidAsk) to dock to
 #include <chrono>
@@ -1420,7 +1421,7 @@ int HodLod::draw(void)
     {   // (2.9.3, 2026-10-28 06:38 CT, Rassul's rule "callouts never cover candles"; the left side is free again - ColumnBoard 1.8.0) the
         // visible candles are keep-outs too: grouped into ~40 px columns (high .. low + 4 px), so the table + strip dock where no candle is
         const long n = getBarCount(); RTARRAY hi(barHigh), lo(barLow); S->candleAvoid = 0;
-        if (n > 0 && (long)hi.count >= n && (long)lo.count >= n) {
+        if (HL_CANDLE_KEEPOUT && n > 0 && (long)hi.count >= n && (long)lo.count >= n) {   // (2.15.1, Rassul 22:06 CT "it shifts .. it should be left") candles are NOT keep-outs: the box stays left
             int sl = 0, sr = -1, st = 0, sb = 0, seen = 0;
             for (long i = n - 1; i >= 0 && seen < 800; --i, ++seen) {
                 PNT a, c; if (a.set((int)i, (float)hi[(int)i], kBarLeft) != RTX_OK || c.set((int)i, (float)lo[(int)i], kBarRight) != RTX_OK) break;
@@ -1705,6 +1706,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.15.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.15.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
