@@ -1427,10 +1427,10 @@ int HodLod::draw(void)
                 const int xl = (int)a.h, xr = (int)c.h; if (xr < pb.l) break; if (xl > pb.r) continue;
                 const int yt = (std::min)((int)a.v, (int)c.v) - 4, yb = (std::max)((int)a.v, (int)c.v) + 4;
                 if (sr < 0) { sl = xl; sr = xr; st = yt; sb = yb; continue; }
-                if (sr - xl > 40) { avoid.push_back(hl::Box{ sl, st, sr, sb }); ++S->candleAvoid; sl = xl; sr = xr; st = yt; sb = yb; }
+                if (sr - xl > 40) { if (sr > pb.l + 70) { avoid.push_back(hl::Box{ sl, st, sr, sb }); ++S->candleAvoid; } sl = xl; sr = xr; st = yt; sb = yb; }   // (2.15.0) candles in the left 70 px may sit under the box (Rassul "Stretch left to chart edge")
                 else { sl = (std::min)(sl, xl); st = (std::min)(st, yt); sb = (std::max)(sb, yb); }
             }
-            if (sr >= 0) { avoid.push_back(hl::Box{ sl, st, sr, sb }); ++S->candleAvoid; }
+            if (sr >= 0 && sr > pb.l + 70) { avoid.push_back(hl::Box{ sl, st, sr, sb }); ++S->candleAvoid; }
         }
     }
     const Place PL = position(S->mkt);
@@ -1705,6 +1705,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.14.4");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.15.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

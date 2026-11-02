@@ -6,7 +6,7 @@
 
 namespace dpset {
 
-static const char* const PLUGIN_VERSION = "2.30.1";   // (2.30.1) no settings change
+static const char* const PLUGIN_VERSION = "2.31.0";   // (2.31.0) no settings change   // (2.30.1) no settings change
 // was "2.30.0"   // (2.30.0) no settings change (hourly flow F?)   // (2.29.0) no settings change (READ tiers, swing odds)   // (2.28.0) no settings change (right column + READ strip, facts, combiner)   // (2.27.1) no settings change (trap badges off the column)   // (2.27.0) no settings change (left column, body rule)
 enum K { K_WIDTH, K_FONT, K_DELTA_TEXT, K_WICK_ON, K_WICK_X, K_TRAP_ON, K_DRAW_LATE, K_N };
 
