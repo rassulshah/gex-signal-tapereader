@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.6.1";   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.6.2";   // (1.6.2, Rassul 09:44 CT) T? = heavy with-wave delta in the last 20% of the wave (up wave: green near the top; down wave: red near the bottom), decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -63,7 +63,8 @@ static const int LET_TOP = 2;           // (1.5.0, Rassul 2026-11-01 06:35 CT "i
 static const int CL_BAND = 8;           // cluster A: 8-tick delta bands
 static const int CL_N = 20, CL_MIN = 10;// cluster A: vs the median of the prior 20 waves (needs 10)
 static const double CL_X = 2.0;         // cluster A: band >= 2.0x that median
-static const int TRAP_BARS = 5;         // T: a close back through the node within 5 bars after the end pivot
+static const int TRAP_BARS = 5;         // (unused since 1.6.2) T used to need a close back through the node within 5 bars after the end pivot
+static const double T_ZONE = 0.80;     // (1.6.2, Rassul 2026-11-02 09:44 CT "keep T simple, its an upwave with heavy green delta in the end of the wave near the top (20%) and vice versa") T = a top-2 with-wave delta row in the last 20% of the wave
 static const int PB_GAP = 16;   // (1.5.0) Pb one text row away from the bar (the candle code A? / Ae? / D? / S? owns the row next to it)
 static const int PB_MAX = 3;            // POC pullback: the next 3 pullback pivots after the wave
 
@@ -724,18 +725,14 @@ inline std::vector<Letter> letters(const Wave& w, const std::vector<Bar>& B) {
     const std::vector<int> cand = topDelta(w);
     const bool wc = w.dir > 0;   // the wave's colour: green up, red down
     const long long sep = std::max<long long>(8, rng / 10);
-    const int lastClosed = (int)B.size() - 1;
+    (void)B;   // (1.6.2) T no longer reads the bars after the pivot
     for (int j : cand) {
         const long long d = w.drows[(size_t)j], t = tickOf(j); const bool with = d * w.dir > 0; const double f = posf(t);
         Letter L; L.row = j;
         if (with && f <= 1.0 / 3.0 + 1e-9) { L.t = 'I'; L.bull = wc; }
         else if (!with && f < 0.75) { L.t = 'A'; L.bull = wc; }
-        else if (with && f >= 0.75) {
-            bool back = false;
-            for (int k = w.i1 + 1; k <= std::min(w.i1 + TRAP_BARS, lastClosed); ++k) if (w.dir > 0 ? B[(size_t)k].c < t - 1 : B[(size_t)k].c > t + 1) { back = true; break; }
-            if (!back) continue;
-            L.t = 'T'; L.bull = !wc;
-        } else continue;
+        else if (with && f >= T_ZONE - 1e-9) { L.t = 'T'; L.bull = !wc; }   // (1.6.2) heavy with-wave delta in the top / bottom 20%: no close-back wait
+        else continue;
         bool dup = false; for (const Letter& o : out) if (o.t == L.t && (L.t == 'T' || std::llabs(tickOf(o.row) - t) <= sep)) dup = true;
         if (!dup) out.push_back(L);
     }

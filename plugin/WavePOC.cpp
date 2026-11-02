@@ -5,8 +5,8 @@
  *    LEFT = the volume profile as a grey outline, HVN rows light grey, WPOC amber, liquidity nodes grouped with it; RIGHT = the wave's
  *    same-price delta (buy - sell volume from IRT's VAP), green buyers / red sellers, rows >= 2x the median bright, the delta POC outlined
  *    in white. The top 4 delta rows (each >= 2x the median) are classified by location: I? with the wave in its first third, A? against
- *    the wave before its last quarter (both the wave's colour), T? with the wave in the last quarter AND a close back through it within
- *    5 bars after the pivot (opposite colour); cluster A? = an 8-tick middle band against the wave >= 2.0x the prior 20 waves' median
+ *    the wave before its last quarter (both the wave's colour), T? (1.6.2) heavy delta WITH the wave in its last 20% - an up wave's green
+ *    near the top, a down wave's red near the bottom (opposite colour: the trapped side); cluster A? = an 8-tick middle band against the wave >= 2.0x the prior 20 waves' median
  *    (10 waves needed). Letters are centred on their node; a dotted border goes round each top-4 node's distribution. POC pullback Pb =
  *    any of the next 3 pullback pivots after the wave that trades through its volume POC and holds on the far side (amber dotted line).
  *    Which waves get a profile: reversal (14-bar extreme AND > the average AND > 3 ATR) OR breakout (> 3 ATR and a close beyond the
@@ -132,7 +132,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.6.1";   // (1.6.1) no liquidity-node bars on the left   // was "1.6.0":   // (1.6.0) cyan WPOC on the delta side, no left volume profile   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") wave delta profile right (same-price delta from the VAP buy / sell volume), volume outline left, top-4 delta letters I? / A? / T?, cluster A?, dotted node borders, POC pullback Pb, reversal / breakout / rally waves   // was "1.4.2":   // (1.4.2, 2026-10-29 Rassul 13:02 CT) right-edge tags restored as 1.3.4 drew them (the Levels-column "WPOC" he asked for is the WEEKLY POC; lsDealerProfile 2.39.0 drops the Wave POC badge); the version header moved bottom-right (it sat on the REV UP banner)   // was 1.4.1:   // (1.4.1, 2026-10-29 13:20 CT crash fix) the CoB flags come from getChartIndicator only - no getCustomIndicator (IRT fast-fail 0xC0000409 on opening the Add Indicator window, WER bucket 5c8499f9)   // was 1.4.0: (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.6.2";   // (1.6.2) T? = heavy with-wave delta in the last 20%   // was "1.6.1":   // (1.6.1) no liquidity-node bars on the left   // was "1.6.0":   // (1.6.0) cyan WPOC on the delta side, no left volume profile   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") wave delta profile right (same-price delta from the VAP buy / sell volume), volume outline left, top-4 delta letters I? / A? / T?, cluster A?, dotted node borders, POC pullback Pb, reversal / breakout / rally waves   // was "1.4.2":   // (1.4.2, 2026-10-29 Rassul 13:02 CT) right-edge tags restored as 1.3.4 drew them (the Levels-column "WPOC" he asked for is the WEEKLY POC; lsDealerProfile 2.39.0 drops the Wave POC badge); the version header moved bottom-right (it sat on the REV UP banner)   // was 1.4.1:   // (1.4.1, 2026-10-29 13:20 CT crash fix) the CoB flags come from getChartIndicator only - no getCustomIndicator (IRT fast-fail 0xC0000409 on opening the Add Indicator window, WER bucket 5c8499f9)   // was 1.4.0: (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
 static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
 
@@ -640,6 +640,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setDescription("LRA Wave POC v1.5.0 - each big wave's (reversal, breakout, rally) volume profile left and delta profile right at its start, WPOC / HVN / liquidity nodes, the top-4 delta nodes as I? / A? / T?, and POC pullbacks (Pb).");
-    p->setVersion("1.6.1");   // = WP_VERSION (gex-build reads this literal)
+    p->setVersion("1.6.2");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

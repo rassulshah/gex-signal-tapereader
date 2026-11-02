@@ -33,9 +33,15 @@ int main(int argc, char** argv) {
             if (x.t == 'T') CHECK(x.row == 90 && !x.bull, "T? on row 90, opposite colour (red after an up wave)");
         }
         std::vector<wpc::Bar> B2 = flat(12, 195);
-        CHECK(count(wpc::letters(w, B2), 'T') == 0, "no close back within 5 bars = no T");
+        CHECK(count(wpc::letters(w, B2), 'T') == 1, "(1.6.2) no close back needed: heavy with-wave delta in the last 20% = T");
         std::vector<wpc::Bar> B3 = flat(12, 195); B3[11].c = 188;   // 6 bars after the pivot: too late
-        CHECK(count(wpc::letters(w, B3), 'T') == 0, "a close back 6 bars after the pivot is too late for T");
+        CHECK(count(wpc::letters(w, B3), 'T') == 1, "(1.6.2) what the bars do after the pivot never changes T");
+        wpc::Wave w4 = upWave({{78, 95}});   // with the wave at 78% of the way up: below the top 20% - no T
+        CHECK(count(wpc::letters(w4, B2), 'T') == 0, "(1.6.2) heavy green delta at 78% (not in the top 20%) = no T");
+        wpc::Wave w5 = upWave({{80, 95}});
+        CHECK(count(wpc::letters(w5, B2), 'T') == 1, "(1.6.2) heavy green delta at 80% = T (red, the trapped buyers)");
+        wpc::Wave w6 = upWave({}); w6.dir = -1; w6.p0 = 200; w6.p1 = 100; w6.drows.assign(101, 10); w6.drows[10] = -120; w6.dMax = 120;
+        { const auto L6 = wpc::letters(w6, B2); CHECK(L6.size() == 1 && L6[0].t == 'T' && L6[0].bull, "(1.6.2) down wave: heavy RED delta near the bottom (10%) = T, green"); }
     }
     {   // A = against the wave before its last quarter, wave colour; two A rows within 10 ticks = one letter
         wpc::Wave w = upWave({{50, -90}, {52, -85}, {20, 40}});
