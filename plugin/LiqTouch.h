@@ -50,7 +50,7 @@
 #include <algorithm>
 #include <sstream>
 namespace ltc {
-static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-11-01) + the whole-book nodes (bookNodes)  // was "1.2.0";   // (1.2.0, 2026-10-29) + the KING nodes above / below (kingStep)
+static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-11-02) + THE REAL-LIQUIDITY GRADE R S \xACP F (Grade below)   // was "1.3.0";   // (1.3.0, 2026-11-01) + the whole-book nodes (bookNodes)  // was "1.2.0";   // (1.2.0, 2026-10-29) + the KING nodes above / below (kingStep)
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum Tag { T_PENDING = 0, T_STAYS_PLUS = 1, T_STAYS = 2, T_STAYS_WEAK = 3, T_GONE = 4, T_GONE_PLUS = 5, T_MID = 6, T_EARLY = 7 };
@@ -262,6 +262,35 @@ inline void decide(const Params& P, Touch& t) {
     t.decided = true;
 }
 
+// ------------------------------------------------------------------------------------------------------------- (1.4.0) the grade
+// (1.4.0, Rassul 2026-11-02 10:39-10:59 CT: study REAL-LIQUIDITY-2026-11-02 "go", mockup real_liq v4 "lets go with this") THE REAL-LIQUIDITY
+// GRADE of a touched level, from the order feed, decided 180 s after the touch and never changed. The zone = the level +- hw ticks
+// (the study's medium zone: hw = clamp(round(k x ATR), min, max) per market). Defenders = the touched side's orders in the zone.
+//   R  REBUILT     (end - low) / (start - low) of the defenders' size in the zone (1-s samples) >= 0.84; never lost size = passed
+//   S  STACKED     the size ADDED to the zone in [touch - 300 s, decision - 30 s] that STAYED 30 s+ (or was filled) / all added >= 0.18
+//                  (adds of the last 30 s are left out of both: not judgeable live); no adds = not passed
+//   NP NOT PULLED  of the defenders resting at the touch, lots pulled (cancelled / moved out of the zone) by the decision / shown < 0.5
+//   F  FADED       the attackers' volume into the defenders in the 2nd 90 s < 0.5 x the 1st 90 s (no attack at all = passed)
+// Study (7 markets, 11,929 touches, both halves): 0-1 checks held ~45-58%, 4 checks 83%; NQ flat (graded, not drawn by the readers).
+// OUTCOME (study 'hold'): HELD = price 1 ATR from the level the defenders' way before a 3-min block CLOSES beyond the zone's far edge;
+// BROKE = that close first (also between the touch and the decision); EXPIRED = neither in 60 min. Final once decided.
+enum GradeBit { G_R = 1, G_S = 2, G_NP = 4, G_F = 8 };
+struct ZoneW { double k; int lo, hi; };
+inline ZoneW zoneW(const std::string& m) {
+    return m == "ES" ? ZoneW{ 0.30, 4, 6 } : m == "NQ" ? ZoneW{ 0.11, 8, 12 } : m == "GC" ? ZoneW{ 0.25, 8, 15 } : m == "HG" ? ZoneW{ 0.30, 2, 5 }
+         : m == "CL" ? ZoneW{ 0.25, 4, 8 } : m == "NG" ? ZoneW{ 0.30, 2, 4 } : (m == "EU" || m == "6E") ? ZoneW{ 0.40, 2, 3 } : ZoneW{ 0.30, 2, 6 };
+}
+inline long long zoneHw(const std::string& m, double atrTicks) { const ZoneW z = zoneW(m); const double a = atrTicks > 0 ? atrTicks : 15.0;
+    long long h = (long long)std::llround(z.k * a); if (h < z.lo) h = z.lo; if (h > z.hi) h = z.hi; return h; }
+struct Grade {
+    int side = BID; long long px = 0, lo = 0, hi = 0, ta = 0, tdc = 0; double A = 0;
+    long long shown = 0, pulled = 0, s0 = -1, minS = -1, endS = -1, v1 = 0, v2 = 0, added = 0, quick = 0;
+    double res = -1, dur = -1, pull = -1, exh = -1; int mask = 0; bool done = false, lost = false, through = false;   // through = price beyond the far edge at the decision (or a block closed there): the study left these out - shown as broken
+    int outcome = O_OPEN; long long outMs = 0, mfe = 0, lastBlk = -1, lastClose = -1; bool brokeEarly = false;
+    std::unordered_map<long long, long long> coh;   // order id -> lots resting in the zone at the touch (the defenders)
+    int checks() const { int n = 0; for (int b = 1; b <= 8; b <<= 1) n += (mask & b) ? 1 : 0; return n; }
+};
+inline std::string gradeLetters(int mask) { std::string o; o += (mask & G_R) ? 'R' : 'r'; o += (mask & G_S) ? 'S' : 's'; o += (mask & G_NP) ? 'P' : 'p'; o += (mask & G_F) ? 'F' : 'f'; return o; }
 // ------------------------------------------------------------------------------------------------------------- the engine
 struct MqLevel { long long px = 0; std::string name; };
 class Engine {
@@ -274,7 +303,7 @@ public:
     long long nEvents = 0, nTouches = 0, nEpisodes = 0, nUnknown = 0, nGap = 0;
     explicit Engine(const Params& p = Params()) : P(p) {}
     void newSession() { live.clear(); out.clear(); }   // a new 17:00 session: touches start again, the book and the followed levels go on
-    void reset() { cand.clear(); book.clear(); nBookReal = 0; medAt = -1; med[0] = med[1] = 0; ord.clear(); lev.clear(); eps.clear(); live.clear(); out.clear(); hist.clear(); blocks.clear(); nextT = 0; last = hi = lo = -1; bv = sv = 0; lastSec = -1; started = false; }
+    void reset() { gLive.clear(); gDone.clear(); gOut.clear(); adds.clear(); quick.clear(); cand.clear(); book.clear(); nBookReal = 0; medAt = -1; med[0] = med[1] = 0; ord.clear(); lev.clear(); eps.clear(); live.clear(); out.clear(); hist.clear(); blocks.clear(); nextT = 0; last = hi = lo = -1; bv = sv = 0; lastSec = -1; started = false; }
     // tests: start the 1-s clock at a boundary and seed the last trade (the live engine starts at its first event)
     void begin(long long boundaryMs, long long lastPx) { nextT = boundaryMs; started = true; if (lastPx > 0) last = lastPx; }
     // one MBO event. side: the event's raw side (BID / ASK, -1 unknown); implied: a spread-driven fill (no aggressor)
@@ -287,17 +316,17 @@ public:
         switch (act) {
         case NEW:
             if (side != BID && side != ASK) return;
-            if (it != ord.end()) { Lev& o = L(it->second.side, it->second.px); o.size -= it->second.size; it->second = Ord{ side, px, size, ms }; L(side, px).size += size; return; }
-            ord[id] = Ord{ side, px, size, ms }; { Lev& l = L(side, px); l.size += size; l.cAdd += size; } return;
+            if (it != ord.end()) { cohortPull(id, it->second.size, px, side); logQuick(it->second.side, it->second.px, it->second.size, it->second.t0, ms); Lev& o = L(it->second.side, it->second.px); o.size -= it->second.size; it->second = Ord{ side, px, size, ms }; L(side, px).size += size; logAdd(side, px, size, ms); return; }
+            ord[id] = Ord{ side, px, size, ms }; { Lev& l = L(side, px); l.size += size; l.cAdd += size; } logAdd(side, px, size, ms); return;
         case MOD:
-            if (it == ord.end()) { if (side != BID && side != ASK) return; ord[id] = Ord{ side, px, size, ms }; Lev& l = L(side, px); l.size += size; l.cAdd += size; return; }
+            if (it == ord.end()) { if (side != BID && side != ASK) return; ord[id] = Ord{ side, px, size, ms }; Lev& l = L(side, px); l.size += size; l.cAdd += size; logAdd(side, px, size, ms); return; }
             {   Ord& o = it->second;
-                if (px != o.px) { Lev& a = L(o.side, o.px); a.size -= o.size; a.cPull += o.size; Lev& b = L(o.side, px); b.size += size; b.cAdd += size; o.px = px; o.size = size; o.mv1 = o.mv0; o.mv0 = ms; o.t0 = ms; return; }
-                const long long ch = size - o.size; Lev& l = L(o.side, o.px); l.size += ch; if (ch < 0) l.cPull += -ch; else l.cAdd += ch; o.size = size; }
+                if (px != o.px) { cohortPull(id, o.size, px, o.side); logQuick(o.side, o.px, o.size, o.t0, ms); Lev& a = L(o.side, o.px); a.size -= o.size; a.cPull += o.size; Lev& b = L(o.side, px); b.size += size; b.cAdd += size; o.px = px; o.size = size; o.mv1 = o.mv0; o.mv0 = ms; o.t0 = ms; logAdd(o.side, px, size, ms); return; }
+                const long long ch = size - o.size; Lev& l = L(o.side, o.px); l.size += ch; if (ch < 0) { l.cPull += -ch; cohortPull(id, -ch, -1, o.side); logQuick(o.side, o.px, -ch, o.t0, ms); } else { l.cAdd += ch; logAdd(o.side, o.px, ch, ms); } o.size = size; }
             return;
         case DEL:
             if (it == ord.end()) return;
-            { Lev& l = L(it->second.side, it->second.px); l.size -= it->second.size; l.cPull += it->second.size; } ord.erase(it); return;
+            { cohortPull(id, it->second.size, -1, it->second.side); logQuick(it->second.side, it->second.px, it->second.size, it->second.t0, ms); Lev& l = L(it->second.side, it->second.px); l.size -= it->second.size; l.cPull += it->second.size; } ord.erase(it); return;
         case FILL: {
             const int rs = it != ord.end() ? it->second.side : side;
             last = px; if (hi < 0 || px > hi) hi = px; if (lo < 0 || px < lo) lo = px;
@@ -308,8 +337,10 @@ public:
                 if (lv == lev.end() || lv->second.ep < 0) continue;
                 touch(sd, q, lv->second, ms);
             }
-            if (it != ord.end()) { Ord& o = it->second; const long long take = std::min(size, o.size); Lev& l = L(o.side, o.px); l.size -= take; l.cEat += take; o.size -= take; }
-            else ++nUnknown;
+            if (it != ord.end()) { Ord& o = it->second; const long long take = std::min(size, o.size); Lev& l = L(o.side, o.px); l.size -= take; l.cEat += take; o.size -= take;
+                { for (size_t gi = 0; gi < gLive.size(); ++gi) { std::unordered_map<long long, long long>::iterator c = gLive[gi].coh.find(id); if (c != gLive[gi].coh.end()) c->second = std::max(0LL, c->second - take); } }   // filled cohort lots are not pullable
+                gradeFill(o.side, o.px, take, ms); }
+            else { ++nUnknown; if (!implied && (side == BID || side == ASK)) gradeFill(side, px, size, ms); }
             return; }
         }
     }
@@ -351,6 +382,13 @@ public:
     double median(int sd) const { return med[sd & 1]; }
     long long realNearCount() const { return nReal; }
     long long levelSize(int sd, long long px) const { std::unordered_map<long long, Lev>::const_iterator i = lev.find(key(sd, px)); return i == lev.end() ? 0 : i->second.size; }
+    // (1.4.0) the real-liquidity grades: testing (not decided yet) and decided (newest last, the last 6 h, at most 400)
+    const std::vector<Grade>& gradesLive() const { return gLive; }
+    const std::vector<Grade>& gradesDone() const { return gDone; }
+    struct GRec { char kind; Grade g; };                  // 'G' decided, 'H' outcome
+    std::vector<GRec> drainGrades() { std::vector<GRec> r; r.swap(gOut); return r; }
+    long long nGrades = 0, addLog = 0;
+    static const long long GRADE_MS = 180000, STACK_PRE_MS = 300000, DURABLE_MS = 30000, GRADE_OUT_MS = 3600000, ADD_KEEP_MS = 510000, ADD_REACH = 400;
 private:
     struct Ord { int side; long long px, size; long long t0 = 0, mv0 = -1, mv1 = -1; };   // (1.1.0) t0 = at this price since; the last two re-price times
     struct Lev { long long size = 0, cAdd = 0, cEat = 0, cPull = 0, qsince = 0; int ep = -1; };
@@ -365,6 +403,74 @@ private:
     long long nextT = 0, last = -1, hi = -1, lo = -1, bv = 0, sv = 0, lastSec = -1; bool started = false;
     std::vector<Zone> cand; double med[2] = { 0, 0 }; long long medAt = -1, nReal = 0;   // (1.1.0)
     std::vector<Zone> book; long long nBookReal = 0;   // (1.3.0)
+    // (1.4.0) the grade: live / decided grades, the add log and the quick-cancel log (adds that left within 30 s), both 8.5 min
+    struct AddRec { long long t, px, size; int side; };
+    std::vector<Grade> gLive, gDone; std::vector<GRec> gOut; std::deque<AddRec> adds, quick;
+    void logAdd(int sd, long long px, long long sz, long long ms) { if (sz <= 0 || (last > 0 && std::llabs(px - last) > ADD_REACH)) return; adds.push_back(AddRec{ ms, px, sz, sd }); ++addLog; }
+    void logQuick(int sd, long long px, long long sz, long long addedAt, long long ms) { if (sz <= 0 || addedAt <= 0 || ms - addedAt >= DURABLE_MS || (last > 0 && std::llabs(px - last) > ADD_REACH)) return; quick.push_back(AddRec{ addedAt, px, sz, sd }); }
+    // a defender order (cohort) leaves the zone / is cut: the pulled lots of every live grade that holds it
+    void cohortPull(long long id, long long lots, long long newPx, int sd) {
+        for (size_t i = 0; i < gLive.size(); ++i) { Grade& g = gLive[i]; if (g.done) continue;
+            std::unordered_map<long long, long long>::iterator c = g.coh.find(id); if (c == g.coh.end()) continue;
+            if (newPx >= g.lo && newPx <= g.hi && sd == g.side) continue;   // moved inside the zone: not pulled
+            const long long q = std::min(lots, c->second); if (q <= 0) continue; g.pulled += q; c->second -= q; }
+    }
+    long long zoneSize(int sd, long long lo_, long long hi_) const { long long s = 0; for (long long p = lo_; p <= hi_; ++p) { std::unordered_map<long long, Lev>::const_iterator i = lev.find(key(sd, p)); if (i != lev.end() && i->second.size > 0) s += i->second.size; } return s; }
+    void startGrade(int sd, long long px, long long ms, double A) {
+        if (gLive.size() >= 200) return;
+        for (const Grade& g : gLive) if (g.side == sd && std::llabs(g.px - px) <= 1) return;   // one grade per zone at a time
+        Grade g; g.side = sd; g.px = px; g.A = A; const long long hw = zoneHw(P.market, A); g.lo = px - hw; g.hi = px + hw; g.ta = ms; g.tdc = ms + GRADE_MS;
+        for (std::unordered_map<long long, Ord>::const_iterator i = ord.begin(); i != ord.end(); ++i) { const Ord& o = i->second;
+            if (o.side == sd && o.size > 0 && o.px >= g.lo && o.px <= g.hi) { g.coh[i->first] = o.size; g.shown += o.size; } }
+        g.s0 = g.minS = zoneSize(sd, g.lo, g.hi); ++nGrades; gLive.push_back(g);
+    }
+    void decideGrade(Grade& g) {
+        g.endS = zoneSize(g.side, g.lo, g.hi); if (g.endS < g.minS) g.minS = g.endS;
+        g.lost = g.s0 - g.minS > 0;
+        g.res = g.lost ? std::max(0.0, (double)(g.endS - g.minS) / (double)(g.s0 - g.minS)) : 1.0;
+        const long long from = g.ta - STACK_PRE_MS, to = g.tdc - DURABLE_MS; long long A_ = 0, Q_ = 0;
+        for (size_t i = 0; i < adds.size(); ++i) { const AddRec& a = adds[i]; if (a.t < from) continue; if (a.t > to) break; if (a.side == g.side && a.px >= g.lo && a.px <= g.hi) A_ += a.size; }
+        for (size_t i = 0; i < quick.size(); ++i) { const AddRec& a = quick[i]; if (a.t >= from && a.t <= to && a.side == g.side && a.px >= g.lo && a.px <= g.hi) Q_ += a.size; }
+        g.added = A_; g.quick = std::min(Q_, A_); g.dur = A_ > 0 ? (double)(A_ - g.quick) / (double)A_ : -1;
+        g.pull = g.shown > 0 ? (double)g.pulled / (double)g.shown : -1;
+        g.exh = g.v1 > 0 ? (double)g.v2 / (double)g.v1 : (g.v2 > 0 ? 99.0 : 0.0);
+        g.mask = 0; if (g.res >= 0.84) g.mask |= G_R; if (g.dur >= 0.18) g.mask |= G_S; if (g.pull >= 0 && g.pull < 0.5) g.mask |= G_NP; if (g.exh < 0.5) g.mask |= G_F;
+        g.through = g.brokeEarly || (last > 0 && ((g.side == BID && last < g.lo) || (g.side == ASK && last > g.hi)));
+        g.done = true; gOut.push_back(GRec{ 'G', g });
+    }
+    // the grades at a 1-s boundary: depth sample, the decision, the outcome (sh / sLo = the second's high / low, blk = its 3-min block, cl = last)
+    void gradeStep(long long sh, long long sLo, long long sl) {
+        const long long blk = blockIdx(nextT);
+        while (!adds.empty() && adds.front().t < nextT - ADD_KEEP_MS) adds.pop_front();
+        while (!quick.empty() && quick.front().t < nextT - ADD_KEEP_MS) quick.pop_front();
+        for (size_t i = 0; i < gLive.size();) {
+            Grade& g = gLive[i];
+            const bool sup = g.side == BID;
+            if (sl > 0) {   // a 3-min block closed beyond the far edge?
+                if (g.lastBlk >= 0 && blk != g.lastBlk && g.lastClose > 0 && ((sup && g.lastClose < g.lo) || (!sup && g.lastClose > g.hi))) {
+                    if (!g.done) g.brokeEarly = true; else if (g.outcome == O_OPEN) { g.outcome = O_BROKE; g.outMs = nextT; } }
+                g.lastBlk = blk; g.lastClose = sl;
+            }
+            if (!g.done) {
+                const long long z = zoneSize(g.side, g.lo, g.hi); if (z < g.minS) g.minS = z;
+                if (nextT >= g.tdc) { decideGrade(g); if (g.brokeEarly) { g.outcome = O_BROKE; g.outMs = nextT; } }
+            } else if (g.outcome == O_OPEN && sl > 0) {
+                const long long ex = sup ? sh - g.px : g.px - sLo; if (ex > g.mfe) g.mfe = ex;
+                if (g.A > 0 && (double)g.mfe >= g.A) { g.outcome = O_HELD; g.outMs = nextT; }
+                else if (nextT - g.tdc >= GRADE_OUT_MS) { g.outcome = O_EXPIRED; g.outMs = nextT; }
+            }
+            if (g.done && g.outcome != O_OPEN) {
+                gOut.push_back(GRec{ 'H', g }); g.coh.clear();
+                gDone.push_back(g); if (gDone.size() > 400) gDone.erase(gDone.begin());
+                gLive.erase(gLive.begin() + (long)i); continue; }
+            ++i;
+        }
+        while (!gDone.empty() && nextT - gDone.front().ta > 21600000LL) gDone.erase(gDone.begin());
+    }
+    void gradeFill(int restSide, long long px, long long size, long long ms) {
+        for (size_t i = 0; i < gLive.size(); ++i) { Grade& g = gLive[i]; if (g.done || restSide != g.side || px < g.lo || px > g.hi || ms < g.ta || ms >= g.tdc) continue;
+            if (ms - g.ta < GRADE_MS / 2) g.v1 += size; else g.v2 += size; }
+    }
     void bookStep(long long sl) {
         book.clear(); nBookReal = 0; if (sl <= 0) return;
         std::map<long long, long long> real[2];
@@ -396,7 +502,9 @@ private:
             medAt = nextT; }
         for (int sd = 0; sd < 2; ++sd) { std::vector<Zone> z = pickZones(real[sd], sd, sl, R, med[sd], P); cand.insert(cand.end(), z.begin(), z.end()); }
         kingStep(sl, R);
-        for (const Zone& z : cand) { Lev& l = L(z.side, z.px); if (l.ep >= 0 || eps.size() >= 3000) continue;
+        std::vector<Zone> follow = cand;   // (1.4.0) the whole-book nodes within reach are followed too (the Liquidity column's nodes get graded)
+        for (const Zone& z : book) { const long long dz = z.side == BID ? sl - z.px : z.px - sl; if (dz >= 1 && dz <= R) follow.push_back(z); }
+        for (const Zone& z : follow) { Lev& l = L(z.side, z.px); if (l.ep >= 0 || eps.size() >= 3000) continue;
             Ep e; e.side = z.side; e.px = z.px; e.t0 = nextT; e.sz0 = l.size; e.mx = l.size; e.hist60 = 0; e.sz60 = l.size; e.lowSince = 0;
             l.ep = ++epSeq; eps[l.ep] = e; ++nEpisodes; }
     }
@@ -453,7 +561,7 @@ private:
         for (std::map<int, Ep>::iterator e = eps.begin(); e != eps.end(); ++e) { Lev& l = L(e->second.side, e->second.px); l.ep = -1; l.qsince = 0; }
         eps.clear(); for (std::unordered_map<long long, Lev>::iterator i = lev.begin(); i != lev.end(); ++i) i->second.qsince = 0;
         for (size_t i = 0; i < live.size(); ++i) if (live[i].outcome == O_OPEN) { live[i].outcome = O_EXPIRED; live[i].outMs = ms; if (live[i].decided) out.push_back(Rec{ 'O', live[i] }); }
-        live.clear(); hi = lo = -1; bv = sv = 0; nextT = (ms / 1000) * 1000 + 1000;
+        live.clear(); gLive.clear(); adds.clear(); quick.clear(); hi = lo = -1; bv = sv = 0; nextT = (ms / 1000) * 1000 + 1000;
     }
     void touch(int sd, long long px, Lev& l, long long ms) {
         std::map<int, Ep>::iterator e = eps.find(l.ep); if (e == eps.end()) { l.ep = -1; return; }
@@ -472,6 +580,7 @@ private:
             t.king = bp == px && bs == sd; t.kingSz = b1; t.secondSz = b2; t.dom = t.king ? (double)b1 / (double)std::max(b2, 1LL) : 0.0;
         }
         for (size_t i = 0; i < mq.size(); ++i) if (std::fabs((double)(mq[i].px - px)) <= std::max(1.0, 0.1 * t.A)) { t.onMq = true; t.mqName = mq[i].name; break; }
+        startGrade(sd, px, ms, t.A);   // (1.4.0) the real-liquidity grade starts at the touch
         eps.erase(e); l.ep = -1; l.qsince = 0; ++nTouches;
         if (live.size() < 400) { live.push_back(t); out.push_back(Rec{ 'P', t }); }
     }
@@ -523,6 +632,7 @@ private:
             if (!end && nextT - e.t0 >= 3600000) end = true;
             if (end) { l.ep = -1; l.qsince = 0; it = eps.erase(it); } else ++it;
         }
+        gradeStep(sh, sLo, sl);   // (1.4.0)
         // 4) touched levels: the decision windows, the snapshots at +15 / +30 s, the outcome
         for (size_t i = 0; i < live.size();) {
             Touch& t = live[i]; const Lev& l = L(t.side, t.px);

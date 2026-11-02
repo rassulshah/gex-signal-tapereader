@@ -248,8 +248,8 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.42.0" && src.find("p->setVersion(\"2.42.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.42.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
-        check(DP_BOOK && !DP_ODDS && !DP_RANK_CHIPS && DP_KEYS_RIGHT && std::string(lpk::VERSION) == "1.0.0" && lpk::TOP == 5 && lpk::PCT == 0.50 && lpk::ATR_X == 1.0 && std::string(ltc::VERSION) == "1.3.0", "whole book, top 5, 50% / 1 ATR, no odds, no rank chips, Key Levels right (LiqPick 1.0.0, LiqTouch 1.3.0)");
+        check(std::string(DP_VERSION) == "2.43.0" && src.find("p->setVersion(\"2.43.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.43.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
+        check(DP_BOOK && !DP_ODDS && DP_RANK_CHIPS && DP_LIQ_RANK_RIGHT && DP_KEYS_RIGHT && std::string(lpk::VERSION) == "1.0.0" && lpk::TOP == 5 && lpk::PCT == 0.50 && lpk::ATR_X == 1.0 && std::string(ltc::VERSION) == "1.4.0", "whole book, top 5, 50% / 1 ATR, no odds, no rank chips, Key Levels right (LiqPick 1.0.0, LiqTouch 1.3.0)");
     }
     dealerFile(true);
     std::vector<klv::Merged> lv;
@@ -294,11 +294,16 @@ int main(int argc, char** argv)
         check(pct == 0, "no odds % on the level badges (" + std::to_string(pct) + ")");
         check(inPrice == 0, "nothing of the Dealer Profile drawn in the price area (" + std::to_string(inPrice) + ")"); }
     {   int chips = 0; for (auto& q : O) if (q.kind == "text" && q.l >= kL && q.r <= kR && q.text.size() <= 2 && std::isdigit((unsigned char)q.text[0])) ++chips;
-        check(chips == 0, "no rank chips on the level badges (" + std::to_string(chips) + ")"); }
+        // (2.42.0, Rassul 10:35 CT "i want the rank after the name of the level") the rank box sits right of every other text of its badge row
+        int after = 0; for (auto& q : O) if (q.kind == "text" && q.l >= kL && q.r <= kR && q.text.size() <= 2 && (std::isdigit((unsigned char)q.text[0]) || q.text == "K")) {
+            bool last = true; for (auto& o : O) if (&o != &q && o.kind == "text" && o.l >= kL && o.r <= kR && std::abs(((o.t + o.b) / 2) - ((q.t + q.b) / 2)) <= 3 && o.l > q.l && o.text.find('%') == std::string::npos) last = false;
+            after += last; }
+        check(chips >= 1 && after >= chips, "(2.42.0) the liquidity rank AFTER the level name on the badges (" + std::to_string(after) + " / " + std::to_string(chips) + ")"); }
     {   int ticks = 0, badTicks = 0; for (auto& q : O) if (q.kind == "line" && std::min(q.l, q.r) == kL && std::max(q.l, q.r) < kL + 6 && q.t == q.b) ++ticks; else if (q.kind == "line" && std::min(q.l, q.r) >= kR - 7 && std::max(q.l, q.r) == kR && q.t == q.b && q.t > 0) ++badTicks;
         check(ticks >= 3 && badTicks == 0, "each badge's tick runs from the column's LEFT edge (price side) (" + std::to_string(ticks) + ", right-side ticks " + std::to_string(badTicks) + ")"); }
     // ---- the Liquidity column
-    std::vector<std::string> rk; for (auto& q : O) if (q.kind == "text" && q.l >= lqL && q.l < lqL + 24 && q.text.size() <= 2) rk.push_back(q.text);
+    const int lqR = c.lay.levels.r;   // (2.42.0, Rassul 10:36 CT "the rank of the liquidity should also be after the level label") the rank at the row's RIGHT end
+    std::vector<std::string> rk; for (auto& q : O) if (q.kind == "text" && q.l >= lqR - 24 && q.r <= lqR + 2 && q.text.size() <= 2) rk.push_back(q.text);
     std::sort(rk.begin(), rk.end()); std::string rks; for (auto& t : rk) rks += t + " ";
     check(rk == std::vector<std::string>({ "2", "3", "4", "5", "6", "7", "8", "K" }), "rank boxes: K + 2-5 + the level-linked 6, 7, 8 with their real ranks, no 9-11 (" + rks + ")");
     auto findText = [&](const std::string& pre) -> const Op* { for (auto& q : O) if (q.kind == "text" && q.l > lqL && q.text.rfind(pre, 0) == 0) return &q; return nullptr; };
@@ -317,6 +322,26 @@ int main(int argc, char** argv)
     {   std::vector<sb::Fact> Q; check(sb::readFacts('Q', a.sym, a.spb, MOCK_CHART, dpNowMs(), Q, false) && Q.size() == 8 && Q[0].code == 1 && Q[0].val == 900, "Q facts: the 8 shown nodes, rank 1 = the king (" + std::to_string(Q.size()) + ")"); }
     {   const std::string st = slurp(fl("DealerProfile.status-ES-180.txt"));
         check(st.find("LIQ_BOOK,WHOLE BOOK") != std::string::npos && st.find("shown top 5 + level-linked >= 50% within 1 ATR 3") != std::string::npos && st.find("king 900 lots") != std::string::npos, "status LIQ_BOOK line"); }
+    // ---- (2.43.0) the real-liquidity grade: the king (offer 7858) decided 4/4 + HELD; rank 2 (bid 7845) still testing (1:49 left)
+    {   auto ctOf = [&](RTDATE d) { time_t tt = (time_t)d; struct tm bt; gmtime_r(&tt, &bt); return fr::ctAbs(bt.tm_year + 1900, bt.tm_mon + 1, bt.tm_mday, bt.tm_hour * 3600 + bt.tm_min * 60 + bt.tm_sec); };
+        const size_t nb = a.dt.size(); const long long tTouch = ctOf(a.dt[nb - 15]) - 60, tHeld = ctOf(a.dt[nb - 8]) - 30;   // 45 min ago (a decided grade shows for 60 min)
+        std::vector<sb::Fact> SG;
+        { sb::Fact f; f.bar = tTouch; f.lo = 7856.5; f.hi = 7859.5; f.side = -1; f.val = 15; f.code = 31; f.state = 1; f.proven = 4; SG.push_back(f); }
+        { sb::Fact f; f.bar = tTouch; f.lo = f.hi = 7858.0; f.side = -1; f.val = (double)(tHeld - tTouch); f.code = 32; f.state = 1; f.proven = 1; SG.push_back(f); }
+        { sb::Fact f; f.bar = ctOf(a.dt[nb - 1]) + 100; f.lo = 7843.5; f.hi = 7846.5; f.side = 1; f.val = 109; f.code = 30; f.state = 0; SG.push_back(f); }
+        sb::postFacts('S', a.sym, a.spb, MOCK_CHART, dpNowMs(), SG); sb::postFacts('B', a.sym, a.spb, MOCK_CHART, dpNowMs(), B);
+        std::vector<Op> G = drawOn(X, a, MOCK_CHART); DealerProfile::ColsState cg = colsOf(X, a);
+        if (getenv("DP_GRADE_DUMP")) { const char* d0 = DUMP; DUMP = getenv("DP_GRADE_DUMP"); dump(G, a, cg); DUMP = d0; }
+        const Op* k4 = nullptr; const Op* tst = nullptr; int white = 0, dark = 0, held = 0, heldWord = 0;
+        for (auto& q : G) { if (q.kind == "text" && q.text == "4/4" && q.l >= lqL) k4 = &q; if (q.kind == "text" && q.text == "1:49" && q.l >= lqL) tst = &q;
+            if (q.kind == "box" && q.l >= lqL && q.col == 0xFFFFFF && q.b - q.t < 20) ++white; if (q.kind == "box" && q.l >= lqL && q.col == 0x334155 && q.b - q.t < 20) ++dark;
+            if (q.kind == "line" && q.font == 2 && q.t == q.b && q.r < lqL && q.col == 0xEF4444) ++held; if (q.kind == "text" && q.text == "HELD" && q.r < lqL) ++heldWord; }
+        check(k4 && k4->col == 0x22C55E, "the king's row: score 4/4 in green");
+        check(tst != nullptr, "rank 2 testing: the countdown 1:49");
+        check(white == 4 && dark == 4, "4 white tags (all passed) on the king's bar + 4 dark tags on the testing row (" + std::to_string(white) + " / " + std::to_string(dark) + ")");
+        check(held == 1 && heldWord == 1 && cg.heldLines == 1, "the HELD line (2 px, offer red) + HELD in the price area (" + std::to_string(held) + " / " + std::to_string(heldWord) + ")");
+        { std::vector<sb::Fact> none; sb::postFacts('S', a.sym, a.spb, MOCK_CHART, dpNowMs(), none); }
+    }
     // ---- the steady board: a new node waits 30 s (production persistence), a gone node leaves after 10 s
     {   CUR = &a; X.loadHostState(); t10::Params P1; P1.n = DP_BOOKN; X.cs.bBoard = t10::Board(P1); X.cs.bInit = true; X.saveHostState();
         sb::postFacts('B', a.sym, a.spb, MOCK_CHART, dpNowMs(), B); std::vector<Op> O2 = drawOn(X, a, MOCK_CHART);
