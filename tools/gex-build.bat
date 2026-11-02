@@ -78,6 +78,10 @@ REM (2026-10-28 11:4x CT) lsWavePOC 1.1.0: + WavePOCLiq.h (liquidity nodes from 
 call :one WavePOC lsWavePOC WavePOCLogic.h WavePOCLiq.h WavePOCSettings.h SettingsSpec.h SettingsHost.h HostSlot.h
 REM (2026-11-01) lsCandleAbsorb 1.0.0 "Candle Absorb" (Rassul 2026-10-31 "implement waht we have disuccessed"): A / Ae / D / S at ZigZag pivots + the delta POC dash on every candle; no settings
 call :one CandleAbsorb lsCandleAbsorb CandleAbsorbLogic.h HostSlot.h
+REM (2026-11-01 22:24 CT, Rassul "build") lsCobSignal 1.0.0 "CoB Signal": his CoB natively (+ PHH / PHL), Cob / Cob+R / Cob+V; no settings
+call :one CobSignal lsCobSignal CobSignalLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h CobImpulseLogic.h HostSlot.h SettingsGuard.h
+REM (2026-11-01 22:24 CT) lsBigPrint 1.0.0 "Big Print": one pane - biggest ask / bid print in N bars, V in N, BGB / BRB; replaces his BV_Since / BRB / BGB panes; no settings
+call :one BigPrint lsBigPrint BigPrintLogic.h HostSlot.h SettingsGuard.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
 rem (2026-11-01 cleanup, Rassul approved: not loaded on any chart - retired) call :one FootprintReaderES lsFootprintReaderES IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
 rem (2026-11-01 cleanup, Rassul approved: not loaded on any chart - retired) call :one FootprintReaderNQ lsFootprintReaderNQ IRTReader.cpp IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
@@ -335,7 +339,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - new builds install after 15:15 CT, when Investor/RT is closed ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile DealerProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk) do (
+for %%N in (GammaProfile DealerProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
