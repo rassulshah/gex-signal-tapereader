@@ -25,6 +25,7 @@ static const char* KEYS_ES = "KEYLV,1,1793500000\nL|ONH|7713.00|0\nL|AsiaHI/PFL|
 static hl::View shotView(bool sw) {   // his ES box (Exp / Act / Feed) + the Oct 30 sweep rows
     hl::View v; v.has = true; v.prior = false;
     v.headLeftSegs.push_back(hl::Seg{ "ES RTH 8:30-3:00", hl::C_SLATE }); v.trendReady = true; v.trendLvl = -1;
+    v.sessSegs.push_back(hl::Seg{ "Regime Negative", hl::C_RED });
     v.E[hl::K_1ST] = hl::mkCell("8:33 - 9:21", hl::C_BLUE); v.headTail = "LOD after 9:30";
     v.A[hl::K_1ST] = hl::mkCell("8:33", hl::C_SLATE); v.A[hl::K_1ST].s2 = "HOD"; v.A[hl::K_1ST].col2 = hl::C_GREEN;
     v.A[hl::K_2ND] = hl::mkCell("1:54", hl::C_SLATE); v.A[hl::K_2ND].s2 = "LOD"; v.A[hl::K_2ND].col2 = hl::C_RED;
@@ -33,7 +34,7 @@ static hl::View shotView(bool sw) {   // his ES box (Exp / Act / Feed) + the Oct
         std::vector<hsw::Row> hi, lo; hsw::build(hsw::parse(FILE_ES, "ES"), L, 7669.50, 2, hi, lo);
         const hsw::File F = hsw::parse(FILE_ES, "ES"); v.tmOk = hsw::timeCum(F, v.tmCum);
         v.hdrExtra.push_back(hl::Seg{ "Day  " + hsw::dayText(F, hsw::onTercile(F, 49.0, 58.53)), hl::C_SLATE });
-        v.hdrExtra.push_back(hl::Seg{ "RTH 83% done", hl::C_SLATE }); v.hdrExtra.push_back(hl::Seg{ "Bar 2:13 left", hl::C_SLATE });
+        v.hdrLeft.push_back(hl::Seg{ "RTH 83% done", hl::C_SLATE }); v.hdrLeft.push_back(hl::Seg{ "Bar 2:13 left", hl::C_SLATE });
         v.swOn = true; for (auto& r : hi) v.swHi.push_back(hl::View::SwRow{ r.name, r.px, r.pct, r.elig }); for (auto& r : lo) v.swLo.push_back(hl::View::SwRow{ r.name, r.px, r.pct, r.elig });
     }
     return v;
@@ -83,7 +84,10 @@ int main() {
         CHECK(bars == 12, "12 % bars (" + std::to_string(bars) + ")");
         const hl::Item* dy = nullptr; for (const hl::Item& it : tx) if (it.s.find("Day  ON range mid") == 0) dy = &it;
         const hl::Item* bl = find(tx, "Bar 2:13 left"); const hl::Item* rh = find(tx, "RTH 83% done");
-        CHECK(dy && bl && rh && dy->t < L.table.t + 30 && dy->r <= rh->l && rh->r <= bl->l, "header extras in order: Day | RTH | Bar");
+        const hl::Item* es = find(tx, "ES");
+        { const hl::Item* dt = find(tx, "Downtrend"); const hl::Item* gp = find(tx, "-GAMMA");
+          CHECK(dt && gp && gp->r <= dt->l && std::abs((gp->l - 6 + dt->r) / 2 - (L.table.l + L.table.r) / 2) <= 2 && bl && bl->r < gp->l && dy && dt->r < dy->l, "header: -GAMMA Downtrend centred"); }
+        CHECK(dy && bl && rh && es && dy->t < L.table.t + 30 && es->r <= rh->l && rh->r <= bl->l && bl->r < dy->l, "header: ES | RTH | Bar ... Day (right)");
         CHECK(!find(tx, "Feed"), "no Feed row");
         CHECK(find(tx, "7,674.50") && find(tx, "46%") && find(tx, "above open") && find(tx, "above open")->c1 == hl::C_DIM, "prices, % and a dimmed 'above open'");
         int out = 0; for (const hl::Item& it : tx) if (!inside(hl::Box{ it.l, it.t, it.r, it.b }, L.table) && !(L.gexOk && inside(hl::Box{ it.l, it.t, it.r, it.b }, L.gexRow))) ++out;
