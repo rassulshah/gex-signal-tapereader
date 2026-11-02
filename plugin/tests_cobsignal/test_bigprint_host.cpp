@@ -35,6 +35,11 @@ static void chart(mock::Host& H, const Fix& F, int upto, int first) {
     H.lo = 0; H.hi = 1; H.first = first; H.paneR = 10 * (upto - first + 1) + H.rightMargin; H.paneB = 300;
 }
 static void mdraw(BigPrint& x) { mock::current->drawing = true; x.draw(); mock::current->drawing = false; }
+static int bbaRun(const std::vector<double>& x, const std::vector<bool>& ok, int i) {   // (1.0.1) lsBigBidAsk::backCount
+    if (!ok[(size_t)i] || !(x[(size_t)i] > 0)) return 0; int n = 0;
+    for (int k = i - 1; k >= 0 && n < 50; --k) { if (!ok[(size_t)k] || x[(size_t)k] >= x[(size_t)i]) break; ++n; }
+    return n;
+}
 static int brute(const std::vector<double>& x, const std::vector<bool>& ok, const std::vector<bool>& skip, int i) {
     if (!ok[(size_t)i] || skip[(size_t)i]) return 0;
     for (int k = i - 1; k >= 0 && i - k < 100; --k) { if (skip[(size_t)k]) continue; if (!ok[(size_t)k] || x[(size_t)k] > x[(size_t)i]) return i - k; }
@@ -50,9 +55,9 @@ int main(int argc, char** argv) {
     {   std::vector<bpr::Bar> B; auto mk = [](double v, double o, double c, double h, double l) { bpr::Bar b; b.v = v; b.o = o; b.c = c; b.h = h; b.l = l; b.vap = true; b.bigAsk = v; b.bigBid = v; return b; };
         B.push_back(mk(50, 1, 2, 3, 0)); B.push_back(mk(10, 2, 1, 3, 1)); B.push_back(mk(10, 1, 2, 2, 1));
         bpr::Counts c = bpr::countsAt(B, 3, mk(20, 1, 2, 4, 1));
-        CHECK(c.vol == 3 && c.ask == 3, "20 after 50, 10, 10: the bigger bar 3 back -> 3 (" << c.vol << ")");
+        CHECK(c.vol == 3 && c.ask == 2, "20 after 50, 10, 10: V = 3 (the platform since), ask = 2 smaller prints in a row (lsBigBidAsk) (" << c.vol << ", " << c.ask << ")");
         c = bpr::countsAt(B, 3, mk(10, 1, 2, 2, 1));
-        CHECK(c.vol == 3, "a tie is not bigger: 10 after 50, 10, 10 -> the 50 three back (" << c.vol << ")");
+        CHECK(c.vol == 3 && c.ask == 0, "a tie: V skips it (-> 3), the print count stops at it (-> 0, as the lsBigBidAsk box) (" << c.vol << ", " << c.ask << ")");
         CHECK(c.green == 3, "BGB: a green range-1 bar vs green bars only (the red bar skipped): the equal one 1 back is not bigger, the range-3 one 3 back is -> 3 (" << c.green << ")");
     }
     // ---- the fixture through the host
@@ -65,15 +70,28 @@ int main(int argc, char** argv) {
             notG.push_back(!(F.bars[(size_t)i][3] > F.bars[(size_t)i][0])); notR.push_back(!(F.bars[(size_t)i][3] < F.bars[(size_t)i][0])); none.push_back(false); }
         bool same = true; int strongA = 0, strongB = 0;
         for (int i = 0; i < n - 1; ++i) { const bpr::Counts& c = S->E.C[(size_t)i];
-            same = same && c.ask == brute(ask, okV, none, i) && c.bid == brute(bid, okV, none, i) && c.vol == brute(vol, okV, none, i) && c.green == brute(rng, okAll, notG, i) && c.red == brute(rng, okAll, notR, i);
+            same = same && c.ask == bbaRun(ask, okV, i) && c.bid == bbaRun(bid, okV, i) && c.vol == brute(vol, okV, none, i) && c.green == brute(rng, okAll, notG, i) && c.red == brute(rng, okAll, notR, i);
             strongA += c.ask >= 35; strongB += c.bid >= 35; }
         CHECK(same, "host counts = brute force for ask / bid / V / BGB / BRB on every bar");
         std::cerr << "fixture: ask >= 35 on " << strongA << " bars, bid >= 35 on " << strongB << "\n";
     }
+    // (1.0.1) one price arriving as TWO rows (IRT can send a float price twice) is merged first, as lsBigBidAsk does: split every even row
+    {   Fix G = F; long long split = 0;
+        for (size_t i = 0; i < G.vap.size(); ++i) { std::vector<std::pair<float, long long> > v2; std::vector<long long> d2;
+            for (size_t k = 0; k < G.vap[i].size(); ++k) { const long long t = G.vap[i][k].second, d = G.d[i][k];
+                if (t % 4 == 0 && d % 4 == 0 && t > 0) { v2.push_back(std::make_pair(G.vap[i][k].first, t / 2)); d2.push_back(d / 2); v2.push_back(std::make_pair(G.vap[i][k].first, t / 2)); d2.push_back(d / 2); ++split; }
+                else { v2.push_back(G.vap[i][k]); d2.push_back(d); } }
+            G.vap[i] = v2; G.d[i] = d2; }
+        mock::Host H2; mock::current = &H2; H2.root = "ES"; H2.sym = "ESZ26"; chart(H2, G, n - 1, n - 130);
+        BigPrint y; y.calc(0); BPState* S2 = static_cast<BPState*>(H2.userData);
+        bool same = S2 && S2->E.C.size() == S->E.C.size();
+        for (size_t i = 0; same && i < S->E.C.size(); ++i) same = S2->E.C[i].ask == S->E.C[i].ask && S2->E.C[i].bid == S->E.C[i].bid;
+        CHECK(split > 100 && same, "(1.0.1) split rows of one price give the SAME counts as whole rows (" << split << " rows split)");
+        mock::current = &A; }
     // the forming bar never changes a closed bar
     {   std::vector<bpr::Counts> before = S->E.C; A.vap.back().push_back(std::make_pair(7000.0f, 99999LL)); A.vapD.back().push_back(99999); x.calc(0);
         bool same = before.size() == S->E.C.size(); for (size_t i = 0; same && i < before.size(); ++i) same = before[i].ask == S->E.C[i].ask && before[i].bid == S->E.C[i].bid;
-        CHECK(same && S->formC.ask >= 100, "the forming bar's huge print moves only its own count (" << S->formC.ask << ")"); }
+        CHECK(same && S->formC.ask == 50, "the forming bar's huge print moves only its own count (" << S->formC.ask << ")"); }
     // the draw
     A.vapReads = 0; A.drawn.clear(); mdraw(x);
     CHECK(A.vapInDraw == 0, "VAP never read in draw()");
@@ -91,7 +109,7 @@ int main(int argc, char** argv) {
     // the settings-window copy
     {   mock::Host D; D.dialog = true; D.root = ""; mock::current = &D; BigPrint z; z.calc(0); mdraw(z); CHECK(D.drawn.empty(), "the Add / settings copy with no chart draws nothing"); }
     { std::ifstream f("../BigPrint.cpp"); std::stringstream s; s << f.rdbuf(); const std::string src = s.str(); const size_t p = src.find("p->setVersion(\""); const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-      CHECK(lit == BP_VERSION && lit == bpr::VERSION && lit == "1.0.0", "version literals match (" << lit << ")"); }
+      CHECK(lit == BP_VERSION && lit == bpr::VERSION && lit == "1.0.1", "version literals match (" << lit << ")"); }
     std::cout << "test_bigprint_host: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

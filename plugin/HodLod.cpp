@@ -272,6 +272,9 @@ struct HLState {
     bp::Hyst hyst; long long hystPlaceSig = -3; std::string placeLine; hl::Box hystPane = { 0, 0, 0, 0 };                           // (2.0.6) the table's place: no ping-pong (reset when the settings change)
     // (2.6.0) the PRE-OPEN BOOK: the engine of today's open, its order feed (+ 250 ms clock), the record, the row's hover
     po::Engine pre; hlpo::Feed preFeed; int preTimerId = 0; bool preTimerOn = false, preTimerTried = false, preBusy = false;
+    // (2.15.2, Rassul 2026-11-02 05:03 / 05:20 CT "the bar left is not automatically being updated, it only updates as i move my mouse")
+    // a 1 s clock: redraws the chart only when the header's "Bar m:ss left" text would change (once a second, never faster)
+    int clkTimerId = 0; bool clkOn = false, clkTried = false; long long clkLastSec = -1, clkFires = 0, clkRedraws = 0;
     long long preDay = -1; bool preNearFrozen = false; bool preSnapWritten = false, preImbWritten = false; long long preWrites = 0, preWriteFails = 0, preRestored = 0;
     RTDATE preStampKey = 0; long long preStampMs = 0; long long preRouted = 0; std::string preState = "not started"; double preTick = 0; std::string preSym; long prePer = 0;
     po::Line preLine; long long preLineMs = -100000; bool preShow = true; int preMin = 15;
@@ -294,6 +297,15 @@ public:
     void preRestore(HLState& S);
     void preStopTimer(HLState& S) { if (S.preTimerOn) { destroyTimer(S.preTimerId); S.preTimerOn = false; } if (S.preTimerId) preTimers().erase(S.preTimerId); S.preTimerId = 0; }
     static std::map<int, HLState*>& preTimers() { static std::map<int, HLState*> m; return m; }
+    static std::map<int, HLState*>& clkTimers() { static std::map<int, HLState*> m; return m; }   // (2.15.2) the bar-countdown clock
+    void clkStart(HLState& S)
+    {   // once per chart state, only on a real chart (S.mi >= 0, a bar size): the settings-window copy never gets a clock
+        if (S.clkTried || S.clkOn || S.mi < 0 || S.per <= 0 || S.per > 3600) return;
+        S.clkTried = true; int id = 8700 + (int)(((uintptr_t)&S >> 4) % 1000);
+        while (preTimers().count(id) || clkTimers().count(id)) ++id;
+        if (createTimer(id, 1000) == RTX_OK) { S.clkTimerId = id; S.clkOn = true; clkTimers()[id] = &S; }
+    }
+    void clkStop(HLState& S) { if (S.clkOn) { destroyTimer(S.clkTimerId); S.clkOn = false; } if (S.clkTimerId) clkTimers().erase(S.clkTimerId); S.clkTimerId = 0; }
     void loadGex(HLState& S);
     void loadQ(HLState& S);                                          // (2.3.0)
     void loadSweeps(HLState& S);                                     // (2.13.0)
@@ -328,7 +340,7 @@ public:
         HLState* S = slot_.get(this, false);
         if (S && S->hlbPosted) { bdk::clearHodLod(S->hlbSym, S->hlbSpb, S->hlbChart); bdk::clearHodLodTable(S->hlbSym, S->hlbSpb, S->hlbChart); S->hlbPosted = false; }   // (2.4.1)
         if (S && S->mstPosted) { mst::clear("HODLOD", S->mstSym, S->mstSpb, S->mstChart); mst::clear("TREND", S->mstSym, S->mstSpb, S->mstChart); S->selfHL.clear(S->mstSym, S->mstSpb, S->mstChart); S->selfTR.clear(S->mstSym, S->mstSpb, S->mstChart); S->aw.clear(S->mstSym, S->mstSpb, S->mstChart); S->mstPosted = false; }
-        if (S) { preStopTimer(*S); S->preFeed.close(); }            // (2.6.0) the clock stops before the state goes; the feed unsubscribes
+        if (S) { preStopTimer(*S); clkStop(*S); S->preFeed.close(); }   // (2.15.2) the countdown clock stops too            // (2.6.0) the clock stops before the state goes; the feed unsubscribes
         slot_.release(this);
     }
     void refresh(HLState& S);
@@ -370,6 +382,7 @@ int cppExtension::calc(int)
     HLState* S = x->state(true);
     if (S) x->refresh(*S);
     if (S && S->mi >= 0) x->preTick(*S);                               // (2.6.0) the pre-open book's feed is read on every calc too
+    if (S && S->mi >= 0) x->clkStart(*S);                              // (2.15.2) the 1 s bar-countdown clock (real chart only)
     return RTX_OK;
 }
 
@@ -1343,6 +1356,15 @@ void HodLod::preTick(HLState& S)
 int HodLod::timer(RTX_EVENT* e)
 {
     if (!e) return RTX_FAIL;
+    {   // (2.15.2) the bar-countdown clock: one redraw when the second changes, nothing else (the draw computes the text from the clock)
+        std::map<int, HLState*>::const_iterator ic = clkTimers().find(e->v.timer.id);
+        if (ic != clkTimers().end()) {
+            HLState* C = ic->second; if (!C) return RTX_OK;
+            try { ++C->clkFires; const long long sec = hlNowCt();
+                  if (sec != C->clkLastSec) { C->clkLastSec = sec; ++C->clkRedraws; invalidateChart(false); } } catch (...) {}
+            return RTX_OK;
+        }
+    }
     HLState* S = nullptr;
     { std::map<int, HLState*>::const_iterator it = preTimers().find(e->v.timer.id); if (it != preTimers().end()) S = it->second; }
     if (!S) return RTX_FAIL;                                                // not ours
@@ -1706,6 +1728,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.15.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.15.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

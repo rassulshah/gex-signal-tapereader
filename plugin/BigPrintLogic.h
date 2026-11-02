@@ -19,8 +19,9 @@
 
 namespace bpr {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // (1.0.1, Rassul 2026-11-02 05:02 / 05:23 CT "the big print indicator doesn't match the signal") the ask / bid numbers = lsBigBidAsk's "biggest in N" box exactly: split rows of one price merged, N = the run of earlier candles whose biggest is SMALLER (an equal one stops it), cap 50   // was "1.0.0":
 static const int CAP = 100, SHOW = 10, STRONG = 35, MAX_BARS = 20000;
+static const int PRINT_CAP = 50;   // (1.0.1) lsBigBidAsk's cap (bbaset::CAP)
 
 struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0, v = 0; bool vap = false; double buy = 0, sell = 0, bigAsk = 0, bigBid = 0; };
 struct Counts { int ask = 0, bid = 0, vol = 0, green = 0, red = 0; };
@@ -36,12 +37,23 @@ inline int since(const std::vector<Bar>& B, int i, const Bar& cur, Val val, Ok o
     for (int k = i - 1; k >= 0 && i - k < CAP; --k) { const Bar& b = B[(size_t)k]; if (skip(b)) continue; if (!ok(b) || val(b) > x) return i - k; }
     return std::min(CAP, i + 1);
 }
+// (1.0.1) THE PRINT COUNT = lsBigBidAsk::backCount: how many earlier candles in a row have a SMALLER biggest print of the same side
+// (an equal or bigger one ends the run; a candle with no volume at price ends it too), capped at PRINT_CAP. No print = 0.
+template <class Val>
+inline int printRun(const std::vector<Bar>& B, int i, const Bar& cur, Val val)
+{
+    if (!cur.vap) return 0;
+    const double x = val(cur); if (!(x > 0)) return 0;
+    int n = 0;
+    for (int k = i - 1; k >= 0 && n < PRINT_CAP; --k) { const Bar& b = B[(size_t)k]; if (!b.vap || val(b) >= x) break; ++n; }
+    return n;
+}
 inline Counts countsAt(const std::vector<Bar>& B, int i, const Bar& cur)   // cur = B[i] or the forming bar (i = B.size())
 {
     Counts c;
-    auto hasVap = [](const Bar& b) { return b.vap; }; auto none = [](const Bar&) { return false; };
-    c.ask = since(B, i, cur, [](const Bar& b) { return b.bigAsk; }, hasVap, none);
-    c.bid = since(B, i, cur, [](const Bar& b) { return b.bigBid; }, hasVap, none);
+    auto none = [](const Bar&) { return false; };
+    c.ask = printRun(B, i, cur, [](const Bar& b) { return b.bigAsk; });   // (1.0.1) = the lsBigBidAsk box
+    c.bid = printRun(B, i, cur, [](const Bar& b) { return b.bigBid; });
     c.vol = since(B, i, cur, [](const Bar& b) { return b.v; }, [](const Bar& b) { return b.v > 0; }, none);
     auto rng = [](const Bar& b) { return b.h - b.l; }; auto okR = [](const Bar& b) { return b.h >= b.l; };
     c.green = since(B, i, cur, rng, okR, [](const Bar& b) { return !(b.c > b.o); });
@@ -114,7 +126,7 @@ inline Scene layout(const Engine& E, const View& v)
 inline std::string statusText(const Engine& E, const std::string& mkt, const std::string& sym, int spb, long long noVap, const Scene& last)
 {
     std::string o = std::string("VERSION,") + VERSION + "\nMARKET," + mkt + "\nSYMBOL," + sym + "\nBAR_SECONDS," + std::to_string(spb) + "\nBARS," + std::to_string(E.B.size()) +
-                    "\nNO_VAP," + std::to_string(noVap) + "\nRULES,ask / bid = biggest one-price print in N bars (shown >= 10, bold >= 35, cap 100); V >= 35; bright bar = BGB / BRB >= 35\n";
+                    "\nNO_VAP," + std::to_string(noVap) + "\nRULES,ask / bid = lsBigBidAsk biggest in N (smaller prints in a row; shown >= 10, bold >= 35, cap 50); V >= 35 (cap 100); bright bar = BGB / BRB >= 35\n";
     const int n = (int)E.B.size();
     if (n > 0) { const Counts& c = E.C.back(); const Bar& b = E.B.back();
         char buf[200]; std::snprintf(buf, sizeof buf, "LAST,buy %.0f,sell %.0f,ask in %d,bid in %d,V in %d,BGB %d,BRB %d\n", b.buy, b.sell, c.ask, c.bid, c.vol, c.green, c.red); o += buf; }

@@ -1,5 +1,5 @@
 /********************************************************************************
- *  BigPrint.cpp  --  Investor/RT RTX extension  lsBigPrint  "Big Print"  1.0.0  (2026-11-01)
+ *  BigPrint.cpp  --  Investor/RT RTX extension  lsBigPrint  "Big Print"  1.0.1  (2026-11-02; 1.0.0 2026-11-01)
  *
  *  Rassul 2026-11-01 22:12-22:24 CT (mockup cob_ba_mockup v2 "build"): ONE pane replacing his BV_Since / BVGB / BVRB / BRB_Since /
  *  BGB_Since panes. Per bar a green bar (volume bought at the ask) and a red bar (sold at the bid) side by side up from the baseline;
@@ -29,7 +29,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <ctime>
+#include <map>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -41,7 +43,7 @@
 #define BP_SEP "/"
 #endif
 
-static const char* BP_VERSION = "1.0.0";   // = bpr::VERSION = the setVersion literal
+static const char* BP_VERSION = "1.0.1";   // (1.0.1) the numbers = lsBigBidAsk's boxes   // was "1.0.0":   // = bpr::VERSION = the setVersion literal
 
 static long long bpMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bpFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BP_SEP "InvestorRT" BP_SEP "rtx" BP_SEP "lsFlexLevels" : std::string(); }
@@ -134,11 +136,17 @@ int BigPrint::prints(BPState& S, int chartBar, bpr::Bar& b) {
     const int got = readPrices(&vap, chartBar, &rv[0], prices);
     if (got == -1) { S.vapFault = true; return -1; }
     if (got < 0) return 0;
+    // (1.0.1) rows of the SAME price (a float price can arrive twice for one tick) are added together first, as lsBigBidAsk does
+    const double tick = S.tickKey > 0 ? (double)S.tickKey / 1e9 : 0.0;
+    std::map<long long, std::pair<double, double> > at;   // tick key -> (bought at the ask, sold at the bid)
     for (const VOLPROFILE& v : rv) {
         if (v.buyVolume < 0 || v.sellVolume < 0) continue;
         b.buy += (double)v.buyVolume; b.sell += (double)v.sellVolume;
-        b.bigAsk = std::max(b.bigAsk, (double)v.buyVolume); b.bigBid = std::max(b.bigBid, (double)v.sellVolume);
+        const double px = (double)v.price;
+        const long long key = tick > 0 && std::isfinite(px) ? std::llround(px / tick) : (long long)std::llround(px * 1e6);
+        std::pair<double, double>& r = at[key]; r.first += (double)v.buyVolume; r.second += (double)v.sellVolume;
     }
+    for (const auto& r : at) { b.bigAsk = std::max(b.bigAsk, r.second.first); b.bigBid = std::max(b.bigBid, r.second.second); }
     b.vap = b.buy + b.sell > 0;
     return b.vap ? 1 : 0;
 }
@@ -234,7 +242,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigPrint* p = new BigPrint();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself
-    p->setDescription("LRA Big Print v1.0.0 - one pane for the biggest prints: green = bought at the ask, red = sold at the bid (side by side); the number over each bar = its biggest one-price ask / bid print is the biggest in N bars (from 10, bold from 35); V = biggest volume in N bars (from 35); a bright bar = the biggest green / red candle in 35+ bars. Replaces BV_Since / BVGB / BVRB / BRB_Since / BGB_Since.");
-    p->setVersion("1.0.0");   // = BP_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Big Print v1.0.1 - one pane for the biggest prints: green = bought at the ask, red = sold at the bid (side by side); the number over each bar = its biggest one-price ask / bid print is the biggest in N bars (lsBigBidAsk's count: smaller prints in a row, cap 50; from 10, bold from 35); V = biggest volume in N bars (from 35); a bright bar = the biggest green / red candle in 35+ bars. Replaces BV_Since / BVGB / BVRB / BRB_Since / BGB_Since.");
+    p->setVersion("1.0.1");   // = BP_VERSION (gex-build reads this literal)
     return p;
 }
