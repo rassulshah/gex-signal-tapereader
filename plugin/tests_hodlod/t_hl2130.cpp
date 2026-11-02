@@ -115,6 +115,15 @@ int main() {
         }
         CHECK(bad == 0 && runs == 36 && withSw >= 18, std::to_string(runs) + " layouts clean, " + std::to_string(withSw) + " with sweeps (" + std::to_string(bad) + " bad)");
     }
+    {   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") gamma levels on the view, still no strip above the box
+        hl::View v = shotView(true);
+        hl::View::GexItem a; a.strike = "7650"; a.name = "PS0"; a.above = true; v.gexItems.push_back(a);
+        hl::View::GexItem m; m.strike = "7659.25"; m.mid = true; v.gexItems.push_back(m);
+        hl::View::GexItem b; b.strike = "7625"; b.name = "G2"; b.above = false; v.gexItems.push_back(b);
+        const hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);
+        bool none = true; for (const hl::Item& it : L.items) if (it.s == "PS0" || it.s == "G2" || it.s.find("7659.25") != std::string::npos) none = false;
+        CHECK(L.tableOk && !L.gexOk && none && !hl::HL_SHOW_GEX_LADDER, "(2.15.3) no gamma strip above the box, even with gamma levels on hand");
+    }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }
