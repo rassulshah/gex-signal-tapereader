@@ -33,10 +33,10 @@ int main(int argc, char** argv) {
             if (x.t == 'A') CHECK(x.row == 40 && x.bull, "A? on row 40 (against, first half) in the wave's colour (green: sellers absorbed)");
             if (x.t == 'T') CHECK(x.row == 90 && !x.bull, "T? on row 90 (with, last 20%) in the opposite colour (red: buyers trapped)");
         }
-        CHECK(count(wpc::letters(upWave({{50, 95}}), B), 'I') == 1 && count(wpc::letters(upWave({{51, 95}}), B), 'I') == 0, "I? up to the halfway mark (50% yes, 51% no)");
-        CHECK(count(wpc::letters(upWave({{50, -95}}), B), 'A') == 1 && count(wpc::letters(upWave({{51, -95}}), B), 'A') == 0, "A? up to the halfway mark (50% yes, 51% no)");
+        CHECK(count(wpc::letters(upWave({{66, 95}}), B), 'I') == 1 && count(wpc::letters(upWave({{67, 95}}), B), 'I') == 0, "I? up to 66% of the wave (66% yes, 67% no)");
+        CHECK(count(wpc::letters(upWave({{66, -95}}), B), 'A') == 1 && count(wpc::letters(upWave({{67, -95}}), B), 'A') == 0, "A? up to 66% of the wave (66% yes, 67% no)");
         CHECK(count(wpc::letters(upWave({{80, 95}}), B), 'T') == 1 && count(wpc::letters(upWave({{79, 95}}), B), 'T') == 0, "T? from 80% (80% yes, 79% no)");
-        CHECK(wpc::letters(upWave({{65, 95}, {90, -95}}), B).empty(), "with the wave at 65% and against it in the last 20%: no letter");
+        CHECK(wpc::letters(upWave({{70, 95}, {90, -95}}), B).empty(), "with the wave at 70% and against it in the last 20%: no letter");
         CHECK(wpc::letters(upWave({{10, 19}}), B).empty(), "a 1.9x row: no letter");
         wpc::Wave w4 = upWave({{10, 300}, {20, 290}, {30, 280}, {90, 95}});   // the green row near the top is only 4th biggest: no T
         CHECK(count(wpc::letters(w4, B), 'T') == 0, "a with-wave row near the top that is not in the top 3: no T");
