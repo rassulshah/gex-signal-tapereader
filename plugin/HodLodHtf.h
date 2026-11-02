@@ -16,7 +16,7 @@
 #include <vector>
 
 namespace htf {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.2.0";   // (1.2.0, Rassul 14:41 CT "put these values in the top row and make it fit by abbreviating") StrUp / Up / Side / Dn / StrDn, RS VStr / Str / Mod / Wk / VWk   // was "1.1.0";   // (1.1.0, Rassul 2026-11-02 14:41 CT) labels only: Strong Up / Up / Side / Dn / Strong Dn; RS Very Strong / Strong / Moderate / Weak / Very Weak   // was "1.0.0"
 static const int N_HOUR = 20, N_DAY = 10, RSI_N = 14;
 static const double TR_STRONG = 40, TR_MOD = 20, RS_STRONG = 60, RS_WEAK = 40, RS_OB = 70, RS_OS = 30;
 struct In { long long absEnd; double c; };   // bar END (local CT seconds since 1970) and its close
@@ -55,13 +55,16 @@ inline Out compute(const std::vector<In>& b) {
 }
 // display pieces: "Dn 3 Weak", "RS 37 Weak"; dir +1 up (green) / -1 down (red) / 0 neutral (grey)
 inline std::string trendText(double er, int& dir) {
-    const int s = (int)std::lround(std::fabs(er) * 100.0); dir = er > 0 && s > 0 ? 1 : er < 0 && s > 0 ? -1 : 0;
-    const char* q = s >= TR_STRONG ? "Strong" : s >= TR_MOD ? "Moderate" : "Weak";
-    char b[40]; std::snprintf(b, sizeof b, "%s %d %s", dir > 0 ? "Up" : dir < 0 ? "Dn" : "Flat", s, q); return b;
+    // (1.1.0, Rassul 14:41 CT "i just want Strong Up, Up, Dn, Strong Dn or Side") efficiency >= 40 Strong, 20-39 plain, < 20 Side
+    const int s = (int)std::lround(std::fabs(er) * 100.0);
+    if (s < TR_MOD) { dir = 0; return "Side"; }
+    dir = er > 0 ? 1 : -1; const bool st = s >= TR_STRONG;
+    return std::string(st ? "Str" : "") + (dir > 0 ? "Up" : "Dn");   // (1.2.0) abbreviated: StrUp / Up / Dn / StrDn
 }
 inline std::string rsText(double r, int& dir) {
+    // (1.1.0, Rassul 14:41 CT "for RS I want Very Strong, Strong, Moderate, Weak, Very Weak") RSI >= 70 / 60-69 / 41-59 / 31-40 / <= 30
     const int s = (int)std::lround(r); dir = s >= RS_STRONG ? 1 : s <= RS_WEAK ? -1 : 0;
-    const char* q = s >= RS_OB ? "Overbought" : s <= RS_OS ? "Oversold" : s >= RS_STRONG ? "Strong" : s <= RS_WEAK ? "Weak" : "Neutral";
+    const char* q = s >= RS_OB ? "VStr" : s >= RS_STRONG ? "Str" : s <= RS_OS ? "VWk" : s <= RS_WEAK ? "Wk" : "Mod";   // (1.2.0) Very Strong / Strong / Moderate / Weak / Very Weak
     char b[40]; std::snprintf(b, sizeof b, "RS %d %s", s, q); return b;
 }
 }  // namespace htf

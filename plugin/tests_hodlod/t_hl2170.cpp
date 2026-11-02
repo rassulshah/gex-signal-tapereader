@@ -12,10 +12,10 @@ int main() {
         std::vector<double> zz; for (int i = 0; i < 21; ++i) zz.push_back(i % 2 ? 101 : 100); CHECK(htf::efficiency(zz, 20, er) && std::fabs(er) < 1e-9, "up/down/up.. back to the start = 0");
         CHECK(!htf::efficiency(std::vector<double>(10, 1.0), 20, er), "too few closes = no value");
         double r = 0; CHECK(htf::rsi(up, 14, r) && r == 100.0, "only up-closes = RSI 100"); }
-    {   int d = 0; CHECK(htf::trendText(-0.03, d) == "Dn 3 Weak" && d < 0, "Dn 3 Weak"); CHECK(htf::trendText(0.45, d) == "Up 45 Strong" && d > 0, "Up 45 Strong");
-        CHECK(htf::trendText(-0.31, d) == "Dn 31 Moderate", "Dn 31 Moderate"); CHECK(htf::trendText(0.0, d) == "Flat 0 Weak" && d == 0, "Flat 0 Weak");
-        CHECK(htf::rsText(37.0, d) == "RS 37 Weak" && d < 0, "RS 37 Weak"); CHECK(htf::rsText(64, d) == "RS 64 Strong" && d > 0, "RS 64 Strong");
-        CHECK(htf::rsText(50, d) == "RS 50 Neutral" && d == 0, "RS 50 Neutral"); CHECK(htf::rsText(74, d) == "RS 74 Overbought", "RS 74 Overbought"); CHECK(htf::rsText(28, d) == "RS 28 Oversold", "RS 28 Oversold"); }
+    {   int d = 0; CHECK(htf::trendText(-0.03, d) == "Side" && d == 0, "(1.1.0) 3 = Side"); CHECK(htf::trendText(0.45, d) == "StrUp" && d > 0, "StrUp");
+        CHECK(htf::trendText(-0.31, d) == "Dn" && d < 0, "Dn"); CHECK(htf::trendText(0.25, d) == "Up", "Up"); CHECK(htf::trendText(-0.6, d) == "StrDn", "StrDn");
+        CHECK(htf::rsText(37.0, d) == "RS 37 Wk" && d < 0, "RS 37 Wk"); CHECK(htf::rsText(64, d) == "RS 64 Str" && d > 0, "RS 64 Str");
+        CHECK(htf::rsText(50, d) == "RS 50 Mod" && d == 0, "RS 50 Mod"); CHECK(htf::rsText(74, d) == "RS 74 VStr", "RS 74 VStr"); CHECK(htf::rsText(28, d) == "RS 28 VWk", "RS 28 VWk"); }
     {   // hours by bar END: 10:03 .. 11:00 = one hour; sessions from 17:00 CT
         std::vector<htf::In> b = { { 10 * 3600 + 180, 1 }, { 11 * 3600, 2 }, { 11 * 3600 + 180, 3 }, { 16 * 3600, 4 }, { 17 * 3600 + 180, 5 } };
         CHECK(htf::hourCloses(b) == std::vector<double>({ 2, 3, 4, 5 }), "hour closes by bar END");

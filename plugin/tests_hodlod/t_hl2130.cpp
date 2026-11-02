@@ -115,18 +115,17 @@ int main() {
         }
         CHECK(bad == 0 && runs == 36 && withSw >= 18, std::to_string(runs) + " layouts clean, " + std::to_string(withSw) + " with sweeps (" + std::to_string(bad) + " bad)");
     }
-    {   // (2.17.0, Rassul 2026-11-02 14:31 CT) the HTF trend / RS line under the header: inside the box, no overlaps, 1 row taller
+    {   // (2.17.2, Rassul 2026-11-02 14:41 CT) the HTF values IN the header row (abbreviated): after "Bar 2:13 left", before the -GAMMA pill, same box height
         hl::View v0 = shotView(true); hl::View v = shotView(true);
-        v.htf = { hl::Seg{ "60m", hl::C_GREY }, hl::Seg{ "Dn 3 Weak", hl::C_RED }, hl::Seg{ "RS 37 Weak", hl::C_RED }, hl::Seg{ "Day", hl::C_GREY }, hl::Seg{ "Dn 31 Moderate", hl::C_RED }, hl::Seg{ "RS 31 Weak", hl::C_RED } };
+        v.htf = { hl::Seg{ "60m", hl::C_GREY }, hl::Seg{ "Side", hl::C_SLATE }, hl::Seg{ "RS 37 Wk", hl::C_RED }, hl::Seg{ "D", hl::C_GREY }, hl::Seg{ "Dn", hl::C_RED }, hl::Seg{ "RS 31 Wk", hl::C_RED } };
         hl::Layout L0 = hl::layoutAll(v0, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);
         hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);
         const std::vector<hl::Item> tx = texts(L);
-        const hl::Item* a = find(tx, "60m"); const hl::Item* b = find(tx, "Dn 31 Moderate"); const hl::Item* es = find(tx, "ES"); const hl::Item* ss = find(tx, "SESSION");
+        const hl::Item* a = find(tx, "60m"); const hl::Item* b = find(tx, "RS 31 Wk"); const hl::Item* bl = find(tx, "Bar 2:13 left"); const hl::Item* gp = find(tx, "-GAMMA");
         int out = 0; for (const hl::Item& it : tx) if (!inside(hl::Box{ it.l, it.t, it.r, it.b }, L.table)) ++out;
-        const int rowH = es ? hl::lineH(es->fs) + 1 : 0;
-        CHECK(a && b && es && ss && a->t > es->t && a->b <= ss->t + 1 && a->l < b->l && b->c1 == hl::C_RED, "(2.17.0) the HTF line sits between the header and the SESSION strip, left to right");
-        CHECK(out == 0 && overlaps(tx) == 0, "(2.17.0) inside the box, no overlaps");
-        CHECK((L.table.b - L.table.t) - (L0.table.b - L0.table.t) == rowH + 1, "(2.17.0) the box is one row taller (" + std::to_string((L.table.b - L.table.t) - (L0.table.b - L0.table.t)) + ")"); }
+        CHECK(a && b && bl && gp && std::abs(a->t - bl->t) <= 1 && a->l > bl->r && b->r < gp->l && b->c1 == hl::C_RED, "(2.17.2) the HTF values sit in the header row between 'Bar left' and the gamma pill");
+        CHECK(out == 0 && overlaps(tx) == 0, "(2.17.2) inside the box, no overlaps");
+        CHECK(L.table.b - L.table.t == L0.table.b - L0.table.t, "(2.17.2) the box keeps its height (no extra row)"); }
     {   // (2.15.4, Rassul 2026-11-02 13:15 CT "put the time like 8:45, 8:30") the 1st-extreme heads as clock times from the market's open
         hl::View v = shotView(true); v.tmOpenMin = 510;   // ES 8:30
         hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);
