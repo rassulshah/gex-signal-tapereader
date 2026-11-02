@@ -171,14 +171,14 @@ static void testProvisionalAndOrigin() {
     wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = V[(size_t)i]; return 1; };
     std::vector<int> provEnd; wpc::Wave last;
     for (int k = 0; k <= 25; ++k) { E.addBar(B[(size_t)k], vap); wpc::Wave p; if (E.provisional(p, vap)) { provEnd.push_back(p.i1); last = p; } else provEnd.push_back(-1); }
-    CHECK(provEnd[15] == -1, "no provisional wave before the extreme is a 20-bar low");
+    CHECK(provEnd[15] >= 0, "(1.7.0, Rassul 13:28 CT \"moving with the wave\") the live wave is drawn before it qualifies");
     CHECK(provEnd[21] == 21 && provEnd[22] == 22 && provEnd[24] == 24, "the provisional wave moves to every new extreme (21, 22 .. 24)");
     CHECK(provEnd[25] == 24 && last.provisional && !last.nodes.empty(), "after the turn the provisional wave stays at the extreme (bar 24), dashed");
     // (1.3.2) IRT's zigzag starts at bar 0's low, so the 0 -> 10 rise is an up wave (confirmed at 13); the down wave is what this test follows
     auto downs = [&]() { std::vector<const wpc::Wave*> d; for (const wpc::Wave& w : E.waves) if (w.dir < 0) d.push_back(&w); return d; };
     CHECK(downs().empty(), "(1.3.2) nothing confirmed before IRT's reversal bar");
     E.addBar(B[26], vap); wpc::Wave p;
-    CHECK(!E.provisional(p, vap), "confirmed: the provisional copy is gone");
+    CHECK(!E.provisional(p, vap) || p.i0 >= 24, "confirmed: the old live copy is gone (any live leg now starts at the new pivot)");
     CHECK(downs().size() == 1 && downs()[0]->i0 == 10 && downs()[0]->i1 == 24 && downs()[0]->conf == 26, "(1.3.2) the wave confirmed at bar 26 (its high 99 beats the previous 3 highs 98) (10 -> 24)");
     if (downs().size() != 1) return;
     wpc::Wave& DW = const_cast<wpc::Wave&>(*downs()[0]);
@@ -279,7 +279,7 @@ static void testLayout(const Fix& F) {
             sp += n; if (n != 1) ok = false; }
         CHECK(ok && sp == 4, "(1.3.3) spines: 4 waves, one each, green up / red down, spanning the wave's range (" << sp << ")"); }
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.6.3", "header Wave POC v1.6.3");
+    CHECK(header && std::string(wpc::VERSION) == "1.7.0", "header Wave POC v1.7.0");
     {   // (1.4.0) the open WPOC handed to lsDealerProfile: the latest confirmed wave's node [0] while OPEN, else none
         long long tk = 0; const bool has = wpc::latestOpenPoc(E, tk);
         const wpc::Wave* lw = nullptr; for (const wpc::Wave& w : E.waves) if (!w.pending) lw = &w;
@@ -439,7 +439,7 @@ static void testCobSynthetic() {
     wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.atrMult = 1e9; E.tick = 0.25; E.cobFn = [&](int k) { auto it = flags.find(k); return it == flags.end() ? 0 : it->second; };
     bool early = false, prov = false;
     for (int k = 0; k <= 25; ++k) { E.addBar(Y.B[(size_t)k], vap); wpc::Wave p; early = early || !E.waves.empty(); prov = prov || E.provisional(p, vap); }
-    CHECK(!early && !prov, "CoB leg: nothing drawn before its end pivot is confirmed, no provisional CoB leg");
+    (void)prov; CHECK(!early, "CoB leg: nothing CONFIRMED before its end pivot is confirmed (1.7.0: the live leg itself is drawn while it runs)");
     E.addBar(Y.B[26], vap);
     CHECK(E.waves.size() == 1 && E.waves[0].kind == wpc::K_COB && E.waves[0].i0 == 10 && E.waves[0].i1 == 24 && E.waves[0].conf == 26, "CoB leg 10 -> 24 (not a wave) drawn at its confirmation, kind COB");
     if (E.waves.size() != 1) return;

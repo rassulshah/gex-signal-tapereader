@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.6.3";   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.7.0";   // (1.7.0, Rassul 2026-11-02 13:28 CT "it should continue to draw as the wave continues") the LIVE wave always drawn, forming bar included   // was "1.6.3":   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -57,7 +57,8 @@ static const double PROF_SCALE = 0.67;   // (1.2.0) the wave profile max width f
 static const double LNODE_W = 40;        // (1.2.0) the liquidity node max width (was 60 px)
 #define WPC_VERSION "1.5.0"
 // (1.5.0) the profile sides, letters and pullbacks
-static const bool TAG_LINES = false;   // (1.6.3) the leader line from the last bar to each right-edge tag (the tag text stays at its price)
+static const bool TAG_LINES = false;
+static const bool LIVE_ALWAYS = true;   // (1.7.0) the live zigzag leg is drawn from its first bars on (no 14-bar / average / ATR gate while live; confirmed waves keep the rules)   // (1.6.3) the leader line from the last bar to each right-edge tag (the tag text stays at its price)
 static const double SIDE_W = 38;   // (1.6.2, Rassul 2026-11-02 09:38 "make the profile 25% bigger", build 10:06) 30 -> 38 px   // was 30:        // px each side: volume (left) / delta (right) (Rassul 10-31 22:48 CT "40 px on both sides is too much, reduce to 30")
 static const double RALLY_MULT = 4.0;   // a rally / decline wave: bigger than 4 ATR on its own
 static const int LET_TOP = 3;   // (1.6.2, Rassul 2026-11-02 09:54 CT "first consider top 3 nodes, then placement")   // was 2:           // (1.5.0, Rassul 2026-11-01 06:35 CT "instead of 4 lets shorten it to 2") the 2 biggest delta rows (each >= 2x the wave median |delta|) are boxed and classified
@@ -115,7 +116,7 @@ struct Wave {
     std::vector<Node> nodes;              // rank order: [0] = WPOC
     std::vector<LNode> lnodes;            // (1.1.0) liquidity nodes, [0] = LPOC (empty = no book for this wave)
     bool liqTried = false, liqOk = false;
-    bool provisional = false, fromRecord = false, pending = false, recorded = false;
+    bool provisional = false, fromRecord = false, pending = false, recorded = false, liveOnly = false, withForming = false;   // (1.7.0)
     int vapMissing = 0;                   // bars of the wave IRT had no VAP for
     int scanned = 0;                      // stop rules evaluated up to this bar
     int kind = K_WAVE;                    // (1.3.0) WAVE / COB / BOTH
@@ -673,7 +674,14 @@ public:
 
     // the PROVISIONAL wave (live): IRT's live zigzag leg (last final pivot -> the live extreme) while it would qualify; moves with every
     // new extreme; it becomes the confirmed wave when IRT's rule reverses the leg.
-    bool provisional(Wave& w, VapFn& vap) {
+    // (1.7.0) form = the FORMING bar (not yet closed): when it extends the live leg it is the leg's extreme for this draw (its VAP rows
+    // through vap(lastBar() + 1)); the engine is left exactly as it was
+    bool provisional(Wave& w, VapFn& vap, const Bar* form = nullptr) {
+        if (form && !B.empty() && zDir != 0 && zI >= 0 && zI < (int)B.size() && (zDir > 0 ? form->h > B[(size_t)zI].h : form->l < B[(size_t)zI].l)) {
+            const int zSave = zI; B.push_back(*form); cob.push_back(0); zI = lastBar();
+            bool ok = false; try { ok = provisional(w, vap, nullptr); } catch (...) { ok = false; }
+            B.pop_back(); cob.pop_back(); zI = zSave; if (ok) w.withForming = true; return ok;
+        }
         w = Wave();
         if (alt.empty() || B.empty()) return false;
         // (1.3.2) IRT's live zigzag leg: from the last final pivot to the live leg's extreme, until IRT's rule reverses it
@@ -684,8 +692,11 @@ public:
         const bool cand = is20(e, dir);
         w.avg = cand && store ? store->avgBefore(dir, w.t1, w.nHist) : 0;
         {   const long long prevPx = alt.size() >= 2 && alt[alt.size() - 2].type == dir ? alt[alt.size() - 2].px : LLONG_MIN;   // (1.5.0)
-            if (rule == 133 && !cand) return false;
-            w.qWhy = rule == 133 ? qualify(w, e) : qualify5(w, a.i, e, cand, prevPx); if (!w.qWhy) return false; }
+            if (rule == 133 && !cand && !LIVE_ALWAYS) return false;
+            w.qWhy = (rule == 133 && !cand) ? 0 : (rule == 133 ? qualify(w, e) : qualify5(w, a.i, e, cand, prevPx));
+            if (!w.qWhy && !LIVE_ALWAYS) return false;
+            if (!w.qWhy) w.liveOnly = true;   // (1.7.0) drawn while live, not (yet) a qualifying wave
+            if (e - a.i + 1 < 2) return false; }
         if (!profile(w, vap)) return false;
         nodesFromRows(w); liquidity(w); clusterRef(w); w.scanned = w.i1; advance(w, k, false);
         return true;
