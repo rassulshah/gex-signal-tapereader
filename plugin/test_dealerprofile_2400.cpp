@@ -248,7 +248,7 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.43.0" && src.find("p->setVersion(\"2.43.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.43.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
+        check(std::string(DP_VERSION) == "2.44.0" && src.find("p->setVersion(\"2.44.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.44.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
         check(DP_BOOK && !DP_ODDS && DP_RANK_CHIPS && DP_LIQ_RANK_RIGHT && DP_KEYS_RIGHT && std::string(lpk::VERSION) == "1.0.0" && lpk::TOP == 5 && lpk::PCT == 0.50 && lpk::ATR_X == 1.0 && std::string(ltc::VERSION) == "1.4.0", "whole book, top 5, 50% / 1 ATR, no odds, no rank chips, Key Levels right (LiqPick 1.0.0, LiqTouch 1.3.0)");
     }
     dealerFile(true);
@@ -279,6 +279,11 @@ int main(int argc, char** argv)
     std::vector<Op> O = drawOn(X, a, MOCK_CHART);
     DealerProfile::ColsState c = colsOf(X, a);
     if (DUMP) dump(O, a, c);
+    // ---- (2.44.0) CR0 / PS0 in the Key Levels column; the other gamma levels (HVL 0D 7850) stay out
+    {   const int kL0 = c.lay.levels.l, kR0 = kL0 + c.keysW; int ps0 = 0, hvl = 0, gw = 0;
+        for (auto& q : O) if (q.kind == "text" && q.l >= kL0 && q.r <= kR0) { if (q.text == "PS0") ++ps0; if (q.text.compare(0, 3, "HVL") == 0) ++hvl; if (q.text.find("GW") != std::string::npos) ++gw; }
+        check(ps0 == 1 && hvl == 0 && gw == 0 && c.zeroDte >= 1, "(2.44.0) PS0 badge in Key Levels (" + std::to_string(ps0) + "), no HVL (" + std::to_string(hvl) + ") / GW (" + std::to_string(gw) + "), zeroDte " + std::to_string(c.zeroDte));
+        check(dcol::zeroDteName("CR0/GW0") == "CR0" && dcol::zeroDteName("PS0") == "PS0" && dcol::zeroDteName("PS0/G1") == "PS0" && dcol::zeroDteName("CR0/PS0") == "CR0/PS0" && dcol::zeroDteName("CR") == "" && dcol::zeroDteName("HVL") == "" && dcol::zeroDteName("PS1") == "", "(2.44.0) zeroDteName: CR0 / PS0 from merged names, nothing else"); }
     // ---- layout
     check(c.lay.w[cb::LEVELS] == 340, "(2.42.0) the published Levels width = Key Levels 170 + Liquidity 170 (" + std::to_string(c.lay.w[cb::LEVELS]) + ")");
     check(c.lay.delta.r <= c.lay.levels.l && c.lay.levels.r <= c.lay.dealer.l && cb::columnsClean(c.lay) && c.lay.w[cb::BIG] == 0, "right side: Delta | Key Levels + Liquidity | Dealer, clean, no LMT F (" + std::to_string(c.lay.delta.l) + " " + std::to_string(c.lay.levels.l) + " " + std::to_string(c.lay.dealer.l) + ")");

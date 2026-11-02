@@ -127,6 +127,18 @@ inline std::string compactName(const std::string& name0)
     if (o.compare(0, 4, "HVL0") == 0) o = "HVL" + o.substr(4);   // the flip level: "HVL" (mockup), its expiry is in the hover
     return o;
 }
+// (2.44.0) "CR0" / "PS0" (or "CR0/PS0") when a compact MenthorQ name holds today's 0DTE call resistance / put support, else ""
+inline std::string zeroDteName(const std::string& c)
+{
+    bool cr = false, ps = false; size_t a = 0;
+    while (a <= c.size()) {
+        size_t b = c.find('/', a); if (b == std::string::npos) b = c.size();
+        const std::string seg = c.substr(a, b - a);
+        if (seg == "CR0") cr = true; else if (seg == "PS0") ps = true;
+        a = b + 1;
+    }
+    return cr && ps ? std::string("CR0/PS0") : cr ? std::string("CR0") : ps ? std::string("PS0") : std::string();
+}
 // what a level is, by its first name (key levels from the chart; MenthorQ levels from the options book)
 inline std::string levelWhat(const std::string& name)
 {
