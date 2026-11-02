@@ -55,7 +55,7 @@
 
 namespace hl {
 
-static const char* const HL_VERSION = "2.12.0";   // (2.12.0, 2026-10-28 18:22 CT Rassul approved "build") the box trimmed: no Q-Scores on the top line ("ES [+GAMMA] Uptrend"), no "1ST / 2ND" header row, no Est row, no "Options exp" footer; the version sits small at the right of the top line; a thin grey vertical separator between the 1st- and 2nd-extreme columns (Exp + Act rows); the box is shorter, its bottom edge stays docked
+static const char* const HL_VERSION = "2.13.0";   // (2.13.0, 2026-11-01 Rassul 18:52-19:06 CT mockup "HodLod box: 3 sections" + "go") the box in 3 sections side by side: 1 the session (Exp / Act / Feed, unchanged) | 2 HOD sweeps (1st = HOD) | 3 LOD sweeps (1st = LOD) - each level's price today and how often the 1st extreme swept it by <= 1/4 ADR and turned (HodLodSweeps.h; % from the nightly LRA-HodLodSweeps-<MKT>.csv)   // was "2.12.0":   // (2.12.0, 2026-10-28 18:22 CT Rassul approved "build") the box trimmed: no Q-Scores on the top line ("ES [+GAMMA] Uptrend"), no "1ST / 2ND" header row, no Est row, no "Options exp" footer; the version sits small at the right of the top line; a thin grey vertical separator between the 1st- and 2nd-extreme columns (Exp + Act rows); the box is shorter, its bottom edge stays docked
 // was 2.11.0:   // (2.11.0, 2026-10-28 12:50-12:56 CT Rassul "get rid of the S and R in the hod lod box, make the white price a little smaller so it doesn't fall into the values below it"; his picture circled the green S, the red R and the big price) the Gex S/R ladder has NO S / R squares; the spot price is drawn 2 steps smaller (fs + 1, was fs + 3) inside the top row only (never into the distance row below); the docked table sits bottom-left, right of the Key Levels column (ColumnBoard 1.9.1)   // was (2.10.0, 2026-10-28 12:16 CT Rassul "move the hod lod box aligned with the liquidity profile on the left") the table docks at the TOP-LEFT of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0) while that column is on the chart
 // was 2.9.3:   // (2.9.3, 2026-10-28 06:38 CT) the visible candles are keep-outs: the table + strip dock where they cover no candle (Rassul's rule "callouts never cover candles"); the left Liquidity column is gone (ColumnBoard 1.8.0)   // (2.9.2, 2026-10-28) GAMMA / Gex S/R freshness judged by ARRIVAL (Fresh.h 1.1.0: 20 min RTH, 45 min overnight) - the "GAMMA STALE" overnight while MenthorQ sets were arriving every 5 min   // (2.9.1, 2026-10-28) the table keeps right of the left Liquidity column (ColumnBoard leftKeep)   // (2.9.0, 2026-10-26) self-awareness SELFHL (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (2.8.0, 2026-10-26) smart-read hook (AwareHook.h 0.1.0, TEAM-DESIGN.md): posts AWHODLOD for each closed bar once lsContext has posted CTX for it (or after 3 s), records the isolated + aware read in lsFlexLevels\\Context-AWR-<MKT>-<spb>s-<day>.rec; links OFF per market (LRA-Context-<MKT>.csv) so aware = isolated and nothing drawn changes (facts only)   // (2.7.1, 2026-10-22 evening fix build) the day-type log creates lsFlexLevels\\HodLod first ("log fails 17");   // (2.7.0, 2026-10-22 evening, Rassul approved 17:39 CT) the DAY TYPE folded into the header trend ("Uptrend \xB7 Trend day ?" green / "Dntrend \xB7 Trend day ?" red / "Balance \xB7 Rotation day ?" plain; DayTypeLogic.h, price only, live from closed bars; hover = what fired); the NEWS / SETTLE window note row and the "Feed ?" row (NewsWindow.h); the Pre row is LOG ONLY by default (LRA-PreOpen-<MKT>.csv PARAM,SHOW - VALIDATE-CONTEXT-MARKS 2026-10-22: the call never fired, 0 of 42 sessions);   // (2.6.0, 2026-10-22, Rassul 15:57 CT "yes hod lod box", MBO Roadmap T-20261022-29) the PRE-OPEN BOOK row "Pre" under Est (PreOpenLogic.h): from 30 min before the RTH open to 60 min after, the MBO book near price in the last N minutes before the open (bids vs offers, % that stayed, the opening imbalance) and an untested lean "1st LOW early ?"; its own hover (question / what / why / how / example + the numbers);   // (2.5.0, 2026-10-21 10:56 CT, Rassul approved mockup v1 "ok.. build") the Gex S/R LADDER low -> high (supports, the spot with its distance to the nearest S / R, resistances) as the card's top band; the header band with a +GAMMA / -GAMMA pill and the trend in full ("Strong Uptrend"); the regime from the LIVE Gex S/R file's HVL0 when the HVL book is stale; row dividers; footer "Options exp 3:00 PM" . version right;   // (2.4.6, 2026-10-18 20:28 CT, Rassul "remove the hoverover on gext strikes and the hod lod box") the Gex S/R strip and header hovers are off (HodLod.cpp HL_HOVERS);  // (2.4.5, 2026-10-18 19:13 CT, Rassul "right justify the 2nd column" + outside RTH "just keep it blank" - "prior RTH 10/16 ... doesnt make any sense") the 2nd column (heading, Exp, Act, Est) is right-aligned to the table edge; the Est row stays (same height) but is empty while the box shows the prior session;  // (2.4.4, 2026-10-18, Rassul approved 17:13 CT "build") the COMPACT table (~350 px, columns sized to their text; Exp / Act / Est; header "ES M2 O0 V2  Neg . S.Dn"; footer "Exp 3:00 PM . v2.4.4") + the Gex S/R on its own strip ABOVE it (R green / S red); the removed words in the hovers; Offset X / Y removed (9-spot Position only);   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
 // (2.3.0)   // (2.3.0, Rassul 2026-10-17 19:53-20:20) MenthorQ Q-Scores "Q: M1 O1 V4" top left (hover = the meaning), "Reg: Neg / S. Dntrend" top right; Gex S/R = the BAND rule: 3 biggest abs-GEX strikes from the RTH open up to the 1.38 extension of the 1D Max (red, a drawn up triangle first) | price | 3 down to the 1.38 extension of the 1D Min (green, a down triangle first)
@@ -699,6 +699,9 @@ struct View {
     std::string dayText; unsigned dayCol = 0x00B8BEC8; std::vector<Line> dayHover;
     struct Note { std::string label, text; unsigned col = 0x00B8BEC8; std::vector<Line> hover; };
     std::vector<Note> notes;
+    // (2.13.0) the HOD / LOD sweep sections (HodLodSweeps.h fills them; swOn false = the 2.12.0 box)
+    struct SwRow { std::string name, px, pct; bool elig = true; };
+    bool swOn = false; std::vector<SwRow> swHi, swLo;
     std::string market, session;           // session = YYYY-MM-DD of the RTH shown
     int side = 0;                          // 0 not clear, 1 LOD first, 2 HOD first
     bool secondPrinted = false, reclaimed = false, complete = false;
@@ -1375,6 +1378,7 @@ struct Layout {
     Box dayBox = { 0, 0, 0, 0 }; bool dayOk = false;           // (2.7.0) the day type text in the header (the mouse-over target)
     int colSepX = -1, colSepT = 0, colSepB = 0;                 // (2.12.0) the 1st | 2nd column separator (tests / status)
     std::vector<Box> noteRows;                                  // (2.7.0) the note rows (News / Feed)
+    bool swOk = false; std::vector<Box> swCols;                 // (2.13.0) the HOD / LOD sweep sections (tests / status)
 };
 
 inline int lineH(int fs) { return (int)(fs * 1.7f + 0.5f); }   // as SessionInfo (a 9 pt font is 12 px at 96 dpi)
@@ -1816,8 +1820,21 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         if (v.preOn) W = (std::max)(W, 8 + lw + M(v.preText, fs, false) + 10);            // (2.6.0) the Pre row never wraps either
         for (size_t q = 0; q < v.notes.size(); q++) W = (std::max)(W, 8 + lw + M(v.notes[q].text, fs, false) + 10);   // (2.7.0) nor the note rows
         cw[(size_t)(ncol - 1)] += W - (8 + lw + sumC);                                   // the spare width goes to the last column
+        // (2.13.0) the HOD / LOD sweep sections right of the session section: name | price | %; dropped when the pane is too narrow
+        const int Wsess = W; int swW = 0, swNameW = 0, swPxW = 0, swPctW = 0; size_t swRows = 0;
+        const char* swTitle[2] = { "HOD sweeps (1st = HOD)", "LOD sweeps (1st = LOD)" };
+        bool useSw = v.swOn && (!v.swHi.empty() || !v.swLo.empty());
+        if (useSw) {
+            const std::vector<View::SwRow>* SR2[2] = { &v.swHi, &v.swLo }; int tW = 0;
+            for (int q = 0; q < 2; q++) { tW = (std::max)(tW, M(swTitle[q], fs, true)); swRows = (std::max)(swRows, SR2[q]->size());
+                for (const View::SwRow& r : *SR2[q]) { swNameW = (std::max)(swNameW, M(r.name, fs, false)); swPxW = (std::max)(swPxW, M(r.px, fs, false)); swPctW = (std::max)(swPctW, M(r.pct, fs, true)); } }
+            swW = (std::max)(tW, swNameW + 12 + swPxW + 12 + swPctW) + 18;
+            if (area.l + Wsess + 2 * swW > pane.r - pad) useSw = false;   // no room: the 2.12.0 box (never the "pane too small" line)
+        }
+        if (useSw) W = Wsess + 2 * swW;
         const int hdrH = rowH + 4;                         // (2.5.0) the header band, a little taller
-        const int H = 1 + hdrH + 1 + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3;   // (2.12.0) header band + Exp + Act (no 1ST / 2ND row, no Est row, no footer); (2.6.0) + the Pre row while it is shown
+        const int H0 = 1 + hdrH + 1 + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3;   // (2.12.0) header band + Exp + Act (no 1ST / 2ND row, no Est row, no footer); (2.6.0) + the Pre row while it is shown
+        const int H = useSw ? (std::max)(H0, 1 + hdrH + 1 + rowH * (1 + (int)swRows) + 3) : H0;   // (2.13.0) the sweep sections: title + their rows
         const int Htot = H + (lad.ok ? stripH + STRIP_GAP : 0);
         if (W > area.r - area.l && attempt == 0) continue;
         if (area.l + W > pane.r - pad) continue;
@@ -1852,7 +1869,8 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int x0 = T.l + 8 + lw;
         auto colX = [&](int k) { int x = x0; for (int i = 0; i < k; i++) x += cw[(size_t)i]; return x; };
         // (2.4.5, Rassul 19:08 "right justify the 2nd column, we have space") the last column's text ends at the table's right padding
-        auto colStart = [&](int k, int w) { return k == ncol - 1 ? T.r - 8 - w : colX(k); };
+        const int SR = T.l + Wsess;   // (2.13.0) the session section's right edge (= T.r without the sweep sections)
+        auto colStart = [&](int k, int w) { return k == ncol - 1 ? SR - 8 - w : colX(k); };
         const int rowsTop = y;   // (2.12.0) no 1ST / 2ND heading row: the Exp row follows the header band
         const Cell* rows[2] = { eRow, aRow }; const char* lab[2] = { "Exp", "Act" };
         for (int r = 0; r < 2; r++) {
@@ -1866,7 +1884,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                 part.push_back(C.s3.empty() ? "" : "  " + C.s3); pc.push_back(C.col3 ? C.col3 : C.col);
                 for (size_t k = 0; k < part.size(); k++) { if (part[k].empty()) continue; const int pw = M(part[k], fs, C.bold); addText(L, xx, y, y + rowH, part[k], pc[k], fs, C.bold, pw, R_TABLE, -1); xx += pw; }
             }
-            if (r) addLine(L, T.l + 1, y, T.r - 1, y, C_DIV, 1, R_TABLE);   // (2.5.0) a thin divider between the rows (2.12.0: none under the header band's border)
+            if (r) addLine(L, T.l + 1, y, SR - 1, y, C_DIV, 1, R_TABLE);   // (2.5.0) a thin divider between the rows (2.12.0: none under the header band's border)
             y += rowH;
         }
         for (int k = 1; k < ncol; k++) {   // (2.12.0, Rassul 18:22 CT) a thin grey vertical separator between the 1st- and 2nd-extreme columns, Exp + Act rows
@@ -1875,21 +1893,42 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             L.colSepX = sx; L.colSepT = rowsTop + 2; L.colSepB = y - 2;
         }
         if (v.preOn) {   // (2.6.0) the PRE-OPEN BOOK row: one line across the columns, green = 1st LOW lean, red = 1st HIGH lean, grey otherwise
-            addLine(L, T.l + 1, y, T.r - 1, y, C_DIV, 1, R_TABLE);
+            addLine(L, T.l + 1, y, SR - 1, y, C_DIV, 1, R_TABLE);
             addText(L, T.l + 8, y, y + rowH, "Pre", C_SLATE, fs, false, M("Pre", fs, false), R_TABLE, -1);
             addText(L, x0, y, y + rowH, v.preText, v.preCol, fs, false, M(v.preText, fs, false), R_TABLE, -1);
-            L.preRow = Box{ T.l, y, T.r, y + rowH }; L.preOk = true;
+            L.preRow = Box{ T.l, y, SR, y + rowH }; L.preOk = true;
             y += rowH;
         }
         L.noteRows.clear();
         for (size_t q = 0; q < v.notes.size(); q++) {   // (2.7.0) the note rows: "News  CPI 7:30 AM . -5 / +15 min . marks ?" / "Feed  ? ..."
-            addLine(L, T.l + 1, y, T.r - 1, y, C_DIV, 1, R_TABLE);
+            addLine(L, T.l + 1, y, SR - 1, y, C_DIV, 1, R_TABLE);
             addText(L, T.l + 8, y, y + rowH, v.notes[q].label, C_SLATE, fs, false, M(v.notes[q].label, fs, false), R_TABLE, -1);
             addText(L, x0, y, y + rowH, v.notes[q].text, v.notes[q].col, fs, false, M(v.notes[q].text, fs, false), R_TABLE, -1);
-            L.noteRows.push_back(Box{ T.l, y, T.r, y + rowH });
+            L.noteRows.push_back(Box{ T.l, y, SR, y + rowH });
             y += rowH;
         }
         // (2.12.0) no footer ("Options exp 3:00 PM" + version): the version is on the top line, the expiry in the header hover
+        if (useSw) {   // (2.13.0) 2 HOD sweeps | 3 LOD sweeps, each its own section with a separator line on its left
+            L.swOk = true; L.swCols.clear();
+            for (int q = 0; q < 2; q++) {
+                const std::vector<View::SwRow>& RR = q ? v.swLo : v.swHi; const int cx = SR + q * swW;
+                addLine(L, cx, rowsTop, cx, T.b - 1, C_BORDER, 2, R_TABLE);
+                int yy = rowsTop;
+                addText(L, cx + 9, yy, yy + rowH, swTitle[q], C_BLUE, fs, true, M(swTitle[q], fs, true), R_TABLE, -1);
+                yy += rowH;
+                for (const View::SwRow& r : RR) {
+                    addLine(L, cx + 2, yy, cx + swW - 1, yy, C_DIV, 1, R_TABLE);
+                    const unsigned cn = r.elig ? C_SLATE : C_DIM, cp = r.elig ? C_GREY : C_DIM;
+                    const int pw = M(r.pct, fs, true), xw = M(r.px, fs, false);
+                    const int xPct = cx + swW - 9 - swPctW + (swPctW - pw), xPx = cx + swW - 9 - swPctW - 12 - xw;
+                    addText(L, cx + 9, yy, yy + rowH, r.name, cn, fs, false, M(r.name, fs, false), R_TABLE, -1);
+                    addText(L, xPx, yy, yy + rowH, r.px, cp, fs, false, xw, R_TABLE, -1);
+                    addText(L, xPct, yy, yy + rowH, r.pct, cn, fs, true, pw, R_TABLE, -1);
+                    yy += rowH;
+                }
+                L.swCols.push_back(Box{ cx, rowsTop, cx + swW, T.b });
+            }
+        }
         L.blocks.push_back(T);
         return;
     }

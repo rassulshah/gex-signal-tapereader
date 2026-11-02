@@ -120,6 +120,8 @@
 #include "DealerProfileSettings.h"   // (2.4.3) the Dealer Profile banner key (its keyed per-market file)
 #include "SettingsHost.h"           // (2.4.2) registration / window fill / read / group masters from the table
 #include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
+#include "HodLodSweeps.h"         // (2.13.0) the HOD / LOD sweep sections (SDK-free)
+static const bool HL_FEED_ROW = false;   // (2.13.0) the "Feed ?" row is not drawn
 #include "HodLodQ.h"               // (2.3.0) MenthorQ Q-Scores: LRA-QScore-<MKT>.csv parse / header parts / hover (SDK-free)
 // (2.4.6, Rassul 2026-10-18 20:28 "remove the hoverover on gext strikes and the hod lod box") both hovers (Gex S/R strip, header) off
 static const bool HL_HOVERS = false;
@@ -255,6 +257,9 @@ struct HLState {
     int gexCurX = -100000, gexCurY = -100000; long long gexHovers = 0;
     // (2.3.0) the Q-Scores: LRA-QScore-<MKT>.csv (stamp, at most every 5 s) and their hover
     long long qStamp = -2; time_t qChecked = 0; hlq::File qf; std::string qWhy;
+    // (2.13.0) the sweep sections: LRA-HodLodSweeps-<MKT>.csv (the nightly %) + LRA-KeyLevels-<MKT>.csv (the Dealer Profile's prices), each
+    // stamp-checked at most every 5 s
+    long long swStamp = -2, swKeyStamp = -2; time_t swChecked = 0; hsw::File sw; std::vector<hsw::Lv> swKeys; std::string swWhy, swKeyWhy;
     bool inQ = false, lastQOk = false, lastQHoverOk = false; hl::Box lastQBox = { 0, 0, 0, 0 }, lastQHover = { 0, 0, 0, 0 }; int qCurX = -100000, qCurY = -100000; long long qHovers = 0;
     // (2.4.0) the regime's ONE source: GammaProfile-MQ-<MKT>.csv HVL0 (stamp, at most every 5 s) and its verdict (Fresh.h)
     long long hvlStamp = -2; time_t hvlChecked = 0; hlg::HvlBook hvl; std::string hvlWhy; int regSign = 0; bool regFromGex = false; double regGexHvl = 0;   /* (2.5.0) the regime from the Gex S/R file HVL0 */ fr::Verdict regV; fr::Verdict qV; bool qJudged = false;
@@ -290,6 +295,7 @@ public:
     static std::map<int, HLState*>& preTimers() { static std::map<int, HLState*> m; return m; }
     void loadGex(HLState& S);
     void loadQ(HLState& S);                                          // (2.3.0)
+    void loadSweeps(HLState& S);                                     // (2.13.0)
     // (HL105, Rassul "you should have setting where to put them like upper left etc.") ONE setting: Position (9 spots), default
     // Bottom centre. IRT can return -1 for a LIST parameter outside its settings copy, so the choice is also kept per market in
     // HodLod.place-<MKT>.txt - written only from the dialog's callbacks (loading never saves, #29) and read back by stamp.
@@ -561,6 +567,36 @@ void HodLod::loadQ(HLState& S)
     hlq::File F = hlq::parse(text, S.mkt);
     if (!F.ok) { S.qWhy = "garbled (" + F.why + "): kept the last good copy"; S.qStamp = -2; return; }
     S.qf = F; S.qWhy.clear();
+}
+
+// (2.13.0) the sweep sections' two inputs, bounded and stamp-checked (a torn / missing file keeps the last good copy, or shows "?")
+static bool hlSmallRead(const std::string& p, size_t maxB, std::string& text, long long& stamp)
+{
+#ifdef _WIN32
+    struct _stat64 st; const bool ok = _stat64(p.c_str(), &st) == 0;
+#else
+    struct stat st; const bool ok = stat(p.c_str(), &st) == 0;
+#endif
+    stamp = ok ? (long long)st.st_mtime * 1000003LL + (long long)st.st_size : -1;
+    if (!ok || (long long)st.st_size > (long long)maxB) return false;
+    std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) return false;
+    text.resize(maxB + 1); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount());
+    return true;
+}
+void HodLod::loadSweeps(HLState& S)
+{
+    time_t now = time(nullptr);
+    if (S.swStamp != -2 && now - S.swChecked < 5) return;
+    S.swChecked = now;
+    const std::string p = flexPath("LRA-HodLodSweeps-" + S.mkt + ".csv"), k = flexPath("LRA-KeyLevels-" + S.mkt + ".csv");
+    std::string text; long long st = -1;
+    if (p.empty()) { S.sw = hsw::File(); S.swWhy = "no profile folder"; S.swStamp = -1; }
+    else if (!hlSmallRead(p, hsw::MAX_BYTES, text, st)) { if (st != S.swStamp) { S.sw = hsw::File(); S.swWhy = "LRA-HodLodSweeps-" + S.mkt + ".csv missing: % shown as ?"; } S.swStamp = st; }
+    else if (st != S.swStamp) { hsw::File F = hsw::parse(text, S.mkt); if (F.ok) { S.sw = F; S.swWhy.clear(); } else S.swWhy = "garbled (" + F.why + "): kept the last good copy"; S.swStamp = st; }
+    text.clear(); st = -1;
+    if (k.empty()) { S.swKeys.clear(); S.swKeyWhy = "no profile folder"; }
+    else if (!hlSmallRead(k, 16384, text, st)) { S.swKeys.clear(); S.swKeyWhy = "LRA-KeyLevels-" + S.mkt + ".csv missing (the Dealer Profile on the 3-min chart writes it): no prices"; S.swKeyStamp = st; }
+    else if (st != S.swKeyStamp) { std::vector<hsw::Lv> L; if (hsw::parseKeys(text, (long long)now, 80LL * 3600, L)) { S.swKeys.swap(L); S.swKeyWhy.clear(); } else { S.swKeys.clear(); S.swKeyWhy = "LRA-KeyLevels stale / garbled: no prices"; } S.swKeyStamp = st; }
 }
 
 void HodLod::loadSession(HLState& S)
@@ -1354,6 +1390,13 @@ int HodLod::draw(void)
         }
     }
     loadQ(*S);                               // (2.3.0) the Q-Scores top left of the header
+    loadSweeps(*S);                          // (2.13.0) the HOD / LOD sweep sections: % (nightly) + today's prices (Dealer Profile key levels)
+    {   std::vector<hsw::Row> hi, lo; const double openPx = (S->view.has && !S->view.prior) ? (double)S->view.open * tick : 0.0;
+        hsw::build(S->sw, S->swKeys, openPx, hl::MKTS[S->mi < 0 ? 0 : S->mi].dec, hi, lo);
+        S->view.swOn = true; S->view.swHi.clear(); S->view.swLo.clear();
+        for (const hsw::Row& r : hi) S->view.swHi.push_back(hl::View::SwRow{ r.name, r.px, r.pct, r.elig });
+        for (const hsw::Row& r : lo) S->view.swLo.push_back(hl::View::SwRow{ r.name, r.px, r.pct, r.elig });
+    }
     S->qV = hlq::fresh(S->qf, hlNowCt()); S->qJudged = S->qf.ok;   // (2.4.0) their age: stale -> "Q: STALE"
     hlq::toView(S->view, S->qf, S->view.trendReady ? hl::trendWord(S->view.trendLvl) : std::string(), S->view.trendLvl, &S->qV);
     const int pe = priceEdge();
@@ -1405,7 +1448,7 @@ int HodLod::draw(void)
             for (int i = 0; i < 6; i++) N.hover.push_back(hl::Line{ hl::Seg{ i == 0 ? std::string(H[0]) + g.label : std::string(H[i]), i == 0 ? hl::C_AMBER : hl::C_SLATE } });
             S->view.notes.push_back(N);
         }
-        if (g.feedBad) {
+        if (g.feedBad && HL_FEED_ROW) {   // (2.13.0, Rassul 19:13 CT "get rid of the feed line": not drawn; the feed check still gates the MBO marks)
             hl::View::Note N; N.label = "Feed"; N.col = hl::C_AMBER; N.text = "? live MBO feed does not match \xB7 MBO marks record only";
             const char* H[] = { "Feed ?", "Question: can the order-by-order (MBO) marks on this market be trusted today?",
                 "What it is: the nightly compares this PC's recorded MBO feed with the exchange data (LRA-FeedCheck file); here they did not match.",
@@ -1416,6 +1459,16 @@ int HodLod::draw(void)
             S->view.notes.push_back(N);
         }
         S->newsLine = std::string("NEWS,") + nw::VERSION + "," + (g.news ? g.label : std::string("none")) + ",feed " + (g.feedBad ? "BAD (" + g.feedWhy + ")" : std::string("ok"));
+    }
+    {   // (2.13.0) the 1st-extreme time row (after the News row; the notes were rebuilt just above)
+            const std::string tt = hsw::timeText(S->sw);   // (2.13.0, Rassul 19:12-19:14 CT) when the 1st extreme forms, in the session section
+        if (!tt.empty()) { hl::View::Note N; N.label = "1st"; N.text = tt; N.col = hl::C_SLATE;
+            const char* H[] = { "When the 1st extreme forms", "Question: how soon after the open is the day's first extreme (HOD or LOD) usually in?",
+                "What it is: the share of the last year's sessions whose 1st extreme printed 0-15, 15-30, 30-60 or 60+ minutes after the RTH open (nightly, this market).",
+                "How to use: a fast 1st extreme is the norm in some markets (ES / NQ ~ half within 15 min); after 60 min a new extreme is less often the 1st one.",
+                "Example: ES 0-15m 43% - on 43% of days the 1st extreme was in by 8:45." };
+            for (int i = 0; i < 5; i++) N.hover.push_back(hl::Line{ hl::Seg{ H[i], i == 0 ? hl::C_BLUE : hl::C_SLATE } });
+            S->view.notes.push_back(N); }
     }
     S->placeLine = "PLACE,pos " + std::to_string(PL.pos) + ",dx " + std::to_string(O.dx) + ",dy " + std::to_string(O.dy) + (PL.why.empty() ? "" : "," + PL.why)
                  + "\nOPTS,table " + (O.table ? "on" : "off (Show table unchecked in Settings)") + ",projection " + (O.proj ? "on" : "off") + ",mark " + (O.mark ? "on" : "off") + ",moves " + std::to_string(S->hyst.moves) + "\n";
@@ -1629,6 +1682,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.12.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.13.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

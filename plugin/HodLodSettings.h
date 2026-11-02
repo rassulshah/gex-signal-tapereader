@@ -5,7 +5,7 @@
 
 namespace hlset {
 
-static const char* const PLUGIN_VERSION = "2.12.0";   // (2.12.0) no settings change (box trimmed: no Q-Scores / 1ST-2ND row / Est / footer; column separator)
+static const char* const PLUGIN_VERSION = "2.13.0";   // (2.13.0) no settings change (the HOD / LOD sweep sections)   // was "2.12.0":   // (2.12.0) no settings change (box trimmed: no Q-Scores / 1ST-2ND row / Est / footer; column separator)
 // was 2.11.0:
 //   2.11.0: (2.11.0) no settings change (docks bottom-left, right of the Key Levels column; no S / R squares; smaller spot)
 // was 2.9.3
