@@ -851,7 +851,23 @@ void HodLod::writeProj(HLState& S)
     int at = v.projLockMod >= 0 ? v.projLockMod : v.lastMod;   // the bar the target was set on
     std::string ln = v.session + "," + hl::hhmm(at) + "," + (v.projUp ? "HOD" : "LOD") + "," + hl::trimNum((double)v.projFrom * S.tick, dec) + "," + tgt + "," + re + "," +
         hl::trimNum((double)v.rangeT * S.tick, dec) + "," + std::to_string(v.projStage) + "," + (v.projV2 ? "v2" : "v1") + "," + hl::HL_VERSION + "\n";
-    if (F.write(p, ln, true)) S.projLogged += key.substr(1);
+    if (F.write(p, ln, true)) {
+        S.projLogged += key.substr(1);
+        // (2.14.0, Rassul 2026-11-01 20:38 CT "ok") SHADOW: the overnight-range-scaled target beside every live one (study 2026-11-01: the
+        // scaled range beat the plain median in ES / NQ / HG, mean |error| 0.354 vs 0.364 ADR). Logged only - nothing drawn changes; the
+        // nightly (lra.hodlod_levels proj_shadow) scores both against the day's final extreme before anything is promoted.
+        const int t = v.onOk ? hsw::onTercile(S.sw, (double)(v.onHi - v.onLo) * S.tick, v.adrTrim) : -1;
+        const std::string ps = flexPath("HodLod.projON-" + S.mkt + ".csv");
+        if (t >= 0 && S.sw.projX100[t] > 0 && std::isfinite(v.adrTrim) && !ps.empty()) {
+            const double alt = (std::max)(S.sw.projX100[t] / 100.0 * v.adrTrim, (double)v.rangeT * S.tick);
+            const double from = (double)v.projFrom * S.tick, at = v.projUp ? from + alt : from - alt;
+            if (!F.exists(ps)) F.write(ps, "session,bar_end,side,from,live_target,on_target,on_tercile,mult,adr,on_range,version\n", true);
+            char b2[256]; std::snprintf(b2, sizeof b2, "%s,%s,%s,%s,%s,%s,%d,%.2f,%.4f,%.4f,%s\n", v.session.c_str(), hl::hhmm(v.projLockMod >= 0 ? v.projLockMod : v.lastMod).c_str(),
+                v.projUp ? "HOD" : "LOD", hl::trimNum(from, dec).c_str(), tgt.c_str(), hl::trimNum(at, dec).c_str(), t, S.sw.projX100[t] / 100.0, v.adrTrim,
+                (double)(v.onHi - v.onLo) * S.tick, hl::HL_VERSION);
+            F.write(ps, b2, true);
+        }
+    }
 }
 
 // (1.1.8) the day's FIRST IN call, once per session (3-min charts): immutable - a session already in the file is never written again,
@@ -1460,15 +1476,22 @@ int HodLod::draw(void)
         }
         S->newsLine = std::string("NEWS,") + nw::VERSION + "," + (g.news ? g.label : std::string("none")) + ",feed " + (g.feedBad ? "BAD (" + g.feedWhy + ")" : std::string("ok"));
     }
-    {   // (2.13.0) the 1st-extreme time row (after the News row; the notes were rebuilt just above)
-            const std::string tt = hsw::timeText(S->sw);   // (2.13.0, Rassul 19:12-19:14 CT) when the 1st extreme forms, in the session section
-        if (!tt.empty()) { hl::View::Note N; N.label = "1st"; N.text = tt; N.col = hl::C_SLATE;
-            const char* H[] = { "When the 1st extreme forms", "Question: how soon after the open is the day's first extreme (HOD or LOD) usually in?",
-                "What it is: the share of the last year's sessions whose 1st extreme printed 0-15, 15-30, 30-60 or 60+ minutes after the RTH open (nightly, this market).",
-                "How to use: a fast 1st extreme is the norm in some markets (ES / NQ ~ half within 15 min); after 60 min a new extreme is less often the 1st one.",
-                "Example: ES 0-15m 43% - on 43% of days the 1st extreme was in by 8:45." };
-            for (int i = 0; i < 5; i++) N.hover.push_back(hl::Line{ hl::Seg{ H[i], i == 0 ? hl::C_BLUE : hl::C_SLATE } });
-            S->view.notes.push_back(N); }
+    {   // (2.14.0, Rassul 20:06-20:38 CT mockup v14) the 1st-extreme time table, the Day forecast, RTH % done and the bar's time left
+        S->view.tmOk = hsw::timeCum(S->sw, S->view.tmCum); S->view.tmQ = S->sw.tmN > 0 && S->sw.tmN < hsw::MIN_N;
+        S->view.hdrExtra.clear();
+        const int t = S->view.onOk ? hsw::onTercile(S->sw, (double)(S->view.onHi - S->view.onLo) * tick, S->view.adrTrim) : -1;
+        const std::string day = hsw::dayText(S->sw, t);
+        if (!day.empty()) S->view.hdrExtra.push_back(hl::Seg{ "Day  " + day, hl::C_SLATE });
+        if (S->mi >= 0) {
+            const hl::Mkt& K = hl::MKTS[S->mi]; const long long now = hlNowCt(); const int sod = (int)(((now % 86400) + 86400) % 86400), mod = sod / 60;
+            std::string rth;
+            if (mod < K.open) rth = "RTH opens " + hl::clkAmPm(K.open);
+            else if (mod >= K.close) rth = "RTH closed";
+            else rth = "RTH " + std::to_string((int)((mod - K.open) * 100 / (K.close - K.open))) + "% done";
+            S->view.hdrExtra.push_back(hl::Seg{ rth, hl::C_SLATE });
+            const int per = S->per > 0 && S->per <= 3600 ? (int)S->per : 0;
+            if (per > 0) { const int left = per - (sod % per); char b[32]; std::snprintf(b, sizeof b, "Bar %d:%02d left", left / 60, left % 60); S->view.hdrExtra.push_back(hl::Seg{ b, hl::C_SLATE }); }
+        }
     }
     S->placeLine = "PLACE,pos " + std::to_string(PL.pos) + ",dx " + std::to_string(O.dx) + ",dy " + std::to_string(O.dy) + (PL.why.empty() ? "" : "," + PL.why)
                  + "\nOPTS,table " + (O.table ? "on" : "off (Show table unchecked in Settings)") + ",projection " + (O.proj ? "on" : "off") + ",mark " + (O.mark ? "on" : "off") + ",moves " + std::to_string(S->hyst.moves) + "\n";
@@ -1682,6 +1705,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.13.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.14.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

@@ -23,7 +23,8 @@ static const char* const VERSION = "1.0.0";
 static const size_t MAX_BYTES = 8192;
 static const int MIN_N = 20;
 struct Cell { int pct = -1, swept = 0, n = 0; };
-struct File { bool ok = false; std::string why; std::map<std::string, Cell> hi, lo; int tm[4] = { -1, -1, -1, -1 }; int tmN = 0; };   // tm = % of days the 1st extreme formed 0-15 / 15-30 / 30-60 / 60+ min after the open
+struct File { bool ok = false; std::string why; std::map<std::string, Cell> hi, lo; int tm[4] = { -1, -1, -1, -1 }; int tmN = 0;
+             double onCut[2] = { NAN, NAN }; int dayTrend[3] = { -1, -1, -1 }, dayChop[3] = { -1, -1, -1 }, dayN[3] = { 0, 0, 0 }, projX100[3] = { -1, -1, -1 }; };   // (2.14.0) ONCUT / DAY / PROJ rows   // tm = % of days the 1st extreme formed 0-15 / 15-30 / 30-60 / 60+ min after the open
 struct Lv { std::string name; double px = 0; };   // one name of a LRA-KeyLevels row (merged rows are split by the caller)
 struct Row { std::string name, px, pct; bool elig = true; };
 
@@ -43,6 +44,10 @@ inline File parse(const std::string& text, const std::string& mkt)
             c.n = (int)std::strtol(f[5].c_str(), &e, 10); if (!e || *e || c.n < 0) continue;
             (f[1] == "HI" ? F.hi : F.lo)[f[2]] = c;
         }
+        if (f.size() >= 3 && f[0] == "ONCUT") { char* e1 = nullptr; char* e2 = nullptr; const double a = std::strtod(f[1].c_str(), &e1), b = std::strtod(f[2].c_str(), &e2);
+            if (e1 && !*e1 && e2 && !*e2 && std::isfinite(a) && std::isfinite(b) && a > 0 && b >= a) { F.onCut[0] = a; F.onCut[1] = b; } continue; }
+        if (f.size() >= 5 && f[0] == "DAY") { const int k = std::atoi(f[1].c_str()); if (k >= 0 && k < 3) { F.dayTrend[k] = std::atoi(f[2].c_str()); F.dayChop[k] = std::atoi(f[3].c_str()); F.dayN[k] = std::atoi(f[4].c_str()); } continue; }
+        if (f.size() >= 4 && f[0] == "PROJ") { const int k = std::atoi(f[1].c_str()); if (k >= 0 && k < 3) F.projX100[k] = std::atoi(f[2].c_str()); continue; }
         if (f.size() >= 6 && f[0] == "TIME") {   // (2.13.0, Rassul 19:12-19:14 CT) TIME,<0-15>,<15-30>,<30-60>,<60+>,<n days>
             int v[5]; bool good = true;
             for (int i = 0; i < 5; i++) { char* e = nullptr; v[i] = (int)std::strtol(f[(size_t)i + 1].c_str(), &e, 10); if (!e || *e || v[i] < 0 || (i < 4 && v[i] > 100)) good = false; }
@@ -89,6 +94,26 @@ inline std::string timeText(const File& F)
     const char* L[4] = { "0-15m ", "15-30m ", "30-60m ", "60m+ " }; std::string s;
     for (int i = 0; i < 4; i++) s += (i ? " \xB7 " : "") + std::string(L[i]) + std::to_string(F.tm[i]) + "%";
     return s + (F.tmN < MIN_N ? " ?" : "");
+}
+// (2.14.0) the overnight range tercile (0 small, 1 mid, 2 big; -1 = no cut points / no inputs)
+inline int onTercile(const File& F, double onRange, double adr)
+{
+    if (!F.ok || !std::isfinite(F.onCut[0]) || !(adr > 0) || !std::isfinite(onRange) || onRange < 0) return -1;
+    const double r = onRange / adr; return r <= F.onCut[0] ? 0 : (r <= F.onCut[1] ? 1 : 2);
+}
+// "ON range mid \xBB Trend 22% \xB7 Chop 16%" ("" = no forecast)
+inline std::string dayText(const File& F, int t)
+{
+    if (t < 0 || F.dayTrend[t] < 0) return "";
+    static const char* const N[3] = { "small", "mid", "big" };
+    const std::string q = F.dayN[t] < MIN_N ? "?" : "";
+    return std::string("ON range ") + N[t] + " \xBB Trend " + std::to_string(F.dayTrend[t]) + "%" + q + " \xB7 Chop " + std::to_string(F.dayChop[t]) + "%" + q;
+}
+// cumulative 1st-extreme time: 0-15 / 0-30 / 0-60 / 60m+ from the window shares
+inline bool timeCum(const File& F, int out[4])
+{
+    if (!F.ok || F.tmN <= 0 || F.tm[0] < 0) return false;
+    out[0] = F.tm[0]; out[1] = (std::min)(100, F.tm[0] + F.tm[1]); out[2] = (std::min)(100, F.tm[0] + F.tm[1] + F.tm[2]); out[3] = F.tm[3]; return true;
 }
 inline std::string pxText(double p, int dec)
 {
