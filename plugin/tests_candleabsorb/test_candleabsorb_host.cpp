@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
     mkdir((home + "/InvestorRT").c_str(), 0755); mkdir((home + "/InvestorRT/rtx").c_str(), 0755);   // IRT's own folders
     {   std::string src = slurp("../CandleAbsorb.cpp"); if (src.empty()) src = slurp("CandleAbsorb.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == CA_VERSION && lit == cab::VERSION && lit == "1.0.1", "version literals match (" << lit << ")"); }
+        CHECK(lit == CA_VERSION && lit == cab::VERSION && lit == "1.1.0", "version literals match (" << lit << ")"); }
     CandleAbsorb x; mock::Host A; A.root = "EP"; mock::current = &A;
     chart(A, F, 165, 246); x.calc(0);
     CState* S = static_cast<CState*>(A.userData);
@@ -98,6 +98,18 @@ int main(int argc, char** argv) {
         cab::toTicks(F.bars[i][0], .25, b.o); cab::toTicks(F.bars[i][1], .25, b.h); cab::toTicks(F.bars[i][2], .25, b.l); cab::toTicks(F.bars[i][3], .25, b.c);
         for (size_t j = 0; j < F.vap[i].size(); ++j) { cab::DRow q; cab::toTicks(F.vap[i][j].first, .25, q.tick); q.dlt = F.d[i][j]; r.push_back(q); } D.addBar(b, r); }
     CHECK(S && marksOf(S->E) == marksOf(D), "host (VAP buy - sell) = logic on the recorded delta (" << (S ? marksOf(S->E) : "") << ")");
+    // (1.1.0, Rassul 2026-11-02 13:10 CT) the LIVE mark: every pivot-bar mark is already drawn when its own bar CLOSES (fed only up to it),
+    // as a live mark with the same code; the recorded marks are unchanged by the live marks
+    {   int pv = 0, hit = 0, early = 0; std::string miss;
+        for (const cab::Mark& m : D.marks) { if (m.bar != m.pivot) continue; ++pv;
+            cab::Engine P; for (size_t i = 0; i <= (size_t)m.bar; ++i) { std::vector<cab::DRow> r; cab::Bar b; b.t = (long long)F.t[i];
+                cab::toTicks(F.bars[i][0], .25, b.o); cab::toTicks(F.bars[i][1], .25, b.h); cab::toTicks(F.bars[i][2], .25, b.l); cab::toTicks(F.bars[i][3], .25, b.c);
+                for (size_t j = 0; j < F.vap[i].size(); ++j) { cab::DRow q; cab::toTicks(F.vap[i][j].first, .25, q.tick); q.dlt = F.d[i][j]; r.push_back(q); } P.addBar(b, r); }
+            bool h = false; for (const cab::Mark& l : P.liveMarks()) if (l.bar == m.bar && l.code == m.code && l.low == m.low) h = true;
+            for (const cab::Mark& l : P.marks) if (l.bar == m.bar) h = false;   // must not already be recorded at its own close
+            if (h) { ++hit; if (m.conf > m.bar) ++early; } else miss += cab::hm(m.t) + " "; }
+        CHECK(pv > 0 && hit == pv, "(1.1.0) each pivot-bar mark is drawn LIVE when its own bar closes (" << hit << " / " << pv << ", missed " << miss << ")");
+        CHECK(early == hit, "(1.1.0) ... before the ZigZag confirmed it (" << early << ")"); }
     {   std::string pm; if (S) for (const cab::Mark& m : S->E.marks) if (m.t >= 1793367000) pm += cab::hm(m.t) + (m.low ? "L" : "H") + cab::codeName(m.code) + " ";
         CHECK(pm == "13:42HS 13:54LD 14:21LD 14:33LAe ", "Oct 30 PM = the approved mockup: 1:42 S, 1:54 D, 2:21 D, 2:33 Ae (bar END times) (" << pm << ")"); }
     // draw: dashes on every visible candle with VAP (+ the forming one), each a black edge then the colour, on the candle
@@ -131,7 +143,7 @@ int main(int argc, char** argv) {
     {   const std::string rec = slurp(flex() + "/CandleAbsorb/EP-180.csv"), st = slurp(flex() + "/CandleAbsorb.status-EP-180.txt");
         size_t n = 0; for (size_t p = rec.find("\nMARK,"); p != std::string::npos; p = rec.find("\nMARK,", p + 1)) ++n;
         CHECK(n == S->E.marks.size() && n > 0, "record: every mark once (" << n << ")");
-        CHECK(st.rfind("VERSION,1.0.1", 0) == 0 && st.find("MARKS,A ") != std::string::npos && st.find("RULES,ZigZag 3 bars") != std::string::npos, "status file");
+        CHECK(st.rfind("VERSION,1.1.0", 0) == 0 && st.find("\nLIVE,") != std::string::npos && st.find("MARKS,A ") != std::string::npos && st.find("RULES,ZigZag 3 bars") != std::string::npos, "status file");
         // restart: a fresh state replays the chart and writes nothing twice
         x.clear(); mock::current = &A; x.calc(0); const std::string rec2 = slurp(flex() + "/CandleAbsorb/EP-180.csv");
         CHECK(rec2 == rec, "a restart never writes a mark twice");

@@ -52,7 +52,7 @@
 #define CA_SEP "/"
 #endif
 
-static const char* CA_VERSION = "1.0.1";   // (1.0.1) the Add-window crash fix (SS_SAFE_DIALOG); drawing / rules unchanged   // was "1.0.0"   // = cab::VERSION = the setVersion literal (test_candleabsorb_host checks)
+static const char* CA_VERSION = "1.1.0";   // (1.1.0, 2026-11-02 Rassul 13:10 CT) the live mark at the leg extreme's close, repainted until the ZigZag confirms   // was "1.0.1":   // (1.0.1) the Add-window crash fix (SS_SAFE_DIALOG); drawing / rules unchanged   // was "1.0.0"   // = cab::VERSION = the setVersion literal (test_candleabsorb_host checks)
 
 static long long caMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string caFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + CA_SEP "InvestorRT" CA_SEP "rtx" CA_SEP "lsFlexLevels" : std::string(); }
@@ -290,7 +290,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CandleAbsorb* p = new CandleAbsorb();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Candle Absorb v1.0.1 - at ZigZag pivots the bar's delta POC in the extreme end: A absorbed, Ae absorbed + exhausted, D demand, S supply; a delta POC dash on every candle.");
-    p->setVersion("1.0.1");   // = CA_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Candle Absorb v1.1.0 - at ZigZag pivots the bar's delta POC in the extreme end: A absorbed, Ae absorbed + exhausted, D demand, S supply; a delta POC dash on every candle.");
+    p->setVersion("1.1.0");   // = CA_VERSION (gex-build reads this literal)
     return p;
 }

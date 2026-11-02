@@ -30,7 +30,7 @@
 
 namespace cab {
 
-static const char* const VERSION = "1.0.1";   // (1.0.1) host crash fix only
+static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-02 13:10 CT "you must draw it on the 12:12 bar closed and repaint as necessary") the LIVE mark   // was "1.0.1":   // (1.0.1) host crash fix only
 static const int N_BARS = 3;          // IRT ZigZag Min Price Change = 3 bars, Use High/Low
 static const int RETEST_TICKS = 4;    // the next bar re-tests the extreme within 4 ticks
 static const double SIZE_X = 2.0;     // delta POC >= 2.0 x the bar's median |delta| row
@@ -136,6 +136,23 @@ public:
         zI = std::max(0, zI - n); zHi = std::max(0, zHi - n); zLo = std::max(0, zLo - n); trimmed += n;
     }
     long long trimmed = 0;
+    // (1.1.0, Rassul 2026-11-02 13:10 CT "you must draw it on the 12:12 bar closed and repaint as necessary") the LIVE mark: the running
+    // ZigZag leg's extreme bar (and its re-test bar) is judged as soon as it CLOSES, as if the pivot were confirmed; it is drawn the same
+    // way, moves / disappears when a later bar makes a new extreme (repaint allowed: the pivot rule), and becomes a recorded mark once
+    // the ZigZag confirms the pivot. Not recorded while live.
+    std::vector<Mark> liveMarks() const {
+        std::vector<Mark> o; if (zDir == 0 || zI < 0 || zI >= (int)B.size()) return o;
+        const bool low = zDir < 0;   // a down leg's extreme = a candidate LOW pivot; an up leg's = a candidate HIGH
+        auto add = [&](int k) {
+            if (k < 0 || k >= (int)B.size()) return;
+            for (const Mark& m : marks) if (m.bar == k) return;
+            const BarRead& r = R[(size_t)k]; const int code = low ? r.codeLow : r.codeHigh; if (!r.have || code == NONE) return;
+            Mark m; m.bar = k; m.low = low; m.code = code; m.poc = r.poc; m.pocD = r.pocD; m.x = r.x; m.pivot = zI; m.conf = -1; m.t = B[(size_t)k].t; o.push_back(m); };
+        add(zI);
+        const int k1 = zI + 1;
+        if (k1 < (int)B.size()) { const bool re = low ? B[(size_t)k1].l <= B[(size_t)zI].l + RETEST_TICKS : B[(size_t)k1].h >= B[(size_t)zI].h - RETEST_TICKS; if (re) add(k1); }
+        return o;
+    }
 };
 
 // ---------- layout (pixels) ----------
@@ -148,7 +165,7 @@ struct View {
     bool haveForming = false; Bar forming; BarRead formRead; int formIdx = -1;   // the forming bar (engine index = lastBar + 1)
     int clipL = -30000, clipR = 30000;
 };
-struct Scene { std::vector<Prim> p; int dashes = 0, marksDrawn = 0; };
+struct Scene { std::vector<Prim> p; int dashes = 0, marksDrawn = 0, liveDrawn = 0; };
 inline int ci(double v) { return (int)std::lround(std::max(-30000.0, std::min(30000.0, v))); }
 
 // the dash: ON the candle at the delta POC row, a little wider than the body (body = 60% of the bar spacing, dash = body + 2 px a side),
@@ -168,7 +185,8 @@ inline Scene layout(const Engine& E, const View& v, const Colours& C = Colours()
     const int a = std::max(0, v.first), z = std::min(E.lastBar(), v.last);
     for (int k = a; k <= z; ++k) { const BarRead& r = E.R[(size_t)k]; if (r.have) dash(s, v, C, v.X(k), r.poc, r.pocD); }
     if (v.haveForming && v.formIdx >= a && v.formIdx <= v.last && v.formRead.have) dash(s, v, C, v.X(v.formIdx), v.formRead.poc, v.formRead.pocD);
-    for (const Mark& m : E.marks) {
+    std::vector<Mark> all = E.marks; { const std::vector<Mark> lv = E.liveMarks(); all.insert(all.end(), lv.begin(), lv.end()); s.liveDrawn = (int)lv.size(); }   // (1.1.0)
+    for (const Mark& m : all) {
         if (m.bar < a || m.bar > z) continue;
         const Bar& b = E.B[(size_t)m.bar];
         const std::string txt = codeName(m.code);   // (09:17 CT) no "?"
@@ -189,6 +207,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, int spb, 
       << "BARS," << E.B.size() << ",pivots " << E.pivots << ",candidates " << E.cands << "\n"
       << "MARKS,A " << n[A] << ",Ae " << n[AE] << ",D " << n[D] << ",S " << n[S] << "\nVAP," << vap << "\nRECORD," << rec << "\n";
     const size_t m = E.marks.size();
+    { const std::vector<Mark> lv = E.liveMarks(); o << "LIVE," << lv.size(); for (const Mark& k : lv) o << "," << hm(k.t) << " " << (k.low ? "low " : "high ") << codeName(k.code) << " (repaints until the ZigZag confirms)"; o << "\n"; }   // (1.1.0)
     for (size_t i = m > 8 ? m - 8 : 0; i < m; ++i) { const Mark& k = E.marks[i]; o << "LAST," << hm(k.t) << "," << (k.low ? "low " : "high ") << codeName(k.code) << ",delta " << k.pocD << "\n"; }
     return o.str();
 }
