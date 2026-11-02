@@ -50,7 +50,7 @@ static void wipe() { std::string cmd = "rm -rf '" + home + "/InvestorRT'"; if (s
 // (1.5.0) a right-edge price tag (not a letter "X?" or a "Pb"); the lines 1.5.0 draws on purpose: the grey volume outline, the Pb amber
 // dotted line, the white dotted node borders
 static bool isTagText(const std::string& t) { return t != "Pb" && !(t.size() == 2 && t[1] == '?'); }
-static bool okLine(const mock::Prim& p) { return p.k == 'L' && (p.col == 0x94A3B8 || p.col == 0xF5B428 || p.col == 0xE5E7EB); }
+static bool okLine(const mock::Prim& p) { return p.k == 'L' && (p.col == 0x94A3B8 || p.col == 0xF5B428 || p.col == 0xE5E7EB || p.col == 0x22D3EE); }   // (1.6.0) + the cyan Pb line
 int main(int argc, char** argv) {
     const Fix F = load(argc > 1 ? argv[1] : "wavepoc_es1022.csv");
     if (F.t.size() != 80) { std::cerr << "no fixture\n"; return 1; }
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.5.0" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.6.0" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();
@@ -113,8 +113,9 @@ int main(int argc, char** argv) {
         bool amber3 = false, amberBox = false; int whiteBoxes = 0, amberBoxes = 0, anyBox = 0;
         mock::current = &A; A.drawn.clear(); A.reason = REASON_PREDRAW; mdraw(x);
         for (const mock::Prim& p : A.drawn) { if (p.k == 'L' && p.col == 0xF5B428 && p.w == 3) amber3 = true; if (p.k == 'F' && p.col == 0xC88C14) { amberBox = true; ++amberBoxes; } if (p.k == 'F' && p.col == 0xB4BECD) ++whiteBoxes; if (p.k == 'B' && p.col != 0xE5E7EB) ++anyBox; }   /* (1.5.0) the white box = the delta POC outline */
-        CHECK(!amber3 && amberBox && anyBox == 0, "(1.2.0) WPOC = the bright amber row only (no 3 px line); (1.5.0) the only boxes = the white delta POC outlines");
-        CHECK(amberBoxes == 6 && whiteBoxes == 13 && S->provOk && S->prov.i0 == 75 && S->prov.i1 == 78, "(1.3.3) one WPOC per wave (5 confirmed + the live provisional leg), the other 13 nodes white " << amberBoxes << "/" << whiteBoxes);
+        CHECK(!amber3 && !amberBox && whiteBoxes == 0 && anyBox == 0, "(1.6.0) no left volume profile: no amber WPOC / white HVN fills (" << amberBoxes << "/" << whiteBoxes << "); the only boxes = the white delta POC outlines");
+        {   std::vector<mock::Prim> keepPre = A.drawn; A.drawn.clear(); A.reason = REASON_DRAW; mdraw(x); int cy = 0; for (const mock::Prim& p : A.drawn) cy += p.k == 'F' && p.col == 0x22D3EE; amberBoxes = cy; whiteBoxes = 13; A.drawn = keepPre; A.reason = REASON_PREDRAW; }   // (1.6.0) the cyan WPOC is drawn in front (post call)
+        CHECK(amberBoxes == 6 && whiteBoxes == 13 && S->provOk && S->prov.i0 == 75 && S->prov.i1 == 78, "(1.6.0) one CYAN WPOC per wave (5 confirmed + the live provisional leg) " << amberBoxes << "/" << whiteBoxes);
         {   // (1.2.0, Rassul 16:26 CT "remove the drawing of levels across the chart and from the wave pocs"): no line / circle / tick op at all
             int other = 0, spines = 0; for (const mock::Prim& p : A.drawn) { if (p.k == 'L' && p.x0 == p.x1 && (p.col == 0x22C55E || p.col == 0xEF4444)) { ++spines; continue; } if (p.k != 'F' && !okLine(p) && !(p.k == 'B' && p.col == 0xE5E7EB)) ++other; }   // (1.3.3) + the spines
             std::vector<mock::Prim> pre2 = A.drawn; A.drawn.clear(); A.reason = REASON_DRAW; mdraw(x);
@@ -163,14 +164,14 @@ int main(int argc, char** argv) {
         const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt"), sto = slurp(flex() + "/WavePOC/ES-180.csv");
         size_t nw = 0; for (size_t p = rec.find("\nWAVE,"); p != std::string::npos; p = rec.find("\nWAVE,", p + 1)) ++nw;
         CHECK(nw == 5 && rec.find("NODE,") != std::string::npos && rec.find("STOP,") != std::string::npos && rec.find("\nROWS,") != std::string::npos, "(1.3.3) record: 5 waves with nodes, stops and (1.3.2) rows");
-        CHECK(st.rfind("VERSION,1.5.0", 0) == 0 && st.find("qualified up 3 down 2") != std::string::npos && st.find("QUALIFIED_BY,reversal 4,breakout 0,rally/decline 0,(older records AVG 0 ATR 1)") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
+        CHECK(st.rfind("VERSION,1.6.0", 0) == 0 && st.find("qualified up 3 down 2") != std::string::npos && st.find("QUALIFIED_BY,reversal 4,breakout 0,rally/decline 0,(older records AVG 0 ATR 1)") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
         CHECK(st.find("touch 13,new wave 3,origin close 0") != std::string::npos, "status: stops by reason (" << st.substr(st.find("STOPS,"), 50) << ")");
         wpc::Store chk; std::string why; CHECK(wpc::storeFromText(sto, "ES", 180, 3, 250000000LL, chk, why) && chk.dn.size() == 25 && sto.rfind("WAVEPOC_STORE,2,", 0) == 0, "(1.3.3) store (version 2) saved atomically with the day's 5 down candidates (14-bar lows) (" << why << ", " << chk.dn.size() << ")");
     }
     // no pre-draw call: everything in the post call
     {
         mock::Host P = A; P.userData = nullptr; mock::current = &P; x.calc(0); P.drawn.clear(); P.reason = REASON_DRAW; mdraw(x);
-        bool prof = false; for (const mock::Prim& p : P.drawn) prof = prof || (p.k == 'L' && p.col == 0x94A3B8);
+        bool prof = false; for (const mock::Prim& p : P.drawn) prof = prof || (p.k == 'F' && p.col == 0x22D3EE);   // (1.6.0) the cyan WPOC
         CHECK(prof, "IRT never pre-draws: the profile is drawn in the post call (never missing)");
         x.clear();
     }
@@ -237,7 +238,7 @@ int main(int argc, char** argv) {
         wipe(); seedStore("ES", 180, 3, (long long)F.t[0]);
         mock::Host V; V.vapMissing = { 10 }; mock::current = &V; chart(V, F, 79); x.calc(0); WState* sv = static_cast<WState*>(V.userData);
         CHECK(sv && sv->E.pendingCount() == 1 && sv->E.waves.size() == 5 && sv->E.waves[0].pending, "VAP missing -> the wave waits (pending), retried every 10 min");
-        drawBoth(x, V); int amber = 0; for (const mock::Prim& p : V.drawn) amber += p.k == 'F' && p.col == 0xC88C14;
+        drawBoth(x, V); int amber = 0; for (const mock::Prim& p : V.drawn) amber += p.k == 'F' && p.col == 0x22D3EE;   // (1.6.0) cyan WPOC
         CHECK(amber == 5, "(1.3.3) only the 4 complete waves (+ the provisional one) are drawn;  (+ the provisional one) is drawn " << amber);
         x.clear();
     }
@@ -378,10 +379,10 @@ int main(int argc, char** argv) {
         CHECK(beforeConf == 55, "drawn only once its end pivot is confirmed (bar 55 = IRT's reversal bar after the 13:42 low), not before (" << beforeConf << ")");
         if (sk && sk->E.waves.size() == 6) CHECK(!sk->E.waves[4].nodes.empty() && sk->E.waves[0].kind == wpc::K_WAVE && sk->E.waves[2].kind == wpc::K_WAVE, "its own nodes; the two sell waves stay kind WAVE");
         {   // drawn at the leg START (bar 47), its WPOC amber
-            mock::current = &K; K.drawn.clear(); K.reason = REASON_PREDRAW; mdraw(x);
+            mock::current = &K; K.drawn.clear(); K.reason = REASON_DRAW; mdraw(x);
             PNT p; p.set(47, 0.0f, kBarCenter); const int x0 = p.h - (int)std::lround(10 * 0.45); int at = 0, amb = 0;
-            for (const mock::Prim& q : K.drawn) { if (q.k == 'L' && q.col == 0x94A3B8 && q.x0 == q.x1 && q.x0 < x0 && q.x0 >= x0 - 31) ++at; if (q.k == 'F' && std::abs(q.x1 - x0) <= 1) amb += q.col == 0xC88C14; }   // (1.5.0) outline rows left of the start
-            CHECK(at > 5 && amb == 1, "the CoB leg's profile is drawn at its start (bar 47) with one amber WPOC (" << at << " rows, " << amb << ")");
+            for (const mock::Prim& q : K.drawn) { if (q.k == 'L' && q.col == 0x94A3B8) ++at; if (q.k == 'F' && std::abs(q.x0 - (x0 + 1)) <= 1) amb += q.col == 0x22D3EE; }   // (1.6.0) no outline; the cyan WPOC starts at the leg start
+            CHECK(at == 0 && amb == 1, "(1.6.0) the CoB leg's profile is drawn at its start (bar 47) with one cyan WPOC, no volume outline (" << at << " outline, " << amb << ")");
         }
         sk->statusMs = -1; mock::current = &K; x.calc(0);   // the status is written at most once a second: force the latest one
         const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt");

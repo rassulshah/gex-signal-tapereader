@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.6.0";   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -774,7 +774,8 @@ struct Prim {
     enum K { FILL, BOX, LINE, OVAL, TEXT } k = FILL;
     int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned long col = 0; int w = 1; std::string text; bool back = true; int bold = 0;
 };
-struct Colours { unsigned long prof = 0x334155, amber = 0xF5B428, amberFill = 0xC88C14, white = 0xE5E7EB, whiteFill = 0xB4BECD, zz = 0x78849A, zzBig = 0xCBD5E1, grey = 0x94A3B8, bid = 0x22C55E, offer = 0xEF4444, bg = 0x0B0F17, up = 0x22C55E, down = 0xEF4444; };   // (1.3.3) up / down = the spine (bullish green, bearish red)
+static const bool SHOW_VOL_LEFT = false;   // (1.6.0) the left volume profile (outline + HVN / WPOC fills); the WPOC is now cyan on the right
+struct Colours { unsigned long prof = 0x334155, amber = 0xF5B428, amberFill = 0xC88C14, white = 0xE5E7EB, whiteFill = 0xB4BECD, zz = 0x78849A, zzBig = 0xCBD5E1, grey = 0x94A3B8, cyan = 0x22D3EE, bid = 0x22C55E, offer = 0xEF4444, bg = 0x0B0F17, up = 0x22C55E, down = 0xEF4444; };   // (1.3.3) up / down = the spine (bullish green, bearish red)
 inline unsigned long mix(unsigned long c, unsigned long bg, double a) {   // a of the colour over the background
     unsigned long o = 0; for (int sh = 0; sh <= 16; sh += 8) { const double x = (double)((bg >> sh) & 255) + ((double)((c >> sh) & 255) - (double)((bg >> sh) & 255)) * a; o |= (unsigned long)std::lround(std::max(0.0, std::min(255.0, x))) << sh; }
     return o;
@@ -828,7 +829,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
     const bool haveDelta = !w.drows.empty() && (int)w.drows.size() == nr && w.dMax > 0;
     int dPoc = -1; if (haveDelta) for (int j = 0; j < nr; ++j) if (dPoc < 0 || std::llabs(w.drows[(size_t)j]) > std::llabs(w.drows[(size_t)dPoc])) dPoc = j;
     if (phase != 1) {
-        if (nr > 0 && w.maxVol > 0) {   // the volume OUTLINE, left
+        if (SHOW_VOL_LEFT && nr > 0 && w.maxVol > 0) {   // the volume OUTLINE, left (1.6.0: off - Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc")
             for (int j = 0; j < nr; ++j) {
                 double top, bot; rowY(j, top, bot); const double wj = vw(j);
                 if (wj > 0) addLine(s, x0 - wj, top, x0 - wj, bot, C.grey, 1, true);
@@ -870,7 +871,11 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
         const double yc = v.Y((double)nd.tick);
         if (yc < v.t - 10 || yc > v.b + 10) continue;
         ++s.nodesDrawn;
-        if (nd.row >= 0 && nd.row < nr && w.maxVol > 0) {
+        if (!SHOW_VOL_LEFT && poc && nd.row >= 0 && nd.row < nr) {   // (1.6.0) the WPOC: a CYAN line across the delta side (right), in front
+            double top, bot; rowY(nd.row, top, bot); const double yc = (top + bot) / 2.0;
+            Prim f; f.k = Prim::FILL; f.x0 = ci(x0 + 1); f.x1 = ci(x0 + 1 + PR); f.y0 = ci(yc - 1); f.y1 = ci(yc + 1); f.col = C.cyan; f.back = false; s.p.push_back(f);
+        }
+        if (SHOW_VOL_LEFT && nd.row >= 0 && nd.row < nr && w.maxVol > 0) {
             double top, bot; rowY(nd.row, top, bot);
             const double wj = vw(nd.row) > 0 ? vw(nd.row) : PL * (double)nd.vol / (double)w.maxVol;
             Prim f; f.k = Prim::FILL; f.x1 = ci(x0); f.x0 = ci(x0 - wj); f.y0 = ci(top + 0.5); f.y1 = ci(std::max(top + 1.0, bot - 0.5)); f.col = poc ? C.amberFill : C.whiteFill; f.back = true;
@@ -918,7 +923,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
         const double yp = v.Y((double)w.nodes[0].tick);
         for (int b : pbs) {
             if (b < v.first || b > v.last) continue;
-            addDashed(s, x0, v.X(b), yp, C.amber, 1);
+            addDashed(s, SHOW_VOL_LEFT ? x0 : x0 + 1 + PR, v.X(b), yp, SHOW_VOL_LEFT ? C.amber : C.cyan, 1);   // (1.6.0) cyan from the end of the delta side
             const Bar& br = (*bars)[(size_t)b];
             const std::string txt = "Pb"; const int tw = v.textW ? v.textW(txt, true) : 14; const double cx = v.X(b);
             const double ye = w.dir > 0 ? v.Y((double)br.l - 0.5) + 3 + PB_GAP : v.Y((double)br.h + 0.5) - 3 - 14 - PB_GAP;   // (1.5.0) one row past the bar: lsCandleAbsorb's code sits next to the extreme of the same pivot bar
@@ -934,7 +939,7 @@ inline void drawTags(Scene& s, const View& v, const Colours& C, std::vector<std:
     std::vector<T> ts;
     for (const auto& pr : tags) {
         const double y = v.Y((double)pr.second->tick); if (y < v.t + 4 || y > v.b - 4) continue;
-        T t; t.y = y; t.poc = pr.second->rank == 0; t.col = t.poc ? C.amber : C.white; t.text = tagText(*pr.second, v.tick);
+        T t; t.y = y; t.poc = pr.second->rank == 0; t.col = t.poc ? (SHOW_VOL_LEFT ? C.amber : C.cyan) : C.white; t.text = tagText(*pr.second, v.tick);
         t.w = v.textW ? v.textW(t.text, t.poc) : (int)t.text.size() * 7; ts.push_back(t);
     }
     if (ts.empty()) return;

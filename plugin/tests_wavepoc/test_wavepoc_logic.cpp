@@ -256,7 +256,7 @@ static void testLayout(const Fix& F) {
     (void)whiteLine1;
     {   // (1.2.0, Rassul 16:26 CT "remove the drawing of levels across the chart and from the wave pocs") no line / circle at all (zigzag off)
         int lines = 0, ovals = 0; for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::LINE && std::min(p.x0, p.x1) < xLast - 1 && !(p.w == 2 && p.x0 == p.x1) && p.col != 0x94A3B8 && p.col != 0xF5B428 && p.col != 0xE5E7EB) ++lines;   /* (1.5.0) not the volume outline (grey), the Pb dotted POC line (amber), the dotted node borders (white) */ /* (1.3.3) not the spines */ if (p.k == wpc::Prim::OVAL) ++ovals; }   // (the tag leader right of the last bar is the tag itself)
-        CHECK(!amberLine3 && lines == 0 && ovals == 0 && amberBox2 && noBoxes, "(1.2.0) no node lines / touch circles / end ticks; WPOC = the bright amber row; no outline boxes (" << lines << " lines, " << ovals << " ovals)");
+        if (wpc::SHOW_VOL_LEFT) CHECK(!amberLine3 && lines == 0 && ovals == 0 && amberBox2 && noBoxes, "(1.2.0) no node lines / touch circles / end ticks; WPOC = the bright amber row; no outline boxes (" << lines << " lines, " << ovals << " ovals)");   // (1.6.0) the left volume profile is off: checked in test_wavepoc_150 instead
         // tags only for nodes still OPEN (untouched, wave not replaced, origin not broken)
         int open = 0, closed = 0; for (const wpc::Wave& w : E.waves) if (!w.pending) for (const wpc::Node& nd : w.nodes) { if (nd.stop == wpc::OPEN) ++open; else ++closed; }
         CHECK(closed > 0 && sc.tagsShown + sc.tagsHidden == open, "(1.2.0) tags only for OPEN nodes (" << sc.tagsShown + sc.tagsHidden << " tags, " << open << " open, " << closed << " closed)");
@@ -266,7 +266,7 @@ static void testLayout(const Fix& F) {
             const double x0 = v.X(w.i0) - v.bw * 0.45; int mn = 1 << 30;
             for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.col == 0x94A3B8 && p.x0 == p.x1 && p.x0 <= (int)std::lround(x0) && p.x0 >= (int)std::lround(x0) - 31) mn = std::min(mn, p.x0);
             ++waves; if (std::abs(mn - (int)std::lround(x0 - wpc::SIDE_W)) > 1) wOk = false; }
-        CHECK(waves > 0 && wOk && wpc::SIDE_W == 30, "(1.5.0) the volume outline points LEFT, its widest row = 30 px (" << waves << " waves)");
+        if (wpc::SHOW_VOL_LEFT) CHECK(waves > 0 && wOk && wpc::SIDE_W == 30, "(1.5.0) the volume outline points LEFT, its widest row = 30 px (" << waves << " waves)");   // (1.6.0) the left volume profile is off: checked in test_wavepoc_150 instead
     }
     CHECK(sc.nodesDrawn <= 5 * sc.wavesDrawn && sc.nodesDrawn == 13, "(1.3.3) nodes drawn = 5 + 2 + 3 + 3 (four waves confirmed by 13:33), at most 5 per wave (" << sc.nodesDrawn << ")");
     {   // (1.3.3, Rassul 04:52 CT) the spine: one 2 px vertical line per drawn wave at its profile start x, over start pivot .. end pivot; green up, red down
@@ -277,7 +277,7 @@ static void testLayout(const Fix& F) {
             sp += n; if (n != 1) ok = false; }
         CHECK(ok && sp == 4, "(1.3.3) spines: 4 waves, one each, green up / red down, spanning the wave's range (" << sp << ")"); }
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.5.0", "header Wave POC v1.5.0");
+    CHECK(header && std::string(wpc::VERSION) == "1.6.0", "header Wave POC v1.6.0");
     {   // (1.4.0) the open WPOC handed to lsDealerProfile: the latest confirmed wave's node [0] while OPEN, else none
         long long tk = 0; const bool has = wpc::latestOpenPoc(E, tk);
         const wpc::Wave* lw = nullptr; for (const wpc::Wave& w : E.waves) if (!w.pending) lw = &w;
@@ -301,7 +301,7 @@ static void testLayout(const Fix& F) {
     // the profile sits at the wave start, pointing right, behind the candles
     bool profAtStart = false; const int xs6 = (int)std::lround(v.X(6) - v.bw * 0.45);
     for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.col == 0x94A3B8 && p.x0 == p.x1 && p.x0 < xs6 && p.x0 >= xs6 - 31) profAtStart = profAtStart || p.back;
-    CHECK(profAtStart, "(1.5.0) the volume outline drawn left of the wave start (behind the candles)");
+    if (wpc::SHOW_VOL_LEFT) CHECK(profAtStart, "(1.5.0) the volume outline drawn left of the wave start (behind the candles)");   // (1.6.0) the left volume profile is off: checked in test_wavepoc_150 instead
 }
 
 // ---- (1.1.0) liquidity nodes ----
@@ -580,16 +580,16 @@ static void test132() {
         bool one = true; for (const auto& kv : rowsAtY) one = one && kv.second == 1;
         for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.x1 == xs && (p.col == 0xC88C14 || p.col == 0xB4BECD)) { ++hl; const int yc = (p.y0 + p.y1) / 2;
             for (const wpc::Prim& q : sc.p) if (q.k == wpc::Prim::LINE && q.col == 0x94A3B8 && q.x0 == q.x1 && q.x0 == p.x0 && std::min(q.y0, q.y1) <= yc && std::max(q.y0, q.y1) >= yc) { ++hlOk; break; } }
-        CHECK(!rowsAtY.empty() && one, "(1.3.2/1.5.0) one profile outline segment per row at that start (no stacked profiles)");
-        CHECK(boxes == 0 && hl > 0 && hl == hlOk, "(1.5.0) no delta (fixture has none) = no box; each highlight reaches exactly its own row's outline, filled (" << hl << "/" << hlOk << ")");
+        if (wpc::SHOW_VOL_LEFT) CHECK(!rowsAtY.empty() && one, "(1.3.2/1.5.0) one profile outline segment per row at that start (no stacked profiles)");   // (1.6.0) the left volume profile is off: checked in test_wavepoc_150 instead
+        if (wpc::SHOW_VOL_LEFT) CHECK(boxes == 0 && hl > 0 && hl == hlOk, "(1.5.0) no delta (fixture has none) = no box; each highlight reaches exactly its own row's outline, filled (" << hl << "/" << hlOk << ")");   // (1.6.0) the left volume profile is off: checked in test_wavepoc_150 instead
         bool seenHl = false, after = false; for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD)) seenHl = true; else if (seenHl && p.k == wpc::Prim::LINE && p.col == 0x94A3B8) after = true; }
-        CHECK(seenHl && !after, "(1.3.2) every profile outline is drawn before any highlight (nothing paints over a highlight)");
+        if (wpc::SHOW_VOL_LEFT) CHECK(seenHl && !after, "(1.3.2) every profile outline is drawn before any highlight (nothing paints over a highlight)");   // (1.6.0) the left volume profile is off: checked in test_wavepoc_150 instead
         // (c) the Levels column: nothing left of clipL; a profile starting inside it is CLIPPED (its rows keep their right ends)
         wpc::View c = v; c.clipL = xs - 12; c.clipR = 1200;
         const wpc::Scene s2 = wpc::layout(E, nullptr, c);
         bool inside = true; int cut = 0; for (const wpc::Prim& p : s2.p) { if (std::min(p.x0, p.x1) < c.clipL || std::max(p.x0, p.x1) > c.clipR) inside = false; if (p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD) && p.x0 == c.clipL && p.x1 == xs) ++cut; }   /* this start's rows only */
         int sameEnds = 0; for (const wpc::Prim& p : s2.p) if (p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD) && p.x0 == c.clipL) for (const wpc::Prim& q : sc.p) if (q.k == wpc::Prim::FILL && q.col == p.col && q.y0 == p.y0 && q.x1 == xs && p.x1 == xs && q.x0 <= c.clipL) { ++sameEnds; break; }
-        CHECK(inside && cut > 0 && sameEnds == cut, "(1.3.2) Levels column: nothing drawn left of it, the profile is clipped not shifted (" << cut << " rows cut, " << sameEnds << " same ends, inside " << inside << ")");
+        if (wpc::SHOW_VOL_LEFT) CHECK(inside && cut > 0 && sameEnds == cut, "(1.3.2) Levels column: nothing drawn left of it, the profile is clipped not shifted (" << cut << " rows cut, " << sameEnds << " same ends, inside " << inside << ")");   // (1.6.0) the left volume profile is off: checked in test_wavepoc_150 instead
         bool hdr = false; for (const wpc::Prim& p : s2.p) hdr = hdr || (p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC v", 0) == 0 && p.x0 >= c.clipL && p.x1 == std::min(c.r, c.clipR) - 4 && p.y1 == c.b - 3);
         CHECK(hdr, "(1.4.2) the version header sits bottom-right inside the drawing area (right of the Levels column, off the top-left banner)");
     }

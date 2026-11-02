@@ -134,7 +134,10 @@ int main(int argc, char** argv) {
         CHECK(lets == sc.lettersDrawn && letOk, "each letter is bold, front, on its own background patch (" << lets << ")");
         // Pb: text + the amber dashed line from the POC
         int pbT = 0, amber = 0; for (const wpc::Prim& p : sc.p) { pbT += p.k == wpc::Prim::TEXT && p.text == "Pb"; amber += p.k == wpc::Prim::LINE && p.col == 0xF5B428; }
-        CHECK(pbT == sc.pbDrawn && amber > 0, "Pb text and the amber dotted POC line (" << pbT << ", " << amber << " dashes)");
+        int cyanL = 0, cyanF = 0, greyL = 0, amberF = 0; for (const wpc::Prim& p : sc.p) { cyanL += p.k == wpc::Prim::LINE && p.col == 0x22D3EE; cyanF += p.k == wpc::Prim::FILL && p.col == 0x22D3EE && !p.back; greyL += p.k == wpc::Prim::LINE && p.col == 0x94A3B8; amberF += p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD); }
+        CHECK(pbT == sc.pbDrawn && cyanL > 0 && amber == 0, "(1.6.0) Pb text and the CYAN dotted POC line (" << pbT << ", " << cyanL << " dashes, amber " << amber << ")");
+        CHECK(greyL == 0 && amberF == 0, "(1.6.0) no left volume profile: no grey outline lines (" << greyL << "), no HVN / amber WPOC fills (" << amberF << ")");
+        CHECK(cyanF >= sc.wavesDrawn / 2 && cyanF > 0, "(1.6.0) a cyan WPOC line on the delta side per profiled wave (" << cyanF << " for " << sc.wavesDrawn << " waves)");
         // the volume side never crosses the wave start to the right; the delta side never crosses the next wave start
         std::cerr << "fixture: " << q << " waves (" << rev << " reversal, " << bo << " breakout, " << ra << " rally), letters " << sc.lettersDrawn << ", Pb " << sc.pbDrawn << ", boxes " << sc.boxesDrawn << "\n";
         // status text names the new rule
