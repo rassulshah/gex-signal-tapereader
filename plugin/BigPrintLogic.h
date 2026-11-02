@@ -69,8 +69,11 @@ inline Scene layout(const Engine& E, const View& v)
     Scene S;
     const int n = (int)E.B.size();
     auto barAt = [&](int j, Bar& b, Counts& c) { if (j >= 0 && j < n) { b = E.B[(size_t)j]; c = E.C[(size_t)j]; return true; } if (v.haveForm && j == v.formIdx) { b = v.form; c = v.formC; return true; } return false; };
+    // the scale: the 95th percentile of the visible bars (one settlement / news bar must not flatten the rest); taller bars are clipped
+    std::vector<double> vals;
+    for (int j = v.first; j <= v.last; ++j) { Bar b; Counts c; if (barAt(j, b, c) && b.vap) { vals.push_back(b.buy); vals.push_back(b.sell); } }
     double mx = 0;
-    for (int j = v.first; j <= v.last; ++j) { Bar b; Counts c; if (barAt(j, b, c) && b.vap) mx = std::max(mx, std::max(b.buy, b.sell)); }
+    if (!vals.empty()) { std::sort(vals.begin(), vals.end()); mx = vals.size() >= 20 ? vals[(size_t)((vals.size() - 1) * 0.95)] : vals.back(); }
     S.scaleMax = mx; if (!(mx > 0)) return S;
     const int top = v.t + 16, base = v.b - 2;                   // the V row at the top, the baseline at the bottom
     const int avail = base - top - 26;                          // room for two number rows above the tallest bar
@@ -81,7 +84,7 @@ inline Scene layout(const Engine& E, const View& v)
         Bar b; Counts c; if (!barAt(j, b, c)) continue;
         const double x = v.X(j); if (x < v.l - 20 || x > v.r + 20) continue;
         if (b.vap) {
-            const int hb = (int)std::lround(avail * b.buy / mx), hs = (int)std::lround(avail * b.sell / mx);
+            const int hb = (int)std::lround(avail * std::min(1.0, b.buy / mx)), hs = (int)std::lround(avail * std::min(1.0, b.sell / mx));
             Prim g; g.x0 = (int)std::lround(x - hw); g.x1 = (int)std::lround(x) - 1; g.y0 = base - hb; g.y1 = base; g.col = c.green >= STRONG ? C_G : C_GD;
             Prim r; r.x0 = (int)std::lround(x); r.x1 = (int)std::lround(x + hw) - 1; r.y0 = base - hs; r.y1 = base; r.col = c.red >= STRONG ? C_R : C_RD;
             if (g.x1 < g.x0) g.x1 = g.x0; if (r.x1 < r.x0) r.x1 = r.x0;
