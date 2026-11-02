@@ -20,49 +20,42 @@ static std::vector<wpc::Bar> flat(int n, long long c) { std::vector<wpc::Bar> B(
 static int count(const std::vector<wpc::Letter>& L, char t) { int k = 0; for (auto& x : L) k += x.t == t; return k; }
 
 int main(int argc, char** argv) {
-    // ---- 1. the letters (Rassul 06:35 CT "identify 2 largest nodes, box them (solid box), classify them") ----
-    {   // I = with the wave in the first third; T = with, last quarter + close back within 5 bars
-        std::vector<wpc::Bar> B = flat(12, 195); B[7].c = 188;   // closes back below row 90 (tick 190) 2 bars after the pivot
-        wpc::Wave w = upWave({{10, 100}, {90, 95}, {50, -90}, {52, -85}});
+    // ---- 1. the letters (1.6.2, Rassul 2026-11-02 09:54 CT "first consider top 3 nodes, then placement: if its in the first 1/2 it can be
+    //      absorbtion or initiation, if it is in the last 20% with the wave, consider it to be trapped traders")
+    {   const std::vector<wpc::Bar> B = flat(12, 195);
+        wpc::Wave w = upWave({{10, 100}, {90, 95}, {40, -90}, {60, 85}});   // 4 big rows: the 4th (85) is left out
         const auto top = wpc::topDelta(w);
-        CHECK(top.size() == 2 && top[0] == 10 && top[1] == 90 && wpc::LET_TOP == 2, "top 2 by |delta|, biggest first (3rd and 4th left out)");
+        CHECK(top.size() == 3 && top[0] == 10 && top[1] == 90 && top[2] == 40 && wpc::LET_TOP == 3, "top 3 by |delta|, biggest first (the 4th left out)");
         const auto L = wpc::letters(w, B);
-        CHECK(count(L, 'I') == 1 && count(L, 'T') == 0 && count(L, 'A') == 0 && L.size() == 1, "(1.6.2) I only: the 95 row near the top is the 2nd biggest, not the delta POC (100 at row 10) - no T (" << L.size() << ")");
+        CHECK(count(L, 'I') == 1 && count(L, 'A') == 1 && count(L, 'T') == 1 && L.size() == 3, "I (10%, green) + A (40%, red) + T (90%, green) (" << L.size() << ")");
         for (auto& x : L) {
-            if (x.t == 'I') CHECK(x.row == 10 && x.bull, "I? on row 10, wave colour (green for an up wave)");
-            if (x.t == 'T') CHECK(false, "no T expected here");
+            if (x.t == 'I') CHECK(x.row == 10 && x.bull, "I? on row 10 in the wave's colour (green, up wave)");
+            if (x.t == 'A') CHECK(x.row == 40 && x.bull, "A? on row 40 (against, first half) in the wave's colour (green: sellers absorbed)");
+            if (x.t == 'T') CHECK(x.row == 90 && !x.bull, "T? on row 90 (with, last 20%) in the opposite colour (red: buyers trapped)");
         }
-        std::vector<wpc::Bar> B2 = flat(12, 195);
-        wpc::Wave wt = upWave({{90, 120}, {10, 100}});   // the delta POC (120) near the top, with the wave
-        CHECK(count(wpc::letters(wt, B2), 'T') == 1, "(1.6.2) the delta POC with the wave in the last 20% = T, no close back needed");
-        std::vector<wpc::Bar> B3 = flat(12, 195); B3[11].c = 188;   // 6 bars after the pivot: too late
-        CHECK(count(wpc::letters(wt, B3), 'T') == 1, "(1.6.2) what the bars do after the pivot never changes T");
-        wpc::Wave w4 = upWave({{78, 95}});   // with the wave at 78% of the way up: below the top 20% - no T
-        CHECK(count(wpc::letters(w4, B2), 'T') == 0, "(1.6.2) heavy green delta at 78% (not in the top 20%) = no T");
-        wpc::Wave w5 = upWave({{80, 95}});
-        CHECK(count(wpc::letters(w5, B2), 'T') == 1, "(1.6.2) heavy green delta at 80% = T (red, the trapped buyers)");
-        wpc::Wave w6 = upWave({}); w6.dir = -1; w6.p0 = 200; w6.p1 = 100; w6.drows.assign(101, 10); w6.drows[10] = -120; w6.dMax = 120;
-        { const auto L6 = wpc::letters(w6, B2); CHECK(L6.size() == 1 && L6[0].t == 'T' && L6[0].bull, "(1.6.2) down wave: heavy RED delta near the bottom (10%) = T, green"); }
+        CHECK(count(wpc::letters(upWave({{50, 95}}), B), 'I') == 1 && count(wpc::letters(upWave({{51, 95}}), B), 'I') == 0, "I? up to the halfway mark (50% yes, 51% no)");
+        CHECK(count(wpc::letters(upWave({{50, -95}}), B), 'A') == 1 && count(wpc::letters(upWave({{51, -95}}), B), 'A') == 0, "A? up to the halfway mark (50% yes, 51% no)");
+        CHECK(count(wpc::letters(upWave({{80, 95}}), B), 'T') == 1 && count(wpc::letters(upWave({{79, 95}}), B), 'T') == 0, "T? from 80% (80% yes, 79% no)");
+        CHECK(wpc::letters(upWave({{65, 95}, {90, -95}}), B).empty(), "with the wave at 65% and against it in the last 20%: no letter");
+        CHECK(wpc::letters(upWave({{10, 19}}), B).empty(), "a 1.9x row: no letter");
+        wpc::Wave w4 = upWave({{10, 300}, {20, 290}, {30, 280}, {90, 95}});   // the green row near the top is only 4th biggest: no T
+        CHECK(count(wpc::letters(w4, B), 'T') == 0, "a with-wave row near the top that is not in the top 3: no T");
+        std::vector<wpc::Bar> B3 = flat(12, 195); B3[7].c = 188;
+        CHECK(count(wpc::letters(upWave({{90, 95}}), B3), 'T') == 1, "what the bars do after the pivot never changes a letter");
     }
-    {   // A = against the wave before its last quarter, wave colour; two A rows within 10 ticks = one letter
-        wpc::Wave w = upWave({{50, -90}, {52, -85}, {20, 40}});
+    {   // the same letter within 10% of the wave (min 8 ticks): the bigger row keeps it
+        wpc::Wave w = upWave({{30, -90}, {34, -85}, {5, 40}});
         const auto L = wpc::letters(w, flat(12, 195));
-        CHECK(L.size() == 1 && L[0].t == 'A' && L[0].row == 50 && L[0].bull, "A? on the bigger against row, wave colour; the 2nd merged (" << L.size() << ")");
+        CHECK(count(L, 'A') == 1 && L[0].row == 30, "two A rows 4 ticks apart = one A on the bigger (" << count(L, 'A') << ")");
     }
-    {   // rows under 2x the median never get a letter; with-wave rows in the middle get none
-        wpc::Wave w = upWave({{20, 19}, {60, 200}});
-        const auto L = wpc::letters(w, flat(12, 195));
-        CHECK(L.empty(), "a 1.9x row and a with-wave middle row: no letter (" << L.size() << ")");
+    {   // down wave mirror: I near the TOP (red), A green near the top, T near the BOTTOM (green)
+        wpc::Wave w = upWave({}); w.dir = -1; w.p0 = 200; w.p1 = 100; w.drows.assign(101, -10); w.drows[95] = -120; w.drows[70] = 110; w.drows[10] = -100; w.dMax = 120;
+        const auto L = wpc::letters(w, flat(12, 105)); int i = 0, a2 = 0, t = 0;
+        for (auto& x : L) { if (x.t == 'I') i += x.row == 95 && !x.bull; if (x.t == 'A') a2 += x.row == 70 && !x.bull; if (x.t == 'T') t += x.row == 10 && x.bull; }
+        CHECK(i == 1 && a2 == 1 && t == 1 && L.size() == 3, "down wave: I? red near the top, A? red (wave colour) at 30%, T? green near the bottom (" << L.size() << ")");
     }
-    {   // the far A rows are separate letters; an A in the last quarter is not an A
-        wpc::Wave w = upWave({{30, -60}, {60, -70}, {80, -90}});
-        const auto L = wpc::letters(w, flat(12, 195));
-        CHECK(count(L, 'A') == 1 && L[0].row == 60, "top 2 = 80% and 60%: A at 60%, none at 80% (last quarter) (" << count(L, 'A') << ")");
-    }
-    {   // down wave mirror: an I in the first third of a down wave is near its TOP and red
-        wpc::Wave w = upWave({}); w.dir = -1; w.p0 = 200; w.p1 = 100; w.drows.assign(101, -10); w.drows[95] = -120; w.dMax = 120;
-        const auto L = wpc::letters(w, flat(12, 105));
-        CHECK(L.size() == 1 && L[0].t == 'I' && L[0].row == 95 && !L[0].bull, "down wave: I? near the top, red");
+    {   // (1.6.2) no cluster A?: letters come from the top-3 nodes only
+        CHECK(!wpc::CLUSTER_A, "cluster A? off");
     }
     {   // distribution around a node: same sign, >= median, contiguous
         wpc::Wave w = upWave({{40, 30}, {41, 60}, {42, 12}, {43, -50}, {39, 9}});
@@ -74,7 +67,7 @@ int main(int argc, char** argv) {
         int a = -1, b = -1; const long long best = wpc::Engine::clusterBest(w, &a, &b);
         CHECK(best == 8 * 15 - 0 && a == 48 && b == 55, "cluster band = the 8-tick against band in the middle (" << best << " " << a << "-" << b << ")");
         w.clRef = 50; auto L = wpc::letters(w, flat(12, 195));
-        CHECK(L.size() == 1 && L[0].t == 'A' && L[0].cluster && L[0].a == 48, "cluster 120 >= 2.0 x reference 50 -> one A? with its band");
+        CHECK(L.empty(), "(1.6.2) cluster A? off: a 120 band >= 2.0 x reference 50 no longer makes an A?");
         w.clRef = 70; L = wpc::letters(w, flat(12, 195));
         CHECK(L.empty(), "cluster 120 < 2.0 x 70 -> no cluster A");
         w.clRef = 0; CHECK(wpc::letters(w, flat(12, 195)).empty(), "no reference yet (fewer than 10 waves) -> no cluster A");
@@ -132,8 +125,8 @@ int main(int argc, char** argv) {
         int boxW = 0; for (const wpc::Prim& p : sc.p) boxW += p.k == wpc::Prim::BOX && p.col == 0xE5E7EB;
         int front = 0, dots = 0; for (const wpc::Prim& p : sc.p) { front += p.k == wpc::Prim::BOX && p.col == 0xE5E7EB && !p.back; dots += p.k == wpc::Prim::LINE && p.col == 0xE5E7EB; }
         CHECK(boxW > 0 && front == sc.boxesDrawn && dots == 0, "the 2 biggest nodes' distributions in SOLID white boxes (no dotted lines) (" << front << " / " << sc.boxesDrawn << ")");
-        bool atMost2 = true; for (const wpc::Wave& w : E.waves) if (!w.provisional) atMost2 = atMost2 && wpc::topDelta(w).size() <= 2;
-        CHECK(atMost2, "every wave: at most 2 boxed / classified nodes");
+        bool atMost2 = true; for (const wpc::Wave& w : E.waves) if (!w.provisional) atMost2 = atMost2 && wpc::topDelta(w).size() <= 3;
+        CHECK(atMost2, "(1.6.2) every wave: at most 3 boxed / classified nodes");
         // letters: the text sits over its row, centred, on a background patch, never more than the 30 px side + its width
         bool letOk = true; int lets = 0;
         for (size_t k = 0; k < sc.p.size(); ++k) { const wpc::Prim& p = sc.p[k]; if (p.k != wpc::Prim::TEXT || p.text.size() != 2 || p.text[1] != '?') continue; ++lets;

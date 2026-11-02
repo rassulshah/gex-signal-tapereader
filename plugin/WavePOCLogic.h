@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.6.2";   // (1.6.2, Rassul 09:44 CT) T? = the wave's delta POC, with the wave, in its last 20% (up wave: the biggest row green near the top; down wave: red near the bottom), decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.6.2";   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first half of the wave = I? (with) / A? (against), last 20% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -59,12 +59,14 @@ static const double LNODE_W = 40;        // (1.2.0) the liquidity node max width
 // (1.5.0) the profile sides, letters and pullbacks
 static const double SIDE_W = 30;        // px each side: volume (left) / delta (right) (Rassul 10-31 22:48 CT "40 px on both sides is too much, reduce to 30")
 static const double RALLY_MULT = 4.0;   // a rally / decline wave: bigger than 4 ATR on its own
-static const int LET_TOP = 2;           // (1.5.0, Rassul 2026-11-01 06:35 CT "instead of 4 lets shorten it to 2") the 2 biggest delta rows (each >= 2x the wave median |delta|) are boxed and classified
+static const int LET_TOP = 3;   // (1.6.2, Rassul 2026-11-02 09:54 CT "first consider top 3 nodes, then placement")   // was 2:           // (1.5.0, Rassul 2026-11-01 06:35 CT "instead of 4 lets shorten it to 2") the 2 biggest delta rows (each >= 2x the wave median |delta|) are boxed and classified
 static const int CL_BAND = 8;           // cluster A: 8-tick delta bands
 static const int CL_N = 20, CL_MIN = 10;// cluster A: vs the median of the prior 20 waves (needs 10)
 static const double CL_X = 2.0;         // cluster A: band >= 2.0x that median
 static const int TRAP_BARS = 5;         // (unused since 1.6.2) T used to need a close back through the node within 5 bars after the end pivot
-static const double T_ZONE = 0.80;     // (1.6.2, Rassul 2026-11-02 09:44 CT "keep T simple, its an upwave with heavy green delta in the end of the wave near the top (20%) and vice versa") + 09:46 "we should also make it the poc of the wave") T = the wave's delta POC (its biggest delta row), with the wave, in the last 20%
+static const double I_A_ZONE = 0.50;   // (1.6.2) I? / A?: a top-3 node in the FIRST half of the wave (with the wave = I, against = A)
+static const bool CLUSTER_A = false;   // (1.6.2) the 8-tick cluster A? is off: letters come from the top-3 nodes only
+static const double T_ZONE = 0.80;     // (1.6.2, Rassul 2026-11-02 09:44 CT "keep T simple, its an upwave with heavy green delta in the end of the wave near the top (20%) and vice versa") + 09:46 "we should also make it the poc of the wave") T = the wave's biggest with-wave row (green among green in an up wave, red among red in a down wave; 09:51), >= 2x the median, in the last 20%
 static const int PB_GAP = 16;   // (1.5.0) Pb one text row away from the bar (the candle code A? / Ae? / D? / S? owns the row next to it)
 static const int PB_MAX = 3;            // POC pullback: the next 3 pullback pivots after the wave
 
@@ -729,14 +731,15 @@ inline std::vector<Letter> letters(const Wave& w, const std::vector<Bar>& B) {
     for (int j : cand) {
         const long long d = w.drows[(size_t)j], t = tickOf(j); const bool with = d * w.dir > 0; const double f = posf(t);
         Letter L; L.row = j;
-        if (with && f <= 1.0 / 3.0 + 1e-9) { L.t = 'I'; L.bull = wc; }
-        else if (!with && f < 0.75) { L.t = 'A'; L.bull = wc; }
-        else if (with && f >= T_ZONE - 1e-9 && j == cand.front()) { L.t = 'T'; L.bull = !wc; }   // (1.6.2) the wave's DELTA POC (its biggest row), with the wave, in the top / bottom 20%: no close-back wait
+        // (1.6.2, Rassul 09:54 CT) "first consider top 3 nodes, then placement: if its in the first 1/2 it can be absorbtion or initiation,
+        // if it is in the last 20% with the wave, consider it to be trapped traders"
+        if (f <= I_A_ZONE + 1e-9) { if (with) { L.t = 'I'; L.bull = wc; } else { L.t = 'A'; L.bull = wc; } }   // both in the wave's colour
+        else if (with && f >= T_ZONE - 1e-9) { L.t = 'T'; L.bull = !wc; }                                      // the trapped side's opposite colour
         else continue;
         bool dup = false; for (const Letter& o : out) if (o.t == L.t && (L.t == 'T' || std::llabs(tickOf(o.row) - t) <= sep)) dup = true;
         if (!dup) out.push_back(L);
     }
-    if (w.clRef > 0) {
+    if (CLUSTER_A && w.clRef > 0) {
         int a = -1, b = -1; const long long best = Engine::clusterBest(w, &a, &b);
         if (best > 0 && (double)best >= CL_X * w.clRef && a >= 0) {
             const long long c0 = tickOf(a) - CL_BAND, c1 = tickOf(b) + CL_BAND; bool near = false;
