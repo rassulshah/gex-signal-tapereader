@@ -5,7 +5,7 @@
 
 namespace hlset {
 
-static const char* const PLUGIN_VERSION = "2.16.0";   // (2.16.0) no settings change   // was "2.15.4":   // (2.15.4) no settings change   // was "2.15.3":   // (2.15.3) no settings change   // was "2.15.2":   // (2.15.2) no settings change   // was "2.15.1":   // (2.14.3) no settings change   // was "2.14.2":   // (2.14.2) no settings change   // was "2.14.1":   // (2.14.1) no settings change (compact)   // was "2.14.0":   // (2.14.0) no settings change (new box design)   // was "2.13.0":   // (2.13.0) no settings change (the HOD / LOD sweep sections)   // was "2.12.0":   // (2.12.0) no settings change (box trimmed: no Q-Scores / 1ST-2ND row / Est / footer; column separator)
+static const char* const PLUGIN_VERSION = "2.17.0";   // (2.17.0) no settings change   // was "2.16.0":   // (2.16.0) no settings change   // was "2.15.4":   // (2.15.4) no settings change   // was "2.15.3":   // (2.15.3) no settings change   // was "2.15.2":   // (2.15.2) no settings change   // was "2.15.1":   // (2.14.3) no settings change   // was "2.14.2":   // (2.14.2) no settings change   // was "2.14.1":   // (2.14.1) no settings change (compact)   // was "2.14.0":   // (2.14.0) no settings change (new box design)   // was "2.13.0":   // (2.13.0) no settings change (the HOD / LOD sweep sections)   // was "2.12.0":   // (2.12.0) no settings change (box trimmed: no Q-Scores / 1ST-2ND row / Est / footer; column separator)
 // was 2.11.0:
 //   2.11.0: (2.11.0) no settings change (docks bottom-left, right of the Key Levels column; no S / R squares; smaller spot)
 // was 2.9.3
