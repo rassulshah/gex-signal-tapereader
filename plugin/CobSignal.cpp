@@ -1,5 +1,5 @@
 /********************************************************************************
- *  CobSignal.cpp  --  Investor/RT RTX extension  lsCobSignal  "CoB Signal"  1.0.0  (2026-11-01)
+ *  CobSignal.cpp  --  Investor/RT RTX extension  lsCobSignal  "CoB Signal"  1.1.0  (2026-11-02; 1.0.0 2026-11-01)
  *
  *  Rassul 2026-11-01 22:12-22:24 CT ("i want you to build the cob signals instead of me having my own", "consider the new levels also
  *  PHH and PHL", labels "Cob , Cob+R , Cob+V", mockup cob_ba_mockup v2 "build"): his CoB computed natively from the chart's own bars,
@@ -44,7 +44,7 @@
 #define CS_SEP "/"
 #endif
 
-static const char* CS_VERSION = "1.0.0";   // = cobs::VERSION = the setVersion literal
+static const char* CS_VERSION = "1.1.0";   // = cobs::VERSION = the setVersion literal
 
 static long long csMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string csFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + CS_SEP "InvestorRT" CS_SEP "rtx" CS_SEP "lsFlexLevels" : std::string(); }
@@ -159,7 +159,7 @@ void CobSignal::flush(CSState& S) {
             const std::string d = csFlex(); csMkdir(d); csMkdir(d + CS_SEP "CobSignal");
             const bool isNew = !csExists(S.recPath);
             std::ofstream f(S.recPath.c_str(), std::ios::binary | std::ios::app);
-            if (f) { if (isNew) f << "# lsCobSignal: COB,bar end (local secs),BULL/BEAR,label,levels swept,dratio,LOD/HOD,ADR,leg start,leg end,R since,V since\n"; for (const std::string& l : fresh) f << l << "\n"; f.flush(); }
+            if (f) { if (isNew) f << "# lsCobSignal: COB,bar end (local secs),BULL/BEAR,label,levels swept,dratio,LOD/HOD,ADR,leg start,leg end,R since,V since,SHOW / LOG (1.1.0)\n"; for (const std::string& l : fresh) f << l << "\n"; f.flush(); }
             if (f.good()) { for (const std::string& l : fresh) { char* e = nullptr; S.written.insert(std::strtoll(l.c_str() + 4, &e, 10)); } S.recWhy = "appending"; }
             else { ++S.recFails; S.recWhy = "append failed " + std::to_string(S.recFails) + "x"; }
         }
@@ -167,7 +167,7 @@ void CobSignal::flush(CSState& S) {
     }
     if (S.E.marks.size() != S.liveN && !S.livePath.empty()) {          // every CoB on the loaded bars, for the other indicators
         std::string body = std::string("COBSIGNAL,") + CS_VERSION + "\n";
-        for (const cobs::Mark& m : S.E.marks) body += S.E.recLine(m) + "\n";
+        for (const cobs::Mark& m : S.E.marks) if (m.show) body += S.E.recLine(m) + "\n";   // (1.1.0) the drawn CoBs only (LOG ones stay in the record)
         csMkdir(csFlex()); if (csPublish(S.livePath, body)) S.liveN = S.E.marks.size();
     }
 }
@@ -217,7 +217,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.0.0 - his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PHH/PHL; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted.");
-    p->setVersion("1.0.0");   // = CS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA CoB Signal v1.1.0 - his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PHH/PHL; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00; a PHH/PHL-only CoB is drawn in ES, HG, GC and recorded only elsewhere): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted.");
+    p->setVersion("1.1.0");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }

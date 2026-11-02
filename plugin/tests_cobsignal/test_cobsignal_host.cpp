@@ -50,6 +50,18 @@ int main(int argc, char** argv) {
     { bool sub = true; for (const cobs::Mark& m : O.marks) { bool f = false; for (const cobs::Mark& n : L.marks) f = f || (n.t == m.t && n.side == m.side); sub = sub && f; } CHECK(sub, "every CoB without PHH / PHL is still a CoB with them"); }
     { bool lab = true; for (const cobs::Mark& m : L.marks) { const std::string s = m.label(); lab = lab && (s == "Cob" || s == "Cob+R" || s == "Cob+V" || s == "Cob+RV") && (s.find('R') != std::string::npos) == m.r && (s.find('V') != std::string::npos) == m.v; } CHECK(lab, "labels Cob / Cob+R / Cob+V / Cob+RV only, matching the tags"); }
     { bool rules = true; for (const cobs::Mark& m : L.marks) { const int mod = (int)(m.t % 86400) / 60; rules = rules && m.dratio >= 1.9 && m.legEnd - m.legStart >= 3 && (m.side < 0 || mod <= 660) && mod >= 510 && mod <= 900; } CHECK(rules, "every CoB: dratio >= 1.9, >= 3 bars, RTH, bulls by 11:00"); }
+    // ---- (1.1.0) PHH / PHL-only CoBs: drawn in ES / HG / GC, recorded (LOG) but not drawn in the other markets
+    {   int phOnly = 0, esShow = 0; for (const cobs::Mark& m : L.marks) { phOnly += m.phOnly; esShow += m.phOnly && m.show; }
+        CHECK(phOnly > 0 && esShow == phOnly, "ES: every PHH / PHL-only CoB is drawn (" << esShow << " of " << phOnly << ")");
+        cobs::Engine C; C.setMarket("CL", 0.25, 180); for (size_t i = 0; i + 1 < F.B.size(); ++i) C.addBar(F.B[i]);   // the same bars as "CL"
+        int cOnly = 0, cShow = 0, other = 0, otherShow = 0; for (const cobs::Mark& m : C.marks) { cOnly += m.phOnly; cShow += m.phOnly && m.show; other += !m.phOnly; otherShow += !m.phOnly && m.show; }
+        CHECK(C.marks.size() == L.marks.size() && cOnly == phOnly && cShow == 0 && otherShow == other, "CL: PHH / PHL-only CoBs recorded but not shown, all others shown (" << cOnly << " log, " << otherShow << " shown)");
+        bool logTag = true; for (const cobs::Mark& m : C.marks) { const std::string l = C.recLine(m); logTag = logTag && l.size() > 4 && l.compare(l.size() - 4, 4, m.show ? "SHOW" : ",LOG") == 0; }
+        CHECK(logTag, "record lines end with SHOW / LOG");
+        cobs::View cv; cv.first = 0; cv.last = (int)C.B.size() - 1; cv.t = -1000000; cv.b = 1000000; cv.X = [](int i) { return (double)i * 10; }; cv.Y = [](double p) { return -p * 4; };
+        const auto P = cobs::layout(C, cv); int drawnPh = 0; for (const auto& p : P) for (const cobs::Mark& m : C.marks) if (m.phOnly && std::abs(p.x0 + (p.x1 - p.x0) / 2 - (int)std::lround(cv.X(m.idx))) <= 1) ++drawnPh;
+        CHECK(drawnPh == 0 && (int)P.size() > 0, "CL: no PHH / PHL-only label in the drawing (" << P.size() << " labels)");
+    }
     // ---- the host: whole chart in one calc
     mock::Host A; mock::current = &A; A.root = "ES"; A.sym = "ESZ26"; chart(A, F, (int)F.B.size() - 1, (int)F.B.size() - 3000);
     CobSignal x; x.calc(0);
@@ -62,8 +74,8 @@ int main(int argc, char** argv) {
     const std::string rec = slurp(flex() + "/CobSignal/ES-180.csv"), live = slurp(flex() + "/CobSignal-ES-180-live.csv"), st = slurp(flex() + "/CobSignal.status-ES-180.txt");
     size_t nrec = 0; for (size_t p = rec.find("\nCOB,"); p != std::string::npos; p = rec.find("\nCOB,", p + 1)) ++nrec;
     CHECK(nrec == L.marks.size(), "record: every CoB once (" << nrec << ")");
-    CHECK(live.rfind("COBSIGNAL,1.0.0\n", 0) == 0 && live.find(L.recLine(L.marks.back())) != std::string::npos, "live file: version + every CoB");
-    CHECK(st.rfind("VERSION,1.0.0\nMARKET,ES", 0) == 0 && st.find("COBS," + std::to_string(L.marks.size())) != std::string::npos, "status file");
+    CHECK(live.rfind("COBSIGNAL,1.1.0\n", 0) == 0 && live.find(L.recLine(L.marks.back())) != std::string::npos, "live file: version + every CoB");
+    CHECK(st.rfind("VERSION,1.1.0\nMARKET,ES", 0) == 0 && st.find("COBS," + std::to_string(L.marks.size())) != std::string::npos, "status file");
     // bar-by-bar feeding = one pass; a restart never writes a CoB twice
     {   mock::Host Bh; mock::current = &Bh; Bh.root = "ES"; Bh.sym = "ESZ26"; CobSignal y;
         const int n = (int)F.B.size(); for (int u = n - 400; u < n; ++u) { chart(Bh, F, u, std::max(0, u - 120)); y.calc(0); }
@@ -87,7 +99,7 @@ int main(int argc, char** argv) {
     {   mock::Host D; D.dialog = true; D.root = ""; mock::current = &D; CobSignal z; z.calc(0); mdraw(z); CHECK(D.drawn.empty(), "the Add / settings copy with no chart draws nothing and does not fault"); }
     // versions
     { const std::string src = slurp("../CobSignal.cpp"); const size_t p = src.find("p->setVersion(\""); const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.0.0", "version literals match (" << lit << ")"); }
+      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.1.0", "version literals match (" << lit << ")"); }
     std::cout << "test_cobsignal_host: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

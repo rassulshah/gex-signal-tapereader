@@ -33,7 +33,10 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-02 10:14 CT "ok.. lets add it .. build") a CoB whose ONLY swept level is PHH / PHL
+// is drawn in ES / HG / GC (the year test: +0.61 / +0.18 / +0.16 R) and recorded but NOT drawn in NQ / CL / NG / 6E (+0.01 / -0.22 / -0.53 / -0.15 R) until the
+// nightly proves it there; a CoB that also swept another level is drawn everywhere as before   // was "1.0.0"
+inline bool phShown(const std::string& mkt) { return mkt == "ES" || mkt == "HG" || mkt == "GC"; }
 #ifndef COBS_MAX_BARS
 #define COBS_MAX_BARS 40000
 #endif
@@ -44,6 +47,7 @@ struct Mark {
     long long t = 0; int idx = -1; int side = 0;     // side +1 bull, -1 bear
     std::string levels; double dratio = 0, ext = 0, adr = 0; int legStart = -1, legEnd = -1;
     bool r = false, v = false; int rBar = -1, vBar = -1, rN = 0, vN = 0;
+    bool phOnly = false, show = true;   // (1.1.0) PHH / PHL the only level swept; drawn (false = recorded only)
     std::string label() const { std::string s = "Cob"; if (r || v) s += "+"; if (r) s += "R"; if (v) s += "V"; return s; }
 };
 struct Leg { int s = -1, e = -1, dir = 0; double size = 0; };
@@ -170,14 +174,15 @@ struct Engine {
             m.ext = hod;
         }
         m.levels = sw;
+        m.phOnly = sw == "PHH" || sw == "PHL"; m.show = !m.phOnly || phShown(mkt);   // (1.1.0)
         cimp::Params P; const cimp::Tag T = cimp::evaluate(CB, j, side, P, false);
         m.r = T.r.bar >= 0; m.v = T.v.bar >= 0; m.rBar = T.r.bar; m.vBar = T.v.bar; m.rN = T.r.n; m.vN = T.v.n;
         marks.push_back(m); out.push_back(recLine(m));
     }
     std::string recLine(const Mark& m) const {
         char b[320];
-        std::snprintf(b, sizeof b, "COB,%lld,%s,%s,%s,%.2f,%.6g,%.6g,%lld,%lld,%d,%d", m.t, m.side > 0 ? "BULL" : "BEAR", m.label().c_str(), m.levels.c_str(), m.dratio, m.ext, m.adr,
-                      B[(size_t)m.legStart].t, B[(size_t)m.legEnd].t, m.rN, m.vN);
+        std::snprintf(b, sizeof b, "COB,%lld,%s,%s,%s,%.2f,%.6g,%.6g,%lld,%lld,%d,%d,%s", m.t, m.side > 0 ? "BULL" : "BEAR", m.label().c_str(), m.levels.c_str(), m.dratio, m.ext, m.adr,
+                      B[(size_t)m.legStart].t, B[(size_t)m.legEnd].t, m.rN, m.vN, m.show ? "SHOW" : "LOG");   // (1.1.0) SHOW = drawn, LOG = recorded only
         return b;
     }
 };
@@ -191,7 +196,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
 {
     std::vector<Prim> P; std::vector<std::pair<int, int>> used;   // label boxes (x0, y0) taken
     for (const Mark& m : E.marks) {
-        if (m.idx < v.first || m.idx > v.last || m.idx >= (int)E.B.size()) continue;
+        if (!m.show || m.idx < v.first || m.idx > v.last || m.idx >= (int)E.B.size()) continue;   // (1.1.0) LOG CoBs are not drawn
         const Bar& b = E.B[(size_t)m.idx];
         const std::string s = m.label(); const int w = v.textW ? v.textW(s) : (int)s.size() * 7, h = 14;
         const double x = v.X(m.idx);
@@ -211,7 +216,7 @@ inline std::string statusText(const Engine& E, const std::string& sym, int spb, 
 {
     std::string o = std::string("VERSION,") + VERSION + "\nMARKET," + E.mkt + "\nSYMBOL," + sym + "\nBAR_SECONDS," + std::to_string(spb) +
                      "\nRTH," + std::to_string(E.openMin) + "-" + std::to_string(E.closeMin) + "\nBARS," + std::to_string(E.B.size()) + "\nLEGS," + std::to_string(E.legs.size()) +
-                     "\nRULES,1-bar ZigZag; sweep ONH/ONL PDH/PDL PFH/PFL LonHI/LonLO PHH/PHL; dratio >= 1.9 (20 legs); >= 3 bars; 50-bar extreme; < 0.4 ADR; bull room 0.1 ADR, bull <= 11:00\n";
+                     "\nRULES,1-bar ZigZag; sweep ONH/ONL PDH/PDL PFH/PFL LonHI/LonLO PHH/PHL; dratio >= 1.9 (20 legs); >= 3 bars; 50-bar extreme; < 0.4 ADR; bull room 0.1 ADR, bull <= 11:00; PHH/PHL-only CoBs drawn in ES/HG/GC, recorded only elsewhere\n";
     o += "RECORD," + rec + "\nCOBS," + std::to_string(E.marks.size()) + "\n";
     const size_t n = E.marks.size();
     for (size_t k = n > 8 ? n - 8 : 0; k < n; ++k) o += "LAST," + E.recLine(E.marks[k]) + "\n";
