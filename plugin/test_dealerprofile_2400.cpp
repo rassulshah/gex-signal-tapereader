@@ -248,7 +248,7 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.49.0" && src.find("p->setVersion(\"2.49.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.49.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
+        check(std::string(DP_VERSION) == "2.50.0" && src.find("p->setVersion(\"2.50.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.50.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
         check(DP_BOOK && !DP_ODDS && DP_RANK_CHIPS && DP_LIQ_RANK_RIGHT && DP_KEYS_RIGHT && std::string(lpk::VERSION) == "1.0.0" && lpk::TOP == 5 && lpk::PCT == 0.50 && lpk::ATR_X == 1.0 && std::string(ltc::VERSION) == "1.4.0", "whole book, top 5, 50% / 1 ATR, no odds, no rank chips, Key Levels right (LiqPick 1.0.0, LiqTouch 1.3.0)");
     }
     dealerFile(true);
@@ -364,6 +364,14 @@ int main(int argc, char** argv)
             if (getenv("DP_GRADE_DUMP2")) { const char* d0 = DUMP; DUMP = getenv("DP_GRADE_DUMP2"); dump(G2, a, c2); DUMP = d0; }
             for (auto& q : G2) if (q.kind == "text" && q.text.rfind("HELD", 0) == 0 && q.r < lqL) hw = q.text;
             check(hw == "HELD  900  K" && c2.heldNamed == 1, "(2.45.0) HELD word with lots + rank: '" + hw + "'"); }
+        // (2.50.0, Rassul 13:18 CT "sometimes they have the letters and sometimes they dont") one draw without the grade facts: the grade holds 10 s
+        {   std::vector<sb::Fact> only; sb::Fact f = SG[2]; only.push_back(f); sb::postFacts('S', a.sym, a.spb, MOCK_CHART, dpNowMs(), only);
+            std::vector<Op> G3 = drawOn(X, a, MOCK_CHART); bool k44 = false; for (auto& q : G3) if (q.kind == "text" && q.text == "4/4" && q.l >= lqL) k44 = true;
+            check(k44, "(2.50.0) the king's grade 4/4 stays through a draw without its fact (10 s hold, no flicker)"); }
+        // (2.50.0) two HELDs at the same spot: one line + one word, the bigger node's
+        {   std::vector<sb::Fact> two = SG; sb::Fact d = SG[1]; d.lo = d.hi = 7858.25; d.bar += 1; two.push_back(d); sb::postFacts('S', a.sym, a.spb, MOCK_CHART, dpNowMs(), two);
+            std::vector<Op> G4 = drawOn(X, a, MOCK_CHART); DealerProfile::ColsState c4 = colsOf(X, a); int words = 0; for (auto& q : G4) if (q.kind == "text" && q.text.rfind("HELD", 0) == 0 && q.r < lqL) ++words;
+            check(words == 1 && c4.heldLines == 1 && c4.heldSkipped == 1, "(2.50.0) HELDs never pile up: 1 word, 1 line, 1 skipped (" + std::to_string(words) + " / " + std::to_string(c4.heldLines) + " / " + std::to_string(c4.heldSkipped) + ")"); }
         { std::vector<sb::Fact> none; sb::postFacts('S', a.sym, a.spb, MOCK_CHART, dpNowMs(), none); }
     }
     // ---- the steady board: a new node waits 30 s (production persistence), a gone node leaves after 10 s
