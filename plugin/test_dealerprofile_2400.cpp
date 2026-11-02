@@ -248,7 +248,7 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.46.0" && src.find("p->setVersion(\"2.46.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.46.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
+        check(std::string(DP_VERSION) == "2.47.0" && src.find("p->setVersion(\"2.47.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.47.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
         check(DP_BOOK && !DP_ODDS && DP_RANK_CHIPS && DP_LIQ_RANK_RIGHT && DP_KEYS_RIGHT && std::string(lpk::VERSION) == "1.0.0" && lpk::TOP == 5 && lpk::PCT == 0.50 && lpk::ATR_X == 1.0 && std::string(ltc::VERSION) == "1.4.0", "whole book, top 5, 50% / 1 ATR, no odds, no rank chips, Key Levels right (LiqPick 1.0.0, LiqTouch 1.3.0)");
     }
     dealerFile(true);
@@ -320,9 +320,14 @@ int main(int argc, char** argv)
     auto findText = [&](const std::string& pre) -> const Op* { for (auto& q : O) if (q.kind == "text" && q.l > lqL && q.text.rfind(pre, 0) == 0) return &q; return nullptr; };
     { const Op* k = findText("900  100%"); check(k && k->bold && k->text == "900  100%", "the king: '900  100%' in bold"); }
     { const Op* t = findText("500  56%"); check(t && t->text == "500  56%", "rank 2 = % of the king: '500  56%'"); }
-    { const Op* t = findText("465  52%"); check(t && t->text.find("VAH") != std::string::npos && t->r <= c.lay.levels.r - 4 && c.bExtras == 3, std::string("rank 6: '465  52%' + the nearest high level it sits above (VAH 0.25), shortened to fit the column (") + (t ? t->text : "-") + ")"); }
-    { const Op* t = findText("460  51%"); check(t && t->text.find("PFL") != std::string::npos, std::string("rank 7: under the low level PFL/PDL (") + (t ? t->text : "-") + ")"); }
-    { const Op* t = findText("455  51%"); check(t && t->text.find("DPoc") != std::string::npos, std::string("rank 8: next to the POC (") + (t ? t->text : "-") + ")"); }
+    // (2.47.0, Rassul 12:27 CT) no level names on the liquidity rows; the level-linked ranks 6 / 7 / 8 on the level badges (VAH, PFL/PDL, DPoc)
+    { const Op* a6 = findText("465  52%"); const Op* a7 = findText("460  51%"); const Op* a8 = findText("455  51%");
+      check(a6 && a6->text == "465  52%" && a7 && a7->text == "460  51%" && a8 && a8->text == "455  51%" && c.bExtras == 3, "(2.47.0) level-linked rows 6 / 7 / 8 without level names"); }
+    {   auto rankAt = [&](const std::string& price) { for (auto& p0 : O) if (p0.kind == "text" && p0.text == price && p0.l >= kL && p0.r <= kR)
+            for (auto& q : O) if (q.kind == "text" && q.l > p0.r && q.r <= kR && std::abs((q.t + q.b) / 2 - (p0.t + p0.b) / 2) <= 3 && q.text.size() <= 2 && std::isdigit((unsigned char)q.text[0])) return q.text;
+          return std::string("-"); };
+        const std::string r6 = rankAt("7865.50"), r7 = rankAt("7834.50"), r8 = rankAt("7840.00");
+        check(r6 == "6" && r7 == "7" && r8 == "8", "(2.47.0) the liquidity rank next to the level name: VAH " + r6 + ", PFL/PDL " + r7 + ", DPoc " + r8); }
     check(!findText("450") && !findText("440") && !findText("300") && !findText("5000"), "not shown: 50% with no level, beyond 1 ATR, 33%, the old code-2 zone");
     {   int tags = 0; for (auto& q : O) if (q.kind == "text" && q.l >= lqL && (q.text.find("STAYS") != std::string::npos || q.text.find("GONE") != std::string::npos || q.text.find("HELD") != std::string::npos || q.text.find("(") != std::string::npos)) ++tags;
         for (auto& q : O) if (q.kind == "text" && (q.text.find("STAYS") != std::string::npos || q.text.find("GONE") != std::string::npos || q.text.find("HELD") != std::string::npos || q.text.find("(") != std::string::npos)) std::printf("  tag text %s at %d\n", q.text.c_str(), q.l);
