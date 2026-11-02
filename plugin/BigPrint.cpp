@@ -43,7 +43,7 @@
 #define BP_SEP "/"
 #endif
 
-static const char* BP_VERSION = "1.0.1";   // (1.0.1) the numbers = lsBigBidAsk's boxes   // was "1.0.0":   // = bpr::VERSION = the setVersion literal
+static const char* BP_VERSION = "1.0.2";   // (1.0.2) numbers lime / red   // was "1.0.1":   // (1.0.1) the numbers = lsBigBidAsk's boxes   // was "1.0.0":   // = bpr::VERSION = the setVersion literal
 
 static long long bpMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bpFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BP_SEP "InvestorRT" BP_SEP "rtx" BP_SEP "lsFlexLevels" : std::string(); }
@@ -242,7 +242,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigPrint* p = new BigPrint();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself
-    p->setDescription("LRA Big Print v1.0.1 - one pane for the biggest prints: green = bought at the ask, red = sold at the bid (side by side); the number over each bar = its biggest one-price ask / bid print is the biggest in N bars (lsBigBidAsk's count: smaller prints in a row, cap 50; from 10, bold from 35); V = biggest volume in N bars (from 35); a bright bar = the biggest green / red candle in 35+ bars. Replaces BV_Since / BVGB / BVRB / BRB_Since / BGB_Since.");
-    p->setVersion("1.0.1");   // = BP_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Big Print v1.0.2 - one pane for the biggest prints: green = bought at the ask, red = sold at the bid (side by side); the number over each bar = its biggest one-price ask / bid print is the biggest in N bars (lsBigBidAsk's count: smaller prints in a row, cap 50; from 10, bold from 35); V = biggest volume in N bars (from 35); a bright bar = the biggest green / red candle in 35+ bars. Replaces BV_Since / BVGB / BVRB / BRB_Since / BGB_Since.");
+    p->setVersion("1.0.2");   // = BP_VERSION (gex-build reads this literal)
     return p;
 }

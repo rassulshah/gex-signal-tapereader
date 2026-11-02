@@ -248,7 +248,7 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.41.0" && src.find("p->setVersion(\"2.41.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.41.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
+        check(std::string(DP_VERSION) == "2.42.0" && src.find("p->setVersion(\"2.42.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.42.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
         check(DP_BOOK && !DP_ODDS && !DP_RANK_CHIPS && DP_KEYS_RIGHT && std::string(lpk::VERSION) == "1.0.0" && lpk::TOP == 5 && lpk::PCT == 0.50 && lpk::ATR_X == 1.0 && std::string(ltc::VERSION) == "1.3.0", "whole book, top 5, 50% / 1 ATR, no odds, no rank chips, Key Levels right (LiqPick 1.0.0, LiqTouch 1.3.0)");
     }
     dealerFile(true);
@@ -280,10 +280,10 @@ int main(int argc, char** argv)
     DealerProfile::ColsState c = colsOf(X, a);
     if (DUMP) dump(O, a, c);
     // ---- layout
-    check(c.lay.w[cb::LEVELS] == 430, "the published Levels width = Key Levels 200 + Liquidity 230 (" + std::to_string(c.lay.w[cb::LEVELS]) + ")");
+    check(c.lay.w[cb::LEVELS] == 340, "(2.42.0) the published Levels width = Key Levels 170 + Liquidity 170 (" + std::to_string(c.lay.w[cb::LEVELS]) + ")");
     check(c.lay.delta.r <= c.lay.levels.l && c.lay.levels.r <= c.lay.dealer.l && cb::columnsClean(c.lay) && c.lay.w[cb::BIG] == 0, "right side: Delta | Key Levels + Liquidity | Dealer, clean, no LMT F (" + std::to_string(c.lay.delta.l) + " " + std::to_string(c.lay.levels.l) + " " + std::to_string(c.lay.dealer.l) + ")");
     const int kL = c.lay.levels.l, kR = kL + c.keysW, lqL = kR;
-    check(c.keysL == kL && c.keysW == 200, "Key Levels column = the left 200 px of the Levels width (" + std::to_string(c.keysL) + " / " + std::to_string(c.keysW) + ")");
+    check(c.keysL == kL && c.keysW == 170, "(2.42.0) Key Levels column = the left 170 px of the Levels width (" + std::to_string(c.keysL) + " / " + std::to_string(c.keysW) + ")");
     { int w = 0; check(!cb::keysFresh(a.sym, a.spb, MOCK_CHART, dpNowMs(), w), "the old LEFT Key Levels column is cleared on the board (no left keep-out for the other plugins)"); }
     check(cb::leftKeep(a.sym, a.spb, MOCK_CHART, 0, dpNowMs()) == 0, "leftKeep = the pane's left edge: the price area starts at the left edge");
     std::vector<Op> badges; for (auto& q : O) if (q.kind == "box" && q.col == 0x0B0F19 && q.l >= kL && q.r <= kR && q.b - q.t < 40 && q.r - q.l < 230) badges.push_back(q);

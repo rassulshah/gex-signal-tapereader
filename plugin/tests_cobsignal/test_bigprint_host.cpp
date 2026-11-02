@@ -106,10 +106,12 @@ int main(int argc, char** argv) {
     CHECK(base > 0 && fills > 0 && up, "green and red bars both go UP from one baseline (" << fills << " bars, base " << base << ")");
     CHECK(side, "green left of red in each slot (side by side, no overlap)");
     CHECK(nums > 0 && numsOk, "numbers only from 10, bold from 35 (" << nums << " numbers, " << vlab << " V labels)");
+    {   bool bright = true; for (const mock::Prim& p : A.drawn) if (p.k == 'T' && p.text[0] != 'V') bright = bright && (p.col == bpr::C_LIME || p.col == bpr::C_R);
+        CHECK(bright, "(1.0.2) every ask number lime, every bid number red - no dark shades"); }
     // the settings-window copy
     {   mock::Host D; D.dialog = true; D.root = ""; mock::current = &D; BigPrint z; z.calc(0); mdraw(z); CHECK(D.drawn.empty(), "the Add / settings copy with no chart draws nothing"); }
     { std::ifstream f("../BigPrint.cpp"); std::stringstream s; s << f.rdbuf(); const std::string src = s.str(); const size_t p = src.find("p->setVersion(\""); const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-      CHECK(lit == BP_VERSION && lit == bpr::VERSION && lit == "1.0.1", "version literals match (" << lit << ")"); }
+      CHECK(lit == BP_VERSION && lit == bpr::VERSION && lit == "1.0.2", "version literals match (" << lit << ")"); }
     std::cout << "test_bigprint_host: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

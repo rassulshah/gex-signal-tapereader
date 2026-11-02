@@ -19,7 +19,7 @@
 
 namespace bpr {
 
-static const char* const VERSION = "1.0.1";   // (1.0.1, Rassul 2026-11-02 05:02 / 05:23 CT "the big print indicator doesn't match the signal") the ask / bid numbers = lsBigBidAsk's "biggest in N" box exactly: split rows of one price merged, N = the run of earlier candles whose biggest is SMALLER (an equal one stops it), cap 50   // was "1.0.0":
+static const char* const VERSION = "1.0.2";   // (1.0.2) the numbers all lime (ask) / red (bid): no dark shades   // was "1.0.1":   // (1.0.1, Rassul 2026-11-02 05:02 / 05:23 CT "the big print indicator doesn't match the signal") the ask / bid numbers = lsBigBidAsk's "biggest in N" box exactly: split rows of one price merged, N = the run of earlier candles whose biggest is SMALLER (an equal one stops it), cap 50   // was "1.0.0":
 static const int CAP = 100, SHOW = 10, STRONG = 35, MAX_BARS = 20000;
 static const int PRINT_CAP = 50;   // (1.0.1) lsBigBidAsk's cap (bbaset::CAP)
 
@@ -74,6 +74,7 @@ struct Engine {
 struct View { int l = 0, t = 0, r = 800, b = 200, first = 0, last = 0; double bw = 6; std::function<double(int)> X; std::function<int(const std::string&, bool)> textW;
               bool haveForm = false; Bar form; Counts formC; int formIdx = -1; };
 struct Prim { enum K { FILL, TEXT } k = FILL; int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; bool bold = false; std::string text; };
+static const unsigned C_LIME = 0x0032FF32;   // (1.0.2) every ask number lime, every bid number red (bold still = 35+)
 static const unsigned C_G = 0x0022C55E, C_R = 0x00EF4444, C_GD = 0x00145A32, C_RD = 0x006E2328, C_W = 0x00E5E7EB, C_BASE = 0x00374151, C_GT = 0x0016803C, C_RT = 0x00A33232;
 struct Scene { std::vector<Prim> p; int numbers = 0, vlabels = 0, bars = 0; double scaleMax = 0; };
 inline Scene layout(const Engine& E, const View& v)
@@ -109,7 +110,7 @@ inline Scene layout(const Engine& E, const View& v)
                 const std::string s = std::to_string(val); const bool strong = val >= STRONG;
                 const int w = v.textW ? v.textW(s, strong) : (int)s.size() * 6;
                 Prim t; t.k = Prim::TEXT; t.x0 = (int)std::lround(x - w / 2.0); t.x1 = t.x0 + w; t.y0 = std::max(top, y); t.y1 = t.y0 + h; t.bold = strong;
-                t.col = ask ? (strong ? C_G : C_GT) : (strong ? C_R : C_RT); t.text = s; S.p.push_back(t); ++S.numbers;
+                t.col = ask ? C_LIME : C_R; t.text = s; S.p.push_back(t); ++S.numbers;   // (1.0.2, Rassul 2026-11-02 10:30 CT "all be lime and red because some of them are dark and difficult to read")
             };
             if (sa) num(c.ask, ya, true);
             if (sb) num(c.bid, yb, false);
