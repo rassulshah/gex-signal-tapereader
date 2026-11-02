@@ -127,11 +127,17 @@ int main(int argc, char** argv) {
         CHECK(boxW > 0 && front == sc.boxesDrawn && dots == 0, "the 2 biggest nodes' distributions in SOLID white boxes (no dotted lines) (" << front << " / " << sc.boxesDrawn << ")");
         bool atMost2 = true; for (const wpc::Wave& w : E.waves) if (!w.provisional) atMost2 = atMost2 && wpc::topDelta(w).size() <= 3;
         CHECK(atMost2, "(1.6.2) every wave: at most 3 boxed / classified nodes");
+        {   // (1.6.2) no two letters overlap (nearby I? / A? rows are spread 13 px apart)
+            std::vector<std::pair<int,int> > tx; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::TEXT && p.text.size() == 2 && p.text[1] == '?') tx.push_back(std::make_pair(p.x0, p.y0));
+            bool clear = true; for (size_t i2 = 0; i2 < tx.size(); ++i2) for (size_t j2 = i2 + 1; j2 < tx.size(); ++j2) if (std::abs(tx[i2].first - tx[j2].first) < 20 && std::abs(tx[i2].second - tx[j2].second) < 13) clear = false;
+            CHECK(clear && tx.size() >= 3, "(1.6.2) letters never overlap (" << tx.size() << " letters)"); }
+        {   int grey = 0, black = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && !p.back && p.y1 - p.y0 == 12) { grey += p.col == 0x374151; black += p.col == 0x0B0F17; }
+            CHECK(grey == sc.lettersDrawn && black == 0, "(1.6.2) every letter sits on a GREY patch, none on black (" << grey << " / " << sc.lettersDrawn << ")"); }
         // letters: the text sits over its row, centred, on a background patch, never more than the 30 px side + its width
         bool letOk = true; int lets = 0;
         for (size_t k = 0; k < sc.p.size(); ++k) { const wpc::Prim& p = sc.p[k]; if (p.k != wpc::Prim::TEXT || p.text.size() != 2 || p.text[1] != '?') continue; ++lets;
-            if (k == 0 || sc.p[k - 1].k != wpc::Prim::FILL || sc.p[k - 1].col != 0x0B0F17 || p.back || !p.bold) letOk = false; }
-        CHECK(lets == sc.lettersDrawn && letOk, "each letter is bold, front, on its own background patch (" << lets << ")");
+            if (k == 0 || sc.p[k - 1].k != wpc::Prim::FILL || sc.p[k - 1].col != 0x374151 || p.back || !p.bold) letOk = false; }
+        CHECK(lets == sc.lettersDrawn && letOk, "each letter is bold, front, on its own GREY patch (" << lets << ")");
         // Pb: text + the amber dashed line from the POC
         int pbT = 0, amber = 0; for (const wpc::Prim& p : sc.p) { pbT += p.k == wpc::Prim::TEXT && p.text == "Pb"; amber += p.k == wpc::Prim::LINE && p.col == 0xF5B428; }
         int cyanL = 0, cyanF = 0, greyL = 0, amberF = 0; for (const wpc::Prim& p : sc.p) { cyanL += p.k == wpc::Prim::LINE && p.col == 0x22D3EE; cyanF += p.k == wpc::Prim::FILL && p.col == 0x22D3EE && !p.back; greyL += p.k == wpc::Prim::LINE && p.col == 0x94A3B8; amberF += p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD); }

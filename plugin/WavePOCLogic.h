@@ -776,7 +776,7 @@ struct Prim {
 };
 static const bool SHOW_VOL_LEFT = false;   // (1.6.0) the left volume profile (outline + HVN / WPOC fills); the WPOC is now cyan on the right
 static const bool SHOW_LIQ_LEFT = false;   // (1.6.1) the liquidity-node bars left of the spine: off (computed, recorded, counted in the status file)
-struct Colours { unsigned long prof = 0x334155, amber = 0xF5B428, amberFill = 0xC88C14, white = 0xE5E7EB, whiteFill = 0xB4BECD, zz = 0x78849A, zzBig = 0xCBD5E1, grey = 0x94A3B8, cyan = 0x22D3EE, bid = 0x22C55E, offer = 0xEF4444, bg = 0x0B0F17, up = 0x22C55E, down = 0xEF4444; };   // (1.3.3) up / down = the spine (bullish green, bearish red)
+struct Colours { unsigned long letterBg = 0x374151; unsigned long prof = 0x334155, amber = 0xF5B428, amberFill = 0xC88C14, white = 0xE5E7EB, whiteFill = 0xB4BECD, zz = 0x78849A, zzBig = 0xCBD5E1, grey = 0x94A3B8, cyan = 0x22D3EE, bid = 0x22C55E, offer = 0xEF4444, bg = 0x0B0F17, up = 0x22C55E, down = 0xEF4444; };   // (1.3.3) up / down = the spine (bullish green, bearish red)
 inline unsigned long mix(unsigned long c, unsigned long bg, double a) {   // a of the colour over the background
     unsigned long o = 0; for (int sh = 0; sh <= 16; sh += 8) { const double x = (double)((bg >> sh) & 255) + ((double)((c >> sh) & 255) - (double)((bg >> sh) & 255)) * a; o |= (unsigned long)std::lround(std::max(0.0, std::min(255.0, x))) << sh; }
     return o;
@@ -907,14 +907,20 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
     }
     // the letters, centred on their node (front), each on a small background patch so it reads over the row
     if (haveDelta && bars) {
-        for (const Letter& L : letters(w, *bars)) {
-            double top, bot; rowY(L.row, top, bot); const double yc = (top + bot) / 2.0;
+        // (1.6.2) letters on nearby rows (e.g. an I? and an A? 3 ticks apart) never overlap: sorted top to bottom, each at least 13 px
+        // below the one above it (the text is 12 px tall)
+        std::vector<std::pair<double, Letter> > ys;
+        for (const Letter& L : letters(w, *bars)) { double top, bot; rowY(L.row, top, bot); ys.push_back(std::make_pair((top + bot) / 2.0, L)); }
+        std::stable_sort(ys.begin(), ys.end(), [](const std::pair<double, Letter>& p, const std::pair<double, Letter>& q) { return p.first < q.first; });
+        for (size_t k = 1; k < ys.size(); ++k) if (ys[k].first < ys[k - 1].first + 13) ys[k].first = ys[k - 1].first + 13;
+        for (const auto& yl : ys) {
+            const Letter& L = yl.second; const double yc = yl.first;
             if (yc < v.t + 7 || yc > v.b - 7) continue;
             const std::string txt = std::string(1, L.t) + "?";
             const int tw = v.textW ? v.textW(txt, true) : 12;
             const double len = PR * (double)std::llabs(w.drows[(size_t)L.row]) / (double)w.dMax;
             const double cx = x0 + 1 + std::max(len / 2.0, tw / 2.0 + 2.0);
-            Prim bg; bg.k = Prim::FILL; bg.x0 = ci(cx - tw / 2.0 - 1); bg.x1 = ci(cx + tw / 2.0 + 1); bg.y0 = ci(yc - 6); bg.y1 = ci(yc + 6); bg.col = C.bg; bg.back = false; s.p.push_back(bg);
+            Prim bg; bg.k = Prim::FILL; bg.x0 = ci(cx - tw / 2.0 - 2); bg.x1 = ci(cx + tw / 2.0 + 2); bg.y0 = ci(yc - 6); bg.y1 = ci(yc + 6); bg.col = C.letterBg; bg.back = false; s.p.push_back(bg);   // (1.6.2, Rassul 10:03 CT "use a gray background instead of black for the signals")
             Prim t; t.k = Prim::TEXT; t.x0 = ci(cx - tw / 2.0); t.x1 = ci(cx + tw / 2.0); t.y0 = ci(yc - 7); t.y1 = ci(yc + 7); t.col = L.bull ? C.up : C.down; t.text = txt; t.bold = 1; t.back = false; s.p.push_back(t);
             ++s.lettersDrawn;
         }
