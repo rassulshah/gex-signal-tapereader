@@ -2195,7 +2195,7 @@ void DealerProfile::flushLines(const Settings& S)
                 if (a.v <= pane.top + 2 || a.v >= pane.bottom - 2) continue;
                 const int x0 = std::max((int)pane.left + 1, (int)a.h), x1 = std::min(xMax, (int)c.h); if (x1 <= x0) continue;
                 const COLOR lc = g.side > 0 ? C_BUY : C_SELL;
-                {   const HB lb{ x0, (int)a.v - 3, x1, (int)a.v + 3 }; if (hit(lb)) { ++cs.heldSkipped; continue; } used.push_back(lb); }
+                {   const HB lb{ x0, (int)a.v - 8, x1, (int)a.v + 8 }; if (hit(lb)) { ++cs.heldSkipped; continue; } used.push_back(lb); }   // (2.50.0, 13:25 CT "look at the number of held lines") one HELD per spot: any other within 8 px over the same candles is skipped
                 line((short)x0, (short)a.v, (short)x1, (short)a.v, lc, 2); ++cs.heldLines;
                 // (2.45.0, Rassul 12:12 CT "held line should mention the lotsize and rank") "HELD 854 #2" (K = the king), frozen at the touch
                 std::string hw = "HELD";

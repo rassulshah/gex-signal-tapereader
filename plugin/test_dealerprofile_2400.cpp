@@ -369,9 +369,9 @@ int main(int argc, char** argv)
             std::vector<Op> G3 = drawOn(X, a, MOCK_CHART); bool k44 = false; for (auto& q : G3) if (q.kind == "text" && q.text == "4/4" && q.l >= lqL) k44 = true;
             check(k44, "(2.50.0) the king's grade 4/4 stays through a draw without its fact (10 s hold, no flicker)"); }
         // (2.50.0) two HELDs at the same spot: one line + one word, the bigger node's
-        {   std::vector<sb::Fact> two = SG; sb::Fact d = SG[1]; d.lo = d.hi = 7858.25; d.bar += 1; two.push_back(d); sb::postFacts('S', a.sym, a.spb, MOCK_CHART, dpNowMs(), two);
+        {   std::vector<sb::Fact> two = SG; sb::Fact d = SG[1]; d.lo = d.hi = 7858.25; d.bar += 1; two.push_back(d); sb::Fact d2 = SG[1]; d2.lo = d2.hi = 7859.0; d2.bar += 2; two.push_back(d2); sb::postFacts('S', a.sym, a.spb, MOCK_CHART, dpNowMs(), two);
             std::vector<Op> G4 = drawOn(X, a, MOCK_CHART); DealerProfile::ColsState c4 = colsOf(X, a); int words = 0; for (auto& q : G4) if (q.kind == "text" && q.text.rfind("HELD", 0) == 0 && q.r < lqL) ++words;
-            check(words == 1 && c4.heldLines == 1 && c4.heldSkipped == 1, "(2.50.0) HELDs never pile up: 1 word, 1 line, 1 skipped (" + std::to_string(words) + " / " + std::to_string(c4.heldLines) + " / " + std::to_string(c4.heldSkipped) + ")"); }
+            check(words == 1 && c4.heldLines == 1 && c4.heldSkipped == 2, "(2.50.0) HELDs never pile up (3 within 1 point): 1 word, 1 line, 2 skipped (" + std::to_string(words) + " / " + std::to_string(c4.heldLines) + " / " + std::to_string(c4.heldSkipped) + ")"); }
         { std::vector<sb::Fact> none; sb::postFacts('S', a.sym, a.spb, MOCK_CHART, dpNowMs(), none); }
     }
     // ---- the steady board: a new node waits 30 s (production persistence), a gone node leaves after 10 s
