@@ -16,11 +16,11 @@
 #include <vector>
 
 namespace htf {
-static const char* const VERSION = "1.2.0";   // (1.2.0, Rassul 14:41 CT "put these values in the top row and make it fit by abbreviating") StrUp / Up / Side / Dn / StrDn, RS VStr / Str / Mod / Wk / VWk   // was "1.1.0";   // (1.1.0, Rassul 2026-11-02 14:41 CT) labels only: Strong Up / Up / Side / Dn / Strong Dn; RS Very Strong / Strong / Moderate / Weak / Very Weak   // was "1.0.0"
+static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 14:49 CT "| Dly: Dn, Wk | Hrly: Side, Wk | 3m: Dn, Wk") + the chart's own 3m bars, RS word only   // was "1.2.0";   // (1.2.0, Rassul 14:41 CT "put these values in the top row and make it fit by abbreviating") StrUp / Up / Side / Dn / StrDn, RS VStr / Str / Mod / Wk / VWk   // was "1.1.0";   // (1.1.0, Rassul 2026-11-02 14:41 CT) labels only: Strong Up / Up / Side / Dn / Strong Dn; RS Very Strong / Strong / Moderate / Weak / Very Weak   // was "1.0.0"
 static const int N_HOUR = 20, N_DAY = 10, RSI_N = 14;
 static const double TR_STRONG = 40, TR_MOD = 20, RS_STRONG = 60, RS_WEAK = 40, RS_OB = 70, RS_OS = 30;
 struct In { long long absEnd; double c; };   // bar END (local CT seconds since 1970) and its close
-struct Out { bool hOk = false, dOk = false, hRsOk = false, dRsOk = false; double hEr = 0, dEr = 0, hRsi = 0, dRsi = 0; int nH = 0, nD = 0; };
+struct Out { bool hOk = false, dOk = false, hRsOk = false, dRsOk = false, mOk = false, mRsOk = false; double hEr = 0, dEr = 0, hRsi = 0, dRsi = 0, mEr = 0, mRsi = 0; int nH = 0, nD = 0, nM = 0; };   // (1.3.0) m = the chart bars (3m)
 
 // the closes of each hour / session (the last bar's close in it), oldest first
 inline std::vector<double> hourCloses(const std::vector<In>& b) {
@@ -51,6 +51,8 @@ inline Out compute(const std::vector<In>& b) {
     Out o; const std::vector<double> h = hourCloses(b), d = sessionCloses(b); o.nH = (int)h.size(); o.nD = (int)d.size();
     o.hOk = efficiency(h, N_HOUR, o.hEr); o.dOk = efficiency(d, N_DAY, o.dEr);
     o.hRsOk = rsi(h, RSI_N, o.hRsi); o.dRsOk = rsi(d, RSI_N, o.dRsi);
+    {   std::vector<double> m; m.reserve(b.size()); for (const In& x : b) m.push_back(x.c); o.nM = (int)m.size();   // (1.3.0) the chart's own bars: 20 bars / RSI 14
+        o.mOk = efficiency(m, N_HOUR, o.mEr); o.mRsOk = rsi(m, RSI_N, o.mRsi); }
     return o;
 }
 // display pieces: "Dn 3 Weak", "RS 37 Weak"; dir +1 up (green) / -1 down (red) / 0 neutral (grey)
@@ -66,6 +68,10 @@ inline std::string rsText(double r, int& dir) {
     const int s = (int)std::lround(r); dir = s >= RS_STRONG ? 1 : s <= RS_WEAK ? -1 : 0;
     const char* q = s >= RS_OB ? "VStr" : s >= RS_STRONG ? "Str" : s <= RS_OS ? "VWk" : s <= RS_WEAK ? "Wk" : "Mod";   // (1.2.0) Very Strong / Strong / Moderate / Weak / Very Weak
     char b[40]; std::snprintf(b, sizeof b, "RS %d %s", s, q); return b;
+}
+// (1.3.0) the RS word alone ("Wk"), same cut-offs and colour
+inline std::string rsWord(double r, int& dir) {
+    const std::string t = rsText(r, dir); const size_t p = t.rfind(' '); return p == std::string::npos ? t : t.substr(p + 1);
 }
 }  // namespace htf
 #endif

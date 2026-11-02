@@ -115,17 +115,20 @@ int main() {
         }
         CHECK(bad == 0 && runs == 36 && withSw >= 18, std::to_string(runs) + " layouts clean, " + std::to_string(withSw) + " with sweeps (" + std::to_string(bad) + " bad)");
     }
-    {   // (2.17.2, Rassul 2026-11-02 14:41 CT) the HTF values IN the header row (abbreviated): after "Bar 2:13 left", before the -GAMMA pill, same box height
+    {   // (2.17.3, Rassul 2026-11-02 14:49 CT) "| Dly: Dn, Wk | Hrly: Side, Wk | 3m: Dn, Wk" centred in the header, before the -GAMMA pill
         hl::View v0 = shotView(true); hl::View v = shotView(true);
-        v.htf = { hl::Seg{ "60m", hl::C_GREY }, hl::Seg{ "Side", hl::C_SLATE }, hl::Seg{ "RS 37 Wk", hl::C_RED }, hl::Seg{ "D", hl::C_GREY }, hl::Seg{ "Dn", hl::C_RED }, hl::Seg{ "RS 31 Wk", hl::C_RED } };
+        v.htf = { hl::Seg{ "Dly:", hl::C_GREY }, hl::Seg{ "Dn,", hl::C_RED }, hl::Seg{ "Wk", hl::C_RED }, hl::Seg{ "Hrly:", hl::C_GREY }, hl::Seg{ "Side,", hl::C_SLATE }, hl::Seg{ "Wk", hl::C_RED },
+                  hl::Seg{ "3m:", hl::C_GREY }, hl::Seg{ "Dn,", hl::C_RED }, hl::Seg{ "Wk", hl::C_RED } };
         hl::Layout L0 = hl::layoutAll(v0, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);
         hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);
         const std::vector<hl::Item> tx = texts(L);
-        const hl::Item* a = find(tx, "60m"); const hl::Item* b = find(tx, "RS 31 Wk"); const hl::Item* bl = find(tx, "Bar 2:13 left"); const hl::Item* gp = find(tx, "-GAMMA");
+        const hl::Item* a = find(tx, "Dly:"); const hl::Item* m3 = find(tx, "3m:"); const hl::Item* bl = find(tx, "Bar 2:13 left"); const hl::Item* gp = find(tx, "-GAMMA"); const hl::Item* dt = find(tx, "Downtrend");
         int out = 0; for (const hl::Item& it : tx) if (!inside(hl::Box{ it.l, it.t, it.r, it.b }, L.table)) ++out;
-        CHECK(a && b && bl && gp && std::abs(a->t - bl->t) <= 1 && a->l > bl->r && b->r < gp->l && b->c1 == hl::C_RED, "(2.17.2) the HTF values sit in the header row between 'Bar left' and the gamma pill");
-        CHECK(out == 0 && overlaps(tx) == 0, "(2.17.2) inside the box, no overlaps");
-        CHECK(L.table.b - L.table.t == L0.table.b - L0.table.t, "(2.17.2) the box keeps its height (no extra row)"); }
+        CHECK(a && m3 && bl && gp && dt && std::abs(a->t - bl->t) <= 1 && a->l > bl->r && a->l < m3->l && m3->r < gp->l, "(2.17.3) Dly | Hrly | 3m in the header, after 'Bar left', before the gamma pill");
+        const int mid = (L.table.l + L.table.r) / 2, cen = (a->l + dt->r) / 2;
+        CHECK(std::abs(cen - mid) <= 40, "(2.17.3) the HTF + pill + trend block is centred (" + std::to_string(cen - mid) + " px off)");
+        CHECK(out == 0 && overlaps(tx) == 0, "(2.17.3) inside the box, no overlaps");
+        CHECK(L.table.b - L.table.t == L0.table.b - L0.table.t, "(2.17.3) the box keeps its height"); }
     {   // (2.15.4, Rassul 2026-11-02 13:15 CT "put the time like 8:45, 8:30") the 1st-extreme heads as clock times from the market's open
         hl::View v = shotView(true); v.tmOpenMin = 510;   // ES 8:30
         hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);

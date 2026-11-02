@@ -806,13 +806,12 @@ void HodLod::recompute(HLState& S, long n)
         std::vector<htf::In> hb; hb.reserve(B.size()); for (const hl::Bar& b : B) hb.push_back(htf::In{ b.absEnd, b.c });
         const htf::Out o = htf::compute(hb); S.htf = o; S.view.htf.clear();
         auto col = [](int d) { return d > 0 ? hl::C_GREEN : d < 0 ? hl::C_RED : hl::C_SLATE; };
-        int d = 0;
-        S.view.htf.push_back(hl::Seg{ "60m", hl::C_GREY });
-        if (o.hOk) { const std::string t = htf::trendText(o.hEr, d); S.view.htf.push_back(hl::Seg{ t, col(d) }); } else S.view.htf.push_back(hl::Seg{ "-", hl::C_SLATE });
-        if (o.hRsOk) { const std::string t = htf::rsText(o.hRsi, d); S.view.htf.push_back(hl::Seg{ t, col(d) }); }
-        S.view.htf.push_back(hl::Seg{ "D", hl::C_GREY });
-        if (o.dOk) { const std::string t = htf::trendText(o.dEr, d); S.view.htf.push_back(hl::Seg{ t, col(d) }); } else S.view.htf.push_back(hl::Seg{ "-", hl::C_SLATE });
-        if (o.dRsOk) { const std::string t = htf::rsText(o.dRsi, d); S.view.htf.push_back(hl::Seg{ t, col(d) }); }
+        // (2.17.3, Rassul 14:49 CT) "| Dly: Dn, Wk | Hrly: Side, Wk | 3m: Dn, Wk" - timeframe: trend, RS word
+        auto group = [&](const char* lab, bool ok, double er, bool rsOk, double r) {
+            int d = 0; S.view.htf.push_back(hl::Seg{ lab, hl::C_GREY });
+            S.view.htf.push_back(ok ? hl::Seg{ htf::trendText(er, d) + (rsOk ? "," : ""), col(d) } : hl::Seg{ "-", hl::C_SLATE });
+            if (ok) { if (rsOk) { const std::string w = htf::rsWord(r, d); S.view.htf.push_back(hl::Seg{ w, col(d) }); } } };
+        group("Dly:", o.dOk, o.dEr, o.dRsOk, o.dRsi); group("Hrly:", o.hOk, o.hEr, o.hRsOk, o.hRsi); { const std::string ml = std::to_string((long long)(per / 60 > 0 ? per / 60 : 1)) + "m:"; group(ml.c_str(), o.mOk, o.mEr, o.mRsOk, o.mRsi); }   // the chart's own bar size ("3m:")
     }
     {   // (2.7.0) the day-type log for the nightly: one line each time the call changes (a restart logs the current call once again)
         const std::string key = std::to_string(hlNowCt() / 86400) + "," + std::to_string(S.day.kind);
@@ -1632,7 +1631,7 @@ int HodLod::draw(void)
     }
     {   // (2.6.0) the PRE-OPEN BOOK's status
         const long long nowMs = hlNowCt() * 1000LL; const po::Engine& E = S->pre;
-        {   char hb[200]; std::snprintf(hb, sizeof hb, "HTF,%s,60m bars %d %s ER %+.2f RSI %.1f,sessions %d %s ER %+.2f RSI %.1f\n", htf::VERSION, S->htf.nH, S->htf.hOk ? "ok" : "too few", S->htf.hEr, S->htf.hRsOk ? S->htf.hRsi : -1.0, S->htf.nD, S->htf.dOk ? "ok" : "too few", S->htf.dEr, S->htf.dRsOk ? S->htf.dRsi : -1.0); S->placeLine += hb; }
+        {   char hb[320]; std::snprintf(hb, sizeof hb, "HTF,%s,3m ER %+.2f RSI %.1f,60m bars %d %s ER %+.2f RSI %.1f,sessions %d %s ER %+.2f RSI %.1f\n", htf::VERSION, S->htf.mEr, S->htf.mRsOk ? S->htf.mRsi : -1.0, S->htf.nH, S->htf.hOk ? "ok" : "too few", S->htf.hEr, S->htf.hRsOk ? S->htf.hRsi : -1.0, S->htf.nD, S->htf.dOk ? "ok" : "too few", S->htf.dEr, S->htf.dRsOk ? S->htf.dRsi : -1.0); S->placeLine += hb; }
         S->placeLine += S->dayLine + ",logged " + std::to_string(S->dayLogs) + ",log fails " + std::to_string(S->dayLogFails) + "\n" + S->newsLine + "\n";   // (2.7.0)
         S->placeLine += "PREOPEN," + std::string(po::VERSION) + ",state " + S->preState + ",show " + (S->preShow ? "on" : "off") + ",param SHOW " + mp::modeName(S->preParamShow) + " (" + S->preParamWhy + ")" + ",window " + std::to_string(E.P.windowMin) + " min"
                       + (E.dayMs >= 0 ? ",session " + po::sessionKey(E.dayMs) + ",open " + po::hm12(E.openMin) : std::string()) + ",near " + std::to_string(E.nearTicks) + " ticks,s20 " + std::to_string(E.s20)
@@ -1743,6 +1742,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.17.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.17.3");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
