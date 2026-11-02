@@ -811,7 +811,20 @@ void HodLod::recompute(HLState& S, long n)
             int d = 0; S.view.htf.push_back(hl::Seg{ lab, hl::C_GREY });
             S.view.htf.push_back(ok ? hl::Seg{ htf::trendText(er, d) + (rsOk ? "," : ""), col(d) } : hl::Seg{ "-", hl::C_SLATE });
             if (ok) { if (rsOk) { const std::string w = htf::rsWord(r, d); S.view.htf.push_back(hl::Seg{ w, col(d) }); } } };
-        group("Dly:", o.dOk, o.dEr, o.dRsOk, o.dRsi); group("Hrly:", o.hOk, o.hEr, o.hRsOk, o.hRsi); { const std::string ml = std::to_string((long long)(per / 60 > 0 ? per / 60 : 1)) + "m:"; group(ml.c_str(), o.mOk, o.mEr, o.mRsOk, o.mRsi); }   // the chart's own bar size ("3m:")
+        group("Dly:", o.dOk, o.dEr, o.dRsOk, o.dRsi); group("Hrly:", o.hOk, o.hEr, o.hRsOk, o.hRsi);
+        {   // the chart's own bar size ("3m:"): (2.17.4, Rassul 14:55 CT "the trend shouldn't be displayed twice so use Dntrend") its trend = his
+            // VWAP trend (the header's old "Downtrend" text, now shown only here), RS = RSI 14 of the chart bars; the day type (when called) after it
+            const std::string ml = std::to_string((long long)(per / 60 > 0 ? per / 60 : 1)) + "m:";
+            if (S.view.trendReady) {
+                const int lv = S.view.trendLvl; const char* tw = lv >= 2 ? "StrUp" : lv == 1 ? "Up" : lv == -1 ? "Dn" : lv <= -2 ? "StrDn" : "Side";
+                int d = 0; S.view.htf.push_back(hl::Seg{ ml, hl::C_GREY });
+                S.view.htf.push_back(hl::Seg{ std::string(tw) + (o.mRsOk ? "," : ""), col(lv > 0 ? 1 : lv < 0 ? -1 : 0) });
+                if (o.mRsOk) { const std::string w = htf::rsWord(o.mRsi, d); S.view.htf.push_back(hl::Seg{ w, col(d) }); }
+            } else group(ml.c_str(), o.mOk, o.mEr, o.mRsOk, o.mRsi);
+            if (!S.view.dayText.empty()) {   // "Dntrend . Trend day ?" -> "Trend day ?" (the trend word is already in the 3m group)
+                std::string k = S.view.dayText; const size_t p = k.rfind('\xB7'); if (p != std::string::npos) { k = k.substr(p + 1); while (!k.empty() && k[0] == ' ') k.erase(0, 1); }
+                if (!k.empty()) { S.view.htf.push_back(hl::Seg{ " ", hl::C_GREY }); S.view.htf.push_back(hl::Seg{ k, S.view.dayCol == hl::C_GREY ? hl::C_SLATE : S.view.dayCol }); } }   // its own divider
+        }
     }
     {   // (2.7.0) the day-type log for the nightly: one line each time the call changes (a restart logs the current call once again)
         const std::string key = std::to_string(hlNowCt() / 86400) + "," + std::to_string(S.day.kind);
@@ -1742,6 +1755,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.17.3");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.17.4");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
