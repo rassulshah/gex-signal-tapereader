@@ -74,7 +74,9 @@ int main() {
         CHECK(ex && th && tl && ex->r < th->l && th->r < tl->l, "order left to right: Session | HOD | LOD");
         CHECK(L.swCols.size() == 2 && L.swCols[0].l > ex->r && L.swCols[1].l == L.swCols[0].r && L.swCols[1].r == L.table.r, "sections butt up, the LOD one ends at the box's right edge");
         CHECK(find(tx, "SESSION") && find(tx, "HOD SWEEPS \xB7 1st = HOD") && find(tx, "LOD SWEEPS \xB7 1st = LOD"), "three panel strips");
-        const hl::Item* d15 = find(tx, "0-15m"); const hl::Item* p58 = find(tx, "58%");
+        const hl::Item* d15 = find(tx, "0-15m"); const hl::Item* p58 = find(tx, "58%"); const hl::Item* lab = find(tx, "1st extreme");
+        CHECK(lab && d15 && d15->l - lab->r < 120, "2.14.1 compact: the time columns start right after the label");
+        CHECK(L.swCols[0].l - L.table.l < 480, "2.14.1 compact: the session panel is as wide as its content (" + std::to_string(L.swCols[0].l - L.table.l) + " px)");
         CHECK(d15 && p58 && d15->r <= L.swCols[0].l && p58->r <= L.swCols[0].l && p58->t > d15->t, "time table in the session panel (heads, then 58%)");
         CHECK(find(tx, "Level") && find(tx, "Today") && find(tx, "Swept"), "column heads");
         int bars = 0; for (const hl::Item& it : L.items) if (it.k == hl::K_FILL && (it.c1 == hl::C_BAR_R || it.c1 == hl::C_BAR_G || it.c1 == hl::C_BAR_RD || it.c1 == hl::C_BAR_GD)) ++bars;
@@ -100,14 +102,14 @@ int main() {
     }
     std::printf("[3] fuzz + no room\n");
     {   int bad = 0, runs = 0, withSw = 0;
-        for (int W : { 2400, 1530, 900 }) for (int pos = 0; pos < 9; pos++) {
+        for (int W : { 2400, 1530, 900, 600 }) for (int pos = 0; pos < 9; pos++) {
             const hl::View v = shotView(true); hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, W, 520 }, yOf, measure, W - 300, pos, -1, nullptr, nullptr);
             if (!L.tableOk) { ++bad; continue; } ++runs; if (L.swOk) ++withSw;
             const std::vector<hl::Item> tx = texts(L); if (overlaps(tx)) { ++bad; continue; }
             for (const hl::Item& it : tx) if (!inside(hl::Box{ it.l, it.t, it.r, it.b }, L.table) && !(L.gexOk && inside(hl::Box{ it.l, it.t, it.r, it.b }, L.gexRow))) { ++bad; break; }
-            if (W == 900 && L.swOk) ++bad;   // no room: the 2.12.0 box
+            if (W == 600 && L.swOk) ++bad;   // no room: the 2.12.0 box (2.14.1: the compact box fits 900)
         }
-        CHECK(bad == 0 && runs == 27 && withSw >= 9, std::to_string(runs) + " layouts clean, " + std::to_string(withSw) + " with sweeps (" + std::to_string(bad) + " bad)");
+        CHECK(bad == 0 && runs == 36 && withSw >= 18, std::to_string(runs) + " layouts clean, " + std::to_string(withSw) + " with sweeps (" + std::to_string(bad) + " bad)");
     }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
