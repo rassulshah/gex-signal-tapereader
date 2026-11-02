@@ -115,23 +115,24 @@ int main() {
         }
         CHECK(bad == 0 && runs == 36 && withSw >= 18, std::to_string(runs) + " layouts clean, " + std::to_string(withSw) + " with sweeps (" + std::to_string(bad) + " bad)");
     }
-    {   // (2.17.4, Rassul 2026-11-02 14:55 CT "move -Gamma to be right justified and the trend shouldn't be displayed twice ... make everything look nice")
+    {   // (2.17.5, Rassul 2026-11-02 15:14 CT "remove what i crossed out and place the option Expiry time there instead before the regime")
         hl::View v0 = shotView(true); hl::View v = shotView(true);
         v.htf = { hl::Seg{ "Dly:", hl::C_GREY }, hl::Seg{ "Dn,", hl::C_RED }, hl::Seg{ "Wk", hl::C_RED }, hl::Seg{ "Hrly:", hl::C_GREY }, hl::Seg{ "Side,", hl::C_SLATE }, hl::Seg{ "Wk", hl::C_RED },
                   hl::Seg{ "3m:", hl::C_GREY }, hl::Seg{ "Dn,", hl::C_RED }, hl::Seg{ "Mod", hl::C_SLATE } };
+        v.sessSegs.push_back(hl::Seg{ "Expiry 3:00 PM (in 1h 46m)", hl::C_GREY });
         hl::Layout L0 = hl::layoutAll(v0, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);
         hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);
         const std::vector<hl::Item> tx = texts(L);
-        const hl::Item* a = find(tx, "Dly:"); const hl::Item* md = find(tx, "Mod"); const hl::Item* bl = find(tx, "Bar 2:13 left"); const hl::Item* gp = find(tx, "-GAMMA");
+        const hl::Item* a = find(tx, "Dly:"); const hl::Item* md = find(tx, "Mod"); const hl::Item* bl = find(tx, "Bar 2:13 left"); const hl::Item* gp = find(tx, "-GAMMA"); const hl::Item* ex = find(tx, "Exp 3:00 PM");
         const hl::Item* dy = nullptr; for (const hl::Item& it : tx) if (it.s.find("Day  ") == 0) dy = &it;
         const hl::Item* ver = nullptr; for (const hl::Item& it : tx) if (it.s.size() > 1 && it.s[0] == 'v' && it.s[1] == '2') ver = &it;
         int out = 0; for (const hl::Item& it : tx) if (!inside(hl::Box{ it.l, it.t, it.r, it.b }, L.table)) ++out;
-        CHECK(a && md && bl && gp && dy && ver && a->l > bl->r && md->r < dy->l && dy->r < gp->l && gp->r < ver->l && ver->l - gp->r < 40, "(2.17.4) left | centred Dly / Hrly / 3m | Day ... | -GAMMA right-justified before the version");
-        CHECK(!find(tx, "Downtrend") && !find(tx, "Dntrend \xB7 Trend day ?"), "(2.17.4) the trend shown once (no separate Downtrend text)");
+        CHECK(a && md && bl && gp && ex && ver && !dy && a->l > bl->r && md->r < ex->l && ex->r < gp->l && gp->l - ex->r < 30 && gp->r < ver->l && ver->l - gp->r < 40, "(2.17.5) left | centred Dly / Hrly / 3m | Exp 3:00 PM then -GAMMA at the right; no 'Day ...'");
+        CHECK(!find(tx, "Downtrend") && !find(tx, "Trend day ?"), "(2.17.5) no separate trend / day-type text");
         const int mid = (L.table.l + L.table.r) / 2, cen = (a->l + md->r) / 2;
-        CHECK(std::abs(cen - mid) <= 60, "(2.17.4) the Dly / Hrly / 3m block is centred (" + std::to_string(cen - mid) + " px off)");
-        CHECK(out == 0 && overlaps(tx) == 0, "(2.17.4) inside the box, no overlaps");
-        CHECK(L.table.b - L.table.t == L0.table.b - L0.table.t, "(2.17.4) the box keeps its height"); }
+        CHECK(std::abs(cen - mid) <= 60, "(2.17.5) the Dly / Hrly / 3m block is centred (" + std::to_string(cen - mid) + " px off)");
+        CHECK(out == 0 && overlaps(tx) == 0, "(2.17.5) inside the box, no overlaps");
+        CHECK(L.table.b - L.table.t == L0.table.b - L0.table.t, "(2.17.5) the box keeps its height"); }
     {   // (2.15.4, Rassul 2026-11-02 13:15 CT "put the time like 8:45, 8:30") the 1st-extreme heads as clock times from the market's open
         hl::View v = shotView(true); v.tmOpenMin = 510;   // ES 8:30
         hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);
