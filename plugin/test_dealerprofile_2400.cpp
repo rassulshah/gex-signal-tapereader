@@ -327,7 +327,8 @@ int main(int argc, char** argv)
             for (auto& q : O) if (q.kind == "text" && q.l > p0.r && q.r <= kR && std::abs((q.t + q.b) / 2 - (p0.t + p0.b) / 2) <= 3 && q.text.size() <= 2 && std::isdigit((unsigned char)q.text[0])) return q.text;
           return std::string("-"); };
         const std::string r6 = rankAt("7865.50"), r7 = rankAt("7834.50"), r8 = rankAt("7840.00");
-        check(r6 == "6" && r7 == "7" && r8 == "8", "(2.47.0) the liquidity rank next to the level name: VAH " + r6 + ", PFL/PDL " + r7 + ", DPoc " + r8); }
+        check(r6 == "6" && r7 == "7" && r8 == "8", "(2.47.0) the liquidity rank next to the level name: VAH " + r6 + ", PFL/PDL " + r7 + ", DPoc " + r8);
+        const std::string rP = rankAt("7864.00"); check(rP == "-", "(2.47.0) one badge per node: PFH/PDH (also near rank 6) gets no rank (" + rP + ")"); }
     check(!findText("450") && !findText("440") && !findText("300") && !findText("5000"), "not shown: 50% with no level, beyond 1 ATR, 33%, the old code-2 zone");
     {   int tags = 0; for (auto& q : O) if (q.kind == "text" && q.l >= lqL && (q.text.find("STAYS") != std::string::npos || q.text.find("GONE") != std::string::npos || q.text.find("HELD") != std::string::npos || q.text.find("(") != std::string::npos)) ++tags;
         for (auto& q : O) if (q.kind == "text" && (q.text.find("STAYS") != std::string::npos || q.text.find("GONE") != std::string::npos || q.text.find("HELD") != std::string::npos || q.text.find("(") != std::string::npos)) std::printf("  tag text %s at %d\n", q.text.c_str(), q.l);

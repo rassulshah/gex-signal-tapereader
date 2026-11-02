@@ -1998,10 +1998,14 @@ void DealerProfile::flushLines(const Settings& S)
                 // (2.47.0, Rassul 12:27 CT "you do need to mention the liquidity rank next to the level name") a level-linked liquidity node
                 // (its level names) puts its rank on that level's badge too, when the badge has no (better) rank yet
                 for (size_t z = 0; z < topq.size(); ++z) { const TopQ& q = topq[z]; if (!q.extra || q.names.empty()) continue;
-                    const std::vector<std::string> tk = lvc::tokens(q.names);
-                    for (size_t i = 0; i < shown.size(); ++i) { lvc::Row& R = rows[shown[i]]; if (R.rank > 0 && R.rank <= q.rank) continue;
-                        bool hit = false; for (const lvc::Chip& C : R.chips) { const std::vector<std::string> ct = lvc::tokens(C.text); for (const std::string& t : tk) for (const std::string& u : ct) if (u == t) hit = true; }
-                        if (!hit) continue; R.rank = q.rank; R.bid = q.bid; rowQ[shown[i]] = (int)z; ++cs.rankByName; } }
+                    // one level only per node (the 2.37 rule): its FIRST name = the nearest level
+                    const std::vector<std::string> tk = lvc::tokens(q.names); bool placed = false;
+                    for (const std::string& t : tk) { if (placed) break;
+                        for (size_t i = 0; i < shown.size() && !placed; ++i) { lvc::Row& R = rows[shown[i]];
+                            bool hit = false; for (const lvc::Chip& C : R.chips) for (const std::string& u : lvc::tokens(C.text)) if (u == t) hit = true;
+                            if (!hit) continue; placed = true;
+                            if (R.rank > 0 && R.rank <= q.rank) break;
+                            R.rank = q.rank; R.bid = q.bid; rowQ[shown[i]] = (int)z; ++cs.rankByName; } } }
             }
         }
         cs.qShown = (int)topq.size();
