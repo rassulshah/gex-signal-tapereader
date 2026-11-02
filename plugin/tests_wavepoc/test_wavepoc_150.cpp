@@ -27,15 +27,16 @@ int main(int argc, char** argv) {
         const auto top = wpc::topDelta(w);
         CHECK(top.size() == 2 && top[0] == 10 && top[1] == 90 && wpc::LET_TOP == 2, "top 2 by |delta|, biggest first (3rd and 4th left out)");
         const auto L = wpc::letters(w, B);
-        CHECK(count(L, 'I') == 1 && count(L, 'T') == 1 && count(L, 'A') == 0 && L.size() == 2, "I + T; the 3rd / 4th rows (A candidates) are not classified (" << L.size() << ")");
+        CHECK(count(L, 'I') == 1 && count(L, 'T') == 0 && count(L, 'A') == 0 && L.size() == 1, "(1.6.2) I only: the 95 row near the top is the 2nd biggest, not the delta POC (100 at row 10) - no T (" << L.size() << ")");
         for (auto& x : L) {
             if (x.t == 'I') CHECK(x.row == 10 && x.bull, "I? on row 10, wave colour (green for an up wave)");
-            if (x.t == 'T') CHECK(x.row == 90 && !x.bull, "T? on row 90, opposite colour (red after an up wave)");
+            if (x.t == 'T') CHECK(false, "no T expected here");
         }
         std::vector<wpc::Bar> B2 = flat(12, 195);
-        CHECK(count(wpc::letters(w, B2), 'T') == 1, "(1.6.2) no close back needed: heavy with-wave delta in the last 20% = T");
+        wpc::Wave wt = upWave({{90, 120}, {10, 100}});   // the delta POC (120) near the top, with the wave
+        CHECK(count(wpc::letters(wt, B2), 'T') == 1, "(1.6.2) the delta POC with the wave in the last 20% = T, no close back needed");
         std::vector<wpc::Bar> B3 = flat(12, 195); B3[11].c = 188;   // 6 bars after the pivot: too late
-        CHECK(count(wpc::letters(w, B3), 'T') == 1, "(1.6.2) what the bars do after the pivot never changes T");
+        CHECK(count(wpc::letters(wt, B3), 'T') == 1, "(1.6.2) what the bars do after the pivot never changes T");
         wpc::Wave w4 = upWave({{78, 95}});   // with the wave at 78% of the way up: below the top 20% - no T
         CHECK(count(wpc::letters(w4, B2), 'T') == 0, "(1.6.2) heavy green delta at 78% (not in the top 20%) = no T");
         wpc::Wave w5 = upWave({{80, 95}});
