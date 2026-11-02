@@ -254,6 +254,8 @@ static void testLayout(const Fix& F) {
     }
     CHECK(texts == sc.tagsShown && tagsRight, "(1.4.2) the right-edge price tags are back (1.3.4): every tag right of the last bar (" << texts << " shown)");
     (void)whiteLine1;
+    {   int lead = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.x0 >= xLast - 1 && p.x1 > p.x0 + 6) ++lead;
+        CHECK(!wpc::TAG_LINES && lead == 0, "(1.6.3, Rassul 13:17 CT \"remove these lines\") no leader lines from the last bar to the right-edge tags (" << lead << ")"); }
     {   // (1.2.0, Rassul 16:26 CT "remove the drawing of levels across the chart and from the wave pocs") no line / circle at all (zigzag off)
         int lines = 0, ovals = 0; for (const wpc::Prim& p : sc.p) { if (p.k == wpc::Prim::LINE && std::min(p.x0, p.x1) < xLast - 1 && !(p.w == 2 && p.x0 == p.x1) && p.col != 0x94A3B8 && p.col != 0xF5B428 && p.col != 0xE5E7EB) ++lines;   /* (1.5.0) not the volume outline (grey), the Pb dotted POC line (amber), the dotted node borders (white) */ /* (1.3.3) not the spines */ if (p.k == wpc::Prim::OVAL) ++ovals; }   // (the tag leader right of the last bar is the tag itself)
         if (wpc::SHOW_VOL_LEFT) CHECK(!amberLine3 && lines == 0 && ovals == 0 && amberBox2 && noBoxes, "(1.2.0) no node lines / touch circles / end ticks; WPOC = the bright amber row; no outline boxes (" << lines << " lines, " << ovals << " ovals)");   // (1.6.0) the left volume profile is off: checked in test_wavepoc_150 instead
@@ -277,7 +279,7 @@ static void testLayout(const Fix& F) {
             sp += n; if (n != 1) ok = false; }
         CHECK(ok && sp == 4, "(1.3.3) spines: 4 waves, one each, green up / red down, spanning the wave's range (" << sp << ")"); }
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.6.2", "header Wave POC v1.6.2");
+    CHECK(header && std::string(wpc::VERSION) == "1.6.3", "header Wave POC v1.6.3");
     {   // (1.4.0) the open WPOC handed to lsDealerProfile: the latest confirmed wave's node [0] while OPEN, else none
         long long tk = 0; const bool has = wpc::latestOpenPoc(E, tk);
         const wpc::Wave* lw = nullptr; for (const wpc::Wave& w : E.waves) if (!w.pending) lw = &w;

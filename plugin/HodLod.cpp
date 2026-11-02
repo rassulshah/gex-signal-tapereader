@@ -126,7 +126,7 @@ static const bool HL_FEED_ROW = false;   // (2.13.0) the "Feed ?" row is not dra
 // (2.4.6, Rassul 2026-10-18 20:28 "remove the hoverover on gext strikes and the hod lod box") both hovers (Gex S/R strip, header) off
 static const bool HL_HOVERS = false;
 // (2.6.0, Rassul 15:57 CT, the agreed PRE-OPEN BOOK design: "a hover on the line") the ONE hover on this box: the Pre row's detail
-static const bool HL_PRE_HOVER = true;
+static const bool HL_PRE_HOVER = false;   // (2.16.0, Rassul 2026-11-02 13:19 CT "remove the hover over text in the hod lod box like the hoverover on the day type") no hover on the box at all
 #include "HodLodFx.h"            // (2.0.0) the 1st Extreme model, merged in (was the separate lsFirstExtreme)
 #include "Fresh.h"               // (2.4.0) the one freshness / STALE rule (Reg / Q / Gex row / Tape Reader status)
 #include "AwareHook.h"           // (2.8.0) the smart-read hook (layer L3)
@@ -1500,7 +1500,7 @@ int HodLod::draw(void)
         S->newsLine = std::string("NEWS,") + nw::VERSION + "," + (g.news ? g.label : std::string("none")) + ",feed " + (g.feedBad ? "BAD (" + g.feedWhy + ")" : std::string("ok"));
     }
     {   // (2.14.0, Rassul 20:06-20:38 CT mockup v14) the 1st-extreme time table, the Day forecast, RTH % done and the bar's time left
-        S->view.tmOk = hsw::timeCum(S->sw, S->view.tmCum); S->view.tmQ = S->sw.tmN > 0 && S->sw.tmN < hsw::MIN_N;
+        S->view.tmOk = hsw::timeCum(S->sw, S->view.tmCum); S->view.tmOpenMin = S->mi >= 0 ? hl::MKTS[S->mi].open : -1; S->view.tmQ = S->sw.tmN > 0 && S->sw.tmN < hsw::MIN_N;
         S->view.hdrExtra.clear(); S->view.hdrLeft.clear();
         const int t = S->view.onOk ? hsw::onTercile(S->sw, (double)(S->view.onHi - S->view.onLo) * tick, S->view.adrTrim) : -1;
         const std::string day = hsw::dayText(S->sw, t);
@@ -1728,6 +1728,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.15.3");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.16.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

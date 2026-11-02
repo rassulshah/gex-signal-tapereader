@@ -115,6 +115,16 @@ int main() {
         }
         CHECK(bad == 0 && runs == 36 && withSw >= 18, std::to_string(runs) + " layouts clean, " + std::to_string(withSw) + " with sweeps (" + std::to_string(bad) + " bad)");
     }
+    {   // (2.15.4, Rassul 2026-11-02 13:15 CT "put the time like 8:45, 8:30") the 1st-extreme heads as clock times from the market's open
+        hl::View v = shotView(true); v.tmOpenMin = 510;   // ES 8:30
+        hl::Layout L = hl::layoutAll(v, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr);
+        const std::vector<hl::Item> tx = texts(L);
+        CHECK(find(tx, "8:45") && find(tx, "9:00") && find(tx, "9:30") && find(tx, "9:30+") && find(tx, "1st extreme by") && !find(tx, "0-15m"), "(2.15.4) heads 8:45 / 9:00 / 9:30 / 9:30+ under '1st extreme by'");
+        int out = 0; for (const hl::Item& it : tx) if (!inside(hl::Box{ it.l, it.t, it.r, it.b }, L.table)) ++out;
+        CHECK(out == 0 && overlaps(tx) == 0, "(2.15.4) inside the box, no overlaps");
+        hl::View g = shotView(true); g.tmOpenMin = 440;   // GC 7:20
+        const std::vector<hl::Item> tg = texts(hl::layoutAll(g, hl::Box{ 0, 0, 2400, 520 }, yOf, measure, 1900, 6, -1, nullptr, nullptr));
+        CHECK(find(tg, "7:35") && find(tg, "7:50") && find(tg, "8:20") && find(tg, "8:20+"), "(2.15.4) GC from its 7:20 open: 7:35 / 7:50 / 8:20 / 8:20+"); }
     {   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") gamma levels on the view, still no strip above the box
         hl::View v = shotView(true);
         hl::View::GexItem a; a.strike = "7650"; a.name = "PS0"; a.above = true; v.gexItems.push_back(a);
