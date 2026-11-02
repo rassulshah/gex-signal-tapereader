@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
         }
         CHECK(count(wpc::letters(upWave({{66, 95}}), B), 'I') == 1 && count(wpc::letters(upWave({{67, 95}}), B), 'I') == 0, "I? up to 66% of the wave (66% yes, 67% no)");
         CHECK(count(wpc::letters(upWave({{66, -95}}), B), 'A') == 1 && count(wpc::letters(upWave({{67, -95}}), B), 'A') == 0, "A? up to 66% of the wave (66% yes, 67% no)");
-        CHECK(count(wpc::letters(upWave({{80, 95}}), B), 'T') == 1 && count(wpc::letters(upWave({{79, 95}}), B), 'T') == 0, "T? from 80% (80% yes, 79% no)");
+        CHECK(count(wpc::letters(upWave({{85, 95}}), B), 'T') == 1 && count(wpc::letters(upWave({{84, 95}}), B), 'T') == 0, "T? in the last 15% (85% yes, 84% no)");
         CHECK(wpc::letters(upWave({{70, 95}, {90, -95}}), B).empty(), "with the wave at 70% and against it in the last 20%: no letter");
         CHECK(wpc::letters(upWave({{10, 19}}), B).empty(), "a 1.9x row: no letter");
         wpc::Wave w4 = upWave({{10, 300}, {20, 290}, {30, 280}, {90, 95}});   // the green row near the top is only 4th biggest: no T
@@ -121,7 +121,7 @@ int main(int argc, char** argv) {
         bool right = true; int drowsN = 0;
         for (const wpc::Wave& w : E.waves) { if (w.provisional || w.drows.empty() || w.i0 < first) continue; const int x0 = (int)std::lround(v.X(w.i0) - bw * 0.45);
             for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.back && p.x0 == x0 + 1 && (p.col & 0) == 0) { ++drowsN; if (p.x1 > x0 + 1 + wpc::SIDE_W) right = false; } }
-        CHECK(drowsN > 0 && right, "delta rows point RIGHT from the wave start, at most 30 px (" << drowsN << " rows)");
+        CHECK(drowsN > 0 && right, "delta rows point RIGHT from the wave start, at most 38 px (1.6.2: 25% bigger) (" << drowsN << " rows)");
         int boxW = 0; for (const wpc::Prim& p : sc.p) boxW += p.k == wpc::Prim::BOX && p.col == 0xE5E7EB;
         int front = 0, dots = 0; for (const wpc::Prim& p : sc.p) { front += p.k == wpc::Prim::BOX && p.col == 0xE5E7EB && !p.back; dots += p.k == wpc::Prim::LINE && p.col == 0xE5E7EB; }
         CHECK(boxW > 0 && front == sc.boxesDrawn && dots == 0, "the 2 biggest nodes' distributions in SOLID white boxes (no dotted lines) (" << front << " / " << sc.boxesDrawn << ")");
@@ -132,12 +132,12 @@ int main(int argc, char** argv) {
             bool clear = true; for (size_t i2 = 0; i2 < tx.size(); ++i2) for (size_t j2 = i2 + 1; j2 < tx.size(); ++j2) if (std::abs(tx[i2].first - tx[j2].first) < 20 && std::abs(tx[i2].second - tx[j2].second) < 13) clear = false;
             CHECK(clear && tx.size() >= 3, "(1.6.2) letters never overlap (" << tx.size() << " letters)"); }
         {   int grey = 0, black = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && !p.back && p.y1 - p.y0 == 12) { grey += p.col == 0x374151; black += p.col == 0x0B0F17; }
-            CHECK(grey == sc.lettersDrawn && black == 0, "(1.6.2) every letter sits on a GREY patch, none on black (" << grey << " / " << sc.lettersDrawn << ")"); }
+            CHECK(black == sc.lettersDrawn && grey == 0, "(1.6.2) every letter sits on a BLACK patch (grey undone 10:05) (" << black << " / " << sc.lettersDrawn << ")"); }
         // letters: the text sits over its row, centred, on a background patch, never more than the 30 px side + its width
         bool letOk = true; int lets = 0;
         for (size_t k = 0; k < sc.p.size(); ++k) { const wpc::Prim& p = sc.p[k]; if (p.k != wpc::Prim::TEXT || p.text.size() != 2 || p.text[1] != '?') continue; ++lets;
-            if (k == 0 || sc.p[k - 1].k != wpc::Prim::FILL || sc.p[k - 1].col != 0x374151 || p.back || !p.bold) letOk = false; }
-        CHECK(lets == sc.lettersDrawn && letOk, "each letter is bold, front, on its own GREY patch (" << lets << ")");
+            if (k == 0 || sc.p[k - 1].k != wpc::Prim::FILL || sc.p[k - 1].col != 0x0B0F17 || p.back || !p.bold) letOk = false; }
+        CHECK(lets == sc.lettersDrawn && letOk, "each letter is bold, front, on its own black patch (" << lets << ")");
         // Pb: text + the amber dashed line from the POC
         int pbT = 0, amber = 0; for (const wpc::Prim& p : sc.p) { pbT += p.k == wpc::Prim::TEXT && p.text == "Pb"; amber += p.k == wpc::Prim::LINE && p.col == 0xF5B428; }
         int cyanL = 0, cyanF = 0, greyL = 0, amberF = 0; for (const wpc::Prim& p : sc.p) { cyanL += p.k == wpc::Prim::LINE && p.col == 0x22D3EE; cyanF += p.k == wpc::Prim::FILL && p.col == 0x22D3EE && !p.back; greyL += p.k == wpc::Prim::LINE && p.col == 0x94A3B8; amberF += p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD); }
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
         std::cerr << "fixture: " << q << " waves (" << rev << " reversal, " << bo << " breakout, " << ra << " rally), letters " << sc.lettersDrawn << ", Pb " << sc.pbDrawn << ", boxes " << sc.boxesDrawn << "\n";
         // status text names the new rule
         const std::string st = wpc::statusText(E, "ES", 180, "native,ok", "loaded", "loaded", 0, &sc, false, 0);
-        CHECK(st.find("QUALIFIED_BY,reversal") != std::string::npos && st.find("PROFILE,(1.5.0)") != std::string::npos, "status QUALIFIED_BY + PROFILE lines");
+        CHECK(st.find("QUALIFIED_BY,reversal") != std::string::npos && st.find("PROFILE,(1.6.2)") != std::string::npos, "status QUALIFIED_BY + PROFILE lines");
     }
     // ---- 5. the legacy rule still answers when pinned ----
     {   wpc::Engine E; CHECK(E.rule == 150, "default rule = 1.5.0"); }

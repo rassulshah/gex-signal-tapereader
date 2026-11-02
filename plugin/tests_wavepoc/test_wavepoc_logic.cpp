@@ -266,7 +266,7 @@ static void testLayout(const Fix& F) {
             const double x0 = v.X(w.i0) - v.bw * 0.45; int mn = 1 << 30;
             for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.col == 0x94A3B8 && p.x0 == p.x1 && p.x0 <= (int)std::lround(x0) && p.x0 >= (int)std::lround(x0) - 31) mn = std::min(mn, p.x0);
             ++waves; if (std::abs(mn - (int)std::lround(x0 - wpc::SIDE_W)) > 1) wOk = false; }
-        if (wpc::SHOW_VOL_LEFT) CHECK(waves > 0 && wOk && wpc::SIDE_W == 30, "(1.5.0) the volume outline points LEFT, its widest row = 30 px (" << waves << " waves)");   // (1.6.0) the left volume profile is off: checked in test_wavepoc_150 instead
+        if (wpc::SHOW_VOL_LEFT) CHECK(waves > 0 && wOk && wpc::SIDE_W == 38, "(1.5.0) the volume outline points LEFT, its widest row = 30 px (" << waves << " waves)");   // (1.6.0) the left volume profile is off: checked in test_wavepoc_150 instead
     }
     CHECK(sc.nodesDrawn <= 5 * sc.wavesDrawn && sc.nodesDrawn == 13, "(1.3.3) nodes drawn = 5 + 2 + 3 + 3 (four waves confirmed by 13:33), at most 5 per wave (" << sc.nodesDrawn << ")");
     {   // (1.3.3, Rassul 04:52 CT) the spine: one 2 px vertical line per drawn wave at its profile start x, over start pivot .. end pivot; green up, red down
@@ -372,7 +372,7 @@ static void testLiquidityReference(const Fix& F) {
     }
     CHECK(sc.lnodesDrawn == 0 && bright == 0 && dim == 0 && left, "(1.6.1) no liquidity bars on the left (Rassul 2026-11-02 05:06) (" << bright << "/" << dim << ")");
     { int mxw = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.col == 0x22C55E) mxw = std::max(mxw, p.x1 - p.x0);
-      CHECK(dots == 0 && mxw == 0 && wpc::SIDE_W == 30, "(1.5.0) no dotted liquidity lines; LPOC bar = 30 px max, grouped with the volume side (" << dots << " dots, " << mxw << " px)"); }
+      CHECK(dots == 0 && mxw == 0 && wpc::SIDE_W == 38, "(1.5.0) no dotted liquidity lines; LPOC bar = 30 px max, grouped with the volume side (" << dots << " dots, " << mxw << " px)"); }
     const wpc::Scene s0 = wpc::layout(Nb, nullptr, v); int t0 = 0; for (const wpc::Prim& p : s0.p) t0 += p.k == wpc::Prim::TEXT;
     CHECK(texts == t0, "no price tags for liquidity nodes");
 }
