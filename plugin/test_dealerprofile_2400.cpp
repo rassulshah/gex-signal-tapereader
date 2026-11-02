@@ -248,7 +248,7 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.48.0" && src.find("p->setVersion(\"2.48.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.48.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
+        check(std::string(DP_VERSION) == "2.49.0" && src.find("p->setVersion(\"2.49.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.49.0 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
         check(DP_BOOK && !DP_ODDS && DP_RANK_CHIPS && DP_LIQ_RANK_RIGHT && DP_KEYS_RIGHT && std::string(lpk::VERSION) == "1.0.0" && lpk::TOP == 5 && lpk::PCT == 0.50 && lpk::ATR_X == 1.0 && std::string(ltc::VERSION) == "1.4.0", "whole book, top 5, 50% / 1 ATR, no odds, no rank chips, Key Levels right (LiqPick 1.0.0, LiqTouch 1.3.0)");
     }
     dealerFile(true);
@@ -357,7 +357,7 @@ int main(int argc, char** argv)
             if (q.kind == "line" && q.font == 2 && q.t == q.b && q.r < lqL && q.col == 0xEF4444) ++held; if (q.kind == "text" && q.text == "HELD" && q.r < lqL) ++heldWord; }
         check(k4 && k4->col == 0x22C55E, "the king's row: score 4/4 in green");
         check(tst != nullptr, "rank 2 testing: the countdown 1:49");
-        check(white == 4 && dark == 4, "(2.48.0) 4 white letters (all passed) on the king's bar + 4 grey letters on the testing row, no tag boxes (" + std::to_string(white) + " / " + std::to_string(dark) + ")");
+        check(white == 4 && dark == 0, "(2.49.0) 4 white letters (all passed) on the king's bar, nothing for the testing row, no tag boxes (" + std::to_string(white) + " / " + std::to_string(dark) + ")");
         check(held == 1 && heldWord == 1 && cg.heldLines == 1, "the HELD line (2 px, offer red) + HELD in the price area (" + std::to_string(held) + " / " + std::to_string(heldWord) + ")");
         // (2.45.0, Rassul 12:12 CT) the HELD word names the lots and rank frozen at the touch: "HELD  900  K" on the next draw
         {   std::vector<Op> G2 = drawOn(X, a, MOCK_CHART); DealerProfile::ColsState c2 = colsOf(X, a); std::string hw;
