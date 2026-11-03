@@ -1,6 +1,9 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.1.0  (2026-11-03)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.1.1  (2026-11-03)
  *
+ *  2.1.1 (Rassul 2026-11-03 "build it all", ref picture gc_zz.png): the wave COUNT is drawn INSIDE the wave's bars - centred on the
+ *    second-to-last bar, just below its top, white with a 1 px black outline; a bar too short for the text gets it just above its top.
+ *    The ratio label is unchanged (centred above the last bar). View only (ZzoComboView.h); waves, counts, tags unchanged.
  *  2.1.0 (Rassul 2026-11-03 13:59-14:03 CT): waves from the 3-bar High/Low ZigZag by default ("make it 3bar using high and low by
  *    default" = IRT's ZIGZAG Min Price Change 3 bars, as lsWavePOC); the count compares the wave's volume ratio (the ramp height) with
  *    prior waves of its own colour only; "weak" not drawn ("remove weak"); the count one bar further left. No settings (SS_SAFE_DIALOG):
@@ -268,7 +271,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoCombo* p = new ZzoCombo();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Combo v2.1.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count (beats the last N same-colour waves, 50+), Cmx / AR / ST, CoB after a key-level sweep, Ab = absorption with a heavy extreme (effort / result).");
-    p->setVersion("2.1.0");   // = zzd::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Combo v2.1.1 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count (beats the last N same-colour waves, 50+), Cmx / AR / ST, CoB after a key-level sweep, Ab = absorption with a heavy extreme (effort / result).");
+    p->setVersion("2.1.1");   // = zzd::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

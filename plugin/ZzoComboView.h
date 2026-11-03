@@ -1,4 +1,7 @@
-// ZzoComboView.h - lsZzoCombo 2.1.0 (2026-11-03 14:00 CT, Rassul 13:59-14:03): waves from the 3-bar High/Low ZigZag (ZzoDeltaLogic.h
+// ZzoComboView.h - lsZzoCombo 2.1.1 (2026-11-03, Rassul "build it all"): the wave COUNT is drawn INSIDE the wave's bars - centred on the
+//   wave's second-to-last bar, just below that bar's top, white with a 1 px black outline (reads on green or red); a bar too short for the
+//   text gets it just above its top (moved above the ratio label if they would touch). The ratio label is unchanged.
+// was 2.1.0 (2026-11-03 14:00 CT, Rassul 13:59-14:03): waves from the 3-bar High/Low ZigZag (ZzoDeltaLogic.h
 //   COMBO_REV_BARS); the count compares the wave's volume ratio (the ramp height) with PRIOR waves of its own colour only; "weak" is no
 //   longer drawn ("remove weak"); the count is drawn one bar further LEFT ("move the count 1 more to the left": its right edge = the
 //   wave's last bar's right edge - one bar width). The ratio label stays centred on the wave's last bar.
@@ -7,8 +10,8 @@
 // (tests_zzodelta/test_zzocombo.cpp). One row in its own pane:
 //   - a volume RAMP per wave: one column per bar, height = the wave's running volume / the median volume of the last 5 same-way waves
 //     ("wave on top"), green up waves / red down waves; the forming wave darker with a white top edge (it repaints with every tick)
-//   - waves of 2.0x+ volume: the ratio above the peak ("3.2x") and the COUNT right-justified against the wave's right edge in the top
-//     quarter ("12" = the biggest wave of its colour in the last 12 of its colour; 0 hidden; "50+" cap)
+//   - waves of 2.0x+ volume: the ratio above the peak ("3.2x") and the COUNT (2.1.1: inside the second-to-last bar, below its top; was
+//     right-justified against the wave's right edge in the top quarter) ("12" = the biggest wave of its colour in the last 12 of its colour; 0 hidden; "50+" cap)
 //   - tags at the bottom centre of the wave, stacked up: Cmx / AR / ST, CoB (2.1.0: weak not drawn), and "Ab 4.9" (absorption with a heavy extreme and its
 //     effort / result) in the colour of the side that wins the turn - only where the market's showAb is on (ES at build)
 //   - tags only on completed waves (a wave completes when its bar closes and the next bar confirms the pivot)
@@ -20,7 +23,9 @@
 
 namespace zzd {
 
-struct ComboScene { std::vector<Prim> p; int cols = 0, ratios = 0, counts = 0, ab = 0, cmx = 0, ar = 0, st = 0, cob = 0, weak = 0; double hi = 0; };
+static const int COUNT_PAD = 2;                  // (2.1.1) px between the bar's top and the count text inside it
+static const unsigned long OUTLINE = 0x000000;  // (2.1.1) the count's 1 px outline
+struct ComboScene { std::vector<Prim> p; int cols = 0, ratios = 0, counts = 0, countsIn = 0, countsAbove = 0, countsDropped = 0, ab = 0, cmx = 0, ar = 0, st = 0, cob = 0, weak = 0; double hi = 0; };
 
 inline std::string countText(const Wave& w) { if (w.cntCap) return std::to_string(CNT_CAP) + "+"; return std::to_string(w.cnt); }
 
@@ -59,20 +64,36 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
             yPeak = std::min(yPeak, y);
         }
         const double Vr = (double)w.vol / w.medV;
-        const double xr = v.X(w.e) + half;          // the wave's right edge
         const double xm = (v.X(std::max(w.s, v.first)) + v.X(std::min(w.e, v.last))) / 2.0;   // its visible centre
         if (Vr >= CNT_MIN_VOL && w.e >= v.first && w.e <= v.last) {
+            Prim rp; bool hasRp = false;   // the ratio label's box (the count never sits on it)
             if (showRatio) {   // ratio above the peak, centred on the last column
                 char b[24]; std::snprintf(b, sizeof b, "%.1fx", Vr); const std::string t = b; const int tw = v.textW(t);
                 int x0 = ci(v.X(w.e) - tw / 2.0); x0 = std::max(v.l + 1, std::min(x0, v.r - 1 - tw));
                 Prim p; p.k = Prim::TEXT; p.x0 = x0; p.x1 = x0 + tw; p.y1 = std::max(yPeak - 1, top + TH); p.y0 = p.y1 - TH; p.col = up ? C.up : C.down; p.text = t;
-                over.push_back(p); ++S.ratios;
+                over.push_back(p); ++S.ratios; rp = p; hasRp = true;
             }
-            if (showCount && w.cnt > 0 && bot - yPeak >= TH + 4) {   // count right-justified, top quarter of the ramp
+            if (showCount && w.cnt > 0) {
+                // (2.1.1, Rassul 2026-11-03) the count INSIDE the wave: centred on the wave's second-to-last bar, just below that bar's top,
+                // white with a 1 px black outline; a bar too short for the text gets it just above its top (never on the ratio label)
+                const int k = std::max(w.s, w.e - 1);
+                double runK = 0; for (int i = w.s; i <= k; ++i) runK += volAt(i) / w.medV;
+                const int yK = Y(runK);
                 const std::string t = countText(w); const int tw = v.textW(t);
-                const int x1 = ci(xr - v.bw) - 1; const int y0 = yPeak + (bot - yPeak) / 4 - TH / 2;
-                Prim p; p.k = Prim::TEXT; p.x0 = std::max(v.l + 1, x1 - tw); p.x1 = x1; p.y0 = std::max(y0, yPeak + 1); p.y1 = p.y0 + TH; p.col = white; p.text = t;
-                if (p.y1 <= bot - 1) { over.push_back(p); ++S.counts; }
+                int x0 = ci(v.X(k) - tw / 2.0); x0 = std::max(v.l + 1, std::min(x0, v.r - 1 - tw));
+                Prim p; p.k = Prim::TEXT; p.x0 = x0; p.x1 = x0 + tw; p.col = white; p.text = t;
+                bool ok = true, inside = true;
+                p.y0 = yK + COUNT_PAD; p.y1 = p.y0 + TH;
+                if (p.y1 > bot - 1) {   // too short: just above the bar's top
+                    inside = false; p.y1 = yK - 1; p.y0 = p.y1 - TH;
+                    if (hasRp && p.x0 <= rp.x1 + 1 && rp.x0 <= p.x1 + 1 && p.y0 <= rp.y1 && rp.y0 <= p.y1) { p.y1 = rp.y0 - 1; p.y0 = p.y1 - TH; }   // above the ratio label
+                    if (p.y0 < top) ok = false;
+                }
+                if (ok) {
+                    static const int OX[8] = { -1, 0, 1, -1, 1, -1, 0, 1 }, OY[8] = { -1, -1, -1, 0, 0, 1, 1, 1 };
+                    for (int o = 0; o < 8; ++o) { Prim q = p; q.x0 += OX[o]; q.x1 += OX[o]; q.y0 += OY[o]; q.y1 += OY[o]; q.col = OUTLINE; over.push_back(q); }   // 1 px black outline
+                    over.push_back(p); ++S.counts; if (inside) ++S.countsIn; else ++S.countsAbove;
+                } else ++S.countsDropped;
             }
         }
         if (w.live) continue;   // tags only once the wave is complete

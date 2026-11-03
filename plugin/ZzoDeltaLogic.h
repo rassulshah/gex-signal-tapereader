@@ -1,4 +1,4 @@
-// ZzoDeltaLogic.h - lsZzoCombo 2.1.0 / lsZzoZigZag 1.1.0 (2026-11-03 14:00 CT, Rassul 13:59 "make it 3bar using high and low by default";
+// ZzoDeltaLogic.h - lsZzoCombo 2.1.1 (2026-11-03: count drawn inside the wave - view only, engine unchanged) / was lsZzoCombo 2.1.0 / lsZzoZigZag 1.1.0 (2026-11-03 14:00 CT, Rassul 13:59 "make it 3bar using high and low by default";
 //   14:02 "remove weak" + the count: "why is there 50+ on green waves that are not bigger than the last 50+ green waves"; 14:03 "move the
 //   count 1 more to the left"):
 //   (1) ZigZag reversal bars per engine (Engine::revBars): Combo and the ZZO ZigZag overlay use COMBO_REV_BARS = 3 = IRT's own ZIGZAG
@@ -85,7 +85,7 @@
 namespace zzd {
 static const char* const VERSION = "1.3.2";
 static const char* const VOL_VERSION = "1.2.2";   // lsZzoVolume
-static const char* const COMBO_VERSION = "2.1.0";   // lsZzoCombo
+static const char* const COMBO_VERSION = "2.1.1";   // lsZzoCombo (2.1.1: the count drawn inside the wave, ZzoComboView.h)
 static const char* const ZIGZAG_VERSION = "1.1.0";  // lsZzoZigZag
 static const int COMBO_REV_BARS = 3;   // (Combo 2.1.0) ZigZag reversal bars for lsZzoCombo + lsZzoZigZag: IRT ZIGZAG 3 bars, High/Low (1 = the 1-bar walk)
 static const int CNT_CAP = 50;          // (Combo) count cap ("cap it at 50")

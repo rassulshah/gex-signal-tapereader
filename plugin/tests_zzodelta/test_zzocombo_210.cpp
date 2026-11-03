@@ -1,4 +1,4 @@
-// test_zzocombo_210.cpp - lsZzoCombo 2.1.0 / lsZzoZigZag 1.1.0 (2026-11-03, Rassul 13:59 "make it 3bar using high and low by default",
+// test_zzocombo_210.cpp - (updated for lsZzoCombo 2.1.1: count inside the wave) lsZzoCombo 2.1.0 / lsZzoZigZag 1.1.0 (2026-11-03, Rassul 13:59 "make it 3bar using high and low by default",
 // 14:02 "remove weak" + the count only vs prior waves of the same colour on the ramp's own measure, 14:03 "move the count 1 more to the left").
 //   1. the 3-bar High/Low walk on synthetic bars (up and down): a 1- or 2-bar pullback that stays above (below) the extreme of the previous
 //      3 bars does NOT turn the wave, the bar that breaks the previous 3 bars' low (high) does; equal does not; the 1-bar engine turns on
@@ -6,8 +6,9 @@
 //   2. the 3-bar walk = lsWavePOC's IRT ZIGZAG rule (an independent copy of WavePOCLogic.h addBar) pivot for pivot on real ES 3-min bars
 //   3. the count: a green wave stops at an earlier bigger green wave; red waves never count against green ones (and back); waves with no
 //      normal are skipped; 50+ cap; on real ES every count = the ramp-ratio walk
-//   4. drawing: no "weak" anywhere (while weak waves exist), the count's right edge one bar left of the wave's right edge, the ratio still
-//      centred on the wave's last bar
+//   4. drawing: no "weak" anywhere (while weak waves exist); (2.1.1) the count centred on the wave's second-to-last bar, just below that
+//      bar's top (inside it), white over a 1 px black outline (8 offsets), or just above the top when the bar is too short; never on the
+//      ratio label; the ratio still centred above the wave's last bar; ES / GC tally of inside vs above
 //   5. the hosts: ZzoCombo.cpp / ZzoZigZag.cpp set revBars = COMBO_REV_BARS; version literals = the logic's
 //   6. regression: ES Oct 26 - Nov 3 14:00 CT (fp_bars), the Nov 3 wave list printed
 #include "../ZzoComboView.h"
@@ -122,33 +123,107 @@ int main() {
         const int from = std::max(0, (int)E.B.size() - 400);
         zzd::View v; v.l = 0; v.t = 0; v.r = 9 * ((int)E.B.size() + 1 - from) + 20; v.b = 260; v.first = from; v.last = (int)E.B.size(); v.bw = 9;
         v.X = [from](int j) { return (j - from) * 9.0 + 5; }; v.textW = [](const std::string& t) { return (int)t.size() * 6; }; v.textH = 11;
-        const zzd::ComboScene S = zzd::layoutCombo(E, waves, form.vol, v, "ZZO Combo 2.1.0");
+        const zzd::ComboScene S = zzd::layoutCombo(E, waves, form.vol, v, std::string("ZZO Combo ") + zzd::COMBO_VERSION);
         int weakW = 0; for (const zzd::Wave& w : waves) if (w.cobTag == 2 && w.e >= from) ++weakW;
         bool weakTxt = false; for (const zzd::Prim& p : S.p) if (p.k == zzd::Prim::TEXT && p.text == "weak") weakTxt = true;
         std::printf("  drawn: ratios %d counts %d CoB %d Cmx %d Ab %d; weak waves in view %d\n", S.ratios, S.counts, S.cob, S.cmx, S.ab, weakW);
         CHECK(!weakTxt && S.weak == 0, "no weak tag drawn");
         CHECK(zzd::comboStatus(E, "ES", 180, "ok").find("ZIGZAG,3-bar reversal, High/Low") != std::string::npos, "status file names the 3-bar High/Low ZigZag");
-        int counts = 0, atX = 0, ratiosC = 0, ratios = 0; const double half = std::max(0.5, v.bw * 0.5);
-        for (const zzd::Prim& p : S.p) {   // every count / ratio label belongs to a 2.0x+ wave at the expected x
+        int counts = 0, atXY = 0, ratiosC = 0, ratios = 0, outl = 0, onRatio = 0, inBar = 0, above = 0;
+        std::vector<zzd::Prim> ratioBoxes;
+        for (const zzd::Prim& p : S.p) if (p.k == zzd::Prim::TEXT && !p.text.empty() && p.text.back() == 'x' && p.col != 0xFFFFFF) ratioBoxes.push_back(p);
+        for (size_t pi = 0; pi < S.p.size(); ++pi) {   // every count / ratio label belongs to a 2.0x+ wave at the expected x / y
+            const zzd::Prim& p = S.p[pi];
             if (p.k != zzd::Prim::TEXT || p.text.empty() || p.text.rfind("ZZO", 0) == 0) continue;
             const bool isCount = p.col == 0xFFFFFF && std::isdigit((unsigned char)p.text[0]) && p.text.back() != 'x';
             const bool isRatio = p.text.back() == 'x' && p.col != 0xFFFFFF;
             if (!isCount && !isRatio) continue;
-            if (isCount) ++counts; else ++ratios;
+            if (isCount) { ++counts;   // the 8 prims before it = the same text in black, offset by one pixel each way
+                int ok8 = 0; for (size_t o = 1; o <= 8 && o <= pi; ++o) { const zzd::Prim& q = S.p[pi - o];
+                    if (q.k == zzd::Prim::TEXT && q.col == zzd::OUTLINE && q.text == p.text && std::abs(q.x0 - p.x0) <= 1 && std::abs(q.y0 - p.y0) <= 1 && q.x1 - q.x0 == p.x1 - p.x0 && !(q.x0 == p.x0 && q.y0 == p.y0)) ++ok8; }
+                if (ok8 == 8) ++outl;
+                for (const zzd::Prim& r : ratioBoxes) if (p.x0 <= r.x1 && r.x0 <= p.x1 && p.y0 <= r.y1 && r.y0 <= p.y1) ++onRatio; }
+            else ++ratios;
             for (const zzd::Wave& w : waves) {
                 if (!w.hasV || w.e < v.first || w.e > v.last || (double)w.vol / w.medV < zzd::CNT_MIN_VOL) continue;
-                if (isCount && w.cnt > 0 && p.text == zzd::countText(w) && (p.x1 == zzd::ci(v.X(w.e) + half - v.bw) - 1 || p.x0 == v.l + 1)) { ++atX; break; }   // one bar left of the old anchor (the wave's right edge)
+                if (isCount && w.cnt > 0 && p.text == zzd::countText(w)) {
+                    const int k = std::max(w.s, w.e - 1); const int tw = v.textW(p.text);
+                    int x0 = zzd::ci(v.X(k) - tw / 2.0); x0 = std::max(v.l + 1, std::min(x0, v.r - 1 - tw));
+                    if (p.x0 != x0) continue;
+                    // the top of bar k = the top of its drawn column
+                    int yTop = INT_MAX; const double half = std::max(0.5, v.bw * 0.5);
+                    for (const zzd::Prim& c : S.p) if (c.k == zzd::Prim::FILL && c.x0 == zzd::ci(v.X(k) - half) && c.y1 == 260 - 3 && (c.col == 0x22C55E || c.col == 0xEF4444 || c.col == 0x15803D || c.col == 0xB91C1C)) yTop = std::min(yTop, c.y0);
+                    if (yTop == INT_MAX) continue;
+                    if (p.y0 == yTop + zzd::COUNT_PAD && p.y1 <= 260 - 3) { ++atXY; ++inBar; break; }               // inside, just below the top
+                    if (p.y1 <= yTop - 1 && yTop + zzd::COUNT_PAD + v.textH > 260 - 3) { ++atXY; ++above; break; }   // bar too short: above its top
+                }
                 char rb[24]; std::snprintf(rb, sizeof rb, "%.1fx", (double)w.vol / w.medV);
                 if (isRatio && p.text == rb) { const int tw = v.textW(rb); int x0 = zzd::ci(v.X(w.e) - tw / 2.0); x0 = std::max(v.l + 1, std::min(x0, v.r - 1 - tw)); if (p.x0 == x0) { ++ratiosC; break; } }
             }
         }
-        std::printf("  counts at the new x %d / %d, ratios centred %d / %d\n", atX, counts, ratiosC, ratios);
-        CHECK(counts > 0 && atX == counts, "the count's right edge = one bar left of the wave's right edge");
+        std::printf("  counts at the new x / y %d / %d (inside the bar %d, above a short bar %d), outlined %d, ratios centred %d / %d\n", atXY, counts, inBar, above, outl, ratiosC, ratios);
+        CHECK(counts > 0 && atXY == counts, "the count is centred on the wave's second-to-last bar, just below its top (or just above a short bar)");
+        CHECK(counts == S.counts && S.countsIn + S.countsAbove == S.counts && S.countsIn == inBar && S.countsAbove == above, "scene tallies match the drawn counts");
+        CHECK(outl == counts, "every count has a 1 px black outline (8 offsets) drawn under the white text");
+        CHECK(onRatio == 0, "no count on a ratio label");
         CHECK(ratios > 0 && ratiosC == ratios, "the ratio label stays centred on the wave's last bar");
-        // a hand-made check of the shift: a wave at bar e draws its count ending at X(e) - bw/2 - 1
-        for (const zzd::Prim& p : S.p) if (p.k == zzd::Prim::TEXT && p.col == 0xFFFFFF && !p.text.empty() && std::isdigit((unsigned char)p.text[0])) {
-            bool inside = false; for (const zzd::Wave& w : waves) if (w.cnt > 0 && p.x1 <= zzd::ci(v.X(w.e) - half) && p.x1 >= zzd::ci(v.X(w.s) - half) - 1) inside = true;
-            CHECK(inside || p.x0 == v.l + 1, "every count ends left of its wave's last bar"); }
+    }
+    {   // (2.1.1) hand-made: one green wave, bars 0..4, a 2.0x+ ratio and a count; tall pane -> inside bar 3; tiny first bars -> above
+        zzd::Engine E2; E2.setMarket("ES", 180);
+        zzd::Wave w; w.s = 0; w.e = 4; w.dir = 1; w.hasV = true; w.medV = 100; w.vol = 400; w.cnt = 7;
+        for (int i = 0; i < 5; ++i) { zzd::Bar b; b.t = 1793700000 + 180 * i; b.vol = (i < 4 ? 1 : 396); E2.B.push_back(b); }
+        zzd::View v; v.l = 0; v.t = 0; v.r = 200; v.b = 200; v.first = 0; v.last = 4; v.bw = 20;
+        v.X = [](int j) { return j * 20.0 + 10; }; v.textW = [](const std::string& t) { return (int)t.size() * 6; }; v.textH = 11;
+        zzd::ComboScene S1 = zzd::layoutCombo(E2, { w }, 0, v, "ZZO Combo");
+        const zzd::Prim* c = nullptr; const zzd::Prim* r = nullptr;
+        for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT) { if (p.text == "7" && p.col == 0xFFFFFF) c = &p; if (p.text == "4.0x") r = &p; }
+        int yTopS = INT_MAX; for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::FILL && p.x0 == 60 && p.col == 0x22C55E) yTopS = std::min(yTopS, p.y0);
+        CHECK(c && S1.countsAbove == 1 && c->x0 == 70 - 3 && c->y1 == yTopS - 1 && r && !(c->x0 <= r->x1 && r->x0 <= c->x1 && c->y0 <= r->y1 && r->y0 <= c->y1), "short second-to-last bar: count above its top, centred on bar 3, not on the ratio label");
+        for (int i = 0; i < 5; ++i) E2.B[(size_t)i].vol = 80;
+        S1 = zzd::layoutCombo(E2, { w }, 0, v, "ZZO Combo");
+        c = nullptr; for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT && p.text == "7" && p.col == 0xFFFFFF) c = &p;
+        int yTop3 = INT_MAX; for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::FILL && p.x0 == 60 && p.col == 0x22C55E) yTop3 = std::min(yTop3, p.y0);
+        CHECK(c && S1.countsIn == 1 && c->x0 == 67 && c->y0 == yTop3 + zzd::COUNT_PAD, "tall second-to-last bar: count inside it, just below the top");
+        zzd::Wave one = w; one.s = one.e = 4; S1 = zzd::layoutCombo(E2, { one }, 0, v, "ZZO Combo");
+        c = nullptr; for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT && p.text == "7" && p.col == 0xFFFFFF) c = &p;
+        CHECK(c && c->x0 == 90 - 3, "a one-bar wave: count on its only bar");
+    }
+    {   // (2.1.1) real data tally: how often the second-to-last bar is too short (ES Oct 26 - Nov 3, GC Oct 1 - 7; 260 px and 150 px panes)
+        const char* files[2] = { "zzc_es_1026_1102.csv", "zzc_gc_1001_1007.csv" }; const char* mk[2] = { "ES", "GC" }; const double tk[2] = { 0.25, 0.1 };
+        for (int f = 0; f < 2; ++f) {
+            std::vector<zzd::Bar> bars; { std::ifstream in(files[f]); std::string ln;
+                while (std::getline(in, ln)) { if (ln.empty() || ln[0] == '#') continue; std::stringstream q(ln); std::string a; std::vector<std::string> x; while (std::getline(q, a, ',')) x.push_back(a);
+                    if (x.size() < 8) { continue; }
+                    zzd::Bar b; b.t = std::stoll(x[0]); zzd::toTicks(std::stod(x[1]), tk[f], b.h); zzd::toTicks(std::stod(x[2]), tk[f], b.l);
+                    b.vol = std::stoll(x[3]); b.dlt = std::stoll(x[4]); b.vap = true; b.xh = std::stoll(x[5]); b.xl = std::stoll(x[6]); b.xok = x[7] == "1"; bars.push_back(b); } }
+            if (bars.size() < 100) { std::printf("  %s fixture missing\n", mk[f]); continue; }
+            zzd::Engine G; G.revBars = zzd::COMBO_REV_BARS; G.setMarket(mk[f], 180); for (size_t i = 0; i + 1 < bars.size(); ++i) G.addBar(bars[i]);
+            zzd::Bar form = bars.back(); form.seg = G.segOf(form.t); const std::vector<zzd::Wave> wv = G.view(&form);
+            for (int H : { 260, 150 }) {
+                int in = 0, ab = 0, dr = 0, clash = 0;
+                for (int from = 0; from + 1 < (int)G.B.size(); from += 400) {   // window by window, 400 bars each (no overlap), 9 px per bar
+                    zzd::View v; v.l = 0; v.t = 0; v.first = from; v.last = std::min((int)G.B.size(), from + 399); v.r = 9 * (v.last - from + 1) + 20; v.b = H; v.bw = 9;
+                    v.X = [from](int j) { return (j - from) * 9.0 + 5; }; v.textW = [](const std::string& t) { return (int)t.size() * 6; }; v.textH = 11;
+                    const zzd::ComboScene T = zzd::layoutCombo(G, wv, form.vol, v, "ZZO Combo");
+                    in += T.countsIn; ab += T.countsAbove; dr += T.countsDropped;
+                    {   // a count never touches a ratio label, a tag box or another count
+                        std::vector<const zzd::Prim*> cnt, oth;
+                        for (size_t i = 0; i < T.p.size(); ++i) { const zzd::Prim& p = T.p[i]; if (p.k != zzd::Prim::TEXT || p.text.empty() || p.text.rfind("ZZO", 0) == 0 || p.col == zzd::OUTLINE) continue;
+                            if (p.col == 0xFFFFFF && std::isdigit((unsigned char)p.text[0]) && p.text.back() != 'x') cnt.push_back(&p);
+                            else if (p.text.back() == 'x') oth.push_back(&p);
+                            else if (i > 0 && T.p[i - 1].k == zzd::Prim::FILL) oth.push_back(&T.p[i - 1]); }   // tag box
+                        for (size_t a = 0; a < cnt.size(); ++a) { const zzd::Prim& c = *cnt[a];
+                            for (const zzd::Prim* o : oth) if (c.x0 <= o->x1 && o->x0 <= c.x1 && c.y0 <= o->y1 && o->y0 <= c.y1) ++clash;
+                            for (size_t b = a + 1; b < cnt.size(); ++b) { const zzd::Prim& o = *cnt[b]; if (c.x0 <= o.x1 && o.x0 <= c.x1 && c.y0 <= o.y1 && o.y0 <= c.y1) ++clash; } }
+                    }
+                    bool inPane = true; for (const zzd::Prim& p : T.p) if (p.y0 < v.t || p.y1 > v.b || p.x0 < v.l - 1 || p.x1 > v.r + 1) inPane = false;
+                    if (!inPane) { CHECK(false, "everything inside the pane (tally)"); break; }
+                }
+                std::printf("  %s %dpx: counts drawn inside the bar %d, above a short bar %d (%.0f%%), dropped (no room) %d, overlaps %d\n", mk[f], H, in, ab, in + ab ? 100.0 * ab / (in + ab) : 0.0, dr, clash);
+                CHECK(clash == 0, "a count never overlaps a ratio label, a tag or another count");
+                CHECK(in + ab > 0, "counts drawn on real data");
+            }
+        }
     }
 
     // ---- 5. hosts
