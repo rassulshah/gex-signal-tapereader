@@ -1,5 +1,9 @@
 /********************************************************************************
- *  ZzoDelta.cpp  --  Investor/RT RTX extension  lsZzoDelta  "ZZO Delta"  1.1.1  (2026-11-02)
+ *  ZzoDelta.cpp  --  Investor/RT RTX extension  lsZzoDelta  "ZZO Delta"  1.2.0  (2026-11-02)  -  also built as lsZzoVolume "ZZO Volume" 1.0.0 (ZzoVolume.cpp = ZZO_VOLUME_VIEW + this file)
+ *
+ *  1.2.0 / ZZO Volume 1.0.0 (Rassul 22:40 CT "lets build, use delta as default and keep the Ab tag and add the cmx and cob tags for volume"):
+ *    ZZO Delta unchanged (Ab?); ZZO Volume = each wave's volume vs the median of the last 5 same-way waves (Weis Wave), green up /
+ *    red down waves, tags Ab? / Cmx / CoB (ZzoDeltaLogic.h). Two indicators instead of a dialog setting (no settings dialogs).
  *
  *  1.1.1 (Rassul 21:37-21:48 CT): every wave's bars point UP from one bottom line (easier to compare); colour = buying / selling.
  *
@@ -41,6 +45,14 @@
 #include <vector>
 #include <sys/stat.h>
 
+#ifndef ZZO_VOLUME_VIEW
+#define ZZO_VOLUME_VIEW 0   // 1 = the ZZO Volume indicator (ZzoVolume.cpp)
+#endif
+#if ZZO_VOLUME_VIEW
+#define ZD_NAME "ZzoVolume"
+#else
+#define ZD_NAME "ZzoDelta"
+#endif
 #if defined(_WIN32)
 #define ZD_SEP "\\"
 #else
@@ -172,7 +184,7 @@ bool ZzoDelta::identify(ZState& S) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
         S.E.reset(); S.E.setMarket(mkt, spb); S.raw.clear(); S.off = 0; S.haveForm = false;
         const std::string d = zdFlex(); const std::string key = mkt + "-" + std::to_string(spb);
-        S.statusPath = d.empty() ? std::string() : d + ZD_SEP "ZzoDelta.status-" + key + ".txt";
+        S.statusPath = d.empty() ? std::string() : d + ZD_SEP ZD_NAME ".status-" + key + ".txt";
     }
     return true;
 }
@@ -180,15 +192,17 @@ bool ZzoDelta::identify(ZState& S) {
 // closed bars in order, each once; a changed history (first stamp, fewer bars, a stamp moved) = replay from the start
 void ZzoDelta::feed(ZState& S) {
     const long n = getBarCount(); if (n < 2) return;
-    RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow);
+    RTARRAYI times(barDateTime), vol(barVolume); RTARRAY hi(barHigh), lo(barLow);
     if ((long)times.count < n || (long)hi.count < n || (long)lo.count < n) return;
     const int closed = (int)n - 1;
     const int fed = (int)S.raw.size();
     if (fed > 0) { const int lastIdx = S.off + fed - 1;
         if (lastIdx >= closed || (RTDATE)times[lastIdx] != S.raw.back() || (RTDATE)times[S.off] != S.raw.front()) { S.E.reset(); S.E.setMarket(S.mkt, S.spb); S.raw.clear(); } }
     if (S.raw.empty()) S.off = std::max(0, closed - zzd::MAX_BARS + zzd::TRIM);
+    const bool haveVol = (long)vol.count >= n;
     auto bar = [&](int i, zzd::Bar& b) {
         b.t = localSec((RTDATE)times[i]);
+        b.vol = haveVol ? std::max(0LL, (long long)vol[i]) : 0;   // (1.2.0) bar volume
         if (!zzd::toTicks(hi[i], S.tick, b.h) || !zzd::toTicks(lo[i], S.tick, b.l)) { b.h = b.l = S.E.B.empty() ? 0 : S.E.B.back().h; }
         if (b.h < b.l) std::swap(b.h, b.l);
         long long d = 0; b.vap = barDelta(S, i, d) > 0; b.dlt = d;
@@ -205,7 +219,7 @@ void ZzoDelta::status(ZState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = zzd::statusText(S.E, S.mkt, S.spb, S.vapFault ? "FAULT - remove and re-add the indicator" : "ok") +
-        "DRAWN,bars " + std::to_string(S.last.bars) + ",labels " + std::to_string(S.last.labels) + ",Ab? " + std::to_string(S.last.marks) + "\n";
+        "VIEW," ZD_NAME "\nDRAWN,bars " + std::to_string(S.last.bars) + ",labels " + std::to_string(S.last.labels) + ",Ab? " + std::to_string(S.last.marks) + ",Cmx " + std::to_string(S.last.cmx) + ",CoB " + std::to_string(S.last.cob) + "\n";
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     zdMkdir(zdFlex()); zdPublish(S.statusPath, body);
@@ -234,8 +248,10 @@ int ZzoDelta::draw(void) {
         v.textW = [this, &fb](const std::string& s) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
         v.textH = 12;
         const std::vector<zzd::Wave> waves = S->E.view(S->haveForm ? &S->formBar : nullptr);
-        const std::string head = std::string("ZZO Delta ") + zzd::VERSION + "  + buying / - selling vs median of last 5";
-        S->last = zzd::layout(S->E, waves, S->haveForm ? S->formBar.dlt : 0, v, head);
+        v.volume = ZZO_VOLUME_VIEW != 0;
+        const std::string head = v.volume ? std::string("ZZO Volume ") + zzd::VOL_VERSION + "  wave volume vs median of last 5"
+                                          : std::string("ZZO Delta ") + zzd::VERSION + "  + buying / - selling vs median of last 5";
+        S->last = zzd::layout(S->E, waves, S->haveForm ? S->formBar.dlt : 0, v, head, S->haveForm ? S->formBar.vol : 0);
         const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom;
         for (const zzd::Prim& p : S->last.p) {
             if (p.k == zzd::Prim::FILL) {
@@ -256,7 +272,12 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoDelta* p = new ZzoDelta();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Delta v1.1.1 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? = absorption.");
-    p->setVersion("1.1.1");   // = zzd::VERSION (gex-build reads this literal)
+#if ZZO_VOLUME_VIEW
+    p->setDescription("LRA ZZO Volume v1.0.0 - 1-bar High/Low ZigZag waves: wave volume / the median of the last 5 same-way waves (Weis Wave); Ab? absorption, Cmx climax, CoB change of behaviour.");
+    p->setVersion(ZZO_VOLUME_VERSION_LITERAL);
+#else
+    p->setDescription("LRA ZZO Delta v1.2.0 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? = absorption.");
+    p->setVersion("1.2.0");   // = zzd::VERSION (gex-build reads this literal)
+#endif
     return p;
 }

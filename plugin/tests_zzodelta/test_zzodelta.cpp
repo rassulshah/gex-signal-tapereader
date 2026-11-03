@@ -6,20 +6,20 @@
 #include <sstream>
 static int pass = 0, fail = 0;
 #define CHECK(c, m) do { if (c) ++pass; else { ++fail; std::printf("FAIL %s (line %d)\n", m, __LINE__); } } while (0)
-struct Raw { long long t; double h, l; long long d; };
+struct Raw { long long t; double h, l; long long d; long long v = 0; };
 static std::vector<Raw> load(const char* p) {
-    std::vector<Raw> v; std::map<int, long long> D; std::ifstream f(p); std::string ln;
+    std::vector<Raw> v; std::map<int, long long> D, VV; std::ifstream f(p); std::string ln;
     while (std::getline(f, ln)) {
         if (ln.empty()) continue;
         std::stringstream ss(ln); std::string k; std::getline(ss, k, ',');
         std::vector<std::string> x; std::string c; while (std::getline(ss, c, ',')) x.push_back(c);
         if (k == "B") v.push_back({ std::stoll(x[1]), std::stod(x[3]), std::stod(x[4]), 0 });
-        else if (k == "V") D[std::stoi(x[0])] += std::stoll(x[3]);
+        else if (k == "V") { D[std::stoi(x[0])] += std::stoll(x[3]); VV[std::stoi(x[0])] += std::stoll(x[2]); }
     }
-    for (size_t i = 0; i < v.size(); ++i) v[i].d = D[(int)i];
+    for (size_t i = 0; i < v.size(); ++i) { v[i].d = D[(int)i]; v[i].v = VV[(int)i]; }
     return v;
 }
-static zzd::Bar mk(const Raw& r) { zzd::Bar b; b.t = r.t; zzd::toTicks(r.h, 0.25, b.h); zzd::toTicks(r.l, 0.25, b.l); b.dlt = r.d; b.vap = true; return b; }
+static zzd::Bar mk(const Raw& r) { zzd::Bar b; b.t = r.t; zzd::toTicks(r.h, 0.25, b.h); zzd::toTicks(r.l, 0.25, b.l); b.dlt = r.d; b.vol = r.v; b.vap = true; return b; }
 int main() {
     const std::vector<Raw> R = load("zzodelta_es1029_1030.csv");
     CHECK(R.size() == 247, "fixture bars");
@@ -92,6 +92,19 @@ int main() {
     // 13) (1.1.0) layout: bars green when the running total is >= 0, an Ab? box for each visible completed Ab? wave
     { zzd::View v; v.l = 0; v.t = 0; v.r = 1300; v.b = 220; v.first = 124; v.last = 246; v.bw = 9; v.X = [](int j) { return (j - 124) * 9.0 + 5; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
       const std::vector<zzd::Wave> w = E.view(nullptr); const zzd::Scene s = zzd::layout(E, w, 0, v, "ZZO Delta");
-      int want = 0; for (const zzd::Wave& x : w) if (x.ab && !x.live && x.e >= v.first && x.e <= v.last) ++want; CHECK(s.marks == want && want == 4, "4 Ab? boxes drawn on Oct 30"); }
+      int want = 0; for (const zzd::Wave& x : w) if (x.ab && !x.live && x.e >= v.first && x.e <= v.last) ++want; CHECK(s.marks == want && want == 4, "4 Ab? boxes drawn on Oct 30");
+      bool in2 = true; for (const zzd::Prim& p : s.p) if (p.y0 < v.t || p.y1 > v.b) in2 = false; CHECK(in2, "delta view inside the pane"); }
+    // 14) (1.2.0) Cmx / CoB = the 36-day study's definitions on these days (bar START times):
+    //     Oct 29 Cmx 12:12 DN, 12:54 DN, 14:30 UP; CoB 14:45 DN; 14:57 UP Cmx (its pivot confirmed by the next day's first bar in this fixture)   Oct 30 Cmx 10:45 DN, 13:33 DN; CoB 13:39 UP
+    { std::string got; for (const zzd::Wave& w : E.W) if (w.cmx || w.cob) { const long long t0 = E.B[(size_t)w.e].t - 180; char b[48];
+          std::snprintf(b, sizeof b, "%lld %02lld:%02lld %s %s; ", (t0 / 86400) % 100, (t0 % 86400) / 3600, (t0 % 3600) / 60, w.dir > 0 ? "UP" : "DN", w.cmx ? "Cmx" : "CoB"); got += b; }
+      std::printf("  Cmx/CoB: %s\n", got.c_str());
+      CHECK(got == "55 12:12 DN Cmx; 55 12:54 DN Cmx; 55 14:30 UP Cmx; 55 14:45 DN CoB; 55 14:57 UP Cmx; 56 10:45 DN Cmx; 56 13:33 DN Cmx; 56 13:39 UP CoB; ", "Cmx / CoB = the study"); }
+    // 15) (1.2.0) volume view: bars green on up waves / red on down waves, labels unsigned, Cmx + CoB boxes on Oct 30, Ab? still drawn
+    { zzd::View v; v.volume = true; v.l = 0; v.t = 0; v.r = 1300; v.b = 240; v.first = 124; v.last = 246; v.bw = 9; v.X = [](int j) { return (j - 124) * 9.0 + 5; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
+      const std::vector<zzd::Wave> w = E.view(nullptr); const zzd::Scene s = zzd::layout(E, w, 0, v, "ZZO Volume");
+      bool unsignedLab = true; for (const zzd::Prim& p : s.p) if (p.k == zzd::Prim::TEXT && !p.text.empty() && (p.text[0] == '+' || (p.text[0] == '-' && p.text.size() > 1))) unsignedLab = false;
+      CHECK(unsignedLab, "volume labels unsigned"); CHECK(s.cmx == 2 && s.cob == 1 && s.marks == 4, "Oct 30 volume view: 2 Cmx, 1 CoB, 4 Ab?");
+      bool inside = true; for (const zzd::Prim& p : s.p) if (p.y0 < v.t || p.y1 > v.b) inside = false; if (!inside) for (const zzd::Prim& p : s.p) if (p.y0 < v.t || p.y1 > v.b) std::printf("  out: %d %d %d %d %s\n", p.x0, p.y0, p.x1, p.y1, p.text.c_str()); CHECK(inside, "volume view inside the pane"); }
     std::printf("%d passed, %d failed\n", pass, fail); return fail ? 1 : 0;
 }
