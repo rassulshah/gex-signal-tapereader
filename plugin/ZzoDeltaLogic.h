@@ -1,4 +1,5 @@
-// ZzoDeltaLogic.h - lsZzoDelta 1.1.0 (2026-11-02 21:33 CT, Rassul "yes, fix it" after mockup "ZZO Absorption Mockup" v6):
+// ZzoDeltaLogic.h - lsZzoDelta 1.1.1 (21:48 CT, Rassul "show all the waves up because they are easier to compare": bars = |running total| up from one
+//   bottom line, colour = buying / selling) - was 1.1.0 (2026-11-02 21:33 CT, Rassul "yes, fix it" after mockup "ZZO Absorption Mockup" v6):
 //   (1) the STANDARD delta convention: + / green = net BUYING in the wave, - / red = net SELLING (buy - sell volume), bars coloured by
 //       the sign of the running total (the wave's direction is the ZigZag - lsZzoZigZag on the price chart);
 //   (2) Ab? absorption marks at a COMPLETED wave's end, coloured by the side that won (green = sellers absorbed under a down wave,
@@ -33,9 +34,10 @@
 #include "SessionVWAPLogic.h"
 
 namespace zzd {
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.1.1";
 static const int HIST = 5, MIN_HIST = 3, MAX_BARS = 6000, TRIM = 1000;
 static const double AB_EFFORT = 1.9, AB_BACK = 0.75;   // (1.1.0) Ab? rule thresholds
+static const bool UP_ONLY = true;   // (1.1.0, Rassul 21:37 CT "show all the waves up because they are easier to compare") bars = |running total| from the bottom line, colour = buying / selling
 
 inline bool toTicks(double px, double tick, long long& out) {
     if (!std::isfinite(px) || !(tick > 0)) return false;
@@ -181,9 +183,9 @@ inline int ci(double v) { return (int)std::lround(std::max(-30000.0, std::min(30
 
 inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long formDlt, const View& v, const std::string& head) {
     Scene S; const Colours C;
-    const int TH = v.textH, top = v.t + TH + 4 + TH + 2, bot = v.b - TH - 2;   // header row, room for a label above / below
+    const int TH = v.textH, top = v.t + TH + 4 + TH + 2 + (UP_ONLY ? TH + 3 : 0), bot = UP_ONLY ? v.b - 3 : v.b - TH - 2;   // (1.1.0) up-only: room for label + Ab? above   // header row, room for a label above / below
     // running value per bar of the visible waves
-    struct Pt { int i; double val; int dir; };
+    struct Pt { int i; double val; int dir; bool buy; };
     std::vector<Pt> pts; double lo = 0, hi = 0;
     const int nB = (int)E.B.size();
     for (const Wave& w : waves) {
@@ -193,10 +195,11 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
             const long long d = i < nB ? E.B[(size_t)i].dlt : formDlt;   // the forming bar = index nB
             run += (double)d / w.med;
             if (i < v.first || i > v.last) continue;
-            pts.push_back({ i, run, w.dir }); lo = std::min(lo, run); hi = std::max(hi, run);
+            const double pv = UP_ONLY ? std::fabs(run) : run; pts.push_back({ i, pv, w.dir, run >= 0 }); lo = std::min(lo, pv); hi = std::max(hi, pv);
         }
     }
-    if (hi - lo < 1.0) { hi = std::max(hi, 0.5); lo = std::min(lo, -0.5); }
+    if (UP_ONLY) { lo = 0; if (hi < 1.0) hi = 1.0; }
+    else if (hi - lo < 1.0) { hi = std::max(hi, 0.5); lo = std::min(lo, -0.5); }
     S.lo = lo; S.hi = hi;
     auto Y = [&](double x) { return (double)bot - (x - lo) / (hi - lo) * (double)(bot - top); };
     const int z = ci(Y(0));
@@ -206,7 +209,7 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
         const double xc = v.X(q.i); const int y = ci(Y(q.val));
         Prim p; p.k = Prim::FILL; p.x0 = ci(xc - half); p.x1 = std::max(p.x0, ci(xc + half) - 1); p.y0 = std::min(y, z); p.y1 = std::max(y, z);
         if (p.y1 == p.y0) p.y1 = p.y0 + 1;
-        p.col = q.val >= 0 ? C.up : C.down; if (p.x1 >= v.l && p.x0 <= v.r) { S.p.push_back(p); ++S.bars; }   // (1.1.0) green = net buying so far
+        p.col = q.buy ? C.up : C.down; if (p.x1 >= v.l && p.x0 <= v.r) { S.p.push_back(p); ++S.bars; }   // (1.1.0) green = net buying so far
     }
     // labels at each wave's end (skipped when they would overlap the previous one)
     int lastR = -100000;
@@ -215,12 +218,12 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
         const std::string t = ratioText(w); const int tw = v.textW(t); const double xc = v.X(w.e);
         int x0 = ci(xc - tw / 2.0); if (x0 < v.l + 1) x0 = v.l + 1; if (x0 + tw > v.r - 1) x0 = v.r - 1 - tw;
         if (x0 <= lastR + 2 && !(w.ab && !w.live)) continue;   // (1.1.0) an Ab? wave always keeps its label
-        double end = w.hasR ? (double)w.dlt / w.med : 0.0;
+        double end = w.hasR ? (double)w.dlt / w.med : 0.0; if (UP_ONLY) end = std::fabs(end);
         // clear of every bar under the label's width: above the highest (end >= 0) / below the lowest (end < 0)
         int yTop = z, yBot = z;
         for (const Pt& q : pts) { const double xc2 = v.X(q.i); if (xc2 + half < x0 - 1 || xc2 - half > x0 + tw + 1) continue; const int y = ci(Y(q.val)); yTop = std::min(yTop, y); yBot = std::max(yBot, y); }
         Prim p; p.k = Prim::TEXT; p.x0 = x0; p.x1 = x0 + tw; p.text = t;
-        if (end >= 0) { p.y1 = std::max(yTop - 2, v.t + TH + 4 + TH); p.y0 = p.y1 - TH; } else { p.y0 = std::min(yBot + 2, v.b - TH); p.y1 = p.y0 + TH; }
+        if (end >= 0) { p.y1 = std::max(yTop - 2, v.t + TH + 4 + TH + (UP_ONLY ? TH + 3 : 0)); p.y0 = p.y1 - TH; } else { p.y0 = std::min(yBot + 2, v.b - TH); p.y1 = p.y0 + TH; }
         p.col = !w.hasR ? C.grey : w.dlt >= 0 ? C.up : C.down; S.p.push_back(p); ++S.labels; lastR = x0 + tw;   // (1.1.0) by the delta's sign
         if (w.ab && !w.live) {   // (1.1.0) Ab? box beyond the label, coloured by the winner (the side opposite the wave)
             const std::string a = "Ab?"; const int aw = v.textW(a) + 6; int ax = ci(xc - aw / 2.0); if (ax < v.l + 1) ax = v.l + 1; if (ax + aw > v.r - 1) ax = v.r - 1 - aw;

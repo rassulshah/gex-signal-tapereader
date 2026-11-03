@@ -1,5 +1,7 @@
 /********************************************************************************
- *  ZzoDelta.cpp  --  Investor/RT RTX extension  lsZzoDelta  "ZZO Delta"  1.1.0  (2026-11-02)
+ *  ZzoDelta.cpp  --  Investor/RT RTX extension  lsZzoDelta  "ZZO Delta"  1.1.1  (2026-11-02)
+ *
+ *  1.1.1 (Rassul 21:37-21:48 CT): every wave's bars point UP from one bottom line (easier to compare); colour = buying / selling.
  *
  *  1.1.0 (Rassul 21:33 CT "yes, fix it"): the standard delta sign (+ green buying / - red selling) and Ab? absorption marks (rules A / B,
  *    ZzoDeltaLogic.h); the ZigZag itself is drawn on the price chart by lsZzoZigZag (ZzoZigZag.cpp, same walk).
@@ -254,7 +256,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoDelta* p = new ZzoDelta();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Delta v1.1.0 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? = absorption.");
-    p->setVersion("1.1.0");   // = zzd::VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Delta v1.1.1 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? = absorption.");
+    p->setVersion("1.1.1");   // = zzd::VERSION (gex-build reads this literal)
     return p;
 }
