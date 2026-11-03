@@ -150,6 +150,23 @@ int main(int argc, char** argv) {
             CHECK(clear, "(1.7.2) letters never overlap");
             CHECK(q == 0 && patch == 0, "(1.7.2) no \"?\" and no background patch (" << q << " / " << patch << ")");
             CHECK(ps > 0 && pOnLine == ps, "(1.7.2) every P sits on its wave's cyan volume POC line (" << pOnLine << " / " << ps << ")"); }
+        {   // (1.8.0) extended wave POC lines: 1 px cyan dashes behind the candles; untested = bright, to the right edge, at most 2 above
+            // and 2 below the last close; tested = dimmer, ending at the first bar after the wave that traded through the POC
+            const unsigned long cy = 0x22D3EE, dim = wpc::mix(0x22D3EE, 0x0B0F17, 0.5);
+            std::map<int, std::pair<int, int> > rows;   // y -> (min x0, max x1) per colour key
+            int bright = 0, faint = 0; bool okw = true, back = true;
+            std::map<int, int> brightMaxX, faintMaxX;
+            for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.y0 == p.y1 && (p.col == cy || p.col == dim) && p.x1 - p.x0 <= 4 && p.x1 > p.x0) {
+                if (p.w != 1) okw = false;
+                if (!p.back) back = false;
+                auto& m = p.col == cy ? brightMaxX : faintMaxX; m[p.y0] = std::max(m.count(p.y0) ? m[p.y0] : 0, p.x1); }
+            bright = (int)brightMaxX.size(); faint = (int)faintMaxX.size();
+            CHECK(okw && back, "(1.8.0) POC lines are 1 px dashes behind the candles");
+            CHECK(sc.pocOpen + sc.pocTested > 0, "(1.8.0) POC lines drawn on the Oct 30 PM fixture (" << sc.pocOpen << " untested, " << sc.pocTested << " tested)");
+            int ab = 0, be = 0; const double yc = v.Y((double)E.B.back().c), edge = v.X(last) + bw * 0.5;
+            for (const auto& kv : brightMaxX) if (kv.second >= (int)edge - 8) (kv.first <= yc ? ab : be)++;   // rows reaching the right edge (a Pb line ends at its bar)
+            CHECK(ab <= 2 && be <= 2 && ab + be == sc.pocOpen, "(1.8.0) every untested line reaches the right edge, at most 2 above / 2 below (" << ab << " / " << be << ", untested " << sc.pocOpen << ")");
+            (void)rows; (void)faint; (void)bright; }
         // Pb: text + the amber dashed line from the POC
         int pbT = 0, amber = 0; for (const wpc::Prim& p : sc.p) { pbT += p.k == wpc::Prim::TEXT && p.text == "Pb"; amber += p.k == wpc::Prim::LINE && p.col == 0xF5B428; }
         int cyanL = 0, cyanF = 0, greyL = 0, amberF = 0; for (const wpc::Prim& p : sc.p) { cyanL += p.k == wpc::Prim::LINE && p.col == 0x22D3EE; cyanF += p.k == wpc::Prim::FILL && p.col == 0x22D3EE && !p.back; greyL += p.k == wpc::Prim::LINE && p.col == 0x94A3B8; amberF += p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD); }

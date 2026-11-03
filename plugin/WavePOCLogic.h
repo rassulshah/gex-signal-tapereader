@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.7.2";   // (1.7.2, 2026-11-03 Rassul "build" 09:37 CT) letters I / A / T white on the spine, no "?", no patch; cyan P on the volume POC   // was "1.7.1";   // (1.7.1, Rassul 14:31 CT "you should not be delayed") Pb drawn when the pullback bar closes (live, final once confirmed)   // was "1.7.0":   // (1.7.0, Rassul 2026-11-02 13:28 CT "it should continue to draw as the wave continues") the LIVE wave always drawn, forming bar included   // was "1.6.3":   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.8.0";   // (1.8.0, 2026-11-03 Rassul 11:29 CT "i'll go with your recommendation") extended wave POC lines: untested to the right edge (2 nearest above + 2 below), tested ones end at the bar that traded through, dimmer, until the next same-way wave   // was "1.7.2";   // (1.7.2, 2026-11-03 Rassul "build" 09:37 CT) letters I / A / T white on the spine, no "?", no patch; cyan P on the volume POC   // was "1.7.1";   // (1.7.1, Rassul 14:31 CT "you should not be delayed") Pb drawn when the pullback bar closes (live, final once confirmed)   // was "1.7.0":   // (1.7.0, Rassul 2026-11-02 13:28 CT "it should continue to draw as the wave continues") the LIVE wave always drawn, forming bar included   // was "1.6.3":   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -814,7 +814,7 @@ struct View {
     double tick = 0.25;
     int clipL = -30000, clipR = 30000;            // (1.3.2) nothing drawn left of the Levels column / right of the price area (ColumnBoard)
 };
-struct Scene { std::vector<Prim> p; int tagsShown = 0, tagsHidden = 0, nodesDrawn = 0, wavesDrawn = 0, lnodesDrawn = 0, lettersDrawn = 0, pbDrawn = 0, boxesDrawn = 0; };
+struct Scene { std::vector<Prim> p; int pocOpen = 0, pocTested = 0; int tagsShown = 0, tagsHidden = 0, nodesDrawn = 0, wavesDrawn = 0, lnodesDrawn = 0, lettersDrawn = 0, pbDrawn = 0, boxesDrawn = 0; };
 
 inline int ci(double v) { return v < -30000 ? -30000 : v > 30000 ? 30000 : (int)std::lround(v); }
 inline void addLine(Scene& s, double x0, double y0, double x1, double y1, unsigned long c, int w, bool back) { Prim p; p.k = Prim::LINE; p.x0 = ci(x0); p.y0 = ci(y0); p.x1 = ci(x1); p.y1 = ci(y1); p.col = c; p.w = w; p.back = back; s.p.push_back(p); }
@@ -1012,6 +1012,40 @@ inline bool latestOpenPoc(const Engine& E, long long& tick) {
     if (!latest || latest->nodes.empty() || latest->nodes[0].stop != OPEN) return false;
     tick = latest->nodes[0].tick; return true;
 }
+// (1.8.0, Rassul 2026-11-03 11:14 / 11:29 CT "I like the poc lines extended" + the recommendation) EXTENDED WAVE POC LINES: each wave's
+// volume POC runs right from the end of its delta side, 1 px cyan dashes behind the candles, no text on the line.
+//   UNTESTED (no bar has traded through it yet): to the right edge; only the 2 nearest above and the 2 nearest below the last close
+//   TESTED (traded through, or stopped by a new wave / an origin close): ends at that bar, dimmer, and is shown only until the next
+//           wave of the same direction completes
+static const int POC_EXT_EACH_SIDE = 2;
+inline void drawPocLines(Scene& s, const Engine& E, const View& v, const Colours& C, const std::vector<const Wave*>& ws) {
+    if (E.B.empty()) return;
+    const long long last = E.B.back().c;
+    struct L { const Wave* w; const Node* n; bool open; double d; int hit; };
+    std::vector<L> up, dn, tested;
+    for (const Wave* w : ws) {
+        if (w->pending || w->nodes.empty()) continue;
+        const Node& n = w->nodes[0];
+        // tested = the first CLOSED bar after the wave that traded through the POC (its own scan: a node the engine stopped for a new
+        // wave or an origin close was never traded through, so it is still untested here)
+        int hit = -1; for (int k = w->i1 + 1; k < (int)E.B.size(); ++k) { const Bar& b = E.B[(size_t)k]; if (b.l <= n.tick && n.tick <= b.h) { hit = k; break; } }
+        if (hit < 0) { L l{ w, &n, true, (double)std::llabs(n.tick - last), -1 }; (n.tick >= last ? up : dn).push_back(l); continue; }
+        bool newer = false; for (const Wave* o : ws) if (o != w && !o->pending && o->dir == w->dir && o->i0 > w->i0) { newer = true; break; }
+        if (!newer) tested.push_back(L{ w, &n, false, 0, hit });
+    }
+    auto near = [](std::vector<L>& a) { std::stable_sort(a.begin(), a.end(), [](const L& x, const L& y) { return x.d < y.d; }); if ((int)a.size() > POC_EXT_EACH_SIDE) a.resize((size_t)POC_EXT_EACH_SIDE); };
+    near(up); near(dn);
+    std::vector<L> all = up; all.insert(all.end(), dn.begin(), dn.end()); all.insert(all.end(), tested.begin(), tested.end());
+    for (const L& l : all) {
+        const double y = v.Y((double)l.n->tick); if (y < v.t || y > v.b) continue;
+        const double x0 = v.X(l.w->i0) - v.bw * 0.45 + 1 + SIDE_W;
+        const double x1 = l.open ? v.X(v.lastBar) + v.bw * 0.5 : v.X(l.hit);
+        if (x1 <= x0) continue;
+        for (double x = x0; x < x1; x += 7) addLine(s, x, y, std::min(x + 4, x1), y, l.open ? C.cyan : mix(C.cyan, C.bg, 0.5), 1, true);
+        ++(l.open ? s.pocOpen : s.pocTested);
+    }
+}
+
 inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colours& C = Colours()) {
     Scene s; std::vector<std::pair<const Wave*, const Node*> > tags;
     const Wave* latest = nullptr; for (const Wave& w : E.waves) if (!w.pending) latest = &w;
@@ -1021,6 +1055,7 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
     auto xNext = [&](const Wave* w) { double x = 1e9; for (const Wave* o : ws) if (o->i0 > w->i0) x = std::min(x, v.X(o->i0) - v.bw * 0.45); return x; };
     for (int ph = 0; ph < 2; ++ph)
         for (const Wave* w : ws) drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w), &E.B, &E.alt, E.zDir, E.zI);   // (1.7.1) + the live pullback
+    drawPocLines(s, E, v, C, ws);   // (1.8.0) the extended wave POC lines, behind the candles
     drawTags(s, v, C, tags);   // (1.4.2, 2026-10-29 13:02 CT) the right-edge tags are back exactly as 1.3.4 drew them: the "WPOC" Rassul asked for in the Levels column was the WEEKLY POC, not this indicator's   // was (1.4.0): not drawn
     if (v.zigzag) drawZigzag(s, E, v, C);
     // (1.3.2, Rassul 18:24 CT profiles drawn under the Levels column) every primitive kept inside [clipL, clipR]: fills / lines cut
