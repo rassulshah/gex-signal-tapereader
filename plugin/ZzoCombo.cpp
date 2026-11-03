@@ -1,6 +1,7 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.0.0  (2026-11-03)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.0.1  (2026-11-03)
  *
+ *  2.0.1 (09:20 CT, Rassul's ES chart): labels / tags drawn after every column (the next wave covered the "weak" tag).
  *  2.0.0 (Rassul 2026-11-03 07:40-08:49 CT, "ZZO Combo Mockup" v19 + "build"): the default ZZO indicator - one row in its own pane:
  *    volume ramp per wave (running volume / the median of the last 5 same-way waves), the 2.0x+ ratio above the peak and the count
  *    ("biggest red in the last 12 red waves", 0 hidden, 50+ cap) right-justified in the top quarter, tags at the bottom centre of the wave
@@ -263,7 +264,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoCombo* p = new ZzoCombo();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Combo v2.0.0 - 1-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count (biggest in N, 50+), Cmx / AR / ST, CoB / weak after a key-level sweep, Ab = absorption with a heavy extreme (effort / result).");
-    p->setVersion("2.0.0");   // = zzd::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Combo v2.0.1 - 1-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count (biggest in N, 50+), Cmx / AR / ST, CoB / weak after a key-level sweep, Ab = absorption with a heavy extreme (effort / result).");
+    p->setVersion("2.0.1");   // = zzd::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

@@ -71,7 +71,7 @@
 namespace zzd {
 static const char* const VERSION = "1.3.2";
 static const char* const VOL_VERSION = "1.2.2";   // lsZzoVolume
-static const char* const COMBO_VERSION = "2.0.0";   // lsZzoCombo
+static const char* const COMBO_VERSION = "2.0.1";   // lsZzoCombo
 static const int CNT_CAP = 50;          // (Combo) count cap ("cap it at 50")
 static const double AB_HEAVY = 0.04;    // (Combo) Ab drawn only with >= 4% of the pivot bar's volume in its extreme 2 ticks
 static const double CNT_MIN_VOL = 2.0;  // (Combo) volume ratio, count and ratio label only on waves of 2.0x+ ("only on volume that is at least 2x")   // lsZzoVolume

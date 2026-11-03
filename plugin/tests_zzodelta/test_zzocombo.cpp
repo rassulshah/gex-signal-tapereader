@@ -69,6 +69,12 @@ static void drawing(const char* csv, const char* mkt, double tick) {
         std::snprintf(m, sizeof m, "%s %dpx: everything inside the pane", mkt, H); CHECK(in, m);
         std::snprintf(m, sizeof m, "%s %dpx: no tag on top of another (%d tags)", mkt, H, tagBoxes); CHECK(noClash, m);
         std::snprintf(m, sizeof m, "%s %dpx: no zero count", mkt, H); CHECK(noZero, m);
+        {   // (2.0.1) no column is drawn after any label / tag (a later wave never covers them)
+            size_t lastCol = 0, firstText = S.p.size();
+            for (size_t i = 0; i < S.p.size(); ++i) { const zzd::Prim& p = S.p[i];
+                if (p.k == zzd::Prim::FILL && (p.col == 0x22C55E || p.col == 0xEF4444 || p.col == 0x15803D || p.col == 0xB91C1C) && p.y1 == v.b - 3) lastCol = i;   // columns end at bot - 1 = v.b - 3 (tag boxes end higher)
+                if (p.k == zzd::Prim::TEXT && firstText == S.p.size() && p.text.rfind("ZZO", 0) != 0) firstText = i; }
+            std::snprintf(m, sizeof m, "%s %dpx: labels and tags drawn after every column", mkt, H); CHECK(firstText == S.p.size() || lastCol < firstText, m); }
         if (H < 70) { std::snprintf(m, sizeof m, "%s %dpx: ratio labels dropped", mkt, H); CHECK(S.ratios == 0, m); }
         if (H < 50) { std::snprintf(m, sizeof m, "%s %dpx: counts dropped", mkt, H); CHECK(S.counts == 0, m); }
         if (H == 260) {
