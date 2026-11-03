@@ -1,5 +1,8 @@
 /********************************************************************************
- *  ZzoDelta.cpp  --  Investor/RT RTX extension  lsZzoDelta  "ZZO Delta"  1.0.0  (2026-11-02)
+ *  ZzoDelta.cpp  --  Investor/RT RTX extension  lsZzoDelta  "ZZO Delta"  1.1.0  (2026-11-02)
+ *
+ *  1.1.0 (Rassul 21:33 CT "yes, fix it"): the standard delta sign (+ green buying / - red selling) and Ab? absorption marks (rules A / B,
+ *    ZzoDeltaLogic.h); the ZigZag itself is drawn on the price chart by lsZzoZigZag (ZzoZigZag.cpp, same walk).
  *
  *  1.0.0 (Rassul 2026-11-02 19:40-20:05 CT, mockup "ZZO Delta Mockup" option 1 + "ok lets do option 2"): its own pane; a 1-bar
  *    High / Low ZigZag; each bar = the wave's running delta (VAP buy - sell) / the median |delta| of the last 5 waves in the same
@@ -200,7 +203,7 @@ void ZzoDelta::status(ZState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = zzd::statusText(S.E, S.mkt, S.spb, S.vapFault ? "FAULT - remove and re-add the indicator" : "ok") +
-        "DRAWN,bars " + std::to_string(S.last.bars) + ",labels " + std::to_string(S.last.labels) + "\n";
+        "DRAWN,bars " + std::to_string(S.last.bars) + ",labels " + std::to_string(S.last.labels) + ",Ab? " + std::to_string(S.last.marks) + "\n";
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     zdMkdir(zdFlex()); zdPublish(S.statusPath, body);
@@ -229,7 +232,7 @@ int ZzoDelta::draw(void) {
         v.textW = [this, &fb](const std::string& s) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
         v.textH = 12;
         const std::vector<zzd::Wave> waves = S->E.view(S->haveForm ? &S->formBar : nullptr);
-        const std::string head = std::string("ZZO Delta ") + zzd::VERSION + "  wave delta / median of last 5 (RTH reset)";
+        const std::string head = std::string("ZZO Delta ") + zzd::VERSION + "  + buying / - selling vs median of last 5";
         S->last = zzd::layout(S->E, waves, S->haveForm ? S->formBar.dlt : 0, v, head);
         const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom;
         for (const zzd::Prim& p : S->last.p) {
@@ -251,7 +254,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoDelta* p = new ZzoDelta();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Delta v1.0.0 - 1-bar High/Low ZigZag waves: each wave's delta / the median of the last 5 same-way waves (RTH restarts); green up, red down.");
-    p->setVersion("1.0.0");   // = zzd::VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Delta v1.1.0 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? = absorption.");
+    p->setVersion("1.1.0");   // = zzd::VERSION (gex-build reads this literal)
     return p;
 }

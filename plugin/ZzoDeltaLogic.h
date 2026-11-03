@@ -1,4 +1,13 @@
-// ZzoDeltaLogic.h - lsZzoDelta 1.0.0 (2026-11-02, Rassul 19:40-20:05 CT: "creat an indicator based on delta like zzo delta using high
+// ZzoDeltaLogic.h - lsZzoDelta 1.1.0 (2026-11-02 21:33 CT, Rassul "yes, fix it" after mockup "ZZO Absorption Mockup" v6):
+//   (1) the STANDARD delta convention: + / green = net BUYING in the wave, - / red = net SELLING (buy - sell volume), bars coloured by
+//       the sign of the running total (the wave's direction is the ZigZag - lsZzoZigZag on the price chart);
+//   (2) Ab? absorption marks at a COMPLETED wave's end, coloured by the side that won (green = sellers absorbed under a down wave,
+//       red = buyers absorbed over an up wave), decided once when the wave completes, never repainted; tested on ES 3m RTH 36 days
+//       (Sep 14 - Nov 2, 1,333 waves; base 31.1% of pivots reach 2R): with-wave effort E = dir * delta, Er = E / median of the last 5
+//         rule A  Er > 1.9 AND E >= |delta| of the prior OPPOSITE wave AND size <= 0.75 x that wave's size   (30 waves, 53% 2R, halves 45 / 58)
+//         rule B  Er > 1.9 AND no new extreme past the prior SAME-WAY wave's pivot                           (105 waves, 39% 2R, halves 31 / 49)
+//       (prior waves from the same session part; "?" = not yet proven at t > 3, the nightly keeps scoring them)
+// was 1.0.0 (2026-11-02, Rassul 19:40-20:05 CT: "creat an indicator based on delta like zzo delta using high
 // low and 1 bar reversal default. it shoud use 1 pane and should be green for upwave and red for down wave" -> "use a ratio instead"
 // -> mockup "ZZO Delta Mockup" option 1 (median of the last 5) -> "ok lets do option 2" = the history restarts at the RTH open).
 // SDK-free (tested: tests_zzodelta).
@@ -24,8 +33,9 @@
 #include "SessionVWAPLogic.h"
 
 namespace zzd {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 static const int HIST = 5, MIN_HIST = 3, MAX_BARS = 6000, TRIM = 1000;
+static const double AB_EFFORT = 1.9, AB_BACK = 0.75;   // (1.1.0) Ab? rule thresholds
 
 inline bool toTicks(double px, double tick, long long& out) {
     if (!std::isfinite(px) || !(tick > 0)) return false;
@@ -36,7 +46,8 @@ inline bool toTicks(double px, double tick, long long& out) {
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
 
 struct Bar { long long t = 0, h = 0, l = 0, dlt = 0; bool vap = false; long long seg = 0; };   // t = bar END (local secs), prices in ticks
-struct Wave { int s = 0, e = 0, dir = 0; long long dlt = 0, seg = 0; bool hasR = false; double med = 0; bool live = false; };
+struct Wave { int s = 0, e = 0, dir = 0; long long dlt = 0, seg = 0; bool hasR = false; double med = 0; bool live = false;
+              long long ext = 0, size = 0; int ab = 0; };   // (1.1.0) pivot price / pivot-to-pivot size (ticks); ab 0 none, 1 rule A, 2 rule B
 struct Walk { int dirn = 0, ext = 0, start = 0; bool any = false; };   // any = a wave completed already
 
 inline bool medianOf(std::vector<long long> v, double& m) {
@@ -65,7 +76,11 @@ struct Engine {
     Wave make(const std::vector<Bar>& bars, int s, int e, int dir, size_t nW, bool live) const {
         Wave w; w.s = s; w.e = e; w.dir = dir; w.live = live;
         for (int i = s; i <= e; ++i) w.dlt += bars[(size_t)i].dlt;
-        w.seg = bars[(size_t)e].seg; w.hasR = baseFor(dir, w.seg, nW, w.med); return w;
+        w.seg = bars[(size_t)e].seg; w.hasR = baseFor(dir, w.seg, nW, w.med);
+        const int p0 = s > 0 ? s - 1 : 0;   // the previous pivot (the first wave starts at its own first bar)
+        w.ext = dir > 0 ? bars[(size_t)e].h : bars[(size_t)e].l;
+        w.size = dir > 0 ? bars[(size_t)e].h - bars[(size_t)p0].l : bars[(size_t)p0].h - bars[(size_t)e].l;
+        return w;
     }
     // the 1-bar walk with bar j (CobSignalLogic.h): true = a wave completed (s .. e, dir)
     static bool step(const std::vector<Bar>& b, Walk& z, int j, int& s, int& e, int& dir) {
@@ -84,8 +99,21 @@ struct Engine {
         b.seg = segOf(b.t); if (!b.vap) ++noVap;
         B.push_back(b); const int j = (int)B.size() - 1;
         int s = 0, e = 0, d = 0;
-        if (step(B, Z, j, s, e, d)) W.push_back(make(B, s, e, d, W.size(), false));
+        if (step(B, Z, j, s, e, d)) { Wave w = make(B, s, e, d, W.size(), false); w.ab = absorb(w, W.size()); W.push_back(w); }
         if ((int)B.size() > MAX_BARS) trim(TRIM);
+    }
+    // (1.1.0) the Ab? rules on a completed wave against the completed waves W[0 .. nW) of its session part
+    int absorb(const Wave& w, size_t nW) const {
+        if (!w.hasR) return 0;
+        const double E = (double)w.dir * (double)w.dlt, Er = E / w.med;
+        if (!(Er > AB_EFFORT)) return 0;
+        const Wave* ps = nullptr; const Wave* po = nullptr;
+        for (size_t k = nW; k-- > 0 && (!ps || !po);) { const Wave& x = W[k]; if (x.seg != w.seg) continue; if (x.dir == w.dir) { if (!ps) ps = &x; } else if (!po) po = &x; }
+        if (!ps || !po) return 0;
+        const long long pd = po->dlt < 0 ? -po->dlt : po->dlt;
+        if (pd > 0 && E / (double)pd >= 1.0 && po->size > 0 && (double)w.size / (double)po->size <= AB_BACK) return 1;
+        if ((double)w.dir * (double)(w.ext - ps->ext) <= 0) return 2;
+        return 0;
     }
     void trim(int k) {
         if (k <= 0 || k >= (int)B.size() || Z.start < k) return;   // never cut the live wave
@@ -119,10 +147,26 @@ struct Engine {
     }
 };
 
+// (1.1.0) the standard sign: + = net buying, - = net selling; size vs the median of the last 5 waves the same way
 inline std::string ratioText(const Wave& w) {
     if (!w.hasR) return "-";
-    const double r = (double)w.dir * (double)w.dlt / w.med; char b[24];
-    const bool z = std::fabs(r) < 0.05; std::snprintf(b, sizeof b, "%s%.1fx", r < 0 && !z ? "-" : "", z ? 0.0 : std::fabs(r)); return b;
+    const double r = (double)w.dlt / w.med; char b[24];
+    const bool z = std::fabs(r) < 0.05; std::snprintf(b, sizeof b, "%s%.1fx", z ? "" : r < 0 ? "-" : "+", z ? 0.0 : std::fabs(r)); return b;
+}
+// (1.1.0) the ZigZag points for the price-chart overlay: the first wave's start, every pivot, then the live leg's extreme
+struct ZPt { int i = 0; long long px = 0; bool live = false; };
+inline std::vector<ZPt> zigzag(const Engine& E, const Bar* form) {
+    std::vector<ZPt> out; const std::vector<Wave> v = E.view(form); if (v.empty()) return out;
+    std::vector<Bar> b = E.B; if (form) b.push_back(*form);
+    const Wave& f = v.front();
+    if (f.s >= 0 && f.s < (int)b.size()) { const int p0 = f.s > 0 ? f.s - 1 : f.s; ZPt z; z.i = p0; z.px = f.dir > 0 ? b[(size_t)p0].l : b[(size_t)p0].h; out.push_back(z); }
+    for (const Wave& w : v) {
+        int best = w.s;
+        for (int i = w.s; i <= w.e && i < (int)b.size(); ++i) if (w.dir > 0 ? b[(size_t)i].h >= b[(size_t)best].h : b[(size_t)i].l <= b[(size_t)best].l) best = i;
+        if (!w.live) best = w.e;
+        ZPt z; z.i = best; z.px = w.dir > 0 ? b[(size_t)best].h : b[(size_t)best].l; z.live = w.live; out.push_back(z);
+    }
+    return out;
 }
 
 // ---- drawing (own pane) ----
@@ -132,7 +176,7 @@ struct View {
     int l = 0, t = 0, r = 0, b = 0, first = 0, last = 0; double bw = 8;   // engine bar indexes of the visible range, pixels per bar
     std::function<double(int)> X; std::function<int(const std::string&)> textW; int textH = 12;
 };
-struct Scene { std::vector<Prim> p; int bars = 0, labels = 0; double lo = 0, hi = 0; };
+struct Scene { std::vector<Prim> p; int bars = 0, labels = 0, marks = 0; double lo = 0, hi = 0; };
 inline int ci(double v) { return (int)std::lround(std::max(-30000.0, std::min(30000.0, v))); }
 
 inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long formDlt, const View& v, const std::string& head) {
@@ -162,7 +206,7 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
         const double xc = v.X(q.i); const int y = ci(Y(q.val));
         Prim p; p.k = Prim::FILL; p.x0 = ci(xc - half); p.x1 = std::max(p.x0, ci(xc + half) - 1); p.y0 = std::min(y, z); p.y1 = std::max(y, z);
         if (p.y1 == p.y0) p.y1 = p.y0 + 1;
-        p.col = q.dir > 0 ? C.up : C.down; if (p.x1 >= v.l && p.x0 <= v.r) { S.p.push_back(p); ++S.bars; }
+        p.col = q.val >= 0 ? C.up : C.down; if (p.x1 >= v.l && p.x0 <= v.r) { S.p.push_back(p); ++S.bars; }   // (1.1.0) green = net buying so far
     }
     // labels at each wave's end (skipped when they would overlap the previous one)
     int lastR = -100000;
@@ -170,14 +214,22 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
         if (w.e < v.first || w.e > v.last) continue;
         const std::string t = ratioText(w); const int tw = v.textW(t); const double xc = v.X(w.e);
         int x0 = ci(xc - tw / 2.0); if (x0 < v.l + 1) x0 = v.l + 1; if (x0 + tw > v.r - 1) x0 = v.r - 1 - tw;
-        if (x0 <= lastR + 2) continue;
+        if (x0 <= lastR + 2 && !(w.ab && !w.live)) continue;   // (1.1.0) an Ab? wave always keeps its label
         double end = w.hasR ? (double)w.dlt / w.med : 0.0;
         // clear of every bar under the label's width: above the highest (end >= 0) / below the lowest (end < 0)
         int yTop = z, yBot = z;
         for (const Pt& q : pts) { const double xc2 = v.X(q.i); if (xc2 + half < x0 - 1 || xc2 - half > x0 + tw + 1) continue; const int y = ci(Y(q.val)); yTop = std::min(yTop, y); yBot = std::max(yBot, y); }
         Prim p; p.k = Prim::TEXT; p.x0 = x0; p.x1 = x0 + tw; p.text = t;
         if (end >= 0) { p.y1 = std::max(yTop - 2, v.t + TH + 4 + TH); p.y0 = p.y1 - TH; } else { p.y0 = std::min(yBot + 2, v.b - TH); p.y1 = p.y0 + TH; }
-        p.col = !w.hasR ? C.grey : w.dir > 0 ? C.up : C.down; S.p.push_back(p); ++S.labels; lastR = x0 + tw;
+        p.col = !w.hasR ? C.grey : w.dlt >= 0 ? C.up : C.down; S.p.push_back(p); ++S.labels; lastR = x0 + tw;   // (1.1.0) by the delta's sign
+        if (w.ab && !w.live) {   // (1.1.0) Ab? box beyond the label, coloured by the winner (the side opposite the wave)
+            const std::string a = "Ab?"; const int aw = v.textW(a) + 6; int ax = ci(xc - aw / 2.0); if (ax < v.l + 1) ax = v.l + 1; if (ax + aw > v.r - 1) ax = v.r - 1 - aw;
+            Prim bx; bx.k = Prim::FILL; bx.x0 = ax; bx.x1 = ax + aw; bx.col = w.dir > 0 ? C.down : C.up;
+            if (end >= 0) { bx.y1 = p.y0 - 2; bx.y0 = bx.y1 - TH - 1; } else { bx.y0 = p.y1 + 2; bx.y1 = bx.y0 + TH + 1; }
+            if (bx.y0 >= v.t + TH + 2 && bx.y1 <= v.b) {
+                S.p.push_back(bx); Prim tx; tx.k = Prim::TEXT; tx.x0 = ax + 3; tx.x1 = ax + aw - 3; tx.y0 = bx.y0 + 1; tx.y1 = bx.y1; tx.col = 0xFFFFFF; tx.text = a; S.p.push_back(tx); ++S.marks;
+            }
+        }
     }
     { Prim p; p.k = Prim::TEXT; p.x0 = v.l + 4; p.y0 = v.t + 2; p.x1 = p.x0 + v.textW(head); p.y1 = p.y0 + TH; p.col = C.grey; p.text = head; S.p.push_back(p); }
     return S;
@@ -185,12 +237,12 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
 
 inline std::string statusText(const Engine& E, const std::string& mkt, int spb, const std::string& vap) {
     std::string s = std::string("lsZzoDelta ") + VERSION + "\nMARKET," + mkt + "," + std::to_string(spb) + "\nRTH," + std::to_string(E.openMin) + "-" + std::to_string(E.closeMin) +
-        "\nRULES,1-bar High/Low ZigZag; wave delta / median |delta| of the last 5 same-way waves in the same session part (>= 3; RTH restarts)\nBARS," +
+        "\nRULES,1-bar High/Low ZigZag; wave delta (+ buying / - selling) / median |delta| of the last 5 same-way waves in the same session part (>= 3; RTH restarts)\nAB,A effort > 1.9x and >= the prior opposite wave's, size <= 0.75x it; B effort > 1.9x and no new extreme past the prior same-way pivot\nBARS," +
         std::to_string(E.B.size()) + ",no VAP " + std::to_string(E.noVap) + ",VAP " + vap + "\nWAVES," + std::to_string(E.W.size()) + "\n";
     int n = 0;
     for (size_t k = E.W.size(); k-- > 0 && n < 12; ++n) {
         const Wave& w = E.W[k]; if (w.s < 0) break;
-        char b[160]; std::snprintf(b, sizeof b, "WAVE,%lld,%s,delta %lld,%s\n", E.B[(size_t)w.e].t, w.dir > 0 ? "UP" : "DN", w.dlt, ratioText(w).c_str()); s += b;
+        char b[160]; std::snprintf(b, sizeof b, "WAVE,%lld,%s,delta %lld,%s%s\n", E.B[(size_t)w.e].t, w.dir > 0 ? "UP" : "DN", w.dlt, ratioText(w).c_str(), w.ab == 1 ? ",Ab? A" : w.ab == 2 ? ",Ab? B" : ""); s += b;
     }
     return s;
 }

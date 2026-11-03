@@ -30,7 +30,7 @@ int main() {
     while (std::getline(f, ln)) {
         int e, d; long long dl; char rr[16] = { 0 };
         if (std::sscanf(ln.c_str(), "%d,%d,%lld,%15s", &e, &d, &dl, rr) != 4) continue;
-        if (k < E.W.size()) { const zzd::Wave& w = E.W[k]; std::string t = zzd::ratioText(w); if (t.size() && t.back() == 'x') t.pop_back();
+        if (k < E.W.size()) { const zzd::Wave& w = E.W[k]; std::string t = "-"; if (w.hasR) { char tb[24]; const double r = w.dir * (double)w.dlt / w.med; std::snprintf(tb, sizeof tb, "%.1f", std::fabs(r) < 0.05 ? 0.0 : r); t = tb; }
             if (w.e == e && w.dir == d && w.dlt == dl && t == rr) ++same; else std::printf("  wave %zu: got e%d d%d %lld %s / want e%d d%d %lld %s\n", k, w.e, w.dir, w.dlt, t.c_str(), e, d, dl, rr); }
         ++k;
     }
@@ -60,7 +60,8 @@ int main() {
         bool s2 = v.size() == q.size(); for (size_t i = 0; s2 && i < v.size(); ++i) s2 = v[i].s == q[i].s && v[i].e == q[i].e && v[i].dlt == q[i].dlt && v[i].hasR == q[i].hasR && v[i].med == q[i].med; if (!s2) ++bad; }
       CHECK(bad == 0, "forming view = closed, every bar"); }
     // 7) ratio text
-    { zzd::Wave w; w.dir = -1; w.dlt = -2600; w.med = 1000; w.hasR = true; CHECK(zzd::ratioText(w) == "2.6x", "down wave sold 2.6x"); w.dlt = 400; CHECK(zzd::ratioText(w) == "-0.4x", "down wave bought -0.4x");
+    { zzd::Wave w; w.dir = -1; w.dlt = -2600; w.med = 1000; w.hasR = true; CHECK(zzd::ratioText(w) == "-2.6x", "down wave sold = -2.6x (standard sign)"); w.dlt = 400; CHECK(zzd::ratioText(w) == "+0.4x", "down wave bought = +0.4x");
+      w.dlt = 20; CHECK(zzd::ratioText(w) == "0.0x", "near zero has no sign");
       w.hasR = false; CHECK(zzd::ratioText(w) == "-", "no ratio"); }
     // 8) segments: overnight / RTH / after the close differ, the evening belongs to the next session
     { zzd::Engine S; S.setMarket("ES", 180); const long long d = 20391LL * 86400;   // a Wednesday
@@ -77,5 +78,20 @@ int main() {
       int nb = 0; for (const zzd::Wave& x : w) if (x.hasR) for (int i = std::max(x.s, v.first); i <= std::min(x.e, v.last); ++i) ++nb;
       CHECK(s.bars == nb, "one bar per visible bar of a wave with a ratio"); bool inside = true; for (const zzd::Prim& p : s.p) if (p.k == zzd::Prim::TEXT && (p.y0 < v.t || p.y1 > v.b)) inside = false; CHECK(inside, "labels inside the pane");
       bool cols = true; for (const zzd::Prim& p : s.p) if (p.k == zzd::Prim::FILL && p.y0 != p.y1 && !(p.col == 0x22C55E || p.col == 0xEF4444)) cols = false; CHECK(cols, "bars green / red"); }
+    // 11) (1.1.0) Ab? = the 36-day study's marks on these days (bar START times): Oct 29 10:00 B; Oct 30 10:00 A, 10:57 B, 12:24 A, 14:18 B
+    { std::vector<std::string> got; for (const zzd::Wave& w : E.W) if (w.ab) { const long long t0 = E.B[(size_t)w.e].t - 180; char b[40]; std::snprintf(b, sizeof b, "%lld %02lld:%02lld %c", (t0 / 86400) % 100, (t0 % 86400) / 3600, (t0 % 3600) / 60, w.ab == 1 ? 'A' : 'B'); got.push_back(b); }
+      std::string all; for (const std::string& g : got) all += g + "; "; std::printf("  Ab?: %s\n", all.c_str());
+      int d29 = 0, d30 = 0; bool a1 = false, a2 = false, a3 = false, a4 = false, b1 = false;
+      for (const zzd::Wave& w : E.W) if (w.ab) { const long long t0 = E.B[(size_t)w.e].t - 180, m = (t0 % 86400) / 60; const bool fri = t0 / 86400 == E.B.back().t / 86400; (fri ? d30 : d29)++;
+        b1 = b1 || (!fri && m == 600 && w.ab == 2); a1 = a1 || (fri && m == 600 && w.ab == 1); a2 = a2 || (fri && m == 657 && w.ab == 2); a3 = a3 || (fri && m == 744 && w.ab == 1); a4 = a4 || (fri && m == 858 && w.ab == 2 && w.dir < 0); }
+      CHECK(d29 == 1 && d30 == 4 && b1 && a1 && a2 && a3 && a4, "Ab? marks = the study (incl. the circled 14:18 down wave)"); }
+    // 12) (1.1.0) Ab? never on a live wave; the ZigZag points: pivots in order, alternating, live last
+    { const std::vector<zzd::Wave> v = E.view(nullptr); CHECK(!v.back().live || v.back().ab == 0, "no Ab? on the live wave");
+      const std::vector<zzd::ZPt> z = zzd::zigzag(E, nullptr); bool ord = z.size() == E.W.size() + 2; for (size_t i = 1; i < z.size(); ++i) ord = ord && z[i].i >= z[i - 1].i;
+      bool piv = true; for (size_t k = 0; k < E.W.size(); ++k) piv = piv && z[k + 1].i == E.W[k].e && z[k + 1].px == E.W[k].ext; CHECK(ord && piv && z.back().live, "ZigZag points = the waves' pivots + the live leg"); }
+    // 13) (1.1.0) layout: bars green when the running total is >= 0, an Ab? box for each visible completed Ab? wave
+    { zzd::View v; v.l = 0; v.t = 0; v.r = 1300; v.b = 220; v.first = 124; v.last = 246; v.bw = 9; v.X = [](int j) { return (j - 124) * 9.0 + 5; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
+      const std::vector<zzd::Wave> w = E.view(nullptr); const zzd::Scene s = zzd::layout(E, w, 0, v, "ZZO Delta");
+      int want = 0; for (const zzd::Wave& x : w) if (x.ab && !x.live && x.e >= v.first && x.e <= v.last) ++want; CHECK(s.marks == want && want == 4, "4 Ab? boxes drawn on Oct 30"); }
     std::printf("%d passed, %d failed\n", pass, fail); return fail ? 1 : 0;
 }
