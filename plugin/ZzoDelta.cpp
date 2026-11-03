@@ -1,9 +1,11 @@
 /********************************************************************************
- *  ZzoDelta.cpp  --  Investor/RT RTX extension  lsZzoDelta  "ZZO Delta"  1.2.0  (2026-11-02)  -  also built as lsZzoVolume "ZZO Volume" 1.0.0 (ZzoVolume.cpp = ZZO_VOLUME_VIEW + this file)
+ *  ZzoDelta.cpp  --  Investor/RT RTX extension  lsZzoDelta  "ZZO Delta"  1.3.0  (2026-11-02)  -  also built as lsZzoVolume "ZZO Volume" 1.2.0 (ZzoVolume.cpp = ZZO_VOLUME_VIEW + this file)
  *
  *  1.2.0 / ZZO Volume 1.0.0 (Rassul 22:40 CT "lets build, use delta as default and keep the Ab tag and add the cmx and cob tags for volume"):
  *    ZZO Delta unchanged (Ab?); ZZO Volume = each wave's volume vs the median of the last 5 same-way waves (Weis Wave), green up /
- *    red down waves, tags Ab? / Cmx / CoB (ZzoDeltaLogic.h). Two indicators instead of a dialog setting (no settings dialogs).
+ *    red down waves, tags Ab? / Cmx / CoB (ZzoDeltaLogic.h).
+ *  1.3.0 / ZZO Volume 1.2.0 (Rassul 23:03 CT "build out indicator ... ready for tomorrow"): CoB / weak on the reversal wave after the
+ *    first RTH sweep of a key level (levels from the chart's own bars - keep the chart on the full 17:00-16:00 session). Two indicators instead of a dialog setting (no settings dialogs).
  *
  *  1.1.1 (Rassul 21:37-21:48 CT): every wave's bars point UP from one bottom line (easier to compare); colour = buying / selling.
  *
@@ -219,7 +221,7 @@ void ZzoDelta::status(ZState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = zzd::statusText(S.E, S.mkt, S.spb, S.vapFault ? "FAULT - remove and re-add the indicator" : "ok") +
-        "VIEW," ZD_NAME "\nDRAWN,bars " + std::to_string(S.last.bars) + ",labels " + std::to_string(S.last.labels) + ",Ab? " + std::to_string(S.last.marks) + ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.cob) + ",ST " + std::to_string(S.last.st) + "\n";
+        "VIEW," ZD_NAME "\nDRAWN,bars " + std::to_string(S.last.bars) + ",labels " + std::to_string(S.last.labels) + ",Ab? " + std::to_string(S.last.marks) + ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.cob) + ",ST " + std::to_string(S.last.st) + ",CoB " + std::to_string(S.last.swCob) + ",weak " + std::to_string(S.last.swWeak) + "\n";
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     zdMkdir(zdFlex()); zdPublish(S.statusPath, body);
@@ -273,11 +275,11 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #if ZZO_VOLUME_VIEW
-    p->setDescription("LRA ZZO Volume v1.1.1 - 1-bar High/Low ZigZag waves: wave volume / the median of the last 5 same-way waves (Weis Wave); Ab? absorption, Cmx climax, AR automatic rally, ST secondary test.");
+    p->setDescription("LRA ZZO Volume v1.2.0 - 1-bar High/Low ZigZag waves: wave volume / the median of the last 5 same-way waves (Weis Wave); Ab? absorption, Cmx / AR / ST Wyckoff, CoB / weak after a key-level sweep.");
     p->setVersion(ZZO_VOLUME_VERSION_LITERAL);
 #else
-    p->setDescription("LRA ZZO Delta v1.2.0 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? = absorption.");
-    p->setVersion("1.2.0");   // = zzd::VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Delta v1.3.0 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? absorption, CoB / weak after a key-level sweep.");
+    p->setVersion("1.3.0");   // = zzd::VERSION (gex-build reads this literal)
 #endif
     return p;
 }
