@@ -33,7 +33,7 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-02 10:14 CT "ok.. lets add it .. build") a CoB whose ONLY swept level is PHH / PHL
+static const char* const VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-02 19:07-19:19 CT, his cob_bull_3m_1b / cob_bear_3m_1b + "11:00 am cutoff" + "build it so i can add it") = his two signals: + PWL / AsiaLO (bull) and PWH / AsiaHI (bear) as swept levels, PHL / PHH kept as extras; BOTH sides by 11:00 CT; the bear gets his room line (the leg-start high - close >= 0.1 ADR)   // was "1.1.0":   // (1.1.0, Rassul 2026-11-02 10:14 CT "ok.. lets add it .. build") a CoB whose ONLY swept level is PHH / PHL
 // is drawn in ES / HG / GC (the year test: +0.61 / +0.18 / +0.16 R) and recorded but NOT drawn in NQ / CL / NG / 6E (+0.01 / -0.22 / -0.53 / -0.15 R) until the
 // nightly proves it there; a CoB that also swept another level is drawn everywhere as before   // was "1.0.0"
 inline bool phShown(const std::string& mkt) { return mkt == "ES" || mkt == "HG" || mkt == "GC"; }
@@ -127,6 +127,8 @@ struct Engine {
     }
     int lastLowPivot = -1;
     bool useNew = true;                                         // PHH / PHL (2026-11-01); false = his RTL level set only (parity tests)
+    bool legacy = false;                                        // (1.2.0) parity with his OLD signals (recorded flags): bear without room / cutoff
+    bool hisSet = true;                                         // (1.2.0) with useNew false: true = his 6 levels (+ PWx / Asia), false = the old 4
     void check(int j, int side) {
         if (dirn != side || ext != j - 1) return;
         const Bar& bj = B[(size_t)j];
@@ -153,8 +155,8 @@ struct Engine {
             const double lod = s.rl;
             if (!(B[(size_t)p0].l <= lod)) return;                  // the leg starts at the LOD
             const double hi = B[(size_t)p1].h;
-            const char* N[] = { "ONL", "PDL", "PFL", "LonLO", "PHL" };
-            for (int q = 0; q < (useNew ? 5 : 4); ++q) { double v; if (lvl(N[q], v) && lod < v && v < hi) add(N[q]); }
+            const char* N[] = { "ONL", "PDL", "PFL", "LonLO", "PWL", "AsiaLO", "PHL" };   // (1.2.0) his set (6) + PHL
+            for (int q = 0; q < (useNew ? 7 : (hisSet ? 6 : 4)); ++q) { double v; if (lvl(N[q], v) && lod < v && v < hi) add(N[q]); }
             if (sw.empty()) return;
             if (!(bj.c - B[(size_t)p0].l >= 0.1 * adr)) return;     // room
             if (!(hi - lod < 0.4 * adr)) return;
@@ -165,9 +167,11 @@ struct Engine {
             const double hod = s.rh;
             if (!(B[(size_t)p0].h >= hod)) return;                  // the leg starts at the HOD
             const double lo = B[(size_t)p1].l;
-            const char* N[] = { "ONH", "PDH", "PFH", "LonHI", "PHH" };
-            for (int q = 0; q < (useNew ? 5 : 4); ++q) { double v; if (lvl(N[q], v) && lo < v && v < hod) add(N[q]); }
+            const char* N[] = { "ONH", "PDH", "PFH", "LonHI", "PWH", "AsiaHI", "PHH" };   // (1.2.0) his set (6) + PHH
+            for (int q = 0; q < (useNew ? 7 : (hisSet ? 6 : 4)); ++q) { double v; if (lvl(N[q], v) && lo < v && v < hod) add(N[q]); }
             if (sw.empty()) return;
+            if (!legacy && !(B[(size_t)p0].h - bj.c >= 0.1 * adr)) return;     // (1.2.0) his bear room: the leg-start high - close >= 0.1 ADR
+            if (!legacy && mod > 11 * 60) return;                              // (1.2.0) by 11:00 CT (his TIME <= 1100), both sides
             if (!(lastLowPivot >= 0 && lo < B[(size_t)lastLowPivot].l)) return;   // below the previous down pivot
             if (!(hod - lo < 0.4 * adr)) return;
             if (std::fabs(hod - mx) > 1e-9) return;                 // HOD = MAX(HI,50)

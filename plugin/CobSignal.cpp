@@ -1,5 +1,5 @@
 /********************************************************************************
- *  CobSignal.cpp  --  Investor/RT RTX extension  lsCobSignal  "CoB Signal"  1.1.0  (2026-11-02; 1.0.0 2026-11-01)
+ *  CobSignal.cpp  --  Investor/RT RTX extension  lsCobSignal  "CoB Signal"  1.2.0  (2026-11-02 evening = his cob_bull_3m_1b / cob_bear_3m_1b + 11:00 CT; 1.0.0 2026-11-01)
  *
  *  Rassul 2026-11-01 22:12-22:24 CT ("i want you to build the cob signals instead of me having my own", "consider the new levels also
  *  PHH and PHL", labels "Cob , Cob+R , Cob+V", mockup cob_ba_mockup v2 "build"): his CoB computed natively from the chart's own bars,
@@ -44,7 +44,7 @@
 #define CS_SEP "/"
 #endif
 
-static const char* CS_VERSION = "1.1.0";   // = cobs::VERSION = the setVersion literal
+static const char* CS_VERSION = "1.2.0";   // = cobs::VERSION = the setVersion literal
 
 static long long csMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string csFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + CS_SEP "InvestorRT" CS_SEP "rtx" CS_SEP "lsFlexLevels" : std::string(); }
@@ -217,7 +217,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.1.0 - his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PHH/PHL; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00; a PHH/PHL-only CoB is drawn in ES, HG, GC and recorded only elsewhere): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted.");
-    p->setVersion("1.1.0");   // = CS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA CoB Signal v1.2.0 - his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PWH/PWL, AsiaHI/AsiaLO, PHH/PHL; by 11:00 CT; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00; a PHH/PHL-only CoB is drawn in ES, HG, GC and recorded only elsewhere): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted.");
+    p->setVersion("1.2.0");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }

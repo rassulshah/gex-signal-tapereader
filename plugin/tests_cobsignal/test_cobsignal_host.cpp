@@ -50,6 +50,15 @@ int main(int argc, char** argv) {
     { bool sub = true; for (const cobs::Mark& m : O.marks) { bool f = false; for (const cobs::Mark& n : L.marks) f = f || (n.t == m.t && n.side == m.side); sub = sub && f; } CHECK(sub, "every CoB without PHH / PHL is still a CoB with them"); }
     { bool lab = true; for (const cobs::Mark& m : L.marks) { const std::string s = m.label(); lab = lab && (s == "Cob" || s == "Cob+R" || s == "Cob+V" || s == "Cob+RV") && (s.find('R') != std::string::npos) == m.r && (s.find('V') != std::string::npos) == m.v; } CHECK(lab, "labels Cob / Cob+R / Cob+V / Cob+RV only, matching the tags"); }
     { bool rules = true; for (const cobs::Mark& m : L.marks) { const int mod = (int)(m.t % 86400) / 60; rules = rules && m.dratio >= 1.9 && m.legEnd - m.legStart >= 3 && (m.side < 0 || mod <= 660) && mod >= 510 && mod <= 900; } CHECK(rules, "every CoB: dratio >= 1.9, >= 3 bars, RTH, bulls by 11:00"); }
+    // ---- (1.2.0, Rassul 2026-11-02 19:19 CT) = his cob_bull_3m_1b / cob_bear_3m_1b + 11:00 CT: no CoB after 11:00 on either side; PWx / Asia levels count
+    {   cobs::Engine A; A.setMarket("ES", 0.25, 180); for (const cobs::Bar& b : F.B) A.addBar(b);
+        int late = 0, pwAsia = 0; for (const cobs::Mark& m : A.marks) { const int mod = (int)((m.t % 86400 + 86400) % 86400) / 60; if (mod > 660) ++late;
+            if (m.levels.find("PW") != std::string::npos || m.levels.find("Asia") != std::string::npos) ++pwAsia; }
+        CHECK(late == 0, "(1.2.0) no CoB after 11:00 CT (" << late << ")");
+        CHECK(pwAsia >= 1, "(1.2.0) PWL / PWH / AsiaLO / AsiaHI count as swept levels (" << pwAsia << ")");
+        cobs::Engine G; G.setMarket("ES", 0.25, 180); G.legacy = true; for (const cobs::Bar& b : F.B) G.addBar(b);
+        int bearLate = 0; for (const cobs::Mark& m : G.marks) if (m.side < 0 && (int)((m.t % 86400 + 86400) % 86400) / 60 > 660) ++bearLate;
+        std::cout << "1.2.0: " << A.marks.size() << " CoBs (legacy bear rules: " << G.marks.size() << ", bear after 11:00 " << bearLate << ")\n"; }
     // ---- (1.1.0) PHH / PHL-only CoBs: drawn in ES / HG / GC, recorded (LOG) but not drawn in the other markets
     {   int phOnly = 0, esShow = 0; for (const cobs::Mark& m : L.marks) { phOnly += m.phOnly; esShow += m.phOnly && m.show; }
         CHECK(phOnly > 0 && esShow == phOnly, "ES: every PHH / PHL-only CoB is drawn (" << esShow << " of " << phOnly << ")");
@@ -74,8 +83,8 @@ int main(int argc, char** argv) {
     const std::string rec = slurp(flex() + "/CobSignal/ES-180.csv"), live = slurp(flex() + "/CobSignal-ES-180-live.csv"), st = slurp(flex() + "/CobSignal.status-ES-180.txt");
     size_t nrec = 0; for (size_t p = rec.find("\nCOB,"); p != std::string::npos; p = rec.find("\nCOB,", p + 1)) ++nrec;
     CHECK(nrec == L.marks.size(), "record: every CoB once (" << nrec << ")");
-    CHECK(live.rfind("COBSIGNAL,1.1.0\n", 0) == 0 && live.find(L.recLine(L.marks.back())) != std::string::npos, "live file: version + every CoB");
-    CHECK(st.rfind("VERSION,1.1.0\nMARKET,ES", 0) == 0 && st.find("COBS," + std::to_string(L.marks.size())) != std::string::npos, "status file");
+    CHECK(live.rfind("COBSIGNAL,1.2.0\n", 0) == 0 && live.find(L.recLine(L.marks.back())) != std::string::npos, "live file: version + every CoB");
+    CHECK(st.rfind("VERSION,1.2.0\nMARKET,ES", 0) == 0 && st.find("COBS," + std::to_string(L.marks.size())) != std::string::npos, "status file");
     // bar-by-bar feeding = one pass; a restart never writes a CoB twice
     {   mock::Host Bh; mock::current = &Bh; Bh.root = "ES"; Bh.sym = "ESZ26"; CobSignal y;
         const int n = (int)F.B.size(); for (int u = n - 400; u < n; ++u) { chart(Bh, F, u, std::max(0, u - 120)); y.calc(0); }
@@ -99,7 +108,7 @@ int main(int argc, char** argv) {
     {   mock::Host D; D.dialog = true; D.root = ""; mock::current = &D; CobSignal z; z.calc(0); mdraw(z); CHECK(D.drawn.empty(), "the Add / settings copy with no chart draws nothing and does not fault"); }
     // versions
     { const std::string src = slurp("../CobSignal.cpp"); const size_t p = src.find("p->setVersion(\""); const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.1.0", "version literals match (" << lit << ")"); }
+      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.2.0", "version literals match (" << lit << ")"); }
     std::cout << "test_cobsignal_host: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }
