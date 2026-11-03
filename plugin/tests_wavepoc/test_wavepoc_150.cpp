@@ -132,17 +132,24 @@ int main(int argc, char** argv) {
         CHECK(boxW > 0 && front == sc.boxesDrawn && dots == 0, "the 2 biggest nodes' distributions in SOLID white boxes (no dotted lines) (" << front << " / " << sc.boxesDrawn << ")");
         bool atMost2 = true; for (const wpc::Wave& w : E.waves) if (!w.provisional) atMost2 = atMost2 && wpc::topDelta(w).size() <= 3;
         CHECK(atMost2, "(1.6.2) every wave: at most 3 boxed / classified nodes");
-        {   // (1.6.2) no two letters overlap (nearby I? / A? rows are spread 13 px apart)
-            std::vector<std::pair<int,int> > tx; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::TEXT && p.text.size() == 2 && p.text[1] == '?') tx.push_back(std::make_pair(p.x0, p.y0));
+        {   // (1.7.2) the letters: single I / A / T in WHITE and P in CYAN, bold, front, ON the spine (centred on a wave's spine x), no "?",
+            // no background patch; never two on top of each other; one P per drawn wave, centred on its cyan WPOC line
+            auto isLet = [](const wpc::Prim& p) { return p.k == wpc::Prim::TEXT && p.text.size() == 1 && (p.text == "I" || p.text == "A" || p.text == "T" || p.text == "P"); };
+            std::vector<int> spX; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.w == 2 && p.x0 == p.x1) spX.push_back(p.x0);
+            std::vector<std::pair<int,int> > tx; int lets = 0, ps = 0, pOnLine = 0; bool ok = true, onSpine = true;
+            for (const wpc::Prim& p : sc.p) { if (!isLet(p)) continue; ++lets; tx.push_back(std::make_pair(p.x0, p.y0));
+                const unsigned long want = p.text == "P" ? 0x22D3EEUL : 0xFFFFFFUL; if (p.col != want || p.back || !p.bold) ok = false;
+                const int cx = (p.x0 + p.x1) / 2; bool sp = false; for (int x : spX) sp = sp || std::abs(cx - x) <= 1; if (!sp) onSpine = false;
+                if (p.text == "P") { ++ps; const int cy = (p.y0 + p.y1) / 2;
+                    for (const wpc::Prim& f : sc.p) if (f.k == wpc::Prim::FILL && f.col == 0x22D3EE && !f.back && std::abs(f.x0 - cx) <= 2 && std::abs((f.y0 + f.y1) / 2 - cy) <= 1) { ++pOnLine; break; } } }
             bool clear = true; for (size_t i2 = 0; i2 < tx.size(); ++i2) for (size_t j2 = i2 + 1; j2 < tx.size(); ++j2) if (std::abs(tx[i2].first - tx[j2].first) < 20 && std::abs(tx[i2].second - tx[j2].second) < 13) clear = false;
-            CHECK(clear && tx.size() >= 3, "(1.6.2) letters never overlap (" << tx.size() << " letters)"); }
-        {   int grey = 0, black = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && !p.back && p.y1 - p.y0 == 12) { grey += p.col == 0x374151; black += p.col == 0x0B0F17; }
-            CHECK(black == sc.lettersDrawn && grey == 0, "(1.6.2) every letter sits on a BLACK patch (grey undone 10:05) (" << black << " / " << sc.lettersDrawn << ")"); }
-        // letters: the text sits over its row, centred, on a background patch, never more than the 30 px side + its width
-        bool letOk = true; int lets = 0;
-        for (size_t k = 0; k < sc.p.size(); ++k) { const wpc::Prim& p = sc.p[k]; if (p.k != wpc::Prim::TEXT || p.text.size() != 2 || p.text[1] != '?') continue; ++lets;
-            if (k == 0 || sc.p[k - 1].k != wpc::Prim::FILL || sc.p[k - 1].col != 0x0B0F17 || p.back || !p.bold) letOk = false; }
-        CHECK(lets == sc.lettersDrawn && letOk, "each letter is bold, front, on its own black patch (" << lets << ")");
+            int q = 0; for (const wpc::Prim& p : sc.p) q += p.k == wpc::Prim::TEXT && p.text.find('?') != std::string::npos;
+            int patch = 0; for (const wpc::Prim& p : sc.p) patch += p.k == wpc::Prim::FILL && !p.back && p.y1 - p.y0 == 12 && (p.col == 0x0B0F17 || p.col == 0x374151);
+            CHECK(lets == sc.lettersDrawn && lets >= 3 && ok, "(1.7.2) letters white (P cyan), bold, front (" << lets << ")");
+            CHECK(onSpine, "(1.7.2) every letter centred on a wave's spine");
+            CHECK(clear, "(1.7.2) letters never overlap");
+            CHECK(q == 0 && patch == 0, "(1.7.2) no \"?\" and no background patch (" << q << " / " << patch << ")");
+            CHECK(ps > 0 && pOnLine == ps, "(1.7.2) every P sits on its wave's cyan volume POC line (" << pOnLine << " / " << ps << ")"); }
         // Pb: text + the amber dashed line from the POC
         int pbT = 0, amber = 0; for (const wpc::Prim& p : sc.p) { pbT += p.k == wpc::Prim::TEXT && p.text == "Pb"; amber += p.k == wpc::Prim::LINE && p.col == 0xF5B428; }
         int cyanL = 0, cyanF = 0, greyL = 0, amberF = 0; for (const wpc::Prim& p : sc.p) { cyanL += p.k == wpc::Prim::LINE && p.col == 0x22D3EE; cyanF += p.k == wpc::Prim::FILL && p.col == 0x22D3EE && !p.back; greyL += p.k == wpc::Prim::LINE && p.col == 0x94A3B8; amberF += p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD); }

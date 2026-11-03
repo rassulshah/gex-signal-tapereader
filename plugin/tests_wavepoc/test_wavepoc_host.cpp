@@ -49,7 +49,7 @@ static void wipe() { std::string cmd = "rm -rf '" + home + "/InvestorRT'"; if (s
 
 // (1.5.0) a right-edge price tag (not a letter "X?" or a "Pb"); the lines 1.5.0 draws on purpose: the grey volume outline, the Pb amber
 // dotted line, the white dotted node borders
-static bool isTagText(const std::string& t) { return t != "Pb" && !(t.size() == 2 && t[1] == '?'); }
+static bool isTagText(const std::string& t) { return t != "Pb" && !(t.size() == 2 && t[1] == '?') && !(t == "I" || t == "A" || t == "T" || t == "P"); }   // (1.7.2) letters I / A / T / P on the spine
 static bool okLine(const mock::Prim& p) { return p.k == 'L' && (p.col == 0x94A3B8 || p.col == 0xF5B428 || p.col == 0xE5E7EB || p.col == 0x22D3EE); }   // (1.6.0) + the cyan Pb line
 int main(int argc, char** argv) {
     const Fix F = load(argc > 1 ? argv[1] : "wavepoc_es1022.csv");
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.7.1" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.7.2" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();
@@ -164,7 +164,7 @@ int main(int argc, char** argv) {
         const std::string rec = slurp(flex() + "/WavePOC/ES-180-nodes.csv"), st = slurp(flex() + "/WavePOC.status-ES-180.txt"), sto = slurp(flex() + "/WavePOC/ES-180.csv");
         size_t nw = 0; for (size_t p = rec.find("\nWAVE,"); p != std::string::npos; p = rec.find("\nWAVE,", p + 1)) ++nw;
         CHECK(nw == 5 && rec.find("NODE,") != std::string::npos && rec.find("STOP,") != std::string::npos && rec.find("\nROWS,") != std::string::npos, "(1.3.3) record: 5 waves with nodes, stops and (1.3.2) rows");
-        CHECK(st.rfind("VERSION,1.7.1", 0) == 0 && st.find("qualified up 3 down 2") != std::string::npos && st.find("QUALIFIED_BY,reversal 4,breakout 0,rally/decline 0,(older records AVG 0 ATR 1)") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
+        CHECK(st.rfind("VERSION,1.7.2", 0) == 0 && st.find("qualified up 3 down 2") != std::string::npos && st.find("QUALIFIED_BY,reversal 4,breakout 0,rally/decline 0,(older records AVG 0 ATR 1)") != std::string::npos && st.find("PARMS,native,ok,reversal bars 3") != std::string::npos, "status file: version, N, qualified waves");
         CHECK(st.find("touch 13,new wave 3,origin close 0") != std::string::npos, "status: stops by reason (" << st.substr(st.find("STOPS,"), 50) << ")");
         wpc::Store chk; std::string why; CHECK(wpc::storeFromText(sto, "ES", 180, 3, 250000000LL, chk, why) && chk.dn.size() == 25 && sto.rfind("WAVEPOC_STORE,2,", 0) == 0, "(1.3.3) store (version 2) saved atomically with the day's 5 down candidates (14-bar lows) (" << why << ", " << chk.dn.size() << ")");
     }
