@@ -30,7 +30,8 @@
 
 namespace cab {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-02 13:10 CT "you must draw it on the 12:12 bar closed and repaint as necessary") the LIVE mark   // was "1.0.1":   // (1.0.1) host crash fix only
+static const int ROW_OUT = 16;   // (1.1.1) px between the extreme row (his ratio label) and the code
+static const char* const VERSION = "1.1.1";   // (1.1.1, 2026-11-03) the code one text row further from the high / low   // was "1.1.0";   // (1.1.0, Rassul 2026-11-02 13:10 CT "you must draw it on the 12:12 bar closed and repaint as necessary") the LIVE mark   // was "1.0.1":   // (1.0.1) host crash fix only
 static const int N_BARS = 3;          // IRT ZigZag Min Price Change = 3 bars, Use High/Low
 static const int RETEST_TICKS = 4;    // the next bar re-tests the extreme within 4 ticks
 static const double SIZE_X = 2.0;     // delta POC >= 2.0 x the bar's median |delta| row
@@ -191,7 +192,9 @@ inline Scene layout(const Engine& E, const View& v, const Colours& C = Colours()
         const Bar& b = E.B[(size_t)m.bar];
         const std::string txt = codeName(m.code);   // (09:17 CT) no "?"
         const int tw = v.textW ? v.textW(txt) : (int)txt.size() * 7; const double xc = v.X(m.bar);
-        const double y = m.low ? v.Y((double)b.l - 0.5) + 3 : v.Y((double)b.h + 0.5) - 3 - 14;
+        // (1.1.1, Rassul 2026-11-03 11:05 / 12:24 CT "the labels like A S etc on the candles seem to conflict with other labels") one text row
+        // (16 px) further out: his updn ratio / time label keeps the row at the extreme; lsWavePOC's Pb sits one more row out (PB_GAP 46)
+        const double y = m.low ? v.Y((double)b.l - 0.5) + 3 + ROW_OUT : v.Y((double)b.h + 0.5) - 3 - 14 - ROW_OUT;
         Prim t; t.k = Prim::TEXT; t.x0 = ci(xc - tw / 2.0); t.x1 = ci(xc + tw / 2.0); t.y0 = ci(y); t.y1 = t.y0 + 14; t.col = m.low ? C.up : C.down; t.text = txt;
         if (t.x0 < v.clipL || t.x1 > v.clipR || t.y0 < v.t || t.y1 > v.b) continue;
         s.p.push_back(t); ++s.marksDrawn;
