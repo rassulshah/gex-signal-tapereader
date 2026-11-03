@@ -273,7 +273,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #if ZZO_VOLUME_VIEW
-    p->setDescription("LRA ZZO Volume v1.1.0 - 1-bar High/Low ZigZag waves: wave volume / the median of the last 5 same-way waves (Weis Wave); Ab? absorption, Cmx climax, AR automatic rally, ST secondary test.");
+    p->setDescription("LRA ZZO Volume v1.1.1 - 1-bar High/Low ZigZag waves: wave volume / the median of the last 5 same-way waves (Weis Wave); Ab? absorption, Cmx climax, AR automatic rally, ST secondary test.");
     p->setVersion(ZZO_VOLUME_VERSION_LITERAL);
 #else
     p->setDescription("LRA ZZO Delta v1.2.0 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? = absorption.");

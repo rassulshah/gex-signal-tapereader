@@ -99,7 +99,13 @@ int main() {
     { std::string got; for (const zzd::Wave& w : E.W) if (w.cmx || w.cob) { const long long t0 = E.B[(size_t)w.e].t - 180; char b[48];
           std::snprintf(b, sizeof b, "%lld %02lld:%02lld %s %s; ", (t0 / 86400) % 100, (t0 % 86400) / 3600, (t0 % 3600) / 60, w.dir > 0 ? "UP" : "DN", w.cmx ? "Cmx" : "AR"); got += b; }
       std::printf("  Cmx/CoB: %s\n", got.c_str());
-      CHECK(got == "55 12:12 DN Cmx; 55 12:54 DN Cmx; 55 14:30 UP Cmx; 55 14:45 DN AR; 55 14:57 UP Cmx; 56 10:45 DN Cmx; 56 13:33 DN Cmx; 56 13:39 UP AR; ", "Cmx / CoB = the study"); }
+      CHECK(got == "56 13:33 DN Cmx; 56 13:39 UP AR; ", "Cmx (clear trend + new low + biggest volume) / AR = the 36-day reference: only Oct 30 13:33; not 10:45 (smaller than the 09:24 wave)"); }
+    // 14b) (1.1.1 volume) the BUYING climax: the same day mirrored (prices and delta flipped) gives an UP Cmx at 13:33 and a DOWN AR at 13:39
+    { zzd::Engine M; M.setMarket("ES", 180);
+      for (const Raw& r : R) { zzd::Bar b = mk(r); const long long h = b.h; b.h = -b.l; b.l = -h; b.dlt = -b.dlt; M.addBar(b); }
+      std::string got; for (const zzd::Wave& w : M.W) if (w.cmx || w.cob) { const long long t0 = M.B[(size_t)w.e].t - 180; char b[48];
+          std::snprintf(b, sizeof b, "%lld %02lld:%02lld %s %s; ", (t0 / 86400) % 100, (t0 % 86400) / 3600, (t0 % 3600) / 60, w.dir > 0 ? "UP" : "DN", w.cmx ? "Cmx" : "AR"); got += b; }
+      std::printf("  mirrored: %s\n", got.c_str()); CHECK(got == "56 13:33 UP Cmx; 56 13:39 DN AR; ", "buying climax (mirror) detected the same way"); }
     // 16) (1.1.0 volume) ST = the wave right after an AR, the climax's way, <= 0.7x the climax volume, giving back >= 75% of the AR (the Python reference: Oct 30 13:51 - the Cmx 13:33 -> AR 13:39 -> ST sequence)
     { int st = 0; for (size_t k = 2; k < E.W.size(); ++k) { const zzd::Wave& w = E.W[k]; const zzd::Wave& a = E.W[k - 1]; const zzd::Wave& c = E.W[k - 2];
           const bool want = a.cob && c.cmx && c.dir == w.dir && a.seg == w.seg && c.seg == w.seg && w.vol <= 0.7 * c.vol && w.size >= 0.75 * a.size; CHECK(want == w.st, "ST rule"); st += w.st; }
@@ -108,7 +114,7 @@ int main() {
     { zzd::View v; v.volume = true; v.l = 0; v.t = 0; v.r = 1300; v.b = 240; v.first = 124; v.last = 246; v.bw = 9; v.X = [](int j) { return (j - 124) * 9.0 + 5; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
       const std::vector<zzd::Wave> w = E.view(nullptr); const zzd::Scene s = zzd::layout(E, w, 0, v, "ZZO Volume");
       bool unsignedLab = true; for (const zzd::Prim& p : s.p) if (p.k == zzd::Prim::TEXT && !p.text.empty() && (p.text[0] == '+' || (p.text[0] == '-' && p.text.size() > 1))) unsignedLab = false;
-      CHECK(unsignedLab, "volume labels unsigned"); CHECK(s.cmx == 2 && s.cob == 1 && s.marks == 4, "Oct 30 volume view: 2 Cmx, 1 CoB, 4 Ab?");
+      CHECK(unsignedLab, "volume labels unsigned"); CHECK(s.cmx == 1 && s.cob == 1 && s.st == 1 && s.marks == 4, "Oct 30 volume view: 1 Cmx, 1 AR, 1 ST, 4 Ab?");
       bool inside = true; for (const zzd::Prim& p : s.p) if (p.y0 < v.t || p.y1 > v.b) inside = false; if (!inside) for (const zzd::Prim& p : s.p) if (p.y0 < v.t || p.y1 > v.b) std::printf("  out: %d %d %d %d %s\n", p.x0, p.y0, p.x1, p.y1, p.text.c_str()); CHECK(inside, "volume view inside the pane"); }
     std::printf("%d passed, %d failed\n", pass, fail); return fail ? 1 : 0;
 }

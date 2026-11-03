@@ -6,7 +6,7 @@
 //   the cmx and cob tags for volume ... remove lo tag"): the same engine also gives each wave's VOLUME (Weis Wave) - the "ZZO Volume"
 //   indicator (ZzoVolume.cpp) draws wave volume / the median of the last 5 same-way waves, green up / red down waves, with tags:
 //     Ab?  the delta absorption rules (as in ZZO Delta)
-//     Cmx  climax: a completed wave with volume >= 2.5x normal that made a new high / low past the prior same-way pivot
+//     Cmx  climax: a wave in a clear trend making a new session high / low on volume >= 2.5x normal AND bigger than the last 5 same-way waves
 //     CoB  change of behaviour: the wave right after a Cmx, the other way, with volume >= 1.5x normal
 //   (36-day ES test: Cmx alone 30% reach 2R vs the 31% base, Cmx followed by a CoB wave 38% - descriptive tags, the nightly scores them)
 // was 1.1.1 (21:48 CT, Rassul "show all the waves up because they are easier to compare": bars = |running total| up from one
@@ -46,7 +46,7 @@
 
 namespace zzd {
 static const char* const VERSION = "1.2.0";
-static const char* const VOL_VERSION = "1.1.0";   // lsZzoVolume
+static const char* const VOL_VERSION = "1.1.1";   // lsZzoVolume
 static const int HIST = 5, MIN_HIST = 3, MAX_BARS = 6000, TRIM = 1000;
 static const double AB_EFFORT = 1.9, AB_BACK = 0.75;   // (1.1.0) Ab? rule thresholds
 static const double CMX_VOL = 2.5, COB_VOL = 1.5, ST_VOL = 0.7, ST_BACK = 0.75;      // (1.2.0) Cmx / CoB volume thresholds (x the median of the last 5 same-way waves)
@@ -144,9 +144,21 @@ struct Engine {
         w.cmx = w.cob = w.st = false;
         if (!w.hasV) return;
         const double Vr = (double)w.vol / w.medV;
-        const Wave* ps = nullptr;
-        for (size_t k = nW; k-- > 0;) { const Wave& x = W[k]; if (x.seg == w.seg && x.dir == w.dir) { ps = &x; break; } }
-        if (Vr >= CMX_VOL && ps && (double)w.dir * (double)(w.ext - ps->ext) > 0) w.cmx = true;
+        // (1.2.0, Rassul 23:00 CT "you need a clear down trend and then a new low with very heavy volume, bigger than prior downwaves ...
+        // implement for bullish buying cmx too") Cmx = volume >= CMX_VOL x normal AND bigger than each of the last 5 same-way waves AND
+        // a clear trend its way (the last 2 same-way pivots AND the last 2 opposite pivots each further its way) AND a new session
+        // high / low (past every earlier bar of this session part). Both sides: selling climax (down) / buying climax (up).
+        std::vector<const Wave*> same, opp;
+        for (size_t k = nW; k-- > 0 && (same.size() < 5 || opp.size() < 2);) { const Wave& x = W[k]; if (x.seg != w.seg) continue; if (x.dir == w.dir) { if (same.size() < 5) same.push_back(&x); } else if (opp.size() < 2) opp.push_back(&x); }
+        bool c = Vr >= CMX_VOL && same.size() >= 3 && opp.size() >= 2;
+        if (c) for (const Wave* x : same) if (w.vol <= x->vol) { c = false; break; }
+        if (c) c = (double)w.dir * (double)(same[0]->ext - same[1]->ext) > 0 && (double)w.dir * (double)(opp[0]->ext - opp[1]->ext) > 0;
+        if (c && w.s >= 0) {
+            bool any = false; long long ex = 0;
+            for (int i = w.s - 1; i >= 0 && B[(size_t)i].seg == w.seg; --i) { const long long v = w.dir > 0 ? B[(size_t)i].h : B[(size_t)i].l; if (!any || (w.dir > 0 ? v > ex : v < ex)) ex = v; any = true; }
+            c = any && (double)w.dir * (double)(w.ext - ex) > 0;
+        }
+        w.cmx = c;
         if (nW > 0) { const Wave& p = W[nW - 1]; if (p.cmx && p.dir != w.dir && p.seg == w.seg && Vr >= COB_VOL) w.cob = true; }   // AR
         if (nW > 1) { const Wave& a = W[nW - 1]; const Wave& c = W[nW - 2];   // (1.1.0) ST after Cmx + AR
             if (a.cob && c.cmx && c.dir == w.dir && a.seg == w.seg && c.seg == w.seg && (double)w.vol <= ST_VOL * (double)c.vol && a.size > 0 && (double)w.size >= ST_BACK * (double)a.size) w.st = true; }
@@ -291,7 +303,7 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
 
 inline std::string statusText(const Engine& E, const std::string& mkt, int spb, const std::string& vap) {
     std::string s = std::string("lsZzoDelta ") + VERSION + "\nMARKET," + mkt + "," + std::to_string(spb) + "\nRTH," + std::to_string(E.openMin) + "-" + std::to_string(E.closeMin) +
-        "\nRULES,1-bar High/Low ZigZag; wave delta (+ buying / - selling) / median |delta| of the last 5 same-way waves in the same session part (>= 3; RTH restarts)\nVOL,Cmx volume >= 2.5x normal at a new extreme; AR the next wave the other way >= 1.5x normal; ST the wave after an AR on <= 0.7x the climax volume giving back >= 75% of the AR\nAB,A effort > 1.9x and >= the prior opposite wave's, size <= 0.75x it; B effort > 1.9x and no new extreme past the prior same-way pivot\nBARS," +
+        "\nRULES,1-bar High/Low ZigZag; wave delta (+ buying / - selling) / median |delta| of the last 5 same-way waves in the same session part (>= 3; RTH restarts)\nVOL,Cmx clear trend + new session extreme + volume >= 2.5x normal and > the last 5 same-way waves; AR the next wave the other way >= 1.5x normal; ST the wave after an AR on <= 0.7x the climax volume giving back >= 75% of the AR\nAB,A effort > 1.9x and >= the prior opposite wave's, size <= 0.75x it; B effort > 1.9x and no new extreme past the prior same-way pivot\nBARS," +
         std::to_string(E.B.size()) + ",no VAP " + std::to_string(E.noVap) + ",VAP " + vap + "\nWAVES," + std::to_string(E.W.size()) + "\n";
     int n = 0;
     for (size_t k = E.W.size(); k-- > 0 && n < 12; ++n) {
