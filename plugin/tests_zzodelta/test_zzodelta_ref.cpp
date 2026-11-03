@@ -1,4 +1,4 @@
-// test_zzodelta_ref.cpp - ZzoDeltaLogic.h (lsZzoDelta 1.3.0 / lsZzoVolume 1.2.0) against the independent Python model zzo_ref.py:
+// test_zzodelta_ref.cpp - ZzoDeltaLogic.h (lsZzoDelta 1.3.1 / lsZzoVolume 1.2.1; 1.3.1 adds the per-market ZzoParams.h check) against the independent Python model zzo_ref.py:
 // every completed wave (end bar, direction, delta, volume, the three normals, Ab?, Cmx, AR, ST, levels swept, CoB / weak) must match,
 // on the RTH-only ES fixture and on full-session ES (Oct 19-28) and GC (Oct 5-14) fixtures with overnight bars (key levels).
 #include "../ZzoDeltaLogic.h"
@@ -8,8 +8,10 @@
 static int pass = 0, fail = 0;
 #define CHECK(c, m) do { if (c) ++pass; else { ++fail; std::printf("FAIL %s (line %d)\n", m, __LINE__); } } while (0)
 static std::string f1(bool ok, double v) { if (!ok) return "na"; char b[32]; std::snprintf(b, sizeof b, "%.1f", v); return b; }
-static void run(const char* csv, const char* ref, const char* mkt, double tick) {
+struct Px { bool set = false; double abE = 0, abB = 0, cmx = 0, swD = 0, swV = 0, swS = 0; };
+static void run(const char* csv, const char* ref, const char* mkt, double tick, Px px = Px()) {
     zzd::Engine E; E.setMarket(mkt, 180);
+    if (px.set) { E.abEffort = px.abE; E.abBack = px.abB; E.cmxVol = px.cmx; E.swDelta = px.swD; E.swVol = px.swV; E.swSize = px.swS; }
     std::ifstream f(csv); std::string ln; int n = 0;
     while (std::getline(f, ln)) {
         if (ln.empty() || ln[0] == '#') continue;
@@ -41,5 +43,13 @@ int main() {
     run("zzo_es_rth_1029_1030.csv", "ref_zzo_es_rth_1029_1030.txt", "ES", 0.25);
     run("zzo_es_full_1019_1028.csv", "ref_zzo_es_full_1019_1028.txt", "ES", 0.25);
     run("zzo_gc_full_1005_1014.csv", "ref_zzo_gc_full_1005_1014.txt", "GC", 0.1);
+    // (1.3.1) ZzoParams.h: every market starts on the 1.3.0 numbers; moved thresholds = the nightly model (lra.zzo_model) with the same numbers
+    { zzd::Engine E; CHECK(zzd::zzoParamsBuilt(), "ZzoParams.h compiled in");
+      const char* ms[] = { "ES", "NQ", "CL", "GC", "HG", "NG", "6E" };
+      for (const char* m : ms) { E.setMarket(m, 180); CHECK(E.abEffort == 1.9 && E.abBack == 0.75 && E.cmxVol == 2.5 && E.swDelta == 1.9 && E.swVol == 1.5 && E.swSize == 1.5, "market starts on the 1.3.0 numbers"); }
+      E.setMarket("ES", 180); CHECK(zzd::statusText(E, "ES", 180, "ok").find("PARAMS,1.90,0.75,2.50,1.90,1.50,1.50,ZzoParams.h") != std::string::npos, "status shows the numbers in use"); }
+    Px px; px.set = true; px.abE = 2.5; px.abB = 0.6; px.cmx = 2.0; px.swD = 1.5; px.swV = 1.0; px.swS = 1.0;
+    run("zzo_gc_full_1005_1014.csv", "ref_params_gc_full_1005_1014.txt", "GC", 0.1, px);
+    run("zzo_es_full_1019_1028.csv", "ref_params_es_full_1019_1028.txt", "ES", 0.25, px);
     std::printf("%d passed, %d failed\n", pass, fail); return fail ? 1 : 0;
 }

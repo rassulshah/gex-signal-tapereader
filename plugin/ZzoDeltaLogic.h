@@ -1,4 +1,8 @@
-// ZzoDeltaLogic.h - lsZzoDelta 1.3.0 / lsZzoVolume 1.2.0 (2026-11-02 23:03 CT, Rassul "build out indicator and make sure it is ready for
+// ZzoDeltaLogic.h - lsZzoDelta 1.3.1 / lsZzoVolume 1.2.1 (2026-11-02 23:40 CT, Rassul "make sure everything is added to the self improvmeent
+//   process"): the Ab? / Cmx / CoB-after-sweep thresholds are per market from ZzoParams.h (written by the nightly lra.zzo_score when its
+//   judge promotes a challenger: 20+ new-day cases, Wilson lower bound above the champion; compiled in, nothing read at run time). The
+//   header ships with the 1.3.0 numbers for every market, so the chart is unchanged until a promotion. No header = the 1.3.0 numbers.
+// was 1.3.0 / 1.2.0 (2026-11-02 23:03 CT, Rassul "build out indicator and make sure it is ready for
 //   tomorrow" after the CoB-after-sweep study, ES + GC Sep 14 - Nov 2, 127 first key-level sweeps):
 //   CoB   on the wave right after a wave that made the FIRST RTH sweep of a key level (ONH/ONL, LonHI/LonLO, PDH/PDL, PFH/PFL, computed
 //         natively from the chart's own bars): that reversal wave has delta >= 1.9x normal its way AND volume >= 1.5x AND size >= 1.5x
@@ -53,10 +57,16 @@
 #include <string>
 #include <vector>
 #include "SessionVWAPLogic.h"
+#if defined(__has_include)
+#if __has_include("ZzoParams.h")
+#include "ZzoParams.h"      // (1.3.1) per-market thresholds from the nightly self-improvement (lra.zzo_score)
+#define ZZO_HAVE_PARAMS 1
+#endif
+#endif
 
 namespace zzd {
-static const char* const VERSION = "1.3.0";
-static const char* const VOL_VERSION = "1.2.0";   // lsZzoVolume
+static const char* const VERSION = "1.3.1";
+static const char* const VOL_VERSION = "1.2.1";   // lsZzoVolume
 static const int HIST = 5, MIN_HIST = 3, MAX_BARS = 6000, TRIM = 1000;
 static const double AB_EFFORT = 1.9, AB_BACK = 0.75;   // (1.1.0) Ab? rule thresholds
 static const double CMX_VOL = 2.5, COB_VOL = 1.5, ST_VOL = 0.7, ST_BACK = 0.75;
@@ -85,8 +95,18 @@ inline bool medianOf(std::vector<long long> v, double& m) {
     m = n % 2 ? (double)v[n / 2] : ((double)v[n / 2 - 1] + (double)v[n / 2]) / 2.0; return true;
 }
 
+inline bool zzoParamsBuilt() {
+#ifdef ZZO_HAVE_PARAMS
+    return true;
+#else
+    return false;
+#endif
+}
+
 struct Engine {
     int openMin = 510, closeMin = 900, per = 180;
+    // (1.3.1) this market's thresholds (setMarket: ZzoParams.h row, else the 1.3.0 numbers)
+    double abEffort = AB_EFFORT, abBack = AB_BACK, cmxVol = CMX_VOL, swDelta = SW_DELTA, swVol = SW_VOL, swSize = SW_SIZE;
     std::vector<Bar> B; Walk Z; std::vector<Wave> W; long long trimmed = 0; long long noVap = 0;
     // (1.3.0) per session (keyed by its day): high / low of all bars, RTH, overnight, London; levels already swept in RTH
     struct HL { bool any = false; long long h = 0, l = 0; void add(long long hi, long long lo) { if (!any || hi > h) h = hi; if (!any || lo < l) l = lo; any = true; } };
@@ -140,10 +160,22 @@ struct Engine {
         w.swLv = p.sw;
         if (!w.hasR || !w.hasV || !w.hasS) return;
         const double Er = (double)w.dir * (double)w.dlt / w.med, Vr = (double)w.vol / w.medV, Sr = (double)w.size / w.medS;
-        if (Er >= SW_DELTA && Vr >= SW_VOL && Sr >= SW_SIZE) w.cobTag = 1;
+        if (Er >= swDelta && Vr >= swVol && Sr >= swSize) w.cobTag = 1;
         else if (Vr < SW_WEAK_VOL || Er < 0) w.cobTag = 2;
     }
-    bool setMarket(const std::string& root, int spb) { per = spb > 0 ? spb : 180; const std::string m = root == "6E" ? std::string("EU") : root; return svl::rthOf(m.c_str(), openMin, closeMin); }
+    bool setMarket(const std::string& root, int spb) {
+        per = spb > 0 ? spb : 180; const std::string m = root == "6E" ? std::string("EU") : root;
+        abEffort = AB_EFFORT; abBack = AB_BACK; cmxVol = CMX_VOL; swDelta = SW_DELTA; swVol = SW_VOL; swSize = SW_SIZE;
+#ifdef ZZO_HAVE_PARAMS
+        for (int i = 0; i < ZZO_PARAMS_N; ++i) if (m == ZZO_PARAMS[i].m) {
+            const ZzoParamRow& r = ZZO_PARAMS[i];
+            auto ok = [](double v) { return std::isfinite(v) && v > 0 && v < 100; };   // a garbled row keeps the 1.3.0 numbers
+            if (ok(r.abEffort) && ok(r.abBack) && ok(r.cmxVol) && ok(r.swDelta) && ok(r.swVol) && ok(r.swSize)) {
+                abEffort = r.abEffort; abBack = r.abBack; cmxVol = r.cmxVol; swDelta = r.swDelta; swVol = r.swVol; swSize = r.swSize; }
+            break; }
+#endif
+        return svl::rthOf(m.c_str(), openMin, closeMin);
+    }
     long long segOf(long long tEnd) const {   // overnight / RTH / after the close of one session = one history
         const long long days = floorDiv(tEnd, 86400); const int sec = (int)(tEnd - days * 86400);
         const svl::Cls c = svl::classify((long)days, sec, per, openMin, closeMin);
@@ -198,12 +230,12 @@ struct Engine {
     int absorb(const Wave& w, size_t nW) const {
         if (!w.hasR) return 0;
         const double E = (double)w.dir * (double)w.dlt, Er = E / w.med;
-        if (!(Er > AB_EFFORT)) return 0;
+        if (!(Er > abEffort)) return 0;
         const Wave* ps = nullptr; const Wave* po = nullptr;
         for (size_t k = nW; k-- > 0 && (!ps || !po);) { const Wave& x = W[k]; if (x.seg != w.seg) continue; if (x.dir == w.dir) { if (!ps) ps = &x; } else if (!po) po = &x; }
         if (!ps || !po) return 0;
         const long long pd = po->dlt < 0 ? -po->dlt : po->dlt;
-        if (pd > 0 && E / (double)pd >= 1.0 && po->size > 0 && (double)w.size / (double)po->size <= AB_BACK) return 1;
+        if (pd > 0 && E / (double)pd >= 1.0 && po->size > 0 && (double)w.size / (double)po->size <= abBack) return 1;
         if ((double)w.dir * (double)(w.ext - ps->ext) <= 0) return 2;
         return 0;
     }
@@ -219,7 +251,7 @@ struct Engine {
         // high / low (past every earlier bar of this session part). Both sides: selling climax (down) / buying climax (up).
         std::vector<const Wave*> same, opp;
         for (size_t k = nW; k-- > 0 && (same.size() < 5 || opp.size() < 2);) { const Wave& x = W[k]; if (x.seg != w.seg) continue; if (x.dir == w.dir) { if (same.size() < 5) same.push_back(&x); } else if (opp.size() < 2) opp.push_back(&x); }
-        bool c = Vr >= CMX_VOL && same.size() >= 3 && opp.size() >= 2;
+        bool c = Vr >= cmxVol && same.size() >= 3 && opp.size() >= 2;
         if (c) for (const Wave* x : same) if (w.vol <= x->vol) { c = false; break; }
         if (c) c = (double)w.dir * (double)(same[0]->ext - same[1]->ext) > 0 && (double)w.dir * (double)(opp[0]->ext - opp[1]->ext) > 0;
         if (c && w.s >= 0) {
@@ -375,8 +407,10 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
 }
 
 inline std::string statusText(const Engine& E, const std::string& mkt, int spb, const std::string& vap) {
+    auto pf = [](double v) { char t[24]; std::snprintf(t, sizeof t, "%.2f", v); return std::string(t); };   // (1.3.1)
     std::string s = std::string("lsZzoDelta ") + VERSION + "\nMARKET," + mkt + "," + std::to_string(spb) + "\nRTH," + std::to_string(E.openMin) + "-" + std::to_string(E.closeMin) +
-        "\nRULES,1-bar High/Low ZigZag; wave delta (+ buying / - selling) / median |delta| of the last 5 same-way waves in the same session part (>= 3; RTH restarts)\nVOL,Cmx clear trend + new session extreme + volume >= 2.5x normal and > the last 5 same-way waves; AR the next wave the other way >= 1.5x normal; ST the wave after an AR on <= 0.7x the climax volume giving back >= 75% of the AR\nCOB,after the first RTH sweep of ONH/ONL LonHI/LonLO PDH/PDL PFH/PFL: CoB = reversal wave delta >= 1.9x + volume >= 1.5x + size >= 1.5x; weak = volume < 1x or delta against\nAB,A effort > 1.9x and >= the prior opposite wave's, size <= 0.75x it; B effort > 1.9x and no new extreme past the prior same-way pivot\nBARS," +
+        "\nRULES,1-bar High/Low ZigZag; wave delta (+ buying / - selling) / median |delta| of the last 5 same-way waves in the same session part (>= 3; RTH restarts)\nVOL,Cmx clear trend + new session extreme + volume >= 2.5x normal and > the last 5 same-way waves; AR the next wave the other way >= 1.5x normal; ST the wave after an AR on <= 0.7x the climax volume giving back >= 75% of the AR\nCOB,after the first RTH sweep of ONH/ONL LonHI/LonLO PDH/PDL PFH/PFL: CoB = reversal wave delta >= 1.9x + volume >= 1.5x + size >= 1.5x; weak = volume < 1x or delta against\nAB,A effort > 1.9x and >= the prior opposite wave's, size <= 0.75x it; B effort > 1.9x and no new extreme past the prior same-way pivot\nPARAMS," + pf(E.abEffort) + "," + pf(E.abBack) + "," + pf(E.cmxVol) + "," + pf(E.swDelta) + "," + pf(E.swVol) + "," + pf(E.swSize) +
+        (zzoParamsBuilt() ? ",ZzoParams.h" : ",built-in") + "\nBARS," +
         std::to_string(E.B.size()) + ",no VAP " + std::to_string(E.noVap) + ",VAP " + vap + "\nWAVES," + std::to_string(E.W.size()) + "\n";
     {   // (1.3.0) the last 12 CoB / weak decisions with the level that was swept and the current key levels
         std::vector<std::string> ev;
