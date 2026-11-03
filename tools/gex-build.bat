@@ -82,6 +82,8 @@ REM (2026-11-01 22:24 CT, Rassul "build") lsCobSignal 1.0.0 "CoB Signal": his Co
 call :one CobSignal lsCobSignal CobSignalLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h CobImpulseLogic.h HostSlot.h SettingsGuard.h
 REM (2026-11-02 19:45 CT, Rassul "ok lets do option 2") lsZzoDelta 1.0.0 "ZZO Delta": 1-bar H/L ZigZag wave delta / median of the last 5 same-way waves (RTH restarts); own pane; no settings
 call :one ZzoDelta lsZzoDelta ZzoDeltaLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h
+REM (2026-11-02 21:33 CT, Rassul "add a zig zag also" / "yes, fix it") lsZzoZigZag 1.0.0 "ZZO ZigZag": the 1-bar H/L ZigZag ZZO Delta uses, on the price chart; no settings
+call :one ZzoZigZag lsZzoZigZag ZzoDeltaLogic.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h
 REM (2026-11-01 22:24 CT) lsBigPrint 1.0.0 "Big Print": one pane - biggest ask / bid print in N bars, V in N, BGB / BRB; replaces his BV_Since / BRB / BGB panes; no settings
 call :one BigPrint lsBigPrint BigPrintLogic.h HostSlot.h SettingsGuard.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
