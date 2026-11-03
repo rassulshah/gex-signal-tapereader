@@ -302,3 +302,8 @@ Rules (every new or changed indicator):
 - (2026-10-29 lsSessionVWAP 1.8.6 / 1.8.7) a default change shipped with NO host test of the ADD path; test_sessionvwap_187.cpp (23/0) now covers
   setup -> no saved set / parmsInit(7..11) -> first fill -> first draw = the yellow pivot VWAP only. A status file not written since a restart
   means the indicator is NOT on the chart (here removed at 09:17) - check that before suspecting the code.
+- (2026-11-03 lsZzoCombo 2.1.0) A LABEL MUST USE THE DRAWN MEASURE: the count ("biggest in N") compared RAW wave volume while the ramp drew volume /
+  normal, so ordinary RTH waves beat every quiet overnight wave and showed "50+" over ramps that were visibly not the tallest (Rassul 14:02 CT). Count
+  now walks the same colour only on the ramp ratio. Also: "N-bar reversal" means IRT's ZIGZAG rule (a bar beyond the previous N bars' extreme), not
+  "N consecutive bars" - copy lsWavePOC's rule and prove it pivot for pivot. Proof: tests_zzodelta/test_zzocombo_210.cpp (46/0: same-colour ratio
+  count, WavePOC parity 529/529, Python replica 530/530, count x one bar left).

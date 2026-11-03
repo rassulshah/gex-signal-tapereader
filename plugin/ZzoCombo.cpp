@@ -1,6 +1,10 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.0.1  (2026-11-03)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.1.0  (2026-11-03)
  *
+ *  2.1.0 (Rassul 2026-11-03 13:59-14:03 CT): waves from the 3-bar High/Low ZigZag by default ("make it 3bar using high and low by
+ *    default" = IRT's ZIGZAG Min Price Change 3 bars, as lsWavePOC); the count compares the wave's volume ratio (the ramp height) with
+ *    prior waves of its own colour only; "weak" not drawn ("remove weak"); the count one bar further left. No settings (SS_SAFE_DIALOG):
+ *    1-bar vs 3-bar is the compiled constant zzd::COMBO_REV_BARS.
  *  2.0.1 (09:20 CT, Rassul's ES chart): labels / tags drawn after every column (the next wave covered the "weak" tag).
  *  2.0.0 (Rassul 2026-11-03 07:40-08:49 CT, "ZZO Combo Mockup" v19 + "build"): the default ZZO indicator - one row in its own pane:
  *    volume ramp per wave (running volume / the median of the last 5 same-way waves), the 2.0x+ ratio above the peak and the count
@@ -174,7 +178,7 @@ bool ZzoCombo::identify(ZState& S) {
     const long long tk = std::llround(tick * 1e9);
     if (!S.keyed || mkt != S.mkt || sym != S.sym || spb != S.spb || tk != S.tickKey) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
-        S.E.reset(); S.E.setMarket(mkt, spb); S.raw.clear(); S.off = 0; S.haveForm = false;
+        S.E.reset(); S.E.revBars = zzd::COMBO_REV_BARS; S.E.setMarket(mkt, spb); S.raw.clear(); S.off = 0; S.haveForm = false;   // (2.1.0) 3-bar ZigZag
         const std::string d = zdFlex(); const std::string key = mkt + "-" + std::to_string(spb);
         S.statusPath = d.empty() ? std::string() : d + ZD_SEP ZD_NAME ".status-" + key + ".txt";
     }
@@ -264,7 +268,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoCombo* p = new ZzoCombo();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Combo v2.0.1 - 1-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count (biggest in N, 50+), Cmx / AR / ST, CoB / weak after a key-level sweep, Ab = absorption with a heavy extreme (effort / result).");
-    p->setVersion("2.0.1");   // = zzd::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Combo v2.1.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count (beats the last N same-colour waves, 50+), Cmx / AR / ST, CoB after a key-level sweep, Ab = absorption with a heavy extreme (effort / result).");
+    p->setVersion("2.1.0");   // = zzd::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

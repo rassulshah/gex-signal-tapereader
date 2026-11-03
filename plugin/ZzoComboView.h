@@ -1,11 +1,15 @@
-// ZzoComboView.h - lsZzoCombo 2.0.1 (2026-11-03 09:20 CT: labels and tags drawn after every column - the next wave's columns covered
+// ZzoComboView.h - lsZzoCombo 2.1.0 (2026-11-03 14:00 CT, Rassul 13:59-14:03): waves from the 3-bar High/Low ZigZag (ZzoDeltaLogic.h
+//   COMBO_REV_BARS); the count compares the wave's volume ratio (the ramp height) with PRIOR waves of its own colour only; "weak" is no
+//   longer drawn ("remove weak"); the count is drawn one bar further LEFT ("move the count 1 more to the left": its right edge = the
+//   wave's last bar's right edge - one bar width). The ratio label stays centred on the wave's last bar.
+// was 2.0.1 (2026-11-03 09:20 CT: labels and tags drawn after every column - the next wave's columns covered
 //   the "weak" tag on Rassul's ES chart at 08:33) 2.0.0 (2026-11-03, Rassul "build" after the ZZO Combo Mockup v19): the drawing of ZZO Combo, SDK-free
 // (tests_zzodelta/test_zzocombo.cpp). One row in its own pane:
 //   - a volume RAMP per wave: one column per bar, height = the wave's running volume / the median volume of the last 5 same-way waves
 //     ("wave on top"), green up waves / red down waves; the forming wave darker with a white top edge (it repaints with every tick)
 //   - waves of 2.0x+ volume: the ratio above the peak ("3.2x") and the COUNT right-justified against the wave's right edge in the top
 //     quarter ("12" = the biggest wave of its colour in the last 12 of its colour; 0 hidden; "50+" cap)
-//   - tags at the bottom centre of the wave, stacked up: Cmx / AR / ST, CoB / weak, and "Ab 4.9" (absorption with a heavy extreme and its
+//   - tags at the bottom centre of the wave, stacked up: Cmx / AR / ST, CoB (2.1.0: weak not drawn), and "Ab 4.9" (absorption with a heavy extreme and its
 //     effort / result) in the colour of the side that wins the turn - only where the market's showAb is on (ES at build)
 //   - tags only on completed waves (a wave completes when its bar closes and the next bar confirms the pivot)
 //   - every tag box has a dark 1 px edge (readable on a ramp of its own colour)
@@ -66,7 +70,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
             }
             if (showCount && w.cnt > 0 && bot - yPeak >= TH + 4) {   // count right-justified, top quarter of the ramp
                 const std::string t = countText(w); const int tw = v.textW(t);
-                const int x1 = ci(xr) - 1; const int y0 = yPeak + (bot - yPeak) / 4 - TH / 2;
+                const int x1 = ci(xr - v.bw) - 1; const int y0 = yPeak + (bot - yPeak) / 4 - TH / 2;
                 Prim p; p.k = Prim::TEXT; p.x0 = std::max(v.l + 1, x1 - tw); p.x1 = x1; p.y0 = std::max(y0, yPeak + 1); p.y1 = p.y0 + TH; p.col = white; p.text = t;
                 if (p.y1 <= bot - 1) { over.push_back(p); ++S.counts; }
             }
@@ -77,7 +81,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
         if (w.cob) tags.push_back({ "AR", up ? C.up : C.down });
         if (w.st) tags.push_back({ "ST", up ? C.down : C.up });          // the side expected to take over
         if (w.cobTag == 1) tags.push_back({ "CoB", up ? C.up : C.down });
-        if (w.cobTag == 2) tags.push_back({ "weak", C.grey });
+        // (2.1.0, Rassul 14:02 CT "remove weak") cobTag 2 = weak stays in the status file only, never drawn
         double er = 0;
         if (E.showAb && abHeavy(w) && effortResult(w, er)) { char b[24]; std::snprintf(b, sizeof b, "Ab %.1f", er); tags.push_back({ b, up ? C.down : C.up }); }   // winner's colour
         int lvl = 0;
@@ -106,8 +110,9 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
 
 inline std::string comboStatus(const Engine& E, const std::string& mkt, int spb, const std::string& vap) {
     std::string s = std::string("lsZzoCombo ") + COMBO_VERSION + " (engine " + VERSION + ")\nMARKET," + mkt + "," + std::to_string(spb) +
+        "\nZIGZAG," + std::to_string(E.revBars) + "-bar reversal, High/Low (IRT ZIGZAG Min Price Change = " + std::to_string(E.revBars) + " bars)" +
         "\nSHOW_AB," + (E.showAb ? "on" : "off - logged only until the nightly proves it here") +
-        "\nRULES,volume ramp per wave vs the median of the last 5 same-way waves; ratio + count on 2.0x+ waves (count = biggest of its colour in the last N of its colour, cap 50); Ab = absorption rule + pivot extreme 2 ticks >= 4% of the bar, shown with effort / result\n" +
+        "\nRULES,volume ramp per wave vs the median of the last 5 same-way waves; ratio + count on 2.0x+ waves (count = its volume ratio beats the last N waves of its colour in a row, cap 50; weak logged, not drawn); Ab = absorption rule + pivot extreme 2 ticks >= 4% of the bar, shown with effort / result\n" +
         "BARS," + std::to_string(E.B.size()) + ",no VAP " + std::to_string(E.noVap) + ",VAP " + vap + "\n";
     int n = 0;
     for (size_t k = E.W.size(); k-- > 0 && n < 30; ++n) {

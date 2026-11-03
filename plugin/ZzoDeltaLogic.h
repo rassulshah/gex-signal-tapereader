@@ -1,4 +1,18 @@
-// ZzoDeltaLogic.h - lsZzoDelta 1.3.2 / lsZzoVolume 1.2.2 / lsZzoCombo 2.0.0 (2026-11-03 09:00 CT, Rassul "build" - ZZO Combo): every wave
+// ZzoDeltaLogic.h - lsZzoCombo 2.1.0 / lsZzoZigZag 1.1.0 (2026-11-03 14:00 CT, Rassul 13:59 "make it 3bar using high and low by default";
+//   14:02 "remove weak" + the count: "why is there 50+ on green waves that are not bigger than the last 50+ green waves"; 14:03 "move the
+//   count 1 more to the left"):
+//   (1) ZigZag reversal bars per engine (Engine::revBars): Combo and the ZZO ZigZag overlay use COMBO_REV_BARS = 3 = IRT's own ZIGZAG
+//       "Min Price Change = 3 bars, Use High/Low", the same rule as lsWavePOC 1.3.2 (WavePOCLogic.h addBar): an up wave turns down only
+//       on a bar whose LOW is below the lows of the previous 3 bars (a down wave turns up on a HIGH above the previous 3 bars' highs);
+//       a strictly higher high (lower low) moves the wave's extreme. ZZO Delta / ZZO Volume keep 1 bar (revBars default 1, unchanged).
+//       There is no settings dialog on these plugins (SS_SAFE_DIALOG, "dialog settings never worked"), so the 1-bar / 3-bar choice is
+//       the compiled constant COMBO_REV_BARS, not a chart setting.
+//   (2) count = how many PRIOR waves of the SAME colour in a row this wave's volume RATIO (wave volume / its normal = the ramp height
+//       the pane draws) beats, walking back over the whole history the engine holds (overnight included) and stopping at the first one
+//       with a ratio >= this one; capped at CNT_CAP ("50+"). Waves with no normal yet (no ramp drawn) are skipped. Was raw volume, so a
+//       normal RTH wave beat every quiet overnight wave and showed "50+" while its ramp was not the tallest.
+//   (3) weak is still computed and logged in the status file but never drawn (ZzoComboView.h).
+// was lsZzoDelta 1.3.2 / lsZzoVolume 1.2.2 / lsZzoCombo 2.0.0 (2026-11-03 09:00 CT, Rassul "build" - ZZO Combo): every wave
 //   also carries cnt (the biggest wave of its colour in the last cnt waves of its colour, overnight included, capped at CNT_CAP) and xsh
 //   (the share of its pivot bar's volume in the bar's extreme 2 ticks, from VAP); Ab heavy = Ab rule + xsh >= AB_HEAVY (ES 49% vs 33%
 //   reached 2R, both halves); showAb per market from ZzoParams.h (ES on; the nightly turns other markets on). Delta / Volume unchanged.
@@ -71,7 +85,9 @@
 namespace zzd {
 static const char* const VERSION = "1.3.2";
 static const char* const VOL_VERSION = "1.2.2";   // lsZzoVolume
-static const char* const COMBO_VERSION = "2.0.1";   // lsZzoCombo
+static const char* const COMBO_VERSION = "2.1.0";   // lsZzoCombo
+static const char* const ZIGZAG_VERSION = "1.1.0";  // lsZzoZigZag
+static const int COMBO_REV_BARS = 3;   // (Combo 2.1.0) ZigZag reversal bars for lsZzoCombo + lsZzoZigZag: IRT ZIGZAG 3 bars, High/Low (1 = the 1-bar walk)
 static const int CNT_CAP = 50;          // (Combo) count cap ("cap it at 50")
 static const double AB_HEAVY = 0.04;    // (Combo) Ab drawn only with >= 4% of the pivot bar's volume in its extreme 2 ticks
 static const double CNT_MIN_VOL = 2.0;  // (Combo) volume ratio, count and ratio label only on waves of 2.0x+ ("only on volume that is at least 2x")   // lsZzoVolume
@@ -95,13 +111,26 @@ struct Wave { int s = 0, e = 0, dir = 0; long long dlt = 0, seg = 0; bool hasR =
               long long ext = 0, size = 0; int ab = 0;
               long long vol = 0; bool hasV = false; double medV = 0; bool cmx = false, cob = false, st = false;
               bool hasS = false; double medS = 0; int sw = 0, swLv = 0, cobTag = 0;
-              int cnt = 0; bool cntCap = false; double xsh = -1; };   // (Combo) count (0 = a bigger same-colour wave came right before; cntCap = >= CNT_CAP); xsh -1 = no footprint   // (1.3.0) size normal; sw = levels this wave swept; swLv = the sweep it answers; cobTag 1 CoB, 2 weak   // (1.1.0) cob = the AR tag; st = secondary test   // (1.2.0) wave volume / its normal, Cmx / CoB tags   // (1.1.0) pivot price / pivot-to-pivot size (ticks); ab 0 none, 1 rule A, 2 rule B
+              int cnt = 0; bool cntCap = false; double xsh = -1; };   // (Combo 2.1.0) count = prior same-colour waves in a row with a smaller volume ratio (0 = the one before is >=; cntCap = >= CNT_CAP); xsh -1 = no footprint   // (1.3.0) size normal; sw = levels this wave swept; swLv = the sweep it answers; cobTag 1 CoB, 2 weak   // (1.1.0) cob = the AR tag; st = secondary test   // (1.2.0) wave volume / its normal, Cmx / CoB tags   // (1.1.0) pivot price / pivot-to-pivot size (ticks); ab 0 none, 1 rule A, 2 rule B
 struct Walk { int dirn = 0, ext = 0, start = 0; bool any = false; };   // any = a wave completed already
 
 inline bool medianOf(std::vector<long long> v, double& m) {
     if (v.empty()) return false;
     std::sort(v.begin(), v.end()); const size_t n = v.size();
     m = n % 2 ? (double)v[n / 2] : ((double)v[n / 2 - 1] + (double)v[n / 2]) / 2.0; return true;
+}
+
+// (Combo 2.1.0) the count: walking back over W[0 .. nW), only waves of w's colour that have a normal, how many in a row have a volume
+// RATIO (vol / medV = the ramp height drawn) below w's; stops at the first >= one; CNT_CAP or more = cntCap ("50+")
+inline void countBack(const std::vector<Wave>& W, size_t nW, Wave& w) {
+    w.cnt = 0; w.cntCap = false;
+    if (!w.hasV || !(w.medV > 0)) return;
+    const double r = (double)w.vol / w.medV;
+    for (size_t k = std::min(nW, W.size()); k-- > 0;) {
+        const Wave& x = W[k]; if (x.dir != w.dir || !x.hasV || !(x.medV > 0)) continue;
+        if ((double)x.vol / x.medV >= r) break;
+        if (++w.cnt >= CNT_CAP) { w.cntCap = true; break; }
+    }
 }
 
 inline bool zzoParamsBuilt() {
@@ -116,6 +145,7 @@ struct Engine {
     int openMin = 510, closeMin = 900, per = 180;
     // (1.3.1) this market's thresholds (setMarket: ZzoParams.h row, else the 1.3.0 numbers)
     double abEffort = AB_EFFORT, abBack = AB_BACK, cmxVol = CMX_VOL, swDelta = SW_DELTA, swVol = SW_VOL, swSize = SW_SIZE;
+    int revBars = 1;       // (Combo 2.1.0) ZigZag reversal bars: 1 (beyond the previous bar; Delta / Volume) or COMBO_REV_BARS = 3 (Combo / ZigZag); kept by reset()
     bool showAb = false;   // (Combo) draw Ab on this market (ZzoParams.h; built-in: ES only)
     std::vector<Bar> B; Walk Z; std::vector<Wave> W; long long trimmed = 0; long long noVap = 0;
     // (1.3.0) per session (keyed by its day): high / low of all bars, RTH, overnight, London; levels already swept in RTH
@@ -214,20 +244,27 @@ struct Engine {
         w.size = dir > 0 ? bars[(size_t)e].h - bars[(size_t)p0].l : bars[(size_t)p0].h - bars[(size_t)e].l;
         w.hasS = baseSize(dir, w.seg, nW, w.medS);
         // (Combo) count back over the earlier waves of this colour (all session parts) until a bigger one; capped
-        for (size_t k = nW; k-- > 0;) { const Wave& x = W[k]; if (x.dir != dir) continue; if (x.vol >= w.vol) break; if (++w.cnt >= CNT_CAP) { w.cntCap = true; break; } }
+        // (2.1.0) by the volume RATIO (the ramp height drawn), same colour only, skipping waves with no normal; stop at the first >= one
+        countBack(W, nW, w);
         { const Bar& pb = bars[(size_t)e]; if (pb.xok && pb.vol > 0) w.xsh = (double)(dir > 0 ? pb.xh : pb.xl) / (double)pb.vol; }
         return w;
     }
-    // the 1-bar walk with bar j (CobSignalLogic.h): true = a wave completed (s .. e, dir)
-    static bool step(const std::vector<Bar>& b, Walk& z, int j, int& s, int& e, int& dir) {
+    // the walk with bar j (1-bar = CobSignalLogic.h's): an up wave turns on a bar whose low is below the lows of the previous N bars
+    // (N = 1: the bar before; N = 3: IRT's ZIGZAG "Min Price Change = 3 bars", as lsWavePOC), a down wave on a high above the previous
+    // N bars' highs; a strictly more extreme bar moves the live extreme. true = a wave completed (s .. e, dir)
+    static bool step(const std::vector<Bar>& b, Walk& z, int j, int& s, int& e, int& dir, int N = 1) {
         if (j == 1) { z.dirn = b[1].h >= b[0].h ? 1 : -1; z.ext = 0; z.start = 0; }
         if (j < 1) return false;
+        if (N < 1) N = 1;
+        const int j0 = std::max(0, j - N);
         if (z.dirn == 1) {
             if (b[(size_t)j].h > b[(size_t)z.ext].h) { z.ext = j; return false; }
-            if (b[(size_t)j].l < b[(size_t)j - 1].l && j != z.ext) { s = z.any ? z.start + 1 : z.start; e = z.ext; dir = 1; z.start = z.ext; z.ext = j; z.dirn = -1; z.any = true; return true; }
+            long long pl = b[(size_t)j0].l; for (int k = j0 + 1; k < j; ++k) pl = std::min(pl, b[(size_t)k].l);
+            if (b[(size_t)j].l < pl && j != z.ext) { s = z.any ? z.start + 1 : z.start; e = z.ext; dir = 1; z.start = z.ext; z.ext = j; z.dirn = -1; z.any = true; return true; }
         } else {
             if (b[(size_t)j].l < b[(size_t)z.ext].l) { z.ext = j; return false; }
-            if (b[(size_t)j].h > b[(size_t)j - 1].h && j != z.ext) { s = z.any ? z.start + 1 : z.start; e = z.ext; dir = -1; z.start = z.ext; z.ext = j; z.dirn = 1; z.any = true; return true; }
+            long long ph = b[(size_t)j0].h; for (int k = j0 + 1; k < j; ++k) ph = std::max(ph, b[(size_t)k].h);
+            if (b[(size_t)j].h > ph && j != z.ext) { s = z.any ? z.start + 1 : z.start; e = z.ext; dir = -1; z.start = z.ext; z.ext = j; z.dirn = 1; z.any = true; return true; }
         }
         return false;
     }
@@ -235,7 +272,7 @@ struct Engine {
         b.seg = segOf(b.t); if (!b.vap) ++noVap;
         B.push_back(b); const int j = (int)B.size() - 1;
         int s = 0, e = 0, d = 0;
-        if (step(B, Z, j, s, e, d)) { Wave w = make(B, s, e, d, W.size(), false); w.ab = absorb(w, W.size()); volTags(w, W.size()); cobAfterSweep(w, W.size()); sweeps(w); W.push_back(w); }
+        if (step(B, Z, j, s, e, d, revBars)) { Wave w = make(B, s, e, d, W.size(), false); w.ab = absorb(w, W.size()); volTags(w, W.size()); cobAfterSweep(w, W.size()); sweeps(w); W.push_back(w); }
         addSess(b);   // (1.3.0) after the wave check: a wave completed by this bar is judged on the bars before it
         if ((int)B.size() > MAX_BARS) trim(TRIM);
     }
@@ -298,7 +335,7 @@ struct Engine {
             std::vector<Bar> b2 = B; Bar f = *form; f.seg = segOf(f.t); b2.push_back(f);
             Walk z = Z; int s = 0, e = 0, d = 0; const int j = (int)b2.size() - 1;
             Engine tmp; tmp.W = W;
-            if (step(b2, z, j, s, e, d)) { Wave w = tmp.make(b2, s, e, d, tmp.W.size(), true); out.push_back(w); tmp.W.push_back(w); }
+            if (step(b2, z, j, s, e, d, revBars)) { Wave w = tmp.make(b2, s, e, d, tmp.W.size(), true); out.push_back(w); tmp.W.push_back(w); }
             const int ls = z.any ? z.start + 1 : 0;
             if (j >= 1 && ls <= j) out.push_back(tmp.make(b2, ls, j, z.dirn, tmp.W.size(), true));
             return out;

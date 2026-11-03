@@ -1,6 +1,9 @@
 /********************************************************************************
- *  ZzoZigZag.cpp  --  Investor/RT RTX extension  lsZzoZigZag  "ZZO ZigZag"  1.0.0  (2026-11-02)
+ *  ZzoZigZag.cpp  --  Investor/RT RTX extension  lsZzoZigZag  "ZZO ZigZag"  1.1.0  (2026-11-03)
  *
+ *  1.1.0 (Rassul 2026-11-03 13:59 CT "make it 3bar using high and low by default" for ZZO Combo): this overlay draws the waves ZZO Combo
+ *    measures, so it follows Combo to the 3-bar High/Low ZigZag (zzd::COMBO_REV_BARS = IRT's ZIGZAG Min Price Change 3 bars, as
+ *    lsWavePOC); ZZO Delta / ZZO Volume keep their 1-bar walk.
  *  1.0.0 (Rassul 2026-11-02 21:18 CT "add a zig zag also" + 21:33 "yes, fix it"): on the price chart, the 1-bar High / Low ZigZag
  *    that ZZO Delta measures its waves on (ZzoDeltaLogic.h, the same walk) - a white line pivot to pivot; the live leg dashed (it
  *    moves with the forming bar until the 1-bar reversal confirms it). No settings, no hovers, no files.
@@ -77,7 +80,7 @@ bool ZzoZigZag::identify(ZZState& S) {
     const long long tk = std::llround(tick * 1e9);
     if (!S.keyed || mkt != S.mkt || sym != S.sym || spb != S.spb || tk != S.tickKey) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
-        S.E.reset(); S.E.setMarket(mkt, spb); S.raw.clear(); S.off = 0; S.haveForm = false;
+        S.E.reset(); S.E.revBars = zzd::COMBO_REV_BARS; S.E.setMarket(mkt, spb); S.raw.clear(); S.off = 0; S.haveForm = false;   // (1.1.0) Combo's 3-bar walk
     }
     return true;
 }
@@ -134,7 +137,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoZigZag* p = new ZzoZigZag();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO ZigZag v1.0.0 - the 1-bar High/Low ZigZag ZZO Delta measures its waves on (white; the live leg dashed).");
-    p->setVersion("1.0.0");   // gex-build reads this literal
+    p->setDescription("LRA ZZO ZigZag v1.1.0 - the 3-bar High/Low ZigZag ZZO Combo measures its waves on (white; the live leg dashed).");
+    p->setVersion("1.1.0");   // = zzd::ZIGZAG_VERSION (gex-build reads this literal)
     return p;
 }
