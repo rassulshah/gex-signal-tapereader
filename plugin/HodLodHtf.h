@@ -3,7 +3,7 @@
 // inside a bar; updates at each bar close):
 //   60m / Day TREND = Kaufman efficiency x 100, signed: (last close - close N bars back) / the sum of |close-to-close| moves over those
 //                    N bars; N = 20 hourly bars / 10 sessions. Up / Dn by the sign; Strong >= 40, Moderate 20-39, Weak < 20.
-//   RS (vs itself) = RSI 14 (Wilder) of the same hourly / session closes; Strong >= 60, Weak <= 40, Neutral between;
+//   RS (vs itself) = RSI 20 (Wilder; 1.4.0, was 14) of the same hourly / session closes; Strong >= 60, Weak <= 40, Neutral between;
 //                    >= 70 Overbought, <= 30 Oversold.
 //   60m bars = clock hours by bar END (a bar ending 10:03 .. 11:00 is the 11:00 hour); sessions start 17:00 CT (Sun-Thu evening).
 // Too few bars for a value = "-" for that part (the chart holds ~21 calendar days = ~15 sessions).
@@ -16,8 +16,8 @@
 #include <vector>
 
 namespace htf {
-static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 14:49 CT "| Dly: Dn, Wk | Hrly: Side, Wk | 3m: Dn, Wk") + the chart's own 3m bars, RS word only   // was "1.2.0";   // (1.2.0, Rassul 14:41 CT "put these values in the top row and make it fit by abbreviating") StrUp / Up / Side / Dn / StrDn, RS VStr / Str / Mod / Wk / VWk   // was "1.1.0";   // (1.1.0, Rassul 2026-11-02 14:41 CT) labels only: Strong Up / Up / Side / Dn / Strong Dn; RS Very Strong / Strong / Moderate / Weak / Very Weak   // was "1.0.0"
-static const int N_HOUR = 20, N_DAY = 10, RSI_N = 14;
+static const char* const VERSION = "1.4.0";   // (1.4.0) RS = RSI 20 (the MQ Reader cards use the same)   // was "1.3.0";   // (1.3.0, Rassul 14:49 CT "| Dly: Dn, Wk | Hrly: Side, Wk | 3m: Dn, Wk") + the chart's own 3m bars, RS word only   // was "1.2.0";   // (1.2.0, Rassul 14:41 CT "put these values in the top row and make it fit by abbreviating") StrUp / Up / Side / Dn / StrDn, RS VStr / Str / Mod / Wk / VWk   // was "1.1.0";   // (1.1.0, Rassul 2026-11-02 14:41 CT) labels only: Strong Up / Up / Side / Dn / Strong Dn; RS Very Strong / Strong / Moderate / Weak / Very Weak   // was "1.0.0"
+static const int N_HOUR = 20, N_DAY = 10, RSI_N = 20;   // (1.4.0, Rassul 2026-11-03 12:06-12:16 CT "20 day relative strength ... consistent across") RSI 20 everywhere RS shows (was 14); the daily RS needs 21+ sessions on the chart
 static const double TR_STRONG = 40, TR_MOD = 20, RS_STRONG = 60, RS_WEAK = 40, RS_OB = 70, RS_OS = 30;
 struct In { long long absEnd; double c; };   // bar END (local CT seconds since 1970) and its close
 struct Out { bool hOk = false, dOk = false, hRsOk = false, dRsOk = false, mOk = false, mRsOk = false; double hEr = 0, dEr = 0, hRsi = 0, dRsi = 0, mEr = 0, mRsi = 0; int nH = 0, nD = 0, nM = 0; };   // (1.3.0) m = the chart bars (3m)
