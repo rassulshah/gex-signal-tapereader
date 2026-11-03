@@ -121,7 +121,7 @@ int main(int argc, char** argv) {
         v.X = [&](int i) { return 40 + (i - first + 0.5) * bw; }; v.Y = [&](double tk) { return H - 20 - (tk - (lo - 8)) / (double)(hi - lo + 16) * (H - 40); };
         v.textW = [](const std::string& s, bool) { return (int)s.size() * 7; };
         const wpc::Scene sc = wpc::layout(E, nullptr, v);
-        CHECK(sc.lettersDrawn > 0 && sc.pbDrawn > 0 && sc.boxesDrawn > 0, "Oct 30 PM: letters, Pb and solid node boxes drawn (" << sc.lettersDrawn << " / " << sc.pbDrawn << " / " << sc.boxesDrawn << ")");
+        CHECK(sc.lettersDrawn > 0 && sc.pbDrawn == 0 && sc.pbFound > 0 && sc.boxesDrawn > 0, "Oct 30 PM: letters and solid node boxes drawn; (1.8.3) POC pullbacks found but NO Pb drawn (" << sc.lettersDrawn << " / " << sc.pbDrawn << " drawn, " << sc.pbFound << " found / " << sc.boxesDrawn << ")");
         // delta rows: right of each wave start, <= 30 px; the white delta POC box on the biggest row
         bool right = true; int drowsN = 0;
         for (const wpc::Wave& w : E.waves) { if (w.provisional || w.drows.empty() || w.i0 < first) continue; const int x0 = (int)std::lround(v.X(w.i0) - bw * 0.45);
@@ -173,7 +173,8 @@ int main(int argc, char** argv) {
         // Pb: text + the amber dashed line from the POC
         int pbT = 0, amber = 0; for (const wpc::Prim& p : sc.p) { pbT += p.k == wpc::Prim::TEXT && p.text == "Pb"; amber += p.k == wpc::Prim::LINE && p.col == 0xF5B428; }
         int cyanL = 0, cyanF = 0, greyL = 0, amberF = 0; for (const wpc::Prim& p : sc.p) { cyanL += p.k == wpc::Prim::LINE && p.col == 0x22D3EE; cyanF += p.k == wpc::Prim::FILL && p.col == 0x22D3EE && !p.back; greyL += p.k == wpc::Prim::LINE && p.col == 0x94A3B8; amberF += p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD); }
-        CHECK(pbT == sc.pbDrawn && cyanL > 0 && amber == 0, "(1.6.0) Pb text and the CYAN dotted POC line (" << pbT << ", " << cyanL << " dashes, amber " << amber << ")");
+        int pbDash = 0; for (const wpc::Prim& p : sc.p) pbDash += p.k == wpc::Prim::LINE && p.y0 == p.y1 && p.x1 - p.x0 <= 5 && p.col == 0x22D3EE;
+        CHECK(pbT == 0 && pbDash == 0 && cyanL > 0 && amber == 0, "(1.8.3) no Pb text and no Pb dotted line (Pb = lsBreakout); the cyan POC lines stay (" << pbT << " Pb, " << pbDash << " dashes, " << cyanL << " cyan lines, amber " << amber << ")");
         CHECK(greyL == 0 && amberF == 0, "(1.6.0) no left volume profile: no grey outline lines (" << greyL << "), no HVN / amber WPOC fills (" << amberF << ")");
         CHECK(cyanF >= sc.wavesDrawn / 2 && cyanF > 0, "(1.6.0) a cyan WPOC line on the delta side per profiled wave (" << cyanF << " for " << sc.wavesDrawn << " waves)");
         // the volume side never crosses the wave start to the right; the delta side never crosses the next wave start

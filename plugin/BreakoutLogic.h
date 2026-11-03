@@ -1,6 +1,18 @@
 #ifndef LS_BREAKOUT_LOGIC_H
 #define LS_BREAKOUT_LOGIC_H
-// BreakoutLogic.h 1.0.0 (2026-11-03) -- the SDK-free part of lsBreakout ("BO", Breakout.cpp). Rassul approved the mockup
+// BreakoutLogic.h 1.1.0 (2026-11-03) -- lsBreakout 1.1.0: + "Pb" (Rassul approved the Pb mockup - ES Oct 30 - and said "build"):
+//   Pb = a pullback that TESTS the BO / BD candle. Pivots = the 3-bar High / Low ZigZag (zzd::Engine::step with COMBO_REV_BARS = 3,
+//        the engine of lsZzoCombo 2.1.0 / lsZzoZigZag: a down wave turns up on a bar whose HIGH is above the highs of the previous 3
+//        bars, an up wave turns down on a LOW below the previous 3 bars' lows; a strictly higher high / lower low moves the extreme).
+//        After a fired BO on bar i: every confirmed pivot LOW p > i whose bar overlaps the BO candle (low <= BO high AND high >= BO low)
+//        gets a green "Pb" just below its low, until EITHER the next fired BO / BD (any side, t0 in (i, p]) OR a bar in (i, p] trades
+//        below the BO wave's origin (the last pivot LOW before i). BD mirrored (pivot HIGHs, red "Pb" just above the high, origin = the
+//        last pivot HIGH before i).
+//        Decided when BOTH are known: the pivot is confirmed (its ZigZag turn bar closed) and the BO / BD has fired (its follow-through
+//        closed) = decision bar d = max(confirm, fire). Only BO / BD letters fired by d block (the chart cannot know a later one), so a
+//        restart (one full pass) gives the same Pb as the live chart. A Pb, once made, is kept for the chart's life (no repaint; a later
+//        invalidation never removes it). Same small font as BO / BD, 3 px from the wick; never on another letter (one row further out).
+// was BreakoutLogic.h 1.0.0 (2026-11-03) -- the SDK-free part of lsBreakout ("BO", Breakout.cpp). Rassul approved the mockup
 // (bo_mockup.html, ES Oct 30: "BO / BD sit small, right at the breakout candle ... letters only") and said "build".
 // The chart shows ONLY letters:
 //   "BO" green just ABOVE the breakout candle's high, "BD" red just BELOW the breakdown candle's low (GAP px from the wick), small font;
@@ -15,6 +27,7 @@
 #include "BigBidAskLogic.h"
 #include "VwapTrendLogic.h"
 #include "RallyLogic.h"
+#include "ZzoDeltaLogic.h"   // (1.1.0) zzd::Engine::step = the 3-bar High / Low ZigZag of lsZzoCombo 2.1.0 (COMBO_REV_BARS)
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -24,18 +37,23 @@
 
 namespace bko {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0) + Pb   // was "1.0.0"
 static const int GAP = 3;              // px between the wick end and the BO / BD letter
 static const int RLY_ROW = 16;         // the Rly letter sits this many px further out than the BO / BD row
 static const int FONT_BO = 7;          // ~9 px letters (Rassul: small, smaller than lsBigBidAsk's 10)
 static const int FONT_RLY = 9;         // the mockup's Rly size
 static const unsigned long C_UP = 0x0022C55E, C_DN = 0x00EF4444;   // green bullish / red bearish (his C_BUY / C_SELL)
 static const int MAX_BARS = 20000;     // bars considered (as lsBigBidAsk's Rly pass)
+static const int PB_REV_BARS = zzd::COMBO_REV_BARS;   // (1.1.0) the Pb pivots: 3-bar High / Low ZigZag (lsZzoCombo 2.1.0)
 
 // one chart bar (the host fills it from IRT; t = the raw IRT stamp = the bar END, days / endSec = local CT civil day / second)
 struct In { long long t = 0; bool ok = false; long days = 0; int endSec = 0; double o = 0, h = 0, l = 0, c = 0; long long vol = 0; };
 struct BoMark { long long t0 = 0, t = 0; int dir = 0; double piv = 0; bool fired = false; int reason = 0; };
 struct RlyMark { long long te = 0; int dir = 0; bool fired = false; };
+// (1.1.0) one Pb: the pivot bar (tp), +1 = a pivot LOW after a BO (green, below) / -1 = a pivot HIGH after a BD (red, above), the BO / BD
+// candle it tested (t0), the bar that confirmed the pivot (tc) and the decision bar (td = the later of tc and the BO / BD's fire bar)
+struct PbMark { long long tp = 0, t0 = 0, tc = 0, td = 0; int dir = 0; };
+struct Pivot { long long t = 0, tc = 0; int type = 0; double h = 0, l = 0; };   // type +1 = pivot HIGH, -1 = pivot LOW; tc = confirm bar
 
 struct Engine {
     // inputs of the last update
@@ -44,6 +62,8 @@ struct Engine {
     std::map<long long, bba::BoDec> bo;        // t0 -> lsBigBidAsk's decision record (fired or not)
     std::map<long long, RlyMark> rly;          // te * 2 + (dir > 0) -> judged wave
     std::map<long long, int> trend;            // closed bar time -> vwapTrend level (cache)
+    std::map<long long, PbMark> pb;            // (1.1.0) pivot bar time -> Pb (kept for the chart's life)
+    std::vector<Pivot> piv;                    // (1.1.0) the confirmed 3-bar ZigZag pivots of the last pass (closed bars)
     long long lastClosedT = 0, firstT = 0; long count = -1; bool full = true;   // firstT / count = the CHART's first bar stamp and bar count
     int runs = 0, fullRuns = 0; long long boDup = 0;
     void reset() { *this = Engine(); }
@@ -57,7 +77,7 @@ struct Engine {
         if (chartN == count && lc == lastClosedT && chartFirst == firstT && tk == tick && per == spb) return false;
         if (count >= 0 && (chartFirst != firstT || chartN < count || tk != tick || per != spb)) full = true;
         bars = B; tick = tk; spb = per; openMin = om; closeMin = cm; count = chartN; lastClosedT = lc; firstT = chartFirst;
-        boPass(); rlyPass(); full = false; ++runs; return true;
+        boPass(); rlyPass(); pbPass(); full = false; ++runs; return true;
     }
     int trendAt(int k) {
         if (k <= 0 || k >= (int)bars.size()) return 0;
@@ -107,13 +127,66 @@ struct Engine {
         }
         while (rly.size() > 20000) rly.erase(rly.begin());
     }
+    // (1.1.0) the 3-bar High / Low ZigZag over the closed bars (zzd::Engine::step, N = 3); bars with no valid price are skipped
+    void pivots() {
+        piv.clear(); const int n = (int)bars.size();
+        std::vector<zzd::Bar> Z; std::vector<int> at; Z.reserve((size_t)n); at.reserve((size_t)n);
+        for (int k = 0; k < n - 1; ++k) {
+            const In& b = bars[(size_t)k]; zzd::Bar z; z.t = b.t;
+            if (!b.ok || !(b.h >= b.l) || !zzd::toTicks(b.h, tick, z.h) || !zzd::toTicks(b.l, tick, z.l)) continue;
+            Z.push_back(z); at.push_back(k);
+        }
+        zzd::Walk w;
+        for (int j = 0; j < (int)Z.size(); ++j) {
+            int s0 = 0, e = 0, d = 0;
+            if (!zzd::Engine::step(Z, w, j, s0, e, d, PB_REV_BARS)) continue;
+            const In& b = bars[(size_t)at[(size_t)e]];
+            Pivot p; p.t = b.t; p.tc = bars[(size_t)at[(size_t)j]].t; p.type = d > 0 ? 1 : -1; p.h = b.h; p.l = b.l; piv.push_back(p);
+        }
+    }
+    // (1.1.0) Pb: see the header. Every fired BO / BD with its candle on the chart is checked against the confirmed pivots after it.
+    void pbPass() {
+        pivots();
+        const int n = (int)bars.size(); if (n < 3 || piv.empty()) return;
+        std::vector<long long> T((size_t)n); for (int k = 0; k < n; ++k) T[(size_t)k] = bars[(size_t)k].t;
+        auto idxOf = [&](long long t) { const auto it = std::lower_bound(T.begin(), T.end(), t); return it != T.end() && *it == t ? (int)(it - T.begin()) : -1; };
+        std::vector<const bba::BoDec*> F; for (const auto& kv : bo) if (kv.second.fired && kv.second.dir != 0) F.push_back(&kv.second);   // t0 order (map)
+        for (size_t q = 0; q < F.size(); ++q) {
+            const bba::BoDec& D = *F[q]; const int i = idxOf(D.t0); if (i < 0) continue;
+            const In& c = bars[(size_t)i]; if (!std::isfinite(c.h) || !std::isfinite(c.l)) continue;
+            const int dir = D.dir > 0 ? 1 : -1, want = dir > 0 ? -1 : 1;    // BO: pivot LOWs, BD: pivot HIGHs
+            const long long tf = D.t;                                         // the BO / BD's fire bar (follow-through closed)
+            // the wave's origin: the last pivot of the wanted type before the BO / BD candle, known when the BO / BD fired
+            bool haveOrg = false; double org = 0;
+            for (const Pivot& p : piv) { if (p.t >= D.t0) break; if (p.type == want && p.tc <= tf) { haveOrg = true; org = dir > 0 ? p.l : p.h; } }
+            int scan = i;                                                     // bars (i, scan] checked against the origin
+            const auto p0 = std::upper_bound(piv.begin(), piv.end(), D.t0, [](long long t, const Pivot& p) { return t < p.t; });
+            for (auto it = p0; it != piv.end(); ++it) {
+                const Pivot& p = *it; const long long td = std::max(p.tc, tf);
+                // the next BO / BD known by the decision bar, with its candle in (t0, tp]: this pivot and every later one are past it
+                // (td and tp only grow along the pivots, so every later pivot is blocked too: stop)
+                bool blocked = false;
+                for (size_t r = q + 1; r < F.size(); ++r) { const bba::BoDec& X = *F[r]; if (X.t0 > p.t) break; if (X.t <= td) { blocked = true; break; } }
+                if (blocked) break;
+                // price traded beyond the origin on a bar in (i, p]: stop (no Pb on or after that)
+                bool broke = false; const int pi = idxOf(p.t); if (pi < 0) break;
+                if (haveOrg) for (int k = scan + 1; k <= pi; ++k) { const In& b = bars[(size_t)k]; if (b.ok && (dir > 0 ? b.l < org : b.h > org)) { broke = true; break; } scan = k; }
+                if (broke) break;
+                if (p.type != want) continue;
+                if (!(p.l <= c.h && p.h >= c.l)) continue;                    // the pivot bar overlaps the BO / BD candle
+                if (pb.count(p.t)) continue;                                  // decided before: never again
+                PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = td; m.dir = dir; pb[p.t] = m;
+            }
+        }
+        while (pb.size() > 40000) pb.erase(pb.begin());
+    }
 };
 
 // ---- layout: what the host draws (one text per letter; the host adds the 1 px black edge as lsBigBidAsk did) ---------------------
 struct Box { int l = 0, t = 0, r = 0, b = 0; };
 inline bool hits(const Box& a, const Box& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
 inline bool inside(const Box& a, const Box& in) { return a.l >= in.l && a.r <= in.r && a.t >= in.t && a.b <= in.b; }
-struct Txt { std::string s; Box f; unsigned long col = 0; int font = 0; int bar = 0; int dir = 0; int kind = 0; };   // kind 0 BO / BD, 1 Rly
+struct Txt { std::string s; Box f; unsigned long col = 0; int font = 0; int bar = 0; int dir = 0; int kind = 0; };   // kind 0 BO / BD, 1 Rly, 2 Pb (1.1.0)
 struct View {
     int first = 0, last = -1;                       // visible chart bars (inclusive)
     Box area;                                       // where letters may go (price area, below the IRT title row)
@@ -124,7 +197,7 @@ struct View {
     int lh[2] = { 12, 14 };                         // letter row heights: BO / BD font, Rly font
 };
 struct Board { long long t = 0; int side = 0; int val = 0; };   // SignalBoard 'L': bar time, +1 above / -1 below, px from the extreme to the outer edge
-struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, noRoom = 0; };
+struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, noRoom = 0; };
 
 inline Scene layout(const Engine& E, const View& v) {
     Scene S; const int n = (int)E.bars.size(); if (n < 2 || !v.X || !v.Y || !v.textW) return S;
@@ -133,20 +206,32 @@ inline Scene layout(const Engine& E, const View& v) {
     std::map<std::pair<int, int>, int> reach;       // (bar, side) -> outer edge in px from the wick end
     auto put = [&](int bar, int dir, int kind) {
         const In& b = E.bars[(size_t)bar]; if (!std::isfinite(b.h) || !std::isfinite(b.l)) return;
-        const char* tx = kind == 1 ? "Rly" : (dir > 0 ? "BO" : "BD"); const int font = kind == 1 ? FONT_RLY : FONT_BO;
+        const char* tx = kind == 2 ? "Pb" : kind == 1 ? "Rly" : (dir > 0 ? "BO" : "BD"); const int font = kind == 1 ? FONT_RLY : FONT_BO;
         const int w = v.textW(tx, font) + 2, cx = v.X(bar), yh = v.Y(b.h), yl = v.Y(b.l), top = std::min(yh, yl), bot = std::max(yh, yl);
         const int lh = v.lh[kind == 1 ? 1 : 0], off = kind == 1 ? GAP + std::max(RLY_ROW, v.lh[0] + 3) : GAP;
         Txt T; T.s = tx; T.font = font; T.bar = bar; T.dir = dir; T.kind = kind; T.col = dir > 0 ? C_UP : C_DN;
         T.f.l = cx - w / 2; T.f.r = T.f.l + w;
         if (dir > 0) { T.f.b = top - off; T.f.t = T.f.b - lh; } else { T.f.t = bot + off; T.f.b = T.f.t + lh; }
+        if (kind == 2)   // (1.1.0) Pb never on another letter: one row further out (lh + 1 px) until it is clear
+            for (int tries = 0; tries < 4; ++tries) {
+                bool clash = false; for (const Txt& o : S.txt) if (hits(T.f, o.f)) { clash = true; break; }
+                if (!clash) break;
+                const int st = lh + 1; if (dir > 0) { T.f.t -= st; T.f.b -= st; } else { T.f.t += st; T.f.b += st; }
+            }
         bool ok = inside(T.f, v.area); for (const Box& k : v.keepOut) if (k.r > k.l && k.b > k.t && hits(T.f, k)) ok = false;
+        if (kind == 2) for (const Txt& o : S.txt) if (hits(T.f, o.f)) ok = false;
         if (!ok) { ++S.noRoom; return; }
-        S.txt.push_back(T); if (kind == 1) ++S.rlyShown; else ++S.boShown;
+        S.txt.push_back(T); if (kind == 2) ++S.pbShown; else if (kind == 1) ++S.rlyShown; else ++S.boShown;
         int& r = reach[std::make_pair(bar, dir > 0 ? 1 : -1)]; r = std::max(r, dir > 0 ? top - T.f.t : T.f.b - bot);
     };
     std::vector<std::pair<int, int>> boBars;
     for (const auto& kv : E.bo) { const bba::BoDec& D = kv.second; if (!D.fired) continue; const auto it = idx.find(D.t0); if (it == idx.end()) continue; put(it->second, D.dir, 0); boBars.push_back({ it->second, D.dir > 0 ? 1 : -1 }); }
     for (const auto& kv : E.rly) { const RlyMark& R = kv.second; if (!R.fired) continue; const auto it = idx.find(R.te); if (it == idx.end()) continue; put(it->second, R.dir, 1); }
+    // (1.1.0) Pb: green below a pivot LOW after a BO (dir +1 -> drawn on the LOW side), red above a pivot HIGH after a BD
+    for (const auto& kv : E.pb) { const PbMark& P = kv.second; const auto it = idx.find(P.tp); if (it == idx.end()) continue;
+        const size_t before = S.txt.size(); put(it->second, -P.dir, 2);
+        if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
+    std::sort(boBars.begin(), boBars.end()); boBars.erase(std::unique(boBars.begin(), boBars.end()), boBars.end());   // (1.1.0) one post per bar and side
     for (const auto& p : boBars) { const auto it = reach.find(p); if (it == reach.end()) continue; Board B; B.t = E.bars[(size_t)p.first].t; B.side = p.second; B.val = it->second; S.board.push_back(B); }
     return S;
 }
@@ -158,11 +243,12 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
     std::map<long long, long> dayOf; for (const In& b : E.bars) dayOf[b.t] = b.days;
     for (const auto& kv : E.bo) { const auto it = dayOf.find(kv.first); if (it == dayOf.end() || it->second != today) continue; if (kv.second.fired) (kv.second.dir > 0 ? bo : bd)++; else ++nf; }
     for (const auto& kv : E.rly) { const auto it = dayOf.find(kv.second.te); if (it == dayOf.end() || it->second != today || !kv.second.fired) continue; (kv.second.dir > 0 ? ru : rd)++; }
+    int pu = 0, pd = 0; for (const auto& kv : E.pb) { const auto it = dayOf.find(kv.first); if (it == dayOf.end() || it->second != today) continue; (kv.second.dir > 0 ? pu : pd)++; }   // (1.1.0)
     std::string s = std::string("VERSION,") + VERSION + "\nMARKET," + mkt + "\nSYMBOL," + sym + "\nSPB," + std::to_string(spb) + "\n";
-    s += "RULES,BO / BD = lsBigBidAsk " + std::string(bba::VERSION) + " bba::boFromCandles (rule " + std::to_string(bba::BO_RULE) + ", follow-through in the same wave); Rly = RallyLogic " + rly::VERSION + (spb == 180 ? "" : " (3-min charts only: off on this chart)") + "\n";
-    s += "TODAY,BO " + std::to_string(bo) + ",BD " + std::to_string(bd) + ",not fired " + std::to_string(nf) + ",Rly up " + std::to_string(ru) + ",Rly down " + std::to_string(rd) + "\n";
-    s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
-    s += "DRAWN,BO/BD " + std::to_string(last.boShown) + ",Rly " + std::to_string(last.rlyShown) + ",no room " + std::to_string(last.noRoom) + "\n";
+    s += "RULES,BO / BD = lsBigBidAsk " + std::string(bba::VERSION) + " bba::boFromCandles (rule " + std::to_string(bba::BO_RULE) + ", follow-through in the same wave); Rly = RallyLogic " + rly::VERSION + (spb == 180 ? "" : " (3-min charts only: off on this chart)") + "; Pb = a confirmed 3-bar High/Low ZigZag pivot testing the BO / BD candle (until the next BO / BD or the wave origin breaks)\n";
+    s += "TODAY,BO " + std::to_string(bo) + ",BD " + std::to_string(bd) + ",not fired " + std::to_string(nf) + ",Rly up " + std::to_string(ru) + ",Rly down " + std::to_string(rd) + ",Pb after BO " + std::to_string(pu) + ",Pb after BD " + std::to_string(pd) + "\n";
+    s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",Pb " + std::to_string(E.pb.size()) + ",pivots " + std::to_string(E.piv.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
+    s += "DRAWN,BO/BD " + std::to_string(last.boShown) + ",Rly " + std::to_string(last.rlyShown) + ",Pb " + std::to_string(last.pbShown) + ",no room " + std::to_string(last.noRoom) + "\n";
     return s;
 }
 

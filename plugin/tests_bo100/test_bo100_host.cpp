@@ -1,4 +1,4 @@
-// test_bo100_host.cpp -- lsBreakout 1.0.0 (2026-11-03) host suite: Breakout.cpp on the mock SDK (Breakout_test_support/irtsdk.h).
+// test_bo100_host.cpp -- lsBreakout 1.1.0 (2026-11-03; 1.0.0 + Pb) host suite: Breakout.cpp on the mock SDK (Breakout_test_support/irtsdk.h).
 //   (in plugin\tests_bo100) g++ -std=c++17 -fsanitize=address,undefined -Werror -Wall -Wextra -IBreakout_test_support -I.. test_bo100_host.cpp -o th && ./th
 // Covers, on the real ES Oct 28 - 30 3-min candles (es_2026-10-28_30_3m.txt, from fp_bars):
 //   the ONLY drawn things are the texts "BO" / "BD" / "Rly" (no fills, boxes, lines, ovals, numbers); BO green just above the candle's
@@ -7,6 +7,8 @@
 //   decision in view is drawn; bar-by-bar feeding then a restart draws the same letters (no repaint); two charts on one DLL keep their
 //   own state; a 1-min chart gets BO / BD but no Rly; the settings-window copy with no chart is safe (SS_SAFE_DIALOG); the status file;
 //   SignalBoard 'L' posted for the BO letters; the version literals agree (BKO_VERSION = bko::VERSION = setVersion).
+//   (1.1.0) + "Pb": green just below a pivot LOW / red just above a pivot HIGH (3 px, font 7, one row out when another letter is there),
+//   only on bars with a kept Pb decision, every Pb in view drawn, no overlaps, carried in SignalBoard 'L'.
 #include "irtsdk.h"
 #include <fstream>
 #include <iostream>
@@ -56,15 +58,18 @@ int main() {
     // only texts, only the three words
     int other = 0; std::set<std::string> words; for (const auto& p : H.drawn) { if (p.k != 'T') ++other; else words.insert(p.text); }
     CHECK(other == 0, "nothing but text is drawn (no boxes / fills / lines / ovals)");
-    bool onlyW = true; for (const auto& w : words) if (w != "BO" && w != "BD" && w != "Rly") onlyW = false;
-    CHECK(onlyW && words.count("BD") && words.count("Rly"), "the only texts are BO / BD / Rly (no numbers, prints or lots)");
+    bool onlyW = true; for (const auto& w : words) if (w != "BO" && w != "BD" && w != "Rly" && w != "Pb") onlyW = false;
+    CHECK(onlyW && words.count("BD") && words.count("Rly") && words.count("Pb"), "the only texts are BO / BD / Rly / Pb (no numbers, prints or lots)");
     const std::vector<mock::Prim> C = coloured(H);
-    int bad = 0, nBo = 0, nBd = 0, nR = 0; std::set<int> boBars;
+    int bad = 0, nBo = 0, nBd = 0, nR = 0, nPb = 0, pbExact = 0; std::set<int> boBars, pbBars; std::set<std::pair<int, int>> sides;
     const int lift7 = std::max(1, (1 + (7 / 4 + 1) + 1) / 2), lift9 = std::max(1, (1 + (9 / 4 + 1) + 1) / 2);
     for (const auto& p : C) {
         const int bar = barAt(H, (p.x0 + p.x1) / 2);
         if (bar < 0 || bar >= N) { ++bad; continue; }                                   // never on the forming candle
         const int yh = mockY(H.f[barHigh][(size_t)bar]), yl = mockY(H.f[barLow][(size_t)bar]);
+        if (p.text == "Pb") { ++nPb; pbBars.insert(bar); const bool up = p.col == 0x0022C55E; if (p.font != 7 || (p.col != 0x0022C55E && p.col != 0x00EF4444)) ++bad;   // (1.1.0)
+            const int ye = up ? p.y0 + lift7 : p.y1 + lift7; if (up ? ye < yl + 3 : ye > yh - 3) ++bad; if (up ? ye == yl + 3 : ye == yh - 3) ++pbExact; sides.insert({ bar, up ? -1 : 1 }); }
+        if (p.text == "BO") { sides.insert({ bar, 1 }); } if (p.text == "BD") { sides.insert({ bar, -1 }); }
         if (p.text == "BO") { ++nBo; boBars.insert(bar); if (p.col != 0x0022C55E || p.font != 7 || p.y1 + lift7 != yh - 3) ++bad; }
         else if (p.text == "BD") { ++nBd; boBars.insert(bar); if (p.col != 0x00EF4444 || p.font != 7 || p.y0 + lift7 != yl + 3) ++bad; }
         else if (p.text == "Rly") { ++nR; const bool up = p.col == 0x0022C55E; if (p.font != 9) ++bad;
@@ -77,16 +82,18 @@ int main() {
     CHECK(fired > 0 && drawnOk == fired && boBars == decBars, "every fired BO / BD in view is drawn on its breakout candle and no other candle has one (" + std::to_string(drawnOk) + " / " + std::to_string(fired) + ")");
     int rf = 0; for (const auto& kv : S->E.rly) if (kv.second.fired) for (int i = H.first; i < N; ++i) if ((long long)H.t[(size_t)i] == kv.second.te) ++rf;
     CHECK(rf == nR && nR > 0, "every fired Rly in view drawn once (" + std::to_string(nR) + " / " + std::to_string(rf) + ")");
+    {   int pf = 0; std::set<int> pdec; for (const auto& kv : S->E.pb) for (int i = H.first; i < N; ++i) if ((long long)H.t[(size_t)i] == kv.first) pdec.insert(i);
+        pf = (int)pdec.size(); CHECK(pf > 0 && pdec == pbBars && nPb == pf && pbExact >= nPb - 2, "(1.1.0) every kept Pb in view drawn once on its pivot bar, no other bar has one, 3 px from the wick unless a letter is there (" + std::to_string(nPb) + " / " + std::to_string(pf) + ", exact " + std::to_string(pbExact) + ")"); }
     int ov = 0; for (size_t a = 0; a < C.size(); ++a) for (size_t b = a + 1; b < C.size(); ++b) { const auto& p = C[a]; const auto& q = C[b]; if (p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1) ++ov; }
     CHECK(ov == 0, "no two letters overlap (" + std::to_string(ov) + ")");
     { int halo = 0; for (const auto& p : H.drawn) if (p.k == 'T' && p.col == 0) ++halo; CHECK(halo == 4 * (int)C.size(), "each letter has its 1 px black edge (4 offsets), as lsBigBidAsk drew them"); }
-    std::printf("drawn in view: BO %d, BD %d, Rly %d\n", nBo, nBd, nR);
+    std::printf("drawn in view: BO %d, BD %d, Rly %d, Pb %d\n", nBo, nBd, nR, nPb);
     // SignalBoard 'L'
     { std::vector<sb::Ev> ev; const bool ok = sb::readAll('L', "ESZ26", 180, "", bkoMs(), ev); int good = 0; for (const auto& e : ev) if (e.val > 3 && e.val < 400) ++good;
-      CHECK(ok && (int)ev.size() == std::min<int>((int)sb::CAP, nBo + nBd) && good == (int)ev.size(), "SignalBoard 'L' posted for the BO / BD letters (px from the extreme to the outer edge)"); }
+      CHECK(ok && (int)ev.size() == std::min<int>((int)sb::CAP, (int)sides.size()) && good == (int)ev.size(), "SignalBoard 'L' posted for the BO / BD and Pb letters, one per bar and side (px from the extreme to the outer edge) (" + std::to_string(ev.size()) + " / " + std::to_string(sides.size()) + ")"); }
     // status file + versions
     const std::string st = slurp(home + "/InvestorRT/rtx/lsFlexLevels/Breakout.status-ES-180.txt");
-    CHECK(st.rfind("VERSION,1.0.0\n", 0) == 0 && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
+    CHECK(st.rfind("VERSION,1.1.0\n", 0) == 0 && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
     { const std::string src = slurp("../Breakout.cpp"); const size_t a = src.find("p->setVersion(\""); const std::string lit = a == std::string::npos ? "" : src.substr(a + 15, src.find('"', a + 15) - a - 15);
       CHECK(lit == BKO_VERSION && lit == bko::VERSION, "setVersion literal = BKO_VERSION = bko::VERSION (" + lit + ")"); }
     const std::string full = sig(H);
@@ -123,7 +130,7 @@ int main() {
     {   mock::Host E2; mock::current = &E2; chart(E2, R, 1); Breakout* w = static_cast<Breakout*>(CreateExtension()); w->setup(); pass(*w);
         CHECK(E2.drawn.empty(), "2 bars: nothing drawn");
         chart(E2, R, 300); E2.f[barHigh][250] = NAN; E2.f[barLow][251] = INFINITY; pass(*w);
-        bool okW = true; for (const auto& p : E2.drawn) if (p.text != "BO" && p.text != "BD" && p.text != "Rly") okW = false;
+        bool okW = true; for (const auto& p : E2.drawn) if (p.text != "BO" && p.text != "BD" && p.text != "Rly" && p.text != "Pb") okW = false;
         CHECK(okW, "NaN / Inf bars: still only letters, no fault");
         w->destroy(); delete w; }
     std::printf("RESULT %d passed, %d failed\n", passed, failed);
