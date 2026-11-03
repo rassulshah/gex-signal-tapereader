@@ -1,9 +1,11 @@
 /********************************************************************************
- *  ZzoDelta.cpp  --  Investor/RT RTX extension  lsZzoDelta  "ZZO Delta"  1.3.1  (2026-11-02)  -  also built as lsZzoVolume "ZZO Volume" 1.2.1 (ZzoVolume.cpp = ZZO_VOLUME_VIEW + this file)
+ *  ZzoDelta.cpp  --  Investor/RT RTX extension  lsZzoDelta  "ZZO Delta"  1.3.2  (2026-11-03)  -  also built as lsZzoVolume "ZZO Volume" 1.2.2 (ZzoVolume.cpp = ZZO_VOLUME_VIEW + this file)
  *
  *  1.2.0 / ZZO Volume 1.0.0 (Rassul 22:40 CT "lets build, use delta as default and keep the Ab tag and add the cmx and cob tags for volume"):
  *    ZZO Delta unchanged (Ab?); ZZO Volume = each wave's volume vs the median of the last 5 same-way waves (Weis Wave), green up /
  *    red down waves, tags Ab? / Cmx / CoB (ZzoDeltaLogic.h).
+ *  1.3.2 / ZZO Volume 1.2.2 (2026-11-03): rebuilt on the shared engine of ZZO Combo 2.0.0 (adds the count and pivot extreme share used
+ *    only by ZZO Combo); nothing drawn here changes.
  *  1.3.1 / ZZO Volume 1.2.1 (23:40 CT, self-improvement): the thresholds come per market from ZzoParams.h (nightly lra.zzo_score
  *    promotions; ships with the 1.3.0 numbers) - status file PARAMS line shows the numbers in use.
  *  1.3.0 / ZZO Volume 1.2.0 (Rassul 23:03 CT "build out indicator ... ready for tomorrow"): CoB / weak on the reversal wave after the
@@ -277,11 +279,11 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #if ZZO_VOLUME_VIEW
-    p->setDescription("LRA ZZO Volume v1.2.1 - 1-bar High/Low ZigZag waves: wave volume / the median of the last 5 same-way waves (Weis Wave); Ab? absorption, Cmx / AR / ST Wyckoff, CoB / weak after a key-level sweep.");
+    p->setDescription("LRA ZZO Volume v1.2.2 - 1-bar High/Low ZigZag waves: wave volume / the median of the last 5 same-way waves (Weis Wave); Ab? absorption, Cmx / AR / ST Wyckoff, CoB / weak after a key-level sweep.");
     p->setVersion(ZZO_VOLUME_VERSION_LITERAL);
 #else
-    p->setDescription("LRA ZZO Delta v1.3.1 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? absorption, CoB / weak after a key-level sweep.");
-    p->setVersion("1.3.1");   // = zzd::VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Delta v1.3.2 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? absorption, CoB / weak after a key-level sweep.");
+    p->setVersion("1.3.2");   // = zzd::VERSION (gex-build reads this literal)
 #endif
     return p;
 }

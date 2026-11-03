@@ -1,4 +1,8 @@
-// ZzoDeltaLogic.h - lsZzoDelta 1.3.1 / lsZzoVolume 1.2.1 (2026-11-02 23:40 CT, Rassul "make sure everything is added to the self improvmeent
+// ZzoDeltaLogic.h - lsZzoDelta 1.3.2 / lsZzoVolume 1.2.2 / lsZzoCombo 2.0.0 (2026-11-03 09:00 CT, Rassul "build" - ZZO Combo): every wave
+//   also carries cnt (the biggest wave of its colour in the last cnt waves of its colour, overnight included, capped at CNT_CAP) and xsh
+//   (the share of its pivot bar's volume in the bar's extreme 2 ticks, from VAP); Ab heavy = Ab rule + xsh >= AB_HEAVY (ES 49% vs 33%
+//   reached 2R, both halves); showAb per market from ZzoParams.h (ES on; the nightly turns other markets on). Delta / Volume unchanged.
+// was 1.3.1 / 1.2.1 (2026-11-02 23:40 CT, Rassul "make sure everything is added to the self improvmeent
 //   process"): the Ab? / Cmx / CoB-after-sweep thresholds are per market from ZzoParams.h (written by the nightly lra.zzo_score when its
 //   judge promotes a challenger: 20+ new-day cases, Wilson lower bound above the champion; compiled in, nothing read at run time). The
 //   header ships with the 1.3.0 numbers for every market, so the chart is unchanged until a promotion. No header = the 1.3.0 numbers.
@@ -65,8 +69,12 @@
 #endif
 
 namespace zzd {
-static const char* const VERSION = "1.3.1";
-static const char* const VOL_VERSION = "1.2.1";   // lsZzoVolume
+static const char* const VERSION = "1.3.2";
+static const char* const VOL_VERSION = "1.2.2";   // lsZzoVolume
+static const char* const COMBO_VERSION = "2.0.0";   // lsZzoCombo
+static const int CNT_CAP = 50;          // (Combo) count cap ("cap it at 50")
+static const double AB_HEAVY = 0.04;    // (Combo) Ab drawn only with >= 4% of the pivot bar's volume in its extreme 2 ticks
+static const double CNT_MIN_VOL = 2.0;  // (Combo) volume ratio, count and ratio label only on waves of 2.0x+ ("only on volume that is at least 2x")   // lsZzoVolume
 static const int HIST = 5, MIN_HIST = 3, MAX_BARS = 6000, TRIM = 1000;
 static const double AB_EFFORT = 1.9, AB_BACK = 0.75;   // (1.1.0) Ab? rule thresholds
 static const double CMX_VOL = 2.5, COB_VOL = 1.5, ST_VOL = 0.7, ST_BACK = 0.75;
@@ -82,11 +90,12 @@ inline bool toTicks(double px, double tick, long long& out) {
 }
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
 
-struct Bar { long long t = 0, h = 0, l = 0, dlt = 0; bool vap = false; long long seg = 0; long long vol = 0; };   // (1.2.0) vol = the bar's volume   // t = bar END (local secs), prices in ticks
+struct Bar { long long t = 0, h = 0, l = 0, dlt = 0; bool vap = false; long long seg = 0; long long vol = 0; long long xh = 0, xl = 0; bool xok = false; };   // (Combo) xh / xl = VAP volume at the bar's top / bottom 2 ticks   // (1.2.0) vol = the bar's volume   // t = bar END (local secs), prices in ticks
 struct Wave { int s = 0, e = 0, dir = 0; long long dlt = 0, seg = 0; bool hasR = false; double med = 0; bool live = false;
               long long ext = 0, size = 0; int ab = 0;
               long long vol = 0; bool hasV = false; double medV = 0; bool cmx = false, cob = false, st = false;
-              bool hasS = false; double medS = 0; int sw = 0, swLv = 0, cobTag = 0; };   // (1.3.0) size normal; sw = levels this wave swept; swLv = the sweep it answers; cobTag 1 CoB, 2 weak   // (1.1.0) cob = the AR tag; st = secondary test   // (1.2.0) wave volume / its normal, Cmx / CoB tags   // (1.1.0) pivot price / pivot-to-pivot size (ticks); ab 0 none, 1 rule A, 2 rule B
+              bool hasS = false; double medS = 0; int sw = 0, swLv = 0, cobTag = 0;
+              int cnt = 0; bool cntCap = false; double xsh = -1; };   // (Combo) count (0 = a bigger same-colour wave came right before; cntCap = >= CNT_CAP); xsh -1 = no footprint   // (1.3.0) size normal; sw = levels this wave swept; swLv = the sweep it answers; cobTag 1 CoB, 2 weak   // (1.1.0) cob = the AR tag; st = secondary test   // (1.2.0) wave volume / its normal, Cmx / CoB tags   // (1.1.0) pivot price / pivot-to-pivot size (ticks); ab 0 none, 1 rule A, 2 rule B
 struct Walk { int dirn = 0, ext = 0, start = 0; bool any = false; };   // any = a wave completed already
 
 inline bool medianOf(std::vector<long long> v, double& m) {
@@ -107,6 +116,7 @@ struct Engine {
     int openMin = 510, closeMin = 900, per = 180;
     // (1.3.1) this market's thresholds (setMarket: ZzoParams.h row, else the 1.3.0 numbers)
     double abEffort = AB_EFFORT, abBack = AB_BACK, cmxVol = CMX_VOL, swDelta = SW_DELTA, swVol = SW_VOL, swSize = SW_SIZE;
+    bool showAb = false;   // (Combo) draw Ab on this market (ZzoParams.h; built-in: ES only)
     std::vector<Bar> B; Walk Z; std::vector<Wave> W; long long trimmed = 0; long long noVap = 0;
     // (1.3.0) per session (keyed by its day): high / low of all bars, RTH, overnight, London; levels already swept in RTH
     struct HL { bool any = false; long long h = 0, l = 0; void add(long long hi, long long lo) { if (!any || hi > h) h = hi; if (!any || lo < l) l = lo; any = true; } };
@@ -165,13 +175,13 @@ struct Engine {
     }
     bool setMarket(const std::string& root, int spb) {
         per = spb > 0 ? spb : 180; const std::string m = root == "6E" ? std::string("EU") : root;
-        abEffort = AB_EFFORT; abBack = AB_BACK; cmxVol = CMX_VOL; swDelta = SW_DELTA; swVol = SW_VOL; swSize = SW_SIZE;
+        abEffort = AB_EFFORT; abBack = AB_BACK; cmxVol = CMX_VOL; swDelta = SW_DELTA; swVol = SW_VOL; swSize = SW_SIZE; showAb = m == "ES";
 #ifdef ZZO_HAVE_PARAMS
         for (int i = 0; i < ZZO_PARAMS_N; ++i) if (m == ZZO_PARAMS[i].m) {
             const ZzoParamRow& r = ZZO_PARAMS[i];
             auto ok = [](double v) { return std::isfinite(v) && v > 0 && v < 100; };   // a garbled row keeps the 1.3.0 numbers
             if (ok(r.abEffort) && ok(r.abBack) && ok(r.cmxVol) && ok(r.swDelta) && ok(r.swVol) && ok(r.swSize)) {
-                abEffort = r.abEffort; abBack = r.abBack; cmxVol = r.cmxVol; swDelta = r.swDelta; swVol = r.swVol; swSize = r.swSize; }
+                abEffort = r.abEffort; abBack = r.abBack; cmxVol = r.cmxVol; swDelta = r.swDelta; swVol = r.swVol; swSize = r.swSize; showAb = r.showAb != 0; }
             break; }
 #endif
         return svl::rthOf(m.c_str(), openMin, closeMin);
@@ -203,6 +213,9 @@ struct Engine {
         w.ext = dir > 0 ? bars[(size_t)e].h : bars[(size_t)e].l;
         w.size = dir > 0 ? bars[(size_t)e].h - bars[(size_t)p0].l : bars[(size_t)p0].h - bars[(size_t)e].l;
         w.hasS = baseSize(dir, w.seg, nW, w.medS);
+        // (Combo) count back over the earlier waves of this colour (all session parts) until a bigger one; capped
+        for (size_t k = nW; k-- > 0;) { const Wave& x = W[k]; if (x.dir != dir) continue; if (x.vol >= w.vol) break; if (++w.cnt >= CNT_CAP) { w.cntCap = true; break; } }
+        { const Bar& pb = bars[(size_t)e]; if (pb.xok && pb.vol > 0) w.xsh = (double)(dir > 0 ? pb.xh : pb.xl) / (double)pb.vol; }
         return w;
     }
     // the 1-bar walk with bar j (CobSignalLogic.h): true = a wave completed (s .. e, dir)
@@ -296,6 +309,13 @@ struct Engine {
     }
 };
 
+// (Combo) effort / result: the wave's delta its own way vs normal over its size vs normal (result floored at 0.1); false = no effort
+inline bool effortResult(const Wave& w, double& er) {
+    if (!w.hasR || !w.hasS) return false;
+    const double E = (double)w.dir * (double)w.dlt / w.med; if (!(E > 0)) return false;
+    er = E / std::max((double)w.size / w.medS, 0.1); return std::isfinite(er);
+}
+inline bool abHeavy(const Wave& w) { return w.ab != 0 && w.xsh >= AB_HEAVY; }
 // (1.1.0) the standard sign: + = net buying, - = net selling; size vs the median of the last 5 waves the same way
 inline std::string ratioText(const Wave& w) {
     if (!w.hasR) return "-";
