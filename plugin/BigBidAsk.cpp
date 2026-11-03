@@ -1,4 +1,9 @@
 /********************************************************************************
+ *  1.32.0 (2026-11-03, Rassul approved the "BO" indicator mockup and said "build"): the BO / BD and Rly LETTERS are no longer drawn
+ *         here - the new letters-only lsBreakout indicator (Breakout.cpp) draws them small, right at the candle. The decision is the
+ *         SAME code: boPass now calls bba::boFromCandles / boWindow / boDuplicate (BigBidAskLogic.h 1.32.0), which lsBreakout calls too.
+ *         Unchanged: every BO / BD and Rly decision and record (lsFlexLevels\BigBidAsk breakouts, lsFlexLevels\Rly), the prints and
+ *         boxes (incl. the BO print box in the BO colour), settings (parameter version 14). SignalBoard 'L' is now posted by lsBreakout.
  *  1.30.0 (2026-10-27, Rassul 13:00 CT "there are still errors. the breakout requires a followthrough bar (green bar that makes a
  *         higher high and a higher close)"): BO rule 4 = the rule-3 BO bar (through an intact swing, 10-candle extreme, range / volume,
  *         green, one per wave, counter-trend 20-bar extreme, no close beyond the pivot) + the VERY NEXT candle green with a higher high
@@ -186,7 +191,8 @@
 #include <unistd.h>
 #endif
 
-#define BBA_VERSION "1.31.3"          // 1.31.3 (2026-10-28 12:16 CT) nothing drawn under lsDealerProfile 2.33.0's Key Levels column at the pane's LEFT edge (ColumnBoard 1.9.0 leftKeep)
+#define BBA_VERSION "1.32.0"          // 1.32.0 (2026-11-03) the BO / BD and Rly letters are no longer drawn here (lsBreakout 1.0.0 draws them, the same decision via bba::boFromCandles); decisions, records and prints unchanged
+#define BBA_VERSION_1313 "1.31.3"          // 1.31.3 (2026-10-28 12:16 CT) nothing drawn under lsDealerProfile 2.33.0's Key Levels column at the pane's LEFT edge (ColumnBoard 1.9.0 leftKeep)
 #define BBA_VERSION_1312 "1.31.2"          // 1.31.2 (2026-10-28 overnight, live 22:06) nothing drawn under the LEFT Liquidity column (ColumnBoard Levels box)
 // was 1.31.1:          // 1.31.1 (2026-10-27 19:00 CT) the BO letters as drawn are posted on the SignalBoard (kind L) so the Ex letter of lsLiquidityProfile stacks straight against BO on the same candle; nothing drawn changes;          // 1.31.0 (2026-10-27 17:29 CT Rassul) BO follow-through = any later candle of the same up-wave, green, higher high + higher close than the BO bar (BD mirror); older BO records decided again;          // 1.30.2 (2026-10-27 17:23 CT) FIX: old BO records (1.28 / 1.29, no follow-through) were still drawn - the record version was read from the wrong field; they are now decided again under rule 4 (follow-through bar);          // 1.30.1 (2026-10-27 14:00 CT) nothing drawn under the left Delta column (ColumnBoard 1.5.0);          // 1.30.0 (2026-10-27, Rassul 13:00 CT) BO rule 4: the next candle must follow through (green, higher high + higher close; BD mirror); 1.29.0 records decided again;          // 1.29.0 (2026-10-26, Rassul 17:55 CT) the OB print + OB letter are not drawn, OB settings rows removed (decision + record kept)
 // prev:          // 1.28.0 (2026-10-24, Rassul 21:38 CT) BO wave confirmation (higher high + higher close in the same wave, closes beyond the pivot), counter-trend needs a 30-bar high / low, letter on the BO bar, BO / OB boxes show biggest-in-N
@@ -194,6 +200,11 @@
 // prev:          // 1.27.0 (2026-10-22 evening fix build) the BL5 / BL10 / BL20 box next to the HOD/LOD table is no longer drawn (tiers only in the LMT / LMT F footers; numbers kept in BL_BOX status);          // keep equal to bba::VERSION and the setVersion literal below
 // (1.17.1, Rassul 23:37 CT 2026-10-18 "get rid of the hover over on the gex levels and other places") the print-number and Big Lot box hovers are OFF (BBA_HOVERS; the code is kept), no TRACK_MOUSE
 static const bool BBA_HOVERS = false;
+// (1.32.0, 2026-11-03, Rassul approved the "BO" indicator mockup: "build") the BO / BD and Rly LETTERS moved to the new lsBreakout
+// indicator (Breakout.cpp, letters only, small, right at the candle); this plugin still DECIDES and RECORDS both (lsFlexLevels\BigBidAsk
+// breakouts / lsFlexLevels\Rly, the nightly and lsLiquidityProfile read them) and keeps every print / box. false = the letters are not
+// drawn here and the SignalBoard 'L' (BO letters as drawn) is posted by lsBreakout instead.
+static const bool BBA_LETTERS = false;
 // (1.15.0, 2026-10-18 audit B finding 2) NO SIZE REPAINT: the Big Lot tiers of a candle are those of ITS session, decided once from the
 // complete sessions before it (bba::tiersFor) and only after the chart history before that session is fully read; the facts come from the
 // last 8 sessions of the chart whatever is in view (and are recorded for 8 sessions); SignalBoard B events from the record for the last
@@ -1343,49 +1354,32 @@ void BigBidAsk::boPass(BBState& S, long long now) {
     const long long lastT = (long long)times[(int)count - 1];
     if (!(lastT == S.boLast && S.boMs >= 0 && now >= S.boMs && now - S.boMs < 1000)) {   // once a second or on a new bar
         S.boLast = lastT; S.boMs = now;
-        std::vector<signed char> up, dn, zd; std::vector<double> upPx, dnPx;
-        std::vector<char> rthAll((size_t)count, 0); std::vector<long long> dayAll((size_t)count, 0);   // (1.26.0) the RTH session of every candle
-        {   for (int k = 0; k < (int)count; ++k) { long dd = 0; int es = 0; if (!parts((long long)times[k], dd, es)) continue;
-                rthAll[(size_t)k] = 1; dayAll[(size_t)k] = (long long)dd + (es > 17 * 3600 ? 1 : 0); }   // (1.29.0, Rassul 18:10 "remove rule 1") every session: the full Globex session (17:00 CT open) - BO path only
-            bba::swingBreaksPx(op, hi, lo, cl, rthAll, dayAll, (int)count, S.tick, up, dn, upPx, dnPx);   // (1.26.0) SwingRef.h: an intact swing of the last 3 (was the higher of the last 2 pivots)
-        }
-        bba::zigDir(hi, lo, (int)count, zd);                                  // (1.23.0) the wave of every candle (same walk)
-        const int emitFrom = std::max(1, (int)count - 1 - 300), from = std::max(1, emitFrom - 60), fill0 = std::max(0, from - (bba::BO_CAP + 12));
-        std::vector<bba::BoIn> in((size_t)count); std::vector<bba::BoBar> bars((size_t)count); std::vector<char> skip((size_t)count, 0);
+        // (1.32.0) the inputs and the decision come from bba::boFromCandles (BigBidAskLogic.h) - the SAME function lsBreakout (the
+        // letters-only "BO" indicator) calls, so both decide identical breakouts. Unchanged rules and windows (1.26.0 - 1.31.3): the
+        // full-session swings / wave over every candle, the last 300 closed candles decided from a state built 60 before them, a candle
+        // held back until its volume-at-price facts are read (S.fin), the trend at candidate candles (trendAt), the prints from S.fin.
+        std::vector<bba::BoCandle> cand((size_t)count);
+        for (int k = 0; k < (int)count; ++k) { bba::BoCandle& c = cand[(size_t)k]; long dd = 0; int es = 0;
+            c.o = op[k]; c.h = hi[k]; c.l = lo[k]; c.c = cl[k]; c.vol = (long long)vo[k];
+            if (parts((long long)times[k], dd, es)) { c.ok = true; c.days = dd; c.endSec = es; } }
+        int emitFrom = 1, from = 1, fill0 = 0; bba::boWindow((int)count, from, emitFrom, fill0);
         std::vector<int> rthOf((size_t)count, 0);
-        // (1.28.0) his vwapTrend at the candidate candles only (the BO bar's trend decides with / counter-trend; trendAt = the host's
-        // vwapTrend, cached for closed candles) and the RTH session of every candle (the 30-bar window is clipped at the session start)
-        std::vector<signed char> trendV((size_t)count, 0); std::vector<long long> sessV((size_t)count, 0);
         for (int k = fill0; k < (int)count - 1; ++k) {
-            sessV[(size_t)k] = dayAll[(size_t)k];                            // (1.29.0) the 20-bar window is clipped at the full session's start
-            if (k >= from && (up[(size_t)k] || dn[(size_t)k])) trendV[(size_t)k] = (signed char)std::max(-2, std::min(2, trendAt(S, k)));
-        }
-        for (int k = fill0; k < (int)count - 1; ++k) {
-            const long long t = (long long)times[k];
-            bba::BoBar& bb = bars[(size_t)k]; bb.ok = keyOf(op[k], S.tick, bb.o) && keyOf(cl[k], S.tick, bb.c) && keyOf(hi[k], S.tick, bb.h) && keyOf(lo[k], S.tick, bb.l);
             long days = 0; int endSec = 0; svl::Cls cls; cls.kind = svl::NONE;
-            if (parts(t, days, endSec)) cls = svl::classify(days, endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin);
-            rthOf[(size_t)k] = cls.kind == svl::RTH ? 1 : 0; skip[(size_t)k] = (cls.kind == svl::NONE || timeSkipped(S.set, cls, endSec, S.openMin, S.closeMin)) ? 1 : 0;
-            const auto it = S.fin.find(t); if (it == S.fin.end()) continue;
-            bba::BoIn& b = in[(size_t)k];
-            if (!keyOf(hi[k], S.tick, b.hk) || !keyOf(lo[k], S.tick, b.lk)) continue;
-            b.vol = (long long)vo[k]; b.known = true;
-            const bba::Facts& F = it->second;
-            if (F.valid && F.bid.ok) { b.big[0] = F.bid.vol; b.bigKey[0] = F.bid.key; }
-            if (F.valid && F.ask.ok) { b.big[1] = F.ask.vol; b.bigKey[1] = F.ask.key; }
+            if (parts((long long)times[k], days, endSec)) cls = svl::classify(days, endSec, S.spb > 0 ? S.spb : 180, S.openMin, S.closeMin);
+            rthOf[(size_t)k] = cls.kind == svl::RTH ? 1 : 0;
         }
-        // (1.28.0) the wave confirmation (green / red BO bar, same-wave higher high + higher close beyond the pivot, counter-trend 30-bar
-        // extreme) over the closed candles (a pure function of them); only decisions not yet recorded
-        // are added - a breakout candle already decided (t0 in the record) is never decided again, and a fired break whose recorded mark
-        // already covers this break (same side and pivot, marked at or after its breakout candle) is not drawn twice (no repaint)
-        const bba::BoRun R = bba::boWaves(in, bars, zd, up, dn, upPx, dnPx, skip, trendV, sessV, S.tick, from, (int)count - 1, emitFrom);
+        const bba::BoRun R = bba::boFromCandles(cand, S.tick, from, (int)count - 1, emitFrom, fill0,
+            [&](int k) { return trendAt(S, k); },
+            [&](int k) { return S.fin.find((long long)times[k]) != S.fin.end(); },
+            [&](int k, bba::BoIn& b) { const bba::Facts& F = S.fin.find((long long)times[k])->second;
+                if (F.valid && F.bid.ok) { b.big[0] = F.bid.vol; b.bigKey[0] = F.bid.key; }
+                if (F.valid && F.ask.ok) { b.big[1] = F.ask.vol; b.bigKey[1] = F.ask.key; } });
         for (bba::BoDec D : R.ev) {
             if (D.i0 < 0 || D.im < 0 || D.im >= (int)count - 1) continue;
             D.t0 = (long long)times[D.i0]; D.t = (long long)times[D.im];
             if (S.boDec.count(D.t0)) continue;
-            if (D.fired) { bool dup = false;
-                for (const auto& kv : S.boDec) { const bba::BoDec& O = kv.second; if (O.fired && O.dir == D.dir && O.piv == D.piv && O.t >= D.t0) { dup = true; break; } }
-                if (dup) { ++S.boDup; continue; } }
+            if (bba::boDuplicate(S.boDec, D)) { ++S.boDup; continue; }   // (1.32.0) the same rule, shared with lsBreakout
             S.boDec[D.t0] = D;
             const long long sess = sessionOf(D.t); if (sess > 0) S.boPending.push_back({ sess, bba::boLine(D, rthOf[(size_t)D.im], BBA_VERSION) });
         }
@@ -1902,6 +1896,7 @@ void BigBidAsk::render(BBState& S) {
         std::vector<bba::Box> placedL;
         std::vector<sb::Ev> boBoard;                                           // (1.31.1) the BO letters as drawn, for lsLiquidityProfile's Ex
         for (const BoLetter& L : letters) {
+            if (L.kind == 0 && !BBA_LETTERS) continue;                         // (1.32.0) the BO / BD letters are drawn by lsBreakout now
             // (1.26.0) "BO" for both sides: green ABOVE a breakout / red BELOW a breakdown; "OB" BELOW an up-wave's candle / ABOVE a down-wave's
             const char* tx = L.kind == 1 ? "OB" : "BO";
             const bool above = L.kind == 1 ? L.dir < 0 : L.dir > 0;
@@ -1933,11 +1928,11 @@ void BigBidAsk::render(BBState& S) {
             setTextColor(col);
             { RCT r; r.set(coord(f.l), coord(f.t - lift), coord(f.r), coord(f.b - lift)); r.drawText(tx, true, false); }
         }
-        {   const char* sy = getSymbol(); const char* chl = getChartLabel();   // (1.31.1) posted every draw (an empty list clears it)
+        if (BBA_LETTERS) {   const char* sy = getSymbol(); const char* chl = getChartLabel();   // (1.31.1) posted every draw (an empty list clears it); (1.32.0) lsBreakout posts kind 'L' now
             sb::publish('L', sy ? sy : "", getSecondsPerBar(), chl ? chl : "", steadyMs(), boBoard); }
         // (1.24.0) RLY on the wave's end bar: green ABOVE the high (up) / red BELOW the low (down), outside the prints and the BO / BD
         // letters of that bar (moved further out), never over the banner, the HOD/LOD table / Big Lot box, or outside the price area
-        if (S.rlyOn && S.spb == 180 && !S.rlyRec.empty()) {
+        if (BBA_LETTERS && S.rlyOn && S.spb == 180 && !S.rlyRec.empty()) {   // (1.32.0) Rly is drawn by lsBreakout now (still decided + recorded here)
             std::map<long long, int> idx; for (int i = vs; i <= ve && i < (int)count - 1; ++i) idx[(long long)times[i]] = i;
             for (const auto& kv : S.rlyRec) {
                 const rly::Rec& R = kv.second; if (!R.fired) continue;
@@ -2165,7 +2160,7 @@ extern "C" cppExtension* CreateExtension(void) {
     BigBidAsk* p = new BigBidAsk();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | TRACK_MOUSE | VAP_REQUIRED);   // (1.24.0) TRACK_MOUSE for the Rly hover only (print hovers stay off: BBA_HOVERS)
-    p->setDescription("LRA Big Bid / Ask 1.30.0: Rly (3-min) = the end of a confirmed trend wave (3+ bars, 2.5+ ATR, tagged VWAP +/-1 SD, a 20-bar high / low, vwapTrend Uptrend / Dntrend): green above / red below the bar - don't chase it, wait for the pullback to VWAP / 1 SD and a trigger, trend only. BO = context, not an entry: a confirmed break - don't fade against it. A green breakout (red breakdown) candle that trades through one of the last 3 intact swing highs (lows) of the full-session 1-bar ZigZag (a swing stays intact until a candle closes beyond it), with a 10-candle high (low), range >= the prior candle's and volume or range up; no close beyond the swing needed, but the NEXT candle must follow through (green with a higher high and a higher close; breakdown: red, lower low, lower close) - decided at that candle's close, in every session; against the vwapTrend the wave must also make a 20-bar high (low); one per wave. BO green above / red below the breakout candle; failures are logged only. Its biggest buy (sell) print on the candle, the box = biggest in N candles. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
-    p->setVersion("1.31.3");   // BBA_VERSION
+    p->setDescription("LRA Big Bid / Ask 1.32.0 (the BO / BD and Rly LETTERS are drawn by the separate lsBreakout indicator; decided and recorded here as before): Rly (3-min) = the end of a confirmed trend wave (3+ bars, 2.5+ ATR, tagged VWAP +/-1 SD, a 20-bar high / low, vwapTrend Uptrend / Dntrend): green above / red below the bar - don't chase it, wait for the pullback to VWAP / 1 SD and a trigger, trend only. BO = context, not an entry: a confirmed break - don't fade against it. A green breakout (red breakdown) candle that trades through one of the last 3 intact swing highs (lows) of the full-session 1-bar ZigZag (a swing stays intact until a candle closes beyond it), with a 10-candle high (low), range >= the prior candle's and volume or range up; no close beyond the swing needed, but the NEXT candle must follow through (green with a higher high and a higher close; breakdown: red, lower low, lower close) - decided at that candle's close, in every session; against the vwapTrend the wave must also make a 20-bar high (low); one per wave. BO green above / red below the breakout candle; failures are logged only. Its biggest buy (sell) print on the candle, the box = biggest in N candles. on each candle, the biggest print AT THE BID (left box) and AT THE ASK (right box); the number = how many candles back it is the biggest of its side (capped at 50), shown from the Biggest in setting (default 10). Settings: Biggest in, Skip first / last minutes of each session (default 15 / 15), font size, number colour, bid / ask box colours. The Big Lot box (BL5 / BL10 / BL20) sits beside the HOD/LOD table.");
+    p->setVersion("1.32.0");   // BBA_VERSION
     return p;
 }
