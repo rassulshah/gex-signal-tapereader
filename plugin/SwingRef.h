@@ -1,5 +1,9 @@
 #ifndef LS_SWINGREF_H
 #define LS_SWINGREF_H
+// SwingRef.h (1.0.0, 2026-10-22; 2026-11-03 + ZigZag::rev for lsBreakout 1.2.0 - default 1 = the rule below, unchanged for every user)
+// (2026-11-03) ZigZag::rev > 1 (lsBreakout 1.2.0 sets 3): the zzd 3-bar High / Low turn rule of lsZzoCombo 2.1.0 / Pb instead of the
+//   1-bar rule - an up swing ends on a candle whose LOW is below the lows of the previous rev candles, a down swing on a HIGH above
+//   their highs; a strictly higher high / lower low moves the extreme; no outside-candle exception. rev = 1 keeps the code below.
 // SwingRef.h (1.0.0, 2026-10-22) -- SDK-free, shared by lsSweepRefill 1.1.0 (Sr) and lsStopRun 1.2.0 (St / Sta): the ONE rule for
 // "which swing / level did this sweep take out". Rassul approved the Sr mockup v4 rule at 17:39 CT 2026-10-22 and asked for the SAME
 // swing rule on St / Sta, so St and Sr mark the same swings (sweep-refill-mockup-v4.png).
@@ -52,7 +56,7 @@ struct Swing { int idx = 0; long long barT = 0, px = 0; int dir = 0; int confirm
 
 // ---- the 1-bar ZigZag of today's RTH candles (closed candles only, in time order) ----------------------------------------------
 struct ZigZag {
-    long long day = 0; int spb = 180; int rthLenSec = 0;
+    long long day = 0; int spb = 180; int rthLenSec = 0; int rev = 1;   // rev: ZigZag reversal bars (1 = the 1-bar rule; lsBreakout 1.2.0: 3)
     std::vector<ZBar> bars; std::vector<Swing> swings; int st = 0, ext = 0;
     void reset(long long d) { day = d; bars.clear(); swings.clear(); st = 0; ext = 0; }
     void add(const ZBar& b) {
@@ -63,6 +67,18 @@ struct ZigZag {
         bars.push_back(b);
         const int i = (int)bars.size() - 1;
         if (i == 0) { st = b.c >= b.o ? 1 : -1; ext = 0; return; }
+        if (rev > 1) {                                                   // (2026-11-03) zzd 3-bar High / Low rule (lsBreakout 1.2.0)
+            const int j0 = i - rev > 0 ? i - rev : 0; long long pl = bars[(size_t)j0].l, ph = bars[(size_t)j0].h;
+            for (int k = j0 + 1; k < i; ++k) { pl = std::min(pl, bars[(size_t)k].l); ph = std::max(ph, bars[(size_t)k].h); }
+            if (st == 1) {
+                if (b.h > bars[(size_t)ext].h) ext = i;
+                else if (b.l < pl && i != ext) { Swing s; s.idx = ext; s.barT = bars[(size_t)ext].t; s.px = bars[(size_t)ext].h; s.dir = 1; s.confirmIdx = i; swings.push_back(s); st = -1; ext = i; }
+            } else {
+                if (b.l < bars[(size_t)ext].l) ext = i;
+                else if (b.h > ph && i != ext) { Swing s; s.idx = ext; s.barT = bars[(size_t)ext].t; s.px = bars[(size_t)ext].l; s.dir = -1; s.confirmIdx = i; swings.push_back(s); st = 1; ext = i; }
+            }
+            return;
+        }
         const ZBar& p = bars[(size_t)i - 1];
         const bool hh = b.h > p.h, ll = b.l < p.l;
         if (st == 1) {

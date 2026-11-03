@@ -1,3 +1,6 @@
+// RallyLogic.h 1.1.0 + (2026-11-03) run(..., rev): ZigZag reversal bars, default 1 = unchanged (lsBigBidAsk); lsBreakout 1.2.0 passes 3
+//   = the zzd 3-bar High / Low turn of lsZzoCombo 2.1.0 / Pb (an up wave ends on a LOW below the previous 3 bars' lows, mirrored; a
+//   strictly higher high / lower low moves the extreme; no outside-candle exception). Every other Rly condition unchanged.
 // RallyLogic.h 1.1.0 (2026-10-24: condition 3 = tagged +-1 SD OR a 30-bar high / low; Rassul 21:42 CT "modify 3 so that it can be either that or a 30 bar high")
 // RallyLogic.h 1.0.0 (2026-10-22) -- the "Rly" (rally) signal, SDK-free. Rassul approved mockup v0.2 (rly-mockup-v2.png) at
 // 15:10-15:15 CT 2026-10-22 ("keep 4 a day as it is now"). Exact port of the research twin rly2.py session() (v0.2):
@@ -97,11 +100,18 @@ inline void trends(const std::vector<Bar>& B, Sess& S) {
 struct Pivot { int i; int type; };   // session index, +1 = high pivot (end of an up-wave), -1 = low pivot
 
 // rly2.py's 1-bar ZigZag: dir[0] = 0, pivots incl. the starting pseudo-pivot at 0 and the open extreme at the end
-inline void zigzag(const std::vector<Bar>& B, Sess& S, std::vector<Pivot>& piv) {
+inline void zigzag(const std::vector<Bar>& B, Sess& S, std::vector<Pivot>& piv, int rev = 1) {
     const int n = (int)S.g.size(); S.dir.assign((size_t)n, 0); piv.clear(); if (n == 0) return;
     auto X = [&](int k) -> const Bar& { return B[(size_t)S.g[(size_t)k]]; };
     int st = X(0).c >= X(0).o ? 1 : -1, ext = 0; piv.push_back({ 0, -st });
     for (int i = 1; i < n; ++i) {
+        if (rev > 1) {                                                   // (2026-11-03) zzd 3-bar High / Low turn (lsBreakout 1.2.0)
+            const int j0 = i - rev > 0 ? i - rev : 0; double pl = X(j0).l, ph = X(j0).h;
+            for (int k = j0 + 1; k < i; ++k) { if (X(k).l < pl) pl = X(k).l; if (X(k).h > ph) ph = X(k).h; }
+            if (st == 1) { if (X(i).h > X(ext).h) ext = i; else if (X(i).l < pl && i != ext) { st = -1; piv.push_back({ ext, 1 }); ext = i; } }
+            else { if (X(i).l < X(ext).l) ext = i; else if (X(i).h > ph && i != ext) { st = 1; piv.push_back({ ext, -1 }); ext = i; } }
+            S.dir[(size_t)i] = st; continue;
+        }
         const bool hh = X(i).h > X(i - 1).h, ll = X(i).l < X(i - 1).l;
         if (st == 1) {
             if (ll && !(hh && X(i).c >= X(i).o)) { st = -1; piv.push_back({ ext, 1 }); ext = i; }
@@ -130,8 +140,8 @@ static const char* const COND_NAMES[5] = { "3+ bars", "2.5 ATR", "tag 1SD", "20-
 static const char* const VIA30 = "via 30-bar ext";   // (1.1.0) the failed field of a fired wave that passed condition 3 by the 30-bar extreme
 
 // judge every confirmed wave of one session (closed bars only)
-inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Sess& S, std::vector<Wave>& out) {
-    bands(B, S); trends(B, S); std::vector<Pivot> P; zigzag(B, S, P);
+inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Sess& S, std::vector<Wave>& out, int rev = 1) {
+    bands(B, S); trends(B, S); std::vector<Pivot> P; zigzag(B, S, P, rev);
     const int n = (int)S.g.size();
     auto X = [&](int k) -> const Bar& { return B[(size_t)S.g[(size_t)k]]; };
     for (size_t q = 0; q + 1 < P.size(); ++q) {
@@ -163,10 +173,10 @@ inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Ses
 }
 
 // every RTH session of the chart from chart index `from` on (B = CLOSED bars only), per = bar seconds
-inline std::vector<Wave> run(const std::vector<Bar>& B, int per, int openMin, int closeMin, int from = 0) {
+inline std::vector<Wave> run(const std::vector<Bar>& B, int per, int openMin, int closeMin, int from = 0, int rev = 1) {   // rev: ZigZag reversal bars (2026-11-03)
     std::vector<Wave> out; std::vector<double> atr; atrWilder(B, atr);
     Sess cur; bool open = false;
-    auto flush = [&]() { if (open && !cur.g.empty()) judge(B, atr, cur, out); cur = Sess(); open = false; };
+    auto flush = [&]() { if (open && !cur.g.empty()) judge(B, atr, cur, out, rev); cur = Sess(); open = false; };
     for (int i = 0; i < (int)B.size(); ++i) {
         const svl::Cls c = svl::classify(B[(size_t)i].days, B[(size_t)i].endSec, per, openMin, closeMin);
         if (c.kind != svl::RTH) { if (open && c.sess != cur.sess) flush(); continue; }

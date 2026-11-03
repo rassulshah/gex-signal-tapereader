@@ -248,10 +248,10 @@ inline void breakFlagsPx(H& high, L& low, int n, std::vector<signed char>& up, s
 static const int SWING_KEEP = 3;
 template <class O, class H, class L, class C>
 inline void swingBreaksPx(O& open, H& high, L& low, C& close, const std::vector<char>& rth, const std::vector<long long>& day, int n, double tick,
-                          std::vector<signed char>& up, std::vector<signed char>& dn, std::vector<double>& upPx, std::vector<double>& dnPx) {
+                          std::vector<signed char>& up, std::vector<signed char>& dn, std::vector<double>& upPx, std::vector<double>& dnPx, int rev = 1) {
     up.assign(n > 0 ? n : 0, 0); dn.assign(n > 0 ? n : 0, 0); upPx.assign(n > 0 ? n : 0, 0.0); dnPx.assign(n > 0 ? n : 0, 0.0);
     if (n < 2 || !(tick > 0) || !std::isfinite(tick) || (int)rth.size() < n || (int)day.size() < n) return;
-    swg::ZigZag Z; Z.day = -1;
+    swg::ZigZag Z; Z.day = -1; Z.rev = rev;   // (2026-11-03) rev = the ZigZag reversal bars: 1 = lsBigBidAsk (unchanged), 3 = lsBreakout 1.2.0
     for (int i = 0; i < n; ++i) {
         const double o = open[i], h = high[i], l = low[i], c = close[i];
         if (!rth[(size_t)i] || !std::isfinite(o) || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(c) || h < l) continue;
@@ -1069,12 +1069,31 @@ inline BoDec breakoutAt(const std::vector<BoIn>& in, const std::vector<signed ch
 //   same_wave_already (the waiting one may still be confirmed by it). Context, not an entry: the BO / BD test (research-artifacts
 //   learning, 2026-10-22) found close-beyond and same-wave breaks both continue about 49% - the same as a random candle of the wave.
 // the walk's direction after each bar (+1 up-wave, -1 down-wave; a broken bar keeps the last direction) - same walk as breakFlagsPx
+// (2026-11-03) rev > 1 (lsBreakout 1.2.0: 3) = the zzd 3-bar High / Low turn: down on a LOW below the previous rev bars' lows, up on a
+// HIGH above their highs (the extreme moves on a strictly higher high / lower low as before); rev = 1 = the code below, unchanged.
 template <class H, class L>
-inline void zigDir(H& high, L& low, int n, std::vector<signed char>& dir) {
+inline void zigDir(H& high, L& low, int n, std::vector<signed char>& dir, int rev = 1) {
     dir.assign(n > 0 ? n : 0, 0);
     if (n < 2) return;
     auto hi = [&](int i) { return (double)high[i]; }; auto lo = [&](int i) { return (double)low[i]; };
     int dirn = hi(1) >= hi(0) ? 1 : -1, ext = 0;
+    if (rev > 1) {
+        for (int i = 1; i < n; ++i) {
+            if (std::isfinite(hi(i)) && std::isfinite(lo(i)) && hi(i) >= lo(i)) {
+                const int j0 = i - rev > 0 ? i - rev : 0; double pl = lo(j0), ph = hi(j0);
+                for (int k = j0 + 1; k < i; ++k) { if (lo(k) < pl) pl = lo(k); if (hi(k) > ph) ph = hi(k); }
+                if (dirn == 1) {
+                    if (hi(i) > hi(ext)) ext = i;
+                    else if (lo(i) < pl && i != ext) { ext = i; dirn = -1; }
+                } else {
+                    if (lo(i) < lo(ext)) ext = i;
+                    else if (hi(i) > ph && i != ext) { ext = i; dirn = 1; }
+                }
+            }
+            dir[(size_t)i] = (signed char)dirn;
+        }
+        return;
+    }
     for (int i = 1; i < n; ++i) {
         if (std::isfinite(hi(i)) && std::isfinite(lo(i)) && hi(i) >= lo(i)) {
             if (dirn == 1) {
@@ -1227,14 +1246,14 @@ struct BoPrep {
 // end = the first candle NOT decided (the forming one); fill0 = the first candle whose inputs are filled (lsBigBidAsk: from - 62)
 template <class TrendAt, class Known, class BigOf>
 inline BoRun boFromCandles(const std::vector<BoCandle>& C, double tick, int from, int end, int emitFrom, int fill0,
-                           TrendAt trendAt, Known known, BigOf bigOf, BoPrep* keep = nullptr) {
+                           TrendAt trendAt, Known known, BigOf bigOf, BoPrep* keep = nullptr, int rev = 1) {   // (2026-11-03) rev = ZigZag reversal bars (1 lsBigBidAsk, 3 lsBreakout 1.2.0)
     BoPrep P; const int count = (int)C.size();
     std::vector<double> op((size_t)count), hi((size_t)count), lo((size_t)count), cl((size_t)count);
     std::vector<char> rthAll((size_t)count, 0); std::vector<long long> dayAll((size_t)count, 0);
     for (int k = 0; k < count; ++k) { const BoCandle& b = C[(size_t)k]; op[(size_t)k] = b.o; hi[(size_t)k] = b.h; lo[(size_t)k] = b.l; cl[(size_t)k] = b.c;
         if (b.ok) { rthAll[(size_t)k] = 1; dayAll[(size_t)k] = boSessKey(b.days, b.endSec); } }
-    swingBreaksPx(op, hi, lo, cl, rthAll, dayAll, count, tick, P.up, P.dn, P.upPx, P.dnPx);
-    zigDir(hi, lo, count, P.zd);
+    swingBreaksPx(op, hi, lo, cl, rthAll, dayAll, count, tick, P.up, P.dn, P.upPx, P.dnPx, rev);
+    zigDir(hi, lo, count, P.zd, rev);
     P.in.assign((size_t)count, BoIn()); P.bars.assign((size_t)count, BoBar()); P.skip.assign((size_t)count, 0);
     P.trend.assign((size_t)count, 0); P.sess.assign((size_t)count, 0); P.fill0 = fill0 = std::max(0, fill0);
     auto keyOk = [&](double px, long long& k) { if (!std::isfinite(px) || !(tick > 0)) return false; const double q = px / tick;

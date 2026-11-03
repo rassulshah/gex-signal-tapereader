@@ -88,7 +88,9 @@ int main() {
     CHECK(n > 1000, "ES Oct 28 - 30 3-min bars (" + std::to_string(n) + ")");
     if (n <= 1000) { std::printf("RESULT %d passed, %d failed (run from plugin/tests_bo100)\n", passes, fails); return 1; }
     // live replay, as test_bo100_parity: the chart grows bar by bar (the last bar forming)
-    bko::Engine E; std::map<long long, std::string> seen; int changed = 0, early = 0;
+    // (1.2.0) the mockup's 9 Pb were drawn against the 1-bar BO / BD set: this Pb-rule check runs the BO / BD on zzRev = 1 (the Pb rule
+    //   itself is unchanged); lsBreakout's own 3-bar BO / BD + Pb are checked against the week harness in test_bo120_week.cpp
+    bko::Engine E; E.zzRev = 1; std::map<long long, std::string> seen; int changed = 0, early = 0;
     for (int N = 60; N <= n; ++N) {
         std::vector<bko::In> P(B.begin(), B.begin() + N);
         E.update(P, N, P[0].t, 0.25, 180, 510, 900);
@@ -99,7 +101,7 @@ int main() {
     }
     CHECK(changed == 0, "[3] no repaint: " + std::to_string(seen.size()) + " Pb over the replay, " + std::to_string(changed) + " changed / vanished");
     CHECK(early == 0, "[3] every Pb appears at the close of its decision bar (max of pivot confirm, BO / BD fire), none earlier or later (" + std::to_string(early) + ")");
-    {   bko::Engine F; F.update(B, n, B[0].t, 0.25, 180, 510, 900); int same = 0, diff = 0;
+    {   bko::Engine F; F.zzRev = 1; F.update(B, n, B[0].t, 0.25, 180, 510, 900); int same = 0, diff = 0;
         for (const auto& kv : E.pb) { const auto it = F.pb.find(kv.first); (it != F.pb.end() && pbKey(it->second) == pbKey(kv.second)) ? ++same : ++diff; }
         for (const auto& kv : F.pb) if (!E.pb.count(kv.first)) ++diff;
         CHECK(diff == 0 && same == (int)E.pb.size(), "[3] restart (one full pass) == the live replay: " + std::to_string(same) + " same, " + std::to_string(diff) + " different"); }

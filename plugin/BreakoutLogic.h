@@ -1,6 +1,14 @@
 #ifndef LS_BREAKOUT_LOGIC_H
 #define LS_BREAKOUT_LOGIC_H
-// BreakoutLogic.h 1.1.1 (2026-11-03) -- lsBreakout 1.1.1: Pb moved TWO rows out from the wick (Rassul's screenshot: the green "Pb" sat on
+// BreakoutLogic.h 1.2.0 (2026-11-03) -- lsBreakout 1.2.0: BO / BD and Rly on the 3-bar High / Low ZigZag (Rassul "go": check BO / BD +
+//   Rly on the 3-bar zigzag over a week, then switch "BO" to 3-bar). The swing walk that gives the BO pivots (SwingRef.h ZigZag::rev),
+//   the wave direction for one-per-wave / follow-through (bba::zigDir) and the Rly waves (rly::run) now use the SAME turn rule as the Pb
+//   pivots and lsZzoCombo 2.1.0 (zzd::Engine::step, COMBO_REV_BARS = 3: an up wave turns down on a LOW below the previous 3 bars' lows,
+//   a down wave turns up on a HIGH above their highs) - so BO / BD, Rly and Pb all refer to the same swings. Every other threshold
+//   unchanged (10-bar extreme, range / volume, colour, follow-through, 20-bar counter-trend, Rly 2.5 ATR / 1 SD or 30-bar / 20-bar /
+//   trend). lsBigBidAsk keeps the 1-bar rule (rev default 1: its decisions and records are unchanged). Week check ES / NQ / GC
+//   Oct 26 - Nov 3 (week_1v3.png): BO / BD RTH works 58/94 -> 50/76, session 173/315 -> 146/267; Rly 52/65 -> 64/69 (later by ~1 bar).
+// was BreakoutLogic.h 1.1.1 (2026-11-03) -- lsBreakout 1.1.1: Pb moved TWO rows out from the wick (Rassul's screenshot: the green "Pb" sat on
 //   the zigzag wave-time labels "9m" / "16m" drawn right at the pivot's wick, ~14 px tall from 3 px out; lsCandleAbsorb's A / Ae uses the
 //   next row, ROW_OUT 16 px further). Pb now: below a pivot LOW the letter's top = Y(low) + 3 + 32; above a pivot HIGH its bottom =
 //   Y(high) - 3 - 32 (PB_ROWS = 2 rows of ROW_OUT 16 px). Collision rule unchanged (another BO / BD / Rly letter there: one more row out,
@@ -42,7 +50,7 @@
 
 namespace bko {
 
-static const char* const VERSION = "1.1.1";   // (1.1.1) Pb two rows out   // was "1.1.0" (+ Pb), "1.0.0"
+static const char* const VERSION = "1.2.0";   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
 static const int GAP = 3;              // px between the wick end and the BO / BD letter
 static const int RLY_ROW = 16;         // the Rly letter sits this many px further out than the BO / BD row
 static const int ROW_OUT = 16;         // (1.1.1) one row = lsCandleAbsorb's ROW_OUT (its A / Ae sits one row beyond the wick label row)
@@ -53,6 +61,7 @@ static const int FONT_RLY = 9;         // the mockup's Rly size
 static const unsigned long C_UP = 0x0022C55E, C_DN = 0x00EF4444;   // green bullish / red bearish (his C_BUY / C_SELL)
 static const int MAX_BARS = 20000;     // bars considered (as lsBigBidAsk's Rly pass)
 static const int PB_REV_BARS = zzd::COMBO_REV_BARS;   // (1.1.0) the Pb pivots: 3-bar High / Low ZigZag (lsZzoCombo 2.1.0)
+static const int ZZ_REV_BARS = zzd::COMBO_REV_BARS;   // (1.2.0) BO / BD pivots + wave and Rly waves: the same 3-bar High / Low ZigZag
 
 // one chart bar (the host fills it from IRT; t = the raw IRT stamp = the bar END, days / endSec = local CT civil day / second)
 struct In { long long t = 0; bool ok = false; long days = 0; int endSec = 0; double o = 0, h = 0, l = 0, c = 0; long long vol = 0; };
@@ -66,6 +75,7 @@ struct Pivot { long long t = 0, tc = 0; int type = 0; double h = 0, l = 0; };   
 struct Engine {
     // inputs of the last update
     std::vector<In> bars; double tick = 0; int spb = 0, openMin = 510, closeMin = 900;
+    int zzRev = ZZ_REV_BARS;                   // (1.2.0) ZigZag reversal bars for BO / BD + Rly (3; tests set 1 = lsBigBidAsk's path; set before the first update)
     // decisions (kept for the chart's life; never changed once made)
     std::map<long long, bba::BoDec> bo;        // t0 -> lsBigBidAsk's decision record (fired or not)
     std::map<long long, RlyMark> rly;          // te * 2 + (dir > 0) -> judged wave
@@ -106,7 +116,7 @@ struct Engine {
         if (!full) bba::boWindow(n, from, emitFrom, fill0);                          // lsBigBidAsk's live window
         else { fill0 = std::max(0, n - 1 - MAX_BARS); from = emitFrom = std::max(1, fill0); ++fullRuns; }
         const bba::BoRun R = bba::boFromCandles(C, tick, from, n - 1, emitFrom, fill0,
-            [&](int k) { return trendAt(k); }, [](int) { return true; }, [](int, bba::BoIn&) {});
+            [&](int k) { return trendAt(k); }, [](int) { return true; }, [](int, bba::BoIn&) {}, nullptr, zzRev);
         for (bba::BoDec D : R.ev) {
             if (D.i0 < 0 || D.im < 0 || D.im >= n - 1) continue;
             D.t0 = bars[(size_t)D.i0].t; D.t = bars[(size_t)D.im].t;
@@ -126,7 +136,7 @@ struct Engine {
             rly::Bar b; b.days = x.days; b.endSec = x.endSec; b.o = x.o; b.h = x.h; b.l = x.l; b.c = x.c; b.v = (double)x.vol; B.push_back(b); T.push_back(x.t);
         }
         const int from = full ? 0 : std::max(0, (int)B.size() - 600);
-        const std::vector<rly::Wave> W = rly::run(B, spb, openMin, closeMin, from);
+        const std::vector<rly::Wave> W = rly::run(B, spb, openMin, closeMin, from, zzRev);
         for (const rly::Wave& w : W) {
             if (w.ge < 0 || w.gp < 0 || w.gc < 0 || w.ge >= (int)T.size()) continue;
             const long long te = T[(size_t)w.ge], key = te * 2 + (w.dir > 0 ? 1 : 0);
@@ -253,7 +263,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
     for (const auto& kv : E.rly) { const auto it = dayOf.find(kv.second.te); if (it == dayOf.end() || it->second != today || !kv.second.fired) continue; (kv.second.dir > 0 ? ru : rd)++; }
     int pu = 0, pd = 0; for (const auto& kv : E.pb) { const auto it = dayOf.find(kv.first); if (it == dayOf.end() || it->second != today) continue; (kv.second.dir > 0 ? pu : pd)++; }   // (1.1.0)
     std::string s = std::string("VERSION,") + VERSION + "\nMARKET," + mkt + "\nSYMBOL," + sym + "\nSPB," + std::to_string(spb) + "\n";
-    s += "RULES,BO / BD = lsBigBidAsk " + std::string(bba::VERSION) + " bba::boFromCandles (rule " + std::to_string(bba::BO_RULE) + ", follow-through in the same wave); Rly = RallyLogic " + rly::VERSION + (spb == 180 ? "" : " (3-min charts only: off on this chart)") + "; Pb = a confirmed 3-bar High/Low ZigZag pivot testing the BO / BD candle (until the next BO / BD or the wave origin breaks)\n";
+    s += "RULES,BO / BD = lsBigBidAsk " + std::string(bba::VERSION) + " bba::boFromCandles (rule " + std::to_string(bba::BO_RULE) + ", follow-through in the same wave) on the " + std::to_string(E.zzRev) + "-bar High/Low ZigZag; Rly = RallyLogic " + rly::VERSION + " on the same ZigZag" + (spb == 180 ? "" : " (3-min charts only: off on this chart)") + "; Pb = a confirmed 3-bar High/Low ZigZag pivot testing the BO / BD candle (until the next BO / BD or the wave origin breaks)\n";
     s += "TODAY,BO " + std::to_string(bo) + ",BD " + std::to_string(bd) + ",not fired " + std::to_string(nf) + ",Rly up " + std::to_string(ru) + ",Rly down " + std::to_string(rd) + ",Pb after BO " + std::to_string(pu) + ",Pb after BD " + std::to_string(pd) + "\n";
     s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",Pb " + std::to_string(E.pb.size()) + ",pivots " + std::to_string(E.piv.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
     s += "DRAWN,BO/BD " + std::to_string(last.boShown) + ",Rly " + std::to_string(last.rlyShown) + ",Pb " + std::to_string(last.pbShown) + ",no room " + std::to_string(last.noRoom) + "\n";
