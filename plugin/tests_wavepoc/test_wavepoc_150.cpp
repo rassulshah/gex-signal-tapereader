@@ -139,34 +139,37 @@ int main(int argc, char** argv) {
             std::vector<std::pair<int,int> > tx; int lets = 0, ps = 0, pOnLine = 0; bool ok = true, onSpine = true;
             for (const wpc::Prim& p : sc.p) { if (!isLet(p)) continue; ++lets; tx.push_back(std::make_pair(p.x0, p.y0));
                 const unsigned long want = p.text == "P" ? 0x22D3EEUL : 0xFFFFFFUL; if (p.col != want || p.back || !p.bold) ok = false;
-                const int cx = (p.x0 + p.x1) / 2; bool sp = false; for (int x : spX) sp = sp || std::abs(cx - x) <= 1; if (!sp) onSpine = false;
+                bool sp = false; for (int x : spX) sp = sp || (p.x1 <= x - 1 && p.x1 >= x - 4); if (!sp) onSpine = false;   // (1.8.1) right edge 1-4 px left of a spine
                 if (p.text == "P") { ++ps; const int cy = (p.y0 + p.y1) / 2;
-                    for (const wpc::Prim& f : sc.p) if (f.k == wpc::Prim::FILL && f.col == 0x22D3EE && !f.back && std::abs(f.x0 - cx) <= 2 && std::abs((f.y0 + f.y1) / 2 - cy) <= 1) { ++pOnLine; break; } } }
+                    for (const wpc::Prim& f : sc.p) if (f.k == wpc::Prim::FILL && f.col == 0x22D3EE && !f.back && f.x0 - p.x1 >= 0 && f.x0 - p.x1 <= 5 && std::abs((f.y0 + f.y1) / 2 - cy) <= 1) { ++pOnLine; break; } } }
             bool clear = true; for (size_t i2 = 0; i2 < tx.size(); ++i2) for (size_t j2 = i2 + 1; j2 < tx.size(); ++j2) if (std::abs(tx[i2].first - tx[j2].first) < 20 && std::abs(tx[i2].second - tx[j2].second) < 13) clear = false;
             int q = 0; for (const wpc::Prim& p : sc.p) q += p.k == wpc::Prim::TEXT && p.text.find('?') != std::string::npos;
             int patch = 0; for (const wpc::Prim& p : sc.p) patch += p.k == wpc::Prim::FILL && !p.back && p.y1 - p.y0 == 12 && (p.col == 0x0B0F17 || p.col == 0x374151);
             CHECK(lets == sc.lettersDrawn && lets >= 3 && ok, "(1.7.2) letters white (P cyan), bold, front (" << lets << ")");
-            CHECK(onSpine, "(1.7.2) every letter centred on a wave's spine");
+            CHECK(onSpine, "(1.8.1) every letter just LEFT of a wave's spine");
             CHECK(clear, "(1.7.2) letters never overlap");
             CHECK(q == 0 && patch == 0, "(1.7.2) no \"?\" and no background patch (" << q << " / " << patch << ")");
-            CHECK(ps > 0 && pOnLine == ps, "(1.7.2) every P sits on its wave's cyan volume POC line (" << pOnLine << " / " << ps << ")"); }
+            CHECK(ps > 0 && pOnLine == ps, "(1.8.1) every P sits just left of its wave's cyan volume POC line (" << pOnLine << " / " << ps << ")"); }
         {   // (1.8.0) extended wave POC lines: 1 px cyan dashes behind the candles; untested = bright, to the right edge, at most 2 above
             // and 2 below the last close; tested = dimmer, ending at the first bar after the wave that traded through the POC
             const unsigned long cy = 0x22D3EE, dim = wpc::mix(0x22D3EE, 0x0B0F17, 0.5);
             std::map<int, std::pair<int, int> > rows;   // y -> (min x0, max x1) per colour key
             int bright = 0, faint = 0; bool okw = true, back = true;
             std::map<int, int> brightMaxX, faintMaxX;
-            for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.y0 == p.y1 && (p.col == cy || p.col == dim) && p.x1 - p.x0 <= 4 && p.x1 > p.x0) {
+            for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.y0 == p.y1 && (p.col == cy || p.col == dim) && p.x1 - p.x0 > 6) {   // (1.8.1) solid: one long segment (a Pb dash is 5 px)
                 if (p.w != 1) okw = false;
                 if (!p.back) back = false;
                 auto& m = p.col == cy ? brightMaxX : faintMaxX; m[p.y0] = std::max(m.count(p.y0) ? m[p.y0] : 0, p.x1); }
             bright = (int)brightMaxX.size(); faint = (int)faintMaxX.size();
-            CHECK(okw && back, "(1.8.0) POC lines are 1 px dashes behind the candles");
+            CHECK(okw && back, "(1.8.1) POC lines are 1 px SOLID lines behind the candles");
             CHECK(sc.pocOpen + sc.pocTested > 0, "(1.8.0) POC lines drawn on the Oct 30 PM fixture (" << sc.pocOpen << " untested, " << sc.pocTested << " tested)");
             int ab = 0, be = 0; const double yc = v.Y((double)E.B.back().c), edge = v.X(last) + bw * 0.5;
             for (const auto& kv : brightMaxX) if (kv.second >= (int)edge - 8) (kv.first <= yc ? ab : be)++;   // rows reaching the right edge (a Pb line ends at its bar)
             CHECK(ab <= 2 && be <= 2 && ab + be == sc.pocOpen, "(1.8.0) every untested line reaches the right edge, at most 2 above / 2 below (" << ab << " / " << be << ", untested " << sc.pocOpen << ")");
             (void)rows; (void)faint; (void)bright; }
+        {   // (1.8.1) the trading day: Mon 17:03 bar and Tue 16:00 bar = one day; Tue 17:03 = the next
+            const long long mon1703 = 1793638980, tue1600 = 1793721600, tue1703 = 1793725380;   // 2026-11-02 17:03, 11-03 16:00, 11-03 17:03 (Central wall clock)
+            CHECK(wpc::tday(mon1703) == wpc::tday(tue1600) && wpc::tday(tue1703) == wpc::tday(tue1600) + 1, "(1.8.1) a POC line's trading day runs 17:00 -> 16:00 CT"); }
         // Pb: text + the amber dashed line from the POC
         int pbT = 0, amber = 0; for (const wpc::Prim& p : sc.p) { pbT += p.k == wpc::Prim::TEXT && p.text == "Pb"; amber += p.k == wpc::Prim::LINE && p.col == 0xF5B428; }
         int cyanL = 0, cyanF = 0, greyL = 0, amberF = 0; for (const wpc::Prim& p : sc.p) { cyanL += p.k == wpc::Prim::LINE && p.col == 0x22D3EE; cyanF += p.k == wpc::Prim::FILL && p.col == 0x22D3EE && !p.back; greyL += p.k == wpc::Prim::LINE && p.col == 0x94A3B8; amberF += p.k == wpc::Prim::FILL && (p.col == 0xC88C14 || p.col == 0xB4BECD); }

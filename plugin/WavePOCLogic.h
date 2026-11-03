@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.8.0";   // (1.8.0, 2026-11-03 Rassul 11:29 CT "i'll go with your recommendation") extended wave POC lines: untested to the right edge (2 nearest above + 2 below), tested ones end at the bar that traded through, dimmer, until the next same-way wave   // was "1.7.2";   // (1.7.2, 2026-11-03 Rassul "build" 09:37 CT) letters I / A / T white on the spine, no "?", no patch; cyan P on the volume POC   // was "1.7.1";   // (1.7.1, Rassul 14:31 CT "you should not be delayed") Pb drawn when the pullback bar closes (live, final once confirmed)   // was "1.7.0":   // (1.7.0, Rassul 2026-11-02 13:28 CT "it should continue to draw as the wave continues") the LIVE wave always drawn, forming bar included   // was "1.6.3":   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.8.1";   // (1.8.1, Rassul 11:36-11:37 CT) solid POC lines; a line ends with its trading day; letters left of the spine   // was "1.8.0";   // (1.8.0, 2026-11-03 Rassul 11:29 CT "i'll go with your recommendation") extended wave POC lines: untested to the right edge (2 nearest above + 2 below), tested ones end at the bar that traded through, dimmer, until the next same-way wave   // was "1.7.2";   // (1.7.2, 2026-11-03 Rassul "build" 09:37 CT) letters I / A / T white on the spine, no "?", no patch; cyan P on the volume POC   // was "1.7.1";   // (1.7.1, Rassul 14:31 CT "you should not be delayed") Pb drawn when the pullback bar closes (live, final once confirmed)   // was "1.7.0":   // (1.7.0, Rassul 2026-11-02 13:28 CT "it should continue to draw as the wave continues") the LIVE wave always drawn, forming bar included   // was "1.6.3":   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -946,7 +946,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
             if (yc < v.t + 7 || yc > v.b - 7) continue;
             const std::string txt = std::string(1, L.t);   // (1.7.2, Rassul 2026-11-03 09:20 CT) no "?"
             const int tw = v.textW ? v.textW(txt, true) : 12;
-            const double cx = x0;                            // (1.7.2) on the spine
+            const double cx = x0 - 2 - tw / 2.0;             // (1.8.1, Rassul 11:37 CT "draw them to the left of the spine") right edge 2 px left of the spine   // was (1.7.2) on the spine
             /* (1.7.2) no background patch (was the 1.6.2 black patch) */   // (1.6.2) black patch (grey tried 10:03, Rassul 10:05 CT "go back to black")
             Prim t; t.k = Prim::TEXT; t.x0 = ci(cx - tw / 2.0); t.x1 = ci(cx + tw / 2.0); t.y0 = ci(yc - 7); t.y1 = ci(yc + 7); t.col = L.t == 'P' ? C.cyan : 0xFFFFFF; t.text = txt; t.bold = 1; t.back = false; s.p.push_back(t);
             ++s.lettersDrawn;
@@ -1013,11 +1013,14 @@ inline bool latestOpenPoc(const Engine& E, long long& tick) {
     tick = latest->nodes[0].tick; return true;
 }
 // (1.8.0, Rassul 2026-11-03 11:14 / 11:29 CT "I like the poc lines extended" + the recommendation) EXTENDED WAVE POC LINES: each wave's
-// volume POC runs right from the end of its delta side, 1 px cyan dashes behind the candles, no text on the line.
+// volume POC runs right from the end of its delta side, a 1 px SOLID cyan line behind the candles (1.8.1; 1.8.0 dashed), no text on the line;
+// every line ends with its trading day (16:00 CT close): none is carried into the next session.
 //   UNTESTED (no bar has traded through it yet): to the right edge; only the 2 nearest above and the 2 nearest below the last close
 //   TESTED (traded through, or stopped by a new wave / an origin close): ends at that bar, dimmer, and is shown only until the next
 //           wave of the same direction completes
 static const int POC_EXT_EACH_SIDE = 2;
+// (1.8.1) the CME trading day of a bar (t = bar END, Central wall-clock seconds): 17:00 CT starts the next day
+inline long long tday(long long t) { return (t + 7 * 3600) / 86400; }
 inline void drawPocLines(Scene& s, const Engine& E, const View& v, const Colours& C, const std::vector<const Wave*>& ws) {
     if (E.B.empty()) return;
     const long long last = E.B.back().c;
@@ -1025,6 +1028,7 @@ inline void drawPocLines(Scene& s, const Engine& E, const View& v, const Colours
     std::vector<L> up, dn, tested;
     for (const Wave* w : ws) {
         if (w->pending || w->nodes.empty()) continue;
+        if (tday(E.B[(size_t)std::min<int>(w->i1, (int)E.B.size() - 1)].t) != tday(E.B.back().t)) continue;   // (1.8.1) a POC line lives until the end of its trading day (16:00 CT), never into the next one
         const Node& n = w->nodes[0];
         // tested = the first CLOSED bar after the wave that traded through the POC (its own scan: a node the engine stopped for a new
         // wave or an origin close was never traded through, so it is still untested here)
@@ -1041,7 +1045,7 @@ inline void drawPocLines(Scene& s, const Engine& E, const View& v, const Colours
         const double x0 = v.X(l.w->i0) - v.bw * 0.45 + 1 + SIDE_W;
         const double x1 = l.open ? v.X(v.lastBar) + v.bw * 0.5 : v.X(l.hit);
         if (x1 <= x0) continue;
-        for (double x = x0; x < x1; x += 7) addLine(s, x, y, std::min(x + 4, x1), y, l.open ? C.cyan : mix(C.cyan, C.bg, 0.5), 1, true);
+        addLine(s, x0, y, x1, y, l.open ? C.cyan : mix(C.cyan, C.bg, 0.5), 1, true);   // (1.8.1, Rassul 11:36 CT "use a solid line")
         ++(l.open ? s.pocOpen : s.pocTested);
     }
 }
