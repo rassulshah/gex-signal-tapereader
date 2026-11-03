@@ -1,4 +1,4 @@
-// render_dump.cpp -- lsBreakout 1.1.0 (BO / BD / Rly / Pb): dumps the mock chart (ES Oct 30 RTH) and every drawing call for render_check.py (a PNG of what
+// render_dump.cpp -- lsBreakout 1.1.1 (BO / BD / Rly / Pb): dumps the mock chart (ES Oct 30 RTH) and every drawing call for render_check.py (a PNG of what
 // the plugin draws). g++ -std=c++17 -IBreakout_test_support -I.. render_dump.cpp -o rd && ./rd > dump.txt && python3 render_check.py dump.txt
 #include "irtsdk.h"
 #include <fstream>

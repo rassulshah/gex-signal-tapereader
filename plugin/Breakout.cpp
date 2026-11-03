@@ -1,6 +1,9 @@
 /********************************************************************************
- *  Breakout.cpp  --  Investor/RT RTX extension  lsBreakout  "BO"  1.1.0  (2026-11-03)
+ *  Breakout.cpp  --  Investor/RT RTX extension  lsBreakout  "BO"  1.1.1  (2026-11-03)
  *
+ *  1.1.1 (2026-11-03, Rassul's screenshot: the green "Pb" sat on the zigzag wave-time labels "9m" / "16m" at the pivot's wick): Pb moved
+ *    TWO rows out - below a pivot low its top = Y(low) + 3 + 32, above a pivot high its bottom = Y(high) - 3 - 32 - clear of the wave-time
+ *    label row (at the wick) and lsCandleAbsorb's A / Ae row (one row out, +16 .. +30). Same collision rule; BO / BD / Rly unchanged.
  *  1.1.0 (2026-11-03, Rassul approved the Pb mockup - ES Oct 30 - and said "build"): + "Pb", a pullback that TESTS the BO / BD candle:
  *    every confirmed 3-bar High / Low ZigZag pivot LOW after a BO whose bar overlaps the BO candle gets a green "Pb" just below its low
  *    (pivot HIGHs after a BD: red, just above the high), until the next BO / BD or price trades beyond the BO / BD wave's origin pivot.
@@ -57,7 +60,7 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.1.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
+#define BKO_VERSION "1.1.1"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
 
 static long long bkoMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bkoFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BKO_SEP "InvestorRT" BKO_SEP "rtx" BKO_SEP "lsFlexLevels" : std::string(); }
@@ -225,7 +228,7 @@ extern "C" cppExtension* CreateExtension(void) {
     Breakout* p = new Breakout();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA BO v1.1.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (lsBigBidAsk's rule, shown when the follow-through candle closes), Rly at the end of a rally / decline (3-min) and Pb on a pullback pivot that tests the BO / BD candle. No settings.");
-    p->setVersion("1.1.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA BO v1.1.1 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (lsBigBidAsk's rule, shown when the follow-through candle closes), Rly at the end of a rally / decline (3-min) and Pb on a pullback pivot that tests the BO / BD candle. No settings.");
+    p->setVersion("1.1.1");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }

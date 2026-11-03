@@ -307,3 +307,8 @@ Rules (every new or changed indicator):
   now walks the same colour only on the ramp ratio. Also: "N-bar reversal" means IRT's ZIGZAG rule (a bar beyond the previous N bars' extreme), not
   "N consecutive bars" - copy lsWavePOC's rule and prove it pivot for pivot. Proof: tests_zzodelta/test_zzocombo_210.cpp (46/0: same-colour ratio
   count, WavePOC parity 529/529, Python replica 530/530, count x one bar left).
+- (2026-11-03 lsBreakout 1.1.1) A LETTER AT THE WICK MUST KNOW WHAT ELSE LIVES THERE: Pb (1.1.0) was drawn 3 px from the pivot's wick, the row his
+  zigzag wave-time labels ("9m", "16m", another indicator) already use; lsCandleAbsorb's A / Ae uses the next row (ROW_OUT 16). The mockup had no
+  wave labels, so it looked clear. Before placing a mark on a pivot / extreme, list every indicator on his chart that draws at that bar (rows: wick
+  label +3..+17, A / Ae +19..+33, Pb now +35) and put them in the mockup. Proof: tests_bo100/test_bo110_pb.cpp (21/0: Pb at Y(low)+35 / Y(high)-35,
+  clear of a simulated 14-px wave label and the A row on both sides) + test_bo100_host.cpp (22/0); PB_ROWS = 0 fails 6 + 2 checks.

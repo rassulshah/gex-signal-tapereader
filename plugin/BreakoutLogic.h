@@ -1,6 +1,11 @@
 #ifndef LS_BREAKOUT_LOGIC_H
 #define LS_BREAKOUT_LOGIC_H
-// BreakoutLogic.h 1.1.0 (2026-11-03) -- lsBreakout 1.1.0: + "Pb" (Rassul approved the Pb mockup - ES Oct 30 - and said "build"):
+// BreakoutLogic.h 1.1.1 (2026-11-03) -- lsBreakout 1.1.1: Pb moved TWO rows out from the wick (Rassul's screenshot: the green "Pb" sat on
+//   the zigzag wave-time labels "9m" / "16m" drawn right at the pivot's wick, ~14 px tall from 3 px out; lsCandleAbsorb's A / Ae uses the
+//   next row, ROW_OUT 16 px further). Pb now: below a pivot LOW the letter's top = Y(low) + 3 + 32; above a pivot HIGH its bottom =
+//   Y(high) - 3 - 32 (PB_ROWS = 2 rows of ROW_OUT 16 px). Collision rule unchanged (another BO / BD / Rly letter there: one more row out,
+//   up to 4 rows; no room = dropped and counted). BO / BD / Rly positions and every decision unchanged.
+// was BreakoutLogic.h 1.1.0 (2026-11-03) -- lsBreakout 1.1.0: + "Pb" (Rassul approved the Pb mockup - ES Oct 30 - and said "build"):
 //   Pb = a pullback that TESTS the BO / BD candle. Pivots = the 3-bar High / Low ZigZag (zzd::Engine::step with COMBO_REV_BARS = 3,
 //        the engine of lsZzoCombo 2.1.0 / lsZzoZigZag: a down wave turns up on a bar whose HIGH is above the highs of the previous 3
 //        bars, an up wave turns down on a LOW below the previous 3 bars' lows; a strictly higher high / lower low moves the extreme).
@@ -37,9 +42,12 @@
 
 namespace bko {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0) + Pb   // was "1.0.0"
+static const char* const VERSION = "1.1.1";   // (1.1.1) Pb two rows out   // was "1.1.0" (+ Pb), "1.0.0"
 static const int GAP = 3;              // px between the wick end and the BO / BD letter
 static const int RLY_ROW = 16;         // the Rly letter sits this many px further out than the BO / BD row
+static const int ROW_OUT = 16;         // (1.1.1) one row = lsCandleAbsorb's ROW_OUT (its A / Ae sits one row beyond the wick label row)
+static const int PB_ROWS = 2;          // (1.1.1) Pb sits this many rows beyond the wick row: clear of the wave-time label (row 0) and A / Ae (row 1)
+static const int PB_OFF = GAP + PB_ROWS * ROW_OUT;   // (1.1.1) = 35 px from the wick end to the Pb letter's near edge
 static const int FONT_BO = 7;          // ~9 px letters (Rassul: small, smaller than lsBigBidAsk's 10)
 static const int FONT_RLY = 9;         // the mockup's Rly size
 static const unsigned long C_UP = 0x0022C55E, C_DN = 0x00EF4444;   // green bullish / red bearish (his C_BUY / C_SELL)
@@ -208,11 +216,11 @@ inline Scene layout(const Engine& E, const View& v) {
         const In& b = E.bars[(size_t)bar]; if (!std::isfinite(b.h) || !std::isfinite(b.l)) return;
         const char* tx = kind == 2 ? "Pb" : kind == 1 ? "Rly" : (dir > 0 ? "BO" : "BD"); const int font = kind == 1 ? FONT_RLY : FONT_BO;
         const int w = v.textW(tx, font) + 2, cx = v.X(bar), yh = v.Y(b.h), yl = v.Y(b.l), top = std::min(yh, yl), bot = std::max(yh, yl);
-        const int lh = v.lh[kind == 1 ? 1 : 0], off = kind == 1 ? GAP + std::max(RLY_ROW, v.lh[0] + 3) : GAP;
+        const int lh = v.lh[kind == 1 ? 1 : 0], off = kind == 1 ? GAP + std::max(RLY_ROW, v.lh[0] + 3) : kind == 2 ? PB_OFF : GAP;   // (1.1.1) Pb two rows out
         Txt T; T.s = tx; T.font = font; T.bar = bar; T.dir = dir; T.kind = kind; T.col = dir > 0 ? C_UP : C_DN;
         T.f.l = cx - w / 2; T.f.r = T.f.l + w;
         if (dir > 0) { T.f.b = top - off; T.f.t = T.f.b - lh; } else { T.f.t = bot + off; T.f.b = T.f.t + lh; }
-        if (kind == 2)   // (1.1.0) Pb never on another letter: one row further out (lh + 1 px) until it is clear
+        if (kind == 2)   // (1.1.0) Pb never on another letter: one row further out (lh + 1 px) until it is clear (1.1.1: starting PB_OFF out)
             for (int tries = 0; tries < 4; ++tries) {
                 bool clash = false; for (const Txt& o : S.txt) if (hits(T.f, o.f)) { clash = true; break; }
                 if (!clash) break;

@@ -1,4 +1,4 @@
-// test_bo110_pb.cpp -- lsBreakout 1.1.0 (2026-11-03) "Pb" (a pullback pivot that TESTS the BO / BD candle), SDK-free (BreakoutLogic.h).
+// test_bo110_pb.cpp -- lsBreakout 1.1.1 (2026-11-03; 1.1.1: Pb two rows out - top Y(low) + 35 / bottom Y(high) - 35) "Pb" (a pullback pivot that TESTS the BO / BD candle), SDK-free (BreakoutLogic.h).
 //   [1] the pivots = the 3-bar High / Low ZigZag of lsZzoCombo 2.1.0 (zzd::Engine::step, COMBO_REV_BARS 3) == an independent port of the
 //       mockup's walk (pb.py / r4.py) on ES Oct 28 - 30 (same pivots once both walks are in step).
 //   [2] PARITY ES Oct 30 (the mockup r4.py on the same 3-min bars, the same 20 BO / BD): the 9 Pb the mockup drew
@@ -63,14 +63,23 @@ static void unitRule() {
     {   bko::View v; v.first = 0; v.last = (int)B.size() - 1; v.area = { 0, 0, 2000, 2000 };
         v.X = [](int j) { return 20 + j * 10; }; v.Y = [](double p) { return (int)std::lround(1500 - p * 10); }; v.textW = [](const char* s, int) { return (int)std::strlen(s) * 6; };
         E.bars = B; bko::Scene S = bko::layout(E, v); const bko::Txt* T = nullptr; for (const auto& t : S.txt) if (t.kind == 2) T = &t;
-        CHECK(T && T->s == "Pb" && T->col == bko::C_UP && T->font == bko::FONT_BO && T->f.t == v.Y(B[14].l) + 3 && T->bar == 14 && S.pbShown == 1, "[4] layout: green Pb at Y(low) + 3, font 7, on the pivot bar");
+        CHECK(T && T->s == "Pb" && T->col == bko::C_UP && T->font == bko::FONT_BO && T->f.t == v.Y(B[14].l) + 3 + 32 && T->bar == 14 && S.pbShown == 1, "[4] (1.1.1) layout: green Pb at Y(low) + 3 + 32 (two rows out), font 7, on the pivot bar");
+        if (T) {   // (1.1.1) no overlap with the wave-time label at the wick (14 px tall from 3 px out) or lsCandleAbsorb's A row (+16: +19 .. +33)
+            const int yl = v.Y(B[14].l), cx = v.X(14); const bko::Box wave = { cx - 15, yl + 3, cx + 15, yl + 3 + 14 }, ab = { cx - 10, yl + 3 + 16, cx + 10, yl + 3 + 16 + 14 };
+            CHECK(!bko::hits(T->f, wave) && !bko::hits(T->f, ab), "[4] (1.1.1) Pb (below) clears a 14-px wave-time label at the wick row and the CandleAbsorb A row (+16 .. +30 beyond it)"); }
         bool post = false; for (const auto& b : S.board) if (b.t == B[14].t && b.side == -1) post = true; CHECK(post, "[4] SignalBoard 'L' carries the Pb bar (below)");
         bko::Engine G = E; bba::BoDec X; X.t0 = B[14].t; X.t = B[20].t; X.dir = -1; X.fired = true; G.bo[X.t0] = X;
         S = bko::layout(G, v); const bko::Txt* bd = nullptr; T = nullptr; for (const auto& t : S.txt) { if (t.kind == 2) T = &t; if (t.kind == 0 && t.bar == 14) bd = &t; }
-        CHECK(T && bd && !bko::hits(T->f, bd->f) && T->f.t == bd->f.b + 1, "[4] a BD on the same bar: Pb one row further out, no overlap");
+        CHECK(T && bd && !bko::hits(T->f, bd->f) && T->f.t == v.Y(B[14].l) + 3 + 32, "[4] (1.1.1) a BD on the same bar: no clash any more (BD at the wick, Pb two rows out), no overlap");
+        {   // (1.1.1) the collision rule still works: a (tall) Rly on the same bar reaching into the Pb row pushes Pb one row further out
+            bko::Engine R2 = E; bko::RlyMark rm; rm.te = B[14].t; rm.dir = -1; rm.fired = true; R2.rly[B[14].t * 2] = rm; bko::View v2 = v; v2.lh[1] = 24;   // Rly row +19 .. +43 reaches into the Pb row (+35)
+            S = bko::layout(R2, v2); const bko::Txt* ry = nullptr; T = nullptr; for (const auto& t : S.txt) { if (t.kind == 2) T = &t; if (t.kind == 1) ry = &t; }
+            CHECK(T && ry && !bko::hits(T->f, ry->f) && T->f.t == v.Y(B[14].l) + 3 + 32 + (v2.lh[0] + 1), "[4] (1.1.1) a letter in the Pb row: Pb one more row out (lh + 1), no overlap"); }
         bko::Engine H2 = E; for (auto& kv : H2.pb) kv.second.dir = -1; H2.bars[14].h = 111;
         S = bko::layout(H2, v); T = nullptr; for (const auto& t : S.txt) if (t.kind == 2) T = &t;
-        CHECK(T && T->col == bko::C_DN && T->f.b == v.Y(H2.bars[14].h) - 3, "[4] layout: red Pb (after a BD) at Y(high) - 3 - height"); }
+        CHECK(T && T->col == bko::C_DN && T->f.b == v.Y(H2.bars[14].h) - 3 - 32, "[4] (1.1.1) layout: red Pb (after a BD) with its bottom at Y(high) - 3 - 32");
+        if (T) { const int yh = v.Y(H2.bars[14].h), cx = v.X(14); const bko::Box wave = { cx - 15, yh - 3 - 14, cx + 15, yh - 3 }, ab = { cx - 10, yh - 3 - 16 - 14, cx + 10, yh - 3 - 16 };
+            CHECK(!bko::hits(T->f, wave) && !bko::hits(T->f, ab), "[4] (1.1.1) Pb (above) clears the wave-time label row and the CandleAbsorb A row (mirror)"); } }
 }
 
 int main() {
