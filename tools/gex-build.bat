@@ -78,6 +78,8 @@ REM (2026-10-28 11:4x CT) lsWavePOC 1.1.0: + WavePOCLiq.h (liquidity nodes from 
 call :one WavePOC lsWavePOC WavePOCLogic.h WavePOCLiq.h WavePOCSettings.h SettingsSpec.h SettingsHost.h HostSlot.h
 REM (2026-11-01) lsCandleAbsorb 1.0.0 "Candle Absorb" (Rassul 2026-10-31 "implement waht we have disuccessed"): A / Ae / D / S at ZigZag pivots + the delta POC dash on every candle; no settings
 call :one CandleAbsorb lsCandleAbsorb CandleAbsorbLogic.h HostSlot.h
+REM (2026-11-03) lsBreakout 1.0.0 "BO" (Rassul approved the mockup, "build"): letters only - BO / BD (lsBigBidAsk's breakout via bba::boFromCandles) + Rly (RallyLogic.h); no settings (SS_SAFE_DIALOG). lsBigBidAsk 1.32.0 stops drawing these letters
+call :one Breakout lsBreakout BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ColumnBoard.h BoxPlace.h BannerBoard.h BoxDock.h SignalBoard.h
 REM (2026-11-01 22:24 CT, Rassul "build") lsCobSignal 1.0.0 "CoB Signal": his CoB natively (+ PHH / PHL), Cob / Cob+R / Cob+V; no settings
 call :one CobSignal lsCobSignal CobSignalLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h CobImpulseLogic.h HostSlot.h SettingsGuard.h
 REM (2026-11-02 19:45 CT, Rassul "ok lets do option 2") lsZzoDelta 1.0.0 "ZZO Delta": 1-bar H/L ZigZag wave delta / median of the last 5 same-way waves (RTH restarts); own pane; no settings
@@ -347,7 +349,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - new builds install after 15:15 CT, when Investor/RT is closed ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile DealerProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk) do (
+for %%N in (GammaProfile DealerProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb Breakout CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
