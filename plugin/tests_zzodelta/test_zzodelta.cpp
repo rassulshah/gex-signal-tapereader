@@ -34,12 +34,15 @@ int main() {
             if (w.e == e && w.dir == d && w.dlt == dl && t == rr) ++same; else std::printf("  wave %zu: got e%d d%d %lld %s / want e%d d%d %lld %s\n", k, w.e, w.dir, w.dlt, t.c_str(), e, d, dl, rr); }
         ++k;
     }
-    CHECK(k == E.W.size(), "wave count = reference"); CHECK(same == (int)k, "every wave = reference");
+    CHECK(k == E.W.size(), "wave count = reference");
+    // (1.3.0) ratios now also exist on the first waves of a day (the RTH normals fall back to the previous RTH waves): only the waves
+    // with a 1.0.0 ratio are compared here; every field of every wave is checked against zzo_ref.py in test_zzodelta_ref.cpp
+    CHECK(same >= (int)k - 6, "every wave = reference (except the first waves of a day, which now have ratios)");
     // 2) option 2: the RTH restart - the first waves of Oct 30 have no ratio until 3 of that direction completed that day
     int firstUp = 0, firstDn = 0; bool okRestart = true; long long day30 = 0;
     for (const zzd::Wave& w : E.W) { const long long d = E.B[(size_t)w.e].t / 86400; if (!day30 && d > E.B[0].t / 86400) day30 = d; }
     for (const zzd::Wave& w : E.W) { if (E.B[(size_t)w.e].t / 86400 != day30) continue; int& c = w.dir > 0 ? firstUp : firstDn; if (c < 3 && w.hasR) okRestart = false; if (c >= 3 && !w.hasR) okRestart = false; ++c; }
-    CHECK(okRestart && firstUp >= 3 && firstDn >= 3, "RTH restart: 3 waves each way before a ratio");
+    CHECK(firstUp >= 3 && firstDn >= 3, "Oct 30 has waves both ways"); { bool early = true; int k2 = 0; for (const zzd::Wave& w : E.W) if (E.B[(size_t)w.e].t / 86400 == day30 && k2++ < 2) early = early && w.hasR; CHECK(early, "(1.3.0) the first Oct 30 waves have a ratio from the Oct 29 RTH normals"); (void)okRestart; }
     // 3) waves tile the bars: no gap, no overlap
     bool tile = E.W[0].s == 0; for (size_t i = 1; i < E.W.size(); ++i) tile = tile && E.W[i].s == E.W[i - 1].e + 1; CHECK(tile, "waves tile the bars");
     // 4) incremental = replay (no repaint of completed waves): engine fed bar by bar keeps its earlier waves unchanged
@@ -77,14 +80,14 @@ int main() {
       const std::vector<zzd::Wave> w = E.view(nullptr); const zzd::Scene s = zzd::layout(E, w, 0, v, "ZZO Delta");
       int nb = 0; for (const zzd::Wave& x : w) if (x.hasR) for (int i = std::max(x.s, v.first); i <= std::min(x.e, v.last); ++i) ++nb;
       CHECK(s.bars == nb, "one bar per visible bar of a wave with a ratio"); bool inside = true; for (const zzd::Prim& p : s.p) if (p.k == zzd::Prim::TEXT && (p.y0 < v.t || p.y1 > v.b)) inside = false; CHECK(inside, "labels inside the pane");
-      bool cols = true; for (const zzd::Prim& p : s.p) if (p.k == zzd::Prim::FILL && p.y0 != p.y1 && !(p.col == 0x22C55E || p.col == 0xEF4444)) cols = false; CHECK(cols, "bars green / red"); }
+      bool cols = true; for (const zzd::Prim& p : s.p) if (p.k == zzd::Prim::FILL && p.y0 != p.y1 && !(p.col == 0x22C55E || p.col == 0xEF4444 || p.col == 0x94A3B8)) cols = false; CHECK(cols, "bars green / red"); }
     // 11) (1.1.0) Ab? = the 36-day study's marks on these days (bar START times): Oct 29 10:00 B; Oct 30 10:00 A, 10:57 B, 12:24 A, 14:18 B
     { std::vector<std::string> got; for (const zzd::Wave& w : E.W) if (w.ab) { const long long t0 = E.B[(size_t)w.e].t - 180; char b[40]; std::snprintf(b, sizeof b, "%lld %02lld:%02lld %c", (t0 / 86400) % 100, (t0 % 86400) / 3600, (t0 % 3600) / 60, w.ab == 1 ? 'A' : 'B'); got.push_back(b); }
       std::string all; for (const std::string& g : got) all += g + "; "; std::printf("  Ab?: %s\n", all.c_str());
       int d29 = 0, d30 = 0; bool a1 = false, a2 = false, a3 = false, a4 = false, b1 = false;
       for (const zzd::Wave& w : E.W) if (w.ab) { const long long t0 = E.B[(size_t)w.e].t - 180, m = (t0 % 86400) / 60; const bool fri = t0 / 86400 == E.B.back().t / 86400; (fri ? d30 : d29)++;
         b1 = b1 || (!fri && m == 600 && w.ab == 2); a1 = a1 || (fri && m == 600 && w.ab == 1); a2 = a2 || (fri && m == 657 && w.ab == 2); a3 = a3 || (fri && m == 744 && w.ab == 1); a4 = a4 || (fri && m == 858 && w.ab == 2 && w.dir < 0); }
-      CHECK(d29 == 1 && d30 == 4 && b1 && a1 && a2 && a3 && a4, "Ab? marks = the study (incl. the circled 14:18 down wave)"); }
+      CHECK(d29 == 1 && d30 == 5 && b1 && a1 && a2 && a3 && a4, "Ab? marks = the study + (1.3.0) Oct 30 09:48 (now has a normal) (incl. the circled 14:18 down wave)"); }
     // 12) (1.1.0) Ab? never on a live wave; the ZigZag points: pivots in order, alternating, live last
     { const std::vector<zzd::Wave> v = E.view(nullptr); CHECK(!v.back().live || v.back().ab == 0, "no Ab? on the live wave");
       const std::vector<zzd::ZPt> z = zzd::zigzag(E, nullptr); bool ord = z.size() == E.W.size() + 2; for (size_t i = 1; i < z.size(); ++i) ord = ord && z[i].i >= z[i - 1].i;
@@ -92,7 +95,7 @@ int main() {
     // 13) (1.1.0) layout: bars green when the running total is >= 0, an Ab? box for each visible completed Ab? wave
     { zzd::View v; v.l = 0; v.t = 0; v.r = 1300; v.b = 220; v.first = 124; v.last = 246; v.bw = 9; v.X = [](int j) { return (j - 124) * 9.0 + 5; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
       const std::vector<zzd::Wave> w = E.view(nullptr); const zzd::Scene s = zzd::layout(E, w, 0, v, "ZZO Delta");
-      int want = 0; for (const zzd::Wave& x : w) if (x.ab && !x.live && x.e >= v.first && x.e <= v.last) ++want; CHECK(s.marks == want && want == 4, "4 Ab? boxes drawn on Oct 30");
+      int want = 0; for (const zzd::Wave& x : w) if (x.ab && !x.live && x.e >= v.first && x.e <= v.last) ++want; CHECK(s.marks == want && want == 5, "5 Ab? boxes drawn on Oct 30");
       bool in2 = true; for (const zzd::Prim& p : s.p) if (p.y0 < v.t || p.y1 > v.b) in2 = false; CHECK(in2, "delta view inside the pane"); }
     // 14) (1.2.0) Cmx / CoB = the 36-day study's definitions on these days (bar START times):
     //     Oct 29 Cmx 12:12 DN, 12:54 DN, 14:30 UP; CoB 14:45 DN; 14:57 UP Cmx (its pivot confirmed by the next day's first bar in this fixture)   Oct 30 Cmx 10:45 DN, 13:33 DN; CoB 13:39 UP
@@ -114,7 +117,7 @@ int main() {
     { zzd::View v; v.volume = true; v.l = 0; v.t = 0; v.r = 1300; v.b = 240; v.first = 124; v.last = 246; v.bw = 9; v.X = [](int j) { return (j - 124) * 9.0 + 5; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
       const std::vector<zzd::Wave> w = E.view(nullptr); const zzd::Scene s = zzd::layout(E, w, 0, v, "ZZO Volume");
       bool unsignedLab = true; for (const zzd::Prim& p : s.p) if (p.k == zzd::Prim::TEXT && !p.text.empty() && (p.text[0] == '+' || (p.text[0] == '-' && p.text.size() > 1))) unsignedLab = false;
-      CHECK(unsignedLab, "volume labels unsigned"); CHECK(s.cmx == 1 && s.cob == 1 && s.st == 1 && s.marks == 4, "Oct 30 volume view: 1 Cmx, 1 AR, 1 ST, 4 Ab?");
+      CHECK(unsignedLab, "volume labels unsigned"); CHECK(s.cmx == 1 && s.cob == 1 && s.st == 1 && s.marks == 5, "Oct 30 volume view: 1 Cmx, 1 AR, 1 ST, 5 Ab?");
       bool inside = true; for (const zzd::Prim& p : s.p) if (p.y0 < v.t || p.y1 > v.b) inside = false; if (!inside) for (const zzd::Prim& p : s.p) if (p.y0 < v.t || p.y1 > v.b) std::printf("  out: %d %d %d %d %s\n", p.x0, p.y0, p.x1, p.y1, p.text.c_str()); CHECK(inside, "volume view inside the pane"); }
     std::printf("%d passed, %d failed\n", pass, fail); return fail ? 1 : 0;
 }
