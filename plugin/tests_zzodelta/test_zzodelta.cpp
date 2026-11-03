@@ -97,9 +97,13 @@ int main() {
     // 14) (1.2.0) Cmx / CoB = the 36-day study's definitions on these days (bar START times):
     //     Oct 29 Cmx 12:12 DN, 12:54 DN, 14:30 UP; CoB 14:45 DN; 14:57 UP Cmx (its pivot confirmed by the next day's first bar in this fixture)   Oct 30 Cmx 10:45 DN, 13:33 DN; CoB 13:39 UP
     { std::string got; for (const zzd::Wave& w : E.W) if (w.cmx || w.cob) { const long long t0 = E.B[(size_t)w.e].t - 180; char b[48];
-          std::snprintf(b, sizeof b, "%lld %02lld:%02lld %s %s; ", (t0 / 86400) % 100, (t0 % 86400) / 3600, (t0 % 3600) / 60, w.dir > 0 ? "UP" : "DN", w.cmx ? "Cmx" : "CoB"); got += b; }
+          std::snprintf(b, sizeof b, "%lld %02lld:%02lld %s %s; ", (t0 / 86400) % 100, (t0 % 86400) / 3600, (t0 % 3600) / 60, w.dir > 0 ? "UP" : "DN", w.cmx ? "Cmx" : "AR"); got += b; }
       std::printf("  Cmx/CoB: %s\n", got.c_str());
-      CHECK(got == "55 12:12 DN Cmx; 55 12:54 DN Cmx; 55 14:30 UP Cmx; 55 14:45 DN CoB; 55 14:57 UP Cmx; 56 10:45 DN Cmx; 56 13:33 DN Cmx; 56 13:39 UP CoB; ", "Cmx / CoB = the study"); }
+      CHECK(got == "55 12:12 DN Cmx; 55 12:54 DN Cmx; 55 14:30 UP Cmx; 55 14:45 DN AR; 55 14:57 UP Cmx; 56 10:45 DN Cmx; 56 13:33 DN Cmx; 56 13:39 UP AR; ", "Cmx / CoB = the study"); }
+    // 16) (1.1.0 volume) ST = the wave right after an AR, the climax's way, <= 0.7x the climax volume, giving back >= 75% of the AR (the Python reference: Oct 30 13:51 - the Cmx 13:33 -> AR 13:39 -> ST sequence)
+    { int st = 0; for (size_t k = 2; k < E.W.size(); ++k) { const zzd::Wave& w = E.W[k]; const zzd::Wave& a = E.W[k - 1]; const zzd::Wave& c = E.W[k - 2];
+          const bool want = a.cob && c.cmx && c.dir == w.dir && a.seg == w.seg && c.seg == w.seg && w.vol <= 0.7 * c.vol && w.size >= 0.75 * a.size; CHECK(want == w.st, "ST rule"); st += w.st; }
+      std::printf("  ST: %d\n", st); CHECK(st == 1, "one ST on these days (Oct 30 13:51)"); }
     // 15) (1.2.0) volume view: bars green on up waves / red on down waves, labels unsigned, Cmx + CoB boxes on Oct 30, Ab? still drawn
     { zzd::View v; v.volume = true; v.l = 0; v.t = 0; v.r = 1300; v.b = 240; v.first = 124; v.last = 246; v.bw = 9; v.X = [](int j) { return (j - 124) * 9.0 + 5; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
       const std::vector<zzd::Wave> w = E.view(nullptr); const zzd::Scene s = zzd::layout(E, w, 0, v, "ZZO Volume");

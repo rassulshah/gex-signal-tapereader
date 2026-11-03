@@ -1,4 +1,8 @@
-// ZzoDeltaLogic.h - lsZzoDelta 1.2.0 / lsZzoVolume 1.0.0 (2026-11-02 22:40 CT, Rassul "lets build, use delta as default and keep the Ab tag and add
+// ZzoDeltaLogic.h - lsZzoVolume 1.1.0 (22:52 CT, Rassul "you can use AR to mean automatic rally in the classic wyckoff sequence of
+//   looking for a cmx then ar the secondary test"): the CoB volume tag is renamed AR (automatic rally / reaction) and ST is added:
+//     ST   secondary test: the wave right after an AR, the climax's way, on <= 0.7x the climax wave's volume, giving back >= 75% of the AR
+//   (36-day ES: Cmx 30%, Cmx + AR 38%, ST 29% reach 2R vs the 31% base - descriptive Wyckoff tags, the nightly scores them)
+// was lsZzoDelta 1.2.0 / lsZzoVolume 1.0.0 (2026-11-02 22:40 CT, Rassul "lets build, use delta as default and keep the Ab tag and add
 //   the cmx and cob tags for volume ... remove lo tag"): the same engine also gives each wave's VOLUME (Weis Wave) - the "ZZO Volume"
 //   indicator (ZzoVolume.cpp) draws wave volume / the median of the last 5 same-way waves, green up / red down waves, with tags:
 //     Ab?  the delta absorption rules (as in ZZO Delta)
@@ -42,10 +46,10 @@
 
 namespace zzd {
 static const char* const VERSION = "1.2.0";
-static const char* const VOL_VERSION = "1.0.0";   // lsZzoVolume
+static const char* const VOL_VERSION = "1.1.0";   // lsZzoVolume
 static const int HIST = 5, MIN_HIST = 3, MAX_BARS = 6000, TRIM = 1000;
 static const double AB_EFFORT = 1.9, AB_BACK = 0.75;   // (1.1.0) Ab? rule thresholds
-static const double CMX_VOL = 2.5, COB_VOL = 1.5;      // (1.2.0) Cmx / CoB volume thresholds (x the median of the last 5 same-way waves)
+static const double CMX_VOL = 2.5, COB_VOL = 1.5, ST_VOL = 0.7, ST_BACK = 0.75;      // (1.2.0) Cmx / CoB volume thresholds (x the median of the last 5 same-way waves)
 static const bool UP_ONLY = true;   // (1.1.0, Rassul 21:37 CT "show all the waves up because they are easier to compare") bars = |running total| from the bottom line, colour = buying / selling
 
 inline bool toTicks(double px, double tick, long long& out) {
@@ -59,7 +63,7 @@ inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((
 struct Bar { long long t = 0, h = 0, l = 0, dlt = 0; bool vap = false; long long seg = 0; long long vol = 0; };   // (1.2.0) vol = the bar's volume   // t = bar END (local secs), prices in ticks
 struct Wave { int s = 0, e = 0, dir = 0; long long dlt = 0, seg = 0; bool hasR = false; double med = 0; bool live = false;
               long long ext = 0, size = 0; int ab = 0;
-              long long vol = 0; bool hasV = false; double medV = 0; bool cmx = false, cob = false; };   // (1.2.0) wave volume / its normal, Cmx / CoB tags   // (1.1.0) pivot price / pivot-to-pivot size (ticks); ab 0 none, 1 rule A, 2 rule B
+              long long vol = 0; bool hasV = false; double medV = 0; bool cmx = false, cob = false, st = false; };   // (1.1.0) cob = the AR tag; st = secondary test   // (1.2.0) wave volume / its normal, Cmx / CoB tags   // (1.1.0) pivot price / pivot-to-pivot size (ticks); ab 0 none, 1 rule A, 2 rule B
 struct Walk { int dirn = 0, ext = 0, start = 0; bool any = false; };   // any = a wave completed already
 
 inline bool medianOf(std::vector<long long> v, double& m) {
@@ -137,13 +141,15 @@ struct Engine {
     // (1.2.0) Cmx: volume >= CMX_VOL x normal AND a new extreme past the prior same-way pivot; CoB: the wave right after a Cmx (the
     // previous completed wave, the other way, same session part) with volume >= COB_VOL x normal
     void volTags(Wave& w, size_t nW) const {
-        w.cmx = w.cob = false;
+        w.cmx = w.cob = w.st = false;
         if (!w.hasV) return;
         const double Vr = (double)w.vol / w.medV;
         const Wave* ps = nullptr;
         for (size_t k = nW; k-- > 0;) { const Wave& x = W[k]; if (x.seg == w.seg && x.dir == w.dir) { ps = &x; break; } }
         if (Vr >= CMX_VOL && ps && (double)w.dir * (double)(w.ext - ps->ext) > 0) w.cmx = true;
-        if (nW > 0) { const Wave& p = W[nW - 1]; if (p.cmx && p.dir != w.dir && p.seg == w.seg && Vr >= COB_VOL) w.cob = true; }
+        if (nW > 0) { const Wave& p = W[nW - 1]; if (p.cmx && p.dir != w.dir && p.seg == w.seg && Vr >= COB_VOL) w.cob = true; }   // AR
+        if (nW > 1) { const Wave& a = W[nW - 1]; const Wave& c = W[nW - 2];   // (1.1.0) ST after Cmx + AR
+            if (a.cob && c.cmx && c.dir == w.dir && a.seg == w.seg && c.seg == w.seg && (double)w.vol <= ST_VOL * (double)c.vol && a.size > 0 && (double)w.size >= ST_BACK * (double)a.size) w.st = true; }
     }
     void trim(int k) {
         if (k <= 0 || k >= (int)B.size() || Z.start < k) return;   // never cut the live wave
@@ -212,7 +218,7 @@ struct View {
     int l = 0, t = 0, r = 0, b = 0, first = 0, last = 0; double bw = 8;   // engine bar indexes of the visible range, pixels per bar
     std::function<double(int)> X; std::function<int(const std::string&)> textW; int textH = 12;
 };
-struct Scene { std::vector<Prim> p; int bars = 0, labels = 0, marks = 0, cmx = 0, cob = 0; double lo = 0, hi = 0; };
+struct Scene { std::vector<Prim> p; int bars = 0, labels = 0, marks = 0, cmx = 0, cob = 0, st = 0; double lo = 0, hi = 0; };
 inline int ci(double v) { return (int)std::lround(std::max(-30000.0, std::min(30000.0, v))); }
 
 inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long formDlt, const View& v, const std::string& head, long long formVol = 0) {
@@ -256,7 +262,8 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
         if (!w.live) {
             if (w.ab) tags.push_back({ "Ab?", w.dir > 0 ? C.down : C.up });
             if (v.volume && w.cmx) tags.push_back({ "Cmx", w.dir > 0 ? C.up : C.down });
-            if (v.volume && w.cob) tags.push_back({ "CoB", w.dir > 0 ? C.up : C.down });
+            if (v.volume && w.cob) tags.push_back({ "AR", w.dir > 0 ? C.up : C.down });
+            if (v.volume && w.st) tags.push_back({ "ST", w.dir > 0 ? C.down : C.up });   // coloured by the side expected to take over
         }
         int x0 = ci(xc - tw / 2.0); if (x0 < v.l + 1) x0 = v.l + 1; if (x0 + tw > v.r - 1) x0 = v.r - 1 - tw;
         if (x0 <= lastR + 2 && tags.empty()) continue;   // (1.1.0) a tagged wave always keeps its label
@@ -274,7 +281,7 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
             if (end >= 0) { bx.y1 = edge - 2; bx.y0 = bx.y1 - TH - 1; edge = bx.y0; } else { bx.y0 = edge + 2; bx.y1 = bx.y0 + TH + 1; edge = bx.y1; }
             if (bx.y0 >= v.t + TH + 2 && bx.y1 <= v.b) {
                 S.p.push_back(bx); Prim tx; tx.k = Prim::TEXT; tx.x0 = ax + 3; tx.x1 = ax + aw - 3; tx.y0 = bx.y0 + 1; tx.y1 = bx.y1; tx.col = 0xFFFFFF; tx.text = tg.first; S.p.push_back(tx);
-                if (tg.first == "Ab?") ++S.marks; else if (tg.first == "Cmx") ++S.cmx; else ++S.cob;
+                if (tg.first == "Ab?") ++S.marks; else if (tg.first == "Cmx") ++S.cmx; else if (tg.first == "AR") ++S.cob; else ++S.st;
             }
         }
     }
@@ -284,12 +291,12 @@ inline Scene layout(const Engine& E, const std::vector<Wave>& waves, long long f
 
 inline std::string statusText(const Engine& E, const std::string& mkt, int spb, const std::string& vap) {
     std::string s = std::string("lsZzoDelta ") + VERSION + "\nMARKET," + mkt + "," + std::to_string(spb) + "\nRTH," + std::to_string(E.openMin) + "-" + std::to_string(E.closeMin) +
-        "\nRULES,1-bar High/Low ZigZag; wave delta (+ buying / - selling) / median |delta| of the last 5 same-way waves in the same session part (>= 3; RTH restarts)\nVOL,Cmx volume >= 2.5x normal at a new extreme; CoB the next wave the other way >= 1.5x normal\nAB,A effort > 1.9x and >= the prior opposite wave's, size <= 0.75x it; B effort > 1.9x and no new extreme past the prior same-way pivot\nBARS," +
+        "\nRULES,1-bar High/Low ZigZag; wave delta (+ buying / - selling) / median |delta| of the last 5 same-way waves in the same session part (>= 3; RTH restarts)\nVOL,Cmx volume >= 2.5x normal at a new extreme; AR the next wave the other way >= 1.5x normal; ST the wave after an AR on <= 0.7x the climax volume giving back >= 75% of the AR\nAB,A effort > 1.9x and >= the prior opposite wave's, size <= 0.75x it; B effort > 1.9x and no new extreme past the prior same-way pivot\nBARS," +
         std::to_string(E.B.size()) + ",no VAP " + std::to_string(E.noVap) + ",VAP " + vap + "\nWAVES," + std::to_string(E.W.size()) + "\n";
     int n = 0;
     for (size_t k = E.W.size(); k-- > 0 && n < 12; ++n) {
         const Wave& w = E.W[k]; if (w.s < 0) break;
-        char b[200]; std::snprintf(b, sizeof b, "WAVE,%lld,%s,delta %lld,%s,vol %lld,%s%s%s%s\n", E.B[(size_t)w.e].t, w.dir > 0 ? "UP" : "DN", w.dlt, ratioText(w).c_str(), w.vol, volText(w).c_str(), w.ab == 1 ? ",Ab? A" : w.ab == 2 ? ",Ab? B" : "", w.cmx ? ",Cmx" : "", w.cob ? ",CoB" : ""); s += b;
+        char b[200]; std::snprintf(b, sizeof b, "WAVE,%lld,%s,delta %lld,%s,vol %lld,%s%s%s%s\n", E.B[(size_t)w.e].t, w.dir > 0 ? "UP" : "DN", w.dlt, ratioText(w).c_str(), w.vol, volText(w).c_str(), w.ab == 1 ? ",Ab? A" : w.ab == 2 ? ",Ab? B" : "", w.cmx ? ",Cmx" : "", w.cob ? ",AR" : w.st ? ",ST" : ""); s += b;
     }
     return s;
 }

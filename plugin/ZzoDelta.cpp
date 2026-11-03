@@ -219,7 +219,7 @@ void ZzoDelta::status(ZState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = zzd::statusText(S.E, S.mkt, S.spb, S.vapFault ? "FAULT - remove and re-add the indicator" : "ok") +
-        "VIEW," ZD_NAME "\nDRAWN,bars " + std::to_string(S.last.bars) + ",labels " + std::to_string(S.last.labels) + ",Ab? " + std::to_string(S.last.marks) + ",Cmx " + std::to_string(S.last.cmx) + ",CoB " + std::to_string(S.last.cob) + "\n";
+        "VIEW," ZD_NAME "\nDRAWN,bars " + std::to_string(S.last.bars) + ",labels " + std::to_string(S.last.labels) + ",Ab? " + std::to_string(S.last.marks) + ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.cob) + ",ST " + std::to_string(S.last.st) + "\n";
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     zdMkdir(zdFlex()); zdPublish(S.statusPath, body);
@@ -273,7 +273,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #if ZZO_VOLUME_VIEW
-    p->setDescription("LRA ZZO Volume v1.0.0 - 1-bar High/Low ZigZag waves: wave volume / the median of the last 5 same-way waves (Weis Wave); Ab? absorption, Cmx climax, CoB change of behaviour.");
+    p->setDescription("LRA ZZO Volume v1.1.0 - 1-bar High/Low ZigZag waves: wave volume / the median of the last 5 same-way waves (Weis Wave); Ab? absorption, Cmx climax, AR automatic rally, ST secondary test.");
     p->setVersion(ZZO_VOLUME_VERSION_LITERAL);
 #else
     p->setDescription("LRA ZZO Delta v1.2.0 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? = absorption.");
