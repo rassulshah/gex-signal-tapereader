@@ -312,3 +312,12 @@ Rules (every new or changed indicator):
   wave labels, so it looked clear. Before placing a mark on a pivot / extreme, list every indicator on his chart that draws at that bar (rows: wick
   label +3..+17, A / Ae +19..+33, Pb now +35) and put them in the mockup. Proof: tests_bo100/test_bo110_pb.cpp (21/0: Pb at Y(low)+35 / Y(high)-35,
   clear of a simulated 14-px wave label and the A row on both sides) + test_bo100_host.cpp (22/0); PB_ROWS = 0 fails 6 + 2 checks.
+- (2026-11-03 lsDealerProfile 2.52.1) IRT'S LEFT-JUSTIFIED TEXT IS NOT AT ITS RECT'S LEFT EDGE: RCT::drawText(s, false, false) shows the text ~4 px
+  right of rect.left on his chart (the rank digits sat 4-5 px right of their box centre, the badge price 4 px right of x+1), while getTextWidth
+  is right. Centring a label with "left = centre - textW/2" + textLJ therefore lands ~4 px right - in a 13 px rank box the king's dark "K" was half
+  off its white box and "10" / "11" spilled out (the box was also a fixed one-character square). Text that must sit centred in a box is drawn
+  with drawText(s, TRUE, false) in a wide symmetric rect (DealerProfile textC), and a box holding variable text is sized to it (max(square,
+  textW + 6), one width per column so the boxes stay aligned). The mock's drawText must honour the centred flag, and a check that models the
+  4 px left-justified inset is the only way a host test sees this defect. Proof: test_dealerprofile_2521.cpp (38/0; ranks K 2 3 4 5 10 11 in
+  one column + badge chips 10 / 11 fully inside and centred within 1 px with IRT_LJ_INSET = 4; the 2.52.0 code fails 6 of them, "K" 1441-1449
+  in box 1434-1448 exactly as on his screenshot).

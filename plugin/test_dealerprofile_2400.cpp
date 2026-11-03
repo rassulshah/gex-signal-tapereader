@@ -111,8 +111,8 @@ void cppExtension::RCT::getScaleRect(void) { left = (short)PW; top = 0; right = 
 void cppExtension::RCT::set(short l, short t, short r, short b) { left = l; top = t; right = r; bottom = b; }
 void cppExtension::RCT::draw(short w, COLOR border, COLOR fill, DRAWTYPE, BRUSH_STYLE bs) { OPS.push_back(Op{"box", left, top, right, bottom, fill & 0xFFFFFF, border & 0xFFFFFF, w, false, "", (int)bs}); }
 void cppExtension::RCT::drawRounded(int, int) { OPS.push_back(Op{"rbox", left, top, right, bottom, brush & 0xFFFFFF, pen & 0xFFFFFF, penW, false, "", penStyle}); }
-void cppExtension::RCT::drawText(const char* t, RTBOOL, RTBOOL rj) {
-    const int w = tw(t); const int l = rj ? right - w : left;
+void cppExtension::RCT::drawText(const char* t, RTBOOL ctr, RTBOOL rj) {   // (2.52.1) the centred flag honoured (rank text drawn centred)
+    const int w = tw(t); const int l = ctr ? (left + right) / 2 - w / 2 : rj ? right - w : left;
     OPS.push_back(Op{"text", l, top, l + w, bottom, ink & 0xFFFFFF, 0, curFont, curBold, t, 0}); }
 RTX_RESULT cppExtension::PNT::set(int bar, float price, BAR_POSITION) { h = (short)(X0 + PPB * bar); v = yOfP(price); return RTX_OK; }
 void cppExtension::PNT::setDrawPosition() { posH = h; posV = v; }

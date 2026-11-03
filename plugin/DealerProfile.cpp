@@ -1,6 +1,10 @@
 /********************************************************************************
  *  DealerProfile.cpp  --  Investor/RT RTX extension  lsDealerProfile  (v1.0, 2026-09-29; v2.12.0, 2026-10-14; v2.17.0, 2026-10-18)
  *
+ *  2.52.1 (2026-11-03, Rassul "go"): the LIQUIDITY rows' rank box and the level-badge rank chips are as wide as their text (one width
+ *     per column so the boxes stay aligned: max(old square, widest label + 6)) - "10" / "11" no longer spill out; the rank text is
+ *     centred by IRT (textC = drawText centred in a symmetric rect): the left-justified draw lands ~4 px right of its x on his chart, so
+ *     the old textLJ centring put every rank right of centre (the king's dark "K" half off its white box). Nothing else changes.
  *  2.17.0 (2026-10-18 night, Rassul approved the audit-C fixes - findings 7 / 10 + the Market State): the grid's STALE test is the
  *     shared Fresh.h rule (the same thresholds as the HOD / LOD box): over 20 min old while MenthorQ updates; while it pauses (16:00-
  *     21:40 CT, the weekend) the closing set is fine but an older one is STALE (before: never stale outside MenthorQ hours, and the
@@ -145,7 +149,7 @@ static const int DP_KEYS_RW = 170, DP_LQ_RW = 170;   // (2.42.0, Rassul 2026-11-
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.52.0";   // (2.52.0, 2026-11-03 Rassul "the rank in front of the liquidity") the LIQUIDITY rows' rank box moved to the FRONT of the row (left of R S notP F); same box, colours, column width   // was "2.51.0": (2.51.0, 2026-11-03 Rassul 09:34 CT "remove the held lines") no HELD lines / words on the price chart (DP_HELD_LINES false; grades still read and logged)   // was "2.50.1":   // (2.50.1) no hovers at all (DP_PCT_HOVERS off, no TRACK_MOUSE)   // was "2.50.0":   // (2.50.0, 2026-11-02 Rassul 13:18 CT) no flicker: level ranks and node grades held 10 s, grade zone +-2.5 ticks; HELD lots = the most seen while testing; HELD lines / words never pile up   // was "2.49.0":   // (2.49.0, 2026-11-02 Rassul 12:37 CT) only the PASSED grade letters are drawn (white, fixed slots)   // was "2.48.0":   // (2.48.0, 2026-11-02 Rassul 12:34 CT) grade letters without the white / grey boxes (passed white, failed grey)   // was "2.47.0":   // (2.47.0, 2026-11-02 Rassul 12:27 CT) no level names on the liquidity rows; a level-linked node's rank on its level badge   // was "2.46.0":   // (2.46.0, 2026-11-02 Rassul 12:22 CT) CR0 red / PS0 green; level names never shortened for the grade tags (tags only where they fit)   // was "2.45.0":   // (2.45.0, 2026-11-02 Rassul 12:10-12:12 CT, mockup liq_gap) liquidity label 4 px after its bar, rank box right after the label; grade tags stay on the bar   // was "2.44.0":   // (2.44.0, 2026-11-02 Rassul) CR0 and PS0 (today's 0DTE call resistance / put support) back in the Key Levels column; other gamma levels stay out   // was "2.43.0":   // (2.43.0, 2026-11-02 10:59 CT) the real-liquidity grade R S \xACP F on the Liquidity bar + score, HELD line when a graded node held   // was "2.42.0":   // (2.42.0, 2026-11-02) Key Levels and Liquidity columns 170 px each (were 200 / 230)   // was "2.41.0":   // (2.41.0, 2026-11-01 Rassul 16:32-16:52 CT) new key levels PHH / PHL = the high / low of the hour before the RTH open (KeyLevelsLogic), overnight grey; HG RTH from 07:10 CT (SessionVWAPLogic, his locked rule; was 07:20)   // was 2.40.2:   // (2.40.2, 2026-11-01) the bar export reads his indicators from the CHART only (no getCustomIndicator fallback - the IRT crash rule); the weekly POC stays computed natively from the completed prior week   // was 2.40.1:  (2.40.1, 2026-11-01 cleanup, Rassul "go with your recommendation") code that could no longer run removed: the Dealer Profile bars (render / node rows / header / strength marks), the pre-2.29 Levels column (flushColumn) and badge paths, the GEX rows, the 2.35 code-2 zone mode, the 2.38 king rows, the touch-tag rows / lane, the badge rank chips and odds; the no-order-feed fallback shows the top 5 (was 3); every drawing of 2.40.0 unchanged (identical draw list)   // was 2.40.0:  (2.40.0, 2026-11-01 Rassul 09:49-10:21 CT, mockup lp_proposal.html) THE LIQUIDITY COLUMN = the WHOLE BOOK: the top 5 real-order nodes (lsLiquidityProfile 0.70.0 B code 4: rested >= 10 min, re-priced < 2x in 5 min, any distance; both sides together; steady board in 30 s / out 10 s) + any other node >= 50% of the king within 1 ATR (3-min) above a high level / below a low level (POCs either side) with its REAL rank (6, 7, ...) and the level names (LiqPick.h); the amount is "265  100%" = % of the king (no age, no x); no STAYS / GONE tags, no K rows (the king = rank 1, a white K box); the KEY LEVELS column moved RIGHT, just left of the Liquidity column (the price area starts at the pane's left edge; badges left-justified); no odds % and no rank chips on the level badges   // was 2.39.0:  (2.39.0, 2026-10-29 Rassul 13:02 CT) no Wave POC badge (his "WPOC" = the WEEKLY POC); the weekly POC off screen = its own marker "Weekly POC 7,690.00  (-42.00)" at the Key Levels column's top / bottom edge; liquidity column re-laid out (bars use the column width, the left tag lane wider)
+static const char* DP_VERSION = "2.52.1";   // (2.52.1, 2026-11-03 Rassul "go") the rank boxes (Liquidity rows + level-badge chips) sized to their text ("10", "11" fit) and the rank text CENTRED by IRT (drawText centred) - the left-justified draw sat ~4 px right of where it was measured, so "K" was half cut off   // was "2.52.0": (2.52.0, 2026-11-03 Rassul "the rank in front of the liquidity") the LIQUIDITY rows' rank box moved to the FRONT of the row (left of R S notP F); same box, colours, column width   // was "2.51.0": (2.51.0, 2026-11-03 Rassul 09:34 CT "remove the held lines") no HELD lines / words on the price chart (DP_HELD_LINES false; grades still read and logged)   // was "2.50.1":   // (2.50.1) no hovers at all (DP_PCT_HOVERS off, no TRACK_MOUSE)   // was "2.50.0":   // (2.50.0, 2026-11-02 Rassul 13:18 CT) no flicker: level ranks and node grades held 10 s, grade zone +-2.5 ticks; HELD lots = the most seen while testing; HELD lines / words never pile up   // was "2.49.0":   // (2.49.0, 2026-11-02 Rassul 12:37 CT) only the PASSED grade letters are drawn (white, fixed slots)   // was "2.48.0":   // (2.48.0, 2026-11-02 Rassul 12:34 CT) grade letters without the white / grey boxes (passed white, failed grey)   // was "2.47.0":   // (2.47.0, 2026-11-02 Rassul 12:27 CT) no level names on the liquidity rows; a level-linked node's rank on its level badge   // was "2.46.0":   // (2.46.0, 2026-11-02 Rassul 12:22 CT) CR0 red / PS0 green; level names never shortened for the grade tags (tags only where they fit)   // was "2.45.0":   // (2.45.0, 2026-11-02 Rassul 12:10-12:12 CT, mockup liq_gap) liquidity label 4 px after its bar, rank box right after the label; grade tags stay on the bar   // was "2.44.0":   // (2.44.0, 2026-11-02 Rassul) CR0 and PS0 (today's 0DTE call resistance / put support) back in the Key Levels column; other gamma levels stay out   // was "2.43.0":   // (2.43.0, 2026-11-02 10:59 CT) the real-liquidity grade R S \xACP F on the Liquidity bar + score, HELD line when a graded node held   // was "2.42.0":   // (2.42.0, 2026-11-02) Key Levels and Liquidity columns 170 px each (were 200 / 230)   // was "2.41.0":   // (2.41.0, 2026-11-01 Rassul 16:32-16:52 CT) new key levels PHH / PHL = the high / low of the hour before the RTH open (KeyLevelsLogic), overnight grey; HG RTH from 07:10 CT (SessionVWAPLogic, his locked rule; was 07:20)   // was 2.40.2:   // (2.40.2, 2026-11-01) the bar export reads his indicators from the CHART only (no getCustomIndicator fallback - the IRT crash rule); the weekly POC stays computed natively from the completed prior week   // was 2.40.1:  (2.40.1, 2026-11-01 cleanup, Rassul "go with your recommendation") code that could no longer run removed: the Dealer Profile bars (render / node rows / header / strength marks), the pre-2.29 Levels column (flushColumn) and badge paths, the GEX rows, the 2.35 code-2 zone mode, the 2.38 king rows, the touch-tag rows / lane, the badge rank chips and odds; the no-order-feed fallback shows the top 5 (was 3); every drawing of 2.40.0 unchanged (identical draw list)   // was 2.40.0:  (2.40.0, 2026-11-01 Rassul 09:49-10:21 CT, mockup lp_proposal.html) THE LIQUIDITY COLUMN = the WHOLE BOOK: the top 5 real-order nodes (lsLiquidityProfile 0.70.0 B code 4: rested >= 10 min, re-priced < 2x in 5 min, any distance; both sides together; steady board in 30 s / out 10 s) + any other node >= 50% of the king within 1 ATR (3-min) above a high level / below a low level (POCs either side) with its REAL rank (6, 7, ...) and the level names (LiqPick.h); the amount is "265  100%" = % of the king (no age, no x); no STAYS / GONE tags, no K rows (the king = rank 1, a white K box); the KEY LEVELS column moved RIGHT, just left of the Liquidity column (the price area starts at the pane's left edge; badges left-justified); no odds % and no rank chips on the level badges   // was 2.39.0:  (2.39.0, 2026-10-29 Rassul 13:02 CT) no Wave POC badge (his "WPOC" = the WEEKLY POC); the weekly POC off screen = its own marker "Weekly POC 7,690.00  (-42.00)" at the Key Levels column's top / bottom edge; liquidity column re-laid out (bars use the column width, the left tag lane wider)
 // was 2.38.0:   // (2.38.0, 2026-10-29 Rassul approved 11:18 CT) a WPOC badge in the Key Levels column = the latest wave's OPEN Wave POC from lsWavePOC 1.4.0 (SignalBoard W); the KING nodes from lsLiquidityProfile 0.69.0 (B code 3): a K row at their price, off screen the edge marker "K <price> <lots> (x)"; the Liquidity column: the zone's AGE next to its amount ("223 \xB7 48m", from lsLiquidityProfile 0.69.0's first-candidate time); R? after a touch tag when the zone was rebuilt >= what was hit (untested "?"; live only, not recorded)   // was 2.37.0: (2.37.0, 2026-10-29 Rassul approved 09:33 CT, mockup orderlines-levels-mockup.html) Key Levels badge order left to right: odds (left-justified) ... VALUE, NAME chip(s), the LIQUIDITY RANK box right-most (no rank = no box; same 230 px; odds drop first); rank rule option c: a zone counts only from the level out to 0.25 ATR (3-min) BEYOND it (one-sided, away from price) and each zone goes to ONE level (the nearest) - no rank twice (LevelsColumn.h lrk 1.0.0); liqlevels.csv follows the same rule; every rank change appended to lsFlexLevels\\DealerProfile\\<MKT>-liqlevels-history-<session>.csv (time, level, price, rank, lots)   // was 2.36.1: (2.36.1, 2026-10-28 18:24 CT Rassul "you shouldn't be able to see the background") the Key Levels column ground is SOLID: the chart background colour (getBackgroundColor), the full column (pane left edge to the column edge, pane top to bottom, no cut-out), drawn first in the levels pass - before the narrow-chart return - so nothing DealerProfile or an indicator drawn before it paints there shows through; badges / odds / ticks on top
 // was 2.36.0:   // (2.36.0, 2026-10-28 16:26 CT Rassul "the chart is extremely messy, remove the drawing of levels across the chart") NO level lines across the price area (badges stay in the Key Levels column, a <= 6 px tick at its edge), no faint liquidity order lines, no HELD line / word on the chart (HELD = a tag in the liquidity column lane; record + outcome logic unchanged), the off-screen level markers in the Key Levels column top / bottom
 // was 2.35.0:   // (2.35.0, 2026-10-28 14:04 CT Rassul approved the new liquidity-column candidate rule) when lsLiquidityProfile 0.67.0 posts its ZONE candidates (SignalBoard B code 2 = LiqTouch 1.1.0 pickZones: real orders only - rested 30 s+, re-priced < 2x in 5 min; a price + its +-1 tick neighbours; >= 2.0x the median real level of that side within 3 ATR, median every 60 s; one node per distribution) the column shows the TOP 3 BIDS below price + the TOP 3 OFFERS above (max 6, fewer when fewer pass), each side on its own steady board (Top10Stable, cap 3), the KING = the biggest of all shown (white chip + K, edge marker unchanged); touch tags + HELD on every shown level; the p97 tier is a log field only (LP status LIQ_CANDIDATES). No code-2 facts (old LP / no order feed) = the 2.34.0 path
@@ -405,6 +409,7 @@ public:
     void line(short x1, short y1, short x2, short y2, COLOR c, int w);
     void textRJ(short rightX, short y, const char* s, COLOR col, int sz, bool bold);
     void textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold);
+    void textC(short centerX, short y, const char* s, COLOR col, int sz, bool bold);   // (2.52.1) centred on centerX by IRT itself
     int  textW(const char* s, int sz, bool bold);
     void outline(short l, short t, short r, short b);
     // (2.3.0, Rassul 2026-10-06 21:02 "irt ... pauses every few minutes ... i think its because of flexlevels ... replace with
@@ -717,6 +722,17 @@ void DealerProfile::textRJ(short rightX, short y, const char* s, COLOR col, int 
     short yy = (short)(y - (short)(sz * 0.45f + 0.5f));
     RCT rc; rc.set((short)(rightX - 400), (short)(yy - sz), rightX, (short)(yy + sz));
     rc.drawText(s, false, true);
+}
+// (2.52.1) centred text: IRT centres it in a wide symmetric rect (its own font metric, no left inset). The left-justified draw (textLJ)
+// shows the text ~4 px right of leftX on his chart (screenshot 2026-11-03: the rank digits sat 4-5 px right of the box centre, the
+// price text 4 px right of x+1), so a box centred with textLJ + textW was off by that inset; centring by IRT cancels it.
+void DealerProfile::textC(short centerX, short y, const char* s, COLOR col, int sz, bool bold)
+{
+    FONT f; f.id = HELVETICA; f.size = (short)sz; f.style = bold ? BOLD : PLAIN; setFont(f);
+    setTextColor(col);
+    short yy = (short)(y - (short)(sz * 0.45f + 0.5f));
+    RCT rc; rc.set((short)(centerX - 300), (short)(yy - sz), (short)(centerX + 300), (short)(yy + sz));
+    rc.drawText(s, true, false);
 }
 void DealerProfile::textLJ(short leftX, short y, const char* s, COLOR col, int sz, bool bold)
 {
@@ -2049,7 +2065,7 @@ void DealerProfile::flushLines(const Settings& S)
         int w = 4;
         for (const lvc::Chip& C : R.chips) w += textW(C.text.c_str(), kf, true) + 8 + 3;
         w += textW(P0.priceTxt.c_str(), kf, true) + 6;
-        if (DP_RANK_CHIPS && R.rank > 0) w += (bh - 2) + 3;   // (2.42.0) the rank box after the names
+        if (DP_RANK_CHIPS && R.rank > 0) w += std::max(bh - 2, textW(R.rank == 1 ? "K" : std::to_string(R.rank).c_str(), sf, true) + 6) + 3;   // (2.42.0) the rank box after the names   // (2.52.1) as wide as its text ("10")
         // (2.34.0, Rassul 12:50 CT "the percentages should be behind the level names to the left justified. and the level name and value should be
         // right justified") w = the name chips + price badge only (RIGHT-justified at the column's right edge); the odds are separate text
         // LEFT-justified at the column's left edge; they must not meet (6 px apart) - the odds go first, then the last chips of a merged row
@@ -2132,11 +2148,11 @@ void DealerProfile::flushLines(const Settings& S)
         }
         if (DP_RANK_CHIPS && R.rank > 0) {   // (2.42.0, Rassul 10:35 CT) the liquidity rank AFTER the level name(s): K = the king, as in the Liquidity column
             const bool king = R.rank == 1; const std::string rk = king ? "K" : std::to_string(R.rank);
-            const int rl = std::min(x, rgt - 1 - (bh - 2)), rr = rl + (bh - 2);
+            const int cw = std::max(bh - 2, textW(rk.c_str(), sf, true) + 6);   // (2.52.1) the chip as wide as its text ("10", "11"), at least the old square
+            const int rl = std::min(x, rgt - 1 - cw), rr = rl + cw;
             const COLOR ring = R.bid ? C_BUY : C_SELL;
             RCT rb; rb.set((short)rl, (short)(t + 2), (short)rr, (short)(b - 2)); rb.draw(1, ring, king ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);
-            const int rkw = textW(rk.c_str(), sf, true);
-            textLJ((short)((rl + rr) / 2 - rkw / 2), (short)g.yb, rk.c_str(), king ? C_DARK : (COLOR)0x00F8FAFC, sf, true);
+            textC((short)((rl + rr) / 2), (short)g.yb, rk.c_str(), king ? C_DARK : (COLOR)0x00F8FAFC, sf, true);   // (2.52.1) centred by IRT
             ++cs.keysRankChips;
         }
         if (!g.odds.empty()) textLJ((short)(kL + 4), (short)g.yb, g.odds.c_str(), C_GREYC, sf, false);   // (2.34.0) the odds LEFT-justified at the column's left edge
@@ -2244,6 +2260,10 @@ void DealerProfile::flushLines(const Settings& S)
             int n = 0; for (int bit = 1; bit <= 8; bit <<= 1) n += (m & bit) ? 1 : 0; return std::to_string(n) + "/4"; };
         auto bookText = [&](const TopQ& q) { std::string t = std::to_string(q.lots); const std::string sc = scoreOf(gradeOf(q)); if (!sc.empty()) t += "  " + sc;
             t += "  " + std::to_string(q.pct) + "%"; return t; };   // (2.47.0, Rassul 12:27 CT) no level names on the liquidity rows: the rank shows on the level's badge
+        // (2.52.1) ONE rank-box width for the column (boxes stay aligned): the widest shown rank label + 6, at least the old square
+        int RKW = bh - 2;
+        for (const TopQ& q : topq) { if (!q.on) continue; const std::string rk0s = (cs.bookMode && q.rank == 1) ? std::string("K") : std::to_string(q.rank);
+            RKW = std::max(RKW, textW(rk0s.c_str(), sf, true) + 6); }
         int LOTW = 0;
         {   const long long nowS0 = ctNowSec();
             for (const TopQ& q : topq) { if (!q.on) continue; if (cs.bookMode) { LOTW = std::max(LOTW, textW(bookText(q).c_str(), sf, q.rank == 1)); continue; }
@@ -2255,12 +2275,12 @@ void DealerProfile::flushLines(const Settings& S)
             // (2.46.0) exact room: bar area >= the tags' width + 2 px
             bool anyG = false; for (const TopQ& q : topq) if (q.on && cs.bookMode && gradeOf(q)) anyG = true;
             if (anyG) { int need = 0; const char* L4[4] = { "R", "S", "\xACP", "F" }; for (int k4 = 0; k4 < 4; ++k4) need += textW(L4[k4], sf, true) + 6;
-                const int rk0 = (DP_LIQ_RANK_RIGHT || DP_LIQ_RANK_FRONT) ? (bh - 2) : 0; LOTW = std::max(0, std::min(LOTW, (col.r - col.l) - rk0 - 17 - need - 2)); } }
+                const int rk0 = (DP_LIQ_RANK_RIGHT || DP_LIQ_RANK_FRONT) ? RKW : 0; LOTW = std::max(0, std::min(LOTW, (col.r - col.l) - rk0 - 17 - need - 2)); } }
         const int TGR = 0;   // (2.40.0 cleanup) no tag lane
         const bool rkR = DP_LIQ_RANK_RIGHT && cs.bookMode;   // (2.42.0) the rank box at the row's RIGHT end, after the lots / pct / level label
         const bool rkF = DP_LIQ_RANK_FRONT && cs.bookMode;   // (2.52.0) the rank box at the row's FRONT (RKX = col.l + 4), the bar / letters after it, the label 4 px after the bar
-        const int RKX = rkR ? col.r - 3 - (bh - 2) : col.l + 4, TXR = rkR ? RKX - 4 : col.r - 4;
-        const int BX = rkR ? col.l + 4 : RKX + bh + 1, BAR_R = TXR - 4 - LOTW, BW = std::max(12, BAR_R - BX);
+        const int RKX = rkR ? col.r - 3 - RKW : col.l + 4, TXR = rkR ? RKX - 4 : col.r - 4;   // (2.52.1) RKW
+        const int BX = rkR ? col.l + 4 : RKX + RKW + 3, BAR_R = TXR - 4 - LOTW, BW = std::max(12, BAR_R - BX);
         cs.lqBarW = BW; cs.lqLotW = LOTW; cs.lqTagLane = TGR;
         std::vector<sb::Fact> qf;
         for (size_t k = 0; k < topq.size(); ++k) { const TopQ& q = topq[k]; sb::Fact f; f.bar = (long long)time(nullptr); f.lo = f.hi = q.px; f.side = q.bid ? 1 : -1; f.val = (double)q.lots; f.code = q.rank; f.state = q.dim ? 1 : 0; qf.push_back(f);
@@ -2311,8 +2331,8 @@ void DealerProfile::flushLines(const Settings& S)
                 // the rank box right after the label (never past the column's right end)
                 const int x0 = (rkR || rkF) ? BAR_R + 4 : std::max(BAR_R + 4, TXR - lw);   // (2.52.0) front rank: the label still starts 4 px after the bar
                 {   const int rx = rkR ? std::min(RKX, x0 + lw + 4) : RKX;
-                    RCT rb; rb.set((short)rx, (short)(t + 1), (short)(rx + bh - 2), (short)(b - 1)); rb.draw(1, base, king ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);
-                    const int rkw = textW(rk.c_str(), sf, true); textLJ((short)(rx + (bh - 2) / 2 - rkw / 2), (short)yc, rk.c_str(), king ? C_DARK : (COLOR)0x00F8FAFC, sf, true);
+                    RCT rb; rb.set((short)rx, (short)(t + 1), (short)(rx + RKW), (short)(b - 1)); rb.draw(1, base, king ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);   // (2.52.1) RKW wide
+                    textC((short)(rx + RKW / 2), (short)yc, rk.c_str(), king ? C_DARK : (COLOR)0x00F8FAFC, sf, true);
                     cs.lqGapMax = std::max(cs.lqGapMax, x0 - BAR_R); }
                 if (sc.empty()) textLJ((short)x0, (short)yc, lt.c_str(), tc, sf, king);
                 else {   // (2.43.0) "lots  SCORE  pct%  names": the score in its own colour (3-4 green, 0-1 / broke red, 2 / testing grey)
@@ -2339,8 +2359,8 @@ void DealerProfile::flushLines(const Settings& S)
                 }
                 ++cs.lvcLiq; continue; }
             const std::string rk = std::to_string(q.rank);
-            RCT rb; rb.set((short)RKX, (short)(t + 1), (short)(RKX + bh - 2), (short)(b - 1)); rb.draw(1, base, q.rank == 1 ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);
-            const int rkw = textW(rk.c_str(), sf, true); textLJ((short)(RKX + (bh - 2) / 2 - rkw / 2), (short)yc, rk.c_str(), q.rank == 1 ? C_DARK : (COLOR)0x00F8FAFC, sf, true);
+            RCT rb; rb.set((short)RKX, (short)(t + 1), (short)(RKX + RKW), (short)(b - 1)); rb.draw(1, base, q.rank == 1 ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);   // (2.52.1) RKW wide
+            textC((short)(RKX + RKW / 2), (short)yc, rk.c_str(), q.rank == 1 ? C_DARK : (COLOR)0x00F8FAFC, sf, true);
             const int fl = std::max(6, (int)std::lround((double)BW * (double)q.lots / (double)mx));
             std::string lt = (q.dim ? "~" : "") + std::to_string(q.lots);   // (2.31.1) "~" = this order is moving / quoting
             if (q.since > 0) { const long long nowS = ctNowSec(), age = nowS > q.since ? (nowS - q.since) / 60 : -1;
@@ -2377,8 +2397,7 @@ void DealerProfile::flushLines(const Settings& S)
         if (R.rank > 0) {
             const std::string rk = std::to_string(R.rank);
             RCT rb; rb.set((short)RKX, (short)(t + 1), (short)(RKX + bh - 2), (short)(b - 1)); rb.draw(1, base, R.rank == 1 ? (COLOR)0x00F8FAFC : (COLOR)0x001E293B, DRAW_OPAQUE, PAT_SOLID);
-            const int rkw = textW(rk.c_str(), sf, true);
-            textLJ((short)(RKX + (bh - 2) / 2 - rkw / 2), (short)yc, rk.c_str(), R.rank == 1 ? C_DARK : (COLOR)0x00F8FAFC, sf, true);
+            textC((short)(RKX + (bh - 2) / 2), (short)yc, rk.c_str(), R.rank == 1 ? C_DARK : (COLOR)0x00F8FAFC, sf, true);   // (2.52.1) centred by IRT (fallback column, box unchanged)
         }
         const int fl = std::max(18, (int)std::lround((double)LQW * std::min(1.0, maxLots > 0 ? (double)R.lots / (double)maxLots : 1.0)));
         box((short)LQX, (short)(t + 2), (short)(LQX + fl), (short)(b - 2), fade(base, 0.55f));
@@ -2596,6 +2615,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | ((DP_HOVERS || DP_PCT_HOVERS) ? TRACK_MOUSE : 0));   // (2.17.3) no TRACK_MOUSE while the hovers are off   // (2.9.0) hovers: mouse events even when not selected
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
-    p->setVersion("2.52.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.52.1");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }
