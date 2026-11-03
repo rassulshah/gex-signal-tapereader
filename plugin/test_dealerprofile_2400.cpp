@@ -1,3 +1,4 @@
+// (2.52.0 update: the liquidity rank box at the row FRONT - two checks follow DP_LIQ_RANK_FRONT; the version / HELD checks were already failing before 2.52.0)
 // test_dealerprofile_2400.cpp -- lsDealerProfile 2.40.0 (2026-11-01, Rassul 09:49-10:21 CT, mockup lp_proposal.html) through the REAL DealerProfile.cpp:
 // the Liquidity column = the WHOLE BOOK (B code 4 from lsLiquidityProfile 0.70.0): top 5 + level-linked nodes >= 50% of the king with their real
 // ranks (6, 7, ...) and the level names; "lots  pct%" = % of the king; K box on the king; no STAYS / GONE tags; the Key Levels column on the RIGHT,
@@ -249,7 +250,7 @@ int main(int argc, char** argv)
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
         check(std::string(DP_VERSION) == "2.50.1" && src.find("p->setVersion(\"2.50.1\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.50.1 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
-        check(DP_BOOK && !DP_ODDS && DP_RANK_CHIPS && DP_LIQ_RANK_RIGHT && DP_KEYS_RIGHT && std::string(lpk::VERSION) == "1.0.0" && lpk::TOP == 5 && lpk::PCT == 0.50 && lpk::ATR_X == 1.0 && std::string(ltc::VERSION) == "1.5.0", "whole book, top 5, 50% / 1 ATR, no odds, no rank chips, Key Levels right (LiqPick 1.0.0, LiqTouch 1.3.0)");
+        check(DP_BOOK && !DP_ODDS && DP_RANK_CHIPS && DP_LIQ_RANK_FRONT && !DP_LIQ_RANK_RIGHT && DP_KEYS_RIGHT && std::string(lpk::VERSION) == "1.0.0" && lpk::TOP == 5 && lpk::PCT == 0.50 && lpk::ATR_X == 1.0 && std::string(ltc::VERSION) == "1.5.0", "whole book, top 5, 50% / 1 ATR, no odds, no rank chips, Key Levels right (LiqPick 1.0.0, LiqTouch 1.3.0)");
     }
     dealerFile(true);
     std::vector<klv::Merged> lv;
@@ -312,9 +313,10 @@ int main(int argc, char** argv)
     std::vector<std::string> rk; int rkFar = 0;
     for (auto& q : O) if (q.kind == "text" && q.l >= lqL && q.r <= lqR + 2 && q.text.size() <= 2 && (std::isdigit((unsigned char)q.text[0]) || q.text == "K")) {
         rk.push_back(q.text); int best = 9999;
-        for (auto& o : O) if (o.kind == "text" && o.l >= lqL && o.text.find('%') != std::string::npos && std::abs((o.t + o.b) / 2 - (q.t + q.b) / 2) <= 3 && q.l >= o.r) best = std::min(best, q.l - o.r);
-        if (best > 16) ++rkFar; }
-    check(rkFar == 0 && c.lqGapMax == 4, "(2.45.0) every rank box right after its label (" + std::to_string(rkFar) + " far), label 4 px after the bar (" + std::to_string(c.lqGapMax) + ")");
+        // (2.52.0, Rassul 2026-11-03 "the rank in front of the liquidity") the rank box now at the row's FRONT: left of its label (test_dealerprofile_2520 checks the full row)
+        for (auto& o : O) if (o.kind == "text" && o.l >= lqL && o.text.find('%') != std::string::npos && std::abs((o.t + o.b) / 2 - (q.t + q.b) / 2) <= 3 && q.r <= o.l) best = std::min(best, o.l - q.r);
+        if (best == 9999) ++rkFar; }
+    check(rkFar == 0 && c.lqGapMax == 4, "(2.52.0) every rank box in FRONT of its label (" + std::to_string(rkFar) + " not), label 4 px after the bar (" + std::to_string(c.lqGapMax) + ")");
     std::sort(rk.begin(), rk.end()); std::string rks; for (auto& t : rk) rks += t + " ";
     check(rk == std::vector<std::string>({ "2", "3", "4", "5", "6", "7", "8", "K" }), "rank boxes: K + 2-5 + the level-linked 6, 7, 8 with their real ranks, no 9-11 (" + rks + ")");
     auto findText = [&](const std::string& pre) -> const Op* { for (auto& q : O) if (q.kind == "text" && q.l > lqL && q.text.rfind(pre, 0) == 0) return &q; return nullptr; };
