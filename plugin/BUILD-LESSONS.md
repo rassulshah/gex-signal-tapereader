@@ -333,3 +333,15 @@ Rules (every new or changed indicator):
   12 days without an error. A record reader must accept every layout its writer has produced (or log what it skipped); a writer that adds fields
   ships a reader test with a line in the new layout. Proof: LRA test_orderflow_badges.py::test_read_bbo_breakout_folder (20 / 24 / 27 fields,
   real lsBreakout lines, per-day preference, first wins).
+- (2026-11-03 night lsLiquidityProfile 0.73.0 / lsDealerProfile 2.52.2) A RETIRED HAND-OFF CODE LEFT THE READER INVENTING ITS OWN ANSWER: LP 0.70.0
+  stopped posting SignalBoard B code 3 (the king) but kept computing it (status KING_NODES offer 50 @ 7587), and DP 2.40 quietly took rank 1 of
+  its own board as K (7625) - two "kings" on one chart, status "B code 3: 0" for 3 days. When a producer retires a fact, the reader's status must
+  say what it shows instead, and any concept shown by two plugins needs ONE owner + an end-to-end test (the producer's real posted facts fed to
+  the reader). Proof: tests_liqtouch/test_lp073_host.cpp writes the real LP facts (lp073_bfacts.txt) -> test_dealerprofile_2522.cpp F) K = 7830.
+- (same build) A RATIO MUST SAY WHAT IT IS A RATIO OF: the zone "x" divided by the median of the 8 bands BEHIND it (1-lot floor), so in a thin
+  evening book a normal 380-lot band read 54x (0.94-1.4x a normal band). Gates on a relative-to-neighbours ratio need an absolute size gate too
+  (>= 1.5x the slot normal), and the label shows size x normal. Also check WHO draws a label before fixing it: the 3.9x / 3x on his chart were
+  lsDeltaProfile's, not the Liquidity Profile's (whose column has been off since 0.60.0). Proof: tests_lqp044/test_lp073.cpp, tests_dp217/test_dp2321.cpp.
+- (same build) AFTER A RESTART THE MBO BOOK IS BLIND TO OLDER ORDERS: rank / king logic must not run on a book that only knows 10 minutes of
+  orders; LiqTouch 1.6.0 warms 10 min and seeds the depth (MBP) lots the order book cannot explain once displayed 10 min. Proof:
+  tests_liqtouch/test_liqtouch_warm.cpp (restart replay), test_lp073_host.cpp (warming -> ready -> IRT restart -> warming).

@@ -1,5 +1,14 @@
 #ifndef LS_LIQTOUCH_H
 #define LS_LIQTOUCH_H
+// LiqTouch.h 1.6.0 (2026-11-03 night, audit of his 7:49 PM CT ES files: after an IRT restart the order-by-order book only knows the orders
+//   placed since (BIG_ORDERS not_known ~5%, oldest zone ~17 min), so ordinary 25-50 lot orders ranked as the king):
+//   - warming(now): the first WARM_MS (10 min = the king / whole-book rest rule) after this engine's first event - the host publishes no
+//     king and the Dealer Profile no ranks while it is true.
+//   - setDepth(): the chart's depth book (MBP, displayed lots per price). At every price the displayed lots the order book cannot explain
+//     (depth - every known order there) are orders placed before the restart; once such a remainder has been displayed continuously for
+//     KING_REST_MS it counts as REAL resting size (seedLots) in bookStep (whole-book nodes) and kingStep (the king), as if it were one
+//     rested order (no re-price history). A price that leaves the depth window or drops to no remainder restarts its clock; a depth book
+//     older than 5 s is ignored. coverage() = known / displayed lots inside the depth window (status only).
 // LiqTouch.h 1.3.0 (2026-11-01, Rassul 10:12-10:21 CT "it should be the whole book, no more 3 ATR"): + THE WHOLE-BOOK NODES (bookNodes):
 //   real orders = rested >= 10 min at their price and re-priced < 2x in 5 min (the king rule), ANY distance from price (bids below the last
 //   trade, offers above); node = a price +-1 tick (same side) at the price with the most lots; each node its own distribution (>= 3 ticks
@@ -50,7 +59,7 @@
 #include <algorithm>
 #include <sstream>
 namespace ltc {
-static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-02 13:31 CT "it should not be 1 atr, it should be bar close") HELD = a 3-min bar CLOSES beyond the zone on the defenders' side   // was "1.4.0":   // (1.4.0, 2026-11-02) + THE REAL-LIQUIDITY GRADE R S \xACP F (Grade below)   // was "1.3.0";   // (1.3.0, 2026-11-01) + the whole-book nodes (bookNodes)  // was "1.2.0";   // (1.2.0, 2026-10-29) + the KING nodes above / below (kingStep)
+static const char* const VERSION = "1.6.0";   // (1.6.0, 2026-11-03 night, Rassul "fix all" after the Liquidity Profile audit) WARM-UP + DEPTH SEED: warming() for the first 10 min of the order-by-order book after a restart; the displayed (MBP) lots the order book cannot explain (orders placed before the restart) count as real once displayed 10 min+ (seedLots) in the whole-book nodes and the king   // was "1.5.0":   // (1.5.0, Rassul 2026-11-02 13:31 CT "it should not be 1 atr, it should be bar close") HELD = a 3-min bar CLOSES beyond the zone on the defenders' side   // was "1.4.0":   // (1.4.0, 2026-11-02) + THE REAL-LIQUIDITY GRADE R S \xACP F (Grade below)   // was "1.3.0";   // (1.3.0, 2026-11-01) + the whole-book nodes (bookNodes)  // was "1.2.0";   // (1.2.0, 2026-10-29) + the KING nodes above / below (kingStep)
 enum Side { BID = 0, ASK = 1 };
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum Tag { T_PENDING = 0, T_STAYS_PLUS = 1, T_STAYS = 2, T_STAYS_WEAK = 3, T_GONE = 4, T_GONE_PLUS = 5, T_MID = 6, T_EARLY = 7 };
@@ -303,13 +312,14 @@ public:
     long long nEvents = 0, nTouches = 0, nEpisodes = 0, nUnknown = 0, nGap = 0;
     explicit Engine(const Params& p = Params()) : P(p) {}
     void newSession() { live.clear(); out.clear(); }   // a new 17:00 session: touches start again, the book and the followed levels go on
-    void reset() { gLive.clear(); gDone.clear(); gOut.clear(); adds.clear(); quick.clear(); cand.clear(); book.clear(); nBookReal = 0; medAt = -1; med[0] = med[1] = 0; ord.clear(); lev.clear(); eps.clear(); live.clear(); out.clear(); hist.clear(); blocks.clear(); nextT = 0; last = hi = lo = -1; bv = sv = 0; lastSec = -1; started = false; }
+    void reset() { gLive.clear(); gDone.clear(); gOut.clear(); adds.clear(); quick.clear(); cand.clear(); book.clear(); nBookReal = 0; medAt = -1; med[0] = med[1] = 0; ord.clear(); lev.clear(); eps.clear(); live.clear(); out.clear(); hist.clear(); blocks.clear(); seed[0].clear(); seed[1].clear(); depthAt = -1; cover = -1.0; firstMs = -1; nextT = 0; last = hi = lo = -1; bv = sv = 0; lastSec = -1; started = false; }
     // tests: start the 1-s clock at a boundary and seed the last trade (the live engine starts at its first event)
     void begin(long long boundaryMs, long long lastPx) { nextT = boundaryMs; started = true; if (lastPx > 0) last = lastPx; }
     // one MBO event. side: the event's raw side (BID / ASK, -1 unknown); implied: a spread-driven fill (no aggressor)
     void onEvent(int act, int side, long long px, long long size, long long id, long long ms, bool implied = false) {
         if (ms <= 0 || px <= 0 || size < 0 || act < NEW || act > FILL) return;
         if (!started) { nextT = (ms / 1000) * 1000 + 1000; started = true; }
+        if (firstMs < 0) firstMs = ms;                                  // (1.6.0) the warm-up clock
         advance(ms);
         ++nEvents;
         std::unordered_map<long long, Ord>::iterator it = ord.find(id);
@@ -388,6 +398,37 @@ public:
     struct GRec { char kind; Grade g; };                  // 'G' decided, 'H' outcome
     std::vector<GRec> drainGrades() { std::vector<GRec> r; r.swap(gOut); return r; }
     long long nGrades = 0, addLog = 0;
+    // (1.6.0) WARM-UP + DEPTH SEED (see the header)
+    static const long long WARM_MS = 600000, DEPTH_FRESH_MS = 5000;
+    long long firstMs = -1;                                  // the first event this engine saw (host clock ms); -1 = none yet
+    bool warming(long long nowMs) const { return firstMs < 0 || nowMs - firstMs < WARM_MS; }
+    long long trackedMs(long long nowMs) const { return firstMs < 0 ? 0 : std::max(0LL, nowMs - firstMs); }
+    void setDepth(const std::map<long long, double>& bidLots, const std::map<long long, double>& askLots, long long nowMs) {
+        if (nowMs <= 0) return;
+        const std::map<long long, double>* src[2] = { &bidLots, &askLots };
+        long long known = 0, shown = 0; seedNow = 0; seedLevels = 0;
+        for (int sd = 0; sd < 2; ++sd) {
+            std::map<long long, Seed>& m = seed[sd]; std::map<long long, Seed> nm;
+            for (std::map<long long, double>::const_iterator i = src[sd]->begin(); i != src[sd]->end(); ++i) {
+                if (!(i->second > 0) || !std::isfinite(i->second) || i->first <= 0) continue;
+                const long long d = (long long)std::llround(std::min(i->second, 1e9)), k = std::max(0LL, levelSize(sd, i->first));
+                shown += d; known += std::min(d, k);
+                const long long r = d - k; if (r <= 0) continue;
+                std::map<long long, Seed>::const_iterator o = m.find(i->first);
+                Seed z; z.since = (o != m.end() && depthAt > 0 && nowMs - depthAt <= DEPTH_FRESH_MS) ? o->second.since : nowMs; z.lots = r;
+                nm[i->first] = z; if (nowMs - z.since >= KING_REST_MS) { seedNow += r; ++seedLevels; }
+            }
+            m.swap(nm);
+        }
+        cover = shown > 0 ? (double)known / (double)shown : -1.0; depthAt = nowMs;
+    }
+    // the remainder at a price that has been displayed KING_REST_MS+ (0 = none / not yet / depth stale)
+    long long seedLots(int sd, long long px, long long nowMs) const {
+        if (depthAt <= 0 || nowMs - depthAt > DEPTH_FRESH_MS || nowMs < depthAt - DEPTH_FRESH_MS) return 0;
+        std::map<long long, Seed>::const_iterator i = seed[sd & 1].find(px);
+        return (i == seed[sd & 1].end() || nowMs - i->second.since < KING_REST_MS) ? 0 : i->second.lots; }
+    double coverage() const { return cover; }
+    long long seedNow = 0, seedLevels = 0;                     // seeded lots / prices at the last setDepth
     static const long long GRADE_MS = 180000, STACK_PRE_MS = 300000, DURABLE_MS = 30000, GRADE_OUT_MS = 3600000, ADD_KEEP_MS = 510000, ADD_REACH = 400;
 private:
     struct Ord { int side; long long px, size; long long t0 = 0, mv0 = -1, mv1 = -1; };   // (1.1.0) t0 = at this price since; the last two re-price times
@@ -403,6 +444,15 @@ private:
     long long nextT = 0, last = -1, hi = -1, lo = -1, bv = 0, sv = 0, lastSec = -1; bool started = false;
     std::vector<Zone> cand; double med[2] = { 0, 0 }; long long medAt = -1, nReal = 0;   // (1.1.0)
     std::vector<Zone> book; long long nBookReal = 0;   // (1.3.0)
+    struct Seed { long long since = 0, lots = 0; };
+    std::map<long long, Seed> seed[2]; long long depthAt = -1; double cover = -1.0;   // (1.6.0)
+    void addSeeds(std::map<long long, long long>* into, long long sl, bool farOnly, long long R) const {   // (1.6.0) the rested remainders
+        if (depthAt <= 0 || nextT - depthAt > DEPTH_FRESH_MS || nextT < depthAt - DEPTH_FRESH_MS) return;
+        for (int sd = 0; sd < 2; ++sd) for (std::map<long long, Seed>::const_iterator i = seed[sd].begin(); i != seed[sd].end(); ++i) {
+            if (i->second.lots <= 0 || nextT - i->second.since < KING_REST_MS) continue;
+            const long long d = sd == BID ? sl - i->first : i->first - sl; if (d < 0) continue;
+            if (farOnly) { if (d <= R) continue; if (kLo > 0 && i->first < kLo - 1) continue; if (kHi > 0 && i->first > kHi + 1) continue; }
+            into[sd][i->first] += i->second.lots; } }
     // (1.4.0) the grade: live / decided grades, the add log and the quick-cancel log (adds that left within 30 s), both 8.5 min
     struct AddRec { long long t, px, size; int side; };
     std::vector<Grade> gLive, gDone; std::vector<GRec> gOut; std::deque<AddRec> adds, quick;
@@ -485,6 +535,7 @@ private:
             if (mv >= P.maxMoves) continue;
             real[o.side][o.px] += o.size; ++nBookReal;
         }
+        addSeeds(real, sl, false, 0);                                                                       // (1.6.0) orders from before the restart
         for (int sd = 0; sd < 2; ++sd) { std::vector<Zone> z = bookZones(real[sd], sd, sl, P.sepTicks, P.sepX, BOOK_PER_SIDE); book.insert(book.end(), z.begin(), z.end()); }
     }
     void zoneStep(long long sl, double atr) {
@@ -523,6 +574,7 @@ private:
             if (mv >= P.maxMoves) continue;
             far[o.side][o.px] += o.size;
         }
+        addSeeds(far, sl, true, R);                                                                         // (1.6.0)
         for (int sd = 0; sd < 2; ++sd) {
             auto zoneAt = [&](long long p) { long long z = 0; for (long long q = p - 1; q <= p + 1; ++q) { std::map<long long, long long>::const_iterator f = far[sd].find(q); if (f != far[sd].end()) z += f->second; } return z; };
             Zone best; for (std::map<long long, long long>::const_iterator f = far[sd].begin(); f != far[sd].end(); ++f) {
