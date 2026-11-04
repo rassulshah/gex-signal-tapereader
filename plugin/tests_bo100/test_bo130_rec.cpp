@@ -1,3 +1,4 @@
+// (lsBreakout 1.5.0) version 1.5.0-zz3; the breakouts file's first line adds "| bi 1", a third line "# BBI|..." and BBI| lines (one per BI, key t_bi + dir + pivot); a BO / BD a BI cancelled is written fired 0 / bi_cancel
 // test_bo130_rec.cpp -- lsBreakout 1.4.0 (2026-11-04: header + status say zz_carry 1, version 1.4.0-zz3) / 1.3.0 (2026-11-03 evening) RECORDS suite: Breakout.cpp on the mock SDK writes the BO / BD, Rly and Pb
 // decision records into lsFlexLevels\Breakout (lsBigBidAsk was removed from his charts; the nightly reads these now).
 //   (in plugin\tests_bo100) g++ -std=c++17 -fsanitize=address,undefined -Werror -Wall -Wextra -IBreakout_test_support -I.. test_bo130_rec.cpp
@@ -80,19 +81,29 @@ int main() {
     CHECK(nm && names.size() == 9, "[1] lsBigBidAsk's names in the Breakout folder: breakouts / pb / Rly x the last 3 daykeys (" + std::to_string(minS) + " .. " + std::to_string(sLast) + "), " + std::to_string(names.size()) + " files");
     bool heads = true;
     for (const auto& kv : s1) { const auto L = linesOf(kv.second); const bool rl = kv.first.find("/Rly/") != std::string::npos, pb = kv.first.find("-pb-") != std::string::npos;
-        if (L.size() < 2 || L[0].rfind("# lsBreakout 1.4.0 | ES ESZ26 180 | zz_rev_bars 3 | ft_tie 1 | zz_carry 1 | ", 0) != 0) heads = false;
+        if (L.size() < 2 || L[0].rfind("# lsBreakout 1.5.0 | ES ESZ26 180 | zz_rev_bars 3 | ft_tie 1 | zz_carry 1 | ", 0) != 0) heads = false;
+        if (!rl && !pb && (L.size() < 3 || L[0].find(" | bi 1 | ") == std::string::npos || L[2] != std::string("# ") + bko::BI_HEADER)) heads = false;
         if (L.size() >= 2 && L[1] != (rl ? rly::REC_HEADER : pb ? bko::PB_HEADER : bba::BO_HEADER)) heads = false; }
-    CHECK(heads, "[1] first line names lsBreakout 1.4.0, the market, zz_rev_bars 3, ft_tie 1 and zz_carry 1; the second is lsBigBidAsk's column header");
+    CHECK(heads, "[1] first line names lsBreakout 1.5.0, the market, zz_rev_bars 3, ft_tie 1, zz_carry 1 (breakouts: bi 1); the second is lsBigBidAsk's column header; breakouts: third = # BBI header");
     // [2] parse every line with lsBigBidAsk's own parsers; one line per decision; every decision of the last 3 sessions written
-    int nb = 0, nr = 0, np = 0, badP = 0; std::set<long long> bt0, rkey, ptp;
+    int nb = 0, nr = 0, np = 0, ni = 0, nc = 0, badP = 0; std::set<long long> bt0, rkey, ptp, ikey;
     for (const auto& kv : s1) for (const auto& l : linesOf(kv.second)) {
-        if (l.rfind("BBO|", 0) == 0 && l.rfind("BBO|t|", 0) != 0) { bba::BoDec D;
-            if (!bba::parseBoLine(l, D) || D.rule != 5 || l.find("|1.4.0-zz3|") == std::string::npos) ++badP; else { ++nb; bt0.insert(D.t0);
+        if (l.rfind("BBO|", 0) == 0 && l.find("|0|bi_cancel|") != std::string::npos) { bba::BoDec D;   // (1.5.0) a cancelled BO / BD: the fired line with fired 0 / bi_cancel
+            std::string r = l; r.replace(r.find("|0|bi_cancel|"), 13, "|1|fired|");
+            if (!bba::parseBoLine(r, D) || l.find("|1.5.0-zz3|") == std::string::npos || !S->E.cancelled(D.t0)) ++badP; else { ++nb; ++nc; bt0.insert(D.t0);
+                const auto it = S->E.bo.find(D.t0); if (it == S->E.bo.end() || !it->second.fired || it->second.t != D.t) ++badP; } }
+        else if (l.rfind("BBI|", 0) == 0) { std::vector<std::string> f; size_t a = 0; for (;;) { const size_t q = l.find('|', a); f.push_back(l.substr(a, q == std::string::npos ? q : q - a)); if (q == std::string::npos) break; a = q + 1; }
+            if (f.size() != 22 || f[21] != "1.5.0-zz3" || bko::recKey(l).empty()) { ++badP; continue; } ++ni;
+            const long long t = std::atoll(f[1].c_str()); const int d = std::atoi(f[2].c_str()); bool found = false;
+            for (const auto& kv : S->E.bi) if (kv.second.t == t && kv.second.dir == d && std::atoll(f[3].c_str()) == kv.second.t0 && bko::biLine(kv.second, "1.5.0-zz3") == l) { found = true; ikey.insert(kv.first); }
+            if (!found) ++badP; }
+        else if (l.rfind("BBO|", 0) == 0 && l.rfind("BBO|t|", 0) != 0) { bba::BoDec D;
+            if (!bba::parseBoLine(l, D) || D.rule != 5 || l.find("|1.5.0-zz3|") == std::string::npos) ++badP; else { ++nb; bt0.insert(D.t0);
                 const auto it = S->E.bo.find(D.t0); if (it == S->E.bo.end() || it->second.dir != D.dir || it->second.fired != D.fired || it->second.t != D.t || it->second.reason != D.reason) ++badP; } }
-        else if (l.rfind("RLY|", 0) == 0 && l.rfind("RLY|t_", 0) != 0) { rly::Rec Q; if (!rly::parseLine(l, Q) || l.substr(l.rfind('|') + 1) != "1.4.0-zz3") ++badP; else { ++nr; rkey.insert(Q.te * 2 + (Q.dir > 0 ? 1 : 0));
+        else if (l.rfind("RLY|", 0) == 0 && l.rfind("RLY|t_", 0) != 0) { rly::Rec Q; if (!rly::parseLine(l, Q) || l.substr(l.rfind('|') + 1) != "1.5.0-zz3") ++badP; else { ++nr; rkey.insert(Q.te * 2 + (Q.dir > 0 ? 1 : 0));
                 const auto it = S->E.rly.find(Q.te * 2 + (Q.dir > 0 ? 1 : 0)); if (it == S->E.rly.end() || it->second.fired != Q.fired) ++badP; } }
         else if (l.rfind("BPB|", 0) == 0 && l.rfind("BPB|t_", 0) != 0) { std::vector<std::string> f; size_t a = 0; for (;;) { const size_t q = l.find('|', a); f.push_back(l.substr(a, q == std::string::npos ? q : q - a)); if (q == std::string::npos) break; a = q + 1; }
-            if (f.size() != 14 || f[13] != "1.4.0-zz3") { ++badP; continue; } ++np; const long long tp = std::atoll(f[1].c_str()); ptp.insert(tp);
+            if (f.size() != 14 || f[13] != "1.5.0-zz3") { ++badP; continue; } ++np; const long long tp = std::atoll(f[1].c_str()); ptp.insert(tp);
             const auto it = S->E.pb.find(tp); const auto bo = it == S->E.pb.end() ? S->E.bo.end() : S->E.bo.find(it->second.t0);
             if (it == S->E.pb.end() || std::atoi(f[2].c_str()) != it->second.dir || std::atoll(f[3].c_str()) != it->second.t0 || bo == S->E.bo.end() || std::atoll(f[4].c_str()) != bo->second.t
                 || std::atoll(f[5].c_str()) != it->second.tc || std::atoll(f[6].c_str()) != it->second.td || std::atof(f[12].c_str()) != bo->second.piv) ++badP; } }
@@ -100,11 +111,13 @@ int main() {
     for (const auto& kv : S->E.boL) if (kv.second.sess >= minS) { ++wantB; if (!bt0.count(kv.first)) ++badP; }
     for (const auto& kv : S->E.rlyL) if (kv.second.sess >= minS) { ++wantR; if (!rkey.count(kv.first)) ++badP; }
     for (const auto& kv : S->E.pbL) if (kv.second.sess >= minS) { ++wantP; if (!ptp.count(kv.first)) ++badP; }
+    int wantI = 0; for (const auto& kv : S->E.biL) if (kv.second.sess >= minS) { ++wantI; if (!ikey.count(kv.first)) ++badP; }
+    CHECK(ni == wantI && ni > 3, "[2] (1.5.0) every BI of the last 3 sessions written once as a 22-field BBI| line equal to the engine's (" + std::to_string(ni) + " / " + std::to_string(wantI) + ", cancelled BO lines " + std::to_string(nc) + ")");
     CHECK(badP == 0 && nb == wantB && nr == wantR && np == wantP && nb > 50 && nr > 3 && np > 10,
-          "[2] every line parses (bba::parseBoLine / rly::parseLine / 14-field Pb, version 1.4.0-zz3) and equals the engine's decision; one per decision: BO / BD "
+          "[2] every line parses (bba::parseBoLine / rly::parseLine / 14-field Pb / 22-field BBI, version 1.5.0-zz3) and equals the engine's decision; one per decision: BO / BD "
           + std::to_string(nb) + " / " + std::to_string(wantB) + ", Rly " + std::to_string(nr) + " / " + std::to_string(wantR) + ", Pb " + std::to_string(np) + " / " + std::to_string(wantP) + " (" + std::to_string(badP) + " bad)");
     { int L = 0, D = 0, B = 0; count(s1, L, D, B); CHECK(D == 0 && B == 0, "[2] no duplicate key in any file (" + std::to_string(L) + " lines)"); }
-    { const std::string st = slurp(flex + "/Breakout.status-ES-180.txt"); CHECK(st.rfind("VERSION,1.4.0\n", 0) == 0 && st.find("RECORDS,lsFlexLevels\\Breakout (ES-ESZ26-180),zz_rev_bars 3,ft_tie 1,zz_carry 1,lines written " + std::to_string(nb + nr + np) + ",pending 0,write fails 0") != std::string::npos, "status RECORDS line: folder, zz 3, tie 1, carry 1, lines written, 0 pending / fails"); }
+    { const std::string st = slurp(flex + "/Breakout.status-ES-180.txt"); CHECK(st.rfind("VERSION,1.5.0\n", 0) == 0 && st.find("RECORDS,lsFlexLevels\\Breakout (ES-ESZ26-180),zz_rev_bars 3,ft_tie 1,zz_carry 1,bi 1,lines written " + std::to_string(nb + nr + np + ni) + ",pending 0,write fails 0") != std::string::npos, "status RECORDS line: folder, zz 3, tie 1, carry 1, bi 1, lines written, 0 pending / fails"); }
     // more passes with nothing new: nothing written
     pass(*x); pass(*x); CHECK(snapshot() == s1, "[3] repeated passes with no new bar write nothing");
     x->destroy(); delete x;
@@ -151,9 +164,9 @@ int main() {
         CHECK(slurp(flex + "/" + p) == s1.at(p), "[6] a half-written file is completed: the lines already there are not repeated, the rest appended (= the clean file)");
         std::set<std::string> in; int added = 0; const std::string t2 = bko::recMerge(s1.at(p), "H\n", linesOf(s1.at(p)), in, added);
         CHECK(added == 0 && t2 == s1.at(p), "[6] recMerge of a file with every line again: 0 appended, text unchanged");
-        const std::string t3 = bko::recMerge("", "H\n", { L[2], L[2], L[3] }, in, added);
-        CHECK(added == 2 && t3 == "H\n" + L[2] + "\n" + L[3] + "\n", "[6] recMerge: a new file starts with its header, a repeated line in one batch is written once");
-        CHECK(bko::recKey("BBO|t|t0|dir") == "" && bko::recKey("# x") == "" && bko::recKey("garbage") == "" && bko::recKey(L[2]) != "", "[6] recKey: header / comment / garbage lines have no key");
+        const std::string t3 = bko::recMerge("", "H\n", { L[3], L[3], L[4] }, in, added);   // (1.5.0) L[2] = the # BBI header comment
+        CHECK(added == 2 && t3 == "H\n" + L[3] + "\n" + L[4] + "\n", "[6] recMerge: a new file starts with its header, a repeated line in one batch is written once");
+        CHECK(bko::recKey("BBO|t|t0|dir") == "" && bko::recKey("# x") == "" && bko::recKey("garbage") == "" && bko::recKey(L[2]) == "" && bko::recKey(L[3]) != "" && bko::recKey(std::string("# ") + bko::BI_HEADER) == "", "[6] recKey: header / comment / garbage lines have no key");
         y->destroy(); delete y; }
     // market names = lsBigBidAsk's
     CHECK(bko::recMarket("EP") == "ES" && bko::recMarket("6E") == "EU" && bko::recMarket("QM") == "CL" && bko::recMarket("MNQ") == "NQ" && bko::recFileKey("ESZ26") == "ESZ26" && bko::recFileKey("es z6") == "ES_Z6", "recMarket / recFileKey = lsBigBidAsk's marketName / fileKey");

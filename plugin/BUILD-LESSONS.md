@@ -406,3 +406,18 @@ Rules (every new or changed indicator):
   cppExtension (real SDK and the mock): a `static` helper calling it does not compile - keep time helpers non-static. Large append-only
   records (WavePOC nodes 5.7 MB, mostly ROWS / STOP lines) are read as tail + new complete lines only, never whole and never on repaint.
   Proof: tests_bf135/test_bf135_wpoc [1], parity_wpoc.py, test_bf135_host (torn line held back, truncation re-read).
+- (lsBreakout 1.5.0, 2026-11-04, Rassul approved the BreakIn mockup v0.3, "build") A ONE-PASS PROTOTYPE IS NOT A LIVE RULE - FIND WHERE IT
+  LOOKS AHEAD BEFORE PROMISING "PARITY": the v0.3 BI prototype knew, at every candle, whether a BO attempt would LATER fire, and for a fired
+  BO only looked after its follow-through. A live chart cannot know that while the BO waits, and the approved cancel rule ("a BI while the
+  BO waits cancels it") decides those candles differently: 8 BO / BD on ES Oct 20 - Nov 3, 3 BI lost / 4 added vs the prototype's 271.
+  Build the causal rule, keep the prototype's rule behind a test-only switch (bko::Engine::biCancel = false == the prototype exactly), and
+  check the causal one against an INDEPENDENT model (Python) plus a bar-by-bar replay == one pass. Proof: tests_bo100/test_bo150_bi [1] / [2]
+  / [5], LRA test_bo_pb_bi (port == C++ harness, both rules).
+- (lsBreakout 1.5.0) A NEW RULE THAT CHANGES AN OLD SIGNAL (BI cancels BO / BD, which removes their Pb) MUST NOT SILENTLY REWRITE THE OLD
+  SUITES' EXPECTATIONS: the 1.4.0 suites run with the new rule off (they prove BO / Rly / Pb are unchanged), and the new suite proves the
+  exact delta (the 8 cancelled BO / BD: not drawn, no Pb, record fired 0 / bi_cancel). A record reason a reader does not know must be
+  checked in EVERY reader: bba::parseBoLine rejects "bi_cancel" (only lsBigBidAsk's own folder uses it), BookLevelBox::parseBbo keeps
+  fired lines only, orderflow_badges 1.6.0 drops it from the not-fired controls. Proof: test_bo130_rec [2], test_orderflow_badges BI test.
+- (lsBreakout 1.5.0) A `//` COMMENT INSERTED MID-LINE SWALLOWS THE REST OF THE LINE: `if (...) continue;   // note const auto it = ...`
+  removed the BO letters' code and the brace balance broke 100 lines later ("function-definition is not allowed here"). Inline notes in a
+  one-line loop body go in /* */ or on their own line.

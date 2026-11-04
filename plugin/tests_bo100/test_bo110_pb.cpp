@@ -1,3 +1,4 @@
+// (lsBreakout 1.5.0) every engine here runs biCancel = false: the 1.4.0 BO / Rly / Pb decisions, unchanged; the BI and its BO cancel are tested in test_bo150_bi.cpp
 // test_bo110_pb.cpp -- lsBreakout 1.1.1 (2026-11-03; 1.1.1: Pb two rows out - top Y(low) + 35 / bottom Y(high) - 35) "Pb" (a pullback pivot that TESTS the BO / BD candle), SDK-free (BreakoutLogic.h).
 //   [1] the pivots = the 3-bar High / Low ZigZag of lsZzoCombo 2.1.0 (zzd::Engine::step, COMBO_REV_BARS 3) == an independent port of the
 //       mockup's walk (pb.py / r4.py) on ES Oct 28 - 30 (same pivots once both walks are in step).
@@ -41,7 +42,7 @@ static void unitRule() {
         for (auto& p : hl) { bko::In b; b.t = (t += 180); b.ok = true; b.days = 20000; b.endSec = (int)(t % 86400); b.h = p.first; b.l = p.second; b.o = (b.h + b.l) / 2; b.c = b.o; b.vol = 100; B.push_back(b); } return B; };
     //                0          1          2          3          4         5         6         7         8          9          10 BO      11 FT      12         13         14 (pivot low, overlaps)  15        16        17        18
     std::vector<bko::In> B = mk({ {105,100},{104,99},{103,98},{102,97},{101,95},{103,96},{104,97},{106,99},{107,100},{108,101},{112,104},{114,108},{113,107},{111,106},{110,105},{113,107},{115,109},{116,110},{117,111},{118,112},{119,113} });
-    bko::Engine E; E.bars = B; E.tick = 1; E.spb = 180; E.count = (long)B.size();
+    bko::Engine E; E.biCancel = false; E.bars = B; E.tick = 1; E.spb = 180; E.count = (long)B.size();
     bba::BoDec D; D.t0 = B[10].t; D.t = B[11].t; D.dir = 1; D.fired = true; D.i0 = 10; D.im = 11; E.bo[D.t0] = D;
     E.pbPass();
     bool low14 = E.pb.count(B[14].t) && E.pb[B[14].t].dir == 1 && E.pb[B[14].t].t0 == B[10].t;
@@ -49,14 +50,14 @@ static void unitRule() {
     { const auto& m = E.pb[B[14].t]; CHECK(m.tc == B[16].t && m.td == B[16].t, "[4] decided at the confirm bar (bar 16: the first high above the previous 3 highs; bar 15 only equals 113)"); }
     // no overlap: the pullback stays above the BO high
     { std::vector<bko::In> C = B; for (int k = 12; k <= 14; ++k) { C[(size_t)k].l += 10; C[(size_t)k].h += 10; } for (size_t k = 15; k < C.size(); ++k) { C[k].l += 10; C[k].h += 10; }
-      bko::Engine F; F.bars = C; F.tick = 1; F.spb = 180; F.bo = E.bo; F.pbPass(); CHECK(F.pb.empty(), "[4] a pivot low above the BO candle's high: no Pb"); }
+      bko::Engine F; F.biCancel = false; F.bars = C; F.tick = 1; F.spb = 180; F.bo = E.bo; F.pbPass(); CHECK(F.pb.empty(), "[4] a pivot low above the BO candle's high: no Pb"); }
     // a next BD fired before the pivot is confirmed, its candle before the pivot: blocks
     { bko::Engine F = E; F.pb.clear(); bba::BoDec X; X.t0 = B[12].t; X.t = B[13].t; X.dir = -1; X.fired = true; F.bo[X.t0] = X; F.pbPass(); CHECK(F.pb.empty(), "[4] the next BO / BD (fired by the decision bar) stops the Pb"); }
     // the next one fired only AFTER the decision bar: does not block (the chart could not know it); not fired at all: does not block
     { bko::Engine F = E; F.pb.clear(); bba::BoDec X; X.t0 = B[12].t; X.t = B[18].t; X.dir = -1; X.fired = true; F.bo[X.t0] = X; F.pbPass(); CHECK(F.pb.count(B[14].t) == 1, "[4] a later BO / BD fired after the decision bar does not remove / block the Pb"); }
     { bko::Engine F = E; F.pb.clear(); bba::BoDec X; X.t0 = B[12].t; X.t = B[13].t; X.dir = -1; X.fired = false; F.bo[X.t0] = X; F.pbPass(); CHECK(F.pb.count(B[14].t) == 1, "[4] a BO / BD candidate that never fired does not block"); }
     // origin break: a bar between the BO and the pivot trades below the wave's origin low (95, bar 4)
-    { std::vector<bko::In> C = B; C[13].l = 94; bko::Engine F; F.bars = C; F.tick = 1; F.spb = 180; F.bo = E.bo; F.pbPass(); CHECK(F.pb.empty(), "[4] price below the BO wave's origin pivot low before the pivot: no Pb"); }
+    { std::vector<bko::In> C = B; C[13].l = 94; bko::Engine F; F.biCancel = false; F.bars = C; F.tick = 1; F.spb = 180; F.bo = E.bo; F.pbPass(); CHECK(F.pb.empty(), "[4] price below the BO wave's origin pivot low before the pivot: no Pb"); }
     // kept: once made, a later pass never removes it (even if the BO record vanished)
     { bko::Engine F = E; F.bo.clear(); F.pbPass(); CHECK(F.pb.count(B[14].t) == 1, "[4] a made Pb is never removed by a later pass"); }
     // layout: green under the low, 3 px, font 7; one row out when a BD sits on the same bar
@@ -90,7 +91,7 @@ int main() {
     // live replay, as test_bo100_parity: the chart grows bar by bar (the last bar forming)
     // (1.2.0) the mockup's 9 Pb were drawn against the 1-bar BO / BD set: this Pb-rule check runs the BO / BD on zzRev = 1 (the Pb rule
     //   itself is unchanged); lsBreakout's own 3-bar BO / BD + Pb are checked against the week harness in test_bo120_week.cpp
-    bko::Engine E; E.zzRev = 1; std::map<long long, std::string> seen; int changed = 0, early = 0;
+    bko::Engine E; E.biCancel = false; E.zzRev = 1; std::map<long long, std::string> seen; int changed = 0, early = 0;
     for (int N = 60; N <= n; ++N) {
         std::vector<bko::In> P(B.begin(), B.begin() + N);
         E.update(P, N, P[0].t, 0.25, 180, 510, 900);
@@ -101,7 +102,7 @@ int main() {
     }
     CHECK(changed == 0, "[3] no repaint: " + std::to_string(seen.size()) + " Pb over the replay, " + std::to_string(changed) + " changed / vanished");
     CHECK(early == 0, "[3] every Pb appears at the close of its decision bar (max of pivot confirm, BO / BD fire), none earlier or later (" + std::to_string(early) + ")");
-    {   bko::Engine F; F.zzRev = 1; F.update(B, n, B[0].t, 0.25, 180, 510, 900); int same = 0, diff = 0;
+    {   bko::Engine F; F.biCancel = false; F.zzRev = 1; F.update(B, n, B[0].t, 0.25, 180, 510, 900); int same = 0, diff = 0;
         for (const auto& kv : E.pb) { const auto it = F.pb.find(kv.first); (it != F.pb.end() && pbKey(it->second) == pbKey(kv.second)) ? ++same : ++diff; }
         for (const auto& kv : F.pb) if (!E.pb.count(kv.first)) ++diff;
         CHECK(diff == 0 && same == (int)E.pb.size(), "[3] restart (one full pass) == the live replay: " + std::to_string(same) + " same, " + std::to_string(diff) + " different"); }

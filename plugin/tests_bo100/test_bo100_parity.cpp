@@ -1,3 +1,4 @@
+// (lsBreakout 1.5.0) every engine here runs biCancel = false: the 1.4.0 BO / Rly / Pb decisions, unchanged; the BI and its BO cancel are tested in test_bo150_bi.cpp
 // test_bo100_parity.cpp -- (1.2.0: the lsBigBidAsk record parity [2] / [3] runs the engine with zzRev = 1 = lsBigBidAsk's own 1-bar path;
 //   lsBreakout itself now runs 3-bar - see test_bo120_week.cpp)
 // test_bo100_parity.cpp -- lsBreakout 1.0.0 (2026-11-03) PARITY with lsBigBidAsk, SDK-free (BreakoutLogic.h).
@@ -83,7 +84,7 @@ int main() {
     const long long s0 = (long long)svl::daysFromCivil(2026, 10, 29) * 86400 + 17 * 3600, s1 = (long long)svl::daysFromCivil(2026, 10, 30) * 86400 + 16 * 3600;
     auto inSess = [&](long long naive) { return naive > s0 && naive <= s1; };
     // live replay: the chart starts with history through the start of Oct 28's data; one new bar at a time (the last bar forming)
-    bko::Engine E; E.zzRev = 1; std::map<long long, std::string> seen; int changed = 0;   // (1.2.0) lsBigBidAsk's 1-bar path
+    bko::Engine E; E.biCancel = false; E.zzRev = 1; std::map<long long, std::string> seen; int changed = 0;   // (1.2.0) lsBigBidAsk's 1-bar path
     for (int N = 60; N <= (int)B.size(); ++N) {
         std::vector<bko::In> P(B.begin(), B.begin() + N);
         E.update(P, N, P[0].t, 0.25, 180, 510, 900);
@@ -108,7 +109,7 @@ int main() {
     std::printf("RLY PARITY: %d / %zu recorded fired matched, %d extra\n", mr, exRly.size(), xr);
     CHECK(mr == (int)exRly.size() && xr == 0, "[2] Rly parity ES Oct 30 (" + std::to_string(mr) + " / " + std::to_string(exRly.size()) + " matched, " + std::to_string(xr) + " extra)");
     // a restart at the end: one full pass keeps every fired letter of the replay
-    bko::Engine F; F.zzRev = 1; F.update(B, (long)B.size(), B[0].t, 0.25, 180, 510, 900);
+    bko::Engine F; F.biCancel = false; F.zzRev = 1; F.update(B, (long)B.size(), B[0].t, 0.25, 180, 510, 900);
     int keep = 0, lost = 0; for (const auto& kv : E.bo) if (kv.second.fired) { const auto it = F.bo.find(kv.first); (it != F.bo.end() && it->second.fired && it->second.dir == kv.second.dir) ? ++keep : ++lost; }
     int keepR = 0, lostR = 0; for (const auto& kv : E.rly) if (kv.second.fired) { const auto it = F.rly.find(kv.first); (it != F.rly.end() && it->second.fired) ? ++keepR : ++lostR; }
     int newF = 0; for (const auto& kv : F.bo) if (kv.second.fired) { const auto it = E.bo.find(kv.first); if (it == E.bo.end() || !it->second.fired) ++newF; }
