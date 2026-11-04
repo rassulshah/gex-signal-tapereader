@@ -1,4 +1,4 @@
-// test_bo100_host.cpp -- lsBreakout 1.3.0 (2026-11-03; 1.3.0 version only - the records have their own suite test_bo130_rec; 1.2.0 3-bar ZigZag: version + status RULES line; 1.0.0 + Pb; 1.1.1 Pb two rows out: 35 px from the wick) host suite: Breakout.cpp on the mock SDK (Breakout_test_support/irtsdk.h).
+// test_bo100_host.cpp -- lsBreakout 1.4.0 (2026-11-04: version only - the carry is tested in test_bo120_week [6]) / 1.3.0 (2026-11-03; 1.3.0 version only - the records have their own suite test_bo130_rec; 1.2.0 3-bar ZigZag: version + status RULES line; 1.0.0 + Pb; 1.1.1 Pb two rows out: 35 px from the wick) host suite: Breakout.cpp on the mock SDK (Breakout_test_support/irtsdk.h).
 //   (in plugin\tests_bo100) g++ -std=c++17 -fsanitize=address,undefined -Werror -Wall -Wextra -IBreakout_test_support -I.. test_bo100_host.cpp -o th && ./th
 // Covers, on the real ES Oct 28 - 30 3-min candles (es_2026-10-28_30_3m.txt, from fp_bars):
 //   the ONLY drawn things are the texts "BO" / "BD" / "Rly" (no fills, boxes, lines, ovals, numbers); BO green just above the candle's
@@ -94,7 +94,7 @@ int main() {
       CHECK(ok && (int)ev.size() == std::min<int>((int)sb::CAP, (int)sides.size()) && good == (int)ev.size(), "SignalBoard 'L' posted for the BO / BD and Pb letters, one per bar and side (px from the extreme to the outer edge) (" + std::to_string(ev.size()) + " / " + std::to_string(sides.size()) + ")"); }
     // status file + versions
     const std::string st = slurp(home + "/InvestorRT/rtx/lsFlexLevels/Breakout.status-ES-180.txt");
-    CHECK(st.rfind("VERSION,1.3.0\n", 0) == 0 && st.find("3-bar High/Low ZigZag") != std::string::npos && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
+    CHECK(st.rfind("VERSION,1.4.0\n", 0) == 0 && st.find("3-bar High/Low ZigZag") != std::string::npos && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
     { const std::string src = slurp("../Breakout.cpp"); const size_t a = src.find("p->setVersion(\""); const std::string lit = a == std::string::npos ? "" : src.substr(a + 15, src.find('"', a + 15) - a - 15);
       CHECK(lit == BKO_VERSION && lit == bko::VERSION, "setVersion literal = BKO_VERSION = bko::VERSION (" + lit + ")"); }
     const std::string full = sig(H);

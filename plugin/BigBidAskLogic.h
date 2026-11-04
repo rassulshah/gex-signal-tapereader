@@ -246,16 +246,43 @@ inline void breakFlagsPx(H& high, L& low, int n, std::vector<signed char>& up, s
 // 1 .. 3 = how many swings back, 0 none; upPx / dnPx = its price. RTH candles only (the zigzag is an RTH one). The mirror for lows.
 // A pure function of the bars up to the candle - never repainted. rth[i] / day[i] = the candle's RTH flag and session key.
 static const int SWING_KEEP = 3;
+// ---- (2026-11-04, lsBreakout 1.4.0, Rassul "BO 5PM - yes") CARRY THE ZIGZAG ACROSS THE 17:00 CT SESSION BREAK (lsBreakout 1.4.0 only) ------------
+// Without carry the zigzag starts again at every Globex open (17:00 CT), so the first swings of the evening have no history and the
+// prior session's intact swing highs / lows cannot be broken in the evening. With carry the walk (direction, leg extreme, swings) runs
+// on across the break exactly as if there were no break. Memory stays bounded and TIME-anchored (a pure function of the candles, no
+// repaint): at each new session the bars older than the start of the previous session are dropped (swings on them go too - an intact
+// swing older than a full session is never among the last 3 used in practice: ES Oct 20 - Nov 3 identical to an unbounded walk), and
+// never the current leg's extreme; when one session + the prior one still exceed swg::ZZ_CAP (1-min charts) the older half is dropped.
+inline void swgTrim(swg::ZigZag& Z, std::vector<int>& sessAt, int cut) {
+    if (cut > Z.ext) cut = Z.ext;
+    if (cut <= 0) return;
+    Z.bars.erase(Z.bars.begin(), Z.bars.begin() + cut); Z.ext -= cut;
+    std::vector<swg::Swing> keep; for (swg::Swing s : Z.swings) if (s.idx >= cut) { s.idx -= cut; s.confirmIdx -= cut; keep.push_back(s); }
+    Z.swings.swap(keep);
+    std::vector<int> sa; for (int a : sessAt) if (a - cut >= 0) sa.push_back(a - cut); else if (sa.empty()) sa.push_back(0);
+    sessAt.swap(sa);
+}
+inline void swgCarry(swg::ZigZag& Z, std::vector<int>& sessAt, long long key) {
+    if (Z.day == -1 && Z.bars.empty()) { Z.reset(key); sessAt.assign(1, 0); return; }
+    if (key != Z.day) {                                            // a new session: keep the previous one + this one
+        Z.day = key; sessAt.push_back((int)Z.bars.size());
+        if (sessAt.size() > 2) swgTrim(Z, sessAt, sessAt[sessAt.size() - 2]);
+    }
+    if ((int)Z.bars.size() >= swg::ZZ_CAP - 1) swgTrim(Z, sessAt, (int)Z.bars.size() / 2);
+}
 template <class O, class H, class L, class C>
 inline void swingBreaksPx(O& open, H& high, L& low, C& close, const std::vector<char>& rth, const std::vector<long long>& day, int n, double tick,
-                          std::vector<signed char>& up, std::vector<signed char>& dn, std::vector<double>& upPx, std::vector<double>& dnPx, int rev = 1) {
+                          std::vector<signed char>& up, std::vector<signed char>& dn, std::vector<double>& upPx, std::vector<double>& dnPx, int rev = 1,
+                          bool carry = false) {   // (2026-11-04) carry = lsBreakout 1.4.0 only: the zigzag runs ON across the 17:00 CT session break (swgCarry)
     up.assign(n > 0 ? n : 0, 0); dn.assign(n > 0 ? n : 0, 0); upPx.assign(n > 0 ? n : 0, 0.0); dnPx.assign(n > 0 ? n : 0, 0.0);
     if (n < 2 || !(tick > 0) || !std::isfinite(tick) || (int)rth.size() < n || (int)day.size() < n) return;
     swg::ZigZag Z; Z.day = -1; Z.rev = rev;   // (2026-11-03) rev = the ZigZag reversal bars: 1 = lsBigBidAsk (unchanged), 3 = lsBreakout 1.2.0
+    std::vector<int> sessAt;                  // (carry) Z.bars index where each kept session starts (oldest first)
     for (int i = 0; i < n; ++i) {
         const double o = open[i], h = high[i], l = low[i], c = close[i];
         if (!rth[(size_t)i] || !std::isfinite(o) || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(c) || h < l) continue;
         swg::ZBar b; b.t = i + 1; b.o = std::llround(o / tick); b.h = std::llround(h / tick); b.l = std::llround(l / tick); b.c = std::llround(c / tick); b.day = day[(size_t)i]; b.rth = true;
+        if (carry) swgCarry(Z, sessAt, b.day);    // same key from here on: Z.add never resets; old bars trimmed (time-anchored)
         if (Z.day == b.day) {
             const int fi = (int)Z.bars.size();                                   // every candle in Z closed before this one
             for (int sd = 1; sd >= -1; sd -= 2) {
@@ -1249,13 +1276,13 @@ struct BoPrep {
 // end = the first candle NOT decided (the forming one); fill0 = the first candle whose inputs are filled (lsBigBidAsk: from - 62)
 template <class TrendAt, class Known, class BigOf>
 inline BoRun boFromCandles(const std::vector<BoCandle>& C, double tick, int from, int end, int emitFrom, int fill0,
-                           TrendAt trendAt, Known known, BigOf bigOf, BoPrep* keep = nullptr, int rev = 1, bool ftTie = false) {   // (2026-11-03) rev = ZigZag reversal bars (1 lsBigBidAsk, 3 lsBreakout 1.2.0); ftTie (lsBreakout 1.3.0) = follow-through close may equal the BO close
+                           TrendAt trendAt, Known known, BigOf bigOf, BoPrep* keep = nullptr, int rev = 1, bool ftTie = false, bool carry = false) {   // (2026-11-04) carry = lsBreakout 1.4.0 only: the BO pivot zigzag runs on across the 17:00 CT break   // (2026-11-03) rev = ZigZag reversal bars (1 lsBigBidAsk, 3 lsBreakout 1.2.0); ftTie (lsBreakout 1.3.0) = follow-through close may equal the BO close
     BoPrep P; const int count = (int)C.size();
     std::vector<double> op((size_t)count), hi((size_t)count), lo((size_t)count), cl((size_t)count);
     std::vector<char> rthAll((size_t)count, 0); std::vector<long long> dayAll((size_t)count, 0);
     for (int k = 0; k < count; ++k) { const BoCandle& b = C[(size_t)k]; op[(size_t)k] = b.o; hi[(size_t)k] = b.h; lo[(size_t)k] = b.l; cl[(size_t)k] = b.c;
         if (b.ok) { rthAll[(size_t)k] = 1; dayAll[(size_t)k] = boSessKey(b.days, b.endSec); } }
-    swingBreaksPx(op, hi, lo, cl, rthAll, dayAll, count, tick, P.up, P.dn, P.upPx, P.dnPx, rev);
+    swingBreaksPx(op, hi, lo, cl, rthAll, dayAll, count, tick, P.up, P.dn, P.upPx, P.dnPx, rev, carry);
     zigDir(hi, lo, count, P.zd, rev);
     P.in.assign((size_t)count, BoIn()); P.bars.assign((size_t)count, BoBar()); P.skip.assign((size_t)count, 0);
     P.trend.assign((size_t)count, 0); P.sess.assign((size_t)count, 0); P.fill0 = fill0 = std::max(0, fill0);

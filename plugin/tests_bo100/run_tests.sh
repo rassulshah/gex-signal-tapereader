@@ -1,5 +1,5 @@
 #!/bin/sh
-# lsBreakout 1.3.0 tests (1.3.0 records + follow-through tie: test_bo130_rec, test_bo120_week [4] / [5]; 1.0.0 + Pb: test_bo110_pb; 1.1.1 Pb two rows out; 1.2.0 3-bar ZigZag: test_bo120_week, ~3 min) (Linux, from plugin/tests_bo100): parity with lsBigBidAsk (ES Oct 30 records) + the host on the mock SDK under
+# lsBreakout 1.4.0 tests (1.4.0 zigzag carry across the 17:00 CT break: test_bo120_week [6] + carry expectations; 1.3.0 records + follow-through tie: test_bo130_rec, test_bo120_week [4] / [5]; 1.0.0 + Pb: test_bo110_pb; 1.1.1 Pb two rows out; 1.2.0 3-bar ZigZag: test_bo120_week, ~3 min) (Linux, from plugin/tests_bo100): parity with lsBigBidAsk (ES Oct 30 records) + the host on the mock SDK under
 # ASan / UBSan, then (with the real irtsdk.h folder as $1) the MinGW syntax check of Breakout.cpp against the REAL SDK, and the render.
 set -e
 CXX="g++ -std=c++17 -fsanitize=address,undefined -fno-sanitize-recover=all -Werror -Wall -Wextra -g"

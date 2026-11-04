@@ -1,6 +1,13 @@
 #ifndef LS_BREAKOUT_LOGIC_H
 #define LS_BREAKOUT_LOGIC_H
-// BreakoutLogic.h 1.3.0 (2026-11-03 evening) -- lsBreakout 1.3.0 (Rassul removed lsBigBidAsk from his charts at 19:45 CT, "do it"):
+// BreakoutLogic.h 1.4.0 (2026-11-04) -- lsBreakout 1.4.0 (Rassul "BO 5PM - yes"): the BO pivot ZigZag CARRIES across the 17:00 CT
+//   Globex session break (and the Sunday open) instead of starting again each session (bba::swingBreaksPx carry / swgCarry, passed only
+//   here: Engine::zzCarry with zzRev > 1; lsBigBidAsk and the zzRev = 1 path keep the per-session walk). The evening's first candles can
+//   now break the prior session's intact swing highs / lows. Everything else unchanged (BO rules incl. the 20-bar window clipped at the
+//   session start, follow-through tie, Rly = RTH waves, Pb on the chart-wide 3-bar pivots, record layout); records say "zz_carry 1" in
+//   the file's first line and "1.4.0-zz3" in every line. ES Oct 20 - Nov 3 19:45 one pass: fired 144 -> 152 (+8, all 17:03 - 18:27 CT
+//   evening candles, 0 lost); replay bar by bar == one pass.
+// was BreakoutLogic.h 1.3.0 (2026-11-03 evening) -- lsBreakout 1.3.0 (Rassul removed lsBigBidAsk from his charts at 19:45 CT, "do it"):
 //   (1) RECORDS: lsBreakout now writes the decision records the nightly scores, from ITS OWN 3-bar decisions, in the same line layout
 //       lsBigBidAsk used (bba::boLine 27-field BBO|, rly::line 17-field RLY|) plus a Pb record:
 //         lsFlexLevels\Breakout\<MKT>-<SYM>-<spb>-breakouts-<daykey>.csv   BBO| one line per decided candidate (fired / no_confirm / reason)
@@ -74,7 +81,7 @@
 
 namespace bko {
 
-static const char* const VERSION = "1.3.0";   // (1.3.0) records + follow-through tie   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
+static const char* const VERSION = "1.4.0";   // (1.4.0) zigzag carries across the 17:00 CT break   // (1.3.0) records + follow-through tie   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
 static const int GAP = 3;              // px between the wick end and the BO / BD letter
 static const int RLY_ROW = 16;         // the Rly letter sits this many px further out than the BO / BD row
 static const int ROW_OUT = 16;         // (1.1.1) one row = lsCandleAbsorb's ROW_OUT (its A / Ae sits one row beyond the wick label row)
@@ -115,6 +122,8 @@ struct Engine {
     bool ftTie = true;                         // (1.3.0) follow-through close may equal the BO close - only with zzRev > 1 (zzRev 1 = lsBigBidAsk's strict rule)
     std::map<long long, RecL> boL, rlyL, pbL;  // (1.3.0) the record line of each decision (same keys as bo / rly / pb)
     bool tieOn() const { return ftTie && zzRev > 1; }
+    bool zzCarry = true;                       // (1.4.0) the BO pivot zigzag carries across the 17:00 CT break - only with zzRev > 1 (zzRev 1 = lsBigBidAsk's per-session walk)
+    bool carryOn() const { return zzCarry && zzRev > 1; }
     std::string recVer() const { return std::string(VERSION) + "-zz" + std::to_string(zzRev); }   // the version field of every record line
     // decisions (kept for the chart's life; never changed once made)
     std::map<long long, bba::BoDec> bo;        // t0 -> lsBigBidAsk's decision record (fired or not)
@@ -156,7 +165,7 @@ struct Engine {
         if (!full) bba::boWindow(n, from, emitFrom, fill0);                          // lsBigBidAsk's live window
         else { fill0 = std::max(0, n - 1 - MAX_BARS); from = emitFrom = std::max(1, fill0); ++fullRuns; }
         const bba::BoRun R = bba::boFromCandles(C, tick, from, n - 1, emitFrom, fill0,
-            [&](int k) { return trendAt(k); }, [](int) { return true; }, [](int, bba::BoIn&) {}, nullptr, zzRev, tieOn());
+            [&](int k) { return trendAt(k); }, [](int) { return true; }, [](int, bba::BoIn&) {}, nullptr, zzRev, tieOn(), carryOn());
         const std::string ver = recVer();
         for (bba::BoDec D : R.ev) {
             if (D.i0 < 0 || D.im < 0 || D.im >= n - 1) continue;
@@ -354,7 +363,7 @@ inline std::string recKey(const std::string& line0) {
 struct RecFile { int kind = 0; long long sess = 0; std::string dir, file, head; std::vector<std::string> lines; };
 inline std::string recHead(const Engine& E, int kind, const std::string& mkt, const std::string& sym, int spb) {
     std::string h = std::string("# lsBreakout ") + VERSION + " | " + mkt + " " + sym + " " + std::to_string(spb) + " | zz_rev_bars " + std::to_string(E.zzRev)
-                  + " | ft_tie " + (E.tieOn() ? "1" : "0") + " | " + (kind == REC_BO ? "BO / BD decisions (bba::boLine, 27 fields)" : kind == REC_RLY ? "Rly waves (rly::line, 17 fields)" : "Pb (14 fields)") + "\n";
+                  + " | ft_tie " + (E.tieOn() ? "1" : "0") + " | zz_carry " + (E.carryOn() ? "1" : "0") + " | " + (kind == REC_BO ? "BO / BD decisions (bba::boLine, 27 fields)" : kind == REC_RLY ? "Rly waves (rly::line, 17 fields)" : "Pb (14 fields)") + "\n";
     return h + (kind == REC_BO ? bba::BO_HEADER : kind == REC_RLY ? rly::REC_HEADER : PB_HEADER) + "\n";
 }
 // every record line of the last REC_SESSIONS sessions (by the last closed bar's session), grouped per file, in decision-key order

@@ -1,5 +1,7 @@
 /********************************************************************************
- *  Breakout.cpp  --  Investor/RT RTX extension  lsBreakout  "BO"  1.3.0  (2026-11-03)
+ *  Breakout.cpp  --  Investor/RT RTX extension  lsBreakout  "BO"  1.4.0  (2026-11-04)
+ *  1.4.0 (2026-11-04, Rassul "BO 5PM - yes"): the BO pivot ZigZag carries across the 17:00 CT session break (BreakoutLogic.h 1.4.0,
+ *        bba::swingBreaksPx carry) - no host change; status RECORDS line and record files add "zz_carry 1".
  *  1.3.0 (2026-11-03 evening, Rassul removed lsBigBidAsk from his charts at 19:45 CT and said "do it"):
  *    RECORDS - lsBreakout writes the BO / BD, Rly and Pb decision records from its own 3-bar decisions (BreakoutLogic.h recPlan /
  *      recMerge; line layout = lsBigBidAsk's bba::boLine / rly::line + a BPB| Pb line), one line per decision, deduped by key against
@@ -73,7 +75,7 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.3.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
+#define BKO_VERSION "1.4.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
 
 static long long bkoMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bkoFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BKO_SEP "InvestorRT" BKO_SEP "rtx" BKO_SEP "lsFlexLevels" : std::string(); }
@@ -193,7 +195,7 @@ void Breakout::status(BState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = bko::statusText(S.E, S.mkt, S.sym, S.spb, S.last)
-        + "RECORDS,lsFlexLevels\\Breakout (" + S.recMkt + "-" + S.recSym + "-" + std::to_string(S.spb) + "),zz_rev_bars " + std::to_string(S.E.zzRev) + ",ft_tie " + (S.E.tieOn() ? "1" : "0")
+        + "RECORDS,lsFlexLevels\\Breakout (" + S.recMkt + "-" + S.recSym + "-" + std::to_string(S.spb) + "),zz_rev_bars " + std::to_string(S.E.zzRev) + ",ft_tie " + (S.E.tieOn() ? "1" : "0") + ",zz_carry " + (S.E.carryOn() ? "1" : "0")
         + ",lines written " + std::to_string(S.recAdded) + ",pending " + std::to_string(S.recPend) + ",write fails " + std::to_string(S.recFails) + "\n";   // (1.3.0)
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
@@ -286,7 +288,7 @@ extern "C" cppExtension* CreateExtension(void) {
     Breakout* p = new Breakout();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA BO v1.3.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (lsBigBidAsk's rule on the 3-bar High/Low ZigZag, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min) and Pb on a pullback pivot that tests the BO / BD candle. Records its BO / BD, Rly and Pb decisions to lsFlexLevels\\Breakout for the nightly. No settings.");
-    p->setVersion("1.3.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA BO v1.4.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (lsBigBidAsk's rule on the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min) and Pb on a pullback pivot that tests the BO / BD candle. Records its BO / BD, Rly and Pb decisions to lsFlexLevels\\Breakout for the nightly. No settings.");
+    p->setVersion("1.4.0");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }

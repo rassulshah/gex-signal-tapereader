@@ -354,3 +354,15 @@ Rules (every new or changed indicator):
   uses Mark::legEnd. Proof: test_cobsignal_lvp.cpp section 1 / 7.
 - (same build) THE EXISTING HOST TEST DID NOT BUILD WITH -Werror (-Wmisleading-indentation in test_cobsignal_host.cpp chart() and in
   CobSignalLogic.h layout) - the suite had been run without the flag the checklist requires. Fixed both; always run the stated flags.
+
+## 2026-11-04 lsBreakout 1.4.0 (BO zigzag carries across the 17:00 CT break, Rassul "BO 5PM - yes")
+- AN EXPERIMENT'S SHORTCUT IS NOT THE RULE: the bo_eve "carry" evidence (carry.txt) was made by keying the walk on the CALENDAR day - it
+  carries 17:00 -> 23:59 but starts a new walk at MIDNIGHT (3 midnight artefacts, 2 evening breaks missed). Before porting an experiment,
+  diff what it actually changed against what was approved; implement the stated rule and show both counts. Proof: test_bo120_week [6]
+  (carry == harness3, all 8 adds are 17:03 - 18:27 CT evening candles, 0 lost).
+- "NEVER RESET" HITS A HIDDEN CAP: a walk keyed to one constant (no reset at all) silently stopped at swg::ZZ_CAP (1,600 bars) and fired
+  53 instead of 152. A carried walk needs TIME-anchored trimming (keep the previous + current session; never the current leg's extreme)
+  so it stays bounded AND a pure function of the candles; check bounded == unbounded on real data (ES Oct 20 - Nov 3: identical) and a
+  1-min stress (8 x 1,380 candles). Proof: test_bo120_week [6] 1-min stress.
+- A SHARED RULE CHANGE FOR ONE PLUGIN = A DEFAULT-OFF PARAMETER: swingBreaksPx / boFromCandles `carry` default false, so lsBigBidAsk
+  (and the zzRev 1 parity path) keep the per-session walk; keep the OLD expectations as *_nocarry files and test the flag off == them.
