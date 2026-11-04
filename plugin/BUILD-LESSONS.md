@@ -366,3 +366,17 @@ Rules (every new or changed indicator):
   1-min stress (8 x 1,380 candles). Proof: test_bo120_week [6] 1-min stress.
 - A SHARED RULE CHANGE FOR ONE PLUGIN = A DEFAULT-OFF PARAMETER: swingBreaksPx / boFromCandles `carry` default false, so lsBigBidAsk
   (and the zzRev 1 parity path) keep the per-session walk; keep the OLD expectations as *_nocarry files and test the flag off == them.
+
+## 2026-11-04 lsDealerProfile 2.52.3 / ColumnBoard 1.10.0, lsHodLod 2.17.8, lsLiquidityProfile 0.73.1 (audit, Rassul "just build it")
+- DECIDE THE BAND BEFORE WHAT IS "ON SCREEN": the Key Levels on-screen test used the pane edges, then the HOD/LOD table (stretched over the
+  column) became a hard floor for the stacker - every level behind the table was squeezed onto its edge and looked pinned (HG PFL 6.3180
+  drawn ~6.343). Any keep-out (title row, marker rows, another plugin's box) must shrink the band FIRST; a line outside it is an edge
+  marker, never a squeezed badge; a push is capped (2 badge heights). Proof: test_columnboard_1100 (HG / ES / CL / NG geometry, scroll
+  frames) + test_dealerprofile_2523 B / D.
+- A COMMENT THAT PROMISES A PASS IS A TEST TO WRITE: cb::stack said "then forward again for the top edge" with no such code. Fuzz the
+  invariant (20,000 scenes: inside the band, no overlap) instead of trusting the comment. Proof: test_columnboard_1100 fuzz.
+- ONE SESSION RULE, ONE DEFINITION OF "IN": London was 02:00-07:30 in lsHodLod / lra.key_levels but stopped at the RTH open in
+  KeyLevelsLogic / hodlod_levels (GC / EU / HG LonHI could include RTH bars). Use the same membership test everywhere (bar START before the
+  open, END by 07:30) and test it bar by bar across markets. Proof: t_hl2178 [2], test_london_window (every bar 02:03-07:30, 7 markets).
+- A WINDOW BUILT FROM TWO EDGES CAN BE EMPTY: kings between high - ADR and low + ADR vanish on a day over 2 ADR ("no kings" on ES 11-04).
+  Every derived range needs a test of its degenerate day and a fallback (last price +- 1 ADR). Proof: test_liquidityprofile_0731.

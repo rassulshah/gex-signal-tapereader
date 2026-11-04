@@ -31,7 +31,8 @@
 #include "BannerBoard.h"
 
 namespace cb {
-static const char* const VERSION = "1.9.1";   // (1.9.1, 2026-10-28 12:50 CT Rassul "the hod lod should be on the right of the level column not in it. and it should be on the bottom left next to the levels column") dockKeys: lsHodLod's table docks at the BOTTOM-LEFT of the price area, immediately RIGHT of the Key Levels column (left = column right + 4, bottom = pane bottom - 6); the column keeps its full height
+static const char* const VERSION = "1.10.0";   // (1.10.0, 2026-11-04, audit "badges pinned behind the HOD/LOD table", Rassul "just build it") stack(): the promised 3rd (forward) pass for the top edge; planKeys(): the Key Levels band (title row, edge-marker rows, HOD/LOD table) decided BEFORE what is on screen - a level whose line is outside the band becomes the edge marker, a badge is pushed at most KEY_MAX_PUSH badge heights (past that: an edge marker near the band edge, else dropped)
+// was 1.9.1: // (1.9.1, 2026-10-28 12:50 CT Rassul "the hod lod should be on the right of the level column not in it. and it should be on the bottom left next to the levels column") dockKeys: lsHodLod's table docks at the BOTTOM-LEFT of the price area, immediately RIGHT of the Key Levels column (left = column right + 4, bottom = pane bottom - 6); the column keeps its full height
 // was 1.9.0: // (1.9.0, 2026-10-28 12:16-12:18 CT Rassul "i want a column for levels and move all the level badges in the levels column because the chart is too messy. also move the hod lod box aligned with the liquidity profile on the left") the KEY LEVELS column (lsDealerProfile 2.33.0) at the pane's LEFT edge: its own board key LRA_COLV_, leftKeep keeps every plugin right of it (lsHodLod docks INSIDE it, leftKeep(..., false))
 // was 1.8.0:   // (1.8.0, 2026-10-28 06:42 CT Rassul "keep the liquidity profile behind the delta profile", option R) the Levels / liquidity column moves to the RIGHT as its own column after the Delta Profile: gap, BIG = LMT F, Delta (READ + bars), Levels (liquidity top 10), Dealer, axis; the left side is free (leftKeep = the pane edge)   // (1.7.0, 2026-10-28 overnight, live 22:06 overlap on the left column) leftKeep: the one rule every plugin uses to keep its marks / boxes right of the left columns;   // (1.6.0, 2026-10-28) Levels (liquidity) LEFT, Delta back on the right after LMT F;   // (1.5.0, 2026-10-27 14:00 CT) the Delta column at the pane's LEFT edge (DELTA_LEFT);   // (1.4.0, 2026-10-27 DP 2.28.0) Levels column up to 460 px (the combined Levels + Liquidity column);   // (1.3.0, 2026-10-21 DP 2.19.0) Levels column up to 250 px: the level % block "33%  /  66%" sits after the liquidity ratio;   // (1.2.0) order: gap, Levels, BIG, Delta, Dealer (BIG next to the Delta Profile);   // (1.1.0, Rassul 2026-10-15) the BIG column (Liquidity Profile big orders) first after the last bar: gap, BIG, Levels, Delta, Dealer
 static const int GAP_PX = 20;            // between the last bar and the Levels column
@@ -283,7 +284,80 @@ inline int stack(std::vector<Item>& v, int top, int bottom, int focusY)
         if (t + it.h > nextT - 1) t = nextT - 1 - it.h;
         it.y = t + it.h / 2; nextT = t;
     }
+    // (1.10.0) the 3rd pass (promised above, missing until 1.10.0; a guard - the drop step already keeps the total inside, fuzz found no case): forward again so no badge sits above top after the pull-up; the
+    // total height fits (checked above), so this never pushes a badge under 'bottom'
+    prevB = top - 1;
+    for (size_t i = 0; i < keep.size(); ++i) {
+        Item& it = v[keep[i]]; int t = it.y - it.h / 2; if (t < prevB + 1) t = prevB + 1; if (t < top) t = top;
+        it.y = t + it.h / 2; prevB = t + it.h;
+    }
     return dropped;
+}
+
+// ---- (1.10.0) the Key Levels column's band and edge markers ---------------------------------------------------------------------------
+// Audit 2026-11-04 (HG PFL 6.3180 drawn at ~6.343, ES PFH / PDH and CL / NG levels pinned against the HOD/LOD table): the table rect was a
+// hard floor / ceiling AFTER the on-screen test, so every level behind it was squeezed against its edge and looked static. Now the band is
+// decided first: [top0, bot0] = the pane under the IRT title row, minus the HOD/LOD table side it covers (the caller), minus one row per edge
+// marker. A level whose LINE lies outside the band is not a badge: it is a candidate for that edge's marker ("^ / v name price (distance)",
+// the nearest one shown). Inside the band each badge stays at its price or is pushed at most 'maxPush' px (the slanted tick); a badge pushed
+// further is taken out (the one farthest from price first, then re-stacked): near the band edge (its line within 3 badge heights of it) it
+// becomes that edge's marker candidate, elsewhere it is dropped (counted). A marker row is reserved only while that edge has a marker.
+enum KeyState { K_SHOWN = 0, K_UP = 1, K_DN = 2, K_DROP = 3 };
+static const int KEY_MAX_PUSH = 2;   // badge heights
+struct KeyPlan {
+    int top = 0, bot = 0;                // the badges' band (after the marker rows)
+    bool up = false, dn = false;         // an edge marker row at the top / bottom
+    int upY = 0, dnY = 0, wkY = 0;       // the marker rows' centres (wkY: the weekly POC marker, 0 = none)
+    int out = 0, capped = 0, dropped = 0;
+    std::vector<int> st;                 // per item: KeyState
+    std::vector<char> outside;           // per item: its line is outside the band (never stacked)
+};
+// v: the badges (want = the line's y, h = badge height); wk: +1 = a weekly POC marker at the top, -1 = at the bottom, 0 = none;
+// offUp / offDn = a level beyond the pane's top / bottom already needs that marker; rowH = a marker row (badge height + 2)
+inline KeyPlan planKeys(std::vector<Item>& v, int top0, int bot0, int rowH, bool offUp, bool offDn, int wk, int focusY, int maxPush)
+{
+    KeyPlan P; bool needUp = offUp, needDn = offDn;
+    for (int pass = 0; pass < 4; ++pass) {
+        P = KeyPlan(); P.st.assign(v.size(), K_SHOWN); P.outside.assign(v.size(), 0);
+        int top = top0, bot = bot0;
+        if (needUp) { P.up = true; P.upY = top + (rowH - 2) / 2; top += rowH; }
+        if (wk > 0) { P.wkY = top + (rowH - 2) / 2; top += rowH; }
+        if (needDn) { P.dn = true; P.dnY = bot - (rowH - 2) / 2; bot -= rowH; }
+        if (wk < 0) { P.wkY = bot - (rowH - 2) / 2; bot -= rowH; }
+        P.top = top; P.bot = bot;
+        bool moreUp = false, moreDn = false;
+        std::vector<size_t> in;
+        for (size_t i = 0; i < v.size(); ++i) {
+            v[i].shown = false; v[i].y = v[i].want;
+            if (v[i].want < top) { P.st[i] = K_UP; P.outside[i] = 1; ++P.out; moreUp = true; }
+            else if (v[i].want > bot) { P.st[i] = K_DN; P.outside[i] = 1; ++P.out; moreDn = true; }
+            else in.push_back(i);
+        }
+        if (bot - top < 4) { for (size_t i : in) P.st[i] = K_DROP; P.dropped += (int)in.size(); in.clear(); }
+        for (size_t guard = 0; guard <= v.size() && !in.empty(); ++guard) {
+            std::vector<Item> sub; for (size_t i : in) sub.push_back(v[i]);
+            stack(sub, top, bot, focusY);
+            long long worstD = -1; size_t worst = in.size();
+            for (size_t k = 0; k < in.size(); ++k) {
+                Item& it = v[in[k]]; it.y = sub[k].y; it.shown = sub[k].shown;
+                if (!it.shown) continue;
+                if (std::abs(it.y - it.want) > maxPush) {
+                    const long long d = std::llabs((long long)it.want - focusY);
+                    if (d > worstD) { worstD = d; worst = k; }
+                }
+            }
+            if (worst >= in.size()) break;
+            const size_t i = in[worst]; Item& it = v[i]; it.shown = false; ++P.capped;
+            if (it.want - top <= 3 * it.h) { P.st[i] = K_UP; moreUp = true; }
+            else if (bot - it.want <= 3 * it.h) { P.st[i] = K_DN; moreDn = true; }
+            else { P.st[i] = K_DROP; ++P.dropped; }
+            in.erase(in.begin() + (long)worst);
+        }
+        for (size_t i : in) if (!v[i].shown) { P.st[i] = K_DROP; ++P.dropped; }
+        if ((moreUp && !needUp) || (moreDn && !needDn)) { needUp = needUp || moreUp; needDn = needDn || moreDn; continue; }
+        break;
+    }
+    return P;
 }
 // the badge name that fits 'room' px: the name, else the first of a merged name + "+", else cut (at least 2 characters), else ""
 template <class W> std::string fitName(const std::string& name, int room, W widthOf)
