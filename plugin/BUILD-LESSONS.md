@@ -398,3 +398,11 @@ Rules (every new or changed indicator):
   whose width cannot shrink by compaction (the header) must drop its own extras instead of forcing the fallback. Test at HIS pane widths
   (930-980, the status files' axis) and font metric, not only 1200+, and pin every layout that already worked with golden hashes.
   Proof: tests_hodlod/t_hl2179 [1] his NQ geometry, [2] grid, [3] golden_2178.txt (1,596 scenarios byte-identical).
+- (lsBookFlow 1.35.0, 2026-11-04, Rassul "add wave poc as one of the levels for bookflow") ANOTHER PLUGIN'S DRAWN LEVELS = ITS RECORD +
+  ITS OWN DRAW RULE, PROVEN AGAINST ITS DRAW FUNCTION: BookFlow has no VAP, so the WPOC levels are rebuilt from lsWavePOC's record with
+  wpc::drawPocLines' selection ported (blb::wpocLines) - and tested bar by bar against drawPocLines on lsWavePOC's own engine (247 / 247),
+  the Python nightly port against the C++ (247 / 247). Two traps found doing it: (a) wpc::ci clamps every pixel to +-30000, so a parity
+  view with Y = price ticks (ES ~31,000) silently clamped every line - offset prices in test views; (b) getLocaltime is a MEMBER of
+  cppExtension (real SDK and the mock): a `static` helper calling it does not compile - keep time helpers non-static. Large append-only
+  records (WavePOC nodes 5.7 MB, mostly ROWS / STOP lines) are read as tail + new complete lines only, never whole and never on repaint.
+  Proof: tests_bf135/test_bf135_wpoc [1], parity_wpoc.py, test_bf135_host (torn line held back, truncation re-read).

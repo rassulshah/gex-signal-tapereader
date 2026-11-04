@@ -94,6 +94,6 @@ int main() {
         const std::string ln = blb::stateLine(560, "09:23:23", sh, blb::boxText(sh, blb::Params()));
         check(ln.compare(0, 26, "S|560|09:23:23|G 7630|mq|s") == 0 && ln.find("|1|4.25|g|1|3.29|g|5|0.96|n|") != std::string::npos, "S line: " + ln);
         blb::Engine::Shown off; check(blb::stateLine(1, "x", off, blb::BoxText()) == "S|1|x|off" && blb::stateKey(off) == "off", "off line"); }
-    check(std::string(blb::VERSION) == "1.0.0" && std::string(bf::VERSION).compare(0, 6, "1.34.0") == 0 && std::string(ofset::BF_VERSION) == "1.34.0", "versions: BookLevelBox 1.0.0, bf::VERSION / ofset::BF_VERSION 1.34.0");
+    check(std::string(blb::VERSION) == "1.1.0" && std::string(bf::VERSION).compare(0, 6, "1.35.0") == 0 && std::string(ofset::BF_VERSION) == "1.35.0", "versions: BookLevelBox 1.1.0, bf::VERSION / ofset::BF_VERSION 1.35.0 (pins moved with the 1.35.0 bump)");
     std::printf("blb logic: %d passed, %d failed\n", P, F); return F ? 1 : 0;
 }

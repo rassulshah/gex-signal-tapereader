@@ -1,6 +1,6 @@
 #ifndef LS_BOOK_LEVEL_BOX_H
 #define LS_BOOK_LEVEL_BOX_H
-// BookLevelBox.h 1.0.0 (2026-11-04) -- the SDK-free LEVEL BOX of lsBookFlow 1.34.0 (Rassul "just build it", 2026-11-04: the BookFlow
+// BookLevelBox.h 1.1.0 (2026-11-04; 1.1.0 = + the WAVE POC levels, Rassul "add wave poc as one of the levels for bookflow") -- the SDK-free LEVEL BOX of lsBookFlow 1.34.0 (Rassul "just build it", 2026-11-04: the BookFlow
 // upgrade he called "clean and it looks good" on bf_mockup.html / bf_*.png / bf3_*.png). One line, only while price is near a level:
 //   "<LEVEL> | Defenders stacking 2.1x? | Behind stacking 3.3x? | Attackers normal?"
 // and two rows of squares under the bars of each candle that spent time at a level (Defenders row, Behind row).
@@ -44,7 +44,7 @@
 
 namespace blb {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0) + L_WPOC: lsWavePOC's drawn wave POC lines (wpocLevels)   // was "1.0.0"
 static const int HALF = 4, AWAY = 8, ABAND = 8, MINREST = 5, BEHIND = 12, PERSIST = 15, WIN = 30, PRE = 300, BAND = 4;
 static const int HIST = 700;                 // seconds kept in the per-second rings (a case can be rebuilt up to ~+390 s after its anchor)
 static const int SNAP_R = 160;               // book snapshot half-width around the last trade (ticks)
@@ -54,8 +54,9 @@ static const int SQ_SECS = 20;               // a square's colour needs >= 20 s 
 static const double ES_REF_ACT = 60.0;       // book_level_combo.ES_REF_ACT
 
 enum Col { GRAY = 0, GREEN = 1, RED = 2 };
-enum LType { L_KEY = 0, L_MQ = 1, L_PROFILE = 2, L_VWAP = 3, L_PB = 4 };
-inline const char* ltypeName(int t) { return t == L_KEY ? "key" : t == L_MQ ? "mq" : t == L_PROFILE ? "profile" : t == L_VWAP ? "vwap" : "pb"; }
+enum LType { L_KEY = 0, L_MQ = 1, L_PROFILE = 2, L_VWAP = 3, L_PB = 4, L_WPOC = 5 };
+static const int L_TYPES = 6;
+inline const char* ltypeName(int t) { return t == L_KEY ? "key" : t == L_MQ ? "mq" : t == L_PROFILE ? "profile" : t == L_VWAP ? "vwap" : t == L_WPOC ? "wave_poc" : "pb"; }   // (1.1.0) "wave_poc" = the nightly's ltype
 
 struct Params {
     double defX = 1.5, quiet = -1, behStack = 2.0, behThin = 0.67, attStack = 1.4, attPull = 1.5;   // quiet < 0 = not from the file
@@ -394,6 +395,91 @@ inline BoxText boxText(const Engine::Shown& sh, const Params& P) {
     BoxText t; if (!sh.on) return t; t.level = sh.c.name;
     for (int q = 0; q < 3; ++q) { t.part[q] = lineText(q, sh.r[q], q == 0 ? P.showD : (q == 1 ? P.showB : false)); t.col[q] = implCol(sh.r[q].col, sh.c.ds); }
     return t;
+}
+
+// ---- (1.1.0) WAVE POC levels: the wave POC lines lsWavePOC 1.8.3 draws (WavePOCLogic.h drawPocLines), from its own record ----------
+// Rassul 2026-11-04: "add wave poc as one of the levels for bookflow". Source = lsFlexLevels\WavePOC\<MKT>-180-nodes.csv (append-only:
+// WAVE,ver,N,dir,t0,t1,tConf,... + NODE,t0,t1,rank,price,...; rank 0 = the wave's volume POC = the cyan line). Times = bar END, local
+// (Central) wall-clock seconds (WavePOC::localSec). The rule = drawPocLines line for line, on the chart's CLOSED bars:
+//   waves     every recorded wave of the chart's reversal-bars N (the N of the newest WAVE line) confirmed by the last closed bar
+//             (tConf <= its time); an extended leg (same direction and start, later end) replaces the earlier one (Engine::leg)
+//   day       only waves whose extreme bar is in the last bar's CME trading day (17:00 CT starts the next; tday)
+//   tested    the first closed bar AFTER the extreme bar whose range contains the POC; a tested line is drawn (to that bar) only until
+//             a newer wave of the same direction exists
+//   untested  only the 2 nearest at / above the last close and the 2 nearest below it (distance, then confirmation order)
+// Every drawn line (untested + tested) is a level: zone = POC +-4 ticks, named "WPOC <price>". Not used (documented differences): the
+// LIVE provisional wave's POC line (never recorded until confirmed); its "newer wave" effect on tested lines; whether the line is in
+// the visible price range / wide enough to draw in px.
+struct WpRec { int n = 0, dir = 0; long long t0 = 0, t1 = 0, tConf = 0; bool havePoc = false; long long poc = 0; long long seq = 0; };
+struct WpBar { long long t = 0, h = 0, l = 0, c = 0; };   // bar END local seconds, prices in ticks
+static const int WP_EACH_SIDE = 2;                        // = wpc::POC_EXT_EACH_SIDE
+inline long long wpDay(long long t) { const long long a = t + 7 * 3600; return a >= 0 ? a / 86400 : -((-a + 86399) / 86400); }   // = wpc::tday
+inline bool wpTicks(const std::string& s, double tick, long long& out) { if (s.empty() || s.size() > 40) return false; char* e = nullptr; const double v = std::strtod(s.c_str(), &e); if (!e || *e || !(tick > 0) || !(v > 0) || !(v < 1e12)) return false; const double q = v / tick; if (!(q < 4e15)) return false; out = (long long)std::llround(q); return true; }
+inline bool wpLL(const std::string& s, long long& out) { if (s.empty() || s.size() > 20) return false; char* e = nullptr; const long long v = std::strtoll(s.c_str(), &e, 10); if (!e || *e) return false; out = v; return true; }
+// the record, fed line by line (incremental: the host feeds only the new complete lines of the append-only file)
+struct WpFeed {
+    std::map<std::pair<long long, long long>, WpRec> w;   // (t0, t1) -> wave (+ its POC)
+    int nNewest = 0; long long seq = 0, bad = 0, lines = 0;
+    void line(const std::string& raw, double tick) {
+        if (raw.size() < 5 || raw[0] == '#') return;
+        const bool wave = raw.compare(0, 5, "WAVE,") == 0, node = raw.compare(0, 5, "NODE,") == 0; if (!wave && !node) return;   // ROWS / STOP / LNODE ...: skipped unparsed
+        ++lines; std::vector<std::string> f; { std::string c; for (char ch : raw) { if (ch == ',') { f.push_back(c); c.clear(); } else if (ch != '\r' && ch != '\n') c += ch; } f.push_back(c); }
+        if (wave) {
+            long long n = 0, t0 = 0, t1 = 0, tc = 0;
+            if (f.size() < 19 || !wpLL(f[2], n) || n < 1 || n > 50 || (f[3] != "up" && f[3] != "down") || !wpLL(f[4], t0) || !wpLL(f[5], t1) || !wpLL(f[6], tc) || t0 <= 0 || t1 < t0 || tc < t1) { ++bad; return; }
+            WpRec& r = w[std::make_pair(t0, t1)]; r.n = (int)n; r.dir = f[3] == "up" ? 1 : -1; r.t0 = t0; r.t1 = t1; r.tConf = tc; r.seq = ++seq; nNewest = (int)n;
+        } else {
+            long long t0 = 0, t1 = 0, rk = 0, tk = 0;
+            if (f.size() < 7 || !wpLL(f[1], t0) || !wpLL(f[2], t1) || !wpLL(f[3], rk) || !wpTicks(f[4], tick, tk)) { ++bad; return; }
+            if (rk != 0) return;
+            std::map<std::pair<long long, long long>, WpRec>::iterator it = w.find(std::make_pair(t0, t1)); if (it == w.end()) return;   // a torn / missing WAVE line
+            it->second.havePoc = true; it->second.poc = tk;
+        }
+    }
+    void prune(long long keepFrom) { for (std::map<std::pair<long long, long long>, WpRec>::iterator it = w.begin(); it != w.end();) { if (it->second.t1 < keepFrom) it = w.erase(it); else ++it; } }
+    std::vector<WpRec> waves() const { std::vector<WpRec> v; for (const auto& kv : w) v.push_back(kv.second); return v; }
+};
+inline std::string wpPx(long long tk, double tick) {
+    int d = 0; for (double x = tick; d < 6 && std::fabs(x - std::round(x)) > 1e-9; x *= 10) ++d;
+    char b[48]; std::snprintf(b, sizeof b, "%.*f", d, (double)tk * tick); return b;
+}
+struct WpLine { long long tick = 0; bool open = true; long long t0 = 0, t1 = 0; int hit = -1; };
+// the drawn lines at the last bar of `bars` (closed bars, time order); n = the chart's reversal bars (0 = the newest WAVE line's)
+inline std::vector<WpLine> wpocLines(const std::vector<WpRec>& recs, const std::vector<WpBar>& bars, int n) {
+    std::vector<WpLine> out; if (bars.empty()) return out;
+    const WpBar& L = bars.back();
+    // the engine's waves at this bar: confirmed by it, this N, an extended leg replaces the earlier one (same dir + start, later end)
+    std::map<std::pair<int, long long>, WpRec> best;
+    for (const WpRec& r : recs) { if (r.n != n || r.tConf > L.t) continue; const std::pair<int, long long> k(r.dir, r.t0);
+        std::map<std::pair<int, long long>, WpRec>::iterator it = best.find(k); if (it == best.end() || r.t1 > it->second.t1) best[k] = r; }
+    std::vector<WpRec> ws; for (const auto& kv : best) ws.push_back(kv.second);
+    std::stable_sort(ws.begin(), ws.end(), [](const WpRec& a, const WpRec& b) { return a.tConf != b.tConf ? a.tConf < b.tConf : a.seq < b.seq; });   // confirmation order
+    struct C { WpLine l; double d; };
+    std::vector<C> up, dn; std::vector<WpLine> tested;
+    const long long day = wpDay(L.t);
+    for (const WpRec& w : ws) {
+        if (!w.havePoc || wpDay(w.t1) != day) continue;
+        int hit = -1; for (int k = 0; k < (int)bars.size(); ++k) { const WpBar& b = bars[(size_t)k]; if (b.t <= w.t1) continue; if (b.l <= w.poc && w.poc <= b.h) { hit = k; break; } }
+        WpLine l; l.tick = w.poc; l.t0 = w.t0; l.t1 = w.t1;
+        if (hit < 0) { C c; c.l = l; c.d = (double)std::llabs(w.poc - L.c); (w.poc >= L.c ? up : dn).push_back(c); continue; }
+        bool newer = false; for (const WpRec& o : ws) if (!(o.t0 == w.t0 && o.t1 == w.t1) && o.dir == w.dir && o.t0 > w.t0) { newer = true; break; }
+        if (!newer) { l.open = false; l.hit = hit; tested.push_back(l); }
+    }
+    auto near = [](std::vector<C>& a) { std::stable_sort(a.begin(), a.end(), [](const C& x, const C& y) { return x.d < y.d; }); if ((int)a.size() > WP_EACH_SIDE) a.resize((size_t)WP_EACH_SIDE); };
+    near(up); near(dn);
+    for (const C& c : up) out.push_back(c.l);
+    for (const C& c : dn) out.push_back(c.l);
+    for (const WpLine& l : tested) out.push_back(l);
+    return out;
+}
+// the box levels: one per distinct POC price, zone +-HALF, "WPOC <price>"
+inline std::vector<Level> wpocLevels(const std::vector<WpLine>& lines, double tick) {
+    std::vector<Level> v; std::vector<long long> seen;
+    for (const WpLine& l : lines) {
+        if (l.tick <= HALF || std::find(seen.begin(), seen.end(), l.tick) != seen.end()) continue;
+        seen.push_back(l.tick); Level lv; lv.name = "WPOC " + wpPx(l.tick, tick); lv.type = L_WPOC; lv.lo = l.tick - HALF; lv.hi = l.tick + HALF; v.push_back(lv);
+    }
+    return v;
 }
 
 // ---- squares: per candle, the seconds the box showed and their colours ------------------------------------------------------------

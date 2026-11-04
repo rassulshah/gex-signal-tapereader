@@ -1,5 +1,8 @@
 /********************************************************************************
- *  BookFlow.cpp  --  Investor/RT RTX extension  lsBookFlow  1.34.0  (2026-11-04; 1.0.0 2026-10-16)
+ *  BookFlow.cpp  --  Investor/RT RTX extension  lsBookFlow  1.35.0  (2026-11-04; 1.0.0 2026-10-16)
+ *  1.35.0 (2026-11-04, Rassul "add wave poc as one of the levels for bookflow"): the level box also watches the WAVE POC lines lsWavePOC
+ *         draws (BookLevelBox 1.1.0 wpocLevels: read from lsFlexLevels\WavePOC\<MKT>-180-nodes.csv, the same rule as wpc::drawPocLines),
+ *         named "WPOC <price>", level type wave_poc; status LEVEL_BOX "wave_poc N" + WPOC note.
  *  1.34.0 (2026-11-04, Rassul "just build it" after "clean and it looks good" on bf_mockup.html; levels added at his request: prior-day
  *        POC / VAH / VAL, VWAP and its bands, Pb tests of BO / BD - "the pullback is the signal we were working on"):
  *        (1) LEVEL BOX (BookLevelBox.h 1.0.0, = the nightly lra.book_level_combo 1.1.1, exact parity on ES 2026-10-30): one row right of
@@ -105,7 +108,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <chrono>
 #include "SignalBoard.h"            // (1.31.0) kind D facts (decided candles' defense)
 
-#define BF_VERSION "1.34.0"          // 1.34.0 (2026-11-04, Rassul "just build it") the LEVEL BOX + squares (BookLevelBox.h) and the turn-mark ratio label   // was 1.33.0: 1.33.0 (2026-11-03, Rassul "go" on bf_box.png) the 4-line info box -> ONE compact line top-left (bf::oneLine): yellow Defending?, green B +923 0.6x, red S +534 0.3x, small white Live; no (i) icon
+#define BF_VERSION "1.35.0"          // 1.35.0 (2026-11-04, Rassul "add wave poc as one of the levels for bookflow") + WPOC levels in the level box   // was 1.34.0: 1.34.0 (2026-11-04, Rassul "just build it") the LEVEL BOX + squares (BookLevelBox.h) and the turn-mark ratio label   // was 1.33.0: 1.33.0 (2026-11-03, Rassul "go" on bf_box.png) the 4-line info box -> ONE compact line top-left (bf::oneLine): yellow Defending?, green B +923 0.6x, red S +534 0.3x, small white Live; no (i) icon
 // was "1.32.1"          // 1.32.1 (2026-11-02) no hovers (BF_HOVERS false, no TRACK_MOUSE)
 static const bool BF_HOVERS = false;   // was 1.32.0:          // 1.32.0 (2026-10-28 overnight, Rassul 21:52 / 21:57 CT) the NODE LADDER owner (OrderFlowFeed 1.16.0 Engine.ladder -> SignalBoard 1.5.0 LRA_SLD_ every second), the AT NODE box row and the node mark (white square inside the defenders' bar: filled = holding, hollow = pulling) from lsDeltaProfile's kind Y read (display only, nothing recomputed)
 // 1.31.0 was:          // 1.31.0 (2026-10-28 overnight) the decided candle's defense posted on the SignalBoard as kind D (bf::defenseFact; layer 1a, one owner)
@@ -219,7 +222,9 @@ public:
         // (1.34.0) THE LEVEL BOX (BookLevelBox.h): the engine (fed every order event), the nightly's params, the levels, the box last
         // evaluated, the squares (decided per candle, never changed), the levelbox record
         blb::Engine lb; blb::Params lbP; blb::Profile lbProf; long long lbParMs = -100000, lbParSig = -2; std::string lbParPath;
-        std::string lbIdent; long long lbLvMs = -100000; long lbLvCount = -1; std::vector<blb::Level> lbLv; int lbN[5] = {0, 0, 0, 0, 0}; std::string lbVwapNote, lbProfNote, lbPbNote;
+        std::string lbIdent; long long lbLvMs = -100000; long lbLvCount = -1; std::vector<blb::Level> lbLv; int lbN[blb::L_TYPES] = {0, 0, 0, 0, 0, 0}; std::string lbVwapNote, lbProfNote, lbPbNote;
+        // (1.35.0) the Wave POC record (append-only; read incrementally: only the new complete lines), the lines last built
+        blb::WpFeed lbWp; std::string lbWpPath, lbWpPend, lbWpNote = "not read yet"; long long lbWpOff = -1, lbWpMs = -100000, lbWpReads = 0; bool lbWpSkip = false; long lbWpCount = -1; long long lbWpSeq = -1; std::vector<blb::Level> lbWpLv;
         long long lbBoSig = -2, lbBoMs = -100000; std::string lbBoPath; std::vector<blb::BoRec> lbBo;
         long long lbLastE = -1, lbResetDay = -1, lbEvals = 0, lbShownSecs = 0, lbEvalNs = 0, lbEventNs = 0, lbEventsTimed = 0; blb::Engine::Shown lbShown; blb::BoxText lbText; std::string lbKey;
         std::map<long long, blb::SqAcc> lbAcc; std::map<long long, blb::Square> lbSq; long long lbSqDecided = 0;
@@ -243,7 +248,7 @@ public:
     void lbIdentity(S_& S, Ext& e) {
         if (e.lbIdent == S.identity) return;
         e.lb.reset(); e.lb.market = S.market; e.lbIdent = S.identity; e.lbSq.clear(); e.lbAcc.clear(); e.lbPath.clear(); e.lbSess.clear(); e.lbLastE = -1;
-        e.lbParSig = -2; e.lbParMs = -100000; e.lbLvCount = -1; e.lbLvMs = -100000; e.lbBoSig = -2; e.lbBoMs = -100000; e.lbBo.clear(); e.lbShown = blb::Engine::Shown(); e.lbText = blb::BoxText(); e.lbKey.clear();
+        e.lbParSig = -2; e.lbParMs = -100000; e.lbLvCount = -1; e.lbLvMs = -100000; e.lbBoSig = -2; e.lbBoMs = -100000; e.lbBo.clear(); e.lbWp = blb::WpFeed(); e.lbWpPend.clear(); e.lbWpOff = -1; e.lbWpMs = -100000; e.lbWpCount = -1; e.lbWpSeq = -1; e.lbWpLv.clear(); e.lbShown = blb::Engine::Shown(); e.lbText = blb::BoxText(); e.lbKey.clear();
     }
     // every order event (the engine keeps its own book: O(1) per event)
     void lbEvent(S_& S, const DEPTH_ORDER& o) {
@@ -307,7 +312,7 @@ public:
         if (count == e.lbLvCount && nowMs - e.lbLvMs < 5000 && nowMs >= e.lbLvMs) return;
         const bool newBar = count != e.lbLvCount;
         e.lbLvMs = nowMs; e.lbLvCount = count;
-        std::vector<blb::Level> v; int n[5] = {0, 0, 0, 0, 0};
+        std::vector<blb::Level> v; int n[blb::L_TYPES] = {0, 0, 0, 0, 0, 0};
         auto add = [&](const std::string& name, int type, double px) {
             const long long c = lbTicks(px, S.tick); if (c <= blb::HALF) return;
             blb::Level l; l.name = name; l.type = type; l.lo = c - blb::HALF; l.hi = c + blb::HALF;
@@ -323,8 +328,10 @@ public:
         if (newBar || nowMs - e.lbBoMs >= 5000 || nowMs < e.lbBoMs) lbPb(S, e, flex, nowMs);
         for (const blb::Level& l : e.lbLv) if (l.type == blb::L_PB) { v.push_back(l); ++n[blb::L_PB]; }
         std::vector<blb::Level> keepPb; for (const blb::Level& l : e.lbLv) if (l.type == blb::L_PB) keepPb.push_back(l);
+        lbWpoc(S, e, flex, nowMs);                                          // (1.35.0) the drawn wave POC lines
+        for (const blb::Level& l : e.lbWpLv) { v.push_back(l); ++n[blb::L_WPOC]; }
         e.lb.setLevels(v); e.lbLv.swap(keepPb);
-        for (int k = 0; k < 5; ++k) e.lbN[k] = n[k];
+        for (int k = 0; k < blb::L_TYPES; ++k) e.lbN[k] = n[k];
     }
     template <class Add> void lbVwap(S_& S, Ext& e, Add add) {
         int openMin = 0, closeMin = 0; if (!svl::rthOf(S.market.c_str(), openMin, closeMin)) { e.lbVwapNote = "no RTH hours for " + S.market; return; }
@@ -381,6 +388,57 @@ public:
         for (size_t k = 0; k < L.size() && k < F.size(); ++k) L[k].name += " " + lbHm(F[k].t0);
         e.lbLv.clear(); for (const blb::Level& l : L) e.lbLv.push_back(l);
         e.lbPbNote = std::to_string(e.lbBo.size()) + " fired BO / BD read" + (S.spb == 180 ? std::string(", origin rule on") : std::string(", origin rule off (not a 3-min chart)")) + ", file " + e.lbBoPath;
+    }
+    // (1.35.0, 2026-11-04 Rassul "add wave poc as one of the levels for bookflow") WAVE POC levels: lsWavePOC's record
+    // (lsFlexLevels\WavePOC\<MKT>-180-nodes.csv, append-only) read incrementally - the last 3 MiB once, then only the new complete lines
+    // (a torn last line waits for its newline), at most every 5 s; the lines = blb::wpocLines on this chart's CLOSED bars (the rule of
+    // wpc::drawPocLines), rebuilt on a new bar or when the record grew
+    long long lbLocalSec(RTDATE d, bool& ok) {
+        struct tm x; std::memset(&x, 0, sizeof(x)); ok = getLocaltime(d, &x) && x.tm_mon >= 0 && x.tm_mon <= 11 && x.tm_mday >= 1 && x.tm_mday <= 31; if (!ok) return 0;
+        return (long long)svl::daysFromCivil(x.tm_year + 1900, x.tm_mon + 1, x.tm_mday) * 86400LL + x.tm_hour * 3600 + x.tm_min * 60 + x.tm_sec;   // = WavePOC::localSec
+    }
+    void lbWpRead(S_& S, Ext& e) {
+        static const long long TAIL = 3LL * 1024 * 1024, CHUNK = 4LL * 1024 * 1024;
+        std::ifstream f(e.lbWpPath.c_str(), std::ios::binary);
+        if (!f) { if (e.lbWpOff >= 0 || !e.lbWp.w.empty()) { e.lbWp = blb::WpFeed(); e.lbWpPend.clear(); } e.lbWpOff = -1; e.lbWpNote = "no Wave POC record (" + e.lbWpPath + ")"; return; }
+        f.seekg(0, std::ios::end); const long long size = (long long)f.tellg(); if (size < 0) return;
+        if (e.lbWpOff < 0 || size < e.lbWpOff) { e.lbWp = blb::WpFeed(); e.lbWpPend.clear(); e.lbWpOff = size > TAIL ? size - TAIL : 0; e.lbWpSkip = e.lbWpOff > 0; }   // new / rewritten file: its tail
+        if (size == e.lbWpOff) return;
+        const long long want = std::min(size - e.lbWpOff, CHUNK);
+        std::string buf((size_t)want, '\0'); f.seekg(e.lbWpOff); f.read(&buf[0], (std::streamsize)want); const long long got = (long long)f.gcount(); if (got <= 0) return;
+        buf.resize((size_t)got); e.lbWpOff += got; e.lbWpPend += buf; ++e.lbWpReads;
+        size_t a = 0, nl;
+        while ((nl = e.lbWpPend.find('\n', a)) != std::string::npos) {
+            if (e.lbWpSkip) e.lbWpSkip = false;                             // the first line of a tail read is cut: skipped
+            else e.lbWp.line(e.lbWpPend.substr(a, nl - a), S.tick);
+            a = nl + 1;
+        }
+        e.lbWpPend.erase(0, a);
+        if (e.lbWpPend.size() > 256 * 1024) e.lbWpPend.clear();             // no newline in 256 KiB: garbage, dropped
+        long long newest = 0; for (const auto& kv : e.lbWp.w) newest = std::max(newest, kv.second.t1);
+        if (newest > 0) e.lbWp.prune(newest - 3 * 86400);                  // a trading day at most is used; keep 3 days
+    }
+    void lbWpoc(S_& S, Ext& e, const std::string& flex, long long nowMs) {
+        if (flex.empty() || S.market.empty() || !(S.tick > 0)) { e.lbWpLv.clear(); return; }
+        const std::string path = flex + "\\WavePOC\\" + S.market + "-180-nodes.csv";
+        if (path != e.lbWpPath) { e.lbWpPath = path; e.lbWp = blb::WpFeed(); e.lbWpPend.clear(); e.lbWpOff = -1; e.lbWpCount = -1; }
+        if (e.lbWpOff < 0 || nowMs - e.lbWpMs >= 5000 || nowMs < e.lbWpMs) { e.lbWpMs = nowMs; lbWpRead(S, e); }
+        const long count = getBarCount();
+        if (count == e.lbWpCount && e.lbWp.seq == e.lbWpSeq) return;        // nothing new: the lines last built stand
+        e.lbWpCount = count; e.lbWpSeq = e.lbWp.seq; e.lbWpLv.clear();
+        if (e.lbWp.w.empty()) { if (e.lbWpOff >= 0) e.lbWpNote = "Wave POC record has no waves yet"; return; }
+        RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
+        if (count < 2 || times.count < count || hi.count < count || lo.count < count || cl.count < count) { e.lbWpNote = "bars not readable"; return; }
+        std::vector<blb::WpBar> bars; bars.reserve(2000);
+        for (long k = std::max(0L, count - 2001); k < count - 1; ++k) {      // closed bars only
+            bool ok = false; blb::WpBar b; b.t = lbLocalSec((RTDATE)times[(int)k], ok); if (!ok) continue;
+            if (!(hi[(int)k] >= lo[(int)k]) || !zzd::toTicks(hi[(int)k], S.tick, b.h) || !zzd::toTicks(lo[(int)k], S.tick, b.l) || !zzd::toTicks(cl[(int)k], S.tick, b.c)) continue;
+            bars.push_back(b);
+        }
+        const std::vector<blb::WpLine> L = blb::wpocLines(e.lbWp.waves(), bars, e.lbWp.nNewest);
+        e.lbWpLv = blb::wpocLevels(L, S.tick);
+        int open = 0; for (const blb::WpLine& l : L) open += l.open ? 1 : 0;
+        e.lbWpNote = std::to_string(e.lbWpLv.size()) + " WPOC (" + std::to_string(open) + " untested, " + std::to_string((int)L.size() - open) + " tested) from " + std::to_string(e.lbWp.w.size()) + " recorded waves (N " + std::to_string(e.lbWp.nNewest) + ", " + std::to_string(e.lbWp.bad) + " bad lines, " + std::to_string(e.lbWpReads) + " reads)" + (S.spb == 180 || S.spb == 60 ? std::string() : std::string(", not a 1 / 3-min chart: tested-bar timing approximate")) + ", file " + e.lbWpPath;
     }
     // away states reset once a day at RTH open - 60 min (find_touches starts there)
     void lbReset(S_& S, Ext& e) {
@@ -507,8 +565,8 @@ public:
           << "\nF_MIRROR," << fmr::VERSION << "," << (e ? std::to_string(e->fReads.size()) + " pivot reads (" + std::to_string(e->fWritten) + " written here, " + std::to_string(e->fFails) + " write fails), F? armed " + std::to_string(e->fArmed) + ",thresholds " + (e->fPar.set() ? "front " + std::to_string(e->fPar.front).substr(0, 5) + " behind " + std::to_string(e->fPar.behind).substr(0, 5) : std::string("NOT SET (recorded, not drawn)")) + ",params " + e->fPar.why + ",file " + e->fPath : std::string("n/a"))
           << "\nRETEST_IDS," << (e ? std::to_string(e->rtInfo.size()) + " classified (same order / new big order / small only), file " + e->rtPath : std::string("n/a"))
           << "\nLEVEL_BOX," << blb::VERSION << (e ? ",params " + e->lbP.why + ",quiet floor " + std::to_string((int)std::lround(e->lb.quietFloor())) + " lots,SHOW D " + (e->lbP.showD ? "1" : "0") + " B " + (e->lbP.showB ? "1" : "0")
-                + ",levels key " + std::to_string(e->lbN[blb::L_KEY]) + " mq " + std::to_string(e->lbN[blb::L_MQ]) + " profile " + std::to_string(e->lbN[blb::L_PROFILE]) + " vwap " + std::to_string(e->lbN[blb::L_VWAP]) + " pb " + std::to_string(e->lbN[blb::L_PB])
-                + "," + e->lbProfNote + "," + e->lbVwapNote + ",Pb " + e->lbPbNote
+                + ",levels key " + std::to_string(e->lbN[blb::L_KEY]) + " mq " + std::to_string(e->lbN[blb::L_MQ]) + " profile " + std::to_string(e->lbN[blb::L_PROFILE]) + " vwap " + std::to_string(e->lbN[blb::L_VWAP]) + " pb " + std::to_string(e->lbN[blb::L_PB]) + " wave_poc " + std::to_string(e->lbN[blb::L_WPOC])
+                + "," + e->lbProfNote + "," + e->lbVwapNote + ",Pb " + e->lbPbNote + ",WPOC " + e->lbWpNote
                 + ",now " + (e->lbShown.on ? e->lbText.level + " | " + e->lbText.part[0] + " | " + e->lbText.part[1] + " | " + e->lbText.part[2] + (e->lbShown.c.arrived ? " (arrived " + lbClock(e->lbShown.c.anchor) + ")" : " (approaching)") : std::string("hidden (no level within 4 ticks)"))
                 + ",evaluated to " + lbClock(e->lbLastE) + " (" + std::to_string(e->lbEvals) + " s, shown " + std::to_string(e->lbShownSecs) + " s, " + std::to_string(e->lbEvals > 0 ? e->lbEvalNs / e->lbEvals / 1000 : 0) + " us per s)"
                 + ",engine " + std::to_string(e->lb.events) + " events, " + std::to_string(e->lb.book.size()) + " orders, " + std::to_string(e->lb.arrivals) + " arrivals, " + std::to_string(e->lb.garbage) + " garbage, " + std::to_string(e->lb.outside) + " off-grid, " + std::to_string(e->lb.pendOver) + " pending overflow"
@@ -1942,6 +2000,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | (BF_HOVERS ? TRACK_MOUSE : 0));   // (1.32.1) no hovers                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.34.0");   // BF_VERSION
+    p->setVersion("1.35.0");   // BF_VERSION
     return p;
 }

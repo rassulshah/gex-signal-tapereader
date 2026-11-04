@@ -46,8 +46,8 @@ int main() {
     for (int i = 0; i < 31; ++i) h.bars.push_back(bar(T0 + 60UL * i));
     Ind* p = make(); p->calc(0); auto* S = p->testState(); h.draws.clear(); p->draw();
     Ind::Ext* e = p->ext(*S);
-    CHECK(std::string(BF_VERSION) == "1.34.0" && std::string(bf::VERSION) == "1.34.0", "versions 1.34.0 (BF_VERSION / bf::VERSION; ofset::BF_VERSION in test_blb_logic)");
-    CHECK(readAll("../BookFlow.cpp").find("p->setVersion(\"1.34.0\")") != std::string::npos, "the setVersion literal 1.34.0 (gex-build reads it)");
+    CHECK(std::string(BF_VERSION) == "1.35.0" && std::string(bf::VERSION) == "1.35.0", "versions 1.35.0 (1.34.0 suite, pins moved with the 1.35.0 bump) (BF_VERSION / bf::VERSION; ofset::BF_VERSION in test_blb_logic)");
+    CHECK(readAll("../BookFlow.cpp").find("p->setVersion(\"1.35.0\")") != std::string::npos, "the setVersion literal 1.34.0 (gex-build reads it)");
     step(h, p, 31);
     // ---- phase A: 6 candles at 7013 (8 ticks above the zone 7009-7011): far from the level -> no box ----
     for (int k = 31; k <= 36; ++k) { candle(k, 7013.0f, 2, 2, k == 31 ? 20 : 0); step(h, p, k + 1); }
@@ -123,7 +123,7 @@ int main() {
     CHECK(same2 && e2->lbLoaded == 4, "restart: the squares come back from the record, identical (" + std::to_string(e2->lbSq.size()) + ")");
     {   int n = 0; for (auto& x : h.draws) if (x.type == "box" && x.b - x.y == blb::SQ_H && x.color == (COLOR)blb::BC_GREEN) ++n; CHECK(n >= 4, "restart: the squares are drawn again"); }
     {   std::string st = readAll(flex + "\\BookFlow\\status-ES-ESZ6-60.txt"); NOW += 40000; p2->calc(0); st = readAll(flex + "\\BookFlow\\status-ES-ESZ6-60.txt");
-        CHECK(st.find("LEVEL_BOX,1.0.0,params defaults") != std::string::npos && st.find("TURN_LABEL,") != std::string::npos, "status: LEVEL_BOX + TURN_LABEL lines"); }
+        CHECK(st.find("LEVEL_BOX,1.1.0,params defaults") != std::string::npos && st.find("TURN_LABEL,") != std::string::npos, "status: LEVEL_BOX + TURN_LABEL lines"); }
     // the nightly's params: SHOW D drops the "?" on Defenders; a wrong-market file = defaults with the reason
     {   std::ofstream f((flex + "\\LRA-BookLevel-ES.csv").c_str()); f << "VERSION|1\nMARKET|ES\nPARAM|def_x|1.5\nPARAM|quiet_lots|40\nSHOW|D|1\nSHOW|B|0\n"; }
     NOW += 6000; p2->calc(0);
