@@ -321,3 +321,15 @@ Rules (every new or changed indicator):
   4 px left-justified inset is the only way a host test sees this defect. Proof: test_dealerprofile_2521.cpp (38/0; ranks K 2 3 4 5 10 11 in
   one column + badge chips 10 / 11 fully inside and centred within 1 px with IRT_LJ_INSET = 4; the 2.52.0 code fails 6 of them, "K" 1441-1449
   in box 1434-1448 exactly as on his screenshot).
+- (2026-11-03 lsBreakout 1.3.0) A RECORD APPEND MUST LOOK AT THE FILE FIRST: lsBigBidAsk appended each new BBO| decision to the session file without
+  reading what was there, and its loader kept only some line versions, so a restart / re-decided candle / second chart of the same stem wrote the
+  same decision again - its ES Oct 30 breakouts file held 753 rows, the 141 fired lines only 21 distinct (8 - 10 copies each), one candle with two
+  different follow-through candles. Every record line now has a key (BO t0 + dir, Rly t_e + dir, Pb t_pivot + side); before an append the file is
+  read and every key already in it is dropped, a key counts as written only after a good atomic replace, first line per key wins. Proof:
+  tests_bo100/test_bo130_rec.cpp (20/0: restart, recompute, two charts on one DLL + two DLL objects -> files byte-identical; bar-by-bar + restart
+  append-only; blocked write retried and written once; half-written file completed without repeats); dedupe off (recMerge) fails 7 checks.
+- (2026-11-03 orderflow_badges 1.4.0) A READER THAT FILTERS ON A FIELD COUNT GOES SILENT WHEN THE WRITER GROWS: read_bbo accepted only the 20-field
+  1.21 BBO| lines, so every 24 / 27-field line lsBigBidAsk wrote from 1.23.0 (Oct 22) on was skipped and the BO / BD reads scored no new data for
+  12 days without an error. A record reader must accept every layout its writer has produced (or log what it skipped); a writer that adds fields
+  ships a reader test with a line in the new layout. Proof: LRA test_orderflow_badges.py::test_read_bbo_breakout_folder (20 / 24 / 27 fields,
+  real lsBreakout lines, per-day preference, first wins).

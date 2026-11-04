@@ -1,5 +1,12 @@
 /********************************************************************************
- *  Breakout.cpp  --  Investor/RT RTX extension  lsBreakout  "BO"  1.2.0  (2026-11-03)
+ *  Breakout.cpp  --  Investor/RT RTX extension  lsBreakout  "BO"  1.3.0  (2026-11-03)
+ *  1.3.0 (2026-11-03 evening, Rassul removed lsBigBidAsk from his charts at 19:45 CT and said "do it"):
+ *    RECORDS - lsBreakout writes the BO / BD, Rly and Pb decision records from its own 3-bar decisions (BreakoutLogic.h recPlan /
+ *      recMerge; line layout = lsBigBidAsk's bba::boLine / rly::line + a BPB| Pb line), one line per decision, deduped by key against
+ *      the file before every append (restart / recompute / two charts never repeat a line), last 3 sessions:
+ *        lsFlexLevels\Breakout\<MKT>-<SYM>-<spb>-breakouts-<daykey>.csv, lsFlexLevels\Breakout\Rly\<MKT>-<SYM>-<spb>-<daykey>.csv,
+ *        lsFlexLevels\Breakout\<MKT>-<SYM>-<spb>-pb-<daykey>.csv  (first line "# lsBreakout 1.3.0 | ... | zz_rev_bars 3 | ft_tie 1").
+ *    FOLLOW-THROUGH TIE - the follow-through close may equal the BO / BD candle's close (bba::boWaves ftTie; lsBigBidAsk unchanged).
  *  1.2.0 (2026-11-03, Rassul "go" after the 1-bar vs 3-bar week check): BO / BD pivots + wave and Rly waves on the 3-bar High / Low
  *         ZigZag (the Pb / lsZzoCombo 2.1.0 turn rule, BreakoutLogic.h ZZ_REV_BARS); lsBigBidAsk keeps 1-bar. Host code unchanged.
  *
@@ -23,6 +30,8 @@
  *  the chart's life and never changes or disappears (no repaint). Posts SignalBoard kind 'L' (the BO letters as drawn) for
  *  lsLiquidityProfile's Ex letter, as lsBigBidAsk 1.31.1 did.
  *  FILES: lsFlexLevels\Breakout.status-<MKT>-<spb>.txt  version, rules, today's counts, drawn counts (on change / 30 s; write only)
+ *         (1.3.0) lsFlexLevels\Breakout\...-breakouts-<daykey>.csv, Breakout\Rly\...-<daykey>.csv, Breakout\...-pb-<daykey>.csv  the decision
+ *         records (appended once per decision; read back only to skip keys already there - never used for a decision)
  *  Logic + layout: BreakoutLogic.h (SDK-free, tests_bo100). Per chart state in the host slot (HostSlot.h).
  ********************************************************************************/
 #ifndef NOMINMAX
@@ -52,6 +61,8 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 #include <sys/stat.h>
@@ -62,7 +73,7 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.2.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
+#define BKO_VERSION "1.3.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
 
 static long long bkoMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bkoFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BKO_SEP "InvestorRT" BKO_SEP "rtx" BKO_SEP "lsFlexLevels" : std::string(); }
@@ -88,6 +99,15 @@ static bool bkoPublish(const std::string& path, const std::string& text) {   // 
     return true;
 #endif
 }
+// (1.3.0) a bounded read of a record file (false = could not be read or bigger than cap: never rewrite what could not be read)
+static const size_t BKO_REC_MAX = 4u * 1024u * 1024u;
+static bool bkoRead(const std::string& path, std::string& out) {
+    out.clear(); std::ifstream in(path.c_str(), std::ios::binary); if (!in) return false;
+    in.seekg(0, std::ios::end); const std::streamoff size = in.tellg();
+    if (size < 0 || size > (std::streamoff)BKO_REC_MAX) return false;
+    in.seekg(0, std::ios::beg); out.resize((size_t)size); if (size > 0) in.read(&out[0], size);
+    return (bool)in || in.eof();
+}
 static short bkoC(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 
 struct BState {
@@ -96,6 +116,9 @@ struct BState {
     bko::Engine E; bko::Scene last;
     std::string statusPath, statusBody; long long statusMs = -1;
     bb::Beat trBeat, hlBeat;   // the Tape Reader banner / HOD/LOD table present while their stamps keep moving (as lsBigBidAsk)
+    // (1.3.0) records: lsBigBidAsk's market / contract names; keys known to be in each file; the engine run last written; counters
+    std::string recMkt, recSym; std::map<std::string, std::set<std::string>> recHave; int recRuns = -1; long long recMs = -1;
+    long long recAdded = 0, recFails = 0; long recPend = 0;
 };
 
 class Breakout : public cppExtension {
@@ -112,6 +135,7 @@ public:
     bool identify(BState& S);
     void feed(BState& S);
     void status(BState& S, long long now);
+    void records(BState& S, long long now);
     bool parts(RTDATE d, long& days, int& endSec);
     BState* testState() { return slot_.get(this, false); }
 };
@@ -144,6 +168,7 @@ bool Breakout::identify(BState& S) {
         const std::string d = bkoFlex();
         S.statusPath = d.empty() ? std::string() : d + BKO_SEP "Breakout.status-" + mkt + "-" + std::to_string(spb) + ".txt";
         S.statusBody.clear(); S.statusMs = -1;
+        S.recMkt = bko::recMarket(rs ? rs : ""); S.recSym = bko::recFileKey(sym); S.recHave.clear(); S.recRuns = -1; S.recMs = -1; S.recPend = 0;   // (1.3.0)
     }
     return true;
 }
@@ -167,16 +192,47 @@ void Breakout::feed(BState& S) {
 void Breakout::status(BState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
-    const std::string body = bko::statusText(S.E, S.mkt, S.sym, S.spb, S.last);
+    const std::string body = bko::statusText(S.E, S.mkt, S.sym, S.spb, S.last)
+        + "RECORDS,lsFlexLevels\\Breakout (" + S.recMkt + "-" + S.recSym + "-" + std::to_string(S.spb) + "),zz_rev_bars " + std::to_string(S.E.zzRev) + ",ft_tie " + (S.E.tieOn() ? "1" : "0")
+        + ",lines written " + std::to_string(S.recAdded) + ",pending " + std::to_string(S.recPend) + ",write fails " + std::to_string(S.recFails) + "\n";   // (1.3.0)
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     bkoMkdir(bkoFlex()); bkoPublish(S.statusPath, body);
 }
 
+// (1.3.0) RECORDS: after a new engine run (or while lines wait after a failed write, retried once a second), every record line of the last
+// 3 sessions whose key is not yet known to be in its file: the file is read, the lines whose key is already there are dropped (written by
+// an earlier run, another chart or before a restart), the rest appended in one atomic replace. A key is "known" only after a good write
+// or once seen in the file, so nothing is written twice and nothing is lost on a failed write.
+void Breakout::records(BState& S, long long now) {
+    if (S.E.runs == S.recRuns && S.recPend == 0) return;
+    if (S.recPend > 0 && S.E.runs == S.recRuns && S.recMs >= 0 && now - S.recMs < 1000) return;
+    const std::string f = bkoFlex(); if (f.empty() || S.recMkt.empty()) return;
+    S.recRuns = S.E.runs; S.recMs = now;
+    const std::vector<bko::RecFile> G = bko::recPlan(S.E, S.recMkt, S.recSym, S.spb);
+    long pend = 0; std::set<std::string> live;
+    for (const bko::RecFile& F : G) {
+        const std::string dir = f + BKO_SEP + F.dir, path = dir + BKO_SEP + F.file; live.insert(path);
+        std::set<std::string>& have = S.recHave[path];
+        std::vector<std::string> want; for (const std::string& l : F.lines) { const std::string k = bko::recKey(l); if (!k.empty() && !have.count(k)) want.push_back(l); }
+        if (want.empty()) continue;
+        std::string old; if (bkoExists(path) && !bkoRead(path, old)) { ++S.recFails; pend += (long)want.size(); continue; }
+        std::set<std::string> inFile; int added = 0; const std::string text = bko::recMerge(old, F.head, want, inFile, added);
+        if (added > 0) {
+            bkoMkdir(f); bkoMkdir(f + BKO_SEP "Breakout"); bkoMkdir(dir);
+            if (!bkoPublish(path, text)) { ++S.recFails; pend += (long)want.size(); continue; }
+            S.recAdded += added;
+        }
+        have.swap(inFile);
+    }
+    for (auto it = S.recHave.begin(); it != S.recHave.end();) { if (live.count(it->first)) ++it; else it = S.recHave.erase(it); }   // older sessions: forget
+    S.recPend = pend;
+}
+
 void Breakout::pump() {
     BState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
-    feed(*S); status(*S, bkoMs());
+    feed(*S); const long long now = bkoMs(); records(*S, now); status(*S, now);
 }
 
 int Breakout::draw(void) {
@@ -230,7 +286,7 @@ extern "C" cppExtension* CreateExtension(void) {
     Breakout* p = new Breakout();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA BO v1.2.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (lsBigBidAsk's rule on the 3-bar High/Low ZigZag, shown when the follow-through candle closes), Rly at the end of a rally / decline (3-min) and Pb on a pullback pivot that tests the BO / BD candle. No settings.");
-    p->setVersion("1.2.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA BO v1.3.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (lsBigBidAsk's rule on the 3-bar High/Low ZigZag, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min) and Pb on a pullback pivot that tests the BO / BD candle. Records its BO / BD, Rly and Pb decisions to lsFlexLevels\\Breakout for the nightly. No settings.");
+    p->setVersion("1.3.0");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }

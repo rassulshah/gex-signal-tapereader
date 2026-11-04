@@ -1,6 +1,22 @@
 #ifndef LS_BREAKOUT_LOGIC_H
 #define LS_BREAKOUT_LOGIC_H
-// BreakoutLogic.h 1.2.0 (2026-11-03) -- lsBreakout 1.2.0: BO / BD and Rly on the 3-bar High / Low ZigZag (Rassul "go": check BO / BD +
+// BreakoutLogic.h 1.3.0 (2026-11-03 evening) -- lsBreakout 1.3.0 (Rassul removed lsBigBidAsk from his charts at 19:45 CT, "do it"):
+//   (1) RECORDS: lsBreakout now writes the decision records the nightly scores, from ITS OWN 3-bar decisions, in the same line layout
+//       lsBigBidAsk used (bba::boLine 27-field BBO|, rly::line 17-field RLY|) plus a Pb record:
+//         lsFlexLevels\Breakout\<MKT>-<SYM>-<spb>-breakouts-<daykey>.csv   BBO| one line per decided candidate (fired / no_confirm / reason)
+//         lsFlexLevels\Breakout\Rly\<MKT>-<SYM>-<spb>-<daykey>.csv         RLY| one line per judged wave (3-min charts)
+//         lsFlexLevels\Breakout\<MKT>-<SYM>-<spb>-pb-<daykey>.csv          BPB| one line per Pb (pivot bar, side, BO / BD candle, prices)
+//       <MKT> / <SYM> / <daykey> exactly as lsBigBidAsk named them (marketName, fileKey, sessionOf: 17:00 CT starts the next day).
+//       The ZigZag setting is in every line (version field "1.3.0-zz3") and in the file's first line ("# lsBreakout 1.3.0 | ... |
+//       zz_rev_bars 3 | ft_tie 1"), so the scorer can tell these from lsBigBidAsk's 1-bar lines. ONE line per decision: a key per line
+//       (BO t0 + dir, Rly t_e + dir, Pb t_pivot + side); the file is read before an append and a key already in it is never written
+//       again (restart, recompute, two charts of the same market / contract / period) - lsBigBidAsk's Oct 30 file held most fired lines
+//       8 - 10 times because it appended without looking. Only the last 3 sessions are written.
+//   (2) FOLLOW-THROUGH TIE: the rule-5 follow-through close may EQUAL the breakout candle's close (BO: a later green candle of the wave
+//       with a higher high AND close >= the BO close; BD: red, lower low AND close <= the BD close) - bba::boWaves ftTie, passed only
+//       here (Engine::ftTie with zzRev > 1); lsBigBidAsk and the zzRev = 1 replay keep the strict rule. ES Oct 20 - Nov 3: fired 142 -> 144
+//       (+ Oct 23 01:48 BO, + Nov 3 19:06 BD shown at the 19:21 close).
+// was BreakoutLogic.h 1.2.0 (2026-11-03) -- lsBreakout 1.2.0: BO / BD and Rly on the 3-bar High / Low ZigZag (Rassul "go": check BO / BD +
 //   Rly on the 3-bar zigzag over a week, then switch "BO" to 3-bar). The swing walk that gives the BO pivots (SwingRef.h ZigZag::rev),
 //   the wave direction for one-per-wave / follow-through (bba::zigDir) and the Rly waves (rly::run) now use the SAME turn rule as the Pb
 //   pivots and lsZzoCombo 2.1.0 (zzd::Engine::step, COMBO_REV_BARS = 3: an up wave turns down on a LOW below the previous 3 bars' lows,
@@ -45,12 +61,20 @@
 #include <cmath>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
+#include <cctype>
+#include <cstdio>
+#if defined(_WIN32)
+#define BKO_REC_SEP "\\"
+#else
+#define BKO_REC_SEP "/"
+#endif
 
 namespace bko {
 
-static const char* const VERSION = "1.2.0";   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
+static const char* const VERSION = "1.3.0";   // (1.3.0) records + follow-through tie   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
 static const int GAP = 3;              // px between the wick end and the BO / BD letter
 static const int RLY_ROW = 16;         // the Rly letter sits this many px further out than the BO / BD row
 static const int ROW_OUT = 16;         // (1.1.1) one row = lsCandleAbsorb's ROW_OUT (its A / Ae sits one row beyond the wick label row)
@@ -67,15 +91,31 @@ static const int ZZ_REV_BARS = zzd::COMBO_REV_BARS;   // (1.2.0) BO / BD pivots 
 struct In { long long t = 0; bool ok = false; long days = 0; int endSec = 0; double o = 0, h = 0, l = 0, c = 0; long long vol = 0; };
 struct BoMark { long long t0 = 0, t = 0; int dir = 0; double piv = 0; bool fired = false; int reason = 0; };
 struct RlyMark { long long te = 0; int dir = 0; bool fired = false; };
+struct RecL { long long sess = 0; std::string line; };   // (1.3.0) a record line, built once at the decision, and its file's session (daykey)
+// (1.3.0) lsBigBidAsk's session key (BigBidAsk::sessionOf): the CT civil second, 17:00 CT starts the next day's file
+inline long long sessOf(long days, int endSec) { const long long cs = (long long)days * 86400LL + endSec; return cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : -1; }
 // (1.1.0) one Pb: the pivot bar (tp), +1 = a pivot LOW after a BO (green, below) / -1 = a pivot HIGH after a BD (red, above), the BO / BD
 // candle it tested (t0), the bar that confirmed the pivot (tc) and the decision bar (td = the later of tc and the BO / BD's fire bar)
 struct PbMark { long long tp = 0, t0 = 0, tc = 0, td = 0; int dir = 0; };
 struct Pivot { long long t = 0, tc = 0; int type = 0; double h = 0, l = 0; };   // type +1 = pivot HIGH, -1 = pivot LOW; tc = confirm bar
+// (1.3.0) the Pb record: one line per drawn Pb. side +1 = a pivot LOW after a BO (green, below), -1 = a pivot HIGH after a BD (red, above);
+// t0 = the BO / BD candle it tested, t_fire = that BO / BD's follow-through close, t_conf = the bar that confirmed the pivot, t_dec = the
+// Pb's decision bar (the later of the two); prices = the pivot bar's high / low, the BO / BD candle's high / low / close, the broken pivot.
+static const char* const PB_HEADER = "BPB|t_pivot|side|t0|t_fire|t_conf|t_dec|pivot_high|pivot_low|bo_high|bo_low|bo_close|bo_pivot|version";
+inline std::string pbLine(const PbMark& m, const bba::BoDec& D, const Pivot& p, const In& c, const std::string& ver) {
+    char b[400]; std::snprintf(b, sizeof b, "BPB|%lld|%d|%lld|%lld|%lld|%lld|%.10g|%.10g|%.10g|%.10g|%.10g|%.10g|%s",
+        m.tp, m.dir, m.t0, D.t, m.tc, m.td, p.h, p.l, c.h, c.l, c.c, D.piv, ver.c_str());
+    return b;
+}
 
 struct Engine {
     // inputs of the last update
     std::vector<In> bars; double tick = 0; int spb = 0, openMin = 510, closeMin = 900;
     int zzRev = ZZ_REV_BARS;                   // (1.2.0) ZigZag reversal bars for BO / BD + Rly (3; tests set 1 = lsBigBidAsk's path; set before the first update)
+    bool ftTie = true;                         // (1.3.0) follow-through close may equal the BO close - only with zzRev > 1 (zzRev 1 = lsBigBidAsk's strict rule)
+    std::map<long long, RecL> boL, rlyL, pbL;  // (1.3.0) the record line of each decision (same keys as bo / rly / pb)
+    bool tieOn() const { return ftTie && zzRev > 1; }
+    std::string recVer() const { return std::string(VERSION) + "-zz" + std::to_string(zzRev); }   // the version field of every record line
     // decisions (kept for the chart's life; never changed once made)
     std::map<long long, bba::BoDec> bo;        // t0 -> lsBigBidAsk's decision record (fired or not)
     std::map<long long, RlyMark> rly;          // te * 2 + (dir > 0) -> judged wave
@@ -116,15 +156,19 @@ struct Engine {
         if (!full) bba::boWindow(n, from, emitFrom, fill0);                          // lsBigBidAsk's live window
         else { fill0 = std::max(0, n - 1 - MAX_BARS); from = emitFrom = std::max(1, fill0); ++fullRuns; }
         const bba::BoRun R = bba::boFromCandles(C, tick, from, n - 1, emitFrom, fill0,
-            [&](int k) { return trendAt(k); }, [](int) { return true; }, [](int, bba::BoIn&) {}, nullptr, zzRev);
+            [&](int k) { return trendAt(k); }, [](int) { return true; }, [](int, bba::BoIn&) {}, nullptr, zzRev, tieOn());
+        const std::string ver = recVer();
         for (bba::BoDec D : R.ev) {
             if (D.i0 < 0 || D.im < 0 || D.im >= n - 1) continue;
             D.t0 = bars[(size_t)D.i0].t; D.t = bars[(size_t)D.im].t;
             if (bo.count(D.t0)) continue;                                            // decided before: never again
             if (bba::boDuplicate(bo, D)) { ++boDup; continue; }
             bo[D.t0] = D;
+            const In& m = bars[(size_t)D.im];                                        // (1.3.0) the record line, as lsBigBidAsk wrote it (rth / session of the decision candle)
+            const svl::Cls cls = m.ok ? svl::classify(m.days, m.endSec, spb > 0 ? spb : 180, openMin, closeMin) : svl::Cls();
+            RecL L; L.sess = m.ok ? sessOf(m.days, m.endSec) : -1; L.line = bba::boLine(D, cls.kind == svl::RTH ? 1 : 0, ver.c_str()); boL[D.t0] = L;
         }
-        while (bo.size() > 40000) bo.erase(bo.begin());
+        while (bo.size() > 40000) { boL.erase(bo.begin()->first); bo.erase(bo.begin()); }
     }
     void rlyPass() {
         if (spb != 180) return;                                                      // the rule was built and tested on 3-min bars
@@ -137,13 +181,15 @@ struct Engine {
         }
         const int from = full ? 0 : std::max(0, (int)B.size() - 600);
         const std::vector<rly::Wave> W = rly::run(B, spb, openMin, closeMin, from, zzRev);
+        const std::string ver = recVer();
         for (const rly::Wave& w : W) {
-            if (w.ge < 0 || w.gp < 0 || w.gc < 0 || w.ge >= (int)T.size()) continue;
+            if (w.ge < 0 || w.gp < 0 || w.gc < 0 || w.ge >= (int)T.size() || w.gp >= (int)T.size() || w.gc >= (int)T.size()) continue;
             const long long te = T[(size_t)w.ge], key = te * 2 + (w.dir > 0 ? 1 : 0);
             if (rly.count(key)) continue;                                            // judged before: never again
             RlyMark m; m.te = te; m.dir = w.dir; m.fired = w.fired; rly[key] = m;
+            RecL L; L.sess = w.sess; L.line = rly::line(w, te, T[(size_t)w.gp], T[(size_t)w.gc], ver.c_str()); rlyL[key] = L;   // (1.3.0) as lsBigBidAsk (w.sess = the RTH day)
         }
-        while (rly.size() > 20000) rly.erase(rly.begin());
+        while (rly.size() > 20000) { rlyL.erase(rly.begin()->first); rly.erase(rly.begin()); }
     }
     // (1.1.0) the 3-bar High / Low ZigZag over the closed bars (zzd::Engine::step, N = 3); bars with no valid price are skipped
     void pivots() {
@@ -194,9 +240,11 @@ struct Engine {
                 if (!(p.l <= c.h && p.h >= c.l)) continue;                    // the pivot bar overlaps the BO / BD candle
                 if (pb.count(p.t)) continue;                                  // decided before: never again
                 PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = td; m.dir = dir; pb[p.t] = m;
+                RecL L; const int di = idxOf(td); L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;   // (1.3.0) the decision bar's day
+                L.line = pbLine(m, D, p, c, recVer()); pbL[p.t] = L;
             }
         }
-        while (pb.size() > 40000) pb.erase(pb.begin());
+        while (pb.size() > 40000) { pbL.erase(pb.begin()->first); pb.erase(pb.begin()); }
     }
 };
 
@@ -268,6 +316,76 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
     s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",Pb " + std::to_string(E.pb.size()) + ",pivots " + std::to_string(E.piv.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
     s += "DRAWN,BO/BD " + std::to_string(last.boShown) + ",Rly " + std::to_string(last.rlyShown) + ",Pb " + std::to_string(last.pbShown) + ",no room " + std::to_string(last.noRoom) + "\n";
     return s;
+}
+
+// ---- (1.3.0) RECORDS (the host reads / writes the files; everything that decides WHAT is written lives here and is tested) ------------
+// lsBigBidAsk's file names: marketName (root -> ES / NQ / GC / CL / HG / NG / EU) and fileKey (the contract), copied from BigBidAsk.cpp
+inline std::string recFileKey(const std::string& s) {
+    std::string out;
+    for (size_t i = 0; i < s.size() && out.size() < 24; ++i) { const unsigned char c = (unsigned char)s[i];
+        out.push_back((std::isalnum(c) || c == '-' || c == '_') ? (char)std::toupper(c) : '_'); }
+    return out.empty() ? "UNKNOWN" : out;
+}
+inline std::string recMarket(std::string r) {
+    for (size_t i = 0; i < r.size(); ++i) r[i] = (char)std::toupper((unsigned char)r[i]);
+    const auto has = [&r](const char* p) { return r.find(p) != std::string::npos; };
+    if (has("NQ")) return "NQ";
+    if (has("GC")) return "GC";
+    if (has("CL") || r == "QM") return "CL";
+    if (has("HG") || has("CP")) return "HG";
+    if (has("NG") || r == "QG") return "NG";
+    if (has("EU") || has("6E") || has("E6")) return "EU";
+    if (has("ES") || has("EP")) return "ES";
+    return recFileKey(r.substr(0, 8));
+}
+static const int REC_SESSIONS = 3;                 // the last 3 sessions (daykeys) are written; older decisions stay in memory only
+enum { REC_BO = 0, REC_RLY = 1, REC_PB = 2 };
+// the dedupe key of a record line ("" = not a record line: the header, a comment, garbage)
+inline std::string recKey(const std::string& line0) {
+    std::string line = line0; while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
+    std::vector<std::string> f; { size_t a = 0; for (;;) { const size_t q = line.find('|', a); f.push_back(line.substr(a, q == std::string::npos ? std::string::npos : q - a)); if (q == std::string::npos) break; a = q + 1; } }
+    auto num = [](const std::string& x) { if (x.empty() || x.size() > 20) return false; size_t k = x[0] == '-' ? 1 : 0; if (k >= x.size()) return false; for (; k < x.size(); ++k) if (x[k] < '0' || x[k] > '9') return false; return true; };
+    if (f[0] == "BBO" && f.size() == 27 && num(f[2]) && num(f[3])) return "B|" + f[2] + "|" + f[3];     // t0 + dir
+    if (f[0] == "RLY" && f.size() == 17 && num(f[1]) && num(f[4])) return "R|" + f[1] + "|" + f[4];     // t_e + dir
+    if (f[0] == "BPB" && f.size() == 14 && num(f[1]) && num(f[2])) return "P|" + f[1] + "|" + f[2];     // t_pivot + side
+    return std::string();
+}
+// one file's worth of lines: dir = the folder under lsFlexLevels, file = the file name, head = what a NEW file starts with
+struct RecFile { int kind = 0; long long sess = 0; std::string dir, file, head; std::vector<std::string> lines; };
+inline std::string recHead(const Engine& E, int kind, const std::string& mkt, const std::string& sym, int spb) {
+    std::string h = std::string("# lsBreakout ") + VERSION + " | " + mkt + " " + sym + " " + std::to_string(spb) + " | zz_rev_bars " + std::to_string(E.zzRev)
+                  + " | ft_tie " + (E.tieOn() ? "1" : "0") + " | " + (kind == REC_BO ? "BO / BD decisions (bba::boLine, 27 fields)" : kind == REC_RLY ? "Rly waves (rly::line, 17 fields)" : "Pb (14 fields)") + "\n";
+    return h + (kind == REC_BO ? bba::BO_HEADER : kind == REC_RLY ? rly::REC_HEADER : PB_HEADER) + "\n";
+}
+// every record line of the last REC_SESSIONS sessions (by the last closed bar's session), grouped per file, in decision-key order
+inline std::vector<RecFile> recPlan(const Engine& E, const std::string& mkt, const std::string& sym, int spb) {
+    std::vector<RecFile> out; if (E.bars.size() < 2) return out;
+    const In& lc = E.bars[E.bars.size() - 2]; if (!lc.ok) return out;
+    const long long minS = sessOf(lc.days, lc.endSec) - (REC_SESSIONS - 1);
+    const std::string stem = mkt + "-" + sym + "-" + std::to_string(spb);
+    std::map<std::pair<int, long long>, size_t> at;
+    auto add = [&](int kind, const RecL& L) {
+        if (L.sess < minS || L.line.empty()) return;
+        const auto k = std::make_pair(kind, L.sess); auto it = at.find(k);
+        if (it == at.end()) { RecFile F; F.kind = kind; F.sess = L.sess; F.head = recHead(E, kind, mkt, sym, spb);
+            F.dir = kind == REC_RLY ? "Breakout" BKO_REC_SEP "Rly" : "Breakout";
+            F.file = stem + (kind == REC_BO ? "-breakouts-" : kind == REC_PB ? "-pb-" : "-") + std::to_string(L.sess) + ".csv";
+            it = at.emplace(k, out.size()).first; out.push_back(F); }
+        out[it->second].lines.push_back(L.line); };
+    for (const auto& kv : E.boL) add(REC_BO, kv.second);
+    for (const auto& kv : E.rlyL) add(REC_RLY, kv.second);
+    for (const auto& kv : E.pbL) add(REC_PB, kv.second);
+    return out;
+}
+// the merge: old = the file as it is now ("" = no file yet). Returns the new text = old (or head) + every line whose key is NOT already in
+// the file (nor earlier in `lines`); inFile gets every key now in the file text returned; added = lines appended (0 = nothing to write).
+inline std::string recMerge(const std::string& old, const std::string& head, const std::vector<std::string>& lines, std::set<std::string>& inFile, int& added) {
+    added = 0; inFile.clear();
+    { size_t a = 0; while (a < old.size()) { size_t q = old.find('\n', a); if (q == std::string::npos) q = old.size();
+        const std::string k = recKey(old.substr(a, q - a)); if (!k.empty()) inFile.insert(k); a = q + 1; } }
+    std::string text = old.empty() ? head : old; if (!text.empty() && text.back() != '\n') text += "\n";
+    for (const std::string& l : lines) { const std::string k = recKey(l); if (k.empty() || !inFile.insert(k).second) continue; text += l + "\n"; ++added; }
+    return text;
 }
 
 } // namespace bko

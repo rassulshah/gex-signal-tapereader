@@ -1150,7 +1150,10 @@ inline bool boExt20(const std::vector<BoBar>& bar, const std::vector<long long>&
 inline BoRun boWaves(const std::vector<BoIn>& in, const std::vector<BoBar>& bar, const std::vector<signed char>& zdir,
                      const std::vector<signed char>& up, const std::vector<signed char>& dn, const std::vector<double>& upPx,
                      const std::vector<double>& dnPx, const std::vector<char>& skip, const std::vector<signed char>& trend,
-                     const std::vector<long long>& sess, double tick, int from, int end, int emitFrom = 0) {
+                     const std::vector<long long>& sess, double tick, int from, int end, int emitFrom = 0, bool ftTie = false) {
+    // (2026-11-03, lsBreakout 1.3.0, Rassul "do it") ftTie = the rule-5 follow-through close may EQUAL the BO candle's close (BO: higher
+    // high AND close >= the BO close; BD: lower low AND close <= the BD close). Only lsBreakout passes true; lsBigBidAsk (default false)
+    // keeps the strict higher / lower close, so its decisions and records are unchanged.
     BoRun R; bool done[2] = { false, false };
     if (!(tick > 0) || !std::isfinite(tick)) { R.stop = from; return R; }
     end = std::min(end, std::min((int)in.size(), std::min((int)bar.size(), (int)zdir.size())));
@@ -1172,7 +1175,7 @@ inline BoRun boWaves(const std::vector<BoIn>& in, const std::vector<BoBar>& bar,
             if (E.rule >= 5) {                                                   // (1.31.0) any later candle of the same wave
                 if (zdir[(size_t)j] != sg) { E.fired = false; E.reason = BO_R_NO_CONFIRM; dn2[sd] = false; out.push_back(E); pOn[sd] = false; continue; }   // the wave ended first
                 const BoBar& f = bar[(size_t)j];
-                const bool ft = colour(j, sd) && (sd ? (f.h > E.hk && f.c > E.c0) : (f.l < E.lk && f.c < E.c0));
+                const bool ft = colour(j, sd) && (sd ? (f.h > E.hk && (ftTie ? f.c >= E.c0 : f.c > E.c0)) : (f.l < E.lk && (ftTie ? f.c <= E.c0 : f.c < E.c0)));
                 if (!ft) continue;                                               // not yet: the wave goes on
                 E.fired = true; E.reason = BO_R_FIRED; out.push_back(E); pOn[sd] = false; continue;
             }
@@ -1246,7 +1249,7 @@ struct BoPrep {
 // end = the first candle NOT decided (the forming one); fill0 = the first candle whose inputs are filled (lsBigBidAsk: from - 62)
 template <class TrendAt, class Known, class BigOf>
 inline BoRun boFromCandles(const std::vector<BoCandle>& C, double tick, int from, int end, int emitFrom, int fill0,
-                           TrendAt trendAt, Known known, BigOf bigOf, BoPrep* keep = nullptr, int rev = 1) {   // (2026-11-03) rev = ZigZag reversal bars (1 lsBigBidAsk, 3 lsBreakout 1.2.0)
+                           TrendAt trendAt, Known known, BigOf bigOf, BoPrep* keep = nullptr, int rev = 1, bool ftTie = false) {   // (2026-11-03) rev = ZigZag reversal bars (1 lsBigBidAsk, 3 lsBreakout 1.2.0); ftTie (lsBreakout 1.3.0) = follow-through close may equal the BO close
     BoPrep P; const int count = (int)C.size();
     std::vector<double> op((size_t)count), hi((size_t)count), lo((size_t)count), cl((size_t)count);
     std::vector<char> rthAll((size_t)count, 0); std::vector<long long> dayAll((size_t)count, 0);
@@ -1271,7 +1274,7 @@ inline BoRun boFromCandles(const std::vector<BoCandle>& C, double tick, int from
         b.vol = C[(size_t)k].vol; b.known = true;
         bigOf(k, b);
     }
-    BoRun R = boWaves(P.in, P.bars, P.zd, P.up, P.dn, P.upPx, P.dnPx, P.skip, P.trend, P.sess, tick, from, end, emitFrom);
+    BoRun R = boWaves(P.in, P.bars, P.zd, P.up, P.dn, P.upPx, P.dnPx, P.skip, P.trend, P.sess, tick, from, end, emitFrom, ftTie);
     if (keep) *keep = std::move(P);
     return R;
 }
