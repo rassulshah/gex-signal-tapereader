@@ -391,3 +391,10 @@ Rules (every new or changed indicator):
   test_aggbook_host (every drawn label == turnMarkText of the drawn bars).
 - (lsBookFlow 1.34.0) EXTRA ROWS UNDER BARS MUST NOT MOVE THE PANE WHEN NOT NEEDED: scale() keeps the 10 px only while a candle with squares
   is in view; otherwise the axis is bit-identical. Proof: test_bf134_host (axis with / without squares, same range).
+- (lsHodLod 2.17.9, 2026-11-04, Rassul "sometimes the hodlod box collapses") A FALLBACK MUST NOT FIRE BEFORE THE CHEAPER FIXES ARE TRIED:
+  the 10 pt pass dropped the sweep sections the moment the full form was a few px too wide and drew the header-only box (it fits at 10 pt,
+  so the 9 pt sweep box ES uses was never tried); NQ / GC / HG flipped to 57 px on content alone (5-digit ranges, longer Exp text, narrower
+  panes) while ES fitted by ~7 px. Order the forms (10 pt full -> 9 pt full -> compact 1-3 that keep every row) and fall back last; a part
+  whose width cannot shrink by compaction (the header) must drop its own extras instead of forcing the fallback. Test at HIS pane widths
+  (930-980, the status files' axis) and font metric, not only 1200+, and pin every layout that already worked with golden hashes.
+  Proof: tests_hodlod/t_hl2179 [1] his NQ geometry, [2] grid, [3] golden_2178.txt (1,596 scenarios byte-identical).

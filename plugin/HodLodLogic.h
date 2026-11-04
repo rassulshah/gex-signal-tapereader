@@ -56,7 +56,7 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.17.8";   // (2.17.8, 2026-11-04 audit, Rassul "just build it") one London rule everywhere: London = 02:00 CT to the EARLIER of 07:30 and the market's RTH open (GC / EU 07:20, HG 07:10; was 07:30 for every market) - the LonHI / LonLO sweep levels   // was "2.17.7":   // (2.17.7, 2026-11-03 Rassul "go" on hodlod_wide.png) the box runs to the price axis: the extra width spread over SESSION | HOD SWEEPS | LOD SWEEPS (stretchToAxis)   // was "2.17.6":   // (2.17.6, 2026-11-03 Rassul) RS = RSI 14, the same as the MQ Reader (HodLodHtf 1.4.0)   // was "2.17.5";   // (2.17.5, 15:14 CT) header right side = "| Exp 3:00 PM" + the gamma pill (no Day ... / day type)   // was "2.17.4":   // (2.17.4, 14:55 CT) gamma pill right-justified, one trend (3m = his VWAP trend), centred HTF groups   // was "2.17.3":   // (2.17.3, 14:49 CT) "| Dly: Dn, Wk | Hrly: Side, Wk | 3m: Dn, Wk" centred before the gamma pill   // was "2.17.2":   // (2.17.2, 14:41 CT) the HTF values in the header row, abbreviated   // was "2.17.1":   // (2.17.1, 14:41 CT) HTF labels Strong Up / Up / Side / Dn / Strong Dn, RS Very Strong .. Very Weak   // was "2.17.0":   // (2.17.0, Rassul 2026-11-02 14:31 CT "start") the HTF trend + RS line under the header (HodLodHtf.h)   // was "2.16.0":   // (2.16.0, 13:19 CT) no hovers on the box   // was "2.15.4":   // (2.15.4, Rassul 2026-11-02 13:15 CT) the 1st-extreme columns as clock times (8:45 / 9:00 / 9:30 / 9:30+)   // was "2.15.3":   // (2.15.3) the gamma strip above the box removed   // was "2.15.2":   // (2.15.2, Rassul 2026-11-02 05:20 CT "bar left doesnt update without mouse movement") a 1 s clock redraws the countdown   // was "2.15.1":   // (2.15.1, Rassul 22:06 CT "it shifts right, it should be left") candles are no longer keep-outs: the box stays at the left edge   // was "2.15.0":   // (2.15.0, Rassul 21:45 CT) the box starts at the chart's left edge and is 62 px wider (the sweep panels); candles in that left strip may sit under it   // was "2.14.4":   // (2.14.4) gamma pill + trend centred in the header   // was "2.14.3":   // (2.14.3, Rassul 20:56 CT) RTH % done and the bar time left sit right after the market (ES); Day stays right   // was "2.14.2":   // (2.14.2) the time table one row lower   // was "2.14.1":   // (2.14.1, Rassul 2026-11-01 20:50 CT "more compact") the session panel is as wide as its own content (the header's spare width goes to the sweep panels); the time table is 2 rows right after its label ("1st extreme" / "% of days")   // was "2.14.0":   // (2.14.0, 2026-11-01 Rassul 20:06-20:38 CT mockup v14 "ok") panel header strips (SESSION | HOD SWEEPS | LOD SWEEPS), column heads, alternate rows and % bars; the 1st-extreme time table (0-15 / 0-30 / 0-60 / 60m+) in the session panel; header extras: Day forecast (overnight range tercile -> trend / chop %), RTH % done, bar time left   // was "2.13.0":   // (2.13.0, 2026-11-01 Rassul 18:52-19:06 CT mockup "HodLod box: 3 sections" + "go") the box in 3 sections side by side: 1 the session (Exp / Act / Feed, unchanged) | 2 HOD sweeps (1st = HOD) | 3 LOD sweeps (1st = LOD) - each level's price today and how often the 1st extreme swept it by <= 1/4 ADR and turned (HodLodSweeps.h; % from the nightly LRA-HodLodSweeps-<MKT>.csv)   // was "2.12.0":   // (2.12.0, 2026-10-28 18:22 CT Rassul approved "build") the box trimmed: no Q-Scores on the top line ("ES [+GAMMA] Uptrend"), no "1ST / 2ND" header row, no Est row, no "Options exp" footer; the version sits small at the right of the top line; a thin grey vertical separator between the 1st- and 2nd-extreme columns (Exp + Act rows); the box is shorter, its bottom edge stays docked
+static const char* const HL_VERSION = "2.17.9";   // (2.17.9, 2026-11-04 Rassul "sometimes the hodlod box collapses", NQ 11:24 CT) the sweep sections are never dropped while a compact form fits: 10 pt full, then 9 pt full, then 9 pt compact (1 no strip caption, 2 % bars half width, 3 no % bars - every row and its % kept); the header-only 2.12.0 box only when even that cannot fit; the box then still runs to the axis   // was "2.17.8":   // (2.17.8, 2026-11-04 audit, Rassul "just build it") one London rule everywhere: London = 02:00 CT to the EARLIER of 07:30 and the market's RTH open (GC / EU 07:20, HG 07:10; was 07:30 for every market) - the LonHI / LonLO sweep levels   // was "2.17.7":   // (2.17.7, 2026-11-03 Rassul "go" on hodlod_wide.png) the box runs to the price axis: the extra width spread over SESSION | HOD SWEEPS | LOD SWEEPS (stretchToAxis)   // was "2.17.6":   // (2.17.6, 2026-11-03 Rassul) RS = RSI 14, the same as the MQ Reader (HodLodHtf 1.4.0)   // was "2.17.5";   // (2.17.5, 15:14 CT) header right side = "| Exp 3:00 PM" + the gamma pill (no Day ... / day type)   // was "2.17.4":   // (2.17.4, 14:55 CT) gamma pill right-justified, one trend (3m = his VWAP trend), centred HTF groups   // was "2.17.3":   // (2.17.3, 14:49 CT) "| Dly: Dn, Wk | Hrly: Side, Wk | 3m: Dn, Wk" centred before the gamma pill   // was "2.17.2":   // (2.17.2, 14:41 CT) the HTF values in the header row, abbreviated   // was "2.17.1":   // (2.17.1, 14:41 CT) HTF labels Strong Up / Up / Side / Dn / Strong Dn, RS Very Strong .. Very Weak   // was "2.17.0":   // (2.17.0, Rassul 2026-11-02 14:31 CT "start") the HTF trend + RS line under the header (HodLodHtf.h)   // was "2.16.0":   // (2.16.0, 13:19 CT) no hovers on the box   // was "2.15.4":   // (2.15.4, Rassul 2026-11-02 13:15 CT) the 1st-extreme columns as clock times (8:45 / 9:00 / 9:30 / 9:30+)   // was "2.15.3":   // (2.15.3) the gamma strip above the box removed   // was "2.15.2":   // (2.15.2, Rassul 2026-11-02 05:20 CT "bar left doesnt update without mouse movement") a 1 s clock redraws the countdown   // was "2.15.1":   // (2.15.1, Rassul 22:06 CT "it shifts right, it should be left") candles are no longer keep-outs: the box stays at the left edge   // was "2.15.0":   // (2.15.0, Rassul 21:45 CT) the box starts at the chart's left edge and is 62 px wider (the sweep panels); candles in that left strip may sit under it   // was "2.14.4":   // (2.14.4) gamma pill + trend centred in the header   // was "2.14.3":   // (2.14.3, Rassul 20:56 CT) RTH % done and the bar time left sit right after the market (ES); Day stays right   // was "2.14.2":   // (2.14.2) the time table one row lower   // was "2.14.1":   // (2.14.1, Rassul 2026-11-01 20:50 CT "more compact") the session panel is as wide as its own content (the header's spare width goes to the sweep panels); the time table is 2 rows right after its label ("1st extreme" / "% of days")   // was "2.14.0":   // (2.14.0, 2026-11-01 Rassul 20:06-20:38 CT mockup v14 "ok") panel header strips (SESSION | HOD SWEEPS | LOD SWEEPS), column heads, alternate rows and % bars; the 1st-extreme time table (0-15 / 0-30 / 0-60 / 60m+) in the session panel; header extras: Day forecast (overnight range tercile -> trend / chop %), RTH % done, bar time left   // was "2.13.0":   // (2.13.0, 2026-11-01 Rassul 18:52-19:06 CT mockup "HodLod box: 3 sections" + "go") the box in 3 sections side by side: 1 the session (Exp / Act / Feed, unchanged) | 2 HOD sweeps (1st = HOD) | 3 LOD sweeps (1st = LOD) - each level's price today and how often the 1st extreme swept it by <= 1/4 ADR and turned (HodLodSweeps.h; % from the nightly LRA-HodLodSweeps-<MKT>.csv)   // was "2.12.0":   // (2.12.0, 2026-10-28 18:22 CT Rassul approved "build") the box trimmed: no Q-Scores on the top line ("ES [+GAMMA] Uptrend"), no "1ST / 2ND" header row, no Est row, no "Options exp" footer; the version sits small at the right of the top line; a thin grey vertical separator between the 1st- and 2nd-extreme columns (Exp + Act rows); the box is shorter, its bottom edge stays docked
 // was 2.11.0:   // (2.11.0, 2026-10-28 12:50-12:56 CT Rassul "get rid of the S and R in the hod lod box, make the white price a little smaller so it doesn't fall into the values below it"; his picture circled the green S, the red R and the big price) the Gex S/R ladder has NO S / R squares; the spot price is drawn 2 steps smaller (fs + 1, was fs + 3) inside the top row only (never into the distance row below); the docked table sits bottom-left, right of the Key Levels column (ColumnBoard 1.9.1)   // was (2.10.0, 2026-10-28 12:16 CT Rassul "move the hod lod box aligned with the liquidity profile on the left") the table docks at the TOP-LEFT of lsDealerProfile 2.33.0's Key Levels column (ColumnBoard 1.9.0) while that column is on the chart
 // was 2.9.3:   // (2.9.3, 2026-10-28 06:38 CT) the visible candles are keep-outs: the table + strip dock where they cover no candle (Rassul's rule "callouts never cover candles"); the left Liquidity column is gone (ColumnBoard 1.8.0)   // (2.9.2, 2026-10-28) GAMMA / Gex S/R freshness judged by ARRIVAL (Fresh.h 1.1.0: 20 min RTH, 45 min overnight) - the "GAMMA STALE" overnight while MenthorQ sets were arriving every 5 min   // (2.9.1, 2026-10-28) the table keeps right of the left Liquidity column (ColumnBoard leftKeep)   // (2.9.0, 2026-10-26) self-awareness SELFHL (SelfAware.h, SELF-AWARE.md; ships OFF per market) // (2.8.0, 2026-10-26) smart-read hook (AwareHook.h 0.1.0, TEAM-DESIGN.md): posts AWHODLOD for each closed bar once lsContext has posted CTX for it (or after 3 s), records the isolated + aware read in lsFlexLevels\\Context-AWR-<MKT>-<spb>s-<day>.rec; links OFF per market (LRA-Context-<MKT>.csv) so aware = isolated and nothing drawn changes (facts only)   // (2.7.1, 2026-10-22 evening fix build) the day-type log creates lsFlexLevels\\HodLod first ("log fails 17");   // (2.7.0, 2026-10-22 evening, Rassul approved 17:39 CT) the DAY TYPE folded into the header trend ("Uptrend \xB7 Trend day ?" green / "Dntrend \xB7 Trend day ?" red / "Balance \xB7 Rotation day ?" plain; DayTypeLogic.h, price only, live from closed bars; hover = what fired); the NEWS / SETTLE window note row and the "Feed ?" row (NewsWindow.h); the Pre row is LOG ONLY by default (LRA-PreOpen-<MKT>.csv PARAM,SHOW - VALIDATE-CONTEXT-MARKS 2026-10-22: the call never fired, 0 of 42 sessions);   // (2.6.0, 2026-10-22, Rassul 15:57 CT "yes hod lod box", MBO Roadmap T-20261022-29) the PRE-OPEN BOOK row "Pre" under Est (PreOpenLogic.h): from 30 min before the RTH open to 60 min after, the MBO book near price in the last N minutes before the open (bids vs offers, % that stayed, the opening imbalance) and an untested lean "1st LOW early ?"; its own hover (question / what / why / how / example + the numbers);   // (2.5.0, 2026-10-21 10:56 CT, Rassul approved mockup v1 "ok.. build") the Gex S/R LADDER low -> high (supports, the spot with its distance to the nearest S / R, resistances) as the card's top band; the header band with a +GAMMA / -GAMMA pill and the trend in full ("Strong Uptrend"); the regime from the LIVE Gex S/R file's HVL0 when the HVL book is stale; row dividers; footer "Options exp 3:00 PM" . version right;   // (2.4.6, 2026-10-18 20:28 CT, Rassul "remove the hoverover on gext strikes and the hod lod box") the Gex S/R strip and header hovers are off (HodLod.cpp HL_HOVERS);  // (2.4.5, 2026-10-18 19:13 CT, Rassul "right justify the 2nd column" + outside RTH "just keep it blank" - "prior RTH 10/16 ... doesnt make any sense") the 2nd column (heading, Exp, Act, Est) is right-aligned to the table edge; the Est row stays (same height) but is empty while the box shows the prior session;  // (2.4.4, 2026-10-18, Rassul approved 17:13 CT "build") the COMPACT table (~350 px, columns sized to their text; Exp / Act / Est; header "ES M2 O0 V2  Neg . S.Dn"; footer "Exp 3:00 PM . v2.4.4") + the Gex S/R on its own strip ABOVE it (R green / S red); the removed words in the hovers; Offset X / Y removed (9-spot Position only);   // (2.4.3, 2026-10-18 settings audit) the Dealer Profile banner read from the keyed DealerProfile.settings-<MKT>.txt (dprset), the old positional column 9 only through the Dealer Profile's own legacy reader;  (2.4.2, 2026-10-18 settings audit) settings from HodLodSettings.h / SettingsSpec.h (keyed HodLod.settings-<MKT>.txt; colours via setParameterColor / getParameterColor - were black swatches, never saved; Show boxes grey their colours);  (2.4.1, 2026-10-18, Rassul approved 15:03 CT) the table rectangle is published for the docked Big Lot box (BoxDock.h, lsBigBidAsk 1.16.0); nothing drawn changes; (2.4.0, 2026-10-18 night, Rassul approved the audit-C fixes) Reg from ONE MenthorQ source: the HVL0 of GammaProfile-MQ-<MKT>.csv (= the HVL the Dealer Profile draws) vs the last closed close, aged by Fresh.h - STALE shows "Reg: STALE", never a stale regime as live (the LRA-Session GAM / FLIP is no longer used); Q-Scores and the Gex S/R row get the same age check ("Q: STALE"); the Tape Reader slot only while its status file is fresh (120 s); Market State posts HODLOD + TREND once per closed bar (MarketState.h)
 // (2.3.0)   // (2.3.0, Rassul 2026-10-17 19:53-20:20) MenthorQ Q-Scores "Q: M1 O1 V4" top left (hover = the meaning), "Reg: Neg / S. Dntrend" top right; Gex S/R = the BAND rule: 3 biggest abs-GEX strikes from the RTH open up to the 1.38 extension of the 1D Max (red, a drawn up triangle first) | price | 3 down to the 1.38 extension of the 1D Min (green, a down triangle first)
@@ -1406,6 +1406,7 @@ struct Layout {
     bool swOk = false; std::vector<Box> swCols;                 // (2.13.0) the HOD / LOD sweep sections (tests / status)
     Box tmRow = { 0, 0, 0, 0 };                                 // (2.14.0) the 1st-extreme time table's % row
     int tableFs = 0;                                            // (2.17.7) the font size the table was laid out with (pass 2 keeps it)
+    int swTier = -1;                                            // (2.17.9) the sweep sections' form: 0 full, 1 no caption, 2 half bars, 3 no bars (-1 = no sections)
     int sessR = 0;                                              // (2.17.7) the SESSION section's right edge (= the HOD section's left)
     bool stretched = false; int stretchFrom = 0;                // (2.17.7) the table was widened to the price axis (from this width)
 };
@@ -1793,7 +1794,7 @@ inline void layoutLadder(Layout& L, const Ladder& Lr, const LadderGeo& G, const 
 
 // (2.17.7) fillW > 0 = pass 2 of stretchToAxis: the table is laid out exactly fillW wide (the extra width spread over the three sections in
 // proportion to their natural widths), at the area's left (the host moves it onto pass 1's final spot), with pass 1's font (fillFs)
-inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M, int freeR = -1, int pos = POS_DEFAULT, int dx = 0, int dy = 0, int growW = 0, int fillW = 0, int fillFs = 0)
+inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, const Measure& M, int freeR = -1, int pos = POS_DEFAULT, int dx = 0, int dy = 0, int growW = 0, int fillW = 0, int fillFs = 0, int fillTier = -1)
 {
     if (freeR < 0) freeR = pane.r;
     const int pad = 6;
@@ -1828,8 +1829,14 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
     const Seg pill = gammaPill(v);                           // (2.5.0) +GAMMA / -GAMMA / GAMMA STALE
     const std::string trendTxt = !v.dayText.empty() ? v.dayText : (v.trendReady ? trendFull(v.trendLvl) : std::string());   // (2.7.0) the day type, when called
     const unsigned trendC = !v.dayText.empty() ? v.dayCol : trendCol(v.trendLvl);
-    for (int attempt = 0; attempt < 2; attempt++) {
-        const int fs = 10 - attempt;                         // 10 pt (his minimum); 9 pt only when 10 cannot fit
+    // (2.17.9, Rassul 2026-11-04 "sometimes the hodlod box collapses") the steps, in order: 10 pt full sweeps, 9 pt full, 9 pt compact
+    // tiers 1-3, then (only when no sweep form fits) the 2.12.0 box at 10 / 9 pt. Was: 10 pt, 9 pt, with the sweeps dropped at 10 pt as
+    // soon as the full form did not fit the pane - the 9 pt (or a compact) sweep box was never tried, so NQ / GC / HG lost the sections.
+    static const int STEP_FS[7] = { 10, 9, 9, 9, 9, 10, 9 }, STEP_TIER[7] = { 0, 0, 1, 2, 3, -1, -1 };
+    for (int step = 0; step < 7; step++) {
+        const int fs = STEP_FS[step], tier = STEP_TIER[step];   // 10 pt (his minimum); 9 pt only when 10 cannot fit
+        const int attempt = fs == 10 ? 0 : 1;
+        if (fillTier >= 0 && tier != fillTier) continue;     // (2.17.9) pass 2 keeps pass 1's sweep form
         if (fillFs > 0 && fs != fillFs) continue;            // (2.17.7) pass 2 keeps pass 1's font
         const LadderGeo geo = ladderGeo(lad, M, fs);
         const int rowH = lineH(fs) + 1, stripH = lad.ok ? geo.H : 0;
@@ -1862,14 +1869,17 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         // (2.13.0) the HOD / LOD sweep sections right of the session section: name | price | %; dropped when the pane is too narrow
         const int Wsess = W; int swW = 0, swNameW = 0, swPxW = 0, swPctW = 0; size_t swRows = 0;
         const char* swTitle[2] = { "HOD sweeps (1st = HOD)", "LOD sweeps (1st = LOD)" };
-        bool useSw = v.swOn && (!v.swHi.empty() || !v.swLo.empty());
+        bool useSw = tier >= 0 && v.swOn && (!v.swHi.empty() || !v.swLo.empty());   // (2.17.9) tier -1 = the 2.12.0 box
+        if (tier >= 0 && !useSw) { if (tier > 0) continue; }  // no sweep rows: tier 0 lays out the 2.12.0 box as before, tiers 1-3 add nothing
+        const int swBar = tier >= 3 ? 0 : (tier >= 2 ? SW_BAR / 2 : SW_BAR), swGap = tier >= 3 ? 6 : (tier >= 2 ? 8 : 12), swPad = tier >= 3 ? 18 : 22;   // (2.17.9) compact tiers 2 / 3
+        auto swPx = [tier](const std::string& px) { if (tier < 3) return px; std::string o; for (size_t k = 0; k < px.size(); k++) { if (px.compare(k, 3, " - ") == 0) { o += '-'; k += 2; } else o += px[k]; } return o; };   // (2.17.9) tier 3: a range as "a-b"
         if (useSw) {
             const std::vector<View::SwRow>* SR2[2] = { &v.swHi, &v.swLo }; int tW = 0;
-            for (int q = 0; q < 2; q++) { tW = (std::max)(tW, M(swTitle[q], fs, true)); swRows = (std::max)(swRows, SR2[q]->size());
-                for (const View::SwRow& r : *SR2[q]) { swNameW = (std::max)(swNameW, M(r.name, fs, false)); swPxW = (std::max)(swPxW, M(r.px, fs, false)); swPctW = (std::max)(swPctW, M(r.pct, fs, true)); } }
-            const int capW = M("\xBC ADR \xB7 1 yr", fs - 1, false);
-            swW = (std::max)(tW + 16 + capW, swNameW + 12 + swPxW + 12 + (std::max)(swPctW + 6, SW_BAR)) + 22;
-            if (area.l + Wsess + 2 * swW > pane.r - pad) useSw = false;   // no room: the 2.12.0 box (never the "pane too small" line)
+            for (int q = 0; q < 2; q++) { tW = (std::max)(tW, tier >= 1 ? M(q ? "LOD SWEEPS \xB7 1st = LOD" : "HOD SWEEPS \xB7 1st = HOD", fs - 1, true) : M(swTitle[q], fs, true)); /* (2.17.9) compact: the strip title as drawn */ swRows = (std::max)(swRows, SR2[q]->size());
+                for (const View::SwRow& r : *SR2[q]) { swNameW = (std::max)(swNameW, M(r.name, fs, false)); swPxW = (std::max)(swPxW, M(swPx(r.px), fs, false)); swPctW = (std::max)(swPctW, M(r.pct, fs, true)); } }
+            const int capW = tier >= 1 ? 0 : M("\xBC ADR \xB7 1 yr", fs - 1, false);   // (2.17.9) tier 1+: no strip caption
+            swW = (std::max)(tW + 16 + capW, swNameW + swGap + swPxW + swGap + (std::max)(swPctW + 6, swBar)) + swPad;
+            if (area.l + Wsess + 2 * swW > pane.r - pad) continue;   // (2.17.9) no room for this form: the next step (was: the 2.12.0 box at once)
         }
         // (2.14.0 / 2.14.1, Rassul 20:50 CT "more compact") the session panel's 1st-extreme time table: two rows, the label then 4 columns
         // (2.15.4, Rassul 2026-11-02 13:15 CT "instead of 0-15 and other intervals, put the time like 8:45, 8:30") by the open + 15 / 30 / 60 min, then after
@@ -1882,8 +1892,10 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int tmLabW = (std::max)(M(tmLab[0], fs - 1, false), M(tmLab[1], fs - 1, false)) + 10;
         int WsessF = W;
         if (useSw && v.tmOk) WsessF = (std::max)(WsessF, 16 + tmLabW + 4 * tmColW);
+        if (useSw && area.l + WsessF + 2 * swW > pane.r - pad) continue;   // (2.17.9) the time table widened the session section past the pane: the next form
         if (useSw) {   // (2.14.1) the header / ladder never widen the session panel: any spare width goes to the two sweep panels
-            const int need = (std::max)(headW, sW), have = WsessF + 2 * swW;
+            int need = (std::max)(headW, sW); const int have = WsessF + 2 * swW;
+            if (need > have && area.l + WsessF + 2 * (swW + (need - have + 1) / 2) > pane.r - pad) need = (std::max)(htfW > 0 ? headW - exL : headW - exW, sW);   // (2.17.9) a header wider than the pane drops its extras (RTH % / bar left), as the 2.12.0 box does - it never drops the sweeps
             if (need > have) swW += (need - have + 1) / 2;
             W = WsessF + 2 * swW;
             if (growW > 0 && area.l + W + growW <= (std::min)(freeR, (int)pane.r)) { swW += growW / 2; W = WsessF + 2 * swW; }   // (2.15.0) the box spreads left over the old column gap: the sweep panels get the width
@@ -1905,13 +1917,13 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         if (fillOn) area.r = area.l + W;                     // (2.17.7) laid out at the area's left; the host moves it onto pass 1's final spot
         if (!fillOn && W > area.r - area.l && attempt == 0) continue;
         if (!fillOn && area.l + W > pane.r - pad) continue;
-        if (Htot + 40 > pane.b - pane.t) break;
+        if (Htot + 40 > pane.b - pane.t) continue;   // (2.17.9) too short for this form: the next one (the 2.12.0 box is shorter; was break)
         if (W > area.r - area.l) area.r = (std::min)((int)pane.r, area.l + W);
         L.tableWant = offsetIn(area, placeIn(area, W, Htot, pos), dx, dy);
         const Box B = fillOn ? placeIn(area, W, Htot, pos) : placeAvoid(area, W, Htot, pos, L.avoid, &L.tableMoved, &L.tableClear, dx, dy);
         L.tableFs = fs;
         const Box T = { B.l, B.b - H, B.r, B.b };
-        L.table = T; L.tableOk = true; L.trendCompact = true;
+        L.table = T; L.tableOk = true; L.trendCompact = true; L.swTier = useSw ? tier : -1;
         if (lad.ok) {   // (2.5.0) the Gex S/R ladder: the card's top band, the table's width
             const Box Sb = { B.l, B.t, B.r, B.t + stripH };
             layoutLadder(L, lad, geo, Sb, M, fs);
@@ -2048,14 +2060,14 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         }
         if (useSw) {   // (2.13.0 / 2.14.0) 2 HOD sweeps | 3 LOD sweeps: a header strip, the column heads, the rows with a % bar
             L.swOk = true; L.swCols.clear();
-            const std::string cap = "\xBC ADR \xB7 1 yr";
+            const std::string cap = tier >= 1 ? std::string() : std::string("\xBC ADR \xB7 1 yr");   // (2.17.9) tier 1+: no caption
             const char* stripT[2] = { "HOD SWEEPS \xB7 1st = HOD", "LOD SWEEPS \xB7 1st = LOD" };
             for (int q = 0; q < 2; q++) {
                 const std::vector<View::SwRow>& RR = q ? v.swLo : v.swHi; const int cx = SR + q * swW;
                 addLine(L, cx, panelTop, cx, T.b - 3, C_BORDER, 2, R_TABLE);
                 int yy = panelTop;
                 strip(cx + 6, cx + swW - 6, yy, q ? C_GREEN : C_RED, stripT[q], cap); yy += rowH;
-                const int xPctR = cx + swW - 9, xPxR = xPctR - (std::max)(swPctW + 6, SW_BAR) - 12;
+                const int xPctR = cx + swW - 9, xPxR = xPctR - (std::max)(swPctW + 6, swBar) - swGap;
                 { const int w1 = M("Today", fs - 1, false), w2 = M("Swept", fs - 1, false);
                   addText(L, cx + 9, yy, yy + rowH, "Level", C_GREY, fs - 1, false, M("Level", fs - 1, false), R_TABLE, -1);
                   addText(L, xPxR - w1, yy, yy + rowH, "Today", C_GREY, fs - 1, false, w1, R_TABLE, -1);
@@ -2067,11 +2079,11 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                     if (i % 2 == 0) addFill(L, cx + 6, yy + 1, cx + swW - 6, yy + rowH - 1, C_ROWALT, R_TABLE);
                     const unsigned cn = r.elig ? C_SLATE : C_DIM, cp = r.elig ? C_GREY : C_DIM;
                     int pv = -1; { char* e = nullptr; const long t = std::strtol(r.pct.c_str(), &e, 10); if (e != r.pct.c_str()) pv = (int)t; }
-                    if (pv > 0) { const int bw = (std::min)(SW_BAR, (int)std::lround(SW_BAR * (std::min)(100, pv * 16 / 10) / 100.0)), bx = xPctR - SW_BAR;
+                    if (pv > 0 && swBar > 0) { const int bw = (std::min)(swBar, (int)std::lround(swBar * (std::min)(100, pv * 16 / 10) / 100.0)), bx = xPctR - swBar;   // (2.17.9) the tier's bar width
                         addFill(L, bx, yy + 3, bx + (std::max)(2, bw), yy + rowH - 3, r.elig ? (q ? C_BAR_G : C_BAR_R) : (q ? C_BAR_GD : C_BAR_RD), R_TABLE); }
-                    const int pw = M(r.pct, fs, true), xw = M(r.px, fs, false);
+                    const std::string pxs = swPx(r.px); const int pw = M(r.pct, fs, true), xw = M(pxs, fs, false);
                     addText(L, cx + 9, yy, yy + rowH, r.name, cn, fs, false, M(r.name, fs, false), R_TABLE, -1);
-                    addText(L, xPxR - xw, yy, yy + rowH, r.px, cp, fs, false, xw, R_TABLE, -1);
+                    addText(L, xPxR - xw, yy, yy + rowH, pxs, cp, fs, false, xw, R_TABLE, -1);
                     addText(L, xPctR - pw, yy, yy + rowH, r.pct, cn, fs, true, pw, R_TABLE, -1);
                     yy += rowH;
                 }
@@ -2590,6 +2602,7 @@ inline void layoutProj(Layout& L, const View& v, const Box& pane, const std::fun
 struct Opts {
     bool table = true, proj = true, mark = true;
     int fillW = 0, fillFs = 0;                                             // (2.17.7) pass 2 of stretchToAxis (0 = the natural width)
+    int fillTier = -1;                                                     // (2.17.9) pass 2 keeps pass 1's sweep form
     int dx = 0, dy = 0;                                                    // (2.0.6) Offset X / Y of the table (px, -600..600)
     unsigned tableBg = C_PANEL, projUp = C_GREEN, projDn = C_RED, markLod = C_GREEN, markHod = C_RED;
 };
@@ -2635,7 +2648,7 @@ inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(
     // the free area ends at the price edge (the last bar's right edge, where the profiles begin) when the chart gives it
     int freeR = priceEdge > 0 ? priceEdge : pane.r - (int)((pane.r - pane.l) * 0.15);
     if (freeR <= colR + 100) freeR = pane.r - (int)((pane.r - pane.l) * 0.15);
-    if (showTable) layoutTable(L, v, pane, colR, M, freeR, pos, opt ? opt->dx : 0, opt ? opt->dy : 0, v.has && HODLOD_SHOW_CANDLE ? 0 : LQ_GROW, opt ? opt->fillW : 0, opt ? opt->fillFs : 0);   // (2.0.5) Show table off: no table, the projection runs uncut   // (HL105) placed by Position inside [the pane's left edge (or the column), the last bar]
+    if (showTable) layoutTable(L, v, pane, colR, M, freeR, pos, opt ? opt->dx : 0, opt ? opt->dy : 0, v.has && HODLOD_SHOW_CANDLE ? 0 : LQ_GROW, opt ? opt->fillW : 0, opt ? opt->fillFs : 0, opt ? opt->fillTier : -1);   // (2.0.5) Show table off: no table, the projection runs uncut   // (HL105) placed by Position inside [the pane's left edge (or the column), the last bar]
     if (HODLOD_SHOW_CANDLE) layoutCandle(L, v, pane, yOf, M);
     // (1.1.2) the line stands on the live extreme's candle; only when that bar is off the chart, just left of the table (1.1.0)
     if ((projX < pane.l + 2 || projX > pane.r - 4) && L.tableOk && L.table.l - PROJ_GAP > pane.l + 2) projX = L.table.l - PROJ_GAP;
@@ -2650,6 +2663,7 @@ inline Layout layoutAll(const View& v, const Box& pane, const std::function<int(
 // and colours, the extra width spread over SESSION | HOD SWEEPS | LOD SWEEPS in proportion (labels left, values / bars right-aligned to
 // each section's right edge as before) - and moved onto pass 1's final left / bottom. Only the table's own items (R_TABLE / R_NOTE) and
 // rectangles are replaced; the projection / marker items stay. The 2.12.0 box (no sweep sections: narrow pane) is left as it was.
+// (2.17.9) a compact sweep form (swTier 1-3) is stretched in the same form.
 // axisR = the price axis's left edge (the price pane's drawing area right edge). Returns true when the table was widened.
 inline bool stretchToAxis(Layout& L, const View& v, const Box& pane, const std::function<int(long long)>& yOf, const Measure& M, int priceEdge, int pos, int projX,
                           const std::vector<Box>* avoid, const Opts& O, int axisR)
@@ -2658,7 +2672,7 @@ inline bool stretchToAxis(Layout& L, const View& v, const Box& pane, const std::
     if (!L.tableOk || !L.swOk || axisR <= 0) return false;
     const int want = axisR - 1 - L.table.l;                                // 1 px clear of the axis line
     if (want <= L.table.r - L.table.l + 2 || L.table.l < pane.l || axisR > pane.r + 1) return false;
-    Opts O2 = O; O2.fillW = want; O2.fillFs = L.tableFs; O2.dx = O2.dy = 0;
+    Opts O2 = O; O2.fillW = want; O2.fillFs = L.tableFs; O2.fillTier = L.swTier; O2.dx = O2.dy = 0;   // (2.17.9) + the sweep form
     Layout P = layoutAll(v, pane, yOf, M, priceEdge, pos, projX, avoid, &O2);
     if (!P.tableOk || !P.swOk || P.table.r - P.table.l != want || P.table.b - P.table.t != L.table.b - L.table.t) return false;
     const int dx = L.table.l - P.table.l, dy = L.table.b - P.table.b;
@@ -2676,7 +2690,7 @@ inline bool stretchToAxis(Layout& L, const View& v, const Box& pane, const std::
     for (Box& b : P.swCols) { mv(b); } L.swCols = P.swCols;
     if (P.tmRow.r > P.tmRow.l) { mv(P.tmRow); } L.tmRow = P.tmRow;
     L.colSepX = P.colSepX >= 0 ? P.colSepX + dx : -1; L.colSepT = P.colSepT + dy; L.colSepB = P.colSepB + dy;
-    L.sessR = P.sessR + dx; L.tableFs = P.tableFs;
+    L.sessR = P.sessR + dx; L.tableFs = P.tableFs; L.swTier = P.swTier;
     L.stretched = true;
     return true;
 }
