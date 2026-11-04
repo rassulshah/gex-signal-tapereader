@@ -139,14 +139,14 @@ int main(int argc, char** argv) {
             std::vector<std::pair<int,int> > tx; int lets = 0, ps = 0, pOnLine = 0; bool ok = true, onSpine = true;
             for (const wpc::Prim& p : sc.p) { if (!isLet(p)) continue; ++lets; tx.push_back(std::make_pair(p.x0, p.y0));
                 const unsigned long want = p.text == "P" ? 0x22D3EEUL : 0xFFFFFFUL; if (p.col != want || p.back || !p.bold) ok = false;
-                bool sp = false; for (int x : spX) sp = sp || (p.x1 <= x - 1 && p.x1 >= x - 4); if (!sp) onSpine = false;   // (1.8.1) right edge 1-4 px left of a spine
+                const int tw = p.x1 - p.x0; bool sp = false; for (int x : spX) sp = sp || (p.x1 <= x - tw - 1 && p.x1 >= x - tw - 4); if (!sp) onSpine = false;   // (1.8.4) right edge one letter + 1-4 px left of a spine (1.8.1: 1-4 px)
                 if (p.text == "P") { ++ps; const int cy = (p.y0 + p.y1) / 2;
-                    for (const wpc::Prim& f : sc.p) if (f.k == wpc::Prim::FILL && f.col == 0x22D3EE && !f.back && f.x0 - p.x1 >= 0 && f.x0 - p.x1 <= 5 && std::abs((f.y0 + f.y1) / 2 - cy) <= 1) { ++pOnLine; break; } } }
+                    for (const wpc::Prim& f : sc.p) if (f.k == wpc::Prim::FILL && f.col == 0x22D3EE && !f.back && f.x0 - p.x1 >= tw && f.x0 - p.x1 <= tw + 5 && std::abs((f.y0 + f.y1) / 2 - cy) <= 1) { ++pOnLine; break; } } }
             bool clear = true; for (size_t i2 = 0; i2 < tx.size(); ++i2) for (size_t j2 = i2 + 1; j2 < tx.size(); ++j2) if (std::abs(tx[i2].first - tx[j2].first) < 20 && std::abs(tx[i2].second - tx[j2].second) < 13) clear = false;
             int q = 0; for (const wpc::Prim& p : sc.p) q += p.k == wpc::Prim::TEXT && p.text.find('?') != std::string::npos;
             int patch = 0; for (const wpc::Prim& p : sc.p) patch += p.k == wpc::Prim::FILL && !p.back && p.y1 - p.y0 == 12 && (p.col == 0x0B0F17 || p.col == 0x374151);
             CHECK(lets == sc.lettersDrawn && lets >= 3 && ok, "(1.7.2) letters white (P cyan), bold, front (" << lets << ")");
-            CHECK(onSpine, "(1.8.1) every letter just LEFT of a wave's spine");
+            CHECK(onSpine, "(1.8.4) every letter one letter width further LEFT of a wave's spine");
             CHECK(clear, "(1.7.2) letters never overlap");
             CHECK(q == 0 && patch == 0, "(1.7.2) no \"?\" and no background patch (" << q << " / " << patch << ")");
             CHECK(ps > 0 && pOnLine == ps, "(1.8.1) every P sits just left of its wave's cyan volume POC line (" << pOnLine << " / " << ps << ")"); }

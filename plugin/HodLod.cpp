@@ -1,6 +1,7 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
- *  2.18.0 (2026-11-04 16:59 CT, Rassul "swap the LOD Sweeps with HOD sweeps"): the box reads SESSION | LOD SWEEPS | HOD SWEEPS.
+ *  2.18.0 (2026-11-04 16:59-17:11 CT, Rassul "swap the LOD Sweeps with HOD sweeps", "PhrL and PhrH", "FAV tag"): the box reads
+ *         SESSION | LOD SWEEPS | HOD SWEEPS; prior-hour rows PhrH / PhrL; FAV after each section's favourite level (highest Swept %, sweepable today).
  *  2.17.9 (2026-11-04, Rassul "sometimes the hodlod box collapses", NQ 3-min 11:24 CT): the box showed only its header + Exp / Act
  *         (57 px, status TABLE_BOX 568-625, AXIS_FILL off) on NQ, GC and HG while ES kept its sections. Root cause (HodLodLogic.h
  *         layoutTable): the 10 pt pass dropped the HOD / LOD SWEEPS sections as soon as the full form was a few px wider than the pane

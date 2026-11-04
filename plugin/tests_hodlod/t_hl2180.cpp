@@ -49,26 +49,42 @@ static bool sameBut(const std::string& g, const std::string& n) {
     const size_t r = x.size() - 3;   // ... l t r b hash
     for (size_t i = 0; i < x.size(); i++) if (i != r && x[i] != y[i]) return false;
     const long d = std::stol(y[r]) - std::stol(x[r]); return d == 0; }
+// (FAV) with sweep rows: exactly one FAV per section (scen.h: the top row of each side has the highest % and a price), drawn after its
+// row's name, inside its section, in the FAV colour; if the sections are drawn
+static bool favOk(const hl::Layout& L, const hl::View& v) {
+    if (!L.swOk) return L.favN == 0;
+    if (L.favN != 2) { std::printf("  favN %d\n", L.favN); return false; }
+    if (L.swTier >= 3) { int y = 0, t = 0; for (const hl::Item& it : L.items) { if (it.k != hl::K_TEXT) continue; if (it.s == "FAV") t++; if ((it.s == v.swHi[0].name || it.s == v.swLo[0].name) && it.c1 == hl::C_FAV) y++; }
+        return t == 0 && y == 2; }   // tightest form: the FAV names in yellow, no tag
+    int n = 0; for (const hl::Item& it : L.items) if (it.k == hl::K_TEXT && it.s == "FAV") { n++;
+        if (it.c1 != hl::C_FAV) return false;
+        bool after = false; for (const hl::Item& nm : L.items) if (nm.k == hl::K_TEXT && (nm.s == v.swHi[0].name || nm.s == v.swLo[0].name) && nm.t == it.t && it.l > nm.r) after = true;
+        if (!after) { std::printf("  FAV not after its name\n"); return false; } }
+    return n == 2; }
 int main() { (void)&itemsText;
     auto yOf = [](long long) { return 300; }; const double SCS[5] = { 1.0, 1.25, 1.3, 1.35, 1.4 };
     std::ifstream g("grid_2179.txt"); std::vector<std::string> gold; { std::string ln; while (std::getline(g, ln)) gold.push_back(ln); }
     CHECK(gold.size() == 1890, "grid_2179.txt: 1890 lines (got " + std::to_string(gold.size()) + ")");
     std::printf("[1] order + [2] unchanged vs 2.17.9\n");
-    size_t gi = 0; int same = 0, diff = 0, swN = 0;
+    std::map<std::string, std::string> gm, gs; { std::string last; for (const std::string& ln : gold) { if (ln.compare(0, 2, "S ") == 0) gs[last] = ln; else { std::istringstream is(ln); std::string k, t; for (int i = 0; i < 5 && is >> t; i++) k += t + " "; gm[k] = ln; last = k; } } }
+    int same = 0, diff = 0, swN = 0, favBoxes = 0;
     for (int m = 0; m < 6; m++) for (int W : { 930, 950, 980, 1050, 1200, 1530, 1900 }) for (int sci = 0; sci < 5; sci++) for (int pos : { 6, 7, 1 }) for (int var = 0; var < 2; var++) {
         SC = SCS[sci]; const hl::Box pane = { 0, 0, W, 640 }; hl::View v = mkView(m, var == 0); hl::Opts O;
+        const std::string key = std::to_string(m) + " " + std::to_string(W) + " " + std::to_string(sci) + " " + std::to_string(pos) + " " + std::to_string(var) + " ";
         const std::string id = std::string(MKS[m].code) + " W" + std::to_string(W) + " s" + std::to_string(sci) + " p" + std::to_string(pos) + " v" + std::to_string(var);
         hl::Layout L = hl::layoutAll(v, pane, yOf, MS, (int)(W * 0.75), pos, -1, nullptr, &O);
-        std::ostringstream a; a << m << " " << W << " " << sci << " " << pos << " " << var << " " << gridLine(L);
-        if (gi < gold.size() && sameBut(gold[gi], a.str())) ++same; else { ++diff; if (diff < 4) std::printf("  diff %s\n   now  %s\n   2179 %s\n", id.c_str(), a.str().c_str(), gi < gold.size() ? gold[gi].c_str() : "-"); } gi++;
+        bool ok = var == 1 ? (gm.count(key) && sameBut(gm[key], key + gridLine(L))) : favOk(L, v);
+        if (var == 0 && L.swOk) favBoxes++;
         order(L, v, id); if (L.swOk) ++swN;
         if (hl::stretchToAxis(L, v, pane, yOf, MS, (int)(W * 0.75), pos, -1, nullptr, O, W - 2)) {
-            const std::string s = "S " + gridLine(L); if (gi < gold.size() && sameBut(gold[gi], s)) ++same; else { ++diff; if (diff < 4) std::printf("  diff %s stretched\n", id.c_str()); } gi++;
-            order(L, v, id + " stretched"); }
+            ok = ok && (var == 1 ? (gs.count(key) && sameBut(gs[key], "S " + gridLine(L))) : favOk(L, v)); order(L, v, id + " stretched"); }
+        else if (var == 1 && gs.count(key)) ok = false;
+        if (ok) ++same; else if (++diff < 4) std::printf("  diff %s\n", id.c_str());
     }
-    CHECK(gi == gold.size(), "same scenario count as 2.17.9");
-    CHECK(diff == 0, "box, form and texts identical to 2.17.9 (" + std::to_string(diff) + " differ)");
-    std::printf("  identical to 2.17.9: %d of %zu; layouts with sweep sections checked: %d\n", same, gold.size(), swN);
+    CHECK(diff == 0, "no-row boxes identical to 2.17.9, every sweep box carries its 2 FAV tags (" + std::to_string(diff) + " differ)");
+    CHECK(swN == 630, "the sweep sections are drawn in every scenario 2.17.9 drew them (630, got " + std::to_string(swN) + ")");
+    CHECK(favBoxes > 500, "FAV checked on " + std::to_string(favBoxes) + " sweep boxes");
+    std::printf("  scenarios passing: %d of 1260; layouts with sweep sections checked: %d; FAV boxes %d\n", same, swN, favBoxes);
     std::printf("[3] versions\n");
     CHECK(std::string(hl::HL_VERSION) == "2.18.0" && std::string(hlset::PLUGIN_VERSION) == "2.18.0", "HL_VERSION = PLUGIN_VERSION = 2.18.0");
     { std::ifstream f("../HodLod.cpp"); std::stringstream ss; ss << f.rdbuf(); CHECK(ss.str().find("p->setVersion(\"2.18.0\")") != std::string::npos, "HodLod.cpp setVersion 2.18.0"); }

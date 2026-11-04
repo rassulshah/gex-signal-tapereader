@@ -20,3 +20,20 @@ Rassul 17:02 CT: "also update PHL and PHH to PhrL and PhrH"
   - `tests_hodlod/t_phr.cpp`: 8 passed.
   - `test_keylevels_logic`: 62 passed.
   - `test_dealerprofile_2523`: only its 2.52.3 version check fails, which is expected.
+
+## lsHodLod 2.18.0: FAV tag (Rassul 17:08 CT "put a FAV tag next to the favorite level of the market to sweep"; 17:11 CT "go" on the fav_mock mockup)
+- FAV marks the level with the highest Swept % in each section, counting only levels that can still be swept today: eligible, with a real price (not "-", not "below / above open"). Ties all get FAV.
+- The tag is a small yellow outlined "FAV" right after the level name.
+- In the tightest compact form (tier 3) there is no room for the tag, so the level name itself is drawn in yellow instead. This way the sweep sections are never dropped because of the tag.
+- t_hl2180:
+  - The sweep sections are drawn in all 630 scenarios where 2.17.9 drew them.
+  - Every sweep box carries its 2 FAVs.
+  - The no-row boxes are identical to 2.17.9.
+- Real long names (ONH / LonHI / AsiaHI as the FAV row) on 930-1050 px panes at font scales 1.0-1.4: 0 of 72 boxes lost their sections.
+
+# lsWavePOC 1.8.4 (Rassul 17:11 CT "move the I P and other signals for the spine of the wave poc, 1 more to the left")
+- The spine letters I / A / T / P sit one letter width further left. The right edge is now 2 px plus one letter left of the spine; before, it was 2 px.
+- Tests passed:
+  - test_wavepoc_150: 49
+  - test_wavepoc_logic: 187
+  - test_wavepoc_host: 109
