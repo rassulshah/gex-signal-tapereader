@@ -1,12 +1,16 @@
 /********************************************************************************
- *  CobSignal.cpp  --  Investor/RT RTX extension  lsCobSignal  "CoB Signal"  1.2.0  (2026-11-02 evening = his cob_bull_3m_1b / cob_bear_3m_1b + 11:00 CT; 1.0.0 2026-11-01)
+ *  CobSignal.cpp  --  Investor/RT RTX extension  lsCobSignal  "CoB Signal"  1.3.0  (2026-11-04: + LVP low-volume pullback; 1.2.0 2026-11-02 evening = his cob_bull_3m_1b / cob_bear_3m_1b + 11:00 CT; 1.0.0 2026-11-01)
  *
  *  Rassul 2026-11-01 22:12-22:24 CT ("i want you to build the cob signals instead of me having my own", "consider the new levels also
  *  PHH and PHL", labels "Cob , Cob+R , Cob+V", mockup cob_ba_mockup v2 "build"): his CoB computed natively from the chart's own bars,
  *  so his RTL cob_bull / cob_bear can come off the chart. Rules = CobSignalLogic.h (trade_def.cob_live + PHH / PHL; 202 of 202 parity
  *  on a year of ES without PHH / PHL). Label under a bull CoB bar (green) / over a bear CoB bar (red): Cob, Cob+R, Cob+V, Cob+RV.
  *  Decided once at the CoB bar's close, recorded, never repainted. No settings (NO_UI, SS_SAFE_DIALOG - the Candle Absorb lesson).
- *  FILES  lsFlexLevels\CobSignal\<MKT>-<spb>.csv          every CoB (append-only, each once)
+ *  1.3.0 (2026-11-04, Rassul approved the LVP mockup - GC 3-min Nov 3 - and said "build"): + LVP = a pullback wave (3-bar High / Low ZigZag,
+ *  zzd::Engine::step) among the first 3 after the CoB that stays inside the CoB wave's range on <= 1/3 of the CoB wave's volume: red "LVP"
+ *  above it after a bear CoB (no demand), green below it after a bull CoB (no supply); decided when the wave is confirmed, never repainted;
+ *  one "LVP,..." record line each (rules: CobSignalLogic.h).
+ *  FILES  lsFlexLevels\CobSignal\<MKT>-<spb>.csv          every CoB (append-only, each once) + (1.3.0) every LVP ("LVP,..." lines, each once)
  *         lsFlexLevels\CobSignal.status-<MKT>-<spb>.txt   version, rules, counts, the last CoBs
  *         lsFlexLevels\CobSignal-<MKT>-<spb>-live.csv     every CoB on the loaded bars (for lsWavePOC / the nightly), rewritten on change
  ********************************************************************************/
@@ -44,7 +48,7 @@
 #define CS_SEP "/"
 #endif
 
-static const char* CS_VERSION = "1.2.0";   // = cobs::VERSION = the setVersion literal
+static const char* CS_VERSION = "1.3.0";   // = cobs::VERSION = the setVersion literal
 
 static long long csMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string csFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + CS_SEP "InvestorRT" CS_SEP "rtx" CS_SEP "lsFlexLevels" : std::string(); }
@@ -71,7 +75,7 @@ static bool csPublish(const std::string& path, const std::string& text) {
 struct CSState {
     std::string mkt, sym; int spb = 0; double tick = 0; long long tickKey = 0; bool keyed = false, mktOk = false;
     cobs::Engine E; std::vector<RTDATE> raw; int off = 0;
-    std::string recPath, statusPath, livePath, recWhy = "not opened"; std::set<long long> written; int recFails = 0;
+    std::string recPath, statusPath, livePath, recWhy = "not opened"; std::set<long long> written, writtenLvp; int recFails = 0;
     long long statusMs = -1; std::string statusBody; size_t liveN = (size_t)-1; int drawn = 0;
 };
 
@@ -124,9 +128,9 @@ bool CobSignal::identify(CSState& S) {
         S.recPath = d.empty() ? std::string() : d + CS_SEP "CobSignal" CS_SEP + key + ".csv";
         S.statusPath = d.empty() ? std::string() : d + CS_SEP "CobSignal.status-" + key + ".txt";
         S.livePath = d.empty() ? std::string() : d + CS_SEP "CobSignal-" + key + "-live.csv";
-        S.written.clear(); S.recWhy = d.empty() ? "no USERPROFILE" : "new";
+        S.written.clear(); S.writtenLvp.clear(); S.recWhy = d.empty() ? "no USERPROFILE" : "new";
         std::ifstream f(S.recPath.c_str(), std::ios::binary);
-        if (f) { std::string l; int n = 0; while (std::getline(f, l) && n < 200000) { ++n; if (l.rfind("COB,", 0) != 0) continue; char* e = nullptr; const long long t = std::strtoll(l.c_str() + 4, &e, 10); if (e && *e == ',' && t > 0) S.written.insert(t); } S.recWhy = "loaded " + std::to_string(S.written.size()) + " CoBs"; }
+        if (f) { std::string l; int n = 0; while (std::getline(f, l) && n < 200000) { ++n; const bool isLvp = l.rfind("LVP,", 0) == 0; if (!isLvp && l.rfind("COB,", 0) != 0) continue; char* e = nullptr; const long long t = std::strtoll(l.c_str() + 4, &e, 10); if (e && *e == ',' && t > 0) (isLvp ? S.writtenLvp : S.written).insert(t); } S.recWhy = "loaded " + std::to_string(S.written.size()) + " CoBs, " + std::to_string(S.writtenLvp.size()) + " LVPs"; }
     }
     return S.mktOk;
 }
@@ -152,19 +156,21 @@ void CobSignal::feed(CSState& S) {
 }
 
 void CobSignal::flush(CSState& S) {
-    if (!S.E.out.empty() && !S.recPath.empty()) {
+    if ((!S.E.out.empty() || !S.E.lvpOut.empty()) && !S.recPath.empty()) {
         std::vector<std::string> fresh;
         for (const std::string& l : S.E.out) { char* e = nullptr; const long long t = std::strtoll(l.c_str() + 4, &e, 10); if (!S.written.count(t)) fresh.push_back(l); }
+        for (const std::string& l : S.E.lvpOut) { char* e = nullptr; const long long t = std::strtoll(l.c_str() + 4, &e, 10); if (!S.writtenLvp.count(t)) fresh.push_back(l); }   // (1.3.0)
         if (!fresh.empty()) {
             const std::string d = csFlex(); csMkdir(d); csMkdir(d + CS_SEP "CobSignal");
             const bool isNew = !csExists(S.recPath);
             std::ofstream f(S.recPath.c_str(), std::ios::binary | std::ios::app);
-            if (f) { if (isNew) f << "# lsCobSignal: COB,bar end (local secs),BULL/BEAR,label,levels swept,dratio,LOD/HOD,ADR,leg start,leg end,R since,V since,SHOW / LOG (1.1.0)\n"; for (const std::string& l : fresh) f << l << "\n"; f.flush(); }
-            if (f.good()) { for (const std::string& l : fresh) { char* e = nullptr; S.written.insert(std::strtoll(l.c_str() + 4, &e, 10)); } S.recWhy = "appending"; }
+            if (f) { if (isNew) f << "# lsCobSignal: COB,bar end (local secs),BULL/BEAR,label,levels swept,dratio,LOD/HOD,ADR,leg start,leg end,R since,V since,SHOW / LOG (1.1.0) | (1.3.0) LVP,pullback pivot bar end,BULL/BEAR (the CoB),CoB bar end,pullback first bar end,confirmed bar end,pullback volume,CoB wave volume,pct,nth pullback,SHOW / LOG\n"; for (const std::string& l : fresh) f << l << "\n"; f.flush(); }
+            if (f.good()) { for (const std::string& l : fresh) { char* e = nullptr; (l.rfind("LVP,", 0) == 0 ? S.writtenLvp : S.written).insert(std::strtoll(l.c_str() + 4, &e, 10)); } S.recWhy = "appending"; }
             else { ++S.recFails; S.recWhy = "append failed " + std::to_string(S.recFails) + "x"; }
         }
-        S.E.out.clear();
+        S.E.out.clear(); S.E.lvpOut.clear();
     }
+    if (S.recPath.empty()) { S.E.out.clear(); S.E.lvpOut.clear(); }   // (1.3.0) no record path: keep the queues bounded
     if (S.E.marks.size() != S.liveN && !S.livePath.empty()) {          // every CoB on the loaded bars, for the other indicators
         std::string body = std::string("COBSIGNAL,") + CS_VERSION + "\n";
         for (const cobs::Mark& m : S.E.marks) if (m.show) body += S.E.recLine(m) + "\n";   // (1.1.0) the drawn CoBs only (LOG ones stay in the record)
@@ -217,7 +223,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.2.0 - his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PWH/PWL, AsiaHI/AsiaLO, PHH/PHL; by 11:00 CT; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00; a PHH/PHL-only CoB is drawn in ES, HG, GC and recorded only elsewhere): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted.");
-    p->setVersion("1.2.0");   // = CS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA CoB Signal v1.3.0 - his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PWH/PWL, AsiaHI/AsiaLO, PHH/PHL; by 11:00 CT; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00; a PHH/PHL-only CoB is drawn in ES, HG, GC and recorded only elsewhere): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted. + LVP: low-volume pullback after a CoB.");
+    p->setVersion("1.3.0");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }

@@ -345,3 +345,12 @@ Rules (every new or changed indicator):
 - (same build) AFTER A RESTART THE MBO BOOK IS BLIND TO OLDER ORDERS: rank / king logic must not run on a book that only knows 10 minutes of
   orders; LiqTouch 1.6.0 warms 10 min and seeds the depth (MBP) lots the order book cannot explain once displayed 10 min. Proof:
   tests_liqtouch/test_liqtouch_warm.cpp (restart replay), test_lp073_host.cpp (warming -> ready -> IRT restart -> warming).
+- (2026-11-04 lsCobSignal 1.3.0 LVP) A MOCKUP'S PERCENTAGES CAN MIX CONVENTIONS: the approved LVP mockup said 18% / 6% because its script summed
+  the CoB wave INCLUDING its start pivot bar but the pullbacks WITHOUT theirs; the plugin uses one wave definition (zzd: after the previous pivot
+  through its own) for both -> 21.8% / 7.0%, same LVPs. Re-derive every number a mockup prints from the plugin's own logic before calling it a
+  match, and say which convention ships. Proof: tests_cobsignal/test_cobsignal_lvp.cpp (GC Nov 3 replay: 3,575 / 1,151 vs 16,402).
+- (same build) ANCHOR A WAVE TO THE LEG EXTREME, NOT THE SIGNAL BAR: a CoB bar is the bar AFTER the leg's extreme, so when that extreme is the
+  ZigZag pivot the CoB bar already belongs to the pullback wave; "the wave containing the CoB bar" would then pick the wrong wave. The LVP look
+  uses Mark::legEnd. Proof: test_cobsignal_lvp.cpp section 1 / 7.
+- (same build) THE EXISTING HOST TEST DID NOT BUILD WITH -Werror (-Wmisleading-indentation in test_cobsignal_host.cpp chart() and in
+  CobSignalLogic.h layout) - the suite had been run without the flag the checklist requires. Fixed both; always run the stated flags.

@@ -1,4 +1,4 @@
-// test_cobsignal_host.cpp - lsCobSignal 1.0.0 host + logic suite on the mock SDK (CobSignal_test_support/irtsdk.h).
+// test_cobsignal_host.cpp - lsCobSignal 1.3.0 (1.3.0: + LVP records / restart / draw checks; 1.0.0) host + logic suite on the mock SDK (CobSignal_test_support/irtsdk.h).
 //   (in plugin\tests_cobsignal) g++ -std=c++17 -Wall -Wextra -ICobSignal_test_support -I.. test_cobsignal_host.cpp -o th && ./th cobsignal_es.csv
 // Covers: the ES fixture (the last 40 sessions of a year of 3-min bars) through the real host = the logic run on the same bars;
 // PHH / PHL add CoBs (useNew); labels Cob / Cob+R / Cob+V / Cob+RV; bar-by-bar feeding = one pass (no repaint); the forming bar is never
@@ -25,7 +25,8 @@ static Fix load(const char* path) {
     return F;
 }
 static void chart(mock::Host& H, const Fix& F, int upto, int first) {
-    for (int a = 0; a < 4; ++a) H.f[a].clear(); H.t.clear(); H.vol.clear();
+    for (int a = 0; a < 4; ++a) { H.f[a].clear(); }
+    H.t.clear(); H.vol.clear();
     for (int i = 0; i <= upto; ++i) { const cobs::Bar& b = F.B[(size_t)i]; H.f[0].push_back((float)b.o); H.f[1].push_back((float)b.h); H.f[2].push_back((float)b.l); H.f[3].push_back((float)b.c); H.t.push_back((RTDATE)b.t); H.vol.push_back((RTDATE)b.v); }
     float lo = 1e9f, hi = -1e9f; for (int i = first; i <= upto; ++i) { lo = std::min(lo, H.f[2][(size_t)i]); hi = std::max(hi, H.f[1][(size_t)i]); }
     H.lo = lo - 3; H.hi = hi + 3; H.first = first; H.paneR = 10 * (upto - first + 1) + H.rightMargin; H.paneB = 900;
@@ -83,22 +84,45 @@ int main(int argc, char** argv) {
     const std::string rec = slurp(flex() + "/CobSignal/ES-180.csv"), live = slurp(flex() + "/CobSignal-ES-180-live.csv"), st = slurp(flex() + "/CobSignal.status-ES-180.txt");
     size_t nrec = 0; for (size_t p = rec.find("\nCOB,"); p != std::string::npos; p = rec.find("\nCOB,", p + 1)) ++nrec;
     CHECK(nrec == L.marks.size(), "record: every CoB once (" << nrec << ")");
-    CHECK(live.rfind("COBSIGNAL,1.2.0\n", 0) == 0 && live.find(L.recLine(L.marks.back())) != std::string::npos, "live file: version + every CoB");
-    CHECK(st.rfind("VERSION,1.2.0\nMARKET,ES", 0) == 0 && st.find("COBS," + std::to_string(L.marks.size())) != std::string::npos, "status file");
+    // (1.3.0) LVP: every LVP once in the record, LVP lines in the status, the live file stays CoB-only
+    size_t nlvp = 0; for (size_t p = rec.find("\nLVP,"); p != std::string::npos; p = rec.find("\nLVP,", p + 1)) ++nlvp;
+    std::cerr << "fixture: " << L.lvp.marks.size() << " LVPs after " << L.marks.size() << " CoBs\n";
+    CHECK(L.lvp.marks.size() > 0 && nlvp == L.lvp.marks.size(), "record: every LVP once (" << nlvp << " of " << L.lvp.marks.size() << ")");
+    { bool all = true; for (const cobs::LvpMark& m : L.lvp.marks) all = all && rec.find(cobs::lvpLine(m) + "\n") != std::string::npos; CHECK(all, "record: the LVP lines = the logic's"); }
+    CHECK(st.find("\nLVPS," + std::to_string(L.lvp.marks.size()) + "\n") != std::string::npos && st.find("\nLVP_RULES,") != std::string::npos, "status: LVP rules + count");
+    CHECK(live.find("LVP,") == std::string::npos, "live file: CoBs only (unchanged format for its readers)");
+    { bool ok = true; for (const cobs::LvpMark& m : L.lvp.marks) { bool f = false; for (const cobs::Mark& c : L.marks) f = f || (c.t == m.cobT && c.side == m.side && c.show == m.show); ok = ok && f && m.vol * 3 <= m.cobVol && m.nth >= 1 && m.nth <= 3 && m.idx > 0; } CHECK(ok, "every LVP belongs to a CoB of its side, <= 1/3 volume, pullback 1-3"); }
+    CHECK(live.rfind("COBSIGNAL,1.3.0\n", 0) == 0 && live.find(L.recLine(L.marks.back())) != std::string::npos, "live file: version + every CoB");
+    CHECK(st.rfind("VERSION,1.3.0\nMARKET,ES", 0) == 0 && st.find("COBS," + std::to_string(L.marks.size())) != std::string::npos, "status file");
     // bar-by-bar feeding = one pass; a restart never writes a CoB twice
     {   mock::Host Bh; mock::current = &Bh; Bh.root = "ES"; Bh.sym = "ESZ26"; CobSignal y;
         const int n = (int)F.B.size(); for (int u = n - 400; u < n; ++u) { chart(Bh, F, u, std::max(0, u - 120)); y.calc(0); }
         CSState* S2 = static_cast<CSState*>(Bh.userData);
         CHECK(S2 && sig(S2->E) == sig(L), "bar-by-bar feeding = one pass (no repaint)");
         const std::string rec2 = slurp(flex() + "/CobSignal/ES-180.csv");
-        CHECK(rec2 == rec, "a restart (second chart, same market) appends nothing new");
+        CHECK(rec2 == rec, "a restart (second chart, same market) appends nothing new (CoBs and LVPs)");
+        std::string a, b; for (const cobs::LvpMark& m : S2->E.lvp.marks) a += cobs::lvpLine(m); for (const cobs::LvpMark& m : L.lvp.marks) b += cobs::lvpLine(m);
+        CHECK(a == b, "(1.3.0) bar-by-bar feeding: the same LVPs (no repaint)");
     }
     // the draw: labels in the pane, bull green under the bar, bear red over it
     mock::current = &A; A.drawn.clear(); mdraw(x);
-    int bull = 0, bear = 0, other = 0;
-    for (const mock::Prim& p : A.drawn) { if (p.k != 'T') { ++other; continue; } if (p.col == cobs::C_BULL) ++bull; else if (p.col == cobs::C_BEAR) ++bear; }
+    int bull = 0, bear = 0, other = 0, lvpN = 0;
+    for (const mock::Prim& p : A.drawn) { if (p.k != 'T') { ++other; continue; } if (p.text == "LVP") { ++lvpN; continue; } if (p.col == cobs::C_BULL) ++bull; else if (p.col == cobs::C_BEAR) ++bear; }
+    {   int lvis = 0; for (const cobs::LvpMark& m : L.lvp.marks) lvis += m.show && m.idx >= A.first;
+        CHECK(lvpN <= lvis && (lvis == 0 || lvpN > 0) && bull + bear + lvpN == S->drawn, "(1.3.0) LVP labels drawn (" << lvpN << " of " << lvis << " visible)");
+        bool col = true, place = true;
+        for (const mock::Prim& p : A.drawn) { if (p.text != "LVP") continue; bool f = false;
+            for (const cobs::LvpMark& m : L.lvp.marks) { PNT q; q.set(m.idx, 0.0f, kBarCenter); if (m.idx < A.first || std::abs(q.h - (p.x0 + p.x1) / 2) > 3) continue; f = true;
+                col = col && p.col == (m.side > 0 ? cobs::C_BULL : cobs::C_BEAR);
+                const int yl = (int)x.getVerticalDrawPosition((float)L.B[(size_t)m.idx].l), yh = (int)x.getVerticalDrawPosition((float)L.B[(size_t)m.idx].h);
+                place = place && (m.side > 0 ? p.y0 >= yl + 50 : p.y1 <= yh - 50); }
+            place = place && f; }
+        CHECK(col && place, "(1.3.0) LVP: red above after a bear CoB / green below after a bull CoB, 3 rows clear of the wick");
+        bool clear = true; for (size_t i = 0; i < A.drawn.size(); ++i) for (size_t j = i + 1; j < A.drawn.size(); ++j) { const mock::Prim& a = A.drawn[i]; const mock::Prim& b = A.drawn[j];
+            clear = clear && !(a.x0 < b.x1 - 2 && b.x0 < a.x1 - 2 && a.y0 < b.y1 && b.y0 < a.y1); }
+        CHECK(clear, "(1.3.0) no label overlaps another"); }
     int vis = 0, vb = 0; for (const cobs::Mark& m : L.marks) if (m.idx >= A.first) { ++vis; vb += m.side > 0; }
-    CHECK(other == 0 && bull + bear > 0 && bull + bear == S->drawn && bull + bear <= vis && bull <= vb, "only label text drawn (" << bull << " green / " << bear << " red of " << vis << " visible)");
+    CHECK(other == 0 && bull + bear > 0 && bull + bear + lvpN == S->drawn && bull + bear <= vis && bull <= vb, "only label text drawn (" << bull << " green / " << bear << " red of " << vis << " visible)");
     {   bool place = true; for (const mock::Prim& p : A.drawn) { if (p.k != 'T') continue; for (const cobs::Mark& m : L.marks) { if (m.idx < A.first) continue;
             PNT q; q.set(m.idx, 0.0f, kBarCenter); if (std::abs(q.h - (p.x0 + p.x1) / 2) > 6) continue;
             const int yl = (int)x.getVerticalDrawPosition((float)L.B[(size_t)m.idx].l), yh = (int)x.getVerticalDrawPosition((float)L.B[(size_t)m.idx].h);
@@ -108,7 +132,7 @@ int main(int argc, char** argv) {
     {   mock::Host D; D.dialog = true; D.root = ""; mock::current = &D; CobSignal z; z.calc(0); mdraw(z); CHECK(D.drawn.empty(), "the Add / settings copy with no chart draws nothing and does not fault"); }
     // versions
     { const std::string src = slurp("../CobSignal.cpp"); const size_t p = src.find("p->setVersion(\""); const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.2.0", "version literals match (" << lit << ")"); }
+      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.3.0", "version literals match (" << lit << ")"); }
     std::cout << "test_cobsignal_host: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }
