@@ -131,7 +131,7 @@ inline void build(const File& F, const std::vector<Lv>& lv, double open, int dec
     for (int side = 0; side < 2; side++) {
         const bool H = side == 0;
         struct Def { const char* key; const char* show; const char* a; const char* b; const char* c; };
-        const Def D[6] = { { H ? "PHH" : "PHL", H ? "PHH" : "PHL", H ? "PHH" : "PHL", nullptr, nullptr },
+        const Def D[6] = { { H ? "PHH" : "PHL", H ? "PhrH" : "PhrL", H ? "PHH" : "PHL", nullptr, nullptr },   // (lsHodLod 2.18.0) shown PhrH / PhrL (Rassul 2026-11-04 17:02 CT); key + file name stay PHH / PHL
                            { "ON3", H ? "ONH / LonHI / AsiaHI" : "ONL / LonLO / AsiaLO", H ? "ONH" : "ONL", H ? "LonHI" : "LonLO", H ? "AsiaHI" : "AsiaLO" },
                            { "DPoc", "DPoc", "DPoc", nullptr, nullptr },
                            { H ? "VAH" : "VAL", H ? "VAH" : "VAL", H ? "VAH" : "VAL", nullptr, nullptr },

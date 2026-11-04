@@ -150,7 +150,7 @@ inline std::string levelWhat(const std::string& name)
     if (f == "ONH" || f == "ONL") return std::string("tonight's overnight session ") + (f == "ONH" ? "high" : "low");
     if (f == "LonHI" || f == "LonLO") return std::string("the London session's ") + (f == "LonHI" ? "high" : "low");
     if (f == "AsiaHI" || f == "AsiaLO") return std::string("the Asia session's (6:00 PM - 1:00 AM CT) ") + (f == "AsiaHI" ? "high" : "low");
-    if (f == "PHH" || f == "PHL") return std::string("the ") + (f == "PHH" ? "high" : "low") + " of the hour before the RTH open (ES 7:30 - 8:30 AM CT)";   // (DP 2.41.0)
+    if (f == "PHH" || f == "PHL" || f == "PhrH" || f == "PhrL") return std::string("the ") + (f == "PHH" || f == "PhrH" ? "high" : "low") + " of the hour before the RTH open (ES 7:30 - 8:30 AM CT)";   // (DP 2.41.0)
     if (f == "Open") return "today's RTH open (the first trade of the day session)";                                   // (DP 2.18.0)
     if (f == "DPoc") return "the previous full session's volume point of control (the price that traded the most)";
     if (f == "VAH" || f == "VAL") return std::string("the previous full session's value area ") + (f == "VAH" ? "high" : "low") + " (70% of its volume traded inside)";
@@ -165,7 +165,7 @@ inline std::string levelWhat(const std::string& name)
 inline bool isKeyLevel(const std::string& name)
 {
     const std::string f = name.substr(0, name.find_first_of("/ "));
-    static const char* const K[] = { "PFH", "PFL", "PDH", "PDL", "PWH", "PWL", "CWH", "CWL", "ONH", "ONL", "LonHI", "LonLO", "AsiaHI", "AsiaLO", "Open", "DPoc", "VAH", "VAL", "WPoc", "PHH", "PHL" };   // (DP 2.18.0) + Open / profile levels; (2.41.0) + PHH / PHL
+    static const char* const K[] = { "PFH", "PFL", "PDH", "PDL", "PWH", "PWL", "CWH", "CWL", "ONH", "ONL", "LonHI", "LonLO", "AsiaHI", "AsiaLO", "Open", "DPoc", "VAH", "VAL", "WPoc", "PHH", "PHL", "PhrH", "PhrL" };   // (DP 2.18.0) + Open / profile levels; (2.41.0) + PHH / PHL
     for (size_t i = 0; i < sizeof(K) / sizeof(K[0]); ++i) if (f == K[i]) return true;
     return false;
 }

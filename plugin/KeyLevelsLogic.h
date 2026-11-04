@@ -246,10 +246,14 @@ inline std::vector<Merged> merge(const std::vector<Level>& L, double tick, int n
 }
 // (2.10.0, Rassul 2026-10-14 "ONH (dot) AsiaHI") the name on the chart badge: "/" -> " \xB7 " (the middle dot, CP1252 like DayStats);
 // the files keep "/" (every parser splits on it)
+// (2026-11-04 17:02 CT, Rassul "update PHL and PHH to PhrL and PhrH") the prior-hour levels are SHOWN as PhrH / PhrL; the stored / file
+// name stays PHH / PHL (LRA-KeyLevels-<MKT>.csv, the nightly, lsCobSignal and lsHodLod match on it)
+inline std::string shownToken(const std::string& t) { return t == "PHH" ? std::string("PhrH") : t == "PHL" ? std::string("PhrL") : t; }
 inline std::string displayName(const std::string& n)
 {
-    std::string r; r.reserve(n.size() + 8);
-    for (char c : n) { if (c == '/') r += " \xB7 "; else r += c; }
+    std::string r, tok; r.reserve(n.size() + 8);
+    for (char c : n) { if (c == '/') { r += shownToken(tok) + " \xB7 "; tok.clear(); } else tok += c; }
+    r += shownToken(tok);
     return r;
 }
 
