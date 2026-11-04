@@ -92,7 +92,8 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <chrono>
 #include "SignalBoard.h"            // (1.31.0) kind D facts (decided candles' defense)
 
-#define BF_VERSION "1.32.1"          // 1.32.1 (2026-11-02) no hovers (BF_HOVERS false, no TRACK_MOUSE)
+#define BF_VERSION "1.33.0"          // 1.33.0 (2026-11-03, Rassul "go" on bf_box.png) the 4-line info box -> ONE compact line top-left (bf::oneLine): yellow Defending?, green B +923 0.6x, red S +534 0.3x, small white Live; no (i) icon
+// was "1.32.1"          // 1.32.1 (2026-11-02) no hovers (BF_HOVERS false, no TRACK_MOUSE)
 static const bool BF_HOVERS = false;   // was 1.32.0:          // 1.32.0 (2026-10-28 overnight, Rassul 21:52 / 21:57 CT) the NODE LADDER owner (OrderFlowFeed 1.16.0 Engine.ladder -> SignalBoard 1.5.0 LRA_SLD_ every second), the AT NODE box row and the node mark (white square inside the defenders' bar: filled = holding, hollow = pulling) from lsDeltaProfile's kind Y read (display only, nothing recomputed)
 // 1.31.0 was:          // 1.31.0 (2026-10-28 overnight) the decided candle's defense posted on the SignalBoard as kind D (bf::defenseFact; layer 1a, one owner)
 // prev:         // 1.30.0 (2026-10-26, Rassul 18:33 CT) the letter strips are not drawn (letters recorded / exported / in the status), their rows go to the bars; the turn % marks stay
@@ -158,7 +159,8 @@ public:
         std::vector<sb::Fact> yFacts; long long yReadMs = -100000; long long nodeMarks = 0; std::string nodeRowText;       // (1.32.0) the Delta Profile's node defender reads (kind Y), read for display only
         long long mstBar = 0, mstCt = 0, mstMs = -1, mstPosts = 0; std::map<std::string, std::string> mstKv; sa::Hook self;
         pc::Tracker cur; long long liveEv = -1, liveMs = -1;
-        br::Read lastRead; std::vector<std::string> lastReadLines;        // (1.4.0) the Read last drawn (tests)
+        br::Read lastRead; std::vector<std::string> lastReadLines;        // (1.4.0) the Read last drawn (tests); (1.33.0) computed, not drawn
+        off::Info lastInfo; bf::OneLine lastLine;                         // (1.33.0) the rows the box used to show (tests / status) + the one line drawn
         // (1.12.0) pivot turns: the candles (OHLC ticks, Defense / Aggression, refill price, attack timing), the decided turns (one per
         // pivot, never re-decided), the turns file, the live "?" line and the shared settings file
         std::map<long long, dt::Candle> dtc; std::set<std::pair<int, long long> > dtUsed; std::map<std::pair<int, long long>, dt::Turn> dtTurns;
@@ -1454,7 +1456,6 @@ public:
         bp::Place pl; pl.pos = S.set.pos; pl.dx = S.set.dx; pl.dy = S.set.dy;
         const bp::Box area = bp::mk(g.left + 3, g.top + 3, g.edge - 3, g.bottom - 3);
         const zread::Line zl = S.zr.e.line(S.zr.pane, off::steadyMs());
-        off::PanelPlan P;                                                  // (1.4.0) + the Read row: the box grows to hold it (BoxReadDraw.h)
         br::Read rd = bf::bookRead(shownNs, shownPs);
         if (mbar) {                                                        // (1.5.0) at a new 10-bar low / high the REFILL read leads
             br::Read rr; if (bf::refillRead(mbar->r, S.market, spotAt(liveBox ? last : mb), shownNs, rr)) rd = rr;
@@ -1469,15 +1470,19 @@ public:
             }
             br::Read er; if (bf::earlyRead(tw0, lb.r, S.market, S.e.adMedian, S.tick, er)) rd = er;
         }
-        if (S.feed.silentNow(off::steadyMs())) { rd = br::Read(); rd.head = off::silentRead(S.feed.silentFromWall, S.feed.reconnects); }   // (1.7.0) the watchdog says so
+        const bool silent = S.feed.silentNow(off::steadyMs());
+        if (silent) { rd = br::Read(); rd.head = off::silentRead(S.feed.silentFromWall, S.feed.reconnects); }   // (1.7.0) the watchdog says so
         const off::TextW tw = off::measureWith(this);
-        info.topLines = 1; info.topW = off::questionW(tw, bf::QUESTION);   // (1.15.0, Rassul 11:30) the question + info icon: the box's first line
-        const br::Plan rp = br::addAndPlan(info, rd, tw, [&](const off::Info& I) { return off::planPanel(area, g.top, off::MODE_NUMBERS, pl, I, std::string(), std::string(), g.reserve, tw); }, P);
-        if (Ext* e = ext(S)) { e->lastRead = rd; e->lastReadLines = rp.lines; }
-        S.lastBox = P.ok ? P.box : bp::Box();
+        // (1.33.0, Rassul 2026-11-03 "go" on bf_box.png) the box is ONE line in the top-left corner (bf::oneLine), inside the strip the pane
+        // keeps free on top (QUESTION_H) - "Defending?  B +923 0.6x  S +534 0.3x  Live". The rows / Read are still built (records, status,
+        // tests: e->lastInfo / e->lastRead), not drawn. (was: info.topLines + br::addAndPlan + off::planPanel -> the 4-line box)
+        (void)area; (void)pl; (void)zl;
+        std::string bCell, sCell; bf::refillCells(info, bCell, sCell);
+        const bf::OneLine OL = bf::oneLine(bCell, sCell, silent ? std::string("Feed silent") : info.head, g.left + 2, g.top + 1, g.edge - 2, tw);
+        if (Ext* e = ext(S)) { e->lastRead = rd; e->lastReadLines = rd.head.empty() ? std::vector<std::string>() : std::vector<std::string>(1, rd.full()); e->lastInfo = info; e->lastLine = OL; e->infoIcon = off::IconRect(); }
+        S.lastBox = OL.ok ? bp::mk(OL.l, OL.t, OL.r, OL.b) : bp::Box();
         std::vector<off::LBox> avoid; off::ValY vyNow;
-        if (P.ok) avoid.push_back(off::LBox{ P.box.l, P.box.t, P.box.r, P.box.b, 0, 0 });
-        for (size_t k = 0; k < P.textRects.size(); ++k) avoid.push_back(off::LBox{ P.textRects[k].l, P.textRects[k].t, P.textRects[k].r, P.textRects[k].b, 0, 0 });
+        if (OL.ok) avoid.push_back(off::LBox{ OL.l, OL.t, OL.r, OL.b, 0, 0 });
         // (1.8.0) the pull markers' bottom strip is gone with the pair bars (the pull stats stay in the record and the status)
         {   // (1.8.0, Rassul 19:02 / 19:09) PAIR bars: bids (buyers defending) green LEFT, offers (sellers defending) red RIGHT, both above zero
             const COLOR normal[2] = { off::C_GREEN_BAR, off::C_RED_BAR }, spike[2] = { off::C_GREEN_SPIKE, off::C_RED_SPIKE };
@@ -1539,14 +1544,14 @@ public:
                 }
             }
         }
-        const COLOR vcol[2] = { 0x0022C55E, 0x00EF4444 };                 // values: bids (buyers) green, offers (sellers) red
-        off::drawPanel(this, P, info, vcol, off::implOf(zl), false);
-        br::draw(this, P, info, rp, rd);                                  // (1.4.0) the Read word + lines over its rows
-        { Ext* ex = ext(S); off::IconRect tmp; if (P.ok) off::drawQuestionIn(this, P.box, bf::QUESTION, ex ? &ex->infoIcon : &tmp); else if (ex) ex->infoIcon = off::IconRect();   // (1.15.0) inside the box, upper left   // (1.8.0) the question; (1.10.0) + the info icon
-          if (ex && ex->infoTipOn) off::drawInfoTip(this, g, ex->infoIcon, bf::INFO_TIP);   // (1.11.0) the description box while the mouse is on the icon
+        if (OL.ok) {                                                       // (1.33.0) the one line: a small dark backing just behind the text, then the parts
+            off::fillFlat(this, OL.l, OL.t, OL.r, OL.b, (COLOR)bf::LC_BG);
+            for (const bf::LineSeg& sg : OL.segs) off::textAt(this, sg.x, OL.t + (sg.pt < bf::LINE_PT ? 1 : 0), bf::LINE_H - 1, sg.text, (COLOR)sg.color, sg.pt, sg.bold);
+        }
+        { Ext* ex = ext(S);                                                // (1.33.0) no (i) icon / info tip (no hovers since 1.32.1: the icon did nothing)
           if (ex) ex->lastTip = dt::TipRect();
           if (ex && !ex->infoTipOn && ex->badgeTip >= 0 && ex->badgeTip < (int)ex->badgeHit.size())   // (1.19.0) the badge's hover; (1.20.0) per letter, never over the box
-              drawBadgeTip(*ex, g, ex->badgeHit[(size_t)ex->badgeTip].first, ex->badgeHit[(size_t)ex->badgeTip].second, P.ok ? &P.box : nullptr); }
+              drawBadgeTip(*ex, g, ex->badgeHit[(size_t)ex->badgeTip].first, ex->badgeHit[(size_t)ex->badgeTip].second, OL.ok ? &S.lastBox : nullptr); }
     }
     // (1.5.0) where candle i sits: a new 10-bar low / high and its volume vs the 20 before it (bf::spotOf), from the chart's own bars
     bf::Spot spotAt(int i) {
@@ -1675,6 +1680,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | (BF_HOVERS ? TRACK_MOUSE : 0));   // (1.32.1) no hovers                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.32.1");   // BF_VERSION
+    p->setVersion("1.33.0");   // BF_VERSION
     return p;
 }

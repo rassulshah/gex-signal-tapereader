@@ -1592,6 +1592,15 @@ int HodLod::draw(void)
         }
         S->placeLine += S->dockLine + "\n";
     }
+    {   // (2.17.7, 2026-11-03 Rassul "go" on hodlod_wide.png) the box runs to the PRICE AXIS (the price pane's drawing-area right edge): same rows,
+        // font and colours, the extra width spread over SESSION | HOD SWEEPS | LOD SWEEPS; it may cover the bottom of lsDealerProfile's
+        // LIQUIDITY column (Rassul accepted). Placement / hysteresis / dock above are unchanged: pass 2 is moved onto their final spot.
+        RCT sc; sc.getScaleRect();
+        int axisR = (int)pane.right; if (sc.left > pane.left + 100 && sc.left < pane.right) axisR = (int)sc.left;   // the axis inside the pane rect (some hosts include it)
+        const int w0 = L.table.r - L.table.l;
+        const bool st = hl::stretchToAxis(L, S->view, pb, yOf, M, pe, PL.pos, projX, &avoid, O, axisR);
+        S->placeLine += "AXIS_FILL," + std::string(st ? "on" : "off") + ",axis " + std::to_string(axisR) + ",width " + std::to_string(w0) + " -> " + std::to_string(L.table.r - L.table.l) + (L.tableOk ? ",right " + std::to_string(L.table.r) : std::string()) + "\n";
+    }
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
         PNT p; int mx = -1;
         if (p.set(S->fxIdx, (float)S->fxView.price, kBarCenter) == RTX_OK && p.h > 0) mx = (int)p.h;
@@ -1755,6 +1764,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.17.6");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.17.7");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

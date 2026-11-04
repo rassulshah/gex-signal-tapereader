@@ -51,6 +51,10 @@ template <class E> static std::string strip(mock::Host& h, E* e, int s, bool col
     for (auto& hit : e->badgeHit) { const off::IconRect& r = hit.first; if ((r.t - y0) / lst::ROW_H != s) continue;
         for (auto& d : h.draws) if (d.type == "text" && d.x == r.l && d.y >= r.t && d.y <= r.b) { b += d.text; if (colour) b += d.color == 0x22C55E ? "@G" : d.color == 0xEF4444 ? "@R" : d.color == 0x9CA3AF ? "@g" : d.color == 0xF59E0B ? "@A" : "@?"; } }
     return b; }
+// (lsBookFlow 1.33.0) the box is one line: the rows it used to show are checked in e->lastInfo (built, not drawn)
+template <class E> static bool rowHas(E* e, const std::string& label, const std::string& v) { for (auto& r : e->lastInfo.rows) if (r.label == label && (v.empty() || r.v[0] == v || r.v[1] == v)) return true; return false; }
+template <class E> static int rowAt(E* e, const std::string& label) { for (size_t k = 0; k < e->lastInfo.rows.size(); ++k) if (e->lastInfo.rows[k].label == label) return (int)k; return -1; }
+template <class E> static const off::InfoRow* rowOf(E* e, const std::string& label) { for (auto& r : e->lastInfo.rows) if (r.label == label) return &r; return nullptr; }
 template <class E> static const off::IconRect* stripHit(mock::Host& h, E* e, int s) { const int y0 = stripY0(h); const off::IconRect* r = nullptr; for (auto& hit : e->badgeHit) if ((hit.first.t - y0) / lst::ROW_H == s) r = &hit.first; return r; }
 #endif
 static int pTexts(mock::Host& h) { int n = 0; for (auto& d : h.draws) if (d.type == "text" && d.text.size() > 1 && d.text[0] == 'p' && d.text[1] == ' ') ++n; return n; }
@@ -304,8 +308,8 @@ int main() {
         int brightOthers = 0; for (int b = 30; b < 52; ++b) for (auto& d : barsAt(h, b)) brightOthers += d.color == off::C_GREEN_SPIKE || d.color == off::C_RED_SPIKE;
         CHECK(brightOthers == 0, "normal candles are dim"); }
     // the info box Net row carries the ratio
-    {   int found = 0; for (auto& d : h.draws) if (d.type == "text" && (d.text == "+100 (5.0x)" || d.text == "-100 (5.0x)")) ++found;
-        CHECK(found == 2, "box Net: +100 (5.0x) | -100 (5.0x)"); }
+    {   int found = 0; for (auto& d : h.draws) if (d.type == "text" && (d.text == "B +100 5.0x" || d.text == "S -100 5.0x")) ++found;
+        CHECK(found == 2, "line Net: B +100 5.0x | S -100 5.0x (1.33.0: was the box's +100 (5.0x) | -100 (5.0x))"); }
     // the Market State
     NOW += 16000; p->calc(0);
     mst::Facts F = mst::read("BOOK", "ESZ6", 60, "test", NOW);
@@ -330,21 +334,36 @@ int main() {
     {   void* W = (void*)0x1; off::off_test_cursor_wnd = W; pc::test_ok = true;
         pc::test_cx = 1450; pc::test_cy = 650; RTX_EVENT e2 = moveAt(450, 150, 52); p->mouse(&e2);
         h.draws.clear(); p->draw();
-        CHECK(S->hov.hover.bar == 52 && text(h, "Live") == nullptr && hasPrefix(h, "+100 ("), "inside the pane over candle 52: its Net +100");
+        CHECK(S->hov.hover.bar == 52 && text(h, "Live") == nullptr && hasPrefix(h, "B +100 "), "inside the pane over candle 52: its Net +100");
         pc::test_cy = 900; NOW += 300; p->calc(0); h.draws.clear(); p->draw();
         CHECK(S->hov.hover.bar == -1 && text(h, "Live") != nullptr, "cursor outside the pane: Live");
         {   const RTDATE t = T0 + 60 * 53 - 30; for (int i = 0; i < 3; ++i) ev(0, 1, 6999.75f, 10, t, nextId++); }
         const int inv = h.invalidates; NOW += 300; p->calc(0);
         CHECK(h.invalidates > inv, "new order events on the forming candle while Live: redrawn");
         h.draws.clear(); p->draw();
-        CHECK(text(h, "Live") != nullptr && hasPrefix(h, "+30 ("), "Live box: the forming candle's Net +30 bids so far with its ratio (1.4.0), mouse outside the pane");
-        CHECK(text(h, "Refill Effort") != nullptr && text(h, "Refilled") != nullptr && text(h, "Added") == nullptr && text(h, "Pulled") == nullptr
-              && text(h, "Pace") == nullptr && text(h, "Net") == nullptr, "(1.5.0) the box shows Refill Effort + Refilled only (Added / Pulled / Pace hidden)");
-        CHECK(text(h, "Reward") == nullptr, "(1.8.0) no Reward row (it repeats Aggression's)");
-        CHECK(text(h, bf::QUESTION) != nullptr, "(1.8.0) the question line on top");
-        {   Ind::Ext* e = p->ext(*S); std::string why; const bool fits = e && readFits(h, S->lastBox, e->lastRead, e->lastReadLines, why);
-            CHECK(e && text(h, "BULLISH", br::C_BULL) != nullptr && e->lastRead.head.find("Bids stacking") == 0, "(1.4.0) Read: BULLISH, Bids stacking (live, offers flat)");
-            CHECK(fits, ("(1.4.0) the Read lines fit inside the box, nothing cut " + why).c_str()); }
+        CHECK(text(h, "Live") != nullptr && hasPrefix(h, "B +30 "), "Live line: the forming candle's Net +30 bids so far with its ratio (1.4.0; 1.33.0 one line 'B +30 ..'), mouse outside the pane");
+        {   Ind::Ext* e = p->ext(*S);
+            CHECK(e && rowHas(e, "Refill Effort", "") && rowHas(e, "Refilled", "") && !rowHas(e, "Added", "") && !rowHas(e, "Pulled", "") && !rowHas(e, "Pace", "") && !rowHas(e, "Net", ""),
+                  "(1.5.0) the rows kept: Refill Effort + Refilled (Added / Pulled / Pace hidden) - built in lastInfo");
+            CHECK(text(h, "Refill Effort") == nullptr && text(h, "Refilled") == nullptr && text(h, "Buyers") == nullptr && text(h, "Sellers") == nullptr,
+                  "(1.33.0) one line: no row labels / column heads drawn");
+            CHECK(text(h, "Reward") == nullptr && e && !rowHas(e, "Reward", ""), "(1.8.0) no Reward row (it repeats Aggression's)");
+            CHECK(text(h, bf::LINE_Q, (COLOR)bf::LC_Q) != nullptr && text(h, bf::QUESTION) == nullptr, "(1.33.0) the short question 'Defending?' in yellow (the long one is gone)");
+            CHECK(e && e->lastRead.word() == "BULLISH" && e->lastRead.head.find("Bids stacking") == 0 && text(h, "BULLISH") == nullptr, "(1.4.0) Read: BULLISH, Bids stacking (live, offers flat) - computed; (1.33.0) not drawn");
+            // (1.33.0) THE ONE LINE: top-left, one text row high, every part inside it in order, the same numbers as the Refill Effort row
+            const bf::OneLine& L = e->lastLine; const off::InfoRow* re = rowOf(e, "Refill Effort");
+            CHECK(L.ok && L.segs.size() == 4 && L.b - L.t <= off::QUESTION_H && L.t >= h.paneTop && L.t <= h.paneTop + 3 && L.l >= h.paneLeft && L.l <= h.paneLeft + 6, ("(1.33.0) one line, <= one text row + padding high, in the pane's top-left corner (" + std::to_string(L.l) + "," + std::to_string(L.t) + "-" + std::to_string(L.r) + "," + std::to_string(L.b) + ")").c_str());
+            CHECK(L.ok && re && L.segs[1].text == "B " + bf::compactCell(re->v[0]) && L.segs[2].text == "S " + bf::compactCell(re->v[1]) && L.segs[3].text == "Live", ("(1.33.0) B / S = the Refill Effort cells (" + (re ? re->v[0] + " | " + re->v[1] : std::string("none")) + "), then Live").c_str());
+            CHECK(L.ok && L.segs[1].color == 0x0022C55E && L.segs[2].color == 0x00EF4444 && L.segs[3].color == 0x00FFFFFF && L.segs[3].pt < L.segs[0].pt, "(1.33.0) colours: B green, S red, Live small white");
+            {   bool inOrder = true, inside = true; for (size_t k = 0; k < L.segs.size(); ++k) { const mock::Draw* d = text(h, L.segs[k].text, (COLOR)L.segs[k].color);
+                    if (!d || d->x < L.l || d->r > L.r + 2 || d->y < L.t || d->y > L.b) inside = false; if (k && L.segs[k].x <= L.segs[k - 1].x + L.segs[k - 1].w) inOrder = false; }
+                CHECK(inside && inOrder, "(1.33.0) every part drawn inside the line's backing, left to right, never overlapping"); }
+            {   int others = 0, backs = 0; for (auto& d : h.draws) { const bool hit = d.x < L.r && d.r > L.l && d.y < L.b && d.b > L.t; if (!hit) continue;
+                    if (d.type == "box" && d.color == (COLOR)bf::LC_BG && d.x == L.l && d.y == L.t) { ++backs; continue; }
+                    bool mine = false; for (auto& sg : L.segs) mine = mine || (d.type == "text" && d.text == sg.text); if (!mine) ++others; }
+                CHECK(backs == 1 && others == 0, ("(1.33.0) nothing else drawn in the line (backs " + std::to_string(backs) + ", others " + std::to_string(others) + ")").c_str()); }
+            {   bool border = false, ring = false; for (auto& d : h.draws) { if (d.type == "box" && d.border == off::C_BOX_BORDER) border = true; if (d.type == "ring" || d.type == "oval") ring = true; }
+                CHECK(!border && !ring, "(1.33.0) no tall bordered box and no (i) icon"); } }
         pc::test_ok = false; off::off_test_cursor_wnd = nullptr; }
     // (1.4.0) no repaint: later candles never move or remove the marker (decided once at the close)
     for (int k = 54; k < 58; ++k) step(h, p, k);
@@ -401,17 +420,13 @@ int main() {
             CHECK(!lab && !border, "(BF 1.29.0) no strip labels and no letter boxes"); }
         {   bool over = false; if (bd) over = bd->x < S->lastBox.r && bd->x + 10 > S->lastBox.l && bd->y < S->lastBox.b && bd->y + 10 > S->lastBox.t;
             CHECK(!over, "(1.15.0) the badge never over the info box"); }
-        CHECK(text(h, "Counter") != nullptr && text(h, "Hit back 2.3x") != nullptr, "(1.15.0) the box row Counter: Hit back 2.3x (920 / 400)");
-        {   const mock::Draw* q = text(h, bf::QUESTION);
-            CHECK(q && q->x >= S->lastBox.l && q->x < S->lastBox.r && q->y >= S->lastBox.t - 2 && q->y < S->lastBox.t + 20, "(1.15.0, Rassul 11:30) the question is the box's first line, upper left inside the box");
-            const mock::Draw* ring = nullptr; for (auto& d : h.draws) if (d.type == "ring" || d.type == "oval") ring = &d;
-            CHECK(q && ring && ring->x > q->x && ring->x < S->lastBox.r && ring->y >= S->lastBox.t - 2 && ring->y < S->lastBox.t + 20, "(1.15.0) the info icon right of it, inside the box");
-            CHECK(e->infoIcon.r > e->infoIcon.l && e->infoIcon.l >= S->lastBox.l && e->infoIcon.r <= S->lastBox.r, "(1.15.0) the icon's hover rectangle moved with it (hover keeps working)"); 
-        {   const mock::Draw* q = text(h, bf::QUESTION);   // (1.18.0) the icon >= 4 px clear of the question's text (it touched "defending?")
-            CHECK(q && e->infoIcon.l - (q->r - 2) >= 4, ("(1.18.0) the (i) icon " + std::to_string(q ? e->infoIcon.l - (q->r - 2) : -1) + " px right of the question text (>= 4)").c_str()); }
-        }
+        CHECK(rowHas(e, "Counter", "Hit back 2.3x") && text(h, "Counter") == nullptr, "(1.15.0) the row Counter: Hit back 2.3x (920 / 400) - built; (1.33.0) not drawn");
+        {   const mock::Draw* q = text(h, bf::LINE_Q);
+            CHECK(q && q->x >= S->lastBox.l && q->x < S->lastBox.r && q->y >= S->lastBox.t - 2 && q->y < S->lastBox.t + 20, "(1.33.0) the question opens the one line, upper left");
+            bool ring = false; for (auto& d : h.draws) if (d.type == "ring" || d.type == "oval") ring = true;
+            CHECK(!ring && e->infoIcon.r <= e->infoIcon.l, "(1.33.0) no (i) icon (it did nothing since 1.32.1: no hovers)"); }
         e->dtH[std::make_pair((int)dt::LOW, k)].H = false; h.draws.clear(); p->draw();
-        CHECK(strip(h, e, 0).empty() && strip(h, e, 1).empty() && text(h, "Absorbed only") != nullptr, "(1.15.0) decided without a counter: A only, Counter = Absorbed only");
+        CHECK(strip(h, e, 0).empty() && strip(h, e, 1).empty() && rowHas(e, "Counter", "Absorbed only"), "(1.15.0) decided without a counter: A only, Counter = Absorbed only");
         // (1.16.0, Top Defender #4) the re-test: the engine's resting lots in the zone are read; a decided L on the candle -> one badge A|L?, box Re-test
         S->e.restAdd(off::BID, 27990, 300); S->e.restAdd(off::BID, 27995, 50);
         CHECK(p->restIn(*S, dt::LOW, 27988, 27992) == 300 && p->restIn(*S, dt::LOW, 27988, 27995) == 350, "(1.16.0) restIn sums the defenders' resting lots in the zone");
@@ -420,11 +435,11 @@ int main() {
         h.draws.clear(); p->draw();
         if (const char* dp = std::getenv("D4_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
         CHECK(strip(h, e, 0, true).empty() && strip(h, e, 1, true).empty(), "(1.23.0) H > L: the Turn & re-test strip shows H (L in its hover)");
-        CHECK(text(h, "Re-test") != nullptr && text(h, "Reloaded 1.9x") != nullptr, "(1.16.0) the box row Re-test: Reloaded 1.9x");
-        {   const mock::Draw* rr = text(h, "Re-test"); const mock::Draw* cc = text(h, "Counter"); CHECK(rr && cc && rr->y > cc->y && rr->y < S->lastBox.b, "(1.16.0) Re-test under Counter, inside the box"); }
+        CHECK(rowHas(e, "Re-test", "Reloaded 1.9x"), "(1.16.0) the row Re-test: Reloaded 1.9x (built)");
+        CHECK(rowAt(e, "Re-test") > rowAt(e, "Counter") && rowAt(e, "Counter") >= 0, "(1.16.0) Re-test under Counter (row order kept)");
         e->dtQ[std::make_pair((int)dt::LOW, k)].res = 'X'; e->dtQ[std::make_pair((int)dt::LOW, k)].ratio = 0.2; e->dtH[std::make_pair((int)dt::LOW, k)].H = false;
         h.draws.clear(); p->draw();
-        CHECK(strip(h, e, 1, true).empty() && text(h, "Empty 0.2x") != nullptr, ("(1.23.0) X (a warning) in the colour of the side it hurts (the low's buyers, green); box Empty 0.2x: " + strip(h, e, 1, true)).c_str());
+        CHECK(strip(h, e, 1, true).empty() && rowHas(e, "Re-test", "Empty 0.2x"), ("(1.23.0) X (a warning) in the colour of the side it hurts (the low's buyers, green); box Empty 0.2x: " + strip(h, e, 1, true)).c_str());
         {   const std::string tf0 = readAll(flex + "\\BookFlow\\ES-60-turns.csv");
             { std::ofstream f((flex + "\\BookFlow\\ES-60-turns.csv").c_str(), std::ios::app); dt::Retest q; q.t = k; q.side = dt::LOW; q.res = 'L'; q.ratio = 1.25; q.rest = 625; q.at = k; f << dt::qLineOf(q) << "\n"; }
             e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb); mirrorA(p, *S);
@@ -450,11 +465,10 @@ int main() {
                 if (const char* dp = std::getenv("D3_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
                 std::string badges; for (auto& d : h.draws) if (d.type == "text" && d.y < 60) badges += d.text + " ";
                 CHECK(strip(h, e, 0, true).empty(), ("(1.23.0) A > P: the Holding strip shows A (P in its hover) (" + badges + ")").c_str());
-                {   const mock::Draw* mv = text(h, "Moved"); const mock::Draw* rr = text(h, "Re-test");
-                    CHECK(mv && text(h, "In 2t 2.5x") != nullptr && rr && mv->y > rr->y && mv->y < S->lastBox.b, "(1.17.0) the box row Moved: In 2t 2.5x under Re-test, inside the box"); }
+                CHECK(rowHas(e, "Moved", "In 2t 2.5x") && rowAt(e, "Moved") > rowAt(e, "Re-test") && rowAt(e, "Re-test") >= 0, "(1.17.0) the row Moved: In 2t 2.5x under Re-test (built)");
                 e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_IN] = false; e->dtM[std::make_pair(0, k)].q[mvl::C_DEF_OUT] = true;
                 h.draws.clear(); p->draw();
-                CHECK(text(h, "B") == nullptr && text(h, "In 0t 0.0x") == nullptr && text(h, "Out 0t 0.0x") == nullptr, "(1.19.0, MoveLogic 1.1.1) a case flag with NO lots moved that way: no letter, the Moved row shows '-' (was 'In 0t 0.0x')");
+                CHECK(text(h, "B") == nullptr && text(h, "In 0t 0.0x") == nullptr && text(h, "Out 0t 0.0x") == nullptr && !rowHas(e, "Moved", "In 0t 0.0x") && !rowHas(e, "Moved", "Out 0t 0.0x"), "(1.19.0, MoveLogic 1.1.1) a case flag with NO lots moved that way: no letter, the Moved row shows '-' (was 'In 0t 0.0x')");
                 e->dtM[std::make_pair(0, k)].s.out[0] = 10; e->dtM[std::make_pair(0, k)].s.ticksOut[0] = 2;   // the bids really stepped back 10 lots
                 h.draws.clear(); p->draw();
                 CHECK(strip(h, e, 0, true).empty(), "(1.23.0) stepping back (B): A still shown (A > B; B in the hover)");
@@ -492,8 +506,8 @@ int main() {
         p->decideTurns(*S, k, nb); mirrorA(p, *S); CHECK(e->dtGWritten == g0 + 1, "(1.19.0) decided once: a second close writes nothing");
         h.draws.clear(); p->draw();
         CHECK(strip(h, e, 0, true).empty() && text(h, "Ab") == nullptr && text(h, "G", RED) == nullptr && text(h, "G", GRN) == nullptr, "(BF 1.29.0, Rassul 18:33) no letters drawn: A / G decided and written, never drawn");
-        CHECK(text(h, "Attackers") == nullptr && text(h, "Pulling 2.4x") == nullptr, "(1.21.0, Rassul \"no\") the box row Attackers is removed");
-        {   const mock::Draw* mv = text(h, "Moved"); const mock::Draw* al = text(h, "At level"); CHECK(mv && al && al->y > mv->y && al->y < S->lastBox.b, "(1.21.0) At level right under Moved (no Attackers row), inside the box"); }
+        CHECK(text(h, "Attackers") == nullptr && text(h, "Pulling 2.4x") == nullptr && !rowHas(e, "Attackers", ""), "(1.21.0, Rassul \"no\") the box row Attackers is removed");
+        CHECK(rowAt(e, "At level") == rowAt(e, "Moved") + 1 && rowAt(e, "Moved") >= 0, "(1.21.0) At level right under Moved (no Attackers row)");
         // ---- Tr: the Delta Profile's TR line (trapped sellers below the old low) on this candle
         const std::string tp = p->trapPathFor(*S, 0);
         CHECK(!tp.empty() && tp.find("\\DeltaProfile\\ES-ESZ6-60-signals-") != std::string::npos, ("(1.19.0) the Delta Profile record path " + tp).c_str());
@@ -529,9 +543,9 @@ int main() {
         CHECK(badges == "/" && text(h, "Ab") == nullptr && text(h, "L?") == nullptr && text(h, "W") == nullptr && text(h, "P") == nullptr, ("(BF 1.29.0) A, W, P, L decided on the candle, none drawn (" + badges + ")").c_str());
         if (const char* dp = std::getenv("GTW_DUMP")) { std::ofstream o(dp); for (auto& d : h.draws) o << d.type << '\t' << d.x << '\t' << d.y << '\t' << d.r << '\t' << d.b << '\t' << d.color << '\t' << d.border << '\t' << d.fsize << '\t' << d.text << '\n'; }   // render check (not a test)
         CHECK(text(h, "W") == nullptr, "(1.23.0) W is not drawn when A is on the candle (A > W)");
-        {   bool q = false; for (auto& d : h.draws) if (d.type == "text" && d.y < 60 && d.text != bf::QUESTION && d.text.find('?') != std::string::npos && d.text != "Hb?" && d.text != "L?" && d.text != "X?" && d.text != "F?") q = true;
+        {   bool q = false; for (auto& d : h.draws) if (d.type == "text" && d.y < 60 && d.text != bf::QUESTION && d.text != bf::LINE_Q && d.text.find('?') != std::string::npos && d.text != "Hb?" && d.text != "L?" && d.text != "X?" && d.text != "F?") q = true;
             CHECK(!q, "(BF 1.28.0, BUILD-SPEC 22:29 supersedes 19:48) a '?' only on the approved codes Hb? / L? / X? / F?"); }
-        CHECK(text(h, "At level") != nullptr && text(h, "Pulled 88%", RED) != nullptr, "(1.19.0) box row At level: Pulled 88% (300 / 340), red");
+        {   const off::InfoRow* al = rowOf(e, "At level"); CHECK(al && al->v[0] == "Pulled 88%" && al->side[0] == 1, "(1.19.0) row At level: Pulled 88% (300 / 340), red side (built)"); }
         {   int fs = 99; bool bold = true; for (auto& d : h.draws) if (d.type == "text" && (d.text == "Ab" || d.text == "L?") && d.y >= stripY0(h) && d.y < stripY0(h) + 2 * lst::ROW_H) { fs = std::min(fs, d.fsize); bold = bold && d.fstyle == 1; }
             (void)bold; CHECK(fs == 99, ("(BF 1.29.0) no strip letters at all (" + std::to_string(fs) + ")").c_str()); }
         {   // two neighbouring candles with badges: the wider one never covers the one before it
