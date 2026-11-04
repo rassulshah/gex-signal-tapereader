@@ -82,7 +82,8 @@ REM (2026-11-03) lsBreakout 1.0.0 "BO" (Rassul approved the mockup, "build"): le
 REM (2026-11-03) lsBreakout 1.1.0: + Pb (a pullback pivot testing the BO / BD candle) on the 3-bar ZigZag of ZzoDeltaLogic.h (zzd::Engine::step) - headers added
 call :one Breakout lsBreakout BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ColumnBoard.h BoxPlace.h BannerBoard.h BoxDock.h SignalBoard.h ZzoDeltaLogic.h ZzoParams.h
 REM (2026-11-01 22:24 CT, Rassul "build") lsCobSignal 1.0.0 "CoB Signal": his CoB natively (+ PHH / PHL), Cob / Cob+R / Cob+V; no settings
-call :one CobSignal lsCobSignal CobSignalLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h CobImpulseLogic.h HostSlot.h SettingsGuard.h
+REM (2026-11-04) lsCobSignal 1.3.0: + LVP on the 3-bar ZigZag of ZzoDeltaLogic.h (zzd::Engine::step) - headers added
+call :one CobSignal lsCobSignal CobSignalLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h CobImpulseLogic.h HostSlot.h SettingsGuard.h ZzoDeltaLogic.h ZzoParams.h
 REM (2026-11-02 19:45 CT, Rassul "ok lets do option 2") lsZzoDelta 1.0.0 "ZZO Delta": 1-bar H/L ZigZag wave delta / median of the last 5 same-way waves (RTH restarts); own pane; no settings
 call :one ZzoDelta lsZzoDelta ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h
 REM (2026-11-02 21:33 CT, Rassul "add a zig zag also" / "yes, fix it") lsZzoZigZag 1.0.0 "ZZO ZigZag": the 1-bar H/L ZigZag ZZO Delta uses, on the price chart; no settings
