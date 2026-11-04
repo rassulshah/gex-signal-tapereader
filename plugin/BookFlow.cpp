@@ -1,5 +1,18 @@
 /********************************************************************************
- *  BookFlow.cpp  --  Investor/RT RTX extension  lsBookFlow  1.5.0  (2026-10-19; 1.0.0 2026-10-16)
+ *  BookFlow.cpp  --  Investor/RT RTX extension  lsBookFlow  1.34.0  (2026-11-04; 1.0.0 2026-10-16)
+ *  1.34.0 (2026-11-04, Rassul "just build it" after "clean and it looks good" on bf_mockup.html; levels added at his request: prior-day
+ *        POC / VAH / VAL, VWAP and its bands, Pb tests of BO / BD - "the pullback is the signal we were working on"):
+ *        (1) LEVEL BOX (BookLevelBox.h 1.0.0, = the nightly lra.book_level_combo 1.1.1, exact parity on ES 2026-10-30): one row right of
+ *            the "Defending?" line, only while price is within 4 ticks of a level's zone (= 2 ES points of the level):
+ *            "<LEVEL> | Defenders stacking 2.1x? | Behind stacking 3.3x? | Attackers normal?" coloured by implication (green / red / gray).
+ *            Levels: KeyLevels (incl. its DPoc / VAH / VAL = the prior FULL session profile), MenthorQ / Dealer levels (the same files and
+ *            rules as the pane's level names), pdPOC / pdVAH / pdVAL = the prior RTH profile from the nightly's LRA-BookLevel-<MKT>.csv
+ *            when it carries the prior session, RTH VWAP and +-1 / +-2 SD (SessionVWAPLogic.h svl::run on this chart's bars, last closed
+ *            bar, from the open + 15 min), Pb test zones of lsBreakout's fired BO / BD records (this session).
+ *        (2) SQUARES: two thin rows under the bars of each candle that spent time at a level (Defenders, Behind), decided once every second
+ *            of the candle was evaluated, never repainted (C lines in BookFlow\<stem>-<session>-levelbox.csv, reloaded after a restart).
+ *        (3) TURN MARK label = defending bar / attacking bar as drawn ("3.0x"); attacking bar <= 0 = the triangle alone (was "999%").
+ *        Away from levels the pane is unchanged (the 10 px under the bars is kept only while squares are in view). No settings change.
  *  1.23.0 (2026-10-22, Rassul approved layout-stages-2strips.png 11:41-11:46 CT, build ordered 15:20 CT): the badge row becomes TWO LETTER
  *        STRIPS (LetterStrips.h 1.0.0), each its own row with a small left label: "Holding" (stages 2-3: A > Q > W > P > B; Q only when the
  *        queue meter's record lsFlexLevels\Strips\QUEUE-<MKT>-<spb>.csv exists) and "Turn & re-test" (stages 4-5: H > L > X). ONE letter per
@@ -92,7 +105,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <chrono>
 #include "SignalBoard.h"            // (1.31.0) kind D facts (decided candles' defense)
 
-#define BF_VERSION "1.33.0"          // 1.33.0 (2026-11-03, Rassul "go" on bf_box.png) the 4-line info box -> ONE compact line top-left (bf::oneLine): yellow Defending?, green B +923 0.6x, red S +534 0.3x, small white Live; no (i) icon
+#define BF_VERSION "1.34.0"          // 1.34.0 (2026-11-04, Rassul "just build it") the LEVEL BOX + squares (BookLevelBox.h) and the turn-mark ratio label   // was 1.33.0: 1.33.0 (2026-11-03, Rassul "go" on bf_box.png) the 4-line info box -> ONE compact line top-left (bf::oneLine): yellow Defending?, green B +923 0.6x, red S +534 0.3x, small white Live; no (i) icon
 // was "1.32.1"          // 1.32.1 (2026-11-02) no hovers (BF_HOVERS false, no TRACK_MOUSE)
 static const bool BF_HOVERS = false;   // was 1.32.0:          // 1.32.0 (2026-10-28 overnight, Rassul 21:52 / 21:57 CT) the NODE LADDER owner (OrderFlowFeed 1.16.0 Engine.ladder -> SignalBoard 1.5.0 LRA_SLD_ every second), the AT NODE box row and the node mark (white square inside the defenders' bar: filled = holding, hollow = pulling) from lsDeltaProfile's kind Y read (display only, nothing recomputed)
 // 1.31.0 was:          // 1.31.0 (2026-10-28 overnight) the decided candle's defense posted on the SignalBoard as kind D (bf::defenseFact; layer 1a, one owner)
@@ -103,6 +116,7 @@ static const bool BF_HOVERS = false;   // was 1.32.0:          // 1.32.0 (2026-1
 #include "FMirror.h"              // (1.28.0) F? the pivot dies at once
 #include "OrderLinesLogic.h"       // (1.28.0) the line floor = a "big order" in the re-test hover
 #include <set>
+struct BfMark { int bar; std::string text; long long def, att; int hDef, hAtt; bool live; };   // (1.34.0) one drawn turn mark
 struct BfZoneIds { std::set<long long> big; long long bigId = 0, bigLots = 0, maxLots = 0, n = 0; };   // (1.28.0) the re-test zone by order id
 #include "DefenseTurn.h"          // (1.12.0) the pivot turn marks + the refill line decisions (drawn on the price chart by lsDefenseLines)
 #include "DefenseLinesSettings.h" // (1.12.0) their show / colour settings (one file with lsDefenseLines)
@@ -110,6 +124,8 @@ struct BfZoneIds { std::set<long long> big; long long bigId = 0, bigLots = 0, ma
 #include "TrapLogic.h"           // (1.19.0, Middle Attacker #1) the Delta Profile's TR record (read only)
 #include "LetterStrips.h"        // (1.23.0) the two letter strips + the letter record for lsReversalStage
 #include "ReversalEvidence.h"    // additive typed sidecar; legacy LT strips stay independent
+#include "BookLevelBox.h"         // (1.34.0) the level box + squares (= lra.book_level_combo)
+#include "ZzoDeltaLogic.h"        // (1.34.0) zzd::Engine::step: the 3-bar High / Low ZigZag of lsBreakout's Pb windows (the wave origin)
 #include <fstream>
 #include <set>
 
@@ -127,7 +143,10 @@ public:
     virtual int scale(int iStartBar, int iEndBar, double* dMin, double* dMax) {
         const int r = off::MboPane<bf::Logic>::scale(iStartBar, iEndBar, dMin, dMax);
         S_* S = static_cast<S_*>(getUserData());
-        if (S && dMin && dMax) { double mn = 0, mx = 10; off::axisFor(S->axisTop, S->paneH, off::pairPx(S->paneH, off::textReserve(S->paneH, gmode(S->set.mode)) + off::QUESTION_H + topReserve()), mn, mx); *dMin = mn; *dMax = mx; }
+        if (S && dMin && dMax) { double mn = 0, mx = 10; off::axisFor(S->axisTop, S->paneH, off::pairPx(S->paneH, off::textReserve(S->paneH, gmode(S->set.mode)) + off::QUESTION_H + topReserve()), mn, mx);
+            // (1.34.0) the level squares' rows under the bars: kept ONLY while a candle with squares is in view (else the pane is exactly as before)
+            Ext* e = ext(*S); if (e && mn < 0 && lbSqIn(*e, iStartBar, iEndBar)) { const double unit = -mn; mn -= blb::SQ_RESERVE * unit; mx -= blb::SQ_RESERVE * unit; }
+            *dMin = mn; *dMax = mx; }
         return r;
     }
     virtual bool textOff() const { return false; }
@@ -197,6 +216,16 @@ public:
         rse::Publisher evidence; std::string evidencePath; long long evidenceWritten = 0, evidenceFail = 0; // one publisher per pane host
         std::map<long long, int> evidenceNative; // closed-bar MBO coverage retained before the accumulator is dropped
         std::map<long long, std::map<off::Tick, off::Ice> > evidenceIce[2]; // exact-price execution provenance only; last 64 bars
+        // (1.34.0) THE LEVEL BOX (BookLevelBox.h): the engine (fed every order event), the nightly's params, the levels, the box last
+        // evaluated, the squares (decided per candle, never changed), the levelbox record
+        blb::Engine lb; blb::Params lbP; blb::Profile lbProf; long long lbParMs = -100000, lbParSig = -2; std::string lbParPath;
+        std::string lbIdent; long long lbLvMs = -100000; long lbLvCount = -1; std::vector<blb::Level> lbLv; int lbN[5] = {0, 0, 0, 0, 0}; std::string lbVwapNote, lbProfNote, lbPbNote;
+        long long lbBoSig = -2, lbBoMs = -100000; std::string lbBoPath; std::vector<blb::BoRec> lbBo;
+        long long lbLastE = -1, lbResetDay = -1, lbEvals = 0, lbShownSecs = 0, lbEvalNs = 0, lbEventNs = 0, lbEventsTimed = 0; blb::Engine::Shown lbShown; blb::BoxText lbText; std::string lbKey;
+        std::map<long long, blb::SqAcc> lbAcc; std::map<long long, blb::Square> lbSq; long long lbSqDecided = 0;
+        std::string lbPath, lbSess; long long lbWritten = 0, lbFail = 0, lbLoaded = 0;
+        blb::Lay lbLay; long long lbDrawn = 0, lbNoRoom = 0, lbSqDrawn = 0, lbSqSkipped = 0; bool lbSqView = false;
+        std::vector<BfMark> lastMarks;                                      // (1.34.0) the turn marks last drawn (tests: label = drawn bars' ratio)
         std::map<long long, bf::PullStat> pulls; long long markersDrawn = 0; // (1.4.0) closed candles' pull decisions (decided once, never cleared: no repaint)               // (1.3.4) the pane on the screen; the live candle's events last drawn
     };
     Ext* ext(S_& S) {
@@ -209,8 +238,199 @@ public:
         if (!S.market.empty()) e->r.setMarket(S.market);
         return &e->r;
     }
+    // ==== (1.34.0, 2026-11-04 Rassul "just build it") THE LEVEL BOX + SQUARES (BookLevelBox.h = lra.book_level_combo) ==================
+    static long long lbTicks(double px, double tick) { if (!(tick > 0) || !(px > 0) || !std::isfinite(px)) return 0; const double q = px / tick; if (!std::isfinite(q) || q > 4e15) return 0; return (long long)std::llround(q); }
+    void lbIdentity(S_& S, Ext& e) {
+        if (e.lbIdent == S.identity) return;
+        e.lb.reset(); e.lb.market = S.market; e.lbIdent = S.identity; e.lbSq.clear(); e.lbAcc.clear(); e.lbPath.clear(); e.lbSess.clear(); e.lbLastE = -1;
+        e.lbParSig = -2; e.lbParMs = -100000; e.lbLvCount = -1; e.lbLvMs = -100000; e.lbBoSig = -2; e.lbBoMs = -100000; e.lbBo.clear(); e.lbShown = blb::Engine::Shown(); e.lbText = blb::BoxText(); e.lbKey.clear();
+    }
+    // every order event (the engine keeps its own book: O(1) per event)
+    void lbEvent(S_& S, const DEPTH_ORDER& o) {
+        Ext* e = ext(S); if (!e || !(S.tick > 0) || S.identity.empty()) return;
+        lbIdentity(S, *e);
+        const int act = o.action <= 3 ? (int)o.action : 99, side = o.buySell == 1 ? 0 : (o.buySell == 0 ? 1 : -1);
+        const long long pt = lbTicks((double)o.price, S.tick), bp = lbTicks((double)o.bid, S.tick), ap = lbTicks((double)o.ask, S.tick);
+        e->lb.onEvent((long long)o.timestamp, act, side, pt, (long long)o.size, (long long)o.orderID, bp, ap);
+    }
+    std::string lbClock(long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return "?"; char b[16]; std::snprintf(b, sizeof b, "%02d:%02d:%02d", x.tm_hour, x.tm_min, x.tm_sec); return b; }
+    std::string lbHm(long long t) { struct tm x; std::memset(&x, 0, sizeof(x)); if (t <= 0 || !getLocaltime((RTDATE)t, &x)) return "?"; const int h = x.tm_hour % 12 == 0 ? 12 : x.tm_hour % 12; char b[16]; std::snprintf(b, sizeof b, "%d:%02d", h, x.tm_min); return b; }
+    void lbWrite(Ext& e, const std::string& line) {
+        if (e.lbPath.empty()) return;
+        std::ofstream f(e.lbPath.c_str(), std::ios::binary | std::ios::app);
+        if (!f.is_open()) { ++e.lbFail; return; }
+        f << line << "\n"; f.flush(); if (f.good()) ++e.lbWritten; else ++e.lbFail;
+    }
+    // the session's record: BookFlow\<MKT>-<SYM>-<spb>-<session>-levelbox.csv; its C lines (decided squares) are read back once
+    void lbFile(S_& S, Ext& e, const std::string& flex) {
+        if (flex.empty() || S.curSession.empty() || S.curSession == e.lbSess) return;
+        e.lbSess = S.curSession;
+        const std::string dir = flex + "\\BookFlow"; off::makeDir(flex); off::makeDir(dir);
+        e.lbPath = dir + "\\" + S.market + "-" + off::fileKey(S.symbol) + "-" + std::to_string(S.spb) + "-" + S.curSession + "-levelbox.csv";
+        std::vector<std::string> lines;
+        if (nl::fileSig(e.lbPath) >= 0 && nl::readBoundedLines(e.lbPath, lines, 16u * 1024u * 1024u, 400000, 4096)) {
+            for (const std::string& ln : lines) { long long k = 0; blb::Square q; if (blb::parseSq(ln, k, q) && !e.lbSq.count(k)) { e.lbSq[k] = q; ++e.lbLoaded; } }
+        } else {
+            lbWrite(e, std::string("# lsBookFlow ") + BF_VERSION + " level box (BookLevelBox " + blb::VERSION + ") " + S.market + " " + S.symbol + " " + std::to_string(S.spb)
+                     + " | S|sec|clock|level|ltype|side|arrival_sec(0 = not arrived)|k|zone_lo_ticks|zone_hi_ticks|D word|x|col|B word|x|col|A word|x|col|text"
+                     + " | C|bar_end|D g/r/n|B g/r/n|secs at level|D red s|D green s|B red s|B green s|level  (words 0 quiet 1 stacking 2 pulling 3 steady 4 thinning 5 normal)");
+        }
+        while (e.lbSq.size() > 5000) e.lbSq.erase(e.lbSq.begin());
+    }
+    // the nightly's params (lsFlexLevels\LRA-BookLevel-<MKT>.csv): thresholds, quiet floor, SHOW per line, the prior RTH profile
+    void lbParams(S_& S, Ext& e, const std::string& flex, long long nowMs) {
+        if (flex.empty() || (nowMs - e.lbParMs < 5000 && nowMs >= e.lbParMs)) return;
+        e.lbParMs = nowMs;
+        e.lbParPath = flex + "\\LRA-BookLevel-" + S.market + ".csv";
+        const long long sig = nl::fileSig(e.lbParPath); if (sig == e.lbParSig) return;
+        e.lbParSig = sig;
+        blb::Params P; blb::Profile pr;
+        if (sig < 0) { P.why = "defaults (no LRA-BookLevel-" + S.market + ".csv yet)"; }
+        else { std::vector<std::string> lines; blb::Params Q;
+               if (!nl::readBoundedLines(e.lbParPath, lines, 64 * 1024, 512, 1024) || nl::fileSig(e.lbParPath) != sig) { e.lbParSig = -2; return; }   // torn: try again
+               if (blb::parseParams(lines, S.market, Q, pr)) P = Q; else { P = blb::Params(); P.why = "defaults (" + Q.why + ")"; pr = blb::Profile(); } }
+        e.lbP = P; e.lbProf = pr; e.lb.P = P;
+    }
+    // the previous RTH day of a session key "YYYYMMDD" as "YYYY-MM-DD" (Monday -> Friday)
+    static std::string lbPrevDay(const std::string& sess) {
+        if (sess.size() != 8) return std::string();
+        const int y = std::atoi(sess.substr(0, 4).c_str()), m = std::atoi(sess.substr(4, 2).c_str()), d = std::atoi(sess.substr(6, 2).c_str());
+        long days = svl::daysFromCivil(y, m, d) - 1; while (svl::weekdayOf(days) == 0 || svl::weekdayOf(days) == 6) --days;
+        long z = days + 719468; const long era = (z >= 0 ? z : z - 146096) / 146097; const unsigned doe = (unsigned)(z - era * 146097);
+        const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        const unsigned mp = (5 * doy + 2) / 153, dd = doy - (153 * mp + 2) / 5 + 1, mm = mp < 10 ? mp + 3 : mp - 9; const long yy = (long)yoe + era * 400 + (mm <= 2);
+        char b[48]; std::snprintf(b, sizeof b, "%04ld-%02u-%02u", yy % 100000, mm % 100u, dd % 100u); return b;
+    }
+    // the levels: KeyLevels / MenthorQ (the pane's own level files), the prior RTH profile, RTH VWAP + bands, Pb test zones
+    void lbLevels(S_& S, Ext& e, const std::string& flex, long long nowMs) {
+        const long count = getBarCount();
+        if (count == e.lbLvCount && nowMs - e.lbLvMs < 5000 && nowMs >= e.lbLvMs) return;
+        const bool newBar = count != e.lbLvCount;
+        e.lbLvMs = nowMs; e.lbLvCount = count;
+        std::vector<blb::Level> v; int n[5] = {0, 0, 0, 0, 0};
+        auto add = [&](const std::string& name, int type, double px) {
+            const long long c = lbTicks(px, S.tick); if (c <= blb::HALF) return;
+            blb::Level l; l.name = name; l.type = type; l.lo = c - blb::HALF; l.hi = c + blb::HALF;
+            for (const blb::Level& o : v) if (o.name == l.name && o.type == l.type) { char b[32]; std::snprintf(b, sizeof b, " %.6g", px); l.name += b; break; }
+            v.push_back(l); ++n[type];
+        };
+        std::set<std::string> keyNames; for (const nl::Level& k : S.lv.key.v) keyNames.insert(k.name);
+        for (const nl::Level& L : S.levels) { const bool key = keyNames.count(L.name) > 0; add(L.name, key ? ((L.name == "DPoc" || L.name == "VAH" || L.name == "VAL") ? blb::L_PROFILE : blb::L_KEY) : blb::L_MQ, L.px); }
+        const std::string pd = lbPrevDay(S.curSession);
+        if (e.lbProf.ok && !pd.empty() && e.lbProf.day == pd) { add("pdPOC", blb::L_PROFILE, e.lbProf.poc); add("pdVAH", blb::L_PROFILE, e.lbProf.vah); add("pdVAL", blb::L_PROFILE, e.lbProf.val); e.lbProfNote = "pdPOC / pdVAH / pdVAL (RTH) from LRA-BookLevel " + e.lbProf.day; }
+        else e.lbProfNote = std::string("prior RTH profile: none for ") + (pd.empty() ? "?" : pd) + (e.lbProf.ok ? " (file has " + e.lbProf.day + ")" : "") + "; KeyLevels DPoc / VAH / VAL (full session) used";
+        lbVwap(S, e, add);
+        if (newBar || nowMs - e.lbBoMs >= 5000 || nowMs < e.lbBoMs) lbPb(S, e, flex, nowMs);
+        for (const blb::Level& l : e.lbLv) if (l.type == blb::L_PB) { v.push_back(l); ++n[blb::L_PB]; }
+        std::vector<blb::Level> keepPb; for (const blb::Level& l : e.lbLv) if (l.type == blb::L_PB) keepPb.push_back(l);
+        e.lb.setLevels(v); e.lbLv.swap(keepPb);
+        for (int k = 0; k < 5; ++k) e.lbN[k] = n[k];
+    }
+    template <class Add> void lbVwap(S_& S, Ext& e, Add add) {
+        int openMin = 0, closeMin = 0; if (!svl::rthOf(S.market.c_str(), openMin, closeMin)) { e.lbVwapNote = "no RTH hours for " + S.market; return; }
+        const long count = getBarCount(); if (count < 3) { e.lbVwapNote = "no bars"; return; }
+        RTARRAYI times(barDateTime), vol(barVolume); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
+        if (times.count < count || vol.count < count || hi.count < count || lo.count < count || cl.count < count) { e.lbVwapNote = "bars not readable"; return; }
+        const long first = std::max(0L, count - 1 - 1200);
+        std::vector<svl::Bar> B; B.reserve((size_t)(count - first));
+        for (long i = first; i < count - 1; ++i) {                          // closed bars only
+            struct tm x; std::memset(&x, 0, sizeof(x)); if (!getLocaltime((RTDATE)times[(int)i], &x)) { e.lbVwapNote = "bar clock unreadable"; return; }
+            svl::Bar b; b.days = svl::daysFromCivil(x.tm_year + 1900, x.tm_mon + 1, x.tm_mday); b.endSec = x.tm_hour * 3600 + x.tm_min * 60 + x.tm_sec;
+            b.h = (float)hi[(int)i]; b.l = (float)lo[(int)i]; b.c = (float)cl[(int)i]; b.v = (double)vol[(int)i]; B.push_back(b);
+        }
+        if (B.empty()) return;
+        std::vector<float> out; svl::run(B, (int)S.spb, openMin, closeMin, out);
+        const svl::Bar& L = B.back(); const svl::Cls c = svl::classify(L.days, L.endSec, (int)S.spb, openMin, closeMin);
+        const float* o = &out[(B.size() - 1) * 11];
+        if (c.kind != svl::RTH || L.endSec < openMin * 60 + 900 || !(o[0] > 0)) { e.lbVwapNote = c.kind == svl::RTH ? "RTH VWAP from the open + 15 min" : "outside RTH (no VWAP levels)"; return; }
+        add("VWAP", blb::L_VWAP, o[0]); add("VWAP+1", blb::L_VWAP, o[1]); add("VWAP-1", blb::L_VWAP, o[2]); add("VWAP+2", blb::L_VWAP, o[3]); add("VWAP-2", blb::L_VWAP, o[4]);
+        char b[120]; std::snprintf(b, sizeof b, "RTH VWAP %.2f SD %.2f (svl::run, last closed bar)", (double)o[0], (double)(o[1] - o[0])); e.lbVwapNote = b;
+    }
+    // Pb test zones: lsBreakout's fired BO / BD of this session (lsFlexLevels\Breakout\<MKT>-<SYM>-180-breakouts-<daykey>.csv), the window
+    // until the next fired BO / BD or a bar beyond the wave origin (the 3-bar ZigZag on this chart's bars; 3-min charts only)
+    void lbPb(S_& S, Ext& e, const std::string& flex, long long nowMs) {
+        e.lbBoMs = nowMs;
+        const long count = getBarCount(); if (flex.empty() || count < 3) return;
+        RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow); if (times.count < count || hi.count < count || lo.count < count) return;
+        struct tm x; std::memset(&x, 0, sizeof(x)); if (!getLocaltime((RTDATE)times[(int)(count - 1)], &x)) return;
+        const long days = svl::daysFromCivil(x.tm_year + 1900, x.tm_mon + 1, x.tm_mday); const int endSec = x.tm_hour * 3600 + x.tm_min * 60 + x.tm_sec;
+        const long long cs = (long long)days * 86400LL + endSec, sess = cs > 0 ? (cs - 17LL * 3600) / 86400LL + 1 : -1;   // lsBreakout's daykey (bko::sessOf)
+        e.lbBoPath = flex + "\\Breakout\\" + S.market + "-" + off::fileKey(S.symbol) + "-180-breakouts-" + std::to_string(sess) + ".csv";
+        const long long sig = nl::fileSig(e.lbBoPath);
+        if (sig != e.lbBoSig || sig < 0) {
+            e.lbBoSig = sig; e.lbBo.clear();
+            std::vector<std::string> lines;
+            if (sig >= 0 && nl::readBoundedLines(e.lbBoPath, lines, 4u * 1024u * 1024u, 40000, 2048) && nl::fileSig(e.lbBoPath) == sig) {
+                std::set<std::pair<long long, int> > seen;
+                for (const std::string& ln : lines) { blb::BoRec r; if (blb::parseBbo(ln, r) && seen.insert(std::make_pair(r.t0, r.dir)).second) e.lbBo.push_back(r); }
+            } else if (sig >= 0) e.lbBoSig = -2;
+        }
+        std::vector<blb::PbIn> bars; std::vector<blb::Piv> piv;
+        if (S.spb == 180) {                                                 // the records' bars: the origin rule on the same 3-min bars
+            std::vector<zzd::Bar> Z; std::vector<long> at;
+            for (long k = std::max(0L, count - 2000); k < count - 1; ++k) {
+                zzd::Bar z; z.t = (long long)times[(int)k]; if (!(hi[(int)k] >= lo[(int)k]) || !zzd::toTicks(hi[(int)k], S.tick, z.h) || !zzd::toTicks(lo[(int)k], S.tick, z.l)) continue;
+                Z.push_back(z); at.push_back(k); blb::PbIn b; b.t = z.t; b.h = z.h; b.l = z.l; bars.push_back(b);
+            }
+            zzd::Walk w;
+            for (int j = 0; j < (int)Z.size(); ++j) { int s0 = 0, en = 0, d = 0; if (!zzd::Engine::step(Z, w, j, s0, en, d, zzd::COMBO_REV_BARS)) continue;
+                blb::Piv p; p.t = Z[(size_t)en].t; p.tc = Z[(size_t)j].t; p.type = d > 0 ? 1 : -1; p.h = Z[(size_t)en].h; p.l = Z[(size_t)en].l; piv.push_back(p); }
+        }
+        std::vector<blb::Level> L = blb::pbLevels(e.lbBo, bars, piv);
+        std::vector<blb::BoRec> F(e.lbBo); std::sort(F.begin(), F.end(), [](const blb::BoRec& a, const blb::BoRec& b) { return a.t0 < b.t0; });
+        for (size_t k = 0; k < L.size() && k < F.size(); ++k) L[k].name += " " + lbHm(F[k].t0);
+        e.lbLv.clear(); for (const blb::Level& l : L) e.lbLv.push_back(l);
+        e.lbPbNote = std::to_string(e.lbBo.size()) + " fired BO / BD read" + (S.spb == 180 ? std::string(", origin rule on") : std::string(", origin rule off (not a 3-min chart)")) + ", file " + e.lbBoPath;
+    }
+    // away states reset once a day at RTH open - 60 min (find_touches starts there)
+    void lbReset(S_& S, Ext& e) {
+        int openMin = 0, closeMin = 0; if (!svl::rthOf(S.market.c_str(), openMin, closeMin)) return;
+        struct tm x; std::memset(&x, 0, sizeof(x)); if (!getLocaltime((RTDATE)e.lb.cur, &x)) return;
+        const int m = x.tm_hour * 60 + x.tm_min; const long day = svl::daysFromCivil(x.tm_year + 1900, x.tm_mon + 1, x.tm_mday);
+        if (m >= openMin - 60 && m < openMin && day != e.lbResetDay) { e.lb.resetAway(); e.lbResetDay = day; }
+    }
+    void lbDecide(Ext& e, long long key, const blb::SqAcc& a) {
+        if (a.secs <= 0 || e.lbSq.count(key)) return;
+        const blb::Square q = blb::squareOf(a); e.lbSq[key] = q; ++e.lbSqDecided;
+        lbWrite(e, blb::sqLine(key, q, a));
+        while (e.lbSq.size() > 5000) e.lbSq.erase(e.lbSq.begin());
+    }
+    void lbSecond(S_& S, Ext& e, long long x) {
+        const blb::Engine::Shown sh = e.lb.evaluate(x); ++e.lbEvals;
+        e.lbShown = sh; e.lbText = blb::boxText(sh, e.lb.P);
+        for (std::map<long long, blb::SqAcc>::iterator it = e.lbAcc.begin(); it != e.lbAcc.end();) { if (it->first > x) break; lbDecide(e, it->first, it->second); it = e.lbAcc.erase(it); }   // every candle that ended
+        if (sh.on) {
+            ++e.lbShownSecs;
+            const long long key = off::eventKey(S.barEnds, S.formingKey, (int)S.spb, x);
+            if (key > 0 && !e.lbSq.count(key)) { blb::SqAcc& a = e.lbAcc[key]; ++a.secs; a.level = sh.c.name;
+                for (int r = 0; r < 2; ++r) { if (e.lbText.col[r] == blb::RED) ++a.red[r]; else if (e.lbText.col[r] == blb::GREEN) ++a.green[r]; } }
+        }
+        const std::string k = blb::stateKey(sh); if (k != e.lbKey) { e.lbKey = k; lbWrite(e, blb::stateLine(x, lbClock(x), sh, e.lbText)); }
+    }
+    void lbTick(S_& S, long long nowMs) {
+        Ext* e = ext(S); if (!e || S.market.empty() || !(S.tick > 0) || S.spb <= 0 || S.identity.empty()) return;
+        lbIdentity(S, *e);
+        const std::string flex = off::flexDir();
+        lbParams(S, *e, flex, nowMs); lbFile(S, *e, flex); lbLevels(S, *e, flex, nowMs);
+        if (e->lb.cur <= 0) return;
+        lbReset(S, *e);
+        const long long Et = e->lb.cur - blb::MINREST;
+        if (Et <= e->lbLastE) return;
+        long long from = e->lbLastE < 0 ? Et : e->lbLastE + 1; if (Et - from > 120) from = Et - 120;   // a long gap: the last 2 minutes only
+        const std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+        for (long long x = from; x <= Et; ++x) lbSecond(S, *e, x);
+        e->lbEvalNs += (long long)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
+        e->lbLastE = Et;
+    }
+    bool lbSqIn(Ext& e, int a, int b) {
+        if (e.lbSq.empty()) return false;
+        const long count = getBarCount(); RTARRAYI times(barDateTime); if (times.count < count || count < 2) return false;
+        for (int i = std::max(0, a); i <= b && i < count - 1; ++i) if (e.lbSq.count((long long)times[i])) return true;
+        return false;
+    }
     virtual void onRaw(S_& S, const DEPTH_ORDER& o) {
         trackOn(S);                                                        // (1.17.0) before the engine sees the event
+        try { lbEvent(S, o); } catch (...) {}                              // (1.34.0) the level box engine sees every order event
         mrec::Recorder* r = rec(S); if (!r || !r->on) return;
         if (!o.timestamp) { ++r->dropped; return; }
         if (o.timestamp != r->tsKey) {                                     // one clock conversion per second, not per event
@@ -225,7 +445,7 @@ public:
         e.bid = (double)o.bid; e.ask = (double)o.ask;
         r->add(e);
     }
-    virtual void afterPump(S_& S, long long now, bool fromDraw) { trackOn(S); mrec::Recorder* r = rec(S); if (r) r->tick(now, fromDraw); post(S, now); try { checkX(S); } catch (...) {}
+    virtual void afterPump(S_& S, long long now, bool fromDraw) { trackOn(S); mrec::Recorder* r = rec(S); if (r) r->tick(now, fromDraw); post(S, now); try { checkX(S); } catch (...) {} try { lbTick(S, now); } catch (...) {}
         try { checkW(S); } catch (...) {} try { Ext* e = ext(S); if (e) readTraps(S, *e, now); } catch (...) {} try { sharedA(S, now); } catch (...) {} try { strips(S, now); } catch (...) {} }
     // (1.22.0, 2026-10-22 Rassul 06:43 "then do it") THE SHARED A (SharedAbsorb.h): this pane no longer decides its own A - the badge A comes
     // from the one shared record lsBidAskStats / lsDeltaProfile decide into (the same A on every pane and the price chart). This pane adds
@@ -286,6 +506,15 @@ public:
           << "\nFACTS,SignalBoard " << sb::VERSION << ",D posted " << (e ? std::to_string(e->dPosted) : std::string("n/a"))
           << "\nF_MIRROR," << fmr::VERSION << "," << (e ? std::to_string(e->fReads.size()) + " pivot reads (" + std::to_string(e->fWritten) + " written here, " + std::to_string(e->fFails) + " write fails), F? armed " + std::to_string(e->fArmed) + ",thresholds " + (e->fPar.set() ? "front " + std::to_string(e->fPar.front).substr(0, 5) + " behind " + std::to_string(e->fPar.behind).substr(0, 5) : std::string("NOT SET (recorded, not drawn)")) + ",params " + e->fPar.why + ",file " + e->fPath : std::string("n/a"))
           << "\nRETEST_IDS," << (e ? std::to_string(e->rtInfo.size()) + " classified (same order / new big order / small only), file " + e->rtPath : std::string("n/a"))
+          << "\nLEVEL_BOX," << blb::VERSION << (e ? ",params " + e->lbP.why + ",quiet floor " + std::to_string((int)std::lround(e->lb.quietFloor())) + " lots,SHOW D " + (e->lbP.showD ? "1" : "0") + " B " + (e->lbP.showB ? "1" : "0")
+                + ",levels key " + std::to_string(e->lbN[blb::L_KEY]) + " mq " + std::to_string(e->lbN[blb::L_MQ]) + " profile " + std::to_string(e->lbN[blb::L_PROFILE]) + " vwap " + std::to_string(e->lbN[blb::L_VWAP]) + " pb " + std::to_string(e->lbN[blb::L_PB])
+                + "," + e->lbProfNote + "," + e->lbVwapNote + ",Pb " + e->lbPbNote
+                + ",now " + (e->lbShown.on ? e->lbText.level + " | " + e->lbText.part[0] + " | " + e->lbText.part[1] + " | " + e->lbText.part[2] + (e->lbShown.c.arrived ? " (arrived " + lbClock(e->lbShown.c.anchor) + ")" : " (approaching)") : std::string("hidden (no level within 4 ticks)"))
+                + ",evaluated to " + lbClock(e->lbLastE) + " (" + std::to_string(e->lbEvals) + " s, shown " + std::to_string(e->lbShownSecs) + " s, " + std::to_string(e->lbEvals > 0 ? e->lbEvalNs / e->lbEvals / 1000 : 0) + " us per s)"
+                + ",engine " + std::to_string(e->lb.events) + " events, " + std::to_string(e->lb.book.size()) + " orders, " + std::to_string(e->lb.arrivals) + " arrivals, " + std::to_string(e->lb.garbage) + " garbage, " + std::to_string(e->lb.outside) + " off-grid, " + std::to_string(e->lb.pendOver) + " pending overflow"
+                + ",squares " + std::to_string(e->lbSq.size()) + " (" + std::to_string(e->lbSqDecided) + " decided here, " + std::to_string(e->lbLoaded) + " reloaded, " + std::to_string(e->lbSqDrawn) + " drawn, " + std::to_string(e->lbSqSkipped) + " no room)"
+                + ",box drawn " + std::to_string(e->lbDrawn) + " / no room " + std::to_string(e->lbNoRoom) + ",record " + e->lbPath + " (" + std::to_string(e->lbWritten) + " lines, " + std::to_string(e->lbFail) + " fails)" : std::string(",n/a"))
+          << "\nTURN_LABEL,defending bar / attacking bar as drawn under the mark (one decimal + x; attacking bar <= 0 = no number; forming candle ?); the turns file keeps the old margin % field"
           << "\nMARKET_STATE,BOOK " << (!e || e->chart.empty() ? std::string("waiting for the chart label") : "bar " + std::to_string(e->mstBar ? e->mstCt : 0) + ",posts " + std::to_string(e->mstPosts) + ",keys " + std::to_string(e->mstKv.size()));
     }
     // the old panes' session records (StackStats\ and PullStats\), opened with the session, one row per decided candle, saved with the main record
@@ -1495,10 +1724,26 @@ public:
                 return k;
             }, avoid, 0, &vyNow);
         }
+        if (Ext* e = ext(S)) {                                             // (1.34.0) the squares: two rows under each candle's bars that spent time at a level
+            e->lbSqView = false;
+            if (vyNow.ok && !e->lbSq.empty()) {
+                const int yb = std::min(g.bottom - 1, vyNow.yOf(0));
+                for (int i = v0; i <= v1 && i < last; ++i) {
+                    std::map<long long, blb::Square>::const_iterator it = e->lbSq.find((long long)times[i]); if (it == e->lbSq.end()) continue;
+                    const int xc = xOf(i); if (xc < g.left || xc > g.edge) continue;
+                    e->lbSqView = true;
+                    if (blb::sqRowTop(yb, 1) + blb::SQ_H > g.bottom) { ++e->lbSqSkipped; continue; }   // no room under the bars (axis not moved yet): never over them
+                    const off::Pair pr = off::pairIn(xc, slot);
+                    for (int r = 0; r < 2; ++r) { const int t0 = blb::sqRowTop(yb, r); off::fillFlat(this, pr.l[0], t0, pr.r[1], t0 + blb::SQ_H, (COLOR)blb::colOf(it->second.col[r])); }
+                    ++e->lbSqDrawn;
+                }
+            }
+        }
         try { liveTurn(S, last, times, haveLive ? &lb : nullptr); } catch (...) {}
         if (Ext* e = ext(S)) {                                             // (1.12.0) the turn marks over the defending bar: confirmed "+NN%", forming "+NN% ?"
             if (!S.market.empty()) { const std::string sp = dlset::settingsPath(off::flexDir(), S.market); if (e->dlStore.path != sp) { e->dlStore = ss::Store(); e->dlStore.S = &dlset::spec(); e->dlStore.path = sp; }
                                      if (!sp.empty()) e->dlSet = e->dlStore.load(ss::marketIndex(S.market), off::steadyMs()); }
+            e->lastMarks.clear();
             if (e->dlSet.b(dlset::K_SHOW_MARKS) && top > 0) {
                 FONT mf; mf.id = HELVETICA; mf.size = off::LABEL_PT; mf.style = PLAIN; setFont(mf);
                 auto mark = [&](int i, const dt::Turn& t, bool live) {
@@ -1512,9 +1757,15 @@ public:
                     const COLOR col = (COLOR)(t.side == dt::HIGH ? e->dlSet.c(dlset::K_COL_HIGH) : e->dlSet.c(dlset::K_COL_LOW));
                     if (tip - 5 - off::LABEL_LH < g.top + g.reserve) tip = g.top + g.reserve + 5 + off::LABEL_LH;
                     triangle(cx, tip, t.side == dt::HIGH, col);
-                    const std::string txt = dt::marginText(t.marginPct) + (live ? " ?" : "");
-                    setTextColor(col); const int w = (int)getTextWidth(txt.c_str(), -1); const int y = tip - 5 - off::LABEL_LH;
-                    RCT rc; rc.set(off::coord(cx - w / 2), off::coord(y), off::coord(cx - w / 2 + w + 2), off::coord(y + off::LABEL_LH)); rc.drawText(txt.c_str(), false, false);
+                    // (1.34.0, Rassul "999 makes no sense - you can compare the green bar to the red bar") the two bars AS DRAWN under the mark:
+                    // defending / attacking ("3.0x"); attacking bar <= 0 (a stub) = the triangle alone; the forming candle keeps its "?"
+                    const long long va = netOf(pb->r, 1 - s); int ybA = g.bottom - 1; const int hA = off::pairBarH(&vyNow, g, top, va, ybA);
+                    const std::string txt = bf::turnMarkText(v, va, live);
+                    e->lastMarks.push_back(BfMark{ i, txt, v, va, h, hA, live });
+                    if (!txt.empty()) {
+                        setTextColor(col); const int w = (int)getTextWidth(txt.c_str(), -1); const int y = tip - 5 - off::LABEL_LH;
+                        RCT rc; rc.set(off::coord(cx - w / 2), off::coord(y), off::coord(cx - w / 2 + w + 2), off::coord(y + off::LABEL_LH)); rc.drawText(txt.c_str(), false, false);
+                    }
                 };
                 for (int i = v0; i <= v1 && i < last; ++i)
                     for (int sd = 0; sd < 2; ++sd) { std::map<std::pair<int, long long>, dt::Turn>::const_iterator it = e->dtTurns.find(std::make_pair(sd, (long long)times[i])); if (it != e->dtTurns.end()) mark(i, it->second, false); }
@@ -1547,6 +1798,17 @@ public:
         if (OL.ok) {                                                       // (1.33.0) the one line: a small dark backing just behind the text, then the parts
             off::fillFlat(this, OL.l, OL.t, OL.r, OL.b, (COLOR)bf::LC_BG);
             for (const bf::LineSeg& sg : OL.segs) off::textAt(this, sg.x, OL.t + (sg.pt < bf::LINE_PT ? 1 : 0), bf::LINE_H - 1, sg.text, (COLOR)sg.color, sg.pt, sg.bold);
+        }
+        if (Ext* e = ext(S)) {                                             // (1.34.0) the LEVEL BOX: one row right of the line, only near a level
+            e->lbLay = blb::Lay();
+            if (e->lbShown.on && !silent) {
+                e->lbLay = blb::layout(e->lbText, OL.ok ? OL.r + blb::BOX_AFTER : g.left + 2, g.top + 1, g.edge - 2, [&](const std::string& t) { return tw(t, blb::BOX_PT, true); });
+                if (e->lbLay.ok) {
+                    off::fillFlat(this, e->lbLay.l, e->lbLay.t, e->lbLay.r, e->lbLay.b, (COLOR)blb::BC_BG);
+                    for (const blb::Seg& sg : e->lbLay.segs) off::textAt(this, sg.x, e->lbLay.t, blb::BOX_H - 1, sg.text, (COLOR)sg.color, blb::BOX_PT, true);
+                    ++e->lbDrawn;
+                } else ++e->lbNoRoom;
+            }
         }
         { Ext* ex = ext(S);                                                // (1.33.0) no (i) icon / info tip (no hovers since 1.32.1: the icon did nothing)
           if (ex) ex->lastTip = dt::TipRect();
@@ -1680,6 +1942,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | (BF_HOVERS ? TRACK_MOUSE : 0));   // (1.32.1) no hovers                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.33.0");   // BF_VERSION
+    p->setVersion("1.34.0");   // BF_VERSION
     return p;
 }

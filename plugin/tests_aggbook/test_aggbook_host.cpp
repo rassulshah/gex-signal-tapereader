@@ -394,14 +394,17 @@ int main() {
         int lines = 0; for (char ch : tf) lines += ch == '\n';
         CHECK(lines == 1 && tf.compare(0, 2, "T|") == 0, "(1.12.0) one line in the turns file (decided once, not twice)");
         h.draws.clear(); p->draw();
-        CHECK(text(h, "50%", 0x22C55E) != nullptr, "(1.12.0) the pane mark +50% in green over the bids' bar");
-        {   const mock::Draw* pm = text(h, "50%", 0x22C55E); int over = 0;   // (BF 1.29.0, Rassul 18:33) the % stays; nothing drawn over it (no letters any more)
-            if (pm) for (auto& d : h.draws) if (d.type == "text" && &d != pm && d.y < pm->b && d.b > pm->y && d.x < pm->r && d.r > pm->x && d.text != "50%") ++over;
-            CHECK(pm && over == 0, ("(BF 1.29.0) the turn % kept, no text over it (" + std::to_string(over) + ")").c_str()); }
+        CHECK(text(h, "1.5x", 0x22C55E) != nullptr && text(h, "50%") == nullptr, "(BF 1.34.0) the pane mark = the drawn bars' ratio 90 / 60 = 1.5x in green over the bids' bar (was +50%)");
+        {   const mock::Draw* pm = text(h, "1.5x", 0x22C55E); int over = 0;   // (BF 1.29.0, Rassul 18:33) the label stays; nothing drawn over it (no letters any more)
+            if (pm) for (auto& d : h.draws) if (d.type == "text" && &d != pm && d.y < pm->b && d.b > pm->y && d.x < pm->r && d.r > pm->x && d.text != "1.5x") ++over;
+            CHECK(pm && over == 0, ("(BF 1.29.0 / 1.34.0) the turn label kept, no text over it (" + std::to_string(over) + ")").c_str()); }
+        {   Ind::Ext* e2 = p->ext(*S); bool ok = e2 && !e2->lastMarks.empty();
+            for (const auto& m : e2->lastMarks) ok = ok && m.text == bf::turnMarkText(m.def, m.att, m.live) && (m.att <= 0 ? m.text.find('x') == std::string::npos : true);
+            CHECK(ok, "(BF 1.34.0) every drawn turn label = defending bar / attacking bar as drawn"); }
         CHECK(readAll(flex + "\\BookFlow\\ES-60-turns-live.txt").size() >= 2, "(1.12.0) the live file is published (N or the forming ?)");
         { std::ofstream f((flex + "\\DefenseLines.settings-ES.txt").c_str()); f << ss::format(dlset::spec(), [] { ss::Values V = ss::defaults(dlset::spec(), 0); V.v[dlset::K_SHOW_MARKS] = 0; return V; }()); }
         NOW += 1500; h.draws.clear(); p->draw();
-        CHECK(text(h, "50%") == nullptr, "(1.12.0) Turn marks off in the shared settings: no pane mark");
+        CHECK(text(h, "1.5x") == nullptr, "(1.12.0) Turn marks off in the shared settings: no pane mark");
         // a reload (restart): the turn comes back from the file and is never decided again
         e->dtLoaded = false; e->dtPath.clear(); p->decideTurns(*S, k, nb); mirrorA(p, *S);
         CHECK(e->dtTurns.count(std::make_pair((int)dt::LOW, k)) == 1 && readAll(flex + "\\BookFlow\\ES-60-turns.csv") == tf, "(1.12.0) after a reload: read back, not written twice");

@@ -380,3 +380,14 @@ Rules (every new or changed indicator):
   open, END by 07:30) and test it bar by bar across markets. Proof: t_hl2178 [2], test_london_window (every bar 02:03-07:30, 7 markets).
 - A WINDOW BUILT FROM TWO EDGES CAN BE EMPTY: kings between high - ADR and low + ADR vanish on a day over 2 ADR ("no kings" on ES 11-04).
   Every derived range needs a test of its degenerate day and a fallback (last price +- 1 ADR). Proof: test_liquidityprofile_0731.
+- (lsBookFlow 1.34.0, 2026-11-04) A LIVE PORT OF A NIGHTLY REPLAY: prove parity on the real day, array by array, BEFORE drawing anything.
+  Three differences only showed in that comparison: (1) a per-order cap on pending adds (8) silently made 1,243 ES adds "durable" - cap
+  256 + an overflow counter in the status; (2) the replay's book starts 125 min before the first case (orders resting from earlier are
+  unknown to it) and (3) it misses cancels after its last window - so the reference must start at the first event and end after the
+  last window. A rule that needs the future (an add is "durable" if it is not cancelled within 5 s) is shown 5 s late, never guessed.
+  Proof: tests_bf134/test_blb_replay.cpp (ES 10-30, 6 cases: every per-second array and every smoothed read identical).
+- (lsBookFlow 1.34.0) A LABEL THAT CAN SAY "999%" IS A LABEL OF A HIDDEN NUMBER: label what is drawn (defending bar / attacking bar as
+  drawn), and when the ratio has no meaning (attacking bar <= 0) draw no number. Proof: test_blb_logic (grid: label == ratio),
+  test_aggbook_host (every drawn label == turnMarkText of the drawn bars).
+- (lsBookFlow 1.34.0) EXTRA ROWS UNDER BARS MUST NOT MOVE THE PANE WHEN NOT NEEDED: scale() keeps the 10 px only while a candle with squares
+  is in view; otherwise the axis is bit-identical. Proof: test_bf134_host (axis with / without squares, same range).
