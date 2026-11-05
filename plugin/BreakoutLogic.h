@@ -1,6 +1,15 @@
 #ifndef LS_BREAKOUT_LOGIC_H
 #define LS_BREAKOUT_LOGIC_H
-// BreakoutLogic.h 1.5.0 (2026-11-04) -- lsBreakout 1.5.0 (Rassul approved the BreakIn mockup v0.3 and said "build"): + "BI" (BreakIn =
+// BreakoutLogic.h 1.6.0 (2026-11-04 19:22 CT) -- lsBreakout 1.6.0 (Rassul 19:06 "lets remove the BI signal and require the PB which
+//   tests the BO to pullback to the pivot with less than 1/2 atr remaining", 19:21 "make it 1/3", "go" on mockup pb_mock v4):
+//   1. BI REMOVED: SHOW_BI = false - no BI pass, no BI letters, no BBI| records, and no BO / BD is cancelled by a BI any more (a waiting
+//      BO / BD fires as in 1.4.0). The BI code stays below, unused.
+//   2. Pb = a pullback pivot after a BO that comes back TO the broken pivot (the BO's bba::BoDec::piv) or stops less than PB_ATR_FRAC
+//      (1/3) of the 14-bar Wilder ATR (the Rly ATR, rly::atrWilder, at the BO candle) short of it: pivot LOW <= piv + ATR / 3 (BD mirror:
+//      pivot HIGH >= piv - ATR / 3). This REPLACES 1.1.0's "the pivot bar overlaps the BO / BD candle". Unchanged: the 3-bar pivots, one Pb
+//      per pivot, looked for until the next fired BO / BD or a trade beyond the wave's origin, decided once, kept (no repaint).
+//      ES Oct 20 - Nov 3: 160 Pb (1.5.0) -> 181 (145 the same, 15 dropped as > 1/3 ATR short, 36 new: tested the level below the candle).
+// was BreakoutLogic.h 1.5.0 (2026-11-04) -- lsBreakout 1.5.0 (Rassul approved the BreakIn mockup v0.3 and said "build"): + "BI" (BreakIn =
 //   a FAILED breakout / breakdown). BI DOWN (a failed BO; BI UP mirrors a failed BD):
 //   1. attempt = any BO / BD decision candle that traded through the BO pivot (the swing bba::breakoutAt broke) - unconfirmed
 //      (no_confirm / still waiting), fired, or any other reject (wrong_colour, range_below_prior, not_10bar_extreme, ...);
@@ -97,7 +106,7 @@
 
 namespace bko {
 
-static const char* const VERSION = "1.5.0";   // (1.5.0) + BI (BreakIn = failed BO / BD)   // (1.4.0) zigzag carries across the 17:00 CT break   // (1.3.0) records + follow-through tie   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
+static const char* const VERSION = "1.6.0";   // (1.6.0) BI removed; Pb within 1/3 ATR of the broken pivot   // was "1.5.0":   // (1.5.0) + BI (BreakIn = failed BO / BD)   // (1.4.0) zigzag carries across the 17:00 CT break   // (1.3.0) records + follow-through tie   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
 static const int GAP = 3;              // px between the wick end and the BO / BD letter
 static const int RLY_ROW = 16;         // the Rly letter sits this many px further out than the BO / BD row
 static const int ROW_OUT = 16;         // (1.1.1) one row = lsCandleAbsorb's ROW_OUT (its A / Ae sits one row beyond the wick label row)
@@ -124,6 +133,8 @@ struct Pivot { long long t = 0, tc = 0; int type = 0; double h = 0, l = 0; };   
 // (1.5.0) BI = BreakIn (a failed BO / BD). dir -1 = BI DOWN (a failed BO: red candle closing back BELOW the pivot, letter above the high),
 // +1 = BI UP (a failed BD, letter below the low). kind = the attempt as known at the BI close: 0 unconfirmed (no_confirm or still waiting),
 // 1 fired (the BI after its follow-through), 2 other reject. cancel = the attempt was still waiting (that BO / BD is cancelled).
+static const bool SHOW_BI = false;    // (1.6.0, Rassul 2026-11-04 19:06 CT "lets remove the BI signal") no BI pass: no letters, records or BO / BD cancels
+static const double PB_ATR_FRAC = 1.0 / 3.0;   // (1.6.0, 19:21 CT "make it 1/3") a Pb comes back to within this share of the ATR of the broken pivot
 static const int BI_N = 10;            // the BI window: the attempt candle + the next 10 (fired: the 10 after the follow-through candle)
 static const int BI_AVG = 10;          // breakout range = range >= the average range of the previous 10 candles (+ volume or range up)
 enum { BI_UNCONF = 0, BI_FIRED = 1, BI_OTHER = 2 };
@@ -197,7 +208,7 @@ struct Engine {
         if (chartN == count && lc == lastClosedT && chartFirst == firstT && tk == tick && per == spb) return false;
         if (count >= 0 && (chartFirst != firstT || chartN < count || tk != tick || per != spb)) full = true;
         bars = B; tick = tk; spb = per; openMin = om; closeMin = cm; count = chartN; lastClosedT = lc; firstT = chartFirst;
-        boPass(); biPass(); rlyPass(); pbPass(); full = false; ++runs; return true;
+        boPass(); if (SHOW_BI) biPass(); rlyPass(); pbPass(); full = false; ++runs; return true;
     }
     int trendAt(int k) {
         if (k <= 0 || k >= (int)bars.size()) return 0;
@@ -354,11 +365,18 @@ struct Engine {
         const int n = (int)bars.size(); if (n < 3 || piv.empty()) return;
         std::vector<long long> T((size_t)n); for (int k = 0; k < n; ++k) T[(size_t)k] = bars[(size_t)k].t;
         auto idxOf = [&](long long t) { const auto it = std::lower_bound(T.begin(), T.end(), t); return it != T.end() && *it == t ? (int)(it - T.begin()) : -1; };
-        std::vector<const bba::BoDec*> F; for (const auto& kv : bo) if (shownBo(kv.second)) F.push_back(&kv.second);   // t0 order (map); (1.5.0) a BO / BD a BI cancelled is not one
+        std::vector<const bba::BoDec*> F; for (const auto& kv : bo) if (shownBo(kv.second)) F.push_back(&kv.second);
+        // (1.6.0) the 14-bar Wilder ATR (rly::atrWilder's rule: tr[0] none, atr[1] = tr[1], then (13 * atr + tr) / 14) per bar
+        std::vector<double> atr((size_t)n, NAN); { double y = 0; bool have = false;
+            for (int k = 1; k < n; ++k) { const In& b = bars[(size_t)k]; const In& a = bars[(size_t)k - 1];
+                if (!b.ok || !a.ok || !std::isfinite(b.h) || !std::isfinite(b.l) || !std::isfinite(a.c)) { atr[(size_t)k] = have ? y : NAN; continue; }
+                const double tr = std::max(b.h - b.l, std::max(std::fabs(b.h - a.c), std::fabs(b.l - a.c)));
+                y = have ? y + (tr - y) / 14.0 : tr; have = true; atr[(size_t)k] = y; } }   // t0 order (map); (1.5.0) a BO / BD a BI cancelled is not one
         for (size_t q = 0; q < F.size(); ++q) {
             const bba::BoDec& D = *F[q]; const int i = idxOf(D.t0); if (i < 0) continue;
             const In& c = bars[(size_t)i]; if (!std::isfinite(c.h) || !std::isfinite(c.l)) continue;
             const int dir = D.dir > 0 ? 1 : -1, want = dir > 0 ? -1 : 1;    // BO: pivot LOWs, BD: pivot HIGHs
+            const double A = atr[(size_t)i]; if (!std::isfinite(A) || !(A > 0) || !std::isfinite(D.piv)) continue;   // (1.6.0) the ATR at the BO / BD candle
             const long long tf = D.t;                                         // the BO / BD's fire bar (follow-through closed)
             // the wave's origin: the last pivot of the wanted type before the BO / BD candle, known when the BO / BD fired
             bool haveOrg = false; double org = 0;
@@ -377,7 +395,8 @@ struct Engine {
                 if (haveOrg) for (int k = scan + 1; k <= pi; ++k) { const In& b = bars[(size_t)k]; if (b.ok && (dir > 0 ? b.l < org : b.h > org)) { broke = true; break; } scan = k; }
                 if (broke) break;
                 if (p.type != want) continue;
-                if (!(p.l <= c.h && p.h >= c.l)) continue;                    // the pivot bar overlaps the BO / BD candle
+                // (1.6.0) the pullback comes back to the broken pivot or stops less than ATR / 3 short of it (was: overlaps the BO / BD candle)
+                if (!(dir > 0 ? p.l <= D.piv + PB_ATR_FRAC * A : p.h >= D.piv - PB_ATR_FRAC * A)) continue;
                 if (pb.count(p.t)) continue;                                  // decided before: never again
                 PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = td; m.dir = dir; pb[p.t] = m;
                 RecL L; const int di = idxOf(td); L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;   // (1.3.0) the decision bar's day
@@ -494,10 +513,11 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
     for (const auto& kv : E.rly) { const auto it = dayOf.find(kv.second.te); if (it == dayOf.end() || it->second != today || !kv.second.fired) continue; (kv.second.dir > 0 ? ru : rd)++; }
     int pu = 0, pd = 0; for (const auto& kv : E.pb) { const auto it = dayOf.find(kv.first); if (it == dayOf.end() || it->second != today) continue; (kv.second.dir > 0 ? pu : pd)++; }   // (1.1.0)
     std::string s = std::string("VERSION,") + VERSION + "\nMARKET," + mkt + "\nSYMBOL," + sym + "\nSPB," + std::to_string(spb) + "\n";
-    s += "RULES,BO / BD = lsBigBidAsk " + std::string(bba::VERSION) + " bba::boFromCandles (rule " + std::to_string(bba::BO_RULE) + ", follow-through in the same wave) on the " + std::to_string(E.zzRev) + "-bar High/Low ZigZag; Rly = RallyLogic " + rly::VERSION + " on the same ZigZag" + (spb == 180 ? "" : " (3-min charts only: off on this chart)") + "; Pb = a confirmed 3-bar High/Low ZigZag pivot testing the BO / BD candle (until the next BO / BD or the wave origin breaks)\n";
+    s += "RULES,BO / BD = lsBigBidAsk " + std::string(bba::VERSION) + " bba::boFromCandles (rule " + std::to_string(bba::BO_RULE) + ", follow-through in the same wave) on the " + std::to_string(E.zzRev) + "-bar High/Low ZigZag; Rly = RallyLogic " + rly::VERSION + " on the same ZigZag" + (spb == 180 ? "" : " (3-min charts only: off on this chart)") + "; Pb = a confirmed 3-bar High/Low ZigZag pivot back at the broken pivot or < ATR / 3 short of it (14-bar ATR at the BO / BD candle; until the next BO / BD or the wave origin breaks)\n";
     s += "TODAY,BO " + std::to_string(bo) + ",BD " + std::to_string(bd) + ",not fired " + std::to_string(nf) + ",Rly up " + std::to_string(ru) + ",Rly down " + std::to_string(rd) + ",Pb after BO " + std::to_string(pu) + ",Pb after BD " + std::to_string(pd) + "\n";
-    s += "BI,bi_shown 1,label BI (plain - no ?),window " + std::to_string(BI_N) + " candles,range >= avg of " + std::to_string(BI_AVG) + " + (volume or range up),close back past the pivot,one per pivot,cancel waiting BO " + (E.biCancel ? "1" : "0")
+    if (SHOW_BI) s += "BI,bi_shown 1,label BI (plain - no ?),window " + std::to_string(BI_N) + " candles,range >= avg of " + std::to_string(BI_AVG) + " + (volume or range up),close back past the pivot,one per pivot,cancel waiting BO " + (E.biCancel ? "1" : "0")
        + ",today BI down " + std::to_string(idn) + ",BI up " + std::to_string(iu) + ",BO / BD cancelled " + std::to_string(bc) + ",kept " + std::to_string(E.bi.size()) + ",cancelled kept " + std::to_string(E.boCancel.size()) + ",attempts last pass " + std::to_string(E.biAtt) + ",drawn " + std::to_string(last.biShown) + "\n";   // (1.5.0)
+    if (!SHOW_BI) s += "BI,removed (1.6.0, Rassul 2026-11-04): no BI letters, no BBI records, no BO / BD cancelled\n";
     s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",Pb " + std::to_string(E.pb.size()) + ",pivots " + std::to_string(E.piv.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
     s += "DRAWN,BO/BD " + std::to_string(last.boShown) + ",Rly " + std::to_string(last.rlyShown) + ",Pb " + std::to_string(last.pbShown) + ",no room " + std::to_string(last.noRoom) + "\n";
     return s;
@@ -540,8 +560,8 @@ inline std::string recKey(const std::string& line0) {
 struct RecFile { int kind = 0; long long sess = 0; std::string dir, file, head; std::vector<std::string> lines; };
 inline std::string recHead(const Engine& E, int kind, const std::string& mkt, const std::string& sym, int spb) {
     std::string h = std::string("# lsBreakout ") + VERSION + " | " + mkt + " " + sym + " " + std::to_string(spb) + " | zz_rev_bars " + std::to_string(E.zzRev)
-                  + " | ft_tie " + (E.tieOn() ? "1" : "0") + " | zz_carry " + (E.carryOn() ? "1" : "0") + (kind == REC_BO ? " | bi 1" : "") + " | " + (kind == REC_BO ? "BO / BD decisions (bba::boLine, 27 fields) + BI (BBI|, 22 fields)" : kind == REC_RLY ? "Rly waves (rly::line, 17 fields)" : "Pb (14 fields)") + "\n";
-    return h + (kind == REC_BO ? bba::BO_HEADER : kind == REC_RLY ? rly::REC_HEADER : PB_HEADER) + "\n" + (kind == REC_BO ? std::string("# ") + BI_HEADER + "\n" : std::string());   // (1.5.0) the BI columns as a comment line
+                  + " | ft_tie " + (E.tieOn() ? "1" : "0") + " | zz_carry " + (E.carryOn() ? "1" : "0") + (kind == REC_BO ? (SHOW_BI ? " | bi 1" : " | bi 0") : "") + " | " + (kind == REC_BO ? "BO / BD decisions (bba::boLine, 27 fields) + BI (BBI|, 22 fields)" : kind == REC_RLY ? "Rly waves (rly::line, 17 fields)" : "Pb (14 fields)") + "\n";
+    return h + (kind == REC_BO ? bba::BO_HEADER : kind == REC_RLY ? rly::REC_HEADER : PB_HEADER) + "\n" + (kind == REC_BO && SHOW_BI ? std::string("# ") + BI_HEADER + "\n" : std::string());   /* (1.6.0) no BBI header while BI is removed */   // (1.5.0) the BI columns as a comment line
 }
 // every record line of the last REC_SESSIONS sessions (by the last closed bar's session), grouped per file, in decision-key order
 inline std::vector<RecFile> recPlan(const Engine& E, const std::string& mkt, const std::string& sym, int spb) {

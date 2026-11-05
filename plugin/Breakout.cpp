@@ -81,7 +81,7 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.5.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
+#define BKO_VERSION "1.6.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
 
 static long long bkoMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bkoFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BKO_SEP "InvestorRT" BKO_SEP "rtx" BKO_SEP "lsFlexLevels" : std::string(); }
@@ -201,7 +201,7 @@ void Breakout::status(BState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = bko::statusText(S.E, S.mkt, S.sym, S.spb, S.last)
-        + "RECORDS,lsFlexLevels\\Breakout (" + S.recMkt + "-" + S.recSym + "-" + std::to_string(S.spb) + "),zz_rev_bars " + std::to_string(S.E.zzRev) + ",ft_tie " + (S.E.tieOn() ? "1" : "0") + ",zz_carry " + (S.E.carryOn() ? "1" : "0") + ",bi 1"
+        + "RECORDS,lsFlexLevels\\Breakout (" + S.recMkt + "-" + S.recSym + "-" + std::to_string(S.spb) + "),zz_rev_bars " + std::to_string(S.E.zzRev) + ",ft_tie " + (S.E.tieOn() ? "1" : "0") + ",zz_carry " + (S.E.carryOn() ? "1" : "0") + (bko::SHOW_BI ? ",bi 1" : ",bi 0")
         + ",lines written " + std::to_string(S.recAdded) + ",pending " + std::to_string(S.recPend) + ",write fails " + std::to_string(S.recFails) + "\n";   // (1.3.0)
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
@@ -295,6 +295,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
     p->setDescription("LRA BO v1.5.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (lsBigBidAsk's rule on the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min) Pb on a pullback pivot that tests the BO / BD candle, and BI (BreakIn = a failed BO / BD: red above / green below the candle that closes back past the pivot with breakout range). Records its BO / BD, Rly, Pb and BI decisions to lsFlexLevels\\Breakout for the nightly. No settings.");
-    p->setVersion("1.5.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.6.0");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }
