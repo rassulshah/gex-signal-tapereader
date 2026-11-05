@@ -121,7 +121,7 @@ int main(int argc, char** argv) {
         v.X = [&](int i) { return 40 + (i - first + 0.5) * bw; }; v.Y = [&](double tk) { return H - 20 - (tk - (lo - 8)) / (double)(hi - lo + 16) * (H - 40); };
         v.textW = [](const std::string& s, bool) { return (int)s.size() * 7; };
         const wpc::Scene sc = wpc::layout(E, nullptr, v);
-        CHECK(sc.lettersDrawn > 0 && sc.pbDrawn == 0 && sc.pbFound > 0 && sc.boxesDrawn > 0, "Oct 30 PM: letters and solid node boxes drawn; (1.8.3) POC pullbacks found but NO Pb drawn (" << sc.lettersDrawn << " / " << sc.pbDrawn << " drawn, " << sc.pbFound << " found / " << sc.boxesDrawn << ")");
+        CHECK(sc.lettersDrawn > 0 && sc.pbDrawn == 0 && sc.pbFound > 0 && sc.boxesDrawn == 0, "Oct 30 PM: (1.9.0) P / H letters drawn, NO delta boxes; (1.8.3) POC pullbacks found but NO Pb drawn (" << sc.lettersDrawn << " / " << sc.pbDrawn << " drawn, " << sc.pbFound << " found / " << sc.boxesDrawn << ")");
         // delta rows: right of each wave start, <= 30 px; the white delta POC box on the biggest row
         bool right = true; int drowsN = 0;
         for (const wpc::Wave& w : E.waves) { if (w.provisional || w.drows.empty() || w.i0 < first) continue; const int x0 = (int)std::lround(v.X(w.i0) - bw * 0.45);
@@ -129,12 +129,12 @@ int main(int argc, char** argv) {
         CHECK(drowsN > 0 && right, "delta rows point RIGHT from the wave start, at most 38 px (1.6.2: 25% bigger) (" << drowsN << " rows)");
         int boxW = 0; for (const wpc::Prim& p : sc.p) boxW += p.k == wpc::Prim::BOX && p.col == 0xE5E7EB;
         int front = 0, dots = 0; for (const wpc::Prim& p : sc.p) { front += p.k == wpc::Prim::BOX && p.col == 0xE5E7EB && !p.back; dots += p.k == wpc::Prim::LINE && p.col == 0xE5E7EB; }
-        CHECK(boxW > 0 && front == sc.boxesDrawn && dots == 0, "the 2 biggest nodes' distributions in SOLID white boxes (no dotted lines) (" << front << " / " << sc.boxesDrawn << ")");
+        CHECK(boxW == 0 && front == 0 && dots == 0, "(1.9.0) no delta node boxes (the right side is the volume profile) (" << front << " / " << sc.boxesDrawn << ")");
         bool atMost2 = true; for (const wpc::Wave& w : E.waves) if (!w.provisional) atMost2 = atMost2 && wpc::topDelta(w).size() <= 3;
         CHECK(atMost2, "(1.6.2) every wave: at most 3 boxed / classified nodes");
         {   // (1.7.2) the letters: single I / A / T in WHITE and P in CYAN, bold, front, ON the spine (centred on a wave's spine x), no "?",
             // no background patch; never two on top of each other; one P per drawn wave, centred on its cyan WPOC line
-            auto isLet = [](const wpc::Prim& p) { return p.k == wpc::Prim::TEXT && p.text.size() == 1 && (p.text == "I" || p.text == "A" || p.text == "T" || p.text == "P"); };
+            auto isLet = [](const wpc::Prim& p) { return p.k == wpc::Prim::TEXT && p.text.size() == 1 && (p.text == "I" || p.text == "A" || p.text == "T" || p.text == "P" || p.text == "H"); };   // (1.9.0) + H
             std::vector<int> spX; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::LINE && p.w == 2 && p.x0 == p.x1) spX.push_back(p.x0);
             std::vector<std::pair<int,int> > tx; int lets = 0, ps = 0, pOnLine = 0; bool ok = true, onSpine = true;
             for (const wpc::Prim& p : sc.p) { if (!isLet(p)) continue; ++lets; tx.push_back(std::make_pair(p.x0, p.y0));
@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
             bool clear = true; for (size_t i2 = 0; i2 < tx.size(); ++i2) for (size_t j2 = i2 + 1; j2 < tx.size(); ++j2) if (std::abs(tx[i2].first - tx[j2].first) < 20 && std::abs(tx[i2].second - tx[j2].second) < 13) clear = false;
             int q = 0; for (const wpc::Prim& p : sc.p) q += p.k == wpc::Prim::TEXT && p.text.find('?') != std::string::npos;
             int patch = 0; for (const wpc::Prim& p : sc.p) patch += p.k == wpc::Prim::FILL && !p.back && p.y1 - p.y0 == 12 && (p.col == 0x0B0F17 || p.col == 0x374151);
-            CHECK(lets == sc.lettersDrawn && lets >= 3 && ok, "(1.7.2) letters white (P cyan), bold, front (" << lets << ")");
+            CHECK(lets == sc.lettersDrawn && lets >= 3 && ok, "(1.7.2) letters white (P cyan; 1.9.0: H white, no I / A / T), bold, front (" << lets << ")");
             CHECK(onSpine, "(1.8.4) every letter one letter width further LEFT of a wave's spine");
             CHECK(clear, "(1.7.2) letters never overlap");
             CHECK(q == 0 && patch == 0, "(1.7.2) no \"?\" and no background patch (" << q << " / " << patch << ")");
@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
         std::cerr << "fixture: " << q << " waves (" << rev << " reversal, " << bo << " breakout, " << ra << " rally), letters " << sc.lettersDrawn << ", Pb " << sc.pbDrawn << ", boxes " << sc.boxesDrawn << "\n";
         // status text names the new rule
         const std::string st = wpc::statusText(E, "ES", 180, "native,ok", "loaded", "loaded", 0, &sc, false, 0);
-        CHECK(st.find("QUALIFIED_BY,reversal") != std::string::npos && st.find("PROFILE,(1.6.2)") != std::string::npos, "status QUALIFIED_BY + PROFILE lines");
+        CHECK(st.find("QUALIFIED_BY,reversal") != std::string::npos && st.find("PROFILE,(1.9.0)") != std::string::npos, "status QUALIFIED_BY + PROFILE lines");
     }
     // ---- 5. the legacy rule still answers when pinned ----
     {   wpc::Engine E; CHECK(E.rule == 150, "default rule = 1.5.0"); }

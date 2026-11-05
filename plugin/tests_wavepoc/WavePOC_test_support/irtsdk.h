@@ -25,7 +25,7 @@ enum RTX_REASON { REASON_DRAW = 5, REASON_PREDRAW = 7 };
 enum { NO_UI = 1 << 12, POST_DRAWING = 1 << 18, OVERLAY = 1 << 19, PRE_DRAWING = 1 << 21, INSTRUMENT_SCALE = 1 << 30 };
 static const unsigned long VAP_REQUIRED = 1UL << 31;
 enum fARRAY { barOpen, barHigh, barLow, barClose, fEmptyArray };
-enum iARRAY { barDateTime };
+enum iARRAY { barDateTime, barVolume };   // (1.9.0) + barVolume (0 lots in this mock; lsBreakout's engine in WavePOC reads it)
 enum pARRAY { barVolumeProfile };
 enum SYMBOL_PROPERTY_ID { SYM_TICKINCR = 171 };
 enum BAR_POSITION { kBarLeft, kBarCenter, kBarRight };
@@ -68,7 +68,7 @@ class RTARRAY { public: explicit RTARRAY(fARRAY a) : v_(a == fEmptyArray ? nullp
     RTX_RESULT getChartIndicator(const char* label, int = -1, int = 0) { ++mock::current->chartCalls; if (mock::current->drawing) ++mock::current->chartInDraw; auto it = mock::current->cust.find(label); if (it == mock::current->cust.end()) return RTX_FAIL; v_ = &it->second; count = (long)v_->size(); return RTX_OK; }
     RTX_RESULT getCustomIndicator(char* name, int = 1, RTBOOL = false, const char* = nullptr, int = 0) { ++mock::current->customCalls; if (mock::current->drawing) ++mock::current->customInDraw; auto it = mock::current->cust.find(name); if (it == mock::current->cust.end()) return RTX_FAIL; v_ = &it->second; count = (long)v_->size(); return RTX_OK; }
 private: const std::vector<float>* v_; public: long count; };
-class RTARRAYI { public: explicit RTARRAYI(iARRAY) : count((long)mock::current->t.size()) {} RTDATE operator[](int n) const { return mock::current->t[(size_t)n]; } long count; };
+class RTARRAYI { public: explicit RTARRAYI(iARRAY a) : a_(a), count((long)mock::current->t.size()) {} RTDATE operator[](int n) const { return a_ == barVolume ? 0 : mock::current->t[(size_t)n]; } iARRAY a_; long count; };
 class RTARRAYP {
 public:
     explicit RTARRAYP(pARRAY) : count((long)mock::current->vap.size()) {}

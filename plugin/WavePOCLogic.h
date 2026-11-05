@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.8.4";   // (1.8.4, 2026-11-04 17:11 CT Rassul) the spine letters I / A / T / P one letter width further left   // was "1.8.3";   // (1.8.3, 2026-11-03 Rassul approved lsBreakout 1.1.0's Pb and said "build") the POC-pullback Pb and its cyan dotted line are no longer drawn (SHOW_PB false; still computed for the status file) - Pb is drawn only by lsBreakout   // was "1.8.2";   // (1.8.2) Pb one row further from the bar (PB_GAP 46)   // was "1.8.1";   // (1.8.1, Rassul 11:36-11:37 CT) solid POC lines; a line ends with its trading day; letters left of the spine   // was "1.8.0";   // (1.8.0, 2026-11-03 Rassul 11:29 CT "i'll go with your recommendation") extended wave POC lines: untested to the right edge (2 nearest above + 2 below), tested ones end at the bar that traded through, dimmer, until the next same-way wave   // was "1.7.2";   // (1.7.2, 2026-11-03 Rassul "build" 09:37 CT) letters I / A / T white on the spine, no "?", no patch; cyan P on the volume POC   // was "1.7.1";   // (1.7.1, Rassul 14:31 CT "you should not be delayed") Pb drawn when the pullback bar closes (live, final once confirmed)   // was "1.7.0":   // (1.7.0, Rassul 2026-11-02 13:28 CT "it should continue to draw as the wave continues") the LIVE wave always drawn, forming bar included   // was "1.6.3":   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
+static const char* const VERSION = "1.9.0";   // (1.9.0, 2026-11-05 08:13-08:46 CT Rassul "draw a volume profile instead of the delta profile ... upto 2 hvns and the poc ... the other two hvn should be below the breakout high ... display the poc wherever it may be and then look for 2 hvn's at the break level or lower", "just show the poc line", "now") the right side = the wave VOLUME profile, POC (cyan, P) + up to 2 HVNs (wave colour, H) at / beyond the break level; no delta rows, boxes or I / A / T letters
+// was "1.8.4";   // (1.8.4, 2026-11-04 17:11 CT Rassul) the spine letters I / A / T / P one letter width further left   // was "1.8.3";   // (1.8.3, 2026-11-03 Rassul approved lsBreakout 1.1.0's Pb and said "build") the POC-pullback Pb and its cyan dotted line are no longer drawn (SHOW_PB false; still computed for the status file) - Pb is drawn only by lsBreakout   // was "1.8.2";   // (1.8.2) Pb one row further from the bar (PB_GAP 46)   // was "1.8.1";   // (1.8.1, Rassul 11:36-11:37 CT) solid POC lines; a line ends with its trading day; letters left of the spine   // was "1.8.0";   // (1.8.0, 2026-11-03 Rassul 11:29 CT "i'll go with your recommendation") extended wave POC lines: untested to the right edge (2 nearest above + 2 below), tested ones end at the bar that traded through, dimmer, until the next same-way wave   // was "1.7.2";   // (1.7.2, 2026-11-03 Rassul "build" 09:37 CT) letters I / A / T white on the spine, no "?", no patch; cyan P on the volume POC   // was "1.7.1";   // (1.7.1, Rassul 14:31 CT "you should not be delayed") Pb drawn when the pullback bar closes (live, final once confirmed)   // was "1.7.0":   // (1.7.0, Rassul 2026-11-02 13:28 CT "it should continue to draw as the wave continues") the LIVE wave always drawn, forming bar included   // was "1.6.3":   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
 // 1.3.0:   // (1.3.0, 2026-10-28 17:27 CT Rassul) every CoB leg gets a profile (kind WAVE / COB / BOTH)
 // was 1.2.0:   // (1.2.0, 2026-10-28 16:26 / 16:31 CT Rassul) no node / liquidity lines, circles or end ticks; tags only for OPEN nodes; profile max width x 0.67; liquidity nodes max 40 px
@@ -82,6 +83,9 @@ static const int MIN_HIST = 5;         // candidates needed before anything qual
 static const int MAX_ROWS = 400;       // (1.3.2) row size rule: 1 tick per row (the same row height in every profile) unless > 400 ticks (was 80)
 static const int SEP_ROWS = 3;         // nodes >= 3 rows apart
 static const int MAX_NODES = 5;
+// (1.9.0) the volume profile on the right of the spine (was the delta profile) with the POC and up to 2 HVNs at / beyond the break level
+static const bool SHOW_VOL_RIGHT = true;
+static const int HVN_MAX = 2;
 static const int STORE_VER = 2;        // (1.3.3) store version 2 = 14-bar candidates (1 = the 20-bar ones: rebuilt)
 static const int STORE_CAP = 1000;     // candidates kept per direction in the file
 static const int N_MIN = 2, N_MAX = 10, N_DEF = 3;
@@ -99,7 +103,8 @@ struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };      // prices in w
 struct VRow { long long tick = 0; long long vol = 0; long long dlt = 0; };   // (1.5.0) dlt = same-price delta (IRT VAP buy - sell volume)
 typedef std::function<int(int bar, std::vector<VRow>& out)> VapFn;  // 1 = rows read, 0 = no VAP for that bar (yet), -1 = fault
 
-struct Pivot { int i = 0; int type = 0; long long px = 0; };       // type +1 swing high, -1 swing low
+struct Pivot { int i = 0; int type = 0; long long px = 0; };
+struct BoCand { long long t0 = 0; int dir = 0; long long hi = 0, lo = 0; };   // (1.9.0) a fired BO / BD candle; t0 = the BO / BD candle's END (local seconds, as Bar::t); ticks       // type +1 swing high, -1 swing low
 
 struct Node { long long tick = 0; long long vol = 0; double ratio = 0; int rank = 0; int row = -1; int stop = OPEN; int stopBar = -1; };
 // (1.1.0) a liquidity node: average resting real-order lots of its row over the wave; side 1 = mostly bids, 0 = mostly offers
@@ -194,7 +199,7 @@ inline long long median2(const std::vector<long long>& rows) {     // 2 x the me
 // the mini-distributions (a smoothed peak and the rows falling away from it on both sides); the node's row = the HIGHEST RAW row of
 // that distribution (ties: the one nearest the smoothed peak), >= 2x the median; separation / valley rules as before (on the smoothed
 // peaks); one node per distribution, max 5, biggest raw row first.
-inline std::vector<int> pickNodes(const std::vector<long long>& v, long long med2) {
+inline std::vector<int> pickNodes(const std::vector<long long>& v, long long med2, int maxN = MAX_NODES) {   // (1.9.0) maxN: the HVN pass looks past the top 5
     std::vector<int> out; const int n = (int)v.size(); if (n < 3 || med2 <= 0) return out;
     std::vector<long long> s((size_t)n, 0);
     for (int j = 0; j < n; ++j) s[(size_t)j] = (j > 0 ? v[(size_t)j - 1] : 0) + v[(size_t)j] + (j + 1 < n ? v[(size_t)j + 1] : 0);
@@ -223,7 +228,7 @@ inline std::vector<int> pickNodes(const std::vector<long long>& v, long long med
             if (10 * mn > 7 * std::min(j.ps, c.ps)) { ok = false; break; }   // valley <= 0.7 x the smaller (smoothed) peak
         }
         if (ok) { took.push_back(j); out.push_back(j.row); }
-        if ((int)out.size() == MAX_NODES) break;
+        if ((int)out.size() == maxN) break;
     }
     return out;
 }
@@ -412,6 +417,7 @@ public:
     std::vector<Bar> B;                                              // closed bars, in order
     int zDir = 0, zI = 0, zHi = 0, zLo = 0;                         // (1.3.2) IRT zigzag: live leg (+1 up / -1 down / 0 none), its extreme; first-leg high / low
     std::vector<Pivot> alt;                                          // the zigzag (confirmed pivots)
+    std::vector<BoCand> bos;                                         // (1.9.0) the fired BO / BD candles (host: bko::Engine on the same bars)
     std::vector<Wave> waves;                                         // qualified waves, confirmation order
     std::vector<int> confs;                                          // confirmation bars of the qualifying waves (sorted; stop every direction)
     std::vector<int> confsCob[2];                                    // (1.3.0) confirmation bars of COB-only legs, [0] up / [1] down (stop that direction)
@@ -795,6 +801,35 @@ struct Prim {
     enum K { FILL, BOX, LINE, OVAL, TEXT } k = FILL;
     int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned long col = 0; int w = 1; std::string text; bool back = true; int bold = 0;
 };
+// (1.9.0) THE BREAK LEVEL of a wave: the high of its BO candle (lsBreakout's rule, the host runs bko::Engine on the same bars and passes
+// the fired BO / BD candles; a BO of the wave's direction whose candle closes after the wave's start pivot and by its end), else the high
+// of the first bar of the wave that broke the prior pivot high (where the breakout would be), else the wave's extreme (no limit).
+// Down waves mirror it (BD candle low / the bar that broke the prior pivot low). why: 1 BO / BD, 2 broke the prior pivot, 3 none.
+inline long long breakLevel(const Wave& w, const std::vector<Bar>& B, const std::vector<Pivot>& alt, const std::vector<BoCand>& bos, int& why) {
+    why = 3;
+    if (w.dir == 0 || w.i0 < 0 || w.i1 <= w.i0 || w.i1 >= (int)B.size()) return w.p1;
+    const long long ta = B[(size_t)w.i0].t, tb = B[(size_t)w.i1].t;
+    for (const BoCand& b : bos) if (b.dir == w.dir && b.t0 > ta && b.t0 <= tb) { why = 1; return w.dir > 0 ? b.hi : b.lo; }
+    long long ph = 0; int phI = -1;                                          // the latest pivot of the wave's side before its start
+    for (const Pivot& p : alt) if (p.i < w.i0 && p.type == (w.dir > 0 ? 1 : -1) && p.i > phI) { ph = p.px; phI = p.i; }
+    const bool have = phI >= 0;
+    if (have) for (int k = w.i0 + 1; k <= w.i1; ++k) { const Bar& b = B[(size_t)k]; if (w.dir > 0 ? b.h > ph : b.l < ph) { why = 2; return w.dir > 0 ? b.h : b.l; } }
+    return w.p1;
+}
+// (1.9.0) up to 2 HVNs (the node rule: own distribution, >= 2x the median row, the biggest raw row of it) whose row is AT or BELOW the
+// break level (down wave: at or above), biggest first; the POC is never one of them (it is shown wherever it is)
+inline std::vector<int> hvnRows(const Wave& w, long long cut) {
+    std::vector<int> out; if (w.rows.empty() || w.med2 <= 0) return out;
+    const std::vector<int> pk = pickNodes(w.rows, w.med2, 64);
+    const int poc = !w.nodes.empty() ? w.nodes[0].row : (pk.empty() ? -1 : pk[0]);
+    for (int r : pk) {
+        if (r == poc) continue;
+        const long long lo = w.e0 + (long long)r * w.rowTicks, hi = lo + w.rowTicks - 1;
+        if (w.dir > 0 ? lo <= cut : hi >= cut) out.push_back(r);
+        if ((int)out.size() == HVN_MAX) break;
+    }
+    return out;
+}
 static const bool SHOW_VOL_LEFT = false;   // (1.6.0) the left volume profile (outline + HVN / WPOC fills); the WPOC is now cyan on the right
 static const bool SHOW_LIQ_LEFT = false;   // (1.6.1) the liquidity-node bars left of the spine: off (computed, recorded, counted in the status file)
 struct Colours { unsigned long prof = 0x334155, amber = 0xF5B428, amberFill = 0xC88C14, white = 0xE5E7EB, whiteFill = 0xB4BECD, zz = 0x78849A, zzBig = 0xCBD5E1, grey = 0x94A3B8, cyan = 0x22D3EE, bid = 0x22C55E, offer = 0xEF4444, bg = 0x0B0F17, up = 0x22C55E, down = 0xEF4444; };   // (1.3.3) up / down = the spine (bullish green, bearish red)
@@ -815,7 +850,7 @@ struct View {
     double tick = 0.25;
     int clipL = -30000, clipR = 30000;            // (1.3.2) nothing drawn left of the Levels column / right of the price area (ColumnBoard)
 };
-struct Scene { std::vector<Prim> p; int pocOpen = 0, pocTested = 0; int tagsShown = 0, tagsHidden = 0, nodesDrawn = 0, wavesDrawn = 0, lnodesDrawn = 0, lettersDrawn = 0, pbDrawn = 0, boxesDrawn = 0, pbFound = 0; };   // (1.8.3) pbFound = POC pullbacks in view, not drawn
+struct Scene { std::vector<Prim> p; int hvnDrawn = 0, breakWhy[4] = {0, 0, 0, 0}; int pocOpen = 0, pocTested = 0; int tagsShown = 0, tagsHidden = 0, nodesDrawn = 0, wavesDrawn = 0, lnodesDrawn = 0, lettersDrawn = 0, pbDrawn = 0, boxesDrawn = 0, pbFound = 0; };   // (1.8.3) pbFound = POC pullbacks in view, not drawn
 
 inline int ci(double v) { return v < -30000 ? -30000 : v > 30000 ? 30000 : (int)std::lround(v); }
 inline void addLine(Scene& s, double x0, double y0, double x1, double y1, unsigned long c, int w, bool back) { Prim p; p.k = Prim::LINE; p.x0 = ci(x0); p.y0 = ci(y0); p.x1 = ci(x1); p.y1 = ci(y1); p.col = c; p.w = w; p.back = back; s.p.push_back(p); }
@@ -831,7 +866,7 @@ inline void addDashed(Scene& s, double x0, double x1, double y, unsigned long c,
 //   the WPOC extended as an amber dotted line from the wave to it.
 // phase 0 = outlines / delta rows / spine of every wave, phase 1 = fills, liquidity, letters, pullbacks (no later profile paints over them)
 inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, std::vector<std::pair<const Wave*, const Node*> >& tagNodes, bool /*latest*/, int phase = -1, double xMax = 1e9,
-                     const std::vector<Bar>* bars = nullptr, const std::vector<Pivot>* piv = nullptr, int liveType = 0, int liveI = -1) {
+                     const std::vector<Bar>* bars = nullptr, const std::vector<Pivot>* piv = nullptr, int liveType = 0, int liveI = -1, const std::vector<int>* hvn = nullptr) {   // (1.9.0) hvn = the HVN rows
     const int endShown = v.lastBar;
     std::vector<int> pbs; if (bars && piv) pbs = pullbacks(w, *piv, *bars, liveType, liveI);
     int far = w.i1; for (const Node& nd : w.nodes) far = std::max(far, nd.stop == OPEN ? endShown : nd.stopBar);
@@ -860,7 +895,18 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
                 if (j == 0 && wj > 0) addLine(s, x0 - wj, bot, x0, bot, C.grey, 1, true);
             }
         }
-        if (haveDelta) {                // the DELTA rows, right
+        if (SHOW_VOL_RIGHT && nr > 0 && w.maxVol > 0) {   // (1.9.0) the VOLUME rows, right: plain, POC cyan, HVNs in the wave colour
+            const int pocRow = !w.nodes.empty() ? w.nodes[0].row : -1;
+            for (int j = 0; j < nr; ++j) {
+                const long long q = w.rows[(size_t)j]; if (q <= 0) continue;
+                double top, bot; rowY(j, top, bot);
+                const bool isH = hvn && std::find(hvn->begin(), hvn->end(), j) != hvn->end();
+                const unsigned long col = j == pocRow ? C.cyan : isH ? (w.dir > 0 ? C.up : C.down) : mix(C.grey, C.bg, 0.4);
+                Prim p; p.k = Prim::FILL; p.x0 = ci(x0 + 1); p.x1 = ci(x0 + 1 + PR * (double)q / (double)w.maxVol); p.y0 = ci(top + 0.5); p.y1 = ci(std::max(top + 1.0, bot - 0.5)); p.col = col; p.back = true;
+                if (p.x1 > p.x0 && p.y1 >= p.y0) s.p.push_back(p);
+            }
+        }
+        else if (haveDelta) {                // the DELTA rows, right (1.5.0 - 1.8.4)
             for (int j = 0; j < nr; ++j) {
                 const long long d = w.drows[(size_t)j]; if (d == 0) continue;
                 double top, bot; rowY(j, top, bot);
@@ -907,14 +953,14 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
         if (nd.stop == OPEN && !liveTouch) tagNodes.push_back(std::make_pair(&w, &nd));
     }
     const std::vector<int> top2 = haveDelta ? topDelta(w) : std::vector<int>();
-    if (haveDelta && dPoc >= 0 && std::find(top2.begin(), top2.end(), dPoc) == top2.end()) {     // the delta POC outlined in white (when it is a top-2 node its solid box already marks it)
+    if (!SHOW_VOL_RIGHT && haveDelta && dPoc >= 0 && std::find(top2.begin(), top2.end(), dPoc) == top2.end()) {     // the delta POC outlined in white (when it is a top-2 node its solid box already marks it)
         double top, bot; rowY(dPoc, top, bot);
         Prim b; b.k = Prim::BOX; b.x0 = ci(x0 + 1); b.x1 = ci(x0 + 1 + PR * (double)std::llabs(w.drows[(size_t)dPoc]) / (double)w.dMax); b.y0 = ci(top); b.y1 = ci(std::max(top + 1.0, bot)); b.col = C.white; b.w = 1; b.back = true;
         if (b.x1 > b.x0) s.p.push_back(b);
     }
     // (1.5.0, Rassul 06:35 CT "identify 2 largest nodes, box them (solid box), classify them") a SOLID white box around the distribution of
     // each of the 2 biggest delta nodes (and the cluster A band); was a dotted border round the top 4 (05:50 CT)
-    if (haveDelta) {
+    if (!SHOW_VOL_RIGHT && haveDelta) {
         auto box = [&](int a, int b) {
             double mx = 0; for (int j = a; j <= b; ++j) mx = std::max(mx, PR * (double)std::llabs(w.drows[(size_t)j]) / (double)w.dMax);
             double t1, b1, t2, b2; rowY(b, t1, b1); rowY(a, t2, b2);
@@ -927,11 +973,12 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
         if (bars) for (const Letter& L : letters(w, *bars)) if (L.cluster && L.a >= 0) box(L.a, L.b);
     }
     // the letters, centred on their node (front), each on a small background patch so it reads over the row
-    if (haveDelta && bars) {
+    if ((haveDelta || SHOW_VOL_RIGHT) && bars) {
         // (1.6.2) letters on nearby rows (e.g. an I? and an A? 3 ticks apart) never overlap: sorted top to bottom, each at least 13 px
         // below the one above it (the text is 12 px tall)
         std::vector<std::pair<double, Letter> > ys;
-        for (const Letter& L : letters(w, *bars)) { double top, bot; rowY(L.row, top, bot); ys.push_back(std::make_pair((top + bot) / 2.0, L)); }
+        if (!SHOW_VOL_RIGHT) for (const Letter& L : letters(w, *bars)) { double top, bot; rowY(L.row, top, bot); ys.push_back(std::make_pair((top + bot) / 2.0, L)); }
+        if (SHOW_VOL_RIGHT && hvn) for (int r : *hvn) if (r >= 0 && r < nr) { Letter H = Letter(); H.t = 'H'; H.row = r; double top, bot; rowY(r, top, bot); ys.push_back(std::make_pair((top + bot) / 2.0, H)); }   // (1.9.0) H = an HVN at / beyond the break level
         std::stable_sort(ys.begin(), ys.end(), [](const std::pair<double, Letter>& p, const std::pair<double, Letter>& q) { return p.first < q.first; });
         for (size_t k = 1; k < ys.size(); ++k) if (ys[k].first < ys[k - 1].first + 13) ys[k].first = ys[k - 1].first + 13;
         // (1.7.2, Rassul 09:33-09:36 CT "P signal on spine also for poc ... the volume poc cyan in the spine") P = the wave's volume POC, cyan, ON the POC row on the spine (fixed); a letter that would touch it moves off it
@@ -1059,8 +1106,10 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
     std::vector<const Wave*> ws; for (const Wave& w : E.waves) if (!w.pending) ws.push_back(&w);
     if (prov) ws.push_back(prov);
     auto xNext = [&](const Wave* w) { double x = 1e9; for (const Wave* o : ws) if (o->i0 > w->i0) x = std::min(x, v.X(o->i0) - v.bw * 0.45); return x; };
+    std::vector<std::vector<int> > hv(ws.size());   // (1.9.0) each wave's HVN rows at / beyond its break level
+    for (size_t k = 0; k < ws.size(); ++k) { int why = 0; hv[k] = hvnRows(*ws[k], breakLevel(*ws[k], E.B, E.alt, E.bos, why)); s.hvnDrawn += (int)hv[k].size(); if (why >= 1 && why <= 3) ++s.breakWhy[why]; }
     for (int ph = 0; ph < 2; ++ph)
-        for (const Wave* w : ws) drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w), &E.B, &E.alt, E.zDir, E.zI);   // (1.7.1) + the live pullback
+        for (size_t k = 0; k < ws.size(); ++k) { const Wave* w = ws[k]; drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w), &E.B, &E.alt, E.zDir, E.zI, &hv[k]); }   // (1.7.1) + the live pullback
     drawPocLines(s, E, v, C, ws);   // (1.8.0) the extended wave POC lines, behind the candles
     drawTags(s, v, C, tags);   // (1.4.2, 2026-10-29 13:02 CT) the right-edge tags are back exactly as 1.3.4 drew them: the "WPOC" Rassul asked for in the Levels column was the WEEKLY POC, not this indicator's   // was (1.4.0): not drawn
     if (v.zigzag) drawZigzag(s, E, v, C);
@@ -1095,7 +1144,8 @@ inline std::string statusText(const Engine& E, const std::string& mkt, int spb, 
       << ",pending VAP " << E.pendingCount() << ",from record " << E.C.recordUsed << "\n";
     o << "QUALIFIED_BY,reversal " << E.C.qBy[3] << ",breakout " << E.C.qBy[Q_BO] << ",rally/decline " << E.C.qBy[Q_RALLY] << ",(older records AVG " << E.C.qBy[Q_AVG] << " ATR " << E.C.qBy[Q_ATR]
       << "),rule (1.5.0) reversal = " << LOOKBACK << "-bar extreme and > average and > " << ATR_MULT << " x ATR" << ATR_N << " | breakout = > " << ATR_MULT << " x ATR and a close beyond the previous swing | rally / decline = > " << RALLY_MULT << " x ATR\n";
-    o << "PROFILE,(1.6.2) right only: wave delta + delta POC outline + cyan WPOC (no left side), " << SIDE_W << " px a side,letters drawn now " << (sc ? sc->lettersDrawn : 0) << ",POC pullbacks drawn now " << (sc ? sc->pbDrawn : 0) << " (1.8.3: Pb is lsBreakout's; found in view, not drawn " << (sc ? sc->pbFound : 0) << ")\n";
+    if (SHOW_VOL_RIGHT) o << "PROFILE,(1.9.0) right: the wave VOLUME profile, POC cyan + P (anywhere) + up to " << HVN_MAX << " HVNs + H at / beyond the break level, " << SIDE_W << " px,HVNs drawn now " << (sc ? sc->hvnDrawn : 0) << ",break level from BO / BD candle " << (sc ? sc->breakWhy[1] : 0) << ", bar that broke the prior pivot " << (sc ? sc->breakWhy[2] : 0) << ", none (no limit) " << (sc ? sc->breakWhy[3] : 0) << ",BO / BD candles known " << E.bos.size() << "\n";
+    else o << "PROFILE,(1.6.2) right only: wave delta + delta POC outline + cyan WPOC (no left side), " << SIDE_W << " px a side,letters drawn now " << (sc ? sc->lettersDrawn : 0) << ",POC pullbacks drawn now " << (sc ? sc->pbDrawn : 0) << " (1.8.3: Pb is lsBreakout's; found in view, not drawn " << (sc ? sc->pbFound : 0) << ")\n";
     if (E.store) {
         int nu = 0, nd = 0; const long long far = (long long)4e18;
         const double au = E.store->avgBefore(1, far, nu), ad = E.store->avgBefore(-1, far, nd);

@@ -231,7 +231,7 @@ static void testStoreAndHelpers() {
 }
 
 // (1.5.0) a right-edge price tag (not the header, a letter "X?" or a "Pb")
-static bool isTag(const wpc::Prim& p) { return p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0 && p.text != "Pb" && !(p.text.size() == 2 && p.text[1] == '?'); }
+static bool isTag(const wpc::Prim& p) { return p.k == wpc::Prim::TEXT && p.text.rfind("Wave POC", 0) != 0 && p.text != "Pb" && !(p.text.size() == 2 && p.text[1] == '?') && p.text != "P" && p.text != "H"; }   // (1.9.0) P / H = spine letters, not tags
 static void testLayout(const Fix& F) {
     wpc::Store S; seed(S, F.B[0].t, 189, 172);
     wpc::Engine E; E.rule = 133; E.store = &S; E.N = 3; E.tick = 0.25;
@@ -279,7 +279,7 @@ static void testLayout(const Fix& F) {
             sp += n; if (n != 1) ok = false; }
         CHECK(ok && sp == 4, "(1.3.3) spines: 4 waves, one each, green up / red down, spanning the wave's range (" << sp << ")"); }
     bool header = false; for (const wpc::Prim& p : sc.p) header = header || (p.k == wpc::Prim::TEXT && p.text == std::string("Wave POC v") + wpc::VERSION);
-    CHECK(header && std::string(wpc::VERSION) == "1.8.4", "header Wave POC v1.8.4");
+    CHECK(header && std::string(wpc::VERSION) == "1.9.0", "header Wave POC v1.9.0");
     {   // (1.4.0) the open WPOC handed to lsDealerProfile: the latest confirmed wave's node [0] while OPEN, else none
         long long tk = 0; const bool has = wpc::latestOpenPoc(E, tk);
         const wpc::Wave* lw = nullptr; for (const wpc::Wave& w : E.waves) if (!w.pending) lw = &w;
@@ -362,6 +362,9 @@ static void testLiquidityReference(const Fix& F) {
     const wpc::Scene sc = wpc::layout(E, nullptr, v);
     bool left = true; int bright = 0, dim = 0, dots = 0, texts = 0;
     for (const wpc::Prim& p : sc.p) {
+        {   bool right = false;   // (1.9.0) the right side's volume rows (HVNs in the wave colour) are not liquidity bars
+            for (const wpc::Wave& w : E.waves) if (p.k == wpc::Prim::FILL && std::abs(p.x0 - (int)std::lround(v.X(w.i0) - v.bw * 0.45 + 1)) <= 1) right = true;
+            if (right) continue; }
         if (p.k == wpc::Prim::FILL && (p.col == 0x22C55E || p.col == wpc::mix(0x22C55E, 0x0B0F17, 0.6))) {
             if (p.col == 0x22C55E) ++bright; else ++dim;
             const int e1 = (int)std::lround(v.X(6) - v.bw * 0.45 - 2), e2 = (int)std::lround(v.X(31) - v.bw * 0.45 - 2);
@@ -373,7 +376,7 @@ static void testLiquidityReference(const Fix& F) {
         if (p.k == wpc::Prim::BOX) left = false;
     }
     CHECK(sc.lnodesDrawn == 0 && bright == 0 && dim == 0 && left, "(1.6.1) no liquidity bars on the left (Rassul 2026-11-02 05:06) (" << bright << "/" << dim << ")");
-    { int mxw = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.col == 0x22C55E) mxw = std::max(mxw, p.x1 - p.x0);
+    { int mxw = 0; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.col == 0x22C55E) { bool right = false; for (const wpc::Wave& w : E.waves) if (std::abs(p.x0 - (int)std::lround(v.X(w.i0) - v.bw * 0.45 + 1)) <= 1) right = true; if (!right) mxw = std::max(mxw, p.x1 - p.x0); }
       CHECK(dots == 0 && mxw == 0 && wpc::SIDE_W == 38, "(1.5.0) no dotted liquidity lines; LPOC bar = 30 px max, grouped with the volume side (" << dots << " dots, " << mxw << " px)"); }
     const wpc::Scene s0 = wpc::layout(Nb, nullptr, v); int t0 = 0; for (const wpc::Prim& p : s0.p) t0 += p.k == wpc::Prim::TEXT;
     CHECK(texts == t0, "no price tags for liquidity nodes");
