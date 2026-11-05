@@ -139,9 +139,9 @@ int main(int argc, char** argv) {
         for (const cobs::Prim& p : P) {
             if (p.line) { ++lines; if (p.y0 != p.y1 || p.x0 != (int)v.X(i0) || p.x0 < v.l || p.x1 > v.r) posOk = false; }
             else { ++labels; if (!p.tiny) posOk = false;
-                const unsigned want = p.text == "Stop" ? cobs::C_BEAR : p.text == "50%" ? cobs::C_ENTRY : p.text == "1.0" ? cobs::C_ONE : cobs::C_BULL; if (p.col != want) colOk = false; }
+                const unsigned want = p.text == "Stop" ? cobs::C_BEAR : p.text == "50%" ? cobs::C_ENTRY : p.text == "BE" ? cobs::C_ONE : cobs::C_BULL; if (p.col != want) colOk = false; }
         }
-        CHECK(lines == 6 && labels == 6 && colOk && posOk, "6 lines from the origin bar + 6 names: stop red, 50% blue, 1.0 grey, targets green (" << lines << "/" << labels << ")");
+        CHECK(lines == 6 && labels == 6 && colOk && posOk, "6 lines from the origin bar + 6 names: stop red, 50% blue, BE grey, targets green (" << lines << "/" << labels << ")");
         bool t1x = false; for (const cobs::Prim& p : P) if (p.line && p.y0 == (int)std::lround(v.Y(1.12195 + 1.272 * 0.00215)) && p.x1 == (int)v.X(at(B, "09:30"))) t1x = true;
         CHECK(t1x, "T1's line ends at its hit bar");
         bool t3x = false; for (const cobs::Prim& p : P) if (p.line && p.y0 == (int)std::lround(v.Y(1.12625)) && p.x1 == (int)v.X(last + 1)) t3x = true;
@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
     // [9] status
     {   cobs::Engine E = eng(B, B.size()); E.marks.push_back(cob(B, i0, i1, ic, 1));
         const std::string s = cobs::fibStatus(E);
-        CHECK(s.find("FIB_RULES,1.5.0") == 0 && s.find("BULL,0=1.12195,1=1.1241,live,Stop ended,50% ended,1.0 open,1.272 hit,1.618 hit,2.0 open") != std::string::npos, "status: " << s);
+        CHECK(s.find("FIB_RULES,1.5.0") == 0 && s.find("BULL,0=1.12195,1=1.1241,live,Stop ended,50% ended,BE open,1.272 hit,1.618 hit,2.0 open") != std::string::npos, "status: " << s);
         CHECK(std::string(cobs::VERSION) == "1.5.0", "version 1.5.0");
     }
     // [10] not drawn = no lines

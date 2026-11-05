@@ -232,7 +232,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.5.0 - + Fib lines on each drawn CoB: stop 0, entry 50%, targets 1.272 / 1.618 / 2.0 (end on a close back through 0, at the session end or the next CoB; entry + stop after 3 h, a stop touch or T1 before the fill). his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PWH/PWL, AsiaHI/AsiaLO, PHH/PHL; by 11:00 CT; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00; a PHH/PHL-only CoB is drawn in ES, HG, GC and recorded only elsewhere): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted. + LVP: low-volume pullback after a CoB.");
+    p->setDescription("LRA CoB Signal v1.5.0 - + Fib lines on each drawn CoB: stop 0, entry 50%, BE at the CoB high, targets 1.272 / 1.618 / 2.0 (end on a close back through 0, at the session end or the next CoB; entry + stop after 3 h, a stop touch or T1 before the fill). his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PWH/PWL, AsiaHI/AsiaLO, PHH/PHL; by 11:00 CT; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00; a PHH/PHL-only CoB is drawn in ES, HG, GC and recorded only elsewhere): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted. + LVP: low-volume pullback after a CoB.");
     p->setVersion("1.5.0");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }

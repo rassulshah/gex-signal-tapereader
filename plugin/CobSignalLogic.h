@@ -412,8 +412,8 @@ inline FibSet fibLines(const Engine& E, const Mark& m)
     for (int k = 0; k < 3; ++k) add(F_T1 + k, tk[k], tEnd[k], tEnd[k] >= 0 && tEnd[k] <= last);
     return F;
 }
-static const unsigned C_ENTRY = 0x003B82F6, C_ONE = 0x006B7280;   // entry blue, the CoB high (1.0) grey; targets = the CoB's colour, stop = the other
-inline const char* fibName(int k) { static const char* N[] = { "Stop", "50%", "1.0", "1.272", "1.618", "2.0" }; return N[k >= 0 && k < 6 ? k : 0]; }
+static const unsigned C_ENTRY = 0x003B82F6, C_ONE = 0x006B7280;   // entry blue, the CoB high (1.0) grey = BE (Rassul 13:05 "add one more line for be which will be the cob high"); targets = the CoB's colour, stop = the other
+inline const char* fibName(int k) { static const char* N[] = { "Stop", "50%", "BE", "1.272", "1.618", "2.0" }; return N[k >= 0 && k < 6 ? k : 0]; }
 // lines (1 px, solid) from the CoB origin bar to the end bar (the live bar + 1 when open), the name right of the line's end, small
 inline std::vector<Prim> fibLayout(const Engine& E, const View& v)
 {
