@@ -82,6 +82,6 @@ int main() {
         std::printf("  %s 15-min: %zu bars, %d BO/BD fired, %zu Pb, %zu Rly\n", m.f, B.size(), fired, E.pb.size(), E.rly.size());
     }
     {   std::ifstream f("../Breakout1.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string s = ss.str();
-        CHECK(s.find("#define BKO_ONE_BAR 1") != std::string::npos && s.find("#include \"Breakout.cpp\"") != std::string::npos && s.find("p->setVersion(\"1.6.0\")") != std::string::npos, "[6] Breakout1.cpp wrapper + version line"); }
+        CHECK(s.find("#define BKO_ONE_BAR 1") != std::string::npos && s.find("#include \"Breakout.cpp\"") != std::string::npos && s.find("p->setVersion(\"1.7.0\")") != std::string::npos, "[6] Breakout1.cpp wrapper + version line"); }
     std::printf("RESULT %d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }

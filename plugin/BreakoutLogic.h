@@ -106,7 +106,10 @@
 
 namespace bko {
 
-static const char* const VERSION = "1.6.0";   // (1.6.0) BI removed; Pb within 1/3 ATR of the broken pivot   // was "1.5.0":   // (1.5.0) + BI (BreakIn = failed BO / BD)   // (1.4.0) zigzag carries across the 17:00 CT break   // (1.3.0) records + follow-through tie   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
+#ifndef BKO_RLY_ON_DEFAULT
+#define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
+#endif
+static const char* const VERSION = "1.7.0";   // (1.7.0, 2026-11-05 13:13 CT Rassul "this is a clear rly dn" -> "go") + overnight Rly (rly::run overnight = true: 17:00 CT to the RTH open on its own Globex VWAP / trend; records with version ...-on)   // was "1.6.0";   // (1.6.0) BI removed; Pb within 1/3 ATR of the broken pivot   // was "1.5.0":   // (1.5.0) + BI (BreakIn = failed BO / BD)   // (1.4.0) zigzag carries across the 17:00 CT break   // (1.3.0) records + follow-through tie   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
 static const int GAP = 3;              // px between the wick end and the BO / BD letter
 static const int RLY_ROW = 16;         // the Rly letter sits this many px further out than the BO / BD row
 static const int ROW_OUT = 16;         // (1.1.1) one row = lsCandleAbsorb's ROW_OUT (its A / Ae sits one row beyond the wick label row)
@@ -194,6 +197,7 @@ struct Engine {
     // decisions (kept for the chart's life; never changed once made)
     std::map<long long, bba::BoDec> bo;        // t0 -> lsBigBidAsk's decision record (fired or not)
     std::map<long long, RlyMark> rly;          // te * 2 + (dir > 0) -> judged wave
+    bool rlyOn = BKO_RLY_ON_DEFAULT != 0;      // (1.7.0) judge the overnight session too (false = the 1.6.0 RTH-only Rly, for the older parity tests)
     std::map<long long, int> trend;            // closed bar time -> vwapTrend level (cache)
     std::map<long long, PbMark> pb;            // (1.1.0) pivot bar time -> Pb (kept for the chart's life)
     std::vector<Pivot> piv;                    // (1.1.0) the confirmed 3-bar ZigZag pivots of the last pass (closed bars)
@@ -339,14 +343,14 @@ struct Engine {
             rly::Bar b; b.days = x.days; b.endSec = x.endSec; b.o = x.o; b.h = x.h; b.l = x.l; b.c = x.c; b.v = (double)x.vol; B.push_back(b); T.push_back(x.t);
         }
         const int from = full ? 0 : std::max(0, (int)B.size() - 600);
-        const std::vector<rly::Wave> W = rly::run(B, spb, openMin, closeMin, from, zzRev);
+        const std::vector<rly::Wave> W = rly::run(B, spb, openMin, closeMin, from, zzRev, rlyOn);   // (1.7.0) + the overnight session
         const std::string ver = recVer();
         for (const rly::Wave& w : W) {
             if (w.ge < 0 || w.gp < 0 || w.gc < 0 || w.ge >= (int)T.size() || w.gp >= (int)T.size() || w.gc >= (int)T.size()) continue;
             const long long te = T[(size_t)w.ge], key = te * 2 + (w.dir > 0 ? 1 : 0);
             if (rly.count(key)) continue;                                            // judged before: never again
             RlyMark m; m.te = te; m.dir = w.dir; m.fired = w.fired; rly[key] = m;
-            RecL L; L.sess = w.sess; L.line = rly::line(w, te, T[(size_t)w.gp], T[(size_t)w.gc], ver.c_str()); rlyL[key] = L;   // (1.3.0) as lsBigBidAsk (w.sess = the RTH day)
+            RecL L; L.sess = w.sess; L.line = rly::line(w, te, T[(size_t)w.gp], T[(size_t)w.gc], (w.on ? ver + "-on" : ver).c_str()); rlyL[key] = L;   // (1.7.0) overnight waves: version ...-on   // (1.3.0) as lsBigBidAsk (w.sess = the RTH day)
         }
         while (rly.size() > 20000) { rlyL.erase(rly.begin()->first); rly.erase(rly.begin()); }
     }

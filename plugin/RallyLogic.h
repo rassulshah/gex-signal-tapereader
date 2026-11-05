@@ -27,7 +27,8 @@
 
 namespace rly {
 
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-05 13:13 CT Rassul "this is a clear rly dn" (EU 05:05-05:40 CT) -> "go") + overnight Rly: run(..., overnight = true) judges the overnight session (17:00 CT to the RTH open) as its own session - same rules on a Globex VWAP / bands / trend from 17:00; RTH unchanged; default false = lsBigBidAsk unchanged
+// was "1.1.0";
 static const int MIN_BARS = 3;          // e - p
 static const double ATR_MULT = 2.5;
 static const int ATR_LEN = 14;
@@ -35,6 +36,7 @@ static const int EXT_BARS = 20;         // 20-bar high / low (incl. bar e)
 static const int ALT_BARS = 30;         // (1.1.0) condition 3 alternative: high e = the 30-bar high (low e = the 30-bar low), session bars incl. bar e
 static const int TREND_FROM = 9;        // trend from the 10th RTH bar
 static const int TREND_WIN = 20;
+static const int ON_FROM_SEC = 2 * 3600;   // (1.2.0) overnight Rly only on waves whose extreme bar ends at / after 02:00 CT (London), to the RTH open: ~4 a night like RTH (all night was ~10)
 
 // one chart bar, stamped at its END like svl::Bar (days = civil day of the close stamp, endSec = second of that day)
 struct Bar { long days = 0; int endSec = 0; double o = 0, h = 0, l = 0, c = 0, v = 0; };
@@ -135,12 +137,13 @@ struct Wave {
     bool c[5] = { false, false, false, false, false };   // 3+ bars, 2.5 ATR, tag 1 SD, 20-bar extreme, trend
     bool via30 = false;                    // (1.1.0) condition 3 passed by the 30-bar extreme only (no +-1 SD tag)
     bool fired = false;
+    bool on = false;                       // (1.2.0) an overnight wave (judged on the 17:00 CT Globex VWAP)
 };
 static const char* const COND_NAMES[5] = { "3+ bars", "2.5 ATR", "tag 1SD", "20-bar ext", "trend" };   // (1.1.0) "tag 1SD" failed = no +-1 SD tag AND no 30-bar extreme
 static const char* const VIA30 = "via 30-bar ext";   // (1.1.0) the failed field of a fired wave that passed condition 3 by the 30-bar extreme
 
 // judge every confirmed wave of one session (closed bars only)
-inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Sess& S, std::vector<Wave>& out, int rev = 1) {
+inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Sess& S, std::vector<Wave>& out, int rev = 1, bool on = false) {
     bands(B, S); trends(B, S); std::vector<Pivot> P; zigzag(B, S, P, rev);
     const int n = (int)S.g.size();
     auto X = [&](int k) -> const Bar& { return B[(size_t)S.g[(size_t)k]]; };
@@ -149,7 +152,8 @@ inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Ses
         if (e == n - 1 && q + 1 == P.size() - 1) continue;          // last wave: not confirmed
         int conf = -1; for (int k = e + 1; k < n; ++k) if (S.dir[(size_t)k] != S.dir[(size_t)e]) { conf = k; break; }
         if (conf < 0) continue;
-        Wave W; W.sess = S.sess; W.nb = e - p; W.gp = S.g[(size_t)p]; W.ge = S.g[(size_t)e]; W.gc = S.g[(size_t)conf];
+        if (on && (e == p || B[(size_t)S.g[(size_t)e]].endSec < ON_FROM_SEC || B[(size_t)S.g[(size_t)e]].endSec >= 17 * 3600)) continue;   // (1.2.0) overnight: from 02:00 CT; no 0-bar start pseudo-wave
+        Wave W; W.sess = S.sess; W.on = on; W.nb = e - p; W.gp = S.g[(size_t)p]; W.ge = S.g[(size_t)e]; W.gc = S.g[(size_t)conf];
         W.atr = atr[(size_t)W.ge]; W.trend = S.trend[(size_t)e];
         const int a20 = e - (EXT_BARS - 1) > 0 ? e - (EXT_BARS - 1) : 0, a30 = e - (ALT_BARS - 1) > 0 ? e - (ALT_BARS - 1) : 0;
         if (P[q + 1].type == 1) {
@@ -173,18 +177,24 @@ inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Ses
 }
 
 // every RTH session of the chart from chart index `from` on (B = CLOSED bars only), per = bar seconds
-inline std::vector<Wave> run(const std::vector<Bar>& B, int per, int openMin, int closeMin, int from = 0, int rev = 1) {   // rev: ZigZag reversal bars (2026-11-03)
+inline std::vector<Wave> run(const std::vector<Bar>& B, int per, int openMin, int closeMin, int from = 0, int rev = 1, bool overnight = false) {   // rev: ZigZag reversal bars (2026-11-03); (1.2.0) overnight: also judge the overnight sessions
     std::vector<Wave> out; std::vector<double> atr; atrWilder(B, atr);
     Sess cur; bool open = false;
     auto flush = [&]() { if (open && !cur.g.empty()) judge(B, atr, cur, out, rev); cur = Sess(); open = false; };
+    Sess on; bool onOpen = false;                                                // (1.2.0) the overnight session: its own VWAP / bands / trend / ZigZag from its first bar (17:00 CT)
+    auto onFlush = [&]() { if (onOpen && !on.g.empty()) judge(B, atr, on, out, rev, true); on = Sess(); onOpen = false; };
     for (int i = 0; i < (int)B.size(); ++i) {
         const svl::Cls c = svl::classify(B[(size_t)i].days, B[(size_t)i].endSec, per, openMin, closeMin);
+        if (overnight) {
+            if (c.kind == svl::ON) { if (onOpen && c.sess != on.sess) onFlush(); if (!onOpen) { on.sess = c.sess; onOpen = true; } on.g.push_back(i); }
+            else if (onOpen) onFlush();                                          // the RTH open / a break ends the overnight session
+        }
         if (c.kind != svl::RTH) { if (open && c.sess != cur.sess) flush(); continue; }
         if (open && c.sess != cur.sess) flush();
         if (!open) { cur.sess = c.sess; open = true; }
         cur.g.push_back(i);
     }
-    flush();
+    flush(); onFlush();
     if (from > 0) { std::vector<Wave> k; for (const Wave& w : out) if (w.gc >= from) k.push_back(w); out.swap(k); }
     return out;
 }

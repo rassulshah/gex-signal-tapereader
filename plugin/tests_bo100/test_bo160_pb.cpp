@@ -58,7 +58,7 @@ int main() {
     }
     {   // [5] versions
         std::ifstream f("../Breakout.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string s = ss.str();
-        CHECK(std::string(bko::VERSION) == "1.6.0" && s.find("#define BKO_VERSION \"1.6.0\"") != std::string::npos && s.find("p->setVersion(\"1.6.0\")") != std::string::npos, "[5] versions 1.6.0");
+        CHECK(std::string(bko::VERSION) == "1.7.0" && s.find("#define BKO_VERSION \"1.7.0\"") != std::string::npos && s.find("p->setVersion(\"1.7.0\")") != std::string::npos, "[5] versions 1.7.0");
     }
     std::printf("RESULT %d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }
