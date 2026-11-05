@@ -93,10 +93,10 @@ int main(int argc, char** argv) {
     CHECK(live.find("LVP,") == std::string::npos, "live file: CoBs only (unchanged format for its readers)");
     { bool ok = true; for (const cobs::LvpMark& m : L.lvp.marks) { bool f = false; for (const cobs::Mark& c : L.marks) f = f || (c.t == m.cobT && c.side == m.side && c.show == m.show); ok = ok && f && m.vol * 3 <= m.cobVol && m.nth >= 1 && m.nth <= 3 && m.idx > 0; } CHECK(ok, "every LVP belongs to a CoB of its side, <= 1/3 volume, pullback 1-3"); }
     {   // (1.4.0) the live file = the CoBs that passed the ZZO wave filter (the drawn ones)
-        bool ok = live.rfind("COBSIGNAL,1.4.0\n", 0) == 0; int drawn = 0;
+        bool ok = live.rfind("COBSIGNAL,1.5.0\n", 0) == 0; int drawn = 0;
         for (const cobs::Mark& m : L.marks) { const bool in = live.find(L.recLine(m) + "\n") != std::string::npos; ok = ok && in == (m.show && m.zOk); drawn += m.show && m.zOk; }
         CHECK(ok, "live file: version + every drawn CoB (passed the ZZO wave filter), no other (" << drawn << " of " << L.marks.size() << ")"); }
-    CHECK(st.rfind("VERSION,1.4.0\nMARKET,ES", 0) == 0 && st.find("COBS," + std::to_string(L.marks.size())) != std::string::npos && st.find("\nZZO_FILTER,1.4.0") != std::string::npos, "status file (+ ZZO_FILTER)");
+    CHECK(st.rfind("VERSION,1.5.0\nMARKET,ES", 0) == 0 && st.find("COBS," + std::to_string(L.marks.size())) != std::string::npos && st.find("\nZZO_FILTER,1.4.0") != std::string::npos, "status file (+ ZZO_FILTER)");
     {   // (1.4.0) every decided CoB has one ZZO line in the record; passed = count >= 10; both outcomes occur on a year of ES
         size_t nz = 0; for (size_t p = rec.find("\nZZO,"); p != std::string::npos; p = rec.find("\nZZO,", p + 1)) ++nz;
         int dec = 0, okN = 0, noN = 0; bool cnt = true;
@@ -115,10 +115,11 @@ int main(int argc, char** argv) {
     }
     // the draw: labels in the pane, bull green under the bar, bear red over it
     mock::current = &A; A.drawn.clear(); mdraw(x);
-    int bull = 0, bear = 0, other = 0, lvpN = 0;
-    for (const mock::Prim& p : A.drawn) { if (p.k != 'T') { ++other; continue; } if (p.text == "LVP") { ++lvpN; continue; } if (p.col == cobs::C_BULL) ++bull; else if (p.col == cobs::C_BEAR) ++bear; }
+    int bull = 0, bear = 0, other = 0, lvpN = 0, fibL = 0, fibT = 0;   // (1.5.0) + the Fib lines and their names
+    auto isFib = [](const mock::Prim& p) { return p.k == 'L' || (p.k == 'T' && (p.text == "Stop" || p.text == "50%" || p.text == "1.0" || p.text == "1.272" || p.text == "1.618" || p.text == "2.0")); };
+    for (const mock::Prim& p : A.drawn) { if (p.k == 'L') { ++fibL; if (p.w != 1 || p.y0 != p.y1) ++other; continue; } if (isFib(p)) { ++fibT; continue; } if (p.k != 'T') { ++other; continue; } if (p.text == "LVP") { ++lvpN; continue; } if (p.col == cobs::C_BULL) ++bull; else if (p.col == cobs::C_BEAR) ++bear; }
     {   int lvis = 0; for (const cobs::LvpMark& m : L.lvp.marks) lvis += m.show && m.idx >= A.first;
-        CHECK(lvpN <= lvis && (lvis == 0 || lvpN > 0) && bull + bear + lvpN == S->drawn, "(1.3.0) LVP labels drawn (" << lvpN << " of " << lvis << " visible)");
+        CHECK(lvpN <= lvis && (lvis == 0 || lvpN > 0) && bull + bear + lvpN + fibL + fibT == S->drawn, "(1.3.0) LVP labels drawn (" << lvpN << " of " << lvis << " visible)");
         bool col = true, place = true;
         for (const mock::Prim& p : A.drawn) { if (p.text != "LVP") continue; bool f = false;
             for (const cobs::LvpMark& m : L.lvp.marks) { PNT q; q.set(m.idx, 0.0f, kBarCenter); if (m.idx < A.first || std::abs(q.h - (p.x0 + p.x1) / 2) > 3) continue; f = true;
@@ -127,12 +128,14 @@ int main(int argc, char** argv) {
                 place = place && (m.side > 0 ? p.y0 >= yl + 50 : p.y1 <= yh - 50); }
             place = place && f; }
         CHECK(col && place, "(1.3.0) LVP: red above after a bear CoB / green below after a bull CoB, 3 rows clear of the wick");
-        bool clear = true; for (size_t i = 0; i < A.drawn.size(); ++i) for (size_t j = i + 1; j < A.drawn.size(); ++j) { const mock::Prim& a = A.drawn[i]; const mock::Prim& b = A.drawn[j];
+        bool clear = true; for (size_t i = 0; i < A.drawn.size(); ++i) for (size_t j = i + 1; j < A.drawn.size(); ++j) { const mock::Prim& a = A.drawn[i]; const mock::Prim& b = A.drawn[j]; if (isFib(a) || isFib(b)) continue;
             clear = clear && !(a.x0 < b.x1 - 2 && b.x0 < a.x1 - 2 && a.y0 < b.y1 && b.y0 < a.y1); }
         CHECK(clear, "(1.3.0) no label overlaps another"); }
     int vis = 0, vb = 0; for (const cobs::Mark& m : L.marks) if (m.idx >= A.first) { ++vis; vb += m.side > 0; }
-    CHECK(other == 0 && bull + bear > 0 && bull + bear + lvpN == S->drawn && bull + bear <= vis && bull <= vb, "only label text drawn (" << bull << " green / " << bear << " red of " << vis << " visible)");
-    {   bool place = true; for (const mock::Prim& p : A.drawn) { if (p.k != 'T') continue; for (const cobs::Mark& m : L.marks) { if (m.idx < A.first) continue;
+    CHECK(other == 0 && bull + bear > 0 && bull + bear + lvpN + fibL + fibT == S->drawn && bull + bear <= vis && bull <= vb, "only label text drawn (" << bull << " green / " << bear << " red of " << vis << " visible)");
+    {   int want = 0; for (const cobs::Mark& m : L.marks) if (cobs::fibDrawn(m)) ++want;   // (1.5.0) every drawn CoB in view brings its lines (1 px, solid, horizontal)
+        CHECK(fibL > 0 && fibL <= 6 * want && fibT <= fibL, "(1.5.0) Fib lines drawn through the host (" << fibL << " lines, " << fibT << " names, " << want << " drawn CoBs)"); }
+    {   bool place = true; for (const mock::Prim& p : A.drawn) { if (p.k != 'T' || isFib(p)) continue; for (const cobs::Mark& m : L.marks) { if (m.idx < A.first) continue;
             PNT q; q.set(m.idx, 0.0f, kBarCenter); if (std::abs(q.h - (p.x0 + p.x1) / 2) > 6) continue;
             const int yl = (int)x.getVerticalDrawPosition((float)L.B[(size_t)m.idx].l), yh = (int)x.getVerticalDrawPosition((float)L.B[(size_t)m.idx].h);
             place = place && (m.side > 0 ? p.y0 >= yl : p.y0 + 14 <= yh); } }
@@ -141,7 +144,7 @@ int main(int argc, char** argv) {
     {   mock::Host D; D.dialog = true; D.root = ""; mock::current = &D; CobSignal z; z.calc(0); mdraw(z); CHECK(D.drawn.empty(), "the Add / settings copy with no chart draws nothing and does not fault"); }
     // versions
     { const std::string src = slurp("../CobSignal.cpp"); const size_t p = src.find("p->setVersion(\""); const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.4.0", "version literals match (" << lit << ")"); }
+      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.5.0", "version literals match (" << lit << ")"); }
     std::cout << "test_cobsignal_host: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

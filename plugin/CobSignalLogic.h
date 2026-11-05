@@ -48,7 +48,8 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-11-05 10:17-10:21 CT Rassul "add a zzo wave filter of the cob having a wave that has at least a 10", "the filter should apply to both") a CoB is DRAWN only once its ZZO Combo wave count reaches 10
+static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-11-05 12:25-12:42 CT Rassul "build a line on top of the cob with targets", "lets use 1.272, 1.618 and 2.0", "an entry line at 50% retracement and a stop line at 0", line endings + "i'll go with your recommendations") the CoB Fib lines (fibLines / fibLayout)
+// was "1.4.0";   // (1.4.0, 2026-11-05 10:17-10:21 CT Rassul "add a zzo wave filter of the cob having a wave that has at least a 10", "the filter should apply to both") a CoB is DRAWN only once its ZZO Combo wave count reaches 10
 // was "1.3.0";   // (1.3.0, Rassul 2026-11-04 "build" after the LVP mockup) + LVP (low-volume pullback after a CoB, 3-bar ZigZag waves)   // was "1.2.0";   // (1.2.0, Rassul 2026-11-02 19:07-19:19 CT, his cob_bull_3m_1b / cob_bear_3m_1b + "11:00 am cutoff" + "build it so i can add it") = his two signals: + PWL / AsiaLO (bull) and PWH / AsiaHI (bear) as swept levels, PHL / PHH kept as extras; BOTH sides by 11:00 CT; the bear gets his room line (the leg-start high - close >= 0.1 ADR)   // was "1.1.0":   // (1.1.0, Rassul 2026-11-02 10:14 CT "ok.. lets add it .. build") a CoB whose ONLY swept level is PHH / PHL
 // is drawn in ES / HG / GC (the year test: +0.61 / +0.18 / +0.16 R) and recorded but NOT drawn in NQ / CL / NG / 6E (+0.01 / -0.22 / -0.53 / -0.15 R) until the
 // nightly proves it there; a CoB that also swept another level is drawn everywhere as before   // was "1.0.0"
@@ -319,7 +320,7 @@ struct Engine {
 
 // ---- the drawing (SDK-free): the label under a bull CoB bar's low / over a bear's high, bull green / bear red, never over another label
 struct View { int l = 0, t = 0, r = 800, b = 600, first = 0, last = 0; std::function<double(int)> X; std::function<double(double)> Y; std::function<int(const std::string&)> textW; };
-struct Prim { int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; std::string text; };
+struct Prim { int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; std::string text; bool line = false; bool tiny = false; };   // (1.5.0) line = a horizontal line x0..x1 at y0; tiny = the Fib labels' smaller font
 static const unsigned C_BULL = 0x0022C55E, C_BEAR = 0x00EF4444;   // 0x00RRGGBB
 static const int GAP = 18;                                     // px from the bar's extreme (clear of Candle Absorb's codes on pivot bars)
 static const int LVP_OFF = 3 + 3 * 16;                         // (1.3.0) = 51 px: row 3 out (wave-time label row 0, Candle Absorb A row 1, lsBreakout Pb row 2; 16 px rows)
@@ -361,6 +362,88 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
     return P;
 }
 
+// ---- (1.5.0) the CoB Fib lines. Rassul 2026-11-05: targets 1.272 / 1.618 / 2.0, entry at the 50% retracement, stop at 0 (the CoB origin),
+// lines end on a close back through the origin and at the session end, entry + stop gone after 3 h at most; his "go with your
+// recommendations": entry + stop also end when the stop is touched (wick) or when T1 trades before the entry fills (missed), a hit target
+// ends at its hit bar, a newer drawn CoB (either side) ends the older CoB's lines, CoBs are by 11:00 CT already (check), stop 1 tick beyond 0.
+// Leg: bull = the leg-start bar's low (0) to the leg-end bar's high (1.0); bear the mirror. Only CoBs that are drawn (show + ZZO ok).
+// Computed from closed bars only, so a finished line never changes; an open line runs to the live bar.
+static const double FIB_K[3] = { 1.272, 1.618, 2.0 };
+static const long long FIB_ENTRY_SECS = 3 * 3600;           // entry + stop: 3 h at most from the CoB bar
+enum FibKind { F_STOP = 0, F_ENTRY = 1, F_ONE = 2, F_T1 = 3, F_T2 = 4, F_T3 = 5 };
+struct FibSeg { int kind = 0; double px = 0; int i0 = -1, i1 = -1; bool open = false, hit = false; };
+struct FibSet { long long cobT = 0; int side = 0; double origin = 0, one = 0; std::vector<FibSeg> seg; std::string why; };
+inline bool fibDrawn(const Mark& m) { return m.show && m.zOk && m.legStart >= 0 && m.legEnd >= m.legStart; }
+inline FibSet fibLines(const Engine& E, const Mark& m)
+{
+    FibSet F; F.cobT = m.t; F.side = m.side;
+    const int n = (int)E.B.size();
+    if (!fibDrawn(m) || m.idx < 0 || m.idx >= n || m.legEnd >= n || m.idx >= (int)E.cls.size()) { F.why = "not drawn"; return F; }
+    const int sd = m.side > 0 ? 1 : -1;
+    const double origin = sd > 0 ? E.B[(size_t)m.legStart].l : E.B[(size_t)m.legStart].h;
+    const double one = sd > 0 ? E.B[(size_t)m.legEnd].h : E.B[(size_t)m.legEnd].l;
+    const double L = (one - origin) * sd; if (!(L > 0)) { F.why = "no leg"; return F; }
+    F.origin = origin; F.one = one;
+    auto at = [&](double k) { return origin + sd * k * L; };
+    const double stop = origin - sd * E.tick, entry = at(0.5), tk[3] = { at(FIB_K[0]), at(FIB_K[1]), at(FIB_K[2]) };
+    int nextCob = -1;
+    for (const Mark& o : E.marks) if (&o != &m && o.idx > m.idx && fibDrawn(o)) { if (nextCob < 0 || o.idx < nextCob) nextCob = o.idx; }
+    const long sess = E.cls[(size_t)m.idx].sess;
+    int endAll = -1, entryEnd = -1, tEnd[3] = { -1, -1, -1 }; bool filled = false;
+    for (int j = m.idx + 1; j < n && j < (int)E.cls.size(); ++j) {
+        if (nextCob >= 0 && j >= nextCob) { endAll = j; F.why = "next CoB"; break; }
+        if (E.cls[(size_t)j].kind != svl::RTH || E.cls[(size_t)j].sess != sess) { endAll = j - 1; F.why = "session end"; break; }
+        const Bar& b = E.B[(size_t)j];
+        const double fav = sd > 0 ? b.h : b.l, adv = sd > 0 ? b.l : b.h;
+        if (entryEnd < 0) {
+            if (!filled && (adv - entry) * sd <= 0) filled = true;
+            if ((adv - stop) * sd <= 0) entryEnd = j;                           // stopped (a wick through the stop)
+            else if (!filled && (fav - tk[0]) * sd >= 0) entryEnd = j;         // missed: T1 traded before the 50% filled
+            else if (b.t - m.t >= FIB_ENTRY_SECS) entryEnd = j;                // 3 h
+        }
+        for (int k = 0; k < 3; ++k) if (tEnd[k] < 0 && (fav - tk[k]) * sd >= 0) tEnd[k] = j;
+        if ((b.c - origin) * sd < 0) { endAll = j; F.why = "closed through 0"; break; }
+    }
+    const bool open = endAll < 0; const int last = open ? n - 1 : std::max(m.idx, endAll);
+    if (open) F.why = "live";
+    auto add = [&](int kind, double px, int e, bool hit) { FibSeg g; g.kind = kind; g.px = px; g.i0 = m.legStart; g.hit = hit;
+        if (e >= 0 && e <= last) { g.i1 = e; g.open = false; } else { g.i1 = last; g.open = open; } F.seg.push_back(g); };
+    add(F_STOP, stop, entryEnd, false); add(F_ENTRY, entry, entryEnd, false); add(F_ONE, one, -1, false);
+    for (int k = 0; k < 3; ++k) add(F_T1 + k, tk[k], tEnd[k], tEnd[k] >= 0 && tEnd[k] <= last);
+    return F;
+}
+static const unsigned C_ENTRY = 0x003B82F6, C_ONE = 0x006B7280;   // entry blue, the CoB high (1.0) grey; targets = the CoB's colour, stop = the other
+inline const char* fibName(int k) { static const char* N[] = { "Stop", "50%", "1.0", "1.272", "1.618", "2.0" }; return N[k >= 0 && k < 6 ? k : 0]; }
+// lines (1 px, solid) from the CoB origin bar to the end bar (the live bar + 1 when open), the name right of the line's end, small
+inline std::vector<Prim> fibLayout(const Engine& E, const View& v)
+{
+    std::vector<Prim> P;
+    for (const Mark& m : E.marks) {
+        if (!fibDrawn(m)) continue;
+        const FibSet F = fibLines(E, m); if (F.seg.empty()) continue;
+        for (const FibSeg& g : F.seg) {
+            const int e = g.open ? g.i1 + 1 : g.i1;
+            if (e < v.first || g.i0 > v.last + 1) continue;
+            const int x0 = (int)std::lround(v.X(g.i0)), x1 = (int)std::lround(v.X(e)), y = (int)std::lround(v.Y(g.px));
+            if (x1 <= x0 || y < v.t || y > v.b) continue;
+            const unsigned col = g.kind == F_ENTRY ? C_ENTRY : g.kind == F_ONE ? C_ONE : g.kind == F_STOP ? (F.side > 0 ? C_BEAR : C_BULL) : (F.side > 0 ? C_BULL : C_BEAR);
+            Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = col; P.push_back(L);
+            const std::string s = fibName(g.kind); const int w = v.textW ? v.textW(s) : (int)s.size() * 6, h = 12;
+            Prim T; T.tiny = true; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h; T.col = col; T.text = s;
+            if (T.x1 <= v.r && T.y0 >= v.t && T.y1 <= v.b) P.push_back(T);
+        }
+    }
+    return P;
+}
+inline std::string fibStatus(const Engine& E)
+{
+    std::string o = "FIB_RULES,1.5.0 targets 1.272/1.618/2.0, entry 50%, stop 0 - 1 tick; end: close through 0, session end, next drawn CoB; entry+stop: stop touched, T1 before fill, 3 h; a hit target ends at its hit\n";
+    int k = 0; for (size_t q = E.marks.size(); q-- > 0 && k < 4;) { const Mark& m = E.marks[q]; if (!fibDrawn(m)) continue; ++k;
+        const FibSet F = fibLines(E, m); char b[200]; std::snprintf(b, sizeof b, "FIB,%lld,%s,0=%.6g,1=%.6g,%s", m.t, m.side > 0 ? "BULL" : "BEAR", F.origin, F.one, F.why.c_str());
+        std::string l = b; for (const FibSeg& g : F.seg) { l += std::string(",") + fibName(g.kind) + (g.hit ? " hit" : g.open ? " open" : " ended"); } o += l + "\n"; }
+    return o;
+}
+
 inline std::string statusText(const Engine& E, const std::string& sym, int spb, const std::string& rec)
 {
     std::string o = std::string("VERSION,") + VERSION + "\nMARKET," + E.mkt + "\nSYMBOL," + sym + "\nBAR_SECONDS," + std::to_string(spb) +
@@ -377,6 +460,7 @@ inline std::string statusText(const Engine& E, const std::string& sym, int spb, 
     o += "LVPS," + std::to_string(E.lvp.marks.size()) + "\n";
     const size_t nl = E.lvp.marks.size();
     for (size_t k = nl > 8 ? nl - 8 : 0; k < nl; ++k) o += "LAST" + lvpLine(E.lvp.marks[k]) + "\n";
+    o += fibStatus(E);   // (1.5.0)
     const size_t nt = E.lvp.tr.size();
     for (size_t k = nt > 4 ? nt - 4 : 0; k < nt; ++k) { const LvpTrack& x = E.lvp.tr[k]; o += "LVPLOOK," + std::to_string(x.cobT) + "," + (x.side > 0 ? "BULL" : "BEAR") + "," + std::to_string(x.vol) + "," + std::to_string(x.n) + "," + std::to_string(x.lvp) + "," + x.why + "\n"; }
     return o;
