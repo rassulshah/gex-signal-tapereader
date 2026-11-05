@@ -108,9 +108,11 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <chrono>
 #include "SignalBoard.h"            // (1.31.0) kind D facts (decided candles' defense)
 
-#define BF_VERSION "1.35.0"          // 1.35.0 (2026-11-04, Rassul "add wave poc as one of the levels for bookflow") + WPOC levels in the level box   // was 1.34.0: 1.34.0 (2026-11-04, Rassul "just build it") the LEVEL BOX + squares (BookLevelBox.h) and the turn-mark ratio label   // was 1.33.0: 1.33.0 (2026-11-03, Rassul "go" on bf_box.png) the 4-line info box -> ONE compact line top-left (bf::oneLine): yellow Defending?, green B +923 0.6x, red S +534 0.3x, small white Live; no (i) icon
+#define BF_VERSION "1.36.0"          // 1.36.0 (2026-11-04 20:39 CT, Rassul "this is overcomplicated.. how do i make it basic" -> Option A on bf_basic): bars unchanged; the one-line header reads "Defending?  B 0.4x · S 0.5x" (no lots, no Live / time word; "Feed silent" kept); no turn marks (triangle + ratio) and no level squares drawn - all still computed, recorded and in the status   // was 1.35.0:          // 1.35.0 (2026-11-04, Rassul "add wave poc as one of the levels for bookflow") + WPOC levels in the level box   // was 1.34.0: 1.34.0 (2026-11-04, Rassul "just build it") the LEVEL BOX + squares (BookLevelBox.h) and the turn-mark ratio label   // was 1.33.0: 1.33.0 (2026-11-03, Rassul "go" on bf_box.png) the 4-line info box -> ONE compact line top-left (bf::oneLine): yellow Defending?, green B +923 0.6x, red S +534 0.3x, small white Live; no (i) icon
 // was "1.32.1"          // 1.32.1 (2026-11-02) no hovers (BF_HOVERS false, no TRACK_MOUSE)
-static const bool BF_HOVERS = false;   // was 1.32.0:          // 1.32.0 (2026-10-28 overnight, Rassul 21:52 / 21:57 CT) the NODE LADDER owner (OrderFlowFeed 1.16.0 Engine.ladder -> SignalBoard 1.5.0 LRA_SLD_ every second), the AT NODE box row and the node mark (white square inside the defenders' bar: filled = holding, hollow = pulling) from lsDeltaProfile's kind Y read (display only, nothing recomputed)
+static const bool BF_HOVERS = false;
+static const bool BF_DRAW_TURN_MARKS = false;   // (1.36.0, Rassul Option A) the turn marks over the bars are not drawn (decided + recorded as before)
+static const bool BF_DRAW_SQUARES = false;      // (1.36.0) the level squares under the bars are not drawn and get no axis room (decided + recorded as before)   // was 1.32.0:          // 1.32.0 (2026-10-28 overnight, Rassul 21:52 / 21:57 CT) the NODE LADDER owner (OrderFlowFeed 1.16.0 Engine.ladder -> SignalBoard 1.5.0 LRA_SLD_ every second), the AT NODE box row and the node mark (white square inside the defenders' bar: filled = holding, hollow = pulling) from lsDeltaProfile's kind Y read (display only, nothing recomputed)
 // 1.31.0 was:          // 1.31.0 (2026-10-28 overnight) the decided candle's defense posted on the SignalBoard as kind D (bf::defenseFact; layer 1a, one owner)
 // prev:         // 1.30.0 (2026-10-26, Rassul 18:33 CT) the letter strips are not drawn (letters recorded / exported / in the status), their rows go to the bars; the turn % marks stay
 // prev:          // (1.29.0, 2026-10-26) self-awareness SELFDEF (SelfAware.h, SELF-AWARE.md; ships OFF per market) // 1.28.0 (2026-10-26, BUILD-SPEC Defense pane, Rassul approved 22:29 CT 2026-10-25): F? (amber, FMirror.h 1.0.0: the pivot likely dies at once - attackers stacking in front + defenders pulling behind in the pivot bar's last 60 s, decided at its close, F lines in BookFlow\<MKT>-<spb>-fmirror.csv, drawn only with the per-market thresholds from lsFlexLevels\LRA-FMirror-<MKT>.csv); the shared A shows as grey "Ab", H as "Hb?" (defender colour) only after an Ab at the same pivot within 10 candles, L / X as "L?" / "X?" with the re-test hover (same order / new big order / small orders only, lots vs normal); letters coloured by meaning (bullish green / bearish red: W, B, X, Q! at a low = red); at most 2 codes per candle (one per strip); records unchanged // 1.27.0 (2026-10-23 4-step stage revamp) Defense strips renamed Floor / Release (LetterStrips 1.3.0); // was 1.26.0:          // 1.25.0 (2026-10-22 evening fix build) compact strips, bars >= 50% of the pane, one-line Implied row, the Q hover hides the anchor token;          // keep equal to bf::VERSION and the setVersion literal below; (1.3.4, 2026-10-18 23:19 CT) the box follows the mouse only inside this pane, else Live = the forming candle
@@ -148,7 +150,7 @@ public:
         S_* S = static_cast<S_*>(getUserData());
         if (S && dMin && dMax) { double mn = 0, mx = 10; off::axisFor(S->axisTop, S->paneH, off::pairPx(S->paneH, off::textReserve(S->paneH, gmode(S->set.mode)) + off::QUESTION_H + topReserve()), mn, mx);
             // (1.34.0) the level squares' rows under the bars: kept ONLY while a candle with squares is in view (else the pane is exactly as before)
-            Ext* e = ext(*S); if (e && mn < 0 && lbSqIn(*e, iStartBar, iEndBar)) { const double unit = -mn; mn -= blb::SQ_RESERVE * unit; mx -= blb::SQ_RESERVE * unit; }
+            Ext* e = ext(*S); if (BF_DRAW_SQUARES && e && mn < 0 && lbSqIn(*e, iStartBar, iEndBar)) { const double unit = -mn; mn -= blb::SQ_RESERVE * unit; mx -= blb::SQ_RESERVE * unit; }
             *dMin = mn; *dMax = mx; }
         return r;
     }
@@ -1765,7 +1767,7 @@ public:
         // tests: e->lastInfo / e->lastRead), not drawn. (was: info.topLines + br::addAndPlan + off::planPanel -> the 4-line box)
         (void)area; (void)pl; (void)zl;
         std::string bCell, sCell; bf::refillCells(info, bCell, sCell);
-        const bf::OneLine OL = bf::oneLine(bCell, sCell, silent ? std::string("Feed silent") : info.head, g.left + 2, g.top + 1, g.edge - 2, tw);
+        const bf::OneLine OL = bf::oneLine(bCell, sCell, silent ? std::string("Feed silent") : std::string(), g.left + 2, g.top + 1, g.edge - 2, tw);   // (1.36.0) no Live / time word; "Feed silent" kept
         if (Ext* e = ext(S)) { e->lastRead = rd; e->lastReadLines = rd.head.empty() ? std::vector<std::string>() : std::vector<std::string>(1, rd.full()); e->lastInfo = info; e->lastLine = OL; e->infoIcon = off::IconRect(); }
         S.lastBox = OL.ok ? bp::mk(OL.l, OL.t, OL.r, OL.b) : bp::Box();
         std::vector<off::LBox> avoid; off::ValY vyNow;
@@ -1784,7 +1786,7 @@ public:
         }
         if (Ext* e = ext(S)) {                                             // (1.34.0) the squares: two rows under each candle's bars that spent time at a level
             e->lbSqView = false;
-            if (vyNow.ok && !e->lbSq.empty()) {
+            if (BF_DRAW_SQUARES && vyNow.ok && !e->lbSq.empty()) {
                 const int yb = std::min(g.bottom - 1, vyNow.yOf(0));
                 for (int i = v0; i <= v1 && i < last; ++i) {
                     std::map<long long, blb::Square>::const_iterator it = e->lbSq.find((long long)times[i]); if (it == e->lbSq.end()) continue;
@@ -1802,7 +1804,7 @@ public:
             if (!S.market.empty()) { const std::string sp = dlset::settingsPath(off::flexDir(), S.market); if (e->dlStore.path != sp) { e->dlStore = ss::Store(); e->dlStore.S = &dlset::spec(); e->dlStore.path = sp; }
                                      if (!sp.empty()) e->dlSet = e->dlStore.load(ss::marketIndex(S.market), off::steadyMs()); }
             e->lastMarks.clear();
-            if (e->dlSet.b(dlset::K_SHOW_MARKS) && top > 0) {
+            if (BF_DRAW_TURN_MARKS && e->dlSet.b(dlset::K_SHOW_MARKS) && top > 0) {
                 FONT mf; mf.id = HELVETICA; mf.size = off::LABEL_PT; mf.style = PLAIN; setFont(mf);
                 auto mark = [&](int i, const dt::Turn& t, bool live) {
                     const off::PaneBar* pb = barOf(i); if (!pb) return;
@@ -2000,6 +2002,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | (BF_HOVERS ? TRACK_MOUSE : 0));   // (1.32.1) no hovers                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.35.0");   // BF_VERSION
+    p->setVersion("1.36.0");   // BF_VERSION
     return p;
 }

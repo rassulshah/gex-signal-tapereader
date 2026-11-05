@@ -46,8 +46,8 @@ int main() {
     for (int i = 0; i < 31; ++i) h.bars.push_back(bar(T0 + 60UL * i));
     Ind* p = make(); p->calc(0); auto* S = p->testState(); h.draws.clear(); p->draw();
     Ind::Ext* e = p->ext(*S);
-    CHECK(std::string(BF_VERSION) == "1.35.0" && std::string(bf::VERSION) == "1.35.0", "versions 1.35.0 (1.34.0 suite, pins moved with the 1.35.0 bump) (BF_VERSION / bf::VERSION; ofset::BF_VERSION in test_blb_logic)");
-    CHECK(readAll("../BookFlow.cpp").find("p->setVersion(\"1.35.0\")") != std::string::npos, "the setVersion literal 1.34.0 (gex-build reads it)");
+    CHECK(std::string(BF_VERSION) == "1.36.0" && std::string(bf::VERSION) == "1.36.0", "versions 1.36.0 (1.34.0 suite, pins moved with the 1.36.0 bump) (BF_VERSION / bf::VERSION; ofset::BF_VERSION in test_blb_logic)");
+    CHECK(readAll("../BookFlow.cpp").find("p->setVersion(\"1.36.0\")") != std::string::npos, "the setVersion literal 1.36.0 (gex-build reads it)");
     step(h, p, 31);
     // ---- phase A: 6 candles at 7013 (8 ticks above the zone 7009-7011): far from the level -> no box ----
     for (int k = 31; k <= 36; ++k) { candle(k, 7013.0f, 2, 2, k == 31 ? 20 : 0); step(h, p, k + 1); }
@@ -95,7 +95,7 @@ int main() {
     CHECK(e->lbSq.count(k39 + 60) && e->lbSq[k39 + 60].secs == 1 && e->lbSq[k39 + 60].col[0] == blb::GRAY, "the candle that left after 1 s at the level: gray (< 20 s of a colour)");
     CHECK(e->lbSq[k38].col[0] == blb::GREEN && e->lbSq[k38].col[1] == blb::GREEN && e->lbSq[k38].secs >= 55, "a candle with 60 s of green Defenders / Behind: two green squares");
     {   int nD = 0, nB = 0; for (auto& x : h.draws) if (x.type == "box" && x.color == (COLOR)blb::BC_GREEN && x.b - x.y == blb::SQ_H) { if (x.y == blb::sqRowTop(std::min(h.paneBottom - 1, (int)(h.paneBottom - (0 - h.priceBase) * 20)), 0)) ++nD; else ++nB; }
-        CHECK(nD >= 2 && nB >= 2, "squares drawn: two rows under the bars (" + std::to_string(nD) + " / " + std::to_string(nB) + ")");
+        CHECK(nD == 0 && nB == 0, "(1.36.0 basic) squares decided but NOT drawn (" + std::to_string(nD) + " / " + std::to_string(nB) + ")");
         int hit = 0; for (auto& sq : h.draws) { if (!(sq.type == "box" && sq.b - sq.y == blb::SQ_H && (sq.color == (COLOR)blb::BC_GREEN || sq.color == (COLOR)blb::BC_RED || sq.color == (COLOR)blb::BC_GRAY))) continue;
             for (auto& b : h.draws) if (b.type == "box" && &b != &sq && (b.color == off::C_GREEN_BAR || b.color == off::C_RED_BAR || b.color == off::C_GREEN_SPIKE || b.color == off::C_RED_SPIKE) && b.y < sq.b && b.b > sq.y && b.x < sq.r && b.r > sq.x) ++hit; }
         CHECK(hit == 0, "the squares never overlap a bar (" + std::to_string(hit) + ")"); }
@@ -103,7 +103,7 @@ int main() {
         std::map<long long, blb::Square> keep; keep.swap(e->lbSq); double mn2 = 0, mx2 = 0; p->scale(0, n, &mn2, &mx2); keep.swap(e->lbSq);
         double mn3 = 0, mx3 = 0; p->scale(n - 1, n, &mn3, &mx3);           // squares out of view (the last 2 candles: no square)
         const double unit = -mn2;
-        CHECK(unit > 0 && std::fabs(mn - (mn2 - blb::SQ_RESERVE * unit)) < 1e-6 * unit && std::fabs(mx - (mx2 - blb::SQ_RESERVE * unit)) < 1e-6 * unit, "squares in view: the axis keeps 10 px under the bars (same px per lot)");
+        CHECK(unit > 0 && mn == mn2 && mx == mx2, "(1.36.0 basic) squares not drawn: no axis room for them (the axis exactly as without the level box)");
         keep.swap(e->lbSq); double mn4 = 0, mx4 = 0; p->scale(n - 1, n, &mn4, &mx4); keep.swap(e->lbSq);
         CHECK(mn3 == mn4 && mx3 == mx4, "squares out of view: the axis exactly as without the level box"); (void)baseZero; }
     (void)drawsAway;
@@ -121,7 +121,7 @@ int main() {
     Ind* p2 = make(); p2->calc(0); auto* S2 = p2->testState(); NOW += 1000; p2->calc(0); h.draws.clear(); p2->draw(); Ind::Ext* e2 = p2->ext(*S2);
     bool same2 = e2->lbSq.size() == before.size(); for (auto& kv : before) same2 = same2 && e2->lbSq.count(kv.first) && e2->lbSq[kv.first].col[0] == kv.second.col[0] && e2->lbSq[kv.first].col[1] == kv.second.col[1];
     CHECK(same2 && e2->lbLoaded == 4, "restart: the squares come back from the record, identical (" + std::to_string(e2->lbSq.size()) + ")");
-    {   int n = 0; for (auto& x : h.draws) if (x.type == "box" && x.b - x.y == blb::SQ_H && x.color == (COLOR)blb::BC_GREEN) ++n; CHECK(n >= 4, "restart: the squares are drawn again"); }
+    {   int n = 0; for (auto& x : h.draws) if (x.type == "box" && x.b - x.y == blb::SQ_H && x.color == (COLOR)blb::BC_GREEN) ++n; CHECK(n == 0, "(1.36.0 basic) restart: squares reloaded, still not drawn"); }
     {   std::string st = readAll(flex + "\\BookFlow\\status-ES-ESZ6-60.txt"); NOW += 40000; p2->calc(0); st = readAll(flex + "\\BookFlow\\status-ES-ESZ6-60.txt");
         CHECK(st.find("LEVEL_BOX,1.1.0,params defaults") != std::string::npos && st.find("TURN_LABEL,") != std::string::npos, "status: LEVEL_BOX + TURN_LABEL lines"); }
     // the nightly's params: SHOW D drops the "?" on Defenders; a wrong-market file = defaults with the reason

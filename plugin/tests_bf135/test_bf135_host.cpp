@@ -44,8 +44,8 @@ int main() {
     Ind* p = make();
     // no record yet: no WPOC level, no crash
     p->calc(0); auto* S = p->testState(); h.draws.clear(); p->draw(); Ind::Ext* e = p->ext(*S);
-    CHECK(std::string(BF_VERSION) == "1.35.0" && std::string(bf::VERSION) == "1.35.0" && std::string(blb::VERSION) == "1.1.0", "versions 1.35.0 / BookLevelBox 1.1.0");
-    CHECK(readAll("../BookFlow.cpp").find("p->setVersion(\"1.35.0\")") != std::string::npos, "the setVersion literal 1.35.0 (gex-build reads it)");
+    CHECK(std::string(BF_VERSION) == "1.36.0" && std::string(bf::VERSION) == "1.36.0" && std::string(blb::VERSION) == "1.1.0", "versions 1.36.0 / BookLevelBox 1.1.0");
+    CHECK(readAll("../BookFlow.cpp").find("p->setVersion(\"1.36.0\")") != std::string::npos, "the setVersion literal 1.36.0 (gex-build reads it)");
     CHECK(e->lbN[blb::L_WPOC] == 0 && e->lbWpNote.find("no Wave POC record") != std::string::npos, "no record: no WPOC level (" + e->lbWpNote + ")");
     // the record: an up wave (bars 5 -> 20, confirmed at 23) with its POC 7010.00 (+ other nodes / ROWS / STOP lines, skipped), and a wave of
     // the previous trading day (never used); times = WavePOC::localSec of the bar ENDs
