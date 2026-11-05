@@ -48,7 +48,8 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-04 "build" after the LVP mockup) + LVP (low-volume pullback after a CoB, 3-bar ZigZag waves)   // was "1.2.0";   // (1.2.0, Rassul 2026-11-02 19:07-19:19 CT, his cob_bull_3m_1b / cob_bear_3m_1b + "11:00 am cutoff" + "build it so i can add it") = his two signals: + PWL / AsiaLO (bull) and PWH / AsiaHI (bear) as swept levels, PHL / PHH kept as extras; BOTH sides by 11:00 CT; the bear gets his room line (the leg-start high - close >= 0.1 ADR)   // was "1.1.0":   // (1.1.0, Rassul 2026-11-02 10:14 CT "ok.. lets add it .. build") a CoB whose ONLY swept level is PHH / PHL
+static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-11-05 10:17-10:21 CT Rassul "add a zzo wave filter of the cob having a wave that has at least a 10", "the filter should apply to both") a CoB is DRAWN only once its ZZO Combo wave count reaches 10
+// was "1.3.0";   // (1.3.0, Rassul 2026-11-04 "build" after the LVP mockup) + LVP (low-volume pullback after a CoB, 3-bar ZigZag waves)   // was "1.2.0";   // (1.2.0, Rassul 2026-11-02 19:07-19:19 CT, his cob_bull_3m_1b / cob_bear_3m_1b + "11:00 am cutoff" + "build it so i can add it") = his two signals: + PWL / AsiaLO (bull) and PWH / AsiaHI (bear) as swept levels, PHL / PHH kept as extras; BOTH sides by 11:00 CT; the bear gets his room line (the leg-start high - close >= 0.1 ADR)   // was "1.1.0":   // (1.1.0, Rassul 2026-11-02 10:14 CT "ok.. lets add it .. build") a CoB whose ONLY swept level is PHH / PHL
 // is drawn in ES / HG / GC (the year test: +0.61 / +0.18 / +0.16 R) and recorded but NOT drawn in NQ / CL / NG / 6E (+0.01 / -0.22 / -0.53 / -0.15 R) until the
 // nightly proves it there; a CoB that also swept another level is drawn everywhere as before   // was "1.0.0"
 inline bool phShown(const std::string& mkt) { return mkt == "ES" || mkt == "HG" || mkt == "GC"; }
@@ -63,9 +64,14 @@ struct Mark {
     std::string levels; double dratio = 0, ext = 0, adr = 0; int legStart = -1, legEnd = -1;
     bool r = false, v = false; int rBar = -1, vBar = -1, rN = 0, vN = 0;
     bool phOnly = false, show = true;   // (1.1.0) PHH / PHL the only level swept; drawn (false = recorded only)
+    // (1.4.0) the ZZO wave filter: the CoB's wave on the ZZO Combo engine (3-bar ZigZag, the forming wave after the running extreme);
+    // zOk once its count reaches ZZO_COB_MIN at the CoB bar or a later bar of the same wave; drawn only then (decided once, never undone)
+    int zCnt = -1; bool zOk = false, zDone = false; long long zAt = 0, zWave = 0; int zBars = 0;
     std::string label() const { std::string s = "Cob"; if (r || v) s += "+"; if (r) s += "R"; if (v) s += "V"; return s; }
 };
 struct Leg { int s = -1, e = -1, dir = 0; double size = 0; };
+static const int ZZO_COB_MIN = 10;      // (1.4.0) the CoB wave's ZZO Combo count (Rassul: "at least a 10")
+static const int ZZO_COB_LOOK = 60;     // (1.4.0) bars a CoB waits for its wave to reach the count (then: not drawn)
 
 inline std::string mktKey(const std::string& root) { return root == "6E" ? std::string("EU") : root; }
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
@@ -152,9 +158,11 @@ struct Engine {
     std::vector<Mark> marks; std::vector<std::string> out;   // decisions + record lines not yet written
     long long trimmed = 0; std::string lastWhy;
     Lvp lvp; std::vector<std::string> lvpOut;        // (1.3.0) LVP decisions + record lines not yet written
+    zzd::Engine Z3;                                  // (1.4.0) the ZZO Combo engine on the same bars (wave counts for the CoB filter)
     void reset() { lvp.reset(); lvpOut.clear(); B.clear(); K.clear(); CB.clear(); cls.clear(); dirn = 0; ext = 0; start = 0; legs.clear(); lastLowPivot = -1; S.clear(); doneOrder.clear(); marks.clear(); out.clear(); lastWhy.clear(); }
     bool setMarket(const std::string& m, double tk, int spb) {
         mkt = mktKey(m); tick = tk > 0 ? tk : 0.25; perSec = spb > 0 ? spb : 180; lvp.tick = tick;
+        Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(mkt, perSec);   // (1.4.0)
         return svl::rthOf(mkt.c_str(), openMin, closeMin);
     }
     double adrFor(long sess) const {               // 20 prior completed sessions' true range (>= 10)
@@ -203,6 +211,7 @@ struct Engine {
         // (1.3.0) LVP: the CoBs decided on this bar start a look; then this bar on the 3-bar ZigZag (it may confirm a pullback wave)
         for (size_t q = nm; q < marks.size(); ++q) { const Mark& m = marks[q]; lvp.cob(m.t, m.idx, m.legEnd, m.side, m.show); }
         { const size_t nl = lvp.marks.size(); lvp.bar(b); for (size_t q = nl; q < lvp.marks.size(); ++q) lvpOut.push_back(lvpLine(lvp.marks[q])); }
+        zzoBar(b);                                     // (1.4.0) the ZZO Combo engine with this bar, then the pending CoBs' wave counts
         // 2) the ZigZag (his 1-bar walk) with this bar
         if (j == 1) { dirn = B[1].h >= B[0].h ? 1 : -1; ext = 0; start = 0; }
         if (j >= 1) {
@@ -273,6 +282,33 @@ struct Engine {
         m.r = T.r.bar >= 0; m.v = T.v.bar >= 0; m.rBar = T.r.bar; m.vBar = T.v.bar; m.rN = T.r.n; m.vN = T.v.n;
         marks.push_back(m); out.push_back(recLine(m));
     }
+    // (1.4.0) the ZZO wave filter. The forming wave of the CoB's colour on the Combo engine (lsZzoCombo 2.2.0 liveTail): when the walk
+    // already runs the CoB's way, from the bar after its start pivot; else the bars after the running extreme (the provisional wave).
+    void zzoBar(const Bar& b) {
+        zzd::Bar zb; zb.t = b.t; zb.vap = true; zb.vol = (long long)std::llround(b.v);
+        if (!zzd::toTicks(b.h, tick, zb.h) || !zzd::toTicks(b.l, tick, zb.l)) { zb.h = Z3.B.empty() ? 0 : Z3.B.back().h; zb.l = Z3.B.empty() ? 0 : Z3.B.back().l; }
+        Z3.addBar(zb);
+        const int j3 = (int)Z3.B.size() - 1; if (j3 < 1) return;
+        for (Mark& m : marks) {
+            if (m.zDone) continue;
+            const zzd::Walk& z = Z3.Z; const int d = m.side > 0 ? 1 : -1;
+            const int s0 = z.dirn == d ? (z.any ? z.start + 1 : z.start) : z.ext + 1;
+            if (++m.zBars > ZZO_COB_LOOK) { zzoDone(m, false); continue; }
+            if (s0 < 0 || s0 > j3) continue;                                  // the CoB's wave has no bar yet (the walk is still the other way at this bar)
+            const long long wt = Z3.B[(size_t)s0].t;
+            if (m.zWave == 0) m.zWave = wt;
+            else if (wt != m.zWave) { zzoDone(m, false); continue; }          // its wave ended before reaching the count
+            const zzd::Wave w = Z3.make(Z3.B, s0, j3, d, Z3.W.size(), true);
+            if (!w.hasV) continue;
+            m.zCnt = std::max(m.zCnt, w.cnt + (w.cntCap ? 1 : 0));
+            if (w.cnt >= ZZO_COB_MIN || w.cntCap) { m.zAt = b.t; zzoDone(m, true); }
+        }
+    }
+    void zzoDone(Mark& m, bool ok) {
+        m.zDone = true; m.zOk = ok;
+        char r[160]; std::snprintf(r, sizeof r, "ZZO,%lld,%s,%d,%s,%lld", m.t, m.side > 0 ? "BULL" : "BEAR", m.zCnt, ok ? "OK" : "NO", m.zAt);
+        out.push_back(r);
+    }
     std::string recLine(const Mark& m) const {
         char b[320];
         std::snprintf(b, sizeof b, "COB,%lld,%s,%s,%s,%.2f,%.6g,%.6g,%lld,%lld,%d,%d,%s", m.t, m.side > 0 ? "BULL" : "BEAR", m.label().c_str(), m.levels.c_str(), m.dratio, m.ext, m.adr,
@@ -291,7 +327,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
 {
     std::vector<Prim> P; std::vector<std::pair<int, int>> used;   // label boxes (x0, y0) taken
     for (const Mark& m : E.marks) {
-        if (!m.show || m.idx < v.first || m.idx > v.last || m.idx >= (int)E.B.size()) continue;   // (1.1.0) LOG CoBs are not drawn
+        if (!m.show || !m.zOk || m.idx < v.first || m.idx > v.last || m.idx >= (int)E.B.size()) continue;   // (1.1.0) LOG CoBs are not drawn; (1.4.0) nor a CoB whose ZZO wave count is under 10
         const Bar& b = E.B[(size_t)m.idx];
         const std::string s = m.label(); const int w = v.textW ? v.textW(s) : (int)s.size() * 7, h = 14;
         const double x = v.X(m.idx);
@@ -331,6 +367,8 @@ inline std::string statusText(const Engine& E, const std::string& sym, int spb, 
                      "\nRTH," + std::to_string(E.openMin) + "-" + std::to_string(E.closeMin) + "\nBARS," + std::to_string(E.B.size()) + "\nLEGS," + std::to_string(E.legs.size()) +
                      "\nRULES,1-bar ZigZag; sweep ONH/ONL PDH/PDL PFH/PFL LonHI/LonLO PWH/PWL AsiaHI/AsiaLO PHH/PHL; dratio >= 1.9 (20 legs); >= 3 bars; 50-bar extreme; < 0.4 ADR; bull room 0.1 ADR, bull <= 11:00; PHH/PHL-only CoBs drawn in ES/HG/GC, recorded only elsewhere\n";
     o += "RECORD," + rec + "\nCOBS," + std::to_string(E.marks.size()) + "\n";
+    {   int ok = 0, no = 0, wait = 0; for (const Mark& m : E.marks) { if (!m.zDone) ++wait; else if (m.zOk) ++ok; else ++no; }   // (1.4.0)
+        o += "ZZO_FILTER,1.4.0 drawn only when the CoB's ZZO Combo wave count reaches " + std::to_string(ZZO_COB_MIN) + ",passed " + std::to_string(ok) + ",failed " + std::to_string(no) + ",waiting " + std::to_string(wait) + "\n"; }
     const size_t n = E.marks.size();
     for (size_t k = n > 8 ? n - 8 : 0; k < n; ++k) o += "LAST," + E.recLine(E.marks[k]) + "\n";
     // (1.3.0) LVP

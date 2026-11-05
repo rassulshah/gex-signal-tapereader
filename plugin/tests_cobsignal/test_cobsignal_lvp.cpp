@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
         for (size_t k = 0; ok && k < P.size(); ++k) { const cobs::Bar& b = G[(size_t)L.marks[k].idx]; ok = P[k].col == cobs::C_BEAR && P[k].y1 == (int)std::lround(v.Y(b.h)) - 51 && P[k].y1 <= (int)std::lround(v.Y(b.h)) - 3 - 3 * 16; }
         CHECK(ok, "short CoB: red LVP above the pivot high, bottom 51 px out (rows 0-2 = wave-time, A, Pb stay clear)");
         // a bear CoB label on the same bar at its GAP: the LVP stays clear of it
-        cobs::Mark m; m.idx = L.marks[0].idx; m.side = -1; m.t = G[(size_t)m.idx].t; m.legStart = 0; m.legEnd = 0; E.marks.push_back(m);
+        cobs::Mark m; m.idx = L.marks[0].idx; m.side = -1; m.t = G[(size_t)m.idx].t; m.legStart = 0; m.legEnd = 0; m.zOk = m.zDone = true; E.marks.push_back(m);   // (1.4.0) a drawn CoB = passed the ZZO filter
         P = cobs::layout(E, v); bool clear = P.size() == 3;
         for (size_t a = 0; clear && a < P.size(); ++a) for (size_t b = a + 1; b < P.size(); ++b) clear = clear && !(P[a].x0 < P[b].x1 && P[b].x0 < P[a].x1 && P[a].y0 < P[b].y1 && P[b].y0 < P[a].y1);
         CHECK(clear, "LVP never overlaps a CoB label");
