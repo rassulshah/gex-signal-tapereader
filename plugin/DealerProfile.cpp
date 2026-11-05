@@ -2687,7 +2687,11 @@ extern "C" cppExtension *CreateExtension(void)
     DealerProfile *p = new DealerProfile();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | ((DP_HOVERS || DP_PCT_HOVERS) ? TRACK_MOUSE : 0));   // (2.17.3) no TRACK_MOUSE while the hovers are off   // (2.9.0) hovers: mouse events even when not selected
+#ifdef DP_LIMIT_NAME   // (2026-11-05 12:06 CT Rassul "lets rename the dealer profile to limit profile") built as lsLimitProfile by LimitProfile.cpp
+    p->setDescription("LRA Limit Profile: the resting limit orders (liquidity) and the key / volume / gamma levels at each price.");
+#else
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
+#endif
     p->setVersion("2.53.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }
