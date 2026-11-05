@@ -389,7 +389,7 @@ inline FibSet fibLines(const Engine& E, const Mark& m)
     int nextCob = -1;
     for (const Mark& o : E.marks) if (&o != &m && o.idx > m.idx && fibDrawn(o)) { if (nextCob < 0 || o.idx < nextCob) nextCob = o.idx; }
     const long sess = E.cls[(size_t)m.idx].sess;
-    int endAll = -1, entryEnd = -1, tEnd[3] = { -1, -1, -1 }; bool filled = false;
+    int endAll = -1, entryEnd = -1, beEnd = -1, tEnd[3] = { -1, -1, -1 }; bool filled = false;   // (13:08) beEnd: BE hit = the first bar after the entry fill that trades back to the CoB high
     for (int j = m.idx + 1; j < n && j < (int)E.cls.size(); ++j) {
         if (nextCob >= 0 && j >= nextCob) { endAll = j; F.why = "next CoB"; break; }
         if (E.cls[(size_t)j].kind != svl::RTH || E.cls[(size_t)j].sess != sess) { endAll = j - 1; F.why = "session end"; break; }
@@ -401,6 +401,7 @@ inline FibSet fibLines(const Engine& E, const Mark& m)
             else if (!filled && (fav - tk[0]) * sd >= 0) entryEnd = j;         // missed: T1 traded before the 50% filled
             else if (b.t - m.t >= FIB_ENTRY_SECS) entryEnd = j;                // 3 h
         }
+        if (beEnd < 0 && filled && entryEnd != j && (fav - one) * sd >= 0) beEnd = j;   // (13:08 Rassul "keep the be line like the other green lines that have hit")
         for (int k = 0; k < 3; ++k) if (tEnd[k] < 0 && (fav - tk[k]) * sd >= 0) tEnd[k] = j;
         if ((b.c - origin) * sd < 0) { endAll = j; F.why = "closed through 0"; break; }
     }
@@ -408,11 +409,11 @@ inline FibSet fibLines(const Engine& E, const Mark& m)
     if (open) F.why = "live";
     auto add = [&](int kind, double px, int e, bool hit) { FibSeg g; g.kind = kind; g.px = px; g.i0 = m.legStart; g.hit = hit;
         if (e >= 0 && e <= last) { g.i1 = e; g.open = false; } else { g.i1 = last; g.open = open; } F.seg.push_back(g); };
-    add(F_STOP, stop, entryEnd, false); add(F_ENTRY, entry, entryEnd, false); add(F_ONE, one, -1, false);
+    add(F_STOP, stop, entryEnd, false); add(F_ENTRY, entry, entryEnd, false); add(F_ONE, one, beEnd >= 0 ? beEnd : (!filled ? entryEnd : -1), beEnd >= 0 && beEnd <= last);   // (13:08) BE: green like a target, ends at its hit (no fill: with the entry)
     for (int k = 0; k < 3; ++k) add(F_T1 + k, tk[k], tEnd[k], tEnd[k] >= 0 && tEnd[k] <= last);
     return F;
 }
-static const unsigned C_ENTRY = 0x003B82F6, C_ONE = 0x006B7280;   // entry blue, the CoB high (1.0) grey = BE (Rassul 13:05 "add one more line for be which will be the cob high"); targets = the CoB's colour, stop = the other
+static const unsigned C_ENTRY = 0x003B82F6, C_ONE = 0x006B7280;   // entry blue; (13:08) BE at the CoB high in the CoB colour like the targets (C_ONE no longer drawn); was grey = BE (Rassul 13:05 "add one more line for be which will be the cob high"); targets = the CoB's colour, stop = the other
 inline const char* fibName(int k) { static const char* N[] = { "Stop", "50%", "BE", "1.272", "1.618", "2.0" }; return N[k >= 0 && k < 6 ? k : 0]; }
 // lines (1 px, solid) from the CoB origin bar to the end bar (the live bar + 1 when open), the name right of the line's end, small
 inline std::vector<Prim> fibLayout(const Engine& E, const View& v)
@@ -426,7 +427,7 @@ inline std::vector<Prim> fibLayout(const Engine& E, const View& v)
             if (e < v.first || g.i0 > v.last + 1) continue;
             const int x0 = (int)std::lround(v.X(g.i0)), x1 = (int)std::lround(v.X(e)), y = (int)std::lround(v.Y(g.px));
             if (x1 <= x0 || y < v.t || y > v.b) continue;
-            const unsigned col = g.kind == F_ENTRY ? C_ENTRY : g.kind == F_ONE ? C_ONE : g.kind == F_STOP ? (F.side > 0 ? C_BEAR : C_BULL) : (F.side > 0 ? C_BULL : C_BEAR);
+            const unsigned col = g.kind == F_ENTRY ? C_ENTRY : g.kind == F_STOP ? (F.side > 0 ? C_BEAR : C_BULL) : (F.side > 0 ? C_BULL : C_BEAR);
             Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = col; P.push_back(L);
             const std::string s = fibName(g.kind); const int w = v.textW ? v.textW(s) : (int)s.size() * 6, h = 12;
             Prim T; T.tiny = true; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h; T.col = col; T.text = s;

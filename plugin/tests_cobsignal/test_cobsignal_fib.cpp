@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
             CHECK(t2->hit && t2->i1 == at(B, "09:54"), "T2 hit 9:54");
             CHECK(!t3->hit && t3->open && t3->i1 == last, "T3 open to the live bar (day high 1.12610 < 1.12625)");
             CHECK(!en->open && en->i1 == at(B, "12:00") && st->i1 == en->i1, "entry + stop end at 12:00 (3 h after the 9:00 CoB)");
-            CHECK(one->open && one->i1 == last && F.why == "live", "the CoB high line runs on (" << F.why << ")");
+            CHECK(one->hit && !one->open && one->i1 == at(B, "09:24") && near(one->px, 1.1241) && F.why == "live", "BE (the CoB high 1.12410) hit 9:24 after the 9:03 fill, ends there like a target (" << F.why << ")");
         }
     }
     // [2] mirrored = a short CoB
@@ -139,22 +139,22 @@ int main(int argc, char** argv) {
         for (const cobs::Prim& p : P) {
             if (p.line) { ++lines; if (p.y0 != p.y1 || p.x0 != (int)v.X(i0) || p.x0 < v.l || p.x1 > v.r) posOk = false; }
             else { ++labels; if (!p.tiny) posOk = false;
-                const unsigned want = p.text == "Stop" ? cobs::C_BEAR : p.text == "50%" ? cobs::C_ENTRY : p.text == "BE" ? cobs::C_ONE : cobs::C_BULL; if (p.col != want) colOk = false; }
+                const unsigned want = p.text == "Stop" ? cobs::C_BEAR : p.text == "50%" ? cobs::C_ENTRY : cobs::C_BULL; if (p.col != want) colOk = false; }
         }
-        CHECK(lines == 6 && labels == 6 && colOk && posOk, "6 lines from the origin bar + 6 names: stop red, 50% blue, BE grey, targets green (" << lines << "/" << labels << ")");
+        CHECK(lines == 6 && labels == 6 && colOk && posOk, "6 lines from the origin bar + 6 names: stop red, 50% blue, BE + targets green (" << lines << "/" << labels << ")");
         bool t1x = false; for (const cobs::Prim& p : P) if (p.line && p.y0 == (int)std::lround(v.Y(1.12195 + 1.272 * 0.00215)) && p.x1 == (int)v.X(at(B, "09:30"))) t1x = true;
         CHECK(t1x, "T1's line ends at its hit bar");
         bool t3x = false; for (const cobs::Prim& p : P) if (p.line && p.y0 == (int)std::lround(v.Y(1.12625)) && p.x1 == (int)v.X(last + 1)) t3x = true;
         CHECK(t3x, "T3's open line runs to the forming bar");
         v.first = at(B, "12:15"); const std::vector<cobs::Prim> Q = cobs::fibLayout(E, v); int ql = 0; for (const cobs::Prim& p : Q) if (p.line) ++ql;
-        CHECK(ql == 2, "scrolled past 12:15: only the open lines (1.0, T3) are drawn (" << ql << ")");
+        CHECK(ql == 1, "scrolled past 12:15: only the open line (T3) is drawn (" << ql << ")");
         std::vector<cobs::Prim> both = cobs::fibLayout(E, v); const std::vector<cobs::Prim> lab = cobs::layout(E, v); both.insert(both.end(), lab.begin(), lab.end());
         CHECK(both.size() >= Q.size(), "fib + CoB label layout combine");
     }
     // [9] status
     {   cobs::Engine E = eng(B, B.size()); E.marks.push_back(cob(B, i0, i1, ic, 1));
         const std::string s = cobs::fibStatus(E);
-        CHECK(s.find("FIB_RULES,1.5.0") == 0 && s.find("BULL,0=1.12195,1=1.1241,live,Stop ended,50% ended,BE open,1.272 hit,1.618 hit,2.0 open") != std::string::npos, "status: " << s);
+        CHECK(s.find("FIB_RULES,1.5.0") == 0 && s.find("BULL,0=1.12195,1=1.1241,live,Stop ended,50% ended,BE hit,1.272 hit,1.618 hit,2.0 open") != std::string::npos, "status: " << s);
         CHECK(std::string(cobs::VERSION) == "1.5.0", "version 1.5.0");
     }
     // [10] not drawn = no lines
