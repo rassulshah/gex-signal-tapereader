@@ -81,6 +81,8 @@ call :one CandleAbsorb lsCandleAbsorb CandleAbsorbLogic.h HostSlot.h
 REM (2026-11-03) lsBreakout 1.0.0 "BO" (Rassul approved the mockup, "build"): letters only - BO / BD (lsBigBidAsk's breakout via bba::boFromCandles) + Rly (RallyLogic.h); no settings (SS_SAFE_DIALOG). lsBigBidAsk 1.32.0 stops drawing these letters
 REM (2026-11-03) lsBreakout 1.1.0: + Pb (a pullback pivot testing the BO / BD candle) on the 3-bar ZigZag of ZzoDeltaLogic.h (zzd::Engine::step) - headers added
 call :one Breakout lsBreakout BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ColumnBoard.h BoxPlace.h BannerBoard.h BoxDock.h SignalBoard.h ZzoDeltaLogic.h ZzoParams.h
+REM (2026-11-04 21:31 CT, Rassul "there needs to be a 1bar option for breakout indicator .. for higher timeframes", "go") lsBreakout1 "BO 1-bar" = Breakout.cpp with BKO_ONE_BAR (Breakout1.cpp wrapper)
+call :one Breakout1 lsBreakout1 Breakout.cpp BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ColumnBoard.h BoxPlace.h BannerBoard.h BoxDock.h SignalBoard.h ZzoDeltaLogic.h ZzoParams.h
 REM (2026-11-01 22:24 CT, Rassul "build") lsCobSignal 1.0.0 "CoB Signal": his CoB natively (+ PHH / PHL), Cob / Cob+R / Cob+V; no settings
 REM (2026-11-04) lsCobSignal 1.3.0: + LVP on the 3-bar ZigZag of ZzoDeltaLogic.h (zzd::Engine::step) - headers added
 call :one CobSignal lsCobSignal CobSignalLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h CobImpulseLogic.h HostSlot.h SettingsGuard.h ZzoDeltaLogic.h ZzoParams.h
@@ -352,7 +354,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - new builds install after 15:15 CT, when Investor/RT is closed ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile DealerProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb Breakout CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk) do (
+for %%N in (GammaProfile DealerProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb Breakout Breakout1 CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
