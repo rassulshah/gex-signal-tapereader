@@ -85,8 +85,9 @@
 namespace zzd {
 static const char* const VERSION = "1.3.2";
 static const char* const VOL_VERSION = "1.2.2";   // lsZzoVolume
-static const char* const COMBO_VERSION = "2.1.1";   // lsZzoCombo (2.1.1: the count drawn inside the wave, ZzoComboView.h)
-static const char* const ZIGZAG_VERSION = "1.1.0";  // lsZzoZigZag
+static const char* const COMBO_VERSION = "2.2.0";   // (2.2.0, Rassul 2026-11-04 21:01 "zzo combo is still red while the zig zag turned up already .. they should be in sync", 21:14 "do it") the live tail splits at the live extreme: the bars after it show at once as the provisional opposite wave (repaints until the 3-bar reversal confirms), as the chart ZigZag draws its last leg   // was "2.1.1":   // lsZzoCombo (2.1.1: the count drawn inside the wave, ZzoComboView.h)
+static const char* const ZIGZAG_VERSION = "1.2.0";   // (1.2.0) the live leg the same way (low -> provisional up leg at once)   // was "1.1.0":  // lsZzoZigZag
+static const bool LIVE_SPLIT = true;   // (Combo 2.2.0) see Engine::liveTail
 static const int COMBO_REV_BARS = 3;   // (Combo 2.1.0) ZigZag reversal bars for lsZzoCombo + lsZzoZigZag: IRT ZIGZAG 3 bars, High/Low (1 = the 1-bar walk)
 static const int CNT_CAP = 50;          // (Combo) count cap ("cap it at 50")
 static const double AB_HEAVY = 0.04;    // (Combo) Ab drawn only with >= 4% of the pivot bar's volume in its extreme 2 ticks
@@ -337,12 +338,26 @@ struct Engine {
             Engine tmp; tmp.W = W;
             if (step(b2, z, j, s, e, d, revBars)) { Wave w = tmp.make(b2, s, e, d, tmp.W.size(), true); out.push_back(w); tmp.W.push_back(w); }
             const int ls = z.any ? z.start + 1 : 0;
-            if (j >= 1 && ls <= j) out.push_back(tmp.make(b2, ls, j, z.dirn, tmp.W.size(), true));
+            liveTail(tmp, b2, ls, j, z, out);
             return out;
         }
         const int j = (int)B.size() - 1, ls = Z.any ? Z.start + 1 : 0;
-        if (j >= 1 && ls <= j) out.push_back(make(B, ls, j, Z.dirn, W.size(), true));
+        liveTail(*this, B, ls, j, Z, out);
         return out;
+    }
+    // (Combo 2.2.0 / ZigZag 1.2.0, Rassul 2026-11-04 "they should be in sync") the live tail ls .. j: with the 3-bar walk (revBars > 1) it
+    // ends at the live extreme z.ext and the bars after it are shown at once as the PROVISIONAL opposite wave (z.ext + 1 .. j), the way the
+    // chart's ZigZag draws its last leg from the last pivot to the newest bar; a new extreme folds it back (repaint); the 3-bar reversal
+    // confirms it (completed waves W unchanged). The 1-bar engines (ZZO Delta / Volume) keep one live wave ls .. j.
+    void liveTail(const Engine& M, const std::vector<Bar>& b, int ls, int j, const Walk& z, std::vector<Wave>& out) const {
+        if (j < 1 || ls > j) return;
+        if (LIVE_SPLIT && revBars > 1 && z.ext >= ls && z.ext < j) {
+            const Wave a = M.make(b, ls, z.ext, z.dirn, M.W.size(), true); out.push_back(a);
+            Engine tmp = M; tmp.W.push_back(a);                                      // the provisional wave is judged after the live one
+            out.push_back(tmp.make(b, z.ext + 1, j, -z.dirn, tmp.W.size(), true));
+            return;
+        }
+        out.push_back(M.make(b, ls, j, z.dirn, M.W.size(), true));
     }
 };
 
