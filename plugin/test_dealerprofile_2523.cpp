@@ -337,7 +337,7 @@ int main(int, char**)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp"), set = slurp("DealerProfileSettings.h");
-        check(std::string(DP_VERSION) == "2.52.3" && src.find("p->setVersion(\"2.52.3\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && set.find("PLUGIN_VERSION = \"2.52.3\"") != std::string::npos, "A) versions 2.52.3 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
+        check(std::string(DP_VERSION) == "2.53.0" && src.find("p->setVersion(\"2.53.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && set.find("PLUGIN_VERSION = \"2.53.0\"") != std::string::npos, "A) versions 2.52.3 agree (DP_VERSION, setVersion, settings PLUGIN_VERSION)");
         check(std::string(cb::VERSION) == "1.10.0", "A) ColumnBoard 1.10.0");
     }
     dealerFile(true);
