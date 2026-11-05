@@ -118,6 +118,15 @@ static const unsigned long C_UP = 0x0022C55E, C_DN = 0x00EF4444;   // green bull
 static const int MAX_BARS = 20000;     // bars considered (as lsBigBidAsk's Rly pass)
 static const int PB_REV_BARS = zzd::COMBO_REV_BARS;   // (1.1.0) the Pb pivots: 3-bar High / Low ZigZag (lsZzoCombo 2.1.0)
 static const int ZZ_REV_BARS = zzd::COMBO_REV_BARS;   // (1.2.0) BO / BD pivots + wave and Rly waves: the same 3-bar High / Low ZigZag
+#ifndef BKO_ONE_BAR
+#define BKO_ONE_BAR 0                    // (1.6.1, 2026-11-04 Rassul "there needs to be a 1bar option ... for higher timeframes") 1 = the lsBreakout1 build
+#endif
+#if BKO_ONE_BAR
+#define BKO_REC_DIR "Breakout1"           // (1.6.1) lsBreakout1 records apart from the 3-bar build's (nightly compares the two)
+#else
+#define BKO_REC_DIR "Breakout"
+#endif
+static const int DEF_REV_BARS = BKO_ONE_BAR ? 1 : ZZ_REV_BARS;   // (1.6.1) the build's ZigZag: 1-bar (lsBreakout1) or 3-bar (lsBreakout)
 
 // one chart bar (the host fills it from IRT; t = the raw IRT stamp = the bar END, days / endSec = local CT civil day / second)
 struct In { long long t = 0; bool ok = false; long days = 0; int endSec = 0; double o = 0, h = 0, l = 0, c = 0; long long vol = 0; };
@@ -174,12 +183,13 @@ inline std::string pbLine(const PbMark& m, const bba::BoDec& D, const Pivot& p, 
 struct Engine {
     // inputs of the last update
     std::vector<In> bars; double tick = 0; int spb = 0, openMin = 510, closeMin = 900;
-    int zzRev = ZZ_REV_BARS;                   // (1.2.0) ZigZag reversal bars for BO / BD + Rly (3; tests set 1 = lsBigBidAsk's path; set before the first update)
+    int zzRev = DEF_REV_BARS;                  // (1.6.1) = ZZ_REV_BARS (3) in lsBreakout, 1 in lsBreakout1; (1.2.0) ZigZag reversal bars for BO / BD + Rly (3; tests set 1 = lsBigBidAsk's path; set before the first update)
     bool ftTie = true;                         // (1.3.0) follow-through close may equal the BO close - only with zzRev > 1 (zzRev 1 = lsBigBidAsk's strict rule)
     std::map<long long, RecL> boL, rlyL, pbL;  // (1.3.0) the record line of each decision (same keys as bo / rly / pb)
-    bool tieOn() const { return ftTie && zzRev > 1; }
+    bool refine1 = BKO_ONE_BAR != 0;           // (1.6.1) lsBreakout1: the 3-bar build's refinements (follow-through tie, carry across 17:00 CT) also at zzRev 1
+    bool tieOn() const { return ftTie && (zzRev > 1 || refine1); }
     bool zzCarry = true;                       // (1.4.0) the BO pivot zigzag carries across the 17:00 CT break - only with zzRev > 1 (zzRev 1 = lsBigBidAsk's per-session walk)
-    bool carryOn() const { return zzCarry && zzRev > 1; }
+    bool carryOn() const { return zzCarry && (zzRev > 1 || refine1); }
     std::string recVer() const { return std::string(VERSION) + "-zz" + std::to_string(zzRev); }   // the version field of every record line
     // decisions (kept for the chart's life; never changed once made)
     std::map<long long, bba::BoDec> bo;        // t0 -> lsBigBidAsk's decision record (fired or not)
@@ -352,7 +362,7 @@ struct Engine {
         zzd::Walk w;
         for (int j = 0; j < (int)Z.size(); ++j) {
             int s0 = 0, e = 0, d = 0;
-            if (!zzd::Engine::step(Z, w, j, s0, e, d, PB_REV_BARS)) continue;
+            if (!zzd::Engine::step(Z, w, j, s0, e, d, BKO_ONE_BAR ? 1 : PB_REV_BARS)) continue;   // (1.6.1) lsBreakout1: 1-bar Pb pivots
             const In& b = bars[(size_t)at[(size_t)e]];
             Pivot p; p.t = b.t; p.tc = bars[(size_t)at[(size_t)j]].t; p.type = d > 0 ? 1 : -1; p.h = b.h; p.l = b.l; piv.push_back(p);
         }
@@ -574,7 +584,7 @@ inline std::vector<RecFile> recPlan(const Engine& E, const std::string& mkt, con
         if (L.sess < minS || L.line.empty()) return;
         const auto k = std::make_pair(kind, L.sess); auto it = at.find(k);
         if (it == at.end()) { RecFile F; F.kind = kind; F.sess = L.sess; F.head = recHead(E, kind, mkt, sym, spb);
-            F.dir = kind == REC_RLY ? "Breakout" BKO_REC_SEP "Rly" : "Breakout";
+            F.dir = kind == REC_RLY ? BKO_REC_DIR BKO_REC_SEP "Rly" : BKO_REC_DIR;   // (1.6.1) Breakout1 for lsBreakout1
             F.file = stem + (kind == REC_BO ? "-breakouts-" : kind == REC_PB ? "-pb-" : "-") + std::to_string(L.sess) + ".csv";
             it = at.emplace(k, out.size()).first; out.push_back(F); }
         out[it->second].lines.push_back(L.line); };

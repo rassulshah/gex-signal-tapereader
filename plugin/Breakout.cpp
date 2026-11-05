@@ -174,7 +174,7 @@ bool Breakout::identify(BState& S) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true; S.E.reset();
         S.openMin = 510; S.closeMin = 900; { int o = 0, c = 0; if (svl::rthOf(mkt.c_str(), o, c)) { S.openMin = o; S.closeMin = c; } }
         const std::string d = bkoFlex();
-        S.statusPath = d.empty() ? std::string() : d + BKO_SEP "Breakout.status-" + mkt + "-" + std::to_string(spb) + ".txt";
+        S.statusPath = d.empty() ? std::string() : d + BKO_SEP + (BKO_ONE_BAR ? "Breakout1" : "Breakout") + ".status-" + mkt + "-" + std::to_string(spb) + ".txt";
         S.statusBody.clear(); S.statusMs = -1;
         S.recMkt = bko::recMarket(rs ? rs : ""); S.recSym = bko::recFileKey(sym); S.recHave.clear(); S.recRuns = -1; S.recMs = -1; S.recPend = 0;   // (1.3.0)
     }
@@ -227,7 +227,7 @@ void Breakout::records(BState& S, long long now) {
         std::string old; if (bkoExists(path) && !bkoRead(path, old)) { ++S.recFails; pend += (long)want.size(); continue; }
         std::set<std::string> inFile; int added = 0; const std::string text = bko::recMerge(old, F.head, want, inFile, added);
         if (added > 0) {
-            bkoMkdir(f); bkoMkdir(f + BKO_SEP "Breakout"); bkoMkdir(dir);
+            bkoMkdir(f); bkoMkdir(f + BKO_SEP BKO_REC_DIR); bkoMkdir(dir);
             if (!bkoPublish(path, text)) { ++S.recFails; pend += (long)want.size(); continue; }
             S.recAdded += added;
         }
@@ -294,7 +294,11 @@ extern "C" cppExtension* CreateExtension(void) {
     Breakout* p = new Breakout();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA BO v1.5.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (lsBigBidAsk's rule on the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min) Pb on a pullback pivot that tests the BO / BD candle, and BI (BreakIn = a failed BO / BD: red above / green below the candle that closes back past the pivot with breakout range). Records its BO / BD, Rly, Pb and BI decisions to lsFlexLevels\\Breakout for the nightly. No settings.");
+#if BKO_ONE_BAR
+    p->setDescription("LRA BO 1-bar v1.6.0 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot whose low (high) comes back to the broken pivot or stops less than 1/3 ATR(14) short of it. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
+#else
+    p->setDescription("LRA BO v1.6.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min), Pb on a pullback pivot whose low (high) comes back to the broken pivot or stops less than 1/3 ATR(14) short of it. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
+#endif
     p->setVersion("1.6.0");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }
