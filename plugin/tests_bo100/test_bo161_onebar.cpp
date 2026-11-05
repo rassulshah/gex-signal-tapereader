@@ -55,9 +55,10 @@ int main() {
         std::set<long long> ref; zzd::Walk w;
         for (int j = 0; j < (int)Z.size(); ++j) { int s0 = 0, e = 0, d = 0; if (zzd::Engine::step(Z, w, j, s0, e, d, 1)) ref.insert(B[(size_t)at[(size_t)e]].t); }
         std::set<long long> got; for (const bko::Pivot& p : E.piv) got.insert(p.t);
-        CHECK(got == ref && !got.empty(), std::string("[2] ") + m.f + ": engine pivots == independent 1-bar walk (" + std::to_string(got.size()) + " vs " + std::to_string(ref.size()) + ")");
-        int pbBad = 0; for (const auto& kv : E.pb) if (!ref.count(kv.second.tp)) ++pbBad;
-        CHECK(pbBad == 0, std::string("[2] ") + m.f + ": every Pb sits on a 1-bar pivot (" + std::to_string(E.pb.size()) + " Pb)");
+        CHECK(!got.empty() && !ref.empty(), std::string("[2] ") + m.f + ": Pb pivots (green / red close walk, 1.8.0: " + std::to_string(got.size()) + ") and the 1-bar zzd walk (" + std::to_string(ref.size()) + ") both present - the Pb pivot rule itself is checked in test_bo180_pb");
+        std::set<long long> epv; for (const bko::Pivot& q : E.piv) epv.insert(q.t);   // (1.8.0) Pb pivots = the green / red close walk (test_bo180), not the zzd 1-bar walk
+        int pbBad = 0; for (const auto& kv : E.pb) if (!epv.count(kv.second.tp)) ++pbBad;
+        CHECK(pbBad == 0, std::string("[2] ") + m.f + ": every Pb sits on a Pb pivot (" + std::to_string(E.pb.size()) + " Pb)");
         int fired = 0; for (const auto& kv : E.bo) if (kv.second.fired) ++fired;
         CHECK(fired > 0, std::string("[2] ") + m.f + ": BO / BD fired on 15-min (" + std::to_string(fired) + " of " + std::to_string(E.bo.size()) + ")");
         // [3] the Pb rule from the bars
@@ -68,11 +69,9 @@ int main() {
         int bad = 0, checked = 0;
         for (const auto& kv : E.pb) { const bko::PbMark& P = kv.second; const auto it = E.bo.find(P.t0); if (it == E.bo.end()) { ++bad; continue; }
             size_t i0 = 0, ip = 0; for (size_t k = 0; k < B.size(); ++k) { if (B[k].t == P.t0) i0 = k; if (B[k].t == P.tp) ip = k; }
-            if (!std::isfinite(atr[i0])) continue;
             ++checked;
-            const double piv = it->second.piv, ext = P.dir > 0 ? B[ip].l : B[ip].h, gap = P.dir > 0 ? ext - piv : piv - ext;
-            if (!(gap <= atr[i0] / 3.0 + 1e-6)) ++bad; }
-        CHECK(bad == 0, std::string("[3] ") + m.f + ": every Pb at / through the broken pivot or < ATR / 3 short (" + std::to_string(checked) + " checked, " + std::to_string(bad) + " bad)");
+            const bko::In& c = B[i0]; if (!(B[ip].l < c.h && B[ip].h > c.l)) ++bad; }   // (1.8.0) the Pb bar overlaps the BO / BD candle
+        CHECK(bad == 0, std::string("[3] ") + m.f + ": every Pb bar overlaps its BO / BD candle (1.8.0) (" + std::to_string(checked) + " checked, " + std::to_string(bad) + " bad)");
         // [4] replay
         bko::Engine R; for (int n = 40; n <= (int)B.size(); ++n) { std::vector<bko::In> P(B.begin(), B.begin() + n); R.update(P, n, P[0].t, m.tk, 900, 510, 900); }
         CHECK(boSet(R) == boSet(E) && pbSet(R) == pbSet(E), std::string("[4] ") + m.f + ": bar-by-bar replay == one full pass (" + std::to_string(E.bo.size()) + " BO / BD, " + std::to_string(E.pb.size()) + " Pb)");
@@ -82,6 +81,6 @@ int main() {
         std::printf("  %s 15-min: %zu bars, %d BO/BD fired, %zu Pb, %zu Rly\n", m.f, B.size(), fired, E.pb.size(), E.rly.size());
     }
     {   std::ifstream f("../Breakout1.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string s = ss.str();
-        CHECK(s.find("#define BKO_ONE_BAR 1") != std::string::npos && s.find("#include \"Breakout.cpp\"") != std::string::npos && s.find("p->setVersion(\"1.7.0\")") != std::string::npos, "[6] Breakout1.cpp wrapper + version line"); }
+        CHECK(s.find("#define BKO_ONE_BAR 1") != std::string::npos && s.find("#include \"Breakout.cpp\"") != std::string::npos && s.find("p->setVersion(\"1.8.0\")") != std::string::npos, "[6] Breakout1.cpp wrapper + version line"); }
     std::printf("RESULT %d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }

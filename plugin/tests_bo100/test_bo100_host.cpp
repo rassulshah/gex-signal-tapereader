@@ -99,7 +99,7 @@ int main() {
       CHECK(ok && (int)ev.size() == std::min<int>((int)sb::CAP, (int)sides.size()) && good == (int)ev.size(), "SignalBoard 'L' posted for the BO / BD and Pb letters, one per bar and side (px from the extreme to the outer edge) (" + std::to_string(ev.size()) + " / " + std::to_string(sides.size()) + ")"); }
     // status file + versions
     const std::string st = slurp(home + "/InvestorRT/rtx/lsFlexLevels/Breakout.status-ES-180.txt");
-    CHECK(st.rfind("VERSION,1.7.0\n", 0) == 0 && st.find("BI,removed") != std::string::npos && st.find(",bi 0,") != std::string::npos && st.find("ATR / 3") != std::string::npos && st.find("3-bar High/Low ZigZag") != std::string::npos && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
+    CHECK(st.rfind("VERSION,1.8.0\n", 0) == 0 && st.find("BI,removed") != std::string::npos && st.find(",bi 0,") != std::string::npos && st.find("overlaps the BO / BD candle, at most 2 per BO / BD") != std::string::npos && st.find("3-bar High/Low ZigZag") != std::string::npos && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
     { const std::string src = slurp("../Breakout.cpp"); const size_t a = src.find("p->setVersion(\""); const std::string lit = a == std::string::npos ? "" : src.substr(a + 15, src.find('"', a + 15) - a - 15);
       CHECK(lit == BKO_VERSION && lit == bko::VERSION, "setVersion literal = BKO_VERSION = bko::VERSION (" + lit + ")"); }
     const std::string full = sig(H);

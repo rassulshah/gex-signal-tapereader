@@ -109,7 +109,8 @@ namespace bko {
 #ifndef BKO_RLY_ON_DEFAULT
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
-static const char* const VERSION = "1.7.0";   // (1.7.0, 2026-11-05 13:13 CT Rassul "this is a clear rly dn" -> "go") + overnight Rly (rly::run overnight = true: 17:00 CT to the RTH open on its own Globex VWAP / trend; records with version ...-on)   // was "1.6.0";   // (1.6.0) BI removed; Pb within 1/3 ATR of the broken pivot   // was "1.5.0":   // (1.5.0) + BI (BreakIn = failed BO / BD)   // (1.4.0) zigzag carries across the 17:00 CT break   // (1.3.0) records + follow-through tie   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
+static const char* const VERSION = "1.8.0";   // (1.8.0, 2026-11-05 14:08 CT Rassul "a pb needs to overlap the bo", "limit the pb to be fired upto two times", 16:46 "go") Pb = the pullback pivot bar overlaps the BO / BD candle (the 1.6.0 1/3-ATR-of-the-broken-pivot rule dropped), at most PB_MAX_PER_BO = 2 Pb per BO / BD
+// was "1.7.0";   // (1.7.0, 2026-11-05 13:13 CT Rassul "this is a clear rly dn" -> "go") + overnight Rly (rly::run overnight = true: 17:00 CT to the RTH open on its own Globex VWAP / trend; records with version ...-on)   // was "1.6.0";   // (1.6.0) BI removed; Pb within 1/3 ATR of the broken pivot   // was "1.5.0":   // (1.5.0) + BI (BreakIn = failed BO / BD)   // (1.4.0) zigzag carries across the 17:00 CT break   // (1.3.0) records + follow-through tie   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
 static const int GAP = 3;              // px between the wick end and the BO / BD letter
 static const int RLY_ROW = 16;         // the Rly letter sits this many px further out than the BO / BD row
 static const int ROW_OUT = 16;         // (1.1.1) one row = lsCandleAbsorb's ROW_OUT (its A / Ae sits one row beyond the wick label row)
@@ -146,7 +147,8 @@ struct Pivot { long long t = 0, tc = 0; int type = 0; double h = 0, l = 0; };   
 // +1 = BI UP (a failed BD, letter below the low). kind = the attempt as known at the BI close: 0 unconfirmed (no_confirm or still waiting),
 // 1 fired (the BI after its follow-through), 2 other reject. cancel = the attempt was still waiting (that BO / BD is cancelled).
 static const bool SHOW_BI = false;    // (1.6.0, Rassul 2026-11-04 19:06 CT "lets remove the BI signal") no BI pass: no letters, records or BO / BD cancels
-static const double PB_ATR_FRAC = 1.0 / 3.0;   // (1.6.0, 19:21 CT "make it 1/3") a Pb comes back to within this share of the ATR of the broken pivot
+static const int PB_MAX_PER_BO = 2;            // (1.8.0) the first 2 qualifying pullback pivots of a BO / BD only
+static const double PB_ATR_FRAC = 1.0 / 3.0;   // (1.8.0) no longer used by the Pb rule (kept for the record / older tests)   // (1.6.0, 19:21 CT "make it 1/3") a Pb comes back to within this share of the ATR of the broken pivot
 static const int BI_N = 10;            // the BI window: the attempt candle + the next 10 (fired: the 10 after the follow-through candle)
 static const int BI_AVG = 10;          // breakout range = range >= the average range of the previous 10 candles (+ volume or range up)
 enum { BI_UNCONF = 0, BI_FIRED = 1, BI_OTHER = 2 };
@@ -363,10 +365,25 @@ struct Engine {
             if (!b.ok || !(b.h >= b.l) || !zzd::toTicks(b.h, tick, z.h) || !zzd::toTicks(b.l, tick, z.l)) continue;
             Z.push_back(z); at.push_back(k);
         }
-        zzd::Walk w;
-        for (int j = 0; j < (int)Z.size(); ++j) {
-            int s0 = 0, e = 0, d = 0;
-            if (!zzd::Engine::step(Z, w, j, s0, e, d, BKO_ONE_BAR ? 1 : PB_REV_BARS)) continue;   // (1.6.1) lsBreakout1: 1-bar Pb pivots
+        // (1.8.0, Rassul 16:47 "it should become a pivot low based on a bar close", 16:48 "if the dn pivot low is testing the level and
+        // overlapping the bo bar and a green bar occurs, thats good enough") the Pb pivots: in a down leg every lower low moves the low; the
+        // first later bar that CLOSES GREEN (close > open) confirms that low as a pivot LOW (the leg turns up). Mirror: in an up leg every
+        // higher high moves the high, the first later bar that closes RED confirms the pivot HIGH. Closed bars only. Was the zzd 3-bar high /
+        // low turn (lsBreakout1: 1-bar); now the same rule in both builds.
+        std::vector<int> G; G.reserve(Z.size());   // +1 green close, -1 red, 0 doji
+        for (int a : at) { const In& x = bars[(size_t)a]; G.push_back(x.c > x.o ? 1 : x.c < x.o ? -1 : 0); }
+        struct { int dirn = 0, ext = 0; } w;
+        for (int j = 1; j < (int)Z.size(); ++j) {
+            if (j == 1) { w.dirn = Z[1].h >= Z[0].h ? 1 : -1; w.ext = 0; }
+            int e = -1, d = 0;
+            if (w.dirn == 1) {
+                if (Z[(size_t)j].h > Z[(size_t)w.ext].h) { w.ext = j; continue; }
+                if (G[(size_t)j] < 0) { e = w.ext; d = 1; w.ext = j; w.dirn = -1; }
+            } else {
+                if (Z[(size_t)j].l < Z[(size_t)w.ext].l) { w.ext = j; continue; }
+                if (G[(size_t)j] > 0) { e = w.ext; d = -1; w.ext = j; w.dirn = 1; }
+            }
+            if (e < 0) continue;
             const In& b = bars[(size_t)at[(size_t)e]];
             Pivot p; p.t = b.t; p.tc = bars[(size_t)at[(size_t)j]].t; p.type = d > 0 ? 1 : -1; p.h = b.h; p.l = b.l; piv.push_back(p);
         }
@@ -409,9 +426,11 @@ struct Engine {
                 if (haveOrg) for (int k = scan + 1; k <= pi; ++k) { const In& b = bars[(size_t)k]; if (b.ok && (dir > 0 ? b.l < org : b.h > org)) { broke = true; break; } scan = k; }
                 if (broke) break;
                 if (p.type != want) continue;
-                // (1.6.0) the pullback comes back to the broken pivot or stops less than ATR / 3 short of it (was: overlaps the BO / BD candle)
-                if (!(dir > 0 ? p.l <= D.piv + PB_ATR_FRAC * A : p.h >= D.piv - PB_ATR_FRAC * A)) continue;
+                // (1.8.0) the pullback pivot bar overlaps the BO / BD candle: BO = pivot LOW below the candle's high and the pivot bar's high above
+                // its low (BD mirror: pivot HIGH above the candle's low, the pivot bar's low below its high); was (1.6.0) within ATR / 3 of the broken pivot
+                if (!(p.l < c.h && p.h > c.l)) continue;
                 if (pb.count(p.t)) continue;                                  // decided before: never again
+                { int nb = 0; for (const auto& kv : pb) if (kv.second.t0 == D.t0) ++nb; if (nb >= PB_MAX_PER_BO) break; }   // (1.8.0) at most 2 per BO / BD
                 PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = td; m.dir = dir; pb[p.t] = m;
                 RecL L; const int di = idxOf(td); L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;   // (1.3.0) the decision bar's day
                 L.line = pbLine(m, D, p, c, recVer()); pbL[p.t] = L;
@@ -527,7 +546,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
     for (const auto& kv : E.rly) { const auto it = dayOf.find(kv.second.te); if (it == dayOf.end() || it->second != today || !kv.second.fired) continue; (kv.second.dir > 0 ? ru : rd)++; }
     int pu = 0, pd = 0; for (const auto& kv : E.pb) { const auto it = dayOf.find(kv.first); if (it == dayOf.end() || it->second != today) continue; (kv.second.dir > 0 ? pu : pd)++; }   // (1.1.0)
     std::string s = std::string("VERSION,") + VERSION + "\nMARKET," + mkt + "\nSYMBOL," + sym + "\nSPB," + std::to_string(spb) + "\n";
-    s += "RULES,BO / BD = lsBigBidAsk " + std::string(bba::VERSION) + " bba::boFromCandles (rule " + std::to_string(bba::BO_RULE) + ", follow-through in the same wave) on the " + std::to_string(E.zzRev) + "-bar High/Low ZigZag; Rly = RallyLogic " + rly::VERSION + " on the same ZigZag" + (spb == 180 ? "" : " (3-min charts only: off on this chart)") + "; Pb = a confirmed 3-bar High/Low ZigZag pivot back at the broken pivot or < ATR / 3 short of it (14-bar ATR at the BO / BD candle; until the next BO / BD or the wave origin breaks)\n";
+    s += "RULES,BO / BD = lsBigBidAsk " + std::string(bba::VERSION) + " bba::boFromCandles (rule " + std::to_string(bba::BO_RULE) + ", follow-through in the same wave) on the " + std::to_string(E.zzRev) + "-bar High/Low ZigZag; Rly = RallyLogic " + rly::VERSION + " on the same ZigZag" + (spb == 180 ? "" : " (3-min charts only: off on this chart)") + "; Pb = a pullback pivot LOW confirmed by the next GREEN close (pivot HIGH: next RED close) (1.8.0) whose bar overlaps the BO / BD candle, at most 2 per BO / BD (until the next BO / BD or the wave origin breaks)\n";
     s += "TODAY,BO " + std::to_string(bo) + ",BD " + std::to_string(bd) + ",not fired " + std::to_string(nf) + ",Rly up " + std::to_string(ru) + ",Rly down " + std::to_string(rd) + ",Pb after BO " + std::to_string(pu) + ",Pb after BD " + std::to_string(pd) + "\n";
     if (SHOW_BI) s += "BI,bi_shown 1,label BI (plain - no ?),window " + std::to_string(BI_N) + " candles,range >= avg of " + std::to_string(BI_AVG) + " + (volume or range up),close back past the pivot,one per pivot,cancel waiting BO " + (E.biCancel ? "1" : "0")
        + ",today BI down " + std::to_string(idn) + ",BI up " + std::to_string(iu) + ",BO / BD cancelled " + std::to_string(bc) + ",kept " + std::to_string(E.bi.size()) + ",cancelled kept " + std::to_string(E.boCancel.size()) + ",attempts last pass " + std::to_string(E.biAtt) + ",drawn " + std::to_string(last.biShown) + "\n";   // (1.5.0)
