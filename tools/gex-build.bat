@@ -75,7 +75,8 @@ REM (2026-10-27) lsSessionVWAP 1.8.0: + PivotVwapLogic.h (the 3-bar pivot VWAP)
 call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h SessionVWAPLogic.h OnTouchParams.h OnTouchLogic.h VwapTrendLogic.h VwapOddsLogic.h VwapOddsParams.h SessionVWAPStyle.h MarketState.h BannerBoard.h SessionVWAPSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h BoxDock.h KeepOutDraw.h PerfGuard.h SelfAware.h PivotVwapLogic.h
 REM (2026-10-28) lsWavePOC 1.0.0 "Wave POC" (Rassul approved 10:59 CT "just build now"): each big wave's own volume profile + its nodes as lines; WavePOCLogic.h / WavePOCSettings.h (native parameters, SessionVWAP 1.8.1 pattern)
 REM (2026-10-28 11:4x CT) lsWavePOC 1.1.0: + WavePOCLiq.h (liquidity nodes from the order-by-order book, Rassul approved 11:27 CT)
-call :one WavePOC lsWavePOC WavePOCLogic.h WavePOCLiq.h WavePOCSettings.h SettingsSpec.h SettingsHost.h HostSlot.h
+REM (2026-11-05 08:46 CT, Rassul "now") lsWavePOC 1.9.0: volume profile right + POC + up to 2 HVNs at / beyond the break level = lsBreakout's BO candle (bko::Engine runs inside lsWavePOC) - its headers added to the hash list
+call :one WavePOC lsWavePOC WavePOCLogic.h WavePOCLiq.h WavePOCSettings.h SettingsSpec.h SettingsHost.h HostSlot.h BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h ZzoDeltaLogic.h ZzoParams.h
 REM (2026-11-01) lsCandleAbsorb 1.0.0 "Candle Absorb" (Rassul 2026-10-31 "implement waht we have disuccessed"): A / Ae / D / S at ZigZag pivots + the delta POC dash on every candle; no settings
 call :one CandleAbsorb lsCandleAbsorb CandleAbsorbLogic.h HostSlot.h
 REM (2026-11-03) lsBreakout 1.0.0 "BO" (Rassul approved the mockup, "build"): letters only - BO / BD (lsBigBidAsk's breakout via bba::boFromCandles) + Rly (RallyLogic.h); no settings (SS_SAFE_DIALOG). lsBigBidAsk 1.32.0 stops drawing these letters
