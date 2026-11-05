@@ -333,6 +333,9 @@ REM   form avoids cmd reading 08 / 09 as octal. An unreadable time or day name c
 :window
 set HOLD=
 set HOLDWHY=
+REM (2026-11-05 12:23 CT) Rassul: "remove that rule" - no trading-hours hold any more; a new build installs as soon as IRT is closed.
+set "HOLDWHY=(no trading-hours hold, removed by Rassul 2026-11-05)"
+goto :eof
 set "HT=%TIME: =0%"
 set HMIN=
 set /a HMIN=1!HT:~0,2!*60 + 1!HT:~3,2! - 6100 >nul 2>&1
