@@ -59,7 +59,7 @@ int main() {
     int other = 0; std::set<std::string> words; for (const auto& p : H.drawn) { if (p.k != 'T') ++other; else words.insert(p.text); }
     CHECK(other == 0, "nothing but text is drawn (no boxes / fills / lines / ovals)");
     bool onlyW = true; for (const auto& w : words) if (w != "BO" && w != "BD" && w != "Rly" && w != "Pb" && w != "BI") onlyW = false;
-    CHECK(onlyW && words.count("BD") && words.count("Rly") && words.count("Pb") && words.count("BI"), "the only texts are BO / BD / Rly / Pb / BI (no numbers, prints or lots)");
+    CHECK(onlyW && words.count("BD") && words.count("Rly") && words.count("Pb") && !words.count("BI"), "(1.6.0) the only texts are BO / BD / Rly / Pb - no BI (no numbers, prints or lots)");
     const std::vector<mock::Prim> C = coloured(H);
     int bad = 0, nBo = 0, nBd = 0, nR = 0, nPb = 0, pbExact = 0, nBi = 0; std::set<int> boBars, pbBars; std::set<std::pair<int, int>> biSides; std::set<std::pair<int, int>> sides;
     const int lift7 = std::max(1, (1 + (7 / 4 + 1) + 1) / 2), lift9 = std::max(1, (1 + (9 / 4 + 1) + 1) / 2);
@@ -89,11 +89,7 @@ int main() {
     CHECK(rf == nR && nR > 0, "every fired Rly in view drawn once (" + std::to_string(nR) + " / " + std::to_string(rf) + ")");
     {   int pf = 0; std::set<int> pdec; for (const auto& kv : S->E.pb) for (int i = H.first; i < N; ++i) if ((long long)H.t[(size_t)i] == kv.first) pdec.insert(i);
         pf = (int)pdec.size(); CHECK(pf > 0 && pdec == pbBars && nPb == pf && pbExact >= nPb - 2, "(1.1.1) every kept Pb in view drawn once on its pivot bar, no other bar has one, 35 px from the wick (two rows out) unless a letter is there (" + std::to_string(nPb) + " / " + std::to_string(pf) + ", exact " + std::to_string(pbExact) + ")"); }
-    {   std::set<std::pair<int, int>> bdec; for (const auto& kv : S->E.bi) for (int i = H.first; i < N; ++i) if ((long long)H.t[(size_t)i] == kv.second.t) bdec.insert({ i, kv.second.dir < 0 ? 1 : -1 });
-        bool sub = true; for (const auto& q : biSides) if (!bdec.count(q)) sub = false;
-        int edge = 0; for (const auto& q : bdec) if (!biSides.count(q)) { const int y = q.second > 0 ? mockY(H.f[barHigh][(size_t)q.first]) : mockY(H.f[barLow][(size_t)q.first]);
-            if (q.second > 0 ? y - 35 - 12 < H.paneT + 20 : y + 35 + 12 > H.paneB - 1) ++edge; }   // no free row inside the pane (pivot high at the top: rows 0 / 1 are the wave label / A rows)
-        CHECK(!bdec.empty() && sub && nBi == (int)biSides.size() && (int)bdec.size() - nBi == edge && edge <= S->last.noRoom, "(1.5.0) every kept BI in view drawn once on its candle and side, no other candle has one; only one with no free row inside the pane is dropped (counted) (" + std::to_string(nBi) + " / " + std::to_string(bdec.size()) + ", dropped at the pane edge " + std::to_string(edge) + ")"); }
+    CHECK(S->E.bi.empty() && nBi == 0 && biSides.empty(), "(1.6.0) BI removed: none decided, none drawn");
     int ov = 0; for (size_t a = 0; a < C.size(); ++a) for (size_t b = a + 1; b < C.size(); ++b) { const auto& p = C[a]; const auto& q = C[b]; if (p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1) ++ov; }
     CHECK(ov == 0, "no two letters overlap (" + std::to_string(ov) + ")");
     { int halo = 0; for (const auto& p : H.drawn) if (p.k == 'T' && p.col == 0) ++halo; CHECK(halo == 4 * (int)C.size(), "each letter has its 1 px black edge (4 offsets), as lsBigBidAsk drew them"); }
@@ -103,7 +99,7 @@ int main() {
       CHECK(ok && (int)ev.size() == std::min<int>((int)sb::CAP, (int)sides.size()) && good == (int)ev.size(), "SignalBoard 'L' posted for the BO / BD and Pb letters, one per bar and side (px from the extreme to the outer edge) (" + std::to_string(ev.size()) + " / " + std::to_string(sides.size()) + ")"); }
     // status file + versions
     const std::string st = slurp(home + "/InvestorRT/rtx/lsFlexLevels/Breakout.status-ES-180.txt");
-    CHECK(st.rfind("VERSION,1.5.0\n", 0) == 0 && st.find("BI,bi_shown 1,") != std::string::npos && st.find(",bi 1,") != std::string::npos && st.find("3-bar High/Low ZigZag") != std::string::npos && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
+    CHECK(st.rfind("VERSION,1.6.0\n", 0) == 0 && st.find("BI,removed") != std::string::npos && st.find(",bi 0,") != std::string::npos && st.find("ATR / 3") != std::string::npos && st.find("3-bar High/Low ZigZag") != std::string::npos && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
     { const std::string src = slurp("../Breakout.cpp"); const size_t a = src.find("p->setVersion(\""); const std::string lit = a == std::string::npos ? "" : src.substr(a + 15, src.find('"', a + 15) - a - 15);
       CHECK(lit == BKO_VERSION && lit == bko::VERSION, "setVersion literal = BKO_VERSION = bko::VERSION (" + lit + ")"); }
     const std::string full = sig(H);

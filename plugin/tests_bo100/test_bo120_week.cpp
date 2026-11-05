@@ -28,6 +28,7 @@
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) { ++passes; std::printf("PASS %s\n", std::string(m).c_str()); } else { ++fails; std::printf("FAIL %s\n", std::string(m).c_str()); } } while (0)
 static const long long OFF = 2082844800LL;
+static const bool SKIP_PB = true;   // (1.6.0)
 static std::vector<bko::In> load(const std::string& f) {
     std::ifstream in(f); std::string l; std::vector<bko::In> v;
     while (std::getline(in, l)) { int y, mo, d, h, mi, s; double o, hi, lo, c, vo;
@@ -40,10 +41,12 @@ static std::vector<std::string> lines(const bko::Engine& E) {   // the harness p
     std::vector<std::string> v; char b[160];
     for (const auto& kv : E.bo) { const auto& D = kv.second; std::snprintf(b, sizeof b, "BO %lld %lld %d %d %s %.4f", D.t0 - OFF, D.t - OFF, D.dir, D.fired ? 1 : 0, bba::boReasonName(D.reason), D.piv); v.push_back(b); }
     for (const auto& kv : E.rly) { const auto& R = kv.second; std::snprintf(b, sizeof b, "RLY %lld %d %d", R.te - OFF, R.dir, R.fired ? 1 : 0); v.push_back(b); }
-    for (const auto& kv : E.pb) { const auto& P = kv.second; std::snprintf(b, sizeof b, "PB %lld %lld %d", P.tp - OFF, P.t0 - OFF, P.dir); v.push_back(b); }
+    // (lsBreakout 1.6.0) the Pb rule changed (1/3 ATR of the broken pivot): Pb lines are checked by test_bo160_pb against bo_pb 1.3.0;
+    // this suite keeps checking that every BO / BD and Rly decision is unchanged
+    if (!SKIP_PB) for (const auto& kv : E.pb) { const auto& P = kv.second; std::snprintf(b, sizeof b, "PB %lld %lld %d", P.tp - OFF, P.t0 - OFF, P.dir); v.push_back(b); }
     return v;
 }
-static std::vector<std::string> readExp(const std::string& f) { std::ifstream in(f); std::string l; std::vector<std::string> v; while (std::getline(in, l)) if (!l.empty()) v.push_back(l); return v; }
+static std::vector<std::string> readExp(const std::string& f) { std::ifstream in(f); std::string l; std::vector<std::string> v; while (std::getline(in, l)) if (!l.empty() && !(SKIP_PB && l.compare(0, 3, "PB ") == 0)) v.push_back(l); return v; }
 static int diffCount(const std::vector<std::string>& a, const std::vector<std::string>& b) {
     int d = 0; const size_t n = std::max(a.size(), b.size());
     for (size_t k = 0; k < n; ++k) { const std::string x = k < a.size() ? a[k] : "-", y = k < b.size() ? b[k] : "-"; if (x != y) { if (d < 5) std::printf("  DIFF got [%s] want [%s]\n", x.c_str(), y.c_str()); ++d; } }
