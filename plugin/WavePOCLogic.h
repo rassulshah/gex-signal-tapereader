@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.9.1";   // (1.9.1, 2026-11-06 13:00 CT) HVNs = the top 2 nodes in their own distributions inside the break-level zone, no 2x floor
+static const char* const VERSION = "1.9.2";   // (1.9.2, 2026-11-06 13:11 CT Rassul "If the wave poc is above the breakdown low, dont display the hvns", "the wave poc should only be on Cob, Rly and BO waves") rule 192: a profile only on a CoB / Rly / BO-BD wave; no HVNs when the POC is beyond the break level
+// was "1.9.1";   // (1.9.1, 2026-11-06 13:00 CT) HVNs = the top 2 nodes in their own distributions inside the break-level zone, no 2x floor
 // was "1.9.0";   // (1.9.0, 2026-11-05 08:13-08:46 CT Rassul "draw a volume profile instead of the delta profile ... upto 2 hvns and the poc ... the other two hvn should be below the breakout high ... display the poc wherever it may be and then look for 2 hvn's at the break level or lower", "just show the poc line", "now") the right side = the wave VOLUME profile, POC (cyan, P) + up to 2 HVNs (wave colour, H) at / beyond the break level; no delta rows, boxes or I / A / T letters
 // was "1.8.4";   // (1.8.4, 2026-11-04 17:11 CT Rassul) the spine letters I / A / T / P one letter width further left   // was "1.8.3";   // (1.8.3, 2026-11-03 Rassul approved lsBreakout 1.1.0's Pb and said "build") the POC-pullback Pb and its cyan dotted line are no longer drawn (SHOW_PB false; still computed for the status file) - Pb is drawn only by lsBreakout   // was "1.8.2";   // (1.8.2) Pb one row further from the bar (PB_GAP 46)   // was "1.8.1";   // (1.8.1, Rassul 11:36-11:37 CT) solid POC lines; a line ends with its trading day; letters left of the spine   // was "1.8.0";   // (1.8.0, 2026-11-03 Rassul 11:29 CT "i'll go with your recommendation") extended wave POC lines: untested to the right edge (2 nearest above + 2 below), tested ones end at the bar that traded through, dimmer, until the next same-way wave   // was "1.7.2";   // (1.7.2, 2026-11-03 Rassul "build" 09:37 CT) letters I / A / T white on the spine, no "?", no patch; cyan P on the volume POC   // was "1.7.1";   // (1.7.1, Rassul 14:31 CT "you should not be delayed") Pb drawn when the pullback bar closes (live, final once confirmed)   // was "1.7.0":   // (1.7.0, Rassul 2026-11-02 13:28 CT "it should continue to draw as the wave continues") the LIVE wave always drawn, forming bar included   // was "1.6.3":   // (1.6.3, Rassul 2026-11-02 13:17 CT "remove these lines") no leader lines from the last bar to the right-edge node tags   // was "1.6.2":   // (1.6.2, Rassul 09:44-09:54 CT) letters from the top-3 delta nodes: first 66% of the wave = I? (with) / A? (against), last 15% with the wave = T?; cluster A? off, decided when the wave is, no close-back   // was "1.6.1":   // (1.6.1, Rassul 2026-11-02 05:06 CT "the left side of the profile still has a bar") the liquidity-node bars on the left are off too (still computed and recorded)   // was "1.6.0":   // (1.6.0, 2026-11-01 Rassul 21:33 CT "get rid of the volume profile on the left but keep the poc, make it cyan and put it on the right where the wave delta profile is", mockup 21:34) no volume outline / HVN fills on the left; the WPOC a cyan line across the delta side; Pb line + right tag cyan; liquidity nodes stay left   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") delta profile on the right (wave delta, delta POC outlined), volume outline + HVN / WPOC + liquidity nodes grouped on the LEFT, 30 px a side, top-2 delta nodes boxed (solid) and classified by location I? / A? / T? + cluster A?, POC pullback Pb (next 3 pullbacks), waves: reversal (14-bar extreme AND > average AND > 3 ATR) OR breakout (> 3 ATR, closes beyond the previous swing) OR rally / decline (> 4 ATR)   // was "1.4.2":   // (1.4.2) right-edge tags restored (1.3.4 behaviour); header bottom-right   // was "1.4.1":   // (1.4.1) host crash fix only (no logic change)   // was "1.4.0":   // (1.4.0, 2026-10-29 Rassul approved 11:18 CT) no right-edge tags; the latest wave's OPEN WPOC goes to lsDealerProfile's Levels column (latestOpenPoc)   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine
 // 1.3.2:   // (1.3.2) node = the max raw row of its distribution, one profile per start, 1-tick rows, no outline look
@@ -92,9 +93,13 @@ static const int STORE_CAP = 1000;     // candidates kept per direction in the f
 static const int N_MIN = 2, N_MAX = 10, N_DEF = 3;
 
 enum Stop { OPEN = 0, TOUCH = 1, NEWWAVE = 2, ORIGIN = 3 };
-enum QWhy { Q_AVG = 1, Q_ATR = 2, Q_BO = 4, Q_RALLY = 8 };   // (1.5.0) 3 = REVERSAL (AVG and ATR both), BREAKOUT, RALLY (rally / decline)   // (1.3.3) what qualified the wave (bits; 3 = BOTH)
-inline const char* qName(int q) { return q == 3 ? "BOTH" : q == Q_BO ? "BREAKOUT" : q == Q_RALLY ? "RALLY" : q == Q_ATR ? "ATR" : q == Q_AVG ? "AVG" : "-"; }
-inline int qOf(const std::string& s) { return s == "BOTH" ? 3 : s == "BREAKOUT" ? Q_BO : s == "RALLY" ? Q_RALLY : s == "ATR" ? Q_ATR : s == "AVG" ? Q_AVG : s == "-" ? 0 : -1; }
+enum QWhy { Q_AVG = 1, Q_ATR = 2, Q_BO = 4, Q_RALLY = 8, Q_BOW = 16, Q_RLY = 32, Q_COBW = 64 };   // (1.9.2) rule 192: BO / BD wave, Rly wave, CoB wave (bits)   // (1.5.0) 3 = REVERSAL (AVG and ATR both), BREAKOUT, RALLY (rally / decline)   // (1.3.3) what qualified the wave (bits; 3 = BOTH)
+inline std::string qName(int q) {
+    if (q >= Q_BOW) { std::string o; if (q & Q_BOW) o += "BO"; if (q & Q_RLY) o += o.empty() ? "RLY" : "+RLY"; if (q & Q_COBW) o += o.empty() ? "COB" : "+COB"; return o; }   // (1.9.2)
+    return q == 3 ? "BOTH" : q == Q_BO ? "BREAKOUT" : q == Q_RALLY ? "RALLY" : q == Q_ATR ? "ATR" : q == Q_AVG ? "AVG" : "-"; }
+inline int qOf(const std::string& s) {
+    if ((s.rfind("BO", 0) == 0 && s != "BOTH") || s.rfind("RLY", 0) == 0 || s == "COB") { int q = 0; if (s.rfind("BO", 0) == 0) q |= Q_BOW; if (s.find("RLY") != std::string::npos) q |= Q_RLY; if (s.find("COB") != std::string::npos) q |= Q_COBW; return q; }   // (1.9.2)
+    return s == "BOTH" ? 3 : s == "BREAKOUT" ? Q_BO : s == "RALLY" ? Q_RALLY : s == "ATR" ? Q_ATR : s == "AVG" ? Q_AVG : s == "-" ? 0 : -1; }
 enum Kind { K_WAVE = 1, K_COB = 2, K_BOTH = 3 };   // (1.3.0) why a leg is drawn
 inline const char* kindName(int k) { return k == K_BOTH ? "BOTH" : k == K_COB ? "COB" : "WAVE"; }
 inline int kindOf(const std::string& s) { return s == "BOTH" ? K_BOTH : s == "COB" ? K_COB : s == "WAVE" ? K_WAVE : 0; }
@@ -105,7 +110,9 @@ struct VRow { long long tick = 0; long long vol = 0; long long dlt = 0; };   // 
 typedef std::function<int(int bar, std::vector<VRow>& out)> VapFn;  // 1 = rows read, 0 = no VAP for that bar (yet), -1 = fault
 
 struct Pivot { int i = 0; int type = 0; long long px = 0; };
-struct BoCand { long long t0 = 0; int dir = 0; long long hi = 0, lo = 0; };   // (1.9.0) a fired BO / BD candle; t0 = the BO / BD candle's END (local seconds, as Bar::t); ticks       // type +1 swing high, -1 swing low
+struct BoCand { long long t0 = 0; int dir = 0; long long hi = 0, lo = 0; long long tf = 0; };   // (1.9.2) + tf = the fire (follow-through) bar END
+struct RlyCand { long long te = 0; int dir = 0; long long td = 0; };   // (1.9.2) a fired Rly: te = its wave's end bar, td = the bar it was decided at (END stamps)
+struct CobCand { long long t = 0; int dir = 0; bool ok = false; long long tOk = 0; };   // (1.9.2) a CoB bar (lsCobSignal's rule, native): ok = drawn (ZZO >= 10), decided at tOk   // (1.9.0) a fired BO / BD candle; t0 = the BO / BD candle's END (local seconds, as Bar::t); ticks       // type +1 swing high, -1 swing low
 
 struct Node { long long tick = 0; long long vol = 0; double ratio = 0; int rank = 0; int row = -1; int stop = OPEN; int stopBar = -1; };
 // (1.1.0) a liquidity node: average resting real-order lots of its row over the wave; side 1 = mostly bids, 0 = mostly offers
@@ -405,10 +412,10 @@ inline std::map<std::pair<long long, long long>, RecWave> parseRecord(const std:
 }
 
 // ---------- the engine: closed bars in, waves / nodes / stops out (incremental: each bar is processed once) ----------
-struct Counters { long long pb = 0, letters[3] = {0, 0, 0}, clusterA = 0; long long legs = 0, cand[2] = {0, 0}, qual[2] = {0, 0}, stops[4] = {0, 0, 0, 0}, vapMissing = 0, vapFault = 0, recordUsed = 0, superseded = 0, liqWaves = 0, liqNoBook = 0, lnodes = 0, cobBars[2] = {0, 0}, cobOnly = 0, cobBoth = 0, cobRepeat = 0, replaced = 0, qBy[16] = {}; };   // (1.3.3) qBy[AVG=1 / ATR=2 / BOTH=3]: qualifying waves by what qualified them   // (1.3.0) CoB bars seen bull / bear, legs drawn COB / BOTH, legs whose CoB already had a profile
+struct Counters { long long pb = 0, letters[3] = {0, 0, 0}, clusterA = 0; long long legs = 0, cand[2] = {0, 0}, qual[2] = {0, 0}, stops[4] = {0, 0, 0, 0}, vapMissing = 0, vapFault = 0, recordUsed = 0, superseded = 0, liqWaves = 0, liqNoBook = 0, lnodes = 0, cobBars[2] = {0, 0}, cobOnly = 0, cobBoth = 0, cobRepeat = 0, replaced = 0, qBy[128] = {}; };   // (1.3.3) qBy[AVG=1 / ATR=2 / BOTH=3]: qualifying waves by what qualified them   // (1.3.0) CoB bars seen bull / bear, legs drawn COB / BOTH, legs whose CoB already had a profile
 
 #ifndef WPC_DEFAULT_RULE
-#define WPC_DEFAULT_RULE 150   // the plugin build never defines it; the legacy host suite compiles with -DWPC_DEFAULT_RULE=133
+#define WPC_DEFAULT_RULE 192   // (1.9.2) 192 = CoB / Rly / BO waves only (150 = the 1.5.0 reversal / breakout / rally rule); the plugin build never defines it; the legacy host suite compiles with -DWPC_DEFAULT_RULE=133
 #endif
 class Engine {
 public:
@@ -419,13 +426,18 @@ public:
     int zDir = 0, zI = 0, zHi = 0, zLo = 0;                         // (1.3.2) IRT zigzag: live leg (+1 up / -1 down / 0 none), its extreme; first-leg high / low
     std::vector<Pivot> alt;                                          // the zigzag (confirmed pivots)
     std::vector<BoCand> bos;                                         // (1.9.0) the fired BO / BD candles (host: bko::Engine on the same bars)
+    std::vector<RlyCand> rlys;                                       // (1.9.2) the fired Rly waves (host: bko::Engine's rly)
+    std::vector<CobCand> cobs;                                       // (1.9.2) the CoBs (host: cobs::Engine = lsCobSignal's rule)
+    struct LegQ { Pivot a, z; int k = 0; long long prevPx = LLONG_MIN; };
+    std::vector<LegQ> legQ;                                          // (1.9.2) rule 192: confirmed legs waiting GRACE bars for their BO / Rly / CoB decisions
     std::vector<Wave> waves;                                         // qualified waves, confirmation order
     std::vector<int> confs;                                          // confirmation bars of the qualifying waves (sorted; stop every direction)
     std::vector<int> confsCob[2];                                    // (1.3.0) confirmation bars of COB-only legs, [0] up / [1] down (stop that direction)
     std::vector<signed char> cob;                                    // (1.3.0) per closed bar: 1 bull CoB, 2 bear CoB (3 both), captured when the bar is added
     std::set<long long> cobUsed;                                     // (1.3.0) CoB bar times that already have a profile (one per CoB)
     bool cobLegs = true;                                             // (1.3.0) setting "CoB legs"
-    int rule = WPC_DEFAULT_RULE;   // (1.5.0) 150 = reversal / breakout / rally; 133 = the 1.3.3-1.4.2 rule (AVG or 3 ATR at a 14-bar extreme) - legacy suites pin it
+    static const int GRACE = 3;    // (1.9.2) a leg is judged GRACE bars after its confirmation (the BO / Rly / CoB decisions of its bars are in by then)
+    int rule = WPC_DEFAULT_RULE;   // (1.9.2) 192 = CoB / Rly / BO waves; (1.5.0) 150 = reversal / breakout / rally; 133 = the 1.3.3-1.4.2 rule (AVG or 3 ATR at a 14-bar extreme) - legacy suites pin it
     double atrMult = ATR_MULT;                                       // (1.3.3) 3 ATR (fixed; the CoB-only unit tests raise it to isolate the CoB rule)
     std::function<int(int)> cobFn;                                   // (1.3.0) host: the CoB flags of closed bar k (the RTL cob_bull_3m_1b / cob_bear_3m_1b)
     std::vector<std::string> out;                                    // record lines to append (host drains)
@@ -457,7 +469,7 @@ public:
         w.recorded = true; RecWave& r = rec[std::make_pair(w.t0, w.t1)]; r.dir = w.dir; r.kind = w.kind; r.qWhy = w.qWhy; r.cobT = w.cobT; r.nodes = w.nodes; r.lnodes = w.lnodes;
     }
 
-    void reset() { clHist.clear(); zDir = 0; zI = zHi = zLo = 0; B.clear(); alt.clear(); waves.clear(); confs.clear(); confsCob[0].clear(); confsCob[1].clear(); cob.clear(); cobUsed.clear(); out.clear(); C = Counters(); }
+    void reset() { clHist.clear(); zDir = 0; zI = zHi = zLo = 0; B.clear(); alt.clear(); waves.clear(); confs.clear(); confsCob[0].clear(); confsCob[1].clear(); cob.clear(); cobUsed.clear(); out.clear(); legQ.clear(); C = Counters(); }
     int lastBar() const { return (int)B.size() - 1; }
 
     // (1.3.3) 14-bar ATR at bar i: the simple mean of the true range (high / low vs the previous close) of bars i-13 .. i, closed bars only
@@ -576,10 +588,22 @@ public:
         }
         if (upto > w.scanned) w.scanned = upto;
     }
+    // (1.9.2) rule 192: the wave i0 .. i1 is a BO / BD wave (a fired BO / BD of its direction, candle inside it, fired by tEval), a Rly wave
+    // (a fired Rly of its direction ending within the wave's last bars, decided by tEval) - CoB waves go through the CoB leg path (cobOkAt)
+    int qual192(int dir, int i0, int i1, long long tEval) const {
+        int q = 0; const long long ta = B[(size_t)i0].t, tb = B[(size_t)i1].t, tg = B[(size_t)std::min(i1 + GRACE, lastBar())].t;
+        for (const BoCand& b : bos) if (b.dir == dir && b.t0 > ta && b.t0 <= tb && (b.tf == 0 || b.tf <= tEval)) { q |= Q_BOW; break; }
+        for (const RlyCand& r : rlys) if (r.dir == dir && r.te >= ta && r.te <= tg && (r.td == 0 || r.td <= tEval)) { q |= Q_RLY; break; }
+        return q;
+    }
+    bool cobOkAt(long long t, int dir, long long tEval) const { for (const CobCand& c : cobs) if (c.t == t && c.dir == dir) return c.ok && c.tOk <= tEval; return false; }
     // a confirmed leg ends at alt.back(); evaluate it at bar k (its confirmation)
     void leg(int k, VapFn& vap) {
         if (alt.size() < 2) return;
-        const Pivot& a = alt[alt.size() - 2]; const Pivot& z = alt.back();
+        if (rule == 192) { LegQ L; L.a = alt[alt.size() - 2]; L.z = alt.back(); L.k = k; L.prevPx = alt.size() >= 3 && alt[alt.size() - 3].type == L.z.type ? alt[alt.size() - 3].px : LLONG_MIN; legQ.push_back(L); return; }   // (1.9.2) judged GRACE bars later
+        legAt(alt[alt.size() - 2], alt.back(), k, alt.size() >= 3 && alt[alt.size() - 3].type == alt.back().type ? alt[alt.size() - 3].px : LLONG_MIN, k, vap);
+    }
+    void legAt(const Pivot& a, const Pivot& z, int k, long long prevPxIn, int evalBar, VapFn& vap) {
         ++C.legs;
         Wave w; w.dir = z.type; w.i0 = a.i; w.i1 = z.i; w.conf = k; w.t0 = B[(size_t)a.i].t; w.t1 = B[(size_t)z.i].t; w.tConf = B[(size_t)k].t;
         w.p0 = a.px; w.p1 = z.px; w.size = w.dir > 0 ? z.px - a.px : a.px - z.px; w.scanned = w.i1;
@@ -592,24 +616,29 @@ public:
             if (store) store->add(w.dir, w.t1, w.size);
         }
         {   // (1.5.0) reversal / breakout / rally; the previous swing of the wave's direction = the pivot before its start pivot
-            const long long prevPx = alt.size() >= 3 && alt[alt.size() - 3].type == z.type ? alt[alt.size() - 3].px : LLONG_MIN;
-            w.qWhy = rule == 133 ? (cand ? qualify(w, z.i) : (atrAt(z.i, w.atr), 0)) : qualify5(w, a.i, z.i, cand, prevPx); q = w.qWhy != 0;
+            const long long prevPx = prevPxIn;
+            if (rule == 192) { atrAt(z.i, w.atr); w.qWhy = qual192(w.dir, a.i, z.i, B[(size_t)evalBar].t); }   // (1.9.2)
+            else w.qWhy = rule == 133 ? (cand ? qualify(w, z.i) : (atrAt(z.i, w.atr), 0)) : qualify5(w, a.i, z.i, cand, prevPx);
+            q = w.qWhy != 0;
         }
         // (1.3.0) a CoB of the leg's own direction on a bar of the leg (start .. end pivot) that has no profile yet
         int cobBar = -1;
         if (cobLegs) for (int j = w.i0; j <= w.i1 && j < (int)cob.size(); ++j) {
             if (!(cob[(size_t)j] & (w.dir > 0 ? 1 : 2))) continue;
+            if (rule == 192 && !cobOkAt(B[(size_t)j].t, w.dir, B[(size_t)evalBar].t)) continue;   // (1.9.2) only a drawn CoB (ZZO >= 10), known by now
             if (cobUsed.count(B[(size_t)j].t)) { ++C.cobRepeat; continue; }
             cobBar = j; break;
         }
         const bool recHit = rk != rec.end() && rk->second.dir == w.dir && (cobLegs || (rk->second.kind & K_WAVE));   // CoB legs off: recorded COB-only legs are not drawn
         w.kind = (q ? K_WAVE : 0) | (cobBar >= 0 ? K_COB : 0); w.cobT = cobBar >= 0 ? B[(size_t)cobBar].t : 0;
-        if (recHit) { w.kind = rk->second.kind; w.cobT = rk->second.cobT; if (rk->second.qWhy) w.qWhy = rk->second.qWhy; }             // recorded = drawn as recorded (never repainted)
+        if (recHit && rule != 192) { w.kind = rk->second.kind; w.cobT = rk->second.cobT; if (rk->second.qWhy) w.qWhy = rk->second.qWhy; }             // recorded = drawn as recorded (never repainted); (1.9.2) rule 192 judges every wave on its BO / Rly / CoB (the record only keeps its nodes)
+        if (w.cobT > 0 && rule == 192) w.qWhy |= Q_COBW;
         if (!w.kind) return;
         if (w.cobT > 0) cobUsed.insert(w.cobT);
         if (!(w.kind & K_WAVE)) w.qWhy = 0;
-        if (w.kind & K_WAVE) { ++C.qual[w.dir > 0 ? 0 : 1]; ++C.qBy[w.qWhy & 15]; confs.insert(std::upper_bound(confs.begin(), confs.end(), k), k); }
-        else { std::vector<int>& cc = confsCob[w.dir > 0 ? 0 : 1]; cc.insert(std::upper_bound(cc.begin(), cc.end(), k), k); }
+        const int kc = rule == 192 ? evalBar : k;   // (1.9.2) the bar the new wave stops older nodes at = the bar it is decided at
+        if (w.kind & K_WAVE) { ++C.qual[w.dir > 0 ? 0 : 1]; ++C.qBy[w.qWhy & 127]; confs.insert(std::upper_bound(confs.begin(), confs.end(), kc), kc); }
+        else { std::vector<int>& cc = confsCob[w.dir > 0 ? 0 : 1]; cc.insert(std::upper_bound(cc.begin(), cc.end(), kc), kc); }
         if (w.kind == K_COB) ++C.cobOnly; else if (w.kind == K_BOTH) ++C.cobBoth;
         if (recHit && !rk->second.nodes.empty()) {
             w.fromRecord = true; w.recorded = true; w.nodes = rk->second.nodes; w.lnodes = rk->second.lnodes; w.liqTried = true; w.liqOk = !w.lnodes.empty(); ++C.recordUsed;
@@ -662,6 +691,9 @@ public:
             }
         }
         if (zDir == 0) { if (B[(size_t)k].h > B[(size_t)zHi].h) zHi = k; if (B[(size_t)k].l < B[(size_t)zLo].l) zLo = k; }
+        if (!legQ.empty()) {   // (1.9.2) legs judged GRACE bars after their confirmation, in order
+            size_t d = 0; for (; d < legQ.size() && legQ[d].k + GRACE <= k; ++d) legAt(legQ[d].a, legQ[d].z, legQ[d].k, legQ[d].prevPx, k, vap);
+            if (d) legQ.erase(legQ.begin(), legQ.begin() + (long)d); }
         for (Wave& w : waves) if (!w.pending) advance(w, k, true);
         if (alt.size() > 4000) alt.erase(alt.begin(), alt.begin() + 2000);
         if (cobUsed.size() > 20000) cobUsed.erase(cobUsed.begin(), std::next(cobUsed.begin(), 10000));
@@ -701,7 +733,13 @@ public:
         w.avg = cand && store ? store->avgBefore(dir, w.t1, w.nHist) : 0;
         {   const long long prevPx = alt.size() >= 2 && alt[alt.size() - 2].type == dir ? alt[alt.size() - 2].px : LLONG_MIN;   // (1.5.0)
             if (rule == 133 && !cand && !LIVE_ALWAYS) return false;
-            w.qWhy = (rule == 133 && !cand) ? 0 : (rule == 133 ? qualify(w, e) : qualify5(w, a.i, e, cand, prevPx));
+            if (rule == 192) {   // (1.9.2) the live wave is drawn only once it is a BO / BD (or CoB) wave already; a Rly is known at its end only
+                int q = qual192(dir, a.i, e, B[(size_t)k].t) & Q_BOW; bool cb = false;
+                for (int j = a.i; j <= e && j < (int)cob.size(); ++j) if ((cob[(size_t)j] & (dir > 0 ? 1 : 2)) && cobOkAt(B[(size_t)j].t, dir, B[(size_t)k].t)) cb = true;
+                if (!q && !cb) return false;
+                w.qWhy = q | (cb ? Q_COBW : 0);
+            }
+            if (rule != 192) w.qWhy = (rule == 133 && !cand) ? 0 : (rule == 133 ? qualify(w, e) : qualify5(w, a.i, e, cand, prevPx));
             if (!w.qWhy && !LIVE_ALWAYS) return false;
             if (!w.qWhy) w.liveOnly = true;   // (1.7.0) drawn while live, not (yet) a qualifying wave
             if (e - a.i + 1 < 2) return false; }
@@ -823,14 +861,15 @@ inline long long breakLevel(const Wave& w, const std::vector<Bar>& B, const std:
 // each distribution) runs on that zone alone and with NO 2x-median floor (only above the median row, so flat noise is never a node); the POC (and its distribution) is never one of them.
 // (1.9.0 searched the whole wave with the 2x floor: NQ Nov 6 11:24 down wave, BD low 27,154.50, the second node 27,162 = 197 lots vs a
 // 198 floor was dropped - one H drawn.)
-inline std::vector<int> hvnRows(const Wave& w, long long cut) {
+inline std::vector<int> hvnRows(const Wave& w, long long cut, bool pocRule = true) {   // (1.9.2) pocRule: a real break level (BO / BD candle or the bar that broke the prior pivot) - with none (no limit) the POC is always inside
     std::vector<int> out; const int n = (int)w.rows.size(); if (n == 0 || w.rowTicks <= 0) return out;
     int a = -1, b = -1;                                                 // the zone [a, b] (rows ordered low -> high price)
     for (int r = 0; r < n; ++r) { const long long lo = w.e0 + (long long)r * w.rowTicks, hi = lo + w.rowTicks - 1;
         if (w.dir > 0 ? lo <= cut : hi >= cut) { if (a < 0) a = r; b = r; } }
     if (a < 0) return out;
-    const std::vector<long long> sub(w.rows.begin() + a, w.rows.begin() + b + 1);
     const int poc = !w.nodes.empty() ? w.nodes[0].row : -1;
+    if (pocRule && poc >= a && poc <= b) return out;   // (1.9.2, Rassul 13:11 "If the wave poc is above the breakdown low, dont display the hvns") POC in the zone: no HVN
+    const std::vector<long long> sub(w.rows.begin() + a, w.rows.begin() + b + 1);
     const long long floor1 = w.med2 > 0 ? w.med2 / 2 + 1 : 1;         // a node must at least beat the median row (flat noise is no node)
     for (int r : pickNodes(sub, floor1, 64)) {                          // biggest raw row first, one per distribution
         const int row = r + a; if (row == poc) continue;
@@ -1115,7 +1154,7 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
     if (prov) ws.push_back(prov);
     auto xNext = [&](const Wave* w) { double x = 1e9; for (const Wave* o : ws) if (o->i0 > w->i0) x = std::min(x, v.X(o->i0) - v.bw * 0.45); return x; };
     std::vector<std::vector<int> > hv(ws.size());   // (1.9.0) each wave's HVN rows at / beyond its break level
-    for (size_t k = 0; k < ws.size(); ++k) { int why = 0; hv[k] = hvnRows(*ws[k], breakLevel(*ws[k], E.B, E.alt, E.bos, why)); s.hvnDrawn += (int)hv[k].size(); if (why >= 1 && why <= 3) ++s.breakWhy[why]; }
+    for (size_t k = 0; k < ws.size(); ++k) { int why = 0; { const long long cut = breakLevel(*ws[k], E.B, E.alt, E.bos, why); hv[k] = hvnRows(*ws[k], cut, why == 1 || why == 2); } s.hvnDrawn += (int)hv[k].size(); if (why >= 1 && why <= 3) ++s.breakWhy[why]; }
     for (int ph = 0; ph < 2; ++ph)
         for (size_t k = 0; k < ws.size(); ++k) { const Wave* w = ws[k]; drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w), &E.B, &E.alt, E.zDir, E.zI, &hv[k]); }   // (1.7.1) + the live pullback
     drawPocLines(s, E, v, C, ws);   // (1.8.0) the extended wave POC lines, behind the candles
@@ -1150,9 +1189,11 @@ inline std::string statusText(const Engine& E, const std::string& mkt, int spb, 
     o << "BARS," << E.B.size() << ",pivots " << E.alt.size() << ",legs " << E.C.legs << "\n";
     o << "WAVES,candidates up " << E.C.cand[0] << " down " << E.C.cand[1] << ",qualified up " << E.C.qual[0] << " down " << E.C.qual[1] << ",superseded " << E.C.superseded
       << ",pending VAP " << E.pendingCount() << ",from record " << E.C.recordUsed << "\n";
+    if (E.rule == 192) { int bo = 0, rl = 0, cb = 0; for (int q = 0; q < 128; ++q) { if (q & Q_BOW) bo += (int)E.C.qBy[q]; if (q & Q_RLY) rl += (int)E.C.qBy[q]; if (q & Q_COBW) cb += (int)E.C.qBy[q]; }
+        o << "QUALIFIED_BY,(1.9.2) rule 192 = CoB / Rly / BO-BD waves only: BO/BD " << bo << ",Rly " << rl << ",CoB " << cb << ",inputs: BO/BD " << E.bos.size() << " Rly " << E.rlys.size() << " CoB " << E.cobs.size() << ",judged " << Engine::GRACE << " bars after confirmation\n"; } else
     o << "QUALIFIED_BY,reversal " << E.C.qBy[3] << ",breakout " << E.C.qBy[Q_BO] << ",rally/decline " << E.C.qBy[Q_RALLY] << ",(older records AVG " << E.C.qBy[Q_AVG] << " ATR " << E.C.qBy[Q_ATR]
       << "),rule (1.5.0) reversal = " << LOOKBACK << "-bar extreme and > average and > " << ATR_MULT << " x ATR" << ATR_N << " | breakout = > " << ATR_MULT << " x ATR and a close beyond the previous swing | rally / decline = > " << RALLY_MULT << " x ATR\n";
-    if (SHOW_VOL_RIGHT) o << "PROFILE,(1.9.1) right: the wave VOLUME profile, POC cyan + P (anywhere) + up to " << HVN_MAX << " HVNs + H = the top nodes in their own distributions at / beyond the break level (no 2x floor), " << SIDE_W << " px,HVNs drawn now " << (sc ? sc->hvnDrawn : 0) << ",break level from BO / BD candle " << (sc ? sc->breakWhy[1] : 0) << ", bar that broke the prior pivot " << (sc ? sc->breakWhy[2] : 0) << ", none (no limit) " << (sc ? sc->breakWhy[3] : 0) << ",BO / BD candles known " << E.bos.size() << "\n";
+    if (SHOW_VOL_RIGHT) o << "PROFILE,(1.9.2) right: the wave VOLUME profile, POC cyan + P (anywhere) + up to " << HVN_MAX << " HVNs + H = the top nodes in their own distributions at / beyond the break level (no 2x floor; none when the POC is there - 1.9.2), " << SIDE_W << " px,HVNs drawn now " << (sc ? sc->hvnDrawn : 0) << ",break level from BO / BD candle " << (sc ? sc->breakWhy[1] : 0) << ", bar that broke the prior pivot " << (sc ? sc->breakWhy[2] : 0) << ", none (no limit) " << (sc ? sc->breakWhy[3] : 0) << ",BO / BD candles known " << E.bos.size() << "\n";
     else o << "PROFILE,(1.6.2) right only: wave delta + delta POC outline + cyan WPOC (no left side), " << SIDE_W << " px a side,letters drawn now " << (sc ? sc->lettersDrawn : 0) << ",POC pullbacks drawn now " << (sc ? sc->pbDrawn : 0) << " (1.8.3: Pb is lsBreakout's; found in view, not drawn " << (sc ? sc->pbFound : 0) << ")\n";
     if (E.store) {
         int nu = 0, nd = 0; const long long far = (long long)4e18;

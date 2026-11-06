@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
             else { wpc::VRow r; wpc::toTicks(atof(x[2].c_str()), .25, r.tick); r.vol = atoll(x[3].c_str()); r.dlt = atoll(x[4].c_str()); V[(size_t)atoi(x[1].c_str())].push_back(r); } }
         CHECK(B.size() == 247, "fixture 247 bars");
         wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = V[(size_t)i]; return 1; };
-        wpc::Store S; wpc::Engine E; E.store = &S; std::map<long long, std::string> early;   // letters of each wave seen 6 bars after its end (decided) vs at the end of the day
+        wpc::Store S; wpc::Engine E; E.rule = 150; E.store = &S; std::map<long long, std::string> early;   // (1.9.2) the 1.5.0 wave rule pinned   // letters of each wave seen 6 bars after its end (decided) vs at the end of the day
         auto sig = [&](const wpc::Wave& w) { std::string s; for (auto& L : wpc::letters(w, E.B)) { s += L.t; s += std::to_string(L.row); s += L.bull ? "g" : "r"; } return s; };
         for (size_t i = 0; i < B.size(); ++i) { E.addBar(B[i], vap); for (const wpc::Wave& w : E.waves) if (!w.provisional && !w.pending && (int)i == w.i1 + 6 && !early.count(w.t1)) early[w.t1] = sig(w); }
         int q = 0, bo = 0, ra = 0, rev = 0, haveD = 0, same = 0, cmp = 0; long long sumD = 0;
@@ -181,10 +181,10 @@ int main(int argc, char** argv) {
         std::cerr << "fixture: " << q << " waves (" << rev << " reversal, " << bo << " breakout, " << ra << " rally), letters " << sc.lettersDrawn << ", Pb " << sc.pbDrawn << ", boxes " << sc.boxesDrawn << "\n";
         // status text names the new rule
         const std::string st = wpc::statusText(E, "ES", 180, "native,ok", "loaded", "loaded", 0, &sc, false, 0);
-        CHECK(st.find("QUALIFIED_BY,reversal") != std::string::npos && st.find("PROFILE,(1.9.1)") != std::string::npos, "status QUALIFIED_BY + PROFILE lines");
+        CHECK(st.find("QUALIFIED_BY,reversal") != std::string::npos && st.find("PROFILE,(1.9.2)") != std::string::npos, "status QUALIFIED_BY + PROFILE lines");
     }
     // ---- 5. the legacy rule still answers when pinned ----
-    {   wpc::Engine E; CHECK(E.rule == 150, "default rule = 1.5.0"); }
+    {   wpc::Engine E; CHECK(E.rule == 192, "(1.9.2) default rule = 192 (CoB / Rly / BO waves)"); }
     std::cout << "test_wavepoc_150: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

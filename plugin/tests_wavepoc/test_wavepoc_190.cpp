@@ -43,6 +43,9 @@ int main(int argc, char** argv) {
         h = wpc::hvnRows(d, 1040); CHECK(h.size() == 2 && h[0] == 50 && h[1] == 70, "down: the 2 biggest HVNs AT / ABOVE the break level (mirror)");
         wpc::Wave f = mk(1, {{40, 15}}); { const std::vector<int> hf = wpc::hvnRows(f, 2000); CHECK(hf.size() == 1 && hf[0] == 40, "(1.9.1) a bump under 2x the median row, in its own distribution, IS an HVN now (no 2x floor)"); }
         wpc::Wave g = mk(1, {}); CHECK(wpc::hvnRows(g, 2000).empty(), "(1.9.1) flat rows (nothing above the median row) give no HVN");
+        {   wpc::Wave pz = mk(1, {{20, 200}, {50, 120}, {30, 90}}); CHECK(pz.nodes[0].row == 20 && wpc::hvnRows(pz, 1060).empty(), "(1.9.2) up wave: the POC (row 20) is at / below the break level -> no HVN");
+            wpc::Wave dz = mk(-1, {{80, 200}, {50, 120}, {70, 90}}); CHECK(wpc::hvnRows(dz, 1040).empty(), "(1.9.2) down wave: the POC above the BD low -> no HVN (Rassul 13:11)");
+            wpc::Wave dn = mk(-1, {{20, 200}, {50, 120}, {70, 90}}); CHECK(wpc::hvnRows(dn, 1040).size() == 2, "(1.9.2) down wave: the POC below the BD low -> the 2 HVNs above it"); }
         {   // (1.9.1) Rassul 13:00 "the top 2 nodes above the breakdown low": NQ Nov 6 11:24-11:54 down wave (rows from the record), BD low 27,154.50
             wpc::Wave q; q.dir = -1; q.rowTicks = 3; q.e0 = 107952; std::istringstream in("4 3 12 13 16 41 29 36 76 86 46 24 25 14 9 11 185 60 50 39 50 31 62 110 95 74 101 72 106 130 187 152 155 178 153 284 169 158 193 143 153 194 166 139 102 100 88 112 170 145 122 111 120 114 133 134 218 215 227 228 228 274 355 252 335 324 270 202 200 187 134 114 84 74 110 118 110 116 151 185 223 158 600 278 246 267 244 259 220 231 200 195 151 133 162 154 367 155 194 210 195 248 222 214 191 161 447 277 312 348 307 259 303 307 252 274 313 220 200 166 213 182 236 198 193 201 244 240 237 260 280 233 203 318 276 233 433 302 283 269 290 197 197 149 159 139 182 170 134 216 176 203 216 172 170 143 126 84 143 90 100 95 83 63 47 57 50 39 71 77 52 45 29 32 39 53 58 28 25 26 27 28 33 24 36 21 33 19 23 197 19 30 23 19 46 30 42 26 17 22 20 19 31 52 64 40 38 15 36 14 67 11 10 12 9 9 25 11 19 25 33 35 49 47 67 95 121 145 153 168 184 174 197 177 149 136 123 162 137 115 93 69 65 46 40 88 112 106 109 85 88 104 88 72 80 72 92 86 67 39 52 45 62 84 88 99 114 66 62 53 82 102 71 89 74 57 45 31 19 21 36 35 53 28 32 44 29 37 22 23 23 32 23 40 51 102 83 78 102 93 108 148 155 150 207 195 259 267 270 261 209 222 232 180 244 243 222 190 200 217 204 138 144 113 75 66 65 53 58 45 46 99 53 78 67 64 51 62 64 30 38 26 22 29 37 20 30 22 15 15 22 27 38 28 34 16 11 4 1"); long long x; while (in >> x) q.rows.push_back(x);
             q.med2 = wpc::median2(q.rows); int poc = 0; for (int r = 0; r < (int)q.rows.size(); ++r) if (q.rows[(size_t)r] > q.rows[(size_t)poc]) poc = r; wpc::Node nd; nd.row = poc; q.nodes.push_back(nd);
@@ -73,7 +76,8 @@ int main(int argc, char** argv) {
             b.o = B[i].o * .25; b.h = B[i].h * .25; b.l = B[i].l * .25; b.c = B[i].c * .25; b.vol = vol[i]; I.push_back(b); }
         bko::Engine K; K.update(I, (long)I.size(), I[0].t, .25, 180, 510, 900);
         wpc::Store S; wpc::Engine E; E.store = &S;
-        for (const auto& kv : K.bo) { if (!kv.second.fired) continue; for (size_t j = 0; j < I.size(); ++j) if (I[j].t == kv.second.t0) { wpc::BoCand c; c.t0 = kv.second.t0; c.dir = kv.second.dir; c.hi = B[j].h; c.lo = B[j].l; E.bos.push_back(c); } }
+        for (const auto& kv : K.bo) { if (!kv.second.fired) continue; for (size_t j = 0; j < I.size(); ++j) if (I[j].t == kv.second.t0) { wpc::BoCand c; c.t0 = kv.second.t0; c.dir = kv.second.dir; c.hi = B[j].h; c.lo = B[j].l; c.tf = kv.second.t; E.bos.push_back(c); } }
+        for (const auto& kv : K.rly) if (kv.second.fired) { wpc::RlyCand r; r.te = kv.second.te; r.dir = kv.second.dir; E.rlys.push_back(r); }   // (1.9.2)
         CHECK(E.bos.size() >= 2, "lsBreakout fired BO / BD candles on the fixture (" << E.bos.size() << ")");
         wpc::VapFn vap = [&](int i, std::vector<wpc::VRow>& o) { o = V[(size_t)i]; return 1; };
         std::map<long long, std::vector<int> > early;
@@ -95,6 +99,18 @@ int main(int argc, char** argv) {
         CHECK(why1 > 0, "fixture: at least one wave's break level came from a BO / BD candle (" << why1 << " BO, " << why2 << " prior pivot, " << why3 << " none)");
         CHECK(side == hvns && big == hvns && notPoc == hvns, "every HVN at / beyond its wave's break level, above the median row (1.9.1: no 2x floor), never the POC (" << side << "/" << big << "/" << notPoc << " of " << hvns << ")");
         CHECK(cmp > 0 && same == cmp, "no repaint: a finished wave's HVNs 6 bars after its end = at the end of the day (" << same << "/" << cmp << ")");
+        {   // ---- [6] (1.9.2) rule 192: only CoB / Rly / BO-BD waves; every confirmed leg with a fired BO / BD of its direction inside it is profiled ----
+            int bad = 0, okw = 0, missed = 0, legsBo = 0;
+            for (const wpc::Wave& w : E.waves) { if (w.provisional) continue; ++okw; if (!(w.qWhy & (wpc::Q_BOW | wpc::Q_RLY | wpc::Q_COBW))) ++bad; }
+            for (size_t p = 1; p + 3 < E.alt.size(); ++p) { const wpc::Pivot& a = E.alt[p - 1]; const wpc::Pivot& z = E.alt[p]; bool bo = false;
+                for (const wpc::BoCand& c : E.bos) if (c.dir == z.type && c.t0 > E.B[(size_t)a.i].t && c.t0 <= E.B[(size_t)z.i].t && c.tf <= E.B[(size_t)std::min(z.i + 6, E.lastBar())].t) bo = true;
+                if (!bo) continue;
+                ++legsBo; bool f = false; for (const wpc::Wave& w : E.waves) f = f || (w.dir == z.type && w.i0 == a.i && w.i1 >= z.i); missed += !f; }
+            CHECK(E.rule == 192 && okw > 0 && bad == 0, "(1.9.2) every profiled wave is a BO / BD, Rly or CoB wave (" << okw << " waves, " << bad << " other)");
+            CHECK(legsBo > 0 && missed == 0, "(1.9.2) every confirmed leg with a fired BO / BD of its direction inside is profiled (" << legsBo << " legs, " << missed << " missed)");
+            wpc::Wave lw; const bool live = E.provisional(lw, vap);
+            CHECK(!live || (lw.qWhy & (wpc::Q_BOW | wpc::Q_COBW)), "(1.9.2) the live wave is drawn only once it is a BO / BD (or CoB) wave");
+            std::printf("  rule 192: %d waves (%d legs with a BO / BD), Rly inputs %zu, live wave %s\n", okw, legsBo, E.rlys.size(), live ? "drawn" : "not drawn"); }
         // ---- [4] the drawing (Oct 30 afternoon) ----
         const int first = 165, last = 246; long long lo = LLONG_MAX, hi = LLONG_MIN; for (int i = first; i <= last; ++i) { lo = std::min(lo, B[(size_t)i].l); hi = std::max(hi, B[(size_t)i].h); }
         const double W = 1700, H = 900, bw = (W - 80) / (last - first + 3);
@@ -112,12 +128,12 @@ int main(int argc, char** argv) {
         CHECK(hvnFill > 0 && hvnFill <= sc.hvnDrawn, "HVN rows filled in the wave colour (" << hvnFill << " fills, " << sc.hvnDrawn << " HVNs in the scene)");
         CHECK(boxes == 0 && badText == 0 && Hs > 0 && Ps > 0, "letters only P and H (no I / A / T), no boxes (" << Ps << " P, " << Hs << " H, " << badText << " other, " << boxes << " boxes)");
         const std::string st = wpc::statusText(E, "ES", 180, "native,ok", "loaded", "loaded", 0, &sc, false, 0);
-        CHECK(st.find("PROFILE,(1.9.1)") != std::string::npos && st.find("HVNs drawn now") != std::string::npos, "status PROFILE line (1.9.1)");
+        CHECK(st.find("PROFILE,(1.9.2)") != std::string::npos && st.find("HVNs drawn now") != std::string::npos, "status PROFILE line (1.9.2)");
     }
     // ---- [5] versions ----
     {   const std::string cpp = slurp("../WavePOC.cpp"), set = slurp("../WavePOCSettings.h");
-        CHECK(std::string(wpc::VERSION) == "1.9.1" && cpp.find("WP_VERSION = \"1.9.1\"") != std::string::npos && cpp.find("p->setVersion(\"1.9.1\")") != std::string::npos
-              && set.find("PLUGIN_VERSION = \"1.9.1\"") != std::string::npos, "versions 1.9.1"); }
+        CHECK(std::string(wpc::VERSION) == "1.9.2" && cpp.find("WP_VERSION = \"1.9.2\"") != std::string::npos && cpp.find("p->setVersion(\"1.9.2\")") != std::string::npos
+              && set.find("PLUGIN_VERSION = \"1.9.2\"") != std::string::npos, "versions 1.9.2"); }
     std::cerr << "test_wavepoc_190: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

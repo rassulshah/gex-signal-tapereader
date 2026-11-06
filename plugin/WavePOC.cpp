@@ -108,6 +108,7 @@
 #undef near
 #endif
 #include "WavePOCLogic.h"
+#include "CobSignalLogic.h"  // (1.9.2) cobs::Engine = lsCobSignal's CoB rule natively (CoB waves; no RTL read any more)
 #include "BreakoutLogic.h"   // (1.9.0) bko::Engine = lsBreakout's BO / BD decision on the same bars (the HVN break level), natively
 #include "WavePOCSettings.h"
 #include "SettingsHost.h"
@@ -136,9 +137,9 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.9.1";   // (1.9.1) HVNs = top 2 nodes in their own distributions at / beyond the break level, no 2x floor   // (1.9.0) volume profile right + POC + up to 2 HVNs at / beyond the break level (BO candle, lsBreakout's rule)   // was "1.8.4":   // (1.8.4) spine letters one letter further left   // was "1.8.3":   // (1.8.3) no Pb drawn (Pb = lsBreakout 1.1.0)   // was "1.8.2":   // (1.8.2) Pb one row further out   // was "1.8.1":   // (1.8.1) solid POC lines, ended with their trading day   // was "1.8.0":   // (1.8.0) extended wave POC lines   // was "1.7.2":   // (1.7.2) letters white on the spine, cyan P at the volume POC   // was "1.7.1":   // (1.7.1) Pb at the pullback bar's close   // was "1.7.0":   // (1.7.0) the live wave drawn from its first bars (no gate while live), updated at each bar close   // was "1.6.3":   // (1.6.3) no tag leader lines   // was "1.6.2":   // (1.6.2) T? = heavy with-wave delta in the last 20%   // was "1.6.1":   // (1.6.1) no liquidity-node bars on the left   // was "1.6.0":   // (1.6.0) cyan WPOC on the delta side, no left volume profile   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") wave delta profile right (same-price delta from the VAP buy / sell volume), volume outline left, top-4 delta letters I? / A? / T?, cluster A?, dotted node borders, POC pullback Pb, reversal / breakout / rally waves   // was "1.4.2":   // (1.4.2, 2026-10-29 Rassul 13:02 CT) right-edge tags restored as 1.3.4 drew them (the Levels-column "WPOC" he asked for is the WEEKLY POC; lsDealerProfile 2.39.0 drops the Wave POC badge); the version header moved bottom-right (it sat on the REV UP banner)   // was 1.4.1:   // (1.4.1, 2026-10-29 13:20 CT crash fix) the CoB flags come from getChartIndicator only - no getCustomIndicator (IRT fast-fail 0xC0000409 on opening the Add Indicator window, WER bucket 5c8499f9)   // was 1.4.0: (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
+static const char* WP_VERSION = "1.9.2";   // (1.9.2) only CoB / Rly / BO-BD waves (native CoB + BO + Rly); no HVN when the POC is beyond the break level; VAP retry every 60 s   // (1.9.1) HVNs = top 2 nodes in their own distributions at / beyond the break level, no 2x floor   // (1.9.0) volume profile right + POC + up to 2 HVNs at / beyond the break level (BO candle, lsBreakout's rule)   // was "1.8.4":   // (1.8.4) spine letters one letter further left   // was "1.8.3":   // (1.8.3) no Pb drawn (Pb = lsBreakout 1.1.0)   // was "1.8.2":   // (1.8.2) Pb one row further out   // was "1.8.1":   // (1.8.1) solid POC lines, ended with their trading day   // was "1.8.0":   // (1.8.0) extended wave POC lines   // was "1.7.2":   // (1.7.2) letters white on the spine, cyan P at the volume POC   // was "1.7.1":   // (1.7.1) Pb at the pullback bar's close   // was "1.7.0":   // (1.7.0) the live wave drawn from its first bars (no gate while live), updated at each bar close   // was "1.6.3":   // (1.6.3) no tag leader lines   // was "1.6.2":   // (1.6.2) T? = heavy with-wave delta in the last 20%   // was "1.6.1":   // (1.6.1) no liquidity-node bars on the left   // was "1.6.0":   // (1.6.0) cyan WPOC on the delta side, no left volume profile   // was "1.5.0":   // (1.5.0, 2026-10-31 Rassul "implement what we have discussed") wave delta profile right (same-price delta from the VAP buy / sell volume), volume outline left, top-4 delta letters I? / A? / T?, cluster A?, dotted node borders, POC pullback Pb, reversal / breakout / rally waves   // was "1.4.2":   // (1.4.2, 2026-10-29 Rassul 13:02 CT) right-edge tags restored as 1.3.4 drew them (the Levels-column "WPOC" he asked for is the WEEKLY POC; lsDealerProfile 2.39.0 drops the Wave POC badge); the version header moved bottom-right (it sat on the REV UP banner)   // was 1.4.1:   // (1.4.1, 2026-10-29 13:20 CT crash fix) the CoB flags come from getChartIndicator only - no getCustomIndicator (IRT fast-fail 0xC0000409 on opening the Add Indicator window, WER bucket 5c8499f9)   // was 1.4.0: (1.4.0, 2026-10-29 Rassul approved 11:18 CT) right-edge tags removed; the latest wave's OPEN WPOC posted as SignalBoard W (code 1, decided) for lsDealerProfile 2.38.0's WPOC badge   // was 1.3.4:   // = wpc::VERSION = wpset::PLUGIN_VERSION = the setVersion literal (test_wavepoc_host checks)
 static const int WP_MAX_BARS = 20000;      // closed bars replayed at most (history)
-static const long long WP_RETRY_MS = 10LL * 60 * 1000;   // VAP-missing waves retried every 10 min
+static const long long WP_RETRY_MS = 60LL * 1000;   // (1.9.2) was 10 min: after an IRT restart the HG waves sat "VAP pending" (Nov 6)   // VAP-missing waves retried every 10 min
 
 static ss::Ids& wpIds() { static ss::Ids I; return I; }
 
@@ -206,6 +207,7 @@ struct WState {
     bool vapFault = false, sawPre = false, sawPost = false; int preCalls = 0;
     long long statusMs = -1; std::string statusBody; long long storeSaveMs = -1; int recFails = 0;
     wpc::Scene last;
+    cobs::Engine CB; long cbFed = 0; bool cbOk = false;   // (1.9.2) lsCobSignal's CoB engine on this chart's bars (chart bars S.off .. fed)
     bko::Engine BK; int bkFed = -1; long long bkRuns = 0;   // (1.9.0) lsBreakout's engine on this chart's bars; closed bars it last saw
 };
 
@@ -241,6 +243,7 @@ public:
     void feed(WState& S, bool mayCalc);
     void feedBreakouts(WState& S, long n, RTARRAYI& times);   // (1.9.0)
     void readCob(WState& S, long n);
+    void feedCob(WState& S, long n, RTARRAYI& times);   // (1.9.2)
     void flush(WState& S, long long now);
     void status(WState& S, long long now);
     std::string liqWaves(WState& S);
@@ -373,7 +376,7 @@ bool WavePOC::identify(WState& S) {
     const long long tk = std::llround(tick * 1e9);
     if (!S.keyed || mkt != S.mkt || sym != S.sym || spb != S.spb || tk != S.tickKey || S.N != S.E.N || S.cobLegs != S.E.cobLegs) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
-        S.E.reset(); S.E.N = S.N; S.E.cobLegs = S.cobLegs; S.E.tick = tick; S.E.store = &S.store; S.raw.clear(); S.off = 0; S.provAt = -2; S.provOk = false; S.bkFed = -1;
+        S.E.reset(); S.E.N = S.N; S.E.cobLegs = S.cobLegs; S.E.tick = tick; S.E.store = &S.store; S.raw.clear(); S.off = 0; S.provAt = -2; S.provOk = false; S.bkFed = -1; S.cbFed = 0;
         if (S.bookSym != sym) { delete S.dbo; S.dbo = nullptr; S.dboDead = false; S.blocked = false; S.attempt = 0; S.book = wpl::Book(); S.samp = wpl::Sampler(); S.formIdx = -1; S.formKeys.clear(); S.bookSym = sym; }
         bindLiq(S);
         loadFiles(S);
@@ -474,10 +477,38 @@ void WavePOC::feedBreakouts(WState& S, long n, RTARRAYI& times) {
     for (const auto& kv : S.BK.bo) {
         const bba::BoDec& m = kv.second; if (!m.fired) continue;
         const auto it = at.find(m.t0); if (it == at.end()) continue;
-        wpc::BoCand c; c.t0 = m.t0; c.dir = m.dir;
+        wpc::BoCand c; c.t0 = m.t0; c.dir = m.dir; c.tf = m.t;   // (1.9.2) + the fire bar
         if (!wpc::toTicks(B[it->second].h, S.tick, c.hi) || !wpc::toTicks(B[it->second].l, S.tick, c.lo)) continue;
         S.E.bos.push_back(c);
     }
+    S.E.rlys.clear();   // (1.9.2) the fired Rly waves (Rly waves get a profile)
+    for (const auto& kv : S.BK.rly) { if (!kv.second.fired) continue; wpc::RlyCand r; r.te = kv.second.te; r.dir = kv.second.dir; S.E.rlys.push_back(r); }
+}
+
+// (1.9.2) lsCobSignal's CoB rule on this chart's closed bars (cobs::Engine, the same code as the CoB Signal indicator): the CoB bar flags
+// (1 bull, 2 bear) per chart bar for the CoB legs, and each CoB's drawn decision (ZZO >= 10) with the bar it was decided at. Replaces the
+// 1.3.0 - 1.9.1 read of his cob_bull_3m_1b / cob_bear_3m_1b RTL arrays (not on his charts any more).
+void WavePOC::feedCob(WState& S, long n, RTARRAYI& times) {
+    const int closed = (int)n - 1; if (closed < 3) return;
+    RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose); RTARRAYI vo(barVolume);
+    if ((long)op.count < n || (long)hi.count < n || (long)lo.count < n || (long)cl.count < n) return;
+    const bool haveVol = (long)vo.count >= n;
+    if (S.cbFed == 0 || S.off + S.cbFed > closed) { S.CB.reset(); S.cbOk = S.CB.setMarket(S.mkt, S.tick, S.spb); S.cbFed = 0; }
+    if (!S.cbOk) { S.cobSrc = "native lsCobSignal rule: market " + S.mkt + " unknown (no CoB legs)"; return; }
+    for (int i = S.off + (int)S.cbFed; i < closed; ++i) {
+        cobs::Bar b; b.t = localSec((RTDATE)times[i]); b.o = op[i]; b.h = hi[i]; b.l = lo[i]; b.c = cl[i]; b.v = haveVol ? (double)vo[i] : 0;
+        if (b.h < b.l) std::swap(b.h, b.l);
+        S.CB.addBar(b); ++S.cbFed;
+        if (S.CB.trimmed > 0) { S.CB.trimmed = 0; S.CB.reset(); S.CB.setMarket(S.mkt, S.tick, S.spb); S.cbFed = 0; return; }   // history beyond the engine: next pass restarts
+    }
+    S.CB.out.clear(); S.CB.lvpOut.clear();   // records belong to lsCobSignal; nothing written here
+    S.cobFlags.assign((size_t)n, 0); S.E.cobs.clear(); int ok = 0;
+    for (const cobs::Mark& m : S.CB.marks) {
+        const long c = (long)m.idx + S.off; if (m.idx < 0 || c >= (long)n) continue;
+        if (m.show) S.cobFlags[(size_t)c] |= (signed char)(m.side > 0 ? 1 : 2);
+        wpc::CobCand q; q.t = m.t; q.dir = m.side > 0 ? 1 : -1; q.ok = m.show && m.zOk; q.tOk = m.zAt; S.E.cobs.push_back(q); ok += q.ok;
+    }
+    S.cobSrc = "native lsCobSignal " + std::string(cobs::VERSION) + " rule: CoBs " + std::to_string(S.CB.marks.size()) + ", drawn (ZZO >= 10) " + std::to_string(ok);
 }
 
 void WavePOC::feed(WState& S, bool mayCalc) {
@@ -493,12 +524,13 @@ void WavePOC::feed(WState& S, bool mayCalc) {
         if (lastIdx >= closed || (RTDATE)times[lastIdx] != S.raw.back() || (RTDATE)times[S.off] != S.raw.front()) redo = true;
     }
     if (redo) {
-        S.E.reset(); S.E.N = S.N; S.E.cobLegs = S.cobLegs; S.E.tick = S.tick; S.E.store = &S.store; S.raw.clear(); S.provAt = -2; S.bkFed = -1;   // the store + record stay (superset)
+        S.E.reset(); S.E.N = S.N; S.E.cobLegs = S.cobLegs; S.E.tick = S.tick; S.E.store = &S.store; S.raw.clear(); S.provAt = -2; S.bkFed = -1; S.cbFed = 0;   // the store + record stay (superset); (1.9.2) the CoB engine replays too
         bindLiq(S);
     }
     if (S.raw.empty()) S.off = std::max(0, closed - WP_MAX_BARS);
     wpc::VapFn vap = [this, &S](int j, std::vector<wpc::VRow>& out) { return vapRows(S, j + S.off, out); };
-    if (S.off + (int)S.raw.size() < closed) readCob(S, n);   // (1.3.0) new closed bars: their CoB flags (the RTL arrays), read once per batch (calc only)
+    if (S.off + (int)S.raw.size() < closed && S.cobLegs) feedCob(S, n, times);   // (1.9.2) native CoB flags + decisions (was: the RTL arrays)
+    feedBreakouts(S, n, times);   // (1.9.2) BO / BD + Rly decided BEFORE the new bars go to the engine (its legs are judged on them)
     for (int i = S.off + (int)S.raw.size(); i < closed; ++i) {
         wpc::Bar b; b.t = localSec((RTDATE)times[i]);
         if (!wpc::toTicks(op[i], S.tick, b.o) || !wpc::toTicks(hi[i], S.tick, b.h) || !wpc::toTicks(lo[i], S.tick, b.l) || !wpc::toTicks(cl[i], S.tick, b.c)) { b.o = b.h = b.l = b.c = S.E.B.empty() ? 0 : S.E.B.back().c; }
@@ -506,11 +538,10 @@ void WavePOC::feed(WState& S, bool mayCalc) {
         S.E.addBar(b, vap); S.raw.push_back((RTDATE)times[i]);
     }
     const long long now = wpMs();
-    if (S.E.pendingCount() > 0 && (S.lastRetry < 0 || now - S.lastRetry >= WP_RETRY_MS)) {
+    if (S.E.pendingCount() > 0 && (S.lastRetry < 0 || now - S.lastRetry >= WP_RETRY_MS)) {   // (1.9.2) every 60 s while waves wait for their VAP
         if (S.lastRetry >= 0) { ++S.retries; S.E.retryPending(vap); }
         S.lastRetry = now;
     }
-    feedBreakouts(S, n, times);   // (1.9.0) the BO / BD candles for the HVN break level
     const int k = S.E.lastBar();
     // (1.7.0, Rassul 2026-11-02 13:28-13:29 CT "moving with the wave ... you can wait for bar close when needed") the live wave at every bar close
     if (k != S.provAt) { S.provAt = k; S.provOk = S.E.provisional(S.prov, vap); }
@@ -679,7 +710,7 @@ extern "C" cppExtension* CreateExtension(void) {
     WavePOC* p = new WavePOC();
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Wave POC v1.9.1 - each big wave's (reversal, breakout, rally) VOLUME profile right of a green / red spine at its start: the POC in cyan with a P (and its line to the right) wherever it is, and up to 2 HVNs in the wave colour with an H = the 2 biggest nodes in their own distributions at or below the break level (an up wave: the high of its BO candle - lsBreakout's rule - or, with no BO, of the bar that broke the prior pivot high; down waves mirror it) - pullback entries. No settings.");
-    p->setVersion("1.9.1");   // = WP_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Wave POC v1.9.2 - each CoB, Rly or BO / BD wave's VOLUME profile (lsCobSignal / lsBreakout rules, computed natively; the live wave once its BO / CoB fired) right of a green / red spine at its start: the POC in cyan with a P (and its line to the right) wherever it is, and up to 2 HVNs in the wave colour with an H = the 2 biggest nodes in their own distributions at or below the break level (an up wave: the high of its BO candle - lsBreakout's rule - or, with no BO, of the bar that broke the prior pivot high; down waves mirror it) - pullback entries. No settings.");
+    p->setVersion("1.9.2");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }
