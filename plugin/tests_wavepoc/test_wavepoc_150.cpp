@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
         std::cerr << "fixture: " << q << " waves (" << rev << " reversal, " << bo << " breakout, " << ra << " rally), letters " << sc.lettersDrawn << ", Pb " << sc.pbDrawn << ", boxes " << sc.boxesDrawn << "\n";
         // status text names the new rule
         const std::string st = wpc::statusText(E, "ES", 180, "native,ok", "loaded", "loaded", 0, &sc, false, 0);
-        CHECK(st.find("QUALIFIED_BY,reversal") != std::string::npos && st.find("PROFILE,(1.9.0)") != std::string::npos, "status QUALIFIED_BY + PROFILE lines");
+        CHECK(st.find("QUALIFIED_BY,reversal") != std::string::npos && st.find("PROFILE,(1.9.1)") != std::string::npos, "status QUALIFIED_BY + PROFILE lines");
     }
     // ---- 5. the legacy rule still answers when pinned ----
     {   wpc::Engine E; CHECK(E.rule == 150, "default rule = 1.5.0"); }
