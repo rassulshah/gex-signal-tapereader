@@ -15,6 +15,7 @@ int main() {
     Breakout* x = static_cast<Breakout*>(CreateExtension()); x->setup(); x->calc(0); x->draw();
     std::printf("PANE %d %d %d %d\n", H.paneL, H.paneT, H.paneR, H.paneB);
     for (int i = first; i < n; ++i) std::printf("BAR %d %d %d %d %d %d\n", mockX(i), mockY(H.f[0][(size_t)i]), mockY(H.f[1][(size_t)i]), mockY(H.f[2][(size_t)i]), mockY(H.f[3][(size_t)i]), (int)(H.t[(size_t)i] % 86400 / 60));
-    for (const auto& p : H.drawn) std::printf("TXT %d %d %d %d %lx %d %s\n", p.x0, p.y0, p.x1, p.y1, p.col, p.font, p.text.c_str());
+    for (const auto& p : H.drawn) { if (p.k == 'L') std::printf("LINE %d %d %d %d %lx\n", p.x0, p.y0, p.x1, p.y1, p.col);   // (1.9.0) the Rev lines
+        else std::printf("TXT %d %d %d %d %lx %d %s\n", p.x0, p.y0, p.x1, p.y1, p.col, p.font, p.text.c_str()); }
     x->destroy(); delete x; return 0;
 }

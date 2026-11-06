@@ -73,7 +73,7 @@ int main() {
             else { ++rth; const auto h = H.rlyL.find(kv.first); if (h != H.rlyL.end() && h->second.line == l) ++same; } }
         CHECK(on > 5 && fiveFiftyOne, "[5] engine: " + std::to_string(on) + " overnight Rly lines (version -zz3-on), the 05:51 red Rly fired");
         CHECK(rth == (int)H.rlyL.size() && same == rth, "[5] engine: the RTH Rly lines are the rlyOn = false (1.6.0 rule) lines exactly (" + std::to_string(same) + " of " + std::to_string(H.rlyL.size()) + ")");
-        CHECK(std::string(bko::VERSION) == "1.8.0" && std::string(rly::VERSION) == "1.2.0", "[5] versions 1.8.0 / RallyLogic 1.2.0"); }
+        CHECK(std::string(bko::VERSION) == "1.9.0" && std::string(rly::VERSION) == "1.2.0", "[5] versions 1.9.0 / RallyLogic 1.2.0"); }
     // [6] the weeks
     struct Mk { const char* f; const char* m; double tk; } MS[3] = { { "wk_ES_eve_3m.txt", "ES", 0.25 }, { "wk_NQ_3m.txt", "NQ", 0.25 }, { "wk_GC_3m.txt", "GC", 0.1 } };
     for (const Mk& m : MS) {

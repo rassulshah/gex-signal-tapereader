@@ -1,4 +1,4 @@
-# render_check.py -- (1.2.0) draws render_dump.cpp's output (candles + the plugin's letters as the mock recorded them) to render-bo120.png
+# render_check.py -- (1.2.0) draws render_dump.cpp's output (candles + the plugin's letters as the mock recorded them) to render-bo190.png
 import sys
 from PIL import Image, ImageDraw, ImageFont
 L = [l.split() for l in open(sys.argv[1])]
@@ -10,9 +10,12 @@ for l in L:
         d.line([(x, h), (x, lo)], fill=col); d.rectangle([x - 3, min(o, c), x + 3, max(o, c)], fill=col)
         if m % 30 == 0: d.text((x - 12, H - 22), '%d:%02d' % (m // 60, m % 60), fill=(148, 163, 184))
 for l in L:
+    if l[0] == 'LINE':   # (1.9.0) the Rev lines
+        x0, y0, x1, y1 = map(int, l[1:5]); col = int(l[5], 16); d.line([(x0, y0), (x1, y1)], fill=((col >> 16) & 255, (col >> 8) & 255, col & 255))
+for l in L:
     if l[0] == 'TXT':
         x0, y0, x1, y1 = map(int, l[1:5]); col = int(l[5], 16); size = int(l[6]); s = l[7]
         f = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', int(size * 1.33))
         rgb = ((col >> 16) & 255, (col >> 8) & 255, col & 255)
         tw = d.textlength(s, font=f); d.text(((x0 + x1) / 2 - tw / 2, y0), s, fill=rgb, font=f)
-im.save('render-bo120.png'); print('render-bo120.png', W, H)
+im.save('render-bo190.png'); print('render-bo190.png', W, H)

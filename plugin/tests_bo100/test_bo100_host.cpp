@@ -56,20 +56,23 @@ int main() {
     pass(*x);
     const BState* S = x->testState(); CHECK(S && S->E.bars.size() == R.size(), "state built from every bar");
     // only texts, only the three words
-    int other = 0; std::set<std::string> words; for (const auto& p : H.drawn) { if (p.k != 'T') ++other; else words.insert(p.text); }
-    CHECK(other == 0, "nothing but text is drawn (no boxes / fills / lines / ovals)");
-    bool onlyW = true; for (const auto& w : words) if (w != "BO" && w != "BD" && w != "Rly" && w != "Pb" && w != "BI") onlyW = false;
-    CHECK(onlyW && words.count("BD") && words.count("Rly") && words.count("Pb") && !words.count("BI"), "(1.6.0) the only texts are BO / BD / Rly / Pb - no BI (no numbers, prints or lots)");
+    int other = 0; std::set<std::string> words; int nLines = 0; for (const auto& p : H.drawn) { if (p.k == 'L') ++nLines; else if (p.k != 'T') ++other; else words.insert(p.text); }   // (1.9.0) + the Rev lines
+    CHECK(other == 0 && nLines > 0 && nLines % 3 == 0, "(1.9.0) nothing but text and the Rev lines (3 per Rev) is drawn (no boxes / fills / ovals) (" + std::to_string(nLines) + " lines)");
+    bool onlyW = true; for (const auto& w : words) if (w != "BO" && w != "BD" && w != "Rly" && w != "Pb" && w != "BI" && w != "Rev" && w != "Stop" && w != "T1" && w != "1.618") onlyW = false;
+    CHECK(onlyW && words.count("BD") && words.count("Rly") && words.count("Pb") && words.count("Rev") && !words.count("BI"), "(1.9.0) the only texts are BO / BD / Rly / Pb / Rev + the line names Stop / T1 / 1.618 - no BI (no numbers, prints or lots)");
     const std::vector<mock::Prim> C = coloured(H);
     int bad = 0, nBo = 0, nBd = 0, nR = 0, nPb = 0, pbExact = 0, nBi = 0; std::set<int> boBars, pbBars; std::set<std::pair<int, int>> biSides; std::set<std::pair<int, int>> sides;
     const int lift7 = std::max(1, (1 + (7 / 4 + 1) + 1) / 2), lift9 = std::max(1, (1 + (9 / 4 + 1) + 1) / 2);
+    int nRev = 0;
     for (const auto& p : C) {
+        if (p.text == "Stop" || p.text == "T1" || p.text == "1.618") continue;   // (1.9.0) line names sit right of the line end, not on a bar
         const int bar = barAt(H, (p.x0 + p.x1) / 2);
         if (bar < 0 || bar >= N) { ++bad; continue; }                                   // never on the forming candle
         const int yh = mockY(H.f[barHigh][(size_t)bar]), yl = mockY(H.f[barLow][(size_t)bar]);
         if (p.text == "Pb") { ++nPb; pbBars.insert(bar); const bool up = p.col == 0x0022C55E; if (p.font != 7 || (p.col != 0x0022C55E && p.col != 0x00EF4444)) ++bad;   // (1.1.0)
             const int ye = up ? p.y0 + lift7 : p.y1 + lift7; if (up ? ye < yl + 35 : ye > yh - 35) ++bad; if (up ? ye == yl + 35 : ye == yh - 35) ++pbExact; sides.insert({ bar, up ? -1 : 1 });   // (1.1.1) two rows out
             if (up ? ye < yl + 3 + 14 + 16 + 2 : ye > yh - 3 - 14 - 16 - 2) ++bad; }   // (1.1.1) never in the wave-time label row (+3 .. +17) or the CandleAbsorb A row (+19 .. +33)
+        if (p.text == "Rev") { ++nRev; const bool up = p.col == 0x0022C55E; if (p.font != 7) ++bad; if (up ? p.y0 + lift7 < yl + 3 : p.y1 + lift7 > yh - 3) ++bad; sides.insert({ bar, up ? -1 : 1 }); }   // (1.9.0) green below / red above
         if (p.text == "BO") { sides.insert({ bar, 1 }); } if (p.text == "BD") { sides.insert({ bar, -1 }); }
         if (p.text == "BI") { ++nBi; const bool up = p.col == 0x0022C55E; if (p.font != 7 || (p.col != 0x0022C55E && p.col != 0x00EF4444)) ++bad;   // (1.5.0) BI UP green below / BI DOWN red above
             const int off = up ? p.y0 + lift7 - yl : yh - (p.y1 + lift7); if (off < 3 || (off - 3) % 16 != 0 || (off - 3) / 16 == 3 || (off - 3) / 16 > 5) ++bad;   // a row: +3, +19, +35, (not +51 = LVP), +67, +83
@@ -93,13 +96,14 @@ int main() {
     int ov = 0; for (size_t a = 0; a < C.size(); ++a) for (size_t b = a + 1; b < C.size(); ++b) { const auto& p = C[a]; const auto& q = C[b]; if (p.x0 < q.x1 && q.x0 < p.x1 && p.y0 < q.y1 && q.y0 < p.y1) ++ov; }
     CHECK(ov == 0, "no two letters overlap (" + std::to_string(ov) + ")");
     { int halo = 0; for (const auto& p : H.drawn) if (p.k == 'T' && p.col == 0) ++halo; CHECK(halo == 4 * (int)C.size(), "each letter has its 1 px black edge (4 offsets), as lsBigBidAsk drew them"); }
-    std::printf("drawn in view: BO %d, BD %d, Rly %d, Pb %d, BI %d\n", nBo, nBd, nR, nPb, nBi);
+    std::printf("drawn in view: BO %d, BD %d, Rly %d, Pb %d, BI %d, Rev %d\n", nBo, nBd, nR, nPb, nBi, nRev);
+    CHECK(nRev > 0 && nRev == S->last.revShown, "(1.9.0) every Rev letter in view drawn (" + std::to_string(nRev) + ")");
     // SignalBoard 'L'
     { std::vector<sb::Ev> ev; const bool ok = sb::readAll('L', "ESZ26", 180, "", bkoMs(), ev); int good = 0; for (const auto& e : ev) if (e.val > 3 && e.val < 400) ++good;
       CHECK(ok && (int)ev.size() == std::min<int>((int)sb::CAP, (int)sides.size()) && good == (int)ev.size(), "SignalBoard 'L' posted for the BO / BD and Pb letters, one per bar and side (px from the extreme to the outer edge) (" + std::to_string(ev.size()) + " / " + std::to_string(sides.size()) + ")"); }
     // status file + versions
     const std::string st = slurp(home + "/InvestorRT/rtx/lsFlexLevels/Breakout.status-ES-180.txt");
-    CHECK(st.rfind("VERSION,1.8.0\n", 0) == 0 && st.find("BI,removed") != std::string::npos && st.find(",bi 0,") != std::string::npos && st.find("overlaps the BO / BD candle, at most 2 per BO / BD") != std::string::npos && st.find("3-bar High/Low ZigZag") != std::string::npos && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
+    CHECK(st.rfind("VERSION,1.9.0\n", 0) == 0 && st.find("BI,removed") != std::string::npos && st.find(",bi 0,") != std::string::npos && st.find("overlaps the BO / BD candle, at most 2 per BO / BD") != std::string::npos && st.find("3-bar High/Low ZigZag") != std::string::npos && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
     { const std::string src = slurp("../Breakout.cpp"); const size_t a = src.find("p->setVersion(\""); const std::string lit = a == std::string::npos ? "" : src.substr(a + 15, src.find('"', a + 15) - a - 15);
       CHECK(lit == BKO_VERSION && lit == bko::VERSION, "setVersion literal = BKO_VERSION = bko::VERSION (" + lit + ")"); }
     const std::string full = sig(H);

@@ -70,6 +70,6 @@ int main() {
         CHECK(seen == full && rover == 0, std::string("[5] ") + m.m + ": bar-by-bar replay == one full pass (" + std::to_string(seen.size()) + " vs " + std::to_string(full.size()) + " Pb)");
         std::printf("  %s: %zu Pb on %zu BO / BD (%d with 2), %zu green / red close pivots\n", m.m, E.pb.size(), perBo.size(), two, W.size());
     }
-    CHECK(std::string(bko::VERSION) == "1.8.0" && bko::PB_MAX_PER_BO == 2, "[6] version 1.8.0, PB_MAX_PER_BO 2");
+    CHECK(std::string(bko::VERSION) == "1.9.0" && bko::PB_MAX_PER_BO == 2, "[6] version 1.9.0, PB_MAX_PER_BO 2");
     std::printf("RESULT %d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }
