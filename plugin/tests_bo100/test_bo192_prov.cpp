@@ -42,7 +42,9 @@ int main() {
                 const int want = p.dir > 0 ? -1 : 1; bool conf = false; for (const bko::Pivot& w : R.wav) if (w.t >= p.t0 && w.type == -want) { conf = true; break; }
                 double ext = p.dir > 0 ? -1e300 : 1e300; long long extT = 0;
                 for (size_t k = at[p.t0]; k + 1 < Q.size(); ++k) { const bko::In& b = Q[k]; if (p.dir > 0 ? b.h >= ext : b.l <= ext) { ext = p.dir > 0 ? b.h : b.l; extT = b.t; } }
-                if (conf || !(p.tp > extT) || R.pb.count(p.tp)) ++badState; }
+                bool legExt = false; for (const bko::Pivot& z : R.zzPb) if (z.prov && z.t == p.tp) legExt = true;   // (1.9.3) the forming ZigZag leg's extreme
+                bool onZz = legExt; for (const bko::Pivot& z : R.wav) if (z.t == p.tp && z.type == want) onZz = true;    // (1.9.3) every Pb on a ZigZag pivot
+                if (!onZz || ((conf || !(p.tp > extT)) && !legExt) || R.pb.count(p.tp)) ++badState; }
             for (const auto& kv : per) over += kv.second > bko::PB_MAX_PER_BO;
         }
         int became = 0, vanished = 0, vanishedButFinal = 0;
@@ -50,6 +52,8 @@ int main() {
                 const long long shown = firstProv[t]; if (shown <= P.td) { leadSum += (double)(at[P.td] - at[shown]); ++leadN; } else ++badState; }
             else { bool still = false; for (const bko::PbMark& p : R.pbProv) if (p.tp == t) still = true; if (!still) { ++vanished; if (F.pb.count(t)) ++vanishedButFinal; } } }
         bool same = R.pb.size() == F.pb.size(); for (const auto& kv : F.pb) { const auto it = R.pb.find(kv.first); same = same && it != R.pb.end() && it->second.t0 == kv.second.t0 && it->second.td == kv.second.td; }
+        { int off = 0; for (const auto& kv : R.pb) { const int want = kv.second.dir > 0 ? -1 : 1; bool on = false; for (const bko::Pivot& z : R.wav) if (z.t == kv.first && z.type == want) on = true; off += !on; }
+          CHECK(off == 0, std::string("[6] ") + m.m + ": every final Pb sits on a 3-bar High / Low ZigZag pivot (" + std::to_string(off) + " off)"); }
         CHECK(!everProv.empty(), std::string("[1] ") + m.m + ": provisional Pbs appear (" + std::to_string(everProv.size()) + "): " + std::to_string(became) + " became final, " + std::to_string(vanished) + " vanished");
         CHECK(badState == 0, std::string("[2][5] ") + m.m + ": provisional only while the wave end is unconfirmed, pivot after the extreme so far, shown no later than its final decision (" + std::to_string(badState) + " bad)");
         CHECK(vanishedButFinal == 0 && same, std::string("[3] ") + m.m + ": vanished ones are not final Pbs and the finals equal the full pass (" + std::to_string(R.pb.size()) + " vs " + std::to_string(F.pb.size()) + ")");
@@ -72,6 +76,6 @@ int main() {
         CHECK(tried > 0 && drawn > 0, "[6] the layout draws provisional Pbs (" + std::to_string(drawn) + " drawn in " + std::to_string(tried) + " frames)");
     }
     std::printf("provisional %d: became final %d, vanished %d; shown on average %.1f bars before the final decision\n", allProv, allBecame, allVanished, leadN ? leadSum / leadN : 0.0);
-    CHECK(std::string(bko::VERSION) == "1.9.2", "version 1.9.2");
+    CHECK(std::string(bko::VERSION) == "1.9.3", "version 1.9.3");
     std::printf("%d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }

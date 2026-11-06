@@ -121,7 +121,8 @@ namespace bko {
 #ifndef BKO_RLY_ON_DEFAULT
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
-static const char* const VERSION = "1.9.2";   // (1.9.2, 2026-11-06 14:06 CT Rassul "the PBb should be allowed to repaint when it turns out it doesn't become a pivot") a Pb shows as soon as its pivot is confirmed by the close, while the BO / BD wave's end is still unconfirmed (the wave's high / low so far = its end); it goes away if price makes a new wave extreme before the 3-bar pivot confirms; once the wave end is confirmed it is final (recorded, never changes)
+static const char* const VERSION = "1.9.3";   // (1.9.3, 2026-11-06 17:40 CT Rassul "the pb is not fixed because it is not on the pivot and that is why the rev was not identified", GC + HG Nov 6) the Pb sits ON the chart's 3-bar High / Low ZigZag pivot (the same rule as IRT's Zig Zag 3 bars, High / Low - was: the first opposite-colour close made a pivot, so a Pb could sit on a dip before the real low); while the leg is still forming its extreme so far is a provisional Pb (shown once a bar closes back, moves to a new extreme, final when the ZigZag confirms); the Rev is judged from that pivot
+// was "1.9.2";   // (1.9.2, 2026-11-06 14:06 CT Rassul "the PBb should be allowed to repaint when it turns out it doesn't become a pivot") a Pb shows as soon as its pivot is confirmed by the close, while the BO / BD wave's end is still unconfirmed (the wave's high / low so far = its end); it goes away if price makes a new wave extreme before the 3-bar pivot confirms; once the wave end is confirmed it is final (recorded, never changes)
 //   // (1.9.1, 2026-11-06 12:15 CT Rassul "lets simplify the pb rev .. remove the stop line, t1 and t2 to simplify it and requite the green bar to be 1.2*ATR(13)") Rev = range >= 1.2 x ATR(13) only (no biggest-of-5, no trade lines)
 // was "1.9.0";   // (1.9.0, 2026-11-06 09:38-09:51 CT Rassul "PB Rev ... a thrust after a pullback", "or it can be the pivot bar also", "just a green Rev mark", "the biggest range", "only have 1 Rev per wave", "yes build") + Rev: after a Pb, the first GREEN bar (from the pivot bar on) whose low is below the pivot bar's high with range >= 1.2 x ATR(14) or the biggest range of the last 5 green bars; one per wave; BD mirror (red)
 // was "1.8.0";   // (1.8.0, 2026-11-05 14:08 CT Rassul "a pb needs to overlap the bo", "limit the pb to be fired upto two times", 16:46 "go") Pb = the pullback pivot bar overlaps the BO / BD candle (the 1.6.0 1/3-ATR-of-the-broken-pivot rule dropped), at most PB_MAX_PER_BO = 2 Pb per BO / BD
@@ -159,7 +160,7 @@ inline long long sessOf(long days, int endSec) { const long long cs = (long long
 struct PbMark { long long tp = 0, t0 = 0, tc = 0, td = 0; int dir = 0; };
 // (1.9.0) one Rev: tr = the Rev bar, tp = its Pb's pivot bar, td = the decision bar, rng = its range, atr = ATR(13) at the bar before
 struct RevMark { long long tr = 0, tp = 0, td = 0; int dir = 0; double rng = 0, atr = 0; };
-struct Pivot { long long t = 0, tc = 0; int type = 0; double h = 0, l = 0; };   // type +1 = pivot HIGH, -1 = pivot LOW; tc = confirm bar
+struct Pivot { long long t = 0, tc = 0; int type = 0; double h = 0, l = 0; bool prov = false; };   // (1.9.3) prov = the forming leg's extreme (not confirmed)   // type +1 = pivot HIGH, -1 = pivot LOW; tc = confirm bar
 // (1.5.0) BI = BreakIn (a failed BO / BD). dir -1 = BI DOWN (a failed BO: red candle closing back BELOW the pivot, letter above the high),
 // +1 = BI UP (a failed BD, letter below the low). kind = the attempt as known at the BI close: 0 unconfirmed (no_confirm or still waiting),
 // 1 fired (the BI after its follow-through), 2 other reject. cancel = the attempt was still waiting (that BO / BD is cancelled).
@@ -230,6 +231,7 @@ struct Engine {
     std::vector<PbMark> pbProv;                // (1.9.2) provisional Pbs of the last pass: drawn, never recorded, recomputed every pass (may vanish)
     std::map<long long, RevMark> rev;          // (1.9.0) Pb pivot bar time -> its Rev (kept for the chart's life)
     std::map<long long, RecL> revL;            // (1.9.0) the BRV| record line of each Rev
+    std::vector<RevMark> revProv;              // (1.9.2) Revs on provisional Pbs: drawn, never recorded, recomputed every pass (go with their Pb)
     std::vector<Pivot> piv;                    // (1.1.0) the confirmed 3-bar ZigZag pivots of the last pass (closed bars)
     std::vector<Pivot> wav;                    // (1.9.1) the confirmed 3-bar High / Low ZigZag pivots (the chart's waves): a Pb must be on the wave AFTER the BO / BD wave
     long long curExtT = 0; int curExtType = 0; // (1.5.0) the zigzag's current (unconfirmed) extreme: bar time, +1 HIGH / -1 LOW (0 = none)
@@ -425,8 +427,27 @@ struct Engine {
         if (Z.size() >= 2 && w.ext >= 0 && w.ext < (int)Z.size()) { curExtT = bars[(size_t)at[(size_t)w.ext]].t; curExtType = w.dirn > 0 ? 1 : -1; }
     }
     // (1.1.0) Pb: see the header. Every fired BO / BD with its candle on the chart is checked against the confirmed pivots after it.
+    std::vector<Pivot> zzPb;                   // (1.9.3) the Pb pivots: the confirmed 3-bar High / Low ZigZag pivots (wav) + the forming leg's extreme (prov)
+    void zzPivots() {
+        zzPb = wav; const int n = (int)bars.size(); if (n < 3) return;
+        int from = 0, lastType = 0;
+        if (!wav.empty()) { const long long lt = wav.back().t; lastType = wav.back().type;
+            for (int k = 0; k < n; ++k) if (bars[(size_t)k].t == lt) { from = k + 1; break; } }
+        if (!lastType) return;
+        const int legDir = -lastType;                                    // after a pivot HIGH the leg is down (its low is the next pivot LOW)
+        int ex = -1;
+        for (int k = from; k <= n - 2; ++k) { const In& b = bars[(size_t)k]; if (!b.ok || !(b.h >= b.l)) continue;
+            if (ex < 0 || (legDir < 0 ? b.l <= bars[(size_t)ex].l : b.h >= bars[(size_t)ex].h)) ex = k; }   // the LAST bar at the extreme
+        if (ex < 0) return;
+        int cf = -1;                                                     // a later closed bar closing back (green after a low, red after a high)
+        for (int k = ex + 1; k <= n - 2; ++k) { const In& b = bars[(size_t)k]; if (b.ok && (legDir < 0 ? b.c > b.o : b.c < b.o)) { cf = k; break; } }
+        if (cf < 0) return;
+        Pivot p; p.t = bars[(size_t)ex].t; p.tc = bars[(size_t)cf].t; p.type = legDir; p.h = bars[(size_t)ex].h; p.l = bars[(size_t)ex].l; p.prov = true;
+        zzPb.push_back(p);
+    }
     void pbPass() {
-        pivots(); pbProv.clear();
+        pivots(); zzPivots(); pbProv.clear();
+        const std::vector<Pivot>& piv = zzPb;                            // (1.9.3) Pb / origin pivots = the chart's ZigZag (shadows the member)
         const int n = (int)bars.size(); if (n < 3 || piv.empty()) return;
         std::vector<long long> T((size_t)n); for (int k = 0; k < n; ++k) T[(size_t)k] = bars[(size_t)k].t;
         auto idxOf = [&](long long t) { const auto it = std::lower_bound(T.begin(), T.end(), t); return it != T.end() && *it == t ? (int)(it - T.begin()) : -1; };
@@ -479,7 +500,7 @@ struct Engine {
                 { int nb = 0; for (const auto& kv : pb) if (kv.second.t0 == D.t0) ++nb;
                   for (const PbMark& x : pbProv) { if (x.t0 == D.t0) ++nb; }
                   if (nb >= PB_MAX_PER_BO) break; }   // (1.8.0) at most 2 per BO / BD (1.9.2: provisional ones count)
-                if (prov) { PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = p.tc; m.dir = dir; pbProv.push_back(m); continue; }   // (1.9.2) drawn only
+                if (prov || p.prov) { PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = p.tc; m.dir = dir; pbProv.push_back(m); continue; }   // (1.9.2) drawn only; (1.9.3) + a forming ZigZag leg's extreme
                 PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = td; m.dir = dir; pb[p.t] = m;
                 RecL L; const int di = idxOf(td); L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;   // (1.3.0) the decision bar's day
                 L.line = pbLine(m, D, p, c, recVer()); pbL[p.t] = L;
@@ -489,7 +510,8 @@ struct Engine {
     }
     // (1.9.0) Rev: see the header. Each Pb without a Rev is walked from its pivot bar over the closed bars of its wave.
     void revPass() {
-        const int n = (int)bars.size(); if (n < 3 || pb.empty()) return;
+        revProv.clear();
+        const int n = (int)bars.size(); if (n < 3 || (pb.empty() && pbProv.empty())) return;
         std::vector<double> A13((size_t)n, NAN); { double y = 0; bool have = false;   // (1.9.1) the 13-bar Wilder ATR (pbPass's rule, period 13)
             for (int k = 1; k < n; ++k) { const In& b = bars[(size_t)k]; const In& a = bars[(size_t)k - 1];
                 if (!b.ok || !a.ok || !std::isfinite(b.h) || !std::isfinite(b.l) || !std::isfinite(a.c)) { A13[(size_t)k] = have ? y : NAN; continue; }
@@ -499,13 +521,15 @@ struct Engine {
         auto idxOf = [&](long long t) { const auto it = std::lower_bound(T.begin(), T.end(), t); return it != T.end() && *it == t ? (int)(it - T.begin()) : -1; };
         const int last = n - 2;                                                     // the last closed bar
         const double eps = tick > 0 ? tick * 0.25 : 1e-9;
-        for (const auto& kv : pb) {
-            const PbMark& P = kv.second; if (rev.count(P.tp)) continue;
+        // (1.9.2, Rassul 14:50 "the rev should fire as soon as the pb is detected and the rev conditions are met") provisional Pbs too
+        std::vector<std::pair<const PbMark*, bool>> todo; for (const auto& kv : pb) todo.push_back({ &kv.second, false }); for (const PbMark& x : pbProv) todo.push_back({ &x, true });
+        for (const auto& pq : todo) {
+            const PbMark& P = *pq.first; const bool prov = pq.second; if (!prov && rev.count(P.tp)) continue;
             const int p = idxOf(P.tp), c = idxOf(P.tc); if (p < 0 || c < 0) continue;
             const In& pv = bars[(size_t)p]; if (!pv.ok || !std::isfinite(pv.h) || !std::isfinite(pv.l)) continue;
             const int d = P.dir > 0 ? 1 : -1;
             // the wave ends at the confirmation of the next pivot of the other kind (bull: the next pivot HIGH after the pivot bar)
-            long long endT = 0; for (const Pivot& q : piv) if (q.t > P.tp && q.type == d) { endT = q.tc; break; }
+            long long endT = 0; for (const Pivot& q : wav) if (q.t > P.tp && q.type == d) { endT = q.tc; break; }   // (1.9.3) the chart's ZigZag
             for (int j = p; j <= last; ++j) {
                 const In& b = bars[(size_t)j]; if (!b.ok || !std::isfinite(b.h) || !std::isfinite(b.l)) continue;
                 if (endT && b.t >= endT) break;                                    // the wave is over (that bar closed against it)
@@ -515,6 +539,7 @@ struct Engine {
                 const double r = b.h - b.l; const double A = j >= 1 ? A13[(size_t)j - 1] : NAN;
                 if (!(std::isfinite(A) && A > 0 && r >= REV_ATR_X * A - eps * 0.01)) continue;   // (1.9.1) range >= 1.2 x ATR(13)
                 RevMark m; m.tr = b.t; m.tp = P.tp; m.td = T[(size_t)std::max(j, c)]; m.dir = d; m.rng = r; m.atr = A;
+                if (prov) { revProv.push_back(m); break; }                       // (1.9.2) drawn only; goes if its Pb goes
                 rev[P.tp] = m;
                 RecL L; const In& db = bars[(size_t)std::max(j, c)]; L.sess = db.ok ? sessOf(db.days, db.endSec) : -1;
                 L.line = revLine(m, P.tc, pv.h, pv.l, b.h, b.l, b.c, recVer()); revL[P.tp] = L;
@@ -618,7 +643,8 @@ inline Scene layout(const Engine& E, const View& v) {
             if (!placed) ++S.noRoom; } }
     // (1.9.0) Rev: green "Rev" below the Rev bar (after a BO's Pb) / red above it (after a BD's), the first free row from the wick (the BI
     // row search: rows taken by other indicators' labels - biReserved - and our own letters are skipped); no room = dropped
-    for (const auto& kv : E.rev) { const RevMark& M = kv.second; const auto it = idx.find(M.tr); if (it == idx.end()) continue;
+    std::vector<const RevMark*> RV; for (const auto& kv : E.rev) RV.push_back(&kv.second); for (const RevMark& x : E.revProv) RV.push_back(&x);   // (1.9.2) + provisional
+    for (const RevMark* rp : RV) { const RevMark& M = *rp; const auto it = idx.find(M.tr); if (it == idx.end()) continue;
         const int bar = it->second, side = M.dir > 0 ? -1 : 1;
         const In& b = E.bars[(size_t)bar]; if (!std::isfinite(b.h) || !std::isfinite(b.l)) continue;
         const char* tx = "Rev"; const int w = v.textW(tx, FONT_BO) + 2, cx = v.X(bar), yh = v.Y(b.h), yl = v.Y(b.l), top = std::min(yh, yl), bot = std::max(yh, yl), lh = v.lh[0];
@@ -657,7 +683,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
     if (SHOW_BI) s += "BI,bi_shown 1,label BI (plain - no ?),window " + std::to_string(BI_N) + " candles,range >= avg of " + std::to_string(BI_AVG) + " + (volume or range up),close back past the pivot,one per pivot,cancel waiting BO " + (E.biCancel ? "1" : "0")
        + ",today BI down " + std::to_string(idn) + ",BI up " + std::to_string(iu) + ",BO / BD cancelled " + std::to_string(bc) + ",kept " + std::to_string(E.bi.size()) + ",cancelled kept " + std::to_string(E.boCancel.size()) + ",attempts last pass " + std::to_string(E.biAtt) + ",drawn " + std::to_string(last.biShown) + "\n";   // (1.5.0)
     if (!SHOW_BI) s += "BI,removed (1.6.0, Rassul 2026-11-04): no BI letters, no BBI records, no BO / BD cancelled\n";
-    s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",Pb " + std::to_string(E.pb.size()) + " (provisional " + std::to_string(E.pbProv.size()) + ")" + ",Rev " + std::to_string(E.rev.size()) + ",pivots " + std::to_string(E.piv.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
+    s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",Pb " + std::to_string(E.pb.size()) + " (provisional " + std::to_string(E.pbProv.size()) + ")" + ",Rev " + std::to_string(E.rev.size()) + " (provisional " + std::to_string(E.revProv.size()) + ")" + ",pivots " + std::to_string(E.piv.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
     s += "DRAWN,BO/BD " + std::to_string(last.boShown) + ",Rly " + std::to_string(last.rlyShown) + ",Pb " + std::to_string(last.pbShown) + ",Rev " + std::to_string(last.revShown) + ",no room " + std::to_string(last.noRoom) + "\n";
     return s;
 }

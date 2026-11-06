@@ -52,7 +52,7 @@ int main() {
         const int last = (int)B.size() - 2; const double e = m.tk * 0.25;
         int bad1 = 0, bad2 = 0, bad3 = 0, withRev = 0, onPivot = 0;
         for (const auto& kv : E.pb) { const bko::PbMark& P = kv.second; const int p = at[P.tp], c = at[P.tc], d = P.dir > 0 ? 1 : -1;
-            long long endT = 0; for (const bko::Pivot& q : E.piv) if (q.t > P.tp && q.type == d) { endT = q.tc; break; }
+            long long endT = 0; for (const bko::Pivot& q : E.wav) if (q.t > P.tp && q.type == d) { endT = q.tc; break; }
             int first = -1;
             for (int j = p; j <= last; ++j) { if (endT && B[(size_t)j].t >= endT) break;
                 if (j > p && (d > 0 ? B[(size_t)j].l < B[(size_t)p].l - e : B[(size_t)j].h > B[(size_t)p].h + e)) break;
@@ -89,10 +89,10 @@ int main() {
         CHECK(badL == 0 && nr + S.noRoom >= (int)E.rev.size() && nr == S.revShown && nr > 0, std::string("[5] ") + m.m + ": Rev letters: green below / red above the bar, never on another letter (" + std::to_string(nr) + " drawn, " + std::to_string(badL) + " bad)");
         // [6] records
         int badR = 0; for (const auto& kv : E.revL) { const std::string& l = kv.second.line; int bars_ = 0; for (char ch : l) bars_ += ch == '|';
-            if (bars_ != 13 || l.rfind("BRV|", 0) != 0 || bko::recKey(l).empty() || l.find("|1.9.2-zz3") == std::string::npos) ++badR; }
+            if (bars_ != 13 || l.rfind("BRV|", 0) != 0 || bko::recKey(l).empty() || l.find("|1.9.3-zz3") == std::string::npos) ++badR; }
         CHECK(badR == 0 && E.revL.size() == E.rev.size() && S.txt.size() > 0, std::string("[6] ") + m.m + ": one 14-field BRV| record per Rev (" + std::to_string(E.revL.size()) + ")");
         std::printf("  %s: %zu Pb, %d Rev (%d on the pivot bar), drawn %d\n", m.m, E.pb.size(), withRev, onPivot, nr);
     }
-    CHECK(std::string(bko::VERSION) == "1.9.2" && bko::REV_ATR_X == 1.2 && bko::REV_ATR_N == 13 && totRev > 20, "[6] version 1.9.1, 1.2 x ATR(13)");
+    CHECK(std::string(bko::VERSION) == "1.9.3" && bko::REV_ATR_X == 1.2 && bko::REV_ATR_N == 13 && totRev > 20, "[6] version 1.9.1, 1.2 x ATR(13)");
     std::printf("RESULT %d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }
