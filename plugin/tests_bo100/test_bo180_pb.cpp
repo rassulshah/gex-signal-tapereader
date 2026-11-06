@@ -85,6 +85,6 @@ int main() {
             CHECK(inWave == 0, std::string("[7] ") + m.m + ": every Pb is on the wave AFTER the BO / BD wave (" + std::to_string(inWave) + " inside it)"); }
         std::printf("  %s: %zu Pb on %zu BO / BD (%d with 2), %zu green / red close pivots\n", m.m, E.pb.size(), perBo.size(), two, W.size());
     }
-    CHECK(std::string(bko::VERSION) == "1.9.1" && bko::PB_MAX_PER_BO == 2, "[6] version 1.9.1, PB_MAX_PER_BO 2");
+    CHECK(std::string(bko::VERSION) == "1.9.2" && bko::PB_MAX_PER_BO == 2, "[6] version 1.9.1, PB_MAX_PER_BO 2");
     std::printf("RESULT %d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }

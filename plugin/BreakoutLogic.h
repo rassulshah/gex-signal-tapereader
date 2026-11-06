@@ -121,7 +121,8 @@ namespace bko {
 #ifndef BKO_RLY_ON_DEFAULT
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
-static const char* const VERSION = "1.9.1";   // (1.9.1, 2026-11-06 12:15 CT Rassul "lets simplify the pb rev .. remove the stop line, t1 and t2 to simplify it and requite the green bar to be 1.2*ATR(13)") Rev = range >= 1.2 x ATR(13) only (no biggest-of-5, no trade lines)
+static const char* const VERSION = "1.9.2";   // (1.9.2, 2026-11-06 14:06 CT Rassul "the PBb should be allowed to repaint when it turns out it doesn't become a pivot") a Pb shows as soon as its pivot is confirmed by the close, while the BO / BD wave's end is still unconfirmed (the wave's high / low so far = its end); it goes away if price makes a new wave extreme before the 3-bar pivot confirms; once the wave end is confirmed it is final (recorded, never changes)
+//   // (1.9.1, 2026-11-06 12:15 CT Rassul "lets simplify the pb rev .. remove the stop line, t1 and t2 to simplify it and requite the green bar to be 1.2*ATR(13)") Rev = range >= 1.2 x ATR(13) only (no biggest-of-5, no trade lines)
 // was "1.9.0";   // (1.9.0, 2026-11-06 09:38-09:51 CT Rassul "PB Rev ... a thrust after a pullback", "or it can be the pivot bar also", "just a green Rev mark", "the biggest range", "only have 1 Rev per wave", "yes build") + Rev: after a Pb, the first GREEN bar (from the pivot bar on) whose low is below the pivot bar's high with range >= 1.2 x ATR(14) or the biggest range of the last 5 green bars; one per wave; BD mirror (red)
 // was "1.8.0";   // (1.8.0, 2026-11-05 14:08 CT Rassul "a pb needs to overlap the bo", "limit the pb to be fired upto two times", 16:46 "go") Pb = the pullback pivot bar overlaps the BO / BD candle (the 1.6.0 1/3-ATR-of-the-broken-pivot rule dropped), at most PB_MAX_PER_BO = 2 Pb per BO / BD
 // was "1.7.0";   // (1.7.0, 2026-11-05 13:13 CT Rassul "this is a clear rly dn" -> "go") + overnight Rly (rly::run overnight = true: 17:00 CT to the RTH open on its own Globex VWAP / trend; records with version ...-on)   // was "1.6.0";   // (1.6.0) BI removed; Pb within 1/3 ATR of the broken pivot   // was "1.5.0":   // (1.5.0) + BI (BreakIn = failed BO / BD)   // (1.4.0) zigzag carries across the 17:00 CT break   // (1.3.0) records + follow-through tie   // (1.2.0) BO / BD + Rly on the 3-bar High / Low ZigZag   // was "1.1.1" (Pb two rows out), "1.1.0" (+ Pb), "1.0.0"
@@ -226,6 +227,7 @@ struct Engine {
     bool rlyOn = BKO_RLY_ON_DEFAULT != 0;      // (1.7.0) judge the overnight session too (false = the 1.6.0 RTH-only Rly, for the older parity tests)
     std::map<long long, int> trend;            // closed bar time -> vwapTrend level (cache)
     std::map<long long, PbMark> pb;            // (1.1.0) pivot bar time -> Pb (kept for the chart's life)
+    std::vector<PbMark> pbProv;                // (1.9.2) provisional Pbs of the last pass: drawn, never recorded, recomputed every pass (may vanish)
     std::map<long long, RevMark> rev;          // (1.9.0) Pb pivot bar time -> its Rev (kept for the chart's life)
     std::map<long long, RecL> revL;            // (1.9.0) the BRV| record line of each Rev
     std::vector<Pivot> piv;                    // (1.1.0) the confirmed 3-bar ZigZag pivots of the last pass (closed bars)
@@ -424,7 +426,7 @@ struct Engine {
     }
     // (1.1.0) Pb: see the header. Every fired BO / BD with its candle on the chart is checked against the confirmed pivots after it.
     void pbPass() {
-        pivots();
+        pivots(); pbProv.clear();
         const int n = (int)bars.size(); if (n < 3 || piv.empty()) return;
         std::vector<long long> T((size_t)n); for (int k = 0; k < n; ++k) T[(size_t)k] = bars[(size_t)k].t;
         auto idxOf = [&](long long t) { const auto it = std::lower_bound(T.begin(), T.end(), t); return it != T.end() && *it == t ? (int)(it - T.begin()) : -1; };
@@ -448,7 +450,13 @@ struct Engine {
             // (1.9.1) the BO / BD wave's end: the first wave pivot HIGH (BD: LOW) at or after the BO / BD candle; no Pb until it is confirmed,
             // and only pivots after it (the pullback is the NEXT wave, never a dip inside the BO / BD wave)
             long long topT = 0, topC = 0; for (const Pivot& w : wav) if (w.t >= D.t0 && w.type == -want) { topT = w.t; topC = w.tc; break; }
-            if (!topT) continue;
+            bool prov = false;
+            if (!topT) {                                                      // (1.9.2) wave end not confirmed yet: its extreme so far stands in
+                int bk = -1; for (int k = i; k <= n - 2; ++k) { const In& b = bars[(size_t)k]; if (!b.ok) continue;
+                    if (bk < 0 || (dir > 0 ? b.h >= bars[(size_t)bk].h : b.l <= bars[(size_t)bk].l)) bk = k; }   // the LAST bar at the extreme
+                if (bk < 0) continue;
+                topT = T[(size_t)bk]; topC = 0; prov = true;
+            }
             int scan = i;                                                     // bars (i, scan] checked against the origin
             const auto p0 = std::upper_bound(piv.begin(), piv.end(), D.t0, [](long long t, const Pivot& p) { return t < p.t; });
             for (auto it = p0; it != piv.end(); ++it) {
@@ -468,7 +476,10 @@ struct Engine {
                 // its low (BD mirror: pivot HIGH above the candle's low, the pivot bar's low below its high); was (1.6.0) within ATR / 3 of the broken pivot
                 if (!(p.l < c.h && p.h > c.l)) continue;
                 if (pb.count(p.t)) continue;                                  // decided before: never again
-                { int nb = 0; for (const auto& kv : pb) if (kv.second.t0 == D.t0) ++nb; if (nb >= PB_MAX_PER_BO) break; }   // (1.8.0) at most 2 per BO / BD
+                { int nb = 0; for (const auto& kv : pb) if (kv.second.t0 == D.t0) ++nb;
+                  for (const PbMark& x : pbProv) { if (x.t0 == D.t0) ++nb; }
+                  if (nb >= PB_MAX_PER_BO) break; }   // (1.8.0) at most 2 per BO / BD (1.9.2: provisional ones count)
+                if (prov) { PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = p.tc; m.dir = dir; pbProv.push_back(m); continue; }   // (1.9.2) drawn only
                 PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = td; m.dir = dir; pb[p.t] = m;
                 RecL L; const int di = idxOf(td); L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;   // (1.3.0) the decision bar's day
                 L.line = pbLine(m, D, p, c, recVer()); pbL[p.t] = L;
@@ -580,7 +591,8 @@ inline Scene layout(const Engine& E, const View& v) {
     for (const auto& kv : E.bo) { const bba::BoDec& D = kv.second; if (!E.shownBo(D)) continue;   /* (1.5.0) not a BO / BD a BI cancelled */ const auto it = idx.find(D.t0); if (it == idx.end()) continue; put(it->second, D.dir, 0); boBars.push_back({ it->second, D.dir > 0 ? 1 : -1 }); }
     for (const auto& kv : E.rly) { const RlyMark& R = kv.second; if (!R.fired) continue; const auto it = idx.find(R.te); if (it == idx.end()) continue; put(it->second, R.dir, 1); }
     // (1.1.0) Pb: green below a pivot LOW after a BO (dir +1 -> drawn on the LOW side), red above a pivot HIGH after a BD
-    for (const auto& kv : E.pb) { const PbMark& P = kv.second; const auto it = idx.find(P.tp); if (it == idx.end()) continue;
+    std::vector<const PbMark*> PB; for (const auto& kv : E.pb) PB.push_back(&kv.second); for (const PbMark& x : E.pbProv) PB.push_back(&x);   // (1.9.2) + provisional
+    for (const PbMark* pp : PB) { const PbMark& P = *pp; const auto it = idx.find(P.tp); if (it == idx.end()) continue;
         const size_t before = S.txt.size(); put(it->second, -P.dir, 2);
         if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
     // (1.5.0) BI: "BI" red just above the high (BI DOWN) / green just below the low (BI UP), the BO row first, one row out (16 px) while
@@ -645,7 +657,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
     if (SHOW_BI) s += "BI,bi_shown 1,label BI (plain - no ?),window " + std::to_string(BI_N) + " candles,range >= avg of " + std::to_string(BI_AVG) + " + (volume or range up),close back past the pivot,one per pivot,cancel waiting BO " + (E.biCancel ? "1" : "0")
        + ",today BI down " + std::to_string(idn) + ",BI up " + std::to_string(iu) + ",BO / BD cancelled " + std::to_string(bc) + ",kept " + std::to_string(E.bi.size()) + ",cancelled kept " + std::to_string(E.boCancel.size()) + ",attempts last pass " + std::to_string(E.biAtt) + ",drawn " + std::to_string(last.biShown) + "\n";   // (1.5.0)
     if (!SHOW_BI) s += "BI,removed (1.6.0, Rassul 2026-11-04): no BI letters, no BBI records, no BO / BD cancelled\n";
-    s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",Pb " + std::to_string(E.pb.size()) + ",Rev " + std::to_string(E.rev.size()) + ",pivots " + std::to_string(E.piv.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
+    s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",Pb " + std::to_string(E.pb.size()) + " (provisional " + std::to_string(E.pbProv.size()) + ")" + ",Rev " + std::to_string(E.rev.size()) + ",pivots " + std::to_string(E.piv.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
     s += "DRAWN,BO/BD " + std::to_string(last.boShown) + ",Rly " + std::to_string(last.rlyShown) + ",Pb " + std::to_string(last.pbShown) + ",Rev " + std::to_string(last.revShown) + ",no room " + std::to_string(last.noRoom) + "\n";
     return s;
 }
