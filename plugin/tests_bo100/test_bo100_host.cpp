@@ -57,15 +57,14 @@ int main() {
     const BState* S = x->testState(); CHECK(S && S->E.bars.size() == R.size(), "state built from every bar");
     // only texts, only the three words
     int other = 0; std::set<std::string> words; int nLines = 0; for (const auto& p : H.drawn) { if (p.k == 'L') ++nLines; else if (p.k != 'T') ++other; else words.insert(p.text); }   // (1.9.0) + the Rev lines
-    CHECK(other == 0 && nLines > 0 && nLines % 3 == 0, "(1.9.0) nothing but text and the Rev lines (3 per Rev) is drawn (no boxes / fills / ovals) (" + std::to_string(nLines) + " lines)");
-    bool onlyW = true; for (const auto& w : words) if (w != "BO" && w != "BD" && w != "Rly" && w != "Pb" && w != "BI" && w != "Rev" && w != "Stop" && w != "T1" && w != "1.618") onlyW = false;
-    CHECK(onlyW && words.count("BD") && words.count("Rly") && words.count("Pb") && words.count("Rev") && !words.count("BI"), "(1.9.0) the only texts are BO / BD / Rly / Pb / Rev + the line names Stop / T1 / 1.618 - no BI (no numbers, prints or lots)");
+    CHECK(other == 0 && nLines == 0, "(1.9.1) nothing but text is drawn (no lines / boxes / fills / ovals) (" + std::to_string(nLines) + " lines)");
+    bool onlyW = true; for (const auto& w : words) if (w != "BO" && w != "BD" && w != "Rly" && w != "Pb" && w != "BI" && w != "Rev") onlyW = false;
+    CHECK(onlyW && words.count("BD") && words.count("Rly") && words.count("Pb") && words.count("Rev") && !words.count("BI"), "(1.9.1) the only texts are BO / BD / Rly / Pb / Rev - no BI (no numbers, prints or lots)");
     const std::vector<mock::Prim> C = coloured(H);
     int bad = 0, nBo = 0, nBd = 0, nR = 0, nPb = 0, pbExact = 0, nBi = 0; std::set<int> boBars, pbBars; std::set<std::pair<int, int>> biSides; std::set<std::pair<int, int>> sides;
     const int lift7 = std::max(1, (1 + (7 / 4 + 1) + 1) / 2), lift9 = std::max(1, (1 + (9 / 4 + 1) + 1) / 2);
     int nRev = 0;
     for (const auto& p : C) {
-        if (p.text == "Stop" || p.text == "T1" || p.text == "1.618") continue;   // (1.9.0) line names sit right of the line end, not on a bar
         const int bar = barAt(H, (p.x0 + p.x1) / 2);
         if (bar < 0 || bar >= N) { ++bad; continue; }                                   // never on the forming candle
         const int yh = mockY(H.f[barHigh][(size_t)bar]), yl = mockY(H.f[barLow][(size_t)bar]);
@@ -103,7 +102,7 @@ int main() {
       CHECK(ok && (int)ev.size() == std::min<int>((int)sb::CAP, (int)sides.size()) && good == (int)ev.size(), "SignalBoard 'L' posted for the BO / BD and Pb letters, one per bar and side (px from the extreme to the outer edge) (" + std::to_string(ev.size()) + " / " + std::to_string(sides.size()) + ")"); }
     // status file + versions
     const std::string st = slurp(home + "/InvestorRT/rtx/lsFlexLevels/Breakout.status-ES-180.txt");
-    CHECK(st.rfind("VERSION,1.9.0\n", 0) == 0 && st.find("BI,removed") != std::string::npos && st.find(",bi 0,") != std::string::npos && st.find("overlaps the BO / BD candle, at most 2 per BO / BD") != std::string::npos && st.find("3-bar High/Low ZigZag") != std::string::npos && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
+    CHECK(st.rfind("VERSION,1.9.1\n", 0) == 0 && st.find("BI,removed") != std::string::npos && st.find(",bi 0,") != std::string::npos && st.find("overlaps the BO / BD candle, at most 2 per BO / BD") != std::string::npos && st.find("3-bar High/Low ZigZag") != std::string::npos && st.find(",Pb ") != std::string::npos && st.find("MARKET,ES") != std::string::npos && st.find("DRAWN,") != std::string::npos, "status file written, version first");
     { const std::string src = slurp("../Breakout.cpp"); const size_t a = src.find("p->setVersion(\""); const std::string lit = a == std::string::npos ? "" : src.substr(a + 15, src.find('"', a + 15) - a - 15);
       CHECK(lit == BKO_VERSION && lit == bko::VERSION, "setVersion literal = BKO_VERSION = bko::VERSION (" + lit + ")"); }
     const std::string full = sig(H);

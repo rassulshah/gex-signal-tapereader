@@ -1,5 +1,7 @@
 /********************************************************************************
  *  Breakout.cpp  --  Investor/RT RTX extension  lsBreakout  "BO"  1.5.0  (2026-11-04)
+ *  1.9.1 (2026-11-06 12:15 CT, Rassul "lets simplify the pb rev .. remove the stop line, t1 and t2 ... 1.2*ATR(13)"): Rev = range >= 1.2 x ATR(13)
+ *        only; the biggest-of-5 alternative and the Stop / T1 / T2 lines removed; BRV| 14 fields.
  *  1.9.0 (2026-11-06, Rassul "PB Rev ... a thrust after a pullback", mockup pb-rev v0.1, "yes build"): + "Rev" (BreakoutLogic.h 1.9.0
  *        revPass / layout kind 4): after a Pb, the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high
  *        (BD: high above its low) with range >= 1.2 x ATR(14) or bigger than each of the last 5 green (red) bars; one per wave; green
@@ -86,7 +88,7 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.9.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
+#define BKO_VERSION "1.9.1"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
 
 static long long bkoMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bkoFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BKO_SEP "InvestorRT" BKO_SEP "rtx" BKO_SEP "lsFlexLevels" : std::string(); }
@@ -279,9 +281,6 @@ int Breakout::draw(void) {
         v.lh[0] = lh[0]; v.lh[1] = lh[1];
         v.textW = [this, &f0, &f1](const char* s, int font) { setFont(font == bko::FONT_RLY ? f1 : f0); return (int)getTextWidth(s, -1); };
         S->last = bko::layout(S->E, v);
-        for (const bko::Line& L : S->last.lines) {   // (1.9.0) the Rev trade lines first (under the letters): 1 px solid
-            setPen((COLOR)L.col, 1, P_SOLID);
-            PNT a; a.set(0, 0.0f); a.h = bkoC(L.x0); a.v = bkoC(L.y); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = bkoC(L.x1); b.v = bkoC(L.y); b.drawLineTo(); }
         for (const bko::Txt& T : S->last.txt) {   // lsBigBidAsk's letter drawing: a 1 px black edge, then the colour
             const int k = T.kind == 1 ? 1 : 0; setFont(k ? f1 : f0); const int lf = lift[k];
             setTextColor(0x00000000);
@@ -303,10 +302,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
 #if BKO_ONE_BAR
-    p->setDescription("LRA BO 1-bar v1.9.0 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green below / red above) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(14) or the biggest of the last 5 green (red) bars, one per wave, with its lines: Stop (1 tick beyond the lower of the pivot low and the BO candle low), T1 (the Rly high = the wave high before the pullback) and 1.618 (T2, final); a target line ends where it is hit, all end at the stop, T2, the next Rev or the session end. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
+    p->setDescription("LRA BO 1-bar v1.9.1 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green below / red above) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
 #else
-    p->setDescription("LRA BO v1.9.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green below / red above) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(14) or the biggest of the last 5 green (red) bars, one per wave, with its lines: Stop (1 tick beyond the lower of the pivot low and the BO candle low), T1 (the Rly high = the wave high before the pullback) and 1.618 (T2, final); a target line ends where it is hit, all end at the stop, T2, the next Rev or the session end. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
+    p->setDescription("LRA BO v1.9.1 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green below / red above) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.9.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.9.1");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }
