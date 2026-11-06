@@ -48,7 +48,8 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-11-05 12:25-12:42 CT Rassul "build a line on top of the cob with targets", "lets use 1.272, 1.618 and 2.0", "an entry line at 50% retracement and a stop line at 0", line endings + "i'll go with your recommendations") the CoB Fib lines (fibLines / fibLayout)
+static const char* const VERSION = "1.5.1";   // (1.5.1, 2026-11-06) CQG roots (EP / ENQ / CLE / GCE / CPE / NGE / EU6) -> ES / NQ / CL / GC / HG / NG / EU: the indicator never ran on his charts before
+// was "1.5.0";   // (1.5.0, 2026-11-05 12:25-12:42 CT Rassul "build a line on top of the cob with targets", "lets use 1.272, 1.618 and 2.0", "an entry line at 50% retracement and a stop line at 0", line endings + "i'll go with your recommendations") the CoB Fib lines (fibLines / fibLayout)
 // was "1.4.0";   // (1.4.0, 2026-11-05 10:17-10:21 CT Rassul "add a zzo wave filter of the cob having a wave that has at least a 10", "the filter should apply to both") a CoB is DRAWN only once its ZZO Combo wave count reaches 10
 // was "1.3.0";   // (1.3.0, Rassul 2026-11-04 "build" after the LVP mockup) + LVP (low-volume pullback after a CoB, 3-bar ZigZag waves)   // was "1.2.0";   // (1.2.0, Rassul 2026-11-02 19:07-19:19 CT, his cob_bull_3m_1b / cob_bear_3m_1b + "11:00 am cutoff" + "build it so i can add it") = his two signals: + PWL / AsiaLO (bull) and PWH / AsiaHI (bear) as swept levels, PHL / PHH kept as extras; BOTH sides by 11:00 CT; the bear gets his room line (the leg-start high - close >= 0.1 ADR)   // was "1.1.0":   // (1.1.0, Rassul 2026-11-02 10:14 CT "ok.. lets add it .. build") a CoB whose ONLY swept level is PHH / PHL
 // is drawn in ES / HG / GC (the year test: +0.61 / +0.18 / +0.16 R) and recorded but NOT drawn in NQ / CL / NG / 6E (+0.01 / -0.22 / -0.53 / -0.15 R) until the
@@ -74,7 +75,14 @@ struct Leg { int s = -1, e = -1, dir = 0; double size = 0; };
 static const int ZZO_COB_MIN = 10;      // (1.4.0) the CoB wave's ZZO Combo count (Rassul: "at least a 10")
 static const int ZZO_COB_LOOK = 60;     // (1.4.0) bars a CoB waits for its wave to reach the count (then: not drawn)
 
-inline std::string mktKey(const std::string& root) { return root == "6E" ? std::string("EU") : root; }
+// (1.5.1, 2026-11-06 12:13 CT Rassul "why isnt' the cob there ?") his IRT feed is CQG: the chart's ROOT symbol is EP / ENQ / CLE / GCE / CPE /
+// NGE / EU6 (as lsBigBidAsk / lsDealerHedge map them), not ES / NQ / CL / GC / HG / NG / EU. 1.0.0 - 1.5.0 kept the CQG root, svl::rthOf()
+// did not know it, identify() returned false and the indicator never ran on his charts (no CoB, no status, no record, any market).
+inline std::string mktKey(const std::string& root) {
+    static const char* const P[8][2] = { {"ENQ", "NQ"}, {"EP", "ES"}, {"CLE", "CL"}, {"GCE", "GC"}, {"CPE", "HG"}, {"NGE", "NG"}, {"EU6", "EU"}, {"6E", "EU"} };
+    for (const auto& p : P) if (root == p[0]) return p[1];
+    return root;
+}
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
 
 // ---- (1.3.0) LVP: low-volume pullback after a CoB (rules in the header comment)
