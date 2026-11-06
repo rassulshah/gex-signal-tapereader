@@ -1,5 +1,7 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.19.0 (2026-11-06 15:08-15:11 CT, Rassul "do it", "keep it compact and near the gamma regime"): the Range Day pill (Big 61% /
+ *         Small 56% / Norm; "?" until open + 30 min) right before the gamma pill, from lsFlexLevels\\LRA-RangeDay-<MKT>.csv (lra.range_day).
  *  2.18.0 (2026-11-04 16:59-17:11 CT, Rassul "swap the LOD Sweeps with HOD sweeps", "PhrL and PhrH", "FAV tag"): the box reads
  *         SESSION | LOD SWEEPS | HOD SWEEPS; prior-hour rows PhrH / PhrL; FAV after each section's favourite level (highest Swept %, sweepable today).
  *  2.17.9 (2026-11-04, Rassul "sometimes the hodlod box collapses", NQ 3-min 11:24 CT): the box showed only its header + Exp / Act
@@ -131,6 +133,7 @@
 #include "DealerProfileSettings.h"   // (2.4.3) the Dealer Profile banner key (its keyed per-market file)
 #include "SettingsHost.h"           // (2.4.2) registration / window fill / read / group masters from the table
 #include "HodLodGex.h"             // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv parse / pick / hover text (SDK-free)
+#include "HodLodRange.h"          // (2.19.0) the Range Day pill (SDK-free)
 #include "HodLodSweeps.h"         // (2.13.0) the HOD / LOD sweep sections (SDK-free)
 static const bool HL_FEED_ROW = false;   // (2.13.0) the "Feed ?" row is not drawn
 #include "HodLodHtf.h"             // (2.17.0) the HTF trend + RS line (SDK-free)
@@ -272,6 +275,7 @@ struct HLState {
     long long qStamp = -2; time_t qChecked = 0; hlq::File qf; std::string qWhy;
     // (2.13.0) the sweep sections: LRA-HodLodSweeps-<MKT>.csv (the nightly %) + LRA-KeyLevels-<MKT>.csv (the Dealer Profile's prices), each
     // stamp-checked at most every 5 s
+    long long rdStamp = -2; time_t rdChecked = 0; hrd::File rdf; std::string rdWhy; hrd::Out rdOut;   // (2.19.0) LRA-RangeDay-<MKT>.csv
     long long swStamp = -2, swKeyStamp = -2; time_t swChecked = 0; hsw::File sw; std::vector<hsw::Lv> swKeys; std::string swWhy, swKeyWhy;
     bool inQ = false, lastQOk = false, lastQHoverOk = false; hl::Box lastQBox = { 0, 0, 0, 0 }, lastQHover = { 0, 0, 0, 0 }; int qCurX = -100000, qCurY = -100000; long long qHovers = 0;
     // (2.4.0) the regime's ONE source: GammaProfile-MQ-<MKT>.csv HVL0 (stamp, at most every 5 s) and its verdict (Fresh.h)
@@ -322,6 +326,7 @@ public:
     void loadGex(HLState& S);
     void loadQ(HLState& S);                                          // (2.3.0)
     void loadSweeps(HLState& S);                                     // (2.13.0)
+    void loadRange(HLState& S);                                      // (2.19.0)
     // (HL105, Rassul "you should have setting where to put them like upper left etc.") ONE setting: Position (9 spots), default
     // Bottom centre. IRT can return -1 for a LIST parameter outside its settings copy, so the choice is also kept per market in
     // HodLod.place-<MKT>.txt - written only from the dialog's callbacks (loading never saves, #29) and read back by stamp.
@@ -609,6 +614,16 @@ static bool hlSmallRead(const std::string& p, size_t maxB, std::string& text, lo
     std::ifstream f(p.c_str(), std::ios::binary); if (!f.is_open()) return false;
     text.resize(maxB + 1); f.read(&text[0], (std::streamsize)text.size()); text.resize((size_t)f.gcount());
     return true;
+}
+void HodLod::loadRange(HLState& S)   // (2.19.0) lsFlexLevels\\LRA-RangeDay-<MKT>.csv (lra.range_day, nightly); checked every 5 s, re-parsed on change
+{
+    time_t now = time(nullptr);
+    if (S.rdStamp != -2 && now - S.rdChecked < 5) return;
+    S.rdChecked = now;
+    const std::string p = flexPath("LRA-RangeDay-" + S.mkt + ".csv"); std::string text; long long st = -1;
+    if (p.empty()) { S.rdf = hrd::File(); S.rdWhy = "no profile folder"; S.rdStamp = -1; return; }
+    if (!hlSmallRead(p, hrd::MAX_BYTES, text, st)) { if (st != S.rdStamp) { S.rdf = hrd::File(); S.rdWhy = "LRA-RangeDay-" + S.mkt + ".csv missing: no Range Day pill"; } S.rdStamp = st; return; }
+    if (st != S.rdStamp) { hrd::File F = hrd::parse(text, S.mkt); if (F.ok) { S.rdf = F; S.rdWhy.clear(); } else S.rdWhy = "garbled (" + F.why + "): kept the last good copy"; S.rdStamp = st; }
 }
 void HodLod::loadSweeps(HLState& S)
 {
@@ -1467,6 +1482,11 @@ int HodLod::draw(void)
     }
     loadQ(*S);                               // (2.3.0) the Q-Scores top left of the header
     loadSweeps(*S);                          // (2.13.0) the HOD / LOD sweep sections: % (nightly) + today's prices (Dealer Profile key levels)
+    loadRange(*S);                           // (2.19.0) the Range Day pill beside the gamma pill
+    {   hrd::In I; I.ok = S->view.rdOk; I.on = S->view.rdOn; I.pr = S->view.rdPr; I.gap = S->view.rdGap; I.news = S->view.rdNews; I.x30 = S->view.rdX30;
+        S->rdOut = hrd::read(S->rdf, I);
+        S->view.rangePill = S->rdOut.kind < 0 ? hl::Seg{ std::string(), 0 } : hl::Seg{ S->rdOut.s, S->rdOut.kind == 1 ? hl::C_GREEN : (S->rdOut.kind == 2 ? hl::C_RED : hl::C_GREY) };
+    }
     {   std::vector<hsw::Row> hi, lo; const double openPx = (S->view.has && !S->view.prior) ? (double)S->view.open * tick : 0.0;
         hsw::build(S->sw, S->swKeys, openPx, hl::MKTS[S->mi < 0 ? 0 : S->mi].dec, hi, lo);
         S->view.swOn = true; S->view.swHi.clear(); S->view.swLo.clear();
@@ -1615,6 +1635,10 @@ int HodLod::draw(void)
         static const char* const TIER_TXT[4] = { "full", "compact 1 (no caption)", "compact 2 (half % bars)", "compact 3 (no % bars)" };
         S->placeLine += "SWEEPS," + std::string(!L.tableOk ? "no table" : L.swOk && L.swTier >= 0 && L.swTier <= 3 ? TIER_TXT[L.swTier] : (S->view.swOn && (!S->view.swHi.empty() || !S->view.swLo.empty()) ? "off (no sweep form fits the pane: the header-only box)" : "off (no sweep rows)"))
                       + ",font " + std::to_string(L.tableFs) + "\n";
+        {   char rb[300]; std::snprintf(rb, sizeof rb, "RANGEDAY,%s,%s,pBig %.2f,pSmall %.2f,on %.2f,prior %.2f,gap %.2f,news %d,x30 %.2f,atr14 %.6g,%s\n",   // (2.19.0)
+                S->rdOut.s.empty() ? "none" : S->rdOut.s.c_str(), S->rdOut.post ? "30-min read" : "pre-open read", S->rdOut.pBig, S->rdOut.pSmall,
+                S->view.rdOn, S->view.rdPr, S->view.rdGap, S->view.rdNews, S->view.rdX30, S->view.rdAtr, S->rdWhy.empty() ? "ok" : S->rdWhy.c_str());
+            S->placeLine += rb; }
     }
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
         PNT p; int mx = -1;
@@ -1779,6 +1803,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.18.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.19.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
