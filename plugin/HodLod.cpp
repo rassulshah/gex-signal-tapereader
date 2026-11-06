@@ -1638,7 +1638,10 @@ int HodLod::draw(void)
         {   char rb[300]; std::snprintf(rb, sizeof rb, "RANGEDAY,%s,%s,pBig %.2f,pSmall %.2f,on %.2f,prior %.2f,gap %.2f,news %d,x30 %.2f,atr14 %.6g,%s\n",   // (2.19.0)
                 S->rdOut.s.empty() ? "none" : S->rdOut.s.c_str(), S->rdOut.post ? "30-min read" : "pre-open read", S->rdOut.pBig, S->rdOut.pSmall,
                 S->view.rdOn, S->view.rdPr, S->view.rdGap, S->view.rdNews, S->view.rdX30, S->view.rdAtr, S->rdWhy.empty() ? "ok" : S->rdWhy.c_str());
-            S->placeLine += rb; }
+            S->placeLine += rb;
+            // (2.19.0) the sweep rows as drawn, for the MQ Reader's 1st-extreme sweep table (bridge /api/reader "hodlod_box")
+            for (int sd = 0; sd < 2; sd++) for (const hl::View::SwRow& r : sd ? S->view.swLo : S->view.swHi)
+                S->placeLine += std::string("SWROW|") + (sd ? "LOD" : "HOD") + "|" + r.name + "|" + r.px + "|" + r.pct + "|" + (r.elig ? "1" : "0") + "\n"; }   // '|': prices carry commas
     }
     if (S->fxHave && S->fxView.called && S->fxIdx >= 0 && S->fxIdx < (int)getBarCount()) {   // (2.0.0) the LOD? / HOD? marker on the called candle
         PNT p; int mx = -1;
