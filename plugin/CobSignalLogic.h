@@ -48,7 +48,8 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.5.1";   // (1.5.1, 2026-11-06) CQG roots (EP / ENQ / CLE / GCE / CPE / NGE / EU6) -> ES / NQ / CL / GC / HG / NG / EU: the indicator never ran on his charts before
+static const char* const VERSION = "1.6.0";   // (1.6.0, 2026-11-06 18:49-18:50 CT Rassul on GC / HG "this is the cob for gold, you need to use 3bar", "why does the cob still not on the gold and hg charts", and 2026-11-01 "the cob should be a completed wave, not mid way") the CoB = a COMPLETED 3-bar High / Low ZigZag wave (the ZZO Combo / chart ZigZag wave) from a swing low (bull) / high (bear) that swept a key level, decided when the ZigZag confirms the wave; the old 1-bar pause check is off (wave3)
+// was "1.5.1";   // (1.5.1, 2026-11-06) CQG roots (EP / ENQ / CLE / GCE / CPE / NGE / EU6) -> ES / NQ / CL / GC / HG / NG / EU: the indicator never ran on his charts before
 // was "1.5.0";   // (1.5.0, 2026-11-05 12:25-12:42 CT Rassul "build a line on top of the cob with targets", "lets use 1.272, 1.618 and 2.0", "an entry line at 50% retracement and a stop line at 0", line endings + "i'll go with your recommendations") the CoB Fib lines (fibLines / fibLayout)
 // was "1.4.0";   // (1.4.0, 2026-11-05 10:17-10:21 CT Rassul "add a zzo wave filter of the cob having a wave that has at least a 10", "the filter should apply to both") a CoB is DRAWN only once its ZZO Combo wave count reaches 10
 // was "1.3.0";   // (1.3.0, Rassul 2026-11-04 "build" after the LVP mockup) + LVP (low-volume pullback after a CoB, 3-bar ZigZag waves)   // was "1.2.0";   // (1.2.0, Rassul 2026-11-02 19:07-19:19 CT, his cob_bull_3m_1b / cob_bear_3m_1b + "11:00 am cutoff" + "build it so i can add it") = his two signals: + PWL / AsiaLO (bull) and PWH / AsiaHI (bear) as swept levels, PHL / PHH kept as extras; BOTH sides by 11:00 CT; the bear gets his room line (the leg-start high - close >= 0.1 ADR)   // was "1.1.0":   // (1.1.0, Rassul 2026-11-02 10:14 CT "ok.. lets add it .. build") a CoB whose ONLY swept level is PHH / PHL
@@ -108,7 +109,11 @@ struct Lvp {
     void reset() { Z.clear(); W = zzd::Walk(); waves.clear(); tr.clear(); marks.clear(); }
     long long tk(double px) const { long long q = 0; return zzd::toTicks(px, tick, q) ? q : 0; }
     // a CoB decided on bar idx (its leg's extreme = legEnd): call BEFORE bar(idx)
-    void cob(long long t, int idx, int legEnd, int side, bool show) { LvpTrack x; x.cobT = t; x.cobIdx = idx; x.legEnd = legEnd; x.side = side; x.show = show; tr.push_back(x); }
+    void cob(long long t, int idx, int legEnd, int side, bool show) { LvpTrack x; x.cobT = t; x.cobIdx = idx; x.legEnd = legEnd; x.side = side; x.show = show;
+        for (size_t k = waves.size(); k-- > 0;) {                           // (1.6.0) the CoB = a completed wave: its wave is already here
+            const LvpWave& w = waves[k]; if (w.e < legEnd) break;
+            if (w.dir == side && w.s <= legEnd && w.e >= legEnd) { x.state = 1; x.cw = (int)k; x.hi = w.hi; x.lo = w.lo; x.vol = w.vol; x.why = "counting pullbacks"; break; } }
+        tr.push_back(x); }
     // closed bar j (= the CoB engine's index); true = a new LVP was decided on it
     bool bar(const Bar& b) {
         zzd::Bar z; z.t = b.t; z.h = tk(b.h); z.l = tk(b.l); if (z.h < z.l) std::swap(z.h, z.l);
@@ -168,7 +173,7 @@ struct Engine {
     long long trimmed = 0; std::string lastWhy;
     Lvp lvp; std::vector<std::string> lvpOut;        // (1.3.0) LVP decisions + record lines not yet written
     zzd::Engine Z3;                                  // (1.4.0) the ZZO Combo engine on the same bars (wave counts for the CoB filter)
-    void reset() { lvp.reset(); lvpOut.clear(); B.clear(); K.clear(); CB.clear(); cls.clear(); dirn = 0; ext = 0; start = 0; legs.clear(); lastLowPivot = -1; S.clear(); doneOrder.clear(); marks.clear(); out.clear(); lastWhy.clear(); }
+    void reset() { wSeen = 0; lastWaveT = 0; if (!mkt.empty()) { Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(mkt, perSec); } lvp.reset(); lvpOut.clear(); B.clear(); K.clear(); CB.clear(); cls.clear(); dirn = 0; ext = 0; start = 0; legs.clear(); lastLowPivot = -1; S.clear(); doneOrder.clear(); marks.clear(); out.clear(); lastWhy.clear(); }
     bool setMarket(const std::string& m, double tk, int spb) {
         mkt = mktKey(m); tick = tk > 0 ? tk : 0.25; perSec = spb > 0 ? spb : 180; lvp.tick = tick;
         Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(mkt, perSec);   // (1.4.0)
@@ -216,11 +221,18 @@ struct Engine {
         // 1) the CoB check on this bar with the ZigZag as it stood after the previous bar (trade_def.cob_live, 95% parity with his
         //    platform flags): Ups#1 = 1 = the bar before made the developing leg's extreme and this bar did not exceed it
         const size_t nm = marks.size();
-        if (j >= 2) check(j, 1), check(j, -1);
+        if (j >= 2 && !wave3) check(j, 1), check(j, -1);   // (1.6.0) the 1-bar pause CoB only with wave3 off
         // (1.3.0) LVP: the CoBs decided on this bar start a look; then this bar on the 3-bar ZigZag (it may confirm a pullback wave)
         for (size_t q = nm; q < marks.size(); ++q) { const Mark& m = marks[q]; lvp.cob(m.t, m.idx, m.legEnd, m.side, m.show); }
         { const size_t nl = lvp.marks.size(); lvp.bar(b); for (size_t q = nl; q < lvp.marks.size(); ++q) lvpOut.push_back(lvpLine(lvp.marks[q])); }
         zzoBar(b);                                     // (1.4.0) the ZZO Combo engine with this bar, then the pending CoBs' wave counts
+        if (wave3) {                                   // (1.6.0) a 3-bar wave completed on this bar: is it a CoB?
+            const size_t nm3 = marks.size();
+            // the waves completed on this bar (Z3 trims its own bars / waves, so they are found by their end time, not by index)
+            size_t k0 = Z3.W.size(); while (k0 > 0 && Z3.W[k0 - 1].e >= 0 && Z3.W[k0 - 1].e < (int)Z3.B.size() && Z3.B[(size_t)Z3.W[k0 - 1].e].t > lastWaveT) --k0;
+            for (size_t k = k0; k < Z3.W.size(); ++k) { checkWave(k, j); if (Z3.W[k].e >= 0 && Z3.W[k].e < (int)Z3.B.size()) lastWaveT = Z3.B[(size_t)Z3.W[k].e].t; }
+            for (size_t q = nm3; q < marks.size(); ++q) { const Mark& m = marks[q]; lvp.cob(m.t, m.idx, m.legEnd, m.side, m.show); }
+        }
         // 2) the ZigZag (his 1-bar walk) with this bar
         if (j == 1) { dirn = B[1].h >= B[0].h ? 1 : -1; ext = 0; start = 0; }
         if (j >= 1) {
@@ -234,6 +246,54 @@ struct Engine {
         }
     }
     int lastLowPivot = -1;
+    bool wave3 = true; size_t wSeen = 0; long long lastWaveT = 0;                        // (1.6.0) the 3-bar completed-wave CoB (false = the 1.5.x 1-bar pause rule)
+    // (1.6.0) THE CoB ON A COMPLETED 3-BAR WAVE. Wave k of the Combo engine (Z3, same bar index as B) was confirmed on bar j:
+    //   start pivot p0 = the bar before its first bar (the previous ZigZag pivot), end pivot p1 = its extreme bar
+    //   bull (up wave): p0's LOW is below a key level (ONL / PDL / PFL / LonLO / PWL / AsiaLO / PhrL) and p1's HIGH is back above it;
+    //   bear the mirror (p0's HIGH above ONH / PDH / PFH / LonHI / PWH / AsiaHI / PhrH, p1's LOW back below it)
+    //   size (p0 -> p1) >= 1.9 x the average of the previous 20 completed waves of its direction (>= 5 of them)
+    //   p0 an RTH bar of j's session, p1 - p0 >= 3 bars, room |close[j] - p0's extreme| >= 0.1 ADR, j ends by 11:00 CT
+    //   drawn only with its wave's ZZO Combo count >= 10 (the Combo's own count of that completed wave)
+    // The label goes on bar j (the bar that completed the wave); the Fib lines run from p0 (0) to p1 (1.0). Decided once, never repainted.
+    void checkWave(size_t k, int j) {
+        if (k >= Z3.W.size() || j < 0 || j >= (int)B.size()) return;
+        const zzd::Wave& w = Z3.W[k]; const int side = w.dir > 0 ? 1 : -1;
+        const int nz = (int)Z3.B.size();
+        if (w.s < 1 || w.e <= w.s - 1 || w.e >= nz) return;
+        auto idxOf = [&](long long t) { int lo = 0, hi = (int)B.size() - 1; while (lo <= hi) { const int md = (lo + hi) / 2; if (B[(size_t)md].t == t) return md; if (B[(size_t)md].t < t) lo = md + 1; else hi = md - 1; } return -1; };
+        const int p0 = idxOf(Z3.B[(size_t)(w.s - 1)].t), p1 = idxOf(Z3.B[(size_t)w.e].t);   // the ZigZag pivots on this engine's bars
+        if (p0 < 0 || p1 <= p0) return;
+        const svl::Cls& c = cls[(size_t)j]; const svl::Cls& c0 = cls[(size_t)p0];
+        if (c.kind != svl::RTH || c0.kind != svl::RTH || c0.sess != c.sess || !S.count(c.sess)) return;
+        const Sess& s = S[c.sess]; if (!s.lv) return;
+        const double adr = s.adr; if (!(adr > 0)) return;
+        if (p1 - p0 < 3) return;
+        auto sizeOf = [&](const zzd::Wave& x) { const int a = x.s - 1; return (double)(x.dir > 0 ? Z3.B[(size_t)x.e].h - Z3.B[(size_t)a].l : Z3.B[(size_t)a].h - Z3.B[(size_t)x.e].l); };   // ticks
+        double sum = 0; int n = 0;
+        for (size_t q = k; q-- > 0 && n < 20;) { const zzd::Wave& x = Z3.W[q]; if (x.dir == w.dir && x.s >= 1 && x.e > x.s - 1 && x.e < nz) { sum += sizeOf(x); ++n; } }
+        if (n < 5 || !(sum > 0)) return;
+        const double dr = sizeOf(w) / (sum / n); if (!(dr >= 1.9)) return;
+        const int mod = (int)((B[(size_t)j].t % 86400 + 86400) % 86400) / 60; if (mod > 11 * 60) return;
+        auto lvl = [&](const char* nm, double& v) { auto it = s.L.find(nm); if (it == s.L.end()) return false; v = it->second; return true; };
+        std::string sw; auto add = [&](const char* nm) { if (!sw.empty()) sw += "/"; sw += nm; };
+        const double ext0 = side > 0 ? B[(size_t)p0].l : B[(size_t)p0].h, ext1 = side > 0 ? B[(size_t)p1].h : B[(size_t)p1].l;
+        if (side > 0) {
+            const char* N[] = { "ONL", "PDL", "PFL", "LonLO", "PWL", "AsiaLO", "PHL" };
+            for (const char* nm : N) { double v; if (lvl(nm, v) && ext0 < v && v < ext1) add(nm); }
+            if (sw.empty() || !(B[(size_t)j].c - ext0 >= 0.1 * adr)) return;
+        } else {
+            const char* N[] = { "ONH", "PDH", "PFH", "LonHI", "PWH", "AsiaHI", "PHH" };
+            for (const char* nm : N) { double v; if (lvl(nm, v) && ext1 < v && v < ext0) add(nm); }
+            if (sw.empty() || !(ext0 - B[(size_t)j].c >= 0.1 * adr)) return;
+        }
+        Mark m; m.t = B[(size_t)j].t; m.idx = j; m.side = side; m.dratio = dr; m.adr = adr; m.legStart = p0; m.legEnd = p1; m.ext = ext0; m.levels = sw;
+        m.phOnly = sw == "PHH" || sw == "PHL"; m.show = !m.phOnly || phShown(mkt);
+        cimp::Params P; const cimp::Tag T = cimp::evaluate(CB, j, side, P, false);
+        m.r = T.r.bar >= 0; m.v = T.v.bar >= 0; m.rBar = T.r.bar; m.vBar = T.v.bar; m.rN = T.r.n; m.vN = T.v.n;
+        m.zCnt = w.cnt + (w.cntCap ? 1 : 0); m.zBars = 0; m.zWave = Z3.B[(size_t)w.s].t;
+        marks.push_back(m); out.push_back(recLine(m));
+        marks.back().zAt = m.t; zzoDone(marks.back(), w.hasV && (w.cnt >= ZZO_COB_MIN || w.cntCap));
+    }
     bool useNew = true;                                         // PHH / PHL (2026-11-01); false = his RTL level set only (parity tests)
     bool legacy = false;                                        // (1.2.0) parity with his OLD signals (recorded flags): bear without room / cutoff
     bool hisSet = true;                                         // (1.2.0) with useNew false: true = his 6 levels (+ PWx / Asia), false = the old 4
