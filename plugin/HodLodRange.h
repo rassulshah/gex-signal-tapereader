@@ -12,10 +12,11 @@
 #include <string>
 #include <vector>
 namespace hrd {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // 1.1.0: + REG = the expected RTH range / a normal day ("Exp Range", Rassul 16:30 CT)
 static const size_t MAX_BYTES = 16384;
 struct Md { bool ok = false, filled = false; double b0 = 0; double w[5] = { 0, 0, 0, 0, 0 }; double fill[5] = { 0, 0, 0, 0, 0 }; int n = 0; };
-struct File { bool ok = false; std::string why; Md m[2][2]; double tBig = 0.45, tSmall = 0.50; };   // m[pre=0 / post=1][big=0 / small=1]
+struct Reg { bool ok = false, show = false; double b0 = 0; double w[5] = { 0, 0, 0, 0, 0 }; int n = 0; };
+struct File { bool ok = false; std::string why; Md m[2][2]; Reg reg[2]; double tBig = 0.45, tSmall = 0.50; };   // reg[pre / post]: optional   // m[pre=0 / post=1][big=0 / small=1]
 inline std::vector<std::string> split(const std::string& s) { std::vector<std::string> f; size_t a = 0;
     for (;;) { const size_t q = s.find(',', a); f.push_back(s.substr(a, q == std::string::npos ? std::string::npos : q - a)); if (q == std::string::npos) break; a = q + 1; } return f; }
 inline bool num(const std::string& s, double& v) { if (s.empty()) return false; char* e = nullptr; v = std::strtod(s.c_str(), &e); return e && *e == 0 && std::isfinite(v); }
@@ -27,6 +28,13 @@ inline File parse(const std::string& text, const std::string& mkt) {
         const std::vector<std::string> f = split(l); if (f.empty()) continue;
         if (f[0] == "MARKET" && f.size() >= 2) mk = f[1] == mkt;
         else if (f[0] == "PILL" && f.size() >= 3) { double x, y; if (num(f[1], x) && num(f[2], y) && x > 0 && x < 1 && y > 0 && y < 1) { F.tBig = x; F.tSmall = y; } }
+        else if (f[0] == "REG" && f.size() >= 8) {   // REG,<pre|post>,<show 0/1>,b0,w... (1.1.0); a bad line just leaves no Exp Range
+            const int t = f[1] == "pre" ? 0 : f[1] == "post" ? 1 : -1; if (t < 0) continue;
+            const int need = t == 0 ? 4 : 5; if ((int)f.size() != 4 + need) continue;
+            Reg R; double v; bool good = num(f[3], v); R.b0 = v; R.show = f[2] == "1";
+            for (int i = 0; i < need && good; i++) { good = num(f[(size_t)(4 + i)], v); R.w[i] = v; }
+            if (good) { R.n = need; R.ok = true; F.reg[t] = R; }
+        }
         else if ((f[0] == "MODEL" || f[0] == "FILL") && f.size() >= 7) {
             const int t = f[1] == "pre" ? 0 : f[1] == "post" ? 1 : -1, k = f[2] == "big" ? 0 : f[2] == "small" ? 1 : -1;
             if (t < 0 || k < 0) continue;
@@ -46,12 +54,14 @@ inline double prob(const Md& M, const double* x) {
     return 1.0 / (1.0 + std::exp(-z));
 }
 struct In { bool ok = false; double on = NAN, pr = NAN, gap = NAN, news = 0, x30 = NAN; };
-struct Out { std::string s; int kind = -1; bool post = false; double pBig = NAN, pSmall = NAN; };   // kind 1 big, 2 small, 0 norm, -1 none
+struct Out { std::string s; int kind = -1; bool post = false; double pBig = NAN, pSmall = NAN, xr = NAN; };   // xr = expected RTH range / a normal day (NaN = not shown)   // kind 1 big, 2 small, 0 norm, -1 none
 inline Out read(const File& F, const In& I) {
     Out o; if (!F.ok || !I.ok) return o;
     o.post = std::isfinite(I.x30);
     const double x[5] = { I.on, I.pr, I.gap, I.news, I.x30 }; const int t = o.post ? 1 : 0;
     o.pBig = prob(F.m[t][0], x); o.pSmall = prob(F.m[t][1], x);
+    {   const Reg& R = F.reg[t];   // (1.1.0) missing inputs take the big model's fill values
+        if (R.ok && R.show) { double z = R.b0; for (int i = 0; i < R.n; i++) z += R.w[i] * (std::isfinite(x[i]) ? x[i] : F.m[t][0].fill[i]); o.xr = std::exp(z); } }
     const char* q = o.post ? "" : "?"; char b[40];
     if (o.pBig >= F.tBig) { o.kind = 1; std::snprintf(b, sizeof b, "Big%s %d%%", q, (int)std::lround(o.pBig * 100)); }
     else if (o.pSmall >= F.tSmall) { o.kind = 2; std::snprintf(b, sizeof b, "Small%s %d%%", q, (int)std::lround(o.pSmall * 100)); }
