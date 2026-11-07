@@ -49,7 +49,8 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
+static const char* const VERSION = "1.6.4";   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
+// was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
 // was "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
 // was "1.6.1";   // (1.6.1) roots QGC / QHG / QCL / NGx mapped: the indicator never ran on his GC / HG / CL / NG charts
 // was "1.6.0";   // (1.6.0, 2026-11-06 18:49-18:50 CT Rassul on GC / HG "this is the cob for gold, you need to use 3bar", "why does the cob still not on the gold and hg charts", and 2026-11-01 "the cob should be a completed wave, not mid way") the CoB = a COMPLETED 3-bar High / Low ZigZag wave (the ZZO Combo / chart ZigZag wave) from a swing low (bull) / high (bear) that swept a key level, decided when the ZigZag confirms the wave; the old 1-bar pause check is off (wave3)
@@ -429,6 +430,11 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
     // wick (LVP_OFF), one more row out if another label of this plugin is there (up to 2), never outside the pane
     for (const LvpMark& m : E.lvp.marks) {
         if (!m.show || m.idx < v.first || m.idx > v.last || m.idx >= (int)E.B.size()) continue;
+        {   // (1.6.4, Rassul 21:23 CT "lvp is being drawn even when there is no cob") only after a CoB that is DRAWN (shown and ZZO 10+)
+            bool cobDrawn = false;
+            for (const Mark& c : E.marks) if (c.t == m.cobT && c.show && c.zOk) { cobDrawn = true; break; }
+            if (!cobDrawn) continue;
+        }
         const Bar& b = E.B[(size_t)m.idx];
         const std::string s = "Lvp"; const int w = v.textW ? v.textW(s) : 21, h = 14;
         const double x = v.X(m.idx); const bool below = m.side > 0;
