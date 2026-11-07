@@ -67,7 +67,8 @@
 #include <unistd.h>
 #endif
 
-#define CV_VERSION "1.3.1"          // (1.3.0, 2026-10-24 crash fix) IRT fast-failed (0xC0000409 in investorRT.exe) inside a ChartView lookup - found by parking indicators one group at a time (round 9). No getCustomIndicator() any more (it made IRT recalculate RTL custom indicators from inside the plugin, incl. names IRT no longer knows: DPoc / WPoc), and a crash guard quarantines any label whose lookup brings IRT down (ChartView.skip.txt)
+#define CV_VERSION "1.3.2"          // (1.3.2, 2026-11-07 Rassul 13:09 CT "yes") export copies the PER-MARKET Dealer / Delta / HodLod status files (a GC export showed EU)
+// prior: "1.3.1"          // (1.3.0, 2026-10-24 crash fix) IRT fast-failed (0xC0000409 in investorRT.exe) inside a ChartView lookup - found by parking indicators one group at a time (round 9). No getCustomIndicator() any more (it made IRT recalculate RTL custom indicators from inside the plugin, incl. names IRT no longer knows: DPoc / WPoc), and a crash guard quarantines any label whose lookup brings IRT down (ChartView.skip.txt)
 // prior: "1.2.1"          // keep equal to cvl::CV_VERSION_STR and the setVersion literal below
 
 enum { CTX_CALC = 0, CTX_DRAW = 1, CTX_TIMER = 2 };
@@ -622,6 +623,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | CALC_LAST);
     p->setDescription("LRA ChartView: writes this chart's bars and indicator values to lsFlexLevels\\ChartView for Claude, and takes a picture of this chart on request. Draws nothing; no settings.");
-    p->setVersion("1.3.1");   // CV_VERSION
+    p->setVersion("1.3.2");   // CV_VERSION
     return p;
 }

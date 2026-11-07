@@ -291,6 +291,20 @@ int main()
             if (s.rel == "TapeFlow\\ES-events-v110-EPZ26-2026-10-10.csv" && s.cut == cvl::TAIL) ev = true;
         }
         check(tf && odds && dealer && gp && ev, "ES sources include TapeFlow / VWAP odds / Dealer data / Gamma status / TapeFlow events");
+        {   // (1.3.2) per-market Dealer / Delta / HodLod status files, never the shared names (a GC export showed EU's)
+            bool dpm = false, dlm = false, hlm = false, shared = false, kl = false;
+            for (auto& s : v) {
+                if (s.rel == "DealerProfile.status-ES-180.txt") dpm = true;
+                if (s.rel == "DeltaProfile.status-ES-180.txt") dlm = true;
+                if (s.rel == "HodLod.status-ES-180.txt") hlm = true;
+                if (s.rel == "DealerProfile.status.txt" || s.rel == "DeltaProfile.status.txt") shared = true;
+                if (s.rel == "LRA-KeyLevels-ES.csv") kl = true;
+            }
+            check(dpm && dlm && hlm && !shared && kl, "per-market status files only + key levels");
+            std::vector<cvl::Src> g = cvl::sourcesFor("GC", "GCZ26", 3600, today);
+            bool gc = false; for (auto& s : g) if (s.rel == "DealerProfile.status-GC-3600.txt") gc = true;
+            check(gc, "GC hourly chart -> DealerProfile.status-GC-3600.txt");
+        }
         eq(cvl::contractTag("@ES#"), "_ES_", "contract tag like TapeFlow::evPath");
         cvl::Plan p = cvl::planRead(1000, cvl::HEAD, 4096);
         check(!p.truncated && p.headLen == 1000, "small file whole");

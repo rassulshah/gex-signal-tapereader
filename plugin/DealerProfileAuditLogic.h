@@ -278,6 +278,40 @@ inline bool parseKeyLevels(const std::string& text, long long nowUnix, std::vect
     }
     return head;
 }
+// ---- (DP 2.53.1, 2026-11-07 Rassul 13:09 CT "yes": a nightly check of IRT's level VALUES vs the research levels) once per session a
+// 3-min chart appends the day's key levels to LRA-KeyLevels-<MKT>-hist.csv, after 10:00 CT (every market's ON / London / Asia / PHH
+// levels are final by then) and before 17:00: "<YYYY-MM-DD>|<unix>|<name>=<price>;<name>=<price>;...". One line per session; the
+// nightly lra.consistency_check compares each line with the research levels of that session (> 1 tick = reported).
+inline bool histDue(int barSec, int endSecOfDay) { return barSec == 180 && endSecOfDay >= 10 * 3600 && endSecOfDay < 17 * 3600; }
+inline std::string histDate(long long civilDays)
+{
+    long long z = civilDays + 719468; const long long era = (z >= 0 ? z : z - 146096) / 146097;
+    const unsigned doe = (unsigned)(z - era * 146097); const unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    const long long y0 = (long long)yoe + era * 400; const unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    const unsigned mp = (5 * doy + 2) / 153; const unsigned d = doy - (153 * mp + 2) / 5 + 1; const unsigned m = mp < 10 ? mp + 3 : mp - 9;
+    const long long y = y0 + (m <= 2 ? 1 : 0);
+    if (y < 1970 || y > 9999) return std::string();
+    char b[32]; std::snprintf(b, sizeof(b), "%04lld-%02u-%02u", y, m, d); return b;
+}
+inline std::string histLine(const std::string& session, long long nowUnix, const std::vector<KeyLv>& v)
+{
+    if (session.size() != 10 || v.empty()) return std::string();
+    std::string o = session + "|" + std::to_string(nowUnix) + "|"; char b[96]; bool any = false;
+    for (size_t i = 0; i < v.size(); i++) {
+        if (v[i].name.empty() || v[i].name.size() > 40 || !std::isfinite(v[i].price) || v[i].price <= 0) continue;
+        if (v[i].name.find_first_of("|;=\r\n") != std::string::npos) continue;
+        std::snprintf(b, sizeof(b), "%s%s=%.6f", any ? ";" : "", v[i].name.c_str(), v[i].price); o += b; any = true;
+    }
+    return any ? o + "\n" : std::string();
+}
+// the session is already in the file's tail (read at most the last 4 KiB; a torn last line does not count)
+inline bool histHas(const std::string& tail, const std::string& session)
+{
+    if (session.empty()) return true;
+    std::stringstream ss(tail); std::string ln;
+    while (std::getline(ss, ln)) if (ln.size() > session.size() && ln.compare(0, session.size(), session) == 0 && ln[session.size()] == '|') return true;
+    return false;
+}
 // the chart's bar size: the smallest positive gap between the last 40 stamps (0 = unknown)
 inline int barSeconds(const std::vector<long long>& stamps)
 {

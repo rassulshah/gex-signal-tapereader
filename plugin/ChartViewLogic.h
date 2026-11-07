@@ -1,7 +1,9 @@
 #ifndef LS_CHARTVIEW_LOGIC_H
 #define LS_CHARTVIEW_LOGIC_H
 /********************************************************************************
- *  ChartViewLogic.h  --  the SDK-free half of lsChartView (1.2.1, 2026-10-12)
+ *  ChartViewLogic.h  --  the SDK-free half of lsChartView (1.3.2, 2026-11-07)
+ *  1.3.2 (2026-11-07) per-market DealerProfile / DeltaProfile / HodLod status files (the shared names showed another market)
+ *        + LRA-KeyLevels-<MKT>.csv in the export
  *
  *  Everything ChartView decides without Investor/RT: which market a chart is, the watch-list file, when a snapshot is due,
  *  whether it changed, JSON text (escaping, numbers), size caps for the copied status files, the snapshot JSON itself, and
@@ -34,7 +36,7 @@
 
 namespace cvl {
 
-static const char* const CV_VERSION_STR = "1.3.0";
+static const char* const CV_VERSION_STR = "1.3.2";
 static const int   MAX_LABELS      = 40;       // labels read per chart
 static const int   MAX_ARRAYS      = 16;       // arrays read per label (0..15, stop at the first that fails)
 static const int   FIXED_BARS      = 300;      // (task #300) always the last 300 bars - no setting
@@ -549,8 +551,13 @@ inline std::vector<Src> sourcesFor(const std::string& M, const std::string& sym,
     const std::string svSymbol = filePart(sym, "unknown", 48, false);
     const std::string exMarket = filePart(M, "UNKNOWN", 24, true);
     const std::string exSymbol = filePart(sym, "UNKNOWN", 24, true);
-    add("DealerProfile.status.txt", HEAD); add("DealerRead.status.txt", HEAD); add("DealerSig.status.txt", HEAD);
-    add("DealerSummary.status.txt", HEAD); add("DeltaProfile.status.txt", HEAD);
+    // (1.3.2, 2026-11-07 Rassul 13:09 CT "yes") the PER-MARKET Dealer / Delta Profile status files (<Name>.status-<MKT>-<sec>.txt, written
+    // since DP 2.17.0 / DeltaProfile 2.17.0). The shared DealerProfile.status.txt / DeltaProfile.status.txt hold whichever chart wrote last:
+    // a GC export carried ROOT EU. Never fall back to the shared names - a missing file is better than another market's.
+    add("DealerProfile.status-" + exMarket + "-" + std::to_string(producerPeriod) + ".txt", HEAD);
+    add("DeltaProfile.status-" + exMarket + "-" + std::to_string(producerPeriod) + ".txt", HEAD);
+    add("HodLod.status-" + exMarket + "-" + std::to_string(producerPeriod) + ".txt", HEAD);
+    add("DealerRead.status.txt", HEAD); add("DealerSig.status.txt", HEAD); add("DealerSummary.status.txt", HEAD);
     add("SessionVWAP-" + svMarket + "-" + svSymbol + "-" + std::to_string(producerPeriod) + "s.status.txt", HEAD);
     add("SessionVWAP-" + svMarket + "-" + svSymbol + "-" + std::to_string(producerPeriod) + "s.odds.txt", HEAD);
     add("Exhaustion.status-" + exMarket + "-" + exSymbol + "-" + std::to_string(producerPeriod) + ".txt", HEAD);
@@ -560,6 +567,7 @@ inline std::vector<Src> sourcesFor(const std::string& M, const std::string& sym,
     for (int b = 0; b < 5; b++) { add(std::string("GammaProfile.status-") + BK[b] + "-Left.txt", HEAD); add(std::string("GammaProfile.status-") + BK[b] + "-Right.txt", HEAD); }
     add("LRA-Dealer-" + M + ".csv", HEADTAIL); add("LRA-Summary-" + M + ".txt", HEAD); add("LRA-Session-" + M + ".csv", HEAD);
     add("LRA-Levels-" + M + ".csv", HEAD); add("LRA-Touch-" + M + ".csv", HEAD);
+    add("LRA-KeyLevels-" + M + ".csv", HEAD);   // (1.3.2) the key-level prices the Dealer Profile draws (ONH / LonHI / PDH ...)
     const std::string tag = contractTag(sym);
     if (!tag.empty()) for (int k = 1; k >= -3; k--) add("TapeFlow\\" + M + "-events-v110-" + tag + "-" + dateOfDays(todayDays + k) + ".csv", TAIL);
     return v;
