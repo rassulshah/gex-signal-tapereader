@@ -1,5 +1,14 @@
 /********************************************************************************
  *  HodLod.cpp  --  Investor/RT RTX extension  lsHodLod  (1.0.0, 2026-10-09; 1.1.8 2026-10-12: the day's first IN call ledger; 1.1.9: "called h:mm", "Range used")
+ *  2.20.0 (2026-11-07, Rassul 11:52 CT "there is a read on top of each chart, that is where i need your guidance explained to me depending
+ *         on the situation the market is in ... and can grade yourself"; 12:50 "it cant be more than 3 lines"; 12:51 "build it", mockup v2):
+ *         the CHART READ - 3 lines across the top of the price area (ChartRead.h 1.0.0, SDK-free, tests_chartread): L1 situation + what
+ *         happened, L2 the action (green buy / red sell: the Cob leg's 50% -> 1.33 target, cancel beyond the origin, size note) or a grey
+ *         "Wait", L3 the odds + the read grade. Decided from CLOSED bars at each new bar (no repaint); inputs: this box's day view, the drawn
+ *         CoBs (lsFlexLevels\CobSignal-<MKT>-<spb>-live.csv + the ZZO lines of its record) and LRA-ReadParams-<MKT>.csv (lra.read_grade,
+ *         nightly). Each NEW read (3-min charts) is appended to lsFlexLevels\Reads\<MKT>-<yyyymmdd>.csv for the nightly grader. The strip
+ *         sits under the IRT title row (and the Dealer Profile banner when on), right of the left columns, left of the last bar, and moves
+ *         right of the table when the table is placed at the top. No hover, no settings change.
  *  2.19.0 (2026-11-06 15:08-15:11 CT, Rassul "do it", "keep it compact and near the gamma regime"): the Range Day pill (Big 61% /
  *         Small 56% / Norm; "?" until open + 30 min) right before the gamma pill, from lsFlexLevels\\LRA-RangeDay-<MKT>.csv (lra.range_day).
  *  2.18.0 (2026-11-04 16:59-17:11 CT, Rassul "swap the LOD Sweeps with HOD sweeps", "PhrL and PhrH", "FAV tag"): the box reads
@@ -136,6 +145,7 @@
 #include "HodLodRange.h"          // (2.19.0) the Range Day pill (SDK-free)
 #include "HodLodSweeps.h"         // (2.13.0) the HOD / LOD sweep sections (SDK-free)
 static const bool HL_FEED_ROW = false;   // (2.13.0) the "Feed ?" row is not drawn
+#include "ChartRead.h"              // (2.20.0) the 3-line chart read (SDK-free)
 #include "HodLodHtf.h"             // (2.17.0) the HTF trend + RS line (SDK-free)
 #include "HodLodQ.h"               // (2.3.0) MenthorQ Q-Scores: LRA-QScore-<MKT>.csv parse / header parts / hover (SDK-free)
 // (2.4.6, Rassul 2026-10-18 20:28 "remove the hoverover on gext strikes and the hod lod box") both hovers (Gex S/R strip, header) off
@@ -299,6 +309,9 @@ struct HLState {
     int hovWhich = 0; std::vector<std::pair<int, hl::Box> > lastTargets;
     htf::Out htf;   // (2.17.0) the last HTF trend / RS read (status HTF line)
     dtl::Result day; dtl::Params dayP; std::string dayLine = "DAYTYPE,not run", dayParamWhy, newsLine = "NEWS,none", preParamWhy; int dayLogged = -99; std::string dayLoggedKey; long long dayLogs = 0, dayLogFails = 0; int preParamShow = 0;
+    // (2.20.0) the chart read: the read in force, its inputs' stamps / texts, the log key (the last read written), counters
+    crd::Read cread; std::string creadKey, creadWhy = "not run", crParamText, crLive, crRec; long long crParamStamp = -2, crLiveStamp = -2; crd::Params crP;
+    long long creadLogs = 0, creadLogFails = 0; int crCobs = 0; bool crKeyLoaded = false; std::string crKeyDay;
     ~HLState() { delete T; }
 };
 
@@ -372,6 +385,7 @@ public:
     void writeFirstCall(HLState& S, const std::vector<hl::ReadRow>& rows);
     void writeStatus(HLState& S, const hl::Layout* L);
     void computeFx(HLState& S, long n, long long per);
+    void computeRead(HLState& S, const std::vector<hl::Bar>& B, long long per);   // (2.20.0)
     void writeFxLogs(HLState& S);
     void writeFxStatus(HLState& S);
     std::string flexPath(const std::string& name);
@@ -884,7 +898,46 @@ void HodLod::recompute(HLState& S, long n)
     writeFiles(S, rows);
     writeProj(S);
     writeFirstCall(S, rows);
+    computeRead(S, B, per);                   // (2.20.0) the chart read from the same closed bars
     S.firstPass = false;
+}
+
+// (2.20.0) the CHART READ (ChartRead.h): built from the closed bars at each recompute; a new read (3-min charts) is appended to
+// lsFlexLevels\Reads\<MKT>-<yyyymmdd>.csv, its key kept in <MKT>-<yyyymmdd>.last so a restart never writes it twice
+void HodLod::computeRead(HLState& S, const std::vector<hl::Bar>& B, long long per)
+{
+#ifdef _WIN32
+    const std::string sep = "\\";
+#else
+    const std::string sep = "/";
+#endif
+    if (S.mi < 0 || B.empty()) { S.creadWhy = "no bars"; S.cread = crd::Read(); return; }
+    std::string t; long long st = -1;
+    if (hlSmallRead(flexPath("LRA-ReadParams-" + S.mkt + ".csv"), 64 * 1024, t, st)) { if (st != S.crParamStamp) { S.crParamStamp = st; S.crP = crd::parseParams(t, S.mkt); } }
+    else { S.crParamStamp = st; S.crP = crd::Params(); S.crP.why = "no file"; }
+    const long spb = getSecondsPerBar(); const std::string key = S.mkt + "-" + std::to_string(spb);
+    std::string live; long long ls = -1;
+    if (hlSmallRead(flexPath("CobSignal-" + key + "-live.csv"), 256 * 1024, live, ls)) { if (ls != S.crLiveStamp) { S.crLiveStamp = ls; S.crLive = live; S.crRec = crd::readTail(flexPath("CobSignal" + sep + key + ".csv")); } }
+    else { S.crLiveStamp = ls; S.crLive.clear(); S.crRec.clear(); }
+    crd::In I; I.mkt = S.mkt; I.openMin = hl::MKTS[S.mi].open; I.dec = hl::MKTS[S.mi].dec; I.per = per;
+    const size_t from = B.size() > 700 ? B.size() - 700 : 0;
+    for (size_t i = from; i < B.size(); i++) { crd::Bar b; b.t = B[i].absEnd; b.o = B[i].o; b.h = B[i].h; b.l = B[i].l; b.c = B[i].c; I.bars.push_back(b); }
+    const hl::View& v = S.view; const double tick = S.tick;
+    I.adr = v.adrTrim; I.onOk = v.onOk; I.onHi = (double)v.onHi * tick; I.onLo = (double)v.onLo * tick;
+    I.side = v.side; I.lod = v.lod > 0 ? (double)v.lod * tick : NAN; I.hod = v.hod > 0 ? (double)v.hod * tick : NAN; I.lodMod = v.lodMod; I.hodMod = v.hodMod;
+    I.sweptLod = v.sweptLod; I.sweptHod = v.sweptHod; I.P = S.crP;
+    I.cobs = crd::parseCobs(S.crLive, S.crRec); S.crCobs = (int)I.cobs.size();
+    S.cread = crd::build(I);
+    S.creadWhy = std::string("sit ") + S.cread.sit + ",params " + S.crP.why + ",cobs " + std::to_string(S.crCobs);
+    if (!S.cread.ok || per != 180) return;      // the log: 3-min charts only (one chart per market writes it)
+    const std::string day = crd::ymd(S.cread.at), base = flexPath("Reads" + sep + S.mkt + "-" + day);
+    if (!S.crKeyLoaded || S.crKeyDay != day) { std::string k; long long ks = -1; S.creadKey = hlSmallRead(base + ".last", 4096, k, ks) ? k : std::string(); S.crKeyLoaded = true; S.crKeyDay = day; }
+    const std::string k = crd::key(S.cread);
+    if (k == S.creadKey) return;
+    if (hlAppend(base + ".csv", crd::logHeader(), crd::logRow(S.cread, I.dec, std::string("lsHodLod ") + hl::HL_VERSION) + "\n")) {
+        S.creadKey = k; S.creadLogs++;
+        std::ofstream f((base + ".last").c_str(), std::ios::binary | std::ios::trunc); if (f.is_open()) { f << k; }
+    } else S.creadLogFails++;
 }
 
 // the read log (every closed RTH bar's read, live or replayed after a restart) + the OUTCOME line; marks only after a good write (#6)
@@ -1707,6 +1760,21 @@ int HodLod::draw(void)
     }
     postMst(*S);                             // (2.4.0) the Market State (behind the scenes; nothing drawn changes)
     execute(L);
+    if (S->cread.ok) {   // (2.20.0) the CHART READ strip: 3 lines across the top of the price area, under the IRT title row
+        const int fs = 10, lh = 15, pad = 5, h = 3 * lh + 2 * pad;
+        int l = pb.l + 4, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;
+        int t = (int)pane.top + 20 + (S->dpBanner ? 24 : 0);
+        if (L.tableOk && L.table.t < t + h && L.table.b > t && L.table.l < r && L.table.r > l) l = (std::max)(l, L.table.r + 6);   // a table placed at the top keeps its spot
+        if (r - l >= 220 && t + h < (int)pane.bottom - 40) {
+            RCT bg; bg.set((short)l, (short)t, (short)r, (short)(t + h)); bg.draw(1, (COLOR)0x003A3F47, (COLOR)0x0015181D, DRAW_OPAQUE, PAT_SOLID);
+            auto meas = [&](const std::string& s) { return textW(s, fs, false); };
+            const unsigned c2 = S->cread.tone == crd::GREEN ? hl::C_GREEN : (S->cread.tone == crd::RED ? hl::C_RED : hl::C_GREY);
+            const std::string* Ls[3] = { &S->cread.l1, &S->cread.l2, &S->cread.l3 }; const unsigned Cs[3] = { hl::C_SLATE, c2, hl::C_GREY };
+            for (int k = 0; k < 3; k++) text(l + 8, t + pad + lh * k + lh / 2, crd::fit(*Ls[k], r - l - 16, meas), (COLOR)Cs[k], fs, false);
+            S->placeLine += "CHARTREAD," + std::string(crd::VERSION) + ",box " + std::to_string(l) + "," + std::to_string(t) + "," + std::to_string(r) + "," + std::to_string(t + h) + "," + S->creadWhy +
+                            ",logs " + std::to_string(S->creadLogs) + ",fails " + std::to_string(S->creadLogFails) + "\n";
+        } else S->placeLine += "CHARTREAD," + std::string(crd::VERSION) + ",no room," + S->creadWhy + "\n";
+    }
     {   // (2.4.1) the table's rectangle for the docked Big Lot box (BoxDock.h): table + Q header + GEX row, as drawn; none = cleared
         const char* sy = getSymbol(); const char* cl = getChartLabel();
         const std::string sym = sy ? sy : "", chart = cl ? cl : ""; const long spb = getSecondsPerBar();
@@ -1806,6 +1874,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.19.1");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.20.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
