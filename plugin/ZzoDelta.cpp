@@ -283,7 +283,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setVersion(ZZO_VOLUME_VERSION_LITERAL);
 #else
     p->setDescription("LRA ZZO Delta v1.3.2 - 1-bar High/Low ZigZag waves: wave delta (+ green buying / - red selling) / the median of the last 5 same-way waves (RTH restarts); Ab? absorption, CoB / weak after a key-level sweep.");
-    p->setVersion("1.3.2");   // = zzd::VERSION (gex-build reads this literal)
+    p->setVersion("1.3.3");   // = zzd::VERSION (gex-build reads this literal)
 #endif
     return p;
 }

@@ -42,13 +42,16 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "MarketKey.h"
 #include "KeyLevelsLogic.h"
 #include "CobImpulseLogic.h"
 #include "ZzoDeltaLogic.h"   // (1.3.0) zzd::Engine::step = the 3-bar High / Low ZigZag (COMBO_REV_BARS) for LVP
 
 namespace cobs {
 
-static const char* const VERSION = "1.6.0";   // (1.6.0, 2026-11-06 18:49-18:50 CT Rassul on GC / HG "this is the cob for gold, you need to use 3bar", "why does the cob still not on the gold and hg charts", and 2026-11-01 "the cob should be a completed wave, not mid way") the CoB = a COMPLETED 3-bar High / Low ZigZag wave (the ZZO Combo / chart ZigZag wave) from a swing low (bull) / high (bear) that swept a key level, decided when the ZigZag confirms the wave; the old 1-bar pause check is off (wave3)
+static const char* const VERSION = "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
+// was "1.6.1";   // (1.6.1) roots QGC / QHG / QCL / NGx mapped: the indicator never ran on his GC / HG / CL / NG charts
+// was "1.6.0";   // (1.6.0, 2026-11-06 18:49-18:50 CT Rassul on GC / HG "this is the cob for gold, you need to use 3bar", "why does the cob still not on the gold and hg charts", and 2026-11-01 "the cob should be a completed wave, not mid way") the CoB = a COMPLETED 3-bar High / Low ZigZag wave (the ZZO Combo / chart ZigZag wave) from a swing low (bull) / high (bear) that swept a key level, decided when the ZigZag confirms the wave; the old 1-bar pause check is off (wave3)
 // was "1.5.1";   // (1.5.1, 2026-11-06) CQG roots (EP / ENQ / CLE / GCE / CPE / NGE / EU6) -> ES / NQ / CL / GC / HG / NG / EU: the indicator never ran on his charts before
 // was "1.5.0";   // (1.5.0, 2026-11-05 12:25-12:42 CT Rassul "build a line on top of the cob with targets", "lets use 1.272, 1.618 and 2.0", "an entry line at 50% retracement and a stop line at 0", line endings + "i'll go with your recommendations") the CoB Fib lines (fibLines / fibLayout)
 // was "1.4.0";   // (1.4.0, 2026-11-05 10:17-10:21 CT Rassul "add a zzo wave filter of the cob having a wave that has at least a 10", "the filter should apply to both") a CoB is DRAWN only once its ZZO Combo wave count reaches 10
@@ -79,7 +82,8 @@ static const int ZZO_COB_LOOK = 60;     // (1.4.0) bars a CoB waits for its wave
 // (1.5.1, 2026-11-06 12:13 CT Rassul "why isnt' the cob there ?") his IRT feed is CQG: the chart's ROOT symbol is EP / ENQ / CLE / GCE / CPE /
 // NGE / EU6 (as lsBigBidAsk / lsDealerHedge map them), not ES / NQ / CL / GC / HG / NG / EU. 1.0.0 - 1.5.0 kept the CQG root, svl::rthOf()
 // did not know it, identify() returned false and the indicator never ran on his charts (no CoB, no status, no record, any market).
-inline std::string mktKey(const std::string& root) {
+inline std::string mktKey(const std::string& root) { return mkey::norm(root); }
+inline std::string mktKeyOld(const std::string& root) {
     static const char* const P[8][2] = { {"ENQ", "NQ"}, {"EP", "ES"}, {"CLE", "CL"}, {"GCE", "GC"}, {"CPE", "HG"}, {"NGE", "NG"}, {"EU6", "EU"}, {"6E", "EU"} };
     for (const auto& p : P) if (root == p[0]) return p[1];
     // (1.6.0) his gold / copper / crude charts carry the root QGC / QHG / QCL (the ZZO Combo writes ZzoCombo.status-QGC-180.txt), NG can be

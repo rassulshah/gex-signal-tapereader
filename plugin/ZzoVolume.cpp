@@ -8,8 +8,8 @@
  *  1.2.0 (23:03 CT): CoB / weak after the first RTH sweep of a key level (shared with ZZO Delta 1.3.0).
  *  1.2.1 (23:40 CT): per-market thresholds from ZzoParams.h (nightly self-improvement; shared with ZZO Delta 1.3.1).
  *  1.2.2 (2026-11-03): rebuilt on the ZZO Combo engine; unchanged on the chart.
- *  gex-build reads the version from this line:  p->setVersion("1.2.2")
+ *  gex-build reads the version from this line:  p->setVersion("1.2.3")
  ********************************************************************************/
 #define ZZO_VOLUME_VIEW 1
-#define ZZO_VOLUME_VERSION_LITERAL "1.2.2"
+#define ZZO_VOLUME_VERSION_LITERAL "1.2.3"
 #include "ZzoDelta.cpp"

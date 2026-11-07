@@ -96,6 +96,7 @@
 //        rly2.py v0.2 port lsBigBidAsk uses), 3-min charts only, one row further out than BO / BD so the two never collide.
 // No numbers, no prints, no hovers, no boxes. Decided on closed candles only; a decision once made is kept for the chart's life and
 // never changes or disappears (keyed by the bar time; a later recompute never removes or alters one). Tested: tests_bo100.
+#include "MarketKey.h"
 #include "BigBidAskLogic.h"
 #include "VwapTrendLogic.h"
 #include "RallyLogic.h"
@@ -121,7 +122,8 @@ namespace bko {
 #ifndef BKO_RLY_ON_DEFAULT
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
-static const char* const VERSION = "1.9.3";   // (1.9.3, 2026-11-06 17:40 CT Rassul "the pb is not fixed because it is not on the pivot and that is why the rev was not identified", GC + HG Nov 6) the Pb sits ON the chart's 3-bar High / Low ZigZag pivot (the same rule as IRT's Zig Zag 3 bars, High / Low - was: the first opposite-colour close made a pivot, so a Pb could sit on a dip before the real low); while the leg is still forming its extreme so far is a provisional Pb (shown once a bar closes back, moves to a new extreme, final when the ZigZag confirms); the Rev is judged from that pivot
+static const char* const VERSION = "1.9.4";   // (1.9.4) the market's RTH hours via MarketKey.h (GC / HG / CL / NG charts report QGC / QHG / QCL / NGX6 and ran on the ES default 08:30-15:00)
+// was "1.9.3";   // (1.9.3, 2026-11-06 17:40 CT Rassul "the pb is not fixed because it is not on the pivot and that is why the rev was not identified", GC + HG Nov 6) the Pb sits ON the chart's 3-bar High / Low ZigZag pivot (the same rule as IRT's Zig Zag 3 bars, High / Low - was: the first opposite-colour close made a pivot, so a Pb could sit on a dip before the real low); while the leg is still forming its extreme so far is a provisional Pb (shown once a bar closes back, moves to a new extreme, final when the ZigZag confirms); the Rev is judged from that pivot
 // was "1.9.2";   // (1.9.2, 2026-11-06 14:06 CT Rassul "the PBb should be allowed to repaint when it turns out it doesn't become a pivot") a Pb shows as soon as its pivot is confirmed by the close, while the BO / BD wave's end is still unconfirmed (the wave's high / low so far = its end); it goes away if price makes a new wave extreme before the 3-bar pivot confirms; once the wave end is confirmed it is final (recorded, never changes)
 //   // (1.9.1, 2026-11-06 12:15 CT Rassul "lets simplify the pb rev .. remove the stop line, t1 and t2 to simplify it and requite the green bar to be 1.2*ATR(13)") Rev = range >= 1.2 x ATR(13) only (no biggest-of-5, no trade lines)
 // was "1.9.0";   // (1.9.0, 2026-11-06 09:38-09:51 CT Rassul "PB Rev ... a thrust after a pullback", "or it can be the pivot bar also", "just a green Rev mark", "the biggest range", "only have 1 Rev per wave", "yes build") + Rev: after a Pb, the first GREEN bar (from the pivot bar on) whose low is below the pivot bar's high with range >= 1.2 x ATR(14) or the biggest range of the last 5 green bars; one per wave; BD mirror (red)

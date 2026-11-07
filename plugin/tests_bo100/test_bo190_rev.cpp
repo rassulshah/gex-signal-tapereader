@@ -89,10 +89,10 @@ int main() {
         CHECK(badL == 0 && nr + S.noRoom >= (int)E.rev.size() && nr == S.revShown && nr > 0, std::string("[5] ") + m.m + ": Rev letters: green below / red above the bar, never on another letter (" + std::to_string(nr) + " drawn, " + std::to_string(badL) + " bad)");
         // [6] records
         int badR = 0; for (const auto& kv : E.revL) { const std::string& l = kv.second.line; int bars_ = 0; for (char ch : l) bars_ += ch == '|';
-            if (bars_ != 13 || l.rfind("BRV|", 0) != 0 || bko::recKey(l).empty() || l.find("|1.9.3-zz3") == std::string::npos) ++badR; }
+            if (bars_ != 13 || l.rfind("BRV|", 0) != 0 || bko::recKey(l).empty() || l.find("|1.9.4-zz3") == std::string::npos) ++badR; }
         CHECK(badR == 0 && E.revL.size() == E.rev.size() && S.txt.size() > 0, std::string("[6] ") + m.m + ": one 14-field BRV| record per Rev (" + std::to_string(E.revL.size()) + ")");
         std::printf("  %s: %zu Pb, %d Rev (%d on the pivot bar), drawn %d\n", m.m, E.pb.size(), withRev, onPivot, nr);
     }
-    CHECK(std::string(bko::VERSION) == "1.9.3" && bko::REV_ATR_X == 1.2 && bko::REV_ATR_N == 13 && totRev > 20, "[6] version 1.9.1, 1.2 x ATR(13)");
+    CHECK(std::string(bko::VERSION) == "1.9.4" && bko::REV_ATR_X == 1.2 && bko::REV_ATR_N == 13 && totRev > 20, "[6] version 1.9.1, 1.2 x ATR(13)");
     std::printf("RESULT %d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }

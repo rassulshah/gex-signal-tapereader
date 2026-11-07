@@ -272,6 +272,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
     p->setDescription("LRA ZZO Combo v2.2.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count (beats the last N same-colour waves, 50+), Cmx / AR / ST, CoB after a key-level sweep, Ab = absorption with a heavy extreme (effort / result).");
-    p->setVersion("2.2.0");   // = zzd::COMBO_VERSION (gex-build reads this literal)
+    p->setVersion("2.2.1");   // = zzd::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

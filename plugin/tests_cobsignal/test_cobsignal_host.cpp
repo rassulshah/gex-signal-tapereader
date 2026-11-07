@@ -93,10 +93,10 @@ int main(int argc, char** argv) {
     CHECK(live.find("LVP,") == std::string::npos, "live file: CoBs only (unchanged format for its readers)");
     { bool ok = true; for (const cobs::LvpMark& m : L.lvp.marks) { bool f = false; for (const cobs::Mark& c : L.marks) f = f || (c.t == m.cobT && c.side == m.side && c.show == m.show); ok = ok && f && m.vol * 3 <= m.cobVol && m.nth >= 1 && m.nth <= 3 && m.idx > 0; } CHECK(ok, "every LVP belongs to a CoB of its side, <= 1/3 volume, pullback 1-3"); }
     {   // (1.4.0) the live file = the CoBs that passed the ZZO wave filter (the drawn ones)
-        bool ok = live.rfind("COBSIGNAL,1.6.0\n", 0) == 0; int drawn = 0;
+        bool ok = live.rfind("COBSIGNAL,1.6.2\n", 0) == 0; int drawn = 0;
         for (const cobs::Mark& m : L.marks) { const bool in = live.find(L.recLine(m) + "\n") != std::string::npos; ok = ok && in == (m.show && m.zOk); drawn += m.show && m.zOk; }
         CHECK(ok, "live file: version + every drawn CoB (passed the ZZO wave filter), no other (" << drawn << " of " << L.marks.size() << ")"); }
-    CHECK(st.rfind("VERSION,1.6.0\nMARKET,ES", 0) == 0 && st.find("COBS," + std::to_string(L.marks.size())) != std::string::npos && st.find("\nZZO_FILTER,1.4.0") != std::string::npos, "status file (+ ZZO_FILTER)");
+    CHECK(st.rfind("VERSION,1.6.2\nMARKET,ES", 0) == 0 && st.find("COBS," + std::to_string(L.marks.size())) != std::string::npos && st.find("\nZZO_FILTER,1.4.0") != std::string::npos, "status file (+ ZZO_FILTER)");
     {   // (1.4.0) every decided CoB has one ZZO line in the record; passed = count >= 10; both outcomes occur on a year of ES
         size_t nz = 0; for (size_t p = rec.find("\nZZO,"); p != std::string::npos; p = rec.find("\nZZO,", p + 1)) ++nz;
         int dec = 0, okN = 0, noN = 0; bool cnt = true;
@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
     {   mock::Host D; D.dialog = true; D.root = ""; mock::current = &D; CobSignal z; z.calc(0); mdraw(z); CHECK(D.drawn.empty(), "the Add / settings copy with no chart draws nothing and does not fault"); }
     // versions
     { const std::string src = slurp("../CobSignal.cpp"); const size_t p = src.find("p->setVersion(\""); const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.6.0", "version literals match (" << lit << ")"); }
+      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.6.2", "version literals match (" << lit << ")"); }
     std::cout << "test_cobsignal_host: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

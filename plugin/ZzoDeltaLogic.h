@@ -66,6 +66,7 @@
 //   (as the ZigZag does). Completed waves never change.
 #ifndef ZZO_DELTA_LOGIC_H
 #define ZZO_DELTA_LOGIC_H
+#include "MarketKey.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -83,10 +84,13 @@
 #endif
 
 namespace zzd {
-static const char* const VERSION = "1.3.2";
-static const char* const VOL_VERSION = "1.2.2";   // lsZzoVolume
-static const char* const COMBO_VERSION = "2.2.0";   // (2.2.0, Rassul 2026-11-04 21:01 "zzo combo is still red while the zig zag turned up already .. they should be in sync", 21:14 "do it") the live tail splits at the live extreme: the bars after it show at once as the provisional opposite wave (repaints until the 3-bar reversal confirms), as the chart ZigZag draws its last leg   // was "2.1.1":   // lsZzoCombo (2.1.1: the count drawn inside the wave, ZzoComboView.h)
-static const char* const ZIGZAG_VERSION = "1.2.0";   // (1.2.0) the live leg the same way (low -> provisional up leg at once)   // was "1.1.0":  // lsZzoZigZag
+static const char* const VERSION = "1.3.3";   // (1.3.3) roots via MarketKey.h (QGC / QHG / QCL / NGX6 ran with no session hours and no market params)
+// was "1.3.2";
+static const char* const VOL_VERSION = "1.2.3";   // lsZzoVolume
+static const char* const COMBO_VERSION = "2.2.1";   // (2.2.1) roots via MarketKey.h: on GC / HG / CL / NG the session split (RTH hours) and the market params now apply
+// was "2.2.0";   // (2.2.0, Rassul 2026-11-04 21:01 "zzo combo is still red while the zig zag turned up already .. they should be in sync", 21:14 "do it") the live tail splits at the live extreme: the bars after it show at once as the provisional opposite wave (repaints until the 3-bar reversal confirms), as the chart ZigZag draws its last leg   // was "2.1.1":   // lsZzoCombo (2.1.1: the count drawn inside the wave, ZzoComboView.h)
+static const char* const ZIGZAG_VERSION = "1.2.1";   // (1.2.1) roots via MarketKey.h
+// was "1.2.0";   // (1.2.0) the live leg the same way (low -> provisional up leg at once)   // was "1.1.0":  // lsZzoZigZag
 static const bool LIVE_SPLIT = true;   // (Combo 2.2.0) see Engine::liveTail
 static const int COMBO_REV_BARS = 3;   // (Combo 2.1.0) ZigZag reversal bars for lsZzoCombo + lsZzoZigZag: IRT ZIGZAG 3 bars, High/Low (1 = the 1-bar walk)
 static const int CNT_CAP = 50;          // (Combo) count cap ("cap it at 50")
@@ -205,7 +209,7 @@ struct Engine {
         else if (Vr < SW_WEAK_VOL || Er < 0) w.cobTag = 2;
     }
     bool setMarket(const std::string& root, int spb) {
-        per = spb > 0 ? spb : 180; const std::string m = root == "6E" ? std::string("EU") : root;
+        per = spb > 0 ? spb : 180; const std::string m = mkey::norm(root);   // (1.3.3) any feed's root (QGC, @ES, GCE, 6E ...)
         abEffort = AB_EFFORT; abBack = AB_BACK; cmxVol = CMX_VOL; swDelta = SW_DELTA; swVol = SW_VOL; swSize = SW_SIZE; showAb = m == "ES";
 #ifdef ZZO_HAVE_PARAMS
         for (int i = 0; i < ZZO_PARAMS_N; ++i) if (m == ZZO_PARAMS[i].m) {

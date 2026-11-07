@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
     {   cobs::Engine E = eng(B, B.size()); E.marks.push_back(cob(B, i0, i1, ic, 1));
         const std::string s = cobs::fibStatus(E);
         CHECK(s.find("FIB_RULES,1.5.0") == 0 && s.find("BULL,0=1.12195,1=1.1241,live,Stop ended,50% ended,BE hit,1.272 hit,1.618 hit,2.0 open") != std::string::npos, "status: " << s);
-        CHECK(std::string(cobs::VERSION) == "1.6.0", "version 1.5.0");
+        CHECK(std::string(cobs::VERSION) == "1.6.2", "version 1.5.0");
     }
     // [10] not drawn = no lines
     {   cobs::Engine E = eng(B, B.size()); cobs::Mark m = cob(B, i0, i1, ic, 1); m.show = false; E.marks.push_back(m); m.show = true; m.zOk = false; E.marks.push_back(m);

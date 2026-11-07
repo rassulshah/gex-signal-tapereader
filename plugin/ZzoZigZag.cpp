@@ -138,6 +138,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
     p->setDescription("LRA ZZO ZigZag v1.2.0 - the 3-bar High/Low ZigZag ZZO Combo measures its waves on (white; the live leg dashed, drawn from the last pivot to the newest extreme at once).");
-    p->setVersion("1.2.0");   // = zzd::ZIGZAG_VERSION (gex-build reads this literal)
+    p->setVersion("1.2.1");   // = zzd::ZIGZAG_VERSION (gex-build reads this literal)
     return p;
 }

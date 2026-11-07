@@ -76,6 +76,6 @@ int main() {
         CHECK(tried > 0 && drawn > 0, "[6] the layout draws provisional Pbs (" + std::to_string(drawn) + " drawn in " + std::to_string(tried) + " frames)");
     }
     std::printf("provisional %d: became final %d, vanished %d; shown on average %.1f bars before the final decision\n", allProv, allBecame, allVanished, leadN ? leadSum / leadN : 0.0);
-    CHECK(std::string(bko::VERSION) == "1.9.3", "version 1.9.3");
+    CHECK(std::string(bko::VERSION) == "1.9.4", "version 1.9.3");
     std::printf("%d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }

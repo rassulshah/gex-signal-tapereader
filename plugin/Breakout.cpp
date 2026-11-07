@@ -88,7 +88,7 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.9.3"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
+#define BKO_VERSION "1.9.4"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
 
 static long long bkoMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bkoFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BKO_SEP "InvestorRT" BKO_SEP "rtx" BKO_SEP "lsFlexLevels" : std::string(); }
@@ -179,7 +179,7 @@ bool Breakout::identify(BState& S) {
     const long long tk = std::llround(tick * 1e9);
     if (!S.keyed || mkt != S.mkt || sym != S.sym || spb != S.spb || tk != S.tickKey) {   // a new market / symbol / period: start over
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true; S.E.reset();
-        S.openMin = 510; S.closeMin = 900; { int o = 0, c = 0; if (svl::rthOf(mkt.c_str(), o, c)) { S.openMin = o; S.closeMin = c; } }
+        S.openMin = 510; S.closeMin = 900; { int o = 0, c = 0; if (svl::rthOf(mkey::norm(mkt).c_str(), o, c)) { S.openMin = o; S.closeMin = c; } }
         const std::string d = bkoFlex();
         S.statusPath = d.empty() ? std::string() : d + BKO_SEP + (BKO_ONE_BAR ? "Breakout1" : "Breakout") + ".status-" + mkt + "-" + std::to_string(spb) + ".txt";
         S.statusBody.clear(); S.statusMs = -1;
@@ -302,10 +302,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
 #if BKO_ONE_BAR
-    p->setDescription("LRA BO 1-bar v1.9.3 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green below / red above) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
+    p->setDescription("LRA BO 1-bar v1.9.4 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green below / red above) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
 #else
-    p->setDescription("LRA BO v1.9.3 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green below / red above) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
+    p->setDescription("LRA BO v1.9.4 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green below / red above) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.9.3");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.9.4");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }
