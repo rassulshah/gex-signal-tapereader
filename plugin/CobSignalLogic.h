@@ -182,10 +182,10 @@ struct Engine {
     long long trimmed = 0; std::string lastWhy;
     Lvp lvp; std::vector<std::string> lvpOut;        // (1.3.0) LVP decisions + record lines not yet written
     zzd::Engine Z3;                                  // (1.4.0) the ZZO Combo engine on the same bars (wave counts for the CoB filter)
-    void reset() { wSeen = 0; lastWaveT = 0; if (!mkt.empty()) { Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(mkt, perSec); } lvp.reset(); lvpOut.clear(); B.clear(); K.clear(); CB.clear(); cls.clear(); dirn = 0; ext = 0; start = 0; legs.clear(); lastLowPivot = -1; S.clear(); doneOrder.clear(); marks.clear(); out.clear(); lastWhy.clear(); }
+    void reset() { wSeen = 0; lastWaveT = 0; if (!mkt.empty()) { Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(rootRaw.empty() ? mkt : rootRaw, perSec); } lvp.reset(); lvpOut.clear(); B.clear(); K.clear(); CB.clear(); cls.clear(); dirn = 0; ext = 0; start = 0; legs.clear(); lastLowPivot = -1; S.clear(); doneOrder.clear(); marks.clear(); out.clear(); lastWhy.clear(); }
     bool setMarket(const std::string& m, double tk, int spb) {
-        mkt = mktKey(m); tick = tk > 0 ? tk : 0.25; perSec = spb > 0 ? spb : 180; lvp.tick = tick;
-        Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(mkt, perSec);   // (1.4.0)
+        mkt = mktKey(m); rootRaw = m; tick = tk > 0 ? tk : 0.25; perSec = spb > 0 ? spb : 180; lvp.tick = tick;
+        Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(rootRaw, perSec);   // (1.4.0); (1.6.2) the chart's own root = exactly the ZZO Combo pane's counts
         return svl::rthOf(mkt.c_str(), openMin, closeMin);
     }
     double adrFor(long sess) const {               // 20 prior completed sessions' true range (>= 10)
@@ -255,7 +255,7 @@ struct Engine {
         }
     }
     int lastLowPivot = -1;
-    bool wave3 = true; size_t wSeen = 0; long long lastWaveT = 0;                        // (1.6.0) the 3-bar completed-wave CoB (false = the 1.5.x 1-bar pause rule)
+    bool wave3 = true; size_t wSeen = 0; long long lastWaveT = 0; std::string rootRaw;                        // (1.6.0) the 3-bar completed-wave CoB (false = the 1.5.x 1-bar pause rule)
     // (1.6.0) THE CoB ON A COMPLETED 3-BAR WAVE. Wave k of the Combo engine (Z3, same bar index as B) was confirmed on bar j:
     //   start pivot p0 = the bar before its first bar (the previous ZigZag pivot), end pivot p1 = its extreme bar
     //   bull (up wave): p0's LOW is below a key level (ONL / PDL / PFL / LonLO / PWL / AsiaLO / PhrL) and p1's HIGH is back above it;
