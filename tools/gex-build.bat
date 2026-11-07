@@ -13,7 +13,7 @@ REM  Log: tools\gex-build.log   Status: plugin\out\BUILD-STATUS.txt
 REM  (2026-10-22, MBO recorder fix P3) NO INSTALLS ON WEEKDAYS 07:00-15:15 CT: a build made in trading hours is HELD and installs
 REM  only after 15:15 (when IRT is closed). An IRT crash or close at midday no longer loads new, unwatched code into the recording
 REM  session (10-20 12:43-12:50: 5 installs right after the 12:49 crash; 10-21 11:59-12:30: 47 installs after an 11:52 close).
-REM  Rassul can still ask for a midday install: Claude creates plugin\out\INSTALL-NOW.flag (honoured until 15:15, then deleted).
+REM  Rassul can still ask for a midday install: Claude creates plugin\out\INSTALL-NOW.flag (honoured until 15:00, then deleted).
 REM  NO POWERSHELL ANYWHERE (Avast flags it: IDP.HELU.PSE88).
 REM ============================================================================
 set REPO=C:\Dev\gex-signal-tapereader
@@ -234,14 +234,14 @@ if not exist "%OUT%\%DLL%" goto :eof
 if not exist "%DLLDIR%" ( call :log %NAME%: extension folder not found: %DLLDIR% & goto :eof )
 if defined HOLD (
   REM (P3) trading hours: never copy now; say so once per build
-  if not exist "%OUT%\%NAME%.held" ( call :log %NAME%: HELD - built in trading hours !HOLDWHY!, installs after 15:15 CT when Investor/RT is closed - do not restart IRT for it & > "%OUT%\%NAME%.held" echo !BUILT! )
+  if not exist "%OUT%\%NAME%.held" ( call :log %NAME%: HELD - built in trading hours !HOLDWHY!, installs after 3:00 PM CT when Investor/RT is closed - do not restart IRT for it & > "%OUT%\%NAME%.held" echo !BUILT! )
   call :status
   goto :eof
 )
 copy /Y "%OUT%\%DLL%" "%DLLDIR%\%DLL%" >nul 2>&1
 if errorlevel 1 (
   REM the DLL is loaded (Investor/RT open) - retried next tick; say so once per build
-  if not exist "%OUT%\%NAME%.pending" ( call :log %NAME%: PENDING - installs by itself within 2 min of closing Investor/RT after 15:15 CT & > "%OUT%\%NAME%.pending" echo !BUILT! )
+  if not exist "%OUT%\%NAME%.pending" ( call :log %NAME%: PENDING - installs by itself within 2 min of closing Investor/RT after 3:00 PM CT & > "%OUT%\%NAME%.pending" echo !BUILT! )
   call :status
   goto :eof
 )
@@ -327,15 +327,14 @@ del "%OUT%\settings-contract.fail" >nul 2>&1
 call :log SETTINGS CONTRACT PASSED
 goto :eof
 
-REM ---- :window  (P3, 2026-10-22) HOLD=1 on Monday-Friday 07:00-15:15 (this PC's clock = Central) unless plugin\out\INSTALL-NOW.flag
+REM ---- :window  (P3, 2026-10-22) HOLD=1 on Monday-Friday 06:10-15:00 since 2026-11-07, was 07:00-15:15 (this PC's clock = Central) unless plugin\out\INSTALL-NOW.flag
 REM   exists. %TIME% is " 7:05:12.34" or "07:05:12.34"; %DATE% starts with the day name ("Thu 10/22/2026"). The "1HH*60 + 1MM - 6100"
 REM   form avoids cmd reading 08 / 09 as octal. An unreadable time or day name counts as a weekday in the window (holds: the safe side).
 :window
 set HOLD=
 set HOLDWHY=
-REM (2026-11-05 12:23 CT) Rassul: "remove that rule" - no trading-hours hold any more; a new build installs as soon as IRT is closed.
-set "HOLDWHY=(no trading-hours hold, removed by Rassul 2026-11-05)"
-goto :eof
+REM (2026-11-07 16:49 CT) Rassul approved option A: the hold is BACK, Mon-Fri 06:10-15:00 CT (IRT closed for plugin installs
+REM   in RTH caused the 10-27..11-06 MBO recording gaps). Builds compile any time; installs wait for the first IRT close after 15:00.
 set "HT=%TIME: =0%"
 set HMIN=
 set /a HMIN=1!HT:~0,2!*60 + 1!HT:~3,2! - 6100 >nul 2>&1
@@ -347,7 +346,7 @@ if /i "!HDAY!"=="Sat" set WEEKEND=1
 if /i "!HDAY!"=="Sun" set WEEKEND=1
 if defined WEEKEND ( set "HOLDWHY=(!HDAY! - weekend)" & goto :windowflag )
 if !HMIN! LSS 0 ( set HOLD=1& set "HOLDWHY=(clock unreadable: %TIME%)" & goto :windowflag )
-if !HMIN! GEQ 420 if !HMIN! LSS 915 ( set HOLD=1& set "HOLDWHY=(!HDAY! %TIME:~0,5% CT, 07:00-15:15)" )
+if !HMIN! GEQ 370 if !HMIN! LSS 900 ( set HOLD=1& set "HOLDWHY=(!HDAY! %TIME:~0,5% CT, weekday hold 6:10 AM-3:00 PM)" )
 if not defined HOLD set "HOLDWHY=(!HDAY! %TIME:~0,5% CT)"
 :windowflag
 if exist "%OUT%\INSTALL-NOW.flag" (
@@ -358,14 +357,14 @@ goto :eof
 REM ---- :status  one file a human (or Claude, over the bridge) can read at a glance -
 :status
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
-if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - new builds install after 15:15 CT, when Investor/RT is closed ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! )
+if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - no plugin installs on weekdays 6:10 AM-3:00 PM CT; new builds install the first time Investor/RT is closed after 3:00 PM ^(weekends any time^) ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! - builds install when Investor/RT is closed ^(weekday hold 6:10 AM-3:00 PM CT^) )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
 for %%N in (GammaProfile DealerProfile LimitProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb Breakout Breakout1 CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
-  if exist "%OUT%\%%N.pending" set "P=- PENDING, installs when Investor/RT is closed after 15:15 CT"
-  if exist "%OUT%\%%N.held" if defined HOLD set "P=- HELD until 15:15 CT (trading hours), do not restart Investor/RT for it"
+  if exist "%OUT%\%%N.pending" set "P=- PENDING, installs when Investor/RT is closed after 3:00 PM CT"
+  if exist "%OUT%\%%N.held" if defined HOLD set "P=- HELD until 3:00 PM CT (trading hours), do not restart Investor/RT for it"
   if "!B!"=="" ( >> "%STATUS%" echo %%N: not built yet ) else if "!B!"=="!I!" ( >> "%STATUS%" echo %%N: installed ) else ( >> "%STATUS%" echo %%N: built, not installed !P! )
 )
 goto :eof
