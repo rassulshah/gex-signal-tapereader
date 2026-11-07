@@ -82,6 +82,11 @@ static const int ZZO_COB_LOOK = 60;     // (1.4.0) bars a CoB waits for its wave
 inline std::string mktKey(const std::string& root) {
     static const char* const P[8][2] = { {"ENQ", "NQ"}, {"EP", "ES"}, {"CLE", "CL"}, {"GCE", "GC"}, {"CPE", "HG"}, {"NGE", "NG"}, {"EU6", "EU"}, {"6E", "EU"} };
     for (const auto& p : P) if (root == p[0]) return p[1];
+    // (1.6.0) his gold / copper / crude charts carry the root QGC / QHG / QCL (the ZZO Combo writes ZzoCombo.status-QGC-180.txt), NG can be
+    // NGX6: the CoB indicator never ran on GC / HG (no CobSignal.status-GC / HG file ever) - map them too
+    static const char* const K[] = { "ES", "NQ", "CL", "GC", "HG", "NG", "EU" };
+    if (root.size() == 3 && root[0] == 'Q') { for (const char* k : K) if (root.compare(1, 2, k) == 0) return k; }
+    if (root.size() >= 3 && root.compare(0, 2, "NG") == 0) return "NG";
     return root;
 }
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
