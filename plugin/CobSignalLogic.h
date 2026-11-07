@@ -49,7 +49,8 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
+static const char* const VERSION = "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
+// was "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
 // was "1.6.1";   // (1.6.1) roots QGC / QHG / QCL / NGx mapped: the indicator never ran on his GC / HG / CL / NG charts
 // was "1.6.0";   // (1.6.0, 2026-11-06 18:49-18:50 CT Rassul on GC / HG "this is the cob for gold, you need to use 3bar", "why does the cob still not on the gold and hg charts", and 2026-11-01 "the cob should be a completed wave, not mid way") the CoB = a COMPLETED 3-bar High / Low ZigZag wave (the ZZO Combo / chart ZigZag wave) from a swing low (bull) / high (bear) that swept a key level, decided when the ZigZag confirms the wave; the old 1-bar pause check is off (wave3)
 // was "1.5.1";   // (1.5.1, 2026-11-06) CQG roots (EP / ENQ / CLE / GCE / CPE / NGE / EU6) -> ES / NQ / CL / GC / HG / NG / EU: the indicator never ran on his charts before
@@ -399,21 +400,26 @@ struct Engine {
 struct View { int l = 0, t = 0, r = 800, b = 600, first = 0, last = 0; std::function<double(int)> X; std::function<double(double)> Y; std::function<int(const std::string&)> textW; };
 struct Prim { int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; std::string text; bool line = false; bool tiny = false; };   // (1.5.0) line = a horizontal line x0..x1 at y0; tiny = the Fib labels' smaller font
 static const unsigned C_BULL = 0x0022C55E, C_BEAR = 0x00EF4444;   // 0x00RRGGBB
-static const int GAP = 18;                                     // px from the bar's extreme (clear of Candle Absorb's codes on pivot bars)
-static const int LVP_OFF = 3 + 3 * 16;                         // (1.3.0) = 51 px: row 3 out (wave-time label row 0, Candle Absorb A row 1, lsBreakout Pb row 2; 16 px rows)
+static const int GAP = 18;
+static const int COB_OFF = 3 + 16;                           // (1.6.3) row 1 past the pivot: just beyond the wave-time label ("39m")                                     // px from the bar's extreme (clear of Candle Absorb's codes on pivot bars)
+static const int LVP_OFF = 3 + 1 * 16;   // (1.6.3) row 1 = right past the wave-time label; was 3 + 3 * 16                         // (1.3.0) = 51 px: row 3 out (wave-time label row 0, Candle Absorb A row 1, lsBreakout Pb row 2; 16 px rows)
 inline std::vector<Prim> layout(const Engine& E, const View& v)
 {
     std::vector<Prim> P; std::vector<std::pair<int, int>> used;   // label boxes (x0, y0) taken
     for (const Mark& m : E.marks) {
-        if (!m.show || !m.zOk || m.idx < v.first || m.idx > v.last || m.idx >= (int)E.B.size()) continue;   // (1.1.0) LOG CoBs are not drawn; (1.4.0) nor a CoB whose ZZO wave count is under 10
-        const Bar& b = E.B[(size_t)m.idx];
+        // (1.6.3, Rassul 19:34 "after the cob is calculated you are suppose to put it on top of the up pivot") the label sits on the CoB
+        // wave's END pivot (legEnd): a bull Cob ON TOP of the up-pivot high, a bear Cob UNDER the down-pivot low, one row past the
+        // wave-time label; drawn once the wave is confirmed (decided on bar idx), never moved after
+        const int at = (m.legEnd >= 0 && m.legEnd < (int)E.B.size()) ? m.legEnd : m.idx;
+        if (!m.show || !m.zOk || at < v.first || at > v.last || m.idx >= (int)E.B.size()) continue;   // (1.1.0) LOG CoBs are not drawn; (1.4.0) nor a CoB whose ZZO wave count is under 10
+        const Bar& b = E.B[(size_t)at];
         const std::string s = m.label(); const int w = v.textW ? v.textW(s) : (int)s.size() * 7, h = 14;
-        const double x = v.X(m.idx);
-        int y = m.side > 0 ? (int)std::lround(v.Y(b.l)) + GAP : (int)std::lround(v.Y(b.h)) - GAP - h;
+        const double x = v.X(at);
+        int y = m.side > 0 ? (int)std::lround(v.Y(b.h)) - COB_OFF - h : (int)std::lround(v.Y(b.l)) + COB_OFF;
         for (int k = 0; k < 4; ++k) {                              // step away from another label at the same spot
             bool clash = false; for (auto& u : used) if (std::abs(u.first - (int)x) < w && std::abs(u.second - y) < h) clash = true;
             if (!clash) break;
-            y += m.side > 0 ? h : -h;
+            y += m.side > 0 ? -h : h;
         }
         if (y < v.t || y + h > v.b) continue;
         Prim p; p.x0 = (int)std::lround(x - w / 2.0); p.x1 = p.x0 + w; p.y0 = y; p.y1 = y + h; p.col = m.side > 0 ? C_BULL : C_BEAR; p.text = s;
@@ -424,7 +430,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
     for (const LvpMark& m : E.lvp.marks) {
         if (!m.show || m.idx < v.first || m.idx > v.last || m.idx >= (int)E.B.size()) continue;
         const Bar& b = E.B[(size_t)m.idx];
-        const std::string s = "LVP"; const int w = v.textW ? v.textW(s) : 21, h = 14;
+        const std::string s = "Lvp"; const int w = v.textW ? v.textW(s) : 21, h = 14;
         const double x = v.X(m.idx); const bool below = m.side > 0;
         int y = below ? (int)std::lround(v.Y(b.l)) + LVP_OFF : (int)std::lround(v.Y(b.h)) - LVP_OFF - h;
         for (int k = 0; k < 3; ++k) {

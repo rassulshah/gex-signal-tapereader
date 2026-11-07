@@ -122,7 +122,8 @@ namespace bko {
 #ifndef BKO_RLY_ON_DEFAULT
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
-static const char* const VERSION = "1.9.4";   // (1.9.4) the market's RTH hours via MarketKey.h (GC / HG / CL / NG charts report QGC / QHG / QCL / NGX6 and ran on the ES default 08:30-15:00)
+static const char* const VERSION = "1.9.5";   // (1.9.5, 2026-11-06 19:31 CT Rassul "put rev on top of the green bar", "pb should also be closer to the pivot under the time label") Rev above the green bar (BD: below the red bar); Pb one row out, right under the wave-time label
+// was "1.9.4";   // (1.9.4) the market's RTH hours via MarketKey.h (GC / HG / CL / NG charts report QGC / QHG / QCL / NGX6 and ran on the ES default 08:30-15:00)
 // was "1.9.3";   // (1.9.3, 2026-11-06 17:40 CT Rassul "the pb is not fixed because it is not on the pivot and that is why the rev was not identified", GC + HG Nov 6) the Pb sits ON the chart's 3-bar High / Low ZigZag pivot (the same rule as IRT's Zig Zag 3 bars, High / Low - was: the first opposite-colour close made a pivot, so a Pb could sit on a dip before the real low); while the leg is still forming its extreme so far is a provisional Pb (shown once a bar closes back, moves to a new extreme, final when the ZigZag confirms); the Rev is judged from that pivot
 // was "1.9.2";   // (1.9.2, 2026-11-06 14:06 CT Rassul "the PBb should be allowed to repaint when it turns out it doesn't become a pivot") a Pb shows as soon as its pivot is confirmed by the close, while the BO / BD wave's end is still unconfirmed (the wave's high / low so far = its end); it goes away if price makes a new wave extreme before the 3-bar pivot confirms; once the wave end is confirmed it is final (recorded, never changes)
 //   // (1.9.1, 2026-11-06 12:15 CT Rassul "lets simplify the pb rev .. remove the stop line, t1 and t2 to simplify it and requite the green bar to be 1.2*ATR(13)") Rev = range >= 1.2 x ATR(13) only (no biggest-of-5, no trade lines)
@@ -132,7 +133,7 @@ static const char* const VERSION = "1.9.4";   // (1.9.4) the market's RTH hours 
 static const int GAP = 3;              // px between the wick end and the BO / BD letter
 static const int RLY_ROW = 16;         // the Rly letter sits this many px further out than the BO / BD row
 static const int ROW_OUT = 16;         // (1.1.1) one row = lsCandleAbsorb's ROW_OUT (its A / Ae sits one row beyond the wick label row)
-static const int PB_ROWS = 2;          // (1.1.1) Pb sits this many rows beyond the wick row: clear of the wave-time label (row 0) and A / Ae (row 1)
+static const int PB_ROWS = 1;          // (1.9.5) right under the wave-time label (row 0); was 2 (1.1.1) Pb sits this many rows beyond the wick row: clear of the wave-time label (row 0) and A / Ae (row 1)
 static const int PB_OFF = GAP + PB_ROWS * ROW_OUT;   // (1.1.1) = 35 px from the wick end to the Pb letter's near edge
 static const int FONT_BO = 7;          // ~9 px letters (Rassul: small, smaller than lsBigBidAsk's 10)
 static const int FONT_RLY = 9;         // the mockup's Rly size
@@ -647,7 +648,7 @@ inline Scene layout(const Engine& E, const View& v) {
     // row search: rows taken by other indicators' labels - biReserved - and our own letters are skipped); no room = dropped
     std::vector<const RevMark*> RV; for (const auto& kv : E.rev) RV.push_back(&kv.second); for (const RevMark& x : E.revProv) RV.push_back(&x);   // (1.9.2) + provisional
     for (const RevMark* rp : RV) { const RevMark& M = *rp; const auto it = idx.find(M.tr); if (it == idx.end()) continue;
-        const int bar = it->second, side = M.dir > 0 ? -1 : 1;
+        const int bar = it->second, side = M.dir > 0 ? 1 : -1;   // (1.9.5) green Rev ON TOP of the green bar (BD: red Rev under the red bar)
         const In& b = E.bars[(size_t)bar]; if (!std::isfinite(b.h) || !std::isfinite(b.l)) continue;
         const char* tx = "Rev"; const int w = v.textW(tx, FONT_BO) + 2, cx = v.X(bar), yh = v.Y(b.h), yl = v.Y(b.l), top = std::min(yh, yl), bot = std::max(yh, yl), lh = v.lh[0];
         const unsigned res = biReserved(E, bar, side); bool placed = false;
