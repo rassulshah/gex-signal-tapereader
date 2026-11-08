@@ -1,6 +1,12 @@
 #ifndef LS_DELTAINTEL_H
 #define LS_DELTAINTEL_H
-// DeltaIntel.h 1.0.0 (2026-11-07, Rassul 19:52-19:58 CT: all Delta Profile signals as letters in front of the ratio - A absorbed,
+// DeltaIntel.h 1.1.0 (2026-11-07 ~22:10, Rassul "i'll go with your recommendations"): A = THE CHOSEN RULE (ownA below, = lra.dp_intel
+// 1.2.0 own_A) - the node is one of the CANDLE's own 3 biggest delta rows (>= 2.0x the candle's average row), same candle, winner's colour
+// close beyond it, at / below the open and below 1/2 (in the wick), close in the top 1/3, the attackers' (bid) POC or the volume POC in the
+// bottom 1/3, his 3-bar ZigZag pivot rule; bearish mirror. The CIRCLE = the strongest A of its candle; its MARK = acc (the attackers' POC
+// itself in the absorbing third, known at the close) or ai (an I the same way within 5 candles - added later, the circle never changes).
+// Engine::probe() judges the FORMING candle the same way for the live circle (never recorded; final at the close).
+// 1.0.0 (2026-11-07, Rassul 19:52-19:58 CT: all Delta Profile signals as letters in front of the ratio - A absorbed,
 // F fading, E exhaustion, I initiation, T trapped - "highly accurate ... run it on data for each market", "aware of ... levels, vwap,
 // pivots, trend, momentum, breakouts ... its own history and the price chart history"; "go and make an Intelligent Delta Profile").
 // SDK-free and unit-tested (tests_dintel/t_dintel.cpp, parity with lra.dp_intel 1.0.0 on real sessions of all 7 markets).
@@ -31,7 +37,7 @@
 #include "DeltaCtxParams.h"
 
 namespace dintel {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 static const int HORIZON = 10, WIN = 30, NROWS = 60, TOP = 3;
 static const double RATIO = 2.0;
 // (2026-11-07 ~20:45, coordinator for Rassul) two A switches wait for his answer - the defaults are the CURRENT plugin (dp::researchA):
@@ -48,11 +54,14 @@ static const bool A_OPEN_HALFWAY = DINTEL_A_OPEN_HALFWAY != 0, A_PIVOT_ZZ3 = DIN
 // close), the candle GREEN, the node at / below the candle's OPEN, below 1/2 of its range and IN THE LOWER WICK (below the body); the pivot
 // rule on his 3-bar ZigZag (the candle IS the down-pivot bar or its low is below the down-pivot bar's high). Bearish mirror (red, upper
 // wick). DINTEL_A_MODE 0 = the old dp::researchA path with the two switches.
+// DINTEL_A_MODE 2 (DEFAULT, 1.1.0) = the chosen own-candle rule; 1 = the 1.0.0 wick rule on the 90-min top-3 node; 0 = dp::researchA
 #ifndef DINTEL_A_MODE
-#define DINTEL_A_MODE 1
+#define DINTEL_A_MODE 2
 #endif
-static const bool A_WICK = DINTEL_A_MODE != 0;
-static const char* const A_RULE_LABEL = DINTEL_A_MODE != 0 ? "wick (own candle, favourable colour, node in the wick below the open and 1/2 range, 3-bar ZigZag pivot)" : "researchA";
+static const bool A_OWN = DINTEL_A_MODE == 2;
+static const bool A_WICK = DINTEL_A_MODE == 1;
+static const char* const A_RULE_LABEL = DINTEL_A_MODE == 2 ? "own (candle top-3 node >= 2x, same candle, winner's close, in the wick, close top 1/3, bid or volume POC bottom 1/3, 3-bar ZigZag pivot)"
+                                      : DINTEL_A_MODE == 1 ? "wick (own candle, favourable colour, node in the wick below the open and 1/2 range, 3-bar ZigZag pivot)" : "researchA";
 // (2026-11-07 ~21:10, Rassul chose 9 minutes) the hold judged per letter: A, T, A-then-I (J), T-confirmed (U) over 3 candles; I, E, F over 10
 inline int horizonOf(char l) { return (l == 'A' || l == 'T' || l == 'J' || l == 'U') ? 3 : HORIZON; }
 enum Cond { C_NONE = 0, LVL_KEY, LVL_VWAP, WITH_TREND, AGAINST_TREND, AT_PIVOT, BO_WITH, BO_AGAINST, MOM_HI, OWN_SEEN, OWN_FAILED, OWN_GOOD,
@@ -64,6 +73,8 @@ struct Candle { long long t = 0; int mod = 0; long long O = 0, H = 0, L = 0, C =
 struct Event {
     char letter = 'A'; int k = -1, pk = -1, side = 0; long long lo = 0, hi = 0, ext = 0; int tpr = 1; double ratio = 0;
     bool ctx[N_COND] = {false}; int right = -1; int status = 0; bool shown = false; bool faded = false, ai = false; std::string conf;
+    bool circle = false, acc = false; int markK = -1;   // (1.1.0) the A circle (strongest A of its candle) and the candle its mark was added at
+    bool marked() const { return circle && markK >= 0; }
     unsigned bits() const { unsigned b = 0; for (int c = 1; c < N_COND; ++c) if (ctx[c]) b |= 1u << c; return b; }
 };
 struct Rth { int open = 510, close = 900; };
@@ -119,12 +130,14 @@ class Engine {
 public:
     std::string market; Rth rth; Levels lv; std::vector<Candle> c; std::vector<double> atr, vwap; std::vector<Event> ev;
     std::map<std::string, int> touch; double cv = 0, ctp = 0; int r0 = -1; bool levelsSet = false;
-    long long decided[7] = {0, 0, 0, 0, 0, 0, 0}, shownN = 0, scored = 0, right = 0;
+    long long decided[7] = {0, 0, 0, 0, 0, 0, 0}, shownN = 0, scored = 0, right = 0, circles = 0, marksAcc = 0, marksAi = 0;
+    std::vector<int> newMarks;   // (1.1.0) indexes (in ev) of A circles whose "ai" mark was added by the last add()
     explicit Engine(const std::string& m = "ES") : market(m), rth(rthOf(m)) {}
     void setLevels(const Levels& L) { lv = L; levelsSet = true; }
     bool isRth(int k) const { return c[k].mod >= rth.open && c[k].mod < rth.close; }
     // append the next CLOSED candle; returns the indexes (in ev) of the letters it decided
     std::vector<int> add(const Candle& x) {
+        newMarks.clear();
         c.push_back(x);
         const int k = static_cast<int>(c.size()) - 1;
         // ATR(13) Wilder from the session's first candle; RTH VWAP of the typical price
@@ -148,7 +161,8 @@ public:
             for (Event& a : ev) {
                 if (a.letter != 'A' || a.ai || !(a.k < k && k <= a.k + 5)) continue;
                 if (std::find(iSides.begin(), iSides.end(), a.side) == iSides.end()) continue;
-                a.ai = true; Event j = a; j.letter = 'J'; j.k = k; j.right = -1; j.faded = false; j.ai = false; j.shown = false; j.status = 0; nw.push_back(j);
+                a.ai = true; if (a.circle && a.markK < 0) { a.markK = k; ++marksAi; newMarks.push_back(static_cast<int>(&a - &ev[0])); }
+                Event j = a; j.letter = 'J'; j.k = k; j.right = -1; j.faded = false; j.ai = false; j.shown = false; j.status = 0; nw.push_back(j);
             }
             for (const Event& t : ev) {
                 if (t.letter != 'T' || t.k != k - 1) continue;
@@ -168,9 +182,27 @@ public:
             auto holds = [&](int id) { return id == 0 || (id > 0 && id < N_COND && e.ctx[id]); };   // an id this build does not know never holds
             e.shown = e.status > 0 && g && holds(g->c1) && holds(g->c2);
             if (e.shown) ++shownN;
+            if (e.letter == 'A' && e.circle) { ++circles; if (e.acc) { e.markK = k; ++marksAcc; } }
             ev.push_back(e); out.push_back(static_cast<int>(ev.size()) - 1);
             ++decided[idx(e.letter)];
         }
+        return out;
+    }
+    // (1.1.0) the LIVE circle: the chosen-rule A's of the FORMING candle x (as if it closed now) - nothing is stored; the A's of the same
+    // node decided in the last 2 candles are left out (the closed-candle duplicate rule)
+    std::vector<Event> probe(const Candle& x) {
+        std::vector<Event> out;
+        c.push_back(x);
+        const int k = static_cast<int>(c.size()) - 1;
+        if (isRth(k) && k >= 40) {
+            std::vector<Event> nw; detectAI(k, nw);
+            for (const Event& e : nw) {
+                if (e.letter != 'A') continue;
+                bool dup = false; for (const Event& h : ev) if (same(h, e) && h.k >= k - 2) dup = true;
+                if (!dup) out.push_back(e);
+            }
+        }
+        c.pop_back();
         return out;
     }
     static int idx(char l) { return l == 'A' ? 0 : l == 'F' ? 1 : l == 'E' ? 2 : l == 'I' ? 3 : l == 'T' ? 4 : l == 'J' ? 5 : 6; }
@@ -218,6 +250,51 @@ private:
         if (bullish) return dirn == -1 ? ext : start;
         return dirn == 1 ? ext : start;
     }
+    // THE CHOSEN A (= lra.dp_intel.own_A): the candle's own rows at the 90-min profile's row size [lo + r * tpr, ...]
+    void ownA(int k, long long lo, long long hi, long long tpr, std::vector<Event>& out) const {
+        const Candle& x = c[k];
+        std::map<long long, double> rows;
+        for (const Cell& q : x.cells) if (q.key >= std::max(lo, x.L) && q.key <= std::min(hi, x.H) && q.buy + q.sell > 0) rows[(q.key - lo) / tpr] += q.buy - q.sell;
+        std::vector<long long> nz; double tot = 0;
+        for (std::map<long long, double>::const_iterator i = rows.begin(); i != rows.end(); ++i) if (i->second != 0) { nz.push_back(i->first); tot += std::fabs(i->second); }
+        if (nz.empty()) return;
+        const double n = static_cast<double>(nz.size());
+        std::stable_sort(nz.begin(), nz.end(), [&rows](long long p, long long q) { return std::fabs(rows[p]) > std::fabs(rows[q]); });
+        const long long rng = std::max<long long>(1, x.H - x.L);
+        // per-price lots over [L, H]: sold (bid), bought (ask), volume
+        const size_t np = static_cast<size_t>(x.H - x.L + 1);
+        std::vector<double> sold(np, 0), bought(np, 0), vol(np, 0);
+        for (const Cell& q : x.cells) if (q.key >= x.L && q.key <= x.H) { const size_t i = static_cast<size_t>(q.key - x.L); sold[i] += q.sell; bought[i] += q.buy; vol[i] += q.buy + q.sell; }
+        auto poc = [&](const std::vector<double>& a, bool bull, long long& at) -> bool {   // ties -> the price nearer the absorbing extreme
+            double sum = 0; for (double v : a) sum += v; if (sum <= 0) return false;
+            double best = -1; at = 0;
+            if (bull) { for (size_t i = 0; i < np; ++i) if (a[i] > best) { best = a[i]; at = x.L + static_cast<long long>(i); } }
+            else { for (size_t i = np; i-- > 0;) if (a[i] > best) { best = a[i]; at = x.L + static_cast<long long>(i); } }
+            return true;
+        };
+        const size_t first = out.size();
+        for (size_t t = 0; t < nz.size() && t < 3; ++t) {
+            const long long r = nz[t]; const double v = rows[r];
+            if (std::fabs(v) * n < 2.0 * tot) continue;
+            const bool bull = v < 0;
+            const long long rlo = lo + r * tpr, rhi = std::min(rlo + tpr - 1, hi);
+            const bool ok = bull ? (x.C > x.O && x.C > rhi && rhi < x.O && (rlo + rhi) < (x.H + x.L) && 3 * (x.C - x.L) >= 2 * rng)
+                                 : (x.C < x.O && x.C < rlo && rlo > x.O && (rlo + rhi) > (x.H + x.L) && 3 * (x.H - x.C) >= 2 * rng);
+            if (!ok) continue;
+            long long pa = 0, pv = 0;
+            const bool ha = poc(bull ? sold : bought, bull, pa), hv = poc(vol, bull, pv);
+            auto low3 = [&](bool has, long long p) { return has && (bull ? 3 * (p - x.L) <= rng : 3 * (x.H - p) <= rng); };
+            if (!(low3(ha, pa) || low3(hv, pv))) continue;
+            const int zp = zz3Pivot(k, bull);
+            if (!(k == zp || (bull ? x.L < c[zp].H : x.H > c[zp].L))) continue;
+            Event e; e.letter = 'A'; e.k = k; e.pk = k; e.side = bull ? 1 : -1; e.lo = rlo; e.hi = rhi; e.ratio = std::fabs(v) * n / tot;
+            e.tpr = static_cast<int>(tpr); e.conf = "own"; e.acc = low3(ha, pa); out.push_back(e);
+        }
+        if (out.size() > first) {   // the circle = the strongest A of the candle (ties -> the first)
+            size_t b = first; for (size_t i = first + 1; i < out.size(); ++i) if (out[i].ratio > out[b].ratio) b = i;
+            out[b].circle = true;
+        }
+    }
     void detectAI(int k, std::vector<Event>& out) const {
         const int a = std::max(0, k - WIN + 1);
         if (k - a + 1 < 7) return;
@@ -238,6 +315,7 @@ private:
         const double mean = sum / nz;
         std::vector<int> order(rows.size()); for (size_t i = 0; i < order.size(); ++i) order[i] = static_cast<int>(i);
         std::stable_sort(order.begin(), order.end(), [&rows](int p, int q) { return std::fabs(rows[static_cast<size_t>(p)]) > std::fabs(rows[static_cast<size_t>(q)]); });
+        if (A_OWN) ownA(k, lo, hi, tpr, out);
         for (int rank = 0; rank < TOP && rank < static_cast<int>(order.size()); ++rank) {
             const int r = order[static_cast<size_t>(rank)];
             const double ratio = std::fabs(rows[static_cast<size_t>(r)]) / mean;
@@ -248,6 +326,12 @@ private:
             for (int i = a; i <= k; ++i) { double d, v; region(i, rlo, rhi, d, v); d *= sell ? -1.0 : 1.0; if (d > 0 && (pk < 0 || d > best)) { best = d; pk = i; } }
             if (pk < 0 || (pk != k && pk != k - 1)) continue;
             const Candle* C = &c[0];
+            if (A_OWN) {   // (1.1.0) the 90-min rows give I only; A comes from ownA
+                if ((!sell && C[k].C > C[k].O && C[k].C > rhi) || (sell && C[k].C < C[k].O && C[k].C < rlo)) {
+                    Event e; e.k = k; e.pk = pk; e.lo = rlo; e.hi = rhi; e.ratio = ratio; e.tpr = static_cast<int>(tpr); e.letter = 'I'; e.side = sell ? -1 : 1; e.conf = "k"; out.push_back(e);
+                }
+                continue;
+            }
             auto conf = [&](int q) { return sell ? (C[q].C > C[q].O && C[q].C > rhi) : (C[q].C < C[q].O && C[q].C < rlo); };
             if (A_WICK) {
                 const int zp = zz3Pivot(k, sell);
@@ -412,6 +496,33 @@ inline std::string line(const Event& e, const std::string& dltVersion, const std
     std::snprintf(b, sizeof(b), "DI|%s|%s|%s|%s|%lld|%lld|%lld|%lld|%.10g|%.3f|%u|%d|%d|%s", dltVersion.c_str(), root.c_str(), nm.c_str(),
                   e.side == 1 ? "bullish" : "bearish", endT, pkEndT, e.lo, e.hi, tick, e.ratio, e.bits(), e.status, e.shown ? 1 : 0, e.conf.c_str());
     return b;
+}
+// (1.1.0) the circle record lines: DC|version|root|side|candle_end_t|lo|hi|tick|ratio|acc  and its mark  DM|version|root|side|circle_end_t|mark_end_t|acc or ai
+inline std::string circleLine(const Event& e, const std::string& dltVersion, const std::string& root, long long endT, double tick) {
+    char b[300];
+    std::snprintf(b, sizeof(b), "DC|%s|%s|%s|%lld|%lld|%lld|%.10g|%.3f|%d", dltVersion.c_str(), root.c_str(), e.side == 1 ? "bullish" : "bearish", endT, e.lo, e.hi, tick, e.ratio, e.acc ? 1 : 0);
+    return b;
+}
+inline std::string markLine(const Event& e, const std::string& dltVersion, const std::string& root, long long circleEndT, long long markEndT) {
+    char b[300];
+    std::snprintf(b, sizeof(b), "DM|%s|%s|%s|%lld|%lld|%s", dltVersion.c_str(), root.c_str(), e.side == 1 ? "bullish" : "bearish", circleEndT, markEndT, e.acc ? "acc" : "ai");
+    return b;
+}
+// (1.1.0) the circle label left of the node: "A 3.9x 7746" ("A?" when the market's A gate is not SHOW). Labels are placed top-down, each
+// on its own text row: a label that would overlap one already placed (or leave the box) steps down / up one row (<= 3 tries), else the
+// circle is drawn without its label. SDK-free so the layout is unit-tested.
+struct LBoxI { int l = 0, t = 0, r = 0, b = 0; };
+inline bool boxOverlap(const LBoxI& a, const LBoxI& b) { return a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b; }
+inline bool placeLabel(int right, int y, int width, int h, int top, int bottom, int left, std::vector<LBoxI>& placed, int& yOut) {
+    if (right - width < left) return false;
+    for (int k = 0; k <= 6; ++k) {
+        const int yy = y + ((k + 1) / 2) * h * (k % 2 ? 1 : -1);
+        if (yy - h / 2 <= top || yy + h / 2 >= bottom) continue;
+        const LBoxI bx{ right - width, yy - h / 2, right, yy + h / 2 };
+        bool clash = false; for (const LBoxI& q : placed) if (boxOverlap(bx, q)) clash = true;
+        if (!clash) { placed.push_back(bx); yOut = yy; return true; }
+    }
+    return false;
 }
 // the label in front of the ratio: "I", "I?" (status 1)
 // J (A then counter-I) is drawn "A", U (T confirmed) "T": the same letters on the chart, decided later and more surely
