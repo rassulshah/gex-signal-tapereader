@@ -1,4 +1,4 @@
-// ZoneDefenseRead.h  --  lsZoneDefense 1.0.0: the journal model and the 4 Read lines (SDK-free; the pane, the price-chart marks
+// ZoneDefenseRead.h  --  lsZoneDefense 1.0.1 (5 numbered Read lines, aligned columns): the journal model and the 5 Read lines (SDK-free; the pane, the price-chart marks
 // overlay and the tests all draw from THIS model, built only from decided journal lines -> nothing is ever repainted, a restart
 // reloads the same picture).
 // Journal lines (lsFlexLevels\ZoneDefense\<MKT>-<spb>-<session>.csv, append-only; t = feed ms):
@@ -58,55 +58,72 @@ inline std::string comma(long long v) { char b[32]; std::snprintf(b, sizeof b, "
 inline std::string xText(double x) { char b[32]; std::snprintf(b, sizeof b, x >= 10 ? "%.0fx" : x < 1 ? "%.2fx" : "%.1fx", x); return b; }
 inline std::string pct(double x) { char b[16]; std::snprintf(b, sizeof b, "%.0f%%", x * 100); return b; }
 
-// one Read line: text (verdict first), colour (+1 bullish green, -1 bearish red, 0 white neutral), the time (right-justified)
-struct RLine { std::string text, time; int col = 0; };
+inline std::string priceText(long long ticks, double tick) {
+    int d = 0; double t = tick; while (d < 6 && t > 0 && std::fabs(t - std::floor(t + 0.5)) > 1e-5 * std::max(1.0, t)) { t *= 10; ++d; }
+    char b[48]; std::snprintf(b, sizeof b, "%.*f", d, ticks * tick); return b;
+}
+// one Read line (1.0.1, Rassul 2026-11-08: numbered in event order, aligned columns): the label ("Zone"), the verdict word (coloured,
+// bolder), the detail (same line, a calmer tint of the same colour), the colour (+1 bullish green, -1 bearish red, 0 white neutral) and
+// the time (right-justified, 12-hour). text = verdict + "  " + detail (status file / tests).
+struct RLine { std::string label, verdict, detail, text, time; int col = 0; };
 // the market's measured signs (ZoneDefenseParams.h: reloadSign / pullSign / sweepSign; 0 = not proven -> white)
 struct Signs { int reload = 0, pull = 0, sweep = 0; };
-// clock(t) -> "10:03 AM" (12-hour, the host's local clock)
+inline void setLine(RLine& r, const char* label, const std::string& verdict, const std::string& detail) { r.label = label; r.verdict = verdict; r.detail = detail; r.text = verdict + (detail.empty() ? "" : "  " + detail); }
 // JUMPSTART 2026-11-08 (71 market-days): heavy selling INTO the zone in the 60 s after the touch made it break MORE in 6 of 7
 // markets (both halves) - so heavy = "Bid exhausted" (red) there, light selling with the zone still there = "Buyers holding".
-template <class Clock> std::vector<RLine> readLines(const ZoneView& v, Clock clock, const Signs& sg) {
+// Lines in event order: 1 Zone (formed), 2 Queue (the 60 s before the touch), 3 Pressure (the selling pressure into the zone, decided at
+// the touch + 60 s; Rassul 2026-11-08: "Reload" renamed "Pressure"), 4 Refill (same 60 s), 5 Sweep.
+template <class Clock> std::vector<RLine> readLines(const ZoneView& v, Clock clock, const Signs& sg, double tick = 0) {
     const bool bid = v.side == 0; const int bull = bid ? +1 : -1;      // what defending means for this side
     const std::string who = bid ? "Bid" : "Offer", buyers = bid ? "Buyers" : "Sellers", side = bid ? "bid" : "offer", sides = bid ? "bids" : "offers";
     const std::string dot = " \xC2\xB7 ";
-    std::vector<RLine> out(4);
-    // 1 Reload (decided at the touch + 60 s)
-    if (!v.reloaded) { out[0].text = "Reload: watching the touch"; out[0].time = clock(v.touchT); }
-    else {
-        out[0].time = clock(v.relT);
-        if (v.reload == 0) { out[0].text = who + " exhausted" + dot + "broke through" + (v.brokeT >= 0 ? " at " + clock(v.brokeT) : std::string()); out[0].col = -bull; }
-        else if (v.reload == 2 && sg.reload < 0) { out[0].text = who + " exhausted" + dot + "absorbed " + comma(v.sold) + " (" + xText(v.reloadX) + ")" + dot + "still at the zone"; out[0].col = -bull; }
-        else if (v.reload == 2) { out[0].text = "Quiet" + dot + "absorbed " + comma(v.sold) + " (" + xText(v.reloadX) + ")"; }
-        else if (sg.reload < 0) { out[0].text = buyers + " holding" + dot + "sold " + comma(v.sold) + " of " + comma(v.atTouch) + " shown"; out[0].col = bull; }
-        else { out[0].text = "Quiet" + dot + "sold " + comma(v.sold) + " of " + comma(v.atTouch) + " shown"; }
+    std::vector<RLine> out(5);
+    // 1 Zone: held (green) once the reload decided it still there; broken / faded (red); forming (white) until then
+    {   char b[96]; const double oldestAtTouch = v.oldest + (v.touched ? (v.touchT - v.T) / 60000.0 : 0);
+        std::snprintf(b, sizeof b, " \xC2\xB7 %s lots \xC2\xB7 oldest %.0fm", comma(v.size).c_str(), oldestAtTouch);
+        const std::string range = tick > 0 ? priceText(v.lo, tick) + "\xE2\x80\x93" + priceText(v.hi, tick) : std::string();
+        std::string st = "forming"; int col = 0;
+        if (v.ended && v.endCode == 1) { st = "broken"; col = -bull; }
+        else if (v.ended && v.endCode == 2) { st = "faded"; col = -bull; }
+        else if (v.reloaded && v.reload == 0) { st = "broken"; col = -bull; }
+        else if (v.reloaded) { st = "held"; col = bull; }
+        setLine(out[0], "Zone", st, range + b); out[0].col = col; out[0].time = clock(v.T);
     }
     // 2 Queue (the 60 s before the touch)
-    if (v.cancel60 < 0) out[1].text = "Queue: too few resting orders to read";
-    else { out[1].text = "Queue: cancels " + pct(v.cancel60) + " (norm " + pct(v.cnorm < 0 ? 0 : v.cnorm) + ")" + dot + (v.pulling ? "pulling" : "steady"); out[1].col = v.pulling && sg.pull < 0 ? -bull : 0; }
+    if (v.cancel60 < 0) setLine(out[1], "Queue", "thin", "too few resting orders to read");
+    else { setLine(out[1], "Queue", v.pulling ? "pulling" : "holding", "cancels " + pct(v.cancel60) + " (norm " + pct(v.cnorm < 0 ? 0 : v.cnorm) + ")"); out[1].col = v.pulling && sg.pull < 0 ? -bull : 0; }
     out[1].time = clock(v.touchT);
-    // 3 Refill (the same 60 s)
-    if (!v.reloaded) { out[2].text = "Refill: counting"; out[2].time = clock(v.touchT); }
+    // 3 Pressure (selling pressure into the zone, decided at the touch + 60 s)
+    if (!v.reloaded) { setLine(out[2], "Pressure", "watching", "the touch"); out[2].time = clock(v.touchT); }
     else {
-        out[2].text = "Refill: " + comma(v.refills) + " times" + dot + "absorbed " + comma(v.sold) + " (" + xText(v.reloadX) + ")" + dot + side + " " + comma(v.left) + " of " + comma(v.atTouch);
-        if (v.zeroT >= 0) out[2].text += " \xE2\x86\x92 0 by " + clock(v.zeroT);
-        out[2].col = (v.zeroT >= 0 || v.left == 0) ? -bull : out[0].col; out[2].time = clock(v.relT);
+        out[2].time = clock(v.relT);
+        if (v.reload == 0) { setLine(out[2], "Pressure", who + " exhausted", "broke through" + (v.brokeT >= 0 ? " at " + clock(v.brokeT) : std::string())); out[2].col = -bull; }
+        else if (v.reload == 2 && sg.reload < 0) { setLine(out[2], "Pressure", who + " exhausted", "absorbed " + comma(v.sold) + " (" + xText(v.reloadX) + ")" + dot + "still at the zone"); out[2].col = -bull; }
+        else if (v.reload == 2) setLine(out[2], "Pressure", "Quiet", "absorbed " + comma(v.sold) + " (" + xText(v.reloadX) + ")");
+        else if (sg.reload < 0) { setLine(out[2], "Pressure", buyers + " holding", "sold " + comma(v.sold) + " of " + comma(v.atTouch) + " shown"); out[2].col = bull; }
+        else setLine(out[2], "Pressure", "Quiet", "sold " + comma(v.sold) + " of " + comma(v.atTouch) + " shown");
     }
-    // 4 Sweep (the first stop run per touch, decided 5 s after it)
-    if (!v.swept) out[3].text = "Sweep: watching";
-    else if (v.sweep == 0) { out[3].text = "Sweep: none"; out[3].time = clock(v.swT); }
+    // 4 Refill (the same 60 s)
+    if (!v.reloaded) { setLine(out[3], "Refill", "counting", ""); out[3].time = clock(v.touchT); }
     else {
-        out[3].text = std::string("Sweep: ") + (v.sweep == 2 ? "swept" : "weak") + " lift " + xText(v.lift);
-        if (v.pulling) out[3].text += dot + sides + " pulled before";
-        out[3].text += dot + (bid ? "re-bid " : "re-offer ") + xText(v.runLots > 0 ? (double)v.rebid / v.runLots : 0);
-        out[3].col = sg.sweep > 0 ? (v.sweep == 2 ? bull : -bull) : 0; out[3].time = clock(v.swT);
+        std::string d = "absorbed " + comma(v.sold) + " (" + xText(v.reloadX) + ")" + dot + side + " " + comma(v.left) + " of " + comma(v.atTouch);
+        if (v.zeroT >= 0) d += " \xE2\x86\x92 0 by " + clock(v.zeroT);
+        setLine(out[3], "Refill", comma(v.refills) + " times", d);
+        out[3].col = (v.zeroT >= 0 || v.left == 0) ? -bull : out[2].col; out[3].time = clock(v.relT);
+    }
+    // 5 Sweep (the first stop run per touch, decided 5 s after it)
+    if (!v.swept) setLine(out[4], "Sweep", "watching", "");
+    else if (v.sweep == 0) { setLine(out[4], "Sweep", "none", "no stop run through the zone"); out[4].time = clock(v.swT); }
+    else {
+        std::string d = "lift " + xText(v.lift);
+        if (v.pulling) d += dot + sides + " pulled before";
+        d += dot + (bid ? "re-bid " : "re-offer ") + xText(v.runLots > 0 ? (double)v.rebid / v.runLots : 0);
+        setLine(out[4], "Sweep", v.sweep == 2 ? "swept" : "weak", d);
+        out[4].col = sg.sweep > 0 ? (v.sweep == 2 ? bull : -bull) : 0; out[4].time = clock(v.swT);
     }
     return out;
 }
 // the zone label on the price chart: "Zone 7012.25-7013.00 · 450 lots (2.6x) · oldest 14m · held"
-inline std::string priceText(long long ticks, double tick) {
-    int d = 0; double t = tick; while (d < 6 && t > 0 && std::fabs(t - std::floor(t + 0.5)) > 1e-9) { t *= 10; ++d; }
-    char b[48]; std::snprintf(b, sizeof b, "%.*f", d, ticks * tick); return b;
-}
 inline std::string zoneLabel(const ZoneView& v, double tick) {
     char b[64]; std::snprintf(b, sizeof b, " \xC2\xB7 %s lots (%.1fx) \xC2\xB7 oldest %.0fm", comma(v.size).c_str(), v.dens, v.oldest);
     std::string s = "Zone " + priceText(v.lo, tick) + "\xE2\x80\x93" + priceText(v.hi, tick) + b;

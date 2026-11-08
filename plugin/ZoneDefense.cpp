@@ -1,14 +1,17 @@
 /********************************************************************************
- *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.0  +  lsZoneDefenseMarks 1.0.0  (2026-11-08)
+ *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.1  +  lsZoneDefenseMarks 1.0.1  (2026-11-08)
+ *  1.0.1 (Rassul 2026-11-08, mockup claude.ai/artifact/MJ9YYwjeMAUQztNZrCiP1G "before / after"): the Read block gets the Zone line and
+ *  every line is NUMBERED in event order - 1. Zone, 2. Queue, 3. Pressure (was "Reload"), 4. Refill, 5. Sweep - in aligned columns (labels left, the
+ *  verdict word bold at one x, the detail in a calmer tint on the same line, times right-aligned); the pane bars are dimmed.
  *  Rassul 2026-11-08 "Zone Defense is good. lets build it" - design approved on claude.ai/artifact/MJ9YYwjeMAUQztNZrCiP1G.
  *
- *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.0", on the live market-by-order feed (the same order-feed path
+ *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.1", on the live market-by-order feed (the same order-feed path
  *  as lsBookFlow: off::MboPane, the 250 ms clock, every event once through onRaw). Every event goes to zd::Engine
  *  (ZoneDefenseLogic.h, SDK-free, the same code the jumpstart / nightly ran over 71 market-days of raw MBO). Each decision is a
  *  journal line in lsFlexLevels\ZoneDefense\<MKT>-<spb>-<session>.csv, written once; the pane and the price chart draw ONLY from
  *  the journal (ZoneDefenseRead.h) - nothing repaints, a restart redraws the same picture.
  *    The pane: 4 Read lines for the latest touched zone (verdict first, green bullish / red bearish / white neutral, the time
- *    right-justified, 12-hour) - Reload, Queue, Refill, Sweep - and per candle the lots sold into the zone (red bar) and the bid
+ *    right-justified, 12-hour) - Zone, Queue, Pressure, Refill, Sweep (1.0.1) - and per candle the lots sold into the zone (red bar) and the bid
  *    (offer) left in it (green dot). Mirror for resistance / sellers. No hovers.
  *  lsZoneDefenseMarks (ZoneDefenseMarks.cpp: #define ZD_MARKS 1 + #include this file) - the price-chart overlay: the zone band
  *    (green bids / red offers, brightness = resting / peak, ends when broken, faded below 50% or 60 min untouched), its one label
@@ -55,12 +58,12 @@
 #include <chrono>
 #include <climits>
 
-#define ZD_VERSION "1.0.0"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
+#define ZD_VERSION "1.0.1"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
 
 
 namespace zdh {
 // the version of both DLLs: the ONE setVersion literal (the settings contract counts it; gex-build reads it)
-inline void stamp(cppExtension* p) { p->setVersion("1.0.0"); }
+inline void stamp(cppExtension* p) { p->setVersion("1.0.1"); }
 // the one settings window of both plugins (registered once per DLL)
 inline void registerWindow(cppExtension* x, ss::Ids& ids) { ss::registerAll(x, zdset::spec(), ids); }
 // file helpers shared by the two plugins
@@ -101,6 +104,9 @@ inline std::string clock12(int h, int m) { char b[16]; std::snprintf(b, sizeof b
 inline zdr::Signs signsOf(const std::string& mkt) { const zdp::Mkt& M = zdp::forMarket(mkt); zdr::Signs s; s.reload = M.reloadSign; s.pull = M.pullSign; s.sweep = M.sweepSign; return s; }
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_WHITE = 0x00E5E7EB, C_GRAY = 0x009CA3AF, C_DIM = 0x006B7280;
 inline COLOR colOf(int c) { return c > 0 ? C_GREEN : c < 0 ? C_RED : C_WHITE; }
+// (1.0.1) the detail tint of each line colour (the same hue, calmer) and the dimmed pane bars (never fight the text)
+static const COLOR C_GREEN_T = 0x008FD6AB, C_RED_T = 0x00F2A0A0, C_WHITE_T = 0x00A9B2BD, C_BAR_RED = 0x006E2A2A, C_DOT_GREEN = 0x003F8F5F;
+inline COLOR tintOf(COLOR c) { return c == C_GREEN ? C_GREEN_T : c == C_RED ? C_RED_T : C_WHITE_T; }
 inline COLOR scaleCol(COLOR c, double f) { if (f < 0) f = 0; if (f > 1) f = 1; const int r = (int)(((c >> 16) & 255) * f), g = (int)(((c >> 8) & 255) * f), b = (int)((c & 255) * f); return (COLOR)((r << 16) | (g << 8) | b); }
 // a journal file read incrementally (append-only); the model only grows
 struct JFile {
@@ -213,7 +219,7 @@ public:
         const zdp::Mkt& M = zdp::forMarket(e->mkt.empty() ? S.market : e->mkt);
         o << "\nZONE_DEFENSE,version " << ZD_VERSION << ",market " << e->mkt << ",session " << e->session << ",events " << e->events << ",skipped " << e->skipped
           << ",zones " << (e->eng ? e->eng->zones.size() : 0) << ",journal " << e->path << ",lines " << e->jf.J.lines << ",bad " << e->jf.J.bad << ",write fails " << e->writeFails
-          << "\nZONE_DEFENSE_PARAMS,reloadX " << M.per[0].reloadX << ",signs reload " << M.reloadSign << " pull " << M.pullSign << " sweep " << M.sweepSign << ",liftX " << zd::LIFT_X
+          << "\nZONE_DEFENSE_PARAMS,pressureX " << M.per[0].reloadX << ",signs pressure " << M.reloadSign << " pull " << M.pullSign << " sweep " << M.sweepSign << ",liftX " << zd::LIFT_X
           << "\nZONE_DEFENSE_DRAW,lines drawn " << e->drawn;
         for (size_t i = 0; i < e->lastLines.size(); ++i) o << " | " << e->lastLines[i].text;
     }
@@ -244,7 +250,7 @@ public:
         try { render(*S, *e); } catch (...) { S->state = "draw error"; }
         return RTX_OK;
     }
-    static const int LINE_H = 15;
+    static const int LINE_H = 14;
     void render(S_& S, Ext& e) {
         if (e.jf.path.empty() && !S.market.empty() && S.spb > 0) {           // no order event yet (a restart): the session of the last candle
             const long count = getBarCount(); RTARRAYI times(barDateTime);
@@ -254,27 +260,46 @@ public:
         e.jf.poll();
         RCT pane; pane.getPaneRect(false);
         const ss::Values& V = settings(e, S.market);
-        FONT f; f.id = HELVETICA; f.size = 9; f.style = PLAIN; setFont(f);
-        const int left = pane.left + 4, right = pane.right - 4;
-        int y = pane.top + 2;
+        const int left = pane.left + 6, right = pane.right - 6;
+        int y = pane.top + 3;
         const zdr::ZoneView* z = e.jf.J.latestTouched();
         if (V.b(zdset::K_SHOW_LINES)) {
-            if (!z) { drawLine(left, right, y, "Zone Defense: waiting for a zone touch", "", 0); y += LINE_H; e.lastLines.clear(); }
+            if (!z) { std::vector<zdr::RLine> w(1); zdr::setLine(w[0], "Zone", "waiting", "for a zone touch"); drawBlock(w, left, right, y); y += LINE_H; e.lastLines.clear(); }
             else {
-                e.lastLines = zdr::readLines(*z, [this](long long t) { return clockOf(t); }, zdh::signsOf(S.market));
-                for (size_t i = 0; i < e.lastLines.size(); ++i) { drawLine(left, right, y, e.lastLines[i].text, e.lastLines[i].time, e.lastLines[i].col); y += LINE_H; }
+                e.lastLines = zdr::readLines(*z, [this](long long t) { return clockOf(t); }, zdh::signsOf(S.market), S.tick);
+                drawBlock(e.lastLines, left, right, y); y += LINE_H * (int)e.lastLines.size();
                 ++e.drawn;
             }
         }
-        if (V.b(zdset::K_SHOW_BARS)) drawBars(S, e, y + 2, pane);
+        if (V.b(zdset::K_SHOW_BARS)) drawBars(S, e, y + 4, pane);
     }
-    void drawLine(int left, int right, int y, const std::string& text, const std::string& time, int col) {
-        const int tw = time.empty() ? 0 : getTextWidth(time.c_str(), -1);
-        std::string t = text;                                               // never under the time: cut with "..."
-        while (!t.empty() && left + getTextWidth(t.c_str(), -1) > right - tw - 10) { t.erase(t.size() - 1); if (t.size() > 3) t = t.substr(0, t.size() - 3) + "..."; if (t.size() <= 3) break; }
-        setTextColor(zdh::colOf(col));
-        RCT r; r.set(off::coord(left), off::coord(y), off::coord(right - tw - 8), off::coord(y + LINE_H)); r.drawText(t.c_str(), false, false);
-        if (tw) { setTextColor(zdh::C_GRAY); RCT q; q.set(off::coord(right - tw - 2), off::coord(y), off::coord(right), off::coord(y + LINE_H)); q.drawText(time.c_str(), false, true); }
+    // (1.0.1, Rassul 2026-11-08 "look nice") one aligned block: "1. Zone" labels in a fixed left column (grey), the verdict word at ONE x
+    // (its colour, bold), the detail on the same line in a calmer tint of that colour, the times in one right-aligned column (grey).
+    // Every text is drawn left-aligned in a rectangle exactly its own width (no overlaps; the tests read the rectangles).
+    void drawBlock(const std::vector<zdr::RLine>& L, int left, int right, int y0) {
+        FONT fp; fp.id = HELVETICA; fp.size = 9; fp.style = PLAIN; FONT fb = fp; fb.style = BOLD;
+        setFont(fp);
+        int labW = 0, timeW = 0;
+        for (size_t i = 0; i < L.size(); ++i) {
+            const std::string lab = std::to_string(i + 1) + ". " + L[i].label; labW = std::max(labW, getTextWidth(lab.c_str(), -1));
+            if (!L[i].time.empty()) timeW = std::max(timeW, getTextWidth(L[i].time.c_str(), -1));
+        }
+        const int xV = left + labW + 12, xT = right - timeW, lim = xT - 10;
+        for (size_t i = 0; i < L.size(); ++i) {
+            const int y = y0 + (int)i * LINE_H; const COLOR c = zdh::colOf(L[i].col);
+            setFont(fp); put(std::to_string(i + 1) + ". " + L[i].label, left, y, zdh::C_GRAY, lim);
+            setFont(fb); const int vw = put(L[i].verdict, xV, y, c, lim);
+            setFont(fp); if (!L[i].detail.empty() && xV + vw + 8 < lim) put(L[i].detail, xV + vw + 8, y, zdh::tintOf(c), lim);
+            if (!L[i].time.empty()) put(L[i].time, right - getTextWidth(L[i].time.c_str(), -1), y, zdh::C_GRAY, right + 1);
+        }
+    }
+    // one text at (x, y), cut with "..." to end before lim; returns its drawn width
+    int put(std::string t, int x, int y, COLOR c, int lim) {
+        int w = getTextWidth(t.c_str(), -1);
+        while (t.size() > 3 && x + w > lim) { t = t.substr(0, t.size() - 4) + "..."; w = getTextWidth(t.c_str(), -1); }
+        if (x + w > lim) return 0;
+        setTextColor(c); RCT r; r.set(off::coord(x), off::coord(y), off::coord(x + w), off::coord(y + LINE_H - 1)); r.drawText(t.c_str(), false, false);
+        return w;
     }
     // per candle: lots sold into the zone (red bar up from the bottom), the bid / offer left in it (green dot)
     void drawBars(S_&, Ext& e, int top, const RCT& pane) {
@@ -293,8 +318,8 @@ public:
         for (int i = v0; i <= v1; ++i) {
             const long long k = (long long)times[i]; PNT p; p.set(i, 0.0f, kBarCenter); const int cx = p.h;
             std::map<long long, long long>::const_iterator s = sold.find(k), l = left.find(k);
-            if (s != sold.end() && s->second > 0) { const int h = (int)((bottom - top) * (double)s->second / mx); off::fillFlat(this, cx - w / 2, bottom - h, cx - w / 2 + w, bottom, zdh::C_RED); }
-            if (l != left.end()) { const int yy = bottom - (int)((bottom - top) * (double)l->second / mx); off::fillFlat(this, cx - 2, yy - 2, cx + 3, yy + 3, zdh::C_GREEN); }
+            if (s != sold.end() && s->second > 0) { const int h = (int)((bottom - top) * (double)s->second / mx); off::fillFlat(this, cx - w / 2, bottom - h, cx - w / 2 + w, bottom, zdh::C_BAR_RED); }
+            if (l != left.end()) { const int yy = bottom - (int)((bottom - top) * (double)l->second / mx); off::fillFlat(this, cx - 1, yy - 1, cx + 2, yy + 2, zdh::C_DOT_GREEN); }
         }
     }
 private:
@@ -312,7 +337,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Zone Defense - is the densest band of resting bids (support) or offers (resistance) near price being DEFENDED? (market-by-order feed). Four lines for the latest touched zone, verdict first, green bullish / red bearish / white not proven: RELOAD (touch + 60 s: broke through or sold heavily into = exhausted; light selling and still there = holding), QUEUE (orders that had rested 30 s+ at the zone cancelled in the 60 s before the touch vs normal), REFILL (re-adds at the hit prices, lots absorbed, what is left), SWEEP (the first stop run through the zone: lift = opposite lots in 5 s / run lots; swept = lift 1.0x+ and back in the zone). Bars: lots sold into the zone per candle (red) and what is left (green dot). Thresholds per market and period from 71 days of raw MBO (ZoneDefenseParams.h, refined nightly). The zones, the reload diamond and the sweep triangle on the price chart: add lsZoneDefenseMarks.");
+    p->setDescription("LRA Zone Defense - is the densest band of resting bids (support) or offers (resistance) near price being DEFENDED? (market-by-order feed). Five numbered lines for the latest touched zone (1. Zone, 2. Queue, 3. Pressure, 4. Refill, 5. Sweep), verdict first, green bullish / red bearish / white not proven: ZONE (the band, its lots and oldest order: held / broken), QUEUE (orders that had rested 30 s+ at the zone cancelled in the 60 s before the touch vs normal), PRESSURE (touch + 60 s: broke through or sold heavily into = exhausted; light selling and still there = holding), REFILL (re-adds at the hit prices, lots absorbed, what is left), SWEEP (the first stop run through the zone: lift = opposite lots in 5 s / run lots; swept = lift 1.0x+ and back in the zone). Bars: lots sold into the zone per candle (red) and what is left (green dot). Thresholds per market and period from 71 days of raw MBO (ZoneDefenseParams.h, refined nightly). The zones, the refill diamond and the sweep triangle on the price chart: add lsZoneDefenseMarks.");
     zdh::stamp(p);   // ZD_VERSION
     return p;
 }
@@ -434,7 +459,7 @@ void ZoneDefenseMarks::zoneDraw(ZmState& s, const zdr::ZoneView& v, double tick,
             else ++s.labelsSkipped;                                           // never overlap: the older label gives way
         }
     }
-    // the gray reload DIAMOND on the touch candle, at the zone's edge
+    // the gray refill DIAMOND on the touch candle, at the zone's edge
     if (V.b(zdset::K_SHOW_DIAMOND) && v.reloaded) {
         const int tb = barOf(times, count, v.touchT); PNT p; p.set(tb, (float)((bid ? v.hi : v.lo) * tick), kBarCenter);
         setPen(zdh::C_GRAY, 1, P_SOLID);
@@ -464,7 +489,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZoneDefenseMarks* p = new ZoneDefenseMarks();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA Zone Defense marks (price chart) - the zones lsZoneDefense decided from the order feed: the band (green bids under price / red offers over it, brighter = more still resting; it ends when broken, faded below half or 60 min untouched), one label 'Zone lo-hi · lots (Nx) · oldest Nm · held/broken', one big-order line, the gray reload diamond on the touch candle and the sweep triangle on the first stop run (green up = swept: the run was lifted 1.0x+ within 5 s and price came back into the zone; red down = weak). Needs lsZoneDefense on the same chart (it writes the journal this reads). Never repainted.");
+    p->setDescription("LRA Zone Defense marks (price chart) - the zones lsZoneDefense decided from the order feed: the band (green bids under price / red offers over it, brighter = more still resting; it ends when broken, faded below half or 60 min untouched), one label 'Zone lo-hi · lots (Nx) · oldest Nm · held/broken', one big-order line, the gray refill diamond on the touch candle and the sweep triangle on the first stop run (green up = swept: the run was lifted 1.0x+ within 5 s and price came back into the zone; red down = weak). Needs lsZoneDefense on the same chart (it writes the journal this reads). Never repainted.");
     zdh::stamp(p);   // ZD_VERSION
     return p;
 }
