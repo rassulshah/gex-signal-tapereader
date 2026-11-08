@@ -73,8 +73,8 @@ int main() { (void)&itemsText;
     CHECK(sameSw == n, "the pill never drops the sweep sections (" + std::to_string(sameSw) + " of " + std::to_string(n) + ")");
     std::printf("  %d scenarios, box unchanged in size in %d\n", n, same);
     std::printf("[4] versions\n");
-    CHECK(std::string(hl::HL_VERSION) == "2.19.0" && std::string(hlset::PLUGIN_VERSION) == "2.19.0", "HL_VERSION = PLUGIN_VERSION = 2.19.0");
-    { const std::string c = slurp("../HodLod.cpp"); CHECK(c.find("p->setVersion(\"2.19.0\")") != std::string::npos && c.find("loadRange(*S)") != std::string::npos, "HodLod.cpp setVersion 2.19.0 + loadRange"); }
+    CHECK(std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION), "HL_VERSION = PLUGIN_VERSION");  // (watchdog 2026-11-07) version-agnostic: was pinned to one release and failed on every bump
+    { const std::string c = slurp("../HodLod.cpp"); CHECK(c.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos && c.find("loadRange(*S)") != std::string::npos, "HodLod.cpp setVersion 2.19.0 + loadRange"); }
     std::printf("t_hl2190 (lsHodLod 2.19.0): %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

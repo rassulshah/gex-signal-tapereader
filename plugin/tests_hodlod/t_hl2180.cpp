@@ -86,8 +86,8 @@ int main() { (void)&itemsText;
     CHECK(favBoxes > 500, "FAV checked on " + std::to_string(favBoxes) + " sweep boxes");
     std::printf("  scenarios passing: %d of 1260; layouts with sweep sections checked: %d; FAV boxes %d\n", same, swN, favBoxes);
     std::printf("[3] versions\n");
-    CHECK(std::string(hl::HL_VERSION) == "2.18.0" && std::string(hlset::PLUGIN_VERSION) == "2.18.0", "HL_VERSION = PLUGIN_VERSION = 2.18.0");
-    { std::ifstream f("../HodLod.cpp"); std::stringstream ss; ss << f.rdbuf(); CHECK(ss.str().find("p->setVersion(\"2.18.0\")") != std::string::npos, "HodLod.cpp setVersion 2.18.0"); }
+    CHECK(std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION), "HL_VERSION = PLUGIN_VERSION");  // (watchdog 2026-11-07) version-agnostic: was pinned to one release and failed on every bump
+    { std::ifstream f("../HodLod.cpp"); std::stringstream ss; ss << f.rdbuf(); CHECK(ss.str().find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos, "HodLod.cpp setVersion == HL_VERSION"); }
     std::printf("t_hl2180 (lsHodLod 2.18.0): %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }
