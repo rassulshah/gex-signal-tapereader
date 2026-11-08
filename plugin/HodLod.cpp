@@ -138,6 +138,7 @@
 #include "HostSlot.h"
 #include "BoxPlace.h"                // (2.0.6) Offset X / Y rules, hysteresis, the dialog snapshot
 #include "HodLodLogic.h"
+#include "HodLodConfirm.h"          // (2.21.0) the HOD / LOD confirm badge (SDK-free)
 #include "HodLodSettings.h"         // (2.4.2) the ONE settings table (SettingsSpec.h)
 #include "DealerProfileSettings.h"   // (2.4.3) the Dealer Profile banner key (its keyed per-market file)
 #include "SettingsHost.h"           // (2.4.2) registration / window fill / read / group masters from the table
@@ -166,6 +167,9 @@ static const bool HL_CANDLE_KEEPOUT = false;   // (2.15.1) the box never moves s
 #include "MarkParams.h"          // (2.7.0) per-market SHOW / LOG params (LRA-PreOpen / LRA-DayType-<MKT>.csv)
 #include "NewsWindow.h"          // (2.7.0) the News / settle window and the Feed ? rows
 #include <map>
+#include <set>
+#include <sstream>
+#include <algorithm>
 #include "VwapTrendLogic.h"      // (2.0.5) the header's trend: the Tape Reader TREND vote's rule, computed here from the chart's closed bars
 #include <sys/stat.h>
 #include <fstream>
@@ -312,6 +316,10 @@ struct HLState {
     // (2.20.0) the chart read: the read in force, its inputs' stamps / texts, the log key (the last read written), counters
     crd::Read cread; std::string creadKey, creadWhy = "not run", crParamText, crLive, crRec; long long crParamStamp = -2, crLiveStamp = -2; crd::Params crP;
     long long creadLogs = 0, creadLogFails = 0; int crCobs = 0; bool crKeyLoaded = false; std::string crKeyDay;
+    // (2.21.0) the HOD / LOD CONFIRM badges: what to draw (chart bar indices), the record's keys, counters for the status line
+    struct CfDraw { bool hod; int ext, conf; double px; };
+    std::vector<CfDraw> cfDraw; std::set<std::string> cfKeys; bool cfKeysLoaded = false; long long cfStamp = -2; std::string cfPath, cfWhy = "not run";
+    long long cfLogs = 0, cfFails = 0, cfFromRec = 0; int cfDrawn = 0, cfNoPill = 0;
     ~HLState() { delete T; }
 };
 
@@ -899,6 +907,57 @@ void HodLod::recompute(HLState& S, long n)
     writeProj(S);
     writeFirstCall(S, rows);
     computeRead(S, B, per);                   // (2.20.0) the chart read from the same closed bars
+    if (S.mi >= 0) {   // (2.21.0) the HOD / LOD CONFIRM badges (HodLodConfirm.h): the closed bars of the last 35 calendar days (14 prior RTH sessions
+        // + holidays; the replay test shows 34 days give the same badges as the full history), in ticks; a session cut by the first
+        // loaded bar never feeds the ADR. Every usable session's badges go to the record once (lsFlexLevels\HodLod\Confirm-<MKT>-<per>s.csv);
+        // what is drawn = the record + this pass, so a badge stays exactly as drawn after the window slides or IRT restarts (no repaint).
+        const long long cut2 = absOf(lastClosed) - 35LL * 86400;
+        int s2 = lastClosed; while (s2 > 0 && lastClosed - s2 < 60000) { if (absOf(s2 - 1) < cut2) break; s2--; }
+        std::vector<hcf::Bar> CB; CB.reserve((size_t)(lastClosed - s2 + 1));
+        auto tk = [&](double v) { return (long long)std::llround(v / tick); };
+        for (int i = s2; i <= lastClosed; i++) CB.push_back(hcf::Bar{ absOf(i), tk(hi[i]), tk(lo[i]), tk(cl[i]), tk(op[i]) });
+        const hl::Mkt& K = hl::MKTS[S.mi];
+        const std::vector<hcf::Session> SS = hcf::sessions(CB, per, K.open, K.close);
+        S.cfPath = flexPath("HodLod\\Confirm-" + S.mkt + "-" + std::to_string(per) + "s.csv");
+        std::map<std::string, std::string> rec;   // key -> the record line (day,side,ext hh:mm) -> conf hh:mm,price
+        {   std::string txt; long long st = -1;
+            if (!S.cfPath.empty() && hlSmallRead(S.cfPath, 512 * 1024, txt, st)) {
+                std::istringstream is(txt); std::string ln;
+                while (std::getline(is, ln)) { if (ln.size() < 30 || ln[0] != 'B' || ln[1] != ',') continue;
+                    std::vector<std::string> f; std::string x; std::istringstream ls(ln); while (std::getline(ls, x, ',')) f.push_back(x);
+                    if (f.size() < 7 || f[1].size() != 8 || (f[2] != "HOD" && f[2] != "LOD") || f[3].size() != 5 || f[4].size() != 5) continue;
+                    rec[f[1] + "," + f[2] + "," + f[3]] = f[4] + "," + f[5]; }
+            } else if (st >= 0) S.cfWhy = "record over 512 KiB - not read";
+            S.cfStamp = st;
+        }
+        int logged = 0, fails = 0;
+        for (const hcf::Session& s : SS) for (const hcf::Badge& g : s.badges) {
+            const std::string k = hcf::key(s, CB, g); if (rec.count(k)) continue;
+            if (!S.cfPath.empty() && hlAppend(S.cfPath, "# lsHodLod confirm badges: B,<day yyyymmdd>,HOD|LOD,<extreme bar end HH:MM>,<confirm bar end HH:MM>,<price>,<ADR>,<plugin>",
+                                              hcf::recordLine(s, CB, g, tick, K.dec, (std::string("lsHodLod ") + hl::HL_VERSION).c_str()))) {
+                char px[48]; std::snprintf(px, sizeof px, "%.*f", K.dec, (double)g.px * tick); rec[k] = hcf::hm(CB[(size_t)g.conf].absEnd) + "," + px; logged++;
+            } else fails++;
+        }
+        S.cfLogs += logged; S.cfFails += fails;
+        S.cfDraw.clear(); S.cfFromRec = 0;
+        auto idxOf = [&](long long a) { size_t lo2 = 0, hi2 = CB.size(); while (lo2 < hi2) { size_t m = (lo2 + hi2) / 2; if (CB[m].absEnd < a) lo2 = m + 1; else hi2 = m; } return lo2 < CB.size() && CB[lo2].absEnd == a ? (int)lo2 : -1; };
+        for (const auto& kv : rec) {   // the record (this pass's badges are in it already, unless the write failed - below)
+            const std::string& k = kv.first; const int y = std::atoi(k.substr(0, 4).c_str()), mo = std::atoi(k.substr(4, 2).c_str()), d = std::atoi(k.substr(6, 2).c_str());
+            const long long day = hl::daysFromCivil(y, mo, d) * 86400;
+            const long long ae = day + std::atoi(k.substr(13, 2).c_str()) * 3600 + std::atoi(k.substr(16, 2).c_str()) * 60;
+            const long long ac = day + std::atoi(kv.second.substr(0, 2).c_str()) * 3600 + std::atoi(kv.second.substr(3, 2).c_str()) * 60;
+            const int ie = idxOf(ae), ic = idxOf(ac); if (ie < 0 || ic < ie) continue;
+            S.cfDraw.push_back(HLState::CfDraw{ k.compare(9, 3, "HOD") == 0, s2 + ie, s2 + ic, std::atof(kv.second.substr(6).c_str()) }); S.cfFromRec++;
+        }
+        for (const hcf::Session& s : SS) for (const hcf::Badge& g : s.badges) if (!rec.count(hcf::key(s, CB, g)))   // write failed: still drawn this pass
+            S.cfDraw.push_back(HLState::CfDraw{ g.hod, s2 + g.ext, s2 + g.conf, (double)g.px * tick });
+        const hcf::Session* L2 = SS.empty() ? nullptr : &SS.back();
+        char ad[48] = "-"; if (L2 && std::isfinite(L2->adrT)) std::snprintf(ad, sizeof ad, "%.*f", K.dec, L2->adrT * tick);
+        std::string today; if (L2) for (const hcf::Badge& g : L2->badges) today += std::string(today.empty() ? "" : " ") + (g.hod ? "HOD " : "LOD ") + hcf::hm(CB[(size_t)g.ext].absEnd) + ">" + hcf::hm(CB[(size_t)g.conf].absEnd);
+        S.cfWhy = std::string("CONFIRM,") + hcf::VERSION + ",rule close " + std::to_string(hcf::K).substr(0, 4) + " ADR back + held " + std::to_string(hcf::HOLD_SEC / 60) + " min,bars " + std::to_string(CB.size())
+                + ",sessions " + std::to_string(SS.size()) + ",last " + (L2 ? hcf::ymd(L2->day) : std::string("-")) + " adr " + ad + (L2 && !L2->why.empty() ? " (" + L2->why + ")" : std::string())
+                + ",today " + (today.empty() ? std::string("none") : today) + ",record " + std::to_string(rec.size()) + " (+" + std::to_string(logged) + " now, fails " + std::to_string(S.cfFails) + ")";
+    }
     S.firstPass = false;
 }
 
@@ -1760,6 +1819,7 @@ int HodLod::draw(void)
     }
     postMst(*S);                             // (2.4.0) the Market State (behind the scenes; nothing drawn changes)
     execute(L);
+    hl::Box stripBox = { 0, 0, 0, 0 }; bool stripOk = false;   // (2.21.0) the read strip's rectangle: a confirm badge keeps off it
     if (S->cread.ok) {   // (2.20.0) the CHART READ strip: 3 lines across the top of the price area, under the IRT title row
         const int fs = 10, lh = 15, pad = 5, h = 3 * lh + 2 * pad;
         int l = pb.l + 4, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;
@@ -1767,6 +1827,7 @@ int HodLod::draw(void)
         if (L.tableOk && L.table.t < t + h && L.table.b > t && L.table.l < r && L.table.r > l) l = (std::max)(l, L.table.r + 6);   // a table placed at the top keeps its spot
         if (r - l >= 220 && t + h < (int)pane.bottom - 40) {
             RCT bg; bg.set((short)l, (short)t, (short)r, (short)(t + h)); bg.draw(1, (COLOR)0x003A3F47, (COLOR)0x0015181D, DRAW_OPAQUE, PAT_SOLID);
+            stripBox = hl::Box{ l, t, r, t + h }; stripOk = true;
             auto meas = [&](const std::string& s) { return textW(s, fs, false); };
             const unsigned c2 = S->cread.tone == crd::GREEN ? hl::C_GREEN : (S->cread.tone == crd::RED ? hl::C_RED : hl::C_GREY);
             const std::string* Ls[3] = { &S->cread.l1, &S->cread.l2, &S->cread.l3 }; const unsigned Cs[3] = { hl::C_SLATE, c2, hl::C_GREY };
@@ -1774,6 +1835,44 @@ int HodLod::draw(void)
             S->placeLine += "CHARTREAD," + std::string(crd::VERSION) + ",box " + std::to_string(l) + "," + std::to_string(t) + "," + std::to_string(r) + "," + std::to_string(t + h) + "," + S->creadWhy +
                             ",logs " + std::to_string(S->creadLogs) + ",fails " + std::to_string(S->creadLogFails) + "\n";
         } else S->placeLine += "CHARTREAD," + std::string(crd::VERSION) + ",no room," + S->creadWhy + "\n";
+    }
+    {   // (2.21.0) the HOD / LOD CONFIRM badges: a thin line from the extreme candle to the bar that confirmed it, a small dot there, and a
+        // filled "HOD" (red, above the high) / "LOD" (green, below the low) pill on the extreme candle - no border, no other text, no hover.
+        // The pill keeps off the table, the read strip, the target badge / 1st-extreme marker, every text block and other indicators' boxes;
+        // no clear spot = the line and dot only (counted in the status line). Only bars on screen are drawn.
+        std::vector<hcf::Px> ob;
+        auto addB = [&](const hl::Box& b) { if (b.r > b.l && b.b > b.t) ob.push_back(hcf::Px{ b.l - 2, b.t - 2, b.r + 2, b.b + 2 }); };
+        for (const hl::Box& b : L.blocks) addB(b);
+        if (L.tableOk) addB(L.table);
+        if (L.gexOk) addB(L.gexRow);
+        if (L.qOk) addB(L.qBox);
+        if (L.preOk) addB(L.preRow);
+        if (L.dayOk) addB(L.dayBox);
+        for (const hl::Box& b : L.noteRows) addB(b);
+        for (const hl::Item& it : L.items) if (it.elem == hl::E_PROJ || it.elem == hl::E_MARK) addB(hl::Box{ (std::min)(it.l, it.r), (std::min)(it.t, it.b), (std::max)(it.l, it.r), (std::max)(it.t, it.b) });
+        if (stripOk) addB(stripBox);
+        for (const hl::Box& b : avoid) addB(b);
+        const int fs = 9, pw = textW("HOD", fs, true) + 8, ph = 14;
+        const int rEdge = pe > 0 && pe < pb.r ? pe : pb.r;
+        const hcf::Px pz{ pb.l, (int)pane.top + 20, rEdge, pb.b };
+        S->cfDrawn = 0; S->cfNoPill = 0;
+        const long nb = getBarCount();
+        for (const HLState::CfDraw& d : S->cfDraw) {
+            if (d.ext < 0 || d.conf >= nb) continue;
+            PNT a, c; if (a.set(d.ext, (float)d.px, kBarCenter) != RTX_OK || c.set(d.conf, (float)d.px, kBarCenter) != RTX_OK) continue;
+            const int xe = (int)a.h, xc = (int)c.h, y = (int)a.v;
+            if (xc < pz.l || xe > pz.r || y < pz.t || y > pz.b) continue;   // off screen
+            const COLOR col = (COLOR)(d.hod ? hl::C_RED : hl::C_GREEN);
+            line((std::max)(xe, pz.l), y, (std::min)(xc, pz.r), y, col, 1);
+            if (xc >= pz.l && xc <= pz.r) { RCT dot; dot.set((short)(xc - 2), (short)(y - 2), (short)(xc + 2), (short)(y + 2)); dot.draw(0, col, col, DRAW_OPAQUE, PAT_SOLID); }
+            hcf::Px p;
+            if (xe >= pz.l && hcf::pill(xe, xc, y, d.hod, pw, ph, pz, ob, p)) {
+                RCT bx; bx.set((short)p.l, (short)p.t, (short)p.r, (short)p.b); bx.draw(0, col, col, DRAW_OPAQUE, PAT_SOLID);
+                text(p.l + 4, (p.t + p.b) / 2, d.hod ? "HOD" : "LOD", (COLOR)0x00FFFFFF, fs, true);
+                ob.push_back(p); S->cfDrawn++;
+            } else S->cfNoPill++;
+        }
+        S->placeLine += S->cfWhy + ",draw " + std::to_string(S->cfDraw.size()) + " (record " + std::to_string(S->cfFromRec) + "),pills " + std::to_string(S->cfDrawn) + ",no clear spot " + std::to_string(S->cfNoPill) + "\n";
     }
     {   // (2.4.1) the table's rectangle for the docked Big Lot box (BoxDock.h): table + Q header + GEX row, as drawn; none = cleared
         const char* sy = getSymbol(); const char* cl = getChartLabel();
@@ -1874,6 +1973,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.20.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.21.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
