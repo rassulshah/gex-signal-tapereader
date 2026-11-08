@@ -38,7 +38,7 @@ REM (2026-10-18 settings audit, Rassul 15:13 CT "make sure every indicator alway
 REM   anymore") THE SETTINGS CONTRACT GATES EVERY BUILD: plugin\tests_settings\settings_contract.cpp (SettingsSpec.h + every <Name>Settings.h +
 REM   the migrated sources) is compiled and run first; FAIL = nothing is built this tick (the installed DLLs stay), the log says why once,
 REM   plugin\out\SETTINGS-CONTRACT.txt has every failing check. SETSRC = the plugin sources on the layer (add one when it migrates).
-set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp KeyLevels.cpp DealerHedge.cpp ReversalStage.cpp SweepRefill.cpp StopRunMark.cpp Trapped.cpp TrappedTraders.cpp WavePOC.cpp"
+set "SETSRC=HodLod.cpp DeltaProfile.cpp TapeReader.cpp BidAskStats.cpp BookFlow.cpp LiquidityProfile.cpp TradeManager.cpp DealerProfile.cpp SessionVWAP.cpp BigBidAsk.cpp CVD.cpp CobImpulse.cpp DefenseLines.cpp KeyLevels.cpp DealerHedge.cpp ReversalStage.cpp SweepRefill.cpp StopRunMark.cpp Trapped.cpp TrappedTraders.cpp WavePOC.cpp ZoneDefense.cpp"
 call :settings
 if defined SETFAIL (
   call :status
@@ -155,6 +155,11 @@ REM (2026-10-21) lsBookFlow 1.19.0 reads the Delta Profile's TR record (Tr on th
 REM (2026-10-26) lsBookFlow 1.28.0: FMirror.h (F?) + OrderLinesLogic.h (the re-test big-order floor) hashed
 REM (2026-11-04) lsBookFlow 1.34.0 level box: BookLevelBox.h (+ ZzoDeltaLogic.h / ZzoParams.h for the Pb wave origin, SessionVWAPLogic.h / OnTouch*.h for the RTH VWAP levels) hashed
 call :one BookFlow lsBookFlow BookFlowLogic.h StackStatsLogic.h PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h OrderFlowPaneSettings.h SettingsSpec.h SettingsHost.h PaneCursor.h BoxRead.h BoxReadDraw.h DefenseTurn.h DefenseLinesSettings.h EffortReward.h LargeLotPool.h SettingsGuard.h MoveLogic.h TrapLogic.h SharedAbsorb.h ArrivalStamp.h LetterStrips.h ImpliedFill.h ReversalEvidence.h FMirror.h OrderLinesLogic.h PerfGuard.h SelfAware.h SignalBoard.h NodeLadder.h BookLevelBox.h ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h
+REM (2026-11-08) lsZoneDefense 1.0.0 (Rassul "Zone Defense is good. lets build it"): its own pane on the order feed (off::MboPane, as BookFlow) - the 4 Read lines
+REM   + sold / left bars; lsZoneDefenseMarks 1.0.0 (ZoneDefenseMarks.cpp = ZoneDefense.cpp + ZD_MARKS) draws the zones / reload diamond / sweep triangle on the
+REM   price chart from the pane journal. ZoneDefenseParams.h is written by the jumpstart and then ONLY by the nightly lra.zone_defense (judge passed).
+call :one ZoneDefense lsZoneDefense ZoneDefenseLogic.h ZoneDefenseParams.h ZoneDefenseRead.h ZoneDefenseSettings.h BookFlowLogic.h StackStatsLogic.h PullStatsLogic.h OrderFlowFeed.h NearLevels.h HostSlot.h OptionsFlow.h HoverBoard.h MboRecord.h BoxPlace.h ZoneRule.h ZoneRead.h MarketState.h BannerBoard.h OrderFlowPaneSettings.h SettingsSpec.h SettingsHost.h PaneCursor.h BoxRead.h BoxReadDraw.h DefenseTurn.h DefenseLinesSettings.h EffortReward.h LargeLotPool.h SettingsGuard.h MoveLogic.h TrapLogic.h SharedAbsorb.h ArrivalStamp.h LetterStrips.h ImpliedFill.h ReversalEvidence.h FMirror.h OrderLinesLogic.h PerfGuard.h SelfAware.h SignalBoard.h NodeLadder.h BookLevelBox.h ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h
+call :one ZoneDefenseMarks lsZoneDefenseMarks ZoneDefense.cpp ZoneDefenseLogic.h ZoneDefenseParams.h ZoneDefenseRead.h ZoneDefenseSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h HostSlot.h PerfGuard.h
 REM (2026-10-20 Rassul 12:22 CT "first build the lines, do it now") lsDefenseLines 1.0.0 - the Defense pane's pivot turns + refill lines on the price chart
 REM (2026-10-22) lsDefenseLines 1.10.0 trails (MoveLogic 1.2.0) + the trail hover: HoverBoard.h hashed
 rem (2026-11-01 21:29 CT, Rassul "get rid of the defense lines" - retired) call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h HoverBoard.h MarkParams.h PerfGuard.h ColumnBoard.h
@@ -360,7 +365,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - no plugin installs on weekdays 6:10 AM-3:00 PM CT; new builds install the first time Investor/RT is closed after 3:00 PM ^(weekends any time^) ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! - builds install when Investor/RT is closed ^(weekday hold 6:10 AM-3:00 PM CT^) )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile DealerProfile LimitProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb Breakout Breakout1 CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk) do (
+for %%N in (GammaProfile DealerProfile LimitProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb Breakout Breakout1 CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk ZoneDefense ZoneDefenseMarks) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
