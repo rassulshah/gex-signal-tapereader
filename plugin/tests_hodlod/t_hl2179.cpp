@@ -118,7 +118,7 @@ int main() {
         CHECK(L.swOk, "wide header: the sweep sections stay"); checkBox(L, v, pane, "wide header");
         bool rth = false; for (const hl::Item& it : texts(L)) if (it.s == "RTH 44% done") rth = true; CHECK(!rth, "wide header: the RTH % / bar-left extras dropped first"); }
     std::printf("[5] versions + host\n");
-    {   CHECK(std::string(hl::HL_VERSION) == "2.17.9" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == PLUGIN_VERSION == 2.17.9");
+    {   CHECK(std::string(hl::HL_VERSION) == "2.21.0" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == PLUGIN_VERSION == 2.17.9");
         std::ifstream f("../HodLod.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
         CHECK(src.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos, "setVersion literal 2.17.9");
         CHECK(src.find("S->placeLine += \"SWEEPS,\"") != std::string::npos, "host: the SWEEPS status line");

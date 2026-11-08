@@ -105,7 +105,7 @@ int main() {
         CHECK(!hl::stretchToAxis(L, v, pane, yOf, measure, 1900, 6, -1, nullptr, O, b.r - 50) && L.table.r == b.r, "axis left of the box: unchanged");
         CHECK(!hl::stretchToAxis(L, v, pane, yOf, measure, 1900, 6, -1, nullptr, O, 0) && L.table.r == b.r, "no axis: unchanged"); }
     std::printf("[5] versions + host order\n");
-    {   CHECK(std::string(hl::HL_VERSION) == "2.17.7" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == PLUGIN_VERSION == 2.17.7");
+    {   CHECK(std::string(hl::HL_VERSION) == "2.21.0" && std::string(hlset::PLUGIN_VERSION) == hl::HL_VERSION, "HL_VERSION == PLUGIN_VERSION == 2.17.7");
         std::ifstream f("../HodLod.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
         CHECK(src.find(std::string("p->setVersion(\"") + hl::HL_VERSION + "\")") != std::string::npos, "setVersion literal 2.17.7");
         const size_t dk = src.find("S->placeLine += S->dockLine"), sa = src.find("hl::stretchToAxis("), pub = src.find("bdk::publishHodLod(sym"), ex = src.find("    execute(L);");
