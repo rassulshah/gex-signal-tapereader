@@ -96,7 +96,9 @@
 
 namespace zdh {
 // the version of both DLLs: the ONE setVersion literal (the settings contract counts it; gex-build reads it)
-inline void stamp(cppExtension* p) { p->setVersion("1.0.8"); }
+inline void stamp(cppExtension* p) {   // (1.0.8) the literal on its own line: gex-build :ver reads the text between the first ( and )
+    p->setVersion("1.0.8");
+}
 // the one settings window of both plugins (registered once per DLL)
 inline void registerWindow(cppExtension* x, ss::Ids& ids) { ss::registerAll(x, zdset::spec(), ids); }
 // file helpers shared by the two plugins
