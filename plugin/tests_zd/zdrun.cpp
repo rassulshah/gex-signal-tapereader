@@ -1,7 +1,7 @@
 // zdrun  --  runs the lsZoneDefense engine (ZoneDefenseLogic.h, the plugin's own code) over one session of raw MBO events.
 // stdin: packed records <q ts_ns><b act><b side><q px_ticks><i size><Q oid> (zd_export.py); args: MARKET ctOffsetMin [barSec]
 // (1.0.2 levels) argv[6] = a levels file, lines "t_ms,NAME,px_ticks" sorted by t (a level known from t on; px 0 = gone);
-//   argv[7] = the level reach in ATR (default the market's Mkt.levelReach).
+//   argv[7] = the level reach in ATR (default the market's Mkt.levelReach); argv[8] = (1.0.3) levelFloorX (the at-level share of the floor).
 // stdout: one JSON object per zone (all decided fields + truth) then a "lines" object with the decision journal count.
 #include <cstdio>
 #include <cstdlib>
@@ -19,6 +19,7 @@ int main(int argc, char** argv) {
     zd::Engine E(zdp::forMarket(argv[1])); E.ctOffsetMin = std::atoi(argv[2]); if (argc > 3) E.barSec = std::atoi(argv[3]);
     if (argc > 5) E.minLotsOverride = std::atoll(argv[5]);
     zdp::Mkt M2 = zdp::forMarket(argv[1]); if (argc > 7) { M2.levelReach = std::atof(argv[7]); E.M = M2; }
+    if (argc > 8) { E.M.levelFloorX = std::atof(argv[8]); if (E.M.levelFloor <= 0) E.M.levelFloor = 1; }   // (1.0.3) the at-level share (the nightly noise check)
     struct LE { long long t; std::string name; long long px; }; std::vector<LE> lev; size_t li = 0; std::map<std::string, long long> now;
     if (argc > 6 && std::strcmp(argv[6], "-") != 0) { FILE* f = std::fopen(argv[6], "r"); char ln[256];
         while (f && std::fgets(ln, sizeof ln, f)) { char nm[128]; long long t, px; if (std::sscanf(ln, "%lld,%127[^,],%lld", &t, nm, &px) == 3) lev.push_back(LE{ t, nm, px }); }

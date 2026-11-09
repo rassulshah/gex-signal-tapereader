@@ -34,3 +34,10 @@ DEPENDENCY: the MBO store's trades table must hold the full prior session. A par
 NOT YET VERIFIED against his chart: GC Nov 6 VAL 4053 / WPoc 4055. The store cannot check it now (GC 11-04 missing, 11-05
 partial; the prior week's POC computes to 4040.0, not 4055 - his WPoc may be the CURRENT week's developing POC). Re-check on the
 GC Nov 2-6 data once the conversion lands, and switch the definition to what his chart uses.
+
+## 1.0.3 (2026-11-08, Rassul approved the at-level floor)
+- At-level floor = max(research floor, levelFloorX x chart floor); shipped CAPPED (1.0) in ES NQ CL GC HG NG, ON (0.5) in EU, after a
+  first noise check on the 13 fixture days (> 10 new zones/day at 0.5-0.8x). The jumpstart raw days are on OneDrive (mbo-store\raw),
+  not deleted: zone_defense 1.4.0 re-runs the check every night over all days (0.5 / 0.65 / 0.8x, chart floor, budget-capped, cached in
+  data\zone_defense\floor\) and promotes levelFloorX for a market only at <= 10 new zones/day AND new at-level holds >= off-level (20+ each),
+  written by the params writer. Built + installed 19:00 (settings contract passed).
