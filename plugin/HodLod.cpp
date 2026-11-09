@@ -146,7 +146,9 @@
 #include "HodLodRange.h"          // (2.19.0) the Range Day pill (SDK-free)
 #include "HodLodSweeps.h"         // (2.13.0) the HOD / LOD sweep sections (SDK-free)
 static const bool HL_FEED_ROW = false;   // (2.13.0) the "Feed ?" row is not drawn
-#include "ChartRead.h"              // (2.20.0) the 3-line chart read (SDK-free)
+#include "ChartRead.h"              // (2.20.0) the 3-line chart read (SDK-free) - 2.22.0: still built + logged for lra.read_grade, no longer drawn
+#include "ReadBox.h"                // (2.22.0) the compact READ BOX left column (SDK-free, tests_readbox)
+#include "NearLevels.h"             // (2.22.0) his key / MenthorQ level files for the Lvl line
 #include "HodLodHtf.h"             // (2.17.0) the HTF trend + RS line (SDK-free)
 #include "HodLodQ.h"               // (2.3.0) MenthorQ Q-Scores: LRA-QScore-<MKT>.csv parse / header parts / hover (SDK-free)
 // (2.4.6, Rassul 2026-10-18 20:28 "remove the hoverover on gext strikes and the hod lod box") both hovers (Gex S/R strip, header) off
@@ -316,6 +318,8 @@ struct HLState {
     // (2.20.0) the chart read: the read in force, its inputs' stamps / texts, the log key (the last read written), counters
     crd::Read cread; std::string creadKey, creadWhy = "not run", crParamText, crLive, crRec; long long crParamStamp = -2, crLiveStamp = -2; crd::Params crP;
     long long creadLogs = 0, creadLogFails = 0; int crCobs = 0; bool crKeyLoaded = false; std::string crKeyDay;
+    // (2.22.0) the READ BOX: the five lines in force + their inputs (level files, LRA-VolLevels, lsDeltaProfile's decided signals)
+    rbx::Out rbox; std::string rbWhy = "not run"; nl::Cache rbLv; std::string rbVol, rbSig; long long rbVolStamp = -2, rbSigStamp = -2; std::string rbSigPath; int rbLevels = 0, rbMq = 0, rbSigs = 0;
     // (2.21.0) the HOD / LOD CONFIRM badges: what to draw (chart bar indices), the record's keys, counters for the status line
     struct CfDraw { bool hod; int ext, conf; double px; };
     std::vector<CfDraw> cfDraw; std::set<std::string> cfKeys; bool cfKeysLoaded = false; long long cfStamp = -2; std::string cfPath, cfWhy = "not run";
@@ -394,6 +398,7 @@ public:
     void writeStatus(HLState& S, const hl::Layout* L);
     void computeFx(HLState& S, long n, long long per);
     void computeRead(HLState& S, const std::vector<hl::Bar>& B, long long per);   // (2.20.0)
+    void computeReadBox(HLState& S, const std::vector<hl::Bar>& B, long long per);   // (2.22.0)
     void writeFxLogs(HLState& S);
     void writeFxStatus(HLState& S);
     std::string flexPath(const std::string& name);
@@ -961,6 +966,60 @@ void HodLod::recompute(HLState& S, long n)
     S.firstPass = false;
 }
 
+// (2.22.0) the READ BOX left column (ReadBox.h): HTF / Day / Lvl / Mkt / Lmt from the closed bars (60-min bars built from them), the
+// Range Day read (rdOut), his level files (LRA-KeyLevels / LRA-Dealer / LRA-Levels + LRA-VolLevels) and lsDeltaProfile's DECIDED
+// signals (lsFlexLevels\DeltaProfile\<MKT>-<SYM>-<spb>-signals-<day>.csv, today's and yesterday's file). Native IRT data only.
+void HodLod::computeReadBox(HLState& S, const std::vector<hl::Bar>& B, long long per)
+{
+#ifdef _WIN32
+    const std::string sep = "\\";
+#else
+    const std::string sep = "/";
+#endif
+    rbx::In I; I.mkt = S.mkt; I.dec = hl::MKTS[S.mi].dec; I.per = per; I.openMin = hl::MKTS[S.mi].open; I.closeMin = hl::MKTS[S.mi].close;
+    const size_t from = B.size() > 2400 ? B.size() - 2400 : 0;   // ~5 days of 3-min bars: the 60-min ZigZag / ATR history
+    for (size_t i = from; i < B.size(); i++) { rbx::Bar b; b.t = B[i].absEnd; b.o = B[i].o; b.h = B[i].h; b.l = B[i].l; b.c = B[i].c; I.bars.push_back(b); }
+    if (I.bars.size() < 3) { S.rbox = rbx::Out(); S.rbWhy = "no bars"; return; }
+    const char* sy0 = getSymbol(); const std::string sym = sy0 ? sy0 : "";
+    // levels: key + volume names go to the Lvl line, MenthorQ codes only to its "+" confluence
+    const std::string dir = flexPath(""); std::vector<nl::Level> lv;
+    if (!dir.empty()) lv = nl::levels(S.rbLv, dir, S.mkt, sym, (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(), (long long)std::time(nullptr));
+    {   std::string t; long long st = -1;
+        if (hlSmallRead(flexPath("LRA-VolLevels-" + S.mkt + ".csv"), 64 * 1024, t, st)) { if (st != S.rbVolStamp) { S.rbVolStamp = st; S.rbVol = t; } } else { S.rbVolStamp = st; S.rbVol.clear(); }
+        // the volume file is for ONE session (DATE) and contract (SYMBOL): used only when both match
+        std::string date, fsym; std::vector<nl::Level> vv; size_t a = 0;
+        while (a < S.rbVol.size()) { size_t b = S.rbVol.find('\n', a); if (b == std::string::npos) b = S.rbVol.size(); const std::vector<std::string> c = nl::fields(S.rbVol.substr(a, b - a)); a = b + 1; double px;
+            if (c.size() >= 2 && c[0] == "DATE") date = c[1]; else if (c.size() >= 2 && c[0] == "SYMBOL") fsym = c[1];
+            else if (c.size() >= 4 && c[0] == "LEVEL" && nl::parseReal(c[3], px)) vv.push_back(nl::Level{ c[1], px }); }
+        const long long key = rbx::sessionOf(I.bars.back().t); char d[16]; { const long long z = key + 719468, era = (z >= 0 ? z : z - 146096) / 146097, doe = z - era * 146097, yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365, doy = doe - (365 * yoe + yoe / 4 - yoe / 100), mp = (5 * doy + 2) / 153;
+            const long long dd = doy - (153 * mp + 2) / 5 + 1, mm = mp + (mp < 10 ? 3 : -9), yy = yoe + era * 400 + (mm <= 2); std::snprintf(d, sizeof d, "%04lld-%02lld-%02lld", yy, mm, dd); }
+        if (date == d && nl::sameContract(sym, fsym)) lv.insert(lv.end(), vv.begin(), vv.end()); }
+    for (const nl::Level& x : lv) {
+        size_t p0 = 0; const std::string& n = x.name;
+        while (p0 <= n.size()) { size_t p1 = n.find('/', p0); if (p1 == std::string::npos) p1 = n.size(); std::string t = n.substr(p0, p1 - p0); p0 = p1 + 1;
+            while (!t.empty() && t[0] == ' ') { t.erase(0, 1); }
+            while (!t.empty() && t.back() == ' ') { t.pop_back(); }
+            if (t == "PHH") t = "PhrH";
+            if (t == "PHL") t = "PhrL";
+            std::string u; for (char ch : t) if (ch != ' ') u += ch;
+            if (rbx::isHigh(t) || rbx::isLow(t) || t == "DPoc" || t == "WPoc") I.levels.push_back(rbx::Level{ t, x.px });
+            else if (u.rfind("CR", 0) == 0 || u.rfind("PS", 0) == 0 || u.rfind("HVL", 0) == 0 || u.rfind("GW", 0) == 0) I.mq.push_back(rbx::Level{ u.size() > 4 && u.back() == 'D' ? u.substr(0, u.size() - 1) : u, x.px }); }
+    }
+    S.rbLevels = (int)I.levels.size(); S.rbMq = (int)I.mq.size();
+    // lsDeltaProfile's decided signals: today's and yesterday's record (the session crosses midnight UTC)
+    {   const long long day = rbx::dayOf(I.bars.back().t); std::string all; long long stamp = 0;
+        for (long long dd = day - 1; dd <= day; dd++) { std::string t; long long st = -1;
+            const std::string p = flexPath("DeltaProfile" + sep + S.mkt + "-" + sym + "-" + std::to_string(per) + "-signals-" + std::to_string(dd) + ".csv");
+            if (hlSmallRead(p, 2 * 1024 * 1024, t, st)) { all += t; stamp += st; S.rbSigPath = p; } }
+        if (stamp != S.rbSigStamp) { S.rbSigStamp = stamp; S.rbSig = all; }
+        I.sigs = rbx::parseSigs(S.rbSig); S.rbSigs = (int)I.sigs.size(); }
+    // the day: lsHodLod's Range Day read (pre-open / 30-min) and the ATR(14) day range
+    I.day.kind = S.rdOut.kind; I.day.pBig = S.rdOut.pBig; I.day.pSmall = S.rdOut.pSmall; I.day.xr = S.rdOut.xr; I.day.post = S.rdOut.post;
+    I.day.adr = std::isfinite(S.view.rdAtr) && S.view.rdAtr > 0 ? S.view.rdAtr : S.view.adrTrim;
+    S.rbox = rbx::build(I);
+    S.rbWhy = S.rbox.why + ",levels " + std::to_string(S.rbLevels) + ",mq " + std::to_string(S.rbMq) + ",dp signals " + std::to_string(S.rbSigs) + ",day " + (S.rdOut.kind < 0 ? "none" : "ok");
+}
+
 // (2.20.0) the CHART READ (ChartRead.h): built from the closed bars at each recompute; a new read (3-min charts) is appended to
 // lsFlexLevels\Reads\<MKT>-<yyyymmdd>.csv, its key kept in <MKT>-<yyyymmdd>.last so a restart never writes it twice
 void HodLod::computeRead(HLState& S, const std::vector<hl::Bar>& B, long long per)
@@ -988,6 +1047,7 @@ void HodLod::computeRead(HLState& S, const std::vector<hl::Bar>& B, long long pe
     I.cobs = crd::parseCobs(S.crLive, S.crRec); S.crCobs = (int)I.cobs.size();
     S.cread = crd::build(I);
     S.creadWhy = std::string("sit ") + S.cread.sit + ",params " + S.crP.why + ",cobs " + std::to_string(S.crCobs);
+    computeReadBox(S, B, per);               // (2.22.0) the READ BOX (drawn); the 3-line read above stays for the log only
     if (!S.cread.ok || per != 180) return;      // the log: 3-min charts only (one chart per market writes it)
     const std::string day = crd::ymd(S.cread.at), base = flexPath("Reads" + sep + S.mkt + "-" + day);
     if (!S.crKeyLoaded || S.crKeyDay != day) { std::string k; long long ks = -1; S.creadKey = hlSmallRead(base + ".last", 4096, k, ks) ? k : std::string(); S.crKeyLoaded = true; S.crKeyDay = day; }
@@ -1820,22 +1880,25 @@ int HodLod::draw(void)
     postMst(*S);                             // (2.4.0) the Market State (behind the scenes; nothing drawn changes)
     execute(L);
     hl::Box stripBox = { 0, 0, 0, 0 }; bool stripOk = false;   // (2.21.0) the read strip's rectangle: a confirm badge keeps off it
-    if (S->cread.ok) {   // (2.20.0) the CHART READ strip: 3 lines across the top of the price area, under the IRT title row
-        const int fs = 10, lh = 15, pad = 5, h = 3 * lh + 2 * pad;
+    if (S->rbox.ok) {   // (2.22.0) the READ BOX left column: 5 lines at the top-left of the price area (the right half = the right column's slot, empty)
         int l = pb.l + 4, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;
-        int t = (int)pane.top + 20 + (S->dpBanner ? 24 : 0);
-        if (L.tableOk && L.table.t < t + h && L.table.b > t && L.table.l < r && L.table.r > l) l = (std::max)(l, L.table.r + 6);   // a table placed at the top keeps its spot
-        if (r - l >= 220 && t + h < (int)pane.bottom - 40) {
-            RCT bg; bg.set((short)l, (short)t, (short)r, (short)(t + h)); bg.draw(1, (COLOR)0x003A3F47, (COLOR)0x0015181D, DRAW_OPAQUE, PAT_SOLID);
-            stripBox = hl::Box{ l, t, r, t + h }; stripOk = true;
-            auto meas = [&](const std::string& s) { return textW(s, fs, false); };
-            const unsigned c2 = S->cread.tone == crd::GREEN ? hl::C_GREEN : (S->cread.tone == crd::RED ? hl::C_RED : hl::C_GREY);
-            const std::string* Ls[3] = { &S->cread.l1, &S->cread.l2, &S->cread.l3 }; const unsigned Cs[3] = { hl::C_SLATE, c2, hl::C_GREY };
-            for (int k = 0; k < 3; k++) text(l + 8, t + pad + lh * k + lh / 2, crd::fit(*Ls[k], r - l - 16, meas), (COLOR)Cs[k], fs, false);
-            S->placeLine += "CHARTREAD," + std::string(crd::VERSION) + ",box " + std::to_string(l) + "," + std::to_string(t) + "," + std::to_string(r) + "," + std::to_string(t + h) + "," + S->creadWhy +
-                            ",logs " + std::to_string(S->creadLogs) + ",fails " + std::to_string(S->creadLogFails) + "\n";
-        } else S->placeLine += "CHARTREAD," + std::string(crd::VERSION) + ",no room," + S->creadWhy + "\n";
-    }
+        const int t = (int)pane.top + 18 + (S->dpBanner ? 24 : 0);
+        const rbx::Layout RL0 = rbx::layout(l, t, r, (int)pane.bottom);
+        if (L.tableOk && RL0.ok && L.table.t < RL0.box.b && L.table.b > RL0.box.t && L.table.l < RL0.box.r && L.table.r > l) l = (std::max)(l, L.table.r + 6);   // a table at the top keeps its spot
+        const rbx::Layout RL = rbx::layout(l, t, r, (int)pane.bottom);
+        if (RL.ok) {
+            RCT bg; bg.set((short)RL.box.l, (short)RL.box.t, (short)RL.box.r, (short)RL.box.b); bg.draw(1, (COLOR)0x003A3F47, (COLOR)0x0015181D, DRAW_OPAQUE, PAT_SOLID);
+            stripBox = hl::Box{ RL.box.l, RL.box.t, RL.box.r, RL.box.b }; stripOk = true;
+            auto meas = [&](const std::string& s) { return textW(s, RL.fs, false); };
+            static const unsigned COLS[5] = { hl::C_SLATE, hl::C_GREEN, hl::C_RED, 0x009CA3AF, hl::C_BLUE };
+            for (int k = 0; k < 5; k++) { const rbx::Line& ln = S->rbox.l[k]; const unsigned c = COLS[ln.col >= 0 && ln.col <= 4 ? ln.col : 0];
+                text(RL.line[k].l, (RL.line[k].t + RL.line[k].b) / 2, rbx::fit(ln.text, RL.line[k].r - RL.line[k].l, meas), (COLOR)c, RL.fs, false); }
+            S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",box " + std::to_string(RL.box.l) + "," + std::to_string(RL.box.t) + "," + std::to_string(RL.box.r) + "," + std::to_string(RL.box.b)
+                          + ",slot " + std::to_string(RL.slot.l) + "-" + std::to_string(RL.slot.r) + "," + S->rbWhy + "\n";
+            for (int k = 0; k < 5; k++) S->placeLine += "READBOX_L" + std::to_string(k + 1) + "," + std::to_string(S->rbox.l[k].col) + "," + S->rbox.l[k].text + "\n";
+        } else S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",no room," + S->rbWhy + "\n";
+    } else S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",not built," + S->rbWhy + "\n";
+    S->placeLine += "CHARTREAD," + std::string(crd::VERSION) + ",not drawn (2.22.0: the read box replaces it; still logged)," + S->creadWhy + ",logs " + std::to_string(S->creadLogs) + ",fails " + std::to_string(S->creadLogFails) + "\n";
     {   // (2.21.0) the HOD / LOD CONFIRM badges: a thin line from the extreme candle to the bar that confirmed it, a small dot there, and a
         // filled "HOD" (red, above the high) / "LOD" (green, below the low) pill on the extreme candle - no border, no other text, no hover.
         // The pill keeps off the table, the read strip, the target badge / 1st-extreme marker, every text block and other indicators' boxes;
@@ -1973,6 +2036,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.21.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.22.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

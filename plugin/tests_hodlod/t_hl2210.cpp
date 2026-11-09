@@ -121,7 +121,7 @@ int main(int argc, char** argv)
         hcf::Session s; s.day = 20764; s.adrT = 341.2; const hcf::Badge g{ true, 0, 1, 27011 };
         const std::string ln = hcf::recordLine(s, B, g, 0.25, 2, "lsHodLod 2.21.0");
         CHECK(ln == "B,20261107,HOD,08:42,09:15,6752.75,85.30,lsHodLod 2.21.0\n", "record line: " + ln);
-        CHECK(std::string(hl::HL_VERSION) == "2.21.0" && std::string(hlset::PLUGIN_VERSION) == "2.21.0" && std::string(hcf::VERSION) == "1.0.0", "versions 2.21.0 / HodLodConfirm 1.0.0");
+        CHECK(std::string(hl::HL_VERSION) == std::string(hlset::PLUGIN_VERSION) && std::string(hcf::VERSION) == "1.0.0", "versions HL_VERSION == PLUGIN_VERSION (2.22.0 read box) / HodLodConfirm 1.0.0");
     }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
