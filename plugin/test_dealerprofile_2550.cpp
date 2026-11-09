@@ -250,7 +250,7 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.55.0" && src.find("p->setVersion(\"2.55.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.55.0 agree"); }
+        check(std::string(DP_VERSION) == "2.55.1" && src.find("p->setVersion(\"2.55.1\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.55.1 agree"); }
     dealerFile(true);
     std::vector<klv::Merged> lv;
     { std::istringstream in(slurp(D + "/LRA-KeyLevels-ES.csv")); std::string ln;
@@ -275,7 +275,7 @@ int main(int argc, char** argv)
     check(c.bookMode && c.qFromBoard && !c.rkHide, "drawn through the book rows (rank | bar | lots)");
     const int lqL = c.lay.levels.l + c.keysW, lqR = c.lay.levels.r;
     std::map<std::string, int> T; for (auto& q : O) if (q.kind == "text" && q.l >= lqL - 2 && q.r <= lqR + 2) T[q.text]++;
-    check(T["900 ?  48% real"] == 1 && T["500  92% real"] == 1 && T["490"] == 1 && T["480 S20"] == 1 && T["470"] == 1 && T["455 S20"] == 1, "row texts: lots + ? / S20 + NN% real only when posted (no % of the king)");
+    check(T["900 ?"] == 1 && T["500"] == 1 && T["490"] == 1 && T["480 S20"] == 1 && T["470"] == 1 && T["455 S20"] == 1, "row texts: lots + ? / S20 only (2.55.1: no % real)");
     check(T["K"] == 1 && T["2"] == 1 && T["3"] == 1 && T["4"] == 1 && T["5"] == 1 && T["6"] == 1, "rank boxes K, 2-6 as posted");
     check(T.count("5000") == 0, "the old lsLiquidityProfile node is not shown when kind G is there");
     {   int ascii = 1; for (auto& q : O) if (q.kind == "text" && q.l >= lqL - 2 && q.r <= lqR + 2) for (unsigned char ch : q.text) if (ch > 126) ascii = 0; check(ascii == 1, "plain ASCII in the Liquidity rows"); }
