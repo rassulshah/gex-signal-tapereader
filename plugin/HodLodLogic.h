@@ -56,7 +56,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.22.1";   // (2.22.1) the read box at the top of the price pane, ASCII text only, "Lmt: no absorption"
+static const char* const HL_VERSION = "2.22.2";   // (2.22.2) the read box 4 px from the pane's left edge (was 38)
+// was "2.22.1";   // (2.22.1) the read box at the top of the price pane, ASCII text only, "Lmt: no absorption"
 // was "2.22.0":   // (2.22.0, 2026-11-08 Rassul "go") the compact READ BOX left column (ReadBox.h) replaces the 3-line read strip
 // was "2.20.0":   // (2.20.0, 2026-11-07 12:51 CT Rassul "build it") the 3-line chart read at the top of the price chart (ChartRead.h)
 // was "2.19.1":   // (2.19.1, 2026-11-06 21:14 CT Rassul "fix this also" / "its the formatting we agreed to fix") the 16:18 one-line LOD / HOD target badge and the 16:30 Exp Range (xr) - built at 16:34 but never sent to the PC, so the charts kept the 3-line callout

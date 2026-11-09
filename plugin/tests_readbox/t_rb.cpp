@@ -68,5 +68,11 @@ int main() {
     {   const std::string t = "# x\nt_first|t_decided|code\n1793899080|1793899080|I|support|bullish|1|2|0.1|41|4.37|1|2.32.1|D|GCZ6|12|1|1|4098.1|1|2|buy|node|1|1|conf=same\n"
                               "1793899080|0|I?|support|bullish|1|2|0.1|41|4.37|1|2.32.1|F|GCZ6|12|1|1|4098.1|1|2|buy|node|1|1\nRW|2.34.0|ESZ6|1\n";
         const auto v = rbx::parseSigs(t); CHECK(v.size() == 1 && v[0].code == "I" && v[0].bias == 1 && std::fabs(v[0].px - 4098.1) < 1e-9, "parseSigs: decided rows only"); }
+    {   // (2.22.2, Rassul ES 10:22 "move the read at the top to the left more") the box 4 px from the pane's left edge, the top and fit-width kept
+        std::ifstream f("../HodLod.cpp"); std::stringstream ss; ss << f.rdbuf(); const std::string src = ss.str();
+        CHECK(src.find("static const int HL_RB_LEFT = 4;") != std::string::npos && src.find("int l = pb.l + HL_RB_LEFT,") != std::string::npos && src.find("pb.l + 4 + 34") == std::string::npos, "2.22.2: the read box starts at the pane left + 4 px (was + 38)");
+        CHECK(src.find("const int t = (int)pane.top + 2;") != std::string::npos, "2.22.2: the top edge unchanged (pane top + 2)");
+        const rbx::Layout L = rbx::layout(60 + 4, 42, 900, 700, 300); CHECK(L.ok && L.box.l == 64 && L.box.r - L.box.l <= 300 + 12 + 1, "2.22.2: layout at left + 4: box left 64, fit width");
+        CHECK(src.find("p->setVersion(\"2.22.2\")") != std::string::npos, "versions 2.22.2"); }
     std::printf("%d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }
