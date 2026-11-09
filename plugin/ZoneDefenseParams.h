@@ -19,6 +19,7 @@ struct Mkt {
     long long bigLots;                                          // one big-order line per zone at >= this size
     int reloadSign, pullSign, sweepSign;
     Per per[P_N];                                               // minLots = the period's zone-size p60 (what is drawn), reloadX, the queue's normal cancel share
+    double levelReach = 1.0;                                    // (1.0.2 levels) AT a level = overlapping it or out to this x the 3-min ATR beyond it (his 10-27 rule; nightly 0.5 / 1.0 / 1.5)
 };
 inline const Mkt& forMarket(const std::string& m) {
     static const Mkt T[] = {

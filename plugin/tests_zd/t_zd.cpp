@@ -6,7 +6,7 @@
 //     lines for the zones decided before the restart.
 //   3 LIVE vs CLOSE: every Read line, once decided (not "watching" / "counting"), is the same text at the end of the session.
 //   4 LAYOUT: the 4 lines never overlap each other or their time; the time is right-justified; nothing outside the pane.
-//   5 VERSIONS: ZD_VERSION == zdset::PLUGIN_VERSION == the setVersion literals == "1.0.1", title "Zone Defense v1.0.1".
+//   5 VERSIONS: ZD_VERSION == zdset::PLUGIN_VERSION == the setVersion literals == "1.0.2", title "Zone Defense v1.0.2".
 // Build (tests_zd/): g++ -std=c++17 -O2 -Wall -Wextra -Wno-misleading-indentation -DOFF_TEST_CLOCK -DPC_TEST_CURSOR -I.. -I../tests_aggbook/mock t_zd.cpp -o t && ./t
 #include "ZoneDefense.cpp"
 #include <set>
@@ -33,9 +33,10 @@ static Ind* make() { Ind* p = static_cast<Ind*>(CreateExtension()); p->setup(); 
 static mock::Bar bar(unsigned long t, float px) { mock::Bar b; b.time = t; b.close = px; b.open = px; b.low = px; b.high = px; b.volume = 100; b.rows.push_back(mock::Price(px, 50, 50, 100)); return b; }
 static std::string clk(long long t) { if (t <= 0) return ""; time_t v = (time_t)(t / 1000); struct tm m; gmtime_r(&v, &m); return zdh::clock12(m.tm_hour, m.tm_min); }
 
-// a decided line as compared live vs later: the Zone line's state may progress (forming -> held -> broken: a new decision, the
-// zone's end), its range / lots / oldest / time never change; every other line, once decided, never changes at all
-static std::string key(const zdr::RLine& l, int k) { return (k == 0 ? l.detail : l.label + ": " + l.text) + " @" + l.time; }
+// a decided line as compared live vs later: the Zone line's STATE progresses at candle closes (forming -> testing -> held / reclaimed /
+// broken: each a new decision, never a repaint) - its range / lots / oldest never change; the Sweep line may become "reclaimed" (the
+// run + the reclaim read together, a later decision); every other line, once decided, never changes at all
+static std::string key(const zdr::RLine& l, int k) { return k == 0 ? l.detail : l.label + ": " + l.text + " @" + l.time; }
 struct Run { std::vector<std::string> journal; std::map<int, std::vector<std::string> > firstDecided; size_t zones = 0; };
 // feed [from, to) of the fixture to plugin p on host h, one 180-s candle at a time; records each zone's decided lines when first seen
 static void feedRange(mock::Host& h, Ind* p, const std::vector<FR>& v, size_t from, size_t to, double tick, Run& R, const std::string& path) {
@@ -96,7 +97,8 @@ static void session(const std::string& mkt, const std::string& fx, double tick, 
     zdh::JFile jf; jf.path = path; jf.poll(); int checked = 0, changed = 0;
     for (std::map<int, std::vector<std::string> >::const_iterator it = R.firstDecided.begin(); it != R.firstDecided.end(); ++it) {
         const zdr::ZoneView& zv = jf.J.z[it->first]; const std::vector<zdr::RLine> L = zdr::readLines(zv, clk, zdh::signsOf(mkt), tick);
-        for (int k = 0; k < 5; ++k) if (!it->second[k].empty()) { ++checked; if (it->second[k] != key(L[k], k)) { ++changed; std::printf("  changed %d/%d: %s -> %s\n", it->first, k, it->second[k].c_str(), L[k].text.c_str()); } }
+        for (int k = 0; k < 5; ++k) if (   // a broken zone that is reclaimed later moves on to "broken -> reclaimed" by design (his 10-bar window)
+            !it->second[k].empty() && !(k == 4 && L[k].verdict == "reclaimed") && !(k == 0 && L[k].text.find("reclaimed") != std::string::npos && L[k].detail.compare(0, it->second[k].size(), it->second[k]) == 0)) { ++checked; if (it->second[k] != key(L[k], k)) { ++changed; std::printf("  changed %d/%d: %s -> %s\n", it->first, k, it->second[k].c_str(), L[k].text.c_str()); } }
     }
     CHECK(checked > 4 && changed == 0, mkt + " LIVE vs CLOSE: " + std::to_string(checked) + " decided lines, " + std::to_string(changed) + " changed");
     CHECK(jf.J.bad == 0, mkt + ": every journal line parses (" + std::to_string(jf.J.bad) + " bad)");
@@ -104,7 +106,7 @@ static void session(const std::string& mkt, const std::string& fx, double tick, 
     h.draws.clear(); p->draw();
     std::vector<const mock::Draw*> tx; for (auto& d : h.draws) if (d.type == "text") tx.push_back(&d);
     CHECK(tx.size() >= 4, mkt + ": the pane drew its lines (" + std::to_string(tx.size()) + " texts)");
-    // (1.0.1) every text is drawn left-aligned in a rectangle exactly its width: [x, r] x [y - 6, y + 6]
+    // (1.0.2) every text is drawn left-aligned in a rectangle exactly its width: [x, r] x [y - 6, y + 6]
     bool overlap = false, outside = false; std::vector<std::string> labels;
     for (size_t a = 0; a < tx.size(); ++a) {
         const mock::Draw* A = tx[a]; const int aL = A->x, aR = A->r, aT = A->y - 6, aB = A->y + 6;
@@ -151,7 +153,7 @@ static void session(const std::string& mkt, const std::string& fx, double tick, 
     // the decided lines of zones decided before the restart are unchanged at the end
     int ch2 = 0, n2 = 0;
     for (auto& it : RA.firstDecided) { const zdr::ZoneView& zv = j2.J.z[it.first]; const auto L = zdr::readLines(zv, clk, zdh::signsOf(mkt), tick);
-        for (int k = 0; k < 5; ++k) if (!it.second[k].empty()) { ++n2; if (it.second[k] != key(L[k], k)) ++ch2; } }
+        for (int k = 0; k < 5; ++k) if (!it.second[k].empty() && !(k == 4 && L[k].verdict == "reclaimed")) { ++n2; if (it.second[k] != key(L[k], k)) ++ch2; } }
     CHECK(n2 > 0 && ch2 == 0, mkt + " NO REPAINT: " + std::to_string(n2) + " lines decided before the restart, " + std::to_string(ch2) + " changed");
     dispose(b);
 }
@@ -163,10 +165,10 @@ int main(int argc, char** argv) {
     session("HG", dir + "/HG-2026-11-04.bin", 0.0005, -6 * 3600);
     // ---- 5 VERSIONS ----
     const std::string src = readAll("../ZoneDefense.cpp"), marks = readAll("../ZoneDefenseMarks.cpp");
-    CHECK(std::string(ZD_VERSION) == "1.0.1" && std::string(zdset::PLUGIN_VERSION) == ZD_VERSION && std::string(zd::VERSION) == ZD_VERSION, "versions 1.0.1 (ZD_VERSION, settings spec, engine)");
-    size_t n = 0, at = 0; while ((at = src.find("p->setVersion(\"1.0.1\")", at)) != std::string::npos) { ++n; ++at; }
-    CHECK(n == 1 && marks.find("p->setVersion(\"1.0.1\")") != std::string::npos, "the setVersion literals (pane, marks, the gex-build line) = 1.0.1");
-    char t[64]; Ind* p = make(); p->parmsTitle(t, sizeof t); CHECK(std::string(t) == "Zone Defense v1.0.1", std::string("title ") + t); dispose(p);
+    CHECK(std::string(ZD_VERSION) == "1.0.2" && std::string(zdset::PLUGIN_VERSION) == ZD_VERSION && std::string(zd::VERSION) == ZD_VERSION, "versions 1.0.2 (ZD_VERSION, settings spec, engine)");
+    size_t n = 0, at = 0; while ((at = src.find("p->setVersion(\"1.0.2\")", at)) != std::string::npos) { ++n; ++at; }
+    CHECK(n == 1 && marks.find("p->setVersion(\"1.0.2\")") != std::string::npos, "the setVersion literals (pane, marks, the gex-build line) = 1.0.2");
+    char t[64]; Ind* p = make(); p->parmsTitle(t, sizeof t); CHECK(std::string(t) == "Zone Defense v1.0.2", std::string("title ") + t); dispose(p);
     CHECK(zdset::spec().n == zdset::K_N && ss::check(zdset::spec()).empty(), "settings spec valid (" + std::to_string(ss::check(zdset::spec()).size()) + " problems)");
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

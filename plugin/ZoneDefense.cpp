@@ -1,11 +1,24 @@
 /********************************************************************************
- *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.1  +  lsZoneDefenseMarks 1.0.1  (2026-11-08)
+ *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.2  +  lsZoneDefenseMarks 1.0.2  (2026-11-08)
+ *  1.0.2 (independent code review, Rassul "make the code solid"): one clock for live and research (whole seconds, no arrival ms -
+ *  the IRT stamps are seconds and its reads come in 250 ms batches); markets through mkey::norm (QGC, @ES, EP, QCL ...); a stopped /
+ *  removed / restarted pane closes its open zones (ZE code 5) and a reopened journal closes orphans; ONE writer per journal file
+ *  (process registry + lock file), other copies read-only; reconnect / symbol change resets the book; the book is kept across the
+ *  17:00 roll, a cold start warms 10 min; implied fills ignored; a price-moving MOD counts as a cancel at the old price; a torn last
+ *  journal line is closed; Zone state agrees with Pressure (forming / held / tested / broken / pulled); the pane bars show the latest
+ *  touched zone only; the marks map a time to the bar whose END is after it (IRT stamps bar ENDS inside the plugin), honour the
+ *  sweep sign and draw the diamond only where the zone refilled; clear messages for no order feed / unknown market / no bar time.
+ *  1.0.2 levels (Rassul 2026-11-08 "zones at key levels, volume levels and MenthorQ"): the zone label adds "at VAL + PS0" when the
+ *  zone sits at his levels (overlapping, or out to levelReach x the 3-min ATR beyond a support / resistance level - his 10-27 rule;
+ *  the nightly tunes the reach per market). Live levels = the lsFlexLevels files (LRA-KeyLevels / LRA-Dealer / LRA-Levels, <= 18 h,
+ *  the chart's contract), re-read every 5 s. Zone states (held / reclaimed / broken / broken -> reclaimed, 10-bar window). Memory: only
+ *  orders that rested 30 s+ are kept after they leave (the only ones the queue read can count) - NQ 1,000,000 -> 12,000, same output.
  *  1.0.1 (Rassul 2026-11-08, mockup claude.ai/artifact/MJ9YYwjeMAUQztNZrCiP1G "before / after"): the Read block gets the Zone line and
  *  every line is NUMBERED in event order - 1. Zone, 2. Queue, 3. Pressure (was "Reload"), 4. Refill, 5. Sweep - in aligned columns (labels left, the
  *  verdict word bold at one x, the detail in a calmer tint on the same line, times right-aligned); the pane bars are dimmed.
  *  Rassul 2026-11-08 "Zone Defense is good. lets build it" - design approved on claude.ai/artifact/MJ9YYwjeMAUQztNZrCiP1G.
  *
- *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.1", on the live market-by-order feed (the same order-feed path
+ *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.2", on the live market-by-order feed (the same order-feed path
  *  as lsBookFlow: off::MboPane, the 250 ms clock, every event once through onRaw). Every event goes to zd::Engine
  *  (ZoneDefenseLogic.h, SDK-free, the same code the jumpstart / nightly ran over 71 market-days of raw MBO). Each decision is a
  *  journal line in lsFlexLevels\ZoneDefense\<MKT>-<spb>-<session>.csv, written once; the pane and the price chart draw ONLY from
@@ -42,6 +55,8 @@
 #include "ZoneDefenseLogic.h"
 #include "ZoneDefenseRead.h"
 #include "ZoneDefenseSettings.h"
+#include "MarketKey.h"
+#include "NearLevels.h"   // (1.0.2 levels) the key / MenthorQ level files, read as lsDeltaProfile reads them
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -58,12 +73,12 @@
 #include <chrono>
 #include <climits>
 
-#define ZD_VERSION "1.0.1"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
+#define ZD_VERSION "1.0.2"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
 
 
 namespace zdh {
 // the version of both DLLs: the ONE setVersion literal (the settings contract counts it; gex-build reads it)
-inline void stamp(cppExtension* p) { p->setVersion("1.0.1"); }
+inline void stamp(cppExtension* p) { p->setVersion("1.0.2"); }
 // the one settings window of both plugins (registered once per DLL)
 inline void registerWindow(cppExtension* x, ss::Ids& ids) { ss::registerAll(x, zdset::spec(), ids); }
 // file helpers shared by the two plugins
@@ -81,13 +96,39 @@ inline std::string journalDir(const std::string& flex) { return flex.empty() ? s
 inline std::string journalPath(const std::string& flex, const std::string& mkt, int spb, const std::string& session) {
     return flex.empty() || mkt.empty() || spb <= 0 || session.empty() ? std::string() : journalDir(flex) + "\\" + mkt + "-" + std::to_string(spb) + "-" + session + ".csv";
 }
-inline std::string marketOf(std::string root) {
-    for (size_t i = 0; i < root.size(); ++i) root[i] = (char)std::toupper((unsigned char)root[i]);
-    if (root == "6E" || root == "EU" || root == "M6E") return "EU";
-    static const char* const K[] = { "MES", "ES", "MNQ", "NQ", "MCL", "CL", "QG", "NG", "MGC", "GC", "MHG", "HG" };
-    for (int i = 0; i < 12; i += 2) { if (root.compare(0, std::strlen(K[i]), K[i]) == 0) return K[i + 1]; }
-    for (int i = 1; i < 12; i += 2) { if (root.compare(0, std::strlen(K[i]), K[i]) == 0) return K[i]; }
+// (1.0.2, review H1) the market of a chart: MarketKey.h mkey::norm (QGC = GC, @ES / EP = ES, QCL / CLE = CL, QHG / CPE = HG, 6E = EU,
+// contract roots NGX6 ...) on the root, else on the symbol; "" = not one of his 7 markets (the pane says so)
+inline bool known(const std::string& m) { static const char* const K[] = { "ES", "NQ", "CL", "NG", "GC", "HG", "EU" }; for (const char* k : K) if (m == k) return true; return false; }
+inline std::string upper(std::string r) { for (size_t i = 0; i < r.size(); ++i) r[i] = (char)std::toupper((unsigned char)r[i]); return r; }
+inline std::string marketOf(const std::string& root, const std::string& symbol = std::string()) {
+    std::string m = mkey::norm(upper(root)); if (known(m)) return m;
+    m = mkey::norm(upper(symbol)); if (known(m)) return m;
+    const std::string s = upper(symbol); if (s.size() > 3) { m = mkey::norm(s.substr(0, s.size() - 2)); if (known(m)) return m; }   // ESZ6 -> ES
     return std::string();
+}
+// (1.0.2, review H4) ONE WRITER per journal file: a process registry (two charts in one IRT) + a lock file held open while writing
+// (two IRTs). The others only read the journal and draw it.
+struct Owners { std::map<std::string, const void*> by; static Owners& get() { static Owners o; return o; } };
+inline bool claim(const std::string& path, const void* who, void*& handle) {
+    if (path.empty()) return false;
+    std::map<std::string, const void*>::iterator it = Owners::get().by.find(path);
+    if (it != Owners::get().by.end()) return it->second == who;
+#if defined(_WIN32)
+    HANDLE h = CreateFileA((path + ".lock").c_str(), GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_DELETE_ON_CLOSE, NULL);
+    if (h == INVALID_HANDLE_VALUE) return false;                  // another program writes this journal
+    handle = (void*)h;
+#else
+    handle = nullptr;
+#endif
+    Owners::get().by[path] = who; return true;
+}
+inline void unclaim(const std::string& path, const void* who, void*& handle) {
+    std::map<std::string, const void*>::iterator it = Owners::get().by.find(path);
+    if (it != Owners::get().by.end() && it->second == who) Owners::get().by.erase(it);
+#if defined(_WIN32)
+    if (handle) CloseHandle((HANDLE)handle);
+#endif
+    handle = nullptr;
 }
 // the session a local time belongs to: 17:00 CT starts the next trade date
 inline std::string sessionOf(const struct tm& t) {
@@ -104,10 +145,21 @@ inline std::string clock12(int h, int m) { char b[16]; std::snprintf(b, sizeof b
 inline zdr::Signs signsOf(const std::string& mkt) { const zdp::Mkt& M = zdp::forMarket(mkt); zdr::Signs s; s.reload = M.reloadSign; s.pull = M.pullSign; s.sweep = M.sweepSign; return s; }
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_WHITE = 0x00E5E7EB, C_GRAY = 0x009CA3AF, C_DIM = 0x006B7280;
 inline COLOR colOf(int c) { return c > 0 ? C_GREEN : c < 0 ? C_RED : C_WHITE; }
+inline COLOR colOfSign(int c, int sign) { return sign == 0 ? C_WHITE : colOf(c); }
 // (1.0.1) the detail tint of each line colour (the same hue, calmer) and the dimmed pane bars (never fight the text)
 static const COLOR C_GREEN_T = 0x008FD6AB, C_RED_T = 0x00F2A0A0, C_WHITE_T = 0x00A9B2BD, C_BAR_RED = 0x006E2A2A, C_DOT_GREEN = 0x003F8F5F;
 inline COLOR tintOf(COLOR c) { return c == C_GREEN ? C_GREEN_T : c == C_RED ? C_RED_T : C_WHITE_T; }
 inline COLOR scaleCol(COLOR c, double f) { if (f < 0) f = 0; if (f > 1) f = 1; const int r = (int)(((c >> 16) & 255) * f), g = (int)(((c >> 8) & 255) * f), b = (int)((c & 255) * f); return (COLOR)((r << 16) | (g << 8) | b); }
+// the candle holding feed time t: IRT stamps bar ENDS inside the plugin (OrderFlowFeed eventKey, BUILD-LESSONS #154: the in-plugin
+// barDateTime is the END; the ChartView / IRT bars CSV export writes the START), so the FIRST bar whose end is AFTER t (strict >); a
+// time exactly on a bar end belongs to the NEXT bar (review M6)
+template <class A> int barOfEnd(A& times, int count, long long tMs) {
+    const long long t = tMs / 1000; int lo = 0, hi = count - 1;
+    if (count <= 0) return -1;
+    if ((long long)times[hi] <= t) return hi;
+    while (lo < hi) { const int m = (lo + hi) / 2; if ((long long)times[m] > t) hi = m; else lo = m + 1; }
+    return lo;
+}
 // a journal file read incrementally (append-only); the model only grows
 struct JFile {
     std::string path; long long off = 0, mt = -1, sz = -1; zdr::Journal J; std::string partial;
@@ -121,6 +173,7 @@ struct JFile {
         std::string all = partial + chunk; size_t a = 0, nl;
         while ((nl = all.find('\n', a)) != std::string::npos) { J.add(all.substr(a, nl - a)); a = nl + 1; }
         partial = all.substr(a);                                                            // a half-written line is not a record
+        if (partial.size() > 4096) partial.clear();                                         // never grows on garbage
         return true;
     }
 };
@@ -170,42 +223,88 @@ public:
         long long stamp = -1, stampMs = 0, lastT = 0; int ctOff = 0; long long ctKey = -1;
         zdh::JFile jf; ss::Store store; ss::Values set = ss::defaults(zdset::spec(), -1); long long setMs = -100000;
         std::vector<zdr::RLine> lastLines; long long drawn = 0;
+        nl::Cache lvc; long long lvlSig = -1; size_t nLevels = 0; std::string lvlNote;   // (1.0.2 levels)
+        bool writer = false; void* lock = nullptr; long long reconnects = -1; std::string symbol, note; long long tornFixed = 0, orphansClosed = 0;
     };
     Ext* ext(S_& S) { if (!S.ext) S.ext.reset(new (std::nothrow) Ext()); return static_cast<Ext*>(S.ext.get()); }
     // ---- the feed: every order event, once, in order ------------------------------------------------------------------
+    std::string mktOf(S_& S) { const std::string m = zdh::marketOf(S.market); return m; }
+    // (1.0.2 levels) his key / MenthorQ levels from lsFlexLevels (fresh <= 18 h, the chart's contract) -> the engine (a change only)
+    void refreshLevels(S_& S, Ext& e) {
+        const std::string flex = zdh::flexDir(); if (flex.empty() || !(e.tick > 0)) return;
+        const std::vector<nl::Level> v = nl::levels(e.lvc, flex + "\\", e.mkt, S.symbol, off::steadyMs(), e.stamp);
+        std::vector<zd::Lvl> out; long long sig = 1469598103LL;
+        for (size_t i = 0; i < v.size(); ++i) {
+            if (!(v[i].px > 0)) continue;
+            const long long px = (long long)std::llround(v[i].px / e.tick);
+            const std::vector<zd::Lvl> L = zd::levelsOf(v[i].name, px);
+            for (size_t j = 0; j < L.size(); ++j) { out.push_back(L[j]); for (size_t c = 0; c < L[j].name.size(); ++c) sig = sig * 131 + (unsigned char)L[j].name[c]; sig = sig * 1000003 + L[j].px; }
+        }
+        e.lvlNote = e.lvc.note;
+        if (sig == e.lvlSig && out.size() == e.nLevels) return;
+        e.lvlSig = sig; e.nLevels = out.size(); e.eng->setLevels(out);
+    }
     virtual void onRaw(S_& S, const DEPTH_ORDER& o) {
-        Ext* e = ext(S); if (!e || S.market.empty() || !(S.tick > 0) || S.spb <= 0 || !o.timestamp) { if (e) ++e->skipped; return; }
-        const long long nowMs = off::steadyMs();
+        Ext* e = ext(S); if (!e) return;
+        const std::string mkt = mktOf(S);
+        if (mkt.empty()) { e->note = "market not supported (" + S.market + ")"; ++e->skipped; return; }
+        if (S.spb <= 0) { e->note = "needs a time-based chart (seconds per bar unknown)"; ++e->skipped; return; }
+        if (!(S.tick > 0) || !o.timestamp) { ++e->skipped; return; }
+        e->note.clear();
         if ((long long)o.timestamp != e->stamp) {                         // one clock conversion per second
             struct tm t; std::memset(&t, 0, sizeof t);
             if (!getLocaltime(o.timestamp, &t)) { ++e->skipped; return; }
-            e->stamp = (long long)o.timestamp; e->stampMs = nowMs;
+            e->stamp = (long long)o.timestamp;
             const std::string sess = zdh::sessionOf(t);
-            if (!e->eng || sess != e->session || S.market != e->mkt || (int)S.spb != e->spb) openSession(S, *e, sess);
+            if (!e->eng || sess != e->session || mkt != e->mkt || (int)S.spb != e->spb) openSession(S, *e, sess, mkt);
             const long long utcMin = e->stamp / 60; e->ctOff = (int)(((t.tm_hour * 60 + t.tm_min) - (utcMin % 1440) + 2880) % 1440);
             if (e->eng) e->eng->ctOffsetMin = e->ctOff;
+            if (e->eng) refreshLevels(S, *e);                              // (1.0.2 levels) the files are re-read at most every 5 s (nl::Cache)
         }
-        if (!e->eng) return;
-        const off::Ev x = off::evOf(o, S.tick, nowMs);
+        if (!e->eng || !e->writer) return;                                 // a read-only copy (another chart writes this journal)
+        // (M1) a reconnect or a new contract on the chart: the book is re-sent - close the open zones (5) and start the book again
+        if (e->reconnects < 0) { e->reconnects = S.feed.reconnects; e->symbol = S.symbol; }
+        if (S.feed.reconnects != e->reconnects || S.symbol != e->symbol) { e->eng->reset(e->stamp * 1000); e->reconnects = S.feed.reconnects; e->symbol = S.symbol; }
+        off::Ev x = off::evOf(o, S.tick, 0);
         if (x.action > 3 || x.px <= 0) { ++e->skipped; return; }
-        zd::In in; in.t = e->stamp * 1000 + std::min(999LL, std::max(0LL, nowMs - e->stampMs)); in.act = x.action; in.side = x.side; in.px = x.px; in.sz = x.size; in.oid = x.id;
+        if (x.implied) x.side = -1;                                        // (M3) implied fills are not counted (as the research)
+        zd::In in; in.t = e->stamp * 1000; in.act = x.action; in.side = x.side; in.px = x.px; in.sz = x.size; in.oid = x.id;   // (H2) whole seconds
         e->eng->feed(in); ++e->events;
     }
-    void openSession(S_& S, Ext& e, const std::string& sess) {
-        if (e.eng) { e.eng->finish(e.eng->lastT + 1); flush(e); }
-        e.mkt = S.market; e.spb = (int)S.spb; e.tick = S.tick; e.session = sess; ++e.sessions;
+    void openSession(S_& S, Ext& e, const std::string& sess, const std::string& mkt) {
+        std::unique_ptr<zd::Engine> old;
+        if (e.eng) { e.eng->finish(e.eng->lastT + 1, 4); flush(e); old.swap(e.eng); }
+        if (e.writer) zdh::unclaim(e.path, this, e.lock);
+        const bool sameMarket = old && e.mkt == mkt && e.spb == (int)S.spb;
+        e.mkt = mkt; e.spb = (int)S.spb; e.tick = S.tick; e.session = sess; ++e.sessions;
         e.eng.reset(new (std::nothrow) zd::Engine(zdp::forMarket(e.mkt))); if (!e.eng) return;
-        e.eng->barSec = e.spb; e.written = 0;
+        e.eng->barSec = e.spb; e.written = 0; e.lvlSig = -1; e.nLevels = 0;   // (1.0.2 levels) a new engine gets the levels again
+        if (sameMarket) e.eng->carryBook(*old);                            // (M2) the 17:00 roll keeps the resting book (no warm-up)
         const std::string flex = zdh::flexDir(); zdh::makeDir(flex); zdh::makeDir(zdh::journalDir(flex));
         e.path = zdh::journalPath(flex, e.mkt, e.spb, sess);
+        e.writer = zdh::claim(e.path, this, e.lock);
         e.jf = zdh::JFile(); e.jf.path = e.path; e.jf.poll();             // a restart: what was decided before stays (no repaint)
         int maxId = 0; for (std::map<int, zdr::ZoneView>::const_iterator it = e.jf.J.z.begin(); it != e.jf.J.z.end(); ++it) maxId = std::max(maxId, it->first);
         e.eng->nextId = maxId + 1;                                         // new zones never reuse a journal id
+        if (!e.writer || e.path.empty()) return;
         long long mt = 0, sz = 0;
-        if (!e.path.empty() && !zdh::stat2(e.path, mt, sz)) { std::ofstream f(e.path.c_str(), std::ios::binary | std::ios::app); char b[64]; std::snprintf(b, sizeof b, "H,%.10g,%s\n", e.tick, ZD_VERSION); f << b; }
+        if (!zdh::stat2(e.path, mt, sz)) { std::ofstream f(e.path.c_str(), std::ios::binary | std::ios::app); char b[64]; std::snprintf(b, sizeof b, "H,%.10g,%s\n", e.tick, ZD_VERSION); f << b; return; }
+        // (M7) a torn last line (IRT died mid-write): end it so the next record starts on its own line (the fragment never parses)
+        { std::ifstream in(e.path.c_str(), std::ios::binary); if (sz > 0) { in.seekg(sz - 1); char c = 0; in.get(c); if (c != '\n') { std::ofstream f(e.path.c_str(), std::ios::binary | std::ios::app); f << "\n"; ++e.tornFixed; } } }
+        // (H3) zones the journal left open (IRT closed / the pane removed before they finished) are closed now: ZE code 5, never resumed
+        std::ofstream f(e.path.c_str(), std::ios::binary | std::ios::app);
+        for (std::map<int, zdr::ZoneView>::const_iterator it = e.jf.J.z.begin(); it != e.jf.J.z.end(); ++it)
+            if (!it->second.ended) { f << "ZE," << it->first << "," << (e.stamp > 0 ? e.stamp * 1000 : 0) << ",5,0\n"; ++e.orphansClosed; }
+    }
+    // (H3) the pane is removed / IRT closes / the chart is reloaded: close what is open (ZE 5), write it, give up the journal
+    void stopAll() {
+        S_* S = testState(); if (!S) return; Ext* e = ext(*S); if (!e) return;
+        if (e->eng && e->writer) { e->eng->finish(e->eng->lastT + 1, 5); flush(*e); }
+        if (e->writer) zdh::unclaim(e->path, this, e->lock);
+        e->writer = false;
     }
     void flush(Ext& e) {
-        if (!e.eng || e.path.empty() || e.written >= e.eng->out.size()) return;
+        if (!e.eng || !e.writer || e.path.empty() || e.written >= e.eng->out.size()) return;
         std::ofstream f(e.path.c_str(), std::ios::binary | std::ios::app);
         if (!f.is_open()) { ++e.writeFails; return; }
         for (; e.written < e.eng->out.size(); ++e.written) f << e.eng->out[e.written].text << "\n";
@@ -217,9 +316,13 @@ public:
     virtual void statusExtra(S_& S, std::ostream& o) {
         Ext* e = ext(S); if (!e) { o << "\nZONE_DEFENSE,unavailable"; return; }
         const zdp::Mkt& M = zdp::forMarket(e->mkt.empty() ? S.market : e->mkt);
-        o << "\nZONE_DEFENSE,version " << ZD_VERSION << ",market " << e->mkt << ",session " << e->session << ",events " << e->events << ",skipped " << e->skipped
+        o << "\nZONE_DEFENSE,version " << ZD_VERSION << ",market " << e->mkt << (e->writer ? ",writer" : ",read-only (another chart writes this journal)") << ",session " << e->session << ",events " << e->events << ",skipped " << e->skipped
+          << ",levels " << e->nLevels << " (" << e->lvlNote << ")"
+          << ",resets " << (e->eng ? e->eng->resets : 0) << ",ghosts dropped " << (e->eng ? e->eng->ghosts : 0) << ",implied skipped " << (e->eng ? e->eng->implied : 0) << ",moves " << (e->eng ? e->eng->modMoves : 0)
+          << ",orphans closed " << e->orphansClosed << ",torn lines fixed " << e->tornFixed << (e->note.empty() ? std::string() : ",note " + e->note)
           << ",zones " << (e->eng ? e->eng->zones.size() : 0) << ",journal " << e->path << ",lines " << e->jf.J.lines << ",bad " << e->jf.J.bad << ",write fails " << e->writeFails
           << "\nZONE_DEFENSE_PARAMS,pressureX " << M.per[0].reloadX << ",signs pressure " << M.reloadSign << " pull " << M.pullSign << " sweep " << M.sweepSign << ",liftX " << zd::LIFT_X
+          << "\nZONE_DEFENSE_MEMORY,book " << (e->eng ? e->eng->bookSize() : 0) << ",max book " << (e->eng ? e->eng->maxBook : 0) << ",max ended " << (e->eng ? e->eng->maxEnded : 0) << ",max live zones " << (e->eng ? e->eng->maxLive : 0)
           << "\nZONE_DEFENSE_DRAW,lines drawn " << e->drawn;
         for (size_t i = 0; i < e->lastLines.size(); ++i) o << " | " << e->lastLines[i].text;
     }
@@ -252,21 +355,27 @@ public:
     }
     static const int LINE_H = 14;
     void render(S_& S, Ext& e) {
-        if (e.jf.path.empty() && !S.market.empty() && S.spb > 0) {           // no order event yet (a restart): the session of the last candle
+        const std::string mkt = mktOf(S);
+        if (e.jf.path.empty() && !mkt.empty() && S.spb > 0) {           // no order event yet (a restart): the session of the last candle
             const long count = getBarCount(); RTARRAYI times(barDateTime);
             if (count > 0 && times.count >= count) { struct tm t; std::memset(&t, 0, sizeof t);
-                if (getLocaltime((RTDATE)times[(int)count - 1] - 1, &t)) e.jf.path = zdh::journalPath(zdh::flexDir(), S.market, (int)S.spb, zdh::sessionOf(t)); }
+                if (getLocaltime((RTDATE)times[(int)count - 1] - 1, &t)) e.jf.path = zdh::journalPath(zdh::flexDir(), mkt, (int)S.spb, zdh::sessionOf(t)); }
         }
         e.jf.poll();
         RCT pane; pane.getPaneRect(false);
-        const ss::Values& V = settings(e, S.market);
+        const ss::Values& V = settings(e, mkt);
         const int left = pane.left + 6, right = pane.right - 6;
         int y = pane.top + 3;
         const zdr::ZoneView* z = e.jf.J.latestTouched();
         if (V.b(zdset::K_SHOW_LINES)) {
-            if (!z) { std::vector<zdr::RLine> w(1); zdr::setLine(w[0], "Zone", "waiting", "for a zone touch"); drawBlock(w, left, right, y); y += LINE_H; e.lastLines.clear(); }
+            if (!z) {                                                          // (L3) say why nothing is shown
+                std::string why = "for a zone touch";
+                if (mkt.empty()) why = "market not supported (" + S.market + ")";
+                else if (S.spb <= 0) why = "needs a time-based chart";
+                else { const std::string fs = S.feed.stateText(off::steadyMs()); if (fs != "ready" && !fs.empty()) why = "no order feed - " + fs; }
+                std::vector<zdr::RLine> w(1); zdr::setLine(w[0], "Zone", "waiting", why); drawBlock(w, left, right, y); y += LINE_H; e.lastLines.clear(); }
             else {
-                e.lastLines = zdr::readLines(*z, [this](long long t) { return clockOf(t); }, zdh::signsOf(S.market), S.tick);
+                e.lastLines = zdr::readLines(*z, [this](long long t) { return clockOf(t); }, zdh::signsOf(mkt), S.tick);
                 drawBlock(e.lastLines, left, right, y); y += LINE_H * (int)e.lastLines.size();
                 ++e.drawn;
             }
@@ -307,13 +416,11 @@ public:
         RTARRAYI times(barDateTime); if (times.count < count) return;
         int v0 = 0, v1 = 0; if (getVisibleBars(&v0, &v1) != RTX_OK) return; v0 = std::max(0, v0); v1 = std::min((int)count - 1, v1);
         const int bottom = pane.bottom - 2; if (bottom - top < 12) return;
-        std::map<long long, long long> sold, left;
-        for (std::map<int, zdr::ZoneView>::const_iterator it = e.jf.J.z.begin(); it != e.jf.J.z.end(); ++it) {
-            for (std::map<long long, long long>::const_iterator b = it->second.barSold.begin(); b != it->second.barSold.end(); ++b) sold[b->first] += b->second;
-            for (std::map<long long, long long>::const_iterator b = it->second.barLeft.begin(); b != it->second.barLeft.end(); ++b) left[b->first] = b->second;   // the latest zone wins
-        }
+        // (1.0.2, L1) the bars of the zone the lines read (the latest touched one): its side, its lots
+        const zdr::ZoneView* z = e.jf.J.latestTouched(); if (!z) return;
+        const std::map<long long, long long>& sold = z->barSold; const std::map<long long, long long>& left = z->barLeft;
         long long mx = 1;
-        for (int i = v0; i <= v1; ++i) { const long long k = (long long)times[i]; if (sold.count(k)) mx = std::max(mx, sold[k]); if (left.count(k)) mx = std::max(mx, left[k]); }
+        for (int i = v0; i <= v1; ++i) { const long long k = (long long)times[i]; std::map<long long, long long>::const_iterator a = sold.find(k), b = left.find(k); if (a != sold.end()) mx = std::max(mx, a->second); if (b != left.end()) mx = std::max(mx, b->second); }
         const int ppb = std::max(1, (int)getPixelsPerBar()), w = std::max(1, ppb * 6 / 10);
         for (int i = v0; i <= v1; ++i) {
             const long long k = (long long)times[i]; PNT p; p.set(i, 0.0f, kBarCenter); const int cx = p.h;
@@ -327,8 +434,8 @@ private:
 };
 
 int cppExtension::init(void)    { return RTX_OK; }
-int cppExtension::done(void)    { static_cast<ZoneDefense*>(this)->release(); return RTX_OK; }
-int cppExtension::destroy(void) { static_cast<ZoneDefense*>(this)->release(); return RTX_OK; }
+int cppExtension::done(void)    { static_cast<ZoneDefense*>(this)->stopAll(); static_cast<ZoneDefense*>(this)->release(); return RTX_OK; }
+int cppExtension::destroy(void) { static_cast<ZoneDefense*>(this)->stopAll(); static_cast<ZoneDefense*>(this)->release(); return RTX_OK; }
 int cppExtension::setup(void)   { zdh::registerWindow(this, zdIds()); return RTX_OK; }
 int cppExtension::calc(int)     { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<ZoneDefense*>(this)->zdCalc(); return RTX_OK; }
 
@@ -363,13 +470,7 @@ public:
     virtual int draw(void);
     void refresh(ZmState& s);
     void zoneDraw(ZmState& s, const zdr::ZoneView& v, double tick, const ss::Values& V, int count, RTARRAYI& times, int v0, int v1);
-    int barOf(RTARRAYI& times, int count, long long tMs) {              // the candle holding feed time t (bar END >= t)
-        const long long t = tMs / 1000; int lo = 0, hi = count - 1;
-        if (count <= 0) return -1;
-        if ((long long)times[hi] < t) return hi;
-        while (lo < hi) { const int m = (lo + hi) / 2; if ((long long)times[m] >= t) hi = m; else lo = m + 1; }
-        return lo;
-    }
+    int barOf(RTARRAYI& times, int count, long long tMs) { return zdh::barOfEnd(times, count, tMs); }
 private:
     ss::Snap snap_; ss::Store dlgStore_; std::string dlgMkt_;
     void save() { if (!ss::inDialog(this)) return; ss::Store* st = dialogStore(); if (!st) return;
@@ -397,16 +498,17 @@ void ZoneDefenseMarks::refresh(ZmState& s) {
         const std::string ses = zdh::sessionOf(lt); const std::string p = zdh::journalPath(flex, s.mkt, s.spb, ses);
         long long mt = 0, sz = 0; if (std::find(want.begin(), want.end(), p) == want.end() && zdh::stat2(p, mt, sz)) want.push_back(p);
     }
-    std::vector<zdh::JFile> keep;
-    for (size_t i = 0; i < want.size(); ++i) { zdh::JFile f; for (size_t k = 0; k < s.files.size(); ++k) if (s.files[k].path == want[i]) f = s.files[k]; f.path = want[i]; f.poll(); keep.push_back(f); }
-    s.files.swap(keep);
+    // (L2) the journals are kept in place (no copy every 2 s): the ones no longer wanted are dropped, the others polled
+    for (size_t k = s.files.size(); k-- > 0;) if (std::find(want.begin(), want.end(), s.files[k].path) == want.end()) s.files.erase(s.files.begin() + (long)k);
+    for (size_t i = 0; i < want.size(); ++i) { bool have = false; for (size_t k = 0; k < s.files.size(); ++k) if (s.files[k].path == want[i]) { have = true; s.files[k].poll(); }
+        if (!have) { s.files.push_back(zdh::JFile()); s.files.back().path = want[i]; s.files.back().poll(); } }
 }
 
 int ZoneDefenseMarks::draw(void) {
     LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     ZmState* sp = slot_.get(this, true); if (!sp) return RTX_OK; ZmState& s = *sp;
     char rb[64]; std::memset(rb, 0, sizeof rb); const char* rs = getRootSymbol(rb); const char* sy = getSymbol();
-    s.mkt = zdh::marketOf(rs && *rs ? rs : (sy ? sy : "")); s.spb = getSecondsPerBar(); if (s.mkt.empty() || s.spb <= 0) return RTX_OK;
+    s.mkt = zdh::marketOf(rs ? rs : "", sy ? sy : ""); s.spb = getSecondsPerBar(); if (s.mkt.empty() || s.spb <= 0) return RTX_OK;
     refresh(s);
     const long count = getBarCount(); if (count < 2) return RTX_OK;
     RTARRAYI times(barDateTime); if (times.count < count) return RTX_OK;
@@ -434,7 +536,7 @@ int ZoneDefenseMarks::draw(void) {
 
 void ZoneDefenseMarks::zoneDraw(ZmState& s, const zdr::ZoneView& v, double tick, const ss::Values& V, int count, RTARRAYI& times, int, int) {
     const bool bid = v.side == 0; const COLOR base = bid ? zdh::C_GREEN : zdh::C_RED;
-    const int a = barOf(times, count, v.T), b = v.ended ? barOf(times, count, v.endT) : count - 1;
+    const int a = barOf(times, count, v.T), b = v.ended ? barOf(times, count, v.state == 5 ? v.stateT : v.endT) : count - 1;   // (1.0.2) the band continues to a reclaim
     // brightness: resting now / peak (the latest decided number)
     long long now = v.size; if (v.touched) now = v.atTouch; if (v.reloaded) now = v.left; if (!v.barLeft.empty()) now = v.barLeft.rbegin()->second; if (v.ended) now = v.endResting;
     const double fr = v.size > 0 ? std::min(1.0, (double)now / v.size) : 0;
@@ -451,7 +553,7 @@ void ZoneDefenseMarks::zoneDraw(ZmState& s, const zdr::ZoneView& v, double tick,
         }
         if (V.b(zdset::K_SHOW_LABELS)) {
             FONT f; f.id = HELVETICA; f.size = 8; f.style = PLAIN; setFont(f);
-            const std::string t = zdr::zoneLabel(v, tick); const int tw = getTextWidth(t.c_str(), -1);
+            const std::string t = zdr::zoneLabel(v, tick, zdh::signsOf(s.mkt)); const int tw = getTextWidth(t.c_str(), -1);
             const int x = r.left + 2, y = bid ? r.bottom + 1 : r.top - 12;       // bids: under the band, offers: over it
             ZmState::Box bx = { x, y, x + tw, y + 11 }; bool hit = false;
             for (size_t i = 0; i < s.labels.size(); ++i) { const ZmState::Box& o = s.labels[i]; if (bx.l < o.r && bx.r > o.l && bx.t < o.b && bx.b > o.t) { hit = true; break; } }
@@ -460,7 +562,7 @@ void ZoneDefenseMarks::zoneDraw(ZmState& s, const zdr::ZoneView& v, double tick,
         }
     }
     // the gray refill DIAMOND on the touch candle, at the zone's edge
-    if (V.b(zdset::K_SHOW_DIAMOND) && v.reloaded) {
+    if (V.b(zdset::K_SHOW_DIAMOND) && v.reloaded && v.refills > 0) {     // (L5) only where the zone refilled
         const int tb = barOf(times, count, v.touchT); PNT p; p.set(tb, (float)((bid ? v.hi : v.lo) * tick), kBarCenter);
         setPen(zdh::C_GRAY, 1, P_SOLID);
         for (int r = 0; r <= 4; ++r) { const int w = 4 - r; PNT x0, x1; x0.h = (short)(p.h - w); x1.h = (short)(p.h + w + 1); x0.v = x1.v = (short)(p.v - r); x0.setDrawPosition(); x1.drawLineTo(); x0.v = x1.v = (short)(p.v + r); x0.setDrawPosition(); x1.drawLineTo(); }
@@ -470,7 +572,7 @@ void ZoneDefenseMarks::zoneDraw(ZmState& s, const zdr::ZoneView& v, double tick,
         const int rbar = barOf(times, count, v.runT); RTARRAY hiA(barHigh), loA(barLow); if (hiA.count <= rbar || loA.count <= rbar) return;
         PNT c; c.set(rbar, bid ? (float)loA[rbar] : (float)hiA[rbar], kBarCenter);
         struct { int top, bottom; } w = { c.v, c.v };
-        const bool good = v.sweep == 2; const COLOR col = (good == bid) ? zdh::C_GREEN : zdh::C_RED; const bool up = good == bid;
+        const bool good = v.sweep == 2; const COLOR col = zdh::colOfSign((good == bid) ? 1 : -1, zdp::forMarket(s.mkt).sweepSign); const bool up = good == bid;   // (L5) white where the sweep is not proven
         const int baseY = bid ? w.bottom + 3 : w.top - 3; setPen(col, 1, P_SOLID);
         for (int r = 0; r < 6; ++r) {
             const int y = bid ? (up ? baseY + r : baseY + 5 - r) : (up ? baseY - 5 + r : baseY - r);
