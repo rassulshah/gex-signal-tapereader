@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.10.0";   // (1.10.0, 2026-11-09 Rassul "build") the PULLBACK PROFILE (pullbackOf / drawPullback) + the wave POC / HVN rows thicker
+static const char* const VERSION = "1.10.1";   // (1.10.1, Rassul 12:10 + v7 "above") the lots on the wave POC row (POC colour) and the pullback POC row (white), just above them
+// was "1.10.0";   // (1.10.0, 2026-11-09 Rassul "build") the PULLBACK PROFILE (pullbackOf / drawPullback) + the wave POC / HVN rows thicker
 // was "1.9.7";   // (1.9.7, 2026-11-09) host-side fixes only (CL / HG no drawing, VAP retry)
 // was "1.9.6";   // (1.9.6, 2026-11-09 Rassul 09:29) the plain (non-POC / HVN) profile rows much fainter (GREY_FADE 0.28, was 0.4) and thinner, behind the candles; POC / HVN rows solid
 // was "1.9.5";   // (1.9.5, 2026-11-08) Rly waves follow RallyLogic 1.4.0 (HH / LL rule); no rule change here
@@ -424,6 +425,15 @@ struct Counters { long long pb = 0, letters[3] = {0, 0, 0}, clusterA = 0; long l
 #ifndef WPC_DEFAULT_RULE
 #define WPC_DEFAULT_RULE 192   // (1.9.2) 192 = CoB / Rly / BO waves only (150 = the 1.5.0 reversal / breakout / rally rule); the plugin build never defines it; the legacy host suite compiles with -DWPC_DEFAULT_RULE=133
 #endif
+// (1.10.1, Rassul 12:10 "put a label on both the wave poc and pb poc how many lots .. keep the label on top"; picked v7 ABOVE) the lots of a
+// POC row as plain ASCII with thousands commas ("2,542"), small, just above the row; never on an HVN
+inline std::string lotsText(long long v) {
+    std::string d = std::to_string(v < 0 ? -v : v), o; int k = 0;
+    for (int i = (int)d.size() - 1; i >= 0; --i) { o.insert(o.begin(), d[(size_t)i]); if (++k % 3 == 0 && i > 0) o.insert(o.begin(), ','); }
+    return (v < 0 ? "-" : "") + o;
+}
+static const int LOT_H = 11;   // the label box height (the host's 9 px font)
+
 // ---------- (1.10.0, Rassul 2026-11-09 "build"; PULLBACK-PROFILE-SPEC.md, mockup claude.ai/artifact/5faySwa2NBJcWbwTrEGiAn v6) ----------
 // THE PULLBACK PROFILE of a BO or Rly wave (mirror for BD / Rly down): the volume at price of the bars AFTER the wave's top pivot (up waves;
 // the bottom pivot for down waves). Nothing until the pullback has retraced >= 38.2% of the move (start pivot -> extreme); then the POC and
@@ -920,6 +930,7 @@ inline std::vector<int> pullbacks(const Wave& w, const std::vector<Pivot>& alt, 
 struct Prim {
     enum K { FILL, BOX, LINE, OVAL, TEXT } k = FILL;
     int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned long col = 0; int w = 1; std::string text; bool back = true; int bold = 0;
+    int role = 0;   // (1.10.1) 1 = a POC lot label (nudged up off other texts at the end of layout)
 };
 // (1.9.0) THE BREAK LEVEL of a wave: the high of its BO candle (lsBreakout's rule, the host runs bko::Engine on the same bars and passes
 // the fired BO / BD candles; a BO of the wave's direction whose candle closes after the wave's start pivot and by its end), else the high
@@ -996,6 +1007,12 @@ inline void addDashed(Scene& s, double x0, double x1, double y, unsigned long c,
 //   the spine (green up / red down) at x0; POC pullbacks: "Pb" under (after an up wave) / over (after a down wave) the pullback bar,
 //   the WPOC extended as an amber dotted line from the wave to it.
 // phase 0 = outlines / delta rows / spine of every wave, phase 1 = fills, liquidity, letters, pullbacks (no later profile paints over them)
+// (1.10.1) one POC lot label: plain ASCII, the host's small font, left-aligned at x, its bottom 1 px above the POC row's top
+inline void lotLabel(Scene& s, const View& v, double x, double rowTop, long long lots, unsigned long col) {
+    if (lots <= 0) return;
+    Prim t; t.k = Prim::TEXT; t.text = lotsText(lots); const int tw = v.textW ? v.textW(t.text, false) : (int)t.text.size() * 6;
+    t.x0 = ci(x); t.x1 = ci(x + tw); t.y1 = ci(rowTop - 1); t.y0 = t.y1 - LOT_H; t.col = col; t.bold = 0; t.back = false; t.role = 1; s.p.push_back(t);
+}
 inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, std::vector<std::pair<const Wave*, const Node*> >& tagNodes, bool /*latest*/, int phase = -1, double xMax = 1e9,
                      const std::vector<Bar>* bars = nullptr, const std::vector<Pivot>* piv = nullptr, int liveType = 0, int liveI = -1, const std::vector<int>* hvn = nullptr) {   // (1.9.0) hvn = the HVN rows
     const int endShown = v.lastBar;
@@ -1043,6 +1060,9 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
                 if (node) { const double yc = (top + bot) / 2.0, h = std::max(3.0, bot - top + 2.0); p.y0 = ci(yc - h / 2.0); p.y1 = ci(yc + h / 2.0); }   // (1.10.0, Rassul "make the poc and hvns thicker just like the pb poc and hvn")
                 if (p.x1 > p.x0 && p.y1 >= p.y0) s.p.push_back(p);
             }
+            if (pocRow >= 0 && pocRow < nr && w.rows[(size_t)pocRow] > 0) {   // (1.10.1) the wave POC's lots, just above its (thick) row, POC colour
+                double top, bot; rowY(pocRow, top, bot); const double yc = (top + bot) / 2.0, h = std::max(3.0, bot - top + 2.0);
+                lotLabel(s, v, x0 + 1, yc - h / 2.0, w.rows[(size_t)pocRow], C.cyan); }
         }
         else if (haveDelta) {                // the DELTA rows, right (1.5.0 - 1.8.4)
             for (int j = 0; j < nr; ++j) {
@@ -1259,6 +1279,9 @@ inline void drawPullback(Scene& s, const Wave& w, const PbProf& P, const View& v
             else { const double in = bot - top >= 4.0 ? 1.0 : 0.5; p.y0 = ci(top + in); p.y1 = ci(std::max(top + 1.0, bot - in)); p.col = col(mix(C.grey, C.bg, GREY_FADE)); p.back = true; }
             if (p.x1 > p.x0 && p.y1 >= p.y0) { s.p.push_back(p); ++s.pullRows; }
         }
+    {   // (1.10.1) the pullback POC's lots (white; dimmed when invalid), just above its thick row - updates with the developing POC
+        const double lo = (double)(P.e0 + (long long)P.poc * P.rowTicks), top = v.Y(lo + P.rowTicks - 0.5), bot = v.Y(lo - 0.5), yc = (top + bot) / 2.0, h = std::max(3.0, bot - top + 2.0);
+        lotLabel(s, v, x0, yc - h / 2.0, P.rows[(size_t)P.poc], col(PB_POC)); }
     ++s.pullDrawn;
 }
 inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colours& C = Colours()) {
@@ -1276,6 +1299,13 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
     drawPocLines(s, E, v, C, ws);   // (1.8.0) the extended wave POC lines, behind the candles
     drawTags(s, v, C, tags);   // (1.4.2, 2026-10-29 13:02 CT) the right-edge tags are back exactly as 1.3.4 drew them: the "WPOC" Rassul asked for in the Levels column was the WEEKLY POC, not this indicator's   // was (1.4.0): not drawn
     if (v.zigzag) drawZigzag(s, E, v, C);
+    // (1.10.1) a POC lot label never sits on another text (P / H letters, tags, another label): one label height up at a time, max 3
+    for (size_t i = 0; i < s.p.size(); ++i) { Prim& L = s.p[i]; if (L.k != Prim::TEXT || L.role != 1) continue;
+        for (int tries = 0; tries < 3; ++tries) { bool hit = false;
+            for (size_t j = 0; j < s.p.size(); ++j) { if (j == i) continue; const Prim& o = s.p[j]; if (o.k != Prim::TEXT) continue;
+                if (L.x0 < o.x1 && L.x1 > o.x0 && L.y0 < o.y1 && L.y1 > o.y0) { hit = true; break; } }
+            if (!hit) break;
+            L.y0 -= LOT_H + 1; L.y1 -= LOT_H + 1; } }
     // (1.3.2, Rassul 18:24 CT profiles drawn under the Levels column) every primitive kept inside [clipL, clipR]: fills / lines cut
     // (a profile that starts inside the column is clipped, never shifted), text not drawn when it would cross an edge
     {   std::vector<Prim> kept; kept.reserve(s.p.size());

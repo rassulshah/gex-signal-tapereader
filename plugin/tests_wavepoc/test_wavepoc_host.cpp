@@ -49,7 +49,8 @@ static void wipe() { std::string cmd = "rm -rf '" + home + "/InvestorRT'"; if (s
 
 // (1.5.0) a right-edge price tag (not a letter "X?" or a "Pb"); the lines 1.5.0 draws on purpose: the grey volume outline, the Pb amber
 // dotted line, the white dotted node borders
-static bool isTagText(const std::string& t) { return t != "Pb" && !(t.size() == 2 && t[1] == '?') && !(t == "I" || t == "A" || t == "T" || t == "P" || t == "H"); }   // (1.7.2) letters I / A / T / P on the spine; (1.9.0) + H
+static bool isLots(const std::string& t) { if (t.empty()) return false; for (char c : t) if (!(std::isdigit((unsigned char)c) || c == ',')) return false; return true; }   // (1.10.1) a POC lot label ("2,542") is not a tag
+static bool isTagText(const std::string& t) { return !isLots(t) && t != "Pb" && !(t.size() == 2 && t[1] == '?') && !(t == "I" || t == "A" || t == "T" || t == "P" || t == "H"); }   // (1.7.2) letters I / A / T / P on the spine; (1.9.0) + H
 static bool okLine(const mock::Prim& p) { return p.k == 'L' && (p.col == 0x94A3B8 || p.col == 0xF5B428 || p.col == 0xE5E7EB || p.col == 0x22D3EE || p.col == wpc::mix(0x22D3EE, 0x0B0F17, 0.5)); }   // (1.8.0) + the dim tested POC line   // (1.6.0) + the cyan Pb line
 int main(int argc, char** argv) {
     const Fix F = load(argc > 1 ? argv[1] : "wavepoc_es1022.csv");
@@ -60,7 +61,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.10.0" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.10.1" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();

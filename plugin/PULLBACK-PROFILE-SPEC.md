@@ -31,3 +31,9 @@ Purpose: a POC developing on the pullback = reaccumulation. No accumulation chec
 - Tests: tests_wavepoc/test_wavepoc_1100.cpp on the real 11-09 ES / NQ bars + VAP: ES final POC 7462.75 (= mockup) frozen at the 08:33 BO,
   75% deep; NQ final POC 27317.50 (= mockup) frozen at the 08:30 bar (traded above 27349.75); ES 08:31 one-tick stop run stays valid;
   a close below the origin -> invalid; CoB-only wave -> none; 16:00 end; width = 3 bars or 20 px; no text.
+
+## 1.10.1 (Rassul 12:10, picked mockup v7 ABOVE)
+- The lots of the wave POC row (POC colour, cyan) and of the pullback POC row (white; dimmed when invalid) as plain ASCII with commas
+  ("2,542"), the host's small font, left-aligned with the row, its bottom 1 px above the (thick) POC row; never on an HVN. The developing
+  pullback label follows its POC. A label on another Wave POC text (P / H letters, tags, another label) moves up one label height (max 3).
+  Letters drawn by OTHER plugins (lsBreakout BO / Rly / Pb / Rev) are not visible to Wave POC, so they cannot be avoided from here.

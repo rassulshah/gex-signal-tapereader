@@ -82,13 +82,29 @@ int main(int argc, char** argv) {
             for (const wpc::Prim& p : s.p) { if (p.k == wpc::Prim::TEXT) ++text; if (p.k != wpc::Prim::FILL) continue; maxW = std::max(maxW, p.x1 - p.x0);
                 poc += p.col == wpc::PB_POC && !p.back; hvn += p.col == wpc::PB_HVN && !p.back; grey += p.col == wpc::mix(0x94A3B8UL, 0x0B0F17UL, wpc::GREY_FADE) && p.back; back += p.back; }
             const int want = (int)std::lround(std::max(20.0, (v.X(w.i1 + 2) + bw * 0.5) - (v.X(w.i1) - bw * 0.5)));
-            CHECK(poc == 1 && hvn == (int)F.hvn.size() && grey > 10 && text == 0, "bw " << bw << ": 1 white POC row, " << F.hvn.size() << " orange HVN rows in front, " << grey << " grey rows behind, no text");
+            CHECK(poc == 1 && hvn == (int)F.hvn.size() && grey > 10 && text == 1, "bw " << bw << ": 1 white POC row, " << F.hvn.size() << " orange HVN rows in front, " << grey << " grey rows behind, ONE text (the POC lots)");
+            {   const wpc::Prim* L = nullptr; const wpc::Prim* R = nullptr; for (const wpc::Prim& p : s.p) { if (p.k == wpc::Prim::TEXT) L = &p; if (p.k == wpc::Prim::FILL && p.col == wpc::PB_POC) R = &p; }
+                bool ascii = L != nullptr; if (L) for (unsigned char ch : L->text) ascii = ascii && ch >= 32 && ch < 127;
+                CHECK(L && R && L->text == wpc::lotsText(F.rows[(size_t)F.poc]) && L->col == wpc::PB_POC && L->role == 1 && ascii && L->y1 <= R->y0 && R->y0 - L->y1 <= 2 && L->x0 == R->x0,
+                      "1.10.1 bw " << bw << ": the pullback POC label = its row's lots '" << (L ? L->text : std::string("-")) << "' (" << F.rows[(size_t)F.poc] << "), white, ASCII, just above the row, left-aligned with it"); }
             CHECK(std::abs(maxW - want) <= 1, "bw " << bw << ": the POC row is " << maxW << " px = " << (bw * 3 >= 20 ? "3 bars" : "the 20 px minimum") << " (" << want << ")");
         }
         wpc::PbProf D = F; D.state = wpc::PB_INVALID; wpc::View v; v.first = 0; v.last = 999; v.lastBar = 999; v.bw = 7; v.X = [](int i) { return 40 + (i + 0.5) * 7.0; }; v.Y = [](double tk) { return 800 - (tk - 29700) * 3.0; };
         wpc::Scene s; wpc::drawPullback(s, w, D, v, wpc::Colours()); bool dim = !s.p.empty(); for (const wpc::Prim& p : s.p) dim = dim && p.col != wpc::PB_POC && p.col != wpc::PB_HVN;
         CHECK(dim, "invalid: every row dimmed"); }
-    CHECK(std::string(wpc::VERSION) == "1.10.0", "version 1.10.0");
+    CHECK(wpc::lotsText(2542) == "2,542" && wpc::lotsText(738) == "738" && wpc::lotsText(1234567) == "1,234,567" && wpc::lotsText(1000) == "1,000", "1.10.1: lots with thousands commas");
+    {   // the nudge: a label on top of another text moves up one label height; the wave POC label carries the POC row's lots in the POC colour
+        wpc::Wave w; w.dir = 1; w.i0 = 2; w.i1 = 6; w.p0 = 100; w.p1 = 140; w.e0 = 100; w.rowTicks = 1; w.qWhy = wpc::Q_RLY; w.rows.assign(41, 10); w.rows[20] = 1240; w.maxVol = 1240;
+        wpc::Node nd; nd.tick = 120; nd.vol = 1240; nd.row = 20; nd.rank = 0; w.nodes.push_back(nd);
+        wpc::Engine E; for (int i = 0; i < 12; ++i) { wpc::Bar b; b.t = 1000 + i * 180; b.o = b.c = 110 + i; b.h = b.o + 2; b.l = b.o - 2; E.B.push_back(b); } E.waves.push_back(w);
+        wpc::View v; v.l = 0; v.t = 0; v.r = 800; v.b = 600; v.first = 0; v.last = 11; v.lastBar = 11; v.bw = 7; v.tick = .25; v.clipL = 0; v.clipR = 800;
+        v.X = [](int i) { return 40 + (i + 0.5) * 7.0; }; v.Y = [](double tk) { return 600 - (tk - 90) * 6.0; }; v.textW = [](const std::string& t, bool) { return (int)t.size() * 6; };
+        const wpc::Scene sc = wpc::layout(E, nullptr, v);
+        const wpc::Prim* L = nullptr; for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::TEXT && p.role == 1) L = &p;
+        CHECK(L && L->text == "1,240" && L->col == 0x22D3EE, "1.10.1: the wave POC label = its row's lots '" << (L ? L->text : std::string("-")) << "' in the POC colour");
+        bool overlap = false; for (const wpc::Prim& a : sc.p) for (const wpc::Prim& b : sc.p) if (&a != &b && a.k == wpc::Prim::TEXT && b.k == wpc::Prim::TEXT && a.role == 1 && a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0) overlap = true;
+        CHECK(!overlap, "1.10.1: no lot label on another text"); }
+    CHECK(std::string(wpc::VERSION) == "1.10.1", "version 1.10.1");
     std::cout << "test_wavepoc_1100: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }
