@@ -37,7 +37,7 @@
 #include <cstdlib>
 #include "Top10Stable.h"
 namespace tbk {
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.1.1";   // 1.1.1 (2026-11-09): Why::small -> tooSmall ("small" is a Windows SDK macro = char; MSVC build failed)
 enum Act { ADD = 0, MOD = 1, DEL = 2, FILL = 3, CLEAR = 9 };
 struct Params {
     long long restMs = 30000; int quoteMoves = 2; long long quoteWinMs = 300000; int insideSkip = 2; double reachAtr = 3.0; double normX = 2.0;
@@ -77,7 +77,7 @@ inline RealModel parseRealModel(const std::string& text) {
     return M; }
 struct In { int act = ADD; int side = 0; long long px = 0; long long sz = 0; long long oid = 0; long long tMs = 0; };   // side 0 bid / 1 offer, px in ticks
 struct Lvl { int side = 0; long long px = 0; long long lots = 0; int orders = 0; long long big = 0; double x = 0; int rank = 0; bool single = false; int dist = 0; bool s20 = false; int why = 0; int realPct = -1; bool clustered = false; };   // why (removed list only): 1 inside 2, 2 young, 3 quoting, 4 pulled earlier, 5 cluster; realPct -1 = not shown
-struct Why { int inside = 0, young = 0, quoting = 0, small = 0, pulled = 0, cluster = 0, kept = 0; };
+struct Why { int inside = 0, young = 0, quoting = 0, tooSmall = 0, pulled = 0, cluster = 0, kept = 0; };
 struct Outcome { int side; long long px; long long lots; bool held; bool pulledWhileHit; long long tTouch, tEnd; };
 class Engine {
 public:
@@ -137,7 +137,7 @@ public:
             if (d < P.insideSkip) { ++why.inside; rm(1); continue; }
             if (g.real <= 0) { if (g.young >= g.quote) { ++why.young; rm(2); } else { ++why.quoting; rm(3); } continue; }
             if (g.bigO && g.bigO->clustered) { ++why.cluster; rm(5); continue; }   // (1.1.0) its biggest order came in a just-placed cluster
-            if (med[s] > 0 && (double)g.real < P.normX * med[s]) { ++why.small; continue; }
+            if (med[s] > 0 && (double)g.real < P.normX * med[s]) { ++why.tooSmall; continue; }
             ++why.kept;
             Lvl L; L.side = s; L.px = px; L.lots = g.real; L.orders = g.n; L.big = g.big; L.x = med[s] > 0 ? (double)g.real / med[s] : 0; L.single = g.real > 0 && (double)g.big >= P.singleShare * (double)g.real; L.dist = d; L.s20 = g.s20; L.realPct = g.bigO ? realPct(*g.bigO, now) : -1;
             cands[key(s, px)] = L;
@@ -164,7 +164,7 @@ public:
     long long ev() const { return events; }
     std::string statusLine() const {
         char b[800]; std::snprintf(b, sizeof b, "TOP_BOOK,TopBook %s,S20 %lld (%s),orders %zu,events %lld,inside %lld/%lld,atr %.1f ticks,median real bid %.0f / offer %.0f,shown %zu,show after %llds,kept %d,skipped inside %d young %d quoting %d small %d cluster %d pulled-banned %d,model %s,banned prices %zu,held %d,broke %d,pulled while hit %d,single-order shown %d,dropped orders %lld,resets %lld",
-            VERSION, P.rth ? P.s20Rth : P.s20On, P.rth ? "RTH" : "overnight", O.size(), events, insideB, insideA, atrNow, medNow[0], medNow[1], shown.size(), P.showMs / 1000, why.kept, why.inside, why.young, why.quoting, why.small, why.cluster, why.pulled, RM.live ? "LIVE" : "off", banned.size(), nHeld, nBroke, nPullHit, nSingle, dropped, resets);
+            VERSION, P.rth ? P.s20Rth : P.s20On, P.rth ? "RTH" : "overnight", O.size(), events, insideB, insideA, atrNow, medNow[0], medNow[1], shown.size(), P.showMs / 1000, why.kept, why.inside, why.young, why.quoting, why.tooSmall, why.cluster, why.pulled, RM.live ? "LIVE" : "off", banned.size(), nHeld, nBroke, nPullHit, nSingle, dropped, resets);
         return b; }
     int nHeld = 0, nBroke = 0, nPullHit = 0, nSingle = 0, nBanned = 0;
 private:

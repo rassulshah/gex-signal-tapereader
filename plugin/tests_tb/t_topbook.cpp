@@ -39,7 +39,7 @@ static void units() {
         E.feed(ev(ADD, 0, 990, 100, 5001, 0)); E.feed(ev(MOD, 0, 989, 100, 5001, 1000)); E.feed(ev(MOD, 0, 990, 100, 5001, 2000));
         std::vector<Lvl> v; for (long long t = 0; t <= 180000; t += 1000) v = E.evaluate(t);
         CHECK(!find(v, 0, 990), "re-priced 2x in 5 min = quoting, not shown");
-        CHECK(E.lastWhy().small >= 1, "its 100 lots left out - only the 5-lot noise counts there");
+        CHECK(E.lastWhy().tooSmall >= 1, "its 100 lots left out - only the 5-lot noise counts there");
     }
     {   Engine E; long long oid = 0; base(E, 0, oid);   // under 2.0x the median real level (5 lots): 9 lots -> small
         E.feed(ev(ADD, 0, 990, 4, 5001, 0));
