@@ -122,7 +122,8 @@ namespace bko {
 #ifndef BKO_RLY_ON_DEFAULT
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
-static const char* const VERSION = "1.11.0";   // (1.11.0, 2026-11-08 Rassul "add the higher high rule for rly and vice versa") Rly rule 6 HH / LL (RallyLogic 1.4.0), RTH + overnight
+static const char* const VERSION = "1.11.1";   // (1.11.1, 2026-11-09 Rassul HG 10:13 "if there is a cob you dont need to show a rly and if there is an lvp, you dont need to show a pb") DISPLAY only: no Rly where lsCobSignal draws a Cob on the same extreme, no Pb where it draws an Lvp on the same pivot (records / Rev / qualification unchanged)
+// was "1.11.0";   // (1.11.0, 2026-11-08 Rassul "add the higher high rule for rly and vice versa") Rly rule 6 HH / LL (RallyLogic 1.4.0), RTH + overnight
 // was "1.10.0";   // (1.10.0, 2026-11-08 Rassul ES Sun night "those waves are rallies") overnight Rly judged from the 17:00 CT open (RallyLogic 1.3.0: the 02:00 CT cutoff removed), same rules
 // was "1.9.5";   // (1.9.5, 2026-11-06 19:31 CT Rassul "put rev on top of the green bar", "pb should also be closer to the pivot under the time label") Rev above the green bar (BD: below the red bar); Pb one row out, right under the wave-time label
 // was "1.9.4";   // (1.9.4) the market's RTH hours via MarketKey.h (GC / HG / CL / NG charts report QGC / QHG / QCL / NGX6 and ran on the ES default 08:30-15:00)
@@ -235,6 +236,7 @@ struct Engine {
     std::map<long long, PbMark> pb;            // (1.1.0) pivot bar time -> Pb (kept for the chart's life)
     std::vector<PbMark> pbProv;                // (1.9.2) provisional Pbs of the last pass: drawn, never recorded, recomputed every pass (may vanish)
     std::map<long long, RevMark> rev;          // (1.9.0) Pb pivot bar time -> its Rev (kept for the chart's life)
+    std::set<std::pair<long long, int> > hideRly, hidePb;   // (1.11.1, host: lsCobSignal's rule natively) bar time + letter direction: no Rly (a drawn Cob there) / no Pb (a drawn Lvp there)
     std::map<long long, RecL> revL;            // (1.9.0) the BRV| record line of each Rev
     std::vector<RevMark> revProv;              // (1.9.2) Revs on provisional Pbs: drawn, never recorded, recomputed every pass (go with their Pb)
     std::vector<Pivot> piv;                    // (1.1.0) the confirmed 3-bar ZigZag pivots of the last pass (closed bars)
@@ -570,7 +572,7 @@ struct View {
     int lh[2] = { 12, 14 };                         // letter row heights: BO / BD font, Rly font
 };
 struct Board { long long t = 0; int side = 0; int val = 0; };   // SignalBoard 'L': bar time, +1 above / -1 below, px from the extreme to the outer edge
-struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0; };
+struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0; };   // (1.11.1) hidden = under a Cob / Lvp
 // (1.5.0) the BI rows: row r sits GAP + r * ROW_OUT px from the wick (0 = the BO row +3..+17, 1 = +19..+33, 2 = +35 (Pb), 3 = +51 (LVP),
 // 4 = +67, 5 = +83). Rows taken by OTHER indicators' labels at this candle and side: a zigzag pivot (the wave-time label, row 0, and
 // lsCandleAbsorb's A / Ae, row 1); the candle after a pivot that re-tests it within 4 ticks (lsCandleAbsorb's A row 1); row 3 is
@@ -619,10 +621,13 @@ inline Scene layout(const Engine& E, const View& v) {
     };
     std::vector<std::pair<int, int>> boBars;
     for (const auto& kv : E.bo) { const bba::BoDec& D = kv.second; if (!E.shownBo(D)) continue;   /* (1.5.0) not a BO / BD a BI cancelled */ const auto it = idx.find(D.t0); if (it == idx.end()) continue; put(it->second, D.dir, 0); boBars.push_back({ it->second, D.dir > 0 ? 1 : -1 }); }
-    for (const auto& kv : E.rly) { const RlyMark& R = kv.second; if (!R.fired) continue; const auto it = idx.find(R.te); if (it == idx.end()) continue; put(it->second, R.dir, 1); }
+    for (const auto& kv : E.rly) { const RlyMark& R = kv.second; if (!R.fired) continue; const auto it = idx.find(R.te); if (it == idx.end()) continue;
+        if (E.hideRly.count(std::make_pair(R.te, R.dir))) { ++S.rlyHidden; continue; }   // (1.11.1) a drawn Cob on this extreme: no Rly letter
+        put(it->second, R.dir, 1); }
     // (1.1.0) Pb: green below a pivot LOW after a BO (dir +1 -> drawn on the LOW side), red above a pivot HIGH after a BD
     std::vector<const PbMark*> PB; for (const auto& kv : E.pb) PB.push_back(&kv.second); for (const PbMark& x : E.pbProv) PB.push_back(&x);   // (1.9.2) + provisional
     for (const PbMark* pp : PB) { const PbMark& P = *pp; const auto it = idx.find(P.tp); if (it == idx.end()) continue;
+        if (E.hidePb.count(std::make_pair(P.tp, P.dir))) { ++S.pbHidden; continue; }   // (1.11.1) a drawn Lvp on this pivot: no Pb letter
         const size_t before = S.txt.size(); put(it->second, -P.dir, 2);
         if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
     // (1.5.0) BI: "BI" red just above the high (BI DOWN) / green just below the low (BI UP), the BO row first, one row out (16 px) while
@@ -690,6 +695,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
     if (!SHOW_BI) s += "BI,removed (1.6.0, Rassul 2026-11-04): no BI letters, no BBI records, no BO / BD cancelled\n";
     s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",Pb " + std::to_string(E.pb.size()) + " (provisional " + std::to_string(E.pbProv.size()) + ")" + ",Rev " + std::to_string(E.rev.size()) + " (provisional " + std::to_string(E.revProv.size()) + ")" + ",pivots " + std::to_string(E.piv.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
     s += "DRAWN,BO/BD " + std::to_string(last.boShown) + ",Rly " + std::to_string(last.rlyShown) + ",Pb " + std::to_string(last.pbShown) + ",Rev " + std::to_string(last.revShown) + ",no room " + std::to_string(last.noRoom) + "\n";
+    s += "HIDDEN,(1.11.1) Rly under a Cob " + std::to_string(last.rlyHidden) + ",Pb under an Lvp " + std::to_string(last.pbHidden) + " (in view; still recorded),Cob extremes " + std::to_string(E.hideRly.size() / 3) + ",Lvp pivots " + std::to_string(E.hidePb.size()) + "\n";
     return s;
 }
 

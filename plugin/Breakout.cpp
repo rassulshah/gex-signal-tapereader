@@ -63,6 +63,7 @@
 #undef near
 #endif
 #include "BreakoutLogic.h"
+#include "BreakoutHide.h"   // (1.11.1) lsCobSignal's Cob / Lvp natively: which Rly / Pb letters to hide (display only)
 #include "HostSlot.h"
 #include "SettingsGuard.h"   // SS_SAFE_DIALOG: the chart-less Add / settings copy never faults
 #include "ColumnBoard.h"     // cb::leftKeep - nothing under the left Liquidity / Key Levels columns (as lsBigBidAsk 1.31.3)
@@ -88,7 +89,7 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.11.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
+#define BKO_VERSION "1.11.1"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
 
 static long long bkoMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bkoFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BKO_SEP "InvestorRT" BKO_SEP "rtx" BKO_SEP "lsFlexLevels" : std::string(); }
@@ -134,6 +135,7 @@ struct BState {
     // (1.3.0) records: lsBigBidAsk's market / contract names; keys known to be in each file; the engine run last written; counters
     std::string recMkt, recSym; std::map<std::string, std::set<std::string>> recHave; int recRuns = -1; long long recMs = -1;
     long long recAdded = 0, recFails = 0; long recPend = 0;
+    bkh::Cob cob;   // (1.11.1) the Cob / Lvp letters lsCobSignal draws on this chart
 };
 
 class Breakout : public cppExtension {
@@ -149,6 +151,8 @@ public:
     void pump();
     bool identify(BState& S);
     void feed(BState& S);
+    void feedCob(BState& S, int first, const std::vector<bko::In>& B);
+    long long localSec(RTDATE d);
     void status(BState& S, long long now);
     void records(BState& S, long long now);
     bool parts(RTDATE d, long& days, int& endSec);
@@ -202,6 +206,25 @@ void Breakout::feed(BState& S) {
         b.ok = parts((RTDATE)times[k], b.days, b.endSec);
     }
     S.E.update(B, n, (long long)times[0], S.tick, S.spb, S.openMin, S.closeMin);
+    try { feedCob(S, first, B); } catch (...) { S.E.hideRly.clear(); S.E.hidePb.clear(); }   // (1.11.1) display only: a fault hides nothing
+}
+
+// (1.11.1, Rassul HG 10:13 "if there is a cob you dont need to show a rly and if there is an lvp, you dont need to show a pb, otherwise
+// they start overlapping") lsCobSignal's rule on the same closed bars (cobs::Engine, as Wave POC runs it): a DRAWN Cob (shown + ZZO 10+)
+// hides the Rly letter on its extreme (the Cob bar +- 1 bar, the Rly on the same side of the candle: a bull Cob under the low = a down
+// Rly's end); a drawn Lvp hides the Pb on its pivot bar (same side). Display only - Rly / Pb records, Rev and PB Rev scoring unchanged.
+void Breakout::feedCob(BState& S, int first, const std::vector<bko::In>& B) {
+    bkh::hide(S.E, S.cob, mkey::norm(S.mkt), S.tick, S.spb, B, [this](long long t) { return localSec((RTDATE)t); });
+    (void)first;
+}
+long long Breakout::localSec(RTDATE d) {
+    struct tm t; std::memset(&t, 0, sizeof t);
+    if (!getLocaltime(d, &t) || t.tm_mon < 0 || t.tm_mon > 11 || t.tm_mday < 1 || t.tm_mday > 31) return 0;
+    long long y = t.tm_year + 1900; const unsigned m = (unsigned)t.tm_mon + 1, dd = (unsigned)t.tm_mday;
+    y -= m <= 2; const long long era = (y >= 0 ? y : y - 399) / 400; const unsigned yoe = (unsigned)(y - era * 400);
+    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + dd - 1; const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    const long long days = era * 146097 + (long long)doe - 719468;
+    return days * 86400 + t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
 }
 
 void Breakout::status(BState& S, long long now) {
@@ -302,10 +325,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
 #if BKO_ONE_BAR
-    p->setDescription("LRA BO 1-bar v1.11.0 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
+    p->setDescription("LRA BO 1-bar v1.11.1 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
 #else
-    p->setDescription("LRA BO v1.11.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
+    p->setDescription("LRA BO v1.11.1 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.11.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.11.1");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }
