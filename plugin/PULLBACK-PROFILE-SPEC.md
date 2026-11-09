@@ -1,4 +1,4 @@
-# Wave POC - Pullback Profile (spec, NOT BUILT) - Rassul 2026-11-09
+# Wave POC - Pullback Profile - BUILT in Wave POC 1.10.0 (2026-11-09, held for the 15:00 install)
 Mockup: claude.ai/artifact/5faySwa2NBJcWbwTrEGiAn (v5, real ES / NQ 11-09, his IRT zoom ~6.5 px per 3m bar).
 
 ## What
@@ -21,5 +21,13 @@ Purpose: a POC developing on the pullback = reaccumulation. No accumulation chec
   1 px thinner each side, drawn BEHIND the candles (pre-draw). No lines extended right, no price / text labels, no shift markers.
 - Keep the existing Wave POC elements (wave profile, P, POC line, BO / Rly / Pb / Rev letters).
 
-## Still open (Rassul)
-- None for the mockup; build when he says build.
+## Build notes (1.10.0)
+- wpc::pullbackOf (WavePOCLogic.h): pure, deterministic from the closed bars + IRT VAP -> a restart recomputes the same frozen state (no
+  journal needed; frozen / invalid profiles are never recomputed while the chart runs). Rows = 1 tick (the wave's row size), bars after
+  the pivot bar, the ending bar excluded. Rev / BO / Rly from the same native lsBreakout engine (bko) the host already runs; a Rly ends a
+  pullback at its confirmation bar (field 4 of its RLY| line), a BO at its fire bar; the wave's own BO / Rly never end it.
+- Wave profile POC / HVN rows thicker (same colours: POC cyan, HVN green / red) - option A.
+- Status: PULLBACK line (drawn / developing / frozen / invalid).
+- Tests: tests_wavepoc/test_wavepoc_1100.cpp on the real 11-09 ES / NQ bars + VAP: ES final POC 7462.75 (= mockup) frozen at the 08:33 BO,
+  75% deep; NQ final POC 27317.50 (= mockup) frozen at the 08:30 bar (traded above 27349.75); ES 08:31 one-tick stop run stays valid;
+  a close below the origin -> invalid; CoB-only wave -> none; 16:00 end; width = 3 bars or 20 px; no text.

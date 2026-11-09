@@ -137,7 +137,8 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.9.7";   // (1.9.7) CL / HG drew nothing: safe x range, guarded column read, draw / error counters in the status, the VAP retry runs every calc
+static const char* WP_VERSION = "1.10.0";   // (1.10.0) the pullback profile (PULLBACK-PROFILE-SPEC.md) + thicker wave POC / HVN rows
+// was "1.9.7";   // (1.9.7) CL / HG drew nothing: safe x range, guarded column read, draw / error counters in the status, the VAP retry runs every calc
 // was "1.9.6";   // (1.9.6) plain profile rows faded to ~28% and thinner, behind the candles (no alpha in the SDK)
 // was "1.9.5";   // (1.9.5) Rly waves under RallyLogic 1.4.0 (HH / LL rule) - no draw change
 // was "1.9.4":   // (1.9.4) overnight Rly waves from the 17:00 CT open get their profile (RallyLogic 1.3.0 via lsBreakout's engine) - no draw change
@@ -489,7 +490,13 @@ void WavePOC::feedBreakouts(WState& S, long n, RTARRAYI& times) {
         S.E.bos.push_back(c);
     }
     S.E.rlys.clear();   // (1.9.2) the fired Rly waves (Rly waves get a profile)
-    for (const auto& kv : S.BK.rly) { if (!kv.second.fired) continue; wpc::RlyCand r; r.te = kv.second.te; r.dir = kv.second.dir; S.E.rlys.push_back(r); }
+    for (const auto& kv : S.BK.rly) { if (!kv.second.fired) continue; wpc::RlyCand r; r.te = kv.second.te; r.dir = kv.second.dir;
+        {   const auto L = S.BK.rlyL.find(kv.first);   // (1.10.0) the fire (confirmation) bar = field 4 of lsBreakout's RLY| record line "RLY|t_e|t_p|t_conf|..."
+            if (L != S.BK.rlyL.end()) { const std::string& ln = L->second.line; size_t a = 0; for (int f = 0; f < 3 && a != std::string::npos; ++f) { a = ln.find('|', a); if (a != std::string::npos) ++a; }
+                if (a != std::string::npos) r.tfire = std::atoll(ln.c_str() + a); } }
+        S.E.rlys.push_back(r); }
+    S.E.revs.clear();   // (1.10.0) the fired Revs (a pullback profile ends at one of its wave's direction)
+    for (const auto& kv : S.BK.rev) { wpc::RevCand r; r.t = kv.second.tr; r.dir = kv.second.dir; S.E.revs.push_back(r); }
 }
 
 // (1.9.2) lsCobSignal's CoB rule on this chart's closed bars (cobs::Engine, the same code as the CoB Signal indicator): the CoB bar flags
@@ -548,6 +555,7 @@ void WavePOC::feed(WState& S, bool mayCalc) {
     const int k = S.E.lastBar();
     // (1.7.0, Rassul 2026-11-02 13:28-13:29 CT "moving with the wave ... you can wait for bar close when needed") the live wave at every bar close
     if (k != S.provAt) { S.provAt = k; S.provOk = S.E.provisional(S.prov, vap); }
+    S.E.updatePullbacks(vap, S.provOk ? &S.prov : nullptr);   // (1.10.0) at each bar close (frozen / invalid ones kept as decided)
 }
 
 // (1.3.1) the CoB flags of every chart bar from his RTL (as lsCobImpulse::decide: calc only, once per batch of new closed bars), behind a crash
@@ -608,6 +616,7 @@ void WavePOC::status(WState& S, long long now) {
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;              // calc comes on every tick: build the text at most once a second
     const std::string body = wpc::statusText(S.E, S.mkt, S.spb, S.parms, S.storeWhy, S.recWhy + (S.recFails ? ", append failures " + std::to_string(S.recFails) : std::string()), S.recBad, &S.last, S.provOk, S.retries)
                            + "SETTINGS,show zigzag " + (S.zz ? "on" : "off") + ",CoB legs " + (S.cobLegs ? "on" : "off") + "\nCOB_SOURCE," + S.cobSrc + "\nDRAWING," + (S.sawPre ? "profile behind the candles (pre-draw)" : "profile drawn after the candles (no pre-draw call seen)") + ",x range " + std::to_string(S.clipL) + " .. " + std::to_string(S.clipR) + " (left of the Levels column / right-side columns not drawn)\n"
+                           + "PULLBACK,(1.10.0) profiles drawn now " + std::to_string(S.last.pullDrawn) + ",rows " + std::to_string(S.last.pullRows) + ",tracked " + std::to_string(S.E.pb.size()) + [&]() { int lv = 0, fz = 0, iv = 0; for (const auto& kv : S.E.pb) { lv += kv.second.state == wpc::PB_LIVE; fz += kv.second.state == wpc::PB_FROZEN; iv += kv.second.state == wpc::PB_INVALID; } return ",developing " + std::to_string(lv) + ",frozen " + std::to_string(fz) + ",invalid " + std::to_string(iv) + "\n"; }()
                            + "DRAW_CALLS,(1.9.7) pre " + std::to_string(S.drawPre) + ",post " + std::to_string(S.drawPost) + ",renders " + std::to_string(S.renderDone) + ",render errors " + std::to_string(S.renderErr) + ",column errors " + std::to_string(S.colErr) + ",last render " + (S.renderExit.empty() ? std::string("none yet") : S.renderExit) + ",last error " + (S.lastErr.empty() ? std::string("none") : S.lastErr) + "\n"
                            + (S.vapFault ? "VAP_FAULT,remove and re-add the indicator\n" : "")
                            + "MBO," + (S.blocked ? "not opened (crash guard file present)" : S.dboDead ? "faulted" : S.dbo ? "open" : "opening") + ",events " + std::to_string(S.dboEvents)
@@ -730,7 +739,7 @@ extern "C" cppExtension* CreateExtension(void) {
     WavePOC* p = new WavePOC();
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Wave POC v1.9.3 - each CoB, Rly or BO / BD wave's VOLUME profile (lsCobSignal / lsBreakout rules, computed natively; the live wave once its BO / CoB fired) right of a green / red spine at its start: the POC in cyan with a P (and its line to the right) wherever it is, and up to 2 HVNs in the wave colour with an H = the 2 biggest nodes in their own distributions at or below the break level (an up wave: the high of its BO candle - lsBreakout's rule - or, with no BO, of the bar that broke the prior pivot high; down waves mirror it) - pullback entries. No settings.");
-    p->setVersion("1.9.7");   // = WP_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Wave POC v1.10.0 - (1.10.0) after a BO / Rly wave, the PULLBACK profile once it has retraced 38.2% (POC white, 2 HVNs orange, ends at a Rev / a new BO or Rly / a trade beyond the extreme / 16:00; dimmed on a close beyond the origin). each CoB, Rly or BO / BD wave's VOLUME profile (lsCobSignal / lsBreakout rules, computed natively; the live wave once its BO / CoB fired) right of a green / red spine at its start: the POC in cyan with a P (and its line to the right) wherever it is, and up to 2 HVNs in the wave colour with an H = the 2 biggest nodes in their own distributions at or below the break level (an up wave: the high of its BO candle - lsBreakout's rule - or, with no BO, of the bar that broke the prior pivot high; down waves mirror it) - pullback entries. No settings.");
+    p->setVersion("1.10.0");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

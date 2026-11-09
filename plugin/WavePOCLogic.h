@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.9.7";   // (1.9.7, 2026-11-09) host-side fixes only (CL / HG no drawing, VAP retry)
+static const char* const VERSION = "1.10.0";   // (1.10.0, 2026-11-09 Rassul "build") the PULLBACK PROFILE (pullbackOf / drawPullback) + the wave POC / HVN rows thicker
+// was "1.9.7";   // (1.9.7, 2026-11-09) host-side fixes only (CL / HG no drawing, VAP retry)
 // was "1.9.6";   // (1.9.6, 2026-11-09 Rassul 09:29) the plain (non-POC / HVN) profile rows much fainter (GREY_FADE 0.28, was 0.4) and thinner, behind the candles; POC / HVN rows solid
 // was "1.9.5";   // (1.9.5, 2026-11-08) Rly waves follow RallyLogic 1.4.0 (HH / LL rule); no rule change here
 // was "1.9.4";   // (1.9.4, 2026-11-08) Rly waves now include the overnight ones from 17:00 CT (RallyLogic 1.3.0); no rule change here
@@ -117,7 +118,7 @@ typedef std::function<int(int bar, std::vector<VRow>& out)> VapFn;  // 1 = rows 
 
 struct Pivot { int i = 0; int type = 0; long long px = 0; };
 struct BoCand { long long t0 = 0; int dir = 0; long long hi = 0, lo = 0; long long tf = 0; };   // (1.9.2) + tf = the fire (follow-through) bar END
-struct RlyCand { long long te = 0; int dir = 0; long long td = 0; };   // (1.9.2) a fired Rly: te = its wave's end bar, td = the bar it was decided at (END stamps)
+struct RlyCand { long long te = 0; int dir = 0; long long td = 0; long long tfire = 0; };   // (1.10.0) tfire = its confirmation (fire) bar END - a pullback ends there; td stays as 1.9.2 used it   // (1.9.2) a fired Rly: te = its wave's end bar, td = the bar it was decided at (END stamps)
 struct CobCand { long long t = 0; int dir = 0; bool ok = false; long long tOk = 0; };   // (1.9.2) a CoB bar (lsCobSignal's rule, native): ok = drawn (ZZO >= 10), decided at tOk   // (1.9.0) a fired BO / BD candle; t0 = the BO / BD candle's END (local seconds, as Bar::t); ticks       // type +1 swing high, -1 swing low
 
 struct Node { long long tick = 0; long long vol = 0; double ratio = 0; int rank = 0; int row = -1; int stop = OPEN; int stopBar = -1; };
@@ -423,6 +424,63 @@ struct Counters { long long pb = 0, letters[3] = {0, 0, 0}, clusterA = 0; long l
 #ifndef WPC_DEFAULT_RULE
 #define WPC_DEFAULT_RULE 192   // (1.9.2) 192 = CoB / Rly / BO waves only (150 = the 1.5.0 reversal / breakout / rally rule); the plugin build never defines it; the legacy host suite compiles with -DWPC_DEFAULT_RULE=133
 #endif
+// ---------- (1.10.0, Rassul 2026-11-09 "build"; PULLBACK-PROFILE-SPEC.md, mockup claude.ai/artifact/5faySwa2NBJcWbwTrEGiAn v6) ----------
+// THE PULLBACK PROFILE of a BO or Rly wave (mirror for BD / Rly down): the volume at price of the bars AFTER the wave's top pivot (up waves;
+// the bottom pivot for down waves). Nothing until the pullback has retraced >= 38.2% of the move (start pivot -> extreme); then the POC and
+// up to 2 HVNs (Wave POC's node rule), recomputed at every bar close while it develops. It ENDS (frozen) at the FIRST of: a Rev of the wave's
+// direction fires; a separate new BO / BD or Rly fires; price trades beyond the wave's extreme (pullback over); the 16:00 CT session end.
+// It is INVALID (dimmed, never updated again) when a bar CLOSES beyond the origin (up: below the start pivot). The frozen / invalid
+// profile holds the volume BEFORE the ending bar. One pullback per wave. Deterministic from the bars + VAP: a restart recomputes the same.
+static const double PB_GATE = 0.382;     // the retrace that shows it
+static const double PB_MIN_W = 20;       // px: the POC row's minimum width (Rassul 09:5x)
+static const int PB_MAX_BARS = 400;      // scan cap after the pivot
+static const long long PB_SESSION_END = 16 * 3600;   // 16:00 CT (bar times are CT wall clock)
+enum PbState { PB_NONE = 0, PB_LIVE = 1, PB_FROZEN = 2, PB_INVALID = 3 };
+struct PbProf {
+    int state = PB_NONE; int gateBar = -1, endBar = -1, lastBar = -1; const char* why = "";
+    long long e0 = 0; int rowTicks = 1; std::vector<long long> rows; int poc = -1; std::vector<int> hvn; long long extreme = 0; double retrace = 0;
+};
+struct RevCand { long long t = 0; int dir = 0; };   // a fired Rev (lsBreakout's rule): its bar END time, its direction
+inline bool sessionCross(long long tPrev, long long t) {   // a bar END after 16:00 CT whose previous bar ended at / before it (same day or across)
+    const long long dP = floorDiv(tPrev, 86400), d = floorDiv(t, 86400), sP = tPrev - dP * 86400, s0 = t - d * 86400;
+    if (d == dP) return sP <= PB_SESSION_END && s0 > PB_SESSION_END;
+    return s0 > PB_SESSION_END || sP <= PB_SESSION_END;
+}
+inline PbProf pullbackOf(const Wave& w, const std::vector<Bar>& B, int lastClosed, const std::vector<BoCand>& bos, const std::vector<RlyCand>& rlys,
+                         const std::vector<RevCand>& revs, const VapFn& vap) {
+    PbProf P; P.rowTicks = std::max(1, w.rowTicks);
+    if (!(w.qWhy & (Q_BOW | Q_RLY)) || w.dir == 0 || w.i1 < 0 || w.i1 >= (int)B.size()) return P;
+    const long long H = w.p1, L0 = w.p0, move = w.dir > 0 ? H - L0 : L0 - H; if (move <= 0) return P;
+    const int d = w.dir; long long ext = H; int k = w.i1 + 1;
+    for (; k <= lastClosed && k < (int)B.size() && k <= w.i1 + PB_MAX_BARS; ++k) {
+        const Bar& b = B[(size_t)k];
+        const char* why = nullptr; bool invalid = false;
+        if (d > 0 ? b.c < L0 : b.c > L0) { why = "close beyond the origin"; invalid = true; }
+        else if (d > 0 ? b.h > H : b.l < H) why = "traded beyond the wave extreme";
+        else { for (const RevCand& r : revs) if (r.t == b.t && r.dir == d) { why = "Rev"; break; }
+               if (!why) for (const BoCand& o : bos) if ((o.tf ? o.tf : o.t0) == b.t && o.t0 > w.t1) { why = "new BO / BD"; break; }
+               if (!why) for (const RlyCand& r : rlys) if (r.tfire == b.t && r.te > w.t1) { why = "new Rly"; break; }
+               if (!why && k > 0 && sessionCross(B[(size_t)k - 1].t, b.t)) why = "session end 16:00"; }
+        if (why) { P.endBar = k; P.why = why; P.state = invalid ? PB_INVALID : PB_FROZEN; break; }
+        ext = d > 0 ? std::min(ext, b.l) : std::max(ext, b.h);
+        if (P.gateBar < 0 && (double)(d > 0 ? H - ext : ext - H) >= PB_GATE * (double)move - 1e-9) P.gateBar = k;
+    }
+    P.lastBar = P.endBar >= 0 ? P.endBar - 1 : std::min(lastClosed, (int)B.size() - 1);
+    P.extreme = ext; P.retrace = (double)(d > 0 ? H - ext : ext - H) / (double)move;
+    if (P.gateBar < 0 || P.gateBar > P.lastBar) { P.state = PB_NONE; return P; }   // never reached 38.2% before it ended: nothing drawn
+    if (P.state == PB_NONE) P.state = PB_LIVE;
+    std::vector<std::vector<VRow> > per; per.reserve((size_t)(P.lastBar - w.i1));
+    for (int j = w.i1 + 1; j <= P.lastBar; ++j) { std::vector<VRow> r; if (vap(j, r) != 1) { P.state = PB_NONE; P.why = "VAP missing"; return P; } per.push_back(r); }
+    long long lo = LLONG_MAX, hi = LLONG_MIN; for (int j = w.i1 + 1; j <= P.lastBar; ++j) { lo = std::min(lo, B[(size_t)j].l); hi = std::max(hi, B[(size_t)j].h); }
+    if (lo > hi) { P.state = PB_NONE; return P; }
+    buildRows(per, lo, hi, P.rowTicks, P.e0, P.rows); if (P.rows.empty()) { P.state = PB_NONE; return P; }
+    for (int j = 0; j < (int)P.rows.size(); ++j) if (P.poc < 0 || P.rows[(size_t)j] > P.rows[(size_t)P.poc]) P.poc = j;
+    if (P.poc < 0 || P.rows[(size_t)P.poc] <= 0) { P.state = PB_NONE; return P; }
+    const long long m2 = median2(P.rows), floor1 = m2 > 0 ? m2 / 2 + 1 : 1;
+    for (int r : pickNodes(P.rows, floor1, 64)) { if (r == P.poc) continue; P.hvn.push_back(r); if ((int)P.hvn.size() == HVN_MAX) break; }   // Wave POC's node rule
+    return P;
+}
+
 class Engine {
 public:
     int N = N_DEF;
@@ -434,6 +492,23 @@ public:
     std::vector<BoCand> bos;                                         // (1.9.0) the fired BO / BD candles (host: bko::Engine on the same bars)
     std::vector<RlyCand> rlys;                                       // (1.9.2) the fired Rly waves (host: bko::Engine's rly)
     std::vector<CobCand> cobs;                                       // (1.9.2) the CoBs (host: cobs::Engine = lsCobSignal's rule)
+    std::vector<RevCand> revs;                                       // (1.10.0) the fired Revs (host: bko::Engine's rev) - a pullback ends at one
+    std::map<std::pair<long long, long long>, PbProf> pb;            // (1.10.0) wave (t0, t1) -> its pullback profile (frozen / invalid ones are kept as decided)
+    int pbBar = -1;                                                  // (1.10.0) the last closed bar the pullbacks were updated at
+    // (1.10.0) the pullback profiles at a bar close: the last 12 BO / Rly waves (+ the live wave); a frozen / invalid one is never recomputed
+    void updatePullbacks(const VapFn& vap, const Wave* live = nullptr) {
+        const int lc = lastBar(); if (lc == pbBar) return; pbBar = lc;
+        std::vector<const Wave*> ws; for (int i = (int)waves.size() - 1, n = 0; i >= 0 && n < 12; --i) if (!waves[(size_t)i].pending) { ws.push_back(&waves[(size_t)i]); ++n; }
+        if (live) ws.push_back(live);
+        for (const Wave* w : ws) {
+            const std::pair<long long, long long> key(w->t0, w->t1);
+            const auto it = pb.find(key); if (it != pb.end() && (it->second.state == PB_FROZEN || it->second.state == PB_INVALID)) continue;
+            const PbProf P = pullbackOf(*w, B, lc, bos, rlys, revs, vap);
+            if (P.state == PB_NONE && it == pb.end()) continue;
+            pb[key] = P;
+        }
+        if (pb.size() > 400) pb.erase(pb.begin());
+    }
     struct LegQ { Pivot a, z; int k = 0; long long prevPx = LLONG_MIN; };
     std::vector<LegQ> legQ;                                          // (1.9.2) rule 192: confirmed legs waiting GRACE bars for their BO / Rly / CoB decisions
     std::vector<Wave> waves;                                         // qualified waves, confirmation order
@@ -475,7 +550,7 @@ public:
         w.recorded = true; RecWave& r = rec[std::make_pair(w.t0, w.t1)]; r.dir = w.dir; r.kind = w.kind; r.qWhy = w.qWhy; r.cobT = w.cobT; r.nodes = w.nodes; r.lnodes = w.lnodes;
     }
 
-    void reset() { clHist.clear(); zDir = 0; zI = zHi = zLo = 0; B.clear(); alt.clear(); waves.clear(); confs.clear(); confsCob[0].clear(); confsCob[1].clear(); cob.clear(); cobUsed.clear(); out.clear(); legQ.clear(); C = Counters(); }
+    void reset() { clHist.clear(); zDir = 0; zI = zHi = zLo = 0; B.clear(); alt.clear(); waves.clear(); confs.clear(); confsCob[0].clear(); confsCob[1].clear(); cob.clear(); cobUsed.clear(); out.clear(); legQ.clear(); C = Counters(); pb.clear(); pbBar = -1; }
     int lastBar() const { return (int)B.size() - 1; }
 
     // (1.3.3) 14-bar ATR at bar i: the simple mean of the true range (high / low vs the previous close) of bars i-13 .. i, closed bars only
@@ -906,7 +981,7 @@ struct View {
     double tick = 0.25;
     int clipL = -30000, clipR = 30000;            // (1.3.2) nothing drawn left of the Levels column / right of the price area (ColumnBoard)
 };
-struct Scene { std::vector<Prim> p; int hvnDrawn = 0, breakWhy[4] = {0, 0, 0, 0}; int pocOpen = 0, pocTested = 0; int tagsShown = 0, tagsHidden = 0, nodesDrawn = 0, wavesDrawn = 0, lnodesDrawn = 0, lettersDrawn = 0, pbDrawn = 0, boxesDrawn = 0, pbFound = 0; };   // (1.8.3) pbFound = POC pullbacks in view, not drawn
+struct Scene { std::vector<Prim> p; int pullDrawn = 0, pullRows = 0; int hvnDrawn = 0, breakWhy[4] = {0, 0, 0, 0}; int pocOpen = 0, pocTested = 0; int tagsShown = 0, tagsHidden = 0, nodesDrawn = 0, wavesDrawn = 0, lnodesDrawn = 0, lettersDrawn = 0, pbDrawn = 0, boxesDrawn = 0, pbFound = 0; };   // (1.8.3) pbFound = POC pullbacks in view, not drawn
 
 inline int ci(double v) { return v < -30000 ? -30000 : v > 30000 ? 30000 : (int)std::lround(v); }
 inline void addLine(Scene& s, double x0, double y0, double x1, double y1, unsigned long c, int w, bool back) { Prim p; p.k = Prim::LINE; p.x0 = ci(x0); p.y0 = ci(y0); p.x1 = ci(x1); p.y1 = ci(y1); p.col = c; p.w = w; p.back = back; s.p.push_back(p); }
@@ -965,6 +1040,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
                 const unsigned long col = j == pocRow ? C.cyan : isH ? (w.dir > 0 ? C.up : C.down) : mix(C.grey, C.bg, GREY_FADE);
                 const double inset = !node && bot - top >= 4.0 ? 1.0 : 0.5;
                 Prim p; p.k = Prim::FILL; p.x0 = ci(x0 + 1); p.x1 = ci(x0 + 1 + PR * (double)q / (double)w.maxVol); p.y0 = ci(top + inset); p.y1 = ci(std::max(top + 1.0, bot - inset)); p.col = col; p.back = true;
+                if (node) { const double yc = (top + bot) / 2.0, h = std::max(3.0, bot - top + 2.0); p.y0 = ci(yc - h / 2.0); p.y1 = ci(yc + h / 2.0); }   // (1.10.0, Rassul "make the poc and hvns thicker just like the pb poc and hvn")
                 if (p.x1 > p.x0 && p.y1 >= p.y0) s.p.push_back(p);
             }
         }
@@ -1161,6 +1237,30 @@ inline void drawPocLines(Scene& s, const Engine& E, const View& v, const Colours
     }
 }
 
+// (1.10.0) the pullback profile: anchored at the wave's extreme (pivot) bar, drawn right; the POC row reaches the right edge of the 2nd bar
+// after the pivot, never under PB_MIN_W px; plain rows 28% grey behind the candles (thinner), the POC row WHITE and the HVN rows ORANGE,
+// thicker, in front; invalid = all dimmed. No lines, no labels.
+static const unsigned long PB_POC = 0xFFFFFF, PB_HVN = 0xF59E0B;
+inline void drawPullback(Scene& s, const Wave& w, const PbProf& P, const View& v, const Colours& C) {
+    if (P.state == PB_NONE || P.rows.empty() || P.poc < 0) return;
+    if (P.lastBar < v.first || w.i1 > v.last) return;
+    const double x0 = v.X(w.i1) - v.bw * 0.5, xr = v.X(w.i1 + 2) + v.bw * 0.5, W = std::max(PB_MIN_W, xr - x0);
+    const long long mx = P.rows[(size_t)P.poc]; if (mx <= 0) return;
+    const bool dim = P.state == PB_INVALID;
+    auto col = [&](unsigned long c) { return dim ? mix(c, C.bg, 0.4) : c; };
+    for (int pass = 0; pass < 2; ++pass)
+        for (int j = 0; j < (int)P.rows.size(); ++j) {
+            const long long q = P.rows[(size_t)j]; if (q <= 0) continue;
+            const bool node = j == P.poc || std::find(P.hvn.begin(), P.hvn.end(), j) != P.hvn.end();
+            if (node != (pass == 1)) continue;
+            const double lo = (double)(P.e0 + (long long)j * P.rowTicks), top = v.Y(lo + P.rowTicks - 0.5), bot = v.Y(lo - 0.5);
+            Prim p; p.k = Prim::FILL; p.x0 = ci(x0); p.x1 = ci(x0 + std::max(node ? 6.0 : 1.0, W * (double)q / (double)mx));
+            if (node) { const double yc = (top + bot) / 2.0, h = std::max(3.0, bot - top + 2.0); p.y0 = ci(yc - h / 2.0); p.y1 = ci(yc + h / 2.0); p.col = col(j == P.poc ? PB_POC : PB_HVN); p.back = false; }
+            else { const double in = bot - top >= 4.0 ? 1.0 : 0.5; p.y0 = ci(top + in); p.y1 = ci(std::max(top + 1.0, bot - in)); p.col = col(mix(C.grey, C.bg, GREY_FADE)); p.back = true; }
+            if (p.x1 > p.x0 && p.y1 >= p.y0) { s.p.push_back(p); ++s.pullRows; }
+        }
+    ++s.pullDrawn;
+}
 inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colours& C = Colours()) {
     Scene s; std::vector<std::pair<const Wave*, const Node*> > tags;
     const Wave* latest = nullptr; for (const Wave& w : E.waves) if (!w.pending) latest = &w;
@@ -1172,6 +1272,7 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
     for (size_t k = 0; k < ws.size(); ++k) { int why = 0; { long long far = 0; const long long cut = breakLevel(*ws[k], E.B, E.alt, E.bos, why, &far); hv[k] = hvnRows(*ws[k], cut, why == 1 || why == 2, far); } s.hvnDrawn += (int)hv[k].size(); if (why >= 1 && why <= 3) ++s.breakWhy[why]; }
     for (int ph = 0; ph < 2; ++ph)
         for (size_t k = 0; k < ws.size(); ++k) { const Wave* w = ws[k]; drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w), &E.B, &E.alt, E.zDir, E.zI, &hv[k]); }   // (1.7.1) + the live pullback
+    for (const Wave* w : ws) { const auto it = E.pb.find(std::make_pair(w->t0, w->t1)); if (it != E.pb.end()) drawPullback(s, *w, it->second, v, C); }   // (1.10.0)
     drawPocLines(s, E, v, C, ws);   // (1.8.0) the extended wave POC lines, behind the candles
     drawTags(s, v, C, tags);   // (1.4.2, 2026-10-29 13:02 CT) the right-edge tags are back exactly as 1.3.4 drew them: the "WPOC" Rassul asked for in the Levels column was the WEEKLY POC, not this indicator's   // was (1.4.0): not drawn
     if (v.zigzag) drawZigzag(s, E, v, C);
