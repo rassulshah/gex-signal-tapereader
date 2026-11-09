@@ -141,6 +141,12 @@ template <class Clock> std::vector<RLine> readLines(const ZoneView& v, Clock clo
     }
     return out;
 }
+// (1.0.7, Rassul panel 4) the SHORT label on the price chart: lots + the level(s) the zone is AT ("301 PS0", "450 VAL+PS0"), lots only
+// when no level is within the reach; plain ASCII
+inline std::string zoneShortLabel(const ZoneView& v) {
+    std::string lv; for (size_t i = 0; i < v.lvl.size(); ++i) { const char c = v.lvl[i]; if (c == ' ') continue; if ((unsigned char)c >= 32 && (unsigned char)c < 127) lv += c; }
+    return std::to_string(v.size) + (lv.empty() ? std::string() : " " + lv);
+}
 // the zone label on the price chart: "Zone 7012.25-7013.00 | 450 lots (2.6x) | oldest 14m | at VAL + PS0 | held" (the level part only when tagged)
 inline std::string zoneLabel(const ZoneView& v, double tick, const Signs& sg = Signs()) {
     char b[64]; std::snprintf(b, sizeof b, " | %s lots (%.1fx) | oldest %.0fm", comma(v.size).c_str(), v.dens, v.oldest);

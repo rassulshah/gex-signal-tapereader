@@ -64,3 +64,10 @@ GC Nov 2-6 data once the conversion lands, and switch the definition to what his
 - ES "waiting for a zone touch" with no bars (09:xx): ES had ONE zone today (303 lots at the 299 morning floor, never touched), book
   12,017 orders. The bars are the lots sold into the latest TOUCHED zone (the engine records them only after a touch), so no touched
   zone = no bars by design, not a draw bug. 1.0.5's ES floors drop asia/london/preopen/open (135-225) but morning is 308 (was 299).
+
+## 1.0.7 (2026-11-09 09:35-09:50, Rassul on ES live; picked panel 4 of claude.ai/artifact/EaKHxKQXTnxgg3ZMU9aeRV)
+- The zone label on the price chart is SHORT: lots + the level the zone is AT ("301 PS0", "450 VAL+PS0"), lots only when no level is
+  within the reach - same place (under a bid band / over an offer band, 8 px), plain ASCII (zdr::zoneShortLabel). The long label
+  ("Zone lo-hi | lots (x) | oldest | state") stays only in the pane read.
+- The band ~22% lighter (ZONE_LIGHT 1.22 x the 1.0.6 brightness). Diamond / triangle unchanged.
+- Tests: t_marks 12 (short label format + 3 cases, band brightness); t_zd 47 (versions; a dangling mock host fixed - ASan).

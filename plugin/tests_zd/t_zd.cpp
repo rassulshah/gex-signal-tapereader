@@ -6,7 +6,7 @@
 //     lines for the zones decided before the restart.
 //   3 LIVE vs CLOSE: every Read line, once decided (not "watching" / "counting"), is the same text at the end of the session.
 //   4 LAYOUT: the 4 lines never overlap each other or their time; the time is right-justified; nothing outside the pane.
-//   5 VERSIONS: ZD_VERSION == zdset::PLUGIN_VERSION == the setVersion literals == "1.0.6", title "Zone Defense v1.0.6".
+//   5 VERSIONS: ZD_VERSION == zdset::PLUGIN_VERSION == the setVersion literals == "1.0.7", title "Zone Defense v1.0.7".
 // Build (tests_zd/): g++ -std=c++17 -O2 -Wall -Wextra -Wno-misleading-indentation -DOFF_TEST_CLOCK -DPC_TEST_CURSOR -I.. -I../tests_aggbook/mock t_zd.cpp -o t && ./t
 #include "ZoneDefense.cpp"
 #include <set>
@@ -177,10 +177,11 @@ int main(int argc, char** argv) {
     session("HG", dir + "/HG-2026-11-04.bin", 0.0005, -6 * 3600);
     // ---- 5 VERSIONS ----
     const std::string src = readAll("../ZoneDefense.cpp"), marks = readAll("../ZoneDefenseMarks.cpp");
-    CHECK(std::string(ZD_VERSION) == "1.0.6" && std::string(zdset::PLUGIN_VERSION) == ZD_VERSION && std::string(zd::VERSION) == ZD_VERSION, "versions 1.0.6 (ZD_VERSION, settings spec, engine)");
-    size_t n = 0, at = 0; while ((at = src.find("p->setVersion(\"1.0.6\")", at)) != std::string::npos) { ++n; ++at; }
-    CHECK(n == 1 && marks.find("p->setVersion(\"1.0.6\")") != std::string::npos, "the setVersion literals (pane, marks, the gex-build line) = 1.0.6");
-    char t[64]; Ind* p = make(); p->parmsTitle(t, sizeof t); CHECK(std::string(t) == "Zone Defense v1.0.6", std::string("title ") + t); dispose(p);
+    CHECK(std::string(ZD_VERSION) == "1.0.7" && std::string(zdset::PLUGIN_VERSION) == ZD_VERSION && std::string(zd::VERSION) == ZD_VERSION, "versions 1.0.7 (ZD_VERSION, settings spec, engine)");
+    size_t n = 0, at = 0; while ((at = src.find("p->setVersion(\"1.0.7\")", at)) != std::string::npos) { ++n; ++at; }
+    CHECK(n == 1 && marks.find("p->setVersion(\"1.0.7\")") != std::string::npos, "the setVersion literals (pane, marks, the gex-build line) = 1.0.7");
+    mock::Host hv; mock::current = &hv;   // (1.0.7) the sessions' hosts are gone: a live host for make() (ASan: stack-use-after-return)
+    char t[64]; Ind* p = make(); p->parmsTitle(t, sizeof t); CHECK(std::string(t) == "Zone Defense v1.0.7", std::string("title ") + t); dispose(p);
     CHECK(zdset::spec().n == zdset::K_N && ss::check(zdset::spec()).empty(), "settings spec valid (" + std::to_string(ss::check(zdset::spec()).size()) + " problems)");
     CHECK(fullBars >= 1, "1.0.6: at least one fixture drew bars under the read box (" + std::to_string(fullBars) + ")");
     std::printf("%d passed, %d failed\n", passes, fails);

@@ -45,10 +45,15 @@ int main(int argc, char** argv) {
     int boxes = 0, texts = 0, lines = 0; for (auto& d : h.draws) { boxes += d.type == "box"; texts += d.type == "text"; lines += d.type == "line"; }
     CHECK(S && S->zonesDrawn >= 1 && S->zonesDrawn <= 6, "zones drawn: " + std::to_string(S ? S->zonesDrawn : 0) + " (at most 3 per side)");
     CHECK(boxes == (int)S->zonesDrawn && texts <= boxes, "one band per zone, at most one label each (" + std::to_string(boxes) + " bands, " + std::to_string(texts) + " labels)");
+    {   bool lighter = true; for (auto& d : h.draws) if (d.type == "box") { const int g = (int)((d.color >> 8) & 255), r = (int)((d.color >> 16) & 255); if (std::max(g, r) < 0x30) lighter = false; }
+        CHECK(lighter, "1.0.7: every band at least 22% lighter than 1.0.6 floor (0.22 x 0xC5 = 0x2B, now >= 0x30)"); }
     bool ov = false; for (size_t a = 0; a < S->labels.size(); ++a) for (size_t b = a + 1; b < S->labels.size(); ++b) { auto& A = S->labels[a]; auto& B = S->labels[b]; if (A.l < B.r && A.r > B.l && A.t < B.b && A.b > B.t) ov = true; }
     CHECK(!ov, "labels never overlap (" + std::to_string(S->labels.size()) + " drawn, " + std::to_string(S->labelsSkipped) + " gave way)");
-    bool lab = true; for (auto& d : h.draws) if (d.type == "text" && (d.text.compare(0, 5, "Zone ") != 0 || d.text.find(" lots (") == std::string::npos)) lab = false;
-    CHECK(lab, "label format 'Zone lo-hi | N lots (x) | oldest Nm ...'");
+    bool lab = texts > 0; for (auto& d : h.draws) if (d.type == "text") { const std::string& t = d.text; size_t k = 0; while (k < t.size() && std::isdigit((unsigned char)t[k])) ++k;
+        if (k == 0 || (k < t.size() && t[k] != ' ') || t.size() > 24 || t.find("Zone") != std::string::npos) lab = false; for (unsigned char ch : t) if (ch > 126) lab = false; }
+    CHECK(lab, "1.0.7: the short label = lots [+ level], ASCII, no 'Zone lo-hi | ...' text");
+    {   zdr::ZoneView zv; zv.size = 301; zv.lvl = "PS0"; zdr::ZoneView z2; z2.size = 450; z2.lvl = "VAL + PS0"; zdr::ZoneView z3; z3.size = 301;
+        CHECK(zdr::zoneShortLabel(zv) == "301 PS0" && zdr::zoneShortLabel(z2) == "450 VAL+PS0" && zdr::zoneShortLabel(z3) == "301", "1.0.7: '301 PS0', '450 VAL+PS0', '301' (no level)"); }
     CHECK(lines > 0, "diamonds / triangles / big-order lines drawn (" + std::to_string(lines) + " line segments)");
     const std::string s1 = sig(h); h.draws.clear(); p->draw(); const std::string s2 = sig(h);
     dispose(p); p = make(); h.draws.clear(); p->draw(); const std::string s3 = sig(h);

@@ -1,5 +1,8 @@
 /********************************************************************************
- *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.6  +  lsZoneDefenseMarks 1.0.6  (2026-11-09)
+ *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.7  +  lsZoneDefenseMarks 1.0.7  (2026-11-09)
+ *  1.0.7 (Rassul 09:35 ES live "the zone text is too long, make the zone slightly lighter"; picked panel 4 of
+ *  claude.ai/artifact/EaKHxKQXTnxgg3ZMU9aeRV): the label is short - lots + the level the zone is AT ("301 PS0", "301" when none) -
+ *  same place (under a bid band / over an offer band, 8 px); the band ~22% lighter. Diamond / triangle unchanged.
  *  1.0.6 (Rassul 09:03 CT, NQ live): the bars at full pane height with the read on top in an opaque box sized to the text; every
  *  drawn text plain ASCII ("|", "-", "->" - his pane showed mojibake for the middle dot / dash / arrow).
  *  1.0.5 (Rassul 2026-11-09, option (a)): the floors come from the LIVE recorded books (the nightly's live-floor step, p60 of the zones
@@ -29,7 +32,7 @@
  *  verdict word bold at one x, the detail in a calmer tint on the same line, times right-aligned); the pane bars are dimmed.
  *  Rassul 2026-11-08 "Zone Defense is good. lets build it" - design approved on claude.ai/artifact/MJ9YYwjeMAUQztNZrCiP1G.
  *
- *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.6", on the live market-by-order feed (the same order-feed path
+ *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.7", on the live market-by-order feed (the same order-feed path
  *  as lsBookFlow: off::MboPane, the 250 ms clock, every event once through onRaw). Every event goes to zd::Engine
  *  (ZoneDefenseLogic.h, SDK-free, the same code the jumpstart / nightly ran over 71 market-days of raw MBO). Each decision is a
  *  journal line in lsFlexLevels\ZoneDefense\<MKT>-<spb>-<session>.csv, written once; the pane and the price chart draw ONLY from
@@ -84,12 +87,12 @@
 #include <chrono>
 #include <climits>
 
-#define ZD_VERSION "1.0.6"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
+#define ZD_VERSION "1.0.7"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
 
 
 namespace zdh {
 // the version of both DLLs: the ONE setVersion literal (the settings contract counts it; gex-build reads it)
-inline void stamp(cppExtension* p) { p->setVersion("1.0.6"); }
+inline void stamp(cppExtension* p) { p->setVersion("1.0.7"); }
 // the one settings window of both plugins (registered once per DLL)
 inline void registerWindow(cppExtension* x, ss::Ids& ids) { ss::registerAll(x, zdset::spec(), ids); }
 // file helpers shared by the two plugins
@@ -607,13 +610,14 @@ int ZoneDefenseMarks::draw(void) {
     return RTX_OK;
 }
 
+static const double ZONE_LIGHT = 1.22;   // (1.0.7, Rassul 2026-11-09 09:35 "make the zone slightly lighter") the band brightness x1.22
 void ZoneDefenseMarks::zoneDraw(ZmState& s, const zdr::ZoneView& v, double tick, const ss::Values& V, int count, RTARRAYI& times, int, int) {
     const bool bid = v.side == 0; const COLOR base = bid ? zdh::C_GREEN : zdh::C_RED;
     const int a = barOf(times, count, v.T), b = v.ended ? barOf(times, count, v.state == 5 ? v.stateT : v.endT) : count - 1;   // (1.0.2) the band continues to a reclaim
     // brightness: resting now / peak (the latest decided number)
     long long now = v.size; if (v.touched) now = v.atTouch; if (v.reloaded) now = v.left; if (!v.barLeft.empty()) now = v.barLeft.rbegin()->second; if (v.ended) now = v.endResting;
     const double fr = v.size > 0 ? std::min(1.0, (double)now / v.size) : 0;
-    const COLOR fill = zdh::scaleCol(base, v.ended ? 0.22 : 0.25 + 0.45 * fr);
+    const COLOR fill = zdh::scaleCol(base, ZONE_LIGHT * (v.ended ? 0.22 : 0.25 + 0.45 * fr));   // (1.0.7) ~22% lighter (Rassul 09:35)
     if (V.b(zdset::K_SHOW_ZONES)) {
         const int half = std::max(1, (int)getPixelsPerBar() / 2);
         PNT pa; pa.set(a, (float)((v.hi + 0.5) * tick), kBarCenter); PNT pb; pb.set(b, (float)((v.lo - 0.5) * tick), kBarCenter);
@@ -626,7 +630,7 @@ void ZoneDefenseMarks::zoneDraw(ZmState& s, const zdr::ZoneView& v, double tick,
         }
         if (V.b(zdset::K_SHOW_LABELS)) {
             FONT f; f.id = HELVETICA; f.size = 8; f.style = PLAIN; setFont(f);
-            const std::string t = zdr::zoneLabel(v, tick, zdh::signsOf(s.mkt)); const int tw = getTextWidth(t.c_str(), -1);
+            const std::string t = zdr::zoneShortLabel(v); const int tw = getTextWidth(t.c_str(), -1);   // (1.0.7) "301 PS0" (Rassul panel 4)
             const int x = r.left + 2, y = bid ? r.bottom + 1 : r.top - 12;       // bids: under the band, offers: over it
             ZmState::Box bx = { x, y, x + tw, y + 11 }; bool hit = false;
             for (size_t i = 0; i < s.labels.size(); ++i) { const ZmState::Box& o = s.labels[i]; if (bx.l < o.r && bx.r > o.l && bx.t < o.b && bx.b > o.t) { hit = true; break; } }
