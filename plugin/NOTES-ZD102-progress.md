@@ -22,7 +22,7 @@ MSVC compile: the PC's GEX build job (every ~2 min) - see plugin\out\BUILD-STATU
 | OneDrive online-only step | DONE | zone_defense 1.1.0 rehide (kept in 1.2.0) |
 | Rithmic vs Databento day | WAITING | Needs the 1.0.2 install and one recorded live day (no ZoneDefense journal yet) |
 | Build hash list | DONE | gex-build.bat: MarketKey.h added to ZoneDefense, NearLevels.h + MarketKey.h to ZoneDefenseMarks |
-| GC Nov 6 example mockup + fixture | WAITING | GC Nov 6 MBO is downloaded; store conversion still running |
+| GC Nov 6 example mockup + fixture | DONE | Mockup claude.ai/artifact/MavTNdRrT2c87VWgxzR9oD (from the raw portal DBN; his chart levels). Fixture tests_zd\fx\GC-2026-11-06-sweep.bin + 2 tests in t_zd102. FINDING: at the chart's GC floor (32-36 lots) neither stage draws a zone (the WPoc zone is 21 lots); only at the research floor 15 - his decision whether zones AT his levels get a lower floor |
 
 Nightly 1.2.0: scores go to data\zone_defense\zr102\ (all days re-scored with the 1.0.2 engine, budget-capped); levels files in
 data\zone_defense\levels\ (checked against the jumpstart's files: identical on HG 10-26); ZoneDefenseParams.h rows gain levelReach.
