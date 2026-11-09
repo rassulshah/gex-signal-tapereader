@@ -131,6 +131,31 @@ int main(int argc, char** argv) {
         auto* e = p->ext(*p->testState());
         CHECK(e->eng && e->nLevels == 2 && e->eng->levels.size() == 2 && e->eng->levels[0].name == "PDL" && e->eng->levels[0].px == 27960 && e->eng->levels[1].px == 28042,
               "host: the key-level file -> PDL 6990 and ONH 7010.50 in ticks (VWAP is not his list) (" + std::to_string(e->nLevels) + ", " + e->lvlNote + ")");
+        { std::ofstream f((dir + "\\LRA-VolLevels-ES.csv").c_str()); f << "SYMBOL|ESZ6\nDATE|2000-01-01\nLEVEL|VAL|prior session VAL|6995.00\n"; }
+        NOW += 6000; mock::feed.push(0, 1, 6989.0f, 5, (RTDATE)(t0 + 200), 2); pump(h, p, t0 + 360);
+        CHECK(e->nLevels == 2 && e->lvlNote.find("not for this session") != std::string::npos, "host: a volume file for another session is not used (" + e->lvlNote + ")");
+        { std::ofstream f((dir + "\\LRA-VolLevels-ES.csv").c_str()); f << "SYMBOL|ESZ6\nDATE|" << e->session << "\nLEVEL|VAL|prior session VAL|6995.00\nLEVEL|WPoc|prior week POC|7001.25\n"; }
+        NOW += 6000; mock::feed.push(0, 1, 6988.0f, 5, (RTDATE)(t0 + 380), 3); pump(h, p, t0 + 540);
+        CHECK(e->nLevels == 4 && e->eng->levels.size() == 4 && e->eng->levels[2].name == "VAL" && e->eng->levels[2].px == 27980 && e->eng->levels[3].name == "WPoc",
+              "host: LRA-VolLevels for this session + contract -> VAL / WPoc join the levels (" + std::to_string(e->nLevels) + ", " + e->lvlNote + ")");
+        dispose(p); }
+    // ---- (1.0.2 review L4 / L6) bar sizes the epoch-cut bars are right for; the Central offset (DST) ----
+    CHECK(zd::Engine::barSizeOk(60) && zd::Engine::barSizeOk(180) && zd::Engine::barSizeOk(300) && zd::Engine::barSizeOk(900) && zd::Engine::barSizeOk(3600)
+          && !zd::Engine::barSizeOk(90) && !zd::Engine::barSizeOk(2700) && !zd::Engine::barSizeOk(7200) && !zd::Engine::barSizeOk(30), "L4 bar sizes: 1/3/5/15/60 min ok; 90 s, 45 min, 2 h, 30 s refused");
+    { auto u = [](int y, int mo, int d, int h) { struct tm t; std::memset(&t, 0, sizeof t); t.tm_year = y - 1900; t.tm_mon = mo - 1; t.tm_mday = d; t.tm_hour = h; return (long long)timegm(&t); };
+      CHECK(zd::Engine::chicagoOffsetMin(u(2026, 11, 8, 12)) == -360 && zd::Engine::chicagoOffsetMin(u(2026, 10, 30, 12)) == -300
+            && zd::Engine::chicagoOffsetMin(u(2026, 11, 1, 6)) == -300 && zd::Engine::chicagoOffsetMin(u(2026, 11, 1, 7)) == -360
+            && zd::Engine::chicagoOffsetMin(u(2026, 3, 8, 7)) == -360 && zd::Engine::chicagoOffsetMin(u(2026, 3, 8, 8)) == -300
+            && zd::Engine::chicagoOffsetMin(u(2027, 3, 14, 8)) == -300 && zd::Engine::chicagoOffsetMin(u(2027, 3, 13, 12)) == -360, "L6 Chicago offset: CDT / CST with the 2026 and 2027 switch hours"); }
+    {   freshHome(); mock::Host h; mock::current = &h; mock::feed = mock::Feed(); const unsigned long t0 = 1793034000UL - 3600;
+        Ind* p = pane(h, t0); mock::feed.push(0, 1, 6990.0f, 5, (RTDATE)(t0 + 10), 1); pump(h, p, t0 + 180);
+        auto* e = p->ext(*p->testState());
+        CHECK(!e->clockWarn.empty() && e->clockWarn.find("not Central") != std::string::npos, "L6 the mock clock is UTC: the pane warns (" + e->clockWarn + ")");
+        dispose(p); }
+    {   freshHome(); mock::Host h; mock::current = &h; mock::feed = mock::Feed(); const unsigned long t0 = 1793034000UL - 3600;
+        Ind* p = pane(h, t0); h.seconds = 90; mock::feed.push(0, 1, 6990.0f, 5, (RTDATE)(t0 + 10), 1); pump(h, p, t0 + 180);
+        auto* e = p->ext(*p->testState());
+        CHECK(!e->eng && e->note.find("unsupported bar size") != std::string::npos, "L4 a 90-s chart: no engine, the note says why (" + e->note + ")");
         dispose(p); }
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

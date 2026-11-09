@@ -160,6 +160,7 @@ static void session(const std::string& mkt, const std::string& fx, double tick, 
 int getTextWidthMock(const mock::Draw* d) { int pt = d->fsize < 6 ? 6 : d->fsize > 14 ? 14 : d->fsize; (void)pt; return (int)d->text.size() * 5; }
 
 int main(int argc, char** argv) {
+    zdh::clockCheck() = false;   // the mock clock is UTC (the Central check has its own test in t_zd102)
     const std::string dir = argc > 1 ? argv[1] : "fx";
     session("CL", dir + "/CL-2026-11-04.bin", 0.01, -6 * 3600);
     session("HG", dir + "/HG-2026-11-04.bin", 0.0005, -6 * 3600);

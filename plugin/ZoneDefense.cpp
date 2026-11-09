@@ -83,6 +83,7 @@ inline void stamp(cppExtension* p) { p->setVersion("1.0.2"); }
 inline void registerWindow(cppExtension* x, ss::Ids& ids) { ss::registerAll(x, zdset::spec(), ids); }
 // file helpers shared by the two plugins
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
+inline bool& clockCheck() { static bool on = true; return on; }   // (L6) the Central-time check (the mock-host tests whose clock is UTC turn it off)
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 inline void makeDir(const std::string& p) {
 #if defined(_WIN32)
@@ -223,6 +224,8 @@ public:
         long long stamp = -1, stampMs = 0, lastT = 0; int ctOff = 0; long long ctKey = -1;
         zdh::JFile jf; ss::Store store; ss::Values set = ss::defaults(zdset::spec(), -1); long long setMs = -100000;
         std::vector<zdr::RLine> lastLines; long long drawn = 0;
+        std::vector<nl::Level> vol; std::string volDate, volSym; long long volSig = -2, volChecked = -1;   // (1.0.2) LRA-VolLevels-<MKT>.csv
+        std::string clockWarn;                                          // (L6) "" = the PC is on Central time
         nl::Cache lvc; long long lvlSig = -1; size_t nLevels = 0; std::string lvlNote;   // (1.0.2 levels)
         bool writer = false; void* lock = nullptr; long long reconnects = -1; std::string symbol, note; long long tornFixed = 0, orphansClosed = 0;
     };
@@ -232,7 +235,23 @@ public:
     // (1.0.2 levels) his key / MenthorQ levels from lsFlexLevels (fresh <= 18 h, the chart's contract) -> the engine (a change only)
     void refreshLevels(S_& S, Ext& e) {
         const std::string flex = zdh::flexDir(); if (flex.empty() || !(e.tick > 0)) return;
-        const std::vector<nl::Level> v = nl::levels(e.lvc, flex + "\\", e.mkt, S.symbol, off::steadyMs(), e.stamp);
+        std::vector<nl::Level> v = nl::levels(e.lvc, flex + "\\", e.mkt, S.symbol, off::steadyMs(), e.stamp);
+        // (1.0.2) the volume levels (DPoc / VAH / VAL / WPoc) the nightly writes for the NEXT session: LRA-VolLevels-<MKT>.csv
+        // "SYMBOL|GCZ6", "DATE|2026-11-06", "LEVEL|<code>|<what>|<price>"; used only on that session and that contract
+        const long long nowMs = off::steadyMs();
+        if (e.volChecked < 0 || nowMs - e.volChecked >= 5000 || nowMs < e.volChecked) {
+            e.volChecked = nowMs; const std::string path = flex + "\\LRA-VolLevels-" + e.mkt + ".csv"; const long long sig = nl::fileSig(path);
+            if (sig != e.volSig) {
+                e.volSig = sig; e.vol.clear(); e.volDate.clear(); e.volSym.clear(); std::vector<std::string> L;
+                if (sig >= 0 && nl::readBoundedLines(path, L, 64 * 1024, 256, 512))
+                    for (size_t i = 0; i < L.size(); ++i) { const std::vector<std::string> c = nl::fields(L[i]); double px;
+                        if (c.size() >= 2 && c[0] == "SYMBOL") e.volSym = c[1];
+                        else if (c.size() >= 2 && c[0] == "DATE") e.volDate = c[1];
+                        else if (c.size() >= 4 && c[0] == "LEVEL" && !c[1].empty() && nl::parseReal(c[3], px) && px > 0) e.vol.push_back(nl::Level{ c[1].substr(0, 40), px }); }
+            }
+        }
+        const bool volOk = !e.vol.empty() && e.volDate == e.session && nl::sameContract(S.symbol, e.volSym);
+        if (volOk) v.insert(v.end(), e.vol.begin(), e.vol.end());
         std::vector<zd::Lvl> out; long long sig = 1469598103LL;
         for (size_t i = 0; i < v.size(); ++i) {
             if (!(v[i].px > 0)) continue;
@@ -240,7 +259,7 @@ public:
             const std::vector<zd::Lvl> L = zd::levelsOf(v[i].name, px);
             for (size_t j = 0; j < L.size(); ++j) { out.push_back(L[j]); for (size_t c = 0; c < L[j].name.size(); ++c) sig = sig * 131 + (unsigned char)L[j].name[c]; sig = sig * 1000003 + L[j].px; }
         }
-        e.lvlNote = e.lvc.note;
+        e.lvlNote = e.lvc.note + (volOk ? ", volume levels" : e.vol.empty() ? ", no volume file" : ", volume file not for this session / contract");
         if (sig == e.lvlSig && out.size() == e.nLevels) return;
         e.lvlSig = sig; e.nLevels = out.size(); e.eng->setLevels(out);
     }
@@ -249,6 +268,7 @@ public:
         const std::string mkt = mktOf(S);
         if (mkt.empty()) { e->note = "market not supported (" + S.market + ")"; ++e->skipped; return; }
         if (S.spb <= 0) { e->note = "needs a time-based chart (seconds per bar unknown)"; ++e->skipped; return; }
+        if (!zd::Engine::barSizeOk(S.spb)) { e->note = "unsupported bar size (" + std::to_string((int)S.spb) + " s): use 1-60 min bars that divide the hour"; ++e->skipped; return; }   // (L4)
         if (!(S.tick > 0) || !o.timestamp) { ++e->skipped; return; }
         e->note.clear();
         if ((long long)o.timestamp != e->stamp) {                         // one clock conversion per second
@@ -259,6 +279,8 @@ public:
             if (!e->eng || sess != e->session || mkt != e->mkt || (int)S.spb != e->spb) openSession(S, *e, sess, mkt);
             const long long utcMin = e->stamp / 60; e->ctOff = (int)(((t.tm_hour * 60 + t.tm_min) - (utcMin % 1440) + 2880) % 1440);
             if (e->eng) e->eng->ctOffsetMin = e->ctOff;
+            if (zdh::clockCheck()) { const int want = zd::Engine::chicagoOffsetMin(e->stamp), have = e->ctOff >= 720 ? e->ctOff - 1440 : e->ctOff;   // (L6) the PC must be on Central
+              e->clockWarn = have == want ? std::string() : "PC clock is UTC" + std::string(have >= 0 ? "+" : "") + std::to_string(have / 60) + (have % 60 ? ":" + std::to_string(std::abs(have % 60)) : std::string()) + ", not Central - sessions and times are off"; }
             if (e->eng) refreshLevels(S, *e);                              // (1.0.2 levels) the files are re-read at most every 5 s (nl::Cache)
         }
         if (!e->eng || !e->writer) return;                                 // a read-only copy (another chart writes this journal)
@@ -317,6 +339,7 @@ public:
         Ext* e = ext(S); if (!e) { o << "\nZONE_DEFENSE,unavailable"; return; }
         const zdp::Mkt& M = zdp::forMarket(e->mkt.empty() ? S.market : e->mkt);
         o << "\nZONE_DEFENSE,version " << ZD_VERSION << ",market " << e->mkt << (e->writer ? ",writer" : ",read-only (another chart writes this journal)") << ",session " << e->session << ",events " << e->events << ",skipped " << e->skipped
+          << (e->clockWarn.empty() ? std::string() : ",WARNING " + e->clockWarn) 
           << ",levels " << e->nLevels << " (" << e->lvlNote << ")"
           << ",resets " << (e->eng ? e->eng->resets : 0) << ",ghosts dropped " << (e->eng ? e->eng->ghosts : 0) << ",implied skipped " << (e->eng ? e->eng->implied : 0) << ",moves " << (e->eng ? e->eng->modMoves : 0)
           << ",orphans closed " << e->orphansClosed << ",torn lines fixed " << e->tornFixed << (e->note.empty() ? std::string() : ",note " + e->note)
@@ -367,11 +390,13 @@ public:
         const int left = pane.left + 6, right = pane.right - 6;
         int y = pane.top + 3;
         const zdr::ZoneView* z = e.jf.J.latestTouched();
+        if (!e.clockWarn.empty()) { std::vector<zdr::RLine> w(1); zdr::setLine(w[0], "Clock", "warning", e.clockWarn); w[0].col = 0; drawBlock(w, left, right, y); y += LINE_H; }   // (L6) only when wrong
         if (V.b(zdset::K_SHOW_LINES)) {
             if (!z) {                                                          // (L3) say why nothing is shown
                 std::string why = "for a zone touch";
                 if (mkt.empty()) why = "market not supported (" + S.market + ")";
                 else if (S.spb <= 0) why = "needs a time-based chart";
+                else if (!zd::Engine::barSizeOk(S.spb)) why = "unsupported bar size: use 1-60 min bars that divide the hour";   // (L4)
                 else { const std::string fs = S.feed.stateText(off::steadyMs()); if (fs != "ready" && !fs.empty()) why = "no order feed - " + fs; }
                 std::vector<zdr::RLine> w(1); zdr::setLine(w[0], "Zone", "waiting", why); drawBlock(w, left, right, y); y += LINE_H; e.lastLines.clear(); }
             else {
@@ -508,7 +533,7 @@ int ZoneDefenseMarks::draw(void) {
     LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     ZmState* sp = slot_.get(this, true); if (!sp) return RTX_OK; ZmState& s = *sp;
     char rb[64]; std::memset(rb, 0, sizeof rb); const char* rs = getRootSymbol(rb); const char* sy = getSymbol();
-    s.mkt = zdh::marketOf(rs ? rs : "", sy ? sy : ""); s.spb = getSecondsPerBar(); if (s.mkt.empty() || s.spb <= 0) return RTX_OK;
+    s.mkt = zdh::marketOf(rs ? rs : "", sy ? sy : ""); s.spb = getSecondsPerBar(); if (s.mkt.empty() || s.spb <= 0 || !zd::Engine::barSizeOk(s.spb)) return RTX_OK;   // (L4)
     refresh(s);
     const long count = getBarCount(); if (count < 2) return RTX_OK;
     RTARRAYI times(barDateTime); if (times.count < count) return RTX_OK;

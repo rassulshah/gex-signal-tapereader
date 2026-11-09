@@ -213,6 +213,22 @@ public:
     // (M2) the session roll keeps the book: the new engine takes the old one's resting orders (no warm-up)
     void carryBook(const Engine& o) { book = o.book; lastPx = o.lastPx; }
     int ctMinute(long long t) const { long long m = (t / MIN_MS + ctOffsetMin) % 1440; if (m < 0) m += 1440; return (int)m; }
+    // (1.0.2, review L4) candleKey / barLines cut bars on the epoch: right only when the bar size is whole minutes and divides the hour
+    // (the 17:00 CT session start and every bar start then sit on the same grid); 90-s, 45-min, 2-h bars are refused by the host
+    static bool barSizeOk(long long spb) { return spb >= 60 && spb % 60 == 0 && 3600 % spb == 0; }
+    // (1.0.2, review L6) America/Chicago offset (minutes, local - UTC) at UTC second u: CDT from the 2nd Sunday of March 08:00 UTC to
+    // the 1st Sunday of November 07:00 UTC, else CST
+    static int chicagoOffsetMin(long long u) {
+        auto days = [](int y, int m, int d) { y -= m <= 2; const int era = (y >= 0 ? y : y - 399) / 400; const int yoe = y - era * 400;
+            const int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1; const int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; return (long long)era * 146097 + doe - 719468; };
+        const long long dd = u / 86400; long long z = dd + 719468; const long long era = (z >= 0 ? z : z - 146096) / 146097; const long long doe = z - era * 146097;
+        const long long yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; long long y = yoe + era * 400; const long long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        const long long mp = (5 * doy + 2) / 153; const long long mth = mp + (mp < 10 ? 3 : -9); if (mth <= 2) ++y;
+        auto nthSunday = [&](int m, int n) { const long long d1 = days((int)y, m, 1); const long long wd = ((d1 % 7) + 11) % 7; /* 0 = Sunday (1970-01-01 = Thu) */
+            return d1 + (7 - wd) % 7 + 7 * (n - 1); };
+        const long long on = nthSunday(3, 2) * 86400 + 8 * 3600, off = nthSunday(11, 1) * 86400 + 7 * 3600;
+        return (u >= on && u < off) ? -300 : -360;
+    }
     long long candleKey(long long t) const { const long long b = barSec * 1000; return (t / b + 1) * b / 1000; }   // bar END (s), as the chart
 
     // the most recent zone with a touch (what the pane's 4 lines read), -1 = none
