@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
         CHECK(n >= 5 && zero * 4 <= n && pull * 2 <= n, "queue normal (same distance): " + std::to_string(n) + " touches, " + std::to_string(zero) + " with a 0% normal, " + std::to_string(pull) + " pulling"); }
     // ---- the GC 2026-10-26 08:57 regression: lift 1.07x and price back above the zone by the 3-min close = SWEPT ----
     {   std::vector<FR> v; { FILE* f = std::fopen((fx + "/GC-2026-10-26-sweep.bin").c_str(), "rb"); FR r; while (f && std::fread(&r, sizeof r, 1, f) == 1) v.push_back(r); if (f) std::fclose(f); }
-        zd::Engine E(zdp::forMarket("GC")); E.barSec = 180;
+        zd::Engine E(zdp::forMarket("GC")); E.barSec = 180; E.minLotsOverride = 36;   // (1.0.5) pinned at the floor it was written with (the live floors move nightly)
         for (auto& r : v) E.feed(ev(r.t, r.a, r.s, r.px, r.sz, r.oid));
         const zd::Zone* z = nullptr; for (auto& q : E.zones) if (q.side == 0 && q.lo == 40045 && q.hi == 40048) z = &q;
         CHECK(z && z->touchT >= 0 && z->sweep == 2 && z->lift >= 1.0 && z->backIn, "GC 10-26 4004.5-4004.8: the 8:58 stop run reads SWEPT (lift " + std::string(z ? std::to_string(z->lift) : "-") + ", back in " + (z && z->backIn ? "yes" : "no") + ")");
