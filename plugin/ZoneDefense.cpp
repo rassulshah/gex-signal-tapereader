@@ -1,5 +1,8 @@
 /********************************************************************************
- *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.7  +  lsZoneDefenseMarks 1.0.7  (2026-11-09)
+ *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.8  +  lsZoneDefenseMarks 1.0.8  (2026-11-09)
+ *  1.0.8 (Rassul 15:27 CT "if mbo is quiet, display a message on the chart somewhere"; mockup LPhVzXwuELSZaCFPmZzwEV): "MBO QUIET 12m" in the
+ *  top-right of the pane when no order event arrived for 2 min (07:00-15:00 CT) / 5 min (overnight) while Globex is open (MboQuiet.h);
+ *  clears when events resume. A live status, nothing recorded.
  *  1.0.7 (Rassul 09:35 ES live "the zone text is too long, make the zone slightly lighter"; picked panel 4 of
  *  claude.ai/artifact/EaKHxKQXTnxgg3ZMU9aeRV): the label is short - lots + the level the zone is AT ("301 PS0", "301" when none) -
  *  same place (under a bid band / over an offer band, 8 px); the band ~22% lighter. Diamond / triangle unchanged.
@@ -70,6 +73,7 @@
 #include "ZoneDefenseRead.h"
 #include "ZoneDefenseSettings.h"
 #include "MarketKey.h"
+#include "MboQuiet.h"   // (1.0.8) the MBO quiet notice
 #include "NearLevels.h"   // (1.0.2 levels) the key / MenthorQ level files, read as lsDeltaProfile reads them
 #include <algorithm>
 #include <cctype>
@@ -87,12 +91,12 @@
 #include <chrono>
 #include <climits>
 
-#define ZD_VERSION "1.0.7"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
+#define ZD_VERSION "1.0.8"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
 
 
 namespace zdh {
 // the version of both DLLs: the ONE setVersion literal (the settings contract counts it; gex-build reads it)
-inline void stamp(cppExtension* p) { p->setVersion("1.0.7"); }
+inline void stamp(cppExtension* p) { p->setVersion("1.0.8"); }
 // the one settings window of both plugins (registered once per DLL)
 inline void registerWindow(cppExtension* x, ss::Ids& ids) { ss::registerAll(x, zdset::spec(), ids); }
 // file helpers shared by the two plugins
@@ -262,6 +266,7 @@ public:
         std::string clockWarn;                                          // (L6) "" = the PC is on Central time
         nl::Cache lvc; long long lvlSig = -1; size_t nLevels = 0; std::string lvlNote;   // (1.0.2 levels)
         bool writer = false; void* lock = nullptr; long long reconnects = -1; std::string symbol, note; long long tornFixed = 0, orphansClosed = 0;
+        long long lastEvWall = 0, firstWall = 0; std::string quiet;                        // (1.0.8) the real clock of the last order event / of the first draw
     };
     Ext* ext(S_& S) { if (!S.ext) S.ext.reset(new (std::nothrow) Ext()); return static_cast<Ext*>(S.ext.get()); }
     // ---- the feed: every order event, once, in order ------------------------------------------------------------------
@@ -305,6 +310,7 @@ public:
         if (!zd::Engine::barSizeOk(S.spb)) { e->note = "unsupported bar size (" + std::to_string((int)S.spb) + " s): use 1-60 min bars that divide the hour"; ++e->skipped; return; }   // (L4)
         if (!(S.tick > 0) || !o.timestamp) { ++e->skipped; return; }
         e->note.clear();
+        e->lastEvWall = zdh::wallNow();                                  // (1.0.8) the feed is alive
         if ((long long)o.timestamp != e->stamp) {                         // one clock conversion per second
             struct tm t; std::memset(&t, 0, sizeof t);
             if (!getLocaltime(o.timestamp, &t)) { ++e->skipped; return; }
@@ -386,6 +392,9 @@ public:
           << "\nZONE_DEFENSE_MEMORY,book " << (e->eng ? e->eng->bookSize() : 0) << ",max book " << (e->eng ? e->eng->maxBook : 0) << ",max ended " << (e->eng ? e->eng->maxEnded : 0) << ",max live zones " << (e->eng ? e->eng->maxLive : 0)
           << "\nZONE_DEFENSE_DRAW,lines drawn " << e->drawn;
         for (size_t i = 0; i < e->lastLines.size(); ++i) o << " | " << e->lastLines[i].text;
+        {   const long long now = zdh::wallNow();                          // (1.0.8) the MBO quiet notice
+            o << "\nMBO_QUIET," << mbq::VERSION << "," << (e->quiet.empty() ? std::string("feed alive") : e->quiet) << ",last order event "
+              << (e->lastEvWall > 0 ? std::to_string(now - e->lastEvWall) + " s ago" : std::string("none yet")) << ",threshold 2 min 07:00-15:00 CT / 5 min overnight"; }
     }
     // ---- settings (one window with lsZoneDefenseMarks) --------------------------------------------------------------
     virtual int parmsLoadBody(void) { if (!ss::inDialog(this)) return RTX_OK; ss::Store* st = dialogStore(); if (st) ss::fillDialog(this, zdset::spec(), zdIds(), st->load(ss::marketIndex(dlgMkt_), off::steadyMs(), true), snap_); return RTX_OK; }
@@ -447,6 +456,26 @@ public:
             }
         }
         if (!L.empty()) drawBlock(L, left, right, pane.top + 3);
+        drawQuiet(e, right, pane.top + 3);                                  // (1.0.8) top-right, never renumbers the lines
+    }
+    // (1.0.8) "MBO QUIET 12m": white bold on the pane's dark box at the top-right; the PC clock is Central (else the Clock line warns)
+    std::string quietText(Ext& e) {
+        const long long now = zdh::wallNow(); if (now <= 0) return std::string();
+        if (e.firstWall <= 0) e.firstWall = now;
+        const std::time_t tt = (std::time_t)now; struct tm t; std::memset(&t, 0, sizeof t);
+#ifdef _WIN32
+        if (localtime_s(&t, &tt) != 0) return std::string();
+#else
+        if (!localtime_r(&tt, &t)) return std::string();
+#endif
+        return mbq::text(e.lastEvWall > 0 ? e.lastEvWall : e.firstWall, now, t.tm_hour * 60 + t.tm_min, t.tm_wday);
+    }
+    void drawQuiet(Ext& e, int right, int y) {
+        const std::string q = quietText(e); e.quiet = q; if (q.empty()) return;
+        FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD; setFont(fb);
+        const int w = getTextWidth(q.c_str(), -1), x = right - w;
+        off::fillFlat(this, x - 6, y - 2, right + 4, y + LINE_H + 2, zdh::C_BOX_BG);
+        put(q, x, y, zdh::C_WHITE, right + 1);
     }
     // (1.0.1, Rassul 2026-11-08 "look nice") one aligned block: "1. Zone" labels in a fixed left column (grey), the verdict word at ONE x
     // (its colour, bold), the detail on the same line in a calmer tint of that colour, the times in one right-aligned column (grey).

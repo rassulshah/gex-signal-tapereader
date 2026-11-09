@@ -6,7 +6,7 @@
 //     lines for the zones decided before the restart.
 //   3 LIVE vs CLOSE: every Read line, once decided (not "watching" / "counting"), is the same text at the end of the session.
 //   4 LAYOUT: the 4 lines never overlap each other or their time; the time is right-justified; nothing outside the pane.
-//   5 VERSIONS: ZD_VERSION == zdset::PLUGIN_VERSION == the setVersion literals == "1.0.7", title "Zone Defense v1.0.7".
+//   5 VERSIONS: ZD_VERSION == zdset::PLUGIN_VERSION == the setVersion literals == "1.0.8", title "Zone Defense v1.0.8".
 // Build (tests_zd/): g++ -std=c++17 -O2 -Wall -Wextra -Wno-misleading-indentation -DOFF_TEST_CLOCK -DPC_TEST_CURSOR -I.. -I../tests_aggbook/mock t_zd.cpp -o t && ./t
 #include "ZoneDefense.cpp"
 #include <set>
@@ -105,6 +105,13 @@ static void session(const std::string& mkt, const std::string& fx, double tick, 
     CHECK(jf.J.bad == 0, mkt + ": every journal line parses (" + std::to_string(jf.J.bad) + " bad)");
     // ---- 4 LAYOUT: the last draw ----
     h.draws.clear(); p->draw();
+    {   // (1.0.8) the MBO quiet notice: a draw at a later Tuesday 10:00 (local clock) with no new event shows it, top-right, alone
+        bool none = true; for (auto& d : h.draws) if (d.type == "text" && d.text.compare(0, 10, "MBO QUIET ") == 0) none = false;
+        struct tm tq; std::memset(&tq, 0, sizeof tq); tq.tm_year = 2026 - 1900; tq.tm_mon = 10; tq.tm_mday = 10; tq.tm_hour = 10; tq.tm_isdst = -1;
+        zdh::testWall() = (long long)std::mktime(&tq); std::vector<mock::Draw> keep = h.draws; h.draws.clear(); p->draw();
+        const mock::Draw* q = nullptr; for (auto& d : h.draws) if (d.type == "text" && d.text.compare(0, 10, "MBO QUIET ") == 0) q = &d;
+        CHECK(none && q != nullptr, mkt + ": 1.0.8 no notice while the feed is live; 'MBO QUIET ..m' when it went silent" + (q ? " (" + q->text + ")" : std::string()));
+        zdh::testWall() = 0; h.draws = keep; }
     std::vector<const mock::Draw*> tx; for (auto& d : h.draws) if (d.type == "text") tx.push_back(&d);
     CHECK(tx.size() >= 4, mkt + ": the pane drew its lines (" + std::to_string(tx.size()) + " texts)");
     // (1.0.2) every text is drawn left-aligned in a rectangle exactly its width: [x, r] x [y - 6, y + 6]
@@ -177,11 +184,15 @@ int main(int argc, char** argv) {
     session("HG", dir + "/HG-2026-11-04.bin", 0.0005, -6 * 3600);
     // ---- 5 VERSIONS ----
     const std::string src = readAll("../ZoneDefense.cpp"), marks = readAll("../ZoneDefenseMarks.cpp");
-    CHECK(std::string(ZD_VERSION) == "1.0.7" && std::string(zdset::PLUGIN_VERSION) == ZD_VERSION && std::string(zd::VERSION) == ZD_VERSION, "versions 1.0.7 (ZD_VERSION, settings spec, engine)");
-    size_t n = 0, at = 0; while ((at = src.find("p->setVersion(\"1.0.7\")", at)) != std::string::npos) { ++n; ++at; }
-    CHECK(n == 1 && marks.find("p->setVersion(\"1.0.7\")") != std::string::npos, "the setVersion literals (pane, marks, the gex-build line) = 1.0.7");
+    CHECK(std::string(ZD_VERSION) == "1.0.8" && std::string(zdset::PLUGIN_VERSION) == ZD_VERSION && std::string(zd::VERSION) == ZD_VERSION, "versions 1.0.8 (ZD_VERSION, settings spec, engine)");
+    size_t n = 0, at = 0; while ((at = src.find("p->setVersion(\"1.0.8\")", at)) != std::string::npos) { ++n; ++at; }
+    CHECK(n == 1 && marks.find("p->setVersion(\"1.0.8\")") != std::string::npos, "the setVersion literals (pane, marks, the gex-build line) = 1.0.8");
+    {   // (1.0.8) MBO quiet notice: the pane's helper on a fresh Ext - quiet after 2 min in the day, cleared by an event
+        CHECK(std::string(mbq::VERSION) == "MboQuiet 1.0.0" && mbq::text(1000, 1000 + 12 * 60, 7 * 60 + 45, 1) == "MBO QUIET 12m", "1.0.8: MboQuiet 7:33 -> 7:45 = MBO QUIET 12m");
+        CHECK(src.find("drawQuiet(e, right, pane.top + 3)") != std::string::npos && src.find("e->lastEvWall = zdh::wallNow();") != std::string::npos, "1.0.8: every order event stamps the feed clock; the notice is drawn top-right");
+        CHECK(src.find("MBO_QUIET,") != std::string::npos, "1.0.8: the status file has the MBO_QUIET line"); }
     mock::Host hv; mock::current = &hv;   // (1.0.7) the sessions' hosts are gone: a live host for make() (ASan: stack-use-after-return)
-    char t[64]; Ind* p = make(); p->parmsTitle(t, sizeof t); CHECK(std::string(t) == "Zone Defense v1.0.7", std::string("title ") + t); dispose(p);
+    char t[64]; Ind* p = make(); p->parmsTitle(t, sizeof t); CHECK(std::string(t) == "Zone Defense v1.0.8", std::string("title ") + t); dispose(p);
     CHECK(zdset::spec().n == zdset::K_N && ss::check(zdset::spec()).empty(), "settings spec valid (" + std::to_string(ss::check(zdset::spec()).size()) + " problems)");
     CHECK(fullBars >= 1, "1.0.6: at least one fixture drew bars under the read box (" + std::to_string(fullBars) + ")");
     std::printf("%d passed, %d failed\n", passes, fails);
