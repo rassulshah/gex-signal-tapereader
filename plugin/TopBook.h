@@ -1,5 +1,9 @@
 #ifndef LS_TOPBOOK_H
 #define LS_TOPBOOK_H
+// TopBook.h 1.1.0 (2026-11-09, Rassul approved 13:26 CT): a level shows only once it has held big size for 2 MINUTES (the steady board's
+// entry wait, was 30 s); its biggest order must not be part of a just-placed CLUSTER (another big same-side order within 2 ticks posted in
+// the 60 s before / after it - the real-order model's strongest fake sign); "NN% real" from the per-market real-order model
+// (LRA-RealOrder-<MKT>.csv, shown only while that file says LIVE). 10 s removal grace and the 1.25x swap unchanged.
 // TopBook.h 1.0.0 (2026-11-09, Rassul 12:55 CT "do it" on the top 3 bids / top 3 offers with the fake / market-maker filters;
 // mockup claude.ai/artifact/E9QjUViBERJrEpJruVPKie, real ES book Nov 6 09:45 CT). SDK-free, C++11, no files, no clocks of its own.
 // THE NATIVE TOP BOOK for the Limit Profile's Liquidity column: fed every market-by-order event (lsBookFlow's order feed), asked once a
@@ -30,9 +34,10 @@
 #include <cmath>
 #include <string>
 #include <cstdio>
+#include <cstdlib>
 #include "Top10Stable.h"
 namespace tbk {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 enum Act { ADD = 0, MOD = 1, DEL = 2, FILL = 3, CLEAR = 9 };
 struct Params {
     long long restMs = 30000; int quoteMoves = 2; long long quoteWinMs = 300000; int insideSkip = 2; double reachAtr = 3.0; double normX = 2.0;
@@ -41,21 +46,47 @@ struct Params {
     // the LMT order (INSTITUTIONAL-ORDERS-LMT-2026-10-22: one order >= the market's Big Lot S20, never re-priced, resting >= 2 min, still
     // there when price arrives -> turn AT the order 37% vs 27% random); s20 = 0 -> no tag (GC: not reaction levels; 6E: S20 = quote size)
     long long s20Rth = 0, s20On = 0; long long stationaryMs = 120000; bool rth = true;
+    long long showMs = 120000;                       // (1.1.0) the level must hold big size this long before it shows (board entry wait)
+    long long bigRth = 0, bigOn = 0; long long clusterMs = 60000; int clusterTicks = 2;   // (1.1.0) the cluster rule's "big" (Big Lot S20, all 7 markets)
 };
 // the per-market Big Lot S20 of the resting-order pool (RTH / overnight medians of the 2026-10-22 study); GC and 6E carry no tag
 inline void s20For(const std::string& m, Params& p) {
     struct R { const char* m; long long rth, on; };
     static const R T[] = { {"ES", 45, 25}, {"NQ", 20, 15}, {"CL", 15, 20}, {"HG", 5, 5}, {"NG", 10, 10}, {"GC", 0, 0}, {"EU", 0, 0}, {"6E", 0, 0} };
-    p.s20Rth = p.s20On = 0; for (const R& r : T) if (m == r.m) { p.s20Rth = r.rth; p.s20On = r.on; } }
+    p.s20Rth = p.s20On = 0; for (const R& r : T) if (m == r.m) { p.s20Rth = r.rth; p.s20On = r.on; }
+    // (1.1.0) the cluster rule's "big" in every market (the 2026-10-22 resting-pool S20 medians; GC / 6E included here)
+    static const R B[] = { {"ES", 45, 25}, {"NQ", 20, 15}, {"CL", 15, 20}, {"GC", 9, 12}, {"HG", 5, 5}, {"NG", 10, 10}, {"EU", 42, 41}, {"6E", 42, 41} };
+    p.bigRth = p.bigOn = 0; for (const R& r : B) if (m == r.m) { p.bigRth = r.rth; p.bigOn = r.on; } }
+// (1.1.0) the per-market real-order model (lra.real_orders 1.0.0): p(fake) = 1 / (1 + exp(-(b0 + sum b x))), shown as "% real" = 1 - p(fake)
+struct RealModel { bool live = false; double b0 = 0, size3 = 0, sizeS = 0, age1 = 0, age2 = 0, age3 = 0, clustered = 0, post1 = 0, post2 = 0, rth = 0; int n = 0; };
+inline RealModel parseRealModel(const std::string& text) {
+    RealModel M; size_t a = 0; bool live = false;
+    while (a < text.size()) { size_t e = text.find('\n', a); if (e == std::string::npos) e = text.size(); std::string ln = text.substr(a, e - a); a = e + 1;
+        while (!ln.empty() && (ln.back() == '\r' || ln.back() == ' ')) ln.pop_back();
+        if (ln.empty() || ln[0] == '#') continue;
+        std::vector<std::string> c; size_t q = 0; for (;;) { size_t k = ln.find(',', q); c.push_back(ln.substr(q, k == std::string::npos ? std::string::npos : k - q)); if (k == std::string::npos) break; q = k + 1; }
+        auto num = [](const std::string& t, double& v) { char* end = nullptr; v = std::strtod(t.c_str(), &end); return end && end != t.c_str() && std::isfinite(v); };
+        double v = 0;
+        if (c.size() == 2 && c[0] == "status") live = c[1] == "LIVE";
+        else if (c.size() == 2 && c[0] == "intercept" && num(c[1], v)) { M.b0 = v; ++M.n; }
+        else if (c.size() == 3 && c[0] == "coef" && num(c[2], v)) { const std::string& f = c[1]; ++M.n;
+            if (f == "size_3SD") M.size3 = v; else if (f == "size_S") M.sizeS = v; else if (f == "age_10s_2m") M.age1 = v; else if (f == "age_2_10m") M.age2 = v;
+            else if (f == "age_10m_plus") M.age3 = v; else if (f == "clustered") M.clustered = v; else if (f == "posted_5_25t") M.post1 = v;
+            else if (f == "posted_25t_plus") M.post2 = v; else if (f == "rth") M.rth = v; else --M.n; } }
+    M.live = live && M.n >= 10;   // intercept + the 9 features, else not shown
+    return M; }
 struct In { int act = ADD; int side = 0; long long px = 0; long long sz = 0; long long oid = 0; long long tMs = 0; };   // side 0 bid / 1 offer, px in ticks
-struct Lvl { int side = 0; long long px = 0; long long lots = 0; int orders = 0; long long big = 0; double x = 0; int rank = 0; bool single = false; int dist = 0; bool s20 = false; int why = 0; };   // why (removed list only): 1 inside 2, 2 young, 3 quoting, 4 pulled earlier
-struct Why { int inside = 0, young = 0, quoting = 0, small = 0, pulled = 0, kept = 0; };
+struct Lvl { int side = 0; long long px = 0; long long lots = 0; int orders = 0; long long big = 0; double x = 0; int rank = 0; bool single = false; int dist = 0; bool s20 = false; int why = 0; int realPct = -1; bool clustered = false; };   // why (removed list only): 1 inside 2, 2 young, 3 quoting, 4 pulled earlier, 5 cluster; realPct -1 = not shown
+struct Why { int inside = 0, young = 0, quoting = 0, small = 0, pulled = 0, cluster = 0, kept = 0; };
 struct Outcome { int side; long long px; long long lots; bool held; bool pulledWhileHit; long long tTouch, tEnd; };
 class Engine {
 public:
     explicit Engine(const Params& p = Params()) : P(p) { boardsInit(); }
     void setRth(bool on) { P.rth = on; }
     void setS20(long long rthLots, long long onLots) { P.s20Rth = rthLots; P.s20On = onLots; }
+    void setMarket(const std::string& m) { s20For(m, P); }
+    void setModel(const RealModel& m) { RM = m; }
+    const RealModel& model() const { return RM; }
     const Params& params() const { return P; }
     // ---- the feed -------------------------------------------------------------------------------------------------------------
     void feed(const In& e) {
@@ -69,7 +100,7 @@ public:
         default: ++garbage; break;
         }
     }
-    void reset() { O.clear(); banned.clear(); cxl[0].clear(); cxl[1].clear(); fills[0].clear(); fills[1].clear(); boardsInit(); shown.clear(); watch.clear(); bars.clear(); lastPx = 0; ++resets; }
+    void reset() { recent[0].clear(); recent[1].clear(); O.clear(); banned.clear(); cxl[0].clear(); cxl[1].clear(); fills[0].clear(); fills[1].clear(); boardsInit(); shown.clear(); watch.clear(); bars.clear(); lastPx = 0; ++resets; }
     // ---- once a second: the steady top 3 per side ---------------------------------------------------------------------------------
     std::vector<Lvl> evaluate(long long now) {
         ++evals; why = Why(); cands.clear(); removed.clear();
@@ -81,7 +112,7 @@ public:
             if (o.side == 1 && o.px >= lastPx && (ba == 0 || o.px < ba)) ba = o.px; }
         insideB = bb; insideA = ba;
         const double atr = atrTicks(); atrNow = atr; const long long reach = (long long)std::llround(P.reachAtr * atr);
-        struct Agg { long long real = 0, young = 0, quote = 0, big = 0; int n = 0; bool s20 = false; };
+        struct Agg { long long real = 0, young = 0, quote = 0, big = 0; int n = 0; bool s20 = false; const Ord* bigO = nullptr; };
         std::unordered_map<long long, Agg> A; A.reserve(512);
         for (const auto& kv : O) { const Ord& o = kv.second; if (o.sz <= 0) continue;
             const long long ins = o.side == 0 ? bb : ba; if (ins <= 0) continue;
@@ -90,7 +121,7 @@ public:
             if (now - o.tRest < P.restMs) { g.young += o.sz; continue; }
             int mv = 0; for (long long t : o.moves) if (now - t <= P.quoteWinMs) ++mv;
             if (mv >= P.quoteMoves) { g.quote += o.sz; continue; }
-            g.real += o.sz; ++g.n; g.big = std::max(g.big, o.sz);
+            g.real += o.sz; ++g.n; if (o.sz > g.big || !g.bigO) { g.big = o.sz; g.bigO = &o; }
             const long long s20 = P.rth ? P.s20Rth : P.s20On;
             if (s20 > 0 && o.sz >= s20 && o.nMoves == 0 && now - o.tRest >= P.stationaryMs) g.s20 = true; }
         double med[2] = { 0, 0 };
@@ -105,9 +136,10 @@ public:
             if (banned.count(key(s, px))) { ++why.pulled; rm(4); continue; }
             if (d < P.insideSkip) { ++why.inside; rm(1); continue; }
             if (g.real <= 0) { if (g.young >= g.quote) { ++why.young; rm(2); } else { ++why.quoting; rm(3); } continue; }
+            if (g.bigO && g.bigO->clustered) { ++why.cluster; rm(5); continue; }   // (1.1.0) its biggest order came in a just-placed cluster
             if (med[s] > 0 && (double)g.real < P.normX * med[s]) { ++why.small; continue; }
             ++why.kept;
-            Lvl L; L.side = s; L.px = px; L.lots = g.real; L.orders = g.n; L.big = g.big; L.x = med[s] > 0 ? (double)g.real / med[s] : 0; L.single = g.real > 0 && (double)g.big >= P.singleShare * (double)g.real; L.dist = d; L.s20 = g.s20;
+            Lvl L; L.side = s; L.px = px; L.lots = g.real; L.orders = g.n; L.big = g.big; L.x = med[s] > 0 ? (double)g.real / med[s] : 0; L.single = g.real > 0 && (double)g.big >= P.singleShare * (double)g.real; L.dist = d; L.s20 = g.s20; L.realPct = g.bigO ? realPct(*g.bigO, now) : -1;
             cands[key(s, px)] = L;
             tin[s].push_back(t10::In{ key(s, px), (double)px, g.real, s == 0, true }); }
         std::vector<Lvl> out;
@@ -131,12 +163,14 @@ public:
     size_t orders() const { return O.size(); }
     long long ev() const { return events; }
     std::string statusLine() const {
-        char b[600]; std::snprintf(b, sizeof b, "TOP_BOOK,TopBook %s,S20 %lld (%s),orders %zu,events %lld,inside %lld/%lld,atr %.1f ticks,median real bid %.0f / offer %.0f,shown %zu,kept %d,skipped inside %d young %d quoting %d small %d pulled-banned %d,banned prices %zu,held %d,broke %d,pulled while hit %d,single-order shown %d,dropped orders %lld,resets %lld",
-            VERSION, P.rth ? P.s20Rth : P.s20On, P.rth ? "RTH" : "overnight", O.size(), events, insideB, insideA, atrNow, medNow[0], medNow[1], shown.size(), why.kept, why.inside, why.young, why.quoting, why.small, why.pulled, banned.size(), nHeld, nBroke, nPullHit, nSingle, dropped, resets);
+        char b[800]; std::snprintf(b, sizeof b, "TOP_BOOK,TopBook %s,S20 %lld (%s),orders %zu,events %lld,inside %lld/%lld,atr %.1f ticks,median real bid %.0f / offer %.0f,shown %zu,show after %llds,kept %d,skipped inside %d young %d quoting %d small %d cluster %d pulled-banned %d,model %s,banned prices %zu,held %d,broke %d,pulled while hit %d,single-order shown %d,dropped orders %lld,resets %lld",
+            VERSION, P.rth ? P.s20Rth : P.s20On, P.rth ? "RTH" : "overnight", O.size(), events, insideB, insideA, atrNow, medNow[0], medNow[1], shown.size(), P.showMs / 1000, why.kept, why.inside, why.young, why.quoting, why.small, why.cluster, why.pulled, RM.live ? "LIVE" : "off", banned.size(), nHeld, nBroke, nPullHit, nSingle, dropped, resets);
         return b; }
     int nHeld = 0, nBroke = 0, nPullHit = 0, nSingle = 0, nBanned = 0;
 private:
-    struct Ord { int side = 0; long long px = 0, sz = 0, tRest = 0, tTouch = 0; int nMoves = 0; std::vector<long long> moves; };
+    struct Ord { int side = 0; long long px = 0, sz = 0, tRest = 0, tTouch = 0, tAdd = 0; int nMoves = 0; int postDist = 0; bool clustered = false; std::vector<long long> moves; };
+    struct BigAdd { long long t, px, oid; };
+    std::vector<BigAdd> recent[2]; RealModel RM;
     struct Watch { int side; long long px; long long lots0; long long cxl0; long long fill0; long long tFirst; bool touched = false, near = false; long long lotsNear = 0, cxlNear = 0, fillNear = 0, cxlPrev = 0, fillPrev = 0; long long tTouch = 0; long long lotsTouch = 0; long long cxlTouch = 0, fillTouch = 0; bool pullHit = false; };
     Params P; std::unordered_map<long long, Ord> O; std::unordered_set<long long> banned;
     std::unordered_map<long long, long long> cxl[2], fills[2];   // per price: cumulative cancelled / filled lots (approach + hit checks)
@@ -146,11 +180,27 @@ private:
     static long long key(int s, long long px) { return (s == 0 ? 1LL : 2LL) * 1000000000LL + px; }
     static int sideOf(long long k) { return k >= 2000000000LL ? 1 : 0; }
     static long long pxOf(long long k) { return k - (k >= 2000000000LL ? 2000000000LL : 1000000000LL); }
-    void boardsInit() { t10::Params bp; bp.n = P.perSide; board[0] = t10::Board(bp); board[1] = t10::Board(bp); }
+    void boardsInit() { t10::Params bp; bp.n = P.perSide; bp.persistMs = P.showMs; board[0] = t10::Board(bp); board[1] = t10::Board(bp); }   // (1.1.0) 2 min to show
     void add(const In& e) {
         if (e.side != 0 && e.side != 1) { ++garbage; return; }
         if (O.size() >= P.maxOrders) { trim(); }
-        Ord o; o.side = e.side; o.px = e.px; o.sz = e.sz; o.tRest = e.tMs; o.tTouch = e.tMs; O[e.oid] = o; }
+        Ord o; o.side = e.side; o.px = e.px; o.sz = e.sz; o.tRest = e.tMs; o.tTouch = e.tMs; o.tAdd = e.tMs;
+        o.postDist = lastPx > 0 ? (int)std::llabs(e.px - lastPx) : 0;
+        // (1.1.0) the cluster rule: a big order with another big same-side order within 2 ticks posted in the 60 s before -> both clustered
+        const long long big = P.rth ? P.bigRth : P.bigOn;
+        if (big > 0 && e.sz >= big) { std::vector<BigAdd>& R = recent[e.side];
+            R.erase(std::remove_if(R.begin(), R.end(), [&](const BigAdd& b) { return e.tMs - b.t > P.clusterMs; }), R.end());
+            for (const BigAdd& b : R) if (std::llabs(b.px - e.px) <= P.clusterTicks) { o.clustered = true; auto it = O.find(b.oid); if (it != O.end()) it->second.clustered = true; }
+            if (R.size() < 200) R.push_back(BigAdd{ e.tMs, e.px, e.oid }); }
+        O[e.oid] = o; }
+    // (1.1.0) "% real" of an order from the market's model; -1 = not shown (model not LIVE, or an order the model does not score)
+    int realPct(const Ord& o, long long now) const {
+        if (!RM.live) return -1;
+        const long long s20 = P.rth ? P.bigRth : P.bigOn; if (s20 <= 0 || o.sz * 2 < s20 || o.postDist < 2) return -1;   // the model's population: big orders posted >= 2 ticks away
+        const double age = (double)(now - o.tAdd) / 1000.0;
+        double z = RM.b0 + (o.sz >= s20 ? RM.sizeS : 0.0) + (age >= 600 ? RM.age3 : age >= 120 ? RM.age2 : age >= 10 ? RM.age1 : 0.0) + (o.clustered ? RM.clustered : 0.0)
+                 + (o.postDist > 25 ? RM.post2 : o.postDist > 4 ? RM.post1 : 0.0) + (P.rth ? RM.rth : 0.0);
+        const double pf = 1.0 / (1.0 + std::exp(-z)); return (int)std::lround(100.0 * (1.0 - pf)); }
     void mod(const In& e) {
         auto it = O.find(e.oid); if (it == O.end()) { In a = e; a.act = ADD; add(a); return; }
         Ord& o = it->second; o.tTouch = e.tMs;
