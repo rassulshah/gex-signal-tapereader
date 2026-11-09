@@ -8,6 +8,7 @@ CXX="g++ -std=c++17 -fsanitize=address,undefined -fno-sanitize-recover=all -Werr
 $CXX0 -I.. -o /tmp/bo100_parity test_bo100_parity.cpp && /tmp/bo100_parity
 $CXX0 -O1 -I.. -o /tmp/bo120_week test_bo120_week.cpp && /tmp/bo120_week
 $CXX -O1 -I.. -o /tmp/bo180_pb test_bo180_pb.cpp && /tmp/bo180_pb
+$CXX -O1 -I.. -o /tmp/bo1120_pboc test_bo1120_pboc.cpp && /tmp/bo1120_pboc   # (1.12.0) Pboc (BO-wave Pb + no-BO Rly), real ES 11-09 / 10-21 / 11-04
 $CXX -O1 -I.. -o /tmp/bo190_rev test_bo190_rev.cpp && /tmp/bo190_rev   # (1.9.0) Rev   # (1.8.0) Pb: overlap the BO candle, max 2, green / red close pivots (test_bo160_pb = the 1.6.0 rule, retired: kept, not run)
 $CXX -O1 -I.. -o /tmp/bo161_onebar test_bo161_onebar.cpp && /tmp/bo161_onebar
 $CXX -O1 -I.. -o /tmp/bo170_onrly test_bo170_onrly.cpp && /tmp/bo170_onrly   # (1.7.0) overnight Rly

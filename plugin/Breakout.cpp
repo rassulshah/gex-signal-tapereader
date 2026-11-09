@@ -1,5 +1,14 @@
 /********************************************************************************
  *  Breakout.cpp  --  Investor/RT RTX extension  lsBreakout  "BO"  1.5.0  (2026-11-04)
+ *  1.12.0 (2026-11-09, Rassul 12:22 CT "if a pb tags the wave poc ... show pboc", mockup approved): PBOC. lsBreakout reads IRT's VAP
+ *        (VAP_REQUIRED, lsWavePOC's SEH-guarded reader) and computes each wave's volume POC with lsWavePOC's own rule (WavePOCLogic.h
+ *        rowTicksFor / buildRows / median2 / pickNodes, natively - no file read). (1) A Pb whose pivot bar straddles its BO / BD wave's POC
+ *        (BO: low <= POC < high; BD: high >= POC > low) is drawn "Pboc" (same place / colour). (2) A fired Rly wave WITHOUT a BO / BD of its
+ *        direction: its first 2 confirmed pullback pivots (none after a trade beyond the origin or the next BO / BD / Rly) are drawn "Pboc"
+ *        when the POC is at / below the wave's 50% (Rly down: at / above) and the pivot bar straddles it; otherwise no label. A pivot whose
+ *        wave has no VAP yet draws NOTHING until it has, then Pb or Pboc once (never switched). An Lvp still hides it. Records: BPB| + boc,
+ *        wave_poc (16 fields; written once boc is known); BPO| (Rly Pboc) and BRO| (the Rev rule's thrust off a Rly Pboc - recorded, not
+ *        drawn) in the -pb- file. Pb / Rev decisions unchanged. Status lines PBOC / RLY_PBOC.
  *  1.9.1 (2026-11-06 12:15 CT, Rassul "lets simplify the pb rev .. remove the stop line, t1 and t2 ... 1.2*ATR(13)"): Rev = range >= 1.2 x ATR(13)
  *        only; the biggest-of-5 alternative and the Stop / T1 / T2 lines removed; BRV| 14 fields.
  *  1.9.0 (2026-11-06, Rassul "PB Rev ... a thrust after a pullback", mockup pb-rev v0.1, "yes build"): + "Rev" (BreakoutLogic.h 1.9.0
@@ -89,7 +98,7 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.11.1"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
+#define BKO_VERSION "1.12.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
 
 static long long bkoMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bkoFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BKO_SEP "InvestorRT" BKO_SEP "rtx" BKO_SEP "lsFlexLevels" : std::string(); }
@@ -136,6 +145,7 @@ struct BState {
     std::string recMkt, recSym; std::map<std::string, std::set<std::string>> recHave; int recRuns = -1; long long recMs = -1;
     long long recAdded = 0, recFails = 0; long recPend = 0;
     bkh::Cob cob;   // (1.11.1) the Cob / Lvp letters lsCobSignal draws on this chart
+    bool vapFault = false;   // (1.12.0) a faulting VAP read is never re-entered (no Pboc then: the Pbs wait - status VAP)
 };
 
 class Breakout : public cppExtension {
@@ -152,6 +162,9 @@ public:
     bool identify(BState& S);
     void feed(BState& S);
     void feedCob(BState& S, int first, const std::vector<bko::In>& B);
+    int vapRows(BState& S, int chartBar, std::vector<wpc::VRow>& out);   // (1.12.0) lsWavePOC's reader
+    static int readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
+    static int readPrices(RTARRAYP* vap, int bar, VOLPROFILE* rows, int count);
     long long localSec(RTDATE d);
     void status(BState& S, long long now);
     void records(BState& S, long long now);
@@ -205,7 +218,10 @@ void Breakout::feed(BState& S) {
         b.o = op[k]; b.h = hi[k]; b.l = lo[k]; b.c = cl[k]; b.vol = (long long)vo[k];
         b.ok = parts((RTDATE)times[k], b.days, b.endSec);
     }
-    S.E.update(B, n, (long long)times[0], S.tick, S.spb, S.openMin, S.closeMin);
+    S.E.bocLive = !S.vapFault;   // (1.12.0) Pboc: VAP of engine bar j = chart bar j + first, read only inside this update
+    if (!S.vapFault) S.E.vapAt = [this, &S, first](int j, std::vector<wpc::VRow>& out) { return vapRows(S, j + first, out); };
+    try { S.E.update(B, n, (long long)times[0], S.tick, S.spb, S.openMin, S.closeMin); } catch (...) { S.E.vapAt = nullptr; throw; }
+    S.E.vapAt = nullptr;
     try { feedCob(S, first, B); } catch (...) { S.E.hideRly.clear(); S.E.hidePb.clear(); }   // (1.11.1) display only: a fault hides nothing
 }
 
@@ -216,6 +232,53 @@ void Breakout::feed(BState& S) {
 void Breakout::feedCob(BState& S, int first, const std::vector<bko::In>& B) {
     bkh::hide(S.E, S.cob, mkey::norm(S.mkt), S.tick, S.spb, B, [this](long long t) { return localSec((RTDATE)t); });
     (void)first;
+}
+// (1.12.0) SEH-guarded VAP reads, copied from lsWavePOC 1.10.1 (only trivial values inside, /EHsc compatible)
+int Breakout::readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats) {
+#if defined(_MSC_VER)
+    __try {
+#endif
+        if (!vap || !stats || bar < 0) return -2;
+        std::memset(stats, 0, sizeof(*stats));
+        if (vap->getBarStatistics(bar, *stats) != RTX_OK) return -2;
+        if (stats->prices < 0) return -2;
+        return stats->prices;
+#if defined(_MSC_VER)
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#endif
+}
+int Breakout::readPrices(RTARRAYP* vap, int bar, VOLPROFILE* rows, int count) {
+#if defined(_MSC_VER)
+    __try {
+#endif
+        if (!vap || count < 0 || (count > 0 && !rows)) return -2;
+        for (int i = 0; i < count; ++i) { std::memset(&rows[i], 0, sizeof(rows[i])); if (vap->getVolumeProfile(bar, i, rows[i]) != RTX_OK) return -2; }
+        return count;
+#if defined(_MSC_VER)
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+#endif
+}
+// one bar's volume at price -> rows in ticks: 1 = read, 0 = no VAP for it (yet), -1 = fault (never re-entered) - lsWavePOC::vapRows
+int Breakout::vapRows(BState& S, int chartBar, std::vector<wpc::VRow>& out) {
+    out.clear();
+    if (S.vapFault) return -1;
+    RTARRAYP vap(barVolumeProfile);
+    if (vap.count <= chartBar) return 0;
+    BARSTATISTICS st; const int prices = readStatistics(&vap, chartBar, &st);
+    if (prices == -1) { S.vapFault = true; return -1; }
+    if (prices <= 0 || prices > 100000) return 0;
+    std::vector<VOLPROFILE> rows((size_t)prices);
+    const int got = readPrices(&vap, chartBar, &rows[0], prices);
+    if (got == -1) { S.vapFault = true; return -1; }
+    if (got < 0) return 0;
+    for (const VOLPROFILE& v : rows) {
+        if (!std::isfinite((double)v.price) || v.totalVolume < 0) continue;
+        double vol = (double)v.totalVolume; const double bs = (double)v.buyVolume + (double)v.sellVolume; if (bs > vol + 0.5) vol = bs;
+        if (vol <= 0) continue;
+        wpc::VRow r; if (!wpc::toTicks((double)v.price, S.tick, r.tick)) continue;
+        r.vol = (long long)std::llround(vol); r.dlt = (long long)std::llround((double)v.buyVolume - (double)v.sellVolume); out.push_back(r);
+    }
+    return out.empty() ? 0 : 1;
 }
 long long Breakout::localSec(RTDATE d) {
     struct tm t; std::memset(&t, 0, sizeof t);
@@ -323,12 +386,12 @@ int Breakout::draw(void) {
 extern "C" cppExtension* CreateExtension(void) {
     Breakout* p = new Breakout();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
+    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);   // (1.12.0) VAP for the wave POC (Pboc)
 #if BKO_ONE_BAR
-    p->setDescription("LRA BO 1-bar v1.11.1 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
+    p->setDescription("LRA BO 1-bar v1.12.0 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
 #else
-    p->setDescription("LRA BO v1.11.1 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
+    p->setDescription("LRA BO v1.12.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC (IRT VAP, Wave POC's rule). For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.11.1");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.12.0");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }
