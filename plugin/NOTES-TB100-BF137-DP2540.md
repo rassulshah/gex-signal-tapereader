@@ -31,3 +31,25 @@ Filter check (t_check: every touched level, held = 0.5 ATR back away before 0.25
 One day each = LEARNING. ES / NQ: kept levels hold +3 to +9 points more than removed ones; GC: no difference (its median real level is
 1-2 lots - GC book levels are not reaction levels, as the 10-22 study found). Next: nightly multi-day check; the real-order model
 (LRA-RealOrder-<MKT>.csv) "NN% real" on ES / CL / NG rows = follow-up.
+
+## TopBook 1.1.0 / lsBookFlow 1.38.0 / lsDealerProfile 2.55.0 (Rassul approved 13:26 CT)
+- A level shows only after holding big size for 2 MINUTES (board entry wait, was 30 s); 10 s grace and the 1.25x swap unchanged.
+- CLUSTER rule: a level whose biggest order came with another big same-side order (>= the market's Big Lot S20, all 7 markets incl. GC 9 /
+  6E 42 RTH) within 2 ticks inside 60 s is not shown.
+- "NN% real" (row text "172 ?  48% real"): the per-market real-order model read natively from LRA-RealOrder-<MKT>.csv (re-read when the file
+  changes, checked once a minute), shown only while the file says LIVE (ES / CL / NG today). Scored for the level's biggest order when it is
+  >= half the market's S20 and was posted >= 2 ticks away. APPROXIMATION: the model's 2SD / 3SD tiers are not known natively - size_S = order
+  >= S20, size_3SD is never set (its coefficient: ES -0.08, CL 0, NG +0.31).
+- Tests: tests_tb/t_topbook 33/33; tests_bf137/test_bf138_host 16/16; test_dealerprofile_2550 10/10; chain 17/17; settings contract PASS.
+- ES Nov 6 09:45 with the 2-min rule: the same 6 levels; % real 48 (7454.50 "?"), 92, 95, 88, 92, none (7412: biggest order 20 lots).
+
+Hold time per market (t_check, one session each = LEARNING; shown levels' held %):
+| show after | ES Nov 6 | NQ Oct 27 | GC Oct 30 |
+|---|---|---|---|
+| 30 s | 38.9% (162) | 36.7% (283) | 30.6% (258) |
+| 60 s | 41.2% (153) | 36.2% (279) | 31.5% (251) |
+| 2 min | 43.8% (144) | 38.2% (272) | 31.0% (248) |
+| 5 min | 42.6% (129) | 38.2% (267) | 31.8% (223) |
+ES 2 min: model >= 70% real held 50.0% (64) vs < 70% 47.6% (21). Cluster-removed: ES 15 (46.7%), NQ 2, GC 5.
+NOT YET WIRED: the nightly per-market hold-time report (t_check takes the show time as its 2nd argument; needs a nightly step that streams the
+day's raw MBO through it for 30 s / 60 s / 2 min / 5 min and reports a better hold time before anything changes).
