@@ -42,7 +42,7 @@ int main() {
         for (const auto& kv : F.pb) { F.hidePb.insert(std::make_pair(kv.second.tp, kv.second.dir)); ++pbN; break; }
         const bko::Scene s0 = draw(E, (int)B.size()); bko::Engine G = F; G.hideRly.clear(); G.hidePb.clear(); const bko::Scene s1 = draw(G, (int)B.size()); const bko::Scene s2 = draw(F, (int)B.size());
         CHECK(s2.rlyHidden == rlyN && s2.pbHidden <= pbN && s2.rlyShown == s1.rlyShown - rlyN, "a forced Cob / Lvp key hides exactly that Rly / Pb"); (void)s0; }
-    CHECK(std::string(bko::VERSION) == "1.11.1" || std::string(bko::VERSION) == "1.12.0" || std::string(bko::VERSION) == "1.13.0", "version 1.11.1 (1.12.0 / 1.13.0 keep the hide rule)");
+    CHECK(std::string(bko::VERSION) == "1.11.1" || std::string(bko::VERSION) == "1.12.0" || std::string(bko::VERSION) == "1.13.0" || std::string(bko::VERSION) == "1.14.0", "version 1.11.1 (1.12.0 / 1.13.0 / 1.14.0 keep the hide rule)");
     std::printf("RESULT %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

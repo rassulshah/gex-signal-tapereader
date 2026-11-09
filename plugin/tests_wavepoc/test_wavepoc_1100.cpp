@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
         CHECK(L && L->text == "1,240" && L->col == 0x22D3EE, "1.10.1: the wave POC label = its row's lots '" << (L ? L->text : std::string("-")) << "' in the POC colour");
         bool overlap = false; for (const wpc::Prim& a : sc.p) for (const wpc::Prim& b : sc.p) if (&a != &b && a.k == wpc::Prim::TEXT && b.k == wpc::Prim::TEXT && a.role == 1 && a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0) overlap = true;
         CHECK(!overlap, "1.10.1: no lot label on another text"); }
-    CHECK(std::string(wpc::VERSION) == "1.10.3", "version 1.10.3");
+    CHECK(std::string(wpc::VERSION) == "1.10.4", "version 1.10.4");
     std::cout << "test_wavepoc_1100: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

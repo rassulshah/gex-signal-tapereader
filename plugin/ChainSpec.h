@@ -24,14 +24,14 @@
 #include <map>
 #include <set>
 namespace chain {
-static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-10-28) + kind S (the touch tags: lsLiquidityProfile 0.66.0 decides STAYS+ / STAYS / GONE / GONE+ and HELD / BROKE from the MBO feed, layer 10), read by lsDealerProfile 2.32.0 for DISPLAY (the tag in the Liquidity column, HELD on the chart); the votes ride on the S facts (val) - no combiner / Tape Reader reads them yet (that edge is added when one does)   // (1.3.0, 2026-10-28) + kind H (the hourly flow at each tiered A + the current flow) from lsDeltaProfile.READ, read by the Banner (display); the nightly joins the T-line flow to the scored combiner reads (not a live combiner input yet)   // (1.2.0) + lsLiquidityProfile.Banner (layer 25, display: R / Y / T)
+static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-11-09) + kind E (lsBreakout 1.14.0, layer 20: its drawn decided Pb / Pboc / Pdoc) read for DISPLAY by lsDealerProfile.Badges (layer 25: the ENT / EXIT tags, EntryBadge.h) with G and D   // was "1.4.0":   // (1.4.0, 2026-10-28) + kind S (the touch tags: lsLiquidityProfile 0.66.0 decides STAYS+ / STAYS / GONE / GONE+ and HELD / BROKE from the MBO feed, layer 10), read by lsDealerProfile 2.32.0 for DISPLAY (the tag in the Liquidity column, HELD on the chart); the votes ride on the S facts (val) - no combiner / Tape Reader reads them yet (that edge is added when one does)   // (1.3.0, 2026-10-28) + kind H (the hourly flow at each tiered A + the current flow) from lsDeltaProfile.READ, read by the Banner (display); the nightly joins the T-line flow to the scored combiner reads (not a live combiner input yet)   // (1.2.0) + lsLiquidityProfile.Banner (layer 25, display: R / Y / T)
 enum Use { DECIDE = 0, DISPLAY = 1 };
 struct Node { std::string name; int layer; };
 struct Edge { std::string from, to; char kind; Use use; };   // 'from' produces kind, 'to' reads it
 struct Producer { char kind; std::string owner; int layer; const char* what; };
 inline std::vector<Node> nodes() {
     return { {"IRT", 0}, {"lsLiquidityProfile", 10}, {"lsDeltaProfile", 10}, {"lsBookFlow", 10}, {"lsTrappedTraders", 10}, {"lsDealerProfile", 15},
-             {"lsDeltaProfile.READ", 20}, {"lsLiquidityProfile.Ex", 20}, {"lsBigBidAsk", 20}, {"lsBookFlow.AtNode", 25}, {"lsLiquidityProfile.Banner", 25}, {"lsDeltaProfile.Combiner", 30} };
+             {"lsDeltaProfile.READ", 20}, {"lsLiquidityProfile.Ex", 20}, {"lsBigBidAsk", 20}, {"lsBreakout", 20}, {"lsDealerProfile.Badges", 25}, {"lsBookFlow.AtNode", 25}, {"lsLiquidityProfile.Banner", 25}, {"lsDeltaProfile.Combiner", 30} };
 }
 inline std::vector<Producer> producers() {
     return { {'B', "lsLiquidityProfile", 10, "resting liquidity within reach: the depth book's lots per price + the big-order lines (0.62.1)"},
@@ -50,10 +50,14 @@ inline std::vector<Producer> producers() {
              {'H', "lsDeltaProfile.READ", 20, "the hourly flow: 4 closed hours vs the last hour at each tiered A (F?) + the current flow (DLT 2.30.0)"},
              {'X', "lsLiquidityProfile.Ex", 20, "Ex / Ex? at key levels"},
              {'L', "lsBigBidAsk", 20, "BO / BD letters (SignalBoard 1.3.0 kind L)"},
+             {'E', "lsBreakout", 20, "the drawn decided pullback labels Pb / Pboc / Pdoc: decision bar, side, PB POC, stop, wave target (EntryFacts.h 1.0.0)"},
              {'K', "lsDeltaProfile.Combiner", 30, "the combined read: turn / swing odds"} };
 }
 inline std::vector<Edge> edges() {
-    return { {"lsBookFlow", "lsDealerProfile", 'G', DECIDE},                  // (2026-11-09) the Liquidity column's top 3 bids / offers (lsDealerProfile 2.54.0)
+    return { {"lsBreakout", "lsDealerProfile.Badges", 'E', DISPLAY},          // (1.5.0) the ENT / EXIT tags on the Limit Profile rows (display only, never recorded)
+             {"lsBookFlow", "lsDealerProfile.Badges", 'G', DISPLAY},          // (1.5.0) the EXIT book row
+             {"lsBookFlow", "lsDealerProfile.Badges", 'D', DISPLAY},          // (1.5.0) PULL: defenders leaving at the ENT level
+             {"lsBookFlow", "lsDealerProfile", 'G', DECIDE},                  // (2026-11-09) the Liquidity column's top 3 bids / offers (lsDealerProfile 2.54.0)
              {"lsLiquidityProfile", "lsDealerProfile", 'B', DECIDE},          // the liquidity rank and the level tags come from LP's resting orders
              {"lsLiquidityProfile", "lsDealerProfile", 'S', DISPLAY},         // (1.4.0) the touch tag in the Liquidity column + HELD on the chart (drawn, latched for shown levels)
              {"lsDeltaProfile", "lsTrappedTraders", 'C', DECIDE},             // Who is trapped? falls back to the Delta Profile's candle lots

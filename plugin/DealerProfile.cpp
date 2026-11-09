@@ -119,6 +119,7 @@ static void* dpCursorWindow() { return NULL; }
 #include "Top10Stable.h"        // (2.31.0) the steady liquidity top 10
 #include "LevelFade.h"          // (2.31.1) moving / quoting levels dimmed "~" (never dropped), tracked by level
 #include "BoxDock.h"            // (2.31.0) the HOD/LOD table rectangle (badges keep clear of it)
+#include "EntryBadge.h"         // (2.56.0) the ENT / EXIT / 1/2 liquidity tags on the Key Levels / Liquidity rows (lsBreakout fact kind E)
 #include "LevelsColumn.h"       // (2.28.0) the combined LEVELS + LIQUIDITY column (rows, order, liquidity, rank; SDK-free, tested)
 #include "LiqPick.h"           // (2.40.0) which whole-book nodes the Liquidity column shows (top 5 + level-linked >= 50% of the king)
 #include "LevelPctLogic.h"      // (2.19.0) the level % badges (LRA-LevelBadges-<MKT>.csv)
@@ -149,7 +150,7 @@ static const int DP_KEYS_RW = 170, DP_LQ_RW = 170;   // (2.42.0, Rassul 2026-11-
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.55.1";   // (2.55.1, 2026-11-09 Rassul 13:59 CT "Remove the % real. It is just taking up space") the rows show lots + ? / S20 only; the model keeps running nightly   // was "2.55.0":   // (2.55.0, 2026-11-09 Rassul 13:26 CT) the Liquidity rows add "NN% real" (the per-market real-order model, posted by lsBookFlow 1.38.0 only while the market's model is LIVE: ES / CL / NG today); the 2-min show / cluster rules live in TopBook 1.1.0   // was "2.54.0":   // (2.54.0, 2026-11-09 Rassul 12:55 CT "do it", mockup E9QjUViBERJrEpJruVPKie) the Liquidity column = the NATIVE TOP BOOK from lsBookFlow 1.37.0 (SignalBoard kind G, TopBook.h): the 3 biggest REAL bids below price + the 3 biggest REAL offers above (rested 30 s, not quoting, past the first 2 ticks, >= 2.0x the side normal, not pulled on an earlier approach); rank | bar | lots as before, K = the biggest of the 6; "172 ?" = mostly one order (may not reload), "61 S20" = holds a stationary Big Lot S20 order (the tested LMT order); lsLiquidityProfile no longer needed   // was "2.53.1":   // (2.53.1, 2026-11-07 Rassul 13:09 CT "yes") once per session the 3-min chart appends its key levels to LRA-KeyLevels-<MKT>-hist.csv (the nightly level-value check); nothing on the chart changes
+static const char* DP_VERSION = "2.56.0";   // (2.56.0, 2026-11-09 Rassul 16:34 CT "Ok build", mockup v2 8yUygzBF5C8SEx8toBGaQw) the ENT / EXIT / 1/2 liquidity tags on the Key Levels / Liquidity rows (EntryBadge.h 1.0.0, lsBreakout 1.14.0 fact kind E): ES ENT Pdoc at the PB POC, NG ENT Pdoc ?, CL ENT ? at gamma + EXIT ? on the book row, GC 1/2 + rest; PULL from lsBookFlow D; no new column   // was "2.55.1":   // (2.55.1, 2026-11-09 Rassul 13:59 CT "Remove the % real. It is just taking up space") the rows show lots + ? / S20 only; the model keeps running nightly   // was "2.55.0":   // (2.55.0, 2026-11-09 Rassul 13:26 CT) the Liquidity rows add "NN% real" (the per-market real-order model, posted by lsBookFlow 1.38.0 only while the market's model is LIVE: ES / CL / NG today); the 2-min show / cluster rules live in TopBook 1.1.0   // was "2.54.0":   // (2.54.0, 2026-11-09 Rassul 12:55 CT "do it", mockup E9QjUViBERJrEpJruVPKie) the Liquidity column = the NATIVE TOP BOOK from lsBookFlow 1.37.0 (SignalBoard kind G, TopBook.h): the 3 biggest REAL bids below price + the 3 biggest REAL offers above (rested 30 s, not quoting, past the first 2 ticks, >= 2.0x the side normal, not pulled on an earlier approach); rank | bar | lots as before, K = the biggest of the 6; "172 ?" = mostly one order (may not reload), "61 S20" = holds a stationary Big Lot S20 order (the tested LMT order); lsLiquidityProfile no longer needed   // was "2.53.1":   // (2.53.1, 2026-11-07 Rassul 13:09 CT "yes") once per session the 3-min chart appends its key levels to LRA-KeyLevels-<MKT>-hist.csv (the nightly level-value check); nothing on the chart changes
 // was "2.53.0":   // (2.53.0, 2026-11-04 20:59-21:14 CT Rassul "levels across the chart for the key levels, volume levels, gamma levels just CR0 and PS0 ... dim and thin so they dont look noisy", "go with proposal A" on lv_mock) every level with a badge in view gets a 1 px solid line across the price area in its own colour at ~30% brightness (DP_XLINE_FADE 0.7 toward the dark ground), behind the badge column; VWAP no line; cut around the HOD/LOD table   // was "2.52.4":   // (2.52.4, 2026-11-04 17:02 CT Rassul "update PHL and PHH to PhrL and PhrH") the prior-hour key levels are shown as PhrH / PhrL (KeyLevelsLogic displayName); the file / record name stays PHH / PHL   // was "2.52.3":   // (2.52.3, 2026-11-04, audit + Rassul "just build it") KEY LEVEL BADGES AT THEIR PRICE: the Key Levels band (IRT title row, edge-marker rows, the HOD/LOD table side it covers) is decided BEFORE what is on screen (ColumnBoard 1.10.0 planKeys) - a level whose line is behind the table / title / marker row becomes the "^ / v name price (distance)" edge marker (the nearest one), never a badge squeezed against the table edge; a badge is pushed at most 2 badge heights from its line (past that: an edge marker near the band edge, else dropped and counted); cb::stack has its missing 3rd pass   // was "2.52.2":   // (2.52.2, 2026-11-03 night, Rassul "fix all" after the Liquidity Profile audit) K = lsLiquidityProfile 0.73.0's KING (SignalBoard B code 3) - its node is rank 1 and the others follow in board order; no LP king = no K (rank 1 shows "1"); while lsLiquidityProfile says its order book is WARMING (B code 9, the first 10 min after a restart) the title reads "LIQUIDITY \xB7 warming" and no rank / K / chip / edge marker is shown   // was "2.52.1":   // (2.52.1, 2026-11-03 Rassul "go") the rank boxes (Liquidity rows + level-badge chips) sized to their text ("10", "11" fit) and the rank text CENTRED by IRT (drawText centred) - the left-justified draw sat ~4 px right of where it was measured, so "K" was half cut off   // was "2.52.0": (2.52.0, 2026-11-03 Rassul "the rank in front of the liquidity") the LIQUIDITY rows' rank box moved to the FRONT of the row (left of R S notP F); same box, colours, column width   // was "2.51.0": (2.51.0, 2026-11-03 Rassul 09:34 CT "remove the held lines") no HELD lines / words on the price chart (DP_HELD_LINES false; grades still read and logged)   // was "2.50.1":   // (2.50.1) no hovers at all (DP_PCT_HOVERS off, no TRACK_MOUSE)   // was "2.50.0":   // (2.50.0, 2026-11-02 Rassul 13:18 CT) no flicker: level ranks and node grades held 10 s, grade zone +-2.5 ticks; HELD lots = the most seen while testing; HELD lines / words never pile up   // was "2.49.0":   // (2.49.0, 2026-11-02 Rassul 12:37 CT) only the PASSED grade letters are drawn (white, fixed slots)   // was "2.48.0":   // (2.48.0, 2026-11-02 Rassul 12:34 CT) grade letters without the white / grey boxes (passed white, failed grey)   // was "2.47.0":   // (2.47.0, 2026-11-02 Rassul 12:27 CT) no level names on the liquidity rows; a level-linked node's rank on its level badge   // was "2.46.0":   // (2.46.0, 2026-11-02 Rassul 12:22 CT) CR0 red / PS0 green; level names never shortened for the grade tags (tags only where they fit)   // was "2.45.0":   // (2.45.0, 2026-11-02 Rassul 12:10-12:12 CT, mockup liq_gap) liquidity label 4 px after its bar, rank box right after the label; grade tags stay on the bar   // was "2.44.0":   // (2.44.0, 2026-11-02 Rassul) CR0 and PS0 (today's 0DTE call resistance / put support) back in the Key Levels column; other gamma levels stay out   // was "2.43.0":   // (2.43.0, 2026-11-02 10:59 CT) the real-liquidity grade R S \xACP F on the Liquidity bar + score, HELD line when a graded node held   // was "2.42.0":   // (2.42.0, 2026-11-02) Key Levels and Liquidity columns 170 px each (were 200 / 230)   // was "2.41.0":   // (2.41.0, 2026-11-01 Rassul 16:32-16:52 CT) new key levels PHH / PHL = the high / low of the hour before the RTH open (KeyLevelsLogic), overnight grey; HG RTH from 07:10 CT (SessionVWAPLogic, his locked rule; was 07:20)   // was 2.40.2:   // (2.40.2, 2026-11-01) the bar export reads his indicators from the CHART only (no getCustomIndicator fallback - the IRT crash rule); the weekly POC stays computed natively from the completed prior week   // was 2.40.1:  (2.40.1, 2026-11-01 cleanup, Rassul "go with your recommendation") code that could no longer run removed: the Dealer Profile bars (render / node rows / header / strength marks), the pre-2.29 Levels column (flushColumn) and badge paths, the GEX rows, the 2.35 code-2 zone mode, the 2.38 king rows, the touch-tag rows / lane, the badge rank chips and odds; the no-order-feed fallback shows the top 5 (was 3); every drawing of 2.40.0 unchanged (identical draw list)   // was 2.40.0:  (2.40.0, 2026-11-01 Rassul 09:49-10:21 CT, mockup lp_proposal.html) THE LIQUIDITY COLUMN = the WHOLE BOOK: the top 5 real-order nodes (lsLiquidityProfile 0.70.0 B code 4: rested >= 10 min, re-priced < 2x in 5 min, any distance; both sides together; steady board in 30 s / out 10 s) + any other node >= 50% of the king within 1 ATR (3-min) above a high level / below a low level (POCs either side) with its REAL rank (6, 7, ...) and the level names (LiqPick.h); the amount is "265  100%" = % of the king (no age, no x); no STAYS / GONE tags, no K rows (the king = rank 1, a white K box); the KEY LEVELS column moved RIGHT, just left of the Liquidity column (the price area starts at the pane's left edge; badges left-justified); no odds % and no rank chips on the level badges   // was 2.39.0:  (2.39.0, 2026-10-29 Rassul 13:02 CT) no Wave POC badge (his "WPOC" = the WEEKLY POC); the weekly POC off screen = its own marker "Weekly POC 7,690.00  (-42.00)" at the Key Levels column's top / bottom edge; liquidity column re-laid out (bars use the column width, the left tag lane wider)
 // was 2.38.0:   // (2.38.0, 2026-10-29 Rassul approved 11:18 CT) a WPOC badge in the Key Levels column = the latest wave's OPEN Wave POC from lsWavePOC 1.4.0 (SignalBoard W); the KING nodes from lsLiquidityProfile 0.69.0 (B code 3): a K row at their price, off screen the edge marker "K <price> <lots> (x)"; the Liquidity column: the zone's AGE next to its amount ("223 \xB7 48m", from lsLiquidityProfile 0.69.0's first-candidate time); R? after a touch tag when the zone was rebuilt >= what was hit (untested "?"; live only, not recorded)   // was 2.37.0: (2.37.0, 2026-10-29 Rassul approved 09:33 CT, mockup orderlines-levels-mockup.html) Key Levels badge order left to right: odds (left-justified) ... VALUE, NAME chip(s), the LIQUIDITY RANK box right-most (no rank = no box; same 230 px; odds drop first); rank rule option c: a zone counts only from the level out to 0.25 ATR (3-min) BEYOND it (one-sided, away from price) and each zone goes to ONE level (the nearest) - no rank twice (LevelsColumn.h lrk 1.0.0); liqlevels.csv follows the same rule; every rank change appended to lsFlexLevels\\DealerProfile\\<MKT>-liqlevels-history-<session>.csv (time, level, price, rank, lots)   // was 2.36.1: (2.36.1, 2026-10-28 18:24 CT Rassul "you shouldn't be able to see the background") the Key Levels column ground is SOLID: the chart background colour (getBackgroundColor), the full column (pane left edge to the column edge, pane top to bottom, no cut-out), drawn first in the levels pass - before the narrow-chart return - so nothing DealerProfile or an indicator drawn before it paints there shows through; badges / odds / ticks on top
 // was 2.36.0:   // (2.36.0, 2026-10-28 16:26 CT Rassul "the chart is extremely messy, remove the drawing of levels across the chart") NO level lines across the price area (badges stay in the Key Levels column, a <= 6 px tick at its edge), no faint liquidity order lines, no HELD line / word on the chart (HELD = a tag in the liquidity column lane; record + outcome logic unchanged), the off-screen level markers in the Key Levels column top / bottom
@@ -309,7 +310,7 @@ public:
         bool qFromBoard = false; bool bookMode = false, bInit = false, keysCleared = false; t10::Board bBoard; int bNodes = 0, bExtras = 0, bTop = 0; long long bKing = 0; int qShown = 0, vPosted = 0;   /* (2.40.0) whole-book mode */ t10::Board top10; t10::Board zBid, zAsk; bool zInit = false; int zCands = 0, zShownB = 0, zShownA = 0; bool zMode = false; lfd::Tracker fadeT; std::string fadeMkt; int qBoard = 0, qOff = 0, qQuoting = 0, qMovedMarks = 0, qKingOff = 0;   // (2.31.0) the steady top 10   // (2.30.0) the liquidity top 10 from SignalBoard 'B'; levels posted as 'V'
         lpct::Table lpT; long long lpStamp = -2, lpChecked = -1; std::string lpWhy = "not read yet", lpMkt; int lpShown = 0, lpGreen = 0, lpNoRow = 0, lpNoRoom = 0;   // (2.19.0) the level % file
         qm::File qmF; long long qmStamp = -2, qmChecked = -1, qmMtime = 0; std::string qmMkt; int qmOnBadge = 0, qmAlone = 0, qmFar = 0, qmInactive = 0, qmNoRoom = 0;   // (2.20.0) the queue meter file
-        std::vector<lvc::Order> lmtO; long long lmtStamp = -2, lmtChecked = -1; std::string lmtWhy = "not read yet"; int lvcRows = 0, lvcLiq = 0, lvcMerged = 0, lvcGex = 0, lvcChipsCut = 0;   // (2.28.0)
+        std::vector<lvc::Order> lmtO; long long lmtStamp = -2, lmtChecked = -1; std::string lmtWhy = "not read yet"; int lvcRows = 0, lvcLiq = 0, lvcMerged = 0, lvcGex = 0, lvcChipsCut = 0; ebd::Out eb; int ebFacts = -1, ebDrawn = 0, ebBook = 0, ebAdded = 0;   /* (2.56.0) */   // (2.28.0)
         std::map<std::string, dcol::HLState> hl; int hlOn = 0, liqBlocks = 0;                   // HL hysteresis per level
         dpaudit::WriteGate gateOld, gateMkt;                                                     // (2.17.0) this chart's status writes (was one static for every chart)
         bool mstPosted = false; std::string mstSym, mstChart; long mstSpb = 0;                   // (2.17.0) the Market State entry of this chart
@@ -573,6 +574,15 @@ static ss::Ids& dpIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 static std::string dpFlexDir() { const char* up = getenv("USERPROFILE"); return std::string(up ? up : "C:") + "\\InvestorRT\\rtx\\lsFlexLevels\\"; }
 static std::string dpLiqPath(const std::string& mkt) { return dpFlexDir() + "DealerProfile\\" + mkt + "-liqlevels.csv"; }   // (2.36.0)
 static std::string dpSettingsPath() { return dpFlexDir() + "DealerProfile.settings.txt"; }
+// (2.56.0) a bar's local (Central) time as wall-clock seconds (the clock of every SignalBoard fact; lsBreakout::localSec / lsBookFlow mstCt)
+static long long dpCivilSec(const struct tm& t) {
+    if (t.tm_mon < 0 || t.tm_mon > 11 || t.tm_mday < 1 || t.tm_mday > 31) return 0;
+    long long y = t.tm_year + 1900; const unsigned m = (unsigned)t.tm_mon + 1, dd = (unsigned)t.tm_mday;
+    y -= m <= 2; const long long era = (y >= 0 ? y : y - 399) / 400; const unsigned yoe = (unsigned)(y - era * 400);
+    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + dd - 1; const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    const long long days = era * 146097 + (long long)doe - 719468;
+    return days * 86400 + t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
+}
 static long long dpNowMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static Settings dpFromValues(const ss::Values& V)
 {
@@ -942,6 +952,7 @@ void DealerProfile::writeStatus(const char* what)
       << ",LP kings posted " << cs.lpKings << "\n"
       << "LIQ_WARM," << (!cs.lpProto ? "no lsLiquidityProfile 0.73 state" : cs.rkHide ? "warming" : "ready") << ",LP order book tracked " << cs.lpTracked << " s,depth explained " << cs.lpCover << "%,title " << (cs.rkHide ? "LIQUIDITY \xB7 warming (no ranks / K / chips / edge markers)" : "LIQUIDITY") << "\n"
       << "RANK_RULE,LevelsColumn lrk " << lrk::VERSION << ",reach " << lrk::REACH_ATR << " ATR (3-min) beyond = " << cs.rankReachPx << ",one level per zone,history session " << cs.rankHist.session << " lines " << cs.histLines << " writes " << cs.histWrites << " fails " << cs.histFails << "\n"
+      << "ENTRY_BADGE,EntryBadge " << ebd::VERSION << ",E facts " << cs.ebFacts << ",label " << (cs.eb.lab ? ebd::labName(cs.eb.lab) + (cs.eb.lab > 10 ? " (Rly)" : "") : std::string("-")) << ",state " << cs.eb.why << ",filled " << (cs.eb.filled ? 1 : 0) << ",pull " << (cs.eb.pull ? 1 : 0) << ",tags " << cs.eb.tags.size() << ",drawn on key rows " << cs.ebDrawn << ",on book rows " << cs.ebBook << ",rows added " << cs.ebAdded << "\n"
       << "LEVELS_COLUMN," << (DP_LINES ? "lines (LevelsColumn " : DP_LVC ? "combined (LevelsColumn " : "off (") << lvc::VERSION << ")" << ",rows " << cs.lvcRows << ",merged rows " << cs.lvcMerged << ",with liquidity " << cs.lvcLiq << ",GEX rows " << cs.lvcGex << ",chips cut " << cs.lvcChipsCut << ",orders " << cs.lmtO.size() << ",order file " << (cs.lmtWhy.empty() ? std::string("ok") : cs.lmtWhy) << ",dealer bars " << (DP_BARS ? "on" : "off") << ",off-screen " << (offUp.have ? offUp.name : std::string("-")) << " / " << (offDn.have ? offDn.name : std::string("-")) << "\n"
       << "LEVEL_PCT," << (cfg.levelPct ? "on" : "off (setting)") << ",file " << (cs.lpWhy.empty() ? std::string("ok") : cs.lpWhy) << ",rows " << cs.lpT.rows.size()
       << ",built " << (cs.lpT.built.empty() ? std::string("-") : cs.lpT.built) << ",shown " << cs.lpShown << ",green " << cs.lpGreen << ",no row " << cs.lpNoRow << ",no room " << cs.lpNoRoom << "\n"
@@ -1944,6 +1955,27 @@ void DealerProfile::flushLines(const Settings& S)
     };
     // the levels: key / volume only (gamma off)
     const double tick = chartTick(mkt), atr = atr14();
+    // (2.56.0, Rassul 16:34 CT "Ok build") THE ENTRY / EXIT TAGS (EntryBadge.h): lsBreakout's newest drawn, decided Pb / Pboc / Pdoc (fact kind E)
+    // + the chart's closed bars + the levels below + the native top book (G) + lsBookFlow's decided defense (D) -> tags on this column's rows
+    std::vector<std::pair<size_t, size_t> > ebIn;   // (tag index, in index)
+    cs.eb = ebd::Out(); cs.ebFacts = -1; cs.ebAdded = 0; cs.ebDrawn = 0; cs.ebBook = 0;
+    {   std::vector<sb::Fact> F; const long long nowE = dpNowMs();
+        if (sb::readFacts('E', cs.sym, cs.spb, cs.chart, nowE, F, true)) {
+            cs.ebFacts = (int)F.size();
+            std::vector<ebd::Lbl> L; for (const sb::Fact& f : F) { ebd::Lbl x; x.td = f.bar; x.side = f.side; x.code = f.code; x.pbPoc = f.lo; x.stop = f.hi; x.target = f.val; L.push_back(x); }
+            std::vector<ebd::Bar> B;
+            {   RTARRAY h(barHigh), l(barLow), c(barClose); RTARRAYI dt(barDateTime);
+                const long nAll = std::min<long>(nb, std::min<long>((long)dt.count, std::min<long>((long)h.count, std::min<long>((long)l.count, (long)c.count))));
+                for (long k = std::max(0L, nAll - 400); k + 1 < nAll; ++k) {   // closed bars only
+                    ebd::Bar b; { struct tm tt; std::memset(&tt, 0, sizeof tt); b.t = getLocaltime((RTDATE)dt[(int)k], &tt) ? dpCivilSec(tt) : 0; } b.h = h[(int)k]; b.l = l[(int)k]; b.c = c[(int)k];
+                    if (b.t > 0 && std::isfinite(b.h) && std::isfinite(b.l) && std::isfinite(b.c)) B.push_back(b); } }
+            std::vector<ebd::Lvl> V; for (const PendLbl& P : pend) if (std::isfinite(P.px) && P.px > 0) V.push_back(ebd::Lvl{ P.px, dcol::compactName(klv::displayName(P.name0)), P.src != 0 });
+            std::vector<ebd::Book> K; { std::vector<sb::Fact> G; if (sb::readFacts('G', cs.sym, cs.spb, cs.chart, nowE, G, false))
+                for (const sb::Fact& g : G) if (g.code >= 1 && g.code <= 6 && g.val > 0 && (g.side == 1 || g.side == -1)) K.push_back(ebd::Book{ g.lo, (long long)g.val, g.side > 0 }); }
+            std::map<long long, int> Dm; { std::vector<sb::Fact> DF; if (sb::readFacts('D', cs.sym, cs.spb, cs.chart, nowE, DF, true)) for (const sb::Fact& d : DF) Dm[d.bar] = d.code; }
+            cs.eb = ebd::compute(mkt, B, L, V, K, tick, atr, [&](long long t, int side) { const auto it = Dm.find(t); return it != Dm.end() && ((side > 0 && it->second == 2) || (side < 0 && it->second == 4)); });
+        } else cs.eb.why = "no E producer (lsBreakout 1.14.0 not on this chart)";
+    }
     std::vector<lvc::In> in;
     for (size_t i = 0; i < pend.size(); ++i) {
         const PendLbl& P = pend[i]; if (!std::isfinite(P.px)) continue;
@@ -1965,7 +1997,21 @@ void DealerProfile::flushLines(const Settings& S)
         lvc::In x; x.px = P.px; x.name = dcol::compactName(klv::displayName(P.name0)); x.src = P.src;
         x.col = (unsigned long)P.col; x.pick = P.pick; x.stale = P.stale; x.idx = i; in.push_back(x);
     }
+    for (size_t ti = 0; ti < cs.eb.tags.size(); ++ti) {   // (2.56.0) a key-row tag: its level row in the column (added while the tag lives)
+        const ebd::Tag& T = cs.eb.tags[ti]; if (T.book || !std::isfinite(T.px) || !(tick > 0)) continue;
+        long pi = -1; for (size_t i = 0; i < pend.size(); ++i) if (std::isfinite(pend[i].px) && std::fabs(pend[i].px - T.px) < 0.5 * tick) { pi = (long)i; break; }
+        if (pi < 0) { PendLbl P; P.key = "E|" + T.text; P.name0 = T.name.empty() ? std::string("PbPOC") : T.name; P.priceTxt = dpaudit::priceText(mkt, T.px);
+            P.col = (COLOR)0x00F8FAFC; P.px = T.px; P.src = 0; PNT pp; pp.set((int)(nb - 1), (float)T.px); P.y = pp.v; pend.push_back(P); pi = (long)pend.size() - 1; ++cs.ebAdded; }
+        long ii = -1; for (size_t k = 0; k < in.size(); ++k) if (in[k].idx == (size_t)pi) { ii = (long)k; break; }
+        if (ii < 0) { const PendLbl& P = pend[(size_t)pi]; lvc::In x; x.px = P.px; x.name = dcol::compactName(klv::displayName(P.name0)); if (x.name.empty()) x.name = "PbPOC";
+            x.src = P.src; x.col = (unsigned long)P.col; x.pick = P.pick; x.stale = P.stale; x.idx = (size_t)pi; in.push_back(x); ii = (long)in.size() - 1; }
+        ebIn.push_back(std::make_pair(ti, (size_t)ii));
+    }
     std::vector<lvc::Row> rows = lvc::group(in, tick, atr);
+    std::vector<std::string> rowTag(rows.size()); std::vector<COLOR> rowTagCol(rows.size(), (COLOR)0);   // (2.56.0)
+    for (const std::pair<size_t, size_t>& pr : ebIn) for (size_t r = 0; r < rows.size(); ++r)
+        if (std::find(rows[r].members.begin(), rows[r].members.end(), pr.second) != rows[r].members.end()) { const ebd::Tag& T = cs.eb.tags[pr.first];
+            rowTag[r] += (rowTag[r].empty() ? "" : " ") + T.text; rowTagCol[r] = T.kind == 1 ? (T.side > 0 ? C_BUY : C_SELL) : C_AMBER; break; }
     if (rows.empty()) { pend.clear(); return; }
     loadLmt();
     double lastPx = lastPxLv;
@@ -1998,7 +2044,7 @@ void DealerProfile::flushLines(const Settings& S)
     // (2.30.0) THE LIQUIDITY TOP 10 from lsLiquidityProfile's resting big orders (SignalBoard 'B', live): the 10 biggest on screen, ranked by lots
     // (this indicator owns the rank - ChainSpec.h); each level's badge rank = the best-ranked of them from the level out to 1 ATR BEYOND it,
     // never inside (his rule, 2026-10-27). No 'B' producer = the 2.29.0 ranking from the level-tagged order file (said so in the status).
-    struct TopQ { double px; long long lots; bool bid; int rank; int y; int moves = 0; bool dim = false; bool on = true; long long since = 0; int pct = 0; bool extra = false; std::string names; int gTag = 0; int gReal = -1; };   // (2.55.0) gReal = % real (-1 none)   // (2.54.0) gTag 1 = mostly one order ("?"), 2 = a stationary S20 order   // (2.40.0) pct = % of the king; extra = level-linked (names)   // (2.38.0) since = first a candidate (CT s)
+    struct TopQ { double px; long long lots; bool bid; int rank; int y; int moves = 0; bool dim = false; bool on = true; long long since = 0; int pct = 0; bool extra = false; std::string names; int gTag = 0; int gReal = -1; std::string etag = std::string(); };   // (2.55.0) gReal = % real (-1 none)   // (2.54.0) gTag 1 = mostly one order ("?"), 2 = a stationary S20 order   // (2.40.0) pct = % of the king; extra = level-linked (names)   // (2.38.0) since = first a candidate (CT s)
     std::vector<TopQ> topq;
     std::vector<int> rowQ(rows.size(), -1);   // (2.36.0) each row's matched liquidity level (index into topq) for the badge chip + liqlevels.csv
     {   std::vector<sb::Fact> B; const long long nowMs = (long long)time(nullptr) * 1000LL;
@@ -2017,6 +2063,7 @@ void DealerProfile::flushLines(const Settings& S)
                     q.on = !(p.v - bh / 2 <= pane.top + bh + 4 || p.v + bh / 2 >= pane.bottom - 4); if (!q.on) ++cs.qOff;
                     ++cs.bTop; topq.push_back(q); }
                 std::sort(topq.begin(), topq.end(), [](const TopQ& a, const TopQ& b) { return a.rank < b.rank; });
+                for (TopQ& q : topq) for (const ebd::Tag& T : cs.eb.tags) if (T.book && tick > 0 && std::fabs(q.px - T.px) < 0.5 * tick) { q.etag = T.text; ++cs.ebBook; }   // (2.56.0) EXIT on its book row
                 cs.gShown = (int)topq.size(); cs.qBoard = cs.gShown;
             }
         }
@@ -2171,6 +2218,7 @@ void DealerProfile::flushLines(const Settings& S)
         int w = 4;
         for (const lvc::Chip& C : R.chips) w += textW(C.text.c_str(), kf, true) + 8 + 3;
         w += textW(P0.priceTxt.c_str(), kf, true) + 6;
+        if (r < rowTag.size() && !rowTag[r].empty()) w += textW(rowTag[r].c_str(), kf, true) + 8 + 3;   // (2.56.0) the ENT / EXIT / 1/2 tag
         if (DP_RANK_CHIPS && R.rank > 0 && !cs.rkHide) w += std::max(bh - 2, textW((R.rank == 1 && cs.kOn) ? "K" : std::to_string(R.rank).c_str(), sf, true) + 6) + 3;   // (2.52.2) K only for the LP king; none while warming   // (2.42.0) the rank box after the names   // (2.52.1) as wide as its text ("10")
         // (2.34.0, Rassul 12:50 CT "the percentages should be behind the level names to the left justified. and the level name and value should be
         // right justified") w = the name chips + price badge only (RIGHT-justified at the column's right edge); the odds are separate text
@@ -2267,6 +2315,11 @@ void DealerProfile::flushLines(const Settings& S)
                 textLJ((short)(x + 4), (short)g.yb, C.text.c_str(), P.stale ? fade(cc, 0.45f) : cc, kf, true);
             }
             x += w + 3;
+        }
+        if (g.r < rowTag.size() && !rowTag[g.r].empty()) {   // (2.56.0) the tag, filled (ENT green long / red short, EXIT / 1/2 / rest amber), dark text
+            const std::string& tg = rowTag[g.r]; const int tw = textW(tg.c_str(), kf, true) + 8; const int tl = std::max(l + 2, std::min(x, rgt - 1 - tw));
+            box((short)tl, (short)(t + 2), (short)(tl + tw), (short)(b - 2), rowTagCol[g.r]);
+            textLJ((short)(tl + 4), (short)g.yb, tg.c_str(), C_DARK, kf, true); x = tl + tw + 3; ++cs.ebDrawn;
         }
         if (DP_RANK_CHIPS && R.rank > 0 && !cs.rkHide) {   // (2.42.0, Rassul 10:35 CT) the liquidity rank AFTER the level name(s): K = the king, as in the Liquidity column
             const bool king = R.rank == 1 && cs.kOn; const std::string rk = king ? "K" : std::to_string(R.rank);   // (2.52.2)
@@ -2380,7 +2433,7 @@ void DealerProfile::flushLines(const Settings& S)
             if (g->code == 30) { const int s = std::max(0, (int)std::lround(g->val)); char b[16]; std::snprintf(b, sizeof b, "%d:%02d", s / 60, s % 60); return b; }
             const int m = (int)std::lround(g->val); if (m & 16) return "broke";
             int n = 0; for (int bit = 1; bit <= 8; bit <<= 1) n += (m & bit) ? 1 : 0; return std::to_string(n) + "/4"; };
-        auto bookText = [&](const TopQ& q) { if (cs.gNative) return std::to_string(q.lots) + (q.gTag == 2 ? " S20" : q.gTag == 1 ? " ?" : "");   // (2.55.1, Rassul 13:59 CT "Remove the % real. It is just taking up space")   // (2.54.0) the native top book: lots + its tag only (mockup E9QjUViBERJrEpJruVPKie)
+        auto bookText = [&](const TopQ& q) { if (cs.gNative) return std::to_string(q.lots) + (q.gTag == 2 ? " S20" : q.gTag == 1 ? " ?" : "") + (q.etag.empty() ? std::string() : " " + q.etag);   // (2.56.0) + the EXIT tag on its book row   // (2.55.1, Rassul 13:59 CT "Remove the % real. It is just taking up space")   // (2.54.0) the native top book: lots + its tag only (mockup E9QjUViBERJrEpJruVPKie)
             std::string t = std::to_string(q.lots); const std::string sc = scoreOf(gradeOf(q)); if (!sc.empty()) t += "  " + sc;
             t += "  " + std::to_string(q.pct) + "%"; return t; };   // (2.47.0, Rassul 12:27 CT) no level names on the liquidity rows: the rank shows on the level's badge
         // (2.52.1) ONE rank-box width for the column (boxes stay aligned): the widest shown rank label + 6, at least the old square
@@ -2742,6 +2795,6 @@ extern "C" cppExtension *CreateExtension(void)
 #else
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
 #endif
-    p->setVersion("2.55.1");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.56.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }

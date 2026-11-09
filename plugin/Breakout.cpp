@@ -1,5 +1,8 @@
 /********************************************************************************
  *  Breakout.cpp  --  Investor/RT RTX extension  lsBreakout  "BO"  1.5.0  (2026-11-04)
+ *  1.14.0 (2026-11-09, Rassul 16:34 CT "Ok build" - the entry / exit liquidity badges): lsBreakout (the 3-bar build only) posts its drawn,
+ *        decided pullback labels as SignalBoard fact kind E (EntryFacts.h 1.0.0: decision bar, side, PB POC, stop, wave target, Pb / Pboc / Pdoc)
+ *        for lsDealerProfile / lsLimitProfile 2.56.0 (EntryBadge.h). Hidden (Lvp) and provisional labels never; no rule or drawing changed. Status ENTRY_FACTS.
  *  1.13.0 (2026-11-09, Rassul 14:09-14:12 CT "pdoc where d represent the developing poc"): PDOC. A Pb / no-BO Rly pullback whose pivot
  *        bar straddles the pullback's DEVELOPING volume POC (lsWavePOC's wave PB POC: >= 38.2% retrace, its value at the decision bar) and
  *        NOT the wave POC is drawn "Pdoc" (both -> Pboc). Same no-repaint rule (no VAP yet: nothing, then drawn once). Records BPB + pdoc /
@@ -81,6 +84,7 @@
 #include "SettingsGuard.h"   // SS_SAFE_DIALOG: the chart-less Add / settings copy never faults
 #include "ColumnBoard.h"     // cb::leftKeep - nothing under the left Liquidity / Key Levels columns (as lsBigBidAsk 1.31.3)
 #include "BoxDock.h"         // bdk::peekHodLod - never over the HOD/LOD table
+#include "EntryFacts.h"      // (1.14.0) efx::facts - the drawn decided Pb / Pboc / Pdoc as fact kind E (the Limit Profile's ENT / EXIT tags)
 #include "SignalBoard.h"     // sb::publish('L', ...) - the BO letters as drawn (lsLiquidityProfile reads them)
 #include <algorithm>
 #include <chrono>
@@ -102,7 +106,7 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.13.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
+#define BKO_VERSION "1.14.0"   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
 
 static long long bkoMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bkoFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BKO_SEP "InvestorRT" BKO_SEP "rtx" BKO_SEP "lsFlexLevels" : std::string(); }
@@ -149,6 +153,7 @@ struct BState {
     std::string recMkt, recSym; std::map<std::string, std::set<std::string>> recHave; int recRuns = -1; long long recMs = -1;
     long long recAdded = 0, recFails = 0; long recPend = 0;
     bkh::Cob cob;   // (1.11.1) the Cob / Lvp letters lsCobSignal draws on this chart
+    long long eMs = -1; size_t ePosted = 0;   // (1.14.0) fact kind E: last post (steady ms) and how many
     bool vapFault = false;   // (1.12.0) a faulting VAP read is never re-entered (no Pboc then: the Pbs wait - status VAP)
 };
 
@@ -172,6 +177,7 @@ public:
     long long localSec(RTDATE d);
     void status(BState& S, long long now);
     void records(BState& S, long long now);
+    void postEntry(BState& S, long long now);   // (1.14.0)
     bool parts(RTDATE d, long& days, int& endSec);
     BState* testState() { return slot_.get(this, false); }
 };
@@ -284,6 +290,17 @@ int Breakout::vapRows(BState& S, int chartBar, std::vector<wpc::VRow>& out) {
     }
     return out.empty() ? 0 : 1;
 }
+// (1.14.0) fact kind E once a second (SignalBoard facts are fresh for 60 s): the 3-bar build only (one producer per chart, ChainSpec.h)
+void Breakout::postEntry(BState& S, long long now) {
+    if (BKO_ONE_BAR) return;
+    if (S.eMs >= 0 && now >= S.eMs && now - S.eMs < 1000) return;
+    const char* sy = getSymbol(); const char* chl = getChartLabel(); const std::string sym = sy ? sy : "", chart = chl ? chl : "";
+    if (sym.empty()) return;
+    const std::vector<sb::Fact> v = efx::facts(S.E, [this](long long t) { return localSec((RTDATE)t); });
+    const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    sb::postFacts('E', sym, getSecondsPerBar(), chart, ms, v); S.eMs = now; S.ePosted = v.size();
+}
+
 long long Breakout::localSec(RTDATE d) {
     struct tm t; std::memset(&t, 0, sizeof t);
     if (!getLocaltime(d, &t) || t.tm_mon < 0 || t.tm_mon > 11 || t.tm_mday < 1 || t.tm_mday > 31) return 0;
@@ -299,7 +316,8 @@ void Breakout::status(BState& S, long long now) {
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = bko::statusText(S.E, S.mkt, S.sym, S.spb, S.last)
         + "RECORDS,lsFlexLevels\\Breakout (" + S.recMkt + "-" + S.recSym + "-" + std::to_string(S.spb) + "),zz_rev_bars " + std::to_string(S.E.zzRev) + ",ft_tie " + (S.E.tieOn() ? "1" : "0") + ",zz_carry " + (S.E.carryOn() ? "1" : "0") + (bko::SHOW_BI ? ",bi 1" : ",bi 0")
-        + ",lines written " + std::to_string(S.recAdded) + ",pending " + std::to_string(S.recPend) + ",write fails " + std::to_string(S.recFails) + "\n";   // (1.3.0)
+        + ",lines written " + std::to_string(S.recAdded) + ",pending " + std::to_string(S.recPend) + ",write fails " + std::to_string(S.recFails) + "\n"
+        + "ENTRY_FACTS,EntryFacts " + efx::VERSION + "," + (BKO_ONE_BAR ? std::string("off (lsBreakout1: lsBreakout posts kind E)") : "posted " + std::to_string(S.ePosted) + " drawn decided Pb / Pboc / Pdoc as kind E (the Limit Profile ENT / EXIT tags)") + "\n";   // (1.3.0) (1.14.0)
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     bkoMkdir(bkoFlex()); bkoPublish(S.statusPath, body);
@@ -337,7 +355,7 @@ void Breakout::records(BState& S, long long now) {
 void Breakout::pump() {
     BState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
-    feed(*S); const long long now = bkoMs(); records(*S, now); status(*S, now);
+    feed(*S); const long long now = bkoMs(); records(*S, now); postEntry(*S, now); status(*S, now);
 }
 
 int Breakout::draw(void) {
@@ -392,10 +410,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);   // (1.12.0) VAP for the wave POC (Pboc)
 #if BKO_ONE_BAR
-    p->setDescription("LRA BO 1-bar v1.13.0 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC; Pdoc = it tags the pullback's developing POC (Wave POC's PB POC) instead. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
+    p->setDescription("LRA BO 1-bar v1.14.0 - lsBreakout on the 1-bar High/Low ZigZag (for higher timeframes): letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle, shown when the follow-through candle closes; Rly at the end of a rally / decline; Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC; Pdoc = it tags the pullback's developing POC (Wave POC's PB POC) instead. Same rules as lsBreakout, pivots from the 1-bar ZigZag. Records to lsFlexLevels\\Breakout1 for the nightly. No settings.");
 #else
-    p->setDescription("LRA BO v1.13.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC (IRT VAP, Wave POC's rule); Pdoc = it tags the pullback's developing POC (Wave POC's PB POC) instead. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
+    p->setDescription("LRA BO v1.14.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC (IRT VAP, Wave POC's rule); Pdoc = it tags the pullback's developing POC (Wave POC's PB POC) instead. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.13.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.14.0");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }
