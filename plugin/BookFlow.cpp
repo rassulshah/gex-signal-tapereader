@@ -108,7 +108,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <chrono>
 #include "SignalBoard.h"            // (1.31.0) kind D facts (decided candles' defense)
 
-#define BF_VERSION "1.36.1"          // 1.36.1 (2026-11-07): OrderFlowFeed 1.16.1 - a stale (> 2 h) order-feed crash guard is cleared by itself, so a market is never left unrecorded for days (HG 11-05..11-07)  // was 1.36.0:          // 1.36.0 (2026-11-04 20:39 CT, Rassul "this is overcomplicated.. how do i make it basic" -> Option A on bf_basic): bars unchanged; the one-line header reads "Defending?  B 0.4x · S 0.5x" (no lots, no Live / time word; "Feed silent" kept); no turn marks (triangle + ratio) and no level squares drawn - all still computed, recorded and in the status   // was 1.35.0:          // 1.35.0 (2026-11-04, Rassul "add wave poc as one of the levels for bookflow") + WPOC levels in the level box   // was 1.34.0: 1.34.0 (2026-11-04, Rassul "just build it") the LEVEL BOX + squares (BookLevelBox.h) and the turn-mark ratio label   // was 1.33.0: 1.33.0 (2026-11-03, Rassul "go" on bf_box.png) the 4-line info box -> ONE compact line top-left (bf::oneLine): yellow Defending?, green B +923 0.6x, red S +534 0.3x, small white Live; no (i) icon
+#define BF_VERSION "1.37.0"          // 1.37.0 (2026-11-09, Rassul 12:55 CT "do it"): the TOP BOOK (TopBook.h 1.0.0) - the 3 biggest real bids / offers posted as SignalBoard kind G for the Limit Profile; the pane draws nothing new  // was 1.36.1: 1.36.1 (2026-11-07): OrderFlowFeed 1.16.1 - a stale (> 2 h) order-feed crash guard is cleared by itself, so a market is never left unrecorded for days (HG 11-05..11-07)  // was 1.36.0:          // 1.36.0 (2026-11-04 20:39 CT, Rassul "this is overcomplicated.. how do i make it basic" -> Option A on bf_basic): bars unchanged; the one-line header reads "Defending?  B 0.4x · S 0.5x" (no lots, no Live / time word; "Feed silent" kept); no turn marks (triangle + ratio) and no level squares drawn - all still computed, recorded and in the status   // was 1.35.0:          // 1.35.0 (2026-11-04, Rassul "add wave poc as one of the levels for bookflow") + WPOC levels in the level box   // was 1.34.0: 1.34.0 (2026-11-04, Rassul "just build it") the LEVEL BOX + squares (BookLevelBox.h) and the turn-mark ratio label   // was 1.33.0: 1.33.0 (2026-11-03, Rassul "go" on bf_box.png) the 4-line info box -> ONE compact line top-left (bf::oneLine): yellow Defending?, green B +923 0.6x, red S +534 0.3x, small white Live; no (i) icon
 // was "1.32.1"          // 1.32.1 (2026-11-02) no hovers (BF_HOVERS false, no TRACK_MOUSE)
 static const bool BF_HOVERS = false;
 static const bool BF_DRAW_TURN_MARKS = false;   // (1.36.0, Rassul Option A) the turn marks over the bars are not drawn (decided + recorded as before)
@@ -130,6 +130,7 @@ struct BfZoneIds { std::set<long long> big; long long bigId = 0, bigLots = 0, ma
 #include "LetterStrips.h"        // (1.23.0) the two letter strips + the letter record for lsReversalStage
 #include "ReversalEvidence.h"    // additive typed sidecar; legacy LT strips stay independent
 #include "BookLevelBox.h"         // (1.34.0) the level box + squares (= lra.book_level_combo)
+#include "TopBook.h"               // (1.37.0) the native top 3 bids / offers for the Limit Profile (SignalBoard kind G)
 #include "ZzoDeltaLogic.h"        // (1.34.0) zzd::Engine::step: the 3-bar High / Low ZigZag of lsBreakout's Pb windows (the wave origin)
 #include <fstream>
 #include <set>
@@ -172,6 +173,7 @@ public:
     // Record order feed: the recorder and the two legacy session records live in this chart's pane state
     virtual bool recorderPane() const { return true; }
     struct Ext : off::PaneExt {
+        tbk::Engine tb; std::string tbIdent; long long tbRecon = -1, tbEvalMs = -1, tbPosts = 0, tbEvents = 0, tbFaults = 0; std::string tbMkt; std::string tbLine;   // (1.37.0) TopBook
         sab::Host sab; long long sabX = 0;                                  // (1.22.0) the shared A record (read only here) + pull extras written
         mrec::Recorder r; off::SessionFile stack, pull;
         off::IconRect infoIcon; bool infoTipOn = false;                    // (1.10.0) the info icon (pane pixels) and its hover tip
@@ -251,6 +253,38 @@ public:
         if (e.lbIdent == S.identity) return;
         e.lb.reset(); e.lb.market = S.market; e.lbIdent = S.identity; e.lbSq.clear(); e.lbAcc.clear(); e.lbPath.clear(); e.lbSess.clear(); e.lbLastE = -1;
         e.lbParSig = -2; e.lbParMs = -100000; e.lbLvCount = -1; e.lbLvMs = -100000; e.lbBoSig = -2; e.lbBoMs = -100000; e.lbBo.clear(); e.lbWp = blb::WpFeed(); e.lbWpPend.clear(); e.lbWpOff = -1; e.lbWpMs = -100000; e.lbWpCount = -1; e.lbWpSeq = -1; e.lbWpLv.clear(); e.lbShown = blb::Engine::Shown(); e.lbText = blb::BoxText(); e.lbKey.clear();
+    }
+    // (1.37.0, 2026-11-09 Rassul 12:55 CT "do it") THE TOP BOOK (TopBook.h): the 3 biggest REAL resting bids below price and the 3 biggest REAL
+    // offers above it (rested 30 s, not quoting, past the first 2 ticks, >= 2.0x the side's normal, not pulled on an earlier approach), posted
+    // once a second as SignalBoard kind G for the Limit Profile's Liquidity column (lsDealerProfile 2.54.0). Replaces the lsLiquidityProfile feed.
+    void tbIdentity(S_& S, Ext& e) {
+        if (e.tbIdent == S.identity && e.tbRecon == S.feed.reconnects) return;
+        e.tb.reset(); e.tbIdent = S.identity; e.tbRecon = S.feed.reconnects; e.tbEvalMs = -1;   // a new chart / symbol / reconnect = a cold book
+        if (e.tbMkt != S.market) { e.tbMkt = S.market; tbk::Params p; tbk::s20For(S.market, p); e.tb.setS20(p.s20Rth, p.s20On); }
+    }
+    void tbEvent(S_& S, const DEPTH_ORDER& o) {
+        Ext* e = ext(S); if (!e || !(S.tick > 0) || S.identity.empty()) return;
+        tbIdentity(S, *e);
+        const int act = o.action <= 3 ? (int)o.action : 99, side = o.buySell == 1 ? 0 : (o.buySell == 0 ? 1 : -1);
+        if (act != tbk::FILL && side < 0) return;
+        tbk::In x; x.act = act; x.side = side < 0 ? 0 : side; x.px = lbTicks((double)o.price, S.tick); x.sz = (long long)o.size; x.oid = (long long)o.orderID; x.tMs = off::steadyMs();
+        if (x.px <= 0 && act != tbk::DEL && act != tbk::FILL) return;
+        e->tb.feed(x); ++e->tbEvents;
+    }
+    void tbTick(S_& S, long long) {
+        Ext* e = ext(S); if (!e || S.identity.empty() || S.symbol.empty() || e->chart.empty()) return;
+        tbIdentity(S, *e);
+        const long long ms = off::steadyMs(); if (e->tbEvalMs >= 0 && ms - e->tbEvalMs < 1000 && ms >= e->tbEvalMs) return;   // the feed's clock (the engine's times)
+        e->tbEvalMs = ms;
+        {   struct tm t; std::memset(&t, 0, sizeof t); const std::time_t now = std::time(nullptr);
+            if (getLocaltime((RTDATE)now, &t)) { const int m = t.tm_hour * 60 + t.tm_min; e->tb.setRth(m >= 8 * 60 + 30 && m < 15 * 60 + 15); } }
+        const std::vector<tbk::Lvl> v = e->tb.evaluate(ms);
+        std::vector<sb::Fact> f; f.reserve(v.size() + 1);
+        for (const tbk::Lvl& L : v) { sb::Fact x; x.bar = (long long)L.orders; x.lo = x.hi = (double)L.px * S.tick; x.side = L.side == 0 ? 1 : -1; x.val = (double)L.lots;
+            x.code = L.rank; x.state = 0; x.proven = (L.single ? 2 : 0) + (L.s20 ? 4 : 0); f.push_back(x); }
+        {   sb::Fact h; h.code = 99; h.val = (double)e->tb.orders(); h.state = e->tb.orders() > 0 ? 1 : 0; f.push_back(h); }   // the producer's heartbeat (book size)
+        sb::postFacts('G', S.symbol, S.spb, e->chart, steadyNow(), f); ++e->tbPosts;   // the board's freshness clock (the readers' steady ms)
+        e->tbLine = e->tb.statusLine();
     }
     // every order event (the engine keeps its own book: O(1) per event)
     void lbEvent(S_& S, const DEPTH_ORDER& o) {
@@ -491,6 +525,7 @@ public:
     virtual void onRaw(S_& S, const DEPTH_ORDER& o) {
         trackOn(S);                                                        // (1.17.0) before the engine sees the event
         try { lbEvent(S, o); } catch (...) {}                              // (1.34.0) the level box engine sees every order event
+        try { tbEvent(S, o); } catch (...) { Ext* e0 = ext(S); if (e0) ++e0->tbFaults; }   // (1.37.0) the top book sees every order event
         mrec::Recorder* r = rec(S); if (!r || !r->on) return;
         if (!o.timestamp) { ++r->dropped; return; }
         if (o.timestamp != r->tsKey) {                                     // one clock conversion per second, not per event
@@ -505,7 +540,7 @@ public:
         e.bid = (double)o.bid; e.ask = (double)o.ask;
         r->add(e);
     }
-    virtual void afterPump(S_& S, long long now, bool fromDraw) { trackOn(S); mrec::Recorder* r = rec(S); if (r) r->tick(now, fromDraw); post(S, now); try { checkX(S); } catch (...) {} try { lbTick(S, now); } catch (...) {}
+    virtual void afterPump(S_& S, long long now, bool fromDraw) { trackOn(S); mrec::Recorder* r = rec(S); if (r) r->tick(now, fromDraw); post(S, now); try { checkX(S); } catch (...) {} try { lbTick(S, now); } catch (...) {} try { tbTick(S, now); } catch (...) { Ext* e0 = ext(S); if (e0) ++e0->tbFaults; }
         try { checkW(S); } catch (...) {} try { Ext* e = ext(S); if (e) readTraps(S, *e, now); } catch (...) {} try { sharedA(S, now); } catch (...) {} try { strips(S, now); } catch (...) {} }
     // (1.22.0, 2026-10-22 Rassul 06:43 "then do it") THE SHARED A (SharedAbsorb.h): this pane no longer decides its own A - the badge A comes
     // from the one shared record lsBidAskStats / lsDeltaProfile decide into (the same A on every pane and the price chart). This pane adds
@@ -554,6 +589,7 @@ public:
     virtual void statusExtra(S_& S, std::ostream& o) {
         mrec::Recorder* r = rec(S); if (r) r->status(o); else o << "\nMBO_RECORD,unavailable (out of memory)";
         Ext* e = ext(S);
+        if (e) o << "\n" << (e->tbLine.empty() ? std::string("TOP_BOOK,waiting") : e->tbLine) << ",posted G " << e->tbPosts << ",events " << e->tbEvents << ",faults " << e->tbFaults;
         o << "\nSPIKE_RULE,|net| >= " << off::tenthsText(avgT(S)) << (avgT(S) > 0 ? "" : " (off)") << " the plain " << S.ser.ratioBars << "-candle average of that side's |net|, decided at the close; forming candle dim, no label; colour by side"
           << "\n" << (e ? e->sab.statusLine() + ",pull extras written " + std::to_string(e->sabX) + " (this pane reads the A; the T line A flag is recorded, not drawn)" : std::string("SHARED_A,n/a"))
           << "\nTURNS," << (e ? std::to_string(e->dtTurns.size()) + " decided, " + std::to_string(e->dtXWritten) + " exhaustion lines, " + std::to_string(e->dtPendX.size()) + " waiting, touches " + std::to_string(S.e.touches.size()) + ", " + std::to_string(e->dtWritten) + " written, " + std::to_string(e->dtFileFails) + " write fails, H " + std::to_string(e->dtH.size()) + " decided (" + std::to_string(e->dtHWritten) + " written, " + std::to_string(e->dtPendH.size()) + " waiting, " + std::to_string(e->dtHNoFeed) + " no feed), re-test " + std::to_string(e->dtQ.size()) + " decided (" + std::to_string(e->dtQWritten) + " written, " + std::to_string(e->dtQPend.size()) + " watching, " + std::to_string(e->dtQNoBook) + " no book, " + std::to_string(e->dtQOver) + " over), live " + (e->dtHaveLive ? "?" : "none") + ", file " + e->dtPath : std::string("n/a"))
@@ -2002,6 +2038,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | (BF_HOVERS ? TRACK_MOUSE : 0));   // (1.32.1) no hovers                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.36.1");   // BF_VERSION
+    p->setVersion("1.37.0");   // BF_VERSION
     return p;
 }

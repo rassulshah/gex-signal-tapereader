@@ -35,6 +35,7 @@ inline std::vector<Node> nodes() {
 }
 inline std::vector<Producer> producers() {
     return { {'B', "lsLiquidityProfile", 10, "resting liquidity within reach: the depth book's lots per price + the big-order lines (0.62.1)"},
+             {'G', "lsBookFlow", 10, "the native top book: 3 real bids below / 3 real offers above, rank 1-6, ? / S20 bits, code 99 heartbeat (TopBook.h 1.0.0)"},
              {'Z', "lsBookFlow", 10, "the node ladder: added / pulled / filled lots per price per closed candle (SignalBoard 1.5.0 LRA_SLD_)"},
              {'Y', "lsDeltaProfile.READ", 20, "the node defender read of each tiered A (holding / pulling, net x)"},
              {'P', "lsLiquidityProfile", 10, "LMT F prints (biggest single resting order filled, S20 / S10 / S5)"},
@@ -52,7 +53,8 @@ inline std::vector<Producer> producers() {
              {'K', "lsDeltaProfile.Combiner", 30, "the combined read: turn / swing odds"} };
 }
 inline std::vector<Edge> edges() {
-    return { {"lsLiquidityProfile", "lsDealerProfile", 'B', DECIDE},          // the liquidity rank and the level tags come from LP's resting orders
+    return { {"lsBookFlow", "lsDealerProfile", 'G', DECIDE},                  // (2026-11-09) the Liquidity column's top 3 bids / offers (lsDealerProfile 2.54.0)
+             {"lsLiquidityProfile", "lsDealerProfile", 'B', DECIDE},          // the liquidity rank and the level tags come from LP's resting orders
              {"lsLiquidityProfile", "lsDealerProfile", 'S', DISPLAY},         // (1.4.0) the touch tag in the Liquidity column + HELD on the chart (drawn, latched for shown levels)
              {"lsDeltaProfile", "lsTrappedTraders", 'C', DECIDE},             // Who is trapped? falls back to the Delta Profile's candle lots
              {"lsDealerProfile", "lsDeltaProfile.READ", 'V', DECIDE},         // READ: level context of a node (logged)
