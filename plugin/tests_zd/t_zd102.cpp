@@ -1,4 +1,4 @@
-// t_zd102.cpp -- lsZoneDefense 1.0.2: the independent review's fixes, each with its own test (mock host + the engine directly).
+// t_zd102.cpp -- lsZoneDefense 1.0.2 / 1.0.3: the independent review's fixes, each with its own test (mock host + the engine directly).
 //   markets (mkey::norm), one writer per journal, restart mid-reload (ZE 5 + "not decided"), torn last line, session roll (book kept,
 //   no warm-up), contract roll / reconnect (reset), missed DEL (ghost order dropped), implied fill ignored, a price-moving MOD = a cancel
 //   at the old price, first-second events, periodOf with the real CDT / CST offsets, the same-distance queue normal (not 0%), bar-end
@@ -73,6 +73,37 @@ int main(int argc, char** argv) {
         const zd::Zone* z = nullptr; for (auto& q : E.zones) if (q.side == 0 && q.lo == 40045 && q.hi == 40048) z = &q;
         CHECK(z && z->touchT >= 0 && z->sweep == 2 && z->lift >= 1.0 && z->backIn, "GC 10-26 4004.5-4004.8: the 8:58 stop run reads SWEPT (lift " + std::string(z ? std::to_string(z->lift) : "-") + ", back in " + (z && z->backIn ? "yes" : "no") + ")");
         CHECK(z && z->sweepDecT % (zd::SWEEP_BAR_S * 1000LL) == 0, "the sweep is decided at the run candle's close (never changed after)"); }
+    // ---- the GC 2026-11-06 example (Rassul's chart levels PFL/PDL 4035.1, PS0 4050, VAL 4053, WPoc 4055; 06:30-08:30 CT slice) ----
+    //  stage 1: the 7:30:02 flush to 4035.1 went through a THIN book - no bid zone at / near 4035 before it (nothing to defend)
+    //  stage 2: the 50% pullback - the bid zone 4054.0-4054.3 (WPoc) is touched, its stop run SWEPT, the zone HELD
+    {   std::vector<FR> v; { FILE* f = std::fopen((fx + "/GC-2026-11-06-sweep.bin").c_str(), "rb"); FR r; while (f && std::fread(&r, sizeof r, 1, f) == 1) v.push_back(r); if (f) std::fclose(f); }
+        zd::Engine E(zdp::forMarket("GC")); E.barSec = 180; E.minLotsOverride = 15;   // the research floor (the chart's GC floor is 32-36 in these periods)
+        std::vector<zd::Lvl> L;
+        for (auto& x : zd::levelsOf("PFL/PDL", 40351)) L.push_back(x); for (auto& x : zd::levelsOf("PS0", 40500)) L.push_back(x);
+        for (auto& x : zd::levelsOf("VAL", 40530)) L.push_back(x); for (auto& x : zd::levelsOf("WPoc", 40550)) L.push_back(x);
+        E.setLevels(L);
+        for (auto& r : v) E.feed(ev(r.t, r.a, r.s, r.px, r.sz, r.oid));
+        const long long t730 = (1793923200LL + 7 * 3600 + 1800) * 1000;   // 2026-11-06 07:30 (CT wall clock as if UTC)
+        int nearSweep = 0; const zd::Zone* w = nullptr;
+        for (auto& q : E.zones) { if (q.side == 0 && q.T < t730 && q.hi <= 40400) ++nearSweep; if (q.side == 0 && q.lo <= 40543 && q.hi >= 40540 && q.T > t730 && !w) w = &q; }
+        CHECK(!v.empty() && nearSweep == 0, "GC 11-06 stage 1: no bid zone at 4035-4040 before the 7:30 flush (a thin book, nothing defended) (" + std::to_string(nearSweep) + ")");
+        CHECK(w && w->touchT >= 0 && w->sweep == 2 && (w->state == 2 || w->state == 3) && w->tags.size() >= 1 && w->tags[0].name == "WPoc",
+              "GC 11-06 stage 2: the WPoc zone 4054.0 is touched, swept and HELD (" + (w ? "sweep " + std::to_string(w->sweep) + ", state " + std::to_string(w->state) + ", tag " + (w->tags.empty() ? std::string("-") : w->tags[0].name) : std::string("no zone")) + ")"); }
+    // ---- (1.0.3) the at-level floor on CHART settings (no research override), the same GC 11-06 slice ----
+    {   std::vector<FR> v; { FILE* f = std::fopen((fx + "/GC-2026-11-06-sweep.bin").c_str(), "rb"); FR r; while (f && std::fread(&r, sizeof r, 1, f) == 1) v.push_back(r); if (f) std::fclose(f); }
+        auto run = [&](double x, int& nearSweep) { zd::Engine E(zdp::forMarket("GC")); E.barSec = 180; E.M.levelFloorX = x;
+            std::vector<zd::Lvl> L; for (auto& q : zd::levelsOf("PFL/PDL", 40351)) L.push_back(q); for (auto& q : zd::levelsOf("PS0", 40500)) L.push_back(q);
+            for (auto& q : zd::levelsOf("VAL", 40530)) L.push_back(q); for (auto& q : zd::levelsOf("WPoc", 40550)) L.push_back(q); E.setLevels(L);
+            for (auto& r : v) E.feed(ev(r.t, r.a, r.s, r.px, r.sz, r.oid));
+            const long long t730 = (1793923200LL + 7 * 3600 + 1800) * 1000; nearSweep = 0; zd::Zone w; w.id = -1;
+            for (auto& q : E.zones) { if (q.side == 0 && q.T < t730 && q.hi <= 40400) ++nearSweep; if (q.side == 0 && q.lo <= 40543 && q.hi >= 40540 && q.T > t730 && w.id < 0) w = q; }
+            return w; };
+        int ns = 0; const zd::Zone w5 = run(0.5, ns);
+        CHECK(ns == 0 && w5.id >= 0 && w5.lowFloor && w5.touchT >= 0 && w5.sweep == 2 && (w5.state == 2 || w5.state == 3),
+              "1.0.3 chart settings, GC at-level floor ON (0.5x): the 7:41 WPoc zone appears (" + std::to_string(w5.size) + " lots), swept + held; nothing at 4035-4040 before 7:30");
+        int ns2 = 0; const zd::Zone wc = run(zdp::forMarket("GC").levelFloorX, ns2);
+        CHECK(ns2 == 0 && zdp::forMarket("GC").levelFloorX >= 1.0 && wc.id < 0, "1.0.3 as shipped: GC is CAPPED for noise (levelFloorX 1.0) - no 21-lot zone, as 1.0.2");
+        CHECK(zdp::forMarket("EU").levelFloorX == 0.5 && zdp::forMarket("EU").levelFloor == 400, "1.0.3 EU at-level floor on: max(400, 0.5x)"); }
     // ---- plugin: one writer per journal; restart mid-reload; torn line; contract roll ----
     {   freshHome(); mock::Host h; mock::current = &h; mock::feed = mock::Feed(); const unsigned long t0 = 1793030400UL;   // 2026-10-26 ~14:00 (mock local = UTC)
         Ind* a = pane(h, t0);

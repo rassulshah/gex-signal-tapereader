@@ -1,5 +1,9 @@
 /********************************************************************************
- *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.2  +  lsZoneDefenseMarks 1.0.2  (2026-11-08)
+ *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.3  +  lsZoneDefenseMarks 1.0.3  (2026-11-08)
+ *  1.0.3 (Rassul approved 2026-11-08): a zone AT his levels (key, volume, MenthorQ within the level reach) needs less size - the
+ *  market's research floor or levelFloorX x the chart floor (his rule 0.5x), whichever is higher (ZoneDefenseParams.h). The noise
+ *  check (13 fixture days) added > 10 zones/day in ES NQ CL GC HG NG at 0.5-0.8x, so those markets ship CAPPED (levelFloorX 1.0 =
+ *  the chart floor, as 1.0.2); EU is on at 0.5x. Bar sizes (L4), the Central-clock warning (L6), LRA-VolLevels.
  *  1.0.2 (independent code review, Rassul "make the code solid"): one clock for live and research (whole seconds, no arrival ms -
  *  the IRT stamps are seconds and its reads come in 250 ms batches); markets through mkey::norm (QGC, @ES, EP, QCL ...); a stopped /
  *  removed / restarted pane closes its open zones (ZE code 5) and a reopened journal closes orphans; ONE writer per journal file
@@ -18,7 +22,7 @@
  *  verdict word bold at one x, the detail in a calmer tint on the same line, times right-aligned); the pane bars are dimmed.
  *  Rassul 2026-11-08 "Zone Defense is good. lets build it" - design approved on claude.ai/artifact/MJ9YYwjeMAUQztNZrCiP1G.
  *
- *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.2", on the live market-by-order feed (the same order-feed path
+ *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.3", on the live market-by-order feed (the same order-feed path
  *  as lsBookFlow: off::MboPane, the 250 ms clock, every event once through onRaw). Every event goes to zd::Engine
  *  (ZoneDefenseLogic.h, SDK-free, the same code the jumpstart / nightly ran over 71 market-days of raw MBO). Each decision is a
  *  journal line in lsFlexLevels\ZoneDefense\<MKT>-<spb>-<session>.csv, written once; the pane and the price chart draw ONLY from
@@ -73,12 +77,12 @@
 #include <chrono>
 #include <climits>
 
-#define ZD_VERSION "1.0.2"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
+#define ZD_VERSION "1.0.3"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
 
 
 namespace zdh {
 // the version of both DLLs: the ONE setVersion literal (the settings contract counts it; gex-build reads it)
-inline void stamp(cppExtension* p) { p->setVersion("1.0.2"); }
+inline void stamp(cppExtension* p) { p->setVersion("1.0.3"); }
 // the one settings window of both plugins (registered once per DLL)
 inline void registerWindow(cppExtension* x, ss::Ids& ids) { ss::registerAll(x, zdset::spec(), ids); }
 // file helpers shared by the two plugins

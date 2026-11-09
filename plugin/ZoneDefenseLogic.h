@@ -1,4 +1,4 @@
-// ZoneDefenseLogic.h  --  lsZoneDefense 1.0.2 (2026-11-08) - the SDK-free Zone Defense engine (one copy: the plugin, the zdrun CLI used
+// ZoneDefenseLogic.h  --  lsZoneDefense 1.0.3 (2026-11-08) - the SDK-free Zone Defense engine (one copy: the plugin, the zdrun CLI used
 // by the jumpstart / nightly (lra.zone_defense) and the mock-SDK tests all compile THIS file, so the research and the chart agree).
 //
 // Rassul 2026-11-08 "Zone Defense is good. lets build it" (design: claude.ai/artifact/MJ9YYwjeMAUQztNZrCiP1G).
@@ -32,7 +32,7 @@
 #include "ZoneDefenseParams.h"
 
 namespace zd {
-static const char* const VERSION = "1.0.2";
+static const char* const VERSION = "1.0.3";
 enum Act { ADD = 0, MOD = 1, DEL = 2, FILL = 3, CLEAR = 9 };
 enum Side { BID = 0, ASK = 1 };
 static const long long MIN_MS = 60000;
@@ -144,7 +144,7 @@ struct Zone {
     long long bigOid = 0, bigSz = 0, bigPx = 0;
     // (1.0.2 levels) the levels it sits at (nearest first, at most LVL_SHOW kept for the label) + the research record: the nearest of
     // his levels on its reach side (any distance up to 3 ATR) - its kind and gap in ATR, so the nightly can re-cut the reach (0.5/1/1.5)
-    std::vector<LTag> tags; int nearKind = LK_NONE; double nearGapAtr = -1; std::string nearName; bool levelSearch = false;
+    std::vector<LTag> tags; int nearKind = LK_NONE; double nearGapAtr = -1; std::string nearName; bool levelSearch = false; bool lowFloor = false;   // (1.0.3) found only by the at-level floor
     bool active() const { return endCode == 0; }
 };
 
@@ -583,6 +583,7 @@ private:
         if (!z.tags.empty()) writeTags(z, T);
         return true;
     }
+    long long levelFloorOf(const zdp::Per& p) const { return M.levelFloor > 0 ? std::min(p.minLots, std::max(M.levelFloor, (long long)std::ceil(p.minLots * M.levelFloorX))) : p.minLots; }
     void detect(int side, long long T, int per) {
         const zdp::Per& p = P(per);
         long long at[MAX_DIST + 1] = { 0 };                       // aged resting lots per distance from the last trade
@@ -601,6 +602,9 @@ private:
         if (nz.size() > 2) { std::sort(nz.begin(), nz.end()); const size_t m = nz.size(); med = m % 2 ? (double)nz[m / 2] : (nz[m / 2 - 1] + nz[m / 2]) / 2.0; }
         if (warmUntil >= 0 && T < warmUntil) return;              // (M2) the book is still filling after a cold start
         const long long floorLots = minLotsOverride > 0 ? minLotsOverride : p.minLots;
+        // (1.0.3, Rassul approved 2026-11-08) a zone AT his levels (the level search below) needs less size: the market's research floor
+        // or half the chart floor, whichever is higher (M.levelFloor 0 = off for that market); zones away from levels keep the floor
+        const long long lvlFloor = minLotsOverride > 0 ? std::min(minLotsOverride, levelFloorOf(p)) : levelFloorOf(p);
         const double dens = med > 0 ? best / med : 0;
         if (dens >= DENS_X && best >= floorLots) {
             const long long loD = MIN_DIST + (long long)BAND * bi, hiD = loD + BAND - 1;
@@ -619,8 +623,9 @@ private:
                 long long sum = 0; for (int d = s0; d < s0 + BAND; ++d) sum += at[d];
                 if (sum > bl) { bl = sum; bLoD = s0; }
             }
-            if (bLoD < 0 || bl < floorLots || (med > 0 ? bl / med : 0) < DENS_X) continue;
-            makeZone(side, T, per, side == BID ? lastPx - (bLoD + BAND - 1) : lastPx + bLoD, side == BID ? lastPx - bLoD : lastPx + bLoD + BAND - 1, bl, med > 0 ? bl / med : 0, true);
+            if (bLoD < 0 || bl < lvlFloor || (med > 0 ? bl / med : 0) < DENS_X) continue;
+            if (makeZone(side, T, per, side == BID ? lastPx - (bLoD + BAND - 1) : lastPx + bLoD, side == BID ? lastPx - bLoD : lastPx + bLoD + BAND - 1, bl, med > 0 ? bl / med : 0, true) && bl < floorLots)
+                zones.back().lowFloor = true;
         }
     }
 };
