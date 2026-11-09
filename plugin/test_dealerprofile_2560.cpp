@@ -252,7 +252,7 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.56.0" && src.find("p->setVersion(\"2.56.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.56.0 agree"); }
+        check(std::string(DP_VERSION) == "2.57.0" && src.find("p->setVersion(\"2.57.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.57.0 agree"); }
     dealerFile(true);
     std::vector<klv::Merged> lv;
     { std::istringstream in(slurp(D + "/LRA-KeyLevels-ES.csv")); std::string ln;
@@ -303,14 +303,34 @@ int main(int argc, char** argv)
         check(c3.eb.why == "ok" && c3.eb.tags.size() == 1 && c3.eb.tags[0].text == "ENT Pdoc", "ES Pdoc -> one ENT Pdoc tag");
         check(inKeys == 1 && elsewhere == 0 && c3.ebDrawn == 1, "ENT Pdoc drawn once, inside the Key Levels column (no new column)");
         check(hasText(O3, "PbPOC"), "the PB POC row added to the Key Levels column while the tag lives");
-        {   const std::string st = slurp(fl("DealerProfile.status-ES-180.txt")); check(st.find("ENTRY_BADGE,EntryBadge 1.0.0,E facts 1,label Pdoc,state ok") != std::string::npos, "status ENTRY_BADGE"); }
+        {   const std::string st = slurp(fl("DealerProfile.status-ES-180.txt")); check(st.find("ENTRY_BADGE,EntryBadge 1.1.0,E facts 1,label Pdoc,state ok") != std::string::npos, "status ENTRY_BADGE");
+            check(st.find("params no file - defaults (ENT_PDOC ON ENT_GAMMA OFF EXIT_BOOK OFF SCALE OFF)") != std::string::npos, "(2.57.0) no params file -> the compiled ES defaults, in the status line"); }
         e.code = 1; sb::postFacts('E', a.sym, a.spb, MOCK_CHART, dpNowMs(), std::vector<sb::Fact>{ e });
         std::vector<Op> O4 = drawOn(X, a, MOCK_CHART); DealerProfile::ColsState c4 = colsOf(X, a);
         int ent = 0; for (auto& q : O4) if (q.kind == "text" && q.text.find("ENT") != std::string::npos) ++ent;
         check(ent == 0 && c4.eb.tags.empty() && !hasText(O4, "PbPOC"), "a Pb (not Pdoc) -> no ENT tag, no PB POC row");
         sb::postFacts('E', a.sym, a.spb, MOCK_CHART, dpNowMs() - 120000, std::vector<sb::Fact>{ e });
         std::vector<Op> O5 = drawOn(X, a, MOCK_CHART); DealerProfile::ColsState c5 = colsOf(X, a);
-        check(c5.ebFacts == -1 && c5.eb.tags.empty(), "stale / no E producer -> no tag"); }
+        check(c5.ebFacts == -1 && c5.eb.tags.empty(), "stale / no E producer -> no tag");
+        // (2.57.0, B-20261109-LQ1) the nightly params LRA-EntryBadge-ES.csv. 1) the SAME label keeps its decided tag when the file changes
+        // (no repaint); 2) a NEW label uses the file: OFF -> no ENT, "?" -> "ENT Pdoc ?", garbled -> the compiled default "ENT Pdoc"
+        auto writeParams = [&](const std::string& body) { char ts[32]; std::time_t t0 = std::time(nullptr); struct tm lt; localtime_r(&t0, &lt); std::strftime(ts, sizeof ts, "%Y-%m-%dT%H:%M:%S", &lt);
+            std::ofstream f(fl("LRA-EntryBadge-ES.csv"), std::ios::binary); f << "# LRA-EntryBadge-ES.csv - liq_learn 1.0.0 " << ts << " - test\n" << body; };
+        e.code = 3; sb::postFacts('E', a.sym, a.spb, MOCK_CHART, dpNowMs(), std::vector<sb::Fact>{ e });
+        { std::vector<Op> Oa = drawOn(X, a, MOCK_CHART); writeParams("status,ENT_PDOC,OFF\n"); dpEbClockSkew += 61;
+          std::vector<Op> Ob = drawOn(X, a, MOCK_CHART); DealerProfile::ColsState cb2 = colsOf(X, a);
+          check(cb2.ebPar.why == "file" && cb2.eb.tags.size() == 1 && cb2.eb.tags[0].text == "ENT Pdoc", "(2.57.0) the same label keeps its tag when the nightly turns it OFF (no repaint)"); }
+        const char* BODY[3] = { "status,ENT_PDOC,OFF\n", "status,ENT_PDOC,?\n", "status,ENT_PDOC,banana\nnot a line\n" };
+        const char* WANT[3] = { "", "ENT Pdoc ?", "ENT Pdoc" };
+        for (int z = 0; z < 3; ++z) { writeParams(BODY[z]); dpEbClockSkew += 61;
+            sb::Fact e2 = e; e2.bar = e.bar - 180LL * (z + 1);   // a NEW (older-bar) label id -> a new snapshot
+            const size_t k2 = k - (size_t)(z + 1); e2.lo = std::floor((a.c[k2] - std::max(0.25, 0.4 * X.atr14())) * 4.0) / 4.0; e2.lo = std::min(e2.lo, (double)lo + 1.0);
+            sb::postFacts('E', a.sym, a.spb, MOCK_CHART, dpNowMs(), std::vector<sb::Fact>{ e2 });
+            std::vector<Op> O6 = drawOn(X, a, MOCK_CHART); DealerProfile::ColsState c6 = colsOf(X, a);
+            const std::string got = c6.eb.tags.empty() ? std::string() : c6.eb.tags[0].text;
+            std::printf("PARAMS %d: why %s tags %zu text '%s' params %s\n", z, c6.eb.why.c_str(), c6.eb.tags.size(), got.c_str(), c6.ebPar.why.c_str());
+            check(got == WANT[z], std::string("(2.57.0) new label with params case ") + std::to_string(z) + " -> '" + WANT[z] + "'"); }
+        std::remove(fl("LRA-EntryBadge-ES.csv").c_str()); }
     std::printf("RESULT %d passed, %d failed\n", PASSES, FAILS);
     return FAILS ? 1 : 0;
 }

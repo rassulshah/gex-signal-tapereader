@@ -23,13 +23,25 @@
 //   or after the fill the stop or the target trades (resolved, gone). EXIT shows only after the ENT fill and goes when it trades or the
 //   trade resolves. GC: both "1/2" and "rest" from the decision bar; "1/2" goes when it trades, "rest" when it trades; the stop ends both;
 //   40 bars max. SDK-free.
+// 1.1.0 (2026-11-09, Rassul 17:28 CT "Ok", B-20261109-LQ1): the per-market ON / ? / OFF of each badge comes from the nightly
+//   lsFlexLevels\LRA-EntryBadge-<MKT>.csv (lra.liq_learn: "status,ENT_PDOC,ON", "status,ENT_GAMMA,?", "status,EXIT_BOOK,OFF",
+//   "status,SCALE,ON"; header "# ... <YYYY-MM-DDTHH:MM:SS> ..."). Missing / unreadable / no valid status line / header time older than
+//   8 days or in the future = the compiled defaults below (the 1.0.0 rules). A garbled value keeps that badge's default. "?" adds " ?"
+//   to the text. Any market can turn on (NQ / HG / 6E too). ENT path: Pdoc PB POC first (ENT_PDOC), else gamma (ENT_GAMMA); EXIT_BOOK
+//   after any ENT fill; SCALE only when both ENT badges are OFF. The plugin snapshots the params when a NEW label arrives, so a
+//   nightly change never repaints a decided tag. pull_x / quiet_* lines are logged by the nightly only (PULL stays lsBookFlow's
+//   decided "defenders leaving").
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <map>
 #include <string>
 #include <vector>
 namespace ebd {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
+enum { ST_UNSET = -1, ST_OFF = 0, ST_Q = 1, ST_ON = 2 };
+static const long long PAR_MAX_AGE = 8LL * 86400;
+struct Par { int entPdoc = ST_OFF, entGamma = ST_OFF, exitBook = ST_OFF, scale = ST_OFF; bool fromFile = false; long long built = 0; std::string why = "defaults"; };
 static const int ENT_WAIT = 20, LIFE_BARS = 40;
 struct Bar { long long t = 0; double h = 0, l = 0, c = 0; };          // t = Central wall-clock seconds of the bar (same clock as the facts)
 struct Lbl { long long td = 0; int side = 0, code = 0; double pbPoc = 0, stop = 0, target = 0; };
@@ -39,13 +51,55 @@ struct Tag { double px = 0; std::string name, text; int side = 0; int kind = 0; 
 struct Out { std::vector<Tag> tags; std::string why = "none"; long long td = 0; int lab = 0; bool filled = false, pull = false; };
 inline std::string labName(int code) { const int c = code % 10; return c == 3 ? "Pdoc" : c == 2 ? "Pboc" : "Pb"; }
 inline std::string root(const std::string& m) { std::string r; for (char ch : m) if (ch != ' ') r += (char)std::toupper((unsigned char)ch); if (r == "6E" || r == "EC") r = "EU"; return r; }
+inline long long civilDays(int y, int m, int d) { y -= m <= 2; const long long era = (y >= 0 ? y : y - 399) / 400; const unsigned yoe = (unsigned)(y - era * 400);
+    const unsigned doy = (153u * (unsigned)(m + (m > 2 ? -3 : 9)) + 2u) / 5u + (unsigned)d - 1u; const unsigned doe = yoe * 365u + yoe / 4u - yoe / 100u + doy; return era * 146097 + (long long)doe - 719468; }
+inline Par defaults(const std::string& mkt) {
+    Par p; const std::string m = root(mkt);
+    if (m == "ES") p.entPdoc = ST_ON; else if (m == "NG") p.entPdoc = ST_Q;
+    else if (m == "CL") { p.entGamma = ST_Q; p.exitBook = ST_Q; } else if (m == "GC") p.scale = ST_ON;
+    return p;
+}
+inline int stOf(const std::string& v) { return v == "ON" ? ST_ON : v == "?" ? ST_Q : v == "OFF" ? ST_OFF : ST_UNSET; }
+// the nightly file's text -> params; anything wrong = the defaults (with why). nowSec = Central wall-clock seconds (same clock as the header)
+inline Par parse(const std::string& mkt, const std::string& text, long long nowSec) {
+    Par d = defaults(mkt); if (text.empty()) { d.why = "no file - defaults"; return d; }
+    if (text.size() > 65536) { d.why = "file too big - defaults"; return d; }
+    Par p = d; int good = 0; long long built = 0; size_t a = 0;
+    while (a < text.size()) {
+        size_t e = text.find('\n', a); if (e == std::string::npos) e = text.size();
+        std::string ln = text.substr(a, e - a); a = e + 1;
+        while (!ln.empty() && (ln.back() == '\r' || ln.back() == ' ')) ln.pop_back();
+        if (ln.empty()) continue;
+        if (ln[0] == '#') { for (size_t k = 0; built == 0 && k + 19 <= ln.size(); ++k) {
+                const char* c = ln.c_str() + k; bool ok = true; const char* pat = "dddd-dd-ddTdd:dd:dd";
+                for (int j = 0; j < 19 && ok; ++j) ok = pat[j] == 'd' ? (c[j] >= '0' && c[j] <= '9') : c[j] == pat[j];
+                if (!ok) continue;
+                auto n = [&](int o, int w) { int v = 0; for (int j = 0; j < w; ++j) v = v * 10 + (c[o + j] - '0'); return v; };
+                const int Y = n(0, 4), M = n(5, 2), D = n(8, 2), h = n(11, 2), mi = n(14, 2), se = n(17, 2);
+                if (M >= 1 && M <= 12 && D >= 1 && D <= 31 && h < 24 && mi < 60 && se < 61) built = civilDays(Y, M, D) * 86400 + h * 3600 + mi * 60 + se; }
+            continue; }
+        if (ln.compare(0, 7, "status,") != 0) continue;
+        const size_t c2 = ln.find(',', 7); if (c2 == std::string::npos) continue;
+        const std::string b = ln.substr(7, c2 - 7); const int v = stOf(ln.substr(c2 + 1)); if (v == ST_UNSET) continue;
+        if (b == "ENT_PDOC") p.entPdoc = v; else if (b == "ENT_GAMMA") p.entGamma = v; else if (b == "EXIT_BOOK") p.exitBook = v; else if (b == "SCALE") p.scale = v; else continue;
+        ++good;
+    }
+    if (!good) { d.why = "no valid status line - defaults"; return d; }
+    if (built <= 0) { d.why = "no time in the header - defaults"; return d; }
+    if (nowSec > 0 && (built > nowSec + 3600 || nowSec - built > PAR_MAX_AGE)) { d.why = "stale (older than 8 days) - defaults"; d.built = built; return d; }
+    p.fromFile = true; p.built = built; p.why = "file"; return p;
+}
+inline std::string qs(int st) { return st == ST_Q ? " ?" : ""; }
+inline std::string parText(const Par& p) { auto t = [](int s) { return s == ST_ON ? "ON" : s == ST_Q ? "?" : "OFF"; };
+    return std::string("ENT_PDOC ") + t(p.entPdoc) + " ENT_GAMMA " + t(p.entGamma) + " EXIT_BOOK " + t(p.exitBook) + " SCALE " + t(p.scale); }
 // pull(barT, side) = true when the decided defense of that candle is "defenders leaving" for this side
 template <class Pull>
 inline Out compute(const std::string& mkt, const std::vector<Bar>& bars, const std::vector<Lbl>& labels, const std::vector<Lvl>& lv,
-                   const std::vector<Book>& book, double tick, double atr, Pull pull)
+                   const std::vector<Book>& book, double tick, double atr, Pull pull, const Par& P)
 {
     Out o; const std::string m = root(mkt);
-    if (!(m == "ES" || m == "NG" || m == "CL" || m == "GC")) { o.why = "market has no proven badge"; return o; }
+    const bool entOn = P.entPdoc != ST_OFF || P.entGamma != ST_OFF;
+    if (!entOn && P.scale == ST_OFF) { o.why = "market has no badge ON (" + P.why + ")"; return o; }
     if (labels.empty() || bars.size() < 2 || !(tick > 0) || !(atr > 0) || !std::isfinite(atr)) { o.why = "no label / bars / atr"; return o; }
     const Lbl* L = &labels.front(); for (const Lbl& x : labels) if (x.td > L->td) L = &x;
     o.td = L->td; o.lab = L->code;
@@ -57,7 +111,7 @@ inline Out compute(const std::string& mkt, const std::vector<Bar>& bars, const s
     auto stopHit = [&](const Bar& b) { return d > 0 ? b.l <= L->stop : b.h >= L->stop; };
     auto reach = [&](const Bar& b, double p) { return d > 0 ? b.h >= p : b.l <= p; };          // a price beyond in the trade's direction
     auto touch = [&](const Bar& b, double p) { return d > 0 ? b.l <= p : b.h >= p; };          // back to a price against the trade
-    if (m == "GC") {
+    if (!entOn) {   // SCALE (GC by default)
         std::vector<double> t; for (const Lvl& x : lv) if (std::isfinite(x.px) && (x.px - e0) * d >= 0.5 * R) t.push_back(x.px);
         std::sort(t.begin(), t.end(), [&](double a, double b) { return (a - e0) * d < (b - e0) * d; });
         if (t.empty()) { o.why = "no target level"; return o; }
@@ -71,19 +125,18 @@ inline Out compute(const std::string& mkt, const std::vector<Bar>& bars, const s
         }
         if (h2) { o.why = "rest target traded"; return o; }
         auto nm = [&](double p) { for (const Lvl& x : lv) if (std::fabs(x.px - p) < 0.5 * tick) return x.name; return std::string(); };
-        if (!h1) o.tags.push_back(Tag{ t1, nm(t1), "1/2", d, 3, false });
-        o.tags.push_back(Tag{ t2, nm(t2), "rest", d, 4, false });
+        if (!h1) o.tags.push_back(Tag{ t1, nm(t1), "1/2" + qs(P.scale), d, 3, false });
+        o.tags.push_back(Tag{ t2, nm(t2), "rest" + qs(P.scale), d, 4, false });
         o.why = "ok"; return o;
     }
     double ent = 0; std::string nm, txt;
-    if (m == "ES" || m == "NG") {
-        if (L->code % 10 != 3 || !okEnt(L->pbPoc)) { o.why = "no Pdoc PB POC entry"; return o; }
-        ent = L->pbPoc; nm = "PbPOC"; txt = m == "ES" ? "ENT Pdoc" : "ENT Pdoc ?";
-    } else {   // CL: the gamma level between the stop and entry0, nearest entry0
+    if (P.entPdoc != ST_OFF && L->code % 10 == 3 && okEnt(L->pbPoc)) {
+        ent = L->pbPoc; nm = "PbPOC"; txt = "ENT Pdoc" + qs(P.entPdoc);
+    } else if (P.entGamma != ST_OFF) {   // the gamma level between the stop and entry0, nearest entry0
         bool any = false; for (const Lvl& x : lv) if (x.gamma && okEnt(x.px) && (!any || (x.px - ent) * d > 0)) { ent = x.px; nm = x.name; any = true; }
         if (!any) { o.why = "no gamma entry"; return o; }
-        txt = "ENT ?";
-    }
+        txt = "ENT" + qs(P.entGamma);
+    } else { o.why = "no Pdoc PB POC entry"; return o; }
     bool filled = false; size_t fk = 0;
     for (size_t k = i + 1; k < bars.size(); ++k) {
         const Bar& b = bars[k];
@@ -97,14 +150,19 @@ inline Out compute(const std::string& mkt, const std::vector<Bar>& bars, const s
     for (size_t k = i + 1; k < bars.size(); ++k) if (touch(bars[k], ent + d * tick) && pull(bars[k].t, d)) { o.pull = true; break; }
     o.filled = filled;
     o.tags.push_back(Tag{ ent, nm, txt + (o.pull ? " PULL" : ""), d, 1, false });
-    if (m == "CL" && filled) {
+    if (P.exitBook != ST_OFF && filled) {
         const double r2 = (ent - L->stop) * d; const Book* best = nullptr;
         for (const Book& q : book) { if (!(q.lots > 0) || q.bid == (d > 0) || !((q.px - ent) * d >= 0.5 * r2)) continue;
             if (!best || (q.px - ent) * d < (best->px - ent) * d) best = &q; }
         bool gone = false; if (best) for (size_t k = fk; k < bars.size(); ++k) if (reach(bars[k], best->px)) { gone = true; break; }
-        if (best && !gone) o.tags.push_back(Tag{ best->px, std::string(), "EXIT ?", d, 2, true });
+        if (best && !gone) o.tags.push_back(Tag{ best->px, std::string(), "EXIT" + qs(P.exitBook), d, 2, true });
     }
     o.why = "ok"; return o;
 }
+// 1.0.0 call form (the compiled defaults) - kept for the existing tests / callers
+template <class Pull>
+inline Out compute(const std::string& mkt, const std::vector<Bar>& bars, const std::vector<Lbl>& labels, const std::vector<Lvl>& lv,
+                   const std::vector<Book>& book, double tick, double atr, Pull pull)
+{ return compute(mkt, bars, labels, lv, book, tick, atr, pull, defaults(mkt)); }
 }  // namespace ebd
 #endif
