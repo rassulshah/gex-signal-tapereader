@@ -1880,12 +1880,14 @@ int HodLod::draw(void)
     postMst(*S);                             // (2.4.0) the Market State (behind the scenes; nothing drawn changes)
     execute(L);
     hl::Box stripBox = { 0, 0, 0, 0 }; bool stripOk = false;   // (2.21.0) the read strip's rectangle: a confirm badge keeps off it
-    if (S->rbox.ok) {   // (2.22.0) the READ BOX left column: 5 lines at the top-left of the price area (the right half = the right column's slot, empty)
-        int l = pb.l + 4, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;
-        const int t = (int)pane.top + 2;   // (2.22.1, Rassul "move the read up to cover the black space") the very top of the price pane, under the legend strip
-        const rbx::Layout RL0 = rbx::layout(l, t, r, (int)pane.bottom);
+    if (S->rbox.ok) {   // (2.22.0) the READ BOX left column; (2.22.1) at the pane top, as wide as its text, clear of the left-edge labels
+        const int fs = 10;
+        int l = pb.l + 4 + 34, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;   // +34 px: other indicators' left-edge labels ("86%")
+        const int t = (int)pane.top + 2;   // Rassul "move the read up to cover the black space": the very top of the price pane, under the legend strip
+        int tw = 0; for (int k = 0; k < 5; k++) tw = (std::max)(tw, textW(S->rbox.l[k].text, fs, false));
+        const rbx::Layout RL0 = rbx::layout(l, t, r, (int)pane.bottom, tw, fs);
         if (L.tableOk && RL0.ok && L.table.t < RL0.box.b && L.table.b > RL0.box.t && L.table.l < RL0.box.r && L.table.r > l) l = (std::max)(l, L.table.r + 6);   // a table at the top keeps its spot
-        const rbx::Layout RL = rbx::layout(l, t, r, (int)pane.bottom);
+        const rbx::Layout RL = rbx::layout(l, t, r, (int)pane.bottom, tw, fs);
         if (RL.ok) {
             RCT bg; bg.set((short)RL.box.l, (short)RL.box.t, (short)RL.box.r, (short)RL.box.b); bg.draw(1, (COLOR)0x003A3F47, (COLOR)0x0015181D, DRAW_OPAQUE, PAT_SOLID);
             stripBox = hl::Box{ RL.box.l, RL.box.t, RL.box.r, RL.box.b }; stripOk = true;
@@ -1894,7 +1896,7 @@ int HodLod::draw(void)
             for (int k = 0; k < 5; k++) { const rbx::Line& ln = S->rbox.l[k]; const unsigned c = COLS[ln.col >= 0 && ln.col <= 4 ? ln.col : 0];
                 text(RL.line[k].l, (RL.line[k].t + RL.line[k].b) / 2, rbx::fit(ln.text, RL.line[k].r - RL.line[k].l, meas), (COLOR)c, RL.fs, false); }
             S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",box " + std::to_string(RL.box.l) + "," + std::to_string(RL.box.t) + "," + std::to_string(RL.box.r) + "," + std::to_string(RL.box.b)
-                          + ",slot " + std::to_string(RL.slot.l) + "-" + std::to_string(RL.slot.r) + "," + S->rbWhy + "\n";
+                          + ",text " + std::to_string(tw) + "," + S->rbWhy + "\n";
             for (int k = 0; k < 5; k++) S->placeLine += "READBOX_L" + std::to_string(k + 1) + "," + std::to_string(S->rbox.l[k].col) + "," + S->rbox.l[k].text + "\n";
         } else S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",no room," + S->rbWhy + "\n";
     } else S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",not built," + S->rbWhy + "\n";

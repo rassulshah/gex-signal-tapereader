@@ -289,15 +289,16 @@ template <class Meas> std::string fit(const std::string& s, int w, Meas meas) {
     return t + "...";
 }
 
-// the box: 5 lines in the LEFT half of the price area (the right half is the right column's slot, left empty), at the top
+// the box (1.0.1, Rassul "do not take up extra space"): as wide as the longest line + 6 px each side, 5 lines + 2 px top and bottom,
+// at most half the price area wide (longer lines are cut by fit()); no reserved right-column area (the right column will be its own box)
 struct Rect { int l = 0, t = 0, r = 0, b = 0; };
-struct Layout { bool ok = false; Rect box, slot; Rect line[5]; int fs = 10, lh = 14; };
-inline Layout layout(int left, int top, int right, int bottom, int fs = 10) {
-    Layout L; L.fs = fs; L.lh = fs + 4; const int pad = 4, h = 5 * L.lh + 2 * pad, w = right - left;
-    if (w < 300 || top + h > bottom - 40) return L;
-    const int mid = left + w / 2;
-    L.box = Rect{ left, top, mid - 4, top + h }; L.slot = Rect{ mid + 4, top, right, top + h };
-    for (int k = 0; k < 5; k++) L.line[k] = Rect{ left + 6, top + pad + k * L.lh, mid - 10, top + pad + (k + 1) * L.lh };
+struct Layout { bool ok = false; Rect box; Rect line[5]; int fs = 10, lh = 15; };
+inline Layout layout(int left, int top, int right, int bottom, int textW, int fs = 10) {
+    Layout L; L.fs = fs; L.lh = fs + 5; const int padX = 6, padY = 2, h = 5 * L.lh + 2 * padY, w = right - left;
+    if (w < 200 || top + h > bottom - 20) return L;
+    const int maxW = w / 2, bw = std::min(maxW, std::max(80, textW + 2 * padX));
+    L.box = Rect{ left, top, left + bw, top + h };
+    for (int k = 0; k < 5; k++) L.line[k] = Rect{ left + padX, top + padY + k * L.lh, left + bw - padX, top + padY + (k + 1) * L.lh };
     L.ok = true; return L;
 }
 

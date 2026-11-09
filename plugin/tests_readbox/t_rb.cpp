@@ -44,11 +44,13 @@ int main() {
         CHECK(r.l[1].text.find("Day: Big 82%") == 0 && r.l[1].col == rbx::BLUE && r.l[1].text.find("-> PB Revs, Hold CoB") != std::string::npos, "RTH Day line: " + r.l[1].text);
         rbx::In C = upto(ES, T(2026, 11, 6, 15, 57), "ES", 2); C.day = I.day; const rbx::Out c = rbx::build(C);
         CHECK(c.l[1].text.find("closed") != std::string::npos, "after the close: " + c.l[1].text); }
-    // ---- 4 LAYOUT (ChartView widths of ES / GC / CL charts): 5 lines inside the left half, no overlap, the right slot empty
+    // ---- 4 LAYOUT (ChartView widths of ES / GC / CL charts): top edge = pane top + 2, the box as wide as its text (+6 px a side),
+    //      all 5 rows inside it, never more than half the price area, nothing reserved on the right
     {   const int W[3] = { 1180, 860, 1420 }; bool ok = true;
-        for (int w : W) { const int paneTop = 40; const rbx::Layout L = rbx::layout(60, paneTop + 2, 60 + w, 700); ok = ok && L.ok && L.box.t == paneTop + 2 && L.line[0].t > L.box.t && L.line[4].b <= L.box.b && L.box.r < L.slot.l && L.box.r <= 60 + w / 2;   // (2.22.1) top edge = pane top + 2
-            for (int k = 0; k < 4; k++) ok = ok && L.line[k].b <= L.line[k + 1].t && L.line[k].r <= L.box.r; }
-        CHECK(ok, "layout: 5 rows inside the left half on 3 chart widths, no overlap, the right column slot free");
+        for (int w : W) for (int tw : { 300, 420, 2000 }) { const int paneTop = 40, left = 60 + 38; const rbx::Layout L = rbx::layout(left, paneTop + 2, 60 + w, 700, tw);
+            ok = ok && L.ok && L.box.t == paneTop + 2 && L.box.l == left && L.box.r - L.box.l == std::min((60 + w - left) / 2, tw + 12) && L.line[0].t >= L.box.t + 2 && L.line[4].b <= L.box.b - 2;
+            for (int k = 0; k < 4; k++) ok = ok && L.line[k].b <= L.line[k + 1].t && L.line[k].r <= L.box.r - 6; }
+        CHECK(ok, "layout: top edge at the pane top + 2, width = text + 12 (max half the pane), 5 rows inside, no overlap, no reserved slot");
         auto meas = [](const std::string& s) { return (int)s.size() * 6; };
         const std::string f = rbx::fit("Lvl: Testing S LonLO 7210 (1st) + PS0 7200, -> R PDH 7460 (+0.3 ATR), Swept ONH", 200, meas);
         CHECK(f.rfind("Lvl: Testing S", 0) == 0 && meas(f) <= 200, "fit keeps the verdict, cuts parts from the end: " + f); }
