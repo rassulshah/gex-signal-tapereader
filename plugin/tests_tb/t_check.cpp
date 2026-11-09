@@ -8,14 +8,24 @@
 #include <cstdlib>
 using namespace tbk;
 struct Tr { int grp; int side; long long px; long long t0; bool touched = false; long long tt = 0; };
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    _setmode(_fileno(stdin), _O_BINARY);   // the records arrive on a binary pipe
+#endif
     const std::string mkt = argc > 1 ? argv[1] : "ES";
     Params pp; s20For(mkt, pp); if (argc > 2) pp.showMs = std::atoll(argv[2]) * 1000; Engine E(pp);
     if (argc > 3) { FILE* mf = std::fopen(argv[3], "rb"); if (mf) { std::string t; char b[4096]; size_t n; while ((n = std::fread(b, 1, sizeof b, mf)) > 0) t.append(b, n); std::fclose(mf); E.setModel(parseRealModel(t)); } }
     const long long CT = -6LL * 3600 * 1000;
     const char* G[] = { "shown (all)", "shown, many orders", "shown, mostly one order ?", "shown, S20 order", "removed: inside 2 ticks", "removed: young < 30 s", "removed: quoting", "removed: pulled on approach earlier", "removed: cluster", "shown, model >= 70% real", "shown, model < 70% real" };
     long long n[11] = {0}, held[11] = {0}, broke[11] = {0}; std::map<std::pair<int, long long>, Tr> T; std::map<std::pair<int, long long>, long long> lastDone;
-    struct __attribute__((packed)) R { int8_t act, side; int32_t px, sz; uint64_t oid; int64_t t; } r;
+    #pragma pack(push, 1)
+    struct R { int8_t act, side; int32_t px, sz; uint64_t oid; int64_t t; } r;
+#pragma pack(pop)
+    static_assert(sizeof(R) == 26, "record = 26 bytes");
     long long next = -1;
     auto track = [&](int grp, int side, long long px, long long now) { const auto k = std::make_pair(grp * 2 + side, px);
         if (T.count(k)) return; auto d = lastDone.find(k); if (d != lastDone.end() && now - d->second < 600000) return; Tr x; x.grp = grp; x.side = side; x.px = px; x.t0 = now; T[k] = x; };
