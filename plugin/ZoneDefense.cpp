@@ -1,5 +1,7 @@
 /********************************************************************************
- *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.3  +  lsZoneDefenseMarks 1.0.3  (2026-11-08)
+ *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.4  +  lsZoneDefenseMarks 1.0.4  (2026-11-08)
+ *  1.0.4 (live bug, Sun 19:51 CT): the Central-clock check read "UTC+0" on a Central PC - the order stamps are already local inside
+ *  IRT. The PC zone now comes from GetTimeZoneInformation; unknown = no warning.
  *  1.0.3 (Rassul approved 2026-11-08): a zone AT his levels (key, volume, MenthorQ within the level reach) needs less size - the
  *  market's research floor or levelFloorX x the chart floor (his rule 0.5x), whichever is higher (ZoneDefenseParams.h). The noise
  *  check (13 fixture days) added > 10 zones/day in ES NQ CL GC HG NG at 0.5-0.8x, so those markets ship CAPPED (levelFloorX 1.0 =
@@ -22,7 +24,7 @@
  *  verdict word bold at one x, the detail in a calmer tint on the same line, times right-aligned); the pane bars are dimmed.
  *  Rassul 2026-11-08 "Zone Defense is good. lets build it" - design approved on claude.ai/artifact/MJ9YYwjeMAUQztNZrCiP1G.
  *
- *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.3", on the live market-by-order feed (the same order-feed path
+ *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.4", on the live market-by-order feed (the same order-feed path
  *  as lsBookFlow: off::MboPane, the 250 ms clock, every event once through onRaw). Every event goes to zd::Engine
  *  (ZoneDefenseLogic.h, SDK-free, the same code the jumpstart / nightly ran over 71 market-days of raw MBO). Each decision is a
  *  journal line in lsFlexLevels\ZoneDefense\<MKT>-<spb>-<session>.csv, written once; the pane and the price chart draw ONLY from
@@ -77,16 +79,31 @@
 #include <chrono>
 #include <climits>
 
-#define ZD_VERSION "1.0.3"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
+#define ZD_VERSION "1.0.4"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
 
 
 namespace zdh {
 // the version of both DLLs: the ONE setVersion literal (the settings contract counts it; gex-build reads it)
-inline void stamp(cppExtension* p) { p->setVersion("1.0.3"); }
+inline void stamp(cppExtension* p) { p->setVersion("1.0.4"); }
 // the one settings window of both plugins (registered once per DLL)
 inline void registerWindow(cppExtension* x, ss::Ids& ids) { ss::registerAll(x, zdset::spec(), ids); }
 // file helpers shared by the two plugins
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
+// (1.0.4) the PC's UTC offset in minutes (local - UTC) now, from the Windows time-zone API; false = unknown (then nothing is shown).
+// Off Windows (the mock-host tests) the value comes from testTz() - unknown unless a test sets it.
+struct PcTz { bool known = false; int offMin = 0; };
+inline PcTz& testTz() { static PcTz t; return t; }
+inline bool pcOffsetMin(int& out) {
+#if defined(_WIN32)
+    TIME_ZONE_INFORMATION z; std::memset(&z, 0, sizeof z); const DWORD r = GetTimeZoneInformation(&z);
+    if (r == TIME_ZONE_ID_INVALID) return false;
+    const long b = z.Bias + (r == TIME_ZONE_ID_DAYLIGHT ? z.DaylightBias : r == TIME_ZONE_ID_STANDARD ? z.StandardBias : 0);
+    if (b < -14 * 60 || b > 14 * 60) return false;
+    out = -(int)b; return true;
+#else
+    if (!testTz().known) return false; out = testTz().offMin; return true;
+#endif
+}
 inline bool& clockCheck() { static bool on = true; return on; }   // (L6) the Central-time check (the mock-host tests whose clock is UTC turn it off)
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 inline void makeDir(const std::string& p) {
@@ -283,8 +300,12 @@ public:
             if (!e->eng || sess != e->session || mkt != e->mkt || (int)S.spb != e->spb) openSession(S, *e, sess, mkt);
             const long long utcMin = e->stamp / 60; e->ctOff = (int)(((t.tm_hour * 60 + t.tm_min) - (utcMin % 1440) + 2880) % 1440);
             if (e->eng) e->eng->ctOffsetMin = e->ctOff;
-            if (zdh::clockCheck()) { const int want = zd::Engine::chicagoOffsetMin(e->stamp), have = e->ctOff >= 720 ? e->ctOff - 1440 : e->ctOff;   // (L6) the PC must be on Central
-              e->clockWarn = have == want ? std::string() : "PC clock is UTC" + std::string(have >= 0 ? "+" : "") + std::to_string(have / 60) + (have % 60 ? ":" + std::to_string(std::abs(have % 60)) : std::string()) + ", not Central - sessions and times are off"; }
+            // (L6, 1.0.4 fix) the PC's zone from the Windows API (the order stamps are already local inside IRT, so local - stamp = 0 was a
+            // FALSE "UTC+0"); compared with America/Chicago at the real UTC now; an unknown zone = no warning (never a false one)
+            if (zdh::clockCheck()) { int have = 0; const long long nowUtc = (long long)std::time(nullptr);
+              if (!zdh::pcOffsetMin(have)) e->clockWarn.clear();
+              else { const int want = zd::Engine::chicagoOffsetMin(nowUtc);
+                e->clockWarn = have == want ? std::string() : "PC clock is UTC" + std::string(have >= 0 ? "+" : "-") + std::to_string(std::abs(have) / 60) + (have % 60 ? ":" + std::to_string(std::abs(have % 60)) : std::string()) + ", not Central - sessions and times are off"; } }
             if (e->eng) refreshLevels(S, *e);                              // (1.0.2 levels) the files are re-read at most every 5 s (nl::Cache)
         }
         if (!e->eng || !e->writer) return;                                 // a read-only copy (another chart writes this journal)

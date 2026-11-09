@@ -181,7 +181,15 @@ int main(int argc, char** argv) {
     {   freshHome(); mock::Host h; mock::current = &h; mock::feed = mock::Feed(); const unsigned long t0 = 1793034000UL - 3600;
         Ind* p = pane(h, t0); mock::feed.push(0, 1, 6990.0f, 5, (RTDATE)(t0 + 10), 1); pump(h, p, t0 + 180);
         auto* e = p->ext(*p->testState());
-        CHECK(!e->clockWarn.empty() && e->clockWarn.find("not Central") != std::string::npos, "L6 the mock clock is UTC: the pane warns (" + e->clockWarn + ")");
+        CHECK(e->clockWarn.empty(), "1.0.4 L6: the zone unknown (no API answer) -> NO warning, whatever the order stamps say (" + e->clockWarn + ")");
+        const int cst = zd::Engine::chicagoOffsetMin((long long)std::time(nullptr));
+        zdh::testTz().known = true; zdh::testTz().offMin = cst; NOW += 1000; mock::feed.push(0, 1, 6989.0f, 5, (RTDATE)(t0 + 200), 2); pump(h, p, t0 + 360);
+        CHECK(e->clockWarn.empty(), "1.0.4 L6: the API says Central (" + std::to_string(cst) + ") -> no warning, though the stamps are local-as-UTC");
+        zdh::testTz().offMin = 0; mock::feed.push(0, 1, 6988.0f, 5, (RTDATE)(t0 + 380), 3); pump(h, p, t0 + 540);
+        CHECK(e->clockWarn.find("UTC+0,") != std::string::npos, "1.0.4 L6: UTC+0 only when the API really says so (" + e->clockWarn + ")");
+        zdh::testTz().offMin = -300 == cst ? -360 : -300; mock::feed.push(0, 1, 6987.0f, 5, (RTDATE)(t0 + 560), 4); pump(h, p, t0 + 720);
+        CHECK(e->clockWarn.find("UTC-") != std::string::npos, "1.0.4 L6: a US zone one hour off is reported with its sign (" + e->clockWarn + ")");
+        zdh::testTz() = zdh::PcTz();
         dispose(p); }
     {   freshHome(); mock::Host h; mock::current = &h; mock::feed = mock::Feed(); const unsigned long t0 = 1793034000UL - 3600;
         Ind* p = pane(h, t0); h.seconds = 90; mock::feed.push(0, 1, 6990.0f, 5, (RTDATE)(t0 + 10), 1); pump(h, p, t0 + 180);
