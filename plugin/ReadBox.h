@@ -8,11 +8,11 @@
 //        (3 back each side, no close beyond since) within 1/4 ATR(60m, 14). Green = Rot Up + CLBO, red = Rot Dn + CLBD, else white.
 //   Day  RTH: "Day: Big 72%, 1.4x ADR, Used 74%, -> PB Revs, Hold CoB"   (grey = small, white = normal, blue = big)
 //        overnight / pre-open: "Day: Overnight, ON 0.4x ADR[, Big? 35%]" - never the prior RTH's text.
-//   Lvl  "Lvl: Testing S LonLO 7210 (1st) + PS0 7200, up R PDH 7460 (+0.3 ATR), Swept ONH"
+//   Lvl  "Lvl: Testing S LonLO 7210 (1st) + PS0 7200, -> R PDH 7460 (+0.3 ATR), Swept ONH"
 //        key + volume levels (MenthorQ only as the "+" confluence within 1/4 ATR); green = testing / swept S in Rot Up, red = R in Rot Dn.
 //   Mkt  verdict + Init / Trapped only (lsDeltaProfile's DECIDED I / T in the last 5 closed bars): "Buyers Pushing / B Initiating 4.4x
 //        @4098.1" (green), "Sellers Failing / S Trapped" (green: the failing side takes the other side's colour), else "Mkt: Even" (white).
-//   Lmt  description only (lsDeltaProfile's decided A in the last 5 closed bars): "Lmt: Buyers Absorbing 41 (4.4x) @4098.1"; none = "Lmt: -".
+//   Lmt  description only (lsDeltaProfile's decided A in the last 5 closed bars): "Lmt: Buyers Absorbing 41 (4.4x) @4098.1"; none = "Lmt: no absorption".
 // Built from CLOSED bars and DECIDED signals only, so a line never changes for a bar that is already closed (no repaint).
 #pragma once
 #include <algorithm>
@@ -24,7 +24,7 @@
 
 namespace rbx {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // 1.0.1: plain ASCII only (the IRT text call is ANSI: "->" not an arrow), no bare "-" lines
 enum Col { WHITE = 0, GREEN = 1, RED = 2, GREY = 3, BLUE = 4 };
 struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0; };   // t = bar END, CT wall-clock seconds
 struct Level { std::string name; double px = NAN; };
@@ -91,7 +91,7 @@ struct Htf { bool ok = false; Line line; int dir = 0; double atr = NAN; };
 inline Htf htfLine(const In& I) {
     Htf o; std::vector<Bar> B = hourly(I.bars, I.per);
     if (!B.empty() && !I.bars.empty() && B.back().t > I.bars.back().t) B.pop_back();   // the hour in progress is not read: the last COMPLETED hour (changes once an hour)
-    if (B.size() < 16) { o.line.text = "HTF: -"; o.line.col = WHITE; return o; }
+    if (B.size() < 16) { o.line.text = "HTF: not enough 60-min bars"; o.line.col = WHITE; return o; }
     std::vector<Piv> piv; int dir = 1, ext = 0; zigzag(B, piv, dir, ext);
     const int i = (int)B.size() - 1; const Bar& cur = B[i]; const Bar& prv = B[i - 1];
     std::vector<std::string> P;
@@ -156,20 +156,20 @@ inline Line dayLine(const In& I, long long now) {
     if (I.day.kind == 1) { kind = "Big"; p = I.day.pBig; L.col = BLUE; }
     else if (I.day.kind == 2) { kind = "Sm"; p = I.day.pSmall; L.col = GREY; }
     else if (I.day.kind == 0 && std::isfinite(I.day.pBig) && std::isfinite(I.day.pSmall)) p = 1.0 - I.day.pBig - I.day.pSmall;
-    std::string t = I.day.kind < 0 ? std::string("Day: -") : "Day: " + kind + (std::isfinite(p) ? " " + pct(p) : std::string());
+    std::string t = I.day.kind < 0 ? std::string("Day: no range-day read") : "Day: " + kind + (std::isfinite(p) ? " " + pct(p) : std::string());
     const double rr = rhi > rlo ? rhi - rlo : NAN;
     if (std::isfinite(rr) && std::isfinite(adr) && adr > 0) {
         t += ", " + x1(rr / adr) + " ADR";
         if (std::isfinite(I.day.xr) && I.day.xr > 0) { char b[24]; std::snprintf(b, sizeof b, ", Used %.0f%%", 100.0 * rr / (I.day.xr * adr)); t += b; }
     }
     if (afterClose) t += ", closed";
-    else if (I.day.kind == 1) t += ", \xE2\x86\x92 PB Revs, Hold CoB";
-    else if (I.day.kind >= 0) t += ", \xE2\x86\x92 CoB 1.33";
+    else if (I.day.kind == 1) t += ", -> PB Revs, Hold CoB";
+    else if (I.day.kind >= 0) t += ", -> CoB 1.33";
     L.text = t; return L;
 }
 
 inline Line lvlLine(const In& I, long long now, int dir, double atr) {
-    Line L; L.text = "Lvl: -"; L.col = WHITE;
+    Line L; L.text = "Lvl: no level near"; L.col = WHITE;
     std::vector<Bar> B; for (const Bar& b : I.bars) if (b.t <= now) B.push_back(b);
     if (B.size() < 3 || !std::isfinite(atr) || atr <= 0) return L;
     const Bar& cur = B.back(); const Bar& prv = B[B.size() - 2]; const double q = atr / 4, px = cur.c;
@@ -207,7 +207,7 @@ inline Line lvlLine(const In& I, long long now, int dir, double atr) {
     const bool up = std::isfinite(ref30) ? px >= ref30 : dir == 1; const double ref = have ? best.lv.px : px;
     const Level* nx = nullptr;
     for (const Level& a : lv) if (up ? a.px > ref + q : a.px < ref - q) { if (!nx || (up ? a.px < nx->px : a.px > nx->px)) nx = &a; }
-    if (nx) { char b[40]; std::snprintf(b, sizeof b, " (%+.1f ATR)", (nx->px - px) / atr); P.push_back(std::string(up ? "\xE2\x86\x91 R " : "\xE2\x86\x93 S ") + nx->name + " " + num(nx->px, I.dec) + b); }
+    if (nx) { char b[40]; std::snprintf(b, sizeof b, " (%+.1f ATR)", (nx->px - px) / atr); P.push_back(std::string(up ? "-> R " : "-> S ") + nx->name + " " + num(nx->px, I.dec) + b); }
     std::vector<std::string> sw; std::vector<const Bar*> seg; for (const Bar& b : B) if (b.t > s0) seg.push_back(&b);
     if (!seg.empty()) {
         double mx = -1e300, mn = 1e300; for (const Bar* b : seg) { mx = std::max(mx, b->h); mn = std::min(mn, b->l); }
@@ -243,7 +243,7 @@ inline Line mktLine(const In& I, long long now) {
 }
 
 inline Line lmtLine(const In& I, long long now) {
-    Line L; L.text = "Lmt: -"; L.col = WHITE;
+    Line L; L.text = "Lmt: no absorption"; L.col = WHITE;
     const long long from = now - 5 * I.per; const Sig* a = nullptr;
     for (const Sig& s : I.sigs) { if (s.t <= from || s.t > now) continue; if (s.code == "A" || s.code == "AL") a = &s; }
     if (!a) return L;
