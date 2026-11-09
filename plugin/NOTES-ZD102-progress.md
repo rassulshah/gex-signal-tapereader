@@ -55,3 +55,12 @@ GC Nov 2-6 data once the conversion lands, and switch the definition to what his
   "from the future" -> "levels 0 (0 levels from 0 files)". Now zdh::wallNow() = the real UTC clock. Test: ES key file with 16 levels +
   CT stamps -> "16 levels from 1 files" (his 12 used); the old call reproduces the 0.
 - Data on hand: ES 10 sessions; NQ 2, GC 3, CL 3, EU 3, HG 2 (live MBO archives start 11-04 for those); NG none (research floors).
+
+## 1.0.6 (2026-11-09 09:03 CT, Rassul on NQ live)
+- Bars at FULL pane height (drawn first); the read lines on top in one opaque near-black box (C_BOX_BG) sized to the text (the time
+  column sits right after the widest verdict + detail, like ReadBox 2.22.1) - the bars are hidden only behind the text.
+- Plain ASCII in every drawn string: " | " for the middle dot, "-" for the range dash, "->" for the arrow (his pane showed mojibake).
+  t_zd checks every drawn string is 7-bit ASCII, the box holds every text and fits it, the bars come first and reach the pane top.
+- ES "waiting for a zone touch" with no bars (09:xx): ES had ONE zone today (303 lots at the 299 morning floor, never touched), book
+  12,017 orders. The bars are the lots sold into the latest TOUCHED zone (the engine records them only after a touch), so no touched
+  zone = no bars by design, not a draw bug. 1.0.5's ES floors drop asia/london/preopen/open (135-225) but morning is 308 (was 299).

@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
     bool ov = false; for (size_t a = 0; a < S->labels.size(); ++a) for (size_t b = a + 1; b < S->labels.size(); ++b) { auto& A = S->labels[a]; auto& B = S->labels[b]; if (A.l < B.r && A.r > B.l && A.t < B.b && A.b > B.t) ov = true; }
     CHECK(!ov, "labels never overlap (" + std::to_string(S->labels.size()) + " drawn, " + std::to_string(S->labelsSkipped) + " gave way)");
     bool lab = true; for (auto& d : h.draws) if (d.type == "text" && (d.text.compare(0, 5, "Zone ") != 0 || d.text.find(" lots (") == std::string::npos)) lab = false;
-    CHECK(lab, "label format 'Zone lo-hi · N lots (x) · oldest Nm ...'");
+    CHECK(lab, "label format 'Zone lo-hi | N lots (x) | oldest Nm ...'");
     CHECK(lines > 0, "diamonds / triangles / big-order lines drawn (" + std::to_string(lines) + " line segments)");
     const std::string s1 = sig(h); h.draws.clear(); p->draw(); const std::string s2 = sig(h);
     dispose(p); p = make(); h.draws.clear(); p->draw(); const std::string s3 = sig(h);

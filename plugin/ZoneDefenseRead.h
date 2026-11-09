@@ -77,7 +77,7 @@ struct Signs { int reload = 0, pull = 0, sweep = 0; };
 // rested fell below half of its peak; closed (white) = the pane stopped before it was decided
 inline std::string zoneState(const ZoneView& v, const Signs&, int& col) {
     const int bull = v.side == 0 ? +1 : -1; col = 0;
-    if (v.state == 5) { col = bull; return "broken \xE2\x86\x92 reclaimed"; }   // a failed break: trapped attackers
+    if (v.state == 5) { col = bull; return "broken -> reclaimed"; }   // a failed break: trapped attackers
     if (v.state == 4) { col = -bull; return "broken"; }
     if (v.ended && v.endCode == 2 && v.state != 3 && v.state != 2) { col = -bull; return "pulled"; }
     if (v.ended && v.endCode >= 4 && v.state == 0) return "closed";
@@ -98,14 +98,14 @@ inline void setLine(RLine& r, const char* label, const std::string& verdict, con
 template <class Clock> std::vector<RLine> readLines(const ZoneView& v, Clock clock, const Signs& sg, double tick = 0) {
     const bool bid = v.side == 0; const int bull = bid ? +1 : -1;      // what defending means for this side
     const std::string who = bid ? "Bid" : "Offer", buyers = bid ? "Buyers" : "Sellers", side = bid ? "bid" : "offer", sides = bid ? "bids" : "offers";
-    const std::string dot = " \xC2\xB7 ";
+    const std::string dot = " | ";
     std::vector<RLine> out(5);
     // 1 Zone: ONE state for the line and the price-chart label (zoneState, review M8)
     {   char b[96]; const double oldestAtTouch = v.oldest + (v.touched ? (v.touchT - v.T) / 60000.0 : 0);
-        std::snprintf(b, sizeof b, " \xC2\xB7 %s lots \xC2\xB7 oldest %.0fm", comma(v.size).c_str(), oldestAtTouch);
-        const std::string range = tick > 0 ? priceText(v.lo, tick) + "\xE2\x80\x93" + priceText(v.hi, tick) : std::string();
+        std::snprintf(b, sizeof b, " | %s lots | oldest %.0fm", comma(v.size).c_str(), oldestAtTouch);
+        const std::string range = tick > 0 ? priceText(v.lo, tick) + "-" + priceText(v.hi, tick) : std::string();
         int col = 0; const std::string st = zoneState(v, sg, col);
-        setLine(out[0], "Zone", st, range + b + (v.state == 5 && v.reclaimBars >= 0 ? std::string(" \xC2\xB7 ") + std::to_string(v.reclaimBars) + " bars after the break" : std::string())); out[0].col = col; out[0].time = clock(v.stateT > 0 ? v.stateT : v.T);
+        setLine(out[0], "Zone", st, range + b + (v.state == 5 && v.reclaimBars >= 0 ? std::string(" | ") + std::to_string(v.reclaimBars) + " bars after the break" : std::string())); out[0].col = col; out[0].time = clock(v.stateT > 0 ? v.stateT : v.T);
     }
     // 2 Queue (the 60 s before the touch)
     if (v.cancel60 < 0) setLine(out[1], "Queue", "thin", "too few resting orders to read");
@@ -125,7 +125,7 @@ template <class Clock> std::vector<RLine> readLines(const ZoneView& v, Clock clo
     if (!v.reloaded) { setLine(out[3], "Refill", v.ended ? "not decided" : "counting", ""); out[3].time = clock(v.touchT); }
     else {
         std::string d = "absorbed " + comma(v.sold) + " (" + xText(v.reloadX) + ")" + dot + side + " " + comma(v.left) + " of " + comma(v.atTouch);
-        if (v.zeroT >= 0) d += " \xE2\x86\x92 0 by " + clock(v.zeroT);
+        if (v.zeroT >= 0) d += " -> 0 by " + clock(v.zeroT);
         setLine(out[3], "Refill", comma(v.refills) + " times", d);
         out[3].col = (v.zeroT >= 0 || v.left == 0) ? -bull : out[2].col; out[3].time = clock(v.relT);
     }
@@ -141,9 +141,9 @@ template <class Clock> std::vector<RLine> readLines(const ZoneView& v, Clock clo
     }
     return out;
 }
-// the zone label on the price chart: "Zone 7012.25-7013.00 · 450 lots (2.6x) · oldest 14m · at VAL + PS0 · held" (the level part only when tagged)
+// the zone label on the price chart: "Zone 7012.25-7013.00 | 450 lots (2.6x) | oldest 14m | at VAL + PS0 | held" (the level part only when tagged)
 inline std::string zoneLabel(const ZoneView& v, double tick, const Signs& sg = Signs()) {
-    char b[64]; std::snprintf(b, sizeof b, " \xC2\xB7 %s lots (%.1fx) \xC2\xB7 oldest %.0fm", comma(v.size).c_str(), v.dens, v.oldest);
-    int col = 0; return "Zone " + priceText(v.lo, tick) + "\xE2\x80\x93" + priceText(v.hi, tick) + b + (v.lvl.empty() ? std::string() : " \xC2\xB7 at " + v.lvl) + " \xC2\xB7 " + zoneState(v, sg, col);
+    char b[64]; std::snprintf(b, sizeof b, " | %s lots (%.1fx) | oldest %.0fm", comma(v.size).c_str(), v.dens, v.oldest);
+    int col = 0; return "Zone " + priceText(v.lo, tick) + "-" + priceText(v.hi, tick) + b + (v.lvl.empty() ? std::string() : " | at " + v.lvl) + " | " + zoneState(v, sg, col);
 }
 } // namespace zdr

@@ -6,7 +6,7 @@
 //     lines for the zones decided before the restart.
 //   3 LIVE vs CLOSE: every Read line, once decided (not "watching" / "counting"), is the same text at the end of the session.
 //   4 LAYOUT: the 4 lines never overlap each other or their time; the time is right-justified; nothing outside the pane.
-//   5 VERSIONS: ZD_VERSION == zdset::PLUGIN_VERSION == the setVersion literals == "1.0.5", title "Zone Defense v1.0.5".
+//   5 VERSIONS: ZD_VERSION == zdset::PLUGIN_VERSION == the setVersion literals == "1.0.6", title "Zone Defense v1.0.6".
 // Build (tests_zd/): g++ -std=c++17 -O2 -Wall -Wextra -Wno-misleading-indentation -DOFF_TEST_CLOCK -DPC_TEST_CURSOR -I.. -I../tests_aggbook/mock t_zd.cpp -o t && ./t
 #include "ZoneDefense.cpp"
 #include <set>
@@ -21,6 +21,7 @@ namespace pc { int test_cx = 0, test_cy = 0; bool test_ok = false; }
 #include <sys/stat.h>
 static long long& NOW = off::off_test_now_ms;
 static int fails = 0, passes = 0;
+static int fullBars = 0;   // (1.0.6) fixtures where bars were drawn under the box (at least one must)
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %d %s\n", __LINE__, std::string(m).c_str()); } } while (0)
 #pragma pack(push, 1)
 struct FR { int t; signed char a, s; int px; unsigned sz; int oid; };
@@ -116,6 +117,16 @@ static void session(const std::string& mkt, const std::string& fx, double tick, 
     }
     for (auto* d : tx) std::printf("  %s [%06lx] x %d..%d y %d %s\n", mkt.c_str(), (unsigned long)d->color, d->x, d->r, d->y, d->text.c_str());
     CHECK(!overlap && !outside, mkt + " LAYOUT: no two texts overlap (5 lines), all inside the pane");
+    // ---- (1.0.6, Rassul 2026-11-09 09:03) plain ASCII text; bars at full pane height; the read in an opaque box sized to its text ----
+    {   bool ascii = true; for (auto* d : tx) for (unsigned char ch : d->text) if (ch > 126 || (ch < 32 && ch != 0)) ascii = false;
+        CHECK(ascii, mkt + " 1.0.6: every drawn string is 7-bit ASCII (no mojibake)");
+        int boxAt = -1, lastBar = -1, barTop = 1 << 30, i = 0; const mock::Draw* box = nullptr;
+        for (auto& d : h.draws) { if (d.type == "box" && d.color == zdh::C_BOX_BG) { box = &d; boxAt = i; } if (d.type == "box" && d.color == zdh::C_BAR_RED) { lastBar = i; barTop = std::min(barTop, d.y); } ++i; }
+        int txR = 0, txB = 0; for (auto* d : tx) { txR = std::max(txR, d->r); txB = std::max(txB, d->y + 6); }
+        bool inside = box != nullptr; if (box) for (auto* d : tx) if (d->x < box->x || d->r > box->r || d->y - 6 < box->y || d->y + 6 > box->b) inside = false;
+        CHECK(inside && box->r <= txR + 8 && box->b <= txB + 4, mkt + " 1.0.6: one opaque box behind the read, every text inside it, sized to the text (box r " + std::to_string(box ? box->r : -1) + " vs text " + std::to_string(txR) + ")");
+        CHECK(lastBar < 0 || (lastBar < boxAt && barTop == h.paneTop + 2), mkt + " 1.0.6: the bars are drawn first and the tallest reaches the pane top (top " + std::to_string(barTop) + ", pane " + std::to_string(h.paneTop) + ")");
+        if (lastBar >= 0) ++fullBars; }
     const std::vector<std::string> want = { "1. Zone", "2. Queue", "3. Pressure", "4. Refill", "5. Sweep" };
     CHECK(labels == want, mkt + ": the 5 numbered lines in event order (" + std::to_string(labels.size()) + ")");
     {   std::map<std::string, int> xOf; std::set<int> verdictX, timeR, labelX;
@@ -166,11 +177,12 @@ int main(int argc, char** argv) {
     session("HG", dir + "/HG-2026-11-04.bin", 0.0005, -6 * 3600);
     // ---- 5 VERSIONS ----
     const std::string src = readAll("../ZoneDefense.cpp"), marks = readAll("../ZoneDefenseMarks.cpp");
-    CHECK(std::string(ZD_VERSION) == "1.0.5" && std::string(zdset::PLUGIN_VERSION) == ZD_VERSION && std::string(zd::VERSION) == ZD_VERSION, "versions 1.0.5 (ZD_VERSION, settings spec, engine)");
-    size_t n = 0, at = 0; while ((at = src.find("p->setVersion(\"1.0.5\")", at)) != std::string::npos) { ++n; ++at; }
-    CHECK(n == 1 && marks.find("p->setVersion(\"1.0.5\")") != std::string::npos, "the setVersion literals (pane, marks, the gex-build line) = 1.0.5");
-    char t[64]; Ind* p = make(); p->parmsTitle(t, sizeof t); CHECK(std::string(t) == "Zone Defense v1.0.5", std::string("title ") + t); dispose(p);
+    CHECK(std::string(ZD_VERSION) == "1.0.6" && std::string(zdset::PLUGIN_VERSION) == ZD_VERSION && std::string(zd::VERSION) == ZD_VERSION, "versions 1.0.6 (ZD_VERSION, settings spec, engine)");
+    size_t n = 0, at = 0; while ((at = src.find("p->setVersion(\"1.0.6\")", at)) != std::string::npos) { ++n; ++at; }
+    CHECK(n == 1 && marks.find("p->setVersion(\"1.0.6\")") != std::string::npos, "the setVersion literals (pane, marks, the gex-build line) = 1.0.6");
+    char t[64]; Ind* p = make(); p->parmsTitle(t, sizeof t); CHECK(std::string(t) == "Zone Defense v1.0.6", std::string("title ") + t); dispose(p);
     CHECK(zdset::spec().n == zdset::K_N && ss::check(zdset::spec()).empty(), "settings spec valid (" + std::to_string(ss::check(zdset::spec()).size()) + " problems)");
+    CHECK(fullBars >= 1, "1.0.6: at least one fixture drew bars under the read box (" + std::to_string(fullBars) + ")");
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }
