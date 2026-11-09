@@ -158,6 +158,7 @@ int main(int argc, char** argv) {
         CHECK(l1.find("at VAL + PS0") != std::string::npos && l2.find(" at ") == std::string::npos && J.bad == 0, "label: \"at VAL + PS0\" from the ZL line, gone when the latest ZL has none (" + l1 + ")"); }
     {   freshHome(); mock::Host h; mock::current = &h; mock::feed = mock::Feed(); const unsigned long t0 = 1793034000UL - 3600;
         const std::string dir = zdh::flexDir(); { std::ofstream f((dir + "\\LRA-KeyLevels-ES.csv").c_str()); f << "KEYLV,1," << t0 << "\nL|PDL|6990.00|0\nL|ONH|7010.50|0\nL|VWAP|7000|0\n"; }
+        zdh::testWall() = (long long)t0 + 60;   // (1.0.5) the files are judged on the real UTC clock: pin it next to the file time
         Ind* p = pane(h, t0); mock::feed.push(0, 1, 6990.0f, 5, (RTDATE)(t0 + 10), 1); pump(h, p, t0 + 180);
         auto* e = p->ext(*p->testState());
         CHECK(e->eng && e->nLevels == 2 && e->eng->levels.size() == 2 && e->eng->levels[0].name == "PDL" && e->eng->levels[0].px == 27960 && e->eng->levels[1].px == 28042,
@@ -170,6 +171,22 @@ int main(int argc, char** argv) {
         CHECK(e->nLevels == 4 && e->eng->levels.size() == 4 && e->eng->levels[2].name == "VAL" && e->eng->levels[2].px == 27980 && e->eng->levels[3].name == "WPoc",
               "host: LRA-VolLevels for this session + contract -> VAL / WPoc join the levels (" + std::to_string(e->nLevels) + ", " + e->lvlNote + ")");
         dispose(p); }
+    // ---- (1.0.5 levels fix, live 2026-11-09 "levels 0 (0 levels from 0 files)") the files carry the real UTC time; the order stamps inside
+    //      IRT are CT-as-epoch (5-6 h behind). 1.0.4 judged freshness on the stamps -> every file "from the future" -> 0. Now the UTC clock. ----
+    {   freshHome(); mock::Host h; mock::current = &h; mock::feed = mock::Feed(); const unsigned long W = 1794240000UL;   // 2026-11-09 ~ 13:20 UTC
+        const unsigned long t0 = W - 6 * 3600;                                                                        // the CT-as-epoch stamps (CST)
+        const std::string dir = zdh::flexDir();
+        { std::ofstream f((dir + "\\LRA-KeyLevels-ES.csv").c_str()); f << "KEYLV,1," << (W - 1800) << "\n";
+          const char* nm[16] = { "ONH", "ONL", "PDH", "PDL", "PFH", "PFL", "LonHI", "LonLO", "PhrH", "PhrL", "AsiaHI", "AsiaLO", "VWAP", "G 7000", "IBH", "Settle" };
+          for (int i = 0; i < 16; ++i) f << "L|" << nm[i] << "|" << (6960 + 4 * i) << ".00|0\n"; }
+        zdh::testWall() = (long long)W;
+        Ind* p = pane(h, t0); mock::feed.push(0, 1, 6990.0f, 5, (RTDATE)(t0 + 10), 1); pump(h, p, t0 + 180);
+        auto* e = p->ext(*p->testState());
+        CHECK(e->lvlNote.find("16 levels from 1 files") != std::string::npos && e->nLevels == 12 && e->eng && e->eng->levels.size() == 12,
+              "1.0.5 levels: ES key file (16 levels, UTC time) with CT-as-epoch order stamps -> all 16 read, his 12 used (" + std::to_string(e->nLevels) + ", " + e->lvlNote + ")");
+        {   nl::Cache C; const std::vector<nl::Level> old = nl::levels(C, dir + "\\", "ES", "ESZ6", 1, (long long)(t0 + 10));
+            CHECK(old.empty() && C.note.find("0 levels from 0 files") != std::string::npos, "1.0.5 levels: the 1.0.4 call (wall = the CT stamp) reproduces the live bug (" + C.note + ")"); }
+        dispose(p); zdh::testWall() = 0; }
     // ---- (1.0.2 review L4 / L6) bar sizes the epoch-cut bars are right for; the Central offset (DST) ----
     CHECK(zd::Engine::barSizeOk(60) && zd::Engine::barSizeOk(180) && zd::Engine::barSizeOk(300) && zd::Engine::barSizeOk(900) && zd::Engine::barSizeOk(3600)
           && !zd::Engine::barSizeOk(90) && !zd::Engine::barSizeOk(2700) && !zd::Engine::barSizeOk(7200) && !zd::Engine::barSizeOk(30), "L4 bar sizes: 1/3/5/15/60 min ok; 90 s, 45 min, 2 h, 30 s refused");

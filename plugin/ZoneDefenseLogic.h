@@ -1,4 +1,4 @@
-// ZoneDefenseLogic.h  --  lsZoneDefense 1.0.4 (2026-11-08) - the SDK-free Zone Defense engine (one copy: the plugin, the zdrun CLI used
+// ZoneDefenseLogic.h  --  lsZoneDefense 1.0.5 (2026-11-09) - the SDK-free Zone Defense engine (one copy: the plugin, the zdrun CLI used
 // by the jumpstart / nightly (lra.zone_defense) and the mock-SDK tests all compile THIS file, so the research and the chart agree).
 //
 // Rassul 2026-11-08 "Zone Defense is good. lets build it" (design: claude.ai/artifact/MJ9YYwjeMAUQztNZrCiP1G).
@@ -32,7 +32,7 @@
 #include "ZoneDefenseParams.h"
 
 namespace zd {
-static const char* const VERSION = "1.0.4";
+static const char* const VERSION = "1.0.5";
 enum Act { ADD = 0, MOD = 1, DEL = 2, FILL = 3, CLEAR = 9 };
 enum Side { BID = 0, ASK = 1 };
 static const long long MIN_MS = 60000;

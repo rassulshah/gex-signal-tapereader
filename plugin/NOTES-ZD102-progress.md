@@ -41,3 +41,17 @@ GC Nov 2-6 data once the conversion lands, and switch the definition to what his
   not deleted: zone_defense 1.4.0 re-runs the check every night over all days (0.5 / 0.65 / 0.8x, chart floor, budget-capped, cached in
   data\zone_defense\floor\) and promotes levelFloorX for a market only at <= 10 new zones/day AND new at-level holds >= off-level (20+ each),
   written by the params writer. Built + installed 19:00 (settings contract passed).
+
+## 1.0.5 (2026-11-09, Rassul: option (a) live floors + the levels bug)
+- WHY: ES drew 0 zones overnight and at 07:23 - the research floors (complete Databento books) are 2-3x what a since-connect Rithmic
+  book shows (ES best band 62-108 vs floor 198-247). FIX (a): the chart floors now come from the recorded LIVE book.
+- zone_defense 1.5.0 live-floor step (nightly): the newest 10 recorded sessions per market (C:\LRA-Data\mbo\live\<MKT>\<date>.mbo.csv.gz,
+  else data\irt\<date>\<MKT>\mbo_HH.csv in session order 16..23, 00..15) are streamed in time order into tests_zd\zdlive (the plugin's
+  engine; a gap > 30 min = IRT closed -> cold book + 10-min warm-up, as on the chart) at 0.3x the research floor; floor = p60 of those
+  zones per period, >= 0.3x research, research kept where < 20 zones, raised together to ~60 zones/day. Written by the params writer
+  (apply_live_floors). Research floors kept in data\zone_defense\live\research_floors.json (no feedback); result in floors.json.
+  NOTE: an archive file holds its session as 00..16 then 17..23 of the evening before - the stream puts the evening first (tested).
+- Levels bug: refreshLevels judged the level files' freshness on the order stamp (CT-as-epoch, 5-6 h behind UTC) -> every file looked
+  "from the future" -> "levels 0 (0 levels from 0 files)". Now zdh::wallNow() = the real UTC clock. Test: ES key file with 16 levels +
+  CT stamps -> "16 levels from 1 files" (his 12 used); the old call reproduces the 0.
+- Data on hand: ES 10 sessions; NQ 2, GC 3, CL 3, EU 3, HG 2 (live MBO archives start 11-04 for those); NG none (research floors).

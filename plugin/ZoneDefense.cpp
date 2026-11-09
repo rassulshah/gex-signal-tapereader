@@ -1,5 +1,8 @@
 /********************************************************************************
- *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.4  +  lsZoneDefenseMarks 1.0.4  (2026-11-08)
+ *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.5  +  lsZoneDefenseMarks 1.0.5  (2026-11-09)
+ *  1.0.5 (Rassul 2026-11-09, option (a)): the floors come from the LIVE recorded books (the nightly's live-floor step, p60 of the zones
+ *  the live book shows, last 10 recorded sessions; never below 0.3x the research floor) - the research floors (complete Databento books)
+ *  were 2-3x what a since-connect Rithmic book can show, so ES drew 0 zones. Levels fix: the level files are judged on the real UTC clock.
  *  1.0.4 (live bug, Sun 19:51 CT): the Central-clock check read "UTC+0" on a Central PC - the order stamps are already local inside
  *  IRT. The PC zone now comes from GetTimeZoneInformation; unknown = no warning.
  *  1.0.3 (Rassul approved 2026-11-08): a zone AT his levels (key, volume, MenthorQ within the level reach) needs less size - the
@@ -24,7 +27,7 @@
  *  verdict word bold at one x, the detail in a calmer tint on the same line, times right-aligned); the pane bars are dimmed.
  *  Rassul 2026-11-08 "Zone Defense is good. lets build it" - design approved on claude.ai/artifact/MJ9YYwjeMAUQztNZrCiP1G.
  *
- *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.4", on the live market-by-order feed (the same order-feed path
+ *  lsZoneDefense (this file as is) - its own pane, "Zone Defense v1.0.5", on the live market-by-order feed (the same order-feed path
  *  as lsBookFlow: off::MboPane, the 250 ms clock, every event once through onRaw). Every event goes to zd::Engine
  *  (ZoneDefenseLogic.h, SDK-free, the same code the jumpstart / nightly ran over 71 market-days of raw MBO). Each decision is a
  *  journal line in lsFlexLevels\ZoneDefense\<MKT>-<spb>-<session>.csv, written once; the pane and the price chart draw ONLY from
@@ -79,12 +82,12 @@
 #include <chrono>
 #include <climits>
 
-#define ZD_VERSION "1.0.4"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
+#define ZD_VERSION "1.0.5"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
 
 
 namespace zdh {
 // the version of both DLLs: the ONE setVersion literal (the settings contract counts it; gex-build reads it)
-inline void stamp(cppExtension* p) { p->setVersion("1.0.4"); }
+inline void stamp(cppExtension* p) { p->setVersion("1.0.5"); }
 // the one settings window of both plugins (registered once per DLL)
 inline void registerWindow(cppExtension* x, ss::Ids& ids) { ss::registerAll(x, zdset::spec(), ids); }
 // file helpers shared by the two plugins
@@ -104,6 +107,10 @@ inline bool pcOffsetMin(int& out) {
     if (!testTz().known) return false; out = testTz().offMin; return true;
 #endif
 }
+// (1.0.5 levels fix) the level files' freshness is judged on the PC's real UTC clock (file times are UTC); the order stamps are
+// CT-as-epoch inside IRT, 5-6 h behind, so every file looked "from the future" -> "levels 0 (0 levels from 0 files)". Tests can pin it.
+inline long long& testWall() { static long long w = 0; return w; }
+inline long long wallNow() { return testWall() > 0 ? testWall() : (long long)std::time(nullptr); }
 inline bool& clockCheck() { static bool on = true; return on; }   // (L6) the Central-time check (the mock-host tests whose clock is UTC turn it off)
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
 inline void makeDir(const std::string& p) {
@@ -256,7 +263,7 @@ public:
     // (1.0.2 levels) his key / MenthorQ levels from lsFlexLevels (fresh <= 18 h, the chart's contract) -> the engine (a change only)
     void refreshLevels(S_& S, Ext& e) {
         const std::string flex = zdh::flexDir(); if (flex.empty() || !(e.tick > 0)) return;
-        std::vector<nl::Level> v = nl::levels(e.lvc, flex + "\\", e.mkt, S.symbol, off::steadyMs(), e.stamp);
+        std::vector<nl::Level> v = nl::levels(e.lvc, flex + "\\", e.mkt, S.symbol, off::steadyMs(), zdh::wallNow());   // (1.0.5) the real UTC clock (was e.stamp = CT-as-epoch -> 0 levels)
         // (1.0.2) the volume levels (DPoc / VAH / VAL / WPoc) the nightly writes for the NEXT session: LRA-VolLevels-<MKT>.csv
         // "SYMBOL|GCZ6", "DATE|2026-11-06", "LEVEL|<code>|<what>|<price>"; used only on that session and that contract
         const long long nowMs = off::steadyMs();
