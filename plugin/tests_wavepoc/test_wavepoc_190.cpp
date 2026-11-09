@@ -126,6 +126,15 @@ int main(int argc, char** argv) {
         CHECK(rowsN > 20 && tooWide == 0, "volume rows right of each spine, at most 38 px (" << rowsN << " rows)");
         CHECK(cyanRows > 0, "the POC row filled cyan (" << cyanRows << ")");
         CHECK(hvnFill > 0 && hvnFill <= sc.hvnDrawn, "HVN rows filled in the wave colour (" << hvnFill << " fills, " << sc.hvnDrawn << " HVNs in the scene)");
+        {   // (1.9.6, Rassul 09:29) plain rows: 28% grey over the ground (no alpha in the SDK), behind the candles; POC / HVN rows solid
+            const unsigned long plain = wpc::mix(0x94A3B8UL, 0x0B0F17UL, wpc::GREY_FADE), old = wpc::mix(0x94A3B8UL, 0x0B0F17UL, 0.4);
+            int plainN = 0, notBack = 0, wrong = 0;
+            for (const wpc::Wave& w : E.waves) { if (w.provisional || w.pending || w.i0 < first) continue; const int x0 = (int)std::lround(v.X(w.i0) - bw * 0.45);
+                for (const wpc::Prim& p : sc.p) if (p.k == wpc::Prim::FILL && p.x0 == x0 + 1 && p.x1 - p.x0 > 2) {
+                    const bool node = p.col == 0x22D3EE || p.col == 0x22C55EUL || p.col == 0xEF4444UL; if (node) continue;
+                    ++plainN; notBack += !p.back; wrong += p.col != plain; } }
+            CHECK(plainN > 10 && notBack == 0 && wrong == 0 && (plain & 0xFF) < (old & 0xFF), "1.9.6: " << plainN << " plain rows at 28% grey (darker than 1.9.5's 40%), all behind the candles");
+            CHECK(wpc::GREY_FADE >= 0.25 && wpc::GREY_FADE <= 0.35, "1.9.6: the plain-row grey share is 25-35%"); }
         CHECK(boxes == 0 && badText == 0 && Hs > 0 && Ps > 0, "letters only P and H (no I / A / T), no boxes (" << Ps << " P, " << Hs << " H, " << badText << " other, " << boxes << " boxes)");
         const std::string st = wpc::statusText(E, "ES", 180, "native,ok", "loaded", "loaded", 0, &sc, false, 0);
         CHECK(st.find("PROFILE,(1.9.2)") != std::string::npos && st.find("HVNs drawn now") != std::string::npos, "status PROFILE line (1.9.2)");

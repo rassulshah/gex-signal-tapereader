@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.9.5";   // (1.9.5, 2026-11-08) Rly waves follow RallyLogic 1.4.0 (HH / LL rule); no rule change here
+static const char* const VERSION = "1.9.6";   // (1.9.6, 2026-11-09 Rassul 09:29) the plain (non-POC / HVN) profile rows much fainter (GREY_FADE 0.28, was 0.4) and thinner, behind the candles; POC / HVN rows solid
+// was "1.9.5";   // (1.9.5, 2026-11-08) Rly waves follow RallyLogic 1.4.0 (HH / LL rule); no rule change here
 // was "1.9.4";   // (1.9.4, 2026-11-08) Rly waves now include the overnight ones from 17:00 CT (RallyLogic 1.3.0); no rule change here
 // was "1.9.3";   // (1.9.3, 2026-11-06 17:38 CT Rassul "there is no hvns below the bo being identified . only if the poc is below the low of the bo bar do you not display the 2 hvn") the 2 HVNs are always looked for at / below the break level; they are left out ONLY when the POC is beyond the BO candle's far side (up: POC below the BO bar's low; down: POC above the BD bar's high)
 // was "1.9.2";   // (1.9.2, 2026-11-06 13:11 CT Rassul "If the wave poc is above the breakdown low, dont display the hvns", "the wave poc should only be on Cob, Rly and BO waves") rule 192: a profile only on a CoB / Rly / BO-BD wave; no HVNs when the POC is beyond the break level
@@ -77,6 +78,7 @@ static const bool CLUSTER_A = false;   // (1.6.2) the 8-tick cluster A? is off: 
 static const double T_ZONE = 0.85;   // (1.6.2, Rassul 10:05 CT "we need to change T to 15%") T? = the last 15% of the wave (was 20%)     // (1.6.2, Rassul 2026-11-02 09:44 CT "keep T simple, its an upwave with heavy green delta in the end of the wave near the top (20%) and vice versa") + 09:46 "we should also make it the poc of the wave") T = the wave's biggest with-wave row (green among green in an up wave, red among red in a down wave; 09:51), >= 2x the median, in the last 20%
 static const int PB_GAP = 46;   // (1.8.2, Rassul 2026-11-03 12:24 CT) one row further out: his ratio label at the extreme, lsCandleAbsorb 1.1.1's code one row out, Pb one more   // was 30;   // (1.7.1, Rassul 14:32 CT "put Pb a little higher because it is on top of the distance ratio") was 16;   // (1.5.0) Pb one text row away from the bar (the candle code A? / Ae? / D? / S? owns the row next to it)
 static const int PB_MAX = 3;            // POC pullback: the next 3 pullback pivots after the wave
+static const double GREY_FADE = 0.28;   // (1.9.6) plain profile rows: 28% grey over the chart ground (mix weight = the colour share; was 0.4)
 static const bool SHOW_PB = false;      // (1.8.3) the POC-pullback "Pb" + its dotted line: off (Pb = lsBreakout 1.1.0, a pullback that tests the BO / BD candle); pullbacks() still computed and counted in the status file
 
 // fixed rules (from the approved mockup / reference wp2.py + wp3.py)
@@ -954,8 +956,14 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
                 const long long q = w.rows[(size_t)j]; if (q <= 0) continue;
                 double top, bot; rowY(j, top, bot);
                 const bool isH = hvn && std::find(hvn->begin(), hvn->end(), j) != hvn->end();
-                const unsigned long col = j == pocRow ? C.cyan : isH ? (w.dir > 0 ? C.up : C.down) : mix(C.grey, C.bg, 0.4);
-                Prim p; p.k = Prim::FILL; p.x0 = ci(x0 + 1); p.x1 = ci(x0 + 1 + PR * (double)q / (double)w.maxVol); p.y0 = ci(top + 0.5); p.y1 = ci(std::max(top + 1.0, bot - 0.5)); p.col = col; p.back = true;
+                const bool node = j == pocRow || isH;
+                // (1.9.6, Rassul 2026-11-09 09:29 "the profile covers the candles" on NQ) IRT has no alpha (DRAW_TRANSLUCENT is a fixed host
+                // blend, "not faint" on his chart - GammaProfile 0.67), so the plain rows are faded toward the chart ground (GREY_FADE: 28% grey
+                // = ~28% opacity on the dark ground), drawn BEHIND the candles (back = pre-draw) and 1 px thinner each side when the row is 4 px+.
+                // The POC / HVN rows stay solid, full height.
+                const unsigned long col = j == pocRow ? C.cyan : isH ? (w.dir > 0 ? C.up : C.down) : mix(C.grey, C.bg, GREY_FADE);
+                const double inset = !node && bot - top >= 4.0 ? 1.0 : 0.5;
+                Prim p; p.k = Prim::FILL; p.x0 = ci(x0 + 1); p.x1 = ci(x0 + 1 + PR * (double)q / (double)w.maxVol); p.y0 = ci(top + inset); p.y1 = ci(std::max(top + 1.0, bot - inset)); p.col = col; p.back = true;
                 if (p.x1 > p.x0 && p.y1 >= p.y0) s.p.push_back(p);
             }
         }
