@@ -123,7 +123,7 @@ namespace bko {
 #ifndef BKO_RLY_ON_DEFAULT
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
-static const char* const VERSION = "1.12.0";   // (1.12.0, 2026-11-09 Rassul 12:22 "if a pb tags the wave poc with the downpivot at or below the wave poc but the high is above it, then instead of pb, show pboc") a Pb whose pivot bar straddles its BO / BD wave's volume POC (lsWavePOC's rule on IRT's VAP, computed here) is drawn "Pboc"; BPB record + boc; Pb / Rev decisions unchanged
+static const char* const VERSION = "1.13.0";   // (1.13.0, 2026-11-09 Rassul 14:09-14:12 CT "Lets also have PBoc. It happens when the pb is testing only the wave pb poc ... for rally also", name "pdoc where d represent the developing poc") a Pb / Rly pullback whose pivot bar straddles the pullback's DEVELOPING volume POC (lsWavePOC's wave PB POC: 38.2% gate, value at the decision bar) and not the wave POC is drawn "Pdoc"; both -> Pboc   // was "1.12.0":   // (1.12.0, 2026-11-09 Rassul 12:22 "if a pb tags the wave poc with the downpivot at or below the wave poc but the high is above it, then instead of pb, show pboc") a Pb whose pivot bar straddles its BO / BD wave's volume POC (lsWavePOC's rule on IRT's VAP, computed here) is drawn "Pboc"; BPB record + boc; Pb / Rev decisions unchanged
 // was "1.11.1";   // (1.11.1, 2026-11-09 Rassul HG 10:13 "if there is a cob you dont need to show a rly and if there is an lvp, you dont need to show a pb") DISPLAY only: no Rly where lsCobSignal draws a Cob on the same extreme, no Pb where it draws an Lvp on the same pivot (records / Rev / qualification unchanged)
 // was "1.11.0";   // (1.11.0, 2026-11-08 Rassul "add the higher high rule for rly and vice versa") Rly rule 6 HH / LL (RallyLogic 1.4.0), RTH + overnight
 // was "1.10.0";   // (1.10.0, 2026-11-08 Rassul ES Sun night "those waves are rallies") overnight Rly judged from the 17:00 CT open (RallyLogic 1.3.0: the 02:00 CT cutoff removed), same rules
@@ -214,16 +214,20 @@ inline std::string revLine(const RevMark& m, long long tc, double ph, double pl,
 }
 // (1.12.0) + boc = the Pb tagged its BO / BD wave's volume POC (1 = drawn "Pboc", 0 = "Pb", na = no VAP / no POC at the decision) and
 // wave_poc = that POC (price; "" when na). Appended after version so the older 14-field readers keep their positions.
-static const char* const PB_HEADER = "BPB|t_pivot|side|t0|t_fire|t_conf|t_dec|pivot_high|pivot_low|bo_high|bo_low|bo_close|bo_pivot|version|boc|wave_poc";
-inline std::string pbLine(const PbMark& m, const bba::BoDec& D, const Pivot& p, const In& c, const std::string& ver, int boc = -1, double poc = 0) {
+// (1.13.0) + pdoc = 1 drawn "Pdoc" (the pivot bar straddled the pullback's developing POC, not the wave POC), 0 no, na not known; pb_poc = that POC
+static const char* const PB_HEADER = "BPB|t_pivot|side|t0|t_fire|t_conf|t_dec|pivot_high|pivot_low|bo_high|bo_low|bo_close|bo_pivot|version|boc|wave_poc|pdoc|pb_poc";
+inline std::string pbLine(const PbMark& m, const bba::BoDec& D, const Pivot& p, const In& c, const std::string& ver, int boc = -1, double poc = 0, int pdoc = -1, double dpoc = 0) {
     char pc[40] = { 0 }; if (boc >= 0) std::snprintf(pc, sizeof pc, "%.10g", poc);
-    char b[460]; std::snprintf(b, sizeof b, "BPB|%lld|%d|%lld|%lld|%lld|%lld|%.10g|%.10g|%.10g|%.10g|%.10g|%.10g|%s|%s|%s",
-        m.tp, m.dir, m.t0, D.t, m.tc, m.td, p.h, p.l, c.h, c.l, c.c, D.piv, ver.c_str(), boc == 1 ? "1" : boc == 0 ? "0" : "na", pc);
+    char dc[40] = { 0 }; if (pdoc == 1) std::snprintf(dc, sizeof dc, "%.10g", dpoc);
+    char b[520]; std::snprintf(b, sizeof b, "BPB|%lld|%d|%lld|%lld|%lld|%lld|%.10g|%.10g|%.10g|%.10g|%.10g|%.10g|%s|%s|%s|%s|%s",
+        m.tp, m.dir, m.t0, D.t, m.tc, m.td, p.h, p.l, c.h, c.l, c.c, D.piv, ver.c_str(), boc == 1 ? "1" : boc == 0 ? "0" : "na", pc, pdoc == 1 ? "1" : pdoc == 0 ? "0" : "na", dc);
     return b;
 }
 // (1.12.0) a no-BO Rly wave's Pboc (Rassul 2026-11-09: "a halfway back + a test of the wave POC") and a thrust off it (the Rev rule, recorded
 // only - never drawn as Rev). side +1 = a pivot LOW after a Rly up (green Pboc below), -1 mirror.
 static const char* const RPB_HEADER = "BPO|t_pivot|side|t_rly_end|t_rly_start|t_conf|t_dec|pivot_high|pivot_low|wave_poc|wave_mid|origin|version";
+// (1.13.0) a Rly pullback drawn "Pdoc" (its pivot bar straddled the pullback's developing POC, not a Pboc)
+static const char* const RPD_HEADER = "BPD|t_pivot|side|t_rly_end|t_rly_start|t_conf|t_dec|pivot_high|pivot_low|pb_poc|wave_poc|origin|version";
 static const char* const RRV_HEADER = "BRO|t_thrust|side|t_pivot|t_pb_conf|t_dec|range|atr13|pivot_high|pivot_low|bar_high|bar_low|bar_close|version";
 // (1.12.0) Pboc: a BO Pb (pivot LOW) whose pivot bar's LOW <= the wave POC < its HIGH; BD mirror: HIGH >= POC > LOW (ticks, exact)
 inline bool pbocHit(int dir, long long lowTk, long long highTk, long long pocTk) { return dir > 0 ? (lowTk <= pocTk && highTk > pocTk) : (highTk >= pocTk && lowTk < pocTk); }
@@ -257,7 +261,9 @@ struct Engine {
     struct PbPend { bba::BoDec D; Pivot p; In c; };
     std::map<long long, PbPend> pbPend;        // (1.12.0) Pbs waiting for their wave's VAP: the BPB line is written once boc is known
     std::map<long long, PbMark> rpb;           // (1.12.0) no-BO Rly pullback pivots judged (pivot time -> mark; tw0 / tw1 = the Rly wave)
-    std::map<long long, int> rpbBoc;           // (1.12.0) 1 = drawn "Pboc", 0 = no label (POC above 50% / not tagged)
+    std::map<long long, int> rpbBoc;           // (1.12.0) 1 = drawn "Pboc", 0 = no label (POC above 50% / not tagged); (1.13.0) 2 = drawn "Pdoc"
+    std::map<long long, double> dpoc;          // (1.13.0) Pb / Rly pullback pivot time -> its developing pullback POC (price) when drawn Pdoc
+    long long pdocNoVap = 0;                   // (1.13.0) status: last pass, pullback pivots waiting for the pullback bars' VAP
     std::set<long long> rpbWait;               // (1.12.0) Rly pullback pivots waiting for VAP (nothing drawn)
     std::map<long long, RecL> rpbL, rroL;      // (1.12.0) BPO| / BRO| record lines
     std::map<long long, RevMark> rro;          // (1.12.0) the thrust off a Rly Pboc (recorded only)      // (1.12.0) status: last pass, Pbs whose wave had a bar without VAP / no POC
@@ -473,14 +479,59 @@ struct Engine {
         const std::vector<int> pk = wpc::pickNodes(rows, wpc::median2(rows)); if (pk.empty()) return -1;
         pocTk = e0 + (long long)pk[0] * rt + rt / 2; return 1;
     }
+    // (1.13.0) Pdoc: the pullback's DEVELOPING volume POC = lsWavePOC's wave PB POC (wpc::pullbackOf's rule) at the pivot's decision bar
+    // idec: the volume at price of the bars after the wave end (i1) through idec, rows of the WAVE's row size (rowTicksFor(wave range)),
+    // POC = the biggest row (first), its centre. It exists only once the pullback has retraced >= 38.2% of the wave (origin -> end). The
+    // pullback is over (no PB POC for this pivot) when, at or before the pivot bar, a bar trades beyond the wave end, a 16:00 CT session end
+    // passes, or a new BO / BD or Rly fires; such an event after the pivot bar just ends the profile there (the value lsWavePOC freezes).
+    // A close beyond the origin = invalid (none). 1 = ok (pocTk), 0 = a bar without VAP (pending), -1 = none / fault.
+    int pbPocTk(int i0, int i1, int ip, int idec, int dir, long long& pocTk) const {
+        if (!vapAt || !(tick > 0) || i0 < 0 || i1 <= i0 || ip <= i1 || idec < ip || idec >= (int)bars.size()) return -1;
+        long long L0 = 0, H = 0; const In& a = bars[(size_t)i0]; const In& z = bars[(size_t)i1];
+        if (!wpc::toTicks(dir > 0 ? a.l : a.h, tick, L0) || !wpc::toTicks(dir > 0 ? z.h : z.l, tick, H)) return -1;
+        const long long move = dir > 0 ? H - L0 : L0 - H; if (move <= 0) return -1;
+        long long wlo = LLONG_MAX, whi = LLONG_MIN;
+        for (int k = i0; k <= i1; ++k) { long long x = 0, y = 0; const In& b = bars[(size_t)k]; if (!wpc::toTicks(b.l, tick, x) || !wpc::toTicks(b.h, tick, y)) return -1; wlo = std::min(wlo, x); whi = std::max(whi, y); }
+        const int rt = wpc::rowTicksFor(whi - wlo + 1);
+        long long ext = H; int gate = -1, last = idec;
+        for (int k = i1 + 1; k <= idec; ++k) {
+            const In& b = bars[(size_t)k]; long long bl = 0, bh = 0, bc = 0;
+            if (!wpc::toTicks(b.l, tick, bl) || !wpc::toTicks(b.h, tick, bh) || !wpc::toTicks(b.c, tick, bc)) return -1;
+            if (dir > 0 ? bc < L0 : bc > L0) return -1;                                           // closed beyond the origin: invalid
+            bool end = dir > 0 ? bh > H : bl < H;                                                  // traded beyond the wave end: pullback over
+            if (!end && wpc::sessionCross(bars[(size_t)k - 1].t, b.t)) end = true;                 // 16:00 CT
+            if (!end) for (const auto& kv : bo) { const bba::BoDec& D = kv.second; if (D.t == b.t && D.t0 > z.t && shownBo(D)) { end = true; break; } }   // a new BO / BD fired
+            if (!end) for (const auto& kv : rly) { const RlyMark& R = kv.second; if (R.fired && R.tc == b.t && R.te > z.t) { end = true; break; } }   // a new Rly
+            if (end) { if (k <= ip) return -1; last = k - 1; break; }
+            ext = dir > 0 ? std::min(ext, bl) : std::max(ext, bh);
+            if (gate < 0 && (double)(dir > 0 ? H - ext : ext - H) >= wpc::PB_GATE * (double)move - 1e-9) gate = k;
+        }
+        if (gate < 0 || gate > last || last < ip) return -1;                                       // never retraced 38.2%: no PB POC
+        long long lo = LLONG_MAX, hi = LLONG_MIN; std::vector<std::vector<wpc::VRow> > per; per.reserve((size_t)(last - i1));
+        for (int k = i1 + 1; k <= last; ++k) { long long x = 0, y = 0; const In& b = bars[(size_t)k]; if (!wpc::toTicks(b.l, tick, x) || !wpc::toTicks(b.h, tick, y)) return -1;
+            lo = std::min(lo, x); hi = std::max(hi, y); std::vector<wpc::VRow> r; const int ok = vapAt(k, r); if (ok < 0) return -1; if (ok == 0) return 0; per.push_back(std::move(r)); }
+        if (lo > hi) return -1;
+        long long e0 = 0; std::vector<long long> rows; wpc::buildRows(per, lo, hi, rt, e0, rows); if (rows.empty()) return -1;
+        int pk = -1; for (int j = 0; j < (int)rows.size(); ++j) if (pk < 0 || rows[(size_t)j] > rows[(size_t)pk]) pk = j;
+        if (pk < 0 || rows[(size_t)pk] <= 0) return -1;
+        pocTk = e0 + (long long)pk * rt + rt / 2; return 1;
+    }
+    int idxT(long long t) const { const int n = (int)bars.size(); for (int k = n - 1; k >= 0; --k) if (bars[(size_t)k].t == t) return k; return -1; }
     // (1.12.0) 1 Pboc / 0 Pb / -1 not known (no VAP yet or no POC); pocPx = the wave POC
-    int bocOf(const PbMark& m, double& pocPx) const {
-        const int n = (int)bars.size(); int i0 = -1, i1 = -1, ip = -1;
-        for (int k = 0; k < n; ++k) { const long long t = bars[(size_t)k].t; if (t == m.tw0) i0 = k; if (t == m.tw1) i1 = k; if (t == m.tp) ip = k; }
+    // (1.13.0) + 2 Pdoc (not Pboc, the pivot bar straddles the developing pullback POC as of the decision bar m.td; dpx = it); -2 = a wave
+    // or pullback bar without VAP (pending: nothing drawn, decided once IRT has it)
+    int bocOf(const PbMark& m, double& pocPx, double* dpx = nullptr) const {
+        const int i0 = idxT(m.tw0), i1 = idxT(m.tw1), ip = idxT(m.tp);
         if (i0 < 0 || i1 < 0 || ip < 0) return -1;
-        long long poc = 0; const int r = wavePocTk(i0, i1, poc); if (r != 1) return r == 0 ? -2 : -1;
         long long lt = 0, ht = 0; const In& b = bars[(size_t)ip]; if (!wpc::toTicks(b.l, tick, lt) || !wpc::toTicks(b.h, tick, ht)) return -1;
-        pocPx = (double)poc * tick; return pbocHit(m.dir, lt, ht, poc) ? 1 : 0;
+        long long poc = 0; const int r = wavePocTk(i0, i1, poc); if (r == 0) return -2;
+        if (r == 1) { pocPx = (double)poc * tick; if (pbocHit(m.dir, lt, ht, poc)) return 1; }
+        int idec = idxT(m.td); if (idec < 0) idec = std::min((int)bars.size() - 2, std::max(ip, idxT(m.tc)));
+        if (idec < ip) return r == 1 ? 0 : -1;
+        long long dp = 0; const int d = pbPocTk(i0, i1, ip, idec, m.dir > 0 ? 1 : -1, dp);
+        if (d == 0) return -2;
+        if (d == 1 && pbocHit(m.dir, lt, ht, dp)) { if (dpx) *dpx = (double)dp * tick; return 2; }
+        return r == 1 ? 0 : -1;
     }
     // (1.1.0) Pb: see the header. Every fired BO / BD with its candle on the chart is checked against the confirmed pivots after it.
     std::vector<Pivot> zzPb;                   // (1.9.3) the Pb pivots: the confirmed 3-bar High / Low ZigZag pivots (wav) + the forming leg's extreme (prov)
@@ -502,7 +553,7 @@ struct Engine {
         zzPb.push_back(p);
     }
     void pbPass() {
-        pivots(); zzPivots(); pbProv.clear(); bocProv.clear(); bocNoVap = 0; bocNoPoc = 0;
+        pivots(); zzPivots(); pbProv.clear(); bocProv.clear(); bocNoVap = 0; bocNoPoc = 0; pdocNoVap = 0;
         const std::vector<Pivot>& piv = zzPb;                            // (1.9.3) Pb / origin pivots = the chart's ZigZag (shadows the member)
         const int n = (int)bars.size(); if (n < 3 || piv.empty()) return;
         std::vector<long long> T((size_t)n); for (int k = 0; k < n; ++k) T[(size_t)k] = bars[(size_t)k].t;
@@ -561,27 +612,27 @@ struct Engine {
                 if (prov || p.prov) { PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = p.tc; m.dir = dir; m.tw0 = tw0; m.tw1 = topT; pbProv.push_back(m);
                     double pp = 0; const int bc = bocOf(m, pp); if (bc >= 0) bocProv[p.t] = bc; else if (bc == -2) ++bocNoVap; else ++bocNoPoc; continue; }   // (1.9.2) drawn only; (1.9.3) + a forming ZigZag leg's extreme
                 PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = td; m.dir = dir; m.tw0 = tw0; m.tw1 = topT; pb[p.t] = m;
-                double pp = 0; const int bc = bocOf(m, pp);   // (1.12.0) decided with the Pb; no VAP yet (-2): nothing drawn, the line waits
-                if (bc >= 0) { boc[p.t] = bc; bocPoc[p.t] = pp; } else if (bc == -1) boc[p.t] = 0;   // no POC: a plain Pb (boc na)
+                double pp = 0, dd = 0; const int bc = bocOf(m, pp, &dd);   // (1.12.0) decided with the Pb; no VAP yet (-2): nothing drawn, the line waits
+                if (bc >= 0) { boc[p.t] = bc; if (pp != 0) bocPoc[p.t] = pp; if (bc == 2) dpoc[p.t] = dd; } else if (bc == -1) boc[p.t] = 0;   // no POC: a plain Pb (boc na); (1.13.0) 2 = Pdoc
                 if (bc == -2 && vapAt) { PbPend q; q.D = D; q.p = p; q.c = c; pbPend[p.t] = q; ++bocNoVap; continue; }
                 RecL L; const int di = idxOf(td); L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;   // (1.3.0) the decision bar's day
-                L.line = pbLine(m, D, p, c, recVer(), bc >= 0 ? bc : -1, pp); pbL[p.t] = L;
+                L.line = pbLine(m, D, p, c, recVer(), bc == 2 ? (pp != 0 ? 0 : -1) : bc >= 0 ? bc : -1, pp, bc == 2 ? 1 : bc >= 0 ? 0 : -1, dd); pbL[p.t] = L;
             }
         }
         // (1.12.0) a kept Pb without its boc (no VAP at the decision, e.g. right after a restart): filled in once IRT has the VAP (the letter
         // becomes Pboc then; its record line keeps "na" - written at the decision)
         if (vapAt) for (auto it = pbPend.begin(); it != pbPend.end();) {
             const auto m = pb.find(it->first); if (m == pb.end()) { it = pbPend.erase(it); continue; }
-            double pp = 0; const int bc = bocOf(m->second, pp);
+            double pp = 0, dd = 0; const int bc = bocOf(m->second, pp, &dd);
             if (bc == -2) { ++bocNoVap; ++it; continue; }
-            if (bc >= 0) { boc[it->first] = bc; bocPoc[it->first] = pp; } else { boc[it->first] = 0; ++bocNoPoc; }
+            if (bc >= 0) { boc[it->first] = bc; if (pp != 0) bocPoc[it->first] = pp; if (bc == 2) dpoc[it->first] = dd; } else { boc[it->first] = 0; ++bocNoPoc; }
             const int di = idxOf(m->second.td); RecL L; L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;
-            L.line = pbLine(m->second, it->second.D, it->second.p, it->second.c, recVer(), bc >= 0 ? bc : -1, pp); pbL[it->first] = L;
+            L.line = pbLine(m->second, it->second.D, it->second.p, it->second.c, recVer(), bc == 2 ? (pp != 0 ? 0 : -1) : bc >= 0 ? bc : -1, pp, bc == 2 ? 1 : bc >= 0 ? 0 : -1, dd); pbL[it->first] = L;
             it = pbPend.erase(it);
         }
         rlyPbPass(idxOf, F);
-        while (pb.size() > 40000) { pbL.erase(pb.begin()->first); boc.erase(pb.begin()->first); bocPoc.erase(pb.begin()->first); pbPend.erase(pb.begin()->first); pb.erase(pb.begin()); }
-        while (rpb.size() > 40000) { rpbL.erase(rpb.begin()->first); rpbBoc.erase(rpb.begin()->first); rpb.erase(rpb.begin()); }
+        while (pb.size() > 40000) { pbL.erase(pb.begin()->first); boc.erase(pb.begin()->first); dpoc.erase(pb.begin()->first); bocPoc.erase(pb.begin()->first); pbPend.erase(pb.begin()->first); pb.erase(pb.begin()); }
+        while (rpb.size() > 40000) { rpbL.erase(rpb.begin()->first); rpbBoc.erase(rpb.begin()->first); dpoc.erase(rpb.begin()->first); rpb.erase(rpb.begin()); }
     }
     // (1.12.0) the no-BO Rly Pboc (Rassul 2026-11-09, mockup approved): a fired Rly wave with no shown BO / BD of its direction inside it;
     // its pullback pivots = the first 2 confirmed 3-bar ZigZag pivots of the other kind after the wave end (Rly up: pivot LOWs), none after
@@ -619,12 +670,23 @@ struct Engine {
                 long long ot = 0, et = 0, lt = 0, ht = 0; const In& pb0 = bars[(size_t)pi];
                 const bool tk = wpc::toTicks(org, tick, ot) && wpc::toTicks(ext, tick, et) && wpc::toTicks(pb0.l, tick, lt) && wpc::toTicks(pb0.h, tick, ht);
                 const bool half = r == 1 && tk && (dir > 0 ? 2 * poc <= ot + et : 2 * poc >= ot + et);
-                const int b = r == 1 && tk && half && pbocHit(dir, lt, ht, poc) ? 1 : 0;
-                rpb[p.t] = m; rpbBoc[p.t] = b;
+                int b = r == 1 && tk && half && pbocHit(dir, lt, ht, poc) ? 1 : 0;
+                long long dp = 0;                                                    // (1.13.0) not a Pboc: the developing pullback POC as of the decision bar
+                if (b == 0 && tk) { int idec = idxOf(td); if (idec < 0) idec = pi;
+                    const int d = pbPocTk(i0, i1, pi, idec, dir, dp);
+                    if (d == 0) { rpbWait.insert(p.t); ++pdocNoVap; continue; }      // a pullback bar without VAP: nothing drawn yet
+                    if (d == 1 && pbocHit(dir, lt, ht, dp)) b = 2; }
+                rpb[p.t] = m; rpbBoc[p.t] = b; if (b == 2) dpoc[p.t] = (double)dp * tick;
                 if (b == 1) {
                     RecL L; const int di = idxOf(td); L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;
                     char ln[420]; std::snprintf(ln, sizeof ln, "BPO|%lld|%d|%lld|%lld|%lld|%lld|%.10g|%.10g|%.10g|%.10g|%.10g|%s", p.t, dir, W.te, W.t0, p.tc, td, pb0.h, pb0.l,
                         (double)poc * tick, (double)(ot + et) * tick / 2.0, org, recVer().c_str());
+                    L.line = ln; rpbL[p.t] = L;
+                } else if (b == 2) {                                                 // (1.13.0) BPD| = a Rly Pdoc
+                    RecL L; const int di = idxOf(td); L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;
+                    char wp[40] = "na"; if (r == 1) std::snprintf(wp, sizeof wp, "%.10g", (double)poc * tick);
+                    char ln[420]; std::snprintf(ln, sizeof ln, "BPD|%lld|%d|%lld|%lld|%lld|%lld|%.10g|%.10g|%.10g|%s|%.10g|%s", p.t, dir, W.te, W.t0, p.tc, td, pb0.h, pb0.l,
+                        (double)dp * tick, wp, org, recVer().c_str());
                     L.line = ln; rpbL[p.t] = L;
                 }
             }
@@ -691,7 +753,7 @@ struct View {
     int lh[2] = { 12, 14 };                         // letter row heights: BO / BD font, Rly font
 };
 struct Board { long long t = 0; int side = 0; int val = 0; };   // SignalBoard 'L': bar time, +1 above / -1 below, px from the extreme to the outer edge
-struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0; };   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
+struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0; };   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
 // (1.5.0) the BI rows: row r sits GAP + r * ROW_OUT px from the wick (0 = the BO row +3..+17, 1 = +19..+33, 2 = +35 (Pb), 3 = +51 (LVP),
 // 4 = +67, 5 = +83). Rows taken by OTHER indicators' labels at this candle and side: a zigzag pivot (the wave-time label, row 0, and
 // lsCandleAbsorb's A / Ae, row 1); the candle after a pivot that re-tests it within 4 ticks (lsCandleAbsorb's A row 1); row 3 is
@@ -747,18 +809,20 @@ inline Scene layout(const Engine& E, const View& v) {
     std::vector<const PbMark*> PB; for (const auto& kv : E.pb) PB.push_back(&kv.second); for (const PbMark& x : E.pbProv) PB.push_back(&x);   // (1.9.2) + provisional
     for (const PbMark* pp : PB) { const PbMark& P = *pp; const auto it = idx.find(P.tp); if (it == idx.end()) continue;
         if (E.hidePb.count(std::make_pair(P.tp, P.dir))) { ++S.pbHidden; continue; }   // (1.11.1) a drawn Lvp on this pivot: no Pb letter
-        const std::map<long long, int>& BC = pp >= &E.pbProv[0] && !E.pbProv.empty() && pp <= &E.pbProv.back() ? E.bocProv : E.boc;
+        const std::map<long long, int>& BC = !E.pbProv.empty() && pp >= E.pbProv.data() && pp <= &E.pbProv.back() ? E.bocProv : E.boc;   // (1.13.0) empty-vector check first (UBSan)
         const auto bc = BC.find(P.tp); const bool oc = bc != BC.end() && bc->second == 1;   // (1.12.0) the Pb on its wave's POC = "Pboc"
+        const bool od = bc != BC.end() && bc->second == 2;                               // (1.13.0) on the developing pullback POC only = "Pdoc"
         if (E.bocLive && bc == BC.end()) { ++S.pbocWait; continue; }                     // (1.12.0) its wave's VAP not loaded yet: nothing (never Pb -> Pboc)
-        const size_t before = S.txt.size(); put(it->second, -P.dir, 2, oc ? "Pboc" : nullptr);
+        const size_t before = S.txt.size(); put(it->second, -P.dir, 2, oc ? "Pboc" : od ? "Pdoc" : nullptr);
         if (S.txt.size() > before && oc) ++S.pbocShown;
+        if (S.txt.size() > before && od) ++S.pdocShown;
         if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
     // (1.12.0) the no-BO Rly Pboc: same place / colour as a Pb
-    for (const auto& kv : E.rpbBoc) { if (kv.second != 1) continue; const auto mk = E.rpb.find(kv.first); if (mk == E.rpb.end()) continue; const PbMark& P = mk->second;
+    for (const auto& kv : E.rpbBoc) { if (kv.second != 1 && kv.second != 2) continue; const auto mk = E.rpb.find(kv.first); if (mk == E.rpb.end()) continue; const PbMark& P = mk->second;   // (1.13.0) + Pdoc (2)
         const auto it = idx.find(P.tp); if (it == idx.end()) continue;
         if (E.hidePb.count(std::make_pair(P.tp, P.dir))) { ++S.pbHidden; continue; }   // an Lvp there still wins
-        const size_t before = S.txt.size(); put(it->second, -P.dir, 2, "Pboc");
-        if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; ++S.pbocShown; ++S.rpbocShown; boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
+        const bool od = kv.second == 2; const size_t before = S.txt.size(); put(it->second, -P.dir, 2, od ? "Pdoc" : "Pboc");
+        if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; if (od) { ++S.pdocShown; ++S.rpdocShown; } else { ++S.pbocShown; ++S.rpbocShown; } boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
     // (1.5.0) BI: "BI" red just above the high (BI DOWN) / green just below the low (BI UP), the BO row first, one row out (16 px) while
     // the row is taken (another indicator's label - biReserved - or one of our letters); one "BI" per candle and side; no room = dropped
     {   std::set<std::pair<int, int>> done;
@@ -828,6 +892,8 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
         s += "PBOC,(1.12.0) Pb on its BO / BD wave's volume POC (lsWavePOC's POC rule on IRT's VAP; BO: pivot low <= POC < high; BD mirror) drawn Pboc,decided Pboc " + std::to_string(bu) + ",Pb " + std::to_string(bn) + ",waiting (no VAP yet) " + std::to_string(E.bocNoVap) + ",no POC " + std::to_string(E.bocNoPoc) + ",VAP " + (E.bocLive ? "on" : "off") + ",drawn now Pboc " + std::to_string(last.pbocShown) + " (of them Rly " + std::to_string(last.rpbocShown) + "),Pb not drawn waiting for VAP " + std::to_string(last.pbocWait) + "\n";
         int ru = 0; for (const auto& kv : E.rpbBoc) ru += kv.second == 1;
         s += "RLY_PBOC,(1.12.0) no-BO Rly waves: POC at / below 50% (down: at / above) + the pullback pivot bar straddles it (2 per wave),judged " + std::to_string(E.rpb.size()) + ",Pboc " + std::to_string(ru) + ",waiting for VAP " + std::to_string(E.rpbWait.size()) + ",thrusts recorded (BRO) " + std::to_string(E.rro.size()) + "\n"; }
+    {   int bd = 0, rd = 0; for (const auto& kv : E.boc) bd += kv.second == 2; for (const auto& kv : E.rpbBoc) rd += kv.second == 2;
+        s += "PDOC,(1.13.0) Pb / Rly pullback pivot bar straddles the pullback's DEVELOPING volume POC (lsWavePOC's wave PB POC: >= 38.2% retrace, value at the decision bar) and not the wave POC -> Pdoc (both -> Pboc),decided Pdoc after BO / BD " + std::to_string(bd) + ",Rly " + std::to_string(rd) + ",waiting for pullback VAP " + std::to_string(E.pdocNoVap) + ",drawn now Pdoc " + std::to_string(last.pdocShown) + " (of them Rly " + std::to_string(last.rpdocShown) + ")\n"; }
     s += "HIDDEN,(1.11.1) Rly under a Cob " + std::to_string(last.rlyHidden) + ",Pb under an Lvp " + std::to_string(last.pbHidden) + " (in view; still recorded),Cob extremes " + std::to_string(E.hideRly.size() / 3) + ",Lvp pivots " + std::to_string(E.hidePb.size()) + "\n";
     return s;
 }
@@ -861,8 +927,9 @@ inline std::string recKey(const std::string& line0) {
     auto num = [](const std::string& x) { if (x.empty() || x.size() > 20) return false; size_t k = x[0] == '-' ? 1 : 0; if (k >= x.size()) return false; for (; k < x.size(); ++k) if (x[k] < '0' || x[k] > '9') return false; return true; };
     if (f[0] == "BBO" && f.size() == 27 && num(f[2]) && num(f[3])) return "B|" + f[2] + "|" + f[3];     // t0 + dir
     if (f[0] == "RLY" && f.size() == 17 && num(f[1]) && num(f[4])) return "R|" + f[1] + "|" + f[4];     // t_e + dir
-    if (f[0] == "BPB" && (f.size() == 14 || f.size() == 16) && num(f[1]) && num(f[2])) return "P|" + f[1] + "|" + f[2];     // t_pivot + side ((1.12.0) + boc, wave_poc)
+    if (f[0] == "BPB" && (f.size() == 14 || f.size() == 16 || f.size() == 18) && num(f[1]) && num(f[2])) return "P|" + f[1] + "|" + f[2];     // (1.13.0) + pdoc, pb_poc     // t_pivot + side ((1.12.0) + boc, wave_poc)
     if (f[0] == "BPO" && f.size() == 13 && num(f[1]) && num(f[2])) return "O|" + f[1] + "|" + f[2];     // (1.12.0) Rly Pboc: t_pivot + side
+    if (f[0] == "BPD" && f.size() == 13 && num(f[1]) && num(f[2])) return "D|" + f[1] + "|" + f[2];     // (1.13.0) Rly Pdoc: t_pivot + side
     if (f[0] == "BRO" && f.size() == 14 && num(f[1]) && num(f[2])) return "T|" + f[1] + "|" + f[2];     // (1.12.0) thrust off a Rly Pboc
     if (f[0] == "BRV" && f.size() == 14 && num(f[1]) && num(f[2])) return "V|" + f[1] + "|" + f[2];     // (1.9.0) t_rev + side
     if (f[0] == "BBI" && f.size() == 22 && num(f[1]) && num(f[2]) && !f[7].empty() && f[7].size() <= 24) return "I|" + f[1] + "|" + f[2] + "|" + f[7];   // (1.5.0) t_bi + dir + pivot
@@ -873,7 +940,7 @@ struct RecFile { int kind = 0; long long sess = 0; std::string dir, file, head; 
 inline std::string recHead(const Engine& E, int kind, const std::string& mkt, const std::string& sym, int spb) {
     std::string h = std::string("# lsBreakout ") + VERSION + " | " + mkt + " " + sym + " " + std::to_string(spb) + " | zz_rev_bars " + std::to_string(E.zzRev)
                   + " | ft_tie " + (E.tieOn() ? "1" : "0") + " | zz_carry " + (E.carryOn() ? "1" : "0") + (kind == REC_BO ? (SHOW_BI ? " | bi 1" : " | bi 0") : "") + " | " + (kind == REC_BO ? "BO / BD decisions (bba::boLine, 27 fields) + BI (BBI|, 22 fields)" : kind == REC_RLY ? "Rly waves (rly::line, 17 fields)" : "Pb (BPB|, 14 fields) + Rev (BRV|, 14 fields)") + "\n";
-    return h + (kind == REC_BO ? bba::BO_HEADER : kind == REC_RLY ? rly::REC_HEADER : PB_HEADER) + "\n" + (kind == REC_BO && SHOW_BI ? std::string("# ") + BI_HEADER + "\n" : std::string()) + (kind == REC_PB ? std::string("# ") + REV_HEADER + "\n# " + RPB_HEADER + "\n# " + RRV_HEADER + "\n" : std::string());   /* (1.9.0) the BRV columns as a comment line */   /* (1.6.0) no BBI header while BI is removed */   // (1.5.0) the BI columns as a comment line
+    return h + (kind == REC_BO ? bba::BO_HEADER : kind == REC_RLY ? rly::REC_HEADER : PB_HEADER) + "\n" + (kind == REC_BO && SHOW_BI ? std::string("# ") + BI_HEADER + "\n" : std::string()) + (kind == REC_PB ? std::string("# ") + REV_HEADER + "\n# " + RPB_HEADER + "\n# " + RPD_HEADER + "\n# " + RRV_HEADER + "\n" : std::string());   /* (1.9.0) the BRV columns as a comment line */   /* (1.6.0) no BBI header while BI is removed */   // (1.5.0) the BI columns as a comment line
 }
 // every record line of the last REC_SESSIONS sessions (by the last closed bar's session), grouped per file, in decision-key order
 inline std::vector<RecFile> recPlan(const Engine& E, const std::string& mkt, const std::string& sym, int spb) {

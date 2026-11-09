@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.10.2" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.10.3" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();

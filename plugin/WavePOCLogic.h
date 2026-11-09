@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.10.2";   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
+static const char* const VERSION = "1.10.3";   // (1.10.3) rebuild with BreakoutLogic.h 1.13.0, no change   // was "1.10.2":   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
 // was "1.10.1";   // (1.10.1, Rassul 12:10 + v7 "above") the lots on the wave POC row (POC colour) and the pullback POC row (white), just above them
 // was "1.10.0";   // (1.10.0, 2026-11-09 Rassul "build") the PULLBACK PROFILE (pullbackOf / drawPullback) + the wave POC / HVN rows thicker
 // was "1.9.7";   // (1.9.7, 2026-11-09) host-side fixes only (CL / HG no drawing, VAP retry)
