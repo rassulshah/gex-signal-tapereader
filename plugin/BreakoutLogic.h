@@ -122,7 +122,8 @@ namespace bko {
 #ifndef BKO_RLY_ON_DEFAULT
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
-static const char* const VERSION = "1.10.0";   // (1.10.0, 2026-11-08 Rassul ES Sun night "those waves are rallies") overnight Rly judged from the 17:00 CT open (RallyLogic 1.3.0: the 02:00 CT cutoff removed), same rules
+static const char* const VERSION = "1.11.0";   // (1.11.0, 2026-11-08 Rassul "add the higher high rule for rly and vice versa") Rly rule 6 HH / LL (RallyLogic 1.4.0), RTH + overnight
+// was "1.10.0";   // (1.10.0, 2026-11-08 Rassul ES Sun night "those waves are rallies") overnight Rly judged from the 17:00 CT open (RallyLogic 1.3.0: the 02:00 CT cutoff removed), same rules
 // was "1.9.5";   // (1.9.5, 2026-11-06 19:31 CT Rassul "put rev on top of the green bar", "pb should also be closer to the pivot under the time label") Rev above the green bar (BD: below the red bar); Pb one row out, right under the wave-time label
 // was "1.9.4";   // (1.9.4) the market's RTH hours via MarketKey.h (GC / HG / CL / NG charts report QGC / QHG / QCL / NGX6 and ran on the ES default 08:30-15:00)
 // was "1.9.3";   // (1.9.3, 2026-11-06 17:40 CT Rassul "the pb is not fixed because it is not on the pivot and that is why the rev was not identified", GC + HG Nov 6) the Pb sits ON the chart's 3-bar High / Low ZigZag pivot (the same rule as IRT's Zig Zag 3 bars, High / Low - was: the first opposite-colour close made a pivot, so a Pb could sit on a dip before the real low); while the leg is still forming its extreme so far is a provisional Pb (shown once a bar closes back, moves to a new extreme, final when the ZigZag confirms); the Rev is judged from that pivot

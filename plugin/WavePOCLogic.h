@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.9.4";   // (1.9.4, 2026-11-08) Rly waves now include the overnight ones from 17:00 CT (RallyLogic 1.3.0); no rule change here
+static const char* const VERSION = "1.9.5";   // (1.9.5, 2026-11-08) Rly waves follow RallyLogic 1.4.0 (HH / LL rule); no rule change here
+// was "1.9.4";   // (1.9.4, 2026-11-08) Rly waves now include the overnight ones from 17:00 CT (RallyLogic 1.3.0); no rule change here
 // was "1.9.3";   // (1.9.3, 2026-11-06 17:38 CT Rassul "there is no hvns below the bo being identified . only if the poc is below the low of the bo bar do you not display the 2 hvn") the 2 HVNs are always looked for at / below the break level; they are left out ONLY when the POC is beyond the BO candle's far side (up: POC below the BO bar's low; down: POC above the BD bar's high)
 // was "1.9.2";   // (1.9.2, 2026-11-06 13:11 CT Rassul "If the wave poc is above the breakdown low, dont display the hvns", "the wave poc should only be on Cob, Rly and BO waves") rule 192: a profile only on a CoB / Rly / BO-BD wave; no HVNs when the POC is beyond the break level
 // was "1.9.1";   // (1.9.1, 2026-11-06 13:00 CT) HVNs = the top 2 nodes in their own distributions inside the break-level zone, no 2x floor

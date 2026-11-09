@@ -15,6 +15,8 @@ namespace old120 {
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %d %s\n", __LINE__, std::string(m).c_str()); } } while (0)
 template <class Bar> static std::vector<Bar> load(const char* p) { std::vector<Bar> v; std::ifstream f(p); Bar b; while (f >> b.days >> b.endSec >> b.o >> b.h >> b.l >> b.c >> b.v) v.push_back(b); return v; }
+// (1.4.0) compared on rules 1-5: the later HH / LL rule only removes fires (t_rly140.cpp tests it)
+static std::string key5(const rly::Wave& w) { char b[160]; std::snprintf(b, sizeof b, "%d|%d|%d|%d|%d|%.4f|%.4f|%d", w.gp, w.ge, w.gc, w.dir, (w.c[0] && w.c[1] && w.c[2] && w.c[3] && w.c[4]) ? 1 : 0, w.size, w.ratio, w.trend); return b; }
 static std::string key(const rly::Wave& w) { char b[160]; std::snprintf(b, sizeof b, "%d|%d|%d|%d|%d|%.4f|%.4f|%d", w.gp, w.ge, w.gc, w.dir, w.fired ? 1 : 0, w.size, w.ratio, w.trend); return b; }
 int main(int argc, char** argv) {
     const auto N = load<rly::Bar>(argc > 1 ? argv[1] : "es_2026-11-08_on_3m.txt");
@@ -31,10 +33,10 @@ int main(int argc, char** argv) {
         const auto A = load<rly::Bar>(argv[2]); std::vector<old120::rly120::Bar> A0; for (const auto& b : A) { old120::rly120::Bar c; c.days = b.days; c.endSec = b.endSec; c.o = b.o; c.h = b.h; c.l = b.l; c.c = b.c; c.v = b.v; A0.push_back(c); }
         const auto n1 = rly::run(A, 180, 510, 900, 0, 1, true); const auto o1 = old120::rly120::run(A0, 180, 510, 900, 0, 1, true);
         std::map<std::string, int> nk, ok; int rthN = 0, rthO = 0, onLate = 0, onLateKept = 0;
-        for (const auto& w : n1) if (!w.on) { nk[key(w)]++; rthN++; }
+        for (const auto& w : n1) if (!w.on) { nk[key5(w)]++; rthN++; }
         for (const auto& w : o1) if (!w.on) { char b[160]; std::snprintf(b, sizeof b, "%d|%d|%d|%d|%d|%.4f|%.4f|%d", w.gp, w.ge, w.gc, w.dir, w.fired ? 1 : 0, w.size, w.ratio, w.trend); ok[b]++; rthO++; }
         CHECK(rthN == rthO && nk == ok, "RTH waves identical to 1.2.0 (" + std::to_string(rthN) + " vs " + std::to_string(rthO) + ")");
-        std::map<std::string, int> on1; for (const auto& w : n1) if (w.on) on1[key(w)]++;
+        std::map<std::string, int> on1; for (const auto& w : n1) if (w.on) on1[key5(w)]++;
         for (const auto& w : o1) if (w.on) { onLate++; char b[160]; std::snprintf(b, sizeof b, "%d|%d|%d|%d|%d|%.4f|%.4f|%d", w.gp, w.ge, w.gc, w.dir, w.fired ? 1 : 0, w.size, w.ratio, w.trend); if (on1.count(b)) onLateKept++; }
         CHECK(onLate > 0 && onLateKept == onLate, "every overnight wave 1.2.0 judged (02:00 CT on) is judged the same (" + std::to_string(onLateKept) + " / " + std::to_string(onLate) + ")");
     }
