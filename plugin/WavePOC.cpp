@@ -137,7 +137,8 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.9.6";   // (1.9.6) plain profile rows faded to ~28% and thinner, behind the candles (no alpha in the SDK)
+static const char* WP_VERSION = "1.9.7";   // (1.9.7) CL / HG drew nothing: safe x range, guarded column read, draw / error counters in the status, the VAP retry runs every calc
+// was "1.9.6";   // (1.9.6) plain profile rows faded to ~28% and thinner, behind the candles (no alpha in the SDK)
 // was "1.9.5";   // (1.9.5) Rly waves under RallyLogic 1.4.0 (HH / LL rule) - no draw change
 // was "1.9.4":   // (1.9.4) overnight Rly waves from the 17:00 CT open get their profile (RallyLogic 1.3.0 via lsBreakout's engine) - no draw change
 // was "1.9.3":   // (1.9.3) HVNs left out only when the POC is below the BO bar low / above the BD bar high
@@ -209,6 +210,7 @@ struct WState {
     long long lastRetry = -1; int retries = 0;
     int provAt = -2; bool provOk = false; wpc::Wave prov; long long provMs = -100000;   // (1.7.0) the live wave re-built every second
     bool vapFault = false, sawPre = false, sawPost = false; int preCalls = 0;
+    long long drawPre = 0, drawPost = 0, renderDone = 0, renderErr = 0, colErr = 0; std::string lastErr, renderExit;   // (1.9.7) why nothing draws (CL / HG 11-09)
     long long statusMs = -1; std::string statusBody; long long storeSaveMs = -1; int recFails = 0;
     wpc::Scene last;
     cobs::Engine CB; long cbFed = 0; bool cbOk = false;   // (1.9.2) lsCobSignal's CoB engine on this chart's bars (chart bars S.off .. fed)
@@ -240,6 +242,7 @@ public:
     bool nativeParms(wpp::Parms& p, std::string& why);
     HostSlot<WState> slot_;
     void pump(bool mayCalc);
+    void retryVap(WState& S, wpc::VapFn vap);
     void clear() { slot_.release(this); }
     void readSettings(WState& S);
     bool identify(WState& S);
@@ -541,11 +544,7 @@ void WavePOC::feed(WState& S, bool mayCalc) {
         if (b.h < b.l) std::swap(b.h, b.l);
         S.E.addBar(b, vap); S.raw.push_back((RTDATE)times[i]);
     }
-    const long long now = wpMs();
-    if (S.E.pendingCount() > 0 && (S.lastRetry < 0 || now - S.lastRetry >= WP_RETRY_MS)) {   // (1.9.2) every 60 s while waves wait for their VAP
-        if (S.lastRetry >= 0) { ++S.retries; S.E.retryPending(vap); }
-        S.lastRetry = now;
-    }
+    retryVap(S, vap);
     const int k = S.E.lastBar();
     // (1.7.0, Rassul 2026-11-02 13:28-13:29 CT "moving with the wave ... you can wait for bar close when needed") the live wave at every bar close
     if (k != S.provAt) { S.provAt = k; S.provOk = S.E.provisional(S.prov, vap); }
@@ -609,6 +608,7 @@ void WavePOC::status(WState& S, long long now) {
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;              // calc comes on every tick: build the text at most once a second
     const std::string body = wpc::statusText(S.E, S.mkt, S.spb, S.parms, S.storeWhy, S.recWhy + (S.recFails ? ", append failures " + std::to_string(S.recFails) : std::string()), S.recBad, &S.last, S.provOk, S.retries)
                            + "SETTINGS,show zigzag " + (S.zz ? "on" : "off") + ",CoB legs " + (S.cobLegs ? "on" : "off") + "\nCOB_SOURCE," + S.cobSrc + "\nDRAWING," + (S.sawPre ? "profile behind the candles (pre-draw)" : "profile drawn after the candles (no pre-draw call seen)") + ",x range " + std::to_string(S.clipL) + " .. " + std::to_string(S.clipR) + " (left of the Levels column / right-side columns not drawn)\n"
+                           + "DRAW_CALLS,(1.9.7) pre " + std::to_string(S.drawPre) + ",post " + std::to_string(S.drawPost) + ",renders " + std::to_string(S.renderDone) + ",render errors " + std::to_string(S.renderErr) + ",column errors " + std::to_string(S.colErr) + ",last render " + (S.renderExit.empty() ? std::string("none yet") : S.renderExit) + ",last error " + (S.lastErr.empty() ? std::string("none") : S.lastErr) + "\n"
                            + (S.vapFault ? "VAP_FAULT,remove and re-add the indicator\n" : "")
                            + "MBO," + (S.blocked ? "not opened (crash guard file present)" : S.dboDead ? "faulted" : S.dbo ? "open" : "opening") + ",events " + std::to_string(S.dboEvents)
                            + ",orders " + std::to_string(S.book.book.size()) + ",samples " + std::to_string(S.samp.samples) + ",bars sampled " + std::to_string(S.samp.bars.size())
@@ -619,12 +619,22 @@ void WavePOC::status(WState& S, long long now) {
     wpMkdir(wpFlex()); wpPublish(S.statusPath, body);
 }
 
+// (1.9.7) the VAP retry of waves still waiting for their volume (every 60 s); 1.9.2 ran it only at the end of feed(), behind early
+// returns - HG 11-09 "pending VAP 229, retries 0"
+void WavePOC::retryVap(WState& S, wpc::VapFn vap) {
+    const long long now = wpMs();
+    if (S.E.pendingCount() <= 0) return;
+    if (S.lastRetry >= 0 && now - S.lastRetry < WP_RETRY_MS && now >= S.lastRetry) return;
+    if (S.lastRetry >= 0) { ++S.retries; S.E.retryPending(vap); }
+    S.lastRetry = now;
+}
 void WavePOC::pump(bool mayCalc) {
     WState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
     const long long now = wpMs();
-    drainBook(*S, now);   // (1.1.0) before the new closed bars: the forming bar's samples are complete when it closes
+    try { drainBook(*S, now); } catch (const std::exception& ex) { S->lastErr = std::string("book: ") + ex.what(); } catch (...) { S->lastErr = "book: unknown exception"; }   // (1.9.7) a book fault never stops the bars
     feed(*S, mayCalc);   // (1.3.1) no-op from draw()
+    if (mayCalc) { wpc::VapFn vap = [this, S](int j, std::vector<wpc::VRow>& out) { return vapRows(*S, j + S->off, out); }; retryVap(*S, vap); }   // (1.9.7) every calc, whatever feed() returned early on
     flush(*S, now);
     status(*S, now);
 }
@@ -632,7 +642,8 @@ void WavePOC::pump(bool mayCalc) {
 static short wpC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
 
 void WavePOC::render(WState& S, bool back, bool front) {
-    const long n = getBarCount(); if (n < 2 || S.E.B.empty()) return;
+    const long n = getBarCount(); if (n < 2 || S.E.B.empty()) { S.renderExit = n < 2 ? "fewer than 2 bars" : "no bars fed yet"; return; }
+    S.renderExit = "drawn";
     RCT pane; pane.getPaneRect(false);
     int vs = 0, ve = (int)n - 1; if (getVisibleBars(&vs, &ve) != RTX_OK) { vs = 0; ve = (int)n - 1; }
     RTARRAY hi(barHigh), lo(barLow);
@@ -647,7 +658,8 @@ void WavePOC::render(WState& S, bool back, bool front) {
     if ((long)hi.count >= n && (long)lo.count >= n) { long long h = 0, l = 0; if (wpc::toTicks(hi[(int)n - 1], tick, h) && wpc::toTicks(lo[(int)n - 1], tick, l)) { v.formH = std::max(h, l); v.formL = std::min(h, l); v.haveForming = true; } }
     // (1.3.2, Rassul 18:24 CT) nothing under the Key Levels column at the left edge (ColumnBoard leftKeep, as lsBigBidAsk 1.31.3 /
     // lsDeltaProfile 2.30.1) nor under the right-side columns (LMT F / READ / Delta / Levels / Dealer: ColumnBoard layout priceRight)
-    {   RCT scale; scale.getScaleRect(); int axisR = pane.right;
+    v.clipL = pane.left; v.clipR = pane.right; S.clipL = v.clipL; S.clipR = v.clipR;   // (1.9.7) a safe range first: the column read below may fail
+    try {   RCT scale; scale.getScaleRect(); int axisR = pane.right;
         if (scale.left > pane.left && scale.left < pane.right && scale.right >= scale.left) axisR = scale.left - 2;
         const char* cl = getChartLabel(); const std::string chart = cl ? cl : "";
         const long spb = getSecondsPerBar(); const long long ms = wpMs();
@@ -661,8 +673,10 @@ void WavePOC::render(WState& S, bool back, bool front) {
         if (cb::LEVELS_LEFT && L.w[cb::LEVELS] > 0) left = std::max(left, L.levels.r + 2);
         left = std::max(left, cb::leftKeep(S.sym, spb, chart, (int)pane.left, ms));
         v.clipL = left; v.clipR = (L.ok && L.margin > 0) ? L.priceRight : axisR;
+        if (v.clipR <= v.clipL) { v.clipL = pane.left; v.clipR = axisR > pane.left ? axisR : pane.right; }   // (1.9.7) never an empty range
         S.clipL = v.clipL; S.clipR = v.clipR;
-    }
+    } catch (const std::exception& ex) { ++S.colErr; S.lastErr = std::string("columns: ") + ex.what(); }
+      catch (...) { ++S.colErr; S.lastErr = "columns: unknown exception"; }
     S.last = wpc::layout(S.E, S.provOk ? &S.prov : nullptr, v);
     {   // (1.4.0) the latest wave's OPEN WPOC as SignalBoard fact W (code 1, decided): lsDealerProfile 2.38.0 draws it as the WPOC badge
         const long long ms = wpMs(); long long tk = 0;
@@ -704,9 +718,11 @@ int WavePOC::draw(void) {
     if (!S) return RTX_OK;
     try {
         const bool pre = getReason() == REASON_PREDRAW;
-        if (pre) { S->sawPre = true; ++S->preCalls; render(*S, true, !S->sawPost && S->preCalls > 3); }   // the profile + nodes + lines behind the candles
-        else { S->sawPost = true; render(*S, !S->sawPre, true); }                                         // tags, zigzag, header (+ the back layer if IRT never pre-draws)
-    } catch (...) {}
+        if (pre) { ++S->drawPre; S->sawPre = true; ++S->preCalls; render(*S, true, !S->sawPost && S->preCalls > 3); }   // the profile + nodes + lines behind the candles
+        else { ++S->drawPost; S->sawPost = true; render(*S, !S->sawPre, true); }                                          // tags, zigzag, header (+ the back layer if IRT never pre-draws)
+        ++S->renderDone;
+    } catch (const std::exception& ex) { ++S->renderErr; S->lastErr = std::string("draw: ") + ex.what(); }
+      catch (...) { ++S->renderErr; S->lastErr = "draw: unknown exception"; }
     return RTX_OK;
 }
 
@@ -715,6 +731,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setDescription("LRA Wave POC v1.9.3 - each CoB, Rly or BO / BD wave's VOLUME profile (lsCobSignal / lsBreakout rules, computed natively; the live wave once its BO / CoB fired) right of a green / red spine at its start: the POC in cyan with a P (and its line to the right) wherever it is, and up to 2 HVNs in the wave colour with an H = the 2 biggest nodes in their own distributions at or below the break level (an up wave: the high of its BO candle - lsBreakout's rule - or, with no BO, of the bar that broke the prior pivot high; down waves mirror it) - pullback entries. No settings.");
-    p->setVersion("1.9.6");   // = WP_VERSION (gex-build reads this literal)
+    p->setVersion("1.9.7");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

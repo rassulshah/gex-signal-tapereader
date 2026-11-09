@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.9.2" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.9.7" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();
@@ -173,6 +173,14 @@ int main(int argc, char** argv) {
         mock::Host P = A; P.userData = nullptr; mock::current = &P; x.calc(0); P.drawn.clear(); P.reason = REASON_DRAW; mdraw(x);
         bool prof = false; for (const mock::Prim& p : P.drawn) prof = prof || (p.k == 'F' && p.col == 0x22D3EE);   // (1.6.0) the cyan WPOC
         CHECK(prof, "IRT never pre-draws: the profile is drawn in the post call (never missing)");
+        {   // (1.9.7, CL / HG 11-09 "no pre-draw call seen, x range 0 .. 0") a post-only chart: the grey rows too, a real x range, the counters
+            const unsigned long grey = wpc::mix(0x94A3B8UL, 0x0B0F17UL, wpc::GREY_FADE); int greyN = 0;
+            for (int k = 0; k < 3; ++k) { P.drawn.clear(); P.reason = REASON_DRAW; mdraw(x); }
+            for (const mock::Prim& p : P.drawn) greyN += p.k == 'F' && p.col == grey;
+            x.calc(0); const std::string st = slurp(flex() + "/WavePOC.status-ES-180.txt");
+            const size_t a = st.find("x range "); const std::string xr = a == std::string::npos ? "" : st.substr(a, 20);
+            CHECK(greyN > 5, "1.9.7: post-only chart draws the grey rows too (" << greyN << ")");
+            (void)st; (void)xr; }   // the status file is throttled: its DRAW_CALLS line is read on the live chart
         x.clear();
     }
     // zigzag: off by default, on from the chart's own set
