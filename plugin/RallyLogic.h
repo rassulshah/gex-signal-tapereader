@@ -27,7 +27,8 @@
 
 namespace rly {
 
-static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-05 13:13 CT Rassul "this is a clear rly dn" (EU 05:05-05:40 CT) -> "go") + overnight Rly: run(..., overnight = true) judges the overnight session (17:00 CT to the RTH open) as its own session - same rules on a Globex VWAP / bands / trend from 17:00; RTH unchanged; default false = lsBigBidAsk unchanged
+static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-11-08 Rassul ES Sun night "those waves are rallies") overnight Rly from the 17:00 CT session open: the 02:00 CT cutoff (ON_FROM_SEC) removed, same rules
+// was "1.2.0":   // (1.2.0, 2026-11-05 13:13 CT Rassul "this is a clear rly dn" (EU 05:05-05:40 CT) -> "go") + overnight Rly: run(..., overnight = true) judges the overnight session (17:00 CT to the RTH open) as its own session - same rules on a Globex VWAP / bands / trend from 17:00; RTH unchanged; default false = lsBigBidAsk unchanged
 // was "1.1.0";
 static const int MIN_BARS = 3;          // e - p
 static const double ATR_MULT = 2.5;
@@ -36,7 +37,7 @@ static const int EXT_BARS = 20;         // 20-bar high / low (incl. bar e)
 static const int ALT_BARS = 30;         // (1.1.0) condition 3 alternative: high e = the 30-bar high (low e = the 30-bar low), session bars incl. bar e
 static const int TREND_FROM = 9;        // trend from the 10th RTH bar
 static const int TREND_WIN = 20;
-static const int ON_FROM_SEC = 2 * 3600;   // (1.2.0) overnight Rly only on waves whose extreme bar ends at / after 02:00 CT (London), to the RTH open: ~4 a night like RTH (all night was ~10)
+static const int ON_FROM_SEC = 17 * 3600;   // (1.3.0) not used any more: overnight Rly from the 17:00 CT open; (1.2.0 was 2 * 3600) overnight Rly only on waves whose extreme bar ends at / after 02:00 CT (London), to the RTH open: ~4 a night like RTH (all night was ~10)
 
 // one chart bar, stamped at its END like svl::Bar (days = civil day of the close stamp, endSec = second of that day)
 struct Bar { long days = 0; int endSec = 0; double o = 0, h = 0, l = 0, c = 0, v = 0; };
@@ -152,7 +153,7 @@ inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Ses
         if (e == n - 1 && q + 1 == P.size() - 1) continue;          // last wave: not confirmed
         int conf = -1; for (int k = e + 1; k < n; ++k) if (S.dir[(size_t)k] != S.dir[(size_t)e]) { conf = k; break; }
         if (conf < 0) continue;
-        if (on && (e == p || B[(size_t)S.g[(size_t)e]].endSec < ON_FROM_SEC || B[(size_t)S.g[(size_t)e]].endSec >= 17 * 3600)) continue;   // (1.2.0) overnight: from 02:00 CT; no 0-bar start pseudo-wave
+        if (on && e == p) continue;   // (1.3.0, Rassul "those waves are rallies") overnight judged from the 17:00 CT open (the 02:00 cutoff removed); no 0-bar start pseudo-wave
         Wave W; W.sess = S.sess; W.on = on; W.nb = e - p; W.gp = S.g[(size_t)p]; W.ge = S.g[(size_t)e]; W.gc = S.g[(size_t)conf];
         W.atr = atr[(size_t)W.ge]; W.trend = S.trend[(size_t)e];
         const int a20 = e - (EXT_BARS - 1) > 0 ? e - (EXT_BARS - 1) : 0, a30 = e - (ALT_BARS - 1) > 0 ? e - (ALT_BARS - 1) : 0;

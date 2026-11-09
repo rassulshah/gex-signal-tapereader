@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.9.3";   // (1.9.3, 2026-11-06 17:38 CT Rassul "there is no hvns below the bo being identified . only if the poc is below the low of the bo bar do you not display the 2 hvn") the 2 HVNs are always looked for at / below the break level; they are left out ONLY when the POC is beyond the BO candle's far side (up: POC below the BO bar's low; down: POC above the BD bar's high)
+static const char* const VERSION = "1.9.4";   // (1.9.4, 2026-11-08) Rly waves now include the overnight ones from 17:00 CT (RallyLogic 1.3.0); no rule change here
+// was "1.9.3";   // (1.9.3, 2026-11-06 17:38 CT Rassul "there is no hvns below the bo being identified . only if the poc is below the low of the bo bar do you not display the 2 hvn") the 2 HVNs are always looked for at / below the break level; they are left out ONLY when the POC is beyond the BO candle's far side (up: POC below the BO bar's low; down: POC above the BD bar's high)
 // was "1.9.2";   // (1.9.2, 2026-11-06 13:11 CT Rassul "If the wave poc is above the breakdown low, dont display the hvns", "the wave poc should only be on Cob, Rly and BO waves") rule 192: a profile only on a CoB / Rly / BO-BD wave; no HVNs when the POC is beyond the break level
 // was "1.9.1";   // (1.9.1, 2026-11-06 13:00 CT) HVNs = the top 2 nodes in their own distributions inside the break-level zone, no 2x floor
 // was "1.9.0";   // (1.9.0, 2026-11-05 08:13-08:46 CT Rassul "draw a volume profile instead of the delta profile ... upto 2 hvns and the poc ... the other two hvn should be below the breakout high ... display the poc wherever it may be and then look for 2 hvn's at the break level or lower", "just show the poc line", "now") the right side = the wave VOLUME profile, POC (cyan, P) + up to 2 HVNs (wave colour, H) at / beyond the break level; no delta rows, boxes or I / A / T letters
