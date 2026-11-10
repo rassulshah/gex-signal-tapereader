@@ -152,7 +152,7 @@ int main(int argc, char** argv) {
         CHECK(a.size() == 2 && a[0].name == "PFL" && a[1].name == "PDL" && a[0].dir == -1 && a[0].kind == zd::LK_KEY && b.size() == 1 && b[0].name == "CR0" && b[0].kind == zd::LK_MQ && c.empty(),
               "levels: PFL/PDL -> 2 key lows, CR 0D/GW 0D -> CR0 only, a gamma node is not his list");
         zd::Lvl S; S.px = 100; S.dir = -1;
-        CHECK(zd::levelGap(95, 98, 0, S) == 2 && zd::levelGap(99, 101, 0, S) == 0 && zd::levelGap(101, 103, 0, S) == -1, "levels: support reaches the zone BELOW it only (gap 2), overlap = 0, above = never"); }
+        CHECK(zd::levelGap(95, 98, 0, S) == 2 && zd::levelGap(99, 101, 0, S) == 0 && zd::levelGap(101, 103, 0, S) == 1, "levels (1.0.10): either side - below gap 2, overlap 0, above gap 1"); }
     {   zdr::Journal J; J.add("H,0.25,1.0.2"); J.add("ZN,1,1000,0,27960,27963,450,2.6,14,3,0,0"); J.add("ZL,1,1000,VAL:27962;PS0:27960");
         const std::string l1 = zdr::zoneLabel(J.z[1], 0.25); J.add("ZL,1,2000,"); const std::string l2 = zdr::zoneLabel(J.z[1], 0.25);
         CHECK(l1.find("at VAL + PS0") != std::string::npos && l2.find(" at ") == std::string::npos && J.bad == 0, "label: \"at VAL + PS0\" from the ZL line, gone when the latest ZL has none (" + l1 + ")"); }

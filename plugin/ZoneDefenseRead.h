@@ -108,7 +108,7 @@ template <class Clock> std::vector<RLine> readLines(const ZoneView& v, Clock clo
         std::snprintf(b, sizeof b, " | %s lots | oldest %.0fm", comma(v.size).c_str(), oldestAtTouch);
         const std::string range = tick > 0 ? priceText(v.lo, tick) + "-" + priceText(v.hi, tick) : std::string();
         int col = 0; const std::string st = zoneState(v, sg, col);
-        setLine(out[0], "Zone", st, range + b + (v.state == 5 && v.reclaimBars >= 0 ? std::string(" | ") + std::to_string(v.reclaimBars) + " bars after the break" : std::string())); out[0].col = col; out[0].time = clock(v.ended && (v.endCode == 2 || v.endCode == 3) && v.endT > 0 ? v.endT : (v.stateT > 0 ? v.stateT : v.T));
+        setLine(out[0], "Zone", st, range + (v.lvl.empty() ? std::string(" | no level") : " | at " + v.lvl) + b +   /* (1.0.10) the level(s) it sits at */ (v.state == 5 && v.reclaimBars >= 0 ? std::string(" | ") + std::to_string(v.reclaimBars) + " bars after the break" : std::string())); out[0].col = col; out[0].time = clock(v.ended && (v.endCode == 2 || v.endCode == 3) && v.endT > 0 ? v.endT : (v.stateT > 0 ? v.stateT : v.T));
     }
     // 2 Queue (the 60 s before the touch)
     if (v.cancel60 < 0) setLine(out[1], "Queue", "thin", "too few resting orders to read");

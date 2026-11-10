@@ -5,7 +5,7 @@
 #include "SettingsSpec.h"
 
 namespace zdset {
-static const char* const PLUGIN_VERSION = "1.0.9";   // = the setVersion literal in ZoneDefense.cpp (lsZoneDefense + lsZoneDefenseMarks)
+static const char* const PLUGIN_VERSION = "1.0.10";   // = the setVersion literal in ZoneDefense.cpp (lsZoneDefense + lsZoneDefenseMarks)
 enum K { K_SHOW_LINES, K_SHOW_BARS, K_SHOW_ZONES, K_SHOW_LABELS, K_SHOW_BIG, K_SHOW_DIAMOND, K_SHOW_SWEEP, K_MAX_ZONES, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

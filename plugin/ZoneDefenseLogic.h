@@ -32,7 +32,8 @@
 #include "ZoneDefenseParams.h"
 
 namespace zd {
-static const char* const VERSION = "1.0.9";
+static const char* const VERSION = "1.0.10";   // (1.0.10) levels matched on either side + named on the Zone line
+// was "1.0.9";
 enum Act { ADD = 0, MOD = 1, DEL = 2, FILL = 3, CLEAR = 9 };
 enum Side { BID = 0, ASK = 1 };
 static const long long MIN_MS = 60000;
@@ -110,9 +111,11 @@ inline std::vector<Lvl> levelsOf(const std::string& name, long long px) {
 // how far the zone [lo, hi] of side sits BEYOND the level (ticks): 0 = overlaps; -1 = on the wrong side (never at it)
 inline long long levelGap(long long lo, long long hi, int side, const Lvl& L) {
     if (lo <= L.px && L.px <= hi) return 0;
-    const int dir = L.dir != 0 ? L.dir : (side == 0 ? -1 : 1);    // 0 = bid side
-    if (dir < 0) return hi < L.px ? L.px - hi : -1;               // support: the zone below it
-    return lo > L.px ? lo - L.px : -1;                            // resistance: the zone above it
+    // (1.0.10, Rassul 2026-11-10 09:02 "do you name the level(s) its associated with") EITHER side: bids defending a low rest AT or just
+    // ABOVE it (front-running), offers just below a high - the old rule (support only with the zone below it) missed the usual case
+    // (ES 11-10: the 7569.25-7570.00 bids 2 points above AsiaLO / LonLO 7567.25 got no name). The nearest level within the reach wins.
+    (void)side;
+    return L.px > hi ? L.px - hi : lo - L.px;
 }
 inline const char* kindName(int k) { return k == LK_MQ ? "mq" : k == LK_VOLUME ? "volume" : k == LK_KEY ? "key" : "none"; }
 
