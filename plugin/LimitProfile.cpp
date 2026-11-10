@@ -4,7 +4,7 @@
  *  profile which is called the dealer profile that has limit orders").
  *  = DealerProfile.cpp built as lsLimitProfile.dll under the new name; the drawing, rules, settings and files are lsDealerProfile's
  *  (same lsFlexLevels\DealerProfile files, so his settings carry over). Use ONE of the two per chart, never both.
- *  gex-build reads the version from this line:  p->setVersion("2.57.0")
+ *  gex-build reads the version from this line:  p->setVersion("2.58.0")
  ********************************************************************************/
 #define DP_LIMIT_NAME 1
 #include "DealerProfile.cpp"

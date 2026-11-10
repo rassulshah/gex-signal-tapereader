@@ -252,7 +252,7 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.57.0" && src.find("p->setVersion(\"2.57.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.57.0 agree"); }
+        check(std::string(DP_VERSION) == "2.58.0" && src.find("p->setVersion(\"2.58.0\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION), "versions 2.58.0 agree"); }
     dealerFile(true);
     std::vector<klv::Merged> lv;
     { std::istringstream in(slurp(D + "/LRA-KeyLevels-ES.csv")); std::string ln;
