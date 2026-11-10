@@ -106,7 +106,8 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.16.0"   // (1.16.0) every Pb / Pboc / Pdoc pivot must retrace >= 38.2% of its wave   // was "1.15.0":   // (1.15.0) Pdoc only when the PB POC is >= 38.2% deep   // was "1.14.0":   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
+#define BKO_VERSION "1.16.1"   // (1.16.1) no Rly near a drawn Cob
+// was "1.16.0"   // (1.16.0) every Pb / Pboc / Pdoc pivot must retrace >= 38.2% of its wave   // was "1.15.0":   // (1.15.0) Pdoc only when the PB POC is >= 38.2% deep   // was "1.14.0":   // = bko::VERSION = the setVersion literal below (test_bo100_host checks)
 
 static long long bkoMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string bkoFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + BKO_SEP "InvestorRT" BKO_SEP "rtx" BKO_SEP "lsFlexLevels" : std::string(); }
@@ -414,6 +415,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA BO v1.14.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC (IRT VAP, Wave POC's rule); Pdoc = it tags the pullback's developing POC (Wave POC's PB POC) instead. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.16.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.16.1");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }
