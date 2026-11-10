@@ -1,5 +1,12 @@
 #ifndef LS_DELTAINTEL_H
 #define LS_DELTAINTEL_H
+// DeltaIntel.h 1.2.0 (2026-11-09, Rassul 23:17 CT "looks good build" on the A / I model mockup): DINTEL_A_MODE 3 (DEFAULT) = ONE rule set
+// for A and I on the 90-min profile (60 rows): node |delta| >= 2.0x the average non-zero row and one of the top 3; the peak candle (most
+// same-side delta on the row) = the decision candle k (same) or k-1 (2-bar); bullish = a GREEN close above the node's top on the peak
+// candle, or (2-bar, the peak did not) on the NEXT candle whose low is below the peak candle's high (bearish mirror); the 5-bar pivot rule;
+// the TRUE WICK rule (bullish: the whole node <= min(open, close) of the PEAK candle; bearish: >= max(open, close)); the halfway rule.
+// Letter by node side: bullish + RED (selling) node = A, bullish + GREEN node = I, bearish + GREEN node = A, bearish + RED node = I.
+// Decided at the close (never repaints). The circle = the strongest A / I of its candle, drawn ON THE CANDLE at the node, side colour.
 // DeltaIntel.h 1.1.0 (2026-11-07 ~22:10, Rassul "i'll go with your recommendations"): A = THE CHOSEN RULE (ownA below, = lra.dp_intel
 // 1.2.0 own_A) - the node is one of the CANDLE's own 3 biggest delta rows (>= 2.0x the candle's average row), same candle, winner's colour
 // close beyond it, at / below the open and below 1/2 (in the wick), close in the top 1/3, the attackers' (bid) POC or the volume POC in the
@@ -37,7 +44,7 @@
 #include "DeltaCtxParams.h"
 
 namespace dintel {
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";
 static const int HORIZON = 10, WIN = 30, NROWS = 60, TOP = 3;
 static const double RATIO = 2.0;
 // (2026-11-07 ~20:45, coordinator for Rassul) two A switches wait for his answer - the defaults are the CURRENT plugin (dp::researchA):
@@ -56,11 +63,13 @@ static const bool A_OPEN_HALFWAY = DINTEL_A_OPEN_HALFWAY != 0, A_PIVOT_ZZ3 = DIN
 // wick). DINTEL_A_MODE 0 = the old dp::researchA path with the two switches.
 // DINTEL_A_MODE 2 (DEFAULT, 1.1.0) = the chosen own-candle rule; 1 = the 1.0.0 wick rule on the 90-min top-3 node; 0 = dp::researchA
 #ifndef DINTEL_A_MODE
-#define DINTEL_A_MODE 2
+#define DINTEL_A_MODE 3
 #endif
 static const bool A_OWN = DINTEL_A_MODE == 2;
+static const bool A_UNI = DINTEL_A_MODE == 3;   // (1.2.0) the unified A / I rule
 static const bool A_WICK = DINTEL_A_MODE == 1;
-static const char* const A_RULE_LABEL = DINTEL_A_MODE == 2 ? "own (candle top-3 node >= 2x, same candle, winner's close, in the wick, close top 1/3, bid or volume POC bottom 1/3, 3-bar ZigZag pivot)"
+static const char* const A_RULE_LABEL = DINTEL_A_MODE == 3 ? "A/I (90-min top-3 node >= 2x, peak k or k-1, close beyond, 5-bar pivot, true wick, halfway; red node bull = A, green node bull = I)"
+                                      : DINTEL_A_MODE == 2 ? "own (candle top-3 node >= 2x, same candle, winner's close, in the wick, close top 1/3, bid or volume POC bottom 1/3, 3-bar ZigZag pivot)"
                                       : DINTEL_A_MODE == 1 ? "wick (own candle, favourable colour, node in the wick below the open and 1/2 range, 3-bar ZigZag pivot)" : "researchA";
 // (2026-11-07 ~21:10, Rassul chose 9 minutes) the hold judged per letter: A, T, A-then-I (J), T-confirmed (U) over 3 candles; I, E, F over 10
 inline int horizonOf(char l) { return (l == 'A' || l == 'T' || l == 'J' || l == 'U') ? 3 : HORIZON; }
@@ -182,7 +191,7 @@ public:
             auto holds = [&](int id) { return id == 0 || (id > 0 && id < N_COND && e.ctx[id]); };   // an id this build does not know never holds
             e.shown = e.status > 0 && g && holds(g->c1) && holds(g->c2);
             if (e.shown) ++shownN;
-            if (e.letter == 'A' && e.circle) { ++circles; if (e.acc) { e.markK = k; ++marksAcc; } }
+            if ((e.letter == 'A' || (A_UNI && e.letter == 'I')) && e.circle) { ++circles; if (e.acc) { e.markK = k; ++marksAcc; } }
             ev.push_back(e); out.push_back(static_cast<int>(ev.size()) - 1);
             ++decided[idx(e.letter)];
         }
@@ -197,7 +206,7 @@ public:
         if (isRth(k) && k >= 40) {
             std::vector<Event> nw; detectAI(k, nw);
             for (const Event& e : nw) {
-                if (e.letter != 'A') continue;
+                if (!(e.letter == 'A' || (A_UNI && e.letter == 'I'))) continue;
                 bool dup = false; for (const Event& h : ev) if (same(h, e) && h.k >= k - 2) dup = true;
                 if (!dup) out.push_back(e);
             }
@@ -316,6 +325,7 @@ private:
         std::vector<int> order(rows.size()); for (size_t i = 0; i < order.size(); ++i) order[i] = static_cast<int>(i);
         std::stable_sort(order.begin(), order.end(), [&rows](int p, int q) { return std::fabs(rows[static_cast<size_t>(p)]) > std::fabs(rows[static_cast<size_t>(q)]); });
         if (A_OWN) ownA(k, lo, hi, tpr, out);
+        const size_t first = out.size();
         for (int rank = 0; rank < TOP && rank < static_cast<int>(order.size()); ++rank) {
             const int r = order[static_cast<size_t>(rank)];
             const double ratio = std::fabs(rows[static_cast<size_t>(r)]) / mean;
@@ -326,6 +336,10 @@ private:
             for (int i = a; i <= k; ++i) { double d, v; region(i, rlo, rhi, d, v); d *= sell ? -1.0 : 1.0; if (d > 0 && (pk < 0 || d > best)) { best = d; pk = i; } }
             if (pk < 0 || (pk != k && pk != k - 1)) continue;
             const Candle* C = &c[0];
+            if (A_UNI) {   // (1.2.0) the unified A / I rule
+                Event e; if (uniAI(k, pk, rlo, rhi, sell, e)) { e.ratio = ratio; e.tpr = static_cast<int>(tpr); out.push_back(e); }
+                continue;
+            }
             if (A_OWN) {   // (1.1.0) the 90-min rows give I only; A comes from ownA
                 if ((!sell && C[k].C > C[k].O && C[k].C > rhi) || (sell && C[k].C < C[k].O && C[k].C < rlo)) {
                     Event e; e.k = k; e.pk = pk; e.lo = rlo; e.hi = rhi; e.ratio = ratio; e.tpr = static_cast<int>(tpr); e.letter = 'I'; e.side = sell ? -1 : 1; e.conf = "k"; out.push_back(e);
@@ -356,7 +370,37 @@ private:
                 e.letter = 'I'; e.side = sell ? -1 : 1; e.conf = "k"; out.push_back(e);
             }
         }
+        if (A_UNI && out.size() > first) {   // the circle = the strongest A / I of the candle (ties -> the first)
+            size_t b = first; for (size_t i = first + 1; i < out.size(); ++i) if (out[i].ratio > out[b].ratio) b = i;
+            out[b].circle = true;
+        }
     }
+public:
+    // (1.2.0) the unified A / I rule for one node [rlo, rhi] (sell = a red / selling node) whose peak candle is pk (k or k-1), judged at the
+    // close of k. Rules 4-9 of the model: close beyond (same candle, or 2-bar on the next candle that overlaps the peak), the 5-bar pivot,
+    // the TRUE wick (the whole node outside the peak candle's body), the halfway rule; A when the node is the losing side, else I.
+    bool uniAI(int k, int pk, long long rlo, long long rhi, bool sell, Event& e) const {
+        if (pk != k && pk != k - 1) return false;
+        const Candle* C = &c[0];
+        for (int d = 0; d < 2; ++d) {
+            const bool bull = d == 0;
+            auto beyond = [&](int q) { return bull ? (C[q].C > C[q].O && C[q].C > rhi) : (C[q].C < C[q].O && C[q].C < rlo); };
+            std::string how;
+            if (pk == k) { if (beyond(k)) how = "same"; }
+            else if (!beyond(pk) && beyond(k) && (bull ? C[k].L < C[pk].H : C[k].H > C[pk].L)) how = "next";
+            if (how.empty()) continue;
+            int pb = std::max(0, pk - 5);   // the 5-bar pivot rule (unchanged)
+            for (int i = pb + 1; i <= k; ++i) if (bull ? C[i].L < C[pb].L : C[i].H > C[pb].H) pb = i;
+            if (!(pb == pk || (bull ? C[pk].L < C[pb].H : C[pk].H > C[pb].L))) continue;
+            if (!(bull ? rhi <= std::min(C[pk].O, C[pk].C) : rlo >= std::max(C[pk].O, C[pk].C))) continue;   // the TRUE wick rule
+            if (!(bull ? (rlo + rhi) <= (C[pk].H + C[pk].L) : (rlo + rhi) >= (C[pk].H + C[pk].L))) continue;   // the halfway rule
+            e = Event(); e.k = k; e.pk = pk; e.lo = rlo; e.hi = rhi; e.side = bull ? 1 : -1; e.conf = how;
+            e.letter = (bull == sell) ? 'A' : 'I';
+            return true;
+        }
+        return false;
+    }
+private:
     void detectT(int k, std::vector<Event>& out) const {
         if (k < 20) return;
         for (int t = 0; t < 2; ++t) {
@@ -500,7 +544,7 @@ inline std::string line(const Event& e, const std::string& dltVersion, const std
 // (1.1.0) the circle record lines: DC|version|root|side|candle_end_t|lo|hi|tick|ratio|acc  and its mark  DM|version|root|side|circle_end_t|mark_end_t|acc or ai
 inline std::string circleLine(const Event& e, const std::string& dltVersion, const std::string& root, long long endT, double tick) {
     char b[300];
-    std::snprintf(b, sizeof(b), "DC|%s|%s|%s|%lld|%lld|%lld|%.10g|%.3f|%d", dltVersion.c_str(), root.c_str(), e.side == 1 ? "bullish" : "bearish", endT, e.lo, e.hi, tick, e.ratio, e.acc ? 1 : 0);
+    std::snprintf(b, sizeof(b), "DC|%s|%s|%s|%lld|%lld|%lld|%.10g|%.3f|%d|%c", dltVersion.c_str(), root.c_str(), e.side == 1 ? "bullish" : "bearish", endT, e.lo, e.hi, tick, e.ratio, e.acc ? 1 : 0, e.letter);   // (1.2.0) + letter (A / I) at the end
     return b;
 }
 inline std::string markLine(const Event& e, const std::string& dltVersion, const std::string& root, long long circleEndT, long long markEndT) {
