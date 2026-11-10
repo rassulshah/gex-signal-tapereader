@@ -30,8 +30,8 @@ int main() {
     mock::Host h; mock::current = &h; h.tick = 0.25f; h.seconds = 180; h.symbol = "ESZ6"; h.root = "ES"; h.chart = "ES 3m #1"; h.paneBottom = 300; h.paneRight = 2000; h.scaleLeft = 1980; h.ppb = 10; h.barW = 20; h.listIndex = 0;
     for (int i = 0; i < 31; ++i) h.bars.push_back(bar(T0 + 180UL * i));
     Ind* p = make();
-    CHECK(std::string(BF_VERSION) == "1.38.0" && std::string(bf::VERSION) == "1.38.0" && readAll("../OrderFlowPaneSettings.h").find("BF_VERSION = \"1.38.0\"") != std::string::npos && std::string(tbk::VERSION) == "1.1.0", "versions 1.38.0 (BF / bf / settings spec) + TopBook 1.1.0");
-    CHECK(readAll("../BookFlow.cpp").find("p->setVersion(\"1.38.0\")") != std::string::npos, "the setVersion literal 1.38.0");
+    CHECK(std::string(BF_VERSION) == "1.38.1" && std::string(bf::VERSION) == "1.38.1" && readAll("../OrderFlowPaneSettings.h").find("BF_VERSION = \"1.38.1\"") != std::string::npos && std::string(tbk::VERSION) == "1.1.1", "versions 1.38.1 (BF / bf / settings spec) + TopBook 1.1.1");
+    CHECK(readAll("../BookFlow.cpp").find("p->setVersion(\"1.38.1\")") != std::string::npos, "the setVersion literal 1.38.1");
     p->calc(0); h.draws.clear(); p->draw();
     // the book: 1-lot noise every tick, 60 ticks each side of 7000.00 / 7000.25; a trade at 7000.00; big bids 6997.00 (100) / 6995.00 (60),
     // offers 7003.00 (80) / 7005.00 (50 + 1 = one order "?") / 7008.00 (70); an offer 7001.00 (200) inside 2 ticks
@@ -62,7 +62,7 @@ int main() {
     {   int k1 = 0; for (auto& kv : at) if (kv.second.code == 1) { ++k1; CHECK(kv.first == 6997.0 || kv.second.val == 100, "rank 1 = the biggest"); } CHECK(k1 == 1, "one rank 1"); }
     {   NOW += 40000; p->calc(0); const std::string st = readAll(flex + "\\BookFlow\\status-ES-ESZ6-180.txt");
         { size_t i = st.find("TOP_BOOK"); std::printf("  %s\n", i == std::string::npos ? "no TOP_BOOK line" : st.substr(i, 200).c_str()); }
-        CHECK(st.find("TOP_BOOK,TopBook 1.1.0,S20 ") != std::string::npos && st.find("posted G ") != std::string::npos, "status TOP_BOOK line"); }
+        CHECK(st.find("TOP_BOOK,TopBook 1.1.1,S20 ") != std::string::npos && st.find("posted G ") != std::string::npos, "status TOP_BOOK line"); }
     // a reconnect = a cold book: heartbeat 0, no levels
     p->testState()->feed.reconnects += 1; NOW += 1100; p->calc(0);
     ok = sb::readFacts('G', "ESZ6", 180, "ES 3m #1", BookFlow::steadyNow(), G, false); lv = 0; hb = -1; for (auto& f : G) { if (f.code == 99) hb = (long long)f.val; else ++lv; }

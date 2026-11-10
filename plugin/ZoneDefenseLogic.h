@@ -32,7 +32,7 @@
 #include "ZoneDefenseParams.h"
 
 namespace zd {
-static const char* const VERSION = "1.0.8";
+static const char* const VERSION = "1.0.9";
 enum Act { ADD = 0, MOD = 1, DEL = 2, FILL = 3, CLEAR = 9 };
 enum Side { BID = 0, ASK = 1 };
 static const long long MIN_MS = 60000;

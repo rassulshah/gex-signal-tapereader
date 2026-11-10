@@ -79,7 +79,10 @@ inline std::string zoneState(const ZoneView& v, const Signs&, int& col) {
     const int bull = v.side == 0 ? +1 : -1; col = 0;
     if (v.state == 5) { col = bull; return "broken -> reclaimed"; }   // a failed break: trapped attackers
     if (v.state == 4) { col = -bull; return "broken"; }
-    if (v.ended && v.endCode == 2 && v.state != 3 && v.state != 2) { col = -bull; return "pulled"; }
+    // (1.0.9, 2026-11-10 Rassul 08:19 "is the zone here suppose to be a lvl?") a held / reclaimed zone whose orders were then pulled
+    // stayed "held" after price ran through it: the end now wins - "held -> pulled" (attackers' colour), "expired" after 60 min untouched
+    if (v.ended && v.endCode == 2) { col = -bull; return (v.state == 2 || v.state == 3) ? "held -> pulled" : "pulled"; }
+    if (v.ended && v.endCode == 3) return "expired";
     if (v.ended && v.endCode >= 4 && v.state == 0) return "closed";
     if (v.state == 1) return "testing";
     if (v.state == 3) { col = bull; return "reclaimed"; }
@@ -105,7 +108,7 @@ template <class Clock> std::vector<RLine> readLines(const ZoneView& v, Clock clo
         std::snprintf(b, sizeof b, " | %s lots | oldest %.0fm", comma(v.size).c_str(), oldestAtTouch);
         const std::string range = tick > 0 ? priceText(v.lo, tick) + "-" + priceText(v.hi, tick) : std::string();
         int col = 0; const std::string st = zoneState(v, sg, col);
-        setLine(out[0], "Zone", st, range + b + (v.state == 5 && v.reclaimBars >= 0 ? std::string(" | ") + std::to_string(v.reclaimBars) + " bars after the break" : std::string())); out[0].col = col; out[0].time = clock(v.stateT > 0 ? v.stateT : v.T);
+        setLine(out[0], "Zone", st, range + b + (v.state == 5 && v.reclaimBars >= 0 ? std::string(" | ") + std::to_string(v.reclaimBars) + " bars after the break" : std::string())); out[0].col = col; out[0].time = clock(v.ended && (v.endCode == 2 || v.endCode == 3) && v.endT > 0 ? v.endT : (v.stateT > 0 ? v.stateT : v.T));
     }
     // 2 Queue (the 60 s before the touch)
     if (v.cancel60 < 0) setLine(out[1], "Queue", "thin", "too few resting orders to read");

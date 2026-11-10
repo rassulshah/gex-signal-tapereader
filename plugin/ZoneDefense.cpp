@@ -1,5 +1,6 @@
 /********************************************************************************
- *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.8  +  lsZoneDefenseMarks 1.0.8  (2026-11-09)
+ *  ZoneDefense.cpp  --  Investor/RT RTX extensions  lsZoneDefense 1.0.9  +  lsZoneDefenseMarks 1.0.9  (2026-11-10)
+ *  1.0.9 (Rassul 08:19 CT): a held zone whose orders were pulled shows "held -> pulled" (was stuck on "held"); 60 min untouched = "expired"
  *  1.0.8 (Rassul 15:27 CT "if mbo is quiet, display a message on the chart somewhere"; mockup LPhVzXwuELSZaCFPmZzwEV): "MBO QUIET 12m" in the
  *  top-right of the pane when no order event arrived for 2 min (07:00-15:00 CT) / 5 min (overnight) while Globex is open (MboQuiet.h);
  *  clears when events resume. A live status, nothing recorded.
@@ -91,13 +92,13 @@
 #include <chrono>
 #include <climits>
 
-#define ZD_VERSION "1.0.8"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
+#define ZD_VERSION "1.0.9"   // = zdset::PLUGIN_VERSION = zd::VERSION = the one setVersion literal (zdh::stamp)
 
 
 namespace zdh {
 // the version of both DLLs: the ONE setVersion literal (the settings contract counts it; gex-build reads it)
 inline void stamp(cppExtension* p) {   // (1.0.8) the literal on its own line: gex-build :ver reads the text between the first ( and )
-    p->setVersion("1.0.8");
+    p->setVersion("1.0.9");
 }
 // the one settings window of both plugins (registered once per DLL)
 inline void registerWindow(cppExtension* x, ss::Ids& ids) { ss::registerAll(x, zdset::spec(), ids); }

@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.11.1";   // (1.11.1, 2026-11-09 Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc") the PB POC row = the wave POC row width (SIDE_W), anchored at the pivot bar   // was "1.11.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") wave PB POC = the POC row only (no HVN / grey rows), shown only when the POC itself sits at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4) rebuild with BreakoutLogic.h 1.14.0, no change   // was "1.10.3":   // (1.10.3) rebuild with BreakoutLogic.h 1.13.0, no change   // was "1.10.2":   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
+static const char* const VERSION = "1.12.0";   // (1.12.0, 2026-11-10 Rassul 08:17 CT) the wave POC shows only its POC row (no HVN / grey rows), like the PB POC
+// was "1.11.1";   // (1.11.1, 2026-11-09 Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc") the PB POC row = the wave POC row width (SIDE_W), anchored at the pivot bar   // was "1.11.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") wave PB POC = the POC row only (no HVN / grey rows), shown only when the POC itself sits at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4) rebuild with BreakoutLogic.h 1.14.0, no change   // was "1.10.3":   // (1.10.3) rebuild with BreakoutLogic.h 1.13.0, no change   // was "1.10.2":   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
 // was "1.10.1";   // (1.10.1, Rassul 12:10 + v7 "above") the lots on the wave POC row (POC colour) and the pullback POC row (white), just above them
 // was "1.10.0";   // (1.10.0, 2026-11-09 Rassul "build") the PULLBACK PROFILE (pullbackOf / drawPullback) + the wave POC / HVN rows thicker
 // was "1.9.7";   // (1.9.7, 2026-11-09) host-side fixes only (CL / HG no drawing, VAP retry)
@@ -97,6 +98,9 @@ static const int MAX_NODES = 5;
 // (1.9.0) the volume profile on the right of the spine (was the delta profile) with the POC and up to 2 HVNs at / beyond the break level
 static const bool SHOW_VOL_RIGHT = true;
 static const int HVN_MAX = 2;
+// (1.12.0, 2026-11-10 Rassul 08:17 CT "update the wave poc so it only has the poc and no hvn just like the wave pb poc") the wave profile
+// draws ONLY its POC row (cyan, thick, lots label) and the P on the spine: no grey rows, no HVN rows, no H letters (still computed + logged)
+static const bool WAVE_POC_ONLY = true;
 static const int STORE_VER = 2;        // (1.3.3) store version 2 = 14-bar candidates (1 = the 20-bar ones: rebuilt)
 static const int STORE_CAP = 1000;     // candidates kept per direction in the file
 static const int N_MIN = 2, N_MAX = 10, N_DEF = 3;
@@ -1053,6 +1057,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
             const int pocRow = !w.nodes.empty() ? w.nodes[0].row : -1;
             for (int j = 0; j < nr; ++j) {
                 const long long q = w.rows[(size_t)j]; if (q <= 0) continue;
+                if (WAVE_POC_ONLY && j != pocRow) continue;   // (1.12.0) the POC row only: no grey rows, no HVN rows
                 double top, bot; rowY(j, top, bot);
                 const bool isH = hvn && std::find(hvn->begin(), hvn->end(), j) != hvn->end();
                 const bool node = j == pocRow || isH;
@@ -1142,7 +1147,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
         // below the one above it (the text is 12 px tall)
         std::vector<std::pair<double, Letter> > ys;
         if (!SHOW_VOL_RIGHT) for (const Letter& L : letters(w, *bars)) { double top, bot; rowY(L.row, top, bot); ys.push_back(std::make_pair((top + bot) / 2.0, L)); }
-        if (SHOW_VOL_RIGHT && hvn) for (int r : *hvn) if (r >= 0 && r < nr) { Letter H = Letter(); H.t = 'H'; H.row = r; double top, bot; rowY(r, top, bot); ys.push_back(std::make_pair((top + bot) / 2.0, H)); }   // (1.9.0) H = an HVN at / beyond the break level
+        if (SHOW_VOL_RIGHT && hvn && !WAVE_POC_ONLY) for (int r : *hvn) if (r >= 0 && r < nr) { Letter H = Letter(); H.t = 'H'; H.row = r; double top, bot; rowY(r, top, bot); ys.push_back(std::make_pair((top + bot) / 2.0, H)); }   // (1.9.0) H = an HVN at / beyond the break level
         std::stable_sort(ys.begin(), ys.end(), [](const std::pair<double, Letter>& p, const std::pair<double, Letter>& q) { return p.first < q.first; });
         for (size_t k = 1; k < ys.size(); ++k) if (ys[k].first < ys[k - 1].first + 13) ys[k].first = ys[k - 1].first + 13;
         // (1.7.2, Rassul 09:33-09:36 CT "P signal on spine also for poc ... the volume poc cyan in the spine") P = the wave's volume POC, cyan, ON the POC row on the spine (fixed); a letter that would touch it moves off it
