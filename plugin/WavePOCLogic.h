@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.12.0";   // (1.12.0, 2026-11-10 Rassul 08:17 CT) the wave POC shows only its POC row (no HVN / grey rows), like the PB POC
+static const char* const VERSION = "1.13.0";   // (1.13.0, 2026-11-10 Rassul 13:03-13:11 CT) wave POC + up to 1 HVN (below the POC and below the level the BO broke; POC at / below it = none); the pullback (PB POC) profile removed
+// was "1.12.0";   // (1.12.0, 2026-11-10 Rassul 08:17 CT) the wave POC shows only its POC row (no HVN / grey rows), like the PB POC
 // was "1.11.1";   // (1.11.1, 2026-11-09 Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc") the PB POC row = the wave POC row width (SIDE_W), anchored at the pivot bar   // was "1.11.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") wave PB POC = the POC row only (no HVN / grey rows), shown only when the POC itself sits at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4) rebuild with BreakoutLogic.h 1.14.0, no change   // was "1.10.3":   // (1.10.3) rebuild with BreakoutLogic.h 1.13.0, no change   // was "1.10.2":   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
 // was "1.10.1";   // (1.10.1, Rassul 12:10 + v7 "above") the lots on the wave POC row (POC colour) and the pullback POC row (white), just above them
 // was "1.10.0";   // (1.10.0, 2026-11-09 Rassul "build") the PULLBACK PROFILE (pullbackOf / drawPullback) + the wave POC / HVN rows thicker
@@ -97,10 +98,11 @@ static const int SEP_ROWS = 3;         // nodes >= 3 rows apart
 static const int MAX_NODES = 5;
 // (1.9.0) the volume profile on the right of the spine (was the delta profile) with the POC and up to 2 HVNs at / beyond the break level
 static const bool SHOW_VOL_RIGHT = true;
-static const int HVN_MAX = 2;
+static const int HVN_MAX = 1;   // (1.13.0, Rassul 13:03 CT "upto 1 additional hvn instead of 2")
 // (1.12.0, 2026-11-10 Rassul 08:17 CT "update the wave poc so it only has the poc and no hvn just like the wave pb poc") the wave profile
 // draws ONLY its POC row (cyan, thick, lots label) and the P on the spine: no grey rows, no HVN rows, no H letters (still computed + logged)
-static const bool WAVE_POC_ONLY = true;
+static const bool WAVE_POC_ONLY = true;   // (1.13.0) = no grey rows: the POC row and up to 1 HVN
+static const bool SHOW_PB_PROFILE = false; // (1.13.0, Rassul 13:11 CT "we will be removing that signal (Pdoc) and the wave pb poc") the pullback profile is not drawn (still computed + logged)
 static const int STORE_VER = 2;        // (1.3.3) store version 2 = 14-bar candidates (1 = the 20-bar ones: rebuilt)
 static const int STORE_CAP = 1000;     // candidates kept per direction in the file
 static const int N_MIN = 2, N_MAX = 10, N_DEF = 3;
@@ -950,11 +952,13 @@ inline long long breakLevel(const Wave& w, const std::vector<Bar>& B, const std:
     why = 3; if (farSide) *farSide = 0;
     if (w.dir == 0 || w.i0 < 0 || w.i1 <= w.i0 || w.i1 >= (int)B.size()) return w.p1;
     const long long ta = B[(size_t)w.i0].t, tb = B[(size_t)w.i1].t;
-    for (const BoCand& b : bos) if (b.dir == w.dir && b.t0 > ta && b.t0 <= tb) { why = 1; if (farSide) *farSide = w.dir > 0 ? b.lo : b.hi; return w.dir > 0 ? b.hi : b.lo; }
     long long ph = 0; int phI = -1;                                          // the latest pivot of the wave's side before its start
     for (const Pivot& p : alt) if (p.i < w.i0 && p.type == (w.dir > 0 ? 1 : -1) && p.i > phI) { ph = p.px; phI = p.i; }
     const bool have = phI >= 0;
-    if (have) for (int k = w.i0 + 1; k <= w.i1; ++k) { const Bar& b = B[(size_t)k]; if (w.dir > 0 ? b.h > ph : b.l < ph) { why = 2; if (farSide) *farSide = w.dir > 0 ? b.l : b.h; return w.dir > 0 ? b.h : b.l; } }
+    // (1.13.0, Rassul 2026-11-10 13:07 CT "the break level is the level that the BO is breaking") = the pivot high (BD: low) the BO broke;
+    // the BO candle's own high only when there is no prior pivot (was: the BO candle's high)
+    for (const BoCand& b : bos) if (b.dir == w.dir && b.t0 > ta && b.t0 <= tb) { why = 1; if (farSide) *farSide = w.dir > 0 ? b.lo : b.hi; return have ? ph : (w.dir > 0 ? b.hi : b.lo); }
+    if (have) for (int k = w.i0 + 1; k <= w.i1; ++k) { const Bar& b = B[(size_t)k]; if (w.dir > 0 ? b.h > ph : b.l < ph) { why = 2; if (farSide) *farSide = w.dir > 0 ? b.l : b.h; return ph; } }   // (1.13.0) the pivot it broke
     return w.p1;
 }
 // (1.9.1, Rassul 2026-11-06 13:00 CT "it should be the top 2 nodes above the breakdown low and vice versa", "basically that are in their own
@@ -970,9 +974,10 @@ inline std::vector<int> hvnRows(const Wave& w, long long cut, bool pocRule = tru
         if (w.dir > 0 ? lo <= cut : hi >= cut) { if (a < 0) a = r; b = r; } }
     if (a < 0) return out;
     const int poc = !w.nodes.empty() ? w.nodes[0].row : -1;
-    if (pocRule && poc >= 0 && farSide != 0) {   // (1.9.3) no HVNs ONLY when the POC row lies wholly beyond the break bar's far side (up: below its low; down: above its high)
-        const long long plo = w.e0 + (long long)poc * w.rowTicks, phi = plo + w.rowTicks - 1;
-        if (w.dir > 0 ? phi < farSide : plo > farSide) return out;
+    (void)farSide;
+    if (pocRule && poc >= 0) {   // (1.13.0, Rassul 13:07 / 13:09 CT) an HVN only when the POC is ABOVE the break level (up; down: below) - then the HVN is below
+        const long long plo = w.e0 + (long long)poc * w.rowTicks, phi = plo + w.rowTicks - 1;   // the POC and below the break level; POC at / below it = no HVN
+        if (w.dir > 0 ? plo <= cut : phi >= cut) return out;
     }
     const std::vector<long long> sub(w.rows.begin() + a, w.rows.begin() + b + 1);
     const long long floor1 = w.med2 > 0 ? w.med2 / 2 + 1 : 1;         // a node must at least beat the median row (flat noise is no node)
@@ -1057,9 +1062,9 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
             const int pocRow = !w.nodes.empty() ? w.nodes[0].row : -1;
             for (int j = 0; j < nr; ++j) {
                 const long long q = w.rows[(size_t)j]; if (q <= 0) continue;
-                if (WAVE_POC_ONLY && j != pocRow) continue;   // (1.12.0) the POC row only: no grey rows, no HVN rows
-                double top, bot; rowY(j, top, bot);
                 const bool isH = hvn && std::find(hvn->begin(), hvn->end(), j) != hvn->end();
+                if (WAVE_POC_ONLY && j != pocRow && !isH) continue;   // (1.13.0) the POC row + the one HVN; no grey rows
+                double top, bot; rowY(j, top, bot);
                 const bool node = j == pocRow || isH;
                 // (1.9.6, Rassul 2026-11-09 09:29 "the profile covers the candles" on NQ) IRT has no alpha (DRAW_TRANSLUCENT is a fixed host
                 // blend, "not faint" on his chart - GammaProfile 0.67), so the plain rows are faded toward the chart ground (GREY_FADE: 28% grey
@@ -1147,7 +1152,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
         // below the one above it (the text is 12 px tall)
         std::vector<std::pair<double, Letter> > ys;
         if (!SHOW_VOL_RIGHT) for (const Letter& L : letters(w, *bars)) { double top, bot; rowY(L.row, top, bot); ys.push_back(std::make_pair((top + bot) / 2.0, L)); }
-        if (SHOW_VOL_RIGHT && hvn && !WAVE_POC_ONLY) for (int r : *hvn) if (r >= 0 && r < nr) { Letter H = Letter(); H.t = 'H'; H.row = r; double top, bot; rowY(r, top, bot); ys.push_back(std::make_pair((top + bot) / 2.0, H)); }   // (1.9.0) H = an HVN at / beyond the break level
+        if (SHOW_VOL_RIGHT && hvn) for (int r : *hvn) if (r >= 0 && r < nr) { Letter H = Letter(); H.t = 'H'; H.row = r; double top, bot; rowY(r, top, bot); ys.push_back(std::make_pair((top + bot) / 2.0, H)); }   // (1.9.0) H = an HVN at / beyond the break level
         std::stable_sort(ys.begin(), ys.end(), [](const std::pair<double, Letter>& p, const std::pair<double, Letter>& q) { return p.first < q.first; });
         for (size_t k = 1; k < ys.size(); ++k) if (ys[k].first < ys[k - 1].first + 13) ys[k].first = ys[k - 1].first + 13;
         // (1.7.2, Rassul 09:33-09:36 CT "P signal on spine also for poc ... the volume poc cyan in the spine") P = the wave's volume POC, cyan, ON the POC row on the spine (fixed); a letter that would touch it moves off it
@@ -1306,7 +1311,7 @@ inline Scene layout(const Engine& E, const Wave* prov, const View& v, const Colo
     for (size_t k = 0; k < ws.size(); ++k) { int why = 0; { long long far = 0; const long long cut = breakLevel(*ws[k], E.B, E.alt, E.bos, why, &far); hv[k] = hvnRows(*ws[k], cut, why == 1 || why == 2, far); } s.hvnDrawn += (int)hv[k].size(); if (why >= 1 && why <= 3) ++s.breakWhy[why]; }
     for (int ph = 0; ph < 2; ++ph)
         for (size_t k = 0; k < ws.size(); ++k) { const Wave* w = ws[k]; drawWave(s, *w, v, C, tags, w == prov || (w == latest && !prov), ph, xNext(w), &E.B, &E.alt, E.zDir, E.zI, &hv[k]); }   // (1.7.1) + the live pullback
-    for (const Wave* w : ws) { const auto it = E.pb.find(std::make_pair(w->t0, w->t1)); if (it != E.pb.end()) drawPullback(s, *w, it->second, v, C); }   // (1.10.0)
+    if (SHOW_PB_PROFILE) for (const Wave* w : ws) { const auto it = E.pb.find(std::make_pair(w->t0, w->t1)); if (it != E.pb.end()) drawPullback(s, *w, it->second, v, C); }   // (1.10.0)
     drawPocLines(s, E, v, C, ws);   // (1.8.0) the extended wave POC lines, behind the candles
     drawTags(s, v, C, tags);   // (1.4.2, 2026-10-29 13:02 CT) the right-edge tags are back exactly as 1.3.4 drew them: the "WPOC" Rassul asked for in the Levels column was the WEEKLY POC, not this indicator's   // was (1.4.0): not drawn
     if (v.zigzag) drawZigzag(s, E, v, C);

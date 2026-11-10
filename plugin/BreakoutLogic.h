@@ -123,7 +123,9 @@ namespace bko {
 #ifndef BKO_RLY_ON_DEFAULT
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
-static const char* const VERSION = "1.16.1";   // (1.16.1, 2026-11-10) no Rly within 6 bars before / 1 after a drawn Cob (either direction)
+static const bool SHOW_PDOC = false;   // (1.17.0) Pdoc removed from the chart (decided + recorded as before)
+static const char* const VERSION = "1.17.0";   // (1.17.0, 2026-11-10 Rassul 13:09-13:11 CT "so we have 2 signals, PB and Pboc, pboc replaces pb if it is true", "remove pdoc") Pdoc is no longer drawn (a BO / BD pullback that was Pdoc shows Pb; a Rly Pdoc shows nothing); the decision is still recorded
+// was "1.16.1";   // (1.16.1, 2026-11-10) no Rly within 6 bars before / 1 after a drawn Cob (either direction)
 // was "1.16.0";   // (1.16.0, 2026-11-09 Rassul 21:06-21:08 CT "see this pb, it is too low", "all pullbacks including pb pboc pdoc are required to be at least 38.2%") every pullback label (Pb / Pboc / Pdoc after a BO / BD and the no-BO Rly Pboc / Pdoc) needs its pivot to retrace >= 38.2% of its wave (wave origin -> wave end, the same bars as the PB POC gate); shallower pivots get no label and do not count toward the 2 per wave   // was "1.15.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") a Pdoc / ENT at the PB POC counts only when that frozen PB POC is at / beyond 38.2% of the wave (wpc::pbPocDeep); otherwise Pb (or Pboc)   // was "1.14.0":   // (1.14.0, 2026-11-09 Rassul 16:34 CT) the plugin posts fact kind E (EntryFacts.h) - no rule here changed   // was "1.13.0":   // (1.13.0, 2026-11-09 Rassul 14:09-14:12 CT "Lets also have PBoc. It happens when the pb is testing only the wave pb poc ... for rally also", name "pdoc where d represent the developing poc") a Pb / Rly pullback whose pivot bar straddles the pullback's DEVELOPING volume POC (lsWavePOC's wave PB POC: 38.2% gate, value at the decision bar) and not the wave POC is drawn "Pdoc"; both -> Pboc   // was "1.12.0":   // (1.12.0, 2026-11-09 Rassul 12:22 "if a pb tags the wave poc with the downpivot at or below the wave poc but the high is above it, then instead of pb, show pboc") a Pb whose pivot bar straddles its BO / BD wave's volume POC (lsWavePOC's rule on IRT's VAP, computed here) is drawn "Pboc"; BPB record + boc; Pb / Rev decisions unchanged
 // was "1.11.1";   // (1.11.1, 2026-11-09 Rassul HG 10:13 "if there is a cob you dont need to show a rly and if there is an lvp, you dont need to show a pb") DISPLAY only: no Rly where lsCobSignal draws a Cob on the same extreme, no Pb where it draws an Lvp on the same pivot (records / Rev / qualification unchanged)
 // was "1.11.0";   // (1.11.0, 2026-11-08 Rassul "add the higher high rule for rly and vice versa") Rly rule 6 HH / LL (RallyLogic 1.4.0), RTH + overnight
@@ -839,14 +841,14 @@ inline Scene layout(const Engine& E, const View& v) {
         if (E.hidePb.count(std::make_pair(P.tp, P.dir))) { ++S.pbHidden; continue; }   // (1.11.1) a drawn Lvp on this pivot: no Pb letter
         const std::map<long long, int>& BC = !E.pbProv.empty() && pp >= E.pbProv.data() && pp <= &E.pbProv.back() ? E.bocProv : E.boc;   // (1.13.0) empty-vector check first (UBSan)
         const auto bc = BC.find(P.tp); const bool oc = bc != BC.end() && bc->second == 1;   // (1.12.0) the Pb on its wave's POC = "Pboc"
-        const bool od = bc != BC.end() && bc->second == 2;                               // (1.13.0) on the developing pullback POC only = "Pdoc"
+        const bool od = SHOW_PDOC && bc != BC.end() && bc->second == 2;                  // (1.13.0) on the developing pullback POC only = "Pdoc"; (1.17.0) not drawn: a plain Pb
         if (E.bocLive && bc == BC.end()) { ++S.pbocWait; continue; }                     // (1.12.0) its wave's VAP not loaded yet: nothing (never Pb -> Pboc)
         const size_t before = S.txt.size(); put(it->second, -P.dir, 2, oc ? "Pboc" : od ? "Pdoc" : nullptr);
         if (S.txt.size() > before && oc) ++S.pbocShown;
         if (S.txt.size() > before && od) ++S.pdocShown;
         if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
     // (1.12.0) the no-BO Rly Pboc: same place / colour as a Pb
-    for (const auto& kv : E.rpbBoc) { if (kv.second != 1 && kv.second != 2) continue; const auto mk = E.rpb.find(kv.first); if (mk == E.rpb.end()) continue; const PbMark& P = mk->second;   // (1.13.0) + Pdoc (2)
+    for (const auto& kv : E.rpbBoc) { if (kv.second != 1 && (kv.second != 2 || !SHOW_PDOC)) continue; /* (1.17.0) a Rly Pdoc is not drawn */ const auto mk = E.rpb.find(kv.first); if (mk == E.rpb.end()) continue; const PbMark& P = mk->second;   // (1.13.0) + Pdoc (2)
         const auto it = idx.find(P.tp); if (it == idx.end()) continue;
         if (E.hidePb.count(std::make_pair(P.tp, P.dir))) { ++S.pbHidden; continue; }   // an Lvp there still wins
         const bool od = kv.second == 2; const size_t before = S.txt.size(); put(it->second, -P.dir, 2, od ? "Pdoc" : "Pboc");
