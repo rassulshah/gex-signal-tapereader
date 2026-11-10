@@ -48,7 +48,7 @@ int main()
     }
     // [3]
     {   const std::string cpp = slurp("../HodLod.cpp"), set = slurp("../HodLodSettings.h");
-        ok(std::string(hl::HL_VERSION) == "2.21.0" && cpp.find("p->setVersion(\"2.17.8\")") != std::string::npos && set.find("PLUGIN_VERSION = \"2.17.8\"") != std::string::npos, "[3] versions 2.17.8 (HL_VERSION, setVersion, settings)");
+        ok(std::string(hl::HL_VERSION) == "2.22.2" && cpp.find("p->setVersion(\"2.17.8\")") != std::string::npos && set.find("PLUGIN_VERSION = \"2.17.8\"") != std::string::npos, "[3] versions 2.17.8 (HL_VERSION, setVersion, settings)");
     }
     std::printf("lsHodLod %s: %d passed, %d failed\n", hl::HL_VERSION, P, F);
     return F ? 1 : 0;
