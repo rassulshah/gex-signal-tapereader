@@ -82,17 +82,27 @@ int main(int argc, char** argv) {
             int poc = 0, hvn = 0, grey = 0, back = 0, text = 0, maxW = 0;
             for (const wpc::Prim& p : s.p) { if (p.k == wpc::Prim::TEXT) ++text; if (p.k != wpc::Prim::FILL) continue; maxW = std::max(maxW, p.x1 - p.x0);
                 poc += p.col == wpc::PB_POC && !p.back; hvn += p.col == wpc::PB_HVN && !p.back; grey += p.col == wpc::mix(0x94A3B8UL, 0x0B0F17UL, wpc::GREY_FADE) && p.back; back += p.back; }
-            const int want = (int)std::lround(std::max(20.0, (v.X(w.i1 + 2) + bw * 0.5) - (v.X(w.i1) - bw * 0.5)));
+            const int want = (int)std::lround(wpc::SIDE_W);   // (1.11.1) the PB POC row = the wave POC row width
             CHECK(poc == 1 && hvn == 0 && grey == 0 && back == 0 && text == 1, "1.11.0 bw " << bw << ": ONLY the white POC row (no HVN " << hvn << ", no grey " << grey << ") + ONE text (the POC lots)");
             {   const wpc::Prim* L = nullptr; const wpc::Prim* R = nullptr; for (const wpc::Prim& p : s.p) { if (p.k == wpc::Prim::TEXT) L = &p; if (p.k == wpc::Prim::FILL && p.col == wpc::PB_POC) R = &p; }
                 bool ascii = L != nullptr; if (L) for (unsigned char ch : L->text) ascii = ascii && ch >= 32 && ch < 127;
                 CHECK(L && R && L->text == wpc::lotsText(F.rows[(size_t)F.poc]) && L->col == wpc::PB_POC && L->role == 1 && ascii && L->y1 <= R->y0 && R->y0 - L->y1 <= 2 && L->x0 == R->x0,
                       "1.10.1 bw " << bw << ": the pullback POC label = its row's lots '" << (L ? L->text : std::string("-")) << "' (" << F.rows[(size_t)F.poc] << "), white, ASCII, just above the row, left-aligned with it"); }
-            CHECK(std::abs(maxW - want) <= 1, "bw " << bw << ": the POC row is " << maxW << " px = " << (bw * 3 >= 20 ? "3 bars" : "the 20 px minimum") << " (" << want << ")");
+            CHECK(std::abs(maxW - want) <= 1, "1.11.1 bw " << bw << ": the PB POC row is " << maxW << " px = the wave POC row width SIDE_W (" << want << ")");
         }
         wpc::PbProf D = F; D.state = wpc::PB_INVALID; wpc::View v; v.first = 0; v.last = 999; v.lastBar = 999; v.bw = 7; v.X = [](int i) { return 40 + (i + 0.5) * 7.0; }; v.Y = [](double tk) { return 800 - (tk - 29700) * 3.0; };
         wpc::Scene s; wpc::drawPullback(s, w, D, v, wpc::Colours()); bool dim = !s.p.empty(); for (const wpc::Prim& p : s.p) dim = dim && p.col != wpc::PB_POC && p.col != wpc::PB_HVN;
         CHECK(dim, "invalid: every row dimmed"); }
+    {   // (1.11.1) PB POC width == the wave POC row width as the wave profile draws it (same View)
+        wpc::Wave w; w.dir = 1; w.i0 = 2; w.i1 = 6; w.p0 = 100; w.p1 = 140; w.e0 = 100; w.rowTicks = 1; w.qWhy = wpc::Q_RLY; w.rows.assign(41, 10); w.rows[20] = 1240; w.maxVol = 1240;
+        wpc::Node nd; nd.tick = 120; nd.vol = 1240; nd.row = 20; nd.rank = 0; w.nodes.push_back(nd);
+        wpc::Engine E; for (int i = 0; i < 30; ++i) { wpc::Bar b; b.t = 1000 + i * 180; b.o = b.c = 110 + i % 7; b.h = b.o + 2; b.l = b.o - 2; E.B.push_back(b); } E.waves.push_back(w);
+        wpc::View v; v.l = 0; v.t = 0; v.r = 1600; v.b = 600; v.first = 0; v.last = 29; v.lastBar = 29; v.bw = 7; v.tick = .25; v.clipL = 0; v.clipR = 1600;
+        v.X = [](int i) { return 40 + (i + 0.5) * 7.0; }; v.Y = [](double tk) { return 600 - (tk - 90) * 6.0; }; v.textW = [](const std::string& s, bool) { return (int)s.size() * 7; };
+        const wpc::Scene S = wpc::layout(E, nullptr, v); int wW = -1; for (const wpc::Prim& p : S.p) if (p.k == wpc::Prim::FILL && p.col == wpc::Colours().cyan) wW = std::max(wW, p.x1 - p.x0);
+        wpc::PbProf P; P.state = wpc::PB_LIVE; P.e0 = 100; P.rowTicks = 1; P.rows.assign(10, 5); P.rows[3] = 50; P.poc = 3; P.lastBar = 10;
+        wpc::Scene s2; wpc::drawPullback(s2, w, P, v, wpc::Colours()); int pW = -1; for (const wpc::Prim& p : s2.p) if (p.k == wpc::Prim::FILL && p.col == wpc::PB_POC) pW = std::max(pW, p.x1 - p.x0);
+        CHECK(wW > 0 && pW > 0 && std::abs(wW - pW) <= 1, "1.11.1: PB POC width " << pW << " px == wave POC row width " << wW << " px"); }
     CHECK(wpc::lotsText(2542) == "2,542" && wpc::lotsText(738) == "738" && wpc::lotsText(1234567) == "1,234,567" && wpc::lotsText(1000) == "1,000", "1.10.1: lots with thousands commas");
     {   // the nudge: a label on top of another text moves up one label height; the wave POC label carries the POC row's lots in the POC colour
         wpc::Wave w; w.dir = 1; w.i0 = 2; w.i1 = 6; w.p0 = 100; w.p1 = 140; w.e0 = 100; w.rowTicks = 1; w.qWhy = wpc::Q_RLY; w.rows.assign(41, 10); w.rows[20] = 1240; w.maxVol = 1240;
@@ -105,7 +115,7 @@ int main(int argc, char** argv) {
         CHECK(L && L->text == "1,240" && L->col == 0x22D3EE, "1.10.1: the wave POC label = its row's lots '" << (L ? L->text : std::string("-")) << "' in the POC colour");
         bool overlap = false; for (const wpc::Prim& a : sc.p) for (const wpc::Prim& b : sc.p) if (&a != &b && a.k == wpc::Prim::TEXT && b.k == wpc::Prim::TEXT && a.role == 1 && a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0) overlap = true;
         CHECK(!overlap, "1.10.1: no lot label on another text"); }
-    CHECK(std::string(wpc::VERSION) == "1.11.0", "version 1.11.0");
+    CHECK(std::string(wpc::VERSION) == "1.11.1", "version 1.11.1");
     std::cout << "test_wavepoc_1100: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

@@ -137,7 +137,7 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.11.0";   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") the wave PB POC = its POC row only (white + lots), shown only when the POC is at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4, 2026-11-09) rebuild only: BreakoutLogic.h 1.14.0 compiled in - nothing changes here (no drawing change)   // was "1.10.3":   // (1.10.3, 2026-11-09) rebuild only: BreakoutLogic.h 1.13.0 (lsBreakout's Pdoc) compiled in - nothing changes here   // was "1.10.2":   // (1.10.2, 2026-11-09) rebuild only: BreakoutLogic.h 1.12.0 (lsBreakout's Pboc) is compiled in for its BO / Rly / Rev decisions - unchanged here (no VAP handed to it, no Pboc)
+static const char* WP_VERSION = "1.11.1";   // (1.11.1, 2026-11-09 Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc") PB POC row width = the wave POC row width   // was "1.11.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") the wave PB POC = its POC row only (white + lots), shown only when the POC is at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4, 2026-11-09) rebuild only: BreakoutLogic.h 1.14.0 compiled in - nothing changes here (no drawing change)   // was "1.10.3":   // (1.10.3, 2026-11-09) rebuild only: BreakoutLogic.h 1.13.0 (lsBreakout's Pdoc) compiled in - nothing changes here   // was "1.10.2":   // (1.10.2, 2026-11-09) rebuild only: BreakoutLogic.h 1.12.0 (lsBreakout's Pboc) is compiled in for its BO / Rly / Rev decisions - unchanged here (no VAP handed to it, no Pboc)
 // was "1.10.1";   // (1.10.1) lot labels on the wave POC + pullback POC rows
 // was "1.10.0";   // (1.10.0) the pullback profile (PULLBACK-PROFILE-SPEC.md) + thicker wave POC / HVN rows
 // was "1.9.7";   // (1.9.7) CL / HG drew nothing: safe x range, guarded column read, draw / error counters in the status, the VAP retry runs every calc
@@ -742,6 +742,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setDescription("LRA Wave POC v1.10.4 - (1.10.1) lots labelled on the wave POC and pullback POC rows. (1.10.0) after a BO / Rly wave, the PULLBACK profile once it has retraced 38.2% (POC white, 2 HVNs orange, ends at a Rev / a new BO or Rly / a trade beyond the extreme / 16:00; dimmed on a close beyond the origin). each CoB, Rly or BO / BD wave's VOLUME profile (lsCobSignal / lsBreakout rules, computed natively; the live wave once its BO / CoB fired) right of a green / red spine at its start: the POC in cyan with a P (and its line to the right) wherever it is, and up to 2 HVNs in the wave colour with an H = the 2 biggest nodes in their own distributions at or below the break level (an up wave: the high of its BO candle - lsBreakout's rule - or, with no BO, of the bar that broke the prior pivot high; down waves mirror it) - pullback entries. No settings.");
-    p->setVersion("1.11.0");   // = WP_VERSION (gex-build reads this literal)
+    p->setVersion("1.11.1");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }

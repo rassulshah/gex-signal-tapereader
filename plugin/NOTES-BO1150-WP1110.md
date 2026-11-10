@@ -27,3 +27,8 @@
 - NOT done tonight: Wave POC building VAP from live MBO prints (needs the DEPTH_ORDER trade/fill action mapping and
   bar mapping; too big to do safely tonight). Wave profiles on a chart whose IRT VAP is missing stay pending; the
   VAP_SRC status line says so. The real fix for HG is IRT-side (the HG chart has no VAP even for today's bars).
+
+## 4. lsWavePOC 1.11.1 (Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc")
+- The PB POC row is drawn at the wave POC row's width (SIDE_W = 38 px, the same constant the wave profile's POC row
+  uses), anchored at the pivot bar; replaces "to the 2nd candle after the top pivot, min 20 px". White + lots label kept.
+- Test: test_wavepoc_1100 asserts PB POC width == the wave POC row width drawn by wpc::layout (38 px).

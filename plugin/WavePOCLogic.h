@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.11.0";   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") wave PB POC = the POC row only (no HVN / grey rows), shown only when the POC itself sits at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4) rebuild with BreakoutLogic.h 1.14.0, no change   // was "1.10.3":   // (1.10.3) rebuild with BreakoutLogic.h 1.13.0, no change   // was "1.10.2":   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
+static const char* const VERSION = "1.11.1";   // (1.11.1, 2026-11-09 Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc") the PB POC row = the wave POC row width (SIDE_W), anchored at the pivot bar   // was "1.11.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") wave PB POC = the POC row only (no HVN / grey rows), shown only when the POC itself sits at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4) rebuild with BreakoutLogic.h 1.14.0, no change   // was "1.10.3":   // (1.10.3) rebuild with BreakoutLogic.h 1.13.0, no change   // was "1.10.2":   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
 // was "1.10.1";   // (1.10.1, Rassul 12:10 + v7 "above") the lots on the wave POC row (POC colour) and the pullback POC row (white), just above them
 // was "1.10.0";   // (1.10.0, 2026-11-09 Rassul "build") the PULLBACK PROFILE (pullbackOf / drawPullback) + the wave POC / HVN rows thicker
 // was "1.9.7";   // (1.9.7, 2026-11-09) host-side fixes only (CL / HG no drawing, VAP retry)
@@ -1270,7 +1270,7 @@ static const unsigned long PB_POC = 0xFFFFFF, PB_HVN = 0xF59E0B;
 inline void drawPullback(Scene& s, const Wave& w, const PbProf& P, const View& v, const Colours& C) {
     if (P.state == PB_NONE || P.rows.empty() || P.poc < 0) return;
     if (P.lastBar < v.first || w.i1 > v.last) return;
-    const double x0 = v.X(w.i1) - v.bw * 0.5, xr = v.X(w.i1 + 2) + v.bw * 0.5, W = std::max(PB_MIN_W, xr - x0);
+    const double x0 = v.X(w.i1) - v.bw * 0.5, W = SIDE_W;   // (1.11.1, 2026-11-09 Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc") = the wave POC row (PR = SIDE_W at the POC); was: to the 2nd bar after the pivot, min PB_MIN_W
     const long long mx = P.rows[(size_t)P.poc]; if (mx <= 0) return;
     const bool dim = P.state == PB_INVALID;
     auto col = [&](unsigned long c) { return dim ? mix(c, C.bg, 0.4) : c; };
