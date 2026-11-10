@@ -103,7 +103,7 @@ int main() {
     CHECK(lab(R, T("07:45", d9)) == "Pb", "ES 07:45 Pb (got " + lab(R, T("07:45", d9)) + ")");
     CHECK(lab(R, T("23:24", d8)) == "Pboc", "ES 23:24 Pboc");
     CHECK(lab(R, T("00:33", d9)) == "Pboc", "ES 00:33 Pboc");
-    CHECK(lab(R, T("20:03", d8)) == "Pb", "ES 20:03 Pb");
+    CHECK(lab(R, T("20:03", d8)) == "-", "ES 20:03 no label (1.16.0: the pullback retraced < 38.2% of its BD wave)");
     CHECK(lab(R, T("00:45", d9)) == "Pb", "ES 00:45 Pb (1.15.0: its PB POC 7429.75 is shallower than 38.2%; got " + lab(R, T("00:45", d9)) + ")");
     CHECK(!R.E.dpoc.count(T("00:45", d9)), "00:45 no PB POC kept (shallow)");
     CHECK(std::fabs(R.E.bocPoc[T("07:15", d9)] - 7453.75) < 1e-9, "07:15 wave POC 7453.75 unchanged");

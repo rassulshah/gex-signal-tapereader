@@ -123,7 +123,7 @@ namespace bko {
 #ifndef BKO_RLY_ON_DEFAULT
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
-static const char* const VERSION = "1.15.0";   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") a Pdoc / ENT at the PB POC counts only when that frozen PB POC is at / beyond 38.2% of the wave (wpc::pbPocDeep); otherwise Pb (or Pboc)   // was "1.14.0":   // (1.14.0, 2026-11-09 Rassul 16:34 CT) the plugin posts fact kind E (EntryFacts.h) - no rule here changed   // was "1.13.0":   // (1.13.0, 2026-11-09 Rassul 14:09-14:12 CT "Lets also have PBoc. It happens when the pb is testing only the wave pb poc ... for rally also", name "pdoc where d represent the developing poc") a Pb / Rly pullback whose pivot bar straddles the pullback's DEVELOPING volume POC (lsWavePOC's wave PB POC: 38.2% gate, value at the decision bar) and not the wave POC is drawn "Pdoc"; both -> Pboc   // was "1.12.0":   // (1.12.0, 2026-11-09 Rassul 12:22 "if a pb tags the wave poc with the downpivot at or below the wave poc but the high is above it, then instead of pb, show pboc") a Pb whose pivot bar straddles its BO / BD wave's volume POC (lsWavePOC's rule on IRT's VAP, computed here) is drawn "Pboc"; BPB record + boc; Pb / Rev decisions unchanged
+static const char* const VERSION = "1.16.0";   // (1.16.0, 2026-11-09 Rassul 21:06-21:08 CT "see this pb, it is too low", "all pullbacks including pb pboc pdoc are required to be at least 38.2%") every pullback label (Pb / Pboc / Pdoc after a BO / BD and the no-BO Rly Pboc / Pdoc) needs its pivot to retrace >= 38.2% of its wave (wave origin -> wave end, the same bars as the PB POC gate); shallower pivots get no label and do not count toward the 2 per wave   // was "1.15.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") a Pdoc / ENT at the PB POC counts only when that frozen PB POC is at / beyond 38.2% of the wave (wpc::pbPocDeep); otherwise Pb (or Pboc)   // was "1.14.0":   // (1.14.0, 2026-11-09 Rassul 16:34 CT) the plugin posts fact kind E (EntryFacts.h) - no rule here changed   // was "1.13.0":   // (1.13.0, 2026-11-09 Rassul 14:09-14:12 CT "Lets also have PBoc. It happens when the pb is testing only the wave pb poc ... for rally also", name "pdoc where d represent the developing poc") a Pb / Rly pullback whose pivot bar straddles the pullback's DEVELOPING volume POC (lsWavePOC's wave PB POC: 38.2% gate, value at the decision bar) and not the wave POC is drawn "Pdoc"; both -> Pboc   // was "1.12.0":   // (1.12.0, 2026-11-09 Rassul 12:22 "if a pb tags the wave poc with the downpivot at or below the wave poc but the high is above it, then instead of pb, show pboc") a Pb whose pivot bar straddles its BO / BD wave's volume POC (lsWavePOC's rule on IRT's VAP, computed here) is drawn "Pboc"; BPB record + boc; Pb / Rev decisions unchanged
 // was "1.11.1";   // (1.11.1, 2026-11-09 Rassul HG 10:13 "if there is a cob you dont need to show a rly and if there is an lvp, you dont need to show a pb") DISPLAY only: no Rly where lsCobSignal draws a Cob on the same extreme, no Pb where it draws an Lvp on the same pivot (records / Rev / qualification unchanged)
 // was "1.11.0";   // (1.11.0, 2026-11-08 Rassul "add the higher high rule for rly and vice versa") Rly rule 6 HH / LL (RallyLogic 1.4.0), RTH + overnight
 // was "1.10.0";   // (1.10.0, 2026-11-08 Rassul ES Sun night "those waves are rallies") overnight Rly judged from the 17:00 CT open (RallyLogic 1.3.0: the 02:00 CT cutoff removed), same rules
@@ -265,7 +265,16 @@ struct Engine {
     std::map<long long, double> dpoc;          // (1.13.0) Pb / Rly pullback pivot time -> its developing pullback POC (price) when drawn Pdoc
     long long pdocNoVap = 0;                   // (1.13.0) status: last pass, pullback pivots waiting for the pullback bars' VAP
     long long noVapPb = 0, noVapRly = 0;       // (1.15.0) decided WITHOUT VAP after VAP_WAIT_BARS (cumulative): plain Pb drawn / Rly pullback no label
-    static const int VAP_WAIT_BARS = 3;        // (1.15.0) bars after the decision bar to wait for IRT's VAP; then decide with what is known (never switched later)
+    static const int VAP_WAIT_BARS = 3;
+    static constexpr double PB_MIN_RETRACE = 0.382;   // (1.16.0) a pullback pivot must retrace >= 38.2% of its wave (origin -> end)
+    long long shallowPb = 0, shallowRly = 0;   // (1.16.0) pullback pivots skipped as shallower than 38.2% (this pass)
+    // (1.16.0) dir > 0 (up wave: org = its low, ext = its high, the pivot LOW pv): (ext - pv) >= 0.382 x (ext - org); dir < 0 mirror
+    static bool deepPb(int dir, double org, double ext, double pv) {
+        if (!std::isfinite(org) || !std::isfinite(ext) || !std::isfinite(pv)) return false;
+        const double move = dir > 0 ? ext - org : org - ext; if (!(move > 0)) return false;
+        const double back = dir > 0 ? ext - pv : pv - ext;
+        return back >= PB_MIN_RETRACE * move - 1e-9 * (std::fabs(move) + 1.0);
+    }        // (1.15.0) bars after the decision bar to wait for IRT's VAP; then decide with what is known (never switched later)
     std::set<long long> rpbWait;               // (1.12.0) Rly pullback pivots waiting for VAP (nothing drawn)
     std::map<long long, RecL> rpbL, rroL;      // (1.12.0) BPO| / BRO| record lines
     std::map<long long, RevMark> rro;          // (1.12.0) the thrust off a Rly Pboc (recorded only)      // (1.12.0) status: last pass, Pbs whose wave had a bar without VAP / no POC
@@ -557,7 +566,7 @@ struct Engine {
         zzPb.push_back(p);
     }
     void pbPass() {
-        pivots(); zzPivots(); pbProv.clear(); bocProv.clear(); bocNoVap = 0; bocNoPoc = 0; pdocNoVap = 0;
+        pivots(); zzPivots(); pbProv.clear(); bocProv.clear(); bocNoVap = 0; bocNoPoc = 0; pdocNoVap = 0; shallowPb = 0; shallowRly = 0;
         const std::vector<Pivot>& piv = zzPb;                            // (1.9.3) Pb / origin pivots = the chart's ZigZag (shadows the member)
         const int n = (int)bars.size(); if (n < 3 || piv.empty()) return;
         std::vector<long long> T((size_t)n); for (int k = 0; k < n; ++k) T[(size_t)k] = bars[(size_t)k].t;
@@ -609,6 +618,12 @@ struct Engine {
                 // (1.8.0) the pullback pivot bar overlaps the BO / BD candle: BO = pivot LOW below the candle's high and the pivot bar's high above
                 // its low (BD mirror: pivot HIGH above the candle's low, the pivot bar's low below its high); was (1.6.0) within ATR / 3 of the broken pivot
                 if (!(p.l < c.h && p.h > c.l)) continue;
+                {   // (1.16.0) >= 38.2% of the BO / BD wave (tw0 = its start pivot bar, topT = its end bar; the origin pivot price when tw0 is unknown)
+                    const int a0 = tw0 ? idxOf(tw0) : -1, a1 = idxOf(topT);
+                    const double wOrg = a0 >= 0 ? (dir > 0 ? bars[(size_t)a0].l : bars[(size_t)a0].h) : (haveOrg ? org : NAN);
+                    const double wExt = a1 >= 0 ? (dir > 0 ? bars[(size_t)a1].h : bars[(size_t)a1].l) : NAN;
+                    if (!deepPb(dir, wOrg, wExt, dir > 0 ? p.l : p.h)) { ++shallowPb; continue; }   // too shallow: no label, not counted toward the 2
+                }
                 if (pb.count(p.t)) continue;                                  // decided before: never again
                 { int nb = 0; for (const auto& kv : pb) if (kv.second.t0 == D.t0) ++nb;
                   for (const PbMark& x : pbProv) { if (x.t0 == D.t0) ++nb; }
@@ -669,6 +684,7 @@ struct Engine {
                 if (!stop) for (size_t r = q + 1; r < R.size(); ++r) if (R[r]->te > W.te && R[r]->te <= p.t && R[r]->tc <= td) { stop = true; break; }
                 if (stop) break;
                 if (p.type != want) continue;
+                { const int pq = idxOf(p.t); if (pq < 0 || !deepPb(dir, org, ext, dir > 0 ? bars[(size_t)pq].l : bars[(size_t)pq].h)) { ++shallowRly; continue; } }   // (1.16.0) >= 38.2% of the Rly wave, else no label (not counted toward the 2)
                 if (++seen > 2) break;
                 if (rpb.count(p.t)) continue;                                        // judged before: never again
                 PbMark m; m.tp = p.t; m.t0 = W.te; m.tc = p.tc; m.td = td; m.dir = dir; m.tw0 = W.t0; m.tw1 = W.te;
@@ -904,7 +920,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
         int ru = 0; for (const auto& kv : E.rpbBoc) ru += kv.second == 1;
         s += "RLY_PBOC,(1.12.0) no-BO Rly waves: POC at / below 50% (down: at / above) + the pullback pivot bar straddles it (2 per wave),judged " + std::to_string(E.rpb.size()) + ",Pboc " + std::to_string(ru) + ",waiting for VAP " + std::to_string(E.rpbWait.size()) + ",thrusts recorded (BRO) " + std::to_string(E.rro.size()) + "\n"; }
     {   int bd = 0, rd = 0; for (const auto& kv : E.boc) bd += kv.second == 2; for (const auto& kv : E.rpbBoc) rd += kv.second == 2;
-        s += "PDOC,(1.13.0) Pb / Rly pullback pivot bar straddles the pullback's DEVELOPING volume POC (lsWavePOC's wave PB POC: >= 38.2% retrace, value at the decision bar) and not the wave POC -> Pdoc (both -> Pboc),decided Pdoc after BO / BD " + std::to_string(bd) + ",Rly " + std::to_string(rd) + ",waiting for pullback VAP " + std::to_string(E.pdocNoVap) + ",decided without VAP after " + std::to_string(bko::Engine::VAP_WAIT_BARS) + " bars: Pb " + std::to_string(E.noVapPb) + " / Rly " + std::to_string(E.noVapRly) + ",PB POC only when >= 38.2% deep (1.15.0)" + ",drawn now Pdoc " + std::to_string(last.pdocShown) + " (of them Rly " + std::to_string(last.rpdocShown) + ")\n"; }
+        s += "PDOC,(1.13.0) Pb / Rly pullback pivot bar straddles the pullback's DEVELOPING volume POC (lsWavePOC's wave PB POC: >= 38.2% retrace, value at the decision bar) and not the wave POC -> Pdoc (both -> Pboc),decided Pdoc after BO / BD " + std::to_string(bd) + ",Rly " + std::to_string(rd) + ",waiting for pullback VAP " + std::to_string(E.pdocNoVap) + ",decided without VAP after " + std::to_string(bko::Engine::VAP_WAIT_BARS) + " bars: Pb " + std::to_string(E.noVapPb) + " / Rly " + std::to_string(E.noVapRly) + ",PB POC only when >= 38.2% deep (1.15.0)" + ",pullbacks shallower than 38.2% of their wave (no label, 1.16.0): after BO / BD " + std::to_string(E.shallowPb) + " / Rly " + std::to_string(E.shallowRly) + ",drawn now Pdoc " + std::to_string(last.pdocShown) + " (of them Rly " + std::to_string(last.rpdocShown) + ")\n"; }
     s += "HIDDEN,(1.11.1) Rly under a Cob " + std::to_string(last.rlyHidden) + ",Pb under an Lvp " + std::to_string(last.pbHidden) + " (in view; still recorded),Cob extremes " + std::to_string(E.hideRly.size() / 3) + ",Lvp pivots " + std::to_string(E.hidePb.size()) + "\n";
     return s;
 }

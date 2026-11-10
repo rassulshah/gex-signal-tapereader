@@ -9,6 +9,7 @@ $CXX0 -I.. -o /tmp/bo100_parity test_bo100_parity.cpp && /tmp/bo100_parity
 $CXX0 -O1 -I.. -o /tmp/bo120_week test_bo120_week.cpp && /tmp/bo120_week
 $CXX -O1 -I.. -o /tmp/bo180_pb test_bo180_pb.cpp && /tmp/bo180_pb
 $CXX -O1 -I.. -o /tmp/bo1140_entry test_bo1140_entry.cpp && /tmp/bo1140_entry   # (1.14.0) fact kind E = only drawn decided Pb / Pboc / Pdoc, none hidden / provisional, no repaint (real ES 11-09 / 10-21 / 11-04)
+$CXX -O1 -I.. -o /tmp/bo1160_retrace test_bo1160_retrace.cpp && /tmp/bo1160_retrace   # (1.16.0) every Pb / Pboc / Pdoc (BO / BD and Rly) pivot >= 38.2% of its wave, incl. the no-VAP fallback
 $CXX -O1 -I.. -o /tmp/bo1130_pdoc test_bo1130_pdoc.cpp && /tmp/bo1130_pdoc   # (1.13.0) Pdoc + Pboc (replaces test_bo1120_pboc: 00:45 / 08:30 are Pdoc now), real ES 11-09 / 10-21 / 11-04
 $CXX -O1 -I.. -o /tmp/bo190_rev test_bo190_rev.cpp && /tmp/bo190_rev   # (1.9.0) Rev   # (1.8.0) Pb: overlap the BO candle, max 2, green / red close pivots (test_bo160_pb = the 1.6.0 rule, retired: kept, not run)
 $CXX -O1 -I.. -o /tmp/bo161_onebar test_bo161_onebar.cpp && /tmp/bo161_onebar
