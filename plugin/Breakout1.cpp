@@ -4,7 +4,7 @@
  *  = Breakout.cpp built with BKO_ONE_BAR: the BO / BD pivots, the waves, Rly and the Pb pivots come from the 1-bar High / Low ZigZag
  *  instead of the 3-bar one; every other rule is lsBreakout 1.6.0's (follow-through incl. the equal-close tie, the zigzag carried across
  *  the 17:00 CT break, Pb within 1/3 ATR of the broken pivot, no BI). Records: lsFlexLevels\Breakout1 (zz_rev_bars 1).
- *  gex-build reads the version from this line:  p->setVersion("1.14.0")
+ *  gex-build reads the version from this line:  p->setVersion("1.15.0")
  ********************************************************************************/
 #define BKO_ONE_BAR 1
 #include "Breakout.cpp"

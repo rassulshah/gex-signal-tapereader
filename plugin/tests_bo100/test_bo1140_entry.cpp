@@ -2,7 +2,7 @@
 // pullback whose pivot bar straddles the pullback's DEVELOPING volume POC (lsWavePOC's wave PB POC: >= 38.2% retrace, its value at the decision
 // bar) and NOT the wave POC is drawn "Pdoc"; both -> Pboc. Built on test_bo1120_pboc.cpp (real ES 3m bars + VAP, bar-by-bar replay):
 //  [1] ES 11-09: 07:15 / 23:24 / 00:33 Pboc, 07:45 / 20:03 Pb, 00:45 Pdoc (PB POC 7429.75; the wave POC 7426.75 not tested) - checked by hand in python
-//  [2] ES 10-21: BO Pdoc 01:06 / 02:12 / 14:30; Rly Pdoc 22:12 / 00:12 / 12:03; Rly Pboc 08:15 / 03:27 unchanged; ES 11-04: Rly 08:30 Pdoc (wave POC above
+//  [2] (1.15.0: Pdoc only with a PB POC >= 38.2% deep) ES 10-21: BD Pdoc 02:12 / 14:30 (01:06 now Pb; Rly 22:12 / 00:12 / 12:03 no label); was: BO Pdoc 01:06 / 02:12 / 14:30; Rly Pdoc 22:12 / 00:12 / 12:03; Rly Pboc 08:15 / 03:27 unchanged; ES 11-04: Rly 08:30 Pdoc (wave POC above
 //      50%: no Pboc), 08:36 no label; BO Pdoc 01:21
 //  [3] every drawn Pdoc: the wave POC NOT straddled, the PB POC straddled; every Pboc: the wave POC straddled (Pboc wins)
 //  [4] no repaint: no confirmed label ever changes; the pullback's VAP missing -> nothing drawn, then Pdoc once (never Pb -> Pdoc)
@@ -78,7 +78,7 @@ static void freplay(FRun& R, const Fix& X, int from, int vapAtStep = -1, long lo
         for (const auto& d : drawn) if (!fk.count(d)) ++R.noFact;
     }
 }
-static void checks(const FRun& R, const char* tag) {
+static void checks(const FRun& R, const char* tag, bool wantPdoc = true) {
     const std::string t = tag;
     CHECK(R.orphan == 0, t + ": every fact is a drawn decided label with the drawn text");
     CHECK(R.noFact == 0, t + ": every drawn decided label has its fact");
@@ -96,15 +96,15 @@ static void checks(const FRun& R, const char* tag) {
         const int pk = barOf(R.E, tp); if (pk >= 0) { const bko::In& pv = R.E.bars[(size_t)pk]; CHECK(std::fabs(f.hi - (f.side > 0 ? pv.l - 0.25 : pv.h + 0.25)) < 1e-9, t + ": stop beyond the pivot bar"); }
         CHECK(f.state == 1 && f.proven == 0, t + ": decided fact");
     }
-    CHECK(pd > 0, t + ": at least one Pdoc fact");
+    CHECK(wantPdoc ? pd > 0 : pd == 0, t + (wantPdoc ? ": at least one Pdoc fact" : ": no Pdoc fact (1.15.0: every PB POC shallower than 38.2%)"));
 }
 int main() {
     const Fix A = load("pboc_es1109.txt", 0.25); CHECK(A.B.size() > 300, "ES 11-09 bars");
-    FRun R; freplay(R, A, 3); checks(R, "ES 11-09");
+    FRun R; freplay(R, A, 3); checks(R, "ES 11-09", false);
     const long d9 = A.B.back().days;
     {   const std::vector<sb::Fact> F = efx::facts(R.E, nullptr); bool p0045 = false;
-        for (const sb::Fact& f : F) { const auto a = R.E.pb.find(T("00:45", d9)); if (a != R.E.pb.end() && f.bar == a->second.td && f.code == 3) { p0045 = true; CHECK(std::fabs(f.lo - 7429.75) < 1e-9, "00:45 Pdoc fact PB POC 7429.75"); } }
-        CHECK(p0045, "00:45 Pdoc has its fact");
+        for (const sb::Fact& f : F) { const auto a = R.E.pb.find(T("00:45", d9)); if (a != R.E.pb.end() && f.bar == a->second.td) { p0045 = true; CHECK(f.code % 10 != 3 && f.lo == 0, "00:45 (1.15.0) Pb fact, no PB POC: its PB POC 7429.75 is shallower than 38.2%"); } }
+        CHECK(p0045, "00:45 has its (Pb) fact");
         bko::Engine E = R.E; E.hidePb.insert(std::make_pair(T("00:45", d9), -1)); const std::vector<sb::Fact> G = efx::facts(E, nullptr); bool still = false;
         for (const sb::Fact& f : G) { const auto a = E.pb.find(T("00:45", d9)); if (a != E.pb.end() && f.bar == a->second.td) still = true; }
         CHECK(!still && G.size() + 1 == F.size(), "Lvp-hidden Pdoc: no fact (the others stay)");
@@ -113,7 +113,7 @@ int main() {
         bko::Engine Q = R.E; const auto a = Q.pb.find(T("00:45", d9)); if (a != Q.pb.end()) Q.boc.erase(a->first);
         CHECK(efx::facts(Q, nullptr).size() + 1 == F.size(), "boc unknown with VAP live (not drawn): no fact"); }
     {   FRun Q; int stepAt = 0; for (int k = 0; k < (int)A.B.size(); ++k) if (A.B[(size_t)k].t == T("01:03", d9)) stepAt = k + 2;
-        freplay(Q, A, 3, stepAt, T("00:15", d9), T("00:51", d9)); checks(Q, "ES 11-09 late VAP"); }
+        freplay(Q, A, 3, stepAt, T("00:15", d9), T("00:51", d9)); checks(Q, "ES 11-09 late VAP", false); }
     {   const Fix X = load("pboc_es1021.txt", 0.25); FRun Q; freplay(Q, X, 3); checks(Q, "ES 10-21");
         int rly = 0; for (const sb::Fact& f : efx::facts(Q.E, nullptr)) if (f.code > 10) ++rly; CHECK(rly > 0, "ES 10-21: Rly Pboc / Pdoc facts"); }
     {   const Fix X = load("pboc_es1104.txt", 0.25); FRun Q; freplay(Q, X, 3); checks(Q, "ES 11-04"); }

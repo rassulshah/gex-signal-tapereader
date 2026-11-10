@@ -88,7 +88,7 @@ static int parity(const bko::Engine& E, const char* nm) {
     for (const auto& kv : E.pb) one(kv.second);
     for (const auto& kv : E.rpb) one(kv.second);
     std::printf("  %s parity: %d of %d pullback pivots with a PB POC agree with lsWavePOC\n", nm, same, checked);
-    CHECK(checked > 0 && same == checked, std::string(nm) + " PB POC parity with lsWavePOC (" + std::to_string(same) + "/" + std::to_string(checked) + ")");
+    CHECK(same == checked, std::string(nm) + " PB POC parity with lsWavePOC (" + std::to_string(same) + "/" + std::to_string(checked) + ")");
     return checked;
 }
 static Fix FX;   // the fixture the parity run reads VAP from
@@ -104,20 +104,20 @@ int main() {
     CHECK(lab(R, T("23:24", d8)) == "Pboc", "ES 23:24 Pboc");
     CHECK(lab(R, T("00:33", d9)) == "Pboc", "ES 00:33 Pboc");
     CHECK(lab(R, T("20:03", d8)) == "Pb", "ES 20:03 Pb");
-    CHECK(lab(R, T("00:45", d9)) == "Pdoc", "ES 00:45 Pdoc (got " + lab(R, T("00:45", d9)) + ")");
-    CHECK(R.E.dpoc.count(T("00:45", d9)) && std::fabs(R.E.dpoc.at(T("00:45", d9)) - 7429.75) < 1e-9, "00:45 PB POC 7429.75 (python check)");
+    CHECK(lab(R, T("00:45", d9)) == "Pb", "ES 00:45 Pb (1.15.0: its PB POC 7429.75 is shallower than 38.2%; got " + lab(R, T("00:45", d9)) + ")");
+    CHECK(!R.E.dpoc.count(T("00:45", d9)), "00:45 no PB POC kept (shallow)");
     CHECK(std::fabs(R.E.bocPoc[T("07:15", d9)] - 7453.75) < 1e-9, "07:15 wave POC 7453.75 unchanged");
     invariants(R, "ES 11-09");
     {   const auto L = R.E.pbL.find(T("00:45", d9)); CHECK(L != R.E.pbL.end(), "BPB line 00:45");
-        if (L != R.E.pbL.end()) { int nf = 1; for (char c : L->second.line) nf += c == '|'; CHECK(nf == 18, "BPB 18 fields"); CHECK(L->second.line.find("|0|7426.75|1|7429.75") != std::string::npos, "BPB pdoc 1 + PB POC: " + L->second.line);
+        if (L != R.E.pbL.end()) { int nf = 1; for (char c : L->second.line) nf += c == '|'; CHECK(nf == 18, "BPB 18 fields"); CHECK(L->second.line.find("|0|7426.75|0|") != std::string::npos, "BPB 00:45 Pb, pdoc 0 (1.15.0): " + L->second.line);
             CHECK(!bko::recKey(L->second.line).empty(), "BPB 18-field key"); }
         const auto M = R.E.pbL.find(T("07:15", d9)); CHECK(M != R.E.pbL.end() && M->second.line.find("|1|7453.75|0|") != std::string::npos, "BPB 07:15 Pboc pdoc 0"); }
     // [4] the pullback's VAP (00:15-00:51) missing until 01:03 closes: 00:45 nothing, then Pdoc once
     {   Run Q; int stepAt = 0; for (int k = 0; k < (int)A.B.size(); ++k) if (A.B[(size_t)k].t == T("01:03", d9)) stepAt = k + 2;
         replay(Q, A, 3, stepAt, T("00:15", d9), T("00:51", d9));
-        CHECK(lab(Q, T("00:45", d9)) == "Pdoc", "late pullback VAP: 00:45 drawn once as Pdoc (got " + lab(Q, T("00:45", d9)) + ")");
+        CHECK(lab(Q, T("00:45", d9)) == "Pb", "late pullback VAP: 00:45 drawn once as Pb (got " + lab(Q, T("00:45", d9)) + ")");
         CHECK(Q.switches == 0, "late pullback VAP: no Pb -> Pdoc switch");
-        const auto L = Q.E.pbL.find(T("00:45", d9)); CHECK(L != Q.E.pbL.end() && L->second.line.find("|1|7429.75") != std::string::npos, "late VAP: BPB written once with pdoc 1"); }
+        const auto L = Q.E.pbL.find(T("00:45", d9)); CHECK(L != Q.E.pbL.end() && L->second.line.find("|1|") == std::string::npos, "late VAP (1.15.0: decided 3 bars after its decision without VAP): BPB written once, no Pboc / Pdoc: " + (L != Q.E.pbL.end() ? L->second.line : std::string("none"))); }
     {   bko::Engine E = R.E; E.hidePb.insert(std::make_pair(T("00:45", d9), -1)); const bko::Scene S = draw(E); bool has = false;
         for (const bko::Txt& t : S.txt) if (t.kind == 2 && E.bars[(size_t)t.bar].t == T("00:45", d9)) has = true;
         CHECK(!has && S.pbHidden > 0, "Lvp hides Pdoc"); }
@@ -126,10 +126,10 @@ int main() {
         std::printf("ES 10-21:\n"); for (const auto& kv : Q.first) std::printf("  %s %s\n", hmOf(kv.first).c_str(), kv.second.c_str());
         CHECK(lab(Q, T("08:15", d)) == "Pboc", "10-21 08:15 Rly Pboc (unchanged)");
         CHECK(lab(Q, T("03:27", d)) == "Pboc", "10-21 03:27 Rly Pboc (unchanged)");
-        CHECK(lab(Q, T("01:06", d)) == "Pdoc" && lab(Q, T("02:12", d)) == "Pdoc" && lab(Q, T("14:30", d)) == "Pdoc", "10-21 BD Pdoc 01:06 / 02:12 / 14:30");
-        CHECK(lab(Q, T("22:12", dp)) == "Pdoc" && lab(Q, T("00:12", d)) == "Pdoc" && lab(Q, T("12:03", d)) == "Pdoc", "10-21 Rly Pdoc 22:12 / 00:12 / 12:03");
+        CHECK(lab(Q, T("01:06", d)) == "Pb" && lab(Q, T("02:12", d)) == "Pdoc" && lab(Q, T("14:30", d)) == "Pdoc", "10-21 (1.15.0) 01:06 Pb (shallow PB POC), BD Pdoc 02:12 / 14:30");
+        CHECK(lab(Q, T("22:12", dp)) == "-" && lab(Q, T("00:12", d)) == "-" && lab(Q, T("12:03", d)) == "-", "10-21 (1.15.0) Rly 22:12 / 00:12 / 12:03 no label (shallow PB POC)");
         int bpd = 0; for (const auto& kv : Q.E.rpbL) if (kv.second.line.compare(0, 4, "BPD|") == 0) { ++bpd; CHECK(!bko::recKey(kv.second.line).empty(), "BPD key " + kv.second.line); }
-        CHECK(bpd == 3, "10-21 3 BPD lines");
+        CHECK(bpd == 0, "10-21 (1.15.0) no BPD lines");
         invariants(Q, "ES 10-21"); }
     {   const Fix X = load("pboc_es1104.txt", 0.25); Run Q; replay(Q, X, 3); const long d = X.B.back().days, dp = d - 1;
         std::printf("ES 11-04:\n"); for (const auto& kv : Q.first) std::printf("  %s %s\n", hmOf(kv.first).c_str(), kv.second.c_str());
@@ -139,7 +139,23 @@ int main() {
         CHECK(lab(Q, T("19:27", dp)) == "Pboc" && lab(Q, T("13:15", d)) == "Pboc", "11-04 Pboc 19:27 / 13:15 unchanged");
         invariants(Q, "ES 11-04"); }
     {   const char* fs[3] = { "pboc_es1109.txt", "pboc_es1021.txt", "pboc_es1104.txt" };
-        for (const char* f : fs) { FX = load(f, 0.25); Run Q; replay(Q, FX, 3); withVap(Q.E); parity(Q.E, f); Q.E.vapAt = nullptr; } }
+        int tot = 0; for (const char* f : fs) { FX = load(f, 0.25); Run Q; replay(Q, FX, 3); withVap(Q.E); tot += parity(Q.E, f); Q.E.vapAt = nullptr; }
+        CHECK(tot > 0, "PB POC parity checked on at least one deep PB POC (" + std::to_string(tot) + ")"); }
+    // [9] (1.15.0) VAP never arrives (Rassul's HG chart): every BO Pb is decided as a plain "Pb" VAP_WAIT_BARS bars after its decision bar, once, never switched
+    {   const long long NEVER = 0x7fffffffffffffffLL;
+        Run Q; replay(Q, A, 3, 1 << 30, 0, NEVER);
+        int pbs = 0, drawnPb = 0, other = 0; for (const auto& kv : Q.E.pb) { ++pbs; const std::string l = lab(Q, kv.first); if (l == "Pb") ++drawnPb; else if (l != "-") ++other; }
+        CHECK(pbs > 0 && other == 0, "no VAP: no Pboc / Pdoc ever (" + std::to_string(other) + ")");
+        CHECK(drawnPb >= pbs - (int)Q.E.pbPend.size() - (int)Q.E.hidePb.size() && drawnPb > 0, "no VAP: every decided Pb drawn as Pb (" + std::to_string(drawnPb) + " of " + std::to_string(pbs) + ")");
+        CHECK(Q.switches == 0, "no VAP: no label ever changed");
+        CHECK(Q.E.noVapPb > 0, "no VAP: status count of Pbs decided without VAP (" + std::to_string(Q.E.noVapPb) + ")");
+        const auto m = R.E.pb.find(T("07:15", d9));
+        if (m != R.E.pb.end()) { const int di = barOf(R.E, m->second.td);
+            for (int extra = 2; extra <= 3; ++extra) { Fix Y = A; Y.B.resize((size_t)std::min((int)A.B.size(), di + extra + 1)); Run Z; replay(Z, Y, 3, 1 << 30, 0, NEVER);
+                const std::string l = lab(Z, T("07:15", d9));
+                if (extra == 2) CHECK(l == "-", "no VAP: 07:15 not drawn 2 bars after its decision (got " + l + ")");
+                else CHECK(l == "Pb", "no VAP: 07:15 drawn Pb 3 bars after its decision (got " + l + ")"); } }
+        else CHECK(false, "07:15 Pb exists"); }
     std::printf("test_bo1130_pdoc: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

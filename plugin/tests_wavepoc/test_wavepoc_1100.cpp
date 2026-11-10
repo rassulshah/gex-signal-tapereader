@@ -45,7 +45,9 @@ int main(int argc, char** argv) {
         const wpc::PbProf F = wpc::pullbackOf(w, ES.B, ES.at(T("2026-11-09 09:00")), esBo, esRly, none, vapOf(ES));
         CHECK(F.state == wpc::PB_FROZEN && F.endBar == ES.at(T("2026-11-09 08:33")) && std::string(F.why) == "new BO / BD", "ES frozen at the 08:33 BO (" << F.why << ", end " << (F.endBar >= 0 ? HM(ES.B[(size_t)F.endBar].t) : "-") << ")");
         const double poc = px(F.e0 + F.poc);
-        std::cout << "  ES final pullback POC " << poc << " HVN"; for (int h : F.hvn) std::cout << " " << px(F.e0 + h); std::cout << " retrace " << F.retrace << "\n";
+        std::cout << "  ES final pullback POC " << poc << " retrace " << F.retrace << "\n";
+        CHECK(F.hvn.empty(), "1.11.0 ES: no HVNs (POC only)");
+        CHECK(poc <= 7463.70, "1.11.0 ES: POC " << poc << " is at / beyond the 38.2% level 7463.70 -> shown");
         CHECK(std::fabs(poc - 7462.75) <= 0.5, "ES final POC = the mockup's 7462.75 (+- 2 ticks: 3-min bars from the bar after the pivot vs the mockup's 1-min) -> " << poc);
         CHECK(F.retrace > 0.74 && F.retrace < 0.77, "ES pullback 75% deep (low 7451.25)"); }
     // ---- ES invalidation on a CLOSE: wave 7456.25 (07:44, bar 07:45) -> 7475.00 (07:51); 08:31 traded 7455.75 (one tick under), the bar closed above ----
@@ -61,10 +63,9 @@ int main(int argc, char** argv) {
     {   const wpc::Wave w = wave(NQ, "2026-11-09 07:27", "2026-11-09 07:57", 109008, 109399);
         CHECK(w.i0 >= 0 && w.i1 > w.i0, "NQ wave bars found");
         const wpc::PbProf F = wpc::pullbackOf(w, NQ.B, NQ.at(T("2026-11-09 09:00")), nqBo, nqRly, none, vapOf(NQ));
-        CHECK(F.state == wpc::PB_FROZEN && std::string(F.why) == "traded beyond the wave extreme" && F.endBar == NQ.at(T("2026-11-09 08:30")), "NQ ends when price trades above 27349.75 (08:30 bar) (" << F.why << ")");
-        const double poc = px(F.e0 + F.poc);
-        std::cout << "  NQ final pullback POC " << poc << " HVN"; for (int h : F.hvn) std::cout << " " << px(F.e0 + h); std::cout << " retrace " << F.retrace << "\n";
-        CHECK(std::fabs(poc - 27317.5) <= 2.5, "NQ final POC = the mockup's 27317.50 (+- 10 ticks) -> " << poc);
+        CHECK(F.endBar == NQ.at(T("2026-11-09 08:30")), "NQ ends when price trades above 27349.75 (08:30 bar)");
+        // (1.11.0) the NQ pullback POC 27317.50 sits ABOVE the 38.2% level (27312.41): shallower than 38.2% -> no PB POC shown
+        CHECK(F.state == wpc::PB_NONE && F.poc < 0 && std::string(F.why) == "POC shallower than 38.2%", "1.11.0 NQ: POC 27317.50 shallower than 38.2% (27312.41) -> nothing drawn (" << F.why << ")");
         CHECK(F.retrace > 0.58 && F.retrace < 0.61, "NQ pullback 59% deep (low 27291.75)"); }
     // ---- a wave that is neither BO nor Rly (CoB only): no pullback profile ----
     {   wpc::Wave w = wave(ES, "2026-11-09 06:27", "2026-11-09 06:51", 29772, 29906); w.qWhy = wpc::Q_COBW;
@@ -82,7 +83,7 @@ int main(int argc, char** argv) {
             for (const wpc::Prim& p : s.p) { if (p.k == wpc::Prim::TEXT) ++text; if (p.k != wpc::Prim::FILL) continue; maxW = std::max(maxW, p.x1 - p.x0);
                 poc += p.col == wpc::PB_POC && !p.back; hvn += p.col == wpc::PB_HVN && !p.back; grey += p.col == wpc::mix(0x94A3B8UL, 0x0B0F17UL, wpc::GREY_FADE) && p.back; back += p.back; }
             const int want = (int)std::lround(std::max(20.0, (v.X(w.i1 + 2) + bw * 0.5) - (v.X(w.i1) - bw * 0.5)));
-            CHECK(poc == 1 && hvn == (int)F.hvn.size() && grey > 10 && text == 1, "bw " << bw << ": 1 white POC row, " << F.hvn.size() << " orange HVN rows in front, " << grey << " grey rows behind, ONE text (the POC lots)");
+            CHECK(poc == 1 && hvn == 0 && grey == 0 && back == 0 && text == 1, "1.11.0 bw " << bw << ": ONLY the white POC row (no HVN " << hvn << ", no grey " << grey << ") + ONE text (the POC lots)");
             {   const wpc::Prim* L = nullptr; const wpc::Prim* R = nullptr; for (const wpc::Prim& p : s.p) { if (p.k == wpc::Prim::TEXT) L = &p; if (p.k == wpc::Prim::FILL && p.col == wpc::PB_POC) R = &p; }
                 bool ascii = L != nullptr; if (L) for (unsigned char ch : L->text) ascii = ascii && ch >= 32 && ch < 127;
                 CHECK(L && R && L->text == wpc::lotsText(F.rows[(size_t)F.poc]) && L->col == wpc::PB_POC && L->role == 1 && ascii && L->y1 <= R->y0 && R->y0 - L->y1 <= 2 && L->x0 == R->x0,
@@ -104,7 +105,7 @@ int main(int argc, char** argv) {
         CHECK(L && L->text == "1,240" && L->col == 0x22D3EE, "1.10.1: the wave POC label = its row's lots '" << (L ? L->text : std::string("-")) << "' in the POC colour");
         bool overlap = false; for (const wpc::Prim& a : sc.p) for (const wpc::Prim& b : sc.p) if (&a != &b && a.k == wpc::Prim::TEXT && b.k == wpc::Prim::TEXT && a.role == 1 && a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0) overlap = true;
         CHECK(!overlap, "1.10.1: no lot label on another text"); }
-    CHECK(std::string(wpc::VERSION) == "1.10.4", "version 1.10.4");
+    CHECK(std::string(wpc::VERSION) == "1.11.0", "version 1.11.0");
     std::cout << "test_wavepoc_1100: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

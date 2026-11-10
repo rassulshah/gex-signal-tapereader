@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.10.4";   // (1.10.4) rebuild with BreakoutLogic.h 1.14.0, no change   // was "1.10.3":   // (1.10.3) rebuild with BreakoutLogic.h 1.13.0, no change   // was "1.10.2":   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
+static const char* const VERSION = "1.11.0";   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") wave PB POC = the POC row only (no HVN / grey rows), shown only when the POC itself sits at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4) rebuild with BreakoutLogic.h 1.14.0, no change   // was "1.10.3":   // (1.10.3) rebuild with BreakoutLogic.h 1.13.0, no change   // was "1.10.2":   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
 // was "1.10.1";   // (1.10.1, Rassul 12:10 + v7 "above") the lots on the wave POC row (POC colour) and the pullback POC row (white), just above them
 // was "1.10.0";   // (1.10.0, 2026-11-09 Rassul "build") the PULLBACK PROFILE (pullbackOf / drawPullback) + the wave POC / HVN rows thicker
 // was "1.9.7";   // (1.9.7, 2026-11-09) host-side fixes only (CL / HG no drawing, VAP retry)
@@ -443,6 +443,11 @@ static const int LOT_H = 11;   // the label box height (the host's 9 px font)
 // It is INVALID (dimmed, never updated again) when a bar CLOSES beyond the origin (up: below the start pivot). The frozen / invalid
 // profile holds the volume BEFORE the ending bar. One pullback per wave. Deterministic from the bars + VAP: a restart recomputes the same.
 static const double PB_GATE = 0.382;     // the retrace that shows it
+// (1.11.0) the PB POC counts only when the POC PRICE itself is at / beyond the 38.2% retracement of the wave (origin L0 -> end H)
+inline bool pbPocDeep(int dir, long long H, long long L0, long long pocMid) {
+    const long long move = dir > 0 ? H - L0 : L0 - H; if (move <= 0) return false;
+    return (double)(dir > 0 ? H - pocMid : pocMid - H) >= PB_GATE * (double)move - 1e-9;
+}
 static const double PB_MIN_W = 20;       // px: the POC row's minimum width (Rassul 09:5x)
 static const int PB_MAX_BARS = 400;      // scan cap after the pivot
 static const long long PB_SESSION_END = 16 * 3600;   // 16:00 CT (bar times are CT wall clock)
@@ -487,8 +492,8 @@ inline PbProf pullbackOf(const Wave& w, const std::vector<Bar>& B, int lastClose
     buildRows(per, lo, hi, P.rowTicks, P.e0, P.rows); if (P.rows.empty()) { P.state = PB_NONE; return P; }
     for (int j = 0; j < (int)P.rows.size(); ++j) if (P.poc < 0 || P.rows[(size_t)j] > P.rows[(size_t)P.poc]) P.poc = j;
     if (P.poc < 0 || P.rows[(size_t)P.poc] <= 0) { P.state = PB_NONE; return P; }
-    const long long m2 = median2(P.rows), floor1 = m2 > 0 ? m2 / 2 + 1 : 1;
-    for (int r : pickNodes(P.rows, floor1, 64)) { if (r == P.poc) continue; P.hvn.push_back(r); if ((int)P.hvn.size() == HVN_MAX) break; }   // Wave POC's node rule
+    // (1.11.0) POC only (no HVNs), and only when the POC price is at / beyond 38.2% of the wave; re-checked every bar while it develops
+    if (!pbPocDeep(d, H, L0, P.e0 + (long long)P.poc * P.rowTicks + P.rowTicks / 2)) { if (P.state != PB_INVALID) { P.state = PB_NONE; P.why = "POC shallower than 38.2%"; } P.poc = -1; return P; }   // invalid keeps its state / why; nothing drawn either way
     return P;
 }
 
@@ -1269,11 +1274,11 @@ inline void drawPullback(Scene& s, const Wave& w, const PbProf& P, const View& v
     const long long mx = P.rows[(size_t)P.poc]; if (mx <= 0) return;
     const bool dim = P.state == PB_INVALID;
     auto col = [&](unsigned long c) { return dim ? mix(c, C.bg, 0.4) : c; };
-    for (int pass = 0; pass < 2; ++pass)
+    for (int pass = 1; pass < 2; ++pass)   // (1.11.0) the POC row only: no grey rows, no HVN rows
         for (int j = 0; j < (int)P.rows.size(); ++j) {
             const long long q = P.rows[(size_t)j]; if (q <= 0) continue;
-            const bool node = j == P.poc || std::find(P.hvn.begin(), P.hvn.end(), j) != P.hvn.end();
-            if (node != (pass == 1)) continue;
+            const bool node = j == P.poc;
+            if (!node) continue;
             const double lo = (double)(P.e0 + (long long)j * P.rowTicks), top = v.Y(lo + P.rowTicks - 0.5), bot = v.Y(lo - 0.5);
             Prim p; p.k = Prim::FILL; p.x0 = ci(x0); p.x1 = ci(x0 + std::max(node ? 6.0 : 1.0, W * (double)q / (double)mx));
             if (node) { const double yc = (top + bot) / 2.0, h = std::max(3.0, bot - top + 2.0); p.y0 = ci(yc - h / 2.0); p.y1 = ci(yc + h / 2.0); p.col = col(j == P.poc ? PB_POC : PB_HVN); p.back = false; }
@@ -1349,6 +1354,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, int spb, 
         std::snprintf(a, sizeof a, "%.2f", ad * E.tick); o << ",down " << a << " pts (" << nd << " waves),store " << storeWhy << ",kept up " << E.store->up.size() << " down " << E.store->dn.size() << "\n";
     }
     o << "VAP,missing bars " << E.C.vapMissing << ",faults " << E.C.vapFault << ",retries " << vapRetries << "\n";
+    o << "VAP_SRC,irt (IRT volume at price only; bars without it stay pending - a chart with no VAP draws no wave profile; MBO-built VAP not implemented yet),PB POC (1.11.0) POC row only when the POC is >= 38.2% deep\n";
     long long nodes = 0; for (const Wave& w : E.waves) nodes += (long long)w.nodes.size();
     o << "NODES,total " << nodes << ",drawn now " << (sc ? sc->nodesDrawn : 0) << ",waves drawn " << (sc ? sc->wavesDrawn : 0) << ",tags " << (sc ? sc->tagsShown : 0)
       << ",tags hidden (no room right of the last bar) " << (sc ? sc->tagsHidden : 0) << ",provisional " << (provShown ? "yes" : "no") << "\n";
