@@ -44,10 +44,10 @@ typedef unsigned long Colour;   // IRT COLOR, 0x00RRGGBB
 
 // 1.4.2's fixed colours - the defaults (Rassul 2026-10-09 13:41 his settings window colours; 14:40 -1 SD light red)
 static const Colour D_VWAP = 0x00FF80FFUL;   // magenta
-static const Colour D_P1   = 0x00008000UL;   // +1 SD green
-static const Colour D_M1   = 0x00FF8080UL;   // -1 SD light red
-static const Colour D_P2   = 0x0000FF00UL;   // +2 SD lime
-static const Colour D_M2   = 0x00FF0000UL;   // -2 SD red
+static const Colour D_P1   = 0x004B5563UL;   // (1.9.0) dark grey   // was 0x00008000UL +1 SD green
+static const Colour D_M1   = 0x004B5563UL;   // (1.9.0) dark grey   // was 0x00FF8080UL -1 SD light red
+static const Colour D_P2   = 0x004B5563UL;   // (1.9.0) dark grey   // was 0x0000FF00UL +2 SD lime
+static const Colour D_M2   = 0x004B5563UL;   // (1.9.0) dark grey   // was 0x00FF0000UL -2 SD red
 static const Colour D_PRTH = 0x006B7280UL;   // prior RTH VWAP, dim grey
 static const Colour D_PIV_UP = 0x00FACC15UL; // (1.8.6) yellow  // was 0x0022C55EUL // (1.8.1) pivot VWAP while the bar closed above it - green
 static const Colour D_PIV_DN = 0x00FACC15UL; // (1.8.6) yellow  // was 0x00EF4444UL // (1.8.1) pivot VWAP while the bar closed below it - red
@@ -63,7 +63,7 @@ enum { K_VWAP = 0, K_P1, K_M1, K_P2, K_M2, K_N };
 #ifdef SVS_TEST_ALL_ON_DEFAULTS
 #define SVS_DEF_ON true
 #else
-#define SVS_DEF_ON false
+#define SVS_DEF_ON true   // (1.9.0, Rassul 2026-11-10 09:10 CT) session VWAP (magenta) + the +-1 / +-2 SD bands (dark grey) on by default
 #endif
 #endif
 // (1.8.4, 2026-10-28 16:26 CT Rassul "the chart is extremely messy" + "also remove the Pivot VWAP line") the pivot VWAP is OFF by default too:
@@ -72,7 +72,7 @@ enum { K_VWAP = 0, K_P1, K_M1, K_P2, K_M2, K_N };
 #ifdef SVS_TEST_ALL_ON_DEFAULTS
 #define SVS_PIV_DEF true
 #else
-#define SVS_PIV_DEF true   // (1.8.6, Rassul 2026-10-29 09:46 CT) pivot VWAP on by default, yellow, no bands
+#define SVS_PIV_DEF false   // (1.9.0) the pivot VWAP is no longer drawn   // was true (1.8.6)
 #endif
 #endif
 struct Style {
@@ -88,7 +88,7 @@ struct Style {
     // (1.8.3, 2026-10-28 14:08 CT Rassul "only 1 vwap level should be displayed" - the 3-bar anchored pivot VWAP) defaults: ONLY the
     // pivot VWAP is drawn (green above / red below, 2 px); session VWAP, the +-1 / +-2 SD bands, the overnight set and the prior RTH
     // VWAP are off (their colours / widths keep their values, so ticking a box brings the line back in its usual style)
-    Style() : vwapW(D_VWAP_W), bandW(D_BAND_W), on(SVS_DEF_ON), prior(SVS_DEF_ON), pivot(SVS_PIV_DEF), priorCol(D_PRTH), pivUp(D_PIV_UP), pivDn(D_PIV_DN), pivW(D_PIV_W) {
+    Style() : vwapW(D_VWAP_W), bandW(D_BAND_W), on(false), prior(false),   /* (1.9.0) overnight set + prior RTH VWAP no longer drawn */ pivot(SVS_PIV_DEF), priorCol(D_PRTH), pivUp(D_PIV_UP), pivDn(D_PIV_DN), pivW(D_PIV_W) {
         const Colour d[K_N] = { D_VWAP, D_P1, D_M1, D_P2, D_M2 };
         for (int k = 0; k < K_N; ++k) { show[k] = SVS_DEF_ON; col[k] = d[k]; }
     }
