@@ -37,7 +37,8 @@
 #include <cstdlib>
 #include "Top10Stable.h"
 namespace tbk {
-static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-11-11 Rassul 10:10 CT "keep top 3 per side + liquidity near levels"): levelLiq() - the real resting size at / within 2 ticks of each given level price (key / volume / CR0 / PS0), at any distance, with the lower 1.5x size bar and no top-3 cap
+static const char* const VERSION = "1.2.1";   // 1.2.1 (2026-11-11 Rassul 11:01 CT "i want it upto 1 atr beyond , so ovh will get it if it is from the ovnh to ovnh+1atr and ovl ... ovnl to ovnl-1atr"): levelLiq takes a side per level: +1 a high (the level up to 1 ATR above it), -1 a low (down to 1 ATR below it), 0 within tol ticks
+// was "1.2.0";   // 1.2.0 (2026-11-11 Rassul 10:10 CT "keep top 3 per side + liquidity near levels"): levelLiq() - the real resting size at / within 2 ticks of each given level price (key / volume / CR0 / PS0), at any distance, with the lower 1.5x size bar and no top-3 cap
 // was "1.1.1";   // 1.1.1 (2026-11-09): Why::small -> tooSmall ("small" is a Windows SDK macro = char; MSVC build failed)
 enum Act { ADD = 0, MOD = 1, DEL = 2, FILL = 3, CLEAR = 9 };
 struct Params {
@@ -158,16 +159,21 @@ public:
     // the top book (rested showMs or more, not re-pricing, not the first insideSkip levels, not a banned price, its biggest order not in a
     // just-placed cluster) - but at ANY distance and with the lower size bar levelX (1.5x the side's median real level; the top book needs 2.0x). One Lvl per level that has one (rank = 100 + the level's index).
     // Call after evaluate() (it uses that pass's inside).
-    std::vector<Lvl> levelLiq(long long now, const std::vector<long long>& lv, int tol = 2) const {
+    // (1.2.1) dirs (same length as lv, else all 0): +1 = a HIGH level: the band is the level up to 1 ATR ABOVE it (beyond it); -1 = a LOW
+    // level: the level down to 1 ATR BELOW it; 0 = within tol ticks either side. The ATR is this engine's own (atrTicks).
+    std::vector<Lvl> levelLiq(long long now, const std::vector<long long>& lv, const std::vector<int>& dirs = std::vector<int>(), int tol = 2) const {
         std::vector<Lvl> out; if (lv.empty() || O.empty() || (insideB <= 0 && insideA <= 0)) return out;
+        const long long atrT = std::max(1LL, (long long)std::llround(atrTicks())); const bool haveD = dirs.size() == lv.size();
+        std::vector<long long> bl(lv.size()), bh(lv.size());                  // each level's band [bl, bh] in ticks
+        for (size_t i = 0; i < lv.size(); ++i) { const int d = haveD ? dirs[i] : 0; bl[i] = d == 2 ? lv[i] - atrT : d > 0 ? lv[i] : d < 0 ? lv[i] - atrT : lv[i] - tol; bh[i] = d == 2 ? lv[i] + atrT : d > 0 ? lv[i] + atrT : d < 0 ? lv[i] : lv[i] + tol; }   // 2 = 1 ATR either side (Rassul 11:02 CT "actually make + or - 1 ATR")
         struct Agg { long long real = 0, big = 0; int n = 0; bool clus = false, s20 = false; };
         std::map<long long, Agg> A;                                           // key(side, px) of the prices within tol of a level
-        long long lo = lv[0], hi = lv[0]; for (long long p : lv) { lo = std::min(lo, p); hi = std::max(hi, p); }
+        long long lo = bl[0], hi = bh[0]; for (size_t i = 0; i < lv.size(); ++i) { lo = std::min(lo, bl[i]); hi = std::max(hi, bh[i]); }
         const long long s20 = P.rth ? P.s20Rth : P.s20On;
-        for (const auto& kv : O) { const Ord& o = kv.second; if (o.sz <= 0 || o.px < lo - tol || o.px > hi + tol) continue;
+        for (const auto& kv : O) { const Ord& o = kv.second; if (o.sz <= 0 || o.px < lo || o.px > hi) continue;
             const long long ins = o.side == 0 ? insideB : insideA; if (ins <= 0) continue;
             const long long d = o.side == 0 ? ins - o.px : o.px - ins; if (d < P.insideSkip) continue;
-            bool nearLv = false; for (long long p : lv) if (o.px >= p - tol && o.px <= p + tol) { nearLv = true; break; }
+            bool nearLv = false; for (size_t i = 0; i < lv.size(); ++i) if (o.px >= bl[i] && o.px <= bh[i]) { nearLv = true; break; }
             if (!nearLv || banned.count(key(o.side, o.px))) continue;
             if (now - o.tRest < P.showMs) continue;
             int mv = 0; for (long long t : o.moves) if (now - t <= P.quoteWinMs) ++mv;
@@ -175,7 +181,7 @@ public:
             Agg& g = A[key(o.side, o.px)]; g.real += o.sz; ++g.n; if (o.sz > g.big) { g.big = o.sz; g.clus = o.clustered; }
             if (s20 > 0 && o.sz >= s20 && o.nMoves == 0 && now - o.tRest >= P.stationaryMs) g.s20 = true; }
         for (size_t i = 0; i < lv.size(); ++i) { const Agg* best = nullptr; long long bk = 0;
-            for (const auto& kv : A) { const long long px = pxOf(kv.first); if (px < lv[i] - tol || px > lv[i] + tol || kv.second.clus || kv.second.real <= 0) continue;
+            for (const auto& kv : A) { const long long px = pxOf(kv.first); if (px < bl[i] || px > bh[i] || kv.second.clus || kv.second.real <= 0) continue;
                 if (!best || kv.second.real > best->real || (kv.second.real == best->real && std::llabs(px - lv[i]) < std::llabs(pxOf(bk) - lv[i]))) { best = &kv.second; bk = kv.first; } }
             if (!best) continue;
             { const double md = medNow[sideOf(bk)]; if (md > 0 && (double)best->real < P.levelX * md) continue; }

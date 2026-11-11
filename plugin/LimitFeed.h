@@ -21,7 +21,8 @@
 #include <vector>
 #include <sys/stat.h>
 namespace lpf {
-static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-11-11): + the level liquidity rows (TopBook 1.2.0 levelLiq) as facts code 7, state = the level's index + 1
+static const char* const VERSION = "1.1.1";   // 1.1.1: each level's side (TopBook 1.2.1) and name; rowNames = the level name of each level liquidity row
+// was "1.1.0";   // 1.1.0 (2026-11-11): + the level liquidity rows (TopBook 1.2.0 levelLiq) as facts code 7, state = the level's index + 1
 // was "1.0.0";
 static const int SLICE_MAX = 5000; static const long long SLICE_MS = 8, WAIT_MS = 60000, SILENT_MS = 120000, RECONNECT_MS = 300000, GUARD_STALE_S = 2 * 3600;
 inline long long realMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -37,7 +38,8 @@ struct Feed {
     long long openMs = -1, lastResubMs = -1, lastEventMs = -1, events = 0, faults = 0, capHits = 0, reconnects = 0, lastReconnectMs = -1, tradeKey = -1, lastTradeMs = -1;
     std::string ident, market, via, state = "not opened"; tbk::Engine tb; long long evalMs = -1, modelMs = -100000, modelStamp = -2; bool modelLive = false;
     std::vector<sb::Fact> facts; bool haveFacts = false; std::string tbLine;
-    std::vector<long long> levelTicks; int levelRows = 0;   // (1.1.0) the host's level prices (ticks) for the level liquidity rows; rows posted in the last pass
+    std::vector<long long> levelTicks; std::vector<int> levelDirs; std::vector<std::string> levelNames; std::map<long long, std::string> rowNames; int levelRows = 0;   // (1.1.1) rowNames: price tick * 2 + side -> the level's name
+      // (1.1.0) the host's level prices (ticks) for the level liquidity rows; rows posted in the last pass
     Feed() {} Feed(const Feed&) = delete; Feed& operator=(const Feed&) = delete; ~Feed() { delete dbo; }
     void closeFeed() { delete dbo; dbo = nullptr; attempt = 0; flag = -1; dead = false; openMs = lastResubMs = lastEventMs = -1; via.clear(); }
     void identity(const std::string& id, const std::string& mkt) {
@@ -102,10 +104,12 @@ struct Feed {
         for (const tbk::Lvl& L : v) { sb::Fact x; x.bar = (long long)L.orders; x.lo = x.hi = (double)L.px * tick; x.side = L.side == 0 ? 1 : -1; x.val = (double)L.lots; x.code = L.rank; x.state = 0;
             x.proven = (L.single ? 2 : 0) + (L.s20 ? 4 : 0) + 8 * (L.realPct >= 0 ? L.realPct + 1 : 0); facts.push_back(x); }
         levelRows = 0;                                                         // (1.1.0) level liquidity: not a price the top 3 already show
-        if (!levelTicks.empty()) for (const tbk::Lvl& L : tb.levelLiq(now, levelTicks)) { bool dup = false; for (const tbk::Lvl& T : v) if (T.side == L.side && T.px == L.px) dup = true;
+        if (rowNames.size() > 256) rowNames.clear();
+        if (!levelTicks.empty()) for (const tbk::Lvl& L : tb.levelLiq(now, levelTicks, levelDirs)) { bool dup = false; for (const tbk::Lvl& T : v) if (T.side == L.side && T.px == L.px) dup = true;
             if (dup) continue;
             sb::Fact x; x.bar = (long long)L.orders; x.lo = x.hi = (double)L.px * tick; x.side = L.side == 0 ? 1 : -1; x.val = (double)L.lots; x.code = 7; x.state = L.rank - 100 + 1;
-            x.proven = (L.single ? 2 : 0) + (L.s20 ? 4 : 0); facts.push_back(x); ++levelRows; }
+            x.proven = (L.single ? 2 : 0) + (L.s20 ? 4 : 0); facts.push_back(x); ++levelRows;
+            const size_t li = (size_t)(L.rank - 100); if (li < levelNames.size()) rowNames[L.px * 2 + L.side] = levelNames[li]; }
         { sb::Fact h; h.code = 99; h.val = (double)tb.orders(); h.state = tb.orders() > 0 ? 1 : 0; facts.push_back(h); }
         haveFacts = true; tbLine = tb.statusLine();
     }
