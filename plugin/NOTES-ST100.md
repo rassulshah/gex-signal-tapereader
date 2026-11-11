@@ -1,0 +1,35 @@
+# lsStepTrend 1.0.0 "Step Trend" (2026-11-11)
+
+## What he asked (CT)
+- 2026-11-10 22:28 "I am also interested in a stepwise trend indicator. It looks at the hourly bar and the current zig zag rotation (going up or down), if the hourly close and high are above the prior hourly close or high, it considers this an hourly breakout and on the 3min ltf chart the level drawn is on the prior hourly bar high."
+- 22:31 - 23:20 mockup rounds: "first show the 1 hour chart on top and then the 3 min chart below it with zig zags"; "those hourly highs should be coming from the top of the waves"; "they should be connected steps"; "get rid of the labels"; "did you put the zig zag wave rotation requirement" (his 60-min ZigZag: Use High / Low, Min Price Change 1 Bars); "connect the tops without going across"; "once it steps up, the prior high becomes support, so you can extend it as a subtle dashed line, not too thick".
+- 23:53 "build" -> Step Trend indicator, clock hours (asked: clock hours vs hours from the session open).
+- 2026-11-11 00:08 "when the rotation is up and the hourly bar closes are above prior bar highs the lines are green, and if its vice versa, do you know to make them red" (yes, mirrored). 00:11 "the bar closing higher needs to be green and vice versa" -> the breakout hour must itself be a green (up) / red (down) candle (body rule).
+
+## What it does
+On the price chart (a period that divides the hour; his is 3 min). No text, no hovers, no settings.
+- HOUR: clock hours of the chart's own candles (IRT stamps a candle with its END; the candle belongs to the hour its START is in). Closed when a later candle exists.
+- STEP UP (green): the hour closes above the prior hour's high, is a green candle, and the hourly ZigZag (High / Low, 1 bar) is rotating up (or has no rotation yet). Level = the prior hour's high, starting at the candle that made it (the wave top). STEP DOWN (red) is the mirror on the prior hour's low.
+- LINES: from a top straight up (down) to the next level, then flat to the next top (3 px, the new step's colour). The newest level is dashed to the right edge. Once the next step the same way exists, the old level runs on thin (1 px) and dashed in a dimmer green / red until the first candle after the new step's start closes back through it. A dot marks each level's start candle.
+- Never repaints: a step is added when its hour closes; a support line only gets its end, once. (The newest level's dashed line becomes the thin support line when the next step arrives - the same level, a lighter style.)
+- Status file per chart: lsFlexLevels\StepTrend\<MKT>-<seconds>.status.txt (version, rule, candle / hour / step counts, the last 8 steps).
+
+## Files
+plugin: StepTrend.cpp (host), StepTrendLogic.h (stp::Engine + layout, no SDK), StepTrendParams.h (rule 0, rot 1, body 1 for every market; by hand), tests_step/ (t_step.cpp, fx_mockup.txt, ref.js, render_dump.cpp, render.py, wrap_real_sdk.cpp, mock/irtsdk.h).
+tools: gex-build.next.bat (the `call :one StepTrend lsStepTrend ...` line + the status list).
+LRA: analytics/lra/step_trend_score.py + analytics/test_step_trend_score.py + test_step_trend_fx.txt; parts.json part "STEP TREND"; setup_scorecard line.
+
+## Tests (all pass)
+- tests_step/t_step.cpp, ASan / UBSan, -Werror: 130 checks. PARITY: the engine gives exactly the steps of the mockup's own code (ref.js) on the 7 real chart days (ES Nov 10 day + evening, NQ / GC / CL Nov 9 and 10), both rules, rotation on and off = 28 cases incl. start candles and support ends. BODY rule. NO REPAINT candle by candle + a restart after any candle. FORMING (a step only when the hour is complete). ties, session gap, out-of-order candle, rotation. LAYOUT. HOST on the mock SDK: candle by candle = the engine; drawing only flats and risers, green / red, widths 3 / 1, inside the pane, clipped to the visible candles; status file; changed history; two charts on one DLL; symbol change; a 7-minute chart (nothing drawn, said in the status file); unreadable candles; no tick; one candle; no visible range; a host with no slot; 7,600 candles (re-feed of the last 5,000). VERSIONS.
+- MinGW against the REAL irtsdk.h (-Dsmall=char): 0 errors, 0 warnings outside the SDK.
+- render check: render_dump + render.py = the plugin's own draw list on the ES and CL days, compared with the mockup (same steps, same shape).
+- analytics/test_step_trend_score.py: 6 tests (walk() == the mockup's steps on the same fixture, no repaint, body rule, follow / retest, nightly files, judge needs both halves).
+
+## First nightly run (stored 3-min bars, all sessions, 36 - 56 days per market)
+Follow (2 ATR further before 2 ATR back, 60 min from the hour's close): ES 49% (419) vs any hour 48%; NQ 53% vs 51%; CL 53% vs 52%; GC 48% vs 52%; HG 48% vs 52%; NG 46% vs 50%; 6E 52% vs 53%. The level was retested after 60 - 66% of steps and held on 34 - 42% of the retests. No challenger passed. Status LEARNING everywhere: the steps are a trend map, not a proven signal.
+
+## Risks / not verified (needs his IRT)
+- The look on the real chart: line widths, the hand-drawn dashes of the newest level, the thin P_DASH support line, the dot size, colours against his background.
+- That IRT's hour grouping of his 60-min chart equals clock hours of the 3-min candles (it should: both are clock aligned).
+- IQFeed backfill vs Rithmic live candles can differ by a tick: after a restart a level can sit one tick away from where it was drawn live.
+- Steps older than the last 5,000 candles are not drawn.
