@@ -31,3 +31,14 @@ later: 46-50%). Largest band in reach ON the level: 75% vs 67% close back (small
 1. The look on his wide monitor with real fonts (text width inside short nodes).
 2. "time in the top book" starts when the indicator first sees the level (restart = starts again).
 3. The level badge uses the levels of the Key Levels column; with no ATR yet (first bars) no badge is drawn.
+
+# 2.60.0 (2026-11-10 20:57 CT) - liquidity on the level lines
+Rassul: "we have dim lines right for the levels" / "how would it look if the liquidity was also there on the chart" / "i like it but dont keep the
+amount, because it becomes noisy" (mockup claude.ai/artifact/Fx5CKJkC1mHzj9uyUwWTvn v3).
+- While a node carries a level's badge (the largest node within 1 ATR of that level), the level's dim line is drawn BRIGHT (2 px, green = bids,
+  red = offers) over those candles. No number on the chart. A stretch ends 3 minutes after the node was last seen; stretches are kept for the
+  session while Investor/RT stays open (not stored: after a restart the lines start dim again).
+- test_dealerprofile_2600.cpp 34 / 34 (2.59.0's 32 + the bright stretch on the level's y in the side colour with no amount; the stretch stays
+  after the node leaves). ASan / UBSan clean, MinGW real-SDK syntax 0 errors, settings contract PASS.
+- Not verified on his chart: the look across many candles; the mockup used $-bands from the whole recorded book, the live rule uses his top-book
+  nodes (3 bids + 3 offers), so fewer stretches than the mockup are possible.
