@@ -37,13 +37,14 @@ int main() {
     std::printf("%llu %llu %d %d %zu\n", hashS(s), rec, s.dashes, tx, E.marks.size()); return 0;
 #else
     unsigned long long oh = 0, orec = 0; int od = 0, ot = 0; size_t om = 0; { FILE* f = std::fopen("old.txt", "r"); if (f) { if (std::fscanf(f, "%llu %llu %d %d %zu", &oh, &orec, &od, &ot, &om) != 5) oh = 0; std::fclose(f); } }
-    CHECK(std::string(cab::VERSION) == "1.2.0", "version 1.2.0");
+    CHECK(std::string(cab::VERSION) == "1.2.1", "version 1.2.1");
     CHECK(oh != 0 && ot >= 10 && od > 300, "the 1.1.1 reference loaded: dashes " + std::to_string(od) + ", letters " + std::to_string(ot));
     CHECK(rec == orec && E.marks.size() == om, "[5] the records and decisions are the 1.1.1 ones");
     { const cab::Scene s = cab::layout(E, v); int tx = 0; for (const cab::Prim& p : s.p) tx += p.k == cab::Prim::TEXT;
       CHECK(tx == 0 && s.marksDrawn == 0 && s.marksOff >= ot, "[1] default: no letters (" + std::to_string(s.marksOff) + " switched off)");
-      CHECK(s.dashes == od && s.volDashes == 0 && s.bidTicks == 0 && s.askTicks == 0, "[1] default: the delta POC dashes only"); }
-    { cab::View w = v; w.show.a = w.show.ae = w.show.d = w.show.s = true; const cab::Scene s = cab::layout(E, w);
+      CHECK(s.dashes == 0 && s.volDashes == 0 && s.bidTicks > 300 && s.askTicks > 300, "[1] default (1.2.1): the bid and ask POC ticks only");
+      cab::View o1 = v; o1.show.dPoc = true; o1.show.bPoc = o1.show.aPoc = false; const cab::Scene so = cab::layout(E, o1); CHECK(so.dashes == od && so.bidTicks == 0, "[1] delta POC by setting: the 1.1.1 dashes"); }
+    { cab::View w = v; w.show.a = w.show.ae = w.show.d = w.show.s = true; w.show.dPoc = true; w.show.bPoc = w.show.aPoc = false; const cab::Scene s = cab::layout(E, w);
       CHECK(hashS(s) == oh && s.marksDrawn == ot, "[2] all letters on + delta POC = the 1.1.1 scene exactly"); }
     { const int codes[4] = { cab::A, cab::AE, cab::D, cab::S }; int sum = 0, bad = 0;
       for (int k = 0; k < 4; ++k) { cab::View w = v; w.show.a = k == 0; w.show.ae = k == 1; w.show.d = k == 2; w.show.s = k == 3; const cab::Scene s = cab::layout(E, w);
@@ -59,9 +60,9 @@ int main() {
       for (const cab::Prim& p : s.p) { if (p.col == 0x000000 || p.col == 0xFFFFFF) continue; const double cx = (p.x0 + p.x1) / 2.0; const int j = (int)std::lround((cx - 20.0) / 12.0); const double xc = 20.0 + j * 12.0;
           const bool left = cx < xc && p.x0 >= xc - 6, right = cx > xc && p.x1 <= xc + 6; if (!left && !right) ++out; if ((left && p.col != 0xEF4444) || (right && p.col != 0x22C55E)) ++col; }
       CHECK(s.dashes == 0 && s.volDashes == n && s.bidTicks > 300 && s.askTicks > 300 && out == 0 && col == 0, "[4] ticks outside the body: bid red left, ask green right; volume dash white");
-      cab::View b2 = v; b2.show.vPoc = true; const cab::Scene s2 = cab::layout(E, b2); int wide = 0; for (const cab::Prim& p : s2.p) if (p.col == 0xFFFFFF && p.x1 - p.x0 > 13) ++wide;
+      cab::View b2 = v; b2.show.vPoc = true; b2.show.dPoc = true; b2.show.bPoc = b2.show.aPoc = false; const cab::Scene s2 = cab::layout(E, b2); int wide = 0; for (const cab::Prim& p : s2.p) if (p.col == 0xFFFFFF && p.x1 - p.x0 > 13) ++wide;
       CHECK(wide == same && wide > 0, "[4] a volume dash on the delta POC row is wider (" + std::to_string(wide) + ")"); }
-    { cab::View w = v; w.show = cab::Show(); w.show.dPoc = false; const cab::Scene s = cab::layout(E, w); CHECK(s.p.empty(), "[5] everything off = nothing drawn"); }
+    { cab::View w = v; w.show = cab::Show(); w.show.dPoc = w.show.bPoc = w.show.aPoc = false; const cab::Scene s = cab::layout(E, w); CHECK(s.p.empty(), "[5] everything off = nothing drawn"); }
     std::printf("t_ca120 (lsCandleAbsorb %s): %d passed, %d failed\n", cab::VERSION, passes, fails); return fails ? 1 : 0;
 #endif
 }

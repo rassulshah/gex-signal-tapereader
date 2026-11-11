@@ -55,7 +55,7 @@
 #define CA_SEP "/"
 #endif
 
-static const char* CA_VERSION = "1.2.0";   // (1.2.0, 2026-11-11) settings: a switch per letter (off by default) and per marking (delta POC on)   // was "1.1.1";   // (1.1.1) code one row further out   // was "1.1.0":   // (1.1.0, 2026-11-02 Rassul 13:10 CT) the live mark at the leg extreme's close, repainted until the ZigZag confirms   // was "1.0.1":   // (1.0.1) the Add-window crash fix (SS_SAFE_DIALOG); drawing / rules unchanged   // was "1.0.0"   // = cab::VERSION = the setVersion literal (test_candleabsorb_host checks)
+static const char* CA_VERSION = "1.2.1";   // (1.2.1) bid + ask POC ticks by default   // was "1.2.0";   // (1.2.0, 2026-11-11) settings: a switch per letter (off by default) and per marking (delta POC on)   // was "1.1.1";   // (1.1.1) code one row further out   // was "1.1.0":   // (1.1.0, 2026-11-02 Rassul 13:10 CT) the live mark at the leg extreme's close, repainted until the ZigZag confirms   // was "1.0.1":   // (1.0.1) the Add-window crash fix (SS_SAFE_DIALOG); drawing / rules unchanged   // was "1.0.0"   // = cab::VERSION = the setVersion literal (test_candleabsorb_host checks)
 
 static long long caMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string caFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + CA_SEP "InvestorRT" CA_SEP "rtx" CA_SEP "lsFlexLevels" : std::string(); }
@@ -312,7 +312,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CandleAbsorb* p = new CandleAbsorb();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | VAP_REQUIRED);   // (1.2.0) NO_UI dropped: it has a settings window now
-    p->setDescription("LRA Candle Absorb v1.2.0 - candle markings: delta POC dash, volume POC, bid POC, ask POC; letters at ZigZag pivots by setting: A absorbed, Ae absorbed + exhausted, D demand, S supply.");
-    p->setVersion("1.2.0");   // = CA_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Candle Absorb v1.2.1 - candle markings: delta POC dash, volume POC, bid POC, ask POC; letters at ZigZag pivots by setting: A absorbed, Ae absorbed + exhausted, D demand, S supply.");
+    p->setVersion("1.2.1");   // = CA_VERSION (gex-build reads this literal)
     return p;
 }

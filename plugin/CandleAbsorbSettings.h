@@ -7,7 +7,7 @@
 #include "SettingsSpec.h"
 
 namespace caset {
-static const char* const PLUGIN_VERSION = "1.2.0";   // = the setVersion literal in CandleAbsorb.cpp = cab::VERSION
+static const char* const PLUGIN_VERSION = "1.2.1";   // = the setVersion literal in CandleAbsorb.cpp = cab::VERSION
 enum K { K_SIG_A, K_SIG_AE, K_SIG_D, K_SIG_S, K_MARK_DELTA, K_MARK_VOLUME, K_MARK_BID, K_MARK_ASK, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
@@ -15,10 +15,10 @@ inline const ss::Spec& spec() {
         ss::boolRow("sig_ae", "Signal Ae (absorbed + exhaustion)", false),
         ss::boolRow("sig_d", "Signal D (demand)", false),
         ss::boolRow("sig_s", "Signal S (supply)", false),
-        ss::boolRow("mark_delta", "Delta POC dash", true),
+        ss::boolRow("mark_delta", "Delta POC dash", false),   // (1.2.1) off by default
         ss::boolRow("mark_volume", "Volume POC dash", false),
-        ss::boolRow("mark_bid", "Bid POC tick", false),
-        ss::boolRow("mark_ask", "Ask POC tick", false),
+        ss::boolRow("mark_bid", "Bid POC tick", true),        // (1.2.1) on by default
+        ss::boolRow("mark_ask", "Ask POC tick", true),        // (1.2.1) on by default
     };
     static const ss::Spec S = { "CandleAbsorb", PLUGIN_VERSION, 2, R, K_N, 0 };   // parameter version 2 (1 = no settings, 1.1.1)
     return S;

@@ -31,7 +31,7 @@
 namespace cab {
 
 static const int ROW_OUT = 16;   // (1.1.1) px between the extreme row (his ratio label) and the code
-static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-11 Rassul "Build"): the letters are OFF by default (a setting per letter); markings by setting: delta POC dash (default on), volume POC dash, bid POC tick, ask POC tick   // was "1.1.1";   // (1.1.1, 2026-11-03) the code one text row further from the high / low   // was "1.1.0";   // (1.1.0, Rassul 2026-11-02 13:10 CT "you must draw it on the 12:12 bar closed and repaint as necessary") the LIVE mark   // was "1.0.1":   // (1.0.1) host crash fix only
+static const char* const VERSION = "1.2.1";   // (1.2.1, 2026-11-11 Rassul 16:01 CT "The candle absorb should mark the bid and ask pocs instead by default"): default markings = bid POC + ask POC ticks; the delta POC dash is a setting (off)   // was "1.2.0";   // (1.2.0, 2026-11-11 Rassul "Build"): the letters are OFF by default (a setting per letter); markings by setting: delta POC dash (default on), volume POC dash, bid POC tick, ask POC tick   // was "1.1.1";   // (1.1.1, 2026-11-03) the code one text row further from the high / low   // was "1.1.0";   // (1.1.0, Rassul 2026-11-02 13:10 CT "you must draw it on the 12:12 bar closed and repaint as necessary") the LIVE mark   // was "1.0.1":   // (1.0.1) host crash fix only
 static const int N_BARS = 3;          // IRT ZigZag Min Price Change = 3 bars, Use High/Low
 static const int RETEST_TICKS = 4;    // the next bar re-tests the extreme within 4 ticks
 static const double SIZE_X = 2.0;     // delta POC >= 2.0 x the bar's median |delta| row
@@ -167,7 +167,7 @@ public:
 struct Prim { enum K { FILL, TEXT } k = FILL; int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned long col = 0; std::string text; bool bold = true; };
 struct Colours { unsigned long up = 0x22C55E, down = 0xEF4444, edge = 0x000000, vol = 0xFFFFFF; };
 // (1.2.0) what is drawn (the settings window): the letters are off by default; the delta POC dash is on
-struct Show { bool a = false, ae = false, d = false, s = false, dPoc = true, vPoc = false, bPoc = false, aPoc = false;
+struct Show { bool a = false, ae = false, d = false, s = false, dPoc = false, vPoc = false, bPoc = true, aPoc = true;   // (1.2.1) bid + ask POC by default
     bool code(int c) const { return c == A ? a : c == AE ? ae : c == D ? d : c == S ? s : false; } };
 struct View {
     int l = 0, t = 0, r = 0, b = 0, first = 0, last = 0; double bw = 8;    // bw = pixels per bar
