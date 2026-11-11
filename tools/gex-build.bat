@@ -364,8 +364,9 @@ set WEEKEND=
 if /i "!HDAY!"=="Sat" set WEEKEND=1
 if /i "!HDAY!"=="Sun" set WEEKEND=1
 if defined WEEKEND ( set "HOLDWHY=(!HDAY! - weekend)" & goto :windowflag )
-if !HMIN! LSS 0 ( set HOLD=1& set "HOLDWHY=(clock unreadable: %TIME%)" & goto :windowflag )
-if !HMIN! GEQ 370 if !HMIN! LSS 900 ( set HOLD=1& set "HOLDWHY=(!HDAY! %TIME:~0,5% CT, weekday hold 6:10 AM-3:00 PM)" )
+REM (2026-11-11 10:50 CT) Rassul: "why are you waiting for 3pm.. remove that rule ! i want immediate build and installs" - the weekday hold is REMOVED: a build installs the first time Investor/RT is closed, any day, any time
+if !HMIN! LSS 0 ( set "HOLDWHY=(clock unreadable: %TIME%)" & goto :windowflag )
+REM was: if !HMIN! GEQ 370 if !HMIN! LSS 900  set HOLD=1  (weekday hold 6:10 AM-3:00 PM)
 if not defined HOLD set "HOLDWHY=(!HDAY! %TIME:~0,5% CT)"
 :windowflag
 if exist "%OUT%\INSTALL-NOW.flag" (
