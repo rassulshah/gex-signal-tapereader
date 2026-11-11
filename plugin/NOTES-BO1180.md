@@ -28,3 +28,14 @@
 ## Not verified (needs his IRT)
 - The look of PbT / PbocT on his charts (5 letters wide) next to the wave-time labels.
 - Nightly scoring of PbT vs Pb (does the tested pullback win more) is not built yet.
+
+# 1.19.0 (2026-11-11) - the Rev rule
+- Rassul 11:07 CT: "update as follows: Its range is at least 1.2x the 13-bar ATR (measured on the bar before) or it closes above the prior bar
+  high. also note that it can be displayed after any type of pb including pboc etc."
+- Rev = the first bar of the right colour from the Pb pivot bar whose low is below the pivot bar's high and whose range is >= 1.2 x ATR(13)
+  OR that closes above the prior bar's high (short: below the prior bar's low). Drawn after every pullback label: Pb, Pboc, PbT, PbocT and
+  the no-BO Rly Pboc (its Rev was recorded as BRO only; now drawn too, the record line unchanged).
+- Tests: tests_bo100/test_bo1190_rev.cpp (12 checks, ES 11-09 / 10-21 / 11-04 replay): every Rev re-checked from the bars, first qualifying
+  bar, both kinds occur, the Rly Pboc Rev is drawn, replay = straight pass. test_bo1180_pbt 24 pass. MinGW 0 errors / 0 warnings.
+- Not done: the in-sample PB Rev numbers (69% / +0.07R) were measured with the range-only rule; lra.pb_rev reads the plugin's records, so
+  new days are scored with the new rule from tonight - the old table no longer describes this rule.
