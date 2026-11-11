@@ -38,6 +38,7 @@
 #include "../TrappedTradersSettings.h"
 #include "../WavePOCSettings.h"   // (2026-10-28) lsWavePOC 1.0.0
 #include "../ZoneDefenseSettings.h"   // (2026-11-08) lsZoneDefense 1.0.0 + lsZoneDefenseMarks 1.0.0
+#include "../CandleAbsorbSettings.h"   // (2026-11-11) lsCandleAbsorb 1.2.0
 
 struct LegacyCase { const char* text; int market; const char* key; double want; };   // key == nullptr: must NOT be recognised
 struct Entry {
@@ -226,6 +227,7 @@ int main(int argc, char** argv) {
     E.push_back(Entry{ &ttrset::spec(), "TrappedTraders.cpp", nullptr, {}, {} });     // (2026-10-26) lsTrappedTraders 0.1.0: trigger marks levels only / everywhere / off, ratio, live box, colours
     E.push_back(Entry{ &wpset::spec(), "WavePOC.cpp", nullptr, {}, {} });   // (2026-10-28) lsWavePOC 1.0.0: Reversal bars, Show zigzag (read from IRT's own parameters)
     E.push_back(Entry{ &zdset::spec(), "ZoneDefense.cpp", nullptr, {}, {} });   // (2026-11-08) lsZoneDefense 1.0.0 pane + lsZoneDefenseMarks (ZoneDefenseMarks.cpp = ZoneDefense.cpp + ZD_MARKS): read lines, bars, zones, labels, big line, diamond, sweep, zones per side
+    E.push_back(Entry{ &caset::spec(), "CandleAbsorb.cpp", nullptr, {}, {} });   // (2026-11-11) lsCandleAbsorb 1.2.0: a switch per letter (A / Ae / D / S) and per marking (delta / volume / bid / ask POC)
     if (argc > 3 && std::string(argv[2]) == "--print") {   // the expected window per indicator, for the real-dialog check (tools\settings-check)
         const int mkt = ss::marketIndex(argv[3]);
         for (const Entry& e : E) {

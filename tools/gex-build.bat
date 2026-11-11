@@ -82,7 +82,7 @@ REM (2026-10-28 11:4x CT) lsWavePOC 1.1.0: + WavePOCLiq.h (liquidity nodes from 
 REM (2026-11-05 08:46 CT, Rassul "now") lsWavePOC 1.9.0: volume profile right + POC + up to 2 HVNs at / beyond the break level = lsBreakout's BO candle (bko::Engine runs inside lsWavePOC) - its headers added to the hash list
 call :one WavePOC lsWavePOC WavePOCLogic.h WavePOCLiq.h WavePOCSettings.h SettingsSpec.h SettingsHost.h HostSlot.h BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h ZzoDeltaLogic.h ZzoParams.h
 REM (2026-11-01) lsCandleAbsorb 1.0.0 "Candle Absorb" (Rassul 2026-10-31 "implement waht we have disuccessed"): A / Ae / D / S at ZigZag pivots + the delta POC dash on every candle; no settings
-call :one CandleAbsorb lsCandleAbsorb CandleAbsorbLogic.h HostSlot.h
+call :one CandleAbsorb lsCandleAbsorb CandleAbsorbLogic.h CandleAbsorbSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h HostSlot.h
 REM (2026-11-03) lsBreakout 1.0.0 "BO" (Rassul approved the mockup, "build"): letters only - BO / BD (lsBigBidAsk's breakout via bba::boFromCandles) + Rly (RallyLogic.h); no settings (SS_SAFE_DIALOG). lsBigBidAsk 1.32.0 stops drawing these letters
 REM (2026-11-03) lsBreakout 1.1.0: + Pb (a pullback pivot testing the BO / BD candle) on the 3-bar ZigZag of ZzoDeltaLogic.h (zzd::Engine::step) - headers added
 REM (2026-11-09) lsBreakout 1.12.0: + WavePOCLogic.h / WavePOCLiq.h (Pboc: the wave volume POC natively, lsWavePOC's rule)
@@ -260,7 +260,7 @@ if defined HOLD (
 copy /Y "%OUT%\%DLL%" "%DLLDIR%\%DLL%" >nul 2>&1
 if errorlevel 1 (
   REM the DLL is loaded (Investor/RT open) - retried next tick; say so once per build
-  if not exist "%OUT%\%NAME%.pending" ( call :log %NAME%: PENDING - installs by itself within 2 min of closing Investor/RT after 3:00 PM CT & > "%OUT%\%NAME%.pending" echo !BUILT! )
+  if not exist "%OUT%\%NAME%.pending" ( call :log %NAME%: PENDING - installs by itself within 2 min of closing Investor/RT & > "%OUT%\%NAME%.pending" echo !BUILT! )
   call :status
   goto :eof
 )
@@ -383,7 +383,7 @@ for %%N in (GammaProfile LimitProfile DeltaProfile DeltaProfileHourly HodLod Ses
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
-  if exist "%OUT%\%%N.pending" set "P=- PENDING, installs when Investor/RT is closed after 3:00 PM CT"
+  if exist "%OUT%\%%N.pending" set "P=- PENDING, installs when Investor/RT is closed"
   if exist "%OUT%\%%N.held" if defined HOLD set "P=- HELD until 3:00 PM CT (trading hours), do not restart Investor/RT for it"
   if "!B!"=="" ( >> "%STATUS%" echo %%N: not built yet ) else if "!B!"=="!I!" ( >> "%STATUS%" echo %%N: installed ) else ( >> "%STATUS%" echo %%N: built, not installed !P! )
 )

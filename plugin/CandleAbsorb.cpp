@@ -31,6 +31,9 @@
 #endif
 #include "CandleAbsorbLogic.h"
 #include "HostSlot.h"
+#include "SettingsSpec.h"     // (1.2.0) the settings table
+#include "SettingsHost.h"
+#include "CandleAbsorbSettings.h"
 #include "SettingsGuard.h"   // (1.0.1) SS_SAFE_DIALOG: the chart-less Add / settings copy never faults
 #include <algorithm>
 #include <chrono>
@@ -52,7 +55,7 @@
 #define CA_SEP "/"
 #endif
 
-static const char* CA_VERSION = "1.1.1";   // (1.1.1) code one row further out   // was "1.1.0":   // (1.1.0, 2026-11-02 Rassul 13:10 CT) the live mark at the leg extreme's close, repainted until the ZigZag confirms   // was "1.0.1":   // (1.0.1) the Add-window crash fix (SS_SAFE_DIALOG); drawing / rules unchanged   // was "1.0.0"   // = cab::VERSION = the setVersion literal (test_candleabsorb_host checks)
+static const char* CA_VERSION = "1.2.0";   // (1.2.0, 2026-11-11) settings: a switch per letter (off by default) and per marking (delta POC on)   // was "1.1.1";   // (1.1.1) code one row further out   // was "1.1.0":   // (1.1.0, 2026-11-02 Rassul 13:10 CT) the live mark at the leg extreme's close, repainted until the ZigZag confirms   // was "1.0.1":   // (1.0.1) the Add-window crash fix (SS_SAFE_DIALOG); drawing / rules unchanged   // was "1.0.0"   // = cab::VERSION = the setVersion literal (test_candleabsorb_host checks)
 
 static long long caMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string caFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + CA_SEP "InvestorRT" CA_SEP "rtx" CA_SEP "lsFlexLevels" : std::string(); }
@@ -87,16 +90,31 @@ struct CState {
     std::string recPath, statusPath, recWhy = "not opened"; std::set<long long> written; int recFails = 0;
     long long statusMs = -1; std::string statusBody;
     cab::Scene last;
+    ss::Store store; ss::Values set = ss::defaults(caset::spec(), -1); long long setMs = -100000;   // (1.2.0) this chart's settings (re-read every 2 s)
 };
 
+static ss::Ids& caIds() { static ss::Ids I; return I; }
 class CandleAbsorb : public cppExtension {
 public:
     SS_SAFE_DIALOG(CandleAbsorb, "CandleAbsorb")   // (1.0.1, 2026-11-01 crash fix) IRT gives the Add / settings window a copy with NO chart:
                                                    // getRootSymbol / getSymbol there crashed IRT (xnmba150.dll, 17:05 CT) - guarded like ChartView
     CandleAbsorb() : cppExtension() {}
-    virtual int parmsLoadBody(void)  { return RTX_OK; }          // no settings: nothing to load or save
-    virtual int parmsApplyBody(void) { return RTX_OK; }
-    virtual int parmsUpdtBody(unsigned int) { return RTX_OK; }
+    // ---- (1.2.0) settings: lsFlexLevels\CandleAbsorb.settings-<MKT>.txt (caset::spec), as lsZoneDefense ----
+    virtual int parmsLoadBody(void) { if (!ss::inDialog(this)) return RTX_OK; ss::Store* st = dialogStore(); if (st) ss::fillDialog(this, caset::spec(), caIds(), st->load(ss::marketIndex(dlgMkt_), caMs(), true), snap_); return RTX_OK; }
+    virtual int parmsApplyBody(void) { save(); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, caset::spec(), caIds(), (int)i, snap_); save(); return RTX_OK; }
+    void save() { if (!ss::inDialog(this)) return; ss::Store* st = dialogStore(); if (!st) return;
+        const ss::Values V = ss::readDialog(this, caset::spec(), caIds(), st->load(ss::marketIndex(dlgMkt_), caMs(), true), snap_);
+        caMkdir(caFlex()); if (st->save(V)) snap_.take(ss::dialogNow(this, caset::spec(), caIds(), V)); }
+    ss::Store* dialogStore() { const std::string mkt = ss::safeMarket(this); const std::string p = caset::settingsPath(caFlex(), mkt); if (p.empty()) return nullptr;
+        if (dlgStore_.path != p) { dlgStore_ = ss::Store(); dlgStore_.S = &caset::spec(); dlgStore_.path = p; dlgMkt_ = mkt; } return &dlgStore_; }
+    const ss::Values& settings(CState& e) {
+        const long long now = caMs(); if (now - e.setMs < 2000 && now >= e.setMs) return e.set; e.setMs = now;
+        const std::string p = caset::settingsPath(caFlex(), e.mkt);
+        if (e.store.path != p) { e.store = ss::Store(); e.store.S = &caset::spec(); e.store.path = p; }
+        e.set = p.empty() ? ss::defaults(caset::spec(), -1) : e.store.load(ss::marketIndex(e.mkt), now); return e.set;
+    }
+    ss::Snap snap_; ss::Store dlgStore_; std::string dlgMkt_;
     virtual int draw(void);
     HostSlot<CState> slot_;
     void clear() { slot_.release(this); }
@@ -112,7 +130,7 @@ public:
 };
 
 int cppExtension::init(void) { return RTX_OK; }
-int cppExtension::setup(void) { setParameterVersion(1); return RTX_OK; }   // (1.0.1) no settings, as ChartView
+int cppExtension::setup(void) { ss::registerAll(this, caset::spec(), caIds()); return RTX_OK; }   // (1.2.0) the settings window   // (1.0.1) no settings, as ChartView
 int cppExtension::done(void) { static_cast<CandleAbsorb*>(this)->clear(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<CandleAbsorb*>(this)->clear(); return RTX_OK; }
 int cppExtension::calc(int) { CandleAbsorb* me = static_cast<CandleAbsorb*>(this); try { me->pump(); } catch (...) {} return RTX_OK; }   // bars + VAP read here only
@@ -159,7 +177,7 @@ int CandleAbsorb::rows(CState& S, int chartBar, std::vector<cab::DRow>& out) {
         if (!std::isfinite((double)v.price) || v.buyVolume < 0 || v.sellVolume < 0) continue;
         if (v.buyVolume + v.sellVolume <= 0) continue;
         cab::DRow r; if (!cab::toTicks((double)v.price, S.tick, r.tick)) continue;
-        r.dlt = (long long)v.buyVolume - (long long)v.sellVolume; out.push_back(r);
+        r.dlt = (long long)v.buyVolume - (long long)v.sellVolume; r.buy = (long long)v.buyVolume; r.sell = (long long)v.sellVolume; out.push_back(r);
     }
     return out.empty() ? 0 : 1;
 }
@@ -239,7 +257,8 @@ void CandleAbsorb::status(CState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string vap = S.vapFault ? "FAULT - remove and re-add the indicator" : "ok, bars without VAP " + std::to_string(S.vapMissing);
-    const std::string body = cab::statusText(S.E, S.mkt, S.spb, vap, S.recWhy) + "DRAWN,dashes " + std::to_string(S.last.dashes) + ",marks " + std::to_string(S.last.marksDrawn) + "\n";
+    const std::string body = cab::statusText(S.E, S.mkt, S.spb, vap, S.recWhy) + "DRAWN,delta POC dashes " + std::to_string(S.last.dashes) + ",volume POC " + std::to_string(S.last.volDashes) + ",bid POC " + std::to_string(S.last.bidTicks) + ",ask POC " + std::to_string(S.last.askTicks) + ",letters " + std::to_string(S.last.marksDrawn) + ",letters switched off " + std::to_string(S.last.marksOff) + "\n"
+        + "SETTINGS," + (S.store.path.empty() ? std::string("defaults") : S.store.path) + ",A " + (S.set.b(caset::K_SIG_A) ? "on" : "off") + ",Ae " + (S.set.b(caset::K_SIG_AE) ? "on" : "off") + ",D " + (S.set.b(caset::K_SIG_D) ? "on" : "off") + ",S " + (S.set.b(caset::K_SIG_S) ? "on" : "off") + "\n";
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     caMkdir(caFlex()); caPublish(S.statusPath, body);
@@ -269,6 +288,9 @@ int CandleAbsorb::draw(void) {
         v.textW = [this, &fb](const std::string& s) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
         v.haveForming = S->haveForm; v.forming = S->formBar; v.formRead = S->form; v.formIdx = S->formIdx;
         v.clipL = pane.left; v.clipR = pane.right;
+        { const ss::Values& V = settings(*S);   // (1.2.0) what to draw
+          v.show.a = V.b(caset::K_SIG_A); v.show.ae = V.b(caset::K_SIG_AE); v.show.d = V.b(caset::K_SIG_D); v.show.s = V.b(caset::K_SIG_S);
+          v.show.dPoc = V.b(caset::K_MARK_DELTA); v.show.vPoc = V.b(caset::K_MARK_VOLUME); v.show.bPoc = V.b(caset::K_MARK_BID); v.show.aPoc = V.b(caset::K_MARK_ASK); }
         S->last = cab::layout(S->E, v);
         const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom;
         for (const cab::Prim& p : S->last.p) {
@@ -289,8 +311,8 @@ int CandleAbsorb::draw(void) {
 extern "C" cppExtension* CreateExtension(void) {
     CandleAbsorb* p = new CandleAbsorb();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
-    p->setDescription("LRA Candle Absorb v1.1.0 - at ZigZag pivots the bar's delta POC in the extreme end: A absorbed, Ae absorbed + exhausted, D demand, S supply; a delta POC dash on every candle.");
-    p->setVersion("1.1.1");   // = CA_VERSION (gex-build reads this literal)
+    p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | VAP_REQUIRED);   // (1.2.0) NO_UI dropped: it has a settings window now
+    p->setDescription("LRA Candle Absorb v1.2.0 - candle markings: delta POC dash, volume POC, bid POC, ask POC; letters at ZigZag pivots by setting: A absorbed, Ae absorbed + exhausted, D demand, S supply.");
+    p->setVersion("1.2.0");   // = CA_VERSION (gex-build reads this literal)
     return p;
 }

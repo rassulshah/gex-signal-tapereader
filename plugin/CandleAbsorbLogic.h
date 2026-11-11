@@ -31,7 +31,7 @@
 namespace cab {
 
 static const int ROW_OUT = 16;   // (1.1.1) px between the extreme row (his ratio label) and the code
-static const char* const VERSION = "1.1.1";   // (1.1.1, 2026-11-03) the code one text row further from the high / low   // was "1.1.0";   // (1.1.0, Rassul 2026-11-02 13:10 CT "you must draw it on the 12:12 bar closed and repaint as necessary") the LIVE mark   // was "1.0.1":   // (1.0.1) host crash fix only
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-11 Rassul "Build"): the letters are OFF by default (a setting per letter); markings by setting: delta POC dash (default on), volume POC dash, bid POC tick, ask POC tick   // was "1.1.1";   // (1.1.1, 2026-11-03) the code one text row further from the high / low   // was "1.1.0";   // (1.1.0, Rassul 2026-11-02 13:10 CT "you must draw it on the 12:12 bar closed and repaint as necessary") the LIVE mark   // was "1.0.1":   // (1.0.1) host crash fix only
 static const int N_BARS = 3;          // IRT ZigZag Min Price Change = 3 bars, Use High/Low
 static const int RETEST_TICKS = 4;    // the next bar re-tests the extreme within 4 ticks
 static const double SIZE_X = 2.0;     // delta POC >= 2.0 x the bar's median |delta| row
@@ -42,7 +42,7 @@ enum Code { NONE = 0, A = 1, AE = 2, D = 3, S = 4 };
 inline const char* codeName(int c) { return c == A ? "A" : c == AE ? "Ae" : c == D ? "D" : c == S ? "S" : "-"; }
 
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };   // whole ticks; t = IRT bar END (local seconds)
-struct DRow { long long tick = 0; long long dlt = 0; };
+struct DRow { long long tick = 0; long long dlt = 0; long long buy = 0, sell = 0; };   // (1.2.0) buy = traded at the ask, sell = traded at the bid (0 / 0 = not given: no volume / bid / ask POC)
 
 inline bool toTicks(double px, double tick, long long& out) {
     if (!std::isfinite(px) || !(tick > 0)) return false;
@@ -56,13 +56,20 @@ inline std::string hm(long long t) { if (t <= 0) return "--:--"; const long long
 struct BarRead {
     bool have = false; long long poc = 0, pocD = 0; double x = 0;   // delta POC row, its delta, |delta| / median
     int codeLow = NONE, codeHigh = NONE;
+    // (1.2.0) volume POC = the row with the most volume; bid POC = the most traded at the bid (sellers hitting); ask POC = the most at the ask
+    // (buyers lifting). Ties: the lowest row. have* = false when nothing traded that way.
+    bool haveV = false, haveB = false, haveA = false; long long vpoc = 0, bpoc = 0, apoc = 0;
 };
 inline BarRead readBar(const Bar& b, const std::vector<DRow>& rowsIn) {
     BarRead r; if (rowsIn.empty()) return r;
     std::vector<DRow> rows(rowsIn); std::sort(rows.begin(), rows.end(), [](const DRow& a, const DRow& c) { return a.tick < c.tick; });
-    {   std::vector<DRow> m; for (const DRow& x : rows) { if (!m.empty() && m.back().tick == x.tick) m.back().dlt += x.dlt; else m.push_back(x); } rows.swap(m); }
+    {   std::vector<DRow> m; for (const DRow& x : rows) { if (!m.empty() && m.back().tick == x.tick) { m.back().dlt += x.dlt; m.back().buy += x.buy; m.back().sell += x.sell; } else m.push_back(x); } rows.swap(m); }
     int pk = 0; for (int j = 1; j < (int)rows.size(); ++j) if (std::llabs(rows[(size_t)j].dlt) > std::llabs(rows[(size_t)pk].dlt)) pk = j;   // ties: the lowest row
     r.have = true; r.poc = rows[(size_t)pk].tick; r.pocD = rows[(size_t)pk].dlt;
+    { long long bv = 0, bb = 0, ba = 0; for (const DRow& x : rows) { if (x.buy < 0 || x.sell < 0) continue;
+          if (x.buy + x.sell > bv) { bv = x.buy + x.sell; r.vpoc = x.tick; r.haveV = true; }
+          if (x.sell > bb) { bb = x.sell; r.bpoc = x.tick; r.haveB = true; }
+          if (x.buy > ba) { ba = x.buy; r.apoc = x.tick; r.haveA = true; } } }
     std::vector<long long> a; a.reserve(rows.size()); for (const DRow& x : rows) a.push_back(std::llabs(x.dlt));
     std::sort(a.begin(), a.end()); const size_t n = a.size();
     double med = n % 2 ? (double)a[n / 2] : ((double)a[n / 2 - 1] + (double)a[n / 2]) / 2.0; if (!(med > 0)) med = 1.0;
@@ -158,15 +165,19 @@ public:
 
 // ---------- layout (pixels) ----------
 struct Prim { enum K { FILL, TEXT } k = FILL; int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned long col = 0; std::string text; bool bold = true; };
-struct Colours { unsigned long up = 0x22C55E, down = 0xEF4444, edge = 0x000000; };
+struct Colours { unsigned long up = 0x22C55E, down = 0xEF4444, edge = 0x000000, vol = 0xFFFFFF; };
+// (1.2.0) what is drawn (the settings window): the letters are off by default; the delta POC dash is on
+struct Show { bool a = false, ae = false, d = false, s = false, dPoc = true, vPoc = false, bPoc = false, aPoc = false;
+    bool code(int c) const { return c == A ? a : c == AE ? ae : c == D ? d : c == S ? s : false; } };
 struct View {
     int l = 0, t = 0, r = 0, b = 0, first = 0, last = 0; double bw = 8;    // bw = pixels per bar
     std::function<double(int)> X; std::function<double(double)> Y;         // engine bar -> centre x; price in ticks -> y
     std::function<int(const std::string&)> textW;
     bool haveForming = false; Bar forming; BarRead formRead; int formIdx = -1;   // the forming bar (engine index = lastBar + 1)
     int clipL = -30000, clipR = 30000;
+    Show show;
 };
-struct Scene { std::vector<Prim> p; int dashes = 0, marksDrawn = 0, liveDrawn = 0; };
+struct Scene { std::vector<Prim> p; int dashes = 0, marksDrawn = 0, liveDrawn = 0, volDashes = 0, bidTicks = 0, askTicks = 0, marksOff = 0; };
 inline int ci(double v) { return (int)std::lround(std::max(-30000.0, std::min(30000.0, v))); }
 
 // the dash: ON the candle at the delta POC row, a little wider than the body (body = 60% of the bar spacing, dash = body + 2 px a side),
@@ -181,14 +192,43 @@ inline void dash(Scene& s, const View& v, const Colours& C, double xc, long long
     Prim f; f.k = Prim::FILL; f.x0 = x0; f.x1 = x1; f.y0 = y0; f.y1 = y1; f.col = d > 0 ? C.up : C.down; s.p.push_back(f);
     ++s.dashes;
 }
+// (1.2.0) the volume POC: the same dash in white; 2 px wider a side when it sits on the delta POC row and both are shown (its ends stay visible)
+inline void volDash(Scene& s, const View& v, const Colours& C, double xc, long long poc, bool wide) {
+    const double body = std::max(1.0, v.bw * 0.6), half = body / 2.0 + 2.0 + (wide ? 2.0 : 0.0);
+    const double y = v.Y((double)poc); const int h = v.bw >= 10 ? 3 : 2;
+    const int x0 = ci(xc - half), x1 = ci(xc + half), y0 = ci(y - h / 2.0), y1 = y0 + h - 1;
+    if (x1 < v.clipL || x0 > v.clipR || y1 < v.t || y0 > v.b) return;
+    Prim e; e.k = Prim::FILL; e.x0 = x0 - 1; e.x1 = x1 + 1; e.y0 = y0 - 1; e.y1 = y1 + 1; e.col = C.edge; s.p.push_back(e);
+    Prim f; f.k = Prim::FILL; f.x0 = x0; f.x1 = x1; f.y0 = y0; f.y1 = y1; f.col = C.vol; s.p.push_back(f);
+    ++s.volDashes;
+}
+// (1.2.0) the bid POC: a short RED tick on the LEFT edge of the candle body; the ask POC: a short GREEN tick on its RIGHT edge. It starts 2 px
+// inside the body edge and sticks out 1-5 px (half the free space between two bodies, so neighbours never touch); drawn last, no edge.
+inline void sideTick(Scene& s, const View& v, const Colours& C, double xc, long long poc, bool bid) {
+    const double body = std::max(1.0, v.bw * 0.6); const int eL = ci(xc - body / 2.0), eR = ci(xc + body / 2.0);
+    const int w = std::max(1, std::min(5, ((int)std::lround(v.bw) - (eR - eL + 1)) / 2));
+    const double y = v.Y((double)poc); const int h = v.bw >= 10 ? 3 : 2;
+    const int x0 = bid ? eL - w : eR - 1, x1 = bid ? eL + 1 : eR + w, y0 = ci(y - h / 2.0), y1 = y0 + h - 1;
+    if (x1 < v.clipL || x0 > v.clipR || y1 < v.t || y0 > v.b) return;
+    Prim f; f.k = Prim::FILL; f.x0 = x0; f.x1 = x1; f.y0 = y0; f.y1 = y1; f.col = bid ? C.down : C.up; s.p.push_back(f);
+    ++(bid ? s.bidTicks : s.askTicks);
+}
+inline void markBar(Scene& s, const View& v, const Colours& C, double xc, const BarRead& r) {
+    if (!r.have) return;
+    if (v.show.vPoc && r.haveV) volDash(s, v, C, xc, r.vpoc, v.show.dPoc && r.pocD != 0 && r.vpoc == r.poc);
+    if (v.show.dPoc) dash(s, v, C, xc, r.poc, r.pocD);
+    if (v.show.bPoc && r.haveB) sideTick(s, v, C, xc, r.bpoc, true);
+    if (v.show.aPoc && r.haveA) sideTick(s, v, C, xc, r.apoc, false);
+}
 inline Scene layout(const Engine& E, const View& v, const Colours& C = Colours()) {
     Scene s;
     const int a = std::max(0, v.first), z = std::min(E.lastBar(), v.last);
-    for (int k = a; k <= z; ++k) { const BarRead& r = E.R[(size_t)k]; if (r.have) dash(s, v, C, v.X(k), r.poc, r.pocD); }
-    if (v.haveForming && v.formIdx >= a && v.formIdx <= v.last && v.formRead.have) dash(s, v, C, v.X(v.formIdx), v.formRead.poc, v.formRead.pocD);
+    for (int k = a; k <= z; ++k) markBar(s, v, C, v.X(k), E.R[(size_t)k]);
+    if (v.haveForming && v.formIdx >= a && v.formIdx <= v.last && v.formRead.have) markBar(s, v, C, v.X(v.formIdx), v.formRead);
     std::vector<Mark> all = E.marks; { const std::vector<Mark> lv = E.liveMarks(); all.insert(all.end(), lv.begin(), lv.end()); s.liveDrawn = (int)lv.size(); }   // (1.1.0)
     for (const Mark& m : all) {
         if (m.bar < a || m.bar > z) continue;
+        if (!v.show.code(m.code)) { ++s.marksOff; continue; }   // (1.2.0) that letter is switched off (still decided and recorded)
         const Bar& b = E.B[(size_t)m.bar];
         const std::string txt = codeName(m.code);   // (09:17 CT) no "?"
         const int tw = v.textW ? v.textW(txt) : (int)txt.size() * 7; const double xc = v.X(m.bar);
