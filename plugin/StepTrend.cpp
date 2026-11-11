@@ -1,5 +1,8 @@
 /********************************************************************************
- *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.4.2  (2026-11-11)
+ *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.4.3  (2026-11-11)
+ *
+ *  1.4.3 (Rassul 2026-11-11 17:06 CT) a flipped line starts at the other end of the last step candle (red from the green candle's low).
+ *  (was 1.4.2)
  *
  *  1.4.2 the T / B letters sit 8 px off the wick so they clear the step dot (a breaking candle is often the next step candle).
  *  (was 1.4.1)
@@ -75,7 +78,7 @@
 #include <string>
 #include <vector>
 
-#define STEPTREND_VERSION "1.4.2"
+#define STEPTREND_VERSION "1.4.3"
 
 namespace sth {
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREEN_D = 0x00178A42, C_RED_D = 0x00B03A3A;
@@ -271,7 +274,7 @@ extern "C" cppExtension* CreateExtension(void) {
     StepTrend* p = new StepTrend();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA Step Trend v1.4.2 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
-    p->setVersion("1.4.2");
+    p->setDescription("LRA Step Trend v1.4.3 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
+    p->setVersion("1.4.3");
     return p;
 }
