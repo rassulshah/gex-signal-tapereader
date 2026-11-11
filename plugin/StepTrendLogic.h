@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 namespace stp {
-static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
+static const char* const VERSION = "1.3.1";   // (1.3.1, 2026-11-11 Rassul 16:47-16:51 CT, his sketch) the 60-minute chart draws TWO lines: the solid stairs from the high of one step-up candle across to the next step-up candle and up to its high; the dashed test line from the prior high across   // was "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
 static const int MAX_BARS = 5000, SLACK = 2000;      // the host feeds the last MAX_BARS closed candles and re-feeds when SLACK more have come
 
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };                         // t = candle START (wall seconds of the chart); prices in ticks
@@ -120,17 +120,23 @@ inline void layout(const Engine& E, int lastIdx, std::vector<Seg>& segs, std::ve
         else if (lastIdx >= q.oi) { Seg l; l.i0 = q.oi; l.p0 = q.px; l.i1 = lastIdx; l.p1 = q.px; l.dir = q.dir; l.kind = 1; segs.push_back(l); }
         Dot d; d.i = q.oi; d.px = q.px; d.dir = q.dir; dots.push_back(d); }
 }
-// (1.3.0) the 60-minute chart: solid stairs through the breakout candles (across at the old level, up / down at the breakout candle), the dot on the
-// breakout candle at its level, the dashed line from the breakout candle on (to its test / end, else the right edge), a T mark at each test
+// (1.3.1, Rassul 2026-11-11 16:47 CT "there are suppose to be 2 lines, the solid line stepping up from high to high based on a hbo and a dashed testing
+// line which goes from the prior high accross when there is a step up"; 16:50 "the solid line is from high of a prior step up to the next step up";
+// 16:51 his sketch) the 60-minute chart:
+//   SOLID   from the HIGH of a step-up candle across to the next step-up candle, then up at that candle to ITS high (step down: lows); the dot on
+//           the step candle at its high (low).
+//   DASHED  the test line at the broken level (the prior high), from the candle before the step candle across to its test / end (else the right edge).
+//   T       a mark at each test (stp::Mark).
+inline long long stepTop(const Step& q) { return q.dir > 0 ? q.bhi : q.blo; }
 inline void layoutHourly(const Engine& E, int lastIdx, std::vector<Seg>& segs, std::vector<Dot>& dots, std::vector<Mark>& marks) {
     segs.clear(); dots.clear(); marks.clear(); const size_t n = E.S.size();
-    for (size_t i = 0; i < n; ++i) { const Step& q = E.S[i]; if (q.bi < 0) continue; const int e = q.endI >= 0 ? q.endI : lastIdx;
-        if (e > q.bi) { Seg s; s.i0 = q.bi; s.p0 = q.px; s.i1 = e; s.p1 = q.px; s.dir = q.dir; s.kind = 2; segs.push_back(s); } }
+    for (size_t i = 0; i < n; ++i) { const Step& q = E.S[i]; if (q.bi < 1) continue; const int e = q.endI >= 0 ? q.endI : lastIdx;
+        if (e > q.bi - 1) { Seg s; s.i0 = q.bi - 1; s.p0 = q.px; s.i1 = e; s.p1 = q.px; s.dir = q.dir; s.kind = 2; segs.push_back(s); } }
     for (size_t i = 0; i < n; ++i) { const Step& q = E.S[i]; if (q.bi < 0) continue;
         if (i > 0 && E.S[i - 1].bi >= 0) { const Step& p = E.S[i - 1];
-            Seg h; h.i0 = p.bi; h.p0 = p.px; h.i1 = q.bi; h.p1 = p.px; h.dir = q.dir; h.kind = 0; segs.push_back(h);
-            Seg v; v.i0 = q.bi; v.p0 = p.px; v.i1 = q.bi; v.p1 = q.px; v.dir = q.dir; v.kind = 0; segs.push_back(v); }
-        Dot d; d.i = q.bi; d.px = q.px; d.dir = q.dir; dots.push_back(d);
+            Seg h; h.i0 = p.bi; h.p0 = stepTop(p); h.i1 = q.bi; h.p1 = stepTop(p); h.dir = q.dir; h.kind = 0; segs.push_back(h);
+            Seg v; v.i0 = q.bi; v.p0 = stepTop(p); v.i1 = q.bi; v.p1 = stepTop(q); v.dir = q.dir; v.kind = 0; segs.push_back(v); }
+        Dot d; d.i = q.bi; d.px = stepTop(q); d.dir = q.dir; dots.push_back(d);
         if (q.tI >= 0) { Mark m; m.i = q.tI; m.dir = q.dir; marks.push_back(m); } }
 }
 } // namespace stp

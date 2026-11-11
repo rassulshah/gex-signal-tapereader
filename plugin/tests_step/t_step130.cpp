@@ -28,14 +28,17 @@ int main() {
 #endif
     }
 #ifndef OLD
-    CHECK(std::string(stp::VERSION) == "1.3.0", "version 1.3.0");
+    CHECK(std::string(stp::VERSION) == "1.3.1", "version 1.3.1");
     const std::vector<stp::Bar> H = load("es_60m.csv"); CHECK(H.size() > 300, "hourly bars loaded: " + std::to_string(H.size()));
     stp::Engine E; E.hourly = true; for (const stp::Bar& b : H) E.addBar(b);
     std::vector<stp::Seg> s; std::vector<stp::Dot> d; std::vector<stp::Mark> m; stp::layoutHourly(E, (int)H.size() - 1, s, d, m);
     int bad = 0, up = 0, dn = 0; for (const stp::Step& q : E.S) { if (q.bi < 1) { ++bad; continue; } const stp::Bar& c = H[(size_t)q.bi]; const stp::Bar& p = H[(size_t)q.bi - 1];
         if (q.dir > 0) { ++up; if (!(c.c > c.o && c.c > p.h && q.px == p.h)) ++bad; } else { ++dn; if (!(c.c < c.o && c.c < p.l && q.px == p.l)) ++bad; } }
     CHECK(bad == 0 && up >= 20 && dn >= 20, "[1] every step sits on its breakout candle: green closing above the prior high / red below the prior low (" + std::to_string(up) + " up, " + std::to_string(dn) + " down)");
-    { int db = 0; for (size_t i = 0; i < d.size(); ++i) if (d[i].i != E.S[i].bi || d[i].px != E.S[i].px) ++db; CHECK(db == 0 && d.size() == E.S.size(), "[1] the dot is on the breakout candle at the broken level"); }
+    { int db = 0; for (size_t i = 0; i < d.size(); ++i) if (d[i].i != E.S[i].bi || d[i].px != (E.S[i].dir > 0 ? H[(size_t)E.S[i].bi].h : H[(size_t)E.S[i].bi].l)) ++db; CHECK(db == 0 && d.size() == E.S.size(), "[1] (1.3.1) the dot is on the step candle at its high (low for a step down)");
+      int sb = 0, solid = 0; for (const stp::Seg& g : s) if (g.kind == 0) { ++solid; bool ok = false; for (size_t i = 1; i < E.S.size(); ++i) { const stp::Step& p = E.S[i - 1]; const stp::Step& q = E.S[i]; const long long pt = p.dir > 0 ? p.bhi : p.blo, qt = q.dir > 0 ? q.bhi : q.blo;
+              if ((g.i0 == p.bi && g.i1 == q.bi && g.p0 == pt && g.p1 == pt) || (g.i0 == q.bi && g.i1 == q.bi && g.p0 == pt && g.p1 == qt)) ok = true; } if (!ok) ++sb; }
+      CHECK(sb == 0 && solid == 2 * ((int)E.S.size() - 1), "[1] (1.3.1) the solid line: across at the prior step candle's high to the next step candle, then up to its high"); }
     // [2] the test, re-derived: the first later candle that trades below the breakout candle's low ends it (no T); else the first that touches / exceeds the level = T; the next step ends it
     int tb = 0, nT = 0, nBroken = 0; for (size_t i = 0; i < E.S.size(); ++i) { const stp::Step& q = E.S[i]; int wantT = -1, wantEnd = -1; const int stop = i + 1 < E.S.size() ? E.S[i + 1].bi : (int)H.size();
         for (int j = q.bi + 1; j < (int)H.size(); ++j) { const stp::Bar& b = H[(size_t)j];
@@ -47,8 +50,8 @@ int main() {
         if (q.tI != wantT || q.endI != wantEnd) ++tb;
         if (q.tI >= 0) ++nT; else if (q.endI >= 0 && q.endI != stop) ++nBroken; }
     CHECK(tb == 0 && nT >= 10 && nBroken >= 5, "[2] T = touched or exceeded without breaking the step candle's low (" + std::to_string(nT) + " tested, " + std::to_string(nBroken) + " broken first), mismatches " + std::to_string(tb));
-    { int sb = 0, dashed = 0; for (const stp::Seg& g : s) if (g.kind == 2) { ++dashed; bool ok = false; for (const stp::Step& q : E.S) if (q.bi == g.i0 && q.px == g.p0 && g.i1 > g.i0) ok = true; if (!ok) ++sb; }
-      CHECK(sb == 0 && dashed >= 20, "[2] every dashed line starts at its step's breakout candle, never before (" + std::to_string(dashed) + ")"); CHECK(m.size() == (size_t)nT, "[2] one T mark per tested step"); }
+    { int sb = 0, dashed = 0; for (const stp::Seg& g : s) if (g.kind == 2) { ++dashed; bool ok = false; for (const stp::Step& q : E.S) if (q.bi - 1 == g.i0 && q.px == g.p0 && g.i1 > g.i0 && (q.dir > 0 ? H[(size_t)g.i0].h : H[(size_t)g.i0].l) == g.p0) ok = true; if (!ok) ++sb; }
+      CHECK(sb == 0 && dashed >= 20, "[2] (1.3.1) every dashed line starts at the prior high's candle, at that high, never before (" + std::to_string(dashed) + ")"); CHECK(m.size() == (size_t)nT, "[2] one T mark per tested step"); }
     // [4] nothing decided changes: a shorter history gives the same steps / tests for everything decided by then
     { int rp = 0; for (size_t cut = 60; cut < H.size(); cut += 37) { stp::Engine P; P.hourly = true; for (size_t k = 0; k < cut; ++k) P.addBar(H[k]);
           for (size_t i = 0; i < P.S.size(); ++i) { const stp::Step& a = P.S[i]; const stp::Step& b = E.S[i]; if (a.bi != b.bi || a.px != b.px || a.dir != b.dir) ++rp; if (a.endI >= 0 && (a.endI != b.endI || a.tI != b.tI)) ++rp; } }
