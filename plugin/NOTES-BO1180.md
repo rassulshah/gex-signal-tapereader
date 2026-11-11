@@ -66,3 +66,15 @@ Rassul: "Ok build and I want the signal on rev to utilize this also when giving 
 - Tests: tests_bo100/test_bo1220_book.cpp 11 pass; 1180 / 1190 / 1200 / 1210 pass; MinGW real SDK 0 errors (25 warnings = before).
 - NOT measured: whether a book-agreed Rev wins more often. Revs older than lsBookFlow's 200 candles are not shown after a restart.
 - Not verified on his charts (needs his IRT restart).
+
+## 1.23.0 (2026-11-11 14:41 CT) - book gate OFF, RevA
+Rassul: "1. switch it off. 2. ok and only delta profile".
+- REV_BOOK_GATE = false: every Rev is drawn again. Evidence (86 Revs with a BookFlow record, 68 ES, mostly overnight): book agreed 35 -> 69% / +0.16R;
+  not agreed 51 -> 73% / +0.40R; ten other book readings: no help. The verdict is still decided and shown in the status (REV_BOOK line), not gating.
+- RevA (REV_ABS_MARK): the Rev's text is "RevA" when the pullback pivot bar, or the bar either side up to the Rev bar, has an absorbed delta node
+  (bko::Engine::nodeAbsorbed: biggest attackers' 2-row delta band >= 2.0 x the bar's median band, bar closes its own colour beyond the band). Decided
+  with the Rev (RevMark::absn), never changed. Evidence (747 Revs, ES NQ CL GC, in-sample): node 438 -> 73% / +0.21R; none 309 -> 66% / +0.04R; same
+  sign in all 4 markets and both halves of the days. Mockup https://claude.ai/artifact (RevA mark mockup).
+- Not used (his choice "only delta profile"): wick absorption on the Rev bar (node + wick 78% / +0.41R, n 136).
+- Tests: test_bo1230_reva 8 pass, test_bo1220_book 12 pass (gate switch aware), 1180 / 1190 / 1200 / 1210 pass; MinGW 0 errors.
+- Records unchanged (RevA is not in the BRV line yet). Not verified on his charts.

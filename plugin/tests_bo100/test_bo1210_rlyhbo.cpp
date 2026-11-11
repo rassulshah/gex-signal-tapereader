@@ -58,7 +58,7 @@ static std::map<long long, int> stepHours(const bko::Engine& E) { stp::Engine S;
     std::map<long long, int> m; for (const stp::Step& q : S.S) m[q.hour] = q.dir; return m; }
 static long long hourOf(const bko::In& b) { return stp::floorDiv((long long)b.days * 86400LL + b.endSec - 180, 3600) * 3600; }
 int main() {
-    CHECK(std::string(bko::VERSION) == "1.22.0", "version 1.22.0");
+    CHECK(std::string(bko::VERSION) == "1.23.0", "version 1.23.0");
     int drawnAll = 0, firedAll = 0; const char* F[3] = { "pboc_es1109.txt", "pboc_es1021.txt", "pboc_es1104.txt" };
     for (int f = 0; f < 3; ++f) { const Fix X = load(F[f], 0.25); Run R; replay(R, X, 3); const bko::Engine& E = R.E; const bko::Scene S = draw(E); const std::map<long long, int> H = stepHours(E);
         int drawn = 0, bad = 0, fired = 0, pbBad = 0;

@@ -52,17 +52,23 @@ static void replay(Run& R, const Fix& X, int from, int vapAtStep = -1, long long
 }
 
 
-static std::set<long long> revs(const bko::Engine& E, int* hid = nullptr) { const bko::Scene S = draw(E); std::set<long long> r; for (const bko::Txt& t : S.txt) if (t.kind == 4 && t.s == "Rev") r.insert(E.bars[(size_t)t.bar].t); if (hid) *hid = S.revNoBook; return r; }
+static std::set<long long> revs(const bko::Engine& E, int* hid = nullptr) { const bko::Scene S = draw(E); std::set<long long> r; for (const bko::Txt& t : S.txt) if (t.kind == 4 && (t.s == "Rev" || t.s == "RevA")) r.insert(E.bars[(size_t)t.bar].t); if (hid) *hid = S.revNoBook; return r; }
+// (1.23.0) the gate is a switch (bko::REV_BOOK_GATE): OFF = every Rev is drawn and the verdict is only logged - the "drawn" set of the checks below is then the set the gate WOULD draw
+static std::set<long long> gated(const bko::Engine& E, const std::set<long long>& base) { if (bko::REV_BOOK_GATE) return revs(E); std::set<long long> r;
+    auto one = [&](const bko::RevMark& m) { if (!base.count(m.tr)) return; const auto it = E.revBook.find(std::make_pair(m.tr, m.dir)); if (it != E.revBook.end() ? it->second == 1 : E.bookVerdict(m) == 1) r.insert(m.tr); };
+    for (const auto& kv : E.rev) one(kv.second);
+    for (const auto& kv : E.rro) one(kv.second);
+    return r; }
 int main() {
-    CHECK(std::string(bko::VERSION) == "1.22.0", "version 1.22.0");
+    CHECK(std::string(bko::VERSION) == "1.23.0", "version 1.23.0");
     const Fix X = load("pboc_es1109.txt", 0.25); Run R; replay(R, X, (int)X.B.size()); bko::Engine E = R.E;
     std::vector<bko::RevMark> M; for (const auto& kv : E.rev) M.push_back(kv.second); for (const auto& kv : E.rro) M.push_back(kv.second);
     const std::set<long long> base = revs(E); const size_t recs = E.revL.size() + E.rroL.size();
     CHECK(M.size() >= 4 && base.size() >= 4, "fixture has Revs: " + std::to_string(M.size()) + " drawn " + std::to_string(base.size()));
     CHECK(!E.bookSeen && E.setBook(std::map<long long, int>()) == 0 && revs(E) == base, "[1] no lsBookFlow: Revs as before");
     std::map<long long, int> none; for (const bko::In& b : E.bars) none[b.t] = 0;
-    { bko::Engine A = E; const int n = A.setBook(none); int hid = 0; const std::set<long long> r = revs(A, &hid); int yes = 0; for (const auto& kv : A.revBook) yes += kv.second;
-      CHECK(A.bookSeen && n == (int)M.size() && r.empty() && yes == 0 && hid >= (int)base.size(), "[2] nothing defending: no Rev drawn (" + std::to_string(n) + " decided no)"); }
+    { bko::Engine A = E; const int n = A.setBook(none); const std::set<long long> r = gated(A, base); CHECK(bko::REV_BOOK_GATE || revs(A) == base, "[2] gate OFF: every Rev still drawn"); int yes = 0; for (const auto& kv : A.revBook) yes += kv.second;
+      CHECK(A.bookSeen && n == (int)M.size() && r.empty() && yes == 0, "[2] nothing defending: no Rev drawn (" + std::to_string(n) + " decided no)"); }
     { bko::Engine A = E; std::map<long long, int> b = none; std::set<long long> want;
       for (size_t i = 0; i < M.size(); ++i) { const bko::RevMark& m = M[i]; const int def = m.dir > 0 ? 1 : 4, pull = m.dir > 0 ? 2 : 8, other = m.dir > 0 ? 4 : 1;
           if (i % 4 == 0) { b[m.tp] |= def; want.insert(m.tr); }                      // defending on the pivot bar
@@ -73,15 +79,15 @@ int main() {
       std::set<long long> exp; for (const bko::RevMark& m : M) { const int def = m.dir > 0 ? 1 : 4, pull = m.dir > 0 ? 2 : 8; bool ok = !(b[m.tr] & pull), d = false;
           for (auto it = b.lower_bound(m.tp); it != b.end() && it->first <= m.tr; ++it) { if (it->second & def) d = true; }
           if (ok && d && base.count(m.tr)) exp.insert(m.tr); }
-      A.setBook(b); const std::set<long long> r = revs(A);
+      A.setBook(b); const std::set<long long> r = gated(A, base);
       CHECK(r == exp && !r.empty() && r.size() < base.size(), "[3] drawn = the rule: " + std::to_string(r.size()) + " of " + std::to_string(base.size()));
       int w = 0; for (long long t : want) if (exp.count(t)) ++w; CHECK(w >= 1, "[3] a defended Rev is drawn");
       // [4] sticky: the book changes afterwards, the decisions do not
       const std::map<std::pair<long long, int>, int> dec = A.revBook; std::map<long long, int> all = none; for (auto& kv : all) kv.second = 5;
-      CHECK(A.setBook(all) == 0 && A.revBook == dec && revs(A) == r, "[4] decided once: a later book never changes a Rev");
+      CHECK(A.setBook(all) == 0 && A.revBook == dec && gated(A, base) == r, "[4] decided once: a later book never changes a Rev");
       CHECK(A.revL.size() + A.rroL.size() == recs, "[4] records unchanged"); }
     { bko::Engine A = E; const bko::RevMark& m = M.back(); std::map<long long, int> b; for (const bko::In& x : A.bars) if (x.t < m.tr) b[x.t] = 5;
-      A.setBook(b); CHECK(!A.revBook.count(std::make_pair(m.tr, m.dir)) && !revs(A).count(m.tr), "[4] the Rev bar's fact not there yet: not drawn, not decided");
+      A.setBook(b); CHECK(!A.revBook.count(std::make_pair(m.tr, m.dir)) && !gated(A, base).count(m.tr), "[4] the Rev bar's fact not there yet: not drawn, not decided");
       b[m.tr] = 5; A.setBook(b); const auto it = A.revBook.find(std::make_pair(m.tr, m.dir)); CHECK(it != A.revBook.end() && it->second == 1, "[4] decided when its fact arrives");
       bko::Engine C = E; std::map<long long, int> late; late[A.bars.back().t] = 0; C.setBook(late); const auto ic = C.revBook.find(std::make_pair(M.front().tr, M.front().dir));
       CHECK(ic != C.revBook.end() && ic->second == 0, "[4] no fact for the Rev bar while a later candle has one = no"); }
