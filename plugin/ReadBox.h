@@ -24,9 +24,9 @@
 
 namespace rbx {
 
-static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-11-11 Rassul 11:41 CT "also updat eht readt at the top to be more simple", his screenshot: the HTF line and "0.8x ADR, Used 91%" crossed out): no HTF line (4 lines: Day / Lvl / Mkt / Lmt); the RTH Day line without the ADR multiple and the Used %
+static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-11-11 Rassul 11:41 CT "also updat eht readt at the top to be more simple", his screenshot: the HTF line and "0.8x ADR, Used 91%" crossed out): the HTF line is "Hrly Trend: Up / Down / NA" (11:45 CT); the RTH Day line without the ADR multiple and the Used %
 // was "1.0.1";
-static const bool SHOW_HTF = false;   // (1.1.0) the HTF line is not shown (still computed: the Lvl line uses its direction / ATR)
+static const bool SHOW_HTF = true;    // (1.1.0) 11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA": the first line is "Hrly Trend: Up / Down / NA" (green / red / white)
 static const bool DAY_ADR = false;    // (1.1.0) the RTH Day line: no "0.8x ADR, Used 91%"   // 1.0.1: plain ASCII only (the IRT text call is ANSI: "->" not an arrow), no bare "-" lines
 enum Col { WHITE = 0, GREEN = 1, RED = 2, GREY = 3, BLUE = 4 };
 struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0; };   // t = bar END, CT wall-clock seconds
@@ -90,10 +90,14 @@ inline bool isLow(const std::string& n) {
 }
 
 // ---------------------------------------------------------------- the lines
-struct Htf { bool ok = false; Line line; int dir = 0; double atr = NAN; };
+struct Htf { bool ok = false; Line line; int dir = 0; double atr = NAN; int trend = 0; };   // (1.1.0) trend = the hourly rotation by the 1-bar rule (lsStepTrend 1.2.0): +1 up, -1 down, 0 none yet
 inline Htf htfLine(const In& I) {
     Htf o; std::vector<Bar> B = hourly(I.bars, I.per);
     if (!B.empty() && !I.bars.empty() && B.back().t > I.bars.back().t) B.pop_back();   // the hour in progress is not read: the last COMPLETED hour (changes once an hour)
+    // (1.1.0) the hourly trend, lsStepTrend's rule over the COMPLETED hours: a higher high and not a lower low = up, a lower low and not a
+    // higher high = down, both = the hour's own colour, neither = unchanged
+    for (size_t k = 1; k < B.size(); k++) { const bool hh = B[k].h > B[k - 1].h, ll = B[k].l < B[k - 1].l;
+        if (hh && !ll) o.trend = 1; else if (ll && !hh) o.trend = -1; else if (hh && ll) o.trend = B[k].c > B[k].o ? 1 : B[k].c < B[k].o ? -1 : o.trend; }
     if (B.size() < 16) { o.line.text = "HTF: not enough 60-min bars"; o.line.col = WHITE; return o; }
     std::vector<Piv> piv; int dir = 1, ext = 0; zigzag(B, piv, dir, ext);
     const int i = (int)B.size() - 1; const Bar& cur = B[i]; const Bar& prv = B[i - 1];
@@ -261,7 +265,7 @@ inline Out build(const In& I) {
     Out o; if (I.bars.size() < 3) { o.why = "no bars"; return o; }
     const long long now = I.bars.back().t; o.at = now;
     const Htf h = htfLine(I);
-    int k = 0; if (SHOW_HTF) o.l[k++] = h.line;
+    int k = 0; if (SHOW_HTF) { Line t; t.text = std::string("Hrly Trend: ") + (h.trend > 0 ? "Up" : h.trend < 0 ? "Down" : "NA"); t.col = h.trend > 0 ? GREEN : h.trend < 0 ? RED : WHITE; o.l[k++] = t; }
     o.l[k++] = dayLine(I, now); o.l[k++] = lvlLine(I, now, h.dir, h.atr); o.l[k++] = mktLine(I, now); o.l[k++] = lmtLine(I, now); o.n = k;
     o.ok = true; o.why = "ok"; return o;
 }

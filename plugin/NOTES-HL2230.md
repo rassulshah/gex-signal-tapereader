@@ -8,12 +8,12 @@
 ## What changed
 - Header row of the HOD / LOD table: no "RTH opens 8:30 AM" / "RTH 83% done", no "Bar m:ss left", no "Dly:" trend. The gamma pill
   (+GAMMA / -GAMMA) now leads the centre group, where "Dly:" was, followed by "Hrly:" and "3m:". Right side: Exp, the range pill, the version.
-- Read box (ReadBox 1.1.0): 4 lines - Day / Lvl / Mkt / Lmt. No HTF line (still computed: the Lvl line uses its direction and ATR). The RTH
+- Read box (ReadBox 1.1.0): Hrly Trend / Day / Lvl / Mkt / Lmt. The first line is "Hrly Trend: Up / Down / NA" (11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA"; 2.23.1) by the Step Trend 1-bar hourly rule over the completed hours, green / red / white. The RTH
   Day line has no ADR multiple and no "Used %" ("Day: Nor 35%, -> CoB 1.33"). The overnight Day line still shows "ON 0.4x ADR".
 - Flags: hl::HDR_DLY / HDR_LEFT / HDR_PILL_MID, rbx::SHOW_HTF / DAY_ADR. No settings change.
 
 ## Tests
-- tests_readbox/test_readbox_110.cpp: 5 pass (4 lines, no HTF, no ADR / Used, the box one line shorter). MinGW real SDK: 0 errors.
+- tests_readbox/test_readbox_110.cpp: 8 pass. MinGW real SDK: 0 errors.
   Settings contract passes.
 - NOT run: the older lsHodLod host suites and tests_readbox assertions that expect the HTF line / the 5-line box (superseded).
 
