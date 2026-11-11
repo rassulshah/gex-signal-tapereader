@@ -37,7 +37,8 @@
 #include <cstdlib>
 #include "Top10Stable.h"
 namespace tbk {
-static const char* const VERSION = "1.1.1";   // 1.1.1 (2026-11-09): Why::small -> tooSmall ("small" is a Windows SDK macro = char; MSVC build failed)
+static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-11-11 Rassul 10:10 CT "keep top 3 per side + liquidity near levels"): levelLiq() - the real resting size at / within 2 ticks of each given level price (key / volume / CR0 / PS0), at any distance, with the lower 1.5x size bar and no top-3 cap
+// was "1.1.1";   // 1.1.1 (2026-11-09): Why::small -> tooSmall ("small" is a Windows SDK macro = char; MSVC build failed)
 enum Act { ADD = 0, MOD = 1, DEL = 2, FILL = 3, CLEAR = 9 };
 struct Params {
     long long restMs = 30000; int quoteMoves = 2; long long quoteWinMs = 300000; int insideSkip = 2; double reachAtr = 3.0; double normX = 2.0;
@@ -47,7 +48,7 @@ struct Params {
     // there when price arrives -> turn AT the order 37% vs 27% random); s20 = 0 -> no tag (GC: not reaction levels; 6E: S20 = quote size)
     long long s20Rth = 0, s20On = 0; long long stationaryMs = 120000; bool rth = true;
     long long showMs = 120000;                       // (1.1.0) the level must hold big size this long before it shows (board entry wait)
-    long long bigRth = 0, bigOn = 0; long long clusterMs = 60000; int clusterTicks = 2;   // (1.1.0) the cluster rule's "big" (Big Lot S20, all 7 markets)
+    long long bigRth = 0, bigOn = 0; long long clusterMs = 60000; int clusterTicks = 2; double levelX = 1.5;   /* (1.2.0) level liquidity: at least this x the side's median real level */   // (1.1.0) the cluster rule's "big" (Big Lot S20, all 7 markets)
 };
 // the per-market Big Lot S20 of the resting-order pool (RTH / overnight medians of the 2026-10-22 study); GC and 6E carry no tag
 inline void s20For(const std::string& m, Params& p) {
@@ -151,6 +152,37 @@ public:
         approachCheck(now, out);
         touchCheck(now, out, atr);
         shown = out; return shown;
+    }
+    // (1.2.0) LEVEL LIQUIDITY: for each level price (ticks) the biggest REAL price level within +-tol ticks of it, on the side the book has
+    // there (at / below the best bid = bids, at / above the best offer = offers; between them: nothing). REAL = the same order filters as
+    // the top book (rested showMs or more, not re-pricing, not the first insideSkip levels, not a banned price, its biggest order not in a
+    // just-placed cluster) - but at ANY distance and with the lower size bar levelX (1.5x the side's median real level; the top book needs 2.0x). One Lvl per level that has one (rank = 100 + the level's index).
+    // Call after evaluate() (it uses that pass's inside).
+    std::vector<Lvl> levelLiq(long long now, const std::vector<long long>& lv, int tol = 2) const {
+        std::vector<Lvl> out; if (lv.empty() || O.empty() || (insideB <= 0 && insideA <= 0)) return out;
+        struct Agg { long long real = 0, big = 0; int n = 0; bool clus = false, s20 = false; };
+        std::map<long long, Agg> A;                                           // key(side, px) of the prices within tol of a level
+        long long lo = lv[0], hi = lv[0]; for (long long p : lv) { lo = std::min(lo, p); hi = std::max(hi, p); }
+        const long long s20 = P.rth ? P.s20Rth : P.s20On;
+        for (const auto& kv : O) { const Ord& o = kv.second; if (o.sz <= 0 || o.px < lo - tol || o.px > hi + tol) continue;
+            const long long ins = o.side == 0 ? insideB : insideA; if (ins <= 0) continue;
+            const long long d = o.side == 0 ? ins - o.px : o.px - ins; if (d < P.insideSkip) continue;
+            bool nearLv = false; for (long long p : lv) if (o.px >= p - tol && o.px <= p + tol) { nearLv = true; break; }
+            if (!nearLv || banned.count(key(o.side, o.px))) continue;
+            if (now - o.tRest < P.showMs) continue;
+            int mv = 0; for (long long t : o.moves) if (now - t <= P.quoteWinMs) ++mv;
+            if (mv >= P.quoteMoves) continue;
+            Agg& g = A[key(o.side, o.px)]; g.real += o.sz; ++g.n; if (o.sz > g.big) { g.big = o.sz; g.clus = o.clustered; }
+            if (s20 > 0 && o.sz >= s20 && o.nMoves == 0 && now - o.tRest >= P.stationaryMs) g.s20 = true; }
+        for (size_t i = 0; i < lv.size(); ++i) { const Agg* best = nullptr; long long bk = 0;
+            for (const auto& kv : A) { const long long px = pxOf(kv.first); if (px < lv[i] - tol || px > lv[i] + tol || kv.second.clus || kv.second.real <= 0) continue;
+                if (!best || kv.second.real > best->real || (kv.second.real == best->real && std::llabs(px - lv[i]) < std::llabs(pxOf(bk) - lv[i]))) { best = &kv.second; bk = kv.first; } }
+            if (!best) continue;
+            { const double md = medNow[sideOf(bk)]; if (md > 0 && (double)best->real < P.levelX * md) continue; }
+            Lvl L; L.side = sideOf(bk); L.px = pxOf(bk); L.lots = best->real; L.orders = best->n; L.big = best->big; L.rank = 100 + (int)i; L.s20 = best->s20;
+            L.single = (double)best->big >= P.singleShare * (double)best->real; const long long ins = L.side == 0 ? insideB : insideA; L.dist = (int)(L.side == 0 ? ins - L.px : L.px - ins);
+            const double md = medNow[L.side]; L.x = md > 0 ? (double)L.lots / md : 0; out.push_back(L); }
+        return out;
     }
     // ---- read-outs (status / tests) ------------------------------------------------------------------------------------------
     const std::vector<Lvl>& lastShown() const { return shown; }

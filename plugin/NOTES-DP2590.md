@@ -85,3 +85,19 @@ Tests: test_dealerprofile_2640.cpp = the 44 checks of 2630 + 12 new (gap 0 repro
 
 Not verified - needs his IRT: the real draw time after the install (perf-DealerProfile-<date>.csv: expect a few ms per draw and no "over" flag). The own order feed of 2.63.0 reads its slice inside draw (capped): to be watched in RTH with the same file.
 Not fixed here (same audit needed, by estimate): Delta Profile (13 - 21 ms per draw, spikes to 2.5 s), BookFlow (10 - 20 ms), and gex-build's hashing of every source every 2 minutes.
+
+## 2.65.0 (2026-11-11) - level liquidity rows, dark lot numbers
+- Rassul 08:07 CT "was there any reason that the lqiuidity profile is ony drawing few nodes . did you implement top 3?"; 08:10 "how about top 10
+  and any liquidity associated with key levels, volume levels cr0 and ps0"; 08:10 "make the white wiriting black in the green nodes just like
+  you do with the red nodes"; on the mockup (claude.ai/artifact/WajQKNSjSbsPdGd9QXAq2J) 10:10 "keep top 3 per side + liquidity near levels".
+- The top 3 per side are unchanged. NEW: one LEVEL LIQUIDITY row for every key level, volume level (src 0, not VWAP), CR0 and PS0 with real
+  resting size within 2 ticks: TopBook 1.2.0 levelLiq (rested 2 min+, not re-pricing, not the first 2 levels, not a banned price, not a
+  cluster order; ANY distance; 1.5x the side's typical real level or more - the top book needs 2.0x). LimitFeed 1.1.0 posts them as code 7.
+  Drawn dimmer, no rank, never the king, the level's name on the node. A price the top 3 already show gets no second row.
+- Lot numbers on a node are in dark ink (white when the text starts in front of a short node, on the black chart).
+- Status: TOP_BOOK_G "level liquidity rows (2.65.0) N, dark lot texts N".
+- Tests: test_dealerprofile_2650.cpp 60 pass (ASan / UBSan): the row drawn once with its name, top 3 and king unchanged, dark ink, levelLiq on
+  its own (tolerance, size bar, young order, inside, gap). MinGW real SDK: 0 errors, 8 warnings (= 2.64.0). Settings contract 45,949 pass.
+  Speed check pass (0.25 ms / draw on 6,580 candles).
+- Not verified (needs his IRT): the look on his chart; whether 1.5x gives too many / too few rows. Not built: nightly scoring of level
+  rows (held vs levels with no liquidity) and the lsBookFlow (kind G) path - level rows come from the own feed only.
