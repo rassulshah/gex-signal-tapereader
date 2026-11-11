@@ -319,6 +319,7 @@ struct HLState {
     crd::Read cread; std::string creadKey, creadWhy = "not run", crParamText, crLive, crRec; long long crParamStamp = -2, crLiveStamp = -2; crd::Params crP;
     long long creadLogs = 0, creadLogFails = 0; int crCobs = 0; bool crKeyLoaded = false; std::string crKeyDay;
     // (2.22.0) the READ BOX: the five lines in force + their inputs (level files, LRA-VolLevels, lsDeltaProfile's decided signals)
+    int callSide = 0; std::string callFlip, callSess;   // (2.25.0) the call line: the side first called in, "FLIPPED hh:mm" once it changed, their session
     rbx::Out rbox; std::string rbWhy = "not run"; nl::Cache rbLv; std::string rbVol, rbSig; long long rbVolStamp = -2, rbSigStamp = -2; std::string rbSigPath; int rbLevels = 0, rbMq = 0, rbSigs = 0;
     // (2.21.0) the HOD / LOD CONFIRM badges: what to draw (chart bar indices), the record's keys, counters for the status line
     struct CfDraw { bool hod; int ext, conf; double px; };
@@ -865,7 +866,9 @@ void HodLod::recompute(HLState& S, long n)
             S.view.htf.push_back(ok ? hl::Seg{ htf::trendText(er, d) + (rsOk ? "," : ""), col(d) } : hl::Seg{ "-", hl::C_SLATE });
             if (ok) { if (rsOk) { const std::string w = htf::rsWord(r, d); S.view.htf.push_back(hl::Seg{ w, col(d) }); } } };
         if (hl::HDR_DLY) group("Dly:", o.dOk, o.dEr, o.dRsOk, o.dRsi);   // (2.23.0) the daily trend is not shown
-        group("Hrly:", o.hOk, o.hEr, o.hRsOk, o.hRsi);
+        if (S.rbox.ok && S.rbox.trend.text.compare(0, 12, "Hrly Trend: ") == 0) {   // (2.25.0) "Hrly: Up, above 7607" - the read's hourly trend + breakout level (moved here from the read box)
+            S.view.htf.push_back(hl::Seg{ "Hrly:", hl::C_GREY }); S.view.htf.push_back(hl::Seg{ S.rbox.trend.text.substr(12), S.rbox.trend.col == rbx::GREEN ? hl::C_GREEN : S.rbox.trend.col == rbx::RED ? hl::C_RED : hl::C_SLATE });
+        } else group("Hrly:", o.hOk, o.hEr, o.hRsOk, o.hRsi);
         {   // the chart's own bar size ("3m:"): (2.17.4, Rassul 14:55 CT "the trend shouldn't be displayed twice so use Dntrend") its trend = his
             // VWAP trend (the header's old "Downtrend" text, now shown only here), RS = RSI 14 of the chart bars; the day type (when called) after it
             const std::string ml = std::to_string((long long)(per / 60 > 0 ? per / 60 : 1)) + "m:";
@@ -878,6 +881,8 @@ void HodLod::recompute(HLState& S, long n)
             if (!S.view.dayText.empty()) {   // "Dntrend . Trend day ?" -> "Trend day ?" (the trend word is already in the 3m group)
                 std::string k = S.view.dayText; const size_t p = k.rfind('\xB7'); if (p != std::string::npos) { k = k.substr(p + 1); while (!k.empty() && k[0] == ' ') k.erase(0, 1); }
                 (void)k; }   // (2.17.5, Rassul 15:14 CT) the day type is no longer shown in the header (crossed out)
+            if (S.rbox.ok && S.rbox.day.text.compare(0, 5, "Day: ") == 0) {   // (2.25.0) "Day: Nor 35%, favours CoB" - the read's Day line (moved here from the read box)
+                S.view.htf.push_back(hl::Seg{ "Day:", hl::C_GREY }); S.view.htf.push_back(hl::Seg{ S.rbox.day.text.substr(5), hl::C_SLATE }); }
         }
     }
     {   // (2.7.0) the day-type log for the nightly: one line each time the call changes (a restart logs the current call once again)
@@ -1748,6 +1753,18 @@ int HodLod::draw(void)
     }
     S->placeLine = "PLACE,pos " + std::to_string(PL.pos) + ",dx " + std::to_string(O.dx) + ",dy " + std::to_string(O.dy) + (PL.why.empty() ? "" : "," + PL.why)
                  + "\nOPTS,table " + (O.table ? "on" : "off (Show table unchecked in Settings)") + ",projection " + (O.proj ? "on" : "off") + ",mark " + (O.mark ? "on" : "off") + ",moves " + std::to_string(S->hyst.moves) + "\n";
+    {   // (2.25.0) the call line's tail (the Lvl read), FLIPPED, the upcoming sweep level, the time table only until the first extreme is in
+        S->view.callTail.clear();
+        if (S->rbox.ok && !S->rbox.lvl.text.empty() && S->rbox.lvl.text != "Lvl: no level near") S->view.callTail.push_back(hl::Seg{ S->rbox.lvl.text, hl::C_GREY });
+        const bool firstIn = S->view.firstCalledIn || S->view.firstFinal;
+        if (S->view.session != S->callSess) { S->callSess = S->view.session; S->callSide = 0; S->callFlip.clear(); }
+        if (!S->view.prior && firstIn && S->view.side != 0) {
+            if (S->callSide != 0 && S->callSide != S->view.side) { const long long nowF = hlNowCt(); S->callFlip = "FLIPPED " + hl::clkAmPm((int)((((nowF % 86400) + 86400) % 86400) / 60)); }
+            S->callSide = S->view.side; }
+        S->view.callFlip = S->view.prior ? std::string() : S->callFlip;
+        hl::markSweeps(S->view, S->rbox.ok ? S->rbox.px : NAN, S->rbox.ok && std::isfinite(S->rbox.atr) ? S->rbox.atr / 4 : NAN);
+        if (hl::CALL_ROW && firstIn) S->view.tmOk = false;
+    }
     hl::Layout L = hl::layoutAll(S->view, pb, yOf, M, pe, PL.pos, projX, &avoid, &O);
     {   // (2.0.6) the table's place has hysteresis: a new spot only after 2 draws, never straight back (reset when the settings change)
         if (PL.sig != S->hystPlaceSig || pb.l != S->hystPane.l || pb.t != S->hystPane.t || pb.r != S->hystPane.r || pb.b != S->hystPane.b) { S->hyst.reset(); S->hystPlaceSig = PL.sig; S->hystPane = pb; }   // settings or the pane changed: start clean
@@ -2040,6 +2057,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.24.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.25.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

@@ -32,3 +32,23 @@
   afterwards. An event is now named only while it is in play: the last close is on its side of its price and within 1 ATR of it.
 - The box is 4 lines. Tests: tests_readbox/test_readbox_120.cpp 19 pass (replaces test_readbox_110.cpp); MinGW 0 errors; settings contract passes.
 - Not verified: the look on his chart. Not measured: whether the Flow verdict is right more often than not (the events are LOG-only letters).
+
+## 2.25.0 / ReadBox 1.3.0 (2026-11-11)
+- Rassul 11:55 "what would you reccomend for th ehod lod box ?", 11:57 "show mockup" (claude.ai/artifact/BGo1eWeEkJd1M8NhoqJTq2), 12:01 "update the
+  read at the top to just be the MKT LMT or derflow read and keep the Day in the hod lod obx , it already has the lvl righ t", 12:02 "will the hod
+  lod box highlight the level that is upcoming or going to be in play ?", 12:03 "ok.. lets do it. build".
+- Read box (ReadBox 1.3.0): ONE line, the order-flow read ("Flow: ..."). Out still carries the trend / day / lvl reads + the 60-min ATR + price.
+- HOD / LOD box:
+  - header row: "Hrly: Up, above 7607" (the read's hourly trend + breakout level; was the ER trend words) and "Day: Nor 35%, favours CoB".
+  - a CALL LINE under the header: [FLIPPED hh:mm] "1st extreme: <actual, else exp + the expected window>", "2nd: <the same>", then the Lvl read
+    (nearest level above / below). FLIPPED = the side first called in changed during the session (kept in the chart's state: lost on a restart).
+  - sweep tables: the UPCOMING level is the one bright row with "next" / "testing" (within a quarter of the 60-min ATR); every other row dim.
+    HOD table = the nearest level at / above price that can still be swept; LOD table = at / below. After the first extreme is in, only the side
+    still being watched has one (HOD first -> the LOD table) and the other table is dim.
+  - the "1st extreme by / % of days" table shows only until the first extreme is in.
+- Tests: tests_hodlod/t_hl2250.cpp 13 pass (swPrices, markSweeps); tests_readbox/test_readbox_130.cpp 19 pass (replaces 110 / 120); MinGW 0 errors;
+  settings contract passes. The older layout suites t_hl2179 / 2180 / 2190 were run before and after: they already fail on 2.22.2 (stale goldens);
+  the only new failures are the intended ones (the box one row taller, the gamma pill no longer right of the range pill); no text outside the
+  table and no overlaps in the scenes they cover.
+- NOT verified: the look on his chart - in particular the header row's width with the Day group, and the call line when it is longer than the table
+  (segments that do not fit are dropped from the right). The SESSION block keeps its Exp / Act rows (the call line repeats them).

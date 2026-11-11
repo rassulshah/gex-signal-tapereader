@@ -56,10 +56,12 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.24.0";   // (2.24.0, Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed") the read box = ReadBox 1.2.0: Hrly Trend + the hourly breakout level / Day / Lvl nearest above and below / one Flow line from events still in play
+static const char* const HL_VERSION = "2.25.0";   // (2.25.0, 2026-11-11 Rassul 11:57 "show mockup", 12:01 "update the read at the top to just be the MKT LMT or derflow read and keep the Day in the hod lod obx", 12:02 "will the hod lod box highlight the level that is upcoming or going to be in play ?", 12:03 "ok.. lets do it. build") the read box = the Flow line only; this box: a CALL LINE under the header (1st / 2nd extreme: actual, else expected; FLIPPED hh:mm; the Lvl read), "Hrly: Up, above 7607" and "Day: ..." in the header row, the sweep tables' UPCOMING level bright ("next" / "testing") and the rest dim, the 1st-extreme time table only until the first extreme is in
+// was "2.24.0":   // (2.24.0, Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed") the read box = ReadBox 1.2.0: Hrly Trend + the hourly breakout level / Day / Lvl nearest above and below / one Flow line from events still in play
 // was "2.23.1":   // (2.23.1, Rassul 11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA") the read box's first line is "Hrly Trend: Up / Down / NA" (ReadBox 1.1.0)
 // was "2.23.0":   // (2.23.0, 2026-11-11 Rassul 11:40 CT "get rid of dly trend.and the values to the left and move the gamma regime were the daily trend is"; he chose "Dly + RTH opens + Bar left"; 11:41 "updat eht readt at the top to be more simple") the header row: no "RTH opens / % done", no "Bar m:ss left", no "Dly:" trend; the gamma pill (+GAMMA / -GAMMA) leads the centre group where "Dly:" was; the read box: ReadBox 1.1.0 (no HTF line, the Day line without ADR / Used)
 static const bool HDR_DLY = false, HDR_LEFT = false, HDR_PILL_MID = true;   // (2.23.0)
+static const bool CALL_ROW = true;   // (2.25.0) the call line under the header band
 // was "2.22.2";   // (2.22.2) the read box 4 px from the pane's left edge (was 38)
 // was "2.22.1";   // (2.22.1) the read box at the top of the price pane, ASCII text only, "Lmt: no absorption"
 // was "2.22.0":   // (2.22.0, 2026-11-08 Rassul "go") the compact READ BOX left column (ReadBox.h) replaces the 3-line read strip
@@ -725,7 +727,8 @@ struct View {
     struct Note { std::string label, text; unsigned col = 0x00B8BEC8; std::vector<Line> hover; };
     std::vector<Note> notes;
     // (2.13.0) the HOD / LOD sweep sections (HodLodSweeps.h fills them; swOn false = the 2.12.0 box)
-    struct SwRow { std::string name, px, pct; bool elig = true; };
+    struct SwRow { std::string name, px, pct; bool elig = true; int st = 0; bool dim = false; };   // (2.25.0) st: 1 = the UPCOMING level (bright), 2 = being tested; dim = not the live row / a section not being watched
+    std::vector<Seg> callTail; std::string callFlip;   // (2.25.0) the call line: "FLIPPED 10:14" (host) and what follows the 1st / 2nd call (the Lvl read)
     // (2.18.0) FAV = the section's highest Swept % among the levels that can still be swept today (eligible AND a real price: not "-",
     // not "below / above open"); ties all get FAV; no % or no such row = no FAV
     static bool favPriced(const SwRow& r) { return r.elig && !r.px.empty() && r.px != "-" && r.px.find("open") == std::string::npos; }
@@ -806,6 +809,28 @@ struct View {
     std::vector<Seg> qSegs; std::vector<Line> qHover;
 };
 // (v15) every E / A value has a key; the status file writes all of them, the table draws the keys in SHOWN.
+// (2.25.0) the numbers in a sweep row's price text ("7,597.50 - 7,620.00" -> 7597.5, 7620; "-" / "below open" -> none)
+inline std::vector<double> swPrices(const std::string& px) {
+    std::vector<double> v; std::string t;
+    auto flush = [&]() { if (!t.empty() && t.find_first_of("0123456789") != std::string::npos) { char* e = nullptr; const double d = std::strtod(t.c_str(), &e); if (e != t.c_str() && std::isfinite(d)) v.push_back(d); } t.clear(); };
+    for (size_t k = 0; k < px.size(); k++) { const char c = px[k];
+        if ((c >= '0' && c <= '9') || c == '.') t += c; else if (c == ',' && !t.empty()) continue; else flush(); }
+    flush(); return v; }
+// (2.25.0) the UPCOMING level of each sweep table: HOD SWEEPS = the nearest level at / above the last price that can still be swept, LOD
+// SWEEPS = the nearest at / below it; "testing" within q of it. Before the first extreme is in, both tables have one; after it only the
+// side still being watched (HOD first -> the LOD table; LOD first -> the HOD table) and the other table is dim. Every other row is dim.
+inline void markSweeps(View& v, double px, double q) {
+    for (int t = 0; t < 2; t++) for (View::SwRow& r : (t ? v.swLo : v.swHi)) { r.st = 0; r.dim = false; }
+    if (!std::isfinite(px)) return;
+    const bool firstIn = v.firstCalledIn || v.firstFinal;
+    for (int t = 0; t < 2; t++) { std::vector<View::SwRow>& R = t ? v.swLo : v.swHi;
+        const bool watched = !firstIn || v.side == 0 || (t == 0 ? v.side == 1 : v.side == 2);
+        int best = -1; double bd = 1e300;
+        if (watched) for (size_t i = 0; i < R.size(); i++) { if (!R[i].elig) continue;
+            for (double p : swPrices(R[i].px)) { const double d = t == 0 ? p - px : px - p; if (d >= 0 && d < bd) { bd = d; best = (int)i; } } }
+        if (best >= 0) R[(size_t)best].st = (std::isfinite(q) && q > 0 && bd <= q) ? 2 : 1;
+        for (size_t i = 0; i < R.size(); i++) if ((int)i != best && (best >= 0 || !watched)) R[i].dim = true; }
+}
 enum { K_LABEL = 0, K_1ST, K_RECL, K_2ND, K_GAP, K_TOOK, K_SIZE, K_RECTOOK, K_ROOM, K_RANGE, K_CLOSE, K_DIR1, K_DIR2, NALL };
 static const int NCOL = NALL;
 static const char* const COLS[NALL] = { "", "1st Time", "Reclaim", "2nd Time", "Gap", "Took", "Size", "Rec. Took", "Room", "Range", "Close", "1st Dir", "2nd Dir" };
@@ -1946,9 +1971,10 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         cw[(size_t)(ncol - 1)] += WsessF - (8 + lw + sumC);                              // the spare width goes to the last column
         const int hdrH = rowH + 4;                         // (2.5.0) the header band, a little taller
         const int htfH = 0;   // (2.17.2, Rassul 14:41 CT) the HTF trend / RS values moved INTO the header (no own row)
-        const int H0 = htfH + 1 + hdrH + 1 + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3;   // (2.12.0) header band + Exp + Act (no 1ST / 2ND row, no Est row, no footer); (2.6.0) + the Pre row while it is shown
+        const int callH = CALL_ROW ? rowH + 3 : 0;   // (2.25.0) the call line
+        const int H0 = callH + htfH + 1 + hdrH + 1 + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3;   // (2.12.0) header band + Exp + Act (no 1ST / 2ND row, no Est row, no footer); (2.6.0) + the Pre row while it is shown
         const int sessRows = 1 + 2 + (v.preOn ? 1 : 0) + (int)v.notes.size() + (v.tmOk ? 3 : 0);   // (2.14.2) + 1 spacer row above the time table   // (2.14.0) strip + Exp / Act (+ Pre / notes) + the time table
-        const int H = useSw ? htfH + 1 + hdrH + 1 + rowH * (std::max)(sessRows, 2 + (int)swRows) + 3 + 2 : H0;   // (2.14.0) strip + column heads + rows
+        const int H = useSw ? callH + htfH + 1 + hdrH + 1 + rowH * (std::max)(sessRows, 2 + (int)swRows) + 3 + 2 : H0;   // (2.14.0) strip + column heads + rows
         const int Htot = H + (lad.ok ? stripH + STRIP_GAP : 0);
         if (fillW > 0 && !fillOn) return;                    // (2.17.7) pass 2 that cannot reach the width: the caller keeps pass 1
         if (fillOn) area.r = area.l + W;                     // (2.17.7) laid out at the area's left; the host moves it onto pass 1's final spot
@@ -2042,6 +2068,20 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             L.qBox = Box{ T.l, T.t, T.r, y + hdrH }; L.qOk = true;
         }
         y += hdrH; addLine(L, T.l, y, T.r, y, C_BORDER, 1, R_TABLE); y += 1;
+        if (callH > 0) {   // (2.25.0, Rassul 2026-11-11 12:03 CT "ok.. lets do it. build"; mockup claude.ai/artifact/BGo1eWeEkJd1M8NhoqJTq2) THE CALL LINE:
+            // [FLIPPED hh:mm]  1st extreme: <actual, else "exp" + the expected window>   2nd: <the same>   <the Lvl read>
+            auto ctext = [](const Cell& C) { std::string t = C.s; if (!C.s2.empty()) t += " " + C.s2; for (size_t q = 0; q < C.lv.size(); q++) t += (q ? " \xB7 " : " ") + C.lv[q].s; if (!C.s3.empty()) t += " " + C.s3; return t; };
+            auto has = [](const std::string& t) { return !t.empty() && t != "-" && t.find_first_not_of(" -") != std::string::npos; };
+            std::vector<Seg> cs; if (!v.callFlip.empty()) cs.push_back(Seg{ v.callFlip, C_AMBER });
+            const char* cl[2] = { "1st extreme: ", "2nd: " }; const int ck[2] = { K_1ST, K_2ND };
+            for (int q = 0; q < 2; q++) { const std::string a = ctext(aRow[ck[q]]), e = ctext(eRow[ck[q]]);
+                if (has(a)) cs.push_back(Seg{ cl[q] + a, C_SLATE }); else if (has(e)) cs.push_back(Seg{ std::string(cl[q]) + "exp " + e, C_BLUE }); }
+            for (const Seg& t : v.callTail) cs.push_back(t);
+            int xc = T.l + 10;
+            for (size_t q = 0; q < cs.size(); q++) { const bool bold = cs[q].col != C_GREY; const int w = M(cs[q].s, fs, bold); if (xc + w > T.r - 8) break;
+                addText(L, xc, y + 1, y + callH - 2, cs[q].s, cs[q].col, fs, bold, w, R_TABLE, -1); xc += w + 18; }
+            y += callH; addLine(L, T.l, y - 1, T.r, y - 1, C_BORDER, 1, R_TABLE);
+        }
         const int x0 = T.l + 8 + lw;
         auto colX = [&](int k) { int x = x0; for (int i = 0; i < k; i++) x += cw[(size_t)i]; return x; };
         // (2.4.5, Rassul 19:08 "right justify the 2nd column, we have space") the last column's text ends at the table's right padding
@@ -2126,11 +2166,13 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                 yy += rowH;
                 for (size_t i = 0; i < RR.size(); i++) {
                     const View::SwRow& r = RR[i];
-                    if (i % 2 == 0) addFill(L, cx + 6, yy + 1, cx + swW - 6, yy + rowH - 1, C_ROWALT, R_TABLE);
-                    const unsigned cn = r.elig ? C_SLATE : C_DIM, cp = r.elig ? C_GREY : C_DIM;
+                    const bool live = r.st > 0;   // (2.25.0) the upcoming / tested level is the one bright row; the others dim
+                    if (live) addFill(L, cx + 6, yy + 1, cx + swW - 6, yy + rowH - 1, 0x00243447, R_TABLE);
+                    else if (i % 2 == 0) addFill(L, cx + 6, yy + 1, cx + swW - 6, yy + rowH - 1, C_ROWALT, R_TABLE);
+                    const unsigned cn = r.dim ? C_DIM : live ? 0x00FFFFFF : (r.elig ? C_SLATE : C_DIM), cp = r.dim ? C_DIM : live ? 0x00FFFFFF : (r.elig ? C_GREY : C_DIM);
                     int pv = -1; { char* e = nullptr; const long t = std::strtol(r.pct.c_str(), &e, 10); if (e != r.pct.c_str()) pv = (int)t; }
                     if (pv > 0 && swBar > 0) { const int bw = (std::min)(swBar, (int)std::lround(swBar * (std::min)(100, pv * 16 / 10) / 100.0)), bx = xPctR - swBar;   // (2.17.9) the tier's bar width
-                        addFill(L, bx, yy + 3, bx + (std::max)(2, bw), yy + rowH - 3, r.elig ? (q ? C_BAR_G : C_BAR_R) : (q ? C_BAR_GD : C_BAR_RD), R_TABLE); }
+                        addFill(L, bx, yy + 3, bx + (std::max)(2, bw), yy + rowH - 3, (r.elig && !r.dim) ? (q ? C_BAR_G : C_BAR_R) : (q ? C_BAR_GD : C_BAR_RD), R_TABLE); }
                     const std::string pxs = swPx(r.px); const int pw = M(r.pct, fs, true), xw = M(pxs, fs, false);
                     addText(L, cx + 9, yy, yy + rowH, r.name, fav[i] && tier >= 3 ? C_FAV : cn, fs, false, M(r.name, fs, false), R_TABLE, -1);
                     if (fav[i] && tier >= 3) L.favN++;   // (2.18.0) tightest form: the name itself in the FAV colour (never drop the sweep sections for the tag)
@@ -2138,6 +2180,9 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                         addRect(L, fx, yy + 2, fx + fw + 8, yy + rowH - 2, C_FAV, C_PANEL, 1, R_TABLE);
                         addText(L, fx + 4, yy, yy + rowH, "FAV", C_FAV, fs - 2, true, fw, R_TABLE, -1); L.favN++; }
                     addText(L, xPxR - xw, yy, yy + rowH, pxs, cp, fs, false, xw, R_TABLE, -1);
+                    if (live) { const char* tg = r.st == 2 ? "testing" : "next"; const int tw = M(tg, fs - 2, true), tx = xPxR - xw - 10 - tw;   // (2.25.0) its state, right before the price when there is room
+                        const int nameR = cx + 9 + M(r.name, fs, false) + (fav[i] && tier < 3 ? M("FAV", fs - 2, true) + 18 : 4);
+                        if (tx >= nameR) addText(L, tx, yy, yy + rowH, tg, r.st == 2 ? C_AMBER : C_GREY, fs - 2, true, tw, R_TABLE, -1); }
                     addText(L, xPctR - pw, yy, yy + rowH, r.pct, cn, fs, true, pw, R_TABLE, -1);
                     yy += rowH;
                 }

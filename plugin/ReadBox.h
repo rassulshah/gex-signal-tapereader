@@ -24,10 +24,12 @@
 
 namespace rbx {
 
-static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-11-11 Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed"): Lvl = the nearest level above / below with the distance; Hrly Trend + the hourly breakout level; ONE Flow line (verdict first) from events still in play - 4 lines
+static const char* const VERSION = "1.3.0";   // 1.3.0 (2026-11-11 12:01-12:03 CT): the read box shows the order-flow read only (one "Flow:" line); Out carries trend / day / lvl / atr for the HOD / LOD box
+// was "1.2.0";   // 1.2.0 (2026-11-11 Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed"): Lvl = the nearest level above / below with the distance; Hrly Trend + the hourly breakout level; ONE Flow line (verdict first) from events still in play - 4 lines
 // was "1.1.0";   // 1.1.0 (2026-11-11 Rassul 11:41 CT "also updat eht readt at the top to be more simple", his screenshot: the HTF line and "0.8x ADR, Used 91%" crossed out): the HTF line is "Hrly Trend: Up / Down / NA" (11:45 CT); the RTH Day line without the ADR multiple and the Used %
 // was "1.0.1";
 static const bool SHOW_HTF = true;    // (1.1.0) 11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA": the first line is "Hrly Trend: Up / Down / NA" (green / red / white)
+static const bool BOX_FLOW_ONLY = true;   // (1.3.0, Rassul 12:01 CT "update the read at the top to just be the MKT LMT or derflow read and keep the Day in the hod lod obx", 12:03 "build")
 static const bool DAY_ADR = false;    // (1.1.0) the RTH Day line: no "0.8x ADR, Used 91%"   // 1.0.1: plain ASCII only (the IRT text call is ANSI: "->" not an arrow), no bare "-" lines
 enum Col { WHITE = 0, GREEN = 1, RED = 2, GREY = 3, BLUE = 4 };
 struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0; };   // t = bar END, CT wall-clock seconds
@@ -43,7 +45,8 @@ struct In {
     DayIn day;
 };
 struct Line { std::string text; int col = WHITE; };
-struct Out { bool ok = false; Line l[5]; int n = 5; std::string why; long long at = 0; };   // (1.1.0) n = the lines shown (4 without the HTF line)
+struct Out { bool ok = false; Line l[5]; int n = 5; std::string why; long long at = 0;
+             Line trend, day, lvl; double atr = NAN, px = NAN; };   // (1.3.0) the Hrly Trend / Day / Lvl reads (shown in the HOD / LOD box, not in the read box) and the 60-min ATR   // (1.1.0) n = the lines shown (4 without the HTF line)
 
 // ---------------------------------------------------------------- helpers
 inline std::string num(double v, int dec) {
@@ -174,8 +177,8 @@ inline Line dayLine(const In& I, long long now) {
         if (std::isfinite(I.day.xr) && I.day.xr > 0) { char b[24]; std::snprintf(b, sizeof b, ", Used %.0f%%", 100.0 * rr / (I.day.xr * adr)); t += b; }
     }
     if (afterClose) t += ", closed";
-    else if (I.day.kind == 1) t += ", -> PB Revs, Hold CoB";
-    else if (I.day.kind >= 0) t += ", -> CoB 1.33";
+    else if (I.day.kind == 1) t += ", favours PB Revs, hold CoB";   // (1.3.0) plain words (was "-> PB Revs, Hold CoB" / "-> CoB 1.33")
+    else if (I.day.kind >= 0) t += ", favours CoB";
     L.text = t; return L;
 }
 
@@ -253,12 +256,18 @@ inline Out build(const In& I) {
     Out o; if (I.bars.size() < 3) { o.why = "no bars"; return o; }
     const long long now = I.bars.back().t; o.at = now;
     const Htf h = htfLine(I);
-    int k = 0; if (SHOW_HTF) { Line t; t.text = std::string("Hrly Trend: ") + (h.trend > 0 ? "Up" : h.trend < 0 ? "Down" : "NA"); t.col = h.trend > 0 ? GREEN : h.trend < 0 ? RED : WHITE;
+    { Line t; t.text = std::string("Hrly Trend: ") + (h.trend > 0 ? "Up" : h.trend < 0 ? "Down" : "NA"); t.col = h.trend > 0 ? GREEN : h.trend < 0 ? RED : WHITE;
         // (1.2.0, Rassul 11:53 CT "2. ok") + the newest hourly breakout level when it goes the trend's way: "Up, above 7607" / "Up, back below 7607"
         if (h.trend != 0 && h.stepDir == h.trend && std::isfinite(h.stepPx)) { const double px = I.bars.back().c; const bool beyond = h.trend > 0 ? px >= h.stepPx : px <= h.stepPx;
             t.text += std::string(", ") + (beyond ? (h.trend > 0 ? "above " : "below ") : (h.trend > 0 ? "back below " : "back above ")) + num(h.stepPx, I.dec); }
-        o.l[k++] = t; }
-    o.l[k++] = dayLine(I, now); o.l[k++] = lvlLine(I, now, h.dir, h.atr); o.l[k++] = flowLine(I, now, h.atr); o.n = k;
+        o.trend = t; }
+    o.day = dayLine(I, now); o.lvl = lvlLine(I, now, h.dir, h.atr); o.atr = h.atr; o.px = I.bars.back().c;
+    const Line flow = flowLine(I, now, h.atr);
+    int k = 0;
+    if (BOX_FLOW_ONLY) o.l[k++] = flow;   // (1.3.0) the read box = the order-flow read only
+    else { if (SHOW_HTF) o.l[k++] = o.trend;
+           o.l[k++] = o.day; o.l[k++] = o.lvl; o.l[k++] = flow; }
+    o.n = k;
     o.ok = true; o.why = "ok"; return o;
 }
 
