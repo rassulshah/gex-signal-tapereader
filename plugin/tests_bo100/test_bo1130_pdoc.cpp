@@ -13,6 +13,7 @@
 #include <fstream>
 #include <cstdio>
 #include <cstring>
+static std::string baseLbl(const std::string& s) { return s == "PbT" ? "Pb" : s == "PbocT" ? "Pboc" : s; }   // (1.18.0) PbT / PbocT = the Pb / Pboc that tested a Step Trend level (test_bo1180_pbt checks the T)
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %s\n", std::string(m).c_str()); } } while (0)
 static const long long OFF = 2082844800LL;
@@ -53,7 +54,7 @@ static void replay(Run& R, const Fix& X, int from, int vapAtStep = -1, long long
         const bko::Scene S = draw(R.E);
         for (const bko::Txt& t : S.txt) if (t.kind == 2) { const long long bt = R.E.bars[(size_t)t.bar].t; const bool fin = R.E.pb.count(bt) || R.E.rpb.count(bt);
             if (!fin) continue;
-            auto f = R.first.find(bt); if (f == R.first.end()) R.first[bt] = t.s; else if (f->second != t.s) ++R.switches; }
+            auto f = R.first.find(bt); if (f == R.first.end()) R.first[bt] = baseLbl(t.s); else if (f->second != baseLbl(t.s)) ++R.switches; }
     }
 }
 static int barOf(const bko::Engine& E, long long t) { for (int k = 0; k < (int)E.bars.size(); ++k) if (E.bars[(size_t)k].t == t) return k; return -1; }

@@ -170,6 +170,9 @@ REM (2026-11-10) lsSR 1.0.0 (Rassul "build it ... call the new indicator SR ... 
 REM   stop runs through key / MenthorQ levels: gold bar + ratio, reversal arrow, pull diamond. SRParams.h is written by hand from the 2026-11-10 study and then
 REM   ONLY by the nightly lra.sr_score (judge passed). No settings (not on the settings layer list).
 call :one SR lsSR SRLogic.h SRParams.h OrderFlowFeed.h MarketKey.h NearLevels.h HostSlot.h PerfGuard.h SettingsGuard.h SettingsSpec.h SettingsHost.h BoxPlace.h HoverBoard.h ImpliedFill.h LargeLotPool.h MoveLogic.h NodeLadder.h OptionsFlow.h ZoneRead.h ZoneRule.h
+REM (2026-11-11) lsStepTrend 1.0.0 (Rassul 2026-11-10 22:28 CT "a stepwise trend indicator ... hourly breakout", 23:53 "build"): on the price chart, hourly breakouts as
+REM   connected steps over the wave tops (StepTrendLogic.h; per-market rule values StepTrendParams.h, by hand; scored nightly by lra.step_trend_score). No settings.
+call :one StepTrend lsStepTrend StepTrendLogic.h StepTrendParams.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 REM (2026-10-20 Rassul 12:22 CT "first build the lines, do it now") lsDefenseLines 1.0.0 - the Defense pane's pivot turns + refill lines on the price chart
 REM (2026-10-22) lsDefenseLines 1.10.0 trails (MoveLogic 1.2.0) + the trail hover: HoverBoard.h hashed
 rem (2026-11-01 21:29 CT, Rassul "get rid of the defense lines" - retired) call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h HoverBoard.h MarkParams.h PerfGuard.h ColumnBoard.h
@@ -375,7 +378,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - no plugin installs on weekdays 6:10 AM-3:00 PM CT; new builds install the first time Investor/RT is closed after 3:00 PM ^(weekends any time^) ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! - builds install when Investor/RT is closed ^(weekday hold 6:10 AM-3:00 PM CT^) )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile LimitProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb Breakout Breakout1 CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk ZoneDefense ZoneDefenseMarks SR) do (
+for %%N in (GammaProfile LimitProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb Breakout Breakout1 CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow DefenseLines Context BigBidAsk ZoneDefense ZoneDefenseMarks SR StepTrend) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"

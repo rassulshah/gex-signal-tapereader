@@ -101,6 +101,7 @@
 #include "VwapTrendLogic.h"
 #include "RallyLogic.h"
 #include "WavePOCLogic.h"    // (1.12.0) wpc::rowTicksFor / buildRows / median2 / pickNodes = lsWavePOC's wave volume POC rule, natively (Pboc)
+#include "StepTrendLogic.h"   // (1.18.0) stp::Engine = lsStepTrend's hourly steps, natively (PbT / PbocT)
 #include "ZzoDeltaLogic.h"   // (1.1.0) zzd::Engine::step = the 3-bar High / Low ZigZag of lsZzoCombo 2.1.0 (COMBO_REV_BARS)
 #include <algorithm>
 #include <cmath>
@@ -124,7 +125,8 @@ namespace bko {
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
 static const bool SHOW_PDOC = false;   // (1.17.0) Pdoc removed from the chart (decided + recorded as before)
-static const char* const VERSION = "1.17.0";   // (1.17.0, 2026-11-10 Rassul 13:09-13:11 CT "so we have 2 signals, PB and Pboc, pboc replaces pb if it is true", "remove pdoc") Pdoc is no longer drawn (a BO / BD pullback that was Pdoc shows Pb; a Rly Pdoc shows nothing); the decision is still recorded
+static const char* const VERSION = "1.18.0";   // (1.18.0, 2026-11-11 Rassul) (1) 07:50 CT "this pb should have gotting a pboc too", rule: "allow if it doens't close below" - a pullback is void only when a candle CLOSES beyond the wave's origin (was: trades beyond it). (2) 07:33-07:40 CT "if there is a pb and it is below this level then it should be called a PbT", "it would be the dashed lne that would be tested", "update pboc to pbocT" - a drawn Pb / Pboc whose pullback traded at / through a Step Trend level of its direction (the newest level or an older one still running as support) is drawn PbT / PbocT; BPT| record lines
+// was "1.17.0";   // (1.17.0, 2026-11-10 Rassul 13:09-13:11 CT "so we have 2 signals, PB and Pboc, pboc replaces pb if it is true", "remove pdoc") Pdoc is no longer drawn (a BO / BD pullback that was Pdoc shows Pb; a Rly Pdoc shows nothing); the decision is still recorded
 // was "1.16.1";   // (1.16.1, 2026-11-10) no Rly within 6 bars before / 1 after a drawn Cob (either direction)
 // was "1.16.0";   // (1.16.0, 2026-11-09 Rassul 21:06-21:08 CT "see this pb, it is too low", "all pullbacks including pb pboc pdoc are required to be at least 38.2%") every pullback label (Pb / Pboc / Pdoc after a BO / BD and the no-BO Rly Pboc / Pdoc) needs its pivot to retrace >= 38.2% of its wave (wave origin -> wave end, the same bars as the PB POC gate); shallower pivots get no label and do not count toward the 2 per wave   // was "1.15.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") a Pdoc / ENT at the PB POC counts only when that frozen PB POC is at / beyond 38.2% of the wave (wpc::pbPocDeep); otherwise Pb (or Pboc)   // was "1.14.0":   // (1.14.0, 2026-11-09 Rassul 16:34 CT) the plugin posts fact kind E (EntryFacts.h) - no rule here changed   // was "1.13.0":   // (1.13.0, 2026-11-09 Rassul 14:09-14:12 CT "Lets also have PBoc. It happens when the pb is testing only the wave pb poc ... for rally also", name "pdoc where d represent the developing poc") a Pb / Rly pullback whose pivot bar straddles the pullback's DEVELOPING volume POC (lsWavePOC's wave PB POC: 38.2% gate, value at the decision bar) and not the wave POC is drawn "Pdoc"; both -> Pboc   // was "1.12.0":   // (1.12.0, 2026-11-09 Rassul 12:22 "if a pb tags the wave poc with the downpivot at or below the wave poc but the high is above it, then instead of pb, show pboc") a Pb whose pivot bar straddles its BO / BD wave's volume POC (lsWavePOC's rule on IRT's VAP, computed here) is drawn "Pboc"; BPB record + boc; Pb / Rev decisions unchanged
 // was "1.11.1";   // (1.11.1, 2026-11-09 Rassul HG 10:13 "if there is a cob you dont need to show a rly and if there is an lvp, you dont need to show a pb") DISPLAY only: no Rly where lsCobSignal draws a Cob on the same extreme, no Pb where it draws an Lvp on the same pivot (records / Rev / qualification unchanged)
@@ -231,6 +233,7 @@ inline std::string pbLine(const PbMark& m, const bba::BoDec& D, const Pivot& p, 
 static const char* const RPB_HEADER = "BPO|t_pivot|side|t_rly_end|t_rly_start|t_conf|t_dec|pivot_high|pivot_low|wave_poc|wave_mid|origin|version";
 // (1.13.0) a Rly pullback drawn "Pdoc" (its pivot bar straddled the pullback's developing POC, not a Pboc)
 static const char* const RPD_HEADER = "BPD|t_pivot|side|t_rly_end|t_rly_start|t_conf|t_dec|pivot_high|pivot_low|pb_poc|wave_poc|origin|version";
+static const char* const PBT_HEADER = "BPT|t_pivot|side|kind|level|t_test|t_dec|version";   // (1.18.0) kind: pb = after a BO / BD, rly = the no-BO Rly Pboc
 static const char* const RRV_HEADER = "BRO|t_thrust|side|t_pivot|t_pb_conf|t_dec|range|atr13|pivot_high|pivot_low|bar_high|bar_low|bar_close|version";
 // (1.12.0) Pboc: a BO Pb (pivot LOW) whose pivot bar's LOW <= the wave POC < its HIGH; BD mirror: HIGH >= POC > LOW (ticks, exact)
 inline bool pbocHit(int dir, long long lowTk, long long highTk, long long pocTk) { return dir > 0 ? (lowTk <= pocTk && highTk > pocTk) : (highTk >= pocTk && lowTk < pocTk); }
@@ -282,6 +285,35 @@ struct Engine {
     std::map<long long, RecL> rpbL, rroL;      // (1.12.0) BPO| / BRO| record lines
     std::map<long long, RevMark> rro;          // (1.12.0) the thrust off a Rly Pboc (recorded only)      // (1.12.0) status: last pass, Pbs whose wave had a bar without VAP / no POC
     std::set<std::pair<long long, int> > hideRly, hidePb;   // (1.11.1, host: lsCobSignal's rule natively) bar time + letter direction: no Rly (a drawn Cob there) / no Pb (a drawn Lvp there)
+    std::map<long long, int> pbT, rpbT;        // (1.18.0) 1 = the pullback tested a Step Trend level (drawn PbT / PbocT); decided once with the mark, never changed
+    std::map<long long, RecL> pbtL, rpbtL;     // (1.18.0) BPT| record lines
+    // (1.18.0) did the pullback of mark m (bars after its wave end tw1 up to its pivot bar tp) trade at / through a Step Trend level of its
+    // direction? The steps are lsStepTrend's (stp::Engine, clock hours of the bar START, CT) fed with the closed bars up to the decision bar
+    // td only (no look-ahead). A level counts while it is the newest one or still running as support (not yet tested, no later step past
+    // it), from the candle after the one that made it; the wave end must be beyond the level (a test from the far side). -1 = not judged.
+    template <class IdxOf> int stepTest(const PbMark& m, IdxOf& idxOf, double& lvl, long long& tTest) const {
+        if (!stp::periodOk(spb) || !(tick > 0)) return -1;
+        const int i1 = idxOf(m.tw1), pi = idxOf(m.tp), id = idxOf(m.td); if (i1 < 0 || pi < 0 || id < pi || pi <= i1) return -1;
+        stp::Engine E; std::vector<int> at((size_t)id + 1, -1);              // at[k] = bar k's index in the step engine
+        for (int k = 0; k <= id; ++k) { const In& b = bars[(size_t)k]; if (!b.ok) continue;
+            stp::Bar x; x.t = (long long)b.days * 86400LL + b.endSec - spb;
+            if (!wpc::toTicks(b.o, tick, x.o) || !wpc::toTicks(b.h, tick, x.h) || !wpc::toTicks(b.l, tick, x.l) || !wpc::toTicks(b.c, tick, x.c)) continue;
+            if (E.addBar(x)) at[(size_t)k] = (int)E.B.size() - 1; }
+        { const In& d = bars[(size_t)id]; E.sealTo((long long)d.days * 86400LL + d.endSec); }   // an hour that ended with the decision bar is closed
+        const int dir = m.dir > 0 ? 1 : -1; long long wt = 0; { const In& w = bars[(size_t)i1]; if (!w.ok || !wpc::toTicks(dir > 0 ? w.h : w.l, tick, wt)) return -1; }
+        for (size_t s = E.S.size(); s-- > 0;) { const stp::Step& q = E.S[s]; if (q.dir != dir) continue;
+            if (dir > 0 ? !(wt > q.px) : !(wt < q.px)) continue;             // the wave never got beyond this level
+            int end = INT_MAX;                                                // the last engine candle the level runs to
+            if (s + 1 < E.S.size()) { const stp::Step& nx = E.S[s + 1]; end = nx.dir != q.dir ? nx.oi : q.sup == 2 ? q.supEnd : INT_MAX; }
+            for (int k = i1 + 1; k <= pi; ++k) { const int j = at[(size_t)k]; if (j < 0 || j <= q.oi || j > end) continue;
+                if (stp::Engine::tested(q, E.B[(size_t)j])) { lvl = (double)q.px * tick; tTest = bars[(size_t)k].t; return 1; } } }
+        return 0;
+    }
+    template <class IdxOf> void judgeT(const PbMark& m, bool rlyKind, IdxOf& idxOf) {
+        double lvl = 0; long long tt = 0; const int r = stepTest(m, idxOf, lvl, tt); (rlyKind ? rpbT : pbT)[m.tp] = r == 1 ? 1 : 0; if (r != 1) return;
+        RecL L; const int di = idxOf(m.td); L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;
+        char ln[260]; std::snprintf(ln, sizeof ln, "BPT|%lld|%d|%s|%.10g|%lld|%lld|%s", m.tp, m.dir, rlyKind ? "rly" : "pb", lvl, tt, m.td, recVer().c_str());
+        L.line = ln; (rlyKind ? rpbtL : pbtL)[m.tp] = L; }
     std::map<long long, RecL> revL;            // (1.9.0) the BRV| record line of each Rev
     std::vector<RevMark> revProv;              // (1.9.2) Revs on provisional Pbs: drawn, never recorded, recomputed every pass (go with their Pb)
     std::vector<Pivot> piv;                    // (1.1.0) the confirmed 3-bar ZigZag pivots of the last pass (closed bars)
@@ -614,7 +646,7 @@ struct Engine {
                 if (blocked) break;
                 // price traded beyond the origin on a bar in (i, p]: stop (no Pb on or after that)
                 bool broke = false; const int pi = idxOf(p.t); if (pi < 0) break;
-                if (haveOrg) for (int k = scan + 1; k <= pi; ++k) { const In& b = bars[(size_t)k]; if (b.ok && (dir > 0 ? b.l < org : b.h > org)) { broke = true; break; } scan = k; }
+                if (haveOrg) for (int k = scan + 1; k <= pi; ++k) { const In& b = bars[(size_t)k]; if (b.ok && (dir > 0 ? b.c < org : b.c > org)) { broke = true; break; } scan = k; }   // (1.18.0) a CLOSE beyond the origin (was: a trade)
                 if (broke) break;
                 if (p.type != want) continue;
                 if (p.t <= topT) continue;                                    // (1.9.1) inside the BO / BD wave: not a pullback
@@ -633,7 +665,7 @@ struct Engine {
                   if (nb >= PB_MAX_PER_BO) break; }   // (1.8.0) at most 2 per BO / BD (1.9.2: provisional ones count)
                 if (prov || p.prov) { PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = p.tc; m.dir = dir; m.tw0 = tw0; m.tw1 = topT; pbProv.push_back(m);
                     double pp = 0; const int bc = bocOf(m, pp); if (bc >= 0) bocProv[p.t] = bc; else if (bc == -2) ++bocNoVap; else ++bocNoPoc; continue; }   // (1.9.2) drawn only; (1.9.3) + a forming ZigZag leg's extreme
-                PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = td; m.dir = dir; m.tw0 = tw0; m.tw1 = topT; pb[p.t] = m;
+                PbMark m; m.tp = p.t; m.t0 = D.t0; m.tc = p.tc; m.td = td; m.dir = dir; m.tw0 = tw0; m.tw1 = topT; pb[p.t] = m; judgeT(m, false, idxOf);   // (1.18.0) PbT
                 double pp = 0, dd = 0; const int bc = bocOf(m, pp, &dd);   // (1.12.0) decided with the Pb; no VAP yet (-2): nothing drawn, the line waits
                 if (bc >= 0) { boc[p.t] = bc; if (pp != 0) bocPoc[p.t] = pp; if (bc == 2) dpoc[p.t] = dd; } else if (bc == -1) boc[p.t] = 0;   // no POC: a plain Pb (boc na); (1.13.0) 2 = Pdoc
                 if (bc == -2 && vapAt) { PbPend q; q.D = D; q.p = p; q.c = c; pbPend[p.t] = q; ++bocNoVap; continue; }
@@ -656,8 +688,8 @@ struct Engine {
             it = pbPend.erase(it);
         }
         rlyPbPass(idxOf, F);
-        while (pb.size() > 40000) { pbL.erase(pb.begin()->first); boc.erase(pb.begin()->first); dpoc.erase(pb.begin()->first); bocPoc.erase(pb.begin()->first); pbPend.erase(pb.begin()->first); pb.erase(pb.begin()); }
-        while (rpb.size() > 40000) { rpbL.erase(rpb.begin()->first); rpbBoc.erase(rpb.begin()->first); dpoc.erase(rpb.begin()->first); rpb.erase(rpb.begin()); }
+        while (pb.size() > 40000) { pbT.erase(pb.begin()->first); pbtL.erase(pb.begin()->first); pbL.erase(pb.begin()->first); boc.erase(pb.begin()->first); dpoc.erase(pb.begin()->first); bocPoc.erase(pb.begin()->first); pbPend.erase(pb.begin()->first); pb.erase(pb.begin()); }
+        while (rpb.size() > 40000) { rpbT.erase(rpb.begin()->first); rpbtL.erase(rpb.begin()->first); rpbL.erase(rpb.begin()->first); rpbBoc.erase(rpb.begin()->first); dpoc.erase(rpb.begin()->first); rpb.erase(rpb.begin()); }
     }
     // (1.12.0) the no-BO Rly Pboc (Rassul 2026-11-09, mockup approved): a fired Rly wave with no shown BO / BD of its direction inside it;
     // its pullback pivots = the first 2 confirmed 3-bar ZigZag pivots of the other kind after the wave end (Rly up: pivot LOWs), none after
@@ -681,7 +713,7 @@ struct Engine {
                 const int pi = idxOf(p.t); if (pi < 0) break;
                 const long long td = std::max(p.tc, W.tc);
                 bool stop = false;
-                for (int k = scan + 1; k <= pi && !stop; ++k) { const In& b = bars[(size_t)k]; if (b.ok && (dir > 0 ? b.l < org : b.h > org)) stop = true; scan = k; }
+                for (int k = scan + 1; k <= pi && !stop; ++k) { const In& b = bars[(size_t)k]; if (b.ok && (dir > 0 ? b.c < org : b.c > org)) stop = true; scan = k; }   // (1.18.0) a CLOSE beyond the origin (was: a trade)
                 if (stop) break;
                 for (const bba::BoDec* D : F) if (D->t0 > W.te && D->t0 <= p.t && D->t <= td) { stop = true; break; }
                 if (!stop) for (size_t r = q + 1; r < R.size(); ++r) if (R[r]->te > W.te && R[r]->te <= p.t && R[r]->tc <= td) { stop = true; break; }
@@ -707,6 +739,7 @@ struct Engine {
                     if (d == 0) ++noVapRly;                                          // (1.15.0) waited: judged on the wave POC alone
                     if (d == 1 && pbocHit(dir, lt, ht, dp)) b = 2; }
                 rpb[p.t] = m; rpbBoc[p.t] = b; if (b == 2) dpoc[p.t] = (double)dp * tick;
+                if (b == 1) judgeT(m, true, idxOf);   // (1.18.0) PbocT
                 if (b == 1) {
                     RecL L; const int di = idxOf(td); L.sess = di >= 0 && bars[(size_t)di].ok ? sessOf(bars[(size_t)di].days, bars[(size_t)di].endSec) : -1;
                     char ln[420]; std::snprintf(ln, sizeof ln, "BPO|%lld|%d|%lld|%lld|%lld|%lld|%.10g|%.10g|%.10g|%.10g|%.10g|%s", p.t, dir, W.te, W.t0, p.tc, td, pb0.h, pb0.l,
@@ -783,7 +816,7 @@ struct View {
     int lh[2] = { 12, 14 };                         // letter row heights: BO / BD font, Rly font
 };
 struct Board { long long t = 0; int side = 0; int val = 0; };   // SignalBoard 'L': bar time, +1 above / -1 below, px from the extreme to the outer edge
-struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0; };   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
+struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0; };   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
 // (1.5.0) the BI rows: row r sits GAP + r * ROW_OUT px from the wick (0 = the BO row +3..+17, 1 = +19..+33, 2 = +35 (Pb), 3 = +51 (LVP),
 // 4 = +67, 5 = +83). Rows taken by OTHER indicators' labels at this candle and side: a zigzag pivot (the wave-time label, row 0, and
 // lsCandleAbsorb's A / Ae, row 1); the candle after a pivot that re-tests it within 4 ticks (lsCandleAbsorb's A row 1); row 3 is
@@ -843,7 +876,9 @@ inline Scene layout(const Engine& E, const View& v) {
         const auto bc = BC.find(P.tp); const bool oc = bc != BC.end() && bc->second == 1;   // (1.12.0) the Pb on its wave's POC = "Pboc"
         const bool od = SHOW_PDOC && bc != BC.end() && bc->second == 2;                  // (1.13.0) on the developing pullback POC only = "Pdoc"; (1.17.0) not drawn: a plain Pb
         if (E.bocLive && bc == BC.end()) { ++S.pbocWait; continue; }                     // (1.12.0) its wave's VAP not loaded yet: nothing (never Pb -> Pboc)
-        const size_t before = S.txt.size(); put(it->second, -P.dir, 2, oc ? "Pboc" : od ? "Pdoc" : nullptr);
+        const size_t before = S.txt.size(); const bool prv = &BC == &E.bocProv; const auto tt = E.pbT.find(P.tp); const bool tT = !prv && tt != E.pbT.end() && tt->second == 1;   // (1.18.0) tested a Step Trend level: PbT / PbocT (decided marks only)
+        put(it->second, -P.dir, 2, oc ? (tT ? "PbocT" : "Pboc") : od ? "Pdoc" : tT ? "PbT" : nullptr);
+        if (S.txt.size() > before && tT) ++S.pbtShown;
         if (S.txt.size() > before && oc) ++S.pbocShown;
         if (S.txt.size() > before && od) ++S.pdocShown;
         if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
@@ -851,7 +886,8 @@ inline Scene layout(const Engine& E, const View& v) {
     for (const auto& kv : E.rpbBoc) { if (kv.second != 1 && (kv.second != 2 || !SHOW_PDOC)) continue; /* (1.17.0) a Rly Pdoc is not drawn */ const auto mk = E.rpb.find(kv.first); if (mk == E.rpb.end()) continue; const PbMark& P = mk->second;   // (1.13.0) + Pdoc (2)
         const auto it = idx.find(P.tp); if (it == idx.end()) continue;
         if (E.hidePb.count(std::make_pair(P.tp, P.dir))) { ++S.pbHidden; continue; }   // an Lvp there still wins
-        const bool od = kv.second == 2; const size_t before = S.txt.size(); put(it->second, -P.dir, 2, od ? "Pdoc" : "Pboc");
+        const bool od = kv.second == 2; const auto tt = E.rpbT.find(P.tp); const bool tT = !od && tt != E.rpbT.end() && tt->second == 1; const size_t before = S.txt.size(); put(it->second, -P.dir, 2, od ? "Pdoc" : tT ? "PbocT" : "Pboc");
+        if (S.txt.size() > before && tT) ++S.pbtShown;
         if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; if (od) { ++S.pdocShown; ++S.rpdocShown; } else { ++S.pbocShown; ++S.rpbocShown; } boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
     // (1.5.0) BI: "BI" red just above the high (BI DOWN) / green just below the low (BI UP), the BO row first, one row out (16 px) while
     // the row is taken (another indicator's label - biReserved - or one of our letters); one "BI" per candle and side; no room = dropped
@@ -959,6 +995,7 @@ inline std::string recKey(const std::string& line0) {
     if (f[0] == "RLY" && f.size() == 17 && num(f[1]) && num(f[4])) return "R|" + f[1] + "|" + f[4];     // t_e + dir
     if (f[0] == "BPB" && (f.size() == 14 || f.size() == 16 || f.size() == 18) && num(f[1]) && num(f[2])) return "P|" + f[1] + "|" + f[2];     // (1.13.0) + pdoc, pb_poc     // t_pivot + side ((1.12.0) + boc, wave_poc)
     if (f[0] == "BPO" && f.size() == 13 && num(f[1]) && num(f[2])) return "O|" + f[1] + "|" + f[2];     // (1.12.0) Rly Pboc: t_pivot + side
+    if (f[0] == "BPT" && f.size() == 8 && num(f[1]) && num(f[2])) return "T|" + f[1] + "|" + f[2] + "|" + f[3];     // (1.18.0) PbT / PbocT: t_pivot + side + kind
     if (f[0] == "BPD" && f.size() == 13 && num(f[1]) && num(f[2])) return "D|" + f[1] + "|" + f[2];     // (1.13.0) Rly Pdoc: t_pivot + side
     if (f[0] == "BRO" && f.size() == 14 && num(f[1]) && num(f[2])) return "T|" + f[1] + "|" + f[2];     // (1.12.0) thrust off a Rly Pboc
     if (f[0] == "BRV" && f.size() == 14 && num(f[1]) && num(f[2])) return "V|" + f[1] + "|" + f[2];     // (1.9.0) t_rev + side
@@ -992,7 +1029,9 @@ inline std::vector<RecFile> recPlan(const Engine& E, const std::string& mkt, con
     for (const auto& kv : E.pbL) add(REC_PB, kv.second);
     for (const auto& kv : E.revL) add(REC_PB, kv.second);
     for (const auto& kv : E.rpbL) add(REC_PB, kv.second);   // (1.12.0) BPO| / BRO| lines go to the -pb- file too
-    for (const auto& kv : E.rroL) add(REC_PB, kv.second);   // (1.9.0) BRV| lines go to the -pb- file
+    for (const auto& kv : E.rroL) add(REC_PB, kv.second);
+    for (const auto& kv : E.pbtL) add(REC_PB, kv.second);    // (1.18.0) BPT| lines go to the -pb- file
+    for (const auto& kv : E.rpbtL) add(REC_PB, kv.second);   // (1.9.0) BRV| lines go to the -pb- file
     for (const auto& kv : E.biL) add(REC_BO, kv.second);   // (1.5.0) BBI| lines go to the breakouts file
     return out;
 }

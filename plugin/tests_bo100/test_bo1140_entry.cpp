@@ -14,6 +14,7 @@
 #include <fstream>
 #include <cstdio>
 #include <cstring>
+static std::string baseLbl(const std::string& s) { return s == "PbT" ? "Pb" : s == "PbocT" ? "Pboc" : s; }   // (1.18.0) PbT / PbocT = the Pb / Pboc that tested a Step Trend level (test_bo1180_pbt checks the T)
 static int fails = 0, passes = 0;
 #define CHECK(c, m) do { if (c) ++passes; else { ++fails; std::printf("FAIL %s\n", std::string(m).c_str()); } } while (0)
 static const long long OFF = 2082844800LL;
@@ -66,7 +67,7 @@ static void freplay(FRun& R, const Fix& X, int from, int vapAtStep = -1, long lo
         for (const bko::Txt& t : S.txt) if (t.kind == 2) { const long long bt = R.E.bars[(size_t)t.bar].t;
             const auto a = R.E.pb.find(bt); const auto b = R.E.rpb.find(bt);
             const bko::PbMark* M = a != R.E.pb.end() ? &a->second : b != R.E.rpb.end() ? &b->second : nullptr; if (!M) continue;
-            drawn.insert(std::make_pair(M->td, M->dir)); dtxt[std::make_pair(M->td, M->dir)] = t.s; }
+            drawn.insert(std::make_pair(M->td, M->dir)); dtxt[std::make_pair(M->td, M->dir)] = baseLbl(t.s); }
         for (const sb::Fact& f : F) {
             const auto key = std::make_pair(f.bar, f.side);
             if (!drawn.count(key)) { ++R.orphan; std::printf("orphan fact td %s code %d\n", hmOf(f.bar).c_str(), f.code); }

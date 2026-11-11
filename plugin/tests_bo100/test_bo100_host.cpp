@@ -58,7 +58,7 @@ int main() {
     // only texts, only the three words
     int other = 0; std::set<std::string> words; int nLines = 0; for (const auto& p : H.drawn) { if (p.k == 'L') ++nLines; else if (p.k != 'T') ++other; else words.insert(p.text); }   // (1.9.0) + the Rev lines
     CHECK(other == 0 && nLines == 0, "(1.9.1) nothing but text is drawn (no lines / boxes / fills / ovals) (" + std::to_string(nLines) + " lines)");
-    bool onlyW = true; for (const auto& w : words) if (w != "BO" && w != "BD" && w != "Rly" && w != "Pb" && w != "BI" && w != "Rev") onlyW = false;
+    bool onlyW = true; for (const auto& w : words) if (w != "BO" && w != "BD" && w != "Rly" && w != "Pb" && w != "PbT" && w != "BI" && w != "Rev") onlyW = false;   // (1.18.0) + PbT
     CHECK(onlyW && words.count("BD") && words.count("Rly") && words.count("Pb") && words.count("Rev") && !words.count("BI"), "(1.9.1) the only texts are BO / BD / Rly / Pb / Rev - no BI (no numbers, prints or lots)");
     const std::vector<mock::Prim> C = coloured(H);
     int bad = 0, nBo = 0, nBd = 0, nR = 0, nPb = 0, pbExact = 0, nBi = 0; std::set<int> boBars, pbBars; std::set<std::pair<int, int>> biSides; std::set<std::pair<int, int>> sides;
@@ -68,7 +68,7 @@ int main() {
         const int bar = barAt(H, (p.x0 + p.x1) / 2);
         if (bar < 0 || bar >= N) { ++bad; continue; }                                   // never on the forming candle
         const int yh = mockY(H.f[barHigh][(size_t)bar]), yl = mockY(H.f[barLow][(size_t)bar]);
-        if (p.text == "Pb") { ++nPb; pbBars.insert(bar); const bool up = p.col == 0x0022C55E; if (p.font != 7 || (p.col != 0x0022C55E && p.col != 0x00EF4444)) ++bad;   // (1.1.0)
+        if (p.text == "Pb" || p.text == "PbT") { ++nPb; pbBars.insert(bar); const bool up = p.col == 0x0022C55E; if (p.font != 7 || (p.col != 0x0022C55E && p.col != 0x00EF4444)) ++bad;   // (1.1.0)
             const int ye = up ? p.y0 + lift7 : p.y1 + lift7; if (up ? ye < yl + 35 : ye > yh - 35) ++bad; if (up ? ye == yl + 35 : ye == yh - 35) ++pbExact; sides.insert({ bar, up ? -1 : 1 });   // (1.1.1) two rows out
             if (up ? ye < yl + 3 + 14 + 16 + 2 : ye > yh - 3 - 14 - 16 - 2) ++bad; }   // (1.1.1) never in the wave-time label row (+3 .. +17) or the CandleAbsorb A row (+19 .. +33)
         if (p.text == "Rev") { ++nRev; const bool up = p.col == 0x0022C55E; if (p.font != 7) ++bad; if (up ? p.y0 + lift7 < yl + 3 : p.y1 + lift7 > yh - 3) ++bad; sides.insert({ bar, up ? -1 : 1 }); }   // (1.9.0) green below / red above
@@ -139,7 +139,7 @@ int main() {
     {   mock::Host E2; mock::current = &E2; chart(E2, R, 1); Breakout* w = static_cast<Breakout*>(CreateExtension()); w->setup(); pass(*w);
         CHECK(E2.drawn.empty(), "2 bars: nothing drawn");
         chart(E2, R, 300); E2.f[barHigh][250] = NAN; E2.f[barLow][251] = INFINITY; pass(*w);
-        bool okW = true; for (const auto& p : E2.drawn) if (p.text != "BO" && p.text != "BD" && p.text != "Rly" && p.text != "Pb" && p.text != "BI") okW = false;
+        bool okW = true; for (const auto& p : E2.drawn) if (p.text != "BO" && p.text != "BD" && p.text != "Rly" && p.text != "Pb" && p.text != "PbT" && p.text != "BI") okW = false;
         CHECK(okW, "NaN / Inf bars: still only letters, no fault");
         w->destroy(); delete w; }
     std::printf("RESULT %d passed, %d failed\n", passed, failed);
