@@ -106,7 +106,8 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.19.0"   // (1.19.0) Rev: range >= 1.2 x ATR(13) OR a close beyond the prior bar; drawn after every pullback label incl. the Rly Pboc
+#define BKO_VERSION "1.20.0"   // (1.20.0) the retracement % under every decided pullback label
+// was "1.19.0"   // (1.19.0) Rev: range >= 1.2 x ATR(13) OR a close beyond the prior bar; drawn after every pullback label incl. the Rly Pboc
 // was "1.18.0"   // (1.18.0) the origin is broken by a CLOSE; PbT / PbocT (a pullback that tested a Step Trend level)
 // was "1.17.0"   // (1.17.0) Pb / Pboc only (Pdoc not drawn)
 // was "1.16.1"   // (1.16.1) no Rly near a drawn Cob
@@ -418,6 +419,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA BO v1.14.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC (IRT VAP, Wave POC's rule); Pdoc = it tags the pullback's developing POC (Wave POC's PB POC) instead. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.19.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.20.0");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }

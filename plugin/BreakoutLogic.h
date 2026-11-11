@@ -125,7 +125,8 @@ namespace bko {
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
 static const bool SHOW_PDOC = false;   // (1.17.0) Pdoc removed from the chart (decided + recorded as before)
-static const char* const VERSION = "1.19.0";   // (1.19.0, 2026-11-11 Rassul 11:07 CT "Its range is at least 1.2x the 13-bar ATR (measured on the bar before) or it closes above the prior bar high. also note that it can be displayed after any type of pb including pboc etc.") Rev = the first bar of the right colour whose range is >= 1.2 x ATR(13) OR that closes beyond the prior bar (long: above its high; short: below its low); a Rev is drawn after every kind of pullback label - Pb, Pboc, PbT, PbocT and the no-BO Rly Pboc (BRO, was recorded only)
+static const char* const VERSION = "1.20.0";   // (1.20.0, 2026-11-11 Rassul 12:27 CT "I want to add the retracement amount right below any type of pb like 45%", "Keep it two digits") the pullback's retracement of its wave, two digits + "%", right under every decided pullback label
+// was "1.19.0";   // (1.19.0, 2026-11-11 Rassul 11:07 CT "Its range is at least 1.2x the 13-bar ATR (measured on the bar before) or it closes above the prior bar high. also note that it can be displayed after any type of pb including pboc etc.") Rev = the first bar of the right colour whose range is >= 1.2 x ATR(13) OR that closes beyond the prior bar (long: above its high; short: below its low); a Rev is drawn after every kind of pullback label - Pb, Pboc, PbT, PbocT and the no-BO Rly Pboc (BRO, was recorded only)
 // was "1.18.0";   // (1.18.0, 2026-11-11 Rassul) (1) 07:50 CT "this pb should have gotting a pboc too", rule: "allow if it doens't close below" - a pullback is void only when a candle CLOSES beyond the wave's origin (was: trades beyond it). (2) 07:33-07:40 CT "if there is a pb and it is below this level then it should be called a PbT", "it would be the dashed lne that would be tested", "update pboc to pbocT" - a drawn Pb / Pboc whose pullback traded at / through a Step Trend level of its direction (the newest level or an older one still running as support) is drawn PbT / PbocT; BPT| record lines
 // was "1.17.0";   // (1.17.0, 2026-11-10 Rassul 13:09-13:11 CT "so we have 2 signals, PB and Pboc, pboc replaces pb if it is true", "remove pdoc") Pdoc is no longer drawn (a BO / BD pullback that was Pdoc shows Pb; a Rly Pdoc shows nothing); the decision is still recorded
 // was "1.16.1";   // (1.16.1, 2026-11-10) no Rly within 6 bars before / 1 after a drawn Cob (either direction)
@@ -820,7 +821,7 @@ struct View {
     int lh[2] = { 12, 14 };                         // letter row heights: BO / BD font, Rly font
 };
 struct Board { long long t = 0; int side = 0; int val = 0; };   // SignalBoard 'L': bar time, +1 above / -1 below, px from the extreme to the outer edge
-struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0; };   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
+struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
 // (1.5.0) the BI rows: row r sits GAP + r * ROW_OUT px from the wick (0 = the BO row +3..+17, 1 = +19..+33, 2 = +35 (Pb), 3 = +51 (LVP),
 // 4 = +67, 5 = +83). Rows taken by OTHER indicators' labels at this candle and side: a zigzag pivot (the wave-time label, row 0, and
 // lsCandleAbsorb's A / Ae, row 1); the candle after a pivot that re-tests it within 4 ticks (lsCandleAbsorb's A row 1); row 3 is
@@ -867,6 +868,22 @@ inline Scene layout(const Engine& E, const View& v) {
         S.txt.push_back(T); if (kind == 2) ++S.pbShown; else if (kind == 1) ++S.rlyShown; else ++S.boShown;
         int& r = reach[std::make_pair(bar, dir > 0 ? 1 : -1)]; r = std::max(r, dir > 0 ? top - T.f.t : T.f.b - bot);
     };
+    // (1.20.0, Rassul 2026-11-11 12:27 CT "I want to add the retracement amount right below any type of pb like 45%", "Keep it two digits") the
+    // pullback's retracement of its wave (wave end -> pivot, over origin -> wave end), two digits + "%", right under a DECIDED pullback label
+    // (Pb / Pboc / PbT / PbocT / the Rly Pboc); a provisional label has none (its wave end can still move); no room = not drawn
+    auto barAt = [&](long long t) { const auto it = std::lower_bound(E.bars.begin(), E.bars.end(), t, [](const In& b, long long x) { return b.t < x; }); return it != E.bars.end() && it->t == t ? (int)(it - E.bars.begin()) : -1; };
+    auto putPct = [&](const PbMark& P) {
+        const int i0 = P.tw0 ? barAt(P.tw0) : -1, i1 = barAt(P.tw1), ip = barAt(P.tp); if (i0 < 0 || i1 < 0 || ip < 0 || S.txt.empty()) return;
+        const int d = P.dir > 0 ? 1 : -1; const In& a = E.bars[(size_t)i0]; const In& b = E.bars[(size_t)i1]; const In& p = E.bars[(size_t)ip];
+        const double move = d > 0 ? b.h - a.l : a.h - b.l, back = d > 0 ? b.h - p.l : p.h - b.l; if (!(move > 0) || !std::isfinite(back)) return;
+        const int pct = (int)std::lround(100.0 * back / move); if (pct < 10) return;
+        char tx[8]; std::snprintf(tx, sizeof tx, "%d%%", pct > 99 ? 99 : pct);
+        const Txt L0 = S.txt.back(); Txt T; T.s = tx; T.font = FONT_BO; T.bar = L0.bar; T.dir = L0.dir; T.kind = 5; T.col = L0.col;
+        const int w = v.textW(tx, FONT_BO) + 2, cx = (L0.f.l + L0.f.r) / 2; T.f.l = cx - w / 2; T.f.r = T.f.l + w; T.f.t = L0.f.b + 1; T.f.b = T.f.t + v.lh[0];
+        bool ok = inside(T.f, v.area); for (const Box& k : v.keepOut) if (k.r > k.l && k.b > k.t && hits(T.f, k)) ok = false;
+        for (const Txt& o : S.txt) if (hits(T.f, o.f)) ok = false;
+        if (!ok) { ++S.pctNoRoom; return; }
+        S.txt.push_back(T); ++S.pctShown; };
     std::vector<std::pair<int, int>> boBars;
     for (const auto& kv : E.bo) { const bba::BoDec& D = kv.second; if (!E.shownBo(D)) continue;   /* (1.5.0) not a BO / BD a BI cancelled */ const auto it = idx.find(D.t0); if (it == idx.end()) continue; put(it->second, D.dir, 0); boBars.push_back({ it->second, D.dir > 0 ? 1 : -1 }); }
     for (const auto& kv : E.rly) { const RlyMark& R = kv.second; if (!R.fired) continue; const auto it = idx.find(R.te); if (it == idx.end()) continue;
@@ -885,14 +902,15 @@ inline Scene layout(const Engine& E, const View& v) {
         if (S.txt.size() > before && tT) ++S.pbtShown;
         if (S.txt.size() > before && oc) ++S.pbocShown;
         if (S.txt.size() > before && od) ++S.pdocShown;
-        if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
+        if (S.txt.size() > before) { { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; } boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 });
+            if (!prv) putPct(P); } }   // (1.20.0) the retracement under a decided label
     // (1.12.0) the no-BO Rly Pboc: same place / colour as a Pb
     for (const auto& kv : E.rpbBoc) { if (kv.second != 1 && (kv.second != 2 || !SHOW_PDOC)) continue; /* (1.17.0) a Rly Pdoc is not drawn */ const auto mk = E.rpb.find(kv.first); if (mk == E.rpb.end()) continue; const PbMark& P = mk->second;   // (1.13.0) + Pdoc (2)
         const auto it = idx.find(P.tp); if (it == idx.end()) continue;
         if (E.hidePb.count(std::make_pair(P.tp, P.dir))) { ++S.pbHidden; continue; }   // an Lvp there still wins
         const bool od = kv.second == 2; const auto tt = E.rpbT.find(P.tp); const bool tT = !od && tt != E.rpbT.end() && tt->second == 1; const size_t before = S.txt.size(); put(it->second, -P.dir, 2, od ? "Pdoc" : tT ? "PbocT" : "Pboc");
         if (S.txt.size() > before && tT) ++S.pbtShown;
-        if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; if (od) { ++S.pdocShown; ++S.rpdocShown; } else { ++S.pbocShown; ++S.rpbocShown; } boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); } }
+        if (S.txt.size() > before) { Txt& T = S.txt.back(); T.dir = P.dir; T.col = P.dir > 0 ? C_UP : C_DN; if (od) { ++S.pdocShown; ++S.rpdocShown; } else { ++S.pbocShown; ++S.rpbocShown; } boBars.push_back({ it->second, -P.dir > 0 ? 1 : -1 }); putPct(P); } }
     // (1.5.0) BI: "BI" red just above the high (BI DOWN) / green just below the low (BI UP), the BO row first, one row out (16 px) while
     // the row is taken (another indicator's label - biReserved - or one of our letters); one "BI" per candle and side; no room = dropped
     {   std::set<std::pair<int, int>> done;
