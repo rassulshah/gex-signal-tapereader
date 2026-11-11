@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 namespace stp {
-static const char* const VERSION = "1.3.2";   // (1.3.2, 2026-11-11 Rassul 16:53 CT "the line goes up from the former step up and then across to the next step up"): the solid line rises AT the former step-up candle to the next step's high, then runs across to the next step-up candle   // was "1.3.1";   // (1.3.1, 2026-11-11 Rassul 16:47-16:51 CT, his sketch) the 60-minute chart draws TWO lines: the solid stairs from the high of one step-up candle across to the next step-up candle and up to its high; the dashed test line from the prior high across   // was "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
+static const char* const VERSION = "1.3.3";   // (1.3.3, 2026-11-11 Rassul 16:56 CT "there is a rule that the low needs to be above to display T, lets make this close instead"): the test is judged by the CLOSE - T when the candle touches the level and closes at / above the step-up candle's low; a close below it ends the line with no T   // was "1.3.2";   // (1.3.2, 2026-11-11 Rassul 16:53 CT "the line goes up from the former step up and then across to the next step up"): the solid line rises AT the former step-up candle to the next step's high, then runs across to the next step-up candle   // was "1.3.1";   // (1.3.1, 2026-11-11 Rassul 16:47-16:51 CT, his sketch) the 60-minute chart draws TWO lines: the solid stairs from the high of one step-up candle across to the next step-up candle and up to its high; the dashed test line from the prior high across   // was "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
 static const int MAX_BARS = 5000, SLACK = 2000;      // the host feeds the last MAX_BARS closed candles and re-feeds when SLACK more have come
 
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };                         // t = candle START (wall seconds of the chart); prices in ticks
@@ -97,7 +97,7 @@ struct Engine {
         if (H.empty() || k != H.back().k) { Hour h; h.k = k; h.o = b.o; h.h = b.h; h.l = b.l; h.c = b.c; h.hiI = h.loI = idx; h.n = 1; H.push_back(h); curClosed = false; }
         else { Hour& h = H.back(); if (b.h >= h.h) { h.h = b.h; h.hiI = idx; } if (b.l <= h.l) { h.l = b.l; h.loI = idx; } h.c = b.c; ++h.n; }
         if (hourly) for (size_t s = 0; s < S.size(); ++s) { Step& o = S[s]; if (o.endI >= 0 || idx <= o.bi) continue;   // (1.3.0) the test: touched or exceeded, the breakout candle's low (high) not broken
-            if (o.dir > 0 ? b.l < o.blo : b.h > o.bhi) { o.endI = idx; continue; }
+            if (o.dir > 0 ? b.c < o.blo : b.c > o.bhi) { o.endI = idx; continue; }   // (1.3.3) by the CLOSE (was the low / high)
             if (o.dir > 0 ? b.l <= o.px : b.h >= o.px) { o.tI = idx; o.endI = idx; } }
         for (size_t s = 0; s + 1 < S.size(); ++s) { Step& o = S[s]; if (o.sup == 1 && idx > S[s + 1].oi && tested(o, b)) { o.sup = 2; o.supEnd = idx; } }
         return true;

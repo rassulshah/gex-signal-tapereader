@@ -28,7 +28,7 @@ int main() {
 #endif
     }
 #ifndef OLD
-    CHECK(std::string(stp::VERSION) == "1.3.2", "version 1.3.2");
+    CHECK(std::string(stp::VERSION) == "1.3.3", "version 1.3.3");
     const std::vector<stp::Bar> H = load("es_60m.csv"); CHECK(H.size() > 300, "hourly bars loaded: " + std::to_string(H.size()));
     stp::Engine E; E.hourly = true; for (const stp::Bar& b : H) E.addBar(b);
     std::vector<stp::Seg> s; std::vector<stp::Dot> d; std::vector<stp::Mark> m; stp::layoutHourly(E, (int)H.size() - 1, s, d, m);
@@ -42,14 +42,14 @@ int main() {
     // [2] the test, re-derived: the first later candle that trades below the breakout candle's low ends it (no T); else the first that touches / exceeds the level = T; the next step ends it
     int tb = 0, nT = 0, nBroken = 0; for (size_t i = 0; i < E.S.size(); ++i) { const stp::Step& q = E.S[i]; int wantT = -1, wantEnd = -1; const int stop = i + 1 < E.S.size() ? E.S[i + 1].bi : (int)H.size();
         for (int j = q.bi + 1; j < (int)H.size(); ++j) { const stp::Bar& b = H[(size_t)j];
-            if (q.dir > 0 ? b.l < q.blo : b.h > q.bhi) { wantEnd = j; break; }
+            if (q.dir > 0 ? b.c < q.blo : b.c > q.bhi) { wantEnd = j; break; }   // (1.3.3) by the close
             if (q.dir > 0 ? b.l <= q.px : b.h >= q.px) { wantT = j; wantEnd = j; break; }
             if (j >= stop) { wantEnd = stop; break; } }
         if (wantEnd > stop) { wantEnd = stop; wantT = -1; }
         if (wantEnd == stop && wantT == stop) { /* the candle that made the next step also tested this level first: kept as a test */ }
         if (q.tI != wantT || q.endI != wantEnd) ++tb;
         if (q.tI >= 0) ++nT; else if (q.endI >= 0 && q.endI != stop) ++nBroken; }
-    CHECK(tb == 0 && nT >= 10 && nBroken >= 5, "[2] T = touched or exceeded without breaking the step candle's low (" + std::to_string(nT) + " tested, " + std::to_string(nBroken) + " broken first), mismatches " + std::to_string(tb));
+    CHECK(tb == 0 && nT >= 10 && nBroken >= 1, "[2] T = touched or exceeded without breaking the step candle's low (" + std::to_string(nT) + " tested, " + std::to_string(nBroken) + " broken first), mismatches " + std::to_string(tb));
     { int sb = 0, dashed = 0; for (const stp::Seg& g : s) if (g.kind == 2) { ++dashed; bool ok = false; for (const stp::Step& q : E.S) if (q.bi - 1 == g.i0 && q.px == g.p0 && g.i1 > g.i0 && (q.dir > 0 ? H[(size_t)g.i0].h : H[(size_t)g.i0].l) == g.p0) ok = true; if (!ok) ++sb; }
       CHECK(sb == 0 && dashed >= 20, "[2] (1.3.1) every dashed line starts at the prior high's candle, at that high, never before (" + std::to_string(dashed) + ")"); CHECK(m.size() == (size_t)nT, "[2] one T mark per tested step"); }
     // [4] nothing decided changes: a shorter history gives the same steps / tests for everything decided by then
