@@ -864,7 +864,8 @@ void HodLod::recompute(HLState& S, long n)
             int d = 0; S.view.htf.push_back(hl::Seg{ lab, hl::C_GREY });
             S.view.htf.push_back(ok ? hl::Seg{ htf::trendText(er, d) + (rsOk ? "," : ""), col(d) } : hl::Seg{ "-", hl::C_SLATE });
             if (ok) { if (rsOk) { const std::string w = htf::rsWord(r, d); S.view.htf.push_back(hl::Seg{ w, col(d) }); } } };
-        group("Dly:", o.dOk, o.dEr, o.dRsOk, o.dRsi); group("Hrly:", o.hOk, o.hEr, o.hRsOk, o.hRsi);
+        if (hl::HDR_DLY) group("Dly:", o.dOk, o.dEr, o.dRsOk, o.dRsi);   // (2.23.0) the daily trend is not shown
+        group("Hrly:", o.hOk, o.hEr, o.hRsOk, o.hRsi);
         {   // the chart's own bar size ("3m:"): (2.17.4, Rassul 14:55 CT "the trend shouldn't be displayed twice so use Dntrend") its trend = his
             // VWAP trend (the header's old "Downtrend" text, now shown only here), RS = RSI 14 of the chart bars; the day type (when called) after it
             const std::string ml = std::to_string((long long)(per / 60 > 0 ? per / 60 : 1)) + "m:";
@@ -1734,7 +1735,7 @@ int HodLod::draw(void)
         const int t = S->view.onOk ? hsw::onTercile(S->sw, (double)(S->view.onHi - S->view.onLo) * tick, S->view.adrTrim) : -1;
         const std::string day = hsw::dayText(S->sw, t);
         if (!day.empty()) S->view.hdrExtra.push_back(hl::Seg{ "Day  " + day, hl::C_SLATE });
-        if (S->mi >= 0) {
+        if (hl::HDR_LEFT && S->mi >= 0) {   // (2.23.0) "RTH opens / % done" and "Bar m:ss left" are not shown
             const hl::Mkt& K = hl::MKTS[S->mi]; const long long now = hlNowCt(); const int sod = (int)(((now % 86400) + 86400) % 86400), mod = sod / 60;
             std::string rth;
             if (mod < K.open) rth = "RTH opens " + hl::clkAmPm(K.open);
@@ -1885,20 +1886,20 @@ int HodLod::draw(void)
         const int fs = 10;
         int l = pb.l + HL_RB_LEFT, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;   // (2.22.2, Rassul ES 10:22 "move the read at the top to the left more") 4 px in; the opaque box covers a left-edge label (NQ "86%") under it
         const int t = (int)pane.top + 2;   // Rassul "move the read up to cover the black space": the very top of the price pane, under the legend strip
-        int tw = 0; for (int k = 0; k < 5; k++) tw = (std::max)(tw, textW(S->rbox.l[k].text, fs, false));
-        const rbx::Layout RL0 = rbx::layout(l, t, r, (int)pane.bottom, tw, fs);
+        int tw = 0; for (int k = 0; k < S->rbox.n && k < 5; k++) tw = (std::max)(tw, textW(S->rbox.l[k].text, fs, false));
+        const rbx::Layout RL0 = rbx::layout(l, t, r, (int)pane.bottom, tw, fs, S->rbox.n);
         if (L.tableOk && RL0.ok && L.table.t < RL0.box.b && L.table.b > RL0.box.t && L.table.l < RL0.box.r && L.table.r > l) l = (std::max)(l, L.table.r + 6);   // a table at the top keeps its spot
-        const rbx::Layout RL = rbx::layout(l, t, r, (int)pane.bottom, tw, fs);
+        const rbx::Layout RL = rbx::layout(l, t, r, (int)pane.bottom, tw, fs, S->rbox.n);
         if (RL.ok) {
             RCT bg; bg.set((short)RL.box.l, (short)RL.box.t, (short)RL.box.r, (short)RL.box.b); bg.draw(1, (COLOR)0x003A3F47, (COLOR)0x0015181D, DRAW_OPAQUE, PAT_SOLID);
             stripBox = hl::Box{ RL.box.l, RL.box.t, RL.box.r, RL.box.b }; stripOk = true;
             auto meas = [&](const std::string& s) { return textW(s, RL.fs, false); };
             static const unsigned COLS[5] = { hl::C_SLATE, hl::C_GREEN, hl::C_RED, 0x009CA3AF, hl::C_BLUE };
-            for (int k = 0; k < 5; k++) { const rbx::Line& ln = S->rbox.l[k]; const unsigned c = COLS[ln.col >= 0 && ln.col <= 4 ? ln.col : 0];
+            for (int k = 0; k < S->rbox.n && k < 5; k++) { const rbx::Line& ln = S->rbox.l[k]; const unsigned c = COLS[ln.col >= 0 && ln.col <= 4 ? ln.col : 0];
                 text(RL.line[k].l, (RL.line[k].t + RL.line[k].b) / 2, rbx::fit(ln.text, RL.line[k].r - RL.line[k].l, meas), (COLOR)c, RL.fs, false); }
             S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",box " + std::to_string(RL.box.l) + "," + std::to_string(RL.box.t) + "," + std::to_string(RL.box.r) + "," + std::to_string(RL.box.b)
                           + ",text " + std::to_string(tw) + "," + S->rbWhy + "\n";
-            for (int k = 0; k < 5; k++) S->placeLine += "READBOX_L" + std::to_string(k + 1) + "," + std::to_string(S->rbox.l[k].col) + "," + S->rbox.l[k].text + "\n";
+            for (int k = 0; k < S->rbox.n && k < 5; k++) S->placeLine += "READBOX_L" + std::to_string(k + 1) + "," + std::to_string(S->rbox.l[k].col) + "," + S->rbox.l[k].text + "\n";
         } else S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",no room," + S->rbWhy + "\n";
     } else S->placeLine += "READBOX," + std::string(rbx::VERSION) + ",not built," + S->rbWhy + "\n";
     S->placeLine += "CHARTREAD," + std::string(crd::VERSION) + ",not drawn (2.22.0: the read box replaces it; still logged)," + S->creadWhy + ",logs " + std::to_string(S->creadLogs) + ",fails " + std::to_string(S->creadLogFails) + "\n";
@@ -2039,6 +2040,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.22.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.23.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

@@ -24,7 +24,10 @@
 
 namespace rbx {
 
-static const char* const VERSION = "1.0.1";   // 1.0.1: plain ASCII only (the IRT text call is ANSI: "->" not an arrow), no bare "-" lines
+static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-11-11 Rassul 11:41 CT "also updat eht readt at the top to be more simple", his screenshot: the HTF line and "0.8x ADR, Used 91%" crossed out): no HTF line (4 lines: Day / Lvl / Mkt / Lmt); the RTH Day line without the ADR multiple and the Used %
+// was "1.0.1";
+static const bool SHOW_HTF = false;   // (1.1.0) the HTF line is not shown (still computed: the Lvl line uses its direction / ATR)
+static const bool DAY_ADR = false;    // (1.1.0) the RTH Day line: no "0.8x ADR, Used 91%"   // 1.0.1: plain ASCII only (the IRT text call is ANSI: "->" not an arrow), no bare "-" lines
 enum Col { WHITE = 0, GREEN = 1, RED = 2, GREY = 3, BLUE = 4 };
 struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0; };   // t = bar END, CT wall-clock seconds
 struct Level { std::string name; double px = NAN; };
@@ -39,7 +42,7 @@ struct In {
     DayIn day;
 };
 struct Line { std::string text; int col = WHITE; };
-struct Out { bool ok = false; Line l[5]; std::string why; long long at = 0; };
+struct Out { bool ok = false; Line l[5]; int n = 5; std::string why; long long at = 0; };   // (1.1.0) n = the lines shown (4 without the HTF line)
 
 // ---------------------------------------------------------------- helpers
 inline std::string num(double v, int dec) {
@@ -158,7 +161,7 @@ inline Line dayLine(const In& I, long long now) {
     else if (I.day.kind == 0 && std::isfinite(I.day.pBig) && std::isfinite(I.day.pSmall)) p = 1.0 - I.day.pBig - I.day.pSmall;
     std::string t = I.day.kind < 0 ? std::string("Day: no range-day read") : "Day: " + kind + (std::isfinite(p) ? " " + pct(p) : std::string());
     const double rr = rhi > rlo ? rhi - rlo : NAN;
-    if (std::isfinite(rr) && std::isfinite(adr) && adr > 0) {
+    if (DAY_ADR && std::isfinite(rr) && std::isfinite(adr) && adr > 0) {
         t += ", " + x1(rr / adr) + " ADR";
         if (std::isfinite(I.day.xr) && I.day.xr > 0) { char b[24]; std::snprintf(b, sizeof b, ", Used %.0f%%", 100.0 * rr / (I.day.xr * adr)); t += b; }
     }
@@ -258,7 +261,8 @@ inline Out build(const In& I) {
     Out o; if (I.bars.size() < 3) { o.why = "no bars"; return o; }
     const long long now = I.bars.back().t; o.at = now;
     const Htf h = htfLine(I);
-    o.l[0] = h.line; o.l[1] = dayLine(I, now); o.l[2] = lvlLine(I, now, h.dir, h.atr); o.l[3] = mktLine(I, now); o.l[4] = lmtLine(I, now);
+    int k = 0; if (SHOW_HTF) o.l[k++] = h.line;
+    o.l[k++] = dayLine(I, now); o.l[k++] = lvlLine(I, now, h.dir, h.atr); o.l[k++] = mktLine(I, now); o.l[k++] = lmtLine(I, now); o.n = k;
     o.ok = true; o.why = "ok"; return o;
 }
 
@@ -293,8 +297,10 @@ template <class Meas> std::string fit(const std::string& s, int w, Meas meas) {
 // at most half the price area wide (longer lines are cut by fit()); no reserved right-column area (the right column will be its own box)
 struct Rect { int l = 0, t = 0, r = 0, b = 0; };
 struct Layout { bool ok = false; Rect box; Rect line[5]; int fs = 10, lh = 15; };
-inline Layout layout(int left, int top, int right, int bottom, int textW, int fs = 10) {
-    Layout L; L.fs = fs; L.lh = fs + 5; const int padX = 6, padY = 2, h = 5 * L.lh + 2 * padY, w = right - left;
+inline Layout layout(int left, int top, int right, int bottom, int textW, int fs = 10, int rows = 5) {   // (1.1.0) rows = Out::n
+    if (rows < 1) rows = 1;
+    if (rows > 5) rows = 5;
+    Layout L; L.fs = fs; L.lh = fs + 5; const int padX = 6, padY = 2, h = rows * L.lh + 2 * padY, w = right - left;
     if (w < 200 || top + h > bottom - 20) return L;
     const int maxW = w / 2, bw = std::min(maxW, std::max(80, textW + 2 * padX));
     L.box = Rect{ left, top, left + bw, top + h };

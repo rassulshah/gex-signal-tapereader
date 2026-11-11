@@ -56,7 +56,9 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.22.2";   // (2.22.2) the read box 4 px from the pane's left edge (was 38)
+static const char* const HL_VERSION = "2.23.0";   // (2.23.0, 2026-11-11 Rassul 11:40 CT "get rid of dly trend.and the values to the left and move the gamma regime were the daily trend is"; he chose "Dly + RTH opens + Bar left"; 11:41 "updat eht readt at the top to be more simple") the header row: no "RTH opens / % done", no "Bar m:ss left", no "Dly:" trend; the gamma pill (+GAMMA / -GAMMA) leads the centre group where "Dly:" was; the read box: ReadBox 1.1.0 (no HTF line, the Day line without ADR / Used)
+static const bool HDR_DLY = false, HDR_LEFT = false, HDR_PILL_MID = true;   // (2.23.0)
+// was "2.22.2";   // (2.22.2) the read box 4 px from the pane's left edge (was 38)
 // was "2.22.1";   // (2.22.1) the read box at the top of the price pane, ASCII text only, "Lmt: no absorption"
 // was "2.22.0":   // (2.22.0, 2026-11-08 Rassul "go") the compact READ BOX left column (ReadBox.h) replaces the 3-line read strip
 // was "2.20.0":   // (2.20.0, 2026-11-07 12:51 CT Rassul "build it") the 3-line chart read at the top of the price chart (ChartRead.h)
@@ -1975,7 +1977,8 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             if (htfW > 0) {   // (2.17.4, Rassul 14:55 CT "move -Gamma to be right justified and the trend shouldn't be displayed twice ... make everything
                 // look nice"): left = market / RTH / bar; CENTRE = | Dly | Hrly | 3m | (the 3m trend = his VWAP trend, the day type after it);
                 // RIGHT = | Day ... | then the gamma pill, then the version
-                const int xp = T.r - 10 - verW - 12 - pillW;
+                const bool pillMid = HDR_PILL_MID && !pill.s.empty();   // (2.23.0) the gamma pill leads the centre group (where "Dly:" was)
+                const int xp = T.r - 10 - verW - 12 - (pillMid ? -12 : pillW);
                 // (2.17.5, Rassul 15:14 CT "remove what i crossed out and place the option Expiry time there instead before the regime"):
                 // no "Day ..." extra and no day type here; "| Exp 3:00 PM" (amber in its last hour, "done" after) right before the gamma pill
                 std::string ex; unsigned exC = C_GREY;
@@ -1988,11 +1991,13 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                 if (!ex.empty()) { const int w = M(ex, fs, false); xe = xq - 12 - w - 12;
                     addLine(L, xe + 4, y + 5, xe + 4, y + hdrH - 5, C_BORDER, 1, R_TABLE);
                     addText(L, xe + 12, y + 2, y + hdrH - 2, ex, exC, fs, false, w, R_TABLE, -1); }
-                if (!pill.s.empty()) {
+                const int cw = htfW + (pillMid ? pillW + 12 : 0);
+                const int lo = x + 24, hi = xe - 16 - cw; int xh = (T.l + T.r) / 2 - cw / 2; if (hi >= lo) xh = (std::min)((std::max)(xh, lo), hi); else xh = lo;
+                if (!pill.s.empty()) { const int px0 = pillMid ? xh : xp;
                     const unsigned fill = pill.col == C_GREEN ? C_PILL_G : (pill.col == C_RED ? C_PILL_R : C_PILL_N);
-                    addRect(L, xp, y + 3, xp + pillW, y + hdrH - 3, pill.col, fill, 1, R_TABLE);
-                    addText(L, xp + 6, y + 3, y + hdrH - 3, pill.s, pill.col, fs, true, pillW - 12, R_TABLE, -1); }
-                const int lo = x + 24, hi = xe - 16 - htfW; int xh = (T.l + T.r) / 2 - htfW / 2; if (hi >= lo) xh = (std::min)((std::max)(xh, lo), hi); else xh = lo;
+                    addRect(L, px0, y + 3, px0 + pillW, y + hdrH - 3, pill.col, fill, 1, R_TABLE);
+                    addText(L, px0 + 6, y + 3, y + hdrH - 3, pill.s, pill.col, fs, true, pillW - 12, R_TABLE, -1);
+                    if (pillMid) xh += pillW + 12; }
                 for (size_t q = 0; q < v.htf.size(); q++) { const bool lab = v.htf[q].col == C_GREY; const int w = M(v.htf[q].s, fs, !lab);
                     if (lab) { addLine(L, xh, y + 5, xh, y + hdrH - 5, C_BORDER, 1, R_TABLE); xh += 8; }
                     addText(L, xh, y + 2, y + hdrH - 2, v.htf[q].s, v.htf[q].col, fs, !lab, w, R_TABLE, -1); xh += w + 5;
