@@ -101,3 +101,10 @@ Not fixed here (same audit needed, by estimate): Delta Profile (13 - 21 ms per d
   Speed check pass (0.25 ms / draw on 6,580 candles).
 - Not verified (needs his IRT): the look on his chart; whether 1.5x gives too many / too few rows. Not built: nightly scoring of level
   rows (held vs levels with no liquidity) and the lsBookFlow (kind G) path - level rows come from the own feed only.
+
+## 2.65.1 (2026-11-11) - level liquidity rows reach 1 ATR either side
+- Rassul 11:01 CT "i want it upto 1 atr beyond ..."; 11:02 CT "actually make + or - 1 ATR".
+- A level liquidity row = the biggest real price within 1 ATR (the top book's own 3-min ATR) above or below its level (was 2 ticks):
+  TopBook 1.2.1 levelLiq side 2, LimitFeed 1.1.1 (rowNames: the row carries the level it was found for). 1.5x size bar unchanged.
+  Two levels whose bands hold the same biggest price: one row, the first level's name.
+- Tests: test_dealerprofile_2651.cpp 61 pass; MinGW 0 errors / 8 warnings; settings contract and speed check pass.
