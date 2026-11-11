@@ -32,13 +32,13 @@ later: 46-50%). Largest band in reach ON the level: 75% vs 67% close back (small
 2. "time in the top book" starts when the indicator first sees the level (restart = starts again).
 3. The level badge uses the levels of the Key Levels column; with no ATR yet (first bars) no badge is drawn.
 
-# 2.60.0 (2026-11-10 20:57 CT) - liquidity on the level lines
-Rassul: "we have dim lines right for the levels" / "how would it look if the liquidity was also there on the chart" / "i like it but dont keep the
-amount, because it becomes noisy" (mockup claude.ai/artifact/Fx5CKJkC1mHzj9uyUwWTvn v3).
-- While a node carries a level's badge (the largest node within 1 ATR of that level), the level's dim line is drawn BRIGHT (2 px, green = bids,
-  red = offers) over those candles. No number on the chart. A stretch ends 3 minutes after the node was last seen; stretches are kept for the
-  session while Investor/RT stays open (not stored: after a restart the lines start dim again).
-- test_dealerprofile_2600.cpp 34 / 34 (2.59.0's 32 + the bright stretch on the level's y in the side colour with no amount; the stretch stays
-  after the node leaves). ASan / UBSan clean, MinGW real-SDK syntax 0 errors, settings contract PASS.
-- Not verified on his chart: the look across many candles; the mockup used $-bands from the whole recorded book, the live rule uses his top-book
-  nodes (3 bids + 3 offers), so fewer stretches than the mockup are possible.
+# 2.62.0 (2026-11-10 21:41 CT) - Limit Profile only
+Rassul: "what dealer profile, we only made changes to the limit profile right?" / "retire that and only call it the limit profile".
+- lsDealerProfile is retired: its build line is commented out in gex-build (the Limit Profile line still builds DealerProfile.cpp, its source),
+  it is off the BUILD-STATUS list, and tools\retire-dealerprofile-2026-11-10.bat moves the installed lsDealerProfile.dll to
+  InvestorRT\_retired-2026-11-10 (not deleted; undo = move it back).
+- Built as lsLimitProfile the column header reads "LP v2.62.0  LIQUIDITY" (was "DP v...").
+- Unchanged on purpose: the source file names (DealerProfile.cpp / DealerProfileSettings.h) and the lsFlexLevels\DealerProfile files, so his
+  settings and records carry over.
+- test_dealerprofile_2620.cpp 37 / 37 with -DDP_LIMIT_NAME=1 (header LP) and without; settings contract PASS; MinGW real-SDK syntax 0 errors.
+- Not verified: whether any chart still holds the OLD lsDealerProfile indicator - such a chart shows it missing after the move; add "Limit Profile" there.

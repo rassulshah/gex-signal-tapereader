@@ -143,6 +143,11 @@ static const bool DP_BOOK = true;     // (2.40.0) whole-book mode: B code 4 node
 static const int DP_BOOKN = 15;       // (2.40.0) the steady board's size (ranks 6..15 can show when level-linked)
 static const bool DP_ODDS = false;    // (2.40.0, Rassul "get rid of the % displayed in the tags of the levels") no odds on the level badges
 static const bool DP_RANK_CHIPS = true;    // (2.42.0, Rassul 2026-11-02 10:35 CT "i want the rank after the name of the level") the liquidity rank box AFTER the level name chips   // was false (2.40.0 "you dont need these ranks because they are on the liquidity profile")
+#ifdef DP_LIMIT_NAME
+static const char* const DP_TAG = "LP";   // (2.62.0) the Limit Profile's own header tag
+#else
+static const char* const DP_TAG = "DP";
+#endif
 static const bool DP_LIQ_ON_LINES = true;   // (2.60.0) a level line is bright over the candles where a node carried its badge (no number)
 static const bool DP_NODE_STYLE = true;   // (2.59.0) the native top book drawn as nodes facing price (labels inside, rank outside)
 static int& dpGHoldSec() { static int s = 60; return s; }   // (2.59.0) the nodes change once per this many seconds (tests: 0 = every draw)
@@ -153,7 +158,8 @@ static const int DP_KEYS_RW = 170, DP_LQ_RW = 170;   // (2.42.0, Rassul 2026-11-
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.61.0";   // (2.61.0, 2026-11-10 Rassul 21:05 CT "remember to add both to the self improvement process") every bright level-line stretch is RECORDED: lsFlexLevels\\DealerProfile\\<MKT>-liqlines-<session>.csv, one line when it starts and at most one a minute while it lasts ("L|level tick|level price|names|side|t0|t1|most lots|pct of king", CT seconds; the nightly lra.liq_lines_score takes the last line of a stretch) - nothing drawn changes
+static const char* DP_VERSION = "2.62.0";   // (2.62.0, 2026-11-10 Rassul 21:41 CT "retire that and only call it the limit profile") lsDealerProfile is retired (no longer built / installed; tools\\retire-dealerprofile-2026-11-10.bat moves its DLL out); built as lsLimitProfile the column header reads "LP v2.62.0" (was "DP v...")
+// was "2.61.0";   // (2.61.0, 2026-11-10 Rassul 21:05 CT "remember to add both to the self improvement process") every bright level-line stretch is RECORDED: lsFlexLevels\\DealerProfile\\<MKT>-liqlines-<session>.csv, one line when it starts and at most one a minute while it lasts ("L|level tick|level price|names|side|t0|t1|most lots|pct of king", CT seconds; the nightly lra.liq_lines_score takes the last line of a stretch) - nothing drawn changes
 // was "2.60.0";   // (2.60.0, 2026-11-10 Rassul 20:55-20:57 CT "we have dim lines right for the levels", "how would it look if the liquidity was also there on the chart", "i like it but dont keep the amount, because it becomes noisy"; mockup claude.ai/artifact/Fx5CKJkC1mHzj9uyUwWTvn v3) LIQUIDITY ON THE LEVEL LINES: while a node carries a level's badge (the largest node within 1 ATR of it) that level's dim line is drawn BRIGHT over those candles (2 px, green = bids, red = offers), no number; the stretches are remembered while Investor/RT stays open (this session only)
 // was "2.59.0";   // (2.59.0, 2026-11-10 Rassul 18:46-20:45 CT "design the limit order profile ... i dont want it always updating every second", "the labels should be inside the node and the profile should be facing price", "the rank can be on the outside", "rank without background", "get rid of the ratio since we already have % king", "keep the level badge left justified so i can easily see the level and then the liquidity", level name "use upto 1 ATR", "it will only be on the profile right, not on the chart"; mockup claude.ai/artifact/6BVGfyxKXGJY6qVbSs29XU v8) THE NODE PROFILE: the native top book (kind G) rows are drawn as nodes anchored at the column's outer edge, pointing at price (length = % of the king), the text INSIDE the node from its tip: [level badge] lots  pct%  time in the top book [S20 / ? / EXIT]; the rank (K, 2-6) outside in front of the node, no box; a key / volume / gamma level within 1 ATR (3-min) names the LARGEST node only; the nodes change once a minute (at once when price is within 2 ticks of one, or the book goes cold). Study (lra.limit_levels 1.1.0, 7 markets, 22,345 touches + 1,100 level sweeps): size / rest / level / hit behaviour do not predict a turn -> a map, no signal drawn.
 // was "2.58.0";   // (2.58.0, 2026-11-10 Rassul 08:59) key level badges: NAME then price
@@ -1945,7 +1951,7 @@ void DealerProfile::flushLines(const Settings& S)
     {   double age = -1; const bool stale = !nx.empty() && gridVerdict(S.clock, age).stale();
         // (2.52.2) lsLiquidityProfile's order book is warming: "LIQUIDITY \xB7 warming" on the title row when it fits the column, else the
         // title stays and "\xB7 warming" goes on the row under it (after STALE when that shows)
-        const bool warm = cs.bookMode && cs.rkHide; std::string h1 = std::string("DP v") + DP_VERSION + "  LIQUIDITY"; bool warm2 = false;
+        const bool warm = cs.bookMode && cs.rkHide; std::string h1 = std::string(DP_TAG) + " v" + DP_VERSION + "  LIQUIDITY"; bool warm2 = false;
         if (warm) { const std::string hw = h1 + " \xB7 warming"; if (textW(hw.c_str(), sf, true) <= col.r - col.l - 10) h1 = hw; else warm2 = true; }
         textLJ((short)(col.l + 6), (short)(pane.top + 4 + bh / 2), h1.c_str(), C_HEAD, sf, true);
         if (stale || warm2) { char b[40] = ""; if (!stale) {} else if (age >= 2880) snprintf(b, sizeof(b), "STALE %dd", (int)(age / 1440 + 0.5)); else if (age >= 90) snprintf(b, sizeof(b), "STALE %dh", (int)(age / 60 + 0.5)); else snprintf(b, sizeof(b), "STALE %dm", (int)(age + 0.5));
@@ -2895,6 +2901,6 @@ extern "C" cppExtension *CreateExtension(void)
 #else
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
 #endif
-    p->setVersion("2.61.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.62.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }

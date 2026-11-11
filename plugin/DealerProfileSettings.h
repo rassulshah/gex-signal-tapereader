@@ -6,7 +6,8 @@
 #include "SettingsSpec.h"
 
 namespace dprset {
-static const char* const PLUGIN_VERSION = "2.61.0";   // (2.61.0) the level-line stretches recorded - no settings change
+static const char* const PLUGIN_VERSION = "2.62.0";   // (2.62.0) Limit Profile only (header tag LP) - no settings change
+// was PLUGIN_VERSION "2.61.0";   // (2.61.0) the level-line stretches recorded - no settings change
 // was PLUGIN_VERSION "2.60.0";   // (2.60.0) liquidity on the level lines - no settings change
 // was PLUGIN_VERSION "2.59.0";   // (2.59.0) the node profile - no settings change
 // was PLUGIN_VERSION "2.58.0";   // (2.58.0) badge order name then price - no settings change
