@@ -28,7 +28,7 @@ int main() {
 #endif
     }
 #ifndef OLD
-    CHECK(std::string(stp::VERSION) == "1.4.3", "version 1.4.3");
+    CHECK(std::string(stp::VERSION) == "1.4.4", "version 1.4.4");
     const std::vector<stp::Bar> H = load("es_60m.csv"); CHECK(H.size() > 300, "hourly bars loaded: " + std::to_string(H.size()));
     stp::Engine E; E.hourly = true; for (const stp::Bar& b : H) E.addBar(b);
     std::vector<stp::Seg> s; std::vector<stp::Dot> d; std::vector<stp::Mark> m; stp::layoutHourly(E, (int)H.size() - 1, s, d, m);
