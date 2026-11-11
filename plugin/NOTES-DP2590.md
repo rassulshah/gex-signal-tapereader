@@ -56,3 +56,32 @@ Rassul (his ES chart had no nodes: lsBookFlow was not on it): "it needs to read 
   TopBook.h - DealerProfile.cpp only undefined `far`); settings contract PASS.
 - NOT verified - needs his Investor/RT: the real feed (a second MBO subscription next to SR / Zone Defense on the same chart), CPU at the NQ
   open (no timer path: events are read on draws only), the 2-minute warm-up after every restart (the book starts empty).
+
+## 2.64.0 (2026-11-11) - performance fix, nothing drawn changes
+Rassul 00:17 CT "double check why irt is slow and if the limit profile is causing it and if you development in creating it has bugs or is suboptimal"; 00:18 "irt is freezing right now so you need to see why .. i think its the limit profile implementation".
+
+Evidence (PerfGuard, lsFlexLevels\Perf\perf-DealerProfile-*.csv = this indicator; IRT admin\msglog.txt):
+- The Limit Profile's DRAW was the most expensive of all his indicators: 54.5 ms per draw on Nov 11 00:00 - 00:15 (Delta Profile 21, BookFlow 20, HodLod 5), one draw of 7.86 s at 00:15, 4.89 s at 00:09. While he scrolls the chart is redrawn 300 - 500 times a minute, so the Limit Profile alone held the chart for 18 - 35 s of each minute.
+- Mean ms per draw by day: Oct 28 5.2 - Nov 4 7.4 - Nov 5 12.3 - Nov 6 10.9 - Nov 9 9.7 - Nov 10 15.0 - Nov 11 54.5. The step on Nov 5 is 2.53.0.
+- Its calc is 0.1 ms: all the work is in draw.
+
+Causes found (Linux harness on the real source; strace + gprof):
+1. BUG (since 2.53.0, 2026-11-04): the two status files (DealerProfile.status-<MKT>-<spb>.txt and DealerProfile.status.txt) were REPLACED ON EVERY DRAW: 2 file creates + 2 writes + 2 renames per repaint. The gate "written when its content changes" always fired because the XLINES "drawn" counter grew on every repaint (and "age N s" changes every second). On Windows each replace is scanned by the antivirus and waits for the disk: milliseconds normally, seconds when the disk is busy (tonight: the research ledger job + the build were running).
+2. SUBOPTIMAL (2.60.0, mine, 2026-11-10): the bright stretches on the level lines converted the time and position of EVERY visible candle on EVERY draw whenever a stretch existed.
+3. SUBOPTIMAL (old): alignContract walked back up to 3,000 candles converting their times on every draw.
+4. The status text (about 100 fields) was formatted on every draw.
+
+Fixes:
+1. dpaudit::WriteGate: a changed status is written at most once every 5 s (statusMinGapSec; unchanged = once a minute as before); cs.xlines / xlinesVwap are per draw again.
+2. dpaudit::stretchRange: the candles of a stretch by bisection on the candle end times (about 25 time conversions per stretch, 2 positions).
+3. alignContract: the candle at the dealer file's minute is looked for once per (candle count, last candle, dealer file, clock setting).
+4. writeStatus returns before building the text while both gates are inside the gap.
+
+Measured on the harness (the same scene, 6,580 candles; the mock SDK's calls cost nothing, so this is the plugin's own work only):
+- file creates / renames per draw: 2.0 / 2.0 -> 0.02 / 0.01;  own CPU per draw: 0.69 ms -> 0.32 ms (161 candles: 0.47 -> 0.09 ms).
+- with bright stretches on a 6,580-candle chart: 22 time conversions and about 100 position look-ups per draw (was one of each per visible candle).
+
+Tests: test_dealerprofile_2640.cpp = the 44 checks of 2630 + 12 new (gap 0 reproduces the old rule: 100 writes in 50 draws; gap 5 s: <= 2 writes in 300 draws; the file whole and current; written again after the gap; XLINES per draw; the same draw calls with the gate; stretchRange = the candle-by-candle rule on 4,000 random cases; SDK calls per draw bounded; alignContract scans 0 while nothing changed, 1 on a new candle). 56 / 56 with and without -DDP_LIMIT_NAME=1, ASan / UBSan. MinGW real SDK: 0 errors, no new warnings. Settings contract: 45,949 checks pass.
+
+Not verified - needs his IRT: the real draw time after the install (perf-DealerProfile-<date>.csv: expect a few ms per draw and no "over" flag). The own order feed of 2.63.0 reads its slice inside draw (capped): to be watched in RTH with the same file.
+Not fixed here (same audit needed, by estimate): Delta Profile (13 - 21 ms per draw, spikes to 2.5 s), BookFlow (10 - 20 ms), and gex-build's hashing of every source every 2 minutes.

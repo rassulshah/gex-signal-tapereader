@@ -160,7 +160,8 @@ static const int DP_KEYS_RW = 170, DP_LQ_RW = 170;   // (2.42.0, Rassul 2026-11-
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.63.0";   // (2.63.0, 2026-11-10 Rassul 22:16 CT "it needs to read the feed directly") THE LIMIT PROFILE READS THE ORDER FEED ITSELF (LimitFeed.h 1.0.0): its own DEPTH_BY_ORDER per chart + the TopBook engine (the one lsBookFlow runs) -> the top 3 bids / offers without lsBookFlow on the chart; lsBookFlow's kind G is used only until the own feed has its first event (or if it cannot open). Status line OWN_FEED.
+static const char* DP_VERSION = "2.64.0";   // (2.64.0, 2026-11-11 Rassul 00:17 CT "double check why irt is slow and if the limit profile is causing it and if your development in creating it has bugs or is suboptimal" / 00:18 "irt is freezing right now ... i think its the limit profile implementation") PERFORMANCE FIX, nothing drawn changes: (1) the two status files were REPLACED ON EVERY DRAW (the XLINES "drawn" counter of 2.53.0 grew on every repaint, so the "written when its content changes" gate always fired: 2 file creates + 2 renames per repaint, 600+ a minute while he scrolls; PerfGuard: draw 7 ms on Nov 4 -> 10 - 15 ms -> 54 ms / spikes to 7.9 s on Nov 11 00:15 with the disk busy) - a changed status is now written at most once every 5 s (dpaudit::statusMinGapSec, WriteGate) and the counter is per draw again; (2) the status text is not even built inside that gap (it was formatted on every draw); (3) the bright level stretches (2.60.0) converted the time of EVERY visible candle on EVERY draw - now found by bisection (dpaudit::stretchRange: ~25 conversions per stretch); (4) alignContract scanned up to 3,000 candle times on every draw - now once per candle / dealer file.
+// was "2.63.0";   // (2.63.0, 2026-11-10 Rassul 22:16 CT "it needs to read the feed directly") THE LIMIT PROFILE READS THE ORDER FEED ITSELF (LimitFeed.h 1.0.0): its own DEPTH_BY_ORDER per chart + the TopBook engine (the one lsBookFlow runs) -> the top 3 bids / offers without lsBookFlow on the chart; lsBookFlow's kind G is used only until the own feed has its first event (or if it cannot open). Status line OWN_FEED.
 // was "2.62.0";   // (2.62.0, 2026-11-10 Rassul 21:41 CT "retire that and only call it the limit profile") lsDealerProfile is retired (no longer built / installed; tools\\retire-dealerprofile-2026-11-10.bat moves its DLL out); built as lsLimitProfile the column header reads "LP v2.62.0" (was "DP v...")
 // was "2.61.0";   // (2.61.0, 2026-11-10 Rassul 21:05 CT "remember to add both to the self improvement process") every bright level-line stretch is RECORDED: lsFlexLevels\\DealerProfile\\<MKT>-liqlines-<session>.csv, one line when it starts and at most one a minute while it lasts ("L|level tick|level price|names|side|t0|t1|most lots|pct of king", CT seconds; the nightly lra.liq_lines_score takes the last line of a stretch) - nothing drawn changes
 // was "2.60.0";   // (2.60.0, 2026-11-10 Rassul 20:55-20:57 CT "we have dim lines right for the levels", "how would it look if the liquidity was also there on the chart", "i like it but dont keep the amount, because it becomes noisy"; mockup claude.ai/artifact/Fx5CKJkC1mHzj9uyUwWTvn v3) LIQUIDITY ON THE LEVEL LINES: while a node carries a level's badge (the largest node within 1 ATR of it) that level's dim line is drawn BRIGHT over those candles (2 px, green = bids, red = offers), no number; the stretches are remembered while Investor/RT stays open (this session only)
@@ -319,6 +320,7 @@ public:
         double rankReachPx = 0; lrk::History rankHist; int histWrites = 0, histFails = 0, histLines = 0; std::string histMkt;   // (2.37.0) 0.25 ATR rank reach + the rank-change history file
         COLOR keysBg = 0;   // (2.36.1) the Key Levels column ground colour drawn (= getBackgroundColor)
         int xlines = 0, xlinesVwap = 0;   // (2.53.0) dim level lines drawn / VWAP rows skipped
+        long acN = -1; long long acLastT = -1, acStamp = -2; int acClock = -99999, acIdx = -1; long long acScans = 0; std::string acPath;   // (2.64.0) alignContract: the candle at the dealer file's minute, looked for once per candle / file
         int keysOut = 0, keysCapped = 0, keysBot = 0, keysEdgeRow = 0; std::string keysEdgeUp, keysEdgeDn;   // (2.52.3) the band plan
         int keysW = 0, keysL = 0, keysTop = 0, keysMoved = 0, keysOddsCut = 0, keysRankChips = 0; bool keysDocked = false, keysPosted = false; std::string keysSym, keysChart; long keysSpb = 0;   // (2.33.0) the Key Levels column
         long long firstMs = -1;
@@ -713,14 +715,21 @@ void DealerProfile::alignContract()
     RTARRAYI dt(barDateTime);
     float c = close[(int)n - 1];
     if (D.asofSo >= 0) {
-        double want = D.asofSo + cfg.clock * 60.0;
-        int from = (int)n - 3000; if (from < 0) from = 0;
-        for (int i = (int)n - 1; i >= from; i--) {
-            struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
-            double so = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
-            bool sameDay = (D.y == 0) || (t.tm_year + 1900 == D.y && t.tm_mon + 1 == D.mo && t.tm_mday == D.d);
-            if (sameDay && so <= want) { c = close[i]; break; }
+        // (2.64.0) the candle at the file's minute is looked for once per (candle count, last candle, file, clock setting), not on every draw
+        // (the scan converted up to 3,000 candle times per repaint; the answer cannot change while those four are the same)
+        const long long lastT = (long long)dt[(int)n - 1];
+        if (!(cs.acN == n && cs.acLastT == lastT && cs.acStamp == loadedStamp && cs.acClock == cfg.clock && cs.acPath == loadedPath)) {
+            cs.acN = n; cs.acLastT = lastT; cs.acStamp = loadedStamp; cs.acClock = cfg.clock; cs.acPath = loadedPath; cs.acIdx = -1; ++cs.acScans;
+            double want = D.asofSo + cfg.clock * 60.0;
+            int from = (int)n - 3000; if (from < 0) from = 0;
+            for (int i = (int)n - 1; i >= from; i--) {
+                struct tm t; memset(&t, 0, sizeof(t)); getLocaltime((RTDATE)dt[i], &t);
+                double so = t.tm_hour * 3600.0 + t.tm_min * 60.0 + t.tm_sec;
+                bool sameDay = (D.y == 0) || (t.tm_year + 1900 == D.y && t.tm_mon + 1 == D.mo && t.tm_mday == D.d);
+                if (sameDay && so <= want) { cs.acIdx = i; break; }
+            }
         }
+        if (cs.acIdx >= 0 && cs.acIdx < (int)n) c = close[cs.acIdx];
     }
     // (2.5.2, Rassul 22:15 "irt gamma levels are not placed at the right price level") MenthorQ's strikes are prices on the
     // contract named in the file (SYMBOL, the bridge's irt_symbols.json): on THAT contract they are drawn exactly at the strike.
@@ -945,6 +954,9 @@ std::string DealerProfile::profileLine()
 }
 void DealerProfile::writeStatus(const char* what)
 {
+    {   // (2.64.0) nothing can be written inside the gate's gap: do not even build the text (it was formatted on every draw)
+        const std::time_t nowG = time(nullptr); const int gap = dpaudit::statusMinGapSec();
+        if (gap > 0 && cs.gateOld.at != 0 && cs.gateMkt.at != 0 && nowG >= cs.gateOld.at && nowG - cs.gateOld.at < gap && nowG >= cs.gateMkt.at && nowG - cs.gateMkt.at < gap) return; }
     const char* up = getenv("USERPROFILE"); if (!up) return;
     std::string path = std::string(up) + "\\InvestorRT\\rtx\\lsFlexLevels\\DealerProfile.status.txt";
     std::ostringstream f;
@@ -2337,9 +2349,9 @@ void DealerProfile::flushLines(const Settings& S)
     // (2.53.0, Rassul 2026-11-04 "levels across the chart ... dim and thin", Proposal A) every shown level (key, volume, CR0 / PS0; not VWAP)
     // = a 1 px solid line across the price area at its TRUE price, its colour faded to ~30%; it stops at the Key Levels column (the badge tick
     // continues it) and is cut where the HOD/LOD table covers that row. Drawn before the badges.
-    cs.gSegDrawn = 0;
+    cs.gSegDrawn = 0; cs.xlines = 0; cs.xlinesVwap = 0;   // (2.64.0) per draw: a counter that grew on every repaint rewrote the status files on every repaint
     if (DP_XLINES && DP_KEYS_RIGHT) {
-        const int x0 = (int)pane.left + 1, x1 = kL - 1; std::vector<std::pair<long long, int> > segT;   // (2.60.0) visible candles: end time (CT s), x
+        const int x0 = (int)pane.left + 1, x1 = kL - 1; bool segInit = false; int segV0 = 0, segV1 = -1, segHw = 3; std::map<int, long long> segEnd;   // (2.64.0) the visible range, half a candle's width, the end times looked up this draw (was 2.60.0: every visible candle)
         for (const BG& g : bgs) {
             if (!g.on || x1 <= x0) continue;
             const lvc::Row& R = rows[g.r]; bool onlyVw = !R.chips.empty(); for (const lvc::Chip& C : R.chips) if (C.text.compare(0, 4, "VWAP") != 0) onlyVw = false;
@@ -2351,17 +2363,20 @@ void DealerProfile::flushLines(const Settings& S)
             line((short)a, (short)g.y, (short)b, (short)g.y, fade(g.lc, DP_XLINE_FADE), 1); ++cs.xlines;
             if (DP_LIQ_ON_LINES && !cs.gSegs.empty() && tick > 0) {   // (2.60.0) the bright stretches of this level (bar time = bar END)
                 const long long key = (long long)std::llround(R.px / tick); bool any = false; for (const ColsState::GSeg& sg : cs.gSegs) if (sg.key == key) { any = true; break; }
-                if (any) {
-                    if (segT.empty()) { RTARRAYI dts(barDateTime); int v0 = 0, v1 = 0; if (getVisibleBars(&v0, &v1) != RTX_OK) { v0 = 0; v1 = (int)nb - 1; } v0 = std::max(0, v0); v1 = std::min(v1, std::min((int)nb, (int)dts.count) - 1);
-                        for (int k = v0; k <= v1; ++k) { struct tm t; memset(&t, 0, sizeof(t)); if (!getLocaltime((RTDATE)dts[k], &t)) continue; PNT p; p.set(k, (float)R.px);
-                            segT.push_back(std::make_pair(fr::ctAbs(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec), (int)p.h)); } }
-                    for (const ColsState::GSeg& sg : cs.gSegs) { if (sg.key != key || segT.empty()) continue;
-                        int xa = -1, xb = -1; const long long spbS = cs.spb > 0 ? cs.spb : 180;
-                        for (size_t k = 0; k < segT.size(); ++k) { const long long e = segT[k].first; if (e <= sg.t0 || e - spbS > sg.t1) continue; if (xa < 0) xa = segT[k].second; xb = segT[k].second; }   // candles that overlap [t0, t1]
-                        if (xa < 0 && sg.t1 >= segT.back().first) xa = xb = segT.back().second;                                  // newer than the last candle's end: the forming candle
-                        if (xa < 0) continue; const int hw = std::max(2, (segT.size() > 1 ? std::abs(segT[1].second - segT[0].second) : 6) / 2);
-                        const int la = std::max(a, xa - hw), lb = std::min(b, xb + hw); if (lb - la < 2) continue;
-                        line((short)la, (short)g.y, (short)lb, (short)g.y, sg.bid ? C_BUY : C_SELL, 2); ++cs.gSegDrawn; } } }
+                if (any) {   // (2.64.0) by bisection on the candles' end times (dpaudit::stretchRange): a few time conversions per stretch, not one per visible candle per draw
+                    if (!segInit) { segInit = true; int v0 = 0, v1 = 0; RTARRAYI dts(barDateTime); if (getVisibleBars(&v0, &v1) != RTX_OK) { v0 = 0; v1 = (int)nb - 1; } segV0 = std::max(0, v0); segV1 = std::min(v1, std::min((int)nb, (int)dts.count) - 1);
+                        if (segV1 > segV0) { PNT p0; p0.set(segV0, (float)R.px); PNT p1; p1.set(segV0 + 1, (float)R.px); segHw = std::max(2, std::abs((int)p1.h - (int)p0.h) / 2); } else segHw = 3; }
+                    if (segV1 >= segV0) {
+                        RTARRAYI dts(barDateTime);
+                        auto endOf = [&](int k) -> long long { std::map<int, long long>::iterator it = segEnd.find(k); if (it != segEnd.end()) return it->second;
+                            struct tm t; memset(&t, 0, sizeof(t)); long long e = 0; if (getLocaltime((RTDATE)dts[k], &t)) e = fr::ctAbs(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec);
+                            segEnd[k] = e; return e; };
+                        const long long spbS = cs.spb > 0 ? cs.spb : 180;
+                        for (const ColsState::GSeg& sg : cs.gSegs) { if (sg.key != key) continue;
+                            int ka = -1, kb = -1; if (!dpaudit::stretchRange(segV0, segV1, endOf, sg.t0, sg.t1, spbS, ka, kb)) continue;
+                            PNT pa; pa.set(ka, (float)R.px); PNT pb; pb.set(kb, (float)R.px); const int xa = pa.h, xb = pb.h, hw = segHw;
+                            const int la = std::max(a, xa - hw), lb = std::min(b, xb + hw); if (lb - la < 2) continue;
+                        line((short)la, (short)g.y, (short)lb, (short)g.y, sg.bid ? C_BUY : C_SELL, 2); ++cs.gSegDrawn; } } } }
         }
     }
     // (2.36.0, Rassul 16:26 CT "remove the drawing of levels across the chart") NO level line in the price area: only the badge's short
@@ -2921,6 +2936,6 @@ extern "C" cppExtension *CreateExtension(void)
 #else
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
 #endif
-    p->setVersion("2.63.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.64.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }

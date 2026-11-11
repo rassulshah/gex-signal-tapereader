@@ -421,3 +421,10 @@ Rules (every new or changed indicator):
 - (lsBreakout 1.5.0) A `//` COMMENT INSERTED MID-LINE SWALLOWS THE REST OF THE LINE: `if (...) continue;   // note const auto it = ...`
   removed the BO letters' code and the brace balance broke 100 lines later ("function-definition is not allowed here"). Inline notes in a
   one-line loop body go in /* */ or on their own line.
+- (lsLimitProfile 2.64.0, 2026-11-11) A STATUS FILE "WRITTEN WHEN ITS CONTENT CHANGES" IS WRITTEN ON EVERY DRAW IF ANY FIELD MOVES ON EVERY DRAW:
+  the XLINES "drawn" counter (2.53.0) grew on every repaint and "age N s" every second, so both status files were replaced on every draw
+  (2 creates + 2 renames per repaint, 600+ a minute while he scrolls): draw 7 ms -> 15 ms -> 54 ms with spikes of seconds (IRT "freezing").
+  Rules: (1) every file write from draw / calc has a MINIMUM GAP in seconds, whatever the content (dpaudit::WriteGate, 5 s); (2) counters in a
+  status are per draw or per minute, never cumulative per repaint; (3) no work per VISIBLE CANDLE per draw (time conversion, PNT::set) - bisect
+  or cache by (candle count, last candle); (4) a new or changed indicator's draw is strace'd on the Linux harness before delivery: file
+  creates / renames per draw must be ~0. Proof: test_dealerprofile_2640.cpp H (writes per draw, SDK calls per draw), NOTES-DP2590.md 2.64.0.

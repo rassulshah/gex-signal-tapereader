@@ -384,12 +384,36 @@ inline std::string pickMQSymbol(const std::vector<std::string>& keys, const std:
 }
 
 // ---- (2.7.4) the status file is rewritten only when its content changes (or once a minute), not on every repaint --------
+// (2.64.0, 2026-11-11 Rassul 00:17 CT "double check why irt is slow and if the limit profile is causing it") a CHANGED status is written at
+// most once every statusMinGapSec() seconds. Before, any changed character wrote the file - and the status carries counters that move on
+// every repaint (XLINES drawn, since 2.53.0) and ages in seconds, so BOTH status files were replaced on EVERY draw (2 creates + 2 renames
+// per repaint, 600+ a minute while he scrolls): the draw went from ~7 ms (Nov 4) to 10 - 15 ms and to 54 ms with spikes of seconds when the
+// disk was busy. An unchanged status is still re-written once a minute. Tests set the gap to 0.
+inline int& statusMinGapSec() { static int s = 5; return s; }
+// (2.64.0) the candles of the range [v0, v1] that overlap a stretch [t0, t1]: candle k ENDS at endOf(k) (rising with k) and covers
+// (end - spb, end]. first / last = the first and last candle with end > t0 and end - spb <= t1; none overlapping but the stretch is newer
+// than the last candle's end = the last candle (the forming one). Found by bisection: endOf is called about 2 * log2(n) times, not once
+// per candle on screen on every draw (2.60.0 - 2.63.0 converted the time of EVERY visible candle on EVERY repaint).
+template <class EndOf> inline bool stretchRange(int v0, int v1, EndOf endOf, long long t0, long long t1, long long spb, int& first, int& last)
+{
+    if (v1 < v0) return false;
+    int lo = v0, hi = v1 + 1;                                   // first k with endOf(k) > t0
+    while (lo < hi) { const int mid = lo + (hi - lo) / 2; if (endOf(mid) > t0) hi = mid; else lo = mid + 1; }
+    const int a = lo;
+    lo = v0; hi = v1 + 1;                                       // first k with endOf(k) - spb > t1  (the one after the last overlapping)
+    while (lo < hi) { const int mid = lo + (hi - lo) / 2; if (endOf(mid) - spb > t1) hi = mid; else lo = mid + 1; }
+    const int b = lo - 1;
+    if (a <= v1 && b >= v0 && a <= b) { first = a; last = b; return true; }
+    if (t1 >= endOf(v1)) { first = last = v1; return true; }
+    return false;
+}
 struct WriteGate {
-    std::string last; std::time_t at = 0;
+    std::string last; std::time_t at = 0; long long writes = 0;
     bool due(const std::string& content, std::time_t now)
     {
+        if (at != 0 && now >= at && now - at < statusMinGapSec()) return false;
         if (content == last && now - at < 60) return false;
-        last = content; at = now; return true;
+        last = content; at = now; ++writes; return true;
     }
 };
 
