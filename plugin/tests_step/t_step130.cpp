@@ -28,7 +28,7 @@ int main() {
 #endif
     }
 #ifndef OLD
-    CHECK(std::string(stp::VERSION) == "1.3.3", "version 1.3.3");
+    CHECK(std::string(stp::VERSION) == "1.4.0", "version 1.4.0");
     const std::vector<stp::Bar> H = load("es_60m.csv"); CHECK(H.size() > 300, "hourly bars loaded: " + std::to_string(H.size()));
     stp::Engine E; E.hourly = true; for (const stp::Bar& b : H) E.addBar(b);
     std::vector<stp::Seg> s; std::vector<stp::Dot> d; std::vector<stp::Mark> m; stp::layoutHourly(E, (int)H.size() - 1, s, d, m);
@@ -51,10 +51,16 @@ int main() {
         if (q.tI >= 0) ++nT; else if (q.endI >= 0 && q.endI != stop) ++nBroken; }
     CHECK(tb == 0 && nT >= 10 && nBroken >= 1, "[2] T = touched or exceeded without breaking the step candle's low (" + std::to_string(nT) + " tested, " + std::to_string(nBroken) + " broken first), mismatches " + std::to_string(tb));
     { int sb = 0, dashed = 0; for (const stp::Seg& g : s) if (g.kind == 2) { ++dashed; bool ok = false; for (const stp::Step& q : E.S) if (q.bi - 1 == g.i0 && q.px == g.p0 && g.i1 > g.i0 && (q.dir > 0 ? H[(size_t)g.i0].h : H[(size_t)g.i0].l) == g.p0) ok = true; if (!ok) ++sb; }
-      CHECK(sb == 0 && dashed >= 20, "[2] (1.3.1) every dashed line starts at the prior high's candle, at that high, never before (" + std::to_string(dashed) + ")"); CHECK(m.size() == (size_t)nT, "[2] one T mark per tested step"); }
+      CHECK(sb == 0 && dashed >= 20, "[2] (1.3.1) every dashed line starts at the prior high's candle, at that high, never before (" + std::to_string(dashed) + ")"); int mt = 0, mb = 0; for (const stp::Mark& x : m) (x.kind == 1 ? mb : mt)++; CHECK(mt == nT, "[2] one T mark per tested step");
+      // [5] (1.4.0) B = the first candle after the step candle, while it is the newest step, that closes below its low (above its high for a step down)
+      int bb = 0, nB = 0; for (size_t i = 0; i < E.S.size(); ++i) { const stp::Step& q = E.S[i]; int want = -1; const int stop = i + 1 < E.S.size() ? E.S[i + 1].bi : (int)H.size() - 1;
+          for (int j = q.bi + 1; j <= stop && j < (int)H.size(); ++j) { if (q.dir > 0 ? H[(size_t)j].c < q.blo : H[(size_t)j].c > q.bhi) { want = j; break; } }
+          if (q.brI != want) ++bb;
+          if (q.brI >= 0) ++nB; }
+      CHECK(bb == 0 && nB >= 5 && mb == nB, "[5] B = the first close beyond the newest step candle's low / high (" + std::to_string(nB) + " breaks), mismatches " + std::to_string(bb)); }
     // [4] nothing decided changes: a shorter history gives the same steps / tests for everything decided by then
     { int rp = 0; for (size_t cut = 60; cut < H.size(); cut += 37) { stp::Engine P; P.hourly = true; for (size_t k = 0; k < cut; ++k) P.addBar(H[k]);
-          for (size_t i = 0; i < P.S.size(); ++i) { const stp::Step& a = P.S[i]; const stp::Step& b = E.S[i]; if (a.bi != b.bi || a.px != b.px || a.dir != b.dir) ++rp; if (a.endI >= 0 && (a.endI != b.endI || a.tI != b.tI)) ++rp; } }
+          for (size_t i = 0; i < P.S.size(); ++i) { const stp::Step& a = P.S[i]; const stp::Step& b = E.S[i]; if (a.bi != b.bi || a.px != b.px || a.dir != b.dir) ++rp; if (a.endI >= 0 && (a.endI != b.endI || a.tI != b.tI)) ++rp; if (a.brI >= 0 && a.brI != b.brI) ++rp; } }
       CHECK(rp == 0, "[4] no repaint: steps and decided tests are the same from any earlier point"); }
     std::printf("t_step130 (lsStepTrend %s): %d passed, %d failed\n", stp::VERSION, passes, fails); return fails ? 1 : 0;
 #endif

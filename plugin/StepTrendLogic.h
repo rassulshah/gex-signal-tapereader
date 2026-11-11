@@ -30,17 +30,17 @@
 #include <string>
 #include <vector>
 namespace stp {
-static const char* const VERSION = "1.3.3";   // (1.3.3, 2026-11-11 Rassul 16:56 CT "there is a rule that the low needs to be above to display T, lets make this close instead"): the test is judged by the CLOSE - T when the candle touches the level and closes at / above the step-up candle's low; a close below it ends the line with no T   // was "1.3.2";   // (1.3.2, 2026-11-11 Rassul 16:53 CT "the line goes up from the former step up and then across to the next step up"): the solid line rises AT the former step-up candle to the next step's high, then runs across to the next step-up candle   // was "1.3.1";   // (1.3.1, 2026-11-11 Rassul 16:47-16:51 CT, his sketch) the 60-minute chart draws TWO lines: the solid stairs from the high of one step-up candle across to the next step-up candle and up to its high; the dashed test line from the prior high across   // was "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
+static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-11-11 Rassul 16:59 CT "show B for Trend Break when the close is below the step up, like the last red candle"): B = the first candle that CLOSES below the newest step-up candle's low (above the high for a step down)   // was "1.3.3";   // (1.3.3, 2026-11-11 Rassul 16:56 CT "there is a rule that the low needs to be above to display T, lets make this close instead"): the test is judged by the CLOSE - T when the candle touches the level and closes at / above the step-up candle's low; a close below it ends the line with no T   // was "1.3.2";   // (1.3.2, 2026-11-11 Rassul 16:53 CT "the line goes up from the former step up and then across to the next step up"): the solid line rises AT the former step-up candle to the next step's high, then runs across to the next step-up candle   // was "1.3.1";   // (1.3.1, 2026-11-11 Rassul 16:47-16:51 CT, his sketch) the 60-minute chart draws TWO lines: the solid stairs from the high of one step-up candle across to the next step-up candle and up to its high; the dashed test line from the prior high across   // was "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
 static const int MAX_BARS = 5000, SLACK = 2000;      // the host feeds the last MAX_BARS closed candles and re-feeds when SLACK more have come
 
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };                         // t = candle START (wall seconds of the chart); prices in ticks
 struct Hour { long long k = 0, o = 0, h = 0, l = 0, c = 0; int hiI = 0, loI = 0, n = 0; };   // hiI / loI = the candle that made the high / low (the last one on a tie)
 struct Step { int dir = 0; long long px = 0, hour = 0, tConf = 0; int oi = 0; long long ot = 0; bool ok = true; int rotAt = 0; int sup = 0; int supEnd = -1;
-    int bi = -1; long long blo = 0, bhi = 0; int tI = -1, endI = -1; };   // (1.3.0, hourly chart) bi = the breakout candle (its low / high), tI = the candle that TESTED the level, endI = where the dashed line stops
+    int bi = -1; long long blo = 0, bhi = 0; int tI = -1, endI = -1; int brI = -1; };   // (1.4.0) brI = the candle that BROKE the trend: the first close below this (newest) step-up candle's low   // (1.3.0, hourly chart) bi = the breakout candle (its low / high), tI = the candle that TESTED the level, endI = where the dashed line stops
 //   sup: 0 = no support line (no later step the same way yet / the next step turned), 1 = running, 2 = ended at candle supEnd
 struct Seg { int i0 = 0; long long p0 = 0; int i1 = 0; long long p1 = 0; int dir = 0; int kind = 0; };   // kind 0 solid step, 1 the live level (dashed, to the right edge), 2 support (thin dashed)
 struct Dot { int i = 0; long long px = 0; int dir = 0; };
-struct Mark { int i = 0; int dir = 0; };   // (1.3.0) "T": under the low of the candle that tested a step up (over the high for a step down)
+struct Mark { int i = 0; int dir = 0; int kind = 0; };   // kind 0 = T (tested), 1 = B (trend break, 1.4.0: over the high of the breaking candle for a broken up-step, under the low for a broken down-step)   // (1.3.0) "T": under the low of the candle that tested a step up (over the high for a step down)
 
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
 inline bool periodOk(int spb) { return spb > 0 && spb <= 3600 && 3600 % spb == 0; }   // (1.2.0) + the 60-minute chart itself: each candle is an hour, the same steps
@@ -96,6 +96,8 @@ struct Engine {
         B.push_back(b);
         if (H.empty() || k != H.back().k) { Hour h; h.k = k; h.o = b.o; h.h = b.h; h.l = b.l; h.c = b.c; h.hiI = h.loI = idx; h.n = 1; H.push_back(h); curClosed = false; }
         else { Hour& h = H.back(); if (b.h >= h.h) { h.h = b.h; h.hiI = idx; } if (b.l <= h.l) { h.l = b.l; h.loI = idx; } h.c = b.c; ++h.n; }
+        if (hourly && !S.empty()) { Step& nw = S.back();   // (1.4.0) TREND BREAK: the first candle that closes below the newest step-up candle's low (above the high of a step-down candle); once
+            if (nw.brI < 0 && idx > nw.bi && (nw.dir > 0 ? b.c < nw.blo : b.c > nw.bhi)) nw.brI = idx; }
         if (hourly) for (size_t s = 0; s < S.size(); ++s) { Step& o = S[s]; if (o.endI >= 0 || idx <= o.bi) continue;   // (1.3.0) the test: touched or exceeded, the breakout candle's low (high) not broken
             if (o.dir > 0 ? b.c < o.blo : b.c > o.bhi) { o.endI = idx; continue; }   // (1.3.3) by the CLOSE (was the low / high)
             if (o.dir > 0 ? b.l <= o.px : b.h >= o.px) { o.tI = idx; o.endI = idx; } }
@@ -137,7 +139,8 @@ inline void layoutHourly(const Engine& E, int lastIdx, std::vector<Seg>& segs, s
             Seg v; v.i0 = p.bi; v.p0 = stepTop(p); v.i1 = p.bi; v.p1 = stepTop(q); v.dir = q.dir; v.kind = 0; segs.push_back(v);   // (1.3.2) up at the former step-up candle
             Seg h; h.i0 = p.bi; h.p0 = stepTop(q); h.i1 = q.bi; h.p1 = stepTop(q); h.dir = q.dir; h.kind = 0; segs.push_back(h); }   // then across to the next step-up candle, at its high
         Dot d; d.i = q.bi; d.px = stepTop(q); d.dir = q.dir; dots.push_back(d);
-        if (q.tI >= 0) { Mark m; m.i = q.tI; m.dir = q.dir; marks.push_back(m); } }
+        if (q.tI >= 0) { Mark m; m.i = q.tI; m.dir = q.dir; marks.push_back(m); }
+        if (q.brI >= 0) { Mark m; m.i = q.brI; m.dir = q.dir; m.kind = 1; marks.push_back(m); } }
 }
 } // namespace stp
 #endif

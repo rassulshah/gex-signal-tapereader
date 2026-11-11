@@ -1,5 +1,9 @@
 /********************************************************************************
- *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.3.3  (2026-11-11)
+ *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.4.0  (2026-11-11)
+ *
+ *  1.4.0 (Rassul 2026-11-11 16:59 CT) "B" = Trend Break on the 60-minute chart: the first candle that closes below the newest step-up candle's low
+ *  (red, over its high); mirror for a step down (green, under its low).
+ *  (was 1.3.3)
  *
  *  1.3.3 (Rassul 2026-11-11 16:56 CT) the T test is judged by the close: a wick below the step-up candle's low still earns a T when the candle closes back above it.
  *  (was 1.3.2)
@@ -65,7 +69,7 @@
 #include <string>
 #include <vector>
 
-#define STEPTREND_VERSION "1.3.3"
+#define STEPTREND_VERSION "1.4.0"
 
 namespace sth {
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREEN_D = 0x00178A42, C_RED_D = 0x00B03A3A;
@@ -246,11 +250,12 @@ int StepTrend::draw(void) {
         if (!marks.empty()) {   // (1.3.0) "T" = the level tested: under the low of the testing candle (step up, green) / over its high (step down, red)
             FONT ft; ft.id = HELVETICA; ft.size = 10; ft.style = BOLD; setFont(ft); const int tw = (int)getTextWidth("T", -1);
             for (size_t k = 0; k < marks.size(); ++k) { const int j = marks[k].i; if (j < 0 || j >= (int)S->E.B.size()) continue; const int i = j + S->off; if (i < vs || i > ve) continue;
-                const stp::Bar& b = S->E.B[(size_t)j]; const bool up = marks[k].dir > 0;
+                const stp::Bar& b = S->E.B[(size_t)j]; const bool brk = marks[k].kind == 1; const bool up = brk ? marks[k].dir < 0 : marks[k].dir > 0;   // (1.4.0) a B is on the other side, in the other colour: a broken up-step = red, over the high
+                const char* tx = brk ? "B" : "T";
                 PNT c; if (c.set(i, (float)((up ? b.l : b.h) * tk), kBarCenter) != RTX_OK) continue;
                 const int top = up ? c.v + 3 : c.v - 3 - 14;
                 setFont(ft); setTextColor(up ? sth::C_GREEN : sth::C_RED);
-                RCT r; r.set(sth::coord(c.h - tw / 2), sth::coord(top), sth::coord(c.h + tw / 2 + 2), sth::coord(top + 14)); r.drawText("T", false, false); }
+                RCT r; r.set(sth::coord(c.h - tw / 2), sth::coord(top), sth::coord(c.h + tw / 2 + 2), sth::coord(top + 14)); r.drawText(tx, false, false); }
         }
     } catch (...) {}
     return RTX_OK;
@@ -260,7 +265,7 @@ extern "C" cppExtension* CreateExtension(void) {
     StepTrend* p = new StepTrend();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA Step Trend v1.3.3 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
-    p->setVersion("1.3.3");
+    p->setDescription("LRA Step Trend v1.4.0 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
+    p->setVersion("1.4.0");
     return p;
 }
