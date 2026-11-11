@@ -27,6 +27,7 @@ static Fix load(const std::string& f, double tick) {
 }
 [[maybe_unused]] static long long T(const char* hm, long day) { int h, m; std::sscanf(hm, "%d:%d", &h, &m); return (long long)day * 86400 + h * 3600 + m * 60 + OFF; }
 [[maybe_unused]] static std::string hmOf(long long t) { const long long s = (t - OFF) % 86400; char b[8]; std::snprintf(b, sizeof b, "%02lld:%02lld", s / 3600, (s / 60) % 60); return b; }
+static int sideBad = 0, nOver = 0, nUnder = 0;   // (1.23.2) the % sits on the outer side of its label
 static bko::Scene draw(const bko::Engine& E) {
     bko::View v; v.first = 0; v.last = (int)E.bars.size() - 1; v.area.l = -1000000; v.area.t = -1000000; v.area.r = 1000000; v.area.b = 1000000;
     v.X = [](int i) { return 10 + i * 40; }; v.Y = [](double p) { return (int)std::lround(400000 - p * 40); }; v.textW = [](const char* s, int) { return (int)std::strlen(s) * 6; };
@@ -54,7 +55,7 @@ static void replay(Run& R, const Fix& X, int from, int vapAtStep = -1, long long
 static int barOf(const bko::Engine& E, long long t) { const auto it = std::lower_bound(E.bars.begin(), E.bars.end(), t, [](const bko::In& b, long long x) { return b.t < x; }); return it != E.bars.end() && it->t == t ? (int)(it - E.bars.begin()) : -1; }
 
 int main() {
-    CHECK(std::string(bko::VERSION) == "1.23.1", "version 1.23.1");
+    CHECK(std::string(bko::VERSION) == "1.23.2", "version 1.23.2");
     int total = 0; const char* F[3] = { "pboc_es1109.txt", "pboc_es1021.txt", "pboc_es1104.txt" };
     for (int f = 0; f < 3; ++f) { const Fix X = load(F[f], 0.25); Run R; replay(R, X, 3); const bko::Engine& E = R.E; const bko::Scene S = draw(E);
         int bad = 0, n = 0, lab = 0, over = 0;
@@ -63,7 +64,8 @@ int main() {
             if (t.kind != 5) continue;
             ++n;
             if (t.s.size() != 3 || t.s[2] != '%' || t.s[0] < '0' || t.s[0] > '9' || t.s[1] < '0' || t.s[1] > '9') { ++bad; continue; }
-            const bko::Txt* L = nullptr; for (const bko::Txt& o : S.txt) if (o.kind == 2 && o.bar == t.bar && o.f.b + 1 == t.f.t && o.col == t.col) L = &o;
+            const bko::Txt* L = nullptr; for (const bko::Txt& o : S.txt) if (o.kind == 2 && o.bar == t.bar && (o.f.b + 1 == t.f.t || t.f.b + 1 == o.f.t) && o.col == t.col) L = &o;
+            if (L) { const bool over = L->f.b <= (int)std::lround(400000 - E.bars[(size_t)t.bar].h * 40); if (over ? !(t.f.b + 1 == L->f.t) : !(L->f.b + 1 == t.f.t)) ++sideBad; if (over) ++nOver; else ++nUnder; }
             if (!L) { ++bad; continue; }
             const long long bt = E.bars[(size_t)t.bar].t; const bko::PbMark* P = nullptr; { const auto a = E.pb.find(bt); if (a != E.pb.end()) P = &a->second; else { const auto b2 = E.rpb.find(bt); if (b2 != E.rpb.end()) P = &b2->second; } }
             if (!P) { ++bad; continue; }
@@ -76,5 +78,6 @@ int main() {
         CHECK(R.switches == 0, std::string("[2] ") + F[f] + ": the labels never change");
         total += n; std::printf("  %s: %d labels, %d retracement texts\n", F[f], lab, n); }
     CHECK(total >= 10, "retracement texts in the three days: " + std::to_string(total));
+    CHECK(sideBad == 0 && nOver >= 1 && nUnder >= 1, "(1.23.2) % above a label drawn over the candle (" + std::to_string(nOver) + "), below one under it (" + std::to_string(nUnder) + ")");
     std::printf("RESULT %d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }

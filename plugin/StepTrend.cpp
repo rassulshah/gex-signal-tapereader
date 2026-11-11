@@ -1,5 +1,8 @@
 /********************************************************************************
- *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.2.0  (2026-11-11)
+ *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.3.0  (2026-11-11)
+ *
+ *  1.3.0 (Rassul 2026-11-11 15:08 / 15:12 CT) the 60-minute chart: the step on the breakout candle, the dashed line from it on, "T" under the low of
+ *  the candle that tested the level (stp::Engine::hourly, stp::layoutHourly). Shorter periods are unchanged.
  *
  *  1.2.0 (Rassul 2026-11-11 07:55 CT "the green step didnt draw when the nq made a higher green bar"): the hourly rotation follows his
  *    1-bar High / Low ZigZag (a higher high turns it up, a lower low down, an outside hour by its colour). 1.0.0 / 1.1.0 used a 3-hour pivot
@@ -53,7 +56,7 @@
 #include <string>
 #include <vector>
 
-#define STEPTREND_VERSION "1.2.0"
+#define STEPTREND_VERSION "1.3.0"
 
 namespace sth {
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREEN_D = 0x00178A42, C_RED_D = 0x00B03A3A;
@@ -124,7 +127,7 @@ bool StepTrend::identify(STState& S) {
         S.root = root; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
         S.mkt = mkey::norm(root); for (char& c : S.mkt) if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) c = '_';
         const stpp::Mkt& M = stpp::forMarket(S.mkt);
-        S.E.reset(); S.E.rule = M.rule; S.E.rot = M.rot != 0; S.E.body = M.body != 0; S.raw.clear(); S.off = 0; S.lastIdx = -1; S.statusSteps = (size_t)-1;
+        S.E.reset(); S.E.rule = M.rule; S.E.rot = M.rot != 0; S.E.body = M.body != 0; S.E.hourly = spb == 3600;   // (1.3.0) the 60-minute chart S.raw.clear(); S.off = 0; S.lastIdx = -1; S.statusSteps = (size_t)-1;
     }
     if (!stp::periodOk(S.spb)) { S.note = "the chart's period must divide the hour (1, 2, 3, 5, 10, 15, 30 or 60 minutes)"; return false; }
     S.note.clear();
@@ -201,8 +204,8 @@ int StepTrend::draw(void) {
         int vs = 0, ve = (int)n - 1; if (getVisibleBars(&vs, &ve) != RTX_OK) { vs = 0; ve = (int)n - 1; }
         vs = std::max(vs, 0); ve = std::min(ve, (int)n - 1);
         if (ve < vs) return RTX_OK;
-        std::vector<stp::Seg> segs; std::vector<stp::Dot> dots;
-        stp::layout(S->E, S->lastIdx - S->off, segs, dots);
+        std::vector<stp::Seg> segs; std::vector<stp::Dot> dots; std::vector<stp::Mark> marks;
+        if (S->E.hourly) stp::layoutHourly(S->E, S->lastIdx - S->off, segs, dots, marks); else stp::layout(S->E, S->lastIdx - S->off, segs, dots);
         const double tk = S->tick;
         for (size_t k = 0; k < segs.size(); ++k) {
             const stp::Seg& g = segs[k];
@@ -231,6 +234,15 @@ int StepTrend::draw(void) {
             setPen(col, 1, P_SOLID); CBRUSH br(col, PAT_SOLID); br.set();
             RCT o; o.set(sth::coord(c.h - 4), sth::coord(c.v - 4), sth::coord(c.h + 4), sth::coord(c.v + 4)); o.drawOval(DRAW_OPAQUE);
         }
+        if (!marks.empty()) {   // (1.3.0) "T" = the level tested: under the low of the testing candle (step up, green) / over its high (step down, red)
+            FONT ft; ft.id = HELVETICA; ft.size = 10; ft.style = BOLD; setFont(ft); const int tw = (int)getTextWidth("T", -1);
+            for (size_t k = 0; k < marks.size(); ++k) { const int j = marks[k].i; if (j < 0 || j >= (int)S->E.B.size()) continue; const int i = j + S->off; if (i < vs || i > ve) continue;
+                const stp::Bar& b = S->E.B[(size_t)j]; const bool up = marks[k].dir > 0;
+                PNT c; if (c.set(i, (float)((up ? b.l : b.h) * tk), kBarCenter) != RTX_OK) continue;
+                const int top = up ? c.v + 3 : c.v - 3 - 14;
+                setFont(ft); setTextColor(up ? sth::C_GREEN : sth::C_RED);
+                RCT r; r.set(sth::coord(c.h - tw / 2), sth::coord(top), sth::coord(c.h + tw / 2 + 2), sth::coord(top + 14)); r.drawText("T", false, false); }
+        }
     } catch (...) {}
     return RTX_OK;
 }
@@ -239,7 +251,7 @@ extern "C" cppExtension* CreateExtension(void) {
     StepTrend* p = new StepTrend();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA Step Trend v1.2.0 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
-    p->setVersion("1.2.0");
+    p->setDescription("LRA Step Trend v1.3.0 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
+    p->setVersion("1.3.0");
     return p;
 }

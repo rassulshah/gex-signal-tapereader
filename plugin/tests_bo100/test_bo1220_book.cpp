@@ -60,7 +60,7 @@ static std::set<long long> gated(const bko::Engine& E, const std::set<long long>
     for (const auto& kv : E.rro) one(kv.second);
     return r; }
 int main() {
-    CHECK(std::string(bko::VERSION) == "1.23.1", "version 1.23.1");
+    CHECK(std::string(bko::VERSION) == "1.23.2", "version 1.23.2");
     const Fix X = load("pboc_es1109.txt", 0.25); Run R; replay(R, X, (int)X.B.size()); bko::Engine E = R.E;
     std::vector<bko::RevMark> M; for (const auto& kv : E.rev) M.push_back(kv.second); for (const auto& kv : E.rro) M.push_back(kv.second);
     const std::set<long long> base = revs(E); const size_t recs = E.revL.size() + E.rroL.size();

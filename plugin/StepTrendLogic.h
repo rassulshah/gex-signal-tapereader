@@ -30,21 +30,30 @@
 #include <string>
 #include <vector>
 namespace stp {
-static const char* const VERSION = "1.2.0";
+static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
 static const int MAX_BARS = 5000, SLACK = 2000;      // the host feeds the last MAX_BARS closed candles and re-feeds when SLACK more have come
 
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };                         // t = candle START (wall seconds of the chart); prices in ticks
 struct Hour { long long k = 0, o = 0, h = 0, l = 0, c = 0; int hiI = 0, loI = 0, n = 0; };   // hiI / loI = the candle that made the high / low (the last one on a tie)
-struct Step { int dir = 0; long long px = 0, hour = 0, tConf = 0; int oi = 0; long long ot = 0; bool ok = true; int rotAt = 0; int sup = 0; int supEnd = -1; };
+struct Step { int dir = 0; long long px = 0, hour = 0, tConf = 0; int oi = 0; long long ot = 0; bool ok = true; int rotAt = 0; int sup = 0; int supEnd = -1;
+    int bi = -1; long long blo = 0, bhi = 0; int tI = -1, endI = -1; };   // (1.3.0, hourly chart) bi = the breakout candle (its low / high), tI = the candle that TESTED the level, endI = where the dashed line stops
 //   sup: 0 = no support line (no later step the same way yet / the next step turned), 1 = running, 2 = ended at candle supEnd
 struct Seg { int i0 = 0; long long p0 = 0; int i1 = 0; long long p1 = 0; int dir = 0; int kind = 0; };   // kind 0 solid step, 1 the live level (dashed, to the right edge), 2 support (thin dashed)
 struct Dot { int i = 0; long long px = 0; int dir = 0; };
+struct Mark { int i = 0; int dir = 0; };   // (1.3.0) "T": under the low of the candle that tested a step up (over the high for a step down)
 
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
 inline bool periodOk(int spb) { return spb > 0 && spb <= 3600 && 3600 % spb == 0; }   // (1.2.0) + the 60-minute chart itself: each candle is an hour, the same steps
 
 struct Engine {
     int rule = 0; bool rot = true, body = true;
+    // (1.3.0, Rassul 2026-11-11 15:08 CT "only draw the dashed line after the stp up. when a candle then pulls back and touches it, without breaking the
+    // step up candle's low, it can be called a T which means that the hbo is tested ... you put the step on the wrong red candle next to it even though only
+    // green candles that close higher are suppose to have the step"; 15:12 "it should go under the low of the candle. only when it is touched or exceeded")
+    // HOURLY CHART (each candle is an hour): the step belongs to the BREAKOUT candle (the green one that closed above the prior high), not to the candle
+    // whose high it broke; the dashed line runs from the breakout candle on, at the broken level, until a later candle TESTS it (its low touches or goes
+    // through the level without trading below the breakout candle's low = "T"), or trades below that low (no T), or another step is made. Mirror for down.
+    bool hourly = false;
     std::vector<Bar> B; std::vector<Hour> H; std::vector<Step> S, skipped;    // S = the steps drawn (in order); skipped = breakouts against the rotation
     bool curClosed = false;                                                    // the newest hour in H has been closed (by a later candle or sealTo)
     int zdir = 0; std::vector<int> rotv;                                       // hourly ZigZag rotation after each closed hour (+1 up, -1 down, 0 none yet)
@@ -71,6 +80,7 @@ struct Engine {
         q.rotAt = zdir; q.ok = !rot || zdir == 0 || (up && zdir > 0) || (dn && zdir < 0);
         if (!q.ok) { skipped.push_back(q); return; }
         const int last = (int)B.size() - 1;                                    // the candle that closed this hour
+        if (hourly) { q.bi = last; q.blo = B[(size_t)last].l; q.bhi = B[(size_t)last].h; for (size_t s = 0; s < S.size(); ++s) if (S[s].endI < 0) S[s].endI = last; }   // (1.3.0)
         for (size_t s = 0; s < S.size(); ++s) if (S[s].sup == 1) { S[s].sup = 2; S[s].supEnd = std::max(S[s].oi, q.oi); }   // (1.1.0) another step was made: a running line stops where that step starts (its wave top / bottom)
         if (!S.empty() && S.back().dir == q.dir) {                             // the old level becomes support / resistance
             Step& o = S.back(); o.sup = 1;
@@ -86,6 +96,9 @@ struct Engine {
         B.push_back(b);
         if (H.empty() || k != H.back().k) { Hour h; h.k = k; h.o = b.o; h.h = b.h; h.l = b.l; h.c = b.c; h.hiI = h.loI = idx; h.n = 1; H.push_back(h); curClosed = false; }
         else { Hour& h = H.back(); if (b.h >= h.h) { h.h = b.h; h.hiI = idx; } if (b.l <= h.l) { h.l = b.l; h.loI = idx; } h.c = b.c; ++h.n; }
+        if (hourly) for (size_t s = 0; s < S.size(); ++s) { Step& o = S[s]; if (o.endI >= 0 || idx <= o.bi) continue;   // (1.3.0) the test: touched or exceeded, the breakout candle's low (high) not broken
+            if (o.dir > 0 ? b.l < o.blo : b.h > o.bhi) { o.endI = idx; continue; }
+            if (o.dir > 0 ? b.l <= o.px : b.h >= o.px) { o.tI = idx; o.endI = idx; } }
         for (size_t s = 0; s + 1 < S.size(); ++s) { Step& o = S[s]; if (o.sup == 1 && idx > S[s + 1].oi && tested(o, b)) { o.sup = 2; o.supEnd = idx; } }
         return true;
     }
@@ -106,6 +119,19 @@ inline void layout(const Engine& E, int lastIdx, std::vector<Seg>& segs, std::ve
             Seg h; h.i0 = q.oi; h.p0 = x.px; h.i1 = x.oi; h.p1 = x.px; h.dir = x.dir; h.kind = 0; segs.push_back(h); }        // then across to the next top
         else if (lastIdx >= q.oi) { Seg l; l.i0 = q.oi; l.p0 = q.px; l.i1 = lastIdx; l.p1 = q.px; l.dir = q.dir; l.kind = 1; segs.push_back(l); }
         Dot d; d.i = q.oi; d.px = q.px; d.dir = q.dir; dots.push_back(d); }
+}
+// (1.3.0) the 60-minute chart: solid stairs through the breakout candles (across at the old level, up / down at the breakout candle), the dot on the
+// breakout candle at its level, the dashed line from the breakout candle on (to its test / end, else the right edge), a T mark at each test
+inline void layoutHourly(const Engine& E, int lastIdx, std::vector<Seg>& segs, std::vector<Dot>& dots, std::vector<Mark>& marks) {
+    segs.clear(); dots.clear(); marks.clear(); const size_t n = E.S.size();
+    for (size_t i = 0; i < n; ++i) { const Step& q = E.S[i]; if (q.bi < 0) continue; const int e = q.endI >= 0 ? q.endI : lastIdx;
+        if (e > q.bi) { Seg s; s.i0 = q.bi; s.p0 = q.px; s.i1 = e; s.p1 = q.px; s.dir = q.dir; s.kind = 2; segs.push_back(s); } }
+    for (size_t i = 0; i < n; ++i) { const Step& q = E.S[i]; if (q.bi < 0) continue;
+        if (i > 0 && E.S[i - 1].bi >= 0) { const Step& p = E.S[i - 1];
+            Seg h; h.i0 = p.bi; h.p0 = p.px; h.i1 = q.bi; h.p1 = p.px; h.dir = q.dir; h.kind = 0; segs.push_back(h);
+            Seg v; v.i0 = q.bi; v.p0 = p.px; v.i1 = q.bi; v.p1 = q.px; v.dir = q.dir; v.kind = 0; segs.push_back(v); }
+        Dot d; d.i = q.bi; d.px = q.px; d.dir = q.dir; dots.push_back(d);
+        if (q.tI >= 0) { Mark m; m.i = q.tI; m.dir = q.dir; marks.push_back(m); } }
 }
 } // namespace stp
 #endif

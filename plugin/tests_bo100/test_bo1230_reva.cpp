@@ -62,7 +62,7 @@ static bool node(const Fix& X, const bko::In& b, int d) { if (!(d > 0 ? b.c > b.
     if (std::fabs(best) < 2.0 * med) return false;
     return d > 0 ? b.c / 0.25 > (double)hi + 1e-6 : b.c / 0.25 < (double)lo - 1e-6; }
 int main() {
-    CHECK(std::string(bko::VERSION) == "1.23.1", "version 1.23.1");
+    CHECK(std::string(bko::VERSION) == "1.23.2", "version 1.23.2");
     int nA = 0, nPlain = 0, bad = 0, txtBad = 0, drawnA = 0;
     const char* F[3] = { "pboc_es1109.txt", "pboc_es1021.txt", "pboc_es1104.txt" };
     for (int f = 0; f < 3; ++f) { const Fix X = load(F[f], 0.25); Run R; replay(R, X, 3); const bko::Engine& E = R.E;

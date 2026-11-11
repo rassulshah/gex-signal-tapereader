@@ -56,3 +56,16 @@ Rassul 07:21 CT "the retest lines should not extend indefinitely . they should s
 - Tests: tests_step/t_step 134 pass (ASan / UBSan, -Werror): the NQ case, the 60-minute chart = the 3-minute chart's steps in every fixture
   day, parity with the mockup (21 cases); MinGW real-SDK syntax check 0 warnings; speed check pass; python 6 pass.
 - Not verified (needs his IRT): the look on his 60-minute chart (line thickness and the dots at hour-candle width).
+
+## 1.3.0 (2026-11-11 15:08-15:12 CT) - the 60-minute chart
+Rassul: "only draw the dashed line after the stp up. when a candle then pullbs back and touches it, without breaking the step up cancles low, its can be
+called a T which means that the hbo is tested. also you missed a candle that stepped up ... you put the step on the wrong red candle next to it even
+though only green candles that close higher are suppose to have the step"; "it should go under the low of the candle. only when it is touched or exceeded".
+- Cause of the "wrong candle": the step was anchored to the candle whose high was broken (the wave top, right on a 3-minute chart) - on the hourly
+  chart that is the candle BEFORE the breakout candle. Hourly mode (stp::Engine::hourly, spb 3600) anchors the step, dot and dashed line to the
+  breakout candle; level = the prior hour's high / low as before.
+- T (stp::Mark): the first later candle whose low touches / goes through the level without trading below the breakout candle's low; a candle that
+  trades below that low first ends the line with no T; the next step ends it too. Under the low (green) / over the high (red, step down).
+- 3-minute and other charts: unchanged (layout hash = 1.2.0 on 6,000 ES 3-min bars).
+- Tests: tests_step/t_step130.cpp 10 pass (680 real ES hours Oct-Nov), t_step 134 pass, MinGW 0 errors. BO / ReadBox tests pass with the shared header.
+- Mockup https://claude.ai/artifact/GPHeTaUZ75ZHtELN5dYFTU . Not verified on his chart.
