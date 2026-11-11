@@ -147,3 +147,5 @@ retired test plugin\tests_trappedtraders\wrap_TrappedTraders.cpp
 retired test plugin\tests_tt011\test_tt011.cpp 
 ==== Sun 11/01/2026 21:43:26.43 defense lines 
 moved lsDefenseLines.dll 
+==== Tue 11/10/2026 21:47:38.73 retire lsDealerProfile 
+moved lsDealerProfile.dll 
