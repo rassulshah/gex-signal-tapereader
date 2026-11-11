@@ -28,7 +28,7 @@ int main() {
 #endif
     }
 #ifndef OLD
-    CHECK(std::string(stp::VERSION) == "1.3.1", "version 1.3.1");
+    CHECK(std::string(stp::VERSION) == "1.3.2", "version 1.3.2");
     const std::vector<stp::Bar> H = load("es_60m.csv"); CHECK(H.size() > 300, "hourly bars loaded: " + std::to_string(H.size()));
     stp::Engine E; E.hourly = true; for (const stp::Bar& b : H) E.addBar(b);
     std::vector<stp::Seg> s; std::vector<stp::Dot> d; std::vector<stp::Mark> m; stp::layoutHourly(E, (int)H.size() - 1, s, d, m);
@@ -37,8 +37,8 @@ int main() {
     CHECK(bad == 0 && up >= 20 && dn >= 20, "[1] every step sits on its breakout candle: green closing above the prior high / red below the prior low (" + std::to_string(up) + " up, " + std::to_string(dn) + " down)");
     { int db = 0; for (size_t i = 0; i < d.size(); ++i) if (d[i].i != E.S[i].bi || d[i].px != (E.S[i].dir > 0 ? H[(size_t)E.S[i].bi].h : H[(size_t)E.S[i].bi].l)) ++db; CHECK(db == 0 && d.size() == E.S.size(), "[1] (1.3.1) the dot is on the step candle at its high (low for a step down)");
       int sb = 0, solid = 0; for (const stp::Seg& g : s) if (g.kind == 0) { ++solid; bool ok = false; for (size_t i = 1; i < E.S.size(); ++i) { const stp::Step& p = E.S[i - 1]; const stp::Step& q = E.S[i]; const long long pt = p.dir > 0 ? p.bhi : p.blo, qt = q.dir > 0 ? q.bhi : q.blo;
-              if ((g.i0 == p.bi && g.i1 == q.bi && g.p0 == pt && g.p1 == pt) || (g.i0 == q.bi && g.i1 == q.bi && g.p0 == pt && g.p1 == qt)) ok = true; } if (!ok) ++sb; }
-      CHECK(sb == 0 && solid == 2 * ((int)E.S.size() - 1), "[1] (1.3.1) the solid line: across at the prior step candle's high to the next step candle, then up to its high"); }
+              if ((g.i0 == p.bi && g.i1 == p.bi && g.p0 == pt && g.p1 == qt) || (g.i0 == p.bi && g.i1 == q.bi && g.p0 == qt && g.p1 == qt)) ok = true; } if (!ok) ++sb; }
+      CHECK(sb == 0 && solid == 2 * ((int)E.S.size() - 1), "[1] (1.3.2) up at the former step candle to the next high, then across; was: across at the prior step candle's high to the next step candle, then up to its high"); }
     // [2] the test, re-derived: the first later candle that trades below the breakout candle's low ends it (no T); else the first that touches / exceeds the level = T; the next step ends it
     int tb = 0, nT = 0, nBroken = 0; for (size_t i = 0; i < E.S.size(); ++i) { const stp::Step& q = E.S[i]; int wantT = -1, wantEnd = -1; const int stop = i + 1 < E.S.size() ? E.S[i + 1].bi : (int)H.size();
         for (int j = q.bi + 1; j < (int)H.size(); ++j) { const stp::Bar& b = H[(size_t)j];

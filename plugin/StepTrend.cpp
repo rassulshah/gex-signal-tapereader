@@ -1,5 +1,9 @@
 /********************************************************************************
- *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.3.1  (2026-11-11)
+ *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.3.2  (2026-11-11)
+ *
+ *  1.3.2 (Rassul 2026-11-11 16:53 CT "the line goes up from the former step up and then across to the next step up") the solid line of the
+ *  60-minute chart rises at the former step-up candle to the next step's high, then runs across to the next step-up candle.
+ *  (was 1.3.1)
  *
  *  1.3.1 (Rassul 2026-11-11 16:47-16:51 CT, his sketch) the 60-minute chart: two lines - solid stairs high to high, dashed test line from the prior high.
  *
@@ -58,7 +62,7 @@
 #include <string>
 #include <vector>
 
-#define STEPTREND_VERSION "1.3.1"
+#define STEPTREND_VERSION "1.3.2"
 
 namespace sth {
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREEN_D = 0x00178A42, C_RED_D = 0x00B03A3A;
@@ -253,7 +257,7 @@ extern "C" cppExtension* CreateExtension(void) {
     StepTrend* p = new StepTrend();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA Step Trend v1.3.1 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
-    p->setVersion("1.3.1");
+    p->setDescription("LRA Step Trend v1.3.2 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
+    p->setVersion("1.3.2");
     return p;
 }
