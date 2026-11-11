@@ -125,7 +125,8 @@ namespace bko {
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
 static const bool SHOW_PDOC = false;   // (1.17.0) Pdoc removed from the chart (decided + recorded as before)
-static const char* const VERSION = "1.20.0";   // (1.20.0, 2026-11-11 Rassul 12:27 CT "I want to add the retracement amount right below any type of pb like 45%", "Keep it two digits") the pullback's retracement of its wave, two digits + "%", right under every decided pullback label
+static const char* const VERSION = "1.21.0";   // (1.21.0, 2026-11-11 Rassul 12:51 CT "Build") a Rly is displayed only when the candle it sits on is inside an hourly breakout bar of its direction (lsStepTrend's step rule), decided once when that hour has closed; a Rly Pboc needs such a Rly
+// was "1.20.0";   // (1.20.0, 2026-11-11 Rassul 12:27 CT "I want to add the retracement amount right below any type of pb like 45%", "Keep it two digits") the pullback's retracement of its wave, two digits + "%", right under every decided pullback label
 // was "1.19.0";   // (1.19.0, 2026-11-11 Rassul 11:07 CT "Its range is at least 1.2x the 13-bar ATR (measured on the bar before) or it closes above the prior bar high. also note that it can be displayed after any type of pb including pboc etc.") Rev = the first bar of the right colour whose range is >= 1.2 x ATR(13) OR that closes beyond the prior bar (long: above its high; short: below its low); a Rev is drawn after every kind of pullback label - Pb, Pboc, PbT, PbocT and the no-BO Rly Pboc (BRO, was recorded only)
 // was "1.18.0";   // (1.18.0, 2026-11-11 Rassul) (1) 07:50 CT "this pb should have gotting a pboc too", rule: "allow if it doens't close below" - a pullback is void only when a candle CLOSES beyond the wave's origin (was: trades beyond it). (2) 07:33-07:40 CT "if there is a pb and it is below this level then it should be called a PbT", "it would be the dashed lne that would be tested", "update pboc to pbocT" - a drawn Pb / Pboc whose pullback traded at / through a Step Trend level of its direction (the newest level or an older one still running as support) is drawn PbT / PbocT; BPT| record lines
 // was "1.17.0";   // (1.17.0, 2026-11-10 Rassul 13:09-13:11 CT "so we have 2 signals, PB and Pboc, pboc replaces pb if it is true", "remove pdoc") Pdoc is no longer drawn (a BO / BD pullback that was Pdoc shows Pb; a Rly Pdoc shows nothing); the decision is still recorded
@@ -180,6 +181,7 @@ struct Pivot { long long t = 0, tc = 0; int type = 0; double h = 0, l = 0; bool 
 // +1 = BI UP (a failed BD, letter below the low). kind = the attempt as known at the BI close: 0 unconfirmed (no_confirm or still waiting),
 // 1 fired (the BI after its follow-through), 2 other reject. cancel = the attempt was still waiting (that BO / BD is cancelled).
 static const bool SHOW_BI = false;    // (1.6.0, Rassul 2026-11-04 19:06 CT "lets remove the BI signal") no BI pass: no letters, records or BO / BD cancels
+static const bool RLY_NEEDS_HBO = true;        // (1.21.0) a Rly counts only inside an hourly breakout bar of its direction
 static const double REV_ATR_X = 1.2;           // (1.9.0) Rev range >= 1.2 x ATR (1.9.1: ATR(13))
 static const int REV_ATR_N = 13;               // (1.9.1) ATR(13), Wilder
 static const int PB_MAX_PER_BO = 2;            // (1.8.0) the first 2 qualifying pullback pivots of a BO / BD only
@@ -341,7 +343,7 @@ struct Engine {
         if (chartN == count && lc == lastClosedT && chartFirst == firstT && tk == tick && per == spb) return false;
         if (count >= 0 && (chartFirst != firstT || chartN < count || tk != tick || per != spb)) full = true;
         bars = B; tick = tk; spb = per; openMin = om; closeMin = cm; count = chartN; lastClosedT = lc; firstT = chartFirst;
-        boPass(); if (SHOW_BI) biPass(); rlyPass(); pbPass(); revPass(); full = false; ++runs; return true;
+        boPass(); if (SHOW_BI) biPass(); rlyPass(); hboPass(); pbPass(); revPass(); full = false; ++runs; return true;
     }
     int trendAt(int k) {
         if (k <= 0 || k >= (int)bars.size()) return 0;
@@ -602,6 +604,34 @@ struct Engine {
         Pivot p; p.t = bars[(size_t)ex].t; p.tc = bars[(size_t)cf].t; p.type = legDir; p.h = bars[(size_t)ex].h; p.l = bars[(size_t)ex].l; p.prov = true;
         zzPb.push_back(p);
     }
+    // (1.21.0, Rassul 2026-11-11 08:19 CT "the Rly ont the lower time frame ... should represent the breakout that is happening on the houly and
+    // be part of the hourly breakout bar", 10:21 "the rally is only displyed if it is consisetent witht the hourly breakout bar right", 12:51
+    // "Build"; mockup claude.ai/artifact/7pSqG2fDsUWHwFGFhfECDn) A Rly counts only when the candle it sits on is inside an HOURLY BREAKOUT
+    // BAR of its direction: lsStepTrend's step rule (the hour closes beyond the prior hour's high / low, in its own colour, with the hourly
+    // rotation). Decided ONCE, when that hour has closed (so a Rly can print later than before, never be taken back), kept per Rly. A chart
+    // period that does not divide the hour: the rule is off (every Rly counts, as before).
+    std::map<std::pair<long long, int>, int> rlyHbo;   // (wave end bar, dir) -> 1 in an hourly breakout bar / 0 not
+    bool rlyShown(const RlyMark& R) const { if (!RLY_NEEDS_HBO || !stp::periodOk(spb) || !(tick > 0)) return true;
+        const auto it = rlyHbo.find(std::make_pair(R.te, R.dir)); return it != rlyHbo.end() && it->second == 1; }
+    void hboPass() {
+        if (!RLY_NEEDS_HBO || !stp::periodOk(spb) || !(tick > 0)) return;
+        const int n = (int)bars.size(); if (n < 3) return;
+        bool need = false; for (const auto& kv : rly) if (kv.second.fired && !rlyHbo.count(std::make_pair(kv.second.te, kv.second.dir))) { need = true; break; }
+        if (!need) return;
+        stp::Engine E; for (int k = 0; k <= n - 2; ++k) { const In& b = bars[(size_t)k]; if (!b.ok) continue;   // the closed candles
+            stp::Bar x; x.t = (long long)b.days * 86400LL + b.endSec - spb;
+            if (!wpc::toTicks(b.o, tick, x.o) || !wpc::toTicks(b.h, tick, x.h) || !wpc::toTicks(b.l, tick, x.l) || !wpc::toTicks(b.c, tick, x.c)) continue;
+            E.addBar(x); }
+        { const In& f = bars[(size_t)n - 1]; if (f.ok) E.sealTo((long long)f.days * 86400LL + f.endSec - spb); }   // the forming candle starts a new hour: the last one is closed
+        if (E.H.empty()) return;
+        const long long lastH = E.H.back().k * 3600; std::map<long long, int> stepAt; for (const stp::Step& q : E.S) stepAt[q.hour] = q.dir;
+        for (const auto& kv : rly) { const RlyMark& R = kv.second; if (!R.fired) continue; const std::pair<long long, int> key(R.te, R.dir); if (rlyHbo.count(key)) continue;
+            const auto it = std::lower_bound(bars.begin(), bars.end(), R.te, [](const In& b, long long t) { return b.t < t; }); if (it == bars.end() || it->t != R.te || !it->ok) continue;
+            const long long h = stp::floorDiv((long long)it->days * 86400LL + it->endSec - spb, 3600) * 3600;
+            if (h > lastH || (h == lastH && !E.curClosed)) continue;            // its hour has not closed yet: not decided
+            const auto st = stepAt.find(h); rlyHbo[key] = (st != stepAt.end() && (st->second > 0) == (R.dir > 0)) ? 1 : 0; }
+        while (rlyHbo.size() > 40000) rlyHbo.erase(rlyHbo.begin());
+    }
     void pbPass() {
         pivots(); zzPivots(); pbProv.clear(); bocProv.clear(); bocNoVap = 0; bocNoPoc = 0; pdocNoVap = 0; shallowPb = 0; shallowRly = 0;
         const std::vector<Pivot>& piv = zzPb;                            // (1.9.3) Pb / origin pivots = the chart's ZigZag (shadows the member)
@@ -701,7 +731,7 @@ struct Engine {
     template <class IdxOf> void rlyPbPass(IdxOf& idxOf, const std::vector<const bba::BoDec*>& F) {
         if (!vapAt) return;
         rpbWait.clear();
-        std::vector<const RlyMark*> R; for (const auto& kv : rly) if (kv.second.fired && kv.second.t0 && kv.second.tc) R.push_back(&kv.second);
+        std::vector<const RlyMark*> R; for (const auto& kv : rly) if (kv.second.fired && kv.second.t0 && kv.second.tc && rlyShown(kv.second)) R.push_back(&kv.second);   // (1.21.0) only a Rly inside an hourly breakout bar
         std::sort(R.begin(), R.end(), [](const RlyMark* a, const RlyMark* b) { return a->te < b->te; });
         for (size_t q = 0; q < R.size(); ++q) {
             const RlyMark& W = *R[q]; const int dir = W.dir > 0 ? 1 : -1, want = -dir;
@@ -821,7 +851,7 @@ struct View {
     int lh[2] = { 12, 14 };                         // letter row heights: BO / BD font, Rly font
 };
 struct Board { long long t = 0; int side = 0; int val = 0; };   // SignalBoard 'L': bar time, +1 above / -1 below, px from the extreme to the outer edge
-struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
+struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0, rlyNoHbo = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
 // (1.5.0) the BI rows: row r sits GAP + r * ROW_OUT px from the wick (0 = the BO row +3..+17, 1 = +19..+33, 2 = +35 (Pb), 3 = +51 (LVP),
 // 4 = +67, 5 = +83). Rows taken by OTHER indicators' labels at this candle and side: a zigzag pivot (the wave-time label, row 0, and
 // lsCandleAbsorb's A / Ae, row 1); the candle after a pivot that re-tests it within 4 ticks (lsCandleAbsorb's A row 1); row 3 is
@@ -887,6 +917,7 @@ inline Scene layout(const Engine& E, const View& v) {
     std::vector<std::pair<int, int>> boBars;
     for (const auto& kv : E.bo) { const bba::BoDec& D = kv.second; if (!E.shownBo(D)) continue;   /* (1.5.0) not a BO / BD a BI cancelled */ const auto it = idx.find(D.t0); if (it == idx.end()) continue; put(it->second, D.dir, 0); boBars.push_back({ it->second, D.dir > 0 ? 1 : -1 }); }
     for (const auto& kv : E.rly) { const RlyMark& R = kv.second; if (!R.fired) continue; const auto it = idx.find(R.te); if (it == idx.end()) continue;
+        if (!E.rlyShown(R)) { ++S.rlyNoHbo; continue; }   // (1.21.0) not inside an hourly breakout bar of its direction (or its hour has not closed yet)
         if (E.hideRly.count(std::make_pair(R.te, R.dir))) { ++S.rlyHidden; continue; }   // (1.11.1) a drawn Cob on this extreme: no Rly letter
         put(it->second, R.dir, 1); }
     // (1.1.0) Pb: green below a pivot LOW after a BO (dir +1 -> drawn on the LOW side), red above a pivot HIGH after a BD

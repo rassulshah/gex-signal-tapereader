@@ -39,3 +39,19 @@
   bar, both kinds occur, the Rly Pboc Rev is drawn, replay = straight pass. test_bo1180_pbt 24 pass. MinGW 0 errors / 0 warnings.
 - Not done: the in-sample PB Rev numbers (69% / +0.07R) were measured with the range-only rule; lra.pb_rev reads the plugin's records, so
   new days are scored with the new rule from tonight - the old table no longer describes this rule.
+
+# 1.20.0 (2026-11-11) - the retracement under every pullback label
+- Rassul 12:27 CT "I want to add the retracement amount right below any type of pb like 45%", "Keep it two digits".
+- Under every DECIDED pullback label (Pb / Pboc / PbT / PbocT / the Rly Pboc): wave end -> pivot over origin -> wave end, two digits + "%",
+  the label's colour and size; no room = not drawn; a provisional label has none. tests_bo100/test_bo1200_pct.cpp 11 pass (22 of 23 labels).
+
+# 1.21.0 (2026-11-11) - a Rly only inside an hourly breakout bar
+- Rassul 08:19 CT "the Rly ont the lower time frame ... should represent the breakout that is happening on the houly and be part of the hourly
+  breakout bar"; mockup claude.ai/artifact/7pSqG2fDsUWHwFGFhfECDn; 10:21 "the rally is only displyed if it is consisetent witht the hourly
+  breakout bar right"; 12:51 "Build".
+- A Rly is drawn (and can start a Rly Pboc) only when the candle it sits on is inside a clock hour that is a Step Trend breakout hour of its
+  direction. Decided once, when that hour has closed (kept in rlyHbo; a Rly can print later than before, never be taken back). Periods that do
+  not divide the hour: rule off. Rly records (RLY lines) are unchanged - the rule is a display / pullback gate.
+- tests_bo100/test_bo1210_rlyhbo.cpp 12 pass: ES 11-09 8 of 9 drawn, 10-21 8 of 18, 11-04 11 of 18 (= the mockup). 1180 / 1190 / 1200 still pass.
+  MinGW 0 errors / 0 warnings.
+- Not verified: his charts. Not done: lra.pb_rev / nightly Rly scoring do not know the gate yet (they read the RLY records).

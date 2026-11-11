@@ -96,7 +96,7 @@ static void check(const Run& Q, const char* nm, int& nT, int& nPlain, int& nTrad
     std::printf("  %s: Pb %zu, Rly marks %zu, T %zu + %zu\n", nm, E.pb.size(), E.rpb.size(), E.pbtL.size(), E.rpbtL.size());
 }
 int main() {
-    CHECK(std::string(bko::VERSION) == "1.19.0", "version 1.19.0");
+    CHECK(std::string(bko::VERSION) == "1.21.0", "version 1.21.0");
     int nT = 0, nPlain = 0, nTraded = 0;
     const char* F[3] = { "pboc_es1109.txt", "pboc_es1021.txt", "pboc_es1104.txt" };
     for (int f = 0; f < 3; ++f) { const Fix X = load(F[f], 0.25); CHECK(X.B.size() > 200, std::string(F[f]) + " loaded"); Run R; replay(R, X, 3); check(R, F[f], nT, nPlain, nTraded);
