@@ -57,7 +57,7 @@ static int barOf(const bko::Engine& E, long long t) { const auto it = std::lower
 static std::vector<double> atr13(const bko::Engine& E) { const int n = (int)E.bars.size(); std::vector<double> A((size_t)n, NAN); double y = 0; bool have = false;
     for (int k = 1; k < n; ++k) { const bko::In& b = E.bars[(size_t)k]; const bko::In& a = E.bars[(size_t)k - 1]; const double tr = std::max(b.h - b.l, std::max(std::fabs(b.h - a.c), std::fabs(b.l - a.c))); y = have ? y + (tr - y) / 13.0 : tr; have = true; A[(size_t)k] = y; } return A; }
 int main() {
-    CHECK(std::string(bko::VERSION) == "1.23.0", "version 1.23.0");
+    CHECK(std::string(bko::VERSION) == "1.23.1", "version 1.23.1");
     int nBig = 0, nPast = 0, nRro = 0, nRroDrawn = 0, nRev = 0;
     const char* F[3] = { "pboc_es1109.txt", "pboc_es1021.txt", "pboc_es1104.txt" };
     for (int f = 0; f < 3; ++f) { const Fix X = load(F[f], 0.25); Run R; replay(R, X, 3); const bko::Engine& E = R.E; const std::vector<double> A = atr13(E); int bad = 0, notFirst = 0;

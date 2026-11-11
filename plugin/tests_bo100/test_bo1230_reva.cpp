@@ -62,13 +62,14 @@ static bool node(const Fix& X, const bko::In& b, int d) { if (!(d > 0 ? b.c > b.
     if (std::fabs(best) < 2.0 * med) return false;
     return d > 0 ? b.c / 0.25 > (double)hi + 1e-6 : b.c / 0.25 < (double)lo - 1e-6; }
 int main() {
-    CHECK(std::string(bko::VERSION) == "1.23.0", "version 1.23.0");
+    CHECK(std::string(bko::VERSION) == "1.23.1", "version 1.23.1");
     int nA = 0, nPlain = 0, bad = 0, txtBad = 0, drawnA = 0;
     const char* F[3] = { "pboc_es1109.txt", "pboc_es1021.txt", "pboc_es1104.txt" };
     for (int f = 0; f < 3; ++f) { const Fix X = load(F[f], 0.25); Run R; replay(R, X, 3); const bko::Engine& E = R.E;
         std::map<long long, std::string> txt; { const bko::Scene S = draw(E); for (const bko::Txt& t : S.txt) if (t.kind == 4) txt[E.bars[(size_t)t.bar].t] = t.s; }
         auto one = [&](const bko::RevMark& m) { const int j = barOf(E, m.tr), p = barOf(E, m.tp); if (j < 1 || p < 1) { ++bad; return; }
             bool want = false; for (int k = p - 1; k <= std::min(j, p + 1); ++k) if (node(X, E.bars[(size_t)k], m.dir > 0 ? 1 : -1)) want = true;
+            if (!bko::REV_ABS_MARK) want = false;   // (1.23.1) the mark is switched off: no Rev carries it
             if (want != (m.absn == 1)) ++bad;
             if (m.absn) ++nA; else ++nPlain;
             const auto it = txt.find(m.tr); if (it != txt.end()) { if (it->second == "RevA") ++drawnA; } };
@@ -82,7 +83,7 @@ int main() {
         if (f == 0) { bko::Engine N; std::vector<bko::In> B(X.B.begin(), X.B.end()); N.bocLive = false; N.vapAt = nullptr; N.update(B, (long)B.size(), X.B[0].t, 0.25, 180, 510, 900); int a = 0; for (const auto& kv : N.rev) a += kv.second.absn; CHECK(a == 0, "[4] no VAP: no RevA"); }
     }
     CHECK(bad == 0, "[1] absn = the independent node rule on every Rev (" + std::to_string(nA + nPlain) + " Revs)");
-    CHECK(nA >= 3 && nPlain >= 3, "[2] both kinds occur: RevA " + std::to_string(nA) + ", Rev " + std::to_string(nPlain));
-    CHECK(txtBad == 0 && drawnA >= 3, "[2] RevA is drawn only on absorbed Revs (" + std::to_string(drawnA) + " drawn)");
+    CHECK(bko::REV_ABS_MARK ? (nA >= 3 && nPlain >= 3) : (nA == 0 && nPlain >= 6), "[2] both kinds occur: RevA " + std::to_string(nA) + ", Rev " + std::to_string(nPlain));
+    CHECK(txtBad == 0 && (bko::REV_ABS_MARK ? drawnA >= 3 : drawnA == 0), "[2] RevA is drawn only on absorbed Revs (" + std::to_string(drawnA) + " drawn)");
     std::printf("test_bo1230_reva: %d passed, %d failed\n", passes, fails); return fails ? 1 : 0;
 }
