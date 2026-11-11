@@ -42,3 +42,17 @@ Rassul: "what dealer profile, we only made changes to the limit profile right?" 
   settings and records carry over.
 - test_dealerprofile_2620.cpp 37 / 37 with -DDP_LIMIT_NAME=1 (header LP) and without; settings contract PASS; MinGW real-SDK syntax 0 errors.
 - Not verified: whether any chart still holds the OLD lsDealerProfile indicator - such a chart shows it missing after the move; add "Limit Profile" there.
+
+# 2.63.0 (2026-11-10 22:16 CT) - the Limit Profile reads the order feed itself
+Rassul (his ES chart had no nodes: lsBookFlow was not on it): "it needs to read the feed directly".
+- LimitFeed.h 1.0.0: one DEPTH_BY_ORDER per chart (kept in the chart's state, deleted when the chart / indicator goes), opened with a crash-guard
+  file, read from the draw (<= 5,000 events or ~8 ms a call), never re-entered after a fault, re-opened after 2 min of silence while the chart
+  trades; fed to tbk::Engine (TopBook.h, the engine lsBookFlow runs), evaluated once a second into the same facts as SignalBoard kind G.
+- DealerProfile.cpp: the own feed is used as soon as it has its first event; lsBookFlow's kind G only before that / if the feed cannot open.
+  Status lines OWN_FEED (state, events, via, faults, reconnects, capped slices, the TopBook line) and TOP_BOOK_G "OWN FEED".
+- test_dealerprofile_2630.cpp 44 / 44 (with and without -DDP_LIMIT_NAME): mocked DEPTH_BY_ORDER - opened once, young level not shown, after
+  2 min the nodes 505 (K) / 305 come from the own feed with no kind G, one feed object for 170 draws, cancelled level goes, chart removed =
+  the feed object deleted. ASan / UBSan clean; MinGW real-SDK syntax 0 errors (LimitFeed.h undefines the Windows `near` / `far` macros before
+  TopBook.h - DealerProfile.cpp only undefined `far`); settings contract PASS.
+- NOT verified - needs his Investor/RT: the real feed (a second MBO subscription next to SR / Zone Defense on the same chart), CPU at the NQ
+  open (no timer path: events are read on draws only), the 2-minute warm-up after every restart (the book starts empty).

@@ -119,6 +119,7 @@ static void* dpCursorWindow() { return NULL; }
 #include "Top10Stable.h"        // (2.31.0) the steady liquidity top 10
 #include "LevelFade.h"          // (2.31.1) moving / quoting levels dimmed "~" (never dropped), tracked by level
 #include "BoxDock.h"            // (2.31.0) the HOD/LOD table rectangle (badges keep clear of it)
+#include "LimitFeed.h"          // (2.63.0) the own order feed + TopBook engine
 #include "EntryBadge.h"         // (2.56.0) the ENT / EXIT / 1/2 liquidity tags on the Key Levels / Liquidity rows (lsBreakout fact kind E)
 #include "LevelsColumn.h"       // (2.28.0) the combined LEVELS + LIQUIDITY column (rows, order, liquidity, rank; SDK-free, tested)
 #include "LiqPick.h"           // (2.40.0) which whole-book nodes the Liquidity column shows (top 5 + level-linked >= 50% of the king)
@@ -148,6 +149,7 @@ static const char* const DP_TAG = "LP";   // (2.62.0) the Limit Profile's own he
 #else
 static const char* const DP_TAG = "DP";
 #endif
+static bool& dpOwnFeed() { static bool on = true; return on; }   // (2.63.0) the own order feed (tests of older scenes switch it off)
 static const bool DP_LIQ_ON_LINES = true;   // (2.60.0) a level line is bright over the candles where a node carried its badge (no number)
 static const bool DP_NODE_STYLE = true;   // (2.59.0) the native top book drawn as nodes facing price (labels inside, rank outside)
 static int& dpGHoldSec() { static int s = 60; return s; }   // (2.59.0) the nodes change once per this many seconds (tests: 0 = every draw)
@@ -158,7 +160,8 @@ static const int DP_KEYS_RW = 170, DP_LQ_RW = 170;   // (2.42.0, Rassul 2026-11-
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.62.0";   // (2.62.0, 2026-11-10 Rassul 21:41 CT "retire that and only call it the limit profile") lsDealerProfile is retired (no longer built / installed; tools\\retire-dealerprofile-2026-11-10.bat moves its DLL out); built as lsLimitProfile the column header reads "LP v2.62.0" (was "DP v...")
+static const char* DP_VERSION = "2.63.0";   // (2.63.0, 2026-11-10 Rassul 22:16 CT "it needs to read the feed directly") THE LIMIT PROFILE READS THE ORDER FEED ITSELF (LimitFeed.h 1.0.0): its own DEPTH_BY_ORDER per chart + the TopBook engine (the one lsBookFlow runs) -> the top 3 bids / offers without lsBookFlow on the chart; lsBookFlow's kind G is used only until the own feed has its first event (or if it cannot open). Status line OWN_FEED.
+// was "2.62.0";   // (2.62.0, 2026-11-10 Rassul 21:41 CT "retire that and only call it the limit profile") lsDealerProfile is retired (no longer built / installed; tools\\retire-dealerprofile-2026-11-10.bat moves its DLL out); built as lsLimitProfile the column header reads "LP v2.62.0" (was "DP v...")
 // was "2.61.0";   // (2.61.0, 2026-11-10 Rassul 21:05 CT "remember to add both to the self improvement process") every bright level-line stretch is RECORDED: lsFlexLevels\\DealerProfile\\<MKT>-liqlines-<session>.csv, one line when it starts and at most one a minute while it lasts ("L|level tick|level price|names|side|t0|t1|most lots|pct of king", CT seconds; the nightly lra.liq_lines_score takes the last line of a stretch) - nothing drawn changes
 // was "2.60.0";   // (2.60.0, 2026-11-10 Rassul 20:55-20:57 CT "we have dim lines right for the levels", "how would it look if the liquidity was also there on the chart", "i like it but dont keep the amount, because it becomes noisy"; mockup claude.ai/artifact/Fx5CKJkC1mHzj9uyUwWTvn v3) LIQUIDITY ON THE LEVEL LINES: while a node carries a level's badge (the largest node within 1 ATR of it) that level's dim line is drawn BRIGHT over those candles (2 px, green = bids, red = offers), no number; the stretches are remembered while Investor/RT stays open (this session only)
 // was "2.59.0";   // (2.59.0, 2026-11-10 Rassul 18:46-20:45 CT "design the limit order profile ... i dont want it always updating every second", "the labels should be inside the node and the profile should be facing price", "the rank can be on the outside", "rank without background", "get rid of the ratio since we already have % king", "keep the level badge left justified so i can easily see the level and then the liquidity", level name "use upto 1 ATR", "it will only be on the profile right, not on the chart"; mockup claude.ai/artifact/6BVGfyxKXGJY6qVbSs29XU v8) THE NODE PROFILE: the native top book (kind G) rows are drawn as nodes anchored at the column's outer edge, pointing at price (length = % of the king), the text INSIDE the node from its tip: [level badge] lots  pct%  time in the top book [S20 / ? / EXIT]; the rank (K, 2-6) outside in front of the node, no box; a key / volume / gamma level within 1 ATR (3-min) names the LARGEST node only; the nodes change once a minute (at once when price is within 2 ticks of one, or the book goes cold). Study (lra.limit_levels 1.1.0, 7 markets, 22,345 touches + 1,100 level sweeps): size / rest / level / hit behaviour do not predict a turn -> a map, no signal drawn.
@@ -311,7 +314,7 @@ public:
         std::string weeklyText;   // (2.39.0) the weekly POC marker drawn last (tests)
         int lqBarW = 0, lqLotW = 0, lqTagLane = 0;   // (2.39.0) the liquidity column's bar room / amount reserve / tag lane this draw (status, tests)
         struct King { double px = 0; long long lots = 0; bool bid = false; double x = 0; long long since = 0; }; std::vector<King> kings; int kingsOn = 0, kingsEdge = 0;   // (2.38.0)
-        bool gNative = false; int gShown = 0, gSingle = 0, gS20 = 0, gReal = 0; long long gBook = 0; std::vector<sb::Fact> gHold; long long gHoldSlot = -1; int gHeld = 0, gNodes = 0, gBadges = 0; struct GSeg { long long key = 0, t0 = 0, t1 = 0; bool bid = true; std::string name; double px = 0; long long lots = 0, logged = 0; int pct = 0; }; int gSegLines = 0, gSegFails = 0;   /* (2.61.0) name / px / most lots / pct + the last recorded t1 */ std::vector<GSeg> gSegs; int gSegDrawn = 0;   /* (2.60.0) bright stretches of a level line: level tick key, CT seconds */ std::map<long long, std::pair<long long, long long> > gSince;   /* (2.59.0) the held minute, node counts, first / last seen per node */   // (2.54.0) the native top book (kind G from lsBookFlow)
+        bool gNative = false; int gShown = 0, gSingle = 0, gS20 = 0, gReal = 0; long long gBook = 0; std::vector<sb::Fact> gHold; long long gHoldSlot = -1; int gHeld = 0, gNodes = 0, gBadges = 0; std::shared_ptr<lpf::Feed> lf; std::string lfText = "off"; long long lfEvents = 0; bool lfUsed = false;   /* (2.63.0) the own order feed (one per chart, alive for the chart's life) */ struct GSeg { long long key = 0, t0 = 0, t1 = 0; bool bid = true; std::string name; double px = 0; long long lots = 0, logged = 0; int pct = 0; }; int gSegLines = 0, gSegFails = 0;   /* (2.61.0) name / px / most lots / pct + the last recorded t1 */ std::vector<GSeg> gSegs; int gSegDrawn = 0;   /* (2.60.0) bright stretches of a level line: level tick key, CT seconds */ std::map<long long, std::pair<long long, long long> > gSince;   /* (2.59.0) the held minute, node counts, first / last seen per node */   // (2.54.0) the native top book (kind G from lsBookFlow)
         bool lpProto = false, kOn = true, rkHide = false, kingMatched = false; long long lpTracked = 0; int lpCover = -1, lpKings = 0;   // (2.52.2) lsLiquidityProfile 0.73 king / warm-up (B codes 3 / 9)
         double rankReachPx = 0; lrk::History rankHist; int histWrites = 0, histFails = 0, histLines = 0; std::string histMkt;   // (2.37.0) 0.25 ATR rank reach + the rank-change history file
         COLOR keysBg = 0;   // (2.36.1) the Key Levels column ground colour drawn (= getBackgroundColor)
@@ -568,6 +571,7 @@ int DealerProfile::done(void)
 {
     if (loadHostState()) { unpublishCols(); clearMst(); }   // (2.17.0) + the Market State entry   // (2.11.0) this chart's columns leave the board (symbol / period change, removal)
     slot_.release(this);
+    cs.lf.reset();   // (2.63.0) the member copy lets go too: the feed object is deleted now (its destructor unsubscribes)
     clearWorkingState();
     return RTX_OK;
 }
@@ -576,6 +580,7 @@ int DealerProfile::destroy(void)
 {
     if (loadHostState()) { unpublishCols(); clearMst(); }
     slot_.release(this);
+    cs.lf.reset();   // (2.63.0)
     clearWorkingState();
     return RTX_OK;
 }
@@ -956,7 +961,8 @@ void DealerProfile::writeStatus(const char* what)
       << ",candidates " << (cs.zMode ? "ZONES from lsLiquidityProfile (B code 2: >= 2.0x the median real level, +-1 tick zones, own distribution, 3 ATR)" : "old B list (no code-2 facts)") << " " << cs.zCands << ",shown bids " << cs.zShownB << " / offers " << cs.zShownA << " (max " << DP_SIDEN << " a side)"
       << ",shown top " << (cs.zMode ? 2 * DP_SIDEN : DP_TOPN) << " (both sides),steady Top10Stable " << t10::VERSION << " (in 30 s + 1.20x, out 10 s, swap 1.25x),book levels on screen " << cs.qBoard << ",ranked over the whole posted book (not the visible pane) " << cs.qBoard << " levels,off screen in the top 10 " << cs.qOff << ",king off screen (edge marker) " << cs.qKingOff << ",moving / quoting dimmed ~ (LevelFade " << lfd::VERSION << ", never dropped) " << cs.qQuoting << ",king ~ " << cs.qMovedMarks << ",tracked " << cs.top10.tracked() << ",place " << (cb::LEVELS_LEFT ? "left" : cb::LEVELS_OUTER ? "right, after Delta (rank | bar | lots)" : "right") << "\n"
       << "KEYS_COLUMN,left edge (ColumnBoard " << cb::VERSION << "),x " << cs.keysL << ",width " << cs.keysW << ",ground solid 0x" << std::hex << (unsigned)cs.keysBg << std::dec << " (chart background, full column)" << ",HOD/LOD table " << (cs.keysDocked ? "docked bottom-left, right of the column" : "not docked") << ",VWAP " << cs.vwapPx << " (badges " << cs.vwapBadges << "),filtered (gamma / VWAP bands) " << cs.keysFiltered << ",CR0/PS0 badges " << cs.zeroDte << ",layout odds left | name + price right" << ",badges from y " << cs.keysTop << " to " << cs.keysBot << ",moved (tick) " << cs.keysMoved << ",(2.52.3) behind table / title -> edge marker " << cs.keysOut << ",pushed past 2 badge heights " << cs.keysCapped << ",edge markers " << cs.keysEdgeRow << " (^ " << (cs.keysEdgeUp.empty() ? std::string("-") : cs.keysEdgeUp) << " / v " << (cs.keysEdgeDn.empty() ? std::string("-") : cs.keysEdgeDn) << ")" << ",odds cut " << cs.keysOddsCut << ",liquidity rank chips " << cs.keysRankChips << ",in the price area 0\n" << "XLINES,2.53.0 dim level lines across the price area,drawn " << cs.xlines << ",vwap skipped " << cs.xlinesVwap << ",fade " << DP_XLINE_FADE << "\n"
-      << "TOP_BOOK_G," << (cs.gNative ? "NATIVE (lsBookFlow 1.37.0 kind G, TopBook)" : "no kind G (lsBookFlow 1.37.0 not on this chart / no order feed)") << ",book orders " << cs.gBook << ",shown " << cs.gShown << " (3 bids + 3 offers max),mostly one order ? " << cs.gSingle << ",S20 " << cs.gS20 << ",% real rows " << cs.gReal << " (model LIVE markets only)" << ",NODES (2.59.0) drawn " << cs.gNodes << ",level badges " << cs.gBadges << ",held draws this minute " << cs.gHeld << ",update every " << dpGHoldSec() << " s" << ",LINES (2.60.0) bright stretches kept " << cs.gSegs.size() << ",drawn " << cs.gSegDrawn << ",recorded lines " << cs.gSegLines << (cs.gSegFails ? ",RECORD FAILED " + std::to_string(cs.gSegFails) : std::string()) << (cs.rkHide && cs.gNative ? ",warming (no ranks)" : "") << "\n"
+      << "OWN_FEED," << lpf::VERSION << "," << cs.lfText << ",events " << cs.lfEvents << (cs.lf ? ",via " + cs.lf->via + ",faults " + std::to_string(cs.lf->faults) + ",reconnects " + std::to_string(cs.lf->reconnects) + ",slices capped " + std::to_string(cs.lf->capHits) + "," + cs.lf->tbLine : std::string()) << "\n"
+      << "TOP_BOOK_G," << (cs.lfUsed ? "OWN FEED (LimitFeed + TopBook, no lsBookFlow needed)" : cs.gNative ? "NATIVE (lsBookFlow 1.37.0 kind G, TopBook)" : "no kind G (lsBookFlow 1.37.0 not on this chart / no order feed)") << ",book orders " << cs.gBook << ",shown " << cs.gShown << " (3 bids + 3 offers max),mostly one order ? " << cs.gSingle << ",S20 " << cs.gS20 << ",% real rows " << cs.gReal << " (model LIVE markets only)" << ",NODES (2.59.0) drawn " << cs.gNodes << ",level badges " << cs.gBadges << ",held draws this minute " << cs.gHeld << ",update every " << dpGHoldSec() << " s" << ",LINES (2.60.0) bright stretches kept " << cs.gSegs.size() << ",drawn " << cs.gSegDrawn << ",recorded lines " << cs.gSegLines << (cs.gSegFails ? ",RECORD FAILED " + std::to_string(cs.gSegFails) : std::string()) << (cs.rkHide && cs.gNative ? ",warming (no ranks)" : "") << "\n"
       << "LIQ_BOOK," << (cs.bookMode ? "WHOLE BOOK (lsLiquidityProfile 0.70.0 B code 4: real orders rested 10 min+, any distance)" : "not in use (no code-4 facts: an older lsLiquidityProfile)") << ",LiqPick " << lpk::VERSION << ",nodes " << cs.bNodes << ",board " << DP_BOOKN << ",king " << cs.bKing << " lots,shown top " << cs.bTop << " + level-linked >= " << (int)(lpk::PCT * 100) << "% within " << lpk::ATR_X << " ATR " << cs.bExtras << ",tags off,odds " << (DP_ODDS ? "on" : "off") << ",badge rank chips " << (DP_RANK_CHIPS ? "on" : "off") << ",Key Levels column " << (DP_KEYS_RIGHT ? "RIGHT (left of the Liquidity column)" : "left") << "\n"
       << "LIQLEVELS," << dpLiqPath(mkt) << ",rows " << cs.liqRows << ",writes " << cs.liqWrites << "," << cs.liqWhy << ",LP median bid " << cs.lpMedB << " / offer " << cs.lpMedA << "\n"
       << "WEEKLY_POC," << (offWk.have ? "off screen " + std::string(offWk.dist >= 0 ? "above" : "below") + " (column edge marker)" : std::string("on screen or none (badge)")) << " (2.39.0; the Wave POC badge of 2.38.0 removed)\n"
@@ -2083,7 +2089,21 @@ void DealerProfile::flushLines(const Settings& S)
     {   std::vector<sb::Fact> B; const long long nowMs = (long long)time(nullptr) * 1000LL;
         // (2.54.0) THE NATIVE TOP BOOK first: lsBookFlow 1.37.0 posts kind G once a second (code 99 = its heartbeat with the book size);
         // the 6 levels arrive decided (filters, steady boards, rank 1-6 by lots) - shown as posted, no second board here
-        {   std::vector<sb::Fact> G; cs.gNative = sb::readFacts('G', cs.sym, cs.spb, cs.chart, dpNowMs(), G, false) && !G.empty();
+        {   std::vector<sb::Fact> G; cs.lfUsed = false;
+            if (dpOwnFeed() && tick > 0 && !cs.sym.empty() && !mkt.empty()) {   // (2.63.0) the own order feed: open / watch / read a slice / evaluate once a second
+                if (!cs.lf) cs.lf = std::make_shared<lpf::Feed>();
+                lpf::Feed& F = *cs.lf; const long long nowF = lpf::nowMs();
+                F.identity(cs.sym + "|" + std::to_string(cs.spb) + "|" + cs.chart, mkt);
+                {   RTARRAYI vt(barDateTime), vv(barVolume); const long nB = std::min<long>((long)nb, std::min<long>((long)vt.count, (long)vv.count));
+                    if (nB > 0) F.watch(nowF, (long long)vt[(int)nB - 1] * 1000003LL + (long long)vv[(int)nB - 1]); }
+                F.open(cs.sym, dpFlexDir() + "DealerProfile\\_opening-LP-" + mkt + "-" + std::to_string(cs.spb) + ".txt", nowF);
+                F.drain(nowF, tick);
+                {   bool rth = false; struct tm t; memset(&t, 0, sizeof(t)); if (getLocaltime(currentDate(), &t)) { const int m = t.tm_hour * 60 + t.tm_min; rth = m >= 8 * 60 + 30 && m < 15 * 60 + 15; }
+                    if (F.lastEventMs >= 0) F.evaluate(nowF, tick, dpFlexDir(), rth); }
+                cs.lfText = F.text(nowF); cs.lfEvents = F.events;
+                if (F.ready()) { G = F.facts; cs.lfUsed = true; }
+            } else if (!dpOwnFeed()) cs.lfText = "off";
+            cs.gNative = cs.lfUsed ? !G.empty() : (sb::readFacts('G', cs.sym, cs.spb, cs.chart, dpNowMs(), G, false) && !G.empty());
             cs.gNodes = 0; cs.gBadges = 0;
             if (cs.gNative && DP_NODE_STYLE) {   // (2.59.0) once a minute: the last minute's nodes stay unless the book went cold or price is at a node
                 bool cold = true; for (const sb::Fact& f : G) if (f.code >= 1 && f.code <= 6 && f.val > 0) cold = false;
@@ -2901,6 +2921,6 @@ extern "C" cppExtension *CreateExtension(void)
 #else
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
 #endif
-    p->setVersion("2.62.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.63.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }
