@@ -1,4 +1,4 @@
-// t_step.cpp -- lsStepTrend 1.0.0: the logic and the plugin on the mock host, on REAL candles (fx_mockup.txt = the 7 chart days of the
+// t_step.cpp -- lsStepTrend 1.1.0 (1.1.0: the support line ends when TESTED or at the NEXT STEP - checked against the rule written out candle by candle): the logic and the plugin on the mock host, on REAL candles (fx_mockup.txt = the 7 chart days of the
 // mockup Rassul approved: ES Nov 10 day + evening, NQ / GC / CL Nov 9 and 10; the expected steps are written by the MOCKUP'S OWN code,
 // ref.js, for both rules with the rotation on and off = 28 cases).
 //   1 PARITY     stp::Engine gives exactly the mockup's steps (direction, level, hour, start candle, support end) in all 28 cases
@@ -45,7 +45,7 @@ static const long long BASE = 1794268800LL;      // 2026-11-10 00:00 as the char
 static int ES_STEPS = 0;
 static void logicTests() {
     { const Data& d = DS[0]; stp::Engine E; for (const FB& b : d.b) E.addBar(tk(b, d.tick)); E.sealTo(d.b.back().t + 180); ES_STEPS = (int)E.S.size(); }
-    int cases = 0, stepsSeen = 0, supSeen = 0;
+    int cases = 0, stepsSeen = 0, supSeen = 0, supEnded = 0, supCut = 0;
     for (const Ref& r : RF) { const Data& d = DS[(size_t)r.d];
         stp::Engine E; E.rule = r.rule; E.rot = r.rot != 0; E.body = false;      // the mockup had no candle-colour rule (added 00:11)
         for (const FB& b : d.b) E.addBar(tk(b, d.tick));
@@ -54,12 +54,16 @@ static void logicTests() {
         bool ok = E.S.size() == r.s.size() && (int)E.skipped.size() == r.nskip;
         for (size_t i = 0; ok && i < r.s.size(); ++i) { const stp::Step& q = E.S[i]; const RS& x = r.s[i];
             ok = q.dir == x.dir && q.px == std::llround(x.px / d.tick) && q.hour == x.hour && q.tConf == x.t && q.ot == x.o;
-            if (ok && i + 1 < r.s.size() && r.s[i + 1].dir == x.dir) { ++supSeen; ok = x.xe == -1 ? q.sup == 1 : (q.sup == 2 && d.b[(size_t)q.supEnd].t == x.xe); }
+            if (ok && i + 1 < r.s.size() && r.s[i + 1].dir == x.dir) { ++supSeen;      // (1.1.0) the rule, candle by candle: tested after the next step's start, or the candle that closes the hour of the step after next
+                long long end = -1; for (const FB& b : d.b) if (b.t > r.s[i + 1].o && (x.dir > 0 ? std::llround(b.l / d.tick) <= q.px : std::llround(b.h / d.tick) >= q.px)) { end = b.t; break; }
+                if (i + 2 < r.s.size()) { if (end < 0 || end >= r.s[i + 2].t) end = r.s[i + 2].o; ++supCut; }   // not tested before that step's hour closed: the line stops where that step starts
+                if (end >= 0) ++supEnded;
+                ok = end < 0 ? q.sup == 1 : (q.sup == 2 && d.b[(size_t)q.supEnd].t == end); }
             if (ok && (i + 1 >= r.s.size() || r.s[i + 1].dir != x.dir)) ok = q.sup == 0; }
         ++cases; stepsSeen += (int)E.S.size();
         CHECK(ok, "PARITY " + d.mkt + " data " + std::to_string(r.d) + " rule " + std::to_string(r.rule) + " rot " + std::to_string(r.rot) + ": engine " + std::to_string(E.S.size()) + " steps / " + std::to_string(E.skipped.size()) + " skipped, mockup " + std::to_string(r.s.size()) + " / " + std::to_string(r.nskip));
     }
-    CHECK(cases == 28 && stepsSeen > 100 && supSeen > 40, "PARITY covered 28 cases (" + std::to_string(stepsSeen) + " steps, " + std::to_string(supSeen) + " support lines)");
+    CHECK(cases == 28 && stepsSeen > 100 && supSeen > 40 && supEnded > 30 && supCut > 20, "PARITY covered 28 cases (" + std::to_string(stepsSeen) + " steps, " + std::to_string(supSeen) + " support lines, " + std::to_string(supEnded) + " ended, " + std::to_string(supCut) + " with a later step)");
     // BODY (Rassul 00:11): with the rule on, every step's hour closed its own way, and the steps are the mockup's minus the hours that did not
     { int dropped = 0, kept = 0; bool sub = true, col = true;
       for (const Ref& r : RF) { if (r.rule != 0 || r.rot != 1) continue; const Data& d = DS[(size_t)r.d];
@@ -109,6 +113,21 @@ static void logicTests() {
         // hours: up, up (breakout 1 above 100), up (breakout 2 above 110), an inside-low lower-high hour -> the ZigZag turns DOWN at the 120 high, then a close above 119 = breakout against the rotation
         if (rot) CHECK(E.S.size() == 2 && E.skipped.size() == 1 && E.skipped[0].px == 119 && E.skipped[0].rotAt < 0, "ROTATION on: the breakout against the hourly ZigZag is not counted (" + std::to_string(E.S.size()) + " / " + std::to_string(E.skipped.size()) + ")");
         else CHECK(E.S.size() == 3 && E.skipped.empty(), "ROTATION off: every breakout counts"); } }
+    // 1.1.0 SUPPORT ENDS: (a) tested, (b) another step up, (c) a step down - and never runs on after any of them
+    { auto mk = [](int variant) { stp::Engine E; E.rot = false; long long t = 0; auto hour = [&](long long o, long long h, long long l, long long c) { for (int i = 0; i < 20; ++i) { stp::Bar b; b.t = t; b.o = i == 0 ? o : c - 1; b.c = c; b.h = i == 10 ? h : c; b.l = i == 5 ? l : std::min(b.o, c); if (b.h < std::max(b.o, b.c)) b.h = std::max(b.o, b.c); E.addBar(b); t += 180; } };
+          hour(95, 100, 94, 98);              // hour 0: high 100
+          hour(99, 112, 99, 110);             // hour 1: closes above 100 -> step 1 UP at 100 (start: the candle that made 100)
+          hour(109, 125, 108, 122);           // hour 2: closes above 112 -> step 2 UP at 112; step 1's level 100 is now support (running)
+          if (variant == 0) hour(121, 124, 99, 123);       // (a) hour 3 dips to 99 <= 100: TESTED, no new step (123 < 125)
+          if (variant == 1) hour(123, 140, 121, 138);      // (b) hour 3 closes above 125: ANOTHER STEP UP, never back at 100
+          if (variant == 2) hour(121, 122, 104, 105);      // (c) hour 3 closes below 108: A STEP DOWN, never back at 100
+          hour(variant == 2 ? 105 : 123, variant == 2 ? 106 : 124, variant == 2 ? 104 : 122, variant == 2 ? 105 : 123); E.sealTo(t); return E; };
+      stp::Engine A = mk(0), Bq = mk(1), C = mk(2);
+      CHECK(A.S.size() == 2 && A.S[0].sup == 2 && A.S[0].supEnd == 65 && A.S[1].sup == 0, "SUPPORT (a) tested: the line ends at the candle that trades back to the level (candle " + std::to_string(A.S.empty() ? -1 : A.S[0].supEnd) + ")");
+      CHECK(Bq.S.size() == 3 && Bq.S[2].dir == 1 && Bq.S[0].sup == 2 && Bq.S[0].supEnd == 50 && Bq.S[2].oi == 50 && Bq.S[1].sup == 1, "SUPPORT (b) another step up: the older line ends where that step starts (candle " + std::to_string(Bq.S.empty() ? -1 : Bq.S[0].supEnd) + "); the newer level's line starts");
+      CHECK(C.S.size() == 3 && C.S[2].dir == -1 && C.S[0].sup == 2 && C.S[0].supEnd == 45 && C.S[2].oi == 45 && C.S[1].sup == 0, "SUPPORT (c) a step down: the line ends where that step starts; no line for the level before the turn");
+      std::vector<stp::Seg> g; std::vector<stp::Dot> dd; stp::layout(Bq, 99, g, dd); int open = 0; for (const stp::Seg& s : g) if (s.kind == 2 && s.i1 == 99 && s.p0 == 100) ++open;
+      CHECK(open == 0, "SUPPORT: an ended line is not drawn on to the right edge"); }
     // 4 LAYOUT on the ES day
     { const Data& d = DS[0]; stp::Engine E; for (const FB& b : d.b) E.addBar(tk(b, d.tick)); E.sealTo(d.b.back().t + 180);
       std::vector<stp::Seg> g; std::vector<stp::Dot> dots; const int last = (int)d.b.size() - 1; stp::layout(E, last, g, dots);

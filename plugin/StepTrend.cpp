@@ -1,6 +1,10 @@
 /********************************************************************************
- *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.0.0  (2026-11-11)
+ *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.1.0  (2026-11-11)
  *
+ *  1.1.0 (Rassul 2026-11-11 07:21 CT "the retest lines should not extend indefinitely . they should stop once they are tested or once another
+ *    step up is made or a step down is made"): the thin dashed support / resistance line of an old level ends at the first candle that
+ *    trades back to it (after the new step's start), or where the NEXT step (up or down) starts (its wave top / bottom) - whichever is
+ *    first. (1.0.0 ran it until a candle CLOSED back through the level, so an untested level ran to the right edge.)
  *  1.0.0 (Rassul 2026-11-10 22:28 CT "I am also interested in a stepwise trend indicator. It looks at the hourly bar and the current zig
  *    zag rotation ... an hourly breakout and on the 3min ltf chart the level drawn is on the prior hourly bar high"; 22:40 - 23:20 the
  *    mockup: "those hourly highs should be coming from the top of the waves", "they should be connected steps", "get rid of the labels",
@@ -10,7 +14,7 @@
  *    versa ... red"; 00:11 "the bar closing higher needs to be green and vice versa" (the breakout hour is itself a green / red candle).
  *    On the price chart (any period that divides the hour; his is 3 minutes): the hourly breakout levels as connected steps over the wave
  *    tops - green up, red down; the newest level dashed to the right edge; an old level runs on thin and dashed as support / resistance
- *    until a candle closes back through it. A dot marks the candle that made each level. No text, no hovers, no settings.
+ *    until it is tested or the next step is made (1.1.0). A dot marks the candle that made each level. No text, no hovers, no settings.
  *    Every rule is in StepTrendLogic.h (stp::Engine, tested against the mockup's own walk on his ES / NQ / GC / CL days); the per-market
  *    rule values are StepTrendParams.h. Steps are decided when the hour closes and never change. One short status file per chart
  *    (lsFlexLevels\StepTrend\<MKT>-<seconds>.status.txt, on a change or once a minute) so the build can be checked without a screenshot.
@@ -44,7 +48,7 @@
 #include <string>
 #include <vector>
 
-#define STEPTREND_VERSION "1.0.0"
+#define STEPTREND_VERSION "1.1.0"
 
 namespace sth {
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREEN_D = 0x00178A42, C_RED_D = 0x00B03A3A;
@@ -230,7 +234,7 @@ extern "C" cppExtension* CreateExtension(void) {
     StepTrend* p = new StepTrend();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA Step Trend v1.0.0 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until a candle closes back through it.");
-    p->setVersion("1.0.0");
+    p->setDescription("LRA Step Trend v1.1.0 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
+    p->setVersion("1.1.0");
     return p;
 }

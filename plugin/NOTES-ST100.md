@@ -33,3 +33,11 @@ Follow (2 ATR further before 2 ATR back, 60 min from the hour's close): ES 49% (
 - That IRT's hour grouping of his 60-min chart equals clock hours of the 3-min candles (it should: both are clock aligned).
 - IQFeed backfill vs Rithmic live candles can differ by a tick: after a restart a level can sit one tick away from where it was drawn live.
 - Steps older than the last 5,000 candles are not drawn.
+
+## 1.1.0 (2026-11-11) - the support (retest) lines end
+Rassul 07:21 CT "the retest lines should not extend indefinitely . they should stop once they are tested or once another step up is made or a step down is made".
+- An old level's thin dashed line now ends at the FIRST of: (a) tested = the first candle after the new step's start that trades back to the level (low <= level for support, high >= level for resistance); (b) / (c) another step is made, up or down = the line stops where that step starts (its wave top / bottom). A test that happened before that step's hour closed keeps its place.
+- 1.0.0 ended the line only when a candle CLOSED back through the level, so an untested level ran to the right edge for the rest of the chart.
+- Still running to the right edge: only the level before the newest step, while it is untested and no further step exists.
+- When another step is confirmed, a line that was running to the right edge is cut back to where that step starts (the steps themselves are drawn back to their wave tops the same way).
+- Tests: t_step.cpp 134 checks (the rule written out candle by candle on the 28 mockup cases: support lines, ended, with a later step; unit cases a / b / c; an ended line is never drawn to the right edge), ASan / UBSan; MinGW real SDK 0 errors 0 warnings; render check on the ES day. lra.step_trend_score 1.0.1 walk() follows the same rule (6 tests).
