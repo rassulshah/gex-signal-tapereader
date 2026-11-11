@@ -56,7 +56,8 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.23.1";   // (2.23.1, Rassul 11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA") the read box's first line is "Hrly Trend: Up / Down / NA" (ReadBox 1.1.0)
+static const char* const HL_VERSION = "2.24.0";   // (2.24.0, Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed") the read box = ReadBox 1.2.0: Hrly Trend + the hourly breakout level / Day / Lvl nearest above and below / one Flow line from events still in play
+// was "2.23.1":   // (2.23.1, Rassul 11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA") the read box's first line is "Hrly Trend: Up / Down / NA" (ReadBox 1.1.0)
 // was "2.23.0":   // (2.23.0, 2026-11-11 Rassul 11:40 CT "get rid of dly trend.and the values to the left and move the gamma regime were the daily trend is"; he chose "Dly + RTH opens + Bar left"; 11:41 "updat eht readt at the top to be more simple") the header row: no "RTH opens / % done", no "Bar m:ss left", no "Dly:" trend; the gamma pill (+GAMMA / -GAMMA) leads the centre group where "Dly:" was; the read box: ReadBox 1.1.0 (no HTF line, the Day line without ADR / Used)
 static const bool HDR_DLY = false, HDR_LEFT = false, HDR_PILL_MID = true;   // (2.23.0)
 // was "2.22.2";   // (2.22.2) the read box 4 px from the pane's left edge (was 38)

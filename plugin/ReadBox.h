@@ -24,7 +24,8 @@
 
 namespace rbx {
 
-static const char* const VERSION = "1.1.0";   // 1.1.0 (2026-11-11 Rassul 11:41 CT "also updat eht readt at the top to be more simple", his screenshot: the HTF line and "0.8x ADR, Used 91%" crossed out): the HTF line is "Hrly Trend: Up / Down / NA" (11:45 CT); the RTH Day line without the ADR multiple and the Used %
+static const char* const VERSION = "1.2.0";   // 1.2.0 (2026-11-11 Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed"): Lvl = the nearest level above / below with the distance; Hrly Trend + the hourly breakout level; ONE Flow line (verdict first) from events still in play - 4 lines
+// was "1.1.0";   // 1.1.0 (2026-11-11 Rassul 11:41 CT "also updat eht readt at the top to be more simple", his screenshot: the HTF line and "0.8x ADR, Used 91%" crossed out): the HTF line is "Hrly Trend: Up / Down / NA" (11:45 CT); the RTH Day line without the ADR multiple and the Used %
 // was "1.0.1";
 static const bool SHOW_HTF = true;    // (1.1.0) 11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA": the first line is "Hrly Trend: Up / Down / NA" (green / red / white)
 static const bool DAY_ADR = false;    // (1.1.0) the RTH Day line: no "0.8x ADR, Used 91%"   // 1.0.1: plain ASCII only (the IRT text call is ANSI: "->" not an arrow), no bare "-" lines
@@ -90,14 +91,17 @@ inline bool isLow(const std::string& n) {
 }
 
 // ---------------------------------------------------------------- the lines
-struct Htf { bool ok = false; Line line; int dir = 0; double atr = NAN; int trend = 0; };   // (1.1.0) trend = the hourly rotation by the 1-bar rule (lsStepTrend 1.2.0): +1 up, -1 down, 0 none yet
+struct Htf { bool ok = false; Line line; int dir = 0; double atr = NAN; int trend = 0; int stepDir = 0; double stepPx = NAN; };   // (1.2.0) stepDir / stepPx = the newest hourly breakout step (lsStepTrend's rule) and its level   // (1.1.0) trend = the hourly rotation by the 1-bar rule (lsStepTrend 1.2.0): +1 up, -1 down, 0 none yet
 inline Htf htfLine(const In& I) {
     Htf o; std::vector<Bar> B = hourly(I.bars, I.per);
     if (!B.empty() && !I.bars.empty() && B.back().t > I.bars.back().t) B.pop_back();   // the hour in progress is not read: the last COMPLETED hour (changes once an hour)
     // (1.1.0) the hourly trend, lsStepTrend's rule over the COMPLETED hours: a higher high and not a lower low = up, a lower low and not a
     // higher high = down, both = the hour's own colour, neither = unchanged
     for (size_t k = 1; k < B.size(); k++) { const bool hh = B[k].h > B[k - 1].h, ll = B[k].l < B[k - 1].l;
-        if (hh && !ll) o.trend = 1; else if (ll && !hh) o.trend = -1; else if (hh && ll) o.trend = B[k].c > B[k].o ? 1 : B[k].c < B[k].o ? -1 : o.trend; }
+        if (hh && !ll) o.trend = 1; else if (ll && !hh) o.trend = -1; else if (hh && ll) o.trend = B[k].c > B[k].o ? 1 : B[k].c < B[k].o ? -1 : o.trend;
+        // (1.2.0) the hourly breakout step: a green hour closing above the prior hour's high while the rotation is up (the mirror for down)
+        const bool su = B[k].c > B[k - 1].h && B[k].c > B[k].o && o.trend >= 0, sd = B[k].c < B[k - 1].l && B[k].c < B[k].o && o.trend <= 0;
+        if (su != sd) { o.stepDir = su ? 1 : -1; o.stepPx = su ? B[k - 1].h : B[k - 1].l; } }
     if (B.size() < 16) { o.line.text = "HTF: not enough 60-min bars"; o.line.col = WHITE; return o; }
     std::vector<Piv> piv; int dir = 1, ext = 0; zigzag(B, piv, dir, ext);
     const int i = (int)B.size() - 1; const Bar& cur = B[i]; const Bar& prv = B[i - 1];
@@ -196,68 +200,52 @@ inline Line lvlLine(const In& I, long long now, int dir, double atr) {
     // "today": from the RTH open once it has passed, else from the 17:00 session start (overnight)
     const long long key = sessionOf(now); long long s0 = sessionStart(key);
     if (dayOf(now - 1) == key && modOf(now - 1) >= I.openMin) s0 = key * 86400 + (long long)I.openMin * 60;
-    std::vector<std::string> P;
+    std::string o1;
     if (have) {
         int cnt = 0; bool away = true;
         for (const Bar& b : B) { if (b.t <= s0) continue; const bool near = b.l <= best.lv.px + q && b.h >= best.lv.px - q; if (near && away) { cnt++; away = false; } if (std::fabs(b.c - best.lv.px) > 2 * q) away = true; }
         static const char* const ORD[] = { "", "1st", "2nd", "3rd" };
         const std::string o = cnt >= 1 && cnt <= 3 ? ORD[cnt] : std::to_string(cnt) + "th";
-        std::string s = best.what + " " + best.lv.name + " " + num(best.lv.px, I.dec) + " (" + o + ")";
-        const Level* mq = nullptr;
-        for (const Level& m : I.mq) if (std::isfinite(m.px) && std::fabs(m.px - best.lv.px) <= q && (!mq || std::fabs(m.px - best.lv.px) < std::fabs(mq->px - best.lv.px))) mq = &m;
-        if (mq) s += " + " + mq->name + " " + num(mq->px, I.dec);
-        P.push_back(s);
+        o1 = o;
         if (best.sup && dir == 1) L.col = GREEN;
         if (!best.sup && dir == -1) L.col = RED;
     }
-    double ref30 = NAN; for (const Bar& b : B) if (b.t <= now - 1800) ref30 = b.c;   // the direction of travel: the close vs 30 min ago
-    const bool up = std::isfinite(ref30) ? px >= ref30 : dir == 1; const double ref = have ? best.lv.px : px;
-    const Level* nx = nullptr;
-    for (const Level& a : lv) if (up ? a.px > ref + q : a.px < ref - q) { if (!nx || (up ? a.px < nx->px : a.px > nx->px)) nx = &a; }
-    if (nx) { char b[40]; std::snprintf(b, sizeof b, " (%+.1f ATR)", (nx->px - px) / atr); P.push_back(std::string(up ? "-> R " : "-> S ") + nx->name + " " + num(nx->px, I.dec) + b); }
-    std::vector<std::string> sw; std::vector<const Bar*> seg; for (const Bar& b : B) if (b.t > s0) seg.push_back(&b);
-    if (!seg.empty()) {
-        double mx = -1e300, mn = 1e300; for (const Bar* b : seg) { mx = std::max(mx, b->h); mn = std::min(mn, b->l); }
-        for (const Level& a : lv) {
-            if ((have && a.name == best.lv.name) || (nx && a.name == nx->name)) continue;
-            bool hiT = true, loT = true; size_t p0 = 0;
-            while (p0 <= a.name.size()) { size_t p1 = a.name.find('/', p0); if (p1 == std::string::npos) p1 = a.name.size(); const std::string n = a.name.substr(p0, p1 - p0); if (!isHigh(n)) hiT = false; if (!isLow(n)) loT = false; p0 = p1 + 1; }
-            if (hiT && mx > a.px && seg.front()->o < a.px) sw.push_back(a.name);
-            if (loT && mn < a.px && seg.front()->o > a.px) sw.push_back(a.name);
-        }
-    }
-    if (!sw.empty()) { std::string s = "Swept"; for (const std::string& x : sw) s += " " + x; P.push_back(s); }
-    if (P.empty()) return L;
-    std::string t = "Lvl: "; for (size_t k = 0; k < P.size(); k++) { if (k) t += ", "; t += P[k]; }
-    L.text = t; return L;
-}
-
-inline Line mktLine(const In& I, long long now) {
-    Line L; L.text = "Mkt: Even"; L.col = WHITE;
-    const long long from = now - 5 * I.per; const Sig* init = nullptr; const Sig* trap = nullptr;
-    for (const Sig& s : I.sigs) { if (s.t <= from || s.t > now) continue; if (s.code == "I") init = &s; if (s.code == "T") trap = &s; }
-    if (init) {
-        const bool b = init->bias > 0;
-        L.text = std::string("Mkt: ") + (b ? "Buyers Pushing / B Initiating" : "Sellers Pushing / S Initiating") + (std::isfinite(init->mult) && init->mult > 0 ? " " + x1(init->mult) : std::string()) + " @" + num(init->px, I.dec);
-        if (trap) L.text += std::string(", ") + (trap->bias > 0 ? "S Trapped" : "B Trapped");
-        L.col = b ? GREEN : RED;
-    } else if (trap) {
-        const bool b = trap->bias > 0;   // a bullish T = sellers trapped -> sellers failing, drawn in the buyers' colour
-        L.text = std::string("Mkt: ") + (b ? "Sellers Failing / S Trapped" : "Buyers Failing / B Trapped") + " @" + num(trap->px, I.dec);
-        L.col = b ? GREEN : RED;
-    }
+    // (1.2.0, Rassul 2026-11-11 11:53 CT "1. ok") always the nearest level ABOVE and BELOW the last close, with the distance in points;
+    // the level being tested / swept right now says so instead of its distance. Levels price has left behind are never named.
+    const Level* up = nullptr; const Level* dn = nullptr;
+    for (const Level& a : lv) { if (a.px > px && (!up || a.px < up->px)) up = &a; if (a.px <= px && (!dn || a.px > dn->px)) dn = &a; }
+    auto part = [&](const Level* a, bool above) { if (!a) return std::string(above ? "none above" : "none below");
+        std::string w = num(std::fabs(a->px - px), I.dec) + (above ? " above" : " below");
+        if (have && std::fabs(best.lv.px - a->px) < 1e-9) w = (best.what.compare(0, 5, "Swept") == 0 ? std::string("swept") : std::string("testing")) + ", " + o1;
+        return a->name + " " + num(a->px, I.dec) + " (" + w + ")"; };
+    if (!up && !dn) return L;
+    L.text = "Lvl: " + part(up, true) + " / " + part(dn, false);
     return L;
 }
 
-inline Line lmtLine(const In& I, long long now) {
-    Line L; L.text = "Lmt: no absorption"; L.col = WHITE;
-    const long long from = now - 5 * I.per; const Sig* a = nullptr;
-    for (const Sig& s : I.sigs) { if (s.t <= from || s.t > now) continue; if (s.code == "A" || s.code == "AL") a = &s; }
-    if (!a) return L;
-    const bool b = a->bias > 0;
-    L.text = std::string("Lmt: ") + (b ? "Buyers Absorbing" : "Sellers Absorbing") + (std::isfinite(a->net) && a->net != 0 ? " " + num(std::fabs(a->net), 0) : std::string())
-           + (std::isfinite(a->mult) && a->mult > 0 ? " (" + x1(a->mult) + ")" : std::string()) + " @" + num(a->px, I.dec);
-    L.col = b ? GREEN : RED;
+// (1.2.0, Rassul 11:53 CT "3. ok, and i dont even think it is working becasue the levels it is mentioning are passed") ONE "Flow:" line with
+// the verdict first, from lsDeltaProfile's decided events of the last 5 candles that are STILL IN PLAY: the last close is on the event's
+// side of its price (a buyers' event: at / above it; a sellers' event: at / below it) and within 1 ATR of it. An event price has gone
+// through, or left behind by more than 1 ATR, is not mentioned (1.0.x named it for 5 candles whatever price did).
+inline Line flowLine(const In& I, long long now, double atr) {
+    Line L; L.text = "Flow: Even"; L.col = WHITE; if (I.bars.empty()) return L;
+    double px = NAN; for (const Bar& b : I.bars) if (b.t <= now) px = b.c;
+    const long long from = now - 5 * I.per; const Sig* init = nullptr; const Sig* trap = nullptr; const Sig* ab = nullptr;
+    auto live = [&](const Sig& s) { if (!std::isfinite(s.px) || !std::isfinite(px)) return false;
+        if (s.bias > 0 ? px < s.px : px > s.px) return false;                           // price has gone through it
+        return !(std::isfinite(atr) && atr > 0) || std::fabs(px - s.px) <= atr; };      // or has left it behind
+    for (const Sig& s : I.sigs) { if (s.t <= from || s.t > now || !live(s)) continue; if (s.code == "I") init = &s; if (s.code == "T") trap = &s; if (s.code == "A" || s.code == "AL") ab = &s; }
+    auto side = [](const Sig* s) { return s->bias > 0 ? std::string("Buyers") : std::string("Sellers"); };
+    const std::string push = init ? std::string("pushing") + (std::isfinite(init->mult) && init->mult > 0 ? " " + x1(init->mult) : std::string()) : std::string();
+    const std::string absb = ab ? std::string("absorbing") + (std::isfinite(ab->net) && ab->net != 0 ? " " + num(std::fabs(ab->net), 0) : std::string())
+                                  + (std::isfinite(ab->mult) && ab->mult > 0 ? " (" + x1(ab->mult) + ")" : std::string()) + " @" + num(ab->px, I.dec) : std::string();
+    if (init && ab && (init->bias > 0) == (ab->bias > 0)) { L.text = "Flow: " + side(ab) + " in control: " + push + ", " + absb; L.col = ab->bias > 0 ? GREEN : RED; }
+    else if (init && ab) { L.text = "Flow: Mixed: " + side(init) + " " + push + ", " + side(ab) + " " + absb; L.col = WHITE; }
+    else if (ab) { L.text = "Flow: " + side(ab) + " " + absb; L.col = ab->bias > 0 ? GREEN : RED; }
+    else if (init) { L.text = "Flow: " + side(init) + " " + push + " @" + num(init->px, I.dec); L.col = init->bias > 0 ? GREEN : RED; }
+    else if (trap) { L.text = std::string("Flow: ") + (trap->bias > 0 ? "Sellers trapped" : "Buyers trapped") + " @" + num(trap->px, I.dec); L.col = trap->bias > 0 ? GREEN : RED; return L; }
+    else return L;
+    if (trap) L.text += std::string(", ") + (trap->bias > 0 ? "sellers trapped" : "buyers trapped");
     return L;
 }
 
@@ -265,8 +253,12 @@ inline Out build(const In& I) {
     Out o; if (I.bars.size() < 3) { o.why = "no bars"; return o; }
     const long long now = I.bars.back().t; o.at = now;
     const Htf h = htfLine(I);
-    int k = 0; if (SHOW_HTF) { Line t; t.text = std::string("Hrly Trend: ") + (h.trend > 0 ? "Up" : h.trend < 0 ? "Down" : "NA"); t.col = h.trend > 0 ? GREEN : h.trend < 0 ? RED : WHITE; o.l[k++] = t; }
-    o.l[k++] = dayLine(I, now); o.l[k++] = lvlLine(I, now, h.dir, h.atr); o.l[k++] = mktLine(I, now); o.l[k++] = lmtLine(I, now); o.n = k;
+    int k = 0; if (SHOW_HTF) { Line t; t.text = std::string("Hrly Trend: ") + (h.trend > 0 ? "Up" : h.trend < 0 ? "Down" : "NA"); t.col = h.trend > 0 ? GREEN : h.trend < 0 ? RED : WHITE;
+        // (1.2.0, Rassul 11:53 CT "2. ok") + the newest hourly breakout level when it goes the trend's way: "Up, above 7607" / "Up, back below 7607"
+        if (h.trend != 0 && h.stepDir == h.trend && std::isfinite(h.stepPx)) { const double px = I.bars.back().c; const bool beyond = h.trend > 0 ? px >= h.stepPx : px <= h.stepPx;
+            t.text += std::string(", ") + (beyond ? (h.trend > 0 ? "above " : "below ") : (h.trend > 0 ? "back below " : "back above ")) + num(h.stepPx, I.dec); }
+        o.l[k++] = t; }
+    o.l[k++] = dayLine(I, now); o.l[k++] = lvlLine(I, now, h.dir, h.atr); o.l[k++] = flowLine(I, now, h.atr); o.n = k;
     o.ok = true; o.why = "ok"; return o;
 }
 

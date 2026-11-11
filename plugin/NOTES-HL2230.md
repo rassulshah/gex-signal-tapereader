@@ -19,3 +19,16 @@
 
 ## Not verified (needs his IRT)
 - The look of the header row with the pill in the centre; nothing was rendered here.
+
+## 2.24.0 / ReadBox 1.2.0 (2026-11-11)
+- Rassul 11:52 CT "are thee any updates you think is should make to the read at the top"; my three proposals; 11:53 "1. ok. 2. ok 3. ok, and i
+  dont even think it is working becasue the levels it is mentioning are passed".
+- Lvl: always the nearest level above and below the last close with the distance in points ("LonHI 7620 (4.5 above) / CWH 7600.5 (15 below)");
+  the one being tested / swept says so. Levels price has left behind are never named (was: "no level near", "-> R ...", "Swept ...").
+- Hrly Trend: + the newest hourly breakout level going the trend's way ("Up, above 7607"; "Up, back below 7607" when the close is under it).
+- Flow: ONE line replaces Mkt and Lmt, the verdict first ("Sellers in control: pushing 2.6x, absorbing 311 (5.1x) @87.75", "Mixed: ...",
+  "Sellers trapped @..", "Even").
+- BUG FIXED (his "the levels it is mentioning are passed"): Mkt / Lmt named every lsDeltaProfile event of the last 5 candles whatever price did
+  afterwards. An event is now named only while it is in play: the last close is on its side of its price and within 1 ATR of it.
+- The box is 4 lines. Tests: tests_readbox/test_readbox_120.cpp 19 pass (replaces test_readbox_110.cpp); MinGW 0 errors; settings contract passes.
+- Not verified: the look on his chart. Not measured: whether the Flow verdict is right more often than not (the events are LOG-only letters).
