@@ -12,6 +12,7 @@
 //   6 VERSIONS   STEPTREND_VERSION == stp::VERSION == the setVersion literal == the description
 // Build (tests_step/): g++ -std=c++17 -Wall -Wextra -Werror -Wno-misleading-indentation -g -fsanitize=address,undefined -I.. -Imock t_step.cpp -o t && ./t
 #include "StepTrend.cpp"
+#include <chrono>
 #include <map>
 #include <memory>
 #include <set>
@@ -258,6 +259,17 @@ static void versionTests(const std::string& dir) {
 int main(int argc, char** argv) {
     const std::string dir = argc > 1 ? argv[1] : ".";
     if (!loadFx(dir + "/fx_mockup.txt") || DS.size() != 7 || RF.size() != 28) { std::printf("FAIL fixture\n"); return 1; }
+    if (getenv("PERF_DRAWS")) {   // PERF MODE (tests_perf/check_draw_io.py, the speed check before delivery): N calc + draw cycles, the clock advancing 1 s; a 267-candle and a 6,400-candle chart
+        const int N = atoi(getenv("PERF_DRAWS")); char tmpl[] = "/tmp/stepPXXXXXX"; const char* tmp = mkdtemp(tmpl); setenv("USERPROFILE", tmp, 1);
+        const std::string flex = std::string(tmp) + "\\InvestorRT\\rtx\\lsFlexLevels"; mkdir(flex.c_str(), 0777); mkdir((flex + "\\StepTrend").c_str(), 0777); sth::testWall() = 2000000;
+        for (int big = 0; big < 2; ++big) { const Data& d = DS[0]; mock::Host h; mock::current = &h; h.tick = 0.25f; h.seconds = 180; h.root = "ES"; h.symbol = "ESZ6"; scale(h, d); h.barW = 1;
+            if (!big) load(h, d, d.b.size()); else { const size_t n = d.b.size(); for (size_t i = 0; i < 6400; ++i) h.bars.push_back(mbar(BASE - 86400LL * 20 + (long long)i * 180, d.b[i % n])); }
+            h.visFrom = 0; h.visTo = (int)h.bars.size() - 1; Ind* p = make(); p->calc(0);
+            const auto t0 = std::chrono::steady_clock::now(); size_t ops = 0;
+            for (int i = 0; i < N; ++i) { sth::testWall() += 1; p->calc(0); h.draws.clear(); p->draw(); ops += h.draws.size(); }
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            std::printf("PERF %-34s candles %5zu  %.3f ms/draw  %zu draw calls/draw\n", big ? "6,400 candles, clock advancing 1 s" : "ES day, clock advancing 1 s", h.bars.size(), ms / N, ops / (size_t)(N ? N : 1)); dispose(p); }
+        return 0; }
     logicTests(); hostTests(); versionTests(dir);
     std::printf("%d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;

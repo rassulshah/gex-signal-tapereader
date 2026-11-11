@@ -1,3 +1,4 @@
+#include <chrono>
 // test_dealerprofile_2640.cpp -- 2.64.0: PERFORMANCE FIX - the status files are no longer replaced on every draw (WriteGate min gap 5 s, XLINES counter per draw). Built on test_dealerprofile_2630.cpp (its 44 checks kept, the gap set to 0 for them).
 // test_dealerprofile_2630.cpp -- 2.63.0: THE OWN ORDER FEED (LimitFeed.h): the top book without lsBookFlow. Built on test_dealerprofile_2620.cpp (its scenes run with the own feed off).
 // test_dealerprofile_2620.cpp -- 2.62.0: Limit Profile only (compile with -DDP_LIMIT_NAME=1: header "LP v2.63.0"). Built on test_dealerprofile_2610.cpp.
@@ -292,6 +293,21 @@ int main(int argc, char** argv)
     std::vector<Op> O = drawOn(X, a, MOCK_CHART);
     DealerProfile::ColsState c = colsOf(X, a);
     if (DUMP) dump(O, a, c);
+    if (getenv("PERF_DRAWS")) { dpaudit::statusMinGapSec() = 5;   // PERF MODE (tests_perf/check_draw_io.py, the speed check before delivery): N draws of this scene, then of a 6,580-candle chart, the clock advancing; exit 0
+        auto run = [&](Chart& ch, const char* lab, int N, bool adv) { const auto t0 = std::chrono::steady_clock::now(); size_t ops = 0;
+            for (int i = 0; i < N; ++i) { CUR = &ch; MOCK_CHART = "ES 3m #1"; NOW = ch.dt.back() + 180 + (adv ? i : 0); OPS.clear(); X.draw(); ops += OPS.size(); }
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            std::printf("PERF %-34s candles %5zu  %.3f ms/draw  %zu draw calls/draw\n", lab, ch.dt.size(), ms / N, ops / (size_t)N); };
+        const int N = atoi(getenv("PERF_DRAWS"));
+        run(a, "small chart, clock advancing 1 s", N, true);
+        Chart big = a; big.user = nullptr; { std::vector<unsigned long> dt; std::vector<float> o, h, l, c2; std::vector<unsigned long> v; const size_t n = a.dt.size(), want = 6580;
+            for (size_t i = 0; i < want; ++i) { const size_t k = i % n; const long back = (long)(want - 1 - i); dt.push_back(a.dt.back() - (unsigned long)(back * 180)); o.push_back(a.o[k]); h.push_back(a.h[k]); l.push_back(a.l[k]); c2.push_back(a.c[k]); v.push_back(a.v[k]); }
+            for (size_t i = 0; i < n; ++i) { const size_t j = want - n + i; o[j] = a.o[i]; h[j] = a.h[i]; l[j] = a.l[i]; c2[j] = a.c[i]; }
+            big.dt = dt; big.o = o; big.h = h; big.l = l; big.c = c2; big.v = v; }
+        prime(X, big, "ES", &lv);
+        run(big, "6,580 candles, clock advancing 1 s", N, true);
+        return 0; }
+
     check(c.gNative && c.gShown == 6 && c.gBook == 10318 && c.gSingle == 1 && c.gS20 == 2 && c.gReal == 2, "native: 6 shown, book 10318, 1 '?', 2 S20 (" + std::to_string(c.gShown) + " / " + std::to_string(c.gSingle) + " / " + std::to_string(c.gS20) + ")");
     check(c.bookMode && c.qFromBoard && !c.rkHide, "drawn through the book rows (rank | bar | lots)");
     const int lqL = c.lay.levels.l + c.keysW, lqR = c.lay.levels.r;

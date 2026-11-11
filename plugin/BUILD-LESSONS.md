@@ -428,3 +428,9 @@ Rules (every new or changed indicator):
   status are per draw or per minute, never cumulative per repaint; (3) no work per VISIBLE CANDLE per draw (time conversion, PNT::set) - bisect
   or cache by (candle count, last candle); (4) a new or changed indicator's draw is strace'd on the Linux harness before delivery: file
   creates / renames per draw must be ~0. Proof: test_dealerprofile_2640.cpp H (writes per draw, SDK calls per draw), NOTES-DP2590.md 2.64.0.
+- (2026-11-11, speed check) EVERY NEW OR CHANGED INDICATOR PASSES tests_perf/check_draw_io.py BEFORE DELIVERY: its Linux harness has a
+  PERF mode (env PERF_DRAWS=N: N draws of its standard scene and of a 6,000+ candle chart, the clock advancing 1 s a draw) and the script
+  runs it under strace: file creates / renames / unlinks per redraw <= 0.05, writes <= 0.10, stats <= 3, and the big chart may not cost
+  more than 6x the small one. It FAILS lsLimitProfile 2.63.0 (2.0 creates + 2.0 renames per redraw) and passes 2.64.0 and lsStepTrend
+  1.1.0. The nightly lra.irt_perf 1.1.0 scores the same thing live (ms per redraw against each indicator's own 7-day normal, SLOWER with
+  the build it started with, HEAVY above 10 ms a redraw) and puts it first in the status email + research-artifacts/irt_perf/FIX-QUEUE.md.
