@@ -43,6 +43,7 @@ inline std::vector<Producer> producers() {
              {'N', "lsDeltaProfile", 10, "delta nodes (top 3 rows of the 90-min profile, ratio)"},
              {'C', "lsDeltaProfile", 10, "candle trap lots (sellers below the close / buyers above it)"},
              {'D', "lsBookFlow", 10, "defending: refill effort / pulling per side"},
+             {'F', "lsBookFlow", 10, "the defend ratios per candle: bid / offer Refill Effort ratio signed, bits defending (>= 2.0x) / pulling (>= 1.5x), the forming candle live (BookFlow 1.40.0)"},
              {'T', "lsTrappedTraders", 10, "trapped lots vs normal"},
              {'V', "lsDealerProfile", 15, "key / volume / gamma levels with odds (owns the level list and the ATR used to tag)"},
              {'Q', "lsDealerProfile", 15, "liquidity top 10 with rank (owns the rank)"},

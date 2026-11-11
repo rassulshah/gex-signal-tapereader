@@ -106,7 +106,7 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.21.0"   // (1.21.0) Rly only inside an hourly breakout bar
+#define BKO_VERSION "1.22.0"   // (1.22.0) a Rev needs the book to agree (lsBookFlow fact F)   // was "1.21.0"   // (1.21.0) Rly only inside an hourly breakout bar
 // was "1.20.0"   // (1.20.0) the retracement % under every decided pullback label
 // was "1.19.0"   // (1.19.0) Rev: range >= 1.2 x ATR(13) OR a close beyond the prior bar; drawn after every pullback label incl. the Rly Pboc
 // was "1.18.0"   // (1.18.0) the origin is broken by a CLOSE; PbT / PbocT (a pullback that tested a Step Trend level)
@@ -159,6 +159,7 @@ struct BState {
     std::string recMkt, recSym; std::map<std::string, std::set<std::string>> recHave; int recRuns = -1; long long recMs = -1;
     long long recAdded = 0, recFails = 0; long recPend = 0;
     bkh::Cob cob;   // (1.11.1) the Cob / Lvp letters lsCobSignal draws on this chart
+    long long bkMs = -1; int bkFacts = -1, bkDecided = 0;   // (1.22.0) fact kind F (lsBookFlow's defend ratios): last read (steady ms), facts read (-1 = none on this chart), Revs decided
     long long eMs = -1; size_t ePosted = 0;   // (1.14.0) fact kind E: last post (steady ms) and how many
     bool vapFault = false;   // (1.12.0) a faulting VAP read is never re-entered (no Pboc then: the Pbs wait - status VAP)
 };
@@ -184,6 +185,7 @@ public:
     void status(BState& S, long long now);
     void records(BState& S, long long now);
     void postEntry(BState& S, long long now);   // (1.14.0)
+    void readBook(BState& S, long long now);    // (1.22.0)
     bool parts(RTDATE d, long& days, int& endSec);
     BState* testState() { return slot_.get(this, false); }
 };
@@ -296,6 +298,24 @@ int Breakout::vapRows(BState& S, int chartBar, std::vector<wpc::VRow>& out) {
     }
     return out.empty() ? 0 : 1;
 }
+// (1.22.0) the book gate's input: lsBookFlow's DECIDED fact F candles of this chart, once a second, keyed to the engine's bars by the
+// Central wall second of the bar (days * 86400 + endSec = lsBookFlow's ctOf). No lsBookFlow on the chart = nothing handed in.
+void Breakout::readBook(BState& S, long long now) {
+    if (!bko::REV_NEEDS_BOOK) return;
+    if (S.bkMs >= 0 && now >= S.bkMs && now - S.bkMs < 1000) return;
+    S.bkMs = now;
+    const char* sy = getSymbol(); const char* chl = getChartLabel(); if (!sy || !chl || !*sy) return;
+    const long long ms = (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    std::vector<sb::Fact> v; std::map<long long, int> bits;
+    if (!sb::readFacts('F', sy, getSecondsPerBar(), chl, ms, v, true)) { S.bkFacts = -1; S.bkDecided += S.E.setBook(bits); return; }
+    S.bkFacts = (int)v.size();
+    if (!v.empty()) {
+        std::map<long long, long long> ct; const size_t n = S.E.bars.size(), from = n > 400 ? n - 400 : 0;
+        for (size_t k = from; k < n; ++k) { const bko::In& b = S.E.bars[k]; if (b.ok) ct[(long long)b.days * 86400LL + b.endSec] = b.t; }
+        for (const sb::Fact& f : v) { const auto it = ct.find(f.bar); if (it != ct.end()) bits[it->second] = f.code; }
+    }
+    S.bkDecided += S.E.setBook(bits);
+}
 // (1.14.0) fact kind E once a second (SignalBoard facts are fresh for 60 s): the 3-bar build only (one producer per chart, ChainSpec.h)
 void Breakout::postEntry(BState& S, long long now) {
     if (BKO_ONE_BAR) return;
@@ -361,7 +381,7 @@ void Breakout::records(BState& S, long long now) {
 void Breakout::pump() {
     BState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
-    feed(*S); const long long now = bkoMs(); records(*S, now); postEntry(*S, now); status(*S, now);
+    feed(*S); const long long now = bkoMs(); readBook(*S, now); records(*S, now); postEntry(*S, now); status(*S, now);
 }
 
 int Breakout::draw(void) {
@@ -420,6 +440,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA BO v1.14.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC (IRT VAP, Wave POC's rule); Pdoc = it tags the pullback's developing POC (Wave POC's PB POC) instead. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.21.0");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.22.0");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }

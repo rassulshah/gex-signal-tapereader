@@ -55,3 +55,14 @@
 - tests_bo100/test_bo1210_rlyhbo.cpp 12 pass: ES 11-09 8 of 9 drawn, 10-21 8 of 18, 11-04 11 of 18 (= the mockup). 1180 / 1190 / 1200 still pass.
   MinGW 0 errors / 0 warnings.
 - Not verified: his charts. Not done: lra.pb_rev / nightly Rly scoring do not know the gate yet (they read the RLY records).
+
+## 1.22.0 (2026-11-11 afternoon CT) - a Rev needs the order book to agree
+Rassul: "Ok build and I want the signal on rev to utilize this also when giving a signal"; asked how: "Require it".
+- Rule (bko::Engine::bookVerdict): a long Rev is DRAWN only when lsBookFlow says BIDS DEFENDING (Refill Effort ratio >= 2.0x, size arriving) on a
+  candle from the Pb pivot bar to the Rev bar, and the bids are not PULLING (leaving >= 1.5x) on the Rev bar. Short Rev: the offers.
+- Input: SignalBoard fact kind F (lsBookFlow 1.40.0, decided candles, last 200), read by the host once a second (Breakout::readBook).
+- Decided once when the Rev bar's fact is there (revBook, kept for the engine's life). No fact for the Rev bar while a later candle has one = no.
+- A chart with no lsBookFlow: nothing is gated (status REV_BOOK says so). Records (BRV / BRO) unchanged - research parity untouched.
+- Tests: tests_bo100/test_bo1220_book.cpp 11 pass; 1180 / 1190 / 1200 / 1210 pass; MinGW real SDK 0 errors (25 warnings = before).
+- NOT measured: whether a book-agreed Rev wins more often. Revs older than lsBookFlow's 200 candles are not shown after a restart.
+- Not verified on his charts (needs his IRT restart).

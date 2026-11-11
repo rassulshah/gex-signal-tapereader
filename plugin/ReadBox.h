@@ -24,7 +24,7 @@
 
 namespace rbx {
 
-static const char* const VERSION = "1.3.0";   // 1.3.0 (2026-11-11 12:01-12:03 CT): the read box shows the order-flow read only (one "Flow:" line); Out carries trend / day / lvl / atr for the HOD / LOD box
+static const char* const VERSION = "1.4.0";   // 1.4.0 (2026-11-11, Rassul "Ok build"): a second line "Book:" under "Flow:" - lsBookFlow's defend ratios (SignalBoard fact F) read for the side that matters   // was "1.3.0";   // 1.3.0 (2026-11-11 12:01-12:03 CT): the read box shows the order-flow read only (one "Flow:" line); Out carries trend / day / lvl / atr for the HOD / LOD box
 // was "1.2.0";   // 1.2.0 (2026-11-11 Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed"): Lvl = the nearest level above / below with the distance; Hrly Trend + the hourly breakout level; ONE Flow line (verdict first) from events still in play - 4 lines
 // was "1.1.0";   // 1.1.0 (2026-11-11 Rassul 11:41 CT "also updat eht readt at the top to be more simple", his screenshot: the HTF line and "0.8x ADR, Used 91%" crossed out): the HTF line is "Hrly Trend: Up / Down / NA" (11:45 CT); the RTH Day line without the ADR multiple and the Used %
 // was "1.0.1";
@@ -36,6 +36,8 @@ struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0; };   // t = bar
 struct Level { std::string name; double px = NAN; };
 struct Sig { long long t = 0; std::string code; int bias = 0; double px = NAN, net = NAN, mult = NAN; };   // a DECIDED lsDeltaProfile event
 struct DayIn { int kind = -1; double pBig = NAN, pSmall = NAN, xr = NAN; bool post = false; double adr = NAN; };
+// (1.4.0) b / s = the bid / offer Refill Effort ratio signed (+ arriving, - leaving); bits: 1 bids defending, 2 bids pulling, 4 offers defending, 8 offers pulling
+struct BookIn { bool ok = false; double b = 0, s = 0; int bits = 0; };
 struct In {
     std::string mkt; int dec = 2; long long per = 180; int openMin = 510, closeMin = 900;
     std::vector<Bar> bars;          // closed bars, oldest first (2+ sessions for the 60-min history)
@@ -43,10 +45,12 @@ struct In {
     std::vector<Level> mq;          // MenthorQ levels (confluence only)
     std::vector<Sig> sigs;          // lsDeltaProfile decided events
     DayIn day;
+    BookIn book;                    // (1.4.0) lsBookFlow's newest defend ratios (fact F); ok = false -> no Book line
 };
 struct Line { std::string text; int col = WHITE; };
 struct Out { bool ok = false; Line l[5]; int n = 5; std::string why; long long at = 0;
-             Line trend, day, lvl; double atr = NAN, px = NAN; };   // (1.3.0) the Hrly Trend / Day / Lvl reads (shown in the HOD / LOD box, not in the read box) and the 60-min ATR   // (1.1.0) n = the lines shown (4 without the HTF line)
+             Line trend, day, lvl; double atr = NAN, px = NAN;
+             int bkTrend = 0, bkSide = 0, bkBase = 1; bool bkPb = false; std::string bkAt; };   // (1.4.0) what the Book line needs (applyBook re-reads the book between bar closes)   // (1.3.0) the Hrly Trend / Day / Lvl reads (shown in the HOD / LOD box, not in the read box) and the 60-min ATR   // (1.1.0) n = the lines shown (4 without the HTF line)
 
 // ---------------------------------------------------------------- helpers
 inline std::string num(double v, int dec) {
@@ -182,7 +186,7 @@ inline Line dayLine(const In& I, long long now) {
     L.text = t; return L;
 }
 
-inline Line lvlLine(const In& I, long long now, int dir, double atr) {
+inline Line lvlLine(const In& I, long long now, int dir, double atr, std::string* atName = nullptr, int* atSide = nullptr) {   // (1.4.0) atName / atSide: the level being tested or swept (+1 from above = support, -1 from below = resistance)
     Line L; L.text = "Lvl: no level near"; L.col = WHITE;
     std::vector<Bar> B; for (const Bar& b : I.bars) if (b.t <= now) B.push_back(b);
     if (B.size() < 3 || !std::isfinite(atr) || atr <= 0) return L;
@@ -209,7 +213,7 @@ inline Line lvlLine(const In& I, long long now, int dir, double atr) {
         for (const Bar& b : B) { if (b.t <= s0) continue; const bool near = b.l <= best.lv.px + q && b.h >= best.lv.px - q; if (near && away) { cnt++; away = false; } if (std::fabs(b.c - best.lv.px) > 2 * q) away = true; }
         static const char* const ORD[] = { "", "1st", "2nd", "3rd" };
         const std::string o = cnt >= 1 && cnt <= 3 ? ORD[cnt] : std::to_string(cnt) + "th";
-        o1 = o;
+        o1 = o; if (atName) *atName = best.lv.name; if (atSide) *atSide = best.sup ? 1 : -1;
         if (best.sup && dir == 1) L.col = GREEN;
         if (!best.sup && dir == -1) L.col = RED;
     }
@@ -252,6 +256,38 @@ inline Line flowLine(const In& I, long long now, double atr) {
     return L;
 }
 
+// (1.4.0, Rassul 2026-11-11 "Can you include 4 because I want to use it to enter after a pullback when I am looking for a reversal", "Ok build")
+// ONE "Book:" line, the verdict first, for the side that matters: hourly trend Up -> the bids (Down -> the offers); price testing / sweeping a
+// key level against the trend -> the side that would make the reversal, with the level named; no trend -> the level's side, else the stronger
+// side. "defending" = that side's Refill Effort ratio >= 2.0x with size arriving; "pulling" = size leaving >= 1.5x (lsBookFlow decides, fact F).
+inline Line bookLine(const BookIn& k, int trend, const std::string& atName, int atSide, bool pb) {
+    Line L; L.text.clear(); L.col = WHITE; if (!k.ok) return L;
+    const std::string raw = "(B " + x1(std::fabs(k.b)) + ", S " + x1(std::fabs(k.s)) + ")";
+    int side = 0; std::string pre;                                          // side +1 = read the bids, -1 = the offers
+    if (atSide != 0 && !atName.empty() && (trend == 0 || atSide == -trend)) { side = atSide; pre = (trend == 0 ? "At " : "Reversal at ") + atName + ": "; }
+    else if (trend != 0) { side = trend;
+        pre = std::string(pb ? "Pullback in " : "") + (trend > 0 ? (pb ? "uptrend: " : "Uptrend: ") : (pb ? "downtrend: " : "Downtrend: ")); }
+    else { const bool bd = (k.bits & 1) != 0, sd = (k.bits & 4) != 0;
+        if (bd && (!sd || k.b >= k.s)) side = 1; else if (sd) side = -1;
+        else { L.text = "Book: Even " + raw; return L; } }
+    const bool def = (k.bits & (side > 0 ? 1 : 4)) != 0, pull = (k.bits & (side > 0 ? 2 : 8)) != 0;
+    const char* who = side > 0 ? "Bids" : "Offers";
+    if (pull) { L.text = "Book: " + pre + who + " pulling " + x1(std::fabs(side > 0 ? k.b : k.s)); L.col = side > 0 ? RED : GREEN; }
+    else if (def) { L.text = "Book: " + pre + who + " defending " + x1(std::fabs(side > 0 ? k.b : k.s)) + " (2.0x)"; L.col = side > 0 ? GREEN : RED; }
+    else L.text = "Book: " + pre + who + " not defending " + raw;
+    return L;
+}
+
+// (1.4.0) puts / refreshes the Book line under the Flow line (the host calls it again each second with the newest fact F): both lines in one
+// colour when they agree, the Book line white when they disagree; no book = no line.
+inline void applyBook(Out& o, const BookIn& k) {
+    if (!o.ok || o.bkBase < 1 || o.bkBase > 4) return;
+    Line bk = bookLine(k, o.bkTrend, o.bkAt, o.bkSide, o.bkPb); o.n = o.bkBase;
+    if (bk.text.empty()) return;
+    const int fc = o.l[o.bkBase - 1].col; if (fc != WHITE && bk.col != WHITE && bk.col != fc) bk.col = WHITE;
+    o.l[o.bkBase] = bk; o.n = o.bkBase + 1;
+}
+
 inline Out build(const In& I) {
     Out o; if (I.bars.size() < 3) { o.why = "no bars"; return o; }
     const long long now = I.bars.back().t; o.at = now;
@@ -261,14 +297,19 @@ inline Out build(const In& I) {
         if (h.trend != 0 && h.stepDir == h.trend && std::isfinite(h.stepPx)) { const double px = I.bars.back().c; const bool beyond = h.trend > 0 ? px >= h.stepPx : px <= h.stepPx;
             t.text += std::string(", ") + (beyond ? (h.trend > 0 ? "above " : "below ") : (h.trend > 0 ? "back below " : "back above ")) + num(h.stepPx, I.dec); }
         o.trend = t; }
-    o.day = dayLine(I, now); o.lvl = lvlLine(I, now, h.dir, h.atr); o.atr = h.atr; o.px = I.bars.back().c;
+    std::string atName; int atSide = 0;
+    o.day = dayLine(I, now); o.lvl = lvlLine(I, now, h.dir, h.atr, &atName, &atSide); o.atr = h.atr; o.px = I.bars.back().c;
     const Line flow = flowLine(I, now, h.atr);
     int k = 0;
     if (BOX_FLOW_ONLY) o.l[k++] = flow;   // (1.3.0) the read box = the order-flow read only
     else { if (SHOW_HTF) o.l[k++] = o.trend;
            o.l[k++] = o.day; o.l[k++] = o.lvl; o.l[k++] = flow; }
     o.n = k;
-    o.ok = true; o.why = "ok"; return o;
+    o.ok = true; o.why = "ok";
+    { const size_t nb = I.bars.size(); o.bkTrend = h.trend; o.bkAt = atName; o.bkSide = atSide; o.bkBase = k;
+      o.bkPb = h.trend != 0 && nb >= 2 && (h.trend > 0 ? I.bars[nb - 1].c < I.bars[nb - 2].c : I.bars[nb - 1].c > I.bars[nb - 2].c); }
+    if (BOX_FLOW_ONLY) applyBook(o, I.book);
+    return o;
 }
 
 // lsDeltaProfile's signals record (lsFlexLevels\DeltaProfile\<MKT>-<SYM>-<spb>-signals-<day>.csv), '|' fields, DECIDED rows (event D):

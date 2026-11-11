@@ -125,7 +125,7 @@ namespace bko {
 #define BKO_RLY_ON_DEFAULT 1   // (1.7.0) the plugin judges the overnight Rly; the 1.6.0 parity suites compile with -DBKO_RLY_ON_DEFAULT=0
 #endif
 static const bool SHOW_PDOC = false;   // (1.17.0) Pdoc removed from the chart (decided + recorded as before)
-static const char* const VERSION = "1.21.0";   // (1.21.0, 2026-11-11 Rassul 12:51 CT "Build") a Rly is displayed only when the candle it sits on is inside an hourly breakout bar of its direction (lsStepTrend's step rule), decided once when that hour has closed; a Rly Pboc needs such a Rly
+static const char* const VERSION = "1.22.0";   // (1.22.0, 2026-11-11 Rassul "I want the signal on rev to utilize this also", "Require it"): a Rev is drawn only when the order book agrees (lsBookFlow fact F)   // was "1.21.0";   // (1.21.0, 2026-11-11 Rassul 12:51 CT "Build") a Rly is displayed only when the candle it sits on is inside an hourly breakout bar of its direction (lsStepTrend's step rule), decided once when that hour has closed; a Rly Pboc needs such a Rly
 // was "1.20.0";   // (1.20.0, 2026-11-11 Rassul 12:27 CT "I want to add the retracement amount right below any type of pb like 45%", "Keep it two digits") the pullback's retracement of its wave, two digits + "%", right under every decided pullback label
 // was "1.19.0";   // (1.19.0, 2026-11-11 Rassul 11:07 CT "Its range is at least 1.2x the 13-bar ATR (measured on the bar before) or it closes above the prior bar high. also note that it can be displayed after any type of pb including pboc etc.") Rev = the first bar of the right colour whose range is >= 1.2 x ATR(13) OR that closes beyond the prior bar (long: above its high; short: below its low); a Rev is drawn after every kind of pullback label - Pb, Pboc, PbT, PbocT and the no-BO Rly Pboc (BRO, was recorded only)
 // was "1.18.0";   // (1.18.0, 2026-11-11 Rassul) (1) 07:50 CT "this pb should have gotting a pboc too", rule: "allow if it doens't close below" - a pullback is void only when a candle CLOSES beyond the wave's origin (was: trades beyond it). (2) 07:33-07:40 CT "if there is a pb and it is below this level then it should be called a PbT", "it would be the dashed lne that would be tested", "update pboc to pbocT" - a drawn Pb / Pboc whose pullback traded at / through a Step Trend level of its direction (the newest level or an older one still running as support) is drawn PbT / PbocT; BPT| record lines
@@ -181,6 +181,7 @@ struct Pivot { long long t = 0, tc = 0; int type = 0; double h = 0, l = 0; bool 
 // +1 = BI UP (a failed BD, letter below the low). kind = the attempt as known at the BI close: 0 unconfirmed (no_confirm or still waiting),
 // 1 fired (the BI after its follow-through), 2 other reject. cancel = the attempt was still waiting (that BO / BD is cancelled).
 static const bool SHOW_BI = false;    // (1.6.0, Rassul 2026-11-04 19:06 CT "lets remove the BI signal") no BI pass: no letters, records or BO / BD cancels
+static const bool REV_NEEDS_BOOK = true;       // (1.22.0) a Rev is drawn only when the book agrees (where lsBookFlow runs on the chart)
 static const bool RLY_NEEDS_HBO = true;        // (1.21.0) a Rly counts only inside an hourly breakout bar of its direction
 static const double REV_ATR_X = 1.2;           // (1.9.0) Rev range >= 1.2 x ATR (1.9.1: ATR(13))
 static const int REV_ATR_N = 13;               // (1.9.1) ATR(13), Wilder
@@ -610,6 +611,35 @@ struct Engine {
     // BAR of its direction: lsStepTrend's step rule (the hour closes beyond the prior hour's high / low, in its own colour, with the hourly
     // rotation). Decided ONCE, when that hour has closed (so a Rly can print later than before, never be taken back), kept per Rly. A chart
     // period that does not divide the hour: the rule is off (every Rly counts, as before).
+    // (1.22.0, Rassul 2026-11-11 "Ok build and I want the signal on rev to utilize this also when giving a signal", his choice "Require it") THE
+    // BOOK GATE: a Rev is DRAWN only when the order book agrees - lsBookFlow's defend ratios (SignalBoard fact F, decided candles): a long Rev
+    // needs BIDS DEFENDING (Refill Effort ratio >= 2.0x, size arriving) on a candle from the Pb pivot bar to the Rev bar, and the bids not
+    // PULLING (leaving >= 1.5x) on the Rev bar; a short Rev the same with the offers. Decided ONCE, when the Rev bar's book fact is there (kept
+    // for the engine's life: no repaint); no fact for the Rev bar while a later candle has one = no (the book never said). The host hands the
+    // facts in (setBook) each second. On a chart with no lsBookFlow (bookSeen false) nothing is gated. Records are unchanged (BRV / BRO lines).
+    bool bookSeen = false; std::map<long long, int> bookBits; long long bookNewest = 0;
+    std::map<std::pair<long long, int>, int> revBook;   // (Rev bar, dir) -> 1 the book agreed / 0 it did not
+    int bookVerdict(const RevMark& m) const {           // 1 agrees, 0 does not, -1 not known yet
+        const auto rb = bookBits.find(m.tr); if (rb == bookBits.end()) return bookNewest > m.tr ? 0 : -1;
+        const int def = m.dir > 0 ? 1 : 4, pull = m.dir > 0 ? 2 : 8;
+        if (rb->second & pull) return 0;
+        for (auto it = bookBits.lower_bound(std::min(m.tp, m.tr)); it != bookBits.end() && it->first <= m.tr; ++it) if (it->second & def) return 1;
+        return 0;
+    }
+    bool revShown(const RevMark& m) const { if (!REV_NEEDS_BOOK || !bookSeen) return true;
+        const auto it = revBook.find(std::make_pair(m.tr, m.dir)); return it != revBook.end() ? it->second == 1 : bookVerdict(m) == 1; }
+    // bits: bar t -> 1 bids defending, 2 bids pulling, 4 offers defending, 8 offers pulling (decided candles only); returns the new decisions
+    int setBook(const std::map<long long, int>& bits) {
+        if (!REV_NEEDS_BOOK) return 0;
+        if (!bits.empty()) { bookSeen = true; bookBits = bits; bookNewest = bits.rbegin()->first; }
+        if (!bookSeen) return 0;
+        int n = 0;
+        auto judge = [&](const RevMark& m) { const std::pair<long long, int> key(m.tr, m.dir); if (revBook.count(key)) return; const int v = bookVerdict(m); if (v >= 0) { revBook[key] = v; ++n; } };
+        for (const auto& kv : rev) judge(kv.second);
+        for (const auto& kv : rro) judge(kv.second);
+        while (revBook.size() > 40000) revBook.erase(revBook.begin());
+        return n;
+    }
     std::map<std::pair<long long, int>, int> rlyHbo;   // (wave end bar, dir) -> 1 in an hourly breakout bar / 0 not
     bool rlyShown(const RlyMark& R) const { if (!RLY_NEEDS_HBO || !stp::periodOk(spb) || !(tick > 0)) return true;
         const auto it = rlyHbo.find(std::make_pair(R.te, R.dir)); return it != rlyHbo.end() && it->second == 1; }
@@ -851,7 +881,7 @@ struct View {
     int lh[2] = { 12, 14 };                         // letter row heights: BO / BD font, Rly font
 };
 struct Board { long long t = 0; int side = 0; int val = 0; };   // SignalBoard 'L': bar time, +1 above / -1 below, px from the extreme to the outer edge
-struct Scene { std::vector<Txt> txt; std::vector<Board> board; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0, rlyNoHbo = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
+struct Scene { std::vector<Txt> txt; std::vector<Board> board; int revNoBook = 0; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0, rlyNoHbo = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
 // (1.5.0) the BI rows: row r sits GAP + r * ROW_OUT px from the wick (0 = the BO row +3..+17, 1 = +19..+33, 2 = +35 (Pb), 3 = +51 (LVP),
 // 4 = +67, 5 = +83). Rows taken by OTHER indicators' labels at this candle and side: a zigzag pivot (the wave-time label, row 0, and
 // lsCandleAbsorb's A / Ae, row 1); the candle after a pivot that re-tests it within 4 ticks (lsCandleAbsorb's A row 1); row 3 is
@@ -968,6 +998,7 @@ inline Scene layout(const Engine& E, const View& v) {
     std::vector<const RevMark*> RV; for (const auto& kv : E.rev) RV.push_back(&kv.second); for (const RevMark& x : E.revProv) RV.push_back(&x);   // (1.9.2) + provisional
     for (const auto& kv : E.rro) RV.push_back(&kv.second);   // (1.19.0) the Rev after a Rly Pboc is drawn too (was recorded only)
     for (const RevMark* rp : RV) { const RevMark& M = *rp; const auto it = idx.find(M.tr); if (it == idx.end()) continue;
+        if (!E.revShown(M)) { ++S.revNoBook; continue; }   // (1.22.0) the book did not agree (or its fact is not there yet)
         const int bar = it->second, side = M.dir > 0 ? 1 : -1;   // (1.9.5) green Rev ON TOP of the green bar (BD: red Rev under the red bar)
         const In& b = E.bars[(size_t)bar]; if (!std::isfinite(b.h) || !std::isfinite(b.l)) continue;
         const char* tx = "Rev"; const int w = v.textW(tx, FONT_BO) + 2, cx = v.X(bar), yh = v.Y(b.h), yl = v.Y(b.l), top = std::min(yh, yl), bot = std::max(yh, yl), lh = v.lh[0];
@@ -1007,6 +1038,8 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
        + ",today BI down " + std::to_string(idn) + ",BI up " + std::to_string(iu) + ",BO / BD cancelled " + std::to_string(bc) + ",kept " + std::to_string(E.bi.size()) + ",cancelled kept " + std::to_string(E.boCancel.size()) + ",attempts last pass " + std::to_string(E.biAtt) + ",drawn " + std::to_string(last.biShown) + "\n";   // (1.5.0)
     if (!SHOW_BI) s += "BI,removed (1.6.0, Rassul 2026-11-04): no BI letters, no BBI records, no BO / BD cancelled\n";
     s += "KEPT,breakout decisions " + std::to_string(E.bo.size()) + ",rally waves " + std::to_string(E.rly.size()) + ",Pb " + std::to_string(E.pb.size()) + " (provisional " + std::to_string(E.pbProv.size()) + ")" + ",Rev " + std::to_string(E.rev.size()) + " (provisional " + std::to_string(E.revProv.size()) + ")" + ",pivots " + std::to_string(E.piv.size()) + ",duplicates skipped " + std::to_string(E.boDup) + ",runs " + std::to_string(E.runs) + " (full " + std::to_string(E.fullRuns) + ")\n";
+    { int y = 0, no = 0; for (const auto& kv : E.revBook) (kv.second == 1 ? y : no)++;   // (1.22.0)
+      s += std::string("REV_BOOK,(1.22.0) a Rev is drawn only when the book agrees (bids defending >= 2.0x from the Pb pivot bar to the Rev bar and not pulling on it; short: the offers),lsBookFlow ") + (E.bookSeen ? "on this chart" : "not on this chart - Revs not gated") + ",book candles " + std::to_string(E.bookBits.size()) + ",Revs agreed " + std::to_string(y) + ",not agreed " + std::to_string(no) + ",hidden now " + std::to_string(last.revNoBook) + "\n"; }
     s += "DRAWN,BO/BD " + std::to_string(last.boShown) + ",Rly " + std::to_string(last.rlyShown) + ",Pb " + std::to_string(last.pbShown) + ",Rev " + std::to_string(last.revShown) + ",no room " + std::to_string(last.noRoom) + "\n";
     {   int bu = 0, bn = 0; for (const auto& kv : E.boc) (kv.second == 1 ? bu : bn)++;
         s += "PBOC,(1.12.0) Pb on its BO / BD wave's volume POC (lsWavePOC's POC rule on IRT's VAP; BO: pivot low <= POC < high; BD mirror) drawn Pboc,decided Pboc " + std::to_string(bu) + ",Pb " + std::to_string(bn) + ",waiting (no VAP yet) " + std::to_string(E.bocNoVap) + ",no POC " + std::to_string(E.bocNoPoc) + ",VAP " + (E.bocLive ? "on" : "off") + ",drawn now Pboc " + std::to_string(last.pbocShown) + " (of them Rly " + std::to_string(last.rpbocShown) + "),Pb not drawn waiting for VAP " + std::to_string(last.pbocWait) + "\n";

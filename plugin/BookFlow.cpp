@@ -108,7 +108,7 @@ static ss::Ids& bfIds() { static ss::Ids I; return I; }   // the row ids IRT gav
 #include <chrono>
 #include "SignalBoard.h"            // (1.31.0) kind D facts (decided candles' defense)
 
-#define BF_VERSION "1.39.0"          // 1.39.0 (2026-11-11 Rassul 12:51 CT "add the ratio back on bookflow") the turn ratio ("3.0x" = defending bar / attacking bar) is drawn over the bar again, text only
+#define BF_VERSION "1.40.0"          // 1.39.0 (2026-11-11 Rassul 12:51 CT "add the ratio back on bookflow") the turn ratio ("3.0x" = defending bar / attacking bar) is drawn over the bar again, text only
 // was "1.38.1"          // 1.38.1 (2026-11-10) chart label read on every pump (Liquidity blank with the pane hidden)
 // was "1.38.0"          // 1.38.0 (2026-11-09, Rassul approved 13:26 CT): TopBook 1.1.0 - a level shows after 2 min of big size, clustered big orders out, "% real" from LRA-RealOrder-<MKT>.csv (LIVE markets only)  // was 1.37.0: 1.37.0 (2026-11-09, Rassul 12:55 CT "do it"): the TOP BOOK (TopBook.h 1.0.0) - the 3 biggest real bids / offers posted as SignalBoard kind G for the Limit Profile; the pane draws nothing new  // was 1.36.1: 1.36.1 (2026-11-07): OrderFlowFeed 1.16.1 - a stale (> 2 h) order-feed crash guard is cleared by itself, so a market is never left unrecorded for days (HG 11-05..11-07)  // was 1.36.0:          // 1.36.0 (2026-11-04 20:39 CT, Rassul "this is overcomplicated.. how do i make it basic" -> Option A on bf_basic): bars unchanged; the one-line header reads "Defending?  B 0.4x · S 0.5x" (no lots, no Live / time word; "Feed silent" kept); no turn marks (triangle + ratio) and no level squares drawn - all still computed, recorded and in the status   // was 1.35.0:          // 1.35.0 (2026-11-04, Rassul "add wave poc as one of the levels for bookflow") + WPOC levels in the level box   // was 1.34.0: 1.34.0 (2026-11-04, Rassul "just build it") the LEVEL BOX + squares (BookLevelBox.h) and the turn-mark ratio label   // was 1.33.0: 1.33.0 (2026-11-03, Rassul "go" on bf_box.png) the 4-line info box -> ONE compact line top-left (bf::oneLine): yellow Defending?, green B +923 0.6x, red S +534 0.3x, small white Live; no (i) icon
 // was "1.32.1"          // 1.32.1 (2026-11-02) no hovers (BF_HOVERS false, no TRACK_MOUSE)
@@ -184,6 +184,7 @@ public:
         // (1.3.0) the net decisions of closed candles (decided once; only a Ratio bars / Spike vs average change re-decides), the chart
         // label + identity they belong to, the Market State facts posted
         std::map<long long, bf::NetStat> net; int netRb = -1; long long netAvg = -1; std::string identity, chart;
+        std::map<long long, sb::Fact> fFacts; long long fPostMs = -100000, fLastKey = 0, fLiveMs = -100000; size_t fPosted = 0; sb::Fact fLive; bool fLiveOk = false;   // (1.40.0) SignalBoard F (the defend ratios)
         std::map<long long, sb::Fact> dFacts; long long dPostMs = -100000; size_t dPosted = 0;   // (1.31.0) SignalBoard D
         nl2::Ladder ladder; long long ladPostMs = -100000; size_t ladPosted = 0, ladBytes = 0; long long ladTooBig = 0;   // (1.32.0) the node ladder (NodeLadder.h): this pane owns it, posts the last closed candles
         std::vector<sb::Fact> yFacts; long long yReadMs = -100000; long long nodeMarks = 0; std::string nodeRowText;       // (1.32.0) the Delta Profile's node defender reads (kind Y), read for display only
@@ -1464,6 +1465,7 @@ public:
         Ext* e = ext(S); if (!e || e->chart.empty() || S.symbol.empty()) return;
         sync(S, *e);
         postLadder(S, *e);   // (1.32.0) every second, before the 15 s Market State throttle
+        postF(S, *e);        // (1.40.0) the defend ratios, every second
         if (e->mstKv.empty() && S.lastClosedKey > 0) {                     // after a restart: the last closed candle read back from the record
             std::map<long long, off::PaneBar>::const_iterator b = S.ser.bars.find(S.lastClosedKey);
             const bf::NetStat* n = b != S.ser.bars.end() && b->second.ok ? netAt(S, S.lastClosedKey) : nullptr;
@@ -1501,6 +1503,29 @@ public:
         const long long ms = steadyNow();
         if (e.yReadMs < 0 || ms < e.yReadMs || ms - e.yReadMs >= 1000) { e.yReadMs = ms; std::vector<sb::Fact> v; if (sb::readFacts('Y', S.symbol, S.spb, e.chart, ms, v, true)) e.yFacts.swap(v); else e.yFacts.clear(); }
         return e.yFacts;
+    }
+    // (1.40.0) SignalBoard kind F (bf::ratioFact): the last 200 decided candles (from the record after a restart) + the forming candle
+    // as the pane last drew it (state 0, dropped when older than 5 s). Decided facts are built once per closed candle.
+    static sb::Fact fOf(const bf::FFact& d, int state) { sb::Fact f; f.bar = d.bar; f.lo = d.b; f.hi = d.s; f.side = d.side; f.val = 0; f.code = d.bits; f.state = state; f.proven = 2; return f; }
+    void postF(S_& S, Ext& e) {
+        const long long ms = steadyNow();
+        if (e.fPostMs >= 0 && ms >= e.fPostMs && ms - e.fPostMs < 1000) return;
+        e.fPostMs = ms;
+        if (S.lastClosedKey > 0 && (S.lastClosedKey != e.fLastKey || e.fFacts.empty())) {
+            e.fLastKey = S.lastClosedKey; size_t seen = 0;
+            for (std::map<long long, off::PaneBar>::const_reverse_iterator it = S.ser.bars.rbegin(); it != S.ser.bars.rend() && seen < sb::FACT_CAP; ++it) {
+                if (it->first > S.lastClosedKey || !it->second.ok) continue;
+                ++seen; const long long ct = ctOf(it->first); if (ct <= 0) continue;
+                if (e.fFacts.count(ct)) { if (seen > 3) break; continue; }
+                const bf::NetStat* n = netAt(S, it->first); if (!n) continue;
+                const bf::FFact d = bf::ratioFact(ct, *n); if (d.ok) e.fFacts[ct] = fOf(d, 1);
+            }
+            while (e.fFacts.size() > sb::FACT_CAP - 1) e.fFacts.erase(e.fFacts.begin());
+        }
+        std::vector<sb::Fact> v; v.reserve(e.fFacts.size() + 1); for (const auto& kv : e.fFacts) v.push_back(kv.second);
+        if (e.fLiveOk && ms >= e.fLiveMs && ms - e.fLiveMs < 5000 && (v.empty() || e.fLive.bar > v.back().bar)) v.push_back(e.fLive);
+        if (v.empty()) return;
+        sb::postFacts('F', S.symbol, S.spb, e.chart, ms, v); e.fPosted = v.size();
     }
     // (1.31.0) SignalBoard 1.4.0 kind D: every decided candle's defense (kept 200), posted with the steady clock beside SRC BOOK
     void postD(S_& S, Ext& e, long long) {
@@ -1652,6 +1677,7 @@ public:
         if (liveBox) mbar = &lb;
         bf::NetStat liveNs; if (liveBox) liveNs = bf::liveNetStat(S.ser.bars, S.formingKey, lb.r, S.ser.ratioBars, avgT(S));   // (1.4.0) its Net ratio so far
         const bf::NetStat* shownNs = mbar ? (liveBox ? &liveNs : netAt(S, mt)) : nullptr;
+        if (Ext* fe = ext(S)) { fe->fLiveOk = false; if (liveBox && haveLive) { const bf::FFact d = bf::ratioFact(ctOf(S.formingKey), liveNs); if (d.ok) { fe->fLive = fOf(d, 0); fe->fLiveOk = true; fe->fLiveMs = steadyNow(); } } }   // (1.40.0) the forming candle for fact F
         bf::PullStat livePs; if (liveBox) livePs = bf::pullStatAt(S.ser.bars, S.formingKey, lb.r);   // (1.4.0) the forming candle: shown, never a marker
         const bf::PullStat* shownPs = mbar ? (liveBox ? &livePs : pullAt(S, mt)) : nullptr;
         off::Info info = bf::info(mbar, S.params.load.p, shownNs, S.market);   // (1.5.0) the market picks the Refilled cut-offs
@@ -2054,6 +2080,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI | (BF_HOVERS ? TRACK_MOUSE : 0));   // (1.32.1) no hovers                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
-    p->setVersion("1.39.0");   // BF_VERSION
+    p->setVersion("1.40.0");   // BF_VERSION
     return p;
 }

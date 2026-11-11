@@ -54,7 +54,7 @@ static void replay(Run& R, const Fix& X, int from, int vapAtStep = -1, long long
 static int barOf(const bko::Engine& E, long long t) { const auto it = std::lower_bound(E.bars.begin(), E.bars.end(), t, [](const bko::In& b, long long x) { return b.t < x; }); return it != E.bars.end() && it->t == t ? (int)(it - E.bars.begin()) : -1; }
 
 int main() {
-    CHECK(std::string(bko::VERSION) == "1.21.0", "version 1.21.0");
+    CHECK(std::string(bko::VERSION) == "1.22.0", "version 1.22.0");
     int total = 0; const char* F[3] = { "pboc_es1109.txt", "pboc_es1021.txt", "pboc_es1104.txt" };
     for (int f = 0; f < 3; ++f) { const Fix X = load(F[f], 0.25); Run R; replay(R, X, 3); const bko::Engine& E = R.E; const bko::Scene S = draw(E);
         int bad = 0, n = 0, lab = 0, over = 0;

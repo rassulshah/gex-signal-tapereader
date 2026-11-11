@@ -147,6 +147,7 @@
 #include "HodLodSweeps.h"         // (2.13.0) the HOD / LOD sweep sections (SDK-free)
 static const bool HL_FEED_ROW = false;   // (2.13.0) the "Feed ?" row is not drawn
 #include "ChartRead.h"              // (2.20.0) the 3-line chart read (SDK-free) - 2.22.0: still built + logged for lra.read_grade, no longer drawn
+#include "SignalBoard.h"            // (2.26.0) sb::readFacts('F'): lsBookFlow's defend ratios for the read box's Book line
 #include "ReadBox.h"                // (2.22.0) the compact READ BOX left column (SDK-free, tests_readbox)
 #include "NearLevels.h"             // (2.22.0) his key / MenthorQ level files for the Lvl line
 #include "HodLodHtf.h"             // (2.17.0) the HTF trend + RS line (SDK-free)
@@ -320,6 +321,7 @@ struct HLState {
     long long creadLogs = 0, creadLogFails = 0; int crCobs = 0; bool crKeyLoaded = false; std::string crKeyDay;
     // (2.22.0) the READ BOX: the five lines in force + their inputs (level files, LRA-VolLevels, lsDeltaProfile's decided signals)
     int callSide = 0; std::string callFlip, callSess;   // (2.25.0) the call line: the side first called in, "FLIPPED hh:mm" once it changed, their session
+    long long rbBookMs = -100000; int rbBookN = -1;   // (2.26.0) the Book line: last board read (steady ms), facts seen (-1 = no lsBookFlow on this chart)
     rbx::Out rbox; std::string rbWhy = "not run"; nl::Cache rbLv; std::string rbVol, rbSig; long long rbVolStamp = -2, rbSigStamp = -2; std::string rbSigPath; int rbLevels = 0, rbMq = 0, rbSigs = 0;
     // (2.21.0) the HOD / LOD CONFIRM badges: what to draw (chart bar indices), the record's keys, counters for the status line
     struct CfDraw { bool hod; int ext, conf; double px; };
@@ -1022,8 +1024,8 @@ void HodLod::computeReadBox(HLState& S, const std::vector<hl::Bar>& B, long long
     // the day: lsHodLod's Range Day read (pre-open / 30-min) and the ATR(14) day range
     I.day.kind = S.rdOut.kind; I.day.pBig = S.rdOut.pBig; I.day.pSmall = S.rdOut.pSmall; I.day.xr = S.rdOut.xr; I.day.post = S.rdOut.post;
     I.day.adr = std::isfinite(S.view.rdAtr) && S.view.rdAtr > 0 ? S.view.rdAtr : S.view.adrTrim;
-    S.rbox = rbx::build(I);
-    S.rbWhy = S.rbox.why + ",levels " + std::to_string(S.rbLevels) + ",mq " + std::to_string(S.rbMq) + ",dp signals " + std::to_string(S.rbSigs) + ",day " + (S.rdOut.kind < 0 ? "none" : "ok");
+    S.rbox = rbx::build(I); S.rbBookMs = -100000;   // (2.26.0) the draw re-reads the book at once
+    S.rbWhy = S.rbox.why + ",levels " + std::to_string(S.rbLevels) + ",mq " + std::to_string(S.rbMq) + ",dp signals " + std::to_string(S.rbSigs) + ",book facts " + std::to_string(S.rbBookN) + ",day " + (S.rdOut.kind < 0 ? "none" : "ok");
 }
 
 // (2.20.0) the CHART READ (ChartRead.h): built from the closed bars at each recompute; a new read (3-min charts) is appended to
@@ -1899,6 +1901,19 @@ int HodLod::draw(void)
     execute(L);
     hl::Box stripBox = { 0, 0, 0, 0 }; bool stripOk = false;   // (2.21.0) the read strip's rectangle: a confirm badge keeps off it
     static const int HL_RB_LEFT = 4;   // (2.22.2) the read box's left edge = the pane left + 4 px (was + 38)
+    if (S->rbox.ok) {   // (2.26.0) the Book line: lsBookFlow's newest defend ratios (fact F, this chart), re-read once a second; the forming candle when it is there
+        const long long bms = hlNowMs();
+        if (S->rbBookMs < 0 || bms < S->rbBookMs || bms - S->rbBookMs >= 1000) {
+            S->rbBookMs = bms; rbx::BookIn bk; S->rbBookN = -1;
+            const char* bsy = getSymbol(); const char* bcl = getChartLabel(); std::vector<sb::Fact> bf;
+            if (bsy && bcl && sb::readFacts('F', bsy, getSecondsPerBar(), bcl, bms, bf, false)) {
+                S->rbBookN = (int)bf.size(); const sb::Fact* nf = nullptr;
+                for (const sb::Fact& f : bf) if (!nf || f.bar >= nf->bar) nf = &f;
+                if (nf && nf->bar + 2LL * (long long)getSecondsPerBar() >= S->rbox.at) { bk.ok = true; bk.b = nf->lo; bk.s = nf->hi; bk.bits = nf->code; }
+            }
+            rbx::applyBook(S->rbox, bk);
+        }
+    }
     if (S->rbox.ok) {   // (2.22.0) the READ BOX left column; (2.22.1) at the pane top, as wide as its text, clear of the left-edge labels
         const int fs = 10;
         int l = pb.l + HL_RB_LEFT, r = priceEdge(); if (r <= 0 || r > pb.r) r = pb.r; r -= 6;   // (2.22.2, Rassul ES 10:22 "move the read at the top to the left more") 4 px in; the opaque box covers a left-edge label (NQ "86%") under it
@@ -2057,6 +2072,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.25.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.26.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
