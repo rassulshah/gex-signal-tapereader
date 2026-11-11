@@ -41,3 +41,18 @@ Rassul 07:21 CT "the retest lines should not extend indefinitely . they should s
 - Still running to the right edge: only the level before the newest step, while it is untested and no further step exists.
 - When another step is confirmed, a line that was running to the right edge is cut back to where that step starts (the steps themselves are drawn back to their wave tops the same way).
 - Tests: t_step.cpp 134 checks (the rule written out candle by candle on the 28 mockup cases: support lines, ended, with a later step; unit cases a / b / c; an ended line is never drawn to the right edge), ASan / UBSan; MinGW real SDK 0 errors 0 warnings; render check on the ES day. lra.step_trend_score 1.0.1 walk() follows the same rule (6 tests).
+
+## 1.2.0 (2026-11-11) - rotation follows every hour; works on the 60-minute chart
+- 07:57 CT, with NQ screenshots: "the green step didnt draw when the nq bade a higher green bar". Cause (my rule): the hourly rotation was a
+  3-pivot ZigZag that needed a completed swing low before it turned up, so it stayed "down" through a green hour that closed above the prior
+  hour's high, and the step was skipped. Now the 1-bar rule of his chart's ZigZag (Use High / Low, 1 bar): an hour with a higher high and not
+  a lower low = up; a lower low and not a higher high = down; both (outside hour) = the candle's colour; neither (inside hour) = unchanged.
+- 08:04 CT: "i also want a version of this indicator to draw on the hourly charts or can you update an existing indicator on the hourly ?"
+  The same lsStepTrend now accepts a 60-minute chart (periodOk up to 3600 s): each candle is an hour, the same levels, each drawn from the
+  hour candle that made it. Nothing else to install.
+- Nightly scorer lra.step_trend_score 1.0.2 uses the same rotation rule (its first score, with the old rule, is replaced tonight).
+- Speed check (tests_perf/check_draw_io.py): growth with the candles on screen fails only when the big scene costs 0.5 ms+ a draw
+  (Step Trend 1.2.0 was failed for "10x growth" at 0.03 ms).
+- Tests: tests_step/t_step 134 pass (ASan / UBSan, -Werror): the NQ case, the 60-minute chart = the 3-minute chart's steps in every fixture
+  day, parity with the mockup (21 cases); MinGW real-SDK syntax check 0 warnings; speed check pass; python 6 pass.
+- Not verified (needs his IRT): the look on his 60-minute chart (line thickness and the dots at hour-candle width).

@@ -1,6 +1,11 @@
 /********************************************************************************
- *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.1.0  (2026-11-11)
+ *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.2.0  (2026-11-11)
  *
+ *  1.2.0 (Rassul 2026-11-11 07:55 CT "the green step didnt draw when the nq made a higher green bar"): the hourly rotation follows his
+ *    1-bar High / Low ZigZag (a higher high turns it up, a lower low down, an outside hour by its colour). 1.0.0 / 1.1.0 used a 3-hour pivot
+ *    and skipped valid breakouts after one lower high (NQ 2026-11-11 4:00 and 5:00 AM).
+ *    + (08:04 CT "i also want a version of this indicator to draw on the hourly charts") the same indicator works on a 60-minute chart:
+ *    each candle is an hour, so the steps are the same levels, drawn from the candle that made each one.
  *  1.1.0 (Rassul 2026-11-11 07:21 CT "the retest lines should not extend indefinitely . they should stop once they are tested or once another
  *    step up is made or a step down is made"): the thin dashed support / resistance line of an old level ends at the first candle that
  *    trades back to it (after the new step's start), or where the NEXT step (up or down) starts (its wave top / bottom) - whichever is
@@ -48,7 +53,7 @@
 #include <string>
 #include <vector>
 
-#define STEPTREND_VERSION "1.1.0"
+#define STEPTREND_VERSION "1.2.0"
 
 namespace sth {
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREEN_D = 0x00178A42, C_RED_D = 0x00B03A3A;
@@ -121,7 +126,7 @@ bool StepTrend::identify(STState& S) {
         const stpp::Mkt& M = stpp::forMarket(S.mkt);
         S.E.reset(); S.E.rule = M.rule; S.E.rot = M.rot != 0; S.E.body = M.body != 0; S.raw.clear(); S.off = 0; S.lastIdx = -1; S.statusSteps = (size_t)-1;
     }
-    if (!stp::periodOk(S.spb)) { S.note = "the chart's period must divide the hour (1, 2, 3, 5, 10, 15, 30 minutes)"; return false; }
+    if (!stp::periodOk(S.spb)) { S.note = "the chart's period must divide the hour (1, 2, 3, 5, 10, 15, 30 or 60 minutes)"; return false; }
     S.note.clear();
     return true;
 }
@@ -234,7 +239,7 @@ extern "C" cppExtension* CreateExtension(void) {
     StepTrend* p = new StepTrend();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA Step Trend v1.1.0 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
-    p->setVersion("1.1.0");
+    p->setDescription("LRA Step Trend v1.2.0 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
+    p->setVersion("1.2.0");
     return p;
 }

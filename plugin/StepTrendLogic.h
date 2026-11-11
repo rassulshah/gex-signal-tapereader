@@ -1,6 +1,6 @@
 #ifndef LS_STEPTREND_LOGIC_H
 #define LS_STEPTREND_LOGIC_H
-// StepTrendLogic.h 1.1.0 (2026-11-11; 1.1.0 = the support lines end when tested or at the next step) -- lsStepTrend "Step Trend": every rule of the indicator, no SDK (unit-tested on Linux, the same
+// StepTrendLogic.h 1.2.0 (2026-11-11; 1.2.0 = the hourly rotation follows a 1-bar ZigZag; 1.1.0 = the support lines end when tested or at the next step) -- lsStepTrend "Step Trend": every rule of the indicator, no SDK (unit-tested on Linux, the same
 // walk as the mockup Rassul approved and as lra.step_trend_score scores every night).
 //
 // Rassul 2026-11-10: "a stepwise trend indicator. It looks at the hourly bar and the current zig zag rotation (going up or down), if the
@@ -15,6 +15,9 @@
 //   BREAKOUT  decided once, when the hour closes: rule 0 = it closed above the prior hour's high (up) / below its low (down).
 //   BODY      the breakout hour itself closes green for a step up, red for a step down (its close vs its own open).
 //   ROTATION  the hourly ZigZag (High / Low, 1 bar): a breakout counts only while it rotates the same way (or has not rotated yet).
+//             (1.2.0, Rassul 2026-11-11 07:55 CT "the green step didnt draw when the nq made a higher green bar") 1.0.0 / 1.1.0 turned the
+//             rotation only at a 3-hour pivot, so after one lower high it stayed "down" while the hours kept breaking higher (NQ 4:00 and
+//             5:00 AM skipped; 24 on NQ, 28 on ES). His ZigZag turns on ONE bar: higher high = up, lower low = down, outside hour = its colour.
 //   STEP      level = the prior hour's high (up) / low (down); it starts at the candle that made it (the wave top / bottom).
 //   SUPPORT   once the next step in the same direction exists, the old level runs on (thin, dashed) until it is TESTED (the first candle
 //             after the new step's start that trades back to it) or until ANOTHER STEP is made, up or down (it stops where that step
@@ -27,7 +30,7 @@
 #include <string>
 #include <vector>
 namespace stp {
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";
 static const int MAX_BARS = 5000, SLACK = 2000;      // the host feeds the last MAX_BARS closed candles and re-feeds when SLACK more have come
 
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };                         // t = candle START (wall seconds of the chart); prices in ticks
@@ -38,29 +41,25 @@ struct Seg { int i0 = 0; long long p0 = 0; int i1 = 0; long long p1 = 0; int dir
 struct Dot { int i = 0; long long px = 0; int dir = 0; };
 
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
-inline bool periodOk(int spb) { return spb > 0 && spb <= 1800 && 3600 % spb == 0; }
+inline bool periodOk(int spb) { return spb > 0 && spb <= 3600 && 3600 % spb == 0; }   // (1.2.0) + the 60-minute chart itself: each candle is an hour, the same steps
 
 struct Engine {
     int rule = 0; bool rot = true, body = true;
     std::vector<Bar> B; std::vector<Hour> H; std::vector<Step> S, skipped;    // S = the steps drawn (in order); skipped = breakouts against the rotation
     bool curClosed = false;                                                    // the newest hour in H has been closed (by a later candle or sealTo)
     int zdir = 0; std::vector<int> rotv;                                       // hourly ZigZag rotation after each closed hour (+1 up, -1 down, 0 none yet)
-    struct Piv { int i; long long px; int s; }; std::vector<Piv> P;            // its pivots (hour index, price, +1 high / -1 low)
 
     static bool tested(const Step& o, const Bar& b) { return o.dir > 0 ? b.l <= o.px : b.h >= o.px; }   // (1.1.0) price traded back to the level
-    void reset() { B.clear(); H.clear(); S.clear(); skipped.clear(); curClosed = false; zdir = 0; rotv.clear(); P.clear(); }
+    void reset() { B.clear(); H.clear(); S.clear(); skipped.clear(); curClosed = false; zdir = 0; rotv.clear(); }
 
     // the hour H.back() is complete: rotate the ZigZag, then decide the breakout (once)
     void closeHour() {
         if (H.empty() || curClosed) return;
         curClosed = true;
         const int k = (int)H.size() - 1, i = k - 1;
-        if (i >= 1) {
-            const bool isH = H[i].h > H[i - 1].h && H[i].h >= H[k].h, isL = H[i].l < H[i - 1].l && H[i].l <= H[k].l;
-            if (zdir >= 0 && isH && !(zdir == 0 && isL)) { if (zdir == 0) P.push_back({ 0, H[0].l, -1 }); P.push_back({ i, H[i].h, 1 }); zdir = -1; }
-            else if (zdir <= 0 && isL) { if (zdir == 0) P.push_back({ 0, H[0].h, 1 }); P.push_back({ i, H[i].l, -1 }); zdir = 1; }
-            else if (zdir > 0 && isL && !P.empty() && P.back().s < 0 && H[i].l < P.back().px) P.back() = { i, H[i].l, -1 };
-            else if (zdir < 0 && isH && !P.empty() && P.back().s > 0 && H[i].h > P.back().px) P.back() = { i, H[i].h, 1 };
+        if (i >= 0) {   // (1.2.0) the hourly ZigZag, High / Low, 1 bar: a higher high turns it up, a lower low turns it down, an outside hour goes by its own colour, an inside hour changes nothing
+            const bool hh = H[k].h > H[i].h, ll = H[k].l < H[i].l;
+            if (hh && !ll) zdir = 1; else if (ll && !hh) zdir = -1; else if (hh && ll) zdir = H[k].c > H[k].o ? 1 : H[k].c < H[k].o ? -1 : zdir;
         }
         rotv.push_back(zdir);
         if (k < 1) return;

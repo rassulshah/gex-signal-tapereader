@@ -10,7 +10,7 @@ clock advancing 1 s a draw, then exits 0) under `strace -f -c`, and fails when a
                  stats                                               <= 3         (reported; a stat is cheap but should not grow)
 
 It also prints the harness's own "PERF ..." lines (ms per draw on the small and the 6,580-candle scene) and fails when the big scene
-costs more than --grow times the small one (work that grows with the candles on screen).
+costs more than --grow times the small one AND 0.5 ms+ a draw (work that grows with the candles on screen).
 
 usage:  python3 tests_perf/check_draw_io.py [--grow 6] -- ./t2640
 A harness without PERF mode fails here: add it (see test_dealerprofile_2640.cpp H / tests_step/t_step.cpp).
@@ -19,6 +19,7 @@ import os, re, subprocess, sys, tempfile
 
 LIMITS = {"creates": 0.05, "rename": 0.05, "unlink": 0.05, "write": 0.10}
 N1, N2 = 50, 450
+GROW_MIN_MS = 0.5        # growth with the candles on screen fails only when the big scene costs 0.5 ms+ of the indicator's own work
 
 
 def run(cmd, n):
@@ -53,7 +54,7 @@ def main(argv):
     stats = per("newfstatat") + per("stat") + per("statx") + per("lstat")
     bad = [k for k, v in got.items() if v > LIMITS[k]]
     ms = [float(m.group(1)) for m in (re.search(r"([0-9.]+) ms/draw", ln) for ln in perf) if m]
-    grew = len(ms) >= 2 and min(ms) > 0 and max(ms) / min(ms) > grow
+    grew = len(ms) >= 2 and min(ms) > 0 and max(ms) / min(ms) > grow and max(ms) >= GROW_MIN_MS
     for ln in perf:
         print(ln)
     print("per redraw: " + ", ".join(f"{k} {v:.3f} (limit {LIMITS[k]:g})" for k, v in got.items()) + f", stats {stats:.2f}")

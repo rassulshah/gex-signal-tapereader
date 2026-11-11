@@ -1,4 +1,4 @@
-// t_step.cpp -- lsStepTrend 1.1.0 (1.1.0: the support line ends when TESTED or at the NEXT STEP - checked against the rule written out candle by candle): the logic and the plugin on the mock host, on REAL candles (fx_mockup.txt = the 7 chart days of the
+// t_step.cpp -- lsStepTrend 1.2.0 (1.2.0: the hourly rotation is a 1-bar ZigZag - the NQ 2026-11-11 4:00 / 5:00 AM steps; 1.1.0: the support line ends when TESTED or at the NEXT STEP - checked against the rule written out candle by candle): the logic and the plugin on the mock host, on REAL candles (fx_mockup.txt = the 7 chart days of the
 // mockup Rassul approved: ES Nov 10 day + evening, NQ / GC / CL Nov 9 and 10; the expected steps are written by the MOCKUP'S OWN code,
 // ref.js, for both rules with the rotation on and off = 28 cases).
 //   1 PARITY     stp::Engine gives exactly the mockup's steps (direction, level, hour, start candle, support end) in all 28 cases
@@ -47,7 +47,10 @@ static int ES_STEPS = 0;
 static void logicTests() {
     { const Data& d = DS[0]; stp::Engine E; for (const FB& b : d.b) E.addBar(tk(b, d.tick)); E.sealTo(d.b.back().t + 180); ES_STEPS = (int)E.S.size(); }
     int cases = 0, stepsSeen = 0, supSeen = 0, supEnded = 0, supCut = 0;
-    for (const Ref& r : RF) { const Data& d = DS[(size_t)r.d];
+    for (const Ref& r0 : RF) { Ref r = r0;   // (1.2.0) with the 1-bar rotation a breakout hour always rotates its own way under rule 0: the rotation-on cases equal the mockup's rotation-off steps
+        if (r0.rot == 1 && r0.rule == 0) { for (const Ref& x : RF) if (x.d == r0.d && x.rule == r0.rule && x.rot == 0) { r.s = x.s; r.nskip = 0; } }
+        if (r0.rot == 1 && r0.rule == 1) continue;   // rule B + rotation: no reference (not his rule)
+        const Data& d = DS[(size_t)r.d];
         stp::Engine E; E.rule = r.rule; E.rot = r.rot != 0; E.body = false;      // the mockup had no candle-colour rule (added 00:11)
         for (const FB& b : d.b) E.addBar(tk(b, d.tick));
         E.sealTo(d.b.back().t + 180);                                          // the mockup counts an hour that ends with the last candle on the chart
@@ -64,10 +67,10 @@ static void logicTests() {
         ++cases; stepsSeen += (int)E.S.size();
         CHECK(ok, "PARITY " + d.mkt + " data " + std::to_string(r.d) + " rule " + std::to_string(r.rule) + " rot " + std::to_string(r.rot) + ": engine " + std::to_string(E.S.size()) + " steps / " + std::to_string(E.skipped.size()) + " skipped, mockup " + std::to_string(r.s.size()) + " / " + std::to_string(r.nskip));
     }
-    CHECK(cases == 28 && stepsSeen > 100 && supSeen > 40 && supEnded > 30 && supCut > 20, "PARITY covered 28 cases (" + std::to_string(stepsSeen) + " steps, " + std::to_string(supSeen) + " support lines, " + std::to_string(supEnded) + " ended, " + std::to_string(supCut) + " with a later step)");
+    CHECK(cases == 21 && stepsSeen > 80 && supSeen > 30 && supEnded > 25 && supCut > 15, "PARITY covered 21 cases (" + std::to_string(stepsSeen) + " steps, " + std::to_string(supSeen) + " support lines, " + std::to_string(supEnded) + " ended, " + std::to_string(supCut) + " with a later step)");
     // BODY (Rassul 00:11): with the rule on, every step's hour closed its own way, and the steps are the mockup's minus the hours that did not
     { int dropped = 0, kept = 0; bool sub = true, col = true;
-      for (const Ref& r : RF) { if (r.rule != 0 || r.rot != 1) continue; const Data& d = DS[(size_t)r.d];
+      for (const Ref& r : RF) { if (r.rule != 0 || r.rot != 0) continue; const Data& d = DS[(size_t)r.d];   /* (1.2.0) the rotation-off reference: the 1-bar rotation never skips a rule-0 breakout */
           stp::Engine E; for (const FB& b : d.b) E.addBar(tk(b, d.tick)); E.sealTo(d.b.back().t + 180);
           std::map<long long, std::pair<double, double> > oc; for (const FB& b : d.b) { const long long k = stp::floorDiv(b.t, 3600); if (!oc.count(k)) oc[k].first = b.o; oc[k].second = b.c; }
           for (const stp::Step& q : E.S) { const std::pair<double, double>& h = oc[q.hour / 3600]; if (q.dir > 0 ? !(h.second > h.first) : !(h.second < h.first)) col = false; bool in = false; for (const RS& x : r.s) if (x.hour == q.hour && x.dir == q.dir) in = true; if (!in) sub = false; ++kept; }
@@ -108,12 +111,19 @@ static void logicTests() {
       for (int i = 0; i < 20; ++i) add(60, 44, 55);
       E.sealTo(9 * 3600); CHECK(E.S.size() == 1 && E.S[0].oi == 11 && E.S[0].px == 50, "TIE + GAP: the prior hour is the last hour that traded; the start is the last candle at the high");
       stp::Bar b; b.t = 8 * 3600; b.h = b.l = b.c = 1; CHECK(!E.addBar(b) && E.B.size() == 40, "ORDER: an out-of-order candle is refused"); }
-    // rotation: a breakout against the hourly ZigZag is not counted; with rot off it is
-    { for (int rot = 0; rot < 2; ++rot) { stp::Engine E; E.rot = rot != 0; long long t = 0; auto hour = [&](long long h, long long l, long long c) { for (int i = 0; i < 20; ++i) { stp::Bar b; b.t = t; b.o = c - 1; b.h = i == 10 ? h : std::min(h, c + 1); b.l = i == 5 ? l : std::max(l, c - 1); b.c = c; if (b.l > b.c) b.l = b.c; if (b.h < b.c) b.h = b.c; if (b.l > b.o) b.l = b.o; E.addBar(b); t += 180; } };
-        hour(100, 90, 95); hour(110, 96, 108); hour(120, 105, 118); hour(119, 112, 114); hour(125, 113, 124); E.sealTo(t);
-        // hours: up, up (breakout 1 above 100), up (breakout 2 above 110), an inside-low lower-high hour -> the ZigZag turns DOWN at the 120 high, then a close above 119 = breakout against the rotation
-        if (rot) CHECK(E.S.size() == 2 && E.skipped.size() == 1 && E.skipped[0].px == 119 && E.skipped[0].rotAt < 0, "ROTATION on: the breakout against the hourly ZigZag is not counted (" + std::to_string(E.S.size()) + " / " + std::to_string(E.skipped.size()) + ")");
-        else CHECK(E.S.size() == 3 && E.skipped.empty(), "ROTATION off: every breakout counts"); } }
+    // (1.2.0) ROTATION, 1-bar High / Low ZigZag: after a lower high the next higher-high hour turns it up again - the NQ 2026-11-11 case
+    { stp::Engine E; long long t = 0; auto hour = [&](long long o, long long h, long long l, long long c) { for (int i = 0; i < 20; ++i) { stp::Bar b; b.t = t; b.o = i == 0 ? o : c; b.c = c; b.h = i == 10 ? h : std::max(b.o, c); b.l = i == 5 ? l : std::min(b.o, c); E.addBar(b); t += 180; } };
+      hour(28237, 28243, 28178, 28240);   // 1:00
+      hour(28240, 28327, 28222, 28286);   // 2:00 closes above 28243: step
+      hour(28285, 28320, 28225, 28310);   // 3:00 a LOWER high (28320 < 28327), a higher low: inside-ish, no breakout
+      hour(28311, 28357, 28275, 28325);   // 4:00 closes above 28320, green: a step (1.1.0 skipped it: rotation "down")
+      hour(28325, 28390, 28308, 28365);   // 5:00 closes above 28357, green: a step
+      hour(28365, 28398, 28352, 28357); E.sealTo(t);
+      CHECK(E.S.size() == 3 && E.skipped.empty() && E.S[1].px == 28320 && E.S[2].px == 28357 && E.rotv.back() == 1, "ROTATION 1-bar: the NQ 4:00 and 5:00 AM hours are steps (" + std::to_string(E.S.size()) + " steps, " + std::to_string(E.skipped.size()) + " skipped)");
+      // an outside hour that closes red is rotating down: a rule-B up breakout on it is not counted with the rotation on
+      stp::Engine F; F.rule = 1; F.body = false; t = 0; auto hr = [&](long long o, long long h, long long l, long long c) { for (int i = 0; i < 20; ++i) { stp::Bar b; b.t = t; b.o = i == 0 ? o : c; b.c = c; b.h = i == 10 ? h : std::max(b.o, c); b.l = i == 5 ? l : std::min(b.o, c); F.addBar(b); t += 180; } };
+      hr(100, 105, 95, 98); hr(104, 110, 90, 99); F.sealTo(t);   // higher high + higher close than 98, but an outside hour that closed below its open
+      CHECK(F.S.empty() && F.skipped.size() == 1 && F.skipped[0].rotAt < 0, "ROTATION: an outside hour that closes red rotates down (rule B breakout not counted)"); }
     // 1.1.0 SUPPORT ENDS: (a) tested, (b) another step up, (c) a step down - and never runs on after any of them
     { auto mk = [](int variant) { stp::Engine E; E.rot = false; long long t = 0; auto hour = [&](long long o, long long h, long long l, long long c) { for (int i = 0; i < 20; ++i) { stp::Bar b; b.t = t; b.o = i == 0 ? o : c - 1; b.c = c; b.h = i == 10 ? h : c; b.l = i == 5 ? l : std::min(b.o, c); if (b.h < std::max(b.o, b.c)) b.h = std::max(b.o, b.c); E.addBar(b); t += 180; } };
           hour(95, 100, 94, 98);              // hour 0: high 100
@@ -139,7 +149,13 @@ static void logicTests() {
       const int n = (int)E.S.size(); int same = 0; for (int i = 0; i + 1 < n; ++i) same += E.S[(size_t)i].dir == E.S[(size_t)i + 1].dir;
       CHECK(n == ES_STEPS && n >= 4 && live == 1 && riser == n - 1 && flat == n - 1 && sup == same && (int)dots.size() == n && geo, "LAYOUT ES: " + std::to_string(n) + " steps = n-1 risers + n-1 flats + 1 live level + " + std::to_string(sup) + " support lines, a dot per step");
       for (size_t i = 0; i + 1 < E.S.size(); ++i) { bool found = false; for (const stp::Seg& s : g) if (s.kind == 0 && s.p0 == s.p1 && s.i0 == E.S[i].oi && s.i1 == E.S[i + 1].oi && s.p0 == E.S[i + 1].px) found = true; CHECK(found, "LAYOUT: the flat runs from top " + std::to_string(i) + " to the next top at the next level"); } }
-    CHECK(stp::periodOk(180) && stp::periodOk(60) && stp::periodOk(1800) && !stp::periodOk(420) && !stp::periodOk(3600) && !stp::periodOk(0) && !stp::periodOk(-1), "PERIOD: only periods that divide the hour");
+    CHECK(stp::periodOk(180) && stp::periodOk(60) && stp::periodOk(1800) && stp::periodOk(3600) && !stp::periodOk(420) && !stp::periodOk(7200) && !stp::periodOk(0) && !stp::periodOk(-1), "PERIOD: only periods that divide the hour, up to the 60-minute chart");
+    // (1.2.0) THE HOURLY CHART: the 3-minute candles made into 60-minute candles give the same steps (direction, level, hour), each starting at the hour candle that made the level
+    for (size_t di = 0; di < DS.size(); ++di) { const Data& d = DS[di]; stp::Engine A; for (const FB& b : d.b) A.addBar(tk(b, d.tick)); A.sealTo(d.b.back().t + 180);
+        std::vector<stp::Bar> HB; for (const FB& b : d.b) { const stp::Bar x = tk(b, d.tick); const long long hs = stp::floorDiv(x.t, 3600) * 3600; if (HB.empty() || HB.back().t != hs) { stp::Bar h = x; h.t = hs; HB.push_back(h); } else { stp::Bar& h = HB.back(); h.h = std::max(h.h, x.h); h.l = std::min(h.l, x.l); h.c = x.c; } }
+        stp::Engine Hh; for (const stp::Bar& h : HB) Hh.addBar(h); Hh.sealTo(d.b.back().t + 180);
+        bool ok = Hh.S.size() == A.S.size(); for (size_t k = 0; ok && k < A.S.size(); ++k) ok = Hh.S[k].dir == A.S[k].dir && Hh.S[k].px == A.S[k].px && Hh.S[k].hour == A.S[k].hour && HB[(size_t)Hh.S[k].oi].t == A.S[k].hour - 3600 * (A.S[k].hour - stp::floorDiv(A.B[(size_t)A.S[k].oi].t, 3600) * 3600) / 3600;
+        CHECK(ok && !A.S.empty(), "HOURLY CHART " + d.mkt + " " + std::to_string(di) + ": 60-minute candles give the 3-minute chart's steps (" + std::to_string(Hh.S.size()) + ")"); }
     CHECK(stp::floorDiv(-1, 3600) == -1 && stp::floorDiv(3599, 3600) == 0 && stp::floorDiv(3600, 3600) == 1, "floorDiv");
 }
 
@@ -218,7 +234,7 @@ static void hostTests() {
       mock::current = &hb; Sb = p->testState(); CHECK(Sb && Sb->mkt == "GC" && Sb->E.S.size() == Rb.S.size(), "SYMBOL CHANGE: the other chart is untouched");
       mock::current = &ha; p->destroy(); mock::current = &hb; p->destroy(); CHECK(ha.data == NULL && hb.data == NULL, "REMOVE both charts"); delete p; }
     // a period that does not divide the hour: nothing drawn, said in the status file; back to 3 minutes: works
-    { const Data& d = DS[0]; mock::Host h; mock::current = &h; h.tick = 0.25f; h.seconds = 420; h.root = "ES"; h.symbol = "ESZ6"; scale(h, d); load(h, d, d.b.size()); h.visFrom = 0; h.visTo = (int)d.b.size() - 1;
+    { const Data& d = DS[0]; mock::Host h; mock::current = &h; h.tick = 0.25f; h.seconds = 420; h.root = "ES";   /* 7 minutes does not divide the hour */ h.symbol = "ESZ6"; scale(h, d); load(h, d, d.b.size()); h.visFrom = 0; h.visTo = (int)d.b.size() - 1;
       Ind* p = make(); sth::testWall() += 100; p->calc(0); h.draws.clear(); p->draw(); STState* S = p->testState();
       CHECK(S && S->E.S.empty() && h.draws.empty() && !S->note.empty() && readAll(flex + "\\StepTrend\\ES-420.status.txt").find("note the chart's period must divide the hour") != std::string::npos, "PERIOD 7 min: nothing drawn, the reason is in the status file");
       h.seconds = 180; p->calc(0); S = p->testState(); h.draws.clear(); p->draw(); CHECK(S && (int)S->E.S.size() == ES_STEPS && !h.draws.empty() && S->note.empty(), "PERIOD back to 3 min: the steps are drawn");
