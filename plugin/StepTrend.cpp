@@ -1,5 +1,9 @@
 /********************************************************************************
- *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.4.5  (2026-11-11)
+ *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.5.0  (2026-11-11)
+ *
+ *  1.5.0 (Rassul 2026-11-11 19:32 CT "the 3m ltf is inconsistent with the 60m steps", 19:37 "go") the shorter periods (3-minute chart) draw
+ *  the 60-minute design: solid from step high to step high, the dashed test line at the broken level, T and B (stp::layoutLtf).
+ *  (was 1.4.5)
  *
  *  1.4.5 (Rassul 2026-11-11 19:33 CT "on the 60 min shouldn't the line go from the high of the bar before the hbo to the hbo bar hi", 19:34
  *  "i'll go with your recommendation" = flips only) hourly: the first step after a change of direction starts at the candle before the
@@ -87,7 +91,7 @@
 #include <string>
 #include <vector>
 
-#define STEPTREND_VERSION "1.4.5"
+#define STEPTREND_VERSION "1.5.0"
 
 namespace sth {
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREEN_D = 0x00178A42, C_RED_D = 0x00B03A3A;
@@ -236,7 +240,7 @@ int StepTrend::draw(void) {
         vs = std::max(vs, 0); ve = std::min(ve, (int)n - 1);
         if (ve < vs) return RTX_OK;
         std::vector<stp::Seg> segs; std::vector<stp::Dot> dots; std::vector<stp::Mark> marks;
-        if (S->E.hourly) stp::layoutHourly(S->E, S->lastIdx - S->off, segs, dots, marks); else stp::layout(S->E, S->lastIdx - S->off, segs, dots);
+        if (S->E.hourly) stp::layoutHourly(S->E, S->lastIdx - S->off, segs, dots, marks); else stp::layoutLtf(S->E, S->lastIdx - S->off, segs, dots, marks);   // (1.5.0) the 3-minute chart = the 60-minute design   // was stp::layout(S->E, S->lastIdx - S->off, segs, dots);
         const double tk = S->tick;
         for (size_t k = 0; k < segs.size(); ++k) {
             const stp::Seg& g = segs[k];
@@ -283,7 +287,7 @@ extern "C" cppExtension* CreateExtension(void) {
     StepTrend* p = new StepTrend();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA Step Trend v1.4.5 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
-    p->setVersion("1.4.5");
+    p->setDescription("LRA Step Trend v1.5.0 - hourly breakouts as connected steps from high to high (green up, red down); the broken level runs on thin and dashed as the test line until it is tested (T), broken by an hourly close (B) or the next step is made.");
+    p->setVersion("1.5.0");
     return p;
 }

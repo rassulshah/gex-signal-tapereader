@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 namespace stp {
-static const char* const VERSION = "1.4.5";   // (1.4.5) hourly: a flip's line starts at the candle before the step candle, at the broken level   // was "1.4.4";   // (1.4.4) host: B over the high of the breaking red candle (under the low of a breaking green candle)   // was "1.4.3";   // (1.4.3, 2026-11-11 Rassul 17:06 CT "the red line should be from the green candle low not its high"): when the trend flips, the new line starts at the OTHER end of the last step candle (a step down after step ups starts at that green candle's low; a step up after step downs at that red candle's high)   // was "1.4.2";   // (1.4.2) host: T / B 8 px off the wick   // was "1.4.1";   // (1.4.1) the B is drawn under the low of the breaking candle (host), red for a broken up-step   // was "1.4.0";   // (1.4.0, 2026-11-11 Rassul 16:59 CT "show B for Trend Break when the close is below the step up, like the last red candle"): B = the first candle that CLOSES below the newest step-up candle's low (above the high for a step down)   // was "1.3.3";   // (1.3.3, 2026-11-11 Rassul 16:56 CT "there is a rule that the low needs to be above to display T, lets make this close instead"): the test is judged by the CLOSE - T when the candle touches the level and closes at / above the step-up candle's low; a close below it ends the line with no T   // was "1.3.2";   // (1.3.2, 2026-11-11 Rassul 16:53 CT "the line goes up from the former step up and then across to the next step up"): the solid line rises AT the former step-up candle to the next step's high, then runs across to the next step-up candle   // was "1.3.1";   // (1.3.1, 2026-11-11 Rassul 16:47-16:51 CT, his sketch) the 60-minute chart draws TWO lines: the solid stairs from the high of one step-up candle across to the next step-up candle and up to its high; the dashed test line from the prior high across   // was "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
+static const char* const VERSION = "1.5.0";   // (1.5.0) the shorter periods draw the 60-minute design (stp::layoutLtf)   // was "1.4.5";   // (1.4.5) hourly: a flip's line starts at the candle before the step candle, at the broken level   // was "1.4.4";   // (1.4.4) host: B over the high of the breaking red candle (under the low of a breaking green candle)   // was "1.4.3";   // (1.4.3, 2026-11-11 Rassul 17:06 CT "the red line should be from the green candle low not its high"): when the trend flips, the new line starts at the OTHER end of the last step candle (a step down after step ups starts at that green candle's low; a step up after step downs at that red candle's high)   // was "1.4.2";   // (1.4.2) host: T / B 8 px off the wick   // was "1.4.1";   // (1.4.1) the B is drawn under the low of the breaking candle (host), red for a broken up-step   // was "1.4.0";   // (1.4.0, 2026-11-11 Rassul 16:59 CT "show B for Trend Break when the close is below the step up, like the last red candle"): B = the first candle that CLOSES below the newest step-up candle's low (above the high for a step down)   // was "1.3.3";   // (1.3.3, 2026-11-11 Rassul 16:56 CT "there is a rule that the low needs to be above to display T, lets make this close instead"): the test is judged by the CLOSE - T when the candle touches the level and closes at / above the step-up candle's low; a close below it ends the line with no T   // was "1.3.2";   // (1.3.2, 2026-11-11 Rassul 16:53 CT "the line goes up from the former step up and then across to the next step up"): the solid line rises AT the former step-up candle to the next step's high, then runs across to the next step-up candle   // was "1.3.1";   // (1.3.1, 2026-11-11 Rassul 16:47-16:51 CT, his sketch) the 60-minute chart draws TWO lines: the solid stairs from the high of one step-up candle across to the next step-up candle and up to its high; the dashed test line from the prior high across   // was "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
 static const int MAX_BARS = 5000, SLACK = 2000;      // the host feeds the last MAX_BARS closed candles and re-feeds when SLACK more have come
 
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };                         // t = candle START (wall seconds of the chart); prices in ticks
@@ -145,6 +145,42 @@ inline void layoutHourly(const Engine& E, int lastIdx, std::vector<Seg>& segs, s
         Dot d; d.i = q.bi; d.px = stepTop(q); d.dir = q.dir; dots.push_back(d);
         if (q.tI >= 0) { Mark m; m.i = q.tI; m.dir = q.dir; marks.push_back(m); }
         if (q.brI >= 0) { Mark m; m.i = q.brI; m.dir = q.dir; m.kind = 1; marks.push_back(m); } }
+}
+// (1.5.0, Rassul 2026-11-11 19:32 CT "the 3m ltf is inconsistent with the 60m steps" -> 19:37 "go") the SHORTER periods (his 3-minute chart) draw
+// the SAME design as the 60-minute chart: the closed hours of the chart's own candles are walked exactly as the hourly chart walks its
+// candles (the hourly Engine: same steps, tests by the hour's low + close, trend break by the hour's close), then placed on the candles:
+//   SOLID   up (down) at the candle that made the former step hour's high (low), from that high to the new step hour's high, then across to
+//           the candle that made it (the dot). A flip: at the candle that made the BROKEN high (low), from that level.
+//   DASHED  the test line at the broken level, from the candle that made it to the candle that first touched it in the hour that tested it
+//           (T under / over that candle), else to the last candle of the hour that closed through the step hour's low (high), else to the
+//           next step's candle, else the right edge.
+//   B       on the last candle of the hour whose close broke the newest step hour's low (high).
+// The forming hour is never used: everything appears when its hour closes and is not changed after.
+inline void layoutLtf(const Engine& E, int lastIdx, std::vector<Seg>& segs, std::vector<Dot>& dots, std::vector<Mark>& marks) {
+    segs.clear(); dots.clear(); marks.clear();
+    const int nh = (int)E.H.size() - (E.curClosed ? 0 : 1); if (nh < 2) return;
+    std::vector<int> st(E.H.size() + 1, 0); for (size_t j = 0; j < E.H.size(); ++j) st[j + 1] = st[j] + E.H[j].n;
+    Engine X; X.rule = E.rule; X.rot = E.rot; X.body = E.body; X.hourly = true;
+    for (int j = 0; j < nh; ++j) { const Hour& h = E.H[(size_t)j]; Bar b; b.t = h.k * 3600; b.o = h.o; b.h = h.h; b.l = h.l; b.c = h.c; X.addBar(b); }
+    X.sealTo((E.H[(size_t)nh - 1].k + 1) * 3600);
+    auto top = [&](int j, int dir) { return dir > 0 ? E.H[(size_t)j].hiI : E.H[(size_t)j].loI; };
+    auto lastOf = [&](int j) { return st[(size_t)j + 1] - 1; };
+    auto touch = [&](int j, const Step& q) { for (int i = st[(size_t)j]; i < st[(size_t)j + 1] && i < (int)E.B.size(); ++i) if (q.dir > 0 ? E.B[(size_t)i].l <= q.px : E.B[(size_t)i].h >= q.px) return i; return lastOf(j); };
+    const size_t n = X.S.size();
+    for (size_t i = 0; i < n; ++i) { const Step& q = X.S[i]; if (q.bi < 1) continue;
+        int e = lastIdx;
+        if (q.tI >= 0) e = touch(q.tI, q);
+        else if (q.endI >= 0) { e = lastOf(q.endI); for (size_t k = i + 1; k < n; ++k) if (X.S[k].bi == q.endI) { e = top(q.endI, X.S[k].dir); break; } }
+        const int a = top(q.bi - 1, q.dir);
+        if (e > a) { Seg s; s.i0 = a; s.p0 = q.px; s.i1 = e; s.p1 = q.px; s.dir = q.dir; s.kind = 2; segs.push_back(s); } }
+    for (size_t i = 0; i < n; ++i) { const Step& q = X.S[i]; if (q.bi < 0) continue;
+        if (i > 0 && X.S[i - 1].bi >= 0 && q.bi >= 1) { const Step& p = X.S[i - 1];
+            const bool flip = p.dir != q.dir; const int at = flip ? top(q.bi - 1, q.dir) : top(p.bi, p.dir); const long long from = flip ? q.px : stepTop(p);
+            Seg v; v.i0 = at; v.p0 = from; v.i1 = at; v.p1 = stepTop(q); v.dir = q.dir; v.kind = 0; segs.push_back(v);
+            Seg h; h.i0 = at; h.p0 = stepTop(q); h.i1 = top(q.bi, q.dir); h.p1 = stepTop(q); h.dir = q.dir; h.kind = 0; segs.push_back(h); }
+        Dot d; d.i = top(q.bi, q.dir); d.px = stepTop(q); d.dir = q.dir; dots.push_back(d);
+        if (q.tI >= 0) { Mark m; m.i = touch(q.tI, q); m.dir = q.dir; marks.push_back(m); }
+        if (q.brI >= 0) { Mark m; m.i = lastOf(q.brI); m.dir = q.dir; m.kind = 1; marks.push_back(m); } }
 }
 } // namespace stp
 #endif

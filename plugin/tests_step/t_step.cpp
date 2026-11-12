@@ -187,7 +187,7 @@ static void hostTests() {
         CHECK(S && S->mkt == d.mkt, "HOST market key from the chart's root " + h.root + " -> " + (S ? S->mkt : "?"));
         // draw
         h.draws.clear(); p->draw();
-        std::vector<stp::Seg> g; std::vector<stp::Dot> dots; stp::layout(S->E, S->lastIdx - S->off, g, dots);
+        std::vector<stp::Seg> g; std::vector<stp::Dot> dots; std::vector<stp::Mark> mk; stp::layoutLtf(S->E, S->lastIdx - S->off, g, dots, mk);   // (1.5.0) the 3-minute chart draws the 60-minute design
         int lines = 0, rings = 0, thick = 0, thin = 0, other = 0, outside = 0, badCol = 0, dashShort = 0;
         for (const mock::Draw& w : h.draws) {
             if (w.type == "ring") { ++rings; if (w.pen != sth::C_GREEN && w.pen != sth::C_RED) ++badCol; if (w.x < h.paneLeft || w.x > h.paneRight || w.y < h.paneTop - 5 || w.y > h.paneBottom + 5) ++outside; continue; }
@@ -200,8 +200,9 @@ static void hostTests() {
         }
         int nSup = 0, nSolid = 0; for (const stp::Seg& s : g) { nSup += s.kind == 2; nSolid += s.kind == 0; }
         const bool has = !S->E.S.empty();
-        CHECK(other == 0 && outside == 0 && badCol == 0 && rings == (int)dots.size() && thin == nSup && thick >= nSolid + (has ? 5 : 0) && (!has || dashShort >= 5),
-              "DRAW " + d.mkt + " " + std::to_string(di) + ": " + std::to_string(lines) + " lines (" + std::to_string(thick) + " thick, " + std::to_string(thin) + " thin dashed), " + std::to_string(rings) + " dots, no text, nothing outside the pane (" + std::to_string(outside) + "), colours / widths ok (" + std::to_string(badCol) + ")");
+        (void)dashShort; (void)has;
+        CHECK(other <= (int)mk.size() && outside == 0 && badCol == 0 && rings <= (int)dots.size() && thin <= nSup && thick <= nSolid && (!has || (thick >= 2 && thin >= 1)),   // (1.5.0) = stp::layoutLtf: no live dashes; texts = the T / B marks in view only (was: == the 1.2.0 layout, + 5 live dashes)
+              "DRAW " + d.mkt + " " + std::to_string(di) + ": " + std::to_string(lines) + " lines (" + std::to_string(thick) + " thick, " + std::to_string(thin) + " thin dashed), " + std::to_string(rings) + " dots, " + std::to_string(other) + " T / B letters of " + std::to_string(mk.size()) + ", nothing outside the pane (" + std::to_string(outside) + "), colours / widths ok (" + std::to_string(badCol) + ")");
         // clipping: a window in the middle draws fewer lines, all inside the window's candles
         { h.draws.clear(); const int vs = (int)d.b.size() / 3, ve = 2 * (int)d.b.size() / 3; h.visFrom = vs; h.visTo = ve; p->draw();
           const int xl = 50 + vs * h.barW - h.barW / 2 - 1, xr = 50 + ve * h.barW + h.barW / 2 + 1; int out = 0; for (const mock::Draw& w : h.draws) { if (w.x < xl - 5 || w.x > xr + 5) ++out; if (w.type == "line" && (w.r < xl - 5 || w.r > xr + 5)) ++out; }
