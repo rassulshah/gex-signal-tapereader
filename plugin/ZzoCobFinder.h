@@ -67,7 +67,7 @@
 //   SR in the pane and on the price chart):
 //   CB RANK = how many of the up bars straight before the Cob bar it beats on range, or on volume (the larger of the two; capped at 150).
 //     The Cob bar is now the first of the wave's first two up bars (within 4 bars of the origin, low under the origin bar's high) that
-//     passes the 1.5x rule OR has a rank of 35+. Drawn "CB", "CB35" (rank 35-98) or "CB99" (99+).
+//     has a rank of 35+ (1.5.1: the rank alone; the 1.5x rule of 1.4.0 no longer qualifies). Drawn "CB35" (rank 35-98) or "CB99" (99+).
 //     MEASURED (18,177 waves near the extreme): rank 99+ -> 18.2% become a Cob, 35-98 -> 14%, under 10 -> 5.5%. Among Cobs it does not
 //     help (rank 35+: held 63%, reached 1.33 51% vs 66% / 59%) - a label, never a quality point.
 //   SR = the STOP RUN bar of a Cob / Cob2 that swept a key level: the first bar of the wave INTO the origin that traded through the
@@ -84,8 +84,8 @@
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.7.2";   // (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
-static const char* const VERSION = "1.5.0";         // the finder rule (1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
+static const char* const COMBO_VERSION = "2.7.3";   // (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const VERSION = "1.5.1";         // the finder rule (1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
 static const double MAX_RETR = 0.46;                 // (1.2.0) no longer a Cob requirement: beyond it a Cob is "deep" (its own Hold rate); still the Cob2 limit
@@ -237,7 +237,7 @@ struct Finder {
         return (10 * dip < 3 * leg) + (hec >= Q_HEC) + (above >= Q_ABOVE) + (first >= Q_FIRST) + (2 * leg >= sum) + (best >= Q_RUN);
     }
     // (1.5.0) how many same-colour bars straight before bar j it beats on range, or on volume (the larger; capped at CB_RANK_CAP)
-    static const int CB_RANK_CAP = 150;
+    static const int CB_RANK_CAP = 150, CB_MIN_RANK = 35;
     int cbRankOf(int d, int j) const {
         const FBar& b = F[(size_t)j]; const long long r = b.h - b.l; int nr = 0, nv = 0; bool openR = true, openV = true; int seen = 0;
         for (int i = j - 1; i >= 0 && seen < CB_RANK_CAP && (openR || openV); --i) {
@@ -252,15 +252,14 @@ struct Finder {
     int cobBar(int d, int io, int e, int* rank = nullptr) const {
         if (rank) *rank = 0;
         if (io < 10 || e <= io || e >= (int)F.size()) return -1;
-        const double atr = F[(size_t)io - 1].atr; std::vector<long long> vv; for (int i = std::max(0, io - 20); i < io; ++i) vv.push_back(F[(size_t)i].v);
-        std::sort(vv.begin(), vv.end()); const size_t n = vv.size(); const double mv = n % 2 ? (double)vv[n / 2] : 0.5 * (double)(vv[n / 2 - 1] + vv[n / 2]);
-        if (!(atr > 0) || !(mv > 0)) return -1;
         const long long ph = d > 0 ? F[(size_t)io].h : -F[(size_t)io].l; int greens = 0;
         for (int i = io + 1; i <= e && i <= io + 4 && greens < 2; ++i) {
             const FBar& b = F[(size_t)i]; if ((long long)d * (b.c - b.o) <= 0) continue;
             ++greens; const long long lo = d > 0 ? b.l : -b.h; if (!(lo < ph)) continue;
             const int rk = cbRankOf(d, i);
-            if ((double)(b.h - b.l) >= 1.5 * atr || (double)b.v >= 1.5 * mv || rk >= 35) { if (rank) *rank = rk; return i; }
+            // (1.5.1, Rassul 2026-11-12 13:04 "it really should be the biggest green bar in at least 35 green bars to even qualify") the rank
+            // alone decides: the biggest (range) or the heaviest (volume) of the 35+ up bars before it. The 1.5x rule no longer qualifies.
+            if (rk >= CB_MIN_RANK) { if (rank) *rank = rk; return i; }
         }
         return -1;
     }
