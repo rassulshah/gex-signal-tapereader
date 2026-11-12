@@ -29,7 +29,7 @@ int main() {
 #endif
     }
 #ifndef OLD
-    CHECK(std::string(stp::VERSION) == "1.5.0", "version 1.5.0");
+    CHECK(std::string(stp::VERSION) == "1.5.1", "version 1.5.1");
     const std::vector<stp::Bar> H = load("es_60m.csv"); CHECK(H.size() > 300, "hourly bars loaded: " + std::to_string(H.size()));
     stp::Engine E; E.hourly = true; for (const stp::Bar& b : H) E.addBar(b);
     std::vector<stp::Seg> s; std::vector<stp::Dot> d; std::vector<stp::Mark> m; stp::layoutHourly(E, (int)H.size() - 1, s, d, m);
@@ -67,7 +67,9 @@ int main() {
       CHECK(rp == 0, "[4] no repaint: steps and decided tests are the same from any earlier point"); }
     {   // ---- (1.5.0, Rassul 2026-11-11 19:32 CT "the 3m ltf is inconsistent with the 60m steps") the 3-minute chart = the 60-minute design ----
         stp::Engine E3; for (const stp::Bar& b : M) E3.addBar(b);
-        std::vector<stp::Seg> s3; std::vector<stp::Dot> d3; std::vector<stp::Mark> m3; const int last3 = (int)M.size() - 1; stp::layoutLtf(E3, last3, s3, d3, m3);
+        std::vector<stp::Seg> s3; std::vector<stp::Dot> d3; std::vector<stp::Mark> m3; const int last3 = (int)M.size() - 1; stp::layoutLtf(E3, last3, s3, d3, m3, true);
+        { std::vector<stp::Seg> sx; std::vector<stp::Dot> dx; std::vector<stp::Mark> mx; stp::layoutLtf(E3, last3, sx, dx, mx); bool eq = sx.size() == s3.size() && dx.size() == d3.size(); for (size_t i = 0; eq && i < sx.size(); ++i) eq = sx[i].i0 == s3[i].i0 && sx[i].i1 == s3[i].i1 && sx[i].p0 == s3[i].p0 && sx[i].p1 == s3[i].p1;
+          CHECK(mx.empty() && eq && !m3.empty(), "[L0] (1.5.1) as drawn: NO T / B letters on the 3-minute chart, the lines exactly the same (" + std::to_string(m3.size()) + " letters left out)"); }
         const int nh = (int)E3.H.size() - (E3.curClosed ? 0 : 1);
         stp::Engine EH; EH.hourly = true; std::vector<int> st(E3.H.size() + 1, 0); for (size_t j = 0; j < E3.H.size(); ++j) st[j + 1] = st[j] + E3.H[j].n;
         for (int j = 0; j < nh; ++j) { const stp::Hour& h = E3.H[(size_t)j]; stp::Bar b; b.t = h.k * 3600; b.o = h.o; b.h = h.h; b.l = h.l; b.c = h.c; EH.addBar(b); }
@@ -90,15 +92,15 @@ int main() {
               else if (floorDivT(b.t + 180) == floorDivT(b.t)) ++bad; }   // a B sits on the LAST candle of its hour
           CHECK(bad == 0 && seen > 0, "[L7] each T is on the candle that touched its test line (the line ends there); each B on the last candle of its hour (" + std::to_string(bad) + " bad)"); }
         {   // nothing decided changes: the layout of the first 3,000 candles is the start of the full layout (dots, marks); a forming hour adds nothing
-            stp::Engine P; for (int i = 0; i < 3000; ++i) P.addBar(M[(size_t)i]); std::vector<stp::Seg> sp; std::vector<stp::Dot> dp; std::vector<stp::Mark> mp; stp::layoutLtf(P, 2999, sp, dp, mp);
+            stp::Engine P; for (int i = 0; i < 3000; ++i) P.addBar(M[(size_t)i]); std::vector<stp::Seg> sp; std::vector<stp::Dot> dp; std::vector<stp::Mark> mp; stp::layoutLtf(P, 2999, sp, dp, mp, true);
             bool ok = dp.size() <= d3.size() && !dp.empty(); for (size_t i = 0; ok && i < dp.size(); ++i) ok = dp[i].i == d3[i].i && dp[i].px == d3[i].px;
             int miss = 0; for (const stp::Mark& k : mp) { bool f = false; for (const stp::Mark& q : m3) if (q.i == k.i && q.kind == k.kind && q.dir == k.dir) f = true; if (!f) ++miss; }
             CHECK(ok && miss == 0, "[L8] no repaint: what 3,000 candles drew is still drawn, unchanged, with all 6,000 (" + std::to_string(dp.size()) + " dots, " + std::to_string(mp.size()) + " marks, " + std::to_string(miss) + " changed)");
             int k = 3000; const long long hr = floorDivT(M[2999].t); while (k < (int)M.size() && floorDivT(M[(size_t)k].t) == hr) { P.addBar(M[(size_t)k]); ++k; }   // finish hour A
             const long long hb = floorDivT(M[(size_t)k].t); P.addBar(M[(size_t)k]); ++k;   // 1 candle of hour B: A is closed, B is forming
-            std::vector<stp::Seg> s1; std::vector<stp::Dot> d1; std::vector<stp::Mark> m1; stp::layoutLtf(P, k - 1, s1, d1, m1);
+            std::vector<stp::Seg> s1; std::vector<stp::Dot> d1; std::vector<stp::Mark> m1; stp::layoutLtf(P, k - 1, s1, d1, m1, true);
             int cnt = 1; while (k + 1 < (int)M.size() && floorDivT(M[(size_t)k + 1].t) == hb) { P.addBar(M[(size_t)k]); ++k; ++cnt; }   // ... all but the last candle of hour B
-            std::vector<stp::Seg> s2; std::vector<stp::Dot> d2; std::vector<stp::Mark> m2; stp::layoutLtf(P, k - 1, s2, d2, m2);
+            std::vector<stp::Seg> s2; std::vector<stp::Dot> d2; std::vector<stp::Mark> m2; stp::layoutLtf(P, k - 1, s2, d2, m2, true);
             bool eq = d1.size() == d2.size() && m1.size() == m2.size(); for (size_t i = 0; eq && i < d1.size(); ++i) eq = d1[i].i == d2[i].i && d1[i].px == d2[i].px; for (size_t i = 0; eq && i < m1.size(); ++i) eq = m1[i].i == m2[i].i && m1[i].kind == m2[i].kind;
             CHECK(cnt >= 3 && eq, "[L9] the candles of a FORMING hour change no dot and no mark (" + std::to_string(cnt) + " candles into the hour)"); }
     }

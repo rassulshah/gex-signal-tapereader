@@ -1,5 +1,9 @@
 /********************************************************************************
- *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.5.0  (2026-11-11)
+ *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.5.1  (2026-11-11)
+ *
+ *  1.5.1 (Rassul 2026-11-11 19:41 CT "you dont need to have the signals like b or T, since 3min ltf already has pb and its variants")
+ *  the shorter periods draw the lines only: no T / B letters (they stay on the 60-minute chart).
+ *  (was 1.5.0)
  *
  *  1.5.0 (Rassul 2026-11-11 19:32 CT "the 3m ltf is inconsistent with the 60m steps", 19:37 "go") the shorter periods (3-minute chart) draw
  *  the 60-minute design: solid from step high to step high, the dashed test line at the broken level, T and B (stp::layoutLtf).
@@ -91,7 +95,7 @@
 #include <string>
 #include <vector>
 
-#define STEPTREND_VERSION "1.5.0"
+#define STEPTREND_VERSION "1.5.1"
 
 namespace sth {
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREEN_D = 0x00178A42, C_RED_D = 0x00B03A3A;
@@ -287,7 +291,7 @@ extern "C" cppExtension* CreateExtension(void) {
     StepTrend* p = new StepTrend();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA Step Trend v1.5.0 - hourly breakouts as connected steps from high to high (green up, red down); the broken level runs on thin and dashed as the test line until it is tested (T), broken by an hourly close (B) or the next step is made.");
-    p->setVersion("1.5.0");
+    p->setDescription("LRA Step Trend v1.5.1 - hourly breakouts as connected steps from high to high (green up, red down); the broken level runs on thin and dashed as the test line until it is tested, broken by an hourly close or the next step is made (T / B letters on the 60-minute chart only).");
+    p->setVersion("1.5.1");
     return p;
 }
