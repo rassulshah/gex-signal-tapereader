@@ -101,7 +101,8 @@ call :one ZzoZigZag lsZzoZigZag ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h O
 REM (2026-11-02 22:40 CT, Rassul "use delta as default ... add the cmx and cob tags for volume") lsZzoVolume 1.0.0 "ZZO Volume": ZzoDelta.cpp in the volume view (Weis Wave + Ab? / Cmx / CoB); no settings
 call :one ZzoVolume lsZzoVolume ZzoDelta.cpp ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h
 REM (2026-11-03 08:49 CT, Rassul "build" - ZZO Combo Mockup v19) lsZzoCombo 2.0.0 "ZZO Combo": volume ramps + count + Cmx / AR / ST, CoB / weak, Ab (heavy extreme); own pane; no settings
-call :one ZzoCombo lsZzoCombo ZzoComboView.h ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h
+REM (2026-11-12 09:02 CT, Rassul "go") lsZzoCombo 2.3.0 the CoB finder: ZzoCobFinder.h (Cob / Lvp tags) + MarketKey.h hashed
+call :one ZzoCombo lsZzoCombo ZzoComboView.h ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h ZzoCobFinder.h MarketKey.h
 REM (2026-11-01 22:24 CT) lsBigPrint 1.0.0 "Big Print": one pane - biggest ask / bid print in N bars, V in N, BGB / BRB; replaces his BV_Since / BRB / BGB panes; no settings
 call :one BigPrint lsBigPrint BigPrintLogic.h HostSlot.h SettingsGuard.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
