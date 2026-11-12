@@ -1,6 +1,8 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.8.0  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.8.1  (2026-11-12)
  *
+ *  2.8.1 (Rassul 2026-11-12 16:18 "For quality give me a percentage instead"): the box row "Q / Rng" shows the score as a percentage of
+ *  its 6 points (4 of 6 = "67%").
  *  2.8.0 (Rassul 2026-11-12 15:21 "I want it now. Build all"; 15:32 "I wanted to call this indicator Cob Reader like the reversal reader": the
  *  pane title is "Cob Reader 2.8.0"; the extension keeps its name lsZzoCombo so the charts keep it): the day range used at the Cob (RTH range so far / the median RTH range of
  *  the last 10 sessions) - read box row "Q / Rng" ("4/6 / 0.9") and Hold moved by it (-12 .. +16 points, ZzoCobFinder.h HOLD_RNG).
@@ -391,7 +393,7 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #endif
-    p->setDescription("LRA Cob Reader v2.8.0 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.8.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Cob Reader v2.8.1 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.8.1");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

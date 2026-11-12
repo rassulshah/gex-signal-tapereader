@@ -49,7 +49,7 @@ inline std::vector<std::pair<std::string, std::string>> readRows(const zcf::Read
     char b[48];
     r.push_back({ R.kind == 2 ? "Cob2" : "Cob", std::string(R.dir > 0 ? "Up " : "Dn ") + clock12(R.tCf) });
     r.push_back({ "Lvl", lvShort(R.lv, R.dir) });
-    if (R.q < 0) std::snprintf(b, sizeof b, "-"); else std::snprintf(b, sizeof b, "%d/%d", R.q, zcf::Q_MAX);
+    if (R.q < 0) std::snprintf(b, sizeof b, "-"); else std::snprintf(b, sizeof b, "%d%%", (100 * R.q + zcf::Q_MAX / 2) / zcf::Q_MAX);   // (2.8.1) quality as a percentage of its 6 points
     { char g[24]; if (R.rng < 0) std::snprintf(g, sizeof g, "-"); else std::snprintf(g, sizeof g, "%d.%d", R.rng / 100, (R.rng % 100) / 10);   // (2.8.0) day range used, in ADRs
       r.push_back({ "Q / Rng", std::string(b) + " / " + g }); }
     r.push_back({ "Lvp / Hr", std::string(R.lvpSt == 1 ? "yes" : R.lvpSt == 2 ? "no" : "wait") + " / " + (R.hr ? "yes" : "no") });
