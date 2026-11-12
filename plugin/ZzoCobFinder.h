@@ -9,7 +9,7 @@
 //   1. RTH: the wave's origin bar and its completing bar are RTH bars of the same session (svl::rthOf hours of the market).
 //   2. Near the extreme: the origin low is at or below the HIGH of the bar that made the RTH low so far (his LOD-bar rule; the RTH low
 //      itself qualifies).
-//   3. Key level first: the origin went below a key low (ONL, AsiaLO, LonLO, PhrL, PFL, PDL), the wave came back over it and the completing
+//   3. Key level first: the origin went below a key low (ONL, AsiaLO, LonLO, PhrL, PFL, PDL) or the prior day's POC / VAH / VAL, the wave came back over it and the completing
 //      bar CLOSED back above it. (PDL = the prior session's RTH low.)
 //   4. A strong wave: ZZO count >= 10 (the pane's own count) and the completing bar has given back <= 0.46 of the wave. It does NOT have
 //      to take out the prior pivot (Rassul 09:07 "it doesnt necessarily need to be the wave that breaks the downtrend, it only
@@ -20,31 +20,59 @@
 //   against 66-85% for those passing both. On ES / NQ the two counts are the same number.
 //   Lvp: among the first 3 pullback waves after a Cob that stay inside the Cob wave (none below its origin, no wave above its top), the
 //   first with <= 1/3 of the Cob wave's volume; tagged on that pullback wave when it completes.
-// MEASURED (lra study, 3-min bars 2025-04-28 .. 2026-11-11, 7 markets, ~2,700 market-sessions): 0.39 Cobs / session, the origin held to
-//   the RTH close 70% (thirds 72 / 70 / 69), reached the 1.33 extension before a close beyond the origin 61%; with an Lvp 78% / 68%,
-//   without one 49% / 48%; no key level 66% / 59%;
+// MEASURED (lra study, 3-min bars 2025-04-28 .. 2026-11-11, 7 markets, ~2,700 market-sessions): 0.44 Cobs / session, the origin held to
+//   the RTH close 71% (thirds 73 / 70 / 69), reached the 1.33 extension before a close beyond the origin 62%; with an Lvp 79% / 68%,
+//   without one 49% / 49%; no key level 63% / 56%; Cobs that qualify ONLY on DPoc / VAH / VAL 76% / 67% (131);
 //   his RTL Cob signal on the same bars 53% / 54%. About break-even after costs at the completing bar's close: a read, not an entry.
 // Levels here are the finder's own (bars only): overnight = bar END in (17:00, RTH open], Asia (18:00, 01:00], London (02:00,
 //   min(07:30, RTH open)], prior hour (open - 60 min, open], prior full session, prior session's RTH. The prior week does not qualify (56% reached 1.33).
 #pragma once
 #include "ZzoDeltaLogic.h"
 #include <climits>
+#include <cmath>
 #include <map>
 #include <string>
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.3.0";   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
-static const char* const VERSION = "1.0.0";         // the finder rule
+static const char* const COMBO_VERSION = "2.3.1";   // (2.3.1) + DPoc / VAH / VAL as key levels   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const VERSION = "1.1.0";         // the finder rule (1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
 static const double MAX_RETR = 0.46;                 // given back at the completing bar
 static const int LVP_WAVES = 3;                      // pullback waves that can carry the Lvp
-static const int NLV = 6;
-static const char* const LV_HI[NLV] = { "ONH", "AsiaHI", "LonHI", "PhrH", "PFH", "PDH" };
-static const char* const LV_LO[NLV] = { "ONL", "AsiaLO", "LonLO", "PhrL", "PFL", "PDL" };
+static const int NLV = 9;                              // 0..5 = a high / low pair; 6..8 = one price, swept from either side
+static const char* const LV_HI[NLV] = { "ONH", "AsiaHI", "LonHI", "PhrH", "PFH", "PDH", "DPoc", "VAH", "VAL" };
+static const char* const LV_LO[NLV] = { "ONL", "AsiaLO", "LonLO", "PhrL", "PFL", "PDL", "DPoc", "VAH", "VAL" };
 
 struct FBar { long long t = 0, h = 0, l = 0, c = 0, sess = 0; bool rth = false; };
+// (1.1.0, Rassul 2026-11-12 09:32 "Add prior day poc vah Val also") the prior FULL session's volume profile, as KeyLevelsLogic.h profileOf
+// (1-tick rows; POC = the biggest row, a tie to the row nearest the middle then the lower; 70% value area by the CBOT two-row rule) -
+// but built from BARS (each bar's volume spread evenly over its ticks), the only data the 400-session test had; it can sit a few
+// ticks from the VAP-built DPoc / VAH / VAL lines of lsKeyLevels.
+struct VA { bool ok = false; long long poc = 0, vah = 0, val = 0; };
+inline VA profileOf(const std::map<long long, double>& rows, double vaPct = 0.70) {
+    VA P; std::vector<long long> key; std::vector<double> vol; double tot = 0;
+    for (const auto& kv : rows) if (kv.second > 0) { key.push_back(kv.first); vol.push_back(kv.second); tot += kv.second; }
+    if (key.empty()) return P;
+    const double mid = 0.5 * ((double)key.front() + (double)key.back()); size_t pi = 0;
+    for (size_t i = 1; i < vol.size(); ++i) {
+        if (vol[i] > vol[pi] + 1e-9) pi = i;
+        else if (std::fabs(vol[i] - vol[pi]) <= 1e-9 && std::fabs((double)key[i] - mid) < std::fabs((double)key[pi] - mid) - 1e-9) pi = i;
+    }
+    size_t lo = pi, hi = pi; double cum = vol[pi]; const double need = vaPct * tot;
+    while (cum + 1e-9 < need && (lo > 0 || hi + 1 < vol.size())) {
+        double up = 0, dn = 0; size_t nu = 0, nd = 0;
+        for (size_t j = hi + 1; j < vol.size() && nu < 2; ++j, ++nu) up += vol[j];
+        for (size_t j = lo; j > 0 && nd < 2; --j, ++nd) dn += vol[j - 1];
+        if (nu == 0) { lo -= nd; cum += dn; continue; }
+        if (nd == 0) { hi += nu; cum += up; continue; }
+        if (up > dn + 1e-9) { hi += nu; cum += up; }
+        else if (dn > up + 1e-9) { lo -= nd; cum += dn; }
+        else { hi += nu; lo -= nd; cum += up + dn; }
+    }
+    P.poc = key[pi]; P.vah = key[hi]; P.val = key[lo]; P.ok = true; return P;
+}
 struct HL { bool any = false; long long h = 0, l = 0; void add(long long hi, long long lo) { if (!any || hi > h) h = hi; if (!any || lo < l) l = lo; any = true; } };
 // one decision, keyed by the wave it sits on (its pivot bar's END time and its direction)
 struct Tag { int cob = 0;            // +1 / -1 = a Cob on this wave
@@ -64,6 +92,8 @@ struct Finder {
     zzd::Engine M;                                         // the same walk with the MARKET's session hours (its count only)
     bool haveSess = false; long long curSess = 0;
     HL on, as, lon, phr, full, rth, prevFull, prevRth;
+    std::map<long long, double> prof; VA prevVA;           // this session's bar-spread profile; the prior session's POC / VAH / VAL
+    static const long long MAX_BAR_TICKS = 20000;          // a bar wider than this (bad data) is not spread
     bool rthAny = false; long long rLo = 0, rHi = 0, rLoBarH = 0, rHiBarL = 0;   // RTH extremes so far; the high of the LOD bar, the low of the HOD bar
     std::map<long long, Tag> tags;
     struct Act { long long key = 0, origin = 0, top = 0, vol = 0, sess = 0; int dir = 0, n = 0; };
@@ -71,7 +101,7 @@ struct Finder {
     std::vector<std::string> out;                          // record lines not yet taken by the host
 
     static long long key(long long tWave, int dir) { return tWave * 2 + (dir > 0 ? 1 : 0); }
-    void reset() { M.reset(); F.clear(); haveSess = false; on = as = lon = phr = full = rth = prevFull = prevRth = HL(); rthAny = false; tags.clear(); act.clear(); out.clear(); }
+    void reset() { M.reset(); F.clear(); haveSess = false; on = as = lon = phr = full = rth = prevFull = prevRth = HL(); prof.clear(); prevVA = VA(); rthAny = false; tags.clear(); act.clear(); out.clear(); }
     bool setMarket(const std::string& root, int spb = 180) { const std::string m = mkey::norm(root); ok = svl::rthOf(m.c_str(), openMin, closeMin);
         M.revBars = zzd::COMBO_REV_BARS; M.setMarket(m, spb); return ok; }
     // the trading session of a bar END stamp (local secs): bars after 17:00 belong to the next day
@@ -83,10 +113,11 @@ struct Finder {
         FBar b; b.t = t; b.h = h; b.l = l; b.c = c; b.sess = sessOf(t);
         const long long days = zzd::floorDiv(t, 86400); const int mn = (int)((t - days * 86400) / 60);
         if (!haveSess || b.sess != curSess) {
-            if (haveSess) { prevFull = full; prevRth = rth; }
-            haveSess = true; curSess = b.sess; on = as = lon = phr = full = rth = HL(); rthAny = false; act.clear();
+            if (haveSess) { prevFull = full; prevRth = rth; prevVA = profileOf(prof); }
+            haveSess = true; curSess = b.sess; on = as = lon = phr = full = rth = HL(); prof.clear(); rthAny = false; act.clear();
         }
         full.add(h, l);
+        if (eb.vol > 0 && h >= l && h - l < MAX_BAR_TICKS) { const double v = (double)eb.vol / (double)(h - l + 1); for (long long p = l; p <= h; ++p) prof[p] += v; }
         if (ok) {
             if (mn > 1020 || mn <= openMin) on.add(h, l);
             if (mn > 1080 || mn <= 60) as.add(h, l);
@@ -138,10 +169,10 @@ struct Finder {
         const bool bo = nW >= 3 && (long long)d * (top - W[nW - 3].ext) > 0;
         const double retr = (double)((long long)d * (top - c0)) / (double)leg;
         if (!(retr <= MAX_RETR)) return;
-        const HL* L[NLV] = { &on, &as, &lon, &phr, &prevFull, &prevRth }; int mask = 0;
+        const HL* L[6] = { &on, &as, &lon, &phr, &prevFull, &prevRth }; const long long V[3] = { prevVA.poc, prevVA.vah, prevVA.val }; int mask = 0;
         for (int i = 0; i < NLV; ++i) {
-            if (!L[i]->any) continue;
-            const long long p = d > 0 ? L[i]->l : L[i]->h;
+            if (i < 6 ? !L[i]->any : !prevVA.ok) continue;
+            const long long p = i < 6 ? (d > 0 ? L[i]->l : L[i]->h) : V[i - 6];
             if ((long long)d * (p - origin) > 0 && (long long)d * (top - p) >= 0 && (long long)d * (c0 - p) > 0) mask |= 1 << i;
         }
         int cnt = w.cntCap ? zzd::CNT_CAP : w.cnt; const int cntPane = cnt; int cntMkt = -1;

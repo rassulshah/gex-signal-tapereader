@@ -89,7 +89,7 @@ int main() {
         const zcf::Tag* t = R.F.find(T(1, 8, 42), 1);
         CHECK(t && t->cob == 1 && t->cnt == 11 && t->atExt && t->origin == 4915 && t->top == 4960 && t->close == 4945, "bullish Cob");
         CHECK(t && zcf::lvText(t->lv, 1) == "ONL/LonLO/PhrL", "the levels swept and closed back over");
-        CHECK(R.F.out.size() == 1 && R.F.out[0].rfind("C|1.0.0|", 0) == 0 && R.F.out[0].find("|UP|4915|4960|4945|ONL/LonLO/PhrL|11|0.33|at|bo|12|11") != std::string::npos, "the record line");
+        CHECK(R.F.out.size() == 1 && R.F.out[0].rfind("C|1.1.0|", 0) == 0 && R.F.out[0].find("|UP|4915|4960|4945|ONL/LonLO/PhrL|11|0.33|at|bo|12|11") != std::string::npos, "the record line");
         CHECK(R.F.act.size() == 1, "open for its Lvp");
     }
     auto none = [&](const char* what, std::function<void(Rig&)> f, int wantWatch) { Rig R; base(R); f(R); const zcf::Tag* t = R.F.find(T(1, 8, 42), 1);
@@ -120,6 +120,25 @@ int main() {
         R.judge(15, 15); const zcf::Tag* t = R.F.find(T(1, 8, 42), -1);
         CHECK(t && t->cob == -1 && zcf::lvText(t->lv, -1) == "ONH/LonHI/PhrH" && t->atExt, "bearish Cob"); CHECK(R.F.out.size() == 1 && R.F.out[0].find("|DN|4985|4940|4955|") != std::string::npos, "bearish record");
     }
+    // ---- 2b. (1.1.0) the prior full session's POC / VAH / VAL
+    {   std::map<long long, double> r; for (long long p = 100; p <= 110; ++p) r[p] = 10; r[104] = 50; r[105] = 40; r[103] = 30;
+        const zcf::VA a = zcf::profileOf(r); CHECK(a.ok && a.poc == 104, "POC = the biggest row");
+        CHECK(a.val <= 103 && a.vah >= 105 && a.vah <= 110 && a.val >= 100, "the value area surrounds the POC");
+        double in = 0, tot = 0; for (auto& kv : r) { tot += kv.second; if (kv.first >= a.val && kv.first <= a.vah) in += kv.second; } CHECK(in >= 0.70 * tot && in < 0.95 * tot, "value area >= 70% and not everything");
+        std::map<long long, double> f; for (long long p = 0; p <= 10; ++p) f[p] = 5; const zcf::VA b = zcf::profileOf(f); CHECK(b.ok && b.poc == 5, "a flat profile: the tie goes to the middle row");
+        std::map<long long, double> e; CHECK(!zcf::profileOf(e).ok, "an empty profile has no levels");
+        std::map<long long, double> two; two[1] = 5; two[9] = 5; CHECK(zcf::profileOf(two).poc == 1, "an exact tie at the same distance: the lower row");
+        Rig R; R.F.setMarket("ES"); zzd::Bar x; x.t = T(0, 12, 0); x.h = 5000; x.l = 4990; x.vol = 1100; x.vap = true; R.F.addBar(x, 4995); x.t = T(0, 12, 3); x.h = 4995; x.l = 4995; x.vol = 900; R.F.addBar(x, 4995);
+        CHECK(!R.F.prevVA.ok, "no prior profile inside the first session"); x.t = T(0, 17, 30); x.h = 4996; x.l = 4994; x.vol = 10; R.F.addBar(x, 4995);
+        CHECK(R.F.prevVA.ok && R.F.prevVA.poc == 4995 && R.F.prevVA.vah >= 4995 && R.F.prevVA.val <= 4995 && R.F.prof.size() == 3, "the bar-spread profile of the prior session; a new one starts"); }
+    {   Rig R; base(R); R.F.on.l = R.F.as.l = R.F.lon.l = R.F.phr.l = R.F.prevFull.l = R.F.prevRth.l = 4900; R.F.prevVA.ok = true; R.F.prevVA.poc = 4922; R.F.prevVA.vah = 4990; R.F.prevVA.val = 4800;
+        R.bar(T(1, 8, 45), 4959, 4944, 4945); R.judge(20, 20); const zcf::Tag* t = R.F.find(T(1, 8, 42), 1);
+        CHECK(t && t->cob == 1 && zcf::lvText(t->lv, 1) == "DPoc", "a low that dips under the prior day's POC and closes back above = a Cob on DPoc alone"); }
+    {   Rig R; base(R); R.F.on.l = R.F.as.l = R.F.lon.l = R.F.phr.l = R.F.prevFull.l = R.F.prevRth.l = 4900; R.F.prevVA.ok = true; R.F.prevVA.poc = 4800; R.F.prevVA.vah = 4930; R.F.prevVA.val = 4920;
+        R.bar(T(1, 8, 45), 4959, 4944, 4945); R.judge(20, 20); const zcf::Tag* t = R.F.find(T(1, 8, 42), 1);
+        CHECK(t && t->cob == 1 && zcf::lvText(t->lv, 1) == "VAH/VAL", "VAH and VAL count from below too"); }
+    {   Rig R; base(R); R.F.on.l = R.F.as.l = R.F.lon.l = R.F.phr.l = R.F.prevFull.l = R.F.prevRth.l = 4900; R.F.prevVA.ok = false; R.F.prevVA.poc = 4922;
+        R.bar(T(1, 8, 45), 4959, 4944, 4945); R.judge(20, 20); const zcf::Tag* t = R.F.find(T(1, 8, 42), 1); CHECK(t && !t->cob && t->watch == 1, "no profile: its numbers are never used"); }
     // ---- 3. Lvp
     auto cob = [&](Rig& R) { base(R); R.bar(T(1, 8, 45), 4959, 4944, 4945); R.judge(12, 12); R.F.out.clear(); };
     auto wave = [](Rig& R, int dir, long long ext, long long vol, long long t) { R.bar(t, ext + 6, ext - 6, ext); R.bar(t + 180, ext + 3, ext - 3, ext); zzd::Wave w; w.s = (int)R.F.F.size() - 2; w.e = w.s; w.dir = dir; w.ext = ext; w.vol = vol; R.W.push_back(w); R.judge(0, 0); };
@@ -162,7 +181,7 @@ int main() {
             if (bx.k != zzd::Prim::FILL || (bx.col != C.up && bx.col != C.down)) colOk = false; }
         CHECK(colOk && seenTags == cobT + lvpT, "tag boxes are green or red only");
         for (const zzd::Wave& w : waves) { if (w.live || w.e < 0) continue; const zcf::Tag* t = H.F.find(H.E.B[(size_t)w.e].t, w.dir); if (t && t->cob) CHECK(t->cob == w.dir, "a Cob sits on a wave of its own direction"); if (t && t->lvp) CHECK(t->lvp == -w.dir, "an Lvp sits on a pullback against its Cob"); }
-        const std::string st = H.F.statusText(); CHECK(st.rfind("COBFINDER,1.0.0,RTH 510-900", 0) == 0 && st.find("\nCOB,") != std::string::npos, "status text");
+        const std::string st = H.F.statusText(); CHECK(st.rfind("COBFINDER,1.1.0,RTH 510-900", 0) == 0 && st.find("\nCOB,") != std::string::npos, "status text");
     }
     // ---- 6. the host
     {   const std::string c = slurp("../ZzoCombo.cpp"), vw = slurp("../ZzoComboView.h");

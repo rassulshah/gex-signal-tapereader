@@ -1,6 +1,8 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.3.0  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.3.1  (2026-11-12)
  *
+ *  2.3.1 (Rassul 2026-11-12 09:32 "Add prior day poc vah Val also", 09:33 "Go"): the prior full session's POC / VAH / VAL count as key
+ *    levels for a Cob, swept from either side (finder 1.1.0; tested first: Cobs qualifying only on them held 76%, 131 cases). Logic only.
  *  2.3.0 (Rassul 2026-11-12 "the wave zzo would be upgraded to show the waves with count labels but also identify cobs", 08:56 "we are
  *    just upgrading the zzo wave to now be the cob finder .. do not change anything beyond the indicator", 09:02 "go"): the CoB FINDER.
  *    "Cob" on a wave that starts at / near the RTH low or high, after a key-level sweep the completing bar closed back over, with a ZZO
@@ -322,7 +324,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoCombo* p = new ZzoCombo();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Combo v2.3.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.3.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Combo v2.3.1 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.3.1");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }
