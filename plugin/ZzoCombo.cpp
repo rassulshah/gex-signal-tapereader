@@ -1,6 +1,13 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.1.1  (2026-11-03)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.3.0  (2026-11-12)
  *
+ *  2.3.0 (Rassul 2026-11-12 "the wave zzo would be upgraded to show the waves with count labels but also identify cobs", 08:56 "we are
+ *    just upgrading the zzo wave to now be the cob finder .. do not change anything beyond the indicator", 09:02 "go"): the CoB FINDER.
+ *    "Cob" on a wave that starts at / near the RTH low or high, after a key-level sweep the completing bar closed back over, with a ZZO
+ *    count of 10+ and <= 0.46 given back; "Lvp" on the low-volume pullback wave after it (ZzoCobFinder.h has the rule and what was
+ *    measured). Decided once on the bar that completes the wave; never repainted. The old "CoB after a sweep" tag is logged only.
+ *    Ramps, ratios, counts, Cmx / AR / ST / Ab unchanged. The engine header (ZzoDeltaLogic.h) is NOT changed: closes are read here.
+ *    + FILE lsFlexLevels\ZzoCombo\cob-<MKT>-<spb>.csv: one line per decision (C Cob, L Lvp, W watch = logged only), for the nightly.
  *  2.1.1 (Rassul 2026-11-03 "build it all", ref picture gc_zz.png): the wave COUNT is drawn INSIDE the wave's bars - centred on the
  *    second-to-last bar, just below its top, white with a 1 px black outline; a bar too short for the text gets it just above its top.
  *    The ratio label is unchanged (centred above the last bar). View only (ZzoComboView.h); waves, counts, tags unchanged.
@@ -43,6 +50,7 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <set>
 #include <string>
 #include <vector>
 #include <sys/stat.h>
@@ -81,6 +89,8 @@ struct ZState {
     bool haveForm = false; zzd::Bar formBar;
     std::string statusPath; long long statusMs = -1; std::string statusBody;
     zzd::ComboScene last;
+    zcf::Finder F; long long lastWaveT = -1;                     // (2.3.0) the CoB finder + the pivot time of the last wave it judged
+    std::string recPath; std::set<std::string> recSeen; bool recLoaded = false;
 };
 
 class ZzoCombo : public cppExtension {
@@ -99,6 +109,7 @@ public:
     int barDelta(ZState& S, int chartBar, long long& d, long long hT = 0, long long lT = 0, long long* xh = nullptr, long long* xl = nullptr);
     long long localSec(RTDATE d);
     void status(ZState& S, long long now);
+    void record(ZState& S);
     static int readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats);
     static int readPrices(RTARRAYP* vap, int bar, VOLPROFILE* rows, int count);
 };
@@ -182,8 +193,10 @@ bool ZzoCombo::identify(ZState& S) {
     if (!S.keyed || mkt != S.mkt || sym != S.sym || spb != S.spb || tk != S.tickKey) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
         S.E.reset(); S.E.revBars = zzd::COMBO_REV_BARS; S.E.setMarket(mkt, spb); S.raw.clear(); S.off = 0; S.haveForm = false;   // (2.1.0) 3-bar ZigZag
+        S.F.reset(); S.F.setMarket(mkt, spb); S.lastWaveT = -1; S.recSeen.clear(); S.recLoaded = false;   // (2.3.0)
         const std::string d = zdFlex(); const std::string key = mkt + "-" + std::to_string(spb);
         S.statusPath = d.empty() ? std::string() : d + ZD_SEP ZD_NAME ".status-" + key + ".txt";
+        S.recPath = d.empty() ? std::string() : d + ZD_SEP ZD_NAME ZD_SEP "cob-" + key + ".csv";
     }
     return true;
 }
@@ -196,9 +209,10 @@ void ZzoCombo::feed(ZState& S) {
     const int closed = (int)n - 1;
     const int fed = (int)S.raw.size();
     if (fed > 0) { const int lastIdx = S.off + fed - 1;
-        if (lastIdx >= closed || (RTDATE)times[lastIdx] != S.raw.back() || (RTDATE)times[S.off] != S.raw.front()) { S.E.reset(); S.E.setMarket(S.mkt, S.spb); S.raw.clear(); } }
+        if (lastIdx >= closed || (RTDATE)times[lastIdx] != S.raw.back() || (RTDATE)times[S.off] != S.raw.front()) { S.E.reset(); S.E.setMarket(S.mkt, S.spb); S.raw.clear(); S.F.reset(); S.F.setMarket(S.mkt, S.spb); S.lastWaveT = -1; } }
     if (S.raw.empty()) S.off = std::max(0, closed - zzd::MAX_BARS + zzd::TRIM);
     const bool haveVol = (long)vol.count >= n;
+    RTARRAY clo(barClose); const bool haveClose = (long)clo.count >= n;   // (2.3.0) closes for the CoB finder
     auto bar = [&](int i, zzd::Bar& b) {
         b.t = localSec((RTDATE)times[i]);
         b.vol = haveVol ? std::max(0LL, (long long)vol[i]) : 0;   // (1.2.0) bar volume
@@ -209,9 +223,46 @@ void ZzoCombo::feed(ZState& S) {
     for (int i = S.off + (int)S.raw.size(); i < closed; ++i) {
         zzd::Bar b; bar(i, b);
         S.E.addBar(b); S.raw.push_back((RTDATE)times[i]);
-        if (S.E.trimmed > 0) { S.off += (int)S.E.trimmed; S.raw.erase(S.raw.begin(), S.raw.begin() + std::min<long long>(S.E.trimmed, (long long)S.raw.size())); S.E.trimmed = 0; }
+        {   // (2.3.0) the finder's copy of the bar, aligned with the engine's
+            long long c = 0; if (!haveClose || !zzd::toTicks(clo[i], S.tick, c)) c = b.h;
+            if (c > b.h) c = b.h;
+            if (c < b.l) c = b.l;
+            S.F.addBar(b, c);
+        }
+        if (S.E.trimmed > 0) { S.F.trim(S.E.trimmed); S.off += (int)S.E.trimmed; S.raw.erase(S.raw.begin(), S.raw.begin() + std::min<long long>(S.E.trimmed, (long long)S.raw.size())); S.E.trimmed = 0; }
+        if (!S.E.W.empty() && S.F.F.size() == S.E.B.size()) {   // a wave completed on this bar: judge it once
+            const zzd::Wave& w = S.E.W.back();
+            if (w.s >= 0 && w.e >= 0 && (size_t)w.e < S.F.F.size()) { const long long tw = S.F.F[(size_t)w.e].t * 2 + (w.dir > 0 ? 1 : 0);
+                if (tw != S.lastWaveT) { S.lastWaveT = tw; S.F.onWave(S.E.W); } }
+        }
     }
     zzd::Bar fb; bar(closed, fb); fb.seg = S.E.segOf(fb.t); S.formBar = fb; S.haveForm = true;   // the forming bar, re-read every calc
+    S.F.prune(); record(S);
+}
+
+// (2.3.0) the finder's new decisions -> lsFlexLevels\ZzoCombo\cob-<MKT>-<spb>.csv, each once (key = kind | wave time | direction); a line
+// counts as written only after a flushed good append
+void ZzoCombo::record(ZState& S) {
+    if (S.F.out.empty()) return;
+    std::vector<std::string> lines; lines.swap(S.F.out);
+    if (S.recPath.empty()) return;
+    auto keyOf = [](const std::string& ln) { std::vector<std::string> f; size_t a = 0; for (;;) { const size_t b = ln.find('|', a); f.push_back(ln.substr(a, b == std::string::npos ? b : b - a)); if (b == std::string::npos) break; a = b + 1; }
+        return f.size() >= 5 ? f[0] + "|" + f[2] + "|" + f[4] : std::string(); };
+    if (!S.recLoaded) {
+        S.recLoaded = true;
+        std::ifstream f(S.recPath.c_str(), std::ios::binary);
+        if (f) { f.seekg(0, std::ios::end); const long long sz = (long long)f.tellg(); const long long cap = 512 * 1024; f.seekg(sz > cap ? sz - cap : 0, std::ios::beg);
+            std::string ln; if (sz > cap) std::getline(f, ln);
+            while (std::getline(f, ln)) { if (!ln.empty() && ln.back() == '\r') ln.pop_back(); const std::string k = keyOf(ln); if (!k.empty()) S.recSeen.insert(k); } }
+    }
+    std::string body; std::vector<std::string> keys;
+    for (const std::string& ln : lines) { const std::string k = keyOf(ln); if (k.empty() || S.recSeen.count(k)) continue; bool dup = false; for (const std::string& q : keys) if (q == k) { dup = true; break; } if (dup) continue; body += ln + "\n"; keys.push_back(k); }
+    if (body.empty()) return;
+    zdMkdir(zdFlex()); zdMkdir(zdFlex() + ZD_SEP ZD_NAME);
+    std::ofstream o(S.recPath.c_str(), std::ios::binary | std::ios::app);
+    if (!o) return;
+    o.write(body.data(), (std::streamsize)body.size()); o.flush();
+    if (o.good()) for (const std::string& k : keys) S.recSeen.insert(k);
 }
 
 void ZzoCombo::status(ZState& S, long long now) {
@@ -219,7 +270,7 @@ void ZzoCombo::status(ZState& S, long long now) {
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = zzd::comboStatus(S.E, S.mkt, S.spb, S.vapFault ? "FAULT - remove and re-add the indicator" : "ok") +
         "DRAWN,columns " + std::to_string(S.last.cols) + ",ratios " + std::to_string(S.last.ratios) + ",counts " + std::to_string(S.last.counts) + ",Ab " + std::to_string(S.last.ab) +
-        ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.ar) + ",ST " + std::to_string(S.last.st) + ",CoB " + std::to_string(S.last.cob) + ",weak " + std::to_string(S.last.weak) + "\n";
+        ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.ar) + ",ST " + std::to_string(S.last.st) + ",Cob " + std::to_string(S.last.cob) + ",Lvp " + std::to_string(S.last.lvp) + "\n" + S.F.statusText();
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     zdMkdir(zdFlex()); zdPublish(S.statusPath, body);
@@ -249,8 +300,8 @@ int ZzoCombo::draw(void) {
         v.textH = 12;
         const std::vector<zzd::Wave> waves = S->E.view(S->haveForm ? &S->formBar : nullptr);
         const bool noFoot = !S->E.B.empty() && S->E.noVap >= (long long)S->E.B.size();   // no footprint on this chart: volume still works, Ab cannot
-        const std::string head = std::string("ZZO Combo ") + zzd::COMBO_VERSION + (noFoot ? "  no footprint - Ab off" : "");
-        S->last = zzd::layoutCombo(S->E, waves, S->haveForm ? S->formBar.vol : 0, v, head);
+        const std::string head = std::string("ZZO Combo ") + zcf::COMBO_VERSION + (noFoot ? "  no footprint - Ab off" : "");
+        S->last = zzd::layoutCombo(S->E, waves, S->haveForm ? S->formBar.vol : 0, v, head, &S->F);
         const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom;
         for (const zzd::Prim& p : S->last.p) {
             if (p.k == zzd::Prim::FILL) {
@@ -271,7 +322,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoCombo* p = new ZzoCombo();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Combo v2.2.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count (beats the last N same-colour waves, 50+), Cmx / AR / ST, CoB after a key-level sweep, Ab = absorption with a heavy extreme (effort / result).");
-    p->setVersion("2.2.1");   // = zzd::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Combo v2.3.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.3.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

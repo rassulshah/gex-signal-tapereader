@@ -230,7 +230,7 @@ int main() {
     {   const std::string c = slurp("../ZzoCombo.cpp"), z = slurp("../ZzoZigZag.cpp");
         CHECK(c.find("S.E.revBars = zzd::COMBO_REV_BARS") != std::string::npos, "ZzoCombo.cpp sets the 3-bar walk");
         CHECK(z.find("S.E.revBars = zzd::COMBO_REV_BARS") != std::string::npos, "ZzoZigZag.cpp follows Combo's walk");
-        CHECK(c.find(std::string("p->setVersion(\"") + zzd::COMBO_VERSION + "\")") != std::string::npos && c.find(std::string("v") + zzd::COMBO_VERSION + " - 3-bar") != std::string::npos, "Combo version literal = COMBO_VERSION");
+        CHECK(c.find(std::string("p->setVersion(\"") + zcf::COMBO_VERSION + "\")") != std::string::npos && c.find(std::string("v") + zcf::COMBO_VERSION + " - 3-bar") != std::string::npos, "Combo version literal = zcf::COMBO_VERSION (2.3.0: the pane version lives in ZzoCobFinder.h)");
         CHECK(z.find(std::string("p->setVersion(\"") + zzd::ZIGZAG_VERSION + "\")") != std::string::npos, "ZigZag version literal = ZIGZAG_VERSION");
         const std::string d = slurp("../ZzoDelta.cpp"); CHECK(d.find("revBars") == std::string::npos, "ZZO Delta / Volume keep the 1-bar default"); }
 

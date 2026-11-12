@@ -1,3 +1,4 @@
+// ZzoComboView.h  (2.3.0, 2026-11-12: + the CoB finder's Cob / Lvp tags from ZzoCobFinder.h; the old CoB-after-sweep tag is logged only)
 // ZzoComboView.h - lsZzoCombo 2.1.1 (2026-11-03, Rassul "build it all"): the wave COUNT is drawn INSIDE the wave's bars - centred on the
 //   wave's second-to-last bar, just below that bar's top, white with a 1 px black outline (reads on green or red); a bar too short for the
 //   text gets it just above its top (moved above the ratio label if they would touch). The ratio label is unchanged.
@@ -20,16 +21,17 @@
 #ifndef ZZO_COMBO_VIEW_H
 #define ZZO_COMBO_VIEW_H
 #include "ZzoDeltaLogic.h"
+#include "ZzoCobFinder.h"   // (2.3.0) the CoB finder: Cob / Lvp tags
 
 namespace zzd {
 
 static const int COUNT_PAD = 2;                  // (2.1.1) px between the bar's top and the count text inside it
 static const unsigned long OUTLINE = 0x000000;  // (2.1.1) the count's 1 px outline
-struct ComboScene { std::vector<Prim> p; int cols = 0, ratios = 0, counts = 0, countsIn = 0, countsAbove = 0, countsDropped = 0, ab = 0, cmx = 0, ar = 0, st = 0, cob = 0, weak = 0; double hi = 0; };
+struct ComboScene { std::vector<Prim> p; int cols = 0, ratios = 0, counts = 0, countsIn = 0, countsAbove = 0, countsDropped = 0, ab = 0, cmx = 0, ar = 0, st = 0, cob = 0, weak = 0, lvp = 0; double hi = 0; };
 
 inline std::string countText(const Wave& w) { if (w.cntCap) return std::to_string(CNT_CAP) + "+"; return std::to_string(w.cnt); }
 
-inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, long long formVol, const View& v, const std::string& head) {
+inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, long long formVol, const View& v, const std::string& head, const zcf::Finder* cf = nullptr) {
     ComboScene S; const Colours C;
     const unsigned long upLive = 0x15803D, downLive = 0xB91C1C, white = 0xFFFFFF;
     const int TH = v.textH, H = v.b - v.t;
@@ -101,7 +103,11 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
         if (w.cmx) tags.push_back({ "Cmx", up ? C.up : C.down });
         if (w.cob) tags.push_back({ "AR", up ? C.up : C.down });
         if (w.st) tags.push_back({ "ST", up ? C.down : C.up });          // the side expected to take over
-        if (w.cobTag == 1) tags.push_back({ "CoB", up ? C.up : C.down });
+        // (2.3.0, Rassul 2026-11-12 CoB finder) the old "CoB after a sweep" tag (cobTag 1) is no longer drawn (status file only); "Cob" and
+        // "Lvp" come from zcf::Finder, decided once when the wave completed. Lvp takes its Cob's colour.
+        if (cf && w.e >= 0 && (size_t)w.e < E.B.size()) { if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) {
+            if (tg->cob) tags.push_back({ "Cob", tg->cob > 0 ? C.up : C.down });
+            if (tg->lvp) tags.push_back({ "Lvp", tg->lvp > 0 ? C.up : C.down }); } }
         // (2.1.0, Rassul 14:02 CT "remove weak") cobTag 2 = weak stays in the status file only, never drawn
         double er = 0;
         if (E.showAb && abHeavy(w) && effortResult(w, er)) { char b[24]; std::snprintf(b, sizeof b, "Ab %.1f", er); tags.push_back({ b, up ? C.down : C.up }); }   // winner's colour
@@ -120,7 +126,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
             { Prim o = bx; o.x0 -= 1; o.x1 += 1; o.y0 -= 1; o.y1 += 1; o.col = 0x0B1220; over.push_back(o); }   // dark edge: readable on a ramp of the same colour
             over.push_back(bx); Prim tx; tx.k = Prim::TEXT; tx.x0 = ax + 3; tx.x1 = ax + aw - 3; tx.y0 = bx.y0; tx.y1 = bx.y1; tx.col = white; tx.text = tg.first; over.push_back(tx);
             const std::string& n = tg.first;
-            if (n.rfind("Ab", 0) == 0) ++S.ab; else if (n == "Cmx") ++S.cmx; else if (n == "AR") ++S.ar; else if (n == "ST") ++S.st; else if (n == "CoB") ++S.cob; else ++S.weak;
+            if (n.rfind("Ab", 0) == 0) ++S.ab; else if (n == "Cmx") ++S.cmx; else if (n == "AR") ++S.ar; else if (n == "ST") ++S.st; else if (n == "Cob") ++S.cob; else if (n == "Lvp") ++S.lvp; else ++S.weak;
             ++lvl;
         }
     }
@@ -130,7 +136,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
 }
 
 inline std::string comboStatus(const Engine& E, const std::string& mkt, int spb, const std::string& vap) {
-    std::string s = std::string("lsZzoCombo ") + COMBO_VERSION + " (engine " + VERSION + ")\nMARKET," + mkt + "," + std::to_string(spb) +
+    std::string s = std::string("lsZzoCombo ") + zcf::COMBO_VERSION + " (engine " + VERSION + ")\nMARKET," + mkt + "," + std::to_string(spb) +
         "\nZIGZAG," + std::to_string(E.revBars) + "-bar reversal, High/Low (IRT ZIGZAG Min Price Change = " + std::to_string(E.revBars) + " bars)" +
         "\nSHOW_AB," + (E.showAb ? "on" : "off - logged only until the nightly proves it here") +
         "\nRULES,volume ramp per wave vs the median of the last 5 same-way waves; ratio + count on 2.0x+ waves (count = its volume ratio beats the last N waves of its colour in a row, cap 50; weak logged, not drawn); Ab = absorption rule + pivot extreme 2 ticks >= 4% of the bar, shown with effort / result\n" +
@@ -142,7 +148,7 @@ inline std::string comboStatus(const Engine& E, const std::string& mkt, int spb,
         char b[320]; std::snprintf(b, sizeof b, "WAVE,%lld,%s,vol %s,count %s,E/R %s,extreme %s%s%s%s%s%s%s\n", E.B[(size_t)w.e].t, w.dir > 0 ? "UP" : "DN", volText(w).c_str(),
             countText(w).c_str(), hasEr ? (std::to_string((int)std::lround(er * 10) / 10) + "." + std::to_string((int)std::lround(er * 10) % 10)).c_str() : "-",
             w.xsh < 0 ? "-" : (std::to_string((int)std::lround(w.xsh * 1000) / 10) + "." + std::to_string((int)std::lround(w.xsh * 1000) % 10) + "%").c_str(),
-            w.ab ? (abHeavy(w) ? ",Ab" : ",Ab? (logged)") : "", w.cmx ? ",Cmx" : "", w.cob ? ",AR" : "", w.st ? ",ST" : "", w.cobTag == 1 ? ",CoB" : "", w.cobTag == 2 ? ",weak" : "");
+            w.ab ? (abHeavy(w) ? ",Ab" : ",Ab? (logged)") : "", w.cmx ? ",Cmx" : "", w.cob ? ",AR" : "", w.st ? ",ST" : "", w.cobTag == 1 ? ",CoB after sweep (logged)" : "", w.cobTag == 2 ? ",weak" : "");
         s += b;
     }
     return s;
