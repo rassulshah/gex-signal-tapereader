@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.13.0";   // (1.13.0, 2026-11-10 Rassul 13:03-13:11 CT) wave POC + up to 1 HVN (below the POC and below the level the BO broke; POC at / below it = none); the pullback (PB POC) profile removed
+static const char* const VERSION = "1.14.0";   // (1.14.0, 2026-11-11 Rassul 19:09-19:12 CT) no spine; the POC and the HVN are dashes ON the candle that traded the most at that price; lots at the end of the POC dash
+// was static const char* const VERSION = "1.13.0";   // (1.13.0, 2026-11-10 Rassul 13:03-13:11 CT) wave POC + up to 1 HVN (below the POC and below the level the BO broke; POC at / below it = none); the pullback (PB POC) profile removed
 // was "1.12.0";   // (1.12.0, 2026-11-10 Rassul 08:17 CT) the wave POC shows only its POC row (no HVN / grey rows), like the PB POC
 // was "1.11.1";   // (1.11.1, 2026-11-09 Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc") the PB POC row = the wave POC row width (SIDE_W), anchored at the pivot bar   // was "1.11.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") wave PB POC = the POC row only (no HVN / grey rows), shown only when the POC itself sits at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4) rebuild with BreakoutLogic.h 1.14.0, no change   // was "1.10.3":   // (1.10.3) rebuild with BreakoutLogic.h 1.13.0, no change   // was "1.10.2":   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
 // was "1.10.1";   // (1.10.1, Rassul 12:10 + v7 "above") the lots on the wave POC row (POC colour) and the pullback POC row (white), just above them
@@ -153,6 +154,7 @@ struct Wave {
     std::vector<long long> drows;         // (1.5.0) same-price delta per row (rows aligned)
     long long dMax = 0, dMed2 = 0;        // (1.5.0) the biggest |delta| row; 2 x the median |delta| of the rows that traded
     double clRef = 0;                     // (1.5.0) cluster A reference: median of the prior 20 waves' best mid-wave counter band (0 = too few)
+    std::vector<int> rowBar;              // (1.14.0) per row: the bar of the wave that traded the most volume in that row (earliest on a tie; -1 = none)
     int qWhy = 0; double atr = 0;         // (1.3.3) AVG / ATR / BOTH (0 = not a qualifying wave); the 14-bar ATR (ticks, 0 = too few bars)
 };
 
@@ -645,6 +647,14 @@ public:
         }
         if (w.vapMissing > 0) { w.rows.clear(); return false; }
         buildRows(per, lo, hi, w.rowTicks, w.e0, w.rows);
+        {   // (1.14.0) the candle each row "belongs in": the bar with the most volume in that row
+            const long long n = (long long)w.rows.size(); w.rowBar.assign((size_t)n, -1); std::vector<long long> best((size_t)n, 0), cur((size_t)n, 0);
+            for (size_t bi = 0; bi < per.size() && n > 0; ++bi) {
+                std::vector<long long> touched;
+                for (const VRow& v : per[bi]) { if (v.vol <= 0) continue; long long k = floorDiv(v.tick - w.e0, w.rowTicks); if (k < 0) k = 0; if (k >= n) k = n - 1; if (cur[(size_t)k] == 0) touched.push_back(k); cur[(size_t)k] += v.vol; }
+                for (long long k : touched) { if (cur[(size_t)k] > best[(size_t)k]) { best[(size_t)k] = cur[(size_t)k]; w.rowBar[(size_t)k] = w.i0 + (int)bi; } cur[(size_t)k] = 0; }
+            }
+        }
         w.med2 = median2(w.rows); w.maxVol = 0; for (long long v : w.rows) w.maxVol = std::max(w.maxVol, v);
         buildDelta(per, w.e0, w.rows.size(), w.rowTicks, w.drows);   // (1.5.0) the wave's delta profile
         {   std::vector<long long> a; w.dMax = 0;
@@ -1023,6 +1033,16 @@ inline void addDashed(Scene& s, double x0, double x1, double y, unsigned long c,
 //   the WPOC extended as an amber dotted line from the wave to it.
 // phase 0 = outlines / delta rows / spine of every wave, phase 1 = fills, liquidity, letters, pullbacks (no later profile paints over them)
 // (1.10.1) one POC lot label: plain ASCII, the host's small font, left-aligned at x, its bottom 1 px above the POC row's top
+// (1.14.0, Rassul 2026-11-11 19:09-19:12 CT "remove the wave poc spine and move the wave poc in the candels that it belowngs in" / "also the hvn" /
+// "you can move the lot count at the end of the poc") no spine; the POC and the HVN are a short dash ON the candle of the wave that traded
+// the most volume at that price; P / H left of the dash, the POC's lots right of it (at its end)
+static const bool ON_CANDLE = true;
+inline int nodeBar(const Wave& w, int row, long long tick, const std::vector<Bar>* bars) {
+    if (row >= 0 && row < (int)w.rowBar.size() && w.rowBar[(size_t)row] >= w.i0 && w.rowBar[(size_t)row] <= w.i1) return w.rowBar[(size_t)row];
+    if (bars) for (int k = w.i0; k <= w.i1 && k < (int)bars->size(); ++k) if (k >= 0 && (*bars)[(size_t)k].l <= tick && tick <= (*bars)[(size_t)k].h) return k;
+    return w.i0;
+}
+inline double dashHalf(const View& v) { return std::max(v.bw * 0.5 + 2.0, 4.0); }
 inline void lotLabel(Scene& s, const View& v, double x, double rowTop, long long lots, unsigned long col) {
     if (lots <= 0) return;
     Prim t; t.k = Prim::TEXT; t.text = lotsText(lots); const int tw = v.textW ? v.textW(t.text, false) : (int)t.text.size() * 6;
@@ -1058,7 +1078,8 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
                 if (j == 0 && wj > 0) addLine(s, x0 - wj, bot, x0, bot, C.grey, 1, true);
             }
         }
-        if (SHOW_VOL_RIGHT && nr > 0 && w.maxVol > 0) {   // (1.9.0) the VOLUME rows, right: plain, POC cyan, HVNs in the wave colour
+        if (ON_CANDLE) { /* (1.14.0) no rows at the wave start, no spine */ }
+        else if (SHOW_VOL_RIGHT && nr > 0 && w.maxVol > 0) {   // (1.9.0) the VOLUME rows, right: plain, POC cyan, HVNs in the wave colour
             const int pocRow = !w.nodes.empty() ? w.nodes[0].row : -1;
             for (int j = 0; j < nr; ++j) {
                 const long long q = w.rows[(size_t)j]; if (q <= 0) continue;
@@ -1091,7 +1112,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
             }
         }
         const double ya = v.Y((double)std::min(w.p0, w.p1) - 0.5), yb = v.Y((double)std::max(w.p0, w.p1) + 0.5);
-        addLine(s, x0, std::min(ya, yb), x0, std::max(ya, yb), w.dir > 0 ? C.up : C.down, 2, true);   // (1.3.3) the spine
+        if (!ON_CANDLE) addLine(s, x0, std::min(ya, yb), x0, std::max(ya, yb), w.dir > 0 ? C.up : C.down, 2, true);   // (1.3.3) the spine (1.14.0: removed)
     }
     if (phase == 0) return;
     // the liquidity nodes, grouped with the volume profile on the left (LPOC bright, others 60%)
@@ -1113,7 +1134,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
         const double yc = v.Y((double)nd.tick);
         if (yc < v.t - 10 || yc > v.b + 10) continue;
         ++s.nodesDrawn;
-        if (!SHOW_VOL_LEFT && poc && nd.row >= 0 && nd.row < nr) {   // (1.6.0) the WPOC: a CYAN line across the delta side (right), in front
+        if (!ON_CANDLE && !SHOW_VOL_LEFT && poc && nd.row >= 0 && nd.row < nr) {   // (1.6.0) the WPOC: a CYAN line across the delta side (right), in front
             double top, bot; rowY(nd.row, top, bot); const double yc = (top + bot) / 2.0;
             Prim f; f.k = Prim::FILL; f.x0 = ci(x0 + 1); f.x1 = ci(x0 + 1 + PR); f.y0 = ci(yc - 1); f.y1 = ci(yc + 1); f.col = C.cyan; f.back = false; s.p.push_back(f);
         }
@@ -1146,8 +1167,31 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
         for (int r : top2) { int a, b; distOf(w, r, a, b); box(a, b); }
         if (bars) for (const Letter& L : letters(w, *bars)) if (L.cluster && L.a >= 0) box(L.a, L.b);
     }
+    if (ON_CANDLE && nr > 0) {   // (1.14.0) the POC / HVN dashes on their candles
+        struct D { int row; bool poc; };
+        std::vector<D> ds; const int pocRow = !w.nodes.empty() ? w.nodes[0].row : -1;
+        if (pocRow >= 0 && pocRow < nr && w.rows[(size_t)pocRow] > 0) ds.push_back(D{ pocRow, true });
+        if (hvn) for (int r : *hvn) if (r >= 0 && r < nr && r != pocRow && w.rows[(size_t)r] > 0) ds.push_back(D{ r, false });
+        const double half = dashHalf(v); double pBox[4] = { 0, 0, 0, 0 }; bool haveP = false;
+        for (const D& d : ds) {
+            double top, bot; rowY(d.row, top, bot); const double yc = (top + bot) / 2.0, h = std::max(3.0, bot - top + 2.0);
+            if (yc < v.t + 2 || yc > v.b - 2) continue;
+            const int bar = nodeBar(w, d.row, w.e0 + (long long)d.row * w.rowTicks, bars);
+            if (bar < v.first || bar > v.last) continue;
+            const double xc = v.X(bar), xL = xc - half, xR = xc + half;
+            Prim p; p.k = Prim::FILL; p.x0 = ci(xL); p.x1 = ci(xR); p.y0 = ci(yc - h / 2.0); p.y1 = ci(yc + h / 2.0); p.col = d.poc ? C.cyan : (w.dir > 0 ? C.up : C.down); p.back = false; s.p.push_back(p);
+            const std::string txt = d.poc ? "P" : "H"; const int tw = v.textW ? v.textW(txt, true) : 12;
+            double ty = yc; const double tx1 = xL - 3, tx0 = tx1 - tw;
+            if (!d.poc && haveP && tx0 < pBox[1] && tx1 > pBox[0] && std::fabs(ty - (pBox[2] + pBox[3]) / 2.0) < 13) ty = ty < (pBox[2] + pBox[3]) / 2.0 ? (pBox[2] + pBox[3]) / 2.0 - 13 : (pBox[2] + pBox[3]) / 2.0 + 13;
+            if (ty >= v.t + 7 && ty <= v.b - 7) {
+                Prim t; t.k = Prim::TEXT; t.x0 = ci(tx0); t.x1 = ci(tx1); t.y0 = ci(ty - 7); t.y1 = ci(ty + 7); t.col = d.poc ? C.cyan : 0xFFFFFF; t.text = txt; t.bold = 1; t.back = false; s.p.push_back(t); ++s.lettersDrawn;
+                if (d.poc) { pBox[0] = tx0; pBox[1] = tx1; pBox[2] = ty - 7; pBox[3] = ty + 7; haveP = true; }
+            }
+            if (d.poc) lotLabel(s, v, xR + 3, yc + LOT_H / 2.0 + 1, w.rows[(size_t)d.row], C.cyan);   // the lots at the END of the POC dash, centred on it
+        }
+    }
     // the letters, centred on their node (front), each on a small background patch so it reads over the row
-    if ((haveDelta || SHOW_VOL_RIGHT) && bars) {
+    if (!ON_CANDLE && (haveDelta || SHOW_VOL_RIGHT) && bars) {
         // (1.6.2) letters on nearby rows (e.g. an I? and an A? 3 ticks apart) never overlap: sorted top to bottom, each at least 13 px
         // below the one above it (the text is 12 px tall)
         std::vector<std::pair<double, Letter> > ys;
@@ -1265,7 +1309,11 @@ inline void drawPocLines(Scene& s, const Engine& E, const View& v, const Colours
     std::vector<L> all = up; all.insert(all.end(), dn.begin(), dn.end()); all.insert(all.end(), tested.begin(), tested.end());
     for (const L& l : all) {
         const double y = v.Y((double)l.n->tick); if (y < v.t || y > v.b) continue;
-        const double x0 = v.X(l.w->i0) - v.bw * 0.45 + 1 + SIDE_W;
+        double x0 = v.X(l.w->i0) - v.bw * 0.45 + 1 + SIDE_W;
+        if (ON_CANDLE) {   // (1.14.0) from the end of the lot count next to the POC dash
+            const std::string lt = l.n->row >= 0 && l.n->row < (int)l.w->rows.size() ? lotsText(l.w->rows[(size_t)l.n->row]) : std::string();
+            x0 = v.X(nodeBar(*l.w, l.n->row, l.n->tick, &E.B)) + dashHalf(v) + 3 + (lt.empty() ? 0 : (v.textW ? v.textW(lt, false) : (int)lt.size() * 6) + 3);
+        }
         const double x1 = l.open ? v.X(v.lastBar) + v.bw * 0.5 : v.X(l.hit);
         if (x1 <= x0) continue;
         addLine(s, x0, y, x1, y, l.open ? C.cyan : mix(C.cyan, C.bg, 0.5), 1, true);   // (1.8.1, Rassul 11:36 CT "use a solid line")

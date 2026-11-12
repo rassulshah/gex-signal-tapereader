@@ -7,7 +7,7 @@
 #include "SettingsSpec.h"
 
 namespace wpset {
-static const char* const PLUGIN_VERSION = "1.13.0";   // (1.12.0) wave POC row only - no settings change
+static const char* const PLUGIN_VERSION = "1.14.0";   // (1.14.0) no settings change   // was "1.13.0";   // (1.12.0) wave POC row only - no settings change
 // was "1.11.1";   // (1.11.1) PB POC width = wave POC width - no settings change   // was "1.11.0":   // (1.11.0) PB POC only, 38.2% POC depth - no settings change   // was "1.10.4":   // (1.10.4) no settings change   // was "1.10.3":   // (1.10.3) no settings change   // was "1.10.2":   // (1.10.2) no settings change   // was "1.10.1";   // (1.9.5) no settings change   // was "1.9.4";   // (1.9.4) no settings change   // was "1.9.2";   // (1.9.2) no settings change   // (1.9.1) no settings change   // (1.8.4) letters one further left - no settings change   // was "1.8.3":   // (1.8.3) no settings change   // was "1.8.2";   // (1.8.0) no settings change   // (1.7.1) no settings change   // was "1.7.0":   // (1.7.0) no settings change   // was "1.6.3":   // (1.6.3) no settings change   // was "1.6.2":   // (1.6.2) no settings change   // was "1.6.1":   // (1.6.1) no settings change   // was "1.6.0":   // (1.6.0) no settings change   // (1.5.0) no settings change   // was "1.4.2":   // (1.4.2) no settings change   // was "1.4.1":   // (1.4.1) no settings change   // was "1.4.0":   // (1.4.0) no settings change   // was "1.3.4":   // (1.3.3) 14-bar extreme, AVG or 3 ATR, coloured spine - same rows / parameter version 2
 // 1.3.2:   // (1.3.1) crash fix, same rows / parameter version 2
 // 1.3.0:   // (1.3.0) + "CoB legs" (every CoB leg gets a profile)

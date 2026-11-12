@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
     {
         std::string src = slurp("WavePOC.cpp"); if (src.empty()) src = slurp("../WavePOC.cpp"); const size_t p = src.find("p->setVersion(\"");
         const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.11.1" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
+        CHECK(lit == WP_VERSION && lit == wpc::VERSION && lit == wpset::PLUGIN_VERSION && lit == "1.10.4" && std::string(wpl::VERSION) == "1.1.3", "version literals match (" << lit << ")");
     }
     // ---- one DLL object, setup once: the settings rows
     WavePOC x; mock::Host A; mock::current = &A; x.setup();
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
             const int xL2 = mockX(79) + 5; int across = 0, tg = 0; for (const mock::Prim& p : A.drawn) { if (p.k != 'F' && p.k != 'T' && !okLine(p) && !(p.k == 'B' && p.col == 0xE5E7EB) && !(p.k == 'L' && p.x0 == p.x1 && (p.col == 0x22C55E || p.col == 0xEF4444)) && std::min(p.x0, p.x1) < xL2) ++across; tg += p.k == 'T' && isTagText(p.text); }
             int open = 0; for (const wpc::Wave& w : S->E.waves) if (!w.pending) for (const wpc::Node& nd : w.nodes) open += nd.stop == wpc::OPEN; if (S->provOk) for (const wpc::Node& nd : S->prov.nodes) open += nd.stop == wpc::OPEN;
             CHECK(other == 0 && across == 0, "(1.2.0/1.5.0) pre-draw = fills + the grey volume outline + the spines; post = the Pb amber dotted line / the solid white node boxes only; no level line / circle / tick across the chart (" << other << " / " << across << ")");
-            CHECK(spines == 6, "(1.3.3) one spine per drawn profile in the pre-draw (5 waves + the provisional leg: " << spines << ")");
+            CHECK(spines == 0, "(1.14.0, Rassul 2026-11-11 19:09 CT \"remove the wave poc spine\") no spine in the pre-draw (" << spines << ")");   // was 6 (1.3.3)
             {   // (1.3.3, Rassul 04:52 CT) each spine (pre-draw = pre2): at its profile's start x, green for an up wave / red for a down wave, over start pivot .. end pivot
                 std::vector<const wpc::Wave*> ws; for (const wpc::Wave& w : S->E.waves) if (!w.pending) ws.push_back(&w); if (S->provOk) ws.push_back(&S->prov);
                 int good = 0, ups = 0, dns = 0;
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
                         const bool spanOk = std::abs(std::min(q.y0, q.y1) - std::min(ya, yb)) <= 1 && std::abs(std::max(q.y0, q.y1) - std::max(ya, yb)) <= 1;
                         if (colOk && spanOk && q.w == 2) { ++good; (w->dir > 0 ? ups : dns) += 1; } }
                 }
-                CHECK(good == 6 && ups == 4 && dns == 2, "(1.3.3) spines: green on the 4 up profiles (3 waves + the provisional up leg), red on the 2 down waves, each over its wave's range, 2 px (" << good << ": " << ups << " up / " << dns << " down)");
+                CHECK(wpc::ON_CANDLE || (good == 6 && ups == 4 && dns == 2), "(1.3.3) spines: green on the 4 up profiles (3 waves + the provisional up leg), red on the 2 down waves, each over its wave's range, 2 px (" << good << ": " << ups << " up / " << dns << " down)");
             }
             CHECK(tg <= open, "(1.2.0) price tags only for OPEN nodes (" << tg - 1 << " tags, " << open << " open)");
             A.drawn = pre2; }
@@ -248,7 +248,7 @@ int main(int argc, char** argv) {
         mock::Host V; V.vapMissing = { 10 }; mock::current = &V; chart(V, F, 79); x.calc(0); WState* sv = static_cast<WState*>(V.userData);
         CHECK(sv && sv->E.pendingCount() == 1 && sv->E.waves.size() == 5 && sv->E.waves[0].pending, "VAP missing -> the wave waits (pending), retried every 10 min");
         drawBoth(x, V); int amber = 0; for (const mock::Prim& p : V.drawn) amber += p.k == 'F' && p.col == 0x22D3EE;   // (1.6.0) cyan WPOC
-        CHECK(amber == 10, "(1.3.3) only the 4 complete waves (+ the provisional one) are drawn; (1.9.0) each: its cyan POC row + its cyan POC line = 10, drawn " << amber);
+        CHECK(amber == 5, "(1.3.3) only the 4 complete waves (+ the provisional one) are drawn; (1.14.0) each: one cyan POC dash on its candle = 5 (was row + line = 10), drawn " << amber);
         x.clear();
     }
     // symbol change on the same chart: the state follows the new market
@@ -288,7 +288,7 @@ int main(int argc, char** argv) {
         {   // (1.3.2, Rassul 21:20 "no liquidity nodes in the pictures") live book -> sampler -> wave bar span -> pickRaw -> LNODE bars LEFT of the profile, <= 40 px
             const unsigned long dim = wpc::mix(0x22C55E, 0x0B0F17, 0.6); int ln = 0, leftOk = 0;
             auto deltaRow = [&](const mock::Prim& g) { for (const mock::Prim& q : M.drawn) if (q.k == 'L' && q.x0 == q.x1 && q.w == 2 && std::abs(g.x0 - (q.x0 + 1)) <= 1) return true; return false; };   // (1.5.0) right side = delta
-            for (const mock::Prim& g : M.drawn) if (g.k == 'F' && (g.col == 0x22C55E || g.col == dim) && !deltaRow(g)) { ++ln;
+            for (const mock::Prim& g : M.drawn) if (g.k == 'F' && (g.col == 0x22C55E || g.col == dim) && !deltaRow(g) && !(wpc::ON_CANDLE && g.col == 0x22C55E && g.x1 - g.x0 <= 16)) { ++ln;   // (1.14.0) a candle-wide green fill = an up wave's HVN dash, not a liquidity bar
                 for (const mock::Prim& q : M.drawn) if (q.k == 'L' && q.x0 == q.x1 && q.w == 2 && (q.col == 0x22C55E || q.col == 0xEF4444) && q.x0 >= g.x1 && q.x0 - g.x1 <= 2 && g.x1 - g.x0 <= 30) { ++leftOk; break; } }
             CHECK(ln == 0 && sm && sm->E.C.lnodes >= 1, "(1.6.1) live-book liquidity nodes still computed but NOT drawn on the left (" << ln << " drawn, " << leftOk << " left)");
         }
