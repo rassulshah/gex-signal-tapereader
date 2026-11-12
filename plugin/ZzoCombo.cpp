@@ -1,6 +1,10 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.5.0  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.5.1  (2026-11-12)
  *
+ *  2.5.1 (Rassul 2026-11-12 12:26 "get rid of count because i already see it on the wave, and keep Q and label it like 4/6. also the
+ *    8ATR or 14 or more candles are excessive ... even 5 or more up candles bigger than ATR is excessive"): Q no longer scores the wave's
+ *    size or length (finder 1.3.1: dips, high-end closes, closes above the prior high, the first 3 bars, efficiency, a run of 4); the
+ *    box row is "Q 4/6" (no count).
  *  2.5.0 (Rassul 2026-11-12 11:45 "score the quality of the bars in the cob", 12:09 "ok. go", 12:10 "also check for high end closes"):
  *    + the quality score Q (0-6) of the wave's own bars (finder 1.3.0); the box row is now "Cnt / Q" and the Hold row uses Q, Hr and
  *    the Lvp. Opens are read here (barOpen) for it. C and Q record lines end with H / - and the score.
@@ -334,7 +338,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoCombo* p = new ZzoCombo();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Combo v2.5.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.5.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Combo v2.5.1 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.5.1");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

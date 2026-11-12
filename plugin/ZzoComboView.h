@@ -33,7 +33,7 @@ inline std::string countText(const Wave& w) { if (w.cntCap) return std::to_strin
 
 // (2.4.0, Rassul 2026-11-12 11:27 "I want a read box on the left of the indicator pane", 11:35 "try to reuse rows like lvp/hrly so it
 // doesn't take up too much vertical space", 11:38 "in the Lvl you can add SR+ in the beginning") the read box: the newest Cob / Cob2 of
-// the session. Rows by importance: Cob | Lvl | Cnt / Q (2.5.0: the quality score 0-6 replaced Retr) | Lvp / Hr | Hold. Fixed width; rows that do not fit a short pane drop from
+// the session. Rows by importance: Cob | Lvl | Q "4/6" (2.5.1, Rassul 12:26 "get rid of count because i already see it on the wave, and keep Q and label it like 4/6") | Lvp / Hr | Hold. Fixed width; rows that do not fit a short pane drop from
 // the bottom; under title + 2 rows no box (the plain title as before).
 inline std::string clock12(long long t) {
     const long long d = floorDiv(t, 86400); const int mn = (int)((t - d * 86400) / 60); int h = mn / 60; const int m = mn % 60; const bool pm = h >= 12; h = h % 12; if (h == 0) h = 12;
@@ -45,11 +45,12 @@ inline std::string lvShort(int mask, int dir, int maxN = 3) {
 }
 inline std::vector<std::pair<std::string, std::string>> readRows(const zcf::Read& R) {
     std::vector<std::pair<std::string, std::string>> r;
-    if (!R.any) { r.push_back({ "Cob", "-" }); r.push_back({ "Lvl", "-" }); r.push_back({ "Cnt / Q", "-" }); r.push_back({ "Lvp / Hr", "-" }); r.push_back({ "Hold", "-" }); return r; }
+    if (!R.any) { r.push_back({ "Cob", "-" }); r.push_back({ "Lvl", "-" }); r.push_back({ "Q", "-" }); r.push_back({ "Lvp / Hr", "-" }); r.push_back({ "Hold", "-" }); return r; }
     char b[48];
     r.push_back({ R.kind == 2 ? "Cob2" : "Cob", std::string(R.dir > 0 ? "Up " : "Dn ") + clock12(R.tCf) });
     r.push_back({ "Lvl", lvShort(R.lv, R.dir) });
-    std::snprintf(b, sizeof b, "%s / %s", R.cnt >= CNT_CAP ? (std::to_string(CNT_CAP) + "+").c_str() : std::to_string(R.cnt).c_str(), R.q < 0 ? "-" : std::to_string(R.q).c_str()); r.push_back({ "Cnt / Q", b });
+    if (R.q < 0) std::snprintf(b, sizeof b, "-"); else std::snprintf(b, sizeof b, "%d/%d", R.q, zcf::Q_MAX);
+    r.push_back({ "Q", b });
     r.push_back({ "Lvp / Hr", std::string(R.lvpSt == 1 ? "yes" : R.lvpSt == 2 ? "no" : "wait") + " / " + (R.hr ? "yes" : "no") });
     std::snprintf(b, sizeof b, "%d%%", R.hold); r.push_back({ "Hold", b });
     return r;

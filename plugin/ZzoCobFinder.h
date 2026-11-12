@@ -42,14 +42,19 @@
 //   SR+ = a key level was swept and closed back over (rule 3); every Cob has it, a Cob2 only when it happened.
 //   HOLD (the read box): held-to-the-RTH-close rate of the state, from the same history - HOLD_COB / HOLD_COB2 below
 //     [Hr no / yes][Lvp still possible / Lvp printed / no Lvp].
-// (1.3.0, lsZzoCombo 2.5.0, Rassul 2026-11-12 11:45 "score the quality of the bars in the cob ... the number of consecutive green bars,
-//   the number of big green bars that are above the atr, the volume of the bars", 12:09 "ok. go", 12:10 "you should also check for high
-//   end closes, they also expose the quality of the cob"): Q = the QUALITY of the wave's own bars (origin + 1 .. the top), 0..6, one
-//   point each (bullish; bearish = mirror; ATR = Wilder 14 as of the bar before the origin):
-//     1. 14 or more bars            2. the wave is 8 ATR or more          3. no dip inside the wave deeper than 0.3 of the wave
-//     4. 5 or more up bars with a range >= 1 ATR      5. a run of 4 or more up bars      6. 6 or more up bars closing in their top third
-//   MEASURED (1,296 Cobs, same history): Q 4-6 held 85% / 89% with an Lvp (last third 83%); Q 3 68%; Q 0-2 57%. Volume per bar, the
-//   share of up bars and the wick at the top did not separate. Q is logged on every C / Q line and drives the read box's Hold row.
+// (1.3.1, lsZzoCombo 2.5.1, Rassul 2026-11-12 11:45 "score the quality of the bars in the cob ... the number of consecutive green bars,
+//   the number of big green bars that are above the atr, the volume of the bars", 12:10 "you should also check for high end closes",
+//   12:26 "get rid of count because i already see it on the wave, and keep Q and label it like 4/6. also the 8ATR or 14 or more candles
+//   are excessive. that many bars and that much length could exhaust and makes it impractical to get in on a pullback ... even 5 or more
+//   up candles bigger than ATR is excessive"): Q = the QUALITY of the wave's own bars (origin + 1 .. the top), 0..6, one point each, none
+//   of them about the wave's size or length (bullish; bearish = mirror):
+//     1. no dip inside the wave deeper than 0.30 of the wave          2. 4 or more up bars closing in their top third
+//     3. 4 or more closes above the prior bar's high                  4. 2 or more of the first 3 bars close in their top third
+//     5. efficient: the wave is at least half the sum of its bars' ranges      6. a run of 4 or more up bars
+//   MEASURED (1,296 Cobs, same history): Q 4-6 held 78%, reached 1.33 65% (last third 75%); Q 0-2 48% / 47%. On waves under 14 bars
+//   and under 8 ATR: Q 5-6 held 78%, reached 1.33 75% (81); Q 0-2 42%. (The 2.5.0 score - 14+ bars, 8+ ATR, 5+ big up bars - held more
+//   often, 85%, but rewarded size; replaced on his instruction. Big waves did not exhaust in the data: 11+ ATR held 87%.)
+//   Volume per bar, the share of up bars and the wick at the top did not separate. Q is logged on every C / Q line and drives Hold.
 #pragma once
 #include "ZzoDeltaLogic.h"
 #include <algorithm>
@@ -61,25 +66,25 @@
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.5.0";   // (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
-static const char* const VERSION = "1.3.0";         // the finder rule (1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
+static const char* const COMBO_VERSION = "2.5.1";   // (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const VERSION = "1.3.1";         // the finder rule (1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
 static const double MAX_RETR = 0.46;                 // (1.2.0) no longer a Cob requirement: beyond it a Cob is "deep" (its own Hold rate); still the Cob2 limit
-static const int HOLD_DEEP[3] = { 38, 58, 26 };      // a Cob that had retraced > 0.46 at the completing bar [Lvp pending, yes, none]
+static const int HOLD_DEEP[2][3] = { { 31, 46, 25 }, { 49, 70, 29 } };   // a Cob that had retraced > 0.46 at the completing bar [Q 0-2, 3-6][Lvp pending, yes, none]
 static const int LVP_WAVES = 3;                      // pullback waves that can carry the Lvp
 static const double COB2_DIST = 5.0;                 // Cob2: bar ranges from the RTH extreme to the completing close
 static const int COB2_MIN_OPEN = 60;                 // Cob2: minutes after the RTH open
 static const int COB2_PRE = 10, COB2_MR = 20;        // Cob2: bars before the extreme bar (the high to close beyond; the median range)
-static const int Q_BARS = 14, Q_BIG = 5, Q_RUN = 4, Q_HEC = 6, ATR_N = 14; static const double Q_SIZE = 8.0, Q_PULL = 0.3;   // the six Q rules
+static const int Q_MAX = 6, Q_HEC = 4, Q_ABOVE = 4, Q_FIRST = 2, Q_RUN = 4, ATR_N = 14;   // the six Q rules (the dip limit 0.30 and efficiency 0.5 are in quality())
 // held % [Q band 0-2, 3, 4-6][Hr no, yes][Lvp pending, yes, none]; a cell under 20 cases takes its band's rate
-static const int HOLD_COB[3][2][3] = { { { 54, 65, 38 }, { 65, 77, 44 } }, { { 59, 64, 50 }, { 77, 80, 68 } }, { { 80, 85, 57 }, { 87, 90, 63 } } };
-static const int HOLD_COB2[3][3] = { { 67, 79, 56 }, { 74, 74, 74 }, { 85, 90, 58 } };   // [Q band][Lvp]; the hourly turn adds nothing to a Cob2
+static const int HOLD_COB[3][2][3] = { { { 49, 59, 35 }, { 72, 81, 54 } }, { { 62, 71, 43 }, { 73, 83, 40 } }, { { 71, 78, 47 }, { 84, 88, 65 } } };
+static const int HOLD_COB2[3][3] = { { 71, 85, 58 }, { 72, 82, 50 }, { 78, 84, 63 } };   // [Q band][Lvp]; the hourly turn adds nothing to a Cob2
 static const int NLV = 9;                              // 0..5 = a high / low pair; 6..8 = one price, swept from either side
 static const char* const LV_HI[NLV] = { "ONH", "AsiaHI", "LonHI", "PhrH", "PFH", "PDH", "DPoc", "VAH", "VAL" };
 static const char* const LV_LO[NLV] = { "ONL", "AsiaLO", "LonLO", "PhrL", "PFL", "PDL", "DPoc", "VAH", "VAL" };
 
-struct FBar { long long t = 0, h = 0, l = 0, c = 0, sess = 0; bool rth = false; long long o = 0; double atr = 0; };   // (1.3.0) o = the open, atr = Wilder ATR(14) through this bar
+struct FBar { long long t = 0, h = 0, l = 0, c = 0, sess = 0; bool rth = false; long long o = 0; double atr = 0; };   // (1.3.0) o = the open, atr = Wilder ATR(14) through this bar (kept; Q 1.3.1 no longer uses it)
 // (1.1.0, Rassul 2026-11-12 09:32 "Add prior day poc vah Val also") the prior FULL session's volume profile, as KeyLevelsLogic.h profileOf
 // (1-tick rows; POC = the biggest row, a tie to the row nearest the middle then the lower; 70% value area by the CBOT two-row rule) -
 // but built from BARS (each bar's volume spread evenly over its ticks), the only data the 400-session test had; it can sit a few
@@ -193,20 +198,22 @@ struct Finder {
     }
     // (1.3.0) Q: the quality of the wave's own bars io + 1 .. e (io = the origin bar, e = the top bar); -1 when it cannot be scored
     int quality(int d, int io, int e) const {
-        if (io < 1 || e <= io || e >= (int)F.size()) return -1;
-        const double atr = F[(size_t)io - 1].atr; if (!(atr > 0)) return -1;
+        if (io < 0 || e <= io || e >= (int)F.size()) return -1;
         auto Hm = [&](int i) { return d > 0 ? F[(size_t)i].h : -F[(size_t)i].l; }; auto Lm = [&](int i) { return d > 0 ? F[(size_t)i].l : -F[(size_t)i].h; };
         const long long leg = Hm(e) - Lm(io); if (leg <= 0) return -1;
-        int n = 0, run = 0, best = 0, big = 0, hec = 0; long long mx = Hm(io + 1), dip = 0;
+        int run = 0, best = 0, hec = 0, above = 0, first = 0; long long mx = Hm(io + 1), dip = 0, sum = 0;
         for (int i = io + 1; i <= e; ++i) {
-            ++n; const long long hh = Hm(i), ll = Lm(i), r = hh - ll; const bool up = (long long)d * (F[(size_t)i].c - F[(size_t)i].o) > 0;
+            const long long hh = Hm(i), ll = Lm(i), r = hh - ll, cc = (long long)d * F[(size_t)i].c; const bool up = (long long)d * (F[(size_t)i].c - F[(size_t)i].o) > 0;
+            const bool hi = r > 0 && 100 * (cc - ll) >= 67 * r;                 // closes in the top third
             run = up ? run + 1 : 0; if (run > best) best = run;
-            if (up && (double)r >= atr) ++big;
-            if (up && r > 0 && 3 * ((long long)d * F[(size_t)i].c - ll) >= 2 * r) ++hec;
+            if (up && hi) ++hec;
+            if (hi && i <= io + 3) ++first;
+            if (cc > Hm(i - 1)) ++above;
+            sum += r;
             if (hh > mx) mx = hh;
             if (mx - ll > dip) dip = mx - ll;
         }
-        return (n >= Q_BARS) + ((double)leg / atr >= Q_SIZE) + ((double)dip / (double)leg < Q_PULL) + (big >= Q_BIG) + (best >= Q_RUN) + (hec >= Q_HEC);
+        return (10 * dip < 3 * leg) + (hec >= Q_HEC) + (above >= Q_ABOVE) + (first >= Q_FIRST) + (2 * leg >= sum) + (best >= Q_RUN);
     }
     // (1.2.0) Cob2 rules a..d (the caller has checked RTH, near the extreme and the 0.46 limit); j = the completing bar
     // The "bar that made the RTH low" = the pivot bar of the nearest of the last 5 down-waves whose low IS the RTH low so far (as
@@ -305,7 +312,7 @@ struct Finder {
             R.any = true; R.kind = t.cob ? 1 : 2; R.dir = t.cob ? t.cob : t.cob2; R.lv = t.lv; R.cnt = t.cnt; R.lvpSt = t.lvpSt; R.hr = t.hr; R.retr = t.retr; R.tCf = t.tCf; R.q = t.q;
             const int ls = t.lvpSt < 0 || t.lvpSt > 2 ? 0 : t.lvpSt;
             const int qb = t.q >= 4 ? 2 : t.q == 3 ? 1 : 0;
-            R.hold = t.cob && t.retr > MAX_RETR ? HOLD_DEEP[ls] : t.cob ? HOLD_COB[qb][t.hr ? 1 : 0][ls] : HOLD_COB2[qb][ls];
+            R.hold = t.cob && t.retr > MAX_RETR ? HOLD_DEEP[qb > 0 ? 1 : 0][ls] : t.cob ? HOLD_COB[qb][t.hr ? 1 : 0][ls] : HOLD_COB2[qb][ls];
         }
         return R;
     }
