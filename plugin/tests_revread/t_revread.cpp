@@ -38,7 +38,7 @@ static std::string readOf(const rvs::Engine& E, const rvs::Story& s) { std::stri
 int main(int argc, char** argv) {
     const std::vector<Ev> V = load(argc > 1 ? argv[1] : "revread_es1111.txt");
     CHECK(V.size() > 40000, "fixture loaded (" << V.size() << " events)");
-    CHECK(std::string(rvs::VERSION) == "0.1.1", "version 0.1.1");
+    CHECK(std::string(rvs::VERSION) == "0.2.0", "version 0.2.0");
     Run R; replay(R, V); const rvs::Engine& E = R.E;
     CHECK(E.sideMismatch == 0 && E.fills == 7307 && E.garbage == 0, "every fill's aggressor side agrees with the resting order's side (" << E.fills << " fills, " << E.sideMismatch << " mismatches)");
     // ---- [1] tonight's reversal: the 8:43 PM selling climax, absorbed, fading, flushed, buyers ----
@@ -107,6 +107,34 @@ int main(int argc, char** argv) {
     // ---- [10] robustness: garbage, a feed reset, the timeout ----
     { rvs::Engine G; G.P = rvs::forMarket("ES"); G.onEvent(1000, 7, 0, 100, 1, 1, 0); G.onEvent(1000, 3, 0, -5, 1, 1, 0); G.onEvent(1000, 0, 0, 100, -1, 1, 0); CHECK(G.garbage == 3 && G.fills == 0 && G.book.empty(), "[10] garbage events are counted and ignored");
       Run M; replay(M, V, false, false, T(20, 44, 30)); M.E.reset(); bool ended = false; for (const rvs::Story& x : M.E.ended) if (x.end == rvs::E_RESET) ended = true; CHECK(ended && !M.E.live[0] && M.E.book.empty(), "[10] a feed reset ends the open story (\"feed reset\") and clears the book"); }
+    // ---- [10] 0.2.0: the zone bottom variants, pullback absorbed (log-only), the new params keys
+    { std::vector<std::string> L; L.push_back("MARKET|ES"); L.push_back("RET_TICKS|2"); L.push_back("MERGE_TICKS|4"); L.push_back("ABS_WAIT|18"); L.push_back("RET_TICKS|99");
+      rvs::Params Q = rvs::forMarket("ES"); const int n = rvs::parseParams(L, "ES", Q); CHECK(n == 4 && Q.retTicks == 12 && Q.mergeTicks == 4 && Q.absWait == 18, "[10] RET_TICKS / MERGE_TICKS / ABS_WAIT are read and clamped");
+      rvs::Params D = rvs::forMarket("ES"); CHECK(D.retTicks == 0 && D.mergeTicks == 0, "[10] the zone variants are off by default (0.1.1 behaviour)"); }
+    { // a second climax 2 ticks under the zone: restarts the story by default, joins it (a zone bottom) with MERGE_TICKS
+      for (int pass = 0; pass < 2; ++pass) { rvs::Engine G; G.P = rvs::forMarket("ES"); G.P.mergeTicks = pass ? 4 : 0; long long id = 1, t = 100000;
+          for (int k = 0; k < 40; ++k, t += 10000) { G.onEvent(t, rvs::FILL, rvs::ASK, 1000, 5, id++, 0); G.onEvent(t + 1, rvs::FILL, rvs::BID, 1001, 5, id++, 0); }
+          G.onEvent(t, rvs::FILL, rvs::ASK, 992, 60, id++, 0); G.onEvent(t + 1, rvs::FILL, rvs::ASK, 991, 80, id++, 0); G.onEvent(t + 2, rvs::FILL, rvs::ASK, 990, 100, id++, 0); t += 10000;      // climax: 240 sold down to 990
+          G.onEvent(t, rvs::FILL, rvs::ASK, 988, 120, id++, 0); G.onEvent(t + 1, rvs::FILL, rvs::ASK, 987, 180, id++, 0); t += 10000;                                                       // a bigger one, 2 ticks under the zone
+          G.onEvent(t, rvs::FILL, rvs::BID, 989, 1, id++, 0);                                                                                                                                    // closes that block
+          if (!pass) CHECK(G.live[0] && G.st[0].id == 2 && G.st[0].merged == 0 && G.ended.size() == 1 && G.ended[0].end == rvs::E_DEEP, "[10] default: the deeper climax ends the story and starts a new one");
+          else CHECK(G.live[0] && G.st[0].id == 1 && G.st[0].merged == 1 && G.ended.empty() && G.st[0].zoneLo == 986 && G.st[0].extreme == 987 && G.st[0].burstAll == 540 && G.st[0].absLots >= 300, "[10] MERGE_TICKS 4: it joins the story, the zone widens to the new low, its lots count as traded into the zone"); } }
+    { // pullback absorbed: buyers lift into a new high, the POC is at the top, the candle closes under it; the next candle follows through
+      rvs::Engine G; G.P = rvs::forMarket("ES"); G.spb = 180; long long id = 1;
+      auto cand = [&](long long end, long long lo, long long hi, long long close, long long poc, long long cdlt, bool trade) { if (trade) G.onEvent((end - 10) * 1000, rvs::FILL, rvs::BID, close, 1, id++, 0);
+          rvs::Poc p; p.ok = true; p.t = end; p.lo = lo; p.hi = hi; p.close = close; p.tick = poc; p.vol = 10; p.total = 50; p.cdlt = cdlt; p.pos = (double)(poc - lo) / (double)(hi - lo); p.closePos = (double)(close - lo) / (double)(hi - lo); G.onCandle(end, p, close); };
+      long long e = 180000; for (int i = 0; i < 12; ++i, e += 180) cand(e, 90, 100 + i % 2, 95, 95, i % 2 ? 10 : -10, true);
+      CHECK(G.pulls.empty(), "[10] ordinary candles: no pullback candidate");
+      cand(e, 100, 110, 104, 109, 40, true); e += 180;
+      CHECK(G.pulls.size() == 1 && G.pulls[0].top && G.pulls[0].conf == -1 && std::fabs(G.pulls[0].dx - 4.0) < 1e-9 && G.pulls[0].ext == 110, "[10] buyers stopped at the high of a pullback: a top candidate, delta 4.0x the normal, waiting for the next candle");
+      cand(e, 95, 108, 96, 100, -30, true); e += 180;
+      bool f = false; for (const std::string& o : G.out) if (o.find("P|0.2.0|1|top|F|") == 0 && o.find("|conf 1|") != std::string::npos) f = true;
+      CHECK(G.pulls.size() == 1 && G.pulls[0].conf == 1 && f && G.marks.empty(), "[10] the next candle makes a lower low and a lower close: follow-through recorded (F, conf 1); log-only, no letter");
+      cand(e, 96, 120, 119, 118, 60, true); e += 180;   // closes ABOVE its POC: buyers were not stopped
+      cand(e, 100, 125, 110, 124, -50, true); e += 180;  // sellers' delta at a new high: not buyers stopped
+      CHECK(G.pulls.size() == 1, "[10] a close above the POC, or a negative delta at the high, is not a candidate");
+      cand(e + 3600, 110, 140, 120, 139, 80, false);     // a candle the engine never saw trade (the chart's history after a restart)
+      CHECK(G.pulls.size() == 1 && G.cnd.back().t == e + 3600, "[10] a candle fed from the chart's history only builds the normal: no candidate, nothing recorded twice"); }
     std::cout << "t_revread (lsRevRead " << rvs::VERSION << "): " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }
