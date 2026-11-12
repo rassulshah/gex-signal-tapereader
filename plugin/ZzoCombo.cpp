@@ -1,6 +1,8 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.5.1  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.6.0  (2026-11-12)
  *
+ *  2.6.0 (Rassul 2026-11-12 12:43 "a cob bar ... I want you to label it in the cob", 12:47 "I'll go with your recommendation"): + "CB" over
+ *    the Cob bar's column inside a Cob / Cob2 wave (finder 1.4.0; label and log only, no quality point). C / Q lines end with its bar time.
  *  2.5.1 (Rassul 2026-11-12 12:26 "get rid of count because i already see it on the wave, and keep Q and label it like 4/6. also the
  *    8ATR or 14 or more candles are excessive ... even 5 or more up candles bigger than ATR is excessive"): Q no longer scores the wave's
  *    size or length (finder 1.3.1: dips, high-end closes, closes above the prior high, the first 3 bars, efficiency, a run of 4); the
@@ -286,7 +288,7 @@ void ZzoCombo::status(ZState& S, long long now) {
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = zzd::comboStatus(S.E, S.mkt, S.spb, S.vapFault ? "FAULT - remove and re-add the indicator" : "ok") +
         "DRAWN,columns " + std::to_string(S.last.cols) + ",ratios " + std::to_string(S.last.ratios) + ",counts " + std::to_string(S.last.counts) + ",Ab " + std::to_string(S.last.ab) +
-        ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.ar) + ",ST " + std::to_string(S.last.st) + ",Cob " + std::to_string(S.last.cob) + ",Lvp " + std::to_string(S.last.lvp) + ",Cob2 " + std::to_string(S.last.cob2) + ",box rows " + std::to_string(S.last.boxRows) + "\n" + S.F.statusText();
+        ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.ar) + ",ST " + std::to_string(S.last.st) + ",Cob " + std::to_string(S.last.cob) + ",Lvp " + std::to_string(S.last.lvp) + ",Cob2 " + std::to_string(S.last.cob2) + ",CB " + std::to_string(S.last.cb) + ",box rows " + std::to_string(S.last.boxRows) + "\n" + S.F.statusText();
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     zdMkdir(zdFlex()); zdPublish(S.statusPath, body);
@@ -338,7 +340,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoCombo* p = new ZzoCombo();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Combo v2.5.1 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.5.1");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Combo v2.6.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.6.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

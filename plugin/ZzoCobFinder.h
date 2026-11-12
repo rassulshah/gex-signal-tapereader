@@ -55,6 +55,13 @@
 //   and under 8 ATR: Q 5-6 held 78%, reached 1.33 75% (81); Q 0-2 42%. (The 2.5.0 score - 14+ bars, 8+ ATR, 5+ big up bars - held more
 //   often, 85%, but rewarded size; replaced on his instruction. Big waves did not exhaust in the data: 11+ ATR held 87%.)
 //   Volume per bar, the share of up bars and the wick at the top did not separate. Q is logged on every C / Q line and drives Hold.
+// (1.4.0, lsZzoCombo 2.6.0, Rassul 2026-11-12 12:43 "a cob bar, basically a big range bar or a heavy volume bar that is the first green bar
+//   or close to it because its low is less than the high of the dn pivot bar high ... I want you to label it in the cob", 12:47 "I'll go
+//   with your recommendation" = label and log, no quality point): CB = the COB BAR of a Cob / Cob2 - the first of the wave's first two up
+//   bars (within 4 bars of the origin) whose low is below the origin bar's high and whose range is >= 1.5 ATR(14) or whose volume is
+//   >= 1.5x the median of the 20 bars before the origin. Bearish = mirror. Logged at the end of every C / Q line (its bar time, 0 = none).
+//   MEASURED: of 18,177 waves near the RTH extreme, 11.5% of those with a Cob bar are Cobs against 4.2% without (65% of Cobs have one,
+//   40% of all waves) - it helps a wave BECOME a Cob; among Cobs it adds nothing (held 62% with, 70% without), so it scores no point.
 #pragma once
 #include "ZzoDeltaLogic.h"
 #include <algorithm>
@@ -66,8 +73,8 @@
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.5.1";   // (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
-static const char* const VERSION = "1.3.1";         // the finder rule (1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
+static const char* const COMBO_VERSION = "2.6.0";   // (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const VERSION = "1.4.0";         // the finder rule (1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
 static const double MAX_RETR = 0.46;                 // (1.2.0) no longer a Cob requirement: beyond it a Cob is "deep" (its own Hold rate); still the Cob2 limit
@@ -84,7 +91,7 @@ static const int NLV = 9;                              // 0..5 = a high / low pa
 static const char* const LV_HI[NLV] = { "ONH", "AsiaHI", "LonHI", "PhrH", "PFH", "PDH", "DPoc", "VAH", "VAL" };
 static const char* const LV_LO[NLV] = { "ONL", "AsiaLO", "LonLO", "PhrL", "PFL", "PDL", "DPoc", "VAH", "VAL" };
 
-struct FBar { long long t = 0, h = 0, l = 0, c = 0, sess = 0; bool rth = false; long long o = 0; double atr = 0; };   // (1.3.0) o = the open, atr = Wilder ATR(14) through this bar (kept; Q 1.3.1 no longer uses it)
+struct FBar { long long t = 0, h = 0, l = 0, c = 0, sess = 0; bool rth = false; long long o = 0; double atr = 0; long long v = 0; };   // (1.3.0) o = the open, atr = Wilder ATR(14) through this bar (used by CB), v = volume (1.4.0)
 // (1.1.0, Rassul 2026-11-12 09:32 "Add prior day poc vah Val also") the prior FULL session's volume profile, as KeyLevelsLogic.h profileOf
 // (1-tick rows; POC = the biggest row, a tie to the row nearest the middle then the lower; 70% value area by the CBOT two-row rule) -
 // but built from BARS (each bar's volume spread evenly over its ticks), the only data the 400-session test had; it can sit a few
@@ -119,6 +126,7 @@ struct Tag { int cob = 0;            // +1 / -1 = a Cob on this wave
              int watch = 0;          // logged only: 1 = no key level, 2 = count 5..9
              int cob2 = 0;           // (1.2.0) +1 / -1 = a Cob2 on this wave (never together with cob)
              bool hr = false;        // (1.2.0) the hourly turn, decided on the completing bar
+             long long tCb = 0;      // (1.4.0) the bar END time of the Cob bar (0 = none)
              int q = -1;             // (1.3.0) the quality score 0..6 (-1 = not scored)
              int lvpSt = 0;          // (1.2.0) of a Cob / Cob2: 0 = an Lvp can still come, 1 = it printed, 2 = none
              int lv = 0, cnt = 0; bool atExt = false; double retr = 0;
@@ -158,7 +166,7 @@ struct Finder {
     void addBar(const zzd::Bar& eb, long long c, long long o = LLONG_MIN) {
         const long long t = eb.t, h = eb.h, l = eb.l;
         M.addBar(eb); M.trimmed = 0;                        // trims itself at the same bar counts as the pane's engine
-        FBar b; b.t = t; b.h = h; b.l = l; b.c = c; b.sess = sessOf(t);
+        FBar b; b.t = t; b.h = h; b.l = l; b.c = c; b.sess = sessOf(t); b.v = eb.vol;
         b.o = o != LLONG_MIN ? o : (F.empty() ? c : F.back().c); if (b.o > h) b.o = h; if (b.o < l) b.o = l;
         if (F.empty()) b.atr = (double)(h - l);
         else { const long long pc = F.back().c; const double tr = (double)std::max(h - l, std::max(std::llabs(h - pc), std::llabs(l - pc))); b.atr = F.back().atr + (tr - F.back().atr) / (double)ATR_N; }
@@ -214,6 +222,20 @@ struct Finder {
             if (mx - ll > dip) dip = mx - ll;
         }
         return (10 * dip < 3 * leg) + (hec >= Q_HEC) + (above >= Q_ABOVE) + (first >= Q_FIRST) + (2 * leg >= sum) + (best >= Q_RUN);
+    }
+    // (1.4.0) CB: the index of the Cob bar of the wave io + 1 .. e, or -1
+    int cobBar(int d, int io, int e) const {
+        if (io < 10 || e <= io || e >= (int)F.size()) return -1;
+        const double atr = F[(size_t)io - 1].atr; std::vector<long long> vv; for (int i = std::max(0, io - 20); i < io; ++i) vv.push_back(F[(size_t)i].v);
+        std::sort(vv.begin(), vv.end()); const size_t n = vv.size(); const double mv = n % 2 ? (double)vv[n / 2] : 0.5 * (double)(vv[n / 2 - 1] + vv[n / 2]);
+        if (!(atr > 0) || !(mv > 0)) return -1;
+        const long long ph = d > 0 ? F[(size_t)io].h : -F[(size_t)io].l; int greens = 0;
+        for (int i = io + 1; i <= e && i <= io + 4 && greens < 2; ++i) {
+            const FBar& b = F[(size_t)i]; if ((long long)d * (b.c - b.o) <= 0) continue;
+            ++greens; const long long lo = d > 0 ? b.l : -b.h;
+            if (lo < ph && ((double)(b.h - b.l) >= 1.5 * atr || (double)b.v >= 1.5 * mv)) return i;
+        }
+        return -1;
     }
     // (1.2.0) Cob2 rules a..d (the caller has checked RTH, near the extreme and the 0.46 limit); j = the completing bar
     // The "bar that made the RTH low" = the pivot bar of the nearest of the last 5 down-waves whose low IS the RTH low so far (as
@@ -291,13 +313,14 @@ struct Finder {
         t.dir = d; t.tWave = tWave; t.tCf = cf.t; t.origin = origin; t.top = top; t.close = c0; t.lv = mask; t.cnt = cnt; t.retr = retr;
         t.atExt = d > 0 ? origin == rLo : origin == rHi;
         t.hr = hr; t.q = quality(d, pw.e, w.e);
+        if (cob || cob2) { const int cb = cobBar(d, pw.e, w.e); t.tCb = cb >= 0 ? F[(size_t)cb].t : 0; }
         if (cob2) t.cob2 = d;
         if (cob || cob2) { if (cob) t.cob = d; Act A; A.key = key(tWave, d); A.origin = origin; A.top = top; A.vol = w.vol; A.sess = cf.sess; A.dir = d; act.push_back(A); }
         if (!cob) t.watch = watch;
         char b[96]; std::snprintf(b, sizeof b, "|%d|%.2f|%s|%s|%d|%d", cnt, retr, t.atExt ? "at" : "near", bo ? "bo" : "-", cntPane, cntMkt);
         const std::string body = std::string(VERSION) + "|" + std::to_string(tWave) + "|" + std::to_string(cf.t) + "|" + (d > 0 ? "UP" : "DN") + "|" + std::to_string(origin) + "|" +
                       std::to_string(top) + "|" + std::to_string(c0) + "|" + lvText(mask, d) + b;
-        const std::string qs = "|" + std::to_string(t.q);
+        const std::string qs = "|" + std::to_string(t.q) + "|" + std::to_string(t.tCb);
         if (cob) out.push_back("C|" + body + (hr ? "|H" : "|-") + qs);
         else if (watch) out.push_back("W|" + body + (watch == 1 ? "|no level" : "|count under 10"));
         if (cob2) out.push_back("Q|" + body + (hr ? "|H" : "|-") + qs);
