@@ -313,8 +313,18 @@ public:
     }
     static const COLOR C_GOLD = 0x0038A5E0;   // BGR of #E0A538
     static COLOR dim(COLOR c) { return srh::scaleCol(c, 0.32); }
-    void label(const std::string& t, int cx, int y, COLOR c) {
-        const int w = getTextWidth(t.c_str(), -1); setTextColor(c); RCT r; r.set(off::coord(cx - w / 2), off::coord(y), off::coord(cx - w / 2 + w), off::coord(y + 11)); r.drawText(t.c_str(), false, false);
+    // (1.1.0) dir -1 = a label above its bar, +1 = below: a label that would sit on one already drawn in this pass moves one text row
+    // further out (up to 4 rows), kept inside the pane - neighbouring candles' ratios and grades never overlap
+    std::vector<int> lab_; int labTop_ = 0, labBot_ = 0;
+    void label(const std::string& t, int cx, int y, COLOR c, int dir = 0) {
+        const int w = getTextWidth(t.c_str(), -1), x0 = cx - w / 2, x1 = x0 + w;
+        if (dir != 0) for (int k = 0; k < 4; ++k) {
+            bool hit = false; for (size_t i = 0; i + 3 < lab_.size(); i += 4) if (x0 < lab_[i + 2] + 1 && x1 > lab_[i] - 1 && y < lab_[i + 3] && y + 11 > lab_[i + 1]) { hit = true; break; }
+            if (!hit) break;
+            const int ny = y + dir * 11; if (ny < labTop_ || ny + 11 > labBot_) break;
+            y = ny; }
+        lab_.push_back(x0); lab_.push_back(y); lab_.push_back(x1); lab_.push_back(y + 11);
+        setTextColor(c); RCT r; r.set(off::coord(x0), off::coord(y), off::coord(x1), off::coord(y + 11)); r.drawText(t.c_str(), false, false);
     }
     void render(S_& S, Ext& e) {
         const std::string mkt = mktOf(S);
@@ -333,6 +343,7 @@ public:
         const int ppb = std::max(1, (int)getPixelsPerBar()), w = std::max(1, ppb * 6 / 10);
         { const int yU = mid - (int)(half * burstX / CAP), yD = mid + (int)(half * burstX / CAP); off::fillFlat(this, pane.left, yU, pane.right, yU + 1, srh::C_DIM); off::fillFlat(this, pane.left, yD, pane.right, yD + 1, srh::C_DIM); off::fillFlat(this, pane.left, mid, pane.right, mid + 1, srh::C_DIM); }
         FONT f; f.id = HELVETICA; f.size = 9; f.style = BOLD; setFont(f);
+        lab_.clear(); labTop_ = pane.top + 1; labBot_ = pane.bottom - 1;
         const sr::Journal& J = e.jf.J;
         for (int i = v0; i <= v1; ++i) {
             const long long k = (long long)times[i] + e.offS; PNT p; p.set(i, 0.0f, kBarCenter); const int cx = p.h, x0 = cx - w / 2;
@@ -344,13 +355,13 @@ public:
                 if (hU > 0) off::fillFlat(this, x0, mid - hU, x0 + w, mid, brU ? srh::C_GREEN : dim(srh::C_GREEN));
                 if (hD > 0) off::fillFlat(this, x0, mid + 1, x0 + w, mid + 1 + hD, brD ? srh::C_RED : dim(srh::C_RED));
                 char t[24];
-                if (brU && !(g != J.gold.end() && g->second.side > 0)) { std::snprintf(t, sizeof t, "%.1f", b->second.xU); label(t, cx, mid - hU - 12, srh::C_GREEN); ratU = true; }
-                if (brD && !(g != J.gold.end() && g->second.side < 0)) { std::snprintf(t, sizeof t, "%.1f", b->second.xD); label(t, cx, mid + hD + 2, srh::C_RED); ratD = true; }
+                if (brU && !(g != J.gold.end() && g->second.side > 0)) { std::snprintf(t, sizeof t, "%.1f", b->second.xU); label(t, cx, mid - hU - 12, srh::C_GREEN, -1); ratU = true; }
+                if (brD && !(g != J.gold.end() && g->second.side < 0)) { std::snprintf(t, sizeof t, "%.1f", b->second.xD); label(t, cx, mid + hD + 2, srh::C_RED, 1); ratD = true; }
             }
             if (g != J.gold.end()) {                                       // the stop run through a level: gold, its ratio just outside the bar
                 const int h = std::max((int)(half * burstX / CAP), (int)(half * std::min(g->second.x, CAP) / CAP)); char t[24]; std::snprintf(t, sizeof t, "%.1f", g->second.x);
-                if (g->second.side > 0) { off::fillFlat(this, x0, mid - h, x0 + w, mid, C_GOLD); label(t, cx, mid - h - 12, C_GOLD); hU = std::max(hU, h); ratU = true; }
-                else { off::fillFlat(this, x0, mid + 1, x0 + w, mid + 1 + h, C_GOLD); label(t, cx, mid + h + 2, C_GOLD); hD = std::max(hD, h); ratD = true; }
+                if (g->second.side > 0) { off::fillFlat(this, x0, mid - h, x0 + w, mid, C_GOLD); label(t, cx, mid - h - 12, C_GOLD, -1); hU = std::max(hU, h); ratU = true; }
+                else { off::fillFlat(this, x0, mid + 1, x0 + w, mid + 1 + h, C_GOLD); label(t, cx, mid + h + 2, C_GOLD, 1); hD = std::max(hD, h); ratD = true; }
             }
             if (gDraw > 0) for (int sd = 1; sd >= -1; sd -= 2) {           // (1.1.0) the strength grade of the run through a level on this candle: one text row outside the ratio
                 const sr::JGrade* q = J.gradeAt(k, sd); if (!q) continue;
@@ -359,7 +370,7 @@ public:
                 int y = sd > 0 ? mid - hU - 12 - (ratU ? 11 : 0) : mid + hD + 2 + (ratD ? 11 : 0);
                 if (y < pane.top + 1) y = pane.top + 1;
                 if (y > pane.bottom - 11) y = pane.bottom - 11;
-                label(t, cx, y, C_GOLD); if (sd > 0) hU += 11; else hD += 11;   // the arrow, if any, goes outside it
+                label(t, cx, y, C_GOLD, sd > 0 ? -1 : 1); if (sd > 0) hU += 11; else hD += 11;   // the arrow, if any, goes outside it
             }
             if (r != J.rev.end() && drawRev) {                             // the reversal: an arrow on that candle's bar (red down after a high, green up after a low)
                 const bool dn = r->second.side > 0; const COLOR c = dn ? srh::C_RED : srh::C_GREEN; const int a = std::max(3, std::min(6, w / 2 + 1));

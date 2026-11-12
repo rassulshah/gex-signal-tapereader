@@ -91,6 +91,8 @@ static void session(const std::string& mkt, const std::string& fx, double tick) 
     int goldFill = 0, texts = 0, outside = 0, white = 0;
     for (auto& d : h.draws) { if (d.color == SRPane::C_GOLD && d.type != "text") ++goldFill; if (d.type == "text") ++texts; if (d.y < h.paneTop - 1 || d.y > h.paneBottom + 1) ++outside; if (d.type != "text" && d.pen == 0x00FFFFFF && d.penW > 0 && d.border == 0x00FFFFFF) ++white; }
     CHECK(goldFill >= 1 && texts >= 2 && outside == 0, mkt + " DRAW: gold bars " + std::to_string(goldFill) + ", ratio labels " + std::to_string(texts) + ", outside the pane " + std::to_string(outside) + ", white outlines " + std::to_string(white));
+    { struct Bx { int x0, y0, x1, y1; }; std::vector<Bx> tb; int over = 0; for (auto& d : h.draws) if (d.type == "text") { Bx b{ d.x, d.y, d.x + (int)d.text.size() * 6, d.y + 11 }; for (auto& o : tb) if (b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0) ++over; tb.push_back(b); }
+      CHECK(over <= 2, mkt + " DRAW: labels do not sit on each other (" + std::to_string(over) + " overlaps of " + std::to_string(tb.size()) + " labels; only a label with no free row inside the pane may)"); }
     char title[64] = { 0 }; p->parmsTitle(title, sizeof title); CHECK(std::string(title) == "SR v1.1.0", std::string("title '") + title + "'");
     dispose(p);
 }
