@@ -85,7 +85,7 @@
 
 namespace zcf {
 static const char* const COMBO_VERSION = "2.8.0";   // (2.8.0) + the day range used: box row "Q / Rng", Hold adjusted by it; (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
-static const char* const VERSION = "1.6.0";         // the finder rule (1.6.0: + day range used, Hold by range; 1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
+static const char* const VERSION = "1.6.0";         // the finder rule (1.6.0: + day range used, Hold by range, the stop-run level's price on the record line; 1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
 static const double MAX_RETR = 0.46;                 // (1.2.0) no longer a Cob requirement: beyond it a Cob is "deep" (its own Hold rate); still the Cob2 limit
@@ -147,7 +147,8 @@ struct Tag { int cob = 0;            // +1 / -1 = a Cob on this wave
              bool hr = false;        // (1.2.0) the hourly turn, decided on the completing bar
              long long tCb = 0;      // (1.4.0) the bar END time of the Cob bar (0 = none)
              int cbRank = 0;         // (1.5.0) up bars in a row before the Cob bar that it beats on range or volume
-             long long tSr = 0; int srLv = -1;   // (1.5.0) the stop-run bar (0 = none) and the level it ran (index into LV_LO / LV_HI)
+             long long tSr = 0; int srLv = -1; long long srPx = 0;   // (1.6.0) srPx = that level's price in ticks (0 = none)
+               // (1.5.0) the stop-run bar (0 = none) and the level it ran (index into LV_LO / LV_HI)
              int q = -1;             // (1.3.0) the quality score 0..6 (-1 = not scored)
              int rng = -1;           // (1.6.0) day range used x100 at the completing bar (-1 = under ADR_MIN sessions of history)
              int lvpSt = 0;          // (1.2.0) of a Cob / Cob2: 0 = an Lvp can still come, 1 = it printed, 2 = none
@@ -371,6 +372,7 @@ struct Finder {
         if (cob || cob2) {
             int rk = 0; const int cb = cobBar(d, pw.e, w.e, &rk); t.tCb = cb >= 0 ? F[(size_t)cb].t : 0; t.cbRank = cb >= 0 ? rk : 0;
             int lvI = -1; const int sr = stopRunBar(d, pw.s, pw.e, mask, &lvI); t.tSr = sr >= 0 ? F[(size_t)sr].t : 0; t.srLv = sr >= 0 ? lvI : -1;
+            t.srPx = sr >= 0 && lvI >= 0 && lvI < NLV ? (lvI < 6 ? (d > 0 ? L[lvI]->l : L[lvI]->h) : V[lvI - 6]) : 0;
         }
         if (cob2) t.cob2 = d;
         if (cob || cob2) { if (cob) t.cob = d; Act A; A.key = key(tWave, d); A.origin = origin; A.top = top; A.vol = w.vol; A.sess = cf.sess; A.dir = d; act.push_back(A); }
@@ -378,7 +380,7 @@ struct Finder {
         char b[96]; std::snprintf(b, sizeof b, "|%d|%.2f|%s|%s|%d|%d", cnt, retr, t.atExt ? "at" : "near", bo ? "bo" : "-", cntPane, cntMkt);
         const std::string body = std::string(VERSION) + "|" + std::to_string(tWave) + "|" + std::to_string(cf.t) + "|" + (d > 0 ? "UP" : "DN") + "|" + std::to_string(origin) + "|" +
                       std::to_string(top) + "|" + std::to_string(c0) + "|" + lvText(mask, d) + b;
-        const std::string qs = "|" + std::to_string(t.q) + "|" + std::to_string(t.tCb) + "|" + std::to_string(t.cbRank) + "|" + std::to_string(t.tSr) + "|" + (t.srLv >= 0 ? (d > 0 ? LV_LO[t.srLv] : LV_HI[t.srLv]) : "-") + "|" + std::to_string(t.rng);
+        const std::string qs = "|" + std::to_string(t.q) + "|" + std::to_string(t.tCb) + "|" + std::to_string(t.cbRank) + "|" + std::to_string(t.tSr) + "|" + (t.srLv >= 0 ? (d > 0 ? LV_LO[t.srLv] : LV_HI[t.srLv]) : "-") + "|" + std::to_string(t.rng) + "|" + std::to_string(t.srPx);
         if (cob) out.push_back("C|" + body + (hr ? "|H" : "|-") + qs);
         else if (watch) out.push_back("W|" + body + (watch == 1 ? "|no level" : "|count under 10"));
         if (cob2) out.push_back("Q|" + body + (hr ? "|H" : "|-") + qs);
