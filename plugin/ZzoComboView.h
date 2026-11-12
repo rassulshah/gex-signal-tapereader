@@ -27,9 +27,33 @@ namespace zzd {
 
 static const int COUNT_PAD = 2;                  // (2.1.1) px between the bar's top and the count text inside it
 static const unsigned long OUTLINE = 0x000000;  // (2.1.1) the count's 1 px outline
-struct ComboScene { std::vector<Prim> p; int cols = 0, ratios = 0, counts = 0, countsIn = 0, countsAbove = 0, countsDropped = 0, ab = 0, cmx = 0, ar = 0, st = 0, cob = 0, weak = 0, lvp = 0; double hi = 0; };
+struct ComboScene { std::vector<Prim> p; int cols = 0, ratios = 0, counts = 0, countsIn = 0, countsAbove = 0, countsDropped = 0, ab = 0, cmx = 0, ar = 0, st = 0, cob = 0, weak = 0, lvp = 0, cob2 = 0, boxRows = 0, boxL = 0, boxT = 0, boxR = 0, boxB = 0; double hi = 0; std::vector<std::pair<std::string, std::string>> box; };
 
 inline std::string countText(const Wave& w) { if (w.cntCap) return std::to_string(CNT_CAP) + "+"; return std::to_string(w.cnt); }
+
+// (2.4.0, Rassul 2026-11-12 11:27 "I want a read box on the left of the indicator pane", 11:35 "try to reuse rows like lvp/hrly so it
+// doesn't take up too much vertical space", 11:38 "in the Lvl you can add SR+ in the beginning") the read box: the newest Cob / Cob2 of
+// the session. Rows by importance: Cob | Lvl | Cnt / Retr | Lvp / Hr | Hold. Fixed width; rows that do not fit a short pane drop from
+// the bottom; under title + 2 rows no box (the plain title as before).
+inline std::string clock12(long long t) {
+    const long long d = floorDiv(t, 86400); const int mn = (int)((t - d * 86400) / 60); int h = mn / 60; const int m = mn % 60; const bool pm = h >= 12; h = h % 12; if (h == 0) h = 12;
+    char b[24]; std::snprintf(b, sizeof b, "%d:%02d %s", h, m, pm ? "PM" : "AM"); return b;
+}
+inline std::string lvShort(int mask, int dir, int maxN = 3) {
+    std::string t; int n = 0; for (int i = 0; i < zcf::NLV && n < maxN; ++i) if (mask & (1 << i)) { t += " "; t += dir > 0 ? zcf::LV_LO[i] : zcf::LV_HI[i]; ++n; }
+    return n ? "SR+" + t : "-";
+}
+inline std::vector<std::pair<std::string, std::string>> readRows(const zcf::Read& R) {
+    std::vector<std::pair<std::string, std::string>> r;
+    if (!R.any) { r.push_back({ "Cob", "-" }); r.push_back({ "Lvl", "-" }); r.push_back({ "Cnt / Retr", "-" }); r.push_back({ "Lvp / Hr", "-" }); r.push_back({ "Hold", "-" }); return r; }
+    char b[48];
+    r.push_back({ R.kind == 2 ? "Cob2" : "Cob", std::string(R.dir > 0 ? "Up " : "Dn ") + clock12(R.tCf) });
+    r.push_back({ "Lvl", lvShort(R.lv, R.dir) });
+    std::snprintf(b, sizeof b, "%s / %.2f", R.cnt >= CNT_CAP ? (std::to_string(CNT_CAP) + "+").c_str() : std::to_string(R.cnt).c_str(), R.retr); r.push_back({ "Cnt / Retr", b });
+    r.push_back({ "Lvp / Hr", std::string(R.lvpSt == 1 ? "yes" : R.lvpSt == 2 ? "no" : "wait") + " / " + (R.hr ? "yes" : "no") });
+    std::snprintf(b, sizeof b, "%d%%", R.hold); r.push_back({ "Hold", b });
+    return r;
+}
 
 inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, long long formVol, const View& v, const std::string& head, const zcf::Finder* cf = nullptr) {
     ComboScene S; const Colours C;
@@ -107,6 +131,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
         // "Lvp" come from zcf::Finder, decided once when the wave completed. Lvp takes its Cob's colour.
         if (cf && w.e >= 0 && (size_t)w.e < E.B.size()) { if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) {
             if (tg->cob) tags.push_back({ "Cob", tg->cob > 0 ? C.up : C.down });
+            if (tg->cob2) tags.push_back({ "Cob2", tg->cob2 > 0 ? C.up : C.down });
             if (tg->lvp) tags.push_back({ "Lvp", tg->lvp > 0 ? C.up : C.down }); } }
         // (2.1.0, Rassul 14:02 CT "remove weak") cobTag 2 = weak stays in the status file only, never drawn
         double er = 0;
@@ -126,12 +151,33 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
             { Prim o = bx; o.x0 -= 1; o.x1 += 1; o.y0 -= 1; o.y1 += 1; o.col = 0x0B1220; over.push_back(o); }   // dark edge: readable on a ramp of the same colour
             over.push_back(bx); Prim tx; tx.k = Prim::TEXT; tx.x0 = ax + 3; tx.x1 = ax + aw - 3; tx.y0 = bx.y0; tx.y1 = bx.y1; tx.col = white; tx.text = tg.first; over.push_back(tx);
             const std::string& n = tg.first;
-            if (n.rfind("Ab", 0) == 0) ++S.ab; else if (n == "Cmx") ++S.cmx; else if (n == "AR") ++S.ar; else if (n == "ST") ++S.st; else if (n == "Cob") ++S.cob; else if (n == "Lvp") ++S.lvp; else ++S.weak;
+            if (n.rfind("Ab", 0) == 0) ++S.ab; else if (n == "Cmx") ++S.cmx; else if (n == "AR") ++S.ar; else if (n == "ST") ++S.st; else if (n == "Cob") ++S.cob; else if (n == "Cob2") ++S.cob2; else if (n == "Lvp") ++S.lvp; else ++S.weak;
             ++lvl;
         }
     }
     S.p.insert(S.p.end(), over.begin(), over.end());
-    { Prim p; p.k = Prim::TEXT; p.x0 = v.l + 4; p.y0 = v.t + 2; p.x1 = p.x0 + v.textW(head); p.y1 = p.y0 + TH; p.col = C.grey; p.text = head; S.p.push_back(p); }
+    bool boxed = false;
+    if (cf && cf->ok) {
+        const zcf::Read R = cf->read(); const std::vector<std::pair<std::string, std::string>> rows = readRows(R);
+        const int rh = TH + 2, kw = v.textW("Cnt / Retr"), vw = v.textW("SR+ AsiaHI LonHI DPoc"), bw = std::max(kw + vw + 22, v.textW(head) + 12);
+        const int x0 = v.l + 2, y0 = v.t + 1, fit = std::min((int)rows.size(), (H - 4 - (TH + 4)) / rh);
+        if (fit >= 2 && x0 + bw < v.r) {
+            boxed = true; const int y1 = y0 + TH + 4 + fit * rh + 2;
+            Prim e; e.k = Prim::FILL; e.x0 = x0; e.x1 = x0 + bw; e.y0 = y0; e.y1 = y1; e.col = 0x6B7280; S.p.push_back(e);
+            Prim f = e; f.x0 += 1; f.x1 -= 1; f.y0 += 1; f.y1 -= 1; f.col = 0x0B0F17; S.p.push_back(f);
+            const int hw = v.textW(head);
+            { Prim p; p.k = Prim::TEXT; p.x0 = x0 + (bw - hw) / 2; p.x1 = p.x0 + hw; p.y0 = y0 + 2; p.y1 = p.y0 + TH; p.col = white; p.text = head; S.p.push_back(p); }
+            for (int i = 0; i < fit; ++i) {
+                const int y = y0 + TH + 4 + i * rh; const int w2 = v.textW(rows[(size_t)i].second);
+                Prim k; k.k = Prim::TEXT; k.x0 = x0 + 6; k.x1 = k.x0 + v.textW(rows[(size_t)i].first); k.y0 = y; k.y1 = y + TH; k.col = C.grey; k.text = rows[(size_t)i].first; S.p.push_back(k);
+                Prim q; q.k = Prim::TEXT; q.x1 = x0 + bw - 6; q.x0 = q.x1 - w2; q.y0 = y; q.y1 = y + TH; q.text = rows[(size_t)i].second;
+                q.col = (i == 0 && R.any) ? (R.dir > 0 ? C.up : C.down) : white; S.p.push_back(q);
+                S.box.push_back(rows[(size_t)i]);
+            }
+            S.boxRows = fit; S.boxL = x0; S.boxT = y0; S.boxR = x0 + bw; S.boxB = y1;
+        }
+    }
+    if (!boxed) { Prim p; p.k = Prim::TEXT; p.x0 = v.l + 4; p.y0 = v.t + 2; p.x1 = p.x0 + v.textW(head); p.y1 = p.y0 + TH; p.col = C.grey; p.text = head; S.p.push_back(p); }
     return S;
 }
 

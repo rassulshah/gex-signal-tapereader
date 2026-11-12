@@ -1,6 +1,11 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.3.1  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.4.0  (2026-11-12)
  *
+ *  2.4.0 (Rassul 2026-11-12 11:25 "Cob2 is fine", 11:27 "I want a read box on the left of the indicator pane", 11:35 "try to reuse rows
+ *    like lvp/hrly", 11:38 "in the Lvl you can add SR+", 11:40 "build and mockup", 11:42 "there should be no requirement for giveback
+ *    because cob can test the origin bar"): + the "Cob2" tag (the quiet turn - no count, no level needed), + the READ BOX at the left of
+ *    the pane (Cob | Lvl with SR+ | Cnt / Retr | Lvp / Hr | Hold), + the hourly turn (Hr), and the Cob's 0.46 retracement limit is
+ *    removed (finder 1.2.0 - ZzoCobFinder.h has every rule and what was measured). + record line Q (Cob2); C and Q end with H / -.
  *  2.3.1 (Rassul 2026-11-12 09:32 "Add prior day poc vah Val also", 09:33 "Go"): the prior full session's POC / VAH / VAL count as key
  *    levels for a Cob, swept from either side (finder 1.1.0; tested first: Cobs qualifying only on them held 76%, 131 cases). Logic only.
  *  2.3.0 (Rassul 2026-11-12 "the wave zzo would be upgraded to show the waves with count labels but also identify cobs", 08:56 "we are
@@ -9,7 +14,7 @@
  *    count of 10+ and <= 0.46 given back; "Lvp" on the low-volume pullback wave after it (ZzoCobFinder.h has the rule and what was
  *    measured). Decided once on the bar that completes the wave; never repainted. The old "CoB after a sweep" tag is logged only.
  *    Ramps, ratios, counts, Cmx / AR / ST / Ab unchanged. The engine header (ZzoDeltaLogic.h) is NOT changed: closes are read here.
- *    + FILE lsFlexLevels\ZzoCombo\cob-<MKT>-<spb>.csv: one line per decision (C Cob, L Lvp, W watch = logged only), for the nightly.
+ *    + FILE lsFlexLevels\ZzoCombo\cob-<MKT>-<spb>.csv: one line per decision (C Cob, Q Cob2, L Lvp, W watch = logged only), for the nightly.
  *  2.1.1 (Rassul 2026-11-03 "build it all", ref picture gc_zz.png): the wave COUNT is drawn INSIDE the wave's bars - centred on the
  *    second-to-last bar, just below its top, white with a 1 px black outline; a bar too short for the text gets it just above its top.
  *    The ratio label is unchanged (centred above the last bar). View only (ZzoComboView.h); waves, counts, tags unchanged.
@@ -272,7 +277,7 @@ void ZzoCombo::status(ZState& S, long long now) {
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = zzd::comboStatus(S.E, S.mkt, S.spb, S.vapFault ? "FAULT - remove and re-add the indicator" : "ok") +
         "DRAWN,columns " + std::to_string(S.last.cols) + ",ratios " + std::to_string(S.last.ratios) + ",counts " + std::to_string(S.last.counts) + ",Ab " + std::to_string(S.last.ab) +
-        ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.ar) + ",ST " + std::to_string(S.last.st) + ",Cob " + std::to_string(S.last.cob) + ",Lvp " + std::to_string(S.last.lvp) + "\n" + S.F.statusText();
+        ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.ar) + ",ST " + std::to_string(S.last.st) + ",Cob " + std::to_string(S.last.cob) + ",Lvp " + std::to_string(S.last.lvp) + ",Cob2 " + std::to_string(S.last.cob2) + ",box rows " + std::to_string(S.last.boxRows) + "\n" + S.F.statusText();
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     zdMkdir(zdFlex()); zdPublish(S.statusPath, body);
@@ -324,7 +329,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoCombo* p = new ZzoCombo();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Combo v2.3.1 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.3.1");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Combo v2.4.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.4.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }
