@@ -147,6 +147,7 @@ struct Engine {
     // stories: [0] bottom (sell climax), [1] top (buy climax)
     Story st[2]; bool live[2] = { false, false }; int nextId = 1; std::vector<Story> ended;
     std::vector<std::pair<long long, std::string> > levels;         // key / volume / gamma levels and VWAP (ticks, name), from the host
+    std::string clock;                                              // the Central wall clock of the newest event ("2026-11-11 20:43:20"), from the host: written on every record line for the nightly
     Ctx ctx; std::vector<std::string> out;                          // record lines (the host appends them to the session file)
     std::map<long long, std::vector<std::pair<int, std::pair<char, int> > > > pend;   // candle end -> (story id, (letter, colour)) in time order
     std::map<long long, std::vector<Mark> > marks;                  // decided letters per candle
@@ -266,7 +267,7 @@ struct Engine {
             + "|shown " + std::to_string(s.shownSz) + "|abs " + std::to_string(s.absLots) + "|absx " + num(s.absR) + "|range " + std::to_string(s.range) + "|ext " + num((double)s.extreme * tick) + "|ret ";
         for (size_t i = 0; i < s.returns.size(); ++i) l += (i ? "/" : "") + std::to_string(s.returns[i]);
         l += "|flush " + std::to_string(s.flushLots) + "|init " + std::to_string(s.initLots) + "|initopp " + std::to_string(s.initOpp) + "|gate " + std::to_string(s.pocGate) + "|pocpos " + num(s.pocPos)
-            + "|sess " + s.ctx.session + "|volwin " + std::to_string(s.ctx.volWin) + "|hourly " + s.ctx.hourly + "|level " + s.ctx.level + "|pb " + std::to_string(s.ctx.pb) + "|sweep " + s.sweep + "|end " + endName(s.end);
+            + "|sess " + s.ctx.session + "|volwin " + std::to_string(s.ctx.volWin) + "|hourly " + s.ctx.hourly + "|level " + s.ctx.level + "|pb " + std::to_string(s.ctx.pb) + "|sweep " + s.sweep + "|ct " + clock + "|end " + endName(s.end);
         out.push_back(l);
     }
     // ---- a candle closed: its letters are decided, once (candle = its END in seconds; poc = that candle's POC; close in ticks) ----

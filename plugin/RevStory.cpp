@@ -225,7 +225,7 @@ public:
             e->stamp = (long long)o.timestamp; e->ctSec = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
             const std::string sess = rvh::sessionOf(t);
             if (!e->eng || sess != e->session || mkt != e->mkt || (int)S.spb != e->spb) openSession(S, *e, sess, mkt);
-            if (e->eng) context(S, *e);
+            if (e->eng) { char cb[40]; std::snprintf(cb, sizeof cb, "%04d-%02d-%02d %02d:%02d:%02d", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec); e->eng->clock = cb; context(S, *e); }
         }
         if (!e->eng) return;
         if (e->reconnects < 0) { e->reconnects = S.feed.reconnects; e->symbol = S.symbol; }
