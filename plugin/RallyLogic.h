@@ -27,7 +27,8 @@
 
 namespace rly {
 
-static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-11-08 Rassul ES Sun night "those waves are rallies") overnight Rly from the 17:00 CT session open: the 02:00 CT cutoff (ON_FROM_SEC) removed, same rules
+static const char* const VERSION = "1.5.0";   // (1.5.0) run(..., needTrend): false = fire without the vwapTrend condition (lsBreakout 1.24.0); default unchanged
+// was "1.3.0";   // (1.3.0, 2026-11-08 Rassul ES Sun night "those waves are rallies") overnight Rly from the 17:00 CT session open: the 02:00 CT cutoff (ON_FROM_SEC) removed, same rules
 // was "1.2.0":   // (1.2.0, 2026-11-05 13:13 CT Rassul "this is a clear rly dn" (EU 05:05-05:40 CT) -> "go") + overnight Rly: run(..., overnight = true) judges the overnight session (17:00 CT to the RTH open) as its own session - same rules on a Globex VWAP / bands / trend from 17:00; RTH unchanged; default false = lsBigBidAsk unchanged
 // was "1.1.0";
 static const int MIN_BARS = 3;          // e - p
@@ -144,7 +145,10 @@ static const char* const COND_NAMES[5] = { "3+ bars", "2.5 ATR", "tag 1SD", "20-
 static const char* const VIA30 = "via 30-bar ext";   // (1.1.0) the failed field of a fired wave that passed condition 3 by the 30-bar extreme
 
 // judge every confirmed wave of one session (closed bars only)
-inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Sess& S, std::vector<Wave>& out, int rev = 1, bool on = false) {
+// (1.5.0, Rassul 2026-11-11 20:26-20:27 CT "you dont need the vwap, if we are using the hourly trend" / "remove the vwap contidion. we need to align
+// witht he hbo instead") needTrend = false: the vwapTrend condition (c[4]) is still measured and recorded but no longer needed to fire - lsBreakout
+// aligns the Rly with the hourly breakout bar instead (bko::RLY_NEEDS_HBO). Default true = unchanged (lsBigBidAsk).
+inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Sess& S, std::vector<Wave>& out, int rev = 1, bool on = false, bool needTrend = true) {
     bands(B, S); trends(B, S); std::vector<Pivot> P; zigzag(B, S, P, rev);
     const int n = (int)S.g.size();
     auto X = [&](int k) -> const Bar& { return B[(size_t)S.g[(size_t)k]]; };
@@ -172,18 +176,18 @@ inline void judge(const std::vector<Bar>& B, const std::vector<double>& atr, Ses
         }
         W.c[0] = W.nb >= MIN_BARS; W.c[1] = std::isfinite(W.atr) && W.size >= ATR_MULT * W.atr;
         W.ratio = std::isfinite(W.atr) && W.atr > 0 ? W.size / W.atr : 0; W.vw = S.vw[(size_t)e];
-        W.fired = W.c[0] && W.c[1] && W.c[2] && W.c[3] && W.c[4];
+        W.fired = W.c[0] && W.c[1] && W.c[2] && W.c[3] && (W.c[4] || !needTrend);
         out.push_back(W);
     }
 }
 
 // every RTH session of the chart from chart index `from` on (B = CLOSED bars only), per = bar seconds
-inline std::vector<Wave> run(const std::vector<Bar>& B, int per, int openMin, int closeMin, int from = 0, int rev = 1, bool overnight = false) {   // rev: ZigZag reversal bars (2026-11-03); (1.2.0) overnight: also judge the overnight sessions
+inline std::vector<Wave> run(const std::vector<Bar>& B, int per, int openMin, int closeMin, int from = 0, int rev = 1, bool overnight = false, bool needTrend = true) {   // rev: ZigZag reversal bars (2026-11-03); (1.2.0) overnight: also judge the overnight sessions
     std::vector<Wave> out; std::vector<double> atr; atrWilder(B, atr);
     Sess cur; bool open = false;
-    auto flush = [&]() { if (open && !cur.g.empty()) judge(B, atr, cur, out, rev); cur = Sess(); open = false; };
+    auto flush = [&]() { if (open && !cur.g.empty()) judge(B, atr, cur, out, rev, false, needTrend); cur = Sess(); open = false; };
     Sess on; bool onOpen = false;                                                // (1.2.0) the overnight session: its own VWAP / bands / trend / ZigZag from its first bar (17:00 CT)
-    auto onFlush = [&]() { if (onOpen && !on.g.empty()) judge(B, atr, on, out, rev, true); on = Sess(); onOpen = false; };
+    auto onFlush = [&]() { if (onOpen && !on.g.empty()) judge(B, atr, on, out, rev, true, needTrend); on = Sess(); onOpen = false; };
     for (int i = 0; i < (int)B.size(); ++i) {
         const svl::Cls c = svl::classify(B[(size_t)i].days, B[(size_t)i].endSec, per, openMin, closeMin);
         if (overnight) {
