@@ -45,12 +45,13 @@ inline std::string lvShort(int mask, int dir, int maxN = 3) {
 }
 inline std::vector<std::pair<std::string, std::string>> readRows(const zcf::Read& R) {
     std::vector<std::pair<std::string, std::string>> r;
-    if (!R.any) { r.push_back({ "Cob", "-" }); r.push_back({ "Lvl", "-" }); r.push_back({ "Q", "-" }); r.push_back({ "Lvp / Hr", "-" }); r.push_back({ "Hold", "-" }); return r; }
+    if (!R.any) { r.push_back({ "Cob", "-" }); r.push_back({ "Lvl", "-" }); r.push_back({ "Q / Rng", "-" }); r.push_back({ "Lvp / Hr", "-" }); r.push_back({ "Hold", "-" }); return r; }
     char b[48];
     r.push_back({ R.kind == 2 ? "Cob2" : "Cob", std::string(R.dir > 0 ? "Up " : "Dn ") + clock12(R.tCf) });
     r.push_back({ "Lvl", lvShort(R.lv, R.dir) });
     if (R.q < 0) std::snprintf(b, sizeof b, "-"); else std::snprintf(b, sizeof b, "%d/%d", R.q, zcf::Q_MAX);
-    r.push_back({ "Q", b });
+    { char g[24]; if (R.rng < 0) std::snprintf(g, sizeof g, "-"); else std::snprintf(g, sizeof g, "%d.%d", R.rng / 100, (R.rng % 100) / 10);   // (2.8.0) day range used, in ADRs
+      r.push_back({ "Q / Rng", std::string(b) + " / " + g }); }
     r.push_back({ "Lvp / Hr", std::string(R.lvpSt == 1 ? "yes" : R.lvpSt == 2 ? "no" : "wait") + " / " + (R.hr ? "yes" : "no") });
     std::snprintf(b, sizeof b, "%d%%", R.hold); r.push_back({ "Hold", b });
     return r;

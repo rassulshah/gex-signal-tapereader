@@ -1,4 +1,4 @@
-// SR.cpp (1.0.0, 2026-11-10) -- lsSR, the "SR" stop-run pane (Rassul 2026-11-10 18:24-18:50 CT, mockup v10
+// SR.cpp (1.1.0, 2026-11-12: + the strength grade of a run, SRGradeParams.h; 1.0.0, 2026-11-10) -- lsSR, the "SR" stop-run pane (Rassul 2026-11-10 18:24-18:50 CT, mockup v10
 // claude.ai/artifact/EctbmGWXrGd5cWxA7JSGKv; "call the new indicator SR instead of StopRun"). Its own pane on the order feed
 // (off::MboPane, as lsZoneDefense): every order event goes once through onRaw into sr::Engine (SRLogic.h, the ONE copy of the rules,
 // checked against the study: tests_sr2/). Every decision is one journal line (lsFlexLevels\SR\<MKT>-<spb>-<session>.csv, append-only);
@@ -32,6 +32,7 @@
 #include "SettingsHost.h"
 #include "SRLogic.h"
 #include "SRParams.h"
+#include "SRGradeParams.h"
 #include "MarketKey.h"
 #include "NearLevels.h"
 #include <algorithm>
@@ -50,7 +51,7 @@
 #include <chrono>
 #include <climits>
 
-#define SR_VERSION "1.0.0"   // = sr::VERSION = the one setVersion literal
+#define SR_VERSION "1.1.0"   // = sr::VERSION = the one setVersion literal
 
 namespace srh {
 // file helpers shared by the two plugins
@@ -249,8 +250,10 @@ public:
         if (ms > 999) ms = 999;
         long long tMs = e->localSec * 1000 + ms; if (tMs < e->lastTick) tMs = e->lastTick;   // never backwards (a re-sent row keeps its arrival order)
         e->lastTick = tMs; ++e->events;
-        if (x.action == off::FILL) { if (x.implied || x.side < 0 || x.size <= 0) return; ++e->fills;
-            e->eng->onFill(tMs, (long long)x.px, x.size, x.side == off::BID ? -1 : 1, (unsigned long long)(x.aggr ? x.aggr : x.id)); }
+        if (x.action == off::FILL) { if (x.size <= 0) return;
+            if (x.implied || x.side < 0) { e->eng->onVolume(tMs, x.size); return; }   // (1.1.0) an implied fill still counts in the candle's volume
+            ++e->fills;
+            e->eng->onFill(tMs, (long long)x.px, x.size, x.side == off::BID ? -1 : 1, (unsigned long long)(x.aggr ? x.aggr : x.id), (unsigned long long)(x.aggr ? x.id : 0)); }
         else if (x.action == off::NEW) e->eng->onBook(tMs, x.side, true, (long long)x.px, x.size);
         else if (x.action == off::DEL) e->eng->onBook(tMs, x.side, false, (long long)x.px, x.size);
         else e->eng->advance(tMs);
@@ -261,6 +264,7 @@ public:
         e.mkt = mkt; e.spb = (int)S.spb; e.tick = S.tick; e.session = sess; ++e.sessions;
         e.eng.reset(new (std::nothrow) sr::Engine()); if (!e.eng) return;
         const srp::Mkt& M = srp::forMarket(mkt); e.eng->spb = e.spb; e.eng->rthOpenSec = M.rthOpen * 60LL; e.eng->rthCloseSec = M.rthClose * 60LL; e.eng->P.recBars = M.recBars; e.eng->P.drawRev = M.drawRev; e.eng->P.burstX = M.burstX;
+        { const srg::Mkt& G = srg::forMarket(mkt); e.eng->P.bigA = G.bigA; e.eng->P.bigP = G.bigP; e.eng->P.gShare = G.share; e.eng->P.gBids = G.bids; e.eng->P.gDeep = G.deep; e.eng->P.gHeavy = G.heavy; e.eng->P.gStrong = G.strong; }   // (1.1.0) the grade
         e.written = 0; e.lvlSig = -1; e.nLevels = 0; e.lastTick = 0;
         const std::string flex = srh::flexDir(); srh::makeDir(flex); srh::makeDir(srh::journalDir(flex));
         e.path = srh::journalPath(flex, e.mkt, e.spb, sess);
@@ -288,11 +292,13 @@ public:
     virtual void afterTimer(S_& S, long long) { Ext* e = ext(S); if (e) flush(*e); }
     virtual void statusExtra(S_& S, std::ostream& o) {
         Ext* e = ext(S); if (!e) { o << "\nSR,unavailable"; return; }
-        const srp::Mkt& M = srp::forMarket(e->mkt.empty() ? S.market : e->mkt);
+        const srp::Mkt& M = srp::forMarket(e->mkt.empty() ? S.market : e->mkt); const srg::Mkt& G = srg::forMarket(e->mkt.empty() ? S.market : e->mkt);
         o << "\nSR,version " << SR_VERSION << ",market " << e->mkt << (e->writer ? ",writer" : ",read-only (another chart writes this journal)") << ",session " << e->session << ",events " << e->events << ",fills " << e->fills << ",skipped " << e->skipped
           << ",levels " << e->nLevels << " (" << e->lvlNote << ")" << (e->note.empty() ? std::string() : ",note " + e->note)
           << ",journal " << e->path << ",lines " << e->jf.J.lines << ",bad " << e->jf.J.bad << ",gold runs " << e->jf.J.gold.size() << ",reversals " << e->jf.J.rev.size() << ",write fails " << e->writeFails << ",torn lines fixed " << e->tornFixed
           << "\nSR_PARAMS,burstX " << M.burstX << ",recBars " << M.recBars << ",drawRev " << M.drawRev << ",rth " << M.rthOpen << "-" << M.rthClose << ",atr " << (e->eng ? e->eng->atr() : 0)
+          << "\nSR_GRADE,graded runs " << e->jf.J.grade.size() << ",open " << (e->eng ? e->eng->openGrades() : 0) << ",big buyer " << G.bigA << " lots,big bid " << G.bigP << " lots,share " << G.share << ",bids " << G.bids << ",deep " << G.deep << " ATR,heavy " << G.heavy
+          << "x,drawn from grade " << G.strong << (G.draw == 0 ? ",logged only" : G.draw == 1 ? ",drawn with ?" : ",proven") << ",ATR14 " << (e->eng ? e->eng->atr14() : 0) << ",normal candle volume " << (e->eng ? e->eng->medVol() : 0)
           << "\nSR_DRAW,draws " << e->drawn;
     }
     void srCalc() { pump(); S_* S = testState(); if (!S) return; Ext* e = ext(*S); if (e && e->jf.poll()) invalidateChart(false); }
@@ -323,7 +329,7 @@ public:
         RCT pane; pane.getPaneRect(false);
         int v0 = 0, v1 = 0; if (getVisibleBars(&v0, &v1) != RTX_OK) return; v0 = std::max(0, v0); v1 = std::min((int)count - 1, v1);
         const int top = pane.top + 14, bottom = pane.bottom - 14, mid = (top + bottom) / 2, half = (bottom - top) / 2; if (half < 8) return;
-        const double CAP = 8.0, burstX = srp::forMarket(mkt).burstX; const bool drawRev = srp::forMarket(mkt).drawRev != 0;
+        const double CAP = 8.0, burstX = srp::forMarket(mkt).burstX; const bool drawRev = srp::forMarket(mkt).drawRev != 0; const int gDraw = srg::forMarket(mkt).draw, gStrong = srg::forMarket(mkt).strong;
         const int ppb = std::max(1, (int)getPixelsPerBar()), w = std::max(1, ppb * 6 / 10);
         { const int yU = mid - (int)(half * burstX / CAP), yD = mid + (int)(half * burstX / CAP); off::fillFlat(this, pane.left, yU, pane.right, yU + 1, srh::C_DIM); off::fillFlat(this, pane.left, yD, pane.right, yD + 1, srh::C_DIM); off::fillFlat(this, pane.left, mid, pane.right, mid + 1, srh::C_DIM); }
         FONT f; f.id = HELVETICA; f.size = 9; f.style = BOLD; setFont(f);
@@ -331,20 +337,29 @@ public:
         for (int i = v0; i <= v1; ++i) {
             const long long k = (long long)times[i] + e.offS; PNT p; p.set(i, 0.0f, kBarCenter); const int cx = p.h, x0 = cx - w / 2;
             std::map<long long, sr::JBar>::const_iterator b = J.bars.find(k); std::map<long long, sr::JRun>::const_iterator g = J.gold.find(k); std::map<long long, sr::JRev>::const_iterator r = J.rev.find(k);
-            int hU = 0, hD = 0;
+            int hU = 0, hD = 0; bool ratU = false, ratD = false;
             if (b != J.bars.end()) {
                 const bool brU = b->second.xU >= burstX && b->second.hiN, brD = b->second.xD >= burstX && b->second.loN;
                 hU = (int)(half * std::min(b->second.xU, CAP) / CAP); hD = (int)(half * std::min(b->second.xD, CAP) / CAP);
                 if (hU > 0) off::fillFlat(this, x0, mid - hU, x0 + w, mid, brU ? srh::C_GREEN : dim(srh::C_GREEN));
                 if (hD > 0) off::fillFlat(this, x0, mid + 1, x0 + w, mid + 1 + hD, brD ? srh::C_RED : dim(srh::C_RED));
                 char t[24];
-                if (brU && !(g != J.gold.end() && g->second.side > 0)) { std::snprintf(t, sizeof t, "%.1f", b->second.xU); label(t, cx, mid - hU - 12, srh::C_GREEN); }
-                if (brD && !(g != J.gold.end() && g->second.side < 0)) { std::snprintf(t, sizeof t, "%.1f", b->second.xD); label(t, cx, mid + hD + 2, srh::C_RED); }
+                if (brU && !(g != J.gold.end() && g->second.side > 0)) { std::snprintf(t, sizeof t, "%.1f", b->second.xU); label(t, cx, mid - hU - 12, srh::C_GREEN); ratU = true; }
+                if (brD && !(g != J.gold.end() && g->second.side < 0)) { std::snprintf(t, sizeof t, "%.1f", b->second.xD); label(t, cx, mid + hD + 2, srh::C_RED); ratD = true; }
             }
             if (g != J.gold.end()) {                                       // the stop run through a level: gold, its ratio just outside the bar
                 const int h = std::max((int)(half * burstX / CAP), (int)(half * std::min(g->second.x, CAP) / CAP)); char t[24]; std::snprintf(t, sizeof t, "%.1f", g->second.x);
-                if (g->second.side > 0) { off::fillFlat(this, x0, mid - h, x0 + w, mid, C_GOLD); label(t, cx, mid - h - 12, C_GOLD); hU = std::max(hU, h); }
-                else { off::fillFlat(this, x0, mid + 1, x0 + w, mid + 1 + h, C_GOLD); label(t, cx, mid + h + 2, C_GOLD); hD = std::max(hD, h); }
+                if (g->second.side > 0) { off::fillFlat(this, x0, mid - h, x0 + w, mid, C_GOLD); label(t, cx, mid - h - 12, C_GOLD); hU = std::max(hU, h); ratU = true; }
+                else { off::fillFlat(this, x0, mid + 1, x0 + w, mid + 1 + h, C_GOLD); label(t, cx, mid + h + 2, C_GOLD); hD = std::max(hD, h); ratD = true; }
+            }
+            if (gDraw > 0) for (int sd = 1; sd >= -1; sd -= 2) {           // (1.1.0) the strength grade of the run through a level on this candle: one text row outside the ratio
+                const sr::JGrade* q = J.gradeAt(k, sd); if (!q) continue;
+                const bool isGold = g != J.gold.end() && g->second.side == sd; if (!isGold && q->score < gStrong) continue;
+                char t[16]; std::snprintf(t, sizeof t, "%d/4%s", q->score, gDraw == 1 ? "?" : "");
+                int y = sd > 0 ? mid - hU - 12 - (ratU ? 11 : 0) : mid + hD + 2 + (ratD ? 11 : 0);
+                if (y < pane.top + 1) y = pane.top + 1;
+                if (y > pane.bottom - 11) y = pane.bottom - 11;
+                label(t, cx, y, C_GOLD); if (sd > 0) hU += 11; else hD += 11;   // the arrow, if any, goes outside it
             }
             if (r != J.rev.end() && drawRev) {                             // the reversal: an arrow on that candle's bar (red down after a high, green up after a low)
                 const bool dn = r->second.side > 0; const COLOR c = dn ? srh::C_RED : srh::C_GREEN; const int a = std::max(3, std::min(6, w / 2 + 1));
@@ -370,7 +385,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
-    p->setDescription("LRA SR - stop runs (market-by-order feed). Per candle: the strongest one-second burst of small market orders, buyers up (green) and sellers down (red), as a ratio of the local normal; faded below 2.0x, bright with its ratio at 2.0x on a 5-bar high / low. GOLD with its ratio = a stop run through a key / MenthorQ level. Arrow = the candle that closes back across that level (red down = short after a high, green up = long after a low). Gray diamond = the side that ran the stops was pulling its own orders on that candle.");
-    p->setVersion("1.0.0");
+    p->setDescription("LRA SR - stop runs (market-by-order feed). Per candle: the strongest one-second burst of small market orders, buyers up (green) and sellers down (red), as a ratio of the local normal; faded below 2.0x, bright with its ratio at 2.0x on a 5-bar high / low. GOLD with its ratio = a stop run through a key / MenthorQ level. 3/4 = the strength grade of a run through a level once a candle closes back over it (big buyers, big bids filled, 1 ATR deep, a candle of selling beyond the level). Arrow = the candle that closes back across that level (red down = short after a high, green up = long after a low). Gray diamond = the side that ran the stops was pulling its own orders on that candle.");
+    p->setVersion("1.1.0");
     return p;
 }

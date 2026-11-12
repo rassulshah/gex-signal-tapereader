@@ -84,8 +84,8 @@
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.7.3";   // (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
-static const char* const VERSION = "1.5.1";         // the finder rule (1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
+static const char* const COMBO_VERSION = "2.8.0";   // (2.8.0) + the day range used: box row "Q / Rng", Hold adjusted by it; (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const VERSION = "1.6.0";         // the finder rule (1.6.0: + day range used, Hold by range; 1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
 static const double MAX_RETR = 0.46;                 // (1.2.0) no longer a Cob requirement: beyond it a Cob is "deep" (its own Hold rate); still the Cob2 limit
@@ -98,6 +98,14 @@ static const int Q_MAX = 6, Q_HEC = 4, Q_ABOVE = 4, Q_FIRST = 2, Q_RUN = 4, ATR_
 // held % [Q band 0-2, 3, 4-6][Hr no, yes][Lvp pending, yes, none]; a cell under 20 cases takes its band's rate
 static const int HOLD_COB[3][2][3] = { { { 49, 59, 35 }, { 72, 81, 54 } }, { { 62, 71, 43 }, { 73, 83, 40 } }, { { 71, 78, 47 }, { 84, 88, 65 } } };
 static const int HOLD_COB2[3][3] = { { 71, 85, 58 }, { 72, 82, 50 }, { 78, 84, 63 } };   // [Q band][Lvp]; the hourly turn adds nothing to a Cob2
+// (1.6.0, Rassul 2026-11-12 15:21 "Build all") the day range used at the completing bar = (RTH high - RTH low so far) / the median RTH
+// range of the last ADR_N sessions (ADR_MIN needed). 400 sessions, 1,821 Cobs / Cob2: under 0.5 held 45%, 0.5-0.7 66%, 0.7-0.9 75%,
+// 0.9-1.2 78%, 1.2+ 91%; against the Hold tables above that is HOLD_RNG points (the same in both halves of the days and in the Cob /
+// Cob2 groups), added to the table rate and kept within 5..95.
+static const int ADR_N = 10, ADR_MIN = 3;
+static const int HOLD_RNG[5] = { -12, -3, 3, 5, 16 };  // range used x100: < 50, 50-69, 70-89, 90-119, 120+
+inline int rngBand(int r100) { return r100 < 50 ? 0 : r100 < 70 ? 1 : r100 < 90 ? 2 : r100 < 120 ? 3 : 4; }
+inline int holdWithRng(int hold, int r100) { if (r100 < 0) return hold; const int h = hold + HOLD_RNG[rngBand(r100)]; return h < 5 ? 5 : h > 95 ? 95 : h; }
 static const int NLV = 9;                              // 0..5 = a high / low pair; 6..8 = one price, swept from either side
 static const char* const LV_HI[NLV] = { "ONH", "AsiaHI", "LonHI", "PhrH", "PFH", "PDH", "DPoc", "VAH", "VAL" };
 static const char* const LV_LO[NLV] = { "ONL", "AsiaLO", "LonLO", "PhrL", "PFL", "PDL", "DPoc", "VAH", "VAL" };
@@ -141,6 +149,7 @@ struct Tag { int cob = 0;            // +1 / -1 = a Cob on this wave
              int cbRank = 0;         // (1.5.0) up bars in a row before the Cob bar that it beats on range or volume
              long long tSr = 0; int srLv = -1;   // (1.5.0) the stop-run bar (0 = none) and the level it ran (index into LV_LO / LV_HI)
              int q = -1;             // (1.3.0) the quality score 0..6 (-1 = not scored)
+             int rng = -1;           // (1.6.0) day range used x100 at the completing bar (-1 = under ADR_MIN sessions of history)
              int lvpSt = 0;          // (1.2.0) of a Cob / Cob2: 0 = an Lvp can still come, 1 = it printed, 2 = none
              int lv = 0, cnt = 0; bool atExt = false; double retr = 0;
              long long tWave = 0, tCf = 0, origin = 0, top = 0, close = 0, tCob = 0; int dir = 0; };
@@ -150,7 +159,7 @@ inline std::string lvText(int mask, int dir) {
     return t.empty() ? "-" : t;
 }
 
-struct Read { bool any = false; int kind = 0, dir = 0, lv = 0, cnt = 0, lvpSt = 0, hold = 0, q = -1; bool hr = false; double retr = 0; long long tCf = 0; };
+struct Read { bool any = false; int kind = 0, dir = 0, lv = 0, cnt = 0, lvpSt = 0, hold = 0, q = -1, rng = -1; bool hr = false; double retr = 0; long long tCf = 0; };
 struct HrBar { long long id = 0, h = 0, l = 0; };
 
 struct Finder {
@@ -161,6 +170,7 @@ struct Finder {
     HL on, as, lon, phr, full, rth, prevFull, prevRth;
     std::map<long long, double> prof; VA prevVA;           // this session's bar-spread profile; the prior session's POC / VAH / VAL
     static const long long MAX_BAR_TICKS = 20000;          // a bar wider than this (bad data) is not spread
+    std::vector<long long> rthRng;                         // (1.6.0) the RTH ranges of the last ADR_N finished sessions
     std::vector<HrBar> hrs;                                // (1.2.0) the last clock hours (id = hour of the bar END - 1 s)
     bool rthAny = false; long long rLo = 0, rHi = 0, rLoBarH = 0, rHiBarL = 0;   // RTH extremes so far; the high of the LOD bar, the low of the HOD bar
     std::map<long long, Tag> tags;
@@ -169,7 +179,7 @@ struct Finder {
     std::vector<std::string> out;                          // record lines not yet taken by the host
 
     static long long key(long long tWave, int dir) { return tWave * 2 + (dir > 0 ? 1 : 0); }
-    void reset() { M.reset(); F.clear(); haveSess = false; on = as = lon = phr = full = rth = prevFull = prevRth = HL(); prof.clear(); prevVA = VA(); rthAny = false; tags.clear(); act.clear(); out.clear(); hrs.clear(); }
+    void reset() { M.reset(); F.clear(); haveSess = false; on = as = lon = phr = full = rth = prevFull = prevRth = HL(); prof.clear(); prevVA = VA(); rthAny = false; tags.clear(); act.clear(); out.clear(); hrs.clear(); rthRng.clear(); }
     bool setMarket(const std::string& root, int spb = 180) { const std::string m = mkey::norm(root); ok = svl::rthOf(m.c_str(), openMin, closeMin);
         M.revBars = zzd::COMBO_REV_BARS; M.setMarket(m, spb); return ok; }
     // the trading session of a bar END stamp (local secs): bars after 17:00 belong to the next day
@@ -185,7 +195,8 @@ struct Finder {
         else { const long long pc = F.back().c; const double tr = (double)std::max(h - l, std::max(std::llabs(h - pc), std::llabs(l - pc))); b.atr = F.back().atr + (tr - F.back().atr) / (double)ATR_N; }
         const long long days = zzd::floorDiv(t, 86400); const int mn = (int)((t - days * 86400) / 60);
         if (!haveSess || b.sess != curSess) {
-            if (haveSess) { prevFull = full; prevRth = rth; prevVA = profileOf(prof); }
+            if (haveSess) { prevFull = full; prevRth = rth; prevVA = profileOf(prof);
+                if (rth.any) { rthRng.push_back(rth.h - rth.l); if ((int)rthRng.size() > ADR_N) rthRng.erase(rthRng.begin()); } }
             for (const Act& A : act) closeAct(A, 2);
             haveSess = true; curSess = b.sess; on = as = lon = phr = full = rth = HL(); prof.clear(); rthAny = false; act.clear();
         }
@@ -209,6 +220,9 @@ struct Finder {
         }
         F.push_back(b);
     }
+    // (1.6.0) the middle RTH range of the last sessions (0 = not enough history) and the day range used x100 now
+    double adr() const { if ((int)rthRng.size() < ADR_MIN) return 0; std::vector<long long> v(rthRng); std::sort(v.begin(), v.end()); return (double)v[v.size() / 2]; }   // the upper middle value, as the study
+    int rngUsed() const { const double a = adr(); if (!(a > 0) || !rthAny) return -1; const double r = 100.0 * (double)(rHi - rLo) / a; return r > 9999 ? 9999 : (int)(r + 0.5); }
     void trim(long long k) { if (k > 0) { const long long n = std::min<long long>(k, (long long)F.size()); F.erase(F.begin(), F.begin() + (size_t)n); } }
     void closeAct(const Act& A, int st) { auto it = tags.find(A.key); if (it != tags.end() && it->second.lvpSt == 0) it->second.lvpSt = st; }
     // (1.2.0) the hourly turn: the close against the clock hour before the hour of the origin bar
@@ -353,7 +367,7 @@ struct Finder {
         Tag& t = tags[key(tWave, d)];
         t.dir = d; t.tWave = tWave; t.tCf = cf.t; t.origin = origin; t.top = top; t.close = c0; t.lv = mask; t.cnt = cnt; t.retr = retr;
         t.atExt = d > 0 ? origin == rLo : origin == rHi;
-        t.hr = hr; t.q = quality(d, pw.e, w.e);
+        t.hr = hr; t.q = quality(d, pw.e, w.e); t.rng = rngUsed();
         if (cob || cob2) {
             int rk = 0; const int cb = cobBar(d, pw.e, w.e, &rk); t.tCb = cb >= 0 ? F[(size_t)cb].t : 0; t.cbRank = cb >= 0 ? rk : 0;
             int lvI = -1; const int sr = stopRunBar(d, pw.s, pw.e, mask, &lvI); t.tSr = sr >= 0 ? F[(size_t)sr].t : 0; t.srLv = sr >= 0 ? lvI : -1;
@@ -364,7 +378,7 @@ struct Finder {
         char b[96]; std::snprintf(b, sizeof b, "|%d|%.2f|%s|%s|%d|%d", cnt, retr, t.atExt ? "at" : "near", bo ? "bo" : "-", cntPane, cntMkt);
         const std::string body = std::string(VERSION) + "|" + std::to_string(tWave) + "|" + std::to_string(cf.t) + "|" + (d > 0 ? "UP" : "DN") + "|" + std::to_string(origin) + "|" +
                       std::to_string(top) + "|" + std::to_string(c0) + "|" + lvText(mask, d) + b;
-        const std::string qs = "|" + std::to_string(t.q) + "|" + std::to_string(t.tCb) + "|" + std::to_string(t.cbRank) + "|" + std::to_string(t.tSr) + "|" + (t.srLv >= 0 ? (d > 0 ? LV_LO[t.srLv] : LV_HI[t.srLv]) : "-");
+        const std::string qs = "|" + std::to_string(t.q) + "|" + std::to_string(t.tCb) + "|" + std::to_string(t.cbRank) + "|" + std::to_string(t.tSr) + "|" + (t.srLv >= 0 ? (d > 0 ? LV_LO[t.srLv] : LV_HI[t.srLv]) : "-") + "|" + std::to_string(t.rng);
         if (cob) out.push_back("C|" + body + (hr ? "|H" : "|-") + qs);
         else if (watch) out.push_back("W|" + body + (watch == 1 ? "|no level" : "|count under 10"));
         if (cob2) out.push_back("Q|" + body + (hr ? "|H" : "|-") + qs);
@@ -376,10 +390,11 @@ struct Finder {
             const Tag& t = it->second; if (!t.cob && !t.cob2) continue;
             if (!haveSess || sessOf(t.tCf) != curSess) { if (t.tCf < (F.empty() ? 0 : F.back().t) - 2 * 86400) break; continue; }
             if (R.any && t.tCf <= R.tCf) continue;
-            R.any = true; R.kind = t.cob ? 1 : 2; R.dir = t.cob ? t.cob : t.cob2; R.lv = t.lv; R.cnt = t.cnt; R.lvpSt = t.lvpSt; R.hr = t.hr; R.retr = t.retr; R.tCf = t.tCf; R.q = t.q;
+            R.any = true; R.kind = t.cob ? 1 : 2; R.dir = t.cob ? t.cob : t.cob2; R.lv = t.lv; R.cnt = t.cnt; R.lvpSt = t.lvpSt; R.hr = t.hr; R.retr = t.retr; R.tCf = t.tCf; R.q = t.q; R.rng = t.rng;
             const int ls = t.lvpSt < 0 || t.lvpSt > 2 ? 0 : t.lvpSt;
             const int qb = t.q >= 4 ? 2 : t.q == 3 ? 1 : 0;
             R.hold = t.cob && t.retr > MAX_RETR ? HOLD_DEEP[qb > 0 ? 1 : 0][ls] : t.cob ? HOLD_COB[qb][t.hr ? 1 : 0][ls] : HOLD_COB2[qb][ls];
+            R.hold = holdWithRng(R.hold, t.rng);
         }
         return R;
     }
@@ -392,8 +407,8 @@ struct Finder {
         int n = 0;
         for (auto it = tags.rbegin(); it != tags.rend() && n < 12; ++it) {
             const Tag& t = it->second; if (!t.cob && !t.lvp && !t.cob2) continue; ++n;
-            if (t.cob2) { char b[200]; std::snprintf(b, sizeof b, "COB2,%lld,%s,%s,quality %d,gave back %.2f,hourly %s\n", t.tWave, t.cob2 > 0 ? "UP" : "DN", lvText(t.lv, t.cob2).c_str(), t.q, t.retr, t.hr ? "turned" : "not turned"); s += b; }
-            if (t.cob) { char b[200]; std::snprintf(b, sizeof b, "COB,%lld,%s,%s,count %d,quality %d,gave back %.2f,%s\n", t.tWave, t.cob > 0 ? "UP" : "DN", lvText(t.lv, t.cob).c_str(), t.cnt, t.q, t.retr, t.atExt ? "at the extreme" : "near the extreme"); s += b; }
+            if (t.cob2) { char b[200]; std::snprintf(b, sizeof b, "COB2,%lld,%s,%s,quality %d,range used %d%%,gave back %.2f,hourly %s\n", t.tWave, t.cob2 > 0 ? "UP" : "DN", lvText(t.lv, t.cob2).c_str(), t.q, t.rng, t.retr, t.hr ? "turned" : "not turned"); s += b; }
+            if (t.cob) { char b[200]; std::snprintf(b, sizeof b, "COB,%lld,%s,%s,count %d,quality %d,range used %d%%,gave back %.2f,%s\n", t.tWave, t.cob > 0 ? "UP" : "DN", lvText(t.lv, t.cob).c_str(), t.cnt, t.q, t.rng, t.retr, t.atExt ? "at the extreme" : "near the extreme"); s += b; }
             if (t.lvp) { char b[120]; std::snprintf(b, sizeof b, "LVP,%lld,of the %s Cob at %lld\n", t.tWave, t.lvp > 0 ? "UP" : "DN", t.tCob); s += b; }
         }
         return s;

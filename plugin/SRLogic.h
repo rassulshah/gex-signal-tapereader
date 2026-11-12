@@ -1,6 +1,6 @@
 #ifndef LS_SR_LOGIC_H
 #define LS_SR_LOGIC_H
-// SRLogic.h (1.0.0, 2026-11-10) -- SDK-free rules of lsSR, the "SR" stop-run pane. Unit-tested on Linux (tests_sr2/).
+// SRLogic.h (1.1.0, 2026-11-12; 1.0.0 2026-11-10) -- SDK-free rules of lsSR, the "SR" stop-run pane. Unit-tested on Linux (tests_sr2/).
 // Rassul 2026-11-10: 18:24 CT "i'll use this as my stop run indicator. put the run and rev indications on the indicator";
 // 18:30 "just put the ratio outside the stop run bar and then the arrow on the reversal bar so it is more compact";
 // 18:35 "it should be at least a 5 bar high or low for it to be highlighted"; 18:37 "add the ratio for the highlighted bars";
@@ -21,6 +21,18 @@
 //     drawRev = 0 (per market, from the nightly) = the arrow is recorded, not drawn.
 //   * a gray diamond next to the arrow: on that candle the attackers' own resting side (bids after a run through a high) had more
 //     pulled than added within zone ticks of price.
+//   * (1.1.0, Rassul 2026-11-12 15:21 "I want it now. Build all"; 15:23 "markets go below a key level and run stops leading to
+//     accumulation and triggering a reversal process") the STRENGTH GRADE 0..4 of every run through a level (gold or not), decided once
+//     on the first candle that CLOSES BACK across the level, from everything traded BEYOND the level since the crossing:
+//       1 big buyers    >= gShare (3%) of the defenders' market volume beyond the level came from aggressor orders >= bigA lots
+//       2 big bids      >= gBids (3) resting orders of >= bigP lots were filled by the attackers beyond the level
+//       3 deep          the run reached >= gDeep (1.0) x ATR(14) beyond the level
+//       4 heavy         the attackers traded >= gHeavy (1.0) x a normal candle's volume (median of the 20 candles before) beyond it
+//     (mirrored for a run through a high). Study (41 sessions x 7 markets, 690 stop runs under a Cob-type wave): grade 0 -> 13% became
+//     a Cob, grade 4 -> 35%; Cobs after a grade-0 run reached their target 33%. Drawn next to the gold ratio ("6.2  3/4"), and alone
+//     in gold on a run that was not gold when the grade is >= gStrong (3); "?" until the nightly proves it (SRGradeParams.h).
+//     Journal: G|id|close-back candle|run candle|level|px|side|grade|s1|s2|s3|s4|share|big bids|depth|heavy|sold|bought|candles|state
+//     (state 1 = closed back, 2 = gave up after gMaxBars candles / the RTH close - logged, never drawn).
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -30,13 +42,15 @@
 #include <unordered_map>
 #include <vector>
 namespace sr {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";
 struct Params {
     double burstX = 2.0, sideX = 2.0, concShare = 0.5, penAtr = 1.6, zoneAtr = 0.25, atrTicks = 0;   // atrTicks 0 = the mean range of the session's closed RTH candles so far
+    double bigA = 0, bigP = 0, gShare = 0.03, gDeep = 1.0, gHeavy = 1.0;   // (1.1.0) the grade; bigA / bigP 0 = that sign is off
+    int gBids = 3, gMaxBars = 40, gStrong = 3;
     int smallMax = 5, concMs = 300, preMs = 200, postMs = 1000, reachTicks = 2, recBars = 6, hiLoBars = 5, normBars = 10, maxVisits = 4, drawRev = 0, zoneMin = 4, skipOpenBars = 3;   // skipOpenBars: runs in the first candles of RTH get no arrow (the study never scored them)
 };
 struct Level { std::string name; long long px = 0; int side = 0; long long fromSec = 0; };   // side +1 = a high (swept upward), -1 = a low
-struct Bar { long long end = 0; long long o = 0, h = 0, l = 0, c = 0; int nU = 0, nD = 0; double xU = 0, xD = 0; bool hiN = false, loN = false; long long add[2] = { 0, 0 }, can[2] = { 0, 0 }; bool rth = false; };
+struct Bar { long long end = 0; long long o = 0, h = 0, l = 0, c = 0; int nU = 0, nD = 0; double xU = 0, xD = 0; bool hiN = false, loN = false; long long add[2] = { 0, 0 }, can[2] = { 0, 0 }; bool rth = false; long long vol = 0; };   // vol (1.1.0) = every print of the candle
 struct Run { int id = 0; std::string lvl; long long px = 0; int side = 0, visit = 0; long long tMs = 0, barEnd = 0; double x = 0, conc = 0; long long vol = 0, ovol = 0, reach = 0; int nSmall = 0; bool gold = false, newExt = false;
              int state = 0; /* 0 watching, 1 reversed, 2 cancelled (too deep / too late / not a new extreme) */ long long ext = 0, revBarEnd = 0; bool pull = false; double penAtr = 0; int backBars = -1; };
 class Engine {
@@ -57,14 +71,23 @@ public:
     static int sideOfName(const std::string& n) { const size_t z = n.size(); if (z >= 2 && (n.compare(z - 2, 2, "HI") == 0)) return 1; if (z >= 2 && n.compare(z - 2, 2, "LO") == 0) return -1; if (z >= 1 && n[z - 1] == 'H') return 1; if (z >= 1 && n[z - 1] == 'L') return -1; return 0; }
     // ---- feed -----------------------------------------------------------------------------------------------------------
     // one aggressive fill: tMs = feed time in ms (CT-as-epoch), px in ticks, ag +1 buyer / -1 seller, id = the aggressor order
-    void onFill(long long tMs, long long px, long long sz, int ag, unsigned long long id) {
+    // (1.1.0) rest = the RESTING order that was filled (0 = not known: the big-bids sign cannot count it)
+    void onFill(long long tMs, long long px, long long sz, int ag, unsigned long long id, unsigned long long rest = 0) {
         advance(tMs); if (sz <= 0 || ag == 0) return;
-        Bar& b = cur(tMs, px); if (px > b.h) b.h = px; if (px < b.l) b.l = px; b.c = px; last_ = px; haveLast_ = true;
+        Bar& b = cur(tMs, px); if (px > b.h) b.h = px; if (px < b.l) b.l = px; b.c = px; last_ = px; haveLast_ = true; b.vol += sz;
         const long long sec = tMs / 1000; if (sec != sec_) closeSecond(sec);
         std::unordered_map<unsigned long long, long long>& m = ord_[ag > 0 ? 0 : 1]; m[id] += sz; vol_[ag > 0 ? 0 : 1] += sz;
         win_.push_back(F{ tMs, px, sz, ag, id }); while (!win_.empty() && win_.front().t < tMs - 5000) win_.erase(win_.begin());
         cross(tMs, px);
+        for (size_t i = 0; i < exc_.size(); ++i) { Exc& e = exc_[i]; const long long rel = (px - e.px) * e.side; if (rel < 1) continue;   // beyond the level only
+            if (rel > e.reach) e.reach = rel;
+            if (ag == e.side) { e.sell += sz; if (rest) e.pas[rest] += sz; } else { e.buy += sz; e.agg[id] += sz; } }
     }
+    // (1.1.0) a print that is not an aggressive fill the engine reads (implied / unsigned): the candle's volume only
+    void onVolume(long long tMs, long long sz) { advance(tMs); if (sz > 0 && !bars.empty() && tMs / 1000 < bars.back().end) bars.back().vol += sz; }
+    double atr14() const { return nTr_ > 0 ? watr_ : 0; }                                   // Wilder ATR(14) of the closed candles (ticks)
+    double medVol() const { const size_t n = cvol_.size(); if (n < 10) return 0; std::vector<long long> v(cvol_.end() - (long)std::min<size_t>(20, n), cvol_.end()); std::sort(v.begin(), v.end()); const size_t k = v.size(); return k % 2 ? (double)v[k / 2] : 0.5 * (double)(v[k / 2 - 1] + v[k / 2]); }
+    size_t openGrades() const { return exc_.size(); }
     // a resting-order change near price: side 0 bid / 1 ask, add (true) or pull (false), sz lots, px ticks
     void onBook(long long tMs, int side, bool add, long long px, long long sz) {
         advance(tMs); if (!haveLast_ || sz <= 0 || side < 0 || side > 1 || bars.empty()) return;
@@ -83,7 +106,10 @@ public:
 private:
     struct F { long long t, px, sz; int ag; unsigned long long id; };
     struct LS { Level L; int st = -1; int visits = 0; };            // st -1 unknown, 0 inside, 1 outside (beyond)
-    struct Pend { long long t0; size_t lv; int visit; long long barEnd; };
+    struct Pend { long long t0; size_t lv; int visit; long long barEnd; int exc; };
+    struct Exc { int key = 0, id = 0, side = 0, bars = 0; std::string lvl; long long px = 0, barEnd = 0, sell = 0, buy = 0, reach = 0; double atr0 = 0, mv0 = 0;
+                 std::unordered_map<unsigned long long, long long> pas, agg; };      // one run through a level, until a candle closes back
+    std::vector<Exc> exc_; int excKey_ = 1; double watr_ = 0; int nTr_ = 0; long long prevC_ = 0; std::vector<long long> cvol_;
     std::vector<LS> lv_; std::vector<F> win_; std::vector<Pend> pend_;
     std::unordered_map<unsigned long long, long long> ord_[2]; long long vol_[2] = { 0, 0 }; long long sec_ = -1, now_ = 0, last_ = 0; bool haveLast_ = false;
     int secN_[2] = { 0, 0 }; double sumRng_ = 0; int nRth_ = 0; long long rthHi_ = 0, rthLo_ = 0; bool haveRth_ = false; int nextId_ = 1;
@@ -124,6 +150,9 @@ private:
             if (b.rth) { sumRng_ += (double)(b.h - b.l); ++nRth_; if (!haveRth_) { rthHi_ = b.h; rthLo_ = b.l; haveRth_ = true; } }
             char z[256]; std::snprintf(z, sizeof z, "B|%lld|%lld|%lld|%lld|%lld|%d|%d|%.2f|%.2f|%d|%d", b.end, b.o, b.h, b.l, b.c, b.nU, b.nD, b.xU, b.xD, (int)b.hiN, (int)b.loN); journal.push_back(z);
             for (size_t r = 0; r < runs.size(); ++r) follow(runs[r], b, i);
+            for (size_t g = 0; g < exc_.size();) { if (grade(exc_[g], b)) exc_.erase(exc_.begin() + (long)g); else ++g; }
+            { const double tr = nTr_ > 0 ? (double)std::max(b.h - b.l, std::max(std::llabs(b.h - prevC_), std::llabs(b.l - prevC_))) : (double)(b.h - b.l);
+              watr_ = nTr_ > 0 ? watr_ + (tr - watr_) / 14.0 : tr; ++nTr_; prevC_ = b.c; cvol_.push_back(b.vol); if (cvol_.size() > 400) cvol_.erase(cvol_.begin(), cvol_.begin() + 200); }
             if (b.rth) { if (b.h > rthHi_) rthHi_ = b.h; if (b.l < rthLo_) rthLo_ = b.l; }
             ++closed_;
         }
@@ -134,7 +163,9 @@ private:
         for (size_t i = 0; i < lv_.size(); ++i) { LS& s = lv_[i]; if (sec < s.L.fromSec) continue; if (s.L.side == 0) { if (s.L.px == px) continue; s.L.side = s.L.px > px ? 1 : -1; s.st = 0; continue; } const long long rel = (px - s.L.px) * s.L.side;
             if (s.st < 0) { s.st = rel >= 1 ? 1 : 0; continue; }
             if (s.st == 1) { if (rel <= -z) s.st = 0; continue; }
-            if (rel >= 1 && s.visits < P.maxVisits) { s.st = 1; ++s.visits; pend_.push_back(Pend{ tMs, i, s.visits, bars.back().end }); }
+            if (rel >= 1 && s.visits < P.maxVisits) { s.st = 1; ++s.visits;
+                Exc e; e.key = excKey_++; e.side = s.L.side; e.px = s.L.px; e.lvl = s.L.name; e.barEnd = bars.back().end; e.atr0 = atr14(); e.mv0 = medVol(); exc_.push_back(e);
+                pend_.push_back(Pend{ tMs, i, s.visits, bars.back().end, e.key }); }
         }
     }
     void decide(const Pend& p) {
@@ -151,6 +182,22 @@ private:
         r.ext = s.L.px + sd * r.reach; r.state = r.gold ? 0 : 2;
         char z[320]; std::snprintf(z, sizeof z, "R|%d|%lld|%lld|%s|%lld|%d|%d|%.2f|%.2f|%lld|%lld|%lld|%d|%d", r.id, r.tMs, r.barEnd, r.lvl.c_str(), r.px, r.side, r.visit, r.x, r.conc, r.vol, r.ovol, r.reach, r.nSmall, (int)r.gold); journal.push_back(z);
         if (r.gold) runs.push_back(r);
+        for (size_t i = 0; i < exc_.size(); ++i) if (exc_[i].key == p.exc) { exc_[i].id = r.id; break; }
+    }
+    // (1.1.0) the grade of one run, on the first closed candle (from the run's candle on) that closes back at / inside the level
+    bool grade(Exc& e, const Bar& b) {
+        if (b.end < e.barEnd || e.id == 0) return false;
+        ++e.bars;
+        const bool back = (b.c - e.px) * e.side <= 0, gaveUp = e.bars > P.gMaxBars || (b.rth && !inRth(b.end));
+        if (!back && !gaveUp) return false;
+        long long big = 0; int nBid = 0;
+        if (P.bigA > 0) for (std::unordered_map<unsigned long long, long long>::const_iterator it = e.agg.begin(); it != e.agg.end(); ++it) if ((double)it->second >= P.bigA) big += it->second;
+        if (P.bigP > 0) for (std::unordered_map<unsigned long long, long long>::const_iterator it = e.pas.begin(); it != e.pas.end(); ++it) if ((double)it->second >= P.bigP) ++nBid;
+        const double share = e.buy > 0 ? (double)big / (double)e.buy : 0, depth = e.atr0 > 0 ? (double)e.reach / e.atr0 : 0, heavy = e.mv0 > 0 ? (double)e.sell / e.mv0 : 0;
+        const int s1 = P.bigA > 0 && share >= P.gShare, s2 = P.bigP > 0 && nBid >= P.gBids, s3 = e.atr0 > 0 && depth >= P.gDeep, s4 = e.mv0 > 0 && heavy >= P.gHeavy;
+        char z[360]; std::snprintf(z, sizeof z, "G|%d|%lld|%lld|%s|%lld|%d|%d|%d|%d|%d|%d|%.3f|%d|%.2f|%.2f|%lld|%lld|%d|%d", e.id, b.end, e.barEnd, e.lvl.c_str(), e.px, e.side, s1 + s2 + s3 + s4, s1, s2, s3, s4,
+                                    share, nBid, depth, heavy, e.sell, e.buy, e.bars, back ? 1 : 2); journal.push_back(z);
+        return true;
     }
     void follow(Run& r, const Bar& b, size_t i) {
         if (r.state != 0 || b.end < r.barEnd) return;
@@ -172,8 +219,12 @@ private:
 struct JBar { double xU = 0, xD = 0; bool hiN = false, loN = false; };
 struct JRun { int id = 0, side = 0; double x = 0; long long barEnd = 0; std::string lvl; };
 struct JRev { int side = 0; bool pull = false; long long barEnd = 0; };
+struct JGrade { int id = 0, side = 0, score = 0; long long barEnd = 0, backEnd = 0; };   // (1.1.0) barEnd = the run candle
 struct Journal {
     std::map<long long, JBar> bars; std::map<long long, JRun> gold; std::map<long long, JRev> rev; std::map<int, JRun> byId; long long lines = 0, bad = 0;
+    std::map<long long, JGrade> grade;   // (1.1.0) key = run candle END * 2 + (a high ? 1 : 0); the best grade of that candle and side (closed back only)
+    static long long gkey(long long barEnd, int side) { return barEnd * 2 + (side > 0 ? 1 : 0); }
+    const JGrade* gradeAt(long long barEnd, int side) const { std::map<long long, JGrade>::const_iterator it = grade.find(gkey(barEnd, side)); return it == grade.end() ? nullptr : &it->second; }
     static std::vector<std::string> split(const std::string& l) { std::vector<std::string> c; size_t a = 0; for (;;) { const size_t p = l.find('|', a); c.push_back(l.substr(a, p == std::string::npos ? std::string::npos : p - a)); if (p == std::string::npos) break; a = p + 1; } return c; }
     void add(const std::string& l) {
         if (l.empty() || l[0] == 'H') return;
@@ -183,6 +234,8 @@ struct Journal {
             byId[r.id] = r; std::map<long long, JRun>::iterator it = gold.find(r.barEnd); if (it == gold.end() || r.x > it->second.x) gold[r.barEnd] = r; }
         else if (c[0] == "V" && c.size() >= 9) { JRev v; v.barEnd = std::atoll(c[2].c_str()); v.side = std::atoi(c[5].c_str()); v.pull = c[8] == "1"; rev[v.barEnd] = v; }
         else if (c[0] == "X") { }
+        else if (c[0] == "G" && c.size() >= 20) { if (c[19] != "1") return; JGrade g; g.id = std::atoi(c[1].c_str()); g.backEnd = std::atoll(c[2].c_str()); g.barEnd = std::atoll(c[3].c_str()); g.side = std::atoi(c[6].c_str()); g.score = std::atoi(c[7].c_str());
+            if (g.side == 0 || g.score < 0 || g.score > 4) { ++bad; return; } const long long k = gkey(g.barEnd, g.side); std::map<long long, JGrade>::iterator it = grade.find(k); if (it == grade.end() || g.score > it->second.score) grade[k] = g; }
         else ++bad;
     }
 };
