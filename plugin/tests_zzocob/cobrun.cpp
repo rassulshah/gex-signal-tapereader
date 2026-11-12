@@ -12,7 +12,7 @@ struct Host { zzd::Engine E; zcf::Finder F; long long lastWaveT = -1;
     void init(const std::string& root) { E.reset(); E.revBars = zzd::COMBO_REV_BARS; E.setMarket(root, 180); F.reset(); F.setMarket(root, 180); lastWaveT = -1; }
     void add(const Row& r) {
         zzd::Bar b; b.t = r.t; b.h = r.h; b.l = r.l; b.vol = r.v; b.vap = true; if (b.h < b.l) std::swap(b.h, b.l);
-        E.addBar(b); long long c = r.c; if (c > b.h) c = b.h; if (c < b.l) c = b.l; F.addBar(b, c);
+        E.addBar(b); long long c = r.c; if (c > b.h) c = b.h; if (c < b.l) c = b.l; long long o = r.o; if (o > b.h) o = b.h; if (o < b.l) o = b.l; F.addBar(b, c, o);
         if (E.trimmed > 0) { F.trim(E.trimmed); E.trimmed = 0; }
         if (!E.W.empty() && F.F.size() == E.B.size()) { const zzd::Wave& w = E.W.back();
             if (w.s >= 0 && w.e >= 0 && (size_t)w.e < F.F.size()) { const long long tw = F.F[(size_t)w.e].t * 2 + (w.dir > 0 ? 1 : 0); if (tw != lastWaveT) { lastWaveT = tw; F.onWave(E.W); } } }

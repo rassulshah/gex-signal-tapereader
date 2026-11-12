@@ -33,7 +33,7 @@ inline std::string countText(const Wave& w) { if (w.cntCap) return std::to_strin
 
 // (2.4.0, Rassul 2026-11-12 11:27 "I want a read box on the left of the indicator pane", 11:35 "try to reuse rows like lvp/hrly so it
 // doesn't take up too much vertical space", 11:38 "in the Lvl you can add SR+ in the beginning") the read box: the newest Cob / Cob2 of
-// the session. Rows by importance: Cob | Lvl | Cnt / Retr | Lvp / Hr | Hold. Fixed width; rows that do not fit a short pane drop from
+// the session. Rows by importance: Cob | Lvl | Cnt / Q (2.5.0: the quality score 0-6 replaced Retr) | Lvp / Hr | Hold. Fixed width; rows that do not fit a short pane drop from
 // the bottom; under title + 2 rows no box (the plain title as before).
 inline std::string clock12(long long t) {
     const long long d = floorDiv(t, 86400); const int mn = (int)((t - d * 86400) / 60); int h = mn / 60; const int m = mn % 60; const bool pm = h >= 12; h = h % 12; if (h == 0) h = 12;
@@ -45,11 +45,11 @@ inline std::string lvShort(int mask, int dir, int maxN = 3) {
 }
 inline std::vector<std::pair<std::string, std::string>> readRows(const zcf::Read& R) {
     std::vector<std::pair<std::string, std::string>> r;
-    if (!R.any) { r.push_back({ "Cob", "-" }); r.push_back({ "Lvl", "-" }); r.push_back({ "Cnt / Retr", "-" }); r.push_back({ "Lvp / Hr", "-" }); r.push_back({ "Hold", "-" }); return r; }
+    if (!R.any) { r.push_back({ "Cob", "-" }); r.push_back({ "Lvl", "-" }); r.push_back({ "Cnt / Q", "-" }); r.push_back({ "Lvp / Hr", "-" }); r.push_back({ "Hold", "-" }); return r; }
     char b[48];
     r.push_back({ R.kind == 2 ? "Cob2" : "Cob", std::string(R.dir > 0 ? "Up " : "Dn ") + clock12(R.tCf) });
     r.push_back({ "Lvl", lvShort(R.lv, R.dir) });
-    std::snprintf(b, sizeof b, "%s / %.2f", R.cnt >= CNT_CAP ? (std::to_string(CNT_CAP) + "+").c_str() : std::to_string(R.cnt).c_str(), R.retr); r.push_back({ "Cnt / Retr", b });
+    std::snprintf(b, sizeof b, "%s / %s", R.cnt >= CNT_CAP ? (std::to_string(CNT_CAP) + "+").c_str() : std::to_string(R.cnt).c_str(), R.q < 0 ? "-" : std::to_string(R.q).c_str()); r.push_back({ "Cnt / Q", b });
     r.push_back({ "Lvp / Hr", std::string(R.lvpSt == 1 ? "yes" : R.lvpSt == 2 ? "no" : "wait") + " / " + (R.hr ? "yes" : "no") });
     std::snprintf(b, sizeof b, "%d%%", R.hold); r.push_back({ "Hold", b });
     return r;
@@ -159,7 +159,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
     bool boxed = false;
     if (cf && cf->ok) {
         const zcf::Read R = cf->read(); const std::vector<std::pair<std::string, std::string>> rows = readRows(R);
-        const int rh = TH + 2, kw = v.textW("Cnt / Retr"), vw = v.textW("SR+ AsiaHI LonHI DPoc"), bw = std::max(kw + vw + 22, v.textW(head) + 12);
+        const int rh = TH + 2, kw = v.textW("Lvp / Hr"), vw = v.textW("SR+ AsiaHI LonHI DPoc"), bw = std::max(kw + vw + 22, v.textW(head) + 12);
         const int x0 = v.l + 2, y0 = v.t + 1, fit = std::min((int)rows.size(), (H - 4 - (TH + 4)) / rh);
         if (fit >= 2 && x0 + bw < v.r) {
             boxed = true; const int y1 = y0 + TH + 4 + fit * rh + 2;

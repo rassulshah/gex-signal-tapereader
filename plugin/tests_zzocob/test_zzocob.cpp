@@ -24,7 +24,7 @@ struct Host { zzd::Engine E; zcf::Finder F; long long lastWaveT = -1; bool align
     void init(const std::string& root) { E.reset(); E.revBars = zzd::COMBO_REV_BARS; E.setMarket(root, 180); F.reset(); F.setMarket(root, 180); lastWaveT = -1; }
     void add(const Row& r) {
         zzd::Bar b; b.t = r.t; b.h = r.h; b.l = r.l; b.vol = r.v; b.vap = true;
-        E.addBar(b); F.addBar(b, r.c);
+        E.addBar(b); F.addBar(b, r.c, r.o);
         if (E.trimmed > 0) { F.trim(E.trimmed); E.trimmed = 0; }
         if (F.F.size() != E.B.size() || F.M.B.size() != E.B.size()) aligned = false;
         if (!E.W.empty()) { const zzd::Wave& w = E.W.back();
@@ -51,6 +51,7 @@ struct Rig { zcf::Finder F; std::vector<zzd::Wave> W; long long t = 0;
     // waves are given directly (the engine's own walk is tested in test_zzocombo_210); the market engine's last wave mirrors the pane's
     void judge(int cntPane, int cntMkt) { zzd::Wave m = W.back(); m.cnt = cntMkt; m.cntCap = false; W.back().cnt = cntPane; F.M.W.clear(); F.M.W.push_back(m); F.onWave(W); } };
 
+static int QB(int q) { return q >= 4 ? 2 : q == 3 ? 1 : 0; }
 int main() {
     // ---- 1. sessions and levels
     {   CHECK(zcf::Finder::sessOf(T(0, 17, 0)) == 20000 && zcf::Finder::sessOf(T(0, 17, 3)) == 20001 && zcf::Finder::sessOf(T(1, 16, 0)) == 20001, "17:00 END stamp closes the session; 17:03 opens the next");
@@ -89,7 +90,7 @@ int main() {
         const zcf::Tag* t = R.F.find(T(1, 8, 42), 1);
         CHECK(t && t->cob == 1 && t->cnt == 11 && t->atExt && t->origin == 4915 && t->top == 4960 && t->close == 4945, "bullish Cob");
         CHECK(t && zcf::lvText(t->lv, 1) == "ONL/LonLO/PhrL", "the levels swept and closed back over");
-        CHECK(R.F.out.size() == 1 && R.F.out[0].rfind("C|1.2.0|", 0) == 0 && R.F.out[0].find("|UP|4915|4960|4945|ONL/LonLO/PhrL|11|0.33|at|bo|12|11|-") != std::string::npos, "the record line");
+        CHECK(R.F.out.size() == 1 && R.F.out[0].rfind("C|1.3.0|", 0) == 0 && R.F.out[0].find("|UP|4915|4960|4945|ONL/LonLO/PhrL|11|0.33|at|bo|12|11|-") != std::string::npos, "the record line");
         CHECK(R.F.act.size() == 1, "open for its Lvp");
     }
     auto none = [&](const char* what, std::function<void(Rig&)> f, int wantWatch) { Rig R; base(R); f(R); const zcf::Tag* t = R.F.find(T(1, 8, 42), 1);
@@ -166,9 +167,9 @@ int main() {
             zzd::Wave d; d.s = 20; d.e = 27; d.dir = -1; d.ext = 4980; d.vol = 900; zzd::Wave u; u.s = 28; u.e = 29; u.dir = 1; u.ext = 5012; u.vol = 900;
             zzd::Wave p; p.s = -1; p.e = -1; p.dir = 1; p.ext = 5002; R.W = { p, d, u }; return t0 + 360; };
         {   Rig R; const long long tw = q(R, 4992, 5010, 0); R.judge(2, 2); const zcf::Tag* t = R.F.find(tw, 1);
-            CHECK(t && t->cob2 == 1 && !t->cob && t->lv == 0 && R.F.out.size() == 1 && R.F.out[0].rfind("Q|1.2.0|", 0) == 0, "Cob2: a quiet turn with count 2 and no level");
+            CHECK(t && t->cob2 == 1 && !t->cob && t->lv == 0 && R.F.out.size() == 1 && R.F.out[0].rfind("Q|1.3.0|", 0) == 0, "Cob2: a quiet turn with count 2 and no level");
             CHECK(R.F.act.size() == 1, "a Cob2 is open for its Lvp"); const zcf::Read rd = R.F.read();
-            CHECK(rd.any && rd.kind == 2 && rd.dir == 1 && rd.lvpSt == 0 && rd.hold == zcf::HOLD_COB2[rd.hr ? 1 : 0][0], "the read: Cob2, Lvp still possible");
+            CHECK(rd.any && rd.kind == 2 && rd.dir == 1 && rd.lvpSt == 0 && rd.hold == zcf::HOLD_COB2[QB(rd.q)][0], "the read: Cob2, Lvp still possible");
             const auto rows = zzd::readRows(rd); CHECK(rows.size() == 5 && rows[0].first == "Cob2" && rows[0].second.rfind("Up ", 0) == 0 && rows[1].second == "-" && rows[3].second.rfind("wait / ", 0) == 0, "Cob2 rows: no SR+ without a swept level"); }
         {   Rig R; const long long tw = q(R, 4990, 5010, 0); R.F.F[29].c = 4990; R.judge(2, 2); CHECK(!R.F.find(tw, 1), "no Cob2: no close above the extreme bar's high within 2 bars"); }
         {   Rig R; const long long tw = q(R, 4992, 5002, 0); R.judge(2, 2); CHECK(!R.F.find(tw, 1), "no Cob2: the completing close is not above the 10 bars before the extreme"); }
@@ -180,13 +181,38 @@ int main() {
     }
     {   Rig R; base(R); CHECK(R.F.hourTurn(T(1, 8, 36), 1, 4966) && !R.F.hourTurn(T(1, 8, 36), 1, 4965), "Hr: a close above the high of the clock hour before the origin's hour");
         CHECK(R.F.hourTurn(T(1, 8, 36), -1, 4934) && !R.F.hourTurn(T(1, 8, 36), -1, 4935) && !R.F.hourTurn(T(5, 8, 36), 1, 9999), "Hr: bearish mirror; an unknown hour is no turn"); }
-    {   Rig R; cob(R); zcf::Read rd = R.F.read(); CHECK(rd.any && rd.kind == 1 && rd.dir == 1 && rd.cnt == 12 && rd.lvpSt == 0 && !rd.hr && rd.hold == zcf::HOLD_COB[0][0], "the read after a Cob: Lvp still possible");
-        auto rows = zzd::readRows(rd); CHECK(rows[0].first == "Cob" && rows[0].second == "Up 8:45 AM" && rows[1].second == "SR+ ONL LonLO PhrL" && rows[2].second == "12 / 0.33" && rows[3].second == "wait / no" && rows[4].second == "61%", "the box rows");
-        wave(R, -1, 4935, 100, T(1, 8, 48)); rd = R.F.read(); CHECK(rd.lvpSt == 1 && rd.hold == zcf::HOLD_COB[0][1] && zzd::readRows(rd)[3].second == "yes / no", "the read after the Lvp");
+    {   Rig R; cob(R); zcf::Read rd = R.F.read(); CHECK(rd.any && rd.kind == 1 && rd.dir == 1 && rd.cnt == 12 && rd.lvpSt == 0 && !rd.hr && rd.q >= 0 && rd.hold == zcf::HOLD_COB[QB(rd.q)][0][0], "the read after a Cob: Lvp still possible");
+        auto rows = zzd::readRows(rd); CHECK(rows[0].first == "Cob" && rows[0].second == "Up 8:45 AM" && rows[1].second == "SR+ ONL LonLO PhrL" && rows[2].first == "Cnt / Q" && rows[2].second == "12 / " + std::to_string(rd.q) && rows[3].second == "wait / no" && rows[4].second == std::to_string(rd.hold) + "%", "the box rows");
+        wave(R, -1, 4935, 100, T(1, 8, 48)); rd = R.F.read(); CHECK(rd.lvpSt == 1 && rd.hold == zcf::HOLD_COB[QB(rd.q)][0][1] && zzd::readRows(rd)[3].second == "yes / no", "the read after the Lvp");
         R.bar(T(1, 17, 30), 4950, 4940, 4945); CHECK(!R.F.read().any && zzd::readRows(R.F.read())[0].second == "-", "a new session: the box is empty"); }
-    {   Rig R; cob(R); wave(R, -1, 4914, 100, T(1, 8, 48)); const zcf::Read rd = R.F.read(); CHECK(rd.any && rd.lvpSt == 2 && rd.hold == zcf::HOLD_COB[0][2] && zzd::readRows(rd)[3].second == "no / no", "no Lvp: the lower Hold rate"); }
+    {   Rig R; cob(R); wave(R, -1, 4914, 100, T(1, 8, 48)); const zcf::Read rd = R.F.read(); CHECK(rd.any && rd.lvpSt == 2 && rd.hold == zcf::HOLD_COB[QB(rd.q)][0][2] && zzd::readRows(rd)[3].second == "no / no", "no Lvp: the lower Hold rate"); }
     CHECK(zzd::clock12(T(0, 12, 0)) == "12:00 PM" && zzd::clock12(T(0, 0, 3)) == "12:03 AM" && zzd::clock12(T(0, 14, 6)) == "2:06 PM", "12-hour times");
     CHECK(zzd::lvShort(0x1FF, -1) == "SR+ ONH AsiaHI LonHI" && zzd::lvShort(0, 1) == "-", "Lvl: SR+ and at most 3 levels");
+    // ---- 3c. (1.3.0) the quality score
+    {   zcf::Finder F; F.setMarket("ES"); long long t = T(1, 9, 0); long long px = 5000;
+        auto add = [&](long long o, long long h, long long l, long long c) { zzd::Bar b; b.t = t; b.h = h; b.l = l; b.vol = 100; b.vap = true; F.addBar(b, c, o); t += 180; };
+        for (int i = 0; i < 40; ++i) add(px, px + 2, px - 2, px);                          // 0..39: flat, range 4 -> ATR about 4
+        add(px, px + 1, px - 10, px - 8);                                                  // 40: the origin (low 4990)
+        CHECK(F.F[39].atr > 3.9 && F.F[39].atr < 4.1, "Wilder ATR(14) of flat 4-tick bars is 4");
+        long long p = px - 8; for (int i = 0; i < 15; ++i) { add(p, p + 6, p - 1, p + 5); p += 5; }   // 41..55: 15 up bars, range 7, closing near the high
+        CHECK(F.quality(1, 40, 55) == 6, "15 big up bars closing high, 85 ticks, no dip: Q 6");
+        CHECK(F.quality(1, 40, 44) == 1, "4 bars: only the run of 4 scores (23 ticks is under 8 ATR; the first bar's own range is a 0.30 dip)");
+        CHECK(F.quality(1, 40, 40) == -1 && F.quality(1, 0, 5) == -1, "nothing to score");
+        zcf::Finder G; G.setMarket("ES"); t = T(1, 9, 0);
+        auto addG = [&](long long h, long long l, long long c) { zzd::Bar b; b.t = t; b.h = h; b.l = l; b.vol = 100; b.vap = true; G.addBar(b, c); t += 180; };
+        addG(5002, 4998, 5000); addG(5004, 4999, 5003); CHECK(G.F[0].o == 5000 && G.F[1].o == 5000, "no open given: the previous close");
+        // bearish mirror: the same bars upside down score the same
+        zcf::Finder M; M.setMarket("ES"); t = T(1, 9, 0); auto addM = [&](long long o, long long h, long long l, long long c) { zzd::Bar b; b.t = t; b.h = -l; b.l = -h; b.vol = 100; b.vap = true; M.addBar(b, -c, -o); t += 180; };
+        for (int i = 0; i < 40; ++i) addM(px, px + 2, px - 2, px);
+        addM(px, px + 1, px - 10, px - 8); p = px - 8; for (int i = 0; i < 15; ++i) { addM(p, p + 6, p - 1, p + 5); p += 5; }
+        CHECK(M.quality(-1, 40, 55) == 6 && M.quality(-1, 40, 44) == F.quality(1, 40, 44), "bearish mirror");
+        // a deep dip inside the wave costs the point
+        zcf::Finder D; D.setMarket("ES"); t = T(1, 9, 0); auto addD = [&](long long o, long long h, long long l, long long c) { zzd::Bar b; b.t = t; b.h = h; b.l = l; b.vol = 100; b.vap = true; D.addBar(b, c, o); t += 180; };
+        for (int i = 0; i < 40; ++i) addD(px, px + 2, px - 2, px);
+        addD(px, px + 1, px - 10, px - 8); p = px - 8; for (int i = 0; i < 7; ++i) { addD(p, p + 6, p - 1, p + 5); p += 5; }
+        addD(p, p + 1, p - 30, p - 28); p -= 28; for (int i = 0; i < 8; ++i) { addD(p, p + 6, p - 1, p + 5); p += 5; }
+        CHECK(D.quality(1, 40, 56) == 5, "a dip of 31 inside a 50-tick wave costs the shallow-dip point only");
+    }
     // ---- 4. real bars
     {   const std::vector<Row> es = load("bars_es_0908_1009.txt"), gc = load("bars_gc_0908_1009.txt");
         CHECK(es.size() > 6000 && gc.size() > 6000, "fixtures loaded (> 6000 bars: the engine trims)");
@@ -197,7 +223,8 @@ int main() {
         CHECK(c >= 5 && l >= 3 && l <= c, "Cobs and Lvps found; never more Lvps than Cobs");
         auto keys = [](const std::vector<std::string>& v, char k) { std::set<std::string> s; for (const std::string& x : v) if (x[0] == k) { std::vector<std::string> f; std::stringstream ss(x); std::string t; while (std::getline(ss, t, '|')) f.push_back(t); s.insert(f[2] + f[4]); } return s; };
         for (int every : { 977, 2500 }) { const std::vector<std::string> b = replay(es, "ES", every); CHECK(keys(b, 'C') == keys(a, 'C') && keys(b, 'L') == keys(a, 'L') && keys(b, 'Q') == keys(a, 'Q'), "restarts: the same Cobs, Cob2s and Lvps (no repaint)"); }
-        { int q2 = 0; for (const std::string& x : a) if (x[0] == 'Q') ++q2; CHECK(q2 >= 2, "Cob2s found on real bars"); std::printf("  ES: %d Cob2\n", q2);
+        { int q2 = 0; for (const std::string& x : a) if (x[0] == 'Q') ++q2; CHECK(q2 >= 2, "Cob2s found on real bars");
+          bool qok = true; for (const std::string& x : a) if (x[0] == 'C' || x[0] == 'Q') { const char c = x.back(); if (c < '0' || c > '6' || x[x.size() - 2] != '|') qok = false; } CHECK(qok, "every C / Q line ends with the quality score 0..6"); std::printf("  ES: %d Cob2\n", q2);
           const std::set<std::string> kc = keys(a, 'C'), kq2 = keys(a, 'Q'); bool both = false; for (const std::string& k : kq2) if (kc.count(k)) both = true; CHECK(!both, "a wave is never Cob and Cob2"); }
         const std::vector<std::string> q = replay(gc, "QGC", 0, &al), g = replay(gc, "GC", 0); CHECK(al, "GC aligned");
         CHECK(q == lines(slurp("ref_qgc_0908_1009.txt")), "QGC lines = the reference");
@@ -227,12 +254,12 @@ int main() {
             if (bx.k != zzd::Prim::FILL || (bx.col != C.up && bx.col != C.down)) colOk = false; }
         CHECK(colOk && seenTags == cobT + lvpT + cob2T, "tag boxes are green or red only");
         for (const zzd::Wave& w : waves) { if (w.live || w.e < 0) continue; const zcf::Tag* t = H.F.find(H.E.B[(size_t)w.e].t, w.dir); if (t && t->cob) CHECK(t->cob == w.dir, "a Cob sits on a wave of its own direction"); if (t && t->lvp) CHECK(t->lvp == -w.dir, "an Lvp sits on a pullback against its Cob"); }
-        const std::string st = H.F.statusText(); CHECK(st.rfind("COBFINDER,1.2.0,RTH 510-900", 0) == 0 && st.find("\nCOB,") != std::string::npos, "status text");
+        const std::string st = H.F.statusText(); CHECK(st.rfind("COBFINDER,1.3.0,RTH 510-900", 0) == 0 && st.find("\nCOB,") != std::string::npos, "status text");
     }
     // ---- 6. the host
     {   const std::string c = slurp("../ZzoCombo.cpp"), vw = slurp("../ZzoComboView.h");
         CHECK(c.find(std::string("p->setVersion(\"") + zcf::COMBO_VERSION + "\")") != std::string::npos && c.find(std::string("v") + zcf::COMBO_VERSION + " - 3-bar") != std::string::npos, "version literal = zcf::COMBO_VERSION");
-        CHECK(c.find("RTARRAY clo(barClose)") != std::string::npos && c.find("S.F.addBar(b, c);") != std::string::npos && c.find("S.F.trim(S.E.trimmed)") != std::string::npos, "closes read, finder fed and trimmed with the engine");
+        CHECK(c.find("RTARRAY clo(barClose)") != std::string::npos && c.find("S.F.addBar(b, c, o);") != std::string::npos && c.find("RTARRAY opn(barOpen)") != std::string::npos && c.find("S.F.trim(S.E.trimmed)") != std::string::npos, "closes read, finder fed and trimmed with the engine");
         CHECK(c.find("S.F.onWave(S.E.W)") != std::string::npos && c.find("&S->F)") != std::string::npos, "waves judged once; the finder reaches the drawing");
         CHECK(c.find("std::ios::app") != std::string::npos && c.find("S.recSeen.insert(k)") != std::string::npos, "record appended, keyed once");
         CHECK(c.find("far") == std::string::npos || c.find("#undef far") != std::string::npos, "no Windows-macro identifiers");

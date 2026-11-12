@@ -1,6 +1,9 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.4.0  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.5.0  (2026-11-12)
  *
+ *  2.5.0 (Rassul 2026-11-12 11:45 "score the quality of the bars in the cob", 12:09 "ok. go", 12:10 "also check for high end closes"):
+ *    + the quality score Q (0-6) of the wave's own bars (finder 1.3.0); the box row is now "Cnt / Q" and the Hold row uses Q, Hr and
+ *    the Lvp. Opens are read here (barOpen) for it. C and Q record lines end with H / - and the score.
  *  2.4.0 (Rassul 2026-11-12 11:25 "Cob2 is fine", 11:27 "I want a read box on the left of the indicator pane", 11:35 "try to reuse rows
  *    like lvp/hrly", 11:38 "in the Lvl you can add SR+", 11:40 "build and mockup", 11:42 "there should be no requirement for giveback
  *    because cob can test the origin bar"): + the "Cob2" tag (the quiet turn - no count, no level needed), + the READ BOX at the left of
@@ -219,7 +222,8 @@ void ZzoCombo::feed(ZState& S) {
         if (lastIdx >= closed || (RTDATE)times[lastIdx] != S.raw.back() || (RTDATE)times[S.off] != S.raw.front()) { S.E.reset(); S.E.setMarket(S.mkt, S.spb); S.raw.clear(); S.F.reset(); S.F.setMarket(S.mkt, S.spb); S.lastWaveT = -1; } }
     if (S.raw.empty()) S.off = std::max(0, closed - zzd::MAX_BARS + zzd::TRIM);
     const bool haveVol = (long)vol.count >= n;
-    RTARRAY clo(barClose); const bool haveClose = (long)clo.count >= n;   // (2.3.0) closes for the CoB finder
+    RTARRAY clo(barClose); const bool haveClose = (long)clo.count >= n;
+    RTARRAY opn(barOpen); const bool haveOpen = (long)opn.count >= n;   // (2.5.0) opens for the quality score   // (2.3.0) closes for the CoB finder
     auto bar = [&](int i, zzd::Bar& b) {
         b.t = localSec((RTDATE)times[i]);
         b.vol = haveVol ? std::max(0LL, (long long)vol[i]) : 0;   // (1.2.0) bar volume
@@ -234,7 +238,8 @@ void ZzoCombo::feed(ZState& S) {
             long long c = 0; if (!haveClose || !zzd::toTicks(clo[i], S.tick, c)) c = b.h;
             if (c > b.h) c = b.h;
             if (c < b.l) c = b.l;
-            S.F.addBar(b, c);
+            long long o = 0; if (!haveOpen || !zzd::toTicks(opn[i], S.tick, o)) o = LLONG_MIN;   // not given: the finder uses the previous close
+            S.F.addBar(b, c, o);
         }
         if (S.E.trimmed > 0) { S.F.trim(S.E.trimmed); S.off += (int)S.E.trimmed; S.raw.erase(S.raw.begin(), S.raw.begin() + std::min<long long>(S.E.trimmed, (long long)S.raw.size())); S.E.trimmed = 0; }
         if (!S.E.W.empty() && S.F.F.size() == S.E.B.size()) {   // a wave completed on this bar: judge it once
@@ -329,7 +334,7 @@ extern "C" cppExtension* CreateExtension(void) {
     ZzoCombo* p = new ZzoCombo();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Combo v2.4.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.4.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Combo v2.5.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.5.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }
