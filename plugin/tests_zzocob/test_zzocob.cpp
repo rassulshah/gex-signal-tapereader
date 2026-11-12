@@ -275,8 +275,8 @@ int main() {
         for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT && !inBox(p)) { if (p.text == "Cob2") ++cob2T; if (p.text == "Cob") ++cobT; if (p.text == "Lvp") ++lvpT; if (p.text == "CoB" || p.text == "weak") ++old; }
         CHECK(cobT > 0 && cobT == S1.cob && lvpT == S1.lvp && lvpT > 0, "Cob and Lvp tags drawn and counted"); CHECK(cob2T == S1.cob2, "Cob2 tags drawn and counted");
         { int cbT = 0; for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT && !inBox(p) && (p.text == "CB" || p.text == "CB35" || p.text == "CB99")) ++cbT;
-          CHECK(cbT == S1.cb && cbT >= 1 && cbT <= S1.cob + S1.cob2 && S0.cb == 0, "CB / CB35 / CB99 drawn once per Cob bar, never without a finder");
-          int srT = 0; for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT && !inBox(p) && p.text == "SR") ++srT; CHECK(srT == S1.sr && srT >= 1 && srT <= S1.cob + S1.cob2 && S0.sr == 0, "SR drawn once per stop-run bar, never without a finder"); }
+          CHECK(cbT == 0 && S1.cb >= 1 && S1.cb <= S1.cob + S1.cob2 && S0.cb == 0, "(2.7.2) CB is counted but never drawn in the pane");
+          int srT = 0; for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT && !inBox(p) && p.text == "SR") ++srT; CHECK(srT == 0 && S1.sr >= 1 && S1.sr <= S1.cob + S1.cob2 && S0.sr == 0, "(2.7.2) SR is counted but never drawn in the pane"); }
         CHECK(S1.boxRows == 5 && S1.boxL >= v.l && S1.boxR < v.r && S1.boxT >= v.t && S1.boxB <= v.b && S0.boxRows == 0, "the read box: 5 rows inside the pane, none without a finder");
         { int head1 = 0, head0 = 0; for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT && p.text == "ZZO Combo x") { ++head1; CHECK(inBox(p), "the title sits inside the box"); }
           for (const zzd::Prim& p : S0.p) if (p.k == zzd::Prim::TEXT && p.text == "ZZO Combo x") ++head0;

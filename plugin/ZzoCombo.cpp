@@ -1,6 +1,8 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.7.1  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.7.2  (2026-11-12)
  *
+ *  2.7.2 (Rassul 2026-11-12 13:02 "Cb and sr should only be on the price chart"): the pane no longer draws the CB / SR badges (still
+ *    counted in its status file); lsZzoComboMarks draws them on the candles.
  *  2.7.1 (Rassul 2026-11-12 13:00 "the stoprun badge goes under the bar"): lsZzoComboMarks draws SR always UNDER its candle (red under
  *    a high's stop run too) and CB always over its candle. The pane is unchanged.
  *  2.7.0 (Rassul 2026-11-12 12:51 "usually the cob [bar] is the biggest green bar ... in over 35+ or even 99 green bars", 12:53 "you can
@@ -384,7 +386,7 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #endif
-    p->setDescription("LRA ZZO Combo v2.7.1 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.7.1");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA ZZO Combo v2.7.2 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.7.2");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

@@ -84,7 +84,7 @@
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.7.1";   // (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const COMBO_VERSION = "2.7.2";   // (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
 static const char* const VERSION = "1.5.0";         // the finder rule (1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
