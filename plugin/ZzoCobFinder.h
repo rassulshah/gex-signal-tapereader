@@ -84,7 +84,7 @@
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.8.1";   // (2.8.1) the box shows Q as a percentage ("67% / 0.6"); (2.8.0) + the day range used: box row "Q / Rng", Hold adjusted by it; (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const COMBO_VERSION = "2.8.2";   // (2.8.2) review fixes: view cache, whole sessions only in the range history; (2.8.1) the box shows Q as a percentage ("67% / 0.6"); (2.8.0) + the day range used: box row "Q / Rng", Hold adjusted by it; (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
 static const char* const VERSION = "1.6.0";         // the finder rule (1.6.0: + day range used, Hold by range, the stop-run level's price on the record line; 1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
@@ -173,7 +173,7 @@ struct Finder {
     static const long long MAX_BAR_TICKS = 20000;          // a bar wider than this (bad data) is not spread
     std::vector<long long> rthRng;                         // (1.6.0) the RTH ranges of the last ADR_N finished sessions
     std::vector<HrBar> hrs;                                // (1.2.0) the last clock hours (id = hour of the bar END - 1 s)
-    bool rthAny = false; long long rLo = 0, rHi = 0, rLoBarH = 0, rHiBarL = 0;   // RTH extremes so far; the high of the LOD bar, the low of the HOD bar
+    int spbMin = 3; bool rthAny = false, rthWhole = false; long long rLo = 0, rHi = 0, rLoBarH = 0, rHiBarL = 0;   // RTH extremes so far; the high of the LOD bar, the low of the HOD bar
     std::map<long long, Tag> tags;
     struct Act { long long key = 0, origin = 0, top = 0, vol = 0, sess = 0; int dir = 0, n = 0; };
     std::vector<Act> act;
@@ -182,7 +182,7 @@ struct Finder {
     static long long key(long long tWave, int dir) { return tWave * 2 + (dir > 0 ? 1 : 0); }
     void reset() { M.reset(); F.clear(); haveSess = false; on = as = lon = phr = full = rth = prevFull = prevRth = HL(); prof.clear(); prevVA = VA(); rthAny = false; tags.clear(); act.clear(); out.clear(); hrs.clear(); rthRng.clear(); }
     bool setMarket(const std::string& root, int spb = 180) { const std::string m = mkey::norm(root); ok = svl::rthOf(m.c_str(), openMin, closeMin);
-        M.revBars = zzd::COMBO_REV_BARS; M.setMarket(m, spb); return ok; }
+        M.revBars = zzd::COMBO_REV_BARS; M.setMarket(m, spb); spbMin = std::max(1, spb / 60); return ok; }
     // the trading session of a bar END stamp (local secs): bars after 17:00 belong to the next day
     static long long sessOf(long long t) { const long long days = zzd::floorDiv(t - 1, 86400); const long long sec = (t - 1) - days * 86400; return sec >= 17 * 3600 ? days + 1 : days; }
 
@@ -197,9 +197,9 @@ struct Finder {
         const long long days = zzd::floorDiv(t, 86400); const int mn = (int)((t - days * 86400) / 60);
         if (!haveSess || b.sess != curSess) {
             if (haveSess) { prevFull = full; prevRth = rth; prevVA = profileOf(prof);
-                if (rth.any) { rthRng.push_back(rth.h - rth.l); if ((int)rthRng.size() > ADR_N) rthRng.erase(rthRng.begin()); } }
+                if (rth.any && rthWhole) { rthRng.push_back(rth.h - rth.l); if ((int)rthRng.size() > ADR_N) rthRng.erase(rthRng.begin()); } }
             for (const Act& A : act) closeAct(A, 2);
-            haveSess = true; curSess = b.sess; on = as = lon = phr = full = rth = HL(); prof.clear(); rthAny = false; act.clear();
+            haveSess = true; curSess = b.sess; on = as = lon = phr = full = rth = HL(); prof.clear(); rthAny = false; rthWhole = false; act.clear();
         }
         full.add(h, l);
         { const long long id = zzd::floorDiv(t - 1, 3600);
@@ -213,6 +213,7 @@ struct Finder {
             if (mn > openMin - 60 && mn <= openMin) phr.add(h, l);
             b.rth = mn > openMin && mn <= closeMin;
             if (b.rth) {
+                if (!rthAny) rthWhole = mn - openMin <= std::max(1, spbMin);                 // (2.8.2) the session's RTH is whole only when its first bar is the opening one (one bar after the open)
                 rth.add(h, l);
                 if (!rthAny || l < rLo) { rLo = l; rLoBarH = h; }
                 if (!rthAny || h > rHi) { rHi = h; rHiBarL = l; }

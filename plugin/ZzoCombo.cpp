@@ -1,6 +1,8 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.8.1  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.8.2  (2026-11-12)
  *
+ *  2.8.2 (Rassul 2026-11-12 16:20 "independent review ... Do it and fix"): the waves to draw are rebuilt only when a bar changed (was a copy
+ *  of every bar on each repaint); the day-range history skips a session whose RTH did not start at the open.
  *  2.8.1 (Rassul 2026-11-12 16:18 "For quality give me a percentage instead"): the box row "Q / Rng" shows the score as a percentage of
  *  its 6 points (4 of 6 = "67%").
  *  2.8.0 (Rassul 2026-11-12 15:21 "I want it now. Build all"; 15:32 "I wanted to call this indicator Cob Reader like the reversal reader": the
@@ -122,6 +124,7 @@ struct ZState {
     zzd::Engine E; std::vector<RTDATE> raw; int off = 0;
     bool vapFault = false;
     bool haveForm = false; zzd::Bar formBar;
+    std::vector<zzd::Wave> vWaves; long long vSig[12] = { 0 }; bool vOk = false;   // (2.8.2) the waves to draw, rebuilt only when a bar or the forming bar changed
     std::string statusPath; long long statusMs = -1; std::string statusBody;
     zzd::ComboScene last;
     zcf::Finder F; long long lastWaveT = -1;                     // (2.3.0) the CoB finder + the pivot time of the last wave it judged
@@ -365,7 +368,9 @@ int ZzoCombo::draw(void) {
         FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD;
         v.textW = [this, &fb](const std::string& s) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
         v.textH = 12;
-        const std::vector<zzd::Wave> waves = S->E.view(S->haveForm ? &S->formBar : nullptr);
+        { const zzd::Bar& fb2 = S->formBar; const long long sig[12] = { (long long)S->E.B.size(), S->E.B.empty() ? 0 : S->E.B.back().t, (long long)S->E.W.size(), S->haveForm ? 1 : 0, fb2.t, fb2.h, fb2.l, fb2.vol, fb2.dlt, fb2.xh, fb2.xl, fb2.seg };
+          if (!S->vOk || std::memcmp(sig, S->vSig, sizeof sig) != 0) { S->vWaves = S->E.view(S->haveForm ? &S->formBar : nullptr); std::memcpy(S->vSig, sig, sizeof sig); S->vOk = true; } }
+        const std::vector<zzd::Wave>& waves = S->vWaves;
         const bool noFoot = !S->E.B.empty() && S->E.noVap >= (long long)S->E.B.size();   // no footprint on this chart: volume still works, Ab cannot
         const std::string head = std::string("Cob Reader ") + zcf::COMBO_VERSION + (noFoot ? "  no footprint - Ab off" : "");
         S->last = zzd::layoutCombo(S->E, waves, S->haveForm ? S->formBar.vol : 0, v, head, &S->F);
@@ -393,7 +398,7 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #endif
-    p->setDescription("LRA Cob Reader v2.8.1 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.8.1");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Cob Reader v2.8.2 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.8.2");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

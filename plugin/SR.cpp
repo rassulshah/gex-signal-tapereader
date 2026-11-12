@@ -1,4 +1,4 @@
-// SR.cpp (1.1.0, 2026-11-12: + the strength grade of a run, SRGradeParams.h; 1.0.0, 2026-11-10) -- lsSR, the "SR" stop-run pane (Rassul 2026-11-10 18:24-18:50 CT, mockup v10
+// SR.cpp (1.1.1, 2026-11-12: independent review - one writer per CHART, run ids over every line, idle candles close; 1.1.0: + the strength grade of a run, SRGradeParams.h; 1.0.0, 2026-11-10) -- lsSR, the "SR" stop-run pane (Rassul 2026-11-10 18:24-18:50 CT, mockup v10
 // claude.ai/artifact/EctbmGWXrGd5cWxA7JSGKv; "call the new indicator SR instead of StopRun"). Its own pane on the order feed
 // (off::MboPane, as lsZoneDefense): every order event goes once through onRaw into sr::Engine (SRLogic.h, the ONE copy of the rules,
 // checked against the study: tests_sr2/). Every decision is one journal line (lsFlexLevels\SR\<MKT>-<spb>-<session>.csv, append-only);
@@ -51,7 +51,7 @@
 #include <chrono>
 #include <climits>
 
-#define SR_VERSION "1.1.0"   // = sr::VERSION = the one setVersion literal
+#define SR_VERSION "1.1.1"   // = sr::VERSION = the one setVersion literal
 
 namespace srh {
 // file helpers shared by the two plugins
@@ -259,8 +259,8 @@ public:
         else e->eng->advance(tMs);
     }
     void openSession(S_& S, Ext& e, const std::string& sess, const std::string& mkt) {
-        if (e.eng) flush(e);
-        if (e.writer) srh::unclaim(e.path, this, e.lock);
+        if (e.eng) { if (e.haveOff && e.writer) e.eng->advance(e.localSec * 1000); flush(e); }   // (1.1.1) the old session's last candle and open runs are closed before the journal changes
+        if (e.writer) srh::unclaim(e.path, &e, e.lock);
         e.mkt = mkt; e.spb = (int)S.spb; e.tick = S.tick; e.session = sess; ++e.sessions;
         e.eng.reset(new (std::nothrow) sr::Engine()); if (!e.eng) return;
         const srp::Mkt& M = srp::forMarket(mkt); e.eng->spb = e.spb; e.eng->rthOpenSec = M.rthOpen * 60LL; e.eng->rthCloseSec = M.rthClose * 60LL; e.eng->P.recBars = M.recBars; e.eng->P.drawRev = M.drawRev; e.eng->P.burstX = M.burstX;
@@ -268,16 +268,16 @@ public:
         e.written = 0; e.lvlSig = -1; e.nLevels = 0; e.lastTick = 0;
         const std::string flex = srh::flexDir(); srh::makeDir(flex); srh::makeDir(srh::journalDir(flex));
         e.path = srh::journalPath(flex, e.mkt, e.spb, sess);
-        e.writer = srh::claim(e.path, this, e.lock);
+        e.writer = srh::claim(e.path, &e, e.lock);   // (1.1.1) the owner is the CHART (its Ext), not the shared extension object
         e.jf = srh::JFile(); e.jf.path = e.path; e.jf.poll();
-        int maxId = 0; for (std::map<int, sr::JRun>::const_iterator it = e.jf.J.byId.begin(); it != e.jf.J.byId.end(); ++it) maxId = std::max(maxId, it->first);
+        const int maxId = e.jf.J.maxId;   // (1.1.1) over every R / G line, not only the gold runs
         e.eng->setNextId(maxId + 1000);                                   // run ids of this start never collide with a journal id
         if (!e.writer || e.path.empty()) return;
         long long mt = 0, sz = 0;
         if (!srh::stat2(e.path, mt, sz)) { std::ofstream f(e.path.c_str(), std::ios::binary | std::ios::app); char b[64]; std::snprintf(b, sizeof b, "H|%.10g|%s\n", e.tick, SR_VERSION); f << b; return; }
         { std::ifstream in(e.path.c_str(), std::ios::binary); if (sz > 0) { in.seekg(sz - 1); char c = 0; in.get(c); if (c != '\n') { std::ofstream f(e.path.c_str(), std::ios::binary | std::ios::app); f << "\n"; ++e.tornFixed; } } }
     }
-    void stopAll() { S_* S = testState(); if (!S) return; Ext* e = ext(*S); if (!e) return; if (e->eng && e->writer) flush(*e); if (e->writer) srh::unclaim(e->path, this, e->lock); e->writer = false; }
+    void stopAll() { S_* S = testState(); if (!S) return; Ext* e = ext(*S); if (!e) return; if (e->eng && e->writer) flush(*e); if (e->writer) srh::unclaim(e->path, e, e->lock); e->writer = false; }
     void flush(Ext& e) {
         if (!e.eng || !e.writer || e.path.empty() || e.written >= e.eng->journal.size()) return;
         std::ofstream f(e.path.c_str(), std::ios::binary | std::ios::app);
@@ -288,7 +288,8 @@ public:
         f.flush(); if (!f.good()) ++e.writeFails;
         if (e.eng->journal.size() > 20000) { e.eng->journal.clear(); e.written = 0; }
     }
-    virtual void afterPump(S_& S, long long, bool) { Ext* e = ext(S); if (e) { if (e->eng && e->haveOff) e->eng->advance((srh::wallNowLocal(e->offS, e->stamp)) * 1000); flush(*e); e->jf.poll(); } }
+    virtual void afterPump(S_& S, long long, bool) { Ext* e = ext(S); if (e) { if (e->eng && e->haveOff) { const long long idle = off::steadyMs() - e->secArr0; if (idle > IDLE_MS + 1000) e->eng->advance(e->localSec * 1000 + std::min<long long>(idle - IDLE_MS, 3600000LL)); }   // (1.1.1) a quiet feed: time still passes (candles close, pending runs are decided), IDLE_MS behind the clock so a late event never lands in a closed candle
+             flush(*e); e->jf.poll(); } }
     virtual void afterTimer(S_& S, long long) { Ext* e = ext(S); if (e) flush(*e); }
     virtual void statusExtra(S_& S, std::ostream& o) {
         Ext* e = ext(S); if (!e) { o << "\nSR,unavailable"; return; }
@@ -311,6 +312,7 @@ public:
         try { render(*S, *e); } catch (...) { S->state = "draw error"; }
         return RTX_OK;
     }
+    static const long long IDLE_MS = 5000;
     static const COLOR C_GOLD = 0x0038A5E0;   // BGR of #E0A538
     static COLOR dim(COLOR c) { return srh::scaleCol(c, 0.32); }
     // (1.1.0) dir -1 = a label above its bar, +1 = below: a label that would sit on one already drawn in this pass moves one text row
@@ -397,6 +399,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
     p->setDescription("LRA SR - stop runs (market-by-order feed). Per candle: the strongest one-second burst of small market orders, buyers up (green) and sellers down (red), as a ratio of the local normal; faded below 2.0x, bright with its ratio at 2.0x on a 5-bar high / low. GOLD with its ratio = a stop run through a key / MenthorQ level. 3/4 = the strength grade of a run through a level once a candle closes back over it (big buyers, big bids filled, 1 ATR deep, a candle of selling beyond the level). Arrow = the candle that closes back across that level (red down = short after a high, green up = long after a low). Gray diamond = the side that ran the stops was pulling its own orders on that candle.");
-    p->setVersion("1.1.0");
+    p->setVersion("1.1.1");
     return p;
 }

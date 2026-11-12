@@ -37,12 +37,13 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <deque>
 #include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
 namespace sr {
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.1.1";   // 1.1.1 (2026-11-12, independent review): a pending run keeps its own copy of the level; the fill window is a deque; no gold without a normal; capped order maps; a drawn grade never changes
 struct Params {
     double burstX = 2.0, sideX = 2.0, concShare = 0.5, penAtr = 1.6, zoneAtr = 0.25, atrTicks = 0;   // atrTicks 0 = the mean range of the session's closed RTH candles so far
     double bigA = 0, bigP = 0, gShare = 0.03, gDeep = 1.0, gHeavy = 1.0;   // (1.1.0) the grade; bigA / bigP 0 = that sign is off
@@ -77,20 +78,22 @@ public:
         Bar& b = cur(tMs, px); if (px > b.h) b.h = px; if (px < b.l) b.l = px; b.c = px; last_ = px; haveLast_ = true; b.vol += sz;
         const long long sec = tMs / 1000; if (sec != sec_) closeSecond(sec);
         std::unordered_map<unsigned long long, long long>& m = ord_[ag > 0 ? 0 : 1]; m[id] += sz; vol_[ag > 0 ? 0 : 1] += sz;
-        win_.push_back(F{ tMs, px, sz, ag, id }); while (!win_.empty() && win_.front().t < tMs - 5000) win_.erase(win_.begin());
+        win_.push_back(F{ tMs, px, sz, ag, id }); while (!win_.empty() && win_.front().t < tMs - 5000) win_.pop_front();   // (1.1.1) a deque: no shifting on every fill
         cross(tMs, px);
         for (size_t i = 0; i < exc_.size(); ++i) { Exc& e = exc_[i]; const long long rel = (px - e.px) * e.side; if (rel < 1) continue;   // beyond the level only
             if (rel > e.reach) e.reach = rel;
-            if (ag == e.side) { e.sell += sz; if (rest) e.pas[rest] += sz; } else { e.buy += sz; e.agg[id] += sz; } }
+            if (ag == e.side) { e.sell += sz; if (rest && (e.pas.size() < EXC_CAP || e.pas.count(rest))) e.pas[rest] += sz; }
+            else { e.buy += sz; if (e.agg.size() < EXC_CAP || e.agg.count(id)) e.agg[id] += sz; } }   // (1.1.1) the maps are capped: the volumes still count
     }
     // (1.1.0) a print that is not an aggressive fill the engine reads (implied / unsigned): the candle's volume only
     void onVolume(long long tMs, long long sz) { advance(tMs); if (sz > 0 && !bars.empty() && tMs / 1000 < bars.back().end) bars.back().vol += sz; }
     double atr14() const { return nTr_ > 0 ? watr_ : 0; }                                   // Wilder ATR(14) of the closed candles (ticks)
     double medVol() const { const size_t n = cvol_.size(); if (n < 10) return 0; std::vector<long long> v(cvol_.end() - (long)std::min<size_t>(20, n), cvol_.end()); std::sort(v.begin(), v.end()); const size_t k = v.size(); return k % 2 ? (double)v[k / 2] : 0.5 * (double)(v[k / 2 - 1] + v[k / 2]); }
     size_t openGrades() const { return exc_.size(); }
+    static const size_t EXC_CAP = 20000;                                                    // (1.1.1) orders remembered per open run and side
     // a resting-order change near price: side 0 bid / 1 ask, add (true) or pull (false), sz lots, px ticks
     void onBook(long long tMs, int side, bool add, long long px, long long sz) {
-        advance(tMs); if (!haveLast_ || sz <= 0 || side < 0 || side > 1 || bars.empty()) return;
+        advance(tMs); if (!haveLast_ || sz <= 0 || side < 0 || side > 1 || bars.empty() || tMs / 1000 >= bars.back().end) return;   // (1.1.1) never into a closed candle
         const long long d = side == 0 ? last_ - px : px - last_; if (d < 0 || d > zone()) return;
         Bar& b = bars.back(); (add ? b.add[side] : b.can[side]) += sz;
     }
@@ -106,17 +109,17 @@ public:
 private:
     struct F { long long t, px, sz; int ag; unsigned long long id; };
     struct LS { Level L; int st = -1; int visits = 0; };            // st -1 unknown, 0 inside, 1 outside (beyond)
-    struct Pend { long long t0; size_t lv; int visit; long long barEnd; int exc; };
+    struct Pend { long long t0; size_t lv; int visit; long long barEnd; int exc; std::string name; long long px; int side; };   // (1.1.1) its own copy of the level: setLevels may rebuild lv_ while it waits
     struct Exc { int key = 0, id = 0, side = 0, bars = 0; std::string lvl; long long px = 0, barEnd = 0, sell = 0, buy = 0, reach = 0; double atr0 = 0, mv0 = 0;
                  std::unordered_map<unsigned long long, long long> pas, agg; };      // one run through a level, until a candle closes back
     std::vector<Exc> exc_; int excKey_ = 1; double watr_ = 0; int nTr_ = 0; long long prevC_ = 0; std::vector<long long> cvol_;
-    std::vector<LS> lv_; std::vector<F> win_; std::vector<Pend> pend_;
+    std::vector<LS> lv_; std::deque<F> win_; std::vector<Pend> pend_;
     std::unordered_map<unsigned long long, long long> ord_[2]; long long vol_[2] = { 0, 0 }; long long sec_ = -1, now_ = 0, last_ = 0; bool haveLast_ = false;
     int secN_[2] = { 0, 0 }; double sumRng_ = 0; int nRth_ = 0; long long rthHi_ = 0, rthLo_ = 0; bool haveRth_ = false; int nextId_ = 1;
     std::vector<int> pmax_[2];                                        // per closed candle: strongest second (all seconds), for the normal
     void merge() {                                                    // levels within 2 ticks on the same side = one (names joined)
         std::sort(lv_.begin(), lv_.end(), [](const LS& a, const LS& b) { return a.L.side != b.L.side ? a.L.side < b.L.side : a.L.px < b.L.px; });
-        std::vector<LS> out; for (size_t i = 0; i < lv_.size(); ++i) { if (!out.empty() && out.back().L.side == lv_[i].L.side && std::llabs(out.back().L.px - lv_[i].L.px) <= 2 && out.back().L.fromSec == lv_[i].L.fromSec) out.back().L.name += "+" + lv_[i].L.name; else out.push_back(lv_[i]); }
+        std::vector<LS> out; for (size_t i = 0; i < lv_.size(); ++i) { if (!out.empty() && out.back().L.side == lv_[i].L.side && std::llabs(out.back().L.px - lv_[i].L.px) <= 2 && out.back().L.fromSec == lv_[i].L.fromSec) { if (out.back().L.name.size() + lv_[i].L.name.size() < 60) out.back().L.name += "+" + lv_[i].L.name; } else out.push_back(lv_[i]); }
         lv_.swap(out);
     }
     bool inRth(long long sec) const { const long long d = ((sec % 86400) + 86400) % 86400; return rthCloseSec > rthOpenSec ? (d >= rthOpenSec && d < rthCloseSec) : true; }
@@ -139,6 +142,8 @@ private:
         if (v.empty()) return 1.0;
         std::sort(v.begin(), v.end()); const size_t n = v.size(); const double m = n % 2 ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]); return m < 1.0 ? 1.0 : m;
     }
+    // (1.1.1) a normal exists: 3+ of the prior candles had small orders on that side (after a restart the first candles have none: no gold)
+    bool normKnown(int s, size_t nClosed) const { int n = 0; for (size_t i = nClosed; i-- > 0 && (int)(nClosed - i) <= P.normBars;) if (pmax_[s][i] > 0) ++n; return n >= 3; }
     void closeBars(long long nowSec) {
         while (closed_ < bars.size() && bars[closed_].end <= nowSec) {
             if (closed_ + 1 == bars.size()) closeSecond(bars[closed_].end);            // the last second of the candle
@@ -165,21 +170,21 @@ private:
             if (s.st == 1) { if (rel <= -z) s.st = 0; continue; }
             if (rel >= 1 && s.visits < P.maxVisits) { s.st = 1; ++s.visits;
                 Exc e; e.key = excKey_++; e.side = s.L.side; e.px = s.L.px; e.lvl = s.L.name; e.barEnd = bars.back().end; e.atr0 = atr14(); e.mv0 = medVol(); exc_.push_back(e);
-                pend_.push_back(Pend{ tMs, i, s.visits, bars.back().end, e.key }); }
+                pend_.push_back(Pend{ tMs, i, s.visits, bars.back().end, e.key, s.L.name, s.L.px, s.L.side }); }
         }
     }
     void decide(const Pend& p) {
-        const LS& s = lv_[p.lv]; const int sd = s.L.side; Run r; r.id = nextId_++; r.lvl = s.L.name; r.px = s.L.px; r.side = sd; r.visit = p.visit; r.tMs = p.t0; r.barEnd = p.barEnd;
+        const int sd = p.side; Run r; r.id = nextId_++; r.lvl = p.name; r.px = p.px; r.side = sd; r.visit = p.visit; r.tMs = p.t0; r.barEnd = p.barEnd;
         std::unordered_map<unsigned long long, long long> ov; std::vector<std::pair<long long, long long> > at;
         for (size_t i = 0; i < win_.size(); ++i) { const F& f = win_[i]; if (f.t < p.t0 - P.preMs || f.t > p.t0 + P.postMs) continue;
-            if (f.ag == sd) { r.vol += f.sz; ov[f.id] += f.sz; at.push_back(std::make_pair(f.t, f.sz)); const long long rc = (f.px - s.L.px) * sd; if (rc > r.reach) r.reach = rc; } else r.ovol += f.sz; }
+            if (f.ag == sd) { r.vol += f.sz; ov[f.id] += f.sz; at.push_back(std::make_pair(f.t, f.sz)); const long long rc = (f.px - p.px) * sd; if (rc > r.reach) r.reach = rc; } else r.ovol += f.sz; }
         for (std::unordered_map<unsigned long long, long long>::const_iterator it = ov.begin(); it != ov.end(); ++it) if (it->second <= P.smallMax) ++r.nSmall;
         long long best = 0; for (size_t a = 0, b = 0, sum = 0; a < at.size(); ++a) { (void)sum; long long w = 0; for (b = a; b < at.size() && at[b].first <= at[a].first + P.concMs; ++b) w += at[b].second; if (w > best) best = w; }
         r.conc = r.vol > 0 ? (double)best / (double)r.vol : 0;
         size_t nClosed = 0; while (nClosed < bars.size() && bars[nClosed].end < p.barEnd) ++nClosed; if (nClosed > pmax_[sd > 0 ? 0 : 1].size()) nClosed = pmax_[sd > 0 ? 0 : 1].size();
         r.x = r.nSmall / normOf(sd > 0 ? 0 : 1, nClosed);
-        r.gold = r.vol > 0 && r.x >= P.burstX && (double)r.vol >= P.sideX * (double)r.ovol && r.conc >= P.concShare && r.reach >= P.reachTicks;
-        r.ext = s.L.px + sd * r.reach; r.state = r.gold ? 0 : 2;
+        r.gold = normKnown(sd > 0 ? 0 : 1, nClosed) && r.vol > 0 && r.x >= P.burstX && (double)r.vol >= P.sideX * (double)r.ovol && r.conc >= P.concShare && r.reach >= P.reachTicks;
+        r.ext = p.px + sd * r.reach; r.state = r.gold ? 0 : 2;
         char z[320]; std::snprintf(z, sizeof z, "R|%d|%lld|%lld|%s|%lld|%d|%d|%.2f|%.2f|%lld|%lld|%lld|%d|%d", r.id, r.tMs, r.barEnd, r.lvl.c_str(), r.px, r.side, r.visit, r.x, r.conc, r.vol, r.ovol, r.reach, r.nSmall, (int)r.gold); journal.push_back(z);
         if (r.gold) runs.push_back(r);
         for (size_t i = 0; i < exc_.size(); ++i) if (exc_[i].key == p.exc) { exc_[i].id = r.id; break; }
@@ -221,8 +226,8 @@ struct JRun { int id = 0, side = 0; double x = 0; long long barEnd = 0; std::str
 struct JRev { int side = 0; bool pull = false; long long barEnd = 0; };
 struct JGrade { int id = 0, side = 0, score = 0; long long barEnd = 0, backEnd = 0; };   // (1.1.0) barEnd = the run candle
 struct Journal {
-    std::map<long long, JBar> bars; std::map<long long, JRun> gold; std::map<long long, JRev> rev; std::map<int, JRun> byId; long long lines = 0, bad = 0;
-    std::map<long long, JGrade> grade;   // (1.1.0) key = run candle END * 2 + (a high ? 1 : 0); the best grade of that candle and side (closed back only)
+    std::map<long long, JBar> bars; std::map<long long, JRun> gold; std::map<long long, JRev> rev; std::map<int, JRun> byId; long long lines = 0, bad = 0; int maxId = 0;   // maxId (1.1.1) = the highest run id on ANY R / G line
+    std::map<long long, JGrade> grade;   // (1.1.0) key = run candle END * 2 + (a high ? 1 : 0); the grade of that candle and side (closed back only; the first strong one stays)
     static long long gkey(long long barEnd, int side) { return barEnd * 2 + (side > 0 ? 1 : 0); }
     const JGrade* gradeAt(long long barEnd, int side) const { std::map<long long, JGrade>::const_iterator it = grade.find(gkey(barEnd, side)); return it == grade.end() ? nullptr : &it->second; }
     static std::vector<std::string> split(const std::string& l) { std::vector<std::string> c; size_t a = 0; for (;;) { const size_t p = l.find('|', a); c.push_back(l.substr(a, p == std::string::npos ? std::string::npos : p - a)); if (p == std::string::npos) break; a = p + 1; } return c; }
@@ -230,12 +235,12 @@ struct Journal {
         if (l.empty() || l[0] == 'H') return;
         const std::vector<std::string> c = split(l); ++lines;
         if (c[0] == "B" && c.size() >= 12) { JBar b; b.xU = std::atof(c[8].c_str()); b.xD = std::atof(c[9].c_str()); b.hiN = c[10] == "1"; b.loN = c[11] == "1"; bars[std::atoll(c[1].c_str())] = b; }
-        else if (c[0] == "R" && c.size() >= 15) { if (c[14] != "1") return; JRun r; r.id = std::atoi(c[1].c_str()); r.barEnd = std::atoll(c[3].c_str()); r.lvl = c[4]; r.side = std::atoi(c[6].c_str()); r.x = std::atof(c[8].c_str());
+        else if (c[0] == "R" && c.size() >= 15) { maxId = std::max(maxId, std::atoi(c[1].c_str())); if (c[14] != "1") return; JRun r; r.id = std::atoi(c[1].c_str()); r.barEnd = std::atoll(c[3].c_str()); r.lvl = c[4]; r.side = std::atoi(c[6].c_str()); r.x = std::atof(c[8].c_str());
             byId[r.id] = r; std::map<long long, JRun>::iterator it = gold.find(r.barEnd); if (it == gold.end() || r.x > it->second.x) gold[r.barEnd] = r; }
         else if (c[0] == "V" && c.size() >= 9) { JRev v; v.barEnd = std::atoll(c[2].c_str()); v.side = std::atoi(c[5].c_str()); v.pull = c[8] == "1"; rev[v.barEnd] = v; }
         else if (c[0] == "X") { }
-        else if (c[0] == "G" && c.size() >= 20) { if (c[19] != "1") return; JGrade g; g.id = std::atoi(c[1].c_str()); g.backEnd = std::atoll(c[2].c_str()); g.barEnd = std::atoll(c[3].c_str()); g.side = std::atoi(c[6].c_str()); g.score = std::atoi(c[7].c_str());
-            if (g.side == 0 || g.score < 0 || g.score > 4) { ++bad; return; } const long long k = gkey(g.barEnd, g.side); std::map<long long, JGrade>::iterator it = grade.find(k); if (it == grade.end() || g.score > it->second.score) grade[k] = g; }
+        else if (c[0] == "G" && c.size() >= 20) { maxId = std::max(maxId, std::atoi(c[1].c_str())); if (c[19] != "1") return; JGrade g; g.id = std::atoi(c[1].c_str()); g.backEnd = std::atoll(c[2].c_str()); g.barEnd = std::atoll(c[3].c_str()); g.side = std::atoi(c[6].c_str()); g.score = std::atoi(c[7].c_str());
+            if (g.side == 0 || g.score < 0 || g.score > 4) { ++bad; return; } const long long k = gkey(g.barEnd, g.side); std::map<long long, JGrade>::iterator it = grade.find(k); if (it == grade.end() || (it->second.score < 3 && g.score > it->second.score)) grade[k] = g; }   // (1.1.1) a strong grade (3+, the drawn one) once given never changes; a weaker one may be replaced by a deeper level's
         else ++bad;
     }
 };
