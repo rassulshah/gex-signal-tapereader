@@ -1,5 +1,5 @@
 /*
- *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.3.0  (2026-11-12)
+ *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.4.0  (2026-11-12)
  *
  *  Rassul 2026-11-11 21:13-21:33 CT: "I want to know how i can have indicators that tell this story so i can understand how and why it
  *  reveresed"; "i have the poc of the candle in a pane. i want you to create a similar pane that has each candles poc and also makes a dash
@@ -19,7 +19,10 @@
  *      Thresholds: lsFlexLevels\LRA-RevRead-<MKT>.csv (written by the nightly; defaults when absent).
  *  lsRevReadMarks (RevReadMarks.cpp: #define RVS_MARKS 1 + #include this file) - the price-chart overlay: a white dash on every candle
  *      at its POC price.
- *  No settings, no hovers, no text on the price chart. Order-feed letters exist from the moment the pane is on the chart (IRT has no
+ *      (0.4.0, Rassul 2026-11-12 07:07 / 07:12 CT) + the HOLD READ dots, OFF by default (settings: "Hold read dots"): a small red dot over a
+ *      high / a green dot under a low that is likely done (rvs::holdOf, the strong tier only: the candle closed well back from its extreme,
+ *      on heavy volume / after a long run / back inside the prior high or low). Closed candles only: a dot never changes.
+ *  lsRevRead has no settings; lsRevReadMarks has two switches (POC dash, Hold read dots). No hovers, no text on the price chart. Order-feed letters exist from the moment the pane is on the chart (IRT has no
  *  order-by-order history); decided letters are reloaded from the session record after a restart. The POC bars / dashes cover all bars.
  */
 #ifndef NOMINMAX
@@ -37,7 +40,16 @@
 #endif
 #endif
 #include "PerfGuard.h"
+#ifdef RVS_MARKS
+#include "SettingsGuard.h"
+#endif
 #include "HostSlot.h"
+#ifdef RVS_MARKS
+#include "SettingsSpec.h"
+#include "SettingsHost.h"
+#include "RevReadSettings.h"
+#include <chrono>
+#endif
 #include "MarketKey.h"
 #include "NearLevels.h"
 #include "SignalBoard.h"
@@ -58,11 +70,11 @@
 #include <vector>
 #include <sys/stat.h>
 
-#define RVS_VERSION "0.3.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.4.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.3.0");
+    p->setVersion("0.4.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -416,10 +428,37 @@ extern "C" cppExtension* CreateExtension(void) {
 // =====================================================================================================================
 // lsRevReadMarks - the price-chart overlay: a white dash on each candle at its POC price
 // =====================================================================================================================
-struct RmState { rvh::PocStore ps; double tick = 0; long long drawn = 0; };
+static ss::Ids& rmIds() { static ss::Ids I; return I; }
+inline long long rmSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+struct RmState { rvh::PocStore ps; double tick = 0; long long drawn = 0, dots = 0; std::string mkt; ss::Store store; ss::Values set = ss::defaults(rvset::spec(), -1); long long setMs = -100000;
+                 std::map<long long, signed char> hold; };   // candle end -> +3 / -3 ... (side x tier) of a CLOSED candle, decided once
 class RevReadMarks : public cppExtension {
 public:
+    SS_SAFE_DIALOG(RevReadMarks, "RevReadMarks")
     HostSlot<RmState> slot_;
+    virtual int parmsLoadBody(void) { if (!ss::inDialog(this)) return RTX_OK; ss::Store* st = dialogStore(); if (st) ss::fillDialog(this, rvset::spec(), rmIds(), st->load(ss::marketIndex(dlgMkt_), rmSteadyMs(), true), snap_); return RTX_OK; }
+    virtual int parmsApplyBody(void) { save(); return RTX_OK; }
+    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, rvset::spec(), rmIds(), (int)i, snap_); save(); return RTX_OK; }
+    // the settings of this chart's market (re-read at most every 2 s)
+    const ss::Values& settings(RmState& s) {
+        const long long now = rmSteadyMs(); if (now - s.setMs < 2000 && now >= s.setMs) return s.set; s.setMs = now;
+        const char* rs = getRootSymbol(); const char* sy = getSymbol(); s.mkt = rvh::marketOf(rs ? rs : "", sy ? sy : "");
+        const std::string p = rvset::settingsPath(rvh::flexDir(), s.mkt);
+        if (s.store.path != p) { s.store = ss::Store(); s.store.S = &rvset::spec(); s.store.path = p; }
+        s.set = p.empty() ? ss::defaults(rvset::spec(), -1) : s.store.load(ss::marketIndex(s.mkt), now); return s.set;
+    }
+    // the hold read of closed bar i (0 = none), decided once per candle from the 20 closed candles before it
+    template <class TA, class FA> int holdAt(RmState& s, TA& times, FA& hi, FA& lo, FA& cl, int i) {
+        const long long key = (long long)times[i]; const auto it = s.hold.find(key); if (it != s.hold.end()) return it->second;
+        if (i < 20) return 0;
+        std::vector<rvs::Cnd> c; c.reserve(21);
+        for (int k = i - 20; k <= i; ++k) { const auto p = s.ps.poc.find((long long)times[k]); const double h = (double)hi[k], l = (double)lo[k], x = (double)cl[k];
+            if (p == s.ps.poc.end() || !p->second.ok || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(x)) return 0;   // a candle without volume at price yet: decided on a later draw
+            rvs::Cnd d; d.t = (long long)times[k]; d.hi = (long long)std::llround(h / s.tick); d.lo = (long long)std::llround(l / s.tick); d.close = (long long)std::llround(x / s.tick); d.total = p->second.total; c.push_back(d); }
+        const rvs::Hold q = rvs::holdOf(c, 20); const int v = q.side * q.tier;
+        s.hold[key] = (signed char)v; while (s.hold.size() > 6000) s.hold.erase(s.hold.begin());
+        return v;
+    }
     void pump() {
         RmState* sp = slot_.get(this, true); if (!sp) return; RmState& s = *sp;
         const double tick = (double)getProperty(SYM_TICKINCR); if (!std::isfinite(tick) || !(tick > 0) || tick >= 1000) return;
@@ -450,26 +489,43 @@ public:
             int v0 = 0, v1 = 0; if (getVisibleBars(&v0, &v1) != RTX_OK) return RTX_OK; v0 = std::max(0, v0); v1 = std::min((int)count - 1, v1);
             RCT pane; pane.getPaneRect(false);
             const int half = std::max(3, (int)getPixelsPerBar() * 45 / 100);
+            const ss::Values& V = settings(s);
             setPen(rvh::C_DASH, 1, P_SOLID);
-            for (int i = v0; i <= v1; ++i) { const auto it = s.ps.poc.find((long long)times[i]); if (it == s.ps.poc.end() || !it->second.ok) continue;
+            if (V.b(rvset::K_SHOW_HOLD)) {                                // (0.4.0) the hold read: closed candles only; strong tier only
+                RTARRAY hi(barHigh), lo(barLow), cl(barClose);
+                if (hi.count >= count && lo.count >= count && cl.count >= count) for (int i = v0; i <= v1 && i < (int)count - 1; ++i) {
+                    const int h = holdAt(s, times, hi, lo, cl, i); if (h != 3 && h != -3) continue;
+                    PNT p; p.set(i, 0.0f, kBarCenter); const bool top = h > 0; const int y = (int)getVerticalDrawPosition((float)(top ? (double)hi[i] : (double)lo[i])) + (top ? -8 : 8);
+                    if (y < pane.top + 3 || y > pane.bottom - 4) continue;
+                    const COLOR col = top ? rvh::C_RED : rvh::C_GREEN;    // a high that is likely done = bearish (red, over it); a low = bullish (green, under it)
+                    RCT r; r.set(rvh::coord(p.h - 2), rvh::coord(y - 2), rvh::coord(p.h + 3), rvh::coord(y + 3)); r.draw(0, col, col, DRAW_OPAQUE, PAT_SOLID); ++s.dots; }
+            }
+            if (V.b(rvset::K_SHOW_POC)) for (int i = v0; i <= v1; ++i) { const auto it = s.ps.poc.find((long long)times[i]); if (it == s.ps.poc.end() || !it->second.ok) continue;
                 PNT p; p.set(i, 0.0f, kBarCenter); const int y = (int)getVerticalDrawPosition((float)((double)it->second.tick * s.tick));
                 if (y < pane.top + 1 || y > pane.bottom - 2) continue;
                 RCT r; r.set(rvh::coord(p.h - half), rvh::coord(y - 1), rvh::coord(p.h + half + 1), rvh::coord(y + 1)); r.draw(0, rvh::C_DASH, rvh::C_DASH, DRAW_OPAQUE, PAT_SOLID); ++s.drawn; }
         } catch (...) {}
         return RTX_OK;
     }
+private:
+    ss::Snap snap_; ss::Store dlgStore_; std::string dlgMkt_;
+    void save() { if (!ss::inDialog(this)) return; ss::Store* st = dialogStore(); if (!st) return;
+        const ss::Values V = ss::readDialog(this, rvset::spec(), rmIds(), st->load(ss::marketIndex(dlgMkt_), rmSteadyMs(), true), snap_);
+        rvh::makeDir(rvh::flexDir()); if (st->save(V)) snap_.take(ss::dialogNow(this, rvset::spec(), rmIds(), V)); }
+    ss::Store* dialogStore() { const std::string mkt = ss::safeMarket(this); const std::string p = rvset::settingsPath(rvh::flexDir(), mkt); if (p.empty()) return nullptr;
+        if (dlgStore_.path != p) { dlgStore_ = ss::Store(); dlgStore_.S = &rvset::spec(); dlgStore_.path = p; dlgMkt_ = mkt; } return &dlgStore_; }
 };
 int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<RevReadMarks*>(this)->slot_.release(this); return RTX_OK; }
-int cppExtension::setup(void)   { return RTX_OK; }
+int cppExtension::setup(void)   { ss::registerAll(this, rvset::spec(), rmIds()); return RTX_OK; }
 int cppExtension::calc(int)     { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); try { static_cast<RevReadMarks*>(this)->pump(); } catch (...) {} return RTX_OK; }
 
 extern "C" cppExtension* CreateExtension(void) {
     RevReadMarks* p = new RevReadMarks();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI | VAP_REQUIRED);
-    p->setDescription("LRA Reversal Read marks - a white dash on each candle at its POC price (the price with the most volume in that candle); the price-chart half of lsRevRead.");
+    p->setDescription("LRA Reversal Read marks - a white dash on each candle at its POC price (the price with the most volume in that candle); optional (off by default): a dot at a high / low that is likely done; the price-chart half of lsRevRead.");
     rvh::stamp(p);   // RVS_VERSION
     return p;
 }

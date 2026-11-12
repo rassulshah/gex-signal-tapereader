@@ -1,6 +1,6 @@
 #ifndef LS_REVREAD_LOGIC_H
 #define LS_REVREAD_LOGIC_H
-// RevReadLogic.h 0.3.0 (2026-11-12) -- lsRevRead "Reversal Read": every rule of the indicator, no SDK (unit-tested on Linux).
+// RevReadLogic.h 0.4.0 (2026-11-12) -- lsRevRead "Reversal Read": every rule of the indicator, no SDK (unit-tested on Linux).
 //
 // Rassul 2026-11-11 21:00-21:33 CT: "these bids were there getting filled and accumulating .. i need to know what was going on with the bids to
 // understand why the reversal happened"; "I want to know how i can have indicators that tell this story"; "create a similar pane that has each
@@ -44,6 +44,15 @@
 //             strong (>= 3): the extreme held 30 min 36-43% of the time on 3-min candles, 52-69% for 3 hours on hourly candles; weak (<= -2):
 //             4-10% and 0-7% (base 18-24% and 26-34%). It says whether the high / low is likely done - it is NOT an entry: 2R with the pivot
 //             stop from that close is no better than any other new extreme (the close is already farPx from the stop).
+// (0.4.0) Rassul 2026-11-12 07:07 CT "add the hold read as an uncheckeed options in rev read marks. here is another interesting example. i also
+// like it because it shows failure to breakout above the high of the candle about two candles ago"; 07:11 "the second candle tried to breakout
+// over the 1st candles high 3 bars ago, and the second candle even had positive delta but it trapped and close below resistance"; 07:12 "i'll go
+// with your recomendation" (dots for the strong tier only, off by default).
+//   FAILED BREAKOUT  a candle at a new extreme that CLOSES BACK inside the high (low) of the 5 candles before it: +1 on the hold score. Measured:
+//                    the extreme held 29% vs 14% when the candle closed through, in all 7 markets and both halves; with the score 42% at strong.
+//                    (The delta of the failed push - "trapped" - and the wick were measured too: they do not add to it.)
+//   TIERS (0.4.0)    strong >= 4, some = 3, neutral -1 .. 2, weak <= -2.   holdOf() is the ONE function the engine (Q lines), the replay (rrrun)
+//                    and lsRevReadMarks (the dots) use, on closed candles only: a dot never changes once its candle has closed.
 // EVERYTHING measured is recorded (ratios, context, also stories that failed a threshold) so the nightly can score and move the thresholds.
 #include <algorithm>
 #include <cmath>
@@ -55,7 +64,7 @@
 #include <unordered_map>
 #include <vector>
 namespace rvs {
-static const char* const VERSION = "0.3.0";   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
+static const char* const VERSION = "0.4.0";   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum { BID = 0, ASK = 1 };                    // the feed's side codes (resting bids / offers; on a FILL: BID = the aggressor BOUGHT)
 enum { BUY = 0, SELL = 1 };                   // aggressor sides
@@ -128,15 +137,34 @@ inline std::string hourlyText(int dir, int rot, long long px, long long top, boo
 
 // ---- (0.3.0) the hold read of a candle at a new extreme: cp = how farPx it closed back from that extreme (0 = at it .. 1 = the other end),
 // volx / rngx = its volume / range vs the median of the 20 candles before, move = the run into the extreme in median ranges ----
-inline int holdScore(double cp, double volx, double rngx, double move) {
+inline int holdScore(double cp, double volx, double rngx, double move, bool failed) {
     int s = cp >= 0.7 ? 2 : cp >= 0.435 ? 1 : cp < 0.11 ? -2 : cp < 0.25 ? -1 : 0;
     if (volx >= 2.0) ++s;
     if (move >= 5.0) ++s;
     if (rngx >= 1.67) ++s;
+    if (failed) ++s;                                                                           // (0.4.0) it closed back inside the prior high / low: a failed breakout
     return s;
 }
-inline int holdTier(int score) { return score >= 3 ? 3 : score >= 1 ? 2 : score >= -1 ? 1 : 0; }   // 3 strong, 2 some, 1 neutral, 0 weak
+inline int holdTier(int score) { return score >= 4 ? 3 : score >= 3 ? 2 : score >= -1 ? 1 : 0; }   // 3 strong, 2 some, 1 neutral, 0 weak
 inline const char* holdName(int tier) { return tier == 3 ? "strong" : tier == 2 ? "some" : tier == 1 ? "neutral" : "weak"; }
+struct Cnd { long long t = 0, lo = 0, hi = 0, close = 0, cdlt = 0, total = 0; };
+struct Hold { int side = 0, score = 0, tier = 1; double cp = 0, volx = 0, rngx = 0, move = 0; bool failed = false; long long ext = 0; };   // side +1 = the candle's HIGH, -1 = its LOW, 0 = not at a new extreme
+// the hold read of candle c[j] against the 20 closed candles before it (side 0 when it is not at a new high / low of the 5 before, or too few)
+inline Hold holdOf(const std::vector<Cnd>& c, size_t j) {
+    Hold h; if (j < 20 || j >= c.size()) return h; const Cnd& p = c[j]; if (p.hi <= p.lo) return h;
+    bool hi = true, lo = true; for (size_t k = j - 5; k < j; ++k) { if (c[k].hi >= p.hi) hi = false; if (c[k].lo <= p.lo) lo = false; }
+    if (hi == lo) return h;
+    std::vector<double> mt, mr; long long farPx = hi ? c[j - 1].lo : c[j - 1].hi, prior = hi ? c[j - 1].hi : c[j - 1].lo;
+    for (size_t k = j - 20; k < j; ++k) { mt.push_back((double)c[k].total); mr.push_back((double)(c[k].hi - c[k].lo)); }
+    for (size_t k = j - 10; k < j; ++k) farPx = hi ? std::min(farPx, c[k].lo) : std::max(farPx, c[k].hi);
+    for (size_t k = j - 5; k < j; ++k) prior = hi ? std::max(prior, c[k].hi) : std::min(prior, c[k].lo);
+    std::nth_element(mt.begin(), mt.begin() + (long)(mt.size() / 2), mt.end()); std::nth_element(mr.begin(), mr.begin() + (long)(mr.size() / 2), mr.end());
+    const double mT = std::max(1e-9, mt[mt.size() / 2]), mR = std::max(1e-9, mr[mr.size() / 2]), rg = (double)(p.hi - p.lo);
+    h.side = hi ? 1 : -1; h.ext = hi ? p.hi : p.lo; h.cp = hi ? (double)(p.hi - p.close) / rg : (double)(p.close - p.lo) / rg; h.volx = (double)p.total / mT; h.rngx = rg / mR;
+    h.move = (double)(hi ? p.hi - farPx : farPx - p.lo) / mR; h.failed = hi ? p.close < prior : p.close > prior;
+    h.score = holdScore(h.cp, h.volx, h.rngx, h.move, h.failed); h.tier = holdTier(h.score);
+    return h;
+}
 // ---- the candle POC ----
 struct VRow { long long tick = 0, vol = 0, dlt = 0; };
 struct Poc { long long t = 0; long long tick = 0, vol = 0, dlt = 0, total = 0; double pos = 0.5, closePos = 0.5; bool ok = false; long long cdlt = 0, lo = 0, hi = 0, close = 0; };   // (0.2.0) cdlt = the candle's delta; lo / hi / close in ticks   // pos: 0 = at the low .. 1 = at the high
@@ -168,7 +196,7 @@ struct Story {
 };
 // (0.2.0) pullback absorbed: one candle; conf: -1 = waiting for the next candle, 1 = it followed through, 0 = it did not
 struct Pull { int id = 0; bool top = true; long long t = 0, t2 = 0, ext = 0, poc = 0, cdlt = 0, total = 0, close = 0; double dx = 0, pos = 0.5, closePos = 0.5; int conf = -1; Ctx ctx; };
-struct Cnd { long long t = 0, lo = 0, hi = 0, close = 0, cdlt = 0, total = 0; };
+
 struct Mark { long long candle = 0; char letter = 'C'; int col = 0; };   // col: +1 green, -1 red; candle = the candle's END (seconds)
 struct Seg { std::string text; int col = 0; };                          // the read line: col +1 green, -1 red, 0 pending (grey), 2 = white (context)
 
@@ -363,17 +391,12 @@ struct Engine {
                 { long long bd = P.zoneTicks + 3; for (const auto& lv : levels) { const long long dd = std::llabs(lv.first - q.ext); if (dd < bd) { bd = dd; q.ctx.level = lv.second; } } }
                 pulls.push_back(q); pullNote(q, "A"); } }
         if (liveCandle && (int)cnd.size() >= 20) {                                             // (0.3.0) the hold read: a candle at a new high / low of the 5 before it
-            bool hi = true, lo = true; int n = 0; for (auto it = cnd.rbegin(); it != cnd.rend() && n < 5; ++it, ++n) { if (it->hi >= p.hi) hi = false; if (it->lo <= p.lo) lo = false; }
-            if (hi != lo) { std::vector<double> mt, mr; long long farPx = hi ? cnd.back().lo : cnd.back().hi; n = 0;
-                for (auto it = cnd.rbegin(); it != cnd.rend() && n < 20; ++it, ++n) { mt.push_back((double)it->total); mr.push_back((double)(it->hi - it->lo)); if (n < 10) farPx = hi ? std::min(farPx, it->lo) : std::max(farPx, it->hi); }
-                std::nth_element(mt.begin(), mt.begin() + (long)(mt.size() / 2), mt.end()); std::nth_element(mr.begin(), mr.begin() + (long)(mr.size() / 2), mr.end());
-                const double mT = std::max(1e-9, mt[mt.size() / 2]), mR = std::max(1e-9, mr[mr.size() / 2]), rg = (double)(p.hi - p.lo);
-                const double cp = hi ? (double)(p.hi - p.close) / rg : (double)(p.close - p.lo) / rg, volx = (double)p.total / mT, rngx = rg / mR, mv = (double)(hi ? p.hi - farPx : farPx - p.lo) / mR;
-                const int sc = holdScore(cp, volx, rngx, mv), tr = holdTier(sc); const long long ext = hi ? p.hi : p.lo; std::string lv;
-                { long long bd = 5; for (const auto& l : levels) { const long long dd = std::llabs(l.first - ext); if (dd < bd) { bd = dd; lv = l.second; } } }
-                lastHoldTier = tr; lastHoldSide = hi ? 1 : -1; lastHoldCandle = candle;
-                out.push_back(std::string("Q|") + VERSION + "|" + std::to_string(nextHold++) + "|" + (hi ? "top" : "bottom") + "|" + std::to_string(candle) + "|ext " + num((double)ext * tick) + "|score " + std::to_string(sc) + "|tier " + holdName(tr)
-                    + "|cp " + num(cp) + "|volx " + num(volx) + "|rngx " + num(rngx) + "|move " + num(mv) + "|sess " + ctx.session + "|hourly " + ctx.hourly + "|level " + lv + "|ct " + clock); } }
+            std::vector<Cnd> w(cnd.end() - 20, cnd.end()); Cnd me; me.t = candle; me.lo = p.lo; me.hi = p.hi; me.close = p.close; me.cdlt = p.cdlt; me.total = p.total; w.push_back(me);
+            const Hold q = holdOf(w, 20);
+            if (q.side != 0) { std::string lv; { long long bd = 5; for (const auto& l : levels) { const long long dd = std::llabs(l.first - q.ext); if (dd < bd) { bd = dd; lv = l.second; } } }
+                lastHoldTier = q.tier; lastHoldSide = q.side; lastHoldCandle = candle;
+                out.push_back(std::string("Q|") + VERSION + "|" + std::to_string(nextHold++) + "|" + (q.side > 0 ? "top" : "bottom") + "|" + std::to_string(candle) + "|ext " + num((double)q.ext * tick) + "|score " + std::to_string(q.score) + "|tier " + holdName(q.tier)
+                    + "|cp " + num(q.cp) + "|volx " + num(q.volx) + "|rngx " + num(q.rngx) + "|move " + num(q.move) + "|failed " + (q.failed ? "1" : "0") + "|sess " + ctx.session + "|hourly " + ctx.hourly + "|level " + lv + "|ct " + clock); } }
         Cnd c; c.t = candle; c.lo = p.lo; c.hi = p.hi; c.close = p.close; c.cdlt = p.cdlt; c.total = p.total; cnd.push_back(c); while ((int)cnd.size() > 64) cnd.pop_front();
         while (pulls.size() > 400) pulls.erase(pulls.begin());
     }

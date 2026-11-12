@@ -1,4 +1,4 @@
-// rrrun.cpp 1.1.0 (2026-11-12) -- the lsRevRead engine (RevReadLogic.h) as a CLI for lra.rev_read (the nightly) and the jumpstart.
+// rrrun.cpp 1.2.0 (2026-11-12) -- the lsRevRead engine (RevReadLogic.h) as a CLI for lra.rev_read (the nightly) and the jumpstart.
 //
 // Rassul 2026-11-12 06:08 CT: "go. and also build self improvement so you can better detect these sequences and their behaviors and their
 // variants"; 2026-11-11: "jumpstart this indicator for all markets and refine"; "pay attention to session, volatility times, location and context".
@@ -64,6 +64,7 @@ struct Run {
     // every candle of `v` (3-minute: this session's; hourly: all) at a new extreme of the `look` candles before it, with its features and the truth
     void emitQ(const char* kind, const std::vector<QB>& v, size_t look, long long H, long long hold, bool hourly) {
         std::ostream& o = std::cout;
+        std::vector<rvs::Cnd> cn(v.size()); for (size_t k = 0; k < v.size(); ++k) { cn[k].t = v[k].t; cn[k].lo = v[k].lo; cn[k].hi = v[k].hi; cn[k].close = v[k].close; cn[k].cdlt = v[k].cdlt; cn[k].total = v[k].total; }   // (1.2.0) the hold read = the plugin's own rvs::holdOf
         for (size_t j = 20; j < v.size(); ++j) { const QB& c = v[j]; if (c.sess != sess || c.hi <= c.lo) continue;
             bool hi = true, lo = true; for (size_t k = j - look; k < j; ++k) { if (v[k].hi >= c.hi) hi = false; if (v[k].lo <= c.lo) lo = false; }
             if (hi == lo) continue;
@@ -71,15 +72,18 @@ struct Run {
             const double mT = med(mt), mR = med(mr), mD = med(md), rg = (double)(c.hi - c.lo);
             long long farPx = hi ? v[j - 1].lo : v[j - 1].hi, cd5 = 0; for (size_t k = j - 10; k < j; ++k) farPx = hi ? std::min(farPx, v[k].lo) : std::max(farPx, v[k].hi); for (size_t k = j - 5; k < j; ++k) cd5 += v[k].cdlt;
             const long long ext = hi ? c.hi : c.lo; int ft = -1; long long t2 = 0;
+            long long ph = hi ? v[j - 1].hi : v[j - 1].lo; int phago = 1;                        // the high (low) of the `look` candles before, and how many candles ago it was made: a failed breakout of it
+            for (size_t k = 2; k <= look; ++k) { const long long x = hi ? v[j - k].hi : v[j - k].lo; if (hi ? x > ph : x < ph) { ph = x; phago = (int)k; } }
             if (j + 1 < v.size() && v[j + 1].sess == c.sess) { const QB& n = v[j + 1]; ft = hi ? (n.lo < c.lo && n.close < c.close ? 1 : 0) : (n.hi > c.hi && n.close > c.close ? 1 : 0); t2 = n.t; }
-            const int cs = ctSec((c.t - 1) * 1000);
+            const int cs = ctSec((c.t - 1) * 1000); const rvs::Hold hq = rvs::holdOf(cn, j);
             o << "{\"k\":\"" << kind << "\",\"m\":\"" << mkt << "\",\"sess\":" << sess << ",\"side\":\"" << (hi ? "top" : "bottom") << "\",\"ct\":" << ctSec(c.t * 1000) << ",\"csess\":\"" << rvs::sessionOf(cs, rthO, rthC) << "\""
               << ",\"pos\":" << (hi ? 1.0 - c.pos : c.pos) << ",\"cp\":" << (hi ? (double)(c.hi - c.close) / rg : (double)(c.close - c.lo) / rg) << ",\"wick\":" << (hi ? (double)(c.hi - std::max(c.o, c.close)) / rg : (double)(std::min(c.o, c.close) - c.lo) / rg)
               << ",\"volx\":" << (double)c.total / mT << ",\"rngx\":" << rg / mR << ",\"dx\":" << (double)(sg * c.cdlt) / mD << ",\"e2s\":" << (c.total ? (double)c.e2v[b] / (double)c.total : 0) << ",\"e2dx\":" << (double)(sg * c.e2d[b]) / mD
               << ",\"t3s\":" << (c.total ? (double)c.t3v[b] / (double)c.total : 0) << ",\"t3dx\":" << (double)(sg * c.t3d[b]) / mD << ",\"move\":" << (double)(hi ? c.hi - farPx : farPx - c.lo) / mR << ",\"cd5\":" << (double)(sg * cd5) / mD
-              << ",\"hs\":" << rvs::holdScore(hi ? (double)(c.hi - c.close) / rg : (double)(c.close - c.lo) / rg, (double)c.total / mT, rg / mR, (double)(hi ? c.hi - farPx : farPx - c.lo) / mR)
+              << ",\"hs\":" << hq.score << ",\"ht\":" << hq.tier << ",\"failed\":" << (hq.failed ? 1 : 0)
               << ",\"pvolx\":" << (double)v[j - 1].total / mT << ",\"ppos\":" << (hi ? 1.0 - v[j - 1].pos : v[j - 1].pos) << ",\"pt3s\":" << (v[j - 1].total ? (double)v[j - 1].t3v[b] / (double)v[j - 1].total : 0)
               << ",\"over\":" << (double)(hi ? c.hi - v[j - 1].hi : v[j - 1].lo - c.lo) / mR << ",\"vrat\":" << (v[j - 1].total ? (double)c.total / (double)v[j - 1].total : 0) << ",\"pcp\":" << (v[j - 1].hi > v[j - 1].lo ? (hi ? (double)(v[j - 1].hi - v[j - 1].close) : (double)(v[j - 1].close - v[j - 1].lo)) / (double)(v[j - 1].hi - v[j - 1].lo) : 0.5)
+              << ",\"obo\":" << (double)(hi ? c.hi - ph : ph - c.lo) / mR << ",\"cbk\":" << ((hi ? c.close < ph : c.close > ph) ? 1 : 0) << ",\"phago\":" << phago
               << ",\"ft\":" << ft << ",\"hourly\":\"" << js(c.hr) << "\",\"level\":\"" << js(c.lvl[b]) << "\"";
             if (hourly) { int nC = 0, nA = 0; for (const rvs::Story& st : done[0]) { if (!st.shown || st.bottom == hi || st.t0 / 1000 < c.t - 3600 || st.t0 / 1000 >= c.t || std::llabs(st.extreme - ext) > 8) continue; ++nC; if (st.step >= rvs::S_ABSORBED) ++nA; }
                 o << ",\"nC\":" << nC << ",\"nA\":" << nA; }
