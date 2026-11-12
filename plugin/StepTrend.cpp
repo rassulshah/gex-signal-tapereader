@@ -1,5 +1,10 @@
 /********************************************************************************
- *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.4.4  (2026-11-11)
+ *  StepTrend.cpp  --  Investor/RT RTX extension  lsStepTrend  "Step Trend"  1.4.5  (2026-11-11)
+ *
+ *  1.4.5 (Rassul 2026-11-11 19:33 CT "on the 60 min shouldn't the line go from the high of the bar before the hbo to the hbo bar hi", 19:34
+ *  "i'll go with your recommendation" = flips only) hourly: the first step after a change of direction starts at the candle before the
+ *  step candle, from the broken level to the step candle's high (low), then across; same-direction steps unchanged.
+ *  (was 1.4.4)
  *
  *  1.4.4 (Rassul 2026-11-11 17:13 CT "change the location of B to be on top of the red bar so it doesn't overlap the lines and vice versa") B over the
  *  high of the red candle that broke a step up (red); under the low of the green candle that broke a step down (green).
@@ -82,7 +87,7 @@
 #include <string>
 #include <vector>
 
-#define STEPTREND_VERSION "1.4.4"
+#define STEPTREND_VERSION "1.4.5"
 
 namespace sth {
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREEN_D = 0x00178A42, C_RED_D = 0x00B03A3A;
@@ -278,7 +283,7 @@ extern "C" cppExtension* CreateExtension(void) {
     StepTrend* p = new StepTrend();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA Step Trend v1.4.4 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
-    p->setVersion("1.4.4");
+    p->setDescription("LRA Step Trend v1.4.5 - hourly breakouts as connected steps over the wave tops (green up, red down); the newest level dashed; an old level runs on thin and dashed as support until it is tested or the next step is made.");
+    p->setVersion("1.4.5");
     return p;
 }
