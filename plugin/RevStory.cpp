@@ -1,5 +1,5 @@
 /*
- *  RevStory.cpp  --  Investor/RT RTX extension  lsRevStory  "Reversal Story"  0.1.0  (2026-11-11)
+ *  RevStory.cpp  --  Investor/RT RTX extension  lsRevStory  "Reversal Story"  0.1.1  (2026-11-11)
  *
  *  Rassul 2026-11-11 21:13-21:33 CT: "I want to know how i can have indicators that tell this story so i can understand how and why it
  *  reveresed"; "i have the poc of the candle in a pane. i want you to create a similar pane that has each candles poc and also makes a dash
@@ -58,11 +58,11 @@
 #include <vector>
 #include <sys/stat.h>
 
-#define RVS_VERSION "0.1.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.1.1"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.1.0");
+    p->setVersion("0.1.1");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }

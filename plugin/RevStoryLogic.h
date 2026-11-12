@@ -1,6 +1,6 @@
 #ifndef LS_REVSTORY_LOGIC_H
 #define LS_REVSTORY_LOGIC_H
-// RevStoryLogic.h 0.1.0 (2026-11-11) -- lsRevStory "Reversal Story": every rule of the indicator, no SDK (unit-tested on Linux).
+// RevStoryLogic.h 0.1.1 (2026-11-11) -- lsRevStory "Reversal Story": every rule of the indicator, no SDK (unit-tested on Linux).
 //
 // Rassul 2026-11-11 21:00-21:33 CT: "these bids were there getting filled and accumulating .. i need to know what was going on with the bids to
 // understand why the reversal happened"; "I want to know how i can have indicators that tell this story"; "create a similar pane that has each
@@ -37,7 +37,7 @@
 #include <unordered_map>
 #include <vector>
 namespace rvs {
-static const char* const VERSION = "0.1.0";
+static const char* const VERSION = "0.1.1";   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum { BID = 0, ASK = 1 };                    // the feed's side codes (resting bids / offers; on a FILL: BID = the aggressor BOUGHT)
 enum { BUY = 0, SELL = 1 };                   // aggressor sides
@@ -99,8 +99,9 @@ inline std::string hourlyText(int dir, int rot, long long px, long long top, boo
     const bool up = dir > 0; char b[96]; std::string s = up ? "Hrly up" : "Hrly dn";
     if (rot != 0 && (rot > 0) != up) s += up ? " (rotation dn)" : " (rotation up)";
     if (broken) return s + ", trend broken";
-    const bool testing = up ? lo <= px + tol : hi >= px - tol, with = up ? last >= top : last <= top;
+    const bool testing = up ? lo <= px + tol : hi >= px - tol, with = up ? last >= top : last <= top, beyond = up ? hi < px - tol : lo > px + tol;
     std::snprintf(b, sizeof b, "%.10g", (double)px * tick);
+    if (beyond) return s + (up ? ", below the test line " : ", above the test line ") + b;   // (0.1.1) price is through the HBO test line (no hourly close has broken the step yet)
     return s + (testing ? std::string(", testing ") + b : with ? std::string(", going with it") : std::string(", pulling back to ") + b);
 }
 
@@ -126,7 +127,7 @@ struct Story {
     long long t0 = 0, tA = 0, tE = 0, tI = 0, tEnd = 0;            // ms: the climax block's end, absorbed, exhausted, initiation, ended
     long long burst = 0, opp = 0, bigOrder = 0; double p95 = 0;     // the climax block: lots on the attacking side / the other side, its biggest order, the normal
     long long anchor = 0, zoneLo = 0, zoneHi = 0, range = 0, shownSz = 0, absLots = 0; double absR = 0;
-    int blocks = 0; std::vector<long long> returns, fadeList; bool inZone = true; long long retCur = 0; bool fading = false;   // fadeList = the returns when fading was first seen (what the read shows)
+    int blocks = 0; std::vector<long long> attBlocks; std::vector<long long> returns, fadeList; bool inZone = true; long long retCur = 0; bool fading = false;   // fadeList = the returns when fading was first seen (what the read shows)
     bool below = false; long long flushLots = 0, flushExt = 0; long long initLots = 0, initOpp = 0;
     long long extreme = 0;                                           // the story's lowest (highest) trade
     std::string sweep;                                               // the level the flush took out and reclaimed ("stop run of <level>")
@@ -181,7 +182,7 @@ struct Engine {
             cur.vol[a] += sz; cur.hit[a][px] += sz; cur.last = px; if (!cur.any) { cur.lo = cur.hi = px; cur.any = true; } else { cur.lo = std::min(cur.lo, px); cur.hi = std::max(cur.hi, px); }
             if (aggr != 0 && aggr == aggrId && a == aggrSide) aggrLots += sz; else { aggrId = aggr; aggrSide = a; aggrLots = sz; }
             cur.maxOrder[a] = std::max(cur.maxOrder[a], aggrLots);
-            for (int b = 0; b < 2; ++b) if (live[b]) { Story& s = st[b]; const int att = b == 0 ? SELL : BUY; if (a == att && px == s.anchor) s.absLots += sz; }
+            for (int b = 0; b < 2; ++b) if (live[b]) { Story& s = st[b]; const int att = b == 0 ? SELL : BUY; if (a == att && px >= s.zoneLo && px <= s.zoneHi) s.absLots += sz; }   // lots the attackers traded into the ZONE (0.1.1: was the anchor price only)
         }
     }
     // the clock moved with no event (the host calls it once a second): closes a finished block
@@ -213,8 +214,11 @@ struct Engine {
         long long best = -1, bp = ext;                                                           // the anchor: the most lots hit within zoneTicks + 1 of the extreme
         for (const auto& kv : cur.hit[att]) { const long long d = bottom ? kv.first - ext : ext - kv.first; if (d >= 0 && d <= P.zoneTicks + 1 && kv.second > best) { best = kv.second; bp = kv.first; } }
         s.anchor = bp; s.zoneLo = bottom ? bp - 1 : bp - P.zoneTicks; s.zoneHi = bottom ? bp + P.zoneTicks : bp + 1;
-        const int rest = bottom ? BID : ASK; const auto sh = cur.shown[rest].find(bp); s.shownSz = sh == cur.shown[rest].end() ? 0 : sh->second;
-        const auto h = cur.hit[att].find(bp); s.absLots = h == cur.hit[att].end() ? 0 : h->second;
+        // (0.1.1) absorbed is measured over the ZONE, not one price: what was resting at the zone's prices just before each was first hit, and the lots
+        // traded into them ("8.5x" against 11 lots at one price overstated it - ES 21:54 CT 2026-11-11)
+        const int rest = bottom ? BID : ASK; s.shownSz = 0; s.absLots = 0;
+        for (const auto& kv : cur.shown[rest]) if (kv.first >= s.zoneLo && kv.first <= s.zoneHi) s.shownSz += kv.second;
+        for (const auto& kv : cur.hit[att]) if (kv.first >= s.zoneLo && kv.first <= s.zoneHi) s.absLots += kv.second;
         { long long bd = P.zoneTicks + 3; for (const auto& lv : levels) { const long long d = std::llabs(lv.first - bp); if (d < bd) { bd = d; s.ctx.level = lv.second; } } }   // location: the nearest level within zoneTicks + 2 of the anchor
         st[b] = s; live[b] = true; climaxCandle[s.id] = candleOf(tEnd - 1);
         note(s, "C", tEnd);   // the C letter is given only once the climax is ABSORBED (advance): selling that runs through prices is not a climax here
@@ -228,7 +232,7 @@ struct Engine {
         const long long ext = bottom ? cur.lo : cur.hi, zFar = bottom ? s.zoneLo : s.zoneHi, zNear = bottom ? s.zoneHi : s.zoneLo;
         ++s.blocks; if (below(ext, s.extreme)) s.extreme = ext;
         const long long depth = bottom ? s.zoneLo - ext : ext - s.zoneHi;
-        s.absR = s.shownSz > 0 ? (double)s.absLots / (double)s.shownSz : 0;
+        { const double den = std::max((double)s.shownSz, 0.25 * (double)s.burst); s.absR = den > 0 ? (double)s.absLots / den : 0; }   // (0.1.1) never against a tiny display: at least a quarter of the climax
         if (s.step == S_CLIMAX) {
             if (depth > (long long)std::max<double>(P.minDepthTicks, P.flushDepth * (double)s.range)) { finish(s, b, E_RAN, tEnd); return; }
             if (s.blocks >= P.absBlocks && s.absR >= P.absX && (double)s.absLots >= P.absShare * (double)s.burst && atOrAbove(cur.last, s.anchor))   /* absShare: the anchor took a real share of the climax (a 4-lot bid "absorbing 16x" is nothing) */ { s.step = S_ABSORBED; s.tA = tEnd; note(s, "A", tEnd);
@@ -236,6 +240,10 @@ struct Engine {
                 mark(s, 'A', tEnd, bottom ? 1 : -1); }
             else if (s.blocks >= P.absWait) { finish(s, b, below(cur.last, zFar) ? E_RAN : E_NOTABS, tEnd); return; }
         }
+        // (0.1.1) fading while price stays PINNED at the zone: the attackers' lots of the last 3 blocks <= fadeX x those of the first 3 after the climax
+        s.attBlocks.push_back(cur.vol[att]);
+        if (!s.fading && s.attBlocks.size() >= 6) { const size_t n = s.attBlocks.size(); const long long first = s.attBlocks[0] + s.attBlocks[1] + s.attBlocks[2], last = s.attBlocks[n - 1] + s.attBlocks[n - 2] + s.attBlocks[n - 3];
+            if (first > 0 && (double)last <= P.fadeX * (double)first) { s.fading = true; s.fadeList.clear(); s.fadeList.push_back(first); s.fadeList.push_back(last); } }
         // returns to the zone (fading): lots the attackers traded while price was in / beyond the zone, per visit
         const bool touch = !below(s.anchor, ext);                                                // the block traded at / beyond the ANCHOR price
         if (touch) { s.retCur += cur.vol[att]; s.inZone = true; }

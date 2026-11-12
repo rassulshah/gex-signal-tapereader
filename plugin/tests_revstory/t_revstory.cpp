@@ -38,7 +38,7 @@ static std::string readOf(const rvs::Engine& E, const rvs::Story& s) { std::stri
 int main(int argc, char** argv) {
     const std::vector<Ev> V = load(argc > 1 ? argv[1] : "revstory_es1111.txt");
     CHECK(V.size() > 40000, "fixture loaded (" << V.size() << " events)");
-    CHECK(std::string(rvs::VERSION) == "0.1.0", "version 0.1.0");
+    CHECK(std::string(rvs::VERSION) == "0.1.1", "version 0.1.1");
     Run R; replay(R, V); const rvs::Engine& E = R.E;
     CHECK(E.sideMismatch == 0 && E.fills == 7307 && E.garbage == 0, "every fill's aggressor side agrees with the resting order's side (" << E.fills << " fills, " << E.sideMismatch << " mismatches)");
     // ---- [1] tonight's reversal: the 8:43 PM selling climax, absorbed, fading, flushed, buyers ----
@@ -46,8 +46,9 @@ int main(int argc, char** argv) {
     CHECK(s && s->bottom && s->shown && s->end == rvs::E_COMPLETE, "[1] the 8:43:10-8:43:20 PM block starts a bottom story that completes");
     if (s) {
         CHECK(s->burst == 119 && s->opp == 40 && s->bigOrder == 50, "[1] climax: 119 lots sold in 10 s vs 40 bought, the biggest market order 50 lots (" << s->burst << " / " << s->opp << " / " << s->bigOrder << ")");
-        CHECK(s->anchor == 30460 && s->shownSz >= 30 && s->shownSz <= 38, "[1] anchor 7615.00 with 30-38 lots showing on the bid before the first hit (" << s->anchor * 0.25 << ", " << s->shownSz << ")");
-        CHECK(s->tA == T(20, 44, 10) * 1000 && s->absR >= 1.5, "[1] absorbed at 8:44:10 PM (63 lots into ~32 showing)");
+        CHECK(s->anchor == 30460 && s->shownSz >= 60 && s->shownSz <= 100, "[1] anchor 7615.00; 60-100 lots showing on the bids of the zone (7614.75-7615.50) before they were first hit (" << s->anchor * 0.25 << ", " << s->shownSz << ")");
+        std::cout << "  absorbed at second-of-day " << (s->tA / 1000 - DAY) << "\n";
+        CHECK(s->tA >= T(20, 43, 40) * 1000 && s->tA <= T(20, 45, 0) * 1000 && s->absR >= 1.5, "[1] absorbed between 8:43:40 and 8:45:00 PM (inside the climax candle): the lots sold into the zone reached 1.5x what was showing (" << s->absR << "x at the end)");
         CHECK(s->fading && s->fadeList.size() >= 2 && s->fadeList.back() < s->fadeList[s->fadeList.size() - 2], "[1] fading: each return sells less (" << readOf(E, *s) << ")");
         CHECK(s->tE > s->tA && s->flushLots > 0 && (double)s->flushLots <= 0.6 * 119 && s->extreme == 30455, "[1] exhausted: the new low 7613.75 on little volume (" << s->flushLots << " lots)");
         CHECK(s->tI == T(20, 47, 10) * 1000 && s->initLots == 47 && s->initOpp == 3, "[1] initiation: 47 lots bought vs 3 sold in the 8:47:00 block");
@@ -56,7 +57,7 @@ int main(int argc, char** argv) {
     }
     // ---- [2] "i dont understand how you marked the 63 as a climax": the 8:29 PM burst ran through prices -> no letters ----
     const rvs::Story* q = storyAt(E, T(20, 29, 10));
-    CHECK(q && q->burst == 120 && q->tA == 0 && q->end != rvs::E_COMPLETE, "[2] the 8:29 PM burst (120 lots in 10 s) is NOT absorbed: " << (q ? rvs::endName(q->end) : "missing"));
+    CHECK(q && q->burst == 120 && q->end != rvs::E_COMPLETE && q->pocGate == 0, "[2] the 8:29 PM burst (120 lots in 10 s) never completes and its candle's POC is not at the low: " << (q ? rvs::endName(q->end) : "missing"));
     CHECK(!R.letters.count(T(20, 30)), "[2] the 8:30 PM candle (POC 63) gets no letter");
     // ---- [3] letters: decided at the candle close, C red + A green on 8:45, E + I green on 8:48, nothing else in the hour ----
     CHECK(R.letters.size() == 2 && R.letters[T(20, 45)] == "C-A+" && R.letters[T(20, 48)] == "E+I+", "[3] letters: 8:45 PM = red C + green A, 8:48 PM = green E + green I, no others (" << R.letters.size() << ": " << R.letters[T(20, 45)] << " " << R.letters[T(20, 48)] << ")");
@@ -73,8 +74,8 @@ int main(int argc, char** argv) {
     // ---- [6] live: the read fills in step by step ----
     { Run M; replay(M, V, false, false, T(20, 43, 40)); const rvs::Story* m = M.E.newest(T(20, 43, 40) * 1000);
       CHECK(m && m->step == rvs::S_CLIMAX && readOf(M.E, *m).find("Sell climax 119 (50-lot) > absorbed? > fading? > flush? > buyers?") == 0, "[6] at 8:43:40 PM: " << (m ? readOf(M.E, *m) : "none"));
-      Run N; replay(N, V, false, false, T(20, 44, 30)); const rvs::Story* n = N.E.newest(T(20, 44, 30) * 1000);
-      CHECK(n && n->step == rvs::S_ABSORBED && readOf(N.E, *n).find("> Absorbed ") != std::string::npos && readOf(N.E, *n).find("buyers?") != std::string::npos && N.letters.empty(), "[6] at 8:44:30 PM absorbed, no letter yet (the candle is still open): " << (n ? readOf(N.E, *n) : "none")); }
+      Run N; replay(N, V, false, false, T(20, 44, 50)); const rvs::Story* n = N.E.newest(T(20, 44, 50) * 1000);
+      CHECK(n && n->step == rvs::S_ABSORBED && readOf(N.E, *n).find("> Absorbed ") != std::string::npos && readOf(N.E, *n).find("buyers?") != std::string::npos && N.letters.empty(), "[6] at 8:44:50 PM absorbed, no letter yet (the candle is still open): " << (n ? readOf(N.E, *n) : "none")); }
     // ---- [7] a restart: the letters are reloaded from the record, identical ----
     { rvs::Engine F; F.spb = 180; const int n = F.loadMarks(E.out); CHECK(n == 2 && lettersOf(F.marks[T(20, 45)]) == "C-A+" && lettersOf(F.marks[T(20, 48)]) == "E+I+", "[7] reloaded " << n << " candles of letters from the record lines");
       std::vector<std::string> bad = { "L|abc|C-", "L|123", "L|1794429900|Z+", "garbage", "" }; rvs::Engine G; CHECK(G.loadMarks(bad) == 0, "[7] garbled record lines load nothing"); }
@@ -91,7 +92,7 @@ int main(int argc, char** argv) {
     CHECK(rvs::sessionOf(20 * 3600, 510, 900) == "ON" && rvs::sessionOf(3 * 3600, 510, 900) == "LON" && rvs::sessionOf(9 * 3600, 510, 900) == "RTH" && rvs::sessionOf(16 * 3600, 510, 900) == "ON", "[9] sessions: overnight / London / RTH");
     CHECK(rvs::volWindow(510 * 60 + 100, 510, 900) == 1 && rvs::volWindow(900 * 60 - 100, 510, 900) == 2 && rvs::volWindow(7 * 3600 + 1800 + 60, 510, 900) == 3 && rvs::volWindow(11 * 3600, 510, 900) == 0, "[9] volatility windows: the open, into the close, release times, none");
     CHECK(rvs::hourlyText(1, 1, 30467, 30485, false, 30462, 30458, 30470, 4, 0.25) == "Hrly up, testing 7616.75" && rvs::hourlyText(1, 1, 30467, 30485, false, 30480, 30478, 30482, 4, 0.25) == "Hrly up, pulling back to 7616.75"
-          && rvs::hourlyText(1, 1, 30467, 30485, false, 30490, 30486, 30492, 4, 0.25) == "Hrly up, going with it" && rvs::hourlyText(-1, 1, 30467, 30440, true, 30450, 30448, 30452, 4, 0.25) == "Hrly dn (rotation up), trend broken" && rvs::hourlyText(0, 0, 0, 0, false, 1, 1, 1, 4, 0.25) == "Hrly none",
+          && rvs::hourlyText(1, 1, 30467, 30485, false, 30490, 30486, 30492, 4, 0.25) == "Hrly up, going with it" && rvs::hourlyText(-1, 1, 30467, 30440, true, 30450, 30448, 30452, 4, 0.25) == "Hrly dn (rotation up), trend broken" && rvs::hourlyText(0, 0, 0, 0, false, 1, 1, 1, 4, 0.25) == "Hrly none" && rvs::hourlyText(1, 1, 30467, 30485, false, 30445, 30442, 30450, 4, 0.25) == "Hrly up, below the test line 7616.75",
           "[9] the hourly read: testing / pulling back / going with it / broken / none");
     { std::vector<rvs::VRow> rows = { { 100, 5, 1 }, { 101, 9, -3 }, { 102, 9, 2 }, { 103, 0, 0 } }; const rvs::Poc p = rvs::pocOf(7, rows, 100, 110, 104);
       CHECK(p.ok && p.tick == 101 && p.vol == 9 && p.total == 23 && std::fabs(p.pos - 0.1) < 1e-9 && rvs::pocGate(p, true, 104) && !rvs::pocGate(p, true, 100) && !rvs::pocGate(p, false, 100), "[9] POC: the biggest row (the lower one on a tie), its place in the candle, the gate"); }
