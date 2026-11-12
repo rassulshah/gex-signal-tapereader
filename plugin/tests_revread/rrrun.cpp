@@ -1,4 +1,4 @@
-// rrrun.cpp 1.0.0 (2026-11-12) -- the lsRevRead engine (RevReadLogic.h) as a CLI for lra.rev_read (the nightly) and the jumpstart.
+// rrrun.cpp 1.1.0 (2026-11-12) -- the lsRevRead engine (RevReadLogic.h) as a CLI for lra.rev_read (the nightly) and the jumpstart.
 //
 // Rassul 2026-11-12 06:08 CT: "go. and also build self improvement so you can better detect these sequences and their behaviors and their
 // variants"; 2026-11-11: "jumpstart this indicator for all markets and refine"; "pay attention to session, volatility times, location and context".
@@ -18,8 +18,8 @@
 // pilot") one row per hourly candle at a new high / low of the 3 hours before it: its own POC test, and the 3-minute stories (the first config)
 // that sat at its extreme; truth = 2R within 4 hours from the hour's close (stop 1 tick beyond the hourly extreme), the extreme held 3 hours.
 //   r1 / r2  +1R / +2R reached before the stop (1), the stop first (0), neither inside 60 min (-1); entry = the last trade at the decision,
-//            stop = 1 tick beyond the extreme so far (his pivot stop)
-//   held     no trade beyond the extreme so far in the 30 min after; mfe / mae = the best / worst excursion in ticks in those 30 min
+//            stop = 1 tick beyond the extreme so farPx (his pivot stop)
+//   held     no trade beyond the extreme so farPx in the 30 min after; mfe / mae = the best / worst excursion in ticks in those 30 min
 #include "../RevReadLogic.h"
 #include "../StepTrendLogic.h"
 #include <cstdint>
@@ -48,13 +48,49 @@ struct Run {
     long long sess = 0, s0 = -1; std::vector<Sec> sec; long long lastPx = 0, lastT = 0;
     // the candle
     long long candle = 0, cLo = 0, cHi = 0, cClose = 0; std::map<long long, std::pair<long long, long long> > rows;
-    struct CC { long long t, lo, hi, close; }; std::vector<CC> cands;
+    // (1.1.0) one closed candle with what its own volume profile says about each end ([0] the low, [1] the high): the quiet-turn features
+    struct QB { long long t = 0, sess = 0, o = 0, lo = 0, hi = 0, close = 0, total = 0, cdlt = 0; double pos = 0.5; long long e2v[2] = { 0, 0 }, e2d[2] = { 0, 0 }, t3v[2] = { 0, 0 }, t3d[2] = { 0, 0 }; std::string hr, lvl[2]; };
+    std::vector<QB> cands; long long cOpen = 0;
+    QB mk(const std::map<long long, std::pair<long long, long long> >& rw, long long t, long long o, long long lo, long long hi, long long close) {
+        QB q; q.t = t; q.sess = sess; q.o = o; q.lo = lo; q.hi = hi; q.close = close; const long long rg = hi - lo; long long pv = -1, pt = lo;
+        for (const auto& kv : rw) { const long long k = kv.first, v = kv.second.first, d = kv.second.second; q.total += v; q.cdlt += d; if (v > pv) { pv = v; pt = k; }
+            if (k <= lo + 1) { q.e2v[0] += v; q.e2d[0] += d; } if (k >= hi - 1) { q.e2v[1] += v; q.e2d[1] += d; }
+            if (3 * (k - lo) <= rg) { q.t3v[0] += v; q.t3d[0] += d; } if (3 * (hi - k) <= rg) { q.t3v[1] += v; q.t3d[1] += d; } }
+        q.pos = rg > 0 ? (double)(pt - lo) / (double)rg : 0.5; q.hr = E[0]->ctx.hourly;
+        for (int b = 0; b < 2; ++b) { long long bd = 5; for (const auto& lv : E[0]->levels) { const long long d = std::llabs(lv.first - (b ? hi : lo)); if (d < bd) { bd = d; q.lvl[b] = lv.second; } } }
+        return q;
+    }
+    static double med(std::vector<double> v) { if (v.empty()) return 1; std::nth_element(v.begin(), v.begin() + (long)(v.size() / 2), v.end()); return std::max(1e-9, v[v.size() / 2]); }
+    // every candle of `v` (3-minute: this session's; hourly: all) at a new extreme of the `look` candles before it, with its features and the truth
+    void emitQ(const char* kind, const std::vector<QB>& v, size_t look, long long H, long long hold, bool hourly) {
+        std::ostream& o = std::cout;
+        for (size_t j = 20; j < v.size(); ++j) { const QB& c = v[j]; if (c.sess != sess || c.hi <= c.lo) continue;
+            bool hi = true, lo = true; for (size_t k = j - look; k < j; ++k) { if (v[k].hi >= c.hi) hi = false; if (v[k].lo <= c.lo) lo = false; }
+            if (hi == lo) continue;
+            const int b = hi ? 1 : 0, sg = hi ? 1 : -1; std::vector<double> mt, mr, md; for (size_t k = j - 20; k < j; ++k) { mt.push_back((double)v[k].total); mr.push_back((double)(v[k].hi - v[k].lo)); md.push_back((double)std::llabs(v[k].cdlt)); }
+            const double mT = med(mt), mR = med(mr), mD = med(md), rg = (double)(c.hi - c.lo);
+            long long farPx = hi ? v[j - 1].lo : v[j - 1].hi, cd5 = 0; for (size_t k = j - 10; k < j; ++k) farPx = hi ? std::min(farPx, v[k].lo) : std::max(farPx, v[k].hi); for (size_t k = j - 5; k < j; ++k) cd5 += v[k].cdlt;
+            const long long ext = hi ? c.hi : c.lo; int ft = -1; long long t2 = 0;
+            if (j + 1 < v.size() && v[j + 1].sess == c.sess) { const QB& n = v[j + 1]; ft = hi ? (n.lo < c.lo && n.close < c.close ? 1 : 0) : (n.hi > c.hi && n.close > c.close ? 1 : 0); t2 = n.t; }
+            const int cs = ctSec((c.t - 1) * 1000);
+            o << "{\"k\":\"" << kind << "\",\"m\":\"" << mkt << "\",\"sess\":" << sess << ",\"side\":\"" << (hi ? "top" : "bottom") << "\",\"ct\":" << ctSec(c.t * 1000) << ",\"csess\":\"" << rvs::sessionOf(cs, rthO, rthC) << "\""
+              << ",\"pos\":" << (hi ? 1.0 - c.pos : c.pos) << ",\"cp\":" << (hi ? (double)(c.hi - c.close) / rg : (double)(c.close - c.lo) / rg) << ",\"wick\":" << (hi ? (double)(c.hi - std::max(c.o, c.close)) / rg : (double)(std::min(c.o, c.close) - c.lo) / rg)
+              << ",\"volx\":" << (double)c.total / mT << ",\"rngx\":" << rg / mR << ",\"dx\":" << (double)(sg * c.cdlt) / mD << ",\"e2s\":" << (c.total ? (double)c.e2v[b] / (double)c.total : 0) << ",\"e2dx\":" << (double)(sg * c.e2d[b]) / mD
+              << ",\"t3s\":" << (c.total ? (double)c.t3v[b] / (double)c.total : 0) << ",\"t3dx\":" << (double)(sg * c.t3d[b]) / mD << ",\"move\":" << (double)(hi ? c.hi - farPx : farPx - c.lo) / mR << ",\"cd5\":" << (double)(sg * cd5) / mD
+              << ",\"hs\":" << rvs::holdScore(hi ? (double)(c.hi - c.close) / rg : (double)(c.close - c.lo) / rg, (double)c.total / mT, rg / mR, (double)(hi ? c.hi - farPx : farPx - c.lo) / mR)
+              << ",\"pvolx\":" << (double)v[j - 1].total / mT << ",\"ppos\":" << (hi ? 1.0 - v[j - 1].pos : v[j - 1].pos) << ",\"pt3s\":" << (v[j - 1].total ? (double)v[j - 1].t3v[b] / (double)v[j - 1].total : 0)
+              << ",\"over\":" << (double)(hi ? c.hi - v[j - 1].hi : v[j - 1].lo - c.lo) / mR << ",\"vrat\":" << (v[j - 1].total ? (double)c.total / (double)v[j - 1].total : 0) << ",\"pcp\":" << (v[j - 1].hi > v[j - 1].lo ? (hi ? (double)(v[j - 1].hi - v[j - 1].close) : (double)(v[j - 1].close - v[j - 1].lo)) / (double)(v[j - 1].hi - v[j - 1].lo) : 0.5)
+              << ",\"ft\":" << ft << ",\"hourly\":\"" << js(c.hr) << "\",\"level\":\"" << js(c.lvl[b]) << "\"";
+            if (hourly) { int nC = 0, nA = 0; for (const rvs::Story& st : done[0]) { if (!st.shown || st.bottom == hi || st.t0 / 1000 < c.t - 3600 || st.t0 / 1000 >= c.t || std::llabs(st.extreme - ext) > 8) continue; ++nC; if (st.step >= rvs::S_ABSORBED) ++nA; }
+                o << ",\"nC\":" << nC << ",\"nA\":" << nA; }
+            put(o, "oA", outcome(c.t - 1, ext, hi ? -1 : 1, H, hold)); if (ft == 1) put(o, "oF", outcome(t2 - 1, ext, hi ? -1 : 1, H, hold)); o << "}\n"; }
+    }
     // context
     long long vwN = 0; double vwPV = 0;                               // session VWAP (ticks)
     std::vector<stp::Bar> hb; stp::Bar hcur; long long hk = -1; int hDir = 0, hRot = 0; long long hPx = 0, hTop = 0; bool hBroken = false;
     long long pdh = 0, pdl = 0, onh = 0, onl = 0, lnh = 0, lnl = 0, rh = 0, rl = 0, psh = 0, psl = 0, sh = 0, sl = 0; bool onF = false, lnF = false;
     long long ctxSec = -1;
-    struct HC { long long k, sess, lo, hi, close, cdlt; double pos; bool gT, gB; }; std::vector<HC> hcs; std::map<long long, std::pair<long long, long long> > hrows;
+    std::vector<QB> hcs; std::map<long long, std::pair<long long, long long> > hrows;
     std::unordered_map<unsigned long long, long long> pendFill;       // raw days: lots filled per resting order, waiting for their "C"
 
     static std::string js(const std::string& s) { std::string o; for (char c : s) { if (c == '"' || c == '\\') o += '\\'; if ((unsigned char)c >= 32) o += c; } return o; }
@@ -70,9 +106,7 @@ struct Run {
     }
     void hourClose() {
         if (hk < 0) return;
-        { std::vector<rvs::VRow> v; for (const auto& kv : hrows) { rvs::VRow r; r.tick = kv.first; r.vol = kv.second.first; r.dlt = kv.second.second; v.push_back(r); } hrows.clear();
-          const rvs::Poc p = rvs::pocOf((hk + 1) * 3600, v, hcur.l, hcur.h, hcur.c);
-          HC h; h.k = hk; h.sess = sess; h.lo = hcur.l; h.hi = hcur.h; h.close = hcur.c; h.cdlt = p.cdlt; h.pos = p.pos; h.gT = rvs::pocGate(p, false, hcur.c); h.gB = rvs::pocGate(p, true, hcur.c); hcs.push_back(h); if (hcs.size() > 4000) hcs.erase(hcs.begin(), hcs.begin() + 1000); }
+        { hcs.push_back(mk(hrows, (hk + 1) * 3600, hcur.o, hcur.l, hcur.h, hcur.c)); hrows.clear(); if (hcs.size() > 4000) hcs.erase(hcs.begin(), hcs.begin() + 1000); }
         hb.push_back(hcur); if (hb.size() > 600) hb.erase(hb.begin(), hb.begin() + 100);
         stp::Engine X; X.hourly = true; for (const stp::Bar& b : hb) X.addBar(b);
         X.sealTo(hb.back().t + 3600);
@@ -101,7 +135,7 @@ struct Run {
         std::vector<rvs::VRow> v; for (const auto& kv : rows) { rvs::VRow r; r.tick = kv.first; r.vol = kv.second.first; r.dlt = kv.second.second; v.push_back(r); }
         const rvs::Poc p = rvs::pocOf(candle, v, cLo, cHi, cClose);
         for (size_t i = 0; i < E.size(); ++i) { E[i]->onCandle(candle, p, cClose); drain(i); }
-        CC c; c.t = candle; c.lo = cLo; c.hi = cHi; c.close = cClose; cands.push_back(c);
+        cands.push_back(mk(rows, candle, cOpen, cLo, cHi, cClose));
         rows.clear(); cLo = cHi = 0;
     }
     void drain(size_t i) { for (const rvs::Story& s : E[i]->ended) done[i].push_back(s); E[i]->ended.clear(); }
@@ -117,7 +151,7 @@ struct Run {
             const long long k = s / 3600; if (k != hk) { if (hk >= 0) hourClose(); hk = k; hcur = stp::Bar(); hcur.t = k * 3600; hcur.o = hcur.h = hcur.l = hcur.c = px; }
             hcur.h = std::max(hcur.h, px); hcur.l = std::min(hcur.l, px); hcur.c = px;
             if (Sec* q = at(s)) { if (q->last == 0) { q->lo = q->hi = px; } else { q->lo = std::min(q->lo, px); q->hi = std::max(q->hi, px); } q->last = px; }
-            if (cLo == 0) { cLo = cHi = px; } else { cLo = std::min(cLo, px); cHi = std::max(cHi, px); } cClose = px;
+            if (cLo == 0) { cLo = cHi = px; cOpen = px; } else { cLo = std::min(cLo, px); cHi = std::max(cHi, px); } cClose = px;
             std::pair<long long, long long>& rw = rows[px]; rw.first += sz; rw.second += r.side == 0 ? sz : r.side == 1 ? -sz : 0;
             { std::pair<long long, long long>& hw = hrows[px]; hw.first += sz; hw.second += r.side == 0 ? sz : r.side == 1 ? -sz : 0; }
             vwN += sz; vwPV += (double)px * (double)sz; lastPx = px; lastT = t;
@@ -184,22 +218,8 @@ struct Run {
               << ",\"pos\":" << q.pos << ",\"closepos\":" << q.closePos << ",\"total\":" << q.total << ",\"conf\":" << q.conf << ",\"csess\":\"" << q.ctx.session << "\",\"volwin\":" << q.ctx.volWin
               << ",\"hourly\":\"" << js(q.ctx.hourly) << "\",\"level\":\"" << js(q.ctx.level) << "\"";
             put(o, "oA", outcome(q.t - 1, q.ext, dir)); put(o, "oF", outcome(q.t2 - 1, q.ext, dir)); o << "}\n"; }
-        for (size_t j = 5; j < cands.size(); ++j) { const CC& c = cands[j]; bool hi = true, lo = true;
-            for (size_t k = j - 5; k < j; ++k) { if (cands[k].hi >= c.hi) hi = false; if (cands[k].lo <= c.lo) lo = false; }
-            if (hi == lo) continue;
-            o << "{\"k\":\"X\",\"m\":\"" << mkt << "\",\"sess\":" << sess << ",\"side\":\"" << (hi ? "top" : "bottom") << "\",\"ct\":" << ctSec(c.t * 1000)
-              << ",\"csess\":\"" << rvs::sessionOf(ctSec(c.t * 1000 - 1000), rthO, rthC) << "\"";
-            put(o, "oA", outcome(c.t - 1, hi ? c.hi : c.lo, hi ? -1 : 1)); o << "}\n"; }
-        for (size_t j = 3; j < hcs.size(); ++j) { const HC& h = hcs[j]; if (h.sess != sess) continue;
-            bool hi = true, lo = true; for (size_t k = j - 3; k < j; ++k) { if (hcs[k].hi >= h.hi) hi = false; if (hcs[k].lo <= h.lo) lo = false; }
-            if (hi == lo) continue;
-            const bool bt = lo; const long long ext = bt ? h.lo : h.hi; int nC = 0, nA = 0, nDone = 0, nGate = 0, best = 0;
-            for (const rvs::Story& st : done[0]) { if (!st.shown || st.bottom != bt || st.t0 / 1000 < h.k * 3600 || st.t0 / 1000 >= (h.k + 1) * 3600 || std::llabs(st.extreme - ext) > 8) continue;
-                ++nC; if (st.step >= rvs::S_ABSORBED) ++nA; if (st.end == rvs::E_COMPLETE) ++nDone; const auto g = E[0]->gate.find(st.id); if (st.step >= rvs::S_ABSORBED && g != E[0]->gate.end() && g->second == 1) ++nGate; best = std::max(best, st.step); }
-            const int cs = ctSec(h.k * 3600 * 1000);
-            o << "{\"k\":\"H\",\"m\":\"" << mkt << "\",\"sess\":" << sess << ",\"side\":\"" << (bt ? "bottom" : "top") << "\",\"ct\":" << cs << ",\"csess\":\"" << rvs::sessionOf(cs, rthO, rthC) << "\",\"range\":" << (h.hi - h.lo)
-              << ",\"pos\":" << h.pos << ",\"gate\":" << ((bt ? h.gB : h.gT) ? 1 : 0) << ",\"dlt\":" << h.cdlt << ",\"nC\":" << nC << ",\"nA\":" << nA << ",\"nDone\":" << nDone << ",\"nGate\":" << nGate << ",\"best\":" << best;
-            put(o, "oH", outcome((h.k + 1) * 3600 - 1, ext, bt ? 1 : -1, 4 * 3600, 3 * 3600)); o << "}\n"; }
+        emitQ("X", cands, 5, 3600, 1800, false);          // the 3-minute chart: every candle at a new 5-candle extreme (the control and the quiet-turn candidates)
+        emitQ("H", hcs, 3, 4 * 3600, 3 * 3600, true);     // the hourly chart: every hour at a new 3-hour extreme
         s0 = -1;
     }
 };

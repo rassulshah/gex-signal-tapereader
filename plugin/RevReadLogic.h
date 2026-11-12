@@ -1,6 +1,6 @@
 #ifndef LS_REVREAD_LOGIC_H
 #define LS_REVREAD_LOGIC_H
-// RevReadLogic.h 0.2.0 (2026-11-12) -- lsRevRead "Reversal Read": every rule of the indicator, no SDK (unit-tested on Linux).
+// RevReadLogic.h 0.3.0 (2026-11-12) -- lsRevRead "Reversal Read": every rule of the indicator, no SDK (unit-tested on Linux).
 //
 // Rassul 2026-11-11 21:00-21:33 CT: "these bids were there getting filled and accumulating .. i need to know what was going on with the bids to
 // understand why the reversal happened"; "I want to know how i can have indicators that tell this story"; "create a similar pane that has each
@@ -13,7 +13,7 @@
 // its pulling back, testing or going higher with the rotation"; "pay attention to the location of the poc in the candle"; 21:33 "go".
 //
 // THE STORY of a bottom (a top is the mirror), from the market-by-order feed in 10-second BLOCKS:
-//   1 CLIMAX     a block whose market SELLING is far above this market's normal right now (>= cxX x the 95th percentile of the last 30 minutes of
+//   1 CLIMAX     a block whose market SELLING is farPx above this market's normal right now (>= cxX x the 95th percentile of the last 30 minutes of
 //                blocks, >= cxSide x the buying of the same block, >= minLots) at a new low of the last 3 minutes. The ANCHOR is the price near
 //                the block's low where the most was sold into the bid; "shown" = the bid size resting there just before it was first hit.
 //   2 ABSORBED   the lots sold into the anchor reach absX x what was shown AND absShare x the climax AND, two blocks or more after the climax, a
@@ -30,12 +30,20 @@
 // (for example sometimes you have a zone of more than 1 price at the bottom instead of just a single price)"; 06:12 "here is a simple bear
 // pullback example and its footprint. the followthrough bar down also helped confirm".
 //   ZONE BOTTOM   RET_TICKS: a return counts within that many ticks of the anchor (0 = at the anchor, as before); MERGE_TICKS: a second climax
-//                 no more than that far beyond the zone joins the story and widens the zone (0 = off, as before: it restarts the story).
+//                 no more than that farPx beyond the zone joins the story and widens the zone (0 = off, as before: it restarts the story).
 //                 Both stay 0 until the nightly's judge finds a width that reads the market better (LRA-RevRead-<MKT>.csv).
 //   PULLBACK ABSORBED (log-only, "P|" lines; no letter until measured per market): a candle at a new high of the last pbLook candles whose
 //                 POC is in its top third, whose delta is positive (buyers lifting, >= pbLogX x the median |delta| of the last 20 candles)
 //                 and which closes at / under its POC = buyers stopped at the high of a pullback; F = the next candle follows through
 //                 (lower low and lower close). A bottom is the mirror. The context (hourly, level, session) is stamped on it.
+// (0.3.0) Rassul 2026-11-12 06:46 CT "yes go" (the quiet-turn read, ES first, the hourly on the same basis). Measured the same morning on every
+// candle at a new 5-candle extreme, 37-43 sessions x 7 markets (and every hour at a new 3-hour extreme): the POC's place, the delta at the extreme
+// and the lots in the extreme rows do NOT tell whether the extreme holds; what does, in every market, both halves and both timeframes, is
+//   HOLD READ (log-only, "Q|" lines): how farPx the candle CLOSED back from its extreme (>= 0.7 of its range +2, >= 0.435 +1, < 0.25 -1, < 0.11 -2),
+//             volume >= 2x the normal +1, a move into the extreme >= 5 normal ranges +1, a range >= 1.67x the normal +1.
+//             strong (>= 3): the extreme held 30 min 36-43% of the time on 3-min candles, 52-69% for 3 hours on hourly candles; weak (<= -2):
+//             4-10% and 0-7% (base 18-24% and 26-34%). It says whether the high / low is likely done - it is NOT an entry: 2R with the pivot
+//             stop from that close is no better than any other new extreme (the close is already farPx from the stop).
 // EVERYTHING measured is recorded (ratios, context, also stories that failed a threshold) so the nightly can score and move the thresholds.
 #include <algorithm>
 #include <cmath>
@@ -47,7 +55,7 @@
 #include <unordered_map>
 #include <vector>
 namespace rvs {
-static const char* const VERSION = "0.2.0";   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
+static const char* const VERSION = "0.3.0";   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum { BID = 0, ASK = 1 };                    // the feed's side codes (resting bids / offers; on a FILL: BID = the aggressor BOUGHT)
 enum { BUY = 0, SELL = 1 };                   // aggressor sides
@@ -118,6 +126,17 @@ inline std::string hourlyText(int dir, int rot, long long px, long long top, boo
     return s + (testing ? std::string(", testing ") + b : with ? std::string(", going with it") : std::string(", pulling back to ") + b);
 }
 
+// ---- (0.3.0) the hold read of a candle at a new extreme: cp = how farPx it closed back from that extreme (0 = at it .. 1 = the other end),
+// volx / rngx = its volume / range vs the median of the 20 candles before, move = the run into the extreme in median ranges ----
+inline int holdScore(double cp, double volx, double rngx, double move) {
+    int s = cp >= 0.7 ? 2 : cp >= 0.435 ? 1 : cp < 0.11 ? -2 : cp < 0.25 ? -1 : 0;
+    if (volx >= 2.0) ++s;
+    if (move >= 5.0) ++s;
+    if (rngx >= 1.67) ++s;
+    return s;
+}
+inline int holdTier(int score) { return score >= 3 ? 3 : score >= 1 ? 2 : score >= -1 ? 1 : 0; }   // 3 strong, 2 some, 1 neutral, 0 weak
+inline const char* holdName(int tier) { return tier == 3 ? "strong" : tier == 2 ? "some" : tier == 1 ? "neutral" : "weak"; }
 // ---- the candle POC ----
 struct VRow { long long tick = 0, vol = 0, dlt = 0; };
 struct Poc { long long t = 0; long long tick = 0, vol = 0, dlt = 0, total = 0; double pos = 0.5, closePos = 0.5; bool ok = false; long long cdlt = 0, lo = 0, hi = 0, close = 0; };   // (0.2.0) cdlt = the candle's delta; lo / hi / close in ticks   // pos: 0 = at the low .. 1 = at the high
@@ -149,7 +168,7 @@ struct Story {
 };
 // (0.2.0) pullback absorbed: one candle; conf: -1 = waiting for the next candle, 1 = it followed through, 0 = it did not
 struct Pull { int id = 0; bool top = true; long long t = 0, t2 = 0, ext = 0, poc = 0, cdlt = 0, total = 0, close = 0; double dx = 0, pos = 0.5, closePos = 0.5; int conf = -1; Ctx ctx; };
-struct Cnd { long long t = 0, lo = 0, hi = 0, close = 0, cdlt = 0; };
+struct Cnd { long long t = 0, lo = 0, hi = 0, close = 0, cdlt = 0, total = 0; };
 struct Mark { long long candle = 0; char letter = 'C'; int col = 0; };   // col: +1 green, -1 red; candle = the candle's END (seconds)
 struct Seg { std::string text; int col = 0; };                          // the read line: col +1 green, -1 red, 0 pending (grey), 2 = white (context)
 
@@ -171,6 +190,7 @@ struct Engine {
     std::map<long long, std::vector<Mark> > marks;                  // decided letters per candle
     std::map<int, int> gate;                                        // story id -> its climax candle's POC gate (1 / 0)
     std::map<int, long long> climaxCandle;                          // story id -> the climax candle's end
+    int nextHold = 1; int lastHoldTier = -1, lastHoldSide = 0; long long lastHoldCandle = 0;   // (0.3.0) the newest hold read (side +1 a high, -1 a low)
     std::deque<Cnd> cnd; std::vector<Pull> pulls; int nextPull = 1;    // (0.2.0) the last closed candles; pullback-absorbed candidates (the newest 400)
 
     void reset() { book.clear(); lvl[0].clear(); lvl[1].clear(); for (int b = 0; b < 2; ++b) if (live[b]) finish(st[b], b, E_RESET, cur.k * 1000LL * P.blockSec); cur = Block(); aggrId = 0; aggrLots = 0; aggrSide = -1; }
@@ -342,7 +362,19 @@ struct Engine {
                 Pull q; q.id = nextPull++; q.top = top; q.t = candle; q.ext = top ? p.hi : p.lo; q.poc = p.tick; q.cdlt = p.cdlt; q.total = p.total; q.close = p.close; q.dx = (double)d / med; q.pos = p.pos; q.closePos = p.closePos; q.ctx = ctx; q.ctx.pb = (ctx.pb & (top ? 2 : 1)) ? 1 : 0; q.ctx.level.clear();
                 { long long bd = P.zoneTicks + 3; for (const auto& lv : levels) { const long long dd = std::llabs(lv.first - q.ext); if (dd < bd) { bd = dd; q.ctx.level = lv.second; } } }
                 pulls.push_back(q); pullNote(q, "A"); } }
-        Cnd c; c.t = candle; c.lo = p.lo; c.hi = p.hi; c.close = p.close; c.cdlt = p.cdlt; cnd.push_back(c); while ((int)cnd.size() > 64) cnd.pop_front();
+        if (liveCandle && (int)cnd.size() >= 20) {                                             // (0.3.0) the hold read: a candle at a new high / low of the 5 before it
+            bool hi = true, lo = true; int n = 0; for (auto it = cnd.rbegin(); it != cnd.rend() && n < 5; ++it, ++n) { if (it->hi >= p.hi) hi = false; if (it->lo <= p.lo) lo = false; }
+            if (hi != lo) { std::vector<double> mt, mr; long long farPx = hi ? cnd.back().lo : cnd.back().hi; n = 0;
+                for (auto it = cnd.rbegin(); it != cnd.rend() && n < 20; ++it, ++n) { mt.push_back((double)it->total); mr.push_back((double)(it->hi - it->lo)); if (n < 10) farPx = hi ? std::min(farPx, it->lo) : std::max(farPx, it->hi); }
+                std::nth_element(mt.begin(), mt.begin() + (long)(mt.size() / 2), mt.end()); std::nth_element(mr.begin(), mr.begin() + (long)(mr.size() / 2), mr.end());
+                const double mT = std::max(1e-9, mt[mt.size() / 2]), mR = std::max(1e-9, mr[mr.size() / 2]), rg = (double)(p.hi - p.lo);
+                const double cp = hi ? (double)(p.hi - p.close) / rg : (double)(p.close - p.lo) / rg, volx = (double)p.total / mT, rngx = rg / mR, mv = (double)(hi ? p.hi - farPx : farPx - p.lo) / mR;
+                const int sc = holdScore(cp, volx, rngx, mv), tr = holdTier(sc); const long long ext = hi ? p.hi : p.lo; std::string lv;
+                { long long bd = 5; for (const auto& l : levels) { const long long dd = std::llabs(l.first - ext); if (dd < bd) { bd = dd; lv = l.second; } } }
+                lastHoldTier = tr; lastHoldSide = hi ? 1 : -1; lastHoldCandle = candle;
+                out.push_back(std::string("Q|") + VERSION + "|" + std::to_string(nextHold++) + "|" + (hi ? "top" : "bottom") + "|" + std::to_string(candle) + "|ext " + num((double)ext * tick) + "|score " + std::to_string(sc) + "|tier " + holdName(tr)
+                    + "|cp " + num(cp) + "|volx " + num(volx) + "|rngx " + num(rngx) + "|move " + num(mv) + "|sess " + ctx.session + "|hourly " + ctx.hourly + "|level " + lv + "|ct " + clock); } }
+        Cnd c; c.t = candle; c.lo = p.lo; c.hi = p.hi; c.close = p.close; c.cdlt = p.cdlt; c.total = p.total; cnd.push_back(c); while ((int)cnd.size() > 64) cnd.pop_front();
         while (pulls.size() > 400) pulls.erase(pulls.begin());
     }
     void pullNote(const Pull& q, const char* step) {

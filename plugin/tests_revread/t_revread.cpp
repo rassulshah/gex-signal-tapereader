@@ -38,7 +38,7 @@ static std::string readOf(const rvs::Engine& E, const rvs::Story& s) { std::stri
 int main(int argc, char** argv) {
     const std::vector<Ev> V = load(argc > 1 ? argv[1] : "revread_es1111.txt");
     CHECK(V.size() > 40000, "fixture loaded (" << V.size() << " events)");
-    CHECK(std::string(rvs::VERSION) == "0.2.0", "version 0.2.0");
+    CHECK(std::string(rvs::VERSION) == "0.3.0", "version 0.3.0");
     Run R; replay(R, V); const rvs::Engine& E = R.E;
     CHECK(E.sideMismatch == 0 && E.fills == 7307 && E.garbage == 0, "every fill's aggressor side agrees with the resting order's side (" << E.fills << " fills, " << E.sideMismatch << " mismatches)");
     // ---- [1] tonight's reversal: the 8:43 PM selling climax, absorbed, fading, flushed, buyers ----
@@ -128,13 +128,29 @@ int main(int argc, char** argv) {
       cand(e, 100, 110, 104, 109, 40, true); e += 180;
       CHECK(G.pulls.size() == 1 && G.pulls[0].top && G.pulls[0].conf == -1 && std::fabs(G.pulls[0].dx - 4.0) < 1e-9 && G.pulls[0].ext == 110, "[10] buyers stopped at the high of a pullback: a top candidate, delta 4.0x the normal, waiting for the next candle");
       cand(e, 95, 108, 96, 100, -30, true); e += 180;
-      bool f = false; for (const std::string& o : G.out) if (o.find("P|0.2.0|1|top|F|") == 0 && o.find("|conf 1|") != std::string::npos) f = true;
+      bool f = false; for (const std::string& o : G.out) if (o.find("P|0.3.0|1|top|F|") == 0 && o.find("|conf 1|") != std::string::npos) f = true;
       CHECK(G.pulls.size() == 1 && G.pulls[0].conf == 1 && f && G.marks.empty(), "[10] the next candle makes a lower low and a lower close: follow-through recorded (F, conf 1); log-only, no letter");
       cand(e, 96, 120, 119, 118, 60, true); e += 180;   // closes ABOVE its POC: buyers were not stopped
       cand(e, 100, 125, 110, 124, -50, true); e += 180;  // sellers' delta at a new high: not buyers stopped
       CHECK(G.pulls.size() == 1, "[10] a close above the POC, or a negative delta at the high, is not a candidate");
       cand(e + 3600, 110, 140, 120, 139, 80, false);     // a candle the engine never saw trade (the chart's history after a restart)
       CHECK(G.pulls.size() == 1 && G.cnd.back().t == e + 3600, "[10] a candle fed from the chart's history only builds the normal: no candidate, nothing recorded twice"); }
+    // ---- [11] 0.3.0: the hold read (log-only Q lines)
+    CHECK(rvs::holdScore(0.8, 2.5, 2.0, 6.0) == 5 && rvs::holdScore(0.05, 1.0, 1.0, 2.0) == -2 && rvs::holdScore(0.5, 1.0, 1.0, 2.0) == 1 && rvs::holdScore(0.2, 2.0, 1.0, 5.0) == 1, "[11] the hold score: the close back, volume, the move, the range");
+    CHECK(rvs::holdTier(5) == 3 && rvs::holdTier(3) == 3 && rvs::holdTier(2) == 2 && rvs::holdTier(0) == 1 && rvs::holdTier(-1) == 1 && rvs::holdTier(-2) == 0 && std::string(rvs::holdName(3)) == "strong" && std::string(rvs::holdName(0)) == "weak", "[11] tiers: strong / some / neutral / weak");
+    { rvs::Engine G; G.P = rvs::forMarket("ES"); G.spb = 180; long long id = 1;
+      auto cand = [&](long long end, long long lo, long long hi, long long close, long long total, bool trade) { if (trade) G.onEvent((end - 10) * 1000, rvs::FILL, rvs::BID, close, 1, id++, 0);
+          rvs::Poc p; p.ok = true; p.t = end; p.lo = lo; p.hi = hi; p.close = close; p.tick = lo; p.vol = 10; p.total = total; p.cdlt = 0; p.pos = 0; G.onCandle(end, p, close); };
+      long long e = 180000; for (int i = 0; i < 22; ++i, e += 180) cand(e, 90, 100, 95, 100, true);
+      size_t q = 0; for (const std::string& o : G.out) if (o[0] == 'Q') ++q; CHECK(q == 0, "[11] candles inside the range: no hold read");
+      cand(e, 100, 120, 102, 300, true); e += 180;       // a new high, closed near its low on 3x volume, a 2x range, a run of 3 ranges: +2 +1 +1 = 4, strong
+      std::string l; for (const std::string& o : G.out) if (o[0] == 'Q') l = o;
+      CHECK(l.find("Q|0.3.0|1|top|") == 0 && l.find("|score 4|tier strong|") != std::string::npos && G.lastHoldTier == 3 && G.lastHoldSide == 1 && G.marks.empty(), "[11] a high rejected on heavy volume: strong, recorded, no letter (log-only)");
+      cand(e, 101, 130, 130, 100, true); e += 180;       // a new high that closed AT the high on normal volume: weak (-2 + range 2.9x +1 + move +0 = -1 -> neutral? no: move (130-90)/10 = 4 -> -2 +1 = -1)
+      l.clear(); for (const std::string& o : G.out) if (o[0] == 'Q') l = o;
+      CHECK(l.find("|top|") != std::string::npos && l.find("|score -1|tier neutral|") != std::string::npos, "[11] a high that closed at the high: no hold claimed");
+      const size_t before = G.out.size(); cand(e + 7200, 60, 131, 61, 900, false);
+      CHECK(G.out.size() == before, "[11] a candle from the chart's history is not read"); }
     std::cout << "t_revread (lsRevRead " << rvs::VERSION << "): " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }
