@@ -27,7 +27,7 @@ namespace zzd {
 
 static const int COUNT_PAD = 2;                  // (2.1.1) px between the bar's top and the count text inside it
 static const unsigned long OUTLINE = 0x000000;  // (2.1.1) the count's 1 px outline
-struct ComboScene { std::vector<Prim> p; int cols = 0, ratios = 0, counts = 0, countsIn = 0, countsAbove = 0, countsDropped = 0, ab = 0, cmx = 0, ar = 0, st = 0, cob = 0, weak = 0, lvp = 0, cob2 = 0, cb = 0, boxRows = 0, boxL = 0, boxT = 0, boxR = 0, boxB = 0; double hi = 0; std::vector<std::pair<std::string, std::string>> box; };
+struct ComboScene { std::vector<Prim> p; int cols = 0, ratios = 0, counts = 0, countsIn = 0, countsAbove = 0, countsDropped = 0, ab = 0, cmx = 0, ar = 0, st = 0, cob = 0, weak = 0, lvp = 0, cob2 = 0, cb = 0, sr = 0, boxRows = 0, boxL = 0, boxT = 0, boxR = 0, boxB = 0; double hi = 0; std::vector<std::pair<std::string, std::string>> box; };
 
 inline std::string countText(const Wave& w) { if (w.cntCap) return std::to_string(CNT_CAP) + "+"; return std::to_string(w.cnt); }
 
@@ -75,23 +75,31 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
     const int span = std::max(1, bot - top - TH - 2);   // leave a text row above the tallest ramp for the ratio label
     auto Y = [&](double r) { return bot - (int)std::lround(std::min(r, hi) / hi * span); };
     { Prim p; p.k = Prim::FILL; p.x0 = v.l; p.x1 = v.r; p.y0 = p.y1 = bot; p.col = C.zero; S.p.push_back(p); }
+    // (2.7.0) the stop-run bars of the visible Cobs / Cob2s: bar time -> the Cob's direction
+    std::map<long long, int> srAt;
+    if (cf) for (const Wave& w : waves) { if (w.live || w.e < 0 || (size_t)w.e >= E.B.size()) continue; if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) if (tg->tSr && (tg->cob || tg->cob2)) srAt[tg->tSr] = tg->cob ? tg->cob : tg->cob2; }
     std::vector<Prim> over;   // (2.0.1) every label and tag, drawn after ALL columns so a neighbouring wave never covers them
     std::vector<std::vector<std::pair<int, int>>> levels;
     for (const Wave& w : waves) {
         if (!w.hasV || w.e < v.first || w.s > v.last) continue;
         const bool up = w.dir > 0; const unsigned long col = w.live ? (up ? upLive : downLive) : (up ? C.up : C.down);
         double run = 0; int yPeak = bot;
-        // (2.6.0) the Cob bar of this wave (zcf::Finder, decided with the Cob / Cob2): "CB" in a box of the wave's colour over its column
-        long long tCb = 0; if (cf && !w.live && w.e >= 0 && (size_t)w.e < E.B.size()) { if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) tCb = tg->tCb; }
+        // (2.6.0) the Cob bar of this wave (zcf::Finder, decided with the Cob / Cob2): "CB" in a box of the wave's colour over its column;
+        // (2.7.0) "CB35" / "CB99" by its rank, and "SR" over the stop-run bar's column (in the wave BEFORE its Cob) in the Cob's colour
+        long long tCb = 0; int cbRank = 0; if (cf && !w.live && w.e >= 0 && (size_t)w.e < E.B.size()) { if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) { tCb = tg->tCb; cbRank = tg->cbRank; } }
+        auto badge = [&](const std::string& t, double xc, int y, unsigned long colB) {
+            const int tw = v.textW(t) + 4; int x0 = ci(xc - tw / 2.0); x0 = std::max(v.l + 1, std::min(x0, v.r - 1 - tw));
+            Prim bx; bx.k = Prim::FILL; bx.x0 = x0; bx.x1 = x0 + tw; bx.y1 = std::max(std::min(y, bot - 1) - 2, top + TH); bx.y0 = bx.y1 - TH; bx.col = colB;
+            { Prim o = bx; o.x0 -= 1; o.x1 += 1; o.y0 -= 1; o.y1 += 1; o.col = 0x0B1220; over.push_back(o); }
+            over.push_back(bx); Prim tx; tx.k = Prim::TEXT; tx.x0 = x0 + 2; tx.x1 = x0 + tw - 2; tx.y0 = bx.y0; tx.y1 = bx.y1; tx.col = white; tx.text = t; over.push_back(tx); };
         for (int i = w.s; i <= w.e; ++i) {
             run += volAt(i) / w.medV;
             if (i < v.first || i > v.last) continue;
             const double xc = v.X(i); const int y = Y(run);
-            if (tCb && i >= 0 && i < nB && E.B[(size_t)i].t == tCb) {
-                const std::string t = "CB"; const int tw = v.textW(t) + 4; int x0 = ci(xc - tw / 2.0); x0 = std::max(v.l + 1, std::min(x0, v.r - 1 - tw));
-                Prim bx; bx.k = Prim::FILL; bx.x0 = x0; bx.x1 = x0 + tw; bx.y1 = std::max(std::min(y, bot - 1) - 2, top + TH); bx.y0 = bx.y1 - TH; bx.col = up ? C.up : C.down;
-                { Prim o = bx; o.x0 -= 1; o.x1 += 1; o.y0 -= 1; o.y1 += 1; o.col = 0x0B1220; over.push_back(o); }
-                over.push_back(bx); Prim tx; tx.k = Prim::TEXT; tx.x0 = x0 + 2; tx.x1 = x0 + tw - 2; tx.y0 = bx.y0; tx.y1 = bx.y1; tx.col = white; tx.text = t; over.push_back(tx); ++S.cb;
+            if (i >= 0 && i < nB) {
+                const long long tb = E.B[(size_t)i].t;
+                if (tCb && tb == tCb) { badge(cbRank >= 99 ? "CB99" : cbRank >= 35 ? "CB35" : "CB", xc, y, up ? C.up : C.down); ++S.cb; }
+                const auto it = srAt.find(tb); if (it != srAt.end()) { badge("SR", xc, y, it->second > 0 ? C.up : C.down); ++S.sr; }
             }
             Prim p; p.k = Prim::FILL; p.x0 = ci(xc - half); p.x1 = std::max(p.x0, ci(xc + half) - 1); p.y0 = std::min(y, bot - 1); p.y1 = bot - 1; p.col = col;
             if (p.x1 >= v.l && p.x0 <= v.r) { S.p.push_back(p); ++S.cols;

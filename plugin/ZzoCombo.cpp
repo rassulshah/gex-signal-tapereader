@@ -1,6 +1,12 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.6.0  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "ZZO Combo"  2.7.1  (2026-11-12)
  *
+ *  2.7.1 (Rassul 2026-11-12 13:00 "the stoprun badge goes under the bar"): lsZzoComboMarks draws SR always UNDER its candle (red under
+ *    a high's stop run too) and CB always over its candle. The pane is unchanged.
+ *  2.7.0 (Rassul 2026-11-12 12:51 "usually the cob [bar] is the biggest green bar ... in over 35+ or even 99 green bars", 12:53 "you can
+ *    add the stop run badge too like you showed me in the mock up"): + "CB35" / "CB99" (the Cob bar's rank) and + "SR" over the stop-run
+ *    bar's column (finder 1.5.0). C / Q lines end with the Cob bar time, its rank, the SR bar time and level - lsZzoComboMarks reads
+ *    them to draw SR / CB on the price pane.
  *  2.6.0 (Rassul 2026-11-12 12:43 "a cob bar ... I want you to label it in the cob", 12:47 "I'll go with your recommendation"): + "CB" over
  *    the Cob bar's column inside a Cob / Cob2 wave (finder 1.4.0; label and log only, no quality point). C / Q lines end with its bar time.
  *  2.5.1 (Rassul 2026-11-12 12:26 "get rid of count because i already see it on the wave, and keep Q and label it like 4/6. also the
@@ -71,7 +77,11 @@
 #include <vector>
 #include <sys/stat.h>
 
+#ifdef ZC_MARKS
+#define ZD_NAME "ZzoComboMarks"   // (2.7.0) lsZzoComboMarks = this file + ZC_MARKS: the price-pane overlay (SR / CB badges on the candles)
+#else
 #define ZD_NAME "ZzoCombo"
+#endif
 #if defined(_WIN32)
 #define ZD_SEP "\\"
 #else
@@ -212,7 +222,11 @@ bool ZzoCombo::identify(ZState& S) {
         S.F.reset(); S.F.setMarket(mkt, spb); S.lastWaveT = -1; S.recSeen.clear(); S.recLoaded = false;   // (2.3.0)
         const std::string d = zdFlex(); const std::string key = mkt + "-" + std::to_string(spb);
         S.statusPath = d.empty() ? std::string() : d + ZD_SEP ZD_NAME ".status-" + key + ".txt";
+#ifdef ZC_MARKS
+        S.recPath.clear();   // the overlay never writes the record (lsZzoCombo does)
+#else
         S.recPath = d.empty() ? std::string() : d + ZD_SEP ZD_NAME ZD_SEP "cob-" + key + ".csv";
+#endif
     }
     return true;
 }
@@ -288,7 +302,7 @@ void ZzoCombo::status(ZState& S, long long now) {
     if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
     const std::string body = zzd::comboStatus(S.E, S.mkt, S.spb, S.vapFault ? "FAULT - remove and re-add the indicator" : "ok") +
         "DRAWN,columns " + std::to_string(S.last.cols) + ",ratios " + std::to_string(S.last.ratios) + ",counts " + std::to_string(S.last.counts) + ",Ab " + std::to_string(S.last.ab) +
-        ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.ar) + ",ST " + std::to_string(S.last.st) + ",Cob " + std::to_string(S.last.cob) + ",Lvp " + std::to_string(S.last.lvp) + ",Cob2 " + std::to_string(S.last.cob2) + ",CB " + std::to_string(S.last.cb) + ",box rows " + std::to_string(S.last.boxRows) + "\n" + S.F.statusText();
+        ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.ar) + ",ST " + std::to_string(S.last.st) + ",Cob " + std::to_string(S.last.cob) + ",Lvp " + std::to_string(S.last.lvp) + ",Cob2 " + std::to_string(S.last.cob2) + ",CB " + std::to_string(S.last.cb) + ",SR " + std::to_string(S.last.sr) + ",box rows " + std::to_string(S.last.boxRows) + "\n" + S.F.statusText();
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     zdMkdir(zdFlex()); zdPublish(S.statusPath, body);
@@ -307,6 +321,32 @@ int ZzoCombo::draw(void) {
     if (!S || S->E.B.empty()) return RTX_OK;   // draw never reads bars / VAP
     try {
         const long n = getBarCount(); if (n < 2) return RTX_OK;
+#ifdef ZC_MARKS
+        {   // (2.7.0) the price-pane overlay: "SR" UNDER the stop-run candle and "CB" / "CB35" / "CB99" OVER the Cob bar, both in
+            // the Cob's colour (2.7.1). Decided by the same finder as the pane; nothing else is drawn.
+            RCT pane; pane.getPaneRect(false);
+            int vs = 0, ve = (int)n - 1; if (getVisibleBars(&vs, &ve) != RTX_OK) { vs = 0; ve = (int)n - 1; }
+            std::map<long long, int> sr; std::map<long long, std::pair<int, int>> cb;
+            for (const auto& kv : S->F.tags) { const zcf::Tag& t = kv.second; const int d = t.cob ? t.cob : t.cob2; if (!d) continue; if (t.tSr) sr[t.tSr] = d; if (t.tCb) cb[t.tCb] = std::make_pair(d, t.cbRank); }
+            if (sr.empty() && cb.empty()) return RTX_OK;
+            FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD; setFont(fb); const zzd::Colours C; const int TH = 12;
+            const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom; int drawn = 0;
+            auto badge = [&](const std::string& txt, int xc, int yEdge, bool below, unsigned long col) {
+                const int tw = (int)getTextWidth(txt.c_str(), -1) + 4; const int x0 = xc - tw / 2, y0 = below ? yEdge + 4 : yEdge - 4 - TH, y1 = y0 + TH;
+                if (x0 < L || x0 + tw > R || y0 < T || y1 > Bt) return;
+                RCT r; r.set(zdC(x0), zdC(y0), zdC(x0 + tw + 1), zdC(y1 + 1)); r.draw(0, (COLOR)col, (COLOR)col, DRAW_OPAQUE, PAT_SOLID);
+                setTextColor((COLOR)0xFFFFFF); RCT q; q.set(zdC(x0 + 2), zdC(y0), zdC(x0 + tw), zdC(y1)); q.drawText(txt.c_str(), false, false); ++drawn; };
+            for (int i = std::max(vs, S->off); i <= ve; ++i) {
+                const int j = i - S->off; if (j < 0 || j >= (int)S->F.F.size()) continue;
+                const zcf::FBar& b = S->F.F[(size_t)j]; const auto a = sr.find(b.t); const auto c = cb.find(b.t); if (a == sr.end() && c == cb.end()) continue;
+                PNT p; p.set(i, 0.0f, kBarCenter); const int yh = (int)getVerticalDrawPosition((float)((double)b.h * S->tick)), yl = (int)getVerticalDrawPosition((float)((double)b.l * S->tick));
+                if (a != sr.end()) badge("SR", (int)p.h, yl, true, a->second > 0 ? C.up : C.down);   // (2.7.1, Rassul 13:00 "the stoprun badge goes under the bar") always under the candle
+                if (c != cb.end()) { const int d = c->second.first, rk = c->second.second; badge(rk >= 99 ? "CB99" : rk >= 35 ? "CB35" : "CB", (int)p.h, yh, false, d > 0 ? C.up : C.down); }   // (2.7.1) always over the candle
+            }
+            S->last = zzd::ComboScene(); S->last.sr = (int)sr.size(); S->last.cb = (int)cb.size(); S->last.cols = drawn;
+            return RTX_OK;
+        }
+#endif
         RCT pane; pane.getPaneRect(false);
         int vs = 0, ve = (int)n - 1; if (getVisibleBars(&vs, &ve) != RTX_OK) { vs = 0; ve = (int)n - 1; }
         zzd::View v; v.l = pane.left; v.t = pane.top; v.r = pane.right; v.b = pane.bottom;
@@ -339,8 +379,12 @@ int ZzoCombo::draw(void) {
 extern "C" cppExtension* CreateExtension(void) {
     ZzoCombo* p = new ZzoCombo();
     p->setArrayCount(1);
+#ifdef ZC_MARKS
+    p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI | VAP_REQUIRED);   // on the price pane, on the instrument's scale; no hovers
+#else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
-    p->setDescription("LRA ZZO Combo v2.6.0 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.6.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+#endif
+    p->setDescription("LRA ZZO Combo v2.7.1 - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.7.1");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

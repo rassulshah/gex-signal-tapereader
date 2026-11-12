@@ -62,6 +62,17 @@
 //   >= 1.5x the median of the 20 bars before the origin. Bearish = mirror. Logged at the end of every C / Q line (its bar time, 0 = none).
 //   MEASURED: of 18,177 waves near the RTH extreme, 11.5% of those with a Cob bar are Cobs against 4.2% without (65% of Cobs have one,
 //   40% of all waves) - it helps a wave BECOME a Cob; among Cobs it adds nothing (held 62% with, 70% without), so it scores no point.
+// (1.5.0, lsZzoCombo 2.7.0, Rassul 2026-11-12 12:51 "usually the cob [bar] is the biggest green bar or the most green bars volume in over
+//   35+ or even 99 green bars", 12:53 "you can add the stop run badge too like you showed me in the mock up"; his picks: CB and CB35 / CB99,
+//   SR in the pane and on the price chart):
+//   CB RANK = how many of the up bars straight before the Cob bar it beats on range, or on volume (the larger of the two; capped at 150).
+//     The Cob bar is now the first of the wave's first two up bars (within 4 bars of the origin, low under the origin bar's high) that
+//     passes the 1.5x rule OR has a rank of 35+. Drawn "CB", "CB35" (rank 35-98) or "CB99" (99+).
+//     MEASURED (18,177 waves near the extreme): rank 99+ -> 18.2% become a Cob, 35-98 -> 14%, under 10 -> 5.5%. Among Cobs it does not
+//     help (rank 35+: held 63%, reached 1.33 51% vs 66% / 59%) - a label, never a quality point.
+//   SR = the STOP RUN bar of a Cob / Cob2 that swept a key level: the first bar of the wave INTO the origin that traded through the
+//     deepest key level swept (the lowest for a bullish Cob). Bars only (rule 3's sweep), not an order-flow stop run.
+//   C / Q lines end with: ... | Hr | Q | Cob bar time | CB rank | SR bar time | SR level.
 #pragma once
 #include "ZzoDeltaLogic.h"
 #include <algorithm>
@@ -73,8 +84,8 @@
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.6.0";   // (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
-static const char* const VERSION = "1.4.0";         // the finder rule (1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
+static const char* const COMBO_VERSION = "2.7.1";   // (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const VERSION = "1.5.0";         // the finder rule (1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
 static const double MAX_RETR = 0.46;                 // (1.2.0) no longer a Cob requirement: beyond it a Cob is "deep" (its own Hold rate); still the Cob2 limit
@@ -127,6 +138,8 @@ struct Tag { int cob = 0;            // +1 / -1 = a Cob on this wave
              int cob2 = 0;           // (1.2.0) +1 / -1 = a Cob2 on this wave (never together with cob)
              bool hr = false;        // (1.2.0) the hourly turn, decided on the completing bar
              long long tCb = 0;      // (1.4.0) the bar END time of the Cob bar (0 = none)
+             int cbRank = 0;         // (1.5.0) up bars in a row before the Cob bar that it beats on range or volume
+             long long tSr = 0; int srLv = -1;   // (1.5.0) the stop-run bar (0 = none) and the level it ran (index into LV_LO / LV_HI)
              int q = -1;             // (1.3.0) the quality score 0..6 (-1 = not scored)
              int lvpSt = 0;          // (1.2.0) of a Cob / Cob2: 0 = an Lvp can still come, 1 = it printed, 2 = none
              int lv = 0, cnt = 0; bool atExt = false; double retr = 0;
@@ -223,8 +236,21 @@ struct Finder {
         }
         return (10 * dip < 3 * leg) + (hec >= Q_HEC) + (above >= Q_ABOVE) + (first >= Q_FIRST) + (2 * leg >= sum) + (best >= Q_RUN);
     }
-    // (1.4.0) CB: the index of the Cob bar of the wave io + 1 .. e, or -1
-    int cobBar(int d, int io, int e) const {
+    // (1.5.0) how many same-colour bars straight before bar j it beats on range, or on volume (the larger; capped at CB_RANK_CAP)
+    static const int CB_RANK_CAP = 150;
+    int cbRankOf(int d, int j) const {
+        const FBar& b = F[(size_t)j]; const long long r = b.h - b.l; int nr = 0, nv = 0; bool openR = true, openV = true; int seen = 0;
+        for (int i = j - 1; i >= 0 && seen < CB_RANK_CAP && (openR || openV); --i) {
+            const FBar& x = F[(size_t)i]; if ((long long)d * (x.c - x.o) <= 0) continue;
+            ++seen;
+            if (openR) { if (x.h - x.l >= r) openR = false; else ++nr; }
+            if (openV) { if (x.v >= b.v) openV = false; else ++nv; }
+        }
+        return std::max(nr, nv);
+    }
+    // (1.4.0) CB: the index of the Cob bar of the wave io + 1 .. e, or -1; (1.5.0) also by rank 35+, the rank returned in *rank
+    int cobBar(int d, int io, int e, int* rank = nullptr) const {
+        if (rank) *rank = 0;
         if (io < 10 || e <= io || e >= (int)F.size()) return -1;
         const double atr = F[(size_t)io - 1].atr; std::vector<long long> vv; for (int i = std::max(0, io - 20); i < io; ++i) vv.push_back(F[(size_t)i].v);
         std::sort(vv.begin(), vv.end()); const size_t n = vv.size(); const double mv = n % 2 ? (double)vv[n / 2] : 0.5 * (double)(vv[n / 2 - 1] + vv[n / 2]);
@@ -232,10 +258,26 @@ struct Finder {
         const long long ph = d > 0 ? F[(size_t)io].h : -F[(size_t)io].l; int greens = 0;
         for (int i = io + 1; i <= e && i <= io + 4 && greens < 2; ++i) {
             const FBar& b = F[(size_t)i]; if ((long long)d * (b.c - b.o) <= 0) continue;
-            ++greens; const long long lo = d > 0 ? b.l : -b.h;
-            if (lo < ph && ((double)(b.h - b.l) >= 1.5 * atr || (double)b.v >= 1.5 * mv)) return i;
+            ++greens; const long long lo = d > 0 ? b.l : -b.h; if (!(lo < ph)) continue;
+            const int rk = cbRankOf(d, i);
+            if ((double)(b.h - b.l) >= 1.5 * atr || (double)b.v >= 1.5 * mv || rk >= 35) { if (rank) *rank = rk; return i; }
         }
         return -1;
+    }
+    // (1.5.0) SR: the first bar of the wave into the origin (bars s0 .. io) that traded through the deepest swept level of the mask
+    int stopRunBar(int d, int s0, int io, int mask, int* lvOut) const {
+        if (lvOut) *lvOut = -1;
+        if (!mask || io < 0 || io >= (int)F.size()) return -1;
+        const HL* L[6] = { &on, &as, &lon, &phr, &prevFull, &prevRth }; const long long V[3] = { prevVA.poc, prevVA.vah, prevVA.val };
+        int best = -1, bestLv = -1; long long bestP = 0;
+        for (int i = 0; i < NLV; ++i) {
+            if (!(mask & (1 << i))) continue;
+            const long long p = i < 6 ? (d > 0 ? L[i]->l : L[i]->h) : V[i - 6];
+            if (best >= 0 && (long long)d * (p - bestP) >= 0) continue;                      // keep the deepest (lowest for a low)
+            for (int j = std::max(0, s0); j <= io; ++j) { const long long x = d > 0 ? F[(size_t)j].l : F[(size_t)j].h; if ((long long)d * (p - x) > 0) { best = j; bestLv = i; bestP = p; break; } }
+        }
+        if (lvOut) *lvOut = bestLv;
+        return best;
     }
     // (1.2.0) Cob2 rules a..d (the caller has checked RTH, near the extreme and the 0.46 limit); j = the completing bar
     // The "bar that made the RTH low" = the pivot bar of the nearest of the last 5 down-waves whose low IS the RTH low so far (as
@@ -313,14 +355,17 @@ struct Finder {
         t.dir = d; t.tWave = tWave; t.tCf = cf.t; t.origin = origin; t.top = top; t.close = c0; t.lv = mask; t.cnt = cnt; t.retr = retr;
         t.atExt = d > 0 ? origin == rLo : origin == rHi;
         t.hr = hr; t.q = quality(d, pw.e, w.e);
-        if (cob || cob2) { const int cb = cobBar(d, pw.e, w.e); t.tCb = cb >= 0 ? F[(size_t)cb].t : 0; }
+        if (cob || cob2) {
+            int rk = 0; const int cb = cobBar(d, pw.e, w.e, &rk); t.tCb = cb >= 0 ? F[(size_t)cb].t : 0; t.cbRank = cb >= 0 ? rk : 0;
+            int lvI = -1; const int sr = stopRunBar(d, pw.s, pw.e, mask, &lvI); t.tSr = sr >= 0 ? F[(size_t)sr].t : 0; t.srLv = sr >= 0 ? lvI : -1;
+        }
         if (cob2) t.cob2 = d;
         if (cob || cob2) { if (cob) t.cob = d; Act A; A.key = key(tWave, d); A.origin = origin; A.top = top; A.vol = w.vol; A.sess = cf.sess; A.dir = d; act.push_back(A); }
         if (!cob) t.watch = watch;
         char b[96]; std::snprintf(b, sizeof b, "|%d|%.2f|%s|%s|%d|%d", cnt, retr, t.atExt ? "at" : "near", bo ? "bo" : "-", cntPane, cntMkt);
         const std::string body = std::string(VERSION) + "|" + std::to_string(tWave) + "|" + std::to_string(cf.t) + "|" + (d > 0 ? "UP" : "DN") + "|" + std::to_string(origin) + "|" +
                       std::to_string(top) + "|" + std::to_string(c0) + "|" + lvText(mask, d) + b;
-        const std::string qs = "|" + std::to_string(t.q) + "|" + std::to_string(t.tCb);
+        const std::string qs = "|" + std::to_string(t.q) + "|" + std::to_string(t.tCb) + "|" + std::to_string(t.cbRank) + "|" + std::to_string(t.tSr) + "|" + (t.srLv >= 0 ? (d > 0 ? LV_LO[t.srLv] : LV_HI[t.srLv]) : "-");
         if (cob) out.push_back("C|" + body + (hr ? "|H" : "|-") + qs);
         else if (watch) out.push_back("W|" + body + (watch == 1 ? "|no level" : "|count under 10"));
         if (cob2) out.push_back("Q|" + body + (hr ? "|H" : "|-") + qs);
