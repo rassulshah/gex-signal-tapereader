@@ -38,7 +38,7 @@ static std::string readOf(const rvs::Engine& E, const rvs::Story& s) { std::stri
 int main(int argc, char** argv) {
     const std::vector<Ev> V = load(argc > 1 ? argv[1] : "revread_es1111.txt");
     CHECK(V.size() > 40000, "fixture loaded (" << V.size() << " events)");
-    CHECK(std::string(rvs::VERSION) == "0.4.0", "version 0.4.0");
+    CHECK(std::string(rvs::VERSION) == "0.4.1", "version 0.4.1");
     Run R; replay(R, V); const rvs::Engine& E = R.E;
     CHECK(E.sideMismatch == 0 && E.fills == 7307 && E.garbage == 0, "every fill's aggressor side agrees with the resting order's side (" << E.fills << " fills, " << E.sideMismatch << " mismatches)");
     // ---- [1] tonight's reversal: the 8:43 PM selling climax, absorbed, fading, flushed, buyers ----
@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
       cand(e, 100, 110, 104, 109, 40, true); e += 180;
       CHECK(G.pulls.size() == 1 && G.pulls[0].top && G.pulls[0].conf == -1 && std::fabs(G.pulls[0].dx - 4.0) < 1e-9 && G.pulls[0].ext == 110, "[10] buyers stopped at the high of a pullback: a top candidate, delta 4.0x the normal, waiting for the next candle");
       cand(e, 95, 108, 96, 100, -30, true); e += 180;
-      bool f = false; for (const std::string& o : G.out) if (o.find("P|0.4.0|1|top|F|") == 0 && o.find("|conf 1|") != std::string::npos) f = true;
+      bool f = false; for (const std::string& o : G.out) if (o.find("P|0.4.1|1|top|F|") == 0 && o.find("|conf 1|") != std::string::npos) f = true;
       CHECK(G.pulls.size() == 1 && G.pulls[0].conf == 1 && f && G.marks.empty(), "[10] the next candle makes a lower low and a lower close: follow-through recorded (F, conf 1); log-only, no letter");
       cand(e, 96, 120, 119, 118, 60, true); e += 180;   // closes ABOVE its POC: buyers were not stopped
       cand(e, 100, 125, 110, 124, -50, true); e += 180;  // sellers' delta at a new high: not buyers stopped
@@ -145,7 +145,7 @@ int main(int argc, char** argv) {
       size_t q = 0; for (const std::string& o : G.out) if (o[0] == 'Q') ++q; CHECK(q == 0, "[11] candles inside the range: no hold read");
       cand(e, 100, 120, 102, 300, true); e += 180;       // a new high, closed near its low on 3x volume, a 2x range, a run of 3 ranges (it closed above the prior high 100: not a failed breakout): +2 +1 +1 = 4, strong
       std::string l; for (const std::string& o : G.out) if (o[0] == 'Q') l = o;
-      CHECK(l.find("Q|0.4.0|1|top|") == 0 && l.find("|score 4|tier strong|") != std::string::npos && l.find("|failed 0|") != std::string::npos && G.lastHoldTier == 3 && G.lastHoldSide == 1 && G.marks.empty(), "[11] a high rejected on heavy volume: strong, recorded, no letter (log-only)");
+      CHECK(l.find("Q|0.4.1|1|top|") == 0 && l.find("|score 4|tier strong|") != std::string::npos && l.find("|failed 0|") != std::string::npos && G.lastHoldTier == 3 && G.lastHoldSide == 1 && G.marks.empty(), "[11] a high rejected on heavy volume: strong, recorded, no letter (log-only)");
       cand(e, 101, 130, 130, 100, true); e += 180;       // a new high that closed AT the high on normal volume: weak (-2 + range 2.9x +1 + move +0 = -1 -> neutral? no: move (130-90)/10 = 4 -> -2 +1 = -1)
       l.clear(); for (const std::string& o : G.out) if (o[0] == 'Q') l = o;
       CHECK(l.find("|top|") != std::string::npos && l.find("|score -1|tier neutral|") != std::string::npos && l.find("|failed 0|") != std::string::npos, "[11] a high that closed at the high (a breakout that held at the close): no hold claimed");

@@ -1,5 +1,5 @@
 /*
- *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.4.0  (2026-11-12)
+ *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.4.1  (2026-11-12)
  *
  *  Rassul 2026-11-11 21:13-21:33 CT: "I want to know how i can have indicators that tell this story so i can understand how and why it
  *  reveresed"; "i have the poc of the candle in a pane. i want you to create a similar pane that has each candles poc and also makes a dash
@@ -19,6 +19,10 @@
  *      Thresholds: lsFlexLevels\LRA-RevRead-<MKT>.csv (written by the nightly; defaults when absent).
  *  lsRevReadMarks (RevReadMarks.cpp: #define RVS_MARKS 1 + #include this file) - the price-chart overlay: a white dash on every candle
  *      at its POC price.
+ *      (0.4.1, Rassul 2026-11-12 16:33 "tell me about reversal read for hourly how do we get that done"; 16:37 "Ok for hourly reversal read") on a
+ *      60-MINUTE (or longer) chart the hold dots are drawn by themselves - the read that was measured on hourly candles (3,709 hourly
+ *      extremes, 42 sessions x 7 markets: the extreme held 3 hours 65% at the strong tier against 30% for any; the story letters did not
+ *      help on the hourly, so the hourly chart gets the dots only). The checkbox still decides the shorter charts.
  *      (0.4.0, Rassul 2026-11-12 07:07 / 07:12 CT) + the HOLD READ dots, OFF by default (settings: "Hold read dots"): a small red dot over a
  *      high / a green dot under a low that is likely done (rvs::holdOf, the strong tier only: the candle closed well back from its extreme,
  *      on heavy volume / after a long run / back inside the prior high or low). Closed candles only: a dot never changes.
@@ -70,11 +74,11 @@
 #include <vector>
 #include <sys/stat.h>
 
-#define RVS_VERSION "0.4.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.4.1"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.4.0");
+    p->setVersion("0.4.1");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -491,7 +495,7 @@ public:
             const int half = std::max(3, (int)getPixelsPerBar() * 45 / 100);
             const ss::Values& V = settings(s);
             setPen(rvh::C_DASH, 1, P_SOLID);
-            if (V.b(rvset::K_SHOW_HOLD)) {                                // (0.4.0) the hold read: closed candles only; strong tier only
+            if (V.b(rvset::K_SHOW_HOLD) || getSecondsPerBar() >= 3600) {   // (0.4.1) always on an hourly chart                                // (0.4.0) the hold read: closed candles only; strong tier only
                 RTARRAY hi(barHigh), lo(barLow), cl(barClose);
                 if (hi.count >= count && lo.count >= count && cl.count >= count) for (int i = v0; i <= v1 && i < (int)count - 1; ++i) {
                     const int h = holdAt(s, times, hi, lo, cl, i); if (h != 3 && h != -3) continue;
