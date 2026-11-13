@@ -1,12 +1,12 @@
-// RevReadSettings.h (lsRevReadMarks 0.4.2, 2026-11-12): the ONE settings table of the price-chart marks (the pane lsRevRead has no settings).
+// RevReadSettings.h (lsRevReadMarks 0.5.0, 2026-11-13): the ONE settings table of the price-chart marks (the pane lsRevRead has no settings).
 // File: lsFlexLevels\RevReadMarks.settings-<MKT>.txt (keyed, per market).
-// Rassul 2026-11-12 07:07 CT: "add the hold read as an uncheckeed options in rev read marks"; 07:12 "i'll go with your recomendation".
+// Rassul 2026-11-13 07:07 CT: "add the hold read as an uncheckeed options in rev read marks"; 07:12 "i'll go with your recomendation".
 #pragma once
 #include <string>
 #include "SettingsSpec.h"
 
 namespace rvset {
-static const char* const PLUGIN_VERSION = "0.4.2";   // = the setVersion literal in RevRead.cpp (lsRevRead + lsRevReadMarks)
+static const char* const PLUGIN_VERSION = "0.5.0";   // = the setVersion literal in RevRead.cpp (lsRevRead + lsRevReadMarks)
 enum K { K_SHOW_POC, K_SHOW_HOLD, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {

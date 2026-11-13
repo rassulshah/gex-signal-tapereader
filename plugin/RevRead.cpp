@@ -1,5 +1,5 @@
 /*
- *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.4.2  (2026-11-12)
+ *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.5.0  (2026-11-13)
  *
  *  Rassul 2026-11-11 21:13-21:33 CT: "I want to know how i can have indicators that tell this story so i can understand how and why it
  *  reveresed"; "i have the poc of the candle in a pane. i want you to create a similar pane that has each candles poc and also makes a dash
@@ -28,6 +28,12 @@
  *      (0.4.0, Rassul 2026-11-12 07:07 / 07:12 CT) + the HOLD READ dots, OFF by default (settings: "Hold read dots"): a small red dot over a
  *      high / a green dot under a low that is likely done (rvs::holdOf, the strong tier only: the candle closed well back from its extreme,
  *      on heavy volume / after a long run / back inside the prior high or low). Closed candles only: a dot never changes.
+ *      (0.5.0, Rassul 2026-11-13 07:05 "ok build" / 07:09 "the climax waits for the confirmation .. climax on one bar and then after that a green bar occurs
+ *      confirming the climax"; 08:14 "buying climax (bearish) should be near the top of a green candle and selling climax (bullish) should be near the
+ *      bottom of a red candle and both cases should be confirmed by the next bar") the letters of a story appear only when its climax is in the top
+ *      third of a green candle / the bottom third of a red one (CX_LOC) and the NEXT candle closes beyond the climax candle's close the story's way
+ *      (CX_CONFIRM 1); I (initiation) is the signal - bold and bright; C / A / E are drawn plain and dim; stories that begin as a test of a level with
+ *      no climax are recorded only (LEVEL_SHOW); "Stop run of <level>" in the read is now "Flush / Push through <level>" (the stop run is SR's).
  *  lsRevRead has no settings; lsRevReadMarks has two switches (POC dash, Hold read dots). No hovers, no text on the price chart. Order-feed letters exist from the moment the pane is on the chart (IRT has no
  *  order-by-order history); decided letters are reloaded from the session record after a restart. The POC bars / dashes cover all bars.
  */
@@ -76,11 +82,11 @@
 #include <vector>
 #include <sys/stat.h>
 
-#define RVS_VERSION "0.4.2"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.5.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.4.2");
+    p->setVersion("0.5.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -330,7 +336,7 @@ public:
     }
     void candles(S_& S, Ext& e) {
         const long count = getBarCount(); if (count < 2 || !(S.tick > 0) || S.spb <= 0) return;
-        RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
+        RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose), opn(barOpen);   // (0.5.0) the open: the climax candle's colour
         if (times.count < count || hi.count < count || lo.count < count || cl.count < count) return;
         const double tick = S.tick; rvh::PocStore& P = e.ps;
         if (P.seenCount > count || (P.lastKey != 0 && P.next > 0 && P.next <= count - 1 && (long long)times[P.next - 1] != P.lastKey)) P.reset();   // the chart was reloaded
@@ -346,7 +352,7 @@ public:
                 const double h = (double)hi[i], l = (double)lo[i], c = (double)cl[i];
                 if (r == 0 || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(c)) { ++P.missing; P.lastKey = key; continue; }
                 const long long ht = (long long)std::llround(h / tick), lt = (long long)std::llround(l / tick), ct = (long long)std::llround(c / tick);
-                const rvs::Poc p = rvs::pocOf(key, rows, lt, ht, ct); P.poc[key] = p; P.pv[key] = pv; P.lastKey = key;
+                rvs::Poc p = rvs::pocOf(key, rows, lt, ht, ct); { const double o = opn.count >= count ? (double)opn[i] : 0.0; if (std::isfinite(o) && o > 0) p.open = (long long)std::llround(o / tick); } P.poc[key] = p; P.pv[key] = pv; P.lastKey = key;
                 while (P.poc.size() > (size_t)rvh::PocStore::KEEP) { P.pv.erase(P.poc.begin()->first); P.poc.erase(P.poc.begin()); }
                 // the session VWAP from IRT's own volume at price (17:00 CT starts a new one)
                 struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)key - 1, &t)) { const std::string s = rvh::sessionOf(t); if (s != e.vwSession) { e.vwSession = s; e.vwPV = 0; e.vwV = 0; } e.vwPV += pv; e.vwV += (double)p.total; }
@@ -391,7 +397,7 @@ public:
         const long count = getBarCount(); if (count < 2) return;
         RTARRAYI times(barDateTime); if (times.count < count) return;
         int v0 = 0, v1 = 0; if (getVisibleBars(&v0, &v1) != RTX_OK) return; v0 = std::max(0, v0); v1 = std::min((int)count - 1, v1);
-        FONT fp; fp.id = HELVETICA; fp.size = 9; fp.style = PLAIN; FONT fb = fp; fb.style = BOLD; FONT fl = fp; fl.size = 11; fl.style = BOLD;
+        FONT fp; fp.id = HELVETICA; fp.size = 9; fp.style = PLAIN; FONT fb = fp; fb.style = BOLD; FONT fl = fp; fl.size = 11; fl.style = BOLD; FONT fq = fl; fq.style = PLAIN;   // fq (0.5.0): the quiet letters C / A / E
         const double bw = (double)std::max(1, (int)getPixelsPerBar());
         std::vector<std::pair<int, rvs::Poc> > c; c.reserve((size_t)(v1 - v0 + 1));
         for (int i = v0; i <= v1; ++i) { const auto it = e.ps.poc.find((long long)times[i]); if (it == e.ps.poc.end()) continue; PNT p; p.set(i, 0.0f, kBarCenter); c.push_back(std::make_pair((int)p.h, it->second)); }
@@ -403,7 +409,8 @@ public:
             if (!b.marks.empty()) { setFont(fl); int tw = 0; std::vector<std::string> T;
                 for (const rvs::Mark& m : b.marks) { std::string t(1, m.letter); T.push_back(t);   /* (Rassul 2026-11-11 22:19 CT "get rid of the ? mark after the signals so just have C instead of C?") no "?" */ tw += (int)getTextWidth(t.c_str(), -1) + 2; }
                 int x = b.x - tw / 2; const int y = std::max((int)pane.top + LINE_H + 2, b.letY - 2);
-                for (size_t k = 0; k < T.size(); ++k) { const int w = (int)getTextWidth(T[k].c_str(), -1); setTextColor(b.marks[k].col > 0 ? rvh::C_GREEN : rvh::C_RED); RCT r; r.set(rvh::coord(x), rvh::coord(y), rvh::coord(x + w + 1), rvh::coord(y + 13)); r.drawText(T[k].c_str(), false, false); x += w + 2; } }
+                for (size_t k = 0; k < T.size(); ++k) { const int w = (int)getTextWidth(T[k].c_str(), -1); const bool sig = b.marks[k].letter == 'I';   /* (0.5.0, "ok build") the initiation is the signal: bold and bright; C / A / E are the story so far: plain and dim */
+                    setFont(sig ? fl : fq); setTextColor(sig ? (b.marks[k].col > 0 ? rvh::C_GREEN : rvh::C_RED) : (b.marks[k].col > 0 ? rvh::C_BAR_GREEN : rvh::C_BAR_RED)); RCT r; r.set(rvh::coord(x), rvh::coord(y), rvh::coord(x + w + 1), rvh::coord(y + 13)); r.drawText(T[k].c_str(), false, false); x += w + 2; } }
         }
         // the title + the read line of the newest story (one line, top-left; it fills in as the steps happen)
         int x = pane.left + 6; const int y = pane.top + 2, lim = pane.right - 6;

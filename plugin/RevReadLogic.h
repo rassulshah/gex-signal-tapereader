@@ -1,6 +1,6 @@
 #ifndef LS_REVREAD_LOGIC_H
 #define LS_REVREAD_LOGIC_H
-// RevReadLogic.h 0.4.2 (2026-11-12) -- lsRevRead "Reversal Read": every rule of the indicator, no SDK (unit-tested on Linux).
+// RevReadLogic.h 0.5.0 (2026-11-13) -- lsRevRead "Reversal Read": every rule of the indicator, no SDK (unit-tested on Linux).
 //
 // Rassul 2026-11-11 21:00-21:33 CT: "these bids were there getting filled and accumulating .. i need to know what was going on with the bids to
 // understand why the reversal happened"; "I want to know how i can have indicators that tell this story"; "create a similar pane that has each
@@ -64,13 +64,13 @@
 #include <unordered_map>
 #include <vector>
 namespace rvs {
-static const char* const VERSION = "0.4.2";   // (0.4.2) host only: the POC fill starts at the newest 6000 candles (no rule change); (0.4.1) the hourly chart: lsRevReadMarks draws the hold dots on 60-minute candles by itself (no rule changed here);   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
+static const char* const VERSION = "0.5.0";   // (0.5.0, Rassul 2026-11-13 07:05 "ok build": the overnight check - after C / A the extreme held 30 min 21% on ES against 19% for any new extreme, the letters sat at 5% of the real turns, 2% in RTH; initiation held 45%) + CONFIRMATION (07:09 "the climax waits for the confirmation"): a story's letters appear only once one of the 2 candles after the climax candle closes beyond its close the story's way (a green bar after a selling climax; "K" lines; initiation confirms by itself); + LEVEL-START stories: a new 3-minute extreme AT a level with the attackers on top starts a story without a climax (recorded only, "T" lines, ids from 100001; shown when the nightly writes LEVEL_SHOW 1); "Stop run of <level>" is now "Flush through <level>" (one stop-run definition: lsSR's); the host draws C / A / E quietly and I bright;   // was "0.4.2":   // (0.4.2) host only: the POC fill starts at the newest 6000 candles (no rule change); (0.4.1) the hourly chart: lsRevReadMarks draws the hold dots on 60-minute candles by itself (no rule changed here);   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum { BID = 0, ASK = 1 };                    // the feed's side codes (resting bids / offers; on a FILL: BID = the aggressor BOUGHT)
 enum { BUY = 0, SELL = 1 };                   // aggressor sides
 enum Step { S_NONE = 0, S_CLIMAX = 1, S_ABSORBED = 2, S_EXHAUSTED = 3, S_INIT = 4 };
-enum End { E_OPEN = 0, E_COMPLETE = 1, E_RAN = 2, E_NOTABS = 3, E_TIMEOUT = 4, E_DEEP = 5, E_RESET = 6 };
-inline const char* endName(int e) { static const char* const n[7] = { "open", "complete", "ran through", "not absorbed", "timeout", "broke deeper", "feed reset" }; return e >= 0 && e < 7 ? n[e] : "?"; }
+enum End { E_OPEN = 0, E_COMPLETE = 1, E_RAN = 2, E_NOTABS = 3, E_TIMEOUT = 4, E_DEEP = 5, E_RESET = 6, E_SUPER = 7 };   // (0.5.0) E_SUPER: a level-start story gave way to a climax
+inline const char* endName(int e) { static const char* const n[8] = { "open", "complete", "ran through", "not absorbed", "timeout", "broke deeper", "feed reset", "superseded by a climax" }; return e >= 0 && e < 8 ? n[e] : "?"; }
 
 struct Params {
     int blockSec = 10, baseBlocks = 180, minBase = 30, lookBlocks = 18;   // 10-s blocks; the normal = the last 30 min; a "new low" = of the last 3 min
@@ -82,6 +82,9 @@ struct Params {
     int timeoutSec = 900; double volX = 1.5;                              // in a volatility window the climax threshold is x volX
     int proven = 0;                                                       // 1 = the nightly proved the letters for this market: no "?"
     int retTicks = 0, mergeTicks = 0;                                     // (0.2.0) the zone bottom variants (0 = the 0.1.1 behaviour)
+    int cxLoc = 1;                                                        // (0.5.0) 1 = the letters need the climax in the top third of a green candle (buying) / the bottom third of a red one (selling); 0 = the POC gate as before
+    int cxConfirm = 1;                                                    // (0.5.0) a story's letters wait for a confirming candle: (08:14 "confirmed by the next bar") one of the cxConfirm candles after the climax candle closes beyond its close, the story's way (0 = no wait)
+    int levelShow = 0; double levelX = 0.2;                               // (0.5.0) level-start stories: shown only when the nightly proved them (LEVEL_SHOW 1); started from levelX x the climax threshold
     int pbLook = 5, pbBase = 20, pbMinBase = 10; double pbLogX = 0.5;     // (0.2.0) pullback absorbed: new extreme of pbLook candles; delta vs the median |delta| of pbBase candles
 };
 inline Params forMarket(const std::string& m) {   // starting values (0.1.0, not yet measured): only the lot floor differs
@@ -95,7 +98,7 @@ inline int applyParam(Params& p, const std::string& k, double v) {
     else if (k == "ABS_X") p.absX = cl(v, 1.0, 10); else if (k == "ABS_SHARE") p.absShare = cl(v, 0.05, 1.0); else if (k == "FADE_X") p.fadeX = cl(v, 0.1, 1.0); else if (k == "FLUSH_X") p.flushX = cl(v, 0.1, 2.0);
     else if (k == "FLUSH_DEPTH") p.flushDepth = cl(v, 0.5, 5); else if (k == "INIT_X") p.initX = cl(v, 0.5, 10); else if (k == "INIT_SIDE") p.initSide = cl(v, 1.0, 10);
     else if (k == "ZONE_TICKS") p.zoneTicks = (int)cl(v, 1, 12); else if (k == "PROVEN") p.proven = v >= 0.5 ? 1 : 0;
-    else if (k == "RET_TICKS") p.retTicks = (int)cl(v, 0, 12); else if (k == "MERGE_TICKS") p.mergeTicks = (int)cl(v, 0, 12); else if (k == "ABS_WAIT") p.absWait = (int)cl(v, 3, 60); else return 0;
+    else if (k == "RET_TICKS") p.retTicks = (int)cl(v, 0, 12); else if (k == "MERGE_TICKS") p.mergeTicks = (int)cl(v, 0, 12); else if (k == "ABS_WAIT") p.absWait = (int)cl(v, 3, 60); else if (k == "LEVEL_SHOW") p.levelShow = v >= 0.5 ? 1 : 0; else if (k == "CX_LOC") p.cxLoc = v >= 0.5 ? 1 : 0; else if (k == "CX_CONFIRM") p.cxConfirm = (int)cl(v, 0, 5); else return 0;
     return 1;
 }
 inline int parseParams(const std::vector<std::string>& lines, const std::string& mkt, Params& p) {   // returns the keys applied; MARKET must match
@@ -167,7 +170,7 @@ inline Hold holdOf(const std::vector<Cnd>& c, size_t j) {
 }
 // ---- the candle POC ----
 struct VRow { long long tick = 0, vol = 0, dlt = 0; };
-struct Poc { long long t = 0; long long tick = 0, vol = 0, dlt = 0, total = 0; double pos = 0.5, closePos = 0.5; bool ok = false; long long cdlt = 0, lo = 0, hi = 0, close = 0; };   // (0.2.0) cdlt = the candle's delta; lo / hi / close in ticks   // pos: 0 = at the low .. 1 = at the high
+struct Poc { long long t = 0; long long tick = 0, vol = 0, dlt = 0, total = 0; double pos = 0.5, closePos = 0.5; bool ok = false; long long cdlt = 0, lo = 0, hi = 0, close = 0; long long open = 0; };   // (0.5.0) open in ticks, 0 = not known   // (0.2.0) cdlt = the candle's delta; lo / hi / close in ticks   // pos: 0 = at the low .. 1 = at the high
 inline Poc pocOf(long long tEnd, const std::vector<VRow>& rows, long long lo, long long hi, long long close) {
     Poc p; p.t = tEnd; p.lo = lo; p.hi = hi; p.close = close;
     for (const VRow& r : rows) { if (r.vol <= 0) continue; p.total += r.vol; p.cdlt += r.dlt; if (!p.ok || r.vol > p.vol || (r.vol == p.vol && r.tick < p.tick)) { p.ok = true; p.tick = r.tick; p.vol = r.vol; p.dlt = r.dlt; } }
@@ -177,13 +180,19 @@ inline Poc pocOf(long long tEnd, const std::vector<VRow>& rows, long long lo, lo
 // the POC gate of a climax candle: bottom story (sell climax) = POC in the lower third and the close at / above it; top story = the mirror
 inline bool pocGate(const Poc& p, bool bottom, long long close) { if (!p.ok) return false; return bottom ? (p.pos <= 1.0 / 3.0 + 1e-9 && close >= p.tick) : (p.pos >= 2.0 / 3.0 - 1e-9 && close <= p.tick); }
 
+// (0.5.0, Rassul 2026-11-13 08:14 "buying climax (bearish) should be near the top of a green candle and selling climax (bullish) should be near the
+// bottom of a red candle and both cases should be confirmed by the next bar") the climax candle's colour and where in it the climax was hit
+// (anchor = the price that took the most lots at the extreme): the top third of a green candle / the bottom third of a red one. -1 = open not known.
+inline int locGate(const Poc& p, bool bottom, long long anchor) { if (!p.ok || p.open <= 0 || p.hi <= p.lo) return -1;
+    return bottom ? (p.close < p.open && (anchor - p.lo) * 3 <= (p.hi - p.lo) ? 1 : 0) : (p.close > p.open && (anchor - p.lo) * 3 >= 2 * (p.hi - p.lo) ? 1 : 0); }
+
 // ---- the 10-second block ----
 struct Block { long long k = 0; long long vol[2] = { 0, 0 }, maxOrder[2] = { 0, 0 }; long long lo = 0, hi = 0, last = 0; bool any = false;
     std::map<long long, long long> hit[2];          // [aggressor side] price -> lots (SELL: sold into the bid there)
     std::map<long long, long long> shown[2]; };     // [resting side] price -> the size resting there just before its first hit in this block
 
 struct Story {
-    int id = 0; bool bottom = true, shown = false; int step = S_NONE, end = E_OPEN;
+    int id = 0; bool bottom = true, shown = false; int step = S_NONE, end = E_OPEN; int kind = 0;   // (0.5.0) kind 1 = started from a level test, not from a climax
     long long t0 = 0, tA = 0, tE = 0, tI = 0, tEnd = 0;            // ms: the climax block's end, absorbed, exhausted, initiation, ended
     long long burst = 0, opp = 0, bigOrder = 0; double p95 = 0;     // the climax block: lots on the attacking side / the other side, its biggest order, the normal
     long long anchor = 0, zoneLo = 0, zoneHi = 0, range = 0, shownSz = 0, absLots = 0; double absR = 0;
@@ -210,7 +219,7 @@ struct Engine {
     Block cur; std::deque<Block> hist; std::deque<long long> base; double p95 = 0;
     long long aggrId = 0, aggrLots = 0; int aggrSide = -1;
     // stories: [0] bottom (sell climax), [1] top (buy climax)
-    Story st[2]; bool live[2] = { false, false }; int nextId = 1; std::vector<Story> ended;
+    Story st[2]; bool live[2] = { false, false }; int nextId = 1, nextLvlId = 100001; std::vector<Story> ended;
     std::vector<std::pair<long long, std::string> > levels;         // key / volume / gamma levels and VWAP (ticks, name), from the host
     std::string clock;                                              // the Central wall clock of the newest event ("2026-11-11 20:43:20"), from the host: written on every record line for the nightly
     Ctx ctx; std::vector<std::string> out;                          // record lines (the host appends them to the session file)
@@ -218,6 +227,10 @@ struct Engine {
     std::map<long long, std::vector<Mark> > marks;                  // decided letters per candle
     std::map<int, int> gate;                                        // story id -> its climax candle's POC gate (1 / 0)
     std::map<int, long long> climaxCandle;                          // story id -> the climax candle's end
+    // (0.5.0, Rassul 2026-11-13 07:09 "the climax waits for the confirmation .. climax on one bar and then after that a green bar occurs
+    // confirming the climax") story id -> (the climax candle's close, 1 = a bottom) and its confirmation: 1 = a later candle closed
+    // beyond that close the story's way (a green bar after a selling climax), 0 = none of the cxConfirm candles did; absent = waiting
+    std::map<int, std::pair<long long, int> > cxRef; std::map<int, int> conf;
     int nextHold = 1; int lastHoldTier = -1, lastHoldSide = 0; long long lastHoldCandle = 0;   // (0.3.0) the newest hold read (side +1 a high, -1 a low)
     std::deque<Cnd> cnd; std::vector<Pull> pulls; int nextPull = 1;    // (0.2.0) the last closed candles; pullback-absorbed candidates (the newest 400)
 
@@ -261,7 +274,7 @@ struct Engine {
         const bool haveBase = (int)hist.size() >= P.minBase;
         if (cur.any) for (int b = 0; b < 2; ++b) if (live[b]) advance(st[b], b, tEnd);
         for (int b = 0; b < 2; ++b) if (live[b] && tEnd - st[b].t0 > 1000LL * P.timeoutSec) finish(st[b], b, E_TIMEOUT, tEnd);
-        if (cur.any && haveBase) for (int b = 0; b < 2; ++b) tryClimax(b, tEnd);
+        if (cur.any && haveBase) for (int b = 0; b < 2; ++b) { tryClimax(b, tEnd); tryLevel(b, tEnd); }
         hist.push_back(cur); while ((int)hist.size() > P.baseBlocks) hist.pop_front();
         base.push_back(cur.vol[0]); base.push_back(cur.vol[1]); while ((int)base.size() > 2 * P.baseBlocks) base.pop_front();
         p95 = pct95(base);
@@ -273,6 +286,7 @@ struct Engine {
         if ((double)v < P.logX * thr || (double)v < P.cxSide * (double)o || p95 <= 0) return;
         long long ext = bottom ? cur.lo : cur.hi; int n = 0;                                    // location: a new low (high) of the last 3 minutes
         for (auto it = hist.rbegin(); it != hist.rend() && n < P.lookBlocks; ++it, ++n) if (it->any && (bottom ? it->lo < ext : it->hi > ext)) return;
+        if (live[b] && st[b].kind == 1) finish(st[b], b, E_SUPER, tEnd);                         // (0.5.0) a climax takes over from a level-start story
         if (live[b]) { Story& s = st[b];                                                         // a second climax while one is open: a bigger one beyond the zone restarts it
             const long long past = bottom ? s.zoneLo - cur.lo : cur.hi - s.zoneHi;
             if (P.mergeTicks > 0 && past > 0 && past <= P.mergeTicks && s.step < S_INIT) {       /* (0.2.0) a zone bottom: the next climax a tick or two lower joins the story and widens the zone */
@@ -295,6 +309,31 @@ struct Engine {
         st[b] = s; live[b] = true; climaxCandle[s.id] = candleOf(tEnd - 1);
         note(s, "C", tEnd);   // the C letter is given only once the climax is ABSORBED (advance): selling that runs through prices is not a climax here
     }
+    // (0.5.0) a story that starts from the LEVEL, not from a climax: no story open on that side, the block made a new low (high) of the last
+    // 3 minutes within zoneTicks + 2 of a level, and the attackers traded at least as much as the other side (and levelX x the climax
+    // threshold). The same absorbed / exhausted / initiation steps follow. Recorded only (shown = 0) until LEVEL_SHOW 1; no C letter.
+    void tryLevel(int b, long long tEnd) {
+        if (live[b] || p95 <= 0 || levels.empty()) return;
+        const bool bottom = b == 0; const int att = bottom ? SELL : BUY, def = bottom ? BUY : SELL;
+        const long long v = cur.vol[att], o = cur.vol[def];
+        const double thr = std::max((double)P.minLots, P.cxX * p95 * (ctx.volWin ? P.volX : 1.0));
+        if (v <= 0 || v < o || (double)v < P.levelX * thr) return;
+        const long long ext = bottom ? cur.lo : cur.hi; int n = 0;
+        for (auto it = hist.rbegin(); it != hist.rend() && n < P.lookBlocks; ++it, ++n) if (it->any && (bottom ? it->lo < ext : it->hi > ext)) return;
+        long long bd = P.zoneTicks + 3; std::string name;
+        for (const auto& lv : levels) { const long long d = std::llabs(lv.first - ext); if (d < bd) { bd = d; name = lv.second; } }
+        if (name.empty()) return;
+        Story s; s.id = nextLvlId++; s.kind = 1; s.bottom = bottom; s.shown = P.levelShow != 0; s.step = S_CLIMAX; s.t0 = tEnd; s.burst = v; s.opp = o; s.bigOrder = cur.maxOrder[att]; s.p95 = p95; s.burstAll = v;
+        s.range = std::max<long long>(1, cur.hi - cur.lo); s.extreme = ext; s.ctx = ctx; s.ctx.pb = (ctx.pb & (bottom ? 1 : 2)) ? 1 : 0; s.ctx.level = name;
+        long long best = -1, bp = ext;
+        for (const auto& kv : cur.hit[att]) { const long long d = bottom ? kv.first - ext : ext - kv.first; if (d >= 0 && d <= P.zoneTicks + 1 && kv.second > best) { best = kv.second; bp = kv.first; } }
+        s.anchor = bp; s.zoneLo = bottom ? bp - 1 : bp - P.zoneTicks; s.zoneHi = bottom ? bp + P.zoneTicks : bp + 1;
+        const int rest = bottom ? BID : ASK;
+        for (const auto& kv : cur.shown[rest]) if (kv.first >= s.zoneLo && kv.first <= s.zoneHi) s.shownSz += kv.second;
+        for (const auto& kv : cur.hit[att]) if (kv.first >= s.zoneLo && kv.first <= s.zoneHi) s.absLots += kv.second;
+        st[b] = s; live[b] = true; climaxCandle[s.id] = candleOf(tEnd - 1);
+        note(s, "T", tEnd);
+    }
     // one closed block against an open story (b = 0 bottom: prices mirrored for a top through sgn)
     void advance(Story& s, int b, long long tEnd) {
         if (tEnd <= s.t0) return;
@@ -308,7 +347,7 @@ struct Engine {
         if (s.step == S_CLIMAX) {
             if (depth > (long long)std::max<double>(P.minDepthTicks, P.flushDepth * (double)s.range)) { finish(s, b, E_RAN, tEnd); return; }
             if (s.blocks >= P.absBlocks && s.absR >= P.absX && (double)s.absLots >= P.absShare * (double)s.burst && atOrAbove(cur.last, s.anchor))   /* absShare: the anchor took a real share of the climax (a 4-lot bid "absorbing 16x" is nothing) */ { s.step = S_ABSORBED; s.tA = tEnd; note(s, "A", tEnd);
-                if (s.shown) pend[climaxCandle[s.id]].push_back(std::make_pair(s.id, std::make_pair('C', bottom ? -1 : 1)));   // C on the climax candle (red = selling climax), now that it held
+                if (s.shown && s.kind == 0) pend[climaxCandle[s.id]].push_back(std::make_pair(s.id, std::make_pair('C', bottom ? -1 : 1)));   // C on the climax candle (red = selling climax), now that it held
                 mark(s, 'A', tEnd, bottom ? 1 : -1); }
             else if (s.blocks >= P.absWait) { finish(s, b, below(cur.last, zFar) ? E_RAN : E_NOTABS, tEnd); return; }
         }
@@ -347,27 +386,39 @@ struct Engine {
             + "|shown " + std::to_string(s.shownSz) + "|abs " + std::to_string(s.absLots) + "|absx " + num(s.absR) + "|range " + std::to_string(s.range) + "|ext " + num((double)s.extreme * tick) + "|ret ";
         for (size_t i = 0; i < s.returns.size(); ++i) l += (i ? "/" : "") + std::to_string(s.returns[i]);
         l += "|flush " + std::to_string(s.flushLots) + "|init " + std::to_string(s.initLots) + "|initopp " + std::to_string(s.initOpp) + "|gate " + std::to_string(s.pocGate) + "|pocpos " + num(s.pocPos)
-            + "|sess " + s.ctx.session + "|volwin " + std::to_string(s.ctx.volWin) + "|hourly " + s.ctx.hourly + "|level " + s.ctx.level + "|pb " + std::to_string(s.ctx.pb) + "|sweep " + s.sweep + "|ct " + clock + "|merged " + std::to_string(s.merged) + "|zone " + std::to_string(s.zoneHi - s.zoneLo + 1) + "|end " + endName(s.end);
+            + "|sess " + s.ctx.session + "|volwin " + std::to_string(s.ctx.volWin) + "|hourly " + s.ctx.hourly + "|level " + s.ctx.level + "|pb " + std::to_string(s.ctx.pb) + "|sweep " + s.sweep + "|ct " + clock + "|merged " + std::to_string(s.merged) + "|zone " + std::to_string(s.zoneHi - s.zoneLo + 1) + "|end " + endName(s.end) + "|start " + (s.kind == 1 ? "level" : "climax");
         out.push_back(l);
     }
     // ---- a candle closed: its letters are decided, once (candle = its END in seconds; poc = that candle's POC; close in ticks) ----
     void onCandle(long long candle, const Poc& poc, long long close) {
         for (auto& kv : climaxCandle) if (kv.second == candle && !gate.count(kv.first)) {       // the POC gate of every story whose climax was in this candle
-            bool bottom = true, found = false; for (int b = 0; b < 2; ++b) if (live[b] && st[b].id == kv.first) { bottom = st[b].bottom; found = true; st[b].pocGate = pocGate(poc, bottom, close) ? 1 : 0; st[b].pocPos = poc.pos; }
-            if (!found) for (Story& e : ended) if (e.id == kv.first) { bottom = e.bottom; found = true; e.pocGate = pocGate(poc, bottom, close) ? 1 : 0; e.pocPos = poc.pos; }
-            if (found) { gate[kv.first] = pocGate(poc, bottom, close) ? 1 : 0; out.push_back("G|" + std::to_string(kv.first) + "|" + std::to_string(candle) + "|" + std::to_string(gate[kv.first]) + "|" + num(poc.pos)); } }
+            bool bottom = true, found = false; long long anc = 0; for (int b = 0; b < 2; ++b) if (live[b] && st[b].id == kv.first) { bottom = st[b].bottom; found = true; anc = st[b].anchor; st[b].pocGate = pocGate(poc, bottom, close) ? 1 : 0; st[b].pocPos = poc.pos; }
+            if (!found) for (Story& e : ended) if (e.id == kv.first) { bottom = e.bottom; found = true; anc = e.anchor; e.pocGate = pocGate(poc, bottom, close) ? 1 : 0; e.pocPos = poc.pos; }
+            if (found) { const int lg = P.cxLoc ? locGate(poc, bottom, anc) : -1; gate[kv.first] = lg >= 0 ? lg : (pocGate(poc, bottom, close) ? 1 : 0);   /* (0.5.0) the green-top / red-bottom rule when the open is known */ if (gate[kv.first] == 1) cxRef[kv.first] = std::make_pair(close, bottom ? 1 : 0); out.push_back("G|" + std::to_string(kv.first) + "|" + std::to_string(candle) + "|" + std::to_string(gate[kv.first]) + "|" + num(poc.pos) + "|loc " + std::to_string(lg)); } }
+        // (0.5.0) the confirming candle of every story whose climax candle passed the POC gate
+        if (P.cxConfirm > 0) for (auto it = pend.begin(); it != pend.end() && it->first <= candle; ++it) for (const auto& pr : it->second)   // an initiation confirms its story by itself, before the candle is judged
+            if (pr.second.first == 'I' && !conf.count(pr.first)) { conf[pr.first] = 1; out.push_back("K|" + std::to_string(pr.first) + "|" + std::to_string(candle) + "|1"); }
+        if (P.cxConfirm > 0) for (const auto& kv : cxRef) { if (conf.count(kv.first)) continue; const auto cc = climaxCandle.find(kv.first); if (cc == climaxCandle.end() || candle <= cc->second) continue;
+            const bool with = kv.second.second ? close > kv.second.first : close < kv.second.first; const long long n = (candle - cc->second) / std::max(1, spb);
+            if (with || n >= P.cxConfirm) { conf[kv.first] = with ? 1 : 0; out.push_back("K|" + std::to_string(kv.first) + "|" + std::to_string(candle) + "|" + (with ? "1" : "0")); } }
+        std::map<long long, std::vector<std::pair<int, std::pair<char, int> > > > held;       // letters still waiting for their story's confirming candle
         for (auto it = pend.begin(); it != pend.end() && it->first <= candle; it = pend.erase(it)) {
             std::vector<Mark> v;
             for (const auto& pr : it->second) { const auto g = gate.find(pr.first); if (g == gate.end() || g->second != 1) continue;   // a story whose climax candle failed the POC gate shows no letter
+                if (P.cxConfirm > 0) { auto c = conf.find(pr.first);
+                    if (pr.second.first == 'I' && (c == conf.end() || c->second != 1)) { conf[pr.first] = 1; c = conf.find(pr.first); out.push_back("K|" + std::to_string(pr.first) + "|" + std::to_string(candle) + "|1"); }   // initiation confirms by itself
+                    if (c == conf.end()) { held[it->first].push_back(pr); continue; }           // not decided yet: the letter waits
+                    if (c->second != 1) continue; }                                              // no confirming candle: the story shows no letter
                 Mark m; m.candle = it->first; m.letter = pr.second.first; m.col = pr.second.second; v.push_back(m); }
             if (v.size() > 2) { std::vector<Mark> w; w.push_back(v.front()); w.push_back(v.back()); v.swap(w); }                            // at most 2: the first and the last step of the candle
             if (!v.empty()) { std::vector<Mark>& d = marks[it->first];
-                if (!d.empty() && d.size() < 2 && it->first < candle) { for (const Mark& m : v) if (d.size() < 2) { d.insert(d.begin(), m); out.push_back(std::string("L|") + std::to_string(it->first) + "|" + m.letter + (m.col > 0 ? "+" : "-")); } }   // a C that arrives after its candle closed (absorbed one candle later) joins it
+                if (!d.empty() && d.size() < 2 && it->first < candle) { for (const Mark& m : v) if (d.size() < 2) { d.insert(d.begin(), m); out.push_back(std::string("L|") + std::to_string(it->first) + "|" + m.letter + (m.col > 0 ? "+" : "-")); } }   // a letter that arrives after its candle closed (a C absorbed one candle later, a letter that waited for its confirming candle) joins it
                 else if (d.empty()) { d = v; std::string l = "L|" + std::to_string(it->first) + "|"; for (const Mark& m : v) { l += m.letter; l += m.col > 0 ? "+" : "-"; } out.push_back(l); } }
         }
+        for (auto& kv : held) { auto& d = pend[kv.first]; d.insert(d.begin(), kv.second.begin(), kv.second.end()); }
         pullCandle(candle, poc);
         while (marks.size() > 4000) marks.erase(marks.begin());
-        while (gate.size() > 2000) { climaxCandle.erase(gate.begin()->first); gate.erase(gate.begin()); }
+        while (gate.size() > 2000) { climaxCandle.erase(gate.begin()->first); cxRef.erase(gate.begin()->first); conf.erase(gate.begin()->first); gate.erase(gate.begin()); }
     }
     // (0.2.0) pullback absorbed, decided on closed candles only: F for the candidate of the candle before, then this candle as a candidate
     void pullCandle(long long candle, const Poc& p) {
@@ -424,13 +475,14 @@ struct Engine {
     std::vector<Seg> readLine(const Story& s) const {
         std::vector<Seg> L; const bool bt = s.bottom; const int a = bt ? -1 : 1, d = bt ? 1 : -1;   // attackers' colour / defenders' colour
         auto add = [&](const std::string& t, int c) { Seg g; g.text = t; g.col = c; L.push_back(g); };
-        add(std::string(bt ? "Sell climax " : "Buy climax ") + lots(s.burst) + (s.bigOrder >= 10 ? " (" + lots(s.bigOrder) + "-lot)" : std::string()), a);
+        if (s.kind == 1) add("Test of " + s.ctx.level + " on " + lots(s.burst), a);   // (0.5.0) a story that started from the level
+        else add(std::string(bt ? "Sell climax " : "Buy climax ") + lots(s.burst) + (s.bigOrder >= 10 ? " (" + lots(s.bigOrder) + "-lot)" : std::string()), a);
         char b[64];
         if (s.step >= S_ABSORBED) { std::snprintf(b, sizeof b, "Absorbed %.1fx at %.10g", s.absR, (double)s.anchor * tick); add(b, d); }
         else if (s.end == E_OPEN) add("absorbed?", 0); else { add(endName(s.end), 0); return L; }
         if (s.fading) { std::string t = "Fading "; for (size_t i = 0; i < s.fadeList.size(); ++i) t += (i ? " / " : "") + lots(s.fadeList[i]); add(t, d); }
         else if (s.end == E_OPEN && s.step < S_INIT) add("fading?", 0);
-        if (s.tE > 0) add((s.sweep.empty() ? std::string(bt ? "Flush on " : "Push on ") : "Stop run of " + s.sweep + " on ") + lots(s.flushLots), d);
+        if (s.tE > 0) add((s.sweep.empty() ? std::string(bt ? "Flush on " : "Push on ") : std::string(bt ? "Flush through " : "Push through ") + s.sweep + " on ") + lots(s.flushLots), d);   // (0.5.0) was "Stop run of <level>": a stop run is lsSR's burst of small orders through a level, this is a quiet new extreme through one
         else if (s.end == E_OPEN && s.step < S_INIT) add(bt ? "flush?" : "push?", 0);
         if (s.step >= S_INIT) add(std::string(bt ? "Buyers " : "Sellers ") + lots(s.initLots), d);
         else if (s.end == E_OPEN) add(bt ? "buyers?" : "sellers?", 0);
