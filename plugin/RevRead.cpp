@@ -1,5 +1,5 @@
 /*
- *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.4.1  (2026-11-12)
+ *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.4.2  (2026-11-12)
  *
  *  Rassul 2026-11-11 21:13-21:33 CT: "I want to know how i can have indicators that tell this story so i can understand how and why it
  *  reveresed"; "i have the poc of the candle in a pane. i want you to create a similar pane that has each candles poc and also makes a dash
@@ -19,6 +19,8 @@
  *      Thresholds: lsFlexLevels\LRA-RevRead-<MKT>.csv (written by the nightly; defaults when absent).
  *  lsRevReadMarks (RevReadMarks.cpp: #define RVS_MARKS 1 + #include this file) - the price-chart overlay: a white dash on every candle
  *      at its POC price.
+ *      (0.4.2, Rassul 2026-11-12 19:20 "can you check the CL because it is not showing") the POC bars / dashes fill from the newest 6000 candles (was: from the
+ *      chart's oldest candle, so the candles on screen came last), and a pass runs on while it has used under 10 ms.
  *      (0.4.1, Rassul 2026-11-12 16:33 "tell me about reversal read for hourly how do we get that done"; 16:37 "Ok for hourly reversal read") on a
  *      60-MINUTE (or longer) chart the hold dots are drawn by themselves - the read that was measured on hourly candles (3,709 hourly
  *      extremes, 42 sessions x 7 markets: the extreme held 3 hours 65% at the strong tier against 30% for any; the story letters did not
@@ -74,11 +76,11 @@
 #include <vector>
 #include <sys/stat.h>
 
-#define RVS_VERSION "0.4.1"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.4.2"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.4.1");
+    p->setVersion("0.4.2");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -174,6 +176,13 @@ inline int vapRows(RTARRAYP& vap, int chartBar, double tick, std::vector<rvs::VR
 struct PocStore {
     std::map<long long, rvs::Poc> poc; std::map<long long, double> pv; int next = 0; long seenCount = -1; bool fault = false; long long missing = 0; long long lastKey = 0;
     void reset() { poc.clear(); pv.clear(); next = 0; seenCount = -1; missing = 0; lastKey = 0; }
+    // (0.4.2, Rassul 2026-11-12 19:20 "can you check the CL because it is not showing": the pane filled from the chart's OLDEST candle,
+    // 300 a pass, so the candles on screen came last - minutes on a quiet evening) only the newest KEEP candles are ever kept, so the
+    // fill starts there; and a pass may run on past 300 candles while it has used under 10 ms (at most 3000).
+    static const int KEEP = 6000;
+    void start(long count) { if (next == 0 && lastKey == 0 && count - 1 > KEEP) next = (int)(count - 1 - KEEP); }
+    static long long nowMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+    static bool more(int done, long long t0) { return done < 300 || (done < 3000 && nowMs() - t0 < 10); }
 };
 } // namespace rvh
 
@@ -329,8 +338,8 @@ public:
         { const double fl = (double)lo[(int)count - 1], fh = (double)hi[(int)count - 1]; if (std::isfinite(fl) && std::isfinite(fh) && fl > 0) { e.barLo = (long long)std::llround(fl / tick); e.barHi = (long long)std::llround(fh / tick); } }
         e.aligned = ((long long)times[(int)count - 1] % (long long)S.spb) == 0;
         if (!P.fault) {
-            RTARRAYP vap(barVolumeProfile); int done = 0;
-            for (; P.next < count - 1 && done < 300; ++P.next, ++done) {       // closed bars only, at most 300 per pass
+            RTARRAYP vap(barVolumeProfile); int done = 0; P.start(count); const long long t0 = rvh::PocStore::nowMs();
+            for (; P.next < count - 1 && rvh::PocStore::more(done, t0); ++P.next, ++done) {       // closed bars only; 300 a pass, more while under 10 ms (0.4.2)
                 const int i = P.next; const long long key = (long long)times[i]; std::vector<rvs::VRow> rows; double pv = 0;
                 const int r = rvh::vapRows(vap, i, tick, rows, pv);
                 if (r < 0) { P.fault = true; break; }
@@ -338,7 +347,7 @@ public:
                 if (r == 0 || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(c)) { ++P.missing; P.lastKey = key; continue; }
                 const long long ht = (long long)std::llround(h / tick), lt = (long long)std::llround(l / tick), ct = (long long)std::llround(c / tick);
                 const rvs::Poc p = rvs::pocOf(key, rows, lt, ht, ct); P.poc[key] = p; P.pv[key] = pv; P.lastKey = key;
-                while (P.poc.size() > 6000) { P.pv.erase(P.poc.begin()->first); P.poc.erase(P.poc.begin()); }
+                while (P.poc.size() > (size_t)rvh::PocStore::KEEP) { P.pv.erase(P.poc.begin()->first); P.poc.erase(P.poc.begin()); }
                 // the session VWAP from IRT's own volume at price (17:00 CT starts a new one)
                 struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)key - 1, &t)) { const std::string s = rvh::sessionOf(t); if (s != e.vwSession) { e.vwSession = s; e.vwPV = 0; e.vwV = 0; } e.vwPV += pv; e.vwV += (double)p.total; }
                 if (e.eng && e.aligned && key > e.fedCandle) { e.eng->onCandle(key, p, ct); e.fedCandle = key; }   // the letters of that candle are decided now, once
@@ -473,15 +482,15 @@ public:
         rvh::PocStore& P = s.ps;
         if (P.seenCount > count || (P.lastKey != 0 && P.next > 0 && P.next <= count - 1 && (long long)times[P.next - 1] != P.lastKey)) P.reset();
         P.seenCount = count; if (P.fault) return;
-        RTARRAYP vap(barVolumeProfile); int done = 0;
-        for (; P.next < count - 1 && done < 300; ++P.next, ++done) {
+        RTARRAYP vap(barVolumeProfile); int done = 0; P.start(count); const long long t0 = rvh::PocStore::nowMs();
+        for (; P.next < count - 1 && rvh::PocStore::more(done, t0); ++P.next, ++done) {
             const int i = P.next; const long long key = (long long)times[i]; std::vector<rvs::VRow> rows; double pv = 0;
             const int r = rvh::vapRows(vap, i, tick, rows, pv);
             if (r < 0) { P.fault = true; break; }
             const double h = (double)hi[i], l = (double)lo[i], c = (double)cl[i];
             if (r == 0 || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(c)) { ++P.missing; P.lastKey = key; continue; }
             P.poc[key] = rvs::pocOf(key, rows, (long long)std::llround(l / tick), (long long)std::llround(h / tick), (long long)std::llround(c / tick)); P.lastKey = key;
-            while (P.poc.size() > 6000) P.poc.erase(P.poc.begin());
+            while (P.poc.size() > (size_t)rvh::PocStore::KEEP) P.poc.erase(P.poc.begin());
         }
     }
     virtual int draw(void) {

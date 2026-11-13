@@ -1,6 +1,6 @@
 #ifndef LS_REVREAD_LOGIC_H
 #define LS_REVREAD_LOGIC_H
-// RevReadLogic.h 0.4.1 (2026-11-12) -- lsRevRead "Reversal Read": every rule of the indicator, no SDK (unit-tested on Linux).
+// RevReadLogic.h 0.4.2 (2026-11-12) -- lsRevRead "Reversal Read": every rule of the indicator, no SDK (unit-tested on Linux).
 //
 // Rassul 2026-11-11 21:00-21:33 CT: "these bids were there getting filled and accumulating .. i need to know what was going on with the bids to
 // understand why the reversal happened"; "I want to know how i can have indicators that tell this story"; "create a similar pane that has each
@@ -64,7 +64,7 @@
 #include <unordered_map>
 #include <vector>
 namespace rvs {
-static const char* const VERSION = "0.4.1";   // (0.4.1) the hourly chart: lsRevReadMarks draws the hold dots on 60-minute candles by itself (no rule changed here);   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
+static const char* const VERSION = "0.4.2";   // (0.4.2) host only: the POC fill starts at the newest 6000 candles (no rule change); (0.4.1) the hourly chart: lsRevReadMarks draws the hold dots on 60-minute candles by itself (no rule changed here);   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum { BID = 0, ASK = 1 };                    // the feed's side codes (resting bids / offers; on a FILL: BID = the aggressor BOUGHT)
 enum { BUY = 0, SELL = 1 };                   // aggressor sides
