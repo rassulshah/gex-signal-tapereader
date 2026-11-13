@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
     // the draw: labels in the pane, bull green under the bar, bear red over it
     mock::current = &A; A.drawn.clear(); mdraw(x);
     int bull = 0, bear = 0, other = 0, lvpN = 0, fibL = 0, fibT = 0;   // (1.5.0) + the Fib lines and their names
-    auto isFib = [](const mock::Prim& p) { return p.k == 'L' || (p.k == 'T' && (p.text == "Stop" || p.text == "50%" || p.text == "BE" || p.text == "1.272" || p.text == "1.618" || p.text == "2.0")); };
+    auto isFib = [](const mock::Prim& p) { return p.k == 'L' || (p.k == 'T' && (p.text == "Stop" || p.text == "38.2%" || p.text == "BE" || p.text == "1.272" || p.text == "1.618" || p.text == "2.0")); };
     for (const mock::Prim& p : A.drawn) { if (p.k == 'L') { ++fibL; if (p.w != 1 || p.y0 != p.y1) ++other; continue; } if (isFib(p)) { ++fibT; continue; } if (p.k != 'T') { ++other; continue; } if (p.text == "LVP") { ++lvpN; continue; } if (p.col == cobs::C_BULL) ++bull; else if (p.col == cobs::C_BEAR) ++bear; }
     {   int lvis = 0; for (const cobs::LvpMark& m : L.lvp.marks) lvis += m.show && m.idx >= A.first;
         CHECK(lvpN <= lvis && (lvis == 0 || lvpN > 0) && bull + bear + lvpN + fibL + fibT == S->drawn, "(1.3.0) LVP labels drawn (" << lvpN << " of " << lvis << " visible)");
@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
     {   mock::Host D; D.dialog = true; D.root = ""; mock::current = &D; CobSignal z; z.calc(0); mdraw(z); CHECK(D.drawn.empty(), "the Add / settings copy with no chart draws nothing and does not fault"); }
     // versions
     { const std::string src = slurp("../CobSignal.cpp"); const size_t p = src.find("p->setVersion(\""); const std::string lit = p == std::string::npos ? "" : src.substr(p + 15, src.find('"', p + 15) - p - 15);
-      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.6.2", "version literals match (" << lit << ")"); }
+      CHECK(lit == CS_VERSION && lit == cobs::VERSION && lit == "1.6.5", "version literals match (" << lit << ")"); }
     std::cout << "test_cobsignal_host: " << passed << " passed, " << failed << " failed\n";
     return failed ? 1 : 0;
 }

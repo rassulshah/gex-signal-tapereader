@@ -49,7 +49,7 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.6.4";   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
+static const char* const VERSION = "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
 // was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
 // was "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
 // was "1.6.1";   // (1.6.1) roots QGC / QHG / QCL / NGx mapped: the indicator never ran on his GC / HG / CL / NG charts
@@ -458,6 +458,9 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
 // Leg: bull = the leg-start bar's low (0) to the leg-end bar's high (1.0); bear the mirror. Only CoBs that are drawn (show + ZZO ok).
 // Computed from closed bars only, so a finished line never changes; an open line runs to the live bar.
 static const double FIB_K[3] = { 1.272, 1.618, 2.0 };
+// (1.6.5, Rassul 2026-11-12 19:48 "update the 1/2 way back cob line to the 38.2% instead of 50%") the entry line sits at the 38.2%
+// retracement of the CoB wave = 0.618 of the way from the origin (0) to the CoB high (1.0); it was the 50% retracement.
+static const double FIB_ENTRY_K = 0.618;
 static const long long FIB_ENTRY_SECS = 3 * 3600;           // entry + stop: 3 h at most from the CoB bar
 enum FibKind { F_STOP = 0, F_ENTRY = 1, F_ONE = 2, F_T1 = 3, F_T2 = 4, F_T3 = 5 };
 struct FibSeg { int kind = 0; double px = 0; int i0 = -1, i1 = -1; bool open = false, hit = false; };
@@ -474,7 +477,7 @@ inline FibSet fibLines(const Engine& E, const Mark& m)
     const double L = (one - origin) * sd; if (!(L > 0)) { F.why = "no leg"; return F; }
     F.origin = origin; F.one = one;
     auto at = [&](double k) { return origin + sd * k * L; };
-    const double stop = origin - sd * E.tick, entry = at(0.5), tk[3] = { at(FIB_K[0]), at(FIB_K[1]), at(FIB_K[2]) };
+    const double stop = origin - sd * E.tick, entry = at(FIB_ENTRY_K), tk[3] = { at(FIB_K[0]), at(FIB_K[1]), at(FIB_K[2]) };
     int nextCob = -1;
     for (const Mark& o : E.marks) if (&o != &m && o.idx > m.idx && fibDrawn(o)) { if (nextCob < 0 || o.idx < nextCob) nextCob = o.idx; }
     const long sess = E.cls[(size_t)m.idx].sess;
@@ -487,7 +490,7 @@ inline FibSet fibLines(const Engine& E, const Mark& m)
         if (entryEnd < 0) {
             if (!filled && (adv - entry) * sd <= 0) filled = true;
             if ((adv - stop) * sd <= 0) entryEnd = j;                           // stopped (a wick through the stop)
-            else if (!filled && (fav - tk[0]) * sd >= 0) entryEnd = j;         // missed: T1 traded before the 50% filled
+            else if (!filled && (fav - tk[0]) * sd >= 0) entryEnd = j;         // missed: T1 traded before the entry filled
             else if (b.t - m.t >= FIB_ENTRY_SECS) entryEnd = j;                // 3 h
         }
         if (beEnd < 0 && filled && entryEnd != j && (fav - one) * sd >= 0) beEnd = j;   // (13:08 Rassul "keep the be line like the other green lines that have hit")
@@ -503,7 +506,7 @@ inline FibSet fibLines(const Engine& E, const Mark& m)
     return F;
 }
 static const unsigned C_ENTRY = 0x003B82F6, C_ONE = 0x006B7280;   // entry blue; (13:08) BE at the CoB high in the CoB colour like the targets (C_ONE no longer drawn); was grey = BE (Rassul 13:05 "add one more line for be which will be the cob high"); targets = the CoB's colour, stop = the other
-inline const char* fibName(int k) { static const char* N[] = { "Stop", "50%", "BE", "1.272", "1.618", "2.0" }; return N[k >= 0 && k < 6 ? k : 0]; }
+inline const char* fibName(int k) { static const char* N[] = { "Stop", "38.2%", "BE", "1.272", "1.618", "2.0" }; return N[k >= 0 && k < 6 ? k : 0]; }
 // lines (1 px, solid) from the CoB origin bar to the end bar (the live bar + 1 when open), the name right of the line's end, small
 inline std::vector<Prim> fibLayout(const Engine& E, const View& v)
 {
@@ -527,7 +530,7 @@ inline std::vector<Prim> fibLayout(const Engine& E, const View& v)
 }
 inline std::string fibStatus(const Engine& E)
 {
-    std::string o = "FIB_RULES,1.5.0 targets 1.272/1.618/2.0, entry 50%, stop 0 - 1 tick; end: close through 0, session end, next drawn CoB; entry+stop: stop touched, T1 before fill, 3 h; a hit target ends at its hit\n";
+    std::string o = "FIB_RULES,1.6.5 targets 1.272/1.618/2.0, entry 38.2%, stop 0 - 1 tick; end: close through 0, session end, next drawn CoB; entry+stop: stop touched, T1 before fill, 3 h; a hit target ends at its hit\n";
     int k = 0; for (size_t q = E.marks.size(); q-- > 0 && k < 4;) { const Mark& m = E.marks[q]; if (!fibDrawn(m)) continue; ++k;
         const FibSet F = fibLines(E, m); char b[200]; std::snprintf(b, sizeof b, "FIB,%lld,%s,0=%.6g,1=%.6g,%s", m.t, m.side > 0 ? "BULL" : "BEAR", F.origin, F.one, F.why.c_str());
         std::string l = b; for (const FibSeg& g : F.seg) { l += std::string(",") + fibName(g.kind) + (g.hit ? " hit" : g.open ? " open" : " ended"); } o += l + "\n"; }

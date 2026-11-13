@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
         const cobs::FibSeg *st = seg(F, cobs::F_STOP), *en = seg(F, cobs::F_ENTRY), *t1 = seg(F, cobs::F_T1), *t2 = seg(F, cobs::F_T2), *t3 = seg(F, cobs::F_T3), *one = seg(F, cobs::F_ONE);
         CHECK(st && en && t1 && t2 && t3 && one, "all kinds");
         if (st && en && t1 && t2 && t3 && one) {
-            CHECK(near(st->px, 1.1219) && near(en->px, 1.123025) && near(t1->px, 1.12195 + 1.272 * 0.00215) && near(t2->px, 1.12195 + 1.618 * 0.00215) && near(t3->px, 1.12625), "prices: stop 1.12190, entry 1.123025, T1 1.124685, T2 1.125429, T3 1.12625");
+            CHECK(near(st->px, 1.1219) && near(en->px, 1.12195 + 0.618 * 0.00215) && near(t1->px, 1.12195 + 1.272 * 0.00215) && near(t2->px, 1.12195 + 1.618 * 0.00215) && near(t3->px, 1.12625), "prices: stop 1.12190, entry 1.123279 (38.2% back), T1 1.124685, T2 1.125429, T3 1.12625");
             CHECK(st->i0 == i0 && en->i0 == i0 && t1->i0 == i0, "lines start at the CoB origin bar (8:39)");
             CHECK(t1->hit && t1->i1 == at(B, "09:30") && !t1->open, "T1 hit 9:30 (" << t1->i1 << ")");
             CHECK(t2->hit && t2->i1 == at(B, "09:54"), "T2 hit 9:54");
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
         cobs::Engine E = eng(M, M.size()); E.marks.push_back(cob(M, i0, i1, ic, -1));
         const cobs::FibSet F = cobs::fibLines(E, E.marks[0]);
         const cobs::FibSeg *st = seg(F, cobs::F_STOP), *en = seg(F, cobs::F_ENTRY), *t1 = seg(F, cobs::F_T1), *t2 = seg(F, cobs::F_T2), *t3 = seg(F, cobs::F_T3);
-        CHECK(st && en && t1 && t2 && t3 && near(F.origin, -1.12195) && near(st->px, -1.1219) && near(en->px, -1.123025), "short: 0 above, stop 1 tick above, entry 50%");
+        CHECK(st && en && t1 && t2 && t3 && near(F.origin, -1.12195) && near(st->px, -1.1219) && near(en->px, -(1.12195 + 0.618 * 0.00215)), "short: 0 above, stop 1 tick above, entry 38.2% back");
         if (st && t1 && t2 && t3) CHECK(t1->i1 == at(B, "09:30") && t2->i1 == at(B, "09:54") && t3->open && st->i1 == at(B, "12:00"), "short: same hits and ends as the long");
     }
     // [3] a close back through 0 ends everything; a stop wick (no close through) ends entry + stop only
@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
         CHECK(st && t1 && st->i1 == k && !st->open && t1->i1 == at(B, "09:30") && G.why == "live", "a stop wick ends entry + stop, the targets go on");
     }
     // [4] T1 before the 50% fills = missed (entry + stop end there)
-    {   std::vector<cobs::Bar> C = B; for (int j = ic + 1; j < at(B, "09:30"); ++j) C[(size_t)j].l = std::max(C[(size_t)j].l, 1.1231);   // no pullback to 1.123025
+    {   std::vector<cobs::Bar> C = B; for (int j = ic + 1; j < at(B, "09:30"); ++j) C[(size_t)j].l = std::max(C[(size_t)j].l, 1.1234);   // no pullback to 1.123279
         cobs::Engine E = eng(C, C.size()); E.marks.push_back(cob(C, i0, i1, ic, 1));
         const cobs::FibSet F = cobs::fibLines(E, E.marks[0]); const cobs::FibSeg* en = seg(F, cobs::F_ENTRY);
         CHECK(en && en->i1 == at(B, "09:30") && !en->open, "missed: the entry ends at the T1 bar (9:30)");
@@ -139,9 +139,9 @@ int main(int argc, char** argv) {
         for (const cobs::Prim& p : P) {
             if (p.line) { ++lines; if (p.y0 != p.y1 || p.x0 != (int)v.X(i0) || p.x0 < v.l || p.x1 > v.r) posOk = false; }
             else { ++labels; if (!p.tiny) posOk = false;
-                const unsigned want = p.text == "Stop" ? cobs::C_BEAR : p.text == "50%" ? cobs::C_ENTRY : cobs::C_BULL; if (p.col != want) colOk = false; }
+                const unsigned want = p.text == "Stop" ? cobs::C_BEAR : p.text == "38.2%" ? cobs::C_ENTRY : cobs::C_BULL; if (p.col != want) colOk = false; }
         }
-        CHECK(lines == 6 && labels == 6 && colOk && posOk, "6 lines from the origin bar + 6 names: stop red, 50% blue, BE + targets green (" << lines << "/" << labels << ")");
+        CHECK(lines == 6 && labels == 6 && colOk && posOk, "6 lines from the origin bar + 6 names: stop red, 38.2% blue, BE + targets green (" << lines << "/" << labels << ")");
         bool t1x = false; for (const cobs::Prim& p : P) if (p.line && p.y0 == (int)std::lround(v.Y(1.12195 + 1.272 * 0.00215)) && p.x1 == (int)v.X(at(B, "09:30"))) t1x = true;
         CHECK(t1x, "T1's line ends at its hit bar");
         bool t3x = false; for (const cobs::Prim& p : P) if (p.line && p.y0 == (int)std::lround(v.Y(1.12625)) && p.x1 == (int)v.X(last + 1)) t3x = true;
@@ -154,8 +154,8 @@ int main(int argc, char** argv) {
     // [9] status
     {   cobs::Engine E = eng(B, B.size()); E.marks.push_back(cob(B, i0, i1, ic, 1));
         const std::string s = cobs::fibStatus(E);
-        CHECK(s.find("FIB_RULES,1.5.0") == 0 && s.find("BULL,0=1.12195,1=1.1241,live,Stop ended,50% ended,BE hit,1.272 hit,1.618 hit,2.0 open") != std::string::npos, "status: " << s);
-        CHECK(std::string(cobs::VERSION) == "1.6.2", "version 1.5.0");
+        CHECK(s.find("FIB_RULES,1.6.5") == 0 && s.find("BULL,0=1.12195,1=1.1241,live,Stop ended,38.2% ended,BE hit,1.272 hit,1.618 hit,2.0 open") != std::string::npos, "status: " << s);
+        CHECK(std::string(cobs::VERSION) == "1.6.5" && cobs::FIB_ENTRY_K == 0.618, "version 1.6.5, entry at 0.618 from the origin");
     }
     // [10] not drawn = no lines
     {   cobs::Engine E = eng(B, B.size()); cobs::Mark m = cob(B, i0, i1, ic, 1); m.show = false; E.marks.push_back(m); m.show = true; m.zOk = false; E.marks.push_back(m);

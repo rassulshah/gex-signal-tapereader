@@ -48,7 +48,7 @@
 #define CS_SEP "/"
 #endif
 
-static const char* CS_VERSION = "1.6.4";   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
+static const char* CS_VERSION = "1.6.5";   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
 // was "1.5.1";   // (1.5.1) CQG roots mapped (cobs::mktKey) - it never ran on his CQG charts before   // (1.5.0) + the CoB Fib lines (targets 1.272 / 1.618 / 2.0, entry 50%, stop 0)   // = cobs::VERSION = the setVersion literal
 
 static long long csMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -233,7 +233,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.6.4 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave (the chart ZigZag / ZZO Combo wave) from a swing low/high that swept a key level, back through the level, >= 1.9x the last 20 waves, ZZO Combo count >= 10, by 11:00 CT; marked on the bar that completes the wave. + Fib lines on each drawn CoB: stop 0, entry 50%, BE at the CoB high, targets 1.272 / 1.618 / 2.0 (end on a close back through 0, at the session end or the next CoB; entry + stop after 3 h, a stop touch or T1 before the fill). his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PWH/PWL, AsiaHI/AsiaLO, PHH/PHL; by 11:00 CT; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00; a PHH/PHL-only CoB is drawn in ES, HG, GC and recorded only elsewhere): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted. + Lvp: low-volume pullback after a drawn CoB.");
-    p->setVersion("1.6.4");   // = CS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA CoB Signal v1.6.5 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave (the chart ZigZag / ZZO Combo wave) from a swing low/high that swept a key level, back through the level, >= 1.9x the last 20 waves, ZZO Combo count >= 10, by 11:00 CT; marked on the bar that completes the wave. + Fib lines on each drawn CoB: stop 0, entry 50%, BE at the CoB high, targets 1.272 / 1.618 / 2.0 (end on a close back through 0, at the session end or the next CoB; entry + stop after 3 h, a stop touch or T1 before the fill). his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PWH/PWL, AsiaHI/AsiaLO, PHH/PHL; by 11:00 CT; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00; a PHH/PHL-only CoB is drawn in ES, HG, GC and recorded only elsewhere): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted. + Lvp: low-volume pullback after a drawn CoB.");
+    p->setVersion("1.6.5");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }
