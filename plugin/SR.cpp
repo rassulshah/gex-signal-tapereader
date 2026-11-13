@@ -1,4 +1,4 @@
-// SR.cpp (1.1.1, 2026-11-12: independent review - one writer per CHART, run ids over every line, idle candles close; 1.1.0: + the strength grade of a run, SRGradeParams.h; 1.0.0, 2026-11-10) -- lsSR, the "SR" stop-run pane (Rassul 2026-11-10 18:24-18:50 CT, mockup v10
+// SR.cpp (1.1.2, 2026-11-12: no grey lines across the pane; 1.1.1: independent review - one writer per CHART, run ids over every line, idle candles close; 1.1.0: + the strength grade of a run, SRGradeParams.h; 1.0.0, 2026-11-10) -- lsSR, the "SR" stop-run pane (Rassul 2026-11-10 18:24-18:50 CT, mockup v10
 // claude.ai/artifact/EctbmGWXrGd5cWxA7JSGKv; "call the new indicator SR instead of StopRun"). Its own pane on the order feed
 // (off::MboPane, as lsZoneDefense): every order event goes once through onRaw into sr::Engine (SRLogic.h, the ONE copy of the rules,
 // checked against the study: tests_sr2/). Every decision is one journal line (lsFlexLevels\SR\<MKT>-<spb>-<session>.csv, append-only);
@@ -51,7 +51,7 @@
 #include <chrono>
 #include <climits>
 
-#define SR_VERSION "1.1.1"   // = sr::VERSION = the one setVersion literal
+#define SR_VERSION "1.1.2"   // = sr::VERSION = the one setVersion literal
 
 namespace srh {
 // file helpers shared by the two plugins
@@ -343,7 +343,7 @@ public:
         const int top = pane.top + 14, bottom = pane.bottom - 14, mid = (top + bottom) / 2, half = (bottom - top) / 2; if (half < 8) return;
         const double CAP = 8.0, burstX = srp::forMarket(mkt).burstX; const bool drawRev = srp::forMarket(mkt).drawRev != 0; const int gDraw = srg::forMarket(mkt).draw, gStrong = srg::forMarket(mkt).strong;
         const int ppb = std::max(1, (int)getPixelsPerBar()), w = std::max(1, ppb * 6 / 10);
-        { const int yU = mid - (int)(half * burstX / CAP), yD = mid + (int)(half * burstX / CAP); off::fillFlat(this, pane.left, yU, pane.right, yU + 1, srh::C_DIM); off::fillFlat(this, pane.left, yD, pane.right, yD + 1, srh::C_DIM); off::fillFlat(this, pane.left, mid, pane.right, mid + 1, srh::C_DIM); }
+        // (1.1.2, Rassul 2026-11-12 20:58 "remove the gray lines") the three grey lines across the pane (the zero line and the two burst limits) are no longer drawn
         FONT f; f.id = HELVETICA; f.size = 9; f.style = BOLD; setFont(f);
         lab_.clear(); labTop_ = pane.top + 1; labBot_ = pane.bottom - 1;
         const sr::Journal& J = e.jf.J;
@@ -399,6 +399,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
     p->setDescription("LRA SR - stop runs (market-by-order feed). Per candle: the strongest one-second burst of small market orders, buyers up (green) and sellers down (red), as a ratio of the local normal; faded below 2.0x, bright with its ratio at 2.0x on a 5-bar high / low. GOLD with its ratio = a stop run through a key / MenthorQ level. 3/4 = the strength grade of a run through a level once a candle closes back over it (big buyers, big bids filled, 1 ATR deep, a candle of selling beyond the level). Arrow = the candle that closes back across that level (red down = short after a high, green up = long after a low). Gray diamond = the side that ran the stops was pulling its own orders on that candle.");
-    p->setVersion("1.1.1");
+    p->setVersion("1.1.2");
     return p;
 }

@@ -43,7 +43,7 @@
 #include <unordered_map>
 #include <vector>
 namespace sr {
-static const char* const VERSION = "1.1.1";   // 1.1.1 (2026-11-12, independent review): a pending run keeps its own copy of the level; the fill window is a deque; no gold without a normal; capped order maps; a drawn grade never changes
+static const char* const VERSION = "1.1.2";   // 1.1.2 (2026-11-12): host only - no grey lines across the pane (no rule change); 1.1.1 (2026-11-12, independent review): a pending run keeps its own copy of the level; the fill window is a deque; no gold without a normal; capped order maps; a drawn grade never changes
 struct Params {
     double burstX = 2.0, sideX = 2.0, concShare = 0.5, penAtr = 1.6, zoneAtr = 0.25, atrTicks = 0;   // atrTicks 0 = the mean range of the session's closed RTH candles so far
     double bigA = 0, bigP = 0, gShare = 0.03, gDeep = 1.0, gHeavy = 1.0;   // (1.1.0) the grade; bigA / bigP 0 = that sign is off

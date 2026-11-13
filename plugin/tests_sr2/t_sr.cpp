@@ -5,7 +5,7 @@
 //   2 CONTENT: gold stop runs and reversal arrows exist in the slice (the study's cases).
 //   3 NO REPAINT: a restart half way - the journal before it is byte-identical afterwards; the pane draws the same gold bars / arrows.
 //   4 DRAW: gold bar + its ratio drawn, bright bars carry a ratio, nothing outside the pane, no white-pen outline.
-//   5 VERSIONS: SR_VERSION == sr::VERSION == "1.0.0", title "SR v1.1.1".
+//   5 VERSIONS: SR_VERSION == sr::VERSION == "1.0.0", title "SR v1.1.2".
 // Build (tests_sr2/): g++ -std=c++17 -O2 -Wall -Wextra -Wno-misleading-indentation -DOFF_TEST_CLOCK -DPC_TEST_CURSOR -I.. -I../tests_aggbook/mock t_sr.cpp -o t && ./t
 #include "SR.cpp"
 #include <set>
@@ -93,11 +93,11 @@ static void session(const std::string& mkt, const std::string& fx, double tick) 
     CHECK(goldFill >= 1 && texts >= 2 && outside == 0, mkt + " DRAW: gold bars " + std::to_string(goldFill) + ", ratio labels " + std::to_string(texts) + ", outside the pane " + std::to_string(outside) + ", white outlines " + std::to_string(white));
     { struct Bx { int x0, y0, x1, y1; }; std::vector<Bx> tb; int over = 0; for (auto& d : h.draws) if (d.type == "text") { Bx b{ d.x, d.y, d.x + (int)d.text.size() * 6, d.y + 11 }; for (auto& o : tb) if (b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0) ++over; tb.push_back(b); }
       CHECK(over <= 2, mkt + " DRAW: labels do not sit on each other (" + std::to_string(over) + " overlaps of " + std::to_string(tb.size()) + " labels; only a label with no free row inside the pane may)"); }
-    char title[64] = { 0 }; p->parmsTitle(title, sizeof title); CHECK(std::string(title) == "SR v1.1.1", std::string("title '") + title + "'");
+    char title[64] = { 0 }; p->parmsTitle(title, sizeof title); CHECK(std::string(title) == "SR v1.1.2", std::string("title '") + title + "'");
     dispose(p);
 }
 int main() {
-    CHECK(std::string(SR_VERSION) == sr::VERSION && std::string(SR_VERSION) == "1.1.1", "versions");
+    CHECK(std::string(SR_VERSION) == sr::VERSION && std::string(SR_VERSION) == "1.1.2", "versions");
     { int c1 = 0, c2 = 0; void* h1 = nullptr; void* h2 = nullptr; const std::string jp = "/tmp/sr_claim_test.csv";
       CHECK(srh::claim(jp, &c1, h1) && srh::claim(jp, &c1, h1) && !srh::claim(jp, &c2, h2), "one writer per journal: a second chart (another owner) is refused, the owner itself is not");
       srh::unclaim(jp, &c2, h2); CHECK(!srh::claim(jp, &c2, h2), "a chart that is not the owner cannot release the claim"); srh::unclaim(jp, &c1, h1); CHECK(srh::claim(jp, &c2, h2), "released by its owner: the next chart writes"); srh::unclaim(jp, &c2, h2); }
