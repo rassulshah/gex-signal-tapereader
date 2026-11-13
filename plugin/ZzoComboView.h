@@ -174,7 +174,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
     bool boxed = false;
     if (cf && cf->ok) {
         const zcf::Read R = cf->read(); const std::vector<std::pair<std::string, std::string>> rows = readRows(R);
-        const int rh = TH + 2, kw = v.textW("Lvp / Hr"), vw = std::max(v.textW("SR+ AsiaHI LonHI DPoc"), v.textW("Rng 1st Deep Q Hr Room")), bw = std::max(kw + vw + 22, v.textW(head) + 12);
+        const int rh = TH + 2, kw = v.textW("Lvp / Hr"), vw = std::max(v.textW("SR+ AsiaHI LonHI DPoc"), v.textW("Rng 1st Deep Q Hr")), bw = std::max(kw + vw + 22, v.textW(head) + 12);
         const int x0 = v.l + 2, y0 = v.t + 1, fit = std::min((int)rows.size(), (H - 4 - (TH + 4)) / rh);
         if (fit >= 2 && x0 + bw < v.r) {
             boxed = true; const int y1 = y0 + TH + 4 + fit * rh + 2;

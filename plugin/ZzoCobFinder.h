@@ -84,8 +84,8 @@
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.9.0";   // (2.9.0) + the box row "Warn (n)": the warnings a Cob carries; (2.8.2) review fixes: view cache, whole sessions only in the range history; (2.8.1) the box shows Q as a percentage ("67% / 0.6"); (2.8.0) + the day range used: box row "Q / Rng", Hold adjusted by it; (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
-static const char* const VERSION = "1.7.0";         // the finder rule (1.7.0: + the warnings of a Cob (Tag::warn), on the record line; 1.6.0: + day range used, Hold by range, the stop-run level's price on the record line; 1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
+static const char* const COMBO_VERSION = "2.9.1";   // (2.9.1) five warnings: Room merged into Deep (gave back > 0.40), 1st = first 30 minutes or first hour with the hourly not turned; (2.9.0) + the box row "Warn (n)": the warnings a Cob carries; (2.8.2) review fixes: view cache, whole sessions only in the range history; (2.8.1) the box shows Q as a percentage ("67% / 0.6"); (2.8.0) + the day range used: box row "Q / Rng", Hold adjusted by it; (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const VERSION = "1.7.1";         // the finder rule (1.7.1: five warnings, re-checked; 1.7.0: + the warnings of a Cob (Tag::warn), on the record line; 1.6.0: + day range used, Hold by range, the stop-run level's price on the record line; 1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
 static const double MAX_RETR = 0.46;                 // (1.2.0) no longer a Cob requirement: beyond it a Cob is "deep" (its own Hold rate); still the Cob2 limit
@@ -110,12 +110,18 @@ inline int holdWithRng(int hold, int r100) { if (r100 < 0) return hold; const in
 // 17:58 "keep a number next to it also like Warn (3)") six things known when the Cob completes. 1,809 Cobs / Cob2, 392 sessions, 7 markets:
 // the origin held 84% with none, 78% with 1, 61% with 2, 46% with 3, 44% with 4, 17% with 5-6 - the same in both halves of the days.
 // Room and Deep are one measure at two limits (room = 1 - gave back): a deep Cob carries both, as it was counted in the study.
-enum { W_RNG = 1, W_FIRST = 2, W_DEEP = 4, W_Q = 8, W_HR = 16, W_ROOM = 32 };
-static const int NWARN = 6;
-static const char* const WARN_CODE[NWARN] = { "Rng", "1st", "Deep", "Q", "Hr", "Room" };
-static const int WARN_RNG = 50, WARN_FIRST_MIN = 60, WARN_Q = 2, WARN_RED = 3; static const double WARN_ROOM = 0.60;
+// (1.7.1, Rassul 2026-11-12 18:02 "you need to work on the warn because the 1st hour of the RTH initiates most cobs"; 18:06 "double check
+// everything"; 18:07 "go") re-checked on outcomes that give every Cob the same time (origin held the next 2 hours / reached 1.33):
+//   Room and Deep were one measure counted twice -> ONE warning, Deep = gave back more than 0.40 (held 2 h 47% against 80%).
+//   1st: a Cob that only STARTED in the first hour is normal; completed in the first 30 minutes held 2 h 40% (30 Cobs); completed in
+//   minutes 30-59 with the hourly turned 76% (normal, no warning), not turned 48% -> 1st = first 30 minutes, or first hour not turned.
+//   Five warnings, held 2 h: none 89%, 1 81%, 2 68%, 3 51%, 4 32%, 5 38%; one alone is no warning, red stays at 3.
+enum { W_RNG = 1, W_FIRST = 2, W_DEEP = 4, W_Q = 8, W_HR = 16 };   // 32 was Room (1.7.0 records only)
+static const int NWARN = 5;
+static const char* const WARN_CODE[NWARN] = { "Rng", "1st", "Deep", "Q", "Hr" };
+static const int WARN_RNG = 50, WARN_FIRST_MIN = 30, WARN_FIRST_HR_MIN = 60, WARN_Q = 2, WARN_RED = 3; static const double WARN_DEEP = 0.40;
 inline int warnMask(int rng100, int minAfterOpen, double retr, int q, bool hr) {
-    return (rng100 >= 0 && rng100 < WARN_RNG ? W_RNG : 0) | (minAfterOpen < WARN_FIRST_MIN ? W_FIRST : 0) | (retr > MAX_RETR ? W_DEEP : 0) | (q >= 0 && q <= WARN_Q ? W_Q : 0) | (!hr ? W_HR : 0) | (1.0 - retr < WARN_ROOM ? W_ROOM : 0);
+    return (rng100 >= 0 && rng100 < WARN_RNG ? W_RNG : 0) | (minAfterOpen < WARN_FIRST_MIN || (minAfterOpen < WARN_FIRST_HR_MIN && !hr) ? W_FIRST : 0) | (retr > WARN_DEEP ? W_DEEP : 0) | (q >= 0 && q <= WARN_Q ? W_Q : 0) | (!hr ? W_HR : 0);
 }
 inline int warnCount(int m) { int n = 0; for (int i = 0; i < NWARN; ++i) if (m & (1 << i)) ++n; return n; }
 inline std::string warnText(int m) { std::string t; for (int i = 0; i < NWARN; ++i) if (m & (1 << i)) { if (!t.empty()) t += " "; t += WARN_CODE[i]; } return t.empty() ? "none" : t; }
