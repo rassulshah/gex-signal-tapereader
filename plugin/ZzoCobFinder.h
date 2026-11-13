@@ -84,8 +84,8 @@
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.9.4";   // (2.9.4) the pane draws Cob and Lvp tags only (Cmx / AR / ST / Ab logged, not drawn); (2.9.3) Cob2 is no longer shown (tag, its Lvp, read box, SR / CB badges) - recorded only; (2.9.2) price pane: a bearish Cob's SR badge over its candle; (2.9.1) five warnings: Room merged into Deep (gave back > 0.40), 1st = first 30 minutes or first hour with the hourly not turned; (2.9.0) + the box row "Warn (n)": the warnings a Cob carries; (2.8.2) review fixes: view cache, whole sessions only in the range history; (2.8.1) the box shows Q as a percentage ("67% / 0.6"); (2.8.0) + the day range used: box row "Q / Rng", Hold adjusted by it; (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
-static const char* const VERSION = "1.7.1";         // the finder rule (1.7.1: five warnings, re-checked; 1.7.0: + the warnings of a Cob (Tag::warn), on the record line; 1.6.0: + day range used, Hold by range, the stop-run level's price on the record line; 1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
+static const char* const COMBO_VERSION = "2.9.5";   // (2.9.5, Rassul 2026-11-13 14:40-14:42 CT "change the definition of the cob bar, it is basically a big bar that is the biggest in x many green or red bars where x is at least 40 bars", "it is the first green bar in a bullish cob wave and vice versa") the Cob bar = the wave's FIRST bar of its colour, the biggest (range) or heaviest (volume) of the 40+ same-colour bars before it; badge "CB40" / "CB99";   // was "2.9.4":   // (2.9.4) the pane draws Cob and Lvp tags only (Cmx / AR / ST / Ab logged, not drawn); (2.9.3) Cob2 is no longer shown (tag, its Lvp, read box, SR / CB badges) - recorded only; (2.9.2) price pane: a bearish Cob's SR badge over its candle; (2.9.1) five warnings: Room merged into Deep (gave back > 0.40), 1st = first 30 minutes or first hour with the hourly not turned; (2.9.0) + the box row "Warn (n)": the warnings a Cob carries; (2.8.2) review fixes: view cache, whole sessions only in the range history; (2.8.1) the box shows Q as a percentage ("67% / 0.6"); (2.8.0) + the day range used: box row "Q / Rng", Hold adjusted by it; (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const VERSION = "1.7.2";         // the finder rule (1.7.2: the Cob bar is the wave's first bar of its colour and beats 40+ same-colour bars (was: one of the first two, 35+); 1.7.1: five warnings, re-checked; 1.7.0: + the warnings of a Cob (Tag::warn), on the record line; 1.6.0: + day range used, Hold by range, the stop-run level's price on the record line; 1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
 static const double MAX_RETR = 0.46;                 // (1.2.0) no longer a Cob requirement: beyond it a Cob is "deep" (its own Hold rate); still the Cob2 limit
@@ -277,7 +277,7 @@ struct Finder {
         return (10 * dip < 3 * leg) + (hec >= Q_HEC) + (above >= Q_ABOVE) + (first >= Q_FIRST) + (2 * leg >= sum) + (best >= Q_RUN);
     }
     // (1.5.0) how many same-colour bars straight before bar j it beats on range, or on volume (the larger; capped at CB_RANK_CAP)
-    static const int CB_RANK_CAP = 150, CB_MIN_RANK = 35;
+    static const int CB_RANK_CAP = 150, CB_MIN_RANK = 40;   // (1.7.2) was 35
     int cbRankOf(int d, int j) const {
         const FBar& b = F[(size_t)j]; const long long r = b.h - b.l; int nr = 0, nv = 0; bool openR = true, openV = true; int seen = 0;
         for (int i = j - 1; i >= 0 && seen < CB_RANK_CAP && (openR || openV); --i) {
@@ -288,18 +288,21 @@ struct Finder {
         }
         return std::max(nr, nv);
     }
-    // (1.4.0) CB: the index of the Cob bar of the wave io + 1 .. e, or -1; (1.5.0) also by rank 35+, the rank returned in *rank
+    // (1.4.0) CB: the index of the Cob bar of the wave io + 1 .. e, or -1; (1.7.2) the first bar of the wave's colour with rank 40+, the rank returned in *rank
     int cobBar(int d, int io, int e, int* rank = nullptr) const {
         if (rank) *rank = 0;
         if (io < 10 || e <= io || e >= (int)F.size()) return -1;
-        const long long ph = d > 0 ? F[(size_t)io].h : -F[(size_t)io].l; int greens = 0;
-        for (int i = io + 1; i <= e && i <= io + 4 && greens < 2; ++i) {
+        const long long ph = d > 0 ? F[(size_t)io].h : -F[(size_t)io].l;
+        // (1.7.2, Rassul 2026-11-13 14:40-14:42 "the biggest in x many green or red bars where x is at least 40", "it is the first green bar in a
+        // bullish cob wave and vice versa") ONLY the wave's first bar of its colour can be the Cob bar - the origin (pivot) bar itself when it
+        // closed the wave's way, else the first such bar after it, which still has to start inside the pivot bar - and it must be the
+        // biggest (range) or heaviest (volume) of the 40+ same-colour bars before it. A later bar never qualifies.
+        for (int i = io; i <= e; ++i) {
             const FBar& b = F[(size_t)i]; if ((long long)d * (b.c - b.o) <= 0) continue;
-            ++greens; const long long lo = d > 0 ? b.l : -b.h; if (!(lo < ph)) continue;
+            const long long lo = d > 0 ? b.l : -b.h; if (i > io && !(lo < ph)) return -1;
             const int rk = cbRankOf(d, i);
-            // (1.5.1, Rassul 2026-11-12 13:04 "it really should be the biggest green bar in at least 35 green bars to even qualify") the rank
-            // alone decides: the biggest (range) or the heaviest (volume) of the 35+ up bars before it. The 1.5x rule no longer qualifies.
             if (rk >= CB_MIN_RANK) { if (rank) *rank = rk; return i; }
+            return -1;
         }
         return -1;
     }

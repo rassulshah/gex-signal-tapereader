@@ -362,7 +362,7 @@ int ZzoCombo::draw(void) {
                 const zcf::FBar& b = S->F.F[(size_t)j]; const auto a = sr.find(b.t); const auto c = cb.find(b.t); if (a == sr.end() && c == cb.end()) continue;
                 PNT p; p.set(i, 0.0f, kBarCenter); const int yh = (int)getVerticalDrawPosition((float)((double)b.h * S->tick)), yl = (int)getVerticalDrawPosition((float)((double)b.l * S->tick));
                 if (a != sr.end()) { if (a->second > 0) badge("SR", (int)p.h, yl, true, C.up); else badge("SR", (int)p.h, yh - (c != cb.end() ? TH + 2 : 0), false, C.down); }   // (2.9.2, Rassul 18:12 "the bearish SR tab should be on top of the candle") a bullish Cob's stop run under its candle (2.7.1), a bearish one over it - above the CB when both sit on one candle
-                if (c != cb.end()) { const int d = c->second.first, rk = c->second.second; badge(rk >= 99 ? "CB99" : rk >= 35 ? "CB35" : "CB", (int)p.h, yh, false, d > 0 ? C.up : C.down); }   // (2.7.1) always over the candle
+                if (c != cb.end()) { const int d = c->second.first, rk = c->second.second; badge(rk >= 99 ? "CB99" : "CB40",   /* (2.9.5) a Cob bar always beats 40+ same-colour bars */ (int)p.h, yh, false, d > 0 ? C.up : C.down); }   // (2.7.1) always over the candle
             }
             S->last = zzd::ComboScene(); S->last.sr = (int)sr.size(); S->last.cb = (int)cb.size(); S->last.cols = drawn;
             return RTX_OK;
@@ -407,7 +407,7 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #endif
-    p->setDescription("LRA Cob Reader v2.9.4 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.9.4");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Cob Reader v2.9.5 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.9.5");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }
