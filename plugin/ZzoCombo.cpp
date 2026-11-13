@@ -1,6 +1,8 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.9.3  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.9.4  (2026-11-12)
  *
+ *  2.9.4 (Rassul 2026-11-12 20:37 "the cob reader has AB and other signals, it should only have cobs and lvp"): the wave tags Cmx / AR / ST / Ab
+ *  are no longer drawn (status file only); the pane shows Cob and Lvp, the wave counts and the volume ratios.
  *  2.9.3 (Rassul 2026-11-12 18:19 "this cannot be a cob, there is not even a count, and its a small wave", 18:21 "3. yeah lets go with this"):
  *  Cob2 is no longer shown anywhere (pane tag, its Lvp, read box, SR / CB badges); it stays on the record for the nightly review.
  *  2.9.2 (Rassul 2026-11-12 18:12 "the bearish SR tab should be on top of the candle"): price pane - SR over the candle for a bearish Cob.
@@ -405,7 +407,7 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #endif
-    p->setDescription("LRA Cob Reader v2.9.3 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.9.3");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Cob Reader v2.9.4 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.9.4");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

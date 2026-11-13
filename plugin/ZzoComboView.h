@@ -27,6 +27,7 @@ namespace zzd {
 
 static const int COUNT_PAD = 2;                  // (2.1.1) px between the bar's top and the count text inside it
 static const unsigned long OUTLINE = 0x000000;  // (2.1.1) the count's 1 px outline
+static const bool SHOW_WAVE_TAGS = false;   // (2.9.4) Cmx / AR / ST / Ab tags of a wave: logged, not drawn
 struct ComboScene { std::vector<Prim> p; int cols = 0, ratios = 0, counts = 0, countsIn = 0, countsAbove = 0, countsDropped = 0, ab = 0, cmx = 0, ar = 0, st = 0, cob = 0, weak = 0, lvp = 0, cob2 = 0, cb = 0, sr = 0, boxRows = 0, boxL = 0, boxT = 0, boxR = 0, boxB = 0; double hi = 0; std::vector<std::pair<std::string, std::string>> box; };
 
 inline std::string countText(const Wave& w) { if (w.cntCap) return std::to_string(CNT_CAP) + "+"; return std::to_string(w.cnt); }
@@ -139,9 +140,11 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
         }
         if (w.live) continue;   // tags only once the wave is complete
         std::vector<std::pair<std::string, unsigned long>> tags;
-        if (w.cmx) tags.push_back({ "Cmx", up ? C.up : C.down });
-        if (w.cob) tags.push_back({ "AR", up ? C.up : C.down });
-        if (w.st) tags.push_back({ "ST", up ? C.down : C.up });          // the side expected to take over
+        // (2.9.4, Rassul 2026-11-12 20:37 "the cob reader has AB and other signals, it should only have cobs and lvp") Cmx / AR / ST / Ab
+        // are still decided and written to the status file, but no longer drawn: the pane's tags are Cob and Lvp only.
+        if (SHOW_WAVE_TAGS && w.cmx) tags.push_back({ "Cmx", up ? C.up : C.down });
+        if (SHOW_WAVE_TAGS && w.cob) tags.push_back({ "AR", up ? C.up : C.down });
+        if (SHOW_WAVE_TAGS && w.st) tags.push_back({ "ST", up ? C.down : C.up });          // the side expected to take over
         // (2.3.0, Rassul 2026-11-12 CoB finder) the old "CoB after a sweep" tag (cobTag 1) is no longer drawn (status file only); "Cob" and
         // "Lvp" come from zcf::Finder, decided once when the wave completed. Lvp takes its Cob's colour.
         if (cf && w.e >= 0 && (size_t)w.e < E.B.size()) { if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) {
@@ -150,7 +153,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
             if (tg->lvp) { const zcf::Tag* par = cf->find(tg->tCob, tg->lvp); if (zcf::SHOW_COB2 || (par && par->cob)) tags.push_back({ "Lvp", tg->lvp > 0 ? C.up : C.down }); } } }   // (2.9.3) the Lvp of a Cob2 is not drawn
         // (2.1.0, Rassul 14:02 CT "remove weak") cobTag 2 = weak stays in the status file only, never drawn
         double er = 0;
-        if (E.showAb && abHeavy(w) && effortResult(w, er)) { char b[24]; std::snprintf(b, sizeof b, "Ab %.1f", er); tags.push_back({ b, up ? C.down : C.up }); }   // winner's colour
+        if (SHOW_WAVE_TAGS && E.showAb && abHeavy(w) && effortResult(w, er)) { char b[24]; std::snprintf(b, sizeof b, "Ab %.1f", er); tags.push_back({ b, up ? C.down : C.up }); }   // winner's colour
         int lvl = 0;
         for (const auto& tg : tags) {
             const int aw = v.textW(tg.first) + 6; int ax = ci(xm - aw / 2.0); ax = std::max(v.l + 1, std::min(ax, v.r - 1 - aw));

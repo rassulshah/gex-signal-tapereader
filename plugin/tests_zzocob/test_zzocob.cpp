@@ -292,6 +292,7 @@ int main() {
         int cob2T = 0;
         for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT && !inBox(p)) { if (p.text == "Cob2") ++cob2T; if (p.text == "Cob") ++cobT; if (p.text == "Lvp") ++lvpT; if (p.text == "CoB" || p.text == "weak") ++old; }
         CHECK(cobT > 0 && cobT == S1.cob && lvpT == S1.lvp && lvpT > 0, "Cob and Lvp tags drawn and counted"); CHECK(cob2T == S1.cob2, "Cob2 tags drawn and counted");
+        CHECK(!zzd::SHOW_WAVE_TAGS && S1.ab + S1.cmx + S1.ar + S1.st + S1.weak == 0, "(2.9.4) no Ab / Cmx / AR / ST tag is drawn: the pane tags are Cob and Lvp only");
         { int cbT = 0; for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT && !inBox(p) && (p.text == "CB" || p.text == "CB35" || p.text == "CB99")) ++cbT;
           CHECK(cbT == 0 && S1.cb >= 1 && S1.cb <= S1.cob + S1.cob2 && S0.cb == 0, "(2.7.2) CB is counted but never drawn in the pane");
           int srT = 0; for (const zzd::Prim& p : S1.p) if (p.k == zzd::Prim::TEXT && !inBox(p) && p.text == "SR") ++srT; CHECK(srT == 0 && S1.sr >= 1 && S1.sr <= S1.cob + S1.cob2 && S0.sr == 0, "(2.7.2) SR is counted but never drawn in the pane"); }
