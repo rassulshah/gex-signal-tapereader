@@ -269,7 +269,7 @@ int main(int argc, char** argv)
     { std::string d = UP; mkdir(d.c_str(), 0700); }
     for (const char* n : { "MenthorQLevels.csv", "LRA-Levels-ES.csv", "LRA-Touch-ES.csv" }) put(n, slurp(D + "/" + n));
     {   const std::string src = slurp("DealerProfile.cpp");
-        check(std::string(DP_VERSION) == "2.65.1" && src.find("p->setVersion(\"2.65.1\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && slurp("LimitProfile.cpp").find("p->setVersion(\"2.65.1\")") != std::string::npos, "versions 2.65.1 agree (DealerProfile, settings, LimitProfile)"); }
+        check(std::string(DP_VERSION) == "2.65.2" && src.find("p->setVersion(\"2.65.2\")") != std::string::npos && std::string(dprset::PLUGIN_VERSION) == std::string(DP_VERSION) && slurp("LimitProfile.cpp").find("p->setVersion(\"2.65.2\")") != std::string::npos, "versions 2.65.2 agree (DealerProfile, settings, LimitProfile)"); }
     dpGHoldSec() = 0;   // the 2.56.0 scenes below repost within one minute
     dpaudit::statusMinGapSec() = 0;   // (2.65.1) the scenes below read the status right after a draw; the gap has its own scene at the end
     dpOwnFeed() = false;   // (2.63.0) the scenes below feed kind G; the own feed has its own scene at the end
@@ -313,9 +313,9 @@ int main(int argc, char** argv)
     const int lqL = c.lay.levels.l + c.keysW, lqR = c.lay.levels.r;
     std::map<std::string, int> T; for (auto& q : O) if (q.kind == "text" && q.l >= lqL - 2 && q.r <= lqR + 2) T[q.text]++;
 #ifdef DP_LIMIT_NAME
-    check(T.count("LP v2.65.1  LIQUIDITY") == 1 && T.count("DP v2.65.1  LIQUIDITY") == 0, "built as the Limit Profile: the header reads LP v2.65.1");
+    check(T.count("LP v2.65.2  LIQUIDITY") == 1 && T.count("DP v2.65.2  LIQUIDITY") == 0, "built as the Limit Profile: the header reads LP v2.65.1");
 #else
-    check(T.count("DP v2.65.1  LIQUIDITY") == 1, "built under the old name: DP v2.65.1");
+    check(T.count("DP v2.65.2  LIQUIDITY") == 1, "built under the old name: DP v2.65.1");
 #endif
     {   std::string all; for (auto& kv : T) all += "[" + kv.first + "]";
         check(T["900  100% ?"] == 1 && T["500  56%"] == 1 && T["490  54%"] == 1 && T["480  53% S20"] == 1 && T["470  52%"] == 1 && T["455  51% S20"] == 1, "node texts: lots  pct%  [tag] " + all);

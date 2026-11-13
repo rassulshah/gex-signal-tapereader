@@ -160,7 +160,7 @@ static const int DP_KEYS_RW = 170, DP_LQ_RW = 170;   // (2.42.0, Rassul 2026-11-
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.65.1";   // (2.65.1, 2026-11-11 Rassul 11:01 CT "i want it upto 1 atr beyond , so ovh will get it if it is from the ovnh to ovnh+1atr and ovl will get it if it is at ovnl to ovnl-1atr") then 11:02 CT "actually make + or - 1 ATR": a level liquidity row is the biggest real price within 1 ATR either side of its level (was 2 ticks)
+static const char* DP_VERSION = "2.65.2";   // (2.65.2, 2026-11-13 Rassul 10:32 CT: the liquidity lines on the price chart - the bright level stretches and the HELD line - are BLUE (bids) / ORANGE (offers); green / red stay with the hourly trend steps)   // was "2.65.1";   // (2.65.1, 2026-11-11 Rassul 11:01 CT "i want it upto 1 atr beyond , so ovh will get it if it is from the ovnh to ovnh+1atr and ovl will get it if it is at ovnl to ovnl-1atr") then 11:02 CT "actually make + or - 1 ATR": a level liquidity row is the biggest real price within 1 ATR either side of its level (was 2 ticks)
 // was "2.65.0";   // (2.65.0, 2026-11-11 Rassul 08:07-10:10 CT "was there any reason that the lqiuidity profile is ony drawing few nodes", "how about top 10 and any liquidity associated with key levels, volume levels cr0 and ps0", then on the mockup "keep top 3 per side + liquidity near levels"; 08:10 "make the white wiriting black in the green nodes") the Liquidity column keeps the top 3 per side and adds a LEVEL LIQUIDITY row for every key level, volume level, CR0 and PS0 that has real resting size within 2 ticks (TopBook 1.2.0 levelLiq: same real-order filters, any distance, 1.5x the typical level or more; dimmer, no rank, the level's name on it); lot numbers in dark ink on the node
 // was "2.64.0";   // (2.64.0, 2026-11-11 Rassul 00:17 CT "double check why irt is slow and if the limit profile is causing it and if your development in creating it has bugs or is suboptimal" / 00:18 "irt is freezing right now ... i think its the limit profile implementation") PERFORMANCE FIX, nothing drawn changes: (1) the two status files were REPLACED ON EVERY DRAW (the XLINES "drawn" counter of 2.53.0 grew on every repaint, so the "written when its content changes" gate always fired: 2 file creates + 2 renames per repaint, 600+ a minute while he scrolls; PerfGuard: draw 7 ms on Nov 4 -> 10 - 15 ms -> 54 ms / spikes to 7.9 s on Nov 11 00:15 with the disk busy) - a changed status is now written at most once every 5 s (dpaudit::statusMinGapSec, WriteGate) and the counter is per draw again; (2) the status text is not even built inside that gap (it was formatted on every draw); (3) the bright level stretches (2.60.0) converted the time of EVERY visible candle on EVERY draw - now found by bisection (dpaudit::stretchRange: ~25 conversions per stretch); (4) alignContract scanned up to 3,000 candle times on every draw - now once per candle / dealer file.
 // was "2.63.0";   // (2.63.0, 2026-11-10 Rassul 22:16 CT "it needs to read the feed directly") THE LIMIT PROFILE READS THE ORDER FEED ITSELF (LimitFeed.h 1.0.0): its own DEPTH_BY_ORDER per chart + the TopBook engine (the one lsBookFlow runs) -> the top 3 bids / offers without lsBookFlow on the chart; lsBookFlow's kind G is used only until the own feed has its first event (or if it cannot open). Status line OWN_FEED.
@@ -202,6 +202,8 @@ static const COLOR C_WALL  = 0x00E3C341;   // (1.3.9, Rassul 2026-09-30: "yellow
 static const COLOR C_FUEL  = 0x00AB47BC;   // short gamma = PURPLE (Skylit) //   // short gamma: LIME (delta keeps green buy / red sell)
 static const COLOR C_BUY   = 0x0022C55E;   // dealers buy
 static const COLOR C_SELL  = 0x00EF4444;   // dealers sell
+static const COLOR C_LQ_BID = 0x003B82F6;   // (2.65.2, Rassul 2026-11-13 10:32 "instead of green and red, use blue and orange for the lines instead because red and green are for the hourly trend steps") a liquidity line on the chart: bids = BLUE
+static const COLOR C_LQ_ASK = 0x00F59E0B;   // ... offers = ORANGE (the column, the rings and the tags keep green / red)
 static const COLOR C_WHISK = 0x00F8FAFC;   // arrival range
 static const COLOR C_SNAP  = 0x00E5E7EB;   // snapshot outline
 static const COLOR C_INK   = 0x00E5E7EB;
@@ -2410,7 +2412,7 @@ void DealerProfile::flushLines(const Settings& S)
                             int ka = -1, kb = -1; if (!dpaudit::stretchRange(segV0, segV1, endOf, sg.t0, sg.t1, spbS, ka, kb)) continue;
                             PNT pa; pa.set(ka, (float)R.px); PNT pb; pb.set(kb, (float)R.px); const int xa = pa.h, xb = pb.h, hw = segHw;
                             const int la = std::max(a, xa - hw), lb = std::min(b, xb + hw); if (lb - la < 2) continue;
-                        line((short)la, (short)g.y, (short)lb, (short)g.y, sg.bid ? C_BUY : C_SELL, 2); ++cs.gSegDrawn; } } } }
+                        line((short)la, (short)g.y, (short)lb, (short)g.y, sg.bid ? C_LQ_BID : C_LQ_ASK, 2); ++cs.gSegDrawn; } } } }
         }
     }
     // (2.36.0, Rassul 16:26 CT "remove the drawing of levels across the chart") NO level line in the price area: only the badge's short
@@ -2540,7 +2542,7 @@ void DealerProfile::flushLines(const Settings& S)
                 PNT a; a.set(i0, (float)py, kBarCenter); PNT c; c.set(i1, (float)py, kBarCenter);
                 if (a.v <= pane.top + 2 || a.v >= pane.bottom - 2) continue;
                 const int x0 = std::max((int)pane.left + 1, (int)a.h), x1 = std::min(xMax, (int)c.h); if (x1 <= x0) continue;
-                const COLOR lc = g.side > 0 ? C_BUY : C_SELL;
+                const COLOR lc = g.side > 0 ? C_LQ_BID : C_LQ_ASK;   // (2.65.2) the HELD line on the chart: blue / orange
                 {   const HB lb{ x0, (int)a.v - 8, x1, (int)a.v + 8 }; if (hit(lb)) { ++cs.heldSkipped; continue; } used.push_back(lb); }   // (2.50.0, 13:25 CT "look at the number of held lines") one HELD per spot: any other within 8 px over the same candles is skipped
                 line((short)x0, (short)a.v, (short)x1, (short)a.v, lc, 2); ++cs.heldLines;
                 // (2.45.0, Rassul 12:12 CT "held line should mention the lotsize and rank") "HELD 854 #2" (K = the king), frozen at the touch
@@ -2972,6 +2974,6 @@ extern "C" cppExtension *CreateExtension(void)
 #else
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
 #endif
-    p->setVersion("2.65.1");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.65.2");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }
