@@ -1,6 +1,7 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.9.1  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.9.2  (2026-11-12)
  *
+ *  2.9.2 (Rassul 2026-11-12 18:12 "the bearish SR tab should be on top of the candle"): price pane - SR over the candle for a bearish Cob.
  *  2.9.1 (Rassul 2026-11-12 18:02 "work on the warn because the 1st hour of the RTH initiates most cobs", 18:07 "go"): five warnings -
  *  Room merged into Deep (gave back > 0.40); 1st only for a Cob completed in the first 30 minutes, or in the first hour with the hourly not turned.
  *  2.9.0 (Rassul 2026-11-12 17:43 "a line saying warnings which can forecast whether this cob will be a failure"; 17:58 "like Warn (3)"): the
@@ -338,7 +339,7 @@ int ZzoCombo::draw(void) {
     try {
         const long n = getBarCount(); if (n < 2) return RTX_OK;
 #ifdef ZC_MARKS
-        {   // (2.7.0) the price-pane overlay: "SR" UNDER the stop-run candle and "CB" / "CB35" / "CB99" OVER the Cob bar, both in
+        {   // (2.7.0) the price-pane overlay: "SR" under the stop-run candle of a bullish Cob / over it for a bearish one (2.9.2) and "CB" / "CB35" / "CB99" OVER the Cob bar, both in
             // the Cob's colour (2.7.1). Decided by the same finder as the pane; nothing else is drawn.
             RCT pane; pane.getPaneRect(false);
             int vs = 0, ve = (int)n - 1; if (getVisibleBars(&vs, &ve) != RTX_OK) { vs = 0; ve = (int)n - 1; }
@@ -356,7 +357,7 @@ int ZzoCombo::draw(void) {
                 const int j = i - S->off; if (j < 0 || j >= (int)S->F.F.size()) continue;
                 const zcf::FBar& b = S->F.F[(size_t)j]; const auto a = sr.find(b.t); const auto c = cb.find(b.t); if (a == sr.end() && c == cb.end()) continue;
                 PNT p; p.set(i, 0.0f, kBarCenter); const int yh = (int)getVerticalDrawPosition((float)((double)b.h * S->tick)), yl = (int)getVerticalDrawPosition((float)((double)b.l * S->tick));
-                if (a != sr.end()) badge("SR", (int)p.h, yl, true, a->second > 0 ? C.up : C.down);   // (2.7.1, Rassul 13:00 "the stoprun badge goes under the bar") always under the candle
+                if (a != sr.end()) { if (a->second > 0) badge("SR", (int)p.h, yl, true, C.up); else badge("SR", (int)p.h, yh - (c != cb.end() ? TH + 2 : 0), false, C.down); }   // (2.9.2, Rassul 18:12 "the bearish SR tab should be on top of the candle") a bullish Cob's stop run under its candle (2.7.1), a bearish one over it - above the CB when both sit on one candle
                 if (c != cb.end()) { const int d = c->second.first, rk = c->second.second; badge(rk >= 99 ? "CB99" : rk >= 35 ? "CB35" : "CB", (int)p.h, yh, false, d > 0 ? C.up : C.down); }   // (2.7.1) always over the candle
             }
             S->last = zzd::ComboScene(); S->last.sr = (int)sr.size(); S->last.cb = (int)cb.size(); S->last.cols = drawn;
@@ -402,7 +403,7 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #endif
-    p->setDescription("LRA Cob Reader v2.9.1 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.9.1");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Cob Reader v2.9.2 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.9.2");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }
