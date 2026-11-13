@@ -64,7 +64,7 @@
 #include <unordered_map>
 #include <vector>
 namespace rvs {
-static const char* const VERSION = "0.5.0";   // (0.5.0, Rassul 2026-11-13 07:05 "ok build": the overnight check - after C / A the extreme held 30 min 21% on ES against 19% for any new extreme, the letters sat at 5% of the real turns, 2% in RTH; initiation held 45%) + CONFIRMATION (07:09 "the climax waits for the confirmation"): a story's letters appear only once one of the 2 candles after the climax candle closes beyond its close the story's way (a green bar after a selling climax; "K" lines; initiation confirms by itself); + LEVEL-START stories: a new 3-minute extreme AT a level with the attackers on top starts a story without a climax (recorded only, "T" lines, ids from 100001; shown when the nightly writes LEVEL_SHOW 1); "Stop run of <level>" is now "Flush through <level>" (one stop-run definition: lsSR's); the host draws C / A / E quietly and I bright;   // was "0.4.2":   // (0.4.2) host only: the POC fill starts at the newest 6000 candles (no rule change); (0.4.1) the hourly chart: lsRevReadMarks draws the hold dots on 60-minute candles by itself (no rule changed here);   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
+static const char* const VERSION = "0.6.0";   // (0.6.0, Rassul 2026-11-13 11:39-11:53 "show the buy volume and sell volume ... pocs, bid poc ask poc and delta poc ... in the background", "show the biggest in value if the value is 10 or higher", "just focus on the reversal behaviors and make it readable", "the new read will be on the right", "add a period like 1. 2.", "when i move the mouse in the indicator pane, it shows the value that i am hovering over ... default is ... the last bar", "go build"): the pane draws each candle's BUY and SELL volume side by side (no values on top; a number only where the bar is the biggest in 10+ candles of its session); the read = numbered behaviour steps, in the empty space right of the last candle, for the candle under the mouse (default the newest story); "V" lines record buy / sell / bid POC / ask POC / delta POC / max - min delta per candle (not drawn); no rule of the letters changed;   // was "0.5.0":   // (0.5.0, Rassul 2026-11-13 07:05 "ok build": the overnight check - after C / A the extreme held 30 min 21% on ES against 19% for any new extreme, the letters sat at 5% of the real turns, 2% in RTH; initiation held 45%) + CONFIRMATION (07:09 "the climax waits for the confirmation"): a story's letters appear only once one of the 2 candles after the climax candle closes beyond its close the story's way (a green bar after a selling climax; "K" lines; initiation confirms by itself); + LEVEL-START stories: a new 3-minute extreme AT a level with the attackers on top starts a story without a climax (recorded only, "T" lines, ids from 100001; shown when the nightly writes LEVEL_SHOW 1); "Stop run of <level>" is now "Flush through <level>" (one stop-run definition: lsSR's); the host draws C / A / E quietly and I bright;   // was "0.4.2":   // (0.4.2) host only: the POC fill starts at the newest 6000 candles (no rule change); (0.4.1) the hourly chart: lsRevReadMarks draws the hold dots on 60-minute candles by itself (no rule changed here);   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum { BID = 0, ASK = 1 };                    // the feed's side codes (resting bids / offers; on a FILL: BID = the aggressor BOUGHT)
 enum { BUY = 0, SELL = 1 };                   // aggressor sides
@@ -170,13 +170,33 @@ inline Hold holdOf(const std::vector<Cnd>& c, size_t j) {
 }
 // ---- the candle POC ----
 struct VRow { long long tick = 0, vol = 0, dlt = 0; };
-struct Poc { long long t = 0; long long tick = 0, vol = 0, dlt = 0, total = 0; double pos = 0.5, closePos = 0.5; bool ok = false; long long cdlt = 0, lo = 0, hi = 0, close = 0; long long open = 0; };   // (0.5.0) open in ticks, 0 = not known   // (0.2.0) cdlt = the candle's delta; lo / hi / close in ticks   // pos: 0 = at the low .. 1 = at the high
+struct Poc { long long t = 0; long long tick = 0, vol = 0, dlt = 0, total = 0; double pos = 0.5, closePos = 0.5; bool ok = false; long long cdlt = 0, lo = 0, hi = 0, close = 0; long long open = 0;
+    long long buy = 0, sell = 0, bidPoc = 0, bidPocVol = 0, askPoc = 0, askPocVol = 0, dPoc = 0, dPocDlt = 0, maxD = 0, minD = 0, sess = 0; int bbv = 0, bsv = 0; };   // (0.6.0) the candle's buy / sell lots; bid POC = the price most was SOLD at, ask POC = most BOUGHT at, delta POC = the biggest |delta| row; sess = its session as yyyymmdd; bbv / bsv = its buy / sell volume is the biggest in that many candles of its session   // (0.5.0) open in ticks, 0 = not known   // (0.2.0) cdlt = the candle's delta; lo / hi / close in ticks   // pos: 0 = at the low .. 1 = at the high
 inline Poc pocOf(long long tEnd, const std::vector<VRow>& rows, long long lo, long long hi, long long close) {
     Poc p; p.t = tEnd; p.lo = lo; p.hi = hi; p.close = close;
-    for (const VRow& r : rows) { if (r.vol <= 0) continue; p.total += r.vol; p.cdlt += r.dlt; if (!p.ok || r.vol > p.vol || (r.vol == p.vol && r.tick < p.tick)) { p.ok = true; p.tick = r.tick; p.vol = r.vol; p.dlt = r.dlt; } }
+    for (const VRow& r : rows) { if (r.vol <= 0) continue; p.total += r.vol; p.cdlt += r.dlt; if (!p.ok || r.vol > p.vol || (r.vol == p.vol && r.tick < p.tick)) { p.ok = true; p.tick = r.tick; p.vol = r.vol; p.dlt = r.dlt; }
+        const long long bv = (r.vol + r.dlt) / 2, sv = (r.vol - r.dlt) / 2; p.buy += bv; p.sell += sv;   // (0.6.0)
+        if (bv > p.askPocVol || (bv == p.askPocVol && bv > 0 && r.tick < p.askPoc)) { p.askPocVol = bv; p.askPoc = r.tick; }
+        if (sv > p.bidPocVol || (sv == p.bidPocVol && sv > 0 && r.tick < p.bidPoc)) { p.bidPocVol = sv; p.bidPoc = r.tick; }
+        const long long ad = r.dlt < 0 ? -r.dlt : r.dlt, pd = p.dPocDlt < 0 ? -p.dPocDlt : p.dPocDlt; if (ad > pd || (ad == pd && ad > 0 && r.tick < p.dPoc)) { p.dPocDlt = r.dlt; p.dPoc = r.tick; } }
     if (p.ok && hi > lo) { p.pos = (double)(p.tick - lo) / (double)(hi - lo); p.closePos = (double)(close - lo) / (double)(hi - lo); p.pos = p.pos < 0 ? 0 : p.pos > 1 ? 1 : p.pos; }
     return p;
 }
+// (0.6.0) "biggest in": how many candles back (this one counted) until one with at least as much buy / sell volume, inside its own session.
+// prev = the candles before p, any order of sessions, keyed by candle end.
+inline void biggestIn(const std::map<long long, Poc>& prev, Poc& p) {
+    p.bbv = p.bsv = 1; bool db = false, ds = false;
+    for (auto it = prev.rbegin(); it != prev.rend() && !(db && ds); ++it) { const Poc& q = it->second; if (q.t >= p.t) continue; if (q.sess != p.sess) break; if (!q.ok) continue;
+        if (!db) { if (q.buy >= p.buy) db = true; else ++p.bbv; }
+        if (!ds) { if (q.sell >= p.sell) ds = true; else ++p.bsv; } }
+}
+// (0.6.0) the candle's background record line (never drawn): V|version|candle end|buy|sell|bid POC px lots|ask POC px lots|delta POC px delta|POC px lots|max delta|min delta|bbv|bsv
+inline std::string vLine(const Poc& p, double tick) {
+    char b[400]; std::snprintf(b, sizeof b, "V|%s|%lld|%lld|%lld|bidpoc %.10g %lld|askpoc %.10g %lld|dpoc %.10g %lld|poc %.10g %lld|maxd %lld|mind %lld|bbv %d|bsv %d", VERSION, p.t, p.buy, p.sell,
+        (double)p.bidPoc * tick, p.bidPocVol, (double)p.askPoc * tick, p.askPocVol, (double)p.dPoc * tick, p.dPocDlt, (double)p.tick * tick, p.vol, p.maxD, p.minD, p.bbv, p.bsv); return b;
+}
+inline long long sessId(const std::string& s) { long long v = 0; int n = 0; for (char c : s) if (c >= '0' && c <= '9') { v = v * 10 + (c - '0'); ++n; } return n == 8 ? v : 0; }   // "2026-11-13" -> 20261113
+inline long long lastV(const std::vector<std::string>& lines) { long long m = 0; for (const std::string& l : lines) { if (l.size() < 4 || l[0] != 'V' || l[1] != '|') continue; const size_t a = l.find('|', 2); if (a == std::string::npos) continue; const long long c = std::strtoll(l.c_str() + a + 1, nullptr, 10); if (c > m) m = c; } return m; }
 // the POC gate of a climax candle: bottom story (sell climax) = POC in the lower third and the close at / above it; top story = the mirror
 inline bool pocGate(const Poc& p, bool bottom, long long close) { if (!p.ok) return false; return bottom ? (p.pos <= 1.0 / 3.0 + 1e-9 && close >= p.tick) : (p.pos >= 2.0 / 3.0 - 1e-9 && close <= p.tick); }
 
@@ -219,7 +239,7 @@ struct Engine {
     Block cur; std::deque<Block> hist; std::deque<long long> base; double p95 = 0;
     long long aggrId = 0, aggrLots = 0; int aggrSide = -1;
     // stories: [0] bottom (sell climax), [1] top (buy climax)
-    Story st[2]; bool live[2] = { false, false }; int nextId = 1, nextLvlId = 100001; std::vector<Story> ended;
+    Story st[2]; bool live[2] = { false, false }; int nextId = 1, nextLvlId = 100001; std::vector<Story> ended; long long lastV = 0;   // (0.6.0) lastV = the newest candle whose "V" line is in the record
     std::vector<std::pair<long long, std::string> > levels;         // key / volume / gamma levels and VWAP (ticks, name), from the host
     std::string clock;                                              // the Central wall clock of the newest event ("2026-11-11 20:43:20"), from the host: written on every record line for the nightly
     Ctx ctx; std::vector<std::string> out;                          // record lines (the host appends them to the session file)
@@ -471,6 +491,25 @@ struct Engine {
         if (s) return s;
         for (auto it = ended.rbegin(); it != ended.rend(); ++it) if (it->shown && it->tA > 0 && nowMs - it->tEnd <= 1000LL * keepSec) return &*it;
         return nullptr; }
+    // (0.6.0) the story that covers a candle (the mouse over it): the newest shown story that started by the candle's end and was still going in it
+    const Story* storyAt(long long candleEnd, int spb) const {
+        const long long a = (candleEnd - spb) * 1000, b = candleEnd * 1000; const Story* s = nullptr;
+        for (int k = 0; k < 2; ++k) if (live[k] && st[k].shown && st[k].t0 <= b && (!s || st[k].t0 > s->t0)) s = &st[k];
+        for (const Story& q : ended) if (q.shown && q.tA > 0 && q.t0 <= b && q.tEnd >= a && (!s || q.t0 > s->t0)) s = &q;
+        return s; }
+    // (0.6.0) the read as numbered behaviour steps, plain words, ratios not lots; nothing but the reversal behaviours (no context, no pending steps)
+    std::vector<Seg> readSteps(const Story& s) const {
+        std::vector<Seg> L; const bool bt = s.bottom; const int a = bt ? -1 : 1, d = bt ? 1 : -1; char b[96];
+        auto add = [&](const std::string& t, int c) { Seg g; g.text = std::to_string(L.size() + 1) + ". " + t; g.col = c; L.push_back(g); };
+        if (s.kind == 1) add((bt ? "Sellers test " : "Buyers test ") + s.ctx.level, a);
+        else if (s.p95 > 0) { std::snprintf(b, sizeof b, "%s climax %.1fx", bt ? "Sellers" : "Buyers", (double)s.burst / s.p95); add(b, a); }
+        else add(bt ? "Sellers climax" : "Buyers climax", a);
+        if (s.step >= S_ABSORBED) { std::snprintf(b, sizeof b, "Absorbed %.1fx at %.10g", s.absR, (double)s.anchor * tick); add(b, d); }
+        if (s.fading) add(bt ? "Selling fading" : "Buying fading", d);
+        if (s.tE > 0) add(std::string(bt ? "Thin push lower" : "Thin push higher") + (s.sweep.empty() ? std::string() : " through " + s.sweep), 2);
+        if (s.step >= S_INIT) add(bt ? "Buyers took over" : "Sellers took over", d);
+        else if (s.end != E_OPEN) add(endName(s.end), 0);
+        return L; }
     static std::string lots(long long v) { return std::to_string(v); }
     std::vector<Seg> readLine(const Story& s) const {
         std::vector<Seg> L; const bool bt = s.bottom; const int a = bt ? -1 : 1, d = bt ? 1 : -1;   // attackers' colour / defenders' colour
@@ -508,6 +547,21 @@ inline std::vector<PBar> layoutBars(const std::vector<std::pair<int, Poc> >& c, 
     for (const auto& p : c) { if (!p.second.ok) continue; PBar b; b.x = p.first; b.w = w; b.bottom = bot; b.top = bot - std::max(1, (int)std::lround((double)(bot - top) * (double)p.second.vol / (double)mx));
         b.col = p.second.dlt > 0 ? 1 : p.second.dlt < 0 ? -1 : 0; if (nums) b.num = std::to_string(p.second.vol); b.numY = b.top - textH - 1; b.letY = b.numY - textH;
         const auto m = marks.find(p.second.t); if (m != marks.end()) b.marks = m->second; out.push_back(b); }
+    return out;
+}
+// ---- (0.6.0) the buy / sell layout (pure): two bars per visible candle, buy left (green), sell right (red); no values; nB / nS = the
+// "biggest in" count when it is minN or more (else 0), drawn over that bar; the letters above
+struct BSBar { int x = 0, w = 0, bottom = 0, topB = 0, topS = 0, nB = 0, nS = 0, numYB = 0, numYS = 0; std::vector<Mark> marks; int letY = 0; long long t = 0; };
+inline std::vector<BSBar> layoutBS(const std::vector<std::pair<int, Poc> >& c, const std::map<long long, std::vector<Mark> >& marks, int paneTop, int paneBottom, int textH, double bw, int headH, int minN = 10) {
+    std::vector<BSBar> out; long long mx = 0; for (const auto& p : c) if (p.second.ok) mx = std::max(mx, std::max(p.second.buy, p.second.sell));
+    const int top = paneTop + headH + 2 * textH + 4, bot = paneBottom - 2; if (mx <= 0 || bot - top < 6) return out;
+    const int w = std::max(1, (int)std::lround(bw * 0.36));
+    for (const auto& p : c) { const Poc& q = p.second; if (!q.ok) continue; BSBar b; b.x = p.first; b.w = w; b.bottom = bot; b.t = q.t;
+        b.topB = bot - (q.buy > 0 ? std::max(1, (int)std::lround((double)(bot - top) * (double)q.buy / (double)mx)) : 0);
+        b.topS = bot - (q.sell > 0 ? std::max(1, (int)std::lround((double)(bot - top) * (double)q.sell / (double)mx)) : 0);
+        b.nB = q.bbv >= minN ? q.bbv : 0; b.nS = q.bsv >= minN ? q.bsv : 0; b.numYB = b.topB - textH - 1; b.numYS = b.topS - textH - 1;
+        b.letY = std::min(b.nB ? b.numYB : b.topB - 1, b.nS ? b.numYS : b.topS - 1) - textH;
+        const auto m = marks.find(q.t); if (m != marks.end()) b.marks = m->second; out.push_back(b); }
     return out;
 }
 } // namespace rvs
