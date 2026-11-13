@@ -1,6 +1,8 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.9.2  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.9.3  (2026-11-12)
  *
+ *  2.9.3 (Rassul 2026-11-12 18:19 "this cannot be a cob, there is not even a count, and its a small wave", 18:21 "3. yeah lets go with this"):
+ *  Cob2 is no longer shown anywhere (pane tag, its Lvp, read box, SR / CB badges); it stays on the record for the nightly review.
  *  2.9.2 (Rassul 2026-11-12 18:12 "the bearish SR tab should be on top of the candle"): price pane - SR over the candle for a bearish Cob.
  *  2.9.1 (Rassul 2026-11-12 18:02 "work on the warn because the 1st hour of the RTH initiates most cobs", 18:07 "go"): five warnings -
  *  Room merged into Deep (gave back > 0.40); 1st only for a Cob completed in the first 30 minutes, or in the first hour with the hourly not turned.
@@ -344,7 +346,7 @@ int ZzoCombo::draw(void) {
             RCT pane; pane.getPaneRect(false);
             int vs = 0, ve = (int)n - 1; if (getVisibleBars(&vs, &ve) != RTX_OK) { vs = 0; ve = (int)n - 1; }
             std::map<long long, int> sr; std::map<long long, std::pair<int, int>> cb;
-            for (const auto& kv : S->F.tags) { const zcf::Tag& t = kv.second; const int d = t.cob ? t.cob : t.cob2; if (!d) continue; if (t.tSr) sr[t.tSr] = d; if (t.tCb) cb[t.tCb] = std::make_pair(d, t.cbRank); }
+            for (const auto& kv : S->F.tags) { const zcf::Tag& t = kv.second; const int d = t.cob ? t.cob : zcf::SHOW_COB2 ? t.cob2 : 0; if (!d) continue; if (t.tSr) sr[t.tSr] = d; if (t.tCb) cb[t.tCb] = std::make_pair(d, t.cbRank); }
             if (sr.empty() && cb.empty()) return RTX_OK;
             FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD; setFont(fb); const zzd::Colours C; const int TH = 12;
             const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom; int drawn = 0;
@@ -403,7 +405,7 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #endif
-    p->setDescription("LRA Cob Reader v2.9.2 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.9.2");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Cob Reader v2.9.3 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.9.3");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

@@ -79,7 +79,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
     { Prim p; p.k = Prim::FILL; p.x0 = v.l; p.x1 = v.r; p.y0 = p.y1 = bot; p.col = C.zero; S.p.push_back(p); }
     // (2.7.0) the stop-run bars of the visible Cobs / Cob2s: bar time -> the Cob's direction
     std::map<long long, int> srAt;
-    if (cf) for (const Wave& w : waves) { if (w.live || w.e < 0 || (size_t)w.e >= E.B.size()) continue; if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) if (tg->tSr && (tg->cob || tg->cob2)) srAt[tg->tSr] = tg->cob ? tg->cob : tg->cob2; }
+    if (cf) for (const Wave& w : waves) { if (w.live || w.e < 0 || (size_t)w.e >= E.B.size()) continue; if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) if (tg->tSr && (tg->cob || (tg->cob2 && zcf::SHOW_COB2))) srAt[tg->tSr] = tg->cob ? tg->cob : tg->cob2; }
     std::vector<Prim> over;   // (2.0.1) every label and tag, drawn after ALL columns so a neighbouring wave never covers them
     std::vector<std::vector<std::pair<int, int>>> levels;
     for (const Wave& w : waves) {
@@ -146,8 +146,8 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
         // "Lvp" come from zcf::Finder, decided once when the wave completed. Lvp takes its Cob's colour.
         if (cf && w.e >= 0 && (size_t)w.e < E.B.size()) { if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) {
             if (tg->cob) tags.push_back({ "Cob", tg->cob > 0 ? C.up : C.down });
-            if (tg->cob2) tags.push_back({ "Cob2", tg->cob2 > 0 ? C.up : C.down });
-            if (tg->lvp) tags.push_back({ "Lvp", tg->lvp > 0 ? C.up : C.down }); } }
+            if (tg->cob2 && zcf::SHOW_COB2) tags.push_back({ "Cob2", tg->cob2 > 0 ? C.up : C.down });
+            if (tg->lvp) { const zcf::Tag* par = cf->find(tg->tCob, tg->lvp); if (zcf::SHOW_COB2 || (par && par->cob)) tags.push_back({ "Lvp", tg->lvp > 0 ? C.up : C.down }); } } }   // (2.9.3) the Lvp of a Cob2 is not drawn
         // (2.1.0, Rassul 14:02 CT "remove weak") cobTag 2 = weak stays in the status file only, never drawn
         double er = 0;
         if (E.showAb && abHeavy(w) && effortResult(w, er)) { char b[24]; std::snprintf(b, sizeof b, "Ab %.1f", er); tags.push_back({ b, up ? C.down : C.up }); }   // winner's colour

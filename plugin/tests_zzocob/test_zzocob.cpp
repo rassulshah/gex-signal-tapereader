@@ -169,8 +169,8 @@ int main() {
         {   Rig R; const long long tw = q(R, 4992, 5010, 0); R.judge(2, 2); const zcf::Tag* t = R.F.find(tw, 1);
             CHECK(t && t->cob2 == 1 && !t->cob && t->lv == 0 && R.F.out.size() == 1 && R.F.out[0].rfind("Q|1.7.1|", 0) == 0, "Cob2: a quiet turn with count 2 and no level");
             CHECK(R.F.act.size() == 1, "a Cob2 is open for its Lvp"); const zcf::Read rd = R.F.read();
-            CHECK(rd.any && rd.kind == 2 && rd.dir == 1 && rd.lvpSt == 0 && rd.hold == zcf::HOLD_COB2[QB(rd.q)][0], "the read: Cob2, Lvp still possible");
-            const auto rows = zzd::readRows(rd); CHECK(rows.size() == 6 && rows[0].first == "Cob2" && rows[0].second.rfind("Up ", 0) == 0 && rows[1].second == "-" && rows[3].second.rfind("wait / ", 0) == 0, "Cob2 rows: no SR+ without a swept level"); }
+            CHECK(!zcf::SHOW_COB2 && !rd.any, "(2.9.3) a Cob2 is recorded but the read box never shows it");
+            const auto rows = zzd::readRows(rd); CHECK(rows.size() == 6 && rows[0].first == "Cob" && rows[0].second == "-", "(2.9.3) the box stays empty after a Cob2"); }
         {   Rig R; const long long tw = q(R, 4990, 5010, 0); R.F.F[29].c = 4990; R.judge(2, 2); CHECK(!R.F.find(tw, 1), "no Cob2: no close above the extreme bar's high within 2 bars"); }
         {   Rig R; const long long tw = q(R, 4992, 5002, 0); R.judge(2, 2); CHECK(!R.F.find(tw, 1), "no Cob2: the completing close is not above the 10 bars before the extreme"); }
         {   Rig R; const long long tw = q(R, 4992, 5010, -60); R.judge(2, 2); CHECK(!R.F.find(tw, 1), "no Cob2: under 60 minutes after the open"); }
