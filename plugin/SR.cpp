@@ -1,4 +1,4 @@
-// SR.cpp (1.1.2, 2026-11-12: no grey lines across the pane; 1.1.1: independent review - one writer per CHART, run ids over every line, idle candles close; 1.1.0: + the strength grade of a run, SRGradeParams.h; 1.0.0, 2026-11-10) -- lsSR, the "SR" stop-run pane (Rassul 2026-11-10 18:24-18:50 CT, mockup v10
+// SR.cpp (1.1.3, 2026-11-13 Rassul 10:30 "remove the 3/4, it is too noisy": the strength grade ("3/4?") is no longer drawn - still graded and recorded; 1.1.2, 2026-11-12: no grey lines across the pane; 1.1.1: independent review - one writer per CHART, run ids over every line, idle candles close; 1.1.0: + the strength grade of a run, SRGradeParams.h; 1.0.0, 2026-11-10) -- lsSR, the "SR" stop-run pane (Rassul 2026-11-10 18:24-18:50 CT, mockup v10
 // claude.ai/artifact/EctbmGWXrGd5cWxA7JSGKv; "call the new indicator SR instead of StopRun"). Its own pane on the order feed
 // (off::MboPane, as lsZoneDefense): every order event goes once through onRaw into sr::Engine (SRLogic.h, the ONE copy of the rules,
 // checked against the study: tests_sr2/). Every decision is one journal line (lsFlexLevels\SR\<MKT>-<spb>-<session>.csv, append-only);
@@ -51,7 +51,8 @@
 #include <chrono>
 #include <climits>
 
-#define SR_VERSION "1.1.2"   // = sr::VERSION = the one setVersion literal
+#define SR_VERSION "1.1.3"
+static const bool SR_DRAW_GRADE = false;   // (1.1.3, Rassul 2026-11-13 10:30 "remove the 3/4, it is too noisy") the grade text is not drawn; the grade is still decided, recorded and scored nightly   // = sr::VERSION = the one setVersion literal
 
 namespace srh {
 // file helpers shared by the two plugins
@@ -365,7 +366,7 @@ public:
                 if (g->second.side > 0) { off::fillFlat(this, x0, mid - h, x0 + w, mid, C_GOLD); label(t, cx, mid - h - 12, C_GOLD, -1); hU = std::max(hU, h); ratU = true; }
                 else { off::fillFlat(this, x0, mid + 1, x0 + w, mid + 1 + h, C_GOLD); label(t, cx, mid + h + 2, C_GOLD, 1); hD = std::max(hD, h); ratD = true; }
             }
-            if (gDraw > 0) for (int sd = 1; sd >= -1; sd -= 2) {           // (1.1.0) the strength grade of the run through a level on this candle: one text row outside the ratio
+            if (SR_DRAW_GRADE && gDraw > 0) for (int sd = 1; sd >= -1; sd -= 2) {           // (1.1.0) the strength grade of the run through a level on this candle: one text row outside the ratio
                 const sr::JGrade* q = J.gradeAt(k, sd); if (!q) continue;
                 const bool isGold = g != J.gold.end() && g->second.side == sd; if (!isGold && q->score < gStrong) continue;
                 char t[16]; std::snprintf(t, sizeof t, "%d/4%s", q->score, gDraw == 1 ? "?" : "");
@@ -399,6 +400,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
     p->setDescription("LRA SR - stop runs (market-by-order feed). Per candle: the strongest one-second burst of small market orders, buyers up (green) and sellers down (red), as a ratio of the local normal; faded below 2.0x, bright with its ratio at 2.0x on a 5-bar high / low. GOLD with its ratio = a stop run through a key / MenthorQ level. 3/4 = the strength grade of a run through a level once a candle closes back over it (big buyers, big bids filled, 1 ATR deep, a candle of selling beyond the level). Arrow = the candle that closes back across that level (red down = short after a high, green up = long after a low). Gray diamond = the side that ran the stops was pulling its own orders on that candle.");
-    p->setVersion("1.1.2");
+    p->setVersion("1.1.3");
     return p;
 }
