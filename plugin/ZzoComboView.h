@@ -45,7 +45,7 @@ inline std::string lvShort(int mask, int dir, int maxN = 3) {
 }
 inline std::vector<std::pair<std::string, std::string>> readRows(const zcf::Read& R) {
     std::vector<std::pair<std::string, std::string>> r;
-    if (!R.any) { r.push_back({ "Cob", "-" }); r.push_back({ "Lvl", "-" }); r.push_back({ "Q / Rng", "-" }); r.push_back({ "Lvp / Hr", "-" }); r.push_back({ "Hold", "-" }); return r; }
+    if (!R.any) { r.push_back({ "Cob", "-" }); r.push_back({ "Lvl", "-" }); r.push_back({ "Q / Rng", "-" }); r.push_back({ "Lvp / Hr", "-" }); r.push_back({ "Hold", "-" }); r.push_back({ "Warn", "-" }); return r; }
     char b[48];
     r.push_back({ R.kind == 2 ? "Cob2" : "Cob", std::string(R.dir > 0 ? "Up " : "Dn ") + clock12(R.tCf) });
     r.push_back({ "Lvl", lvShort(R.lv, R.dir) });
@@ -54,6 +54,7 @@ inline std::vector<std::pair<std::string, std::string>> readRows(const zcf::Read
       r.push_back({ "Q / Rng", std::string(b) + " / " + g }); }
     r.push_back({ "Lvp / Hr", std::string(R.lvpSt == 1 ? "yes" : R.lvpSt == 2 ? "no" : "wait") + " / " + (R.hr ? "yes" : "no") });
     std::snprintf(b, sizeof b, "%d%%", R.hold); r.push_back({ "Hold", b });
+    std::snprintf(b, sizeof b, "Warn (%d)", zcf::warnCount(R.warn)); r.push_back({ b, zcf::warnText(R.warn) });   // (2.9.0) the warnings it carries; red at WARN_RED
     return r;
 }
 
@@ -173,7 +174,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
     bool boxed = false;
     if (cf && cf->ok) {
         const zcf::Read R = cf->read(); const std::vector<std::pair<std::string, std::string>> rows = readRows(R);
-        const int rh = TH + 2, kw = v.textW("Lvp / Hr"), vw = v.textW("SR+ AsiaHI LonHI DPoc"), bw = std::max(kw + vw + 22, v.textW(head) + 12);
+        const int rh = TH + 2, kw = v.textW("Lvp / Hr"), vw = std::max(v.textW("SR+ AsiaHI LonHI DPoc"), v.textW("Rng 1st Deep Q Hr Room")), bw = std::max(kw + vw + 22, v.textW(head) + 12);
         const int x0 = v.l + 2, y0 = v.t + 1, fit = std::min((int)rows.size(), (H - 4 - (TH + 4)) / rh);
         if (fit >= 2 && x0 + bw < v.r) {
             boxed = true; const int y1 = y0 + TH + 4 + fit * rh + 2;
@@ -185,7 +186,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
                 const int y = y0 + TH + 4 + i * rh; const int w2 = v.textW(rows[(size_t)i].second);
                 Prim k; k.k = Prim::TEXT; k.x0 = x0 + 6; k.x1 = k.x0 + v.textW(rows[(size_t)i].first); k.y0 = y; k.y1 = y + TH; k.col = C.grey; k.text = rows[(size_t)i].first; S.p.push_back(k);
                 Prim q; q.k = Prim::TEXT; q.x1 = x0 + bw - 6; q.x0 = q.x1 - w2; q.y0 = y; q.y1 = y + TH; q.text = rows[(size_t)i].second;
-                q.col = (i == 0 && R.any) ? (R.dir > 0 ? C.up : C.down) : white; S.p.push_back(q);
+                q.col = (i == 0 && R.any) ? (R.dir > 0 ? C.up : C.down) : (R.any && rows[(size_t)i].first.rfind("Warn", 0) == 0 && zcf::warnCount(R.warn) >= zcf::WARN_RED) ? C.down : white; S.p.push_back(q);
                 S.box.push_back(rows[(size_t)i]);
             }
             S.boxRows = fit; S.boxL = x0; S.boxT = y0; S.boxR = x0 + bw; S.boxB = y1;

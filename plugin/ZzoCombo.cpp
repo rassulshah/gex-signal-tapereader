@@ -1,6 +1,8 @@
 /********************************************************************************
- *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.8.2  (2026-11-12)
+ *  ZzoCombo.cpp  --  Investor/RT RTX extension  lsZzoCombo  "Cob Reader" (was "ZZO Combo")  2.9.0  (2026-11-12)
  *
+ *  2.9.0 (Rassul 2026-11-12 17:43 "a line saying warnings which can forecast whether this cob will be a failure"; 17:58 "like Warn (3)"): the
+ *  box row "Warn (n)" with the codes Rng 1st Deep Q Hr Room ("none" without any), red at 3 or more.
  *  2.8.2 (Rassul 2026-11-12 16:20 "independent review ... Do it and fix"): the waves to draw are rebuilt only when a bar changed (was a copy
  *  of every bar on each repaint); the day-range history skips a session whose RTH did not start at the open.
  *  2.8.1 (Rassul 2026-11-12 16:18 "For quality give me a percentage instead"): the box row "Q / Rng" shows the score as a percentage of
@@ -398,7 +400,7 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #endif
-    p->setDescription("LRA Cob Reader v2.8.2 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
-    p->setVersion("2.8.2");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Cob Reader v2.9.0 (was ZZO Combo) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setVersion("2.9.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

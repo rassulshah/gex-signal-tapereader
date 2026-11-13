@@ -84,8 +84,8 @@
 #include <vector>
 
 namespace zcf {
-static const char* const COMBO_VERSION = "2.8.2";   // (2.8.2) review fixes: view cache, whole sessions only in the range history; (2.8.1) the box shows Q as a percentage ("67% / 0.6"); (2.8.0) + the day range used: box row "Q / Rng", Hold adjusted by it; (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
-static const char* const VERSION = "1.6.0";         // the finder rule (1.6.0: + day range used, Hold by range, the stop-run level's price on the record line; 1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
+static const char* const COMBO_VERSION = "2.9.0";   // (2.9.0) + the box row "Warn (n)": the warnings a Cob carries; (2.8.2) review fixes: view cache, whole sessions only in the range history; (2.8.1) the box shows Q as a percentage ("67% / 0.6"); (2.8.0) + the day range used: box row "Q / Rng", Hold adjusted by it; (2.7.3) a Cob bar must be the biggest / heaviest of 35+ up bars; (2.7.2) CB / SR on the price pane only; (2.7.1) price-pane SR under the bar; (2.7.0) + CB35 / CB99, the SR badge; (2.6.0) + the Cob bar label CB; (2.5.1) Q without size / length, box row "Q 4/6"; (2.5.0) + the quality score Q; (2.4.0) + Cob2, the hourly turn, the read box   // lsZzoCombo (the setVersion literal in ZzoCombo.cpp)
+static const char* const VERSION = "1.7.0";         // the finder rule (1.7.0: + the warnings of a Cob (Tag::warn), on the record line; 1.6.0: + day range used, Hold by range, the stop-run level's price on the record line; 1.5.1: CB needs rank 35+; 1.5.0: + CB rank, SR bar; 1.4.0: + CB, the Cob bar; 1.3.1: Q without size / length; 1.3.0: + Q; 1.2.0: + Cob2, Hr; 1.1.0: + the prior full session's POC / VAH / VAL)
 static const int MIN_CNT = 10;                       // ZZO count ("zzo 10+", as his CoB filter today)
 static const int WATCH_CNT = 5;                      // logged only (challenger)
 static const double MAX_RETR = 0.46;                 // (1.2.0) no longer a Cob requirement: beyond it a Cob is "deep" (its own Hold rate); still the Cob2 limit
@@ -106,6 +106,19 @@ static const int ADR_N = 10, ADR_MIN = 3;
 static const int HOLD_RNG[5] = { -12, -3, 3, 5, 16 };  // range used x100: < 50, 50-69, 70-89, 90-119, 120+
 inline int rngBand(int r100) { return r100 < 50 ? 0 : r100 < 70 ? 1 : r100 < 90 ? 2 : r100 < 120 ? 3 : 4; }
 inline int holdWithRng(int hold, int r100) { if (r100 < 0) return hold; const int h = hold + HOLD_RNG[rngBand(r100)]; return h < 5 ? 5 : h > 95 ? 95 : h; }
+// (1.7.0, Rassul 2026-11-12 17:43 "maybe we should have a line saying warnings which can forecast whether this cob will be a failure";
+// 17:58 "keep a number next to it also like Warn (3)") six things known when the Cob completes. 1,809 Cobs / Cob2, 392 sessions, 7 markets:
+// the origin held 84% with none, 78% with 1, 61% with 2, 46% with 3, 44% with 4, 17% with 5-6 - the same in both halves of the days.
+// Room and Deep are one measure at two limits (room = 1 - gave back): a deep Cob carries both, as it was counted in the study.
+enum { W_RNG = 1, W_FIRST = 2, W_DEEP = 4, W_Q = 8, W_HR = 16, W_ROOM = 32 };
+static const int NWARN = 6;
+static const char* const WARN_CODE[NWARN] = { "Rng", "1st", "Deep", "Q", "Hr", "Room" };
+static const int WARN_RNG = 50, WARN_FIRST_MIN = 60, WARN_Q = 2, WARN_RED = 3; static const double WARN_ROOM = 0.60;
+inline int warnMask(int rng100, int minAfterOpen, double retr, int q, bool hr) {
+    return (rng100 >= 0 && rng100 < WARN_RNG ? W_RNG : 0) | (minAfterOpen < WARN_FIRST_MIN ? W_FIRST : 0) | (retr > MAX_RETR ? W_DEEP : 0) | (q >= 0 && q <= WARN_Q ? W_Q : 0) | (!hr ? W_HR : 0) | (1.0 - retr < WARN_ROOM ? W_ROOM : 0);
+}
+inline int warnCount(int m) { int n = 0; for (int i = 0; i < NWARN; ++i) if (m & (1 << i)) ++n; return n; }
+inline std::string warnText(int m) { std::string t; for (int i = 0; i < NWARN; ++i) if (m & (1 << i)) { if (!t.empty()) t += " "; t += WARN_CODE[i]; } return t.empty() ? "none" : t; }
 static const int NLV = 9;                              // 0..5 = a high / low pair; 6..8 = one price, swept from either side
 static const char* const LV_HI[NLV] = { "ONH", "AsiaHI", "LonHI", "PhrH", "PFH", "PDH", "DPoc", "VAH", "VAL" };
 static const char* const LV_LO[NLV] = { "ONL", "AsiaLO", "LonLO", "PhrL", "PFL", "PDL", "DPoc", "VAH", "VAL" };
@@ -150,6 +163,7 @@ struct Tag { int cob = 0;            // +1 / -1 = a Cob on this wave
              long long tSr = 0; int srLv = -1; long long srPx = 0;   // (1.6.0) srPx = that level's price in ticks (0 = none)
                // (1.5.0) the stop-run bar (0 = none) and the level it ran (index into LV_LO / LV_HI)
              int q = -1;             // (1.3.0) the quality score 0..6 (-1 = not scored)
+             int warn = 0;           // (1.7.0) the warnings (W_ bits), decided with the Cob
              int rng = -1;           // (1.6.0) day range used x100 at the completing bar (-1 = under ADR_MIN sessions of history)
              int lvpSt = 0;          // (1.2.0) of a Cob / Cob2: 0 = an Lvp can still come, 1 = it printed, 2 = none
              int lv = 0, cnt = 0; bool atExt = false; double retr = 0;
@@ -160,7 +174,7 @@ inline std::string lvText(int mask, int dir) {
     return t.empty() ? "-" : t;
 }
 
-struct Read { bool any = false; int kind = 0, dir = 0, lv = 0, cnt = 0, lvpSt = 0, hold = 0, q = -1, rng = -1; bool hr = false; double retr = 0; long long tCf = 0; };
+struct Read { bool any = false; int kind = 0, dir = 0, lv = 0, cnt = 0, lvpSt = 0, hold = 0, q = -1, rng = -1, warn = 0; bool hr = false; double retr = 0; long long tCf = 0; };
 struct HrBar { long long id = 0, h = 0, l = 0; };
 
 struct Finder {
@@ -370,6 +384,7 @@ struct Finder {
         t.dir = d; t.tWave = tWave; t.tCf = cf.t; t.origin = origin; t.top = top; t.close = c0; t.lv = mask; t.cnt = cnt; t.retr = retr;
         t.atExt = d > 0 ? origin == rLo : origin == rHi;
         t.hr = hr; t.q = quality(d, pw.e, w.e); t.rng = rngUsed();
+        { const long long dy = zzd::floorDiv(cf.t, 86400); t.warn = warnMask(t.rng, (int)((cf.t - dy * 86400) / 60) - openMin, retr, t.q, hr); }
         if (cob || cob2) {
             int rk = 0; const int cb = cobBar(d, pw.e, w.e, &rk); t.tCb = cb >= 0 ? F[(size_t)cb].t : 0; t.cbRank = cb >= 0 ? rk : 0;
             int lvI = -1; const int sr = stopRunBar(d, pw.s, pw.e, mask, &lvI); t.tSr = sr >= 0 ? F[(size_t)sr].t : 0; t.srLv = sr >= 0 ? lvI : -1;
@@ -381,7 +396,7 @@ struct Finder {
         char b[96]; std::snprintf(b, sizeof b, "|%d|%.2f|%s|%s|%d|%d", cnt, retr, t.atExt ? "at" : "near", bo ? "bo" : "-", cntPane, cntMkt);
         const std::string body = std::string(VERSION) + "|" + std::to_string(tWave) + "|" + std::to_string(cf.t) + "|" + (d > 0 ? "UP" : "DN") + "|" + std::to_string(origin) + "|" +
                       std::to_string(top) + "|" + std::to_string(c0) + "|" + lvText(mask, d) + b;
-        const std::string qs = "|" + std::to_string(t.q) + "|" + std::to_string(t.tCb) + "|" + std::to_string(t.cbRank) + "|" + std::to_string(t.tSr) + "|" + (t.srLv >= 0 ? (d > 0 ? LV_LO[t.srLv] : LV_HI[t.srLv]) : "-") + "|" + std::to_string(t.rng) + "|" + std::to_string(t.srPx);
+        const std::string qs = "|" + std::to_string(t.q) + "|" + std::to_string(t.tCb) + "|" + std::to_string(t.cbRank) + "|" + std::to_string(t.tSr) + "|" + (t.srLv >= 0 ? (d > 0 ? LV_LO[t.srLv] : LV_HI[t.srLv]) : "-") + "|" + std::to_string(t.rng) + "|" + std::to_string(t.srPx) + "|" + std::to_string(t.warn);
         if (cob) out.push_back("C|" + body + (hr ? "|H" : "|-") + qs);
         else if (watch) out.push_back("W|" + body + (watch == 1 ? "|no level" : "|count under 10"));
         if (cob2) out.push_back("Q|" + body + (hr ? "|H" : "|-") + qs);
@@ -393,7 +408,7 @@ struct Finder {
             const Tag& t = it->second; if (!t.cob && !t.cob2) continue;
             if (!haveSess || sessOf(t.tCf) != curSess) { if (t.tCf < (F.empty() ? 0 : F.back().t) - 2 * 86400) break; continue; }
             if (R.any && t.tCf <= R.tCf) continue;
-            R.any = true; R.kind = t.cob ? 1 : 2; R.dir = t.cob ? t.cob : t.cob2; R.lv = t.lv; R.cnt = t.cnt; R.lvpSt = t.lvpSt; R.hr = t.hr; R.retr = t.retr; R.tCf = t.tCf; R.q = t.q; R.rng = t.rng;
+            R.any = true; R.kind = t.cob ? 1 : 2; R.dir = t.cob ? t.cob : t.cob2; R.lv = t.lv; R.cnt = t.cnt; R.lvpSt = t.lvpSt; R.hr = t.hr; R.retr = t.retr; R.tCf = t.tCf; R.q = t.q; R.rng = t.rng; R.warn = t.warn;
             const int ls = t.lvpSt < 0 || t.lvpSt > 2 ? 0 : t.lvpSt;
             const int qb = t.q >= 4 ? 2 : t.q == 3 ? 1 : 0;
             R.hold = t.cob && t.retr > MAX_RETR ? HOLD_DEEP[qb > 0 ? 1 : 0][ls] : t.cob ? HOLD_COB[qb][t.hr ? 1 : 0][ls] : HOLD_COB2[qb][ls];
