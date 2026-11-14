@@ -8,7 +8,7 @@ static In bar(int k, double o, double h, double l, double c) { In b; b.t = 1000 
 static Engine boEng(const std::vector<In>& B, int i0, int dir) { Engine E; E.tick = 0.25; E.zzRev = 3; E.bars = B; bba::BoDec D; D.fired = true; D.dir = dir; D.t0 = B[(size_t)i0].t; D.t = D.t0; E.bo[D.t0] = D; return E; }
 static std::vector<In> mirror(std::vector<In> B) { for (In& b : B) { const double o = 200 - b.o, h = 200 - b.l, l = 200 - b.h, c = 200 - b.c; b.o = o; b.h = h; b.l = l; b.c = c; } return B; }
 int main() {
-    CK(std::string(VERSION) == "1.27.0"); CK(REV_ATR_X == 1.0);
+    CK(std::string(VERSION) == "1.27.1"); CK(REV_ATR_X == 1.0);
     // ---- FT. Bars 0-2 lead in; bar 3 = the BO candle (high 104); the last bar is forming (never read)
     std::vector<In> base = { bar(0, 100, 101, 99.5, 100.5), bar(1, 100.5, 101.5, 100, 101), bar(2, 101, 102, 100.5, 101.5), bar(3, 101.5, 104, 101.25, 103.5) };
     auto run = [&](std::vector<In> tail, int dir = 1) { std::vector<In> B = base; for (In& b : tail) { b.t = 1000 + 180 * (int)B.size(); B.push_back(b); } B.push_back(bar((int)B.size(), 0, 0, 0, 0));
@@ -22,6 +22,7 @@ int main() {
         { auto r = run({ bar(0, 104.75, 105, 104.0, 104.25) }, dir); CK(r.ft == 0); }                                   // closes above the BO high but RED: no
         { auto r = run({ bar(0, 103.5, 104.75, 103.25, 103.75), bar(0, 103.75, 104.5, 103.5, 104.25) }, dir); CK(r.ft == T5); }   // the second candle (no new high, wave not turned)
         { auto r = run({ bar(0, 103.5, 103.75, 103.0, 103.25), bar(0, 103.25, 103.5, 102.75, 103.0), bar(0, 103.0, 105, 102.9, 104.5) }, dir); CK(r.ft == T6); }   // three later, wave intact (lows above the 3 bars before)
+        { auto r = run({ bar(0, 103.5, 103.75, 103.0, 103.25), bar(0, 103.25, 103.5, 102.75, 103.0), bar(0, 103.0, 103.4, 102.9, 103.2), bar(0, 103.2, 105, 103.0, 104.5) }, dir); CK(r.ft == 0 && r.none); }   // (1.27.1) the 4th candle: too late, no FT
         // the wave turns first (a low below the lows of the 3 candles before it, no new high): no FT, even if a later candle closes above
         { auto r = run({ bar(0, 103.5, 103.75, 99.75, 100.5), bar(0, 100.5, 105, 100.4, 104.5) }, dir); CK(r.ft == 0 && r.none); }
         // a candle that turns the wave is not an FT itself
