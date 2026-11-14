@@ -1,6 +1,6 @@
 #ifndef LS_REVREAD_LOGIC_H
 #define LS_REVREAD_LOGIC_H
-// RevReadLogic.h 0.5.0 (2026-11-13) -- lsRevRead "Reversal Read": every rule of the indicator, no SDK (unit-tested on Linux).
+// RevReadLogic.h 0.7.0 (2026-11-13) -- lsRevRead "Reversal Read": every rule of the indicator, no SDK (unit-tested on Linux).
 //
 // Rassul 2026-11-11 21:00-21:33 CT: "these bids were there getting filled and accumulating .. i need to know what was going on with the bids to
 // understand why the reversal happened"; "I want to know how i can have indicators that tell this story"; "create a similar pane that has each
@@ -64,7 +64,7 @@
 #include <unordered_map>
 #include <vector>
 namespace rvs {
-static const char* const VERSION = "0.6.0";   // (0.6.0, Rassul 2026-11-13 11:39-11:53 "show the buy volume and sell volume ... pocs, bid poc ask poc and delta poc ... in the background", "show the biggest in value if the value is 10 or higher", "just focus on the reversal behaviors and make it readable", "the new read will be on the right", "add a period like 1. 2.", "when i move the mouse in the indicator pane, it shows the value that i am hovering over ... default is ... the last bar", "go build"): the pane draws each candle's BUY and SELL volume side by side (no values on top; a number only where the bar is the biggest in 10+ candles of its session); the read = numbered behaviour steps, in the empty space right of the last candle, for the candle under the mouse (default the newest story); "V" lines record buy / sell / bid POC / ask POC / delta POC / max - min delta per candle (not drawn); no rule of the letters changed;   // was "0.5.0":   // (0.5.0, Rassul 2026-11-13 07:05 "ok build": the overnight check - after C / A the extreme held 30 min 21% on ES against 19% for any new extreme, the letters sat at 5% of the real turns, 2% in RTH; initiation held 45%) + CONFIRMATION (07:09 "the climax waits for the confirmation"): a story's letters appear only once one of the 2 candles after the climax candle closes beyond its close the story's way (a green bar after a selling climax; "K" lines; initiation confirms by itself); + LEVEL-START stories: a new 3-minute extreme AT a level with the attackers on top starts a story without a climax (recorded only, "T" lines, ids from 100001; shown when the nightly writes LEVEL_SHOW 1); "Stop run of <level>" is now "Flush through <level>" (one stop-run definition: lsSR's); the host draws C / A / E quietly and I bright;   // was "0.4.2":   // (0.4.2) host only: the POC fill starts at the newest 6000 candles (no rule change); (0.4.1) the hourly chart: lsRevReadMarks draws the hold dots on 60-minute candles by itself (no rule changed here);   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
+static const char* const VERSION = "0.7.0";   // (0.7.0, Rassul 2026-11-13 22:05-22:23 "this will be our reversal framework for local pivots", "go , but you must allow for variability and discovery as well"): THE SIX CHECKS of a reversal at a local pivot (struct Six, at the end of this file) - live, counted 0-6, recorded on "R6|" lines; no rule of the letters changed;   // was "0.6.0":   // (0.6.0, Rassul 2026-11-13 11:39-11:53 "show the buy volume and sell volume ... pocs, bid poc ask poc and delta poc ... in the background", "show the biggest in value if the value is 10 or higher", "just focus on the reversal behaviors and make it readable", "the new read will be on the right", "add a period like 1. 2.", "when i move the mouse in the indicator pane, it shows the value that i am hovering over ... default is ... the last bar", "go build"): the pane draws each candle's BUY and SELL volume side by side (no values on top; a number only where the bar is the biggest in 10+ candles of its session); the read = numbered behaviour steps, in the empty space right of the last candle, for the candle under the mouse (default the newest story); "V" lines record buy / sell / bid POC / ask POC / delta POC / max - min delta per candle (not drawn); no rule of the letters changed;   // was "0.5.0":   // (0.5.0, Rassul 2026-11-13 07:05 "ok build": the overnight check - after C / A the extreme held 30 min 21% on ES against 19% for any new extreme, the letters sat at 5% of the real turns, 2% in RTH; initiation held 45%) + CONFIRMATION (07:09 "the climax waits for the confirmation"): a story's letters appear only once one of the 2 candles after the climax candle closes beyond its close the story's way (a green bar after a selling climax; "K" lines; initiation confirms by itself); + LEVEL-START stories: a new 3-minute extreme AT a level with the attackers on top starts a story without a climax (recorded only, "T" lines, ids from 100001; shown when the nightly writes LEVEL_SHOW 1); "Stop run of <level>" is now "Flush through <level>" (one stop-run definition: lsSR's); the host draws C / A / E quietly and I bright;   // was "0.4.2":   // (0.4.2) host only: the POC fill starts at the newest 6000 candles (no rule change); (0.4.1) the hourly chart: lsRevReadMarks draws the hold dots on 60-minute candles by itself (no rule changed here);   // (0.1.1, the same night, his 2nd example ES 21:54 CT) absorbed over the ZONE; fading also while pinned; "below the test line"
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
 enum { BID = 0, ASK = 1 };                    // the feed's side codes (resting bids / offers; on a FILL: BID = the aggressor BOUGHT)
 enum { BUY = 0, SELL = 1 };                   // aggressor sides
@@ -563,6 +563,156 @@ inline std::vector<BSBar> layoutBS(const std::vector<std::pair<int, Poc> >& c, c
         b.letY = std::min(b.nB ? b.numYB : b.topB - 1, b.nS ? b.numYS : b.topS - 1) - textH;
         const auto m = marks.find(q.t); if (m != marks.end()) b.marks = m->second; out.push_back(b); }
     return out;
+}
+// =====================================================================================================================
+// (0.7.0) THE SIX CHECKS of a reversal at a local pivot (Rassul 2026-11-13 22:05-22:23 CT: "this will be our reversal framework for local
+// pivots", "make sure you know the threshholds and nuances for different markets", "make sure you can identify all of this in realtime",
+// "you must allow for variability and discovery as well"). Measured on 140 Revs (close beyond the prior candle), Nov 9-11, 7 markets, in sample.
+// Written for a SHORT (a pullback up to a pivot high); a long is the mirror. ext = the pivot candle's high, th = the first second it traded there,
+// b0 = the candle before the pivot candle, pl = the low of the candle before the Rev candle, medv = the middle volume of the 20 candles before b0.
+//   1 Buying fading    (buy - sell) / volume of b0 <= FADE_X                                   (known at b0's close)
+//   2 Big buyer        the biggest market BUY order that started in th - 30 s .. th + 1 s >= BB_LOTS; "Buyer trapped" once a candle closes below its price
+//   3 Quick rejection  the lots BOUGHT at the top three prices (>= ext - 2 ticks) from the pivot candle's open to the Rev candle's open (to its
+//                      close when the pivot candle is the Rev candle) / medv <= REJ_X           (final at the Rev candle's open)
+//   4 Bids pulled      of the bid lots resting at the Rev candle's open in pl - 8 .. pl + 2 ticks, the share cancelled / moved away by its close >= PULL_X
+//   5 Big seller       the biggest market SELL order that started in the Rev candle >= BS_LOTS
+//   6 With trend       his vwapTrend at the pivot candle points the trade's way
+// The count 0-6 goes on the label ("Rev 4"). Cut-offs per market from LRA-RevSix-<MKT>.csv (the nightly), defaults = the Nov 9-11 values.
+// Every read is recorded with its raw values and the candidate reads (tests of the high, seconds at the high, pivot candle volume, seconds
+// from the high to the break of pl) on an "R6|" line, so the nightly can re-cut and challenge the checks.
+struct SixParams { long long bbLots = 10, bsLots = 7; double rejX = 0.1, pullX = 0.75, fadeX = 0.05; };
+inline SixParams sixFor(const std::string& m) {
+    SixParams p; struct R { const char* m; long long bb, bs; double rej, pull, fade; };
+    static const R T[7] = { { "ES", 24, 42, 0.054, 0.608, 0.013 }, { "NQ", 9, 14, 0.015, 0.853, 0.028 }, { "CL", 10, 6, 0.127, 0.81, 0.065 }, { "GC", 10, 7, 0.043, 0.905, 0.015 },
+                            { "HG", 7, 3, 0.189, 0.77, 0.16 }, { "NG", 19, 14, 0.192, 0.576, 0.151 }, { "EU", 48, 17, 0.529, 0.421, -0.032 } };
+    for (const R& r : T) if (m == r.m) { p.bbLots = r.bb; p.bsLots = r.bs; p.rejX = r.rej; p.pullX = r.pull; p.fadeX = r.fade; }
+    return p;
+}
+// LRA-RevSix-<MKT>.csv: "KEY|value" lines, MARKET must match; values clamped; returns the keys applied
+inline int sixParse(const std::vector<std::string>& lines, const std::string& mkt, SixParams& p) {
+    bool ok = false; int n = 0; SixParams q = p; auto cl = [](double x, double a, double b) { return x < a ? a : x > b ? b : x; };
+    for (const std::string& l : lines) { const size_t b = l.find('|'); if (b == std::string::npos) continue; const std::string k = l.substr(0, b), v = l.substr(b + 1);
+        if (k == "MARKET") { ok = v == mkt; continue; }
+        char* e = nullptr; const double d = std::strtod(v.c_str(), &e); if (e == v.c_str() || (e && *e && *e != '\r') || !std::isfinite(d)) continue;
+        if (k == "BB_LOTS") q.bbLots = (long long)cl(d, 1, 5000); else if (k == "BS_LOTS") q.bsLots = (long long)cl(d, 1, 5000); else if (k == "REJ_X") q.rejX = cl(d, 0, 5);
+        else if (k == "PULL_X") q.pullX = cl(d, 0, 1); else if (k == "FADE_X") q.fadeX = cl(d, -1, 1); else continue;
+        ++n; }
+    if (!ok) return 0;
+    p = q; return n;
+}
+struct SixRead {
+    bool ok = false, final = false; int dir = 0; long long tp = 0, tr = 0;          // dir -1 = a short (pivot high), +1 = a long; tr = the Rev candle (the forming one while live)
+    bool c[6] = { false, false, false, false, false, false }; int n = 0; bool trapped = false;
+    double fade = 0, rej = -1, pull = 0, medv = 0, pvolx = 0; long long bbLots = 0, bbPx = 0, bbT = 0, bbC = 0, bsLots = 0, bsPx = 0, pullTot = 0, ext = 0, pl = 0;
+    double bbX = 0, bsX = 0; int trend = 0, tests = 0, hiSecs = 0, brkSec = -1; bool haveB0 = false, haveSnap = false;
+};
+struct Six {
+    SixParams P; int spb = 180;
+    struct Fl { long long sec, px, lots; int side, n; };   // n = the fills merged into it (same second, price and side)
+    struct Cn { long long buy = 0, sell = 0, hi = 0, lo = 0, close = 0; bool any = false; std::vector<Fl> fl; };
+    struct Agg { long long id = 0, lots = 0, t0 = 0, px = 0; int side = 0; };
+    struct Trk { int which; long long rem, candle; };
+    struct Snap { long long tot[2] = { 0, 0 }, pulled[2] = { 0, 0 }, filled[2] = { 0, 0 }, ref[2] = { 0, 0 }; bool ok = false; };   // [0] bids under the prior low, [1] offers over the prior high
+    std::map<long long, Cn> cn; std::deque<Agg> aggs; std::unordered_map<long long, Trk> trk; std::map<long long, Snap> snaps; std::map<long long, long long> tot;
+    long long curCandle = 0, fills = 0; std::map<long long, SixRead> done; std::vector<std::string> out;
+    long long candleOf(long long sec) const { return (sec / spb + 1) * (long long)spb; }
+    void reset() { trk.clear(); }                                                // the book was re-sent: the open snapshot can no longer be followed
+    // a new candle: snapshot the orders resting near the prior candle's low / high (book = the engine's resting orders, any struct with side / px / sz)
+    template <class BK> void roll(long long candle, const BK& book) {
+        curCandle = candle; trk.clear(); Snap s; const auto p = cn.find(candle - spb);
+        if (p != cn.end() && p->second.any) { s.ok = true; s.ref[0] = p->second.lo; s.ref[1] = p->second.hi;
+            for (const auto& kv : book) { const auto& o = kv.second; if (o.sz <= 0) continue;
+                if (o.side == BID && o.px >= s.ref[0] - 8 && o.px <= s.ref[0] + 2) { s.tot[0] += o.sz; trk[kv.first] = Trk{ 0, o.sz, candle }; }
+                else if (o.side == ASK && o.px >= s.ref[1] - 2 && o.px <= s.ref[1] + 8) { s.tot[1] += o.sz; trk[kv.first] = Trk{ 1, o.sz, candle }; } } }
+        snaps[candle] = s;
+        while (snaps.size() > 40) snaps.erase(snaps.begin());
+        while (cn.size() > 40) cn.erase(cn.begin());
+        while (tot.size() > 200) tot.erase(tot.begin());
+    }
+    // one order event BEFORE the engine applies it; sec = whole seconds; side = the feed's code (-1 = unknown / implied); px in ticks
+    template <class BK> void onEvent(long long sec, int act, int side, long long px, long long sz, long long id, long long aggr, const BK& book) {
+        if (act < 0 || act > 3 || px <= 0 || sz < 0 || sec <= 0) return;
+        const long long c = candleOf(sec); if (c > curCandle) roll(c, book);
+        auto t = trk.find(id);
+        if (act == DEL) { if (t != trk.end()) { snaps[t->second.candle].pulled[t->second.which] += t->second.rem; trk.erase(t); } return; }
+        if (act == MOD) { if (t != trk.end()) { Snap& s = snaps[t->second.candle]; const auto b = book.find(id); const long long opx = b != book.end() ? b->second.px : px;
+                if (opx != px) { s.pulled[t->second.which] += t->second.rem; trk.erase(t); }
+                else if (sz < t->second.rem) { s.pulled[t->second.which] += t->second.rem - sz; t->second.rem = sz; } }
+            return; }
+        if (act != FILL) return;
+        if (t != trk.end()) { const long long d = std::min(sz, t->second.rem); snaps[t->second.candle].filled[t->second.which] += d; t->second.rem -= d; }
+        const int a = side == BID ? BUY : side == ASK ? SELL : -1; if (a < 0 || sz <= 0) return;
+        ++fills; Cn& k = cn[c]; if (!k.any) { k.any = true; k.hi = k.lo = px; } else { k.hi = std::max(k.hi, px); k.lo = std::min(k.lo, px); } k.close = px; (a == BUY ? k.buy : k.sell) += sz;
+        if (!k.fl.empty() && k.fl.back().sec == sec && k.fl.back().px == px && k.fl.back().side == a) { k.fl.back().lots += sz; ++k.fl.back().n; } else if (k.fl.size() < 200000) k.fl.push_back(Fl{ sec, px, sz, a, 1 });
+        if (aggr != 0 && !aggs.empty() && aggs.back().id == aggr && aggs.back().side == a) { aggs.back().lots += sz; aggs.back().px = px; }
+        else { Agg g; g.id = aggr; g.side = a; g.lots = sz; g.t0 = sec; g.px = px; aggs.push_back(g); while (aggs.size() > 60000) aggs.pop_front(); }
+    }
+    void setTotal(long long candle, long long total) { tot[candle] = total; }                   // the chart's own candle volume (the normal)
+    double medV(long long tp) const { std::vector<double> v; for (int k = 2; k <= 21; ++k) { const auto it = tot.find(tp - (long long)k * spb); if (it != tot.end() && it->second > 0) v.push_back((double)it->second); }
+        if (v.size() < 5) return 0; std::nth_element(v.begin(), v.begin() + (long)(v.size() / 2), v.end()); return v[v.size() / 2]; }
+    // the read of a pivot: dir -1 short / +1 long, tp = the pivot candle, tr = the Rev candle (0 = live: the forming candle), nowSec, trend = his vwapTrend (-2 .. +2)
+    SixRead eval(int dir, long long tp, long long tr, long long nowSec, int trend) const {
+        SixRead r; r.dir = dir; r.tp = tp; r.final = tr > 0; if (tr <= 0) tr = std::max(tp, candleOf(nowSec)); r.tr = tr; r.trend = trend;
+        const auto pv = cn.find(tp); if (dir == 0 || tr < tp || pv == cn.end() || !pv->second.any) return r;
+        const bool sh = dir < 0; const int att = sh ? BUY : SELL, def = sh ? SELL : BUY; const long long sg = sh ? 1 : -1;
+        r.ok = true; r.ext = sh ? pv->second.hi : pv->second.lo; r.medv = medV(tp);
+        long long th = 0; for (const Fl& f : pv->second.fl) if (f.px == r.ext) { th = f.sec; break; }
+        const auto b0 = cn.find(tp - spb);                                                        // 1 fading
+        if (b0 != cn.end() && b0->second.any) { const Cn& b = b0->second; const long long a = sh ? b.buy : b.sell, d = sh ? b.sell : b.buy; r.haveB0 = true; r.fade = (double)(a - d) / (double)std::max<long long>(1, a + d); r.c[0] = r.fade <= P.fadeX; }
+        for (const Agg& g : aggs) if (g.side == att && g.t0 >= th - 30 && g.t0 <= th + 1 && g.lots > r.bbLots) { r.bbLots = g.lots; r.bbPx = g.px; r.bbT = g.t0; }   // 2 big buyer
+        r.bbX = (double)r.bbLots / (double)std::max<long long>(1, P.bbLots); r.c[1] = r.bbLots >= P.bbLots; r.bbC = r.bbT > 0 ? candleOf(r.bbT) : 0;
+        if (r.c[1]) for (auto it = cn.lower_bound(tp); it != cn.end(); ++it) if (it->first <= nowSec && it->second.any && (it->second.close - r.bbPx) * sg < 0) { r.trapped = true; break; }
+        { const long long last = tr > tp ? tr - spb : tr; long long lots = 0, prev = -100; int trades = 0; std::vector<long long> secs;      // 3 quick rejection + the candidates at the high
+            for (auto it = cn.lower_bound(tp); it != cn.end() && it->first <= last; ++it) for (const Fl& f : it->second.fl) { if ((f.px - r.ext) * sg < -2) continue;
+                if (secs.empty() || secs.back() != f.sec) secs.push_back(f.sec);
+                if (f.side != att) continue; lots += f.lots; trades += f.n; if (f.sec - prev > 10) ++r.tests; prev = f.sec; }
+            r.hiSecs = (int)secs.size(); if (r.medv > 0) { r.rej = trades < 2 ? 0.0 : (double)lots / r.medv; r.c[2] = r.rej <= P.rejX; r.pvolx = (double)(pv->second.buy + pv->second.sell) / r.medv; } }
+        const auto sn = snaps.find(tr);                                                           // 4 bids pulled
+        if (sn != snaps.end() && sn->second.ok) { const int w = sh ? 0 : 1; r.haveSnap = true; r.pullTot = sn->second.tot[w]; r.pl = sn->second.ref[w]; r.pull = (double)sn->second.pulled[w] / (double)std::max<long long>(1, r.pullTot); r.c[3] = r.pullTot > 0 && r.pull >= P.pullX; }
+        for (const Agg& g : aggs) if (g.side == def && g.t0 >= tr - spb && g.t0 < tr && g.lots > r.bsLots) { r.bsLots = g.lots; r.bsPx = g.px; }   // 5 big seller
+        r.bsX = (double)r.bsLots / (double)std::max<long long>(1, P.bsLots); r.c[4] = r.bsLots >= P.bsLots;
+        r.c[5] = trend * dir > 0;                                                                 // 6 with trend
+        const auto rv = cn.find(tr); if (rv != cn.end() && r.haveSnap && th > 0) for (const Fl& f : rv->second.fl) if ((f.px - r.pl) * sg < 0) { r.brkSec = (int)(f.sec - th); break; }
+        for (int i = 0; i < 6; ++i) r.n += r.c[i] ? 1 : 0;
+        return r;
+    }
+    // the Rev candle closed: its read is final, recorded once and kept (never changed after)
+    const SixRead* decide(int dir, long long tp, long long tr, int trend, const std::string& clock) {
+        const auto it = done.find(tr); if (it != done.end()) return &it->second;
+        SixRead r = eval(dir, tp, tr, tr, trend); if (!r.ok) return nullptr;
+        done[tr] = r; while (done.size() > 400) done.erase(done.begin()); out.push_back(line(r, clock)); return &done[tr];
+    }
+    static std::string num(double v) { char b[32]; std::snprintf(b, sizeof b, "%.6g", v); return b; }
+    static std::string line(const SixRead& r, const std::string& clock) {
+        std::string f; for (int i = 0; i < 6; ++i) f += r.c[i] ? '1' : '0';
+        return std::string("R6|") + VERSION + "|" + (r.dir < 0 ? "short" : "long") + "|" + std::to_string(r.tp) + "|" + std::to_string(r.tr) + "|" + std::to_string(r.n) + "|" + f + "|trapped " + (r.trapped ? "1" : "0")
+            + "|fade " + num(r.fade) + "|bb " + std::to_string(r.bbLots) + "|bbx " + num(r.bbX) + "|bbpx " + std::to_string(r.bbPx) + "|bbc " + std::to_string(r.bbC) + "|rej " + num(r.rej) + "|pull " + num(r.pull) + "|pulltot " + std::to_string(r.pullTot)
+            + "|pl " + std::to_string(r.pl) + "|bs " + std::to_string(r.bsLots) + "|bsx " + num(r.bsX) + "|bspx " + std::to_string(r.bsPx) + "|trend " + std::to_string(r.trend) + "|ext " + std::to_string(r.ext) + "|medv " + num(r.medv)
+            + "|tests " + std::to_string(r.tests) + "|hisecs " + std::to_string(r.hiSecs) + "|pvolx " + num(r.pvolx) + "|brk " + std::to_string(r.brkSec) + "|b0 " + (r.haveB0 ? "1" : "0") + "|snap " + (r.haveSnap ? "1" : "0") + "|ct " + clock;
+    }
+    // a restart: the decided reads of the session file come back (what the label and the marks need)
+    int load(const std::vector<std::string>& lines) { int n = 0;
+        for (const std::string& l : lines) { if (l.compare(0, 3, "R6|") != 0) continue; std::vector<std::string> p; size_t a = 0, b; while ((b = l.find('|', a)) != std::string::npos) { p.push_back(l.substr(a, b - a)); a = b + 1; } p.push_back(l.substr(a));
+            if (p.size() < 8 || p[6].size() != 6) continue; SixRead r; r.ok = r.final = true; r.dir = p[2] == "short" ? -1 : 1; r.tp = std::strtoll(p[3].c_str(), nullptr, 10); r.tr = std::strtoll(p[4].c_str(), nullptr, 10); if (r.tr <= 0) continue;
+            for (int i = 0; i < 6; ++i) { r.c[i] = p[6][(size_t)i] == '1'; r.n += r.c[i] ? 1 : 0; }
+            for (size_t i = 7; i < p.size(); ++i) { const size_t s = p[i].find(' '); if (s == std::string::npos) continue; const std::string k = p[i].substr(0, s); const double v = std::strtod(p[i].c_str() + s + 1, nullptr);
+                if (k == "trapped") r.trapped = v > 0.5; else if (k == "bbx") r.bbX = v; else if (k == "bsx") r.bsX = v; else if (k == "pull") r.pull = v; else if (k == "bbc") r.bbC = (long long)v; else if (k == "bbpx") r.bbPx = (long long)v; else if (k == "bspx") r.bsPx = (long long)v; else if (k == "pl") r.pl = (long long)v; }
+            if (!done.count(r.tr)) { done[r.tr] = r; ++n; } }
+        return n; }
+};
+// the read on the right: the header "Rev N", then the six checks in the order they happen; col 2 = white header; ok 1 = passed (green check), 0 = not (red x, grey text)
+struct SixLine { std::string text; int ok = -1; };
+inline std::vector<SixLine> sixLines(const SixRead& r) {
+    std::vector<SixLine> L; if (!r.ok) return L; const bool sh = r.dir < 0; char b[64];
+    auto add = [&](const std::string& t, bool ok) { SixLine x; x.text = std::to_string(L.size()) + ". " + t; x.ok = ok ? 1 : 0; L.push_back(x); };
+    { SixLine h; h.text = "Rev " + std::to_string(r.n); L.push_back(h); }
+    add(sh ? "Buying fading" : "Selling fading", r.c[0]);
+    if (r.c[1]) { std::snprintf(b, sizeof b, "%s %.1fx", r.trapped ? (sh ? "Buyer trapped" : "Seller trapped") : (sh ? "Big buyer" : "Big seller"), r.bbX); add(b, true); } else add(sh ? "Big buyer" : "Big seller", false);
+    add("Quick rejection", r.c[2]);
+    if (r.haveSnap && r.pullTot > 0) { std::snprintf(b, sizeof b, "%s %.0f%%", sh ? "Bids pulled" : "Offers pulled", 100.0 * r.pull); add(b, r.c[3]); } else add(sh ? "Bids pulled" : "Offers pulled", false);
+    if (r.c[4]) { std::snprintf(b, sizeof b, "%s %.1fx", sh ? "Big seller" : "Big buyer", r.bsX); add(b, true); } else add(sh ? "Big seller" : "Big buyer", false);
+    add("With trend", r.c[5]);
+    return L;
 }
 } // namespace rvs
 #endif

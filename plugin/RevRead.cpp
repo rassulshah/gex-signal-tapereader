@@ -1,5 +1,5 @@
 /*
- *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.5.0  (2026-11-13)
+ *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.7.0  (2026-11-13)
  *
  *  Rassul 2026-11-11 21:13-21:33 CT: "I want to know how i can have indicators that tell this story so i can understand how and why it
  *  reveresed"; "i have the poc of the candle in a pane. i want you to create a similar pane that has each candles poc and also makes a dash
@@ -34,6 +34,14 @@
  *      third of a green candle / the bottom third of a red one (CX_LOC) and the NEXT candle closes beyond the climax candle's close the story's way
  *      (CX_CONFIRM 1); I (initiation) is the signal - bold and bright; C / A / E are drawn plain and dim; stories that begin as a test of a level with
  *      no climax are recorded only (LEVEL_SHOW); "Stop run of <level>" in the read is now "Flush / Push through <level>" (the stop run is SR's).
+ *      (0.7.0, Rassul 2026-11-13 22:05-22:23 CT "this will be our reversal framework for local pivots", "make sure you can identify all of this in
+ *      realtime", "go , but you must allow for variability and discovery as well") THE SIX CHECKS (rvs::Six): Buying fading, Big buyer -> Buyer trapped,
+ *      Quick rejection, Bids pulled, Big seller, With trend - computed live from the order feed for the newest pullback lsBreakout decided (fact E:
+ *      side + the pivot extreme) and, once lsBreakout posts its Rev candles (fact W: lo = the Rev candle, hi = the pivot candle, raw bar stamps),
+ *      decided once at the Rev candle's close, recorded ("R6|" lines: raw values + candidate reads) and posted back as fact X (bar = the Rev candle's
+ *      raw stamp, code = count x 1000 + check bits + 64 trapped, lo / hi = the big buyer's / big seller's price, val = the prior candle's extreme) for
+ *      the "Rev N" label and the BT / P / S marks. The read on the right = "Rev N" + six lines, a green check / red x each; a white ratio (3.5x) over
+ *      the volume bar of the big buyer / big seller. Cut-offs: lsFlexLevels\LRA-RevSix-<MKT>.csv (defaults = Nov 9-11).
  *  lsRevRead has no settings; lsRevReadMarks has two switches (POC dash, Hold read dots). No hovers, no text on the price chart. Order-feed letters exist from the moment the pane is on the chart (IRT has no
  *  order-by-order history); decided letters are reloaded from the session record after a restart. The POC bars / dashes cover all bars.
  */
@@ -66,6 +74,7 @@
 #include "NearLevels.h"
 #include "SignalBoard.h"
 #include "StepTrendLogic.h"
+#include "VwapTrendLogic.h"
 #include "RevReadLogic.h"
 #include <algorithm>
 #include <cctype>
@@ -82,11 +91,11 @@
 #include <vector>
 #include <sys/stat.h>
 
-#define RVS_VERSION "0.6.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.6.0");
+    p->setVersion("0.7.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -240,6 +249,10 @@ public:
         long long lastPx = 0, barLo = 0, barHi = 0;                       // the forming candle (ticks)
         long long parMs = -100000; long long parSig = -2; int parKeys = 0; int pbBits = 0; long long pbMs = -100000;
         long long drawn = 0; std::string lastRead;
+        // (0.7.0) the six checks
+        rvs::Six six; int sixKeys = 0; long long sixParMs = -100000, sixParSig = -2; int sixLoaded = 0, sixDecided = 0;
+        int pvDir = 0; long long pvTp = 0, pvExt = 0; std::map<long long, int> trendAt; int trendNow = 0; std::vector<sb::Fact> revF; long long sixPostMs = -100000;
+        rvs::SixRead live; bool haveLive = false;
     };
     Ext* ext(S_& S) { if (!S.ext) S.ext.reset(new (std::nothrow) Ext()); return static_cast<Ext*>(S.ext.get()); }
 
@@ -261,9 +274,10 @@ public:
         }
         if (!e->eng) return;
         if (e->reconnects < 0) { e->reconnects = S.feed.reconnects; e->symbol = S.symbol; }
-        if (S.feed.reconnects != e->reconnects || S.symbol != e->symbol) { e->eng->reset(); e->reconnects = S.feed.reconnects; e->symbol = S.symbol; }   // the book is re-sent
+        if (S.feed.reconnects != e->reconnects || S.symbol != e->symbol) { e->six.reset(); e->eng->reset(); e->reconnects = S.feed.reconnects; e->symbol = S.symbol; }   // the book is re-sent
         const off::Ev x = off::evOf(o, S.tick, 0);
         if (x.action > 3 || x.px <= 0) { ++e->skipped; return; }
+        e->six.onEvent(e->stamp, x.action, x.implied ? -1 : x.side, (long long)x.px, x.size, x.id, x.aggr, e->eng->book);   // (0.7.0) before the engine applies it (a MOD needs the order's old price)
         e->eng->onEvent(e->stamp * 1000, x.action, x.implied ? -1 : x.side, (long long)x.px, x.size, x.id, x.aggr); ++e->events;
         if (x.action == off::FILL) e->lastPx = (long long)x.px;
     }
@@ -273,11 +287,12 @@ public:
         const bool same = old && e.mkt == mkt && e.spb == (int)S.spb;
         e.mkt = mkt; e.spb = (int)S.spb; e.tick = S.tick; e.session = sess; ++e.sessions; rvh::rthOf(mkt, e.rthO, e.rthC);
         e.eng.reset(new (std::nothrow) rvs::Engine()); if (!e.eng) return;
+        if (!same) { e.six = rvs::Six(); e.sixParSig = -2; e.trendAt.clear(); e.haveLive = false; } e.six.spb = e.spb; if (e.sixParSig == -2) e.six.P = rvs::sixFor(mkt);
         e.eng->P = rvs::forMarket(mkt); e.eng->tick = e.tick; e.eng->spb = e.spb; e.written = 0; e.parMs = -100000; e.parSig = -2;
         if (same) { e.eng->book.swap(old->book); e.eng->lvl[0].swap(old->lvl[0]); e.eng->lvl[1].swap(old->lvl[1]); e.eng->hist.swap(old->hist); e.eng->base.swap(old->base); e.eng->p95 = old->p95; e.eng->nextId = old->nextId; }   // the 17:00 roll keeps the book and the normal
         const std::string flex = rvh::flexDir(); rvh::makeDir(flex); rvh::makeDir(rvh::recDir(flex));
         e.path = rvh::recPath(flex, mkt, e.spb, sess);
-        std::vector<std::string> L; if (!e.path.empty() && rvh::readLines(e.path, L, 4 * 1024 * 1024)) { e.marksLoaded = e.eng->loadMarks(L); e.eng->lastV = rvs::lastV(L); }   // a restart: the letters decided before stay
+        std::vector<std::string> L; if (!e.path.empty() && rvh::readLines(e.path, L, 4 * 1024 * 1024)) { e.marksLoaded = e.eng->loadMarks(L); e.eng->lastV = rvs::lastV(L); e.sixLoaded += e.six.load(L); }   // a restart: the letters decided before stay
         if (!e.path.empty()) { struct stat st; if (stat(e.path.c_str(), &st) != 0) { std::ofstream f(e.path.c_str(), std::ios::binary | std::ios::app); f << "H|" << RVS_VERSION << "|" << mkt << "|" << e.spb << "|" << sess << "|tick " << rvs::Engine::num(e.tick) << "\n"; } }
     }
     // the context a story is stamped with when it starts: session, volatility window, the hourly read, levels, Pb (once a second)
@@ -289,7 +304,14 @@ public:
         if (now - e.pbMs >= 1000 || now < e.pbMs) {                      // lsBreakout's decided Pb / Pboc / Pdoc (fact E), the last 30 minutes
             e.pbMs = now; e.pbBits = 0; const char* sy = getSymbol(); const char* cl = getChartLabel(); std::vector<sb::Fact> F;
             if (sy && cl && sb::readFacts('E', sy, getSecondsPerBar(), cl, now, F, true)) { long long newest = 0; for (const sb::Fact& f : F) newest = std::max(newest, f.bar);
-                for (const sb::Fact& f : F) if (newest - f.bar <= 1800) e.pbBits |= f.side > 0 ? 1 : 2; }
+                for (const sb::Fact& f : F) if (newest - f.bar <= 1800) e.pbBits |= f.side > 0 ? 1 : 2;
+                e.pvDir = 0; for (const sb::Fact& f : F) if (f.bar == newest && f.side != 0 && std::isfinite(f.hi) && f.hi > 0) { e.pvDir = f.side > 0 ? 1 : -1; e.pvExt = (long long)std::llround(f.hi / e.tick) + (f.side > 0 ? 1 : -1); } }   // (0.7.0) the newest decided pullback: its stop is 1 tick beyond the pivot
+            e.revF.clear(); if (sy && cl) sb::readFacts('W', sy, getSecondsPerBar(), cl, now, e.revF, true);                                  // (0.7.0) lsBreakout's Rev candles (when it posts them)
+            sixTick(e, sy ? sy : "", cl ? cl : "", now);
+        }
+        if (now - e.sixParMs >= 30000 || now < e.sixParMs) {             // (0.7.0) the nightly's cut-offs of the six checks
+            e.sixParMs = now; const std::string p = rvh::flexDir() + "\\LRA-RevSix-" + e.mkt + ".csv"; struct stat st; const long long sig = stat(p.c_str(), &st) == 0 ? (long long)st.st_mtime * 1000003LL + (long long)st.st_size : -1;
+            if (sig != e.sixParSig) { e.sixParSig = sig; rvs::SixParams P = rvs::sixFor(e.mkt); e.sixKeys = 0; std::vector<std::string> L; if (sig >= 0 && rvh::readLines(p, L, 64 * 1024)) e.sixKeys = rvs::sixParse(L, e.mkt, P); e.six.P = P; }
         }
         c.pb = e.pbBits;
         if (now - e.lvlMs >= 5000 || now < e.lvlMs) {                    // the level files (key / MenthorQ), re-read at most every 5 s, + the session VWAP
@@ -305,6 +327,25 @@ public:
             if (sig != e.parSig) { e.parSig = sig; rvs::Params P = rvs::forMarket(e.mkt); e.parKeys = 0; std::vector<std::string> L; if (sig >= 0 && rvh::readLines(p, L, 64 * 1024)) e.parKeys = rvs::parseParams(L, e.mkt, P); e.eng->P = P; }
         }
         e.eng->ctx = c;
+    }
+    // (0.7.0) once a second: decide the Revs lsBreakout posted, the live read of the newest pullback, and post the reads (fact X)
+    int trendOf(const Ext& e, long long candle) const { const auto it = e.trendAt.find(candle); return it != e.trendAt.end() ? it->second : e.trendNow; }
+    void sixTick(Ext& e, const std::string& sym, const std::string& chart, long long now) {
+        const long long cur = e.six.candleOf(e.stamp);
+        for (const sb::Fact& f : e.revF) { const long long tr = (long long)std::llround(f.lo), tp = (long long)std::llround(f.hi); if (f.side == 0 || tr <= 0 || tp <= 0 || tr >= cur || tr < tp || e.six.done.count(tr)) continue;
+            if (e.six.decide(f.side > 0 ? 1 : -1, tp, tr, trendOf(e, tp), e.eng ? e.eng->clock : std::string())) ++e.sixDecided; }
+        e.haveLive = false;
+        if (e.pvDir != 0) { long long tp = 0; int n = 0;                                          // the pivot candle: the newest of the last 10 whose extreme is the pivot (1 tick of tolerance: an unsigned trade may have made it)
+            for (auto it = e.six.cn.rbegin(); it != e.six.cn.rend() && n < 10; ++it, ++n) { if (!it->second.any) continue; const long long x = e.pvDir < 0 ? it->second.hi : it->second.lo; if (std::llabs(x - e.pvExt) <= 1) { tp = it->first; break; } }
+            e.pvTp = tp; bool printed = false; for (auto it = e.six.done.rbegin(); it != e.six.done.rend() && !printed; ++it) printed = it->second.tp == tp;   /* its Rev is decided: the read is final, no live one */
+            if (tp > 0 && !printed) { e.live = e.six.eval(e.pvDir, tp, 0, e.stamp, trendOf(e, tp)); e.haveLive = e.live.ok; } }
+        if (now - e.sixPostMs >= 1000 || now < e.sixPostMs) { e.sixPostMs = now; std::vector<sb::Fact> v;
+            auto mk = [&](const rvs::SixRead& r, int state) { sb::Fact f; f.bar = r.tr; f.side = r.dir; int bits = 0; for (int i = 0; i < 6; ++i) if (r.c[i]) bits |= 1 << i; if (r.trapped) bits |= 64;
+                f.code = r.n * 1000 + bits; f.lo = (double)r.bbPx * e.tick; f.hi = (double)r.bsPx * e.tick; f.val = (double)r.pl * e.tick; f.state = state; f.proven = 0; v.push_back(f); };
+            int n = 0; for (auto it = e.six.done.rbegin(); it != e.six.done.rend() && n < 30; ++it, ++n) mk(it->second, 1);
+            if (e.haveLive) mk(e.live, 0);
+            if (!sym.empty()) sb::postFacts('X', sym, getSecondsPerBar(), chart, now, v); }
+        if (e.eng) { for (const std::string& l : e.six.out) e.eng->out.push_back(l); e.six.out.clear(); }
     }
     void flush(Ext& e) {
         if (!e.eng || e.path.empty() || e.written >= e.eng->out.size()) return;
@@ -327,6 +368,9 @@ public:
           << "\nREV_READ_CONTEXT," << (E ? E->ctx.session : std::string("?")) << "," << (E && E->ctx.volWin ? rvs::volName(E->ctx.volWin) : "no volatility window") << "," << (E ? E->ctx.hourly : std::string()) << ",pb bits " << e->pbBits
           << ",bar ends aligned " << (e->aligned ? "yes" : "NO - letters off")
           << "\nREV_READ_POC,candles " << e->ps.poc.size() << ",without VAP " << e->ps.missing << (e->ps.fault ? ",VAP FAULT - remove and re-add the indicator" : "")
+          << "\nREV_SIX,fills " << e->six.fills << ",candles " << e->six.cn.size() << ",decided " << e->six.done.size() << " (now " << e->sixDecided << ", reloaded " << e->sixLoaded << ")" << ",params keys " << e->sixKeys
+          << ",big buyer lots " << e->six.P.bbLots << ",big seller lots " << e->six.P.bsLots << ",rejection x " << e->six.P.rejX << ",pulled x " << e->six.P.pullX << ",fading x " << e->six.P.fadeX
+          << ",pullback " << (e->pvDir > 0 ? "long" : e->pvDir < 0 ? "short" : "none") << ",pivot candle " << e->pvTp << ",trend " << e->trendNow << ",Rev facts " << e->revF.size() << ",live " << (e->haveLive ? e->live.n : -1)
           << "\nREV_READ_READ," << e->lastRead << ",draws " << e->drawn;
     }
     // ---- calc: the candles (bars + VAP are read here only) ----------------------------------------------------------------
@@ -356,7 +400,7 @@ public:
                 const long long ht = (long long)std::llround(h / tick), lt = (long long)std::llround(l / tick), ct = (long long)std::llround(c / tick);
                 rvs::Poc p = rvs::pocOf(key, rows, lt, ht, ct); { const double o = opn.count >= count ? (double)opn[i] : 0.0; if (std::isfinite(o) && o > 0) p.open = (long long)std::llround(o / tick); } p.maxD = dmm[0]; p.minD = dmm[1];
                 struct tm t; std::memset(&t, 0, sizeof t); const bool tOk = getLocaltime((RTDATE)key - 1, &t) != 0; const std::string cs = tOk ? rvh::sessionOf(t) : std::string(); p.sess = rvs::sessId(cs); rvs::biggestIn(P.poc, p);   // (0.6.0)
-                P.poc[key] = p; P.pv[key] = pv; P.lastKey = key;
+                P.poc[key] = p; P.pv[key] = pv; P.lastKey = key; e.six.setTotal(key, p.total);
                 while (P.poc.size() > (size_t)rvh::PocStore::KEEP) { P.pv.erase(P.poc.begin()->first); P.poc.erase(P.poc.begin()); }
                 // the session VWAP from IRT's own volume at price (17:00 CT starts a new one)
                 if (tOk) { const std::string& s = cs; if (s != e.vwSession) { e.vwSession = s; e.vwPV = 0; e.vwV = 0; } e.vwPV += pv; e.vwV += (double)p.total; }
@@ -364,7 +408,7 @@ public:
                     if (cs == e.session && key > e.eng->lastV) { e.eng->out.push_back(rvs::vLine(p, tick)); e.eng->lastV = key; } }   // (0.6.0) the background record, once per candle of this session   // the letters of that candle are decided now, once
             }
         }
-        if (count != e.hCount && P.next >= count - 1) { e.hCount = count; hourly(S, e, times, hi, lo, cl, (int)count); }
+        if (count != e.hCount && P.next >= count - 1) { e.hCount = count; hourly(S, e, times, hi, lo, cl, (int)count); vwTrend(S, e, times, hi, lo, cl, (int)count); }
         if (e.eng) flush(e);
     }
     // lsStepTrend's hourly steps on this chart's closed candles (the same walk as its 60-minute design): rotation, the newest step, its test line
@@ -381,6 +425,16 @@ public:
         X.sealTo((E.H[(size_t)nh - 1].k + 1) * 3600);
         e.hRot = X.zdir; if (X.S.empty()) return;
         const stp::Step& q = X.S.back(); e.hDir = q.dir; e.hPx = q.px; e.hTop = stp::stepTop(q); e.hBroken = q.brI >= 0;
+    }
+    // (0.7.0) his vwapTrend at the newest closed candle (VwapTrendLogic.h on this chart's closed candles, the session of that candle), kept per candle
+    template <class TA, class FA> void vwTrend(S_& S, Ext& e, TA& times, FA& hi, FA& lo, FA& cl, int count) {
+        RTARRAYI vo(barVolume); if (vo.count < count || count < 3) return;
+        std::vector<svl::Bar> B; const int first = std::max(0, count - 1 - 700); B.reserve((size_t)(count - first));
+        for (int i = first; i < count - 1; ++i) { struct tm t; std::memset(&t, 0, sizeof t); if (!getLocaltime((RTDATE)times[i], &t) || t.tm_mon < 0 || t.tm_mon > 11 || t.tm_mday < 1 || t.tm_mday > 31) return;
+            svl::Bar b; b.days = svl::daysFromCivil(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday); b.endSec = t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec; b.h = (float)hi[i]; b.l = (float)lo[i]; b.c = (float)cl[i]; b.v = (double)vo[i]; B.push_back(b); }
+        if (B.empty()) return;
+        const vtl::Trend tr = vtl::fromChart(B, (int)B.size(), (int)S.spb, e.rthO, e.rthC);
+        e.trendNow = vtl::level(tr); e.trendAt[(long long)times[count - 2]] = e.trendNow; while (e.trendAt.size() > 400) e.trendAt.erase(e.trendAt.begin());
     }
     virtual int scale(int, int, double* dMin, double* dMax) { if (dMin) *dMin = 0; if (dMax) *dMax = 1; return RTX_OK; }
     virtual int draw(void) {
@@ -422,6 +476,17 @@ public:
                 for (size_t k = 0; k < T.size(); ++k) { const int w = (int)getTextWidth(T[k].c_str(), -1); const bool sig = b.marks[k].letter == 'I';   /* (0.5.0, "ok build") the initiation is the signal: bold and bright; C / A / E are the story so far: plain and dim */
                     setFont(sig ? fl : fq); setTextColor(sig ? (b.marks[k].col > 0 ? rvh::C_GREEN : rvh::C_RED) : (b.marks[k].col > 0 ? rvh::C_BAR_GREEN : rvh::C_BAR_RED)); RCT r; r.set(rvh::coord(x), rvh::coord(y), rvh::coord(x + w + 1), rvh::coord(y + 13)); r.drawText(T[k].c_str(), false, false); x += w + 2; } }
         }
+        // (0.7.0) the six checks: the read shown = the decided Rev under the mouse, else the live pullback, else the newest decided Rev of the last 10 candles
+        const rvs::SixRead* six = nullptr;
+        { const int hb6 = S.hov.hover.bar; if (hb6 >= 0 && hb6 < (int)count) { const auto it = e.six.done.find((long long)times[hb6]); if (it != e.six.done.end()) six = &it->second; }
+          if (!six && e.haveLive) six = &e.live;
+          if (!six && !e.six.done.empty() && (long long)times[(int)count - 1] - e.six.done.rbegin()->first <= 10LL * (long long)S.spb) six = &e.six.done.rbegin()->second; }
+        // a white ratio over the volume bar of a big order that passed its check (the big buyer at the pivot, the big seller on the Rev candle)
+        { setFont(fb); auto ratio = [&](long long candle, bool buyBar, double x) { for (const rvs::BSBar& b : B) { if (b.t != candle) continue; char t[24]; std::snprintf(t, sizeof t, "%.1fx", x); const int w = (int)getTextWidth(t, -1);
+                    const int cx = buyBar ? b.x - b.w / 2 : b.x + 1 + b.w / 2; const int y = std::max((int)pane.top + LINE_H + 2, (buyBar ? (b.nB ? b.numYB : b.topB - 1) : (b.nS ? b.numYS : b.topS - 1)) - 13);
+                    setTextColor(rvh::C_WHITE); RCT r; r.set(rvh::coord(cx - w / 2), rvh::coord(y), rvh::coord(cx - w / 2 + w + 1), rvh::coord(y + 12)); r.drawText(t, false, false); break; } };
+          auto both = [&](const rvs::SixRead& r) { if (r.c[1] && r.bbC > 0) ratio(r.bbC, r.dir < 0, r.bbX); if (r.c[4]) ratio(r.tr, r.dir > 0, r.bsX); };
+          if (!B.empty()) { for (auto it = e.six.done.lower_bound(B.front().t); it != e.six.done.end(); ++it) both(it->second); if (e.haveLive) both(e.live); } }
         // the title (top-left)
         int x = pane.left + 6; const int y = pane.top + 2, lim = pane.right - 6;
         setFont(fb); { const std::string t = std::string("Reversal Read v") + RVS_VERSION; const int w = put(t, x, y, rvh::C_WHITE, lim); if (w > 0) x += w + 10; }
@@ -441,7 +506,20 @@ public:
             if (s) { const std::vector<rvs::Seg> L = e.eng->readSteps(*s);
                 for (const rvs::Seg& g : L) { Row r; r.t = g.text; r.c = g.col > 1 ? rvh::C_WHITE : g.col > 0 ? rvh::C_GREEN : g.col < 0 ? rvh::C_RED : rvh::C_GRAY; R.push_back(r); } }
             for (size_t i = 0; i < R.size(); ++i) read += (i ? " > " : "") + R[i].t + (R[i].t2.empty() ? std::string() : " " + R[i].t2);
-            if (R.empty()) read = "no story";
+            if (six) {                                                   // (0.7.0) "Rev N" + six lines, a green check / red x in front of each
+                const std::vector<rvs::SixLine> L = rvs::sixLines(*six); read.clear(); for (size_t i = 0; i < L.size(); ++i) read += (i ? " > " : "") + L[i].text + (L[i].ok == 1 ? " +" : L[i].ok == 0 ? " -" : "");
+                setFont(fl); int wmax = 0; for (const rvs::SixLine& l : L) wmax = std::max(wmax, (int)getTextWidth(l.text.c_str(), -1) + 18);
+                PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18; const int rowH = 17, y0 = pane.top + LINE_H + 6;
+                if (v1 >= (int)count - 1 && xr + wmax <= lim && y0 + (int)L.size() * rowH <= pane.bottom) {
+                    for (size_t i = 0; i < L.size(); ++i) { const int yy = y0 + (int)i * rowH; const rvs::SixLine& l = L[i];
+                        if (l.ok < 0) { put(l.text, xr, yy, rvh::C_WHITE, lim + 1); continue; }
+                        const COLOR mc = l.ok ? rvh::C_GREEN : rvh::C_RED; setPen(mc, 2, P_SOLID);
+                        auto seg = [&](int x0, int y0_, int x1, int y1) { PNT a; a.set(0, 0.0f); a.h = rvh::coord(x0); a.v = rvh::coord(y0_); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = rvh::coord(x1); b.v = rvh::coord(y1); b.drawLineTo(); };
+                        if (l.ok) { seg(xr, yy + 7, xr + 3, yy + 11); seg(xr + 3, yy + 11, xr + 10, yy + 3); } else { seg(xr + 1, yy + 3, xr + 9, yy + 11); seg(xr + 9, yy + 3, xr + 1, yy + 11); }
+                        put(l.text, xr + 16, yy, l.ok ? rvh::C_WHITE : rvh::C_GRAY, lim + 1); } }
+                else { setFont(fb); for (size_t i = 0; i < L.size(); ++i) { const COLOR c = L[i].ok < 0 ? rvh::C_WHITE : L[i].ok ? rvh::C_GREEN : rvh::C_GRAY; const int w = put(L[i].text, x, y, c, lim); if (w < 0) break; x += w + 8; } }
+            }
+            else if (R.empty()) read = "no story";
             else {
                 setFont(fl); int wmax = 0; for (const Row& r : R) wmax = std::max(wmax, (int)getTextWidth(r.t.c_str(), -1) + (r.t2.empty() ? 0 : 10 + (int)getTextWidth(r.t2.c_str(), -1)));
                 PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18; const int rowH = 17, y0 = pane.top + LINE_H + 6;
@@ -467,7 +545,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);      // its own pane, draws itself; (0.6.0) the mouse picks the candle the read is about; IRT's volume at price
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Reversal Read - two bars per candle = its buy volume (green) and sell volume (red); a number on a bar = the biggest in that many candles (10 or more); letters C climax (red = selling, green = buying), A absorbed, E exhausted, I initiation; the read (right of the last candle) lists the reversal behaviours of the candle under the mouse, else of the newest reversal. Market-by-order feed.");
+    p->setDescription("LRA Reversal Read - two bars per candle = its buy volume (green) and sell volume (red); a number on a bar = the biggest in that many candles (10 or more); letters C climax (red = selling, green = buying), A absorbed, E exhausted, I initiation; the read (right of the last candle) = the six checks of the newest pullback / Rev (Rev N: buying fading, big buyer trapped, quick rejection, bids pulled, big seller, with trend), else the reversal behaviours of the candle under the mouse. Market-by-order feed.");
     rvh::stamp(p);   // RVS_VERSION
     return p;
 }
