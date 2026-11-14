@@ -251,7 +251,7 @@ public:
         long long drawn = 0; std::string lastRead;
         // (0.7.0) the six checks
         rvs::Six six; int sixKeys = 0; long long sixParMs = -100000, sixParSig = -2; int sixLoaded = 0, sixDecided = 0;
-        int pvDir = 0; long long pvTp = 0, pvExt = 0; std::map<long long, int> trendAt; int trendNow = 0; std::vector<sb::Fact> revF; long long sixPostMs = -100000;
+        int pvDir = 0; long long pvTp = 0, pvExt = 0, pvW = 0; std::map<long long, int> trendAt; int trendNow = 0; std::vector<sb::Fact> revF; long long sixPostMs = -100000;
         rvs::SixRead live; bool haveLive = false;
     };
     Ext* ext(S_& S) { if (!S.ext) S.ext.reset(new (std::nothrow) Ext()); return static_cast<Ext*>(S.ext.get()); }
@@ -306,7 +306,7 @@ public:
             if (sy && cl && sb::readFacts('E', sy, getSecondsPerBar(), cl, now, F, true)) { long long newest = 0; for (const sb::Fact& f : F) newest = std::max(newest, f.bar);
                 for (const sb::Fact& f : F) if (newest - f.bar <= 1800) e.pbBits |= f.side > 0 ? 1 : 2;
                 e.pvDir = 0; for (const sb::Fact& f : F) if (f.bar == newest && f.side != 0 && std::isfinite(f.hi) && f.hi > 0) { e.pvDir = f.side > 0 ? 1 : -1; e.pvExt = (long long)std::llround(f.hi / e.tick) + (f.side > 0 ? 1 : -1); } }   // (0.7.0) the newest decided pullback: its stop is 1 tick beyond the pivot
-            e.revF.clear(); if (sy && cl) sb::readFacts('W', sy, getSecondsPerBar(), cl, now, e.revF, true);                                  // (0.7.0) lsBreakout's Rev candles (when it posts them)
+            e.revF.clear(); e.pvW = 0; if (sy && cl) { std::vector<sb::Fact> W; sb::readFacts('W', sy, getSecondsPerBar(), cl, now, W, false); for (const sb::Fact& f : W) { if (f.state == 1) e.revF.push_back(f); else if (f.side != 0 && f.hi > 0) { e.pvW = (long long)std::llround(f.hi); e.pvDir = f.side > 0 ? 1 : -1; } } }   // state 0 = the newest pullback without a Rev (also a provisional one): the live read's pivot                                  // (0.7.0) lsBreakout's Rev candles (when it posts them)
             sixTick(e, sy ? sy : "", cl ? cl : "", now);
         }
         if (now - e.sixParMs >= 30000 || now < e.sixParMs) {             // (0.7.0) the nightly's cut-offs of the six checks
@@ -335,9 +335,10 @@ public:
         for (const sb::Fact& f : e.revF) { const long long tr = (long long)std::llround(f.lo), tp = (long long)std::llround(f.hi); if (f.side == 0 || tr <= 0 || tp <= 0 || tr >= cur || tr < tp || e.six.done.count(tr)) continue;
             if (e.six.decide(f.side > 0 ? 1 : -1, tp, tr, trendOf(e, tp), e.eng ? e.eng->clock : std::string())) ++e.sixDecided; }
         e.haveLive = false;
-        if (e.pvDir != 0) { long long tp = 0; int n = 0;                                          // the pivot candle: the newest of the last 10 whose extreme is the pivot (1 tick of tolerance: an unsigned trade may have made it)
+        if (e.pvDir != 0) { long long tp = e.pvW; int n = 0; if (tp > 0 && !e.six.cn.count(tp)) tp = -1;   /* lsBreakout named the pivot candle (fact W); else the newest decided pullback's stop (fact E) finds it */
+            if (tp == 0)                                          // the pivot candle: the newest of the last 10 whose extreme is the pivot (1 tick of tolerance: an unsigned trade may have made it)
             for (auto it = e.six.cn.rbegin(); it != e.six.cn.rend() && n < 10; ++it, ++n) { if (!it->second.any) continue; const long long x = e.pvDir < 0 ? it->second.hi : it->second.lo; if (std::llabs(x - e.pvExt) <= 1) { tp = it->first; break; } }
-            e.pvTp = tp; bool printed = false; for (auto it = e.six.done.rbegin(); it != e.six.done.rend() && !printed; ++it) printed = it->second.tp == tp;   /* its Rev is decided: the read is final, no live one */
+            if (tp < 0) tp = 0; e.pvTp = tp; bool printed = false; for (auto it = e.six.done.rbegin(); it != e.six.done.rend() && !printed; ++it) printed = it->second.tp == tp;   /* its Rev is decided: the read is final, no live one */
             if (tp > 0 && !printed) { e.live = e.six.eval(e.pvDir, tp, 0, e.stamp, trendOf(e, tp)); e.haveLive = e.live.ok; } }
         if (now - e.sixPostMs >= 1000 || now < e.sixPostMs) { e.sixPostMs = now; std::vector<sb::Fact> v;
             auto mk = [&](const rvs::SixRead& r, int state) { sb::Fact f; f.bar = r.tr; f.side = r.dir; int bits = 0; for (int i = 0; i < 6; ++i) if (r.c[i]) bits |= 1 << i; if (r.trapped) bits |= 64;

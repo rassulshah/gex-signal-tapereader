@@ -126,7 +126,7 @@ namespace bko {
 #endif
 static const bool SHOW_RLY_PBOC = false;   // (1.25.0, Rassul 2026-11-13 14:24-14:25 CT "right now the pb signal works with rly, but it needs a bo", "dont show pboc, because pboc requires a pb") a pullback label needs a BO / BD: the no-BO Rly Pboc / PbocT is no longer drawn (still judged + recorded, BPO| lines)
 static const bool SHOW_PDOC = false;   // (1.17.0) Pdoc removed from the chart (decided + recorded as before)
-static const char* const VERSION = "1.25.0";   // (1.25.0, 2026-11-13 Rassul 14:25 CT "dont show pboc, because pboc requires a pb"): no pullback label after a Rly wave that has no BO / BD (SHOW_RLY_PBOC false; display only, the decision and its records unchanged)   // was "1.24.0":   // (1.24.0, 2026-11-11 Rassul 20:26-20:27 CT "you dont need the vwap, if we are using the hourly trend", "remove the vwap contidion. we need to align witht he hbo instead"): a Rly no longer needs vwapTrend (RallyLogic 1.5.0 needTrend = false); it still has to sit inside an hourly breakout bar of its direction
+static const char* const VERSION = "1.26.0";   // (1.26.0, 2026-11-13 Rassul 22:05-22:27 CT "update it to indicate the number of checks", "make the T green .. add P for pulled. Put S for Seller", "update T to BT", "make P red", "next thing is to have the stop line , target 1 and target 2 lines", "target 1 is the high and target two can be an extenstion like 1.38", "1. pullback only. 2. use a similar approach as the cob"): the Rev label carries the count of the six checks ("Rev 4", from lsRevRead's fact X); the marks BT / P / S (ST / P / B on a long) at the big buyer's price, the prior candle's extreme and the big seller's price when their check passed; the lines Stop / T1 / 1.382 from the Rev candle (revLines); no Pb / Rev decision changed   // was "1.25.0":   // (1.25.0, 2026-11-13 Rassul 14:25 CT "dont show pboc, because pboc requires a pb"): no pullback label after a Rly wave that has no BO / BD (SHOW_RLY_PBOC false; display only, the decision and its records unchanged)   // was "1.24.0":   // (1.24.0, 2026-11-11 Rassul 20:26-20:27 CT "you dont need the vwap, if we are using the hourly trend", "remove the vwap contidion. we need to align witht he hbo instead"): a Rly no longer needs vwapTrend (RallyLogic 1.5.0 needTrend = false); it still has to sit inside an hourly breakout bar of its direction
 // was static const char* const VERSION = "1.23.2";   // (1.23.2, 2026-11-11 Rassul 15:08 CT "when you have a bearish retracement, the label should be above the pb and its variants and vice versa"): the retracement % sits on the OUTER side of the pullback label - above a label drawn over the candle, below one drawn under it   // was "1.23.1";   // (1.23.1, 2026-11-11 Rassul 14:55 CT "pb and its variants are suppose to be completely seperate"): RevA switched OFF - the BO indicator shows no Delta Profile absorption; Rev is "Rev" again   // was "1.23.0";   // (1.23.0, 2026-11-11 Rassul 14:41 CT "1. switch it off. 2. ok and only delta profile"): the book gate is OFF (the verdict is still decided, status only); a Rev with an absorbed delta node at its pullback pivot is drawn "RevA"   // was "1.22.0";   // (1.22.0, 2026-11-11 Rassul "I want the signal on rev to utilize this also", "Require it"): a Rev is drawn only when the order book agrees (lsBookFlow fact F)   // was "1.21.0";   // (1.21.0, 2026-11-11 Rassul 12:51 CT "Build") a Rly is displayed only when the candle it sits on is inside an hourly breakout bar of its direction (lsStepTrend's step rule), decided once when that hour has closed; a Rly Pboc needs such a Rly
 // was "1.20.0";   // (1.20.0, 2026-11-11 Rassul 12:27 CT "I want to add the retracement amount right below any type of pb like 45%", "Keep it two digits") the pullback's retracement of its wave, two digits + "%", right under every decided pullback label
 // was "1.19.0";   // (1.19.0, 2026-11-11 Rassul 11:07 CT "Its range is at least 1.2x the 13-bar ATR (measured on the bar before) or it closes above the prior bar high. also note that it can be displayed after any type of pb including pboc etc.") Rev = the first bar of the right colour whose range is >= 1.2 x ATR(13) OR that closes beyond the prior bar (long: above its high; short: below its low); a Rev is drawn after every kind of pullback label - Pb, Pboc, PbT, PbocT and the no-BO Rly Pboc (BRO, was recorded only)
@@ -267,6 +267,8 @@ struct Engine {
     std::map<long long, int> trend;            // closed bar time -> vwapTrend level (cache)
     std::map<long long, PbMark> pb;            // (1.1.0) pivot bar time -> Pb (kept for the chart's life)
     std::vector<PbMark> pbProv;                // (1.9.2) provisional Pbs of the last pass: drawn, never recorded, recomputed every pass (may vanish)
+    struct SixFact { int n = -1, bits = 0; double bt = 0, s = 0, p = 0; };   // (1.26.0) lsRevRead's read of a Rev candle: count 0-6, bit i = check i + 1 passed (+ 64 trapped), prices of the big buyer / big seller / the prior candle's extreme
+    std::map<long long, SixFact> six;          // (1.26.0) Rev candle time -> its six-check read (display only; set by the host from fact X)
     std::map<long long, RevMark> rev;          // (1.9.0) Pb pivot bar time -> its Rev (kept for the chart's life)
     // (1.12.0) Pboc: the host's VAP of engine bar j (lsWavePOC's reader: 1 read, 0 none yet, -1 fault); unset = no Pboc (pending)
     std::function<int(int, std::vector<wpc::VRow>&)> vapAt;
@@ -905,7 +907,7 @@ struct View {
     int lh[2] = { 12, 14 };                         // letter row heights: BO / BD font, Rly font
 };
 struct Board { long long t = 0; int side = 0; int val = 0; };   // SignalBoard 'L': bar time, +1 above / -1 below, px from the extreme to the outer edge
-struct Scene { std::vector<Txt> txt; std::vector<Board> board; int revNoBook = 0, revAShown = 0; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0, rlyNoHbo = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
+struct Scene { std::vector<Txt> txt; std::vector<Board> board; int sixMarks = 0; int revNoBook = 0, revAShown = 0; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0, rlyNoHbo = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
 // (1.5.0) the BI rows: row r sits GAP + r * ROW_OUT px from the wick (0 = the BO row +3..+17, 1 = +19..+33, 2 = +35 (Pb), 3 = +51 (LVP),
 // 4 = +67, 5 = +83). Rows taken by OTHER indicators' labels at this candle and side: a zigzag pivot (the wave-time label, row 0, and
 // lsCandleAbsorb's A / Ae, row 1); the candle after a pivot that re-tests it within 4 ticks (lsCandleAbsorb's A row 1); row 3 is
@@ -1026,7 +1028,7 @@ inline Scene layout(const Engine& E, const View& v) {
         if (!E.revShown(M)) { ++S.revNoBook; continue; }   // (1.22.0) the book did not agree (or its fact is not there yet)
         const int bar = it->second, side = M.dir > 0 ? 1 : -1;   // (1.9.5) green Rev ON TOP of the green bar (BD: red Rev under the red bar)
         const In& b = E.bars[(size_t)bar]; if (!std::isfinite(b.h) || !std::isfinite(b.l)) continue;
-        const char* tx = M.absn ? "RevA" : "Rev"; if (M.absn) ++S.revAShown;   // (1.23.0)
+        const auto sx = E.six.find(M.tr); const std::string txs = sx != E.six.end() && sx->second.n >= 0 ? "Rev " + std::to_string(sx->second.n) : std::string(M.absn ? "RevA" : "Rev"); const char* tx = txs.c_str(); if (M.absn) ++S.revAShown;   // (1.26.0) "Rev N"   // (1.23.0)
         const int w = v.textW(tx, FONT_BO) + 2, cx = v.X(bar), yh = v.Y(b.h), yl = v.Y(b.l), top = std::min(yh, yl), bot = std::max(yh, yl), lh = v.lh[0];
         const unsigned res = biReserved(E, bar, side); bool placed = false;
         for (int r = 0; r < BI_ROWS && !placed; ++r) {
@@ -1039,6 +1041,15 @@ inline Scene layout(const Engine& E, const View& v) {
             bool ok = inside(T.f, v.area); for (const Box& k : v.keepOut) if (k.r > k.l && k.b > k.t && hits(T.f, k)) ok = false;
             if (!ok) break;
             S.txt.push_back(T); ++S.revShown; placed = true;
+            if (sx != E.six.end() && sx->second.n >= 0) {   // (1.26.0) the marks at their prices: BT (ST) left of the pivot candle, S (B) left of the Rev candle, P right of it; only for a check that passed
+                const Engine::SixFact& q = sx->second; const int half = std::max(3, (v.X(bar) - v.X(bar - 1)) / 2); const auto pt = idx.find(M.tp);
+                auto mark = [&](const char* s, double px, int atBar, bool right, unsigned long col) { if (!(px > 0) || !std::isfinite(px)) return; Txt K; K.s = s; K.font = FONT_BO; K.bar = atBar; K.dir = M.dir; K.kind = 5; K.col = col;
+                    const int ww = v.textW(s, FONT_BO) + 2, x = v.X(atBar), y = v.Y(px); if (right) { K.f.l = x + half + 2; K.f.r = K.f.l + ww; } else { K.f.r = x - half - 2; K.f.l = K.f.r - ww; } K.f.t = y - lh / 2; K.f.b = K.f.t + lh;
+                    if (!inside(K.f, v.area)) return; for (const Box& k : v.keepOut) if (k.r > k.l && k.b > k.t && hits(K.f, k)) return; S.txt.push_back(K); ++S.sixMarks; };
+                const bool sh = M.dir < 0;                    // a short: the trapped BUYER is bullish-coloured, the pull and the seller bearish
+                if ((q.bits & 2) && pt != idx.end()) mark(sh ? "BT" : "ST", q.bt, pt->second, false, sh ? C_UP : C_DN);
+                if (q.bits & 8) mark("P", q.p, bar, true, sh ? C_DN : C_UP);
+                if (q.bits & 16) mark(sh ? "S" : "B", q.s, bar, false, sh ? C_DN : C_UP); }
             int& rr = reach[std::make_pair(bar, side)]; rr = std::max(rr, side > 0 ? top - T.f.t : T.f.b - bot); boBars.push_back({ bar, side });
         }
         if (!placed) ++S.noRoom; }
@@ -1160,5 +1171,48 @@ inline std::string recMerge(const std::string& old, const std::string& head, con
     return text;
 }
 
+
+// ---- (1.26.0) the trade lines of a Rev, his CoB line style (Rassul 2026-11-13 22:27 CT "1. pullback only. 2. use a similar approach as the cob"):
+// Stop = 1 tick beyond the pullback pivot (the opposite colour), T1 = the extreme of the move before the pullback, "1.382" = the pivot +
+// 1.382 x (T1 - the pivot) (the trade's colour). From the Rev candle; a target ends at the candle that reaches it, the stop at the candle
+// that touches it (the targets still open end there too); every line ends at the next Rev; an open line runs to the last candle.
+struct RevLn { int bar0 = 0, bar1 = 0; double px = 0; unsigned long col = 0; const char* name = ""; bool open = false; };
+inline std::vector<RevLn> revLines(const Engine& E) {
+    std::vector<RevLn> out; const int n = (int)E.bars.size(); if (n < 2 || !(E.tick > 0)) return out;
+    std::map<long long, int> idx; for (int k = 0; k < n; ++k) idx[E.bars[(size_t)k].t] = k;
+    std::vector<std::pair<int, const RevMark*> > R; auto take = [&](const RevMark& M) { const auto it = idx.find(M.tr); if (it != idx.end() && idx.count(M.tp) && E.revShown(M)) R.push_back(std::make_pair(it->second, &M)); };
+    for (const auto& kv : E.rev) take(kv.second); for (const auto& kv : E.rro) take(kv.second);
+    std::sort(R.begin(), R.end(), [](const std::pair<int, const RevMark*>& a, const std::pair<int, const RevMark*>& b) { return a.first < b.first; });
+    for (size_t i = 0; i < R.size(); ++i) { const RevMark& M = *R[i].second; const int b0 = R[i].first, last = i + 1 < R.size() ? std::max(b0, R[i + 1].first) : n - 1; const bool lg = M.dir > 0;
+        const In& pv = E.bars[(size_t)idx[M.tp]]; if (!std::isfinite(pv.h) || !std::isfinite(pv.l)) continue;
+        auto pm = E.pb.find(M.tp); if (pm == E.pb.end()) { pm = E.rpb.find(M.tp); if (pm == E.rpb.end()) continue; }
+        const auto a = idx.find(std::min(pm->second.tw0, pm->second.tw1)), b = idx.find(std::max(pm->second.tw0, pm->second.tw1)); if (a == idx.end() || b == idx.end()) continue;
+        double t1 = 0; bool any = false; for (int k = a->second; k <= b->second; ++k) { const double x = lg ? E.bars[(size_t)k].h : E.bars[(size_t)k].l; if (std::isfinite(x) && (!any || (lg ? x > t1 : x < t1))) { t1 = x; any = true; } }
+        const double pivot = lg ? pv.l : pv.h, stop = lg ? pivot - E.tick : pivot + E.tick, t2 = pivot + 1.382 * (t1 - pivot); if (!any || (lg ? t1 <= pivot : t1 >= pivot)) continue;
+        int bs = -1, h1 = -1, h2 = -1;
+        for (int k = b0 + 1; k <= last && bs < 0; ++k) { const In& x = E.bars[(size_t)k]; if (!std::isfinite(x.h) || !std::isfinite(x.l)) continue;
+            if (lg ? x.l <= stop : x.h >= stop) { bs = k; break; }                          // a candle touching both = the stop (his win rule)
+            if (h1 < 0 && (lg ? x.h >= t1 : x.l <= t1)) h1 = k; if (h2 < 0 && (lg ? x.h >= t2 : x.l <= t2)) h2 = k; }
+        const bool live = last == n - 1; const unsigned long cT = lg ? C_UP : C_DN, cS = lg ? C_DN : C_UP;
+        auto ln = [&](const char* nm, double px, int hit, unsigned long col) { RevLn L; L.bar0 = b0; L.px = px; L.col = col; L.name = nm; L.bar1 = hit >= 0 ? hit : bs >= 0 ? bs : last; L.open = hit < 0 && bs < 0 && live; out.push_back(L); };
+        ln("Stop", stop, bs, cS); ln("T1", t1, h1, cT); ln("1.382", t2, h2, cT); }
+    return out;
+}
+
+// ---- (1.26.0) what lsRevRead needs (fact kind W): every Rev as drawn (provisional ones too: it reads a Rev once, at its first print) and the
+// newest pullbacks that have no Rev yet (state 0: the live read before the Rev). tr = the Rev candle (0 = none yet), tp = the pivot candle.
+struct RevPost { long long tr = 0, tp = 0; int dir = 0, state = 0; };
+inline std::vector<RevPost> revPosts(const Engine& E, size_t maxRevs = 30) {
+    std::vector<RevPost> v; std::map<long long, int> has;
+    auto rv = [&](const RevMark& M) { if (M.tr <= 0 || M.tp <= 0 || M.dir == 0) return; has[M.tp] = 1; RevPost p; p.tr = M.tr; p.tp = M.tp; p.dir = M.dir > 0 ? 1 : -1; p.state = 1; v.push_back(p); };
+    for (const auto& kv : E.rev) rv(kv.second); for (const auto& kv : E.rro) rv(kv.second); for (const RevMark& x : E.revProv) rv(x);
+    std::sort(v.begin(), v.end(), [](const RevPost& a, const RevPost& b) { return a.tr < b.tr; });
+    v.erase(std::unique(v.begin(), v.end(), [](const RevPost& a, const RevPost& b) { return a.tr == b.tr; }), v.end());
+    if (v.size() > maxRevs) v.erase(v.begin(), v.end() - (long)maxRevs);
+    const PbMark* best = nullptr; auto pbk = [&](const PbMark& P) { if (P.tp > 0 && P.dir != 0 && !has.count(P.tp) && (!best || P.tp > best->tp)) best = &P; };
+    if (!E.pb.empty()) pbk(E.pb.rbegin()->second); for (const PbMark& x : E.pbProv) pbk(x);
+    if (best && !E.bars.empty() && E.bars.back().t - best->tp <= 10LL * std::max<long long>(1, E.bars.size() > 1 ? E.bars.back().t - E.bars[E.bars.size() - 2].t : 180)) { RevPost p; p.tp = best->tp; p.dir = best->dir > 0 ? 1 : -1; p.state = 0; v.push_back(p); }
+    return v;
+}
 } // namespace bko
 #endif

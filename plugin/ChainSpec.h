@@ -52,6 +52,8 @@ inline std::vector<Producer> producers() {
              {'X', "lsLiquidityProfile.Ex", 20, "Ex / Ex? at key levels"},
              {'L', "lsBigBidAsk", 20, "BO / BD letters (SignalBoard 1.3.0 kind L)"},
              {'E', "lsBreakout", 20, "the drawn decided pullback labels Pb / Pboc / Pdoc: decision bar, side, PB POC, stop, wave target (EntryFacts.h 1.0.0)"},
+             {'W', "lsBreakout", 20, "(2026-11-13) the Rev candles as drawn (lo = the Rev candle's raw stamp, hi = the pivot candle's, side) + the newest pullback without a Rev (state 0)"},
+             {'X', "lsRevRead", 30, "(2026-11-13) the six-check read of a Rev candle: bar = its raw stamp, code = count x 1000 + check bits (+ 64 trapped), lo / hi = big buyer / big seller price, val = the prior candle's extreme"},
              {'K', "lsDeltaProfile.Combiner", 30, "the combined read: turn / swing odds"} };
 }
 inline std::vector<Edge> edges() {
