@@ -8,7 +8,7 @@ static In bar(int k, double o, double h, double l, double c) { In b; b.t = 1000 
 static Engine boEng(const std::vector<In>& B, int i0, int dir) { Engine E; E.tick = 0.25; E.zzRev = 3; E.bars = B; bba::BoDec D; D.fired = true; D.dir = dir; D.t0 = B[(size_t)i0].t; D.t = D.t0; E.bo[D.t0] = D; return E; }
 static std::vector<In> mirror(std::vector<In> B) { for (In& b : B) { const double o = 200 - b.o, h = 200 - b.l, l = 200 - b.h, c = 200 - b.c; b.o = o; b.h = h; b.l = l; b.c = c; } return B; }
 int main() {
-    CK(std::string(VERSION) == "1.27.1"); CK(REV_ATR_X == 1.0);
+    CK(std::string(VERSION) == "1.27.2"); CK(REV_ATR_X == 0.8);
     // ---- FT. Bars 0-2 lead in; bar 3 = the BO candle (high 104); the last bar is forming (never read)
     std::vector<In> base = { bar(0, 100, 101, 99.5, 100.5), bar(1, 100.5, 101.5, 100, 101), bar(2, 101, 102, 100.5, 101.5), bar(3, 101.5, 104, 101.25, 103.5) };
     auto run = [&](std::vector<In> tail, int dir = 1) { std::vector<In> B = base; for (In& b : tail) { b.t = 1000 + 180 * (int)B.size(); B.push_back(b); } B.push_back(bar((int)B.size(), 0, 0, 0, 0));
@@ -48,7 +48,8 @@ int main() {
     const long long R21 = 1000 + 180 * 21, R22 = 1000 + 180 * 22;
     for (int dir = 1; dir >= -1; dir -= 2) {
         CK(revRun({ bar(0, 99.25, 101.5, 99.0, 101.25) }, dir) == R21);               // green, range 2.5 >= ATR, prior bar red: Rev
-        CK(revRun({ bar(0, 99.25, 100.9, 99.0, 100.85) }, dir) == 0);                 // range 1.9 < ATR although it closes above the prior high: NO Rev (1.19.0 gave one)
+        CK(revRun({ bar(0, 99.25, 100.5, 99.0, 100.45) }, dir) == 0);                 // range 1.5 = 0.75 x ATR: NO Rev
+        CK(revRun({ bar(0, 99.25, 100.9, 99.0, 100.85) }, dir) == R21);               // (1.27.2) range 1.9 = 0.95 x ATR: Rev
         CK(revRun({ bar(0, 99.25, 101.0, 99.0, 100.9) }, dir) == R21);                // range exactly 1.0 x ATR (about): Rev
         // rule 7: the prior bar is green and BIGGER -> the next green candle is not a Rev; a bigger one after it is
         CK(revRun({ bar(0, 99.25, 102.0, 98.9, 101.9), bar(0, 101.9, 103.5, 101.0, 103.25) }, dir) == R21);   // the first one already qualifies (prior = red pivot)
