@@ -8,7 +8,7 @@ static In bar(int k, double o, double h, double l, double c) { In b; b.t = 1000 
 static Engine boEng(const std::vector<In>& B, int i0, int dir) { Engine E; E.tick = 0.25; E.zzRev = 3; E.bars = B; bba::BoDec D; D.fired = true; D.dir = dir; D.t0 = B[(size_t)i0].t; D.t = D.t0; E.bo[D.t0] = D; return E; }
 static std::vector<In> mirror(std::vector<In> B) { for (In& b : B) { const double o = 200 - b.o, h = 200 - b.l, l = 200 - b.h, c = 200 - b.c; b.o = o; b.h = h; b.l = l; b.c = c; } return B; }
 int main() {
-    CK(std::string(VERSION) == "1.27.3"); CK(REV_ATR_X == 0.8);
+    CK(std::string(VERSION) == "1.27.4"); CK(REV_ATR_X == 0.8);
     // ---- FT. Bars 0-2 lead in; bar 3 = the BO candle (high 104); the last bar is forming (never read)
     std::vector<In> base = { bar(0, 100, 101, 99.5, 100.5), bar(1, 100.5, 101.5, 100, 101), bar(2, 101, 102, 100.5, 101.5), bar(3, 101.5, 104, 101.25, 103.5) };
     auto run = [&](std::vector<In> tail, int dir = 1) { std::vector<In> B = base; for (In& b : tail) { b.t = 1000 + 180 * (int)B.size(); B.push_back(b); } B.push_back(bar((int)B.size(), 0, 0, 0, 0));
@@ -55,8 +55,9 @@ int main() {
         CK(revRun({ bar(0, 99.25, 102.0, 98.9, 101.9), bar(0, 101.9, 103.5, 101.0, 103.25) }, dir) == R21);   // the first one already qualifies (prior = red pivot)
         CK(revRun({ bar(0, 99.25, 100.5, 99.0, 100.4), bar(0, 100.4, 102.9, 99.9, 102.75) }, dir) == R22);    // small green (no Rev), then range 3.0 > its 1.5: Rev
         CK(revRun({ bar(0, 99.5, 102.5, 99.0, 99.25) , bar(0, 99.3, 103.0, 99.1, 102.9) }, dir) == R22);
-        CK(revRun({ bar(0, 99.25, 102.0, 99.0, 100.5) }, dir) == 0);                  // (1.27.3) big enough (range 3.0) but closes under the prior bar's high (100.75): NO Rev
-        CK(revRun({ bar(0, 99.25, 102.0, 99.0, 100.75) }, dir) == 0);                 // closes exactly AT the prior high: no       // prior bar RED and bigger (3.5): no size test against it
+        CK(revRun({ bar(0, 99.25, 102.0, 99.0, 100.5) }, dir) == R21);                // (1.27.4) range 3.0 >= 1.2 x ATR: Rev without the close
+        CK(revRun({ bar(0, 99.25, 101.0, 99.0, 100.5) }, dir) == 0);                  // (1.27.3) big enough (range 3.0) but closes under the prior bar's high (100.75): NO Rev
+        CK(revRun({ bar(0, 99.25, 101.0, 99.0, 100.75) }, dir) == 0);                 // closes exactly AT the prior high: no       // prior bar RED and bigger (3.5): no size test against it
     }
     {   // same colour prior bar that is bigger or equal blocks the Rev
         std::vector<In> B; for (int k = 0; k < 20; ++k) B.push_back(bar(k, 100.5, 101.5, 99.5, 100.5));
