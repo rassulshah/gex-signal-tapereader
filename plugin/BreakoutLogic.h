@@ -126,7 +126,7 @@ namespace bko {
 #endif
 static const bool SHOW_RLY_PBOC = false;   // (1.25.0, Rassul 2026-11-13 14:24-14:25 CT "right now the pb signal works with rly, but it needs a bo", "dont show pboc, because pboc requires a pb") a pullback label needs a BO / BD: the no-BO Rly Pboc / PbocT is no longer drawn (still judged + recorded, BPO| lines)
 static const bool SHOW_PDOC = false;   // (1.17.0) Pdoc removed from the chart (decided + recorded as before)
-static const char* const VERSION = "1.26.0";   // (1.26.0, 2026-11-13 Rassul 22:05-22:27 CT "update it to indicate the number of checks", "make the T green .. add P for pulled. Put S for Seller", "update T to BT", "make P red", "next thing is to have the stop line , target 1 and target 2 lines", "target 1 is the high and target two can be an extenstion like 1.38", "1. pullback only. 2. use a similar approach as the cob"): the Rev label carries the count of the six checks ("Rev 4", from lsRevRead's fact X); the marks BT / P / S (ST / P / B on a long) at the big buyer's price, the prior candle's extreme and the big seller's price when their check passed; the lines Stop / T1 / 1.382 from the Rev candle (revLines); no Pb / Rev decision changed   // was "1.25.0":   // (1.25.0, 2026-11-13 Rassul 14:25 CT "dont show pboc, because pboc requires a pb"): no pullback label after a Rly wave that has no BO / BD (SHOW_RLY_PBOC false; display only, the decision and its records unchanged)   // was "1.24.0":   // (1.24.0, 2026-11-11 Rassul 20:26-20:27 CT "you dont need the vwap, if we are using the hourly trend", "remove the vwap contidion. we need to align witht he hbo instead"): a Rly no longer needs vwapTrend (RallyLogic 1.5.0 needTrend = false); it still has to sit inside an hourly breakout bar of its direction
+static const char* const VERSION = "1.27.0";   // (1.27.0, 2026-11-14 Rassul 11:07-11:28 CT "also implement the ft bar label on the ft bar that closes above the bo bar high", "the followht through candle is a green candle that closes above the bo bar high or at the bo bar [high] with a high above the bo high" (he chose reading A), "the rev size must be at least the size of the ATR", "update 7 , rev candles range bigger than the prior bar if the prior bar is the same color"): (1) the FT label on the follow-through candle of a drawn BO / BD (ftPass; a label only, no BO / Pb / Rev decision uses it); (2) Rev = range >= 1.0 x ATR(13), REQUIRED (the 1.19.0 "or closes beyond the prior bar" is gone); (3) rule 7: when the bar before the Rev candle has the Rev's colour, the Rev's range must be bigger than that bar's   // was "1.26.0":   // (1.26.0, 2026-11-13 Rassul 22:05-22:27 CT "update it to indicate the number of checks", "make the T green .. add P for pulled. Put S for Seller", "update T to BT", "make P red", "next thing is to have the stop line , target 1 and target 2 lines", "target 1 is the high and target two can be an extenstion like 1.38", "1. pullback only. 2. use a similar approach as the cob"): the Rev label carries the count of the six checks ("Rev 4", from lsRevRead's fact X); the marks BT / P / S (ST / P / B on a long) at the big buyer's price, the prior candle's extreme and the big seller's price when their check passed; the lines Stop / T1 / 1.382 from the Rev candle (revLines); no Pb / Rev decision changed   // was "1.25.0":   // (1.25.0, 2026-11-13 Rassul 14:25 CT "dont show pboc, because pboc requires a pb"): no pullback label after a Rly wave that has no BO / BD (SHOW_RLY_PBOC false; display only, the decision and its records unchanged)   // was "1.24.0":   // (1.24.0, 2026-11-11 Rassul 20:26-20:27 CT "you dont need the vwap, if we are using the hourly trend", "remove the vwap contidion. we need to align witht he hbo instead"): a Rly no longer needs vwapTrend (RallyLogic 1.5.0 needTrend = false); it still has to sit inside an hourly breakout bar of its direction
 // was static const char* const VERSION = "1.23.2";   // (1.23.2, 2026-11-11 Rassul 15:08 CT "when you have a bearish retracement, the label should be above the pb and its variants and vice versa"): the retracement % sits on the OUTER side of the pullback label - above a label drawn over the candle, below one drawn under it   // was "1.23.1";   // (1.23.1, 2026-11-11 Rassul 14:55 CT "pb and its variants are suppose to be completely seperate"): RevA switched OFF - the BO indicator shows no Delta Profile absorption; Rev is "Rev" again   // was "1.23.0";   // (1.23.0, 2026-11-11 Rassul 14:41 CT "1. switch it off. 2. ok and only delta profile"): the book gate is OFF (the verdict is still decided, status only); a Rev with an absorbed delta node at its pullback pivot is drawn "RevA"   // was "1.22.0";   // (1.22.0, 2026-11-11 Rassul "I want the signal on rev to utilize this also", "Require it"): a Rev is drawn only when the order book agrees (lsBookFlow fact F)   // was "1.21.0";   // (1.21.0, 2026-11-11 Rassul 12:51 CT "Build") a Rly is displayed only when the candle it sits on is inside an hourly breakout bar of its direction (lsStepTrend's step rule), decided once when that hour has closed; a Rly Pboc needs such a Rly
 // was "1.20.0";   // (1.20.0, 2026-11-11 Rassul 12:27 CT "I want to add the retracement amount right below any type of pb like 45%", "Keep it two digits") the pullback's retracement of its wave, two digits + "%", right under every decided pullback label
 // was "1.19.0";   // (1.19.0, 2026-11-11 Rassul 11:07 CT "Its range is at least 1.2x the 13-bar ATR (measured on the bar before) or it closes above the prior bar high. also note that it can be displayed after any type of pb including pboc etc.") Rev = the first bar of the right colour whose range is >= 1.2 x ATR(13) OR that closes beyond the prior bar (long: above its high; short: below its low); a Rev is drawn after every kind of pullback label - Pb, Pboc, PbT, PbocT and the no-BO Rly Pboc (BRO, was recorded only)
@@ -189,7 +189,7 @@ static const double REV_ABS_X = 2.0;           // the node: the bar's biggest at
 static const bool REV_NEEDS_BOOK = true;       // (1.22.0) a Rev is drawn only when the book agrees (where lsBookFlow runs on the chart)
 static const bool RLY_NEEDS_VWAP_TREND = false;   // (1.24.0, Rassul 2026-11-11 20:27 CT "remove the vwap contidion. we need to align witht he hbo instead") a Rly fires on its 4 wave conditions; the hourly breakout bar (RLY_NEEDS_HBO) is the trend check
 static const bool RLY_NEEDS_HBO = true;        // (1.21.0) a Rly counts only inside an hourly breakout bar of its direction
-static const double REV_ATR_X = 1.2;           // (1.9.0) Rev range >= 1.2 x ATR (1.9.1: ATR(13))
+static const double REV_ATR_X = 1.0;           // (1.27.0) Rev range >= 1.0 x ATR(13), required   // was 1.2 (1.9.0 / 1.9.1)
 static const int REV_ATR_N = 13;               // (1.9.1) ATR(13), Wilder
 static const int PB_MAX_PER_BO = 2;            // (1.8.0) the first 2 qualifying pullback pivots of a BO / BD only
 static const double PB_ATR_FRAC = 1.0 / 3.0;   // (1.8.0) no longer used by the Pb rule (kept for the record / older tests)   // (1.6.0, 19:21 CT "make it 1/3") a Pb comes back to within this share of the ATR of the broken pivot
@@ -352,7 +352,7 @@ struct Engine {
         if (chartN == count && lc == lastClosedT && chartFirst == firstT && tk == tick && per == spb) return false;
         if (count >= 0 && (chartFirst != firstT || chartN < count || tk != tick || per != spb)) full = true;
         bars = B; tick = tk; spb = per; openMin = om; closeMin = cm; count = chartN; lastClosedT = lc; firstT = chartFirst;
-        boPass(); if (SHOW_BI) biPass(); rlyPass(); hboPass(); pbPass(); revPass(); full = false; ++runs; return true;
+        boPass(); ftPass(); if (SHOW_BI) biPass(); rlyPass(); hboPass(); pbPass(); revPass(); full = false; ++runs; return true;
     }
     int trendAt(int k) {
         if (k <= 0 || k >= (int)bars.size()) return 0;
@@ -844,6 +844,41 @@ struct Engine {
         const double c = b.c / tick; return d > 0 ? c > (double)hi + 1e-6 : c < (double)lo - 1e-6;
     }
     int revAbs(int p, int j, int d) { for (int k = p - 1; k <= std::min(j, p + 1); ++k) if (nodeAbsorbed(k, d)) return 1; return 0; }
+    // (1.27.0) FT: the follow-through candle of a fired BO (BD mirrored) = the FIRST candle after the BO candle, while the BO's wave is
+    // still up at that candle's close, that is GREEN and closes above the BO candle's high, or closes exactly AT that high with its own
+    // high above it. The wave = the BO decision's own 3-bar High / Low walk from the BO candle (bba::zigDir's rule: the wave ends on the
+    // first candle that makes no new high and trades below the lows of the zzRev candles before it). Decided on closed candles only, a
+    // pure function of the candles from the BO candle on, kept once found (no repaint); a label only - nothing else reads it.
+    std::map<long long, long long> ft;         // BO / BD candle time -> its FT candle time
+    std::set<long long> ftNone;                // BO / BD candles whose wave ended without an FT (decided: never looked at again)
+    void ftPass() {
+        const int n = (int)bars.size(); if (n < 3 || !(tick > 0)) return;
+        const int last = n - 2; const double eps = tick * 0.25; const int rv = std::max(1, zzRev);
+        std::vector<long long> T((size_t)n); for (int k = 0; k < n; ++k) T[(size_t)k] = bars[(size_t)k].t;
+        for (const auto& kv : bo) {
+            const bba::BoDec& D = kv.second; if (!D.fired || !D.dir || ft.count(D.t0) || ftNone.count(D.t0)) continue;
+            const auto it = std::lower_bound(T.begin(), T.end(), D.t0); if (it == T.end() || *it != D.t0) continue;
+            const int i0 = (int)(it - T.begin()), d = D.dir > 0 ? 1 : -1; const In& b0 = bars[(size_t)i0];
+            if (!b0.ok || !std::isfinite(b0.h) || !std::isfinite(b0.l)) continue;
+            const double X0 = d > 0 ? b0.h : b0.l; double ext = X0;                 // the BO candle's high (BD: low); the wave's extreme so far
+            for (int j = i0 + 1; j <= last; ++j) {
+                const In& b = bars[(size_t)j]; if (!b.ok || !std::isfinite(b.h) || !std::isfinite(b.l) || !std::isfinite(b.o) || !std::isfinite(b.c) || b.h < b.l) continue;
+                if (d > 0 ? b.h > ext : b.l < ext) ext = d > 0 ? b.h : b.l;         // a new extreme: the wave goes on
+                else {                                                              // no new extreme: did it turn (beyond the rv candles before it)?
+                    double pl = 0; bool have = false;
+                    for (int k = std::max(0, j - rv); k < j; ++k) { const In& q = bars[(size_t)k]; if (!std::isfinite(q.h) || !std::isfinite(q.l)) continue;
+                        const double x = d > 0 ? q.l : q.h; if (!have || (d > 0 ? x < pl : x > pl)) { pl = x; have = true; } }
+                    if (have && (d > 0 ? b.l < pl : b.h > pl)) { ftNone.insert(D.t0); break; }   // the wave is over: no FT
+                }
+                if (!(d > 0 ? b.c > b.o : b.c < b.o)) continue;                     // colour
+                const bool beyond = d > 0 ? b.c > X0 + eps : b.c < X0 - eps;
+                const bool at = std::fabs(b.c - X0) <= eps && (d > 0 ? b.h > X0 + eps : b.l < X0 - eps);
+                if (beyond || at) { ft[D.t0] = b.t; break; }
+            }
+        }
+        while (ft.size() > 40000) ft.erase(ft.begin());
+        while (ftNone.size() > 40000) ftNone.erase(ftNone.begin());
+    }
     void revPass() {
         revProv.clear();
         const int n = (int)bars.size(); if (n < 3 || (pb.empty() && pbProv.empty() && rpb.empty())) return;
@@ -877,8 +912,11 @@ struct Engine {
                 const double r = b.h - b.l; const double A = j >= 1 ? A13[(size_t)j - 1] : NAN;
                 const bool big = std::isfinite(A) && A > 0 && r >= REV_ATR_X * A - eps * 0.01;   // (1.9.1) range >= 1.2 x ATR(13)
                 const In* pr = j >= 1 ? &bars[(size_t)j - 1] : nullptr;                          // (1.19.0) OR it closes beyond the prior bar: above its high (bear: below its low)
-                const bool past = pr && pr->ok && std::isfinite(pr->h) && std::isfinite(pr->l) && (d > 0 ? b.c > pr->h + eps : b.c < pr->l - eps);
-                if (!big && !past) continue;
+                // (1.27.0) the size is REQUIRED (the 1.19.0 "or closes beyond the prior bar" no longer qualifies a smaller candle); rule 7: a prior
+                // bar of the Rev's own colour must be SMALLER than the Rev candle (a prior bar of the other colour, or an unknown one: no test)
+                if (!big) continue;
+                if (pr && pr->ok && std::isfinite(pr->h) && std::isfinite(pr->l) && std::isfinite(pr->o) && std::isfinite(pr->c)
+                    && (d > 0 ? pr->c > pr->o : pr->c < pr->o) && !(r > (pr->h - pr->l) + eps)) continue;
                 RevMark m; m.tr = b.t; m.tp = P.tp; m.td = T[(size_t)std::max(j, c)]; m.dir = d; m.rng = r; m.atr = A; m.absn = revAbs(p, j, d);   // (1.23.0)
                 if (prov) { revProv.push_back(m); break; }                       // (1.9.2) drawn only; goes if its Pb goes
                 RecL L; const In& db = bars[(size_t)std::max(j, c)]; L.sess = db.ok ? sessOf(db.days, db.endSec) : -1;
@@ -907,7 +945,7 @@ struct View {
     int lh[2] = { 12, 14 };                         // letter row heights: BO / BD font, Rly font
 };
 struct Board { long long t = 0; int side = 0; int val = 0; };   // SignalBoard 'L': bar time, +1 above / -1 below, px from the extreme to the outer edge
-struct Scene { std::vector<Txt> txt; std::vector<Board> board; int sixMarks = 0; int revNoBook = 0, revAShown = 0; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0, rlyNoHbo = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
+struct Scene { std::vector<Txt> txt; std::vector<Board> board; int ftShown = 0; int sixMarks = 0; int revNoBook = 0, revAShown = 0; int boShown = 0, rlyShown = 0, pbShown = 0, biShown = 0, revShown = 0, noRoom = 0, rlyHidden = 0, pbHidden = 0, pbocShown = 0, pbocWait = 0, rpbocShown = 0, pdocShown = 0, rpdocShown = 0, pbtShown = 0, pctShown = 0, pctNoRoom = 0, rlyNoHbo = 0; };   // (1.20.0) pctShown = retracement texts   // (1.18.0) pbtShown = drawn PbT / PbocT   // (1.13.0) pdocShown = of pbShown, drawn "Pdoc"   // (1.12.0) pbocShown = of pbShown, drawn "Pboc"   // (1.11.1) hidden = under a Cob / Lvp
 // (1.5.0) the BI rows: row r sits GAP + r * ROW_OUT px from the wick (0 = the BO row +3..+17, 1 = +19..+33, 2 = +35 (Pb), 3 = +51 (LVP),
 // 4 = +67, 5 = +83). Rows taken by OTHER indicators' labels at this candle and side: a zigzag pivot (the wave-time label, row 0, and
 // lsCandleAbsorb's A / Ae, row 1); the candle after a pivot that re-tests it within 4 ticks (lsCandleAbsorb's A row 1); row 3 is
@@ -1053,6 +1091,27 @@ inline Scene layout(const Engine& E, const View& v) {
             int& rr = reach[std::make_pair(bar, side)]; rr = std::max(rr, side > 0 ? top - T.f.t : T.f.b - bot); boBars.push_back({ bar, side });
         }
         if (!placed) ++S.noRoom; }
+    // (1.27.0) FT: green "FT" above the follow-through candle of a drawn BO (red under it for a BD), the first free row from the wick
+    // (the Rev's row search); no room = not drawn
+    for (const auto& kv : E.ft) {
+        const auto bd = E.bo.find(kv.first); if (bd == E.bo.end() || !E.shownBo(bd->second)) continue;
+        const auto it = idx.find(kv.second); if (it == idx.end()) continue;
+        const int bar = it->second, dir = bd->second.dir > 0 ? 1 : -1; const In& b = E.bars[(size_t)bar]; if (!std::isfinite(b.h) || !std::isfinite(b.l)) continue;
+        const int w = v.textW("FT", FONT_BO) + 2, cx = v.X(bar), yh = v.Y(b.h), yl = v.Y(b.l), top = std::min(yh, yl), bot = std::max(yh, yl), lh = v.lh[0];
+        const unsigned res = biReserved(E, bar, dir); bool placed = false;
+        for (int r = 0; r < BI_ROWS && !placed; ++r) {
+            if (res & (1u << r)) continue;
+            Txt T; T.s = "FT"; T.font = FONT_BO; T.bar = bar; T.dir = dir; T.kind = 6; T.row = r; T.col = dir > 0 ? C_UP : C_DN;
+            T.f.l = cx - w / 2; T.f.r = T.f.l + w; const int off = GAP + r * ROW_OUT;
+            if (dir > 0) { T.f.b = top - off; T.f.t = T.f.b - lh; } else { T.f.t = bot + off; T.f.b = T.f.t + lh; }
+            bool clash = false; for (const Txt& o : S.txt) if (hits(T.f, o.f)) { clash = true; break; }
+            if (clash) continue;
+            bool ok = inside(T.f, v.area); for (const Box& k : v.keepOut) if (k.r > k.l && k.b > k.t && hits(T.f, k)) ok = false;
+            if (!ok) break;
+            S.txt.push_back(T); ++S.ftShown; placed = true;
+            int& rr = reach[std::make_pair(bar, dir)]; rr = std::max(rr, dir > 0 ? top - T.f.t : T.f.b - bot); boBars.push_back({ bar, dir });
+        }
+        if (!placed) ++S.noRoom; }
     std::sort(boBars.begin(), boBars.end()); boBars.erase(std::unique(boBars.begin(), boBars.end()), boBars.end());   // (1.1.0) one post per bar and side
     for (const auto& p : boBars) { const auto it = reach.find(p); if (it == reach.end()) continue; Board B; B.t = E.bars[(size_t)p.first].t; B.side = p.second; B.val = it->second; S.board.push_back(B); }
     return S;
@@ -1069,7 +1128,7 @@ inline std::string statusText(const Engine& E, const std::string& mkt, const std
     for (const auto& kv : E.rly) { const auto it = dayOf.find(kv.second.te); if (it == dayOf.end() || it->second != today || !kv.second.fired) continue; (kv.second.dir > 0 ? ru : rd)++; }
     int pu = 0, pd = 0; for (const auto& kv : E.pb) { const auto it = dayOf.find(kv.first); if (it == dayOf.end() || it->second != today) continue; (kv.second.dir > 0 ? pu : pd)++; }   // (1.1.0)
     std::string s = std::string("VERSION,") + VERSION + "\nMARKET," + mkt + "\nSYMBOL," + sym + "\nSPB," + std::to_string(spb) + "\n";
-    s += "RULES,BO / BD = lsBigBidAsk " + std::string(bba::VERSION) + " bba::boFromCandles (rule " + std::to_string(bba::BO_RULE) + ", follow-through in the same wave) on the " + std::to_string(E.zzRev) + "-bar High/Low ZigZag; Rly = RallyLogic " + rly::VERSION + " on the same ZigZag" + (spb == 180 ? "" : " (3-min charts only: off on this chart)") + "; Pb = a pullback pivot LOW confirmed by the next GREEN close (pivot HIGH: next RED close) (1.8.0) whose bar overlaps the BO / BD candle, at most 2 per BO / BD (until the next BO / BD or the wave origin breaks), (1.9.1) only after the BO / BD wave's 3-bar ZigZag pivot (the next wave); (1.9.0) Rev = after a Pb the first green bar (BD: red) from the pivot bar on with its low below the pivot bar's high (BD: high above its low) and range >= 1.2 x ATR(13), one per wave\n";
+    s += "RULES,BO / BD = lsBigBidAsk " + std::string(bba::VERSION) + " bba::boFromCandles (rule " + std::to_string(bba::BO_RULE) + ", follow-through in the same wave) on the " + std::to_string(E.zzRev) + "-bar High/Low ZigZag; Rly = RallyLogic " + rly::VERSION + " on the same ZigZag" + (spb == 180 ? "" : " (3-min charts only: off on this chart)") + "; Pb = a pullback pivot LOW confirmed by the next GREEN close (pivot HIGH: next RED close) (1.8.0) whose bar overlaps the BO / BD candle, at most 2 per BO / BD (until the next BO / BD or the wave origin breaks), (1.9.1) only after the BO / BD wave's 3-bar ZigZag pivot (the next wave); (1.9.0) Rev = after a Pb the first green bar (BD: red) from the pivot bar on with its low below the pivot bar's high (BD: high above its low) and range >= 1.0 x ATR(13) (1.27.0: required; bigger than the bar before it when that bar has its colour), one per wave; (1.27.0) FT = the first candle of the BO / BD's wave after the BO / BD candle that is green (BD: red) and closes above its high (BD: below its low), or exactly at it with a high above it (BD: a low below it): a label only\n";
     s += "TODAY,BO " + std::to_string(bo) + ",BD " + std::to_string(bd) + ",not fired " + std::to_string(nf) + ",Rly up " + std::to_string(ru) + ",Rly down " + std::to_string(rd) + ",Pb after BO " + std::to_string(pu) + ",Pb after BD " + std::to_string(pd) + "\n";
     if (SHOW_BI) s += "BI,bi_shown 1,label BI (plain - no ?),window " + std::to_string(BI_N) + " candles,range >= avg of " + std::to_string(BI_AVG) + " + (volume or range up),close back past the pivot,one per pivot,cancel waiting BO " + (E.biCancel ? "1" : "0")
        + ",today BI down " + std::to_string(idn) + ",BI up " + std::to_string(iu) + ",BO / BD cancelled " + std::to_string(bc) + ",kept " + std::to_string(E.bi.size()) + ",cancelled kept " + std::to_string(E.boCancel.size()) + ",attempts last pass " + std::to_string(E.biAtt) + ",drawn " + std::to_string(last.biShown) + "\n";   // (1.5.0)
