@@ -66,6 +66,9 @@ int main(int argc, char** argv) {
         CHECK(lines > 0 && col && in, "3-hour lines drawn in one colour inside the pane (" << lines << " pieces)");
         CHECK(names <= 4 && nm.find("Cob") == std::string::npos, "at most one name per line, at its newest piece (" << nm << ")");
         cobs::View w = v; w.first = 5; w.last = 2; CHECK(cobs::htfLayout(E, w).empty(), "an empty view draws nothing"); }
+    {   int nh = 0; bool okh = true; for (const std::string& l : E.out) if (l.rfind("HTF,", 0) == 0) { ++nh; bool f = false; for (const cobs::Mark& m : E.marks) f = f || (l.find("HTF," + std::to_string(m.t) + (m.side > 0 ? ",BULL," : ",BEAR,") + m.levels.substr(0, 2) + ",") == 0); okh = okh && f; }
+        CHECK(nh == (int)E.marks.size() && okh, "one HTF record line per CoB with its level's name and price (" << nh << ")");
+        const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.find("\nHTFNOW,") != std::string::npos && st.find("\nHTFX,") != std::string::npos && st.find(",HOD,") != std::string::npos && st.find(",LOD,") != std::string::npos, "status: HTFNOW + the session's HOD / LOD lines for the MQ Reader"); }
     {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.7.0\n", 0) == 0 && st.find("\nHTF_RULES,1.7.0") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
     std::cout << "test_cobsignal_htf: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }

@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 #include <functional>
 #include <map>
 #include <string>
@@ -352,6 +353,12 @@ struct Engine {
         m.r = T.r.bar >= 0; m.v = T.v.bar >= 0; m.rBar = T.r.bar; m.vBar = T.v.bar; m.rN = T.r.n; m.vN = T.v.n;
         m.zCnt = w.cnt + (w.cntCap ? 1 : 0); m.zBars = 0; m.zWave = Z3.B[(size_t)w.s].t;
         marks.push_back(m); out.push_back(recLine(m));
+        {   // the swept 3-hour levels with their prices, for the MQ Reader: HTF,<CoB bar end>,<BULL|BEAR>,<name>,<price>[,<name>,<price>]
+            char r[200]; int q = std::snprintf(r, sizeof r, "HTF,%lld,%s", m.t, side > 0 ? "BULL" : "BEAR");
+            auto put = [&](const char* nm, double px) { if (sw.find(nm) != std::string::npos && q > 0 && q < (int)sizeof r) q += std::snprintf(r + q, sizeof r - (size_t)q, ",%s,%.10g", nm, std::round(px / tick) * tick); };
+            if (side > 0) { put("S1", h.s1); put("S2", h.s2); } else { put("R1", h.r1); put("R2", h.r2); }
+            out.push_back(r);
+        }
         marks.back().zAt = m.t; zzoDone(marks.back(), w.hasV && (w.cnt >= ZZO_COB_MIN || w.cntCap));
     }
     void checkWave(size_t k, int j) {
@@ -659,7 +666,23 @@ inline std::vector<Prim> htfLayout(const Engine& E, const View& v)
 inline std::string htfStatus(const Engine& E)
 {
     std::string o = "HTF_RULES,1.7.0 3-hour bars from 17:00 CT (forming bar counts); 1-bar High/Low ZigZag; R1 = last pivot high, R2 = higher of the last 2; S1 = last pivot low, S2 = lower of the last 2; standing = no completed 3-hour bar closed beyond; the CoB origin = the 3-hour swing's extreme beyond a standing level, the wave back through it; origin from 7:00 AM CT, confirmed by 11:00 CT\n";
-    if (!E.hs.empty()) { const HSnap& h = E.hs.back(); char b[200]; std::snprintf(b, sizeof b, "HTF,R1=%.6g%s,R2=%.6g%s,S1=%.6g%s,S2=%.6g%s,swing %s\n", h.r1, h.r1ok ? "" : " broken", h.r2, h.r2ok ? "" : " broken", h.s1, h.s1ok ? "" : " broken", h.s2, h.s2ok ? "" : " broken", h.dir > 0 ? "up" : h.dir < 0 ? "down" : "-"); o += b; }
+    if (!E.hs.empty()) { const HSnap& h = E.hs.back(); char b[200]; std::snprintf(b, sizeof b, "HTF,R1=%.6g%s,R2=%.6g%s,S1=%.6g%s,S2=%.6g%s,swing %s\n", h.r1, h.r1ok ? "" : " broken", h.r2, h.r2ok ? "" : " broken", h.s1, h.s1ok ? "" : " broken", h.s2, h.s2ok ? "" : " broken", h.dir > 0 ? "up" : h.dir < 0 ? "down" : "-"); o += b;
+        const double tk = E.tick > 0 ? E.tick : 1; auto rt = [tk](double v) { return std::isfinite(v) ? std::round(v / tk) * tk : v; };
+        std::snprintf(b, sizeof b, "HTFNOW,%.10g,%d,%.10g,%d,%.10g,%d,%.10g,%d,%d,%.10g\n", rt(h.r1), h.r1ok ? 1 : 0, rt(h.r2), h.r2ok ? 1 : 0, rt(h.s1), h.s1ok ? 1 : 0, rt(h.s2), h.s2ok ? 1 : 0, h.dir, rt(h.ext)); o += b; }   // r1,ok,r2,ok,s1,ok,s2,ok,swing,swing extreme (for the MQ Reader)
+    // the session's RTH high / low and the 3-hour levels each went through (as they stood on that bar): HTFX,<session day>,<HOD|LOD>,<price>,<name price;...>
+    if (!E.S.empty()) { const auto it = E.S.rbegin(); const Engine::Sess& s = it->second; const long long dd = (long long)it->first * 86400; const time_t tt = (time_t)dd; struct tm g; char day[16] = "";
+#if defined(_WIN32)
+        gmtime_s(&g, &tt);
+#else
+        gmtime_r(&tt, &g);
+#endif
+        std::strftime(day, sizeof day, "%Y-%m-%d", &g);
+        auto line = [&](const char* nm, int i, bool hi) { if (i < 0 || i >= (int)E.hs.size() || i >= (int)E.B.size()) return; const HSnap& h = E.hs[(size_t)i]; const double px = hi ? E.B[(size_t)i].h : E.B[(size_t)i].l; char b[240]; std::string sw;
+            const double tk = E.tick > 0 ? E.tick : 1;
+            auto add = [&](const char* n, double v) { if (std::isfinite(v) && (hi ? px > v : px < v)) { char c[48]; std::snprintf(c, sizeof c, "%s%s %.10g", sw.empty() ? "" : ";", n, std::round(v / tk) * tk); sw += c; } };
+            if (hi) { add("R1", h.r1); if (std::fabs(h.r2 - h.r1) > E.tick * 0.25) add("R2", h.r2); } else { add("S1", h.s1); if (std::fabs(h.s2 - h.s1) > E.tick * 0.25) add("S2", h.s2); }
+            std::snprintf(b, sizeof b, "HTFX,%s,%s,%.10g,%s\n", day, nm, std::round(px / tk) * tk, sw.c_str()); o += b; };
+        if (s.rth) { line("HOD", s.rhI, true); line("LOD", s.rlI, false); } }
     return o;
 }
 
