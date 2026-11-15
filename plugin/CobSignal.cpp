@@ -48,7 +48,7 @@
 #define CS_SEP "/"
 #endif
 
-static const char* CS_VERSION = "1.6.5";   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
+static const char* CS_VERSION = "1.7.0";   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
 // was "1.5.1";   // (1.5.1) CQG roots mapped (cobs::mktKey) - it never ran on his CQG charts before   // (1.5.0) + the CoB Fib lines (targets 1.272 / 1.618 / 2.0, entry 50%, stop 0)   // = cobs::VERSION = the setVersion literal
 
 static long long csMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -198,7 +198,7 @@ static short csC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000
 
 int CobSignal::draw(void) {
     CSState* S = slot_.get(this, false);
-    if (!S || S->E.marks.empty()) return RTX_OK;                        // draw never reads bars
+    if (!S || (S->E.marks.empty() && S->E.hs.empty())) return RTX_OK;   // draw never reads bars
     try {
         const long n = getBarCount(); if (n < 2) return RTX_OK;
         RCT pane; pane.getPaneRect(false);
@@ -209,7 +209,8 @@ int CobSignal::draw(void) {
         v.Y = [this](double px) { return (double)getVerticalDrawPosition((float)px); };
         FONT fb; fb.id = HELVETICA; fb.size = 10; fb.style = BOLD;
         v.textW = [this, &fb](const std::string& s) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
-        std::vector<cobs::Prim> P = cobs::fibLayout(S->E, v);           // (1.5.0) the Fib lines first (under the labels)
+        std::vector<cobs::Prim> P = cobs::htfLayout(S->E, v);           // (1.7.0) the 3-hour R1 / R2 / S1 / S2 lines first
+        { const std::vector<cobs::Prim> Q = cobs::fibLayout(S->E, v); P.insert(P.end(), Q.begin(), Q.end()); }   // (1.5.0) the Fib lines (under the labels)
         { const std::vector<cobs::Prim> Q = cobs::layout(S->E, v); P.insert(P.end(), Q.begin(), Q.end()); }
         S->drawn = (int)P.size();
         FONT fs; fs.id = HELVETICA; fs.size = 8; fs.style = PLAIN;
@@ -233,7 +234,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.6.5 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave (the chart ZigZag / ZZO Combo wave) from a swing low/high that swept a key level, back through the level, >= 1.9x the last 20 waves, ZZO Combo count >= 10, by 11:00 CT; marked on the bar that completes the wave. + Fib lines on each drawn CoB: stop 0, entry 50%, BE at the CoB high, targets 1.272 / 1.618 / 2.0 (end on a close back through 0, at the session end or the next CoB; entry + stop after 3 h, a stop touch or T1 before the fill). his CoB computed natively (sweep of ONH/ONL, PDH/PDL, PFH/PFL, LonHI/LonLO, PWH/PWL, AsiaHI/AsiaLO, PHH/PHL; by 11:00 CT; leg >= 1.9x the last 20, >= 3 bars, 50-bar extreme, < 0.4 ADR; bulls to 11:00; a PHH/PHL-only CoB is drawn in ES, HG, GC and recorded only elsewhere): Cob, Cob+R (biggest range in 35+ bars at the origin), Cob+V (biggest volume). Decided at the bar close, never repainted. + Lvp: low-volume pullback after a drawn CoB.");
-    p->setVersion("1.6.5");   // = CS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA CoB Signal v1.7.0 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. Origin from 7:00 AM CT, confirmed by 11:00 CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Decided at the bar close, never repainted.");
+    p->setVersion("1.7.0");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }

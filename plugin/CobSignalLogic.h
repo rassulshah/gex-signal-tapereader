@@ -49,7 +49,8 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
+static const char* const VERSION = "1.7.0";   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
+// was "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
 // was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
 // was "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
 // was "1.6.1";   // (1.6.1) roots QGC / QHG / QCL / NGx mapped: the indicator never ran on his GC / HG / CL / NG charts
@@ -171,6 +172,49 @@ inline std::string lvpLine(const LvpMark& m) {
     return b;
 }
 
+// ---- (1.7.0) THE 3-HOUR SUPPORT / RESISTANCE (his setHrlyLvls on a 180-min chart) built from the chart's own bars.
+//   3-hour bars from 5:00 PM CT (17-20, 20-23, 23-2, 2-5, 5-8, 8-11, 11-14, 14-17); the forming bar counts, as on his live chart.
+//   ZigZag  his 1-bar High / Low ZigZag as IRT walks it: up while highs extend, turns down on a bar with a lower low than the bar
+//           before and no new high (mirror); a bar that makes both keeps the extreme (no split inside the bar).
+//   R1 = the last confirmed pivot high, R2 = the higher of the last two;  S1 = the last confirmed pivot low, S2 = the lower of the last two.
+//   standing = no COMPLETED 3-hour bar since that pivot has closed beyond the level (a closed break is a break, not a spring / upthrust).
+//   Each chart bar keeps the four values as they stood at its close: decided once, never repainted.
+static const int HTF_SECS = 10800;
+static const int HTF_FROM_MIN = 7 * 60;          // the CoB's origin bar starts at or after 7:00 AM CT (tested: evening / Asia sweeps lose)
+struct HBar { long long k = 0; double h = 0, l = 0, c = 0; };
+struct HSnap { double r1 = NAN, r2 = NAN, s1 = NAN, s2 = NAN, ext = 0; int dir = 0; bool r1ok = false, r2ok = false, s1ok = false, s2ok = false; };
+struct Htf {
+    std::vector<HBar> HB; int d = 0, ext = 0; std::vector<std::pair<int, int>> piv;   // piv = (bar, +1 high / -1 low), confirmed by completed bars
+    void reset() { HB.clear(); d = 0; ext = 0; piv.clear(); }
+    static void step(const std::vector<HBar>& H, int i, int& d, int& ext, std::vector<std::pair<int, int>>& out) {
+        if (i < 1 || i >= (int)H.size()) return;
+        if (d == 0) { d = H[1].h >= H[0].h ? 1 : -1; ext = 0; }
+        const HBar& b = H[(size_t)i]; const HBar& p = H[(size_t)i - 1];
+        if (d == 1) { if (b.h > H[(size_t)ext].h) ext = i; else if (b.l < p.l && i != ext) { out.push_back(std::make_pair(ext, 1)); ext = i; d = -1; } }
+        else        { if (b.l < H[(size_t)ext].l) ext = i; else if (b.h > p.h && i != ext) { out.push_back(std::make_pair(ext, -1)); ext = i; d = 1; } }
+    }
+    HSnap add(const Bar& b, int perSec) {
+        HSnap o; if (perSec <= 0 || perSec >= HTF_SECS || HTF_SECS % perSec != 0) return o;
+        const long long k = floorDiv(b.t - perSec - 7200, HTF_SECS);          // 17:00 = 7200 s past a 3-hour boundary of the day
+        if (HB.empty() || k != HB.back().k) {
+            if (!HB.empty()) step(HB, (int)HB.size() - 1, d, ext, piv);       // the bar that just completed joins the walk
+            HBar n; n.k = k; n.h = b.h; n.l = b.l; n.c = b.c; HB.push_back(n);
+        } else { HBar& n = HB.back(); n.h = std::max(n.h, b.h); n.l = std::min(n.l, b.l); n.c = b.c; }
+        const int last = (int)HB.size() - 1; int d2 = d, e2 = ext; std::vector<std::pair<int, int>> extra;
+        step(HB, last, d2, e2, extra);                                         // the forming bar, as the live chart walks it
+        if (d2 == 0) return o;
+        o.dir = d2; o.ext = d2 > 0 ? HB[(size_t)e2].h : HB[(size_t)e2].l;
+        int hi[2] = { -1, -1 }, lo[2] = { -1, -1 }, nh = 0, nl = 0;
+        auto take = [&](const std::pair<int, int>& q) { if (q.second > 0) { if (nh < 2) hi[nh++] = q.first; } else { if (nl < 2) lo[nl++] = q.first; } };
+        for (size_t q = extra.size(); q-- > 0;) take(extra[q]);
+        for (size_t q = piv.size(); q-- > 0 && (nh < 2 || nl < 2);) take(piv[q]);
+        auto stand = [&](int pb, double L, int sd) { for (int q = pb + 1; q < last; ++q) if (sd > 0 ? HB[(size_t)q].c > L : HB[(size_t)q].c < L) return false; return true; };
+        if (nh >= 1) { o.r1 = HB[(size_t)hi[0]].h; o.r1ok = stand(hi[0], o.r1, 1); int b2 = hi[0]; if (nh >= 2 && HB[(size_t)hi[1]].h > o.r1) b2 = hi[1]; o.r2 = HB[(size_t)b2].h; o.r2ok = stand(b2, o.r2, 1); }
+        if (nl >= 1) { o.s1 = HB[(size_t)lo[0]].l; o.s1ok = stand(lo[0], o.s1, -1); int b2 = lo[0]; if (nl >= 2 && HB[(size_t)lo[1]].l < o.s1) b2 = lo[1]; o.s2 = HB[(size_t)b2].l; o.s2ok = stand(b2, o.s2, -1); }
+        return o;
+    }
+};
+
 struct Engine {
     std::string mkt; double tick = 0.25; int openMin = 510, closeMin = 900, perSec = 180;
     std::vector<Bar> B; std::vector<klv::Bar> K; std::vector<cimp::Bar> CB; std::vector<svl::Cls> cls;
@@ -183,8 +227,9 @@ struct Engine {
     std::vector<Mark> marks; std::vector<std::string> out;   // decisions + record lines not yet written
     long long trimmed = 0; std::string lastWhy;
     Lvp lvp; std::vector<std::string> lvpOut;        // (1.3.0) LVP decisions + record lines not yet written
+    Htf H; std::vector<HSnap> hs; bool htfSweep = true;   // (1.7.0) the 3-hour S / R as of every bar; false = the 1.6.x named key levels (tests)
     zzd::Engine Z3;                                  // (1.4.0) the ZZO Combo engine on the same bars (wave counts for the CoB filter)
-    void reset() { wSeen = 0; lastWaveT = 0; if (!mkt.empty()) { Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(rootRaw.empty() ? mkt : rootRaw, perSec); } lvp.reset(); lvpOut.clear(); B.clear(); K.clear(); CB.clear(); cls.clear(); dirn = 0; ext = 0; start = 0; legs.clear(); lastLowPivot = -1; S.clear(); doneOrder.clear(); marks.clear(); out.clear(); lastWhy.clear(); }
+    void reset() { wSeen = 0; lastWaveT = 0; if (!mkt.empty()) { Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(rootRaw.empty() ? mkt : rootRaw, perSec); } lvp.reset(); lvpOut.clear(); H.reset(); hs.clear(); B.clear(); K.clear(); CB.clear(); cls.clear(); dirn = 0; ext = 0; start = 0; legs.clear(); lastLowPivot = -1; S.clear(); doneOrder.clear(); marks.clear(); out.clear(); lastWhy.clear(); }
     bool setMarket(const std::string& m, double tk, int spb) {
         mkt = mktKey(m); rootRaw = m; tick = tk > 0 ? tk : 0.25; perSec = spb > 0 ? spb : 180; lvp.tick = tick;
         Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(rootRaw, perSec);   // (1.4.0); (1.6.2) the chart's own root = exactly the ZZO Combo pane's counts
@@ -208,7 +253,7 @@ struct Engine {
     int prevPivotEnd(int dir, size_t upto) const { for (size_t k = upto; k-- > 0;) if (legs[k].dir == dir) return legs[k].e; return -1; }
     void addBar(const Bar& b) {
         if ((int)B.size() >= MAX_BARS) { trimmed += (long long)B.size(); reset(); }
-        B.push_back(b);
+        B.push_back(b); hs.push_back(H.add(b, perSec));
         klv::Bar kb; kb.days = (long)floorDiv(b.t, 86400); kb.endSec = (int)(b.t - (long long)kb.days * 86400); kb.h = (float)b.h; kb.l = (float)b.l; kb.c = (float)b.c; kb.o = (float)b.o; kb.v = b.v;
         K.push_back(kb);
         cimp::Bar cb; cb.t = b.t; cb.o = b.o; cb.h = b.h; cb.l = b.l; cb.c = b.c; cb.v = b.v; CB.push_back(cb);
@@ -266,7 +311,51 @@ struct Engine {
     //   p0 an RTH bar of j's session, p1 - p0 >= 3 bars, room |close[j] - p0's extreme| >= 0.1 ADR, j ends by 11:00 CT
     //   drawn only with its wave's ZZO Combo count >= 10 (the Combo's own count of that completed wave)
     // The label goes on bar j (the bar that completed the wave); the Fib lines run from p0 (0) to p1 (1.0). Decided once, never repainted.
+    // (1.7.0) THE SWEEP = A 3-HOUR SPRING / UPTHRUST. Bull: at the origin bar p0 the 3-hour ZigZag is in a down swing whose low IS p0's low,
+    //   that low is below S1 or S2 (still standing) and the wave's high p1 is back above it. Bear the mirror with R1 / R2.
+    //   Origin bar from 7:00 AM CT, the wave confirmed by 11:00 CT, same session; the other rules as 1.6.x (>= 3 bars, >= 1.9x the last 20
+    //   waves, room 0.1 ADR, ZZO Combo count >= 10 to be drawn).
+    void checkWaveHtf(size_t k, int j) {
+        if (k >= Z3.W.size() || j < 0 || j >= (int)B.size() || hs.size() != B.size()) return;
+        const zzd::Wave& w = Z3.W[k]; const int side = w.dir > 0 ? 1 : -1;
+        const int nz = (int)Z3.B.size();
+        if (w.s < 1 || w.e <= w.s - 1 || w.e >= nz) return;
+        auto idxOf = [&](long long t) { int lo = 0, hi = (int)B.size() - 1; while (lo <= hi) { const int md = (lo + hi) / 2; if (B[(size_t)md].t == t) return md; if (B[(size_t)md].t < t) lo = md + 1; else hi = md - 1; } return -1; };
+        const int p0 = idxOf(Z3.B[(size_t)(w.s - 1)].t), p1 = idxOf(Z3.B[(size_t)w.e].t);
+        if (p0 < 0 || p1 <= p0 || p1 - p0 < 3) return;
+        const svl::Cls& c = cls[(size_t)j]; const svl::Cls& c0 = cls[(size_t)p0];
+        if (c.kind == svl::NONE || c0.kind == svl::NONE || c0.sess != c.sess || !S.count(c.sess)) return;
+        const int modJ = (int)((B[(size_t)j].t % 86400 + 86400) % 86400) / 60, mod0 = (int)(((B[(size_t)p0].t - perSec) % 86400 + 86400) % 86400) / 60;
+        if (mod0 < HTF_FROM_MIN || mod0 > 11 * 60 || modJ > 11 * 60 || modJ < HTF_FROM_MIN) return;
+        const Sess& s = S[c.sess]; const double adr = s.adr > 0 ? s.adr : adrFor(c.sess); if (!(adr > 0)) return;
+        auto sizeOf = [&](const zzd::Wave& x) { const int a = x.s - 1; return (double)(x.dir > 0 ? Z3.B[(size_t)x.e].h - Z3.B[(size_t)a].l : Z3.B[(size_t)a].h - Z3.B[(size_t)x.e].l); };
+        double sum = 0; int n = 0;
+        for (size_t q = k; q-- > 0 && n < 20;) { const zzd::Wave& x = Z3.W[q]; if (x.dir == w.dir && x.s >= 1 && x.e > x.s - 1 && x.e < nz) { sum += sizeOf(x); ++n; } }
+        if (n < 5 || !(sum > 0)) return;
+        const double dr = sizeOf(w) / (sum / n); if (!(dr >= 1.9)) return;
+        const HSnap& h = hs[(size_t)p0]; const double eps = tick * 0.25;
+        const double ext0 = side > 0 ? B[(size_t)p0].l : B[(size_t)p0].h, ext1 = side > 0 ? B[(size_t)p1].h : B[(size_t)p1].l;
+        std::string sw; auto add = [&](const char* nm) { if (!sw.empty()) sw += "/"; sw += nm; };
+        if (side > 0) {
+            if (h.dir >= 0 || ext0 > h.ext + eps) return;                       // the origin is the low of the 3-hour down swing
+            if (h.s1ok && ext0 < h.s1 && h.s1 < ext1) add("S1");
+            if (h.s2ok && std::fabs(h.s2 - h.s1) > eps && ext0 < h.s2 && h.s2 < ext1) add("S2");
+            if (sw.empty() || !(B[(size_t)j].c - ext0 >= 0.1 * adr)) return;
+        } else {
+            if (h.dir <= 0 || ext0 < h.ext - eps) return;
+            if (h.r1ok && ext1 < h.r1 && h.r1 < ext0) add("R1");
+            if (h.r2ok && std::fabs(h.r2 - h.r1) > eps && ext1 < h.r2 && h.r2 < ext0) add("R2");
+            if (sw.empty() || !(ext0 - B[(size_t)j].c >= 0.1 * adr)) return;
+        }
+        Mark m; m.t = B[(size_t)j].t; m.idx = j; m.side = side; m.dratio = dr; m.adr = adr; m.legStart = p0; m.legEnd = p1; m.ext = ext0; m.levels = sw;
+        cimp::Params P; const cimp::Tag T = cimp::evaluate(CB, j, side, P, false);
+        m.r = T.r.bar >= 0; m.v = T.v.bar >= 0; m.rBar = T.r.bar; m.vBar = T.v.bar; m.rN = T.r.n; m.vN = T.v.n;
+        m.zCnt = w.cnt + (w.cntCap ? 1 : 0); m.zBars = 0; m.zWave = Z3.B[(size_t)w.s].t;
+        marks.push_back(m); out.push_back(recLine(m));
+        marks.back().zAt = m.t; zzoDone(marks.back(), w.hasV && (w.cnt >= ZZO_COB_MIN || w.cntCap));
+    }
     void checkWave(size_t k, int j) {
+        if (htfSweep) { checkWaveHtf(k, j); return; }
         if (k >= Z3.W.size() || j < 0 || j >= (int)B.size()) return;
         const zzd::Wave& w = Z3.W[k]; const int side = w.dir > 0 ? 1 : -1;
         const int nz = (int)Z3.B.size();
@@ -537,11 +626,48 @@ inline std::string fibStatus(const Engine& E)
     return o;
 }
 
+// ---- (1.7.0) the 3-hour R1 / R2 / S1 / S2 as stepped lines (each bar's value as it stood at that bar's close), one colour, the name at the
+// right end of the newest piece; R2 / S2 only where they differ from R1 / S1
+static const unsigned C_HTF = 0x00FF9F1A;
+inline std::vector<Prim> htfLayout(const Engine& E, const View& v)
+{
+    std::vector<Prim> P; const int n = (int)std::min(E.hs.size(), E.B.size());
+    const int a = std::max(0, v.first), b = std::min(n - 1, v.last); if (b < a || !v.X || !v.Y) return P;
+    const double bw = b > a ? (v.X(b) - v.X(a)) / (double)(b - a) : 6.0;
+    static const char* const NM[4] = { "R1", "R2", "S1", "S2" };
+    for (int q = 0; q < 4; ++q) {
+        auto val = [&](int i) { const HSnap& h = E.hs[(size_t)i]; const double x = q == 0 ? h.r1 : q == 1 ? h.r2 : q == 2 ? h.s1 : h.s2; const double base = q == 1 ? h.r1 : q == 3 ? h.s1 : NAN;
+            return (std::isfinite(x) && !(std::isfinite(base) && std::fabs(x - base) < E.tick * 0.25)) ? x : NAN; };
+        int i = a;
+        while (i <= b) {
+            const double x = val(i); if (!std::isfinite(x)) { ++i; continue; }
+            int e = i; while (e + 1 <= b && std::fabs(val(e + 1) - x) < E.tick * 0.25) ++e;
+            const int y = (int)std::lround(v.Y(x));
+            if (y >= v.t && y <= v.b) {
+                const int x0 = (int)std::lround(v.X(i) - bw / 2), x1 = (int)std::lround(v.X(e) + bw / 2);
+                if (x1 > x0) { Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = C_HTF; P.push_back(L);
+                    if (e == b) { const std::string s = NM[q]; const int w = v.textW ? v.textW(s) : (int)s.size() * 6, h = 12;
+                        Prim T; T.tiny = true; T.col = C_HTF; T.text = s; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h;
+                        if (T.x1 > v.r) { T.x1 = x1 - 2; T.x0 = T.x1 - w; T.y1 = y - 1; T.y0 = T.y1 - h; }
+                        if (T.x0 >= v.l && T.x1 <= v.r && T.y0 >= v.t && T.y1 <= v.b) P.push_back(T); } }
+            }
+            i = e + 1;
+        }
+    }
+    return P;
+}
+inline std::string htfStatus(const Engine& E)
+{
+    std::string o = "HTF_RULES,1.7.0 3-hour bars from 17:00 CT (forming bar counts); 1-bar High/Low ZigZag; R1 = last pivot high, R2 = higher of the last 2; S1 = last pivot low, S2 = lower of the last 2; standing = no completed 3-hour bar closed beyond; the CoB origin = the 3-hour swing's extreme beyond a standing level, the wave back through it; origin from 7:00 AM CT, confirmed by 11:00 CT\n";
+    if (!E.hs.empty()) { const HSnap& h = E.hs.back(); char b[200]; std::snprintf(b, sizeof b, "HTF,R1=%.6g%s,R2=%.6g%s,S1=%.6g%s,S2=%.6g%s,swing %s\n", h.r1, h.r1ok ? "" : " broken", h.r2, h.r2ok ? "" : " broken", h.s1, h.s1ok ? "" : " broken", h.s2, h.s2ok ? "" : " broken", h.dir > 0 ? "up" : h.dir < 0 ? "down" : "-"); o += b; }
+    return o;
+}
+
 inline std::string statusText(const Engine& E, const std::string& sym, int spb, const std::string& rec)
 {
     std::string o = std::string("VERSION,") + VERSION + "\nMARKET," + E.mkt + "\nSYMBOL," + sym + "\nBAR_SECONDS," + std::to_string(spb) +
                      "\nRTH," + std::to_string(E.openMin) + "-" + std::to_string(E.closeMin) + "\nBARS," + std::to_string(E.B.size()) + "\nLEGS," + std::to_string(E.legs.size()) +
-                     "\nRULES,1-bar ZigZag; sweep ONH/ONL PDH/PDL PFH/PFL LonHI/LonLO PWH/PWL AsiaHI/AsiaLO PHH/PHL; dratio >= 1.9 (20 legs); >= 3 bars; 50-bar extreme; < 0.4 ADR; bull room 0.1 ADR, bull <= 11:00; PHH/PHL-only CoBs drawn in ES/HG/GC, recorded only elsewhere\n";
+                     "\nRULES,completed 3-bar ZigZag wave; sweep of the 3-hour S1/S2 (bull) or R1/R2 (bear); dratio >= 1.9 (20 waves); >= 3 bars; room 0.1 ADR; origin from 7:00 AM CT, confirmed <= 11:00 CT; drawn with ZZO count >= 10\n";
     o += "RECORD," + rec + "\nCOBS," + std::to_string(E.marks.size()) + "\n";
     {   int ok = 0, no = 0, wait = 0; for (const Mark& m : E.marks) { if (!m.zDone) ++wait; else if (m.zOk) ++ok; else ++no; }   // (1.4.0)
         o += "ZZO_FILTER,1.4.0 drawn only when the CoB's ZZO Combo wave count reaches " + std::to_string(ZZO_COB_MIN) + ",passed " + std::to_string(ok) + ",failed " + std::to_string(no) + ",waiting " + std::to_string(wait) + "\n"; }
@@ -554,6 +680,7 @@ inline std::string statusText(const Engine& E, const std::string& sym, int spb, 
     const size_t nl = E.lvp.marks.size();
     for (size_t k = nl > 8 ? nl - 8 : 0; k < nl; ++k) o += "LAST" + lvpLine(E.lvp.marks[k]) + "\n";
     o += fibStatus(E);   // (1.5.0)
+    o += htfStatus(E);   // (1.7.0)
     const size_t nt = E.lvp.tr.size();
     for (size_t k = nt > 4 ? nt - 4 : 0; k < nt; ++k) { const LvpTrack& x = E.lvp.tr[k]; o += "LVPLOOK," + std::to_string(x.cobT) + "," + (x.side > 0 ? "BULL" : "BEAR") + "," + std::to_string(x.vol) + "," + std::to_string(x.n) + "," + std::to_string(x.lvp) + "," + x.why + "\n"; }
     return o;
