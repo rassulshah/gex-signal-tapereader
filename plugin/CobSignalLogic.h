@@ -50,7 +50,7 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.7.0";   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
+static const char* const VERSION = "1.7.1";   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
 // was "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
 // was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
 // was "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
@@ -181,7 +181,8 @@ inline std::string lvpLine(const LvpMark& m) {
 //   standing = no COMPLETED 3-hour bar since that pivot has closed beyond the level (a closed break is a break, not a spring / upthrust).
 //   Each chart bar keeps the four values as they stood at its close: decided once, never repainted.
 static const int HTF_SECS = 10800;
-static const int HTF_FROM_MIN = 7 * 60;          // the CoB's origin bar starts at or after 7:00 AM CT (tested: evening / Asia sweeps lose)
+static const int HTF_TO_MIN = 11 * 60;           // (1.7.1) the CoB window = the session start (5:00 PM CT) to 11:00 AM CT: origin and confirming bar both inside it
+inline bool htfInWindow(int startMin, int endMin) { return startMin >= 17 * 60 || endMin <= HTF_TO_MIN; }   // bar start at / after 17:00 (the evening) or bar end by 11:00
 struct HBar { long long k = 0; double h = 0, l = 0, c = 0; };
 struct HSnap { double r1 = NAN, r2 = NAN, s1 = NAN, s2 = NAN, ext = 0; int dir = 0; bool r1ok = false, r2ok = false, s1ok = false, s2ok = false; };
 struct Htf {
@@ -314,7 +315,7 @@ struct Engine {
     // The label goes on bar j (the bar that completed the wave); the Fib lines run from p0 (0) to p1 (1.0). Decided once, never repainted.
     // (1.7.0) THE SWEEP = A 3-HOUR SPRING / UPTHRUST. Bull: at the origin bar p0 the 3-hour ZigZag is in a down swing whose low IS p0's low,
     //   that low is below S1 or S2 (still standing) and the wave's high p1 is back above it. Bear the mirror with R1 / R2.
-    //   Origin bar from 7:00 AM CT, the wave confirmed by 11:00 CT, same session; the other rules as 1.6.x (>= 3 bars, >= 1.9x the last 20
+    //   Origin and confirming bar between the 5:00 PM session start and 11:00 AM CT (1.7.1; was from 7:00 AM), same session; the other rules as 1.6.x (>= 3 bars, >= 1.9x the last 20
     //   waves, room 0.1 ADR, ZZO Combo count >= 10 to be drawn).
     void checkWaveHtf(size_t k, int j) {
         if (k >= Z3.W.size() || j < 0 || j >= (int)B.size() || hs.size() != B.size()) return;
@@ -327,7 +328,7 @@ struct Engine {
         const svl::Cls& c = cls[(size_t)j]; const svl::Cls& c0 = cls[(size_t)p0];
         if (c.kind == svl::NONE || c0.kind == svl::NONE || c0.sess != c.sess || !S.count(c.sess)) return;
         const int modJ = (int)((B[(size_t)j].t % 86400 + 86400) % 86400) / 60, mod0 = (int)(((B[(size_t)p0].t - perSec) % 86400 + 86400) % 86400) / 60;
-        if (mod0 < HTF_FROM_MIN || mod0 > 11 * 60 || modJ > 11 * 60 || modJ < HTF_FROM_MIN) return;
+        if (!htfInWindow(mod0, mod0 + perSec / 60) || !htfInWindow(modJ - perSec / 60 < 0 ? modJ - perSec / 60 + 1440 : modJ - perSec / 60, modJ)) return;
         const Sess& s = S[c.sess]; const double adr = s.adr > 0 ? s.adr : adrFor(c.sess); if (!(adr > 0)) return;
         auto sizeOf = [&](const zzd::Wave& x) { const int a = x.s - 1; return (double)(x.dir > 0 ? Z3.B[(size_t)x.e].h - Z3.B[(size_t)a].l : Z3.B[(size_t)a].h - Z3.B[(size_t)x.e].l); };
         double sum = 0; int n = 0;
@@ -665,7 +666,7 @@ inline std::vector<Prim> htfLayout(const Engine& E, const View& v)
 }
 inline std::string htfStatus(const Engine& E)
 {
-    std::string o = "HTF_RULES,1.7.0 3-hour bars from 17:00 CT (forming bar counts); 1-bar High/Low ZigZag; R1 = last pivot high, R2 = higher of the last 2; S1 = last pivot low, S2 = lower of the last 2; standing = no completed 3-hour bar closed beyond; the CoB origin = the 3-hour swing's extreme beyond a standing level, the wave back through it; origin from 7:00 AM CT, confirmed by 11:00 CT\n";
+    std::string o = "HTF_RULES,1.7.1 3-hour bars from 17:00 CT (forming bar counts); 1-bar High/Low ZigZag; R1 = last pivot high, R2 = higher of the last 2; S1 = last pivot low, S2 = lower of the last 2; standing = no completed 3-hour bar closed beyond; the CoB origin = the 3-hour swing's extreme beyond a standing level, the wave back through it; window = the 5:00 PM session start to 11:00 AM CT\n";
     if (!E.hs.empty()) { const HSnap& h = E.hs.back(); char b[200]; std::snprintf(b, sizeof b, "HTF,R1=%.6g%s,R2=%.6g%s,S1=%.6g%s,S2=%.6g%s,swing %s\n", h.r1, h.r1ok ? "" : " broken", h.r2, h.r2ok ? "" : " broken", h.s1, h.s1ok ? "" : " broken", h.s2, h.s2ok ? "" : " broken", h.dir > 0 ? "up" : h.dir < 0 ? "down" : "-"); o += b;
         const double tk = E.tick > 0 ? E.tick : 1; auto rt = [tk](double v) { return std::isfinite(v) ? std::round(v / tk) * tk : v; };
         std::snprintf(b, sizeof b, "HTFNOW,%.10g,%d,%.10g,%d,%.10g,%d,%.10g,%d,%d,%.10g\n", rt(h.r1), h.r1ok ? 1 : 0, rt(h.r2), h.r2ok ? 1 : 0, rt(h.s1), h.s1ok ? 1 : 0, rt(h.s2), h.s2ok ? 1 : 0, h.dir, rt(h.ext)); o += b; }   // r1,ok,r2,ok,s1,ok,s2,ok,swing,swing extreme (for the MQ Reader)
@@ -690,7 +691,7 @@ inline std::string statusText(const Engine& E, const std::string& sym, int spb, 
 {
     std::string o = std::string("VERSION,") + VERSION + "\nMARKET," + E.mkt + "\nSYMBOL," + sym + "\nBAR_SECONDS," + std::to_string(spb) +
                      "\nRTH," + std::to_string(E.openMin) + "-" + std::to_string(E.closeMin) + "\nBARS," + std::to_string(E.B.size()) + "\nLEGS," + std::to_string(E.legs.size()) +
-                     "\nRULES,completed 3-bar ZigZag wave; sweep of the 3-hour S1/S2 (bull) or R1/R2 (bear); dratio >= 1.9 (20 waves); >= 3 bars; room 0.1 ADR; origin from 7:00 AM CT, confirmed <= 11:00 CT; drawn with ZZO count >= 10\n";
+                     "\nRULES,completed 3-bar ZigZag wave; sweep of the 3-hour S1/S2 (bull) or R1/R2 (bear); dratio >= 1.9 (20 waves); >= 3 bars; room 0.1 ADR; from the 5:00 PM session start to 11:00 AM CT; drawn with ZZO count >= 10\n";
     o += "RECORD," + rec + "\nCOBS," + std::to_string(E.marks.size()) + "\n";
     {   int ok = 0, no = 0, wait = 0; for (const Mark& m : E.marks) { if (!m.zDone) ++wait; else if (m.zOk) ++ok; else ++no; }   // (1.4.0)
         o += "ZZO_FILTER,1.4.0 drawn only when the CoB's ZZO Combo wave count reaches " + std::to_string(ZZO_COB_MIN) + ",passed " + std::to_string(ok) + ",failed " + std::to_string(no) + ",waiting " + std::to_string(wait) + "\n"; }

@@ -48,7 +48,7 @@
 #define CS_SEP "/"
 #endif
 
-static const char* CS_VERSION = "1.7.0";   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
+static const char* CS_VERSION = "1.7.1";   // (1.7.1) the CoB window opens at the 5:00 PM session start (overnight CoBs)   // was "1.7.0":   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
 // was "1.5.1";   // (1.5.1) CQG roots mapped (cobs::mktKey) - it never ran on his CQG charts before   // (1.5.0) + the CoB Fib lines (targets 1.272 / 1.618 / 2.0, entry 50%, stop 0)   // = cobs::VERSION = the setVersion literal
 
 static long long csMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -234,7 +234,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.7.0 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. Origin from 7:00 AM CT, confirmed by 11:00 CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Decided at the bar close, never repainted.");
-    p->setVersion("1.7.0");   // = CS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA CoB Signal v1.7.1 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. From the 5:00 PM session start to 11:00 AM CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Decided at the bar close, never repainted.");
+    p->setVersion("1.7.1");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }

@@ -38,16 +38,16 @@ int main(int argc, char** argv) {
     cobs::Engine E; E.setMarket("ES", 0.25, 180); for (const cobs::Bar& b : B) E.addBar(b);
     CHECK(E.hs.size() == E.B.size(), "one 3-hour snapshot per bar");
     CHECK(!E.marks.empty(), "the fixture has 3-hour sweep CoBs (" << E.marks.size() << ")");
-    {   bool lv = true, win = true, geo = true, rules = true;
+    {   bool lv = true, win = true, geo = true, rules = true, night = false;
         for (const cobs::Mark& m : E.marks) {
             lv = lv && (m.side > 0 ? (m.levels == "S1" || m.levels == "S2" || m.levels == "S1/S2") : (m.levels == "R1" || m.levels == "R2" || m.levels == "R1/R2"));
-            const int m0 = (int)((E.B[(size_t)m.legStart].t - 180) % 86400) / 60, mj = (int)(m.t % 86400) / 60; win = win && m0 >= 420 && m0 <= 660 && mj <= 660 && mj >= 420;
+            const int m0 = (int)((E.B[(size_t)m.legStart].t - 180) % 86400) / 60, mj = (int)(m.t % 86400) / 60; win = win && (m0 >= 1020 || m0 + 3 <= 660) && (mj - 3 >= 1020 || mj <= 660); night = night || m0 >= 1020 || m0 < 420;
             const cobs::HSnap& h = E.hs[(size_t)m.legStart]; const double o = m.ext, e = m.side > 0 ? E.B[(size_t)m.legEnd].h : E.B[(size_t)m.legEnd].l;
             const bool a = m.side > 0 ? (h.s1ok && o < h.s1 && h.s1 < e) : (h.r1ok && e < h.r1 && h.r1 < o), b = m.side > 0 ? (h.s2ok && o < h.s2 && h.s2 < e) : (h.r2ok && e < h.r2 && h.r2 < o);
             geo = geo && (a || b) && h.dir == -m.side && std::fabs(h.ext - o) < 1e-9;
             rules = rules && m.dratio >= 1.9 && m.legEnd - m.legStart >= 3 && m.show;
         }
-        CHECK(lv, "every CoB names S1 / S2 (bull) or R1 / R2 (bear) only"); CHECK(win, "origin from 7:00 AM CT, confirmed by 11:00 CT");
+        CHECK(lv, "every CoB names S1 / S2 (bull) or R1 / R2 (bear) only"); CHECK(win, "(1.7.1) origin and confirming bar between 5:00 PM and 11:00 AM CT"); CHECK(night, "(1.7.1) overnight CoBs are found"); CHECK(cobs::htfInWindow(1020, 1023) && cobs::htfInWindow(0, 3) && cobs::htfInWindow(657, 660) && !cobs::htfInWindow(660, 663) && !cobs::htfInWindow(1017, 1020), "window edges: 5:00 PM in, 11:00 AM in, 11:00-11:03 out, 4:57 PM out");
         CHECK(geo, "origin = the 3-hour swing's extreme beyond a standing level, the wave back through it"); CHECK(rules, "dratio >= 1.9, >= 3 bars, all shown"); }
     {   cobs::Engine O; O.setMarket("ES", 0.25, 180); O.htfSweep = false; for (const cobs::Bar& b : B) O.addBar(b);
         bool named = !O.marks.empty(); for (const cobs::Mark& m : O.marks) named = named && m.levels.find("S1") == std::string::npos && m.levels.find("R1") == std::string::npos;
@@ -69,6 +69,6 @@ int main(int argc, char** argv) {
     {   int nh = 0; bool okh = true; for (const std::string& l : E.out) if (l.rfind("HTF,", 0) == 0) { ++nh; bool f = false; for (const cobs::Mark& m : E.marks) f = f || (l.find("HTF," + std::to_string(m.t) + (m.side > 0 ? ",BULL," : ",BEAR,") + m.levels.substr(0, 2) + ",") == 0); okh = okh && f; }
         CHECK(nh == (int)E.marks.size() && okh, "one HTF record line per CoB with its level's name and price (" << nh << ")");
         const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.find("\nHTFNOW,") != std::string::npos && st.find("\nHTFX,") != std::string::npos && st.find(",HOD,") != std::string::npos && st.find(",LOD,") != std::string::npos, "status: HTFNOW + the session's HOD / LOD lines for the MQ Reader"); }
-    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.7.0\n", 0) == 0 && st.find("\nHTF_RULES,1.7.0") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
+    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.7.1\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
     std::cout << "test_cobsignal_htf: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }
