@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 namespace stp {
-static const char* const VERSION = "1.5.1";   // (1.5.1) no T / B letters on the shorter periods   // was "1.5.0";   // (1.5.0) the shorter periods draw the 60-minute design (stp::layoutLtf)   // was "1.4.5";   // (1.4.5) hourly: a flip's line starts at the candle before the step candle, at the broken level   // was "1.4.4";   // (1.4.4) host: B over the high of the breaking red candle (under the low of a breaking green candle)   // was "1.4.3";   // (1.4.3, 2026-11-11 Rassul 17:06 CT "the red line should be from the green candle low not its high"): when the trend flips, the new line starts at the OTHER end of the last step candle (a step down after step ups starts at that green candle's low; a step up after step downs at that red candle's high)   // was "1.4.2";   // (1.4.2) host: T / B 8 px off the wick   // was "1.4.1";   // (1.4.1) the B is drawn under the low of the breaking candle (host), red for a broken up-step   // was "1.4.0";   // (1.4.0, 2026-11-11 Rassul 16:59 CT "show B for Trend Break when the close is below the step up, like the last red candle"): B = the first candle that CLOSES below the newest step-up candle's low (above the high for a step down)   // was "1.3.3";   // (1.3.3, 2026-11-11 Rassul 16:56 CT "there is a rule that the low needs to be above to display T, lets make this close instead"): the test is judged by the CLOSE - T when the candle touches the level and closes at / above the step-up candle's low; a close below it ends the line with no T   // was "1.3.2";   // (1.3.2, 2026-11-11 Rassul 16:53 CT "the line goes up from the former step up and then across to the next step up"): the solid line rises AT the former step-up candle to the next step's high, then runs across to the next step-up candle   // was "1.3.1";   // (1.3.1, 2026-11-11 Rassul 16:47-16:51 CT, his sketch) the 60-minute chart draws TWO lines: the solid stairs from the high of one step-up candle across to the next step-up candle and up to its high; the dashed test line from the prior high across   // was "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
+static const char* const VERSION = "1.5.2";   // (1.5.2, 2026-11-15 Rassul "andd the new trep trend indicator on the 3hr charts", 17:06 "go build everythign") the 180-minute chart: each 3-hour candle is one step unit (Engine::unit = 10800), drawn like the 60-minute chart   // was "1.5.1":   // (1.5.1) no T / B letters on the shorter periods   // was "1.5.0";   // (1.5.0) the shorter periods draw the 60-minute design (stp::layoutLtf)   // was "1.4.5";   // (1.4.5) hourly: a flip's line starts at the candle before the step candle, at the broken level   // was "1.4.4";   // (1.4.4) host: B over the high of the breaking red candle (under the low of a breaking green candle)   // was "1.4.3";   // (1.4.3, 2026-11-11 Rassul 17:06 CT "the red line should be from the green candle low not its high"): when the trend flips, the new line starts at the OTHER end of the last step candle (a step down after step ups starts at that green candle's low; a step up after step downs at that red candle's high)   // was "1.4.2";   // (1.4.2) host: T / B 8 px off the wick   // was "1.4.1";   // (1.4.1) the B is drawn under the low of the breaking candle (host), red for a broken up-step   // was "1.4.0";   // (1.4.0, 2026-11-11 Rassul 16:59 CT "show B for Trend Break when the close is below the step up, like the last red candle"): B = the first candle that CLOSES below the newest step-up candle's low (above the high for a step down)   // was "1.3.3";   // (1.3.3, 2026-11-11 Rassul 16:56 CT "there is a rule that the low needs to be above to display T, lets make this close instead"): the test is judged by the CLOSE - T when the candle touches the level and closes at / above the step-up candle's low; a close below it ends the line with no T   // was "1.3.2";   // (1.3.2, 2026-11-11 Rassul 16:53 CT "the line goes up from the former step up and then across to the next step up"): the solid line rises AT the former step-up candle to the next step's high, then runs across to the next step-up candle   // was "1.3.1";   // (1.3.1, 2026-11-11 Rassul 16:47-16:51 CT, his sketch) the 60-minute chart draws TWO lines: the solid stairs from the high of one step-up candle across to the next step-up candle and up to its high; the dashed test line from the prior high across   // was "1.3.0";   // (1.3.0, 2026-11-11 Rassul 15:08 / 15:12 CT) the 60-minute chart: the step sits on the breakout candle, the dashed line starts there, "T" = the level tested   // was "1.2.0";
 static const int MAX_BARS = 5000, SLACK = 2000;      // the host feeds the last MAX_BARS closed candles and re-feeds when SLACK more have come
 
 struct Bar { long long t = 0, o = 0, h = 0, l = 0, c = 0; };                         // t = candle START (wall seconds of the chart); prices in ticks
@@ -43,7 +43,8 @@ struct Dot { int i = 0; long long px = 0; int dir = 0; };
 struct Mark { int i = 0; int dir = 0; int kind = 0; };   // kind 0 = T (tested), 1 = B (trend break; 1.4.1: under the low of the breaking candle for a broken up-step, red; over the high for a broken down-step, green)   // (1.3.0) "T": under the low of the candle that tested a step up (over the high for a step down)
 
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
-inline bool periodOk(int spb) { return spb > 0 && spb <= 3600 && 3600 % spb == 0; }   // (1.2.0) + the 60-minute chart itself: each candle is an hour, the same steps
+inline bool periodOk(int spb) { return spb > 0 && ((spb <= 3600 && 3600 % spb == 0) || spb == 10800); }   // (1.5.2) + the 180-minute chart
+inline long long unitFor(int spb) { return spb == 10800 ? 10800 : 3600; }   // (1.2.0) + the 60-minute chart itself: each candle is an hour, the same steps
 
 struct Engine {
     int rule = 0; bool rot = true, body = true;
@@ -54,6 +55,7 @@ struct Engine {
     // whose high it broke; the dashed line runs from the breakout candle on, at the broken level, until a later candle TESTS it (its low touches or goes
     // through the level without trading below the breakout candle's low = "T"), or trades below that low (no T), or another step is made. Mirror for down.
     bool hourly = false;
+    long long unit = 3600;                                                     // (1.5.2) seconds per step unit: 3600 (the hour), 10800 on a 180-minute chart (each candle is a unit)
     std::vector<Bar> B; std::vector<Hour> H; std::vector<Step> S, skipped;    // S = the steps drawn (in order); skipped = breakouts against the rotation
     bool curClosed = false;                                                    // the newest hour in H has been closed (by a later candle or sealTo)
     int zdir = 0; std::vector<int> rotv;                                       // hourly ZigZag rotation after each closed hour (+1 up, -1 down, 0 none yet)
@@ -76,7 +78,7 @@ struct Engine {
         bool up = rule == 0 ? c.c > p.h : (c.h > p.h && c.c > p.c), dn = rule == 0 ? c.c < p.l : (c.l < p.l && c.c < p.c);
         if (body) { up = up && c.c > c.o; dn = dn && c.c < c.o; }             // the breakout hour itself is a green (up) / red (down) candle
         if (up == dn) return;                                                  // no breakout (or both ways: none)
-        Step q; q.dir = up ? 1 : -1; q.px = up ? p.h : p.l; q.hour = c.k * 3600; q.tConf = (c.k + 1) * 3600; q.oi = up ? p.hiI : p.loI; q.ot = B[(size_t)q.oi].t;
+        Step q; q.dir = up ? 1 : -1; q.px = up ? p.h : p.l; q.hour = c.k * unit; q.tConf = (c.k + 1) * unit; q.oi = up ? p.hiI : p.loI; q.ot = B[(size_t)q.oi].t;
         q.rotAt = zdir; q.ok = !rot || zdir == 0 || (up && zdir > 0) || (dn && zdir < 0);
         if (!q.ok) { skipped.push_back(q); return; }
         const int last = (int)B.size() - 1;                                    // the candle that closed this hour
@@ -91,7 +93,7 @@ struct Engine {
     // a CLOSED candle, in time order; false = out of order (the host re-feeds)
     bool addBar(const Bar& b) {
         if (!B.empty() && b.t <= B.back().t) return false;
-        const long long k = floorDiv(b.t, 3600); const int idx = (int)B.size();
+        const long long k = floorDiv(b.t, unit); const int idx = (int)B.size();
         if (!H.empty() && k != H.back().k) closeHour();
         B.push_back(b);
         if (H.empty() || k != H.back().k) { Hour h; h.k = k; h.o = b.o; h.h = b.h; h.l = b.l; h.c = b.c; h.hiI = h.loI = idx; h.n = 1; H.push_back(h); curClosed = false; }
@@ -105,7 +107,7 @@ struct Engine {
         return true;
     }
     // the forming candle starts at t: every candle of an earlier hour is closed, so that hour is complete
-    void sealTo(long long t) { if (!H.empty() && !curClosed && floorDiv(t, 3600) > H.back().k) closeHour(); }
+    void sealTo(long long t) { if (!H.empty() && !curClosed && floorDiv(t, unit) > H.back().k) closeHour(); }
 };
 
 // what the chart draws (candle indices of the engine; lastIdx = the newest candle on the chart, in the same index space)
@@ -163,9 +165,9 @@ inline void layoutLtf(const Engine& E, int lastIdx, std::vector<Seg>& segs, std:
     segs.clear(); dots.clear(); marks.clear();
     const int nh = (int)E.H.size() - (E.curClosed ? 0 : 1); if (nh < 2) return;
     std::vector<int> st(E.H.size() + 1, 0); for (size_t j = 0; j < E.H.size(); ++j) st[j + 1] = st[j] + E.H[j].n;
-    Engine X; X.rule = E.rule; X.rot = E.rot; X.body = E.body; X.hourly = true;
-    for (int j = 0; j < nh; ++j) { const Hour& h = E.H[(size_t)j]; Bar b; b.t = h.k * 3600; b.o = h.o; b.h = h.h; b.l = h.l; b.c = h.c; X.addBar(b); }
-    X.sealTo((E.H[(size_t)nh - 1].k + 1) * 3600);
+    Engine X; X.rule = E.rule; X.rot = E.rot; X.body = E.body; X.hourly = true; X.unit = E.unit;
+    for (int j = 0; j < nh; ++j) { const Hour& h = E.H[(size_t)j]; Bar b; b.t = h.k * E.unit; b.o = h.o; b.h = h.h; b.l = h.l; b.c = h.c; X.addBar(b); }
+    X.sealTo((E.H[(size_t)nh - 1].k + 1) * E.unit);
     auto top = [&](int j, int dir) { return dir > 0 ? E.H[(size_t)j].hiI : E.H[(size_t)j].loI; };
     auto lastOf = [&](int j) { return st[(size_t)j + 1] - 1; };
     auto touch = [&](int j, const Step& q) { for (int i = st[(size_t)j]; i < st[(size_t)j + 1] && i < (int)E.B.size(); ++i) if (q.dir > 0 ? E.B[(size_t)i].l <= q.px : E.B[(size_t)i].h >= q.px) return i; return lastOf(j); };

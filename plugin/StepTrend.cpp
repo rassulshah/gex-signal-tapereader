@@ -95,7 +95,7 @@
 #include <string>
 #include <vector>
 
-#define STEPTREND_VERSION "1.5.1"
+#define STEPTREND_VERSION "1.5.2"
 
 namespace sth {
 static const COLOR C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_GREEN_D = 0x00178A42, C_RED_D = 0x00B03A3A;
@@ -166,9 +166,10 @@ bool StepTrend::identify(STState& S) {
         S.root = root; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
         S.mkt = mkey::norm(root); for (char& c : S.mkt) if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))) c = '_';
         const stpp::Mkt& M = stpp::forMarket(S.mkt);
-        S.E.reset(); S.E.rule = M.rule; S.E.rot = M.rot != 0; S.E.body = M.body != 0; S.E.hourly = spb == 3600;   // (1.3.0) the 60-minute chart S.raw.clear(); S.off = 0; S.lastIdx = -1; S.statusSteps = (size_t)-1;
+        S.E.reset(); S.E.rule = M.rule; S.E.rot = M.rot != 0; S.E.body = M.body != 0; S.E.unit = stp::unitFor(spb); S.E.hourly = spb == 3600 || spb == 10800;   // (1.5.2) + the 180-minute chart: each candle is one step unit   // (1.3.0) the 60-minute chart
+        S.raw.clear(); S.off = 0; S.lastIdx = -1; S.statusSteps = (size_t)-1;   // (1.5.2) these resets sat inside the comment above since 1.3.0: a symbol / period change now restarts the feed as intended
     }
-    if (!stp::periodOk(S.spb)) { S.note = "the chart's period must divide the hour (1, 2, 3, 5, 10, 15, 30 or 60 minutes)"; return false; }
+    if (!stp::periodOk(S.spb)) { S.note = "the chart's period must divide the hour (1, 2, 3, 5, 10, 15, 30 or 60 minutes) or be 180 minutes"; return false; }
     S.note.clear();
     return true;
 }
@@ -291,7 +292,7 @@ extern "C" cppExtension* CreateExtension(void) {
     StepTrend* p = new StepTrend();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);   // on the price chart; no mouse tracking (no hovers)
-    p->setDescription("LRA Step Trend v1.5.1 - hourly breakouts as connected steps from high to high (green up, red down); the broken level runs on thin and dashed as the test line until it is tested, broken by an hourly close or the next step is made (T / B letters on the 60-minute chart only).");
-    p->setVersion("1.5.1");
+    p->setDescription("LRA Step Trend v1.5.2 - hourly breakouts as connected steps from high to high (green up, red down); the broken level runs on thin and dashed as the test line until it is tested, broken by an hourly close or the next step is made (T / B letters on the 60-minute chart only).");
+    p->setVersion("1.5.2");
     return p;
 }
