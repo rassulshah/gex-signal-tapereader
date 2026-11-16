@@ -4,11 +4,15 @@
 // SDK-free. UNPROVEN: every zone is a "?" until the nightly has scored it (status RULES line says so).
 //
 // ACCUMULATION (at a low; DISTRIBUTION = the mirror at a high). Over the last 5..14 closed candles:
-//   1. the sellers were the net aggressors: sell - buy >= NET_SHARE (4%) of the lots traded in those candles
-//   2. price made no progress: the lowest low is at most PROG_X (0.75) x the candles' mean range below the first candle's low,
+//   1. the sellers were the net aggressors: sell - buy >= NET_SHARE (2%) of the lots traded in those candles
+//   2. price made no progress: the lowest low is at most PROG_X (0.25) x the candles' mean range below the first candle's low,
 //      and it is the lowest low of the last LOW_LOOK (20) candles (the selling is AT a low)
 //   3. a passive buyer was seen: lsRevRead's "Absorbed" (more traded at a price than was ever shown there, ratio >= ABS_X 1.2) inside
 //      those candles, at or just above that low
+//   TESTED 2026-11-16 (accstudy, order-by-order store): 1.0.0's rule held no better than any low under net selling (55% vs 59%). What DID separate,
+//   on both halves and in all 4 markets: a tight hold (67%), a QUIET END - the defended prices no longer being hit in the last third (67% vs 42%) -
+//   and offers above NOT building (68% vs 51%); together 76% (n 456). None of them yet finds the BIG turns (2 ranges before 1: 29-31%).
+//   The quiet end and the offers need the order book inside the indicator: not built yet.
 //   -> a zone OPENS (amber): from the first candle to now, low .. high of those candles, the absorbed price, the numbers of the read.
 // While open it grows with every candle. It is DECIDED once, at a candle's close, and never changes afterwards:
 //   CONFIRMED (green / red)  a candle with delta on the zone's side (buyers for accumulation) closes beyond the highest high (lowest low)
@@ -25,9 +29,9 @@
 #include <vector>
 
 namespace acc {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-16 11:40 CT, the first order-by-order test: 4,168 candidates, 80 sessions CL ES NQ GC, both halves) the hold must be TIGHT (PROG_X 0.75 -> 0.25: held 67% vs 59% for all) and the net selling need only be there (NET_SHARE 4% -> 2%: heavier net selling broke MORE often, 53% vs 63%)   // was "1.0.0";
 static const int WIN_MIN = 5, WIN_MAX = 14, LOW_LOOK = 20, MAX_OPEN = 30, CONF_BACK = 3, KEEP_BARS = 400, KEEP_ZONES = 300;
-static const double NET_SHARE = 0.04, PROG_X = 0.75, ABS_X = 1.2;
+static const double NET_SHARE = 0.02, PROG_X = 0.25, ABS_X = 1.2;
 enum State { OPEN = 0, CONFIRMED = 1, BROKEN = 2, EXPIRED = 3 };
 struct Bar { long long t = 0, lo = 0, hi = 0, close = 0, buy = 0, sell = 0; };          // t = the candle's END (seconds); prices in ticks
 struct Abs { long long t = 0; int side = 0; long long px = 0, shown = 0, lots = 0; double x = 0; };   // side +1 = a BUYER absorbed sellers (at a low)
