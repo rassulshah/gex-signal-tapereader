@@ -63,7 +63,7 @@ inline std::vector<std::pair<std::string, std::string>> readRows(const zcf::Read
 
 // (3.0.0) the read of the 3-hour-sweep CoBs, handed in by the host (built from CobCheck.h): tags by (the wave's pivot bar END, the wave's
 // direction) -> the CoB's side; rows = label, value, colour (0 white, 1 up, 2 down)
-struct XRead { bool on = false, any = false; int dir = 0; std::vector<std::pair<std::string, std::string>> rows; std::vector<int> col;
+struct XRead { int readX = -1;   /* (3.0.1, Rassul 2026-11-16 10:58 CT "move others reads to the right") the x just right of the last candle when it is on screen, else -1 = the left edge */ bool on = false, any = false; int dir = 0; std::vector<std::pair<std::string, std::string>> rows; std::vector<int> col;
     std::map<std::pair<long long, int>, int> cob, lvp; };
 inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, long long formVol, const View& v, const std::string& head, const zcf::Finder* cf0 = nullptr, const XRead* xr = nullptr) {
     const bool xon = xr && xr->on; const zcf::Finder* cf = xon ? nullptr : cf0;   // (3.0.0) with an XRead nothing of the old finder is drawn
@@ -189,7 +189,8 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
         const std::vector<std::pair<std::string, std::string>>& rows = xr->rows;
         int kw = v.textW("Warn (0)"), vw = std::max(v.textW("S2 28,583.75 AsiaLO"), v.textW("3/3 3row SMA R1")); for (const auto& r : rows) { kw = std::max(kw, v.textW(r.first)); vw = std::max(vw, v.textW(r.second)); }
         const int rh = TH + 2, bw = std::max(kw + vw + 22, v.textW(head) + 12);
-        const int x0 = v.l + 2, y0 = v.t + 1, fit = std::min((int)rows.size(), (H - 4 - (TH + 4)) / rh);
+        const int x0 = (xr->readX >= 0 && xr->readX + bw < v.r) ? xr->readX : v.l + 2;   // (3.0.1) right of the last candle when there is room, else the left edge as before
+        const int y0 = v.t + 1, fit = std::min((int)rows.size(), (H - 4 - (TH + 4)) / rh);
         if (fit >= 2 && x0 + bw < v.r) {
             boxed = true; const int y1 = y0 + TH + 4 + fit * rh + 2;
             Prim e; e.k = Prim::FILL; e.x0 = x0; e.x1 = x0 + bw; e.y0 = y0; e.y1 = y1; e.col = 0x6B7280; S.p.push_back(e);

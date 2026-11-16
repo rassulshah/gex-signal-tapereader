@@ -50,7 +50,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.3.0";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.3.1";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -258,6 +258,7 @@ int VolRead::draw(void) {
         FONT fp; fp.id = HELVETICA; fp.size = 9; fp.style = PLAIN; FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD;
         v.textW = [this, &fb](const std::string& s) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
         S->cur.pane.l = pane.left; S->cur.pane.t = pane.top; S->cur.pane.r = pane.right; S->cur.pane.b = pane.bottom;   // (1.2.0) for mouseLeft
+        v.readX = ve >= (int)n - 1 ? (int)v.X((int)n - 1 - off) + v.bw / 2 + 18 : -1;   // (1.3.1) the read box right of the last candle
         const int pick = S->hov >= 0 ? S->hov - S->off : -1;               // the bar under the mouse as an engine index (the forming bar = the bar count)
         const std::vector<vrr::Prim> P = vrr::layout(S->E, v, S->haveForm ? &S->form : nullptr, pick);
         S->drawn = (int)P.size();
@@ -282,10 +283,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);   // (1.2.0) + the mouse picks the bar the read box is about                                    // its own pane, draws itself; no hovers, no settings
 #ifdef VR_RANGE
-    p->setDescription("LRA Range Read v1.3.0 - its own pane: each bar's range (high - low) in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Rev = a PB Rev or CoB pullback Rev bar, Ct = a counter bar bigger than every bar since the Cob origin, P = a ZigZag pivot bar that is the biggest in 20 or more; no code: the biggest in 50 or more bars, a breakout candle of 1.2x ATR(13) or more. BRMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
+    p->setDescription("LRA Range Read v1.3.1 - its own pane: each bar's range (high - low) in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Rev = a PB Rev or CoB pullback Rev bar, Ct = a counter bar bigger than every bar since the Cob origin, P = a ZigZag pivot bar that is the biggest in 20 or more; no code: the biggest in 50 or more bars, a breakout candle of 1.2x ATR(13) or more. BRMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #else
-    p->setDescription("LRA Volume Read v1.3.0 - its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Rev = a PB Rev or CoB pullback Rev bar, Ct = a counter bar bigger than every bar since the Cob origin, P = a ZigZag pivot bar that is the biggest in 20 or more; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
+    p->setDescription("LRA Volume Read v1.3.1 - its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Rev = a PB Rev or CoB pullback Rev bar, Ct = a counter bar bigger than every bar since the Cob origin, P = a ZigZag pivot bar that is the biggest in 20 or more; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #endif
-    p->setVersion("1.3.0");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.3.1");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

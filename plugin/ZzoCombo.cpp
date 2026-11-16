@@ -444,6 +444,7 @@ int ZzoCombo::draw(void) {
         const std::vector<zzd::Wave>& waves = S->vWaves;
         const bool noFoot = !S->E.B.empty() && S->E.noVap >= (long long)S->E.B.size();   // no footprint on this chart: volume still works, Ab cannot
         const std::string head = std::string("Cob Reader ") + zcf::COMBO_VERSION + (noFoot ? "  no footprint - Ab off" : "");
+        S->xr.readX = ve >= (int)n - 1 ? (int)v.X((int)n - 1 - off) + (int)v.bw / 2 + 18 : -1;   // (3.0.1) the read box sits right of the last candle
         S->last = zzd::layoutCombo(S->E, waves, S->haveForm ? S->formBar.vol : 0, v, head, &S->F, &S->xr);
         const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom;
         for (const zzd::Prim& p : S->last.p) {
@@ -469,7 +470,7 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #endif
-    p->setDescription("LRA Cob Reader v3.0.0 (was ZZO Combo; 3.0.0 = the 3-hour-sweep CoBs of lsCobSignal with the checklist) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count; Cob = the CoB Signal's 3-hour-sweep CoB (a count 10+ wave whose origin swept a standing 3-hour S1 / S2 / R1 / R2 and came back through it), Lvp = its low-volume pullback; read box: Cob, Lvl, Check (3row, SMA, S1 / R1), Lvp, Warn (counter wave 0.8x+), Win. No settings.");
-    p->setVersion("3.0.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Cob Reader v3.0.1 (was ZZO Combo; 3.0.1 = the read box sits right of the last candle; 3.0.0 = the 3-hour-sweep CoBs of lsCobSignal with the checklist) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count; Cob = the CoB Signal's 3-hour-sweep CoB (a count 10+ wave whose origin swept a standing 3-hour S1 / S2 / R1 / R2 and came back through it), Lvp = its low-volume pullback; read box: Cob, Lvl, Check (3row, SMA, S1 / R1), Lvp, Warn (counter wave 0.8x+), Win. No settings.");
+    p->setVersion("3.0.1");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

@@ -24,7 +24,7 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
+static const char* const VERSION = "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
 // "what about an increas on a break/sweep of a keylevel, vol level", "go", "if there is a bar that is big like biggest range or volume in 50+ , lets highlight it, this includes variants like biggest green or red";
 // mockup Dr2SDbU3idUeUYD5c2KAVX) BOTH panes: bars grey, a marked bar green (bullish) / red (bearish) with ONE short code over it, by priority:
 //   CB  the Cob bar near the origin (the Cob Reader's CB bar)                      colour = the Cob's side
@@ -298,7 +298,7 @@ struct Engine {
 };
 
 // ---- the drawing (SDK-free)
-struct View { int l = 0, t = 0, r = 800, b = 100, first = 0, last = 0, bw = 6, textH = 11; std::function<double(int)> X; std::function<int(const std::string&)> textW; };
+struct View { int readX = -1;   /* (1.3.1) the x just right of the last candle when it is on screen: the read box goes there; -1 = the left edge */ int l = 0, t = 0, r = 800, b = 100, first = 0, last = 0, bw = 6, textH = 11; std::function<double(int)> X; std::function<int(const std::string&)> textW; };
 struct Prim { int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; std::string text; bool fill = false, bold = false; };
 static const unsigned C_GREY = 0x006B6B6B;
 static const unsigned C_UP = 0x0022C55E, C_DN = 0x00EF4444, C_TXT = 0x00FFFFFF, C_BOXBG = 0x000D0D0D, C_BOXLN = 0x00888888;   // 0x00RRGGBB
@@ -309,15 +309,16 @@ static const int BOX_W = 92, BOX_PAD = 3;
 inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form, int pick = -1)
 {
     std::vector<Prim> P; const int n = (int)E.V.size(), W = v.r - v.l, H = v.b - v.t; if (W < 40 || H < 12 || !v.X) return P;
-    const bool box = W >= BOX_W + 60; const int bx1 = v.l + 2 + BOX_W;                    // the box needs room; bars start right of it
+    const bool box = W >= BOX_W + 60; const bool right = box && v.readX >= 0 && v.readX + BOX_W + 2 <= v.r;   // (1.3.1, Rassul 2026-11-16 10:58 CT "move others reads to the right") right of the last candle when there is room
+    const int bxL = right ? v.readX : v.l + 2, bx1 = bxL + BOX_W; const bool lbox = box && !right;       // lbox: the box is at the left edge - bars start right of it
     const int th = std::max(8, v.textH), top = v.t + (E.hlOn ? 2 : 1) * th + 2;          // room for the number (and, 1.3.0, the code) over the tallest bar
     const double fv = form ? E.valueOf(*form) : 0.0;
     const int a = std::max(0, v.first), z = std::min(n - 1 + (form ? 1 : 0), v.last);
     auto valAt = [&](int i) { return i < n ? E.V[(size_t)i] : fv; };
-    double mx = 0; for (int i = a; i <= z; ++i) { if (box && v.X(i) - v.bw / 2.0 < bx1 + 1) continue; mx = std::max(mx, valAt(i)); }
+    double mx = 0; for (int i = a; i <= z; ++i) { if (lbox && v.X(i) - v.bw / 2.0 < bx1 + 1) continue; mx = std::max(mx, valAt(i)); }
     const int hw = std::max(1, (int)(v.bw * 0.8) / 2);
     if (mx > 0 && v.b - top >= 4) for (int i = a; i <= z; ++i) {
-        const double x = v.X(i); const int x0 = (int)std::lround(x) - hw, x1 = (int)std::lround(x) + hw; if (x0 < v.l || x1 > v.r || (box && x0 < bx1 + 1)) continue;
+        const double x = v.X(i); const int x0 = (int)std::lround(x) - hw, x1 = (int)std::lround(x) + hw; if (x0 < v.l || x1 > v.r || (lbox && x0 < bx1 + 1)) continue;
         const double val = valAt(i); if (!(val > 0)) continue;
         const bool g = i < n ? E.G[(size_t)i] != 0 : (form->c >= form->o);
         const int y = v.b - std::max(1, (int)std::lround(val / mx * (v.b - top)));
@@ -329,7 +330,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
             const int w = v.textW ? v.textW(s) : (int)s.size() * 6;
             Prim t; t.text = s; t.col = c; t.bold = bold; t.x0 = (int)std::lround(x - w / 2.0); t.x1 = t.x0 + w; t.y1 = yTop; t.y0 = t.y1 - th;
             if (t.y0 < v.t) { t.y0 = v.t; t.y1 = v.t + th; }
-            bool ok = t.x0 >= (box ? bx1 + 1 : v.l) && t.x1 <= v.r;
+            bool ok = t.x0 >= (lbox ? bx1 + 1 : v.l) && t.x1 <= v.r;
             for (int up = 0; ok && up < 3; ++up) {                                       // never over another text: one row up (twice at most), else not drawn
                 bool clash = false; for (const Prim& q : P) if (!q.fill && q.x0 < t.x1 + 2 && t.x0 < q.x1 + 2 && q.y0 < t.y1 && t.y0 < q.y1) { clash = true; break; }
                 if (!clash) break;
@@ -343,7 +344,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
     }
     if (box) {                                                                          // the read box: the last CLOSED bar
         const int rows = 5, rh = std::max(8, std::min(th + 1, (H - 2 * BOX_PAD) / rows)); const int bh = rows * rh + 2 * BOX_PAD;
-        const int x0 = v.l + 2, y0 = v.t + std::max(0, (H - bh) / 2), x1 = bx1, y1 = std::min(v.b, y0 + bh);
+        const int x0 = bxL, y0 = v.t + std::max(0, (H - bh) / 2), x1 = bx1, y1 = std::min(v.b, y0 + bh);
         Prim bg; bg.fill = true; bg.x0 = x0; bg.y0 = y0; bg.x1 = x1; bg.y1 = y1; bg.col = C_BOXBG; P.push_back(bg);
         const int E4[4][4] = { {x0, y0, x1, y0}, {x0, y1, x1, y1}, {x0, y0, x0, y1}, {x1, y0, x1, y1} };
         for (const auto& e : E4) { Prim ln; ln.fill = true; ln.x0 = e[0]; ln.y0 = e[1]; ln.x1 = e[2]; ln.y1 = e[3]; ln.col = C_BOXLN; P.push_back(ln); }
