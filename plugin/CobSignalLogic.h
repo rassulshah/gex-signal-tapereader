@@ -50,7 +50,7 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.7.1";   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
+static const char* const VERSION = "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
 // was "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
 // was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
 // was "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
@@ -80,6 +80,19 @@ struct Mark {
     std::string label() const { std::string s = "Cob"; if (r || v) s += "+"; if (r) s += "R"; if (v) s += "V"; return s; }
 };
 struct Leg { int s = -1, e = -1, dir = 0; double size = 0; };
+// (1.8.0) THE CoB PULLBACK REV. For a DRAWN CoB (shown, ZZO ok): the bars after the wave's end pivot p1 are the pullback. It ends without a
+// Rev when a bar closes through the CoB origin or trades beyond the wave's extreme. The first bar at / after the CoB bar that closes above
+// the prior bar's high and is green (bear: below the prior low and red) decides: a Rev when the volume of the pullback bars before it is
+// <= REV_VOL_X of the CoB wave's volume (the bars after the origin pivot through p1), else no Rev on this pullback.
+// (Rassul 20:48-20:49 "cob can have upto 3 revs , as long as its still valid - close doesn't tak out the the cob origint", "upto 3 revs on
+// 3 seperate pullbacks") A bar that trades beyond the running extreme ends the pullback and starts the next one from that new extreme; each
+// pullback gets one decision. Up to REV_MAX Revs per CoB; the look ends when a bar CLOSES through the CoB origin. Decided on a closed bar,
+// never repainted. Year test of the FIRST Rev (279 CoBs): to the CoB high 82% (141) at <= 0.5x vs 51% (74) above it; no minimum depth.
+static const double REV_VOL_X = 0.5;
+static const int REV_MAX = 3;
+static const int REV_LOOK = 400;        // bars after the wave's end pivot
+struct RevMark { long long t = 0, cobT = 0; int idx = -1, side = 0, nth = 0, topIdx = -1; double ratio = 0, depth = 0; };
+struct RevTrack { long long cobT = 0; int cobIdx = -1, p0 = -1, p1 = -1, side = 0, q = -1, topIdx = -1, n = 0; double ext = 0, top = 0, waveVol = 0, pbVol = 0, pe = 0; bool done = false, armed = true; };
 static const int ZZO_COB_MIN = 10;      // (1.4.0) the CoB wave's ZZO Combo count (Rassul: "at least a 10")
 static const int ZZO_COB_LOOK = 60;     // (1.4.0) bars a CoB waits for its wave to reach the count (then: not drawn)
 
@@ -229,9 +242,10 @@ struct Engine {
     std::vector<Mark> marks; std::vector<std::string> out;   // decisions + record lines not yet written
     long long trimmed = 0; std::string lastWhy;
     Lvp lvp; std::vector<std::string> lvpOut;        // (1.3.0) LVP decisions + record lines not yet written
+    std::vector<RevTrack> revTr; std::vector<RevMark> revs;   // (1.8.0) the CoB pullback Rev
     Htf H; std::vector<HSnap> hs; bool htfSweep = true;   // (1.7.0) the 3-hour S / R as of every bar; false = the 1.6.x named key levels (tests)
     zzd::Engine Z3;                                  // (1.4.0) the ZZO Combo engine on the same bars (wave counts for the CoB filter)
-    void reset() { wSeen = 0; lastWaveT = 0; if (!mkt.empty()) { Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(rootRaw.empty() ? mkt : rootRaw, perSec); } lvp.reset(); lvpOut.clear(); H.reset(); hs.clear(); B.clear(); K.clear(); CB.clear(); cls.clear(); dirn = 0; ext = 0; start = 0; legs.clear(); lastLowPivot = -1; S.clear(); doneOrder.clear(); marks.clear(); out.clear(); lastWhy.clear(); }
+    void reset() { wSeen = 0; lastWaveT = 0; if (!mkt.empty()) { Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(rootRaw.empty() ? mkt : rootRaw, perSec); } lvp.reset(); lvpOut.clear(); H.reset(); hs.clear(); revTr.clear(); revs.clear(); B.clear(); K.clear(); CB.clear(); cls.clear(); dirn = 0; ext = 0; start = 0; legs.clear(); lastLowPivot = -1; S.clear(); doneOrder.clear(); marks.clear(); out.clear(); lastWhy.clear(); }
     bool setMarket(const std::string& m, double tk, int spb) {
         mkt = mktKey(m); rootRaw = m; tick = tk > 0 ? tk : 0.25; perSec = spb > 0 ? spb : 180; lvp.tick = tick;
         Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(rootRaw, perSec);   // (1.4.0); (1.6.2) the chart's own root = exactly the ZZO Combo pane's counts
@@ -291,6 +305,7 @@ struct Engine {
             for (size_t k = k0; k < Z3.W.size(); ++k) { checkWave(k, j); if (Z3.W[k].e >= 0 && Z3.W[k].e < (int)Z3.B.size()) lastWaveT = Z3.B[(size_t)Z3.W[k].e].t; }
             for (size_t q = nm3; q < marks.size(); ++q) { const Mark& m = marks[q]; lvp.cob(m.t, m.idx, m.legEnd, m.side, m.show); }
         }
+        revStep(j);                                    // (1.8.0) the CoB pullback Rev, with every bar through this one
         // 2) the ZigZag (his 1-bar walk) with this bar
         if (j == 1) { dirn = B[1].h >= B[0].h ? 1 : -1; ext = 0; start = 0; }
         if (j >= 1) {
@@ -302,6 +317,37 @@ struct Engine {
                 else if (B[j].h > B[j - 1].h && j != ext) { Leg L; L.s = start; L.e = ext; L.dir = -1; L.size = B[start].h - B[ext].l; legs.push_back(L); lastLowPivot = ext; start = ext; ext = j; dirn = 1; }
             }
         }
+    }
+    // (1.8.0) start a pullback look for every newly drawn CoB, then walk each open look bar by bar through bar j
+    void revStep(int j) {
+        for (const Mark& m : marks) {
+            if (!m.show || !m.zOk || m.legStart < 0 || m.legEnd <= m.legStart || m.legEnd >= (int)B.size()) continue;
+            bool have = false; for (const RevTrack& x : revTr) if (x.cobT == m.t && x.side == m.side) { have = true; break; }
+            if (have) continue;
+            RevTrack x; x.cobT = m.t; x.cobIdx = m.idx; x.p0 = m.legStart; x.p1 = m.legEnd; x.side = m.side; x.q = m.legEnd + 1; x.topIdx = m.legEnd; x.ext = m.ext;
+            x.top = m.side > 0 ? B[(size_t)m.legEnd].h : B[(size_t)m.legEnd].l; x.pe = x.top;
+            for (int i = m.legStart + 1; i <= m.legEnd; ++i) x.waveVol += std::isfinite(B[(size_t)i].v) && B[(size_t)i].v > 0 ? B[(size_t)i].v : 0;
+            if (!(x.waveVol > 0) || !((x.top - x.ext) * x.side > 0)) x.done = true;
+            revTr.push_back(x);
+        }
+        for (RevTrack& x : revTr) {
+            for (; !x.done && x.q <= j; ++x.q) {
+                const Bar& b = B[(size_t)x.q]; const Bar& p = B[(size_t)x.q - 1]; const int d = x.side;
+                if (x.q - x.p1 > REV_LOOK) { x.done = true; break; }
+                if (d > 0 ? b.c < x.ext : b.c > x.ext) { x.done = true; break; }                                       // a close through the CoB origin: the CoB is no longer valid
+                if (d > 0 ? b.h > x.top : b.l < x.top) { x.top = d > 0 ? b.h : b.l; x.topIdx = x.q; x.pe = x.top; x.pbVol = 0; x.armed = true; continue; }   // a new extreme: that pullback is over, the next one starts here
+                x.pe = d > 0 ? std::min(x.pe, b.l) : std::max(x.pe, b.h);
+                if (x.armed && x.q >= x.cobIdx && (d > 0 ? (b.c > p.h && b.c > b.o) : (b.c < p.l && b.c < b.o))) {   // the first bar closing beyond the prior bar decides this pullback
+                    x.armed = false;
+                    const double ratio = x.pbVol / x.waveVol;
+                    if (ratio <= REV_VOL_X) { RevMark r; r.t = b.t; r.cobT = x.cobT; r.idx = x.q; r.side = d; r.nth = ++x.n; r.topIdx = x.topIdx; r.ratio = ratio; r.depth = std::fabs(x.top - x.pe) / std::fabs(x.top - x.ext); revs.push_back(r);
+                        char ln[160]; std::snprintf(ln, sizeof ln, "REV,%lld,%s,%lld,%.2f,%.2f,%d", r.t, d > 0 ? "BULL" : "BEAR", r.cobT, r.ratio, r.depth, r.nth); out.push_back(ln);
+                        if (x.n >= REV_MAX) { x.done = true; ++x.q; break; } }
+                }
+                x.pbVol += std::isfinite(b.v) && b.v > 0 ? b.v : 0;
+            }
+        }
+        if (revTr.size() > 64) { std::vector<RevTrack> keep; for (const RevTrack& x : revTr) if (!x.done || keep.size() + 32 > revTr.size()) keep.push_back(x); if (keep.size() < revTr.size() && keep.size() >= 32) revTr.swap(keep); }
     }
     int lastLowPivot = -1;
     bool wave3 = true; size_t wSeen = 0; long long lastWaveT = 0; std::string rootRaw;                        // (1.6.0) the 3-bar completed-wave CoB (false = the 1.5.x 1-bar pause rule)
@@ -545,6 +591,16 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
         Prim p; p.x0 = (int)std::lround(x - w / 2.0); p.x1 = p.x0 + w; p.y0 = y; p.y1 = y + h; p.col = below ? C_BULL : C_BEAR; p.text = s;
         P.push_back(p); used.push_back(std::make_pair((int)x, y));
     }
+    // (1.8.0) the CoB pullback Rev: green "Rev" on top of the bar for a bull CoB, red under it for a bear CoB (as the PB Rev), never on another label
+    for (const RevMark& m : E.revs) {
+        if (m.idx < v.first || m.idx > v.last || m.idx >= (int)E.B.size()) continue;
+        const Bar& b = E.B[(size_t)m.idx]; const std::string s = "Rev"; const int w = v.textW ? v.textW(s) : 21, h = 14; const double x = v.X(m.idx); const bool above = m.side > 0;
+        int y = above ? (int)std::lround(v.Y(b.h)) - COB_OFF - h : (int)std::lround(v.Y(b.l)) + COB_OFF;
+        for (int k = 0; k < 3; ++k) { bool clash = false; for (auto& u : used) if (std::abs(u.first - (int)x) < w && std::abs(u.second - y) < h) clash = true; if (!clash) break; y += above ? -16 : 16; }
+        if (y < v.t || y + h > v.b) continue;
+        Prim p; p.x0 = (int)std::lround(x - w / 2.0); p.x1 = p.x0 + w; p.y0 = y; p.y1 = y + h; p.col = above ? C_BULL : C_BEAR; p.text = s;
+        P.push_back(p); used.push_back(std::make_pair((int)x, y));
+    }
     return P;
 }
 
@@ -705,6 +761,7 @@ inline std::string statusText(const Engine& E, const std::string& sym, int spb, 
     for (size_t k = nl > 8 ? nl - 8 : 0; k < nl; ++k) o += "LAST" + lvpLine(E.lvp.marks[k]) + "\n";
     o += fibStatus(E);   // (1.5.0)
     o += htfStatus(E);   // (1.7.0)
+    o += "REV_RULES,1.8.0 CoB pullback Rev: after a drawn CoB, pullback inside the CoB range (no close through the origin, no new extreme); the first bar closing beyond the prior bar (and its own open) is a Rev when the pullback volume before it <= " + std::string("0.5") + "x the CoB wave volume; a new extreme starts the next pullback; up to 3 Revs per CoB, until a close through the origin\nREVS," + std::to_string(E.revs.size()) + "\n";   // (1.8.0)
     const size_t nt = E.lvp.tr.size();
     for (size_t k = nt > 4 ? nt - 4 : 0; k < nt; ++k) { const LvpTrack& x = E.lvp.tr[k]; o += "LVPLOOK," + std::to_string(x.cobT) + "," + (x.side > 0 ? "BULL" : "BEAR") + "," + std::to_string(x.vol) + "," + std::to_string(x.n) + "," + std::to_string(x.lvp) + "," + x.why + "\n"; }
     return o;

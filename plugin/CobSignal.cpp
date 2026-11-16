@@ -48,7 +48,7 @@
 #define CS_SEP "/"
 #endif
 
-static const char* CS_VERSION = "1.7.1";   // (1.7.1) the CoB window opens at the 5:00 PM session start (overnight CoBs)   // was "1.7.0":   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
+static const char* CS_VERSION = "1.8.0";   // (1.8.0) + the CoB pullback Rev ("Rev" on the bar, REV record lines)   // was "1.7.1":   // (1.7.1) the CoB window opens at the 5:00 PM session start (overnight CoBs)   // was "1.7.0":   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
 // was "1.5.1";   // (1.5.1) CQG roots mapped (cobs::mktKey) - it never ran on his CQG charts before   // (1.5.0) + the CoB Fib lines (targets 1.272 / 1.618 / 2.0, entry 50%, stop 0)   // = cobs::VERSION = the setVersion literal
 
 static long long csMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -76,7 +76,7 @@ static bool csPublish(const std::string& path, const std::string& text) {
 struct CSState {
     std::string mkt, sym; int spb = 0; double tick = 0; long long tickKey = 0; bool keyed = false, mktOk = false;
     cobs::Engine E; std::vector<RTDATE> raw; int off = 0;
-    std::string recPath, statusPath, livePath, recWhy = "not opened"; std::set<long long> written, writtenLvp, writtenZzo; int recFails = 0;   // (1.4.0) + writtenZzo (ZZO lines)
+    std::string recPath, statusPath, livePath, recWhy = "not opened"; std::set<long long> written, writtenLvp, writtenZzo, writtenRev; int recFails = 0;   // (1.4.0) + writtenZzo (ZZO lines)
     long long statusMs = -1; std::string statusBody; size_t liveN = (size_t)-1; int drawn = 0;
 };
 
@@ -129,9 +129,9 @@ bool CobSignal::identify(CSState& S) {
         S.recPath = d.empty() ? std::string() : d + CS_SEP "CobSignal" CS_SEP + key + ".csv";
         S.statusPath = d.empty() ? std::string() : d + CS_SEP "CobSignal.status-" + key + ".txt";
         S.livePath = d.empty() ? std::string() : d + CS_SEP "CobSignal-" + key + "-live.csv";
-        S.written.clear(); S.writtenLvp.clear(); S.writtenZzo.clear(); S.recWhy = d.empty() ? "no USERPROFILE" : "new";
+        S.written.clear(); S.writtenLvp.clear(); S.writtenZzo.clear(); S.writtenRev.clear(); S.recWhy = d.empty() ? "no USERPROFILE" : "new";
         std::ifstream f(S.recPath.c_str(), std::ios::binary);
-        if (f) { std::string l; int n = 0; while (std::getline(f, l) && n < 200000) { ++n; const bool isLvp = l.rfind("LVP,", 0) == 0, isZzo = l.rfind("ZZO,", 0) == 0; if (!isLvp && !isZzo && l.rfind("COB,", 0) != 0) continue; char* e = nullptr; const long long t = std::strtoll(l.c_str() + 4, &e, 10); if (e && *e == ',' && t > 0) (isLvp ? S.writtenLvp : isZzo ? S.writtenZzo : S.written).insert(t); } S.recWhy = "loaded " + std::to_string(S.written.size()) + " CoBs, " + std::to_string(S.writtenLvp.size()) + " LVPs"; }
+        if (f) { std::string l; int n = 0; while (std::getline(f, l) && n < 200000) { ++n; const bool isLvp = l.rfind("LVP,", 0) == 0, isZzo = l.rfind("ZZO,", 0) == 0, isRev = l.rfind("REV,", 0) == 0; if (isRev) { char* e2 = nullptr; const long long t2 = std::strtoll(l.c_str() + 4, &e2, 10); if (e2 && *e2 == ',' && t2 > 0) S.writtenRev.insert(t2); continue; } if (!isLvp && !isZzo && l.rfind("COB,", 0) != 0) continue; char* e = nullptr; const long long t = std::strtoll(l.c_str() + 4, &e, 10); if (e && *e == ',' && t > 0) (isLvp ? S.writtenLvp : isZzo ? S.writtenZzo : S.written).insert(t); } S.recWhy = "loaded " + std::to_string(S.written.size()) + " CoBs, " + std::to_string(S.writtenLvp.size()) + " LVPs"; }
     }
     return S.mktOk;
 }
@@ -159,14 +159,14 @@ void CobSignal::feed(CSState& S) {
 void CobSignal::flush(CSState& S) {
     if ((!S.E.out.empty() || !S.E.lvpOut.empty()) && !S.recPath.empty()) {
         std::vector<std::string> fresh;
-        for (const std::string& l : S.E.out) { char* e = nullptr; const long long t = std::strtoll(l.c_str() + 4, &e, 10); if (!(l.rfind("ZZO,", 0) == 0 ? S.writtenZzo : S.written).count(t)) fresh.push_back(l); }   // (1.4.0) ZZO lines keyed apart
+        for (const std::string& l : S.E.out) { char* e = nullptr; const long long t = std::strtoll(l.c_str() + 4, &e, 10); if (!(l.rfind("ZZO,", 0) == 0 ? S.writtenZzo : l.rfind("REV,", 0) == 0 ? S.writtenRev : S.written).count(t)) fresh.push_back(l); }   // (1.4.0) ZZO lines keyed apart
         for (const std::string& l : S.E.lvpOut) { char* e = nullptr; const long long t = std::strtoll(l.c_str() + 4, &e, 10); if (!S.writtenLvp.count(t)) fresh.push_back(l); }   // (1.3.0)
         if (!fresh.empty()) {
             const std::string d = csFlex(); csMkdir(d); csMkdir(d + CS_SEP "CobSignal");
             const bool isNew = !csExists(S.recPath);
             std::ofstream f(S.recPath.c_str(), std::ios::binary | std::ios::app);
             if (f) { if (isNew) f << "# lsCobSignal: COB,bar end (local secs),BULL/BEAR,label,levels swept,dratio,LOD/HOD,ADR,leg start,leg end,R since,V since,SHOW / LOG (1.1.0) | (1.3.0) LVP,pullback pivot bar end,BULL/BEAR (the CoB),CoB bar end,pullback first bar end,confirmed bar end,pullback volume,CoB wave volume,pct,nth pullback,SHOW / LOG\n"; for (const std::string& l : fresh) f << l << "\n"; f.flush(); }
-            if (f.good()) { for (const std::string& l : fresh) { char* e = nullptr; (l.rfind("LVP,", 0) == 0 ? S.writtenLvp : l.rfind("ZZO,", 0) == 0 ? S.writtenZzo : S.written).insert(std::strtoll(l.c_str() + 4, &e, 10)); } S.recWhy = "appending"; }
+            if (f.good()) { for (const std::string& l : fresh) { char* e = nullptr; (l.rfind("LVP,", 0) == 0 ? S.writtenLvp : l.rfind("ZZO,", 0) == 0 ? S.writtenZzo : l.rfind("REV,", 0) == 0 ? S.writtenRev : S.written).insert(std::strtoll(l.c_str() + 4, &e, 10)); } S.recWhy = "appending"; }
             else { ++S.recFails; S.recWhy = "append failed " + std::to_string(S.recFails) + "x"; }
         }
         S.E.out.clear(); S.E.lvpOut.clear();
@@ -234,7 +234,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.7.1 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. From the 5:00 PM session start to 11:00 AM CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Decided at the bar close, never repainted.");
-    p->setVersion("1.7.1");   // = CS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA CoB Signal v1.8.0 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. From the 5:00 PM session start to 11:00 AM CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Rev = the CoB pullback Rev: the first bar that closes above the prior bar's high (below its low for a bear CoB) while the pullback has carried 0.5x of the CoB wave's volume or less; up to 3 Revs on 3 separate pullbacks, until a bar closes through the CoB origin. Decided at the bar close, never repainted.");
+    p->setVersion("1.8.0");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }

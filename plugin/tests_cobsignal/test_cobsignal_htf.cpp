@@ -69,6 +69,28 @@ int main(int argc, char** argv) {
     {   int nh = 0; bool okh = true; for (const std::string& l : E.out) if (l.rfind("HTF,", 0) == 0) { ++nh; bool f = false; for (const cobs::Mark& m : E.marks) f = f || (l.find("HTF," + std::to_string(m.t) + (m.side > 0 ? ",BULL," : ",BEAR,") + m.levels.substr(0, 2) + ",") == 0); okh = okh && f; }
         CHECK(nh == (int)E.marks.size() && okh, "one HTF record line per CoB with its level's name and price (" << nh << ")");
         const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.find("\nHTFNOW,") != std::string::npos && st.find("\nHTFX,") != std::string::npos && st.find(",HOD,") != std::string::npos && st.find(",LOD,") != std::string::npos, "status: HTFNOW + the session's HOD / LOD lines for the MQ Reader"); }
-    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.7.1\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
+    {   // (1.8.0) the CoB pullback Rev: up to 3 per CoB on separate pullbacks
+        bool cap = true, rule = true, own = true, sep = true; int n = 0, multi = 0;
+        for (const cobs::RevMark& r : E.revs) { ++n; const cobs::Bar& b = E.B[(size_t)r.idx]; const cobs::Bar& p = E.B[(size_t)r.idx - 1]; const cobs::Mark* cm = nullptr; int cnt = 0;
+            for (const cobs::Mark& m : E.marks) { if (m.t == r.cobT && m.side == r.side) cm = &m; }
+            for (const cobs::RevMark& q : E.revs) { if (q.cobT == r.cobT && q.side == r.side) { ++cnt; if (&q != &r && q.nth == r.nth) sep = false; if (q.nth == r.nth + 1) sep = sep && q.topIdx > r.idx; } }
+            cap = cap && cnt <= cobs::REV_MAX && r.nth >= 1 && r.nth <= cobs::REV_MAX; if (r.nth == 2) ++multi;
+            own = own && cm && cm->show && cm->zOk && r.idx >= cm->idx && r.idx > cm->legEnd && r.topIdx >= cm->legEnd && r.topIdx < r.idx;
+            rule = rule && r.ratio <= cobs::REV_VOL_X + 1e-12 && (r.side > 0 ? (b.c > p.h && b.c > b.o) : (b.c < p.l && b.c < b.o));
+            if (cm) { double wv = 0, pv = 0; for (int i = cm->legStart + 1; i <= cm->legEnd; ++i) wv += E.B[(size_t)i].v;
+                const double top = r.side > 0 ? E.B[(size_t)r.topIdx].h : E.B[(size_t)r.topIdx].l;
+                for (int i = r.topIdx + 1; i < r.idx; ++i) { pv += E.B[(size_t)i].v; const cobs::Bar& x = E.B[(size_t)i]; rule = rule && (r.side > 0 ? x.h <= top : x.l >= top); }
+                for (int i = cm->legEnd + 1; i <= r.idx; ++i) { const cobs::Bar& x = E.B[(size_t)i]; rule = rule && (r.side > 0 ? x.c >= cm->ext : x.c <= cm->ext); }
+                rule = rule && (r.side > 0 ? b.h <= top : b.l >= top) && std::fabs(pv / wv - r.ratio) < 1e-9; } }
+        const bool one = cap && sep;
+        int drawnCobs = 0; for (const cobs::Mark& m : E.marks) if (m.show && m.zOk) ++drawnCobs;
+        CHECK(n > 0 && n <= drawnCobs, "CoB pullback Revs found (" << n << " after " << drawnCobs << " drawn CoBs)"); CHECK(one, "up to 3 Revs per CoB, each on its own pullback (a new extreme between them)"); CHECK(multi >= 0, "second Revs: " << multi); CHECK(own, "each Rev belongs to a drawn CoB, at / after its bar and after the wave's end pivot");
+        CHECK(rule, "Rev rule: closes beyond the prior bar and its own open, pullback volume <= 0.5x the wave's, no close through the origin, inside the running extreme");
+        int lines = 0; for (const std::string& l : E.out) if (l.rfind("REV,", 0) == 0) ++lines; CHECK(lines == n, "one REV record line per Rev");
+        {   const size_t cut = B.size() * 2 / 3; cobs::Engine P; P.setMarket("ES", 0.25, 180); for (size_t i = 0; i < cut; ++i) P.addBar(B[i]); bool pre = true; size_t k = 0; for (const cobs::RevMark& r : E.revs) if (r.idx < (int)cut) { ++k; bool f = false; for (const cobs::RevMark& q : P.revs) f = f || (q.t == r.t && q.side == r.side && q.cobT == r.cobT); pre = pre && f; } CHECK(pre && k == P.revs.size(), "Revs never repaint (prefix run)"); }
+        cobs::View v; v.l = 0; v.t = 0; v.r = 100000; v.b = 100000; v.first = 0; v.last = (int)E.B.size() - 1; v.X = [](int j) { return 10.0 + j * 4.0; }; v.Y = [](double p) { return 50000.0 - p * 4.0; };
+        int lab = 0; bool side = true; for (const cobs::Prim& p : cobs::layout(E, v)) if (p.text == "Rev") { ++lab; side = side && (p.col == cobs::C_BULL || p.col == cobs::C_BEAR); } CHECK(lab == n && side, "a Rev label per Rev, green / red (" << lab << ")");
+        const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.find("\nREV_RULES,1.8.0") != std::string::npos && st.find("\nREVS," + std::to_string(n) + "\n") != std::string::npos, "status: Rev rule + count"); }
+    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.8.0\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
     std::cout << "test_cobsignal_htf: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }
