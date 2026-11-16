@@ -1,5 +1,5 @@
 /*
- *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.8.0  (2026-11-16: lsSR runs in the background, SRBack.h; 0.7.0 2026-11-13)
+ *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.9.0  (2026-11-16: accumulation / distribution zones + their read, AccumLogic.h; 0.8.0: lsSR runs in the background, SRBack.h; 0.7.0 2026-11-13)
  *
  *  Rassul 2026-11-11 21:13-21:33 CT: "I want to know how i can have indicators that tell this story so i can understand how and why it
  *  reveresed"; "i have the poc of the candle in a pane. i want you to create a similar pane that has each candles poc and also makes a dash
@@ -86,16 +86,17 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
 #include <sys/stat.h>
 
-#define RVS_VERSION "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.8.0");
+    p->setVersion("0.9.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -214,6 +215,7 @@ struct PocStore {
 #endif
 #define OFF_SDK 1
 #include "OrderFlowFeed.h"
+#include "AccumLogic.h"        // (0.9.0) accumulation / distribution zones (SDK-free, tests_accum)
 #include "SRBack.h"            // (0.8.0) lsSR in the background: same rules, same journal, nothing drawn
 namespace rvs {
 struct PaneLogic {   // the MboPane contract (the base's own bars / records are not drawn by this pane)
@@ -254,6 +256,7 @@ public:
         rvs::Six six; int sixKeys = 0; long long sixParMs = -100000, sixParSig = -2; int sixLoaded = 0, sixDecided = 0;
         int pvDir = 0; long long pvTp = 0, pvExt = 0, pvW = 0; std::map<long long, int> trendAt; int trendNow = 0; std::vector<sb::Fact> revF; long long sixPostMs = -100000;
         rvs::SixRead live; bool haveLive = false;
+        acc::Engine ac; bool acLoaded = false; std::string acMkt, acPath, acBody; int acSpb = 0; long long acMs = -100000, acWrites = 0, acFails = 0; std::set<long long> acSeen; std::vector<acc::Abs> acPend;   // (0.9.0)
         srb::Back sr;                                                     // (0.8.0) the stop-run engine in the background
     };
     Ext* ext(S_& S) { if (!S.ext) S.ext.reset(new (std::nothrow) Ext()); return static_cast<Ext*>(S.ext.get()); }
@@ -299,7 +302,8 @@ public:
         if (same) { e.eng->book.swap(old->book); e.eng->lvl[0].swap(old->lvl[0]); e.eng->lvl[1].swap(old->lvl[1]); e.eng->hist.swap(old->hist); e.eng->base.swap(old->base); e.eng->p95 = old->p95; e.eng->nextId = old->nextId; }   // the 17:00 roll keeps the book and the normal
         const std::string flex = rvh::flexDir(); rvh::makeDir(flex); rvh::makeDir(rvh::recDir(flex));
         e.path = rvh::recPath(flex, mkt, e.spb, sess);
-        std::vector<std::string> L; if (!e.path.empty() && rvh::readLines(e.path, L, 4 * 1024 * 1024)) { e.marksLoaded = e.eng->loadMarks(L); e.eng->lastV = rvs::lastV(L); e.sixLoaded += e.six.load(L); }   // a restart: the letters decided before stay
+        std::vector<std::string> L; if (!e.path.empty() && rvh::readLines(e.path, L, 4 * 1024 * 1024)) { e.marksLoaded = e.eng->loadMarks(L); e.eng->lastV = rvs::lastV(L); e.sixLoaded += e.six.load(L);
+            try { accLoad(S, e); for (const std::string& l : L) { acc::Abs a; if (acc::parseAbsLine(l, e.tick, a) && a.t > e.ac.resume && e.acSeen.insert(a.t * 2 + (a.side > 0 ? 1 : 0)).second) e.acPend.push_back(a); } } catch (...) {}   /* (0.9.0) the Absorbed reads decided before this restart */ }   // a restart: the letters decided before stay
         if (!e.path.empty()) { struct stat st; if (stat(e.path.c_str(), &st) != 0) { std::ofstream f(e.path.c_str(), std::ios::binary | std::ios::app); f << "H|" << RVS_VERSION << "|" << mkt << "|" << e.spb << "|" << sess << "|tick " << rvs::Engine::num(e.tick) << "\n"; } }
     }
     // the context a story is stamped with when it starts: session, volatility window, the hourly read, levels, Pb (once a second)
@@ -363,13 +367,56 @@ public:
         f.flush(); if (!f.good()) ++e.writeFails;
         if (e.eng->out.size() > 20000) { e.eng->out.clear(); e.written = 0; }
     }
+    // ---- (0.9.0) accumulation / distribution zones (AccumLogic.h) ----------------------------------------------------------------
+    void accLoad(S_& S, Ext& e) {
+        const std::string mkt = rvh::marketOf(S.market); const int spb = (int)S.spb; if (mkt.empty() || spb <= 0) return;
+        if (e.acLoaded && mkt == e.acMkt && spb == e.acSpb) return;
+        e.ac.reset(); e.ac.spb = spb; e.acMkt = mkt; e.acSpb = spb; e.acLoaded = true; e.acSeen.clear(); e.acPend.clear(); e.acBody.clear();
+        const std::string flex = rvh::flexDir(); e.acPath = flex.empty() ? std::string() : rvh::recDir(flex) + "\\accum-" + mkt + "-" + std::to_string(spb) + ".txt";
+        if (e.acPath.empty()) return;
+        std::ifstream f(e.acPath.c_str(), std::ios::binary); if (!f) return;
+        std::string txt(262144, '\0'); f.read(&txt[0], (std::streamsize)txt.size()); txt.resize((size_t)f.gcount()); if (txt.size() >= 262144) return;
+        e.ac.load(acc::parseFile(txt), acc::parseLast(txt)); e.acBody = txt;
+    }
+    void accFeed(S_& S, Ext& e, long long key, const rvs::Poc& p, const std::string& cs) {
+        accLoad(S, e); if (!e.acLoaded || !p.ok) return;
+        acc::Bar b; b.t = key; b.lo = p.lo; b.hi = p.hi; b.close = p.close; b.buy = p.buy; b.sell = p.sell;
+        const bool live = e.ac.resume > 0 ? key > e.ac.resume : (!cs.empty() && cs == e.session);   // a first run starts with the running session; a restart goes on after the file
+        if (!live) { e.ac.prime(b); return; }
+        for (size_t i = 0; i < e.acPend.size();) { const acc::Abs& a = e.acPend[i]; if (a.t <= key) { e.ac.onAbsorb(a.t, a.side > 0, a.px, a.shown, a.lots, a.x); e.acPend.erase(e.acPend.begin() + (long)i); } else ++i; }
+        e.ac.onCandle(b);
+    }
+    void accPump(S_& S, Ext& e) {
+        if (!e.acLoaded) return;
+        if (e.eng) {                                                      // a story that just reached Absorbed (decided once)
+            auto see = [&](const rvs::Story& s) { if (s.tA <= 0 || s.anchor <= 0) return; const long long t = s.tA / 1000; if (!e.acSeen.insert(t * 2 + (s.bottom ? 1 : 0)).second) return;
+                acc::Abs a; a.t = t; a.side = s.bottom ? 1 : -1; a.px = s.anchor; a.shown = s.shownSz; a.lots = s.absLots; a.x = s.absR; e.acPend.push_back(a); };
+            for (int b = 0; b < 2; ++b) if (e.eng->live[b]) see(e.eng->st[b]);
+            for (size_t i = e.eng->ended.size() > 8 ? e.eng->ended.size() - 8 : 0; i < e.eng->ended.size(); ++i) see(e.eng->ended[i]);
+            if (e.acSeen.size() > 4000) e.acSeen.clear();
+            if (e.acPend.size() > 400) e.acPend.erase(e.acPend.begin(), e.acPend.begin() + 200);
+        }
+        const long long now = off::steadyMs(); if (now - e.acMs < 1000 && now >= e.acMs) return; e.acMs = now;
+        if (e.acPath.empty() || e.ac.lastT <= 0) return;
+        const std::string body = acc::fileText(e.ac, e.acMkt, S.tick); if (body == e.acBody) return;
+        const std::string tmp = e.acPath + ".tmp"; bool ok = false;
+        { std::ofstream f(tmp.c_str(), std::ios::binary | std::ios::trunc); if (f) { f.write(body.data(), (std::streamsize)body.size()); f.flush(); ok = f.good(); } }
+#if defined(_WIN32)
+        if (ok) ok = ::MoveFileExA(tmp.c_str(), e.acPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+        if (ok) ok = std::rename(tmp.c_str(), e.acPath.c_str()) == 0;
+#endif
+        if (ok) { e.acBody = body; ++e.acWrites; } else { std::remove(tmp.c_str()); ++e.acFails; }
+    }
     void stopAll() { S_* S = testState(); if (!S) return; Ext* e = ext(*S); if (e) { flush(*e); try { e->sr.stop(); } catch (...) {} } }
-    virtual void afterPump(S_& S, long long, bool) { Ext* e = ext(S); if (e) { if (e->eng && e->stamp > 0) e->eng->onClock(e->stamp * 1000); flush(*e); try { e->sr.afterPump(); } catch (...) { ++e->sr.faults; } } }
+    virtual void afterPump(S_& S, long long, bool) { Ext* e = ext(S); if (e) { if (e->eng && e->stamp > 0) e->eng->onClock(e->stamp * 1000); flush(*e); try { e->sr.afterPump(); } catch (...) { ++e->sr.faults; } try { accPump(S, *e); } catch (...) {} } }
     virtual void afterTimer(S_& S, long long) { Ext* e = ext(S); if (e) { flush(*e); try { e->sr.flush(); } catch (...) { ++e->sr.faults; } } }
     virtual void statusExtra(S_& S, std::ostream& o) {
         Ext* e = ext(S); if (!e) { o << "\nREV_READ,unavailable"; return; }
         const rvs::Engine* E = e->eng.get();
         try { o << "\n" << e->sr.status(); } catch (...) {}
+        try { int op = 0, cf = 0; for (const acc::Zone& z : e->ac.Z) { if (z.state == acc::OPEN) ++op; else if (z.state == acc::CONFIRMED) ++cf; }
+              o << "\nACCUM,AccumLogic " << acc::VERSION << ",UNPROVEN (every zone is a ?),zones " << e->ac.Z.size() << ",open " << op << ",confirmed " << cf << ",candles " << e->ac.B.size() << ",absorbed reads " << e->ac.A.size() << ",resumed after " << e->ac.resume << ",file " << e->acPath << ",writes " << e->acWrites << ",fails " << e->acFails; } catch (...) {}
         o << "\nREV_READ,version " << RVS_VERSION << ",market " << e->mkt << ",session " << e->session << ",events " << e->events << ",skipped " << e->skipped << (e->note.empty() ? std::string() : ",note " + e->note)
           << ",fills " << (E ? E->fills : 0) << ",side mismatch " << (E ? E->sideMismatch : 0) << ",book " << (E ? E->book.size() : 0) << ",blocks " << (E ? E->hist.size() : 0) << ",normal p95 " << (E ? E->p95 : 0)
           << ",stories " << (E ? E->nextId - 1 : 0) << ",letters " << (E ? E->marks.size() : 0) << " (reloaded " << e->marksLoaded << ")" << ",levels " << e->nLevels << ",params keys " << e->parKeys << ",proven " << (E ? E->P.proven : 0)
@@ -410,6 +457,7 @@ public:
                 rvs::Poc p = rvs::pocOf(key, rows, lt, ht, ct); { const double o = opn.count >= count ? (double)opn[i] : 0.0; if (std::isfinite(o) && o > 0) p.open = (long long)std::llround(o / tick); } p.maxD = dmm[0]; p.minD = dmm[1];
                 struct tm t; std::memset(&t, 0, sizeof t); const bool tOk = getLocaltime((RTDATE)key - 1, &t) != 0; const std::string cs = tOk ? rvh::sessionOf(t) : std::string(); p.sess = rvs::sessId(cs); rvs::biggestIn(P.poc, p);   // (0.6.0)
                 P.poc[key] = p; P.pv[key] = pv; P.lastKey = key; e.six.setTotal(key, p.total);
+                try { accFeed(S, e, key, p, cs); } catch (...) {}   // (0.9.0) the accumulation zones: this closed candle, once
                 while (P.poc.size() > (size_t)rvh::PocStore::KEEP) { P.pv.erase(P.poc.begin()->first); P.poc.erase(P.poc.begin()); }
                 // the session VWAP from IRT's own volume at price (17:00 CT starts a new one)
                 if (tOk) { const std::string& s = cs; if (s != e.vwSession) { e.vwSession = s; e.vwPV = 0; e.vwV = 0; } e.vwPV += pv; e.vwV += (double)p.total; }
@@ -499,6 +547,19 @@ public:
         // the title (top-left)
         int x = pane.left + 6; const int y = pane.top + 2, lim = pane.right - 6;
         setFont(fb); { const std::string t = std::string("Reversal Read v") + RVS_VERSION; const int w = put(t, x, y, rvh::C_WHITE, lim); if (w > 0) x += w + 10; }
+        // (0.9.0) the accumulation / distribution read: a column right of the last candle; the story / Rev read moves right of it
+        int accShift = 0; std::string accRead;
+        if (const acc::Zone* z = e.ac.current()) {
+            std::string dec; if (z->tDec > 0) { struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)z->tDec, &t)) dec = off::clock12(t.tm_hour, t.tm_min); }
+            const std::vector<acc::Line> L = acc::readLines(*z, S.tick, (int)S.spb, dec);
+            for (size_t i = 0; i < L.size(); ++i) accRead += (i ? " > " : "") + L[i].text;
+            const int y0 = pane.top + 2, room = pane.bottom - y0; const int rowH = L.empty() ? 17 : std::min(17, room / (int)L.size());
+            if (rowH >= 12) { setFont(rowH >= 16 ? fl : fb); int wmax = 0; for (const acc::Line& l : L) wmax = std::max(wmax, (int)getTextWidth(l.text.c_str(), -1));
+                PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18;
+                if (v1 >= (int)count - 1 && xr + wmax <= pane.right - 6) {
+                    for (size_t i = 0; i < L.size(); ++i) { const COLOR c = L[i].col == 3 ? (COLOR)acc::C_AMBER : L[i].col == 2 ? rvh::C_WHITE : L[i].col > 0 ? rvh::C_GREEN : rvh::C_RED; put(L[i].text, xr, y0 + (int)i * rowH, c, pane.right - 5); }
+                    accShift = wmax + 26; } }
+        }
         std::string read;
         if (!e.note.empty()) { setFont(fp); put(e.note, x, y, rvh::C_GRAY, lim); read = e.note; }
         else if (!e.eng) { const std::string fs = S.feed.stateText(off::steadyMs()); const std::string t = fs != "ready" && !fs.empty() ? "no order feed - " + fs : "waiting for orders"; setFont(fp); put(t, x, y, rvh::C_GRAY, lim); read = t; }
@@ -518,7 +579,7 @@ public:
             if (six) {                                                   // (0.7.0) "Rev N" + six lines, a green check / red x in front of each
                 const std::vector<rvs::SixLine> L = rvs::sixLines(*six); read.clear(); for (size_t i = 0; i < L.size(); ++i) read += (i ? " > " : "") + L[i].text + (L[i].ok == 1 ? " +" : L[i].ok == 0 ? " -" : "");
                 setFont(fl); int wmax = 0; for (const rvs::SixLine& l : L) wmax = std::max(wmax, (int)getTextWidth(l.text.c_str(), -1) + 18);
-                PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18; const int rowH = 17, y0 = pane.top + LINE_H + 6;
+                PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18 + accShift; const int rowH = 17, y0 = pane.top + LINE_H + 6;
                 if (v1 >= (int)count - 1 && xr + wmax <= lim && y0 + (int)L.size() * rowH <= pane.bottom) {
                     for (size_t i = 0; i < L.size(); ++i) { const int yy = y0 + (int)i * rowH; const rvs::SixLine& l = L[i];
                         if (l.ok < 0) { put(l.text, xr, yy, rvh::C_WHITE, lim + 1); continue; }
@@ -531,7 +592,7 @@ public:
             else if (R.empty()) read = "no story";
             else {
                 setFont(fl); int wmax = 0; for (const Row& r : R) wmax = std::max(wmax, (int)getTextWidth(r.t.c_str(), -1) + (r.t2.empty() ? 0 : 10 + (int)getTextWidth(r.t2.c_str(), -1)));
-                PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18; const int rowH = 17, y0 = pane.top + LINE_H + 6;
+                PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18 + accShift; const int rowH = 17, y0 = pane.top + LINE_H + 6;
                 if (v1 >= (int)count - 1 && xr + wmax <= lim && y0 + (int)R.size() * rowH <= pane.bottom) {
                     for (size_t i = 0; i < R.size(); ++i) { const int yy = y0 + (int)i * rowH; const int w = put(R[i].t, xr, yy, R[i].c, lim + 1); if (w > 0 && !R[i].t2.empty()) put(R[i].t2, xr + w + 10, yy, R[i].c2, lim + 1); } }
                 else { setFont(fb);
@@ -539,6 +600,7 @@ public:
                         int w = put(R[i].t, x, y, R[i].c, lim); if (w < 0) break; x += w + 5; if (!R[i].t2.empty()) { w = put(R[i].t2, x, y, R[i].c2, lim); if (w < 0) break; x += w + 5; } } }
             }
         }
+        if (!accRead.empty()) read = accRead + " || " + read;
         e.lastRead = read; ++e.drawn;
     }
 };

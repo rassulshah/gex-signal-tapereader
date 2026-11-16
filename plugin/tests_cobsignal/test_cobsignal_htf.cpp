@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
         cobs::View v; v.l = 0; v.t = 0; v.r = 100000; v.b = 100000; v.first = 0; v.last = (int)E.B.size() - 1; v.X = [](int j) { return 10.0 + j * 4.0; }; v.Y = [](double p) { return 50000.0 - p * 4.0; };
         int lab = 0; bool side = true; for (const cobs::Prim& p : cobs::layout(E, v)) if (p.text == "Rev") { ++lab; side = side && (p.col == cobs::C_BULL || p.col == cobs::C_BEAR); } CHECK(lab == n && side, "a Rev label per Rev, green / red (" << lab << ")");
         const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.find("\nREV_RULES,1.8.0") != std::string::npos && st.find("\nREVS," + std::to_string(n) + "\n") != std::string::npos, "status: Rev rule + count"); }
-    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.8.2\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
+    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.8.3\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
     {   // (1.8.1, independent review) every drawn CoB starts its pullback look exactly once (revOn); finished looks are pruned without a second
         // walk: no (bar, CoB) has two Rev marks; the 3-hour lines never draw a broken level
         std::map<std::pair<long long, long long>, int> seen; int dup = 0; for (const cobs::RevMark& r : E.revs) if (++seen[std::make_pair(r.t, r.cobT)] > 1) ++dup;

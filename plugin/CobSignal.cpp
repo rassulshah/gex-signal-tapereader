@@ -28,6 +28,7 @@
 #undef near
 #endif
 #include "CobSignalLogic.h"
+#include "AccumLogic.h"            // (1.8.3) lsRevRead's accumulation / distribution zones: the boxes on the price chart
 #include "HostSlot.h"
 #include "SettingsGuard.h"
 #include <algorithm>
@@ -48,7 +49,7 @@
 #define CS_SEP "/"
 #endif
 
-static const char* CS_VERSION = "1.8.2";   // (1.8.2) the 3-hour S / R lines: one line each across the chart, no past steps   // was "1.8.1";   // (1.8.1) review fixes: the status text is built at most once a second; a REV line is keyed by its bar AND its CoB   // was "1.8.0";   // (1.8.0) + the CoB pullback Rev ("Rev" on the bar, REV record lines)   // was "1.7.1":   // (1.7.1) the CoB window opens at the 5:00 PM session start (overnight CoBs)   // was "1.7.0":   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
+static const char* CS_VERSION = "1.8.3";   // (1.8.3, 2026-11-16 Rassul 10:54 CT) draws lsRevRead 0.9.0's accumulation / distribution boxes on the price chart (outline + the absorbed price)   // was "1.8.2";   // (1.8.2) the 3-hour S / R lines: one line each across the chart, no past steps   // was "1.8.1";   // (1.8.1) review fixes: the status text is built at most once a second; a REV line is keyed by its bar AND its CoB   // was "1.8.0";   // (1.8.0) + the CoB pullback Rev ("Rev" on the bar, REV record lines)   // was "1.7.1":   // (1.7.1) the CoB window opens at the 5:00 PM session start (overnight CoBs)   // was "1.7.0":   // (1.7.0) the sweep = the 3-hour S1 / S2 / R1 / R2 (spring / upthrust), the four lines drawn   // was "1.6.5":   // (1.6.5) the CoB entry line at the 38.2% retracement (was 50%)   // (1.6.0) the CoB = a completed 3-bar ZigZag wave from a swing that swept a key level
 // was "1.5.1";   // (1.5.1) CQG roots mapped (cobs::mktKey) - it never ran on his CQG charts before   // (1.5.0) + the CoB Fib lines (targets 1.272 / 1.618 / 2.0, entry 50%, stop 0)   // = cobs::VERSION = the setVersion literal
 
 static long long csMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -79,6 +80,7 @@ struct CSState {
     std::string mkt, sym; int spb = 0; double tick = 0; long long tickKey = 0; bool keyed = false, mktOk = false;
     cobs::Engine E; std::vector<RTDATE> raw; int off = 0;
     std::string recPath, statusPath, livePath, recWhy = "not opened"; std::set<long long> written, writtenLvp, writtenZzo, writtenRev; int recFails = 0;   // (1.4.0) + writtenZzo (ZZO lines)
+    std::vector<acc::Zone> acZ; long long acMs = -100000; std::string acSig, acPath; int acDrawn = 0;   // (1.8.3) the zones lsRevRead saved (RevRead\\accum-<MKT>-<spb>.txt), looked at every 2 s
     long long statusMs = -1, statusCk = -1; std::string statusBody; size_t liveN = (size_t)-1; int drawn = 0;   // statusCk (1.8.1) = when the text was last built
 };
 
@@ -203,13 +205,21 @@ void CobSignal::pump() {
     CSState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
     feed(*S); flush(*S); status(*S, csMs());
+    {   // (1.8.3) lsRevRead's zones: read (bounded) only when the file's size / time changed; never from the draw
+        const long long now = csMs(); if (now - S->acMs >= 2000 || now < S->acMs) { S->acMs = now;
+            const std::string d = csFlex(); const std::string p = d.empty() || S->E.mkt.empty() ? std::string() : d + CS_SEP "RevRead" CS_SEP "accum-" + S->E.mkt + "-" + std::to_string(S->spb) + ".txt";
+            if (p != S->acPath) { S->acPath = p; S->acSig.clear(); S->acZ.clear(); }
+            struct stat st; if (p.empty() || stat(p.c_str(), &st) != 0) { if (!S->acSig.empty()) { S->acSig.clear(); S->acZ.clear(); invalidateChart(false); } }
+            else { const std::string sig = std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime);
+                if (sig != S->acSig) { std::ifstream f(p.c_str(), std::ios::binary); if (f) { std::string txt(262144, '\0'); f.read(&txt[0], (std::streamsize)txt.size()); txt.resize((size_t)f.gcount());
+                        if (txt.size() < 262144) { S->acSig = sig; S->acZ = acc::parseFile(txt); invalidateChart(false); } } } } } }
 }
 
 static short csC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
 
 int CobSignal::draw(void) {
     CSState* S = slot_.get(this, false);
-    if (!S || (S->E.marks.empty() && S->E.hs.empty())) return RTX_OK;   // draw never reads bars
+    if (!S || (S->E.marks.empty() && S->E.hs.empty() && S->acZ.empty())) return RTX_OK;   // draw never reads bars
     try {
         const long n = getBarCount(); if (n < 2) return RTX_OK;
         RCT pane; pane.getPaneRect(false);
@@ -220,6 +230,21 @@ int CobSignal::draw(void) {
         v.Y = [this](double px) { return (double)getVerticalDrawPosition((float)px); };
         FONT fb; fb.id = HELVETICA; fb.size = 10; fb.style = BOLD;
         v.textW = [this, &fb](const std::string& s) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
+        S->acDrawn = 0;
+        if (!S->acZ.empty() && !S->raw.empty()) {   // (1.8.3) the accumulation / distribution boxes, under everything else: an outline (amber = undecided, green / red = confirmed) + one line at the absorbed price
+            const std::vector<RTDATE>& R = S->raw; const int nR = (int)R.size(); const double tk = S->tick;
+            auto idx = [&](long long t) { int a = 0, b = nR - 1; while (a < b) { const int m = (a + b) / 2; if ((long long)R[(size_t)m] < t) a = m + 1; else b = m; } return a; };
+            const int i0 = std::max(0, std::min(nR - 1, vs - off)), i1 = std::max(0, std::min(nR - 1, ve - off));
+            auto X = [&](long long t) { return (int)std::lround(v.X(idx(t))); }; auto Y = [&](long long ticks) { return (int)std::lround(v.Y((double)ticks * tk)); };
+            const int half = std::max(2, (int)getPixelsPerBar() / 2);
+            for (const acc::Box& b : acc::boxes(S->acZ, (long long)R[(size_t)i0], (long long)R[(size_t)i1], S->spb, X, Y, half)) {
+                const int x0 = std::max((int)pane.left, b.x0), x1 = std::min((int)pane.right, b.x1), y0 = std::max((int)pane.top, b.y0 - 2), y1 = std::min((int)pane.bottom, b.y1 + 2); if (x1 <= x0 || y1 <= y0) continue;
+                setPen((COLOR)b.col, 1, P_SOLID);
+                auto ln = [&](int ax, int ay, int bx, int by) { PNT p0; p0.set(0, 0.0f); p0.h = csC(ax); p0.v = csC(ay); p0.setDrawPosition(); PNT p1; p1.set(0, 0.0f); p1.h = csC(bx); p1.v = csC(by); p1.drawLineTo(); };
+                ln(x0, y0, x1, y0); ln(x1, y0, x1, y1); ln(x1, y1, x0, y1); ln(x0, y1, x0, y0);
+                if (b.yAbs > y0 && b.yAbs < y1) { setPen((COLOR)b.col, 2, P_SOLID); ln(x0, b.yAbs, x1, b.yAbs); }
+                ++S->acDrawn; }
+        }
         std::vector<cobs::Prim> P = cobs::htfLayout(S->E, v);           // (1.7.0) the 3-hour R1 / R2 / S1 / S2 lines first
         { const std::vector<cobs::Prim> Q = cobs::fibLayout(S->E, v); P.insert(P.end(), Q.begin(), Q.end()); }   // (1.5.0) the Fib lines (under the labels)
         { const std::vector<cobs::Prim> Q = cobs::layout(S->E, v); P.insert(P.end(), Q.begin(), Q.end()); }
@@ -245,7 +270,7 @@ extern "C" cppExtension* CreateExtension(void) {
     CobSignal* p = new CobSignal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE);
-    p->setDescription("LRA CoB Signal v1.8.2 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. From the 5:00 PM session start to 11:00 AM CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Rev = the CoB pullback Rev: the first bar that closes above the prior bar's high (below its low for a bear CoB) while the pullback has carried 0.5x of the CoB wave's volume or less; up to 3 Revs on 3 separate pullbacks, until a bar closes through the CoB origin. Decided at the bar close, never repainted.");
-    p->setVersion("1.8.2");   // = CS_VERSION (gex-build reads this literal)
+    p->setDescription("LRA CoB Signal v1.8.3 - the CoB = a COMPLETED 3-bar High/Low ZigZag wave whose origin swept a 3-hour support or resistance (spring / upthrust): the origin is the low of the 3-hour down swing below S1 or S2 (bear: the high above R1 or R2), the level still standing (no 3-hour close beyond it), and the wave closes back through it. 3-hour bars from 5:00 PM CT, 1-bar ZigZag; R1 / S1 = the last pivot high / low, R2 / S2 = the higher / lower of the last two; the four lines are drawn. From the 5:00 PM session start to 11:00 AM CT, >= 1.9x the last 20 waves, >= 3 bars, room 0.1 ADR, ZZO Combo count >= 10. Cob, Cob+R, Cob+V; Fib lines (stop 0, entry 38.2%, BE, 1.272 / 1.618 / 2.0); Lvp = low-volume pullback after a drawn CoB. Rev = the CoB pullback Rev: the first bar that closes above the prior bar's high (below its low for a bear CoB) while the pullback has carried 0.5x of the CoB wave's volume or less; up to 3 Revs on 3 separate pullbacks, until a bar closes through the CoB origin. Decided at the bar close, never repainted.");
+    p->setVersion("1.8.3");   // = CS_VERSION (gex-build reads this literal)
     return p;
 }
