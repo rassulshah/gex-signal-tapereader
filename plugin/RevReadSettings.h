@@ -6,7 +6,7 @@
 #include "SettingsSpec.h"
 
 namespace rvset {
-static const char* const PLUGIN_VERSION = "0.5.0";   // = the setVersion literal in RevRead.cpp (lsRevRead + lsRevReadMarks)
+static const char* const PLUGIN_VERSION = "0.7.0";   // (2026-11-15: brought back in step with RevRead.cpp 0.7.0 - the settings contract failed on it) was "0.5.0";   // = the setVersion literal in RevRead.cpp (lsRevRead + lsRevReadMarks)
 enum K { K_SHOW_POC, K_SHOW_HOLD, K_N };
 inline const ss::Spec& spec() {
     static const ss::Row R[K_N] = {
