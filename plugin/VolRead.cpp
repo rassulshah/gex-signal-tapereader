@@ -1,5 +1,5 @@
 /********************************************************************************
- *  VolRead.cpp  --  Investor/RT RTX extension  lsVolRead "Volume Read" / lsRangeRead "Range Read" (RangeRead.cpp = this file + VR_RANGE)  1.0.0  (2026-11-15)
+ *  VolRead.cpp  --  Investor/RT RTX extension  lsVolRead "Volume Read" / lsRangeRead "Range Read" (RangeRead.cpp = this file + VR_RANGE)  1.1.0  (2026-11-15: Range pane highlight of BO / PB Rev / CoB Rev bars; 1.0.0 2026-11-15)
  *
  *  Rassul 2026-11-14 21:58-22:05 CT ("a little reader for the volume and range ... BVG, BVR, BV ... and BVMax", "put the max stat on top
  *  then Bv then BV green annd then BVR"), 2026-11-15 16:07 / 17:06 CT ("i also want to implement the new volume and range indicators that
@@ -30,9 +30,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <string>
 #include <vector>
+#include <sys/stat.h>
 
 #if defined(_WIN32)
 #define VR_SEP "\\"
@@ -47,7 +49,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.0.0";   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.1.0";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -69,6 +71,7 @@ struct VRState {
     vrr::Engine E; std::vector<RTDATE> raw; int off = 0;
     vrr::Bar form; bool haveForm = false;
     std::string statusPath, statusBody; long long statusMs = -1; int drawn = 0;
+    long long hlMs = -1; std::string hlSig;            // (1.1.0) when the signal files were last looked at / their stamps
 };
 
 class VolRead : public cppExtension {
@@ -85,6 +88,8 @@ public:
     bool identify(VRState& S);
     void feed(VRState& S);
     void status(VRState& S, long long now);
+    long long localSec(RTDATE d);
+    void signals(VRState& S, long long now);
 };
 
 int cppExtension::init(void) { return RTX_OK; }
@@ -92,6 +97,44 @@ int cppExtension::setup(void) { setParameterVersion(1); return RTX_OK; }
 int cppExtension::done(void) { static_cast<VolRead*>(this)->clear(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<VolRead*>(this)->clear(); return RTX_OK; }
 int cppExtension::calc(int) { VolRead* me = static_cast<VolRead*>(this); try { me->pump(); } catch (...) {} return RTX_OK; }
+
+long long VolRead::localSec(RTDATE d) {              // as lsCobSignal stamps its records: the chart's local wall clock in seconds
+    struct tm t; std::memset(&t, 0, sizeof t);
+    if (!getLocaltime(d, &t) || t.tm_mon < 0 || t.tm_mon > 11 || t.tm_mday < 1 || t.tm_mday > 31) return 0;
+    long long y = t.tm_year + 1900; const unsigned m = (unsigned)t.tm_mon + 1, dd = (unsigned)t.tm_mday;
+    y -= m <= 2; const long long era = (y >= 0 ? y : y - 399) / 400; const unsigned yoe = (unsigned)(y - era * 400);
+    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + dd - 1; const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    const long long days = era * 146097 + (long long)doe - 719468;
+    return days * 86400 + t.tm_hour * 3600 + t.tm_min * 60 + t.tm_sec;
+}
+
+// (1.1.0) the Range pane's signal bars from his own indicators' records (read here in calc, never in draw; at most every 5 s and only when a
+// file's size / time changed; bounded reads): lsBreakout's breakouts + pb files of the last 10 days and lsCobSignal's record (REV lines)
+static bool vrSlurp(const std::string& path, size_t cap, std::string& out) {
+    std::ifstream f(path.c_str(), std::ios::binary | std::ios::ate); if (!f) return false; std::streamoff sz = (std::streamoff)f.tellg(); if (sz < 0) return false;
+    const std::streamoff from = sz > (std::streamoff)cap ? sz - (std::streamoff)cap : 0; f.seekg(from); out.resize((size_t)(sz - from)); if (!out.empty()) f.read(&out[0], (std::streamsize)out.size()); out.resize((size_t)f.gcount()); return true;
+}
+void VolRead::signals(VRState& S, long long now) {
+#ifdef VR_RANGE
+    S.E.hlOn = true;
+    if (S.hlMs >= 0 && now - S.hlMs < 5000) return;
+    S.hlMs = now;
+    const std::string d = vrFlex(); if (d.empty() || S.E.LT.empty()) return;
+    const std::string mk = mkey::norm(S.mkt), base = d + VR_SEP "Breakout" VR_SEP + mk + "-" + S.sym + "-" + std::to_string(S.spb) + "-";
+    const long day = (long)(S.E.LT.back() / 86400);
+    std::vector<std::string> files; for (long k = day - 9; k <= day + 1; ++k) { files.push_back(base + "breakouts-" + std::to_string(k) + ".csv"); files.push_back(base + "pb-" + std::to_string(k) + ".csv"); }
+    const std::string cob = d + VR_SEP "CobSignal" VR_SEP + mk + "-" + std::to_string(S.spb) + ".csv"; files.push_back(cob);
+    std::string sig; for (const std::string& p : files) { struct stat st; if (stat(p.c_str(), &st) == 0) { sig += std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime) + ";"; } else sig += "-;"; }
+    if (sig == S.hlSig) return;
+    S.hlSig = sig;
+    std::map<long long, vrr::Hl> raw, loc; std::string txt;
+    for (size_t i = 0; i + 1 < files.size(); ++i) { if (!vrSlurp(files[i], 512 * 1024, txt)) continue; if (i % 2 == 0) vrr::parseBo(txt, raw); else vrr::parsePbRev(txt, raw); }
+    if (vrSlurp(cob, 4 * 1024 * 1024, txt)) vrr::parseCobRev(txt, loc);
+    S.E.hlRaw.swap(raw); S.E.hlLocal.swap(loc);
+#else
+    (void)S; (void)now;
+#endif
+}
 
 bool VolRead::identify(VRState& S) {
     char rb[64] = { 0 }; const char* rs = getRootSymbol(rb); std::string mkt = rs ? rs : "";
@@ -125,7 +168,7 @@ void VolRead::feed(VRState& S) {
         if (!std::isfinite(b.h) || !std::isfinite(b.l) || !std::isfinite(b.o) || !std::isfinite(b.c)) { b.o = b.h = b.l = b.c = 0; b.v = 0; }
         if (b.h < b.l) std::swap(b.h, b.l);
         return b; };
-    for (int i = S.off + (int)S.raw.size(); i < closed; ++i) { S.E.addBar(bar(i)); S.raw.push_back((RTDATE)times[i]); }
+    for (int i = S.off + (int)S.raw.size(); i < closed; ++i) { S.E.addBar(bar(i), localSec((RTDATE)times[i])); S.raw.push_back((RTDATE)times[i]); }
     S.form = bar(closed); S.haveForm = true;
 }
 
@@ -142,7 +185,7 @@ void VolRead::status(VRState& S, long long now) {
 void VolRead::pump() {
     VRState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
-    feed(*S); status(*S, vrMs());
+    feed(*S); signals(*S, vrMs()); status(*S, vrMs());
 }
 
 static short vrC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
@@ -183,10 +226,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers, no settings
 #ifdef VR_RANGE
-    p->setDescription("LRA Range Read v1.0.0 - its own pane: each bar's range (high - low), green / red, with BRMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BRMax, BR (bars in a row with a smaller range), BRG (green bars only), BRR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
+    p->setDescription("LRA Range Read v1.1.0 - its own pane: each bar's range (high - low) in grey, with a breakout candle of 1.2x ATR(13) or more, every PB Rev bar and every CoB pullback Rev bar in green (bullish) or red (bearish); BRMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BRMax, BR (bars in a row with a smaller range), BRG (green bars only), BRR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
 #else
-    p->setDescription("LRA Volume Read v1.0.0 - its own pane: each bar's volume, green / red, with BVMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BVMax, BV (bars in a row with a smaller volume), BVG (green bars only), BVR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
+    p->setDescription("LRA Volume Read v1.1.0 - its own pane: each bar's volume, green / red, with BVMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BVMax, BV (bars in a row with a smaller volume), BVG (green bars only), BVR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
 #endif
-    p->setVersion("1.0.0");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.1.0");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

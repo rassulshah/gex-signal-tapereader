@@ -21,6 +21,27 @@ int main(int argc, char** argv) {
     {   vrr::Engine E; E.mode = vrr::RANGE; E.tick = 0.25;
         E.addBar(mk(10, 11, 1, 11.0, 10.0)); E.addBar(mk(10, 9, 1, 10.5, 9.0)); E.addBar(mk(10, 11, 1, 11.5, 10.0 - 1e-9));
         CHECK(E.V[0] == 4 && E.V[1] == 6 && E.V[2] == 6, "range in whole ticks (" << E.V[0] << ", " << E.V[1] << ", " << E.V[2] << ")"); CHECK(E.S[2].all == 0 && E.S[2].same == 1, "equal ranges do not count (" << E.S[2].all << ", " << E.S[2].same << ")"); }
+    {   // (1.1.0) the Range pane highlight
+        std::map<long long, vrr::Hl> m;
+        vrr::parseBo("# head\nBBO|t|t0|dir|fired|reason\nBBO|900|800|1|1|fired|x\r\nBBO|950|850|-1|0|not_10bar_extreme|x\nBBO|990|870|-1|1|fired\nBBX|1|2|1|1\nBBO|bad|x|1|1\n", m);
+        CHECK(m.size() == 2 && m[800].dir == 1 && m[800].kind == vrr::HL_BO && m[870].dir == -1 && !m.count(850), "BO file: fired breakouts only, keyed by the BO candle (" << m.size() << ")");
+        vrr::parsePbRev("# BRV|t_rev|side\nBRV|1200|1|1100|x\nBRV|1300|-1|1250\nBPB|1|2\nBRV|x|1\n", m); CHECK(m.size() == 4 && m[1200].dir == 1 && m[1300].dir == -1 && m[1300].kind == vrr::HL_PBREV, "pb file: every Rev bar");
+        std::map<long long, vrr::Hl> c; vrr::parseCobRev("COB,5,BULL,Cob\nREV,7000,BULL,6000,0.21,0.30,1\nREV,8000,BEAR,7500,0.4,0.1,2\nREV,x,BULL\nREV,9000,UP\n", c); CHECK(c.size() == 2 && c[7000].dir == 1 && c[8000].dir == -1 && c[8000].kind == vrr::HL_COBREV, "CoB record: REV lines by local seconds");
+        vrr::Engine E; E.mode = vrr::RANGE; E.tick = 0.25; E.hlOn = true;
+        auto bar = [&](long long t, double o, double h, double l, double cl) { vrr::Bar b; b.t = t; b.o = o; b.h = h; b.l = l; b.c = cl; b.v = 1; E.addBar(b, t + 5); };
+        for (int i = 0; i < 20; ++i) bar(100 + i, 10, 11, 10, 10.5);             // 20 bars of range 1 -> ATR(13) = 1
+        CHECK(std::fabs(E.ATR[12] - 1.0) < 1e-9 && std::fabs(E.ATR[19] - 1.0) < 1e-9 && E.ATR[11] == 0, "Wilder ATR(13): ready from the 13th bar");
+        bar(120, 10, 11.19, 10, 11); bar(121, 10, 11.3, 10, 11); bar(122, 10, 11, 10, 10.5); bar(123, 10, 10.5, 10, 10.2); bar(124, 10, 10.4, 10, 10.1); bar(125, 10, 13, 10, 10.2);
+        E.hlRaw[120] = vrr::Hl{ 1, vrr::HL_BO }; E.hlRaw[121] = vrr::Hl{ -1, vrr::HL_BO }; E.hlRaw[123] = vrr::Hl{ -1, vrr::HL_PBREV }; E.hlLocal[124 + 5] = vrr::Hl{ 1, vrr::HL_COBREV };
+        E.hlRaw[125] = vrr::Hl{ 1, vrr::HL_BO }; E.hlLocal[125 + 5] = vrr::Hl{ -1, vrr::HL_COBREV };
+        CHECK(E.highlight(20) == 0, "a BO of 1.19x ATR stays grey"); CHECK(E.highlight(21) == -1, "a BD of 1.2x ATR or more is red (the signal's side, not the candle's)");
+        CHECK(E.highlight(22) == 0, "an ordinary bar is grey"); CHECK(E.highlight(23) == -1, "a PB Rev bar is always coloured, whatever its range"); CHECK(E.highlight(24) == 1, "a CoB pullback Rev bar is coloured (matched by local time)");
+        CHECK(E.highlight(25) == -1, "a Rev wins over a BO on the same bar");
+        vrr::View v; v.l = 0; v.t = 0; v.r = 600; v.b = 80; v.bw = 6; v.first = 0; v.last = 26; v.X = [](int j) { return 110.0 + j * 8.0; };
+        int grey = 0, up = 0, dn = 0; for (const vrr::Prim& p : vrr::layout(E, v, nullptr)) if (p.fill) { if (p.col == vrr::C_GREY) ++grey; else if (p.col == vrr::C_UP) ++up; else if (p.col == vrr::C_DN) ++dn; }
+        CHECK(grey == 22 && up == 1 && dn == 3, "Range pane: grey bars, only the signal bars coloured (" << grey << " grey, " << up << " green, " << dn << " red)");
+        E.hlOn = false; int g2 = 0; for (const vrr::Prim& p : vrr::layout(E, v, nullptr)) if (p.fill && p.col == vrr::C_GREY) ++g2; CHECK(g2 == 0, "highlight off (the Volume pane): candle colours as before");
+        E.hlOn = true; CHECK(vrr::statusText(E, "ES", "ESZ6", 180).find("\nHIGHLIGHT,1.1.0") != std::string::npos, "status: highlight line"); }
     if (argc < 2) { std::cerr << "fixture path needed\n"; return 2; }
     std::vector<vrr::Bar> B; { std::ifstream f(argv[1]); std::string l; std::getline(f, l); while (std::getline(f, l)) { vrr::Bar b; if (std::sscanf(l.c_str(), "%lld,%lf,%lf,%lf,%lf,%lf", &b.t, &b.o, &b.h, &b.l, &b.c, &b.v) == 6) B.push_back(b); } }
     CHECK(B.size() > 5000, "fixture loaded (" << B.size() << ")");
