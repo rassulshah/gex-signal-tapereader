@@ -50,7 +50,7 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.8.1";   // (1.8.1, 2026-11-15 independent review: the Rev tracks are pruned safely (a started CoB is flagged, never re-walked); the 3-hour lines show STANDING levels only (as lsHtfSR and the Limit Profile); one Rev label per bar and side)   // was "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
+static const char* const VERSION = "1.8.2";   // (1.8.2, 2026-11-16: the 3-hour R1 / R2 / S1 / S2 are drawn as ONE line each across the chart at where they stand now - no past steps)   // was "1.8.1";   // (1.8.1, 2026-11-15 independent review: the Rev tracks are pruned safely (a started CoB is flagged, never re-walked); the 3-hour lines show STANDING levels only (as lsHtfSR and the Limit Profile); one Rev label per bar and side)   // was "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
 // was "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
 // was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
 // was "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
@@ -705,21 +705,16 @@ inline std::vector<Prim> htfLayout(const Engine& E, const View& v)
         auto val = [&](int i) { const HSnap& h = E.hs[(size_t)i]; const double x = q == 0 ? h.r1 : q == 1 ? h.r2 : q == 2 ? h.s1 : h.s2; const double base = q == 1 ? h.r1 : q == 3 ? h.s1 : NAN;
             const bool ok = q == 0 ? h.r1ok : q == 1 ? h.r2ok : q == 2 ? h.s1ok : h.s2ok; const bool baseOk = q == 1 ? h.r1ok : q == 3 ? h.s1ok : false;   // (1.8.1) standing levels only: a broken level can no longer give a CoB
             return (ok && std::isfinite(x) && !(baseOk && std::isfinite(base) && std::fabs(x - base) < E.tick * 0.25)) ? x : NAN; };
-        int i = a;
-        while (i <= b) {
-            const double x = val(i); if (!std::isfinite(x)) { ++i; continue; }
-            int e = i; while (e + 1 <= b && std::fabs(val(e + 1) - x) < E.tick * 0.25) ++e;
-            const int y = (int)std::lround(v.Y(x));
-            if (y >= v.t && y <= v.b) {
-                const int x0 = (int)std::lround(v.X(i) - bw / 2), x1 = (int)std::lround(v.X(e) + bw / 2);
-                if (x1 > x0) { Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = C_HTF; P.push_back(L);
-                    if (e == b) { const std::string s = NM[q]; const int w = v.textW ? v.textW(s) : (int)s.size() * 6, h = 12;
-                        Prim T; T.tiny = true; T.col = C_HTF; T.text = s; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h;
-                        if (T.x1 > v.r) { T.x1 = x1 - 2; T.x0 = T.x1 - w; T.y1 = y - 1; T.y0 = T.y1 - h; }
-                        if (T.x0 >= v.l && T.x1 <= v.r && T.y0 >= v.t && T.y1 <= v.b) P.push_back(T); } }
-            }
-            i = e + 1;
-        }
+        // (1.8.2, Rassul 2026-11-16 06:15 / 06:30 CT "for the s2 and s1 lines, they should make a line across the chart", "they should just move like lines to new spots
+        // so i dont need to see where they were in the past, because it becomes too noisy") ONE line per level, at where it stands at the last bar on screen, across the chart
+        const double x = val(b); if (!std::isfinite(x)) continue;
+        const int y = (int)std::lround(v.Y(x)); if (y < v.t || y > v.b) continue;
+        const int x0 = v.l, x1 = (int)std::lround(v.X(b) + bw / 2); if (x1 <= x0) continue;
+        Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = C_HTF; P.push_back(L);
+        const std::string s = NM[q]; const int w = v.textW ? v.textW(s) : (int)s.size() * 6, h = 12;
+        Prim T; T.tiny = true; T.col = C_HTF; T.text = s; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h;
+        if (T.x1 > v.r) { T.x1 = x1 - 2; T.x0 = T.x1 - w; T.y1 = y - 1; T.y0 = T.y1 - h; }
+        if (T.x0 >= v.l && T.x1 <= v.r && T.y0 >= v.t && T.y1 <= v.b) P.push_back(T);
     }
     return P;
 }

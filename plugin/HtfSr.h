@@ -17,7 +17,7 @@
 #include <vector>
 
 namespace hsr {
-static const char* const VERSION = "1.0.0";   // = the lsHtfSR setVersion literal
+static const char* const VERSION = "1.0.1";   // = the lsHtfSR setVersion literal
 static const int SECS = 10800;
 inline long long floorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
 struct Bar { long long t = 0; double h = 0, l = 0, c = 0; };   // t = the bar END, local wall-clock seconds (any epoch that starts on a local midnight)
@@ -135,21 +135,15 @@ inline std::vector<Prim> layout(const std::vector<Snap>& hs, double tick, const 
     const double bw = b > a ? (v.X(b) - v.X(a)) / (double)(b - a) : 6.0;
     static const char* const NM[4] = { "R1", "R2", "S1", "S2" };
     for (int q = 0; q < 4; ++q) {
-        int i = a;
-        while (i <= b) {
-            const double x = shown(hs[(size_t)i], q, tick); if (!std::isfinite(x)) { ++i; continue; }
-            int e = i; while (e + 1 <= b && std::fabs(shown(hs[(size_t)e + 1], q, tick) - x) < tick * 0.25) ++e;
-            const int y = (int)std::lround(v.Y(x));
-            if (y >= v.t && y <= v.b) {
-                const int x0 = std::max(v.l, (int)std::lround(v.X(i) - bw / 2)), x1 = std::min(v.r, (int)std::lround(v.X(e) + bw / 2));
-                if (x1 > x0) { Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = C_LINE; P.push_back(L);
-                    if (e == b) { const std::string s = NM[q]; const int w = v.textW ? v.textW(s) : (int)s.size() * 6, h = v.textH;
-                        Prim T; T.col = C_LINE; T.text = s; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h;
-                        if (T.x1 > v.r) { T.x1 = x1 - 2; T.x0 = T.x1 - w; T.y1 = y - 1; T.y0 = T.y1 - h; }
-                        if (T.x0 >= v.l && T.x1 <= v.r && T.y0 >= v.t && T.y1 <= v.b) P.push_back(T); } }
-            }
-            i = e + 1;
-        }
+        // (1.0.1, Rassul 2026-11-16 06:15 / 06:30 CT) ONE line per level, at where it stands at the last bar on screen, across the chart - no past steps
+        const double x = shown(hs[(size_t)b], q, tick); if (!std::isfinite(x)) continue;
+        const int y = (int)std::lround(v.Y(x)); if (y < v.t || y > v.b) continue;
+        const int x0 = v.l, x1 = std::min(v.r, (int)std::lround(v.X(b) + bw / 2)); if (x1 <= x0) continue;
+        Prim L; L.line = true; L.x0 = x0; L.x1 = x1; L.y0 = L.y1 = y; L.col = C_LINE; P.push_back(L);
+        const std::string s = NM[q]; const int w = v.textW ? v.textW(s) : (int)s.size() * 6, h = v.textH;
+        Prim T; T.col = C_LINE; T.text = s; T.x0 = x1 + 3; T.x1 = T.x0 + w; T.y0 = y - h / 2; T.y1 = T.y0 + h;
+        if (T.x1 > v.r) { T.x1 = x1 - 2; T.x0 = T.x1 - w; T.y1 = y - 1; T.y0 = T.y1 - h; }
+        if (T.x0 >= v.l && T.x1 <= v.r && T.y0 >= v.t && T.y1 <= v.b) P.push_back(T);
     }
     return P;
 }

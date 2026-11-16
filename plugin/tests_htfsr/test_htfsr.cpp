@@ -65,7 +65,10 @@ int main(int argc, char** argv)
         for (const hsr::Prim& p : P) { if (p.line) ++lines; else { ++texts; names += p.text + " "; } if (p.x0 < v.l || p.x1 > v.r || p.y0 < v.t || p.y1 > v.b) ++out; }
         std::printf("lines %d texts %d (%s) outside %d\n", lines, texts, names.c_str(), out);
         // R1: 110 over bars 0-4, 108 over 5-6, (7 broken = gap), 108 over 8-9 = 3 pieces; R2: hidden on bars 0-4 (same as R1), 110 over 5-9 = 1 piece (bar 7: R1 broken, so R2 shows; same price, one piece); S1 1 piece; S2 none
-        CHECK(lines == 5); CHECK(texts == 3); CHECK(names == "R1 R2 S1 "); CHECK(out == 0);
+        // (1.0.1) ONE line per level at where it stands at the last bar on screen (bar 9: R1 108, R2 110, S1 100; S2 = S1 hidden), from the pane's left edge
+        CHECK(lines == 3); CHECK(texts == 3); CHECK(names == "R1 R2 S1 "); CHECK(out == 0);
+        { bool left = true; int y108 = 0; for (const hsr::Prim& p : P) if (p.line) { left = left && p.x0 == v.l; if (p.y0 == 70) ++y108; } CHECK(left); CHECK(y108 == 1); }
+        { hsr::View w = v; w.last = 7; int ln = 0; for (const hsr::Prim& p : hsr::layout(hs, 0.25, w)) if (p.line) ++ln; CHECK(ln == 2); }   // bar 7: R1 broken -> R2 and S1 only
         CHECK(std::isnan(hsr::shown(hs[7], 0, 0.25))); CHECK(hsr::shown(hs[7], 1, 0.25) == 110); CHECK(std::isnan(hsr::shown(hs[0], 1, 0.25))); CHECK(std::isnan(hsr::shown(hs[0], 3, 0.25)));
         v.first = 20; CHECK(hsr::layout(hs, 0.25, v).empty()); v.first = 0; CHECK(hsr::layout(hs, 0, v).empty()); }
     std::printf("%d passed, %d failed\n", ok, bad); return bad ? 1 : 0;

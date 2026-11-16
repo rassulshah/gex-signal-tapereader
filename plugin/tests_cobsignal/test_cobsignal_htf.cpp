@@ -91,16 +91,18 @@ int main(int argc, char** argv) {
         cobs::View v; v.l = 0; v.t = 0; v.r = 100000; v.b = 100000; v.first = 0; v.last = (int)E.B.size() - 1; v.X = [](int j) { return 10.0 + j * 4.0; }; v.Y = [](double p) { return 50000.0 - p * 4.0; };
         int lab = 0; bool side = true; for (const cobs::Prim& p : cobs::layout(E, v)) if (p.text == "Rev") { ++lab; side = side && (p.col == cobs::C_BULL || p.col == cobs::C_BEAR); } CHECK(lab == n && side, "a Rev label per Rev, green / red (" << lab << ")");
         const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.find("\nREV_RULES,1.8.0") != std::string::npos && st.find("\nREVS," + std::to_string(n) + "\n") != std::string::npos, "status: Rev rule + count"); }
-    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.8.1\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
+    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.8.2\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
     {   // (1.8.1, independent review) every drawn CoB starts its pullback look exactly once (revOn); finished looks are pruned without a second
         // walk: no (bar, CoB) has two Rev marks; the 3-hour lines never draw a broken level
         std::map<std::pair<long long, long long>, int> seen; int dup = 0; for (const cobs::RevMark& r : E.revs) if (++seen[std::make_pair(r.t, r.cobT)] > 1) ++dup;
         int started = 0, drawnM = 0; for (const cobs::Mark& m : E.marks) { if (m.show && m.zOk) ++drawnM; if (m.revOn) ++started; }
         CHECK(dup == 0, "no duplicate Rev (" << E.revs.size() << " Revs)"); CHECK(started == drawnM, "every drawn CoB's look started once: " << started << " of " << drawnM); CHECK(E.revTr.size() <= 65, "open tracks bounded: " << E.revTr.size());
         cobs::View v; v.l = 0; v.t = 0; v.r = 1000000; v.b = 1000000; v.first = 0; v.last = (int)E.B.size() - 1; v.X = [](int j) { return (double)j * 3; }; v.Y = [](double p) { return 1000000.0 - p * 100; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
-        int broken = 0, lines = 0;
-        for (const cobs::Prim& p : cobs::htfLayout(E, v)) { if (!p.line) continue; ++lines; const int i = (p.x0 + 2) / 3; if (i < 0 || i >= (int)E.hs.size()) continue; const cobs::HSnap& h = E.hs[(size_t)i]; const double px = (1000000.0 - p.y0) / 100.0;
-            const bool ok = (h.r1ok && std::fabs(h.r1 - px) < 0.011) || (h.r2ok && std::fabs(h.r2 - px) < 0.011) || (h.s1ok && std::fabs(h.s1 - px) < 0.011) || (h.s2ok && std::fabs(h.s2 - px) < 0.011); if (!ok) ++broken; }
-        CHECK(lines > 50 && broken == 0, "3-hour line pieces " << lines << ", on a broken level " << broken); }
+        // (1.8.2) ONE line per standing level at the last bar on screen, from the pane's left edge; scrolled back = the levels as they stood at that bar
+        int broken = 0, lines = 0, views = 0, notLeft = 0;
+        for (int last = 400; last < (int)E.B.size(); last += 97) { v.last = last; ++views; const cobs::HSnap& h = E.hs[(size_t)last];
+            for (const cobs::Prim& p : cobs::htfLayout(E, v)) { if (!p.line) continue; ++lines; if (p.x0 != v.l) ++notLeft; const double px = (1000000.0 - p.y0) / 100.0;
+                const bool ok = (h.r1ok && std::fabs(h.r1 - px) < 0.011) || (h.r2ok && std::fabs(h.r2 - px) < 0.011) || (h.s1ok && std::fabs(h.s1 - px) < 0.011) || (h.s2ok && std::fabs(h.s2 - px) < 0.011); if (!ok) ++broken; } }
+        CHECK(lines > 50 && lines <= 4 * views && broken == 0 && notLeft == 0, "3-hour lines " << lines << " over " << views << " views (at most 4 each), on a broken level " << broken << ", not from the left edge " << notLeft); }
     std::cout << "test_cobsignal_htf: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }
