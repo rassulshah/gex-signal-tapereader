@@ -19,7 +19,7 @@
 #endif
 #endif
 namespace svset {
-static const char* const PLUGIN_VERSION = "1.9.0";   // (1.9.0, 2026-11-10 Rassul 09:10 CT) defaults = session VWAP magenta + +-1 / +-2 SD bands dark grey; overnight / prior / pivot never drawn
+static const char* const PLUGIN_VERSION = "1.10.0";   // (1.10.0, 2026-11-16) the chart draws ONE fixed style (VWAP magenta) and the window is not offered (NO_UI); the table stays for the saved sets   // was "1.9.0";   // (1.9.0, 2026-11-10 Rassul 09:10 CT) defaults = session VWAP magenta + +-1 / +-2 SD bands dark grey; overnight / prior / pivot never drawn
 // was "1.8.7";   // (1.8.7) no settings change (pivot anchors = IRT ZigZag; parameter version stays 12)   // was "1.8.6": (1.8.6, 2026-10-29) pivot VWAP on by default, yellow, no bands; parameter version 12 resets saved sets once
 // was 1.8.5:   // (1.8.5) Key Levels column keep-out (drawing only; parameter version stays 11)
 // was 1.8.4:   // (1.8.4, 2026-10-28 16:26 CT Rassul "the chart is extremely messy", remove the Pivot VWAP line) parameter version 11: every older set is reset once to the new defaults = NO line drawn (pivot VWAP off too); he can tick any line back

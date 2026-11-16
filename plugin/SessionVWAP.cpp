@@ -117,7 +117,7 @@ inline bool clipLeft(int& x1, int& y1, int& x2, int& y2, int keepX)
 #include <atomic>
 
 static const bool SV_SHOW_BADGES = false;   // (1.4.1) Rassul 18:07: VWAP odds off the chart for now
-static const char* SV_VERSION = "1.9.0";        // (1.9.0, 2026-11-10 Rassul 09:10 CT) session VWAP (magenta) + +-1 / +-2 SD bands (dark grey) by default; overnight / prior RTH / pivot VWAP never drawn
+static const char* SV_VERSION = "1.10.0";       // (1.10.0, 2026-11-16 Rassul 10:00 CT "only have the vwap (magenta) and no options") only the session VWAP, magenta; no settings window (NO_UI)   // was "1.9.0";        // (1.9.0, 2026-11-10 Rassul 09:10 CT) session VWAP (magenta) + +-1 / +-2 SD bands (dark grey) by default; overnight / prior RTH / pivot VWAP never drawn
 // was "1.8.7";        // (1.8.7, 2026-10-29 Rassul approved 10:23 CT) the pivot VWAP anchors = IRT's ZigZag rule (PivotVwapLogic 1.1.0 = lsWavePOC's: a strict new extreme moves the pivot, a bar beyond the previous 3 bars' opposite extreme reverses); no settings change   // was 1.8.6: (1.8.6, 2026-10-29) pivot VWAP on by default, yellow, no bands (parameter version 12)
 // was 1.8.5:        // (1.8.5, 2026-10-28) every line / band / label stops at the Key Levels column's right edge (lsDealerProfile, pane LEFT edge; ColumnBoard cb::leftKeep, as BigBidAsk / DeltaProfile / LiquidityProfile / HodLod); the HOD/LOD table keep-out (1.6.3) unchanged; no settings change
 // was 1.8.4:        // (1.8.4, 2026-10-28 16:26 CT Rassul "the chart is extremely messy" + remove the Pivot VWAP line) defaults: NO line drawn (pivot VWAP off too); parameter version 11 resets every older saved set (incl. 1.8.3 version 10) to them once; the window shows all unticked; he can tick any line back
@@ -789,6 +789,8 @@ int SessionVWAP::draw(void)
     S->parmsSrc = native ? "native" : "file"; S->parmsWhy = why;
     svs::Style st = native ? own : styleFor(*S, market);                 // (1.5.0) else this market's file (fallback)
     st.on = false; st.prior = false; st.pivot = false;                   // (1.9.0, Rassul 09:10 CT) only the session VWAP + its 1st / 2nd bands are ever drawn
+    {   // (1.10.0, Rassul 2026-11-16 10:00 CT "only have the vwap (magenta) and no options") ONE fixed style: the session VWAP in magenta - RTH VWAP in the day session, the overnight VWAP overnight; no bands, no prior / pivot line, whatever was saved before
+        svs::Style f; for (int k = 0; k < svs::K_N; ++k) f.show[k] = (k == 0); f.on = true; f.prior = false; f.pivot = false; st = f; }   // on = the overnight set's VWAP line overnight (10:01 CT "when it is overnight, it will display overnight vwap"); its bands stay off (show[1..4] false)
     S->parmsStyle = svp::describe(st);                                    // (1.8.2) the status STYLE line = what this draw used
     S->keep.refresh(getSymbol(), getSecondsPerBar(), getChartLabel());   // (1.6.3) the HOD/LOD table: nothing painted over it this draw
     bdk::KeepScope keepScope(S->keep);
@@ -1029,8 +1031,8 @@ extern "C" cppExtension *CreateExtension(void)
 {
     SessionVWAP *p = new SessionVWAP();
     p->setArrayCount(11);
-    p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE);
-    p->setDescription("LRA Session VWAP: the session VWAP with its +-1 and +-2 SD bands - RTH in the day session, the overnight VWAP and the prior RTH VWAP overnight.");
-    p->setVersion("1.9.0");   // = SV_VERSION (gex-build reads this literal; test_sessionvwap_settings checks they match)
+    p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI);   // (1.10.0) no options
+    p->setDescription("LRA Session VWAP v1.10.0: the session VWAP as one magenta line (RTH in the day session, the overnight VWAP overnight). No settings.");
+    p->setVersion("1.10.0");   // = SV_VERSION (gex-build reads this literal; test_sessionvwap_settings checks they match)
     return p;
 }
