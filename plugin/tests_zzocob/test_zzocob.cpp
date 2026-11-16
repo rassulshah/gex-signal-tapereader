@@ -314,9 +314,9 @@ int main() {
     }
     // ---- 6. the host
     {   const std::string c = slurp("../ZzoCombo.cpp"), vw = slurp("../ZzoComboView.h");
-        CHECK(c.find(std::string("p->setVersion(\"") + zcf::COMBO_VERSION + "\")") != std::string::npos && c.find(std::string("LRA Cob Reader v") + zcf::COMBO_VERSION + " (was ZZO Combo) - 3-bar") != std::string::npos && c.find("std::string(\"Cob Reader \") + zcf::COMBO_VERSION") != std::string::npos, "version literal = zcf::COMBO_VERSION; the pane title is Cob Reader");
+        CHECK(c.find(std::string("p->setVersion(\"") + zcf::COMBO_VERSION + "\")") != std::string::npos && c.find(std::string("LRA Cob Reader v") + zcf::COMBO_VERSION + " (was ZZO Combo") != std::string::npos && c.find("std::string(\"Cob Reader \") + zcf::COMBO_VERSION") != std::string::npos, "version literal = zcf::COMBO_VERSION; the pane title is Cob Reader");
         CHECK(c.find("RTARRAY clo(barClose)") != std::string::npos && c.find("S.F.addBar(b, c, o);") != std::string::npos && c.find("RTARRAY opn(barOpen)") != std::string::npos && c.find("S.F.trim(S.E.trimmed)") != std::string::npos, "closes read, finder fed and trimmed with the engine");
-        CHECK(c.find("S.F.onWave(S.E.W)") != std::string::npos && c.find("&S->F)") != std::string::npos, "waves judged once; the finder reaches the drawing");
+        CHECK(c.find("S.F.onWave(S.E.W)") != std::string::npos && c.find("&S->F, &S->xr)") != std::string::npos && c.find("feedCob(*S)") != std::string::npos && c.find("S.C.out.clear(); S.C.lvpOut.clear();") != std::string::npos, "waves judged once; the finder and the (3.0.0) checklist read reach the drawing; the signal engine's record queues are dropped");
         CHECK(c.find("std::ios::app") != std::string::npos && c.find("S.recSeen.insert(k)") != std::string::npos, "record appended, keyed once");
         CHECK(c.find("far") == std::string::npos || c.find("#undef far") != std::string::npos, "no Windows-macro identifiers");
         CHECK(vw.find("\"CoB\"") == std::string::npos, "the view no longer draws CoB");

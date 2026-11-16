@@ -1,3 +1,5 @@
+// ZzoComboView.h  (3.0.0, 2026-11-15 Rassul "make sure you build the new cob finder indicator": with an XRead (CobCheck.h, the 3-hour-sweep CoBs of
+//   lsCobSignal + the checklist) the Cob / Lvp tags and the read box come from it - rows Cob | Lvl | Check | Lvp | Warn | Win; without one, as 2.9.5)
 // ZzoComboView.h  (2.3.0, 2026-11-12: + the CoB finder's Cob / Lvp tags from ZzoCobFinder.h; the old CoB-after-sweep tag is logged only)
 // ZzoComboView.h - lsZzoCombo 2.1.1 (2026-11-03, Rassul "build it all"): the wave COUNT is drawn INSIDE the wave's bars - centred on the
 //   wave's second-to-last bar, just below that bar's top, white with a 1 px black outline (reads on green or red); a bar too short for the
@@ -59,7 +61,12 @@ inline std::vector<std::pair<std::string, std::string>> readRows(const zcf::Read
     return r;
 }
 
-inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, long long formVol, const View& v, const std::string& head, const zcf::Finder* cf = nullptr) {
+// (3.0.0) the read of the 3-hour-sweep CoBs, handed in by the host (built from CobCheck.h): tags by (the wave's pivot bar END, the wave's
+// direction) -> the CoB's side; rows = label, value, colour (0 white, 1 up, 2 down)
+struct XRead { bool on = false, any = false; int dir = 0; std::vector<std::pair<std::string, std::string>> rows; std::vector<int> col;
+    std::map<std::pair<long long, int>, int> cob, lvp; };
+inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, long long formVol, const View& v, const std::string& head, const zcf::Finder* cf0 = nullptr, const XRead* xr = nullptr) {
+    const bool xon = xr && xr->on; const zcf::Finder* cf = xon ? nullptr : cf0;   // (3.0.0) with an XRead nothing of the old finder is drawn
     ComboScene S; const Colours C;
     const unsigned long upLive = 0x15803D, downLive = 0xB91C1C, white = 0xFFFFFF;
     const int TH = v.textH, H = v.b - v.t;
@@ -147,6 +154,9 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
         if (SHOW_WAVE_TAGS && w.st) tags.push_back({ "ST", up ? C.down : C.up });          // the side expected to take over
         // (2.3.0, Rassul 2026-11-12 CoB finder) the old "CoB after a sweep" tag (cobTag 1) is no longer drawn (status file only); "Cob" and
         // "Lvp" come from zcf::Finder, decided once when the wave completed. Lvp takes its Cob's colour.
+        if (xon && w.e >= 0 && (size_t)w.e < E.B.size()) { const std::pair<long long, int> key(E.B[(size_t)w.e].t, w.dir);
+            const auto a = xr->cob.find(key); if (a != xr->cob.end()) tags.push_back({ "Cob", a->second > 0 ? C.up : C.down });
+            const auto b = xr->lvp.find(key); if (b != xr->lvp.end()) tags.push_back({ "Lvp", b->second > 0 ? C.up : C.down }); }
         if (cf && w.e >= 0 && (size_t)w.e < E.B.size()) { if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) {
             if (tg->cob) tags.push_back({ "Cob", tg->cob > 0 ? C.up : C.down });
             if (tg->cob2 && zcf::SHOW_COB2) tags.push_back({ "Cob2", tg->cob2 > 0 ? C.up : C.down });
@@ -175,7 +185,27 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
     }
     S.p.insert(S.p.end(), over.begin(), over.end());
     bool boxed = false;
-    if (cf && cf->ok) {
+    if (xon && !xr->rows.empty()) {   // (3.0.0) the checklist read box: fixed width (the widest value a row can take), rows drop from the bottom in a short pane
+        const std::vector<std::pair<std::string, std::string>>& rows = xr->rows;
+        int kw = v.textW("Warn (0)"), vw = std::max(v.textW("S2 28,583.75 AsiaLO"), v.textW("3/3 3row SMA R1")); for (const auto& r : rows) { kw = std::max(kw, v.textW(r.first)); vw = std::max(vw, v.textW(r.second)); }
+        const int rh = TH + 2, bw = std::max(kw + vw + 22, v.textW(head) + 12);
+        const int x0 = v.l + 2, y0 = v.t + 1, fit = std::min((int)rows.size(), (H - 4 - (TH + 4)) / rh);
+        if (fit >= 2 && x0 + bw < v.r) {
+            boxed = true; const int y1 = y0 + TH + 4 + fit * rh + 2;
+            Prim e; e.k = Prim::FILL; e.x0 = x0; e.x1 = x0 + bw; e.y0 = y0; e.y1 = y1; e.col = 0x6B7280; S.p.push_back(e);
+            Prim f = e; f.x0 += 1; f.x1 -= 1; f.y0 += 1; f.y1 -= 1; f.col = 0x0B0F17; S.p.push_back(f);
+            const int hw = v.textW(head);
+            { Prim p; p.k = Prim::TEXT; p.x0 = x0 + (bw - hw) / 2; p.x1 = p.x0 + hw; p.y0 = y0 + 2; p.y1 = p.y0 + TH; p.col = white; p.text = head; S.p.push_back(p); }
+            for (int i = 0; i < fit; ++i) {
+                const int y = y0 + TH + 4 + i * rh; const int w2 = v.textW(rows[(size_t)i].second); const int cc = (size_t)i < xr->col.size() ? xr->col[(size_t)i] : 0;
+                Prim k; k.k = Prim::TEXT; k.x0 = x0 + 6; k.x1 = k.x0 + v.textW(rows[(size_t)i].first); k.y0 = y; k.y1 = y + TH; k.col = C.grey; k.text = rows[(size_t)i].first; S.p.push_back(k);
+                Prim q; q.k = Prim::TEXT; q.x1 = x0 + bw - 6; q.x0 = q.x1 - w2; q.y0 = y; q.y1 = y + TH; q.text = rows[(size_t)i].second; q.col = cc == 1 ? C.up : cc == 2 ? C.down : white; S.p.push_back(q);
+                S.box.push_back(rows[(size_t)i]);
+            }
+            S.boxRows = fit; S.boxL = x0; S.boxT = y0; S.boxR = x0 + bw; S.boxB = y1;
+        }
+    }
+    if (!xon && cf && cf->ok) {
         const zcf::Read R = cf->read(); const std::vector<std::pair<std::string, std::string>> rows = readRows(R);
         const int rh = TH + 2, kw = v.textW("Lvp / Hr"), vw = std::max(v.textW("SR+ AsiaHI LonHI DPoc"), v.textW("Rng 1st Deep Q Hr")), bw = std::max(kw + vw + 22, v.textW(head) + 12);
         const int x0 = v.l + 2, y0 = v.t + 1, fit = std::min((int)rows.size(), (H - 4 - (TH + 4)) / rh);

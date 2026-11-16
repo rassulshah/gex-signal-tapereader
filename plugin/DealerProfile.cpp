@@ -107,6 +107,7 @@ static void* dpCursorWindow() { return NULL; }
 #include "HostSlot.h"
 #include "DealerProfileAuditLogic.h"
 #include "OnTouchLogic.h"   // (2.6.0) the overnight touch odds, natively
+#include "HtfSr.h"          // (2.66.0) the 3-hour R1 / R2 / S1 / S2 from the chart's own bars (SDK-free, tested; = lsCobSignal's walk)
 #include "KeyLevelsLogic.h" // (2.7.0) the key levels, natively from the chart's bars
 #include "QueueMeter.h"     // (2.20.0) the queue meter: the live file from lsLiquidityProfile, the badge text and the hover (SDK-free, tested)
 #include "SignalBoard.h"    // (2.30.0) SignalBoard 1.4.0 facts: reads B (lsLiquidityProfile resting orders), posts V (levels) and Q (liquidity top 10)
@@ -160,7 +161,7 @@ static const int DP_KEYS_RW = 170, DP_LQ_RW = 170;   // (2.42.0, Rassul 2026-11-
 static const int DP_TOPN = 3; static const double DP_REACH_ATR = 3.0; static const int DP_FAKE_MOVES = 2;   // (2.32.0, Rassul 11:27 CT) the KING + the next 2 = TOP 3 real orders, only within 3 ATR (3-min) of price
 // was (2.31.2) DP_TOPN = 5;   // (2.31.2) "real" = rested 30 s+ (Top10Stable) and re-priced under 2 times in 5 min (king persistence study: re-quoting 2+ = pulled 39% vs 8%)
    // (2.31.2) Rassul 10:03 "top 5 means 5 nodes" - the rows shown (both sides together)
-static const char* DP_VERSION = "2.65.2";   // (2.65.2, 2026-11-13 Rassul 10:32 CT: the liquidity lines on the price chart - the bright level stretches and the HELD line - are BLUE (bids) / ORANGE (offers); green / red stay with the hourly trend steps)   // was "2.65.1";   // (2.65.1, 2026-11-11 Rassul 11:01 CT "i want it upto 1 atr beyond , so ovh will get it if it is from the ovnh to ovnh+1atr and ovl will get it if it is at ovnl to ovnl-1atr") then 11:02 CT "actually make + or - 1 ATR": a level liquidity row is the biggest real price within 1 ATR either side of its level (was 2 ticks)
+static const char* DP_VERSION = "2.66.0";   // (2.66.0, 2026-11-15 Rassul 20:35 CT "yes" + 20:55 "i will go with your recommendation": the STANDING 3-hour R1 / R2 / S1 / S2 (HtfSr.h, the same walk as lsCobSignal 1.7.x) join the key-level list - a badge in the Key Levels column (R red, S green; on a named level's exact price the name joins it: "ONH/R1") and the level liquidity row within 1 ATR; a broken level is dropped; no dim line of its own (lsCobSignal draws the 3-hour lines); never in LRA-KeyLevels files)   // was "2.65.2";   // (2.65.2, 2026-11-13 Rassul 10:32 CT: the liquidity lines on the price chart - the bright level stretches and the HELD line - are BLUE (bids) / ORANGE (offers); green / red stay with the hourly trend steps)   // was "2.65.1";   // (2.65.1, 2026-11-11 Rassul 11:01 CT "i want it upto 1 atr beyond , so ovh will get it if it is from the ovnh to ovnh+1atr and ovl will get it if it is at ovnl to ovnl-1atr") then 11:02 CT "actually make + or - 1 ATR": a level liquidity row is the biggest real price within 1 ATR either side of its level (was 2 ticks)
 // was "2.65.0";   // (2.65.0, 2026-11-11 Rassul 08:07-10:10 CT "was there any reason that the lqiuidity profile is ony drawing few nodes", "how about top 10 and any liquidity associated with key levels, volume levels cr0 and ps0", then on the mockup "keep top 3 per side + liquidity near levels"; 08:10 "make the white wiriting black in the green nodes") the Liquidity column keeps the top 3 per side and adds a LEVEL LIQUIDITY row for every key level, volume level, CR0 and PS0 that has real resting size within 2 ticks (TopBook 1.2.0 levelLiq: same real-order filters, any distance, 1.5x the typical level or more; dimmer, no rank, the level's name on it); lot numbers in dark ink on the node
 // was "2.64.0";   // (2.64.0, 2026-11-11 Rassul 00:17 CT "double check why irt is slow and if the limit profile is causing it and if your development in creating it has bugs or is suboptimal" / 00:18 "irt is freezing right now ... i think its the limit profile implementation") PERFORMANCE FIX, nothing drawn changes: (1) the two status files were REPLACED ON EVERY DRAW (the XLINES "drawn" counter of 2.53.0 grew on every repaint, so the "written when its content changes" gate always fired: 2 file creates + 2 renames per repaint, 600+ a minute while he scrolls; PerfGuard: draw 7 ms on Nov 4 -> 10 - 15 ms -> 54 ms / spikes to 7.9 s on Nov 11 00:15 with the disk busy) - a changed status is now written at most once every 5 s (dpaudit::statusMinGapSec, WriteGate) and the counter is per draw again; (2) the status text is not even built inside that gap (it was formatted on every draw); (3) the bright level stretches (2.60.0) converted the time of EVERY visible candle on EVERY draw - now found by bisection (dpaudit::stretchRange: ~25 conversions per stretch); (4) alignContract scanned up to 3,000 candle times on every draw - now once per candle / dealer file.
 // was "2.63.0";   // (2.63.0, 2026-11-10 Rassul 22:16 CT "it needs to read the feed directly") THE LIMIT PROFILE READS THE ORDER FEED ITSELF (LimitFeed.h 1.0.0): its own DEPTH_BY_ORDER per chart + the TopBook engine (the one lsBookFlow runs) -> the top 3 bids / offers without lsBookFlow on the chart; lsBookFlow's kind G is used only until the own feed has its first event (or if it cannot open). Status line OWN_FEED.
@@ -343,7 +344,7 @@ public:
         bool lpProto = false, kOn = true, rkHide = false, kingMatched = false; long long lpTracked = 0; int lpCover = -1, lpKings = 0;   // (2.52.2) lsLiquidityProfile 0.73 king / warm-up (B codes 3 / 9)
         double rankReachPx = 0; lrk::History rankHist; int histWrites = 0, histFails = 0, histLines = 0; std::string histMkt;   // (2.37.0) 0.25 ATR rank reach + the rank-change history file
         COLOR keysBg = 0;   // (2.36.1) the Key Levels column ground colour drawn (= getBackgroundColor)
-        int xlines = 0, xlinesVwap = 0;   // (2.53.0) dim level lines drawn / VWAP rows skipped
+        int xlines = 0, xlinesVwap = 0, xlinesHtf = 0; std::string htfLine; int htfAdded = 0;   // (2.66.0) the 3-hour S / R: rows without their own dim line, the status line, levels added / joined   // (2.53.0) dim level lines drawn / VWAP rows skipped
         long acN = -1; long long acLastT = -1, acStamp = -2; int acClock = -99999, acIdx = -1; long long acScans = 0; std::string acPath;   // (2.64.0) alignContract: the candle at the dealer file's minute, looked for once per candle / file
         int keysOut = 0, keysCapped = 0, keysBot = 0, keysEdgeRow = 0; std::string keysEdgeUp, keysEdgeDn;   // (2.52.3) the band plan
         int keysW = 0, keysL = 0, keysTop = 0, keysMoved = 0, keysOddsCut = 0, keysRankChips = 0; bool keysDocked = false, keysPosted = false; std::string keysSym, keysChart; long keysSpb = 0;   // (2.33.0) the Key Levels column
@@ -1007,6 +1008,7 @@ void DealerProfile::writeStatus(const char* what)
       << ",(2.52.2) K = " << (!cs.lpProto ? std::string("rank 1 (no lsLiquidityProfile 0.73 state)") : cs.rkHide ? std::string("none (warming)") : !cs.kOn ? std::string("none (no LP king)") : std::string("the LP king ") + (cs.kings.empty() ? std::string("?") : dpaudit::priceText(mkt, cs.kings.back().px) + " " + std::to_string(cs.kings.back().lots) + " lots" + (cs.kingMatched ? " (its node)" : " (added)")))
       << ",LP kings posted " << cs.lpKings << "\n"
       << "LIQ_WARM," << (!cs.lpProto ? "no lsLiquidityProfile 0.73 state" : cs.rkHide ? "warming" : "ready") << ",LP order book tracked " << cs.lpTracked << " s,depth explained " << cs.lpCover << "%,title " << (cs.rkHide ? "LIQUIDITY \xB7 warming (no ranks / K / chips / edge markers)" : "LIQUIDITY") << "\n"
+      << (cs.htfLine.empty() ? std::string("HTFSR,none (not a chart under 3 hours, or no bars yet)") : cs.htfLine) << ",in the level list " << cs.htfAdded << ",rows without their own dim line " << cs.xlinesHtf << "\n"
       << "RANK_RULE,LevelsColumn lrk " << lrk::VERSION << ",reach " << lrk::REACH_ATR << " ATR (3-min) beyond = " << cs.rankReachPx << ",one level per zone,history session " << cs.rankHist.session << " lines " << cs.histLines << " writes " << cs.histWrites << " fails " << cs.histFails << "\n"
       << "ENTRY_BADGE,EntryBadge " << ebd::VERSION << ",E facts " << cs.ebFacts << ",label " << (cs.eb.lab ? ebd::labName(cs.eb.lab) + (cs.eb.lab > 10 ? " (Rly)" : "") : std::string("-")) << ",state " << cs.eb.why << ",filled " << (cs.eb.filled ? 1 : 0) << ",pull " << (cs.eb.pull ? 1 : 0) << ",tags " << cs.eb.tags.size() << ",drawn on key rows " << cs.ebDrawn << ",on book rows " << cs.ebBook << ",rows added " << cs.ebAdded << ",params " << cs.ebPar.why << " (" << ebd::parText(cs.ebPar) << "),label uses " << ebd::parText(cs.ebSnap) << "\n"
       << "LEVELS_COLUMN," << (DP_LINES ? "lines (LevelsColumn " : DP_LVC ? "combined (LevelsColumn " : "off (") << lvc::VERSION << ")" << ",rows " << cs.lvcRows << ",merged rows " << cs.lvcMerged << ",with liquidity " << cs.lvcLiq << ",GEX rows " << cs.lvcGex << ",chips cut " << cs.lvcChipsCut << ",orders " << cs.lmtO.size() << ",order file " << (cs.lmtWhy.empty() ? std::string("ok") : cs.lmtWhy) << ",dealer bars " << (DP_BARS ? "on" : "off") << ",off-screen " << (offUp.have ? offUp.name : std::string("-")) << " / " << (offDn.have ? offDn.name : std::string("-")) << "\n"
@@ -1615,6 +1617,16 @@ const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m
         cs.vwapPx = vw;
         if (vw > 0 && tk > 0) K.v.push_back(klv::Merged{ "VWAP", std::round(vw / tk) * tk, false });
     }
+    {   // (2.66.0) the standing 3-hour S / R, after every export above (the shared LRA-KeyLevels files and the nightly history keep the
+        // named levels only): walked over the same two weeks of bars, the forming bar included (as lsCobSignal and his 3-hour chart)
+        cs.htfLine.clear(); cs.htfAdded = 0;
+        if (tk > 0 && hsr::periodOk(per) && per < hsr::SECS) {
+            hsr::Walk W; hsr::Snap sn;
+            for (size_t i = 0; i < B.size(); ++i) { hsr::Bar q; q.t = (long long)B[i].days * 86400LL + (long long)B[i].endSec; q.h = B[i].h; q.l = B[i].l; q.c = B[i].c; sn = W.add(q, per); }
+            cs.htfAdded = hsr::addTo(K.v, hsr::standing(sn, tk), tk);
+            cs.htfLine = hsr::statusText(sn, tk, (int)W.HB.size(), per);
+        }
+    }
     return K.v;
 }
 
@@ -1635,6 +1647,8 @@ static COLOR klColor(const std::string& name, bool pivotOnly)
     if (f == "VAH" || f == "VAL") return (COLOR)0x00EF4444;          // (2.18.2, Rassul 2026-10-19 18:51 "make VAH and VAL red and DPOC badge cyan and WPoc beige")
     if (f == "DPoc") return (COLOR)0x0022D3EE;                      // (2.18.2) cyan
     if (f == "WPoc") return (COLOR)0x00E8D5B0;                      // (2.18.2) beige
+    if (f == "R1" || f == "R2") return (COLOR)0x00EF4444;            // (2.66.0) 3-hour resistance = red
+    if (f == "S1" || f == "S2") return (COLOR)0x0022C55E;            // (2.66.0) 3-hour support = green
     if (f == "VWAP") return (COLOR)0x00CBD5E1;                      // (2.34.0) the one VWAP badge: light slate
     return (COLOR)0x00F59E0B;
 }
@@ -2385,18 +2399,19 @@ void DealerProfile::flushLines(const Settings& S)
     // (2.53.0, Rassul 2026-11-04 "levels across the chart ... dim and thin", Proposal A) every shown level (key, volume, CR0 / PS0; not VWAP)
     // = a 1 px solid line across the price area at its TRUE price, its colour faded to ~30%; it stops at the Key Levels column (the badge tick
     // continues it) and is cut where the HOD/LOD table covers that row. Drawn before the badges.
-    cs.gSegDrawn = 0; cs.xlines = 0; cs.xlinesVwap = 0;   // (2.64.0) per draw: a counter that grew on every repaint rewrote the status files on every repaint
+    cs.gSegDrawn = 0; cs.xlines = 0; cs.xlinesVwap = 0; cs.xlinesHtf = 0;   // (2.64.0) per draw: a counter that grew on every repaint rewrote the status files on every repaint
     if (DP_XLINES && DP_KEYS_RIGHT) {
         const int x0 = (int)pane.left + 1, x1 = kL - 1; bool segInit = false; int segV0 = 0, segV1 = -1, segHw = 3; std::map<int, long long> segEnd;   // (2.64.0) the visible range, half a candle's width, the end times looked up this draw (was 2.60.0: every visible candle)
         for (const BG& g : bgs) {
             if (!g.on || x1 <= x0) continue;
             const lvc::Row& R = rows[g.r]; bool onlyVw = !R.chips.empty(); for (const lvc::Chip& C : R.chips) if (C.text.compare(0, 4, "VWAP") != 0) onlyVw = false;
             if (onlyVw) { ++cs.xlinesVwap; continue; }
+            bool onlyHt = !R.chips.empty(); for (const lvc::Chip& C : R.chips) { std::string nm = C.text; for (char& ch : nm) if (ch == '\xB7') ch = '/'; if (!hsr::onlyHtf(nm)) onlyHt = false; }   // (2.66.0) a row that is only R1 / R2 / S1 / S2: lsCobSignal draws that line - no second one here (the liquidity stretches below still draw)
             if (g.y <= (int)pane.top + 1 || g.y >= (int)pane.bottom - 1) continue;
             int a = x0, b = x1;
             if (hbOn && g.y >= hb.t && g.y <= hb.b && hb.r > a && hb.l < b) { if (hb.l - 2 > a + 8) b = std::min(b, (int)hb.l - 2); else a = std::max(a, (int)hb.r + 2); }   // around the table
             if (b - a < 4) continue;
-            line((short)a, (short)g.y, (short)b, (short)g.y, fade(g.lc, DP_XLINE_FADE), 1); ++cs.xlines;
+            if (!onlyHt) { line((short)a, (short)g.y, (short)b, (short)g.y, fade(g.lc, DP_XLINE_FADE), 1); ++cs.xlines; } else ++cs.xlinesHtf;
             if (DP_LIQ_ON_LINES && !cs.gSegs.empty() && tick > 0) {   // (2.60.0) the bright stretches of this level (bar time = bar END)
                 const long long key = (long long)std::llround(R.px / tick); bool any = false; for (const ColsState::GSeg& sg : cs.gSegs) if (sg.key == key) { any = true; break; }
                 if (any) {   // (2.64.0) by bisection on the candles' end times (dpaudit::stretchRange): a few time conversions per stretch, not one per visible candle per draw
@@ -2974,6 +2989,6 @@ extern "C" cppExtension *CreateExtension(void)
 #else
     p->setDescription("LRA Dealer Profile: what dealers must trade at each strike. The guide is below the settings.");
 #endif
-    p->setVersion("2.65.2");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
+    p->setVersion("2.66.0");   // = DP_VERSION (gex-build reads this literal; test_dealerprofile_2110 checks they match)
     return p;
 }
