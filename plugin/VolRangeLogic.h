@@ -23,7 +23,7 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.1.1";   // (1.1.1, 2026-11-15 independent review: lsBreakout's record files are found by lsBreakout's own file key (boMarket / boFileKey); an unreadable bar no longer inflates the ATR)   // was "1.1.0";   // (1.1.0, 2026-11-15 20:38-20:47 CT Rassul "for the range indicator , when there is a bo that has a range of 1.2*ATR or more as well
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-16 05:49 CT Rassul "the values in the infobox should change as my mouse hovers on different bars in the pane": layout(..., pick) - the read box reads the bar under the mouse (pick = its index; the forming bar = the bar count), the last closed bar when the mouse is not in the pane)   // was "1.1.1";   // (1.1.1, 2026-11-15 independent review: lsBreakout's record files are found by lsBreakout's own file key (boMarket / boFileKey); an unreadable bar no longer inflates the ATR)   // was "1.1.0";   // (1.1.0, 2026-11-15 20:38-20:47 CT Rassul "for the range indicator , when there is a bo that has a range of 1.2*ATR or more as well
 // as a pb rev bar ... i want it highlighted in green or red ddepending on whether it is bullish or bearish", "for PB rev do it whenever there is a rev signal also", mockup
 // FNJNiY1fR9JBJsU18aZvg4 v2, "build") RANGE pane: bars grey; a BO / BD candle (lsBreakout's record) whose range is >= 1.2 x ATR(13) of the bar before, every PB Rev bar
 // (lsBreakout's record) and every CoB pullback Rev bar (lsCobSignal's record) in green (bullish) / red (bearish). A Rev wins over a BO on the same bar. Volume pane unchanged.
@@ -146,7 +146,7 @@ static const int BOX_W = 92, BOX_PAD = 3;
 
 // E = the closed bars; form / haveForm = the forming bar (drawn as a bar, never numbered); v.first / v.last = visible bar indexes
 // (the forming bar's index = E.V.size())
-inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form)
+inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form, int pick = -1)
 {
     std::vector<Prim> P; const int n = (int)E.V.size(), W = v.r - v.l, H = v.b - v.t; if (W < 40 || H < 12 || !v.X) return P;
     const bool box = W >= BOX_W + 60; const int bx1 = v.l + 2 + BOX_W;                    // the box needs room; bars start right of it
@@ -185,7 +185,9 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form)
         const int E4[4][4] = { {x0, y0, x1, y0}, {x0, y1, x1, y1}, {x0, y0, x0, y1}, {x1, y0, x1, y1} };
         for (const auto& e : E4) { Prim ln; ln.fill = true; ln.x0 = e[0]; ln.y0 = e[1]; ln.x1 = e[2]; ln.y1 = e[3]; ln.col = C_BOXLN; P.push_back(ln); }
         const bool vol = E.mode == VOL; const std::string pre = vol ? "BV" : "BR";
-        const bool have = n > 0; const Stat s = have ? E.S[(size_t)n - 1] : Stat();
+        // (1.2.0) the bar the box reads: the one under the mouse (a closed bar, or the forming bar = index n), else the last closed bar
+        const bool onForm = pick == n && form != nullptr; const int at = pick >= 0 && pick < n ? pick : n - 1;
+        const bool have = onForm || at >= 0; const Stat s = onForm ? E.forming(*form) : at >= 0 ? E.S[(size_t)at] : Stat();
         const std::string title = std::string(vol ? "Volume v" : "Range v") + VERSION;
         struct Row { std::string k, val; unsigned col; };
         const Row R[4] = { { pre + "Max", have ? fm(s.mx()) : "-", s.green ? C_UP : C_DN }, { pre, have ? fm(s.all) : "-", C_TXT },

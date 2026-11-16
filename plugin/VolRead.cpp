@@ -1,5 +1,5 @@
 /********************************************************************************
- *  VolRead.cpp  --  Investor/RT RTX extension  lsVolRead "Volume Read" / lsRangeRead "Range Read" (RangeRead.cpp = this file + VR_RANGE)  1.1.1  (2026-11-15: 1.1.1 = review fixes (status text built once a second; lsBreakout file names by its own key); 1.1.0 = Range pane highlight of BO / PB Rev / CoB Rev bars; 1.0.0 2026-11-15)
+ *  VolRead.cpp  --  Investor/RT RTX extension  lsVolRead "Volume Read" / lsRangeRead "Range Read" (RangeRead.cpp = this file + VR_RANGE)  1.2.0  (2026-11-16: 1.2.0 = the read box follows the mouse (Rassul 05:49 CT "the values in the infobox should change as my mouse hovers on different bars in the pane"): the bar under the mouse while it is in the pane, the last closed bar otherwise; 1.1.1 = review fixes (status text built once a second; lsBreakout file names by its own key); 1.1.0 = Range pane highlight of BO / PB Rev / CoB Rev bars; 1.0.0 2026-11-15)
  *
  *  Rassul 2026-11-14 21:58-22:05 CT ("a little reader for the volume and range ... BVG, BVR, BV ... and BVMax", "put the max stat on top
  *  then Bv then BV green annd then BVR"), 2026-11-15 16:07 / 17:06 CT ("i also want to implement the new volume and range indicators that
@@ -22,6 +22,7 @@
 #undef near
 #endif
 #include "VolRangeLogic.h"
+#include "PaneCursor.h"          // (1.2.0) is the mouse inside THIS pane right now (IRT sends no event when it leaves)
 #include "MarketKey.h"
 #include "HostSlot.h"
 #include "SettingsGuard.h"
@@ -49,7 +50,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.1.1";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.2.0";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -71,6 +72,7 @@ struct VRState {
     vrr::Engine E; std::vector<RTDATE> raw; int off = 0;
     vrr::Bar form; bool haveForm = false;
     std::string statusPath, statusBody; long long statusMs = -1, statusCk = -1; int drawn = 0;   // statusCk (1.1.1) = when the text was last built
+    int hov = -1; pc::Tracker cur;                     // (1.2.0) the chart bar under the mouse (-1 = not in this pane) and where the pane sits on the screen
     long long hlMs = -1; std::string hlSig;            // (1.1.0) when the signal files were last looked at / their stamps
 };
 
@@ -82,6 +84,8 @@ public:
     virtual int parmsApplyBody(void) { return RTX_OK; }
     virtual int parmsUpdtBody(unsigned int) { return RTX_OK; }
     virtual int draw(void);
+    virtual int mouse(RTX_EVENT* ev);
+    void mouseLeft(VRState& S);
     HostSlot<VRState> slot_;
     void clear() { slot_.release(this); }
     void pump();
@@ -186,6 +190,36 @@ void VolRead::pump() {
     VRState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
     feed(*S); signals(*S, vrMs()); status(*S, vrMs());
+    mouseLeft(*S);
+}
+
+// (1.2.0) the mouse: IRT sends move events only while the cursor is over this pane (TRACK_MOUSE: also when the indicator is not selected).
+// The event gives the chart bar it points at; where the pane sits on the screen is remembered so calc / draw can tell when the cursor
+// has left (no event comes then) - the box goes back to the last closed bar. The event is never swallowed.
+#if defined(_WIN32)
+#if defined(_MSC_VER)
+#pragma comment(lib, "user32.lib")
+#endif
+static void* vrCursorWindow(int sx, int sy) { POINT p; p.x = sx; p.y = sy; return (void*)WindowFromPoint(p); }
+#else
+static void* vrCursorWindow(int, int) { return nullptr; }
+#endif
+int VolRead::mouse(RTX_EVENT* ev) {
+    if (!ev || (ev->type != E_MOUSE_MOVE && ev->type != E_MOUSE_HOVER)) return RTX_FAIL;
+    VRState* S = slot_.get(this, false); if (!S || !S->keyed) return RTX_FAIL;
+    try {
+        int sx = 0, sy = 0; const bool ok = pc::cursorPos(sx, sy);
+        S->cur.onEvent(ok ? vrCursorWindow(sx, sy) : nullptr, ok, sx, sy, (int)ev->v.mouse.h, (int)ev->v.mouse.v);
+        const long n = getBarCount(); const long b = (long)ev->v.mouse.bar;
+        const int hov = (ok && b >= 0 && b < n && S->cur.eventInside((int)ev->v.mouse.h, (int)ev->v.mouse.v)) ? (int)b : -1;
+        if (hov != S->hov) { S->hov = hov; invalidateChart(false); }
+    } catch (...) {}
+    return RTX_FAIL;
+}
+void VolRead::mouseLeft(VRState& S) {
+    if (S.hov < 0) return;
+    int sx = 0, sy = 0; const bool ok = pc::cursorPos(sx, sy);
+    if (!S.cur.inside(ok ? vrCursorWindow(sx, sy) : nullptr, ok, sx, sy)) { S.hov = -1; invalidateChart(false); }
 }
 
 static short vrC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
@@ -203,7 +237,9 @@ int VolRead::draw(void) {
         v.X = [this, off](int j) { PNT p; p.set(j + off, 0.0f, kBarCenter); return (double)p.h; };
         FONT fp; fp.id = HELVETICA; fp.size = 9; fp.style = PLAIN; FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD;
         v.textW = [this, &fb](const std::string& s) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
-        const std::vector<vrr::Prim> P = vrr::layout(S->E, v, S->haveForm ? &S->form : nullptr);
+        S->cur.pane.l = pane.left; S->cur.pane.t = pane.top; S->cur.pane.r = pane.right; S->cur.pane.b = pane.bottom;   // (1.2.0) for mouseLeft
+        const int pick = S->hov >= 0 ? S->hov - S->off : -1;               // the bar under the mouse as an engine index (the forming bar = the bar count)
+        const std::vector<vrr::Prim> P = vrr::layout(S->E, v, S->haveForm ? &S->form : nullptr, pick);
         S->drawn = (int)P.size();
         const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom;
         for (const vrr::Prim& p : P) {
@@ -224,12 +260,12 @@ int VolRead::draw(void) {
 extern "C" cppExtension* CreateExtension(void) {
     VolRead* p = new VolRead();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers, no settings
+    p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);   // (1.2.0) + the mouse picks the bar the read box is about                                    // its own pane, draws itself; no hovers, no settings
 #ifdef VR_RANGE
-    p->setDescription("LRA Range Read v1.1.1 - its own pane: each bar's range (high - low) in grey, with a breakout candle of 1.2x ATR(13) or more, every PB Rev bar and every CoB pullback Rev bar in green (bullish) or red (bearish); BRMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BRMax, BR (bars in a row with a smaller range), BRG (green bars only), BRR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
+    p->setDescription("LRA Range Read v1.2.0 - its own pane: each bar's range (high - low) in grey, with a breakout candle of 1.2x ATR(13) or more, every PB Rev bar and every CoB pullback Rev bar in green (bullish) or red (bearish); BRMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BRMax, BR (bars in a row with a smaller range), BRG (green bars only), BRR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
 #else
-    p->setDescription("LRA Volume Read v1.1.1 - its own pane: each bar's volume, green / red, with BVMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BVMax, BV (bars in a row with a smaller volume), BVG (green bars only), BVR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
+    p->setDescription("LRA Volume Read v1.2.0 - its own pane: each bar's volume, green / red, with BVMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BVMax, BV (bars in a row with a smaller volume), BVG (green bars only), BVR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
 #endif
-    p->setVersion("1.1.1");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.2.0");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

@@ -103,5 +103,19 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 60; ++i) { vrr::Bar b; b.t = 1000 + i; b.o = px; b.h = px + 2; b.l = px - 2; b.c = px + (i % 2 ? 1 : -1); b.v = 10; A.addBar(b, 0); if (i == 30) { vrr::Bar z; z.t = b.t; z.o = z.h = z.l = z.c = 0; z.v = 0; B2.addBar(z, 0); } else B2.addBar(b, 0); px = b.c; }
         double worst = 0; for (size_t i = 32; i < A.ATR.size(); ++i) worst = std::max(worst, std::fabs(A.ATR[i] - B2.ATR[i]) / A.ATR[i]);
         CHECK(worst < 0.15, "an unreadable bar moves the ATR by under 15% (was: tens of times), worst " << worst); }
+    {   // (1.2.0) the read box follows the picked bar: a closed bar's own counts, the forming bar's live counts, the last closed bar when nothing is picked
+        vrr::Engine E; E.mode = vrr::VOL; E.tick = 0.25; const double vv[8] = { 10, 20, 5, 40, 3, 2, 30, 1 };
+        for (int i = 0; i < 8; ++i) { vrr::Bar b; b.t = 100 + i; b.o = 100; b.c = i % 2 ? 99 : 101; b.h = 102; b.l = 98; b.v = vv[i]; E.addBar(b, 0); }
+        vrr::Bar f; f.t = 200; f.o = 100; f.c = 101; f.h = 102; f.l = 98; f.v = 35;
+        vrr::View v; v.l = 0; v.t = 0; v.r = 600; v.b = 120; v.first = 0; v.last = 8; v.bw = 8; v.X = [](int j) { return 150.0 + j * 10.0; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
+        auto box = [&](int pick) { std::vector<std::string> r; bool in = false; for (const vrr::Prim& p : vrr::layout(E, v, &f, pick)) { if (p.fill) continue; if (p.text.rfind("Volume v", 0) == 0) { in = true; continue; } if (in && r.size() < 8) r.push_back(p.text); } return r; };
+        const std::vector<std::string> last = box(-1), b3 = box(3), b6 = box(6), fm = box(8), out = box(99);
+        // rows: BVMax val, BV val, BVG val, BVR val. bar 3 (40, red): bigger than all 3 before -> BV 3, red bars before (20) -> BVR 1; bar 6 (30, green): BV 2 (2, 3), BVG 2 (5, 10 smaller; 10 < 30, 5 < 30 -> 3? green bars before: 3, 5, 10 all smaller) 
+        CHECK(last.size() == 8 && b3.size() == 8, "the box has its four rows");
+        CHECK(last[3] == "0" && last[7] == "0" && last[5] == "-", "nothing picked = the last closed bar (1 lot, red): BV 0, BVR 0, BVG -  (" << last[3] << " " << last[5] << " " << last[7] << ")");
+        CHECK(b3[3] == "3" && b3[7] == "1" && b3[5] == "-", "bar 3 (40 lots, red): BV 3, BVR 1 (" << b3[3] << " " << b3[7] << ")");
+        CHECK(b6[3] == "2" && b6[5] == "3" && b6[7] == "-", "bar 6 (30 lots, green): BV 2, BVG 3 (" << b6[3] << " " << b6[5] << ")");
+        CHECK(fm[3] == "4" && fm[5] == "4" && fm[7] == "-", "the forming bar (35 lots, green): BV 4 (1, 30, 2, 3), BVG 4 (30, 3, 5, 10) (" << fm[3] << " " << fm[5] << ")");
+        CHECK(out == last, "a pick outside the bars = the last closed bar"); }
     std::cout << "test_volrange_logic: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }
