@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
         CHECK(E.highlight(25) == -1, "a Rev wins over a BO on the same bar");
         vrr::View v; v.l = 0; v.t = 0; v.r = 600; v.b = 80; v.bw = 6; v.first = 0; v.last = 26; v.X = [](int j) { return 110.0 + j * 8.0; };
         int grey = 0, up = 0, dn = 0; for (const vrr::Prim& p : vrr::layout(E, v, nullptr)) if (p.fill) { if (p.col == vrr::C_GREY) ++grey; else if (p.col == vrr::C_UP) ++up; else if (p.col == vrr::C_DN) ++dn; }
-        CHECK(grey == 22 && up == 1 && dn == 3, "Range pane: grey bars, only the signal bars coloured (" << grey << " grey, " << up << " green, " << dn << " red)");
+        CHECK(grey == 22 && up == 4 && dn == 0, "Range pane: grey bars, only the signal bars coloured, each in its CANDLE's colour (1.3.3: all four are up candles) (" << grey << " grey, " << up << " green, " << dn << " red)");
         E.hlOn = false; int g2 = 0; for (const vrr::Prim& p : vrr::layout(E, v, nullptr)) if (p.fill && p.col == vrr::C_GREY) ++g2; CHECK(g2 == 0, "highlight off (the Volume pane): candle colours as before");
         E.hlOn = true; CHECK(vrr::statusText(E, "ES", "ESZ6", 180).find("\nHIGHLIGHT,1.1.0") != std::string::npos, "status: highlight line"); }
     if (argc < 2) { std::cerr << "fixture path needed\n"; return 2; }
@@ -85,8 +85,8 @@ int main(int argc, char** argv) {
         const std::string pre = mode ? "BR" : "BV";
         { bool clear = true; for (size_t i = 0; i < P.size(); ++i) for (size_t k = i + 1; k < P.size(); ++k) if (!P[i].fill && !P[k].fill && P[i].x0 > 2 + vrr::BOX_W && P[k].x0 > 2 + vrr::BOX_W && P[i].x0 < P[k].x1 && P[k].x0 < P[i].x1 && P[i].y0 < P[k].y1 && P[k].y0 < P[i].y1) clear = false; CHECK(clear, "no number overlaps another"); }
         CHECK(in, "everything inside the pane"); CHECK(bars > 150, "bars drawn (" << bars << ")"); CHECK(nums > 0 && order, "numbers only for Max 20+, right of the box (" << nums << ")");
-        CHECK(keys.size() == 4 && keys[0] == pre + "Max" && keys[1] == pre && keys[2] == pre + "G" && keys[3] == pre + "R" && boxTxt == 9, "box rows in his order: Max, " << pre << ", " << pre << "G, " << pre << "R");
-        CHECK(title == std::string(mode ? "Range v" : "Volume v") + vrr::VERSION, "title with the version (" << title << ")");
+        CHECK(keys.size() == 4 && keys[0] == pre + "Max" && keys[1] == pre && keys[2] == pre + "G" && keys[3] == pre + "R" && boxTxt == 8, "box rows in his order: Max, " << pre << ", " << pre << "G, " << pre << "R");
+        CHECK(title.empty(), "no title row in the box (" << title << ")");
         { int dash = 0; for (const vrr::Prim& p : P) if (!p.fill && p.text == "-") ++dash; CHECK(dash == 1, "the other colour's row shows -"); }
         vrr::View s2 = v; s2.r = 120; CHECK([&] { for (const vrr::Prim& p : vrr::layout(E, s2, &form)) if (!p.fill && p.text.rfind("B", 0) == 0) return false; return true; }(), "a narrow pane draws no box");
         vrr::View s3 = v; s3.b = 8; CHECK(vrr::layout(E, s3, &form).empty(), "a pane under 12 px draws nothing");
@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 8; ++i) { vrr::Bar b; b.t = 100 + i; b.o = 100; b.c = i % 2 ? 99 : 101; b.h = 102; b.l = 98; b.v = vv[i]; E.addBar(b, 0); }
         vrr::Bar f; f.t = 200; f.o = 100; f.c = 101; f.h = 102; f.l = 98; f.v = 35;
         vrr::View v; v.l = 0; v.t = 0; v.r = 600; v.b = 120; v.first = 0; v.last = 8; v.bw = 8; v.X = [](int j) { return 150.0 + j * 10.0; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
-        auto box = [&](int pick) { std::vector<std::string> r; bool in = false; for (const vrr::Prim& p : vrr::layout(E, v, &f, pick)) { if (p.fill) continue; if (p.text.rfind("Volume v", 0) == 0) { in = true; continue; } if (in && r.size() < 8) r.push_back(p.text); } return r; };
+        auto box = [&](int pick) { std::vector<std::string> r; bool in = false; for (const vrr::Prim& p : vrr::layout(E, v, &f, pick)) { if (p.fill) continue; if (p.text == "BVMax") in = true; if (in && r.size() < 8) r.push_back(p.text); } return r; };
         const std::vector<std::string> last = box(-1), b3 = box(3), b6 = box(6), fm = box(8), out = box(99);
         // rows: BVMax val, BV val, BVG val, BVR val. bar 3 (40, red): bigger than all 3 before -> BV 3, red bars before (20) -> BVR 1; bar 6 (30, green): BV 2 (2, 3), BVG 2 (5, 10 smaller; 10 < 30, 5 < 30 -> 3? green bars before: 3, 5, 10 all smaller) 
         CHECK(last.size() == 8 && b3.size() == 8, "the box has its four rows");

@@ -24,7 +24,7 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
+static const char* const VERSION = "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
 // "what about an increas on a break/sweep of a keylevel, vol level", "go", "if there is a bar that is big like biggest range or volume in 50+ , lets highlight it, this includes variants like biggest green or red";
 // mockup Dr2SDbU3idUeUYD5c2KAVX) BOTH panes: bars grey, a marked bar green (bullish) / red (bearish) with ONE short code over it, by priority:
 //   CB  the Cob bar near the origin (the Cob Reader's CB bar)                      colour = the Cob's side
@@ -323,7 +323,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         const bool g = i < n ? E.G[(size_t)i] != 0 : (form->c >= form->o);
         const int y = v.b - std::max(1, (int)std::lround(val / mx * (v.b - top)));
         unsigned col = g ? C_UP : C_DN;
-        Mk mk; if (E.hlOn) { if (i < n) mk = E.markOf(i); col = mk.dir > 0 ? C_UP : mk.dir < 0 ? C_DN : C_GREY; }   // (1.3.0) grey unless a marked bar
+        Mk mk; if (E.hlOn) { if (i < n) mk = E.markOf(i); col = mk.code ? (g ? C_UP : C_DN) : C_GREY; }   // (1.3.0) grey unless a marked bar; (1.3.3) a marked bar takes its CANDLE's colour (green up, red down), not the mark's direction
         Prim f; f.fill = true; f.x0 = x0; f.x1 = x1; f.y0 = y; f.y1 = v.b; f.col = col; P.push_back(f);
         int yTop = y - 1;                                                                // texts stack upward from the bar's top
         auto put = [&](const std::string& s, unsigned c, bool bold) {
@@ -343,7 +343,7 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         if (mk.code >= MK_P) put(mkText(mk.code), col, true);                                          // (1.3.0) the ONE code of a marked bar, in its colour
     }
     if (box) {                                                                          // the read box: the last CLOSED bar
-        const int rows = 5, rh = std::max(8, std::min(th + 1, (H - 2 * BOX_PAD) / rows)); const int bh = rows * rh + 2 * BOX_PAD;
+        const int rows = 4, rh = std::max(8, std::min(th + 1, (H - 2 * BOX_PAD) / rows)); const int bh = rows * rh + 2 * BOX_PAD;
         const int x0 = bxL, y0 = v.t + std::max(0, (H - bh) / 2), x1 = bx1, y1 = std::min(v.b, y0 + bh);
         Prim bg; bg.fill = true; bg.x0 = x0; bg.y0 = y0; bg.x1 = x1; bg.y1 = y1; bg.col = C_BOXBG; P.push_back(bg);
         const int E4[4][4] = { {x0, y0, x1, y0}, {x0, y1, x1, y1}, {x0, y0, x0, y1}, {x1, y0, x1, y1} };
@@ -352,14 +352,12 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         // (1.2.0) the bar the box reads: the one under the mouse (a closed bar, or the forming bar = index n), else the last closed bar
         const bool onForm = pick == n && form != nullptr; const int at = pick >= 0 && pick < n ? pick : n - 1;
         const bool have = onForm || at >= 0; const Stat s = onForm ? E.forming(*form) : at >= 0 ? E.S[(size_t)at] : Stat();
-        const std::string title = std::string(vol ? "Volume v" : "Range v") + VERSION;
         struct Row { std::string k, val; unsigned col; };
         const Row R[4] = { { pre + "Max", have ? fm(s.mx()) : "-", s.green ? C_UP : C_DN }, { pre, have ? fm(s.all) : "-", C_TXT },
                            { pre + "G", have && s.green ? fm(s.same) : "-", C_UP }, { pre + "R", have && !s.green ? fm(s.same) : "-", C_DN } };
         auto tw = [&](const std::string& q) { return v.textW ? v.textW(q) : (int)q.size() * 6; };
-        { Prim t; t.bold = true; t.text = title; t.col = C_TXT; const int w = tw(title); t.x0 = std::max(x0 + 2, (x0 + x1) / 2 - w / 2); t.x1 = std::min(x1 - 1, t.x0 + w); t.y0 = y0 + BOX_PAD; t.y1 = t.y0 + rh; P.push_back(t); }
         for (int k = 0; k < 4; ++k) {
-            const int y = y0 + BOX_PAD + (k + 1) * rh; if (y + rh > y1) break;
+            const int y = y0 + BOX_PAD + k * rh; if (y + rh > y1) break;
             Prim a2; a2.text = R[k].k; a2.col = C_TXT; a2.x0 = x0 + 5; a2.x1 = a2.x0 + tw(R[k].k); a2.y0 = y; a2.y1 = y + rh; P.push_back(a2);
             Prim b2; b2.bold = true; b2.text = R[k].val; b2.col = R[k].col; b2.x1 = x1 - 5; b2.x0 = b2.x1 - tw(R[k].val); b2.y0 = y; b2.y1 = y + rh; P.push_back(b2);
         }
