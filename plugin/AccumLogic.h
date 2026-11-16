@@ -3,7 +3,7 @@
 // the boxes", "would you highlight the accumualation boxes like you did with the green and amber boxes", "build now create read on the right side".
 // SDK-free. UNPROVEN: every zone is a "?" until the nightly has scored it (status RULES line says so).
 //
-// ACCUMULATION (at a low; DISTRIBUTION = the mirror at a high). Over the last 5..14 closed candles:
+// (2.0.0: the rule below is RETIRED - see "THE SIMPLE RULE" in the Engine.)  1.x: ACCUMULATION (at a low; DISTRIBUTION = the mirror at a high). Over the last 5..14 closed candles:
 //   1. the sellers were the net aggressors: sell - buy >= NET_SHARE (2%) of the lots traded in those candles
 //   2. price made no progress: the lowest low is at most PROG_X (0.25) x the candles' mean range below the first candle's low,
 //      and it is the lowest low of the last LOW_LOOK (20) candles (the selling is AT a low)
@@ -30,8 +30,9 @@
 #include <vector>
 
 namespace acc {
-static const char* const VERSION = "1.2.1";   // (1.2.1, 2026-11-16 14:27 CT: a zone is never written twice - found on ES, every zone doubled after a restart)   // was "1.2.0";   // (1.2.0, 2026-11-16 Rassul 12:44 CT "build") the two readings that separated the bases that HELD in the order-by-order test, now read from the live book: QUIET END (the defended prices are not hit in the last third: held 74% vs 49%, n 513) and the other side NOT BUILDING against the zone (its net adds <= 0.30x the lots traded: 71% vs 57%); both 76%, neither 48%. They grade the zone (n/2), they do not open or close it. The read shows the LAST zone when none is open (Rassul 12:45 "i dont see the accumulaiton or distibution").   // was "1.1.0"
-static const int WIN_MIN = 5, WIN_MAX = 14, LOW_LOOK = 20, MAX_OPEN = 30, CONF_BACK = 3, KEEP_BARS = 400, KEEP_ZONES = 300;
+static const char* const VERSION = "2.0.0";   // (2.0.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it .. you are suppose to look for accumulation / distibution", "the volume at the pivot (or 1 bar before) is a clue", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go"): THE SIMPLE RULE replaces 1.x - climax volume at the pivot or the candle before (1.4x: ES 1:57 PM, the second case he circled, measured 1.43x), a push, 3+ candles stalling at the extreme, delta turned against the push, with the 60-candle trend; confirmed on a close beyond the stall. No order-book condition. Tested the same day on 80 sessions: with the trend 37% follow-through (n 217; ES 56%, n 39), the climax lifts HOLDING (60% -> 70% at 3x), not the move after: UNPROVEN, "?"   // was "1.2.1"
+static const int LOOKP = 8, STALL_MIN = 3, TREND_BARS = 60, MAX_OPEN = 10, KEEP_BARS = 400, KEEP_ZONES = 300;
+static const double CLIMAX_X = 1.4, PUSH_X = 1.5, STALL_X = 0.5, TREND_X = 2.0;   // (2.0.0)
 static const double NET_SHARE = 0.02, PROG_X = 0.25, ABS_X = 1.2, OFF_MAX = 0.30;
 static const int BK_SEC = 30, BK_KEEP = 300;                    // the book cells: 30 s each, 150 min kept (a zone spans at most 14 + 30 candles)
 enum State { OPEN = 0, CONFIRMED = 1, BROKEN = 2, EXPIRED = 3 };
@@ -108,47 +109,58 @@ struct Engine {
     // ---- helpers (side-mirrored: for a top every "low" is a high)
     static long long ext(const Bar& b, int side) { return side > 0 ? b.lo : b.hi; }
     static long long far(const Bar& b, int side) { return side > 0 ? b.hi : b.lo; }
+    // ---- (2.0.0) THE SIMPLE RULE, written for DISTRIBUTION at a high (accumulation = the mirror at a low):
+    //   1. CLIMAX   the pivot candle (the highest high of the last LOOKP candles) or the candle before it has CLIMAX_X x the average volume of the 20 before
+    //   2. PUSH     that high is PUSH_X mean ranges or more above the low of the 6 candles into it
+    //   3. STALL    STALL_MIN or more candles (from the one before the pivot on) have their high within STALL_X mean ranges of it, 2+ candles after the pivot, no close above it
+    //   4. DELTA    the aggressors since the pivot are net AGAINST the push (NET_SHARE of the lots)
+    //   5. TREND    the turn is WITH the trend of the last TREND_BARS candles (TREND_X mean ranges)
+    //   -> the zone OPENS (amber). CONFIRMED when a candle closes beyond the stall (under its lowest low); BROKEN on a close above the high; EXPIRED after MAX_OPEN.
+    double meanRange(int n) const { double r = 0; int k = 0; for (int q = std::max(0, n - 21); q < n - 1; ++q) { r += (double)(B[(size_t)q].hi - B[(size_t)q].lo); ++k; } return k ? r / k : 0; }
     void step(Zone& z, int n) {
         const Bar& b = B[(size_t)n - 1]; const int s = z.side;
-        long long conf = far(B[(size_t)std::max(0, n - 2)], s);                       // the 3 candles BEFORE this one
-        for (int j = std::max(0, n - 1 - CONF_BACK); j < n - 1; ++j) conf = s > 0 ? std::max(conf, B[(size_t)j].hi) : std::min(conf, B[(size_t)j].lo);
-        const long long dl = b.buy - b.sell;
-        z.t1 = b.t; ++z.bars; measure(z, z.t0 - spb, b.t); z.net += s > 0 ? b.sell - b.buy : b.buy - b.sell; z.total += b.buy + b.sell;
-        const bool through = s > 0 ? b.close < z.absPx : b.close > z.absPx;
-        const bool out = s > 0 ? (b.close > conf && dl > 0) : (b.close < conf && dl < 0);
+        z.t1 = b.t; ++z.bars; z.net += s > 0 ? b.sell - b.buy : b.buy - b.sell; z.total += b.buy + b.sell;
+        const bool through = s > 0 ? b.close < z.absPx : b.close > z.absPx;                 // absPx = the stall's extreme (the invalidation line)
+        const bool out = s > 0 ? b.close > z.confPx : b.close < z.confPx;                   // confPx = the stall's far side as of the candle before
         if (through) { z.state = BROKEN; z.tDec = b.t; }
-        else if (out) { z.state = CONFIRMED; z.tDec = b.t; z.confPx = conf; }
+        else if (out) { z.state = CONFIRMED; z.tDec = b.t; }
         else if (z.bars >= MAX_OPEN) { z.state = EXPIRED; z.tDec = b.t; }
-        if (z.state == OPEN || z.state == CONFIRMED) { z.lo = std::min(z.lo, b.lo); z.hi = std::max(z.hi, b.hi); }
-        if (z.state == OPEN) {
-            z.drift = s > 0 ? z.first - z.lo : z.hi - z.first;
-            long long c2 = far(b, s); for (int j = std::max(0, n - CONF_BACK); j < n; ++j) c2 = s > 0 ? std::max(c2, B[(size_t)j].hi) : std::min(c2, B[(size_t)j].lo);
-            z.confPx = c2;                                                           // what the NEXT candle has to close beyond
-        }
+        if (z.state == OPEN) { z.lo = std::min(z.lo, b.lo); z.hi = std::max(z.hi, b.hi); z.confPx = s > 0 ? z.hi : z.lo; ++z.drift; }   // drift = the stall's candles
+        else if (z.state == CONFIRMED) { z.lo = std::min(z.lo, b.lo); z.hi = std::max(z.hi, b.hi); }
     }
     void tryOpen(int side, int n) {
-        if (n < WIN_MIN) return;
-        for (int k = std::min(WIN_MAX, n); k >= WIN_MIN; --k) {
-            const int a = n - k; long long net = 0, tot = 0, lo = B[(size_t)a].lo, hi = B[(size_t)a].hi; double rng = 0;
-            for (int j = a; j < n; ++j) { const Bar& q = B[(size_t)j]; net += side > 0 ? q.sell - q.buy : q.buy - q.sell; tot += q.buy + q.sell; lo = std::min(lo, q.lo); hi = std::max(hi, q.hi); rng += (double)(q.hi - q.lo); }
-            if (tot <= 0 || (double)net < NET_SHARE * (double)tot) continue;
-            rng /= (double)k; const long long first = ext(B[(size_t)a], side), edge = side > 0 ? lo : hi;
-            const long long drift = side > 0 ? first - edge : edge - first;
-            if ((double)drift > PROG_X * rng) continue;
-            bool atExt = true; for (int j = std::max(0, n - LOW_LOOK); j < a && atExt; ++j) atExt = side > 0 ? B[(size_t)j].lo >= edge : B[(size_t)j].hi <= edge;
-            if (!atExt) continue;
-            const Abs* best = nullptr; const long long tA = B[(size_t)a].t - spb, band = std::max(2LL, (long long)std::llround(rng * 0.5));
-            for (const Abs& x : A) { if (x.side != side || x.t <= tA || x.t > B[(size_t)n - 1].t) continue;
-                const bool near = side > 0 ? (x.px >= edge - 2 && x.px <= edge + band) : (x.px <= edge + 2 && x.px >= edge - band);
-                if (near && (!best || x.x > best->x)) best = &x; }
-            if (!best) continue;
-            const Bar& last = B[(size_t)n - 1]; if (side > 0 ? last.close < best->px : last.close > best->px) continue;   // already through it
-            Zone z; z.id = nextId++; z.side = side; z.t0 = B[(size_t)a].t; z.t1 = last.t; z.lo = lo; z.hi = hi; z.absPx = best->px; z.absShown = best->shown; z.absLots = best->lots; z.absX = best->x;
-            z.net = net; z.total = tot; z.drift = drift; z.first = first; z.bars = 0; z.band = std::max(2LL, (long long)std::llround(rng * 0.5)); measure(z, z.t0 - spb, last.t);
-            long long c2 = far(last, side); for (int j = std::max(0, n - CONF_BACK); j < n; ++j) c2 = side > 0 ? std::max(c2, B[(size_t)j].hi) : std::min(c2, B[(size_t)j].lo);
-            z.confPx = c2; if (has(z.side, z.t0)) { --nextId; return; }   /* (1.2.1) already decided once: never a second copy */
-            Z.push_back(z); return;
-        }
+        if (n < TREND_BARS + LOOKP + 2) return;
+        const int e = n - 1; const double rng = meanRange(n); if (!(rng > 0)) return;
+        int ih = e - LOOKP + 1; for (int q = ih + 1; q <= e; ++q) if (side > 0 ? B[(size_t)q].lo < B[(size_t)ih].lo : B[(size_t)q].hi > B[(size_t)ih].hi) ih = q;   // the pivot: the first candle at the extreme
+        const long long H = ext(B[(size_t)ih], side);
+        int is = ih; for (int q = e - LOOKP + 1; q < ih; ++q) if ((double)(side > 0 ? B[(size_t)q].lo - H : H - B[(size_t)q].hi) <= STALL_X * rng) { is = q; break; }   // the stall's first candle: the first one at the extreme (the pivot itself, or an earlier candle within STALL_X of it)
+        if (e - is < 2 || is < 22) return;
+        // 5. with the trend
+        const double tr = (double)(B[(size_t)e - 8].close - B[(size_t)e - TREND_BARS].close) / rng; if (side > 0 ? tr < TREND_X : tr > -TREND_X) return;
+        // 1. the climax: the biggest candle from the one before the stall to the pivot, against the 20 candles before those
+        double vm = 0; for (int q = is - 21; q < is - 1; ++q) vm += (double)(B[(size_t)q].buy + B[(size_t)q].sell); vm /= 20.0; if (!(vm > 0)) return;
+        long long vc = 0; int ic = is - 1; for (int q = is - 1; q <= ih; ++q) { const long long v = B[(size_t)q].buy + B[(size_t)q].sell; if (v > vc) { vc = v; ic = q; } }
+        const int ds = std::max(is, std::min(ic + 1, e - 1));   // the delta, the box and the far side are read AFTER the climax candle (its own delta is the push)
+        const double cx = (double)vc / vm; if (cx < CLIMAX_X) return;
+        // 2. the push
+        long long base = far(B[(size_t)is], side); for (int q = is - 5; q <= is; ++q) base = side > 0 ? std::max(base, B[(size_t)q].hi) : std::min(base, B[(size_t)q].lo);
+        if ((double)(side > 0 ? base - H : H - base) < PUSH_X * rng) return;
+        // 3. the stall
+        int st = 0; long long lo = B[(size_t)ds].lo, hi = B[(size_t)ds].hi, net = 0, tot = 0;
+        for (int q = is; q <= e; ++q) { const Bar& b = B[(size_t)q]; if ((double)(side > 0 ? b.lo - H : H - b.hi) <= STALL_X * rng) ++st;
+            if (q < ds) continue;
+            lo = std::min(lo, b.lo); hi = std::max(hi, b.hi); net += side > 0 ? b.sell - b.buy : b.buy - b.sell; tot += b.buy + b.sell; }
+        if (side > 0) lo = std::min(lo, H); else hi = std::max(hi, H);                       // the box always reaches the extreme
+        if (st < STALL_MIN || tot <= 0) return;
+        // 4. the delta has turned against the push: for a top the SELLERS are net (net here = the pushing side's net, so it must be negative)
+        if ((double)net > -NET_SHARE * (double)tot) return;
+        // still stalling: this candle has not closed beyond the candles before it
+        long long farSide = far(B[(size_t)ds], side); for (int q = ds; q < e; ++q) farSide = side > 0 ? std::max(farSide, B[(size_t)q].hi) : std::min(farSide, B[(size_t)q].lo);
+        const Bar& last = B[(size_t)e]; if (side > 0 ? last.close > farSide : last.close < farSide) return;
+        Zone z; z.id = nextId++; z.side = side; z.t0 = B[(size_t)ds].t; z.t1 = last.t; z.lo = lo; z.hi = hi; z.absPx = H; z.absShown = 0; z.absLots = vc; z.absX = cx;
+        z.net = net; z.total = tot; z.drift = e - is + 1; z.first = H; z.bars = 0; z.band = std::max(2LL, (long long)std::llround(rng * 0.5)); z.confPx = side > 0 ? hi : lo;
+        if (has(z.side, z.t0)) { --nextId; return; }   /* (1.2.1) already decided once: never a second copy */
+        Z.push_back(z);
     }
     // the zone the read is about now: an open one (the newer), else one decided CONFIRMED within the last `keep` candles
     const Zone* current(int keep = 10) const {
@@ -167,21 +179,16 @@ inline std::string px(long long ticks, double tick) {
     const double v = (double)ticks * tick; int d = 0; double t = tick; while (d < 6 && std::fabs(t - std::round(t)) > 1e-7) { t *= 10; ++d; }
     char b[40]; std::snprintf(b, sizeof b, "%.*f", d, v); return b;
 }
+inline std::string commas(long long v) { const bool neg = v < 0; std::string d = std::to_string(neg ? -v : v), o; for (size_t k = 0; k < d.size(); ++k) { if (k && (d.size() - k) % 3 == 0) o += ','; o += d[k]; } return (neg ? "-" : "+") + o; }
 inline std::vector<Line> readLines(const Zone& z, double tick, int spb, const std::string& decidedClock) {
-    std::vector<Line> L; const bool up = z.side > 0, open = z.state == OPEN; const int zc = open ? 3 : up ? 1 : -1; char b[96];
-    L.push_back(Line{ std::string(up ? "Accum" : "Distrib") + (open ? "? " : " ") + px(z.absPx, tick) + (z.book == 1 ? (grade(z) == 2 ? "  2/2" : grade(z) == 1 ? "  1/2" : "  0/2") : ""), open ? 3 : z.state == CONFIRMED ? zc : z.state == BROKEN ? -zc : 2 });
-    const long long mins = std::max(1LL, (z.t1 - z.t0 + spb) / 60);
-    std::snprintf(b, sizeof b, "1. %s net %lld, %lld min", up ? "Sellers" : "Buyers", z.net, mins); L.push_back(Line{ b, up ? -1 : 1 });
-    std::snprintf(b, sizeof b, "2. %s %lld ticks %s", up ? "Lows" : "Highs", z.drift < 0 ? 0 : z.drift, up ? "lower" : "higher"); L.push_back(Line{ b, 2 });
-    std::snprintf(b, sizeof b, "3. Absorbed %.1fx (%lld / %lld shown)", z.absX, z.absLots, z.absShown); L.push_back(Line{ b, up ? 1 : -1 });
-    if (z.book != 1) L.push_back(Line{ "4. Book: n/a", 2 });
-    else {
-        if (quiet(z)) L.push_back(Line{ "4. Quiet end", up ? 1 : -1 }); else { std::snprintf(b, sizeof b, "4. %s still hit: %lld", up ? "Low" : "High", z.lateFill); L.push_back(Line{ b, up ? -1 : 1 }); }
-        std::snprintf(b, sizeof b, "5. %s: %.1fx (%.1fx)", up ? "Offers" : "Bids", z.total > 0 ? (double)z.offNet / (double)z.total : 0.0, OFF_MAX); L.push_back(Line{ b, thin(z) ? (up ? 1 : -1) : (up ? -1 : 1) });
-    }
+    std::vector<Line> L; const bool up = z.side > 0, open = z.state == OPEN; const int zc = up ? 1 : -1; char b[96]; (void)spb;
+    L.push_back(Line{ std::string(up ? "Accum" : "Distrib") + (open ? "? " : " ") + px(z.absPx, tick), open ? 3 : z.state == CONFIRMED ? zc : z.state == BROKEN ? -zc : 2 });
+    std::snprintf(b, sizeof b, "1. Climax %.1fx (%.1fx)", z.absX, CLIMAX_X); L.push_back(Line{ b, 2 });
+    std::snprintf(b, sizeof b, "2. Stall %lld bars", z.drift); L.push_back(Line{ b, 2 });
+    L.push_back(Line{ "3. Delta " + commas(up ? -z.net : z.net), zc });          // net = the pushing side's net (negative): shown as the candles' delta (buy - sell)
     if (open) L.push_back(Line{ std::string(up ? "Above " : "Below ") + px(z.confPx, tick) + " confirms", 2 });
     else if (z.state == CONFIRMED) L.push_back(Line{ "Confirmed " + decidedClock, zc });
-    else if (z.state == BROKEN) L.push_back(Line{ "Broken " + decidedClock, up ? -1 : 1 });
+    else if (z.state == BROKEN) L.push_back(Line{ "Broken " + decidedClock, -zc });
     else L.push_back(Line{ "Expired " + decidedClock, 2 });
     return L;
 }
@@ -189,9 +196,8 @@ inline std::vector<Line> readLines(const Zone& z, double tick, int spb, const st
 inline std::vector<Line> readCompact(const Zone& z, double tick, int spb, const std::string& decidedClock) {
     const std::vector<Line> F = readLines(z, tick, spb, decidedClock); std::vector<Line> L; if (F.empty()) return L;
     const bool up = z.side > 0; char b[96]; L.push_back(F.front());
-    if (z.book == 1) std::snprintf(b, sizeof b, "Abs %.1fx  %s  %s %.1fx", z.absX, quiet(z) ? "Quiet" : "Hit", up ? "Off" : "Bid", z.total > 0 ? (double)z.offNet / (double)z.total : 0.0);
-    else std::snprintf(b, sizeof b, "Abs %.1fx  Book n/a", z.absX);
-    L.push_back(Line{ b, z.book == 1 && grade(z) == 2 ? (up ? 1 : -1) : 2 }); L.push_back(F.back()); return L;
+    std::snprintf(b, sizeof b, "Climax %.1fx  Stall %lld  Delta %s", z.absX, z.drift, commas(up ? -z.net : z.net).c_str());
+    L.push_back(Line{ b, 2 }); L.push_back(F.back()); return L;
 }
 // one line per zone: Z|ver|id|side|state|t0|t1|tDec|lo|hi|absPx|confPx|net|total|drift|absShown|absLots|absX|bars|first|band|lateFill|offNet|book   (1.2.0: the last four; a 1.1.0 line of 20 fields still reads)
 inline std::string zLine(const Zone& z) {
