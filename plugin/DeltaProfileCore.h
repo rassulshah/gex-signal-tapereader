@@ -172,6 +172,25 @@ inline std::vector<Tick> labelKeys(const std::vector<Bucket>& buckets, std::size
     for (std::size_t i = 0; i < v.size() && i < n; ++i) out.push_back(v[i]->key);
     return out;
 }
+// (host 2.37.0, Rassul 2026-11-16 13:24-13:26 CT "keep it simple and just draw the circle associated with the delta profile top 3 nodes",
+// "the color should match the node color", repaint "ok") the candle circles: ONE per labelled bar (the 3 biggest by abs delta, labelKeys),
+// on the candle where that row's own-side delta was biggest, at the row's middle price, in the row's colour (buy = delta > 0).
+// No absorption / size / close / pivot rule. Live: a row that leaves the top 3 loses its circle.
+struct TopCircle { Tick key; int peakBar; double price; bool buy; };
+inline std::vector<TopCircle> topCircles(const std::vector<Bar>& bars, const std::vector<Bucket>& buckets, double tick, std::size_t n = 3) {
+    std::vector<TopCircle> out;
+    if (!finite(tick) || tick <= 0) return out;
+    for (const Tick k : labelKeys(buckets, n)) {
+        const Bucket* b = nullptr; for (const Bucket& q : buckets) if (q.key == k) { b = &q; break; }
+        if (!b || b->delta == 0 || b->low > b->high) continue;
+        const bool sell = b->delta < 0; int peak = -1; double mag = -1;
+        for (std::size_t i = 0; i < bars.size(); ++i) { const double d = regionalDelta(bars[i], b->low, b->high);
+            if (d != 0 && (d < 0) == sell && std::fabs(d) > mag) { mag = std::fabs(d); peak = bars[i].index; } }
+        if (peak < 0) continue;
+        TopCircle t; t.key = k; t.peakBar = peak; t.price = (static_cast<double>(b->low) + static_cast<double>(b->high)) / 2.0 * tick; t.buy = !sell; out.push_back(t);
+    }
+    return out;
+}
 enum ConfBy { CONF_NONE = 0, CONF_SAME = 1, CONF_NEXT = 2 };
 struct AStep { TentStep step; ConfBy by; };
 inline AStep aStep(bool closeSame, bool pivSame, bool nextClosed, bool closeNext, bool pivBoth, bool pivFinal) {
