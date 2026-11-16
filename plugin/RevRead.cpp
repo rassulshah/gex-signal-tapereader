@@ -1,5 +1,5 @@
 /*
- *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.7.0  (2026-11-13)
+ *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.8.0  (2026-11-16: lsSR runs in the background, SRBack.h; 0.7.0 2026-11-13)
  *
  *  Rassul 2026-11-11 21:13-21:33 CT: "I want to know how i can have indicators that tell this story so i can understand how and why it
  *  reveresed"; "i have the poc of the candle in a pane. i want you to create a similar pane that has each candles poc and also makes a dash
@@ -91,11 +91,11 @@
 #include <vector>
 #include <sys/stat.h>
 
-#define RVS_VERSION "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.7.0");
+    p->setVersion("0.8.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -214,6 +214,7 @@ struct PocStore {
 #endif
 #define OFF_SDK 1
 #include "OrderFlowFeed.h"
+#include "SRBack.h"            // (0.8.0) lsSR in the background: same rules, same journal, nothing drawn
 namespace rvs {
 struct PaneLogic {   // the MboPane contract (the base's own bars / records are not drawn by this pane)
     static const char* name() { return "RevRead"; }
@@ -253,12 +254,18 @@ public:
         rvs::Six six; int sixKeys = 0; long long sixParMs = -100000, sixParSig = -2; int sixLoaded = 0, sixDecided = 0;
         int pvDir = 0; long long pvTp = 0, pvExt = 0, pvW = 0; std::map<long long, int> trendAt; int trendNow = 0; std::vector<sb::Fact> revF; long long sixPostMs = -100000;
         rvs::SixRead live; bool haveLive = false;
+        srb::Back sr;                                                     // (0.8.0) the stop-run engine in the background
     };
     Ext* ext(S_& S) { if (!S.ext) S.ext.reset(new (std::nothrow) Ext()); return static_cast<Ext*>(S.ext.get()); }
 
     // ---- the feed: every order event, once, in order ------------------------------------------------------------------
     virtual void onRaw(S_& S, const DEPTH_ORDER& o) {
         Ext* e = ext(S); if (!e) return;
+        try {   // (0.8.0) the stop-run engine first and on its own: nothing it does can change the read below
+            struct tm st; const struct tm* ns = nullptr;
+            if (o.timestamp && (long long)o.timestamp != e->sr.stamp) { std::memset(&st, 0, sizeof st); if (getLocaltime(o.timestamp, &st)) ns = &st; }
+            e->sr.onRaw(o, ns, S.market, S.symbol, (int)S.spb, S.tick);
+        } catch (...) { ++e->sr.faults; }
         const std::string mkt = rvh::marketOf(S.market);
         if (mkt.empty()) { e->note = "market not supported (" + S.market + ")"; ++e->skipped; return; }
         if (S.spb <= 0 || 3600 % (int)S.spb != 0) { e->note = "needs bars that divide the hour"; ++e->skipped; return; }
@@ -356,12 +363,13 @@ public:
         f.flush(); if (!f.good()) ++e.writeFails;
         if (e.eng->out.size() > 20000) { e.eng->out.clear(); e.written = 0; }
     }
-    void stopAll() { S_* S = testState(); if (!S) return; Ext* e = ext(*S); if (e) flush(*e); }
-    virtual void afterPump(S_& S, long long, bool) { Ext* e = ext(S); if (e) { if (e->eng && e->stamp > 0) e->eng->onClock(e->stamp * 1000); flush(*e); } }
-    virtual void afterTimer(S_& S, long long) { Ext* e = ext(S); if (e) flush(*e); }
+    void stopAll() { S_* S = testState(); if (!S) return; Ext* e = ext(*S); if (e) { flush(*e); try { e->sr.stop(); } catch (...) {} } }
+    virtual void afterPump(S_& S, long long, bool) { Ext* e = ext(S); if (e) { if (e->eng && e->stamp > 0) e->eng->onClock(e->stamp * 1000); flush(*e); try { e->sr.afterPump(); } catch (...) { ++e->sr.faults; } } }
+    virtual void afterTimer(S_& S, long long) { Ext* e = ext(S); if (e) { flush(*e); try { e->sr.flush(); } catch (...) { ++e->sr.faults; } } }
     virtual void statusExtra(S_& S, std::ostream& o) {
         Ext* e = ext(S); if (!e) { o << "\nREV_READ,unavailable"; return; }
         const rvs::Engine* E = e->eng.get();
+        try { o << "\n" << e->sr.status(); } catch (...) {}
         o << "\nREV_READ,version " << RVS_VERSION << ",market " << e->mkt << ",session " << e->session << ",events " << e->events << ",skipped " << e->skipped << (e->note.empty() ? std::string() : ",note " + e->note)
           << ",fills " << (E ? E->fills : 0) << ",side mismatch " << (E ? E->sideMismatch : 0) << ",book " << (E ? E->book.size() : 0) << ",blocks " << (E ? E->hist.size() : 0) << ",normal p95 " << (E ? E->p95 : 0)
           << ",stories " << (E ? E->nextId - 1 : 0) << ",letters " << (E ? E->marks.size() : 0) << " (reloaded " << e->marksLoaded << ")" << ",levels " << e->nLevels << ",params keys " << e->parKeys << ",proven " << (E ? E->P.proven : 0)

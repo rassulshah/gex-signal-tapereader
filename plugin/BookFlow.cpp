@@ -1586,6 +1586,9 @@ public:
     virtual int draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
         {   S_* S0 = testState(); if (S0) grabChart(*S0); }               // the chart label (Market State key)
         pump(true);                                                        // from the draw: a recorder buffers, never writes
+#ifdef BF_BACKGROUND
+        return RTX_OK;                                                     // lsBookFlowBg: everything is computed and recorded as in the pane, nothing is drawn
+#endif
         S_* S = testState();
         if (S) paneLeft(*S);                                               // (1.3.4) the candle under the mouse only while the cursor is inside this pane
         if (S) { try { renderNet(*S); } catch (...) { S->state = "draw error"; } }
@@ -1626,6 +1629,9 @@ public:
     }
     void bfCalc() {                                                        // (1.3.4) in place of calcHook (no HoverBoard following)
         pump(); S_* S = testState(); if (!S) return;
+#ifdef BF_BACKGROUND
+        return;                                                            // lsBookFlowBg draws nothing: no redraw is asked for
+#endif
         bool ch = paneLeft(*S);
         Ext* e = ext(*S);
         if (e && S->hov.hover.bar < 0) {                                   // Live: redraw when the forming candle got new order events (<= 4 a second)
@@ -2077,7 +2083,13 @@ int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); static_cast<B
 extern "C" cppExtension* CreateExtension(void) {
     BookFlow* p = new BookFlow();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | NO_UI | (BF_HOVERS ? TRACK_MOUSE : 0));   // (1.32.1) no hovers                   // its own pane, draws itself; mouse events even when not selected
+#ifdef BF_BACKGROUND
+    // lsBookFlowBg (2026-11-16 Rassul 06:00 CT "i dont have space for too many indicators ... in the background"): the SAME indicator added to the PRICE pane, drawing
+    // nothing - it takes no room and keeps every record, turn, level-box line and Market State post exactly as the pane writes them. Use ONE of lsBookFlow / lsBookFlowBg per market.
+    p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI);
+#else
+    p->setFlags(POST_DRAWING | NO_UI | (BF_HOVERS ? TRACK_MOUSE : 0));
+#endif   // (1.32.1) no hovers                   // its own pane, draws itself; mouse events even when not selected
     p->setExtendedFlags(CALL_CONTINUOUSLY);                            // the order feed keeps coming while no trade prints
     p->setDescription("LRA Book Flow - how the resting side DEFENDS near price (market-by-order feed). Green = bids (buyers below price), red = offers (sellers above price). TWO MEASURES: 1) REFILL EFFORT - Question: how much defense is there compared with normal? How: lots ADDED minus lots PULLED near price this candle, per side, compared with that side's average of the last 20 candles; it is the bar and the first box row. Example: offers +2,587 (4.8x) = sellers put back 2,587 more offers than they pulled, 4.8 times their usual. How to read: 1.0x = normal; 2.0x or more = heavy defense (the bar turns bright); a bar below the zero line = that side pulled more than it added. 2) REFILLED - Question: did they put back what was taken, compared with normal for this market? How: lots re-posted at the exact prices that were just hit, within 1 second, divided by the lots eaten there, divided by that market's usual level; it is the second box row and the grey R label on bright bars. Example: buyers took 2,010 offers, sellers re-posted 8,624 at those prices = 4.3 times what was taken; ES normal is 2.2 times, so Refilled = 2.0x STRONG. How to read: 1.0x = the usual refill; STRONG = the market's top quarter (ES about 1.25x and up) = defense holding; weak = its bottom quarter (ES about 0.75x and down) = defense failing. READ (under the box) - Question: is the defense holding? At a new 10-bar low or high: C+R ? = a busy candle (2x volume) + Refill Effort 2.0x or more + Refilled STRONG on the defending side (bids at a low, offers at a high): 53% of lows / 46% of highs turned vs about 20% normally; strong refill alone: 34% / 28%; weak refill = defense failing, don't fade ?: only 10% / 8% turned. Example: 5:39 AM ES new high, offers Refill Effort 4.8x, Refilled 2.0x STRONG -> BEARISH ? C+R, price fell from 7,752 to 7,733. Measured on 7 markets and one week of order-book data: every refill read shows ? until it holds on new days. Box: the candle under the mouse while inside this pane, else the live candle. A closed candle whose side pulled at least 2.0x its 20-candle average and at least 1.2x what it added gets a pull marker at the bottom. Settings: Position (the box), Near ticks (0 = auto: how close to price counts).");
     p->setVersion("1.40.1");   // BF_VERSION
