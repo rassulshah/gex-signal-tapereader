@@ -52,5 +52,11 @@ int main() {
         for (int i = 0; i < 1000; ++i) { E.onBook(1000 + i * 30, 0, true, 10 + i, 1); }
         CHECK((int)E.K.size() == acc::BK_KEEP, "the book cells are capped");
         E.onBook(1000, 0, true, 10, 1); CHECK((int)E.K.size() == acc::BK_KEEP, "an old event is not counted"); CHECK(E.last() == nullptr, "no zone: last() is null"); }
+    {   long long t2 = 0; acc::Engine E = base(1, t2); const std::string f = acc::fileText(E, "ES", 0.25); const std::vector<acc::Zone> one = acc::parseFile(f);
+        std::vector<acc::Zone> two = one; two.insert(two.end(), one.begin(), one.end());                       // the doubled file of 2026-11-16
+        acc::Engine L; L.load(two, 0); CHECK(L.Z.size() == one.size() && one.size() == 1, "a doubled file loads each zone once (" << L.Z.size() << ")");
+        acc::Engine R2 = base(1, t2); const size_t n0 = R2.Z.size(); R2.Z[0].state = acc::BROKEN; R2.lastT = 0;   // decided, then the same candles come again
+        acc::Engine R3 = base(1, t2); for (const acc::Bar& b : R3.B) R2.onCandle(b);
+        CHECK(R2.Z.size() == n0, "replaying decided candles never adds a second copy of a zone (" << R2.Z.size() << ")"); }
     std::cout << "test_accum_120: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }

@@ -30,7 +30,7 @@
 #include <vector>
 
 namespace acc {
-static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-16 Rassul 12:44 CT "build") the two readings that separated the bases that HELD in the order-by-order test, now read from the live book: QUIET END (the defended prices are not hit in the last third: held 74% vs 49%, n 513) and the other side NOT BUILDING against the zone (its net adds <= 0.30x the lots traded: 71% vs 57%); both 76%, neither 48%. They grade the zone (n/2), they do not open or close it. The read shows the LAST zone when none is open (Rassul 12:45 "i dont see the accumulaiton or distibution").   // was "1.1.0"
+static const char* const VERSION = "1.2.1";   // (1.2.1, 2026-11-16 14:27 CT: a zone is never written twice - found on ES, every zone doubled after a restart)   // was "1.2.0";   // (1.2.0, 2026-11-16 Rassul 12:44 CT "build") the two readings that separated the bases that HELD in the order-by-order test, now read from the live book: QUIET END (the defended prices are not hit in the last third: held 74% vs 49%, n 513) and the other side NOT BUILDING against the zone (its net adds <= 0.30x the lots traded: 71% vs 57%); both 76%, neither 48%. They grade the zone (n/2), they do not open or close it. The read shows the LAST zone when none is open (Rassul 12:45 "i dont see the accumulaiton or distibution").   // was "1.1.0"
 static const int WIN_MIN = 5, WIN_MAX = 14, LOW_LOOK = 20, MAX_OPEN = 30, CONF_BACK = 3, KEEP_BARS = 400, KEEP_ZONES = 300;
 static const double NET_SHARE = 0.02, PROG_X = 0.25, ABS_X = 1.2, OFF_MAX = 0.30;
 static const int BK_SEC = 30, BK_KEEP = 300;                    // the book cells: 30 s each, 150 min kept (a zone spans at most 14 + 30 candles)
@@ -81,7 +81,9 @@ struct Engine {
     }
     // a restart: the zones as the file has them (decided ones never change), detection goes on after `last`; candles up to `last` only refill the history
     long long resume = 0;
-    void load(const std::vector<Zone>& zones, long long last) { Z = zones; nextId = 1; for (const Zone& z : Z) nextId = std::max(nextId, z.id + 1); resume = last; }
+    // (1.2.1) the same zone twice (same side, same first candle): only the first is kept - a restart that replayed candles it had already decided wrote every zone again (ES 2026-11-16: 12 lines for 6 zones)
+    bool has(int side, long long t0) const { for (const Zone& z : Z) if (z.side == side && z.t0 == t0) return true; return false; }
+    void load(const std::vector<Zone>& zones, long long last) { Z.clear(); for (const Zone& z : zones) if (!has(z.side, z.t0)) Z.push_back(z); nextId = 1; for (const Zone& z : Z) nextId = std::max(nextId, z.id + 1); resume = last; }
     void prime(const Bar& b) { if (b.t <= lastT || b.hi < b.lo || b.lo <= 0) return; lastT = b.t; B.push_back(b); while ((int)B.size() > KEEP_BARS) B.pop_front(); }
     int openOf(int side) const { for (int i = (int)Z.size() - 1; i >= 0; --i) if (Z[(size_t)i].side == side && Z[(size_t)i].state == OPEN) return i; return -1; }
     // lsRevRead's "Absorbed": bottom = the buyers absorbed (a low)
@@ -144,7 +146,8 @@ struct Engine {
             Zone z; z.id = nextId++; z.side = side; z.t0 = B[(size_t)a].t; z.t1 = last.t; z.lo = lo; z.hi = hi; z.absPx = best->px; z.absShown = best->shown; z.absLots = best->lots; z.absX = best->x;
             z.net = net; z.total = tot; z.drift = drift; z.first = first; z.bars = 0; z.band = std::max(2LL, (long long)std::llround(rng * 0.5)); measure(z, z.t0 - spb, last.t);
             long long c2 = far(last, side); for (int j = std::max(0, n - CONF_BACK); j < n; ++j) c2 = side > 0 ? std::max(c2, B[(size_t)j].hi) : std::min(c2, B[(size_t)j].lo);
-            z.confPx = c2; Z.push_back(z); return;
+            z.confPx = c2; if (has(z.side, z.t0)) { --nextId; return; }   /* (1.2.1) already decided once: never a second copy */
+            Z.push_back(z); return;
         }
     }
     // the zone the read is about now: an open one (the newer), else one decided CONFIRMED within the last `keep` candles
