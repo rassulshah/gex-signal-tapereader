@@ -1,5 +1,5 @@
 /*
- *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.9.0  (2026-11-16: accumulation / distribution zones + their read, AccumLogic.h; 0.8.0: lsSR runs in the background, SRBack.h; 0.7.0 2026-11-13)
+ *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.9.1  (2026-11-16: the accumulation read is always shown (the last zone), + the quiet end and the other side building, AccumLogic 1.2.0; 0.9.0: accumulation / distribution zones + their read, AccumLogic.h; 0.8.0: lsSR runs in the background, SRBack.h; 0.7.0 2026-11-13)
  *
  *  Rassul 2026-11-11 21:13-21:33 CT: "I want to know how i can have indicators that tell this story so i can understand how and why it
  *  reveresed"; "i have the poc of the candle in a pane. i want you to create a similar pane that has each candles poc and also makes a dash
@@ -92,11 +92,11 @@
 #include <vector>
 #include <sys/stat.h>
 
-#define RVS_VERSION "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.9.1"   // (0.9.1, 2026-11-16 Rassul 12:44-12:45 CT "build", "i dont see the accumulaiton or distibution": the read shows the LAST zone when none is open, in 3 lines when the pane is low; every order event feeds AccumLogic 1.2.0 (resting lots added / pulled / filled per price) for the quiet end and the other side building)   // was "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.9.0");
+    p->setVersion("0.9.1");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -290,6 +290,7 @@ public:
         e->six.onEvent(e->stamp, x.action, x.implied ? -1 : x.side, (long long)x.px, x.size, x.id, x.aggr, e->eng->book);   // (0.7.0) before the engine applies it (a MOD needs the order's old price)
         e->eng->onEvent(e->stamp * 1000, x.action, x.implied ? -1 : x.side, (long long)x.px, x.size, x.id, x.aggr); ++e->events;
         if (x.action == off::FILL) e->lastPx = (long long)x.px;
+        if (!x.implied && x.side >= 0 && x.action != off::MOD) e->ac.onBook(e->stamp, x.action == off::NEW ? 0 : x.action == off::DEL ? 1 : 2, x.side == off::BID, (long long)x.px, x.size);   /* (0.9.1) the book cells of the accumulation zones */
     }
     void openSession(S_& S, Ext& e, const std::string& sess, const std::string& mkt) {
         if (e.eng) flush(e);
@@ -549,12 +550,14 @@ public:
         setFont(fb); { const std::string t = std::string("Reversal Read v") + RVS_VERSION; const int w = put(t, x, y, rvh::C_WHITE, lim); if (w > 0) x += w + 10; }
         // (0.9.0) the accumulation / distribution read: a column right of the last candle; the story / Rev read moves right of it
         int accShift = 0; std::string accRead;
-        if (const acc::Zone* z = e.ac.current()) {
+        const acc::Zone* z = e.ac.current(); if (!z) z = e.ac.last();   /* (0.9.1) nothing open: the last zone, with its time and result */
+        if (z) {
             std::string dec; if (z->tDec > 0) { struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)z->tDec, &t)) dec = off::clock12(t.tm_hour, t.tm_min); }
-            const std::vector<acc::Line> L = acc::readLines(*z, S.tick, (int)S.spb, dec);
+            std::vector<acc::Line> L = acc::readLines(*z, S.tick, (int)S.spb, dec);
+            if (!L.empty() && (pane.bottom - pane.top - 2) / (int)L.size() < 12) L = acc::readCompact(*z, S.tick, (int)S.spb, dec);   /* (0.9.1) a low pane: 3 lines */
             for (size_t i = 0; i < L.size(); ++i) accRead += (i ? " > " : "") + L[i].text;
             const int y0 = pane.top + 2, room = pane.bottom - y0; const int rowH = L.empty() ? 17 : std::min(17, room / (int)L.size());
-            if (rowH >= 12) { setFont(rowH >= 16 ? fl : fb); int wmax = 0; for (const acc::Line& l : L) wmax = std::max(wmax, (int)getTextWidth(l.text.c_str(), -1));
+            if (rowH >= 10) { setFont(rowH >= 16 ? fl : fb); int wmax = 0; for (const acc::Line& l : L) wmax = std::max(wmax, (int)getTextWidth(l.text.c_str(), -1));
                 PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18;
                 if (v1 >= (int)count - 1 && xr + wmax <= pane.right - 6) {
                     for (size_t i = 0; i < L.size(); ++i) { const COLOR c = L[i].col == 3 ? (COLOR)acc::C_AMBER : L[i].col == 2 ? rvh::C_WHITE : L[i].col > 0 ? rvh::C_GREEN : rvh::C_RED; put(L[i].text, xr, y0 + (int)i * rowH, c, pane.right - 5); }

@@ -1,4 +1,4 @@
-// test_accum.cpp - AccumLogic.h 1.0.0.  g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. test_accum.cpp -o ta && ./ta [RevRead record] [bars json dump]
+// test_accum.cpp - AccumLogic.h 1.2.0.  g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. test_accum.cpp -o ta && ./ta [RevRead record] [bars json dump]
 #include "AccumLogic.h"
 #include <fstream>
 #include <iostream>
@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
         const acc::Zone z0 = E.Z.empty() ? acc::Zone() : E.Z[0];
         CHECK(z0.net > 0 && z0.drift >= 0 && z0.lo == 1020 && z0.hi >= 1030, "the zone's numbers: net " << z0.net << " drift " << z0.drift);
         const std::vector<acc::Line> L = acc::readLines(z0, 0.01, 180, "");
-        CHECK(L.size() == 5 && L[0].text == "Accum? 10.20" && L[0].col == 3 && L[3].text == "3. Absorbed 1.5x (60 / 40 shown)" && L[4].text.find("Above ") != std::string::npos, "the read while open: " << (L.empty() ? "" : L[0].text));
+        CHECK(L.size() == 6 && L[0].text == "Accum? 10.20" && L[0].col == 3 && L[3].text == "3. Absorbed 1.5x (60 / 40 shown)" && L[4].text == "4. Book: n/a" && L[5].text.find("Above ") != std::string::npos, "the read while open: " << (L.empty() ? "" : L[0].text));
         E.onCandle(bar(t, 1022, 1029, 1027, 90, 120)); t += 180;                    // inside, no decision
         CHECK(E.Z[0].state == acc::OPEN, "still open");
         E.onCandle(bar(t, 1026, 1040, 1038, 200, 90)); t += 180;                     // closes over the last 3 highs with positive delta
@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 10; ++i) { E.onCandle(bar(t, 1000, 1010, 1004, 10, 500)); t += 180; }
         CHECK(E.Z[0].state == acc::CONFIRMED && E.Z[0].lo == dec.lo && E.Z[0].hi == dec.hi && E.Z[0].tDec == dec.tDec, "a decided zone never changes");
         const std::vector<acc::Line> L2 = acc::readLines(dec, 0.01, 180, "10:51 AM");
-        CHECK(L2[0].text == "Accum 10.20" && L2[0].col == 1 && L2[4].text == "4. Confirmed 10:51 AM", "the read once confirmed");
+        CHECK(L2[0].text == "Accum 10.20" && L2[0].col == 1 && L2[5].text == "Confirmed 10:51 AM", "the read once confirmed");
     }
     {   // broken: a close through the absorbed price; expired: 30 candles without a decision; no absorbed read = no zone; up-close on negative delta = no confirm
         acc::Engine E; long long t = T0;
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < 6; ++i) { if (i == 3) E.onAbsorb(t - 60, false, 1092, 40, 70, 1.75); E.onCandle(bar(t, 1082, 1092, 1088, 130, 100)); t += 180; }
         CHECK(E.Z.size() == 1 && E.Z[0].side == -1 && E.Z[0].state == acc::OPEN, "distribution opens at a high");
         const std::vector<acc::Line> L = acc::readLines(E.Z[0], 0.25, 180, "");
-        CHECK(L[0].text == "Distrib? 273.00" && L[1].text.find("Buyers net") != std::string::npos && L[4].text.find("Below ") != std::string::npos, "the mirrored read: " << L[0].text);
+        CHECK(L[0].text == "Distrib? 273.00" && L[1].text.find("Buyers net") != std::string::npos && L[5].text.find("Below ") != std::string::npos, "the mirrored read: " << L[0].text);
         E.onCandle(bar(t, 1070, 1086, 1072, 80, 260)); t += 180;
         CHECK(E.Z[0].state == acc::CONFIRMED, "a selling close under the last 3 lows confirms distribution");
         // record round trip, torn / bad lines
