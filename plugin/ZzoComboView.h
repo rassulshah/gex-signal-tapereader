@@ -75,13 +75,17 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
     const int nB = (int)E.B.size();
     const double half = std::max(0.5, v.bw * 0.5);
     auto volAt = [&](int i) { return i < nB ? (double)E.B[(size_t)i].vol : (double)formVol; };   // the forming bar = index nB
-    // scale: the tallest visible running ratio, capped at 4x (so one opening wave does not flatten the day), at least 1x
-    double hi = 1.0;
+    // (3.0.2, Rassul 2026-11-16 15:03 CT "are you sure you are correctly calculating wave volume. i compared it to irt zzo using volume since last pivot")
+    // the column HEIGHT = the wave's running VOLUME itself (lots since the pivot, as IRT's ZZO draws it), scaled to the tallest visible wave -
+    // was the running volume / the median of the last 5 same-way waves, capped at 4x, which drew a 72k up-wave TALLER than a 153k down-wave.
+    // The ratio (3.9x) and the count stay as the labels.
+    double hi = 0.0;
     for (const Wave& w : waves) {
         if (!w.hasV || w.e < v.first || w.s > v.last) continue;
-        double run = 0; for (int i = w.s; i <= w.e; ++i) { run += volAt(i) / w.medV; if (i >= v.first && i <= v.last) hi = std::max(hi, run); }
+        double run = 0; for (int i = w.s; i <= w.e; ++i) { run += volAt(i); if (i >= v.first && i <= v.last) hi = std::max(hi, run); }
     }
-    hi = std::min(hi, 4.0); S.hi = hi;
+    if (!(hi > 0)) hi = 1.0;
+    S.hi = hi;
     const int span = std::max(1, bot - top - TH - 2);   // leave a text row above the tallest ramp for the ratio label
     auto Y = [&](double r) { return bot - (int)std::lround(std::min(r, hi) / hi * span); };
     { Prim p; p.k = Prim::FILL; p.x0 = v.l; p.x1 = v.r; p.y0 = p.y1 = bot; p.col = C.zero; S.p.push_back(p); }
@@ -97,7 +101,7 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
         // (2.6.0) the Cob bar of this wave (zcf::Finder, decided with the Cob / Cob2): "CB" in a box of the wave's colour over its column;
         long long tCb = 0; if (cf && !w.live && w.e >= 0 && (size_t)w.e < E.B.size()) { if (const zcf::Tag* tg = cf->find(E.B[(size_t)w.e].t, w.dir)) tCb = tg->tCb; }
         for (int i = w.s; i <= w.e; ++i) {
-            run += volAt(i) / w.medV;
+            run += volAt(i);
             if (i < v.first || i > v.last) continue;
             const double xc = v.X(i); const int y = Y(run);
             if (i >= 0 && i < nB) {
@@ -234,13 +238,13 @@ inline std::string comboStatus(const Engine& E, const std::string& mkt, int spb,
     std::string s = std::string("lsZzoCombo ") + zcf::COMBO_VERSION + " (engine " + VERSION + ")\nMARKET," + mkt + "," + std::to_string(spb) +
         "\nZIGZAG," + std::to_string(E.revBars) + "-bar reversal, High/Low (IRT ZIGZAG Min Price Change = " + std::to_string(E.revBars) + " bars)" +
         "\nSHOW_AB," + (E.showAb ? "on" : "off - logged only until the nightly proves it here") +
-        "\nRULES,volume ramp per wave vs the median of the last 5 same-way waves; ratio + count on 2.0x+ waves (count = its volume ratio beats the last N waves of its colour in a row, cap 50; weak logged, not drawn); Ab = absorption rule + pivot extreme 2 ticks >= 4% of the bar, shown with effort / result\n" +
+        "\nRULES,volume ramp per wave = the lots since the pivot (3.0.2: the height is the volume itself); the label = that volume vs the median of the last 5 same-way waves; ratio + count on 2.0x+ waves (count = its volume ratio beats the last N waves of its colour in a row, cap 50; weak logged, not drawn); Ab = absorption rule + pivot extreme 2 ticks >= 4% of the bar, shown with effort / result\n" +
         "BARS," + std::to_string(E.B.size()) + ",no VAP " + std::to_string(E.noVap) + ",VAP " + vap + "\n";
     int n = 0;
     for (size_t k = E.W.size(); k-- > 0 && n < 30; ++n) {
         const Wave& w = E.W[k]; if (w.s < 0) break;
         double er = 0; const bool hasEr = effortResult(w, er);
-        char b[320]; std::snprintf(b, sizeof b, "WAVE,%lld,%s,vol %s,count %s,E/R %s,extreme %s%s%s%s%s%s%s\n", E.B[(size_t)w.e].t, w.dir > 0 ? "UP" : "DN", volText(w).c_str(),
+        char b[320]; std::snprintf(b, sizeof b, "WAVE,%lld,%s,lots %lld,vol %s,count %s,E/R %s,extreme %s%s%s%s%s%s%s\n", E.B[(size_t)w.e].t, w.dir > 0 ? "UP" : "DN", (long long)w.vol, volText(w).c_str(),
             countText(w).c_str(), hasEr ? (std::to_string((int)std::lround(er * 10) / 10) + "." + std::to_string((int)std::lround(er * 10) % 10)).c_str() : "-",
             w.xsh < 0 ? "-" : (std::to_string((int)std::lround(w.xsh * 1000) / 10) + "." + std::to_string((int)std::lround(w.xsh * 1000) % 10) + "%").c_str(),
             w.ab ? (abHeavy(w) ? ",Ab" : ",Ab? (logged)") : "", w.cmx ? ",Cmx" : "", w.cob ? ",AR" : "", w.st ? ",ST" : "", w.cobTag == 1 ? ",CoB after sweep (logged)" : "", w.cobTag == 2 ? ",weak" : "");
