@@ -84,13 +84,23 @@ int main(int argc, char** argv) {
                 rule = rule && (r.side > 0 ? b.h <= top : b.l >= top) && std::fabs(pv / wv - r.ratio) < 1e-9; } }
         const bool one = cap && sep;
         int drawnCobs = 0; for (const cobs::Mark& m : E.marks) if (m.show && m.zOk) ++drawnCobs;
-        CHECK(n > 0 && n <= drawnCobs, "CoB pullback Revs found (" << n << " after " << drawnCobs << " drawn CoBs)"); CHECK(one, "up to 3 Revs per CoB, each on its own pullback (a new extreme between them)"); CHECK(multi >= 0, "second Revs: " << multi); CHECK(own, "each Rev belongs to a drawn CoB, at / after its bar and after the wave's end pivot");
+        CHECK(n > 0 && n <= 3 * drawnCobs, "CoB pullback Revs found (" << n << " after " << drawnCobs << " drawn CoBs)"); CHECK(one, "up to 3 Revs per CoB, each on its own pullback (a new extreme between them)"); CHECK(multi >= 0, "second Revs: " << multi); CHECK(own, "each Rev belongs to a drawn CoB, at / after its bar and after the wave's end pivot");
         CHECK(rule, "Rev rule: closes beyond the prior bar and its own open, pullback volume <= 0.5x the wave's, no close through the origin, inside the running extreme");
         int lines = 0; for (const std::string& l : E.out) if (l.rfind("REV,", 0) == 0) ++lines; CHECK(lines == n, "one REV record line per Rev");
         {   const size_t cut = B.size() * 2 / 3; cobs::Engine P; P.setMarket("ES", 0.25, 180); for (size_t i = 0; i < cut; ++i) P.addBar(B[i]); bool pre = true; size_t k = 0; for (const cobs::RevMark& r : E.revs) if (r.idx < (int)cut) { ++k; bool f = false; for (const cobs::RevMark& q : P.revs) f = f || (q.t == r.t && q.side == r.side && q.cobT == r.cobT); pre = pre && f; } CHECK(pre && k == P.revs.size(), "Revs never repaint (prefix run)"); }
         cobs::View v; v.l = 0; v.t = 0; v.r = 100000; v.b = 100000; v.first = 0; v.last = (int)E.B.size() - 1; v.X = [](int j) { return 10.0 + j * 4.0; }; v.Y = [](double p) { return 50000.0 - p * 4.0; };
         int lab = 0; bool side = true; for (const cobs::Prim& p : cobs::layout(E, v)) if (p.text == "Rev") { ++lab; side = side && (p.col == cobs::C_BULL || p.col == cobs::C_BEAR); } CHECK(lab == n && side, "a Rev label per Rev, green / red (" << lab << ")");
         const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.find("\nREV_RULES,1.8.0") != std::string::npos && st.find("\nREVS," + std::to_string(n) + "\n") != std::string::npos, "status: Rev rule + count"); }
-    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.8.0\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
+    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.8.1\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
+    {   // (1.8.1, independent review) every drawn CoB starts its pullback look exactly once (revOn); finished looks are pruned without a second
+        // walk: no (bar, CoB) has two Rev marks; the 3-hour lines never draw a broken level
+        std::map<std::pair<long long, long long>, int> seen; int dup = 0; for (const cobs::RevMark& r : E.revs) if (++seen[std::make_pair(r.t, r.cobT)] > 1) ++dup;
+        int started = 0, drawnM = 0; for (const cobs::Mark& m : E.marks) { if (m.show && m.zOk) ++drawnM; if (m.revOn) ++started; }
+        CHECK(dup == 0, "no duplicate Rev (" << E.revs.size() << " Revs)"); CHECK(started == drawnM, "every drawn CoB's look started once: " << started << " of " << drawnM); CHECK(E.revTr.size() <= 65, "open tracks bounded: " << E.revTr.size());
+        cobs::View v; v.l = 0; v.t = 0; v.r = 1000000; v.b = 1000000; v.first = 0; v.last = (int)E.B.size() - 1; v.X = [](int j) { return (double)j * 3; }; v.Y = [](double p) { return 1000000.0 - p * 100; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; };
+        int broken = 0, lines = 0;
+        for (const cobs::Prim& p : cobs::htfLayout(E, v)) { if (!p.line) continue; ++lines; const int i = (p.x0 + 2) / 3; if (i < 0 || i >= (int)E.hs.size()) continue; const cobs::HSnap& h = E.hs[(size_t)i]; const double px = (1000000.0 - p.y0) / 100.0;
+            const bool ok = (h.r1ok && std::fabs(h.r1 - px) < 0.011) || (h.r2ok && std::fabs(h.r2 - px) < 0.011) || (h.s1ok && std::fabs(h.s1 - px) < 0.011) || (h.s2ok && std::fabs(h.s2 - px) < 0.011); if (!ok) ++broken; }
+        CHECK(lines > 50 && broken == 0, "3-hour line pieces " << lines << ", on a broken level " << broken); }
     std::cout << "test_cobsignal_htf: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }

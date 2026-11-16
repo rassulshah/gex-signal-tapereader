@@ -1,5 +1,5 @@
 /********************************************************************************
- *  VolRead.cpp  --  Investor/RT RTX extension  lsVolRead "Volume Read" / lsRangeRead "Range Read" (RangeRead.cpp = this file + VR_RANGE)  1.1.0  (2026-11-15: Range pane highlight of BO / PB Rev / CoB Rev bars; 1.0.0 2026-11-15)
+ *  VolRead.cpp  --  Investor/RT RTX extension  lsVolRead "Volume Read" / lsRangeRead "Range Read" (RangeRead.cpp = this file + VR_RANGE)  1.1.1  (2026-11-15: 1.1.1 = review fixes (status text built once a second; lsBreakout file names by its own key); 1.1.0 = Range pane highlight of BO / PB Rev / CoB Rev bars; 1.0.0 2026-11-15)
  *
  *  Rassul 2026-11-14 21:58-22:05 CT ("a little reader for the volume and range ... BVG, BVR, BV ... and BVMax", "put the max stat on top
  *  then Bv then BV green annd then BVR"), 2026-11-15 16:07 / 17:06 CT ("i also want to implement the new volume and range indicators that
@@ -49,7 +49,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.1.0";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.1.1";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -70,7 +70,7 @@ struct VRState {
     std::string mkt, sym; int spb = 0; double tick = 0; long long tickKey = 0; bool keyed = false;
     vrr::Engine E; std::vector<RTDATE> raw; int off = 0;
     vrr::Bar form; bool haveForm = false;
-    std::string statusPath, statusBody; long long statusMs = -1; int drawn = 0;
+    std::string statusPath, statusBody; long long statusMs = -1, statusCk = -1; int drawn = 0;   // statusCk (1.1.1) = when the text was last built
     long long hlMs = -1; std::string hlSig;            // (1.1.0) when the signal files were last looked at / their stamps
 };
 
@@ -120,7 +120,7 @@ void VolRead::signals(VRState& S, long long now) {
     if (S.hlMs >= 0 && now - S.hlMs < 5000) return;
     S.hlMs = now;
     const std::string d = vrFlex(); if (d.empty() || S.E.LT.empty()) return;
-    const std::string mk = mkey::norm(S.mkt), base = d + VR_SEP "Breakout" VR_SEP + mk + "-" + S.sym + "-" + std::to_string(S.spb) + "-";
+    const std::string mk = mkey::norm(S.mkt), base = d + VR_SEP "Breakout" VR_SEP + vrr::boMarket(S.mkt) + "-" + vrr::boFileKey(S.sym) + "-" + std::to_string(S.spb) + "-";   // (1.1.1) lsBreakout's own file key
     const long day = (long)(S.E.LT.back() / 86400);
     std::vector<std::string> files; for (long k = day - 9; k <= day + 1; ++k) { files.push_back(base + "breakouts-" + std::to_string(k) + ".csv"); files.push_back(base + "pb-" + std::to_string(k) + ".csv"); }
     const std::string cob = d + VR_SEP "CobSignal" VR_SEP + mk + "-" + std::to_string(S.spb) + ".csv"; files.push_back(cob);
@@ -174,9 +174,9 @@ void VolRead::feed(VRState& S) {
 
 void VolRead::status(VRState& S, long long now) {
     if (S.statusPath.empty()) return;
-    if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
+    if (S.statusCk >= 0 && now - S.statusCk < 1000) return;                 // (1.1.1) the text is built at most once a second (was: on every calc between writes)
+    S.statusCk = now;
     const std::string body = vrr::statusText(S.E, mkey::norm(S.mkt), S.sym, S.spb) + "HOST," + VR_VERSION + "\nDRAWN," + std::to_string(S.drawn) + "\n";
-    if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     if (body == S.statusBody) { S.statusMs = now; return; }                // unchanged: no write
     S.statusMs = now; S.statusBody = body;
     vrPublish(S.statusPath, body);
@@ -226,10 +226,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers, no settings
 #ifdef VR_RANGE
-    p->setDescription("LRA Range Read v1.1.0 - its own pane: each bar's range (high - low) in grey, with a breakout candle of 1.2x ATR(13) or more, every PB Rev bar and every CoB pullback Rev bar in green (bullish) or red (bearish); BRMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BRMax, BR (bars in a row with a smaller range), BRG (green bars only), BRR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
+    p->setDescription("LRA Range Read v1.1.1 - its own pane: each bar's range (high - low) in grey, with a breakout candle of 1.2x ATR(13) or more, every PB Rev bar and every CoB pullback Rev bar in green (bullish) or red (bearish); BRMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BRMax, BR (bars in a row with a smaller range), BRG (green bars only), BRR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
 #else
-    p->setDescription("LRA Volume Read v1.1.0 - its own pane: each bar's volume, green / red, with BVMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BVMax, BV (bars in a row with a smaller volume), BVG (green bars only), BVR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
+    p->setDescription("LRA Volume Read v1.1.1 - its own pane: each bar's volume, green / red, with BVMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BVMax, BV (bars in a row with a smaller volume), BVG (green bars only), BVR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
 #endif
-    p->setVersion("1.1.0");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.1.1");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

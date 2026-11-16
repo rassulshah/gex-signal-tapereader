@@ -148,6 +148,8 @@ struct ZState {
     // (3.0.0) lsCobSignal's engine on the chart's own bars (fed as lsCobSignal feeds it: its own start, its own history) + the checklist
     cobs::Engine C; std::vector<RTDATE> craw; int coff = 0; bool cOk = false;
     std::vector<cck::Item> items; size_t itemsAt = (size_t)-1; zzd::XRead xr; std::string ckStatus;
+    long long statusCk = -1;                                     // (3.0.0, review) when the status text was last built
+    long long mkMs = -1; std::string mkSig, mkPath;              // (3.0.0, review) the overlay: when the pane's status was last looked at / its stamp / its path
 };
 
 class ZzoCombo : public cppExtension {
@@ -252,7 +254,13 @@ bool ZzoCombo::identify(ZState& S) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
         S.E.reset(); S.E.revBars = zzd::COMBO_REV_BARS; S.E.setMarket(mkt, spb); S.raw.clear(); S.off = 0; S.haveForm = false;   // (2.1.0) 3-bar ZigZag
         S.F.reset(); S.F.setMarket(mkt, spb); S.lastWaveT = -1; S.recSeen.clear(); S.recLoaded = false;   // (2.3.0)
-        S.C.reset(); S.cOk = spb > 0 && S.C.setMarket(mkt, tick, spb); S.craw.clear(); S.coff = 0; S.items.clear(); S.itemsAt = (size_t)-1; S.xr = zzd::XRead(); S.ckStatus.clear();   // (3.0.0)
+        { const std::string d0 = zdFlex(); S.mkPath = d0.empty() ? std::string() : d0 + ZD_SEP "ZzoCombo.status-" + mkt + "-" + std::to_string(spb) + ".txt"; S.mkMs = -1; S.mkSig.clear(); }
+#ifdef ZC_MARKS
+        S.C.reset(); S.cOk = false; S.craw.clear();   // the overlay runs no CoB engine: it reads the pane's status (feedCob)
+#else
+        S.C.reset(); S.cOk = spb > 0 && S.C.setMarket(mkt, tick, spb); S.craw.clear();
+#endif
+        S.coff = 0; S.items.clear(); S.itemsAt = (size_t)-1; S.xr = zzd::XRead(); S.ckStatus.clear();   // (3.0.0)
         const std::string d = zdFlex(); const std::string key = mkt + "-" + std::to_string(spb);
         S.statusPath = d.empty() ? std::string() : d + ZD_SEP ZD_NAME ".status-" + key + ".txt";
 #ifdef ZC_MARKS
@@ -308,6 +316,18 @@ void ZzoCombo::feed(ZState& S) {
 // (3.0.0) lsCobSignal's engine, fed exactly as CobSignal.cpp feeds it (closed bars, each once; a changed history = replay); its record
 // lines are dropped here (lsCobSignal writes the record). When a bar was added: the drawn CoBs with their checklist -> the pane's read.
 void ZzoCombo::feedCob(ZState& S) {
+#ifdef ZC_MARKS
+    {   // the overlay: the SR / CB bars of the last drawn CoBs from the pane's status file (lsZzoCombo on the same chart) - looked at every 5 s,
+        // read (bounded) only when its size / time changed; no engine here
+        const long long now = zdMs(); if (S.mkPath.empty() || (S.mkMs >= 0 && now - S.mkMs < 5000)) return;
+        S.mkMs = now; struct stat st; if (stat(S.mkPath.c_str(), &st) != 0) { if (!S.mkSig.empty()) { S.mkSig.clear(); S.items.clear(); } return; }
+        const std::string sig = std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime); if (sig == S.mkSig) return;
+        std::ifstream f(S.mkPath.c_str(), std::ios::binary); if (!f) return;
+        std::string txt(262144, '\0'); f.read(&txt[0], (std::streamsize)txt.size()); txt.resize((size_t)f.gcount());
+        if (txt.size() >= 262144) return;                                  // not a status file of ours
+        S.mkSig = sig; S.items = cck::parseMarks(txt); return;
+    }
+#endif
     if (!S.cOk) return;
     const long n = getBarCount(); if (n < 3) return;
     RTARRAYI times(barDateTime); RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose); RTARRAYI vo(barVolume);
@@ -361,7 +381,8 @@ void ZzoCombo::record(ZState& S) {
 
 void ZzoCombo::status(ZState& S, long long now) {
     if (S.statusPath.empty()) return;
-    if (S.statusMs >= 0 && now - S.statusMs < 1000) return;
+    if (S.statusCk >= 0 && now - S.statusCk < 1000) return;      // (3.0.0, review) the text is built at most once a second (was: on every calc between writes)
+    S.statusCk = now;
     const std::string body = zzd::comboStatus(S.E, S.mkt, S.spb, S.vapFault ? "FAULT - remove and re-add the indicator" : "ok") +
         "DRAWN,columns " + std::to_string(S.last.cols) + ",ratios " + std::to_string(S.last.ratios) + ",counts " + std::to_string(S.last.counts) + ",Ab " + std::to_string(S.last.ab) +
         ",Cmx " + std::to_string(S.last.cmx) + ",AR " + std::to_string(S.last.ar) + ",ST " + std::to_string(S.last.st) + ",Cob " + std::to_string(S.last.cob) + ",Lvp " + std::to_string(S.last.lvp) + ",Cob2 " + std::to_string(S.last.cob2) + ",CB " + std::to_string(S.last.cb) + ",SR " + std::to_string(S.last.sr) + ",box rows " + std::to_string(S.last.boxRows) + "\n" + S.ckStatus + S.F.statusText();
@@ -389,7 +410,7 @@ int ZzoCombo::draw(void) {
             RCT pane; pane.getPaneRect(false);
             int vs = 0, ve = (int)n - 1; if (getVisibleBars(&vs, &ve) != RTX_OK) { vs = 0; ve = (int)n - 1; }
             std::map<long long, int> sr; std::map<long long, std::pair<int, int>> cb;
-            for (const cck::Item& t : S->items) { if (t.srT) sr[t.srT] = t.side; if (t.cbT) cb[t.cbT] = std::make_pair(t.side, t.cbRank); }   // (3.0.0) the 3-hour-sweep CoBs (was: the 2.9.5 finder's tags)
+            for (const cck::Item& t : S->items) { if (t.srT) sr[t.srT] = t.side; if (t.cbT) cb[t.cbT] = std::make_pair(t.side, t.cbRank); }   // (3.0.0) the 3-hour-sweep CoBs, read from the pane's status (was: the 2.9.5 finder's tags)
             if (sr.empty() && cb.empty()) return RTX_OK;
             FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD; setFont(fb); const zzd::Colours C; const int TH = 12;
             const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom; int drawn = 0;
@@ -398,10 +419,10 @@ int ZzoCombo::draw(void) {
                 if (x0 < L || x0 + tw > R || y0 < T || y1 > Bt) return;
                 RCT r; r.set(zdC(x0), zdC(y0), zdC(x0 + tw + 1), zdC(y1 + 1)); r.draw(0, (COLOR)col, (COLOR)col, DRAW_OPAQUE, PAT_SOLID);
                 setTextColor((COLOR)0xFFFFFF); RCT q; q.set(zdC(x0 + 2), zdC(y0), zdC(x0 + tw), zdC(y1)); q.drawText(txt.c_str(), false, false); ++drawn; };
-            for (int i = std::max(vs, S->coff); i <= ve; ++i) {
-                const int j = i - S->coff; if (j < 0 || j >= (int)S->C.B.size()) continue;
-                const cobs::Bar& b = S->C.B[(size_t)j]; const auto a = sr.find(b.t); const auto c = cb.find(b.t); if (a == sr.end() && c == cb.end()) continue;
-                PNT p; p.set(i, 0.0f, kBarCenter); const int yh = (int)getVerticalDrawPosition((float)b.h), yl = (int)getVerticalDrawPosition((float)b.l);
+            for (int i = std::max(vs, S->off); i <= ve; ++i) {
+                const int j = i - S->off; if (j < 0 || j >= (int)S->F.F.size()) continue;
+                const zcf::FBar& b = S->F.F[(size_t)j]; const auto a = sr.find(b.t); const auto c = cb.find(b.t); if (a == sr.end() && c == cb.end()) continue;
+                PNT p; p.set(i, 0.0f, kBarCenter); const int yh = (int)getVerticalDrawPosition((float)((double)b.h * S->tick)), yl = (int)getVerticalDrawPosition((float)((double)b.l * S->tick));
                 if (a != sr.end()) { if (a->second > 0) badge("SR", (int)p.h, yl, true, C.up); else badge("SR", (int)p.h, yh - (c != cb.end() ? TH + 2 : 0), false, C.down); }   // (2.9.2, Rassul 18:12 "the bearish SR tab should be on top of the candle") a bullish Cob's stop run under its candle (2.7.1), a bearish one over it - above the CB when both sit on one candle
                 if (c != cb.end()) { const int d = c->second.first, rk = c->second.second; badge(rk >= 99 ? "CB99" : "CB40",   /* (2.9.5) a Cob bar always beats 40+ same-colour bars */ (int)p.h, yh, false, d > 0 ? C.up : C.down); }   // (2.7.1) always over the candle
             }
@@ -448,7 +469,7 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
 #endif
-    p->setDescription("LRA Cob Reader v3.0.0 (was ZZO Combo; 3.0.0 = the 3-hour-sweep CoBs of lsCobSignal with the checklist) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count, Cmx / AR / ST, Ab; CoB finder: Cob = a count 10+ wave from the RTH low / high after a key-level sweep that closed back, Lvp = its low-volume pullback. No settings.");
+    p->setDescription("LRA Cob Reader v3.0.0 (was ZZO Combo; 3.0.0 = the 3-hour-sweep CoBs of lsCobSignal with the checklist) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count; Cob = the CoB Signal's 3-hour-sweep CoB (a count 10+ wave whose origin swept a standing 3-hour S1 / S2 / R1 / R2 and came back through it), Lvp = its low-volume pullback; read box: Cob, Lvl, Check (3row, SMA, S1 / R1), Lvp, Warn (counter wave 0.8x+), Win. No settings.");
     p->setVersion("3.0.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }

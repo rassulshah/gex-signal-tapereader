@@ -37,6 +37,11 @@ int main(int argc, char** argv)
     CHECK(R.rows[1].v.rfind("R1 7,649.75", 0) == 0);
     // no Cob in the session = dashes
     { cobs::Engine Z; Z.setMarket("ES", 0.25, 180); const cck::Read N = cck::read(Z, cck::scan(Z)); CHECK(!N.any); CHECK(N.rows.size() == 6); for (const cck::Row& r : N.rows) CHECK(r.v == "-"); }
+    // (1.0.1) the overlay's read of the pane's status: the CK lines give back every item's side, CB bar + rank and SR bar; garbage is skipped
+    {   const std::string st = "lsZzoCombo 3.0.0\nMARKET,ES,180\n" + cck::statusText(E, v) + "CK,12x,BULL\nCK,5,SIDE,R1\nCK,7,BULL,S1,1,-,count 3,CB 9 40\nW,1,2,3\n";
+        const std::vector<cck::Item> m = cck::parseMarks(st); const size_t n0 = v.size() > 12 ? 12 : v.size(); CHECK(m.size() == n0);
+        bool same = m.size() == n0; for (size_t i = 0; same && i < m.size(); ++i) { const cck::Item& a = m[i]; const cck::Item& b = v[v.size() - n0 + i]; same = a.t == b.t && a.side == b.side && a.cbT == b.cbT && a.cbRank == b.cbRank && a.srT == b.srT; }
+        CHECK(same); CHECK(cck::parseMarks("").empty()); CHECK(cck::parseMarks("CK,").empty()); CHECK(cck::parseMarks(std::string(5000, 'C')).empty()); }
     // texts
     CHECK(cck::priceText(7649.75, 0.25) == "7,649.75"); CHECK(cck::priceText(28583.75, 0.25) == "28,583.75"); CHECK(cck::priceText(89.25, 0.01) == "89.25"); CHECK(cck::priceText(1.15235, 0.00005) == "1.15235"); CHECK(cck::priceText(3927.2, 0.1) == "3,927.2"); CHECK(cck::priceText(4.0125, 0.0005) == "4.0125");
     CHECK(cck::clock12(86400LL * 5 + 8 * 3600 + 15 * 60) == "8:15 AM"); CHECK(cck::clock12(86400LL * 5 + 12 * 3600) == "12:00 PM"); CHECK(cck::clock12(86400LL * 5 + 5 * 60) == "12:05 AM");

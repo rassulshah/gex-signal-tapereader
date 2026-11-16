@@ -1,6 +1,28 @@
 // test_volrange_logic.cpp - lsVolRead / lsRangeRead 1.0.0 logic suite (SDK-free).
 //   g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. test_volrange_logic.cpp -o tv && ./tv ../tests_cobsignal/cobsignal_es.csv [dump.txt]
 #include "VolRangeLogic.h"
+#include <cctype>
+// (1.1.1) BreakoutLogic.h bko::recFileKey / bko::recMarket, copied verbatim on 2026-11-15 (lines 1161-1178): the names lsBreakout really writes
+namespace bko {
+inline std::string recFileKey(const std::string& s) {
+    std::string out;
+    for (size_t i = 0; i < s.size() && out.size() < 24; ++i) { const unsigned char c = (unsigned char)s[i];
+        out.push_back((std::isalnum(c) || c == '-' || c == '_') ? (char)std::toupper(c) : '_'); }
+    return out.empty() ? "UNKNOWN" : out;
+}
+inline std::string recMarket(std::string r) {
+    for (size_t i = 0; i < r.size(); ++i) r[i] = (char)std::toupper((unsigned char)r[i]);
+    const auto has = [&r](const char* p) { return r.find(p) != std::string::npos; };
+    if (has("NQ")) return "NQ";
+    if (has("GC")) return "GC";
+    if (has("CL") || r == "QM") return "CL";
+    if (has("HG") || has("CP")) return "HG";
+    if (has("NG") || r == "QG") return "NG";
+    if (has("EU") || has("6E") || has("E6")) return "EU";
+    if (has("ES") || has("EP")) return "ES";
+    return recFileKey(r.substr(0, 8));
+}
+}
 #include <fstream>
 #include <iostream>
 static int passed = 0, failed = 0;
@@ -72,5 +94,14 @@ int main(int argc, char** argv) {
         const std::string st = vrr::statusText(E, "ES", "ESZ6", 180); CHECK(st.rfind(std::string("VERSION,") + vrr::VERSION + "\nPANE," + (mode ? "Range" : "Volume"), 0) == 0 && st.find("\nLAST,") != std::string::npos, "status text");
         if (argc > 2) { std::ofstream d(std::string(argv[2]) + (mode ? ".range" : ".vol")); for (const vrr::Prim& p : P) d << (p.fill ? "F" : p.bold ? "B" : "T") << "," << p.x0 << "," << p.y0 << "," << p.x1 << "," << p.y1 << "," << p.col << "," << p.text << "\n"; }
     }
+    {   // (1.1.1, independent review) lsBreakout's file-name parts are lsBreakout's own; an unreadable (zeroed) bar leaves the ATR alone
+        const char* syms[] = { "ESZ6", "@ES#", "esz6", "GC Z6.cme", "", "A-very-long-symbol-name-beyond-24-characters", "NQ_Z6" };
+        const char* roots[] = { "ES", "EP", "ENQ", "NQ", "CLE", "QM", "GCE", "CPE", "HG", "NGE", "QG", "EU6", "6E", "@ES", "XYZ", "" };
+        bool same = true; for (const char* s : syms) same = same && vrr::boFileKey(s) == bko::recFileKey(s); for (const char* r : roots) same = same && vrr::boMarket(r) == bko::recMarket(r);
+        CHECK(same, "boFileKey / boMarket = bko::recFileKey / bko::recMarket"); CHECK(vrr::boFileKey("@ES#") == "_ES_" && vrr::boMarket("EP") == "ES", "file key examples");
+        vrr::Engine A, B2; A.mode = B2.mode = vrr::RANGE; A.tick = B2.tick = 0.25; double px = 100;
+        for (int i = 0; i < 60; ++i) { vrr::Bar b; b.t = 1000 + i; b.o = px; b.h = px + 2; b.l = px - 2; b.c = px + (i % 2 ? 1 : -1); b.v = 10; A.addBar(b, 0); if (i == 30) { vrr::Bar z; z.t = b.t; z.o = z.h = z.l = z.c = 0; z.v = 0; B2.addBar(z, 0); } else B2.addBar(b, 0); px = b.c; }
+        double worst = 0; for (size_t i = 32; i < A.ATR.size(); ++i) worst = std::max(worst, std::fabs(A.ATR[i] - B2.ATR[i]) / A.ATR[i]);
+        CHECK(worst < 0.15, "an unreadable bar moves the ATR by under 15% (was: tens of times), worst " << worst); }
     std::cout << "test_volrange_logic: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }

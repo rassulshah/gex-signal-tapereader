@@ -12,8 +12,11 @@
 // AFTER IT:
 //   Lvp   lsCobSignal's low-volume pullback (one of the first 3 pullbacks, <= 1/3 of the wave's volume)
 //   Warn CW  the first counter wave carries >= 0.8x of the Cob wave's volume (running: it can switch on, never off)
-// WIN (the read box; the same year test): [checks under 3, 3 of 3][waiting, Lvp, CW]: 50 / 54 / 35 and 62 / 69 / 29
-//   (cases: 119 / 70 / 20 and 155 / 101 / 24; this header's own scan of the year bars reproduces the study's 3row / SMA / S1-R1 / CW numbers exactly).
+// WIN (the read box) - (1.0.1) from the nightly lra.cob3h_score's first run, 18 months of 3-min bars, 7 markets, 467 drawn CoBs:
+//   [checks under 3, 3 of 3][waiting, Lvp, CW]: 52 / 54 / 33 and 55 / 63 / 32 (cases 188 / 111 / 33 and 279 / 174 / 44). "Waiting" is every CoB
+//   of its group (its pullbacks are not known yet). On this longer sample the three checks together did NOT separate (55% vs 52%; the
+//   one-year, 6-market test had 62% vs 50%); the Lvp after 3 of 3 (63%) and the counter-wave warning (32-33%) did. The nightly re-checks
+//   every cell and reports one that is 10+ points off (20+ cases).
 //   A rate of reaching the 1.33 extension before the origin, before costs - a read, not a trade result.
 // NOT in the checklist (did not hold up on the year test): bearish breaks a prior pivot low, Cob bar 40+, climax at the origin, the
 //   heaviest candle at the Cob pivot, a counter bar bigger than any since the origin.
@@ -23,6 +26,8 @@
 #ifndef COB_CHECK_H
 #define COB_CHECK_H
 #include "CobSignalLogic.h"
+#include <cstdlib>
+#include <cstring>
 #include <map>
 #include <string>
 #include <utility>
@@ -30,10 +35,10 @@
 
 namespace cck {
 static const char* const COMBO_VERSION = "3.0.0";
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // 1.0.1: the Win table from the nightly's first run (18 months, 7 markets, 467 drawn CoBs) replaces the one-year table; parseMarks (the overlay reads the pane's status, no engine of its own)
 static const int ROW_MIN = 3, SMA_FAST = 50, SMA_SLOW = 100, CB_MIN = 40, CB_CAP = 150, CB_LOOK = 600, SR_LOOK = 60, ZZ_REV = 3;
 static const double CW_X = 0.8;
-static const int WIN[2][3] = { { 50, 54, 35 }, { 62, 69, 29 } };   // [checks < 3, 3 of 3][waiting, Lvp, CW]
+static const int WIN[2][3] = { { 52, 54, 33 }, { 55, 63, 32 } };   // [checks < 3, 3 of 3][waiting, Lvp, CW] (1.0.1: the 18-month run)
 
 struct Item {
     long long t = 0, tOrg = 0, tEnd = 0; int side = 0, idx = -1, p0 = -1, p1 = -1, cnt = -1; long sess = 0;
@@ -135,13 +140,34 @@ inline Read read(const cobs::Engine& E, const std::vector<Item>& items)
 inline std::string statusText(const cobs::Engine& E, const std::vector<Item>& items)
 {
     std::string o = std::string("COBCHECK,") + VERSION + ",Cobs = lsCobSignal " + cobs::VERSION + " rule (3-hour S / R sweep) drawn " + std::to_string(items.size()) +
-        ",checks 3row (3+ in a row) SMA (50 vs 100 at the origin) S1/R1 (not S2/R2),warn CW (first counter wave >= 0.8x volume),win [checks<3 | 3/3][wait Lvp CW] 50 54 35 | 62 69 29 (year test: 1.33 before the origin, before costs)\n";
+        ",checks 3row (3+ in a row) SMA (50 vs 100 at the origin) S1/R1 (not S2/R2),warn CW (first counter wave >= 0.8x volume),win [checks<3 | 3/3][wait Lvp CW] 52 54 33 | 55 63 32 (lra.cob3h_score, 18 months: 1.33 before the origin, before costs)\n";
     const size_t a = items.size() > 12 ? items.size() - 12 : 0; char b[320];
     for (size_t i = a; i < items.size(); ++i) { const Item& x = items[i];
         std::snprintf(b, sizeof b, "CK,%lld,%s,%s,%.10g,%s,count %d,3row %d,SMA %d,first %d,checks %d,Lvp %lld,CW %d %.2f %s,win %d,CB %lld %d,SR %lld\n", x.t, x.side > 0 ? "BULL" : "BEAR", x.lv.c_str(),
                       std::isfinite(x.lvPx) ? x.lvPx : 0.0, x.tag.empty() ? "-" : x.tag.c_str(), x.cnt, x.row3 ? 1 : 0, x.sma ? 1 : 0, x.first ? 1 : 0, x.checks, x.lvpAt, x.cw ? 1 : 0, x.cwX, x.cwDone ? "done" : "running", x.win, x.cbT, x.cbRank, x.srT);
         o += b; }
     (void)E; return o;
+}
+// (1.0.1, independent review: three identical engines per chart) lsZzoComboMarks runs no engine: it reads the CK lines of the pane's status
+// file (the last 12 drawn CoBs) - side, CB bar + rank, SR bar. Strict: a line that does not parse is skipped.
+inline std::vector<Item> parseMarks(const std::string& text)
+{
+    std::vector<Item> out; size_t a = 0;
+    while (a < text.size()) {
+        size_t b = text.find('\n', a); if (b == std::string::npos) b = text.size();
+        const std::string ln = text.substr(a, b - a); a = b + 1;
+        if (ln.compare(0, 3, "CK,") != 0) continue;
+        Item x; char* e = nullptr; x.t = std::strtoll(ln.c_str() + 3, &e, 10); if (!e || *e != ',' || x.t <= 0) continue;
+        if (std::strncmp(e + 1, "BULL,", 5) == 0) x.side = 1; else if (std::strncmp(e + 1, "BEAR,", 5) == 0) x.side = -1; else continue;
+        const size_t c = ln.find(",CB "), r = ln.find(",SR ");
+        if (c == std::string::npos || r == std::string::npos || r < c) continue;
+        char* e2 = nullptr; x.cbT = std::strtoll(ln.c_str() + c + 4, &e2, 10); if (!e2 || *e2 != ' ') continue;
+        x.cbRank = (int)std::strtol(e2 + 1, &e2, 10); if (!e2 || *e2 != ',') continue;
+        x.srT = std::strtoll(ln.c_str() + r + 4, &e2, 10); if (!e2 || (*e2 != 0 && *e2 != '\r')) continue;
+        if (x.cbT < 0 || x.srT < 0 || x.cbRank < 0) continue;
+        out.push_back(x);
+    }
+    return out;
 }
 } // namespace cck
 #endif

@@ -1622,7 +1622,7 @@ const std::vector<klv::Merged>& DealerProfile::nativeLevels(const std::string& m
         cs.htfLine.clear(); cs.htfAdded = 0;
         if (tk > 0 && hsr::periodOk(per) && per < hsr::SECS) {
             hsr::Walk W; hsr::Snap sn;
-            for (size_t i = 0; i < B.size(); ++i) { hsr::Bar q; q.t = (long long)B[i].days * 86400LL + (long long)B[i].endSec; q.h = B[i].h; q.l = B[i].l; q.c = B[i].c; sn = W.add(q, per); }
+            for (size_t i = 0; i < B.size(); ++i) { hsr::Bar q; q.t = (long long)B[i].days * 86400LL + (long long)B[i].endSec; q.h = B[i].h; q.l = B[i].l; q.c = B[i].c; const hsr::Snap x = W.add(q, per); if (x.dir != 0) sn = x; }   // an unreadable bar keeps the levels as they stood (review)
             cs.htfAdded = hsr::addTo(K.v, hsr::standing(sn, tk), tk);
             cs.htfLine = hsr::statusText(sn, tk, (int)W.HB.size(), per);
         }

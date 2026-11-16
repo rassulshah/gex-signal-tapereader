@@ -34,6 +34,12 @@ int main(int argc, char** argv)
         std::printf("after break: r1 %.2f ok %d r2 %.2f ok %d s1 %.2f ok %d\n", s.r1, s.r1ok, s.r2, s.r2ok, s.s1, s.s1ok);
         CHECK(!(s.r1 == 101 && s.r1ok)); CHECK(!(s.r2 == 104 && s.r2ok)); (void)anyR;
     }
+    // 2b. (review) a 3-hour chart: the short last bar of the session (14:00 - 16:00, stamped 16:00) is its own bar, never merged into 11 - 14
+    {   hsr::Walk W; hsr::Bar b; const long long day = 86400LL * 200;
+        b.t = day + 14 * 3600; b.h = 10; b.l = 5; b.c = 9; W.add(b, 10800); b.t = day + 16 * 3600; b.h = 12; b.l = 8; b.c = 11; W.add(b, 10800); b.t = day + 20 * 3600; b.h = 13; b.l = 9; b.c = 12; W.add(b, 10800);
+        CHECK(W.HB.size() == 3); CHECK(W.HB[0].h == 10 && W.HB[1].h == 12 && W.HB[2].h == 13);
+        hsr::Walk V; b.t = day + 14 * 3600 - 180; b.h = 10; b.l = 5; b.c = 9; V.add(b, 180); b.t = day + 14 * 3600; b.h = 11; b.l = 6; b.c = 9; V.add(b, 180); b.t = day + 14 * 3600 + 180; b.h = 12; b.l = 7; b.c = 9; V.add(b, 180);
+        CHECK(V.HB.size() == 2 && V.HB[0].h == 11 && V.HB[1].h == 12); }   // 3-min bars: 13:57-14:00 ends the 11-14 bar, 14:00-14:03 starts the next
     // 3. periods
     CHECK(hsr::periodOk(180)); CHECK(hsr::periodOk(3600)); CHECK(hsr::periodOk(10800)); CHECK(!hsr::periodOk(14400)); CHECK(!hsr::periodOk(0)); CHECK(!hsr::periodOk(420));
     {   hsr::Walk W; hsr::Bar b; b.t = 1000; b.h = NAN; b.l = 1; b.c = 1; hsr::Snap s = W.add(b, 180); CHECK(s.dir == 0 && W.HB.empty()); }

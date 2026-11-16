@@ -37,7 +37,9 @@ struct Walk {
     Snap add(const Bar& b, int perSec) {
         Snap o;
         if (!periodOk(perSec) || !std::isfinite(b.h) || !std::isfinite(b.l) || !std::isfinite(b.c)) return o;
-        const long long k = floorDiv(b.t - perSec - 7200, SECS);              // 17:00 = 7200 s past a 3-hour boundary of the day
+        // 17:00 = 7200 s past a 3-hour boundary of the day. (review) On a 3-hour chart every chart bar IS a 3-hour bar - also the short
+        // last one of the session (14:00 - 16:00), which a clock bucket would merge into the bar before it.
+        const long long k = perSec == SECS ? (HB.empty() ? 0 : HB.back().k + 1) : floorDiv(b.t - perSec - 7200, SECS);
         if (HB.empty() || k != HB.back().k) {
             if (!HB.empty()) step(HB, (int)HB.size() - 1, d, ext, piv);       // the bar that just completed joins the walk
             HBar n; n.k = k; n.h = b.h; n.l = b.l; n.c = b.c; HB.push_back(n);

@@ -12,6 +12,7 @@
 //   Read box (left of the pane): title, Max, BV, BVG, BVR for the last CLOSED bar; the other colour's row shows "-".
 #pragma once
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -22,7 +23,7 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-15 20:38-20:47 CT Rassul "for the range indicator , when there is a bo that has a range of 1.2*ATR or more as well
+static const char* const VERSION = "1.1.1";   // (1.1.1, 2026-11-15 independent review: lsBreakout's record files are found by lsBreakout's own file key (boMarket / boFileKey); an unreadable bar no longer inflates the ATR)   // was "1.1.0";   // (1.1.0, 2026-11-15 20:38-20:47 CT Rassul "for the range indicator , when there is a bo that has a range of 1.2*ATR or more as well
 // as a pb rev bar ... i want it highlighted in green or red ddepending on whether it is bullish or bearish", "for PB rev do it whenever there is a rev signal also", mockup
 // FNJNiY1fR9JBJsU18aZvg4 v2, "build") RANGE pane: bars grey; a BO / BD candle (lsBreakout's record) whose range is >= 1.2 x ATR(13) of the bar before, every PB Rev bar
 // (lsBreakout's record) and every CoB pullback Rev bar (lsCobSignal's record) in green (bullish) / red (bearish). A Rev wins over a BO on the same bar. Volume pane unchanged.
@@ -75,6 +76,25 @@ struct Bar { long long t = 0; double o = 0, h = 0, l = 0, c = 0, v = 0; };
 struct Stat { int all = 0, same = 0; bool green = false; int mx() const { return std::max(all, same); } };
 inline std::string fm(int n) { return n >= CAP ? std::string("99+") : std::to_string(n); }
 
+// (1.1.1) lsBreakout's record file name parts, the same rules as BreakoutLogic.h bko::recFileKey / bko::recMarket (tests_volrange compares them)
+inline std::string boFileKey(const std::string& s) {
+    std::string out;
+    for (size_t i = 0; i < s.size() && out.size() < 24; ++i) { const unsigned char c = (unsigned char)s[i];
+        out.push_back((std::isalnum(c) || c == '-' || c == '_') ? (char)std::toupper(c) : '_'); }
+    return out.empty() ? "UNKNOWN" : out;
+}
+inline std::string boMarket(std::string r) {
+    for (size_t i = 0; i < r.size(); ++i) r[i] = (char)std::toupper((unsigned char)r[i]);
+    const auto has = [&r](const char* p) { return r.find(p) != std::string::npos; };
+    if (has("NQ")) return "NQ";
+    if (has("GC")) return "GC";
+    if (has("CL") || r == "QM") return "CL";
+    if (has("HG") || has("CP")) return "HG";
+    if (has("NG") || r == "QG") return "NG";
+    if (has("EU") || has("6E") || has("E6")) return "EU";
+    if (has("ES") || has("EP")) return "ES";
+    return boFileKey(r.substr(0, 8));
+}
 struct Engine {
     int mode = VOL; double tick = 0.25;
     std::vector<double> V; std::vector<char> G; std::vector<long long> T; std::vector<Stat> S;   // closed bars only
@@ -109,10 +129,11 @@ struct Engine {
         return s;
     }
     void addBar(const Bar& b, long long localT = 0) { const double x = valueOf(b); const bool g = b.c >= b.o; S.push_back(statFor(x, g, (int)V.size())); V.push_back(x); G.push_back(g ? 1 : 0); T.push_back(b.t);
-        const double r = std::isfinite(b.h - b.l) && b.h > b.l ? b.h - b.l : 0.0; const double tr = std::isfinite(prevC) ? std::max(r, std::max(std::fabs(b.h - prevC), std::fabs(b.l - prevC))) : r;
+        const bool dead = b.h == 0 && b.l == 0 && b.c == 0;            // (1.1.1) an unreadable bar (the host zeroes it): no true range, the last real close stays
+        const double r = std::isfinite(b.h - b.l) && b.h > b.l ? b.h - b.l : 0.0; const double tr = dead ? 0.0 : std::isfinite(prevC) ? std::max(r, std::max(std::fabs(b.h - prevC), std::fabs(b.l - prevC))) : r;
         const int n = (int)PR.size(); double a = 0;                    // Wilder: the mean of the first HL_ATR_N true ranges, then (prev * (N - 1) + TR) / N
         if (n < HL_ATR_N) { trSum += tr; a = n == HL_ATR_N - 1 ? trSum / HL_ATR_N : 0; } else a = (ATR[(size_t)n - 1] * (HL_ATR_N - 1) + tr) / HL_ATR_N;
-        PR.push_back(r); ATR.push_back(a); LT.push_back(localT); prevC = b.c; }
+        PR.push_back(r); ATR.push_back(a); LT.push_back(localT); if (!dead && std::isfinite(b.c)) prevC = b.c; }
     Stat forming(const Bar& b) const { return statFor(valueOf(b), b.c >= b.o, (int)V.size()); }
 };
 

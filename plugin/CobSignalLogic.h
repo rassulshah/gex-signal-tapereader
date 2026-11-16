@@ -50,7 +50,7 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
+static const char* const VERSION = "1.8.1";   // (1.8.1, 2026-11-15 independent review: the Rev tracks are pruned safely (a started CoB is flagged, never re-walked); the 3-hour lines show STANDING levels only (as lsHtfSR and the Limit Profile); one Rev label per bar and side)   // was "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
 // was "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
 // was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
 // was "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
@@ -73,6 +73,7 @@ struct Mark {
     long long t = 0; int idx = -1; int side = 0;     // side +1 bull, -1 bear
     std::string levels; double dratio = 0, ext = 0, adr = 0; int legStart = -1, legEnd = -1;
     bool r = false, v = false; int rBar = -1, vBar = -1, rN = 0, vN = 0;
+    bool revOn = false;                 // (1.8.1) its pullback look was started (once: a pruned track is never re-created)
     bool phOnly = false, show = true;   // (1.1.0) PHH / PHL the only level swept; drawn (false = recorded only)
     // (1.4.0) the ZZO wave filter: the CoB's wave on the ZZO Combo engine (3-bar ZigZag, the forming wave after the running extreme);
     // zOk once its count reaches ZZO_COB_MIN at the CoB bar or a later bar of the same wave; drawn only then (decided once, never undone)
@@ -320,10 +321,9 @@ struct Engine {
     }
     // (1.8.0) start a pullback look for every newly drawn CoB, then walk each open look bar by bar through bar j
     void revStep(int j) {
-        for (const Mark& m : marks) {
-            if (!m.show || !m.zOk || m.legStart < 0 || m.legEnd <= m.legStart || m.legEnd >= (int)B.size()) continue;
-            bool have = false; for (const RevTrack& x : revTr) if (x.cobT == m.t && x.side == m.side) { have = true; break; }
-            if (have) continue;
+        for (Mark& m : marks) {
+            if (m.revOn || !m.show || !m.zOk || m.legStart < 0 || m.legEnd <= m.legStart || m.legEnd >= (int)B.size()) continue;
+            m.revOn = true;
             RevTrack x; x.cobT = m.t; x.cobIdx = m.idx; x.p0 = m.legStart; x.p1 = m.legEnd; x.side = m.side; x.q = m.legEnd + 1; x.topIdx = m.legEnd; x.ext = m.ext;
             x.top = m.side > 0 ? B[(size_t)m.legEnd].h : B[(size_t)m.legEnd].l; x.pe = x.top;
             for (int i = m.legStart + 1; i <= m.legEnd; ++i) x.waveVol += std::isfinite(B[(size_t)i].v) && B[(size_t)i].v > 0 ? B[(size_t)i].v : 0;
@@ -347,7 +347,7 @@ struct Engine {
                 x.pbVol += std::isfinite(b.v) && b.v > 0 ? b.v : 0;
             }
         }
-        if (revTr.size() > 64) { std::vector<RevTrack> keep; for (const RevTrack& x : revTr) if (!x.done || keep.size() + 32 > revTr.size()) keep.push_back(x); if (keep.size() < revTr.size() && keep.size() >= 32) revTr.swap(keep); }
+        if (revTr.size() > 64) { std::vector<RevTrack> keep; for (const RevTrack& x : revTr) if (!x.done) keep.push_back(x); revTr.swap(keep); }   // (1.8.1) finished looks go; a started CoB carries revOn, so none is ever walked twice
     }
     int lastLowPivot = -1;
     bool wave3 = true; size_t wSeen = 0; long long lastWaveT = 0; std::string rootRaw;                        // (1.6.0) the 3-bar completed-wave CoB (false = the 1.5.x 1-bar pause rule)
@@ -592,8 +592,10 @@ inline std::vector<Prim> layout(const Engine& E, const View& v)
         P.push_back(p); used.push_back(std::make_pair((int)x, y));
     }
     // (1.8.0) the CoB pullback Rev: green "Rev" on top of the bar for a bull CoB, red under it for a bear CoB (as the PB Rev), never on another label
+    std::vector<long long> revAt;                    // (1.8.1) one "Rev" per bar and side (two CoBs can give a Rev on the same bar)
     for (const RevMark& m : E.revs) {
         if (m.idx < v.first || m.idx > v.last || m.idx >= (int)E.B.size()) continue;
+        { const long long key = (long long)m.idx * 2 + (m.side > 0 ? 1 : 0); bool dup = false; for (long long q : revAt) if (q == key) { dup = true; break; } if (dup) continue; revAt.push_back(key); }
         const Bar& b = E.B[(size_t)m.idx]; const std::string s = "Rev"; const int w = v.textW ? v.textW(s) : 21, h = 14; const double x = v.X(m.idx); const bool above = m.side > 0;
         int y = above ? (int)std::lround(v.Y(b.h)) - COB_OFF - h : (int)std::lround(v.Y(b.l)) + COB_OFF;
         for (int k = 0; k < 3; ++k) { bool clash = false; for (auto& u : used) if (std::abs(u.first - (int)x) < w && std::abs(u.second - y) < h) clash = true; if (!clash) break; y += above ? -16 : 16; }
@@ -701,7 +703,8 @@ inline std::vector<Prim> htfLayout(const Engine& E, const View& v)
     static const char* const NM[4] = { "R1", "R2", "S1", "S2" };
     for (int q = 0; q < 4; ++q) {
         auto val = [&](int i) { const HSnap& h = E.hs[(size_t)i]; const double x = q == 0 ? h.r1 : q == 1 ? h.r2 : q == 2 ? h.s1 : h.s2; const double base = q == 1 ? h.r1 : q == 3 ? h.s1 : NAN;
-            return (std::isfinite(x) && !(std::isfinite(base) && std::fabs(x - base) < E.tick * 0.25)) ? x : NAN; };
+            const bool ok = q == 0 ? h.r1ok : q == 1 ? h.r2ok : q == 2 ? h.s1ok : h.s2ok; const bool baseOk = q == 1 ? h.r1ok : q == 3 ? h.s1ok : false;   // (1.8.1) standing levels only: a broken level can no longer give a CoB
+            return (ok && std::isfinite(x) && !(baseOk && std::isfinite(base) && std::fabs(x - base) < E.tick * 0.25)) ? x : NAN; };
         int i = a;
         while (i <= b) {
             const double x = val(i); if (!std::isfinite(x)) { ++i; continue; }

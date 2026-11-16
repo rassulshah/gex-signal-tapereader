@@ -434,3 +434,15 @@ Rules (every new or changed indicator):
   more than 6x the small one. It FAILS lsLimitProfile 2.63.0 (2.0 creates + 2.0 renames per redraw) and passes 2.64.0 and lsStepTrend
   1.1.0. The nightly lra.irt_perf 1.1.0 scores the same thing live (ms per redraw against each indicator's own 7-day normal, SLOWER with
   the build it started with, HEAVY above 10 ms a redraw) and puts it first in the status email + research-artifacts/irt_perf/FIX-QUEUE.md.
+- (2026-11-15, lsLimitProfile 2.66.0) A VERSION BUMP OF A PLUGIN WITH A SETTINGS TABLE ALSO BUMPS PLUGIN_VERSION IN ITS <Name>Settings.h. The settings
+  contract (tests_settings/settings_contract.cpp) checks setVersion("<PLUGIN_VERSION>") in the source; bumping DealerProfile.cpp alone failed it
+  and a failed contract blocks EVERY build (lsHtfSR waited). It also exposed RevReadSettings.h still at 0.5.0 against RevRead.cpp 0.7.0 - latent
+  because RevRead.cpp is not in SETSRC, so the contract had not re-run. Rule: after any version bump run the contract locally
+  (g++ settings_contract.cpp; ./sc <plugin dir>) and read out\BUILD-STATUS.txt "SETTINGS CONTRACT" after the commit.
+- (2026-11-15, independent review of the day's builds) FOUND AND FIXED: (1) a status throttle keyed on the last WRITE rebuilt the status text on
+  every calc for 29 of 30 s (lsVolRead / lsRangeRead O(bars), lsCobSignal, lsZzoCombo) - throttle on the last BUILD (statusCk); (2) a prune that
+  could re-create finished tracks (lsCobSignal revTr) - flag what was started on its owner (Mark.revOn), then prune freely; (3) another
+  indicator's record file must be found with THAT indicator's own key function (lsRangeRead used the raw symbol, lsBreakout writes
+  recFileKey(sym)); (4) a clock bucket for higher-timeframe bars merges a short session-end bar on a chart of that timeframe - one chart bar =
+  one bar there (HtfSr.h); (5) a loop that keeps "the last result" must skip an empty result from an unreadable bar; (6) an overlay twin of a
+  pane must not run a second copy of a heavy engine - it reads the pane's status (lsZzoComboMarks: cck::parseMarks).
