@@ -1,5 +1,5 @@
 /********************************************************************************
- *  VolRead.cpp  --  Investor/RT RTX extension  lsVolRead "Volume Read" / lsRangeRead "Range Read" (RangeRead.cpp = this file + VR_RANGE)  1.2.0  (2026-11-16: 1.2.0 = the read box follows the mouse (Rassul 05:49 CT "the values in the infobox should change as my mouse hovers on different bars in the pane"): the bar under the mouse while it is in the pane, the last closed bar otherwise; 1.1.1 = review fixes (status text built once a second; lsBreakout file names by its own key); 1.1.0 = Range pane highlight of BO / PB Rev / CoB Rev bars; 1.0.0 2026-11-15)
+ *  VolRead.cpp  --  Investor/RT RTX extension  lsVolRead "Volume Read" / lsRangeRead "Range Read" (RangeRead.cpp = this file + VR_RANGE)  1.3.0  (2026-11-16: 1.3.0 = both panes mark notable bars - CB / SR (Cob Reader), Bk / Sw of a key, volume or 3-hour level, Rev, Ct, P, biggest in 50+ (Rassul 05:55-06:18 CT; rules in VolRangeLogic.h); 1.2.0 = the read box follows the mouse (Rassul 05:49 CT "the values in the infobox should change as my mouse hovers on different bars in the pane"): the bar under the mouse while it is in the pane, the last closed bar otherwise; 1.1.1 = review fixes (status text built once a second; lsBreakout file names by its own key); 1.1.0 = Range pane highlight of BO / PB Rev / CoB Rev bars; 1.0.0 2026-11-15)
  *
  *  Rassul 2026-11-14 21:58-22:05 CT ("a little reader for the volume and range ... BVG, BVR, BV ... and BVMax", "put the max stat on top
  *  then Bv then BV green annd then BVR"), 2026-11-15 16:07 / 17:06 CT ("i also want to implement the new volume and range indicators that
@@ -50,7 +50,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.2.0";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.3.0";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -74,6 +74,7 @@ struct VRState {
     std::string statusPath, statusBody; long long statusMs = -1, statusCk = -1; int drawn = 0;   // statusCk (1.1.1) = when the text was last built
     int hov = -1; pc::Tracker cur;                     // (1.2.0) the chart bar under the mouse (-1 = not in this pane) and where the pane sits on the screen
     long long hlMs = -1; std::string hlSig;            // (1.1.0) when the signal files were last looked at / their stamps
+    long long lvMs = -1; std::string lvSig;            // (1.3.0) the same for the level files and the Cob Reader status
 };
 
 class VolRead : public cppExtension {
@@ -118,9 +119,10 @@ static bool vrSlurp(const std::string& path, size_t cap, std::string& out) {
     std::ifstream f(path.c_str(), std::ios::binary | std::ios::ate); if (!f) return false; std::streamoff sz = (std::streamoff)f.tellg(); if (sz < 0) return false;
     const std::streamoff from = sz > (std::streamoff)cap ? sz - (std::streamoff)cap : 0; f.seekg(from); out.resize((size_t)(sz - from)); if (!out.empty()) f.read(&out[0], (std::streamsize)out.size()); out.resize((size_t)f.gcount()); return true;
 }
+static void vrMarks(VRState& S, long long now);
 void VolRead::signals(VRState& S, long long now) {
-#ifdef VR_RANGE
-    S.E.hlOn = true;
+    S.E.hlOn = true;                                     // (1.3.0) both panes
+    vrMarks(S, now);
     if (S.hlMs >= 0 && now - S.hlMs < 5000) return;
     S.hlMs = now;
     const std::string d = vrFlex(); if (d.empty() || S.E.LT.empty()) return;
@@ -135,9 +137,27 @@ void VolRead::signals(VRState& S, long long now) {
     for (size_t i = 0; i + 1 < files.size(); ++i) { if (!vrSlurp(files[i], 512 * 1024, txt)) continue; if (i % 2 == 0) vrr::parseBo(txt, raw); else vrr::parsePbRev(txt, raw); }
     if (vrSlurp(cob, 4 * 1024 * 1024, txt)) vrr::parseCobRev(txt, loc);
     S.E.hlRaw.swap(raw); S.E.hlLocal.swap(loc);
-#else
-    (void)S; (void)now;
-#endif
+}
+// (1.3.0) the levels (lsLimitProfile's LRA-KeyLevels-<MKT>-hist.csv = one line per past session, LRA-KeyLevels-<MKT>.csv = the running session) and
+// the Cob Reader pane's status (CK lines: the CB / SR bars of its last Cobs). Looked at every 5 s, read (bounded) only when a size / time changed.
+static void vrMarks(VRState& S, long long now) {
+    if (S.lvMs >= 0 && now - S.lvMs < 5000) return;
+    S.lvMs = now;
+    const std::string d = vrFlex(); if (d.empty() || S.E.LT.empty()) return;
+    const std::string mk = mkey::norm(S.mkt);
+    const std::string fh = d + VR_SEP "LRA-KeyLevels-" + mk + "-hist.csv", fl = d + VR_SEP "LRA-KeyLevels-" + mk + ".csv", fc = d + VR_SEP "ZzoCombo.status-" + S.mkt + "-" + std::to_string(S.spb) + ".txt";
+    const long long day = vrr::sessionDay(S.E.LT.back());
+    std::string sig = std::to_string(day) + ";"; for (const std::string* p : { &fh, &fl, &fc }) { struct stat st; if (stat(p->c_str(), &st) == 0) sig += std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime) + ";"; else sig += "-;"; }
+    if (sig == S.lvSig) return;
+    S.lvSig = sig;
+    std::string txt; std::map<long long, std::vector<double>> days;
+    if (vrSlurp(fh, 1024 * 1024, txt)) vrr::parseLvHist(txt, days);
+    if (vrSlurp(fl, 64 * 1024, txt)) { long long at = 0; std::vector<double> live; const long long wall = (long long)std::time(nullptr);
+        if (vrr::parseLvLive(txt, at, live) && !live.empty() && wall - at <= 6 * 3600 && at - wall <= 600) days[day] = live; }   // the running session: the live levels win
+    for (const auto& kv : S.E.lvDay) if (!days.count(kv.first)) days[kv.first] = kv.second;                                     // a day once known stays known
+    S.E.lvDay.swap(days);
+    std::vector<vrr::CobIt> cobs; if (vrSlurp(fc, 256 * 1024, txt)) vrr::parseCk(txt, cobs);
+    if (!cobs.empty()) S.E.setCobs(cobs);
 }
 
 bool VolRead::identify(VRState& S) {
@@ -150,7 +170,7 @@ bool VolRead::identify(VRState& S) {
     const long long tk = std::llround(tick * 1e9);
     if (!S.keyed || mkt != S.mkt || sym != S.sym || spb != S.spb || tk != S.tickKey) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.tick = tick; S.tickKey = tk; S.keyed = true;
-        S.E.reset(); S.E.mode = VR_MODE; S.E.tick = tick; S.raw.clear(); S.off = 0; S.haveForm = false;
+        S.E.reset(); S.E.mode = VR_MODE; S.E.tick = tick; S.E.spb = spb; S.E.lvDay.clear(); S.E.cobs.clear(); S.lvSig.clear(); S.lvMs = -1; S.raw.clear(); S.off = 0; S.haveForm = false;
         const std::string d = vrFlex();
         S.statusPath = d.empty() ? std::string() : d + VR_SEP VR_NAME ".status-" + mkey::norm(mkt) + "-" + std::to_string(spb) + ".txt";
     }
@@ -189,7 +209,7 @@ void VolRead::status(VRState& S, long long now) {
 void VolRead::pump() {
     VRState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
-    feed(*S); signals(*S, vrMs()); status(*S, vrMs());
+    feed(*S); signals(*S, vrMs()); S->E.markLevels(); S->E.cobMarks(); status(*S, vrMs());   // (1.3.0) the marks of the new closed bars, after the files were looked at
     mouseLeft(*S);
 }
 
@@ -262,10 +282,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);   // (1.2.0) + the mouse picks the bar the read box is about                                    // its own pane, draws itself; no hovers, no settings
 #ifdef VR_RANGE
-    p->setDescription("LRA Range Read v1.2.0 - its own pane: each bar's range (high - low) in grey, with a breakout candle of 1.2x ATR(13) or more, every PB Rev bar and every CoB pullback Rev bar in green (bullish) or red (bearish); BRMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BRMax, BR (bars in a row with a smaller range), BRG (green bars only), BRR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
+    p->setDescription("LRA Range Read v1.3.0 - its own pane: each bar's range (high - low) in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Rev = a PB Rev or CoB pullback Rev bar, Ct = a counter bar bigger than every bar since the Cob origin, P = a ZigZag pivot bar that is the biggest in 20 or more; no code: the biggest in 50 or more bars, a breakout candle of 1.2x ATR(13) or more. BRMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #else
-    p->setDescription("LRA Volume Read v1.2.0 - its own pane: each bar's volume, green / red, with BVMax over every closed bar that is the biggest in 20 or more bars, and a read box for the last closed bar: BVMax, BV (bars in a row with a smaller volume), BVG (green bars only), BVR (red bars only). Counts stop at 99+. Decided at the bar close, never repainted.");
+    p->setDescription("LRA Volume Read v1.3.0 - its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Rev = a PB Rev or CoB pullback Rev bar, Ct = a counter bar bigger than every bar since the Cob origin, P = a ZigZag pivot bar that is the biggest in 20 or more; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #endif
-    p->setVersion("1.2.0");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.3.0");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

@@ -186,8 +186,8 @@ call :one RevRead lsRevRead RevReadLogic.h StepTrendLogic.h SignalBoard.h PerfGu
 call :one RevReadMarks lsRevReadMarks RevRead.cpp RevReadLogic.h StepTrendLogic.h SignalBoard.h BannerBoard.h NearLevels.h MarketKey.h HostSlot.h PerfGuard.h RevReadSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h
 REM (2026-11-15) lsVolRead / lsRangeRead 1.0.0 (Rassul 2026-11-14 21:58 CT "a little reader for the volume and range ... BVG, BVR, BV ... BVMax", 2026-11-15 17:06 "go build"): two panes -
 REM   the bars' volume / range, the Max count over closed bars that are the biggest in 20+ bars, and a read box (Max, BV, BVG, BVR). VolRangeLogic.h; RangeRead.cpp = VolRead.cpp + VR_RANGE. No settings.
-call :one VolRead lsVolRead VolRangeLogic.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
-call :one RangeRead lsRangeRead VolRead.cpp VolRangeLogic.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+call :one VolRead lsVolRead VolRangeLogic.h HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+call :one RangeRead lsRangeRead VolRead.cpp VolRangeLogic.h HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 REM (2026-11-15) lsHtfSR 1.0.0 (Rassul 20:33 CT "did you build any indicator for s1 s2 r1 and r2 for the hourly", 20:55 "just build them"): the standing 3-hour R1 / R2 / S1 / S2
 REM   as stepped lines on the price pane (HtfSr.h, shared with lsLimitProfile 2.66.0). No settings.
 call :one HtfSR lsHtfSR HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
