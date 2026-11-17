@@ -56,7 +56,7 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.28.0";   // (2.28.0, 2026-11-16 Rassul 13:06 CT: the session close and the contract's last trading day right after the market in the header band - host only, the hdrLeft segments)   // was "2.27.0";   // (2.27.0, 2026-11-16 Rassul 09:58 CT "i dont need this line": the call line under the header band - 1st extreme / 2nd / Lvl - is gone; the tables are unchanged)   // was "2.26.0";   // (2.26.0, 2026-11-11 Rassul "Ok build"): the read box gets the Book line (ReadBox 1.4.0, lsBookFlow fact F)   // was "2.25.0";   // (2.25.0, 2026-11-11 Rassul 11:57 "show mockup", 12:01 "update the read at the top to just be the MKT LMT or derflow read and keep the Day in the hod lod obx", 12:02 "will the hod lod box highlight the level that is upcoming or going to be in play ?", 12:03 "ok.. lets do it. build") the read box = the Flow line only; this box: a CALL LINE under the header (1st / 2nd extreme: actual, else expected; FLIPPED hh:mm; the Lvl read), "Hrly: Up, above 7607" and "Day: ..." in the header row, the sweep tables' UPCOMING level bright ("next" / "testing") and the rest dim, the 1st-extreme time table only until the first extreme is in
+static const char* const HL_VERSION = "2.29.0";   // (2.29.0, 2026-11-16 Rassul 21:45-21:52 CT: the market strength line on top of the box - each traded market's session move over its average session range, MktMove.h)   // was "2.28.0";   // (2.28.0, 2026-11-16 Rassul 13:06 CT: the session close and the contract's last trading day right after the market in the header band - host only, the hdrLeft segments)   // was "2.27.0";   // (2.27.0, 2026-11-16 Rassul 09:58 CT "i dont need this line": the call line under the header band - 1st extreme / 2nd / Lvl - is gone; the tables are unchanged)   // was "2.26.0";   // (2.26.0, 2026-11-11 Rassul "Ok build"): the read box gets the Book line (ReadBox 1.4.0, lsBookFlow fact F)   // was "2.25.0";   // (2.25.0, 2026-11-11 Rassul 11:57 "show mockup", 12:01 "update the read at the top to just be the MKT LMT or derflow read and keep the Day in the hod lod obx", 12:02 "will the hod lod box highlight the level that is upcoming or going to be in play ?", 12:03 "ok.. lets do it. build") the read box = the Flow line only; this box: a CALL LINE under the header (1st / 2nd extreme: actual, else expected; FLIPPED hh:mm; the Lvl read), "Hrly: Up, above 7607" and "Day: ..." in the header row, the sweep tables' UPCOMING level bright ("next" / "testing") and the rest dim, the 1st-extreme time table only until the first extreme is in
 // was "2.24.0":   // (2.24.0, Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed") the read box = ReadBox 1.2.0: Hrly Trend + the hourly breakout level / Day / Lvl nearest above and below / one Flow line from events still in play
 // was "2.23.1":   // (2.23.1, Rassul 11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA") the read box's first line is "Hrly Trend: Up / Down / NA" (ReadBox 1.1.0)
 // was "2.23.0":   // (2.23.0, 2026-11-11 Rassul 11:40 CT "get rid of dly trend.and the values to the left and move the gamma regime were the daily trend is"; he chose "Dly + RTH opens + Bar left"; 11:41 "updat eht readt at the top to be more simple") the header row: no "RTH opens / % done", no "Bar m:ss left", no "Dly:" trend; the gamma pill (+GAMMA / -GAMMA) leads the centre group where "Dly:" was; the read box: ReadBox 1.1.0 (no HTF line, the Day line without ADR / Used)
@@ -741,6 +741,8 @@ struct View {
     // (2.14.0) the header extras ("Day ON range mid -> Trend 22% . Chop 16%" | "RTH 83% done" | "Bar 2:13 left") and the 1st-extreme time
     // table (cumulative 0-15 / 0-30 / 0-60 / 60m+ %); the ADR (trimmed ATR10) and tonight's overnight high / low for the day forecast
     std::vector<Seg> hdrExtra, hdrLeft;
+    struct MkSeg { std::string s; unsigned col; bool bold; int arrow; };   // (2.29.0) one market of the strength line; arrow +1 up / -1 down / 0 none
+    std::vector<MkSeg> mkts;   // (2.29.0) the market strength line on top of the box (MktMove.h); empty = no line
     std::vector<Seg> htf;   // (2.17.0) the HTF trend / RS line under the header ("60m" label grey, values coloured); empty = no line   // (2.14.3) hdrLeft = "RTH 83% done", "Bar 2:13 left" right after the market
     int tmCum[4] = { -1, -1, -1, -1 }; bool tmOk = false; bool tmQ = false; int tmOpenMin = -1;   // (2.15.4) the market's RTH open (CT minutes) for the clock-time heads
     double adrTrim = NAN; long long onHi = 0, onLo = 0; bool onOk = false;
@@ -1972,9 +1974,10 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         const int hdrH = rowH + 4;                         // (2.5.0) the header band, a little taller
         const int htfH = 0;   // (2.17.2, Rassul 14:41 CT) the HTF trend / RS values moved INTO the header (no own row)
         const int callH = CALL_ROW ? rowH + 3 : 0;   // (2.25.0) the call line
-        const int H0 = callH + htfH + 1 + hdrH + 1 + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3;   // (2.12.0) header band + Exp + Act (no 1ST / 2ND row, no Est row, no footer); (2.6.0) + the Pre row while it is shown
+        const int mktH = v.mkts.empty() ? 0 : rowH + 3;   // (2.29.0) the market strength line above the header band
+        const int H0 = mktH + callH + htfH + 1 + hdrH + 1 + rowH + rowH + (v.preOn ? rowH : 0) + (int)v.notes.size() * rowH + 3;   // (2.12.0) header band + Exp + Act (no 1ST / 2ND row, no Est row, no footer); (2.6.0) + the Pre row while it is shown
         const int sessRows = 1 + 2 + (v.preOn ? 1 : 0) + (int)v.notes.size() + (v.tmOk ? 3 : 0);   // (2.14.2) + 1 spacer row above the time table   // (2.14.0) strip + Exp / Act (+ Pre / notes) + the time table
-        const int H = useSw ? callH + htfH + 1 + hdrH + 1 + rowH * (std::max)(sessRows, 2 + (int)swRows) + 3 + 2 : H0;   // (2.14.0) strip + column heads + rows
+        const int H = useSw ? mktH + callH + htfH + 1 + hdrH + 1 + rowH * (std::max)(sessRows, 2 + (int)swRows) + 3 + 2 : H0;   // (2.14.0) strip + column heads + rows
         const int Htot = H + (lad.ok ? stripH + STRIP_GAP : 0);
         if (fillW > 0 && !fillOn) return;                    // (2.17.7) pass 2 that cannot reach the width: the caller keeps pass 1
         if (fillOn) area.r = area.l + W;                     // (2.17.7) laid out at the area's left; the host moves it onto pass 1's final spot
@@ -1994,6 +1997,17 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
         }
         addRect(L, T.l, T.t, T.r, T.b, C_BORDER, C_PANEL, 1, R_TABLE);
         int y = T.t + 1;
+        if (mktH > 0) {   // (2.29.0, Rassul 2026-11-16 21:45-21:52 CT "a line on top of the hod lod box , which indicates how much each market is up or down for the
+            // session ... strong trending moving markets"; mockup claude.ai/artifact/TmYk67SB3emJaALWR4PbpJ) THE MARKET STRENGTH LINE: "ES -0.8x" per market,
+            // biggest move first; bold + arrow = strong and still at the session's extreme. Markets that do not fit are left out (the weakest ones).
+            int xm = T.l + 10;
+            for (size_t q = 0; q < v.mkts.size(); q++) { const View::MkSeg& g = v.mkts[q]; const int w = M(g.s, fs, g.bold), aw = g.arrow ? 14 : 0; if (xm + w + aw > T.r - 8) break;
+                addText(L, xm, y + 1, y + mktH - 2, g.s, g.col, fs, g.bold, w, R_TABLE, -1); xm += w;
+                if (g.arrow) { const int ax = xm + 8, ym = y + mktH / 2, d = g.arrow > 0 ? -1 : 1;
+                    addLine(L, ax, ym - 4 * d, ax, ym + 4 * d, g.col, 2, R_TABLE); addLine(L, ax - 3, ym + d, ax, ym + 4 * d, g.col, 2, R_TABLE); addLine(L, ax + 3, ym + d, ax, ym + 4 * d, g.col, 2, R_TABLE); xm += aw; }
+                xm += 18; }
+            y += mktH; addLine(L, T.l, y - 1, T.r, y - 1, C_BORDER, 1, R_TABLE);
+        }
         {   // (2.5.0) the header band: "ES  M4 O0 V2" left; the gamma pill and the trend in full right ("+GAMMA  Strong Uptrend")
             addFill(L, T.l + 1, y, T.r - 1, y + hdrH, C_HEAD, R_TABLE);
             const bool showEx = (T.r - T.l) >= headW;   // (2.14.1) the extras only when they fit
