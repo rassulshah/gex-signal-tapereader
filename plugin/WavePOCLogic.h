@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.14.0";   // (1.14.0, 2026-11-11 Rassul 19:09-19:12 CT) no spine; the POC and the HVN are dashes ON the candle that traded the most at that price; lots at the end of the POC dash
+static const char* const VERSION = "1.15.0";   // (1.15.0, 2026-11-16 Rassul 21:32 / 22:02 CT "put back the spine with the volume profile alon with the poc and 2 hvns like we had before", "build the wave poc") the spine, the grey volume profile right of it, the POC + up to 2 HVNs (the 1.9.3 rules)
+// was static const char* const VERSION = "1.14.0";   // (1.14.0, 2026-11-11 Rassul 19:09-19:12 CT) no spine; the POC and the HVN are dashes ON the candle that traded the most at that price; lots at the end of the POC dash
 // was static const char* const VERSION = "1.13.0";   // (1.13.0, 2026-11-10 Rassul 13:03-13:11 CT) wave POC + up to 1 HVN (below the POC and below the level the BO broke; POC at / below it = none); the pullback (PB POC) profile removed
 // was "1.12.0";   // (1.12.0, 2026-11-10 Rassul 08:17 CT) the wave POC shows only its POC row (no HVN / grey rows), like the PB POC
 // was "1.11.1";   // (1.11.1, 2026-11-09 Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc") the PB POC row = the wave POC row width (SIDE_W), anchored at the pivot bar   // was "1.11.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") wave PB POC = the POC row only (no HVN / grey rows), shown only when the POC itself sits at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4) rebuild with BreakoutLogic.h 1.14.0, no change   // was "1.10.3":   // (1.10.3) rebuild with BreakoutLogic.h 1.13.0, no change   // was "1.10.2":   // (1.10.2) rebuild with BreakoutLogic.h 1.12.0, no change
@@ -99,10 +100,10 @@ static const int SEP_ROWS = 3;         // nodes >= 3 rows apart
 static const int MAX_NODES = 5;
 // (1.9.0) the volume profile on the right of the spine (was the delta profile) with the POC and up to 2 HVNs at / beyond the break level
 static const bool SHOW_VOL_RIGHT = true;
-static const int HVN_MAX = 1;   // (1.13.0, Rassul 13:03 CT "upto 1 additional hvn instead of 2")
+static const int HVN_MAX = 2;   // (1.15.0, Rassul 2026-11-16 21:32 CT "put back the spine with the volume profile alon with the poc and 2 hvns like we had before") was 1;   // (1.13.0, Rassul 13:03 CT "upto 1 additional hvn instead of 2")
 // (1.12.0, 2026-11-10 Rassul 08:17 CT "update the wave poc so it only has the poc and no hvn just like the wave pb poc") the wave profile
 // draws ONLY its POC row (cyan, thick, lots label) and the P on the spine: no grey rows, no HVN rows, no H letters (still computed + logged)
-static const bool WAVE_POC_ONLY = true;   // (1.13.0) = no grey rows: the POC row and up to 1 HVN
+static const bool WAVE_POC_ONLY = false;   // (1.15.0) the grey volume profile rows are back; was true;   // (1.13.0) = no grey rows: the POC row and up to 1 HVN
 static const bool SHOW_PB_PROFILE = false; // (1.13.0, Rassul 13:11 CT "we will be removing that signal (Pdoc) and the wave pb poc") the pullback profile is not drawn (still computed + logged)
 static const int STORE_VER = 2;        // (1.3.3) store version 2 = 14-bar candidates (1 = the 20-bar ones: rebuilt)
 static const int STORE_CAP = 1000;     // candidates kept per direction in the file
@@ -984,8 +985,10 @@ inline std::vector<int> hvnRows(const Wave& w, long long cut, bool pocRule = tru
         if (w.dir > 0 ? lo <= cut : hi >= cut) { if (a < 0) a = r; b = r; } }
     if (a < 0) return out;
     const int poc = !w.nodes.empty() ? w.nodes[0].row : -1;
-    (void)farSide;
-    if (pocRule && poc >= 0) {   // (1.13.0, Rassul 13:07 / 13:09 CT) an HVN only when the POC is ABOVE the break level (up; down: below) - then the HVN is below
+    // (1.15.0) the 2-HVN hide rule of 1.9.3 is back (Rassul 2026-11-06 17:38 CT "only if the poc is below the low of the bo bar do you not display the 2 hvn"):
+    // up wave: no HVN only when the POC row is wholly below the break bar's low (down: wholly above its high); no break bar = always shown
+    if (HVN_MAX >= 2) { if (pocRule && poc >= 0 && farSide > 0) { const long long plo = w.e0 + (long long)poc * w.rowTicks, phi = plo + w.rowTicks - 1; if (w.dir > 0 ? phi < farSide : plo > farSide) return out; } }
+    else if (pocRule && poc >= 0) {   // (1.13.0, Rassul 13:07 / 13:09 CT) an HVN only when the POC is ABOVE the break level (up; down: below) - then the HVN is below
         const long long plo = w.e0 + (long long)poc * w.rowTicks, phi = plo + w.rowTicks - 1;   // the POC and below the break level; POC at / below it = no HVN
         if (w.dir > 0 ? plo <= cut : phi >= cut) return out;
     }
@@ -1036,7 +1039,7 @@ inline void addDashed(Scene& s, double x0, double x1, double y, unsigned long c,
 // (1.14.0, Rassul 2026-11-11 19:09-19:12 CT "remove the wave poc spine and move the wave poc in the candels that it belowngs in" / "also the hvn" /
 // "you can move the lot count at the end of the poc") no spine; the POC and the HVN are a short dash ON the candle of the wave that traded
 // the most volume at that price; P / H left of the dash, the POC's lots right of it (at its end)
-static const bool ON_CANDLE = true;
+static const bool ON_CANDLE = false;   // (1.15.0) the spine and the profile at the wave start are back; was true
 inline int nodeBar(const Wave& w, int row, long long tick, const std::vector<Bar>* bars) {
     if (row >= 0 && row < (int)w.rowBar.size() && w.rowBar[(size_t)row] >= w.i0 && w.rowBar[(size_t)row] <= w.i1) return w.rowBar[(size_t)row];
     if (bars) for (int k = w.i0; k <= w.i1 && k < (int)bars->size(); ++k) if (k >= 0 && (*bars)[(size_t)k].l <= tick && tick <= (*bars)[(size_t)k].h) return k;
