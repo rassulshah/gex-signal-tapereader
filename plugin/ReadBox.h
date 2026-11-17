@@ -24,7 +24,7 @@
 
 namespace rbx {
 
-static const char* const VERSION = "1.5.0";   // 1.5.0 (2026-11-17, Rassul "i want it to be realtime flow"): In::livePx + applyFlow - the Flow line follows the live price and new events every second   // was "1.4.0";   // 1.4.0 (2026-11-11, Rassul "Ok build"): a second line "Book:" under "Flow:" - lsBookFlow's defend ratios (SignalBoard fact F) read for the side that matters   // was "1.3.0";   // 1.3.0 (2026-11-11 12:01-12:03 CT): the read box shows the order-flow read only (one "Flow:" line); Out carries trend / day / lvl / atr for the HOD / LOD box
+static const char* const VERSION = "1.6.0";   // 1.6.0 (2026-11-17 11:16-12:12 CT, Rassul "why is the flow read so slow , look at the green candle and the flow .. it doesnt match", "build"; mockup flow_fix.html): TWO lines - "Now hh:mm: Buyers lifting - delta +41 (2.1x)" from the forming candle's market orders (fact M, lsRevRead), then "Above: / Below:" the decided Delta Profile event still in play with its time and distance   // was "1.5.0";   // 1.5.0 (2026-11-17, Rassul "i want it to be realtime flow"): In::livePx + applyFlow - the Flow line follows the live price and new events every second   // was "1.4.0";   // 1.4.0 (2026-11-11, Rassul "Ok build"): a second line "Book:" under "Flow:" - lsBookFlow's defend ratios (SignalBoard fact F) read for the side that matters   // was "1.3.0";   // 1.3.0 (2026-11-11 12:01-12:03 CT): the read box shows the order-flow read only (one "Flow:" line); Out carries trend / day / lvl / atr for the HOD / LOD box
 // was "1.2.0";   // 1.2.0 (2026-11-11 Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed"): Lvl = the nearest level above / below with the distance; Hrly Trend + the hourly breakout level; ONE Flow line (verdict first) from events still in play - 4 lines
 // was "1.1.0";   // 1.1.0 (2026-11-11 Rassul 11:41 CT "also updat eht readt at the top to be more simple", his screenshot: the HTF line and "0.8x ADR, Used 91%" crossed out): the HTF line is "Hrly Trend: Up / Down / NA" (11:45 CT); the RTH Day line without the ADR multiple and the Used %
 // was "1.0.1";
@@ -44,12 +44,15 @@ struct In {
     std::vector<Level> levels;      // key + volume levels (his names)
     std::vector<Level> mq;          // MenthorQ levels (confluence only)
     std::vector<Sig> sigs;          // lsDeltaProfile decided events
+    double tick = NAN;              // (1.6.0) the distance to the level in ticks
     double livePx = NAN;            // (1.5.0) the live last price: when set, the Flow line tests "still in play" against it (not the last close)
     DayIn day;
     BookIn book;                    // (1.4.0) lsBookFlow's newest defend ratios (fact F); ok = false -> no Book line
 };
 struct Line { std::string text; int col = WHITE; };
+struct LiveIn { bool ok = false; long long buy = 0, sell = 0; double x = NAN; };   // (1.6.0) the forming candle's market orders: lots bought (lifting offers) / sold (hitting bids), |delta| x its 20-candle normal
 struct Out { bool ok = false; Line l[5]; int n = 5; std::string why; long long at = 0;
+             Line now, flow, bkLine;   // (1.6.0) the parts the box is composed of (compose())
              Line trend, day, lvl; double atr = NAN, px = NAN;
              int bkTrend = 0, bkSide = 0, bkBase = 1; bool bkPb = false; std::string bkAt; };   // (1.4.0) what the Book line needs (applyBook re-reads the book between bar closes)   // (1.3.0) the Hrly Trend / Day / Lvl reads (shown in the HOD / LOD box, not in the read box) and the 60-min ATR   // (1.1.0) n = the lines shown (4 without the HTF line)
 
@@ -235,8 +238,12 @@ inline Line lvlLine(const In& I, long long now, int dir, double atr, std::string
 // the verdict first, from lsDeltaProfile's decided events of the last 5 candles that are STILL IN PLAY: the last close is on the event's
 // side of its price (a buyers' event: at / above it; a sellers' event: at / below it) and within 1 ATR of it. An event price has gone
 // through, or left behind by more than 1 ATR, is not mentioned (1.0.x named it for 5 candles whatever price did).
+inline std::string clockOf(long long t) {   // "11:07" from CT wall-clock seconds
+    long long d = ((t % 86400) + 86400) % 86400; int h = (int)(d / 3600), m = (int)((d % 3600) / 60); h %= 12; if (h == 0) h = 12;
+    char b[16]; std::snprintf(b, sizeof b, "%d:%02d", h, m); return b; }
+// (1.6.0) the level line: "Above: Sellers absorbed 22 (3.4x) @5.9993 (11:07, 15 ticks)" - the decided event still in play, where it is from price
 inline Line flowLine(const In& I, long long now, double atr) {
-    Line L; L.text = "Flow: Even"; L.col = WHITE; if (I.bars.empty()) return L;
+    Line L; L.text = "Level: none in play"; L.col = GREY; if (I.bars.empty()) return L;
     double px = NAN; for (const Bar& b : I.bars) if (b.t <= now) px = b.c;
     if (std::isfinite(I.livePx) && I.livePx > 0) px = I.livePx;   // (1.5.0, Rassul 2026-11-17 07:18 CT "yes , i want it to be realtime flow") an event price has traded through drops out at once
     const long long from = now - 5 * I.per; const Sig* init = nullptr; const Sig* trap = nullptr; const Sig* ab = nullptr;
@@ -245,17 +252,33 @@ inline Line flowLine(const In& I, long long now, double atr) {
         return !(std::isfinite(atr) && atr > 0) || std::fabs(px - s.px) <= atr; };      // or has left it behind
     for (const Sig& s : I.sigs) { if (s.t <= from || s.t > now || !live(s)) continue; if (s.code == "I") init = &s; if (s.code == "T") trap = &s; if (s.code == "A" || s.code == "AL") ab = &s; }
     auto side = [](const Sig* s) { return s->bias > 0 ? std::string("Buyers") : std::string("Sellers"); };
-    const std::string push = init ? std::string("pushing") + (std::isfinite(init->mult) && init->mult > 0 ? " " + x1(init->mult) : std::string()) : std::string();
-    const std::string absb = ab ? std::string("absorbing") + (std::isfinite(ab->net) && ab->net != 0 ? " " + num(std::fabs(ab->net), 0) : std::string())
+    const Sig* key = ab ? ab : init ? init : trap; if (!key) return L;
+    auto where = [&](const Sig* s) {   // "(11:07, 15 ticks)" - when it was decided and how far price is from it
+        const double d = std::fabs(px - s->px); std::string w;
+        if (std::isfinite(I.tick) && I.tick > 0) { const long long tk = (long long)std::llround(d / I.tick); w = tk == 0 ? std::string("at price") : std::to_string(tk) + (tk == 1 ? " tick" : " ticks"); }
+        else { w = num(d, I.dec); w += w == "1" ? " pt" : " pts"; }
+        return " (" + clockOf(s->t) + ", " + w + ")"; };
+    const std::string pre = std::isfinite(px) && key->px > px ? "Above: " : key->px < px ? "Below: " : "At price: ";
+    const std::string push = init ? std::string("pushed") + (std::isfinite(init->mult) && init->mult > 0 ? " " + x1(init->mult) : std::string()) : std::string();
+    const std::string absb = ab ? std::string("absorbed") + (std::isfinite(ab->net) && ab->net != 0 ? " " + num(std::fabs(ab->net), 0) : std::string())
                                   + (std::isfinite(ab->mult) && ab->mult > 0 ? " (" + x1(ab->mult) + ")" : std::string()) + " @" + num(ab->px, I.dec) : std::string();
-    if (init && ab && (init->bias > 0) == (ab->bias > 0)) { L.text = "Flow: " + side(ab) + " in control: " + push + ", " + absb; L.col = ab->bias > 0 ? GREEN : RED; }
-    else if (init && ab) { L.text = "Flow: Mixed: " + side(init) + " " + push + ", " + side(ab) + " " + absb; L.col = WHITE; }
-    else if (ab) { L.text = "Flow: " + side(ab) + " " + absb; L.col = ab->bias > 0 ? GREEN : RED; }
-    else if (init) { L.text = "Flow: " + side(init) + " " + push + " @" + num(init->px, I.dec); L.col = init->bias > 0 ? GREEN : RED; }
-    else if (trap) { L.text = std::string("Flow: ") + (trap->bias > 0 ? "Sellers trapped" : "Buyers trapped") + " @" + num(trap->px, I.dec); L.col = trap->bias > 0 ? GREEN : RED; return L; }
-    else return L;
-    if (trap) L.text += std::string(", ") + (trap->bias > 0 ? "sellers trapped" : "buyers trapped");
+    if (init && ab && (init->bias > 0) == (ab->bias > 0)) { L.text = pre + side(ab) + " in control: " + push + ", " + absb + where(ab); L.col = ab->bias > 0 ? GREEN : RED; }
+    else if (init && ab) { L.text = pre + side(ab) + " " + absb + where(ab) + ", " + side(init) + " " + push; L.col = WHITE; }
+    else if (ab) { L.text = pre + side(ab) + " " + absb + where(ab); L.col = ab->bias > 0 ? GREEN : RED; }
+    else if (init) { L.text = pre + side(init) + " " + push + " @" + num(init->px, I.dec) + where(init); L.col = init->bias > 0 ? GREEN : RED; }
+    else { L.text = pre + (trap->bias > 0 ? "Sellers trapped" : "Buyers trapped") + " @" + num(trap->px, I.dec) + where(trap); L.col = trap->bias > 0 ? GREEN : RED; return L; }
+    if (trap && trap != key) L.text += std::string(", ") + (trap->bias > 0 ? "sellers trapped" : "buyers trapped");
     return L;
+}
+// (1.6.0) the Now line: the forming candle's market orders. "Now 11:18: Buyers lifting - delta +41 (2.1x)"; an even candle says so with both sides
+inline Line nowLine(const LiveIn& k, const std::string& when) {
+    Line L; if (!k.ok) return L;   // no producer on this chart: no line
+    const long long dl = k.buy - k.sell; const std::string head = "Now" + (when.empty() ? std::string() : " " + when) + ": ";
+    const bool even = std::llabs(dl) < 3 || (std::isfinite(k.x) && k.x < 0.5);
+    if (k.buy + k.sell == 0) { L.text = head + "no trades yet"; L.col = GREY; return L; }
+    if (even) { L.text = head + "Even - " + std::to_string(k.buy) + " bought, " + std::to_string(k.sell) + " sold"; L.col = WHITE; return L; }
+    L.text = head + (dl > 0 ? "Buyers lifting - delta +" : "Sellers hitting - delta -") + std::to_string(std::llabs(dl)) + (std::isfinite(k.x) && k.x > 0 ? " (" + x1(k.x) + ")" : std::string());
+    L.col = dl > 0 ? GREEN : RED; return L;
 }
 
 // (1.4.0, Rassul 2026-11-11 "Can you include 4 because I want to use it to enter after a pullback when I am looking for a reversal", "Ok build")
@@ -282,16 +305,21 @@ inline Line bookLine(const BookIn& k, int trend, const std::string& atName, int 
 
 // (1.4.0) puts / refreshes the Book line under the Flow line (the host calls it again each second with the newest fact F): both lines in one
 // colour when they agree, the Book line white when they disagree; no book = no line.
+// (1.6.0) the box lines in order: Now (when there is one), the level line, the Book line (when there is one)
+inline void compose(Out& o) {
+    if (!o.ok || !BOX_FLOW_ONLY) return;
+    int k = 0; if (!o.now.text.empty()) o.l[k++] = o.now; o.l[k++] = o.flow; o.bkBase = k; o.n = k;
+    if (!o.bkLine.text.empty() && k < 5) { Line bk = o.bkLine; const int fc = o.l[k - 1].col; if (fc != WHITE && bk.col != WHITE && bk.col != fc) bk.col = WHITE; o.l[k] = bk; o.n = k + 1; }
+}
 inline void applyBook(Out& o, const BookIn& k) {
-    if (!o.ok || o.bkBase < 1 || o.bkBase > 4) return;
-    Line bk = bookLine(k, o.bkTrend, o.bkAt, o.bkSide, o.bkPb); o.n = o.bkBase;
-    if (bk.text.empty()) return;
-    const int fc = o.l[o.bkBase - 1].col; if (fc != WHITE && bk.col != WHITE && bk.col != fc) bk.col = WHITE;
-    o.l[o.bkBase] = bk; o.n = o.bkBase + 1;
+    if (!o.ok) return;
+    if (!BOX_FLOW_ONLY) { if (o.bkBase < 1 || o.bkBase > 4) return; Line bk = bookLine(k, o.bkTrend, o.bkAt, o.bkSide, o.bkPb); o.n = o.bkBase; if (bk.text.empty()) return; o.l[o.bkBase] = bk; o.n = o.bkBase + 1; return; }
+    o.bkLine = bookLine(k, o.bkTrend, o.bkAt, o.bkSide, o.bkPb); compose(o);
 }
 
 // (1.5.0) the Flow line replaced in place (the host re-reads it every second between bar closes)
-inline void applyFlow(Out& o, const Line& f) { if (!o.ok) return; for (int k = 0; k < 5 && k < o.n; k++) if (o.l[k].text.compare(0, 5, "Flow:") == 0) { o.l[k] = f; return; } }
+inline void applyFlow(Out& o, const Line& f) { if (!o.ok) return; o.flow = f; compose(o); }   // (1.6.0) the level line, re-tested every second
+inline void applyNow(Out& o, const Line& n) { if (!o.ok) return; o.now = n; compose(o); }     // (1.6.0) the Now line, every second
 inline Out build(const In& I) {
     Out o; if (I.bars.size() < 3) { o.why = "no bars"; return o; }
     const long long now = I.bars.back().t; o.at = now;
@@ -305,7 +333,7 @@ inline Out build(const In& I) {
     o.day = dayLine(I, now); o.lvl = lvlLine(I, now, h.dir, h.atr, &atName, &atSide); o.atr = h.atr; o.px = I.bars.back().c;
     const Line flow = flowLine(I, now, h.atr);
     int k = 0;
-    if (BOX_FLOW_ONLY) o.l[k++] = flow;   // (1.3.0) the read box = the order-flow read only
+    if (BOX_FLOW_ONLY) { o.flow = flow; o.l[k++] = flow; }   // (1.3.0) the read box = the order-flow read only; (1.6.0) compose() adds Now / Book
     else { if (SHOW_HTF) o.l[k++] = o.trend;
            o.l[k++] = o.day; o.l[k++] = o.lvl; o.l[k++] = flow; }
     o.n = k;

@@ -325,7 +325,7 @@ struct HLState {
     // (2.22.0) the READ BOX: the five lines in force + their inputs (level files, LRA-VolLevels, lsDeltaProfile's decided signals)
     int callSide = 0; std::string callFlip, callSess;   // (2.25.0) the call line: the side first called in, "FLIPPED hh:mm" once it changed, their session
     long long rbBookMs = -100000; int rbBookN = -1;   // (2.26.0) the Book line: last board read (steady ms), facts seen (-1 = no lsBookFlow on this chart)
-    rbx::In rbFlow; std::vector<std::string> rbSigPaths; long long rbFlowMs = -1, rbFlowStamp = -2; int rbFlowRuns = 0;   // (2.31.0) the live Flow line: its inputs, the signal files, when it last ran
+    rbx::In rbFlow; std::vector<std::string> rbSigPaths; long long rbFlowMs = -1, rbFlowStamp = -2; int rbFlowRuns = 0; bool rbNowOk = false;   // (2.32.0) rbNowOk = the Now line had live market orders   // (2.31.0) the live Flow line: its inputs, the signal files, when it last ran
     rbx::Out rbox; std::string rbWhy = "not run"; nl::Cache rbLv; std::string rbVol, rbSig; long long rbVolStamp = -2, rbSigStamp = -2; std::string rbSigPath; int rbLevels = 0, rbMq = 0, rbSigs = 0;
     // (2.21.0) the HOD / LOD CONFIRM badges: what to draw (chart bar indices), the record's keys, counters for the status line
     struct CfDraw { bool hod; int ext, conf; double px; };
@@ -995,7 +995,8 @@ void HodLod::computeReadBox(HLState& S, const std::vector<hl::Bar>& B, long long
 #else
     const std::string sep = "/";
 #endif
-    rbx::In I; I.mkt = S.mkt; I.dec = hl::MKTS[S.mi].dec; I.per = per; I.openMin = hl::MKTS[S.mi].open; I.closeMin = hl::MKTS[S.mi].close;
+    rbx::In I; I.mkt = S.mkt; I.dec = hl::MKTS[S.mi].dec; I.per = per; I.tick = S.tick > 0 ? S.tick : NAN;   // (2.32.0) the level line's distance in ticks
+    I.openMin = hl::MKTS[S.mi].open; I.closeMin = hl::MKTS[S.mi].close;
     const size_t from = B.size() > 2400 ? B.size() - 2400 : 0;   // ~5 days of 3-min bars: the 60-min ZigZag / ATR history
     for (size_t i = from; i < B.size(); i++) { rbx::Bar b; b.t = B[i].absEnd; b.o = B[i].o; b.h = B[i].h; b.l = B[i].l; b.c = B[i].c; I.bars.push_back(b); }
     if (I.bars.size() < 3) { S.rbox = rbx::Out(); S.rbWhy = "no bars"; return; }
@@ -1036,7 +1037,7 @@ void HodLod::computeReadBox(HLState& S, const std::vector<hl::Bar>& B, long long
     // the day: lsHodLod's Range Day read (pre-open / 30-min) and the ATR(14) day range
     I.day.kind = S.rdOut.kind; I.day.pBig = S.rdOut.pBig; I.day.pSmall = S.rdOut.pSmall; I.day.xr = S.rdOut.xr; I.day.post = S.rdOut.post;
     I.day.adr = std::isfinite(S.view.rdAtr) && S.view.rdAtr > 0 ? S.view.rdAtr : S.view.adrTrim;
-    { S.rbFlow = rbx::In(); S.rbFlow.mkt = I.mkt; S.rbFlow.dec = I.dec; S.rbFlow.per = I.per; S.rbFlow.sigs = I.sigs; const size_t nb = I.bars.size(); for (size_t q = nb >= 2 ? nb - 2 : 0; q < nb; q++) S.rbFlow.bars.push_back(I.bars[q]); S.rbFlowMs = -1; S.rbFlowStamp = -2; }   // (2.31.0)
+    { S.rbFlow = rbx::In(); S.rbFlow.mkt = I.mkt; S.rbFlow.dec = I.dec; S.rbFlow.per = I.per; S.rbFlow.tick = I.tick; S.rbFlow.sigs = I.sigs; const size_t nb = I.bars.size(); for (size_t q = nb >= 2 ? nb - 2 : 0; q < nb; q++) S.rbFlow.bars.push_back(I.bars[q]); S.rbFlowMs = -1; S.rbFlowStamp = -2; }   // (2.31.0)
     S.rbox = rbx::build(I); S.rbBookMs = -100000;   // (2.26.0) the draw re-reads the book at once
     S.rbWhy = S.rbox.why + ",levels " + std::to_string(S.rbLevels) + ",mq " + std::to_string(S.rbMq) + ",dp signals " + std::to_string(S.rbSigs) + ",book facts " + std::to_string(S.rbBookN) + ",day " + (S.rdOut.kind < 0 ? "none" : "ok");
 }
@@ -1966,6 +1967,14 @@ int HodLod::draw(void)
                 double live = NAN; { const long n2 = getBarCount(); if (n2 > 0) { RTARRAY cl2(barClose); if ((long)cl2.count >= n2) live = (double)cl2[(int)(n2 - 1)]; } }
                 S->rbFlow.livePx = live;
                 if (!S->rbFlow.bars.empty()) { rbx::applyFlow(S->rbox, rbx::flowLine(S->rbFlow, S->rbox.at + S->rbFlow.per, S->rbox.atr)); S->rbFlowRuns++; }
+                {   // (2.32.0, Rassul 2026-11-17 11:16-12:12 CT "look at the green candle and the flow .. it doesnt match", "build") THE NOW LINE: the forming
+                    // candle's market orders (fact M, lsRevRead 0.14.0, posted once a second): lots bought / sold and |delta| x its 20-candle normal
+                    const char* msy = getSymbol(); const char* mcl = getChartLabel(); std::vector<sb::Fact> mf; rbx::LiveIn lv;
+                    if (msy && mcl && sb::readFacts('M', msy, getSecondsPerBar(), mcl, fms, mf, false)) {
+                        const sb::Fact* nf = nullptr; for (const sb::Fact& f : mf) if (f.state == 0 && (!nf || f.bar >= nf->bar)) nf = &f;
+                        if (nf && std::isfinite(nf->lo) && std::isfinite(nf->hi) && nf->lo >= 0 && nf->hi >= 0) { lv.ok = true; lv.sell = (long long)std::llround(nf->lo); lv.buy = (long long)std::llround(nf->hi); lv.x = nf->val > 0 ? nf->val : NAN; } }
+                    S->rbNowOk = lv.ok;
+                    rbx::applyNow(S->rbox, rbx::nowLine(lv, rbx::clockOf(S->rbox.at + S->rbFlow.per))); }
             } catch (...) {}
         }
     }
@@ -2150,6 +2159,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.31.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.32.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }

@@ -12,6 +12,6 @@ int main(){ using namespace rbx; int f=0; auto ck=[&](bool c,const char*m){ if(!
  k.bits=0; a=bookLine(k,0,"",0,false); ck(a.text=="Book: Even (B 2.6x, S 0.2x)","even");
  k.s=-2.0; k.bits=8; a=bookLine(k,-1,"",0,false); ck(a.col==GREEN&&a.text=="Book: Downtrend: Offers pulling 2.0x","offers pull"); 
  k.ok=false; a=bookLine(k,1,"",0,false); ck(a.text.empty(),"none");
- Out o; o.ok=true; o.n=1; o.l[0].text="Flow: Sellers in control"; o.l[0].col=RED; o.bkTrend=1; o.bkBase=1; BookIn q; q.ok=true; q.b=2.3; q.bits=1;
- applyBook(o,q); ck(o.n==2&&o.l[1].col==WHITE,"disagree white"); o.l[0].col=GREEN; applyBook(o,q); ck(o.l[1].col==GREEN,"agree"); q.ok=false; applyBook(o,q); ck(o.n==1,"gone");
+ Out o; o.ok=true; o.n=1; o.flow.text="Above: Sellers in control"; o.flow.col=RED; o.l[0]=o.flow;   /* (1.6.0) the box is composed from o.flow */ o.bkTrend=1; o.bkBase=1; BookIn q; q.ok=true; q.b=2.3; q.bits=1;
+ applyBook(o,q); ck(o.n==2&&o.l[1].col==WHITE,"disagree white"); o.flow.col=GREEN; applyBook(o,q); ck(o.l[1].col==GREEN,"agree"); q.ok=false; applyBook(o,q); ck(o.n==1,"gone");
  printf("%s\n",f?"FAILED":"bookline 13 ok"); return f; }

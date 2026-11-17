@@ -17,8 +17,8 @@ static rbx::Sig sig(long long t, const char* code, int bias, double px, double n
 int main() {
     rbx::In I = base(); const double px = I.bars.back().c; const long long now = I.bars.back().t;
     {   const rbx::Out o = rbx::build(I);
-        CHECK(o.ok && o.n == 1 && o.l[0].text.compare(0, 5, "Flow:") == 0, "the read box is ONE line: the order-flow read");
-        CHECK(o.trend.text.compare(0, 12, "Hrly Trend: ") == 0 && o.day.text.compare(0, 4, "Day:") == 0 && o.lvl.text.compare(0, 4, "Lvl:") == 0 && o.l[0].text == "Flow: Even", "Hrly Trend / Day / Lvl / Flow (" + o.l[0].text + ")");
+        CHECK(o.ok && o.n == 1 && o.l[0].text.compare(0, 6, "Level:") == 0, "the read box is ONE line: the order-flow read");
+        CHECK(o.trend.text.compare(0, 12, "Hrly Trend: ") == 0 && o.day.text.compare(0, 4, "Day:") == 0 && o.lvl.text.compare(0, 4, "Lvl:") == 0 && o.l[0].text == "Level: none in play", "Hrly Trend / Day / Lvl / Flow (" + o.l[0].text + ")");
         CHECK(o.day.text.find("ADR") == std::string::npos && o.day.text.find("Used") == std::string::npos, "the RTH Day line has no ADR / Used");
         bool old = false; for (int k = 0; k < o.n; ++k) if (o.l[k].text.find("HTF") != std::string::npos || o.l[k].text.find("Mkt:") != std::string::npos || o.l[k].text.find("Lmt:") != std::string::npos) old = true;
         CHECK(!old, "no HTF / Mkt / Lmt line"); }
@@ -32,19 +32,19 @@ int main() {
         rbx::In N = I; const rbx::Out z = rbx::build(N); CHECK(z.lvl.text == "Lvl: no level near", "no levels: " + z.lvl.text); }
     {   // Flow: verdict first; only events still in play
         rbx::In J = I; J.sigs = { sig(now - 360, "A", -1, px + 1.0, -311, 5.1) };     // sellers absorbing 1 pt above the close
-        CHECK(rbx::build(J).l[0].text == "Flow: Sellers absorbing 311 (5.1x) @" + rbx::num(px + 1.0, 2) && rbx::build(J).l[0].col == rbx::RED, "an absorption still above price: " + rbx::build(J).l[0].text);
+        CHECK(rbx::build(J).l[0].text.rfind("Above: Sellers absorbed 311 (5.1x) @" + rbx::num(px + 1.0, 2) + " (", 0) == 0 && rbx::build(J).l[0].col == rbx::RED, "an absorption still above price: " + rbx::build(J).l[0].text);
         J.sigs = { sig(now - 360, "A", -1, px - 1.0, -311, 5.1) };                    // price has gone up through it
-        CHECK(rbx::build(J).l[0].text == "Flow: Even", "PASSED: price closed through the sellers' absorption - not mentioned");
+        CHECK(rbx::build(J).l[0].text == "Level: none in play", "PASSED: price closed through the sellers' absorption - not mentioned");
         J.sigs = { sig(now - 360, "A", 1, px - 400.0, 200, 3.0) };                    // far behind (more than 1 ATR)
-        CHECK(rbx::build(J).l[0].text == "Flow: Even", "left behind by more than 1 ATR - not mentioned");
+        CHECK(rbx::build(J).l[0].text == "Level: none in play", "left behind by more than 1 ATR - not mentioned");
         J.sigs = { sig(now - 3600, "A", -1, px + 1.0, -311, 5.1) };                   // older than 5 candles
-        CHECK(rbx::build(J).l[0].text == "Flow: Even", "older than 5 candles - not mentioned");
+        CHECK(rbx::build(J).l[0].text == "Level: none in play", "older than 5 candles - not mentioned");
         J.sigs = { sig(now - 360, "I", -1, px + 0.5, -100, 2.6), sig(now - 180, "A", -1, px + 1.0, -311, 5.1) };
-        CHECK(rbx::build(J).l[0].text == "Flow: Sellers in control: pushing 2.6x, absorbing 311 (5.1x) @" + rbx::num(px + 1.0, 2), "both the same side: " + rbx::build(J).l[0].text);
+        CHECK(rbx::build(J).l[0].text.rfind("Above: Sellers in control: pushed 2.6x, absorbed 311 (5.1x) @" + rbx::num(px + 1.0, 2) + " (", 0) == 0, "both the same side: " + rbx::build(J).l[0].text);
         J.sigs = { sig(now - 360, "I", 1, px - 0.5, 100, 2.6), sig(now - 180, "A", -1, px + 1.0, -311, 5.1) };
-        CHECK(rbx::build(J).l[0].text.compare(0, 12, "Flow: Mixed:") == 0 && rbx::build(J).l[0].col == rbx::WHITE, "opposite sides = Mixed, white: " + rbx::build(J).l[0].text);
+        CHECK(rbx::build(J).l[0].text.find(", Buyers pushed") != std::string::npos && rbx::build(J).l[0].col == rbx::WHITE, "opposite sides = Mixed, white: " + rbx::build(J).l[0].text);
         J.sigs = { sig(now - 360, "T", 1, px - 0.5, 0, 0) };
-        CHECK(rbx::build(J).l[0].text == "Flow: Sellers trapped @" + rbx::num(px - 0.5, 2) && rbx::build(J).l[0].col == rbx::GREEN, "a trap alone: " + rbx::build(J).l[0].text); }
+        CHECK(rbx::build(J).l[0].text.rfind("Below: Sellers trapped @" + rbx::num(px - 0.5, 2) + " (", 0) == 0 && rbx::build(J).l[0].col == rbx::GREEN, "a trap alone: " + rbx::build(J).l[0].text); }
     {   // Hrly Trend + the hourly breakout level
         rbx::In J = I; const size_t n = J.bars.size();   // the last 3 completed hours rise 6 points an hour, each closing above the prior hour's high
         for (size_t k = n - 70; k < n; ++k) { const double up = (double)(k - (n - 70)) * 0.3; J.bars[k].o += up; J.bars[k].c += up + 0.3; J.bars[k].h += up + 0.3; J.bars[k].l += up; }
