@@ -24,7 +24,7 @@
 
 namespace rbx {
 
-static const char* const VERSION = "1.4.0";   // 1.4.0 (2026-11-11, Rassul "Ok build"): a second line "Book:" under "Flow:" - lsBookFlow's defend ratios (SignalBoard fact F) read for the side that matters   // was "1.3.0";   // 1.3.0 (2026-11-11 12:01-12:03 CT): the read box shows the order-flow read only (one "Flow:" line); Out carries trend / day / lvl / atr for the HOD / LOD box
+static const char* const VERSION = "1.5.0";   // 1.5.0 (2026-11-17, Rassul "i want it to be realtime flow"): In::livePx + applyFlow - the Flow line follows the live price and new events every second   // was "1.4.0";   // 1.4.0 (2026-11-11, Rassul "Ok build"): a second line "Book:" under "Flow:" - lsBookFlow's defend ratios (SignalBoard fact F) read for the side that matters   // was "1.3.0";   // 1.3.0 (2026-11-11 12:01-12:03 CT): the read box shows the order-flow read only (one "Flow:" line); Out carries trend / day / lvl / atr for the HOD / LOD box
 // was "1.2.0";   // 1.2.0 (2026-11-11 Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed"): Lvl = the nearest level above / below with the distance; Hrly Trend + the hourly breakout level; ONE Flow line (verdict first) from events still in play - 4 lines
 // was "1.1.0";   // 1.1.0 (2026-11-11 Rassul 11:41 CT "also updat eht readt at the top to be more simple", his screenshot: the HTF line and "0.8x ADR, Used 91%" crossed out): the HTF line is "Hrly Trend: Up / Down / NA" (11:45 CT); the RTH Day line without the ADR multiple and the Used %
 // was "1.0.1";
@@ -44,6 +44,7 @@ struct In {
     std::vector<Level> levels;      // key + volume levels (his names)
     std::vector<Level> mq;          // MenthorQ levels (confluence only)
     std::vector<Sig> sigs;          // lsDeltaProfile decided events
+    double livePx = NAN;            // (1.5.0) the live last price: when set, the Flow line tests "still in play" against it (not the last close)
     DayIn day;
     BookIn book;                    // (1.4.0) lsBookFlow's newest defend ratios (fact F); ok = false -> no Book line
 };
@@ -237,6 +238,7 @@ inline Line lvlLine(const In& I, long long now, int dir, double atr, std::string
 inline Line flowLine(const In& I, long long now, double atr) {
     Line L; L.text = "Flow: Even"; L.col = WHITE; if (I.bars.empty()) return L;
     double px = NAN; for (const Bar& b : I.bars) if (b.t <= now) px = b.c;
+    if (std::isfinite(I.livePx) && I.livePx > 0) px = I.livePx;   // (1.5.0, Rassul 2026-11-17 07:18 CT "yes , i want it to be realtime flow") an event price has traded through drops out at once
     const long long from = now - 5 * I.per; const Sig* init = nullptr; const Sig* trap = nullptr; const Sig* ab = nullptr;
     auto live = [&](const Sig& s) { if (!std::isfinite(s.px) || !std::isfinite(px)) return false;
         if (s.bias > 0 ? px < s.px : px > s.px) return false;                           // price has gone through it
@@ -288,6 +290,8 @@ inline void applyBook(Out& o, const BookIn& k) {
     o.l[o.bkBase] = bk; o.n = o.bkBase + 1;
 }
 
+// (1.5.0) the Flow line replaced in place (the host re-reads it every second between bar closes)
+inline void applyFlow(Out& o, const Line& f) { if (!o.ok) return; for (int k = 0; k < 5 && k < o.n; k++) if (o.l[k].text.compare(0, 5, "Flow:") == 0) { o.l[k] = f; return; } }
 inline Out build(const In& I) {
     Out o; if (I.bars.size() < 3) { o.why = "no bars"; return o; }
     const long long now = I.bars.back().t; o.at = now;

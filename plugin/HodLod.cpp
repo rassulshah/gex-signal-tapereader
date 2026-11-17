@@ -325,6 +325,7 @@ struct HLState {
     // (2.22.0) the READ BOX: the five lines in force + their inputs (level files, LRA-VolLevels, lsDeltaProfile's decided signals)
     int callSide = 0; std::string callFlip, callSess;   // (2.25.0) the call line: the side first called in, "FLIPPED hh:mm" once it changed, their session
     long long rbBookMs = -100000; int rbBookN = -1;   // (2.26.0) the Book line: last board read (steady ms), facts seen (-1 = no lsBookFlow on this chart)
+    rbx::In rbFlow; std::vector<std::string> rbSigPaths; long long rbFlowMs = -1, rbFlowStamp = -2; int rbFlowRuns = 0;   // (2.31.0) the live Flow line: its inputs, the signal files, when it last ran
     rbx::Out rbox; std::string rbWhy = "not run"; nl::Cache rbLv; std::string rbVol, rbSig; long long rbVolStamp = -2, rbSigStamp = -2; std::string rbSigPath; int rbLevels = 0, rbMq = 0, rbSigs = 0;
     // (2.21.0) the HOD / LOD CONFIRM badges: what to draw (chart bar indices), the record's keys, counters for the status line
     struct CfDraw { bool hod; int ext, conf; double px; };
@@ -1025,15 +1026,17 @@ void HodLod::computeReadBox(HLState& S, const std::vector<hl::Bar>& B, long long
     }
     S.rbLevels = (int)I.levels.size(); S.rbMq = (int)I.mq.size();
     // lsDeltaProfile's decided signals: today's and yesterday's record (the session crosses midnight UTC)
-    {   const long long day = rbx::dayOf(I.bars.back().t); std::string all; long long stamp = 0;
+    {   const long long day = rbx::dayOf(I.bars.back().t); std::string all; long long stamp = 0; S.rbSigPaths.clear();
         for (long long dd = day - 1; dd <= day; dd++) { std::string t; long long st = -1;
             const std::string p = flexPath("DeltaProfile" + sep + S.mkt + "-" + sym + "-" + std::to_string(per) + "-signals-" + std::to_string(dd) + ".csv");
+            if (!p.empty()) S.rbSigPaths.push_back(p);   // (2.31.0) the live Flow line watches the same files
             if (hlSmallRead(p, 2 * 1024 * 1024, t, st)) { all += t; stamp += st; S.rbSigPath = p; } }
         if (stamp != S.rbSigStamp) { S.rbSigStamp = stamp; S.rbSig = all; }
         I.sigs = rbx::parseSigs(S.rbSig); S.rbSigs = (int)I.sigs.size(); }
     // the day: lsHodLod's Range Day read (pre-open / 30-min) and the ATR(14) day range
     I.day.kind = S.rdOut.kind; I.day.pBig = S.rdOut.pBig; I.day.pSmall = S.rdOut.pSmall; I.day.xr = S.rdOut.xr; I.day.post = S.rdOut.post;
     I.day.adr = std::isfinite(S.view.rdAtr) && S.view.rdAtr > 0 ? S.view.rdAtr : S.view.adrTrim;
+    { S.rbFlow = rbx::In(); S.rbFlow.mkt = I.mkt; S.rbFlow.dec = I.dec; S.rbFlow.per = I.per; S.rbFlow.sigs = I.sigs; const size_t nb = I.bars.size(); for (size_t q = nb >= 2 ? nb - 2 : 0; q < nb; q++) S.rbFlow.bars.push_back(I.bars[q]); S.rbFlowMs = -1; S.rbFlowStamp = -2; }   // (2.31.0)
     S.rbox = rbx::build(I); S.rbBookMs = -100000;   // (2.26.0) the draw re-reads the book at once
     S.rbWhy = S.rbox.why + ",levels " + std::to_string(S.rbLevels) + ",mq " + std::to_string(S.rbMq) + ",dp signals " + std::to_string(S.rbSigs) + ",book facts " + std::to_string(S.rbBookN) + ",day " + (S.rdOut.kind < 0 ? "none" : "ok");
 }
@@ -1951,6 +1954,21 @@ int HodLod::draw(void)
     execute(L);
     hl::Box stripBox = { 0, 0, 0, 0 }; bool stripOk = false;   // (2.21.0) the read strip's rectangle: a confirm badge keeps off it
     static const int HL_RB_LEFT = 4;   // (2.22.2) the read box's left edge = the pane left + 4 px (was + 38)
+    if (S->rbox.ok) {   // (2.31.0, Rassul 2026-11-17 07:16-07:18 CT "is the flow read realtime and updating", "yes , i want it to be realtime flow") THE FLOW LINE, LIVE:
+        // once a second - the Delta Profile's signal files are re-read when they changed and "still in play" is tested against the LIVE last price,
+        // so an event price has traded through drops out at once and a new event shows without waiting for the candle to close
+        const long long fms = hlNowMs();
+        if (S->rbFlowMs < 0 || fms < S->rbFlowMs || fms - S->rbFlowMs >= 1000) {
+            S->rbFlowMs = fms;
+            try {
+                long long st = 0; for (const std::string& p : S->rbSigPaths) st += hlFileStamp(p);
+                if (st != S->rbFlowStamp) { S->rbFlowStamp = st; std::string all; for (const std::string& p : S->rbSigPaths) { std::string t; long long s2 = -1; if (hlSmallRead(p, 2 * 1024 * 1024, t, s2)) all += t; } S->rbFlow.sigs = rbx::parseSigs(all); }
+                double live = NAN; { const long n2 = getBarCount(); if (n2 > 0) { RTARRAY cl2(barClose); if ((long)cl2.count >= n2) live = (double)cl2[(int)(n2 - 1)]; } }
+                S->rbFlow.livePx = live;
+                if (!S->rbFlow.bars.empty()) { rbx::applyFlow(S->rbox, rbx::flowLine(S->rbFlow, S->rbox.at + S->rbFlow.per, S->rbox.atr)); S->rbFlowRuns++; }
+            } catch (...) {}
+        }
+    }
     if (S->rbox.ok) {   // (2.26.0) the Book line: lsBookFlow's newest defend ratios (fact F, this chart), re-read once a second; the forming candle when it is there
         const long long bms = hlNowMs();
         if (S->rbBookMs < 0 || bms < S->rbBookMs || bms - S->rbBookMs >= 1000) {
@@ -1971,7 +1989,17 @@ int HodLod::draw(void)
         int tw = 0; for (int k = 0; k < S->rbox.n && k < 5; k++) tw = (std::max)(tw, textW(S->rbox.l[k].text, fs, false));
         const rbx::Layout RL0 = rbx::layout(l, t, r, (int)pane.bottom, tw, fs, S->rbox.n);
         if (L.tableOk && RL0.ok && L.table.t < RL0.box.b && L.table.b > RL0.box.t && L.table.l < RL0.box.r && L.table.r > l) l = (std::max)(l, L.table.r + 6);   // a table at the top keeps its spot
-        const rbx::Layout RL = rbx::layout(l, t, r, (int)pane.bottom, tw, fs, S->rbox.n);
+        rbx::Layout RL = rbx::layout(l, t, r, (int)pane.bottom, tw, fs, S->rbox.n);
+        if (RL.ok) {   // (2.31.0, Rassul 2026-11-17 07:03 CT "move flow read to the bottom center above the hod lod box") centred on the HOD / LOD table, just above it
+            // (above its Gex strip when that is drawn); no table = the bottom centre of the pane. Without room it stays at the top left as before.
+            const int bw2 = RL.box.r - RL.box.l, bh2 = RL.box.b - RL.box.t;
+            const int anchorT = L.tableOk ? (L.gexOk ? (std::min)(L.table.t, L.gexRow.t) : L.table.t) : (int)pane.bottom - 22;
+            const int cx2 = L.tableOk ? (L.table.l + L.table.r) / 2 : (l + r) / 2;
+            int nl2 = cx2 - bw2 / 2; if (nl2 + bw2 > r) nl2 = r - bw2; if (nl2 < l) nl2 = l;
+            const int nt2 = anchorT - 4 - bh2;
+            if (nt2 > (int)pane.top + 24) { const int dx2 = nl2 - RL.box.l, dy2 = nt2 - RL.box.t; RL.box.l += dx2; RL.box.r += dx2; RL.box.t += dy2; RL.box.b += dy2;
+                for (int k = 0; k < 5; k++) { RL.line[k].l += dx2; RL.line[k].r += dx2; RL.line[k].t += dy2; RL.line[k].b += dy2; } }
+        }
         if (RL.ok) {
             RCT bg; bg.set((short)RL.box.l, (short)RL.box.t, (short)RL.box.r, (short)RL.box.b); bg.draw(1, (COLOR)0x003A3F47, (COLOR)0x0015181D, DRAW_OPAQUE, PAT_SOLID);
             stripBox = hl::Box{ RL.box.l, RL.box.t, RL.box.r, RL.box.b }; stripOk = true;
@@ -2122,6 +2150,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.30.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.31.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
