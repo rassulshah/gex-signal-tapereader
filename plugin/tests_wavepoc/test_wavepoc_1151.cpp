@@ -21,6 +21,6 @@ int main() {
     CHECK(run(3, true) == 1, "3 bars after the pivot: still this leg");
     CHECK(run(5, true) == 0, "5 bars after: not this leg");
     CHECK(run(1, false) == 0, "a CoB not drawn (ZZO under 10): no leg");
-    CHECK(std::string(wpc::VERSION) == "1.15.1", "version");
+    CHECK(std::string(wpc::VERSION) == "1.15.2" && wpc::GREY_FADE > 0.3, "version 1.15.2, lighter rows");
     std::cout << "test_wavepoc_1151: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }

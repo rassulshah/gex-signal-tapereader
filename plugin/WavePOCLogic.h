@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.15.1";   // (1.15.1, 2026-11-17 Rassul 09:55 CT: CoB legs found - the CoB mark is on the bar after the end pivot)
+static const char* const VERSION = "1.15.2";   // (1.15.2, 2026-11-17 Rassul 12:28 CT: the plain profile rows lighter, GREY_FADE 0.28 -> 0.38)
+// was static const char* const VERSION = "1.15.1";   // (1.15.1, 2026-11-17 Rassul 09:55 CT: CoB legs found - the CoB mark is on the bar after the end pivot)
 // was static const char* const VERSION = "1.15.0";   // (1.15.0, 2026-11-16 Rassul 21:32 / 22:02 CT "put back the spine with the volume profile alon with the poc and 2 hvns like we had before", "build the wave poc") the spine, the grey volume profile right of it, the POC + up to 2 HVNs (the 1.9.3 rules)
 // was static const char* const VERSION = "1.14.0";   // (1.14.0, 2026-11-11 Rassul 19:09-19:12 CT) no spine; the POC and the HVN are dashes ON the candle that traded the most at that price; lots at the end of the POC dash
 // was static const char* const VERSION = "1.13.0";   // (1.13.0, 2026-11-10 Rassul 13:03-13:11 CT) wave POC + up to 1 HVN (below the POC and below the level the BO broke; POC at / below it = none); the pullback (PB POC) profile removed
@@ -87,7 +88,7 @@ static const bool CLUSTER_A = false;   // (1.6.2) the 8-tick cluster A? is off: 
 static const double T_ZONE = 0.85;   // (1.6.2, Rassul 10:05 CT "we need to change T to 15%") T? = the last 15% of the wave (was 20%)     // (1.6.2, Rassul 2026-11-02 09:44 CT "keep T simple, its an upwave with heavy green delta in the end of the wave near the top (20%) and vice versa") + 09:46 "we should also make it the poc of the wave") T = the wave's biggest with-wave row (green among green in an up wave, red among red in a down wave; 09:51), >= 2x the median, in the last 20%
 static const int PB_GAP = 46;   // (1.8.2, Rassul 2026-11-03 12:24 CT) one row further out: his ratio label at the extreme, lsCandleAbsorb 1.1.1's code one row out, Pb one more   // was 30;   // (1.7.1, Rassul 14:32 CT "put Pb a little higher because it is on top of the distance ratio") was 16;   // (1.5.0) Pb one text row away from the bar (the candle code A? / Ae? / D? / S? owns the row next to it)
 static const int PB_MAX = 3;            // POC pullback: the next 3 pullback pivots after the wave
-static const double GREY_FADE = 0.28;   // (1.9.6) plain profile rows: 28% grey over the chart ground (mix weight = the colour share; was 0.4)
+static const double GREY_FADE = 0.38;   // (1.15.2, Rassul 2026-11-17 12:28 CT "the nodes are very dark graey , make them slightly lighter": 0.28 -> 0.38; 1.9.6 had made them 0.28 from 0.40 "the profile covers the candles")   // (1.9.6) plain profile rows: 28% grey over the chart ground (mix weight = the colour share; was 0.4)
 static const bool SHOW_PB = false;      // (1.8.3) the POC-pullback "Pb" + its dotted line: off (Pb = lsBreakout 1.1.0, a pullback that tests the BO / BD candle); pullbacks() still computed and counted in the status file
 
 // fixed rules (from the approved mockup / reference wp2.py + wp3.py)
