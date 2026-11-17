@@ -93,12 +93,13 @@
 #include <sys/stat.h>
 
 static const double BF_RATIO_MIN = 1.2;   // (0.11.1) a Book Flow ratio label needs the bigger side 1.2x the smaller or more
+static const bool ACC_READ_DRAWN = false;   // (0.12.0, Rassul 2026-11-17 06:03 CT "remove what is there currently now") the Accum / Distrib read is not drawn in the pane (the boxes on the price chart stay; the read stays in the status file)
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
 #define RVS_VERSION "0.11.1"   // (0.11.1, 2026-11-16 Rassul 20:27 CT "i want ratios on bars where 1 is bigger than the other": the label = the bigger Book Flow side / the smaller, on the bigger bar - was the bar against its own 20-candle average)   // was "0.11.0"   // (0.11.0, 2026-11-16 Rassul 20:20 CT "i want to put book flow back": the pane draws the Book Flow bars itself - no lsBookFlowBg needed; buy / sell volume, delta and delta change stay computed, not drawn)   // was "0.10.1"   // (0.10.1, 2026-11-16 19:02 CT: AccumLogic 2.0.1 - the pivot close rule when the climax is the candle before the pivot)   // was "0.10.0"   // (0.10.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go": the accumulation / distribution zones are AccumLogic 2.0.0, the simple rule - climax volume, stall, delta turned, with the trend; the read shows Climax / Stall / Delta)   // was "0.9.2"   // (0.9.2, 2026-11-16 Rassul 13:50 CT "where is the reversal read .. its blank": the bars are drawn in a low pane - under about 52 px nothing was drawn)   // was "0.9.1"   // (0.9.1, 2026-11-16 Rassul 12:44-12:45 CT "build", "i dont see the accumulaiton or distibution": the read shows the LAST zone when none is open, in 3 lines when the pane is low; every order event feeds AccumLogic 1.2.0 (resting lots added / pulled / filled per price) for the quiet end and the other side building)   // was "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.11.1");
+    p->setVersion("0.12.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -217,6 +218,7 @@ struct PocStore {
 #endif
 #define OFF_SDK 1
 #include "OrderFlowFeed.h"
+#include "FlowRead.h"          // (0.12.0) the order flow + pulling / stacking read (SDK-free, tests_revread/t_flowread)
 #include "AccumLogic.h"        // (0.9.0) accumulation / distribution zones (SDK-free, tests_accum)
 #include "SRBack.h"            // (0.8.0) lsSR in the background: same rules, same journal, nothing drawn
 namespace rvs {
@@ -527,6 +529,7 @@ public:
         // the net is positive; (0.11.1) "1.6x" on the bigger bar = the bigger side / the smaller side. Buy / sell volume, delta and the letters' own
         // numbers are still computed (the reads use them) - not drawn.
         std::vector<double> bfx[2];
+        flr::In flowIn; bool flowOk = false; int flowBar = -1;   // (0.12.0)
         if (RV_SHOW_BOOKFLOW) {
             c.clear(); off::PaneBar lb; bool haveLive = false;                 // the forming candle: its numbers as of now (as lsBookFlow builds them)
             {   const auto it = S.accs.find(S.formingKey);
@@ -540,6 +543,13 @@ public:
                     const long long big = std::max(q.buy, q.sell), sml = std::min(q.buy, q.sell); const int sd = q.buy >= q.sell ? 0 : 1;
                     bfx[0].push_back(big > 0 && big != sml ? (sml > 0 ? std::min(99.9, (double)big / (double)sml) : 99.9) : 0.0); bfx[1].push_back((double)sd); }
                 PNT p; p.set(i, 0.0f, kBarCenter); c.push_back(std::make_pair((int)p.h, q)); }
+            {   // (0.12.0) the order flow read's candle: the one under the mouse, else the last closed one; its numbers + x the 20 candles before
+                const int hbF = S.hov.hover.bar; flowBar = hbF >= 0 && hbF < (int)count ? hbF : (int)count - 2;
+                const off::Rec* r = flowBar >= 0 ? recOf(flowBar) : nullptr;
+                if (r) { flowOk = true; std::vector<long long> pb[2], rb[2];
+                    for (int j = flowBar - 1, n = 0; j >= 0 && n < flr::NORM_N && flowBar - j <= 3 * flr::NORM_N; --j) { const off::Rec* q = recOf(j); if (!q) continue; ++n; for (int s2 = 0; s2 < 2; ++s2) { pb[s2].push_back(q->pullC[s2]); rb[s2].push_back(q->refC[s2]); } }
+                    for (int s2 = 0; s2 < 2; ++s2) { flowIn.add[s2] = r->addC[s2]; flowIn.pull[s2] = r->pullC[s2]; flowIn.ref[s2] = r->refC[s2]; flowIn.hit[s2] = r->hitC[s2]; flowIn.ice[s2] = r->ice[s2];
+                        flowIn.pullX[s2] = flr::timesNormal(r->pullC[s2], pb[s2]); flowIn.refX[s2] = flr::timesNormal(r->refC[s2], rb[s2]); } } }
         }
         static const std::map<long long, std::vector<rvs::Mark> > none;
         // (0.6.0) buy and sell volume side by side; no values; the "biggest in" count on a bar that is the biggest in 10+ candles
@@ -590,11 +600,11 @@ public:
             const int y0 = pane.top + 2, room = pane.bottom - y0; const int rowH = L.empty() ? 17 : std::min(17, room / (int)L.size());
             if (rowH >= 10) { setFont(rowH >= 16 ? fl : fb); int wmax = 0; for (const acc::Line& l : L) wmax = std::max(wmax, (int)getTextWidth(l.text.c_str(), -1));
                 PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18;
-                if (v1 >= (int)count - 1 && xr + wmax <= pane.right - 6) {
+                if (ACC_READ_DRAWN && v1 >= (int)count - 1 && xr + wmax <= pane.right - 6) {
                     for (size_t i = 0; i < L.size(); ++i) { const COLOR c = L[i].col == 3 ? (COLOR)acc::C_AMBER : L[i].col == 2 ? rvh::C_WHITE : L[i].col > 0 ? rvh::C_GREEN : rvh::C_RED; put(L[i].text, xr, y0 + (int)i * rowH, c, pane.right - 5); }
                     accShift = wmax + 26; } }
         }
-        std::string read;
+        std::string read; int blockR = 0;   // (0.12.0) blockR = the right end of the story drawn right of the last candle (0 = not there)
         if (!e.note.empty()) { setFont(fp); put(e.note, x, y, rvh::C_GRAY, lim); read = e.note; }
         else if (!e.eng) { const std::string fs = S.feed.stateText(off::steadyMs()); const std::string t = fs != "ready" && !fs.empty() ? "no order feed - " + fs : "waiting for orders"; setFont(fp); put(t, x, y, rvh::C_GRAY, lim); read = t; }
         else {
@@ -626,13 +636,39 @@ public:
             else if (R.empty()) read = "no story";
             else {
                 setFont(fl); int wmax = 0; for (const Row& r : R) wmax = std::max(wmax, (int)getTextWidth(r.t.c_str(), -1) + (r.t2.empty() ? 0 : 10 + (int)getTextWidth(r.t2.c_str(), -1)));
-                PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18 + accShift; const int rowH = 17, y0 = pane.top + LINE_H + 6;
+                PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18 + accShift; const int y0 = pane.top + 2;
+                // (0.12.0, Rassul 06:03 CT "move the climax") the story sits in the empty space right of the last candle, from the pane's top; a low pane
+                // gets the small font and 14 px rows so the steps still fit one under the other
+                int rowH = 17; if (y0 + (int)R.size() * rowH > pane.bottom) { rowH = 14; setFont(fb); wmax = 0; for (const Row& r : R) wmax = std::max(wmax, (int)getTextWidth(r.t.c_str(), -1) + (r.t2.empty() ? 0 : 10 + (int)getTextWidth(r.t2.c_str(), -1))); }
                 if (v1 >= (int)count - 1 && xr + wmax <= lim && y0 + (int)R.size() * rowH <= pane.bottom) {
-                    for (size_t i = 0; i < R.size(); ++i) { const int yy = y0 + (int)i * rowH; const int w = put(R[i].t, xr, yy, R[i].c, lim + 1); if (w > 0 && !R[i].t2.empty()) put(R[i].t2, xr + w + 10, yy, R[i].c2, lim + 1); } }
+                    for (size_t i = 0; i < R.size(); ++i) { const int yy = y0 + (int)i * rowH; const int w = put(R[i].t, xr, yy, R[i].c, lim + 1); if (w > 0 && !R[i].t2.empty()) put(R[i].t2, xr + w + 10, yy, R[i].c2, lim + 1); }
+                    blockR = xr + wmax; }
                 else { setFont(fb);
                     for (size_t i = 0; i < R.size(); ++i) { if (i) { const int w = put(">", x, y, rvh::C_GRAY, lim); if (w < 0) break; x += w + 5; }
                         int w = put(R[i].t, x, y, R[i].c, lim); if (w < 0) break; x += w + 5; if (!R[i].t2.empty()) { w = put(R[i].t2, x, y, R[i].c2, lim); if (w < 0) break; x += w + 5; } } }
             }
+        }
+        if (flowOk && v1 >= (int)count - 1) {   // (0.12.0) THE ORDER FLOW READ: right of the story (or right of the last candle); the line, then the table
+            const flr::Out fo = flr::read(flowIn); const std::vector<flr::Row> FR = flr::rows(flowIn);
+            std::string when; { struct tm t; std::memset(&t, 0, sizeof t); if (getLocaltime((RTDATE)times[flowBar], &t)) when = off::clock12(t.tm_hour, t.tm_min); }
+            setFont(fb); const int rowH = 14, y0 = pane.top + 2; PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter);
+            const int xT = blockR > 0 ? blockR + 26 : (int)pl.h + (int)bw / 2 + 18;
+            int wb = (int)getTextWidth("Bids", -1), wa = (int)getTextWidth("Offers", -1), wl = (int)getTextWidth(when.c_str(), -1), wn = 0;
+            for (const flr::Row& r : FR) { wl = std::max(wl, (int)getTextWidth(r.lab.c_str(), -1)); wb = std::max(wb, (int)getTextWidth(r.b.c_str(), -1)); wa = std::max(wa, (int)getTextWidth(r.a.c_str(), -1)); wn = std::max(wn, (int)getTextWidth(r.note.c_str(), -1)); }
+            const int c1 = xT + wl + 12, c2 = c1 + wb + 14, c3 = c2 + wa + 14;
+            const std::string headLine = fo.head + (fo.why.empty() ? std::string() : " " + fo.why);
+            const int need = std::max(c3 + wn - xT, (int)getTextWidth(headLine.c_str(), -1));
+            const int fit = (pane.bottom - y0) / rowH;   // rows that fit: the line, the Bids / Offers heads, then the table rows by importance
+            if (xT + need <= lim && fit >= 3) {
+                if (blockR > 0) { setPen(rvh::C_GRAY, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = rvh::coord(xT - 13); a.v = rvh::coord(y0 + 2); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = rvh::coord(xT - 13); b.v = rvh::coord(std::min((int)pane.bottom - 3, y0 + fit * rowH)); b.drawLineTo(); }
+                const COLOR vc = fo.verdict == 1 ? rvh::C_GREEN : fo.verdict == -1 ? rvh::C_RED : fo.verdict == 2 ? rvh::C_WHITE : rvh::C_GRAY;
+                const int hw = put(fo.head, xT, y0, vc, lim + 1); if (hw > 0 && !fo.why.empty()) put(fo.why, xT + hw + 6, y0, rvh::C_WHITE, lim + 1);
+                int yy = y0 + rowH; put(when, xT, yy, rvh::C_GRAY, lim + 1); put("Bids", c1, yy, rvh::C_GREEN, lim + 1); put("Offers", c2, yy, rvh::C_RED, lim + 1);
+                for (size_t i = 0; i < FR.size() && (int)i + 3 <= fit; ++i) { yy += rowH; const flr::Row& r = FR[i];
+                    put(r.lab, xT, yy, rvh::C_GRAY, lim + 1); put(r.b, c1, yy, rvh::C_GREEN, lim + 1); put(r.a, c2, yy, rvh::C_RED, lim + 1);
+                    if (!r.note.empty()) put(r.note, c3, yy, r.noteCol > 0 ? rvh::C_GREEN : r.noteCol < 0 ? rvh::C_RED : rvh::C_WHITE, lim + 1); }
+            }
+            read += " || flow " + when + ": " + headLine;
         }
         if (!accRead.empty()) read = accRead + " || " + read;
         e.lastRead = read; ++e.drawn;
