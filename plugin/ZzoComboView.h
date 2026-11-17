@@ -23,6 +23,7 @@
 #ifndef ZZO_COMBO_VIEW_H
 #define ZZO_COMBO_VIEW_H
 #include "ZzoDeltaLogic.h"
+#include "WaveRead.h"       // (3.1.0) the wave read: verdict, wave, two behaviour lines + the numbers (SDK-free, tests_wave)
 #include "ZzoCobFinder.h"   // (2.3.0) the CoB finder: Cob / Lvp tags
 
 namespace zzd {
@@ -63,7 +64,7 @@ inline std::vector<std::pair<std::string, std::string>> readRows(const zcf::Read
 
 // (3.0.0) the read of the 3-hour-sweep CoBs, handed in by the host (built from CobCheck.h): tags by (the wave's pivot bar END, the wave's
 // direction) -> the CoB's side; rows = label, value, colour (0 white, 1 up, 2 down)
-struct XRead { int readX = -1;   /* (3.0.1, Rassul 2026-11-16 10:58 CT "move others reads to the right") the x just right of the last candle when it is on screen, else -1 = the left edge */ bool on = false, any = false; int dir = 0; std::vector<std::pair<std::string, std::string>> rows; std::vector<int> col;
+struct XRead { int pick = -1;   /* (3.1.0) the engine bar under the mouse (-1 = none): the wave read is about its wave */ int readX = -1;   /* (3.0.1, Rassul 2026-11-16 10:58 CT "move others reads to the right") the x just right of the last candle when it is on screen, else -1 = the left edge */ bool on = false, any = false; int dir = 0; std::vector<std::pair<std::string, std::string>> rows; std::vector<int> col;
     std::map<std::pair<long long, int>, int> cob, lvp; };
 inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, long long formVol, const View& v, const std::string& head, const zcf::Finder* cf0 = nullptr, const XRead* xr = nullptr) {
     const bool xon = xr && xr->on; const zcf::Finder* cf = xon ? nullptr : cf0;   // (3.0.0) with an XRead nothing of the old finder is drawn
@@ -189,25 +190,42 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
     }
     S.p.insert(S.p.end(), over.begin(), over.end());
     bool boxed = false;
-    if (xon && !xr->rows.empty()) {   // (3.0.0) the checklist read box: fixed width (the widest value a row can take), rows drop from the bottom in a short pane
-        const std::vector<std::pair<std::string, std::string>>& rows = xr->rows;
-        int kw = v.textW("Warn (0)"), vw = std::max(v.textW("S2 28,583.75 AsiaLO"), v.textW("3/3 3row SMA R1")); for (const auto& r : rows) { kw = std::max(kw, v.textW(r.first)); vw = std::max(vw, v.textW(r.second)); }
-        const int rh = TH + 2, bw = std::max(kw + vw + 22, v.textW(head) + 12);
-        const int x0 = (xr->readX >= 0 && xr->readX + bw < v.r) ? xr->readX : v.l + 2;   // (3.0.1) right of the last candle when there is room, else the left edge as before
-        const int y0 = v.t + 1, fit = std::min((int)rows.size(), (H - 4 - (TH + 4)) / rh);
-        if (fit >= 2 && x0 + bw < v.r) {
-            boxed = true; const int y1 = y0 + TH + 4 + fit * rh + 2;
-            Prim e; e.k = Prim::FILL; e.x0 = x0; e.x1 = x0 + bw; e.y0 = y0; e.y1 = y1; e.col = 0x6B7280; S.p.push_back(e);
-            Prim f = e; f.x0 += 1; f.x1 -= 1; f.y0 += 1; f.y1 -= 1; f.col = 0x0B0F17; S.p.push_back(f);
-            const int hw = v.textW(head);
-            { Prim p; p.k = Prim::TEXT; p.x0 = x0 + (bw - hw) / 2; p.x1 = p.x0 + hw; p.y0 = y0 + 2; p.y1 = p.y0 + TH; p.col = white; p.text = head; S.p.push_back(p); }
-            for (int i = 0; i < fit; ++i) {
-                const int y = y0 + TH + 4 + i * rh; const int w2 = v.textW(rows[(size_t)i].second); const int cc = (size_t)i < xr->col.size() ? xr->col[(size_t)i] : 0;
-                Prim k; k.k = Prim::TEXT; k.x0 = x0 + 6; k.x1 = k.x0 + v.textW(rows[(size_t)i].first); k.y0 = y; k.y1 = y + TH; k.col = C.grey; k.text = rows[(size_t)i].first; S.p.push_back(k);
-                Prim q; q.k = Prim::TEXT; q.x1 = x0 + bw - 6; q.x0 = q.x1 - w2; q.y0 = y; q.y1 = y + TH; q.text = rows[(size_t)i].second; q.col = cc == 1 ? C.up : cc == 2 ? C.down : white; S.p.push_back(q);
-                S.box.push_back(rows[(size_t)i]);
+    if (xon) {   // (3.1.0, Rassul 2026-11-17 06:07-07:02 CT; mockup claude.ai/artifact/3GEqJ61mb24wNyuSvNz2JM) THE WAVE READ, right of the last candle, no frame and
+        // no version text ("this space is very valuable"): four lines (verdict / wave / two behaviours), then the numbers beside them. It is about the wave
+        // under the mouse, else the last finished wave. The 3.0.0 checklist rows are folded into the "Cob" row.
+        std::vector<wvr::W> ws; ws.reserve(waves.size()); int pickW = -1;
+        for (size_t k = 0; k < waves.size(); ++k) { const Wave& w = waves[k]; wvr::W q; q.dir = w.dir; q.vol = w.vol; q.volX = w.hasV && w.medV > 0 ? (double)w.vol / w.medV : 0; q.cnt = w.cnt; q.cntCap = w.cntCap; q.live = w.live;
+            q.size = w.size; q.sizeX = w.hasS && w.medS > 0 ? (double)w.size / w.medS : 0; q.ab = w.ab != 0; q.cmx = w.cmx; ws.push_back(q);
+            if (xr->pick >= 0 && xr->pick >= w.s && xr->pick <= w.e) pickW = (int)k; }
+        std::string cobLine; if (xr->any) for (const auto& r : xr->rows) { if (r.second.empty() || r.second == "-") continue; cobLine += (cobLine.empty() ? "" : "  ") + r.second; }
+        const wvr::Out o = wvr::read(ws, pickW, cobLine);
+        if (o.ok) {
+            const int rh = TH + 2, y0 = v.t + 1, fit = (H - 2) / rh;
+            struct Ln { std::string a, b; unsigned long ca, cb; }; std::vector<Ln> LN;
+            LN.push_back(Ln{ o.head, o.why, o.verdict == 1 ? C.up : o.verdict == -1 ? C.down : o.verdict == 2 ? white : C.grey, white });
+            LN.push_back(Ln{ "Wave:", o.wave, C.grey, white });
+            if (!o.b1.empty()) LN.push_back(Ln{ o.b1, "", white, white });
+            if (!o.b2.empty()) LN.push_back(Ln{ o.b2, "", white, white });
+            int wl = 0; for (const Ln& l : LN) wl = std::max(wl, v.textW(l.a) + (l.b.empty() ? 0 : 6 + v.textW(l.b)));
+            const int x0 = (xr->readX >= 0 && xr->readX + wl < v.r) ? xr->readX : v.l + 2;
+            if (fit >= 1 && x0 + wl < v.r) {
+                boxed = true; int nl = 0;
+                for (size_t i = 0; i < LN.size() && (int)i < fit; ++i, ++nl) { const int y = y0 + (int)i * rh; const int wa = v.textW(LN[i].a);
+                    Prim k; k.k = Prim::TEXT; k.x0 = x0; k.x1 = x0 + wa; k.y0 = y; k.y1 = y + TH; k.col = LN[i].ca; k.text = LN[i].a; S.p.push_back(k);
+                    if (!LN[i].b.empty()) { Prim q; q.k = Prim::TEXT; q.x0 = x0 + wa + 6; q.x1 = q.x0 + v.textW(LN[i].b); q.y0 = y; q.y1 = y + TH; q.col = LN[i].cb; q.text = LN[i].b; S.p.push_back(q); }
+                    S.box.push_back(std::make_pair(std::string("line ") + std::to_string(i + 1), LN[i].a + (LN[i].b.empty() ? std::string() : " " + LN[i].b))); }
+                int wk = 0, wa2 = 0, wb2 = 0, wc2 = 0; for (const wvr::Row& r : o.rows) { wk = std::max(wk, v.textW(r.lab)); wa2 = std::max(wa2, v.textW(r.a)); wb2 = std::max(wb2, v.textW(r.b)); wc2 = std::max(wc2, v.textW(r.c)); }
+                const int xb = x0 + wl + 26, ca = xb + wk + 12, cbx = ca + wa2 + 14, cc = cbx + wb2 + 14;
+                auto colOf = [&](int c) -> unsigned long { return c == 1 ? C.up : c == -1 ? C.down : c == 2 ? C.grey : white; };
+                if (x0 == xr->readX && cc + wc2 < v.r) {
+                    { Prim e; e.k = Prim::FILL; e.x0 = xb - 13; e.x1 = xb - 13; e.y0 = y0 + 2; e.y1 = std::min(v.b - 3, y0 + std::min(fit, (int)o.rows.size()) * rh); e.col = 0x374151; S.p.push_back(e); }
+                    for (size_t i = 0; i < o.rows.size() && (int)i < fit; ++i) { const wvr::Row& r = o.rows[i]; const int y = y0 + (int)i * rh;
+                        auto put = [&](const std::string& t, int x, unsigned long col) { if (t.empty()) return; Prim q; q.k = Prim::TEXT; q.x0 = x; q.x1 = x + v.textW(t); q.y0 = y; q.y1 = y + TH; q.col = col; q.text = t; S.p.push_back(q); };
+                        put(r.lab, xb, C.grey); put(r.a, ca, colOf(r.ca)); put(r.b, cbx, colOf(r.cb)); put(r.c, cc, colOf(r.cc));
+                        S.box.push_back(std::make_pair(r.lab, r.a + (r.b.empty() ? std::string() : " " + r.b) + (r.c.empty() ? std::string() : " " + r.c))); }
+                }
+                S.boxRows = nl; S.boxL = x0; S.boxT = y0; S.boxR = x0 + wl; S.boxB = y0 + nl * rh;
             }
-            S.boxRows = fit; S.boxL = x0; S.boxT = y0; S.boxR = x0 + bw; S.boxB = y1;
         }
     }
     if (!xon && cf && cf->ok) {

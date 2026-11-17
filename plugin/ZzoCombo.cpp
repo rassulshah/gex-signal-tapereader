@@ -87,6 +87,7 @@
 #ifdef near
 #undef near
 #endif
+#include "PaneCursor.h"       // (3.1.0) is the mouse inside THIS pane right now (IRT sends no event when it leaves)
 #include "ZzoComboView.h"
 #include "CobCheck.h"        // (3.0.0) the 3-hour-sweep CoBs (lsCobSignal's engine) + the checklist
 #include "HostSlot.h"
@@ -140,6 +141,7 @@ struct ZState {
     zzd::Engine E; std::vector<RTDATE> raw; int off = 0;
     bool vapFault = false;
     bool haveForm = false; zzd::Bar formBar;
+    int hov = -1; pc::Tracker cur;   // (3.1.0) the chart bar under the mouse (-1 = not in this pane): the wave read is about its wave
     std::vector<zzd::Wave> vWaves; long long vSig[12] = { 0 }; bool vOk = false;   // (2.8.2) the waves to draw, rebuilt only when a bar or the forming bar changed
     std::string statusPath; long long statusMs = -1; std::string statusBody;
     zzd::ComboScene last;
@@ -160,6 +162,10 @@ public:
     virtual int parmsApplyBody(void) { return RTX_OK; }
     virtual int parmsUpdtBody(unsigned int) { return RTX_OK; }
     virtual int draw(void);
+#ifndef ZC_MARKS
+    virtual int mouse(RTX_EVENT* ev);   // (3.1.0)
+    void mouseLeft(ZState& S);
+#endif
     HostSlot<ZState> slot_;
     void clear() { slot_.release(this); }
     void pump();
@@ -395,7 +401,41 @@ void ZzoCombo::pump() {
     ZState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
     feed(*S); feedCob(*S); status(*S, zdMs());
+#ifndef ZC_MARKS
+    mouseLeft(*S);
+#endif
 }
+
+#ifndef ZC_MARKS
+// (3.1.0, Rassul 2026-11-17 07:02 CT "make sure that as i move my mouse on different bars i get that bars / waves information") the mouse, as lsVolRead
+// 1.2.0: IRT sends move events only while the cursor is over this pane; where the pane sits on the screen is remembered so calc / draw can tell
+// when the cursor has left - the read goes back to the last finished wave. The event is never swallowed.
+#if defined(_WIN32)
+#if defined(_MSC_VER)
+#pragma comment(lib, "user32.lib")
+#endif
+static void* zcCursorWindow(int sx, int sy) { POINT p; p.x = sx; p.y = sy; return (void*)WindowFromPoint(p); }
+#else
+static void* zcCursorWindow(int, int) { return nullptr; }
+#endif
+int ZzoCombo::mouse(RTX_EVENT* ev) {
+    if (!ev || (ev->type != E_MOUSE_MOVE && ev->type != E_MOUSE_HOVER)) return RTX_FAIL;
+    ZState* S = slot_.get(this, false); if (!S || !S->keyed) return RTX_FAIL;
+    try {
+        int sx = 0, sy = 0; const bool ok = pc::cursorPos(sx, sy);
+        S->cur.onEvent(ok ? zcCursorWindow(sx, sy) : nullptr, ok, sx, sy, (int)ev->v.mouse.h, (int)ev->v.mouse.v);
+        const long n = getBarCount(); const long b = (long)ev->v.mouse.bar;
+        const int hov = (ok && b >= 0 && b < n && S->cur.eventInside((int)ev->v.mouse.h, (int)ev->v.mouse.v)) ? (int)b : -1;
+        if (hov != S->hov) { S->hov = hov; invalidateChart(false); }
+    } catch (...) {}
+    return RTX_FAIL;
+}
+void ZzoCombo::mouseLeft(ZState& S) {
+    if (S.hov < 0) return;
+    int sx = 0, sy = 0; const bool ok = pc::cursorPos(sx, sy);
+    if (!S.cur.inside(ok ? zcCursorWindow(sx, sy) : nullptr, ok, sx, sy)) { S.hov = -1; invalidateChart(false); }
+}
+#endif
 
 static short zdC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
 
@@ -444,6 +484,8 @@ int ZzoCombo::draw(void) {
         const std::vector<zzd::Wave>& waves = S->vWaves;
         const bool noFoot = !S->E.B.empty() && S->E.noVap >= (long long)S->E.B.size();   // no footprint on this chart: volume still works, Ab cannot
         const std::string head = std::string("Cob Reader ") + zcf::COMBO_VERSION + (noFoot ? "  no footprint - Ab off" : "");
+        S->cur.pane.l = pane.left; S->cur.pane.t = pane.top; S->cur.pane.r = pane.right; S->cur.pane.b = pane.bottom;   // (3.1.0) for mouseLeft
+        S->xr.pick = S->hov >= 0 ? S->hov - S->off : -1;   // (3.1.0) the bar under the mouse as an engine index
         S->xr.readX = ve >= (int)n - 1 ? (int)v.X((int)n - 1 - off) + (int)v.bw / 2 + 18 : -1;   // (3.0.1) the read box sits right of the last candle
         S->last = zzd::layoutCombo(S->E, waves, S->haveForm ? S->formBar.vol : 0, v, head, &S->F, &S->xr);
         const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom;
@@ -468,9 +510,9 @@ extern "C" cppExtension* CreateExtension(void) {
 #ifdef ZC_MARKS
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI | VAP_REQUIRED);   // on the price pane, on the instrument's scale; no hovers
 #else
-    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED);   // its own pane, draws itself; no mouse tracking (no hovers)
+    p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);   // its own pane, draws itself; (3.1.0) the mouse picks the wave the read is about
 #endif
-    p->setDescription("LRA Cob Reader v3.0.3 (was ZZO Combo; 3.0.3 = the CoBs of lsCobSignal 1.9.0: a key level or a 3-hour level swept; 3.0.2 = the wave columns show the wave's volume itself, as IRT's ZZO; 3.0.1 = the read box sits right of the last candle; 3.0.0 = the 3-hour-sweep CoBs of lsCobSignal with the checklist) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count; Cob = the CoB Signal's 3-hour-sweep CoB (a count 10+ wave whose origin swept a standing 3-hour S1 / S2 / R1 / R2 and came back through it), Lvp = its low-volume pullback; read box: Cob, Lvl, Check (3row, SMA, S1 / R1), Lvp, Warn (counter wave 0.8x+), Win. No settings.");
-    p->setVersion("3.0.3");   // = zcf::COMBO_VERSION (gex-build reads this literal)
+    p->setDescription("LRA Cob Reader v3.1.0 (was ZZO Combo; 3.1.0 = the wave read: verdict, wave, two behaviour lines and the numbers, for the wave under the mouse; 3.0.3 = the CoBs of lsCobSignal 1.9.0: a key level or a 3-hour level swept; 3.0.2 = the wave columns show the wave's volume itself, as IRT's ZZO; 3.0.1 = the read box sits right of the last candle; 3.0.0 = the 3-hour-sweep CoBs of lsCobSignal with the checklist) - 3-bar High/Low ZigZag waves: volume ramp vs the last 5 same-way waves, 2.0x+ ratio and count; Cob = the CoB Signal's 3-hour-sweep CoB (a count 10+ wave whose origin swept a standing 3-hour S1 / S2 / R1 / R2 and came back through it), Lvp = its low-volume pullback; read box: Cob, Lvl, Check (3row, SMA, S1 / R1), Lvp, Warn (counter wave 0.8x+), Win. No settings.");
+    p->setVersion("3.1.0");   // = zcf::COMBO_VERSION (gex-build reads this literal)
     return p;
 }
