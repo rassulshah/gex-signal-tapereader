@@ -30,8 +30,9 @@
 #include <vector>
 
 namespace acc {
-static const char* const VERSION = "2.0.0";   // (2.0.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it .. you are suppose to look for accumulation / distibution", "the volume at the pivot (or 1 bar before) is a clue", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go"): THE SIMPLE RULE replaces 1.x - climax volume at the pivot or the candle before (1.4x: ES 1:57 PM, the second case he circled, measured 1.43x), a push, 3+ candles stalling at the extreme, delta turned against the push, with the 60-candle trend; confirmed on a close beyond the stall. No order-book condition. Tested the same day on 80 sessions: with the trend 37% follow-through (n 217; ES 56%, n 39), the climax lifts HOLDING (60% -> 70% at 3x), not the move after: UNPROVEN, "?"   // was "1.2.1"
+static const char* const VERSION = "2.0.1";   // (2.0.1, 2026-11-16 19:02 CT: a climax one candle BEFORE the pivot counts only when the pivot closed no more than 1/3 ATR beyond the close before it)   // was "2.0.0";   // (2.0.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it .. you are suppose to look for accumulation / distibution", "the volume at the pivot (or 1 bar before) is a clue", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go"): THE SIMPLE RULE replaces 1.x - climax volume at the pivot or the candle before (1.4x: ES 1:57 PM, the second case he circled, measured 1.43x), a push, 3+ candles stalling at the extreme, delta turned against the push, with the 60-candle trend; confirmed on a close beyond the stall. No order-book condition. Tested the same day on 80 sessions: with the trend 37% follow-through (n 217; ES 56%, n 39), the climax lifts HOLDING (60% -> 70% at 3x), not the move after: UNPROVEN, "?"   // was "1.2.1"
 static const int LOOKP = 8, STALL_MIN = 3, TREND_BARS = 60, MAX_OPEN = 10, KEEP_BARS = 400, KEEP_ZONES = 300;
+static const int ATR_N = 14; static const double ATR_X = 1.0 / 3.0;   // (2.0.1)
 static const double CLIMAX_X = 1.4, PUSH_X = 1.5, STALL_X = 0.5, TREND_X = 2.0;   // (2.0.0)
 static const double NET_SHARE = 0.02, PROG_X = 0.25, ABS_X = 1.2, OFF_MAX = 0.30;
 static const int BK_SEC = 30, BK_KEEP = 300;                    // the book cells: 30 s each, 150 min kept (a zone spans at most 14 + 30 candles)
@@ -116,6 +117,9 @@ struct Engine {
     //   4. DELTA    the aggressors since the pivot are net AGAINST the push (NET_SHARE of the lots)
     //   5. TREND    the turn is WITH the trend of the last TREND_BARS candles (TREND_X mean ranges)
     //   -> the zone OPENS (amber). CONFIRMED when a candle closes beyond the stall (under its lowest low); BROKEN on a close above the high; EXPIRED after MAX_OPEN.
+    // the average TRUE range of the ATR_N candles before candle i (high - low, widened by the gap from the close before)
+    double atr(int i) const { double r = 0; int k = 0; for (int q = std::max(1, i - ATR_N); q < i; ++q) { const Bar& b = B[(size_t)q]; const long long pc = B[(size_t)q - 1].close;
+            r += (double)(std::max(b.hi, pc) - std::min(b.lo, pc)); ++k; } return k ? r / k : 0; }
     double meanRange(int n) const { double r = 0; int k = 0; for (int q = std::max(0, n - 21); q < n - 1; ++q) { r += (double)(B[(size_t)q].hi - B[(size_t)q].lo); ++k; } return k ? r / k : 0; }
     void step(Zone& z, int n) {
         const Bar& b = B[(size_t)n - 1]; const int s = z.side;
@@ -140,6 +144,10 @@ struct Engine {
         // 1. the climax: the biggest candle from the one before the stall to the pivot, against the 20 candles before those
         double vm = 0; for (int q = is - 21; q < is - 1; ++q) vm += (double)(B[(size_t)q].buy + B[(size_t)q].sell); vm /= 20.0; if (!(vm > 0)) return;
         long long vc = 0; int ic = is - 1; for (int q = is - 1; q <= ih; ++q) { const long long v = B[(size_t)q].buy + B[(size_t)q].sell; if (v > vc) { vc = v; ic = q; } }
+        // (2.0.1, Rassul 2026-11-16 19:02 CT "in the case where the high volume is not the pivot, because it is 1 bar before it, make sure the pivot close is no more
+        // than 1/3rd atr beyond the prior close") the climax came BEFORE the pivot: the pivot candle must not have closed more than ATR_X of the ATR beyond the close before it
+        if (ic < ih) { const double a = atr(ih); const long long d = side > 0 ? B[(size_t)ih - 1].close - B[(size_t)ih].close : B[(size_t)ih].close - B[(size_t)ih - 1].close;
+            if (!(a > 0) || (double)d > ATR_X * a) return; }
         const int ds = std::max(is, std::min(ic + 1, e - 1));   // the delta, the box and the far side are read AFTER the climax candle (its own delta is the push)
         const double cx = (double)vc / vm; if (cx < CLIMAX_X) return;
         // 2. the push

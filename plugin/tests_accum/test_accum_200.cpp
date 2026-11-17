@@ -1,4 +1,4 @@
-// test_accum_200.cpp - AccumLogic.h 2.0.0 (the simple rule).  g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. test_accum_200.cpp -o t200 && ./t200 es_2026-11-16.csv
+// test_accum_200.cpp - AccumLogic.h 2.0.1 (the simple rule).  g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. test_accum_200.cpp -o t200 && ./t200 es_2026-11-16.csv
 // Fixture: ES 3-min candles of 2026-11-16 (t = candle end, local seconds; lo, hi, close in ticks; buy, sell lots) - the day Rassul circled the 12:54 PM and 2:00 PM highs.
 #include "AccumLogic.h"
 #include <fstream>
@@ -48,5 +48,13 @@ int main(int argc, char** argv) {
     {   acc::Engine X; for (int i = 0; i < 40; ++i) { acc::Bar b; b.t = 1000 + i * 180; b.lo = 100; b.hi = 110; b.close = 105; b.buy = b.sell = 10; X.onCandle(b); } CHECK(X.Z.empty(), "a short history opens nothing");
         acc::Bar bad; bad.t = 99999999; bad.lo = 0; bad.hi = 5; X.onCandle(bad); bad.lo = 9; bad.hi = 5; X.onCandle(bad); CHECK(X.B.size() == 40, "bad candles are dropped");
         CHECK(acc::commas(-1466) == "-1,466" && acc::commas(66) == "+66" && acc::commas(1234567) == "+1,234,567" && acc::commas(0) == "+0", "the delta text"); }
+    {   // (2.0.1) the climax one candle BEFORE the pivot (12:51 PM, 2.1x; the pivot is 12:54 PM): the pivot may close at most 1/3 ATR beyond the close before it
+        auto run = [&](long long prevClose) { acc::Engine X; for (const acc::Bar& b : B) { acc::Bar q = b; if (hhmm(b.t) == 1251) q.close = prevClose; X.onCandle(q); } return at(X, -1, 1254) != nullptr; };
+        acc::Engine A0; int ih = -1; for (const acc::Bar& b : B) { A0.prime(b); if (hhmm(b.t) == 1254) ih = (int)A0.B.size() - 1; }
+        const double atr = ih > 0 ? A0.atr(ih) : 0; CHECK(atr > 20 && atr < 60, "the ATR before the pivot is about 7 to 15 points (" << atr * 0.25 << ")");
+        const long long pc = 29824;                                                   // the pivot closed at 7456.00
+        CHECK(run(pc - (long long)(atr / 3.0) + 1), "the pivot closed just inside 1/3 ATR beyond the close before: still a zone");
+        CHECK(!run(pc - (long long)(atr / 3.0) - 3), "the pivot closed more than 1/3 ATR beyond the close before: no zone");
+        CHECK(c != nullptr, "a climax ON the pivot (2:00 PM zone) is not subject to that rule"); }
     std::cout << "test_accum_200: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }
