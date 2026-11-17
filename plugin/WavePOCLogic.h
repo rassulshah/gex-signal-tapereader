@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.15.0";   // (1.15.0, 2026-11-16 Rassul 21:32 / 22:02 CT "put back the spine with the volume profile alon with the poc and 2 hvns like we had before", "build the wave poc") the spine, the grey volume profile right of it, the POC + up to 2 HVNs (the 1.9.3 rules)
+static const char* const VERSION = "1.15.1";   // (1.15.1, 2026-11-17 Rassul 09:55 CT: CoB legs found - the CoB mark is on the bar after the end pivot)
+// was static const char* const VERSION = "1.15.0";   // (1.15.0, 2026-11-16 Rassul 21:32 / 22:02 CT "put back the spine with the volume profile alon with the poc and 2 hvns like we had before", "build the wave poc") the spine, the grey volume profile right of it, the POC + up to 2 HVNs (the 1.9.3 rules)
 // was static const char* const VERSION = "1.14.0";   // (1.14.0, 2026-11-11 Rassul 19:09-19:12 CT) no spine; the POC and the HVN are dashes ON the candle that traded the most at that price; lots at the end of the POC dash
 // was static const char* const VERSION = "1.13.0";   // (1.13.0, 2026-11-10 Rassul 13:03-13:11 CT) wave POC + up to 1 HVN (below the POC and below the level the BO broke; POC at / below it = none); the pullback (PB POC) profile removed
 // was "1.12.0";   // (1.12.0, 2026-11-10 Rassul 08:17 CT) the wave POC shows only its POC row (no HVN / grey rows), like the PB POC
@@ -542,6 +543,7 @@ public:
     std::vector<signed char> cob;                                    // (1.3.0) per closed bar: 1 bull CoB, 2 bear CoB (3 both), captured when the bar is added
     std::set<long long> cobUsed;                                     // (1.3.0) CoB bar times that already have a profile (one per CoB)
     bool cobLegs = true;                                             // (1.3.0) setting "CoB legs"
+    static const int COB_AFTER = 3;   // (1.15.1) a CoB mark up to 3 bars after the leg's end pivot belongs to the leg
     static const int GRACE = 3;    // (1.9.2) a leg is judged GRACE bars after its confirmation (the BO / Rly / CoB decisions of its bars are in by then)
     int rule = WPC_DEFAULT_RULE;   // (1.9.2) 192 = CoB / Rly / BO waves; (1.5.0) 150 = reversal / breakout / rally; 133 = the 1.3.3-1.4.2 rule (AVG or 3 ATR at a 14-bar extreme) - legacy suites pin it
     double atrMult = ATR_MULT;                                       // (1.3.3) 3 ATR (fixed; the CoB-only unit tests raise it to isolate the CoB rule)
@@ -737,7 +739,10 @@ public:
         }
         // (1.3.0) a CoB of the leg's own direction on a bar of the leg (start .. end pivot) that has no profile yet
         int cobBar = -1;
-        if (cobLegs) for (int j = w.i0; j <= w.i1 && j < (int)cob.size(); ++j) {
+        // (1.15.1, Rassul 2026-11-17 09:55 CT "why is there no wave poc profile on copper which had a cob") the CoB mark sits on the bar that COMPLETES
+        // the wave - the bar after its end pivot (HG 3:25 AM Cob, wave 2:37-3:22 AM) - so a leg looked only at i0 .. i1 and never found it (HG 0 of 4,
+        // ES 0 of 2, GC 1 of 6 CoB legs drawn). The search now runs to COB_AFTER bars past the end pivot (never past the bar the leg is judged at).
+        if (cobLegs) for (int j = w.i0; j <= std::min(w.i1 + COB_AFTER, evalBar) && j < (int)cob.size(); ++j) {
             if (!(cob[(size_t)j] & (w.dir > 0 ? 1 : 2))) continue;
             if (rule == 192 && !cobOkAt(B[(size_t)j].t, w.dir, B[(size_t)evalBar].t)) continue;   // (1.9.2) only a drawn CoB (ZZO >= 10), known by now
             if (cobUsed.count(B[(size_t)j].t)) { ++C.cobRepeat; continue; }
