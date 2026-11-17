@@ -31,5 +31,12 @@ int main() {
       v.X = [first](int j) { return 20.0 + (j - first) * 6.0; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; }; v.textH = 12;
       zzd::XRead x; x.on = true; x.readX = 940; const zzd::ComboScene S = zzd::layoutCombo(Z, waves, 0, v, "", nullptr, &x);
       bool inside = true; for (const zzd::Prim& p : S.p) if (p.k == zzd::Prim::TEXT && p.x0 >= 940 && p.y1 > v.b) inside = false; CHECK(inside && S.boxRows <= 2, "a low pane keeps what fits"); }
+    {   // (3.2.1) his real room: about 440 px right of the last candle - the numbers still show (without the third column)
+        zzd::View v; v.l = 0; v.t = 0; v.r = 1380; v.b = 120; v.first = n - 150; v.last = n - 1; v.bw = 6; const int first = v.first;
+        v.X = [first](int j) { return 20.0 + (j - first) * 6.0; }; v.textW = [](const std::string& s) { return (int)s.size() * 6; }; v.textH = 12;
+        zzd::XRead x; x.on = true; x.readX = 940; x.any = true; x.rows.push_back(std::make_pair(std::string("Cob"), std::string("Up 6:54 AM  S1 3/3  63%  Lvp 7:12 AM  hold 71%  warn 2 hourly not turned")));
+        const zzd::ComboScene S = zzd::layoutCombo(Z, waves, 0, v, "", nullptr, &x);
+        bool wave = false, inside = true; for (const zzd::Prim& p : S.p) { if (p.k != zzd::Prim::TEXT || p.x0 < 940) continue; if (p.text == "Wave") wave = true; if (p.x1 > v.r) inside = false; }
+        CHECK(wave && inside, "440 px: the numbers show and stay inside (the long Cob text is cut)"); }
     std::printf("t_zc320_split: %d passed, %d failed\n", ok, bad); return bad ? 1 : 0;
 }

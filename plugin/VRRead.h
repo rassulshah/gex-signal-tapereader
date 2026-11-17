@@ -18,7 +18,7 @@
 
 namespace vrd {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences, most important first)
+static const char* const VERSION = "1.1.1";   // (1.1.1, his 09:32 CT screenshot: "narrowing" was the verdict but the sentence under it was about the 9:21 candle) the sentences behind the verdict come first, the side notes after   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences, most important first)
 static const int NORM_N = 20, NORM_MIN = 5, EXT_N = 10;
 static const double BIG_X = 2.0;        // volume / range "big": 2x the median of the 20 candles before
 static const double SMALL_X = 0.5;      // "drying up": under half of it
@@ -37,7 +37,7 @@ struct Row { std::string lab, a, b; int ca = 0, cb = 0; };   // +1 green, -1 red
 struct Out { bool ok = false; int verdict = 0; std::string head, why, candle, b1, b2; std::vector<Row> rows; std::vector<std::string> ex; };   // ex (1.1.0) = the explanation sentences   // verdict +1 / -1 / 2 mixed / 0 quiet
 
 inline std::string commas(long long v) { std::string s = std::to_string(v < 0 ? -v : v); for (int i = (int)s.size() - 3; i > 0; i -= 3) s.insert((size_t)i, ","); return v < 0 ? "-" + s : s; }
-inline std::string xx(double v) { char b[24]; std::snprintf(b, sizeof b, "%.1fx", (std::min)(v, 99.9)); return b; }
+inline std::string xx(double v) { char b[24]; std::snprintf(b, sizeof b, v > 0 && v < 0.095 ? "%.2fx" : "%.1fx", (std::min)(v, 99.9)); return b; }   // (1.1.1) 0.01x, not 0.0x
 inline std::string px(double v, int dec) { char b[40]; std::snprintf(b, sizeof b, "%.*f", dec < 0 ? 0 : dec > 6 ? 6 : dec, v); return b; }
 inline std::string cnt(int n) { return n >= 99 ? std::string("99+") : std::to_string(n); }
 inline int decOf(double tick) { if (!(tick > 0)) return 2; int d = 0; double t = tick; while (d < 6 && std::fabs(t - std::round(t)) > 1e-7) { t *= 10; ++d; } return (std::max)(d, tick < 1 && d == 1 ? 1 : d); }
@@ -65,7 +65,7 @@ inline Out volumeRead(const Ctx& x) {
     Out o; const int n = (int)x.c.size(); if (n < 1) return o; const int i = n - 1; const Cd& k = x.c[(size_t)i]; if (!(k.h > 0) || k.h < k.l) return o;
     o.ok = true; const bool g = k.green(); const int cd = g ? 1 : -1; const double vx = volX(x.c, i), rx = rngX(x.c, i);
     o.candle = std::string(g ? "green, " : "red, ") + commas((long long)std::llround(k.vol)) + " lots" + (vx > 0 ? ", " + xx(vx) : std::string()) + (x.cntAll >= 5 ? ", biggest in " + cnt(x.cntAll) : std::string());
-    std::vector<std::string> B, E; std::vector<Why> Y; const Inside& q = x.in;
+    std::vector<std::string> B, E, N; std::vector<Why> Y; const Inside& q = x.in;   // E = sentences behind the verdict, N = side notes (1.1.1)
     const bool hiSide = newHigh(x.c, i) || (i >= 1 && newHigh(x.c, i - 1)), loSide = newLow(x.c, i) || (i >= 1 && newLow(x.c, i - 1));
     if (q.ok) {
         const bool bBuy = q.bigBuy > 0 && (double)q.bigBuy >= ONE_SIDED * (double)q.bigSell && q.swBuy >= SWEEP_LV, bSell = q.bigSell > 0 && (double)q.bigSell >= ONE_SIDED * (double)q.bigBuy && q.swSell >= SWEEP_LV;
@@ -79,7 +79,7 @@ inline Out volumeRead(const Ctx& x) {
                      if (!g) Y.push_back(Why{ -1, "big sellers hitting" }); else Y.push_back(Why{ 2, loSide ? "selling climax at the low" : "big sellers trapped" }); }
         const double need = ICE_SHARE * k.vol;
         if (!bBuy && !bSell && (q.swBuy >= SWEEP_LV || q.swSell >= SWEEP_LV) && q.swBuy != q.swSell) {
-            const bool sb = q.swSell > q.swBuy; E.push_back(std::string(sb ? "Sellers" : "Buyers") + " swept " + std::to_string(sb ? q.swSell : q.swBuy) + " levels in one order, " + (sb ? "buyers" : "sellers") + " only " + std::to_string(sb ? q.swBuy : q.swSell) + "."); }
+            const bool sb = q.swSell > q.swBuy; N.push_back(std::string(sb ? "Sellers" : "Buyers") + " swept " + std::to_string(sb ? q.swSell : q.swBuy) + " levels in one order, " + (sb ? "buyers" : "sellers") + " only " + std::to_string(sb ? q.swBuy : q.swSell) + "."); }
         if (q.hidSell > 0 && (double)q.hidSell >= need && (double)q.hidSell >= 1.2 * (double)q.hidBuy) { E.push_back("Hidden sellers: " + commas(q.hidSell) + " lots of iceberg offers soaked up the buying without showing on the book."); B.push_back("Hidden sellers: " + commas(q.hidSell) + " lots of iceberg offers filled the buying"); Y.push_back(Why{ -1, "absorbed" }); }
         else if (q.hidBuy > 0 && (double)q.hidBuy >= need && (double)q.hidBuy >= 1.2 * (double)q.hidSell) { E.push_back("Hidden buyers: " + commas(q.hidBuy) + " lots of iceberg bids soaked up the selling without showing on the book."); B.push_back("Hidden buyers: " + commas(q.hidBuy) + " lots of iceberg bids filled the selling"); Y.push_back(Why{ 1, "absorbed" }); }
     }
@@ -96,8 +96,8 @@ inline Out volumeRead(const Ctx& x) {
     verdict(o, Y);
     {   // (1.1.0) the size sentence: last when something stood out, first (with "nothing unusual") when not
         std::string sz = vx >= BIG_X ? "Heavy volume (" + xx(vx) + ")" + biggestIn(x.cntAll) + "." : vx > 0 && vx < SMALL_X ? "Light volume (" + xx(vx) + ")." : vx > 0 ? "Volume was normal (" + xx(vx) + ")." : "";
-        if (E.empty()) { if (!sz.empty()) o.ex.push_back(sz); o.ex.push_back(q.ok ? "Nothing stood out inside this candle." : "Nothing stood out (no order detail for this candle)."); }
-        else { o.ex = E; if (!sz.empty()) o.ex.push_back(sz); } }
+        if (E.empty() && N.empty()) { if (!sz.empty()) o.ex.push_back(sz); o.ex.push_back(q.ok ? "Nothing stood out inside this candle." : "Nothing stood out (no order detail for this candle)."); }
+        else { o.ex = E; o.ex.insert(o.ex.end(), N.begin(), N.end()); if (!sz.empty()) o.ex.push_back(sz); } }
     { Row r; r.lab = "Volume"; r.a = vx > 0 ? xx(vx) : "-"; r.ca = cd; r.b = commas((long long)std::llround(k.vol)) + " lots"; o.rows.push_back(r); }
     { Row r; r.lab = "Range"; r.a = rx > 0 ? xx(rx) : "-"; r.ca = cd; r.b = px(k.rng(), x.dec) + " pts"; o.rows.push_back(r); }
     { Row r; r.lab = "Biggest in"; r.a = cnt(x.cntAll) + " all"; r.b = cnt(x.cntSame) + (g ? " green" : " red"); r.cb = cd; o.rows.push_back(r); }
@@ -111,7 +111,7 @@ inline Out rangeRead(const Ctx& x) {
     o.ok = true; const bool g = k.green(); const int cd = g ? 1 : -1; const double rx = rngX(x.c, i), R = k.rng();
     const double top = k.h - (std::max)(k.o, k.c), bot = (std::min)(k.o, k.c) - k.l; const int at = R > 0 ? (int)std::lround((k.c - k.l) / R * 100.0) : 50;
     o.candle = std::string(g ? "green, " : "red, ") + px(R, x.dec) + " pts" + (rx > 0 ? ", " + xx(rx) : std::string()) + (x.cntSame >= 5 ? std::string(", biggest ") + (g ? "green" : "red") + " in " + cnt(x.cntSame) : std::string());
-    std::vector<std::string> B, E; std::vector<Why> Y; bool erased = false;
+    std::vector<std::string> B, E, N; std::vector<Why> Y; bool erased = false;   // E = sentences behind the verdict, N = side notes (1.1.1)
     if (i >= 1) { const Cd& p = x.c[(size_t)i - 1]; const double pr = rngX(x.c, i - 1);
         const bool er = p.green() != g && p.rng() > 0 && pr >= 1.0 && (g ? k.c >= p.o : k.c <= p.o);
         if (er) { erased = true; const bool failHi = !g && newHigh(x.c, i - 1), failLo = g && newLow(x.c, i - 1);
@@ -121,8 +121,8 @@ inline Out rangeRead(const Ctx& x) {
     if (R > 0 && newHigh(x.c, i) && top >= WICK_SHARE * R) { E.push_back("It made a new high but closed " + px(k.h - k.c, x.dec) + " pts off it - sellers rejected the high."); B.push_back("New high rejected: closed " + px(k.h - k.c, x.dec) + " pts off it"); Y.push_back(Why{ -2, "new high rejected" }); }
     else if (R > 0 && newLow(x.c, i) && bot >= WICK_SHARE * R) { E.push_back("It made a new low but closed " + px(k.c - k.l, x.dec) + " pts off it - buyers rejected the low."); B.push_back("New low rejected: closed " + px(k.c - k.l, x.dec) + " pts off it"); Y.push_back(Why{ 2, "new low rejected" }); }
     if (i >= 1) { const Cd& p = x.c[(size_t)i - 1]; const double pR = p.rng(), pt = p.h - (std::max)(p.o, p.c), pbm = (std::min)(p.o, p.c) - p.l;
-        if (pR > 0 && newHigh(x.c, i - 1) && pt >= WICK_SHARE * pR && k.h <= p.h) { E.push_back("The " + p.when + " candle made the high but closed " + px(p.h - p.c, x.dec) + " pts off it, and this one did not take it out."); B.push_back(p.when + " made the high but closed " + px(p.h - p.c, x.dec) + " pts off it"); }
-        else if (pR > 0 && newLow(x.c, i - 1) && pbm >= WICK_SHARE * pR && k.l >= p.l) { E.push_back("The " + p.when + " candle made the low but closed " + px(p.c - p.l, x.dec) + " pts off it, and this one did not take it out."); B.push_back(p.when + " made the low but closed " + px(p.c - p.l, x.dec) + " pts off it"); } }
+        if (pR > 0 && newHigh(x.c, i - 1) && pt >= WICK_SHARE * pR && k.h <= p.h) { N.push_back("The " + p.when + " candle made the high but closed " + px(p.h - p.c, x.dec) + " pts off it, and this one did not take it out."); B.push_back(p.when + " made the high but closed " + px(p.h - p.c, x.dec) + " pts off it"); }
+        else if (pR > 0 && newLow(x.c, i - 1) && pbm >= WICK_SHARE * pR && k.l >= p.l) { N.push_back("The " + p.when + " candle made the low but closed " + px(p.c - p.l, x.dec) + " pts off it, and this one did not take it out."); B.push_back(p.when + " made the low but closed " + px(p.c - p.l, x.dec) + " pts off it"); } }
     if (rx >= 1.5 && (g ? at >= 75 : at <= 25)) { E.push_back(std::string("A wide candle that closed near its ") + (g ? "high - buyers were in control to the close." : "low - sellers were in control to the close.")); B.push_back(std::string("Strong close: wide candle closed near its ") + (g ? "high" : "low")); Y.push_back(Why{ cd, "strong close" }); }
     else if (rx >= BIG_X && !erased) { E.push_back("A wide candle (" + xx(rx) + " its normal range) - a strong push."); B.push_back("Wide candle: " + xx(rx) + " range"); Y.push_back(Why{ cd, "wide candle" }); }   // an erasing candle is wide by nature: said once
     if (i >= 2 && rx > 0 && rx < 0.7 && R < x.c[(size_t)i - 1].rng() && x.c[(size_t)i - 1].rng() < x.c[(size_t)i - 2].rng()) { E.push_back("Three candles in a row, each smaller than the last - the market is coiling before a move."); B.push_back("Narrowing: 3 candles, each smaller than the last"); Y.push_back(Why{ 0, "narrowing" }); }
@@ -138,7 +138,7 @@ inline Out rangeRead(const Ctx& x) {
         if (R > 0 && at <= 15 && !g && bot <= 0.1 * R) sh += " with almost no lower wick";
         else if (R > 0 && at >= 85 && g && top <= 0.1 * R) sh += " with almost no upper wick";
         sh += ".";
-        if (E.empty()) { o.ex.push_back(sh); o.ex.push_back("Nothing unusual about its shape."); } else { o.ex = E; o.ex.push_back(sh); } }
+        if (E.empty() && N.empty()) { o.ex.push_back(sh); o.ex.push_back("Nothing unusual about its shape."); } else { o.ex = E; o.ex.push_back(sh); o.ex.insert(o.ex.end(), N.begin(), N.end()); } }
     { Row r; r.lab = "Range"; r.a = rx > 0 ? xx(rx) : "-"; r.ca = cd; r.b = px(R, x.dec) + " pts"; o.rows.push_back(r); }
     { Row r; r.lab = "Against ATR"; r.a = x.atr > 0 ? xx(R / x.atr) : "-"; r.ca = cd; o.rows.push_back(r); }
     { Row r; r.lab = "Closed at"; r.a = std::to_string(at) + "%"; r.b = "of its range"; r.cb = 2; o.rows.push_back(r); }

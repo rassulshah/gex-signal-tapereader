@@ -50,7 +50,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.5.0";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.5.1";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -72,7 +72,8 @@ struct VRState {
     vrr::Engine E; std::vector<RTDATE> raw; int off = 0;
     vrr::Bar form; bool haveForm = false;
     std::string statusPath, statusBody; long long statusMs = -1, statusCk = -1; int drawn = 0;   // statusCk (1.1.1) = when the text was last built
-    int hov = -1; pc::Tracker cur;                     // (1.2.0) the chart bar under the mouse (-1 = not in this pane) and where the pane sits on the screen
+    int hov = -1, hovX = -1; pc::Tracker cur;   // (1.5.1) hovX = the mouse x in the pane
+                        // (1.2.0) the chart bar under the mouse (-1 = not in this pane) and where the pane sits on the screen
     long long hlMs = -1; std::string hlSig;            // (1.1.0) when the signal files were last looked at / their stamps
     long long bfMs = -1; std::string bfSig; int bfRows = 0;   // (1.4.0) when lsBookFlow's session record was last looked at / its stamp / candles read
     long long lvMs = -1; std::string lvSig;            // (1.3.0) the same for the level files and the Cob Reader status
@@ -249,7 +250,8 @@ int VolRead::mouse(RTX_EVENT* ev) {
         S->cur.onEvent(ok ? vrCursorWindow(sx, sy) : nullptr, ok, sx, sy, (int)ev->v.mouse.h, (int)ev->v.mouse.v);
         const long n = getBarCount(); const long b = (long)ev->v.mouse.bar;
         const int hov = (ok && b >= 0 && b < n && S->cur.eventInside((int)ev->v.mouse.h, (int)ev->v.mouse.v)) ? (int)b : -1;
-        if (hov != S->hov) { S->hov = hov; invalidateChart(false); }
+        const int hx = (int)ev->v.mouse.h;
+        if (hov != S->hov || (hov == (int)n - 1 && hx != S->hovX)) { S->hov = hov; S->hovX = hx; invalidateChart(false); }
     } catch (...) {}
     return RTX_FAIL;
 }
@@ -276,7 +278,8 @@ int VolRead::draw(void) {
         v.textW = [this, &fb](const std::string& s) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
         S->cur.pane.l = pane.left; S->cur.pane.t = pane.top; S->cur.pane.r = pane.right; S->cur.pane.b = pane.bottom;   // (1.2.0) for mouseLeft
         v.readX = ve >= (int)n - 1 ? (int)v.X((int)n - 1 - off) + v.bw / 2 + 18 : -1;   // (1.3.1) the read box right of the last candle
-        const int pick = S->hov >= 0 ? S->hov - S->off : -1;               // the bar under the mouse as an engine index (the forming bar = the bar count)
+        int pick = S->hov >= 0 ? S->hov - S->off : -1;                     // the bar under the mouse as an engine index (the forming bar = the bar count)
+        if (S->hov == (int)n - 1 && v.readX >= 0 && S->hovX > v.readX - 16) pick = -1;   // (1.5.1, Rassul 2026-11-17 09:32 CT screenshot) the mouse in the empty space right of the last candle = the last CLOSED candle, not the one just starting
         const std::vector<vrr::Prim> P = vrr::layout(S->E, v, S->haveForm ? &S->form : nullptr, pick);
         S->drawn = (int)P.size();
         const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom;
@@ -304,6 +307,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA Volume Read v1.4.0 - (1.4.0: the read right of the last candle - verdict, candle, two behaviour lines and the numbers, for the candle under the mouse; it looks inside the candle through the Book Flow record) its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #endif
-    p->setVersion("1.5.0");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.5.1");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

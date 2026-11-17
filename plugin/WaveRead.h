@@ -16,7 +16,7 @@
 
 namespace wvr {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences)
+static const char* const VERSION = "1.1.1";   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences)
 static const double STRONG_X = 2.0;      // a strong wave: 2x the median of the last 5 same-way waves or more
 static const double LIGHT_X = 0.33;      // a light pullback: its volume is a third of the wave's or less (his Lvp rule)
 static const double HEAVY_X = 0.8;       // a heavy pullback: 0.8x the wave's volume or more (the Cob check's counter-wave warning)

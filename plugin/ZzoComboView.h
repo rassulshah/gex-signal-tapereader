@@ -205,10 +205,14 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
             const int rh = TH + 2, y0 = v.t + 1, fit = (H - 2) / rh;
             const unsigned long vc = o.verdict == 1 ? C.up : o.verdict == -1 ? C.down : o.verdict == 2 ? white : C.grey;
             const int headW = v.textW(o.head) + (o.why.empty() ? 0 : 6 + v.textW(o.why));
-            int wk = 0, wa2 = 0, wb2 = 0, wc2 = 0; for (const wvr::Row& r : o.rows) { wk = std::max(wk, v.textW(r.lab)); wa2 = std::max(wa2, v.textW(r.a)); wb2 = std::max(wb2, v.textW(r.b)); wc2 = std::max(wc2, v.textW(r.c)); }
+            // (3.2.1, his 09:32 CT screenshot: the numbers were missing) the Cob row's text can be long - it does not size the column, it is cut to the room left
+            int wk = 0, wa2 = 0, wb2 = 0, wc2 = 0; for (const wvr::Row& r : o.rows) { wk = std::max(wk, v.textW(r.lab)); if (r.lab != "Cob") wa2 = std::max(wa2, v.textW(r.a)); wb2 = std::max(wb2, v.textW(r.b)); wc2 = std::max(wc2, v.textW(r.c)); }
             const int dataW = o.rows.empty() ? 0 : wk + 12 + wa2 + 14 + wb2 + (wc2 > 0 ? 14 + wc2 : 0);
             const bool atRead = xr->readX >= 0 && xr->readX < v.r; const int x0 = atRead ? xr->readX : v.l + 2;
-            const spt::Cols cl = spt::cols(v.r - x0 - 4, atRead ? dataW : 0, headW);
+            spt::Cols cl = spt::cols(v.r - x0 - 4, atRead ? dataW : 0, headW); bool third = wc2 > 0;
+            // (3.2.1, his 09:35 CT screenshot: the numbers were missing - about 440 px of room) no room for the third column (biggest in / light / Up 3.3x):
+            // the numbers without it; the sentences already say it
+            if (atRead && !cl.dataOn && wc2 > 0) { const spt::Cols c2 = spt::cols(v.r - x0 - 4, wk + 12 + wa2 + 14 + wb2, headW); if (c2.dataOn) { cl = c2; third = false; } }
             if (fit >= 1 && cl.leftW > 0) {
                 boxed = true;
                 auto put = [&](const std::string& t, int x, int y, unsigned long col) { if (t.empty()) return 0; Prim q; q.k = Prim::TEXT; q.x0 = x; q.x1 = x + v.textW(t); q.y0 = y; q.y1 = y + TH; q.col = col; q.text = t; S.p.push_back(q); return v.textW(t); };
@@ -222,7 +226,8 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
                     auto colOf = [&](int c) -> unsigned long { return c == 1 ? C.up : c == -1 ? C.down : c == 2 ? C.grey : white; };
                     { Prim e; e.k = Prim::FILL; e.x0 = xb - 13; e.x1 = xb - 13; e.y0 = y0 + 2; e.y1 = std::min(v.b - 3, y0 + std::max(nl, std::min(fit, (int)o.rows.size())) * rh); e.col = 0x374151; S.p.push_back(e); }
                     for (size_t i = 0; i < o.rows.size() && (int)i < fit; ++i) { const wvr::Row& r = o.rows[i]; const int y = y0 + (int)i * rh;
-                        put(r.lab, xb, y, C.grey); put(r.a, ca, y, colOf(r.ca)); put(r.b, cbx, y, colOf(r.cb)); put(r.c, cc, y, colOf(r.cc));
+                        std::string ra = r.a; if (r.lab == "Cob") { const int room = v.r - 4 - ca; while (!ra.empty() && v.textW(ra) > room) { ra.pop_back(); while (!ra.empty() && ra.back() == ' ') ra.pop_back(); if (v.textW(ra + "...") <= room) { ra += "..."; break; } } }
+                        put(r.lab, xb, y, C.grey); put(ra, ca, y, colOf(r.ca)); put(r.b, cbx, y, colOf(r.cb)); if (third) put(r.c, cc, y, colOf(r.cc));
                         S.box.push_back(std::make_pair(r.lab, r.a + (r.b.empty() ? std::string() : " " + r.b) + (r.c.empty() ? std::string() : " " + r.c))); }
                 }
                 S.boxRows = nl; S.boxL = x0; S.boxT = y0; S.boxR = x0 + cl.leftW; S.boxB = y0 + nl * rh;
