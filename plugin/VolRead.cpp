@@ -50,7 +50,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.4.0";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.5.0";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -304,6 +304,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA Volume Read v1.4.0 - (1.4.0: the read right of the last candle - verdict, candle, two behaviour lines and the numbers, for the candle under the mouse; it looks inside the candle through the Book Flow record) its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #endif
-    p->setVersion("1.4.0");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.5.0");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

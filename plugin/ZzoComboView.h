@@ -24,6 +24,7 @@
 #define ZZO_COMBO_VIEW_H
 #include "ZzoDeltaLogic.h"
 #include "WaveRead.h"       // (3.1.0) the wave read: verdict, wave, two behaviour lines + the numbers (SDK-free, tests_wave)
+#include "SplitText.h"      // (3.2.0) the split read: verdict + sentences left, numbers right (SDK-free)
 #include "ZzoCobFinder.h"   // (2.3.0) the CoB finder: Cob / Lvp tags
 
 namespace zzd {
@@ -199,32 +200,32 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
             if (xr->pick >= 0 && xr->pick >= w.s && xr->pick <= w.e) pickW = (int)k; }
         std::string cobLine; if (xr->any) for (const auto& r : xr->rows) { if (r.second.empty() || r.second == "-") continue; cobLine += (cobLine.empty() ? "" : "  ") + r.second; }
         const wvr::Out o = wvr::read(ws, pickW, cobLine);
-        if (o.ok) {
+        if (o.ok) {   // (3.2.0, Rassul 2026-11-17 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the
+            // data points") LEFT: the verdict line, then plain-English sentences word-wrapped; RIGHT: the numbers (Wave / Pullback / Last 3 / Cob)
             const int rh = TH + 2, y0 = v.t + 1, fit = (H - 2) / rh;
-            struct Ln { std::string a, b; unsigned long ca, cb; }; std::vector<Ln> LN;
-            LN.push_back(Ln{ o.head, o.why, o.verdict == 1 ? C.up : o.verdict == -1 ? C.down : o.verdict == 2 ? white : C.grey, white });
-            LN.push_back(Ln{ "Wave:", o.wave, C.grey, white });
-            if (!o.b1.empty()) LN.push_back(Ln{ o.b1, "", white, white });
-            if (!o.b2.empty()) LN.push_back(Ln{ o.b2, "", white, white });
-            int wl = 0; for (const Ln& l : LN) wl = std::max(wl, v.textW(l.a) + (l.b.empty() ? 0 : 6 + v.textW(l.b)));
-            const int x0 = (xr->readX >= 0 && xr->readX + wl < v.r) ? xr->readX : v.l + 2;
-            if (fit >= 1 && x0 + wl < v.r) {
-                boxed = true; int nl = 0;
-                for (size_t i = 0; i < LN.size() && (int)i < fit; ++i, ++nl) { const int y = y0 + (int)i * rh; const int wa = v.textW(LN[i].a);
-                    Prim k; k.k = Prim::TEXT; k.x0 = x0; k.x1 = x0 + wa; k.y0 = y; k.y1 = y + TH; k.col = LN[i].ca; k.text = LN[i].a; S.p.push_back(k);
-                    if (!LN[i].b.empty()) { Prim q; q.k = Prim::TEXT; q.x0 = x0 + wa + 6; q.x1 = q.x0 + v.textW(LN[i].b); q.y0 = y; q.y1 = y + TH; q.col = LN[i].cb; q.text = LN[i].b; S.p.push_back(q); }
-                    S.box.push_back(std::make_pair(std::string("line ") + std::to_string(i + 1), LN[i].a + (LN[i].b.empty() ? std::string() : " " + LN[i].b))); }
-                int wk = 0, wa2 = 0, wb2 = 0, wc2 = 0; for (const wvr::Row& r : o.rows) { wk = std::max(wk, v.textW(r.lab)); wa2 = std::max(wa2, v.textW(r.a)); wb2 = std::max(wb2, v.textW(r.b)); wc2 = std::max(wc2, v.textW(r.c)); }
-                const int xb = x0 + wl + 26, ca = xb + wk + 12, cbx = ca + wa2 + 14, cc = cbx + wb2 + 14;
-                auto colOf = [&](int c) -> unsigned long { return c == 1 ? C.up : c == -1 ? C.down : c == 2 ? C.grey : white; };
-                if (x0 == xr->readX && cc + wc2 < v.r) {
-                    { Prim e; e.k = Prim::FILL; e.x0 = xb - 13; e.x1 = xb - 13; e.y0 = y0 + 2; e.y1 = std::min(v.b - 3, y0 + std::min(fit, (int)o.rows.size()) * rh); e.col = 0x374151; S.p.push_back(e); }
+            const unsigned long vc = o.verdict == 1 ? C.up : o.verdict == -1 ? C.down : o.verdict == 2 ? white : C.grey;
+            const int headW = v.textW(o.head) + (o.why.empty() ? 0 : 6 + v.textW(o.why));
+            int wk = 0, wa2 = 0, wb2 = 0, wc2 = 0; for (const wvr::Row& r : o.rows) { wk = std::max(wk, v.textW(r.lab)); wa2 = std::max(wa2, v.textW(r.a)); wb2 = std::max(wb2, v.textW(r.b)); wc2 = std::max(wc2, v.textW(r.c)); }
+            const int dataW = o.rows.empty() ? 0 : wk + 12 + wa2 + 14 + wb2 + (wc2 > 0 ? 14 + wc2 : 0);
+            const bool atRead = xr->readX >= 0 && xr->readX < v.r; const int x0 = atRead ? xr->readX : v.l + 2;
+            const spt::Cols cl = spt::cols(v.r - x0 - 4, atRead ? dataW : 0, headW);
+            if (fit >= 1 && cl.leftW > 0) {
+                boxed = true;
+                auto put = [&](const std::string& t, int x, int y, unsigned long col) { if (t.empty()) return 0; Prim q; q.k = Prim::TEXT; q.x0 = x; q.x1 = x + v.textW(t); q.y0 = y; q.y1 = y + TH; q.col = col; q.text = t; S.p.push_back(q); return v.textW(t); };
+                { const int wa = put(o.head, x0, y0, vc); if (!o.why.empty()) put(o.why, x0 + wa + 6, y0, white); }
+                S.box.push_back(std::make_pair(std::string("line 1"), o.head + (o.why.empty() ? std::string() : " " + o.why)));
+                const std::vector<std::string> EX = spt::wrap(o.ex, cl.leftW, fit - 1, [&](const std::string& q) { return v.textW(q); });
+                for (size_t i = 0; i < EX.size(); ++i) { put(EX[i], x0, y0 + (int)(i + 1) * rh, white); S.box.push_back(std::make_pair(std::string("line ") + std::to_string(i + 2), EX[i])); }
+                const int nl = 1 + (int)EX.size();
+                if (cl.dataOn) {
+                    const int xb = x0 + cl.leftW + spt::GAP, ca = xb + wk + 12, cbx = ca + wa2 + 14, cc = cbx + wb2 + 14;
+                    auto colOf = [&](int c) -> unsigned long { return c == 1 ? C.up : c == -1 ? C.down : c == 2 ? C.grey : white; };
+                    { Prim e; e.k = Prim::FILL; e.x0 = xb - 13; e.x1 = xb - 13; e.y0 = y0 + 2; e.y1 = std::min(v.b - 3, y0 + std::max(nl, std::min(fit, (int)o.rows.size())) * rh); e.col = 0x374151; S.p.push_back(e); }
                     for (size_t i = 0; i < o.rows.size() && (int)i < fit; ++i) { const wvr::Row& r = o.rows[i]; const int y = y0 + (int)i * rh;
-                        auto put = [&](const std::string& t, int x, unsigned long col) { if (t.empty()) return; Prim q; q.k = Prim::TEXT; q.x0 = x; q.x1 = x + v.textW(t); q.y0 = y; q.y1 = y + TH; q.col = col; q.text = t; S.p.push_back(q); };
-                        put(r.lab, xb, C.grey); put(r.a, ca, colOf(r.ca)); put(r.b, cbx, colOf(r.cb)); put(r.c, cc, colOf(r.cc));
+                        put(r.lab, xb, y, C.grey); put(r.a, ca, y, colOf(r.ca)); put(r.b, cbx, y, colOf(r.cb)); put(r.c, cc, y, colOf(r.cc));
                         S.box.push_back(std::make_pair(r.lab, r.a + (r.b.empty() ? std::string() : " " + r.b) + (r.c.empty() ? std::string() : " " + r.c))); }
                 }
-                S.boxRows = nl; S.boxL = x0; S.boxT = y0; S.boxR = x0 + wl; S.boxB = y0 + nl * rh;
+                S.boxRows = nl; S.boxL = x0; S.boxT = y0; S.boxR = x0 + cl.leftW; S.boxB = y0 + nl * rh;
             }
         }
     }

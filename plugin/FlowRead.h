@@ -16,7 +16,7 @@
 
 namespace flr {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": explain() = the plain-English sentences)
 static const double STACK_X = 1.5;      // a side's net stacking is "building" at 1.5x the other side's (or the other side is not stacking at all)
 static const double PULL_X = 2.0;       // "leaving": that side pulled 2x its normal or more AND stacked less than the other side
 static const double ABS_X = 1.5;        // "absorbed": market orders into a side 1.5x the other way ...
@@ -51,6 +51,29 @@ inline Out read(const In& a) {
     if (o.verdict == 2) { const char* u = nullptr; const char* d = nullptr; for (const Why& w : W) { if (w.dir > 0 && !u) u = w.t; if (w.dir < 0 && !d) d = w.t; } o.why = std::string(u) + ", " + d; }
     else { int n = 0; for (const Why& w : W) { if (n == 2) break; o.why += (n ? ", " : "") + std::string(w.t); ++n; } }
     return o;
+}
+// (1.1.0) the plain-English sentences under the verdict, most important first (the left column of the split read)
+inline std::string ratio(double v) { char t[24]; std::snprintf(t, sizeof t, "%.1fx", (std::min)(v, 99.9)); return t; }
+inline std::vector<std::string> explain(const In& a) {
+    std::vector<std::string> E; const long long nb = a.add[0] - a.pull[0], na = a.add[1] - a.pull[1], dl = a.hit[1] - a.hit[0];
+    const bool absBuy = a.hit[1] > 0 && (double)a.hit[1] >= ABS_X * (double)a.hit[0] && na >= 0 && (double)a.ref[1] >= ABS_REFILL * (double)a.hit[1];
+    const bool absSell = a.hit[0] > 0 && (double)a.hit[0] >= ABS_X * (double)a.hit[1] && nb >= 0 && (double)a.ref[0] >= ABS_REFILL * (double)a.hit[0];
+    if (absBuy) E.push_back("Buyers lifted " + commas(a.hit[1]) + " lots (delta " + signedCommas(dl) + ") but the offers refilled " + commas(a.ref[1]) + " - the sellers soaked it up.");
+    if (absSell) E.push_back("Sellers hit " + commas(a.hit[0]) + " lots (delta " + signedCommas(dl) + ") but the bids refilled " + commas(a.ref[0]) + " - the buyers soaked it up.");
+    if (na > 0 && (nb <= 0 || (double)na >= STACK_X * (double)nb))
+        E.push_back(nb > 0 ? "Sellers stacked " + ratio((double)na / (double)nb) + " more offers than buyers stacked bids - resistance is building above." : "Sellers added offers while the bids shrank - resistance is building above.");
+    if (nb > 0 && (na <= 0 || (double)nb >= STACK_X * (double)na))
+        E.push_back(na > 0 ? "Buyers stacked " + ratio((double)nb / (double)na) + " more bids than sellers stacked offers - support is building below." : "Buyers added bids while the offers shrank - support is building below.");
+    if (a.pullX[0] >= PULL_X && nb < na) E.push_back("Bids are being pulled (" + ratio(a.pullX[0]) + " normal) - support is leaving.");
+    if (a.pullX[1] >= PULL_X && na < nb) E.push_back("Offers are being pulled (" + ratio(a.pullX[1]) + " normal) - resistance is leaving.");
+    if (a.ice[1] > 0 && a.ice[1] >= 2 * a.ice[0]) E.push_back("Icebergs refilled on the offer side - hidden sellers.");
+    else if (a.ice[0] > 0 && a.ice[0] >= 2 * a.ice[1]) E.push_back("Icebergs refilled on the bid side - hidden buyers.");
+    if (!absBuy && !absSell && (a.hit[0] > 0 || a.hit[1] > 0)) {
+        const bool more = dl != 0; E.push_back(more ? std::string(dl > 0 ? "Buyers" : "Sellers") + " were the more aggressive side: " + commas(a.hit[1]) + " lifted vs " + commas(a.hit[0]) + " hit (delta " + signedCommas(dl) + ")." : "Buying and selling at market were even.");
+    }
+    if (E.empty()) E.push_back("Both sides added and pulled about evenly - no one is leaning on the book.");
+    else if (E.size() == 1 && !absBuy && !absSell && na <= 0 && nb <= 0) E.push_back("The book itself was balanced - neither side stacked more.");
+    return E;
 }
 // the table: label, bids text, offers text, note (+1 green / -1 red / 0 white)
 struct Row { std::string lab, b, a, note; int noteCol = 0; };

@@ -20,12 +20,13 @@
 #include <map>
 #include <string>
 #include <vector>
-#include "VRRead.h"         // (1.4.0) the pane reads: verdict / candle / two behaviours + the numbers (SDK-free, tests_volrange/t_vrread)
+#include "VRRead.h"           // (1.4.0) the pane reads: verdict / candle / two behaviours + the numbers (SDK-free, tests_volrange/t_vrread)
+#include "SplitText.h"        // (1.5.0) the split read: verdict + plain-English sentences left, numbers right (SDK-free)
 #include "HtfSr.h"          // (1.3.0) the 3-hour R1 / R2 / S1 / S2 walk (SDK-free; = lsLimitProfile / lsCobSignal)
 
 namespace vrr {
 
-static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-11-17 Rassul 06:54-07:02 CT: the pane reads right of the last candle - verdict / candle / two behaviours + the numbers, for the candle under the mouse; Volume looks inside the candle through lsBookFlow's record; VRRead.h)   // was "1.3.5";   // (1.3.5, 2026-11-16 21:17 CT Rassul "lets not color the volume or range based on just being a rev bar . volume and range should only be colored because the volume or range is significaant": the Rev mark is gone)   // was "1.3.4";   // (1.3.4, 2026-11-16 21:13 CT Rassul "use Cx instead of P, to represent climactic volume or a minor climax": the pivot mark reads Cx)   // was "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
+static const char* const VERSION = "1.5.0";   // (1.5.0, 2026-11-17 Rassul 08:35-08:44 CT: the split read - verdict + plain-English sentences on the left, the numbers on the right)   // was "1.4.0"   // (1.4.0, 2026-11-17 Rassul 06:54-07:02 CT: the pane reads right of the last candle - verdict / candle / two behaviours + the numbers, for the candle under the mouse; Volume looks inside the candle through lsBookFlow's record; VRRead.h)   // was "1.3.5";   // (1.3.5, 2026-11-16 21:17 CT Rassul "lets not color the volume or range based on just being a rev bar . volume and range should only be colored because the volume or range is significaant": the Rev mark is gone)   // was "1.3.4";   // (1.3.4, 2026-11-16 21:13 CT Rassul "use Cx instead of P, to represent climactic volume or a minor climax": the pivot mark reads Cx)   // was "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
 // "what about an increas on a break/sweep of a keylevel, vol level", "go", "if there is a bar that is big like biggest range or volume in 50+ , lets highlight it, this includes variants like biggest green or red";
 // mockup Dr2SDbU3idUeUYD5c2KAVX) BOTH panes: bars grey, a marked bar green (bullish) / red (bearish) with ONE short code over it, by priority:
 //   CB  the Cob bar near the origin (the Cob Reader's CB bar)                      colour = the Cob's side
@@ -360,29 +361,27 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         if (!onForm) { x.cx = at < (int)E.pv.size() && E.pv[(size_t)at] ? E.pv[(size_t)at] : (at >= 1 && at - 1 < (int)E.pv.size() ? E.pv[(size_t)at - 1] : 0);
             const auto it = E.inside.find(E.T[(size_t)at]); if (it != E.inside.end()) x.in = it->second; }
         const vrd::Out o = (!onForm && E.deadBar(at)) ? vrd::Out() : (E.mode == VOL ? vrd::volumeRead(x) : vrd::rangeRead(x));
-        if (o.ok) {
+        if (o.ok) {   // (1.5.0, Rassul 2026-11-17 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have
+            // the data points") LEFT: the verdict line, then plain-English sentences word-wrapped (most important first); RIGHT: the numbers
             auto tw = [&](const std::string& q) { return v.textW ? v.textW(q) : (int)q.size() * 6; };
             const int rh = th + 2, y0 = v.t + 1, fit = (H - 2) / rh;
-            struct Ln { std::string a, b; unsigned ca; }; std::vector<Ln> LN;
-            LN.push_back(Ln{ o.head, o.why, o.verdict == 1 ? C_UP : o.verdict == -1 ? C_DN : o.verdict == 2 ? C_TXT : C_BOXLN });
-            LN.push_back(Ln{ "Candle:", o.candle, C_BOXLN });
-            if (!o.b1.empty()) LN.push_back(Ln{ o.b1, "", C_TXT });
-            if (!o.b2.empty()) LN.push_back(Ln{ o.b2, "", C_TXT });
-            int wl = 0; for (const Ln& l : LN) wl = std::max(wl, tw(l.a) + (l.b.empty() ? 0 : 6 + tw(l.b)));
-            const int x0 = v.readX;
-            if (fit >= 1 && x0 + wl <= v.r) {
+            const unsigned vc = o.verdict == 1 ? C_UP : o.verdict == -1 ? C_DN : o.verdict == 2 ? C_TXT : C_BOXLN;
+            const int headW = tw(o.head) + (o.why.empty() ? 0 : 6 + tw(o.why));
+            int wk = 0, wa2 = 0, wb2 = 0; for (const vrd::Row& r : o.rows) { wk = std::max(wk, tw(r.lab)); wa2 = std::max(wa2, tw(r.a)); wb2 = std::max(wb2, tw(r.b)); }
+            const int dataW = o.rows.empty() ? 0 : wk + 12 + wa2 + 14 + wb2;
+            const int x0 = v.readX; const spt::Cols cl = spt::cols(v.r - x0 - 4, dataW, headW);
+            if (fit >= 1 && cl.leftW > 0) {
                 newRead = true;
-                for (size_t i = 0; i < LN.size() && (int)i < fit; ++i) { const int y = y0 + (int)i * rh; const int wa = tw(LN[i].a);
-                    Prim k; k.bold = true; k.text = LN[i].a; k.col = LN[i].ca; k.x0 = x0; k.x1 = x0 + wa; k.y0 = y; k.y1 = y + rh; P.push_back(k);
-                    if (!LN[i].b.empty()) { Prim q; q.bold = i == 0; q.text = LN[i].b; q.col = C_TXT; q.x0 = x0 + wa + 6; q.x1 = q.x0 + tw(LN[i].b); q.y0 = y; q.y1 = y + rh; P.push_back(q); } }
-                int wk = 0, wa2 = 0, wb2 = 0; for (const vrd::Row& r : o.rows) { wk = std::max(wk, tw(r.lab)); wa2 = std::max(wa2, tw(r.a)); wb2 = std::max(wb2, tw(r.b)); }
-                const int xb = x0 + wl + 26, ca = xb + wk + 12, cb = ca + wa2 + 14;
-                auto colOf = [](int c) -> unsigned { return c == 1 ? C_UP : c == -1 ? C_DN : c == 2 ? C_BOXLN : C_TXT; };
-                if (cb + wb2 <= v.r) {
-                    { Prim e; e.fill = true; e.x0 = xb - 13; e.x1 = xb - 13; e.y0 = y0 + 2; e.y1 = std::min(v.b - 3, y0 + std::min(fit, (int)o.rows.size()) * rh); e.col = 0x00374151; P.push_back(e); }
+                auto put2 = [&](const std::string& t, int xx2, int y, unsigned col, bool bold) { if (t.empty()) return 0; Prim q; q.bold = bold; q.text = t; q.col = col; q.x0 = xx2; q.x1 = xx2 + tw(t); q.y0 = y; q.y1 = y + rh; P.push_back(q); return tw(t); };
+                { const int wa = put2(o.head, x0, y0, vc, true); if (!o.why.empty()) put2(o.why, x0 + wa + 6, y0, C_TXT, true); }
+                const std::vector<std::string> EX = spt::wrap(o.ex, cl.leftW, fit - 1, tw);
+                for (size_t i = 0; i < EX.size(); ++i) put2(EX[i], x0, y0 + (int)(i + 1) * rh, C_TXT, false);
+                if (cl.dataOn) {
+                    const int xb = x0 + cl.leftW + spt::GAP, ca = xb + wk + 12, cb = ca + wa2 + 14;
+                    auto colOf = [](int c) -> unsigned { return c == 1 ? C_UP : c == -1 ? C_DN : c == 2 ? C_BOXLN : C_TXT; };
+                    { Prim e; e.fill = true; e.x0 = xb - 13; e.x1 = xb - 13; e.y0 = y0 + 2; e.y1 = std::min(v.b - 3, y0 + std::max(1 + (int)EX.size(), std::min(fit, (int)o.rows.size())) * rh); e.col = 0x00374151; P.push_back(e); }
                     for (size_t i = 0; i < o.rows.size() && (int)i < fit; ++i) { const vrd::Row& r = o.rows[i]; const int y = y0 + (int)i * rh;
-                        auto put2 = [&](const std::string& t, int xx2, unsigned col, bool bold) { if (t.empty()) return; Prim q; q.bold = bold; q.text = t; q.col = col; q.x0 = xx2; q.x1 = xx2 + tw(t); q.y0 = y; q.y1 = y + rh; P.push_back(q); };
-                        put2(r.lab, xb, C_BOXLN, false); put2(r.a, ca, colOf(r.ca), true); put2(r.b, cb, colOf(r.cb), true); }
+                        put2(r.lab, xb, y, C_BOXLN, false); put2(r.a, ca, y, colOf(r.ca), true); put2(r.b, cb, y, colOf(r.cb), true); }
                 }
             }
         }

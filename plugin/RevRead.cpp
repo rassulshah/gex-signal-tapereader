@@ -95,11 +95,11 @@
 static const double BF_RATIO_MIN = 1.2;   // (0.11.1) a Book Flow ratio label needs the bigger side 1.2x the smaller or more
 static const bool ACC_READ_DRAWN = false;   // (0.12.0, Rassul 2026-11-17 06:03 CT "remove what is there currently now") the Accum / Distrib read is not drawn in the pane (the boxes on the price chart stay; the read stays in the status file)
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.11.1"   // (0.11.1, 2026-11-16 Rassul 20:27 CT "i want ratios on bars where 1 is bigger than the other": the label = the bigger Book Flow side / the smaller, on the bigger bar - was the bar against its own 20-candle average)   // was "0.11.0"   // (0.11.0, 2026-11-16 Rassul 20:20 CT "i want to put book flow back": the pane draws the Book Flow bars itself - no lsBookFlowBg needed; buy / sell volume, delta and delta change stay computed, not drawn)   // was "0.10.1"   // (0.10.1, 2026-11-16 19:02 CT: AccumLogic 2.0.1 - the pivot close rule when the climax is the candle before the pivot)   // was "0.10.0"   // (0.10.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go": the accumulation / distribution zones are AccumLogic 2.0.0, the simple rule - climax volume, stall, delta turned, with the trend; the read shows Climax / Stall / Delta)   // was "0.9.2"   // (0.9.2, 2026-11-16 Rassul 13:50 CT "where is the reversal read .. its blank": the bars are drawn in a low pane - under about 52 px nothing was drawn)   // was "0.9.1"   // (0.9.1, 2026-11-16 Rassul 12:44-12:45 CT "build", "i dont see the accumulaiton or distibution": the read shows the LAST zone when none is open, in 3 lines when the pane is low; every order event feeds AccumLogic 1.2.0 (resting lots added / pulled / filled per price) for the quiet end and the other side building)   // was "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.13.0"   // (0.13.0, 2026-11-17 Rassul 08:35-08:44 CT: the Book Flow read split - verdict + plain-English sentences left, the Bids / Offers table right; the title now shows the real version - 0.12.0 still said 0.11.1)   // was "0.11.1"   // (0.11.1, 2026-11-16 Rassul 20:27 CT "i want ratios on bars where 1 is bigger than the other": the label = the bigger Book Flow side / the smaller, on the bigger bar - was the bar against its own 20-candle average)   // was "0.11.0"   // (0.11.0, 2026-11-16 Rassul 20:20 CT "i want to put book flow back": the pane draws the Book Flow bars itself - no lsBookFlowBg needed; buy / sell volume, delta and delta change stay computed, not drawn)   // was "0.10.1"   // (0.10.1, 2026-11-16 19:02 CT: AccumLogic 2.0.1 - the pivot close rule when the climax is the candle before the pivot)   // was "0.10.0"   // (0.10.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go": the accumulation / distribution zones are AccumLogic 2.0.0, the simple rule - climax volume, stall, delta turned, with the trend; the read shows Climax / Stall / Delta)   // was "0.9.2"   // (0.9.2, 2026-11-16 Rassul 13:50 CT "where is the reversal read .. its blank": the bars are drawn in a low pane - under about 52 px nothing was drawn)   // was "0.9.1"   // (0.9.1, 2026-11-16 Rassul 12:44-12:45 CT "build", "i dont see the accumulaiton or distibution": the read shows the LAST zone when none is open, in 3 lines when the pane is low; every order event feeds AccumLogic 1.2.0 (resting lots added / pulled / filled per price) for the quiet end and the other side building)   // was "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.12.0");
+    p->setVersion("0.13.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -219,6 +219,7 @@ struct PocStore {
 #define OFF_SDK 1
 #include "OrderFlowFeed.h"
 #include "FlowRead.h"          // (0.12.0) the order flow + pulling / stacking read (SDK-free, tests_revread/t_flowread)
+#include "SplitText.h"         // (0.13.0) the split read: verdict + sentences left, numbers right (SDK-free)
 #include "AccumLogic.h"        // (0.9.0) accumulation / distribution zones (SDK-free, tests_accum)
 #include "SRBack.h"            // (0.8.0) lsSR in the background: same rules, same journal, nothing drawn
 namespace rvs {
@@ -655,18 +656,28 @@ public:
             const int xT = blockR > 0 ? blockR + 26 : (int)pl.h + (int)bw / 2 + 18;
             int wb = (int)getTextWidth("Bids", -1), wa = (int)getTextWidth("Offers", -1), wl = (int)getTextWidth(when.c_str(), -1), wn = 0;
             for (const flr::Row& r : FR) { wl = std::max(wl, (int)getTextWidth(r.lab.c_str(), -1)); wb = std::max(wb, (int)getTextWidth(r.b.c_str(), -1)); wa = std::max(wa, (int)getTextWidth(r.a.c_str(), -1)); wn = std::max(wn, (int)getTextWidth(r.note.c_str(), -1)); }
-            const int c1 = xT + wl + 12, c2 = c1 + wb + 14, c3 = c2 + wa + 14;
+            // (0.13.0, Rassul 2026-11-17 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the
+            // data points") LEFT: the verdict line, then plain-English sentences word-wrapped; RIGHT: the Bids / Offers table
             const std::string headLine = fo.head + (fo.why.empty() ? std::string() : " " + fo.why);
-            const int need = std::max(c3 + wn - xT, (int)getTextWidth(headLine.c_str(), -1));
-            const int fit = (pane.bottom - y0) / rowH;   // rows that fit: the line, the Bids / Offers heads, then the table rows by importance
-            if (xT + need <= lim && fit >= 3) {
+            auto tw = [&](const std::string& q) { return (int)getTextWidth(q.c_str(), -1); };
+            const int headW = tw(fo.head) + (fo.why.empty() ? 0 : 6 + tw(fo.why));
+            const int dataW = wl + 12 + wb + 14 + wa + (wn > 0 ? 14 + wn : 0);
+            const int fit = (pane.bottom - y0) / rowH;   // lines that fit
+            const spt::Cols cl = spt::cols(lim - xT, dataW, headW);
+            if (cl.leftW > 0 && fit >= 1) {
                 if (blockR > 0) { setPen(rvh::C_GRAY, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = rvh::coord(xT - 13); a.v = rvh::coord(y0 + 2); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = rvh::coord(xT - 13); b.v = rvh::coord(std::min((int)pane.bottom - 3, y0 + fit * rowH)); b.drawLineTo(); }
                 const COLOR vc = fo.verdict == 1 ? rvh::C_GREEN : fo.verdict == -1 ? rvh::C_RED : fo.verdict == 2 ? rvh::C_WHITE : rvh::C_GRAY;
                 const int hw = put(fo.head, xT, y0, vc, lim + 1); if (hw > 0 && !fo.why.empty()) put(fo.why, xT + hw + 6, y0, rvh::C_WHITE, lim + 1);
-                int yy = y0 + rowH; put(when, xT, yy, rvh::C_GRAY, lim + 1); put("Bids", c1, yy, rvh::C_GREEN, lim + 1); put("Offers", c2, yy, rvh::C_RED, lim + 1);
-                for (size_t i = 0; i < FR.size() && (int)i + 3 <= fit; ++i) { yy += rowH; const flr::Row& r = FR[i];
-                    put(r.lab, xT, yy, rvh::C_GRAY, lim + 1); put(r.b, c1, yy, rvh::C_GREEN, lim + 1); put(r.a, c2, yy, rvh::C_RED, lim + 1);
-                    if (!r.note.empty()) put(r.note, c3, yy, r.noteCol > 0 ? rvh::C_GREEN : r.noteCol < 0 ? rvh::C_RED : rvh::C_WHITE, lim + 1); }
+                const std::vector<std::string> EX = spt::wrap(flr::explain(flowIn), cl.leftW, fit - 1, tw);
+                for (size_t i = 0; i < EX.size(); ++i) put(EX[i], xT, y0 + (int)(i + 1) * rowH, rvh::C_WHITE, lim + 1);
+                if (cl.dataOn && fit >= 2) {
+                    const int xb = xT + cl.leftW + spt::GAP, c1 = xb + wl + 12, c2 = c1 + wb + 14, c3 = c2 + wa + 14;
+                    setPen(rvh::C_GRAY, 1, P_SOLID); { PNT a; a.set(0, 0.0f); a.h = rvh::coord(xb - 13); a.v = rvh::coord(y0 + 2); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = rvh::coord(xb - 13); b.v = rvh::coord(std::min((int)pane.bottom - 3, y0 + std::min(fit, (int)FR.size() + 1) * rowH)); b.drawLineTo(); }
+                    int yy = y0; put(when, xb, yy, rvh::C_GRAY, lim + 1); put("Bids", c1, yy, rvh::C_GREEN, lim + 1); put("Offers", c2, yy, rvh::C_RED, lim + 1);
+                    for (size_t i = 0; i < FR.size() && (int)i + 2 <= fit; ++i) { yy += rowH; const flr::Row& r = FR[i];
+                        put(r.lab, xb, yy, rvh::C_GRAY, lim + 1); put(r.b, c1, yy, rvh::C_GREEN, lim + 1); put(r.a, c2, yy, rvh::C_RED, lim + 1);
+                        if (!r.note.empty()) put(r.note, c3, yy, r.noteCol > 0 ? rvh::C_GREEN : r.noteCol < 0 ? rvh::C_RED : rvh::C_WHITE, lim + 1); }
+                }
             }
             read += " || flow " + when + ": " + headLine;
         }

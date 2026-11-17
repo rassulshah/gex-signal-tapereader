@@ -16,7 +16,7 @@
 
 namespace wvr {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences)
 static const double STRONG_X = 2.0;      // a strong wave: 2x the median of the last 5 same-way waves or more
 static const double LIGHT_X = 0.33;      // a light pullback: its volume is a third of the wave's or less (his Lvp rule)
 static const double HEAVY_X = 0.8;       // a heavy pullback: 0.8x the wave's volume or more (the Cob check's counter-wave warning)
@@ -26,7 +26,7 @@ static const double BUILD_X = 1.5;       // "building": one side's volume over t
 struct W { int dir = 0; long long vol = 0; double volX = 0; int cnt = 0; bool cntCap = false, live = false; double sizeX = 0;   // sizeX = price size / the median size (0 = unknown)
            bool ab = false, cmx = false; long long size = 0; };
 struct Row { std::string lab, a, b, c; int ca = 0, cb = 0, cc = 0; };   // colours: +1 green, -1 red, 0 white, 2 grey
-struct Out { bool ok = false; int verdict = 0; bool q = false; std::string head, why, wave, b1, b2; std::vector<Row> rows; };   // verdict +1 / -1 / 2 mixed / 0 quiet
+struct Out { bool ok = false; int verdict = 0; bool q = false; std::string head, why, wave, b1, b2; std::vector<Row> rows; std::vector<std::string> ex; };   // ex (1.1.0) = the explanation sentences, most important first   // verdict +1 / -1 / 2 mixed / 0 quiet
 
 inline std::string commas(long long v) { std::string s = std::to_string(v < 0 ? -v : v); for (int i = (int)s.size() - 3; i > 0; i -= 3) s.insert((size_t)i, ","); return v < 0 ? "-" + s : s; }
 inline std::string x1(double v) { char b[24]; std::snprintf(b, sizeof b, "%.1fx", (std::min)(v, 99.9)); return b; }
@@ -67,6 +67,25 @@ inline Out read(const std::vector<W>& ws, int pick, const std::string& cobLine) 
     if (build) B.push_back(std::string(build > 0 ? "Up" : "Down") + " volume building: " + x1(build > 0 ? (double)su / (double)sd : (double)sd / (double)su) + " over the last 3 waves ?");
     if (!B.empty()) o.b1 = B[0];
     if (B.size() > 1) o.b2 = B[1];
+    {   // (1.1.0) the sentences: the behaviours in words, then the wave's size
+        const char* Bu = up ? "Buyers" : "Sellers"; const char* bo = up ? "buying" : "selling";
+        if (w.ab) o.ex.push_back(std::string(Bu) + " were absorbed at the " + ext + " - the other side soaked up the " + bo + ".");
+        if (w.cmx) o.ex.push_back(std::string("A climax at the ") + ext + " - often the last push before a turn.");
+        if (shorten) o.ex.push_back(std::string("The third ") + dirW + " wave in a row covered less ground - the push is tiring.");
+        if (prevTurn) o.ex.push_back(std::string("This strong wave answered the ") + (up ? "selling" : "buying") + " climax at the " + (up ? "low" : "high") + " - " + (up ? "buyers" : "sellers") + " took over.");
+        if (pb) { if (pb->ab) o.ex.push_back(std::string("Its pullback was absorbed - ") + (up ? "sellers" : "buyers") + " could not push back.");
+                  else if (light) o.ex.push_back("The pullback was light (" + x2(pbX) + " of the wave) - little " + (up ? "selling" : "buying") + " against it.");
+                  else if (heavy) o.ex.push_back("The pullback was heavy (" + x2(pbX) + " of the wave) - real " + (up ? "selling" : "buying") + " against it."); }
+        if (build) o.ex.push_back(std::string(build > 0 ? "Buyers are putting more volume into the up waves - " : "Sellers are putting more volume into the down waves - ") + x1(build > 0 ? (double)su / (double)sd : (double)sd / (double)su) + (build > 0 ? " the down waves" : " the up waves") + " over the last 3.");
+        if (little) o.ex.push_back(std::string("Heavy volume but little progress - someone is absorbing the ") + bo + ".");
+        std::string sz = std::string("This ") + dirW + " wave was ";
+        if (w.volX <= 0) sz += commas(w.vol) + " lots.";
+        else if (strong) sz += "strong (" + x1(w.volX) + " its normal volume) - a real push.";
+        else if (w.volX < 0.7) sz += "light (" + x1(w.volX) + ") - little conviction.";
+        else sz += std::string("normal size (") + x1(w.volX) + ")" + (build && build != w.dir ? ", so " + std::string(up ? "buyers" : "sellers") + " are not pressing." : ".");
+        o.ex.push_back(sz);
+        if (o.ex.size() == 1) o.ex.push_back("Nothing unusual in this wave.");
+    }
     // line 1: the verdict, for the wave's direction (+) or against it (-)
     struct Why { int s; std::string t; }; std::vector<Why> Y;
     if (strong) Y.push_back(Why{ 1, std::string("strong ") + dirW + " wave" });
