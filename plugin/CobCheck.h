@@ -66,14 +66,16 @@ inline std::vector<Item> scan(const cobs::Engine& E)
         // the swept level: its name (the first when two), its price as it stood at the origin, a named key level on the same price
         x.lv = m.levels.substr(0, m.levels.find('/'));
         if ((size_t)p0 < E.hs.size()) { const cobs::HSnap& h = E.hs[(size_t)p0]; x.lvPx = x.lv == "R1" ? h.r1 : x.lv == "R2" ? h.r2 : x.lv == "S1" ? h.s1 : x.lv == "S2" ? h.s2 : NAN; }
-        if (std::isfinite(x.lvPx)) { const auto s = E.S.find(x.sess); double best = 2.5 * E.tick;
+        const bool htfLv = x.lv == "R1" || x.lv == "R2" || x.lv == "S1" || x.lv == "S2";
+        if (!htfLv) { const auto s = E.S.find(x.sess); if (s != E.S.end()) { const auto kv = s->second.L.find(x.lv); if (kv != s->second.L.end()) x.lvPx = kv->second; } }   // (lsCobSignal 1.9.0) a named key level swept: its own price, no tag
+        if (htfLv && std::isfinite(x.lvPx)) { const auto s = E.S.find(x.sess); double best = 2.5 * E.tick;
             if (s != E.S.end()) for (const auto& kv : s->second.L) { const double dd = std::fabs(kv.second - x.lvPx); if (dd < best) { best = dd; x.tag = klv::shownToken(kv.first); } } }
         // 3row
         { int run = 0, mx = 0; for (int q = p0 + 1; q <= p1; ++q) { const bool own = d > 0 ? up(B[(size_t)q]) : !up(B[(size_t)q]); run = own ? run + 1 : 0; mx = std::max(mx, run); } x.row3 = mx >= ROW_MIN; }
         // SMA side at the origin
         if (p0 >= SMA_SLOW - 1) { double a = 0, b = 0; for (int q = p0 - SMA_SLOW + 1; q <= p0; ++q) { b += B[(size_t)q].c; if (q > p0 - SMA_FAST) a += B[(size_t)q].c; }
             a /= SMA_FAST; b /= SMA_SLOW; x.sma = d > 0 ? a < b : a > b; }
-        x.first = m.levels == "S1" || m.levels == "R1";
+        x.first = (x.lv == "S1" || x.lv == "R1") && m.levels.find("S2") == std::string::npos && m.levels.find("R2") == std::string::npos;   // (1.9.0) the levels may carry key names after the 3-hour ones
         x.checks = (x.row3 ? 1 : 0) + (x.sma ? 1 : 0) + (x.first ? 1 : 0);
         // Lvp (the signal's own)
         for (const cobs::LvpMark& L : E.lvp.marks) if (L.cobT == m.t && L.show && L.side == d) { x.lvpT.push_back(L.t); if (!x.lvpAt || L.t < x.lvpAt) x.lvpAt = L.t; }

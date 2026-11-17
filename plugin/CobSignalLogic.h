@@ -50,7 +50,7 @@
 
 namespace cobs {
 
-static const char* const VERSION = "1.8.3";   // (1.8.3, 2026-11-16: host only - the accumulation boxes of lsRevRead 0.9.0 are drawn; no rule change)   // was "1.8.2";   // (1.8.2, 2026-11-16: the 3-hour R1 / R2 / S1 / S2 are drawn as ONE line each across the chart at where they stand now - no past steps)   // was "1.8.1";   // (1.8.1, 2026-11-15 independent review: the Rev tracks are pruned safely (a started CoB is flagged, never re-walked); the 3-hour lines show STANDING levels only (as lsHtfSR and the Limit Profile); one Rev label per bar and side)   // was "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
+static const char* const VERSION = "1.9.0";   // (1.9.0, 2026-11-16 Rassul 19:06-19:07 CT "i had replaced cob key levels with 3 hr levels, i am reconsidering so that we can use both", "eigher": the sweep = a 3-hour S1 / S2 / R1 / R2 OR a named key level (ONL, PDL, PFL, LonLO, PWL, AsiaLO, PHL and the highs; RTH only, as 1.6.x); the record names both)   // was "1.8.3";   // (1.8.3, 2026-11-16: host only - the accumulation boxes of lsRevRead 0.9.0 are drawn; no rule change)   // was "1.8.2";   // (1.8.2, 2026-11-16: the 3-hour R1 / R2 / S1 / S2 are drawn as ONE line each across the chart at where they stand now - no past steps)   // was "1.8.1";   // (1.8.1, 2026-11-15 independent review: the Rev tracks are pruned safely (a started CoB is flagged, never re-walked); the 3-hour lines show STANDING levels only (as lsHtfSR and the Limit Profile); one Rev label per bar and side)   // was "1.8.0";   // (1.8.0, 2026-11-15 20:43-20:47 CT Rassul "now i need to extend the rev to the cob pullback", "what if the volume was under .5", "ok.. lets use that", "build") + the CoB pullback Rev: after a drawn CoB, the first bar that closes beyond the prior bar (above its high and green for a bull CoB) while the pullback stays inside the CoB range - a Rev when the pullback so far carried <= 0.5x the CoB wave's volume   // was "1.7.1":   // (1.7.1, 2026-11-15 17:01 CT Rassul "i want the overnight cobs also but i want to make sure they have decent performance") the window opens at the 5:00 PM session start (was 7:00 AM) and still ends at 11:00 AM CT; the 1.9x rule stays (overnight CoBs under 1.9x won 42% of 12, at 1.9x+ 65% of 20)   // was "1.7.0":   // (1.7.0, 2026-11-15 Rassul "i want to make a change to the cob indicator so that the sweep is a sweep of a support or resistance level on the 3 hour, basically the 3 hour goes into an upthrust or spring position and the sweep occurs with a cob", "1. the cob signal in IRT 2. Replace 3. yes show the S1 S2, R1 R2 levels like i have in my htf 3hr chart") the swept level = the 3-hour S1 / S2 (bull) or R1 / R2 (bear), not the named key levels; the four lines drawn
 // was "1.6.5";   // (1.6.5, 2026-11-12 19:48 CT) the entry line at the 38.2% retracement (was 50%)   // was "1.6.4":   // (1.6.4, 2026-11-06 21:23 CT) Lvp only after a drawn CoB (shown + ZZO 10+)
 // was "1.6.3";   // (1.6.3, 2026-11-06 19:31 CT Rassul "make LVP into Lvp and closer to the pivot") "Lvp", one row out (right under / over the wave-time label)
 // was "1.6.2";   // (1.6.2) the shared MarketKey.h lookup (IQFeed / Rithmic / CQG roots)
@@ -244,6 +244,7 @@ struct Engine {
     long long trimmed = 0; std::string lastWhy;
     Lvp lvp; std::vector<std::string> lvpOut;        // (1.3.0) LVP decisions + record lines not yet written
     std::vector<RevTrack> revTr; std::vector<RevMark> revs;   // (1.8.0) the CoB pullback Rev
+    bool keySweep = true;   // (1.9.0) the named key levels count as well as the 3-hour ones; false = 3-hour only (the 1.7.0 - 1.8.x rule, tests)
     Htf H; std::vector<HSnap> hs; bool htfSweep = true;   // (1.7.0) the 3-hour S / R as of every bar; false = the 1.6.x named key levels (tests)
     zzd::Engine Z3;                                  // (1.4.0) the ZZO Combo engine on the same bars (wave counts for the CoB filter)
     void reset() { wSeen = 0; lastWaveT = 0; if (!mkt.empty()) { Z3.reset(); Z3.revBars = zzd::COMBO_REV_BARS; Z3.setMarket(rootRaw.empty() ? mkt : rootRaw, perSec); } lvp.reset(); lvpOut.clear(); H.reset(); hs.clear(); revTr.clear(); revs.clear(); B.clear(); K.clear(); CB.clear(); cls.clear(); dirn = 0; ext = 0; start = 0; legs.clear(); lastLowPivot = -1; S.clear(); doneOrder.clear(); marks.clear(); out.clear(); lastWhy.clear(); }
@@ -384,23 +385,34 @@ struct Engine {
         const HSnap& h = hs[(size_t)p0]; const double eps = tick * 0.25;
         const double ext0 = side > 0 ? B[(size_t)p0].l : B[(size_t)p0].h, ext1 = side > 0 ? B[(size_t)p1].h : B[(size_t)p1].l;
         std::string sw; auto add = [&](const char* nm) { if (!sw.empty()) sw += "/"; sw += nm; };
-        if (side > 0) {
-            if (h.dir >= 0 || ext0 > h.ext + eps) return;                       // the origin is the low of the 3-hour down swing
-            if (h.s1ok && ext0 < h.s1 && h.s1 < ext1) add("S1");
-            if (h.s2ok && std::fabs(h.s2 - h.s1) > eps && ext0 < h.s2 && h.s2 < ext1) add("S2");
-            if (sw.empty() || !(B[(size_t)j].c - ext0 >= 0.1 * adr)) return;
-        } else {
-            if (h.dir <= 0 || ext0 < h.ext - eps) return;
-            if (h.r1ok && ext1 < h.r1 && h.r1 < ext0) add("R1");
-            if (h.r2ok && std::fabs(h.r2 - h.r1) > eps && ext1 < h.r2 && h.r2 < ext0) add("R2");
-            if (sw.empty() || !(ext0 - B[(size_t)j].c >= 0.1 * adr)) return;
+        // (1.9.0, Rassul 2026-11-16 19:06-19:07 CT "i had replaced cob key levels with 3 hr levels, i am reconsidering so that we can use both", "eigher")
+        // EITHER sweep makes the CoB: a standing 3-hour level (sw: S1 / S2, R1 / R2 - the origin = the 3-hour swing's extreme) OR a named key level of the
+        // session (kw: the 1.6.x set, known from the session's first RTH bar on, both pivots in RTH). Recorded as "<3-hour names>/<key names>".
+        std::string kw; auto addK = [&](const char* nm) { if (!kw.empty()) kw += "/"; kw += nm; };
+        if (keySweep && s.lv && c.kind == svl::RTH && c0.kind == svl::RTH) {
+            auto lvl = [&](const char* nm, double& v) { auto it = s.L.find(nm); if (it == s.L.end()) return false; v = it->second; return true; };
+            if (side > 0) { const char* N[] = { "ONL", "PDL", "PFL", "LonLO", "PWL", "AsiaLO", "PHL" }; for (const char* nm : N) { double v; if (lvl(nm, v) && ext0 < v && v < ext1) addK(nm); } }
+            else { const char* N[] = { "ONH", "PDH", "PFH", "LonHI", "PWH", "AsiaHI", "PHH" }; for (const char* nm : N) { double v; if (lvl(nm, v) && ext1 < v && v < ext0) addK(nm); } }
         }
-        Mark m; m.t = B[(size_t)j].t; m.idx = j; m.side = side; m.dratio = dr; m.adr = adr; m.legStart = p0; m.legEnd = p1; m.ext = ext0; m.levels = sw;
+        if (side > 0) {
+            if (!(h.dir >= 0 || ext0 > h.ext + eps)) {                          // the origin is the low of the 3-hour down swing
+                if (h.s1ok && ext0 < h.s1 && h.s1 < ext1) add("S1");
+                if (h.s2ok && std::fabs(h.s2 - h.s1) > eps && ext0 < h.s2 && h.s2 < ext1) add("S2"); }
+            if ((sw.empty() && kw.empty()) || !(B[(size_t)j].c - ext0 >= 0.1 * adr)) return;
+        } else {
+            if (!(h.dir <= 0 || ext0 < h.ext - eps)) {
+                if (h.r1ok && ext1 < h.r1 && h.r1 < ext0) add("R1");
+                if (h.r2ok && std::fabs(h.r2 - h.r1) > eps && ext1 < h.r2 && h.r2 < ext0) add("R2"); }
+            if ((sw.empty() && kw.empty()) || !(ext0 - B[(size_t)j].c >= 0.1 * adr)) return;
+        }
+        const std::string all = sw.empty() ? kw : kw.empty() ? sw : sw + "/" + kw;
+        Mark m; m.t = B[(size_t)j].t; m.idx = j; m.side = side; m.dratio = dr; m.adr = adr; m.legStart = p0; m.legEnd = p1; m.ext = ext0; m.levels = all;
+        if (sw.empty()) { m.phOnly = kw == "PHH" || kw == "PHL"; m.show = !m.phOnly || phShown(mkt); }   // a prior-hour level alone: drawn only where the nightly proved it
         cimp::Params P; const cimp::Tag T = cimp::evaluate(CB, j, side, P, false);
         m.r = T.r.bar >= 0; m.v = T.v.bar >= 0; m.rBar = T.r.bar; m.vBar = T.v.bar; m.rN = T.r.n; m.vN = T.v.n;
         m.zCnt = w.cnt + (w.cntCap ? 1 : 0); m.zBars = 0; m.zWave = Z3.B[(size_t)w.s].t;
         marks.push_back(m); out.push_back(recLine(m));
-        {   // the swept 3-hour levels with their prices, for the MQ Reader: HTF,<CoB bar end>,<BULL|BEAR>,<name>,<price>[,<name>,<price>]
+        if (!sw.empty()) {   // the swept 3-hour levels with their prices, for the MQ Reader: HTF,<CoB bar end>,<BULL|BEAR>,<name>,<price>[,<name>,<price>]
             char r[200]; int q = std::snprintf(r, sizeof r, "HTF,%lld,%s", m.t, side > 0 ? "BULL" : "BEAR");
             auto put = [&](const char* nm, double px) { if (sw.find(nm) != std::string::npos && q > 0 && q < (int)sizeof r) q += std::snprintf(r + q, sizeof r - (size_t)q, ",%s,%.10g", nm, std::round(px / tick) * tick); };
             if (side > 0) { put("S1", h.s1); put("S2", h.s2); } else { put("R1", h.r1); put("R2", h.r2); }
@@ -745,7 +757,7 @@ inline std::string statusText(const Engine& E, const std::string& sym, int spb, 
 {
     std::string o = std::string("VERSION,") + VERSION + "\nMARKET," + E.mkt + "\nSYMBOL," + sym + "\nBAR_SECONDS," + std::to_string(spb) +
                      "\nRTH," + std::to_string(E.openMin) + "-" + std::to_string(E.closeMin) + "\nBARS," + std::to_string(E.B.size()) + "\nLEGS," + std::to_string(E.legs.size()) +
-                     "\nRULES,completed 3-bar ZigZag wave; sweep of the 3-hour S1/S2 (bull) or R1/R2 (bear); dratio >= 1.9 (20 waves); >= 3 bars; room 0.1 ADR; from the 5:00 PM session start to 11:00 AM CT; drawn with ZZO count >= 10\n";
+                     "\nRULES,completed 3-bar ZigZag wave; sweep of the 3-hour S1/S2 (bull) or R1/R2 (bear) OR of a named key level (RTH; 1.9.0); dratio >= 1.9 (20 waves); >= 3 bars; room 0.1 ADR; from the 5:00 PM session start to 11:00 AM CT; drawn with ZZO count >= 10\n";
     o += "RECORD," + rec + "\nCOBS," + std::to_string(E.marks.size()) + "\n";
     {   int ok = 0, no = 0, wait = 0; for (const Mark& m : E.marks) { if (!m.zDone) ++wait; else if (m.zOk) ++ok; else ++no; }   // (1.4.0)
         o += "ZZO_FILTER,1.4.0 drawn only when the CoB's ZZO Combo wave count reaches " + std::to_string(ZZO_COB_MIN) + ",passed " + std::to_string(ok) + ",failed " + std::to_string(no) + ",waiting " + std::to_string(wait) + "\n"; }

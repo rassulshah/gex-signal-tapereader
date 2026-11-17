@@ -35,7 +35,8 @@ int main(int argc, char** argv) {
     std::vector<cobs::Bar> B; { std::ifstream f(argv[1]); std::string l; std::getline(f, l);
         while (std::getline(f, l)) { cobs::Bar b; if (std::sscanf(l.c_str(), "%lld,%lf,%lf,%lf,%lf,%lf", &b.t, &b.o, &b.h, &b.l, &b.c, &b.v) == 6) B.push_back(b); } }
     CHECK(B.size() > 5000, "fixture loaded (" << B.size() << ")");
-    cobs::Engine E; E.setMarket("ES", 0.25, 180); for (const cobs::Bar& b : B) E.addBar(b);
+    cobs::Engine E; E.setMarket("ES", 0.25, 180); E.keySweep = false;   /* (1.9.0) this suite checks the 3-hour sweep itself; key levels OR 3-hour: cmp_190.cpp */
+    for (const cobs::Bar& b : B) E.addBar(b);
     CHECK(E.hs.size() == E.B.size(), "one 3-hour snapshot per bar");
     CHECK(!E.marks.empty(), "the fixture has 3-hour sweep CoBs (" << E.marks.size() << ")");
     {   bool lv = true, win = true, geo = true, rules = true, night = false;
@@ -53,7 +54,7 @@ int main(int argc, char** argv) {
         bool named = !O.marks.empty(); for (const cobs::Mark& m : O.marks) named = named && m.levels.find("S1") == std::string::npos && m.levels.find("R1") == std::string::npos;
         CHECK(named, "htfSweep off = the 1.6.x named key levels (" << O.marks.size() << ")"); }
     {   // no repaint: feeding bar by bar gives the same snapshots and marks as they stood (a prefix run = the full run's prefix)
-        const size_t cut = B.size() * 2 / 3; cobs::Engine P; P.setMarket("ES", 0.25, 180); for (size_t i = 0; i < cut; ++i) P.addBar(B[i]);
+        const size_t cut = B.size() * 2 / 3; cobs::Engine P; P.setMarket("ES", 0.25, 180); P.keySweep = false; for (size_t i = 0; i < cut; ++i) P.addBar(B[i]);
         bool same = true; for (size_t i = 0; i < cut; ++i) { const cobs::HSnap& a = P.hs[i]; const cobs::HSnap& b = E.hs[i]; same = same && ((eq(a.r1, b.r1) || (std::isnan(a.r1) && std::isnan(b.r1))) && (eq(a.s2, b.s2) || (std::isnan(a.s2) && std::isnan(b.s2))) && a.dir == b.dir && a.s1ok == b.s1ok && a.r2ok == b.r2ok); }
         CHECK(same, "3-hour levels never repaint (prefix run = the full run)");
         bool mk = true; size_t n = 0; for (const cobs::Mark& m : E.marks) if (m.idx < (int)cut) { ++n; bool f = false; for (const cobs::Mark& q : P.marks) f = f || (q.t == m.t && q.side == m.side && q.levels == m.levels); mk = mk && f; }
@@ -87,11 +88,11 @@ int main(int argc, char** argv) {
         CHECK(n > 0 && n <= 3 * drawnCobs, "CoB pullback Revs found (" << n << " after " << drawnCobs << " drawn CoBs)"); CHECK(one, "up to 3 Revs per CoB, each on its own pullback (a new extreme between them)"); CHECK(multi >= 0, "second Revs: " << multi); CHECK(own, "each Rev belongs to a drawn CoB, at / after its bar and after the wave's end pivot");
         CHECK(rule, "Rev rule: closes beyond the prior bar and its own open, pullback volume <= 0.5x the wave's, no close through the origin, inside the running extreme");
         int lines = 0; for (const std::string& l : E.out) if (l.rfind("REV,", 0) == 0) ++lines; CHECK(lines == n, "one REV record line per Rev");
-        {   const size_t cut = B.size() * 2 / 3; cobs::Engine P; P.setMarket("ES", 0.25, 180); for (size_t i = 0; i < cut; ++i) P.addBar(B[i]); bool pre = true; size_t k = 0; for (const cobs::RevMark& r : E.revs) if (r.idx < (int)cut) { ++k; bool f = false; for (const cobs::RevMark& q : P.revs) f = f || (q.t == r.t && q.side == r.side && q.cobT == r.cobT); pre = pre && f; } CHECK(pre && k == P.revs.size(), "Revs never repaint (prefix run)"); }
+        {   const size_t cut = B.size() * 2 / 3; cobs::Engine P; P.setMarket("ES", 0.25, 180); P.keySweep = false; for (size_t i = 0; i < cut; ++i) P.addBar(B[i]); bool pre = true; size_t k = 0; for (const cobs::RevMark& r : E.revs) if (r.idx < (int)cut) { ++k; bool f = false; for (const cobs::RevMark& q : P.revs) f = f || (q.t == r.t && q.side == r.side && q.cobT == r.cobT); pre = pre && f; } CHECK(pre && k == P.revs.size(), "Revs never repaint (prefix run)"); }
         cobs::View v; v.l = 0; v.t = 0; v.r = 100000; v.b = 100000; v.first = 0; v.last = (int)E.B.size() - 1; v.X = [](int j) { return 10.0 + j * 4.0; }; v.Y = [](double p) { return 50000.0 - p * 4.0; };
         int lab = 0; bool side = true; for (const cobs::Prim& p : cobs::layout(E, v)) if (p.text == "Rev") { ++lab; side = side && (p.col == cobs::C_BULL || p.col == cobs::C_BEAR); } CHECK(lab == n && side, "a Rev label per Rev, green / red (" << lab << ")");
         const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.find("\nREV_RULES,1.8.0") != std::string::npos && st.find("\nREVS," + std::to_string(n) + "\n") != std::string::npos, "status: Rev rule + count"); }
-    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.8.3\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
+    {   const std::string st = cobs::statusText(E, "ESZ6", 180, "x"); CHECK(st.rfind("VERSION,1.9.0\n", 0) == 0 && st.find("\nHTF_RULES,1.7.1") != std::string::npos && st.find("\nHTF,R1=") != std::string::npos, "status: version + 3-hour rules + levels"); }
     {   // (1.8.1, independent review) every drawn CoB starts its pullback look exactly once (revOn); finished looks are pruned without a second
         // walk: no (bar, CoB) has two Rev marks; the 3-hour lines never draw a broken level
         std::map<std::pair<long long, long long>, int> seen; int dup = 0; for (const cobs::RevMark& r : E.revs) if (++seen[std::make_pair(r.t, r.cobT)] > 1) ++dup;
