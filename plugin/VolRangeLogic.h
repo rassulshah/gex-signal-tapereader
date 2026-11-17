@@ -24,7 +24,7 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
+static const char* const VERSION = "1.3.4";   // (1.3.4, 2026-11-16 21:13 CT Rassul "use Cx instead of P, to represent climactic volume or a minor climax": the pivot mark reads Cx)   // was "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
 // "what about an increas on a break/sweep of a keylevel, vol level", "go", "if there is a bar that is big like biggest range or volume in 50+ , lets highlight it, this includes variants like biggest green or red";
 // mockup Dr2SDbU3idUeUYD5c2KAVX) BOTH panes: bars grey, a marked bar green (bullish) / red (bearish) with ONE short code over it, by priority:
 //   CB  the Cob bar near the origin (the Cob Reader's CB bar)                      colour = the Cob's side
@@ -85,7 +85,7 @@ static const int SHOW_MIN = 20;     // the Max number goes on a bar from this co
 static const int LV_MIN = 5, PV_MIN = 20, BIG_MIN = 50, LV_COOL = 10, CT_BACK = 40, CT_FWD = 60;   // (1.3.0) the mark thresholds
 enum MkCode { MK_NONE = 0, MK_BO, MK_BIG, MK_P, MK_CT, MK_REV, MK_SW, MK_BK, MK_SR, MK_CB };
 struct Mk { int code = 0, dir = 0; };
-inline const char* mkText(int c) { switch (c) { case MK_P: return "P"; case MK_CT: return "Ct"; case MK_REV: return "Rev"; case MK_SW: return "Sw"; case MK_BK: return "Bk"; case MK_SR: return "SR"; case MK_CB: return "CB"; default: return ""; } }
+inline const char* mkText(int c) { switch (c) { case MK_P: return "Cx"; case MK_CT: return "Ct"; case MK_REV: return "Rev"; case MK_SW: return "Sw"; case MK_BK: return "Bk"; case MK_SR: return "SR"; case MK_CB: return "CB"; default: return ""; } }
 struct CobIt { long long t = 0, cbT = 0, srT = 0; int side = 0; };
 inline long long lvFloorDiv(long long a, long long b) { long long q = a / b; if ((a % b != 0) && ((a < 0) != (b < 0))) --q; return q; }
 inline long long lvCivil(long long y, unsigned m, unsigned d) { y -= m <= 2; const long long era = (y >= 0 ? y : y - 399) / 400; const unsigned yoe = (unsigned)(y - era * 400);
