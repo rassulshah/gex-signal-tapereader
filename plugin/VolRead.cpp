@@ -50,7 +50,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.3.5";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.4.0";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -74,6 +74,7 @@ struct VRState {
     std::string statusPath, statusBody; long long statusMs = -1, statusCk = -1; int drawn = 0;   // statusCk (1.1.1) = when the text was last built
     int hov = -1; pc::Tracker cur;                     // (1.2.0) the chart bar under the mouse (-1 = not in this pane) and where the pane sits on the screen
     long long hlMs = -1; std::string hlSig;            // (1.1.0) when the signal files were last looked at / their stamps
+    long long bfMs = -1; std::string bfSig; int bfRows = 0;   // (1.4.0) when lsBookFlow's session record was last looked at / its stamp / candles read
     long long lvMs = -1; std::string lvSig;            // (1.3.0) the same for the level files and the Cob Reader status
 };
 
@@ -120,6 +121,22 @@ static bool vrSlurp(const std::string& path, size_t cap, std::string& out) {
     const std::streamoff from = sz > (std::streamoff)cap ? sz - (std::streamoff)cap : 0; f.seekg(from); out.resize((size_t)(sz - from)); if (!out.empty()) f.read(&out[0], (std::streamsize)out.size()); out.resize((size_t)f.gcount()); return true;
 }
 static void vrMarks(VRState& S, long long now);
+// (1.4.0) the Volume pane looks INSIDE the candle: lsBookFlow's session record (lsFlexLevels\BookFlow\<MKT>-<SYM>-<secs>-<yyyymmdd>.csv), the current
+// session and the one before, looked at every 10 s and re-read only when a file changed. No order feed is opened here; a chart without lsBookFlow
+// simply has no "Biggest order" / "Sweep" rows.
+static void vrInside(VRState& S, long long now) {
+    if (S.E.mode != vrr::VOL || (S.bfMs >= 0 && now - S.bfMs < 10000)) return;
+    S.bfMs = now;
+    const std::string d = vrFlex(); if (d.empty() || S.E.LT.empty()) return;
+    const long long day = vrr::sessionDay(S.E.LT.back());
+    std::vector<std::string> files; const std::string keys[2] = { S.mkt, mkey::norm(S.mkt) };
+    for (int k = 0; k < 2; ++k) { if (k == 1 && keys[1] == keys[0]) break; for (long long q = day - 1; q <= day; ++q) files.push_back(d + VR_SEP "BookFlow" VR_SEP + keys[k] + "-" + S.sym + "-" + std::to_string(S.spb) + "-" + vrd::ymd(q) + ".csv"); }
+    std::string sig; for (const std::string& p : files) { struct stat st; if (stat(p.c_str(), &st) == 0) sig += std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime) + ";"; else sig += "-;"; }
+    if (sig == S.bfSig) return;
+    S.bfSig = sig; std::map<long long, vrd::Inside> m; std::string txt; int rows = 0;
+    for (const std::string& p : files) { struct stat st; if (stat(p.c_str(), &st) != 0 || st.st_size > 8 * 1024 * 1024) continue; if (vrSlurp(p, 8 * 1024 * 1024, txt)) rows += vrd::parseBookFlow(txt, m); }
+    S.E.inside.swap(m); S.bfRows = rows;
+}
 void VolRead::signals(VRState& S, long long now) {
     S.E.hlOn = true;                                     // (1.3.0) both panes
     vrMarks(S, now);
@@ -209,7 +226,7 @@ void VolRead::status(VRState& S, long long now) {
 void VolRead::pump() {
     VRState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
-    feed(*S); signals(*S, vrMs()); S->E.markLevels(); S->E.cobMarks(); status(*S, vrMs());   // (1.3.0) the marks of the new closed bars, after the files were looked at
+    feed(*S); signals(*S, vrMs()); try { vrInside(*S, vrMs()); } catch (...) {} S->E.markLevels(); S->E.cobMarks(); status(*S, vrMs());   // (1.3.0) the marks of the new closed bars, after the files were looked at
     mouseLeft(*S);
 }
 
@@ -283,10 +300,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);   // (1.2.0) + the mouse picks the bar the read box is about                                    // its own pane, draws itself; no hovers, no settings
 #ifdef VR_RANGE
-    p->setDescription("LRA Range Read v1.3.5 - its own pane: each bar's range (high - low) in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars, a breakout candle of 1.2x ATR(13) or more. BRMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
+    p->setDescription("LRA Range Read v1.4.0 - (1.4.0: the read right of the last candle - verdict, candle, two behaviour lines and the numbers, for the candle under the mouse) its own pane: each bar's range (high - low) in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars, a breakout candle of 1.2x ATR(13) or more. BRMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #else
-    p->setDescription("LRA Volume Read v1.3.5 - its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
+    p->setDescription("LRA Volume Read v1.4.0 - (1.4.0: the read right of the last candle - verdict, candle, two behaviour lines and the numbers, for the candle under the mouse; it looks inside the candle through the Book Flow record) its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #endif
-    p->setVersion("1.3.5");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.4.0");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

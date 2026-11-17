@@ -20,11 +20,12 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "VRRead.h"         // (1.4.0) the pane reads: verdict / candle / two behaviours + the numbers (SDK-free, tests_volrange/t_vrread)
 #include "HtfSr.h"          // (1.3.0) the 3-hour R1 / R2 / S1 / S2 walk (SDK-free; = lsLimitProfile / lsCobSignal)
 
 namespace vrr {
 
-static const char* const VERSION = "1.3.5";   // (1.3.5, 2026-11-16 21:17 CT Rassul "lets not color the volume or range based on just being a rev bar . volume and range should only be colored because the volume or range is significaant": the Rev mark is gone)   // was "1.3.4";   // (1.3.4, 2026-11-16 21:13 CT Rassul "use Cx instead of P, to represent climactic volume or a minor climax": the pivot mark reads Cx)   // was "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
+static const char* const VERSION = "1.4.0";   // (1.4.0, 2026-11-17 Rassul 06:54-07:02 CT: the pane reads right of the last candle - verdict / candle / two behaviours + the numbers, for the candle under the mouse; Volume looks inside the candle through lsBookFlow's record; VRRead.h)   // was "1.3.5";   // (1.3.5, 2026-11-16 21:17 CT Rassul "lets not color the volume or range based on just being a rev bar . volume and range should only be colored because the volume or range is significaant": the Rev mark is gone)   // was "1.3.4";   // (1.3.4, 2026-11-16 21:13 CT Rassul "use Cx instead of P, to represent climactic volume or a minor climax": the pivot mark reads Cx)   // was "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
 // "what about an increas on a break/sweep of a keylevel, vol level", "go", "if there is a bar that is big like biggest range or volume in 50+ , lets highlight it, this includes variants like biggest green or red";
 // mockup Dr2SDbU3idUeUYD5c2KAVX) BOTH panes: bars grey, a marked bar green (bullish) / red (bearish) with ONE short code over it, by priority:
 //   CB  the Cob bar near the origin (the Cob Reader's CB bar)                      colour = the Cob's side
@@ -169,8 +170,9 @@ struct Engine {
     int spb = 0; std::vector<double> Hh, Ll, Cc; std::vector<signed char> pv, lvC, lvD; std::vector<double> htf;   // htf: 4 per bar (NAN = none)
     int zd = 0, zext = 0; hsr::Walk hw; hsr::Snap hsn;
     std::map<long long, std::vector<double>> lvDay; int lvDone = 0; std::map<long long, int> lvLast;
+    std::vector<double> Oo, Vol; std::map<long long, vrd::Inside> inside;   // (1.4.0) per closed bar its open and volume; lsBookFlow's per-candle order facts by chart time (the host fills it)
     std::vector<CobIt> cobs; std::map<long long, int> cbAt, srAt, ctAt; int cobN = -1;                    // by bar time (local seconds or chart time)
-    void reset() { V.clear(); G.clear(); T.clear(); S.clear(); PR.clear(); ATR.clear(); LT.clear(); prevC = NAN; trSum = 0;
+    void reset() { Oo.clear(); Vol.clear(); V.clear(); G.clear(); T.clear(); S.clear(); PR.clear(); ATR.clear(); LT.clear(); prevC = NAN; trSum = 0;
         Hh.clear(); Ll.clear(); Cc.clear(); pv.clear(); lvC.clear(); lvD.clear(); htf.clear(); zd = 0; zext = 0; hw.reset(); hsn = hsr::Snap(); lvDone = 0; lvLast.clear(); cbAt.clear(); srAt.clear(); ctAt.clear(); cobN = -1; }
     bool deadBar(int i) const { return Hh[(size_t)i] == 0 && Ll[(size_t)i] == 0 && Cc[(size_t)i] == 0; }
     // the ZigZag (3-bar High / Low, the chart's ZigZag): a pivot is marked when the wave that follows confirms it - on its bar, or the bar before, when biggest in PV_MIN+
@@ -289,6 +291,7 @@ struct Engine {
         const int n = (int)PR.size(); double a = 0;                    // Wilder: the mean of the first HL_ATR_N true ranges, then (prev * (N - 1) + TR) / N
         if (n < HL_ATR_N) { trSum += tr; a = n == HL_ATR_N - 1 ? trSum / HL_ATR_N : 0; } else a = (ATR[(size_t)n - 1] * (HL_ATR_N - 1) + tr) / HL_ATR_N;
         PR.push_back(r); ATR.push_back(a); LT.push_back(localT); if (!dead && std::isfinite(b.c)) prevC = b.c;
+        Oo.push_back(b.o); Vol.push_back(b.v);   // (1.4.0)
         Hh.push_back(b.h); Ll.push_back(b.l); Cc.push_back(b.c); pv.push_back(0); lvC.push_back(0); lvD.push_back(0);                 // (1.3.0)
         { double q[4] = { NAN, NAN, NAN, NAN }; if (tick > 0 && spb > 0 && spb < hsr::SECS && hsr::periodOk(spb)) { int k = 0; for (const hsr::Lv& x : hsr::standing(hsn, tick)) if (k < 4) q[k++] = x.px;
               if (!dead && localT > 0) { hsr::Bar hb; hb.t = localT; hb.h = b.h; hb.l = b.l; hb.c = b.c; const hsr::Snap s2 = hw.add(hb, spb); if (s2.dir != 0) hsn = s2; } }
@@ -342,7 +345,49 @@ inline std::vector<Prim> layout(const Engine& E, const View& v, const Bar* form,
         if (i < n && E.S[(size_t)i].mx() >= SHOW_MIN) put(fm(E.S[(size_t)i].mx()), C_TXT, false);          // closed bars only: decided once
         if (mk.code >= MK_P) put(mkText(mk.code), col, true);                                          // (1.3.0) the ONE code of a marked bar, in its colour
     }
-    if (box) {                                                                          // the read box: the last CLOSED bar
+    bool newRead = false;
+    if (v.readX >= 0 && n > 0 && (int)E.Oo.size() == n && (int)E.Vol.size() == n) {
+        // (1.4.0, Rassul 2026-11-17 06:54-07:02 CT; mockups RLzNyNZo4rDHuJA2vKwdfY / NdxMKEmswYJHTCjYKW57bi) THE READ, right of the last candle, no frame: four
+        // lines (verdict / candle / two behaviours), then the numbers beside them - about the candle under the mouse, else the last closed one
+        const bool onForm = pick == n && form != nullptr; const int at = pick >= 0 && pick < n ? pick : n - 1;
+        vrd::Ctx x; x.dec = vrd::decOf(E.tick);
+        for (int j = std::max(0, at - 24); j <= at; ++j) { if (E.deadBar(j)) continue; vrd::Cd k; k.o = E.Oo[(size_t)j]; k.h = E.Hh[(size_t)j]; k.l = E.Ll[(size_t)j]; k.c = E.Cc[(size_t)j]; k.vol = E.Vol[(size_t)j];
+            if (j < (int)E.LT.size()) { k.when = vrd::clock12(E.LT[(size_t)j]); }
+            x.c.push_back(k); }
+        if (onForm) { vrd::Cd k; k.o = form->o; k.h = form->h; k.l = form->l; k.c = form->c; k.vol = form->v; k.when = "now"; x.c.push_back(k); }
+        const Stat s = onForm ? E.forming(*form) : E.S[(size_t)at]; x.cntAll = s.all; x.cntSame = s.same;
+        { const int ai = onForm ? at : at - 1; if (ai >= 0 && ai < (int)E.ATR.size()) x.atr = E.ATR[(size_t)ai]; }
+        if (!onForm) { x.cx = at < (int)E.pv.size() && E.pv[(size_t)at] ? E.pv[(size_t)at] : (at >= 1 && at - 1 < (int)E.pv.size() ? E.pv[(size_t)at - 1] : 0);
+            const auto it = E.inside.find(E.T[(size_t)at]); if (it != E.inside.end()) x.in = it->second; }
+        const vrd::Out o = (!onForm && E.deadBar(at)) ? vrd::Out() : (E.mode == VOL ? vrd::volumeRead(x) : vrd::rangeRead(x));
+        if (o.ok) {
+            auto tw = [&](const std::string& q) { return v.textW ? v.textW(q) : (int)q.size() * 6; };
+            const int rh = th + 2, y0 = v.t + 1, fit = (H - 2) / rh;
+            struct Ln { std::string a, b; unsigned ca; }; std::vector<Ln> LN;
+            LN.push_back(Ln{ o.head, o.why, o.verdict == 1 ? C_UP : o.verdict == -1 ? C_DN : o.verdict == 2 ? C_TXT : C_BOXLN });
+            LN.push_back(Ln{ "Candle:", o.candle, C_BOXLN });
+            if (!o.b1.empty()) LN.push_back(Ln{ o.b1, "", C_TXT });
+            if (!o.b2.empty()) LN.push_back(Ln{ o.b2, "", C_TXT });
+            int wl = 0; for (const Ln& l : LN) wl = std::max(wl, tw(l.a) + (l.b.empty() ? 0 : 6 + tw(l.b)));
+            const int x0 = v.readX;
+            if (fit >= 1 && x0 + wl <= v.r) {
+                newRead = true;
+                for (size_t i = 0; i < LN.size() && (int)i < fit; ++i) { const int y = y0 + (int)i * rh; const int wa = tw(LN[i].a);
+                    Prim k; k.bold = true; k.text = LN[i].a; k.col = LN[i].ca; k.x0 = x0; k.x1 = x0 + wa; k.y0 = y; k.y1 = y + rh; P.push_back(k);
+                    if (!LN[i].b.empty()) { Prim q; q.bold = i == 0; q.text = LN[i].b; q.col = C_TXT; q.x0 = x0 + wa + 6; q.x1 = q.x0 + tw(LN[i].b); q.y0 = y; q.y1 = y + rh; P.push_back(q); } }
+                int wk = 0, wa2 = 0, wb2 = 0; for (const vrd::Row& r : o.rows) { wk = std::max(wk, tw(r.lab)); wa2 = std::max(wa2, tw(r.a)); wb2 = std::max(wb2, tw(r.b)); }
+                const int xb = x0 + wl + 26, ca = xb + wk + 12, cb = ca + wa2 + 14;
+                auto colOf = [](int c) -> unsigned { return c == 1 ? C_UP : c == -1 ? C_DN : c == 2 ? C_BOXLN : C_TXT; };
+                if (cb + wb2 <= v.r) {
+                    { Prim e; e.fill = true; e.x0 = xb - 13; e.x1 = xb - 13; e.y0 = y0 + 2; e.y1 = std::min(v.b - 3, y0 + std::min(fit, (int)o.rows.size()) * rh); e.col = 0x00374151; P.push_back(e); }
+                    for (size_t i = 0; i < o.rows.size() && (int)i < fit; ++i) { const vrd::Row& r = o.rows[i]; const int y = y0 + (int)i * rh;
+                        auto put2 = [&](const std::string& t, int xx2, unsigned col, bool bold) { if (t.empty()) return; Prim q; q.bold = bold; q.text = t; q.col = col; q.x0 = xx2; q.x1 = xx2 + tw(t); q.y0 = y; q.y1 = y + rh; P.push_back(q); };
+                        put2(r.lab, xb, C_BOXLN, false); put2(r.a, ca, colOf(r.ca), true); put2(r.b, cb, colOf(r.cb), true); }
+                }
+            }
+        }
+    }
+    if (box && !newRead) {                                                              // the 1.2.0 read box (a narrow pane / the chart scrolled back): the last CLOSED bar
         const int rows = 4, rh = std::max(8, std::min(th + 1, (H - 2 * BOX_PAD) / rows)); const int bh = rows * rh + 2 * BOX_PAD;
         const int x0 = bxL, y0 = v.t + std::max(0, (H - bh) / 2), x1 = bx1, y1 = std::min(v.b, y0 + bh);
         Prim bg; bg.fill = true; bg.x0 = x0; bg.y0 = y0; bg.x1 = x1; bg.y1 = y1; bg.col = C_BOXBG; P.push_back(bg);
