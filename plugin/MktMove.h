@@ -4,7 +4,7 @@
 // claude.ai/artifact/TmYk67SB3emJaALWR4PbpJ)
 //   move  = (last close - the session's open, 5:00 PM CT) / the market's average session range (last 10 complete sessions, at least 5)
 //   pos   = where the last close sits in the session's range so far (0 = the low, 1 = the high)
-//   line  = every market whose chart wrote its move in the last 10 minutes, biggest |move| first: "ES -0.8x"
+//   line  = every market whose chart wrote its move in the last 10 minutes, biggest |move| first: "ES -80%"
 //           grey under 0.25x, else green up / red down; BOLD + arrow = 0.7x or more AND still in the outer quarter of the range (trending)
 // Each chart writes lsFlexLevels\HodLod.move-<MKT>.txt ("MOVE,1,<MKT>,<move>,<pos>,<epoch>") and reads the others'.
 #pragma once
@@ -17,7 +17,7 @@
 
 namespace mkm {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";
 static const int SESS_START = 17 * 3600;          // 5:00 PM CT: a bar ENDING after it belongs to the next day's session
 static const int ADR_N = 10, ADR_MIN = 5;
 static const long long SESS_MIN_SEC = 6 * 3600;   // a session shorter than this (first loaded day, holiday stub) never feeds the average
@@ -82,8 +82,8 @@ inline const char* shown(const std::string& mkt) { return mkt == "EU" ? "6E" : m
 
 inline Seg segOf(const Item& it)
 {
-    Seg g; const double r = std::round(it.ratio * 10.0) / 10.0;
-    char b[48]; if (r == 0) std::snprintf(b, sizeof b, "%s 0.0x", shown(it.mkt)); else std::snprintf(b, sizeof b, "%s %+.1fx", shown(it.mkt), r);
+    Seg g; const int r = (int)std::lround(it.ratio * 100.0);   // (1.0.1, Rassul 2026-11-17 05:31 CT "lets use percentages like 20%") the move as a % of the average session range
+    char b[48]; if (r == 0) std::snprintf(b, sizeof b, "%s 0%%", shown(it.mkt)); else std::snprintf(b, sizeof b, "%s %+d%%", shown(it.mkt), r);
     g.s = b; g.dir = it.ratio > 0 ? 1 : it.ratio < 0 ? -1 : 0; g.flat = std::fabs(it.ratio) < FLAT;
     g.bold = std::fabs(it.ratio) >= STRONG && (it.ratio > 0 ? it.pos >= 1.0 - EDGE : it.pos <= EDGE);
     return g;
