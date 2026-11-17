@@ -50,7 +50,7 @@
 #define VR_MODE vrr::VOL
 #endif
 
-static const char* VR_VERSION = "1.3.4";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
+static const char* VR_VERSION = "1.3.5";   // (1.1.0) the Range pane highlights BO (>= 1.2x ATR), PB Rev and CoB Rev bars   // = vrr::VERSION = the setVersion literal
 static const int VR_MAX_BARS = 40000;
 
 static long long vrMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
@@ -283,10 +283,10 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | TRACK_MOUSE);   // (1.2.0) + the mouse picks the bar the read box is about                                    // its own pane, draws itself; no hovers, no settings
 #ifdef VR_RANGE
-    p->setDescription("LRA Range Read v1.3.4 - its own pane: each bar's range (high - low) in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Rev = a PB Rev or CoB pullback Rev bar, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars, a breakout candle of 1.2x ATR(13) or more. BRMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
+    p->setDescription("LRA Range Read v1.3.5 - its own pane: each bar's range (high - low) in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars, a breakout candle of 1.2x ATR(13) or more. BRMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #else
-    p->setDescription("LRA Volume Read v1.3.4 - its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Rev = a PB Rev or CoB pullback Rev bar, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
+    p->setDescription("LRA Volume Read v1.3.5 - its own pane: each bar's volume in grey; a marked bar is green (bullish) or red (bearish) with one short code: CB = the Cob bar near the origin, SR = the stop-run bar into the Cob origin, Bk / Sw = a break / sweep of a key, volume or 3-hour level on a bar that is the biggest in 5 or more, Ct = a counter bar bigger than every bar since the Cob origin, Cx = a climax: a ZigZag pivot bar (or the bar before it) that is the biggest in 20 or more; no code: the biggest in 50 or more bars. BVMax over every closed bar that is the biggest in 20 or more bars, and a read box that follows the mouse. Decided at the close of each bar, never repainted. No settings.");
 #endif
-    p->setVersion("1.3.4");   // = VR_VERSION (gex-build reads this literal)
+    p->setVersion("1.3.5");   // = VR_VERSION (gex-build reads this literal)
     return p;
 }

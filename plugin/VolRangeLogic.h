@@ -24,7 +24,7 @@
 
 namespace vrr {
 
-static const char* const VERSION = "1.3.4";   // (1.3.4, 2026-11-16 21:13 CT Rassul "use Cx instead of P, to represent climactic volume or a minor climax": the pivot mark reads Cx)   // was "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
+static const char* const VERSION = "1.3.5";   // (1.3.5, 2026-11-16 21:17 CT Rassul "lets not color the volume or range based on just being a rev bar . volume and range should only be colored because the volume or range is significaant": the Rev mark is gone)   // was "1.3.4";   // (1.3.4, 2026-11-16 21:13 CT Rassul "use Cx instead of P, to represent climactic volume or a minor climax": the pivot mark reads Cx)   // was "1.3.3";   // (1.3.3, 2026-11-16 12:53 CT Rassul "the color of the bars must match the color of the bars": a marked bar is drawn in its candle's colour - a red candle is red even when its mark is bullish)   // was "1.3.2";   // (1.3.2, 2026-11-16 12:52 CT Rassul "dont keep the range and volume versions in the box. we have limited verstical space": the read box has no title row - its four rows only)   // was "1.3.1";   // (1.3.1, 2026-11-16 10:58 CT: the read box sits right of the last candle when there is room; the bars then use the whole pane)   // was "1.3.0";   // (1.3.0, 2026-11-16 05:55-06:18 CT Rassul "make sure to highlight it if it has a notable high value on a pivot as well as a reversal , and especially if it is a cob bar near the origin",
 // "what about an increas on a break/sweep of a keylevel, vol level", "go", "if there is a bar that is big like biggest range or volume in 50+ , lets highlight it, this includes variants like biggest green or red";
 // mockup Dr2SDbU3idUeUYD5c2KAVX) BOTH panes: bars grey, a marked bar green (bullish) / red (bearish) with ONE short code over it, by priority:
 //   CB  the Cob bar near the origin (the Cob Reader's CB bar)                      colour = the Cob's side
@@ -250,7 +250,7 @@ struct Engine {
         if ((d = byTime(cbAt, i)) != 0) { m.code = MK_CB; m.dir = d; return m; }
         if ((d = byTime(srAt, i)) != 0) { m.code = MK_SR; m.dir = d; return m; }
         if (i < (int)lvC.size() && lvC[(size_t)i]) { m.code = lvC[(size_t)i]; m.dir = lvD[(size_t)i]; return m; }
-        if ((d = revDir(i)) != 0) { m.code = MK_REV; m.dir = d; return m; }
+        /* (1.3.5) no Rev mark: a bar is coloured only because its volume / range is significant */
         if ((d = byTime(ctAt, i)) != 0) { m.code = MK_CT; m.dir = d; return m; }
         if (i < (int)pv.size() && pv[(size_t)i]) { m.code = MK_P; m.dir = pv[(size_t)i]; return m; }
         if (S[(size_t)i].mx() >= BIG_MIN) { m.code = MK_BIG; m.dir = S[(size_t)i].green ? 1 : -1; return m; }
@@ -263,7 +263,7 @@ struct Engine {
         int bo = 0, rev = 0;
         const auto a = hlRaw.find(T[(size_t)i]); if (a != hlRaw.end()) { if (a->second.kind == HL_BO) bo = a->second.dir; else rev = a->second.dir; }
         if (i < (int)LT.size()) { const auto b = hlLocal.find(LT[(size_t)i]); if (b != hlLocal.end()) { if (b->second.kind == HL_BO) { if (!bo) bo = b->second.dir; } else if (!rev) rev = b->second.dir; } }
-        if (rev) return rev;
+        (void)rev;   // (1.3.5) a Rev alone no longer colours a bar
         if (bo && i >= 1 && ATR[(size_t)i - 1] > 0 && PR[(size_t)i] >= HL_ATR_X * ATR[(size_t)i - 1] - 1e-12) return bo;
         return 0;
     }
