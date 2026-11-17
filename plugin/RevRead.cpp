@@ -95,11 +95,11 @@
 static const double BF_RATIO_MIN = 1.2;   // (0.11.1) a Book Flow ratio label needs the bigger side 1.2x the smaller or more
 static const bool ACC_READ_DRAWN = false;   // (0.12.0, Rassul 2026-11-17 06:03 CT "remove what is there currently now") the Accum / Distrib read is not drawn in the pane (the boxes on the price chart stay; the read stays in the status file)
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.13.2"   // (0.13.2, his 11:18 CT screenshot: candle time on the Book Flow verdict line; story prices with the tick's decimals)   // was "0.13.1"   // (0.13.1, 2026-11-17 09:32 CT screenshot: the Book Flow read was blank - a candle without a record falls back to the newest earlier one; the mouse right of the candles reads the last closed one)   // was "0.13.0"   // (0.13.0, 2026-11-17 Rassul 08:35-08:44 CT: the Book Flow read split - verdict + plain-English sentences left, the Bids / Offers table right; the title now shows the real version - 0.12.0 still said 0.11.1)   // was "0.11.1"   // (0.11.1, 2026-11-16 Rassul 20:27 CT "i want ratios on bars where 1 is bigger than the other": the label = the bigger Book Flow side / the smaller, on the bigger bar - was the bar against its own 20-candle average)   // was "0.11.0"   // (0.11.0, 2026-11-16 Rassul 20:20 CT "i want to put book flow back": the pane draws the Book Flow bars itself - no lsBookFlowBg needed; buy / sell volume, delta and delta change stay computed, not drawn)   // was "0.10.1"   // (0.10.1, 2026-11-16 19:02 CT: AccumLogic 2.0.1 - the pivot close rule when the climax is the candle before the pivot)   // was "0.10.0"   // (0.10.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go": the accumulation / distribution zones are AccumLogic 2.0.0, the simple rule - climax volume, stall, delta turned, with the trend; the read shows Climax / Stall / Delta)   // was "0.9.2"   // (0.9.2, 2026-11-16 Rassul 13:50 CT "where is the reversal read .. its blank": the bars are drawn in a low pane - under about 52 px nothing was drawn)   // was "0.9.1"   // (0.9.1, 2026-11-16 Rassul 12:44-12:45 CT "build", "i dont see the accumulaiton or distibution": the read shows the LAST zone when none is open, in 3 lines when the pane is low; every order event feeds AccumLogic 1.2.0 (resting lots added / pulled / filled per price) for the quiet end and the other side building)   // was "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.13.3"   // (0.13.3, Rassul 11:20 CT: one split read - verdict + sentences left (the story / Rev checks as the last sentence), the Bids / Offers table right)   // was "0.13.2"   // (0.13.2, his 11:18 CT screenshot: candle time on the Book Flow verdict line; story prices with the tick's decimals)   // was "0.13.1"   // (0.13.1, 2026-11-17 09:32 CT screenshot: the Book Flow read was blank - a candle without a record falls back to the newest earlier one; the mouse right of the candles reads the last closed one)   // was "0.13.0"   // (0.13.0, 2026-11-17 Rassul 08:35-08:44 CT: the Book Flow read split - verdict + plain-English sentences left, the Bids / Offers table right; the title now shows the real version - 0.12.0 still said 0.11.1)   // was "0.11.1"   // (0.11.1, 2026-11-16 Rassul 20:27 CT "i want ratios on bars where 1 is bigger than the other": the label = the bigger Book Flow side / the smaller, on the bigger bar - was the bar against its own 20-candle average)   // was "0.11.0"   // (0.11.0, 2026-11-16 Rassul 20:20 CT "i want to put book flow back": the pane draws the Book Flow bars itself - no lsBookFlowBg needed; buy / sell volume, delta and delta change stay computed, not drawn)   // was "0.10.1"   // (0.10.1, 2026-11-16 19:02 CT: AccumLogic 2.0.1 - the pivot close rule when the climax is the candle before the pivot)   // was "0.10.0"   // (0.10.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go": the accumulation / distribution zones are AccumLogic 2.0.0, the simple rule - climax volume, stall, delta turned, with the trend; the read shows Climax / Stall / Delta)   // was "0.9.2"   // (0.9.2, 2026-11-16 Rassul 13:50 CT "where is the reversal read .. its blank": the bars are drawn in a low pane - under about 52 px nothing was drawn)   // was "0.9.1"   // (0.9.1, 2026-11-16 Rassul 12:44-12:45 CT "build", "i dont see the accumulaiton or distibution": the read shows the LAST zone when none is open, in 3 lines when the pane is low; every order event feeds AccumLogic 1.2.0 (resting lots added / pulled / filled per price) for the quiet end and the other side building)   // was "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.13.2");
+    p->setVersion("0.13.3");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -609,6 +609,11 @@ public:
                     accShift = wmax + 26; } }
         }
         std::string read; int blockR = 0;   // (0.12.0) blockR = the right end of the story drawn right of the last candle (0 = not there)
+        // (0.13.3, Rassul 2026-11-17 11:20 CT "the left was supposed to have the read and the right the data points") with the Book Flow read on screen the
+        // pane is ONE split read: left = verdict + sentences (the story / Rev checks become its last sentence), right = the Bids / Offers table. The story
+        // block is not drawn on its own any more; it was taking the room and the table was dropped.
+        const bool splitOn = flowOk && v1 >= (int)count - 1; std::string storySent;
+        auto noNum = [](const std::string& t) { const size_t d = t.find(". "); return d != std::string::npos && d <= 3 ? t.substr(d + 2) : t; };
         if (!e.note.empty()) { setFont(fp); put(e.note, x, y, rvh::C_GRAY, lim); read = e.note; }
         else if (!e.eng) { const std::string fs = S.feed.stateText(off::steadyMs()); const std::string t = fs != "ready" && !fs.empty() ? "no order feed - " + fs : "waiting for orders"; setFont(fp); put(t, x, y, rvh::C_GRAY, lim); read = t; }
         else {
@@ -624,7 +629,15 @@ public:
             if (s) { const std::vector<rvs::Seg> L = e.eng->readSteps(*s);
                 for (const rvs::Seg& g : L) { Row r; r.t = g.text; r.c = g.col > 1 ? rvh::C_WHITE : g.col > 0 ? rvh::C_GREEN : g.col < 0 ? rvh::C_RED : rvh::C_GRAY; R.push_back(r); } }
             for (size_t i = 0; i < R.size(); ++i) read += (i ? " > " : "") + R[i].t + (R[i].t2.empty() ? std::string() : " " + R[i].t2);
-            if (six) {                                                   // (0.7.0) "Rev N" + six lines, a green check / red x in front of each
+            if (six && splitOn) {                                        // (0.13.3) the Rev checks as one sentence: what passed, how many of six
+                const std::vector<rvs::SixLine> L = rvs::sixLines(*six); read.clear(); int okN = 0, nN = 0; std::string pass;
+                for (size_t i = 0; i < L.size(); ++i) { read += (i ? " > " : "") + L[i].text + (L[i].ok == 1 ? " +" : L[i].ok == 0 ? " -" : "");
+                    if (L[i].ok < 0) continue;
+                    ++nN;
+                    if (L[i].ok == 1) { ++okN; pass += (pass.empty() ? "" : ", ") + noNum(L[i].text); } }
+                storySent = (L.empty() ? std::string("Rev") : L[0].text) + ": " + std::to_string(okN) + " of " + std::to_string(nN) + " checks" + (pass.empty() ? std::string(".") : " - " + pass + ".");
+            }
+            else if (six) {                                              // (0.7.0) "Rev N" + six lines, a green check / red x in front of each
                 const std::vector<rvs::SixLine> L = rvs::sixLines(*six); read.clear(); for (size_t i = 0; i < L.size(); ++i) read += (i ? " > " : "") + L[i].text + (L[i].ok == 1 ? " +" : L[i].ok == 0 ? " -" : "");
                 setFont(fl); int wmax = 0; for (const rvs::SixLine& l : L) wmax = std::max(wmax, (int)getTextWidth(l.text.c_str(), -1) + 18);
                 PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18 + accShift; const int rowH = 17, y0 = pane.top + LINE_H + 6;
@@ -638,6 +651,12 @@ public:
                 else { setFont(fb); for (size_t i = 0; i < L.size(); ++i) { const COLOR c = L[i].ok < 0 ? rvh::C_WHITE : L[i].ok ? rvh::C_GREEN : rvh::C_GRAY; const int w = put(L[i].text, x, y, c, lim); if (w < 0) break; x += w + 8; } }
             }
             else if (R.empty()) read = "no story";
+            else if (splitOn) {                                          // (0.13.3) the story as the read's last sentence: "Story 11:07 AM: buyers climax 2.5x, absorbed ..."
+                std::string t; for (size_t i = 1; i < R.size(); ++i) { std::string w = noNum(R[i].t) + (R[i].t2.empty() ? std::string() : " " + R[i].t2);
+                    if (!t.empty() && w.size() > 1 && std::isupper((unsigned char)w[0]) && std::islower((unsigned char)w[1])) w[0] = (char)std::tolower((unsigned char)w[0]);
+                    t += (t.empty() ? "" : ", ") + w; }
+                if (!t.empty()) storySent = "Story " + R[0].t + ": " + t + ".";
+            }
             else {
                 setFont(fl); int wmax = 0; for (const Row& r : R) wmax = std::max(wmax, (int)getTextWidth(r.t.c_str(), -1) + (r.t2.empty() ? 0 : 10 + (int)getTextWidth(r.t2.c_str(), -1)));
                 PNT pl; pl.set((int)count - 1, 0.0f, kBarCenter); const int xr = (int)pl.h + (int)bw / 2 + 18 + accShift; const int y0 = pane.top + 2;
@@ -676,7 +695,8 @@ public:
                 // (0.13.2, his 11:18 CT screenshot: which candle is this?) the candle time leads the verdict line - the table that carried it can be left out
                 const int ww = when.empty() ? 0 : put(when, xT, y0, rvh::C_GRAY, lim + 1); const int xh = xT + (ww > 0 ? ww + 8 : 0);
                 const int hw = put(fo.head, xh, y0, vc, lim + 1); if (hw > 0 && !fo.why.empty()) put(fo.why, xh + hw + 6, y0, rvh::C_WHITE, lim + 1);
-                const std::vector<std::string> EX = spt::wrap(flr::explain(flowIn), cl.leftW, fit - 1, tw);
+                std::vector<std::string> SS = flr::explain(flowIn); if (!storySent.empty()) SS.push_back(storySent);   // (0.13.3) the story last
+                const std::vector<std::string> EX = spt::wrap(SS, cl.leftW, fit - 1, tw);
                 for (size_t i = 0; i < EX.size(); ++i) put(EX[i], xT, y0 + (int)(i + 1) * rowH, rvh::C_WHITE, lim + 1);
                 if (cl.dataOn && fit >= 2) {
                     const int xb = xT + cl.leftW + spt::GAP, c1 = xb + wl + 12, c2 = c1 + wb + 14, c3 = c2 + wa + 14;
