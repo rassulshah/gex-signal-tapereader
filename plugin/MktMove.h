@@ -17,7 +17,7 @@
 
 namespace mkm {
 
-static const char* const VERSION = "1.0.1";
+static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-17 05:55-05:58 CT "in the line, on the right show which markets have a cob like the mq reader trade now section", "build"; mockup claude.ai/artifact/F2X8n9DNVXPFFh9ZZbUfUN) + each market's live Cob
 static const int SESS_START = 17 * 3600;          // 5:00 PM CT: a bar ENDING after it belongs to the next day's session
 static const int ADR_N = 10, ADR_MIN = 5;
 static const long long SESS_MIN_SEC = 6 * 3600;   // a session shorter than this (first loaded day, holiday stub) never feeds the average
@@ -57,23 +57,60 @@ inline Stat compute(const std::vector<Bar>& B)
     return s;
 }
 
-struct Item { std::string mkt; double ratio = 0, pos = 0.5; long long epoch = 0; };
-
-inline std::string fileLine(const std::string& mkt, const Stat& s, long long epoch)
+// ---- (1.1.0) the market's live Cob: the latest drawn (SHOW) Cob of the current session from lsCobSignal's CobSignal-<MKT>-<secs>-live.csv
+// ("COB,<bar end>,<BULL|BEAR>,<label>,<levels>,<dratio>,<origin price>,<adr>,<leg start>,<leg end>,<rN>,<vN>,<SHOW|LOG>"), alive until a later
+// bar CLOSES beyond its origin (bull: below the origin low; bear: above the origin high). A failed latest Cob = no Cob.
+struct Cob { int dir = 0; long long t = 0; double origin = 0; };
+inline std::vector<Cob> parseCobs(const std::string& text)
 {
-    char b[160]; std::snprintf(b, sizeof b, "MOVE,1,%s,%.4f,%.3f,%lld\n", mkt.c_str(), s.ratio, s.pos, epoch); return b;
+    std::vector<Cob> out; size_t a = 0;
+    while (a < text.size() && out.size() < 5000) {
+        size_t e = text.find('\n', a); if (e == std::string::npos) e = text.size();
+        std::string l = text.substr(a, e - a); a = e + 1; if (!l.empty() && l.back() == '\r') l.pop_back();
+        if (l.compare(0, 4, "COB,") != 0) continue;
+        std::vector<std::string> f; size_t b = 0; for (;;) { const size_t c = l.find(',', b); f.push_back(l.substr(b, c == std::string::npos ? std::string::npos : c - b)); if (c == std::string::npos) break; b = c + 1; }
+        if (f.size() != 13 || f[12] != "SHOW") continue;
+        char* end = nullptr; const long long t = std::strtoll(f[1].c_str(), &end, 10); if (!end || *end != 0 || t <= 0) continue;
+        end = nullptr; const double o = std::strtod(f[6].c_str(), &end); if (!end || *end != 0 || !std::isfinite(o) || !(o > 0)) continue;
+        const int d = f[2] == "BULL" ? 1 : f[2] == "BEAR" ? -1 : 0; if (!d) continue;
+        Cob c; c.dir = d; c.t = t; c.origin = o; out.push_back(c);
+    }
+    return out;
 }
-// strict: "MOVE,1,<MKT>,<ratio>,<pos>,<epoch>"; the market must be the one asked for
+inline Cob liveCob(const std::vector<Cob>& cobs, const std::vector<Bar>& B)
+{
+    Cob none; if (cobs.empty() || B.empty()) return none;
+    const long long cur = sidOf(B.back().absEnd);
+    const Cob* best = nullptr; for (const Cob& c : cobs) if (sidOf(c.t) == cur && c.t <= B.back().absEnd && (!best || c.t > best->t)) best = &c;
+    if (!best) return none;
+    for (size_t i = B.size(); i-- > 0;) { const Bar& b = B[i]; if (b.absEnd <= best->t) break; if (!std::isfinite(b.c)) continue; if (best->dir > 0 ? b.c < best->origin : b.c > best->origin) return none; }
+    return *best;
+}
+inline std::string clock12(long long t) { long long sod = ((t % 86400) + 86400) % 86400; int h = (int)(sod / 3600), m = (int)((sod % 3600) / 60); h = h % 12; if (h == 0) h = 12; char b[16]; std::snprintf(b, sizeof b, "%d:%02d", h, m); return b; }
+
+struct Item { std::string mkt; double ratio = 0, pos = 0.5; long long epoch = 0; int cobDir = 0; long long cobT = 0; };
+
+inline std::string fileLine(const std::string& mkt, const Stat& s, long long epoch, const Cob& cob = Cob())
+{
+    char b[200];
+    if (cob.dir == 0) std::snprintf(b, sizeof b, "MOVE,1,%s,%.4f,%.3f,%lld\n", mkt.c_str(), s.ratio, s.pos, epoch);
+    else std::snprintf(b, sizeof b, "MOVE,2,%s,%.4f,%.3f,%lld,%d,%lld\n", mkt.c_str(), s.ratio, s.pos, epoch, cob.dir, cob.t);   // (1.1.0) + the live Cob
+    return b;
+}
+// strict: "MOVE,1,<MKT>,<ratio>,<pos>,<epoch>" or "MOVE,2,...,<cob dir 1|-1>,<cob bar end>"; the market must be the one asked for
 inline bool parseLine(const std::string& text, const std::string& want, Item& out)
 {
     const size_t e = text.find('\n'); const std::string l = text.substr(0, e == std::string::npos ? text.size() : e);
     std::vector<std::string> f; size_t a = 0; for (;;) { const size_t c = l.find(',', a); f.push_back(l.substr(a, c == std::string::npos ? std::string::npos : c - a)); if (c == std::string::npos) break; a = c + 1; }
-    if (f.size() != 6 || f[0] != "MOVE" || f[1] != "1" || f[2] != want) return false;
+    const bool v2 = f.size() == 8 && f[1] == "2";
+    if (!(v2 || (f.size() == 6 && f[1] == "1")) || f[0] != "MOVE" || f[2] != want) return false;
     auto num = [](const std::string& t, double& v) { if (t.empty() || t.size() > 24) return false; char* end = nullptr; v = std::strtod(t.c_str(), &end); return end && *end == 0 && std::isfinite(v); };
     double r = 0, p = 0, ep = 0;
     if (!num(f[3], r) || !num(f[4], p) || !num(f[5], ep)) return false;
     if (std::fabs(r) > 20 || p < 0 || p > 1 || ep < 0) return false;
-    out.mkt = want; out.ratio = r; out.pos = p; out.epoch = (long long)ep; return true;
+    out = Item(); out.mkt = want; out.ratio = r; out.pos = p; out.epoch = (long long)ep;
+    if (v2) { double cd = 0, ct = 0; if (!num(f[6], cd) || !num(f[7], ct) || !(cd == 1 || cd == -1) || !(ct > 0)) return false; out.cobDir = (int)cd; out.cobT = (long long)ct; }
+    return true;
 }
 
 struct Seg { std::string s; int dir = 0; bool flat = false, bold = false; };   // dir +1 up / -1 down; flat = grey; bold = strong and at the extreme (arrow)
@@ -94,6 +131,15 @@ inline std::vector<Seg> line(std::vector<Item> items, long long now)
     std::vector<Item> ok; for (const Item& it : items) if (now - it.epoch <= STALE_SEC && it.epoch - now <= STALE_SEC) ok.push_back(it);
     std::stable_sort(ok.begin(), ok.end(), [](const Item& a, const Item& b) { const double x = std::fabs(a.ratio), y = std::fabs(b.ratio); return x != y ? x > y : a.mkt < b.mkt; });
     std::vector<Seg> out; for (const Item& it : ok) out.push_back(segOf(it)); return out;
+}
+
+// (1.1.0) the Cob section: fresh items with a live Cob, newest Cob first
+struct CobSeg { std::string mkt, when; int dir = 0; };
+inline std::vector<CobSeg> cobLine(std::vector<Item> items, long long now)
+{
+    std::vector<Item> ok; for (const Item& it : items) if (it.cobDir != 0 && now - it.epoch <= STALE_SEC && it.epoch - now <= STALE_SEC) ok.push_back(it);
+    std::stable_sort(ok.begin(), ok.end(), [](const Item& a, const Item& b) { return a.cobT != b.cobT ? a.cobT > b.cobT : a.mkt < b.mkt; });
+    std::vector<CobSeg> out; for (const Item& it : ok) { CobSeg g; g.mkt = shown(it.mkt); g.when = clock12(it.cobT); g.dir = it.cobDir; out.push_back(g); } return out;
 }
 
 } // namespace mkm

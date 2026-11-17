@@ -284,6 +284,7 @@ struct HLState {
     long long sessStamp = -2; time_t sessChecked = 0; std::string sessGam, sessExp; int sessAge = -1; bool sessRec = true;
     // (2.0.5) other indicators' boxes on this pane: the Tape Reader's published box (TapeReader.status-<MKT>.txt LAYOUT), its Position
     // when that is stale, and whether the Dealer Profile banner is on (DealerProfile.settings.txt); re-read at most every 3 s
+    mkm::Cob mkCob; int mkCobN = 0;   // (2.30.0) this market's live Cob (lsCobSignal's live file) / Cobs read
     mkm::Stat mk; time_t mkChecked = 0, mkWritten = 0; std::string mkBody; std::vector<mkm::Item> mkItems; int mkWrites = 0, mkRead = 0;   // (2.29.0) the market strength line
     time_t avoidChecked = 0; bool trBoxOk = false; hl::Box trBox = { 0, 0, 0, 0 }; int trPos = 0; bool trSeen = false; bool dpBanner = false;
     // (2.1.0) the GEX line: LRA-GexNodes-<MKT>.csv (re-read only when its stamp changes, at most every 5 s) and the row's hover
@@ -861,6 +862,9 @@ void HodLod::recompute(HLState& S, long n)
     {   // (2.29.0) this market's session move (5:00 PM open) over its average session range, from the same closed bars
         std::vector<mkm::Bar> mb; mb.reserve(B.size()); for (const hl::Bar& b : B) mb.push_back(mkm::Bar{ b.absEnd, b.o, b.h, b.l, b.c });
         S.mk = mkm::compute(mb);
+        S.mkCob = mkm::Cob(); S.mkCobN = 0;   // (2.30.0) the latest drawn Cob of this session, alive until a close beyond its origin
+        try { const std::string cp = flexPath("CobSignal-" + S.mkt + "-" + std::to_string(per) + "-live.csv"); std::string ct; long long cst = 0;
+            if (!cp.empty() && hlSmallRead(cp, 512 * 1024, ct, cst)) { const std::vector<mkm::Cob> cc = mkm::parseCobs(ct); S.mkCobN = (int)cc.size(); S.mkCob = mkm::liveCob(cc, mb); } } catch (...) {}
     }
     hlTrend(S, B, per);                       // (2.0.5) "Regime: Neg / Uptrend" - the trend from the closed bars only (no repaint)
     hlDayType(S, B, per, hlNowCt());          // (2.7.0) the day type (header trend text while called), from the same closed bars
@@ -1274,7 +1278,7 @@ void HodLod::writeStatus(HLState& S, const hl::Layout* L)
     if (S.T && L) text = hl::statusText(S.view, *L, *S.T, S.rd, (int)S.per, S.state) + "CHART," + S.root + "," + std::to_string(S.per) + "\n" + S.placeLine;   // (HL105) chart identity for SessionInfo; (2.0.6) PLACE / OPTS
     else text = std::string("VERSION,") + hl::HL_VERSION + "\nMARKET," + S.mkt + "\nPER," + std::to_string(S.per) + "\nSTATE," + S.state + "\nLEFT_KEEP," + std::to_string(S.leftKeepX) + " (ColumnBoard " + cb::VERSION + ")\nCANDLE_KEEPOUT," + std::to_string(S.candleAvoid) + " boxes (the table + strip never cover candles when a clear spot exists)\n";
     text += std::string("AWARENESS,") + awh::VERSION + " AWHODLOD decided " + std::to_string(S.aw.writes) + " records\nPERF," + lsperf::statusOf(this) + "\n";   // (2.8.0)
-    {   char b[200]; std::snprintf(b, sizeof b, "MKT_LINE,%s,own %s move %.2f pos %.2f adr sessions %d,others read %d,shown %d,writes %d\n", mkm::VERSION, S.mk.ok ? "ok" : "not ready", S.mk.ratio, S.mk.pos, S.mk.sessions, S.mkRead, (int)S.view.mkts.size(), S.mkWrites); text += b; }   // (2.29.0)
+    {   char b[320]; std::snprintf(b, sizeof b, "MKT_LINE,%s,own %s move %.2f pos %.2f adr sessions %d,others read %d,shown %d,writes %d,own cob %d at %lld (of %d read),cob markets %d\n", mkm::VERSION, S.mk.ok ? "ok" : "not ready", S.mk.ratio, S.mk.pos, S.mk.sessions, S.mkRead, (int)S.view.mkts.size(), S.mkWrites, S.mkCob.dir, S.mkCob.t, S.mkCobN, (int)S.view.cobs.size()); text += b; }   // (2.29.0)
     time_t now = time(nullptr);
     bool changed = text != S.lastStatus;
     if (!(changed && now - S.lastStatusWrite >= 2) && now - S.lastStatusWrite < 30) return;
@@ -1750,15 +1754,15 @@ int HodLod::draw(void)
             S->mkChecked = nowE;
             try {
                 if (S->mk.ok && !S->mkt.empty()) {
-                    char body[64]; std::snprintf(body, sizeof body, "%.2f,%.2f", S->mk.ratio, S->mk.pos);
+                    char body[96]; std::snprintf(body, sizeof body, "%.2f,%.2f,%d,%lld", S->mk.ratio, S->mk.pos, S->mkCob.dir, S->mkCob.t);
                     if (S->mkBody != body || nowE - S->mkWritten >= 60) {
                         const std::string p = flexPath("HodLod.move-" + S->mkt + ".txt"); hl::FileOps F;
-                        if (!p.empty() && hl::writeAtomic(F, p, mkm::fileLine(S->mkt, S->mk, (long long)nowE))) { S->mkBody = body; S->mkWritten = nowE; S->mkWrites++; }
+                        if (!p.empty() && hl::writeAtomic(F, p, mkm::fileLine(S->mkt, S->mk, (long long)nowE, S->mkCob))) { S->mkBody = body; S->mkWritten = nowE; S->mkWrites++; }
                     }
                 }
                 S->mkItems.clear(); S->mkRead = 0;
                 for (int k = 0; k < 7; k++) { const std::string m = hl::MKTS[k].code; mkm::Item it;
-                    if (m == S->mkt) { if (S->mk.ok) { it.mkt = m; it.ratio = S->mk.ratio; it.pos = S->mk.pos; it.epoch = (long long)nowE; S->mkItems.push_back(it); } continue; }
+                    if (m == S->mkt) { if (S->mk.ok) { it.mkt = m; it.ratio = S->mk.ratio; it.pos = S->mk.pos; it.epoch = (long long)nowE; it.cobDir = S->mkCob.dir; it.cobT = S->mkCob.t; S->mkItems.push_back(it); } continue; }
                     const std::string p = flexPath("HodLod.move-" + m + ".txt"); if (p.empty()) continue;
                     std::string text; long long st = 0;
                     if (hlSmallRead(p, 256, text, st) && mkm::parseLine(text, m, it)) { S->mkItems.push_back(it); S->mkRead++; } }
@@ -1767,6 +1771,8 @@ int HodLod::draw(void)
         S->view.mkts.clear();
         for (const mkm::Seg& g : mkm::line(S->mkItems, (long long)nowE))
             S->view.mkts.push_back(hl::View::MkSeg{ g.s, g.flat ? hl::C_GREY : g.dir > 0 ? hl::C_GREEN : hl::C_RED, g.bold, g.bold ? g.dir : 0 });
+        S->view.cobs.clear();
+        for (const mkm::CobSeg& g : mkm::cobLine(S->mkItems, (long long)nowE)) S->view.cobs.push_back(hl::View::CobSeg{ g.mkt, g.when, g.dir });   // (2.30.0)
     }
     {   // (2.14.0, Rassul 20:06-20:38 CT mockup v14) the 1st-extreme time table, the Day forecast, RTH % done and the bar's time left
         S->view.tmOk = hsw::timeCum(S->sw, S->view.tmCum); S->view.tmOpenMin = S->mi >= 0 ? hl::MKTS[S->mi].open : -1; S->view.tmQ = S->sw.tmN > 0 && S->sw.tmN < hsw::MIN_N;
@@ -2116,6 +2122,6 @@ extern "C" cppExtension *CreateExtension(void)
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | FRONT_DRAWING | OVERLAY | INSTRUMENT_SCALE | ((HL_HOVERS || HL_PRE_HOVER) ? TRACK_MOUSE : 0));   // (2.6.0) TRACK_MOUSE for the Pre row's hover only   // (2.4.6) no TRACK_MOUSE while the hovers are off   // (2.1.0) TRACK_MOUSE: the GEX row's hover
     p->setDescription("LRA HOD / LOD: one compact table - Regime, the RTH hours and the options expiry; Expected (1st / 2nd time and their odds) and Actual (the extreme with its IN odds), a thin grey separator between the 1st and 2nd columns; the version small at the right of the top line (2.12.0: no Q-Scores, no 1ST / 2ND row, no Est row, no expiry footer). GEX: the strikes where a reaction can occur (top 3 abs GEX within 1 expected move or growing, from LRA-GexNodes-<MKT>.csv) - mouse over the row for the detail. A projection line from the 1st extreme to the target with its label on the arrowhead. The 1st Extreme model runs in the background (its call box on the candle). Use Settings > Position to place it. Reg / trend top right; Gex S/R = the 3 biggest abs-GEX strikes from the RTH open up to 1.38x the 1D Max (red) and down to 1.38x the 1D Min (green). 2.4.0: Reg = price vs the MenthorQ HVL the Dealer Profile draws; stale data reads STALE (Reg / Q / Gex row), never as live. 2.6.0: the Pre row - the pre-open MBO book (bids vs offers near price in the last N minutes before the open, the share that stayed, the opening imbalance) and an untested lean for the day's first extreme, shown from 30 min before the open to 60 min after; mouse over it for the detail.");
-    p->setVersion("2.29.2");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
+    p->setVersion("2.30.0");   // = hl::HL_VERSION = hlset::PLUGIN_VERSION (gex-build reads this literal; t_hl240 checks they match)
     return p;
 }
