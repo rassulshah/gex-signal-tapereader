@@ -49,7 +49,8 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.15.2";   // (1.15.2, 2026-11-17 Rassul 12:28 CT: the plain profile rows lighter, GREY_FADE 0.28 -> 0.38)
+static const char* const VERSION = "1.16.0";   // (1.16.0, 2026-11-17 Rassul 12:45 CT "ok.. lets go with this": the spike rule - every distribution's spike >= 2x the median row, nearest 4 each side of the POC; below green, above red)
+// was static const char* const VERSION = "1.15.2";   // (1.15.2, 2026-11-17 Rassul 12:28 CT: the plain profile rows lighter, GREY_FADE 0.28 -> 0.38)
 // was static const char* const VERSION = "1.15.1";   // (1.15.1, 2026-11-17 Rassul 09:55 CT: CoB legs found - the CoB mark is on the bar after the end pivot)
 // was static const char* const VERSION = "1.15.0";   // (1.15.0, 2026-11-16 Rassul 21:32 / 22:02 CT "put back the spine with the volume profile alon with the poc and 2 hvns like we had before", "build the wave poc") the spine, the grey volume profile right of it, the POC + up to 2 HVNs (the 1.9.3 rules)
 // was static const char* const VERSION = "1.14.0";   // (1.14.0, 2026-11-11 Rassul 19:09-19:12 CT) no spine; the POC and the HVN are dashes ON the candle that traded the most at that price; lots at the end of the POC dash
@@ -102,6 +103,14 @@ static const int SEP_ROWS = 3;         // nodes >= 3 rows apart
 static const int MAX_NODES = 5;
 // (1.9.0) the volume profile on the right of the spine (was the delta profile) with the POC and up to 2 HVNs at / beyond the break level
 static const bool SHOW_VOL_RIGHT = true;
+// (1.16.0, Rassul 2026-11-17 12:34-12:45 CT "the two hvns were too low so the support was not highlighted in advance during the pullback", "how
+// about just highlighting spikes over a threshold within their distributions", "ok.. lets go with this"; mockup spike_rule.html - ES 10:53-11:26
+// wave: both pullbacks turned at the 7347.25 spike, 1,271 lots, which the 2-HVN rule never drew) THE SPIKE RULE: every distribution's biggest
+// row that is SPIKE_X times the wave's median price row or more is an H, on both sides of the POC, the SPIKE_SIDE nearest the POC each side.
+// Below the POC drawn green (support), above it red (resistance). The break level / POC-below-the-BO-low rules no longer apply.
+static const bool SPIKE_RULE = true;
+static const double SPIKE_X = 2.0;      // x the median non-zero price row of the wave (starting value; tuned per market by the nightly)
+static const int SPIKE_SIDE = 4;        // at most this many H each side of the POC, nearest first
 static const int HVN_MAX = 2;   // (1.15.0, Rassul 2026-11-16 21:32 CT "put back the spine with the volume profile alon with the poc and 2 hvns like we had before") was 1;   // (1.13.0, Rassul 13:03 CT "upto 1 additional hvn instead of 2")
 // (1.12.0, 2026-11-10 Rassul 08:17 CT "update the wave poc so it only has the poc and no hvn just like the wave pb poc") the wave profile
 // draws ONLY its POC row (cyan, thick, lots label) and the P on the spine: no grey rows, no HVN rows, no H letters (still computed + logged)
@@ -984,7 +993,20 @@ inline long long breakLevel(const Wave& w, const std::vector<Bar>& B, const std:
 // each distribution) runs on that zone alone and with NO 2x-median floor (only above the median row, so flat noise is never a node); the POC (and its distribution) is never one of them.
 // (1.9.0 searched the whole wave with the 2x floor: NQ Nov 6 11:24 down wave, BD low 27,154.50, the second node 27,162 = 197 lots vs a
 // 198 floor was dropped - one H drawn.)
-inline std::vector<int> hvnRows(const Wave& w, long long cut, bool pocRule = true, long long farSide = 0) {   // (1.9.3) farSide: the break bar's low (up) / high (down)   // (1.9.2) pocRule: a real break level (BO / BD candle or the bar that broke the prior pivot) - with none (no limit) the POC is always inside
+inline std::vector<int> spikeRows(const Wave& w) {   // (1.16.0) the spike rule (see SPIKE_RULE)
+    std::vector<int> out; if (w.rows.empty() || w.med2 <= 0) return out;
+    const int poc = !w.nodes.empty() ? w.nodes[0].row : -1;
+    const long long floorV = (long long)std::llround(SPIKE_X * (double)w.med2 / 2.0);   // med2 = 2 x the median row
+    std::vector<int> dn, up;
+    for (int r : pickNodes(w.rows, floorV, 64)) { if (r == poc) continue; if (poc >= 0 && r > poc) up.push_back(r); else dn.push_back(r); }
+    std::sort(dn.begin(), dn.end(), [&](int a, int b) { return std::abs(a - poc) < std::abs(b - poc); });
+    std::sort(up.begin(), up.end(), [&](int a, int b) { return std::abs(a - poc) < std::abs(b - poc); });
+    for (size_t i = 0; i < dn.size() && (int)i < SPIKE_SIDE; ++i) out.push_back(dn[i]);
+    for (size_t i = 0; i < up.size() && (int)i < SPIKE_SIDE; ++i) out.push_back(up[i]);
+    return out;
+}
+inline std::vector<int> hvnRows(const Wave& w, long long cut, bool pocRule = true, long long farSide = 0) {
+    if (SPIKE_RULE) { (void)cut; (void)pocRule; (void)farSide; return spikeRows(w); }   // (1.9.3) farSide: the break bar's low (up) / high (down)   // (1.9.2) pocRule: a real break level (BO / BD candle or the bar that broke the prior pivot) - with none (no limit) the POC is always inside
     std::vector<int> out; const int n = (int)w.rows.size(); if (n == 0 || w.rowTicks <= 0) return out;
     int a = -1, b = -1;                                                 // the zone [a, b] (rows ordered low -> high price)
     for (int r = 0; r < n; ++r) { const long long lo = w.e0 + (long long)r * w.rowTicks, hi = lo + w.rowTicks - 1;
@@ -1100,7 +1122,7 @@ inline void drawWave(Scene& s, const Wave& w, const View& v, const Colours& C, s
                 // blend, "not faint" on his chart - GammaProfile 0.67), so the plain rows are faded toward the chart ground (GREY_FADE: 28% grey
                 // = ~28% opacity on the dark ground), drawn BEHIND the candles (back = pre-draw) and 1 px thinner each side when the row is 4 px+.
                 // The POC / HVN rows stay solid, full height.
-                const unsigned long col = j == pocRow ? C.cyan : isH ? (w.dir > 0 ? C.up : C.down) : mix(C.grey, C.bg, GREY_FADE);
+                const unsigned long col = j == pocRow ? C.cyan : isH ? (SPIKE_RULE && pocRow >= 0 ? (j < pocRow ? C.up : C.down) : (w.dir > 0 ? C.up : C.down)) : mix(C.grey, C.bg, GREY_FADE);   // (1.16.0) H below the POC green (support), above red (resistance)
                 const double inset = !node && bot - top >= 4.0 ? 1.0 : 0.5;
                 Prim p; p.k = Prim::FILL; p.x0 = ci(x0 + 1); p.x1 = ci(x0 + 1 + PR * (double)q / (double)w.maxVol); p.y0 = ci(top + inset); p.y1 = ci(std::max(top + 1.0, bot - inset)); p.col = col; p.back = true;
                 if (node) { const double yc = (top + bot) / 2.0, h = std::max(3.0, bot - top + 2.0); p.y0 = ci(yc - h / 2.0); p.y1 = ci(yc + h / 2.0); }   // (1.10.0, Rassul "make the poc and hvns thicker just like the pb poc and hvn")
