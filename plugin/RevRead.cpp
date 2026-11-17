@@ -1,5 +1,5 @@
 /*
- *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.10.1  (2026-11-16: AccumLogic 2.0.1; 0.10.0: 2026-11-16: accumulation / distribution = the simple rule, AccumLogic 2.0.0; 0.9.2: 2026-11-16: bars in a low pane; 0.9.1: 2026-11-16: the accumulation read is always shown (the last zone), + the quiet end and the other side building, AccumLogic 1.2.0; 0.9.0: accumulation / distribution zones + their read, AccumLogic.h; 0.8.0: lsSR runs in the background, SRBack.h; 0.7.0 2026-11-13)
+ *  RevRead.cpp  --  Investor/RT RTX extension  lsRevRead  "Reversal Read"  0.11.0  (2026-11-16: the bars are Book Flow; 0.10.1: 2026-11-16: AccumLogic 2.0.1; 0.10.0: 2026-11-16: accumulation / distribution = the simple rule, AccumLogic 2.0.0; 0.9.2: 2026-11-16: bars in a low pane; 0.9.1: 2026-11-16: the accumulation read is always shown (the last zone), + the quiet end and the other side building, AccumLogic 1.2.0; 0.9.0: accumulation / distribution zones + their read, AccumLogic.h; 0.8.0: lsSR runs in the background, SRBack.h; 0.7.0 2026-11-13)
  *
  *  Rassul 2026-11-11 21:13-21:33 CT: "I want to know how i can have indicators that tell this story so i can understand how and why it
  *  reveresed"; "i have the poc of the candle in a pane. i want you to create a similar pane that has each candles poc and also makes a dash
@@ -92,11 +92,12 @@
 #include <vector>
 #include <sys/stat.h>
 
-#define RVS_VERSION "0.10.1"   // (0.10.1, 2026-11-16 19:02 CT: AccumLogic 2.0.1 - the pivot close rule when the climax is the candle before the pivot)   // was "0.10.0"   // (0.10.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go": the accumulation / distribution zones are AccumLogic 2.0.0, the simple rule - climax volume, stall, delta turned, with the trend; the read shows Climax / Stall / Delta)   // was "0.9.2"   // (0.9.2, 2026-11-16 Rassul 13:50 CT "where is the reversal read .. its blank": the bars are drawn in a low pane - under about 52 px nothing was drawn)   // was "0.9.1"   // (0.9.1, 2026-11-16 Rassul 12:44-12:45 CT "build", "i dont see the accumulaiton or distibution": the read shows the LAST zone when none is open, in 3 lines when the pane is low; every order event feeds AccumLogic 1.2.0 (resting lots added / pulled / filled per price) for the quiet end and the other side building)   // was "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
+#define RVS_VERSION "0.11.0"   // (0.11.0, 2026-11-16 Rassul 20:20 CT "i want to put book flow back": the pane draws the Book Flow bars itself - no lsBookFlowBg needed; buy / sell volume, delta and delta change stay computed, not drawn)   // was "0.10.1"   // (0.10.1, 2026-11-16 19:02 CT: AccumLogic 2.0.1 - the pivot close rule when the climax is the candle before the pivot)   // was "0.10.0"   // (0.10.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go": the accumulation / distribution zones are AccumLogic 2.0.0, the simple rule - climax volume, stall, delta turned, with the trend; the read shows Climax / Stall / Delta)   // was "0.9.2"   // (0.9.2, 2026-11-16 Rassul 13:50 CT "where is the reversal read .. its blank": the bars are drawn in a low pane - under about 52 px nothing was drawn)   // was "0.9.1"   // (0.9.1, 2026-11-16 Rassul 12:44-12:45 CT "build", "i dont see the accumulaiton or distibution": the read shows the LAST zone when none is open, in 3 lines when the pane is low; every order event feeds AccumLogic 1.2.0 (resting lots added / pulled / filled per price) for the quiet end and the other side building)   // was "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.10.1");
+    p->setVersion("0.11.0");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -519,6 +520,25 @@ public:
         const double bw = (double)std::max(1, (int)getPixelsPerBar());
         std::vector<std::pair<int, rvs::Poc> > c; c.reserve((size_t)(v1 - v0 + 1));
         for (int i = v0; i <= v1; ++i) { const auto it = e.ps.poc.find((long long)times[i]); if (it == e.ps.poc.end()) continue; PNT p; p.set(i, 0.0f, kBarCenter); c.push_back(std::make_pair((int)p.h, it->second)); }
+        // (0.11.0, Rassul 2026-11-16 19:31-20:20 CT "instead of having the buy and sell volume, would it be an issue if the book flow showed instead", "i want to put
+        // book flow back ... delta change, delta and buy and sell volume can be invisible in the background") the pane's bars = BOOK FLOW: per candle the resting
+        // orders ADDED minus PULLED near the price (bf::netOf, the very numbers lsBookFlow draws), bids left in green, offers right in red, a bar only when
+        // the net is positive; "2.4x" over a bar that is 2x or more the average of the 20 candles before. Buy / sell volume, delta and the letters' own
+        // numbers are still computed (the reads use them) - not drawn.
+        std::vector<double> bfx[2];
+        if (RV_SHOW_BOOKFLOW) {
+            c.clear(); off::PaneBar lb; bool haveLive = false;                 // the forming candle: its numbers as of now (as lsBookFlow builds them)
+            {   const auto it = S.accs.find(S.formingKey);
+                if (it != S.accs.end() && it->second.events > 0 && (long long)times[(int)count - 1] == S.formingKey) { lb = S.ser.make(S.formingKey, S.e.numbers(it->second, S.formingKey == S.firstBarKey, S.params.load.p)); haveLive = lb.ok; } }
+            auto netOf = [](const off::Rec& r, int s) { return r.addC[s] - r.pullC[s]; };   // = bf::netOf (BookFlowLogic.h): resting lots added - pulled on side s
+            auto recOf = [&](int i) -> const off::Rec* { if (i == (int)count - 1) return haveLive ? &lb.r : nullptr;
+                const auto it = S.ser.bars.find((long long)times[i]); return it != S.ser.bars.end() && it->second.ok ? &it->second.r : nullptr; };
+            for (int i = v0; i <= v1; ++i) { const off::Rec* r = recOf(i); if (!r) continue;
+                rvs::Poc q; q.ok = true; q.t = (long long)times[i]; q.buy = std::max(0LL, netOf(*r, off::BID)); q.sell = std::max(0LL, netOf(*r, off::ASK));
+                for (int s = 0; s < 2; ++s) { double sum = 0; int k = 0; for (int p = i - 1; p >= 0 && p >= i - 20; --p) { const off::Rec* h = recOf(p); if (h) { sum += (double)std::max(0LL, netOf(*h, s)); ++k; } }
+                    const long long v = s == 0 ? q.buy : q.sell; bfx[s].push_back(k >= 5 && sum > 0 ? (double)v / (sum / k) : 0.0); }
+                PNT p; p.set(i, 0.0f, kBarCenter); c.push_back(std::make_pair((int)p.h, q)); }
+        }
         static const std::map<long long, std::vector<rvs::Mark> > none;
         // (0.6.0) buy and sell volume side by side; no values; the "biggest in" count on a bar that is the biggest in 10+ candles
         const std::vector<rvs::BSBar> B = rvs::layoutBS(c, e.eng ? e.eng->marks : none, pane.top, pane.bottom, 12, bw, LINE_H + 2);
@@ -528,6 +548,10 @@ public:
             setFont(fb);
             if (b.nB) { const std::string t = std::to_string(b.nB); const int w = (int)getTextWidth(t.c_str(), -1); const int cx = b.x - b.w / 2 - (b.nS ? w / 2 : 0); setTextColor(rvh::C_GREEN); RCT r; r.set(rvh::coord(cx - w / 2), rvh::coord(b.numYB), rvh::coord(cx - w / 2 + w + 1), rvh::coord(b.numYB + 12)); r.drawText(t.c_str(), false, false); }
             if (b.nS) { const std::string t = std::to_string(b.nS); const int w = (int)getTextWidth(t.c_str(), -1); const int cx = b.x + 1 + b.w / 2 + (b.nB ? w / 2 : 0); setTextColor(rvh::C_RED); RCT r; r.set(rvh::coord(cx - w / 2), rvh::coord(b.numYS), rvh::coord(cx - w / 2 + w + 1), rvh::coord(b.numYS + 12)); r.drawText(t.c_str(), false, false); }
+            if (RV_SHOW_BOOKFLOW) { const size_t k = (size_t)(&b - &B[0]);
+                for (int s = 0; s < 2; ++s) { if (k >= bfx[s].size() || bfx[s][k] < 2.0) continue; char tx[16]; std::snprintf(tx, sizeof tx, "%.1fx", std::min(99.9, bfx[s][k]));
+                    const int w = (int)getTextWidth(tx, -1); const int cx = s == 0 ? b.x - b.w / 2 : b.x + 1 + b.w / 2; const int y = s == 0 ? b.numYB : b.numYS;
+                    setTextColor(s == 0 ? rvh::C_GREEN : rvh::C_RED); RCT r; r.set(rvh::coord(cx - w / 2), rvh::coord(y), rvh::coord(cx - w / 2 + w + 1), rvh::coord(y + 12)); r.drawText(tx, false, false); } }
             if (!b.marks.empty()) { setFont(fl); int tw = 0; std::vector<std::string> T;
                 for (const rvs::Mark& m : b.marks) { std::string t(1, m.letter); T.push_back(t);   /* (Rassul 2026-11-11 22:19 CT "get rid of the ? mark after the signals so just have C instead of C?") no "?" */ tw += (int)getTextWidth(t.c_str(), -1) + 2; }
                 int x = b.x - tw / 2; const int y = std::max((int)pane.top + LINE_H + 2, b.letY - 2);
