@@ -171,14 +171,17 @@ inline Hold holdOf(const std::vector<Cnd>& c, size_t j) {
 // ---- the candle POC ----
 struct VRow { long long tick = 0, vol = 0, dlt = 0; };
 struct Poc { long long t = 0; long long tick = 0, vol = 0, dlt = 0, total = 0; double pos = 0.5, closePos = 0.5; bool ok = false; long long cdlt = 0, lo = 0, hi = 0, close = 0; long long open = 0;
-    long long buy = 0, sell = 0, bidPoc = 0, bidPocVol = 0, askPoc = 0, askPocVol = 0, dPoc = 0, dPocDlt = 0, maxD = 0, minD = 0, sess = 0; int bbv = 0, bsv = 0; };   // (0.6.0) the candle's buy / sell lots; bid POC = the price most was SOLD at, ask POC = most BOUGHT at, delta POC = the biggest |delta| row; sess = its session as yyyymmdd; bbv / bsv = its buy / sell volume is the biggest in that many candles of its session   // (0.5.0) open in ticks, 0 = not known   // (0.2.0) cdlt = the candle's delta; lo / hi / close in ticks   // pos: 0 = at the low .. 1 = at the high
+    long long buy = 0, sell = 0, bidPoc = 0, bidPocVol = 0, askPoc = 0, askPocVol = 0, dPoc = 0, dPocDlt = 0, maxD = 0, minD = 0, sess = 0; int bbv = 0, bsv = 0;
+    long long bNode = 0, bNodeD = 0, sNode = 0, sNodeD = 0; };   // (0.15.0) the heaviest BUYING row (biggest positive delta) and SELLING row (most negative) - the case-review reads (CombRead patterns)   // (0.6.0) the candle's buy / sell lots; bid POC = the price most was SOLD at, ask POC = most BOUGHT at, delta POC = the biggest |delta| row; sess = its session as yyyymmdd; bbv / bsv = its buy / sell volume is the biggest in that many candles of its session   // (0.5.0) open in ticks, 0 = not known   // (0.2.0) cdlt = the candle's delta; lo / hi / close in ticks   // pos: 0 = at the low .. 1 = at the high
 inline Poc pocOf(long long tEnd, const std::vector<VRow>& rows, long long lo, long long hi, long long close) {
     Poc p; p.t = tEnd; p.lo = lo; p.hi = hi; p.close = close;
     for (const VRow& r : rows) { if (r.vol <= 0) continue; p.total += r.vol; p.cdlt += r.dlt; if (!p.ok || r.vol > p.vol || (r.vol == p.vol && r.tick < p.tick)) { p.ok = true; p.tick = r.tick; p.vol = r.vol; p.dlt = r.dlt; }
         const long long bv = (r.vol + r.dlt) / 2, sv = (r.vol - r.dlt) / 2; p.buy += bv; p.sell += sv;   // (0.6.0)
         if (bv > p.askPocVol || (bv == p.askPocVol && bv > 0 && r.tick < p.askPoc)) { p.askPocVol = bv; p.askPoc = r.tick; }
         if (sv > p.bidPocVol || (sv == p.bidPocVol && sv > 0 && r.tick < p.bidPoc)) { p.bidPocVol = sv; p.bidPoc = r.tick; }
-        const long long ad = r.dlt < 0 ? -r.dlt : r.dlt, pd = p.dPocDlt < 0 ? -p.dPocDlt : p.dPocDlt; if (ad > pd || (ad == pd && ad > 0 && r.tick < p.dPoc)) { p.dPocDlt = r.dlt; p.dPoc = r.tick; } }
+        const long long ad = r.dlt < 0 ? -r.dlt : r.dlt, pd = p.dPocDlt < 0 ? -p.dPocDlt : p.dPocDlt; if (ad > pd || (ad == pd && ad > 0 && r.tick < p.dPoc)) { p.dPocDlt = r.dlt; p.dPoc = r.tick; }
+        if (r.dlt > p.bNodeD) { p.bNodeD = r.dlt; p.bNode = r.tick; }
+        if (r.dlt < p.sNodeD) { p.sNodeD = r.dlt; p.sNode = r.tick; } }
     if (p.ok && hi > lo) { p.pos = (double)(p.tick - lo) / (double)(hi - lo); p.closePos = (double)(close - lo) / (double)(hi - lo); p.pos = p.pos < 0 ? 0 : p.pos > 1 ? 1 : p.pos; }
     return p;
 }

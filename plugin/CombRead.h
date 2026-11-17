@@ -19,7 +19,7 @@
 
 namespace cbr {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-17 15:50-16:03 CT case review, "go") the pivot reads on top of the verdict: trapped, absorption, breakout met, rejection wick
 
 struct In {
     std::string mkt, when;               // the market key (ES, NQ, CL, GC, HG, NG, EU) and the candle's time ("2:27 PM")
@@ -29,6 +29,9 @@ struct In {
     bool deltaOk = false;                // the candle and the one before have volume at price
     long long dl = 0, dlPrev = 0;        // this candle's delta and the one before
     double dlX = 0, chgX = 0;            // |delta| and |change| x their medians over the 20 candles before (0 = not known)
+    // (1.1.0) the pivot reads: the candles up to and including the read candle (oldest first, the read candle LAST), prices in ticks
+    struct PC { long long o = 0, h = 0, l = 0, c = 0, dl = 0, bN = 0, bD = 0, sN = 0, sD = 0; bool ok = false; std::string when; };
+    std::vector<PC> pc; double tick = 0; int dec = 2;
 };
 struct Row { std::string lab, a, b; int ca = 0, cb = 0; bool head = false; };   // ca / cb: +1 green, -1 red, 0 white
 struct Out { int verdict = 0; std::string head, why; std::vector<std::string> ex; std::vector<Row> rows; };   // verdict +1 / -1 / 2 mixed / 0 quiet
@@ -61,6 +64,75 @@ inline int pushSide(const In& x, bool& byChange) {
     return 0;
 }
 
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// (1.1.0) THE PIVOT READS from the case review with Rassul (2026-11-17 15:50-16:03 CT), scored at the CALL (909 pivots, ES 22 days, CL / GC / 6E 10 days;
+// turned = 1 ATR from the call close before the pivot zone broke; base 48%, no read 41%):
+//   ABSORPTION  "the circle low in the wick and the green candle closed above it and the high of the red candle"          69% (36/52)  all 4 markets 65-77%
+//   TRAPPED     "trapped sellers in the wicks" - attackers' heaviest row in the wick, a close past that candle's other side  65% (95/147) all 4 markets 60-70%
+//   REJECTION   "seller in the wick with a bigger wick than the body ... low end close" (the row beyond the body)          60% (54/90)  all 4 markets 56-73%
+//   BREAKOUT MET "the breakout was met with selling ... a red candle closing below it"                                     56% (56/100) GC 41%, 2nd half 48%
+// The read candle is the CALL candle k; the pivot is candle k-1 (a new 10-candle low / high, the call candle not more than the zone beyond it).
+// the median of |v| (0 when empty)
+inline double medAbs(std::vector<long long> v) { if (v.empty()) return 0; for (long long& q : v) q = std::llabs(q); std::sort(v.begin(), v.end());
+    const size_t n = v.size(); return n % 2 ? (double)v[n / 2] : 0.5 * ((double)v[n / 2 - 1] + (double)v[n / 2]); }
+struct Pat { int side = 0; std::string head, why, sent; int kind = 0; };   // side +1 = a low (bullish read), -1 = a high; kind 1 absorption, 2 trapped, 3 rejection, 4 breakout met
+inline std::string px(long long t, double tick, int dec) { char b[32]; std::snprintf(b, sizeof b, "%.*f", dec, (double)t * tick); return b; }
+inline Pat pivotRead(const In& x) {
+    Pat P; const std::vector<In::PC>& c = x.pc; const int n = (int)c.size(); if (n < 14 || !(x.tick > 0)) return P;
+    const int k = n - 1, i = k - 1; for (int j = k - 12; j <= k; ++j) if (!c[(size_t)j].ok) return P;
+    double atr = 0; for (int j = i - 12; j <= i; ++j) atr += (double)(std::max(c[(size_t)j].h, c[(size_t)j - 1].c) - std::min(c[(size_t)j].l, c[(size_t)j - 1].c)); atr /= 13.0;
+    const long long tol = std::max(2LL, (long long)std::llround(0.25 * atr));
+    double medD = 0; { std::vector<long long> v; for (int j = std::max(0, i - 20); j < i; ++j) v.push_back(c[(size_t)j].dl); medD = medAbs(v); }   // the trapped side covering: its delta on the close >= 1x the normal |delta|
+    long long mn = c[(size_t)i - 1].l, mx = c[(size_t)i - 1].h; for (int j = i - 10; j < i; ++j) { mn = std::min(mn, c[(size_t)j].l); mx = std::max(mx, c[(size_t)j].h); }
+    int s = 0; if (c[(size_t)i].l < mn && c[(size_t)k].l >= c[(size_t)i].l - tol) s = 1; else if (c[(size_t)i].h > mx && c[(size_t)k].h <= c[(size_t)i].h + tol) s = -1;
+    if (!s) return P;
+    auto pos = [&](int j, long long t) { const In::PC& q = c[(size_t)j]; return q.h > q.l ? (double)(t - q.l) / (double)(q.h - q.l) : 0.5; };
+    auto defN = [&](int j, long long& t) { const In::PC& q = c[(size_t)j]; if (s > 0 && q.bD > 0) { t = q.bN; return true; } if (s < 0 && q.sD < 0) { t = q.sN; return true; } return false; };   // the defenders' heaviest row (buyers at a low)
+    auto attN = [&](int j, long long& t) { const In::PC& q = c[(size_t)j]; if (s > 0 && q.sD < 0) { t = q.sN; return true; } if (s < 0 && q.bD > 0) { t = q.bN; return true; } return false; };   // the attackers' heaviest row
+    auto inWick = [&](int j, long long t, double third) { const double p = pos(j, t); return s > 0 ? p <= third : p >= 1.0 - third; };
+    auto closedPast = [&](int q, long long lvl) { return s > 0 ? c[(size_t)q].c > lvl : c[(size_t)q].c < lvl; };
+    const std::string up = s > 0 ? "up" : "down", A = s > 0 ? "Sellers" : "Buyers", D = s > 0 ? "Buyers" : "Sellers", hiLo = s > 0 ? "high" : "low", above = s > 0 ? "above" : "below";
+    std::vector<Pat> F;   // every read found, strongest first
+    auto absorption = [&]() -> Pat { Pat P;
+    // 1. ABSORPTION: the defenders' heaviest row in the lower (upper) third of candle i-1 or i, then a close past that row AND that candle's high (low)
+    for (int j = i - 1; j <= i; ++j) { long long t = 0; if (!defN(j, t) || !inWick(j, t, 1.0 / 3.0)) continue;
+        for (int q = j + 1; q <= k; ++q) if (closedPast(q, s > 0 ? std::max(t, c[(size_t)j].h) : std::min(t, c[(size_t)j].l))) {
+            P.side = s; P.kind = 1; P.head = s > 0 ? "Buyers absorbed the selling ?" : "Sellers absorbed the buying ?"; P.why = "- Reversal " + up + " ?";
+            P.sent = D + " absorbed at " + px(t, x.tick, x.dec) + " in the " + c[(size_t)j].when + " candle's wick; the " + c[(size_t)q].when + " candle closed " + above + " it and that candle's " + hiLo + "."; return P; } }
+    return P; };
+    auto trapped = [&]() -> Pat { Pat P;
+    // 2. TRAPPED: the attackers' heaviest row in the wick (outer 40%) of candle j (i-2 .. i), a later candle up to k closes past j's other side - the earliest close wins
+    for (int q = i - 1; q <= k; ++q) for (int j = std::max(i - 2, q - 3); j < q; ++j) { long long t = 0; if (!attN(j, t) || !inWick(j, t, 0.4)) continue;
+        if (!closedPast(q, s > 0 ? c[(size_t)j].h : c[(size_t)j].l)) continue;
+        P.side = s; P.kind = 2; P.head = A + " trapped ?"; P.why = "- Reversal " + up + " ?";
+        P.sent = A + " hit " + px(t, x.tick, x.dec) + " in the wick of the " + c[(size_t)j].when + " candle; the " + c[(size_t)q].when + " candle closed " + above + " its " + hiLo + ".";
+        if ((double)(s * c[(size_t)q].dl) >= medD && medD > 0) P.sent += std::string(" ") + (s > 0 ? "Buying" : "Selling") + " came in hard on that close - the trapped side covering.";
+        return P; }
+    return P; };
+    auto rejection = [&]() -> Pat { Pat P;
+    // 3. REJECTION: the pivot candle itself - wick bigger than the body, the defenders' row in the wick, a close at the far end
+    { const In::PC& q = c[(size_t)i]; const long long rng = q.h - q.l, body = std::llabs(q.c - q.o), wick = s > 0 ? std::min(q.o, q.c) - q.l : q.h - std::max(q.o, q.c); long long t = 0;
+      if (rng > 0 && wick > body && defN(i, t) && (s > 0 ? t < std::min(q.o, q.c) : t > std::max(q.o, q.c)) &&   /* in the wick = beyond the body (case 6: 59% at the outer third, 60% of 90 beyond the body) */ (s > 0 ? (double)(q.c - q.l) / (double)rng >= 2.0 / 3.0 : (double)(q.c - q.l) / (double)rng <= 1.0 / 3.0)) {
+        P.side = s; P.kind = 3; P.head = "Rejection wick ?"; P.why = "- Reversal " + up + " ?";
+        P.sent = "The " + q.when + " candle rejected the " + (s > 0 ? "low" : "high") + ": wick bigger than the body, " + (s > 0 ? "buyers" : "sellers") + " at " + px(t, x.tick, x.dec) + " in the wick, close at the " + (s > 0 ? "top." : "bottom."); return P; } }
+    return P; };
+    auto breakoutMet = [&]() -> Pat { Pat P;
+    // 4. BREAKOUT MET: the pivot candle took out an earlier 3-candle swing (last 40 candles), the defenders' row in its outer third, the call candle closes back past that row
+    { long long sw = 0; bool got = false;
+      for (int j = std::max(3, i - 40); j < i - 2; ++j) { bool piv = true; for (int a = j - 3; a <= j + 3 && piv; ++a) if (a != j && a < i && (s > 0 ? c[(size_t)a].l < c[(size_t)j].l : c[(size_t)a].h > c[(size_t)j].h)) piv = false;
+        if (piv) { const long long v = s > 0 ? c[(size_t)j].l : c[(size_t)j].h; if (s > 0 ? (c[(size_t)i].l < v && v - c[(size_t)i].l <= (long long)atr) : (c[(size_t)i].h > v && c[(size_t)i].h - v <= (long long)atr)) { sw = v; got = true; } } }
+      long long t = 0;
+      if (got && defN(i, t) && inWick(i, t, 1.0 / 3.0) && closedPast(k, t)) {
+        P.side = s; P.kind = 4; P.head = s > 0 ? "Breakdown met with buying ?" : "Breakout met with selling ?"; P.why = "- Reversal " + up + " ?";
+        P.sent = std::string("Price ") + (s > 0 ? "broke the " : "broke the ") + px(sw, x.tick, x.dec) + " swing " + (s > 0 ? "low" : "high") + " and " + (s > 0 ? "buyers" : "sellers") + " met it at " + px(t, x.tick, x.dec) + "; the " + c[(size_t)k].when + " candle closed back " + above + "."; return P; } }
+    return P; };
+    for (const Pat& q : { absorption(), trapped(), rejection(), breakoutMet() }) if (q.side) F.push_back(q);
+    if (F.empty()) return P;
+    P = F[0]; for (size_t m = 1; m < F.size(); ++m) P.sent += " Also: " + F[m].sent;   // (1.1.0) two reads together scored 64% (41 / 64) - they are named, the strongest leads
+    return P;
+}
+
 inline Out read(const In& x) {
     Out o; double r = 0; bool byC = false;
     const int bk = bookSide(x, r), ps = pushSide(x, byC);
@@ -71,6 +143,8 @@ inline Out read(const In& x) {
     else if (bk) { o.verdict = bk; o.head = bk > 0 ? "Leaning buy ?:" : "Leaning sell ?:"; o.why = bk > 0 ? "bids building" : "offers building"; }
     else if (ps) { o.verdict = ps; o.head = ps > 0 ? "Leaning buy ?:" : "Leaning sell ?:"; o.why = ps > 0 ? "buyers stepped in" : "sellers stepped in"; }
     else { o.verdict = 0; o.head = "Quiet:"; o.why = "nothing stood out"; }
+    const Pat pr = pivotRead(x);   // (1.1.0) a pivot read leads: its verdict, its sentence first
+    if (pr.side) { o.verdict = pr.side; o.head = pr.head; o.why = pr.why; o.ex.push_back(pr.sent); }
     // the sentences: the book first, then the aggression, then what to watch
     if (!x.bookOk) o.ex.push_back("No Book Flow record for this candle - the read is the delta alone.");
     else if (bk > 0) o.ex.push_back(r > 0 ? "Bids stacked " + xx(r) + " more than offers - buyers are leaving orders under price." : "Bids stacked while offers thinned - buyers are leaving orders under price.");
@@ -81,7 +155,7 @@ inline Out read(const In& x) {
         else if (ps) o.ex.push_back("Delta " + signedC(x.dl) + " (" + xx(x.dlX) + " normal): " + (ps > 0 ? "buyers" : "sellers") + " pushing.");
         else o.ex.push_back("Delta " + signedC(x.dl) + " - no strong push either way.");
     }
-    if (o.verdict == 2) o.ex.push_back(bk > 0 ? "Watch the bids: if they hold while sellers hit, that is absorption (bullish); if they pull, sellers take over."
+    if (o.verdict == 2 && !pr.side) o.ex.push_back(bk > 0 ? "Watch the bids: if they hold while sellers hit, that is absorption (bullish); if they pull, sellers take over."
                                               : "Watch the offers: if they hold while buyers lift, that is absorption (bearish); if they pull, buyers take over.");
     // the table: the passive side (Bids / Offers), the biggest order (Buy / Sell), the aggressive side (Value / vs normal)
     if (x.bookOk) {
@@ -104,9 +178,6 @@ inline Out read(const In& x) {
 // the bottom half's change label: the |change| ratio over the change bar when it is CHG_MIN x normal or more (0 = no label)
 inline double changeLabel(long long chg, double medAbsChg) { if (!(medAbsChg > 0)) return 0; const double v = (double)std::llabs(chg) / medAbsChg; return v >= CHG_MIN ? std::min(99.9, v) : 0; }
 
-// the median of |v| (0 when empty)
-inline double medAbs(std::vector<long long> v) { if (v.empty()) return 0; for (long long& q : v) q = std::llabs(q); std::sort(v.begin(), v.end());
-    const size_t n = v.size(); return n % 2 ? (double)v[n / 2] : 0.5 * ((double)v[n / 2 - 1] + (double)v[n / 2]); }
 
 // THE CLIMAX MARK (Cx on the price chart). The 15:41 CT test of four rules on 909 pivots (turned / zone held 10 candles; base 47% / 42%):
 //   biggest volume in 20+ at the pivot candle or the one before                      58% / 52%  (198)

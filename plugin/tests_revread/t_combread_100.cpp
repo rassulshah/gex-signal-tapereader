@@ -1,5 +1,6 @@
 // CombRead 1.0.0 - the one read of the Reversal Read pane (passive Book Flow + aggressive delta) and the Cx climax rule
 #include "../CombRead.h"
+#include <cstdlib>
 #include <iostream>
 static int P = 0, F = 0;
 #define CHECK(c, m) do { if (c) ++P; else { ++F; std::cout << "FAIL: " << m << " (line " << __LINE__ << ")\n"; } } while (0)
@@ -34,3 +35,18 @@ int main() {
       CHECK(cbr::climaxAt(v, o, c, 39, 1) == -1 && cbr::climaxAt(v, o, c, 0, 1) == -1, "Cx: edges"); }
     std::cout << P << " passed, " << F << " failed\n"; return F ? 1 : 0;
 }
+// (1.1.0) the case-review pivots, real candles (cases_fx.h from the 3-min store + 1-min footprint): what Rassul read in each
+#include "cases_fx.h"
+static cbr::Pat runFx(const Fx& f) { cbr::In x; x.mkt = "ES"; x.tick = f.tick; x.dec = f.dec; x.deltaOk = true;
+    for (const FxC& q : f.c) { cbr::In::PC p; p.o = q.o; p.h = q.h; p.l = q.l; p.c = q.c; p.dl = q.dl; p.bN = q.bN; p.bD = q.bD; p.sN = q.sN; p.sD = q.sD; p.ok = true; p.when = q.when; x.pc.push_back(p); }
+    return cbr::pivotRead(x); }
+struct FxCheck { FxCheck() {
+    const std::vector<Fx> F = fixtures(); int p = 0, f = 0;
+    auto chk = [&](bool c, const std::string& m) { if (c) ++p; else { ++f; std::cout << "FAIL: " << m << "\n"; } };
+    const cbr::Pat a = runFx(F[0]); chk(a.kind == 2 && a.sent.find("8:39 candle") != std::string::npos && a.sent.find("7655.00") != std::string::npos, "case 1 ES 10-23: sellers trapped in the 8:39 wick at 7655 (" + a.sent + ")");
+    const cbr::Pat c = runFx(F[2]); chk(c.kind == 1 && c.side == 1 && c.sent.find("Also:") != std::string::npos, "case 3 GC 11-13: absorption leads, the trap named too");
+    const cbr::Pat d = runFx(F[3]); chk(d.side == 0, "case 4 CL 11-10: no confirmed read (the circle mid-body, no close above the high)");
+    const cbr::Pat e = runFx(F[4]); chk(e.kind == 4 && e.side == -1, "case 5 ES 10-27: breakout met with selling");
+    const cbr::Pat g = runFx(F[5]); chk(g.side == -1 && g.sent.find("rejected the high") != std::string::npos, "case 6 6E 11-05: the rejection wick is named");
+    cbr::In none; none.tick = 0.25; chk(cbr::pivotRead(none).side == 0, "no candles: no read");
+    std::cout << "case fixtures: " << p << " passed, " << f << " failed\n"; if (f) std::exit(1); } } fxCheck;
