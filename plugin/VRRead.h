@@ -18,7 +18,8 @@
 
 namespace vrd {
 
-static const char* const VERSION = "1.1.1";   // (1.1.1, his 09:32 CT screenshot: "narrowing" was the verdict but the sentence under it was about the 9:21 candle) the sentences behind the verdict come first, the side notes after   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences, most important first)
+static const char* const VERSION = "1.1.2";   // (1.1.2, his 11:18 CT screenshot) HG decimals, "big" candle at 1.5x, iceberg reason = hidden buyers / sellers (was "absorbed" next to "volume absorbed")
+// was "1.1.1";   // (1.1.1, his 09:32 CT screenshot: "narrowing" was the verdict but the sentence under it was about the 9:21 candle) the sentences behind the verdict come first, the side notes after   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences, most important first)
 static const int NORM_N = 20, NORM_MIN = 5, EXT_N = 10;
 static const double BIG_X = 2.0;        // volume / range "big": 2x the median of the 20 candles before
 static const double SMALL_X = 0.5;      // "drying up": under half of it
@@ -40,7 +41,8 @@ inline std::string commas(long long v) { std::string s = std::to_string(v < 0 ? 
 inline std::string xx(double v) { char b[24]; std::snprintf(b, sizeof b, v > 0 && v < 0.095 ? "%.2fx" : "%.1fx", (std::min)(v, 99.9)); return b; }   // (1.1.1) 0.01x, not 0.0x
 inline std::string px(double v, int dec) { char b[40]; std::snprintf(b, sizeof b, "%.*f", dec < 0 ? 0 : dec > 6 ? 6 : dec, v); return b; }
 inline std::string cnt(int n) { return n >= 99 ? std::string("99+") : std::to_string(n); }
-inline int decOf(double tick) { if (!(tick > 0)) return 2; int d = 0; double t = tick; while (d < 6 && std::fabs(t - std::round(t)) > 1e-7) { t *= 10; ++d; } return (std::max)(d, tick < 1 && d == 1 ? 1 : d); }
+inline int decOf(double tick) { if (!(tick > 0)) return 2; int d = 0; double t = std::round(tick * 1e9) / 1e9;   // (1.1.2) IRT hands 0.000500000023749 for HG: rounded first (was 6 decimals)
+    while (d < 6 && std::fabs(t - std::round(t)) > 1e-7) { t *= 10; ++d; } return (std::max)(d, tick < 1 && d == 1 ? 1 : d); }
 inline double med(std::vector<double> v) { if (v.empty()) return 0; std::sort(v.begin(), v.end()); const size_t n = v.size(); return n % 2 ? v[n / 2] : (v[n / 2 - 1] + v[n / 2]) / 2.0; }
 // x the median of the (up to) 20 candles before index i; 0 = not known
 inline double volX(const std::vector<Cd>& c, int i) { std::vector<double> v; for (int j = i - 1; j >= 0 && (int)v.size() < NORM_N; --j) v.push_back(c[(size_t)j].vol); const double m = (int)v.size() >= NORM_MIN ? med(v) : 0; return m > 0 ? c[(size_t)i].vol / m : 0; }
@@ -80,8 +82,8 @@ inline Out volumeRead(const Ctx& x) {
         const double need = ICE_SHARE * k.vol;
         if (!bBuy && !bSell && (q.swBuy >= SWEEP_LV || q.swSell >= SWEEP_LV) && q.swBuy != q.swSell) {
             const bool sb = q.swSell > q.swBuy; N.push_back(std::string(sb ? "Sellers" : "Buyers") + " swept " + std::to_string(sb ? q.swSell : q.swBuy) + " levels in one order, " + (sb ? "buyers" : "sellers") + " only " + std::to_string(sb ? q.swBuy : q.swSell) + "."); }
-        if (q.hidSell > 0 && (double)q.hidSell >= need && (double)q.hidSell >= 1.2 * (double)q.hidBuy) { E.push_back("Hidden sellers: " + commas(q.hidSell) + " lots of iceberg offers soaked up the buying without showing on the book."); B.push_back("Hidden sellers: " + commas(q.hidSell) + " lots of iceberg offers filled the buying"); Y.push_back(Why{ -1, "absorbed" }); }
-        else if (q.hidBuy > 0 && (double)q.hidBuy >= need && (double)q.hidBuy >= 1.2 * (double)q.hidSell) { E.push_back("Hidden buyers: " + commas(q.hidBuy) + " lots of iceberg bids soaked up the selling without showing on the book."); B.push_back("Hidden buyers: " + commas(q.hidBuy) + " lots of iceberg bids filled the selling"); Y.push_back(Why{ 1, "absorbed" }); }
+        if (q.hidSell > 0 && (double)q.hidSell >= need && (double)q.hidSell >= 1.2 * (double)q.hidBuy) { E.push_back("Hidden sellers: " + commas(q.hidSell) + " lots of iceberg offers soaked up the buying without showing on the book."); B.push_back("Hidden sellers: " + commas(q.hidSell) + " lots of iceberg offers filled the buying"); Y.push_back(Why{ -1, "hidden sellers" }); }
+        else if (q.hidBuy > 0 && (double)q.hidBuy >= need && (double)q.hidBuy >= 1.2 * (double)q.hidSell) { E.push_back("Hidden buyers: " + commas(q.hidBuy) + " lots of iceberg bids soaked up the selling without showing on the book."); B.push_back("Hidden buyers: " + commas(q.hidBuy) + " lots of iceberg bids filled the selling"); Y.push_back(Why{ 1, "hidden buyers" }); }
     }
     for (int j = i; j >= 0 && j >= i - 2; --j) {   // heavy volume that went nowhere, on this candle or the two before
         const double v2 = volX(x.c, j), r2 = rngX(x.c, j); if (!(v2 >= BIG_X && r2 > 0 && r2 < 1.0)) continue;
@@ -132,7 +134,7 @@ inline Out rangeRead(const Ctx& x) {
     if (B.size() > 1) o.b2 = B[1];
     verdict(o, Y);
     {   // (1.1.0) the shape sentence: size, colour and where it closed
-        const char* sz = rx > 0 && rx < 0.7 ? "A small " : rx >= BIG_X ? "A wide " : "A normal-size ";
+        const char* sz = rx > 0 && rx < 0.7 ? "A small " : rx >= BIG_X ? "A wide " : rx >= 1.5 ? "A big " : "A normal-size ";   // (1.1.2) 1.5x-2x = big
         std::string sh = std::string(sz) + (g ? "green" : "red") + " candle" + (rx > 0 ? " (" + xx(rx) + " its normal range)" : std::string()) + ", closed " +
                          (at >= 75 ? "near its high" : at <= 25 ? "near its low" : "mid-range") + " (" + std::to_string(at) + "%)";
         if (R > 0 && at <= 15 && !g && bot <= 0.1 * R) sh += " with almost no lower wick";

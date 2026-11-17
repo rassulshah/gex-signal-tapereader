@@ -15,9 +15,14 @@ int main() {
       CHECK(L.size() == 1 && L[0] == "first fits.", "wrap: a later sentence that does not fit whole is left out"); }
     { spt::Cols c = spt::cols(700, 200, 150); CHECK(c.dataOn && c.leftW == spt::LEFT_MAX, "cols: room for both - left at its max"); }
     { spt::Cols c = spt::cols(300, 200, 150); CHECK(!c.dataOn && c.leftW == 300, "cols: no room for both - the read alone"); }
-    { spt::Cols c = spt::cols(100, 200, 150); CHECK(c.leftW == 0, "cols: the verdict does not fit - nothing"); }
-    { spt::Cols c = spt::cols(600, 200, 360); CHECK(c.dataOn && c.leftW == 360, "cols: a long verdict line widens the left column"); }
-    { spt::Cols c = spt::cols(500, 200, 360); CHECK(!c.dataOn && c.leftW >= 360, "cols: a long verdict line is never wrapped - the numbers give way"); }
+    { spt::Cols c = spt::cols(100, 200, 150); CHECK(!c.dataOn && c.leftW == 100, "cols 1.1.0: 100 px - the read alone"); }
+    { spt::Cols c = spt::cols(500, 200, 360); CHECK(c.dataOn && c.leftW == 274, "cols 1.1.0: a long verdict no longer pushes the numbers out (GC 11:18)"); }
+    { spt::Cols c = spt::cols(414, 223, 290); CHECK(c.dataOn && c.leftW == 165, "cols 1.1.0: GC Cob Reader 414 px, numbers 223 px: both fit, left 165 px"); }
+    { spt::Cols c = spt::cols(420, 223, 290); CHECK(c.dataOn && c.leftW == 171, "cols 1.1.0: 420 px - both, left 171 px"); }
+    { const std::vector<std::string> H = spt::headLines("Bearish ?:", "thrust shortening, but up volume building", 160, 2, tw);
+      bool ok = H.size() == 2 && H[0].rfind("Bearish ?:", 0) == 0; for (auto& h : H) if (tw(h) > 160) ok = false; CHECK(ok, "headLines: the verdict wraps to 2 lines inside 160 px, starting with the head"); }
+    { const std::vector<std::string> H = spt::headLines("Bearish ?:", "a b c d e f g h i j k l m n o p q r s t u v w x y z aa bb cc dd ee ff gg hh", 120, 2, tw);
+      CHECK(H.size() == 2 && H[1].size() >= 3 && H[1].substr(H[1].size() - 3) == "...", "headLines: cut at 2 lines with ..."); }
     for (int mode = 0; mode < 2; ++mode) {
         vrr::Engine E; E.mode = mode; E.tick = 0.25; E.spb = 180; E.hlOn = true;
         for (int i = 0; i < 60; ++i) { vrr::Bar b; b.t = 3877700000LL + i * 180; b.o = 7400 + i * 0.5; b.c = b.o + ((i % 3) ? 0.75 : -0.5); b.h = std::max(b.o, b.c) + 0.5; b.l = std::min(b.o, b.c) - 0.25; b.v = 500 + (i % 7) * 60 + (i == 59 ? 4000 : 0); E.addBar(b, 20774LL * 86400 + 5 * 3600 + i * 180); }

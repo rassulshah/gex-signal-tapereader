@@ -498,7 +498,7 @@ struct Engine {
         for (const Story& q : ended) if (q.shown && q.tA > 0 && q.t0 <= b && q.tEnd >= a && (!s || q.t0 > s->t0)) s = &q;
         return s; }
     // (0.13.2, his 11:18 CT screenshot "3874.700058") prices with the tick's decimals: 0.1 -> 1, 0.25 -> 2, 0.0005 -> 4, 0.00005 -> 5
-    int tickDec() const { if (!(tick > 0)) return 2; int d = 0; double t = tick; while (d < 6 && std::fabs(t - std::round(t)) > 1e-7) { t *= 10; ++d; } return d; }
+    int tickDec() const { if (!(tick > 0)) return 2; int d = 0; double t = std::round(tick * 1e9) / 1e9; while (d < 6 && std::fabs(t - std::round(t)) > 1e-7) { t *= 10; ++d; } return d; }
     // (0.6.0) the read as numbered behaviour steps, plain words, ratios not lots; nothing but the reversal behaviours (no context, no pending steps)
     std::vector<Seg> readSteps(const Story& s) const {
         std::vector<Seg> L; const bool bt = s.bottom; const int a = bt ? -1 : 1, d = bt ? 1 : -1; char b[96];

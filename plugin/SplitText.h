@@ -12,9 +12,9 @@
 
 namespace spt {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.1.0";   // (1.1.0, his 11:18 CT screenshot: GC Cob Reader lost its numbers - a long verdict line forced the left column wide) the verdict line wraps too; the numbers keep their room
 static const int LEFT_MAX = 340;   // the left column is never wider than this (px)
-static const int LEFT_MIN = 170;   // narrower than this: the numbers are left out and the left column takes the room
+static const int LEFT_MIN = 150;   // narrower than this: the numbers are left out and the left column takes the room
 static const int GAP = 26;         // between the two columns (a thin divider sits in the middle)
 
 // split a sentence into words (single spaces)
@@ -54,12 +54,21 @@ template <class TW> std::vector<std::string> wrap(const std::vector<std::string>
 // the two column widths for an area `avail` px wide with a numbers block `dataW` wide and a verdict line `headW` wide.
 // leftW = 0 means nothing fits; dataOn = false means the numbers are left out.
 struct Cols { int leftW = 0; bool dataOn = false; };
-inline Cols cols(int avail, int dataW, int headW) {
+inline Cols cols(int avail, int dataW, int headW = 0) {
+    (void)headW;   // (1.1.0) the verdict line wraps like the sentences - it no longer sets the column width
     Cols c; if (avail <= 0) return c;
-    const int withData = avail - dataW - GAP, need = std::max(LEFT_MIN, headW);   // the verdict line is never wrapped
-    if (dataW > 0 && withData >= need) { c.leftW = std::max(std::min(LEFT_MAX, withData), headW); c.dataOn = true; return c; }
-    if (avail >= headW && avail >= 60) c.leftW = std::min(avail, std::max(LEFT_MAX, headW));   // no room for both: the read alone
+    const int withData = avail - dataW - GAP;
+    if (dataW > 0 && withData >= LEFT_MIN) { c.leftW = std::min(LEFT_MAX, withData); c.dataOn = true; return c; }
+    if (avail >= 60) c.leftW = std::min(avail, LEFT_MAX);   // no room for both: the read alone
     return c;
 }
-
+// (1.1.0) the verdict "Bearish ?: thrust shortening, but up volume building" word-wrapped to the column; line 0 starts with head (drawn in the
+// verdict colour), the rest in white. At most maxLines; the last one ends in "..." when cut.
+template <class TW> std::vector<std::string> headLines(const std::string& head, const std::string& why, int width, int maxLines, TW tw) {
+    std::vector<std::string> L = wrapOne(head + (why.empty() ? std::string() : " " + why), width, tw);
+    if ((int)L.size() > maxLines && maxLines > 0) { L.resize((size_t)maxLines); std::string& last = L.back();
+        while (!last.empty() && tw(last + "...") > width) { const size_t sp = last.find_last_of(' '); if (sp == std::string::npos) break; last.erase(sp); }
+        last += "..."; }
+    return L;
+}
 } // namespace spt

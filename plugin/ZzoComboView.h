@@ -216,11 +216,16 @@ inline ComboScene layoutCombo(const Engine& E, const std::vector<Wave>& waves, l
             if (fit >= 1 && cl.leftW > 0) {
                 boxed = true;
                 auto put = [&](const std::string& t, int x, int y, unsigned long col) { if (t.empty()) return 0; Prim q; q.k = Prim::TEXT; q.x0 = x; q.x1 = x + v.textW(t); q.y0 = y; q.y1 = y + TH; q.col = col; q.text = t; S.p.push_back(q); return v.textW(t); };
-                { const int wa = put(o.head, x0, y0, vc); if (!o.why.empty()) put(o.why, x0 + wa + 6, y0, white); }
-                S.box.push_back(std::make_pair(std::string("line 1"), o.head + (o.why.empty() ? std::string() : " " + o.why)));
-                const std::vector<std::string> EX = spt::wrap(o.ex, cl.leftW, fit - 1, [&](const std::string& q) { return v.textW(q); });
-                for (size_t i = 0; i < EX.size(); ++i) { put(EX[i], x0, y0 + (int)(i + 1) * rh, white); S.box.push_back(std::make_pair(std::string("line ") + std::to_string(i + 2), EX[i])); }
-                const int nl = 1 + (int)EX.size();
+                // (3.2.2, his 11:18 CT GC screenshot: the numbers were gone) the verdict wraps (at most 2 lines) instead of widening the left column
+                auto twf = [&](const std::string& q) { return v.textW(q); };
+                const std::vector<std::string> HL = spt::headLines(o.head, o.why, cl.leftW, std::max(1, std::min(2, fit - 1)), twf); const int nh = (int)HL.size();
+                for (int i = 0; i < nh; ++i) { const int y = y0 + i * rh; const std::string& h = HL[(size_t)i];
+                    if (i == 0 && h.compare(0, o.head.size(), o.head) == 0) { put(o.head, x0, y, vc); if (h.size() > o.head.size() + 1) put(h.substr(o.head.size() + 1), x0 + v.textW(o.head + " "), y, white); }
+                    else put(h, x0, y, white);
+                    S.box.push_back(std::make_pair(std::string("line ") + std::to_string(i + 1), h)); }
+                const std::vector<std::string> EX = spt::wrap(o.ex, cl.leftW, fit - nh, twf);
+                for (size_t i = 0; i < EX.size(); ++i) { put(EX[i], x0, y0 + (int)(i + (size_t)nh) * rh, white); S.box.push_back(std::make_pair(std::string("line ") + std::to_string(i + 1 + (size_t)nh), EX[i])); }
+                const int nl = nh + (int)EX.size();
                 if (cl.dataOn) {
                     const int xb = x0 + cl.leftW + spt::GAP, ca = xb + wk + 12, cbx = ca + wa2 + 14, cc = cbx + wb2 + 14;
                     auto colOf = [&](int c) -> unsigned long { return c == 1 ? C.up : c == -1 ? C.down : c == 2 ? C.grey : white; };

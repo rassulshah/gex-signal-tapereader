@@ -693,11 +693,18 @@ public:
                 if (blockR > 0) { setPen(rvh::C_GRAY, 1, P_SOLID); PNT a; a.set(0, 0.0f); a.h = rvh::coord(xT - 13); a.v = rvh::coord(y0 + 2); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = rvh::coord(xT - 13); b.v = rvh::coord(std::min((int)pane.bottom - 3, y0 + fit * rowH)); b.drawLineTo(); }
                 const COLOR vc = fo.verdict == 1 ? rvh::C_GREEN : fo.verdict == -1 ? rvh::C_RED : fo.verdict == 2 ? rvh::C_WHITE : rvh::C_GRAY;
                 // (0.13.2, his 11:18 CT screenshot: which candle is this?) the candle time leads the verdict line - the table that carried it can be left out
-                const int ww = when.empty() ? 0 : put(when, xT, y0, rvh::C_GRAY, lim + 1); const int xh = xT + (ww > 0 ? ww + 8 : 0);
-                const int hw = put(fo.head, xh, y0, vc, lim + 1); if (hw > 0 && !fo.why.empty()) put(fo.why, xh + hw + 6, y0, rvh::C_WHITE, lim + 1);
+                // (0.13.3) the verdict wraps (at most 2 lines) so a long one never pushes the table out
+                const std::string lead = when.empty() ? fo.head : when + " " + fo.head;
+                const std::vector<std::string> HL = spt::headLines(lead, fo.why, cl.leftW, std::max(1, std::min(2, fit - 1)), tw); const int nh = (int)HL.size();
+                for (int i = 0; i < nh; ++i) { const int yy = y0 + i * rowH; const std::string& h = HL[(size_t)i];
+                    if (i == 0 && h.compare(0, lead.size(), lead) == 0) { int xx = xT;
+                        if (!when.empty()) { put(when, xx, yy, rvh::C_GRAY, lim + 1); xx += tw(when + " "); }
+                        put(fo.head, xx, yy, vc, lim + 1); xx += tw(fo.head + " ");
+                        if (h.size() > lead.size() + 1) put(h.substr(lead.size() + 1), xx, yy, rvh::C_WHITE, lim + 1); }
+                    else put(h, xT, yy, rvh::C_WHITE, lim + 1); }
                 std::vector<std::string> SS = flr::explain(flowIn); if (!storySent.empty()) SS.push_back(storySent);   // (0.13.3) the story last
-                const std::vector<std::string> EX = spt::wrap(SS, cl.leftW, fit - 1, tw);
-                for (size_t i = 0; i < EX.size(); ++i) put(EX[i], xT, y0 + (int)(i + 1) * rowH, rvh::C_WHITE, lim + 1);
+                const std::vector<std::string> EX = spt::wrap(SS, cl.leftW, fit - nh, tw);
+                for (size_t i = 0; i < EX.size(); ++i) put(EX[i], xT, y0 + (int)(i + (size_t)nh) * rowH, rvh::C_WHITE, lim + 1);
                 if (cl.dataOn && fit >= 2) {
                     const int xb = xT + cl.leftW + spt::GAP, c1 = xb + wl + 12, c2 = c1 + wb + 14, c3 = c2 + wa + 14;
                     setPen(rvh::C_GRAY, 1, P_SOLID); { PNT a; a.set(0, 0.0f); a.h = rvh::coord(xb - 13); a.v = rvh::coord(y0 + 2); a.setDrawPosition(); PNT b; b.set(0, 0.0f); b.h = rvh::coord(xb - 13); b.v = rvh::coord(std::min((int)pane.bottom - 3, y0 + std::min(fit, (int)FR.size() + 1) * rowH)); b.drawLineTo(); }
