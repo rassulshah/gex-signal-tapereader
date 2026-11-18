@@ -27,7 +27,7 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";   // (1.0.1, 09:21 CT) a bullish I trades below the pivot-low candle's high, a bearish I above the pivot-high candle's low
 
 // the cut-offs (starting values, ES 2026-11-18 overnight; LRA-WyRead-<MKT>.csv may override - see Params)
 struct Params {
@@ -193,7 +193,7 @@ inline void springs(const Ctx& X, Out& o, std::vector<int>& rejI) {
             add(o, d, B, side > 0 ? 'S' : 'U', side, r);
             // the strong rejection: a wide candle right after, closing back through the spring / upthrust candle
             for (int k = d + 1; k <= d + 2 && k < n; ++k) { const Bar& q = B[(size_t)k]; const double mr = X.medRg[(size_t)k];
-                const bool wide = mr > 0 && (double)q.range() >= P.rejR * mr, through = lo ? (q.c > b.h && q.c > q.o) : (q.c < b.l && q.c < q.o);
+                const bool wide = mr > 0 && (double)q.range() >= P.rejR * mr, through = lo ? (q.c > b.h && q.c > q.o && q.l < b.h) : (q.c < b.l && q.c < q.o && q.h > b.l);   // (1.0.1) and it starts at the pivot: its low under the spring candle's high (its high over the upthrust candle's low)
                 if (wide && through) { Read ri; ri.dir = side; ri.head = std::string(lo ? "Buyers" : "Sellers") + " took over";
                     ri.lines.push_back("Strong rejection: " + std::string(lo ? "+" : "-") + pts(std::llabs(q.c - q.o), X.tick, X.dec) + " pts, " + fx((double)q.range() / mr) + " normal range,");
                     ri.lines.push_back("closed through the " + std::string(lo ? "spring" : "upthrust") + " candle.");
@@ -215,6 +215,9 @@ inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const st
                 for (int q = std::max(0, k - 10); q < i; ++q) if (q != k && (side > 0 ? B[(size_t)q].l < B[(size_t)k].l : B[(size_t)q].h > B[(size_t)k].h)) { isExt = false; break; }
                 if (isExt) { ex = k; break; } }
             if (ex < 0) continue;
+            // (1.0.1, Rassul 09:21 CT "a bullish I should have its low below the high of the dnpivot and vice versa") the turn bar starts AT the pivot:
+            // a bullish I trades below the pivot-low candle's high, a bearish I above the pivot-high candle's low
+            if (side > 0 ? !(b.l < B[(size_t)ex].h) : !(b.h > B[(size_t)ex].l)) continue;
             const int si = side > 0 ? 0 : 1; if (i - last[si] < 4) continue;
             if (std::find(rejI.begin(), rejI.end(), i) != rejI.end()) continue;
             last[si] = i; (void)L;

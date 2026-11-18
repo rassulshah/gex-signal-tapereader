@@ -38,6 +38,10 @@ int main(int argc, char** argv) {
     CHECK(has(o, B, "5:15 AM", 'E', 1) || has(o, B, "5:18 AM", 'E', 1), "E at the 5:18 AM low");
     CHECK(has(o, B, "5:18 AM", 'A', 1), "A 5:18 AM");
     CHECK(has(o, B, "2:00 AM", 'A', -1), "A 2:00 AM");
+    // (1.0.1, 09:21 CT) a bullish I trades below the high of a pivot-low candle in the 3 before it; a bearish I above the low of a pivot-high candle
+    {   int badI = 0; for (size_t i = 3; i < B.size(); ++i) { const auto it = o.marks.find(B[i].t); if (it == o.marks.end()) continue;
+            for (const wyr::Mark& m : it->second) { if (m.k != 'I') continue; bool ok2 = false; for (size_t k = i - 3; k < i; ++k) if (m.dir > 0 ? B[i].l < B[k].h : B[i].h > B[k].l) ok2 = true; if (!ok2) ++badI; } }
+        CHECK(badI == 0, "every I starts at its pivot"); CHECK(!has(o, B, "11:18 PM", 'I', 1), "11:18 PM I (mid-move, away from the pivot) is gone"); }
     // reads
     for (const wyr::Bar& b : B) if (b.when == "12:03 AM") { const auto r = o.reads.find(b.t); CHECK(r != o.reads.end() && r->second.head == "Spring (flush)", "flush read");
         bool sr = false; if (r != o.reads.end()) for (const auto& l : r->second.lines) { std::printf("    %s\n", l.c_str()); if (l.rfind("Stop run: one 72-lot sell swept 5", 0) == 0) sr = true; } CHECK(sr, "stop-run line 72 lots / 5 prices"); }
