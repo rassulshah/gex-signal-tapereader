@@ -50,7 +50,7 @@ int main() {
     bdk::publishHodLod(es.symbol, es.seconds, es.chart, (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(), tb);
     es.draws.clear(); x->draw(); B = boxes(es); OK(B.size() == 1);
     OK(!bdk::overlap(bdk::mk(B[0].x, B[0].y, B[0].r, B[0].b), tb)); OK(B[0].x >= 760); OK(B[0].y == 20);
-    std::string st = slurp(flex + "/EventCal.status-ES-180.txt"); OK(st.find("lsEventCal 1.0.0") == 0); OK(st.find("SOURCE,nightly file") != std::string::npos);
+    std::string st = slurp(flex + "/EventCal.status-ES-180.txt"); OK(st.find("lsEventCal 1.0.1") == 0); OK(st.find("SOURCE,nightly file") != std::string::npos);
     OK(slurp(flex + "/EventCal.status-CL-180.txt").find("MARKET,CL") != std::string::npos);
     // a chart so narrow the box cannot fit: nothing drawn, no crash
     mock::Host nq; nq.root = "NQ"; nq.symbol = "NQZ26"; nq.seconds = 180; bars(nq, 3); nq.paneRight = 60; mock::current = &nq; x->draw(); OK(boxes(nq).empty());

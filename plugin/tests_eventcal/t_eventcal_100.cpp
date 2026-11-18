@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     // status
     R = select(source(F, "ES", now, nullptr), "ES", now);
     const std::string s = statusText("ES", why, R, "docked right");
-    OK(s.find("lsEventCal 1.0.0") == 0); OK(s.find("ROW,Wed 1:00 PM,FOMC Minutes,H,later") != std::string::npos);
+    OK(s.find("lsEventCal 1.0.1\nVERSION,1.0.1\n") == 0); OK(s.find("ROW,Wed 1:00 PM,FOMC Minutes,H,later") != std::string::npos);
     std::printf("lsEventCal logic: %d pass\n", pass);
     return 0;
 }

@@ -1,4 +1,4 @@
-// EventCalLogic.h 1.0.0 (2026-11-17) - the SDK-free logic of lsEventCal, the Event Calendar box (Linux-tested).
+// EventCalLogic.h 1.0.1 (2026-11-17; 1.0.1: status VERSION line + 10-min heartbeat for the nightly code-health check, today-only rows) - the SDK-free logic of lsEventCal, the Event Calendar box (Linux-tested).
 // Rassul 2026-11-17 18:09 CT: "the calendar at the top center of important events that are coming up for the market that im trading
 // ... for crude it could include inventories. other events are like fomc etc ... after 30 min of the even it can be removed";
 // 18:22 "i only want market moving events medium and high impact that can move the market. also since i have limited space, be
@@ -20,7 +20,7 @@
 #include <vector>
 
 namespace ecal {
-static const char* const VERSION = "1.0.0";
+static const char* const VERSION = "1.0.1";
 static const int MAX_ROWS = 3;          // his limited space
 static const int SESSION_START = 17 * 60;   // (18:39 "i only want todays events") today = the trading session, 5:00 PM CT to 5:00 PM CT
 static const int KEEP_MIN = 30;         // shown 30 min after the release, then removed
@@ -165,7 +165,7 @@ inline Layout layout(const std::vector<Row>& R, const std::function<int(const st
     return L;
 }
 inline std::string statusText(const std::string& mkt, const std::string& srcWhy, const std::vector<Row>& R, const std::string& placeWhy) {
-    std::string s = std::string("lsEventCal ") + VERSION + "\nMARKET," + mkt + "\nSOURCE," + srcWhy + "\nPLACE," + placeWhy + "\n";
+    std::string s = std::string("lsEventCal ") + VERSION + "\nVERSION," + VERSION + "\nMARKET," + mkt + "\nSOURCE," + srcWhy + "\nPLACE," + placeWhy + "\n";
     for (const Row& r : R) s += "ROW," + r.when + "," + r.name + "," + r.tier + "," + (r.state == ST_OUT ? "out" : r.state == ST_SOON ? "soon" : "later") + "\n";
     if (R.empty()) s += "ROW,none left today\n";
     return s;

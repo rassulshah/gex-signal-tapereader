@@ -1,5 +1,5 @@
 /********************************************************************************
- *  EventCal.cpp  --  Investor/RT RTX extension  lsEventCal  "Event Calendar"  1.0.0  (2026-11-17)
+ *  EventCal.cpp  --  Investor/RT RTX extension  lsEventCal  "Event Calendar"  1.0.1  (2026-11-17; 1.0.1: today only, status heartbeat)
  *
  *  Rassul 2026-11-17 18:09 CT: "the calendar at the top center of important events that are coming up for the market that im trading
  *  ... for crude it could include inventories. other events are like fomc etc ... after 30 min of the even it can be removed";
@@ -131,7 +131,8 @@ void EventCal::loadFile(ECState& S, long long ms) {      // at most every 10 s; 
 }
 
 void EventCal::status(ECState& S, long long ms, const std::string& body) {
-    if (S.statusPath.empty() || body == S.statusBody) return;
+    if (S.statusPath.empty()) return;
+    if (body == S.statusBody && S.statusMs >= 0 && ms - S.statusMs < 600000) return;   // unchanged: rewritten every 10 min (the nightly code-health freshness check)
     if (S.statusMs >= 0 && ms - S.statusMs < 30000 && S.statusBody.size() == body.size()) return;   // countdowns alone: at most every 30 s
     S.statusMs = ms; S.statusBody = body; ecPublish(S.statusPath, body);
 }
@@ -187,7 +188,7 @@ extern "C" cppExtension* CreateExtension(void) {
     EventCal* p = new EventCal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI);       // on the price pane, on the instrument's scale; no hovers, no settings
-    p->setDescription("LRA Event Calendar v1.0.0 - on the price pane: today's medium / high impact scheduled events of this chart's market (the 5 PM - 5 PM CT session, at most 3) (FOMC, CPI, NFP, GDP + PCE, retail sales, EIA crude for CL, EIA gas for NG, ECB for 6E, China PMI for HG, jobless claims, PPI, ISM, API ...), at the top centre beside the HOD / LOD table. High impact bold; amber within the hour; red for 30 min after the release, then removed. The nightly keeps the list and drops event types that do not move the market. No settings.");
-    p->setVersion("1.0.0");   // = ecal::VERSION (gex-build reads this literal)
+    p->setDescription("LRA Event Calendar v1.0.1 - on the price pane: today's medium / high impact scheduled events of this chart's market (the 5 PM - 5 PM CT session, at most 3) (FOMC, CPI, NFP, GDP + PCE, retail sales, EIA crude for CL, EIA gas for NG, ECB for 6E, China PMI for HG, jobless claims, PPI, ISM, API ...), at the top centre beside the HOD / LOD table. High impact bold; amber within the hour; red for 30 min after the release, then removed. The nightly keeps the list and drops event types that do not move the market. No settings.");
+    p->setVersion("1.0.1");   // = ecal::VERSION (gex-build reads this literal)
     return p;
 }
