@@ -29,6 +29,10 @@
 #include "BoxDock.h"
 #include "MarketKey.h"
 #include "HostSlot.h"
+#ifndef LSPERF_PLUGIN   // (2026-11-18 memory hunt) the IRT performance guard: time and memory of every calc / draw (Perf\perf- / permem-<plugin>)
+  #define LSPERF_PLUGIN "EventCal"
+#endif
+#include "PerfGuard.h"
 #include "SettingsGuard.h"
 #include <algorithm>
 #include <chrono>
@@ -97,7 +101,7 @@ int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::setup(void) { setParameterVersion(1); return RTX_OK; }
 int cppExtension::done(void) { static_cast<EventCal*>(this)->clear(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<EventCal*>(this)->clear(); return RTX_OK; }
-int cppExtension::calc(int) { return RTX_OK; }   // nothing per bar: the box depends only on the clock and the calendar file
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); return RTX_OK; }   // nothing per bar: the box depends only on the clock and the calendar file
 
 bool EventCal::identify(ECState& S) {
     char rb[64] = { 0 }; const char* rs = getRootSymbol(rb); std::string root = rs ? rs : "";
@@ -139,7 +143,7 @@ void EventCal::status(ECState& S, long long ms, const std::string& body) {
 
 static short ecC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
 
-int EventCal::draw(void) {
+int EventCal::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     ECState* S = slot_.get(this, true);
     if (!S) return RTX_OK;
     try {

@@ -113,6 +113,10 @@
 #include "WavePOCSettings.h"
 #include "SettingsHost.h"
 #include "HostSlot.h"
+#ifndef LSPERF_PLUGIN   // (2026-11-18 memory hunt) the IRT performance guard: time and memory of every calc / draw (Perf\perf- / permem-<plugin>)
+  #define LSPERF_PLUGIN "WavePOC"
+#endif
+#include "PerfGuard.h"
 #include "SignalBoard.h"   // (1.4.0) posts kind W: the open WPOC (lsDealerProfile reads it)
 #include "ColumnBoard.h"   // (1.3.2) the Levels column (left keep-out) and the right-side columns (price area end) - read only
 #include <algorithm>
@@ -275,7 +279,7 @@ public:
 int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::done(void) { static_cast<WavePOC*>(this)->clear(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<WavePOC*>(this)->clear(); return RTX_OK; }
-int cppExtension::calc(int) { WavePOC* me = static_cast<WavePOC*>(this); try { me->pump(true); } catch (...) {} return RTX_OK; }   // (1.3.1) the only context that feeds bars / reads the RTL
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); WavePOC* me = static_cast<WavePOC*>(this); try { me->pump(true); } catch (...) {} return RTX_OK; }   // (1.3.1) the only context that feeds bars / reads the RTL
 int cppExtension::setup(void) {
     ss::registerAll(this, wpset::spec(), wpIds());   // the window: Reversal bars, Show zigzag (controls only)
     return RTX_OK;
@@ -727,7 +731,7 @@ void WavePOC::render(WState& S, bool back, bool front) {
     }
 }
 
-int WavePOC::draw(void) {
+int WavePOC::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     WState* S = slot_.get(this, false);
     if (!S || S->E.B.empty()) { try { pump(false); } catch (...) {} S = slot_.get(this, false); }   // (1.3.1) draw never feeds bars / reads the RTL
     if (!S) return RTX_OK;

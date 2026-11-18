@@ -91,6 +91,14 @@
 #include "ZzoComboView.h"
 #include "CobCheck.h"        // (3.0.0) the 3-hour-sweep CoBs (lsCobSignal's engine) + the checklist
 #include "HostSlot.h"
+#ifndef LSPERF_PLUGIN   // (2026-11-18 memory hunt) the IRT performance guard: time and memory of every calc / draw (Perf\perf- / permem-<plugin>)
+#if defined(ZC_MARKS)
+  #define LSPERF_PLUGIN "ZzoComboMarks"
+#else
+  #define LSPERF_PLUGIN "ZzoCombo"
+#endif
+#endif
+#include "PerfGuard.h"
 #include "SettingsGuard.h"   // SS_SAFE_DIALOG: the chart-less Add / settings copy never faults
 #include <algorithm>
 #include <chrono>
@@ -185,7 +193,7 @@ int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::setup(void) { setParameterVersion(1); return RTX_OK; }
 int cppExtension::done(void) { static_cast<ZzoCombo*>(this)->clear(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<ZzoCombo*>(this)->clear(); return RTX_OK; }
-int cppExtension::calc(int) { ZzoCombo* me = static_cast<ZzoCombo*>(this); try { me->pump(); } catch (...) {} return RTX_OK; }   // bars + VAP read here only
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); ZzoCombo* me = static_cast<ZzoCombo*>(this); try { me->pump(); } catch (...) {} return RTX_OK; }   // bars + VAP read here only
 
 // SEH-guarded VAP reads (as lsCandleAbsorb / lsWavePOC)
 int ZzoCombo::readStatistics(RTARRAYP* vap, int bar, BARSTATISTICS* stats) {
@@ -441,7 +449,7 @@ void ZzoCombo::mouseLeft(ZState& S) {
 
 static short zdC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
 
-int ZzoCombo::draw(void) {
+int ZzoCombo::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     ZState* S = slot_.get(this, false);
     if (!S || S->E.B.empty()) return RTX_OK;   // draw never reads bars / VAP
     try {

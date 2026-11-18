@@ -91,6 +91,14 @@
 #include "BreakoutLogic.h"
 #include "BreakoutHide.h"   // (1.11.1) lsCobSignal's Cob / Lvp natively: which Rly / Pb letters to hide (display only)
 #include "HostSlot.h"
+#ifndef LSPERF_PLUGIN   // (2026-11-18 memory hunt) the IRT performance guard: time and memory of every calc / draw (Perf\perf- / permem-<plugin>)
+#if defined(BKO_ONE_BAR)
+  #define LSPERF_PLUGIN "Breakout1"
+#else
+  #define LSPERF_PLUGIN "Breakout"
+#endif
+#endif
+#include "PerfGuard.h"
 #include "SettingsGuard.h"   // SS_SAFE_DIALOG: the chart-less Add / settings copy never faults
 #include "ColumnBoard.h"     // cb::leftKeep - nothing under the left Liquidity / Key Levels columns (as lsBigBidAsk 1.31.3)
 #include "BoxDock.h"         // bdk::peekHodLod - never over the HOD/LOD table
@@ -205,7 +213,7 @@ int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::setup(void) { setParameterVersion(1); return RTX_OK; }   // no settings (as lsCandleAbsorb / lsChartView)
 int cppExtension::done(void) { static_cast<Breakout*>(this)->clear(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<Breakout*>(this)->clear(); return RTX_OK; }
-int cppExtension::calc(int) { Breakout* me = static_cast<Breakout*>(this); try { me->pump(); } catch (...) {} return RTX_OK; }   // bars read here only
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); Breakout* me = static_cast<Breakout*>(this); try { me->pump(); } catch (...) {} return RTX_OK; }   // bars read here only
 
 // the bar stamp as the local (Central) civil day + second of the day (IRT stamps = the bar END)
 bool Breakout::parts(RTDATE d, long& days, int& endSec) {
@@ -403,7 +411,7 @@ void Breakout::pump() {
     feed(*S); const long long now = bkoMs(); readBook(*S, now); records(*S, now); postEntry(*S, now); status(*S, now);
 }
 
-int Breakout::draw(void) {
+int Breakout::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     BState* S = slot_.get(this, false);
     if (!S || S->E.bars.size() < 3) return RTX_OK;   // draw never reads bars for decisions (calc does)
     try {

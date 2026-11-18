@@ -26,6 +26,10 @@
 #include "HtfSr.h"
 #include "MarketKey.h"
 #include "HostSlot.h"
+#ifndef LSPERF_PLUGIN   // (2026-11-18 memory hunt) the IRT performance guard: time and memory of every calc / draw (Perf\perf- / permem-<plugin>)
+  #define LSPERF_PLUGIN "HtfSR"
+#endif
+#include "PerfGuard.h"
 #include "SettingsGuard.h"
 #include <algorithm>
 #include <chrono>
@@ -87,7 +91,7 @@ int cppExtension::init(void) { return RTX_OK; }
 int cppExtension::setup(void) { setParameterVersion(1); return RTX_OK; }
 int cppExtension::done(void) { static_cast<HtfSR*>(this)->clear(); return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<HtfSR*>(this)->clear(); return RTX_OK; }
-int cppExtension::calc(int) { HtfSR* me = static_cast<HtfSR*>(this); try { me->pump(); } catch (...) {} return RTX_OK; }
+int cppExtension::calc(int) { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); HtfSR* me = static_cast<HtfSR*>(this); try { me->pump(); } catch (...) {} return RTX_OK; }
 
 long long HtfSR::localSec(RTDATE d) {              // the chart's local wall clock in seconds (as lsCobSignal)
     struct tm t; std::memset(&t, 0, sizeof t);
@@ -159,7 +163,7 @@ void HtfSR::pump() {
 
 static short hsC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
 
-int HtfSR::draw(void) {
+int HtfSR::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
     HSState* S = slot_.get(this, false);
     if (!S || !S->keyed || S->hs.empty()) return RTX_OK;                  // draw never reads bars
     try {
