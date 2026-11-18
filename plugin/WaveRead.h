@@ -13,10 +13,11 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include "PlainRead.h"     // (2026-11-17 21:17) the plain three-line read - toPlain() at the end
 
 namespace wvr {
 
-static const char* const VERSION = "1.1.1";   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences)
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-17 21:17) plain() / toPlain(): the three-line read for the pane   // was "1.1.1";   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences)
 static const double STRONG_X = 2.0;      // a strong wave: 2x the median of the last 5 same-way waves or more
 static const double LIGHT_X = 0.33;      // a light pullback: its volume is a third of the wave's or less (his Lvp rule)
 static const double HEAVY_X = 0.8;       // a heavy pullback: 0.8x the wave's volume or more (the Cob check's counter-wave warning)
@@ -120,4 +121,37 @@ inline Out read(const std::vector<W>& ws, int pick, const std::string& cobLine) 
     return o;
 }
 
+
+// (1.2.0, 2026-11-17 Rassul 21:15-21:17 CT "more human readable and simplified ... i need something practical", "i like it. lets do this") the PLAIN read:
+// three lines - who is winning / why in plain words / what to watch - and no table (the numbers stay in the status file and the nightly).
+inline std::string plainReason(const std::string& r, const std::string& last3) {
+    static const char* const M[][2] = {
+        {"strong up wave", "A strong up wave on heavy volume."}, {"strong down wave", "A strong down wave on heavy volume."},
+        {"selling climax absorbed", "The selling climax at the low was absorbed - buyers took over."}, {"buying climax absorbed", "The buying climax at the high was absorbed - sellers took over."},
+        {"light pullback", "The pullback was light - little pushing back."}, {"pullback absorbed", "The pullback was absorbed."},
+        {"climax at the high", "Climax volume at the high - often the last push."}, {"climax at the low", "Climax volume at the low - often the last push."},
+        {"buyers absorbed", "The buying got absorbed at the high."}, {"sellers absorbed", "The selling got absorbed at the low."},
+        {"little progress", "Heavy volume but little progress."}, {"thrust shortening", "Each wave covers less ground - the push is tiring."},
+        {"heavy pullback", "The pullback was heavy - real pushing back."} };
+    for (const auto& m : M) if (r == m[0]) return m[1];
+    if (r == "up volume building" || r == "down volume building") {
+        const bool upB = r[0] == 'u'; std::string x; const size_t sp = last3.find(' '); if (sp != std::string::npos) x = last3.substr(sp + 1);
+        return std::string(upB ? "Up waves are getting more volume than down waves" : "Down waves are getting more volume than up waves") + (x.empty() ? "." : " (" + x + ").");
+    }
+    return plr::cap(r) + ".";
+}
+inline plr::Plain plain(const Out& o) {
+    plr::Plain p; const int v = o.verdict; const std::vector<std::string> R = plr::reasons(o.why);
+    std::string last3; for (const Row& r : o.rows) if (r.lab == "Last 3") last3 = r.c;
+    if (v == 1 || v == -1) { p.head = std::string(v > 0 ? "Buyers stronger" : "Sellers stronger") + (o.q ? " ?" : "");
+        p.why = R.empty() ? std::string() : plainReason(R[0], last3);
+        p.watch = v > 0 ? "Watch: a light pullback -> long idea." : "Watch: a weak bounce (light volume) -> short idea."; }
+    else if (v == 2) { p.head = o.q ? "Mixed ?" : "Mixed"; p.why = R.size() >= 2 ? plr::butJoin(plainReason(R[0], last3), plainReason(R[1], last3)) : R.empty() ? std::string() : plainReason(R[0], last3);
+        p.watch = "Watch: which way the next wave goes."; }
+    else { p.head = "Quiet"; p.why = "Nothing unusual in this wave."; p.watch = "Nothing to act on."; }
+    return p;
+}
+inline Out toPlain(Out o) { if (!o.ok) return o; const plr::Plain p = plain(o); std::string cob; for (const Row& r : o.rows) if (r.lab == "Cob" && !r.a.empty() && r.a != "-") cob = r.a;
+    o.head = p.head; o.why.clear(); o.ex.clear(); if (!p.why.empty()) o.ex.push_back(p.why); if (!cob.empty()) o.ex.push_back("Cob: " + cob); if (!p.watch.empty()) o.ex.push_back(p.watch);   // the Cob line stays (the Cob Reader)
+    o.rows.clear(); o.b1.clear(); o.b2.clear(); return o; }
 } // namespace wvr

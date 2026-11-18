@@ -15,10 +15,11 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "PlainRead.h"     // (2026-11-17 21:17) the plain three-line read - toPlain() at the end
 
 namespace vrd {
 
-static const char* const VERSION = "1.1.2";   // (1.1.2, his 11:18 CT screenshot) HG decimals, "big" candle at 1.5x, iceberg reason = hidden buyers / sellers (was "absorbed" next to "volume absorbed")
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-17 21:17) plain() / toPlain(): the three-line read for the pane   // was "1.1.2";   // (1.1.2, his 11:18 CT screenshot) HG decimals, "big" candle at 1.5x, iceberg reason = hidden buyers / sellers (was "absorbed" next to "volume absorbed")
 // was "1.1.1";   // (1.1.1, his 09:32 CT screenshot: "narrowing" was the verdict but the sentence under it was about the 9:21 candle) the sentences behind the verdict come first, the side notes after   // (1.1.0, 2026-11-17 Rassul 08:35-08:44 CT "a split with the left having a verdict and human readable explanation and the right side to have the data points": Out::ex = the plain-English sentences, most important first)
 static const int NORM_N = 20, NORM_MIN = 5, EXT_N = 10;
 static const double BIG_X = 2.0;        // volume / range "big": 2x the median of the 20 candles before
@@ -177,4 +178,39 @@ inline int parseBookFlow(const std::string& text, std::map<long long, Inside>& o
     return got;
 }
 
+
+// (1.2.0, 2026-11-17 Rassul 21:15-21:17 CT "more human readable and simplified ... i need something practical", "i like it. lets do this") the PLAIN read:
+// three lines - who is winning / why in plain words / what to watch - and no table (the numbers stay in the status file and the nightly).
+inline std::string plainReason(const std::string& r) {
+    static const char* const M[][2] = {
+        {"big buyers lifting", "A big buyer swept up through the offers."}, {"big sellers hitting", "A big seller swept down through the bids."},
+        {"buying climax at the high", "A big buyer at the high got absorbed - a buying climax."}, {"selling climax at the low", "A big seller at the low got absorbed - a selling climax."},
+        {"big buyers trapped", "A big buyer pushed up but the candle closed red - buyers trapped."}, {"big sellers trapped", "A big seller pushed down but the candle closed green - sellers trapped."},
+        {"hidden sellers", "Hidden sellers soaked up the buying."}, {"hidden buyers", "Hidden buyers soaked up the selling."},
+        {"volume absorbed", "Heavy volume barely moved price - someone absorbed it."}, {"climax at the high", "Climax volume at the high - often the last push."},
+        {"climax at the low", "Climax volume at the low - often the last push."}, {"volume run", "Several heavy candles in a row - a strong push."},
+        {"volume drying up", "Volume is drying up - the move is losing interest."}, {"easy movement", "Price moved easily on normal volume."},
+        {"new high rejected, then erased", "The new high failed and this candle erased the one before."}, {"new low rejected, then erased", "The new low failed and this candle erased the one before."},
+        {"prior selling erased", "Buyers erased the whole candle before."}, {"prior buying erased", "Sellers erased the whole candle before."},
+        {"new high rejected", "Sellers rejected the new high."}, {"new low rejected", "Buyers rejected the new low."},
+        {"wide candle", "A wide candle - a strong push."}, {"narrowing", "Candles getting smaller - coiling before a move."},
+        {"no progress", "Wide candles going nowhere - both sides fighting."} };
+    for (const auto& m : M) if (r == m[0]) return m[1];
+    return plr::cap(r) + ".";
+}
+inline plr::Plain plain(const Out& o, bool range) {
+    plr::Plain p; const int v = o.verdict; const std::vector<std::string> R = plr::reasons(o.why);
+    auto one = [&](const std::string& r) { if (r == "strong close") return std::string(v > 0 ? "A wide candle closed at its high - buyers in control." : "A wide candle closed at its low - sellers in control."); return plainReason(r); };
+    const bool q = o.head.find('?') != std::string::npos;
+    if (v == 1 || v == -1) { p.head = std::string(v > 0 ? (range ? "Buyers in control" : "Buyers pushing") : (range ? "Sellers in control" : "Sellers pushing")) + (q ? " ?" : "");
+        p.why = R.empty() ? std::string() : one(R[0]);
+        p.watch = v > 0 ? "Watch: holds above this candle's low -> buyers stay in control." : "Watch: stays under this candle's high -> sellers stay in control."; }
+    else if (v == 2) { p.head = q ? "Mixed ?" : "Mixed"; p.why = R.size() >= 2 ? plr::butJoin(one(R[0]), one(R[1])) : R.empty() ? std::string() : one(R[0]);
+        p.watch = "Watch: the next candle's close decides."; }
+    else { p.head = "Quiet";
+        if (!R.empty()) { p.why = one(R[0]); p.watch = R[0] == "narrowing" ? "Watch: the break out of the coil." : "Nothing to act on."; }
+        else { p.why = o.ex.empty() ? std::string("Nothing unusual.") : plr::noParens(o.ex[0]); p.watch = "Nothing to act on."; } }
+    return p;
+}
+inline Out toPlain(Out o, bool range) { if (!o.ok) return o; const plr::Plain p = plain(o, range); o.head = p.head; o.why.clear(); o.ex = plr::lines(p); o.rows.clear(); o.b1.clear(); o.b2.clear(); return o; }
 } // namespace vrd

@@ -3,7 +3,10 @@
 #include <iostream>
 static int P = 0, Fl = 0;
 #define CHECK(c, m) do { if (c) ++P; else { ++Fl; std::cout << "FAIL: " << m << " (line " << __LINE__ << ")\n"; } } while (0)
-static bool isHead(const std::string& t) { return t.rfind("Bullish", 0) == 0 || t.rfind("Bearish", 0) == 0 || t.rfind("Mixed", 0) == 0 || t.rfind("Quiet", 0) == 0; }
+// (1.6.0, 2026-11-17 21:17 the plain read) the verdict line may start with the candle time ("9:12 PM ", "Now ") and reads "Buyers ..." / "Sellers ..." / "Mixed" / "Quiet"
+static bool isTime(const std::string& t) { return t.size() >= 4 && (t.rfind("Now", 0) == 0 || (t.find("AM") != std::string::npos || t.find("PM") != std::string::npos)) && t.size() <= 10; }
+static bool isHead(std::string t) { const size_t m = t.find("M "); if (t.rfind("Now ", 0) == 0) t = t.substr(4); else if (m != std::string::npos && m <= 6 && (t[m - 1] == 'A' || t[m - 1] == 'P')) t = t.substr(m + 2);
+    return t.rfind("Buyers", 0) == 0 || t.rfind("Sellers", 0) == 0 || t.rfind("Bullish", 0) == 0 || t.rfind("Bearish", 0) == 0 || t.rfind("Mixed", 0) == 0 || t.rfind("Quiet", 0) == 0; }
 int main() {
     // the wrap helper
     auto tw = [](const std::string& s) { return (int)s.size() * 6; };
@@ -34,16 +37,17 @@ int main() {
             v.readX = 642; const std::vector<vrr::Prim> Pm = vrr::layout(E, v, &form, pick);
             bool head = false, inside = true, cand = false, oldBox = false; int sentences = 0, dataX = 1 << 30, leftR = 0;
             for (const vrr::Prim& p : Pm) { if (p.fill) continue; if (p.x1 > 1300 || p.x0 < 642) continue;   // the bars / marks are left of 642
-                if (isHead(p.text) && p.x0 == 642) head = true;
+                if (isTime(p.text)) continue;   // (1.5.3) the candle time is its own text, then the verdict
+                if (isHead(p.text) && p.y0 <= 2) head = true;
                 if (p.text == "Candle:") cand = true;
                 if (p.text == "BVMax" || p.text == "BRMax") oldBox = true;
-                if (p.x0 == 642 && !isHead(p.text)) { ++sentences; leftR = std::max(leftR, p.x1); }
+                if (p.x0 == 642 && p.y0 > 2) { ++sentences; leftR = std::max(leftR, p.x1); }
                 if (p.text == (mode ? "Range" : "Volume") && p.x0 > 642) dataX = std::min(dataX, p.x0);
                 if (p.x0 < v.l || p.x1 > v.r || p.y0 < v.t || p.y1 > v.b) inside = false; }
             CHECK(head && !cand && !oldBox && inside, nm << " pick " << pick << ": the verdict line is drawn, no old Candle: line or box, inside the pane");
             CHECK(sentences >= 1, nm << " pick " << pick << ": at least one sentence under the verdict (" << sentences << ")");
             CHECK(leftR <= 642 + spt::LEFT_MAX, nm << " pick " << pick << ": the sentences stay inside the left column (" << leftR << ")");
-            CHECK(dataX < (1 << 30) && dataX >= 642 + spt::LEFT_MAX + spt::GAP - 1, nm << " pick " << pick << ": the numbers sit right of the left column (" << dataX << ")");
+            CHECK(dataX == (1 << 30), nm << " pick " << pick << ": (1.6.0) no numbers table - the plain read only (" << dataX << ")");
         }
         { const vrd::Out o = mode ? vrd::Out() : vrd::Out(); (void)o; }
         // the 4,000-lot candle with a 100-lot buy sweep and iceberg offers: the sentences say so in words
@@ -53,7 +57,7 @@ int main() {
           if (!mode) CHECK(all.find("100-lot buy order swept 6 offer levels") != std::string::npos && all.find("Hidden sellers") != std::string::npos && all.find("Heavy volume") != std::string::npos, "Volume sentences: the sweep, the hidden sellers, the size (" << all << ")");
           else CHECK(all.find("new high") != std::string::npos && all.find("closed near its low") != std::string::npos, "Range sentences: the rejected high and the shape (" << all << ")");
           bool dot = true; for (auto& s : o.ex) if (s.empty() || (s.back() != '.' && s.back() != '?')) dot = false; CHECK(dot, nm << ": every sentence ends with a full stop"); }
-        v.readX = 1300; { const std::vector<vrr::Prim> Pm = vrr::layout(E, v, &form, -1); bool head = false, num = false; for (const vrr::Prim& p : Pm) { if (!p.fill && isHead(p.text) && p.x0 == 1300) head = true; if (!p.fill && p.x0 > 1300 && (p.text == "Volume" || p.text == "Range")) num = true; }
+        v.readX = 1300; { const std::vector<vrr::Prim> Pm = vrr::layout(E, v, &form, -1); bool head = false, num = false; for (const vrr::Prim& p : Pm) { if (!p.fill && isHead(p.text) && p.x0 >= 1300 && p.y0 <= 2) head = true; if (!p.fill && p.x0 > 1300 && (p.text == "Volume" || p.text == "Range")) num = true; }
           CHECK(head && !num, nm << ": 300 px of room - the read alone, no numbers"); }
         v.readX = 1560; { const std::vector<vrr::Prim> Pm = vrr::layout(E, v, &form, -1); bool head = false; for (const vrr::Prim& p : Pm) if (!p.fill && isHead(p.text)) head = true; CHECK(!head, nm << ": no room right of the last candle - no read"); }
         v.readX = 642; v.b = 20; { const std::vector<vrr::Prim> Pm = vrr::layout(E, v, &form, -1); int lines = 0; bool inside = true; for (const vrr::Prim& p : Pm) { if (p.fill || p.x0 < 642) continue; if (p.x0 == 642) ++lines; if (p.y1 > v.b) inside = false; } CHECK(lines <= 1 && inside, nm << ": a very low pane keeps only the verdict (" << lines << ")"); }

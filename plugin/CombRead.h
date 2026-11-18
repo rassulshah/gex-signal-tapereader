@@ -16,10 +16,11 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include "PlainRead.h"     // (2026-11-17 21:17) the plain three-line read - toPlain() at the end
 
 namespace cbr {
 
-static const char* const VERSION = "1.1.1";   // (1.1.1) the delta-change label at 1.33x   // was "1.1.0";   // (1.1.0, Rassul 2026-11-17 15:50-16:03 CT case review, "go") the pivot reads on top of the verdict: trapped, absorption, breakout met, rejection wick
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-17 21:17) plain() / toPlain(): the three-line read for the pane   // was "1.1.1";   // (1.1.1) the delta-change label at 1.33x   // was "1.1.0";   // (1.1.0, Rassul 2026-11-17 15:50-16:03 CT case review, "go") the pivot reads on top of the verdict: trapped, absorption, breakout met, rejection wick
 
 struct In {
     std::string mkt, when;               // the market key (ES, NQ, CL, GC, HG, NG, EU) and the candle's time ("2:27 PM")
@@ -194,4 +195,41 @@ inline int climaxAt(const std::vector<double>& vol, const std::vector<double>& o
     const bool conf = dir > 0 ? cl[(size_t)i + 1] > op[(size_t)i + 1] : cl[(size_t)i + 1] < op[(size_t)i + 1];
     return conf ? j : -1;
 }
+
+// (1.2.0, 2026-11-17 Rassul 21:15-21:17 CT "more human readable and simplified ... i need something practical", "i like it. lets do this") the PLAIN read:
+// three lines - who is winning / why in plain words / what to watch - and no table (the numbers stay in the status file and the nightly).
+inline plr::Plain plain(const In& x, const Out& o) {
+    plr::Plain p; const int v = o.verdict; const bool up = v > 0;
+    const long long b = x.add[0] - x.pull[0], a = x.add[1] - x.pull[1];
+    const std::string& h = o.head;
+    auto has = [&](const char* t) { return h.find(t) != std::string::npos; };
+    const char* longW = "Watch: holds above the low -> long idea."; const char* shortW = "Watch: stays under the high -> short idea.";
+    if (has("absorbed the")) { p.head = up ? "Buyers absorbed the selling ?" : "Sellers absorbed the buying ?";
+        p.why = up ? "Sellers hit the low, buyers soaked it up and price closed back above." : "Buyers hit the high, sellers soaked it up and price closed back below."; p.watch = up ? longW : shortW; return p; }
+    if (has("trapped")) { p.head = up ? "Sellers trapped ?" : "Buyers trapped ?";
+        p.why = up ? "Sellers who hit the low are stuck - price closed back above them." : "Buyers who hit the high are stuck - price closed back below them."; p.watch = up ? longW : shortW; return p; }
+    if (has("Rejection")) { p.head = up ? "Low rejected ?" : "High rejected ?";
+        p.why = up ? "Long lower wick - the low was rejected and price closed near the top." : "Long upper wick - the high was rejected and price closed near the bottom."; p.watch = up ? longW : shortW; return p; }
+    if (has("met with")) { p.head = up ? "Breakdown failed ?" : "Breakout failed ?";
+        p.why = up ? "The break below the swing low was met by buyers and price closed back above." : "The break above the swing high was met by sellers and price closed back below."; p.watch = up ? longW : shortW; return p; }
+    if (has("in control")) { p.head = up ? "Buyers in control ?" : "Sellers in control ?";
+        p.why = up ? "Bids stacking under price and buyers hitting the offers." : "Offers stacking over price and sellers hitting the bids.";
+        p.watch = up ? "Watch: a dip that holds -> long idea." : "Watch: a bounce that fails -> short idea."; return p; }
+    if (v == 2) { const bool bidsUp = b > a; p.head = "Mixed ?";
+        p.why = bidsUp ? "Bids building, but sellers hitting harder." : "Offers building, but buyers hitting harder.";
+        p.watch = bidsUp ? "Watch: bids hold = buyers win; bids pulled = sellers win." : "Watch: offers hold = sellers win; offers pulled = buyers win."; return p; }
+    if (v == 1 || v == -1) {
+        if (o.why.find("building") != std::string::npos) {   // the book alone
+            p.head = up ? "Buyers leaning in ?" : "Sellers leaning in ?";
+            p.why = up ? (a < 0 ? "Bids stacking under price, offers thinning." : "More bids than offers being added under price.")
+                       : (b < 0 ? "Offers stacking over price, bids thinning." : "More offers than bids being added over price.");
+            p.watch = up ? "Watch: bids hold on the next dip -> long idea." : "Watch: offers hold on the next bounce -> short idea."; return p; }
+        p.head = up ? "Buyers stepping in ?" : "Sellers stepping in ?";   // the delta alone
+        p.why = up ? "Buying jumped on this candle." : "Selling jumped on this candle.";
+        p.watch = up ? "Watch: a higher low -> long idea." : "Watch: a lower high -> short idea."; return p; }
+    p.head = "Quiet"; p.why = o.why.find("no order data") != std::string::npos ? "No order data for this candle." : "Nothing stands out on this candle."; p.watch = "Nothing to act on.";
+    return p;
+}
+// the Out the pane draws: head + the two plain lines, no table
+inline Out toPlain(const In& x, Out o) { const plr::Plain p = plain(x, o); o.head = p.head; o.why.clear(); o.ex = plr::lines(p); o.rows.clear(); return o; }
 } // namespace cbr

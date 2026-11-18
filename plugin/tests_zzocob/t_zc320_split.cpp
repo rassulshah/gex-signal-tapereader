@@ -1,9 +1,10 @@
 // lsZzoCombo 3.2.0: the split wave read on a synthetic zigzag - verdict + sentences left, numbers right, inside the pane, nothing overlapping
+// (3.3.0, 2026-11-17 21:17 Rassul "more human readable and simplified", "lets do this") the PLAIN read: verdict + plain lines, NO numbers table (kept in the background)
 #include "../ZzoComboView.h"
 #include <cstdio>
 static int ok = 0, bad = 0;
 #define CHECK(c, m) do { if (c) ++ok; else { ++bad; std::printf("FAIL line %d: %s\n", __LINE__, m); } } while (0)
-static bool isHead(const std::string& t) { return t.rfind("Bullish", 0) == 0 || t.rfind("Bearish", 0) == 0 || t.rfind("Mixed", 0) == 0 || t.rfind("Quiet", 0) == 0; }
+static bool isHead(const std::string& t) { return t.rfind("Buyers", 0) == 0 || t.rfind("Sellers", 0) == 0 || t.rfind("Mixed", 0) == 0 || t.rfind("Quiet", 0) == 0; }
 int main() {
     zzd::Engine Z; Z.revBars = zzd::COMBO_REV_BARS; Z.setMarket("ES", 180);
     long long px = 30000; int dir = 1;
@@ -24,7 +25,7 @@ int main() {
         for (size_t a = 0; a < T.size(); ++a) for (size_t b = a + 1; b < T.size(); ++b) if (T[a]->y0 == T[b]->y0 && T[a]->x0 < T[b]->x1 && T[b]->x0 < T[a]->x1) ++over;
         char m[160]; std::snprintf(m, sizeof m, "pick %d: verdict %d sentences %d leftR %d dataX %d inside %d overlaps %d", pick, (int)head, sent, leftR, dataX, (int)inside, over);
         CHECK(head && sent >= 1 && inside && over == 0, m);
-        CHECK(leftR <= x.readX + spt::LEFT_MAX && dataX >= leftR + 13 && dataX < (1 << 30), m);
+        CHECK(leftR <= x.readX + spt::LEFT_MAX && dataX == (1 << 30), m);   // (3.3.0) no numbers table
         if (pick == -1) for (const auto& b : S.box) std::printf("   %s: %s\n", b.first.c_str(), b.second.c_str());
     }
     { zzd::View v; v.l = 0; v.t = 0; v.r = 1500; v.b = 30; v.first = n - 150; v.last = n - 1; v.bw = 6; const int first = v.first;
@@ -37,6 +38,7 @@ int main() {
         zzd::XRead x; x.on = true; x.readX = 940; x.any = true; x.rows.push_back(std::make_pair(std::string("Cob"), std::string("Up 6:54 AM  S1 3/3  63%  Lvp 7:12 AM  hold 71%  warn 2 hourly not turned")));
         const zzd::ComboScene S = zzd::layoutCombo(Z, waves, 0, v, "", nullptr, &x);
         bool wave = false, inside = true; for (const zzd::Prim& p : S.p) { if (p.k != zzd::Prim::TEXT || p.x0 < 940) continue; if (p.text == "Wave") wave = true; if (p.x1 > v.r) inside = false; }
-        CHECK(wave && inside, "440 px: the numbers show and stay inside (the long Cob text is cut)"); }
+        bool cob = false; for (const zzd::Prim& p : S.p) if (p.k == zzd::Prim::TEXT && p.text.rfind("Cob:", 0) == 0) cob = true;
+        CHECK(!wave && inside && cob, "440 px: (3.3.0) no numbers, the Cob line stays, inside the pane"); }
     std::printf("t_zc320_split: %d passed, %d failed\n", ok, bad); return bad ? 1 : 0;
 }
