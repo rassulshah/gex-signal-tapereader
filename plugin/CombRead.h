@@ -19,7 +19,7 @@
 
 namespace cbr {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-17 15:50-16:03 CT case review, "go") the pivot reads on top of the verdict: trapped, absorption, breakout met, rejection wick
+static const char* const VERSION = "1.1.1";   // (1.1.1) the delta-change label at 1.33x   // was "1.1.0";   // (1.1.0, Rassul 2026-11-17 15:50-16:03 CT case review, "go") the pivot reads on top of the verdict: trapped, absorption, breakout met, rejection wick
 
 struct In {
     std::string mkt, when;               // the market key (ES, NQ, CL, GC, HG, NG, EU) and the candle's time ("2:27 PM")
@@ -39,6 +39,7 @@ struct Out { int verdict = 0; std::string head, why; std::vector<std::string> ex
 inline double stackMin(const std::string& m) { return (m == "ES" || m == "EU") ? 1.15 : (m == "CL" || m == "GC") ? 1.5 : 1.3; }
 inline bool changeVotes(const std::string& m) { return m != "EU"; }
 static const double CHG_MIN = 2.0;       // a delta change that counts: 2x normal or more
+static const double CHG_LABEL = 1.33;    // (1.1.1, Rassul 18:06 CT "lets go with 1.33x") the ratio over a delta-change bar: 1.33x normal or more (54% turned at pivots vs 53% at 2x, a third more labels); the verdict keeps 2x
 static const double DL_MIN = 1.5;        // a delta that counts on its own
 
 inline std::string commas(long long v) { const bool neg = v < 0; unsigned long long u = neg ? (unsigned long long)(-(v + 1)) + 1ULL : (unsigned long long)v; std::string s = std::to_string(u), o;
@@ -176,7 +177,7 @@ inline Out read(const In& x) {
 }
 
 // the bottom half's change label: the |change| ratio over the change bar when it is CHG_MIN x normal or more (0 = no label)
-inline double changeLabel(long long chg, double medAbsChg) { if (!(medAbsChg > 0)) return 0; const double v = (double)std::llabs(chg) / medAbsChg; return v >= CHG_MIN ? std::min(99.9, v) : 0; }
+inline double changeLabel(long long chg, double medAbsChg) { if (!(medAbsChg > 0)) return 0; const double v = (double)std::llabs(chg) / medAbsChg; return v >= CHG_LABEL ? std::min(99.9, v) : 0; }
 
 
 // THE CLIMAX MARK (Cx on the price chart). The 15:41 CT test of four rules on 909 pivots (turned / zone held 10 candles; base 47% / 42%):

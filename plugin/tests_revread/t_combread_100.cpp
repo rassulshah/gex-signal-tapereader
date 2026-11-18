@@ -22,7 +22,7 @@ int main() {
     { cbr::In x = es227(); x.chgX = 1.2; x.dlX = 0.3; x.add[0] = 20000; x.pull[0] = 17000; x.add[1] = 20000; x.pull[1] = 17000; const cbr::Out o = cbr::read(x); CHECK(o.verdict == 0 && o.head == "Quiet:", "nothing stands out -> Quiet (" << o.head << ")"); }
     { cbr::In x = es227(); x.add[1] = 100; x.pull[1] = 500; const cbr::Out o = cbr::read(x); CHECK(o.ex[0].find("offers thinned") != std::string::npos, "offers net negative: 'offers thinned'"); }
     CHECK(cbr::commas(-1234567) == "-1,234,567" && cbr::signedC(64) == "+64" && cbr::commas(0) == "0", "number format");
-    CHECK(cbr::changeLabel(-586, 282.5) > 2.0 && cbr::changeLabel(300, 282.5) == 0 && cbr::changeLabel(5, 0) == 0, "change label only at 2x+");
+    CHECK(cbr::changeLabel(-586, 282.5) > 2.0 && cbr::changeLabel(380, 282.5) > 1.33 && cbr::changeLabel(370, 282.5) == 0 && cbr::changeLabel(5, 0) == 0, "change label at 1.33x+ (380 / 282.5 = 1.35 labelled, 370 = 1.31 not)");
     CHECK(cbr::medAbs({ -3, 1, 2, -10 }) == 2.5 && cbr::medAbs({}) == 0, "median of |v|");
     // the Cx rule: the 2:00 ES candle (end 2:03) the biggest volume in 20+, the next candle green -> Cx on it; red next -> none; not big enough -> none
     { std::vector<double> v(40, 100), o(40, 10), c(40, 10); v[35] = 500; o[36] = 10; c[36] = 12;
