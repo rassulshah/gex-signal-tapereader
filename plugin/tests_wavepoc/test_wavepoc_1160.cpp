@@ -26,6 +26,6 @@ int main(int argc, char** argv) {
     CHECK(below <= wpc::SPIKE_SIDE && above <= wpc::SPIKE_SIDE && below >= 3, "at most 4 each side (" << below << " below, " << above << " above)");
     CHECK(nearOk, "nearest the POC first");
     { wpc::Wave e; CHECK(wpc::hvnRows(e, 0, true, 0).empty(), "an empty wave: no H"); }
-    CHECK(std::string(wpc::VERSION) == "1.16.0", "version");
+    CHECK(std::string(wpc::VERSION) == "1.16.1", "version");
     std::cout << "test_wavepoc_1160: " << passed << " passed, " << failed << " failed\n"; return failed ? 1 : 0;
 }

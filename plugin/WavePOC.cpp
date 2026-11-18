@@ -137,7 +137,8 @@
 #define WP_SEP "/"
 #endif
 
-static const char* WP_VERSION = "1.16.0";   // (1.16.0) the spike rule for H   // was "1.15.2"   // (1.15.2) lighter profile rows   // was "1.15.1"   // (1.15.1) CoB legs: the CoB mark after the end pivot is found   // was "1.15.0"   // (1.15.0, Rassul 2026-11-16 21:32 CT) spine + volume profile + POC + 2 HVNs back   // was "1.14.0";   // (1.14.0, Rassul 2026-11-11 19:09 CT) no spine; POC / HVN dashes on their candles; lots at the end of the POC dash
+static const bool WP_LIQ = false;   // (1.16.1) the liquidity nodes (WavePOCLiq.h) are removed: the MBO feed is never opened, nothing sampled
+static const char* WP_VERSION = "1.16.1";   // (1.16.1, Rassul 2026-11-17 20:30 CT "remove the liquidity nodes") no order-by-order feed, no liquidity nodes   // was "1.16.0";   // (1.16.0) the spike rule for H   // was "1.15.2"   // (1.15.2) lighter profile rows   // was "1.15.1"   // (1.15.1) CoB legs: the CoB mark after the end pivot is found   // was "1.15.0"   // (1.15.0, Rassul 2026-11-16 21:32 CT) spine + volume profile + POC + 2 HVNs back   // was "1.14.0";   // (1.14.0, Rassul 2026-11-11 19:09 CT) no spine; POC / HVN dashes on their candles; lots at the end of the POC dash
 // was "1.13.0";   // (1.13.0) POC + 1 HVN (break level = the pivot the BO broke), no PB profile
 // was "1.12.0";   // (1.12.0, 2026-11-10) the wave POC row only (no HVN / grey rows)
 // was "1.11.1";   // (1.11.1, 2026-11-09 Rassul 18:59 CT "make the width of the wave pb poc the same as the wave poc") PB POC row width = the wave POC row width   // was "1.11.0":   // (1.11.0 / 1.15.0, 2026-11-09 Rassul 18:46 CT "limit only to poc which should only be shown if the poc is at least a .38 retracement") the wave PB POC = its POC row only (white + lots), shown only when the POC is at / beyond the 38.2% retracement   // was "1.10.4":   // (1.10.4, 2026-11-09) rebuild only: BreakoutLogic.h 1.14.0 compiled in - nothing changes here (no drawing change)   // was "1.10.3":   // (1.10.3, 2026-11-09) rebuild only: BreakoutLogic.h 1.13.0 (lsBreakout's Pdoc) compiled in - nothing changes here   // was "1.10.2":   // (1.10.2, 2026-11-09) rebuild only: BreakoutLogic.h 1.12.0 (lsBreakout's Pboc) is compiled in for its BO / Rly / Rev decisions - unchanged here (no VAP handed to it, no Pboc)
@@ -416,7 +417,7 @@ void WavePOC::loadFiles(WState& S) {
 // (1.1.0) a wave's liquidity = the book samples of its bars (engine bar j = chart bar j + off; stamps as the engine's bars)
 void WavePOC::bindLiq(WState& S) {
     WState* P = &S;
-    S.E.liqFn = [P](const wpc::Wave& w, std::vector<double>& rows, std::vector<double>& bids) {
+    if (WP_LIQ) S.E.liqFn = [P](const wpc::Wave& w, std::vector<double>& rows, std::vector<double>& bids) {
         std::vector<long long> ts; for (int j = w.i0; j <= w.i1 && j < (int)P->E.B.size(); ++j) ts.push_back(P->E.B[(size_t)j].t);
         return P->samp.average(ts, w.e0, w.rowTicks, w.rows.size(), rows, bids, P->spb > 0 ? (long long)P->spb : 0);   // (1.3.2) every sample inside each bar
     };
@@ -624,10 +625,10 @@ void WavePOC::status(WState& S, long long now) {
                            + "PULLBACK,(1.10.0) profiles drawn now " + std::to_string(S.last.pullDrawn) + ",rows " + std::to_string(S.last.pullRows) + ",tracked " + std::to_string(S.E.pb.size()) + [&]() { int lv = 0, fz = 0, iv = 0; for (const auto& kv : S.E.pb) { lv += kv.second.state == wpc::PB_LIVE; fz += kv.second.state == wpc::PB_FROZEN; iv += kv.second.state == wpc::PB_INVALID; } return ",developing " + std::to_string(lv) + ",frozen " + std::to_string(fz) + ",invalid " + std::to_string(iv) + "\n"; }()
                            + "DRAW_CALLS,(1.9.7) pre " + std::to_string(S.drawPre) + ",post " + std::to_string(S.drawPost) + ",renders " + std::to_string(S.renderDone) + ",render errors " + std::to_string(S.renderErr) + ",column errors " + std::to_string(S.colErr) + ",last render " + (S.renderExit.empty() ? std::string("none yet") : S.renderExit) + ",last error " + (S.lastErr.empty() ? std::string("none") : S.lastErr) + "\n"
                            + (S.vapFault ? "VAP_FAULT,remove and re-add the indicator\n" : "")
-                           + "MBO," + (S.blocked ? "not opened (crash guard file present)" : S.dboDead ? "faulted" : S.dbo ? "open" : "opening") + ",events " + std::to_string(S.dboEvents)
+                           + (!WP_LIQ ? std::string("LIQUIDITY,removed (1.16.1)\n") : std::string()) + (!WP_LIQ ? std::string() : std::string("MBO,") + (S.blocked ? "not opened (crash guard file present)" : S.dboDead ? "faulted" : S.dbo ? "open" : "opening") + ",events " + std::to_string(S.dboEvents)
                            + ",orders " + std::to_string(S.book.book.size()) + ",samples " + std::to_string(S.samp.samples) + ",bars sampled " + std::to_string(S.samp.bars.size())
                            + ",market-maker orders left out " + std::to_string(S.samp.mmSeen) + ",backlog slices " + std::to_string(S.backlog) + ",garbage " + std::to_string(S.garbage) + "\n"
-                           + liqWaves(S);
+                           + liqWaves(S));
     if (body == S.statusBody && S.statusMs >= 0 && now - S.statusMs < 30000) return;
     S.statusMs = now; S.statusBody = body;
     wpMkdir(wpFlex()); wpPublish(S.statusPath, body);
@@ -646,7 +647,7 @@ void WavePOC::pump(bool mayCalc) {
     WState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
     const long long now = wpMs();
-    try { drainBook(*S, now); } catch (const std::exception& ex) { S->lastErr = std::string("book: ") + ex.what(); } catch (...) { S->lastErr = "book: unknown exception"; }   // (1.9.7) a book fault never stops the bars
+    if (WP_LIQ) try { drainBook(*S, now); } catch (const std::exception& ex) { S->lastErr = std::string("book: ") + ex.what(); } catch (...) { S->lastErr = "book: unknown exception"; }   // (1.9.7) a book fault never stops the bars
     feed(*S, mayCalc);   // (1.3.1) no-op from draw()
     if (mayCalc) { wpc::VapFn vap = [this, S](int j, std::vector<wpc::VRow>& out) { return vapRows(*S, j + S->off, out); }; retryVap(*S, vap); }   // (1.9.7) every calc, whatever feed() returned early on
     flush(*S, now);
@@ -745,6 +746,6 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(PRE_DRAWING | POST_DRAWING | OVERLAY | NO_UI | INSTRUMENT_SCALE | VAP_REQUIRED);
     p->setDescription("LRA Wave POC v1.10.4 - (1.10.1) lots labelled on the wave POC and pullback POC rows. (1.10.0) after a BO / Rly wave, the PULLBACK profile once it has retraced 38.2% (POC white, 2 HVNs orange, ends at a Rev / a new BO or Rly / a trade beyond the extreme / 16:00; dimmed on a close beyond the origin). each CoB, Rly or BO / BD wave's VOLUME profile (lsCobSignal / lsBreakout rules, computed natively; the live wave once its BO / CoB fired) right of a green / red spine at its start: the POC in cyan with a P (and its line to the right) wherever it is, and up to 2 HVNs in the wave colour with an H = the 2 biggest nodes in their own distributions at or below the break level (an up wave: the high of its BO candle - lsBreakout's rule - or, with no BO, of the bar that broke the prior pivot high; down waves mirror it) - pullback entries. No settings.");
-    p->setVersion("1.16.0");   // = WP_VERSION (gex-build reads this literal)
+    p->setVersion("1.16.1");   // = WP_VERSION (gex-build reads this literal)
     return p;
 }
