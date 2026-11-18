@@ -80,7 +80,7 @@ call :one SessionVWAP  lsSessionVWAP  DealerLogic.h TouchParams.h HostSlot.h Ses
 REM (2026-10-28) lsWavePOC 1.0.0 "Wave POC" (Rassul approved 10:59 CT "just build now"): each big wave's own volume profile + its nodes as lines; WavePOCLogic.h / WavePOCSettings.h (native parameters, SessionVWAP 1.8.1 pattern)
 REM (2026-10-28 11:4x CT) lsWavePOC 1.1.0: + WavePOCLiq.h (liquidity nodes from the order-by-order book, Rassul approved 11:27 CT)
 REM (2026-11-05 08:46 CT, Rassul "now") lsWavePOC 1.9.0: volume profile right + POC + up to 2 HVNs at / beyond the break level = lsBreakout's BO candle (bko::Engine runs inside lsWavePOC) - its headers added to the hash list
-call :one WavePOC lsWavePOC WavePOCLogic.h WavePOCLiq.h WavePOCSettings.h SettingsSpec.h SettingsHost.h HostSlot.h BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h ZzoDeltaLogic.h ZzoParams.h
+call :one WavePOC lsWavePOC WavePOCLogic.h WavePOCLiq.h WavePOCSettings.h SettingsSpec.h SettingsHost.h HostSlot.h BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h ZzoDeltaLogic.h ZzoParams.h PerfGuard.h
 REM (2026-11-01) lsCandleAbsorb 1.0.0 "Candle Absorb" (Rassul 2026-10-31 "implement waht we have disuccessed"): A / Ae / D / S at ZigZag pivots + the delta POC dash on every candle; no settings
 rem (2026-11-17 21:15 retired, Rassul "aren't you going to remove what i dont use ?" - off his charts) call :one CandleAbsorb lsCandleAbsorb CandleAbsorbLogic.h CandleAbsorbSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h HostSlot.h
 REM (2026-11-03) lsBreakout 1.0.0 "BO" (Rassul approved the mockup, "build"): letters only - BO / BD (lsBigBidAsk's breakout via bba::boFromCandles) + Rly (RallyLogic.h); no settings (SS_SAFE_DIALOG). lsBigBidAsk 1.32.0 stops drawing these letters
@@ -88,12 +88,12 @@ REM (2026-11-03) lsBreakout 1.1.0: + Pb (a pullback pivot testing the BO / BD ca
 REM (2026-11-09) lsBreakout 1.12.0: + WavePOCLogic.h / WavePOCLiq.h (Pboc: the wave volume POC natively, lsWavePOC's rule)
 REM (2026-11-09) lsBreakout 1.11.1: + BreakoutHide.h (lsCobSignal's Cob / Lvp natively - Rly / Pb letters hidden under them) and its headers
 REM (2026-11-09 16:34 CT, Rassul "Ok build") lsBreakout 1.14.0 fact kind E (EntryFacts.h) / lsDealerProfile + lsLimitProfile 2.56.0 ENT / EXIT tags (EntryBadge.h) added to their hash lists
-call :one Breakout lsBreakout BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ColumnBoard.h BoxPlace.h BannerBoard.h BoxDock.h SignalBoard.h ZzoDeltaLogic.h ZzoParams.h BreakoutHide.h CobSignalLogic.h KeyLevelsLogic.h CobImpulseLogic.h MarketKey.h WavePOCLogic.h WavePOCLiq.h EntryFacts.h StepTrendLogic.h
+call :one Breakout lsBreakout BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ColumnBoard.h BoxPlace.h BannerBoard.h BoxDock.h SignalBoard.h ZzoDeltaLogic.h ZzoParams.h BreakoutHide.h CobSignalLogic.h KeyLevelsLogic.h CobImpulseLogic.h MarketKey.h WavePOCLogic.h WavePOCLiq.h EntryFacts.h StepTrendLogic.h PerfGuard.h
 REM (2026-11-04 21:31 CT, Rassul "there needs to be a 1bar option for breakout indicator .. for higher timeframes", "go") lsBreakout1 "BO 1-bar" = Breakout.cpp with BKO_ONE_BAR (Breakout1.cpp wrapper)
-call :one Breakout1 lsBreakout1 Breakout.cpp BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ColumnBoard.h BoxPlace.h BannerBoard.h BoxDock.h SignalBoard.h ZzoDeltaLogic.h ZzoParams.h BreakoutHide.h CobSignalLogic.h KeyLevelsLogic.h CobImpulseLogic.h MarketKey.h WavePOCLogic.h WavePOCLiq.h EntryFacts.h StepTrendLogic.h
+call :one Breakout1 lsBreakout1 Breakout.cpp BreakoutLogic.h BigBidAskLogic.h RallyLogic.h VwapTrendLogic.h SessionVWAPLogic.h SwingRef.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ColumnBoard.h BoxPlace.h BannerBoard.h BoxDock.h SignalBoard.h ZzoDeltaLogic.h ZzoParams.h BreakoutHide.h CobSignalLogic.h KeyLevelsLogic.h CobImpulseLogic.h MarketKey.h WavePOCLogic.h WavePOCLiq.h EntryFacts.h StepTrendLogic.h PerfGuard.h
 REM (2026-11-01 22:24 CT, Rassul "build") lsCobSignal 1.0.0 "CoB Signal": his CoB natively (+ PHH / PHL), Cob / Cob+R / Cob+V; no settings
 REM (2026-11-04) lsCobSignal 1.3.0: + LVP on the 3-bar ZigZag of ZzoDeltaLogic.h (zzd::Engine::step) - headers added
-call :one CobSignal lsCobSignal CobSignalLogic.h AccumLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h CobImpulseLogic.h HostSlot.h SettingsGuard.h ZzoDeltaLogic.h ZzoParams.h
+call :one CobSignal lsCobSignal CobSignalLogic.h AccumLogic.h KeyLevelsLogic.h SessionVWAPLogic.h OnTouchLogic.h CobImpulseLogic.h HostSlot.h SettingsGuard.h ZzoDeltaLogic.h ZzoParams.h PerfGuard.h
 REM (2026-11-02 19:45 CT, Rassul "ok lets do option 2") lsZzoDelta 1.0.0 "ZZO Delta": 1-bar H/L ZigZag wave delta / median of the last 5 same-way waves (RTH restarts); own pane; no settings
 call :one ZzoDelta lsZzoDelta ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h
 REM (2026-11-02 21:33 CT, Rassul "add a zig zag also" / "yes, fix it") lsZzoZigZag 1.0.0 "ZZO ZigZag": the 1-bar H/L ZigZag ZZO Delta uses, on the price chart; no settings
@@ -104,9 +104,9 @@ REM (2026-11-03 08:49 CT, Rassul "build" - ZZO Combo Mockup v19) lsZzoCombo 2.0.
 REM (2026-11-12 09:02 CT, Rassul "go") lsZzoCombo 2.3.0 the CoB finder: ZzoCobFinder.h (Cob / Lvp tags) + MarketKey.h hashed
 REM (2026-11-15) lsZzoCombo / lsZzoComboMarks 3.0.0: the 3-hour-sweep CoBs of lsCobSignal + the checklist (CobCheck.h -> CobSignalLogic.h KeyLevelsLogic.h CobImpulseLogic.h hashed)
 REM (2026-11-17 21:17 CT, Rassul "more human readable and simplified", "lets do this") the plain pane reads: PlainRead.h 1.0.0 (+ CombRead.h / VRRead.h / WaveRead.h / SplitText.h) hashed by lsRevRead 0.16.0, lsZzoCombo 3.3.0, lsVolRead / lsRangeRead 1.6.0
-call :one ZzoCombo lsZzoCombo ZzoComboView.h ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h ZzoCobFinder.h MarketKey.h CobCheck.h CobSignalLogic.h KeyLevelsLogic.h CobImpulseLogic.h WaveRead.h SplitText.h PlainRead.h
+call :one ZzoCombo lsZzoCombo ZzoComboView.h ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h ZzoCobFinder.h MarketKey.h CobCheck.h CobSignalLogic.h KeyLevelsLogic.h CobImpulseLogic.h WaveRead.h SplitText.h PlainRead.h PerfGuard.h
 REM (2026-11-12) lsZzoComboMarks 2.7.0 (ZzoComboMarks.cpp = ZzoCombo.cpp + ZC_MARKS): SR / CB badges on the price pane
-call :one ZzoComboMarks lsZzoComboMarks ZzoCombo.cpp ZzoComboView.h ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h ZzoCobFinder.h MarketKey.h CobCheck.h CobSignalLogic.h KeyLevelsLogic.h CobImpulseLogic.h
+call :one ZzoComboMarks lsZzoComboMarks ZzoCombo.cpp ZzoComboView.h ZzoDeltaLogic.h ZzoParams.h SessionVWAPLogic.h OnTouchLogic.h OnTouchParams.h HostSlot.h SettingsGuard.h ZzoCobFinder.h MarketKey.h CobCheck.h CobSignalLogic.h KeyLevelsLogic.h CobImpulseLogic.h PerfGuard.h
 REM (2026-11-01 22:24 CT) lsBigPrint 1.0.0 "Big Print": one pane - biggest ask / bid print in N bars, V in N, BGB / BRB; replaces his BV_Since / BRB / BGB panes; no settings
 rem (2026-11-17 21:15 retired, Rassul "aren't you going to remove what i dont use ?" - off his charts) call :one BigPrint lsBigPrint BigPrintLogic.h HostSlot.h SettingsGuard.h
 call :one IRTReader    lsIRTReader    IRTReaderLogic.h DealerLogic.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h ArrivalStamp.h PerfGuard.h
@@ -180,7 +180,7 @@ REM   ONLY by the nightly lra.sr_score (judge passed). No settings (not on the s
 call :one SR lsSR SRLogic.h SRParams.h SRGradeParams.h OrderFlowFeed.h MarketKey.h NearLevels.h HostSlot.h PerfGuard.h SettingsGuard.h SettingsSpec.h SettingsHost.h BoxPlace.h HoverBoard.h ImpliedFill.h LargeLotPool.h MoveLogic.h NodeLadder.h OptionsFlow.h ZoneRead.h ZoneRule.h
 REM (2026-11-11) lsStepTrend 1.0.0 (Rassul 2026-11-10 22:28 CT "a stepwise trend indicator ... hourly breakout", 23:53 "build"): on the price chart, hourly breakouts as
 REM   connected steps over the wave tops (StepTrendLogic.h; per-market rule values StepTrendParams.h, by hand; scored nightly by lra.step_trend_score). No settings.
-call :one StepTrend lsStepTrend StepTrendLogic.h StepTrendParams.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+call :one StepTrend lsStepTrend StepTrendLogic.h StepTrendParams.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
 REM (2026-11-11 22:18 CT Rassul "lets go with reversal read": renamed from lsRevStory / "Reversal Story" the same night) lsRevRead 0.1.1 (Rassul 21:13-21:33 CT "i want you to create a similar pane that has each candles poc and also makes a dash ont he candle ... the read as well as
 REM   mark the candles with letters like c for climax", "jumpstart this indicator for all markets and refine", "go"): its own pane on the order feed (off::MboPane) - the candle POC
 REM   bars, the story letters C / A / E / I and the read line; lsRevReadMarks (RevReadMarks.cpp = RevRead.cpp + RVS_MARKS) draws the white POC dash on each candle.
@@ -190,14 +190,14 @@ call :one RevRead lsRevRead RevReadLogic.h AccumLogic.h SRBack.h SRLogic.h SRPar
 call :one RevReadMarks lsRevReadMarks RevRead.cpp RevReadLogic.h StepTrendLogic.h SignalBoard.h BannerBoard.h NearLevels.h MarketKey.h HostSlot.h PerfGuard.h RevReadSettings.h SettingsSpec.h SettingsHost.h SettingsGuard.h CombRead.h PlainRead.h WyRead.h
 REM (2026-11-15) lsVolRead / lsRangeRead 1.0.0 (Rassul 2026-11-14 21:58 CT "a little reader for the volume and range ... BVG, BVR, BV ... BVMax", 2026-11-15 17:06 "go build"): two panes -
 REM   the bars' volume / range, the Max count over closed bars that are the biggest in 20+ bars, and a read box (Max, BV, BVG, BVR). VolRangeLogic.h; RangeRead.cpp = VolRead.cpp + VR_RANGE. No settings.
-call :one VolRead lsVolRead VolRangeLogic.h HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h VRRead.h SplitText.h PlainRead.h
-call :one RangeRead lsRangeRead VolRead.cpp VolRangeLogic.h HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h VRRead.h SplitText.h PlainRead.h
+call :one VolRead lsVolRead VolRangeLogic.h HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h VRRead.h SplitText.h PlainRead.h PerfGuard.h
+call :one RangeRead lsRangeRead VolRead.cpp VolRangeLogic.h HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h VRRead.h SplitText.h PlainRead.h PerfGuard.h
 REM (2026-11-15) lsHtfSR 1.0.0 (Rassul 20:33 CT "did you build any indicator for s1 s2 r1 and r2 for the hourly", 20:55 "just build them"): the standing 3-hour R1 / R2 / S1 / S2
 REM   as stepped lines on the price pane (HtfSr.h, shared with lsLimitProfile 2.66.0). No settings.
-call :one HtfSR lsHtfSR HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+call :one HtfSR lsHtfSR HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
 REM (2026-11-17) lsEventCal 1.0.0 (Rassul 18:09 CT "the calendar at the top center of important events that are coming up for the market that im trading", 18:22 "only market moving events medium and high impact", 18:25 "build"):
 REM   the next 3 medium / high impact events of the chart's market, top centre beside the HOD / LOD table; input lsFlexLevels\LRA-Calendar-ALL.csv (nightly lra.event_calendar).
-call :one EventCal lsEventCal EventCalLogic.h BoxDock.h BannerBoard.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+call :one EventCal lsEventCal EventCalLogic.h BoxDock.h BannerBoard.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h PerfGuard.h
 REM (2026-10-20 Rassul 12:22 CT "first build the lines, do it now") lsDefenseLines 1.0.0 - the Defense pane's pivot turns + refill lines on the price chart
 REM (2026-10-22) lsDefenseLines 1.10.0 trails (MoveLogic 1.2.0) + the trail hover: HoverBoard.h hashed
 rem (2026-11-01 21:29 CT, Rassul "get rid of the defense lines" - retired) call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h HoverBoard.h MarkParams.h PerfGuard.h ColumnBoard.h
