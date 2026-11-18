@@ -193,6 +193,9 @@ call :one RangeRead lsRangeRead VolRead.cpp VolRangeLogic.h HtfSr.h MarketKey.h 
 REM (2026-11-15) lsHtfSR 1.0.0 (Rassul 20:33 CT "did you build any indicator for s1 s2 r1 and r2 for the hourly", 20:55 "just build them"): the standing 3-hour R1 / R2 / S1 / S2
 REM   as stepped lines on the price pane (HtfSr.h, shared with lsLimitProfile 2.66.0). No settings.
 call :one HtfSR lsHtfSR HtfSr.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
+REM (2026-11-17) lsEventCal 1.0.0 (Rassul 18:09 CT "the calendar at the top center of important events that are coming up for the market that im trading", 18:22 "only market moving events medium and high impact", 18:25 "build"):
+REM   the next 3 medium / high impact events of the chart's market, top centre beside the HOD / LOD table; input lsFlexLevels\LRA-Calendar-ALL.csv (nightly lra.event_calendar).
+call :one EventCal lsEventCal EventCalLogic.h BoxDock.h BannerBoard.h MarketKey.h HostSlot.h SettingsGuard.h SettingsHost.h SettingsSpec.h
 REM (2026-10-20 Rassul 12:22 CT "first build the lines, do it now") lsDefenseLines 1.0.0 - the Defense pane's pivot turns + refill lines on the price chart
 REM (2026-10-22) lsDefenseLines 1.10.0 trails (MoveLogic 1.2.0) + the trail hover: HoverBoard.h hashed
 rem (2026-11-01 21:29 CT, Rassul "get rid of the defense lines" - retired) call :one DefenseLines lsDefenseLines DefenseTurn.h DefenseLinesSettings.h SettingsSpec.h SettingsHost.h HostSlot.h SettingsGuard.h MoveLogic.h BoxDock.h BannerBoard.h KeepOutDraw.h HoverBoard.h MarkParams.h PerfGuard.h ColumnBoard.h
@@ -399,7 +402,7 @@ REM ---- :status  one file a human (or Claude, over the bridge) can read at a gl
 > "%STATUS%" echo GEX BUILD STATUS  %DATE% %TIME%
 if defined HOLD ( >> "%STATUS%" echo INSTALL WINDOW: HELD !HOLDWHY! - no plugin installs on weekdays 6:10 AM-3:00 PM CT; new builds install the first time Investor/RT is closed after 3:00 PM ^(weekends any time^) ) else ( >> "%STATUS%" echo INSTALL WINDOW: open !HOLDWHY! - builds install when Investor/RT is closed ^(any day, any time^) )
 if defined SETFAIL ( >> "%STATUS%" echo SETTINGS CONTRACT: FAILED - nothing is built until it passes, see plugin\out\SETTINGS-CONTRACT.txt ) else if exist "%OUT%\settings-contract.ok" ( >> "%STATUS%" echo SETTINGS CONTRACT: passed )
-for %%N in (GammaProfile LimitProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb Breakout Breakout1 CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow BookFlowBg DefenseLines Context BigBidAsk ZoneDefense ZoneDefenseMarks SR StepTrend RevRead RevReadMarks ZzoCombo ZzoComboMarks VolRead RangeRead HtfSR) do (
+for %%N in (GammaProfile LimitProfile DeltaProfile DeltaProfileHourly HodLod SessionVWAP WavePOC CandleAbsorb Breakout Breakout1 CobSignal BigPrint IRTReader ChartView LiquidityProfile FirstExtreme BidAskStats BookFlow BookFlowBg DefenseLines Context BigBidAsk ZoneDefense ZoneDefenseMarks SR StepTrend RevRead RevReadMarks ZzoCombo ZzoComboMarks VolRead RangeRead HtfSR EventCal) do (
   set B=& set I=& set P=
   if exist "%OUT%\%%N.built" set /p B=<"%OUT%\%%N.built"
   if exist "%OUT%\%%N.installed" set /p I=<"%OUT%\%%N.installed"
