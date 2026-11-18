@@ -1,5 +1,5 @@
 /********************************************************************************
- *  SDMO.cpp  --  Investor/RT RTX extension  lsSDMO  "SDMO"  0.1.0  (2026-11-18)
+ *  SDMO.cpp  --  Investor/RT RTX extension  lsSDMO  "SDMO"  0.2.0  (2026-11-18; 0.2.0 = the Reversal Read I letters on a dark gray strip at the top)
  *
  *  Rassul 2026-11-18 11:20 CT "create an indicator called sdmomo, it is made of two indicators that are on my chart sd and sdma ... create its
  *  read too"; 11:29 "use a green line and red for the avg"; 12:40 "just call it SDMO"; 12:51 "letsgo with yours.. build" (8 / 14).
@@ -37,7 +37,9 @@
 #include <ctime>
 #include <fstream>
 #include <string>
+#include <map>
 #include <vector>
+#include <sys/stat.h>
 
 #if defined(_WIN32)
 #define SDM_SEP "\\"
@@ -45,7 +47,7 @@
 #define SDM_SEP "/"
 #endif
 
-static const char* SDM_VERSION = "0.1.0";   // = sdmo::VERSION = the setVersion literal
+static const char* SDM_VERSION = "0.2.0";   // (0.2.0) the Reversal Read I letters on a strip at the top   // = sdmo::VERSION = the setVersion literal
 
 static long long sdmMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string sdmFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + SDM_SEP "InvestorRT" SDM_SEP "rtx" SDM_SEP "lsFlexLevels" : std::string(); }
@@ -65,6 +67,7 @@ struct SDMState {
     std::string mkt, sym; int spb = 0; bool keyed = false;
     sdmo::Engine E; std::vector<RTDATE> raw; int off = 0;
     std::string statusPath, statusBody; long long statusCk = -1; int drawn = 0;
+    std::string wyPath, wySig; long long wyCk = -1; std::map<long long, int> iMarks; int wyRead = -1;   // (0.2.0) RevRead's letters file
 };
 
 class SDMO : public cppExtension {
@@ -106,6 +109,9 @@ bool SDMO::identify(SDMState& S) {
         S.mkt = mkt; S.sym = sym; S.spb = spb; S.keyed = true; S.E.reset(); S.raw.clear(); S.off = 0;
         const std::string d = sdmFlex();
         S.statusPath = d.empty() ? std::string() : d + SDM_SEP "SDMO.status-" + mkey::norm(mkt) + "-" + std::to_string(spb) + ".txt";
+        std::string up = mkt; for (char& c : up) if (c >= 'a' && c <= 'z') c = (char)(c - 32);
+        std::string mk = mkey::norm(up); if (mk.size() != 2 && sym.size() > 3) mk = mkey::norm(sym.substr(0, sym.size() - 2));
+        S.wyPath = d.empty() ? std::string() : d + SDM_SEP "RevRead" SDM_SEP "wy-" + mk + "-" + std::to_string(spb) + ".txt"; S.wySig.clear(); S.iMarks.clear(); S.wyCk = -1;
     }
     return true;
 }
@@ -135,16 +141,28 @@ void SDMO::status(SDMState& S, long long now) {
     if (S.statusPath.empty()) return;
     if (S.statusCk >= 0 && now - S.statusCk < 1000) return;              // built at most once a second
     S.statusCk = now;
-    const std::string body = sdmo::statusText(S.E, mkey::norm(S.mkt), S.sym, S.spb) + "HOST," + SDM_VERSION + "\nDRAWN," + std::to_string(S.drawn) + "\n";
+    const std::string body = sdmo::statusText(S.E, mkey::norm(S.mkt), S.sym, S.spb) + "HOST," + SDM_VERSION + "\nDRAWN," + std::to_string(S.drawn) + "\nLETTERS," + S.wyPath + ",I " + std::to_string(S.wyRead) + "\n";
     if (body == S.statusBody) return;                                     // unchanged: no write
     S.statusBody = body;
     sdmPublish(S.statusPath, body);
 }
 
+// (0.2.0) the I letters: looked at every 3 s from calc, re-read (bounded, 1 MB) only when the file's size / time changed
+static void sdmLetters(SDMState& S, long long now) {
+    if (S.wyPath.empty() || (S.wyCk >= 0 && now - S.wyCk < 3000)) return;
+    S.wyCk = now;
+    struct stat st; if (stat(S.wyPath.c_str(), &st) != 0) { if (!S.wySig.empty()) { S.wySig.clear(); S.iMarks.clear(); } S.wyRead = -1; return; }
+    const std::string sig = std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime); if (sig == S.wySig) return;
+    if (st.st_size > 1024 * 1024) { S.wyRead = -2; return; }
+    std::ifstream f(S.wyPath.c_str(), std::ios::binary); if (!f) return; std::string txt((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    std::map<long long, int> m; const int n = sdmo::parseLetters(txt, m); if (n < 0) return;   // a torn / foreign file: keep the last good letters
+    S.iMarks.swap(m); S.wySig = sig; S.wyRead = n;
+}
+
 void SDMO::pump() {
     SDMState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
-    feed(*S); status(*S, sdmMs());
+    feed(*S); try { sdmLetters(*S, sdmMs()); } catch (...) {} status(*S, sdmMs());
 }
 
 static short sdmC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
@@ -161,13 +179,18 @@ int SDMO::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
         v.X = [this, off](int j) { PNT p; p.set(j + off, 0.0f, kBarCenter); return (double)p.h; };
         FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD;
         v.textW = [this, &fb](const std::string& s, bool) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
+        v.iMarks = &S->iMarks;
         const int lastClosed = (int)n - 2;
         v.readX = (ve >= (int)n - 1) ? (int)v.X(lastClosed + 1 - off) + std::max(1, (int)getPixelsPerBar()) + 18 : -1;
         const std::vector<sdmo::Prim> P = sdmo::layout(S->E, v);
         S->drawn = (int)P.size();
         const int L = pane.left, T = pane.top, R = pane.right, Bt = pane.bottom;
         for (const sdmo::Prim& p : P) {
-            if (p.kind == 0) {
+            if (p.kind == 2) {
+                const int x0 = std::max(L, std::min(p.x0, p.x1)), x1 = std::min(R, std::max(p.x0, p.x1)), y0 = std::max(T, std::min(p.y0, p.y1)), y1 = std::min(Bt, std::max(p.y0, p.y1));
+                if (x1 < x0 || y1 < y0) continue;
+                setPen((COLOR)p.col, 1, P_SOLID); RCT r; r.set(sdmC(x0), sdmC(y0), sdmC(x1 + 1), sdmC(y1 + 1)); r.draw(0, (COLOR)p.col, (COLOR)p.col, DRAW_OPAQUE, PAT_SOLID);
+            } else if (p.kind == 0) {
                 const int x0 = std::max(L, std::min(R, p.x0)), x1 = std::max(L, std::min(R, p.x1)), y0 = std::max(T, std::min(Bt, p.y0)), y1 = std::max(T, std::min(Bt, p.y1));
                 setPen((COLOR)p.col, (short)p.width, P_SOLID);
                 PNT q0; q0.set(0, 0.0f); q0.h = sdmC(x0); q0.v = sdmC(y0); q0.setDrawPosition();
@@ -186,7 +209,7 @@ extern "C" cppExtension* CreateExtension(void) {
     SDMO* p = new SDMO();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers, no settings
-    p->setDescription("LRA SDMO v0.1.0 - SD momentum in its own pane: SD (green) = 8-bar average of the 20-candle sum of up-close ranges minus down-close ranges; its average (red) = 14-bar average of SD; a zero line; and a 3-line read right of the last candle: took over (SD crossed its average and pulled away), fading at the low / high (a new 20-candle extreme with SD better than at the earlier extreme), even (SD hugging its average), building or fading (the gap widening or closing, as a ratio of its normal size). Closed candles only, never repainted. No settings.");
-    p->setVersion("0.1.0");   // = SDM_VERSION (gex-build reads this literal)
+    p->setDescription("LRA SDMO v0.2.0 - SD momentum in its own pane: SD (green) = 8-bar average of the 20-candle sum of up-close ranges minus down-close ranges; its average (red) = 14-bar average of SD; a zero line; and a 3-line read right of the last candle: took over (SD crossed its average and pulled away), fading at the low / high (a new 20-candle extreme with SD better than at the earlier extreme), even (SD hugging its average), building or fading (the gap widening or closing, as a ratio of its normal size). Closed candles only, never repainted. No settings.");
+    p->setVersion("0.2.0");   // = SDM_VERSION (gex-build reads this literal)
     return p;
 }

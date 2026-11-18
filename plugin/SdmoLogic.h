@@ -20,17 +20,20 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
 namespace sdmo {
 
-static const char* const VERSION = "0.1.0";
+static const char* const VERSION = "0.2.0";   // (0.2.0, Rassul 13:08 CT "yes, just like the mockup": the Reversal Read I letters on a dark gray strip at the top of the pane, read from RevRead\wy-<MKT>-<secs>.txt - the same I as the Reversal Read)
 static const int SUM_LEN = 20, SD_LEN = 8, AVG_LEN = 14;
 static const int NORM_LOOK = 100, NORM_MIN = 30, EXT_LOOK = 20, DIV_FROM = 6, DIV_TO = 40, DIV_WIN = 10, CROSS_RECENT = 3;
 static const double EVEN_X = 0.5;
-static const unsigned C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_WHITE = 0x00E5E7EB, C_GRAY = 0x009CA3AF, C_ZERO = 0x006B7280;
+static const unsigned C_GREEN = 0x0022C55E, C_RED = 0x00EF4444, C_WHITE = 0x00E5E7EB, C_GRAY = 0x009CA3AF, C_ZERO = 0x006B7280, C_STRIP = 0x00333333;
+static const int STRIP_H = 11;
 static const size_t MAX_BARS = 20000;
 
 inline bool fin(double v) { return v == v && v < 1e300 && v > -1e300; }
@@ -130,17 +133,24 @@ inline Read readAt(const Engine& E, int i) {
 }
 
 // ---- layout (pixels; SDMO.cpp maps bars to x) ----
-struct View { int l = 0, t = 0, r = 0, b = 0, first = 0, last = -1, textH = 12, readX = -1; std::function<double(int)> X; std::function<int(const std::string&, bool)> textW; };
-struct Prim { int kind = 0; int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; int width = 1; bool bold = false; std::string text; };   // kind 0 line, 1 text
+struct View { int l = 0, t = 0, r = 0, b = 0, first = 0, last = -1, textH = 12, readX = -1; std::function<double(int)> X; std::function<int(const std::string&, bool)> textW;
+              const std::map<long long, int>* iMarks = nullptr; };   // (0.2.0) candle stamp -> +1 / -1 for the Reversal Read I letters (nullptr = no strip)
+struct Prim { int kind = 0; int x0 = 0, y0 = 0, x1 = 0, y1 = 0; unsigned col = 0; int width = 1; bool bold = false; std::string text; };   // kind 0 line, 1 text, 2 filled box
 
 inline std::vector<Prim> layout(const Engine& E, const View& v) {
     std::vector<Prim> P; const int n = (int)E.B.size(); if (n < 2 || !v.X) return P;
     const int a = std::max(0, v.first), z = std::min(n - 1, v.last); if (z < a) return P;
-    const int top = v.t + v.textH + 4, bot = v.b - 4; if (bot - top < 20) return P;
+    const bool strip = v.iMarks != nullptr;
+    const int top = v.t + (strip ? STRIP_H + 2 : 0) + v.textH + 4, bot = v.b - 4; if (bot - top < 20) return P;
+    if (strip) {   // (0.2.0) the dark gray strip with the I letters, from the left edge to just past the last candle on screen
+        Prim S; S.kind = 2; S.col = C_STRIP; S.x0 = v.l; S.y0 = v.t; S.y1 = v.t + STRIP_H; S.x1 = std::min(v.r, (int)std::lround(v.X(z)) + 8); P.push_back(S);
+        for (int i = a; i <= z; ++i) { const auto it = v.iMarks->find(E.B[(size_t)i].t); if (it == v.iMarks->end() || it->second == 0) continue;
+            Prim T; T.kind = 1; T.bold = true; T.col = it->second > 0 ? C_GREEN : C_RED; T.text = "I"; const int w = v.textW ? v.textW(T.text, true) : 4; const int cx = (int)std::lround(v.X(i));
+            T.x0 = cx - w / 2; T.x1 = T.x0 + w; T.y0 = v.t; T.y1 = v.t + STRIP_H; P.push_back(T); } }
     double lo = 0, hi = 0; bool any = false;
     for (int i = a; i <= z; ++i) for (double y : { E.sd[(size_t)i], E.avg[(size_t)i] }) if (fin(y)) { lo = std::min(lo, y); hi = std::max(hi, y); any = true; }
     // title (version next to the name)
-    { Prim T; T.kind = 1; T.bold = true; T.col = C_WHITE; T.text = std::string("SDMO v") + VERSION; T.x0 = v.l + 4; T.y0 = v.t + 1; T.x1 = T.x0 + (v.textW ? v.textW(T.text, true) : 60); T.y1 = T.y0 + v.textH; P.push_back(T); }
+    { Prim T; T.kind = 1; T.bold = true; T.col = C_WHITE; T.text = std::string("SDMO v") + VERSION; T.x0 = v.l + 4; T.y0 = v.t + 1 + (strip ? STRIP_H + 2 : 0); T.x1 = T.x0 + (v.textW ? v.textW(T.text, true) : 60); T.y1 = T.y0 + v.textH; P.push_back(T); }
     if (!any) return P;
     const double pad = (hi - lo) * 0.06 + 1e-9; lo -= pad; hi += pad;
     auto Y = [&](double y) { return (int)std::lround(bot - (y - lo) / (hi - lo) * (bot - top)); };
@@ -155,15 +165,30 @@ inline std::vector<Prim> layout(const Engine& E, const View& v) {
     const Read r = readAt(E, n - 1);
     if (r.ok) {
         const std::string head = r.when + " ", body[2] = { r.l1, r.l2 };
-        const int lh = v.textH + 2; int x = v.readX >= 0 ? v.readX : v.l + 4; int y = v.readX >= 0 ? v.t + 1 : v.t + 1 + lh;
+        const int lh = v.textH + 2, y0 = v.t + 1 + (strip ? STRIP_H + 2 : 0); int x = v.readX >= 0 ? v.readX : v.l + 4; int y = v.readX >= 0 ? y0 : y0 + lh;
         int wmax = (v.textW ? v.textW(head, true) + v.textW(r.head, true) : 300); for (const std::string& s : body) wmax = std::max(wmax, v.textW ? v.textW(s, true) : 300);
-        if (x + wmax > v.r - 2) { x = v.l + 4; y = v.t + 1 + lh; }
+        if (x + wmax > v.r - 2) { x = v.l + 4; y = y0 + lh; }
         const unsigned hc = r.col > 0 ? C_GREEN : r.col < 0 ? C_RED : C_WHITE;
         Prim T1; T1.kind = 1; T1.bold = true; T1.col = C_WHITE; T1.text = head; T1.x0 = x; T1.y0 = y; T1.x1 = x + (v.textW ? v.textW(head, true) : 60); T1.y1 = y + v.textH; P.push_back(T1);
         Prim T2 = T1; T2.col = hc; T2.text = r.head; T2.x0 = T1.x1; T2.x1 = T2.x0 + (v.textW ? v.textW(r.head, true) : 200); P.push_back(T2);
         for (int k = 0; k < 2; ++k) { Prim T = T1; T.col = C_WHITE; T.text = body[k]; T.y0 = y + lh * (k + 1); T.y1 = T.y0 + v.textH; T.x1 = x + (v.textW ? v.textW(body[k], true) : 300); if (T.y1 <= v.b) P.push_back(T); }
     }
     return P;
+}
+
+// (0.2.0) lsRevRead's letters file: "WY|1|<MKT>|<secs>|<ver>" then "stamp|letter|dir" lines; only the I's are kept
+inline int parseLetters(const std::string& txt, std::map<long long, int>& out) {
+    out.clear(); size_t a = 0; int n = 0; bool head = false;
+    while (a < txt.size()) { size_t e = txt.find('\n', a); if (e == std::string::npos) e = txt.size(); std::string l = txt.substr(a, e - a); a = e + 1;
+        if (!l.empty() && l.back() == '\r') l.pop_back();
+        if (l.empty()) continue;
+        if (!head) { if (l.compare(0, 5, "WY|1|") != 0) return -1; head = true; continue; }
+        const size_t p1 = l.find('|'), p2 = p1 == std::string::npos ? p1 : l.find('|', p1 + 1); if (p2 == std::string::npos) continue;
+        char* end = nullptr; const long long t = std::strtoll(l.c_str(), &end, 10); if (!end || *end != '|' || t <= 0) continue;
+        if (l.substr(p1 + 1, p2 - p1 - 1) != "I") continue;
+        const int d = std::atoi(l.c_str() + p2 + 1); if (d != 1 && d != -1) continue;
+        out[t] = d; ++n; }
+    return head ? n : -1;
 }
 
 inline std::string statusText(const Engine& E, const std::string& mkt, const std::string& sym, int spb) {

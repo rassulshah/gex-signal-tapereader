@@ -1,4 +1,4 @@
-// t_sdmo_host.cpp -- lsSDMO 0.1.0 on the mock host: two charts on one DLL, lines green / red inside the pane, the read right of the last
+// t_sdmo_host.cpp -- lsSDMO 0.2.0 on the mock host: two charts on one DLL, lines green / red inside the pane, the read right of the last
 // candle (or top-left when scrolled back), the status file, no repaint (a replay bar by bar = one straight pass), a symbol change resets.
 // Build (tests_sdmo/): g++ -std=c++17 -g -fsanitize=address,undefined -Wall -Wextra -Wno-misleading-indentation -DOFF_TEST_CLOCK -I.. -I../tests_aggbook/mock t_sdmo_host.cpp -o th && ./th
 #include "SDMO.cpp"
@@ -20,7 +20,14 @@ int main() {
     CHECK(all.size() > 150, "fixture loaded");
     mock::Host h; mock::current = &h; h.tick = 0.25f; h.seconds = 180; h.symbol = "ESZ6"; h.root = "ES"; h.paneTop = 0; h.paneBottom = 200; h.paneLeft = 0; h.paneRight = 2600; h.ppb = 10;
     h.bars = all; h.visFrom = 0; h.visTo = (int)all.size() - 1;
+    // (0.2.0) the Reversal Read letters file: two I's (one up, one down) and an E that must not show
+    mkdir((flex + "/RevRead").c_str(), 0700);
+    { std::ofstream f((flex + "/RevRead/wy-ES-180.txt").c_str()); f << "WY|1|ES|180|0.17.5\n" << all[150].time << "|I|1\n" << all[160].time << "|I|-1\n" << all[170].time << "|E|1\n"; }
     SDMO* p = make(); p->calc(0); h.draws.clear(); p->draw();
+    { int iG = 0, iR = 0, eLetters = 0, band = 0; for (const auto& d : h.draws) { if (d.type == "text" && d.text == "I") { if (d.color == sdmo::C_GREEN) ++iG; else if (d.color == sdmo::C_RED) ++iR; } if (d.type == "text" && d.text == "E") ++eLetters; if (d.type == "box" && d.color == sdmo::C_STRIP) ++band; }
+      CHECK(iG == 1 && iR == 1 && eLetters == 0, "the strip shows the I's only, in their colours (" + std::to_string(iG) + "/" + std::to_string(iR) + ")");
+      CHECK(band == 1, "one dark gray strip"); }
+    { int above = 0; for (const auto& d : h.draws) if (d.type == "line" && (d.pen == sdmo::C_GREEN || d.pen == sdmo::C_RED) && (d.y < sdmo::STRIP_H || d.y0 < sdmo::STRIP_H)) ++above; CHECK(above == 0, "no line inside the strip"); }
     int green = 0, red = 0, zero = 0, outside = 0; std::string head;
     for (const auto& d : h.draws) {
         if (d.type == "line") { if (d.pen == sdmo::C_GREEN) ++green; else if (d.pen == sdmo::C_RED) ++red; else if (d.pen == sdmo::C_ZERO) ++zero;
@@ -30,10 +37,10 @@ int main() {
     CHECK(green > 100 && red > 100 && zero == 1, "SD green, average red, one zero line (" + std::to_string(green) + "/" + std::to_string(red) + ")");
     CHECK(outside == 0, "every line inside the pane");
     CHECK(head == "Buyers' momentum building", "the 11:30 read (got '" + head + "')");
-    bool title = false; for (const auto& d : h.draws) if (d.type == "text" && d.text == "SDMO v0.1.0") title = true;
+    bool title = false; for (const auto& d : h.draws) if (d.type == "text" && d.text == "SDMO v0.2.0") title = true;
     CHECK(title, "title with the version");
     const std::string st = readAll(flex + "/SDMO.status-ES-180.txt");
-    CHECK(st.find("VERSION,0.1.0") != std::string::npos && st.find("SD = MA 8; average = MA 14") != std::string::npos && st.find("READ,") != std::string::npos, "status file");
+    CHECK(st.find("VERSION,0.2.0") != std::string::npos && st.find("SD = MA 8; average = MA 14") != std::string::npos && st.find("READ,") != std::string::npos, "status file");
     // read placed right of the last candle
     int readX = -1; for (const auto& d : h.draws) if (d.type == "text" && d.text.find("momentum") != std::string::npos) readX = d.x;
     CHECK(readX > 10 * (int)(all.size() - 1), "read right of the last candle (x " + std::to_string(readX) + ")");
