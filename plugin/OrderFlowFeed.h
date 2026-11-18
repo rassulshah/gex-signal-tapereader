@@ -153,7 +153,7 @@
 
 namespace off {
 
-static const char* const VERSION = "1.16.1";   // 1.16.1 (2026-11-07): a feed-open crash guard older than 2 h is stale and cleared (HG blocked 11-05..11-07);   // 1.16.0 (2026-10-28): the node ladder (NodeLadder.h, Engine.ladder);   // 1.15.0 (2026-10-22 evening fix build): pairPx floor = 50% of the pane (pairFloorPx / pairTopRow) - the squashed pair bars;   // 1.14.0 (2026-10-22 evening, Rassul 17:16 CT approved IMPLIED FILLS option B; ImpliedFill.h 1.0.0): a FILL whose raw side is neither bid nor offer (the recorder's "?", the implied / spread-driven fills: CL 10%, NG 5.4%, HG 3.3%, 6E 2.6%, GC 0.7%, ES / NQ 0 of volume) is flagged on the Ev (Ev::implied, set ONCE in evOf for every consumer) and, while LRA-Implied-<MKT>.csv says exclude (or the file is missing), it still takes its lots from the resting order and sets the last trade, but is NOT a hit, an aggressor order, a sweep, a big lot, a pace second, a touch or a refill trigger; Acc / Rec carry fillAll (every filled lot incl. implied) and fillImpl (implied lots) - not in the record line - for the hover row "Implied: NN% of this candle's volume"; Engine.ip = the params, impliedFills / impliedLots counted for the status IMPLIED line;   // 1.13.0 (2026-10-21 20:11-20:23 CT Rassul, attacker letters K / S on lsBidAskStats 1.26.0): each aggressor order keeps its first fill second and its lowest / highest fill price (Aggr t0 / lo / hi); a decided Rec carries the candle's BIGGEST aggressor order and its biggest SWEEP (>= sweepLevels prices, by lots) per side (Rec::big / Rec::sweep: lots, second, prices - not in the record line, the host writes its own K / S / AS lines); Acc keeps the lots hit per second per side (hitSec, the attack pace into / after the extreme); SessionFile reads / keeps more than one extra-line tag (moreTags) up to extraCap lines;   // 1.12.0 (2026-10-21, Top Attacker #2 G / Top Defender #2 W, lsBookFlow 1.19.0): Acc keeps the pulls / adds / moves up to the candle's low / high fill (pullLo / pullHi / addLo / addHi / movLo / movHi: the part after the extreme = total - these); Engine.sink (BookSink) gets every classified near-price add / pull / fill (side, price, second, candle) - lsBookFlow only; an InfoRow cell side 2 = grey;   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
+static const char* const VERSION = "1.17.0";   // 1.17.0 (2026-11-18, Rassul 09:53-10:14 CT "consider the memory leaks because irt has been freezing alot", "start now"): the queued order events are routed in slices (at most FLUSH_MAX events / FLUSH_BUDGET_MS per calc / draw, the rest on the next call, in order; the direct read waits until the queue is empty) - a pane coming back from a hidden layout tab no longer routes up to 400,000 events in one go (a multi-second freeze per pane)   // 1.16.1 (2026-11-07): a feed-open crash guard older than 2 h is stale and cleared (HG blocked 11-05..11-07);   // 1.16.0 (2026-10-28): the node ladder (NodeLadder.h, Engine.ladder);   // 1.15.0 (2026-10-22 evening fix build): pairPx floor = 50% of the pane (pairFloorPx / pairTopRow) - the squashed pair bars;   // 1.14.0 (2026-10-22 evening, Rassul 17:16 CT approved IMPLIED FILLS option B; ImpliedFill.h 1.0.0): a FILL whose raw side is neither bid nor offer (the recorder's "?", the implied / spread-driven fills: CL 10%, NG 5.4%, HG 3.3%, 6E 2.6%, GC 0.7%, ES / NQ 0 of volume) is flagged on the Ev (Ev::implied, set ONCE in evOf for every consumer) and, while LRA-Implied-<MKT>.csv says exclude (or the file is missing), it still takes its lots from the resting order and sets the last trade, but is NOT a hit, an aggressor order, a sweep, a big lot, a pace second, a touch or a refill trigger; Acc / Rec carry fillAll (every filled lot incl. implied) and fillImpl (implied lots) - not in the record line - for the hover row "Implied: NN% of this candle's volume"; Engine.ip = the params, impliedFills / impliedLots counted for the status IMPLIED line;   // 1.13.0 (2026-10-21 20:11-20:23 CT Rassul, attacker letters K / S on lsBidAskStats 1.26.0): each aggressor order keeps its first fill second and its lowest / highest fill price (Aggr t0 / lo / hi); a decided Rec carries the candle's BIGGEST aggressor order and its biggest SWEEP (>= sweepLevels prices, by lots) per side (Rec::big / Rec::sweep: lots, second, prices - not in the record line, the host writes its own K / S / AS lines); Acc keeps the lots hit per second per side (hitSec, the attack pace into / after the extreme); SessionFile reads / keeps more than one extra-line tag (moreTags) up to extraCap lines;   // 1.12.0 (2026-10-21, Top Attacker #2 G / Top Defender #2 W, lsBookFlow 1.19.0): Acc keeps the pulls / adds / moves up to the candle's low / high fill (pullLo / pullHi / addLo / addHi / movLo / movHi: the part after the extreme = total - these); Engine.sink (BookSink) gets every classified near-price add / pull / fill (side, price, second, candle) - lsBookFlow only; an InfoRow cell side 2 = grey;   // 1.11.0 (2026-10-21, Top Defender #3): Engine.trackMoves (off by default; lsBookFlow on) - order MOVES (same-id re-price / unique cancel + re-post) confirmed after 0.5 s rest into Acc.moves (MoveLogic.h);   // 1.10.1: box rows cut (Aggression: Lots, Pace; Book Flow: Net, Pace);   // 1.10.0 (2026-10-16 22:00, Rassul): Book Flow net-bar labels = ratio (yellow) over pace (grey), no lots; Aggression + Book Flow show the left-justified numbers box in their own pane (boxOnly);   // 1.9.0 (2026-10-16 18:04-18:16, Rassul): Aggression + Book Flow draw NO text lines (textOff); ratios against the plain N-bar average (the 30-min slot yardstick is off); spike labels = ratio above the bar, lots + pace inside it, no "p"; Aggression labels only bars of 2.0x or more (onlyHigh), the rest drawn dim;   // 1.8.1: no hovers on the panes (Rassul 18:57);   // 1.8.0 (2026-10-15 audit #1): ratios / spikes against the same 30-min slot (log mean / 2 SD) over this + up to 4 earlier sessions;   // 1.7.0 (2026-10-15): the bar hover - the hovered candle's answer beside it in every pane;   // 1.6.1 (2026-10-15): the pane name + question in front of the read line;   // 1.6.0 (2026-10-14 night): one bar per candle (opt-in drawBars mode);   // 1.5.0 (2026-10-14 night): the READ box -> one zone read line (ZoneRead.h), I -> I?;   // 1.4.0 (2026-10-14 evening): 250 ms order-feed clock + queue, MBO_COVERAGE; 1.3.1 (2026-10-14 CR5300): spike labels never lose rows to another spike (time-order layout, no shrink pass), scroll-stable; 1.3.0 (2026-10-14 CR4800): read box + numbers hover, offsets, white letters, one spike label per candle, rare-L;   // 1.2.1 (2026-10-13 9:30 PM): rebuilt % <= 100% (per-price credit); 1.2.0 (2026-10-13): lots, pace, rebuilt, reset, options line; 1.1.0: stop-run mark slot + extra record lines; 1.0.1: letter I
 typedef long long Tick;
 enum Side { BID = 0, ASK = 1 };                    // BID = resting buy orders, ASK = resting sell orders
 enum Act { NEW = 0, MOD = 1, DEL = 2, FILL = 3 };
@@ -1965,7 +1965,9 @@ inline int safeNext(cppExtension::DEPTH_BY_ORDER* d) {
 static const long long TIMER_MS = 250;              // (1.4.0) the order-feed clock: IRT keeps only the last few thousand events
 static const int TIMER_MAX = 50000;                 //   per subscriber, so it is read 4x a second whatever the chart is doing,
 static const long long TIMER_BUDGET_MS = 20;        //   up to 50,000 events or ~20 ms per tick
-static const size_t QUEUE_MAX = 400000;             //   events read by the clock wait here (<= ~20 MB) for the chart's next calc
+static const size_t QUEUE_MAX = 400000;             //   events read by the clock wait here (<= ~25 MB) for the chart's next calc
+static const size_t FLUSH_MAX = 40000;              // (1.17.0) at most this many queued events routed per calc / draw ...
+static const long long FLUSH_BUDGET_MS = 25;        //   ... or about 25 ms of routing; the rest waits for the next call (in order)
 
 // ---- the order feed of one chart (lsMboCheck 1.1.0 pattern) --------------------------------------------------------
 struct Conn {
@@ -1977,7 +1979,7 @@ struct Conn {
     // (1.4.0) the clock path: events read by the order-feed timer wait in q (with their arrival ms) until the chart's calc / draw
     // routes them, in order, before reading more. `raw` sees every event exactly once, as it is read (the recorder).
     struct QEv { DEPTH_ORDER o; long long ms; };
-    std::vector<QEv> q; size_t qPeak = 0;
+    std::vector<QEv> q; size_t qPeak = 0, qHead = 0;   // (1.17.0) qHead = the first event not yet routed
     long long qDropped = 0, timerTicks = 0, timerEvents = 0, timerFaults = 0, pumpEvents = 0;
     bool timerOff = false;                           // a faulting timer read: the clock stops reading (never re-enter it)
     // (1.17.0) the watchdog: the chart's last volume key and when it changed, the dropout being handled, reconnects made
@@ -1999,7 +2001,7 @@ struct Conn {
     Conn(const Conn&) = delete; Conn& operator=(const Conn&) = delete;
     ~Conn() { delete dbo; }
     void reset() { delete dbo; dbo = nullptr; attempt = 0; flag = -1; blocked = dead = false; openMs = lastResubMs = lastEventMs = -1; lastCapped = false; via.clear();
-                   q.clear(); timerOff = false; cov.reset(); }
+                   q.clear(); qHead = 0; timerOff = false; cov.reset(); }
     bool named() const { return dbo && via.compare(0, 13, "chart symbol ") == 0; }   // opened with the chart symbol spelled out:
                                                                                          // every SDK call names it, so readable off the chart
     void took(const DEPTH_ORDER& o) {                               // every event read, on either path
@@ -2017,20 +2019,36 @@ struct Conn {
             if (r < 0) { timerFaults++; faults++; timerOff = true; break; }
             if (r == 0) break;
             ++n; took(dbo->dbo);
-            if (q.size() < QUEUE_MAX) { QEv e; e.o = dbo->dbo; e.ms = now; q.push_back(e); } else qDropped++;
+            if (queued() < QUEUE_MAX) { QEv e; e.o = dbo->dbo; e.ms = now; q.push_back(e); } else qDropped++;
         }
-        if (q.size() > qPeak) qPeak = q.size();
+        if (queued() > qPeak) qPeak = queued();
         if (n > 0) { lastEventMs = now; slices++; events += n; timerEvents += n; roll.add(now, n); }
         return n;
     }
     // the queued events, in order, to the engine (chart context); `route(const DEPTH_ORDER&, long long arrivalMs)`
-    template <class Route> size_t flushQueue(Route route) {
-        const size_t n = q.size();
-        for (size_t i = 0; i < n; ++i) route(q[i].o, q[i].ms);
-        q.clear();
-        if (q.capacity() > 65536) std::vector<QEv>().swap(q);        // give a burst's memory back
-        return n;
+    // (1.17.0) in slices: budgetMs < 0 = everything now (the old behaviour); else at most FLUSH_MAX events or ~budgetMs, the rest stays
+    // queued (in order) for the next call. Returns the events routed.
+    template <class Route> size_t flushQueue(Route route, long long budgetMs = -1) {
+        if (qHead > q.size()) qHead = q.size();
+        const size_t n0 = qHead;
+        const std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+        while (qHead < q.size()) {
+            route(q[qHead].o, q[qHead].ms); ++qHead;
+            if (budgetMs >= 0) {
+                if (qHead - n0 >= FLUSH_MAX) break;
+                if (((qHead - n0) & 511) == 0 && std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count() >= budgetMs) break;
+            }
+        }
+        const size_t done = qHead - n0;
+        if (qHead >= q.size()) {
+            q.clear(); qHead = 0;
+            if (q.capacity() > 65536) std::vector<QEv>().swap(q);    // give a burst's memory back
+        } else if (qHead >= 65536 && qHead * 2 >= q.size()) {        // a long backlog: drop the routed front so the vector does not hold it
+            q.erase(q.begin(), q.begin() + (std::ptrdiff_t)qHead); qHead = 0;
+        }
+        return done;
     }
+    size_t queued() const { return q.size() > qHead ? q.size() - qHead : 0; }
     bool due(long long now) const {
         if (blocked || dead || attempt >= 2) return false;
         if (attempt == 1) return lastEventMs < 0 && openMs >= 0 && now - openMs >= WAIT_MS;
@@ -3069,8 +3087,8 @@ public:
                 if (!st.empty()) S.state = st;
                 const double tick = S.tick;
                 if (!S.feed.raw) { S_* ps = &S; S.feed.raw = [this, ps](const DEPTH_ORDER& o) { onRaw(*ps, o); }; }   // (1.4.0) once per event read
-                S.feed.flushQueue([&](const DEPTH_ORDER& o, long long ms) { route(S, evOf(o, tick, ms)); });          // (1.4.0) the clock's reads first
-                S.feed.drain(now, steadyMs, [&](const DEPTH_ORDER& o) { route(S, evOf(o, tick, now)); });
+                S.feed.flushQueue([&](const DEPTH_ORDER& o, long long ms) { route(S, evOf(o, tick, ms)); }, FLUSH_BUDGET_MS);   // (1.4.0) the clock's reads first; (1.17.0) in slices
+                if (S.feed.queued() == 0) S.feed.drain(now, steadyMs, [&](const DEPTH_ORDER& o) { route(S, evOf(o, tick, now)); });   // (1.17.0) a backlog left: read more next call (order kept)
                 if (S.feed.lastEventMs >= 0 && S.firstBarKey < 0) S.firstBarKey = S.formingKey;
                 startTimer(S);
                 if (S.feed.timerOff) stopTimer(S);

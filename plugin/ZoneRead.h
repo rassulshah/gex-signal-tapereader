@@ -54,7 +54,7 @@
 
 namespace zread {
 
-static const char* const VERSION = "1.1.0";
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-18 memory hunt) the band book drops orders no longer in any level band when half full after a level change, and also orders filled to 0 before refusing a new order at the cap - it filled to the cap and then refused new orders
 typedef long long Tick;
 typedef long long Ms;
 enum Pane { P_BAS = 0, P_STACK = 1, P_PULLSTATS = 2, P_PULLING = 3, P_N = 4 };
@@ -157,7 +157,7 @@ public:
     bool arrRec = false;                                  // (1.1.0) this host records an "arrived" row (lsPullStats)
     struct Kept { Ms t = 0; long long wall = 0; Line out[P_N]; bool open = false; Line unknown; };   // (1.1.0) open = arrived, never locked (restart inside the window)
     std::map<Tick, Kept> kept;                           // level centre -> its last frozen read (this session; restored on load)
-    long long encounters = 0, frozen = 0, orderDrops = 0;
+    long long encounters = 0, frozen = 0, orderDrops = 0, pruned = 0;
 
     // ---- the levels (key / MenthorQ / gamma, merged) and the zone geometry: zone half-width = 0.06 ADR, band = the MEDIUM half-width
     void setGeometry(double adrPrice, int days, Tick bandHalf) {
@@ -178,6 +178,16 @@ public:
         if (cur.state != NONE) for (size_t k = 0; k < nl.size(); ++k) if (nl[k].c == cur.c) keepLvl = (int)k;
         lv.swap(nl); armed.swap(na); armSup.swap(ns); armWall.swap(nw);
         if (cur.state != NONE) { if (keepLvl < 0 && cur.state != MEASURE) cur = Enc(); else if (keepLvl >= 0) cur.lvl = keepLvl; }
+        if (ord.size() > ORD_CAP / 2) pruneOrd(false);
+    }
+    // (1.2.0) empty orders and orders outside every level band (the encounter being measured keeps its band) leave the book
+    size_t pruneOrd(bool zeros) {   // zeros = also drop orders filled to 0 (only at the cap: a refill MOD may still come)
+        size_t n = 0;
+        for (std::unordered_map<long long, Ord>::iterator it = ord.begin(); it != ord.end(); ) {
+            const bool keep = (!zeros || it->second.size > 0) && (anyBand(it->second.px) || (measuring() && inCurBand(it->second.px)));
+            if (keep) ++it; else { it = ord.erase(it); ++n; }
+        }
+        pruned += (long long)n; return n;
     }
     bool inBand(Tick px, Tick c) const { return px >= c - hw && px <= c + hw; }
     bool anyBand(Tick px) const { for (size_t i = 0; i < lv.size(); ++i) if (inBand(px, lv[i].c)) return true; return false; }
@@ -215,6 +225,7 @@ private:
         }
         if (action == NEW) {
             if (!anyBand(px)) return;
+            if (!known && ord.size() >= ORD_CAP && pruneOrd(true) == 0) { orderDrops++; return; }
             if (!known && ord.size() >= ORD_CAP) { orderDrops++; return; }
             Ord o; o.side = side; o.px = px; o.size = size; o.since = t; ord[id] = o;
             if (measuring() && side == defSide() && inCurBand(px)) cur.added += size;

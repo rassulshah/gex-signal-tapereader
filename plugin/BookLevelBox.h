@@ -44,7 +44,7 @@
 
 namespace blb {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0) + L_WPOC: lsWavePOC's drawn wave POC lines (wpocLevels)   // was "1.0.0"
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-18 memory hunt) the book is capped: over BOOK_CAP orders, those far from price (> 400 ticks) and then the oldest leave (their depth taken out too) - an order whose cancel was never seen stayed forever   // (1.1.0) + L_WPOC: lsWavePOC's drawn wave POC lines (wpocLevels)   // was "1.0.0"
 static const int HALF = 4, AWAY = 8, ABAND = 8, MINREST = 5, BEHIND = 12, PERSIST = 15, WIN = 30, PRE = 300, BAND = 4;
 static const int HIST = 700;                 // seconds kept in the per-second rings (a case can be rebuilt up to ~+390 s after its anchor)
 static const int SNAP_R = 160;               // book snapshot half-width around the last trade (ticks)
@@ -77,6 +77,8 @@ inline long long zoneLo(long long c) { return c - HALF; }
 inline long long zoneHi(long long c) { return c + HALF; }
 
 struct Pend { long long s = 0, pt = 0, q = 0; int side = 0, a = -1; };
+static const size_t BOOK_CAP = 120000;   // (1.2.0) orders kept; trimmed to 3/4 of it when passed
+
 
 struct Engine {
     // ---- the book (the replay's book / depth) ----
@@ -91,7 +93,7 @@ struct Engine {
     long long cur = -1;                      // the newest event second
     std::deque<std::pair<long long, long long> > pendQ;      // (second, order id) of every pending add, time order
     std::unordered_map<long long, std::vector<Pend> > pend;
-    long long events = 0, pendOver = 0, garbage = 0;
+    long long events = 0, pendOver = 0, garbage = 0, trimmed = 0;
     // ---- the levels ----
     struct LState { Level lv; bool away = false; int sideFrom = -1; bool arrived = false; long long tArr = 0, aLo = 0, aHi = 0; int ds = 0; };
     std::vector<LState> L;
@@ -185,6 +187,7 @@ struct Engine {
             if (side != 0 && side != 1) { ++garbage; return; }
             Ord d; d.side = side; d.pt = p; d.sz = q; d.tr = s; book[o] = d; depthAt(side, p) += q;
             logAdd(s, side, p, q, o);
+            if (book.size() > BOOK_CAP) trimBook();
         } else if (act == 1) {
             if (side != 0 && side != 1) { ++garbage; return; }
             std::unordered_map<long long, Ord>::iterator it = book.find(o);
@@ -209,6 +212,23 @@ struct Engine {
             std::unordered_map<long long, Ord>::iterator it = book.find(o);
             if (it != book.end()) { Ord& b = it->second; const long long d = std::min(q, b.sz); depthAt(b.side, b.pt) -= d; b.sz -= d; b.wf = true; }
             trade(s, p);
+        }
+    }
+    // (1.2.0) the cap: orders far from price leave first, then the oldest (their resting lots come out of the depth; pending adds forgotten)
+    void trimBook() {
+        const size_t target = BOOK_CAP * 3 / 4;
+        const long long ref = haveTrade ? lastTrade : (cb > 0 ? cb : ca);
+        for (std::unordered_map<long long, Ord>::iterator it = book.begin(); it != book.end() && book.size() > target; ) {
+            if (ref > 0 && std::llabs(it->second.pt - ref) > 400) { depthAt(it->second.side, it->second.pt) -= it->second.sz; pend.erase(it->first); it = book.erase(it); ++trimmed; }
+            else ++it;
+        }
+        if (book.size() <= target) return;
+        std::vector<long long> tr; tr.reserve(book.size());
+        for (std::unordered_map<long long, Ord>::const_iterator it = book.begin(); it != book.end(); ++it) tr.push_back(it->second.tr);
+        const size_t k = book.size() - target; std::nth_element(tr.begin(), tr.begin() + (std::ptrdiff_t)(k - 1), tr.end()); const long long cut = tr[k - 1];
+        for (std::unordered_map<long long, Ord>::iterator it = book.begin(); it != book.end() && book.size() > target; ) {
+            if (it->second.tr <= cut) { depthAt(it->second.side, it->second.pt) -= it->second.sz; pend.erase(it->first); it = book.erase(it); ++trimmed; }
+            else ++it;
         }
     }
     // a trade print: the last price, and the away / arrival rule of every level (only when the trade price changed: same price = same state)
