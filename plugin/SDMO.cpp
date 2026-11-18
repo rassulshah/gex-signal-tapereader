@@ -47,7 +47,7 @@
 #define SDM_SEP "/"
 #endif
 
-static const char* SDM_VERSION = "0.2.0";   // (0.2.0) the Reversal Read I letters on a strip at the top   // = sdmo::VERSION = the setVersion literal
+static const char* SDM_VERSION = "0.3.0";   // (0.3.0) SD MA 3 / average MA 20 (his settings), no I strip   // was "0.2.0"   // (0.2.0) the Reversal Read I letters on a strip at the top   // = sdmo::VERSION = the setVersion literal
 
 static long long sdmMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 static std::string sdmFlex() { const char* up = std::getenv("USERPROFILE"); return up && *up ? std::string(up) + SDM_SEP "InvestorRT" SDM_SEP "rtx" SDM_SEP "lsFlexLevels" : std::string(); }
@@ -148,7 +148,7 @@ void SDMO::status(SDMState& S, long long now) {
 }
 
 // (0.2.0) the I letters: looked at every 3 s from calc, re-read (bounded, 1 MB) only when the file's size / time changed
-static void sdmLetters(SDMState& S, long long now) {
+[[maybe_unused]] static void sdmLetters(SDMState& S, long long now) {   // (0.3.0) kept, not called (no I strip)
     if (S.wyPath.empty() || (S.wyCk >= 0 && now - S.wyCk < 3000)) return;
     S.wyCk = now;
     struct stat st; if (stat(S.wyPath.c_str(), &st) != 0) { if (!S.wySig.empty()) { S.wySig.clear(); S.iMarks.clear(); } S.wyRead = -1; return; }
@@ -162,7 +162,7 @@ static void sdmLetters(SDMState& S, long long now) {
 void SDMO::pump() {
     SDMState* S = slot_.get(this, true); if (!S) return;
     if (!identify(*S)) return;
-    feed(*S); try { sdmLetters(*S, sdmMs()); } catch (...) {} status(*S, sdmMs());
+    feed(*S); status(*S, sdmMs());   // (0.3.0) no I strip: the letters file is not read
 }
 
 static short sdmC(int v) { return (short)(v < -32000 ? -32000 : v > 32000 ? 32000 : v); }
@@ -179,7 +179,6 @@ int SDMO::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
         v.X = [this, off](int j) { PNT p; p.set(j + off, 0.0f, kBarCenter); return (double)p.h; };
         FONT fb; fb.id = HELVETICA; fb.size = 9; fb.style = BOLD;
         v.textW = [this, &fb](const std::string& s, bool) { setFont(fb); return (int)getTextWidth(s.c_str(), -1); };
-        v.iMarks = &S->iMarks;
         const int lastClosed = (int)n - 2;
         v.readX = (ve >= (int)n - 1) ? (int)v.X(lastClosed + 1 - off) + std::max(1, (int)getPixelsPerBar()) + 18 : -1;
         const std::vector<sdmo::Prim> P = sdmo::layout(S->E, v);
@@ -209,7 +208,7 @@ extern "C" cppExtension* CreateExtension(void) {
     SDMO* p = new SDMO();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI);                                    // its own pane, draws itself; no hovers, no settings
-    p->setDescription("LRA SDMO v0.2.0 - SD momentum in its own pane: SD (green) = 8-bar average of the 20-candle sum of up-close ranges minus down-close ranges; its average (red) = 14-bar average of SD; a zero line; and a 3-line read right of the last candle: took over (SD crossed its average and pulled away), fading at the low / high (a new 20-candle extreme with SD better than at the earlier extreme), even (SD hugging its average), building or fading (the gap widening or closing, as a ratio of its normal size). Closed candles only, never repainted. No settings.");
-    p->setVersion("0.2.0");   // = SDM_VERSION (gex-build reads this literal)
+    p->setDescription("LRA SDMO v0.3.0 - SD momentum in its own pane: SD (green) = 3-bar average of the 20-candle sum of up-close ranges minus down-close ranges; its average (red) = 20-bar average of SD; a zero line; and a 3-line read right of the last candle: took over (SD crossed its average and pulled away), fading at the low / high (a new 20-candle extreme with SD better than at the earlier extreme), even (SD hugging its average), building or fading (the gap widening or closing, as a ratio of its normal size). Closed candles only, never repainted. No settings.");
+    p->setVersion("0.3.0");   // = SDM_VERSION (gex-build reads this literal)
     return p;
 }
