@@ -43,3 +43,25 @@ Full report: `scratchpad/leak-audit/INDEPENDENT-AUDIT.md`. High findings:
 
 - Permem after his restart: which plugin's draws add the memory.
 - Then fix that plugin. If none of ours shows growth, the growth is inside IRT.
+
+## After the close (15:10-15:20 CT): what the permem logs show
+
+Source: `Perf\permem-*-20261118.csv`, 13:19-15:10 (IRT restarted about 14:00).
+
+- In the steady stretch 14:40-15:10, IRT private bytes grew 1,887 MB (63 MB a minute). The plugins' own calc / draw calls account for 1,913 MB of it, so practically all the growth happens inside OUR calls, mostly inside draws.
+- Per plugin, 14:40-15:10 (MB; per draw):
+  - DeltaProfile 661 MB (68 KB a draw, all in draw, none in calc)
+  - BookFlow 432 MB (61 KB a draw)
+  - DealerProfile (Limit Profile) 330 MB (34 KB a draw)
+  - ZzoCombo 279 MB (124 KB a draw)
+  - WavePOC 74, Breakout1 64, ChartView 34, RevRead 22; SDMO, VolRead, RangeRead, HodLod, IRTReader about 0.
+- The four big ones are the heavy drawers (profile columns, panes full of bars). They share no header except PerfGuard / SettingsGuard / irtsdk.h, and the light plugins with the same PerfGuard grow about 0, so PerfGuard is not the cause.
+- Still open: is it memory the plugin's own code keeps (a container that grows), or IRT's own memory used while it carries out the plugin's drawing (drawing primitives / text / VAP arrays)? Private bytes cannot tell the two apart.
+
+## PerfGuard 1.2.0: own heap
+
+- Every plugin DLL now counts the bytes its own code holds: its operator new / delete (malloc / free underneath, exactly like the default, no header, so a block freed by IRT or another module still frees correctly).
+- Every calc / draw also records how much the DLL's own heap grew. Output: `Perf\permem2-<plugin>-<day>.csv` with own_calc_mb, own_draw_mb, own_live_mb added.
+- Read tomorrow: own_live_mb rising with private bytes = that plugin keeps the memory (fix it in the plugin). own_live_mb flat while its draws add private bytes = IRT keeps it while drawing for that plugin (then: draw less per pass, e.g. cache the drawn picture or cut primitives).
+- Tests: test_permem 7/7 (own heap columns), PerfGuard suite 58/0, macro simulation, e2e writer, real-SDK syntax; MinGW syntax of DeltaProfile, BookFlow, ZzoCombo, SDMO, RevRead with 1.2.0: 0 errors; the operator block links (MinGW) and counts / releases correctly (Linux run).
+- SDMO.cpp: the unused sdmLetters function removed (MSVC C5051 warning); SDMO host tests 14/14.

@@ -48,7 +48,8 @@
 
 namespace lsperf {
 
-static const char* const VERSION = "1.1.0";   // (1.1.0, 2026-11-18 Rassul 09:53-10:14 CT "consider the memory leaks because irt has been freezing alot", "start now"): each calc / draw also measures the IRT private bytes before and after it, so the memory growth is pinned to the plugin (and chart) whose call made it - permem-<plugin>-<yyyymmdd>.csv, one row per chart per minute
+static const char* const VERSION = "1.2.0";   // (1.2.0, 2026-11-18 after the close) OWN HEAP: each plugin DLL counts the bytes its OWN code holds (operator new / delete of this DLL, malloc-backed, no header: a block freed by another module still frees correctly), and each calc / draw records how much of the process growth was its own - permem2-<plugin>-<day>.csv adds own_calc_mb, own_draw_mb, own_live_mb. Own flat while private bytes grow = the growth is IRT's, not the plugin's.
+// was 1.1.0:   // (1.1.0, 2026-11-18 Rassul 09:53-10:14 CT "consider the memory leaks because irt has been freezing alot", "start now"): each calc / draw also measures the IRT private bytes before and after it, so the memory growth is pinned to the plugin (and chart) whose call made it - permem-<plugin>-<yyyymmdd>.csv, one row per chart per minute
 static const int NBK = 24;
 static const double EDGE_US[NBK] = { 50, 100, 200, 500, 1000, 2000, 3000, 5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000,
                                      100000, 150000, 250000, 500000, 1e6, 2e6, 5e6, 1e7, 1e12 };
@@ -146,6 +147,15 @@ inline long long fileStamp(const std::string& p) {
     struct stat s; if (::stat(p.c_str(), &s) != 0) return -1; return (long long)s.st_mtime * 1000 + (long long)s.st_size % 1000;
 }
 
+// ---------------------------------------------------------------- (1.2.0) this DLL's own heap (bytes its operator new holds now)
+inline std::atomic<long long>& ownBytes() { static std::atomic<long long> v(0); return v; }
+#ifdef LSPERF_FAKE
+inline long long& fakeOwnBytes() { static long long v = 0; return v; }
+inline double ownMb() { return (double)fakeOwnBytes() / 1048576.0; }
+#else
+inline double ownMb() { return (double)ownBytes().load(std::memory_order_relaxed) / 1048576.0; }
+#endif
+
 // ---------------------------------------------------------------- process memory and board size
 struct Mem { double wsMb = -1, privMb = -1; };
 inline Mem memNow() {
@@ -196,6 +206,7 @@ struct Chart {
     std::string sym; long spb = -1; long bars = -1; long long infoMs = -1, lastSeenMs = -1, lastCalcMs = -1;
     Acc calc, draw, gap;
     long long totCalc = 0, totDraw = 0;
+    double ownCalcNet = 0, ownDrawNet = 0;   // (1.2.0) MB this DLL's own heap grew inside this chart's calls this minute
     double memCalcNet = 0, memDrawNet = 0, memCalcUp = 0, memDrawUp = 0;   // (1.1.0) MB the process grew (net / only the rises) inside this chart's calls this minute
     int overRun = 0, okRun = 0; bool over = false; std::string why;
 };
@@ -304,11 +315,11 @@ inline bool appendLines(State& S, long long utc) {
 }
 // (1.1.0) signed MB with 3 decimals (the memory a chart's calls added this minute; negative = released)
 inline std::string mbStr(double x) { if (!(x == x)) return "?"; char b[32]; std::snprintf(b, sizeof(b), "%.3f", x); return b; }
-inline const char* memHeader() { return "ts_ct,plugin,sym,spb,chart,calc_n,draw_n,calc_net_mb,draw_net_mb,calc_up_mb,draw_up_mb,priv_mb,v"; }
+inline const char* memHeader() { return "ts_ct,plugin,sym,spb,chart,calc_n,draw_n,calc_net_mb,draw_net_mb,calc_up_mb,draw_up_mb,priv_mb,own_calc_mb,own_draw_mb,own_live_mb,v"; }
 inline bool appendMem(State& S, long long utc) {
     if (S.pendingMem.empty()) return true;
     const std::string d = flexDir(); if (d.empty()) { S.pendingMem.clear(); return false; }
-    const std::string p = d + sep() + "Perf" + sep() + "permem-" + S.plugin + "-" + dayStr(utc) + ".csv";
+    const std::string p = d + sep() + "Perf" + sep() + "permem2-" + S.plugin + "-" + dayStr(utc) + ".csv";
     const bool fresh = fileStamp(p) < 0;
     std::FILE* f = std::fopen(p.c_str(), "ab");
     if (!f) { if (S.pendingMem.size() > MAX_PENDING) S.pendingMem.clear(); return false; }
@@ -355,8 +366,8 @@ inline void closeMinute(State& S, long long utcNow) {
         if (S.pending.size() < MAX_PENDING) S.pending.push_back(row);
         if (S.pendingMem.size() < MAX_PENDING) S.pendingMem.push_back(ts + "," + S.plugin + "," + clean(c.sym.c_str()) + "," + std::to_string(c.spb) + "," + chartId(kv.first)
             + "," + std::to_string(c.calc.n) + "," + std::to_string(c.draw.n) + "," + mbStr(c.memCalcNet) + "," + mbStr(c.memDrawNet) + "," + mbStr(c.memCalcUp) + "," + mbStr(c.memDrawUp)
-            + "," + fmt(mem.privMb, 6) + "," + VERSION);
-        c.memCalcNet = c.memDrawNet = c.memCalcUp = c.memDrawUp = 0;
+            + "," + fmt(mem.privMb, 6) + "," + mbStr(c.ownCalcNet) + "," + mbStr(c.ownDrawNet) + "," + mbStr(ownMb()) + "," + VERSION);
+        c.memCalcNet = c.memDrawNet = c.memCalcUp = c.memDrawUp = 0; c.ownCalcNet = c.ownDrawNet = 0;
         c.calc.clear(); c.draw.clear(); c.gap.clear();
     }
     // memory budget (process-wide): private bytes above budget 3 minutes running -> LRA_PERF_MEMOVER; 10 good minutes clear it
@@ -388,7 +399,7 @@ inline void closeMinute(State& S, long long utcNow) {
 
 // ---------------------------------------------------------------- the one recording entry point (the Scope calls this; tests call it directly)
 // kind: 'c' calc, 'p' preCalc (timed with calc, no gap), 'd' draw
-inline void record(const char* plugin, char kind, const void* self, double us, const std::string* sym, long spb, long bars, double dMb = 0) {
+inline void record(const char* plugin, char kind, const void* self, double us, const std::string* sym, long spb, long bars, double dMb = 0, double dOwn = 0) {
     State& S = st();
     std::lock_guard<std::mutex> g(S.m);
     if (S.dead || S.off) return;
@@ -403,6 +414,7 @@ inline void record(const char* plugin, char kind, const void* self, double us, c
         Chart& c = it->second; c.lastSeenMs = now;
         if (sym) { c.sym = *sym; c.spb = spb; c.bars = bars; c.infoMs = now; }
         if (dMb == dMb && dMb > -100000 && dMb < 100000) { if (kind == 'd') { c.memDrawNet += dMb; if (dMb > 0) c.memDrawUp += dMb; } else { c.memCalcNet += dMb; if (dMb > 0) c.memCalcUp += dMb; } }
+        if (dOwn == dOwn && dOwn > -100000 && dOwn < 100000) { if (kind == 'd') c.ownDrawNet += dOwn; else c.ownCalcNet += dOwn; }
         if (kind == 'd') { c.draw.add(us); c.totDraw++; }
         else {
             c.calc.add(us); c.totCalc++;
@@ -438,18 +450,19 @@ public:
                 sym_ = symOf(self, 0); spb_ = spbOf(self, 0); bars_ = barsOf(self, 0); has_ = true;
             }
         } catch (...) { has_ = false; }
-        try { m0_ = memNow().privMb; } catch (...) { m0_ = -1; }
+        try { m0_ = memNow().privMb; o0_ = ownMb(); } catch (...) { m0_ = -1; }
         t0_ = std::chrono::steady_clock::now();
     }
     ~Scope() {
         try {
             const double us = (double)std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - t0_).count();
             double d = 0; if (m0_ >= 0) { const double m1 = memNow().privMb; if (m1 >= 0) d = m1 - m0_; }
-            record(plugin_, kind_, self_, us, has_ ? &sym_ : nullptr, spb_, bars_, d);
+            const double dOwn = m0_ >= 0 ? ownMb() - o0_ : 0;
+            record(plugin_, kind_, self_, us, has_ ? &sym_ : nullptr, spb_, bars_, d, dOwn);
         } catch (...) {}
     }
 private:
-    const char* plugin_; const void* self_; char kind_; bool has_; long spb_, bars_; std::string sym_; double m0_ = -1;
+    const char* plugin_; const void* self_; char kind_; bool has_; long spb_, bars_; std::string sym_; double m0_ = -1, o0_ = 0;
     std::chrono::steady_clock::time_point t0_;
     Scope(const Scope&); Scope& operator=(const Scope&);
 };
@@ -486,5 +499,25 @@ inline void resetForTest() { State& S = st(); std::lock_guard<std::mutex> g(S.m)
 #define LSPERF_CAT2(a, b) a##b
 #define LSPERF_CAT(a, b) LSPERF_CAT2(a, b)
 #define LSPERF_SCOPE(plugin, fn) lsperf::Scope LSPERF_CAT(_lsperf_scope_, __LINE__)(plugin, fn, this)
+
+// (1.2.0) THIS DLL's operator new / delete: malloc / free exactly as the default (same CRT heap, no header, so a block freed by IRT or
+// another module is still freed correctly - it is then just not subtracted), counting _msize. Every plugin is ONE .cpp per DLL
+// (gex-build :one), so these definitions exist once per DLL. Aligned new / delete stay the CRT's. Off with LSPERF_NO_OWNHEAP.
+#if defined(LSPERF_WIN) && !defined(LSPERF_NO_OWNHEAP)
+#include <malloc.h>
+#include <new>
+inline void* lsperfAlloc(size_t n) { void* p = std::malloc(n ? n : 1); if (p) lsperf::ownBytes().fetch_add((long long)_msize(p), std::memory_order_relaxed); return p; }
+inline void lsperfFree(void* p) { if (!p) return; lsperf::ownBytes().fetch_sub((long long)_msize(p), std::memory_order_relaxed); std::free(p); }
+void* operator new(size_t n) { void* p = lsperfAlloc(n); if (!p) throw std::bad_alloc(); return p; }
+void* operator new[](size_t n) { void* p = lsperfAlloc(n); if (!p) throw std::bad_alloc(); return p; }
+void* operator new(size_t n, const std::nothrow_t&) noexcept { return lsperfAlloc(n); }
+void* operator new[](size_t n, const std::nothrow_t&) noexcept { return lsperfAlloc(n); }
+void operator delete(void* p) noexcept { lsperfFree(p); }
+void operator delete[](void* p) noexcept { lsperfFree(p); }
+void operator delete(void* p, size_t) noexcept { lsperfFree(p); }
+void operator delete[](void* p, size_t) noexcept { lsperfFree(p); }
+void operator delete(void* p, const std::nothrow_t&) noexcept { lsperfFree(p); }
+void operator delete[](void* p, const std::nothrow_t&) noexcept { lsperfFree(p); }
+#endif
 
 #endif   // LSPERF_H

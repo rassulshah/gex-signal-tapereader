@@ -147,17 +147,7 @@ void SDMO::status(SDMState& S, long long now) {
     sdmPublish(S.statusPath, body);
 }
 
-// (0.2.0) the I letters: looked at every 3 s from calc, re-read (bounded, 1 MB) only when the file's size / time changed
-[[maybe_unused]] static void sdmLetters(SDMState& S, long long now) {   // (0.3.0) kept, not called (no I strip)
-    if (S.wyPath.empty() || (S.wyCk >= 0 && now - S.wyCk < 3000)) return;
-    S.wyCk = now;
-    struct stat st; if (stat(S.wyPath.c_str(), &st) != 0) { if (!S.wySig.empty()) { S.wySig.clear(); S.iMarks.clear(); } S.wyRead = -1; return; }
-    const std::string sig = std::to_string((long long)st.st_size) + ":" + std::to_string((long long)st.st_mtime); if (sig == S.wySig) return;
-    if (st.st_size > 1024 * 1024) { S.wyRead = -2; return; }
-    std::ifstream f(S.wyPath.c_str(), std::ios::binary); if (!f) return; std::string txt((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    std::map<long long, int> m; const int n = sdmo::parseLetters(txt, m); if (n < 0) return;   // a torn / foreign file: keep the last good letters
-    S.iMarks.swap(m); S.wySig = sig; S.wyRead = n;
-}
+// (0.3.0, 2026-11-18 after the close) sdmLetters removed: the I strip is off, nothing read the letters file (MSVC C5051 gone)
 
 void SDMO::pump() {
     SDMState* S = slot_.get(this, true); if (!S) return;
