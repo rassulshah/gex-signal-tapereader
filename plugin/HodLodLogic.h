@@ -56,7 +56,7 @@
 namespace hl {
 
 static const bool HL_SHOW_GEX_LADDER = false;   // (2.15.3, Rassul 2026-11-02 10:25 CT "get rid of the above line") the Gex S/R strip (G4 G1 G2 | price | PS0 G3 G6) above the box
-static const char* const HL_VERSION = "2.32.0";   // (2.32.0, Rassul 2026-11-17 12:12 CT "build": the Flow read in two lines - Now (the forming candle's market orders, fact M from lsRevRead) + Above / Below (the decided level still in play, its time and distance))   // was "2.31.0";   // (2.31.0, Rassul 2026-11-17 07:03-07:18 CT: host - the Flow read sits bottom centre above the box and follows the live price and new events every second)   // was "2.30.0";   // (2.30.0, Rassul 2026-11-17 05:55-05:58 CT) the Cob section at the right end of the top line: every market with a live Cob   // was "2.29.2";   // (2.29.2, Rassul 2026-11-17 05:31 CT "lets use percentages like 20%") the market strength line reads "CL +20%"   // was "2.29.1";   // (2.29.1) the session close + last trading day always shown, on the top line (a full header band used to drop them)   // was "2.29.0";   // (2.29.0, 2026-11-16 Rassul 21:45-21:52 CT: the market strength line on top of the box - each traded market's session move over its average session range, MktMove.h)   // was "2.28.0";   // (2.28.0, 2026-11-16 Rassul 13:06 CT: the session close and the contract's last trading day right after the market in the header band - host only, the hdrLeft segments)   // was "2.27.0";   // (2.27.0, 2026-11-16 Rassul 09:58 CT "i dont need this line": the call line under the header band - 1st extreme / 2nd / Lvl - is gone; the tables are unchanged)   // was "2.26.0";   // (2.26.0, 2026-11-11 Rassul "Ok build"): the read box gets the Book line (ReadBox 1.4.0, lsBookFlow fact F)   // was "2.25.0";   // (2.25.0, 2026-11-11 Rassul 11:57 "show mockup", 12:01 "update the read at the top to just be the MKT LMT or derflow read and keep the Day in the hod lod obx", 12:02 "will the hod lod box highlight the level that is upcoming or going to be in play ?", 12:03 "ok.. lets do it. build") the read box = the Flow line only; this box: a CALL LINE under the header (1st / 2nd extreme: actual, else expected; FLIPPED hh:mm; the Lvl read), "Hrly: Up, above 7607" and "Day: ..." in the header row, the sweep tables' UPCOMING level bright ("next" / "testing") and the rest dim, the 1st-extreme time table only until the first extreme is in
+static const char* const HL_VERSION = "2.33.0";   // (2.33.0, Rassul 2026-11-18 09:30 CT "lets put the session in the middle with lod to the left and hod to the right": LOD SWEEPS | SESSION | HOD SWEEPS)   // was "2.32.0";   // (2.32.0, Rassul 2026-11-17 12:12 CT "build": the Flow read in two lines - Now (the forming candle's market orders, fact M from lsRevRead) + Above / Below (the decided level still in play, its time and distance))   // was "2.31.0";   // (2.31.0, Rassul 2026-11-17 07:03-07:18 CT: host - the Flow read sits bottom centre above the box and follows the live price and new events every second)   // was "2.30.0";   // (2.30.0, Rassul 2026-11-17 05:55-05:58 CT) the Cob section at the right end of the top line: every market with a live Cob   // was "2.29.2";   // (2.29.2, Rassul 2026-11-17 05:31 CT "lets use percentages like 20%") the market strength line reads "CL +20%"   // was "2.29.1";   // (2.29.1) the session close + last trading day always shown, on the top line (a full header band used to drop them)   // was "2.29.0";   // (2.29.0, 2026-11-16 Rassul 21:45-21:52 CT: the market strength line on top of the box - each traded market's session move over its average session range, MktMove.h)   // was "2.28.0";   // (2.28.0, 2026-11-16 Rassul 13:06 CT: the session close and the contract's last trading day right after the market in the header band - host only, the hdrLeft segments)   // was "2.27.0";   // (2.27.0, 2026-11-16 Rassul 09:58 CT "i dont need this line": the call line under the header band - 1st extreme / 2nd / Lvl - is gone; the tables are unchanged)   // was "2.26.0";   // (2.26.0, 2026-11-11 Rassul "Ok build"): the read box gets the Book line (ReadBox 1.4.0, lsBookFlow fact F)   // was "2.25.0";   // (2.25.0, 2026-11-11 Rassul 11:57 "show mockup", 12:01 "update the read at the top to just be the MKT LMT or derflow read and keep the Day in the hod lod obx", 12:02 "will the hod lod box highlight the level that is upcoming or going to be in play ?", 12:03 "ok.. lets do it. build") the read box = the Flow line only; this box: a CALL LINE under the header (1st / 2nd extreme: actual, else expected; FLIPPED hh:mm; the Lvl read), "Hrly: Up, above 7607" and "Day: ..." in the header row, the sweep tables' UPCOMING level bright ("next" / "testing") and the rest dim, the 1st-extreme time table only until the first extreme is in
 // was "2.24.0":   // (2.24.0, Rassul 11:53 CT "1. ok. 2. ok 3. ok, and i dont even think it is working becasue the levels it is mentioning are passed") the read box = ReadBox 1.2.0: Hrly Trend + the hourly breakout level / Day / Lvl nearest above and below / one Flow line from events still in play
 // was "2.23.1":   // (2.23.1, Rassul 11:45 CT "where it says HTF change it to Hrly Trend: and give it values like up or down or NA") the read box's first line is "Hrly Trend: Up / Down / NA" (ReadBox 1.1.0)
 // was "2.23.0":   // (2.23.0, 2026-11-11 Rassul 11:40 CT "get rid of dly trend.and the values to the left and move the gamma regime were the daily trend is"; he chose "Dly + RTH opens + Bar left"; 11:41 "updat eht readt at the top to be more simple") the header row: no "RTH opens / % done", no "Bar m:ss left", no "Dly:" trend; the gamma pill (+GAMMA / -GAMMA) leads the centre group where "Dly:" was; the read box: ReadBox 1.1.0 (no HTF line, the Day line without ADR / Used)
@@ -2120,10 +2120,12 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                 addText(L, xc, y + 1, y + callH - 2, cs[q].s, cs[q].col, fs, bold, w, R_TABLE, -1); xc += w + 18; }
             y += callH; addLine(L, T.l, y - 1, T.r, y - 1, C_BORDER, 1, R_TABLE);
         }
-        const int x0 = T.l + 8 + lw;
+        // (2.33.0, Rassul 2026-11-18 09:30 CT "lets put the session in the middle with lod to the left and hod to the right") LOD SWEEPS | SESSION | HOD SWEEPS
+        const int SL = useSw ? T.l + swW : T.l;   // the SESSION section's left edge
+        const int x0 = SL + 8 + lw;
         auto colX = [&](int k) { int x = x0; for (int i = 0; i < k; i++) x += cw[(size_t)i]; return x; };
         // (2.4.5, Rassul 19:08 "right justify the 2nd column, we have space") the last column's text ends at the table's right padding
-        const int SR = T.l + WsessF;   // (2.13.0) the session section's right edge (= T.r without the sweep sections)
+        const int SR = SL + WsessF;   // (2.13.0) the session section's right edge; (2.33.0) the HOD section starts here
         L.sessR = SR;
         auto colStart = [&](int k, int w) { return k == ncol - 1 ? SR - 8 - w : colX(k); };
         const int panelTop = y + (useSw ? 2 : 0);   // (2.14.0) the three panels start here (a 2 px gap under the header band)
@@ -2132,11 +2134,11 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             addText(L, l + 9, yy, yy + rowH, title, C_SLATE, fs - 1, true, M(title, fs - 1, true), R_TABLE, -1);
             if (!cap.empty()) { const int cw2 = M(cap, fs - 1, false); addText(L, r - 6 - cw2, yy, yy + rowH, cap, C_GREY, fs - 1, false, cw2, R_TABLE, -1); }
         };
-        if (useSw) { strip(T.l + 6, SR - 6, panelTop, C_BLUE, "SESSION", ""); y = panelTop + rowH; }
+        if (useSw) { strip(SL + 6, SR - 6, panelTop, C_BLUE, "SESSION", ""); y = panelTop + rowH; }
         const int rowsTop = y;   // (2.12.0) no 1ST / 2ND heading row: the Exp row follows the header band
         const Cell* rows[2] = { eRow, aRow }; const char* lab[2] = { "Exp", "Act" };
         for (int r = 0; r < 2; r++) {
-            addText(L, T.l + 8, y, y + rowH, lab[r], C_SLATE, fs, false, M(lab[r], fs, false), R_TABLE, -1);
+            addText(L, SL + 8, y, y + rowH, lab[r], C_SLATE, fs, false, M(lab[r], fs, false), R_TABLE, -1);
             for (int j = 1; j < NSHOWN; j++) {
                 const Cell& C = rows[r][SHOWN[j]]; int xx = colStart(j - 1, cellWf(C));
                 std::vector<std::string> part; std::vector<unsigned> pc;
@@ -2146,7 +2148,7 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
                 part.push_back(C.s3.empty() ? "" : "  " + C.s3); pc.push_back(C.col3 ? C.col3 : C.col);
                 for (size_t k = 0; k < part.size(); k++) { if (part[k].empty()) continue; const int pw = M(part[k], fs, C.bold); addText(L, xx, y, y + rowH, part[k], pc[k], fs, C.bold, pw, R_TABLE, -1); xx += pw; }
             }
-            if (r) addLine(L, T.l + 1, y, SR - 1, y, C_DIV, 1, R_TABLE);   // (2.5.0) a thin divider between the rows (2.12.0: none under the header band's border)
+            if (r) addLine(L, SL + 1, y, SR - 1, y, C_DIV, 1, R_TABLE);   // (2.5.0) a thin divider between the rows (2.12.0: none under the header band's border)
             y += rowH;
         }
         for (int k = 1; k < ncol; k++) {   // (2.12.0, Rassul 18:22 CT) a thin grey vertical separator between the 1st- and 2nd-extreme columns, Exp + Act rows
@@ -2155,29 +2157,29 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             L.colSepX = sx; L.colSepT = rowsTop + 2; L.colSepB = y - 2;
         }
         if (v.preOn) {   // (2.6.0) the PRE-OPEN BOOK row: one line across the columns, green = 1st LOW lean, red = 1st HIGH lean, grey otherwise
-            addLine(L, T.l + 1, y, SR - 1, y, C_DIV, 1, R_TABLE);
-            addText(L, T.l + 8, y, y + rowH, "Pre", C_SLATE, fs, false, M("Pre", fs, false), R_TABLE, -1);
+            addLine(L, SL + 1, y, SR - 1, y, C_DIV, 1, R_TABLE);
+            addText(L, SL + 8, y, y + rowH, "Pre", C_SLATE, fs, false, M("Pre", fs, false), R_TABLE, -1);
             addText(L, x0, y, y + rowH, v.preText, v.preCol, fs, false, M(v.preText, fs, false), R_TABLE, -1);
-            L.preRow = Box{ T.l, y, SR, y + rowH }; L.preOk = true;
+            L.preRow = Box{ SL, y, SR, y + rowH }; L.preOk = true;
             y += rowH;
         }
         L.noteRows.clear();
         for (size_t q = 0; q < v.notes.size(); q++) {   // (2.7.0) the note rows: "News  CPI 7:30 AM . -5 / +15 min . marks ?" / "Feed  ? ..."
-            addLine(L, T.l + 1, y, SR - 1, y, C_DIV, 1, R_TABLE);
-            addText(L, T.l + 8, y, y + rowH, v.notes[q].label, C_SLATE, fs, false, M(v.notes[q].label, fs, false), R_TABLE, -1);
+            addLine(L, SL + 1, y, SR - 1, y, C_DIV, 1, R_TABLE);
+            addText(L, SL + 8, y, y + rowH, v.notes[q].label, C_SLATE, fs, false, M(v.notes[q].label, fs, false), R_TABLE, -1);
             addText(L, x0, y, y + rowH, v.notes[q].text, v.notes[q].col, fs, false, M(v.notes[q].text, fs, false), R_TABLE, -1);
-            L.noteRows.push_back(Box{ T.l, y, SR, y + rowH });
+            L.noteRows.push_back(Box{ SL, y, SR, y + rowH });
             y += rowH;
         }
         // (2.12.0) no footer ("Options exp 3:00 PM" + version): the version is on the top line, the expiry in the header hover
         if (useSw && v.tmOk) {   // (2.14.0) the 1st-extreme time table: a blue sub-heading, the column heads, the % row
             y += rowH;   // (2.14.2, Rassul 20:53 CT "move the 1st extreme and % days down by 1 line")
-            addLine(L, T.l + 6, y, SR - 6, y, C_DIV, 1, R_TABLE);
-            const int x0t = T.l + 8 + tmLabW;
-            addText(L, T.l + 8, y, y + rowH, tmLab[0], C_BLUE, fs - 1, false, M(tmLab[0], fs - 1, false), R_TABLE, -1);
+            addLine(L, SL + 6, y, SR - 6, y, C_DIV, 1, R_TABLE);
+            const int x0t = SL + 8 + tmLabW;
+            addText(L, SL + 8, y, y + rowH, tmLab[0], C_BLUE, fs - 1, false, M(tmLab[0], fs - 1, false), R_TABLE, -1);
             for (int q = 0; q < 4; q++) { const int w = M(tmHead[q], fs - 1, false); addText(L, x0t + (q + 1) * tmColW - 6 - w, y, y + rowH, tmHead[q], C_GREY, fs - 1, false, w, R_TABLE, -1); }
             y += rowH;
-            addText(L, T.l + 8, y, y + rowH, tmLab[1], C_GREY, fs - 1, false, M(tmLab[1], fs - 1, false), R_TABLE, -1);
+            addText(L, SL + 8, y, y + rowH, tmLab[1], C_GREY, fs - 1, false, M(tmLab[1], fs - 1, false), R_TABLE, -1);
             addFill(L, x0t, y + 1, x0t + 4 * tmColW, y + rowH - 1, C_ROWALT, R_TABLE);
             for (int q = 0; q < 4; q++) { const std::string t = v.tmCum[q] < 0 ? std::string("?") : std::to_string(v.tmCum[q]) + "%" + (v.tmQ ? "?" : "");
                 const int w = M(t, fs, true); addText(L, x0t + (q + 1) * tmColW - 6 - w, y, y + rowH, t, C_SLATE, fs, true, w, R_TABLE, -1); }
@@ -2190,9 +2192,9 @@ inline void layoutTable(Layout& L, const View& v, const Box& pane, int left, con
             const char* stripT[2] = { "HOD SWEEPS \xB7 1st = HOD", "LOD SWEEPS \xB7 1st = LOD" };
             for (int pos = 0; pos < 2; pos++) {   // (2.18.0, Rassul 2026-11-04 16:59 CT "swap the LOD sweeps with HOD sweeps") LOD SWEEPS left, HOD SWEEPS right
                 const int q = 1 - pos;                // q: 0 = HOD, 1 = LOD (colours / titles); pos: 0 = left section, 1 = right (swCols in left-to-right order)
-                const std::vector<View::SwRow>& RR = q ? v.swLo : v.swHi; const int cx = SR + pos * swW;
+                const std::vector<View::SwRow>& RR = q ? v.swLo : v.swHi; const int cx = pos == 0 ? T.l : SR;   // (2.33.0) LOD left of the session, HOD right of it
                 const std::vector<bool> fav = View::favOf(RR);   // (2.18.0)
-                addLine(L, cx, panelTop, cx, T.b - 3, C_BORDER, 2, R_TABLE);
+                { const int lx = pos == 0 ? cx + swW : cx; addLine(L, lx, panelTop, lx, T.b - 3, C_BORDER, 2, R_TABLE); }   // (2.33.0) the divider on the session's side
                 int yy = panelTop;
                 strip(cx + 6, cx + swW - 6, yy, q ? C_GREEN : C_RED, stripT[q], cap); yy += rowH;
                 const int xPctR = cx + swW - 9, xPxR = xPctR - (std::max)(swPctW + 6, swBar) - swGap;
