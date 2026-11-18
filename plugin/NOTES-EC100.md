@@ -5,7 +5,7 @@ for crude it could include inventories. other events are like fomc etc ... after
 want market moving events medium and high impact that can move the market. also since i have limited space, be carefull with the font
 size and spacing"; 18:25 "build" (mockup event_calendar_box.html: no title row, one line per event).
 
-What it does: on the price pane, the next 3 medium / high impact events of the chart's market within 2 days - "Wed 1:00 PM  FOMC Minutes
+What it does: on the price pane, the medium / high impact events of the chart's market TODAY (5 PM - 5 PM CT session, at most 3; 18:39 "i only want todays events") - "Wed 1:00 PM  FOMC Minutes
 18h 35m". High impact bold, medium plain; time grey while later; amber inside the last hour; red "out 11m" for 30 min after the release,
 then removed. Top centre (9-spot 2) inside the area up to the last bar and below the IRT title row; when lsHodLod's table is on the chart
 (BoxDock.h LRA_HLB_) it docks beside it (right, else left / below) and never overlaps it. Helvetica 9. No settings, no hovers.

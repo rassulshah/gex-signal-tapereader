@@ -36,7 +36,9 @@ int main(int argc, char** argv) {
     std::vector<Row> R = select(src, "ES", now);
     OK(!R.empty()); OK(R[0].name == "FOMC Minutes"); OK(R[0].tier == 'H'); OK(R[0].state == ST_LATER); OK(R[0].count == "18h 35m");
     OK(R.size() <= 3); for (const Row& r : R) OK(r.name != "EIA Crude" && r.name != "API Crude");
-    OK(R.size() == 2);                                            // Fri 7:30 claims is > 2 days ahead (2d 13h)
+    OK(R.size() == 1);                                            // today = Wed's session (Tue 5 PM - Wed 5 PM): Thu 7:30 claims is tomorrow
+    OK(sessionEnd(now) == minAbs(2026, 11, 18, 17, 0)); OK(sessionEnd(minAbs(2026, 11, 18, 16, 59)) == minAbs(2026, 11, 18, 17, 0)); OK(sessionEnd(minAbs(2026, 11, 18, 17, 0)) == minAbs(2026, 11, 19, 17, 0));
+    {   const long long w = minAbs(2026, 11, 18, 17, 30); std::vector<Row> T = select(source(F, "ES", w, nullptr), "ES", w); OK(T.size() == 1); OK(T[0].name == "Jobless Claims"); }   // after 5 PM: Thursday's
     // CL Wed 9:12 AM: EIA Crude amber; 9:41 red "out 11m"; 10:01 gone
     const long long t912 = minAbs(2026, 11, 18, 9, 12), t941 = minAbs(2026, 11, 18, 9, 41), t1001 = minAbs(2026, 11, 18, 10, 1);
     R = select(source(F, "CL", t912, nullptr), "CL", t912); OK(R[0].name == "EIA Crude"); OK(R[0].state == ST_SOON); OK(R[0].count == "18m");
@@ -67,7 +69,8 @@ int main(int argc, char** argv) {
         Ev c = a; c.t = now + 200; v.push_back(c); Ev d = a; d.t = now + 300; v.push_back(d); Ev e = a; e.t = now - 31; v.push_back(e);
         R = select(v, "ES", now); OK(R.size() == 3); OK(R[0].name == "GDP + PCE"); OK(R[1].name == "Jobless Claims"); OK(R[2].t == now + 200); }
     // layout: 3 cells per row, widths from the widest text, box fits the cells, bold measured for H
-    R = select(source(F, "ES", now, nullptr), "ES", now);
+    {   std::vector<Ev> v; Ev a; a.t = now + 100; a.name = "GDP + PCE"; a.tier = 'H'; a.mkt = "ES"; v.push_back(a); Ev b = a; b.name = "Jobless Claims"; b.tier = 'M'; v.push_back(b); R = select(v, "ES", now); }
+    OK(R.size() == 2);
     Layout L = layout(R, W);
     OK(L.cells.size() == R.size() * 3); OK(L.h == PAD + (int)R.size() * ROW_H);
     for (const Cell& c : L.cells) { OK(c.x >= 0 && c.x + c.w <= L.w); OK(c.y >= 0 && c.y + c.h <= L.h); }
@@ -75,6 +78,7 @@ int main(int argc, char** argv) {
     OK(layout(std::vector<Row>(), W).w == 0);
     OK(L.w < 260);                                                 // compact: well under a quarter of his 3440 px chart
     // status
+    R = select(source(F, "ES", now, nullptr), "ES", now);
     const std::string s = statusText("ES", why, R, "docked right");
     OK(s.find("lsEventCal 1.0.0") == 0); OK(s.find("ROW,Wed 1:00 PM,FOMC Minutes,H,later") != std::string::npos);
     std::printf("lsEventCal logic: %d pass\n", pass);

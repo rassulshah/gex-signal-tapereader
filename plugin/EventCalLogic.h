@@ -6,7 +6,8 @@
 //   Input: lsFlexLevels\LRA-Calendar-ALL.csv, written each night by lra.event_calendar (EV,<yyyy-mm-dd>,<HH:MM CT>,<name>,<H|M>,<MKT>;
 //   VERSION first, MARKET,ALL). Missing / unreadable / older than 8 days = the BUILT-IN list below (the dated releases known on
 //   2026-11-17 + the weekly rules), so the box never goes blank because the nightly missed a night.
-//   Rows: at most 3, the next events of the chart's market within 2 days, one line each: "Wed 1:00 PM   FOMC Minutes   3h 48m".
+//   Rows: at most 3, the next events of the chart's market in TODAY's session (18:39 "i only want todays events": 5:00 PM CT to 5:00 PM CT, so
+//   after 5 PM it is the next day's session), one line each: "Wed 1:00 PM   FOMC Minutes   3h 48m".
 //   High impact bold, medium plain. Colours: later = white (time grey), within 60 min = amber, released = red "out 11m" for 30 min,
 //   then gone. No title row, no settings, no hovers. Times = the PC's clock (Central).
 #pragma once
@@ -21,7 +22,7 @@
 namespace ecal {
 static const char* const VERSION = "1.0.0";
 static const int MAX_ROWS = 3;          // his limited space
-static const int AHEAD_MIN = 2 * 1440;  // two days ahead
+static const int SESSION_START = 17 * 60;   // (18:39 "i only want todays events") today = the trading session, 5:00 PM CT to 5:00 PM CT
 static const int KEEP_MIN = 30;         // shown 30 min after the release, then removed
 static const int SOON_MIN = 60;         // amber inside the last hour
 static const int MAX_EVENTS = 4000;     // parse cap
@@ -121,8 +122,11 @@ inline std::vector<Ev> builtIn(const std::string& mkt, long long d0, long long d
 // ---- the rows -------------------------------------------------------------------------------------------------------------------
 enum State { ST_LATER = 0, ST_SOON = 1, ST_OUT = 2 };
 struct Row { long long t = 0; std::string when, name, count; char tier = 'M'; int state = ST_LATER; };
+// the end of the session that holds `now` (the next 5:00 PM CT)
+inline long long sessionEnd(long long now) { const long long day = now / 1440, mod = now % 1440; return (mod >= SESSION_START ? day + 1 : day) * 1440 + SESSION_START; }
 inline std::vector<Row> select(const std::vector<Ev>& ev, const std::string& mkt, long long now, int maxRows = MAX_ROWS) {
-    std::vector<Ev> v; for (const Ev& e : ev) if (e.mkt == mkt && e.t >= now - KEEP_MIN && e.t <= now + AHEAD_MIN) v.push_back(e);
+    const long long end = sessionEnd(now);
+    std::vector<Ev> v; for (const Ev& e : ev) if (e.mkt == mkt && e.t >= now - KEEP_MIN && e.t < end) v.push_back(e);
     std::sort(v.begin(), v.end(), [](const Ev& a, const Ev& b) { return a.t < b.t || (a.t == b.t && (a.tier == 'H') > (b.tier == 'H')) || (a.t == b.t && a.tier == b.tier && a.name < b.name); });
     std::vector<Row> R;
     for (const Ev& e : v) {
@@ -163,7 +167,7 @@ inline Layout layout(const std::vector<Row>& R, const std::function<int(const st
 inline std::string statusText(const std::string& mkt, const std::string& srcWhy, const std::vector<Row>& R, const std::string& placeWhy) {
     std::string s = std::string("lsEventCal ") + VERSION + "\nMARKET," + mkt + "\nSOURCE," + srcWhy + "\nPLACE," + placeWhy + "\n";
     for (const Row& r : R) s += "ROW," + r.when + "," + r.name + "," + r.tier + "," + (r.state == ST_OUT ? "out" : r.state == ST_SOON ? "soon" : "later") + "\n";
-    if (R.empty()) s += "ROW,none in the next 2 days\n";
+    if (R.empty()) s += "ROW,none left today\n";
     return s;
 }
 } // namespace ecal

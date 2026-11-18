@@ -5,7 +5,7 @@
  *  ... for crude it could include inventories. other events are like fomc etc ... after 30 min of the even it can be removed";
  *  18:22 "i only want market moving events medium and high impact ... be carefull with the font size and spacing"; 18:25 "build".
  *  On the PRICE pane: a compact box at the top centre (beside the HOD / LOD table when that table is on the chart, never over it,
- *  never right of the last bar): the next 3 medium / high impact events of the chart's market within 2 days, one line each
+ *  never right of the last bar): the next medium / high impact events of the chart's market TODAY (the 5 PM - 5 PM session; at most 3), one line each
  *  ("Wed 1:00 PM  FOMC Minutes  18h 35m"); high impact bold, medium plain; amber inside the last hour, red "out 11m" for 30 min after
  *  the release, then gone. No title row, no settings, no hovers. Logic: EventCalLogic.h (SDK-free, Linux-tested).
  *  INPUT  lsFlexLevels\LRA-Calendar-ALL.csv (the nightly lra.event_calendar, which also scores each event type's real impact per
@@ -187,7 +187,7 @@ extern "C" cppExtension* CreateExtension(void) {
     EventCal* p = new EventCal();
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI);       // on the price pane, on the instrument's scale; no hovers, no settings
-    p->setDescription("LRA Event Calendar v1.0.0 - on the price pane: the next 3 medium / high impact scheduled events of this chart's market within 2 days (FOMC, CPI, NFP, GDP + PCE, retail sales, EIA crude for CL, EIA gas for NG, ECB for 6E, China PMI for HG, jobless claims, PPI, ISM, API ...), at the top centre beside the HOD / LOD table. High impact bold; amber within the hour; red for 30 min after the release, then removed. The nightly keeps the list and drops event types that do not move the market. No settings.");
+    p->setDescription("LRA Event Calendar v1.0.0 - on the price pane: today's medium / high impact scheduled events of this chart's market (the 5 PM - 5 PM CT session, at most 3) (FOMC, CPI, NFP, GDP + PCE, retail sales, EIA crude for CL, EIA gas for NG, ECB for 6E, China PMI for HG, jobless claims, PPI, ISM, API ...), at the top centre beside the HOD / LOD table. High impact bold; amber within the hour; red for 30 min after the release, then removed. The nightly keeps the list and drops event types that do not move the market. No settings.");
     p->setVersion("1.0.0");   // = ecal::VERSION (gex-build reads this literal)
     return p;
 }
