@@ -124,7 +124,8 @@
 #define BKO_SEP "/"
 #endif
 
-#define BKO_VERSION "1.27.4"   // (1.27.4) Rev = (> 0.8 x ATR and closes beyond the prior bar) or >= 1.2 x ATR   // was "1.27.3"   // (1.27.3) Rev must close beyond the prior bar's high / low   // was "1.27.2"   // (1.27.2) Rev range bigger than 0.8 x ATR(13)   // was "1.27.1"   // (1.27.1) FT within 3 candles   // was "1.27.0"   // (1.27.0) FT label on the follow-through candle; Rev range >= 1.0 x ATR(13) required; Rev bigger than a same-colour bar before it   // was "1.26.0"   // (1.26.0) "Rev N" + the BT / P / S marks from lsRevRead (fact X), the Stop / T1 / 1.382 lines, fact W for lsRevRead   // was "1.25.0"   // (1.25.0) no Pboc after a Rly without a BO / BD   // was "1.24.0"   // (1.24.0) Rly without the vwapTrend condition (aligned with the hourly breakout bar)   // was "1.23.2"   // (1.23.0) book gate off; RevA   // was "1.22.0"   // (1.22.0) a Rev needs the book to agree (lsBookFlow fact F)   // was "1.21.0"   // (1.21.0) Rly only inside an hourly breakout bar
+static const bool BKO_REV_LINES = false;   // (1.27.5, Rassul 19:55 CT) no Stop / T1 / T2 lines on the Rev signals
+#define BKO_VERSION "1.27.5"   // (1.27.5, Rassul 2026-11-18 19:55 CT "get rid of the stop and targets for rev signals": the Rev Stop / T1 / T2 lines are no longer drawn; Rev decisions, records and facts unchanged)   // was "1.27.4"   // (1.27.4) Rev = (> 0.8 x ATR and closes beyond the prior bar) or >= 1.2 x ATR   // was "1.27.3"   // (1.27.3) Rev must close beyond the prior bar's high / low   // was "1.27.2"   // (1.27.2) Rev range bigger than 0.8 x ATR(13)   // was "1.27.1"   // (1.27.1) FT within 3 candles   // was "1.27.0"   // (1.27.0) FT label on the follow-through candle; Rev range >= 1.0 x ATR(13) required; Rev bigger than a same-colour bar before it   // was "1.26.0"   // (1.26.0) "Rev N" + the BT / P / S marks from lsRevRead (fact X), the Stop / T1 / 1.382 lines, fact W for lsRevRead   // was "1.25.0"   // (1.25.0) no Pboc after a Rly without a BO / BD   // was "1.24.0"   // (1.24.0) Rly without the vwapTrend condition (aligned with the hourly breakout bar)   // was "1.23.2"   // (1.23.0) book gate off; RevA   // was "1.22.0"   // (1.22.0) a Rev needs the book to agree (lsBookFlow fact F)   // was "1.21.0"   // (1.21.0) Rly only inside an hourly breakout bar
 // was "1.20.0"   // (1.20.0) the retracement % under every decided pullback label
 // was "1.19.0"   // (1.19.0) Rev: range >= 1.2 x ATR(13) OR a close beyond the prior bar; drawn after every pullback label incl. the Rly Pboc
 // was "1.18.0"   // (1.18.0) the origin is broken by a CLOSE; PbT / PbocT (a pullback that tested a Step Trend level)
@@ -442,7 +443,7 @@ int Breakout::draw(void) { LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
         v.lh[0] = lh[0]; v.lh[1] = lh[1];
         v.textW = [this, &f0, &f1](const char* s, int font) { setFont(font == bko::FONT_RLY ? f1 : f0); return (int)getTextWidth(s, -1); };
         S->last = bko::layout(S->E, v);
-        {   // (1.26.0) the Rev trade lines under the letters, his CoB style: a thin solid line from the Rev candle, the name at its right end
+        if (BKO_REV_LINES) {   // (1.27.5) off - (1.26.0) the Rev trade lines under the letters, his CoB style: a thin solid line from the Rev candle, the name at its right end
             FONT fs = f0; fs.size = 8; fs.style = PLAIN; setFont(fs);
             for (const bko::RevLn& L : bko::revLines(S->E)) { if (L.bar1 < v.first || L.bar0 > v.last) continue; const int y = v.Y(L.px); if (y < v.area.t || y > v.area.b) continue;
                 const int x0 = std::max(v.area.l, v.X(L.bar0)), x1 = std::min(v.area.r, v.X(L.bar1) + (L.open ? 14 : 0)); if (x1 <= x0) continue;
@@ -473,6 +474,6 @@ extern "C" cppExtension* CreateExtension(void) {
 #else
     p->setDescription("LRA BO v1.14.0 - letters only on the price chart: BO (green, above) / BD (red, below) on a confirmed breakout candle (the 3-bar High/Low ZigZag, which runs on across the 5 PM CT session break, shown when the follow-through candle closes; its close may equal the BO candle's), Rly at the end of a rally / decline (3-min; RTH on the session VWAP, overnight 17:00 CT to the open on its own Globex VWAP), Pb on a pullback pivot (a low confirmed by the next green close / a high by the next red close) whose bar overlaps the BO / BD candle, at most 2 per BO / BD. Rev (green above the bar / red below) = the thrust out of a Pb: the first green bar (BD: red) from the pivot bar on whose low is below the pivot bar's high (BD: high above its low) with range >= 1.2 x ATR(13), one per wave. Pboc = a Pb (or a no-BO Rly wave's pullback past its 50%) whose pivot bar tags the wave's volume POC (IRT VAP, Wave POC's rule); Pdoc = it tags the pullback's developing POC (Wave POC's PB POC) instead. For higher timeframes use lsBreakout1 (1-bar ZigZag). Records to lsFlexLevels\\Breakout for the nightly. No settings.");
 #endif
-    p->setVersion("1.27.4");   // = BKO_VERSION (gex-build reads this literal)
+    p->setVersion("1.27.5");   // = BKO_VERSION (gex-build reads this literal)
     return p;
 }
