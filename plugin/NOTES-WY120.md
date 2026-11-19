@@ -36,3 +36,9 @@ Not verified: needs his IRT restart (File -> Exit, wait for "installed", reopen)
   low 7387.00 held). Tests: t_hourly 13/13, t_reclaim 6/6, t_wyread_102 19/19, t_nearpivot pass, MinGW OK.
 - Measured (no key-level files in the research run, so hour / 4h only): I's 1,239 -> 1,070 (-14%; most I's credited to a local pivot
   had also reclaimed an hour level). Hour 757, 40%, -0.15R | 4h 219, 30%, -0.38R. Best: CL hour +0.09R, NQ hour -0.04R. ES -0.31R.
+
+## 1.3.1 (09:05 CT "then lets drop the 4 hour")
+- 4-hour highs / lows no longer count; the I reclaims a prior hour high / low (3 hours back) or a key / volume level.
+- Tests: t_hourly 13/13 (the 4h case now reads "the 4 AM hour low"), t_reclaim 6/6, t_wyread_102 19/19, MinGW OK.
+- Measured: I's 1,070 -> 987 (-83 that only reclaimed a 4h level). All I's ~-0.21R (was ~-0.22R): the 4h I's that remain are
+  credited to the hour level they also reclaimed, so the hour group is now 901, 38%, -0.20R.

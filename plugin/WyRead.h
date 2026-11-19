@@ -27,7 +27,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-19 09:02 CT "yes. you want some form of higher timeframe breakout failure"): the I needs a FAILED HIGHER-TIMEFRAME BREAKOUT - the level reclaimed must be a prior hour / 4-hour high or low or a key / volume level; a local pivot alone no longer makes an I. The strong-rejection I after Sp / Ut also needs its spring / upthrust candle to have swept such a level and the rejection candle to close back through it
+static const char* const VERSION = "1.3.1";   // (1.3.1, Rassul 2026-11-19 09:05 CT "then lets drop the 4 hour": 4-hour highs / lows no longer count (measured -0.38R vs -0.15R for hour levels); the I reclaims a prior hour high / low or a key / volume level
+// was VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-19 09:02 CT "yes. you want some form of higher timeframe breakout failure"): the I needs a FAILED HIGHER-TIMEFRAME BREAKOUT - the level reclaimed must be a prior hour / 4-hour high or low or a key / volume level; a local pivot alone no longer makes an I. The strong-rejection I after Sp / Ut also needs its spring / upthrust candle to have swept such a level and the rejection candle to close back through it
 // was VERSION = "1.2.1";   // (1.2.1, Rassul 2026-11-19 08:59 CT "the 4 hour high and low is also a key level": the high / low of the 2 completed 4-hour candles before the pivot's (anchored on the 5 PM CT session open: 5 PM, 9 PM, 1 AM, 5 AM, 9 AM, 1 PM) are levels the I can reclaim too ("the 9 PM 4h low"); on a tie with an hour level the 4h name is used)
 // was VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 08:41-08:42 CT on the ES 3:36 AM I "lets include this. so there is always some reclaim after a sweep of some htf level, in this case it was an hourly level. build", "the key is that there is a htf breakout failure as indicated by the reclaim of a level"): the high / low of each of the 3 completed clock hours before the pivot's hour is a level the I can reclaim ("the 2 AM hour low"), computed from the candles themselves (every session, not only the current one)
 // was VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-18 22:33-22:37 CT "modify the I so it is a reclaim of a key level, volume level or a local level", "it needs to close above it", "yes its a sweep", "it can happen anytime as long as it reclaims", "go" on i-reclaim-mockup.html): a bullish I = the pivot low SWEPT a level (1+ tick below it) and the I candle is the FIRST close back above it; the level = a prior pivot low (1, 2 or 3 pivots back - a further one only when it is lower than the nearer ones), a key level or a volume level (the host's level files); plus the delta / close-through / 1-ATR rules; any time after the pivot (no 3-candle window, no pivot-candle-high rule). Bearish mirror.
@@ -188,7 +189,7 @@ inline void blockLevels(const std::vector<Bar>& B, int ex, int side, long long p
         --h; }
 }
 inline void hourLevels(const std::vector<Bar>& B, int ex, int side, std::vector<Lvl>& out) {
-    blockLevels(B, ex, side, 14400, 3600, 2, out);   // (1.2.1) 4-hour candles first: on a tie the 4h name wins
+    // (1.3.1) 4-hour candles dropped (blockLevels(B, ex, side, 14400, 3600, 2, out) was 1.2.1 - 1.3.0)
     blockLevels(B, ex, side, 3600, 0, 3, out);
 }
 inline void springs(const Ctx& X, Out& o, std::vector<int>& rejI) {
