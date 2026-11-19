@@ -49,7 +49,7 @@
 
 namespace wpc {
 
-static const char* const VERSION = "1.16.1";   // (1.16.1, 2026-11-17 Rassul 20:30 CT "remove the liquidity nodes": no order-book liquidity nodes (no MBO feed, nothing computed / recorded / in the status)
+static const char* const VERSION = "1.17.0";   // (1.17.0, 2026-11-19) the plugin profiles the Bk waves (RevRead wy file) - the logic is unchanged, the version follows the plugin (settings contract)   // was "1.16.1";   // (1.16.1, 2026-11-17 Rassul 20:30 CT "remove the liquidity nodes": no order-book liquidity nodes (no MBO feed, nothing computed / recorded / in the status)
 // was static const char* const VERSION = "1.16.0";   // (1.16.0, 2026-11-17 Rassul 12:45 CT "ok.. lets go with this": the spike rule - every distribution's spike >= 2x the median row, nearest 4 each side of the POC; below green, above red)
 // was static const char* const VERSION = "1.15.2";   // (1.15.2, 2026-11-17 Rassul 12:28 CT: the plain profile rows lighter, GREY_FADE 0.28 -> 0.38)
 // was static const char* const VERSION = "1.15.1";   // (1.15.1, 2026-11-17 Rassul 09:55 CT: CoB legs found - the CoB mark is on the bar after the end pivot)
