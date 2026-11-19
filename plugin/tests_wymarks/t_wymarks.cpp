@@ -1,4 +1,4 @@
-// t_wymarks.cpp -- WyMarks.h 1.0.0 / 2.0.0. Build: g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. t_wymarks.cpp -o t && ./t
+// t_wymarks.cpp -- WyMarks.h 1.0.0 / 2.0.0 / 2.2.0. Build: g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -I.. t_wymarks.cpp -o t && ./t
 #include "../WyMarks.h"
 #include <fstream>
 #include <iostream>
@@ -62,5 +62,15 @@ int main(int argc, char** argv) {
       std::vector<wyi::Candle> C(1); C[0].x = 100; C[0].yHigh = 300; C[0].yLow = 340; C[0].green = true; std::vector<wyi::Want> W(1); W[0].w = 10; W[0].h = 13;
       std::vector<wyi::Box> T(1); T[0].l = 86; T[0].r = 114; T[0].b = 300; T[0].t = 268;   // the BO indicator's letter over the candle (32 px)
       const auto P = wyi::layout(C, W, 0, 800, 1000, T); CHECK(P[0].ok && (P[0].b < 268 || P[0].t > 340 || P[0].r < 86 || P[0].l > 114), "a tag never covers another indicator's letter"); }
+    {   // (2.2.0) the strength field: 6-field lines parse (Bk / Sw / I), 5- and 3-field lines still parse, an oversized strength is rejected
+        const std::string txt = "WY|1|ES|180|0.19.2\n100|Bk|-1|ONL|29373|V99+\n200|Sw|1|PDL|29221|\n300|I|1|PHL|29634|R45\n400|Cx|1|Op|29644\n500|I|1\n600|Bk|1|PDH|29555|V123456\n";
+        std::map<long long, std::vector<wyi::M> > m; const int n = wyi::parseAll(txt, m);
+        CHECK(n == 5, "6-field lines read (5 good, 1 rejected)");
+        CHECK(m[100].size() == 1 && m[100][0].st == "V99+" && m[100][0].lv == "ONL", "Bk strength V99+");
+        CHECK(m[200].size() == 1 && m[200][0].st.empty(), "an empty strength = none");
+        CHECK(m[300].size() == 1 && m[300][0].code == 'I' && m[300][0].st == "R45", "the I strength");
+        CHECK(m[400].size() == 1 && m[400][0].st.empty() && m[400][0].lv == "Op", "5 fields still read");
+        CHECK(m[500].size() == 1, "3 fields still read");
+        CHECK(m.count(600) == 0, "an oversized strength is rejected"); }
     std::cout << (fail ? "FAILED " : "ALL PASS ") << pass << " pass, " << fail << " fail\n"; return fail ? 1 : 0;
 }

@@ -1,4 +1,4 @@
-// t_levelmarks.cpp -- LevelMarks 1.0.0 (lsRevRead 0.19.0): Bk / Sw / Cx with one level, on ES 11-19 (mockup v8) + rule cases
+// t_levelmarks.cpp -- LevelMarks 1.2.0 (lsRevRead 0.19.2; 1.0.0 / 0.19.0 first): Bk / Sw / Cx with one level, on ES 11-19 (mockup v8) + rule cases
 #include "../LevelMarks.h"
 #include <cstdio>
 #include <fstream>
@@ -72,5 +72,32 @@ int main(int argc, char** argv) {
       v.push_back(bar(T + 25 * 180, 112, 112, 106, 107, 300)); for (int i = 0; i < 3; ++i) v.push_back(bar(T + (26 + i) * 180, 107, 108, 106, 107, 100));
       auto m = lvm::run(v, k); int nb = 0; for (auto& kv : m) if (kv.second.code == 'B' && kv.second.dir == -1) ++nb; C(nb == 1, "repeat cut: the same Bk PDL again without a 1-ATR move away = not shown (" + std::to_string(nb) + ")"); }
     C(lvm::shortName("Open", 0, false) == "Op" && lvm::shortName("LonLO", 0, false) == "LLO" && lvm::shortName("x", 1, true) == "PHH" && lvm::shortName("x", 3, false) == "3hL", "short names");
+    // (1.2.0) the strength line = his BVMax / BRMax over the chart's candles (the 1,500 before the session + the session), as the panes count it
+    {   std::vector<long long> T; std::vector<double> V, R; std::vector<char> G;
+        std::ifstream in(argc > 2 ? argv[2] : "es1119hist.psv"); std::string line;
+        while (std::getline(in, line)) { auto v = split(line); if (v.size() != 7 || v[0] != "H") continue; T.push_back(std::stoll(v[1]));
+            const long long o = std::stoll(v[2]), h = std::stoll(v[3]), l = std::stoll(v[4]), c = std::stoll(v[5]); V.push_back(std::stod(v[6])); R.push_back(lvm::rangeTicks((double)h, (double)l, 1.0)); G.push_back(c >= o ? 1 : 0); }
+        C(T.size() > 1500, "history fixture loaded");
+        auto M2 = lvm::run(B, K); lvm::fillStrength(M2, T, V, R, G);
+        auto stOf = [&](const std::string& when, char code) { for (const auto& kv : M2) if (startOf[kv.first] == when && kv.second.code == code) return kv.second.lv + "/" + kv.second.st; return std::string("none"); };
+        C(stOf("7:33", 'B') == "AHI/R99+", "7:33 Bk AHI R99+ (got " + stOf("7:33", 'B') + ")");
+        C(stOf("8:30", 'B') == "PHH/V99+", "8:30 Bk PHH V99+ (got " + stOf("8:30", 'B') + ")");
+        C(stOf("8:36", 'B') == "Op/R99+", "8:36 Bk Op R99+ (got " + stOf("8:36", 'B') + ")");
+        C(stOf("8:39", 'S') == "PHL/V99+", "8:39 Sw PHL V99+ (got " + stOf("8:39", 'S') + ")");
+        C(stOf("9:30", 'B') == "ONL/V99+", "9:30 Bk ONL V99+ (got " + stOf("9:30", 'B') + ")");
+        C(stOf("9:39", 'S') == "PDL/V99+", "9:39 Sw PDL V99+ (got " + stOf("9:39", 'S') + ")");
+        for (const char* w : { "7:06", "8:45", "8:54", "9:12", "9:18" }) C(stOf(w, 'B').size() > 0 && stOf(w, 'B').back() == '/', std::string("no strength line on the ") + w + " Bk (got " + stOf(w, 'B') + ")");
+        { long long t754 = 0; for (const auto& kv : startOf) if (kv.second == "7:54") t754 = kv.first; const std::string si = lvm::strengthAt(T, V, R, G, t754);
+          std::printf("I 7:54 strength: '%s'\n", si.c_str()); C(t754 > 0, "the 7:54 I candle is in the fixture"); }
+        int cx = 0; for (const auto& kv : M2) if (kv.second.code == 'C' && !kv.second.st.empty()) ++cx; C(cx == 0, "Cx carries no strength line"); }
+    {   // stCount rules: consecutive count stops at the first candle as big or bigger; same-colour count skips the other colour; caps at 99; under 20 = no line
+        std::vector<double> V(30, 10.0); std::vector<char> G(30, 1); V[29] = 50; C(lvm::stCount(V, G, 29) == 29, "consecutive: biggest in 29");
+        V[20] = 60; C(lvm::stCount(V, G, 29) == 8, "stops at the first candle as big or bigger");
+        std::vector<char> G2(30, 0); for (int i = 0; i < 30; i += 3) G2[(size_t)i] = 1; std::vector<double> V2(30, 10.0); V2[29] = 50; V2[28] = 60; G2[29] = 1; G2[28] = 0;
+        C(lvm::stCount(V2, G2, 29) == 10, "same colour: the bigger red candle before does not stop the green count (10 green candles before) (got " + std::to_string(lvm::stCount(V2, G2, 29)) + ")");
+        std::vector<double> V3(400, 5.0); std::vector<char> G3(400, 1); V3[399] = 9; C(lvm::stCount(V3, G3, 399) == 99, "capped at 99");
+        std::vector<double> R3(400, 5.0); R3[399] = 9; C(lvm::strength(V3, R3, G3, 399, 399) == "V99+", "a tie: volume wins");
+        std::vector<double> V4(30, 10.0); V4[29] = 11; V4[10] = 20; C(lvm::strength(V4, std::vector<double>(30, 0.0), std::vector<char>(30, 1), 29, 29).empty(), "under 20 = no line");
+        std::vector<double> V5(60, 10.0); V5[58] = 30; V5[59] = 5; std::vector<char> G5(60, 1); C(lvm::strength(V5, std::vector<double>(60, 0.0), G5, 57, 59) == "V58", "a Sw: the max over its attempt's candles (got " + lvm::strength(V5, std::vector<double>(60, 0.0), G5, 57, 59) + ")"); }
     std::printf("%s %d pass, %d fail\n", f ? "FAILED" : "ALL PASS", ok, f); return f;
 }

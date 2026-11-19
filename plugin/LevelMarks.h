@@ -18,6 +18,7 @@
 #pragma once
 #include "WyRead.h"
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <set>
 #include <string>
@@ -25,9 +26,10 @@
 #include <vector>
 
 namespace lvm {
-static const char* const VERSION = "1.1.0";   // (1.1.0, Rassul 10:50 CT "ok build": the BO indicator's Rly gets its level too - levelNear(); same priority / short names)
+static const char* const VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 11:22-11:30 CT "sweeps of key levels on big volume or range are very meaningfull", "maybe consider sw and a second line like v50 or r50, same with breaks", "use the max numbers that we have ... biggest in green bars, red bars, consecutive", "ok.. good build it"): Bk / Sw carry a STRENGTH = his BVMax / BRMax (the Volume / Range panes' Max number) - "V<N>" / "R<N>" from 20 up, "99+" from 99; a Sw takes the max over its attempt's candles
+// was VERSION = "1.1.0";   // (1.1.0, Rassul 10:50 CT "ok build": the BO indicator's Rly gets its level too - levelNear(); same priority / short names)
 
-struct Mark { char code = 0; int dir = 0; long long px = 0; std::string lv; };   // code 'B' Bk / 'S' Sw / 'C' Cx; lv = the short level name ("" = none)
+struct Mark { char code = 0; int dir = 0; long long px = 0; std::string lv; long long t0 = 0; std::string st; };   // (1.2.0) t0 = the first candle the strength looks at (a Sw: its attempt's first candle; else the mark's own); st = "V45" / "R99+" / ""   // code 'B' Bk / 'S' Sw / 'C' Cx; lv = the short level name ("" = none)
 inline const char* codeText(char c) { return c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : ""; }
 
 // the priority of a level name (lower = shown first); -1 = this name never labels a mark (MenthorQ, gamma, VWAP ...)
@@ -87,7 +89,7 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
     auto maxV = [&](int a, int b) { double m = 0; for (int k = std::max(0, a); k < b; ++k) m = std::max(m, v[(size_t)k]); return m; };
     const std::vector<double> atr = wyr::atr13(B);
     std::map<int, std::pair<char, std::vector<Cand> > > raw;   // candle -> code + its candidate levels (mockup order: Sw, then Bk, then Cx)
-    std::map<int, int> rawDir;
+    std::map<int, int> rawDir; std::map<int, int> rawA;   // (1.2.0) the mark candle -> the first candle of its Sw attempt
     // Sw: one attempt per level
     { std::set<std::pair<long long, std::string> > done;
       for (int f = 5; f < n; ++f) {
@@ -110,8 +112,8 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
             if (am < maxV(f - 5, f)) continue;
             Cand c; c.px = z.px; c.name = z.name; c.hb = z.hb; c.high = z.high;
             auto it = raw.find(dpt);
-            if (it != raw.end()) { if (it->second.first == 'S') it->second.second.push_back(c); continue; }
-            raw[dpt] = std::make_pair('S', std::vector<Cand>(1, c)); rawDir[dpt] = sup ? 1 : -1;
+            if (it != raw.end()) { if (it->second.first == 'S') { it->second.second.push_back(c); rawA[dpt] = std::min(rawA[dpt], att[0]); } continue; }
+            raw[dpt] = std::make_pair('S', std::vector<Cand>(1, c)); rawDir[dpt] = sup ? 1 : -1; rawA[dpt] = att[0];
         } } }
     // Bk: closes through a level
     for (int i = 5; i < n; ++i) {
@@ -155,9 +157,48 @@ inline std::map<long long, Mark> run(const std::vector<wyr::Bar>& B, const std::
                 if (!away) continue; }
             last[id] = std::make_pair(i, m.px);
         }
+        const auto ra = rawA.find(i); m.t0 = B[(size_t)(ra != rawA.end() ? ra->second : i)].t;   // (1.2.0)
         out[B[(size_t)i].t] = m;
     }
     return out;
+}
+
+// (1.2.0) the strength line: his BVMax / BRMax, exactly as the Volume / Range panes count it (VolRangeLogic.h Engine::statFor): for candle i,
+// BV = how many candles in a row before it were SMALLER (stops at the first as big or bigger), BVG / BVR = the same over the candles of its own
+// colour only; Max = the larger; counts stop at 99 ("99+"), look back at most 1,500 candles. V = volume, R = range in whole ticks.
+static const int ST_LOOK = 1500, ST_CAP = 99, ST_MIN = 20;
+inline int stCount(const std::vector<double>& V, const std::vector<char>& G, int i) {
+    if (i < 0 || i >= (int)V.size() || !(V[(size_t)i] > 0)) return 0;
+    const double x = V[(size_t)i]; const bool g = G[(size_t)i] != 0; int all = 0, same = 0; bool da = false, ds = false;
+    for (int j = i - 1; j >= std::max(0, i - ST_LOOK) && !(da && ds); --j) {
+        const bool big = V[(size_t)j] >= x;
+        if (!da) { if (big || all >= ST_CAP) da = true; else ++all; }
+        if (!ds && (G[(size_t)j] != 0) == g) { if (big || same >= ST_CAP) ds = true; else ++same; }
+    }
+    return std::max(all, same);
+}
+// the strength over candles a..b (a Sw's attempt; a Bk: a == b): "V<N>" / "R<N>" for the larger count (volume wins a tie), "" under 20
+inline std::string strength(const std::vector<double>& vol, const std::vector<double>& rng, const std::vector<char>& green, int a, int b) {
+    int nv = 0, nr = 0; if (a < 0) a = 0;
+    for (int k = a; k <= b && k < (int)vol.size(); ++k) { nv = std::max(nv, stCount(vol, green, k)); if (k < (int)rng.size()) nr = std::max(nr, stCount(rng, green, k)); }
+    const int n = std::max(nv, nr); if (n < ST_MIN) return std::string();
+    return std::string(nv >= nr ? "V" : "R") + (n >= ST_CAP ? std::string("99+") : std::to_string(n));
+}
+// (1.2.0, Rassul 11:35 CT "will you add this strength line to the I also") the strength of ONE candle by its stamp (the I candle); "" = none / under 20
+inline std::string strengthAt(const std::vector<long long>& T, const std::vector<double>& V, const std::vector<double>& R, const std::vector<char>& G, long long t) {
+    const auto it = std::lower_bound(T.begin(), T.end(), t); if (it == T.end() || *it != t) return std::string();
+    const int i = (int)(it - T.begin()); return strength(V, R, G, i, i);
+}
+// the range value as the Range pane counts it: high - low in whole ticks (0 = none)
+inline double rangeTicks(double h, double l, double tick) { const double r = h - l; if (!std::isfinite(r) || r <= 0) return 0.0; return tick > 0 ? (double)std::llround(r / tick) : r; }
+// fill the strength of every Bk / Sw in M from the chart's closed candles (T = candle stamps, ascending; V volume; R range ticks; G green)
+inline int fillStrength(std::map<long long, Mark>& M, const std::vector<long long>& T, const std::vector<double>& V, const std::vector<double>& R, const std::vector<char>& G) {
+    int n = 0;
+    auto at = [&](long long t) { const auto it = std::lower_bound(T.begin(), T.end(), t); return it != T.end() && *it == t ? (int)(it - T.begin()) : -1; };
+    for (auto& kv : M) { Mark& m = kv.second; m.st.clear(); if (m.code != 'B' && m.code != 'S') continue;
+        const int b = at(kv.first); if (b < 0) continue; int a = m.t0 > 0 ? at(m.t0) : b; if (a < 0 || a > b) a = b;
+        m.st = strength(V, R, G, a, b); if (!m.st.empty()) ++n; }
+    return n;
 }
 
 

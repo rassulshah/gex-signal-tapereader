@@ -14,12 +14,13 @@
 #include <vector>
 
 namespace wyi {
-static const char* const VERSION = "2.1.0";   // (2.1.0, Rassul 10:50-10:51 CT "ok build", "remember placement of other signals like cmx so you have to coordinate everything"): the key levels published in the file (L|px|name lines, read by the BO indicator for its Rly level); the layout also keeps clear of boxes other indicators occupy (the BO indicator's letters from SignalBoard 'L')
+static const char* const VERSION = "2.2.0";   // (2.2.0, Rassul 11:30-11:35 CT: the strength line) mark lines may carry a 6th field = the strength ("V45" / "R99+" / ""); 3 / 5 / 6 fields read
+// was VERSION = "2.1.0";   // (2.1.0, Rassul 10:50-10:51 CT "ok build", "remember placement of other signals like cmx so you have to coordinate everything"): the key levels published in the file (L|px|name lines, read by the BO indicator for its Rly level); the layout also keeps clear of boxes other indicators occupy (the BO indicator's letters from SignalBoard 'L')
 static const int TAG_H = 13, PAD_X = 3, GAP = 3, CX_STEP = 16;
 static const int LINE1_H = 13, LINE2_H = 11;   // (2.0.0) a two-line tag: 13 px for the code, 11 px for the level name
 static const size_t MAX_BYTES = 1024 * 1024;
 
-struct M { char code = 0; int dir = 0; std::string lv; long long px = 0; };   // code 'I' / 'B' (Bk) / 'S' (Sw) / 'C' (Cx)
+struct M { char code = 0; int dir = 0; std::string lv; long long px = 0; std::string st; };   // (2.2.0) st = the strength line ("" = none)   // code 'I' / 'B' (Bk) / 'S' (Sw) / 'C' (Cx)
 inline char codeOf(const std::string& s) { return s == "I" ? 'I' : s == "Bk" ? 'B' : s == "Sw" ? 'S' : s == "Cx" ? 'C' : 0; }
 inline const char* textOf(char c) { return c == 'I' ? "I" : c == 'B' ? "Bk" : c == 'S' ? "Sw" : c == 'C' ? "Cx" : ""; }
 
@@ -34,12 +35,13 @@ inline int parseAll(const std::string& txt, std::map<long long, std::vector<M> >
         if (!head) { if (l.compare(0, 5, "WY|1|") != 0) return -1; head = true; continue; }
         std::vector<std::string> f; size_t p = 0; while (true) { const size_t q = l.find('|', p); f.push_back(l.substr(p, q == std::string::npos ? std::string::npos : q - p)); if (q == std::string::npos) break; p = q + 1; }
         if (f.size() == 3 && f[0] == "L") continue;   // (2.1.0) a level line (parseLevels)
-        if (f.size() != 3 && f.size() != 5) continue;
+        if (f.size() != 3 && f.size() != 5 && f.size() != 6) continue;   // (2.2.0) 6 = + the strength
         char* end = nullptr; const long long t = std::strtoll(f[0].c_str(), &end, 10); if (!end || *end != 0 || t <= 0) continue;
         const char c = codeOf(f[1]); if (!c) continue;
         char* e2 = nullptr; const long d = std::strtol(f[2].c_str(), &e2, 10); if (!e2 || *e2 != 0 || (d != 1 && d != -1)) continue;
         M m; m.code = c; m.dir = (int)d;
-        if (f.size() == 5) { if (f[3].size() > 8) continue; m.lv = f[3]; char* e3 = nullptr; const long long px = std::strtoll(f[4].c_str(), &e3, 10); if (!e3 || *e3 != 0 || px < 0) continue; m.px = px; }
+        if (f.size() >= 5) { if (f[3].size() > 8) continue; m.lv = f[3]; char* e3 = nullptr; const long long px = std::strtoll(f[4].c_str(), &e3, 10); if (!e3 || *e3 != 0 || px < 0) continue; m.px = px; }
+        if (f.size() == 6) { if (f[5].size() > 5) continue; m.st = f[5]; }   // (2.2.0)
         std::vector<M>& v = out[t]; bool dup = false; for (const M& x : v) if (x.code == m.code) dup = true; if (dup) continue;
         if (c == 'I') v.insert(v.begin(), m); else v.push_back(m); ++n;
     }
