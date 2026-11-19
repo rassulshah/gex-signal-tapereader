@@ -27,3 +27,12 @@ Not verified: needs his IRT restart (File -> Exit, wait for "installed", reopen)
 - Measured (same data / trade as above), by the furthest level reclaimed:
   4h 148, 34%, -0.28R (halves -0.33 / -0.23) | hour 435, 41%, -0.11R (-0.11 / -0.10) | local pivot only 672, 35%, -0.28R.
   The 4h group is no better than local pivots in this sample; the hourly group stays the best.
+
+## 1.3.0 (09:02 CT "yes. you want some form of higher timeframe breakout failure")
+- The I needs a failed higher-timeframe breakout: the level reclaimed must be a prior hour / 4-hour high or low, or a key / volume level
+  (current session). A local pivot alone no longer makes an I. The strong-rejection I after Sp / Ut needs its spring / upthrust candle to
+  have swept such a level and the rejection candle to close back through it; its read names the level.
+- ES 11-18 fixture now uses real clock stamps; its 3:06 AM rejection I is gone (the 3:03 spring broke only a local floor, the 2 AM hour
+  low 7387.00 held). Tests: t_hourly 13/13, t_reclaim 6/6, t_wyread_102 19/19, t_nearpivot pass, MinGW OK.
+- Measured (no key-level files in the research run, so hour / 4h only): I's 1,239 -> 1,070 (-14%; most I's credited to a local pivot
+  had also reclaimed an hour level). Hour 757, 40%, -0.15R | 4h 219, 30%, -0.38R. Best: CL hour +0.09R, NQ hour -0.04R. ES -0.31R.

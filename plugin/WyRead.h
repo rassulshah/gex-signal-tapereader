@@ -27,7 +27,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.2.1";   // (1.2.1, Rassul 2026-11-19 08:59 CT "the 4 hour high and low is also a key level": the high / low of the 2 completed 4-hour candles before the pivot's (anchored on the 5 PM CT session open: 5 PM, 9 PM, 1 AM, 5 AM, 9 AM, 1 PM) are levels the I can reclaim too ("the 9 PM 4h low"); on a tie with an hour level the 4h name is used)
+static const char* const VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-19 09:02 CT "yes. you want some form of higher timeframe breakout failure"): the I needs a FAILED HIGHER-TIMEFRAME BREAKOUT - the level reclaimed must be a prior hour / 4-hour high or low or a key / volume level; a local pivot alone no longer makes an I. The strong-rejection I after Sp / Ut also needs its spring / upthrust candle to have swept such a level and the rejection candle to close back through it
+// was VERSION = "1.2.1";   // (1.2.1, Rassul 2026-11-19 08:59 CT "the 4 hour high and low is also a key level": the high / low of the 2 completed 4-hour candles before the pivot's (anchored on the 5 PM CT session open: 5 PM, 9 PM, 1 AM, 5 AM, 9 AM, 1 PM) are levels the I can reclaim too ("the 9 PM 4h low"); on a tie with an hour level the 4h name is used)
 // was VERSION = "1.2.0";   // (1.2.0, Rassul 2026-11-19 08:41-08:42 CT on the ES 3:36 AM I "lets include this. so there is always some reclaim after a sweep of some htf level, in this case it was an hourly level. build", "the key is that there is a htf breakout failure as indicated by the reclaim of a level"): the high / low of each of the 3 completed clock hours before the pivot's hour is a level the I can reclaim ("the 2 AM hour low"), computed from the candles themselves (every session, not only the current one)
 // was VERSION = "1.1.0";   // (1.1.0, Rassul 2026-11-18 22:33-22:37 CT "modify the I so it is a reclaim of a key level, volume level or a local level", "it needs to close above it", "yes its a sweep", "it can happen anytime as long as it reclaims", "go" on i-reclaim-mockup.html): a bullish I = the pivot low SWEPT a level (1+ tick below it) and the I candle is the FIRST close back above it; the level = a prior pivot low (1, 2 or 3 pivots back - a further one only when it is lower than the nearer ones), a key level or a volume level (the host's level files); plus the delta / close-through / 1-ATR rules; any time after the pivot (no 3-candle window, no pivot-candle-high rule). Bearish mirror.
 // was VERSION = "1.0.2";   // (1.0.2, Rassul 2026-11-18 20:17 CT "the low of the green I candle should not be greater than 1 atr from the pivot low and vice versa": a bullish I candle's low is within 1 ATR(13) of the pivot low, a bearish I candle's high within 1 ATR(13) of the pivot high (ATR = Wilder 13 as of the candle before), both I paths
@@ -163,6 +164,33 @@ inline bool nearPivot(const Bar& b, const Bar& piv, int side, double atr) {
     return side > 0 ? (double)(b.l - piv.l) <= atr : (double)(piv.h - b.h) <= atr;
 }
 
+// (1.2.0) the clock hour of a candle (t = the candle END, local seconds: the 3:00 candle belongs to the 2 AM hour)
+inline long long hourOf(long long t) { return (t - 1) >= 0 ? (t - 1) / 3600 : -((-(t - 1) + 3599) / 3600); }
+inline std::string hourName(long long h) { int hh = (int)(((h % 24) + 24) % 24); char b[16]; std::snprintf(b, sizeof b, "%d %s", hh % 12 == 0 ? 12 : hh % 12, hh < 12 ? "AM" : "PM"); return b; }
+// the high (side -1) / low (side +1) of the 3 completed clock hours before the pivot candle's hour, newest first; an hour the candles only
+// partly cover (the first one, when the candles start mid-hour) is left out
+// (1.2.1) a candle's block of `per` seconds, anchored `off` seconds after midnight (4h: per 14400, off 3600 = 5 PM / 9 PM / 1 AM ... CT)
+inline long long blockOf(long long t, long long per, long long off) { const long long x = t - 1 - off; return x >= 0 ? x / per : -((-x + per - 1) / per); }
+// the high (side -1) / low (side +1) of the `nWant` completed blocks before the pivot candle's block, newest first; a block the candles
+// only partly cover (the first one, when the candles start mid-block) is left out. per 3600 = clock hours (1.2.0), 14400 = 4-hour candles (1.2.1)
+inline void blockLevels(const std::vector<Bar>& B, int ex, int side, long long per, long long off, int nWant, std::vector<Lvl>& out) {
+    if (ex < 1) return;
+    const long long hp = blockOf(B[(size_t)ex].t, per, off); const bool lo = side > 0;
+    long long spb = B.size() > 1 ? B[1].t - B[0].t : 0; if (spb <= 0) spb = 60;
+    const long long h0 = blockOf(B[0].t, per, off); long long st = (B[0].t - spb - off) % per; if (st < 0) st += per;
+    const long long firstFull = st == 0 ? h0 : h0 + 1;   // B[0] starts on the block boundary = its block is whole
+    int got = 0; long long h = hp - 1; int k = ex - 1;
+    while (got < nWant && h >= firstFull && k >= 0) {
+        long long v = 0; bool any = false;
+        while (k >= 0 && blockOf(B[(size_t)k].t, per, off) > h) --k;
+        while (k >= 0 && blockOf(B[(size_t)k].t, per, off) == h) { const long long x = lo ? B[(size_t)k].l : B[(size_t)k].h; if (!any || (lo ? x < v : x > v)) v = x; any = true; --k; }
+        if (any) { Lvl z; z.px = v; z.name = "the " + hourName((h * per + off) / 3600) + (per == 3600 ? " hour " : " 4h ") + (lo ? "low" : "high"); out.push_back(z); ++got; }
+        --h; }
+}
+inline void hourLevels(const std::vector<Bar>& B, int ex, int side, std::vector<Lvl>& out) {
+    blockLevels(B, ex, side, 14400, 3600, 2, out);   // (1.2.1) 4-hour candles first: on a tie the 4h name wins
+    blockLevels(B, ex, side, 3600, 0, 3, out);
+}
 inline void springs(const Ctx& X, Out& o, std::vector<int>& rejI) {
     const std::vector<Bar>& B = X.B; const int n = (int)B.size(); const Params& P = X.P; const std::vector<double> A = atr13(B);   // (1.0.2)
     for (int side : { 1, -1 }) {   // +1 spring (a false break DOWN), -1 upthrust (a false break UP)
@@ -212,12 +240,17 @@ inline void springs(const Ctx& X, Out& o, std::vector<int>& rejI) {
             r.lines.push_back(brk + " trapped " + (lo ? "below." : "above."));
             add(o, d, B, side > 0 ? 'S' : 'U', side, r);
             // the strong rejection: a wide candle right after, closing back through the spring / upthrust candle
-            for (int k = d + 1; k <= d + 2 && k < n; ++k) { const Bar& q = B[(size_t)k]; const double mr = X.medRg[(size_t)k];
+            for (int k = d + 1; k <= d + 2 && k < n; ++k) { const Bar& q = B[(size_t)k]; const double mr = X.medRg[(size_t)k]; std::string ri_lvl;
                 const bool wide = mr > 0 && (double)q.range() >= P.rejR * mr, through = lo ? (q.c > b.h && q.c > q.o && q.l < b.h) : (q.c < b.l && q.c < q.o && q.h > b.l);   // (1.0.1) and it starts at the pivot: its low under the spring candle's high (its high over the upthrust candle's low)
                 if (wide && through && !nearPivot(q, b, side, A[(size_t)k - 1])) continue;   // (1.0.2) the rejection I also within 1 ATR of the spring / upthrust candle's extreme
+                const Lvl* htf = nullptr;   // (1.3.0) the spring / upthrust candle swept a higher-timeframe level and the rejection closes back through it
+                if (wide && through) { std::vector<Lvl> hl = X.lv; hourLevels(B, d, side, hl);
+                    for (const Lvl& z : hl) if ((lo ? b.l < z.px && q.c > z.px : b.h > z.px && q.c < z.px) && (!htf || (lo ? z.px > htf->px : z.px < htf->px))) htf = &z;
+                    if (!htf) continue;
+                    ri_lvl = htf->name + " " + px(htf->px, X.tick, X.dec); }
                 if (wide && through) { Read ri; ri.dir = side; ri.head = std::string(lo ? "Buyers" : "Sellers") + " took over";
                     ri.lines.push_back("Strong rejection: " + std::string(lo ? "+" : "-") + pts(std::llabs(q.c - q.o), X.tick, X.dec) + " pts, " + fx((double)q.range() / mr) + " normal range,");
-                    ri.lines.push_back("closed through the " + std::string(lo ? "spring" : "upthrust") + " candle.");
+                    ri.lines.push_back("closed through the " + std::string(lo ? "spring" : "upthrust") + " candle, reclaimed " + ri_lvl + ".");
                     ri.lines.push_back("Watch: entry at a key level (Rev, PB, Cob).");
                     add(o, k, B, 'I', side, ri); rejI.push_back(k); break; } }
         }
@@ -231,34 +264,8 @@ inline std::vector<int> pivotsBefore(const std::vector<Leg>& L, int upTo, int si
     for (int k = 0; k <= upTo && k < (int)L.size(); ++k) if (L[(size_t)k].a != lastA) { lastA = L[(size_t)k].a; if (L[(size_t)k].dir == side && k > 0) v.push_back(lastA); }
     std::reverse(v.begin(), v.end()); return v;
 }
-// (1.2.0) the clock hour of a candle (t = the candle END, local seconds: the 3:00 candle belongs to the 2 AM hour)
-inline long long hourOf(long long t) { return (t - 1) >= 0 ? (t - 1) / 3600 : -((-(t - 1) + 3599) / 3600); }
-inline std::string hourName(long long h) { int hh = (int)(((h % 24) + 24) % 24); char b[16]; std::snprintf(b, sizeof b, "%d %s", hh % 12 == 0 ? 12 : hh % 12, hh < 12 ? "AM" : "PM"); return b; }
-// the high (side -1) / low (side +1) of the 3 completed clock hours before the pivot candle's hour, newest first; an hour the candles only
-// partly cover (the first one, when the candles start mid-hour) is left out
-// (1.2.1) a candle's block of `per` seconds, anchored `off` seconds after midnight (4h: per 14400, off 3600 = 5 PM / 9 PM / 1 AM ... CT)
-inline long long blockOf(long long t, long long per, long long off) { const long long x = t - 1 - off; return x >= 0 ? x / per : -((-x + per - 1) / per); }
-// the high (side -1) / low (side +1) of the `nWant` completed blocks before the pivot candle's block, newest first; a block the candles
-// only partly cover (the first one, when the candles start mid-block) is left out. per 3600 = clock hours (1.2.0), 14400 = 4-hour candles (1.2.1)
-inline void blockLevels(const std::vector<Bar>& B, int ex, int side, long long per, long long off, int nWant, std::vector<Lvl>& out) {
-    if (ex < 1) return;
-    const long long hp = blockOf(B[(size_t)ex].t, per, off); const bool lo = side > 0;
-    long long spb = B.size() > 1 ? B[1].t - B[0].t : 0; if (spb <= 0) spb = 60;
-    const long long h0 = blockOf(B[0].t, per, off); long long st = (B[0].t - spb - off) % per; if (st < 0) st += per;
-    const long long firstFull = st == 0 ? h0 : h0 + 1;   // B[0] starts on the block boundary = its block is whole
-    int got = 0; long long h = hp - 1; int k = ex - 1;
-    while (got < nWant && h >= firstFull && k >= 0) {
-        long long v = 0; bool any = false;
-        while (k >= 0 && blockOf(B[(size_t)k].t, per, off) > h) --k;
-        while (k >= 0 && blockOf(B[(size_t)k].t, per, off) == h) { const long long x = lo ? B[(size_t)k].l : B[(size_t)k].h; if (!any || (lo ? x < v : x > v)) v = x; any = true; --k; }
-        if (any) { Lvl z; z.px = v; z.name = "the " + hourName((h * per + off) / 3600) + (per == 3600 ? " hour " : " 4h ") + (lo ? "low" : "high"); out.push_back(z); ++got; }
-        --h; }
-}
-inline void hourLevels(const std::vector<Bar>& B, int ex, int side, std::vector<Lvl>& out) {
-    blockLevels(B, ex, side, 14400, 3600, 2, out);   // (1.2.1) 4-hour candles first: on a tie the 4h name wins
-    blockLevels(B, ex, side, 3600, 0, 3, out);
-}
 inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const std::vector<int>& rejI) {
+    (void)L;   // (1.3.0) local pivots no longer feed the I
     const std::vector<Bar>& B = X.B; const int n = (int)B.size(); const Params& P = X.P; int last[2] = { -10, -10 }; const std::vector<double> A = atr13(B);
     for (int i = 4; i < n; ++i) {
         const Bar& b = B[(size_t)i]; const Bar& p = B[(size_t)i - 1]; const double md = X.medDl[(size_t)i]; if (md <= 0) continue;
@@ -273,12 +280,9 @@ inline void initiation(const Ctx& X, const std::vector<Leg>& L, Out& o, const st
             const long long pv = lo ? B[(size_t)ex].l : B[(size_t)ex].h;
             if (!nearPivot(b, B[(size_t)ex], side, A[(size_t)i - 1])) continue;   // (1.0.2) the I candle within 1 ATR of the pivot
             // the levels it can reclaim: prior pivot lows (highs) 1-3 back, a further one only when beyond the nearer ones; key / volume levels
-            std::vector<Lvl> cand; { const std::vector<int> pv0 = pivotsBefore(L, ex, side); long long best = 0; int m = 0;
-                for (int a : pv0) { if (a >= ex) continue; if (m >= 3) break; const long long v = lo ? B[(size_t)a].l : B[(size_t)a].h;
-                    if (m == 0 || (lo ? v < best : v > best)) { Lvl z; z.px = v; z.name = std::string("the ") + B[(size_t)a].when + (lo ? " low" : " high"); cand.push_back(z); best = v; }
-                    ++m; } }
-            for (const Lvl& z : X.lv) cand.push_back(z);
-            hourLevels(B, ex, side, cand);   // (1.2.0) the prior hours' highs / lows
+            // (1.3.0) higher-timeframe levels only: key / volume levels, the prior 4-hour and hour highs / lows (local pivots no longer count)
+            std::vector<Lvl> cand; for (const Lvl& z : X.lv) cand.push_back(z);
+            hourLevels(B, ex, side, cand);   // (1.2.0 / 1.2.1) the prior hours' and 4-hour candles' highs / lows
             const Lvl* got = nullptr;
             for (const Lvl& z : cand) {
                 if (lo ? !(pv < z.px) : !(pv > z.px)) continue;                 // swept: 1+ tick through it

@@ -1,4 +1,4 @@
-// t_reclaim.cpp -- WyRead 1.1.0: the I = a reclaim of a swept level
+// t_reclaim.cpp -- WyRead 1.1.0: the I = a reclaim of a swept level (1.3.0: higher-timeframe / key levels only)
 #include "../WyRead.h"
 #include <cstdio>
 static int f = 0, ok = 0; static void C(bool c, const char* m) { if (c) ++ok; else { ++f; std::printf("FAIL %s\n", m); } }
@@ -18,7 +18,7 @@ static std::vector<wyr::Bar> base(long long lowSweep, long long iClose, long lon
     return B;
 }
 int main() {
-    { auto B = base(97, 102, 400); auto o = wyr::run(B, 0.25, 2); C(hasI(o, B[18].t, 1), "swept 100 by 3 ticks, closed back above it at 102 with heavy buying = I"); }
+    { auto B = base(97, 102, 400); auto o = wyr::run(B, 0.25, 2); C(!hasI(o, B[18].t, 1), "1.3.0: a local pivot alone (no higher-timeframe level) = no I"); }
     { auto B = base(97, 99, 400); auto o = wyr::run(B, 0.25, 2); C(!hasI(o, B[18].t, 1), "no close back above 100 = no I"); }
     { auto B = base(100, 102, 400); for (auto& b : B) if (b.l < 100) b.l = 100; auto o = wyr::run(B, 0.25, 2); C(!hasI(o, B[18].t, 1), "a touch of 100, never through it = no sweep = no I"); }
     { auto B = base(97, 102, 400); std::vector<wyr::Lvl> lv(1); lv[0].px = 101; lv[0].name = "VAH"; auto o = wyr::run(B, 0.25, 2, wyr::Params(), lv); C(hasI(o, B[18].t, 1), "key level 101 swept and reclaimed = I");

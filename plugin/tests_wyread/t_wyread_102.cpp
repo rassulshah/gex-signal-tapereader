@@ -9,7 +9,7 @@ static std::vector<wyr::Bar> load(const char* f) {
     std::vector<wyr::Bar> B; std::ifstream in(f); std::string line;
     while (std::getline(in, line)) { std::vector<std::string> v; std::stringstream ss(line); std::string x; while (std::getline(ss, x, '|')) v.push_back(x);
         if (v.size() < 18 || v[0] != "B") continue;
-        wyr::Bar b; b.t = 1000 + std::stoll(v[1]) * 180;
+        wyr::Bar b; b.t = 86400LL * 10 + 23 * 3600 + std::stoll(v[1]) * 180;   // (1.3.0) real clock stamps: candle 0 ENDS 11:00 PM, so the hour / 4h levels line up
         b.o = std::stoll(v[2]); b.h = std::stoll(v[3]); b.l = std::stoll(v[4]); b.c = std::stoll(v[5]); b.buy = std::stoll(v[6]); b.sell = std::stoll(v[7]); b.book = v[8] == "1";
         b.addNet[0] = std::stoll(v[9]); b.addNet[1] = std::stoll(v[10]); b.aggrMax[0] = std::stoll(v[11]); b.aggrMax[1] = std::stoll(v[12]); b.sweepLv[0] = std::stoll(v[13]); b.sweepLv[1] = std::stoll(v[14]); b.ice[0] = std::stoll(v[15]); b.ice[1] = std::stoll(v[16]); b.when = v[17];
         B.push_back(b); }
@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
     CHECK(has(o, B, "1:39 AM", 'S', 1), "Sp 1:39 AM (absorbed)");
     CHECK(has(o, B, "3:03 AM", 'S', 1), "Sp 3:03 AM (absorbed)");
     CHECK(!has(o, B, "1:42 AM", 'I', 1), "1.0.2: no I 1:42 AM - its low is 18 ticks above the spring low, ATR 15.1");
-    CHECK(has(o, B, "3:06 AM", 'I', 1), "I 3:06 AM (the strong rejection)");
+    CHECK(!has(o, B, "3:06 AM", 'I', 1), "1.3.0: no I 3:06 AM - the 3:03 spring (7392.25) broke only a local floor; the 2 AM hour low 7387.00 held, so no higher-timeframe breakout failed");
     // the turns of the mockup: 3:45 AM top and 5:18 AM low
     CHECK(has(o, B, "3:30 AM", 'E', -1) || has(o, B, "3:39 AM", 'E', -1) || has(o, B, "3:45 AM", 'E', -1), "E in the leg into the 3:45 AM top");
     CHECK(has(o, B, "3:45 AM", 'A', -1), "A 3:45 AM");
