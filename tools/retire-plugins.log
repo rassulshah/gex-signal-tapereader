@@ -149,3 +149,13 @@ retired test plugin\tests_tt011\test_tt011.cpp
 moved lsDefenseLines.dll 
 ==== Tue 11/10/2026 21:47:38.73 retire lsDealerProfile 
 moved lsDealerProfile.dll 
+==== Wed 11/18/2026 19:34:45.42 retire unused 2026-11-18 
+moved lsGammaProfile.dll 
+moved lsCandleAbsorb.dll 
+moved lsZzoVolume.dll 
+moved lsBigPrint.dll 
+moved lsLiquidityProfile.dll 
+moved lsBidAskStats.dll 
+moved lsBigBidAsk.dll 
+moved lsRevStory.dll 
+moved lsRevStoryMarks.dll 
