@@ -22,13 +22,18 @@ static bool has(const wyr::Out& o, const std::vector<wyr::Bar>& B, const std::st
 int main(int argc, char** argv) {
     const std::vector<wyr::Bar> B = load(argc > 1 ? argv[1] : "es1118.psv");
     CHECK(B.size() == 129, "129 candles");
-    const wyr::Out o = wyr::run(B, 0.25, 2);
+    // (1.6.0) Sp / Ut need a higher-timeframe / key level: the fixture has no level file, so the two springs he marked are given the
+    // levels under them as key levels (the 11:09 PM low 7367.75 and the 12:54 AM low 7373.25, counted from 12:57 AM on)
+    std::vector<wyr::Lvl> lv(2); lv[0].px = 29471; lv[0].name = "LonLO"; lv[1].px = 29493; lv[1].name = "ONL"; lv[1].from = 39;
+    const wyr::Out o = wyr::run(B, 0.25, 2, wyr::Params(), lv);
+    const wyr::Out o0 = wyr::run(B, 0.25, 2);   // no levels: no Sp / Ut at all (every break that night was of a local floor)
+    { int nS = 0; for (auto& kv : o0.marks) for (auto& m : kv.second) if (m.k == 'S' || m.k == 'U') ++nS; CHECK(nS == 0, "1.6.0: no level file = no Sp / Ut on local floors"); }
     for (const wyr::Bar& b : B) { const auto it = o.marks.find(b.t); if (it == o.marks.end()) continue; std::string s; for (const wyr::Mark& m : it->second) s += wyr::label(m) + (m.dir > 0 ? "+ " : "- ");
         std::printf("  %-9s %s\n", b.when.c_str(), s.c_str()); }
     // his three springs (the 08:06 / 08:10 CT screenshots)
-    CHECK(has(o, B, "12:03 AM", 'S', 1), "Sp 12:03 AM (flush)");
+    CHECK(!has(o, B, "12:03 AM", 'S', 1), "1.6.0: no Sp 12:03 AM - its low 7367.75 only matched the 11:09 PM low (a double bottom), it broke the local 11:39 low 7372.00 only");
     CHECK(has(o, B, "1:39 AM", 'S', 1), "Sp 1:39 AM (absorbed)");
-    CHECK(has(o, B, "3:03 AM", 'S', 1), "Sp 3:03 AM (absorbed)");
+    CHECK(!has(o, B, "3:03 AM", 'S', 1), "1.6.0: no Sp 3:03 AM - it broke a local floor only; the 2 AM hour low 7387.00 held");
     CHECK(!has(o, B, "1:42 AM", 'I', 1), "1.0.2: no I 1:42 AM - its low is 18 ticks above the spring low, ATR 15.1");
     CHECK(!has(o, B, "3:06 AM", 'I', 1), "1.3.0: no I 3:06 AM - the 3:03 spring (7392.25) broke only a local floor; the 2 AM hour low 7387.00 held, so no higher-timeframe breakout failed");
     // the turns of the mockup: 3:45 AM top and 5:18 AM low
@@ -42,8 +47,7 @@ int main(int argc, char** argv) {
             for (const wyr::Mark& m : it->second) { if (m.k != 'I') continue; bool ok2 = false; for (size_t k = i - 3; k < i; ++k) if (m.dir > 0 ? B[i].l < B[k].h : B[i].h > B[k].l) ok2 = true; if (!ok2) ++badI; } }
         CHECK(badI == 0, "every I starts at its pivot"); CHECK(!has(o, B, "11:18 PM", 'I', 1), "11:18 PM I (mid-move, away from the pivot) is gone"); }
     // reads
-    for (const wyr::Bar& b : B) if (b.when == "12:03 AM") { const auto r = o.reads.find(b.t); CHECK(r != o.reads.end() && r->second.head == "Spring (flush)", "flush read");
-        bool sr = false; if (r != o.reads.end()) for (const auto& l : r->second.lines) { std::printf("    %s\n", l.c_str()); if (l.rfind("Stop run: one 72-lot sell swept 5", 0) == 0) sr = true; } CHECK(sr, "stop-run line 72 lots / 5 prices"); }
+    // (1.6.0) the 12:03 AM flush / stop-run read checks went with that spring (no higher-timeframe level was broken)
     for (const wyr::Bar& b : B) if (b.when == "1:39 AM") { const auto r = o.reads.find(b.t); CHECK(r != o.reads.end() && r->second.head == "Spring (absorbed)", "absorbed read"); if (r != o.reads.end()) for (const auto& l : r->second.lines) std::printf("    %s\n", l.c_str()); }
     // no repaint: replay candle by candle - a letter, once shown, never changes or goes (a letter may be ADDED later on the same candle:
     // Sp / Ut are decided after the reclaim and two candles without follow-through)

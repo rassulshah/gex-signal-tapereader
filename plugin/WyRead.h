@@ -27,7 +27,8 @@
 
 namespace wyr {
 
-static const char* const VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-19 09:14 CT "it needs to be the first break, otherwise the level was already traded before right"): the pivot's leg must be the FIRST break of the level - since the level formed (the end of its hour; the session start for key / volume levels) no candle before that leg traded through it
+static const char* const VERSION = "1.6.0";   // (1.6.0, Rassul 2026-11-19 09:19-09:22 CT "there needs to be a break that tries to trade above a high or below a low that fails, just like the concept of a spring or upthrust ... all of these are springs and upthrusts because they attempt to break a level and are met by a reversal instead", "yes"): Sp / Ut use the SAME levels and rules as the I - a prior hour high / low or a key / volume level, broken 1+ tick by the leg into the pivot (the leg started on the other side), its first break, closed back within 3 candles, no follow-through, order flow confirms; the old 15-candle local floor / ceiling is gone. The rejection I closes back through that same level
+// was VERSION = "1.5.0";   // (1.5.0, Rassul 2026-11-19 09:14 CT "it needs to be the first break, otherwise the level was already traded before right"): the pivot's leg must be the FIRST break of the level - since the level formed (the end of its hour; the session start for key / volume levels) no candle before that leg traded through it
 // was VERSION = "1.4.0";   // (1.4.0, Rassul 2026-11-19 09:09 CT with a sketch "it should be coming from the pivot break high or low ... the break and reclaim from the pivot low that broke"): the level must be broken BY THE LEG INTO THE PIVOT - at the leg's start (the pivot high before a bullish I's low) price closed above the level and no candle closed below it until the pivot candle; then the first close back above it = the I. A level price was already living under before that leg no longer counts. Same for the rejection I (the leg into the spring) and mirrored for highs
 // was VERSION = "1.3.1";   // (1.3.1, Rassul 2026-11-19 09:05 CT "then lets drop the 4 hour": 4-hour highs / lows no longer count (measured -0.38R vs -0.15R for hour levels); the I reclaims a prior hour high / low or a key / volume level
 // was VERSION = "1.3.0";   // (1.3.0, Rassul 2026-11-19 09:02 CT "yes. you want some form of higher timeframe breakout failure"): the I needs a FAILED HIGHER-TIMEFRAME BREAKOUT - the level reclaimed must be a prior hour / 4-hour high or low or a key / volume level; a local pivot alone no longer makes an I. The strong-rejection I after Sp / Ut also needs its spring / upthrust candle to have swept such a level and the rejection candle to close back through it
@@ -218,21 +219,24 @@ inline void springs(const Ctx& X, const std::vector<Leg>& L, Out& o, std::vector
         auto low = [&](int k) { return side > 0 ? B[(size_t)k].l : -B[(size_t)k].h; };
         auto cls = [&](int k) { return side > 0 ? B[(size_t)k].c : -B[(size_t)k].c; };
         auto lots = [&](int k) { return side > 0 ? B[(size_t)k].sell : B[(size_t)k].buy; };
-        int lastMark = -10; std::vector<int> usedRef;
+        int lastMark = -10; std::vector<long long> usedRef;   // (1.6.0) levels already used (price in ticks)
         for (int d = 12; d < n; ++d) {
-            int rk = -1; for (int k = std::max(0, d - P.spLook); k <= d - 3; ++k) if (fractal(B, k, side) && (rk < 0 || low(k) < low(rk))) rk = k;
-            if (rk < 0) continue;
-            const long long ref = low(rk);
-            if (std::find(usedRef.begin(), usedRef.end(), rk) != usedRef.end()) continue;
-            if (low(d) > ref - P.spMinTicks) continue;                                        // broke it by 2+ ticks
-            bool deeper = true; for (int k = std::max(rk + 1, d - 3); k < d; ++k) if (low(k) <= low(d)) deeper = false;   // the deepest candle of the attempt
+            // (1.6.0) the level: a prior hour high / low or a key / volume level, first broken by the leg into this candle; the furthest one reclaimed
+            std::vector<Lvl> hl = X.lv; hourLevels(B, d, side, hl);
+            int zi = -1, rc = -1; long long ref = 0;
+            for (size_t q = 0; q < hl.size(); ++q) { const Lvl& z = hl[q]; const long long zp = side > 0 ? z.px : -z.px;
+                if (!(low(d) < zp)) continue;                                                  // traded through it (1+ tick)
+                if (std::find(usedRef.begin(), usedRef.end(), z.px) != usedRef.end()) continue;
+                if (!brokeFromPivot(B, L, d, side, z.px) || !firstBreak(B, L, d, side, z)) continue;
+                int rz = -1; for (int k = d; k <= std::min(n - 1, d + P.spReclaim); ++k) if (cls(k) > zp) { rz = k; break; }   // closed back within 3 candles
+                if (rz < 0) continue;
+                if (zi < 0 || zp > ref) { zi = (int)q; ref = zp; rc = rz; } }
+            if (zi < 0) continue;
+            const Lvl lvz = hl[(size_t)zi];
+            bool deeper = true; for (int k = std::max(0, d - 3); k < d; ++k) if (low(k) <= low(d)) deeper = false;   // the deepest candle of the attempt
             if (!deeper) continue;
-            bool closedBelow = false; for (int k = rk + 1; k < d; ++k) if (cls(k) < ref) closedBelow = true;   // the floor already gave way on a close: not a fresh break
-            if (closedBelow) continue;
             if (d + 2 >= n) continue;                                                           // two candles after it are needed
             if (low(d + 1) < low(d) || low(d + 2) < low(d)) continue;                          // follow-through: a real break
-            int rc = -1; for (int k = d; k <= std::min(n - 1, d + P.spReclaim); ++k) if (cls(k) > ref) { rc = k; break; }
-            if (rc < 0) continue;
             const Bar& b = B[(size_t)d];
             if (!b.book) continue;                                                              // the order-flow check needs the Book Flow record
             double mA = 0; int nA = 0; double mD = 0; int nD = 0;
@@ -244,9 +248,9 @@ inline void springs(const Ctx& X, const std::vector<Leg>& L, Out& o, std::vector
             int fk = -1; if (!absorbed && b.addNet[own] > 0) for (int k = d + 1; k <= d + 2; ++k) { const Bar& q = B[(size_t)k]; if (q.book && (double)q.addNet[own] <= P.flushOwn * (double)b.addNet[own] && q.addNet[def] > 0 && q.delta() * side > 0) { fk = k; break; } }
             if (!absorbed && fk < 0) continue;
             if (d - lastMark < 4) continue;
-            usedRef.push_back(rk); lastMark = d;
+            usedRef.push_back(lvz.px); lastMark = d;
             const bool lo = side > 0; Read r; r.dir = side; r.head = std::string(lo ? "Spring" : "Upthrust") + (absorbed ? " (absorbed)" : " (flush)");
-            r.lines.push_back("Broke the " + B[(size_t)rk].when + (lo ? " low " : " high ") + px(lo ? B[(size_t)rk].l : B[(size_t)rk].h, X.tick, X.dec) + " by " + num(lo ? B[(size_t)rk].l - b.l : b.h - B[(size_t)rk].h) + " ticks,");
+            r.lines.push_back("Broke " + lvz.name + " " + px(lvz.px, X.tick, X.dec) + " by " + num(lo ? lvz.px - b.l : b.h - lvz.px) + " ticks,");
             r.lines.push_back("closed back " + std::string(lo ? "above" : "below") + " it at " + B[(size_t)rc].when + ". No follow-through.");
             const std::string brk = lo ? "Sellers" : "Buyers", dside = lo ? "bids" : "offers", oside = lo ? "offers" : "bids";
             if (absorbed) { r.lines.push_back(brk + " hit hard (" + fx(ax) + "), " + dside + " stacked " + fx(dx) + ".");
@@ -262,11 +266,8 @@ inline void springs(const Ctx& X, const std::vector<Leg>& L, Out& o, std::vector
             for (int k = d + 1; k <= d + 2 && k < n; ++k) { const Bar& q = B[(size_t)k]; const double mr = X.medRg[(size_t)k]; std::string ri_lvl;
                 const bool wide = mr > 0 && (double)q.range() >= P.rejR * mr, through = lo ? (q.c > b.h && q.c > q.o && q.l < b.h) : (q.c < b.l && q.c < q.o && q.h > b.l);   // (1.0.1) and it starts at the pivot: its low under the spring candle's high (its high over the upthrust candle's low)
                 if (wide && through && !nearPivot(q, b, side, A[(size_t)k - 1])) continue;   // (1.0.2) the rejection I also within 1 ATR of the spring / upthrust candle's extreme
-                const Lvl* htf = nullptr;   // (1.3.0) the spring / upthrust candle swept a higher-timeframe level and the rejection closes back through it
-                if (wide && through) { std::vector<Lvl> hl = X.lv; hourLevels(B, d, side, hl);
-                    for (const Lvl& z : hl) if ((lo ? b.l < z.px && q.c > z.px : b.h > z.px && q.c < z.px) && brokeFromPivot(B, L, d, side, z.px) && firstBreak(B, L, d, side, z) && (!htf || (lo ? z.px > htf->px : z.px < htf->px))) htf = &z;
-                    if (!htf) continue;
-                    ri_lvl = htf->name + " " + px(htf->px, X.tick, X.dec); }
+                if (wide && through) { if (lo ? !(q.c > lvz.px) : !(q.c < lvz.px)) continue;   // (1.6.0) closes back through the spring / upthrust level
+                    ri_lvl = lvz.name + " " + px(lvz.px, X.tick, X.dec); }
                 if (wide && through) { Read ri; ri.dir = side; ri.head = std::string(lo ? "Buyers" : "Sellers") + " took over";
                     ri.lines.push_back("Strong rejection: " + std::string(lo ? "+" : "-") + pts(std::llabs(q.c - q.o), X.tick, X.dec) + " pts, " + fx((double)q.range() / mr) + " normal range,");
                     ri.lines.push_back("closed through the " + std::string(lo ? "spring" : "upthrust") + " candle, reclaimed " + ri_lvl + ".");

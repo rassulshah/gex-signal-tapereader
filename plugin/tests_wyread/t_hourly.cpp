@@ -56,6 +56,17 @@ int main() {
       mk(97, 104, 97, 103, 500, 20); for (int j = 0; j < 3; ++j) mk(103, 105, 102, 104, 50, 50);
       auto o = wyr::run(C2, 0.25, 2); C(hasI(o, C2[22].t, 1), "the first break of the 2 AM hour low = I");
       C(!hasI(o, C2[31].t, 1), "1.5.0: the second break of the same hour low = already traded = no I"); }
+    { // 1.6.0: a SPRING of the 2 AM hour low - broke it by 3 ticks (heavy selling into stacked bids), no follow-through, closed back above
+      auto B = down(97, 102, 400); for (auto& b : B) { b.book = true; b.addNet[0] = 10; b.addNet[1] = 10; }
+      B[21].sell = 300; B[21].addNet[0] = 120;   // sellers hit hard, bids stacked
+      auto o = wyr::run(B, 0.25, 2); auto it = o.marks.find(B[21].t); bool sp = false; if (it != o.marks.end()) for (auto& m : it->second) if (m.k == 'S') sp = true;
+      C(sp, "Sp on the candle that broke the 2 AM hour low");
+      auto r = o.reads.find(B[21].t); C(r != o.reads.end() && r->second.lines.size() && r->second.lines[0].find("Broke the 2 AM hour low") == 0, "the spring read names the 2 AM hour low");
+      C(hasI(o, B[22].t, 1), "the reversal candle after it = I"); }
+    { // and the same break of a level that was already broken earlier = no Sp
+      auto B = down(97, 102, 400); for (auto& b : B) { b.book = true; b.addNet[0] = 10; b.addNet[1] = 10; } B[21].sell = 300; B[21].addNet[0] = 120;
+      std::vector<wyr::Lvl> lv(1); lv[0].px = 120; lv[0].name = "PDL";   // traded through by the 2 AM drift already
+      auto o = wyr::run(B, 0.25, 2, wyr::Params(), lv); auto r = o.reads.find(B[21].t); C(r == o.reads.end() || r->second.lines.empty() || r->second.lines[0].find("PDL") == std::string::npos, "no spring on an already-broken level"); }
     C(wyr::hourName(26) == "2 AM" && wyr::hourName(24) == "12 AM" && wyr::hourName(36) == "12 PM" && wyr::hourName(15) == "3 PM", "hour names");
     C(wyr::hourOf(3600 * 3) == 2 && wyr::hourOf(3600 * 3 + 180) == 3, "the 3:00 candle END belongs to the 2 AM hour");
     std::printf("%s %d pass, %d fail\n", f ? "FAILED" : "ALL PASS", ok, f); return f;

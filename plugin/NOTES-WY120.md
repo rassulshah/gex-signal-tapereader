@@ -61,3 +61,14 @@ Not verified: needs his IRT restart (File -> Exit, wait for "installed", reopen)
 - Measured: I's 942 -> 723 (fewer than the 267 the 09:12 split suggested: when the furthest level was already traded, another hour level
   that was not often still qualifies). Hour 668, 36%, -0.25R (halves -0.26 / -0.25) - no better than 1.4.0 (-0.21R) in this sample.
   CL -0.06, GC -0.13, HG -0.18, NQ -0.26, NG -0.31, ES -0.33, EU -0.41.
+
+## 1.6.0 (09:19-09:22 CT "all of these are springs and upthrusts because they attempt to break a level and are met by a reversal instead", "yes")
+- Sp / Ut use the same levels and rules as the I: a prior hour high / low or a key / volume level, broken 1+ tick by the leg into the
+  pivot (the leg started on the other side), its FIRST break, closed back within 3 candles, no follow-through, order flow confirms
+  (absorbed / flush, unchanged). The 15-candle local floor / ceiling is gone. The rejection I closes back through that same level.
+  Read: "Broke the 2 AM hour low 7387.00 by 3 ticks, closed back above it at 3:09 AM. No follow-through. ..."
+- ES 11-17/18 overnight (the fixture): his 3 springs -> 0 on hour levels alone. 12:03 AM only matched the 11:09 PM low (double bottom,
+  7367.75); 1:39 AM broke the 12:54 AM local low; 3:03 AM broke a local floor while the 2 AM hour low 7387.00 held. 1:39 AM returns
+  when ONL / a key level sits at 7373.25 (the live chart feeds key levels for the current session).
+- Tests: t_hourly 20/20 (new: Sp of an hour low + its I; no Sp on an already-broken level), t_wyread_102 18/18, t_reclaim 7/7, MinGW OK.
+- Not measurable on the research bars (no Book Flow record = no Sp / Ut there); the nightly scores them from the IRT letters files.
