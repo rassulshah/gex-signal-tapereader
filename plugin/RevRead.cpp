@@ -99,11 +99,11 @@ static const double BF_RATIO_MIN = 1.2;   // (0.11.1) a Book Flow ratio label ne
 static const bool ACC_READ_DRAWN = false;   // (0.12.0, Rassul 2026-11-17 06:03 CT "remove what is there currently now") the Accum / Distrib read is not drawn in the pane (the boxes on the price chart stay; the read stays in the status file)
 static const bool RV_DRAW_BOOKFLOW = false;   // (0.17.3, Rassul 09:29 CT "can we hide bookflow for now and just keep delta + change") the Book Flow half is not drawn - delta + change take the whole pane; Book Flow is still read in the background (the read, the Wyckoff springs)
 static const bool RV_SHOW_BOOKFLOW = true;   // (0.11.0) the pane's bars: true = Book Flow (resting orders added - pulled, bids / offers), false = the candle's buy / sell volume (0.6.0 - 0.10.x)
-#define RVS_VERSION "0.18.1"   // (0.18.1, Rassul 19:40 CT "all of the symbols are gone like A E I from the strip and the I is not displayed on the candles": the letters of the current session and the 3 before it, each session read by itself - at 5 PM only the new session was kept)   // was "0.18.0"   // (0.18.0, Rassul 2026-11-18 17:06 CT "I also want the I indicator on the candle, put it on top of green candle and below red candles", 17:11 "go" on i-on-candles.html: lsRevReadMarks draws each I of the letters file on its price candle - a small tag, green = bullish I / red = bearish I, white letter - OVER a green candle, UNDER a red one, one row further out when a Cx is on that side; WyMarks.h 1.0.0; A / E / Sp / Ut stay in the pane)   // was "0.17.5"   // (0.17.5, Rassul 13:08 CT: the session letters published to RevRead\\wy-<MKT>-<secs>.txt for the SDMO pane's I letters)   // was "0.17.4"   // (0.17.4, Rassul 09:53 CT "make the signal strip have a dark gray background": a dark gray band behind the letter strip)   // was "0.17.3"   // (0.17.3, Rassul 09:29 CT "can we hide bookflow for now and just keep delta + change": the Book Flow half is hidden, delta + change fill the pane; the old story letters on the Book Flow bars go with it)   // was "0.17.2"   // (0.17.2, Rassul 09:21 CT "a bullish I should have its low below the high of the dnpivot and vice versa": WyRead 1.0.1)   // was "0.17.1"   // (0.17.1, Rassul 09:11 CT "get rid of the reversal read header and make the letters smaller and use 1 line instead of two, if there are multiple letters ... make them smaller"): no title row; the strip is one row at the top, 9 pt, 7 pt side by side when a candle has 2+ letters   // was "0.17.0"   // (0.17.0, 2026-11-18 Rassul 05:45-08:15 CT "filter based on a wyckoff perspective", "lets add the letters on a strip on the top of the pane", "use Sp and Ut", "get rid of the ? marks", "dont put anything ont he candle chart", "lets build this"): a letter strip at the top of the pane - E lack of demand / supply, A effort without result, Sp spring / Ut upthrust (absorbed / flush, stop run, no follow-through), I the other side took over (WyRead.h 1.0.0); the read on the right says the Wyckoff step of a lettered candle   // was "0.16.0"   // (0.16.0, 2026-11-17 Rassul 21:15-21:17 CT "i wnat a more human readable and simplified format for these reads ... i need something practical", "i like it. lets do this"): the read = 3 plain lines (who is winning / why / what to watch, CombRead.h 1.2.0 toPlain), no numbers table; the Rev checks stay   // was "0.15.3"   // (0.15.3, Rassul 18:06 CT "lets go with 1.33x": the delta-change ratio label at 1.33x+ normal, was 2x)   // was "0.15.2"   // (0.15.2, his 17:58 CT screenshot "the delta is not drawing on the new bar", "make the delta pane on the top instead": delta + change on top, Book Flow below; the forming candle's delta drawn live; each session scaled by itself - the evening bars were too small to see; no ratio over the title)   // was "0.15.1"   // (0.15.1, Rassul 16:03 CT "go" after the case review: the pivot reads lead the one read - absorption, trapped, rejection wick, breakout met - CombRead 1.1.0)   // was "0.15.0"   // (0.15.0, Rassul 2026-11-17 15:24-15:41 CT "bookflow at the top and delta with change in delta at the bottom", "1 effective read", "i also want cx (climax) to be on the candles", "after that build"): the pane split - Book Flow bars on top, delta + delta change bars below (all above 0, colour = side, a ratio over a change of 1.33x+ normal); ONE read (CombRead.h: the passive Book Flow + the aggressive delta); lsRevReadMarks draws Cx on the climax candle of a pivot (over a down-pivot, under an up-pivot)   // was "0.14.0"   // (0.14.0, Rassul 12:12 CT "build": posts fact M - the forming candle's market orders - once a second for the HOD / LOD box's Now line)   // was "0.13.3"   // (0.13.3, Rassul 11:20 CT: one split read - verdict + sentences left (the story / Rev checks as the last sentence), the Bids / Offers table right)   // was "0.13.2"   // (0.13.2, his 11:18 CT screenshot: candle time on the Book Flow verdict line; story prices with the tick's decimals)   // was "0.13.1"   // (0.13.1, 2026-11-17 09:32 CT screenshot: the Book Flow read was blank - a candle without a record falls back to the newest earlier one; the mouse right of the candles reads the last closed one)   // was "0.13.0"   // (0.13.0, 2026-11-17 Rassul 08:35-08:44 CT: the Book Flow read split - verdict + plain-English sentences left, the Bids / Offers table right; the title now shows the real version - 0.12.0 still said 0.11.1)   // was "0.11.1"   // (0.11.1, 2026-11-16 Rassul 20:27 CT "i want ratios on bars where 1 is bigger than the other": the label = the bigger Book Flow side / the smaller, on the bigger bar - was the bar against its own 20-candle average)   // was "0.11.0"   // (0.11.0, 2026-11-16 Rassul 20:20 CT "i want to put book flow back": the pane draws the Book Flow bars itself - no lsBookFlowBg needed; buy / sell volume, delta and delta change stay computed, not drawn)   // was "0.10.1"   // (0.10.1, 2026-11-16 19:02 CT: AccumLogic 2.0.1 - the pivot close rule when the climax is the candle before the pivot)   // was "0.10.0"   // (0.10.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go": the accumulation / distribution zones are AccumLogic 2.0.0, the simple rule - climax volume, stall, delta turned, with the trend; the read shows Climax / Stall / Delta)   // was "0.9.2"   // (0.9.2, 2026-11-16 Rassul 13:50 CT "where is the reversal read .. its blank": the bars are drawn in a low pane - under about 52 px nothing was drawn)   // was "0.9.1"   // (0.9.1, 2026-11-16 Rassul 12:44-12:45 CT "build", "i dont see the accumulaiton or distibution": the read shows the LAST zone when none is open, in 3 lines when the pane is low; every order event feeds AccumLogic 1.2.0 (resting lots added / pulled / filled per price) for the quiet end and the other side building)   // was "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
+#define RVS_VERSION "0.18.2"   // (0.18.2, Rassul 19:58 CT "remove the show poc option", "it should only show the I", "there should be no options": lsRevReadMarks draws only the I on the candle - no settings window, POC dash, Cx or hold dots)   // was "0.18.1"   // (0.18.1, Rassul 19:40 CT "all of the symbols are gone like A E I from the strip and the I is not displayed on the candles": the letters of the current session and the 3 before it, each session read by itself - at 5 PM only the new session was kept)   // was "0.18.0"   // (0.18.0, Rassul 2026-11-18 17:06 CT "I also want the I indicator on the candle, put it on top of green candle and below red candles", 17:11 "go" on i-on-candles.html: lsRevReadMarks draws each I of the letters file on its price candle - a small tag, green = bullish I / red = bearish I, white letter - OVER a green candle, UNDER a red one, one row further out when a Cx is on that side; WyMarks.h 1.0.0; A / E / Sp / Ut stay in the pane)   // was "0.17.5"   // (0.17.5, Rassul 13:08 CT: the session letters published to RevRead\\wy-<MKT>-<secs>.txt for the SDMO pane's I letters)   // was "0.17.4"   // (0.17.4, Rassul 09:53 CT "make the signal strip have a dark gray background": a dark gray band behind the letter strip)   // was "0.17.3"   // (0.17.3, Rassul 09:29 CT "can we hide bookflow for now and just keep delta + change": the Book Flow half is hidden, delta + change fill the pane; the old story letters on the Book Flow bars go with it)   // was "0.17.2"   // (0.17.2, Rassul 09:21 CT "a bullish I should have its low below the high of the dnpivot and vice versa": WyRead 1.0.1)   // was "0.17.1"   // (0.17.1, Rassul 09:11 CT "get rid of the reversal read header and make the letters smaller and use 1 line instead of two, if there are multiple letters ... make them smaller"): no title row; the strip is one row at the top, 9 pt, 7 pt side by side when a candle has 2+ letters   // was "0.17.0"   // (0.17.0, 2026-11-18 Rassul 05:45-08:15 CT "filter based on a wyckoff perspective", "lets add the letters on a strip on the top of the pane", "use Sp and Ut", "get rid of the ? marks", "dont put anything ont he candle chart", "lets build this"): a letter strip at the top of the pane - E lack of demand / supply, A effort without result, Sp spring / Ut upthrust (absorbed / flush, stop run, no follow-through), I the other side took over (WyRead.h 1.0.0); the read on the right says the Wyckoff step of a lettered candle   // was "0.16.0"   // (0.16.0, 2026-11-17 Rassul 21:15-21:17 CT "i wnat a more human readable and simplified format for these reads ... i need something practical", "i like it. lets do this"): the read = 3 plain lines (who is winning / why / what to watch, CombRead.h 1.2.0 toPlain), no numbers table; the Rev checks stay   // was "0.15.3"   // (0.15.3, Rassul 18:06 CT "lets go with 1.33x": the delta-change ratio label at 1.33x+ normal, was 2x)   // was "0.15.2"   // (0.15.2, his 17:58 CT screenshot "the delta is not drawing on the new bar", "make the delta pane on the top instead": delta + change on top, Book Flow below; the forming candle's delta drawn live; each session scaled by itself - the evening bars were too small to see; no ratio over the title)   // was "0.15.1"   // (0.15.1, Rassul 16:03 CT "go" after the case review: the pivot reads lead the one read - absorption, trapped, rejection wick, breakout met - CombRead 1.1.0)   // was "0.15.0"   // (0.15.0, Rassul 2026-11-17 15:24-15:41 CT "bookflow at the top and delta with change in delta at the bottom", "1 effective read", "i also want cx (climax) to be on the candles", "after that build"): the pane split - Book Flow bars on top, delta + delta change bars below (all above 0, colour = side, a ratio over a change of 1.33x+ normal); ONE read (CombRead.h: the passive Book Flow + the aggressive delta); lsRevReadMarks draws Cx on the climax candle of a pivot (over a down-pivot, under an up-pivot)   // was "0.14.0"   // (0.14.0, Rassul 12:12 CT "build": posts fact M - the forming candle's market orders - once a second for the HOD / LOD box's Now line)   // was "0.13.3"   // (0.13.3, Rassul 11:20 CT: one split read - verdict + sentences left (the story / Rev checks as the last sentence), the Bids / Offers table right)   // was "0.13.2"   // (0.13.2, his 11:18 CT screenshot: candle time on the Book Flow verdict line; story prices with the tick's decimals)   // was "0.13.1"   // (0.13.1, 2026-11-17 09:32 CT screenshot: the Book Flow read was blank - a candle without a record falls back to the newest earlier one; the mouse right of the candles reads the last closed one)   // was "0.13.0"   // (0.13.0, 2026-11-17 Rassul 08:35-08:44 CT: the Book Flow read split - verdict + plain-English sentences left, the Bids / Offers table right; the title now shows the real version - 0.12.0 still said 0.11.1)   // was "0.11.1"   // (0.11.1, 2026-11-16 Rassul 20:27 CT "i want ratios on bars where 1 is bigger than the other": the label = the bigger Book Flow side / the smaller, on the bigger bar - was the bar against its own 20-candle average)   // was "0.11.0"   // (0.11.0, 2026-11-16 Rassul 20:20 CT "i want to put book flow back": the pane draws the Book Flow bars itself - no lsBookFlowBg needed; buy / sell volume, delta and delta change stay computed, not drawn)   // was "0.10.1"   // (0.10.1, 2026-11-16 19:02 CT: AccumLogic 2.0.1 - the pivot close rule when the climax is the candle before the pivot)   // was "0.10.0"   // (0.10.0, 2026-11-16 Rassul 14:32-14:43 CT "are you overcomplicating it", "high volume on the pivot or right before it should be considered as part of the accum or dsit process", "go": the accumulation / distribution zones are AccumLogic 2.0.0, the simple rule - climax volume, stall, delta turned, with the trend; the read shows Climax / Stall / Delta)   // was "0.9.2"   // (0.9.2, 2026-11-16 Rassul 13:50 CT "where is the reversal read .. its blank": the bars are drawn in a low pane - under about 52 px nothing was drawn)   // was "0.9.1"   // (0.9.1, 2026-11-16 Rassul 12:44-12:45 CT "build", "i dont see the accumulaiton or distibution": the read shows the LAST zone when none is open, in 3 lines when the pane is low; every order event feeds AccumLogic 1.2.0 (resting lots added / pulled / filled per price) for the quiet end and the other side building)   // was "0.9.0"   // (0.9.0, 2026-11-16 Rassul 10:54-10:58 CT "can you create an accumulation indicator like you did with the boxes", "build now create read on the right side": accumulation / distribution zones (AccumLogic.h) found in the background from each candle's buy / sell lots and the Absorbed reads, their read right of the last candle, the zones saved to RevRead\\accum-<MKT>-<spb>.txt for the price-chart boxes (lsCobSignal 1.8.3 draws them). UNPROVEN = "?")   // was "0.8.0"   // (0.8.0, 2026-11-16 Rassul 06:00 CT "take the information you get from ... SR and put it in the reversal read indicator in the background ... continue to only show what it shows now": lsSR's stop-run engine runs here unseen (SRBack.h) and keeps lsSR's journal; nothing new is drawn)   // was "0.7.0"   // = rvs::VERSION = the one setVersion literal (rvh::stamp)
 
 namespace rvh {
 inline void stamp(cppExtension* p) {   // the literal on its own line: gex-build reads the text between the first ( and )
-    p->setVersion("0.18.1");
+    p->setVersion("0.18.2");
 }
 inline short coord(int v) { return (short)(v < SHRT_MIN ? SHRT_MIN : v > SHRT_MAX ? SHRT_MAX : v); }
 inline std::string flexDir() { const char* u = std::getenv("USERPROFILE"); return u && *u ? std::string(u) + "\\InvestorRT\\rtx\\lsFlexLevels" : std::string(); }
@@ -859,7 +859,7 @@ extern "C" cppExtension* CreateExtension(void) {
     p->setArrayCount(1);
     p->setFlags(POST_DRAWING | NO_UI | VAP_REQUIRED | TRACK_MOUSE);      // its own pane, draws itself; (0.6.0) the mouse picks the candle the read is about; IRT's volume at price
     p->setExtendedFlags(CALL_CONTINUOUSLY);                              // the order feed keeps coming while no trade prints
-    p->setDescription("LRA Reversal Read 0.18.1 - a letter strip at the top: E lack of demand / supply, A effort without result, Sp spring, Ut upthrust, I the other side took over (green = buyers / a low, red = sellers / a top); then Book Flow (resting orders added - pulled: bids green, offers red); bottom: delta (bright) and its change from the candle before (dim), green = buyers, red = sellers, a ratio over a change of 1.33x+ normal; one read right of the last candle combines both. Earlier: two bars per candle = its buy volume (green) and sell volume (red); a number on a bar = the biggest in that many candles (10 or more); letters C climax (red = selling, green = buying), A absorbed, E exhausted, I initiation; the read (right of the last candle) = the six checks of the newest pullback / Rev (Rev N: buying fading, big buyer trapped, quick rejection, bids pulled, big seller, with trend), else the reversal behaviours of the candle under the mouse. Market-by-order feed.");
+    p->setDescription("LRA Reversal Read 0.18.2 - a letter strip at the top: E lack of demand / supply, A effort without result, Sp spring, Ut upthrust, I the other side took over (green = buyers / a low, red = sellers / a top); then Book Flow (resting orders added - pulled: bids green, offers red); bottom: delta (bright) and its change from the candle before (dim), green = buyers, red = sellers, a ratio over a change of 1.33x+ normal; one read right of the last candle combines both. Earlier: two bars per candle = its buy volume (green) and sell volume (red); a number on a bar = the biggest in that many candles (10 or more); letters C climax (red = selling, green = buying), A absorbed, E exhausted, I initiation; the read (right of the last candle) = the six checks of the newest pullback / Rev (Rev N: buying fading, big buyer trapped, quick rejection, bids pulled, big seller, with trend), else the reversal behaviours of the candle under the mouse. Market-by-order feed.");
     rvh::stamp(p);   // RVS_VERSION
     return p;
 }
@@ -868,63 +868,16 @@ extern "C" cppExtension* CreateExtension(void) {
 // =====================================================================================================================
 // lsRevReadMarks - the price-chart overlay: a white dash on each candle at its POC price
 // =====================================================================================================================
-static ss::Ids& rmIds() { static ss::Ids I; return I; }
+// (0.18.2, Rassul 2026-11-18 19:58 CT "remove the show poc option from the reversal read marks", "it should only show the I", "there should
+// be no options") lsRevReadMarks draws ONLY the Reversal Read I on the candle; no settings window, no POC dash, no Cx, no hold dots
 inline long long rmSteadyMs() { return (long long)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
-struct RmState { rvh::PocStore ps; double tick = 0; long long drawn = 0, dots = 0; std::string mkt; ss::Store store; ss::Values set = ss::defaults(rvset::spec(), -1); long long setMs = -100000;
-                 std::map<long long, signed char> hold;   // candle end -> +3 / -3 ... (side x tier) of a CLOSED candle, decided once
-                 std::map<long long, signed char> cx; std::set<long long> cxDone; long long cxDrawn = 0;
-                 std::map<long long, int> iMarks; std::string wySig; long long wyCk = -100000; int wyRead = -1; long long iDrawn = 0; };   // (0.18.0) the I letters (candle stamp -> +1 / -1) from RevRead\\wy-<MKT>-<secs>.txt, looked at every 3 s, re-read only when its size / time changed   // (0.15.0) climax candle end -> +1 (Cx over it: a down-pivot) / -1 (Cx under it: an up-pivot); cxDone = candles already decided (closed + confirmed candle closed)
+struct RmState { std::map<long long, int> iMarks; std::string wySig; long long wyCk = -100000; int wyRead = -1; long long iDrawn = 0; };   // the I letters (candle stamp -> +1 / -1) from RevRead\\wy-<MKT>-<secs>.txt, looked at every 3 s, re-read only when its size / time changed
 class RevReadMarks : public cppExtension {
 public:
-    SS_SAFE_DIALOG(RevReadMarks, "RevReadMarks")
     HostSlot<RmState> slot_;
-    virtual int parmsLoadBody(void) { if (!ss::inDialog(this)) return RTX_OK; ss::Store* st = dialogStore(); if (st) ss::fillDialog(this, rvset::spec(), rmIds(), st->load(ss::marketIndex(dlgMkt_), rmSteadyMs(), true), snap_); return RTX_OK; }
-    virtual int parmsApplyBody(void) { save(); return RTX_OK; }
-    virtual int parmsUpdtBody(unsigned int i) { ss::onUpdate(this, rvset::spec(), rmIds(), (int)i, snap_); save(); return RTX_OK; }
-    // the settings of this chart's market (re-read at most every 2 s)
-    const ss::Values& settings(RmState& s) {
-        const long long now = rmSteadyMs(); if (now - s.setMs < 2000 && now >= s.setMs) return s.set; s.setMs = now;
-        const char* rs = getRootSymbol(); const char* sy = getSymbol(); s.mkt = rvh::marketOf(rs ? rs : "", sy ? sy : "");
-        const std::string p = rvset::settingsPath(rvh::flexDir(), s.mkt);
-        if (s.store.path != p) { s.store = ss::Store(); s.store.S = &rvset::spec(); s.store.path = p; }
-        s.set = p.empty() ? ss::defaults(rvset::spec(), -1) : s.store.load(ss::marketIndex(s.mkt), now); return s.set;
-    }
-    // the hold read of closed bar i (0 = none), decided once per candle from the 20 closed candles before it
-    template <class TA, class FA> int holdAt(RmState& s, TA& times, FA& hi, FA& lo, FA& cl, int i) {
-        const long long key = (long long)times[i]; const auto it = s.hold.find(key); if (it != s.hold.end()) return it->second;
-        if (i < 20) return 0;
-        std::vector<rvs::Cnd> c; c.reserve(21);
-        for (int k = i - 20; k <= i; ++k) { const auto p = s.ps.poc.find((long long)times[k]); const double h = (double)hi[k], l = (double)lo[k], x = (double)cl[k];
-            if (p == s.ps.poc.end() || !p->second.ok || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(x)) return 0;   // a candle without volume at price yet: decided on a later draw
-            rvs::Cnd d; d.t = (long long)times[k]; d.hi = (long long)std::llround(h / s.tick); d.lo = (long long)std::llround(l / s.tick); d.close = (long long)std::llround(x / s.tick); d.total = p->second.total; c.push_back(d); }
-        const rvs::Hold q = rvs::holdOf(c, 20); const int v = q.side * q.tier;
-        s.hold[key] = (signed char)v; while (s.hold.size() > 6000) s.hold.erase(s.hold.begin());
-        return v;
-    }
+    // the I letters the pane published for this market and candle size (bounded 1 MB read; a torn / foreign file keeps the last good set)
     void pump() {
         RmState* sp = slot_.get(this, true); if (!sp) return; RmState& s = *sp;
-        const double tick = (double)getProperty(SYM_TICKINCR); if (!std::isfinite(tick) || !(tick > 0) || tick >= 1000) return;
-        if (tick != s.tick) { s.ps.reset(); s.tick = tick; }
-        const long count = getBarCount(); if (count < 2) return;
-        RTARRAYI times(barDateTime); RTARRAY hi(barHigh), lo(barLow), cl(barClose);
-        if (times.count < count || hi.count < count || lo.count < count || cl.count < count) return;
-        rvh::PocStore& P = s.ps;
-        if (P.seenCount > count || (P.lastKey != 0 && P.next > 0 && P.next <= count - 1 && (long long)times[P.next - 1] != P.lastKey)) P.reset();
-        P.seenCount = count; if (P.fault) return;
-        RTARRAYP vap(barVolumeProfile); int done = 0; P.start(count); const long long t0 = rvh::PocStore::nowMs();
-        for (; P.next < count - 1 && rvh::PocStore::more(done, t0); ++P.next, ++done) {
-            const int i = P.next; const long long key = (long long)times[i]; std::vector<rvs::VRow> rows; double pv = 0;
-            const int r = rvh::vapRows(vap, i, tick, rows, pv);
-            if (r < 0) { P.fault = true; break; }
-            const double h = (double)hi[i], l = (double)lo[i], c = (double)cl[i];
-            if (r == 0 || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(c)) { ++P.missing; P.lastKey = key; continue; }
-            P.poc[key] = rvs::pocOf(key, rows, (long long)std::llround(l / tick), (long long)std::llround(h / tick), (long long)std::llround(c / tick)); P.lastKey = key;
-            while (P.poc.size() > (size_t)rvh::PocStore::KEEP) P.poc.erase(P.poc.begin());
-        }
-        letters(s);
-    }
-    // (0.18.0) the I letters the pane published for this market and candle size (bounded 1 MB read; a torn / foreign file keeps the last good set)
-    void letters(RmState& s) {
         const long long now = rmSteadyMs(); if (now - s.wyCk < 3000 && now >= s.wyCk) return; s.wyCk = now;
         const char* rs = getRootSymbol(); const char* sy = getSymbol(); const std::string mk = rvh::marketOf(rs ? rs : "", sy ? sy : ""); const long spb = (long)getSecondsPerBar();
         const std::string flex = rvh::flexDir(); if (flex.empty() || mk.empty() || spb <= 0) return;
@@ -941,83 +894,38 @@ public:
         LSPERF_SCOPE(LSPERF_PLUGIN, "draw");
         RmState* sp = slot_.get(this, false); if (!sp) return RTX_OK; RmState& s = *sp;
         try {
-            const long count = getBarCount(); if (count < 2 || !(s.tick > 0)) return RTX_OK;
+            if (s.iMarks.empty()) return RTX_OK;
+            const long count = getBarCount(); if (count < 2) return RTX_OK;
             RTARRAYI times(barDateTime); if (times.count < count) return RTX_OK;
             int v0 = 0, v1 = 0; if (getVisibleBars(&v0, &v1) != RTX_OK) return RTX_OK; v0 = std::max(0, v0); v1 = std::min((int)count - 1, v1);
             RCT pane; pane.getPaneRect(false);
-            const int half = std::max(3, (int)getPixelsPerBar() * 45 / 100);
-            const ss::Values& V = settings(s);
-            setPen(rvh::C_DASH, 1, P_SOLID);
-            if (V.b(rvset::K_SHOW_HOLD) || getSecondsPerBar() >= 3600) {   // (0.4.1) always on an hourly chart                                // (0.4.0) the hold read: closed candles only; strong tier only
-                RTARRAY hi(barHigh), lo(barLow), cl(barClose);
-                if (hi.count >= count && lo.count >= count && cl.count >= count) for (int i = v0; i <= v1 && i < (int)count - 1; ++i) {
-                    const int h = holdAt(s, times, hi, lo, cl, i); if (h != 3 && h != -3) continue;
-                    PNT p; p.set(i, 0.0f, kBarCenter); const bool top = h > 0; const int y = (int)getVerticalDrawPosition((float)(top ? (double)hi[i] : (double)lo[i])) + (top ? -8 : 8);
-                    if (y < pane.top + 3 || y > pane.bottom - 4) continue;
-                    const COLOR col = top ? rvh::C_RED : rvh::C_GREEN;    // a high that is likely done = bearish (red, over it); a low = bullish (green, under it)
-                    RCT r; r.set(rvh::coord(p.h - 2), rvh::coord(y - 2), rvh::coord(p.h + 3), rvh::coord(y + 3)); r.draw(0, col, col, DRAW_OPAQUE, PAT_SOLID); ++s.dots; }
-            }
-            {   // (0.15.0, Rassul 2026-11-17 15:39-15:40 CT "i also want cx (climax) to be on the candles", "put it on top of the candle for a down pviot and the bottom of a
-                // candle for an uppivot") the climax at a pivot: candle i makes a new 10-candle low (high); the pivot candle or the one before has the biggest volume
-                // in 20+ candles; the next candle closes the other way (cbr::climaxAt, the 15:41 CT test: 60% turned / 59% held against 47% / 42%). Decided at
-                // the close of the confirming candle, never changed after. Green Cx over a down-pivot's climax candle, red Cx under an up-pivot's.
-                RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose); RTARRAYI vo(barVolume);
-                if (op.count >= count && vo.count >= count && hi.count >= count && lo.count >= count && cl.count >= count) {
-                    const int iFrom = std::max(61, v0 - 2), iTo = std::min((int)count - 3, v1);   // candle i + 1 must be closed
-                    for (int i = iFrom; i <= iTo; ++i) { const long long key = (long long)times[i]; if (s.cxDone.count(key)) continue; s.cxDone.insert(key);
-                        double mnL = 1e300, mxH = -1e300; bool okv = std::isfinite((double)lo[i]) && std::isfinite((double)hi[i]);
-                        for (int k = i - 10; k < i && okv; ++k) { mnL = std::min(mnL, (double)lo[k]); mxH = std::max(mxH, (double)hi[k]); }
-                        const int dir = !okv ? 0 : (double)lo[i] < mnL ? 1 : (double)hi[i] > mxH ? -1 : 0;
-                        if (dir) { std::vector<double> V2, O2, C2; const int a = i - 60; for (int k = a; k <= i + 1; ++k) { V2.push_back((double)vo[k]); O2.push_back((double)op[k]); C2.push_back((double)cl[k]); }
-                            const int j = cbr::climaxAt(V2, O2, C2, i - a, dir); if (j >= 0) s.cx[(long long)times[a + j]] = (signed char)dir; }
-                    }
-                    while (s.cx.size() > 4000) s.cx.erase(s.cx.begin());
-                    while (s.cxDone.size() > 8000) s.cxDone.erase(s.cxDone.begin());
-                    FONT fx; fx.id = HELVETICA; fx.size = 10; fx.style = BOLD; setFont(fx);
-                    for (int i = v0; i <= v1; ++i) { const auto it = s.cx.find((long long)times[i]); if (it == s.cx.end()) continue;
-                        PNT p; p.set(i, 0.0f, kBarCenter); const bool over = it->second > 0;
-                        const int y = (int)getVerticalDrawPosition((float)(over ? (double)hi[i] : (double)lo[i])); const int w = (int)getTextWidth("Cx", -1);
-                        const int t = over ? y - 16 : y + 3; if (t < pane.top + 1 || t + 13 > pane.bottom - 1) continue;
-                        setTextColor(over ? rvh::C_GREEN : rvh::C_RED); RCT r; r.set(rvh::coord(p.h - w / 2), rvh::coord(t), rvh::coord(p.h - w / 2 + w + 1), rvh::coord(t + 13)); r.drawText("Cx", false, false); ++s.cxDrawn; } } }
-            if (!s.iMarks.empty()) {   // (0.18.0, Rassul 17:06 CT) the I on the candle: OVER a green candle, UNDER a red one; green tag = bullish I, red = bearish; never repaints (decided letters only)
-                RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
-                if (op.count >= count && hi.count >= count && lo.count >= count && cl.count >= count) {
-                    FONT fi; fi.id = HELVETICA; fi.size = 10; fi.style = BOLD; setFont(fi); const int tw = (int)getTextWidth("I", -1);
-                    for (int i = v0; i <= v1; ++i) { const auto it = s.iMarks.find((long long)times[i]); if (it == s.iMarks.end()) continue;
-                        const double o = (double)op[i], h = (double)hi[i], l = (double)lo[i], c = (double)cl[i]; if (!std::isfinite(o) || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(c)) continue;
-                        const bool green = c >= o; const auto cxi = s.cx.find((long long)times[i]); const bool cxSame = cxi != s.cx.end() && ((cxi->second > 0) == green);
-                        PNT p; p.set(i, 0.0f, kBarCenter);
-                        const wyi::Tag g = wyi::place((int)p.h, (int)getVerticalDrawPosition((float)h), (int)getVerticalDrawPosition((float)l), green, tw, cxSame, (int)pane.top, (int)pane.bottom);
-                        if (!g.ok) continue;
-                        const COLOR col = it->second > 0 ? rvh::C_GREEN : rvh::C_RED;
-                        RCT r; r.set(rvh::coord(g.l), rvh::coord(g.t), rvh::coord(g.r), rvh::coord(g.b)); r.draw(0, col, col, DRAW_OPAQUE, PAT_SOLID);
-                        setTextColor(rvh::C_DASH); RCT tr; tr.set(rvh::coord(g.l), rvh::coord(g.t), rvh::coord(g.r), rvh::coord(g.b)); tr.drawText("I", true, false); ++s.iDrawn; } } }
-            if (V.b(rvset::K_SHOW_POC)) for (int i = v0; i <= v1; ++i) { const auto it = s.ps.poc.find((long long)times[i]); if (it == s.ps.poc.end() || !it->second.ok) continue;
-                PNT p; p.set(i, 0.0f, kBarCenter); const int y = (int)getVerticalDrawPosition((float)((double)it->second.tick * s.tick));
-                if (y < pane.top + 1 || y > pane.bottom - 2) continue;
-                RCT r; r.set(rvh::coord(p.h - half), rvh::coord(y - 1), rvh::coord(p.h + half + 1), rvh::coord(y + 1)); r.draw(0, rvh::C_DASH, rvh::C_DASH, DRAW_OPAQUE, PAT_SOLID); ++s.drawn; }
+            RTARRAY op(barOpen), hi(barHigh), lo(barLow), cl(barClose);
+            if (op.count < count || hi.count < count || lo.count < count || cl.count < count) return RTX_OK;
+            // (0.18.0, Rassul 17:06 CT) the I on the candle: OVER a green candle, UNDER a red one; green tag = bullish I, red = bearish; decided letters only (never repaints)
+            FONT fi; fi.id = HELVETICA; fi.size = 10; fi.style = BOLD; setFont(fi); const int tw = (int)getTextWidth("I", -1);
+            for (int i = v0; i <= v1; ++i) { const auto it = s.iMarks.find((long long)times[i]); if (it == s.iMarks.end()) continue;
+                const double o = (double)op[i], h = (double)hi[i], l = (double)lo[i], c = (double)cl[i]; if (!std::isfinite(o) || !std::isfinite(h) || !std::isfinite(l) || !std::isfinite(c)) continue;
+                PNT p; p.set(i, 0.0f, kBarCenter);
+                const wyi::Tag g = wyi::place((int)p.h, (int)getVerticalDrawPosition((float)h), (int)getVerticalDrawPosition((float)l), c >= o, tw, false, (int)pane.top, (int)pane.bottom);
+                if (!g.ok) continue;
+                const COLOR col = it->second > 0 ? rvh::C_GREEN : rvh::C_RED;
+                RCT r; r.set(rvh::coord(g.l), rvh::coord(g.t), rvh::coord(g.r), rvh::coord(g.b)); r.draw(0, col, col, DRAW_OPAQUE, PAT_SOLID);
+                setTextColor(rvh::C_DASH); RCT tr; tr.set(rvh::coord(g.l), rvh::coord(g.t), rvh::coord(g.r), rvh::coord(g.b)); tr.drawText("I", true, false); ++s.iDrawn; }
         } catch (...) {}
         return RTX_OK;
     }
-private:
-    ss::Snap snap_; ss::Store dlgStore_; std::string dlgMkt_;
-    void save() { if (!ss::inDialog(this)) return; ss::Store* st = dialogStore(); if (!st) return;
-        const ss::Values V = ss::readDialog(this, rvset::spec(), rmIds(), st->load(ss::marketIndex(dlgMkt_), rmSteadyMs(), true), snap_);
-        rvh::makeDir(rvh::flexDir()); if (st->save(V)) snap_.take(ss::dialogNow(this, rvset::spec(), rmIds(), V)); }
-    ss::Store* dialogStore() { const std::string mkt = ss::safeMarket(this); const std::string p = rvset::settingsPath(rvh::flexDir(), mkt); if (p.empty()) return nullptr;
-        if (dlgStore_.path != p) { dlgStore_ = ss::Store(); dlgStore_.S = &rvset::spec(); dlgStore_.path = p; dlgMkt_ = mkt; } return &dlgStore_; }
 };
 int cppExtension::init(void)    { return RTX_OK; }
 int cppExtension::done(void)    { return RTX_OK; }
 int cppExtension::destroy(void) { static_cast<RevReadMarks*>(this)->slot_.release(this); return RTX_OK; }
-int cppExtension::setup(void)   { ss::registerAll(this, rvset::spec(), rmIds()); return RTX_OK; }
+int cppExtension::setup(void)   { return RTX_OK; }   // (0.18.2) no settings window
 int cppExtension::calc(int)     { LSPERF_SCOPE(LSPERF_PLUGIN, "calc"); try { static_cast<RevReadMarks*>(this)->pump(); } catch (...) {} return RTX_OK; }
 
 extern "C" cppExtension* CreateExtension(void) {
     RevReadMarks* p = new RevReadMarks();
     p->setArrayCount(1);
-    p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI | VAP_REQUIRED);
-    p->setDescription("LRA Reversal Read marks 0.18.1 - I on the candle (the Reversal Read I: over a green candle, under a red one; green tag = buyers took over, red = sellers); Cx on the climax candle of a pivot (green over a down-pivot, red under an up-pivot: the biggest volume in 20+ candles at the pivot candle or the one before, confirmed by the next candle closing the other way); a white dash on each candle at its POC price (the price with the most volume in that candle); optional (off by default): a dot at a high / low that is likely done; the price-chart half of lsRevRead.");
+    p->setFlags(POST_DRAWING | OVERLAY | INSTRUMENT_SCALE | NO_UI);
+    p->setDescription("LRA Reversal Read marks 0.18.2 - the Reversal Read I on the candle: over a green candle, under a red one; green tag = buyers took over, red = sellers. Needs the Reversal Read pane on the same chart. No settings.");
     rvh::stamp(p);   // RVS_VERSION
     return p;
 }
