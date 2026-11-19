@@ -14,7 +14,7 @@ struct Mkt { const char* name; double bigA, bigP, share; int bids; double deep, 
 inline const Mkt& forMarket(const std::string& m) {
     static const Mkt T[] = {
         { "ES", 36, 35, 0.03, 3, 1.0, 1.0, 3, 1 },
-        { "NQ", 12, 11, 0.03, 3, 1.0, 1.0, 3, 1 },
+        { "NQ", 12, 11, 0.03, 3, 1.00, 1.00, 3, 0 },
         { "CL", 20, 20, 0.03, 3, 1.0, 1.0, 3, 1 },
         { "GC", 14, 14, 0.03, 3, 1.0, 1.0, 3, 1 },
         { "HG", 12, 11, 0.03, 3, 1.0, 1.0, 3, 1 },
